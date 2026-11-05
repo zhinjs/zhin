@@ -58,11 +58,20 @@ export interface AgentDefinition {
   readonly collaboration?: AgentCollaboration;
 }
 
+export interface AgentCollaborationBudget {
+  readonly modelCalls?: number;
+  readonly tokens?: number;
+  readonly wallMs?: number;
+  readonly sideEffects?: number;
+}
+
 export interface AgentCollaboration {
   /** Agent names this agent may ask / delegate to / tell. */
   readonly contacts?: readonly string[];
   /** Agent names (or the literal `human`) allowed to hand this agent work. */
   readonly acceptsFrom?: readonly string[];
+  /** Default delegation budget for this agent (ADR 0048 §2, §5). */
+  readonly budget?: AgentCollaborationBudget;
 }
 
 interface AgentManifest {
@@ -91,6 +100,8 @@ interface AgentManifest {
   readonly collaboration?: {
     readonly contacts?: readonly string[];
     readonly accepts_from?: readonly string[];
+    readonly acceptsFrom?: readonly string[];
+    readonly budget?: Readonly<Record<string, unknown>>;
   };
 }
 
@@ -266,12 +277,14 @@ function optionalScopes(value: unknown): readonly AgentScope[] | undefined {
 function optionalCollaboration(value: unknown): AgentCollaboration | undefined {
   if (value === undefined) return undefined;
   if (!isRecord(value)) throw new TypeError('Agent agent.json collaboration must be an object');
-  const unknown = Object.keys(value).filter((key) => key !== 'contacts' && key !== 'accepts_from');
+  const allowedKeys = new Set(['contacts', 'accepts_from', 'acceptsFrom', 'budget']);
+  const unknown = Object.keys(value).filter((key) => !allowedKeys.has(key));
   if (unknown.length) {
     throw new TypeError(`Agent agent.json collaboration has unknown fields: ${unknown.join(', ')}`);
   }
   const contacts = optionalStringList(value.contacts, 'collaboration.contacts');
-  const acceptsFrom = optionalStringList(value.accepts_from, 'collaboration.accepts_from');
+  const acceptsFromRaw = value.accepts_from !== undefined ? value.accepts_from : value.acceptsFrom;
+  const acceptsFrom = optionalStringList(acceptsFromRaw, 'collaboration.accepts_from');
   for (const name of contacts ?? []) {
     if (!AGENT_NAME.test(name)) throw new TypeError(`Agent agent.json collaboration.contacts has invalid agent name: ${name}`);
   }
@@ -280,7 +293,49 @@ function optionalCollaboration(value: unknown): AgentCollaboration | undefined {
       throw new TypeError(`Agent agent.json collaboration.accepts_from has invalid agent name: ${name}`);
     }
   }
-  return Object.freeze({ contacts, acceptsFrom });
+  const budget = optionalCollaborationBudget(value.budget);
+  return Object.freeze({
+    contacts,
+    acceptsFrom,
+    ...(budget !== undefined ? { budget } : {}),
+  });
+}
+
+function optionalCollaborationBudget(value: unknown): AgentCollaborationBudget | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) throw new TypeError('Agent agent.json collaboration.budget must be an object');
+  const allowedKeys = new Set([
+    'modelCalls',
+    'model_calls',
+    'tokens',
+    'wallMs',
+    'wall_ms',
+    'sideEffects',
+    'side_effects',
+  ]);
+  const unknown = Object.keys(value).filter((key) => !allowedKeys.has(key));
+  if (unknown.length) {
+    throw new TypeError(`Agent agent.json collaboration.budget has unknown fields: ${unknown.join(', ')}`);
+  }
+  const modelCalls = optionalPositiveInteger(
+    value.modelCalls !== undefined ? value.modelCalls : value.model_calls,
+    'collaboration.budget.modelCalls',
+  );
+  const tokens = optionalPositiveInteger(value.tokens, 'collaboration.budget.tokens');
+  const wallMs = optionalPositiveInteger(
+    value.wallMs !== undefined ? value.wallMs : value.wall_ms,
+    'collaboration.budget.wallMs',
+  );
+  const sideEffects = optionalPositiveInteger(
+    value.sideEffects !== undefined ? value.sideEffects : value.side_effects,
+    'collaboration.budget.sideEffects',
+  );
+  return Object.freeze({
+    ...(modelCalls !== undefined ? { modelCalls } : {}),
+    ...(tokens !== undefined ? { tokens } : {}),
+    ...(wallMs !== undefined ? { wallMs } : {}),
+    ...(sideEffects !== undefined ? { sideEffects } : {}),
+  });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

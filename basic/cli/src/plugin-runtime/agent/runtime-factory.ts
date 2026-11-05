@@ -67,9 +67,8 @@ export function createRuntimeZhinAgent(options: RuntimeZhinAgentOptions): {
     activeBinding: binding,
   });
 
-  // Persistence readiness is latched by the Workroom persistence coordinator
-  // (database mode: after DatabaseHost activateNext; file mode: in prepare), or
-  // by installAgentHost right after composition when Workroom is not installed.
+  // Persistence readiness is latched by the Agent persistence coordinator
+  // (database mode: after DatabaseHost activateNext; file mode: in installAgentPersistence).
   return {
     agent,
     events,

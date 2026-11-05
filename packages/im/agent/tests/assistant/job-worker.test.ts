@@ -3,8 +3,11 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { TimerScheduler } from '../../src/assistant/timer-scheduler.js';
+import { createTimerMailDueHandler } from '../../src/assistant/timer-due.js';
 import { ScheduleJobStore } from '../../src/assistant/job-store.js';
 import { createNotificationRouter } from '../../src/assistant/notification-router.js';
+import { HostMailbox } from '../../src/collaboration/host-mailbox.js';
+import { currentMailTurn } from '../../src/collaboration/mail-turn-context.js';
 import type { ScheduleJob } from '../../src/assistant/types.js';
 import type { TaskExecutionResult, TaskExecutor } from '../../src/task-executor.js';
 
@@ -135,5 +138,39 @@ describe('TimerScheduler queue ownership', () => {
     await stopping;
     expect(operationSettled).toBe(true);
     scheduler.unload();
+  });
+
+  it('binds currentMailTurn and charges modelCalls on createMailboxTimerDuePort execution', async () => {
+    const mailbox = new HostMailbox();
+    let observedKind: string | undefined;
+    let observedTimerId: string | undefined;
+    let remainingDuring: number | undefined;
+    const execute = vi.fn(async (): Promise<TaskExecutionResult> => {
+      const ctx = currentMailTurn();
+      observedKind = ctx?.mail.kind;
+      observedTimerId = ctx?.mail.body.kind === 'timer' ? ctx.mail.body.timerId : undefined;
+      remainingDuring = ctx ? mailbox.harness.remaining(ctx.mail)?.modelCalls : undefined;
+      return {
+        success: true,
+        responseText: 'done',
+        output: 'done',
+        durationMs: 5,
+        toolsUsed: [],
+        tokenUsage: { input: 10, output: 5 },
+      };
+    });
+    const due = createTimerMailDueHandler({
+      mailbox: () => mailbox,
+      executor: { execute } as unknown as TaskExecutor,
+    });
+    const result = await due.run(scheduleJob('timer-mail-ctx'), {
+      signal: new AbortController().signal,
+      attempt: 1,
+    });
+    expect(result.success).toBe(true);
+    expect(observedKind).toBe('timer');
+    expect(observedTimerId).toBe('timer-mail-ctx');
+    expect(remainingDuring).toBeGreaterThan(0);
+    await mailbox.close();
   });
 });

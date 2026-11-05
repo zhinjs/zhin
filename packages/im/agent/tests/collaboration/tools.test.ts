@@ -107,7 +107,17 @@ async function call(tools: readonly ToolCapability[], name: string, input: unkno
 describe('collaboration tools: shape and visibility', () => {
   it('returns frozen builtin capabilities for every tool the authority allows', async () => {
     const { tools } = await setup([ceiling('zhin')]);
-    expect(tools.map((t) => t.name).sort()).toEqual(['agents', 'ask', 'cancel_delegation', 'delegate', 'escalate', 'tell']);
+    expect(tools.map((t) => t.name).sort()).toEqual([
+      'agents',
+      'ask',
+      'board_read',
+      'board_write',
+      'cancel_delegation',
+      'delegate',
+      'escalate',
+      'follow_up',
+      'tell',
+    ]);
     for (const tool of tools) {
       expect(Object.isFrozen(tool)).toBe(true);
       expect(tool).toMatchObject({ owner: OWNER, source: 'builtin:collaboration', requiresApproval: 'never', qualifiedName: tool.name });
@@ -229,6 +239,56 @@ describe('collaboration tools: delegate and tell', () => {
     expect(await call(tools, 'tell', { agent: 'writer', content: 'FYI' })).toMatch(/^told writer \(mail id\d+\)$/);
     await attached.detach({ status: 'completed' });
     expect(seen.map((m) => m.body)).toEqual([{ kind: 'tell', content: 'FYI' }]);
+  });
+
+  it('delegate with omitted agent or "self" delegates to an isolated ephemeral worker of the current agent', async () => {
+    const seenActors: string[] = [];
+    const { tools, attached } = await setup([ceiling('zhin')], {
+      'zhin#worker-1': async () => { seenActors.push('zhin#worker-1'); return { status: 'completed', content: 'worker done' }; },
+    });
+    const out = await call(tools, 'delegate', { brief: 'Background task' });
+    expect(out).toMatch(/^delegated to zhin#worker-1 \(mail id\d+\); its result will arrive as a new message$/);
+    const held = await attached.detach({ status: 'completed' });
+    expect(seenActors).toEqual(['zhin#worker-1']);
+    expect(held.map((m) => m.body)).toEqual([expect.objectContaining({ kind: 'result', content: 'worker done' })]);
+  });
+
+  it('follow_up sends a follow-up on previously delegated work and returns the wrapped reply', async () => {
+    let calls = 0;
+    const { tools, attached } = await setup([ceiling('zhin'), ceiling('researcher')], {
+      researcher: async (mail) => {
+        calls += 1;
+        return {
+          status: 'completed',
+          content: mail.body.kind === 'ask' ? `follow-up reply #${calls}` : `initial reply #${calls}`,
+        };
+      },
+    });
+    const delOut = await call(tools, 'delegate', { agent: 'researcher', brief: 'Draft outline' });
+    const mailId = /mail (id\d+)/.exec(delOut)![1]!;
+    const followOut = await call(tools, 'follow_up', { mail_id: mailId, content: 'Add section 3' });
+    expect(followOut).toContain('agent researcher replied (completed');
+    expect(followOut).toContain('follow-up reply #');
+    await attached.detach({ status: 'completed' });
+  });
+
+  it('board_write and board_read share blackboard state across actors in the engagement', async () => {
+    const { tools, toolsFor, attached } = await setup([ceiling('zhin'), ceiling('researcher')], {
+      researcher: async (mail, _signal, harness) => {
+        const peerTools = toolsFor('researcher', mail);
+        await call(peerTools, 'board_write', { key: 'findings', kind: 'artifact', content: 'peer secret findings' });
+        return { status: 'completed', content: 'wrote findings' };
+      },
+    });
+    expect(await call(tools, 'board_write', { key: 'plan', kind: 'todo', content: 'Step 1', status: 'in_progress' }))
+      .toBe('wrote board entry "plan" (todo, v1)');
+    await call(tools, 'ask', { agent: 'researcher', question: 'gather findings' });
+    const allBoard = await call(tools, 'board_read', {});
+    expect(allBoard).toContain('[board key="plan" kind="todo" v1 by zhin status=in_progress]');
+    expect(allBoard).toContain('[board key="findings" kind="artifact" v1 by researcher]');
+    expect(allBoard).toContain('[external_content source="board:researcher"');
+    expect(allBoard).toContain('peer secret findings');
+    await attached.detach({ status: 'completed' });
   });
 });
 

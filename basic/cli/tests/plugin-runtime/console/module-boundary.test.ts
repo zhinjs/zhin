@@ -46,9 +46,7 @@ describe('Console Host module boundary', () => {
       'console-schema.ts',
       'conversation-session.ts',
       'conversation-history-routes.ts',
-      'data-lifecycle-routes.ts',
       'display-path.ts',
-      'effect-sponsor-routes.ts',
       'entry-projection.ts',
       'entry-routes.ts',
       'environment-files.ts',
@@ -58,7 +56,6 @@ describe('Console Host module boundary', () => {
       'login-assist-binding.ts',
       'message-bindings.ts',
       'page-renderer.ts',
-      'portfolio-sponsor-routes.ts',
       'plugin-routes.ts',
       'plugin-package-map.ts',
       'plugin-schema-catalog.ts',
@@ -71,13 +68,6 @@ describe('Console Host module boundary', () => {
       'system-log.ts',
       'system-projection.ts',
       'system-routes.ts',
-      'workroom-routes.ts',
-      'workroom-request-policy.ts',
-      'workroom-run-control-route.ts',
-      'workroom-run-query-routes.ts',
-      'workroom-run-routes.ts',
-      'workroom-governance-routes.ts',
-      'workroom-catalog-rpc.ts',
     ];
     const violations: string[] = [];
     for (const file of supportingModules) {

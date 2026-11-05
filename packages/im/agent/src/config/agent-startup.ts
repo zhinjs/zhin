@@ -1,21 +1,12 @@
-import type { AmbientEngagementConfig, SceneEventWakeConfig, WorkroomModelProcessingConfig, ModelHarnessConfig, ProviderResilienceConfig } from '@zhin.js/ai';
+import type { AmbientEngagementConfig, SceneEventWakeConfig, ModelHarnessConfig, ProviderResilienceConfig } from '@zhin.js/ai';
+import type { VenueDefinition } from '@zhin.js/core';
 import type { AgentBindingConfig } from './types.js';
 
 /** Agent startup policies only. Provider resources and selections belong to the Host runtime graph. */
 export interface AgentStartupConfig {
   enabled?: boolean;
-  /** Workroom control-plane policy. Project definitions remain in the persistent Catalog. */
-  workroom?: {
-    /** Authenticated Console principal ids allowed to publish shared Capability Packs. */
-    trustedPackPublishers?: string[];
-    /** Explicit P12 processor contracts used by authenticated disclosure bootstrap. */
-    disclosure?: {
-      /** Stable tenant boundary for Project data; defaults to `workroom:<projectId>`. */
-      tenantId?: string;
-      /** Contracts keyed by the actual runtime Service id. No privacy property is inferred. */
-      modelServices?: Record<string, WorkroomModelProcessingConfig>;
-    };
-  };
+  /** ADR 0048 H4: Multi-bot IM rooms (Venues) binding agents to bot endpoints. */
+  venues?: readonly VenueDefinition[];
   /** per-agent 绑定（协作角色如 researcher 亦用 agents.<role>）；IM 入站总是交给 zhin */
   agents?: Record<string, AgentBindingConfig>;
   /** Structured numeric usage records; independent of log/trace retention. */

@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/douyin-live/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/douyin-live/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=4121fdf7668f0b45 -->
+<!-- sync-adapter-docs:sha256=5158338101f34e06 -->
 
 # @zhin.js/adapter-douyin-live
 

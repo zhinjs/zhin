@@ -48,3 +48,4 @@ export type { CoreReplyStream, OpenReplyStreamOptions, ReplyStreamSnapshot, Conf
 export * from '../../notice.js';
 export * from '../../request.js';
 export * from '../../system-event.js';
+export * from '../../venue/index.js';

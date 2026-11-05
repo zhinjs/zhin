@@ -53,10 +53,13 @@ sidebar: false
 | 会话画像 / 关系好感 | 已合 #995 | ai_session_profiles + ai_user_relations；短 `[Session]`/`[Relationship]`；speak gate |
 | 状态感知唤醒 | 已合 #997 | sceneEvents debounce/限频；不能发言则 skip 并记因 |
 | config:patch | 已有 | expectedRevision + 白名单路径；Console RPC |
-| 工具硬闸 | 已合 #1006 | risk + humanOnly 审批；deny 不回灌 |
-| B 站审核 MVP | 半成品 #971 | 草稿+扫码+审批页；队列/续期在第 2 期 |
-| 决策审计 | 写路径+回放已合 | #1003 / #1005 / console#34 |
-| 全局静音/急停 | 已合 #1008 | 四开关 + revision；Console 操作页可选 |
+| 工具硬闸 | Implemented（已落盘，#1006 / [ADR 0036](../adr/0036-controlled-landing-phase0.md)） | risk + humanOnly 审批；deny 不回灌 |
+| B 站审核 MVP | 半成品 #971（[ADR 0035](../adr/0035-comment-reply-adapter-contract.md)） | 草稿+扫码+审批页；队列/续期在第 2 期 |
+| 决策审计 | Implemented（已落盘，#1003 / #1005 / console#34 / [ADR 0036](../adr/0036-controlled-landing-phase0.md)） | 写路径+回放已合 |
+| 全局静音/急停 | Implemented（已落盘，#1008 / [ADR 0036](../adr/0036-controlled-landing-phase0.md)） | 四开关 + revision；Console 操作页可选 |
+| 第 1 期群运营与规则 | Implemented（已落盘，[ADR 0037](../adr/0037-controlled-landing-phase1-group-ops.md) / [ADR 0038](../adr/0038-continuous-input-merge.md) / [ADR 0039](../adr/0039-group-ops-rules.md)） | 欢迎/公告/日程唤醒、连续输入合流、动态群管违规阶梯 |
+| 受控自我变更 | Implemented（已落盘，[ADR 0040](../adr/0040-controlled-self-change.md)） | 变更草稿、审批生效与重启回报 |
+| 多 Agent 协作运行时 | Implemented（已落盘，[ADR 0048](../adr/0048-agent-harness.md)） | `@zhin.js/harness` + `@zhin.js/core/venue` 取代旧 Workroom |
 | 转人工状态机 | 缺 | 客服场景站不住 |
 
 ## 能力地图
@@ -188,8 +191,9 @@ API 建议挂现有 Console RPC：`control.get` / `control.set`（或并入 conf
 
 ## 第 3 期详设
 
-1. **场景包**
+1. **场景包与多 Agent 协作（Implemented：已由 `@zhin.js/harness` + `@zhin.js/core/venue` 落盘，见 [ADR 0048](../adr/0048-agent-harness.md)）**
    - 社团包 / 客服包 / 审核包 = 默认配置 + Console 导航 + 示例剧本
+   - 多 Agent 同场协作统一走 `@zhin.js/harness`（Actor / Mailbox / GuardKernel / Engagement Journal）与 `@zhin.js/core/venue`（取代旧 Workroom）
    - 一键启用 = 白名单 config:patch + 打开页面；可一键停用
 2. **观测与回归**
    - 指标：ambient 决策率、skip reason 分布、审批等待、硬闸拒绝率
@@ -203,8 +207,9 @@ API 建议挂现有 Console RPC：`control.get` / `control.set`（或并入 conf
 | 项 | 内容 |
 | --- | --- |
 | 已落地 | #995 会话画像 + 发言门禁 |
-| 第 0 期 | A–E 已合 |
-| 在途（导出时快照，以 main 为准） | 第 1 期群运营切片；G6 IM 审批等 |
+| 第 0 期（[ADR 0036](../adr/0036-controlled-landing-phase0.md)） | Implemented（已落盘，A–E 已合） |
+| 第 1 期与受控演进（[ADR 0037](../adr/0037-controlled-landing-phase1-group-ops.md)–[ADR 0040](../adr/0040-controlled-self-change.md)） | Implemented（已落盘：群运营闭环、连续输入合流、动态群管规则、受控自我进化） |
+| 第 3 期多 Agent 协作底座（[ADR 0048](../adr/0048-agent-harness.md)） | Implemented（已落盘：`@zhin.js/harness` + `@zhin.js/core/venue`） |
 | 半成品 | #971 B 站 MVP → 第 2 期加深 |
 | 配置通道 | config:patch + Console RPC |
 
@@ -239,11 +244,11 @@ API 建议挂现有 Console RPC：`control.get` / `control.set`（或并入 conf
 - [x] 切片 C Console 回放 (#1005 + console#34) — `f52552e70` / `7f06792e`
 - [x] 切片 D 控制面 (#1008) — `1440556f1`
 - [x] 危险工具硬闸 fail-closed (#1006) — `19d3f58e4`
-- [x] 第 0 期 A–E 主链合完 — 可选 Console 开关页
+- [x] 第 0 期 A–E 主链合完（Implemented：[ADR 0036](../adr/0036-controlled-landing-phase0.md)） — 可选 Console 开关页
 - [x] 第 1 期 ADR (#1010) — `1878744d8`
-- [ ] 第 1 期社团群垂直切片
+- [x] 第 1 期社团群垂直切片与群管/合流/自演进（Implemented：[ADR 0037](../adr/0037-controlled-landing-phase1-group-ops.md)、[ADR 0038](../adr/0038-continuous-input-merge.md)、[ADR 0039](../adr/0039-group-ops-rules.md)、[ADR 0040](../adr/0040-controlled-self-change.md)）
 - [ ] 第 2 期转人工 + 审核队列 + 可见画像
-- [ ] 第 3 期场景包 + 观测
+- [x] 第 3 期多 Agent 协作与可观测底座（Implemented：`@zhin.js/harness` + `@zhin.js/core/venue`，[ADR 0048](../adr/0048-agent-harness.md)）
 
 **节奏：**
 

@@ -4,7 +4,6 @@ import * as path from 'node:path';
 import type { SnapshotReader } from '@zhin.js/plugin-runtime';
 import { withGenerationAgentConsole } from './agent-console.js';
 import { parseBoundedInteger, writeJson } from './http-response.js';
-import { registerWorkroomConsoleRoutes } from './workroom-routes.js';
 import { registerTraceArchiveRoutes } from './trace-archive-routes.js';
 import { registerScheduleExecutionRoutes } from './schedule-execution-routes.js';
 
@@ -152,7 +151,99 @@ export function registerAgentConsoleRoutes(
     tags: ['agent', 'tasks'],
   });
 
-  registerWorkroomConsoleRoutes({ http, base, snapshots });
+  // Agent Collaboration Graph — read-only Engagement and Venue projections (ADR 0048).
+  http.route('GET', `${base}/agent/engagements`, async (_request, response, url, authScope) => {
+    if (authScope !== 'full') {
+      writeJson(response, 403, { success: false, error: '需要 full scope 才能读取 Engagement 列表' });
+      return;
+    }
+    const limit = parseBoundedInteger(url.searchParams.get('limit'), 50, 1, 200);
+    const handled = await withGenerationAgentConsole(snapshots, async ({ engagements }) => {
+      if (!engagements) {
+        writeJson(response, 200, { success: true, data: { engagements: [] } });
+        return;
+      }
+      const list = await engagements.list(limit);
+      writeJson(response, 200, { success: true, data: { engagements: list } });
+    });
+    if (!handled) {
+      writeJson(response, 503, {
+        success: false,
+        error: 'Agent Runtime 尚未就绪',
+      });
+    }
+  }, {
+    summary: 'List recent multi-agent engagements',
+    tags: ['agent', 'collaboration'],
+  });
+
+  http.route('GET', `${base}/agent/engagements/*`, async (_request, response, url, authScope) => {
+    if (authScope !== 'full') {
+      writeJson(response, 403, { success: false, error: '需要 full scope 才能读取 Engagement 详情' });
+      return;
+    }
+    const prefix = `${base}/agent/engagements/`;
+    const raw = url.pathname.startsWith(prefix) ? url.pathname.slice(prefix.length) : '';
+    if (!raw || raw.includes('/')) {
+      writeJson(response, 400, { success: false, error: '请提供有效的 engagementId' });
+      return;
+    }
+    let engagementId = '';
+    try {
+      engagementId = decodeURIComponent(raw).trim();
+    } catch {
+      writeJson(response, 400, { success: false, error: '请提供有效的 engagementId' });
+      return;
+    }
+    if (!engagementId || engagementId.length > 512) {
+      writeJson(response, 400, { success: false, error: '请提供有效的 engagementId' });
+      return;
+    }
+    const handled = await withGenerationAgentConsole(snapshots, async ({ engagements }) => {
+      if (!engagements) {
+        writeJson(response, 404, { success: false, error: 'Engagement 不存在' });
+        return;
+      }
+      const detail = await engagements.get(engagementId);
+      if (!detail) {
+        writeJson(response, 404, { success: false, error: 'Engagement 不存在' });
+        return;
+      }
+      writeJson(response, 200, { success: true, data: detail });
+    });
+    if (!handled) {
+      writeJson(response, 503, {
+        success: false,
+        error: 'Agent Runtime 尚未就绪',
+      });
+    }
+  }, {
+    summary: 'Read one multi-agent engagement collaboration graph',
+    tags: ['agent', 'collaboration'],
+  });
+
+  http.route('GET', `${base}/agent/venues`, async (_request, response, _url, authScope) => {
+    if (authScope !== 'full') {
+      writeJson(response, 403, { success: false, error: '需要 full scope 才能读取 Venue 列表' });
+      return;
+    }
+    const handled = await withGenerationAgentConsole(snapshots, async ({ venues }) => {
+      writeJson(response, 200, {
+        success: true,
+        data: { venues: venues ? venues.list() : [] },
+      });
+    });
+    if (!handled) {
+      writeJson(response, 503, {
+        success: false,
+        error: 'Agent Runtime 尚未就绪',
+      });
+    }
+  }, {
+    summary: 'List declared collaboration venues',
+    tags: ['agent', 'collaboration'],
+  });
+
   if (options.projectRoot) registerTraceArchiveRoutes({ http, base, projectRoot: options.projectRoot });
 
 }

@@ -8,7 +8,7 @@ sidebar: false
 
 设计原则（Fin，2026-11-04）：大胆设计，现有架构可推翻、无效支线可删除，只要最终理想形态，不背历史包袱。
 
-取代：`docs/plans/workroom-group-collaboration-redesign.md`（含进度表）、`docs/plans/agent-workroom-orchestration-decision-map.md`、`docs/plans/agent-workroom-production-ledger.md`、`docs/plans/governed-delivery-workflow.md`，以及代码中的 Workroom Kernel 与五角色矩阵（ADR 0024 #9）。
+取代：原 Workroom 与治理交付计划文档（`workroom-group-collaboration-redesign.md`、`agent-workroom-orchestration-decision-map.md`、`agent-workroom-production-ledger.md`、`governed-delivery-workflow.md`，已于 H5 清理中删除），以及代码中的 Workroom Kernel 与五角色矩阵（ADR 0024 #9）。
 
 ## 0. 一句话
 
@@ -180,14 +180,14 @@ packages/im/
 
 ## 8. 分阶段落地（每阶段结束时主干可发布）
 
-| 阶段 | 内容 | 结束时删除 |
-|---|---|---|
-| H0 | 本文定稿为 ADR；盘点引用（`docs/plans/agent-harness-h0-inventory.md`）；写第 7 节评测用例（`packages/im/agent/evals/cases/harness-*.case.ts`，先以 `skip` 标注实现阶段） | — |
-| H1 | `harness` 包：Mail、Mailbox、Engagement、Authority `attenuate()`、预算池、Guard Kernel、Journal。**已完成（2026-11-04）**：`packages/im/harness`；实时回合以 `attach` 作为根 Actor 接入，其余 Actor 回合由 Mailbox 驱动 | — |
-| H2 | 协作工具 `agents / ask / delegate / tell / cancel / escalate`；IM 主路径改为 `human` Mail。**进展（2026-11-04）**：协作工具与 Actor 回合已接入插件运行时回合（有同伴 Agent 时启用），8 条 harness 评测进入 CI；IM 回合仍走现有准入，H3 再收进 Mailbox | `spawn/`、`subagent/`、deferred worker、detached task、standalone loop |
-| H3 | 收件箱策略吸收准入 / 排队 / 合流 / 弹幕；定时改为 `timer` Mail | `assistant/` job engine、ingress 里的散落调度 |
-| H4 | Venue 层（合入 Room 分支的路由与身份部分）、多 Bot 投影、可见性策略、发言权 | `packages/im/workroom/` 整包、五角色 |
-| H5 | `board`、协作图 trace 与 Console 页面、A2A 远程传输 | 旧文档与示例 |
+| 阶段 | 状态 | 内容 | 结束时删除 |
+|---|---|---|---|
+| H0 | ✅ 已完成 | 本文定稿为 ADR；盘点引用（临时盘点文档 `agent-harness-h0-inventory.md` 已于 H5 清理中删除）；写第 7 节评测用例（`packages/im/agent/evals/cases/harness-*.case.ts`） | — |
+| H1 | ✅ 已完成 | `packages/im/harness` 包：Mail、Mailbox、Engagement、Authority `attenuate()`、守恒预算池、Guard Kernel、Journal（`engagement_events`）与共享黑板重建 | — |
+| H2 | ✅ 已完成 | `agents/<name>/agent.json` `collaboration` 声明（`contacts` / `accepts_from` / `budget`）；协作工具 `ask / delegate / tell / follow_up / board_read / board_write / escalate` 与 `policy-facade` 统一准入 | `spawn/`、`subagent/`、deferred worker、detached task、standalone loop |
+| H3 | ✅ 已完成 | `HostMailbox` 与 `TimerScheduler` 统一收编 IM 入站、Cron、Heartbeat、Proactive 与 FollowUp 为 `human` / `timer` / `event` Mail | `assistant/` job engine、ingress 里的散落调度 |
+| H4 | ✅ 已完成 | `@zhin.js/core` `venue/` 层（`ai.venues` 路由、自发回声过滤、`@mention` 解析与 `visible` / `summary` / `backstage` 投影）、`zhin trace <engagement>` CLI、Console Collaboration Graph、`@zhin.js/a2a` 远程信箱桥接 | `packages/im/workroom/` 整包、五角色 |
+| H5 | ✅ 已完成 | 重写 `examples/multi-agent-room` 与 `examples/self-delivery-bot`；清理旧 Workroom 门禁、计划文档与死代码 | 旧文档与示例 |
 
 ## 9. 已按建议默认的事项（2026-11-04）
 

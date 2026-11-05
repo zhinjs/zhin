@@ -4,7 +4,7 @@ sidebar: false
 
 # ADR 0045：当前消息的运行时上下文放在正文之后——让历史前缀可缓存
 
-状态：Proposed
+状态：Implemented（Accepted，Slices E1–E3 已全部落盘合入）
 
 关联：修订 [ADR 0041](./0041-prompt-segments-and-message-headers.md) §5（场景段位置）、补充 [ADR 0042](./0042-first-turn-token-budget.md) §1（稳定前缀）与 [ADR 0043](./0043-history-token-budget.md) §1（历史只存对话）。参考 fraqjs/plugin-chatsalt `054b22f`（固定指令在前、线程只追加、易变内容在断点之后）。
 
@@ -47,6 +47,14 @@ sidebar: false
 ## 不变
 
 - 系统提示词不放当前时间；不在 tool_call 与 tool_result 之间插入任何东西；`midConversationSystem` 默认值不变；存储只存对话；窗口锚定策略不变。
+
+## 实施切片（已全部完成）
+
+| 切片 | 内容 | 状态与主要落点 |
+|---|---|---|
+| E1 | 当前消息运行时尾巴与防伪转义、Anthropic 缓存断点位置 | ✅ 已完成（`packages/im/agent/src/context/{turn-envelope.ts,turn-user-message.ts,envelope-parts.ts}`、`packages/im/ai/src/llm/prompt-cache.ts`） |
+| E2 | 系统稳定前缀不随发送者权限变化（敏感能力与专家目录移入当前消息尾巴） | ✅ 已完成（`packages/im/agent/src/context/turn-envelope.ts`、`packages/im/agent/src/prompt/segments/`） |
+| E3 | 场景行移入当前消息尾巴及集合字段字典序稳定化 | ✅ 已完成（`packages/im/agent/src/context/turn-envelope.ts`、`packages/im/agent/src/scene-facts.ts`） |
 
 ## 后续（不在本 ADR）
 

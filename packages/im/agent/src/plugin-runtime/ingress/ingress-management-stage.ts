@@ -13,7 +13,6 @@ import type {
   ImApprovalChannelPort,
 } from './ports.js';
 import type { RuntimeSenderRoles } from './request.js';
-import type { WorkroomTurnContinuation } from './turn-continuation-port.js';
 
 const logger = getLogger('agent');
 
@@ -26,7 +25,6 @@ export interface IngressCommandsContext {
   readonly turnAccess: TurnAccessContext;
   readonly ownerId: string | undefined;
   readonly effectiveEndpoint: string;
-  readonly workroomAgentTurn: WorkroomTurnContinuation | undefined;
   readonly agent: AgentIngressFoundationPort;
   readonly groupRules: GroupRuleImChannel;
   readonly toolApprovalIm?: ImApprovalChannelPort;
@@ -51,7 +49,6 @@ export async function tryHandleIngressCommands(input: IngressCommandsContext): P
     turnAccess,
     ownerId,
     effectiveEndpoint,
-    workroomAgentTurn,
     agent,
     groupRules,
     toolApprovalIm,
@@ -63,29 +60,27 @@ export async function tryHandleIngressCommands(input: IngressCommandsContext): P
   const zhinAgent = agent.agent;
 
   // Agent 管理命令（/models /tree /reset…）— 在 AI trigger 前拦截
-  const managementReply = workroomAgentTurn
-    ? null
-    : await handleRuntimeManagementCommand({
-        service,
-        zhinAgent,
-        sessionKey,
-        content: message.content,
-        commandPrefix: message.commandPrefix,
-        locale: message.locale,
-        senderRoles,
-        inference: {
-          list: query => withInference(
-            { lease, sessionKey, signal: operationSignal ?? lease.stopSignal },
-            scope => scope.client.list(query),
-          ),
-        },
-        withModelScope: operation => {
-          if (!withModelScope) throw new Error('The Host model operation is unavailable');
-          return withModelScope({ lease, sessionKey, signal: operationSignal ?? lease.stopSignal }, operation);
-        },
-        semanticMemory: agent.semanticMemory ?? null,
-        senderId: turnAccess.principal.subjectId,
-      });
+  const managementReply = await handleRuntimeManagementCommand({
+    service,
+    zhinAgent,
+    sessionKey,
+    content: message.content,
+    commandPrefix: message.commandPrefix,
+    locale: message.locale,
+    senderRoles,
+    inference: {
+      list: query => withInference(
+        { lease, sessionKey, signal: operationSignal ?? lease.stopSignal },
+        scope => scope.client.list(query),
+      ),
+    },
+    withModelScope: operation => {
+      if (!withModelScope) throw new Error('The Host model operation is unavailable');
+      return withModelScope({ lease, sessionKey, signal: operationSignal ?? lease.stopSignal }, operation);
+    },
+    semanticMemory: agent.semanticMemory ?? null,
+    senderId: turnAccess.principal.subjectId,
+  });
   if (managementReply != null) {
     await reply(managementReply);
     logger.info(formatCompact({ op: 'agent_host_management', handled: true }));
@@ -93,7 +88,7 @@ export async function tryHandleIngressCommands(input: IngressCommandsContext): P
   }
 
   // ADR 0039 slice B: `rule approve|reject|disable <code>` / `rules` in the rule's own group.
-  const groupRuleReply = !workroomAgentTurn && turnAccess.origin.kind === 'im'
+  const groupRuleReply = turnAccess.origin.kind === 'im'
     ? await groupRules.handleCommand({
         platform: turnAccess.origin.platform,
         scope: turnAccess.origin.scope,
@@ -111,7 +106,7 @@ export async function tryHandleIngressCommands(input: IngressCommandsContext): P
   }
 
   // G6 (#1013): hard-gate cards (`approve tap_…` / `deny tap_…`) before the owner `/approve` commands.
-  const toolApprovalReply = !workroomAgentTurn && turnAccess.origin.kind === 'im'
+  const toolApprovalReply = turnAccess.origin.kind === 'im'
     ? toolApprovalIm?.handleCommand({
         platform: turnAccess.origin.platform,
         scope: turnAccess.origin.scope,
@@ -126,7 +121,7 @@ export async function tryHandleIngressCommands(input: IngressCommandsContext): P
     return true;
   }
 
-  const approveReply = !workroomAgentTurn && /^approve(?:\s|$)/iu.test(managementCommandText(message.content, message.commandPrefix) ?? '')
+  const approveReply = /^approve(?:\s|$)/iu.test(managementCommandText(message.content, message.commandPrefix) ?? '')
     ? zhinAgent.ownerApprovals.handleCommand(
         {
           endpoint: message.conversation.endpoint,

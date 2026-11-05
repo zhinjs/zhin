@@ -62,7 +62,7 @@ const needsAgentCommand = process.argv[2] === 'agent'
   || (process.argv[2] === 'help' && process.argv[3] === 'agent');
 program.addCommand(needsAgentCommand
   ? (await import('./commands/agent.js')).agentCommand
-  : new Command('agent').description('Agent diagnostics and Workroom operations'));
+  : new Command('agent').description('Inspect Agent capabilities'));
 program.addCommand(runtimeCommand);
 program
   .command('start')

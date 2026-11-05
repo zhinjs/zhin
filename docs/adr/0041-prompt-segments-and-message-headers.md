@@ -4,7 +4,7 @@ sidebar: false
 
 # ADR 0041：提示词分段组装与消息头
 
-状态：Proposed
+状态：Implemented（Accepted，Slices A–E 已全部落盘合入）
 
 关联：在 `codex/prompt-context-stability`（d0e1facae「scoped stable conversation context」）之上继续。该提交已把会话 / Bot 状态做成可投影的状态块（`createPromptStateBlock` + `projectPromptContext`：首次全量、相同省略、变化原位投影）。本 ADR 把这套思路推广到**每条消息的参与者信息**，并把系统提示词与消息组装统一成「段」。
 
@@ -158,17 +158,15 @@ interface SegmentInput {
 - `[Scene events]` ephemeral 块：进出群改走 `state` 段后删除；其余 scene event（戳一戳等）保留为 ephemeral。
 - 不认识 `event` 角色的旧读取方（导出、Console 历史）：按 `system notice` 展示，不报错。
 
-### 8. 实现切片（每个切片单独 PR）
+### 8. 实现切片（已全部完成）
 
-| 切片 | 内容 |
-|---|---|
-| A | 头格式与转义、`name` 字段、存储全量 / 投影省略、助手头；替换 `[User]{…}` / `[sender:…]` 渲染 |
-| B | `TurnContextState` 扩展与 icqq 数据来源；会话场景行替换 Session / Bot 状态块 |
-| C | `EventMessage`：进出群与资料变更入历史、投影兜底变更、provider `midConversationSystem` 能力与降级、工具配对与只追加约束、`[Scene events]` 迁移 |
-| D | `PromptSegmentRegistry`、内置段映射、`promptSegmentToken`、trace 展示；`PromptAssemblyRegistry` 适配层 |
-| E | 缓存断点与稳定性测试（多轮前缀字节不变）、`eval:chat` 前后对比、`fixed-prompt-cost` 预算更新 |
-
-A → C 有依赖；B 独立；D 依赖 A–C 的段产物形状；E 最后。本 ADR 不含代码。
+| 切片 | 内容 | 状态与落点 |
+|---|---|---|
+| A | 头格式与转义、`name` 字段、存储全量 / 投影省略、助手头；替换 `[User]{…}` / `[sender:…]` 渲染 | ✅ 已完成（`packages/im/ai/src/memory/{participant-header.ts,message-header.ts}`） |
+| B | `TurnContextState` 扩展与场景事实来源；会话场景行替换 Session / Bot 状态块 | ✅ 已完成（`packages/im/agent/src/scene-facts.ts`） |
+| C | `EventMessage`：进出群与资料变更入历史、投影兜底变更、provider `midConversationSystem` 能力与降级、工具配对与只追加约束、`[Scene events]` 迁移 | ✅ 已完成（`packages/im/ai/src/memory/{event-message.ts,event-rendering.ts}`、`packages/im/ai/src/llm/mid-conversation-system.ts`、`packages/im/agent/src/scene-events.ts`） |
+| D | `PromptSegmentRegistry`、内置段映射、`promptSegmentToken`、trace 展示；`PromptAssemblyRegistry` 适配层 | ✅ 已完成（`packages/im/agent/src/prompt/segments/`） |
+| E | 缓存断点与稳定性测试（多轮前缀字节不变）、`eval:chat` 前后对比、`fixed-prompt-cost` 预算更新 | ✅ 已完成（`packages/im/agent/src/prompt/segments/`、`packages/im/ai/src/llm/prompt-cache.ts`） |
 
 ## 验收标准
 
@@ -182,7 +180,7 @@ A → C 有依赖；B 独立；D 依赖 A–C 的段产物形状；E 最后。�
 7. 连续多轮同一会话：系统提示词 1–4 段与历史前缀字节不变；改群名只改变 `scene` 段。
 8. 插件经 `promptSegmentToken` 注册一个 `platform` 段：出现在系统提示词对应位置，插件卸载后随代消失。
 
-## 待 Fin 确认的默认值
+## 已落地默认值
 
 - 时间格式 `HH:mm`（修订，见 ADR 0043 §5）、实例时区；窗口首条与跨天首条加 `date`。
 - `mute_time` 用剩余秒数（0 = 未禁言）。

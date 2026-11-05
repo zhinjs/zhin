@@ -168,35 +168,51 @@ ai:
 
 Reserved built-in names (`bash`, `read_file`, `spawn_task`…) can't be overridden by plugins; for non-reserved tools with the same name, the later registration wins and a warning is logged.
 
-## Sub-agents and spawn_task
+## Multi-Agent collaboration
 
-The main Agent can use `spawn_task` to hand complex or slow work to a **background sub-agent** without blocking the conversation.
+The framework enforces boundaries while Agents decide how to collaborate (ADR 0048 Agent Harness). An inbound human message, scheduled timer, or external event opens an **Engagement**: the entry Agent is the root Actor, and every peer turn and shared Blackboard mutation is recorded in the single `engagement_events` Journal. Collaboration tools are exposed **only when the current turn has peer Agents it is allowed to contact**:
 
-```yaml
-ai:
-  agent:
-    maxParallelSubagents: 5        # parallel sub-agent cap (default 5)
-    toolExecution: tiered          # parallel | sequential | tiered (default)
-    subagentAutoContinue: true     # wake the main Agent to continue when a sub-task finishes (default true)
-    subagentDirectImDelivery: false # also post the sub-task summary straight to chat (default false)
-    subagentTools: []              # extra tools for sub-agents
+| Tool | Purpose |
+|------|---------|
+| `agents` | List peer Agents you can contact and their descriptions |
+| `ask` | Ask a peer synchronously and wait for its reply within the current turn |
+| `delegate` | Delegate asynchronously and receive a `mailId` immediately; the peer's reply is posted back as a `result` mail to wake the delegator |
+| `tell` | Send a one-way notification without waiting for a reply |
+| `follow_up` | Follow up on a previously delegated or asked `mailId` within the same Engagement |
+| `board_read` | Read entries from the current Engagement's shared Blackboard (with optional `key` or `kind: note | todo | artifact` filter) |
+| `board_write` | Write or update an entry on the Engagement's shared Blackboard (auto-increments `version` and records `board_written`) |
+| `cancel_delegation` | Cancel a delegated mail (`mailId`) |
+| `escalate` | Freeze the Engagement and hand the decision back to the initiating human principal |
+
+Declare which peers an Agent can contact and its default collaboration budget in `agents/<name>/agent.json` under `collaboration`:
+
+```json
+{
+  "name": "planner",
+  "collaboration": {
+    "contacts": ["builder", "reviewer"],
+    "accepts_from": ["human", "builder", "reviewer"],
+    "budget": {
+      "modelCalls": 16,
+      "tokens": 64000,
+      "wallMs": 120000,
+      "sideEffects": 8
+    }
+  }
+}
 ```
 
-Main `spawn_task` parameters:
+- `contacts`: peer Agent names this Agent may contact (including remote A2A actors such as `remote://<peer>/<agent>`).
+- `accepts_from`: senders allowed to contact this Agent (`"human"` or peer Agent names).
+- `budget`: default per-engagement budget ceiling (`modelCalls`, `tokens`, `wallMs`, `sideEffects`).
+- Each Agent's tools, model, and iteration cap are still defined by its own `agent.json` and core Markdown files; see [Agent tools and Skills · Define a sub-agent](../authoring/agent-tools.md#define-a-sub-agent).
 
-| Parameter | Description |
-|-----------|-------------|
-| `task` | Task description: goal, scope, expected output |
-| `agent` | Sub-agent name (must exist in `ai.agents` or `agents/<name>/agent.json`) |
-| `wait` | `true` waits synchronously; the result returns as the tool result in this turn |
-| `context` | `fork` (include the parent session's recent messages) / `fresh` (empty context) |
-| `tools` / `skills` | Tools and skills the sub-task needs |
+Guardrails are enforced deterministically by `@zhin.js/harness`'s Guard Kernel:
 
-- One turn can start several `spawn_task`s; independent sub-tasks should run in parallel. In `tiered` mode, read-only tools and spawns run in parallel while writes and `bash` run sequentially.
-- Sub-agents get a restricted tool set by default: `read_file` / `write_file` / `edit_file` / `list_dir` / `glob` / `grep` / `web_search` / `web_fetch` / `bash` plus the on-demand meta tools — not everything the main session has. Add more with `ai.agent.subagentTools`.
-- Which sub-agents the main Agent may dispatch is controlled by `ai.agents.<name>.permission.task` (glob → allow / deny).
-- When an async task finishes, the result goes **back to the main Agent first** (written into the main session and continued automatically), which then composes the reply to the user.
-- Sub-agents are declared with `agents/<name>/agent.json` plus three core Markdown files and discovered at startup. See [Agent tools and Skills · Define a sub-agent](../authoring/agent-tools.md#define-a-sub-agent).
+- **Monotonic authority attenuation**: a callee's effective authority is the intersection of the caller's authority, any narrowing on the mail, and the callee's own ceiling.
+- **Conserved budget ledger**: every `ask` / `delegate` carves a child grant out of the caller's remaining budget (`modelCalls`, `tokens`, `wallMs`, `sideEffects`); a subtree can never spend more than its parent granted.
+- **Approvals go to the human**: hard-gate, dangerous-tool, and self-change approvals always route to the initiating human Principal, never to another Agent.
+- **Cycle and convergence guards**: delegation depth (`maxDepth`), fanout (`maxFanout`), pair round trips (`maxPairRoundTrips`), duplicate messages (`maxDuplicates`), and synchronous wait cycles (`wait_cycle`) are blocked deterministically and escalated to the human.
 
 ## Sessions and session trees
 
@@ -536,141 +552,45 @@ ai:
             gpt-4o: { maxIterations: 9 }
 ```
 
-## Workroom Kernel
+## Multi-Bot Group Venues (`ai.venues`) and Tracing
 
-A Workroom lets several Agents **divide work by role** on multi-step tasks in a group, channel or GitHub repository: an Orchestrator understands requests and assigns work, Executors carry it out, Reviewers check it. Unlike ordinary chat, every step is recorded in an append-only journal, so it is auditable and recoverable.
-
-**Neither ordinary chat nor `spawn_task` creates a Workroom automatically** — only explicit Project commands such as `/work` do.
-
-### Core rules
-
-- `WorkroomKernel` accepts only explicit, Project-scoped commands and uses a versioned append-only Journal as the single source of truth for Runs / Tasks / Assignments.
-- There is no generic state-transition tool that would let a model fake "executed / accepted". Command adapters must hold an authenticated Project capability and connect the Scheduler, Executor and Acceptance ports separately.
-- Human messages first enter a content-free Project Inbox by full space address, then the Orchestrator arbitrates them into tasks. `conversation.agent` identifies the Orchestrator owning that Inbox, but can **never** bypass arbitration to turn a message straight into Task state.
-- Once ordinary discussion is persisted, a one-time handoff continues that Orchestrator turn and returns the Agent reply directly. That turn uses a Project-scoped session and a trusted Project / Proposal envelope: it doesn't read the ordinary group-chat session tail, doesn't expose `spawn_task`, and always replies through the Catalog Orchestrator Endpoint's unified outbound chain.
-- Replying to a projected card or `@`-mentioning a named member produces an exact TaskInput only when there is **exactly one** active Assignment; otherwise it asks for clarification.
-- Only an explicit `/work` creates Runs / Tasks, through the governed planning entry point.
-
-### Declaring a Workroom in Console
-
-Use Console's **Workrooms** menu to declare the Project boundary, Agent members and roles, and the group, channel or GitHub repository it binds. Workroom definitions live in the **persistent runtime Catalog**, not in the `ai` config file; saving takes effect immediately without a restart. The old `ai.workrooms` config is explicitly rejected with a migration hint. The record key is the `projectId` used by the Workroom Kernel:
-
-```json
-{
-  "projectId": "support",
-  "name": "Customer Support",
-  "enabled": true,
-  "members": [
-    { "agent": "zhin", "role": "orchestrator" },
-    { "agent": "support", "role": "executor" },
-    { "agent": "reviewer", "role": "reviewer" }
-  ],
-  "conversation": {
-    "adapter": "telegram",
-    "endpoint": "support-bot",
-    "kind": "group",
-    "id": "10001",
-    "agent": "support"
-  }
-}
-```
-
-| Field | Rule |
-| --- | --- |
-| `members[].agent` | Must reference an Agent in `ai.agents`, with each role using its own binding |
-| `members[].role` | One of `orchestrator | executor | reviewer | integration` |
-| `members[].assignmentRoute` | `{ "kind": "local" }` pins local execution; `{ "kind": "remote", "endpointId": "..." }` pins a single A2A endpoint. Omitted means local; remote execution never guesses between endpoints. The route is persisted with the Catalog revision / digest and re-checked before claiming |
-| `members[].messageRoute` | e.g. `{ "adapter": "icqq", "endpoint": "reviewer-bot" }`: which bot this member speaks through in a shared group. Omitted means the `conversation`'s main Endpoint. Once set, messages received by that bot in the same group join the same Workroom, and the member's progress, milestones and conclusions are posted by it |
-| `sponsors[]` | Authenticated principal ids (e.g. `owner:<platform-user-id>`) allowed to run Project Sponsor controls. This is persistent Catalog authority; self-reported identity in message metadata is never read |
-| `conversation` | The ordinary Workroom space |
-| `sponsorConversation` | Optional separate `group | channel` Sponsor Room carrying Sponsor commands, lifecycle / overdue notices, and Portfolio lane / queue / grant / budget / fairness cards |
-
-More constraints:
-
-- The `agent` of both conversations must be a member with the `orchestrator` role. An enabled Workroom needs at least one Orchestrator and an ordinary space.
-- One Workroom binds one full space address; **one Bot / App Endpoint can serve many Workrooms**, but ordinary Workroom addresses can't be reused or collide with a Sponsor Room.
-- Several Projects may declare the same Sponsor Room, forming a Portfolio-level aggregate room, but each projection is still a separate Project view. In an aggregate room, governance commands look like `/control data-lifecycle project <projectId> ...` and Portfolio commands like `/control portfolio <portfolioId> project <projectId> ...`; when replying to a single Project's card you can omit the Project segment. A room address carries no Project authority by itself: if the explicit Project and the replied card disagree, the card revision is stale, or the Endpoint version drifted, you get a clarification, not an executed command.
-- At startup or scan time the Host builds Sponsor delivery bindings from the persistent Catalog and current Endpoint capabilities, so the first outbound-only alert doesn't need the room to have received a message first.
-
-### A GitHub repository as a Workroom
-
-The GitHub adapter matches `repository` Workrooms using the stable `repo` metadata (`owner/repo`) from webhooks, so every Issue / PR comment thread in one repository joins the same Workroom:
-
-```json
-{
-  "projectId": "zhin-repo",
-  "name": "Zhin Repository",
-  "enabled": true,
-  "members": [{ "agent": "zhin", "role": "orchestrator" }],
-  "conversation": {
-    "adapter": "github",
-    "endpoint": "my-github-bot",
-    "kind": "repository",
-    "id": "zhinjs/zhin",
-    "agent": "zhin"
-  }
-}
-```
-
-A GitHub Project Item is an external projection / sync target for a Task, **not** part of the Workroom's identity. Console's Task page currently reads only Journal and Kernel facts; syncing to Project V2 needs a separate Integration Port, an idempotent task-key ↔ item-id mapping and a conflict policy — Console can't change Task state directly. Full design: [GitHub repository Workroom](../solutions/github-workroom.md).
-
-### Planning tasks with `/work`
-
-`/work` never degrades into a single fixed task:
-
-- It creates a Run only when the composition root installs a governed `HumanIngressPlanningPort`; otherwise it persists the request and returns `planning_unavailable` asking for clarification.
-- `DynamicWorkflowPlanningPort` is recommended: the model or Strategy returns only an **untrusted** structured DAG candidate, while Project / Catalog, Profile, Orchestrator, planning policy, budget and Sponsor Gate authority are injected by trusted ports.
-- `WorkflowPlanBuilder` re-validates the candidate against the Profile capability ceiling, required / optional steps, dependencies and cycles, Task / attempt budgets and approval gates; only `WorkroomKernel.admitWorkflowPlan()` can atomically write Plan / Task facts.
-- A Plan Gate first becomes an `approval` Blocker that the ordinary Orchestrator `resolve_blocker` can't clear. With `WorkroomPlanGateAuthorityPort` installed, a human Sponsor can submit an exact, replayable decision with `/control plan-gate <approve|reject|request-changes|cancel> <runId> <taskKey> <gateId> [reason]`.
-
-### Enabling planning for the first time
-
-In Console's **Workrooms → Planning and disclosure**, enter a `projectId` and run diagnostics. Writes need a full token bound to a `principalId`, and that principal must appear both in the Project's `sponsors` and in the process-wide trusted Pack publisher list:
+When several Agents collaborate in a shared group or channel, bind the scene in `zhin.config.yml` under `ai.venues` to assign each participant Agent its own Bot Endpoint and projection mode (see `examples/multi-agent-room`):
 
 ```yaml
-http:
-  tokens:
-    - token: ${WORKROOM_SPONSOR_TOKEN}
-      scope: full
-      principalId: workroom-admin
 ai:
-  workroom:
-    trustedPackPublishers:
-      - workroom-admin
-    disclosure:
-      modelServices:
-        ACTUAL_SERVICE_ID:
-          endpoint: REPLACE_WITH_CONTRACTED_ENDPOINT
-          processingRegions: [REPLACE_WITH_CONTRACTED_REGION]
-          maxConfidentiality: project_internal
-          external: true
-          noTraining: REPLACE_WITH_PROVIDER_GUARANTEE
-          loggingMode: REPLACE_WITH_LOGGING_MODE
-          maximumRetentionSeconds: REPLACE_WITH_MAX_RETENTION_SECONDS
-          allowsRedisclosure: REPLACE_WITH_PROVIDER_GUARANTEE
-          supportsDeletion: REPLACE_WITH_PROVIDER_GUARANTEE
+  venues:
+    - id: product-room
+      adapter: sandbox
+      scene: group:product-room
+      mode: visible
+      entry: planner
+      participants:
+        planner: sandbox:planner-bot
+        builder: sandbox:builder-bot
+        reviewer: sandbox:reviewer-bot
 ```
 
-1. The `REPLACE_WITH_*` values are deliberately invalid placeholders and can't be saved as-is. Keys under `modelServices` must be the runtime Service ID of the Profile actually selected by the Orchestrator; region, training, logging, retention and deletion fields are governance declarations that must match the provider's actual policy and account settings. With OpenRouter, also enable zero data retention and disable data collection in its [Privacy / ZDR](https://openrouter.ai/docs/guides/features/zdr) settings.
-2. Save the real config, restart the Host, log in to Console with that token, and add `workroom-admin` to the Catalog Project's `sponsors`.
-3. Once diagnostics pass, click "Initialize orchestration". Console publishes a Capability Pack from the current version's real Agent / Tool / Skill digests, activates the first Project Profile, publishes the default Planning Policy, and has the authenticated Sponsor issue Project Data Governance authority.
-4. When both Planning and Disclosure show as ready, `/work` can be submitted.
+| Field | Description |
+| --- | --- |
+| `id` | Unique Venue identifier |
+| `adapter` / `scene` | Bound adapter and group/channel scene (e.g. `group:product-room`) |
+| `mode` | Projection mode: `visible` (each Agent posts in the group via its own Bot Endpoint), `summary` (backstage collaboration with a single summary reply from the entry Agent), or `backstage` (silent background collaboration) |
+| `entry` | Default entry Agent when a human message does not `@`-mention a specific participant |
+| `participants` | Map of `agentName -> "<adapter>:<endpoint>"`; the Venue router suppresses self-echoes across participant bots and routes `@builder-bot` mentions directly to that Agent |
 
-::: warning Back up the data-governance root key
-On first issue, a self-hosted Host creates `.zhin/workroom-data-governance-root-key.json` with mode `0600`, used to wrap local data keys and sign authority. Include it in encrypted backups: **if it's lost, existing Payload Vault content can't be recovered.**
-:::
+### Inspecting Engagements with `zhin trace` and Console
 
-::: details Storage backends, Console control planes and remote execution
-- **Storage backend**: the Catalog and Run Journal share one persistence choice. With `ai.sessions.useDatabase !== false` they use the database tables `workroom_catalog` / `workroom_events`, and a Database Root Host that isn't ready makes the new version fail to publish; with it explicitly `false` they fall back to atomic file event streams in `.zhin/workroom-catalog.json` and `.zhin/workroom-journal`. The backend is fixed at process start and **can't change on hot reload** — restart the process to change it, so old and new versions never write two facts sources with no CAS relationship.
-- **Catalog edits**: saves use revision CAS; member references follow the current version's `ai.agents`, and stale references are rejected. Journal facts of existing Runs are never overwritten by Catalog edits.
-- **Read-only projections**: Console's Run list and details are Project-scoped read-only projections (e.g. `GET /api/agent/workroom/runs?projectId=...`) and can't change Tasks / Assignments.
-- **Typed control planes** (isolated from each other): Profiles and Project Knowledge are published or rolled back through `workroom.profile.*` / `workroom.knowledge.*` RPC; a Portfolio Sponsor submits exact commands to `POST /api/agent/workroom/portfolio/commands`; an Effect Sponsor uses `POST /api/agent/workroom/effects/sponsor-decisions` to decide only authorizations bound to an exact Intent, accepting only a closed set of `reasonCode`s and storing no free-form explanation; Data Steward / Privacy / Compliance use `/api/agent/workroom/data-lifecycle`, `/overdue` and `/commands` to query lifecycle projections and run Holds, subject erasure / export and retention purge / reconcile — these endpoints are published only when Root-private role authority, the current Catalog Project and the P12 Console recipient all match. Every endpoint re-derives the principal from the authenticated token and re-checks the current Catalog / Profile / governance revision; identity, approval or discussion self-reported in the request body never grants write access.
-- **Remote execution**: the optional Remote A2A Executor reuses the same Assignment lease / fence / event contract. A new claim is allowed only when the persistent Profile, Authority Grant, Workspace, Disclosure and the endpoint's Card / auth / transport snapshots all match exactly; anything missing blocks persistently. The old `ai.remoteAgents` poller no longer exists.
-:::
+Every Engagement's causal mail chain, Blackboard entries, guard blocks, and budget consumption are persisted in `engagement_events`:
 
-### Legacy data
+```bash
+# List recent Engagements
+zhin trace
 
-The legacy format (a Journal with embedded payloads) and legacy Runs are no longer supported and have no migration tooling; opening a legacy-format store fails closed. See [Legacy concept migration](../contributing/legacy-concepts.md).
+# Inspect a specific Engagement's causal hops, Blackboard entries, and budget
+zhin trace <engagementId>
+```
+
+You can also inspect the live **Collaboration Graph**, Blackboard entries, and budget ledger in the Remote Console.
 
 ## Related
 

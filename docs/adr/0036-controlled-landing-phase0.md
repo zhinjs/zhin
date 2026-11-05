@@ -4,7 +4,7 @@ sidebar: false
 
 # ADR 0036：受控落地第 0 期——决策审计、控制面与危险工具硬闸
 
-状态：Proposed
+状态：Implemented（Accepted，Slices A–E 已全部落盘合入）
 
 关联：[#998](https://github.com/zhinjs/zhin/issues/998)；对齐 [#995](https://github.com/zhinjs/zhin/pull/995)（会话画像 / session-gate，已合入）、[#997](https://github.com/zhinjs/zhin/pull/997)（scene event 唤醒，合并中）
 
@@ -129,17 +129,15 @@ API：
 - 控制面判定位于 session-gate **之前**：控制面拦下时不再跑会话画像发言判定和旁听判定。
 - `config:patch`：控制面写入沿用 `expectedRevision` 乐观并发；受控路径变更写 `config_change`。
 
-### 6. 实现切片（ADR 合入后按序做）
+### 6. 实现切片（已全部完成）
 
-| 切片 | 内容 |
-|---|---|
-| A | `ai_decision_events` schema + 迁移 + `reason_code` 枚举 + 序列化 / 截断 / 脱敏测试 |
-| B | 写路径埋点：入站唤醒、session-gate、ambient、模型调用、工具、出站 |
-| C | Console 回放：列表、`turn_id` 时间线、JSON 导出 |
-| D | 控制面：`control.get` / `control.set`、两级合并、生效顺序、`control_change` 审计 |
-| E | 危险工具硬闸：`risk` 声明、审批队列与卡片、超时拒绝、fail closed 不重试 |
-
-每个切片单独 PR；本 ADR 不含代码。
+| 切片 | 内容 | 状态与核心落点 |
+|---|---|---|
+| A | `ai_decision_events` schema + 迁移 + `reason_code` 枚举 + 序列化 / 截断 / 脱敏测试 | ✅ 已完成（`packages/im/agent/src/decision-events.ts`、`basic/cli/src/database/ai-decision-event-store.ts`） |
+| B | 写路径埋点：入站唤醒、session-gate、ambient、模型调用、工具、出站 | ✅ 已完成（`packages/im/agent/src/service.ts`、`packages/im/agent/src/scene-event-wake.ts`） |
+| C | Console 回放：列表、`turn_id` 时间线、JSON 导出 | ✅ 已完成（Console `/api/ai/decisions` 回放与导出、`packages/console`） |
+| D | 控制面：`control.get` / `control.set`、两级合并、生效顺序、`control_change` 审计 | ✅ 已完成（`packages/im/agent/src/security/control-plane.ts`） |
+| E | 危险工具硬闸：`risk` 声明、审批队列与卡片、超时拒绝、fail closed 不重试 | ✅ 已完成（`packages/im/agent/src/security/tool-hard-gate.ts`） |
 
 ## 验收标准（第 0 期）
 

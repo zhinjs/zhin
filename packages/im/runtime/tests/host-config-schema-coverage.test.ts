@@ -61,7 +61,7 @@ describe('Host configuration field coverage', () => {
 
   it('declares the public AI service inputs and nested Agent policies', () => {
     expect(Object.keys(field(['ai']).properties as object)).toEqual(expect.arrayContaining([
-      'enabled', 'workroom', 'agents', 'sessions', 'context', 'multimodal', 'memory', 'knowledge', 'githubMcp', 'mcpServers',
+      'enabled', 'venues', 'externalPeers', 'agents', 'sessions', 'context', 'multimodal', 'memory', 'knowledge', 'githubMcp', 'mcpServers',
       'agent', 'access', 'trigger',
     ]));
     for (const path of [
@@ -96,8 +96,8 @@ describe('Host configuration field coverage', () => {
       // assistant.queue removed (ADR 0048 H3): retries/concurrency are internal to TimerScheduler
       ['assistant', 'defaults', 'notify'],
       ['assistant', 'home', 'policy', 'requireMaster'], ['assistant', 'events', 'allowedSources'],
-      ['mcp', 'allowUnauthenticatedLocalhost'], ['a2a', 'workroomCallbacks', 'bindings'],
-      ['a2a', 'workroomRemoteExecutors', 'maxResponseBytes'],
+      ['mcp', 'allowUnauthenticatedLocalhost'], ['a2a', 'mailbox', 'peers'],
+      ['a2a', 'mailbox', 'maxBodyBytes'],
     ]) expect(field(path)).toBeTypeOf('object');
     expect(field(['assistant']).properties).not.toHaveProperty('queue');
     check({ speech: { stt: { enabled: true, provider: 'openai', apiKey: '${KEY}' },
@@ -105,7 +105,7 @@ describe('Host configuration field coverage', () => {
     assistant: { enabled: true,
       defaults: { notify: { channel: 'silent' } }, home: { aliases: { lamp: 'light.fixture' }, restToken: '${HOME_KEY}' } },
     mcp: { enabled: true, path: '/mcp', token: '${KEY}' },
-    a2a: { enabled: '${A2A_ON}', workroomCallbacks: { bindings: [{ endpointId: 'fixture', credential: { source: 'config', value: '${KEY}' } }] } },
+    a2a: { enabled: '${A2A_ON}', mailbox: { enabled: true, peers: [{ actor: 'coder', url: 'https://remote.example/a2a/mailbox', secret: '${KEY}' }] } },
     });
   });
 
@@ -143,14 +143,14 @@ describe('Host configuration field coverage', () => {
     { http: { tokens: [null, { token: null }, { token: 'fixture', scope: null, principalId: null }], corsOrigins: [null, 'https://fixture.invalid'] } },
     { database: { dialect: 'mysql', pool: null } },
     { database: { dialect: 'pg', pool: { min: null, max: null, acquireTimeoutMillis: null, idleTimeoutMillis: null } } },
-    { mcp: { path: null, token: null }, a2a: { path: null, token: null, publicUrl: null, workroomCallbacks: null, workroomRemoteExecutors: null } },
+    { mcp: { path: null, token: null }, a2a: { path: null, token: null, publicUrl: null, mailbox: null } },
   ])('retains explicit null where the existing consumer already falls back: %#', input => {
     expect(check(input)).toEqual(input);
   });
 
   it('does not relax previously strict Host fields or non-null collection members', () => {
     for (const input of [
-      { ai: { agent: null } }, { ai: { workroom: null } }, { http: { readiness: null } },
+      { ai: { agent: null } }, { ai: { venues: null } }, { http: { readiness: null } },
       { ai: { mcpServers: [null] } }, { http: { listeners: null } },
       { ai: { multimodal: { perception: { maxChars: null } } } },
     ]) expect(parsePluginConfigSchema(hostSchema, input).errors.length).toBeGreaterThan(0);

@@ -135,6 +135,8 @@ export interface AgentCeiling {
   readonly egress: EgressScope;
   /** Who may hand this agent work: agent names, plus `human` for people. */
   readonly acceptsFrom: NameScope;
+  /** Default delegation budget when handing work to this agent (ADR 0048 §2, §5). */
+  readonly defaultBudget?: Partial<BudgetAmounts>;
 }
 
 // ---------------------------------------------------------------------------
@@ -350,20 +352,114 @@ export interface GuardKernel {
 }
 
 // ---------------------------------------------------------------------------
-// Engagement journal (ADR 0048 §3.5)
+// Blackboard (ADR 0048 §3.1, §3.3, H5)
+// ---------------------------------------------------------------------------
+
+export type BoardEntryKind = 'artifact' | 'note' | 'todo';
+export type BoardTodoStatus = 'pending' | 'in_progress' | 'done';
+
+export interface BoardEntry {
+  readonly key: string;
+  readonly kind: BoardEntryKind;
+  readonly content: string;
+  readonly author: ActorId;
+  readonly updatedAt: number;
+  readonly version: number;
+  readonly status?: BoardTodoStatus;
+}
+
+export interface BoardWriteInput {
+  readonly key: string;
+  readonly kind?: BoardEntryKind;
+  readonly content: string;
+  readonly author: ActorId;
+  readonly status?: BoardTodoStatus;
+  readonly mailId?: MailId;
+}
+
+export interface BoardReadFilter {
+  readonly key?: string;
+  readonly kind?: BoardEntryKind;
+}
+
+// ---------------------------------------------------------------------------
+// Remote Mailbox transport (ADR 0048 §3.6, §8 H5)
+// ---------------------------------------------------------------------------
+
+export interface RemoteMailResult {
+  readonly status: 'completed' | 'cancelled' | 'rejected';
+  readonly content: string;
+  readonly consumed?: Partial<BudgetAmounts>;
+}
+
+export interface RemoteMailTransport {
+  canRoute(target: ActorId): boolean;
+  send(mail: Mail, grantedBudget: BudgetAmounts): Promise<RemoteMailResult>;
+}
+
+export interface GuardBlockReason {
+  readonly code: GuardDenyCode | string;
+  readonly detail?: string;
+}
+
+export interface FollowUpInput {
+  readonly mailId: MailId;
+  readonly from: ActorId;
+  readonly content: string;
+  readonly budget?: Partial<BudgetAmounts>;
+  readonly timeoutMs?: number;
+}
+
+export interface SendAck {
+  readonly ok: boolean;
+  readonly accepted: boolean;
+  readonly mailId: MailId;
+  readonly mail?: Mail;
+  readonly reply?: { readonly status: TurnStatus; readonly content: string };
+  readonly result?: { readonly status: TurnStatus | 'rejected'; readonly content: string };
+  readonly code?: string;
+  readonly reason?: GuardBlockReason;
+  readonly escalated?: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Engagement journal (ADR 0048 §3.5, §6, §8 H5)
 // ---------------------------------------------------------------------------
 
 export type EngagementEventType =
   | 'engagement_opened'
   | 'mail_admitted'
   | 'mail_denied'
+  | 'mail_sent'
+  | 'mail_delivered'
+  | 'mail_completed'
+  | 'mail_cancelled'
   | 'turn_started'
   | 'turn_finished'
   | 'budget_granted'
   | 'budget_charged'
   | 'budget_exceeded'
+  | 'tool_called'
+  | 'board_written'
+  | 'venue_projected'
+  | 'guard_blocked'
   | 'escalated'
   | 'engagement_closed';
+
+export type JournalEvent =
+  | {
+      readonly type: 'board_written';
+      readonly actor: ActorId;
+      readonly key: string;
+      readonly kind: 'artifact' | 'note' | 'todo';
+      readonly content?: string;
+      readonly status?: BoardTodoStatus;
+      readonly version?: number;
+    }
+  | {
+      readonly type: EngagementEventType;
+      readonly [key: string]: unknown;
+    };
 
 export interface EngagementEvent {
   readonly engagementId: EngagementId;
@@ -373,6 +469,53 @@ export interface EngagementEvent {
   readonly type: EngagementEventType;
   /** JSON-serializable payload; shape is per event type and documented at the call site. */
   readonly data: Readonly<Record<string, unknown>>;
+}
+
+export type JournalRecord = EngagementEvent & {
+  readonly event?: JournalEvent;
+};
+
+export interface EngagementHopSummary {
+  readonly mailId: MailId;
+  readonly kind: MailKind;
+  readonly from: string;
+  readonly to: ActorId;
+  readonly causationId?: MailId;
+  readonly status: 'sent' | 'delivered' | 'completed' | 'cancelled';
+}
+
+export interface EngagementSummary {
+  readonly engagementId: EngagementId;
+  readonly initiator?: Principal;
+  readonly venue?: VenueRef;
+  readonly startedAt: number;
+  readonly endedAt?: number;
+  readonly status: 'open' | 'completed' | 'escalated' | 'cancelled' | 'blocked';
+  readonly reason?: string;
+  readonly actors: readonly ActorId[];
+  readonly mailCount: number;
+  readonly toolCallCount: number;
+  readonly boardEntries: readonly BoardEntry[];
+  readonly guardBlocks: readonly {
+    readonly from: ActorId;
+    readonly to?: ActorId;
+    readonly reason: GuardBlockReason;
+    readonly at: number;
+  }[];
+  readonly escalations: readonly {
+    readonly by: ActorId;
+    readonly reason: string;
+    readonly at: number;
+  }[];
+  readonly projections: readonly {
+    readonly venue: VenueRef;
+    readonly actor: ActorId;
+    readonly mailId: MailId;
+    readonly mode: 'visible' | 'summary';
+    readonly at: number;
+  }[];
+  readonly consumed: BudgetAmounts;
+  readonly hops: readonly EngagementHopSummary[];
 }
 
 export interface JournalRetention {
@@ -400,6 +543,12 @@ export interface EngagementJournal {
   read(engagementId: EngagementId): Promise<readonly EngagementEvent[]>;
   /** Deletes engagements past retention; returns how many engagements were removed. */
   prune(now: number): Promise<number>;
+  /** Returns most recent engagement IDs ordered by latest activity descending. */
+  listEngagements(limit?: number): Promise<readonly EngagementId[]>;
+  /** Summarizes an engagement's events into a collaboration graph and stats. */
+  summarize(engagementId: EngagementId): Promise<EngagementSummary | undefined>;
+  /** Compacts intermediate events of a normally completed engagement. */
+  compact(engagementId: EngagementId): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------

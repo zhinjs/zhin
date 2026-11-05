@@ -3,24 +3,26 @@ import type {
   AssistantConfig,
   McpServerEntry,
 } from '@zhin.js/agent';
+import { validateVenueDefinitions, type VenueDefinition } from '@zhin.js/core';
 import { existsSync, realpathSync } from 'node:fs';
 import { isAbsolute, relative, resolve } from 'node:path';
 import type { ConfigDocumentPort, RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
 import { expandEnvironmentValue } from '@zhin.js/runtime';
 
-export type AgentHostAIConfig = NonNullable<ConstructorParameters<typeof AIService>[0]>;
-export type WorkroomStorageMode = 'database' | 'file';
+export type VenueConfig = VenueDefinition;
+
+export interface ExternalPeerConfig {
+  readonly platform: string;
+  readonly userId: string;
+  readonly label?: string;
+}
+
+export type AgentHostAIConfig = NonNullable<ConstructorParameters<typeof AIService>[0]> & {
+  readonly venues?: readonly VenueDefinition[];
+  readonly externalPeers?: readonly ExternalPeerConfig[];
+};
 
 type McpServerConfig = NonNullable<AgentHostAIConfig['mcpServers']>[number];
-
-type WorkroomModelProcessingContract = NonNullable<
-  NonNullable<NonNullable<AgentHostAIConfig['workroom']>['disclosure']>['modelServices']
->[string];
-
-export interface WorkroomDisclosureBootstrapResolution {
-  readonly modelServiceId?: string;
-  readonly contract?: WorkroomModelProcessingContract;
-}
 
 export async function resolveAiConfig(
   config: RuntimeConfigDocument | ConfigDocumentPort,
@@ -29,8 +31,15 @@ export async function resolveAiConfig(
   if (!document || typeof document !== 'object') return undefined;
   const ai = (document as Record<string, unknown>).ai;
   if (!ai || typeof ai !== 'object') return undefined;
+  const rawAi = ai as Record<string, unknown>;
+  if (Object.hasOwn(rawAi, 'workroom') || Object.hasOwn(rawAi, 'workrooms')) {
+    throw new Error(
+      'Configuration key "ai.workroom" has been removed in ADR 0048. Declare shared rooms under "ai.venues" and agent collaboration ceilings under "agents/<name>/agent.json" ("collaboration").',
+    );
+  }
   const expanded = expandEnvironmentValue(ai, (key) => process.env[key]) as AgentHostAIConfig;
-  resolveWorkroomTrustedPackPublishers(expanded);
+  resolveAgentHostVenues(expanded);
+  resolveAgentHostExternalPeers(expanded);
   return expanded;
 }
 
@@ -44,22 +53,71 @@ export async function resolveAssistantConfigDocument(
   return expandEnvironmentValue(assistant, (key) => process.env[key]) as AssistantConfig;
 }
 
-export function resolveWorkroomTrustedPackPublishers(
+export function resolveAgentHostVenues(
   ai: AgentHostAIConfig | undefined,
-): readonly string[] {
-  const value = ai?.workroom?.trustedPackPublishers;
-  if (value === undefined) return Object.freeze([]);
-  if (!Array.isArray(value)) throw new Error('ai.workroom.trustedPackPublishers must be an array');
-  const normalized = value.map((principalId, index) => {
-    if (typeof principalId !== 'string' || !principalId.trim() || principalId !== principalId.trim()) {
-      throw new Error(`ai.workroom.trustedPackPublishers.${index} is invalid`);
-    }
-    return principalId;
-  });
-  if (new Set(normalized).size !== normalized.length) {
-    throw new Error('ai.workroom.trustedPackPublishers contains duplicates');
-  }
-  return Object.freeze(normalized);
+): readonly VenueDefinition[] {
+  const raw = ai?.venues;
+  if (raw === undefined || raw === null) return Object.freeze([]);
+  validateVenueDefinitions(raw);
+  return Object.freeze(
+    raw.map((venue) =>
+      Object.freeze({
+        id: venue.id.trim(),
+        ...(venue.label ? { label: venue.label.trim() } : {}),
+        conversation: Object.freeze({
+          platform: venue.conversation.platform.trim(),
+          ...(venue.conversation.sceneType ? { sceneType: venue.conversation.sceneType } : {}),
+          sceneId: venue.conversation.sceneId.trim(),
+          ...(venue.conversation.threadId ? { threadId: venue.conversation.threadId.trim() } : {}),
+        }),
+        members: Object.freeze(
+          venue.members.map((member) =>
+            Object.freeze({
+              agent: member.agent.trim(),
+              botEndpoint: member.botEndpoint.trim(),
+              ...(member.aliases?.length
+                ? { aliases: Object.freeze(member.aliases.map((a) => a.trim())) }
+                : {}),
+            }),
+          ),
+        ),
+        ...(venue.entry ? { entry: venue.entry.trim() } : {}),
+        ...(venue.visibility ? { visibility: venue.visibility } : {}),
+      }),
+    ),
+  );
+}
+
+export function resolveAgentHostExternalPeers(
+  ai: AgentHostAIConfig | undefined,
+): readonly ExternalPeerConfig[] {
+  const raw = ai?.externalPeers;
+  if (raw === undefined || raw === null) return Object.freeze([]);
+  if (!Array.isArray(raw)) throw new TypeError('ai.externalPeers must be an array');
+  const seen = new Set<string>();
+  return Object.freeze(
+    raw.map((item, index) => {
+      if (!item || typeof item !== 'object') {
+        throw new TypeError(`Invalid ai.externalPeers[${index}] declaration`);
+      }
+      const platform = typeof item.platform === 'string' ? item.platform.trim() : '';
+      const userId = typeof item.userId === 'string' ? item.userId.trim() : '';
+      if (!platform || !userId) {
+        throw new TypeError(`ai.externalPeers[${index}] requires non-empty platform and userId`);
+      }
+      const key = `${platform}:${userId}`;
+      if (seen.has(key)) {
+        throw new Error(`ai.externalPeers contains duplicate peer "${key}"`);
+      }
+      seen.add(key);
+      const label = typeof item.label === 'string' && item.label.trim() ? item.label.trim() : undefined;
+      return Object.freeze({
+        platform,
+        userId,
+        ...(label ? { label } : {}),
+      });
+    }),
+  );
 }
 
 export function resolveAgentHostMcpServers(
@@ -99,91 +157,6 @@ export function resolveAgentHostKnowledgeDirectory(
     throw new TypeError('ai.knowledge.baseDir must stay inside the project root');
   }
   return directory;
-}
-
-export function resolveWorkroomDisclosureBootstrap(input: Readonly<{
-  serviceId?: string;
-  ai: AgentHostAIConfig;
-}>): WorkroomDisclosureBootstrapResolution {
-  const contract = input.serviceId ? input.ai.workroom?.disclosure?.modelServices?.[input.serviceId] : undefined;
-  return Object.freeze({ ...(input.serviceId ? { modelServiceId: input.serviceId } : {}), ...(contract ? { contract } : {}) });
-}
-
-export function assessWorkroomDisclosureSetup(input: Readonly<{
-  resolution: WorkroomDisclosureBootstrapResolution;
-  authorityPublished: boolean;
-  authorityCurrent: boolean;
-  localIssuerAvailable: boolean;
-}>): Readonly<{
-  disclosureReady: boolean;
-  disclosureConfigReady: boolean;
-  diagnostics: readonly string[];
-}> {
-  const { modelServiceId, contract } = input.resolution;
-  const diagnostics: string[] = [];
-  const disclosureConfigReady = contract !== undefined
-    && contract.maxConfidentiality !== 'public'
-    && (!contract.external || contract.noTraining);
-  if (!modelServiceId) diagnostics.push('orchestrator 尚未绑定模型服务');
-  else if (!contract) {
-    diagnostics.push(`尚未配置 ai.workroom.disclosure.modelServices.${modelServiceId}`);
-  } else if (contract.external && !contract.noTraining) {
-    diagnostics.push(`外部模型服务 ${modelServiceId} 必须显式禁止训练`);
-  } else if (contract.maxConfidentiality === 'public') {
-    diagnostics.push(`模型服务 ${modelServiceId} 至少需要 project_internal 披露等级`);
-  }
-  if (!input.authorityPublished) diagnostics.push('尚未发布 Project Data Governance 披露 authority');
-  else if (!input.authorityCurrent) {
-    diagnostics.push('Project Data Governance 披露 authority 未绑定当前 Catalog/Sponsor');
-  }
-  if (!input.localIssuerAvailable && !input.authorityCurrent) {
-    diagnostics.push('Root-private Data Governance 签发能力不可用');
-  }
-  return Object.freeze({
-    disclosureReady: input.authorityCurrent,
-    disclosureConfigReady,
-    diagnostics: Object.freeze(diagnostics),
-  });
-}
-
-export function resolveWorkroomDisclosureAuthorityPublication(
-  current: Readonly<{ revision: number; digest: string }> | undefined,
-  authorityCurrent: boolean,
-): Readonly<{ revision: number; previousDigest?: string }> | undefined {
-  if (authorityCurrent) return undefined;
-  return Object.freeze({
-    revision: (current?.revision ?? 0) + 1,
-    ...(current ? { previousDigest: current.digest } : {}),
-  });
-}
-
-export function resolveWorkroomPlanningPolicyPublication(
-  current: Readonly<{ revision: number; digest: string }> | undefined,
-): Readonly<{ revision: number; expectedPreviousDigest?: string }> {
-  return Object.freeze({
-    revision: (current?.revision ?? 0) + 1,
-    ...(current ? { expectedPreviousDigest: current.digest } : {}),
-  });
-}
-
-export function isWorkroomPlanningPolicyReady(authority: Readonly<{
-  policy: Readonly<{ schedulerPolicy: Readonly<{ pinnedAtSequence: number }> }>;
-}> | undefined): boolean {
-  return authority?.policy.schedulerPolicy.pinnedAtSequence === 1;
-}
-
-export function resolveWorkroomStorageMode(
-  ai: AgentHostAIConfig | undefined,
-): WorkroomStorageMode {
-  return ai?.sessions?.useDatabase === false ? 'file' : 'database';
-}
-
-export function assertFixedWorkroomStorageMode(
-  fixed: WorkroomStorageMode,
-  requested: WorkroomStorageMode,
-): void {
-  if (requested === fixed) return;
-  throw new Error(`Workroom storage mode changed from ${fixed} to ${requested}; process restart required`);
 }
 
 async function readConfigDocument(

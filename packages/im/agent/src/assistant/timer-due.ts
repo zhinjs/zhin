@@ -4,6 +4,7 @@
  * Mail turn (same Gap A shape as {@link deliverTimerMailInbound} in evals).
  */
 import type { HostMailbox } from '../collaboration/host-mailbox.js';
+import { runInMailTurn } from '../collaboration/mail-turn-context.js';
 import type { TaskExecutionResult, TaskExecutor } from '../task-executor.js';
 import { failedScheduleResult } from '../schedule-domain/execution-result.js';
 import { jobPrompt, type TimerDueHandler } from './timer-scheduler.js';
@@ -44,14 +45,25 @@ export function createTimerMailDueHandler(options: TimerMailDueHandlerOptions): 
         });
       }
       let status: 'completed' | 'failed' | 'cancelled' = 'failed';
+      const beforeCalls = admission.harness.remaining(admission.mail)?.modelCalls ?? 0;
       try {
         const signal = runOptions.signal
           ? AbortSignal.any([runOptions.signal, admission.signal])
           : admission.signal;
-        const result = await options.executor.execute(job, {
-          signal,
-          attempt: runOptions.attempt,
-        });
+        const result = await runInMailTurn(
+          { mailbox, mail: admission.mail, batch: admission.batch },
+          async () => {
+            const execResult = await options.executor.execute(job, {
+              signal,
+              attempt: runOptions.attempt,
+            });
+            const afterCalls = admission.harness.remaining(admission.mail)?.modelCalls ?? 0;
+            if (afterCalls === beforeCalls) {
+              await admission.harness.charge(admission.mail, { modelCalls: 1 });
+            }
+            return execResult;
+          },
+        );
         status = result.success ? 'completed' : signal.aborted ? 'cancelled' : 'failed';
         return result;
       } catch (cause) {

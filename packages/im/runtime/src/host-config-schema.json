@@ -731,113 +731,121 @@
       "description": "Providers, Agents, sessions, memory, tools, and execution security.",
       "x-descriptionZh": "Provider、Agent、会话、记忆、工具与执行安全策略。",
       "properties": {
-        "workroom": {
-          "type": "object",
-          "additionalProperties": true,
-          "description": "Process-owned Workroom control-plane policy; Projects remain in the persistent Catalog.",
-          "x-descriptionZh": "进程持有的 Workroom 控制面策略；Project 仍由持久化 Catalog 管理。",
-          "properties": {
-            "trustedPackPublishers": {
-              "type": "array",
-              "items": {
+        "venues": {
+          "type": "array",
+          "description": "Shared multi-Bot IM rooms (ADR 0048 §3.2).",
+          "x-descriptionZh": "多 Bot 共享 IM 房间（ADR 0048 §3.2）。",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "conversation",
+              "members"
+            ],
+            "properties": {
+              "id": {
                 "type": "string",
                 "minLength": 1
               },
-              "uniqueItems": true,
-              "description": "Authenticated Console principal ids allowed to publish shared Capability Packs.",
-              "x-descriptionZh": "允许发布共享 Capability Pack 的 Console 认证 principalId。",
-              "x-zhin-config": {
-                "security": true
-              }
-            },
-            "disclosure": {
-              "type": "object",
-              "additionalProperties": false,
-              "description": "Explicit P12 model processor contracts for Workroom disclosure bootstrap.",
-              "x-descriptionZh": "Workroom 披露初始化使用的显式 P12 模型处理方契约。",
-              "properties": {
-                "tenantId": {
-                  "type": "string",
-                  "minLength": 1
-                },
-                "modelServices": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "required": [
-                      "endpoint",
-                      "processingRegions",
-                      "maxConfidentiality",
-                      "external",
-                      "noTraining",
-                      "loggingMode",
-                      "maximumRetentionSeconds",
-                      "allowsRedisclosure",
-                      "supportsDeletion"
-                    ],
-                    "properties": {
-                      "endpoint": {
-                        "type": "string",
-                        "minLength": 1
-                      },
-                      "owner": {
-                        "type": "string",
-                        "minLength": 1
-                      },
-                      "trustDomain": {
-                        "type": "string",
-                        "minLength": 1
-                      },
-                      "processingRegions": {
-                        "type": "array",
-                        "minItems": 1,
-                        "uniqueItems": true,
-                        "items": {
-                          "type": "string",
-                          "minLength": 1
-                        }
-                      },
-                      "maxConfidentiality": {
-                        "type": "string",
-                        "enum": [
-                          "public",
-                          "project_internal",
-                          "confidential",
-                          "restricted"
-                        ]
-                      },
-                      "external": {
-                        "type": "boolean"
-                      },
-                      "noTraining": {
-                        "type": "boolean"
-                      },
-                      "loggingMode": {
-                        "type": "string",
-                        "enum": [
-                          "disabled",
-                          "metadata_only",
-                          "full"
-                        ]
-                      },
-                      "maximumRetentionSeconds": {
-                        "type": "integer",
-                        "minimum": 1
-                      },
-                      "allowsRedisclosure": {
-                        "type": "boolean"
-                      },
-                      "supportsDeletion": {
-                        "type": "boolean"
-                      }
-                    }
+              "label": {
+                "type": "string"
+              },
+              "conversation": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "platform",
+                  "sceneId"
+                ],
+                "properties": {
+                  "platform": {
+                    "type": "string",
+                    "minLength": 1
                   },
-                  "description": "Explicit processor contract keyed by the selected runtime Service id, never a legacy Provider alias."
+                  "sceneType": {
+                    "type": "string",
+                    "enum": [
+                      "private",
+                      "group",
+                      "channel"
+                    ]
+                  },
+                  "sceneId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "threadId": {
+                    "type": "string"
+                  }
                 }
               },
-              "x-zhin-config": {
-                "security": true
+              "members": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "agent",
+                    "botEndpoint"
+                  ],
+                  "properties": {
+                    "agent": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "botEndpoint": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "aliases": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  }
+                }
+              },
+              "entry": {
+                "type": "string",
+                "minLength": 1
+              },
+              "visibility": {
+                "type": "string",
+                "enum": [
+                  "visible",
+                  "summary",
+                  "backstage"
+                ]
+              }
+            }
+          }
+        },
+        "externalPeers": {
+          "type": "array",
+          "description": "Declared third-party Bot accounts (ADR 0043/0048).",
+          "x-descriptionZh": "显式声明的外部第三方 Bot 账号（ADR 0043/0048）。",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "platform",
+              "userId"
+            ],
+            "properties": {
+              "platform": {
+                "type": "string",
+                "minLength": 1
+              },
+              "userId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "label": {
+                "type": "string"
               }
             }
           }
@@ -2888,8 +2896,8 @@
     "a2a": {
       "type": "object",
       "additionalProperties": true,
-      "description": "A2A Agent Card, remote execution, and Workroom callbacks.",
-      "x-descriptionZh": "A2A Agent Card、远程执行与 Workroom 回调。",
+      "description": "A2A Agent Card, remote execution, and cross-process Mailbox transport.",
+      "x-descriptionZh": "A2A Agent Card、远程执行与跨进程 Mailbox 传输。",
       "properties": {
         "enabled": {
           "type": [
@@ -2919,12 +2927,14 @@
             "null"
           ]
         },
-        "workroomCallbacks": {
+        "mailbox": {
           "type": [
             "object",
             "null"
           ],
           "additionalProperties": true,
+          "description": "Cross-process A2A Mailbox transport for signed Mail + Authority + Budget envelopes (ADR 0048 §3.6).",
+          "x-descriptionZh": "跨进程 A2A Mailbox 传输（携带签名 Mail、Authority 与 Budget，ADR 0048 §3.6）。",
           "properties": {
             "enabled": {
               "type": [
@@ -2934,7 +2944,14 @@
             },
             "path": {
               "type": "string",
-              "description": "Must remain outside the ordinary `/a2a/{agent}/*` route tree."
+              "description": "Inbound HTTP route path (defaults to `/a2a/mailbox`)."
+            },
+            "secret": {
+              "type": "string",
+              "writeOnly": true,
+              "x-zhin-config": {
+                "secret": true
+              }
             },
             "maxBodyBytes": {
               "type": [
@@ -2942,94 +2959,39 @@
                 "string"
               ]
             },
-            "maxSequenceGap": {
-              "type": [
-                "number",
-                "string"
-              ]
-            },
-            "bindings": {
+            "peers": {
               "type": "array",
               "items": {
                 "type": "object",
                 "additionalProperties": true,
+                "required": [
+                  "actor",
+                  "url"
+                ],
                 "properties": {
-                  "endpointId": {
-                    "type": "string"
+                  "actor": {
+                    "type": "string",
+                    "minLength": 1
                   },
-                  "tenantId": {
-                    "type": "string"
+                  "url": {
+                    "type": "string",
+                    "minLength": 1
                   },
-                  "cardDigest": {
-                    "type": "string"
+                  "token": {
+                    "type": "string",
+                    "writeOnly": true,
+                    "x-zhin-config": {
+                      "secret": true
+                    }
                   },
-                  "authBindingId": {
-                    "type": "string"
+                  "secret": {
+                    "type": "string",
+                    "writeOnly": true,
+                    "x-zhin-config": {
+                      "secret": true
+                    }
                   },
-                  "trustDomain": {
-                    "type": "string"
-                  },
-                  "extensionDigest": {
-                    "type": "string"
-                  },
-                  "credentialId": {
-                    "type": "string"
-                  },
-                  "credential": {
-                    "anyOf": [
-                      {
-                        "type": "object",
-                        "additionalProperties": true,
-                        "properties": {
-                          "source": {
-                            "anyOf": [
-                              {
-                                "const": "config"
-                              },
-                              {
-                                "type": "string",
-                                "pattern": "^\\$\\{[A-Za-z_][A-Za-z0-9_]*(?::[-=][^}]*)?\\}$"
-                              }
-                            ]
-                          },
-                          "value": {
-                            "type": "string",
-                            "writeOnly": true,
-                            "x-zhin-config": {
-                              "secret": true
-                            }
-                          }
-                        }
-                      },
-                      {
-                        "type": "object",
-                        "additionalProperties": true,
-                        "properties": {
-                          "source": {
-                            "anyOf": [
-                              {
-                                "const": "secure_provider"
-                              },
-                              {
-                                "type": "string",
-                                "pattern": "^\\$\\{[A-Za-z_][A-Za-z0-9_]*(?::[-=][^}]*)?\\}$"
-                              }
-                            ]
-                          },
-                          "secretRef": {
-                            "type": "string"
-                          }
-                        }
-                      }
-                    ]
-                  },
-                  "enabled": {
-                    "type": [
-                      "boolean",
-                      "string"
-                    ]
-                  },
-                  "expiresAt": {
+                  "timeoutMs": {
                     "type": [
                       "number",
                       "string"
@@ -3039,144 +3001,6 @@
               }
             }
           },
-          "x-zhin-config": {
-            "security": true
-          }
-        },
-        "workroomRemoteExecutors": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": true,
-          "properties": {
-            "enabled": {
-              "type": [
-                "boolean",
-                "string"
-              ]
-            },
-            "maxResponseBytes": {
-              "type": [
-                "number",
-                "string"
-              ]
-            },
-            "bindings": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "additionalProperties": true,
-                "properties": {
-                  "endpointId": {
-                    "type": "string"
-                  },
-                  "cardDigest": {
-                    "type": "string"
-                  },
-                  "authBindingId": {
-                    "type": "string"
-                  },
-                  "dispatchUrl": {
-                    "type": "string"
-                  },
-                  "pollUrl": {
-                    "type": "string"
-                  },
-                  "credential": {
-                    "anyOf": [
-                      {
-                        "type": "object",
-                        "additionalProperties": true,
-                        "properties": {
-                          "source": {
-                            "anyOf": [
-                              {
-                                "const": "config"
-                              },
-                              {
-                                "type": "string",
-                                "pattern": "^\\$\\{[A-Za-z_][A-Za-z0-9_]*(?::[-=][^}]*)?\\}$"
-                              }
-                            ]
-                          },
-                          "value": {
-                            "type": "string",
-                            "writeOnly": true,
-                            "x-zhin-config": {
-                              "secret": true
-                            }
-                          }
-                        }
-                      },
-                      {
-                        "type": "object",
-                        "additionalProperties": true,
-                        "properties": {
-                          "source": {
-                            "anyOf": [
-                              {
-                                "const": "secure_provider"
-                              },
-                              {
-                                "type": "string",
-                                "pattern": "^\\$\\{[A-Za-z_][A-Za-z0-9_]*(?::[-=][^}]*)?\\}$"
-                              }
-                            ]
-                          },
-                          "secretRef": {
-                            "type": "string"
-                          }
-                        }
-                      }
-                    ]
-                  },
-                  "authority": {
-                    "type": "object",
-                    "additionalProperties": true,
-                    "properties": {
-                      "workroomExtension": {
-                        "anyOf": [
-                          {
-                            "const": "https://zhin.dev/extensions/workroom-executor/v1"
-                          },
-                          {
-                            "type": "string",
-                            "pattern": "^\\$\\{[A-Za-z_][A-Za-z0-9_]*(?::[-=][^}]*)?\\}$"
-                          }
-                        ]
-                      },
-                      "idempotentDispatch": {
-                        "type": [
-                          "boolean",
-                          "string"
-                        ]
-                      },
-                      "typedCompletionEnvelope": {
-                        "type": [
-                          "boolean",
-                          "string"
-                        ]
-                      },
-                      "workspaceProviders": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
-                      }
-                    }
-                  },
-                  "enabled": {
-                    "type": [
-                      "boolean",
-                      "string"
-                    ]
-                  }
-                }
-              }
-            }
-          },
-          "description": "Transport endpoints only. Project/Workroom topology remains in the persistent Catalog.",
           "x-zhin-config": {
             "security": true
           }

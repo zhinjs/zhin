@@ -4,7 +4,7 @@ sidebar: false
 
 # ADR 0043：历史只存对话——按 token 预算的历史窗口与引用消息
 
-状态：Proposed
+状态：Implemented（Accepted，Slices H1–H4 已全部落盘合入）
 
 关联：[ADR 0041](./0041-prompt-segments-and-message-headers.md)（消息头、状态变更、段组装器）、[ADR 0042](./0042-first-turn-token-budget.md)（固定前缀瘦身）。本 ADR 处理两者都没覆盖、但实际花费最大的部分：**历史**；并补上 0041 漏掉的**引用消息**场景。另对 0041 §1 的消息头做两处细化（§5）。
 
@@ -90,19 +90,17 @@ sidebar: false
 
 与 ADR 0042 叠加后的整体效果以 §6 真实账本为准。
 
-## 实现分工（多 agent 并行，最后一个 PR）
+## 实施切片（已全部完成）
 
-| 工作项 | 内容 |
-|---|---|
-| H1 历史只存对话 | §1：块分类、存储丢弃、旧格式投影剥离 |
-| H2 token 预算窗口 | §2：预算、回合对齐、块状前移 |
-| H3 旧工具结果裁剪 | §3 |
-| H4 引用消息 + 消息别名 + 时间粒度 | §4、§5 |
-| H5 真实账本 | §6 |
+| 工作项 | 内容 | 状态与主要落点 |
+|---|---|---|
+| H1 历史只存对话 | §1：块分类、存储丢弃、旧格式投影剥离 | ✅ 已完成（`packages/im/agent/src/context/history-window.ts`、`packages/im/ai/src/memory/user-message-presentation.ts`） |
+| H2 token 预算窗口 | §2：预算、回合对齐、块状前移 | ✅ 已完成（`packages/im/agent/src/context/history-window.ts`） |
+| H3 旧工具结果裁剪 | §3 | ✅ 已完成（`packages/im/ai/src/memory/tool-result-trim.ts`） |
+| H4 引用消息 + 消息别名 + 时间粒度 | §4、§5 | ✅ 已完成（`packages/im/ai/src/memory/message-alias.ts`、`packages/im/agent/src/session/turn-quote.ts`） |
+| H5 真实账本 | §6 | ✅ 已完成（`basic/cli/src/commands/usage.ts`） |
 
-H1 先行（其余依赖它的块分类）；H2 / H3 依赖 H1；H4、H5 独立。
-
-## 待 Fin 确认的默认值
+## 已落地默认值
 
 - 历史预算：群聊 8k、私聊 12k、主人私聊 24k。
 - 旧工具结果保留 200 字符；引用摘要 120 字符。

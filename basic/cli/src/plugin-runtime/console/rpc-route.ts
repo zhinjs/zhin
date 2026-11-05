@@ -10,6 +10,7 @@ import { writeJson } from './http-response.js';
 import {
   ConsoleRpcRequestScope,
 } from './rpc-context.js';
+import type { AgentConsolePort } from './agent-console.js';
 import type { ConsoleRpcComposition } from './rpc-composition.js';
 import { assertDemoConsoleRpcAllowed } from '@zhin.js/console-protocol';
 import { dispatchPluginConsoleRpcRequest } from './plugin-console-rpc.js';
@@ -55,6 +56,11 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
       });
       let payloads: Awaited<ReturnType<typeof dispatchRuntimeConsoleRpc>>;
       try {
+        const collaborationReply = await dispatchAgentCollaborationRpc(message, requestScope.agent);
+        if (collaborationReply) {
+          writeJson(response, collaborationReply.status, collaborationReply.body);
+          return;
+        }
         payloads = await dispatchRuntimeConsoleRpc(message, requestScope.context);
       } finally {
         requestScope.close();
@@ -94,4 +100,96 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
     tags: ['console'],
     description: 'Plugin Runtime Console request envelope: `{ type, data?, requestId? }`.',
   });
+}
+
+async function dispatchAgentCollaborationRpc(
+  message: Record<string, unknown>,
+  agent: AgentConsolePort | null,
+): Promise<{ status: number; body: Record<string, unknown> } | null> {
+  const type = typeof message.type === 'string' ? message.type : '';
+  if (
+    type !== 'agent.engagements.list'
+    && type !== 'agent.engagements.get'
+    && type !== 'agent.venues.list'
+  ) {
+    return null;
+  }
+  if (!agent) {
+    return {
+      status: 503,
+      body: {
+        success: false,
+        error: 'Agent Runtime 尚未就绪',
+        requestId: message.requestId,
+      },
+    };
+  }
+  const payload = message.data && typeof message.data === 'object' && !Array.isArray(message.data)
+    ? message.data as Record<string, unknown>
+    : message;
+
+  if (type === 'agent.engagements.list') {
+    const rawLimit = Number(payload.limit ?? 50);
+    const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(200, Math.floor(rawLimit)) : 50;
+    const engagements = agent.engagements ? await agent.engagements.list(limit) : [];
+    return {
+      status: 200,
+      body: {
+        success: true,
+        data: { engagements },
+        type,
+        requestId: message.requestId,
+      },
+    };
+  }
+
+  if (type === 'agent.engagements.get') {
+    const engagementId = typeof payload.engagementId === 'string'
+      ? payload.engagementId.trim()
+      : typeof payload.id === 'string'
+        ? payload.id.trim()
+        : '';
+    if (!engagementId) {
+      return {
+        status: 400,
+        body: {
+          success: false,
+          error: '请提供有效的 engagementId',
+          requestId: message.requestId,
+        },
+      };
+    }
+    const detail = agent.engagements ? await agent.engagements.get(engagementId) : null;
+    if (!detail) {
+      return {
+        status: 404,
+        body: {
+          success: false,
+          error: 'Engagement 不存在',
+          requestId: message.requestId,
+        },
+      };
+    }
+    return {
+      status: 200,
+      body: {
+        success: true,
+        data: detail,
+        type,
+        requestId: message.requestId,
+      },
+    };
+  }
+
+  // agent.venues.list
+  const venues = agent.venues ? agent.venues.list() : [];
+  return {
+    status: 200,
+    body: {
+      success: true,
+      data: { venues },
+      type,
+      requestId: message.requestId,
+    },
+  };
 }

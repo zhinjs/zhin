@@ -103,4 +103,19 @@ describe('createCollaborationDirectory', () => {
     expect(Object.isFrozen(dir.get('a'))).toBe(true);
     expect(Object.isFrozen(dir.get('a')!.ceiling)).toBe(true);
   });
+
+  it('propagates collaboration.budget onto CollaborationAgent.defaultBudget and AgentCeiling.defaultBudget', () => {
+    const dir = build([
+      agent('researcher', {
+        collaboration: {
+          contacts: ['b'],
+          budget: { modelCalls: 5, tokens: 12_000, wallMs: 30_000, sideEffects: 2 },
+        },
+      }),
+      agent('b'),
+    ]);
+    const researcher = dir.get('researcher')!;
+    expect(researcher.defaultBudget).toEqual({ modelCalls: 5, tokens: 12_000, wallMs: 30_000, sideEffects: 2 });
+    expect(researcher.ceiling.defaultBudget).toEqual({ modelCalls: 5, tokens: 12_000, wallMs: 30_000, sideEffects: 2 });
+  });
 });

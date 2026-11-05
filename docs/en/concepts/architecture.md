@@ -88,8 +88,9 @@ Moving further up, `@zhin.js/core` assembles the adapter / command / component /
 | Kernel | `@zhin.js/kernel` | Plugin system and error hierarchy, no IM concepts |
 | Feature layer | `@zhin.js/adapter` `command` `component` `middleware` ... | Contract for a capability type (e.g. `defineAdapter`) + projection index (e.g. `AdapterIndex`) |
 | AI engine | `@zhin.js/ai` | Provider, agentLoop, sessions, memory -- no IM concepts |
-| IM layer | `@zhin.js/core` | Plugin, message pipeline, command dispatch (see [Message flow](./message-flow.md)) |
-| Agent | `@zhin.js/agent` | Multi-model orchestration, tool security policies, MCP client |
+| Agent Harness | `@zhin.js/harness` | Multi-agent collaboration microkernel: per-actor serial Mailbox, Authority attenuation, conserved BudgetLedger, deterministic GuardKernel, shared Blackboard, and single-authority `engagement_events` Journal |
+| IM layer | `@zhin.js/core` | Plugin, message pipeline, command dispatch, and multi-bot collaboration Venues (see [Message flow](./message-flow.md)) |
+| Agent | `@zhin.js/agent` | Multi-model orchestration, collaboration tools (`ask` / `delegate` / `tell` / `follow_up` / `board_read` / `board_write` / `escalate`), HostMailbox / TimerScheduler, tool security policies, MCP client |
 | Facade | `zhin.js` | Re-exports the core authoring surface; `zhin.js/agent`, `zhin.js/ai` sub-paths exposed on demand |
 | Runtime | `@zhin.js/runtime` | `RootRuntime`: scans the project graph, composes configuration, executes generation transactions, HMR |
 | Assembly | `@zhin.js/cli` | Composition root -- `zhin runtime start` wires everything together |

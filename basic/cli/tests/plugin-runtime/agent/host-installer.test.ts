@@ -1,6 +1,5 @@
 import { agentHostToken } from '@zhin.js/agent/runtime';
 import { ingressRouteToken } from '@zhin.js/core/runtime';
-import { workroomHostToken } from '@zhin.js/workroom';
 import {
   Scope,
   SnapshotStore,
@@ -123,18 +122,16 @@ function context(resources: Scope, events = createPluginEventChannel().events) {
   } as never;
 }
 
-function install(workroom?: unknown) {
+function install() {
   return installAgentHost({
     runtime: {} as never,
-    workroomStorageMode: 'file',
     im: {} as never,
     projectRoot: defaultProjectRoot,
     inference: inferenceFor(defaultProjectRoot),
-    ...(workroom ? { workroom: workroom as never } : {}),
   });
 }
 
-describe('installAgentHost optional Workroom', () => {
+describe('installAgentHost', () => {
   beforeEach(async () => {
     defaultProjectRoot = await mkdtemp(join(tmpdir(), 'zhin-agent-installer-'));
     database = createDatabaseHost({ dialect: 'sqlite', filename: ':memory:' });
@@ -158,13 +155,12 @@ describe('installAgentHost optional Workroom', () => {
     await rm(defaultProjectRoot, { recursive: true, force: true });
   });
 
-  it('starts the Agent without Workroom: no Workroom Host port', async () => {
+  it('starts the Agent and publishes agentHostToken and ingressRouteToken', async () => {
     const resources = new Scope(rootPluginId());
     await install()(context(resources));
 
     expect(resources.has(agentHostToken)).toBe(true);
     expect(resources.has(ingressRouteToken)).toBe(true);
-    expect(resources.has(workroomHostToken)).toBe(false);
   });
 
   it('captures each real bootstrap source before formatting its headings', async () => {
@@ -176,7 +172,6 @@ describe('installAgentHost optional Workroom', () => {
       await installAgentHost({
         runtime: {} as never,
         im: {} as never,
-        workroomStorageMode: 'file',
         projectRoot: root,
         inference: inferenceFor(root),
       })(context(new Scope(rootPluginId())));
@@ -194,7 +189,7 @@ describe('installAgentHost optional Workroom', () => {
     }
   });
 
-  it('marks Agent persistence ready without Workroom so the first turn does not wait for the timeout (#857)', async () => {
+  it('marks Agent persistence ready so the first turn does not wait for the timeout (#857)', async () => {
     const resources = new Scope(rootPluginId());
     await install()(context(resources));
 
@@ -208,36 +203,6 @@ describe('installAgentHost optional Workroom', () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(settled).toBe(true);
     expect(vi.getTimerCount()).toBe(0);
-  });
-
-  it('owns the Agent persistence latch even when Workroom is installed', async () => {
-    const markReady = vi.spyOn(agentRef.current!, 'markMemoryPersistenceReady');
-    const workroom = {
-      WorkroomHostAssembly: {
-        begin: vi.fn(() => ({
-          compose: vi.fn(async () => ({ presetCount: 0, persistence: { pendingActivation: true } })),
-        })),
-      },
-    };
-    await install(workroom)(context(new Scope(rootPluginId())));
-    expect(markReady).toHaveBeenCalledOnce();
-  });
-
-  it('fails closed when an installed Workroom fails to compose (not downgraded to not-installed)', async () => {
-    const failure = new Error('journal corrupt');
-    const workroom = {
-      WorkroomHostAssembly: {
-        begin: vi.fn(() => ({
-          compose: vi.fn(async () => {
-            throw failure;
-          }),
-        })),
-      },
-    };
-    const resources = new Scope(rootPluginId());
-
-    await expect(install(workroom)(context(resources))).rejects.toBe(failure);
-    expect(resources.has(ingressRouteToken)).toBe(false);
   });
 
   it('keeps transient cards through rejected or reused Root outcomes and closes only its own committed replacement', async () => {
@@ -321,7 +286,6 @@ describe('installAgentHost optional Workroom', () => {
       },
       installResources: installAgentHost({
         runtime: {} as never,
-        workroomStorageMode: 'file',
         im: {} as never,
         projectRoot: project,
         inference: inferenceFor(project),
@@ -467,7 +431,6 @@ describe('installAgentHost optional Workroom', () => {
       expect(await inference.repository.readGraph({ rootId: inference.rootId })).toBeUndefined();
       const installer = installAgentHost({
         runtime: {} as never,
-        workroomStorageMode: 'file',
         im: {} as never,
         projectRoot: project,
         inference,

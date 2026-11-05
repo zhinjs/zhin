@@ -83,22 +83,24 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `database.disableOfflineQueue` | boolean \| string | no | — | Redis 禁止离线队列。 |
 | `database.pingInterval` | number \| string | no | — | Redis 心跳间隔毫秒。 |
 | `ai` | object | no | — | Providers, Agents, sessions, memory, tools, and execution security. |
-| `ai.workroom` | object | no | — | Process-owned Workroom control-plane policy; Projects remain in the persistent Catalog. |
-| `ai.workroom.trustedPackPublishers` | array&lt;string&gt; | no | — | Authenticated Console principal ids allowed to publish shared Capability Packs. |
-| `ai.workroom.disclosure` | object | no | — | Explicit P12 model processor contracts for Workroom disclosure bootstrap. |
-| `ai.workroom.disclosure.tenantId` | string | no | — | — |
-| `ai.workroom.disclosure.modelServices` | object | no | — | Explicit processor contract keyed by the selected runtime Service id, never a legacy Provider alias. |
-| `ai.workroom.disclosure.modelServices.<key>.endpoint` | string | yes | — | — |
-| `ai.workroom.disclosure.modelServices.<key>.owner` | string | no | — | — |
-| `ai.workroom.disclosure.modelServices.<key>.trustDomain` | string | no | — | — |
-| `ai.workroom.disclosure.modelServices.<key>.processingRegions` | array&lt;string&gt; | yes | — | — |
-| `ai.workroom.disclosure.modelServices.<key>.maxConfidentiality` | string: `"public"`, `"project_internal"`, `"confidential"`, `"restricted"` | yes | — | — |
-| `ai.workroom.disclosure.modelServices.<key>.external` | boolean | yes | — | — |
-| `ai.workroom.disclosure.modelServices.<key>.noTraining` | boolean | yes | — | — |
-| `ai.workroom.disclosure.modelServices.<key>.loggingMode` | string: `"disabled"`, `"metadata_only"`, `"full"` | yes | — | — |
-| `ai.workroom.disclosure.modelServices.<key>.maximumRetentionSeconds` | integer | yes | — | — |
-| `ai.workroom.disclosure.modelServices.<key>.allowsRedisclosure` | boolean | yes | — | — |
-| `ai.workroom.disclosure.modelServices.<key>.supportsDeletion` | boolean | yes | — | — |
+| `ai.venues` | array&lt;object&gt; | no | — | Shared multi-Bot IM rooms (ADR 0048 §3.2). |
+| `ai.venues[].id` | string | yes | — | — |
+| `ai.venues[].label` | string | no | — | — |
+| `ai.venues[].conversation` | object | yes | — | — |
+| `ai.venues[].conversation.platform` | string | yes | — | — |
+| `ai.venues[].conversation.sceneType` | string: `"private"`, `"group"`, `"channel"` | no | — | — |
+| `ai.venues[].conversation.sceneId` | string | yes | — | — |
+| `ai.venues[].conversation.threadId` | string | no | — | — |
+| `ai.venues[].members` | array&lt;object&gt; | yes | — | — |
+| `ai.venues[].members[].agent` | string | yes | — | — |
+| `ai.venues[].members[].botEndpoint` | string | yes | — | — |
+| `ai.venues[].members[].aliases` | array&lt;string&gt; | no | — | — |
+| `ai.venues[].entry` | string | no | — | — |
+| `ai.venues[].visibility` | string: `"visible"`, `"summary"`, `"backstage"` | no | — | — |
+| `ai.externalPeers` | array&lt;object&gt; | no | — | Declared third-party Bot accounts (ADR 0043/0048). |
+| `ai.externalPeers[].platform` | string | yes | — | — |
+| `ai.externalPeers[].userId` | string | yes | — | — |
+| `ai.externalPeers[].label` | string | no | — | — |
 | `ai.agent` | object | no | — | Agent execution, queueing, tool, and model policies. |
 | `ai.agent.mailbox` | object | no | — | IM inbox policy of the agent Mailbox (ADR 0048 H3; renamed from inboundQueue, which now fails startup). |
 | `ai.agent.mailbox.groupMode` | string: `"supersede"`, `"fifo"` | no | — | supersede (default): a sender's new message replaces their own unanswered turn; fifo: every message waits in arrival order. Other members' messages always queue. |
@@ -353,43 +355,22 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `mcp.path` | string \| null | no | — | — |
 | `mcp.token` | string \| null | no | — | — |
 | `mcp.allowUnauthenticatedLocalhost` | boolean \| string | no | — | — |
-| `a2a` | object | no | — | A2A Agent Card, remote execution, and Workroom callbacks. |
+| `a2a` | object | no | — | A2A Agent Card, remote execution, and cross-process Mailbox transport. |
 | `a2a.enabled` | boolean \| string | no | — | — |
 | `a2a.path` | string \| null | no | — | — |
 | `a2a.token` | string \| null | no | — | — |
 | `a2a.publicUrl` | string \| null | no | — | — |
-| `a2a.workroomCallbacks` | object \| null | no | — | — |
-| `a2a.workroomCallbacks.enabled` | boolean \| string | no | — | — |
-| `a2a.workroomCallbacks.path` | string | no | — | Must remain outside the ordinary `/a2a/{agent}/*` route tree. |
-| `a2a.workroomCallbacks.maxBodyBytes` | number \| string | no | — | — |
-| `a2a.workroomCallbacks.maxSequenceGap` | number \| string | no | — | — |
-| `a2a.workroomCallbacks.bindings` | array&lt;object&gt; | no | — | — |
-| `a2a.workroomCallbacks.bindings[].endpointId` | string | no | — | — |
-| `a2a.workroomCallbacks.bindings[].tenantId` | string | no | — | — |
-| `a2a.workroomCallbacks.bindings[].cardDigest` | string | no | — | — |
-| `a2a.workroomCallbacks.bindings[].authBindingId` | string | no | — | — |
-| `a2a.workroomCallbacks.bindings[].trustDomain` | string | no | — | — |
-| `a2a.workroomCallbacks.bindings[].extensionDigest` | string | no | — | — |
-| `a2a.workroomCallbacks.bindings[].credentialId` | string | no | — | — |
-| `a2a.workroomCallbacks.bindings[].credential` | object \| object | no | — | — |
-| `a2a.workroomCallbacks.bindings[].enabled` | boolean \| string | no | — | — |
-| `a2a.workroomCallbacks.bindings[].expiresAt` | number \| string | no | — | — |
-| `a2a.workroomRemoteExecutors` | object \| null | no | — | Transport endpoints only. Project/Workroom topology remains in the persistent Catalog. |
-| `a2a.workroomRemoteExecutors.enabled` | boolean \| string | no | — | — |
-| `a2a.workroomRemoteExecutors.maxResponseBytes` | number \| string | no | — | — |
-| `a2a.workroomRemoteExecutors.bindings` | array&lt;object&gt; | no | — | — |
-| `a2a.workroomRemoteExecutors.bindings[].endpointId` | string | no | — | — |
-| `a2a.workroomRemoteExecutors.bindings[].cardDigest` | string | no | — | — |
-| `a2a.workroomRemoteExecutors.bindings[].authBindingId` | string | no | — | — |
-| `a2a.workroomRemoteExecutors.bindings[].dispatchUrl` | string | no | — | — |
-| `a2a.workroomRemoteExecutors.bindings[].pollUrl` | string | no | — | — |
-| `a2a.workroomRemoteExecutors.bindings[].credential` | object \| object | no | — | — |
-| `a2a.workroomRemoteExecutors.bindings[].authority` | object | no | — | — |
-| `a2a.workroomRemoteExecutors.bindings[].authority.workroomExtension` | `"https://zhin.dev/extensions/workroom-executor/v1"` \| string | no | — | — |
-| `a2a.workroomRemoteExecutors.bindings[].authority.idempotentDispatch` | boolean \| string | no | — | — |
-| `a2a.workroomRemoteExecutors.bindings[].authority.typedCompletionEnvelope` | boolean \| string | no | — | — |
-| `a2a.workroomRemoteExecutors.bindings[].authority.workspaceProviders` | array&lt;string&gt; | no | — | — |
-| `a2a.workroomRemoteExecutors.bindings[].enabled` | boolean \| string | no | — | — |
+| `a2a.mailbox` | object \| null | no | — | Cross-process A2A Mailbox transport for signed Mail + Authority + Budget envelopes (ADR 0048 §3.6). |
+| `a2a.mailbox.enabled` | boolean \| string | no | — | — |
+| `a2a.mailbox.path` | string | no | — | Inbound HTTP route path (defaults to `/a2a/mailbox`). |
+| `a2a.mailbox.secret` | string | no | — | — |
+| `a2a.mailbox.maxBodyBytes` | number \| string | no | — | — |
+| `a2a.mailbox.peers` | array&lt;object&gt; | no | — | — |
+| `a2a.mailbox.peers[].actor` | string | yes | — | — |
+| `a2a.mailbox.peers[].url` | string | yes | — | — |
+| `a2a.mailbox.peers[].token` | string | no | — | — |
+| `a2a.mailbox.peers[].secret` | string | no | — | — |
+| `a2a.mailbox.peers[].timeoutMs` | number \| string | no | — | — |
 | `speech` | object | no | — | Speech-to-text and text-to-speech Host. |
 | `speech.stt` | object \| null | no | — | — |
 | `speech.stt.enabled` | boolean \| string | no | — | — |

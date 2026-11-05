@@ -4,7 +4,7 @@ sidebar: false
 
 # ADR 0039：动态群管规则——批准一次的违规阶梯
 
-状态：Accepted
+状态：Implemented（Accepted，Slices A–E 已全部落盘合入）
 
 实现：切片 A–E 已合入 main（[#1057](https://github.com/zhinjs/zhin/pull/1057) / [#1060](https://github.com/zhinjs/zhin/pull/1060) / [#1063](https://github.com/zhinjs/zhin/pull/1063) / [#1066](https://github.com/zhinjs/zhin/pull/1066) / [#1068](https://github.com/zhinjs/zhin/pull/1068)；tracking [#1050](https://github.com/zhinjs/zhin/issues/1050)）。
 
@@ -117,17 +117,15 @@ Fin 2026-10-27 拍板（#1029 B）：
 
 0037「非目标」中「全自动踢人 / 禁言 / 发公告」改为「**全自动踢人 / 发公告**」：经群主 / 管理员批准过的规则内，禁言可自动执行。踢人与发公告的人批要求不变。
 
-### 8. 实现切片（ADR 合入后按序做，每个切片单独 PR）
+### 8. 实现切片（已全部完成）
 
-| 切片 | 内容 |
-|---|---|
-| A | `ai_group_rules` 表、状态机与 revision、`content_hash` 规范化、审计 kind / 码 |
-| B | `rule_draft` 工具、群内预览卡与审批（实时群主 / 管理员审批人集合）、Console 列表 / 停用 |
-| C | 规则执行器：阶梯进度、`remind` / `warn` / `mute`（以规则批准作硬闸批准）/ `suggest_kick`（出卡）、豁免与 Bot 非管理员处理 |
-| D | `flood` 复读刷屏检测（独立用例） |
-| E | content-moderation 迁移：写死阶梯 → 默认模板、待确认规则、新人踢人改出卡 |
-
-A → B → C 有依赖；D 可在 A 之后并行；E 依赖 C。本 ADR 不含代码。
+| 切片 | 内容 | 状态 |
+|---|---|---|
+| A | `ai_group_rules` 表、状态机与 revision、`content_hash` 规范化、审计 kind / 码 | ✅ 已完成（[#1057](https://github.com/zhinjs/zhin/pull/1057)） |
+| B | `rule_draft` 工具、群内预览卡与审批（实时群主 / 管理员审批人集合）、Console 列表 / 停用 | ✅ 已完成（[#1060](https://github.com/zhinjs/zhin/pull/1060)） |
+| C | 规则执行器：阶梯进度、`remind` / `warn` / `mute`（以规则批准作硬闸批准）/ `suggest_kick`（出卡）、豁免与 Bot 非管理员处理 | ✅ 已完成（[#1063](https://github.com/zhinjs/zhin/pull/1063)） |
+| D | `flood` 复读刷屏检测（独立用例） | ✅ 已完成（[#1066](https://github.com/zhinjs/zhin/pull/1066)） |
+| E | content-moderation 迁移：写死阶梯 → 默认模板、待确认规则、新人踢人改出卡 | ✅ 已完成（[#1068](https://github.com/zhinjs/zhin/pull/1068)） |
 
 ## 验收标准
 
@@ -139,7 +137,7 @@ A → B → C 有依赖；D 可在 A 之后并行；E 依赖 C。本 ADR 不含�
 6. `emergency_stop` / `read_only` 期间规则不执行任何动作，审计可见原因。
 7. 升级后，原 `groupModeration` 名单里的群在群主确认前只提醒不禁言，新人发广告出卡而非直接踢。
 
-## 待 Fin 确认的默认值
+## 9. 已落地默认值
 
 - 冷静期 `30` 分钟；禁言时长范围 60 秒–24 小时。
 - `flood`：60 秒内同一成员 3 条相同 / 高度相似。

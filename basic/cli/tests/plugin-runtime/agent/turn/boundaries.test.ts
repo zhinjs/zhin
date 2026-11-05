@@ -27,9 +27,7 @@ import {
   resolveTriggerTimeoutMs,
   routeSpecialistAgent,
   withTriggerTimeout,
-  workroomOrchestratorSessionKey,
 } from '../../../../src/plugin-runtime/agent/turn/trigger.js';
-import { resolveWorkroomOrchestratorConversation } from '../../../../src/plugin-runtime/workroom/orchestrator-conversation.js';
 import {
   createEndpointRoleResolver,
   readConfiguredEndpointKeys,
@@ -85,19 +83,6 @@ describe('Workroom Orchestrator turn routing', () => {
     expect(() => routeSpecialistAgent('查询群列表', {
       agents: [icqq, { ...icqq, name: 'qq-admin', qualifiedName: 'adapter-icqq__qq-admin' }],
     }, undefined, 'zhin', 'icqq')).toThrow('Multiple specialist Agents target platform icqq');
-  });
-
-  it('isolates the Project session', () => {
-    expect(workroomOrchestratorSessionKey({
-      projectId: 'project:zhin', agentDefinitionId: 'software.orchestrator',
-    })).toBe('workroom:project%3Azhin:orchestrator:software.orchestrator');
-    const conversation = {
-      endpoint: { id: 'orchestrator-capability', adapter: 'root/orchestrator' },
-      kind: 'group' as const, id: 'shared-room',
-    };
-    expect(resolveWorkroomOrchestratorConversation({
-      zhin: { conversation },
-    }, { projectId: 'zhin', space: 'workroom' })).toBe(conversation);
   });
 });
 

@@ -14,7 +14,7 @@
  * receives the same tools bound to its own mail, so any actor can ask,
  * delegate and tell within its attenuated authority.
  */
-import type { ActorId, AgentCeiling, AgentName, Harness, Mail } from '@zhin.js/harness';
+import type { ActorId, AgentCeiling, AgentName, BudgetAmounts, Harness, Mail } from '@zhin.js/harness';
 import type { ToolCapability } from '../plugin-runtime/capability-ingress.js';
 
 /** Model chosen for the root turn; actor turns reuse it. */
@@ -34,6 +34,8 @@ export interface CollaborationAgent {
   readonly ceiling: AgentCeiling;
   readonly model?: string;
   readonly maxIterations?: number;
+  /** Default collaboration budget from `agents/<name>/agent.json` `collaboration.budget`. */
+  readonly defaultBudget?: Partial<BudgetAmounts>;
 }
 
 export interface CollaborationDirectory {
@@ -59,6 +61,9 @@ export const COLLABORATION_TOOL_NAMES = Object.freeze({
   ask: 'ask',
   delegate: 'delegate',
   tell: 'tell',
+  followUp: 'follow_up',
+  boardRead: 'board_read',
+  boardWrite: 'board_write',
   cancel: 'cancel_delegation',
   escalate: 'escalate',
 } as const);
@@ -76,6 +81,7 @@ export type CreateCollaborationTools = (
   options: Readonly<{
     owner: ToolCapability['owner'];
     onEscalate?: (reason: string) => Promise<string>;
+    onVenueTell?: (venue: string, content: string) => Promise<void>;
   }>,
 ) => readonly ToolCapability[];
 

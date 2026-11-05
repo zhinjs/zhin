@@ -1,87 +1,78 @@
-/**
- * multi-agent-room L4 配置契约：3 个 Sandbox Bot 同群协作（Room 核心在示例内组装）。
- */
-import fs from 'node:fs';
-import path from 'node:path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, it, expect } from 'vitest';
-import { parse } from 'yaml';
-import { reviewAIPlan } from '../../../tests/helpers/review-ai-plan.js';
+import { describe, expect, it } from 'vitest';
+import { rootPluginId } from 'zhin.js';
+import { agentFeatureId, parseAgentPackage } from '@zhin.js/agent-feature';
 
-const botRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-const configText = fs.readFileSync(path.join(botRoot, 'zhin.config.yml'), 'utf8');
-const config = parse(configText);
-const plan = parse(fs.readFileSync(path.join(botRoot, 'ai.plan.yml'), 'utf8'));
+const exampleRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const readText = (relPath: string) => fs.readFileSync(path.join(exampleRoot, relPath), 'utf8');
 
-describe('multi-agent-room 编排契约', () => {
-  it('keeps production authoring checks local while the root noEmit check includes the cross-workspace contract tests', async () => {
-    const ts = await import('typescript');
-    const read = (file: string) => {
-      const loaded = ts.readConfigFile(file, ts.sys.readFile);
-      expect(loaded.error).toBeUndefined();
-      const parsed = ts.parseJsonConfigFileContent(loaded.config, ts.sys, path.dirname(file));
-      expect(parsed.errors).toEqual([]);
-      return parsed;
-    };
-    const production = read(path.join(botRoot, 'tsconfig.json'));
-    expect(production.options.rootDir).toBe(botRoot);
-    expect(production.options.noEmit).toBe(true);
-    expect(production.fileNames).toContain(path.join(botRoot, 'plugin.ts'));
-    expect(production.fileNames).not.toContain(fileURLToPath(import.meta.url));
-    const repository = path.resolve(botRoot, '../..');
-    const checks = read(path.join(repository, 'tsconfig.typecheck.json'));
-    expect(checks.options.noEmit).toBe(true);
-    expect(checks.fileNames).toContain(fileURLToPath(import.meta.url));
-    expect(checks.fileNames).toContain(path.join(repository, 'tests/helpers/review-ai-plan.ts'));
+const BOTS = ['planner', 'builder', 'reviewer'] as const;
+
+describe('examples/multi-agent-room contract (ADR 0048 ai.venues + collaboration)', () => {
+  it('declares 3 sandbox endpoints and a visible ai.venues entry in zhin.config.yml', () => {
+    const configText = readText('zhin.config.yml');
+
+    expect(configText).toContain('adapter-sandbox');
+    expect(configText).toContain('name: planner-bot');
+    expect(configText).toContain('name: builder-bot');
+    expect(configText).toContain('name: reviewer-bot');
+    expect(configText).toContain('id: product-room');
+    expect(configText).toContain('adapter: sandbox');
+    expect(configText).toContain('scene: group:product-room');
+    expect(configText).toContain('mode: visible');
+    expect(configText).toContain('entry: planner');
+    expect(configText).toContain('planner: sandbox:planner-bot');
+    expect(configText).toContain('builder: sandbox:builder-bot');
+    expect(configText).toContain('reviewer: sandbox:reviewer-bot');
   });
 
-  it('使用数据库持久化会话', () => {
-    expect(config.database.dialect).toBe('sqlite');
-    expect(config.ai.sessions.useDatabase).toBe(true);
-  });
-
-  it('暴露三个 Sandbox Endpoint：coordinator / researcher / writer', () => {
-    expect(config.sandbox.endpoints).toEqual([
-      { id: 'coordinator-bot', owner: 'planner-user' },
-      { id: 'researcher-bot', owner: 'planner-user' },
-      { id: 'writer-bot', owner: 'planner-user' },
-    ]);
-  });
-
-  it('独立提案中的三种角色用途与 agents 目录对应', async () => {
-    const reviewed = await reviewAIPlan(plan);
-    for (const agent of ['coordinator', 'researcher', 'writer']) {
-      const selected = reviewed.graph.profiles[reviewed.graph.purposes.agents![agent]];
-      expect(selected.model).toBe('qwen3:8b');
-      expect(selected.accountId).toBe(reviewed.bindings.accounts.ollama);
-      for (const file of ['agent.json', 'system.md', 'boundaries.md', 'conventions.md']) {
-        expect(fs.existsSync(path.join(botRoot, 'agents', agent, file))).toBe(true);
-      }
+  it('ships valid agent packages for planner, builder, and reviewer with collaboration rules', () => {
+    for (const bot of BOTS) {
+      const dir = path.join(exampleRoot, 'agents', bot);
+      const pkg = parseAgentPackage(
+        {
+          manifest: JSON.parse(readText(`agents/${bot}/agent.json`)),
+          files: {
+            'system.md': readText(`agents/${bot}/system.md`),
+            'boundaries.md': readText(`agents/${bot}/boundaries.md`),
+            'conventions.md': readText(`agents/${bot}/conventions.md`),
+          },
+          workflows: [],
+          knowledge: [],
+          privateToolNames: [],
+          privateSkillNames: [],
+        },
+        { owner: rootPluginId(), feature: agentFeatureId, localName: bot, source: dir },
+      );
+      expect(pkg.name).toBe(bot);
+      expect(pkg.collaboration).toBeDefined();
+      expect(pkg.collaboration?.contacts?.length).toBeGreaterThan(0);
+      expect(pkg.collaboration?.acceptsFrom).toContain('human');
+      expect(pkg.collaboration?.budget?.modelCalls).toBeGreaterThan(0);
+      expect(pkg.instructions).toMatch(/board_read|board_write/);
     }
-    expect(config.ai).not.toHaveProperty('providers');
-    expect(config.ai).not.toHaveProperty('plan');
-    expect(fs.existsSync(path.join(botRoot, 'agents', 'planner'))).toBe(false);
-    const boundaries = fs.readFileSync(path.join(botRoot, 'agents', 'writer', 'boundaries.md'), 'utf8');
-    expect(boundaries).toContain('Room Bus');
   });
 
-  it('uses the Plugin Runtime package contract and explicit v2 application topology', () => {
-    const manifest = JSON.parse(fs.readFileSync(path.join(botRoot, 'package.json'), 'utf8'));
-    expect(manifest.scripts.dev).toBe('zhin runtime start --watch source config');
-    expect(manifest.zhin.entry).toBe('./plugin.ts');
-    expect(manifest.zhin.plugins ?? []).toEqual([]);
-    expect(config.configVersion).toBe(2);
-    expect(config.plugins).toEqual({ sandbox: '@zhin.js/adapter-sandbox' });
-    expect(config.disable_plugins ?? []).toEqual([]);
-    expect(manifest.dependencies['@zhin.js/workroom']).toBe('workspace:*');
+  it('maps all 3 agents in ai.plan.yml and does not depend on @zhin.js/workroom', () => {
+    const planText = readText('ai.plan.yml');
+    for (const bot of BOTS) {
+      expect(planText).toContain(`${bot}:`);
+    }
+
+    const manifest = JSON.parse(readText('package.json')) as {
+      dependencies?: Record<string, string>;
+    };
+    expect(manifest.dependencies?.['@zhin.js/workroom']).toBeUndefined();
+    expect(manifest.dependencies?.['@zhin.js/agent']).toBe('workspace:*');
   });
 
-  it('README 说明三 Bot 同群协作与当前接线状态', () => {
-    const readme = fs.readFileSync(path.join(botRoot, 'README.md'), 'utf8');
-    expect(readme).toContain('3 个 Bot');
-    expect(readme).toContain('同一个群');
-    expect(readme).toContain('示例内组装，默认运行时未接入');
-    expect(readme).toContain('Room Bus');
-    expect(readme).not.toContain('不需要多个 Bot 账号');
+  it('documents ai.venues, collaboration tools, board, and zhin trace in README.md', () => {
+    const readme = readText('README.md');
+    expect(readme).toContain('ai.venues');
+    expect(readme).toContain('board_write');
+    expect(readme).toContain('board_read');
+    expect(readme).toContain('zhin trace');
   });
 });

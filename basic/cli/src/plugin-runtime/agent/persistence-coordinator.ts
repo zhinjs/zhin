@@ -2,6 +2,11 @@ import { getLogger } from '@zhin.js/logger';
 import { ensureDatabaseColumns, ensureDatabaseIndex, type StructuredDatabase } from '@zhin.js/database';
 import { databaseRootHostToken } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
+import {
+  DatabaseEngagementJournal,
+  defineEngagementEventModel,
+  type EngagementJournalDatabase,
+} from '@zhin.js/harness';
 import { AGENT_MESSAGE_QUERY_MODEL, AGENT_SESSION_SOURCE_MODEL, agentMessageQueryFields, parseAgentMessageRow } from '@zhin.js/ai';
 import { defineAiDatabaseModels, activateAiDatabaseStorage, AGENT_USAGE_TURN_MODEL, AGENT_USAGE_CALL_MODEL,
   DatabaseAgentUsageStore, agentUsageStoreToken, DatabaseScheduleJobStorage, SCHEDULE_JOB_MODEL, SCHEDULE_JOB_MIGRATION_MODEL,
@@ -19,7 +24,7 @@ export async function ensureScheduleHistoryIndexes(database: StructuredDatabase)
   await ensureDatabaseIndex(database, 'agent_schedule_attempts', 'agent_schedule_attempts_run', [{ name: 'run_id' }, { name: 'number' }]);
 }
 
-/** Agent owns its storage with or without the optional Workroom package. */
+/** Agent owns its storage and engagement journal retention. */
 export function installAgentPersistence(context: Pick<Context, 'resources' | 'handoff' | 'lifecycle' | 'admission'>,
   foundation: AgentRuntimeFoundation, config: AgentHostAIConfig, pruneTraces?: () => Promise<unknown>): void {
   const { resources, handoff, lifecycle, admission } = context;
@@ -56,6 +61,10 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
     database.define('agent_schedule_attempts', SCHEDULE_ATTEMPT_MODEL);
     database.define('agent_usage_turns', AGENT_USAGE_TURN_MODEL);
     database.define('agent_usage_calls', AGENT_USAGE_CALL_MODEL);
+    defineEngagementEventModel(database);
+    foundation.setEngagementJournal?.(
+      new DatabaseEngagementJournal(database as unknown as EngagementJournalDatabase),
+    );
     usage = new DatabaseAgentUsageStore(database, Number(config.usage?.retentionDays ?? 30));
     resources.provide(agentUsageStoreToken, usage);
   } else {
@@ -71,6 +80,10 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
   const pruneTraceArchive = async () => {
     try { await pruneTraces?.(); }
     catch { getLogger('agent').warn('op=trace_prune status=failed; 轨迹保留期清理失败'); }
+  };
+  const pruneEngagementJournal = async () => {
+    try { await foundation.engagementJournal?.prune(Date.now()); }
+    catch { getLogger('agent').warn('op=engagement_journal_prune status=failed; 协作事件日志清理失败'); }
   };
   lifecycle.add(async () => {
     stopped = true;
@@ -124,8 +137,11 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
       // The history owner coalesces cleanup and owns its errors; driver IO cannot gate publication or shutdown.
       foundation.schedule.history.housekeeping();
       // Diagnostic storage must not delay generation publication or Agent admission.
-      pendingPrune = pruneTraceArchive().finally(() => { pendingPrune = undefined; });
-      if (usage || decisions() || pruneTraces || foundation.agent.getGroupRules?.()?.persistent || foundation.schedule.history) {
+      pendingPrune = Promise.all([
+        pruneTraceArchive(),
+        pruneEngagementJournal(),
+      ]).then(() => undefined).finally(() => { pendingPrune = undefined; });
+      if (usage || decisions() || pruneTraces || foundation.engagementJournal || foundation.agent.getGroupRules?.()?.persistent || foundation.schedule.history) {
         timer = setInterval(() => {
           if (stopped) return;
           foundation.schedule.history.housekeeping();
@@ -137,6 +153,7 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
             // Never rejects for database errors (only logs); see DecisionEventLog.prune.
             decisions()?.prune(auditRetentionDays),
             pruneTraceArchive(),
+            pruneEngagementJournal(),
             pruneGroupRules(),
           ]).then(() => undefined).finally(() => { pendingPrune = undefined; });
         }, 3_600_000);

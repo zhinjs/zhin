@@ -1,5 +1,15 @@
 import type { ConversationRef } from '@zhin.js/im-contract';
 import { ledgerScopeOf } from './outbound-ledger.js';
+export {
+  roomMembershipToken,
+  type ResolvedRoomInfo,
+  type RoomArbitrationInput,
+  type RoomClaimInput,
+  type RoomInboundRouteInput,
+  type RoomMembershipPort,
+  type RoomReadinessResult,
+  type RoomRouteDecision,
+} from './inbound-origin.js';
 
 /**
  * @internal 入站去重：同一条人类群消息会到达 N 个成员 Endpoint，

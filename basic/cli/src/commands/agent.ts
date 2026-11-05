@@ -1,8 +1,7 @@
 import { Command } from 'commander';
-import { registerWorkroomOnlineCommands } from './agent-workroom.js';
 
 export const agentCommand = new Command('agent')
-  .description('Agent diagnostics and Workroom operations');
+  .description('Inspect Agent capabilities');
 
 agentCommand
   .command('info')
@@ -28,4 +27,3 @@ agentCommand
     console.log(mod.formatAgentSurfaceInfoReport(report));
   });
 
-registerWorkroomOnlineCommands(agentCommand);

@@ -51,11 +51,6 @@
       "development": "./src/memory/index.ts",
       "import": "./lib/memory/index.js"
     },
-    "./subagent": {
-      "types": "./lib/subagent/index.d.ts",
-      "development": "./src/subagent/index.ts",
-      "import": "./lib/subagent/index.js"
-    },
     "./context": {
       "types": "./lib/context/index.d.ts",
       "development": "./src/context/index.ts",
@@ -210,10 +205,6 @@
       "./memory": {
         "types": "./lib/memory/index.d.ts",
         "import": "./lib/memory/index.js"
-      },
-      "./subagent": {
-        "types": "./lib/subagent/index.d.ts",
-        "import": "./lib/subagent/index.js"
       },
       "./context": {
         "types": "./lib/context/index.d.ts",

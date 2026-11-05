@@ -83,22 +83,24 @@ outline: [2, 3]
 | `database.disableOfflineQueue` | boolean \| string | 否 | — | Redis 禁止离线队列。 |
 | `database.pingInterval` | number \| string | 否 | — | Redis 心跳间隔毫秒。 |
 | `ai` | object | 否 | — | Provider、Agent、会话、记忆、工具与执行安全策略。 |
-| `ai.workroom` | object | 否 | — | 进程持有的 Workroom 控制面策略；Project 仍由持久化 Catalog 管理。 |
-| `ai.workroom.trustedPackPublishers` | array&lt;string&gt; | 否 | — | 允许发布共享 Capability Pack 的 Console 认证 principalId。 |
-| `ai.workroom.disclosure` | object | 否 | — | Workroom 披露初始化使用的显式 P12 模型处理方契约。 |
-| `ai.workroom.disclosure.tenantId` | string | 否 | — | — |
-| `ai.workroom.disclosure.modelServices` | object | 否 | — | Explicit processor contract keyed by the selected runtime Service id, never a legacy Provider alias. |
-| `ai.workroom.disclosure.modelServices.<key>.endpoint` | string | 是 | — | — |
-| `ai.workroom.disclosure.modelServices.<key>.owner` | string | 否 | — | — |
-| `ai.workroom.disclosure.modelServices.<key>.trustDomain` | string | 否 | — | — |
-| `ai.workroom.disclosure.modelServices.<key>.processingRegions` | array&lt;string&gt; | 是 | — | — |
-| `ai.workroom.disclosure.modelServices.<key>.maxConfidentiality` | string: `"public"`, `"project_internal"`, `"confidential"`, `"restricted"` | 是 | — | — |
-| `ai.workroom.disclosure.modelServices.<key>.external` | boolean | 是 | — | — |
-| `ai.workroom.disclosure.modelServices.<key>.noTraining` | boolean | 是 | — | — |
-| `ai.workroom.disclosure.modelServices.<key>.loggingMode` | string: `"disabled"`, `"metadata_only"`, `"full"` | 是 | — | — |
-| `ai.workroom.disclosure.modelServices.<key>.maximumRetentionSeconds` | integer | 是 | — | — |
-| `ai.workroom.disclosure.modelServices.<key>.allowsRedisclosure` | boolean | 是 | — | — |
-| `ai.workroom.disclosure.modelServices.<key>.supportsDeletion` | boolean | 是 | — | — |
+| `ai.venues` | array&lt;object&gt; | 否 | — | 多 Bot 共享 IM 房间（ADR 0048 §3.2）。 |
+| `ai.venues[].id` | string | 是 | — | — |
+| `ai.venues[].label` | string | 否 | — | — |
+| `ai.venues[].conversation` | object | 是 | — | — |
+| `ai.venues[].conversation.platform` | string | 是 | — | — |
+| `ai.venues[].conversation.sceneType` | string: `"private"`, `"group"`, `"channel"` | 否 | — | — |
+| `ai.venues[].conversation.sceneId` | string | 是 | — | — |
+| `ai.venues[].conversation.threadId` | string | 否 | — | — |
+| `ai.venues[].members` | array&lt;object&gt; | 是 | — | — |
+| `ai.venues[].members[].agent` | string | 是 | — | — |
+| `ai.venues[].members[].botEndpoint` | string | 是 | — | — |
+| `ai.venues[].members[].aliases` | array&lt;string&gt; | 否 | — | — |
+| `ai.venues[].entry` | string | 否 | — | — |
+| `ai.venues[].visibility` | string: `"visible"`, `"summary"`, `"backstage"` | 否 | — | — |
+| `ai.externalPeers` | array&lt;object&gt; | 否 | — | 显式声明的外部第三方 Bot 账号（ADR 0043/0048）。 |
+| `ai.externalPeers[].platform` | string | 是 | — | — |
+| `ai.externalPeers[].userId` | string | 是 | — | — |
+| `ai.externalPeers[].label` | string | 否 | — | — |
 | `ai.agent` | object | 否 | — | Agent 执行、排队、工具与模型策略。 |
 | `ai.agent.mailbox` | object | 否 | — | Agent 收件箱（Mailbox）的 IM 收件策略（ADR 0048 H3；由 inboundQueue 改名，旧键会导致启动失败）。 |
 | `ai.agent.mailbox.groupMode` | string: `"supersede"`, `"fifo"` | 否 | — | supersede（默认）：同一发起人的新消息会替换他自己尚未回复的回合；fifo：全部按到达顺序排队。其他成员的消息总是排队。 |
@@ -353,43 +355,22 @@ outline: [2, 3]
 | `mcp.path` | string \| null | 否 | — | — |
 | `mcp.token` | string \| null | 否 | — | — |
 | `mcp.allowUnauthenticatedLocalhost` | boolean \| string | 否 | — | — |
-| `a2a` | object | 否 | — | A2A Agent Card、远程执行与 Workroom 回调。 |
+| `a2a` | object | 否 | — | A2A Agent Card、远程执行与跨进程 Mailbox 传输。 |
 | `a2a.enabled` | boolean \| string | 否 | — | — |
 | `a2a.path` | string \| null | 否 | — | — |
 | `a2a.token` | string \| null | 否 | — | — |
 | `a2a.publicUrl` | string \| null | 否 | — | — |
-| `a2a.workroomCallbacks` | object \| null | 否 | — | — |
-| `a2a.workroomCallbacks.enabled` | boolean \| string | 否 | — | — |
-| `a2a.workroomCallbacks.path` | string | 否 | — | Must remain outside the ordinary `/a2a/{agent}/*` route tree. |
-| `a2a.workroomCallbacks.maxBodyBytes` | number \| string | 否 | — | — |
-| `a2a.workroomCallbacks.maxSequenceGap` | number \| string | 否 | — | — |
-| `a2a.workroomCallbacks.bindings` | array&lt;object&gt; | 否 | — | — |
-| `a2a.workroomCallbacks.bindings[].endpointId` | string | 否 | — | — |
-| `a2a.workroomCallbacks.bindings[].tenantId` | string | 否 | — | — |
-| `a2a.workroomCallbacks.bindings[].cardDigest` | string | 否 | — | — |
-| `a2a.workroomCallbacks.bindings[].authBindingId` | string | 否 | — | — |
-| `a2a.workroomCallbacks.bindings[].trustDomain` | string | 否 | — | — |
-| `a2a.workroomCallbacks.bindings[].extensionDigest` | string | 否 | — | — |
-| `a2a.workroomCallbacks.bindings[].credentialId` | string | 否 | — | — |
-| `a2a.workroomCallbacks.bindings[].credential` | object \| object | 否 | — | — |
-| `a2a.workroomCallbacks.bindings[].enabled` | boolean \| string | 否 | — | — |
-| `a2a.workroomCallbacks.bindings[].expiresAt` | number \| string | 否 | — | — |
-| `a2a.workroomRemoteExecutors` | object \| null | 否 | — | Transport endpoints only. Project/Workroom topology remains in the persistent Catalog. |
-| `a2a.workroomRemoteExecutors.enabled` | boolean \| string | 否 | — | — |
-| `a2a.workroomRemoteExecutors.maxResponseBytes` | number \| string | 否 | — | — |
-| `a2a.workroomRemoteExecutors.bindings` | array&lt;object&gt; | 否 | — | — |
-| `a2a.workroomRemoteExecutors.bindings[].endpointId` | string | 否 | — | — |
-| `a2a.workroomRemoteExecutors.bindings[].cardDigest` | string | 否 | — | — |
-| `a2a.workroomRemoteExecutors.bindings[].authBindingId` | string | 否 | — | — |
-| `a2a.workroomRemoteExecutors.bindings[].dispatchUrl` | string | 否 | — | — |
-| `a2a.workroomRemoteExecutors.bindings[].pollUrl` | string | 否 | — | — |
-| `a2a.workroomRemoteExecutors.bindings[].credential` | object \| object | 否 | — | — |
-| `a2a.workroomRemoteExecutors.bindings[].authority` | object | 否 | — | — |
-| `a2a.workroomRemoteExecutors.bindings[].authority.workroomExtension` | `"https://zhin.dev/extensions/workroom-executor/v1"` \| string | 否 | — | — |
-| `a2a.workroomRemoteExecutors.bindings[].authority.idempotentDispatch` | boolean \| string | 否 | — | — |
-| `a2a.workroomRemoteExecutors.bindings[].authority.typedCompletionEnvelope` | boolean \| string | 否 | — | — |
-| `a2a.workroomRemoteExecutors.bindings[].authority.workspaceProviders` | array&lt;string&gt; | 否 | — | — |
-| `a2a.workroomRemoteExecutors.bindings[].enabled` | boolean \| string | 否 | — | — |
+| `a2a.mailbox` | object \| null | 否 | — | 跨进程 A2A Mailbox 传输（携带签名 Mail、Authority 与 Budget，ADR 0048 §3.6）。 |
+| `a2a.mailbox.enabled` | boolean \| string | 否 | — | — |
+| `a2a.mailbox.path` | string | 否 | — | Inbound HTTP route path (defaults to `/a2a/mailbox`). |
+| `a2a.mailbox.secret` | string | 否 | — | — |
+| `a2a.mailbox.maxBodyBytes` | number \| string | 否 | — | — |
+| `a2a.mailbox.peers` | array&lt;object&gt; | 否 | — | — |
+| `a2a.mailbox.peers[].actor` | string | 是 | — | — |
+| `a2a.mailbox.peers[].url` | string | 是 | — | — |
+| `a2a.mailbox.peers[].token` | string | 否 | — | — |
+| `a2a.mailbox.peers[].secret` | string | 否 | — | — |
+| `a2a.mailbox.peers[].timeoutMs` | number \| string | 否 | — | — |
 | `speech` | object | 否 | — | 语音识别与语音合成 Host。 |
 | `speech.stt` | object \| null | 否 | — | — |
 | `speech.stt.enabled` | boolean \| string | 否 | — | — |

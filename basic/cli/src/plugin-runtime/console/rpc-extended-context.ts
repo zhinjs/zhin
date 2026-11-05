@@ -22,8 +22,6 @@ export function createExtendedConsoleRpcContext(
     resolveScheduleEngine: () => resolveScheduleEngine(agent),
     loginAssist: im?.loginAssist,
     authenticatedPrincipal: principal,
-    workroomProfileControl: agent?.workroomProfiles,
-    workroomKnowledgeControl: agent?.workroomKnowledge,
   });
 }
 

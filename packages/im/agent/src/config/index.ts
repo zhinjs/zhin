@@ -17,13 +17,9 @@ export { DEFAULT_ZHIN_AGENT_NAME } from './types.js';
 export type {
   AgentBindingConfig,
   ResolvedAgentBinding,
+  VenueConfig,
+  AIConfig,
 } from './types.js';
-export {
-  resolveFiveAgentRoleBinding,
-  resolvePlannerNickname,
-  FIVE_AGENT_ROLE_LABELS,
-  type FiveAgentBindingSources,
-} from './resolve-five-agent-binding.js';
 
 export type {
   ZhinAgentConfig,

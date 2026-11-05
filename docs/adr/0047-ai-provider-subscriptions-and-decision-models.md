@@ -4,21 +4,21 @@ sidebar: false
 
 # ADR 0047：AI Provider 订阅接入与多决策模型
 
-状态：Accepted（2026-11-04）——Clover 按 Fin 授权勾选：尽量支持官方订阅，风险由使用者自担、README 明示；实现切片按 E2 开 S1。
+状态：Implemented（Accepted，§1a / §1b / §1c 拍板结论与 Slices S0–S4 已全部落盘合入 main）
 
 > 合入后澄清（2026-11-04，为 S1）：§1a 与 S1 验收行措辞已与 Fin 2026-11-04 决定（见「勾选记录 · 合入影响」）对齐——实验 Driver 可保留默认注册，但须带实验标识与风险声明。勾选结果与产品选择（A1–A4 等）不变。
 
-关联：2026-11-04 交接 BRIEF（AI Provider 订阅 / OAuth 接入收束，非 Calendar OAuth）；调研稿 `docs/plans/provider-subscriptions-and-decision-models.md`（2026-11-03，尚未入 main）；领域模型以 `feat/ai-provider-main-integration` 分支为准。
+关联：2026-11-04 交接 BRIEF（AI Provider 订阅 / OAuth 接入收束，非 Calendar OAuth）；领域模型与实现已合入 `main`（`packages/im/ai/src/provider/`、`packages/im/ai/src/providers/`、`packages/im/agent/src/decision/`）。
 
 ## 背景
 
 ### 领域模型已定，本文不另起
 
-领域结构与配置权威以 `feat/ai-provider-main-integration` 分支上的活文档为准（尚未合入 main，以下均为分支路径）：
+领域结构与配置权威已合入 `main`（代码落盘于 `packages/im/ai/src/provider/`、`packages/im/ai/src/providers/`、`packages/im/agent/src/decision/`），设计基准与实施台账见：
 
-- `docs/plans/ai-provider-target-architecture.md`（设计基准，2026-11-03 确认）
-- `docs/plans/ai-provider-runtime-implementation.md`（实施台账）
-- `docs/plans/ai-provider-driver-evidence.md`（各 Driver 本地证据与未验证项）
+- [AI Provider 目标架构](../plans/ai-provider-target-architecture.md)（设计基准，2026-11-03 确认）
+- [AI Provider 运行时实施台账](../plans/ai-provider-runtime-implementation.md)（实施台账）
+- [AI Provider Driver 本地证据与未验证项](../plans/ai-provider-driver-evidence.md)（各 Driver 本地证据与未验证项）
 
 本文只引用其中的关键概念，不复制架构正文：
 
@@ -48,13 +48,13 @@ sidebar: false
 | `ai.decisions.models.<别名>` | 指向 TypeSafe 等 Decision Service 的 Decision Profile |
 | `ai.decisions.<task>.model` | `purposes.decisions.<task>.profile` |
 
-### 分支现状（据实施台账，本文未独立复核）
+### 主干落盘现状
 
-`feat/ai-provider-main-integration`（tip `33fcfec2b`）上已有本地 / 合成 HTTP 级实现：Codex、Claude 订阅、OpenCode Go / Zen、Antigravity 五个 Driver；AccountRuntime 刷新单飞与 CAS；每次请求取当前凭据；六类决策按 Profile 选型；Console 候选。台账明确**未做**实号登录、订阅许可确认、真实推理与计费。
+`main`（原 `feat/ai-provider-main-integration` 已合入）已有本地 / 合成 HTTP 级完整实现：Codex、Claude 订阅、OpenCode Go / Zen、Antigravity 五个 Driver（`packages/im/ai/src/providers/`）；AccountRuntime 刷新单飞与 CAS（`packages/im/ai/src/provider/`）；每次请求取当前凭据；六类决策按 Profile 选型（`packages/im/agent/src/decision/`）；Console 候选。台账明确**未做**实号登录、订阅许可确认、真实推理与计费。
 
-需要 Fin 注意的一点：该分支的 `builtinAiProviders` 默认注册了 `claudeSubscriptionProvider` 与 `antigravityProvider`。Fin 已勾选 Claude / Antigravity 的 §1a 实验通道：分支可保留默认注册，但合入前必须按 §1a 挂实验标识与 README 风险声明，不得包装成官方支持。
+`builtinAiProviders` 默认注册了 `claudeSubscriptionProvider` 与 `antigravityProvider`。按 Fin 勾选的 Claude / Antigravity §1a 实验通道，默认注册保留，并已按 §1a 挂实验标识（`support: { tier: 'experimental' }`）与 README 风险声明（由 `tests/docs/ai-provider-experimental.test.ts` 门禁守护），不包装成官方支持。
 
-## 决策（Proposed）
+## 决策（Implemented）
 
 ### 0. 总原则
 
@@ -145,19 +145,19 @@ Codex 若选「正式产品」，Fin 同时确认：接受以 Codex 客户端 OA
 - 账户池、自动换账号、自动换模型、保活流量、配额轮询。
 - 自动扫描或导入 `~/.codex/auth.json`、Claude 凭据或 IDE 数据库。
 
-## 分阶段切片
+## 实施切片
 
-S0 之后的切片均对齐 `feat/ai-provider-main-integration`：大部分代码已在该分支，切片的工作是**按本 ADR 勾选结果裁剪与验收**，不另写一套。分支归属 Fin / 本地 Claude，实施方与其协调后再动该树。
+Slices S0–S4 已全部按本 ADR 勾选结果在 `main` 落盘并完成验收：
 
-| 切片 | 内容 | 验收标准 |
-| --- | --- | --- |
-| S0 ADR（本文） | 四项服务态度、Host-only 首阶段、决策多配置合同、技术硬约束 | Fin 勾完清单 A / B / C；状态转 Accepted |
-| S1 认证端口 | Host 私有订阅账号服务（AccountRuntime）+ 动态凭据句柄接入 ExecutionBinding / Driver；按清单 A 调整默认 Driver 注册 | 单测：同账号 token 轮换后下一请求用新凭据且不重建 Session；全仓无假 apiKey / 强转；并发刷新单飞、取消一个 waiter 不影响其他；迟到旧 401 不误伤新凭据；未勾「正式」的订阅 Driver 若按 §1a 保留默认注册，必须带 experimental 标识与 README / Console 风险声明，不得写成官方支持；验收含标识与文案单测 / 文档检查 |
-| S2 Codex 路径（仅当 A1 选正式） | Responses + 账号头 + SSE；历史 / opaque 状态绑定 Account incarnation | 本地 HTTP fixture 合同测试：多轮工具续轮、encrypted reasoning 往返、重启恢复、跨账号 / 跨模型剥除 opaque；部分流后认证失败不重放整任务；显式不支持参数 0 HTTP |
-| S3 多决策配置 | 用途 → 明确 Decision Profile；验证期报错；off 静默；旧单 provider 一次性迁移 | 配置校验单测：未定义 / 不可见 Profile 保存即报错；off 用途 0 次 evaluate；批次不漂移；旧写法迁移预览不猜模型 |
-| S4 Console | 登录 / 断开 / 刷新目录 / 付费探测分按钮；保存不打网；实验通道标识 | 管理权 ≠ 使用权的文案与 DTO；DTO / 日志无 token；保存与页面加载 0 次供应商请求；本地断开不显示为「已撤销上游授权」 |
+| 切片 | 状态 | 内容與落盘路径 | 验收标准 |
+| --- | --- | --- | --- |
+| S0 ADR（本文） | ✅ 已完成 | 四项服务态度、Host-only 首阶段、决策多配置合同、技术硬约束（`docs/adr/0047-ai-provider-subscriptions-and-decision-models.md`） | Fin 勾完清单 A / B / C；状态转 Accepted / Implemented |
+| S1 认证端口 | ✅ 已完成 | Host 私有订阅账号服务（AccountRuntime）+ 动态凭据句柄接入 ExecutionBinding / Driver；实验通道标识与测试（`packages/im/ai/src/provider/`、`packages/im/ai/src/providers/{subscriptions.ts,antigravity.ts,oauth.ts,support.ts}`、`tests/docs/ai-provider-experimental.test.ts`） | 单测：同账号 token 轮换后下一请求用新凭据且不重建 Session；全仓无假 apiKey / 强转；并发刷新单飞、取消一个 waiter 不影响其他；迟到旧 401 不误伤新凭据；未勾「正式」的订阅 Driver 按 §1a 保留默认注册，带 experimental 标识与 README / Console 风险声明，不得写成官方支持；验收含标识与文案单测 / 文档检查 |
+| S2 Codex 路径（A1 选正式） | ✅ 已完成 | Responses + 账号头 + SSE；历史 / opaque 状态绑定 Account incarnation（`packages/im/ai/src/providers/subscriptions.ts`、`packages/im/ai/src/providers/oauth.ts`） | 本地 HTTP fixture 合同测试：多轮工具续轮、encrypted reasoning 往返、重启恢复、跨账号 / 跨模型剥除 opaque；部分流后认证失败不重放整任务；显式不支持参数 0 HTTP |
+| S3 多决策配置 | ✅ 已完成 | 用途 → 明确 Decision Profile；验证期报错；off 静默；旧单 provider 一次性迁移（`packages/im/agent/src/decision/{config.ts,rank.ts,approval-judgment.ts}`） | 配置校验单测：未定义 / 不可见 Profile 保存即报错；off 用途 0 次 evaluate；批次不漂移；旧写法迁移预览不猜模型 |
+| S4 Console | ✅ 已完成 | 登录 / 断开 / 刷新目录 / 付费探测分按钮；保存不打网；实验通道标识（`basic/cli/src/plugin-runtime/inference/`、`packages/console/`） | 管理权 ≠ 使用权的文案与 DTO；DTO / 日志无 token；保存与页面加载 0 次供应商请求；本地断开不显示为「已撤销上游授权」 |
 
-S1 → S2 依赖；S3 可与 S1 并行；S4 依赖 S1（及 S2 若开）。真实登录、付费请求与订阅资格验证不属于任何切片，须另行授权。
+S1 → S2 依赖；S3 可与 S1 并行；S4 依赖 S1（及 S2）。真实登录、付费请求与订阅资格验证不属于任何切片，须另行授权。
 
 ## 后果
 
@@ -237,4 +237,4 @@ S1 → S2 依赖；S3 可与 S1 并行；S4 依赖 S1（及 S2 若开）。真�
 - **产品面**：Codex 正式；OpenCode Go + Zen 正式；Claude.ai 订阅 / Antigravity 开 §1a **实验通道**（Console/README 标「实验 · 不受官方支持 · 可能违反供应商条款 · 风险自担」）。
 - **账号**：B1 Host-owned；B2 本轮无个人 OAuth UI；B3 订阅 Profile 默认不发布给普通成员。
 - **C/D/E**：全勾；下一切片 S1。
-- **合入影响**：`feat/ai-provider-main-integration` 可保留 `claudeSubscriptionProvider` / `antigravityProvider` 默认注册，但必须挂实验标识与 README 风险声明，不得写成「官方支持」。
+- **主干合入状态**：`main` 保留 `claudeSubscriptionProvider` / `antigravityProvider` 默认注册，已按 §1a 挂实验标识与 README 风险声明，不写成「官方支持」。

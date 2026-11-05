@@ -6,14 +6,9 @@ export {
 } from './host-installer.js';
 export {
   resolveAiConfig,
-  resolveWorkroomStorageMode,
-  resolveWorkroomTrustedPackPublishers,
+  resolveAgentHostExternalPeers,
+  resolveAgentHostVenues,
 } from './config.js';
-export {
-  isWorkroomPackageMissing,
-  loadWorkroomHostModule,
-  type WorkroomHostModule,
-} from './workroom-loader.js';
 export { createSelfChangeImpactPort } from './self-change-impact.js';
 export { createSelfChangePluginRoots } from './self-change-plugin-roots.js';
 

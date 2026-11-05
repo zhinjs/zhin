@@ -3,19 +3,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
-  assertFixedWorkroomStorageMode,
-  assessWorkroomDisclosureSetup,
-  isWorkroomPlanningPolicyReady,
-  resolveAgentHostMcpServers,
+  resolveAgentHostExternalPeers,
   resolveAgentHostKnowledgeDirectory,
-  resolveWorkroomDisclosureAuthorityPublication,
-  resolveWorkroomDisclosureBootstrap,
-  resolveWorkroomPlanningPolicyPublication,
-  resolveWorkroomStorageMode,
-  resolveWorkroomTrustedPackPublishers,
+  resolveAgentHostMcpServers,
+  resolveAgentHostVenues,
+  resolveAiConfig,
 } from '../../../src/plugin-runtime/agent/config.js';
 
-describe('Agent Host Workroom configuration', () => {
+describe('Agent Host configuration', () => {
   it('resolves only explicitly configured project-local knowledge directories', () => {
     const parent = mkdtempSync(join(tmpdir(), 'zhin-knowledge-config-'));
     const project = join(parent, 'project');
@@ -74,123 +69,86 @@ describe('Agent Host Workroom configuration', () => {
     } as never)).toThrow('Invalid ai.mcpServers[0] declaration');
   });
 
-  it('validates the process-owned trusted Pack publisher list', () => {
-    expect(resolveWorkroomTrustedPackPublishers({
-      workroom: { trustedPackPublishers: ['workroom-admin'] },
-    })).toEqual(['workroom-admin']);
-    expect(() => resolveWorkroomTrustedPackPublishers({
-      workroom: { trustedPackPublishers: ['workroom-admin', 'workroom-admin'] },
-    })).toThrow('contains duplicates');
+  it('normalizes and validates multi-bot Venue declarations', () => {
+    expect(resolveAgentHostVenues(undefined)).toEqual([]);
+    const venues = resolveAgentHostVenues({
+      venues: [{
+        id: ' dev-room ',
+        label: ' Dev Room ',
+        conversation: {
+          platform: ' qq ',
+          sceneType: 'group',
+          sceneId: ' 123456 ',
+        },
+        members: [{
+          agent: ' zhin ',
+          botEndpoint: ' qq:main ',
+          aliases: [' 小智 '],
+        }, {
+          agent: ' coder ',
+          botEndpoint: ' qq:coder ',
+        }],
+        entry: ' zhin ',
+        visibility: 'visible',
+      }],
+    });
+    expect(venues).toEqual([{
+      id: 'dev-room',
+      label: 'Dev Room',
+      conversation: {
+        platform: 'qq',
+        sceneType: 'group',
+        sceneId: '123456',
+      },
+      members: [{
+        agent: 'zhin',
+        botEndpoint: 'qq:main',
+        aliases: ['小智'],
+      }, {
+        agent: 'coder',
+        botEndpoint: 'qq:coder',
+      }],
+      entry: 'zhin',
+      visibility: 'visible',
+    }]);
+    expect(Object.isFrozen(venues)).toBe(true);
+
+    expect(() => resolveAgentHostVenues({
+      venues: [{
+        id: 'broken',
+        conversation: { platform: 'qq', sceneId: '1' },
+        members: [],
+      }],
+    })).toThrow('members must be a non-empty array');
   });
 
-  it('resolves the orchestrator model disclosure contract without inferring privacy', () => {
-    const contract = {
-      endpoint: 'https://models.example/v1', processingRegions: ['global'],
-      maxConfidentiality: 'project_internal' as const, external: true, noTraining: true,
-      loggingMode: 'metadata_only' as const, maximumRetentionSeconds: 60,
-      allowsRedisclosure: false, supportsDeletion: true,
-    };
-    const ai = { workroom: { disclosure: { modelServices: { 'service:contracted': contract } } } };
-    const resolution = resolveWorkroomDisclosureBootstrap({ serviceId: 'service:contracted', ai });
-    expect(resolution).toEqual({ modelServiceId: 'service:contracted', contract });
-    expect(resolveWorkroomDisclosureBootstrap({ ai })).toEqual({});
-    expect(resolveWorkroomDisclosureBootstrap({ serviceId: 'service:unmapped', ai }))
-      .toEqual({ modelServiceId: 'service:unmapped' });
-  });
+  it('normalizes and validates external peer declarations', () => {
+    expect(resolveAgentHostExternalPeers(undefined)).toEqual([]);
+    const peers = resolveAgentHostExternalPeers({
+      externalPeers: [{
+        platform: ' qq ',
+        userId: ' 999888 ',
+        label: ' Partner Bot ',
+      }],
+    });
+    expect(peers).toEqual([{
+      platform: 'qq',
+      userId: '999888',
+      label: 'Partner Bot',
+    }]);
+    expect(Object.isFrozen(peers)).toBe(true);
 
-  it('reports each fail-closed disclosure setup prerequisite', () => {
-    expect(assessWorkroomDisclosureSetup({
-      resolution: {}, authorityPublished: false, authorityCurrent: false, localIssuerAvailable: false,
-    })).toMatchObject({
-      disclosureReady: false,
-      disclosureConfigReady: false,
-      diagnostics: [
-        'orchestrator 尚未绑定模型服务',
-        '尚未发布 Project Data Governance 披露 authority',
-        'Root-private Data Governance 签发能力不可用',
+    expect(() => resolveAgentHostExternalPeers({
+      externalPeers: [
+        { platform: 'qq', userId: '100' },
+        { platform: 'qq', userId: '100' },
       ],
-    });
-    expect(assessWorkroomDisclosureSetup({
-      resolution: { modelServiceId: 'openrouter' },
-      authorityPublished: false,
-      authorityCurrent: false,
-      localIssuerAvailable: true,
-    }).diagnostics).toContain('尚未配置 ai.workroom.disclosure.modelServices.openrouter');
-    expect(assessWorkroomDisclosureSetup({
-      resolution: {
-        modelServiceId: 'external',
-        contract: {
-          endpoint: 'https://models.example/v1', processingRegions: ['global'],
-          maxConfidentiality: 'project_internal', external: true, noTraining: false,
-          loggingMode: 'full', maximumRetentionSeconds: 60,
-          allowsRedisclosure: false, supportsDeletion: false,
-        },
-      },
-      authorityPublished: true,
-      authorityCurrent: true,
-      localIssuerAvailable: false,
-    })).toMatchObject({
-      disclosureReady: true,
-      disclosureConfigReady: false,
-      diagnostics: ['外部模型服务 external 必须显式禁止训练'],
-    });
-    expect(assessWorkroomDisclosureSetup({
-      resolution: {
-        modelServiceId: 'public-only',
-        contract: {
-          endpoint: 'https://models.example/v1', processingRegions: ['local'],
-          maxConfidentiality: 'public', external: false, noTraining: true,
-          loggingMode: 'disabled', maximumRetentionSeconds: 1,
-          allowsRedisclosure: false, supportsDeletion: true,
-        },
-      },
-      authorityPublished: false,
-      authorityCurrent: false,
-      localIssuerAvailable: true,
-    }).diagnostics).toContain('模型服务 public-only 至少需要 project_internal 披露等级');
+    })).toThrow('duplicate peer "qq:100"');
   });
 
-  it('advances a stale disclosure authority through its CAS chain', () => {
-    expect(assessWorkroomDisclosureSetup({
-      resolution: {}, authorityPublished: true, authorityCurrent: false, localIssuerAvailable: true,
-    })).toMatchObject({
-      disclosureReady: false,
-      diagnostics: expect.arrayContaining(['Project Data Governance 披露 authority 未绑定当前 Catalog/Sponsor']),
-    });
-    expect(resolveWorkroomDisclosureAuthorityPublication(undefined, false)).toEqual({ revision: 1 });
-    expect(resolveWorkroomDisclosureAuthorityPublication({
-      revision: 3,
-      digest: `sha256:${'a'.repeat(64)}`,
-    }, false)).toEqual({
-      revision: 4,
-      previousDigest: `sha256:${'a'.repeat(64)}`,
-    });
-    expect(resolveWorkroomDisclosureAuthorityPublication({
-      revision: 3,
-      digest: `sha256:${'a'.repeat(64)}`,
-    }, true)).toBeUndefined();
-  });
-
-  it('advances and evaluates the Planning Policy authority', () => {
-    expect(resolveWorkroomPlanningPolicyPublication(undefined)).toEqual({ revision: 1 });
-    expect(resolveWorkroomPlanningPolicyPublication({ revision: 3, digest: 'sha256:previous' }))
-      .toEqual({ revision: 4, expectedPreviousDigest: 'sha256:previous' });
-    expect(isWorkroomPlanningPolicyReady(undefined)).toBe(false);
-    expect(isWorkroomPlanningPolicyReady({
-      policy: { schedulerPolicy: { pinnedAtSequence: 0 } },
-    })).toBe(false);
-    expect(isWorkroomPlanningPolicyReady({
-      policy: { schedulerPolicy: { pinnedAtSequence: 1 } },
-    })).toBe(true);
-  });
-
-  it('fixes the Workroom storage authority for the process lifetime', () => {
-    expect(resolveWorkroomStorageMode(undefined)).toBe('database');
-    expect(resolveWorkroomStorageMode({ sessions: { useDatabase: false } } as never)).toBe('file');
-    expect(() => assertFixedWorkroomStorageMode('database', 'file'))
-      .toThrow('process restart required');
-    expect(() => assertFixedWorkroomStorageMode('file', 'database'))
-      .toThrow('process restart required');
-    expect(() => assertFixedWorkroomStorageMode('database', 'database')).not.toThrow();
+  it('fails fast with a migration message when legacy ai.workroom is present', async () => {
+    await expect(resolveAiConfig({ ai: { workroom: {} } })).rejects.toThrow(
+      'Configuration key "ai.workroom" has been removed in ADR 0048',
+    );
   });
 });

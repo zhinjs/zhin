@@ -1,5 +1,4 @@
 import { agentHostToken } from '@zhin.js/agent/runtime';
-import { workroomHostToken } from '@zhin.js/workroom';
 import { Scope, rootPluginId } from '@zhin.js/plugin-runtime';
 import { describe, expect, it } from 'vitest';
 import { AgentHostPublicationCoordinator } from '../../../src/plugin-runtime/agent/publication-coordinator.js';
@@ -19,10 +18,9 @@ describe('AgentHostPublicationCoordinator', () => {
       bootstrapText: '',
     })).toThrow('generation replaced');
     expect(resources.has(agentHostToken)).toBe(false);
-    expect(resources.has(workroomHostToken)).toBe(false);
   });
 
-  it('publishes generation-owned Agent ports without Workroom or late-bound controls', () => {
+  it('publishes generation-owned Agent ports including engagements and venues', () => {
     const resources = new Scope(rootPluginId());
     const history = { page: () => undefined, read: () => undefined, cleanup: () => undefined, health: () => undefined };
     const coordinator = new AgentHostPublicationCoordinator({
@@ -60,10 +58,9 @@ describe('AgentHostPublicationCoordinator', () => {
     });
 
     expect(Object.keys(resources.use(agentHostToken).console).sort()).toEqual(
-      ['assistant', 'cancelSession', 'listBindings', 'scheduleExecutions', 'sessionTree', 'trace'],
+      ['assistant', 'cancelSession', 'engagements', 'listBindings', 'scheduleExecutions', 'sessionTree', 'trace', 'venues'],
     );
     expect(resources.use(agentHostToken).console.scheduleExecutions).toBe(history);
-    expect(resources.has(workroomHostToken)).toBe(false);
     for (const removed of [
       'bindWorkroomProfiles', 'bindWorkroomKnowledge', 'bindPortfolioSponsor',
       'bindEffectSponsor', 'bindDataLifecycle', 'resolveDataLifecycle',

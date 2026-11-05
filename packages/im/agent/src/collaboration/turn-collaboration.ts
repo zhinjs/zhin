@@ -11,6 +11,7 @@
  * reply port. Guard escalations are told to the human the same way. Without
  * peers (or outside a Mail turn) nothing is added (D3).
  */
+import type { VenueProjector } from '@zhin.js/core';
 import type {
   ActorTurnResult,
   EscalationNotice,
@@ -55,7 +56,10 @@ export interface TurnCollaborationInput {
   readonly interactiveRun?: InteractiveRun;
   readonly imageInspectionBudget?: ImageInspectionBudget;
   readonly provenance?: TurnProvenance;
+  readonly venueProjector?: VenueProjector;
 }
+
+export type StartTurnCollaborationInput = TurnCollaborationInput;
 
 export interface TurnCollaboration {
   readonly harness: Harness;
@@ -66,6 +70,8 @@ export interface TurnCollaboration {
   /** Ends the root turn; delegated work keeps running and reports back later. */
   finish(status: ActorTurnResult['status']): Promise<void>;
 }
+
+export type TurnCollaborationSession = TurnCollaboration;
 
 export function harnessTrust(level: InitiatorTrustLevel): HarnessTrust {
   switch (level) {
@@ -82,7 +88,13 @@ export function harnessTrust(level: InitiatorTrustLevel): HarnessTrust {
  */
 export async function startTurnCollaboration(input: TurnCollaborationInput): Promise<TurnCollaboration | undefined> {
   const { turn, capabilities } = input;
-  if (capabilities.agents.every((agent) => agent.name === input.entry)) return undefined;
+  const hasPeersOrSelf = capabilities.agents.some(
+    (agent) =>
+      agent.name !== input.entry
+      || agent.collaboration?.contacts?.includes('self')
+      || agent.collaboration?.contacts?.includes(input.entry),
+  );
+  if (!hasPeersOrSelf) return undefined;
   const mailTurn = currentMailTurn();
   if (!mailTurn) {
     logger.debug('collaboration skipped: the turn does not run inside the host mailbox');
@@ -96,7 +108,7 @@ export async function startTurnCollaboration(input: TurnCollaborationInput): Pro
   const harness = mailTurn.mailbox.harness;
   const catalogTools = capabilities.tools.map((tool) => tool.name);
   const directory = createCollaborationDirectory({
-    entry: { name: input.entry, toolNames: catalogTools },
+    entry: { name: input.entry, toolNames: catalogTools, allowSelfDelegation: true },
     agents: capabilities.agents,
     catalogTools,
   });
@@ -112,6 +124,18 @@ export async function startTurnCollaboration(input: TurnCollaborationInput): Pro
   const onEscalate = async (reason: string): Promise<string> => {
     await tell(`需要你来决定：${reason}`);
     return 'The human has been asked to decide; stop this line of work and wait for their answer in a later message.';
+  };
+  const onVenueTell = async (venueId: string, content: string): Promise<void> => {
+    await mailTurn.mailbox.projectVenueTell(root.engagementId, directory.entry.name, root.id, venueId, content);
+  };
+  const onToolCalled = async (info: {
+    readonly engagementId: string;
+    readonly actor: string;
+    readonly mailId: string;
+    readonly tool: string;
+    readonly ok: boolean;
+  }): Promise<void> => {
+    await mailTurn.mailbox.recordToolCalled(info);
   };
 
   const runner = createActorTurnRunner({
@@ -130,12 +154,15 @@ export async function startTurnCollaboration(input: TurnCollaborationInput): Pro
     imageInspectionBudget: input.imageInspectionBudget,
     provenance: input.provenance,
     onEscalate,
+    onVenueTell,
+    onToolCalled,
   });
   // Actor turns of this engagement run from the Mailbox pump, possibly after
   // the root turn ended; bind them to the root turn's async context (turn
   // configuration, models, mail turn) as the per-turn harness of H2 did.
   mailTurn.mailbox.bindCollaboration(root.engagementId, {
     directory,
+    ...(input.venueProjector ? { venueProjector: input.venueProjector } : {}),
     runTurn: AsyncResource.bind(async (actor: string, batch: readonly Mail[], signal: AbortSignal) => {
       const result = await runner(actor, batch, signal);
       // The entry actor continuing with delegated results speaks to the human directly.
@@ -150,7 +177,7 @@ export async function startTurnCollaboration(input: TurnCollaborationInput): Pro
   });
   const tools = createCollaborationTools(
     { harness, directory, actor: directory.entry.name, mail: root },
-    { owner: capabilities.owner, onEscalate },
+    { owner: capabilities.owner, onEscalate, onVenueTell },
   );
   const collaboration: TurnCollaboration = {
     harness,

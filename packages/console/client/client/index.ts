@@ -1,6 +1,7 @@
 // Types
 export * from "./types";
 export {
+  AGENT_COLLABORATION_RPC,
   ENDPOINT_RPC,
   CONSOLE_EVENT_RECOVERY_GAP_EVENT,
   ENDPOINT_MANAGEMENT_CAPABILITIES,
@@ -8,6 +9,9 @@ export {
   SIDE_EVENT_PUSH,
   SIDE_EVENT_RPC,
   parseConsoleInboxEvent,
+  type ConsoleEngagementDetail,
+  type ConsoleEngagementSummary,
+  type ConsoleVenueDefinition,
   type ConsoleInboxEvent,
   type ConsoleInboxEventKind,
   type ConsoleInboxMessageRow,
@@ -178,7 +182,12 @@ export { registerWorkroomConsole } from "./workroom/registerWorkroomConsole.js";
 export { registerAgentTraceConsole } from "./agent-trace/registerAgentTraceConsole.js";
 export { buildWaterfall } from "./agent-trace/traceView.js";
 export { default as TraceArchivePage } from "./agent-trace/TraceArchivePage.js";
-export { default as WorkroomRunsPage } from "./workroom/WorkroomRunsPage.js";
+export {
+  default as WorkroomRunsPage,
+  useEngagements,
+  useEngagementDetail,
+  useVenues,
+} from "./workroom/WorkroomRunsPage.js";
 
 export {
   startAgentSession,

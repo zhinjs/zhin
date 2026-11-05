@@ -7,7 +7,8 @@ import { builtinAiProviders } from '@zhin.js/ai/providers';
 import type { HostInference } from '../inference/host.js';
 import { turnModelPortToken } from '@zhin.js/agent/model-runtime';
 import { createOwnerApprovalMigrationProvider } from '../data-migration/owner-approval-provider.js';
-import { pluginDataMigrationProviderToken, databaseRootHostToken, rootPluginId, type DisposeStack, type PluginId, type SnapshotReader } from '@zhin.js/plugin-runtime';
+import { pluginDataMigrationProviderToken, rootPluginId, type PluginId, type SnapshotReader } from '@zhin.js/plugin-runtime';
+import { getProcessPeerRegistry } from '@zhin.js/adapter';
 import { resolveHostProtectedPaths } from './host-protected-paths.js';
 import { installAgentPersistence } from './persistence-coordinator.js';
 import { createSelfChangeTrialOptions } from './self-change-trial.js';
@@ -16,10 +17,18 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
+  createVenueMembershipPort,
+  createVenueProjector,
+  createVenueRegistry,
+  venueProjectorToken,
+  venueRegistryToken,
+} from '@zhin.js/core';
+import {
   groupRuleViolationToken,
   imOperationResourcesToken,
   ingressRouteToken,
   memberWelcomeOwnerToken,
+  roomMembershipToken,
   type GroupRuleViolationSink,
   type ImRuntime,
   type MemberWelcomeOwner,
@@ -40,13 +49,6 @@ import {
   type SelfChangeImpactPort,
   type AudioTranscriptionPort,
 } from '@zhin.js/agent';
-import type {
-  HumanIngressOrchestratorProposalPort,
-  WorkroomPlanGateAuthorityPort,
-  WorkroomDynamicPlanningPolicyPort,
-  WorkroomPlanningDisclosurePort,
-  SelfDeliveryHostConfiguration,
-} from '@zhin.js/workroom';
 import {
   AgentRuntime,
   agentOperationResourcesToken,
@@ -55,18 +57,13 @@ import {
 } from '@zhin.js/agent/runtime';
 import { AgentTurnIngressRoute } from './turn/ingress-route.js';
 import { AgentHostPublicationCoordinator } from './publication-coordinator.js';
-import type { LocalWorkroomDataGovernanceAuthority } from '../workroom/module.js';
-import type { WorkroomHostModule } from './workroom-loader.js';
 
 export { AgentRuntime, AgentTurnCoordinator } from '@zhin.js/agent/runtime';
 
 import {
-  createRuntimeApprovalPort,
-} from './turn/request.js';
-import {
+  resolveAgentHostExternalPeers,
   resolveAgentHostMcpServers,
   type AgentHostAIConfig as AIConfig,
-  type WorkroomStorageMode,
 } from './config.js';
 import {
   publishAgentToolFeatures,
@@ -90,19 +87,10 @@ export interface InstallAgentHostOptions {
   readonly selfChanges?: import('../console/self-changes.js').HostSelfChanges;
   /** Process-owned host side of self-change apply / recover (ADR 0040 §5 / §6). Absent: approved changes wait. */
   readonly selfChangeApply?: import('../self-change-apply.js').HostSelfChangeApply;
-  /** Root-private self-delivery authentication/integration configuration. Never accepts model-supplied policy. */
-  readonly selfDelivery?: SelfDeliveryHostConfiguration;
-  /**
-   * Optional Workroom Host module, loaded once by the caller. Absent when
-   * `@zhin.js/workroom` is not installed; the Agent then runs without Workroom.
-   */
-  readonly workroom?: WorkroomHostModule;
   /** Process-owned execution authority attached to exactly one Root. */
   readonly runtime: AgentRuntime;
-  /** Process-owned Snapshot reader; local Assignment operations hold an exact generation lease. */
+  /** Process-owned Snapshot reader; local operations hold an exact generation lease. */
   readonly snapshots?: SnapshotReader;
-  /** Process-fixed Workroom storage identity. Changing it requires restart. */
-  readonly workroomStorageMode: WorkroomStorageMode;
   readonly im: ImRuntime;
   readonly projectRoot: string;
   readonly inference: HostInference;
@@ -128,18 +116,6 @@ export interface InstallAgentHostOptions {
   readonly approvalPort?: ApprovalPort;
   /** Trusted product-policy seam for explicit steer/follow-up/observe intent and authorization. */
   readonly resolveTurnIntent?: TurnIntentResolver;
-  /** Trusted idempotent Orchestrator/Kernel proposal seam for Workroom human ingress. */
-  readonly workroomHumanIngressPort?: HumanIngressOrchestratorProposalPort;
-  /** P12 governed model-provider disclosure; absence fails closed before model invocation. */
-  readonly workroomPlanningDisclosurePort?: WorkroomPlanningDisclosurePort;
-  /** Persistent exact Project/Profile planning policy; absence fails closed. */
-  readonly workroomDynamicPlanningPolicyPort?: WorkroomDynamicPlanningPolicyPort;
-  /** Authenticated Sponsor authority for typed pre-execution Plan Gate decisions. */
-  readonly workroomPlanGateAuthority?: WorkroomPlanGateAuthorityPort;
-  /** Process-owned shared Pack publisher membership; never accepted from HTTP request bodies. */
-  readonly workroomTrustedPackPublishers?: readonly string[];
-  /** Self-hosted Root-private KMS and signed governance decision issuer. */
-  readonly workroomLocalDataGovernance?: LocalWorkroomDataGovernanceAuthority;
   /** ADR 0040 §2: `InvalidationPlanner` over the committed source ownership, for `change_draft` previews. */
   readonly selfChangeImpact?: SelfChangeImpactPort;
   /**
@@ -155,6 +131,7 @@ export interface InstallAgentHostOptions {
  * - Command miss → `ai:` trigger → **ZhinAgent.process** (inbound queue + session)
  * - CapabilityIngress tools + `ai.mcpServers` + SOUL/AGENTS/TOOLS bootstrap
  * - Collaboration tools (agents / ask / delegate / …) + deferred meta tools
+ * - Multi-bot Venues (`ai.venues`) + external peers (`ai.externalPeers`)
  * - Optional inbound STT / `@agent` specialist prompt injection
  * - generation-owned Hook resources / `aiHookRuntimeBus`, TimerScheduler + `schedule_*`
  * - Assistant profile sync + Event Ingress registry (HTTP via Console API)
@@ -162,12 +139,17 @@ export interface InstallAgentHostOptions {
  */
 export function installAgentHost(options: InstallAgentHostOptions): RootResourceInstaller {
   const localAssets = new LocalImageAssetStore(join(options.projectRoot, 'data', 'agent-assets'), message => logger.warn(message));
-  return async ({ generation, signal, resources, lifecycle, handoff, admission, events, readCandidateSnapshot, config: primaryConfig, addFeature }) => {
+  return async ({ signal, resources, lifecycle, handoff, admission, events, readCandidateSnapshot, config: primaryConfig, addFeature }) => {
     const aiConfig = primaryConfig.get<AIConfig>('ai');
     const assistantConfig = primaryConfig.get<AssistantConfig>('assistant');
     if (!aiConfig || typeof aiConfig !== 'object') return;
     provideAiProviders(resources, builtinAiProviders);
     const mcpEntries = resolveAgentHostMcpServers(aiConfig);
+    const externalPeers = resolveAgentHostExternalPeers(aiConfig);
+    for (const peer of externalPeers) {
+      const releasePeer = getProcessPeerRegistry().declareExternal(peer.platform, peer.userId, peer.label);
+      lifecycle.add(releasePeer);
+    }
     // #1030 P0: tell the file/bash policy where the project root is and which files only a person may change.
     const hostProtectedPaths = await resolveHostProtectedPaths(options.projectRoot);
     resources.provide(hostProtectedPathsToken, hostProtectedPaths);
@@ -196,6 +178,29 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       homeTools,
       assistantEnabled,
     } = agentFoundation;
+    const venues = agentFoundation.venues ?? [];
+    if (venues.length > 0) {
+      const venueRegistry = createVenueRegistry(venues);
+      resources.provide(venueRegistryToken, venueRegistry);
+      const venueMembershipPort = createVenueMembershipPort({ registry: venueRegistry });
+      resources.provide(roomMembershipToken, venueMembershipPort);
+      const venueProjector = createVenueProjector({
+        registry: venueRegistry,
+        send: async (input) => {
+          await options.im.endpoints?.send({
+            adapter: input.conversation.platform,
+            endpointKey: input.endpointId,
+            conversation: {
+              kind: input.conversation.sceneType ?? 'group',
+              id: input.conversation.sceneId,
+              ...(input.conversation.threadId ? { threadId: input.conversation.threadId } : {}),
+            },
+            content: input.text,
+          });
+        },
+      });
+      resources.provide(venueProjectorToken, venueProjector);
+    }
     resources.provide(pluginDataMigrationProviderToken, createOwnerApprovalMigrationProvider({
       approvals: zhinAgent.ownerApprovals, admission,
     }));
@@ -310,14 +315,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       error: error instanceof Error ? error.message : String(error),
     })));
     const ingress = new CapabilityIngress();
-    const assembly = options.workroom?.WorkroomHostAssembly.begin({
-      generation,
-      signal,
-      resources,
-      planGateAuthority: options.workroomPlanGateAuthority,
-      planningDisclosure: options.workroomPlanningDisclosurePort,
-      dynamicPlanningPolicy: options.workroomDynamicPlanningPolicyPort,
-    });
     const { bootstrapText, contextFiles } = await loadBootstrap(options.projectRoot);
 
     // Register before any await so a cancelled generation cannot leak Agent
@@ -347,7 +344,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       },
     });
 
-    const publicationCoordinator = new AgentHostPublicationCoordinator({
+    new AgentHostPublicationCoordinator({
       projectRoot: options.projectRoot,
       signal,
       resources,
@@ -357,25 +354,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       contextFiles,
     });
 
-    const workroom = assembly
-      ? await assembly.compose({
-        projectRoot: options.projectRoot,
-        lifecycle,
-        handoff,
-        snapshots: options.snapshots,
-        config: aiConfig,
-        storageMode: options.workroomStorageMode,
-        im: options.im,
-        selfDelivery: options.selfDelivery,
-        agent: agentFoundation,
-        ingress,
-        resolveConfiguredEndpointKeys: options.resolveConfiguredEndpointKeys,
-        humanIngressPort: options.workroomHumanIngressPort,
-        trustedPackPublishers: options.workroomTrustedPackPublishers,
-        localDataGovernance: options.workroomLocalDataGovernance,
-      })
-      : undefined;
-    // Workroom validates its authority first; the candidate Agent remains unadmitted until all handoffs finish.
     installAgentPersistence({ resources, handoff, lifecycle, admission }, agentFoundation, aiConfig, options.pruneTraces);
     const binding = service.getBindingRegistry().requireZhinBinding();
 
@@ -390,7 +368,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       resolveEndpointTrusted: options.resolveEndpointTrusted,
       ingress,
       agent: agentFoundation,
-      ...(workroom ? { workroom } : {}),
       ...(options.assistantStatus ? { assistantStatus: options.assistantStatus } : {}),
       toolApprovalIm,
       withInferenceScope: (input, operation) => options.inference.withInferenceScope(input, operation),
@@ -422,14 +399,14 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       scheduleTools.length > 0 ? 'schedule' : '',
       homeTools.length > 0 ? 'home' : '',
       assistantEnabled ? 'assistant' : '',
+      venues.length > 0 ? `venues:${venues.length}` : '',
       'bash',
       options.resolveEndpointOwner ? 'approve' : '',
     ].filter(Boolean).join(',');
     logger.info(
       `ready | ${binding.name}`
       + ` | mcp: ${mcpEntries.map((entry) => entry.name).join(',') || '-'}`
-      + ` | ${features}`
-      + ` | persistence: ${workroom ? (workroom.persistence.pendingActivation ? 'pending_activate' : 'file') : '-'}`,
+      + ` | ${features}`,
     );
     logger.debug(
       `ready detail | runtime model selection`

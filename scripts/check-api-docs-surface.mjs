@@ -78,14 +78,14 @@ const expectedSurface = new Map([
     'CommandFeedback', 'CommandFeedbackContext', 'CommandFeedbackRenderer', 'CommandMenuPresentationInput', 'CommandMenuPresenter', 'CommandMenuPage', 'CommandMenuNavigation', 'CommandMenuEntry', 'CommandMenuAppearance', 'CommandValidationIssue',
     'commandFeedbackToken', 'commandMenuPresentationToken',
   ]],
-  ['zhin.js/component', ['ComponentContext', 'ComponentDefinition', 'defineComponent']],
+  ['zhin.js/component', ['ComponentContext', 'ComponentDefiner', 'ComponentDefinition', 'defineComponent']],
   ['zhin.js/core/runtime', [
     'Message', 'MessageBase', 'ComponentCall', 'IncomingContext', 'IncomingMessage',
     'MessageDispatchResult', 'OutboundMessageService', 'MessageSenderRef', 'OutboundEnvelope',
     'RawContent', 'SendRequest', 'ConversationAddress', 'SendContent',
     'outboundMessageToken',
   ]],
-  ['zhin.js/handler', ['HandlerDefinition', 'HandlerEventMap', 'defineHandler']],
+  ['zhin.js/handler', ['HandlerDefiner', 'HandlerDefinition', 'HandlerEventMap', 'defineHandler']],
   ['zhin.js/middleware', [
     'MiddlewareContext', 'MiddlewareContinuation', 'MiddlewareDefinition',
     'MiddlewareDefinitionBase', 'MiddlewareNext', 'MiddlewarePhase',

@@ -4,7 +4,7 @@ sidebar: false
 
 # ADR 0037：受控落地第 1 期——群运营闭环
 
-状态：Proposed
+状态：Implemented（Accepted，Slices A–E 已全部落盘合入）
 
 关联：[#1009](https://github.com/zhinjs/zhin/issues/1009)；建立在 [ADR 0036](./0036-controlled-landing-phase0.md)（第 0 期，[#999](https://github.com/zhinjs/zhin/pull/999)）之上。前置均已合入 main：[#1001](https://github.com/zhinjs/zhin/pull/1001) 审计 schema、[#1003](https://github.com/zhinjs/zhin/pull/1003) 写路径埋点、[#1005](https://github.com/zhinjs/zhin/pull/1005) + console#34 决策回放、[#1008](https://github.com/zhinjs/zhin/pull/1008) 控制面四开关、[#1006](https://github.com/zhinjs/zhin/pull/1006) 危险工具硬闸、[#995](https://github.com/zhinjs/zhin/pull/995) 会话画像 / session-gate、[#997](https://github.com/zhinjs/zhin/pull/997) scene event 唤醒
 
@@ -154,17 +154,17 @@ sidebar: false
 
 **不做** Console 四开关操作页（见非目标）；四开关的读写仍走切片 D 的 RPC。
 
-### 6. 实现切片（ADR 合入后按序做，每个切片单独 PR）
+### 6. 实现切片（已全部完成）
 
-| 切片 | 内容 |
-|---|---|
-| A | 欢迎 / 退群：会话运营配置、模板渲染与预览、合并窗口与小时上限、`member_lifecycle` kind 与码、对 `member_increase` 唤醒的去重 |
-| B | 公告：`ai_announcements` 表、状态机与 revision、`announcement_draft` 工具、Console 审批、以审批记录作硬闸批准、失败不重试与手动重发 |
-| C | 冷场：计数器、临时 `mention_only` 覆盖（`expires_at`、与手动覆盖分存）、`control.get` 展示来源 |
-| D | 日程：`ai_session_events` 表、`session_event_create` 工具、调度与到点唤醒、宕机补偿、提醒合并 |
-| E | 群管协同：`ops_cooldown` 冷却、`ops:approve` 权限点、审计链对齐（改名片归 `member` 已由 #1014 落地） |
+| 切片 | 内容 | 状态 |
+|---|---|---|
+| A | 欢迎 / 退群：会话运营配置、模板渲染与预览、合并窗口与小时上限、`member_lifecycle` kind 与码、对 `member_increase` 唤醒的去重 | ✅ 已完成 |
+| B | 公告：`ai_announcements` 表、状态机与 revision、`announcement_draft` 工具、Console 审批、以审批记录作硬闸批准、失败不重试与手动重发 | ✅ 已完成（[#1027](https://github.com/zhinjs/zhin/pull/1027)） |
+| C | 冷场：计数器、临时 `mention_only` 覆盖（`expires_at`、与手动覆盖分存）、`control.get` 展示来源 | ✅ 已完成（[#1034](https://github.com/zhinjs/zhin/pull/1034)） |
+| D | 日程：`ai_session_events` 表、`session_event_create` 工具、调度与到点唤醒、宕机补偿、提醒合并 | ✅ 已完成 |
+| E | 群管协同：`ops_cooldown` 冷却、`ops:approve` 权限点、审计链对齐（改名片归 `member` 已由 #1014 落地） | ✅ 已完成（[#1031](https://github.com/zhinjs/zhin/pull/1031)） |
 
-A / C / E 互不依赖，可并行；B 依赖 E 的权限点（可先用 `control:write` 占位）；D 独立。本 ADR 不含代码。
+A / C / E 互不依赖，可并行；B 依赖 E 的权限点；D 独立。Slices A–E 均已落盘合入。
 
 ## 验收标准（第 1 期）
 
@@ -174,9 +174,9 @@ A / C / E 互不依赖，可并行；B 依赖 E 的权限点（可先用 `contro
 4. 同一会话 60 秒内重复触发同一群管动作只出一张审批卡，其余命中冷却并留审计。
 5. 任何一次误操作（误欢迎、误提醒、误发公告、误踢）都能从决策回放按 `turn_id` / 时间定位到触发源、判定链与操作人。
 
-## 待 Fin 确认的默认值
+## 9. 已落地默认值
 
-以下按「Proposed 默认」写入，Fin 可在评审时改：
+以下默认值已按本 ADR 落盘生效：
 
 - 冷场阈值 `20` 条、临时 `mention_only` `30` 分钟、默认关闭。
 - 欢迎合并窗口 `60` 秒、每小时上限 `10` 条；退群默认只写审计不发消息。

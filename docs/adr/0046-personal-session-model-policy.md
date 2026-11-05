@@ -4,7 +4,12 @@ sidebar: false
 
 # ADR 0046: Personal Session model policy
 
-Status: implemented and locally validated; not released or verified against live providers/platforms. Confirmed product boundaries follow.
+Status: Partially Superseded — Personal Session Boundary Implemented (@zhin.js/agent/personal-session); Model Catalog & Model Policy Superseded by ADR 0047 (@zhin.js/ai/provider).
+
+> [!IMPORTANT]
+> **Status & Supersession Boundary:**
+> - **Active:** The **Personal Session** contract (`PersonalSessionTask`, `PersonalSessionPolicy`, `preparePersonalSessionTurn` in `@zhin.js/agent/personal-session`) and the **Adapter Session Runtime** contract ([Adapter、Endpoint 与消息 Session 实施方案](../plans/adapter-session-runtime-refactor.md)) remain active.
+> - **Superseded:** The **Model Catalog and Policy** (`@zhin.js/ai/model-catalog`, `@zhin.js/agent/model-policy`, and the `connection -> model definition -> invocation preset` chain) described in the second half of this ADR was superseded and retired by [ADR 0047](./0047-ai-provider-subscriptions-and-decision-models.md) in favor of `@zhin.js/ai/provider` (`Service -> Account -> Model Profile -> Purpose Policy`).
 
 The approved in-process Adapter/Endpoint and typed message Session evolution is specified in [Adapter、Endpoint 与消息 Session 实施方案](../plans/adapter-session-runtime-refactor.md). Worker isolation and a separate public AdapterController are superseded by the Adapter base class plan.
 
@@ -12,16 +17,19 @@ The approved in-process Adapter/Endpoint and typed message Session evolution is 
 
 A personal AI Session belongs to one authenticated person in one concrete IM conversation. Its identity includes the Host, adapter entry, endpoint account instance, conversation kind/id, parent, thread and subject. Another person's settings, cancellation and personal transcript are not its state. Public conversation events remain references with independent consumer cursors. Existing shared-session records remain intact; this change does not redistribute legacy history.
 
-A user may own a model connection (protocol, base URL and API key) and select a chat preset at any time. Selection applies to the next turn; an admitted turn owns an immutable invocation and connection lease until completion/cancellation. Restoring inheritance removes the Session selection. A model change preserves canonical history and never grants tools or permissions.
+A user may own a model account / profile and select a chat profile at any time. Selection applies to the next turn; an admitted turn owns an immutable execution binding until completion/cancellation. Restoring inheritance removes the Session selection. A model change preserves canonical history and never grants tools or permissions.
 
-## One inference path
+## Model Catalog and Policy (Superseded by ADR 0047)
 
+> **Superseded by [ADR 0047](./0047-ai-provider-subscriptions-and-decision-models.md):** The `connection -> model definition -> invocation preset -> scope policy -> resolved invocation -> leased runtime` chain (`@zhin.js/ai/model-catalog` and `@zhin.js/agent/model-policy`) has been retired and replaced by `@zhin.js/ai/provider` (`Provider Driver -> Service -> Account -> Model Profile -> Purpose Policy -> ExecutionBinding`). Only `@zhin.js/agent/personal-session` (canonical personal address, authenticated ownership, chat selection and optimistic concurrency) remains active.
+
+Historical chain recorded at ADR 0046 time:
 `connection -> model definition -> invocation preset -> scope policy -> resolved invocation -> leased runtime`
 
-- `@zhin.js/ai/model-catalog`: transport-neutral contracts, reference/capability validation, ownership checks and revision-aware runtime leases. No IM identity, files, HTTP routes or plaintext keys in catalog values.
-- `@zhin.js/agent/model-policy`: the only compiler for scope declarations and resolver for model-purpose references. No credential IO, arbitrary deep merge or implicit fallback.
-- `@zhin.js/agent/personal-session`: canonical personal address, authenticated ownership, chat selection and optimistic concurrency. Repository ports separate policy from persistence.
-- Agent runtime: resolve a turn's permitted references once, acquire exact connection revisions and release in `finally`. Agent definitions continue to own MCP/tool/task authority independently.
+- `@zhin.js/ai/model-catalog` *(retired by ADR 0047, replaced by `@zhin.js/ai/provider`)*: transport-neutral contracts, reference/capability validation, ownership checks and revision-aware runtime leases. No IM identity, files, HTTP routes or plaintext keys in catalog values.
+- `@zhin.js/agent/model-policy` *(retired by ADR 0047, replaced by `@zhin.js/ai/provider` Purpose Policy)*: the only compiler for scope declarations and resolver for model-purpose references. No credential IO, arbitrary deep merge or implicit fallback.
+- `@zhin.js/agent/personal-session` *(active)*: canonical personal address, authenticated ownership, chat selection and optimistic concurrency. Repository ports separate policy from persistence.
+- Agent runtime: resolve a turn's permitted references once, acquire exact execution bindings and release in `finally`. Agent definitions continue to own MCP/tool/task authority independently.
 - CLI composition: persistent repositories, encrypted credential vault, trusted IM/Console identity projection and provider network transport. Resources belong to the Root/operation lifecycle, not module singletons.
 - Console: personal model management and Session selection consume the same contracts; server-side authorization is authoritative.
 
@@ -57,10 +65,12 @@ Scene profiles, scene control, public event cursors, personal Session preference
 
 All chat turns, including legacy configuration and personal selections, stay on the selected model. Existing same-model retries remain; exhaustion reports the failure without switching models or Providers. Explicitly configured perception fallback chains retain their existing behavior. Generic AI completion ports continue to support explicit fallback chains for callers that own them.
 
-## Work sequence and acceptance
+## Validation and acceptance
 
-1. Closed domain contracts and resolver tests.
-2. Personal identity/selection and independent public-event consumption.
+> **Note:** Model catalog / policy validation is superseded by [ADR 0047](./0047-ai-provider-subscriptions-and-decision-models.md) (`packages/im/ai/tests/provider/`). Personal Session boundary validation lives in `packages/im/agent/tests/personal-session.test.ts`.
+
+1. Closed domain contracts and resolver tests (`packages/im/ai/tests/provider/` after ADR 0047 supersession).
+2. Personal identity/selection and independent public-event consumption (`packages/im/agent/tests/personal-session.test.ts`).
 3. Root-owned persistence, encrypted credentials and trusted principal mapping.
 4. One leased inference path through real IM/standalone/derived entry points; migrate chat/perception/summary consumers without changing native decisions.
 5. Personal management and Session model selection interfaces; configuration migration, schema and docs.
