@@ -1,0 +1,26 @@
+basic/cli/tests/plugin-runtime/host-config-null-compatibility.test.ts
+  h_6f5e45c41d0910 37
+packages/im/agent/evals/cases/harness-timer-budget-enforced.case.ts
+  h_6f5e45c41d0910 30
+packages/im/agent/evals/cases/harness-timer-cancel-or-escalate.case.ts
+  h_6f5e45c41d0910 16-17
+packages/im/agent/evals/framework/assertions.ts
+  h_6f5e45c41d0910 36-41,43,46
+packages/im/agent/evals/framework/driver.ts
+  h_6f5e45c41d0910 318-328
+packages/im/agent/evals/vitest.config.ts
+  h_6f5e45c41d0910 7-9,17-24
+packages/im/agent/tests/helpers/schedule-execution-fixture.ts
+  h_6f5e45c41d0910 92
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "64803e544166626b3ce8b31dd96dfe4fd6be6cd8",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
