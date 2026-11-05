@@ -433,6 +433,10 @@ Bot 起草的受控自我变更（见[让 Bot 改自己](../ai/self-change.md)�
 | `plugin.root.resolve-self-change` | `pluginRpc('root', 'resolve-self-change', { id, decision: 'approve' \| 'reject' })` | `ops:approve`（动作） |
 | `plugin.root.mark-self-change-handled` | `pluginRpc('root', 'mark-self-change-handled', { id })` | `ops:approve`（动作；`failed` 现场已处理） |
 
+## 页面 UI 套件
+
+不想自己写样式时，用 `@zhin.js/client/ui`：按钮、徽标、提示、空/加载/失败状态、行内确认、表单字段，以及带“加载中 / 为空 / 失败 / 数据过期”四态的 `usePluginRpc`。它直接使用 Console 的主题变量，亮暗色自动跟随，不依赖 Tailwind（远程页面不会被 Console 的 Tailwind 扫描）。用法与导出清单见 [`@zhin.js/client` README](https://github.com/zhinjs/zhin/blob/main/packages/console/client/README.md)。
+
 ## 适配器 Console 页面
 
 内置平台适配器（`plugins/adapters/*`）各自带一个 `pages/index/index.ts`，统一用 `@zhin.js/client` 的 `createAdapterConsolePage(adapterKey)` 渲染，服务端用 `@zhin.js/adapter` 的 `createAdapterConsoleRpc(spec)` 提供数据：

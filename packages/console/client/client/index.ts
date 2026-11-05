@@ -110,12 +110,12 @@ export {
   resolveApiUrl,
 } from "./console-utils/remoteApi.js";
 
+export { resolveAdapterConsolePluginId } from './ui/plugin-id.js';
 export { adapterConsoleStyles } from './adapter-console/styles.js';
 
 export {
   AdapterConsolePage,
   createAdapterConsolePage,
-  resolveAdapterConsolePluginId,
   type AdapterConsolePageProps,
 } from "./adapter-console/AdapterConsolePage.js";
 export type {

@@ -1,57 +1,31 @@
-import { readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
-import ts from 'typescript';
+import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import * as remote from '../console-utils/remoteApi.js';
-import * as messages from './messages.js';
-import * as styles from './styles.js';
+import { allNodes, createHookEnv, isComponent, textOf } from '../../tests/hook-harness.js';
 import type { AdapterConsoleStatus, AdapterConsoleLoginTask } from './types.js';
 
-const require = createRequire(import.meta.url);
-const source = readFileSync(new URL('./AdapterConsolePage.tsx', import.meta.url), 'utf8');
+const file = (relative: string) => fileURLToPath(new URL(relative, import.meta.url));
+const text = textOf;
+const all = allNodes;
 
-type Node = { type?: string | { name?: string }; props?: Record<string, unknown> };
-function text(node: unknown): string {
-  if (node == null || typeof node === 'boolean') return '';
-  if (Array.isArray(node)) return node.map(text).join('');
-  if (typeof node === 'object') { const element = node as Node; if (typeof element.type === 'function' && element.type.name === 'NoticeBar') return String((element.props?.notice as { message: string }).message); return text(element.props?.children); }
-  return String(node);
-}
-function all(node: unknown): Node[] {
-  if (!node || typeof node !== 'object') return [];
-  if (Array.isArray(node)) return node.flatMap(all);
-  return [node as Node, ...all((node as Node).props?.children)];
-}
+type Handlers = { onClick: () => Promise<void> | void; disabled?: boolean; [key: string]: unknown };
+type Confirm = { onConfirm: () => Promise<void> | void; beforeOpen?: () => boolean | void; disabled?: boolean; confirmLabel: string; message: string };
 
 /** Run production hooks and event handlers; HTTP boundaries remain the actual remoteApi functions. */
 function harness() {
-  const slots: unknown[] = []; let cursor = 0, dirty = false, render!: () => unknown, value: unknown;
-  let effects: (() => void)[] = [];
-  const same = (a: unknown[], b: unknown[]) => a && b && a.length === b.length && a.every((v, i) => Object.is(v, b[i]));
-  const hooks = {
-    useState(initial: unknown) {
-      const at = cursor++; if (!(at in slots)) slots[at] = typeof initial === 'function' ? initial() : initial;
-      return [slots[at], (next: unknown) => { const v = typeof next === 'function' ? next(slots[at]) : next; if (!Object.is(v, slots[at])) { slots[at] = v; dirty = true; } }];
-    },
-    useRef(initial: unknown) { const at = cursor++; return slots[at] ?? (slots[at] = { current: initial }); },
-    useMemo(fn: () => unknown, deps: unknown[]) { const at = cursor++; const old = slots[at] as { deps: unknown[]; value: unknown } | undefined; if (!old || !same(old.deps, deps)) slots[at] = { deps, value: fn() }; return (slots[at] as { value: unknown }).value; },
-    useCallback(fn: () => unknown, deps: unknown[]) { return hooks.useMemo(() => fn, deps); },
-    useEffect(fn: () => (() => void) | void, deps: unknown[]) { const at = cursor++; const old = slots[at] as { deps: unknown[]; cleanup?: () => void } | undefined; if (!old || !same(old.deps, deps)) { const slot = { deps, cleanup: old?.cleanup }; slots[at] = slot; effects.push(() => { old?.cleanup?.(); slot.cleanup = fn() || undefined; }); } },
-  };
-  const module = { exports: {} as Record<string, (...args: unknown[]) => unknown> };
-  const compiled = ts.transpileModule(source + '\nexport { AdapterConsoleSession };', { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText;
-  new Function('require', 'module', 'exports', compiled)((name: string) => name === 'react' ? { ...require('react'), ...hooks } : name === '../console-utils/remoteApi.js' ? remote : name === './messages.js' ? messages : name === './styles.js' ? styles : require(name), module, module.exports);
-  const flush = () => { for (let i = 0; i < 50; i++) { dirty = false; cursor = 0; value = render(); const pending = effects; effects = []; pending.forEach(fn => fn()); if (!dirty) break; } return value; };
+  const env = createHookEnv();
+  const page = env.load(file('./AdapterConsolePage.tsx'), ['AdapterConsoleSession', 'captureAdapterConsoleContext', 'runtimeLoginMatches']);
+  const owner = env.load(file('../ui/plugin-id.ts'));
+  const nodes = () => all(env.tree());
+  const buttonNodes = () => nodes().filter(node => isComponent(node, 'Button'));
   return {
-    exports: module.exports,
-    mount(fn: () => unknown) { render = fn; return flush(); },
-    async settle() { for (let i = 0; i < 30; i++) { await Promise.resolve(); if (dirty || effects.length) flush(); } return value; },
-    nodes: () => all(value),
-    button(label: string) { const node = all(value).find(node => typeof node.type === 'function' && node.type.name === 'Button' && text(node) === label); if (!node) throw new Error(`missing button ${label}: ${text(value)}`); return node.props as { onClick: () => Promise<void> | void; disabled?: boolean }; },
-    input(at: number) { return all(value).filter(node => node.type === 'input')[at]!.props as { value: string; onChange: (e: { target: { value: string } }) => void }; },
-    select(at: number) { return all(value).filter(node => node.type === 'select')[at]!.props as { value: string; onChange: (e: { target: { value: string } }) => void }; },
-    unmount() { for (const slot of slots) (slot as { cleanup?: () => void })?.cleanup?.(); },
-    text: () => text(value),
+    exports: { ...page, resolveAdapterConsolePluginId: owner.resolveAdapterConsolePluginId },
+    mount: env.mount, settle: env.settle, unmount: env.unmount, nodes,
+    button(label: string) { const node = buttonNodes().find(node => text(node.props?.children) === label); if (!node) throw new Error(`missing button ${label}: ${text(env.tree())}`); return node.props as Handlers; },
+    confirm(label: string) { const node = nodes().find(node => isComponent(node, 'ConfirmButton') && text(node.props?.children) === label); if (!node) throw new Error(`missing confirm button ${label}`); return node.props as unknown as Confirm; },
+    hasControl(labels: string[]) { return nodes().some(node => (isComponent(node, 'Button') || isComponent(node, 'ConfirmButton')) && labels.includes(text(node.props?.children))); },
+    input(at: number) { return nodes().filter(node => node.type === 'input')[at]!.props as { value: string; onChange: (e: { target: { value: string } }) => void }; },
+    select(at: number) { return nodes().filter(node => node.type === 'select')[at]!.props as { value: string; onChange: (e: { target: { value: string } }) => void }; },
+    text: () => text(env.tree()),
   };
 }
 const storage = () => { const map = new Map<string, string>(); return { getItem: (key: string) => map.get(key) ?? null, setItem: (key: string, value: string) => map.set(key, value), removeItem: (key: string) => map.delete(key) }; };
@@ -60,21 +34,26 @@ function status(): AdapterConsoleStatus {
     configured: [{ id: '10001', instanceId: 'instance-old', values: { password: '••••••', server: 'old-server' } }],
     runtime: { adapterId: 'capability', generation: 4, revision: 2, needsMigration: false, canManage: true, canMigrate: false, canUpdate: true, canReplace: true, mutableFields: ['password', 'server'], identityFields: ['id'], endpoints: [{ instanceId: 'instance-old', canonicalId: 'canonical-old', endpointId: '10001', revision: 2, desiredEnabled: false, epoch: 5, incarnationId: 'incarnation-current', started: false, admitted: false }] } };
 }
-function fixture(initial = status(), tasks: AdapterConsoleLoginTask[] = []) {
+function fixture(initial = status(), tasks: AdapterConsoleLoginTask[] = [], startMode = '') {
   vi.useFakeTimers();
   vi.stubGlobal('localStorage', storage()); vi.stubGlobal('sessionStorage', storage());
   vi.stubGlobal('location', { pathname: '/icqq', origin: 'https://host-a.test' });
   vi.stubGlobal('navigator', { languages: ['zh-CN'] });
   vi.stubGlobal('window', { location, confirm: vi.fn(() => true), dispatchEvent: vi.fn() });
   localStorage.setItem('zhin_api_base', 'https://host-a.test'); localStorage.setItem('zhin_api_token', 'synthetic-token');
-  let view = structuredClone(initial), mode = '', finish: (() => void) | undefined, finishLogin: (() => void) | undefined;
+  let view = structuredClone(initial), mode = startMode, finish: (() => void) | undefined, finishLogin: (() => void) | undefined, releaseStatus: (() => void) | undefined, statusFails = false, endpointsFail = startMode === 'endpoints-down';
+  let hostEndpoints: unknown[] = [];
   const calls: { url: string; body: Record<string, unknown> }[] = [];
   vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
     const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>; calls.push({ url, body });
     const reply = (data: unknown, code = 200, errorCode?: string) => new Response(JSON.stringify(code === 200 ? { success: true, data } : { success: false, code: errorCode, error: 'safe synthetic error' }), { status: code, headers: { 'content-type': 'application/json' } });
     if (url.endsWith('/console/api/pages')) return Response.json({ pages: [{ owner: url.includes('host-b') ? 'plugin-b' : 'plugin-a', localName: 'index', source: 'adapters/icqq/pages/index/index.ts', route: '/icqq' }] });
-    if (body.type === 'plugin.plugin-a.status' || body.type === 'plugin.plugin-b.status') return reply(structuredClone(view));
-    if (body.type === 'endpoint.list') return reply({ endpoints: [] });
+    if (body.type === 'plugin.plugin-a.status' || body.type === 'plugin.plugin-b.status') {
+      if (mode === 'slow-status') await new Promise<void>(resolve => { releaseStatus = resolve; });
+      if (statusFails) return reply(undefined, 503, 'unavailable');
+      return reply(structuredClone(view));
+    }
+    if (body.type === 'endpoint.list') return endpointsFail ? reply(undefined, 503, 'unavailable') : reply({ endpoints: structuredClone(hostEndpoints) });
     if (body.type === 'login.list') { const snapshot = structuredClone(tasks); if (mode === 'late-login') await new Promise<void>(resolve => { finishLogin = resolve; }); return reply({ tasks: snapshot }); }
     if (String(body.type).includes('.endpoint-')) {
       if (mode === 'late') await new Promise<void>(resolve => { finish = resolve; });
@@ -87,7 +66,7 @@ function fixture(initial = status(), tasks: AdapterConsoleLoginTask[] = []) {
   }));
   const h = harness(); const current = h.exports.captureAdapterConsoleContext!() as () => boolean;
   h.mount(() => h.exports.AdapterConsoleSession!({ adapterKey: 'icqq', isCurrent: current }));
-  return { h, calls, setMode(value: string) { mode = value; }, finish: () => finish?.(), finishLogin: () => finishLogin?.(), replaceView(value: AdapterConsoleStatus) { view = value; }, writes: () => calls.filter(call => String(call.body.type).includes('.endpoint-')) };
+  return { h, calls, setMode(value: string) { mode = value; }, releaseStatus: () => releaseStatus?.(), failStatus(value: boolean) { statusFails = value; }, failEndpoints(value: boolean) { endpointsFail = value; }, setHostEndpoints(value: unknown[]) { hostEndpoints = value; }, finish: () => finish?.(), finishLogin: () => finishLogin?.(), replaceView(value: AdapterConsoleStatus) { view = value; }, writes: () => calls.filter(call => String(call.body.type).includes('.endpoint-')) };
 }
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
@@ -98,7 +77,7 @@ describe('shared runtime Adapter page production handlers', () => {
     await f.h.button('启动').onClick(); await f.h.settle();
     expect(f.writes()[0]!.body).toMatchObject({ type: 'plugin.plugin-a.endpoint-start', data: { instanceId: 'instance-old', expectedGeneration: 4, expectedRevision: 2 } });
     expect(f.h.text()).toContain('已保存，操作进行中');
-    await f.h.button('删除').onClick(); await f.h.settle();
+    const remove = f.h.confirm('删除'); expect(remove.confirmLabel).toBe('删除账号'); await remove.onConfirm(); await f.h.settle();
     expect(f.writes()[1]!.body).toMatchObject({ type: 'plugin.plugin-a.endpoint-remove', data: { instanceId: 'instance-old', expectedRevision: 3 } });
     expect(f.calls.some(call => /config|env/u.test(String(call.body.type)))).toBe(false); f.h.unmount();
   });
@@ -108,7 +87,7 @@ describe('shared runtime Adapter page production handlers', () => {
     f.h.input(0).onChange({ target: { value: '10002' } }); await f.h.settle();
     f.h.input(1).onChange({ target: { value: 'synthetic-add-only' } }); await f.h.settle();
     f.h.input(2).onChange({ target: { value: 'new-server' } }); await f.h.settle();
-    const save = f.h.nodes().filter(node => typeof node.type === 'function' && node.type.name === 'Button' && text(node) === '添加').at(-1)!.props!;
+    const save = f.h.nodes().filter(node => isComponent(node, 'Button') && text(node.props?.children) === '添加').at(-1)!.props!;
     await (save.onClick as () => Promise<void>)(); await f.h.settle();
     expect(f.writes()).toHaveLength(1); expect(f.writes()[0]!.body).toMatchObject({ type: 'plugin.plugin-a.endpoint-add', data: { id: '10002', values: { password: 'synthetic-add-only', server: 'new-server' }, expectedGeneration: 4, expectedRevision: 2 } });
     expect(f.h.text()).toContain('已保存，请手动启动'); expect(f.h.nodes().filter(node => node.type === 'input')).toHaveLength(0); f.h.unmount();
@@ -135,8 +114,9 @@ describe('shared runtime Adapter page production handlers', () => {
     await f.h.button('保存').onClick(); await f.h.settle();
     expect(f.writes()[0]!.body).toMatchObject({ type: 'plugin.plugin-a.endpoint-update', data: { values: { server: 'new-server' }, instanceId: 'instance-old', expectedRevision: 2 } });
     await f.h.button('编辑').onClick(); await f.h.settle(); f.h.input(0).onChange({ target: { value: '10002' } }); await f.h.settle();
-    await f.h.button('保存').onClick(); await f.h.settle(); expect(f.writes()).toHaveLength(1); expect(f.h.text()).toContain('请填写 password');
-    f.h.input(1).onChange({ target: { value: 'synthetic-replacement-only' } }); await f.h.settle(); await f.h.button('保存').onClick(); await f.h.settle();
+    expect(f.h.confirm('保存').beforeOpen!()).toBe(false); await f.h.settle(); expect(f.writes()).toHaveLength(1); expect(f.h.text()).toContain('请填写 password');
+    f.h.input(1).onChange({ target: { value: 'synthetic-replacement-only' } }); await f.h.settle();
+    const replace = f.h.confirm('保存'); expect(replace.confirmLabel).toBe('替换账号'); expect(replace.beforeOpen!()).toBe(true); await replace.onConfirm(); await f.h.settle();
     expect(f.writes()[1]!.body).toMatchObject({ type: 'plugin.plugin-a.endpoint-replace', data: { id: '10002', instanceId: 'instance-old', values: { password: 'synthetic-replacement-only', server: 'old-server' }, expectedRevision: 3 } });
     expect(f.h.text()).toContain('已保存，请手动启动'); f.h.unmount();
   });
@@ -146,7 +126,7 @@ describe('shared runtime Adapter page production handlers', () => {
     const identity = { canonicalId: 'canonical-old', instanceId: 'instance-old', epoch: 5, incarnationId: 'incarnation-current' };
     const enabled = status(); enabled.runtime = { ...enabled.runtime!, endpoints: enabled.runtime!.endpoints.map(endpoint => ({ ...endpoint, desiredEnabled: true })) };
     const f = fixture(enabled, [{ ...base, id: 'live', endpointIdentity: identity }, { ...base, id: 'old-epoch', endpointIdentity: { ...identity, epoch: 4 } }, { ...base, id: 'recreated', endpointIdentity: { ...identity, instanceId: 'different' } }, { ...base, id: 'old-incarnation', endpointIdentity: { ...identity, incarnationId: 'incarnation-previous' } }, { ...base, id: 'unbound' }]);
-    await f.h.settle(); expect(f.h.nodes().filter(node => typeof node.type === 'function' && node.type.name === 'Button' && text(node) === '已扫码，继续')).toHaveLength(1);
+    await f.h.settle(); expect(f.h.nodes().filter(node => isComponent(node, 'Button') && text(node.props?.children) === '已扫码，继续')).toHaveLength(1);
     await f.h.button('已扫码，继续').onClick(); await f.h.settle();
     expect(f.calls.find(call => call.body.type === 'login.submit')!.body).toMatchObject({ taskId: 'live', endpointIdentity: identity }); f.h.unmount();
   });
@@ -208,7 +188,7 @@ describe('shared runtime Adapter page production handlers', () => {
   it('keeps retiring accounts read-only and disables migration actions for nonoperators', async () => {
     const s = status(); s.runtime = { ...s.runtime!, needsMigration: true, canMigrate: false, endpoints: s.runtime!.endpoints.map(value => ({ ...value, retiring: true })) };
     const f = fixture(s); await f.h.settle(); expect(f.h.text()).toContain('正在关闭'); expect(f.h.text()).toContain('首次迁移需要管理员确认');
-    expect(f.h.nodes().some(node => typeof node.type === 'function' && node.type.name === 'Button' && ['编辑', '启动', '删除'].includes(text(node)))).toBe(false); f.h.unmount();
+    expect(f.h.hasControl(['编辑', '启动', '删除'])).toBe(false); f.h.unmount();
   });
 
   it('keeps an open edit bound to its original revision rather than rebasing it during polling', async () => {
@@ -234,7 +214,7 @@ describe('shared runtime Adapter page production handlers', () => {
     expect(f.h.text()).toContain('10001'); expect(f.h.text()).toContain('old-server');
     expect(f.h.text()).toContain('当前环境只能查看');
     expect(f.h.text()).not.toMatch(/重启后生效|写入配置后|\.env/u);
-    expect(f.h.nodes().some(node => typeof node.type === 'function' && node.type.name === 'Button' && ['添加', '删除', '编辑', '保存', '启动', '停止'].includes(text(node)))).toBe(false);
+    expect(f.h.hasControl(['添加', '删除', '编辑', '保存', '启动', '停止'])).toBe(false);
     expect(f.writes()).toHaveLength(0); f.h.unmount();
   });
 
@@ -301,14 +281,15 @@ describe('shared runtime Adapter page production handlers', () => {
     expect(disclosure).toBeDefined(); expect(disclosure!.props?.open).toBeUndefined();
     expect(f.h.nodes().find(node => node.type === 'nav')?.props?.['aria-label']).toBe('页面导航');
     await f.h.button('编辑').onClick(); await f.h.settle();
-    expect(f.h.nodes().find(node => node.type === 'input')?.props).toMatchObject({ autoFocus: true, 'aria-label': 'id' });
+    expect(f.h.nodes().find(node => isComponent(node, 'Field'))?.props).toMatchObject({ label: '账号 ID' });
+    expect(f.h.nodes().some(node => node.props?.autoFocus !== undefined)).toBe(false);
     f.h.unmount();
   });
 
   it('clears cancelled add-account credentials before reopening the form', async () => {
     const f = fixture(); await f.h.settle(); await f.h.button('添加').onClick(); await f.h.settle();
     f.h.input(1).onChange({ target: { value: 'synthetic-cancelled-draft' } }); await f.h.settle();
-    expect(f.h.nodes().find(node => node.props?.controls === 'adapter-add-account')?.props?.expanded).toBe(true);
+    expect(f.h.nodes().find(node => node.props?.['aria-controls'] === 'adapter-add-account')?.props?.['aria-expanded']).toBe(true);
     await f.h.button('取消').onClick(); await f.h.settle();
     await f.h.button('添加').onClick(); await f.h.settle();
     expect(f.h.input(1).value).toBe(''); expect(f.writes()).toHaveLength(0); f.h.unmount();
@@ -320,5 +301,98 @@ describe('shared runtime Adapter page production handlers', () => {
       endpointIdentity: { canonicalId: 'canonical-old', instanceId: 'instance-old', epoch: 5, incarnationId: 'incarnation-current' } }]);
     await f.h.settle(); expect(f.h.text()).toContain('验证已过期'); expect(f.h.button('已扫码，继续').disabled).toBe(true);
     expect(f.calls.some(call => call.body.type === 'login.submit')).toBe(false); f.h.unmount();
+  });
+});
+
+describe('loading and failure states (ICQQ page regressions)', () => {
+  const icqqEndpoint = { id: 'canon-1', endpoint: { id: 'canon-1', adapter: 'icqq' }, name: '8596238', adapter: 'icqq', connected: true, status: 'online', transportState: 'open' };
+
+  it('shows only a loading state until status arrives: no read-only/legacy copy, no running list, no raw adapter key as the title', async () => {
+    const s = status(); delete s.runtime;
+    const f = fixture(s, [], 'slow-status'); f.setHostEndpoints([icqqEndpoint]);
+    await f.h.settle(); await f.h.settle();
+    const loading = f.h.text();
+    expect(f.h.nodes().some(node => isComponent(node, 'LoadingState'))).toBe(true);
+    expect(loading).not.toContain('配置里还没有');
+    expect(loading).not.toContain('当前环境只能查看');
+    expect(loading).not.toContain('运行中的连接');
+    expect(loading).not.toContain('icqq');
+    expect(loading).toContain('适配器 Console');
+    f.setMode(''); f.releaseStatus(); await f.h.settle();
+    expect(f.h.text()).not.toContain('加载中…');
+    expect(f.h.text()).toContain('ICQQ');
+    expect(f.h.text()).toContain('10001'); f.h.unmount();
+  });
+
+  it('reports a failed status read as an error with retry instead of an empty configuration', async () => {
+    const f = fixture(); f.failStatus(true); await f.h.settle();
+    const text = f.h.text();
+    expect(text).toContain('无法读取账号状态'); expect(text).toContain('Host 暂时无法响应');
+    expect(text).not.toContain('配置里还没有'); expect(text).not.toContain('加载中…');
+    const retry = f.h.nodes().find(node => node.type !== undefined && typeof node.type === 'function' && node.type.name === 'ErrorState')!.props as { onRetry: () => Promise<boolean>; details: string };
+    expect(retry.details).toContain('unavailable');
+    f.failStatus(false); await retry.onRetry(); await f.h.settle();
+    expect(f.h.text()).toContain('10001'); expect(f.h.text()).not.toContain('无法读取账号状态'); f.h.unmount();
+  });
+
+  it('keeps showing the last good account list as stale when a poll fails, with a separate error for the connection list', async () => {
+    const f = fixture(); await f.h.settle(); expect(f.h.text()).toContain('10001');
+    f.failStatus(true); f.failEndpoints(true);
+    await vi.advanceTimersByTimeAsync(6000); await f.h.settle();
+    const text = f.h.text();
+    expect(text).toContain('10001');
+    expect(f.h.nodes().filter(node => typeof node.type === 'function' && node.type.name === 'StaleNotice').length).toBeGreaterThanOrEqual(1);
+    expect(text).toContain('读取账号状态：Host 暂时无法响应');
+    expect(text).toContain('读取连接状态：safe synthetic error');
+    f.failStatus(false); f.failEndpoints(false);
+    await vi.advanceTimersByTimeAsync(6000); await f.h.settle();
+    expect(f.h.nodes().some(node => typeof node.type === 'function' && node.type.name === 'StaleNotice')).toBe(false); f.h.unmount();
+  });
+
+  it('shows unknown, not offline, while the connection list is unavailable', async () => {
+    const s = status(); s.runtime = { ...s.runtime!, endpoints: s.runtime!.endpoints.map(value => ({ ...value, desiredEnabled: true })) };
+    const f = fixture(s, [], 'endpoints-down'); await f.h.settle();
+    expect(f.h.text()).toContain('状态未知'); expect(f.h.text()).not.toContain('离线');
+    expect(f.h.text()).toContain('读取连接状态'); f.h.unmount();
+  });
+
+  it('does not claim nothing is configured when the adapter has running connections but no account list', async () => {
+    const s = status(); delete s.runtime; s.configured = []; s.running = [{ id: '8596238' }];
+    const f = fixture(s); await f.h.settle();
+    expect(f.h.text()).not.toContain('配置里还没有'); expect(f.h.text()).toContain('此适配器没有提供账号清单'); f.h.unmount();
+  });
+
+  it('never auto-dismisses an error notice but clears a success notice after 8s', async () => {
+    const f = fixture(); await f.h.settle(); f.setMode('conflict');
+    await f.h.button('启动').onClick(); await f.h.settle();
+    expect(f.h.text()).toContain('账号清单已变化');
+    await vi.advanceTimersByTimeAsync(20_000); expect(f.h.text()).toContain('账号清单已变化'); f.h.unmount();
+    const g = fixture(); await g.h.settle(); await g.h.button('启动').onClick(); await g.h.settle();
+    expect(g.h.text()).toContain('已保存，操作进行中'); await vi.advanceTimersByTimeAsync(8_100); await g.h.settle();
+    expect(g.h.text()).not.toContain('已保存，操作进行中'); g.h.unmount();
+  });
+
+  it('keeps per-action busy state local: a slow start leaves test-connection and refresh usable', async () => {
+    const s = status(); s.runtime = { ...s.runtime!, endpoints: s.runtime!.endpoints.map(value => ({ ...value, started: true })) };
+    const f = fixture(s); await f.h.settle(); f.setMode('late');
+    const starting = f.h.button('启动').onClick(); await f.h.settle();
+    const busyStart = f.h.nodes().find(node => typeof node.type === 'function' && node.type.name === 'Button' && node.props?.busy === true);
+    expect(text(busyStart?.props?.children)).toBe('启动');
+    expect(f.h.button('测试连接').disabled).toBeFalsy(); expect(f.h.button('刷新').disabled).toBeFalsy();
+    expect(f.h.button('编辑').disabled).toBe(true);
+    f.finish(); await starting; await f.h.settle(); f.h.unmount();
+  });
+
+  it('shows the countdown as a <time> and announces only near expiry', async () => {
+    const s = status(); s.runtime = { ...s.runtime!, endpoints: s.runtime!.endpoints.map(endpoint => ({ ...endpoint, desiredEnabled: true })) };
+    const identity = { canonicalId: 'canonical-old', instanceId: 'instance-old', epoch: 5, incarnationId: 'incarnation-current' };
+    const f = fixture(s, [{ id: 'q', adapter: 'icqq', endpointKey: '10001', type: 'qrcode', payload: { image: 'data:image/png;base64,AAAA' }, createdAt: 1, expiresAt: Date.now() + 60_000, endpointIdentity: identity }]);
+    await f.h.settle();
+    const nodes = f.h.nodes();
+    expect(nodes.find(node => node.type === 'time')?.props?.dateTime).toMatch(/^PT\d+S$/u);
+    expect(nodes.find(node => node.type === 'img')?.props?.alt).toContain('二维码');
+    expect(f.h.text()).not.toContain('即将过期');
+    await vi.advanceTimersByTimeAsync(55_000); await f.h.settle();
+    expect(f.h.text()).toContain('验证即将过期'); f.h.unmount();
   });
 });
