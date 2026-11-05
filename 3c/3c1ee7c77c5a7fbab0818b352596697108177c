@@ -1,0 +1,22 @@
+.changeset/eval-h3-timer-gap-a-shape.md
+  h_6f5e45c41d0910 1-5
+packages/im/agent/evals/cases/harness-timer-ask-peer-allowed.case.ts
+  h_6f5e45c41d0910 5-6,13-18
+packages/im/agent/evals/cases/harness-timer-budget-enforced.case.ts
+  h_6f5e45c41d0910 6-7,14-19
+packages/im/agent/evals/cases/harness-timer-cancel-or-escalate.case.ts
+  h_6f5e45c41d0910 5-6,13-18
+packages/im/agent/evals/cases/harness-timer-mail-starts-engagement.case.ts
+  h_6f5e45c41d0910 6-7,14-19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3c3c1ee7c77c5a7fbab0818b352596697108177c",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
