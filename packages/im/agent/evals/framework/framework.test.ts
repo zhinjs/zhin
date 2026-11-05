@@ -17,7 +17,6 @@ import {
   loadEvalCases,
   runEvalCase,
   validateEvalCase,
-  TIMER_INBOUND_NOT_SUPPORTED,
   type EvalCase,
 } from './index.js';
 
@@ -386,7 +385,10 @@ describe('eval framework: timer inbound (ADR 0048 H3 Gap A)', () => {
     expect(validateEvalCase(timerCase(unknownKind))).toEqual(['inbound 1 has unknown kind "scene"']);
   });
 
-  it('throws not-supported instead of running a timer inbound through the human Venue path', async () => {
-    await expect(runEvalCase(timerCase(wellFormedTimer))).rejects.toThrow(TIMER_INBOUND_NOT_SUPPORTED);
+  it('delivers a timer inbound as timer Mail and runs one turn for the owner', async () => {
+    const run = await runEvalCase(timerCase(wellFormedTimer));
+    expect(run.modelRequests).toHaveLength(1);
+    expect(run.outbound.join('\n')).toContain('提醒：开会');
+    expect(run.modelRequests[0]?.lastUserText ?? '').toContain('开会');
   });
 });

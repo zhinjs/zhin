@@ -2,7 +2,7 @@
  * ADR 0048 H3 — the host's long-lived harness and Mailbox (D3).
  *
  * Every IM turn goes through here: the ingress posts the message as a
- * `human` Mail (a scene event as an `event` Mail) on the session's lane via
+ * `human` Mail (a scene event as an `event` Mail, a due timer as a `timer` Mail) on its lane via
  * `harness.open()`, and the inbox policy (`createInboxPolicy`, configured by
  * `ai.agent.mailbox`) decides admission, queueing, merge / danmaku windows,
  * supersede, stop and stale replies. When the Mailbox starts a batch, the
@@ -131,9 +131,10 @@ function entryCeiling(agent: string): AgentCeiling {
   return Object.freeze({ agent, tools: ALL, contacts: ALL, maxTrust: 'master', egress: ENTRY_EGRESS, acceptsFrom: ALL });
 }
 
-/** Text a mail contributes to the turn: a human message, or a scene event line. */
+/** Text a mail contributes to the turn: human, scene-event, or timer content. */
 function mailText(mail: Mail): string {
   if (mail.body.kind === 'human') return mail.body.text;
+  if (mail.body.kind === 'timer') return mail.body.content;
   if (mail.body.kind === 'event') {
     const text = (mail.body.data as { text?: unknown } | null)?.text;
     return typeof text === 'string' ? text : '';
@@ -158,7 +159,7 @@ function participantsOfBatch(
   const order: string[] = [];
   const by = new Map<string, { senderName?: string; texts: string[]; messageIds: string[] }>();
   for (const mail of batch) {
-    if (mail.body.kind !== 'human' && mail.body.kind !== 'event') continue;
+    if (mail.body.kind !== 'human' && mail.body.kind !== 'event' && mail.body.kind !== 'timer') continue;
     const sender = mailSender(mail);
     let p = by.get(sender);
     if (!p) {
@@ -308,7 +309,7 @@ export class HostMailbox {
       entry: actor,
       lane,
       body: this.#body(request),
-      budget: this.#budget,
+      budget: request.budget ?? this.#budget,
       ...(request.venue ? { venue: request.venue } : {}),
       // The inbox may start the turn before `open` resolves: register the caller first.
       onPosting: (root) => {
@@ -423,6 +424,15 @@ export class HostMailbox {
         kind: 'event' as const,
         event: request.event ?? 'scene',
         data: Object.freeze({ text: request.text, senderId: request.senderId, venue }),
+      });
+    }
+    if (request.kind === 'timer') {
+      const timerId = request.timerId?.trim();
+      if (!timerId) throw new Error('timer admission needs timerId');
+      return Object.freeze({
+        kind: 'timer' as const,
+        timerId,
+        content: request.text,
       });
     }
     return Object.freeze({
