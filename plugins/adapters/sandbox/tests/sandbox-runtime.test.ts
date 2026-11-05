@@ -14,6 +14,7 @@ import type { ConversationRef } from '@zhin.js/im-contract';
 import { createSandboxReadinessGate, SandboxWsEndpoint } from '../src/endpoint.js';
 import {
   formatSandboxOutbound,
+  parseSandboxInboundPayload,
   parseSandboxWsPayload,
   resolveSandboxEndpoint,
 } from '../src/protocol.js';
@@ -621,5 +622,106 @@ describe('sandbox plugin runtime adapter', () => {
         action: { id: 'btn-1', payload: 'pick:yes' },
       }),
     }));
+  });
+
+  it('parses optional simulated senderId, senderName, and senderRole with backward compatibility', () => {
+    const parsed = parseSandboxInboundPayload(JSON.stringify({
+      text: '/admin-cmd',
+      senderId: '  custom-admin  ',
+      senderName: '  Alice Admin  ',
+      senderRole: 'admin',
+    }));
+    expect(parsed.senderId).toBe('custom-admin');
+    expect(parsed.senderName).toBe('Alice Admin');
+    expect(parsed.senderRole).toBe('admin');
+
+    const fallback = parseSandboxInboundPayload(JSON.stringify({
+      text: 'hello',
+      senderId: '   ',
+      senderName: '',
+      senderRole: 'invalid-role',
+    }));
+    expect(fallback).not.toHaveProperty('senderId');
+    expect(fallback).not.toHaveProperty('senderName');
+    expect(fallback).not.toHaveProperty('senderRole');
+  });
+
+  it('forwards simulated sender identity and role permissions from SandboxWsEndpoint to inbound message sink', async () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const receivedPayloads: unknown[] = [];
+    const receive = vi.fn(async (payload: unknown) => {
+      receivedPayloads.push(payload);
+      return Object.freeze({ matched: true, value: 'ok' });
+    });
+    const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
+    const defaults = resolveSandboxEndpoint({ id: 'demo-bot', owner: 'sandbox-user' });
+    const endpoint = await createEndpointHarness(() => new SandboxWsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'sandbox'),
+      http,
+      defaults,
+    }), { name: 'sandbox', capabilities: ['inbound', 'outbound'], gateway: createTestEventGateway(gateway, undefined) });
+    await endpoint.start();
+    endpoint.open();
+    const { port } = await http.listen();
+
+    const client = new WebSocket(`ws://127.0.0.1:${port}/sandbox`);
+    try {
+      await once(client, 'open');
+      client.send(JSON.stringify({
+        type: 'group',
+        id: 'dev-room',
+        text: '/kick user-2',
+        senderId: 'sim-master',
+        senderName: 'Master User',
+        senderRole: 'master',
+      }));
+      client.send(JSON.stringify({
+        type: 'group',
+        id: 'dev-room',
+        text: '/mute user-2',
+        senderId: 'sim-admin',
+        senderName: 'Admin User',
+        senderRole: 'admin',
+      }));
+      client.send(JSON.stringify({
+        type: 'group',
+        id: 'dev-room',
+        text: 'hi',
+        senderId: 'sim-member',
+        senderRole: 'member',
+      }));
+      await vi.waitFor(() => expect(receivedPayloads).toHaveLength(3));
+    } finally {
+      client.close();
+    }
+
+    expect(receivedPayloads[0]).toMatchObject({
+      content: '/kick user-2',
+      sender: {
+        id: 'sim-master',
+        name: 'Master User',
+        role: 'master',
+        permissions: ['master', 'admin'],
+      },
+    });
+    expect(receivedPayloads[1]).toMatchObject({
+      content: '/mute user-2',
+      sender: {
+        id: 'sim-admin',
+        name: 'Admin User',
+        role: 'admin',
+        permissions: ['admin'],
+      },
+    });
+    expect(receivedPayloads[2]).toMatchObject({
+      content: 'hi',
+      sender: {
+        id: 'sim-member',
+        name: 'sim-member',
+        role: 'member',
+        permissions: [],
+      },
+    });
   });
 });

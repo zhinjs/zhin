@@ -1,19 +1,105 @@
 import {
+  definePage as baseDefinePage,
   normalizeClientModuleArtifact,
   normalizePageMetadata,
+  pageRoute,
+  assertPageLocalName,
   type NormalizedPageMetadata,
+  type PageManifest,
+  type ClientModuleArtifact,
+  type PageMetadata as BasePageMetadata,
 } from '@zhin.js/console-contract';
 import type { ValidationContext } from '@zhin.js/feature-kit';
 
+export {
+  normalizePageMetadata,
+  normalizeClientModuleArtifact,
+  pageRoute,
+  assertPageLocalName,
+  type NormalizedPageMetadata,
+  type PageManifest,
+  type ClientModuleArtifact,
+};
+
+export type PageTitleI18n = Readonly<Partial<Record<'zh-CN' | 'en', string>>>;
+
+export interface PageComponentProps {
+  pluginId?: string;
+  owner?: string;
+  localName?: string;
+  route?: string;
+  title?: string;
+  [key: string]: unknown;
+}
+
+export interface PageMetadata extends BasePageMetadata {
+  readonly description?: string;
+  readonly group?: string;
+  readonly parent?: string;
+  readonly fullWidth?: boolean;
+}
+
+export type DefinedPage = Readonly<PageMetadata>;
+
+export type PageExport<P = PageComponentProps> = (props: P) => unknown;
+
+export function definePage(metadata: PageMetadata = {}): DefinedPage {
+  const { description, group, parent, fullWidth, ...baseMeta } = metadata;
+  if (description !== undefined && (typeof description !== 'string' || !description.trim())) {
+    throw new TypeError('Page description must be a non-empty string');
+  }
+  if (group !== undefined && (typeof group !== 'string' || !group.trim())) {
+    throw new TypeError('Page group must be a non-empty string');
+  }
+  if (parent !== undefined && (typeof parent !== 'string' || !parent.trim())) {
+    throw new TypeError('Page parent must be a non-empty string');
+  }
+  if (fullWidth !== undefined && typeof fullWidth !== 'boolean') {
+    throw new TypeError('Page fullWidth must be boolean');
+  }
+  const normalizedBase = baseDefinePage(baseMeta);
+  return Object.freeze({
+    ...normalizedBase,
+    ...(description !== undefined ? { description } : {}),
+    ...(group !== undefined ? { group } : {}),
+    ...(parent !== undefined ? { parent } : {}),
+    ...(fullWidth !== undefined ? { fullWidth } : {}),
+  });
+}
+
 export interface PageDefinition extends NormalizedPageMetadata {
+  readonly description?: string;
+  readonly group?: string;
+  readonly parent?: string;
+  readonly fullWidth?: boolean;
   readonly module: string;
   readonly hash: string;
 }
 
 export function parsePageArtifact(value: unknown, context: ValidationContext): PageDefinition {
   const artifact = normalizeClientModuleArtifact(value, `Page ${context.source}`);
+  const rawMeta = artifact.metadata && typeof artifact.metadata === 'object' && !Array.isArray(artifact.metadata)
+    ? artifact.metadata as Record<string, unknown>
+    : undefined;
+  const { description, group, parent, fullWidth, ...baseMeta } = rawMeta ?? {};
+  if (description !== undefined && (typeof description !== 'string' || !description.trim())) {
+    throw new TypeError('Page description must be a non-empty string');
+  }
+  if (group !== undefined && (typeof group !== 'string' || !group.trim())) {
+    throw new TypeError('Page group must be a non-empty string');
+  }
+  if (parent !== undefined && (typeof parent !== 'string' || !parent.trim())) {
+    throw new TypeError('Page parent must be a non-empty string');
+  }
+  if (fullWidth !== undefined && typeof fullWidth !== 'boolean') {
+    throw new TypeError('Page fullWidth must be boolean');
+  }
   return Object.freeze({
-    ...normalizePageMetadata(context.localName, artifact.metadata),
+    ...normalizePageMetadata(context.localName, rawMeta === undefined ? undefined : baseMeta),
+    ...(typeof description === 'string' ? { description } : {}),
+    ...(typeof group === 'string' ? { group } : {}),
+    ...(typeof parent === 'string' ? { parent } : {}),
+    ...(typeof fullWidth === 'boolean' ? { fullWidth } : {}),
     module: artifact.module,
     hash: artifact.hash,
   });

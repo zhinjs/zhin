@@ -12,11 +12,26 @@ export type LoadConsoleEntriesOptions = FetchConsoleEntriesOptions & {
   /** Origin for `/@dev` / `/@assets` module URLs (Remote Console: Host API base). */
   assetOrigin?: string;
   hostApi: PluginRegisterHostApi;
+  locale?: 'zh-CN' | 'en';
   beforeLoad?: () => void;
   onEmpty?: () => void;
   onFetchError?: (status: number) => void;
   onEntryError?: (entry: ConsoleClientEntry, error: unknown) => void;
 };
+
+export interface ConsoleEntryMetadataFields {
+  readonly route?: string;
+  readonly title?: string;
+  readonly titleI18n?: Readonly<Partial<Record<'zh-CN' | 'en', string>>>;
+  readonly icon?: string;
+  readonly group?: string;
+  readonly order?: number;
+  readonly parent?: string | null;
+  readonly fullWidth?: boolean;
+  readonly hideInNav?: boolean;
+  readonly requiredPermissions?: string[];
+  readonly requiredRoles?: string[];
+}
 
 const CONSOLE_API_BASE_STORAGE_KEY = "zhin_api_base";
 
@@ -96,7 +111,8 @@ export function getRegisterFn(mod: Record<string, unknown> | null | undefined): 
  */
 export function resolveEntryRegister(
   mod: Record<string, unknown> | null | undefined,
-  entry: ConsoleClientEntry & { readonly route?: string; readonly title?: string },
+  entry: ConsoleClientEntry & ConsoleEntryMetadataFields,
+  locale?: 'zh-CN' | 'en',
 ): ConsolePluginRegister | null {
   const named = getRegisterFn(mod);
   if (named) return named;
@@ -109,19 +125,46 @@ export function resolveEntryRegister(
     ? entry.route
     : `/${entry.id}`;
   const meta = mod["meta"] && typeof mod["meta"] === "object"
-    ? mod["meta"] as { title?: string; titleI18n?: Readonly<Partial<Record<'zh-CN' | 'en', string>>>; icon?: string; hideInNav?: boolean }
+    ? mod["meta"] as ConsoleEntryMetadataFields
     : undefined;
-  const name = (typeof meta?.title === "string" && meta.title)
+  const entryMeta = entry.meta && typeof entry.meta === "object"
+    ? entry.meta as Record<string, unknown>
+    : undefined;
+  const titleI18n = meta?.titleI18n
+    ?? entry.titleI18n
+    ?? (entryMeta?.["titleI18n"] as Readonly<Partial<Record<'zh-CN' | 'en', string>>> | undefined);
+  const localizedTitle = locale && titleI18n && typeof titleI18n[locale] === "string" && titleI18n[locale]
+    ? titleI18n[locale]
+    : undefined;
+  const name = localizedTitle
+    || (typeof meta?.title === "string" && meta.title)
     || (typeof entry.title === "string" && entry.title)
     || entry.meta?.name
     || entry.id;
+  const icon = meta?.icon ?? entry.icon ?? (typeof entryMeta?.["icon"] === "string" ? entryMeta["icon"] : undefined);
+  const group = meta?.group ?? entry.group ?? (typeof entryMeta?.["group"] === "string" ? entryMeta["group"] : undefined);
+  const order = meta?.order ?? entry.order ?? (typeof entryMeta?.["order"] === "number" ? entryMeta["order"] : undefined);
+  const parent = meta?.parent !== undefined ? meta.parent : entry.parent;
+  const fullWidth = meta?.fullWidth ?? entry.fullWidth ?? (typeof entryMeta?.["fullWidth"] === "boolean" ? entryMeta["fullWidth"] : undefined);
+  const hideInNav = meta?.hideInNav ?? entry.hideInNav ?? (entryMeta?.["hideInNav"] === true || entryMeta?.["hideInMenu"] === true);
+  const requiredPermissions = meta?.requiredPermissions ?? entry.requiredPermissions;
+  const requiredRoles = meta?.requiredRoles ?? entry.requiredRoles;
   return (api) => {
     api.addRoute({
       path,
       name,
       element: api.React.createElement(Component as React.ComponentType),
-      ...(meta?.icon != null ? { icon: meta.icon } : {}),
-      meta: { hideInMenu: meta?.hideInNav === true, ...(meta?.titleI18n === undefined ? {} : { titleI18n: meta.titleI18n }) },
+      ...(icon != null ? { icon } : {}),
+      ...(parent !== undefined ? { parent } : {}),
+      ...(requiredPermissions !== undefined ? { requiredPermissions } : {}),
+      ...(requiredRoles !== undefined ? { requiredRoles } : {}),
+      meta: {
+        hideInMenu: hideInNav === true,
+        ...(titleI18n === undefined ? {} : { titleI18n }),
+        ...(group === undefined ? {} : { group }),
+        ...(order === undefined ? {} : { order }),
+        ...(fullWidth === undefined ? {} : { fullWidth }),
+      },
     });
   };
 }
@@ -131,6 +174,7 @@ export async function registerConsolePluginsFromEntries(
   hostApi: PluginRegisterHostApi,
   onEntryError?: (entry: ConsoleClientEntry, error: unknown) => void,
   assetOrigin?: string,
+  locale?: 'zh-CN' | 'en',
 ): Promise<void> {
   if (!entries.length) return;
   await Promise.all(
@@ -138,7 +182,7 @@ export async function registerConsolePluginsFromEntries(
       try {
         const specifier = resolvePluginImportUrl(entry.resolvedModule, assetOrigin);
         const mod = (await import(/* @vite-ignore */ specifier)) as Record<string, unknown>;
-        const register = resolveEntryRegister(mod, entry);
+        const register = resolveEntryRegister(mod, entry, locale);
         if (register) await register(hostApi);
         else throw new Error(`entry "${entry.id}" has no register export`);
       } catch (error) {
@@ -149,12 +193,17 @@ export async function registerConsolePluginsFromEntries(
   );
 }
 
+let activeEntriesLoadPromise: Promise<void> | null = null;
+let lastLoadOptions: LoadConsoleEntriesOptions | null = null;
+
 export async function loadConsoleEntries(options: LoadConsoleEntriesOptions): Promise<void> {
+  lastLoadOptions = options;
   options.beforeLoad?.();
   let data: ConsoleEntriesResponse;
   try {
     data = await fetchConsoleEntries(options);
   } catch (error) {
+    activeEntriesLoadPromise = null;
     const status = typeof (error as { status?: unknown }).status === "number"
       ? (error as { status: number }).status
       : 0;
@@ -168,10 +217,48 @@ export async function loadConsoleEntries(options: LoadConsoleEntriesOptions): Pr
     options.onEmpty?.();
     return;
   }
-  await registerConsolePluginsFromEntries(
-    data.entries,
-    options.hostApi,
-    options.onEntryError,
-    options.assetOrigin,
+  try {
+    await registerConsolePluginsFromEntries(
+      data.entries,
+      options.hostApi,
+      options.onEntryError,
+      options.assetOrigin,
+      options.locale,
+    );
+  } catch (error) {
+    activeEntriesLoadPromise = null;
+    throw error;
+  }
+}
+
+export async function reloadConsoleEntries(options?: LoadConsoleEntriesOptions): Promise<void> {
+  activeEntriesLoadPromise = null;
+  const resolved = options ?? lastLoadOptions;
+  if (!resolved) return;
+  activeEntriesLoadPromise = loadConsoleEntries(resolved).catch((error) => {
+    activeEntriesLoadPromise = null;
+    throw error;
+  });
+  return activeEntriesLoadPromise;
+}
+
+export const CONSOLE_ENTRY_LIFECYCLE_EVENTS = [
+  'plugin:installed',
+  'plugin:uninstalled',
+  'plugin:lifecycle-updated',
+] as const;
+
+export function subscribeConsoleEntryReload(
+  transport: { onConsoleEvent: (type: string, listener: () => void) => () => void },
+  options?: LoadConsoleEntriesOptions | (() => LoadConsoleEntriesOptions | undefined),
+): () => void {
+  const unsubscribes = CONSOLE_ENTRY_LIFECYCLE_EVENTS.map((eventType) =>
+    transport.onConsoleEvent(eventType, () => {
+      const resolved = typeof options === 'function' ? options() : options;
+      void reloadConsoleEntries(resolved).catch(() => {});
+    }),
   );
+  return () => {
+    for (const unsub of unsubscribes) unsub();
+  };
 }

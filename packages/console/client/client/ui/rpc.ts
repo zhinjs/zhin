@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { pluginRpc } from '../console-utils/remoteApi.js';
+import { resolveSyncPluginId } from './plugin-id.js';
 
 /**
  * loading: 还没有成功数据且请求在途；empty: 成功但内容为空；ready: 成功且有内容；
@@ -136,4 +137,21 @@ export function usePluginRpc<T>(
 ): RpcResource<T> {
   const key = pluginId === undefined ? undefined : `${pluginId}\u0000${method}\u0000${params === undefined ? '' : JSON.stringify(params)}`;
   return useRpcResource<T>(key, () => pluginRpc<T>(pluginId as string, method, params), options);
+}
+
+export interface UsePluginDataOptions<T> extends UsePluginRpcOptions<T> {
+  readonly pluginId?: string;
+}
+
+/**
+ * 自动解析当前页面的 PluginId 并读取插件 Console RPC（默认读取 `status`）。
+ */
+export function usePluginData<T = Record<string, unknown>>(
+  method = 'status',
+  params?: Readonly<Record<string, unknown>>,
+  options?: UsePluginDataOptions<T>,
+): RpcResource<T> {
+  const resolved = resolveSyncPluginId(options?.pluginId);
+  const pluginId = resolved === 'unknown' ? undefined : resolved;
+  return usePluginRpc<T>(pluginId, method, params, options);
 }

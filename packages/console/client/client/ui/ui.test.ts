@@ -206,4 +206,61 @@ describe('locale and plugin id helpers', () => {
     await expect(resolvePluginId({ adapter: 'demo' })).rejects.toThrow('HTTP 500');
     expect(await resolvePluginId({ adapter: 'demo', fallback: 'root/demo' })).toBe('root/demo');
   });
+
+  it('resolvePluginId(explicit?) resolves synchronously from explicit arg, active context, or URL pathname', () => {
+    const { resolvePluginId } = createHookEnv().load(file('./plugin-id.ts'));
+    expect(resolvePluginId('root/explicit')).toBe('root/explicit');
+
+    vi.stubGlobal('location', { pathname: '/qq' });
+    expect(resolvePluginId()).toBe('qq');
+
+    vi.stubGlobal('location', { pathname: '/p-custom' });
+    expect(resolvePluginId()).toBe('custom');
+
+    vi.stubGlobal('location', { pathname: '/plugins/weather' });
+    expect(resolvePluginId()).toBe('weather');
+
+    vi.stubGlobal('location', { pathname: '/adapters/telegram' });
+    expect(resolvePluginId()).toBe('telegram');
+
+    vi.stubGlobal('location', { pathname: '/dashboard' });
+    expect(resolvePluginId()).toBe('unknown');
+
+    (globalThis as Record<string, unknown>).__ZHIN_ACTIVE_PLUGIN_ID__ = 'root/from-global';
+    expect(resolvePluginId()).toBe('root/from-global');
+    delete (globalThis as Record<string, unknown>).__ZHIN_ACTIVE_PLUGIN_ID__;
+  });
+
+  it('usePluginData and createDeclarativePage resolve pluginId and render stats/sections', async () => {
+    vi.useFakeTimers();
+    stubHost(async () => ({
+      data: {
+        activeCount: 3,
+        rows: [{ id: 'r1', name: 'Job A', status: 'ok' }],
+      },
+    }));
+    const env = createHookEnv();
+    const { createDeclarativePage } = env.load(file('./declarative-page.tsx'));
+    const Page = createDeclarativePage<{ activeCount: number; rows: { id: string; name: string; status: string }[] }>({
+      pluginId: 'root/my-service',
+      title: '服务状态',
+      stats: [{ label: '活跃任务', value: 'activeCount' }],
+      sections: [
+        {
+          title: '任务列表',
+          items: 'rows',
+          columns: [
+            { key: 'name', label: '名称' },
+            { key: 'status', label: '状态' },
+          ],
+        },
+      ],
+    });
+    env.mount(() => Page({ pluginId: 'root/my-service' }));
+    await env.settle();
+    const serialized = JSON.stringify(env.tree());
+    expect(serialized).toContain('服务状态');
+    expect(serialized).toContain('Job A');
+    env.unmount();
+  });
 });

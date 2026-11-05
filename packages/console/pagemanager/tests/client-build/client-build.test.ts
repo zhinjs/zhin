@@ -56,13 +56,60 @@ describe('Client build adapter', () => {
     const runnable = chunk.replace(/(["'])\/esm\/react(?:%7E|~)jsx-runtime\.mjs(?:\?[^"']*)?\1/gu, JSON.stringify(jsxStub));
     const browserModule = await import(`data:text/javascript;base64,${Buffer.from(runnable).toString('base64')}`);
     const routes: unknown[] = [];
-    browserModule.register({ React: { createElement: () => null }, addRoute: (route: unknown) => routes.push(route) });
-    expect(routes).toEqual([expect.objectContaining({name: 'Status', meta: expect.objectContaining({titleI18n: {en: 'Status page', 'zh-CN': '状态页'}})})]);
+    const createdProps: unknown[] = [];
+    browserModule.register({
+      React: { createElement: (_comp: unknown, props: unknown) => { createdProps.push(props); return null; } },
+      addRoute: (route: unknown) => routes.push(route),
+    });
+    expect(routes).toEqual([
+      expect.objectContaining({
+        name: 'Status',
+        requiredRoles: ['admin'],
+        meta: expect.objectContaining({
+          order: 10,
+          titleI18n: { en: 'Status page', 'zh-CN': '状态页' },
+        }),
+      }),
+    ]);
+    expect(createdProps[0]).toMatchObject({
+      pluginId: 'root',
+      owner: 'root',
+      localName: 'status',
+      route: '/p-status',
+      title: 'Status',
+    });
 
     const persisted = JSON.parse(
       await readFile(join(root, 'dist/client/pages.manifest.json'), 'utf8'),
     ) as { protocol: number; entries: unknown[] };
     expect(persisted).toMatchObject({ protocol: 1, entries: [expect.objectContaining({ hash: artifact?.hash })] });
+  });
+
+  it('accepts definePage imported from @zhin.js/page or zhin.js/page and forwards all metadata fields', async () => {
+    const root = await temp();
+    const source = join(root, 'pages/ops.tsx');
+    await writeSource(source, [
+      "import { definePage } from '@zhin.js/page';",
+      "export const meta = definePage({ title: 'Ops', group: 'system', order: 5, parent: 'root', fullWidth: true, requiredPermissions: ['ops:read'] });",
+      'export default function OpsPage() { return <section>Ops</section>; }',
+    ].join('\n'));
+    const builder = new TypeScriptClientBuilder({
+      projectRoot: root,
+      outDir: join(root, 'dist/client'),
+    });
+    const artifact = await builder.load<{ module: string; metadata: unknown }>(source, {
+      ...pageEntry(source),
+      owner: 'root/ops-plugin' as never,
+      localName: 'ops',
+    });
+    expect(artifact.metadata).toMatchObject({
+      title: 'Ops',
+      group: 'system',
+      order: 5,
+      parent: 'root',
+      fullWidth: true,
+      requiredPermissions: ['ops:read'],
+    });
   });
 
   it('rejects dynamic metadata with a source location', async () => {

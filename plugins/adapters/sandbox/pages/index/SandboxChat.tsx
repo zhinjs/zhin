@@ -106,6 +106,10 @@ export default function Sandbox(props: SandboxPageProps = {}) {
     const [showConversationDetails, setShowConversationDetails] = useState(false)
     const [pendingRefreshEpoch, setPendingRefreshEpoch] = useState(0)
     const [showRunSettings, setShowRunSettings] = useState(false)
+    const [senderId, setSenderId] = useState('dev-user')
+    const [senderName, setSenderName] = useState('Developer')
+    const [senderRole, setSenderRole] = useState<'master' | 'admin' | 'member'>('master')
+    const [showSenderSettings, setShowSenderSettings] = useState(false)
     const [showNewSession, setShowNewSession] = useState(false)
     const [newSessionName, setNewSessionName] = useState('')
     const [newSessionScope, setNewSessionScope] = useState<SandboxScope>('private')
@@ -240,6 +244,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
         type: string; id: string; locale?: unknown; content?: unknown; endpoint?: string; workingDirectory?: string; canExecute?: boolean;
         shellIsolation?: { available?: boolean; provider?: string; message?: string }; timestamp: number;
         messageId?: string; bot?: string; protocol?: string; connectionId?: string; direction?: string; senderId?: string;
+        senderName?: string; senderRole?: 'master' | 'admin' | 'member';
         revision?: number; streaming?: boolean;
         conversation?: { type: Channel['type']; id: string };
     }) => {
@@ -328,7 +333,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
             id: data.messageId ?? createSandboxMessageId(), type: isInput ? 'sent' : 'received', channelType,
             interactionReadOnly: false,
             channelId: sceneId, channelName, senderId: isInput ? data.senderId || connectionRef.current.ownerId || 'owner' : 'endpoint',
-            senderName: isInput ? sandboxText(locale, "当前用户") : data.bot || endpointIdRef.current, content, timestamp: data.timestamp,
+            senderName: isInput ? (typeof data.senderName === 'string' && data.senderName.trim() ? data.senderName.trim() : sandboxText(locale, "当前用户")) : data.bot || endpointIdRef.current, content, timestamp: data.timestamp,
             ...(Number.isSafeInteger(data.revision) && data.revision! > 0 ? { revision: data.revision } : {}),
             ...(typeof data.streaming === 'boolean' ? { streaming: data.streaming } : {}),
         }))
@@ -338,8 +343,11 @@ export default function Sandbox(props: SandboxPageProps = {}) {
         if (!connectionRef.current.canExecute) return false
         const scene = activeChannelRef.current
         const segments: MessageSegment[] = [{ type: 'action', data: { id: payload, payload } }]
+        const resolvedSenderId = senderId.trim() || connectionRef.current.ownerId || 'dev-user'
+        const resolvedSenderName = senderName.trim() || sandboxText(localeRef.current, "测试用户")
         if (!submitSandboxFrame(wsRef.current, {
             type: scene.type, id: scene.id, messageId: createSandboxMessageId(), content: segments,
+            senderId: resolvedSenderId, senderName: resolvedSenderName, senderRole,
             agentRun: scene.runConfig, timestamp: Date.now(),
         })) {
             setTransportNotice(sandboxText(localeRef.current, "Sandbox 连接尚未就绪，审批选择未发送。"))
@@ -528,7 +536,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
 
     const parseTextToSegments = (text: string): MessageSegment[] => {
         const segments: MessageSegment[] = []
-        const regex = /\[@([^\]]+)\]|\[face:(\d+)\]|\[image:([^\]]+)\]|\[video:([^\]]+)\]|\[audio:([^\]]+)\]/g
+        const regex = /\[@([^\[\]]+)\]|\[face:(\d+)\]|\[image:([^\[\]]+)\]|\[video:([^\[\]]+)\]|\[audio:([^\[\]]+)\]/g
         let lastIndex = 0
         let match: RegExpExecArray | null
         while ((match = regex.exec(text)) !== null) {
@@ -578,7 +586,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                 case 'md':
                     return <MarkdownContent key={index} text={String(d.text ?? d.content ?? '')} className={isSent ? 'zhin-markdown--inverse' : undefined} />
                 case 'html':
-                    return <HtmlMessage locale={locale} key={index} html={String(d.html ?? '')} />
+                    return <HtmlMessage locale={locale} key={index} html={String(d.html ?? d.content ?? d.text ?? '')} />
                 case 'code':
                     return <CodeBlock key={index} code={String(d.code ?? d.text ?? d.content ?? '')} language={String(d.language ?? d.lang ?? '')} />
                 case 'mention':
@@ -668,6 +676,147 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                         </div>
                     )
                 }
+                case 'card': {
+                    const title = typeof d.title === 'string' ? d.title : ''
+                    const subtitle = typeof d.subtitle === 'string' ? d.subtitle : ''
+                    const description = typeof d.description === 'string'
+                        ? d.description
+                        : typeof d.content === 'string'
+                            ? d.content
+                            : typeof d.summary === 'string'
+                                ? d.summary
+                                : ''
+                    const rawImage = typeof d.image === 'string'
+                        ? d.image
+                        : typeof d.thumbnail === 'string'
+                            ? d.thumbnail
+                            : typeof d.imageUrl === 'string'
+                                ? d.imageUrl
+                                : pickMediaRawUrl(d)
+                    const imageSrc = rawImage ? resolveMediaSrc(rawImage, 'image') : undefined
+                    const fields = Array.isArray(d.fields)
+                        ? (d.fields as Array<Record<string, unknown>>)
+                        : []
+                    const buttons = Array.isArray(d.buttons)
+                        ? (d.buttons as Array<Record<string, unknown>>)
+                        : Array.isArray(d.actions)
+                            ? (d.actions as Array<Record<string, unknown>>)
+                            : []
+                    const resolved = Boolean(messageId && interactionResolved)
+                    return (
+                        <div key={index} className="sandbox-rich-card">
+                            {imageSrc && (
+                                <img src={imageSrc} alt={title} className="sandbox-rich-card-image" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                            )}
+                            <div className="sandbox-rich-card-body">
+                                {title && <div className="sandbox-rich-card-title">{title}</div>}
+                                {subtitle && <div className="sandbox-rich-card-subtitle">{subtitle}</div>}
+                                {description && <div className="sandbox-rich-card-desc"><MarkdownContent text={description} /></div>}
+                                {fields.length > 0 && (
+                                    <dl className="sandbox-rich-card-fields">
+                                        {fields.map((field, fi) => (
+                                            <div key={fi} className="sandbox-rich-card-field">
+                                                <dt>{String(field.label ?? field.name ?? field.key ?? '')}</dt>
+                                                <dd>{String(field.value ?? '')}</dd>
+                                            </div>
+                                        ))}
+                                    </dl>
+                                )}
+                                {buttons.length > 0 && (
+                                    <div className="agent-playground-approval-actions sandbox-rich-card-actions">
+                                        <div>
+                                            {buttons.map((btn, bi) => {
+                                                const label = String(btn.label ?? btn.text ?? btn.title ?? btn.id ?? `Action ${bi + 1}`)
+                                                const payload = String(btn.payload ?? btn.value ?? btn.id ?? label)
+                                                const url = typeof btn.url === 'string' ? btn.url : undefined
+                                                if (url && /^https?:\/\//i.test(url)) {
+                                                    return (
+                                                        <a key={bi} href={url} target="_blank" rel="noreferrer" className="sandbox-card-link-btn">
+                                                            {label} <ExternalLink size={12} />
+                                                        </a>
+                                                    )
+                                                }
+                                                return (
+                                                    <button
+                                                        key={`${payload}-${bi}`}
+                                                        type="button"
+                                                        disabled={Boolean(btn.disabled) || isSent || resolved || !canExecute || !allowInteraction}
+                                                        onClick={() => { if (sendInteractiveAction(payload, messageId)) onInteractionSubmitted?.() }}
+                                                        className={cn(
+                                                            btn.style === 'primary' && 'is-primary',
+                                                            btn.style === 'danger' && 'is-danger',
+                                                        )}
+                                                    >
+                                                        {label}
+                                                    </button>
+                                                )
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+                                {!title && !subtitle && !description && fields.length === 0 && buttons.length === 0 && (
+                                    <CodeBlock code={JSON.stringify(d, null, 2)} language="json" />
+                                )}
+                            </div>
+                        </div>
+                    )
+                }
+                case 'share': {
+                    const url = typeof d.url === 'string' ? d.url : ''
+                    const title = String(d.title ?? (url || 'Share'))
+                    const description = typeof d.description === 'string'
+                        ? d.description
+                        : typeof d.content === 'string'
+                            ? d.content
+                            : typeof d.artist === 'string'
+                                ? d.artist
+                                : ''
+                    const rawImage = typeof d.image === 'string' ? d.image : pickMediaRawUrl(d)
+                    const imageSrc = rawImage ? resolveMediaSrc(rawImage, 'image') : undefined
+                    const safeHref = /^https?:\/\//i.test(url) ? url : undefined
+                    return (
+                        <div key={index} className="sandbox-share-card">
+                            {imageSrc && (
+                                <img src={imageSrc} alt={title} className="sandbox-share-card-thumb" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                            )}
+                            <div className="sandbox-share-card-main">
+                                <div className="sandbox-share-card-title">
+                                    {safeHref ? (
+                                        <a href={safeHref} target="_blank" rel="noreferrer">
+                                            {title} <ExternalLink size={12} />
+                                        </a>
+                                    ) : (
+                                        <span>{title}</span>
+                                    )}
+                                </div>
+                                {description && <div className="sandbox-share-card-desc">{description}</div>}
+                                {url && <div className="sandbox-share-card-url">{url}</div>}
+                            </div>
+                        </div>
+                    )
+                }
+                case 'button': {
+                    const label = String(d.label ?? d.text ?? d.id ?? 'Button')
+                    const payload = String(d.payload ?? d.id ?? label)
+                    const resolved = Boolean(messageId && interactionResolved)
+                    return (
+                        <div key={index} className="agent-playground-approval-actions">
+                            <div>
+                                <button
+                                    type="button"
+                                    disabled={Boolean(d.disabled) || isSent || resolved || !canExecute || !allowInteraction}
+                                    onClick={() => { if (sendInteractiveAction(payload, messageId)) onInteractionSubmitted?.() }}
+                                    className={cn(
+                                        d.style === 'primary' && 'is-primary',
+                                        d.style === 'danger' && 'is-danger',
+                                    )}
+                                >
+                                    {label}
+                                </button>
+                            </div>
+                        </div>
+                    )
+                }
                 case 'keyboard': {
                     const rows = (d.rows as Array<Array<{ label: string; payload: string; disabled?: boolean; style?: string }>>) ?? []
                     const resolved = Boolean(messageId && interactionResolved)
@@ -704,13 +853,16 @@ export default function Sandbox(props: SandboxPageProps = {}) {
     const handleSendMessage = (_text: string, segments: MessageSegment[]) => {
         if (!connectionRef.current.canExecute || directoryModeRef.current === 'loading' || !hasRenderableSegments(segments)) return
         const scene = activeChannelRef.current
+        const resolvedSenderId = senderId.trim() || connectionRef.current.ownerId || 'dev-user'
+        const resolvedSenderName = senderName.trim() || sandboxText(localeRef.current, "测试用户")
         const newMessage: Message = {
             id: createSandboxMessageId(), type: 'sent', channelType: scene.type, channelId: scene.id,
-            channelName: scene.name, senderId: connectionRef.current.ownerId || 'test_user',
-            senderName: sandboxText(localeRef.current, "测试用户"), content: segments, timestamp: Date.now(),
+            channelName: scene.name, senderId: resolvedSenderId,
+            senderName: resolvedSenderName, content: segments, timestamp: Date.now(),
         }
         if (!submitSandboxFrame(wsRef.current, {
             type: scene.type, id: scene.id, messageId: newMessage.id, content: segments,
+            senderId: resolvedSenderId, senderName: resolvedSenderName, senderRole,
             agentRun: scene.runConfig, timestamp: newMessage.timestamp,
         })) {
             setTransportNotice(sandboxText(localeRef.current, "Sandbox 连接尚未就绪，消息未发送。"))
@@ -891,7 +1043,40 @@ export default function Sandbox(props: SandboxPageProps = {}) {
     const recoveryConnectionId = connectionRef.current.connectionId
     return (
         <section className={cn("zhin-sandbox agent-playground-shell", showInspector && "has-inspector")}>
-            <style>{sandboxStyles}</style>
+            <style>{`${sandboxStyles}
+.sandbox-sender-trigger { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 4px 10px; border-radius: 6px; }
+.sandbox-role-badge { font-style: normal; font-size: 10px; font-weight: 600; text-transform: uppercase; padding: 1px 6px; border-radius: 999px; background: rgba(148,163,184,0.18); color: inherit; }
+.sandbox-role-badge.is-master { background: rgba(245,158,11,0.18); color: #d97706; }
+.sandbox-role-badge.is-admin { background: rgba(59,130,246,0.18); color: #2563eb; }
+.sandbox-role-badge.is-member { background: rgba(16,185,129,0.16); color: #059669; }
+.sandbox-role-switcher { display: inline-flex; gap: 4px; }
+.sandbox-role-option { padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(148,163,184,0.3); font-size: 12px; cursor: pointer; background: transparent; color: inherit; text-transform: capitalize; }
+.sandbox-role-option.active { font-weight: 600; border-color: currentColor; background: rgba(59,130,246,0.12); }
+.sandbox-sender-presets { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.sandbox-sender-presets button { font-size: 11px; padding: 3px 8px; border-radius: 6px; border: 1px solid rgba(148,163,184,0.28); background: transparent; color: inherit; cursor: pointer; }
+.sandbox-quick-commands { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-left: 6px; }
+.sandbox-command-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid rgba(148,163,184,0.28); background: transparent; color: inherit; cursor: pointer; }
+.sandbox-command-chip:hover:not(:disabled) { border-color: rgba(59,130,246,0.5); background: rgba(59,130,246,0.08); }
+.sandbox-command-chip:disabled { opacity: 0.45; cursor: not-allowed; }
+.sandbox-rich-card { border: 1px solid rgba(148,163,184,0.28); border-radius: 10px; overflow: hidden; margin-top: 6px; max-width: 440px; background: rgba(148,163,184,0.06); }
+.sandbox-rich-card-image { width: 100%; max-height: 200px; object-fit: cover; display: block; }
+.sandbox-rich-card-body { padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.sandbox-rich-card-title { font-weight: 600; font-size: 14px; }
+.sandbox-rich-card-subtitle { font-size: 12px; opacity: 0.75; }
+.sandbox-rich-card-desc { font-size: 13px; }
+.sandbox-rich-card-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px; margin: 4px 0 0; }
+.sandbox-rich-card-field { background: rgba(148,163,184,0.08); padding: 4px 8px; border-radius: 6px; }
+.sandbox-rich-card-field dt { font-size: 11px; opacity: 0.7; }
+.sandbox-rich-card-field dd { margin: 0; font-size: 12px; font-weight: 500; }
+.sandbox-card-link-btn { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(148,163,184,0.3); text-decoration: none; color: inherit; }
+.sandbox-share-card { display: flex; gap: 10px; align-items: center; border: 1px solid rgba(148,163,184,0.28); border-radius: 10px; padding: 8px 12px; margin-top: 6px; max-width: 440px; background: rgba(148,163,184,0.06); }
+.sandbox-share-card-thumb { width: 52px; height: 52px; border-radius: 6px; object-fit: cover; flex-shrink: 0; }
+.sandbox-share-card-main { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.sandbox-share-card-title { font-weight: 600; font-size: 13px; }
+.sandbox-share-card-title a { display: inline-flex; align-items: center; gap: 4px; color: inherit; text-decoration: underline; }
+.sandbox-share-card-desc { font-size: 12px; opacity: 0.8; overflow: hidden; text-overflow: ellipsis; }
+.sandbox-share-card-url { font-size: 11px; opacity: 0.6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+`}</style>
             <div className="agent-playground-mobilebar">
                 <button type="button" aria-expanded={showChannelList} onClick={() => setShowChannelList(!showChannelList)}><MessageSquare size={17} />{sandboxText(locale, "会话列表")}</button>
                 <strong>{sandboxText(locale, "会话")}</strong>
@@ -977,11 +1162,66 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                         {props.renderConversationDetails
                             ? <button type="button" disabled={!canExecute} aria-expanded={showConversationDetails} aria-controls="sandbox-conversation-details" onClick={() => setShowConversationDetails((visible) => !visible)}><ListChecks size={14} />{sandboxText(locale, "对话与轨迹")}</button>
                             : <a href={agentSessionsPath(sessionKey)}><ExternalLink size={14} />{sandboxText(locale, "对话与轨迹")}</a>}
+                        <button
+                            type="button"
+                            className={cn("sandbox-sender-trigger", showSenderSettings && "active")}
+                            aria-expanded={showSenderSettings}
+                            onClick={() => setShowSenderSettings((visible) => !visible)}
+                            title={locale === 'en' ? 'Simulated sender identity & role' : '模拟发送者身份与角色'}
+                        >
+                            <User size={14} />
+                            <span>{senderName.trim() || senderId.trim() || 'dev-user'}</span>
+                            <em className={cn("sandbox-role-badge", `is-${senderRole}`)}>{senderRole}</em>
+                        </button>
                         <button type="button" className={cn(showRunSettings && 'active')} aria-expanded={showRunSettings} onClick={() => setShowRunSettings((visible) => !visible)} aria-label={sandboxText(locale, "配置运行环境")}><SlidersHorizontal size={16} /></button>
                         <button type="button" aria-expanded={showInspector} aria-controls="sandbox-run-inspector" onClick={() => setShowInspector(!showInspector)} aria-label={sandboxText(locale, "切换运行检查器")}><PanelRight size={16} /></button>
                         <button type="button" onClick={() => setConfirmClear(true)} aria-label={sandboxText(locale, "清空当前会话")}><Trash2 size={15} /></button>
                     </div>
                 </header>
+
+                {showSenderSettings && (
+                    <section className="agent-playground-run-settings sandbox-sender-settings" aria-label={locale === 'en' ? 'Simulated sender' : '模拟发送者配置'}>
+                        <label>
+                            <span><User size={14} />{locale === 'en' ? 'Sender ID' : '发送者 ID'}</span>
+                            <input
+                                value={senderId}
+                                onChange={(event) => setSenderId(event.target.value)}
+                                placeholder="dev-user"
+                                spellCheck={false}
+                            />
+                        </label>
+                        <label>
+                            <span>{locale === 'en' ? 'Sender Name' : '发送者昵称'}</span>
+                            <input
+                                value={senderName}
+                                onChange={(event) => setSenderName(event.target.value)}
+                                placeholder="Developer"
+                                spellCheck={false}
+                            />
+                        </label>
+                        <label>
+                            <span><ShieldCheck size={14} />{locale === 'en' ? 'Sender Role' : '角色权限'}</span>
+                            <div className="sandbox-role-switcher" role="group" aria-label={locale === 'en' ? 'Sender role' : '角色权限'}>
+                                {(['member', 'admin', 'master'] as const).map((role) => (
+                                    <button
+                                        key={role}
+                                        type="button"
+                                        aria-pressed={senderRole === role}
+                                        className={cn("sandbox-role-option", `is-${role}`, senderRole === role && "active")}
+                                        onClick={() => setSenderRole(role)}
+                                    >
+                                        {role}
+                                    </button>
+                                ))}
+                            </div>
+                        </label>
+                        <div className="sandbox-sender-presets">
+                            <button type="button" onClick={() => { setSenderId('dev-user'); setSenderName('Developer'); setSenderRole('master') }}>Master (dev-user)</button>
+                            <button type="button" onClick={() => { setSenderId('admin-user'); setSenderName('Admin'); setSenderRole('admin') }}>Admin (admin-user)</button>
+                            <button type="button" onClick={() => { setSenderId('member-user'); setSenderName('Member'); setSenderRole('member') }}>Member (member-user)</button>
+                        </div>
+                    </section>
+                )}
 
                 {cancellationFeedback && <div className="agent-playground-confirm" role={cancellationFeedback.kind === 'error' ? 'alert' : 'status'}>
                     <div><span>{cancellationFeedback.message}</span></div>
@@ -1161,6 +1401,30 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                             onClick={() => { setMediaPanel((p) => (p === 'audio' ? null : 'audio')); setShowFacePicker(false) }} title={sandboxText(locale, "插入音频 URL")}>
                             <Music size={16} />
                         </button>
+                        <div className="sandbox-quick-commands" role="toolbar" aria-label={locale === 'en' ? 'Quick commands' : '快捷命令'}>
+                            {['/help', 'help', 'ping', '/status'].map((cmd) => (
+                                <button
+                                    key={cmd}
+                                    type="button"
+                                    className="sandbox-command-chip"
+                                    disabled={!canExecute || directoryStatus.mode === 'loading'}
+                                    onClick={() => runPrompt(cmd)}
+                                >
+                                    <Terminal size={11} />
+                                    <span>{cmd}</span>
+                                </button>
+                            ))}
+                            <button
+                                type="button"
+                                className="sandbox-command-chip is-clear"
+                                disabled={channelMessages.length === 0}
+                                onClick={clearMessages}
+                                title={sandboxText(locale, "清空当前会话")}
+                            >
+                                <Trash2 size={11} />
+                                <span>{locale === 'en' ? 'Clear' : '清屏'}</span>
+                            </button>
+                        </div>
                         <div className="sandbox-toolbar-spacer" />
                         <div className="sandbox-composer-tabs" role="tablist" aria-label={sandboxText(locale, "消息编辑模式")}>
                             <button type="button" role="tab" aria-selected={composerMode === 'write'} className={cn(composerMode === 'write' && 'active')} onClick={() => setComposerMode('write')}>{sandboxText(locale, "编写")}</button>

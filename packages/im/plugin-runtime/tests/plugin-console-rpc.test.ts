@@ -34,3 +34,36 @@ it('treats named queries as read-only methods with the status access rules', () 
   expect(() => definePluginConsoleRpc({ queries: { x: { handler } }, actions: { x: { handler } } })).toThrow(/Duplicate/u);
   expect(() => definePluginConsoleRpc({ queries: { status: { handler } } })).toThrow(/reserved/u);
 });
+
+it('supports definePluginConsoleRpc.withConfig<TConfig>() and typed call.config', async () => {
+  interface MyPluginConfig {
+    readonly prefix: string;
+    readonly maxItems: number;
+  }
+  const defineRpc = definePluginConsoleRpc.withConfig<MyPluginConfig>();
+  const rpc = defineRpc({
+    status: {
+      handler(_input, call) {
+        return {
+          prefix: call.config?.prefix ?? 'default',
+          maxItems: call.config?.maxItems ?? 10,
+        };
+      },
+    },
+    actions: {
+      ping: {
+        handler(input, call) {
+          return `${call.config?.prefix ?? ''}:${String(input.msg ?? '')}`;
+        },
+      },
+    },
+  });
+  const statusMethod = rpc.methods.get('status')!;
+  const signal = new AbortController().signal;
+  expect(statusMethod.handler({}, { signal, config: { prefix: 'zhin', maxItems: 42 } })).toEqual({
+    prefix: 'zhin',
+    maxItems: 42,
+  });
+  const pingMethod = rpc.methods.get('ping')!;
+  expect(pingMethod.handler({ msg: 'ok' }, { signal, config: { prefix: 'bot', maxItems: 5 } })).toBe('bot:ok');
+});

@@ -30,11 +30,19 @@ export function extractPageMetadata(source: string, fileName: string): unknown {
   return metadata;
 }
 
+export const DEFINE_PAGE_PACKAGE = '@zhin.js/console-contract';
+export const DEFINE_PAGE_PACKAGES = new Set([
+  '@zhin.js/console-contract',
+  '@zhin.js/contract',
+  '@zhin.js/page',
+  'zhin.js/page',
+]);
+
 function assertDefinePageImport(file: ts.SourceFile, node: ts.Node): void {
   const found = file.statements.some((statement) => {
     if (!compiler().isImportDeclaration(statement)
       || !compiler().isStringLiteral(statement.moduleSpecifier)
-      || statement.moduleSpecifier.text !== '@zhin.js/console-contract') return false;
+      || !DEFINE_PAGE_PACKAGES.has(statement.moduleSpecifier.text)) return false;
     const bindings = statement.importClause?.namedBindings;
     return bindings && compiler().isNamedImports(bindings)
       && bindings.elements.some((element) => element.name.text === 'definePage'
@@ -43,7 +51,7 @@ function assertDefinePageImport(file: ts.SourceFile, node: ts.Node): void {
   if (!found) fail(
     file,
     node,
-    'Page meta requires a named definePage import from @zhin.js/console-contract',
+    'Page meta requires a named definePage import from @zhin.js/console-contract, @zhin.js/page, or zhin.js/page',
   );
 }
 

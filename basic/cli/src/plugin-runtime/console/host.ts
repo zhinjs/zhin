@@ -7,7 +7,7 @@ import {
   ConsoleRuntime,
   consoleRuntimeToken,
 } from '@zhin.js/pagemanager/plugin-runtime';
-import type { HttpHost } from '@zhin.js/host-http';
+import type { ConsoleAccess, HttpHost } from '@zhin.js/host-http';
 import {
   NativeDevelopmentModuleRuntime,
   type ModuleRuntime,
@@ -17,8 +17,13 @@ import { serveCanonicalEsm, serveClientAsset } from './asset-server.js';
 import { writeHtml, writeJson } from './http-response.js';
 import { renderConsoleIndex, renderPageShell } from './page-renderer.js';
 import { createTsxModuleLoader } from '../start/tsx-module-loader.js';
-import { requestConsoleAccess } from './entry-projection.js';
-import type { ConsoleAccess } from '@zhin.js/host-http';
+import {
+  listPages,
+  projectConsoleEntries,
+  requestConsoleAccess,
+  resolveLocalizedPageTitle,
+  type ExtendedRuntimeConsolePage,
+} from './entry-projection.js';
 
 const clientPublicBase = '/assets/client';
 const noStore = Object.freeze({ 'cache-control': 'no-store' });
@@ -68,9 +73,22 @@ export function registerConsoleHttp(options: {
   http.route('GET', `${clientPublicBase}/*`, async (_request, response, url) => {
     await serveClientAsset(options.clientOutDir, clientPublicBase, url.pathname, response);
   });
+  http.route('GET', '/entries', async (request, response, url) => {
+    try {
+      const locale = url.searchParams.get('locale') ?? undefined;
+      const pages = await listPages(options.console, requestConsoleAccess(http, request, url), { locale });
+      writeJson(response, 200, projectConsoleEntries(pages, { locale }), noStore);
+    } catch (error) {
+      writeJson(response, 503, {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
   http.route('GET', '/console/api/pages', async (request, response, url) => {
+    const locale = url.searchParams.get('locale') ?? undefined;
     // The list depends on the caller's token, so it must never be cached or shared.
-    writeJson(response, 200, { pages: await readConsolePages(options.console, requestConsoleAccess(http, request, url)) }, noStore);
+    writeJson(response, 200, { pages: await readConsolePages(options.console, requestConsoleAccess(http, request, url), locale) }, noStore);
   });
   http.route('GET', '/console/api/topology', async (request, response, url) => {
     try {
@@ -90,13 +108,16 @@ export function registerConsoleHttp(options: {
       response.end('ConsoleRuntime is not ready');
     }
   });
-  http.route('GET', '/console', async (request, response, url) => {
-    writeHtml(response, renderConsoleIndex(await readConsolePages(options.console, requestConsoleAccess(http, request, url))));
-  });
+  const serveConsoleIndex = async (request: Parameters<Parameters<HttpHost['route']>[2]>[0], response: Parameters<Parameters<HttpHost['route']>[2]>[1], url: URL) => {
+    const locale = url.searchParams.get('locale') ?? undefined;
+    writeHtml(response, renderConsoleIndex(await readConsolePages(options.console, requestConsoleAccess(http, request, url), locale)));
+  };
+  http.route('GET', '/console', serveConsoleIndex);
+  http.route('GET', '/pages', serveConsoleIndex);
   // Catch-all page routes must be registered last among exact/prefix peers;
   // matchHttpRoute prefers longest prefix, exact page routes win over shorter prefixes.
   http.route('GET', '/*', async (request, response, url) => {
-    if (url.pathname === '/console' || url.pathname.startsWith('/console/')
+    if (url.pathname === '/console' || url.pathname === '/pages' || url.pathname.startsWith('/console/')
       || url.pathname.startsWith(`${clientPublicBase}/`)
       || url.pathname.startsWith('/esm/')) {
       response.writeHead(404);
@@ -137,9 +158,15 @@ export function installConsoleRuntime(consoleRuntime: ConsoleRuntime): RootResou
   };
 }
 
-async function readConsolePages(consoleRuntime: ConsoleRuntime, access: ConsoleAccess) {
+async function readConsolePages(consoleRuntime: ConsoleRuntime, access: ConsoleAccess, locale?: string) {
   try {
-    return await consoleRuntime.runView(access, (catalog) => catalog.pages());
+    const pages = await consoleRuntime.runView(access, (catalog) => catalog.pages());
+    if (!locale) return pages;
+    return Object.freeze(pages.map((rawPage) => {
+      const page = rawPage as ExtendedRuntimeConsolePage;
+      const title = resolveLocalizedPageTitle(page.title, page.titleI18n, locale);
+      return Object.freeze({ ...page, title });
+    }));
   } catch {
     return Object.freeze([]);
   }

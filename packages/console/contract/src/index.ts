@@ -127,3 +127,35 @@ export type ConsoleEntriesResponse = {
   entries: ConsoleClientEntry[];
   runtimeEnvHint: RuntimeEnv | null;
 };
+
+export type PageTitleI18n = Readonly<Partial<Record<'zh-CN' | 'en', string>>>;
+
+export interface PageComponentProps {
+  pluginId?: string;
+  owner?: string;
+  localName?: string;
+  route?: string;
+  title?: string;
+  [key: string]: unknown;
+}
+
+export interface PageMetadata {
+  readonly title?: string;
+  readonly titleI18n?: PageTitleI18n;
+  readonly icon?: string;
+  readonly group?: string;
+  readonly order?: number;
+  readonly parent?: string;
+  readonly fullWidth?: boolean;
+  readonly hideInNav?: boolean;
+  readonly requiredPermissions?: readonly string[];
+  readonly requiredRoles?: readonly string[];
+}
+
+export type DefinedPage = Readonly<PageMetadata>;
+
+export type PageExport<P = PageComponentProps> = import("react").ComponentType<P>;
+
+export function definePage(metadata: PageMetadata = {}): DefinedPage {
+  return Object.freeze({ ...metadata });
+}

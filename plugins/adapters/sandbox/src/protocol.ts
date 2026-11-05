@@ -130,6 +130,8 @@ export interface SandboxConversation {
   readonly id: string;
 }
 
+export type SandboxSenderRole = 'master' | 'admin' | 'member';
+
 export interface SandboxParsedMessage {
   type: MessageType;
   id: string;
@@ -139,7 +141,12 @@ export interface SandboxParsedMessage {
   text: string;
   action?: { id: string; payload: string };
   agentRun?: SandboxAgentRunConfig;
+  senderId?: string;
+  senderName?: string;
+  senderRole?: SandboxSenderRole;
 }
+
+export type SandboxInboundEnvelope = SandboxParsedMessage;
 
 interface SandboxWirePayload {
   type?: MessageType;
@@ -149,6 +156,9 @@ interface SandboxWirePayload {
   timestamp?: number;
   messageId?: unknown;
   agentRun?: unknown;
+  senderId?: unknown;
+  senderName?: unknown;
+  senderRole?: unknown;
 }
 
 function readSandboxWirePayload(raw: string): SandboxWirePayload & { op?: unknown; conversation?: unknown } {
@@ -186,6 +196,8 @@ export function parseSandboxWsFrame(raw: string): SandboxWsFrame {
 export function parseSandboxWsPayload(raw: string): SandboxParsedMessage {
   return normalizeSandboxWsPayload(readSandboxWirePayload(raw), raw);
 }
+
+export const parseSandboxInboundPayload = parseSandboxWsPayload;
 
 function normalizeSandboxWsPayload(payload: SandboxWirePayload, raw: string): SandboxParsedMessage {
   const type = payload.type ?? 'private';
@@ -225,6 +237,17 @@ function normalizeSandboxWsPayload(payload: SandboxWirePayload, raw: string): Sa
   const agentRun = normalizeSandboxAgentRunConfig(payload.agentRun);
   const rawMessageId = typeof payload.messageId === 'string' ? payload.messageId.trim() : '';
   const messageId = /^[A-Za-z0-9._:-]{1,160}$/u.test(rawMessageId) ? rawMessageId : undefined;
+  const senderId = typeof payload.senderId === 'string' && payload.senderId.trim()
+    ? payload.senderId.trim()
+    : undefined;
+  const senderName = typeof payload.senderName === 'string' && payload.senderName.trim()
+    ? payload.senderName.trim()
+    : undefined;
+  const senderRole: SandboxSenderRole | undefined = payload.senderRole === 'master'
+    || payload.senderRole === 'admin'
+    || payload.senderRole === 'member'
+    ? payload.senderRole
+    : undefined;
   return {
     type,
     id,
@@ -234,6 +257,9 @@ function normalizeSandboxWsPayload(payload: SandboxWirePayload, raw: string): Sa
     text,
     action,
     ...(agentRun ? { agentRun } : {}),
+    ...(senderId ? { senderId } : {}),
+    ...(senderName ? { senderName } : {}),
+    ...(senderRole ? { senderRole } : {}),
   };
 }
 

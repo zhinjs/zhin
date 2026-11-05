@@ -29,9 +29,11 @@ import { createToken } from './token.js';
 export type PluginConsoleRpcJson = JsonValue;
 export type PluginConsoleRpcInput = Readonly<Record<string, JsonValue>>;
 
-export interface PluginConsoleRpcCall {
+export interface PluginConsoleRpcCall<TConfig = Record<string, unknown>> {
   /** Aborted when the Host request times out. Long work must observe it. */
   readonly signal: AbortSignal;
+  /** Validated plugin configuration for this generation, when available. */
+  readonly config?: TConfig;
   /** Authenticated operation view; no snapshot, configuration, resource or private resolver access. */
   readonly runtime?: Readonly<{
     owner: PluginId; generation: number; operator: boolean;
@@ -41,7 +43,18 @@ export interface PluginConsoleRpcCall {
   commitStarted?(): void;
 }
 
-export interface PluginConsoleRpcMethod<TInput = PluginConsoleRpcInput> {
+export type PluginConsoleRpcCallContext<
+  TMethods = Record<string, unknown>,
+  TKey extends keyof TMethods = keyof TMethods,
+  TConfig = Record<string, unknown>,
+> = PluginConsoleRpcCall<TConfig> & {
+  readonly method?: TKey;
+};
+
+export interface PluginConsoleRpcMethod<
+  TInput = PluginConsoleRpcInput,
+  TConfig = Record<string, unknown>,
+> {
   /** Local name of a Page owned by the same plugin (`pages/<page>/index.tsx`). Its access rules apply. */
   readonly page?: string;
   /** Extra permissions on top of the page's own requirements. */
@@ -57,28 +70,33 @@ export interface PluginConsoleRpcMethod<TInput = PluginConsoleRpcInput> {
    * Return a small, user-facing JSON shape. Never return raw log records, prompts, chat lines,
    * secrets or exception text: the Console shows this to ordinary users.
    */
-  handler(input: TInput, call: PluginConsoleRpcCall): JsonValue | Promise<JsonValue>;
+  handler(input: TInput, call: PluginConsoleRpcCall<TConfig>): JsonValue | Promise<JsonValue>;
 }
 
-export interface PluginConsoleRpcStatus extends PluginConsoleRpcMethod<PluginConsoleRpcInput> {
+export interface PluginConsoleRpcStatus<TConfig = Record<string, unknown>>
+  extends PluginConsoleRpcMethod<PluginConsoleRpcInput, TConfig> {
   /** Allow the demo-scope Console token to read this status. Default `false`. */
   readonly demo?: boolean;
 }
 
-export interface PluginConsoleRpcDefinition {
+export interface PluginConsoleRpcDefinition<TConfig = Record<string, unknown>> {
   /** Read-only status for the plugin's Console page(s): `plugin.<pluginId>.status`. */
-  readonly status?: PluginConsoleRpcStatus;
+  readonly status?: PluginConsoleRpcStatus<TConfig>;
   /**
    * Extra read-only views beside `status`: `plugin.<pluginId>.<name>`. Same access rules as
    * `status`; use them when one plugin backs several pages with different permissions.
    */
-  readonly queries?: Readonly<Record<string, PluginConsoleRpcStatus>>;
+  readonly queries?: Readonly<Record<string, PluginConsoleRpcStatus<TConfig>>>;
   /**
    * Limited, named actions: `plugin.<pluginId>.<name>`. Non-admin tokens may run one only when the
    * action declares its own requirements and the token holds them (plus the page's); otherwise
    * admin-only.
    */
-  readonly actions?: Readonly<Record<string, PluginConsoleRpcMethod>>;
+  readonly actions?: Readonly<Record<string, PluginConsoleRpcMethod<PluginConsoleRpcInput, TConfig>>>;
+}
+
+export interface PluginConsoleRpcDefiner<TConfig = Record<string, unknown>> {
+  (definition: PluginConsoleRpcDefinition<TConfig>): PluginConsoleRpc;
 }
 
 export interface NormalizedPluginConsoleRpcMethod {
@@ -118,11 +136,16 @@ const methodNamePattern = /^[a-z][a-z0-9-]{0,63}$/u;
 const pageNamePattern = /^[a-z0-9][a-z0-9-]*$/u;
 
 /** Validates and freezes a plugin's Console RPC surface. Throws on invalid names at setup time. */
-export function definePluginConsoleRpc(definition: PluginConsoleRpcDefinition): PluginConsoleRpc {
+export function definePluginConsoleRpc<TConfig = Record<string, unknown>>(
+  definition: PluginConsoleRpcDefinition<TConfig>,
+): PluginConsoleRpc {
   if (!definition || typeof definition !== 'object') throw new TypeError('Plugin Console RPC definition must be an object');
   const methods = new Map<string, NormalizedPluginConsoleRpcMethod>();
   if (definition.status !== undefined) {
-    methods.set(PLUGIN_CONSOLE_RPC_STATUS, normalizeMethod('status', definition.status, definition.status.demo === true, true));
+    methods.set(
+      PLUGIN_CONSOLE_RPC_STATUS,
+      normalizeMethod('status', definition.status as PluginConsoleRpcMethod, definition.status.demo === true, true),
+    );
   }
   for (const [kind, entries] of [['query', definition.queries], ['action', definition.actions]] as const) {
     for (const [name, method] of Object.entries(entries ?? {})) {
@@ -130,7 +153,15 @@ export function definePluginConsoleRpc(definition: PluginConsoleRpcDefinition): 
       if (name === PLUGIN_CONSOLE_RPC_STATUS) throw new TypeError('"status" is reserved; declare it as definition.status');
       if (methods.has(name)) throw new TypeError(`Duplicate plugin Console RPC method: ${name}`);
       const readOnly = kind === 'query';
-      methods.set(name, normalizeMethod(name, method, readOnly && (method as PluginConsoleRpcStatus).demo === true, readOnly));
+      methods.set(
+        name,
+        normalizeMethod(
+          name,
+          method as PluginConsoleRpcMethod,
+          readOnly && (method as PluginConsoleRpcStatus<TConfig>).demo === true,
+          readOnly,
+        ),
+      );
     }
   }
   if (methods.size === 0) throw new TypeError('Plugin Console RPC must declare status or at least one action');
@@ -141,6 +172,16 @@ export function definePluginConsoleRpc(definition: PluginConsoleRpcDefinition): 
     get [generationAdmissionSource]() { return gates; },
   });
 }
+
+/**
+ * Fix the plugin config type first, then define the Console RPC surface:
+ * `definePluginConsoleRpc.withConfig<MyConfig>()({ status: { handler(_input, call) { ... } } })`
+ */
+definePluginConsoleRpc.withConfig = function withConfig<
+  TConfig = Record<string, unknown>,
+>(): PluginConsoleRpcDefiner<TConfig> {
+  return (definition: PluginConsoleRpcDefinition<TConfig>) => definePluginConsoleRpc(definition);
+};
 
 function normalizeMethod(
   name: string,

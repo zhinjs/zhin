@@ -231,3 +231,66 @@ it('serves host-owned queries as plugin.root.<name> ahead of a root plugin provi
   expect(await call('plugin.root.reset', scoped(['ambient:read']))).toMatchObject({ status: 403 });
   expect(await call('plugin.root.status', unrestrictedConsoleAccess)).toMatchObject({ status: 200, body: { data: { from: 'root-plugin' } } });
 });
+
+it('forwards the owning plugin config on ctx.config for definePluginConsoleRpc.withConfig handlers', async () => {
+  type AmbientConfig = { mode: string; cooldownMs: number };
+  const rpc = definePluginConsoleRpc.withConfig<AmbientConfig>()({
+    status: {
+      handler: async (_input, ctx) => ({
+        config: ctx.config,
+        runtimeKeys: Object.keys(ctx.runtime ?? {}),
+      }),
+    },
+  });
+  const state: SnapshotState = {
+    root,
+    tree: new Map([
+      [root, { id: root, instanceKey: 'root', packageName: 'app', packageRoot: '/app', children: [owner] }],
+      [owner, { id: owner, instanceKey: 'ambient', packageName: 'ambient', packageRoot: '/app/ambient', parent: root, children: [] }],
+    ]),
+    config: new Map([[owner, { mode: 'active', cooldownMs: 1500 }]]),
+    capabilities: new Map(),
+    projections: new Map(),
+    resources: new Map([
+      [root, new Map()],
+      [owner, new Map([[pluginConsoleRpcToken.id, rpc]])],
+    ]),
+  };
+  const store = new SnapshotStore(state);
+  stores.push(store);
+
+  const fromSnapshot = await dispatchPluginConsoleRpcRequest(
+    { type: 'plugin.root/ambient.status', requestId: 9 },
+    { snapshots: store, access: unrestrictedConsoleAccess, pagesOwnedBy: () => [] as never },
+  );
+  expect(fromSnapshot).toMatchObject({
+    status: 200,
+    body: {
+      success: true,
+      data: {
+        config: { mode: 'active', cooldownMs: 1500 },
+        runtimeKeys: ['owner', 'generation', 'operator', 'project'],
+      },
+    },
+  });
+
+  const fromResolver = await dispatchPluginConsoleRpcRequest(
+    { type: 'plugin.root/ambient.status', requestId: 10 },
+    {
+      snapshots: store,
+      access: unrestrictedConsoleAccess,
+      pagesOwnedBy: () => [] as never,
+      resolveConfig: (pluginId) => (pluginId === owner ? { mode: 'override', cooldownMs: 500 } : undefined),
+    },
+  );
+  expect(fromResolver).toMatchObject({
+    status: 200,
+    body: {
+      success: true,
+      data: {
+        config: { mode: 'override', cooldownMs: 500 },
+        runtimeKeys: ['owner', 'generation', 'operator', 'project'],
+      },
+    },
+  });
+});
