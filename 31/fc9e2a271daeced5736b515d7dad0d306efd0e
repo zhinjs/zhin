@@ -1,0 +1,26 @@
+packages/im/harness/src/contracts.ts
+  h_b680f75345178a 229-234,535,601
+packages/im/harness/src/harness.ts
+  h_b680f75345178a 25-36,65-67,69,75-82,107-109,111,114-115,118-125,128-130,143-148,156-162,166-167,173-178,180-182,241-244,326,329-333,335-340,344-371,389-390,399,418-419,422,424-425,446,454-457,466-468,470,472,474,476-478,481,483,504,554,560
+packages/im/harness/src/policies/admission.ts
+  h_b680f75345178a 6-8,101-103
+packages/im/harness/src/policies/markers.ts
+  h_b680f75345178a 22,43,56
+packages/im/harness/tests/harness.test.ts
+  h_b680f75345178a 9,231-235,237-249,252-257,259-263,267-330,337-338,348-357,364
+packages/im/harness/tests/policies/admission.test.ts
+  h_b680f75345178a 28-37
+packages/im/harness/tests/support/inbox-driver.ts
+  h_b680f75345178a 26,91
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "31fc9e2a271daeced5736b515d7dad0d306efd0e",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
