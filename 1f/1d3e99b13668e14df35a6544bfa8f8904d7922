@@ -1,0 +1,18 @@
+basic/cli/src/plugin-runtime/console/page-renderer.ts
+  h_6f5e45c41d0910 416
+plugins/adapters/sandbox/pages/index/SandboxChat.tsx
+  h_6f5e45c41d0910 709,731,772,777
+scripts/check-ci-preflight.mjs
+  h_6f5e45c41d0910 197
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1f1d3e99b13668e14df35a6544bfa8f8904d7922",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
