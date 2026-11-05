@@ -22,6 +22,18 @@
  *   (askers get a `cancelled` reply), and later sends are denied as `frozen`.
  * - An engagement closes when it has no running or queued turns and no
  *   outstanding ask / delegate; its root grant is closed then.
+ * - Inbound mail (`human` / `timer` / `event`) enters through `deliver`
+ *   (`open` is the same call): it opens an engagement and posts the root mail
+ *   into the entry actor's inbox lane (D1). The inbox policy (`inbox.policy`,
+ *   D2) decides what the mail does to that lane, also while a turn of the
+ *   lane is running (mid-turn): queue, merge, supersede the running turn,
+ *   stop it, or reject. Every turn of every actor runs inside the mailbox;
+ *   there is no externally running root turn (H3, Q6).
+ * - A merged batch (Q2) may span several engagements (one per human
+ *   message); each engagement is accounted for by its own mails.
+ * - A `result` for a mail that ran on an explicit lane returns on that lane,
+ *   so delegated results wait for the lane's running turn (the root turn)
+ *   instead of running beside it.
  */
 import {
   DEFAULT_GUARD_LIMITS,
@@ -50,13 +62,24 @@ import {
   type MailSender,
   type Mailbox,
   type MailboxKey,
+  type InboxPolicy,
+  type InboxRejectCode,
+  type InboxSetTimer,
   type MailboxOptions,
+  type PostResult,
   type Principal,
   type VenueRef,
 } from './contracts.js';
 import { agentOf } from './authority.js';
 
-export type HarnessDenyCode = GuardDenyCode | 'unknown_agent' | 'wait_cycle' | 'budget_exceeded' | 'queue_full' | 'closed' | 'frozen';
+export type HarnessDenyCode =
+  | GuardDenyCode
+  | InboxRejectCode
+  | 'unknown_agent'
+  | 'wait_cycle'
+  | 'budget_exceeded'
+  | 'closed'
+  | 'frozen';
 
 export type SendOutcome =
   | { readonly ok: true; readonly mail: Mail; readonly reply?: { readonly status: ActorTurnResult['status']; readonly content: string } }
@@ -80,28 +103,30 @@ export interface OpenEngagementInput {
   readonly budget: BudgetAmounts;
   readonly approvers?: readonly string[];
   readonly venue?: VenueRef;
-}
-
-export interface AttachedEngagement {
-  readonly engagement: Engagement;
-  readonly root: Mail;
   /**
-   * Ends the externally running root turn. `delegate` results that came back
-   * for the root actor while it was attached are posted to its mailbox now,
-   * so the root actor continues with them in a normal actor turn (results
-   * arriving later go there directly). Returns the re-posted mails.
-   * Idempotent.
+   * Serial lane of the root mail inside the entry actor's inbox (D1): the IM
+   * session key for human and scene-event mail, `timer:<jobId>` for timers,
+   * `event:<source>` for webhooks. Omitted = the engagement's own lane.
    */
-  detach(result: ActorTurnResult): Promise<readonly Mail[]>;
+  readonly lane?: string;
 }
 
-export type AttachOutcome =
-  | ({ readonly ok: true } & AttachedEngagement)
-  | { readonly ok: false; readonly code: HarnessDenyCode; readonly reason: string };
+/** How the inbox took an inbound mail. `stopped`: it was a stop request and was consumed. */
+export type DeliverDisposition = Extract<PostResult, { accepted: true }>['disposition'];
 
 export type OpenOutcome =
-  | { readonly ok: true; readonly engagement: Engagement; readonly root: Mail }
+  | {
+      readonly ok: true;
+      readonly engagement: Engagement;
+      readonly root: Mail;
+      readonly disposition: DeliverDisposition;
+      /** 1-based queue position; 0 when consumed (`stopped`). */
+      readonly position: number;
+    }
   | { readonly ok: false; readonly code: HarnessDenyCode; readonly reason: string };
+
+/** `deliver` and `open` are the same call. */
+export type DeliverOutcome = OpenOutcome;
 
 export interface EscalationNotice {
   readonly engagement: Engagement;
@@ -115,8 +140,12 @@ export interface HarnessOptions {
   readonly ledger: BudgetLedger;
   readonly journal: EngagementJournal;
   readonly createMailbox: (options: MailboxOptions) => Mailbox;
-  /** Agent definitions' ceilings; `undefined` = unknown agent. */
-  readonly ceilingOf: (agent: AgentName) => AgentCeiling | undefined;
+  /**
+   * Agent definitions' ceilings; `undefined` = unknown agent. `engagementId`
+   * names the engagement asking, so a long-lived host can resolve agents per
+   * engagement (the directory of the turn that opened it).
+   */
+  readonly ceilingOf: (agent: AgentName, engagementId: EngagementId) => AgentCeiling | undefined;
   readonly rootAuthority: (principal: Principal, ceiling: AgentCeiling, options?: { approvers?: readonly string[] }) => Authority;
   readonly attenuate: (parent: Authority, narrowing: AuthorityNarrowing, target: AgentCeiling, via: ActorId) => Authority;
   /** Runs one actor turn; the agent layer calls `harness.send` / `harness.charge` from inside it. */
@@ -124,19 +153,33 @@ export interface HarnessOptions {
   readonly limits?: GuardLimits;
   readonly maxConcurrentTurns?: number;
   readonly maxQueuedPerKey?: number;
+  /** Inbox scheduling (H3): policy (D2), queue TTL and the timer / clock windows use. */
+  readonly inbox?: Readonly<{
+    policy?: InboxPolicy;
+    queueTtlMs?: number;
+    now?: () => number;
+    setTimer?: InboxSetTimer;
+  }>;
   readonly clock?: () => number;
   readonly newId?: () => string;
   readonly onEscalate?: (notice: EscalationNotice) => void | Promise<void>;
+  /** Called once when an engagement closed (after `engagement_closed` was journaled). */
+  readonly onEngagementClosed?: (engagement: Engagement) => void;
   readonly onError?: (error: unknown) => void;
 }
 
 export interface Harness {
-  open(input: OpenEngagementInput): Promise<OpenOutcome>;
   /**
-   * Opens an engagement whose root turn is already running outside the
-   * mailbox (the live IM turn). The root actor counts as busy until `detach`.
+   * Delivers an inbound mail (`human` / `timer` / `event`): opens its
+   * engagement and posts the root mail to the entry actor's inbox lane. May be
+   * called at any time, including while a turn of that lane is running
+   * (mid-turn delivery): the inbox policy then decides whether the new mail
+   * queues, merges, supersedes or stops the running turn (whose stale reply
+   * must then not be sent; see `ActorTurnControl.staleCheck`).
    */
-  attach(input: OpenEngagementInput): Promise<AttachOutcome>;
+  deliver(input: OpenEngagementInput): Promise<DeliverOutcome>;
+  /** Same as `deliver`. */
+  open(input: OpenEngagementInput): Promise<OpenOutcome>;
   /** Remaining budget of the grant `current` runs on. */
   remaining(current: Mail): BudgetAmounts | undefined;
   /** Called by collaboration tools while `current` (the mail being processed) is running. */
@@ -162,8 +205,6 @@ interface EngagementState {
   closed: boolean;
   /** Set by the first escalation; the engagement accepts no new collaboration after it. */
   frozen?: { readonly code: HarnessDenyCode; readonly reason: string };
-  /** Root actor running outside the mailbox, and results held for it until detach. */
-  attached?: { readonly actor: ActorId; readonly held: Mail[] };
 }
 
 interface Waiter {
@@ -197,6 +238,10 @@ export function createHarness(options: HarnessOptions): Harness {
     },
     maxConcurrentTurns: options.maxConcurrentTurns ?? 8,
     maxQueuedPerKey: options.maxQueuedPerKey ?? 16,
+    ...(options.inbox?.policy ? { policy: options.inbox.policy } : {}),
+    ...(options.inbox?.queueTtlMs !== undefined ? { queueTtlMs: options.inbox.queueTtlMs } : {}),
+    ...(options.inbox?.now ? { now: options.inbox.now } : {}),
+    ...(options.inbox?.setTimer ? { setTimer: options.inbox.setTimer } : {}),
     onTurnFinished: (key, batch, result) => onTurnFinished(key, batch, result),
   });
 
@@ -278,30 +323,53 @@ export function createHarness(options: HarnessOptions): Harness {
       budget: snapshot.ok ? { spent: snapshot.value.spent, granted: snapshot.value.granted } : null,
     });
     engagements.delete(state.engagement.id);
+    try { options.onEngagementClosed?.(state.engagement); } catch (error) { reportError(error); }
   }
 
-  async function post(state: EngagementState, mail: Mail): Promise<{ ok: true } | { ok: false; reason: string }> {
+  type Posted =
+    | { readonly ok: true; readonly disposition: DeliverDisposition; readonly position: number }
+    | { readonly ok: false; readonly code: InboxRejectCode | 'closed'; readonly reason: string };
+
+  function post(state: EngagementState, mail: Mail): Posted {
     const posted = mailbox.post(mail);
-    if (!posted.accepted) return { ok: false, reason: posted.message };
-    state.pendingTurns += 1;
-    return { ok: true };
+    if (!posted.accepted) {
+      return { ok: false, code: posted.code === 'mailbox_closed' ? 'closed' : posted.code, reason: posted.message };
+    }
+    // A stop request is consumed by the inbox: it never becomes a turn.
+    if (posted.disposition !== 'stopped') state.pendingTurns += 1;
+    return { ok: true, disposition: posted.disposition, position: posted.position };
   }
 
   async function onTurnFinished(key: MailboxKey, batch: readonly Mail[], result: ActorTurnResult): Promise<void> {
-    const state = engagements.get(key.engagementId);
-    if (!state) return;
-    state.pendingTurns -= 1;
-    try {
-      await record(state.engagement.id, 'turn_finished', { actor: key.actor, mails: batch.map((mail) => mail.id), status: result.status });
-      for (const mail of batch) {
-        if (mail.body.kind === 'tell') options.ledger.close(mail.grantId);
-        if (mail.body.kind !== 'ask' && mail.body.kind !== 'delegate') continue;
-        await reply(state, mail, result);
+    // A merged batch (Q2) may carry mails of several engagements.
+    const byEngagement = new Map<EngagementId, Mail[]>();
+    for (const mail of batch) {
+      const list = byEngagement.get(mail.engagementId);
+      if (list) list.push(mail);
+      else byEngagement.set(mail.engagementId, [mail]);
+    }
+    for (const [engagementId, mails] of byEngagement) {
+      const state = engagements.get(engagementId);
+      if (!state) continue;
+      state.pendingTurns -= mails.length;
+      try {
+        await record(state.engagement.id, 'turn_finished', {
+          actor: key.actor,
+          mails: mails.map((mail) => mail.id),
+          status: result.status,
+          ...(result.reason ? { reason: result.reason } : {}),
+          ...(engagementId !== key.engagementId ? { carriedBy: key.engagementId } : {}),
+        });
+        for (const mail of mails) {
+          if (mail.body.kind === 'tell') options.ledger.close(mail.grantId);
+          if (mail.body.kind !== 'ask' && mail.body.kind !== 'delegate') continue;
+          await reply(state, mail, result);
+        }
+      } catch (error) {
+        reportError(error);
+      } finally {
+        await maybeCloseEngagement(state).catch(reportError);
       }
-    } catch (error) {
-      reportError(error);
-    } finally {
-      await maybeCloseEngagement(state).catch(reportError);
     }
   }
 
@@ -318,6 +386,8 @@ export function createHarness(options: HarnessOptions): Harness {
       causationId: request.id,
       from: Object.freeze({ kind: 'actor', actor: request.to }) as MailSender,
       to: requester,
+      // Back on the requester's lane, behind the turn that asked (it may still be running).
+      ...(parent?.lane !== undefined && parent.to === requester ? { lane: parent.lane } : {}),
       // The reply runs with the requester's own authority and grant, never the replier's.
       authority: parent?.authority ?? request.authority,
       grantId: parent?.grantId ?? request.grantId,
@@ -326,7 +396,7 @@ export function createHarness(options: HarnessOptions): Harness {
     });
     options.ledger.close(request.grantId);
     state.outstanding.delete(request.id);
-    const ceiling = options.ceilingOf(agentOf(requester));
+    const ceiling = options.ceilingOf(agentOf(requester), state.engagement.id);
     const decision = ceiling
       ? options.guard.admitMail(back, { graph: graphOf(state), targetCeiling: ceiling, limits })
       : { allow: false as const, code: 'not_accepted_by_target' as const, reason: `unknown agent ${requester}`, escalate: false };
@@ -345,23 +415,16 @@ export function createHarness(options: HarnessOptions): Harness {
       waiter.resolve({ status: result.status, content });
       return;
     }
-    if (state.attached && state.attached.actor === requester) {
-      state.attached.held.push(back);
-      return;
-    }
-    const posted = await post(state, back);
-    if (!posted.ok) await record(state.engagement.id, 'mail_denied', { ...mailSummary(back), code: 'queue_full', reason: posted.reason });
+    const posted = post(state, back);
+    if (!posted.ok) await record(state.engagement.id, 'mail_denied', { ...mailSummary(back), code: posted.code, reason: posted.reason });
   }
 
-  async function begin(input: OpenEngagementInput, attach: boolean): Promise<
-    | { ok: true; state: EngagementState; root: Mail }
-    | { ok: false; code: HarnessDenyCode; reason: string }
-  > {
+  async function deliver(input: OpenEngagementInput): Promise<DeliverOutcome> {
     if (closed) return { ok: false, code: 'closed', reason: 'harness is closed' };
-    const ceiling = options.ceilingOf(agentOf(input.entry));
+    const engagementId = newId();
+    const ceiling = options.ceilingOf(agentOf(input.entry), engagementId);
     if (!ceiling) return { ok: false, code: 'unknown_agent', reason: `unknown agent ${agentOf(input.entry)}` };
     const rootGrantId = options.ledger.openRoot(input.budget);
-    const engagementId = newId();
     const rootMailId = newId();
     const engagement: Engagement = Object.freeze({
       id: engagementId,
@@ -380,6 +443,7 @@ export function createHarness(options: HarnessOptions): Harness {
       engagementId,
       from: Object.freeze(from),
       to: input.entry,
+      ...(input.lane !== undefined ? { lane: input.lane } : {}),
       authority: options.rootAuthority(input.principal, ceiling, { approvers: input.approvers }),
       grantId: rootGrantId,
       body: input.body,
@@ -387,7 +451,10 @@ export function createHarness(options: HarnessOptions): Harness {
     });
     const state: EngagementState = { engagement, mails: [], byId: new Map(), pendingTurns: 0, outstanding: new Set(), closed: false };
     engagements.set(engagementId, state);
-    await record(engagementId, 'engagement_opened', { principal: input.principal.id, entry: input.entry, rootMailId, rootGrantId, budget: input.budget });
+    await record(engagementId, 'engagement_opened', {
+      principal: input.principal.id, entry: input.entry, rootMailId, rootGrantId, budget: input.budget,
+      ...(input.lane !== undefined ? { lane: input.lane } : {}),
+    });
     const decision = options.guard.admitMail(root, { graph: graphOf(state), targetCeiling: ceiling, limits });
     if (!decision.allow) {
       await record(engagementId, 'mail_denied', { ...mailSummary(root), code: decision.code, reason: decision.reason });
@@ -396,53 +463,24 @@ export function createHarness(options: HarnessOptions): Harness {
     }
     admit(state, root);
     await record(engagementId, 'mail_admitted', mailSummary(root));
-    if (attach) {
-      state.attached = { actor: input.entry, held: [] };
-      state.pendingTurns += 1;
-      await record(engagementId, 'turn_started', { actor: input.entry, mails: [rootMailId], attached: true });
-      return { ok: true, state, root };
-    }
-    const posted = await post(state, root);
-    if (!posted.ok) {
+    if (closed) {
       await maybeCloseEngagement(state);
-      return { ok: false, code: 'queue_full', reason: posted.reason };
+      return { ok: false, code: 'closed', reason: 'harness is closed' };
     }
-    return { ok: true, state, root };
+    const posted = post(state, root);
+    if (!posted.ok) {
+      await record(engagementId, 'mail_denied', { ...mailSummary(root), code: posted.code, reason: posted.reason });
+      await maybeCloseEngagement(state);
+      return { ok: false, code: posted.code, reason: posted.reason };
     }
-
+    if (posted.disposition === 'stopped') await maybeCloseEngagement(state);
+    return { ok: true, engagement, root, disposition: posted.disposition, position: posted.position };
+  }
 
   return {
-    async open(input) {
-      const opened = await begin(input, false);
-      return opened.ok ? { ok: true, engagement: opened.state.engagement, root: opened.root } : opened;
-    },
+    deliver,
 
-    async attach(input) {
-      const opened = await begin(input, true);
-      if (!opened.ok) return opened;
-      const { state, root } = opened;
-      let detached: Promise<readonly Mail[]> | undefined;
-      const detach = (result: ActorTurnResult): Promise<readonly Mail[]> => {
-        detached ??= (async () => {
-          const held = state.attached?.held.splice(0) ?? [];
-          state.attached = undefined;
-          state.pendingTurns -= 1;
-          try {
-            await record(state.engagement.id, 'turn_finished', { actor: root.to, mails: [root.id], status: result.status, held: held.map((mail) => mail.id) });
-          } catch (error) {
-            reportError(error);
-          }
-          for (const mail of held) {
-            const posted = await post(state, mail);
-            if (!posted.ok) await record(state.engagement.id, 'mail_denied', { ...mailSummary(mail), code: 'queue_full', reason: posted.reason }).catch(reportError);
-          }
-          await maybeCloseEngagement(state).catch(reportError);
-          return Object.freeze(held);
-        })();
-        return detached;
-      };
-      return { ok: true, engagement: state.engagement, root, detach };
-    },
+    open: deliver,
 
     remaining(current) {
       return options.ledger.snapshot(current.grantId)?.remaining;
@@ -463,7 +501,7 @@ export function createHarness(options: HarnessOptions): Harness {
       if (current.to !== from || !state.byId.has(current.id)) {
         return deny('authority_not_attenuated', `${from} is not processing mail ${current.id}`);
       }
-      const ceiling = options.ceilingOf(agentOf(request.to));
+      const ceiling = options.ceilingOf(agentOf(request.to), state.engagement.id);
       if (!ceiling) return deny('unknown_agent', `unknown agent ${agentOf(request.to)}`);
 
       const granted = options.ledger.grant(current.grantId, request.budget ?? {});
@@ -513,13 +551,13 @@ export function createHarness(options: HarnessOptions): Harness {
         set.add(request.to);
         waitingOn.set(key, set);
       }
-      const posted = await post(state, mail);
+      const posted = post(state, mail);
       if (!posted.ok) {
         state.outstanding.delete(mail.id);
         askWaiters.delete(mail.id);
         waitingOn.get(waitKey(state.engagement.id, from))?.delete(request.to);
         options.ledger.close(grantId);
-        return deny('queue_full', posted.reason, mail);
+        return deny(posted.code, posted.reason, mail);
       }
       if (!replied) return { ok: true, mail };
       return { ok: true, mail, reply: await replied };

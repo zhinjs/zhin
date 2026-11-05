@@ -6,6 +6,7 @@ import {
   attenuate,
   createGuardKernel,
   createHarness,
+  createInboxPolicy,
   createMailbox,
   isAttenuationOf,
   only,
@@ -227,45 +228,114 @@ describe('harness: collaboration', () => {
   });
 });
 
-describe('harness: attached root turn', () => {
-  it('lets the live root turn ask, holds delegate results until detach, then closes', async () => {
+describe('harness: inbound delivery (H3)', () => {
+  it('runs the root turn of a lane inside the mailbox and returns delegate results on that lane after it', async () => {
+    const order: string[] = [];
+    let release!: () => void;
+    const rootDone = new Promise<void>((resolve) => { release = resolve; });
     const { harness, journal, seen } = setup([ceiling('zhin', ALL), ceiling('researcher', ALL)], {
+      zhin: async (mail, h) => {
+        if (mail.body.kind === 'result') {
+          order.push(`zhin:result:${mail.lane}`);
+          return { status: 'completed' };
+        }
+        const asked = await h.send('zhin', mail, { kind: 'ask', to: 'researcher', text: 'q1' });
+        expect(asked).toMatchObject({ ok: true, reply: { status: 'completed', content: 'asked-answer' } });
+        const delegated = await h.send('zhin', mail, { kind: 'delegate', to: 'researcher', text: 'q2' });
+        expect(delegated.ok).toBe(true);
+        await rootDone;
+        order.push('zhin:root-done');
+        return { status: 'completed' };
+      },
       researcher: async (mail) => ({ status: 'completed', content: mail.body.kind === 'ask' ? 'asked-answer' : 'delegated-answer' }),
     });
-    const attached = await harness.attach({ principal: master, entry: 'zhin', body: humanBody('live'), budget: BUDGET });
-    if (!attached.ok) throw new Error('attach failed');
-    expect(seen).toEqual([]); // the root turn is not run by the mailbox
-    const asked = await harness.send('zhin', attached.root, { kind: 'ask', to: 'researcher', text: 'q1' });
-    expect(asked).toMatchObject({ ok: true, reply: { status: 'completed', content: 'asked-answer' } });
-    const delegated = await harness.send('zhin', attached.root, { kind: 'delegate', to: 'researcher', text: 'q2' });
-    expect(delegated.ok).toBe(true);
+    const opened = await harness.deliver({ principal: master, entry: 'zhin', body: humanBody('live'), budget: BUDGET, lane: 'im:s1' });
+    if (!opened.ok) throw new Error('deliver failed');
+    expect(opened).toMatchObject({ disposition: 'queued', position: 1 });
+    expect(opened.root.lane).toBe('im:s1');
+    for (let i = 0; i < 50; i += 1) await Promise.resolve();
+    release();
     await harness.idle();
-    expect(seen.map((turn) => turn.actor)).toEqual(['researcher', 'researcher']); // nothing re-runs zhin
-    expect(harness.engagement(attached.engagement.id)).toBeDefined();
-    const held = await attached.detach({ status: 'completed' });
-    expect(held.map((mail) => mail.body)).toEqual([expect.objectContaining({ kind: 'result', content: 'delegated-answer' })]);
-    expect(await attached.detach({ status: 'completed' })).toBe(held);
-    await harness.idle();
-    // The held result continues as a normal turn of the root actor.
-    expect(seen.map((turn) => `${turn.actor}:${turn.mails[0]!.kind}`)).toEqual(['researcher:ask', 'researcher:delegate', 'zhin:result']);
-    expect(harness.engagement(attached.engagement.id)).toBeUndefined();
-    expect((await eventTypes(journal, attached.engagement.id)).at(-1)).toBe('engagement_closed');
+    // The delegate result waited for the running root turn of the lane.
+    expect(order).toEqual(['zhin:root-done', 'zhin:result:im:s1']);
+    expect(seen.map((turn) => `${turn.actor}:${turn.mails[0]!.kind}`)).toEqual(['zhin:human', 'researcher:ask', 'researcher:delegate', 'zhin:result']);
+    expect(harness.engagement(opened.engagement.id)).toBeUndefined();
+    expect((await eventTypes(journal, opened.engagement.id)).at(-1)).toBe('engagement_closed');
   });
 
   it('reports the remaining budget of a grant', async () => {
-    const { harness } = setup([ceiling('zhin', ALL)], {});
-    const attached = await harness.attach({ principal: master, entry: 'zhin', body: humanBody('live'), budget: BUDGET });
-    if (!attached.ok) throw new Error('attach failed');
-    await harness.charge(attached.root, { modelCalls: 3 });
-    expect(harness.remaining(attached.root)?.modelCalls).toBe(17);
-    await attached.detach({ status: 'completed' });
+    let remaining: number | undefined;
+    const { harness } = setup([ceiling('zhin', ALL)], {
+      zhin: async (mail, h) => {
+        await h.charge(mail, { modelCalls: 3 });
+        remaining = h.remaining(mail)?.modelCalls;
+        return { status: 'completed' };
+      },
+    });
+    await harness.open({ principal: master, entry: 'zhin', body: humanBody('live'), budget: BUDGET });
+    await harness.idle();
+    expect(remaining).toBe(17);
+  });
+
+  it('applies the inbox policy to mails delivered mid-turn and accounts merged engagements', async () => {
+    const policy = createInboxPolicy({ maxQueuedTurns: 5, supersedeSameSender: true });
+    const journal = new InMemoryEngagementJournal();
+    const runs: Array<{ texts: string[]; signal: AbortSignal; finish: () => void }> = [];
+    let ids = 0;
+    const closedIds: string[] = [];
+    const harness = createHarness({
+      guard: createGuardKernel({ isAttenuationOf }),
+      ledger: new InMemoryBudgetLedger(),
+      journal,
+      createMailbox: (options) => createMailbox(options),
+      ceilingOf: (agent) => (agent === 'zhin' ? ceiling('zhin', ALL) : undefined),
+      rootAuthority,
+      attenuate,
+      newId: () => `id${++ids}`,
+      clock: () => 1000,
+      inbox: { policy },
+      onEngagementClosed: (engagement) => { closedIds.push(engagement.id); },
+      runTurn: (_actor, batch, signal) => new Promise<ActorTurnResult>((resolve) => {
+        runs.push({
+          texts: batch.map((mail) => (mail.body.kind === 'human' ? mail.body.text : '')),
+          signal,
+          finish: () => resolve({ status: signal.aborted ? 'cancelled' : 'completed' }),
+        });
+        signal.addEventListener('abort', () => resolve({ status: 'cancelled' }), { once: true });
+      }),
+    });
+    const human = (text: string, extra: Record<string, unknown> = {}) => ({
+      kind: 'human' as const, text, venue: { kind: 'private', id: 'owner' }, senderId: 'owner', plainText: true, ...extra,
+    });
+    const first = await harness.deliver({ principal: master, entry: 'zhin', body: human('book the morning'), budget: BUDGET, lane: 'im:s1' });
+    for (let i = 0; i < 20; i += 1) await Promise.resolve();
+    expect(runs).toHaveLength(1);
+    const second = await harness.deliver({ principal: master, entry: 'zhin', body: human('no, afternoon'), budget: BUDGET, lane: 'im:s1' });
+    expect(second).toMatchObject({ ok: true, disposition: 'superseded' });
+    expect(runs[0]!.signal.aborted).toBe(true);
+    for (let i = 0; i < 50; i += 1) await Promise.resolve();
+    expect(runs).toHaveLength(2);
+    expect(runs[1]!.texts).toEqual(['book the morning', 'no, afternoon']);
+    runs[1]!.finish();
+    await harness.idle();
+    for (let i = 0; i < 20; i += 1) await Promise.resolve();
+    if (!first.ok || !second.ok) throw new Error('deliver failed');
+    // Both engagements closed although one batch answered them.
+    expect(closedIds.sort()).toEqual([first.engagement.id, second.engagement.id].sort());
+
+    const stop = await harness.deliver({ principal: master, entry: 'zhin', body: human('stop', { isStop: true }), budget: BUDGET, lane: 'im:s1' });
+    expect(stop).toMatchObject({ ok: false, code: 'not_running' });
+    const ignored = await harness.deliver({ principal: member, entry: 'zhin', body: human('chatter', { unaddressed: true, senderId: 'mallory' }), budget: BUDGET, lane: 'im:g1' });
+    expect(ignored).toMatchObject({ ok: false, code: 'not_addressed' });
+    expect(runs).toHaveLength(2);
   });
 });
 
 describe('harness: escalation freezes the engagement', () => {
   it('notifies once, cancels branches in flight and refuses later sends', async () => {
     const outcomes: unknown[] = [];
-    const { harness, escalations } = setup([ceiling('zhin', ALL), ceiling('alice', ALL), ceiling('bob', ALL)], {
+    const behaviours: Record<string, Behaviour> = {};
+    const { harness, escalations } = setup([ceiling('zhin', ALL), ceiling('alice', ALL), ceiling('bob', ALL)], Object.assign(behaviours, {
       alice: async (mail, h) => {
         const outcome = await h.send('alice', mail, { kind: 'ask', to: 'bob', text: 'yours?' });
         return { status: 'completed', content: outcome.ok ? outcome.reply?.content : outcome.code };
@@ -275,18 +345,22 @@ describe('harness: escalation freezes the engagement', () => {
         outcomes.push(await h.send('bob', mail, { kind: 'tell', to: 'zhin', text: 'still here' }));
         return { status: 'completed', content: 'no' };
       },
-    });
-    const attached = await harness.attach({ principal: master, entry: 'zhin', body: humanBody('who?'), budget: BUDGET });
-    if (!attached.ok) throw new Error('attach failed');
-    const asked = await harness.send('zhin', attached.root, { kind: 'ask', to: 'alice', text: 'who owns this?' });
+    } satisfies Record<string, Behaviour>));
+    let asked: unknown;
+    let again: unknown;
+    behaviours.zhin = async (mail, h) => {
+      asked = await h.send('zhin', mail, { kind: 'ask', to: 'alice', text: 'who owns this?' });
+      again = await h.send('zhin', mail, { kind: 'ask', to: 'bob', text: 'again' });
+      return { status: 'completed' };
+    };
+    await harness.open({ principal: master, entry: 'zhin', body: humanBody('who?'), budget: BUDGET });
+    await harness.idle();
     expect(asked).toMatchObject({ ok: true, reply: { status: 'cancelled' } });
     expect(outcomes).toEqual([
       expect.objectContaining({ ok: false, code: 'wait_cycle', escalated: true }),
       expect.objectContaining({ ok: false, code: 'frozen' }),
     ]);
     expect(escalations).toHaveLength(1);
-    expect(await harness.send('zhin', attached.root, { kind: 'ask', to: 'bob', text: 'again' })).toMatchObject({ ok: false, code: 'frozen' });
-    await attached.detach({ status: 'completed' });
-    await harness.idle();
+    expect(again).toMatchObject({ ok: false, code: 'frozen' });
   });
 });
