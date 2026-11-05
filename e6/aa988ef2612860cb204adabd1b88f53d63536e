@@ -1,0 +1,18 @@
+packages/im/agent/src/plugin-runtime/ingress/content.ts
+  h_b680f75345178a 86,92
+packages/im/agent/src/plugin-runtime/ingress/request.ts
+  h_b680f75345178a 12
+packages/im/agent/src/plugin-runtime/ingress/trigger.ts
+  h_b680f75345178a 179-181
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e6aa988ef2612860cb204adabd1b88f53d63536e",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
