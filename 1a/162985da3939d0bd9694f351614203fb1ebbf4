@@ -1,0 +1,24 @@
+packages/im/agent/evals/framework/driver.ts
+  h_6f5e45c41d0910 18-19,246-254,256,258,291-303,305-321,347-356,358-363,800-802,805-814,816-818,820-840
+packages/im/agent/evals/framework/fixture.ts
+  h_6f5e45c41d0910 17,72-73,83-87,105-117
+packages/im/agent/evals/framework/framework.test.ts
+  h_6f5e45c41d0910 388-392
+packages/im/agent/evals/framework/index.ts
+  h_6f5e45c41d0910 7
+packages/im/agent/src/collaboration/host-mailbox.ts
+  h_6f5e45c41d0910 5,134,137,162,312,429-437
+packages/im/agent/src/turn/turn-admission.ts
+  h_6f5e45c41d0910 7,49-50,53-59
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1a162985da3939d0bd9694f351614203fb1ebbf4",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
