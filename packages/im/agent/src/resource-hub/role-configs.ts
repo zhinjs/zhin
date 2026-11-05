@@ -21,8 +21,6 @@ export interface AgentRoleConfig {
   blockedTools: string[];
   /** 是否允许发送消息给用户 */
   canSendMessage: boolean;
-  /** 是否允许 spawn 子 Agent */
-  canSpawnSubagents: boolean;
   /** 是否允许访问主 Agent 历史 */
   canAccessMainHistory: boolean;
   /** 是否允许执行写操作 */
@@ -47,9 +45,8 @@ export const AGENT_ROLE_CONFIGS: Record<AgentRole, AgentRoleConfig> = {
       'bash', 'web_search', 'web_fetch',
       'generate_image',
     ],
-    blockedTools: ['send_message', 'spawn_subagent', 'discover'],
+    blockedTools: ['send_message', 'discover'],
     canSendMessage: false,
-    canSpawnSubagents: false,
     canAccessMainHistory: false,
     canWrite: true,
     canExecuteDangerous: false,
@@ -67,9 +64,8 @@ export const AGENT_ROLE_CONFIGS: Record<AgentRole, AgentRoleConfig> = {
       'bash', 'web_search', 'web_fetch',
       'generate_image',
     ],
-    blockedTools: ['send_message', 'spawn_subagent'],
+    blockedTools: ['send_message'],
     canSendMessage: false,
-    canSpawnSubagents: false,
     canAccessMainHistory: false,
     canWrite: true,
     canExecuteDangerous: false,
@@ -85,9 +81,8 @@ export const AGENT_ROLE_CONFIGS: Record<AgentRole, AgentRoleConfig> = {
       'read_file', 'list_dir', 'glob', 'grep',
       'web_search', 'web_fetch',
     ],
-    blockedTools: ['write_file', 'edit_file', 'bash', 'send_message', 'spawn_subagent'],
+    blockedTools: ['write_file', 'edit_file', 'bash', 'send_message'],
     canSendMessage: false,
-    canSpawnSubagents: false,
     canAccessMainHistory: false,
     canWrite: false,
     canExecuteDangerous: false,
@@ -104,11 +99,10 @@ export const AGENT_ROLE_CONFIGS: Record<AgentRole, AgentRoleConfig> = {
     ],
     blockedTools: [
       'write_file', 'edit_file',
-      'bash', 'web_search', 'web_fetch', 'send_message', 'spawn_subagent',
+      'bash', 'web_search', 'web_fetch', 'send_message',
       'generate_image',
     ],
     canSendMessage: false,
-    canSpawnSubagents: false,
     canAccessMainHistory: false,
     canWrite: false,
     canExecuteDangerous: false,
@@ -126,9 +120,8 @@ export const AGENT_ROLE_CONFIGS: Record<AgentRole, AgentRoleConfig> = {
       'bash',
       'generate_image',
     ],
-    blockedTools: ['send_message', 'spawn_subagent'],
+    blockedTools: ['send_message'],
     canSendMessage: false,
-    canSpawnSubagents: false,
     canAccessMainHistory: false,
     canWrite: true,
     canExecuteDangerous: false,
@@ -143,10 +136,9 @@ export const AGENT_ROLE_CONFIGS: Record<AgentRole, AgentRoleConfig> = {
     allowedTools: ['read_file', 'list_dir', 'glob', 'grep'],
     blockedTools: [
       'write_file', 'edit_file',
-      'bash', 'web_search', 'web_fetch', 'send_message', 'spawn_subagent',
+      'bash', 'web_search', 'web_fetch', 'send_message',
     ],
     canSendMessage: false,
-    canSpawnSubagents: false,
     canAccessMainHistory: false,
     canWrite: false,
     canExecuteDangerous: false,
@@ -158,12 +150,9 @@ export const AGENT_ROLE_CONFIGS: Record<AgentRole, AgentRoleConfig> = {
   planner: {
     role: 'planner',
     description: '规划 Agent，全局总控 + 动态路由（ADR 0024 director）',
-    allowedTools: [
-      'spawn_task', 'ask_user',
-    ],
+    allowedTools: ['ask_user'],
     blockedTools: ['write_file', 'edit_file', 'bash', 'web_search', 'web_fetch', 'generate_image'],
     canSendMessage: true,
-    canSpawnSubagents: true,
     canAccessMainHistory: true,
     canWrite: false,
     canExecuteDangerous: false,

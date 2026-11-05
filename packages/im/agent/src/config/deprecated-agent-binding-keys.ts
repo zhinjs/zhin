@@ -6,10 +6,10 @@
  * fields had no production caller. They stay accepted for compatibility:
  * startup logs a warning, `zhin config check` reports them, and
  * `zhin config check --fix` deletes them. Other agents are still reached by
- * binding name (spawn_task, collaboration roles, assistant runtime).
+ * binding name (collaboration, assistant runtime).
  */
 export const DEPRECATED_AGENT_BINDING_KEYS: Readonly<Record<string, string>> = Object.freeze({
-  priority: '入站路由从未生效：IM 消息总是交给 ai.agents.zhin，其他 Agent 只按名字调用（spawn_task / 协作角色）。',
+  priority: '入站路由从未生效：IM 消息总是交给 ai.agents.zhin，其他 Agent 只按名字联系（协作 ask / delegate）。',
   match: '入站路由从未生效（包括 hasMedia 等全部条件）：IM 消息总是交给 ai.agents.zhin。图片等媒体请用 ai.multimodal.perception。',
 });
 

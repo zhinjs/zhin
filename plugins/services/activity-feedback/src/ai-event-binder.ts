@@ -91,28 +91,6 @@ export function createActivityFeedbackAIEventHandlers(
       await orchestrator.updatePhaseText(payload, 'active', text);
     },
 
-    onSubagentStart: async (payload) => {
-      if (!isActivityFeedbackEnabled(payload, 'thinking')) return;
-      // The subagent has an isolated session key; remove its own active placeholder
-      // before switching to the richer thinking state.
-      await orchestrator.stopPhase(payload, 'active', 'subagent.start');
-      await orchestrator.startPhase(payload, 'thinking', 'subagent.start');
-      const tag = payload.agentId?.trim() || 'subagent';
-      const label = payload.label?.trim()
-        ? t(locale(payload), 'subtask', { label: payload.label.trim() })
-        : t(locale(payload), 'thinking');
-      await orchestrator.updateThinkingText(payload, `[${tag}] ${label}`);
-    },
-
-    onSubagentFinish: async (payload) => {
-      if (isActivityFeedbackEnabled(payload, 'thinking')) {
-        await orchestrator.stopPhase(payload, 'thinking', 'subagent.finish');
-      }
-      if (isActivityFeedbackEnabled(payload, 'active')) {
-        await orchestrator.stopPhase(payload, 'active', 'subagent.finish');
-      }
-    },
-
     onScheduleStart: (payload) => orchestrator.startPhase(payload, 'schedule_start', 'schedule.start'),
     onScheduleFinish: async (payload) => {
       await orchestrator.stopPhase(payload, 'schedule_start', 'schedule.finish');

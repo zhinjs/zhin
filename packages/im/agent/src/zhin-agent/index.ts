@@ -47,8 +47,6 @@ import { AiSessionOps } from '../session-ops.js';
 import { AiAnnouncements } from '../announcements.js';
 import { AiSessionEvents } from '../session-events.js';
 import { AiGroupRules } from '../group-rules.js';
-import { SubagentSystem, type SubagentOrigin, type SubagentResultSender, type SubagentCompletePayload } from '../subagent/index.js';
-import { buildParentContextSnapshot } from '../subagent-parent-context.js';
 import {
   type ZhinAgentConfig,
   type OnChunkCallback,
@@ -75,9 +73,6 @@ import { buildDisciplinedPrompt as assembleDisciplinedPrompt } from '../prompt/a
 import { createInboundTurnQueue, runWithInboundQueue } from '../turn/inbound-queue-runtime.js';
 import type { ResolvedInboundQueueConfig } from '../turn/inbound-queue-config.js';
 import type { InboundTurnQueue } from '../turn/inbound-turn-queue.js';
-import type { DeferredWorkerResult } from '../deferred-worker-runner.js';
-import { continueAfterSubagent } from '../turn/auto-continue.js';
-import { createSubagentSystem } from '../subagent/subagent-system-init.js';
 import { processTextTurnStream } from '../turn/process-stream.js';
 import { isCancelIntent } from '../turn/cancel-intent.js';
 import { followUpMessage, runPromptTurn, steerMessage } from '../turn/prompt-api.js';
@@ -179,7 +174,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   readonly groupRules: AiGroupRules = new AiGroupRules({ audit: () => this.decisionEvents });
   rateLimiter: RateLimiter;
   readonly usageQuota: UsageQuota;
-  subagentSystem: SubagentSystem | null = null;
   private configuredBootstrapContext: string = '';
   private configuredGlobalContext: string = '';
   alwaysSkillsBaseline: string = '';
@@ -353,19 +347,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     this.userProfiles.upgradeToDatabase(model, relationModel, sessionModel, sceneMemberModel);
   }
 
-  initSubagentSystem(createTools: () => AgentTool[]): void {
-    this.subagentSystem = createSubagentSystem({
-      config: this.config,
-      emitter: this.emitter,
-      createTools,
-      onSubagentComplete: (payload) => this.continueAfterSubagent(payload),
-    });
-  }
-
-  async continueAfterSubagent(payload: SubagentCompletePayload): Promise<void> {
-    return continueAfterSubagent(asPrivate(this), payload);
-  }
-
   getActiveTurnTracker(): TurnTracker | undefined {
     return getActiveTurnTracker();
   }
@@ -376,15 +357,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     options?: TurnContextRunOptions,
   ): Promise<T> {
     return bridgeRunInTurnContext(this.turnContextState, this.config, turnId, fn, options);
-  }
-
-  getSubagentSystem(): SubagentSystem | null {
-    return this.subagentSystem;
-  }
-
-  async buildParentContextSnapshotForSubagent(origin: SubagentOrigin): Promise<string | undefined> {
-    const sessionKey = resolveIMSessionIdFromMessage(origin.message);
-    return buildParentContextSnapshot(this.agentSessionStore, this.contextRepository, sessionKey);
   }
 
   /**
@@ -467,7 +439,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   }
 
   async finalizeActiveTurn(
-    partial: Omit<ZhinAgentTurnMetrics, 'usage' | 'mainUsage' | 'subagentUsage'> & { usage: Usage },
+    partial: Omit<ZhinAgentTurnMetrics, 'usage'> & { usage: Usage },
   ): Promise<void> {
     const tracker = getActiveTurnTracker();
     if (!tracker) return;
@@ -626,7 +598,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     if (this.disposal) return this.disposal;
     this.disposal = (async () => {
       await disposeZhinAgentResources(this);
-      this.subagentSystem = null;
       this.lastTurnMetrics = null;
       this.compactionRuntime.clear();
       this.toldLedger.clear();

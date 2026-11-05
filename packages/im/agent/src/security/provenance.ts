@@ -76,13 +76,12 @@ export function isExternalContentSource(tool: ToolView, settings: InjectionGuard
   if (HARNESS_OUTPUT_TOOLS.has(tool.name)) return false;
   if (settings.trustedOutputTools.includes(tool.name)) return false;
   if (tool.tags?.includes('trusted_output')) return false;
-  // Conservative: every other result (built-in, plugin, MCP, sub-agent report) is data from outside.
+  // Conservative: every other result (built-in, plugin, MCP, collaboration reply) is data from outside.
   return true;
 }
 
 export type ProvenanceSource =
   | Readonly<{ kind: 'tool_result'; toolName: string }>
-  | Readonly<{ kind: 'subagent_report' }>
   | Readonly<{ kind: 'conversation_context' }>
   /** A perception-model description of user media (`ai.multimodal.perception`). */
   | Readonly<{ kind: 'media_perception' }>;
@@ -147,7 +146,6 @@ export const PROVENANCE_UNATTENDED_REASON =
 function describeSource(source: ProvenanceSource): string {
   switch (source.kind) {
     case 'tool_result': return `工具 ${source.toolName} 的结果`;
-    case 'subagent_report': return '子 agent 的报告';
     case 'conversation_context': return '群聊背景消息';
     case 'media_perception': return '图片/媒体的自动描述';
   }

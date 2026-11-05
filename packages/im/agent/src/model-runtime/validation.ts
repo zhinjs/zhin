@@ -1,3 +1,17 @@
+/**
+ * Sub-agent / deferred-worker switches removed by ADR 0048 H2. Collaboration
+ * runs through the harness (`ask` / `delegate` to agent packages), so these
+ * fail startup instead of being silently ignored.
+ */
+const REMOVED_COLLABORATION_AGENT_KEYS = [
+  'subagentTurnMode', 'maxParallelSubagents', 'subagentAutoContinue', 'subagentDirectImDelivery',
+  'subagentTools', 'subagentTurnWaitMs', 'subagentExecApprovalMode', 'workerExecApprovalMode',
+  'workerBaseTools', 'deferredAutoContinue', 'deferredAutoContinueMaxDepth',
+] as const;
+
+const COLLABORATION_MIGRATION_HINT = 'sub-agents and deferred workers were replaced by agent collaboration (ADR 0048):'
+  + ' delete these keys; declare who an agent may contact in agents/<name>/agent.json `collaboration`.';
+
 /** Startup validation only: model resources now require an explicit runtime import. */
 export function validateModelRuntimeConfig(input: unknown, _hostOwnerId: string): string[] {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return ['Invalid AI configuration'];
@@ -35,6 +49,17 @@ export function validateModelRuntimeConfig(input: unknown, _hostOwnerId: string)
     }
   }
   const errors = fields.length ? [`AI inference migration required: ${fields.join(', ')}`] : [];
+  const removed: string[] = [];
+  if (raw.agent && typeof raw.agent === 'object' && !Array.isArray(raw.agent)) {
+    for (const key of REMOVED_COLLABORATION_AGENT_KEYS) if (Object.hasOwn(raw.agent, key)) removed.push(`ai.agent.${key}`);
+  }
+  if (raw.agents && typeof raw.agents === 'object' && !Array.isArray(raw.agents)) {
+    for (const [name, entry] of Object.entries(raw.agents)) {
+      if (entry && typeof entry === 'object' && 'permission' in entry && entry.permission && typeof entry.permission === 'object'
+        && Object.hasOwn(entry.permission, 'task')) removed.push(`ai.agents.${name}.permission.task`);
+    }
+  }
+  if (removed.length) errors.push(`${removed.join(', ')} removed; ${COLLABORATION_MIGRATION_HINT}`);
   const servers = Array.isArray(raw.mcpServers) ? raw.mcpServers : [];
   const names = servers.flatMap(server => server && typeof server === 'object' && 'name' in server && typeof server.name === 'string' ? [server.name] : []);
   if (new Set(names).size !== names.length) errors.push('ai.mcpServers: duplicate server name');

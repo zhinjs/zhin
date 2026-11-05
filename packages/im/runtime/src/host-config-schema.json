@@ -1328,16 +1328,6 @@
                 }
               }
             },
-            "subagentTurnMode": {
-              "type": "string",
-              "enum": [
-                "off",
-                "sync"
-              ],
-              "default": "off",
-              "description": "Sub-agents in IM turns. off: no spawn_task. sync: spawn_task runs a sub-agent inside the current turn with at most the parent's permissions (never wider; no bash unless the parent could run it) and approvals routed to the same conversation.",
-              "x-descriptionZh": "IM 回合中的子 Agent。off：不提供 spawn_task；sync：spawn_task 在当前回合内同步运行子 Agent，权限不超过父回合（父回合不能运行 bash 时子 Agent 也没有），审批发往同一会话。"
-            },
             "execApprovalMode": {
               "type": "string",
               "enum": [
@@ -1347,32 +1337,6 @@
               ],
               "description": "Approval policy for main Agent commands.",
               "x-descriptionZh": "主 Agent 命令的审批策略。",
-              "x-zhin-config": {
-                "security": true
-              }
-            },
-            "subagentExecApprovalMode": {
-              "type": "string",
-              "enum": [
-                "ask",
-                "bypass",
-                "auto"
-              ],
-              "description": "Approval policy for sub-Agent commands.",
-              "x-descriptionZh": "子 Agent 命令的审批策略。",
-              "x-zhin-config": {
-                "security": true
-              }
-            },
-            "workerExecApprovalMode": {
-              "type": "string",
-              "enum": [
-                "ask",
-                "bypass",
-                "auto"
-              ],
-              "description": "Approval policy for worker commands.",
-              "x-descriptionZh": "Worker 命令的审批策略。",
               "x-zhin-config": {
                 "security": true
               }
@@ -1755,13 +1719,6 @@
               },
               "description": "工具 schema 按需加载"
             },
-            "workerBaseTools": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "description": "Deferred Worker 基础工具"
-            },
             "persona": {
               "type": "string"
             },
@@ -1882,37 +1839,7 @@
                 "type": "string"
               }
             },
-            "maxParallelSubagents": {
-              "type": [
-                "number",
-                "string"
-              ]
-            },
-            "subagentAutoContinue": {
-              "type": [
-                "boolean",
-                "string"
-              ]
-            },
-            "subagentDirectImDelivery": {
-              "type": [
-                "boolean",
-                "string"
-              ]
-            },
             "maxSubagentIterations": {
-              "type": [
-                "number",
-                "string"
-              ]
-            },
-            "subagentTools": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "subagentTurnWaitMs": {
               "type": [
                 "number",
                 "string"
@@ -1947,18 +1874,6 @@
             },
             "promptCacheKeyPrefix": {
               "type": "string"
-            },
-            "deferredAutoContinue": {
-              "type": [
-                "boolean",
-                "string"
-              ]
-            },
-            "deferredAutoContinueMaxDepth": {
-              "type": [
-                "number",
-                "string"
-              ]
             },
             "gitStatus": {
               "type": [

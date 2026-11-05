@@ -138,14 +138,8 @@ Dispositions: **keep**, **preset** (advanced, use defaults), **merge-candidate**
 | `contextTailMessageLimit` | preset | Advanced tuning; defaults are recommended |
 | `toneAwareness` | preset | Advanced tuning; defaults are recommended |
 | `maxHistoryShare` | preset | Advanced tuning; defaults are recommended |
-| `maxParallelSubagents` | preset | Advanced tuning; defaults are recommended |
 | `toolExecution` | preset | Advanced tuning; defaults are recommended |
-| `subagentAutoContinue` | preset | Advanced tuning; defaults are recommended |
-| `subagentDirectImDelivery` | preset | Advanced tuning; defaults are recommended |
 | `maxSubagentIterations` | preset | Advanced tuning; defaults are recommended |
-| `subagentTurnMode` | preset | Advanced tuning; defaults are recommended |
-| `subagentTools` | preset | Advanced tuning; defaults are recommended |
-| `subagentTurnWaitMs` | preset | Advanced tuning; defaults are recommended |
 | `modelSizeHint` | preset | Advanced tuning; defaults are recommended |
 | `skillInstructionMaxChars` | preset | Advanced tuning; defaults are recommended |
 | `modelHarness` | preset | Advanced tuning; defaults are recommended |
@@ -155,19 +149,14 @@ Dispositions: **keep**, **preset** (advanced, use defaults), **merge-candidate**
 | `promptCacheRetention` | preset | Advanced tuning; defaults are recommended |
 | `promptCacheKeyPrefix` | preset | Advanced tuning; defaults are recommended |
 | `deferredTools` | preset | Advanced tuning; defaults are recommended |
-| `workerBaseTools` | preset | Advanced tuning; defaults are recommended |
 | `outputSchema` | preset | IM defaults to `segments`; [structured replies](./structured-replies.md). Explicit `false` keeps plain-text output. |
 | `steeringMode` | preset | Advanced tuning; defaults are recommended |
 | `followUpMode` | preset | Advanced tuning; defaults are recommended |
-| `deferredAutoContinue` | preset | Advanced tuning; defaults are recommended |
-| `deferredAutoContinueMaxDepth` | preset | Advanced tuning; defaults are recommended |
 | `gitStatus` | preset | Advanced tuning; defaults are recommended |
 | `contextPaths` | preset | Advanced tuning; defaults are recommended |
 | `systemPromptMaxChars` | preset | Advanced tuning; defaults are recommended |
 | `thinkingPreview` | preset | Advanced tuning; defaults are recommended |
 | `thinkingPreviewMaxLength` | preset | Advanced tuning; defaults are recommended |
-| `subagentExecApprovalMode` | merge-candidate | Future merge into per-role overrides of execApprovalMode |
-| `workerExecApprovalMode` | merge-candidate | Future merge into per-role overrides of execApprovalMode |
 | `phaseTrace` | debug | Diagnostics only |
 | `promptTrace` | debug | Diagnostics only |
 | `promptTraceVerbose` | debug | Diagnostics only |

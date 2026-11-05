@@ -327,20 +327,9 @@ describe('ZhinAgent', () => {
     });
 
     it('并发 dispose 应共享同一关闭完成', async () => {
-      let release!: () => void;
-      const dispose = vi.fn(() => new Promise<void>((resolve) => { release = resolve; }));
-      agent.subagentSystem = { dispose } as unknown as import('../../src/subagent/subagent-system.js').SubagentSystem;
-
       const first = agent.dispose();
-      let secondSettled = false;
-      const repeated = agent.dispose();
-      expect(repeated).toBe(first);
-      const second = repeated.then(() => { secondSettled = true; });
-      await Promise.resolve();
-      expect(secondSettled).toBe(false);
-      expect(dispose).toHaveBeenCalledTimes(1);
-      release();
-      await Promise.all([first, second]);
+      expect(agent.dispose()).toBe(first);
+      await first;
     });
   });
 });

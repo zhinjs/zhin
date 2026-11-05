@@ -5,7 +5,7 @@ import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 /** dispose 的读取目标：权威接口（ZhinAgentPrivate）Pick + 门面内部资源。 */
 export type DisposeZhinAgentTarget = Pick<
   ZhinAgentPrivate,
-  | 'externalTools' | 'userProfiles' | 'rateLimiter' | 'subagentSystem' | 'promptController'
+  | 'externalTools' | 'userProfiles' | 'rateLimiter' | 'promptController'
   | 'agentSessionStore' | 'contextRepository'
   | 'deferred'
 > & {
@@ -18,10 +18,6 @@ export async function disposeZhinAgentResources(target: DisposeZhinAgentTarget):
   target.externalTools.clear();
   target.userProfiles.dispose();
   target.rateLimiter.dispose();
-  if (target.subagentSystem) {
-    await target.subagentSystem.dispose();
-    target.subagentSystem = null;
-  }
   target.promptController.abort();
   target.inboundTurnQueue.dispose();
   const tryDispose = (obj: unknown) => {

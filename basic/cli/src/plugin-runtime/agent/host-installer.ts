@@ -151,11 +151,11 @@ export interface InstallAgentHostOptions {
  * - AIService from top-level `ai`
  * - Command miss → `ai:` trigger → **ZhinAgent.process** (inbound queue + session)
  * - CapabilityIngress tools + `ai.mcpServers` + SOUL/AGENTS/TOOLS bootstrap
- * - SubagentSystem + `spawn_task` (parallel sub-agents) + deferred meta tools
+ * - Collaboration tools (agents / ask / delegate / …) + deferred meta tools
  * - Optional inbound STT / `@agent` specialist prompt injection
  * - generation-owned Hook resources / `aiHookRuntimeBus`, ScheduleJobEngine + `schedule_*`
  * - Assistant profile sync + Event Ingress registry (HTTP via Console API)
- * - Subagent/main-turn `bash` (sandbox + safety) + Owner `/approve` 命令面
+ * - Main-turn `bash` (sandbox + safety) + Owner `/approve` 命令面
  */
 export function installAgentHost(options: InstallAgentHostOptions): RootResourceInstaller {
   const localAssets = new LocalImageAssetStore(join(options.projectRoot, 'data', 'agent-assets'), message => logger.warn(message));
@@ -365,7 +365,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         localDataGovernance: options.workroomLocalDataGovernance,
       })
       : undefined;
-    const presetCount = workroom ? workroom.presetCount : await agentFoundation.seedPresets();
     // Workroom validates its authority first; the candidate Agent remains unadmitted until all handoffs finish.
     installAgentPersistence({ resources, handoff, lifecycle, admission }, agentFoundation, aiConfig, options.pruneTraces);
     const binding = service.getBindingRegistry().requireZhinBinding();
@@ -409,7 +408,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     else signal.addEventListener('abort', stopSceneEvents, { once: true });
 
     const features = [
-      zhinAgent.getSubagentSystem() ? 'subagent' : '',
       options.transcribeUrl ? 'inboundStt' : '',
       scheduleTools.length > 0 ? 'schedule' : '',
       homeTools.length > 0 ? 'home' : '',
@@ -419,7 +417,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     ].filter(Boolean).join(',');
     logger.info(
       `ready | ${binding.name}`
-      + ` | presets: ${presetCount}`
       + ` | mcp: ${mcpEntries.map((entry) => entry.name).join(',') || '-'}`
       + ` | ${features}`
       + ` | persistence: ${workroom ? (workroom.persistence.pendingActivation ? 'pending_activate' : 'file') : '-'}`,

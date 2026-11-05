@@ -116,21 +116,13 @@ export interface ZhinAgentConfig {
   network?: { enabled?: boolean; allowedDomains?: string[] };
   execAllowlist?: string[];
   execApprovalMode?: ExecApprovalMode;
-  subagentExecApprovalMode?: ExecApprovalMode;
-  maxParallelSubagents?: number;
   toolExecution?: 'parallel' | 'sequential' | 'tiered';
-  subagentAutoContinue?: boolean;
-  subagentDirectImDelivery?: boolean;
-  workerExecApprovalMode?: ExecApprovalMode;
   /** @deprecated No effect (#735); `zhin config check --fix` removes it. */
   taskExecApprovalMode?: ExecApprovalMode;
+  /** Iteration cap for a collaboration Actor turn (ask / delegate); an agent package's `maxIterations` wins. */
   maxSubagentIterations?: number;
-  /** Plugin-runtime turns: `sync` offers spawn_task as an in-turn sub-agent; `off` (default) hides it. */
-  subagentTurnMode?: 'off' | 'sync';
   /** Token quota/progress settings; step/time caps apply to bounded and legacy execution. */
   toolBudget?: Partial<ToolBudgetSettings>;
-  subagentTools?: string[];
-  subagentTurnWaitMs?: number;
   modelSizeHint?: '' | 'small' | 'medium' | 'large';
   skillInstructionMaxChars?: number;
   modelHarness?: ModelHarnessConfig;
@@ -162,7 +154,6 @@ export interface ZhinAgentConfig {
   /** @deprecated No effect (#735); use `deferredTools.discoverTopK`. */
   deferredToolMaxResults?: number;
   deferredTools?: DeferredToolsConfig;
-  workerBaseTools?: string[];
   /**
    * AI 结构化输出（AI SDK Output.object）：
    * - false：显式使用纯文本回复；
@@ -174,8 +165,6 @@ export interface ZhinAgentConfig {
   followUpMode?: QueueMode;
   /** @deprecated No effect (#735); `zhin config check --fix` removes it. */
   policyDenialStopAfter?: number;
-  deferredAutoContinue?: boolean;
-  deferredAutoContinueMaxDepth?: number;
   /** §1 Runtime 注入单行 git 状态摘要（非 git 仓库自动跳过） */
   gitStatus?: boolean;
   /** 追加的上下文文件路径（支持 ~ 与相对路径；默认另加载 ~/.config/zhin/AGENTS.md 等全局路径） */

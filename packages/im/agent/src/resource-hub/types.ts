@@ -187,8 +187,7 @@ export type AIHookEventType =
   | 'turn'
   | 'actions'
   | 'action'
-  | 'reasoning'
-  | 'subagent';
+  | 'reasoning';
 
 export interface AIHookEvent {
   type: AIHookEventType;

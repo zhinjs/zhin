@@ -2,8 +2,6 @@ import type { AgentTool } from '@zhin.js/ai';
 import { type PreExecuteResult, runPreExecutableTools } from './pre-exec.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 import type { Tool } from '../resource-hub/types.js';
-import { createSpawnTaskTool } from '../spawn/spawn-task-tool.js';
-import { filterAgentsForSpawnDescription } from '../spawn/permission-task.js';
 import type { ToolFilter, ToolSource, ToolSystemConfig } from './contracts.js';
 import {
   BuiltinToolSource,
@@ -21,10 +19,7 @@ import {
 export type { CollectToolsContext } from './sources.js';
 export type { ResolvedToolsForTurn } from './deferred-resolution.js';
 
-export interface CollectToolsForTurnInput extends CollectToolsContext {
-  host: ZhinAgentPrivate;
-  spawnableAgentNames?: string[];
-}
+export type CollectToolsForTurnInput = CollectToolsContext;
 
 /** 每 turn 独立 Source 列表，不 mutate 共享 ToolSystem 实例。 */
 export function createDefaultToolSources(context: CollectToolsContext): ToolSource[] {
@@ -74,22 +69,7 @@ export class ToolSystem {
   }
 
   async collectForTurn(input: CollectToolsForTurnInput): Promise<AgentTool[]> {
-    const { host, spawnableAgentNames, ...ctx } = input;
-    const tools = await this.collectTools(ctx, createDefaultToolSources(ctx));
-
-    if (host.subagentSystem && spawnableAgentNames) {
-      const permissionTask = host.activeBinding?.permission?.task;
-      tools.push(createSpawnTaskTool(
-        ctx.message,
-        host.subagentSystem,
-        {
-          allowedAgents: filterAgentsForSpawnDescription(spawnableAgentNames, permissionTask),
-          permissionTaskRules: permissionTask,
-        },
-      ));
-    }
-
-    return tools;
+    return this.collectTools(input, createDefaultToolSources(input));
   }
 
   async resolveForTurn(

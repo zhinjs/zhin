@@ -42,7 +42,7 @@ obsolete cache.
 
 Evidence: [full engine](../../packages/im/agent/src/plugin-runtime/full-agent-turn-engine.ts),
 [main loop assembly](../../packages/im/agent/src/core/agent-core-run.ts),
-[standalone runner](../../packages/im/agent/src/core/agent-loop-standalone.ts),
+`standalone runner`（已在 ADR 0048 H2 删除）,
 [lightweight provider](https://github.com/zhinjs/zhin/blob/d8532ddbf8194dd422818463deb554bb97d587e7/packages/im/ai/src/sdk-provider-adapter.ts),
 [LLM runtime](../../packages/im/ai/src/llm/llm-api-runtime.ts).
 
@@ -80,7 +80,7 @@ Evidence: [Host installation](../../basic/cli/src/plugin-runtime/agent/host-inst
 [context preparation](../../packages/im/agent/src/context/context-system.ts),
 [instruction reads](../../packages/im/agent/src/context/agents-instruction.ts),
 [workspace overrides](../../packages/im/agent/src/prompt/workspace-prompt.ts),
-[worker assembly](../../packages/im/agent/src/deferred-worker-runner.ts),
+`worker assembly`（已在 ADR 0048 H2 删除）,
 [compaction assembly](../../packages/im/agent/src/memory/compaction-runtime.ts).
 
 **Conclusion:** an in-flight generation/turn continuing with its already captured bootstrap/system

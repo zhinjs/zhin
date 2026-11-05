@@ -15,7 +15,7 @@ function trace(turnId: string, sessionKey: string, startedAt: number, extra: Par
   return {
     version: 1, turn_id: turnId, session_key: sessionKey, started_at: startedAt, duration_ms: 5,
     model_calls: [], usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 }, tool_calls: [],
-    budget: { extensions: [], continuations: 0 }, subagent_tasks: [], subagents: [], timeline: [],
+    budget: { extensions: [], continuations: 0 }, subagents: [], timeline: [],
     termination: { status: 'completed' }, dropped: 0, ...extra,
   };
 }

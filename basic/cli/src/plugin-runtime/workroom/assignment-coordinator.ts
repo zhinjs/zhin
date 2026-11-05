@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { assistantText, createUserMessage } from '@zhin.js/ai';
 import type { ModelExecutionScope } from '@zhin.js/agent/model-runtime';
 import type { AgentRuntimeFoundation, FoundationModelOperation } from '../agent/runtime-foundation.js';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -161,21 +162,25 @@ export class WorkroomAssignmentCoordinator {
               .getBinding(modelInput.binding.agentDefinitionId);
             if (!binding) throw new WorkroomPlanningClarificationError('planning_unavailable');
             const operationId = randomUUID();
-            const result = await withModels({ turnId: operationId, sessionKey: `workroom:planning:${operationId}`,
-              bindingName: binding.name, signal: operationSignal }, models => service.runAgent(JSON.stringify(modelInput.prompt), {
-              models,
-              systemPrompt: WORKROOM_DYNAMIC_PLANNING_SYSTEM_PROMPT,
-              tools: [],
-              includeRegisteredTools: false,
-              maxIterations: 1,
-              signal: operationSignal,
-            }));
-            operationSignal.throwIfAborted();
-            if (result.terminal?.stopReason === 'error' || result.terminal?.stopReason === 'aborted') {
+            // One direct completion: dynamic planning needs no tools or agent loop (Workroom is removed in ADR 0048 H4).
+            const content = await withModels({ turnId: operationId, sessionKey: `workroom:planning:${operationId}`,
+              bindingName: binding.name, signal: operationSignal }, async models => {
+              const answer = await models.chat.completion.complete(models.chat.model, {
+                systemPrompt: WORKROOM_DYNAMIC_PLANNING_SYSTEM_PROMPT,
+                messages: [createUserMessage(JSON.stringify(modelInput.prompt))],
+                tools: [],
+              }, { signal: operationSignal });
+              if (answer.stopReason === 'error' || answer.stopReason === 'aborted') {
+                throw new WorkroomPlanningClarificationError('planning_unavailable');
+              }
+              return assistantText(answer);
+            }).catch((error: unknown) => {
+              if (operationSignal.aborted) throw error;
               throw new WorkroomPlanningClarificationError('planning_unavailable');
-            }
+            });
+            operationSignal.throwIfAborted();
             try {
-              return JSON.parse(result.content) as unknown;
+              return JSON.parse(content) as unknown;
             } catch (error) {
               throw new Error('Dynamic planning model did not return one strict JSON DAG candidate', {
                 cause: error,

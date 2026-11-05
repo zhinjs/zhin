@@ -4,6 +4,8 @@ sidebar: false
 
 # Workroom 重构进度表
 
+> **已被取代（2026-11-04）**：由 [ADR 0048 Agent Harness](../adr/0048-agent-harness.md) 取代，本文仅作历史参考，不再按本文推进；相关代码将在 ADR 0048 的 H2–H4 阶段删除。
+
 方案见 [workroom-group-collaboration-redesign.md](./workroom-group-collaboration-redesign.md)。这张表由定时任务每次运行时读取和更新。
 
 ## 规则

@@ -18,9 +18,11 @@ import { agentToolApprovalQueueToken } from '../../../src/plugin-runtime/console
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDatabaseHost } from '../../../src/plugin-runtime/database-host-installer.js';
 import { HostInference } from '../../../src/plugin-runtime/inference/host.js';
+import { publishAgentToolFeatures } from '../../../src/plugin-runtime/agent/tool-feature-publisher.js';
 import type { ModelRuntimeServiceOptions } from '@zhin.js/agent/model-runtime';
 
-const seedPresets = vi.fn(async () => 3);
+// Holds the next candidate Foundation composition so a test can observe the live Host mid-reload.
+const candidateGate: { current?: () => Promise<void> } = {};
 const publishHost = vi.hoisted(() => vi.fn());
 // Real ZhinAgent so the test exercises its actual SessionSystem persistence latch.
 const agentRef: { current?: InstanceType<typeof import('@zhin.js/agent/runtime').ZhinAgent> } = {};
@@ -28,6 +30,9 @@ const agentRef: { current?: InstanceType<typeof import('@zhin.js/agent/runtime')
 vi.mock('../../../src/plugin-runtime/agent/runtime-foundation.js', () => ({
   AgentRuntimeFoundation: {
     create: vi.fn(async (options: { modelRuntime: ModelRuntimeServiceOptions }) => {
+      const gate = candidateGate.current;
+      candidateGate.current = undefined;
+      await gate?.();
       const { AIService } = await import('@zhin.js/agent');
       const service = new AIService({ agents: { zhin: {} } });
       await service.prepareModelRuntime(options.modelRuntime);
@@ -40,7 +45,6 @@ vi.mock('../../../src/plugin-runtime/agent/runtime-foundation.js', () => ({
         schedule: { start: vi.fn() },
         homeTools: [],
         assistantEnabled: false,
-        seedPresets: () => seedPresets(),
         listBindings: () => [],
       };
     }),
@@ -136,7 +140,7 @@ describe('installAgentHost optional Workroom', () => {
     database = createDatabaseHost({ dialect: 'sqlite', filename: ':memory:' });
     inferenceFor(defaultProjectRoot);
     await database.start();
-    seedPresets.mockClear();
+    candidateGate.current = undefined;
     publishHost.mockClear();
     // Offline provider: never called, the installer only composes the Agent.
     agentRef.current = new ZhinAgent({ config: { sessions: { useDatabase: false } } });
@@ -154,14 +158,13 @@ describe('installAgentHost optional Workroom', () => {
     await rm(defaultProjectRoot, { recursive: true, force: true });
   });
 
-  it('starts the Agent without Workroom: no Workroom Host port, presets still seeded', async () => {
+  it('starts the Agent without Workroom: no Workroom Host port', async () => {
     const resources = new Scope(rootPluginId());
     await install()(context(resources));
 
     expect(resources.has(agentHostToken)).toBe(true);
     expect(resources.has(ingressRouteToken)).toBe(true);
     expect(resources.has(workroomHostToken)).toBe(false);
-    expect(seedPresets).toHaveBeenCalledTimes(1);
   });
 
   it('captures each real bootstrap source before formatting its headings', async () => {
@@ -235,7 +238,6 @@ describe('installAgentHost optional Workroom', () => {
 
     await expect(install(workroom)(context(resources))).rejects.toBe(failure);
     expect(resources.has(ingressRouteToken)).toBe(false);
-    expect(seedPresets).not.toHaveBeenCalled();
   });
 
   it('keeps transient cards through rejected or reused Root outcomes and closes only its own committed replacement', async () => {
@@ -354,9 +356,11 @@ describe('installAgentHost optional Workroom', () => {
       });
       expect(await call()).toMatchObject({ status: 200, body: { data: { pending: [{ id: card.id }] } } });
       agentRef.current = candidateAgent;
-      seedPresets.mockImplementationOnce(async () => {
+      candidateGate.current = async () => {
         enter();
         await held;
+      };
+      vi.mocked(publishAgentToolFeatures).mockImplementationOnce(() => {
         throw new Error('candidate refused');
       });
       reload = runtime.reload();

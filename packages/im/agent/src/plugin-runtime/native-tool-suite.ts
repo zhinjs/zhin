@@ -25,7 +25,7 @@ export interface NativeAgentToolSuiteOptions {
   readonly resolveDecision?: NativeSearchDecisionResolver;
 }
 
-/** One canonical native Tool suite projected into both main and subagent runtimes. */
+/** One canonical native Tool suite projected into both main and actor runtimes. */
 export function createNativeAgentToolSuite(
   options: NativeAgentToolSuiteOptions,
 ): readonly NativeAgentToolFeature[] {
