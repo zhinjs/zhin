@@ -1,0 +1,14 @@
+basic/cli/tests/plugin-runtime/inference/console-s4-acceptance.test.ts
+  h_6f5e45c41d0910 1-116
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9d55c08c7bc5297e0023fcf3b5ff7c1844b620e8",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
