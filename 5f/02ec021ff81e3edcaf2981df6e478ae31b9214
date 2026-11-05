@@ -1,0 +1,32 @@
+packages/im/harness/src/index.ts
+  h_b680f75345178a 8
+packages/im/harness/src/policies/admission.ts
+  h_b680f75345178a 1-158
+packages/im/harness/src/policies/groups.ts
+  h_b680f75345178a 1-137
+packages/im/harness/src/policies/index.ts
+  h_b680f75345178a 1-5
+packages/im/harness/src/policies/live.ts
+  h_b680f75345178a 1-68
+packages/im/harness/src/policies/markers.ts
+  h_b680f75345178a 1-56
+packages/im/harness/src/policies/merge.ts
+  h_b680f75345178a 1-121
+packages/im/harness/tests/policies/admission.test.ts
+  h_b680f75345178a 1-618
+packages/im/harness/tests/policies/groups.test.ts
+  h_b680f75345178a 1-141
+packages/im/harness/tests/support/inbox-driver.ts
+  h_b680f75345178a 1-176
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5f02ec021ff81e3edcaf2981df6e478ae31b9214",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
