@@ -33,6 +33,8 @@ import { AMBIENT_ENGAGEMENT_METADATA_KEY, SCENE_WAKE_METADATA_KEY } from '../../
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { EventMessage } from '@zhin.js/ai';
 import { SceneEventWake, type SceneWakeBatch } from './scene-event-wake.js';
+import type { HostMailbox } from '../../collaboration/host-mailbox.js';
+import { runInMailTurn } from '../../collaboration/mail-turn-context.js';
 import { sceneEventToStateMessage } from './scene-event-state.js';
 import { applySceneEventToFacts } from './scene-fact-events.js';
 import { readSceneEventLines } from './scene-event-lines.js';
@@ -97,6 +99,12 @@ export interface SceneEventIngressDeps {
   readonly deliver: (conversation: ConversationRef, output: readonly AgentOutputElement[]) => Promise<DeliveryOutcome>;
   /** 执行一次 Agent 回合（生产：AgentRuntime.execute + 主 binding）。 */
   readonly executeTurn: (request: TurnRequest) => Promise<TurnOutcome>;
+  /**
+   * ADR 0048 H3 (Q3): the route's host Mailbox. A coalesced wake is posted as
+   * one event Mail on the scene lane and runs as its Mail turn, queued behind
+   * (never merged into) the scene's human turns. Absent only in unit tests.
+   */
+  readonly mailbox?: () => HostMailbox | undefined;
   readonly timeoutMs: () => number;
   /** Bot 在场景里说过话（用于旁听的「对话进行中」窗口）。 */
   readonly onSpoke?: (key: string) => void;
@@ -343,9 +351,26 @@ export class SceneEventIngress {
     const commitContext = this.deps.commitConversationContext;
     let spoke = false;
     audit({ kind: 'inbound_wake', outcome: 'allow', reasonCode: 'scene_event_high_priority', payload: { ...auditPayload, lines: lines.length, stateChanges } });
+    const mailbox = this.deps.mailbox?.();
+    const admitted = mailbox ? await mailbox.admit({
+      sessionKey,
+      senderId: SCENE_WAKE_PRINCIPAL_ID,
+      kind: 'event',
+      event: types || 'scene',
+      text: lines.join('\n'),
+      plainText: true,
+    }) : undefined;
+    if (admitted && admitted.kind !== 'run') {
+      const reason = admitted.kind === 'rejected' ? admitted.reason : admitted.kind;
+      logger.info(formatCompact({ op: 'scene_event_wake_skipped', conv: batch.key, reason: `mailbox_${reason}`, types }));
+      return { kind: 'skipped', reason: `mailbox:${reason}` };
+    }
+    const admission = admitted;
     const startedAt = Date.now();
     this.#turnIds.set(batch.key, turnId);
-    const outcome = await withTimeout(async (signal) => {
+    let released: 'completed' | 'failed' = 'failed';
+    const run = () => withTimeout(async (timeoutSignal) => {
+      const signal = admission ? AbortSignal.any([timeoutSignal, admission.signal]) : timeoutSignal;
       const request: TurnRequest = Object.freeze({
         identity: Object.freeze({ traceId: randomUUID(), turnId }),
         origin: Object.freeze({ kind: 'im' as const, conversation, platform, endpoint, scope, sceneId: conversation.id }),
@@ -368,6 +393,8 @@ export class SceneEventIngress {
         ports: Object.freeze({
           reply: Object.freeze({
             send: async (output: readonly AgentOutputElement[]) => {
+              // A wake whose turn was stopped never speaks (ADR 0048 H3).
+              if (admission?.signal.aborted) return { status: 'suppressed' as const };
               const outboundVerdict = checkControlAtOutbound(this.deps.controlPlane?.(), controlTarget);
               if (outboundVerdict.blocked) {
                 logControlBlocked('scene_event_outbound_blocked_control', batch.key, outboundVerdict);
@@ -377,7 +404,10 @@ export class SceneEventIngress {
               }
               const delivered = await this.deps.deliver(conversation, output);
               auditOutbound(audit, delivered, { source: 'scene_event' });
-              if (delivered.status === 'sent') spoke = true;
+              if (delivered.status === 'sent') {
+                spoke = true;
+                admission?.markDelivered();
+              }
               return delivered;
             },
           }),
@@ -390,10 +420,16 @@ export class SceneEventIngress {
         }),
       }) as TurnRequest;
       return this.deps.executeTurn(request);
-    }, this.deps.timeoutMs()).catch((error: unknown) => {
+    }, this.deps.timeoutMs());
+    const outcome = await (admission && mailbox
+      ? runInMailTurn({ mailbox, mail: admission.mail, batch: admission.batch }, run)
+      : run()).then((result) => {
+      released = 'completed';
+      return result;
+    }, (error: unknown) => {
       auditModelError(audit, error, { source: 'scene_event', durationMs: Date.now() - startedAt });
       throw error;
-    });
+    }).finally(() => admission?.release(released));
     if (this.#turnIds.get(batch.key) === turnId) this.#turnIds.delete(batch.key);
     auditModelRun(audit, outcome, { source: 'scene_event', durationMs: Date.now() - startedAt, spoke });
     // Ambient engagement still tracks the existing public scene identity.

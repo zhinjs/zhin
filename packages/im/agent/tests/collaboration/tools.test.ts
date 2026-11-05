@@ -47,6 +47,12 @@ async function setup(ceilings: AgentCeiling[], behaviours: Record<string, Behavi
   const directory = directoryOf(ceilings);
   const escalations: EscalationNotice[] = [];
   let ids = 0;
+  // ADR 0048 H3: the entry's root turn is a Mail turn; it stays live until the test detaches it.
+  let releaseRoot!: (result: ActorTurnResult) => void;
+  const rootResult = new Promise<ActorTurnResult>((resolve) => { releaseRoot = resolve; });
+  let rootStarted!: () => void;
+  const started = new Promise<void>((resolve) => { rootStarted = resolve; });
+  const later: Mail[] = [];
   const harness: Harness = createHarness({
     guard: createGuardKernel({ isAttenuationOf }),
     ledger: new InMemoryBudgetLedger(),
@@ -58,12 +64,30 @@ async function setup(ceilings: AgentCeiling[], behaviours: Record<string, Behavi
     newId: () => `id${++ids}`,
     onEscalate: (notice) => { escalations.push(notice); },
     runTurn: async (actor, batch, signal) => {
+      if (batch[0]!.body.kind === 'human') {
+        rootStarted();
+        return rootResult;
+      }
+      if (actor === ceilings[0]!.agent && batch.every((m) => m.body.kind === 'result')) {
+        later.push(...batch);
+        return { status: 'completed' };
+      }
       const behaviour = behaviours[actor];
       return behaviour ? behaviour(batch[0]!, signal, harness) : { status: 'completed', content: `${actor} done` };
     },
   });
-  const attached = await harness.attach({ principal: master, entry: ceilings[0]!.agent, body: humanBody, budget: BUDGET });
-  if (!attached.ok) throw new Error(`attach failed: ${attached.code}`);
+  const opened = await harness.open({ principal: master, entry: ceilings[0]!.agent, body: humanBody, budget: BUDGET });
+  if (!opened.ok) throw new Error(`open failed: ${opened.code}`);
+  await started;
+  const attached = {
+    root: opened.root,
+    /** Ends the root turn; returns the results the entry got afterwards. */
+    detach: async (result: ActorTurnResult): Promise<Mail[]> => {
+      releaseRoot(result);
+      await harness.idle();
+      return later;
+    },
+  };
   const toolsFor = (actor: string, mail: Mail, escalate = onEscalate) =>
     createCollaborationTools({ harness, directory, actor, mail }, { owner: OWNER, ...(escalate ? { onEscalate: escalate } : {}) });
   const tools = toolsFor(attached.root.to, attached.root);
@@ -193,18 +217,17 @@ describe('collaboration tools: delegate and tell', () => {
     const out = await call(tools, 'delegate', { agent: 'researcher', brief: 'Find it.', deliverable: 'a link' });
     expect(out).toMatch(/^delegated to researcher \(mail id\d+\); its result will arrive as a new message$/);
     expect(out).not.toContain('SECRET');
-    await harness.idle();
     const held = await attached.detach({ status: 'completed' });
     expect(held.map((m) => m.body)).toEqual([expect.objectContaining({ kind: 'result', content: 'SECRET RESULT' })]);
   });
 
   it('tell sends a one-way note', async () => {
     const seen: Mail[] = [];
-    const { tools, harness } = await setup([ceiling('zhin'), ceiling('writer')], {
+    const { tools, attached } = await setup([ceiling('zhin'), ceiling('writer')], {
       writer: async (mail) => { seen.push(mail); return { status: 'completed' }; },
     });
     expect(await call(tools, 'tell', { agent: 'writer', content: 'FYI' })).toMatch(/^told writer \(mail id\d+\)$/);
-    await harness.idle();
+    await attached.detach({ status: 'completed' });
     expect(seen.map((m) => m.body)).toEqual([{ kind: 'tell', content: 'FYI' }]);
   });
 });

@@ -1,4 +1,4 @@
-import type { InboundTurnQueue } from '../turn/inbound-turn-queue.js';
+import type { HostMailbox } from '../collaboration/host-mailbox.js';
 import type { Disposable } from '../types/disposable.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 
@@ -10,7 +10,7 @@ export type DisposeZhinAgentTarget = Pick<
   | 'deferred'
 > & {
   /** 接口外的门面内部资源 */
-  inboundTurnQueue: InboundTurnQueue;
+  hostMailbox: HostMailbox;
   lastTurnMetrics: unknown;
 };
 
@@ -19,7 +19,7 @@ export async function disposeZhinAgentResources(target: DisposeZhinAgentTarget):
   target.userProfiles.dispose();
   target.rateLimiter.dispose();
   target.promptController.abort();
-  target.inboundTurnQueue.dispose();
+  target.hostMailbox.dispose();
   const tryDispose = (obj: unknown) => {
     if (obj && typeof (obj as Disposable).dispose === 'function') {
       (obj as Disposable).dispose?.();

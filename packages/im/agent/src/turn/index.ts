@@ -73,24 +73,14 @@ export type { ZhinAgentTurnMetrics, ZhinAgentTurnPath } from './turn-metrics.js'
 export { TurnTracker } from './turn-tracker.js';
 
 export {
-  InboundTurnQueue,
-  InboundTurnCancelledError,
-  InboundTurnExpiredError,
-} from './inbound-turn-queue.js';
-export type { InboundQueueActivityEmitter } from './inbound-turn-queue.js';
-
-export {
-  DEFAULT_INBOUND_LIVE_CONFIG,
-  DEFAULT_INBOUND_MERGE_CONFIG,
-  DEFAULT_INBOUND_QUEUE_CONFIG,
-  normalizeInboundQueueConfig,
-  validateInboundQueueConfig,
-  isGroupOrChannelMessage,
-  shouldUseGroupFifoQueue,
-} from './inbound-queue-config.js';
-export type { ResolvedInboundLiveConfig, ResolvedInboundMergeConfig, ResolvedInboundQueueConfig } from './inbound-queue-config.js';
-
-export { createInboundTurnQueue, runWithInboundQueue } from './inbound-queue-runtime.js';
+  DEFAULT_MAILBOX_CONFIG,
+  DEFAULT_MAILBOX_LIVE_CONFIG,
+  DEFAULT_MAILBOX_MERGE_CONFIG,
+  MAILBOX_MIGRATION_HINT,
+  normalizeMailboxConfig,
+  validateMailboxConfig,
+} from './mailbox-config.js';
+export type { ResolvedMailboxConfig, ResolvedMailboxLiveConfig, ResolvedMailboxMergeConfig } from './mailbox-config.js';
 
 export {
   runPromptTurn,
@@ -122,11 +112,7 @@ export type {
   TaskProgress,
   TaskDecomposition,
 } from './task-continuation.js';
-export {
-  DEFAULT_MAX_QUEUED_TURNS,
-  LIVE_WINDOW_MAX_MESSAGES,
-  TurnAdmissionGate,
-} from './turn-admission-gate.js';
+export { DEFAULT_MAX_QUEUED_TURNS, LIVE_WINDOW_MAX_MESSAGES } from './turn-admission.js';
 export {
   intersectCapabilities,
   narrowMergedAccess,
@@ -154,16 +140,14 @@ export {
 export type {
   TurnAdmission,
   TurnAdmissionFacts,
-  TurnAdmissionGateOptions,
+  TurnAdmissionRejectReason,
   TurnAdmissionRequest,
-  TurnMergeWindowOptions,
-  TurnLiveWindowOptions,
   TurnLiveWindowSnapshot,
   TurnMergeWindowSnapshot,
   TurnParticipant,
   TurnStaleVerdict,
   TurnStopResult,
-} from './turn-admission-gate.js';
+} from './turn-admission.js';
 
 // Host-integration seam for external host packages.
 export { getAgentTurnConfiguration, runWithAgentTurnConfiguration } from './agent-turn-context.js';

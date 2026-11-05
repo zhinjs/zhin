@@ -9,6 +9,7 @@ import { noteTurnTrace } from '../../trace/index.js';
 import {
   isActingTurnEvent,
   type TurnAdmission,
+  type TurnAdmissionRejectReason,
   type TurnStaleVerdict,
 } from '../../turn/index.js';
 import type { DecisionAudit } from './decision-audit.js';
@@ -27,10 +28,11 @@ export function reactionOf(output: readonly AgentOutputElement[]): string | unde
 }
 
 export function admissionRejectionNotice(
-  reason: 'queue_full' | 'expired' | 'stopped',
+  reason: TurnAdmissionRejectReason,
   locale?: Locale,
 ): string | undefined {
-  if (reason !== 'stopped') return t(locale, reason);
+  // `stopped` has its own notice; `not_addressed` is never shown.
+  if (reason === 'queue_full' || reason === 'expired') return t(locale, reason);
   return undefined;
 }
 
@@ -48,7 +50,7 @@ export function auditStaleReply(
 
 /**
  * Records how the turn was admitted on its TurnTrace once the trace exists,
- * and tells the gate when the turn acts (ADR 0038 §4: such replies are never dropped).
+ * and tells the mailbox when the turn acts (ADR 0038 §4: such replies are never dropped).
  */
 export function observeWithAdmission(
   observe: ReturnType<typeof observeAgentTurnTrace>,

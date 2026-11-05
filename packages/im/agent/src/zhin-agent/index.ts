@@ -70,9 +70,9 @@ import type { AudioTranscriptionPort } from '../media/media-types.js';
 import type { MediaPerceptionPort } from '../media/perception.js';
 import type { ImageAssetPublisher } from '../media/image-assets.js';
 import { buildDisciplinedPrompt as assembleDisciplinedPrompt } from '../prompt/assembly.js';
-import { createInboundTurnQueue, runWithInboundQueue } from '../turn/inbound-queue-runtime.js';
-import type { ResolvedInboundQueueConfig } from '../turn/inbound-queue-config.js';
-import type { InboundTurnQueue } from '../turn/inbound-turn-queue.js';
+import { HostMailbox } from '../collaboration/host-mailbox.js';
+import { normalizeMailboxConfig } from '../turn/mailbox-config.js';
+import { runAsMailTurn } from '../turn/mail-turn-runtime.js';
 import { processTextTurnStream } from '../turn/process-stream.js';
 import { isCancelIntent } from '../turn/cancel-intent.js';
 import { followUpMessage, runPromptTurn, steerMessage } from '../turn/prompt-api.js';
@@ -216,8 +216,8 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   /** #1030: this generation's host-protected paths; set by the host installer, absent for embedders. */
   hostProtectedPaths?: HostProtectedPaths;
   lastTurnMetrics: ZhinAgentTurnMetrics | null = null;
-  private readonly inboundQueueConfig: ResolvedInboundQueueConfig;
-  readonly inboundTurnQueue: InboundTurnQueue;
+  /** ADR 0048 H3: every turn of this agent is a Mail turn of its long-lived host Mailbox. */
+  readonly hostMailbox: HostMailbox;
   private disposal?: Promise<void>;
   readonly turnContextState: TurnContextBridgeState = {
     alwaysSkillsBaseline: '',
@@ -283,9 +283,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
       this.config.steeringMode,
       this.config.followUpMode,
     );
-    const inbound = createInboundTurnQueue(this.config, this.emitter);
-    this.inboundQueueConfig = inbound.config;
-    this.inboundTurnQueue = inbound.queue;
+    this.hostMailbox = new HostMailbox({ config: normalizeMailboxConfig(this.config.mailbox) });
     const memoryStack = createMemoryContextRepository({
       tailMessageLimit: resolveContextTailMessageLimit(this.config),
     });
@@ -551,24 +549,26 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
       }
       return [{ type: 'text', content: '当前没有正在执行的任务' }];
     }
-    const executeTurn = (content: string) => processTextTurn(
+    const executeTurn = (content: string, signal: AbortSignal) => processTextTurn(
       asPrivate(this),
       content,
       request.message,
       [...(request.tools ?? [])],
       request.onChunk,
       {
-        signal: request.signal,
+        signal,
         onTurnEvent: request.onTurnEvent,
         generation: request.generation,
       },
     );
     return runWithAgentTurnConfiguration(request.configuration ?? {}, () =>
       this.runInTurnContext(randomUUID(), () =>
-        runWithInboundQueue(request.message, this.inboundQueueConfig, this.inboundTurnQueue, {
+        runAsMailTurn(this.hostMailbox, request.message, {
           content: request.content,
-          signal: request.signal,
+          ...(request.signal ? { signal: request.signal } : {}),
+          emitter: this.emitter,
           run: executeTurn,
+          merged: () => [],
         }),
         request.activityFeedbackEligible === undefined
           ? undefined
@@ -582,7 +582,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   async *processStream(content: string, commMessage: Message, externalTools: Tool[] = []): AsyncGenerator<TurnEvent, void, undefined> {
     yield* processTextTurnStream(asPrivate(this), {
       content, commMessage, externalTools,
-      inboundQueueConfig: this.inboundQueueConfig, inboundTurnQueue: this.inboundTurnQueue,
+      hostMailbox: this.hostMailbox, emitter: this.emitter,
       runInTurnContext: (id, fn) => this.runInTurnContext(id, fn, {
         activityFeedbackEligible: true,
       }),
