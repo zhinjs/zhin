@@ -2,12 +2,12 @@ export { createScriptedModel, actorOfSession, ENTRY_ACTOR, ScriptExhaustedError,
 export type { ScriptStep, ScriptFault, ScriptedToolCall, ScriptedModel, ScriptedModelOptions, ScriptedModelRequest } from './scripted-model.js';
 export { createFakeClock } from './fake-clock.js';
 export type { EvalClock } from './fake-clock.js';
-export { defineEvalCase, validateEvalCase, loadEvalCases } from './fixture.js';
+export { defineEvalCase, validateEvalCase, loadEvalCases, isTimerInbound } from './fixture.js';
 export type {
   EvalCase, EvalAgentFixture, EvalExpectations, EvalInboundMessage, EvalImage, EvalTool, EvalTag, EvalTermination, EvalApprovalBehaviour, EvalNativeTool, EvalLiveMode, EvalMemoryEntry,
   EvalSelfChangeFixture, EvalSelfChangeFile, EvalSelfChangeStatus,
 } from './fixture.js';
-export { runEvalCase } from './driver.js';
+export { runEvalCase, deliverTimerMailInbound, TIMER_INBOUND_NOT_SUPPORTED } from './driver.js';
 export type { EvalRunRecord, EvalToolInvocation, RunEvalCaseOptions } from './driver.js';
 export { evaluateExpectations, formatEvalReport } from './assertions.js';
 export type { EvalFailure } from './assertions.js';

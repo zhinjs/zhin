@@ -17,6 +17,7 @@ import {
   loadEvalCases,
   runEvalCase,
   validateEvalCase,
+  TIMER_INBOUND_NOT_SUPPORTED,
   type EvalCase,
 } from './index.js';
 
@@ -356,4 +357,36 @@ describe('eval framework: per-actor scripted model', () => {
     expect(model.remainingSteps()).toBe(0);
   });
 
+});
+
+describe('eval framework: timer inbound (ADR 0048 H3 Gap A)', () => {
+  const timerCase = (inbound: EvalCase['inbound']) => defineEvalCase({
+    id: 'timer-inbound',
+    description: 'A timer firing is delivered as Mail to the entry agent.',
+    source: 'ADR 0048 H3 Gap A',
+    inbound,
+    script: [{ text: '提醒：开会' }],
+    expect: {},
+  });
+  const wellFormedTimer = { kind: 'timer', timerId: 'standup', content: '开会', owner: { id: 'owner', roles: ['master'] } } as const;
+
+  it('accepts a well-formed timer inbound', () => {
+    expect(validateEvalCase(timerCase(wellFormedTimer))).toEqual([]);
+    expect(validateEvalCase(timerCase([{ text: '十分钟后提醒我开会' }, wellFormedTimer]))).toEqual([]);
+  });
+
+  it('rejects a timer inbound without owner, timerId or content', () => {
+    const missingOwner = { kind: 'timer', timerId: '', content: ' ' } as unknown as EvalCase['inbound'];
+    expect(validateEvalCase(timerCase(missingOwner))).toEqual([
+      'inbound 1 (timer) needs a timerId',
+      'inbound 1 (timer) needs content',
+      'inbound 1 (timer) needs an owner with an id',
+    ]);
+    const unknownKind = { kind: 'scene', text: 'x' } as unknown as EvalCase['inbound'];
+    expect(validateEvalCase(timerCase(unknownKind))).toEqual(['inbound 1 has unknown kind "scene"']);
+  });
+
+  it('throws not-supported instead of running a timer inbound through the human Venue path', async () => {
+    await expect(runEvalCase(timerCase(wellFormedTimer))).rejects.toThrow(TIMER_INBOUND_NOT_SUPPORTED);
+  });
 });

@@ -43,7 +43,7 @@ import { createTracingJournal, registerTurnTrace } from '../../src/trace/turn-tr
 import type { SkillDescriptor } from '@zhin.js/skill';
 import { createJournalFeed } from '../../src/turn/journal-feed.js';
 import { executeAgentTurn } from '../../src/turn/execute-agent-turn.js';
-import type { EvalAgentFixture, EvalApprovalBehaviour, EvalCase, EvalSelfChangeStatus, EvalPromptSection, EvalSkill, EvalInboundMessage, EvalNativeTool, EvalTool } from './fixture.js';
+import { isTimerInbound, type EvalAgentFixture, type EvalApprovalBehaviour, type EvalCase, type EvalSelfChangeStatus, type EvalPromptSection, type EvalSkill, type EvalInbound, type EvalInboundMessage, type EvalNativeTool, type EvalTimerInbound, type EvalTool } from './fixture.js';
 import { createScriptedModel, PERCEPTION_MODEL_ID, PERCEPTION_PROVIDER_ALIAS, type ScriptedModel, type ScriptedModelRequest } from './scripted-model.js';
 import { resolvePerceptionConfig } from '../../src/media/perception.js';
 import { createFakeClock, type EvalClock } from './fake-clock.js';
@@ -213,7 +213,11 @@ async function runInWorkspace(
     const approval = createApprovalPort(definition.approval ?? 'approve', approvalRequests, approvalQuestions);
 
     const inbound = Array.isArray(definition.inbound) ? definition.inbound : [definition.inbound];
-    for (const [index, message] of (inbound as readonly EvalInboundMessage[]).entries()) {
+    for (const [index, entry] of (inbound as readonly EvalInbound[]).entries()) {
+      if (isTimerInbound(entry)) {
+        deliverTimerMailInbound(entry);
+      }
+      const message = entry as EvalInboundMessage;
       const trace = createTurnTrace(definition, message, index);
       const releaseTrace = registerTurnTrace(trace);
       const { turn, tools: turnTools } = buildTurn(definition, message, index, tools, native.available, approval, outbound, workspace, trace);
@@ -583,9 +587,9 @@ async function createEvalSelfChange(definition: EvalCase, workspace: string): Pr
   const approvals = new SelfChangeApprovals({ store, queue });
   const seed = definition.selfChange?.pending;
   if (seed) {
-    const first = (Array.isArray(definition.inbound) ? definition.inbound[0] : definition.inbound) as EvalInboundMessage;
-    const senderId = first.sender?.id ?? 'eval-user';
-    const scope = first.scope ?? 'private';
+    const first = (Array.isArray(definition.inbound) ? definition.inbound[0] : definition.inbound) as EvalInbound;
+    const senderId = isTimerInbound(first) ? first.owner.id : first.sender?.id ?? 'eval-user';
+    const scope = isTimerInbound(first) ? 'private' : first.scope ?? 'private';
     const origin: SelfChangeOrigin = {
       platform: PLATFORM,
       sceneId: `${scope}:${scope === 'group' ? 'eval-group' : senderId}`,
@@ -681,4 +685,16 @@ async function hostBootstrapText(root: string): Promise<string> {
     if (body) parts.push(`## ${name}\n${body}`);
   }
   return parts.join('\n\n');
+}
+
+/** Stable phrase in the error raised for timer inbound until ADR 0048 H3 timer Mail delivery lands. */
+export const TIMER_INBOUND_NOT_SUPPORTED = 'ADR 0048 H3 HOOK GAP: timer Mail inbound not supported';
+
+/**
+ * ADR 0048 H3 Gap A hook: a timer inbound must reach its target actor as Mail, not through the
+ * human Venue path. Runtime timer Mail delivery is not wired yet, so this always throws.
+ */
+export function deliverTimerMailInbound(inbound: EvalTimerInbound): never {
+  const target = inbound.target ?? 'entry agent';
+  throw new Error(`${TIMER_INBOUND_NOT_SUPPORTED} (timer "${inbound.timerId}" for ${target}); keep the case skipped until timer Mail delivery is wired`);
 }
