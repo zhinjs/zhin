@@ -1,0 +1,34 @@
+plugins/adapters/icqq/tests/scene-facts.test.ts
+  h_6f5e45c41d0910 3
+plugins/games/tic-tac-toe/tests/move-atomicity.test.ts
+  h_6f5e45c41d0910 5
+plugins/utils/bilibili/tests/target-migration.test.ts
+  h_6f5e45c41d0910 1
+plugins/utils/content-moderation/tests/group-review-runtime.test.ts
+  h_6f5e45c41d0910 12
+plugins/utils/earthquake/tests/target-migration.test.ts
+  h_6f5e45c41d0910 1
+plugins/utils/group-suite/tests/welcome.test.ts
+  h_6f5e45c41d0910 19
+plugins/utils/ledger/tests/locale-storage.test.ts
+  h_6f5e45c41d0910 4
+plugins/utils/reminder/tests/reminder-create-runtime.test.ts
+  h_6f5e45c41d0910 12
+plugins/utils/reminder/tests/reminder-runtime.test.ts
+  h_6f5e45c41d0910 12
+plugins/utils/rss/tests/admin-fixture.ts
+  h_6f5e45c41d0910 10
+plugins/utils/rss/tests/admin-task-host.test.ts
+  h_6f5e45c41d0910 11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e588d4dcfd65e6e2972b37157a5fb325cd82951c",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
