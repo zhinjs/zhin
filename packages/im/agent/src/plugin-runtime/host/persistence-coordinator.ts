@@ -1,6 +1,10 @@
 import { getLogger } from '@zhin.js/logger';
 import { ensureDatabaseColumns, ensureDatabaseIndex, type StructuredDatabase } from '@zhin.js/database';
-import { databaseRootHostToken, type RootResourceInstaller } from '@zhin.js/plugin-runtime';
+import {
+  databaseRootHostToken,
+  type DatabaseHost,
+  type RootResourceInstaller,
+} from '@zhin.js/plugin-runtime';
 import {
   DatabaseEngagementJournal,
   defineEngagementEventModel,
@@ -15,6 +19,19 @@ import type { AgentRuntimeFoundation } from './runtime-foundation.js';
 import type { AgentHostAIConfig } from './config.js';
 
 type Context = Parameters<RootResourceInstaller>[0];
+
+function createHostEngagementJournalDatabase(database: DatabaseHost): EngagementJournalDatabase {
+  const model = (table: string) => {
+    const m = database.models.get(table);
+    if (!m) throw new Error(`Database table '${table}' is not ready`);
+    return m;
+  };
+  return {
+    select: (table, fields) => model(table).select(...fields),
+    insert: (table, row) => model(table).insert(row),
+    delete: (table, condition) => model(table).delete().where(condition),
+  };
+}
 
 /** MySQL TEXT needs (128); VARCHAR(64) id/run_id must stay unprefixed (ER_WRONG_SUB_KEY). */
 export async function ensureScheduleHistoryIndexes(database: StructuredDatabase): Promise<void> {
@@ -62,7 +79,7 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
     database.define('agent_usage_calls', AGENT_USAGE_CALL_MODEL);
     defineEngagementEventModel(database);
     foundation.setEngagementJournal?.(
-      new DatabaseEngagementJournal(database as unknown as EngagementJournalDatabase),
+      new DatabaseEngagementJournal(createHostEngagementJournalDatabase(database)),
     );
     usage = new DatabaseAgentUsageStore(database, Number(config.usage?.retentionDays ?? 30));
     resources.provide(agentUsageStoreToken, usage);
