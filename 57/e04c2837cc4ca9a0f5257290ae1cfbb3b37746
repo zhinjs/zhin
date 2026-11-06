@@ -1,0 +1,50 @@
+.changeset/console-server-driven-blueprints.md
+  h_6f5e45c41d0910 2,9,39
+basic/cli/src/plugin-runtime/console/entry-projection.ts
+  h_6f5e45c41d0910 25,98,103-107,142,200
+packages/console/page/src/definition.ts
+  h_6f5e45c41d0910 4,12-13,16-17,39-41,44-51,58,65-66,69-70,91-93,96-103,159,188
+packages/console/page/src/page-index.ts
+  h_6f5e45c41d0910 48
+packages/console/pagemanager/src/client-build/manifest-loader.ts
+  h_6f5e45c41d0910 38
+packages/console/pagemanager/src/client-build/typescript-builder.ts
+  h_6f5e45c41d0910 2,4-5,7-25,118-138,141-160,184-215,260-392,499-521
+packages/console/pagemanager/tests/client-build/client-build.test.ts
+  h_6f5e45c41d0910 146,151-156,158,176,181-186,188,205-223
+packages/console/plugin-contract/src/page.ts
+  h_6f5e45c41d0910 26,37-51,62,417-465,651-1330
+packages/console/plugin-contract/tests/contract.test.ts
+  h_6f5e45c41d0910 5,8,13-14,226-301
+plugins/adapters/bilibili/package.json
+  h_6f5e45c41d0910 50,57
+plugins/adapters/bilibili/pages/index/index.ts
+  h_6f5e45c41d0910 1,13-14,17
+plugins/adapters/bilibili/pages/index/spec.ts
+  h_6f5e45c41d0910 1-5,8,13-27,29-34,37-38,40,45-48,52-66,74-79,87-90
+plugins/adapters/bilibili/tests/bilibili-page.test.ts
+  h_6f5e45c41d0910 10
+plugins/adapters/juejin/package.json
+  h_6f5e45c41d0910 50,57
+plugins/adapters/juejin/pages/index/index.ts
+  h_6f5e45c41d0910 1,13-14,17
+plugins/adapters/juejin/pages/index/spec.ts
+  h_6f5e45c41d0910 1-5,8-17,21,26-27,29,31-36,40-45,47-48
+plugins/adapters/juejin/tests/juejin-page.test.ts
+  h_6f5e45c41d0910 10
+scripts/build-plugin-runtime-entries.mjs
+  h_6f5e45c41d0910 66-69,74-103
+tests/docs/adapter-console-pages.test.ts
+  h_6f5e45c41d0910 61-65,67-71
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "57e04c2837cc4ca9a0f5257290ae1cfbb3b37746",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
