@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createEvalWorkspace, loadEvalWorkspace } from '../src/workspace.js';
 import { runtimeFixture, graphFixture, context } from '../../../packages/im/ai/tests/provider/fixtures.js';
-import { openHeadlessInferenceHost } from '../../../basic/cli/src/plugin-runtime/inference/headless-host.js';
+import { openHeadlessInferenceHost } from '../../../packages/im/agent/src/plugin-runtime/index.js';
 
 it('uses the supplied Host operation for actual Profile selection, execution and parameter evidence', async () => {
   const graph = graphFixture(); const f = runtimeFixture({ graph: { ...graph, profiles: { ...graph.profiles, text: { ...graph.profiles.text, parameters: { temperature: 0.42 } } } } });

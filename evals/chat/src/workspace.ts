@@ -3,8 +3,8 @@
 import { randomUUID } from 'node:crypto';
 import { isAbsolute, join } from 'node:path';
 import { loadProjectConfig } from '../../../packages/toolkit/scaffold-wizard/src/project-config-plan.js';
-import { normalizeDatabaseHostConfig } from '../../../basic/cli/src/plugin-runtime/database-config.js';
-import { openHeadlessInferenceHost } from '../../../basic/cli/src/plugin-runtime/inference/headless-host.js';
+import { normalizeDatabaseHostConfig } from '../../../packages/im/core/src/plugin-runtime/im/index.js';
+import { openHeadlessInferenceHost } from '../../../packages/im/agent/src/plugin-runtime/index.js';
 import { createProfileReference, type InferenceOperationScope, type JsonObject } from '../../../packages/im/ai/src/provider/index.js';
 import type { LlmCompletionPort, Model } from '../../../packages/im/ai/src/index.js';
 import { createInvocationCompletion, invocationModel } from '../../../packages/im/agent/src/model-runtime/completion.js';
