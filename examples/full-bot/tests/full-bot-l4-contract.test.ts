@@ -51,11 +51,61 @@ describe('full-bot L4 配置契约', () => {
       'commands/card/index.ts',
       'components/status-card/index.ts',
       'skills/runtime-diagnostics/tools/runtime-status/index.ts',
+      'pages/index/index.ts',
       'pages/workroom/index.tsx',
     ]) {
       expect(fs.existsSync(path.join(botRoot, source)), source).toBe(true);
     }
     expect(fs.existsSync(path.join(botRoot, 'src', 'plugins'))).toBe(false);
+  });
+
+  it('提供声明式 Console 概览页 pages/index/index.ts 与 plugin.ts Console RPC', async () => {
+    const pageMod = await import('../pages/index/index.js');
+    expect(pageMod.meta).toMatchObject({
+      title: 'Full Bot (L4)',
+      icon: 'Bot',
+      order: 10,
+    });
+    const blueprint = pageMod.blueprint ?? pageMod.default();
+    expect(blueprint).toMatchObject({
+      kind: 'zhin.console.page-blueprint',
+      version: 1,
+      title: 'Full Bot (L4 Reference)',
+      dataSource: { action: 'status' },
+    });
+    expect(blueprint.sections.map((section: { type: string }) => section.type)).toEqual([
+      'stats',
+      'table',
+      'table',
+      'actions',
+    ]);
+
+    const pluginMod = await import('../plugin.js');
+    const provided = new Map<unknown, unknown>();
+    await pluginMod.default.setup?.({
+      resources: {
+        provide(token: unknown, value: unknown) {
+          provided.set(token, value);
+        },
+      },
+    } as never);
+    expect(provided.size).toBe(1);
+    const rpc = pluginMod.fullBotConsoleRpc;
+    const statusMethod = rpc.methods.get('status');
+    expect(statusMethod?.page).toBe('index');
+    expect(statusMethod?.demo).toBe(true);
+    const statusPayload = await statusMethod?.handler({}, {} as never);
+    expect(statusPayload).toMatchObject({
+      plugin: 'full-bot',
+      tier: 'L4 Reference',
+    });
+    const pingMethod = rpc.methods.get('ping');
+    expect(pingMethod?.page).toBe('index');
+    const pingPayload = await pingMethod?.handler({}, {} as never);
+    expect(pingPayload).toMatchObject({
+      ok: true,
+      message: 'full-bot L4 runtime active',
+    });
   });
 
   it('ADR 0024 Pipeline 取代 Missions 配置开关', () => {

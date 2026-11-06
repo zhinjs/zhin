@@ -7,10 +7,13 @@ import { parseAgentToolDefinition } from '@zhin.js/tool';
 import plugin from '../plugin.ts';
 import statusCommand from '../commands/process-status/index.ts';
 import statusTool from '../skills/process-monitor/tools/process-status/index.ts';
+import pageComponent, { meta as pageMeta } from '../pages/index/index.ts';
 import {
   classifyStartup,
+  createProcessMonitorConsoleRpc,
   formatUptime,
   ProcessMonitor,
+  processMonitorToken,
   resolveProcessMonitorConfig,
 } from '../src/index.js';
 
@@ -143,5 +146,51 @@ describe('@zhin.js/process-monitor runtime', () => {
     expect(process.listenerCount('SIGTERM')).toBe(beforeTerm);
     expect(process.listenerCount('SIGINT')).toBe(beforeInt);
     fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('exposes Console RPC status snapshot via createProcessMonitorConsoleRpc', async () => {
+    let now = 1_000;
+    const monitor = new ProcessMonitor({}, { now: () => now });
+    now = 66_000;
+    const rpc = createProcessMonitorConsoleRpc();
+    const statusMethod = rpc.methods.get('status');
+    expect(statusMethod).toBeDefined();
+    expect(statusMethod?.page).toBe('index');
+    expect(statusMethod?.requiredPermissions).toContain('process-monitor:read');
+
+    const snapshot = await statusMethod?.handler(
+      {},
+      {
+        signal: new AbortController().signal,
+        runtime: {
+          owner: 'root/process-monitor' as never,
+          generation: 1,
+          operator: true,
+          project: () => undefined,
+          use: (token: unknown) => (token === processMonitorToken ? monitor : undefined),
+        } as never,
+      },
+    ) as Record<string, unknown>;
+
+    expect(snapshot).toMatchObject({
+      pid: process.pid,
+      uptime: formatUptime(65_000),
+      restartCount: 0,
+      healthy: true,
+    });
+    expect(typeof snapshot.rssMb).toBe('number');
+    expect(typeof snapshot.heapUsedMb).toBe('number');
+    expect(typeof snapshot.heapTotalMb).toBe('number');
+  });
+
+  it('defines declarative Console page metadata and component', () => {
+    expect(pageMeta).toMatchObject({
+      title: '进程监控',
+      titleI18n: { en: 'Process Monitor' },
+      icon: 'Activity',
+      order: 56,
+      requiredPermissions: ['process-monitor:read'],
+    });
+    expect(typeof pageComponent).toBe('function');
   });
 });

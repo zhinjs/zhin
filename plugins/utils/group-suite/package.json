@@ -20,6 +20,7 @@
     "middlewares",
     "handlers",
     "schedules",
+    "pages",
     "src",
     "lib",
     "skills",
@@ -50,9 +51,12 @@
   },
   "license": "MIT",
   "dependencies": {
+    "@zhin.js/client": "workspace:*",
     "@zhin.js/components": "workspace:*",
+    "@zhin.js/console-contract": "workspace:*",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/jsx": "workspace:*",
+    "@zhin.js/page": "workspace:*",
     "@zhin.js/skill": "workspace:*",
     "@zhin.js/tool": "workspace:*"
   },
@@ -65,6 +69,7 @@
   "peerDependencies": {
     "@zhin.js/command": "workspace:^",
     "@zhin.js/middleware": "workspace:^",
+    "@zhin.js/page": "workspace:^",
     "zhin.js": "workspace:^",
     "zod": "^4.0.0",
     "@zhin.js/handler": "workspace:^",
@@ -75,6 +80,9 @@
       "optional": true
     },
     "@zhin.js/middleware": {
+      "optional": true
+    },
+    "@zhin.js/page": {
       "optional": true
     },
     "zod": {
@@ -135,6 +143,10 @@
       },
       {
         "package": "@zhin.js/schedule-feature",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/page",
         "api": "^1.0.0"
       }
     ],

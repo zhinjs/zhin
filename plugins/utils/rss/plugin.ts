@@ -6,10 +6,12 @@ import {
   logger,
   databaseHostToken,
   outboundHostToken,
+  pluginConsoleRpcToken,
   scheduleHostToken,
 } from 'zhin.js';
 import { createAdministratorRssState } from './src/storage.js';
 import { AdministratorRssTasks } from './src/admin-tasks.js';
+import { createRssConsoleRpc } from './src/console.js';
 import { resolveRssConfig, type RssConfig } from './src/feed.js';
 import {
   createInMemoryRssDb,
@@ -85,6 +87,7 @@ export default definePlugin<RssConfig>({
       outbound: outboundPush,
     });
     context.resources.provide(rssRuntimeToken, runtime);
+    context.resources.provide(pluginConsoleRpcToken, createRssConsoleRpc(runtime));
 
     // Keep optional in-memory/chat-only installations working. Administrator tasks
     // must have the real durable state port, exact outbound and an active scheduler.

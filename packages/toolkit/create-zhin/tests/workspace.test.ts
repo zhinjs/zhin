@@ -6,6 +6,14 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { BASE_SKILL_NAMES, DEV_SKILL_NAMES, createWorkspace } from '../src/workspace'
 import type { InitOptions } from '../src/types'
 import { scaffoldDependencyRange } from '@zhin.js/scaffold-wizard'
+import { definePage } from '../../../console/plugin-contract/src/index.js'
+import { extractPageMetadata } from '../../../console/pagemanager/src/client-build/index.js'
+import {
+  definePlugin,
+  definePluginConsoleRpc,
+  pluginConsoleRpcToken,
+  type PluginConsoleRpc,
+} from '../../../im/plugin-runtime/src/index.js'
 import { reviewAIPlan } from '../../../../tests/helpers/review-ai-plan.js'
 
 const tmpRoots: string[] = []
@@ -168,12 +176,22 @@ describe('createWorkspace', () => {
     // 骨架文件：创作面 import 走 zhin.js 便利入口
     expect(pluginEntry).toContain("from 'zhin.js'")
     expect(pluginEntry).toContain('definePlugin(')
+    expect(pluginEntry).toContain('pluginConsoleRpcToken')
+    expect(pluginEntry).toContain('definePluginConsoleRpc({')
+    expect(pluginEntry).toContain("page: 'index'")
+    expect(pluginEntry).toContain('handler: async () =>')
     expect(helloCommand).toContain("from 'zhin.js/command'")
     expect(cardCommand).toContain("from 'zhin.js/component'")
+    expect(cardCommand).toContain("{ label: 'Uptime', value: `${Math.round(process.uptime())}s` }")
     expect(statusCard).toContain("from 'zhin.js/component'")
     expect(statusCard).toContain("from '@zhin.js/components'")
     expect(page).toContain("from '@zhin.js/console-contract'")
     expect(page).toContain('definePage(')
+    expect(page).toContain('ConsolePageBlueprint')
+    expect(page).toContain("kind: 'zhin.console.page-blueprint'")
+    expect(page).toContain("id: 'runtime-stats'")
+    expect(page).toContain("id: 'quick-actions'")
+    expect(page).toContain("id: 'getting-started'")
     expect(navigation).toContain('NavSlotProps')
     expect(footer).toContain('FooterSlotProps')
     expect(schema).toMatchObject({ type: 'object', properties: {} })
@@ -318,10 +336,80 @@ it('generates English project guidance and examples while retaining config value
   expect(instructions).toContain('Language: English');
   const hello=await fs.readFile(path.join(projectPath,'commands/hello/index.ts'),'utf8');
   expect(hello).toContain("context.formatCommand('card')"); expect(hello).not.toContain('Try /card');
+  const pluginEntryEn = await fs.readFile(path.join(projectPath, 'plugin.ts'), 'utf8');
+  expect(pluginEntryEn).toContain('pluginConsoleRpcToken');
+  expect(pluginEntryEn).toContain('definePluginConsoleRpc({');
+  expect(pluginEntryEn).toContain('handler: async () =>');
+  expect(pluginEntryEn).not.toMatch(/[\u3400-\u9fff]/u);
+  const cardCommandEn = await fs.readFile(path.join(projectPath, 'commands/card/index.ts'), 'utf8');
+  expect(cardCommandEn).toContain("{ label: 'Uptime', value: `${Math.round(process.uptime())}s` }");
+  expect(cardCommandEn).not.toMatch(/[\u3400-\u9fff]/u);
+  const homePageEn = await fs.readFile(path.join(projectPath, 'pages/index/index.tsx'), 'utf8');
+  expect(homePageEn).toContain("kind: 'zhin.console.page-blueprint'");
+  expect(homePageEn).toContain("id: 'runtime-stats'");
+  expect(homePageEn).toContain("id: 'quick-actions'");
+  expect(homePageEn).toContain("id: 'getting-started'");
+  expect(homePageEn).not.toMatch(/[\u3400-\u9fff]/u);
+  expect(extractPageMetadata(homePageEn, 'pages/index/index.tsx')).toEqual({
+    title: 'bot',
+    icon: 'Bot',
+    order: 10,
+  });
   const ts=await import('typescript'); const module={exports:{} as any};
   const code=ts.transpileModule(hello,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
   Function('require','module','exports',code)(()=>({defineCommand:(definition:unknown)=>definition}),module,module.exports);
   const execute=module.exports.default.execute;
   expect(execute({formatCommand:()=> '!card'})).toContain('Try !card');
   expect(execute({formatCommand:()=>undefined})).not.toContain('card');
+  const pageModule = { exports: {} as any };
+  const pageCode = ts.transpileModule(homePageEn, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+  Function('require', 'module', 'exports', pageCode)(() => ({ definePage }), pageModule, pageModule.exports);
+  expect(pageModule.exports.meta).toMatchObject({ title: 'bot', icon: 'Bot', order: 10 });
+  const blueprint = pageModule.exports.default();
+  expect(blueprint).toMatchObject({
+    kind: 'zhin.console.page-blueprint',
+    version: 1,
+    title: 'bot',
+    dataSource: { action: 'status' },
+  });
+  expect(blueprint.sections.map((section: { id: string }) => section.id)).toEqual([
+    'runtime-stats',
+    'quick-actions',
+    'getting-started',
+  ]);
+  const pluginModule = { exports: {} as any };
+  const pluginCode = ts.transpileModule(pluginEntryEn, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+  Function('require', 'module', 'exports', pluginCode)(
+    () => ({ definePlugin, definePluginConsoleRpc, pluginConsoleRpcToken }),
+    pluginModule,
+    pluginModule.exports,
+  );
+  let providedToken: unknown;
+  let providedRpc: PluginConsoleRpc | undefined;
+  pluginModule.exports.default.setup({
+    resources: {
+      provide: (token: unknown, res: PluginConsoleRpc) => {
+        providedToken = token;
+        providedRpc = res;
+      },
+    },
+  });
+  expect(providedToken).toBe(pluginConsoleRpcToken);
+  expect(providedRpc).toBeDefined();
+  const callContext = { signal: new AbortController().signal };
+  const statusMethod = providedRpc!.methods.get('status');
+  expect(statusMethod).toMatchObject({ page: 'index', demo: true, readOnly: true });
+  await expect(statusMethod!.handler({}, callContext)).resolves.toMatchObject({
+    plugin: 'bot',
+    nodeVersion: process.version,
+    rssMb: expect.any(Number),
+    heapMb: expect.any(Number),
+    uptimeSec: expect.any(Number),
+  });
+  const pingMethod = providedRpc!.methods.get('ping');
+  expect(pingMethod).toMatchObject({ page: 'index', readOnly: false });
+  await expect(pingMethod!.handler({}, callContext)).resolves.toMatchObject({
+    ok: true,
+    message: 'pong',
+  });
 });

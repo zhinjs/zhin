@@ -17,6 +17,7 @@
     "plugin.js",
     "schema.json",
     "commands",
+    "pages",
     "skills",
     "src",
     "lib",
@@ -46,6 +47,9 @@
     "directory": "plugins/features/process-monitor"
   },
   "dependencies": {
+    "@zhin.js/client": "workspace:*",
+    "@zhin.js/console-contract": "workspace:*",
+    "@zhin.js/page": "workspace:*",
     "@zhin.js/skill": "workspace:*",
     "@zhin.js/tool": "workspace:*"
   },
@@ -87,16 +91,24 @@
       {
         "package": "@zhin.js/skill",
         "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/page",
+        "api": "^1.0.0"
       }
     ],
     "plugins": []
   },
   "peerDependencies": {
     "@zhin.js/command": "workspace:^",
+    "@zhin.js/page": "workspace:^",
     "zhin.js": "workspace:^"
   },
   "peerDependenciesMeta": {
     "@zhin.js/command": {
+      "optional": true
+    },
+    "@zhin.js/page": {
       "optional": true
     }
   }

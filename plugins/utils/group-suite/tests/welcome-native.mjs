@@ -4,6 +4,7 @@ import { cp, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from '
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import './client-module-shim.mjs';
 import { PluginTestKit, FakeScheduleRootHost, FakeClock } from '../../../../packages/toolkit/testing/src/index.ts';
 import { scheduleRootHostToken, scheduleHostToken, PluginScheduleHost, rootPluginId } from '../../../../packages/im/plugin-runtime/src/index.ts';
 

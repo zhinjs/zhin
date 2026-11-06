@@ -10,6 +10,7 @@ export default defineCommand({
       lines: [
         { label: 'RSS', value: `${Math.round(memory.rss / 1024 / 1024)}MB` },
         { label: 'Heap', value: `${Math.round(memory.heapUsed / 1024 / 1024)}MB` },
+        { label: 'Uptime', value: `${Math.round(process.uptime())}s` },
       ],
     });
   },

@@ -1,4 +1,5 @@
-import { definePlugin } from 'zhin.js';
+import { definePlugin, pluginConsoleRpcToken } from 'zhin.js';
+import { createModerationConsoleRpc } from './src/console.js';
 import { ModerationEngine } from './src/engine.js';
 import { moderationEngineToken } from './src/runtime.js';
 
@@ -14,6 +15,7 @@ export default definePlugin({
     const engine = new ModerationEngine();
     engine.configure(context.config.get());
     context.resources.provide(moderationEngineToken, engine);
+    context.resources.provide(pluginConsoleRpcToken, createModerationConsoleRpc(engine));
     context.events.on('hmr.resume', ({ details }) => {
       if (details.outcome !== 'committed') return;
       engine.groupReviewQueue.cancelReplacedSources(details.replaced);

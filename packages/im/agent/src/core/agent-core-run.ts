@@ -1,459 +1,70 @@
-import { providerModelSupports } from '@zhin.js/ai/provider';
 /**
  * agentLoop turn runner (ADR 0009) — used when ContextRepository is wired.
  */
 
-import type { AiOutboundSegmentProfile } from '@zhin.js/core';
-import type { CoreReplyStream, ReplyStreamSnapshot } from '@zhin.js/core/runtime';
-import { z } from 'zod';
-import { ReplyStreamRun } from './reply-stream-run.js';
-import type { ReplyPhaseLifecycle, ReplyPhaseFacts } from './reply-phase.js';
-import { decodeStructuredReply, structuredReplyInstruction, structuredReplySchema } from '../outbound/structured-reply.js';
-import { renderAgentOutput, type AgentOutputElement } from '../outbound/agent-output.js';
-import { mergeToolOutboundElements } from '../media/media-tool-bridge.js';
-import { formatCompact, truncatePreview, getLogger } from '@zhin.js/logger';
-import { EMPTY_TOKEN_USAGE, createPromptContextBlock, createLlmMessageProjection, estimateContextFixedTokens, parseOutput, type AgentTool, type Usage, agentLoop, agentContextFrom, assistantText, createUserMessage, agentToolsToLlmTools, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, type ToolExecutionCause, type LlmCompletionPort, createResilientCompletionPort, isProviderFailureMessage, resolveProviderResilienceConfig } from '@zhin.js/ai';
-import type { AgentRunJournal } from '@zhin.js/ai/agent-stream';
+import {
+  agentLoop,
+  agentContextFrom,
+  createUserMessage,
+  type AgentMessage,
+  type AssistantMessage,
+} from '@zhin.js/ai';
+import type { ReplyPhaseFacts } from './reply-phase.js';
+import type { AgentOutputElement } from '../outbound/agent-output.js';
 import { tokenUsageToLegacy } from './agent-run-shared.js';
-import { applyExecPolicyToTools } from '../security/exec-policy.js';
-import { iterationSceneOf, resolveModelHarness, resolveTurnMaxIterations } from '../config/model-harness-runtime.js';
-import { appendScene, appendStable, buildAgentPathSystemPromptParts, buildChatPathSystemPromptParts, describeAgentPathPromptSections, joinSystemPrompt } from '../prompt/assembly.js';
-import { logPromptComposition } from '../internal/prompt-trace.js';
-import { planToolRun } from '../tool/runtime.js';
-import { sanitizeAssistantReply, unwrapJsonStringLayers } from './text-sanitize.js';
-import { formatToolCallsForUser, type ToolCallRecord } from './tool-calls-user-format.js';
+import type { ToolCallRecord } from './tool-calls-user-format.js';
 import { summarizeExhaustedTurn } from './exhausted-turn-reply.js';
-import { decodeLenientStructuredReply, recoverStructuredReply } from './structured-reply-recovery.js';
-import { chatFailureKindOf, chatFailureLine, type ChatFailureOptions } from '../outbound/chat-failure.js';
-import { trackTurnCompletionUsage } from './turn-completion-usage.js';
 import { turnReplyMessages } from './turn-reply-messages.js';
-import type { InteractiveRun } from './interactive-run.js';
-import { createTurnSummaryExecutionResolver } from '../memory/summary-model.js';
-import { AgentCompactionRuntime } from '../memory/compaction-runtime.js';
-import { LocalImageInspection, type ImageInspectionBudget } from '../media/local-image-inspection.js';
-import { DEFAULT_PERCEPTION_SETTINGS } from '../config/perception-config.js';
 import { logPhase, tokenUsageLogFields, logAgentLoopIterationEnd } from '../internal/phase-trace.js';
-import { buildAgentPromptCacheStreamOptions, resolveSkillInstructionMaxChars } from '../config/index.js';
-import type { HostPromptTurnHooks } from '../internal/host-types.js';
-import { publishReplyImages } from '../media/publish-image-reply.js';
-import type { AgentCore } from './agent-core.js';
-import type { ZhinAgentPrivate, OnChunkCallback } from '../internal/agent-host.js';
-import { buildLlmToolsForProvider } from '../tool/deferred-resolution.js';
-import { applyToolToModelOutput } from '../tool/tool-model-output.js';
-import { DEFERRED_META_TOOL_NAMES, type ToolCatalogItem } from '../tool-catalog/types.js';
-import { resolveDeferredApiTools, residentToolNames } from '../tool-catalog/tool-catalog.js';
 import type { TurnEvent } from '../event/turn-event.js';
 import {
   createTurnEventMapperState,
   mapAgentEventToTurnEvents,
 } from './turn-event-mapper.js';
-import type { AgentPromptProfile } from '../prompt/turn-prompt-profile.js';
-import { scenePromptPartsForTurn, type TurnContextView } from '../context/turn-envelope.js';
-import { appendRuntimeContext } from '../context/turn-user-message.js';
-import type { ToolExecutionAuthority } from './tool-execution-authority.js';
-import type { PluginAILoopHookRegistry } from '../plugin-loop-hooks.js';
-import { TurnJournalCommitError } from '../turn/journal-integrity.js';
-import { ExecutableToolRegistry } from '../tool/executable-tool-registry.js';
-import { withoutForbiddenShell } from '../plugin-runtime/native-bash-tool.js';
-import { NETWORK_DISABLED_PROMPT_NOTE, NETWORK_TOOL_NAMES, withoutForbiddenNetwork } from '../security/network-authority.js';
-import { createMissingToolResolver } from './missing-tool-resolver.js';
-import {
-  DEFAULT_EXPLORATION_BUDGET,
-  EXPLORATION_GUIDANCE,
-  ExplorationBudget,
-  LAST_ITERATION_NUDGE,
-  SpinDetector,
-} from './exploration-budget.js';
 import {
   TurnProgressTracker,
   autoContinueAllowed,
   buildContinuationInstruction,
-  isProgress,
   resolveToolBudget,
 } from './turn-progress.js';
 import { TurnProgressReporter, summarizeProgress } from './progress-reporter.js';
-import { stampAssistantHeaders, stampDeliveredMessageId } from '../session/participant-header-stamp.js';
+import { stampAssistantHeaders } from '../session/participant-header-stamp.js';
 import { noteTurnTrace } from '../trace/turn-trace-registry.js';
-import { scopeBootstrapText, bootstrapSceneFromTurn } from '../bootstrap-scope.js';
-import { buildContextBudgetReport } from '../trace/context-budget.js';
-import { historyWindowTrackerFor, historySceneFromTurn, resolveHistoryTokens, resolveHistoryMaxMessages } from '../context/history-window.js';
-import { renderDeferredToolIndex, toolIndexGroup } from '../skill/capability-catalog.js';
-import type { PromptSectionDebugInfo } from '../prompt/system-prompt.js';
-const logger = getLogger('ZhinAgent:AgentLoopTurn');
+import {
+  resolveAssistantReplyText,
+  logAssistantIterationFailure,
+  turnEndFromLegacyUsage,
+  runAgentLoopVisionTurnRun,
+  collectAgentLoopTurnRun,
+  prepareAgentLoopTurnSetup,
+  type AgentLoopVisionTurnInput,
+  type AgentLoopVisionTurnResult,
+} from './agent-core-vision.js';
+import {
+  createTurnCompletionRuntime,
+  createTurnToolLoopHandlers,
+  traceTurnId,
+  type AgentLoopTurnInput,
+  type AgentLoopTurnResult,
+  type TurnToolLoopState,
+} from './agent-core-ports.js';
+import {
+  createTurnReplyPhaseController,
+  createTurnContextCallbacks,
+  finalizeTurnReplyAndOutput,
+  appendConversationBatches,
+  type ConversationBatch,
+  type TurnReplyPhaseState,
+} from './agent-core-settlement.js';
 
-/** 入库前解开模型误包的 JSON 字符串，避免下一轮历史继续叠转义。 */
-function normalizeAssistantMessageText(assistant: AssistantMessage): void {
-  for (const block of assistant.content) {
-    if (block.type === 'text' && block.text) {
-      block.text = unwrapJsonStringLayers(block.text);
-    }
-  }
-}
-
-function resolveAssistantReplyText(assistant: AssistantMessage, chat?: ChatFailureOptions): string {
-  normalizeAssistantMessageText(assistant);
-  const text = assistantText(assistant);
-  if (text.trim()) return text;
-  // In a chat the failure is said like a member would say it; operators read the logs.
-  if (assistant.errorMessage && chat) return chatFailureLine(chatFailureKindOf(assistant.errorMessage), chat);
-  if (assistant.errorMessage && isProviderFailureMessage(assistant.errorMessage)) {
-    return `${assistant.errorMessage}。`;
-  }
-  if (assistant.errorMessage) {
-    return `模型调用失败：${assistant.errorMessage}。请检查 API 密钥与网络后重试。`;
-  }
-  return text;
-}
-
-/** Wrap the selected chat model with same-model retries and timeouts only. */
-function createTurnCompletionPort(input: {
-  host: ZhinAgentPrivate;
-  providerAlias: string;
-  harness: Readonly<{ emptyReplyRetries?: number; requestTimeoutMs?: number }>;
-  sessionId: string;
-  transport: LlmCompletionPort;
-}): LlmCompletionPort {
-  const { host, providerAlias, sessionId } = input;
-  // Profile/Driver owns execution settings; global policy and explicit harness
-  // control same-model retry behavior without a Provider alias directory.
-  const config = resolveProviderResilienceConfig(
-    host.config.providerResilience,
-    host.getTurnExecution().model.executionPolicy,
-    {
-      emptyReplyRetries: input.harness.emptyReplyRetries,
-      requestTimeoutMs: input.harness.requestTimeoutMs,
-    },
-  );
-  return createResilientCompletionPort(input.transport, {
-    config,
-    timers: host.config.providerTimers,
-    onEvent: (event) => {
-      const { type, error, ...fields } = event;
-      logger.warn(formatCompact({
-        op: `provider_${type}`,
-        session: sessionId,
-        ...fields,
-        error: truncatePreview(error, 200),
-      }));
-    },
-  });
-}
-
-function logAssistantIterationFailure(
-  assistant: AssistantMessage,
-  modelId: string,
-  sessionId: string,
-): void {
-  if (assistant.stopReason !== 'error' || !assistant.errorMessage) return;
-  logger.warn(formatCompact({
-    op: 'llm_error',
-    session: sessionId,
-    model: modelId,
-    error: truncatePreview(assistant.errorMessage, 500),
-  }));
-}
-
-function toolResultToAgentMessage(
-  toolCall: ParsedToolCall,
-  result: unknown,
-  isError: boolean,
-): AgentMessage {
-  const text =
-    typeof result === 'string'
-      ? result
-      : result == null
-        ? ''
-        : JSON.stringify(result);
-  return {
-    role: 'toolResult',
-    toolCallId: toolCall.id,
-    toolName: toolCall.name,
-    content: [{ type: 'text', text: text || (isError ? 'Error' : '') }],
-    isError,
-    timestamp: Date.now(),
-  };
-}
-
-export interface AgentLoopTurnInput {
-  /** Filled with the aliases of every projection this turn sends, for tool-argument resolution (ADR 0043 §5). */
-  messageAliases?: import('@zhin.js/ai').MessageAliasTable;
-  /** Shared image allowance, including media already processed at ingress. */
-  imageInspectionBudget?: ImageInspectionBudget;
-  host: ZhinAgentPrivate;
-  core?: AgentCore;
-  sessionId: string;
-  /** 本轮 user 消息 extra（入库 agent_messages.extra） */
-  userMessageExtra?: import('@zhin.js/ai').AgentMessageExtra;
-  rawContent: string;
-  promptProfile: AgentPromptProfile;
-  turnContext: TurnContextView;
-  /** What the IM reply endpoint lets the model author (ReplyPort.segments). */
-  replySegments?: AiOutboundSegmentProfile;
-  /** Turn-owned unified outbound stream; absent preserves complete-message delivery. */
-  replyStream?: CoreReplyStream;
-  replyPhases?: ReplyPhaseLifecycle;
-  allTools: AgentTool[];
-  resolvedTools: AgentTool[];
-  toolExecution: ToolExecutionAuthority;
-  /** Canonical capability authority journals tool facts itself; classic loops map them. */
-  toolEventSource?: 'loop' | 'authority';
-  loopHooks?: PluginAILoopHookRegistry;
-  promptRuntime?: Readonly<{
-    bootstrapContext?: string;
-    contextFiles?: readonly import('../bootstrap.js').ContextFile[];
-    activeSkillsContext?: string;
-    agentNickname?: string;
-    modelId?: string;
-    providerAlias?: string;
-    /** Sender-/selection-dependent capability catalog: sent in the current message's runtime tail. */
-    capabilityTail?: string;
-  }>;
-  personaEnhanced: string;
-  modelId: string;
-  modelCandidates: string[];
-  onChunk?: OnChunkCallback;
-  initialMessages?: AgentMessage[];
-  promptHooks?: HostPromptTurnHooks;
-  signal?: AbortSignal;
-  deferredStats?: string;
-  /** Turn-owned deferred selection authority. Required for deferred loading. */
-  deferredController?: Readonly<{
-    loadedToolNames(): string[];
-    modelOutputBlocks?(name: string, args: unknown, text: string): import('@zhin.js/ai').TextContentBlock[] | undefined;
-    /** Optional: lets the loop auto-load a deferred tool the model called directly. */
-    load?(name: string): Promise<boolean>;
-  }>;
-  /** Catalog paired with deferredController for this exact Turn. */
-  toolCatalog?: readonly ToolCatalogItem[];
-  /** Direct tool sets bypass deferred catalog/snapshot/meta-tool machinery. */
-  toolLoading?: 'deferred' | 'direct';
-  /** Isolated executions neither load nor append conversational history. */
-  conversationPersistence?: 'session' | 'none';
-  /** Explicit iteration cap (e.g. a sub-agent turn); takes precedence over harness/config. */
-  maxIterations?: number;
-  /** Hard cap on steps including progress extensions; defaults to ai.agent.toolBudget.maxTotalIterations. */
-  maxTotalIterations?: number;
-  /** `false` disables automatic continuation (sub-agents report back instead). */
-  autoContinuation?: boolean;
-  /** Sends a brief progress update to the conversation; absent = no updates (sub-agents, unattended). */
-  progressSink?: (text: string) => Promise<void>;
-  /** Admitted interactive root's live budget; inherited only by synchronous children. */
-  interactiveRun?: InteractiveRun;
-  /** Tool name aliases: LLM-facing name → actual tool name */
-  toolAliases?: Record<string, string>;
-  /** Optional TurnEvent tap (processStream / diagnostics) */
-  onTurnEvent?: (event: TurnEvent) => void;
-  /** Ordered public event journal for this stream turn. */
-  journal?: AgentRunJournal;
-  /**
-   * Snapshot generation for ToolRuntime validation.
-   * Plugin Runtime hosts pass SnapshotStore / AgentCapabilities.generation;
-   * legacy paths keep the `0` placeholder.
-   */
-  generation?: number;
-}
-
-export interface AgentLoopTurnResult {
-  reply: string;
-  /** Validated final output, shared by terminal journal and delivery. */
-  output?: AgentOutputElement[];
-  usage: Usage;
-  path: 'chat' | 'agent' | 'multimodal';
-  iterations: number;
-  model: string;
-  toolCalls: ToolCallRecord[];
-  thinking?: string;
-  /** Explicitly unfinished task; unlike a natural final answer, children must not label it complete. */
-  stoppedReason?: string;
-  progressive?: { run: ReplyStreamRun; snapshot?: ReplyStreamSnapshot };
-  replyPhaseId?: string;
-  replyPhaseStopped?: true;
-  /** Conversation projection applied only after the durable terminal commits. */
-  projectConversation?: (delivered?: {
-    readonly messageId?: string;
-    readonly messageIds?: readonly (string | null)[];
-    readonly contextRefs?: readonly string[];
-    readonly confirmedOutput?: AgentOutputElement[];
-    readonly conversationSequence?: number;
-    readonly conversationSequences?: readonly (number | null)[];
-    readonly conversationKey?: string;
-  }) => Promise<void>;
-}
-
-/** @deprecated No production caller: image turns run through `runText` with media
- * blocks (plus the perception pre-pass for text-only models). This path has no
- * provider resilience and no tools. Removed in the next minor. */
-export interface AgentLoopVisionTurnInput {
-  host: ZhinAgentPrivate;
-  core?: AgentCore;
-  sessionId: string;
-  visionSystemPrompt: string;
-  userMessages: AgentMessage[];
-  modelCandidates: string[];
-  onChunk?: OnChunkCallback;
-  promptHooks?: HostPromptTurnHooks;
-  signal?: AbortSignal;
-  onTurnEvent?: (event: TurnEvent) => void;
-}
-
-/** @deprecated See {@link AgentLoopVisionTurnInput}; removed in the next minor. */
-export type AgentLoopVisionTurnResult = AgentLoopTurnResult & { path: 'multimodal' };
-
-function turnEndFromLegacyUsage(reply: string, usage: Usage): TurnEvent {
-  return {
-    type: 'turn_end',
-    output: reply.trim() ? [{ type: 'text', content: reply }] : [],
-    usage: {
-      promptTokens: usage.prompt_tokens,
-      completionTokens: usage.completion_tokens,
-      totalTokens: usage.total_tokens,
-    },
-  };
-}
-
-async function* runAgentLoopVisionTurnOnceRun(
-  input: AgentLoopVisionTurnInput & { modelId: string },
-): AsyncGenerator<TurnEvent, AgentLoopVisionTurnResult> {
-  const { host, sessionId, visionSystemPrompt, modelId, onChunk, promptHooks, signal } = input;
-  const repo = host.contextRepository;
-  const providerAlias = host.getTurnExecution().binding.account.id;
-  const llmModel = host.getTurnExecution().model;
-  const loaded = await repo.loadContext(sessionId);
-  const promptMessages = input.userMessages;
-
-  let iterations = 0;
-  let lastAssistantText = '';
-  let lastUsage: TokenUsage | undefined;
-
-  logPhase(host.phaseConfig, 'agent_loop.vision.start', sessionId, { model: modelId });
-
-  const loopContext = agentContextFrom({
-    systemPrompt: visionSystemPrompt,
-    messages: loaded.messages,
-    tools: [],
-  });
-
-  const loopConfig = {
-    model: llmModel,
-    transport: host.completion,
-    maxIterations: 1,
-    streamOptions: buildAgentPromptCacheStreamOptions(host.config, {
-      modelSdk: llmModel.promptFamily,
-      promptCacheRouting: llmModel.promptCacheRouting,
-      provider: providerAlias,
-      modelId,
-      label: 'vision',
-    }),
-    convertToLlm: createLlmMessageProjection(llmModel),
-    getSteeringMessages: promptHooks?.getSteeringMessages,
-    getFollowUpMessages: promptHooks?.getFollowUpMessages,
-  };
-
-  const mapperState = createTurnEventMapperState();
-
-  const emitTurnEvent = (event: TurnEvent) => {
-    input.onTurnEvent?.(event);
-  };
-
-  for await (const event of agentLoop(promptMessages, loopContext, loopConfig, signal)) {
-    for (const te of mapAgentEventToTurnEvents(event, mapperState)) {
-      emitTurnEvent(te);
-      yield te;
-    }
-    if (event.type === 'turn_start') {
-      iterations += 1;
-    }
-    if (event.type === 'message_update' && event.delta?.type === 'text_delta') {
-      onChunk?.(event.delta.text, lastAssistantText + event.delta.text);
-    }
-    if (event.type === 'message_end' && event.message.role === 'assistant') {
-      const assistant = event.message as AssistantMessage;
-      lastAssistantText = resolveAssistantReplyText(assistant);
-      lastUsage = assistant.usage;
-      logAssistantIterationFailure(assistant, modelId, sessionId);
-      const toolNames = assistant.content
-        .filter((b): b is Extract<typeof b, { type: 'toolCall' }> => b.type === 'toolCall')
-        .map((b) => b.name)
-        .join(',');
-      logAgentLoopIterationEnd(host.phaseConfig, sessionId, {
-        iteration: iterations,
-        model: modelId,
-        label: 'vision',
-        usage: assistant.usage,
-        stopReason: assistant.stopReason,
-        toolNames: toolNames || undefined,
-      });
-      onChunk?.(lastAssistantText, lastAssistantText);
-    }
-    if (event.type === 'agent_end') {
-      if (signal?.aborted) continue;
-      const userBatch = event.userMessages ?? promptMessages;
-      await repo.appendMessages(sessionId, [...userBatch, ...event.messages]);
-    }
-  }
-
-  if (signal?.aborted) {
-    const usage = lastUsage ? tokenUsageToLegacy(lastUsage) : { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
-    const endEvent = turnEndFromLegacyUsage('', usage);
-    emitTurnEvent(endEvent);
-    yield endEvent;
-    return {
-      reply: '',
-      usage,
-      path: 'multimodal',
-      iterations,
-      model: modelId,
-      toolCalls: [],
-    };
-  }
-
-  const reply = sanitizeAssistantReply(lastAssistantText);
-  if (!reply.trim()) {
-    throw new Error('Empty vision model response');
-  }
-
-  logPhase(host.phaseConfig, 'agent_loop.vision.end', sessionId, {
-    iterations,
-    ...tokenUsageLogFields(lastUsage),
-  });
-
-  const usage = lastUsage ? tokenUsageToLegacy(lastUsage) : { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
-  const endEvent = turnEndFromLegacyUsage(reply, usage);
-  emitTurnEvent(endEvent);
-  yield endEvent;
-  return {
-    reply,
-    usage,
-    path: 'multimodal',
-    iterations,
-    model: modelId,
-    toolCalls: [],
-  };
-}
-
-/**
- * @deprecated No production caller: image turns run through `runText` with media
- * blocks (plus the perception pre-pass for text-only models). This path has no
- * provider resilience and no tools. Removed in the next minor.
- */
-export async function* runAgentLoopVisionTurnRun(
-  input: AgentLoopVisionTurnInput,
-): AsyncGenerator<TurnEvent, AgentLoopVisionTurnResult> {
-  const modelId = input.modelCandidates.find(Boolean);
-  if (!modelId) throw new Error('No vision model candidates configured');
-  return yield* runAgentLoopVisionTurnOnceRun({ ...input, modelId });
-}
-
-export async function collectAgentLoopTurnRun<R>(
-  gen: AsyncGenerator<TurnEvent, R>,
-  onTurnEvent?: (event: TurnEvent) => void,
-): Promise<R> {
-  while (true) {
-    const step = await gen.next();
-    if (step.done) return step.value;
-    onTurnEvent?.(step.value);
-  }
-}
+export {
+  runAgentLoopVisionTurnRun,
+  collectAgentLoopTurnRun,
+  type AgentLoopTurnInput,
+  type AgentLoopTurnResult,
+  type AgentLoopVisionTurnInput,
+  type AgentLoopVisionTurnResult,
+};
 
 export async function* runAgentLoopTextTurnRun(
   input: AgentLoopTurnInput,
@@ -462,7 +73,6 @@ export async function* runAgentLoopTextTurnRun(
     host,
     sessionId,
     userMessageExtra,
-    personaEnhanced,
     modelId,
     onChunk,
     promptHooks,
@@ -470,259 +80,51 @@ export async function* runAgentLoopTextTurnRun(
   } = input;
 
   const repo = host.contextRepository;
-
-  // Bash and network tools are only offered when this turn's policy can
-  // actually use them, so the model never burns a step on a tool that is
-  // guaranteed to fail. Filtering the catalog also keeps load_tool /
-  // auto-load from re-adding them.
-  const turnPolicy = input.turnContext.policy;
-  const allTools = withoutForbiddenNetwork(turnPolicy, withoutForbiddenShell(turnPolicy, input.allTools));
-  const resolvedTools = withoutForbiddenNetwork(turnPolicy, withoutForbiddenShell(turnPolicy, input.resolvedTools));
-  const networkWithheld = [...input.allTools, ...input.resolvedTools, ...(input.toolCatalog ?? [])]
-    .some(tool => NETWORK_TOOL_NAMES.has(tool.name)) && !allTools.some(tool => NETWORK_TOOL_NAMES.has(tool.name));
-
-  const providerAlias = host.getTurnExecution().binding.account.id;
-  const llmModel = host.getTurnExecution().model;
   const persistentConversation = input.conversationPersistence !== 'none';
   const loaded = persistentConversation
     ? await repo.loadContext(sessionId)
     : { messages: [] as AgentMessage[] };
-  let promptMessages = input.initialMessages?.length
-    ? input.initialMessages
-    : [createUserMessage(input.rawContent)];
 
-  // ADR 0043 §2: the model sees a token-bounded window of the stored history; storage and
-  // compaction keep working on the full list.
-  const historyWindow = {
-    budget: resolveHistoryTokens(host.config.contextHistory?.tokens, historySceneFromTurn(input.turnContext)),
-    maxMessages: resolveHistoryMaxMessages(host.config.contextHistory?.maxMessages),
-  };
-  const historyTracker = historyWindowTrackerFor(host);
-  const windowed = persistentConversation
-    ? historyTracker.select(sessionId, [...loaded.messages, ...promptMessages], historyWindow)
-    : undefined;
-  const historyView = windowed ? windowed.messages.slice(0, windowed.messages.length - promptMessages.length) : loaded.messages;
+  const setup = await prepareAgentLoopTurnSetup(input, loaded.messages);
+  const {
+    providerAlias, llmModel, promptMessages, historyWindow, historyTracker,
+    directTools, hasTools, imReply, replyPhases, initialReplyPhase, initialReplyRun,
+    prepareReply, withReplyTransition, chatFailure, outputSchema, turnShellPolicy,
+    execPolicyConfig, proseSystemPrompt, systemPrompt, systemPromptCacheBreakpoint,
+    agentTools, deferredController, catalog, turnResidentTools, refreshResolvedTools,
+    harness, maxIterations, explorationBudget, spinDetector, executableTools,
+  } = setup;
+  let llmTools = setup.initialLlmTools;
 
-  const directTools = input.toolLoading === 'direct';
-  const hasTools = providerModelSupports({ model: host.getTurnExecution().binding.model, requirements: { toolCalling: true } })
-    && (directTools ? resolvedTools.length > 0 : allTools.length > 0);
-  const toolRun = hasTools && !directTools
-    ? await planToolRun(resolvedTools, host.config.preExecTimeout)
-    : { mode: 'agent' as const, preExecution: { tools: [], data: '' } };
-
-  const preData = toolRun.preExecution.data;
-  // IM conversations get a message contract. Detached/programmatic turns keep
-  // their text/custom-schema contract and never inherit the IM preset.
-  // ai.agent.outputSchema: true / 'segments' → zhin message contract; an object → caller's own schema.
-  const configuredSchema = host.config.outputSchema ?? 'segments';
-  const messagePreset = configuredSchema === true || configuredSchema === 'segments';
-  const imReply = messagePreset && input.turnContext.origin.kind === 'im'
-    && input.conversationPersistence !== 'none';
-  const replyPhases = imReply ? input.replyPhases : undefined;
-  const initialReplyPhase = replyPhases?.open();
-  let replyPhaseId = initialReplyPhase?.id;
-  let replyRun = imReply && (initialReplyPhase?.stream ?? input.replyStream)
-    ? new ReplyStreamRun((initialReplyPhase?.stream ?? input.replyStream)!, input.replySegments, input.messageAliases) : undefined;
-  let phaseSettled = false;
-  let phaseStopped = false;
-  let phaseAssistant: AssistantMessage | undefined;
-  let phaseLastAssistant: AssistantMessage | undefined;
-  let phaseToolStart = 0;
-  let settledPhaseOutput: AgentOutputElement[] = [];
-  let settledPhaseCount = 0;
-  // This is a phase-transition marker, never a delegated or side-effecting capability.
-  const prepareReply = !!replyRun && hasTools
-    && ![...allTools, ...resolvedTools, ...(input.toolCatalog ?? [])].some(tool => tool.name === 'prepare_reply');
-  let answering = !!replyRun && !hasTools;
-  let preparedCallId: string | undefined;
-  const withReplyTransition = (tools: typeof llmTools): typeof llmTools => prepareReply ? [...tools, {
-        name: 'prepare_reply',
-        description: 'When all work and tools are finished, call this alone to enter the final public answer. No tools are available afterwards.',
-        parameters: z.object({}).strict(),
-      }] : tools;
-  const chatFailure: ChatFailureOptions | undefined = input.turnContext.origin.kind === 'im'
-    ? { master: input.turnContext.principal.roles.includes('master'), locale: input.turnContext.input?.locale }
-    : undefined;
-  const outputSchema = imReply ? structuredReplySchema(input.replySegments)
-    : messagePreset || !configuredSchema ? undefined : configuredSchema;
-  const turnShellPolicy = input.turnContext.policy?.shell;
-  const execPolicyConfig = turnShellPolicy
-    ? {
-        ...host.config,
-        ...(turnShellPolicy.security ? { execSecurity: turnShellPolicy.security } : {}),
-        ...(turnShellPolicy.execPreset ? { execPreset: turnShellPolicy.execPreset } : {}),
-        ...(turnShellPolicy.approvalMode ? { execApprovalMode: turnShellPolicy.approvalMode } : {}),
-      }
-    : host.config;
-  let promptParts = hasTools || input.promptProfile.kind === 'schedule'
-    ? await buildAgentPathSystemPromptParts(host, {
-        profile: input.promptProfile,
-        turn: input.turnContext,
-        content: input.rawContent,
-        sessionId,
-        personaEnhanced,
-      deferredStats: input.deferredStats,
-      modelSdk: llmModel.promptFamily,
-      runtime: input.promptRuntime,
-      })
-    : buildChatPathSystemPromptParts(host, personaEnhanced, input.promptProfile, input.promptRuntime);
-  const proseSystemPrompt = joinSystemPrompt(promptParts).text;
-  // ADR 0042 §1: stable = instance/model/platform text, byte-identical across sessions and scenes;
-  // the tail (scene line, per-turn notes, pre-fetched data) follows the cache breakpoint.
-  if (imReply) promptParts = appendStable(promptParts, structuredReplyInstruction(input.replySegments));
-  if (prepareReply) promptParts = appendStable(promptParts,
-    'When ready to publish your final answer, call prepare_reply by itself. Then provide the final structured reply without further tools. Tool-phase text is not published.');
-  let systemPrompt = joinSystemPrompt(promptParts).text;
-
-  const agentTools = hasTools
-    ? turnShellPolicy
-      ? resolvedTools
-      : applyExecPolicyToTools(execPolicyConfig, resolvedTools, {
-        approvalMode: execPolicyConfig.execApprovalMode,
-      })
-    : [];
-
-  const deferredController = directTools ? undefined : input.deferredController;
-  const catalog = directTools ? [] : withoutForbiddenNetwork(turnPolicy, withoutForbiddenShell(turnPolicy, input.toolCatalog ?? []));
-  if (!directTools && hasTools && (!deferredController || catalog.length === 0)) {
-    throw new Error('Deferred tool loading requires a turn-owned controller and catalog');
-  }
-
-  // The meta tools plus every catalog item the capability plan pinned (scene tier, config names,
-  // platform tools, `alwaysLoaded` plugin tools). Config names alone would re-add tier-excluded tools.
-  const turnResidentTools = () => residentToolNames(catalog, DEFERRED_META_TOOL_NAMES);
-  const refreshResolvedTools = () => {
-    if (directTools) return resolvedTools;
-    const alwaysLoaded = turnResidentTools();
-    const loaded = deferredController!.loadedToolNames();
-    return resolveDeferredApiTools(catalog, alwaysLoaded, loaded);
+  let stopProgressFn: (() => void) | undefined;
+  const state: TurnReplyPhaseState & TurnToolLoopState = {
+    replyPhaseId: initialReplyPhase?.id, replyRun: initialReplyRun,
+    phaseSettled: false, phaseStopped: false, phaseAssistant: undefined,
+    phaseLastAssistant: undefined, phaseToolStart: 0,
+    settledPhaseOutput: [] as AgentOutputElement[], settledPhaseCount: 0,
+    answering: !!initialReplyRun && !hasTools, preparedCallId: undefined,
+    nudgedIteration: 0, activeTools: 0, iterations: 0, segmentStartIteration: 0,
+    currentLimit: maxIterations, lastAssistantText: '',
+    lastAssistantHadToolCalls: false, lastAssistantNeedsHostReply: false,
+    segmentMessages: [] as AgentMessage[], turnTranscript: [] as AgentMessage[],
+    continuations: 0, stopProgress: () => { stopProgressFn?.(); },
   };
 
-  let promptSections: PromptSectionDebugInfo[] = [];
-  if (hasTools) {
-    const sections = input.promptProfile.kind === 'interactive'
-      ? await describeAgentPathPromptSections(host, {
-          turn: input.turnContext,
-          content: input.rawContent,
-          sessionId,
-          deferredStats: input.deferredStats,
-          modelSdk: llmModel.promptFamily,
-          runtime: input.promptRuntime,
-        })
-      : [];
-    promptSections = sections;
-    logPromptComposition({
-      config: host.promptTraceConfig,
-      sessionId,
-      label: 'orchestrator',
-      systemPrompt,
-      sections,
-      historyMessages: historyView,
-      tools: agentTools,
-      userPreview: input.rawContent,
-    });
-  } else {
-    logPromptComposition({
-      config: host.promptTraceConfig,
-      sessionId,
-      label: 'chat',
-      systemPrompt,
-      historyMessages: historyView,
-      tools: [],
-      userPreview: input.rawContent,
-    });
-  }
-
-  const harnessBinding = host.getTurnExecution().binding;
-  const harness = resolveModelHarness({ driver: harnessBinding.service.driver, serviceId: harnessBinding.service.id, modelId, config: host.config.modelHarness });
-  const maxIterations = hasTools
-    ? (input.maxIterations ?? resolveTurnMaxIterations({
-      driver: harnessBinding.service.driver,
-      serviceId: harnessBinding.service.id,
-      modelId,
-      modelHarness: host.config.modelHarness,
-      scene: iterationSceneOf(input.turnContext),
-      configured: host.config.maxIterations,
-    }))
-    : 1;
-  const explorationBudget = hasTools && !input.interactiveRun
-    ? new ExplorationBudget(harness.explorationBudget ?? DEFAULT_EXPLORATION_BUDGET)
-    : undefined;
-  const spinDetector = hasTools && harness.explorationBudget !== 0 ? new SpinDetector() : undefined;
-  let nudgedIteration = 0;
-  if (hasTools && harness.explorationGuidance) promptParts = appendStable(promptParts, EXPLORATION_GUIDANCE);
-  // Prompt-cache layout: everything that varies by turn or sender (observed scene state, capability
-  // availability, deferred tool index, pre-fetched data, network note) rides in the runtime-context
-  // tail of the current user message, after the body. A change there no longer invalidates the
-  // cached history prefix. Only the bound conversation identity belongs in the session-stable tail.
-  const runtimeTail: import('@zhin.js/ai').TextContentBlock[] = [];
-  const scene = scenePromptPartsForTurn(input.turnContext);
-  if (scene) promptParts = appendScene(promptParts, scene.identity);
-  if (scene?.state) runtimeTail.push(createPromptContextBlock('scene', scene.state));
-  const capabilityTail = input.promptRuntime?.capabilityTail?.trim();
-  if (capabilityTail) runtimeTail.push(createPromptContextBlock('turn-capabilities', capabilityTail));
-  if (hasTools && !directTools) {
-    const toolIndex = renderDeferredToolIndex(deferredCatalogTools(catalog, agentTools)
-      .map((item) => ({ name: item.name, description: item.brief, group: toolIndexGroup(item) })));
-    if (toolIndex) runtimeTail.push(createPromptContextBlock('deferred-tools', toolIndex));
-  }
-  if (preData) runtimeTail.push(createPromptContextBlock('pre-fetched-data', `Pre-fetched data:\n${preData}`));
-  if (networkWithheld) runtimeTail.push({ type: 'text', text: NETWORK_DISABLED_PROMPT_NOTE });
-  promptMessages = appendRuntimeContext(promptMessages, runtimeTail);
-  const composedPrompt = joinSystemPrompt(promptParts);
-  systemPrompt = composedPrompt.text;
-  const systemPromptCacheBreakpoint = composedPrompt.cacheBreakpoint;
-
-  const executableTools = new ExecutableToolRegistry(agentTools);
-  let llmTools = directTools
-    ? agentToolsToLlmTools(agentTools)
-    : buildLlmToolsForProvider({
-        nativeDeferredTools: llmModel.nativeDeferredTools === true, catalog, apiTools: agentTools,
-        alwaysLoaded: turnResidentTools(), sessionLoadedNames: deferredController?.loadedToolNames() ?? [],
-      });
-  llmTools = withReplyTransition(llmTools);
-  if (hasTools) {
-    noteTurnTrace(traceTurnId(input.turnContext), {
-      kind: 'context_budget',
-      report: buildContextBudgetReport({
-        systemPrompt,
-        outputSchema,
-        sections: promptSections,
-        bootstrapContext: input.promptRuntime?.bootstrapContext,
-        bootstrapSkipped: scopeBootstrapText(
-          input.promptRuntime?.bootstrapContext ?? '',
-          bootstrapSceneFromTurn(input.turnContext),
-          { contextFiles: input.promptRuntime?.contextFiles },
-        ).skipped,
-        activeSkillsContext: input.promptRuntime?.activeSkillsContext,
-        loadedTools: agentTools,
-        deferredToolCount: deferredCatalogTools(catalog, agentTools).length,
-        historyMessages: historyView,
-        userMessages: promptMessages,
-      }),
-    });
-  }
   const toolCalls: ToolCallRecord[] = [];
-  let iterations = 0;
-  let lastAssistantText = '';
-  let activeTools = 0;
-  const completionUsage = trackTurnCompletionUsage(host.completion, host.imageAssets
-    ? (message, replySignal) => publishReplyImages(message, host.imageAssets!, replySignal)
-    : undefined, { turnId: traceTurnId(input.turnContext), recordBodies: host.config.recordRequestBodies }, input.interactiveRun);
-  const localInspection = host.localAssets ? new LocalImageInspection(
-    host.localAssets, { ...input.turnContext, sessionKey: input.turnContext.session.key },
-    input.imageInspectionBudget ?? { remaining: host.mediaPerception?.maxItemsPerTurn ?? DEFAULT_PERCEPTION_SETTINGS.maxItemsPerTurn },
-    host.mediaPerception, completionUsage.recordMediaUsage,
-  ) : undefined;
-  if (localInspection) completionUsage.transport = localInspection.wrap(completionUsage.transport);
-  const conversationBatches: Array<{
-    messages: AgentMessage[];
-    messageExtras: Array<import('@zhin.js/ai').AgentMessageExtra | undefined>;
-  }> = [];
+  const conversationBatches: ConversationBatch[] = [];
   const conversationProjectionCopies = new Map<AgentMessage, AgentMessage[]>();
   const conversationPhaseFacts = new Map<AgentMessage, ReplyPhaseFacts>();
-  /** This turn's prompt plus every message the loop produced; used for reply recovery. */
-  let turnTranscript: AgentMessage[] = [];
+
+  const {
+    completionUsage, localInspection, rebuildLlmTools, contextWindow,
+    fixedPromptTokens, completionPort, compactionRuntime, summaryExecution,
+  } = createTurnCompletionRuntime({
+    input, providerAlias, llmModel, persistentConversation, directTools,
+    prepareReply, withReplyTransition, turnShellPolicy, execPolicyConfig,
+    systemPrompt, outputSchema, catalog, deferredController, turnResidentTools,
+    refreshResolvedTools, harness, executableTools,
+    getLlmTools: () => llmTools, setLlmTools: (next) => { llmTools = next; }, state,
+  });
 
   logPhase(host.phaseConfig, 'agent_loop.turn.start', sessionId, {
     model: modelId,
@@ -737,81 +139,10 @@ export async function* runAgentLoopTextTurnRun(
     tools: llmTools,
   });
 
-  const rebuildLlmTools = () => {
-    // Provider requests omit schemas during answering; retain the local execution catalog
-    // so an admitted follow-up can resume ordinary tools in its own phase.
-    if (answering) return llmTools;
-    const refreshed = refreshResolvedTools();
-    const nextAgentTools = turnShellPolicy
-      ? refreshed
-      : applyExecPolicyToTools(execPolicyConfig, refreshed, {
-          approvalMode: execPolicyConfig.execApprovalMode,
-        });
-    executableTools.replace(nextAgentTools);
-    llmTools = directTools
-      ? agentToolsToLlmTools(nextAgentTools)
-      : buildLlmToolsForProvider({
-          nativeDeferredTools: llmModel.nativeDeferredTools === true, catalog, apiTools: nextAgentTools,
-          alwaysLoaded: turnResidentTools(), sessionLoadedNames: deferredController?.loadedToolNames() ?? [],
-        });
-    llmTools = withReplyTransition(llmTools);
-    return llmTools;
-  };
-
-  const contextWindow = llmModel.contextWindow || host.config.contextTokens;
-  // System prompt and tool schemas count against the window too, so the
-  // compaction threshold is measured on what is left for messages (#730).
-  let budgetTools: typeof llmTools | undefined;
-  let fixedBudget: Promise<number> | undefined;
-  const fixedPromptTokens = () => {
-    // 本回合系统提示不变；工具渐进披露替换数组后重新计算完整 Schema。
-    if (!fixedBudget || budgetTools !== llmTools) {
-      budgetTools = llmTools;
-      fixedBudget = estimateContextFixedTokens({ systemPrompt, tools: llmTools, model: llmModel, outputSchema });
-    }
-    return fixedBudget;
-  };
-  const loopHooks = input.loopHooks;
-  // The wrapper is inside resilience: every actual attempt gets an independent candidate epoch.
-  const attempt = (method: keyof LlmCompletionPort): LlmCompletionPort['complete'] => async (model, context, options) => {
-    if (!answering) return completionUsage.transport[method](model, context, options);
-    const run = replyRun;
-    if (!run) return completionUsage.transport[method](model, { ...context, tools: undefined }, options);
-    const epoch = run.begin();
-    return completionUsage.transport[method](model, { ...context, tools: undefined }, {
-      ...options,
-      signal: options?.signal ? AbortSignal.any([options.signal, run.failureSignal]) : run.failureSignal,
-      onTextDelta: text => { options?.onTextDelta?.(text); run.append(text, epoch); },
-      retryAllowed: () => !run.offered && options?.retryAllowed?.() !== false,
-    });
-  };
-  const resilientCompletion = createTurnCompletionPort({
-    host,
-    providerAlias,
-    harness,
-    sessionId,
-    transport: { complete: attempt('complete'), completeSimple: attempt('completeSimple') },
-  });
-  const complete = (method: keyof LlmCompletionPort): LlmCompletionPort['complete'] => async (model, context, options) => {
-    preparedCallId = undefined;
-    const assistant = await resilientCompletion[method](model, context, options);
-    if (prepareReply && !answering && !assistant.errorMessage && assistant.stopReason === 'toolCalls') {
-      const calls = assistant.content.filter(block => block.type === 'toolCall');
-      if (calls.length === 1 && calls[0]!.name === 'prepare_reply') preparedCallId = calls[0]!.id;
-    }
-    return assistant;
-  };
-  const completionPort: LlmCompletionPort = { complete: complete('complete'), completeSimple: complete('completeSimple') };
-
-  // An isolated child owns its circuit breaker; later turns must not inherit its failures.
-  const compactionRuntime = !persistentConversation && input.interactiveRun
-    ? new AgentCompactionRuntime() : host.compactionRuntime;
-
   // Progress-aware budget: maxIterations is soft, extended while progressing.
   const toolBudget = resolveToolBudget(host.config.toolBudget, harness);
   const progress = new TurnProgressTracker(toolBudget, !!input.interactiveRun);
   const turnStartedAt = Date.now();
-  let segmentStartIteration = 0;
   let extensionPending = false;
   let lastReportIteration = 0;
   const segmentHardCap = Math.max(maxIterations, input.maxTotalIterations ?? toolBudget.maxTotalIterations);
@@ -819,347 +150,126 @@ export async function* runAgentLoopTextTurnRun(
     input.interactiveRun ? !!input.interactiveRun.check()
       : (toolBudget.maxWallClockMs > 0 && Date.now() - turnStartedAt >= toolBudget.maxWallClockMs)
         || (toolBudget.maxTotalTokens > 0 && completionUsage.usage.totalTokens >= toolBudget.maxTotalTokens);
-  let currentLimit = maxIterations;
   const nextIterationLimit = (iteration: number, limit: number): number => {
-    currentLimit = limit;
-    if (input.interactiveRun) return phaseStopped || hardLimitReached() || progress.stalled ? iteration : iteration + 1;
-    if (phaseStopped || iteration > 0 && hardLimitReached()) return iteration;
+    state.currentLimit = limit;
+    if (input.interactiveRun) return state.phaseStopped || hardLimitReached() || progress.stalled ? iteration : iteration + 1;
+    if (state.phaseStopped || iteration > 0 && hardLimitReached()) return iteration;
     if (iteration < limit) return limit;
     if (toolBudget.extendBy === 0 || limit >= segmentHardCap || progress.stalled) return limit;
-    const windowStart = segmentStartIteration + iteration - toolBudget.progressWindow + 1;
+    const windowStart = state.segmentStartIteration + iteration - toolBudget.progressWindow + 1;
     if (!progress.progressedSince(windowStart)) return limit;
     const next = Math.min(segmentHardCap, limit + toolBudget.extendBy);
-    currentLimit = next;
+    state.currentLimit = next;
     extensionPending = true;
     noteTurnTrace(traceTurnId(input.turnContext), { kind: 'budget_extended', from: limit, to: next });
     logPhase(host.phaseConfig, 'agent_loop.budget.extend', sessionId, { from: limit, to: next });
     return next;
   };
   const recordProgress = (toolName: string, args: unknown, ok: boolean, output?: string) =>
-    progress.record(iterations, { toolName, args, ok, output });
+    progress.record(state.iterations, { toolName, args, ok, output });
 
-  const resolveSummary = createTurnSummaryExecutionResolver({ transport: host.completion, model: llmModel });
-  const summaryExecution = async () => {
-    const summary = await resolveSummary();
-    return { transport: completionUsage.forTransport(summary.transport), model: summary.model };
-  };
-  const settlePhase = async (output: AgentOutputElement[], raw: string, hostReply: boolean) => {
-    if (!replyPhases || !replyPhaseId || phaseSettled) return;
-    let snapshot: ReplyStreamSnapshot | undefined;
-    if (replyRun) {
-      await replyRun.stop();
-      if (answering && !hostReply && !replyRun.error) {
-        try { snapshot = await replyRun.complete(raw); } catch { /* Preserve the confirmed prefix. */ }
-      }
+  let loopDepth = 0;
+  const pendingToolResults = new Map<string, AgentMessage>();
+  const flushToolResults = () => {
+    const assistant = [...state.segmentMessages].reverse().find(message => message.role === 'assistant') as AssistantMessage | undefined;
+    for (const block of assistant?.content ?? []) {
+      if (block.type !== 'toolCall') continue;
+      const result = pendingToolResults.get(block.id);
+      if (result) { state.segmentMessages.push(result); pendingToolResults.delete(block.id); }
     }
-    const facts = await replyPhases.settle({ id: replyPhaseId, output, reply: renderAgentOutput(output),
-      ...(replyRun && (snapshot || replyRun.offered) ? { run: replyRun, ...(snapshot ? { snapshot } : {}) } : {}),
-    });
-    phaseSettled = true;
-    settledPhaseOutput = output;
-    settledPhaseCount += 1;
-    phaseStopped ||= facts.stopped === true;
-    if (!phaseAssistant && facts.confirmedOutput.length && phaseLastAssistant) {
-      // agentLoop can retain only prepare_reply + toolResult after a failed re-completion.
-      phaseAssistant = { ...phaseLastAssistant, stopReason: 'stop', errorMessage: undefined,
-        usage: { ...EMPTY_TOKEN_USAGE, cost: { ...EMPTY_TOKEN_USAGE.cost } }, content: [] };
-      segmentMessages.push(phaseAssistant);
-      const batch = conversationBatches.at(-1);
-      if (batch) {
-        if (batch.messages !== segmentMessages) batch.messages.push(phaseAssistant);
-        batch.messageExtras.push(undefined);
-      }
-    }
-    if (phaseAssistant) {
-      phaseAssistant.content = [{ type: 'text', text: encodeConfirmedOutput(facts.confirmedOutput) }];
-      delete phaseAssistant.messageId;
-      delete phaseAssistant.conversationEventId;
-      delete phaseAssistant.conversationEventIds;
-      delete phaseAssistant.conversationKey;
-      const headed = stampAssistantHeaders([phaseAssistant], input.turnContext.input?.contextState?.bot);
-      const deliveryConv = facts.delivery.status !== 'suppressed' ? facts.delivery : undefined;
-      const stamped = stampDeliveredMessageId(headed, facts.messageId, facts.contextRefs, facts.messageIds, {
-        conversationSequence: facts.conversationSequence ?? deliveryConv?.conversationSequence,
-        conversationSequences: facts.conversationSequences ?? deliveryConv?.conversationSequences,
-        conversationKey: facts.conversationKey ?? deliveryConv?.conversationKey,
-      })[0];
-      if (stamped) Object.assign(phaseAssistant, stamped);
-      conversationPhaseFacts.set(phaseAssistant, facts);
-      for (const copy of conversationProjectionCopies.get(phaseAssistant) ?? []) {
-        if (copy.role === 'assistant') {
-          delete (copy as AssistantMessage).messageId;
-          delete (copy as AssistantMessage).conversationEventId;
-          delete (copy as AssistantMessage).conversationEventIds;
-          delete (copy as AssistantMessage).conversationKey;
-        }
-        Object.assign(copy, phaseAssistant);
-        conversationPhaseFacts.set(copy, facts);
-      }
-    }
+    for (const result of pendingToolResults.values()) state.segmentMessages.push(result);
+    pendingToolResults.clear();
   };
-  const settleQueuedAnswer = async () => {
-    if (!phaseAssistant || phaseSettled) return;
-    const calls = toolCalls.slice(phaseToolStart);
-    let output: AgentOutputElement[] = [];
-    let raw = lastAssistantText;
-    let hostReply = lastAssistantNeedsHostReply;
-    if (!hostReply) {
-      try { output = decodeStructuredReply(raw, input.replySegments); } catch (error) {
-        if (!replyRun?.offered) {
-          const lenient = decodeLenientStructuredReply(raw, input.replySegments);
-          if (lenient) { output = lenient.output; raw = lenient.text; }
-          else {
-            const recovery = await recoverStructuredReply({ transport: completionUsage.transport, model: llmModel,
-              raw, error: error instanceof Error ? error : new Error('Invalid structured reply'), signal,
-              segments: input.replySegments, failureText: chatFailureLine('format', { ...chatFailure, random: 0 }),
-            });
-            output = recovery.output;
-            raw = recovery.assistant ? assistantText(recovery.assistant) : raw;
-            hostReply = !recovery.assistant;
-          }
-        }
-      }
-    } else output = parseOutput(sanitizeAssistantReply(raw));
-    output = mergeToolOutboundElements(output, calls);
-    if (input.messageAliases) output = resolveReplyAliases(output, input.messageAliases);
-    await settlePhase(output, raw, hostReply);
+
+  const reporter = input.progressSink && toolBudget.progressMaxUpdates > 0 && (input.interactiveRun || hasTools)
+    ? new TurnProgressReporter({
+        locale: input.turnContext.input?.locale,
+        sink: input.progressSink,
+        minIntervalMs: toolBudget.progressMinIntervalMs,
+        maxUpdates: input.interactiveRun ? undefined : toolBudget.progressMaxUpdates,
+        signal,
+        summarize: () => input.interactiveRun ? Promise.resolve(undefined) : summarizeProgress({
+          locale: input.turnContext.input?.locale,
+          transport: completionUsage.transport,
+          model: llmModel,
+          systemPrompt: proseSystemPrompt,
+          messages: [...loaded.messages, ...state.turnTranscript, ...state.segmentMessages],
+          sessionId,
+          signal,
+        }),
+      })
+    : undefined;
+  const progressState = () => ({
+    steps: state.iterations,
+    interimText: !state.answering && state.lastAssistantHadToolCalls ? state.lastAssistantText : undefined,
+    activityText: turnReplyMessages(input.turnContext.input?.locale, state.activeTools > 0 ? 'waiting' : 'working'),
+  });
+  stopProgressFn = input.interactiveRun && !state.answering ? reporter?.watch(progressState) : undefined;
+  const restartProgress = () => {
+    stopProgressFn?.();
+    stopProgressFn = input.interactiveRun && !state.answering ? reporter?.watch(progressState) : undefined;
   };
-  const queuedMessages = async (read: () => Promise<AgentMessage[]>) => {
-    if (phaseStopped) return [];
-    const batch = await read();
-    if (!batch.length) return batch;
-    if (replyPhases && phaseAssistant) {
-      await settleQueuedAnswer();
-      if (!phaseStopped) {
-        const next = replyPhases.open();
-        replyPhaseId = next.id;
-        replyRun = next.stream ? new ReplyStreamRun(next.stream, input.replySegments, input.messageAliases) : undefined;
-        phaseSettled = false;
-        phaseAssistant = undefined;
-        phaseLastAssistant = undefined;
-        phaseToolStart = toolCalls.length;
-        answering = !!replyRun && !hasTools;
-        preparedCallId = undefined;
-        rebuildLlmTools();
-        restartProgress();
-      }
-    }
-    // These are admitted inputs, including any whose phase stopped before execution.
-    flushToolResults();
-    segmentMessages.push(...batch);
-    if (phaseStopped) logger.warn(formatCompact({ op: 'reply_phase_input_not_executed', session: sessionId,
-      phase: replyPhaseId, messages: batch.length }));
-    return phaseStopped ? [] : batch;
-  };
+
+  const { settlePhase, queuedMessages } = createTurnReplyPhaseController({
+    input,
+    replyPhases,
+    hasTools,
+    toolCalls,
+    conversationBatches,
+    conversationProjectionCopies,
+    conversationPhaseFacts,
+    transport: completionUsage.transport,
+    llmModel,
+    chatFailure,
+    state,
+    rebuildLlmTools: () => { rebuildLlmTools(); },
+    restartProgress,
+    flushToolResults,
+  });
+
+  const toolHandlers = createTurnToolLoopHandlers({
+    input,
+    hasTools,
+    prepareReply,
+    executableTools,
+    catalog,
+    deferredController,
+    localInspection,
+    explorationBudget,
+    spinDetector,
+    toolCalls,
+    recordProgress,
+    rebuildLlmTools,
+    state,
+  });
 
   const loopConfig = {
     model: llmModel,
     transport: completionPort,
     maxIterations,
     sessionId,
-    streamOptions: {
-      ...buildAgentPromptCacheStreamOptions(host.config, {
-        modelSdk: llmModel.promptFamily,
-        promptCacheRouting: llmModel.promptCacheRouting,
-        provider: providerAlias,
-        modelId,
-        label: hasTools ? 'orchestrator' : 'chat',
-      }),
-      ...(outputSchema ? { outputSchema } : {}),
-      ...(replyRun ? { retryAllowed: () => !replyRun?.offered } : {}),
-    },
-    convertToLlm: persistentConversation
-      ? ((base) => (messages: AgentMessage[]) => base(historyTracker.select(sessionId, messages, historyWindow).messages))(createLlmMessageProjection(llmModel, input.messageAliases))
-      : createLlmMessageProjection(llmModel, input.messageAliases),
-    transformContext: async (messages: AgentMessage[], ctxSignal?: AbortSignal) =>
-      persistentConversation || input.interactiveRun ? compactionRuntime.transformContext(messages, ctxSignal, {
-        host,
-        sessionId,
-        transport: completionPort,
-        model: llmModel,
-        resolveExecution: summaryExecution,
-        compactionConfig: host.config.compaction,
-        contextWindow,
-        reservedTokens: await fixedPromptTokens(),
-        toldLedger: host.toldLedger?.render(sessionId),
-        mode: 'text',
-        persistSummary: persistentConversation,
-        loopHooks,
-      }) : messages,
-    onContextOverflow: async (messages: AgentMessage[], ctxSignal?: AbortSignal) =>
-      replyRun?.offered ? undefined : persistentConversation || input.interactiveRun ? compactionRuntime.transformContext(messages, ctxSignal, {
-        host,
-        sessionId,
-        transport: completionPort,
-        model: llmModel,
-        resolveExecution: summaryExecution,
-        compactionConfig: host.config.compaction,
-        contextWindow,
-        reservedTokens: await fixedPromptTokens(),
-        toldLedger: host.toldLedger?.render(sessionId),
-        mode: 'text',
-        force: true,
-        persistSummary: persistentConversation,
-        loopHooks,
-      }) : messages,
+    ...createTurnContextCallbacks({
+      input,
+      persistentConversation,
+      providerAlias,
+      modelId,
+      hasTools,
+      llmModel,
+      outputSchema,
+      historyTracker,
+      historyWindow,
+      compactionRuntime,
+      completionPort,
+      summaryExecution,
+      contextWindow,
+      fixedPromptTokens,
+      state,
+    }),
     getSteeringMessages: promptHooks?.getSteeringMessages
       ? () => queuedMessages(() => promptHooks.getSteeringMessages!()) : undefined,
     getFollowUpMessages: promptHooks?.getFollowUpMessages
       ? () => queuedMessages(() => promptHooks.getFollowUpMessages!()) : undefined,
-    executeTool: async (toolCall: ParsedToolCall, _tools: typeof llmTools, toolSignal?: AbortSignal, cause?: ToolExecutionCause) => {
-      if (prepareReply && toolCall.name === 'prepare_reply') {
-        if (answering || preparedCallId !== toolCall.id) {
-          return toolResultToAgentMessage(toolCall, 'prepare_reply must be the only tool call in a completed assistant turn.', true);
-        }
-        answering = true;
-        stopProgress?.();
-        return toolResultToAgentMessage(toolCall, 'Final answer phase. All tools are unavailable; publish the structured reply now.', false);
-      }
-      if (answering) return toolResultToAgentMessage(toolCall, 'Tools are unavailable during the public answer.', true);
-      const stopped = input.interactiveRun?.check();
-      if (stopped) return toolResultToAgentMessage(toolCall, stopped, true);
-      const hookRegistry = host.resourceHub?.hooks;
-      const currentAliases = input.toolAliases;
-      const resolvedName = currentAliases?.[toolCall.name] ?? toolCall.name;
-      let effectiveArgs = toolCall.arguments;
-
-      // PreToolUse interception
-      if (hookRegistry) {
-        const preDecision = await hookRegistry.triggerPreToolUse({
-          type: 'preToolUse',
-          toolName: resolvedName,
-          toolInput: effectiveArgs,
-          toolSource: executableTools.resolve(resolvedName)?.source,
-          sessionId,
-          turn: input.turnContext,
-        });
-        if (preDecision.decision === 'deny') {
-          const reason = preDecision.reason;
-          recordProgress(resolvedName, effectiveArgs, false);
-          toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: reason });
-          return toolResultToAgentMessage(toolCall, reason, true);
-        }
-        if (preDecision.decision === 'modify') {
-          effectiveArgs = preDecision.modifiedInput;
-        }
-      }
-
-      const tool = executableTools.resolve(resolvedName);
-      if (!tool) {
-        recordProgress(resolvedName, effectiveArgs, false);
-        return toolResultToAgentMessage(toolCall, `工具「${resolvedName}」执行失败：工具不存在或所属插件未启用。`, true);
-      }
-
-      try {
-        activeTools += 1;
-        const outcome = await input.toolExecution.execute(tool, effectiveArgs, toolCall.id, cause);
-        if (outcome.status === 'cancelled') {
-          const cancellation = signal?.reason instanceof Error
-            ? signal.reason
-            : new DOMException(outcome.reason, 'AbortError');
-          throw cancellation;
-        }
-        if (outcome.status !== 'completed') {
-          const reason = outcome.status === 'failed' ? outcome.error : outcome.reason;
-          recordProgress(resolvedName, effectiveArgs, false);
-          toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: reason });
-          return toolResultToAgentMessage(toolCall, reason, true);
-        }
-        const rawText = await applyToolToModelOutput(tool, outcome.output, effectiveArgs);
-        let modelOutput = outcome.output;
-
-        // PostToolUse interception
-        let resultText = rawText;
-        if (hookRegistry) {
-          const postDecision = await hookRegistry.triggerPostToolUse({
-            type: 'postToolUse',
-            toolName: resolvedName,
-            toolInput: effectiveArgs,
-            toolOutput: rawText,
-            durationMs: outcome.durationMs,
-            sessionId,
-            turn: input.turnContext,
-          });
-          if (postDecision.decision === 'reject') {
-            recordProgress(resolvedName, effectiveArgs, false);
-            toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: postDecision.reason });
-            return toolResultToAgentMessage(toolCall, postDecision.reason, true);
-          }
-          if (postDecision.decision === 'modify') {
-            modelOutput = postDecision.modifiedOutput;
-            resultText = typeof postDecision.modifiedOutput === 'string'
-              ? postDecision.modifiedOutput
-              : JSON.stringify(postDecision.modifiedOutput);
-          }
-        }
-        // MCP capture already removed bytes before execution returned. Only enqueue
-        // an authorized metadata reference after the output hook has accepted it.
-        resultText = localInspection?.accept(modelOutput) ?? resultText;
-
-        const progressKind = recordProgress(resolvedName, effectiveArgs, true, resultText);
-        const budgetNote = explorationBudget?.record(resolvedName, isProgress(progressKind));
-        const spin = spinDetector?.record(resolvedName, effectiveArgs, resultText);
-        if (spin) noteTurnTrace(traceTurnId(input.turnContext), { kind: 'spin_hint', family: spin.family, calls: spin.calls, reason: spin.reason });
-        const localIteration = iterations - segmentStartIteration;
-        const lastStep = !input.interactiveRun && hasTools && currentLimit > 2 && localIteration === currentLimit - 1 && nudgedIteration !== iterations;
-        if (lastStep) {
-          nudgedIteration = iterations;
-          noteTurnTrace(traceTurnId(input.turnContext), { kind: 'last_iteration_nudge', iteration: localIteration, limit: currentLimit });
-        }
-        const notes = [budgetNote, spin?.note, lastStep ? LAST_ITERATION_NUDGE : undefined].filter(Boolean).join('\n\n');
-        const finalText = notes ? `${resultText}\n\n${notes}` : resultText;
-        toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: finalText });
-        const result = toolResultToAgentMessage(toolCall, finalText, false);
-        const blocks = deferredController?.modelOutputBlocks?.(resolvedName, effectiveArgs, finalText);
-        return blocks ? { ...result, content: blocks } : result;
-      } catch (err) {
-        if (err instanceof TurnJournalCommitError) throw err;
-        if (signal?.aborted || (err instanceof Error && err.name === 'AbortError')) {
-          throw signal?.reason instanceof Error
-            ? signal.reason
-            : err instanceof Error
-              ? err
-              : new Error('Tool execution cancelled');
-        }
-        const message = err instanceof Error ? err.message : String(err);
-        const failure = `工具「${resolvedName}」执行失败：${message}`;
-        recordProgress(resolvedName, effectiveArgs, false);
-        toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: failure });
-        return toolResultToAgentMessage(toolCall, failure, true);
-      } finally {
-        activeTools -= 1;
-      }
-    },
-    beforeToolCall: async ({ toolCall }: { toolCall: ParsedToolCall }) => {
-      if (answering) return { allowed: false, reason: 'Tools are unavailable during the public answer.' };
-      if (prepareReply && toolCall.name === 'prepare_reply') return;
-      return loopHooks?.runBeforeToolCall({ toolCall, sessionId });
-    },
-    afterToolCall: async ({ toolCall, result }: { toolCall: ParsedToolCall; result: AgentMessage }) => {
-      if (prepareReply && toolCall.name === 'prepare_reply') return;
-      await loopHooks?.runAfterToolCall({ toolCall, result, sessionId });
-    },
-    refreshTools: hasTools ? () => rebuildLlmTools() : undefined,
-    // The model called a deferred catalog tool without load_tool: load it and
-    // run the call. The catalog only holds tools this turn may use, and the
-    // rebuilt list re-applies exec policy, so disallowed tools stay rejected.
-    resolveMissingTool: hasTools
-      ? async (name: string) => answering ? undefined : createMissingToolResolver({
-          catalog,
-          load: deferredController?.load?.bind(deferredController),
-          rebuild: rebuildLlmTools,
-        })?.(name)
-      : undefined,
-    shouldRecompleteAfterTool: (result: AgentMessage) => {
-      if (answering && result.role === 'toolResult' && result.toolName === 'prepare_reply' && !result.isError) return true;
-      if (result.role !== 'toolResult' || !Array.isArray(result.content)) return false;
-      return result.content.some(
-        (block) =>
-          block.type === 'text'
-          && typeof block.text === 'string'
-          && block.text.includes('__zhin_tools_mutated__'),
-      );
-    },
+    ...toolHandlers,
     maxRecompletePerIteration: 1,
     toolExecution: host.config.toolExecution ?? 'tiered',
     nextIterationLimit,
@@ -1176,67 +286,24 @@ export async function* runAgentLoopTextTurnRun(
     && !input.interactiveRun
     && input.autoContinuation !== false
     && autoContinueAllowed(toolBudget.autoContinue, input.turnContext);
-  let continuations = 0;
   let segmentPrompt = promptMessages;
   let segmentContext = loopContext;
-  let lastAssistantHadToolCalls = false;
-  let lastAssistantNeedsHostReply = false;
-  const reporter = input.progressSink && toolBudget.progressMaxUpdates > 0 && (input.interactiveRun || hasTools)
-    ? new TurnProgressReporter({
-      locale: input.turnContext.input?.locale,
-      sink: input.progressSink,
-      minIntervalMs: toolBudget.progressMinIntervalMs,
-      maxUpdates: input.interactiveRun ? undefined : toolBudget.progressMaxUpdates,
-      signal,
-      summarize: () => input.interactiveRun ? Promise.resolve(undefined) : summarizeProgress({
-        locale: input.turnContext.input?.locale,
-        transport: completionUsage.transport,
-        model: llmModel,
-        systemPrompt: proseSystemPrompt,
-        messages: [...loaded.messages, ...turnTranscript, ...segmentMessages],
-        sessionId,
-        signal,
-      }),
-    })
-    : undefined;
-  // Messages of the running segment, for progress summaries before agent_end.
-  let segmentMessages: AgentMessage[] = [];
-  let loopDepth = 0;
-  const pendingToolResults = new Map<string, AgentMessage>();
-  const flushToolResults = () => {
-    const assistant = [...segmentMessages].reverse().find(message => message.role === 'assistant') as AssistantMessage | undefined;
-    for (const block of assistant?.content ?? []) {
-      if (block.type !== 'toolCall') continue;
-      const result = pendingToolResults.get(block.id);
-      if (result) { segmentMessages.push(result); pendingToolResults.delete(block.id); }
-    }
-    for (const result of pendingToolResults.values()) segmentMessages.push(result);
-    pendingToolResults.clear();
-  };
-  const progressState = () => ({
-    steps: iterations,
-    interimText: !answering && lastAssistantHadToolCalls ? lastAssistantText : undefined,
-    activityText: turnReplyMessages(input.turnContext.input?.locale, activeTools > 0 ? 'waiting' : 'working'),
-  });
-  let stopProgress = input.interactiveRun && !answering ? reporter?.watch(progressState) : undefined;
-  const restartProgress = () => {
-    stopProgress?.();
-    stopProgress = input.interactiveRun && !answering ? reporter?.watch(progressState) : undefined;
-  };
+
   function* drainCompletionUsage(): Generator<TurnEvent> {
     for (const event of completionUsage.drainEvents()) {
       emitTurnEvent(event);
       yield event;
     }
   }
+
   // Each segment is one agentLoop run; continuations add segments to the same
   // Turn, so policy, approval ports and persisted history stay those of the Turn.
   try {
     while (true) {
-      segmentStartIteration = iterations;
+      state.segmentStartIteration = state.iterations;
       progress.startSegment();
-      lastAssistantHadToolCalls = false;
-      segmentMessages = [...segmentPrompt];
+      state.lastAssistantHadToolCalls = false;
+      state.segmentMessages = [...segmentPrompt];
       for await (const event of agentLoop(segmentPrompt, segmentContext, loopConfig, signal)) {
         if (event.type === 'agent_start') loopDepth += 1;
         yield* drainCompletionUsage();
@@ -1251,37 +318,37 @@ export async function* runAgentLoopTextTurnRun(
         }
         if (event.type === 'turn_start') {
           // Milestone updates between iterations keep long Turns from looking frozen.
-          if (!input.interactiveRun && !answering && reporter && progress.progressedSince(lastReportIteration + 1)) {
+          if (!input.interactiveRun && !state.answering && reporter && progress.progressedSince(lastReportIteration + 1)) {
             const sent = await reporter.report(extensionPending ? 'extension' : 'progress', {
-              steps: iterations,
-              interimText: !imReply && lastAssistantHadToolCalls ? lastAssistantText : undefined,
+              steps: state.iterations,
+              interimText: !imReply && state.lastAssistantHadToolCalls ? state.lastAssistantText : undefined,
             });
-            if (sent) lastReportIteration = iterations;
+            if (sent) lastReportIteration = state.iterations;
           }
           extensionPending = false;
-          iterations += 1;
+          state.iterations += 1;
         }
         if (event.type === 'tool_execution_end' && event.result.role === 'toolResult' && typeof event.result.toolCallId === 'string') {
           pendingToolResults.set(event.result.toolCallId, event.result);
         }
         if (event.type === 'message_end') {
           flushToolResults();
-          segmentMessages.push(event.message as AgentMessage);
+          state.segmentMessages.push(event.message as AgentMessage);
         }
         if (!imReply && event.type === 'message_update' && event.delta?.type === 'text_delta') {
-          onChunk?.(event.delta.text, lastAssistantText + event.delta.text);
+          onChunk?.(event.delta.text, state.lastAssistantText + event.delta.text);
         }
         if (event.type === 'message_end' && event.message.role === 'assistant') {
           const assistant = event.message as AssistantMessage;
-          phaseLastAssistant = assistant;
-          lastAssistantHadToolCalls = assistant.content.some((block) => block.type === 'toolCall');
-          if (!lastAssistantHadToolCalls) phaseAssistant = assistant;
+          state.phaseLastAssistant = assistant;
+          state.lastAssistantHadToolCalls = assistant.content.some((block) => block.type === 'toolCall');
+          if (!state.lastAssistantHadToolCalls) state.phaseAssistant = assistant;
           const answerText = assistant.content
             .filter((block): block is Extract<typeof block, { type: 'text' }> => block.type === 'text')
             .map(block => block.text).join('');
-          lastAssistantNeedsHostReply = Boolean(assistant.errorMessage)
-            || (!lastAssistantHadToolCalls && !answerText.trim());
-          lastAssistantText = imReply && !lastAssistantNeedsHostReply ? answerText
+          state.lastAssistantNeedsHostReply = Boolean(assistant.errorMessage)
+            || (!state.lastAssistantHadToolCalls && !answerText.trim());
+          state.lastAssistantText = imReply && !state.lastAssistantNeedsHostReply ? answerText
             : resolveAssistantReplyText(imReply ? { ...assistant, content: [] } : assistant, chatFailure);
           logAssistantIterationFailure(assistant, modelId, sessionId);
           const toolNames = assistant.content
@@ -1289,24 +356,24 @@ export async function* runAgentLoopTextTurnRun(
             .map((b) => b.name)
             .join(',');
           logAgentLoopIterationEnd(host.phaseConfig, sessionId, {
-            iteration: iterations,
+            iteration: state.iterations,
             model: modelId,
             label: hasTools ? 'orchestrator' : 'chat',
             usage: assistant.usage,
             stopReason: assistant.stopReason,
             toolNames: toolNames || undefined,
           });
-          if (!imReply) onChunk?.(lastAssistantText, lastAssistantText);
+          if (!imReply) onChunk?.(state.lastAssistantText, state.lastAssistantText);
         }
         if (event.type === 'agent_end') {
           loopDepth -= 1;
           if (loopDepth > 0) continue;
-          if (signal?.aborted && !replyRun?.offered && !settledPhaseCount) continue;
+          if (signal?.aborted && !state.replyRun?.offered && !state.settledPhaseCount) continue;
           flushToolResults();
-          const batch = segmentMessages;
-          turnTranscript = [...turnTranscript, ...batch];
+          const batch = state.segmentMessages;
+          state.turnTranscript = [...state.turnTranscript, ...batch];
           const messageExtras = batch.map((msg, i) => (
-            msg.role === 'user' && i === 0 && continuations === 0 ? userMessageExtra : undefined
+            msg.role === 'user' && i === 0 && state.continuations === 0 ? userMessageExtra : undefined
           ));
           if (persistentConversation) {
             const messages = input.turnContext.origin.kind === 'im' ? stampAssistantHeaders(batch, input.turnContext.input?.contextState?.bot) : batch;
@@ -1325,42 +392,41 @@ export async function* runAgentLoopTextTurnRun(
       // Auto-continue only a Turn that stopped mid-task (model still calling tools)
       // after real progress, within the continuation and hard caps.
       if (!autoContinue
-        || phaseStopped
+        || state.phaseStopped
         || signal?.aborted
-        || !lastAssistantHadToolCalls
+        || !state.lastAssistantHadToolCalls
         || !progress.segmentProgressed
-        || continuations >= toolBudget.maxContinuations
+        || state.continuations >= toolBudget.maxContinuations
         || hardLimitReached()) break;
       const checkpoint = await summarizeExhaustedTurn({
         locale: input.turnContext.input?.locale,
         transport: completionUsage.transport,
         model: llmModel,
         systemPrompt: proseSystemPrompt,
-        messages: [...loaded.messages, ...turnTranscript],
-        maxIterations: iterations - segmentStartIteration,
+        messages: [...loaded.messages, ...state.turnTranscript],
+        maxIterations: state.iterations - state.segmentStartIteration,
         sessionId,
         signal,
       });
       if (!checkpoint.assistant || signal?.aborted) break;
       conversationBatches.at(-1)?.messages.push(checkpoint.assistant);
       conversationBatches.at(-1)?.messageExtras.push(undefined);
-      turnTranscript = [...turnTranscript, checkpoint.assistant];
-      continuations += 1;
-      await reporter?.report('continuation', { steps: iterations, interimText: checkpoint.reply });
-      lastReportIteration = iterations;
-      noteTurnTrace(traceTurnId(input.turnContext), { kind: 'continuation', index: continuations });
-      logPhase(host.phaseConfig, 'agent_loop.budget.continue', sessionId, { continuation: continuations });
-      segmentPrompt = [createUserMessage(buildContinuationInstruction(continuations, toolBudget.maxContinuations, reporter?.reported))];
+      state.turnTranscript = [...state.turnTranscript, checkpoint.assistant];
+      state.continuations += 1;
+      await reporter?.report('continuation', { steps: state.iterations, interimText: checkpoint.reply });
+      lastReportIteration = state.iterations;
+      noteTurnTrace(traceTurnId(input.turnContext), { kind: 'continuation', index: state.continuations });
+      logPhase(host.phaseConfig, 'agent_loop.budget.continue', sessionId, { continuation: state.continuations });
+      segmentPrompt = [createUserMessage(buildContinuationInstruction(state.continuations, toolBudget.maxContinuations, reporter?.reported))];
       segmentContext = agentContextFrom({
         systemPrompt,
         systemPromptCacheBreakpoint,
-        messages: [...loaded.messages, ...turnTranscript],
+        messages: [...loaded.messages, ...state.turnTranscript],
         tools: llmTools,
       });
     }
-
   } finally {
-    stopProgress?.();
+    stopProgressFn?.();
   }
 
   // Progress updates already reached the user, finished or not (#730 ledger).
@@ -1372,7 +438,7 @@ export async function* runAgentLoopTextTurnRun(
 
   yield* drainCompletionUsage();
   if (signal?.aborted) {
-    await replyRun?.stop();
+    await state.replyRun?.stop();
     if (replyPhases) await settlePhase([], '', true);
     const usage = tokenUsageToLegacy(completionUsage.usage);
     const endEvent = turnEndFromLegacyUsage('', usage);
@@ -1381,12 +447,12 @@ export async function* runAgentLoopTextTurnRun(
     const thinking = mapperState.accumulatedThinking.trim() || undefined;
     return {
       reply: '',
-      ...(!replyPhases && replyRun?.offered ? { progressive: { run: replyRun } } : {}),
-      replyPhaseId,
-      ...(phaseStopped ? { replyPhaseStopped: true as const } : {}),
+      ...(!replyPhases && state.replyRun?.offered ? { progressive: { run: state.replyRun } } : {}),
+      replyPhaseId: state.replyPhaseId,
+      ...(state.phaseStopped ? { replyPhaseStopped: true as const } : {}),
       usage,
       path: hasTools ? 'agent' : 'chat',
-      iterations,
+      iterations: state.iterations,
       model: modelId,
       toolCalls,
       thinking,
@@ -1394,103 +460,32 @@ export async function* runAgentLoopTextTurnRun(
     };
   }
 
-  const finalPhaseToolCalls = toolCalls.slice(phaseToolStart);
+  const {
+    output,
+    finalReply,
+    needsReplyRecovery,
+    hostReply,
+    stopped,
+    progressive,
+  } = await finalizeTurnReplyAndOutput({
+    input,
+    state,
+    progressStalled: progress.stalled,
+    hasTools,
+    imReply,
+    maxIterations,
+    systemPrompt,
+    outputSchema,
+    chatFailure,
+    loadedMessages: loaded.messages,
+    toolCalls,
+    conversationBatches,
+    transport: completionUsage.transport,
+    llmModel,
+    replyPhases,
+    settlePhase,
+  });
 
-  // The loop ran tools but never produced visible text (usually maxIterations
-  // was hit mid-exploration). Ask the model for a tools-off summary instead of
-  // showing raw tool output.
-  const stopped = input.interactiveRun && (lastAssistantHadToolCalls || lastAssistantNeedsHostReply || iterations === 0)
-    ? input.interactiveRun.check() ?? (progress.stalled ? turnReplyMessages(input.turnContext.input?.locale, 'stalled') : undefined)
-    : undefined;
-  if (replyPhases && stopped) phaseStopped = true;
-  const needsReplyRecovery = !phaseSettled && !phaseStopped && !replyRun?.offered && !stopped && !(input.interactiveRun && lastAssistantNeedsHostReply)
-    && hasTools
-    && (toolCalls.length > 0 || iterations >= maxIterations)
-    && (!lastAssistantText.trim() || (imReply && lastAssistantHadToolCalls));
-
-  let rawReply = stopped ?? lastAssistantText;
-  let hostReply = !!stopped || lastAssistantNeedsHostReply;
-  if (needsReplyRecovery) {
-    const summary = await summarizeExhaustedTurn({
-      locale: input.turnContext.input?.locale,
-      transport: completionUsage.transport,
-      model: llmModel,
-      systemPrompt,
-      messages: [...loaded.messages, ...turnTranscript],
-      maxIterations,
-      sessionId,
-      signal,
-      outputSchema,
-    });
-    const lastBatch = conversationBatches.at(-1);
-    if (summary.assistant && lastBatch) {
-      lastBatch.messages.push(summary.assistant);
-      lastBatch.messageExtras.push(undefined);
-    }
-    rawReply = summary.reply;
-    hostReply = !summary.assistant;
-  }
-  const structuredReply = imReply && !hostReply;
-  // A chat member does not announce how many steps a task took; only non-IM callers get the notice.
-  const continuationPrefix = continuations > 0 && input.turnContext.origin.kind !== 'im'
-    ? `（任务步骤较多，已自动续跑 ${continuations} 次）\n\n` : '';
-  const proseReply = structuredReply ? ''
-    : sanitizeAssistantReply(rawReply, {
-      toolSummary: formatToolCallsForUser(finalPhaseToolCalls),
-      ...(chatFailure ? { emptyMessage: chatFailureLine('malformed_tool_call', chatFailure) } : {}),
-    });
-  const textReply = proseReply.trim() ? continuationPrefix + proseReply : proseReply;
-  let output: AgentOutputElement[] = phaseSettled ? [...settledPhaseOutput] : structuredReply ? [] : parseOutput(textReply);
-  if (!phaseSettled && structuredReply) {
-    try {
-      output = decodeStructuredReply(rawReply, input.replySegments);
-    } catch (error) {
-      const messages = conversationBatches.at(-1)?.messages;
-      const rejected = messages?.at(-1);
-      const lenient = replyRun?.offered ? undefined : decodeLenientStructuredReply(rawReply, input.replySegments);
-      if (lenient) {
-        output = lenient.output;
-        if (messages && rejected?.role === 'assistant') {
-          messages[messages.length - 1] = { ...rejected, content: [{ type: 'text', text: lenient.text }] };
-        }
-      } else if (!replyRun?.offered) {
-        const recovery = await recoverStructuredReply({
-          transport: completionUsage.transport, model: llmModel, raw: rawReply,
-          error: error instanceof Error ? error : new Error('Invalid structured reply'), signal,
-          segments: input.replySegments,
-          failureText: chatFailureLine('format', { ...chatFailure, random: 0 }),
-        });
-        output = recovery.output;
-        // History must match what the user saw: the corrected reply, or the failure text. Never the
-        // correction prompt (it embeds the rejected raw text) and never the rejected raw reply.
-        if (messages && rejected?.role === 'assistant') {
-          messages[messages.length - 1] = recovery.assistant
-            ?? { ...rejected, content: [{ type: 'text', text: renderAgentOutput(recovery.output) }] };
-        }
-      }
-    }
-  }
-  if (!phaseSettled) {
-    output = mergeToolOutboundElements(output, toolCalls.slice(phaseToolStart));
-  }
-  // ADR 0043 §5: a `reply` segment may name its target by alias (`m12`); delivery needs the platform id.
-  if (input.messageAliases) output = resolveReplyAliases(output, input.messageAliases);
-  let progressive: AgentLoopTurnResult['progressive'];
-  if (replyPhases) {
-    await settlePhase(output, rawReply, hostReply);
-  } else if (replyRun && (answering || replyRun.offered)) {
-    await replyRun.stop();
-    if (!hostReply && structuredReply && !replyRun.error) {
-      try {
-        const snapshot = await replyRun.complete(rawReply);
-        if (snapshot) progressive = { run: replyRun, snapshot };
-      } catch {
-        // Published prefixes are final facts; a format correction must never rewrite them.
-      }
-    }
-    if (!progressive && replyRun.offered) progressive = { run: replyRun };
-  }
-  const finalReply = imReply ? renderAgentOutput(output) : textReply;
   if (!imReply && needsReplyRecovery) onChunk?.(finalReply, finalReply);
   if (imReply && finalReply) {
     // Never expose partial JSON through streaming callbacks or activity ports.
@@ -1502,13 +497,14 @@ export async function* runAgentLoopTextTurnRun(
 
   yield* drainCompletionUsage();
   logPhase(host.phaseConfig, 'agent_loop.turn.end', sessionId, {
-    iterations,
+    iterations: state.iterations,
     ...tokenUsageLogFields(completionUsage.usage),
   });
 
   const usage = tokenUsageToLegacy(completionUsage.usage);
   const endEvent: TurnEvent = {
-    type: 'turn_end', output,
+    type: 'turn_end',
+    output,
     usage: { promptTokens: usage.prompt_tokens, completionTokens: usage.completion_tokens, totalTokens: usage.total_tokens },
   };
   emitTurnEvent(endEvent);
@@ -1518,134 +514,22 @@ export async function* runAgentLoopTextTurnRun(
     reply: finalReply,
     output,
     progressive,
-    replyPhaseId,
-    ...(phaseStopped ? { replyPhaseStopped: true as const } : {}),
+    replyPhaseId: state.replyPhaseId,
+    ...(state.phaseStopped ? { replyPhaseStopped: true as const } : {}),
     usage,
     path: hasTools ? 'agent' : 'chat',
-    iterations,
+    iterations: state.iterations,
     model: modelId,
     toolCalls,
     thinking,
-    stoppedReason: stopped ?? (input.interactiveRun && lastAssistantNeedsHostReply ? lastAssistantText : undefined),
+    stoppedReason: stopped ?? (input.interactiveRun && state.lastAssistantNeedsHostReply ? state.lastAssistantText : undefined),
     // A host fallback is absent from the model transcript, so it cannot cover its canonical event.
-    projectConversation: (delivered) => appendConversationBatches(repo, sessionId, conversationBatches,
-      replyPhases ? undefined : hostReply && delivered ? { ...delivered, contextRefs: undefined } : delivered, conversationPhaseFacts),
+    projectConversation: (delivered) => appendConversationBatches(
+      repo,
+      sessionId,
+      conversationBatches,
+      replyPhases ? undefined : hostReply && delivered ? { ...delivered, contextRefs: undefined } : delivered,
+      conversationPhaseFacts,
+    ),
   };
-}
-
-function encodeConfirmedOutput(output: readonly AgentOutputElement[]): string {
-  let reaction: string | undefined;
-  const messages = output.flatMap(element => {
-    if (element.type !== 'message') return [{ segments: [{ type: 'text', data: { text: renderAgentOutput([element]) } }] }];
-    const segments = element.segments.filter(segment => {
-      if (segment.type !== 'reaction') return true;
-      const emoji = (segment.data as Readonly<Record<string, unknown>>).emoji;
-      if (typeof emoji === 'string') reaction = emoji;
-      return false;
-    });
-    return segments.length ? [{ segments }] : [];
-  });
-  return JSON.stringify({ messages, ...(reaction ? { reaction } : {}) });
-}
-
-function resolveReplyAliases(output: AgentOutputElement[], aliases: import('@zhin.js/ai').MessageAliasTable): AgentOutputElement[] {
-  return output.map((element) => {
-    if (element.type !== 'message') return element;
-    return {
-      ...element,
-      segments: element.segments.map((segment) => {
-        const id = (segment.data as { message_id?: unknown } | undefined)?.message_id;
-        return segment.type === 'reply' && typeof id === 'string'
-          ? { ...segment, data: { ...segment.data, message_id: aliases.resolve(id) } }
-          : segment;
-      }),
-    };
-  });
-}
-
-async function appendConversationBatches(
-  repo: import('@zhin.js/ai').ContextRepository,
-  sessionId: string,
-  batches: readonly {
-    messages: AgentMessage[];
-    messageExtras: Array<import('@zhin.js/ai').AgentMessageExtra | undefined>;
-  }[],
-  delivered?: {
-    readonly messageId?: string;
-    readonly messageIds?: readonly (string | null)[];
-    readonly contextRefs?: readonly string[];
-    readonly confirmedOutput?: AgentOutputElement[];
-    readonly conversationSequence?: number;
-    readonly conversationSequences?: readonly (number | null)[];
-    readonly conversationKey?: string;
-  },
-  phaseFacts?: ReadonlyMap<AgentMessage, ReplyPhaseFacts>,
-): Promise<void> {
-  // Delivery is authoritative after publication, including an empty confirmed prefix.
-  const projected = batches.map(batch => ({ ...batch, messages: [...batch.messages], messageExtras: [...batch.messageExtras] }));
-  if (delivered?.confirmedOutput !== undefined) {
-    const content = encodeConfirmedOutput(delivered.confirmedOutput);
-    outer: for (let bi = projected.length - 1; bi >= 0; bi -= 1) {
-      const messages = projected[bi]!.messages;
-      for (let mi = messages.length - 1; mi >= 0; mi -= 1) {
-        const message = messages[mi]!;
-        if (message.role !== 'assistant') continue;
-        const assistant = message as AssistantMessage;
-        const confirmed: AssistantMessage = { ...assistant, content: [{ type: 'text', text: content }] };
-        if (assistant.content.some(block => block.type === 'toolCall')) {
-          // A failed tools-off re-completion can leave only prepare_reply + toolResult.
-          // Keep that protocol pair and append the actual visible answer separately.
-          projected.at(-1)!.messages.push({ ...confirmed, stopReason: 'stop', errorMessage: undefined,
-            usage: { ...EMPTY_TOKEN_USAGE, cost: { ...EMPTY_TOKEN_USAGE.cost } } });
-          projected.at(-1)!.messageExtras.push(undefined);
-        } else messages[mi] = confirmed;
-        break outer;
-      }
-    }
-  }
-  const lastIndex = projected.length - 1;
-  for (const [index, batch] of projected.entries()) {
-    const clean = stampDeliveredMessageId(
-      batch.messages,
-      index === lastIndex ? delivered?.messageId : undefined,
-      index === lastIndex ? delivered?.contextRefs : undefined,
-      index === lastIndex ? delivered?.messageIds : undefined,
-      index === lastIndex ? {
-        conversationSequence: delivered?.conversationSequence,
-        conversationSequences: delivered?.conversationSequences,
-        conversationKey: delivered?.conversationKey,
-      } : undefined,
-    );
-    const messages = clean.map((message, messageIndex) => {
-      const facts = phaseFacts?.get(batch.messages[messageIndex]!);
-      // Provider-authored provenance stays stripped; only the delivery owner's exact phase facts return.
-      if (!facts) return message;
-      const {
-        messageId: _providerId,
-        conversationEventId: _providerConvEventId,
-        conversationEventIds: _providerConvEventIds,
-        conversationKey: _providerConvKey,
-        ...authoritative
-      } = message as AssistantMessage;
-      const deliveryConv = facts.delivery.status !== 'suppressed' ? facts.delivery : undefined;
-      return stampDeliveredMessageId([authoritative], facts.messageId, facts.contextRefs, facts.messageIds, {
-        conversationSequence: facts.conversationSequence ?? deliveryConv?.conversationSequence,
-        conversationSequences: facts.conversationSequences ?? deliveryConv?.conversationSequences,
-        conversationKey: facts.conversationKey ?? deliveryConv?.conversationKey,
-      })[0]!;
-    });
-    await repo.appendMessages(sessionId, messages, { messageExtras: batch.messageExtras });
-  }
-}
-
-/** Turn id for trace notes; context views built outside TurnIngress carry none. */
-/** Catalog tools whose schema is not sent on this request (reachable via load_tool / discover). */
-function deferredCatalogTools(catalog: readonly ToolCatalogItem[], loaded: readonly AgentTool[]): ToolCatalogItem[] {
-  const loadedNames = new Set(loaded.map((tool) => tool.name));
-  return catalog.filter((item) => item.source !== 'meta' && !loadedNames.has(item.name));
-}
-
-function traceTurnId(view: TurnContextView | undefined): string | undefined {
-  const identity = (view as { identity?: { turnId?: unknown } } | undefined)?.identity;
-  return typeof identity?.turnId === 'string' ? identity.turnId : undefined;
 }

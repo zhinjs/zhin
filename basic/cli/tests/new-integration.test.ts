@@ -94,6 +94,7 @@ describe('CLI new command integration', () => {
     expect(packageJson.files).not.toContain('src')
     expect(packageJson.files).toContain('schema.json')
     expect(packageJson.files).toContain('commands/**/*.js')
+    expect(packageJson.files).toContain('pages/**/*.js')
     expect(packageJson.files).toContain('skills')
     expect(packageJson.exports['.']).toEqual({ types: './lib/index.d.ts', import: './lib/index.js' })
     expect(packageJson.types).toBe('./lib/index.d.ts')
@@ -125,6 +126,8 @@ describe('CLI new command integration', () => {
     expect(tsconfig.include).toContain('plugin.ts')
     expect(tsconfig.include).toContain('src/**/*')
     expect(tsconfig.include).toContain('commands/**/*')
+    expect(tsconfig.include).toContain('pages/**/*')
+    expect(tsconfig.include).toContain('skills/**/*')
     expect(tsconfig.include).toContain('tests/**/*')
     const buildTsconfig = await fs.readJson(path.join(pluginDir, 'tsconfig.build.json'))
     expect(buildTsconfig.compilerOptions.noEmit).toBe(false)
@@ -175,13 +178,16 @@ describe('CLI new command integration', () => {
     expect(testFile).toContain(`source: echoSource`)
     expect(testFile).toContain(`new URL('../commands/${pluginName}-echo/[text]/index.ts', import.meta.url)`)
 
-    // Check README.md（新挂载方式提示）
+    // Check README.md（新挂载方式提示 + 渐进披露工具与声明式页面指导）
     const readmePath = path.join(pluginDir, 'README.md')
     expect(await fs.pathExists(readmePath)).toBe(true)
     const readme = await fs.readFile(readmePath, 'utf-8')
     expect(readme).toContain(pluginName)
     expect(readme).toContain('configVersion: 2')
     expect(readme).toContain('instanceKey')
+    expect(readme).toContain(`skills/${pluginName}/tools/<tool_name>/index.ts`)
+    expect(readme).toContain('pages/index/index.ts')
+    expect(readme).toContain('ConsolePageBlueprint')
 
     // Check .gitignore / CHANGELOG.md / agent skill
     const gitignore = await fs.readFile(path.join(pluginDir, '.gitignore'), 'utf-8')
@@ -190,12 +196,14 @@ describe('CLI new command integration', () => {
     expect(gitignore).toContain('.zhin/')
     expect(gitignore).toContain('plugin.js')
     expect(gitignore).toContain('commands/**/*.js')
+    expect(gitignore).toContain('pages/**/*.js')
     expect(await fs.pathExists(path.join(pluginDir, 'CHANGELOG.md'))).toBe(true)
 
     const skillPath = path.join(pluginDir, 'skills', pluginName, 'SKILL.md')
     const skillMd = await fs.readFile(skillPath, 'utf-8')
     expect(skillMd).toContain(`name: ${pluginName}`)
     expect(skillMd).toContain('description:')
+    expect(skillMd).toContain(`skills/${pluginName}/tools/<tool_name>/index.ts`)
   }, 30000)
 
   it('should create service plugin with setup lifecycle template', async () => {

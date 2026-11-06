@@ -28,6 +28,7 @@ export {
 } from "./config.js";
 export { cleanSecret } from "./secrets.js";
 export { calendarRuntimeToken, type CalendarRuntime } from "./runtime.js";
+export { createCalendarConsoleRpc } from "./console.js";
 export {
   OAuthTokenManager,
   OAuthTokenError,

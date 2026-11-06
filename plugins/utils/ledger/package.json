@@ -17,8 +17,10 @@
     "README.md",
     "commands",
     "lib",
+    "pages",
     "plugin.js",
     "schedules",
+    "skills",
     "src",
     "schema.json"
   ],
@@ -43,16 +45,30 @@
     "email": "admin@liucl.cn",
     "url": "https://github.com/lc-cn"
   },
+  "dependencies": {
+    "@zhin.js/client": "workspace:*",
+    "@zhin.js/console-contract": "workspace:*",
+    "@zhin.js/page": "workspace:*",
+    "@zhin.js/skill": "workspace:*",
+    "@zhin.js/tool": "workspace:*"
+  },
   "peerDependencies": {
     "zhin.js": "workspace:^",
     "@zhin.js/command": "workspace:^",
-    "@zhin.js/schedule-feature": "workspace:^"
+    "@zhin.js/page": "workspace:^",
+    "@zhin.js/schedule-feature": "workspace:^",
+    "@zhin.js/skill": "workspace:^",
+    "@zhin.js/tool": "workspace:^",
+    "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {
     "@zhin.js/command": {
       "optional": true
     },
     "@zhin.js/schedule-feature": {
+      "optional": true
+    },
+    "zod": {
       "optional": true
     }
   },
@@ -61,7 +77,8 @@
     "@zhin.js/testing": "workspace:*",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",
-    "zhin.js": "workspace:*"
+    "zhin.js": "workspace:*",
+    "zod": "^4.4.3"
   },
   "engines": {
     "node": ">=22.19.0"
@@ -96,6 +113,18 @@
       },
       {
         "package": "@zhin.js/schedule-feature",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/tool",
+        "api": "^1.1.0"
+      },
+      {
+        "package": "@zhin.js/skill",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/page",
         "api": "^1.0.0"
       }
     ],

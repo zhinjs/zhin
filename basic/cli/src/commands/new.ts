@@ -532,11 +532,16 @@ ${readmeUse}
 - \`src/\`：库代码，\`pnpm build\` 编译到 \`lib/\`（\`.js\` + \`.d.ts\`），也是 \`import '${packageName}'\` 的入口；\`plugin.ts\` 和约定目录用 \`./src/xxx.js\` 这样的相对路径引用
 - \`schema.json\`：实例配置（\`<instanceKey>\`）的 JSON Schema，也是本插件唯一的配置声明。如改用 \`definePlugin({ config: Schema.object(...) })\` 获得自动推导的配置类型，请先删除 \`schema.json\`：两者同时存在会拒绝启动，Zhin 不会替你挑一个（见 https://zhin.js.org/authoring/define-plugin#choose-a-config-source）
 ${kind === 'normal' ? '- `commands/**/index.ts`：命令入口（`defineCommand`），目录段 `[name]` 声明动态参数（类型在 `params` 中定义）\n' : ''}${kind === 'adapter' ? '- `adapters/<name>/index.ts`：薄约定入口（`defineAdapter`），`createAdapter` 返回 Adapter 实例\n- `src/adapter.ts`：公开 Client、Endpoint、Adapter、配置与 AdapterRegistry 类型注册，经 `src/index.ts` 导出\n' : ''}- \`skills/<name>/SKILL.md\`：AI 技能包，可附带参考资料与脚本（随 npm 包发布）
+- \`skills/<name>/tools/<tool_name>/index.ts\`：随技能按需激活的渐进披露 AI 工具（\`defineAgentTool\`，需在 \`SKILL.md\` 的 \`tools\` frontmatter 声明）；全局常驻工具则放在根 \`tools/<tool_name>/index.ts\`
+- \`pages/index/index.ts\`：声明式控制台页面（\`definePage\` + \`ConsolePageBlueprint\`，来自 \`@zhin.js/console-contract\`），配合 \`plugin.ts\` 注册 \`definePluginConsoleRpc\`
 - \`tests/\`：Vitest 运行时契约测试
 
 ## AI 技能（skills）
 
 本包包含 \`skills/${pluginName}/SKILL.md\`。请按实际能力修改 \`description\` / \`tools\` 等 frontmatter；参考资料和脚本可放在同一 Skill 目录。
+
+- **渐进披露工具（推荐）**：将专属工具放在 \`skills/${pluginName}/tools/<tool_name>/index.ts\`（使用 \`defineAgentTool\`），并在 \`skills/${pluginName}/SKILL.md\` 的 frontmatter \`tools: [<tool_name>]\` 中声明，仅在技能激活时按需加载，节省常驻上下文预算（全局常驻工具则放在根 \`tools/<tool_name>/index.ts\`）。
+- **声明式控制台页面（可选）**：在 \`pages/index/index.ts\` 导出 \`export const meta = definePage({ title, icon, order })\` 并默认导出返回 \`ConsolePageBlueprint\` 的页面函数，同时在 \`plugin.ts\` 中注册 \`definePluginConsoleRpc\`，即可接入 Remote Console。
 
 ## 开发
 
@@ -584,6 +589,7 @@ tools: []
 ## 执行规则
 
 - 通过本插件注册的 \`${pluginName}_*\` 等工具完成具体任务；请根据实际工具名与参数补充说明。
+- 技能专属工具可放在 \`skills/${pluginName}/tools/<tool_name>/index.ts\`（\`defineAgentTool\`），并在上方 frontmatter 的 \`tools: [...]\` 中声明以实现按需渐进披露。
 `;
   await fs.writeFile(path.join(pluginDir, 'skills', pluginName, 'SKILL.md'), skillMdContent);
 

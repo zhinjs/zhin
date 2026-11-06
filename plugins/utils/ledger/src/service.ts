@@ -19,6 +19,20 @@ const logger = getLogger('ledger');
 
 export type DailyReportAction = 'on' | 'off' | 'status';
 
+export type LedgerConsoleSubscriber = {
+  readonly ownerKey: string;
+  readonly reportLocale: string;
+  readonly lastReportDate: string;
+};
+
+export type LedgerConsoleSnapshot = {
+  readonly timezone: string;
+  readonly reportTime: string;
+  readonly reportWhenEmpty: boolean;
+  readonly subscriberCount: number;
+  readonly subscribers: readonly LedgerConsoleSubscriber[];
+};
+
 export interface LedgerServiceOptions {
   /** Wall clock; tests pass a fake. */
   readonly now?: () => number;
@@ -216,5 +230,20 @@ export class LedgerService {
       }
     }
     return sent;
+  }
+
+  async getConsoleSnapshot(): Promise<LedgerConsoleSnapshot> {
+    const subscribers = await this.#store.listReportSubscribers();
+    return {
+      timezone: this.#config.timezone,
+      reportTime: this.#config.reportTime,
+      reportWhenEmpty: this.#config.reportWhenEmpty,
+      subscriberCount: subscribers.length,
+      subscribers: subscribers.map((subscriber) => ({
+        ownerKey: subscriber.ownerKey,
+        reportLocale: resolveLocale(subscriber.reportLocale),
+        lastReportDate: subscriber.lastReportDate,
+      })),
+    };
   }
 }

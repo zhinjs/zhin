@@ -7,6 +7,7 @@ export default defineAgentTool({
     type: 'object',
     properties: {},
   },
+  readOnly: true,
   requiresApproval: 'never',
   execute: (_input, context) => context.use(processMonitorToken).formatStatus(context.locale),
 });

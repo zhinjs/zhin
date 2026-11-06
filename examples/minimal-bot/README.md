@@ -40,7 +40,9 @@ minimal-bot/
 ├── adapters/terminal/index.ts      # defineAdapter(), stdin + stdout Endpoint
 ├── commands/hello/index.ts         # /hello
 ├── commands/card/index.ts          # /card -> component("status-card")
+├── commands/jsx/index.tsx          # /jsx -> direct JSX reply
 ├── components/status-card/index.tsx # defineComponent(), shared JSX rendering
+├── middlewares/jsx/index.tsx       # jsx? -> inbound middleware JSX reply
 └── tools/echo/index.ts       # optional defineAgentTool() example
 ```
 

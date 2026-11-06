@@ -3592,9 +3592,18 @@ importers:
 
   plugins/features/process-monitor:
     dependencies:
+      '@zhin.js/client':
+        specifier: workspace:*
+        version: link:../../../packages/console/client
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
+      '@zhin.js/console-contract':
+        specifier: workspace:*
+        version: link:../../../packages/console/plugin-contract
+      '@zhin.js/page':
+        specifier: workspace:*
+        version: link:../../../packages/console/page
       '@zhin.js/skill':
         specifier: workspace:*
         version: link:../../../packages/im/skill
@@ -3717,12 +3726,27 @@ importers:
 
   plugins/games/hub:
     dependencies:
+      '@zhin.js/client':
+        specifier: workspace:*
+        version: link:../../../packages/console/client
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
+      '@zhin.js/console-contract':
+        specifier: workspace:*
+        version: link:../../../packages/console/plugin-contract
       '@zhin.js/game-kit':
         specifier: workspace:*
         version: link:../../../packages/game-kit
+      '@zhin.js/page':
+        specifier: workspace:*
+        version: link:../../../packages/console/page
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
+      '@zhin.js/tool':
+        specifier: workspace:*
+        version: link:../../../packages/im/tool
     devDependencies:
       typescript:
         specifier: ^6.0.3
@@ -3733,6 +3757,9 @@ importers:
       zhin.js:
         specifier: workspace:*
         version: link:../../../packages/im/zhin
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
 
   plugins/games/idiom-chain:
     dependencies:
@@ -4020,12 +4047,21 @@ importers:
 
   plugins/utils/calendar:
     dependencies:
+      '@zhin.js/client':
+        specifier: workspace:*
+        version: link:../../../packages/console/client
+      '@zhin.js/console-contract':
+        specifier: workspace:*
+        version: link:../../../packages/console/plugin-contract
       '@zhin.js/host-http':
         specifier: workspace:*
         version: link:../../../packages/host/http
       '@zhin.js/im-contract':
         specifier: workspace:*
         version: link:../../../packages/im/im-contract
+      '@zhin.js/page':
+        specifier: workspace:*
+        version: link:../../../packages/console/page
       '@zhin.js/skill':
         specifier: workspace:*
         version: link:../../../packages/im/skill
@@ -4076,6 +4112,12 @@ importers:
 
   plugins/utils/content-moderation:
     dependencies:
+      '@zhin.js/client':
+        specifier: workspace:*
+        version: link:../../../packages/console/client
+      '@zhin.js/console-contract':
+        specifier: workspace:*
+        version: link:../../../packages/console/plugin-contract
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
@@ -4085,6 +4127,15 @@ importers:
       '@zhin.js/middleware':
         specifier: workspace:^
         version: link:../../../packages/im/middleware
+      '@zhin.js/page':
+        specifier: workspace:*
+        version: link:../../../packages/console/page
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
+      '@zhin.js/tool':
+        specifier: workspace:*
+        version: link:../../../packages/im/tool
     devDependencies:
       typescript:
         specifier: ^6.0.3
@@ -4095,6 +4146,9 @@ importers:
       zhin.js:
         specifier: workspace:*
         version: link:../../../packages/im/zhin
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
 
   plugins/utils/earthquake:
     dependencies:
@@ -4126,12 +4180,18 @@ importers:
 
   plugins/utils/group-suite:
     dependencies:
+      '@zhin.js/client':
+        specifier: workspace:*
+        version: link:../../../packages/console/client
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
       '@zhin.js/components':
         specifier: workspace:*
         version: link:../../../packages/toolkit/components
+      '@zhin.js/console-contract':
+        specifier: workspace:*
+        version: link:../../../packages/console/plugin-contract
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
@@ -4144,6 +4204,9 @@ importers:
       '@zhin.js/middleware':
         specifier: workspace:^
         version: link:../../../packages/im/middleware
+      '@zhin.js/page':
+        specifier: workspace:*
+        version: link:../../../packages/console/page
       '@zhin.js/schedule-feature':
         specifier: workspace:^
         version: link:../../../packages/im/schedule-feature
@@ -4169,9 +4232,24 @@ importers:
 
   plugins/utils/ledger:
     dependencies:
+      '@zhin.js/client':
+        specifier: workspace:*
+        version: link:../../../packages/console/client
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
+      '@zhin.js/console-contract':
+        specifier: workspace:*
+        version: link:../../../packages/console/plugin-contract
+      '@zhin.js/page':
+        specifier: workspace:*
+        version: link:../../../packages/console/page
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
+      '@zhin.js/tool':
+        specifier: workspace:*
+        version: link:../../../packages/im/tool
     devDependencies:
       '@zhin.js/schedule-feature':
         specifier: workspace:*
@@ -4188,6 +4266,9 @@ importers:
       zhin.js:
         specifier: workspace:*
         version: link:../../../packages/im/zhin
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
 
   plugins/utils/link-poster:
     dependencies:
@@ -4334,12 +4415,21 @@ importers:
 
   plugins/utils/reminder:
     dependencies:
+      '@zhin.js/client':
+        specifier: workspace:*
+        version: link:../../../packages/console/client
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
+      '@zhin.js/console-contract':
+        specifier: workspace:*
+        version: link:../../../packages/console/plugin-contract
       '@zhin.js/im-contract':
         specifier: workspace:*
         version: link:../../../packages/im/im-contract
+      '@zhin.js/page':
+        specifier: workspace:*
+        version: link:../../../packages/console/page
       '@zhin.js/skill':
         specifier: workspace:*
         version: link:../../../packages/im/skill
@@ -4390,12 +4480,21 @@ importers:
 
   plugins/utils/rss:
     dependencies:
+      '@zhin.js/client':
+        specifier: workspace:*
+        version: link:../../../packages/console/client
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
+      '@zhin.js/console-contract':
+        specifier: workspace:*
+        version: link:../../../packages/console/plugin-contract
       '@zhin.js/im-contract':
         specifier: workspace:*
         version: link:../../../packages/im/im-contract
+      '@zhin.js/page':
+        specifier: workspace:*
+        version: link:../../../packages/console/page
       '@zhin.js/skill':
         specifier: workspace:*
         version: link:../../../packages/im/skill

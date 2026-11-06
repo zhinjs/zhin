@@ -16,6 +16,7 @@
     "README.md",
     "commands",
     "lib",
+    "pages",
     "plugin.js",
     "schedules",
     "skills",
@@ -31,14 +32,20 @@
     "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean"
   },
   "dependencies": {
+    "@zhin.js/client": "workspace:*",
+    "@zhin.js/console-contract": "workspace:*",
     "@zhin.js/im-contract": "workspace:*",
+    "@zhin.js/page": "workspace:*",
     "@zhin.js/skill": "workspace:*",
     "@zhin.js/tool": "workspace:*"
   },
   "peerDependencies": {
     "zhin.js": "workspace:^",
     "@zhin.js/command": "workspace:^",
+    "@zhin.js/page": "workspace:^",
     "@zhin.js/schedule-feature": "workspace:^",
+    "@zhin.js/skill": "workspace:^",
+    "@zhin.js/tool": "workspace:^",
     "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {
@@ -99,6 +106,10 @@
       },
       {
         "package": "@zhin.js/skill",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/page",
         "api": "^1.0.0"
       }
     ],

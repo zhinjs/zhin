@@ -1,4 +1,5 @@
 export { ledgerConfig, resolveLedgerConfig, DEFAULT_REPORT_TIME, DEFAULT_TIMEZONE, type LedgerConfig, type ResolvedLedgerConfig } from './config.js';
+export { createLedgerConsoleRpc } from './console.js';
 export { parseEntryInput, ADD_USAGE, MAX_CATEGORY_LENGTH, MAX_NOTE_LENGTH, type EntryInputResult, type ParsedEntryInput } from './entry-input.js';
 export { ledgerCaller, ledgerOwnerKey, replyLedger, LedgerInputError, type LedgerCaller } from './identity.js';
 export { formatCents, parseAmountToCents, MASKED_AMOUNT, MAX_ENTRY_CENTS, type AmountParseResult } from './money.js';
@@ -25,5 +26,12 @@ export {
   type PeriodSummary,
 } from './report-format.js';
 export { ledgerServiceToken } from './runtime.js';
-export { LedgerService, type DailyReportAction, type LedgerServiceOptions } from './service.js';
+export {
+  LedgerService,
+  type DailyReportAction,
+  type LedgerConsoleSnapshot,
+  type LedgerConsoleSubscriber,
+  type LedgerServiceOptions,
+} from './service.js';
 export { defineLedgerTables, LedgerStore, ENTRY_TABLE, USER_TABLE, PRIVATE_TARGET_TABLE, type LedgerEntry, type LedgerUserRecord } from './store.js';
+export { ledgerCallerFromTool, type LedgerToolCallerContext } from './tool-caller.js';

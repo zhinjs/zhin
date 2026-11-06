@@ -207,6 +207,15 @@ actions:
 
 
 
+## AI Skill、Tools 与 Console 页面
+
+- **AI Skill (`skills/content-moderation/SKILL.md`)**：按需披露只读诊断工具：
+  - `moderation_check`：对样本文本执行无副作用的策略干跑检测，返回 `severity`、命中词与处置动作（不写入 `groupReviewQueue`）。
+  - `moderation_status`：查看当前引擎启用状态、敏感度等级、激活的审核源与待审群消息数。
+- **Console 页面 (`pages/index/index.ts` & `src/console.ts`)**：
+  - 权限：`content-moderation:read`。
+  - 展示引擎状态、敏感度、审核源列表、白名单数量与待审队列计数，并提供 `checkText` 在线干跑检测动作。
+
 ## 许可
 
 MIT

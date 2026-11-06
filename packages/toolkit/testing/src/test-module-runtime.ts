@@ -24,7 +24,22 @@ export function withTestEndpoints(
       });
       return { ...loaded, default: definition } as T;
     },
-    ...(delegate.loadClientModule ? { loadClientModule: delegate.loadClientModule.bind(delegate) } : {}),
+    loadClientModule: delegate.loadClientModule
+      ? delegate.loadClientModule.bind(delegate)
+      : async <T = unknown>(source: string): Promise<T> => {
+          let metadata: unknown;
+          try {
+            const loaded = await delegate.load<{ meta?: unknown }>(source);
+            metadata = loaded?.meta;
+          } catch {
+            // Browser-only client modules may not load in headless Node test mode; fall back to default metadata.
+          }
+          return Object.freeze({
+            module: source,
+            hash: 'test',
+            ...(metadata !== undefined ? { metadata } : {}),
+          }) as T;
+        },
     ...(delegate.invalidate ? { invalidate: delegate.invalidate.bind(delegate) } : {}),
     ...(delegate.affectedSources ? { affectedSources: delegate.affectedSources.bind(delegate) } : {}),
     ...(delegate.requiresProcessRestart ? { requiresProcessRestart: delegate.requiresProcessRestart.bind(delegate) } : {}),

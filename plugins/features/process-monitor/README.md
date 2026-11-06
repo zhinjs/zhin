@@ -5,7 +5,8 @@ Zhin Plugin Runtime 的进程启动检测与状态查询插件。
 ## 能力
 
 - 通过 `data/process-state.json` 记录启动 PID、启动时间、正常退出标记、重启次数和崩溃次数。
-- `process-status` Command 返回当前 PID、运行时长、内存和累计统计；Agent Tool 位于 `skills/process-monitor/tools/process-status/index.ts`，只在 Skill 激活后披露。
+- `process-status` Command 返回当前 PID、运行时长、内存和累计统计；Agent Tool 位于 `skills/process-monitor/tools/process-status/index.ts`（`readOnly: true`），只在 Skill 激活后披露。
+- Console 页面（`pages/index/index.ts`，权限 `process-monitor:read`）通过 `pluginConsoleRpcToken` 展示实时 RSS/Heap 内存、运行时长、重启与崩溃统计以及主机环境详情。
 - 可在首次启动、正常重启或异常崩溃后调用 HTTP Webhook。
 - 每个插件 owner 独立持有 `ProcessMonitor` 实例、状态和信号监听器；generation dispose 时自动清理监听器。
 

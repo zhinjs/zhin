@@ -79,6 +79,21 @@ export interface ProcessMonitorOptions {
   readonly fetch?: typeof fetch;
 }
 
+export type ProcessMonitorStatusSnapshot = {
+  readonly pid: number;
+  readonly uptime: string;
+  readonly rssMb: number;
+  readonly heapUsedMb: number;
+  readonly heapTotalMb: number;
+  readonly restartCount: number;
+  readonly crashCount: number;
+  readonly totalUptime: string;
+  readonly hostname: string;
+  readonly platform: string;
+  readonly nodeVersion: string;
+  readonly healthy: boolean;
+};
+
 /** One plugin owner's process statistics, persistence, notifications, and signal lifecycle. */
 export class ProcessMonitor {
   readonly #config: ResolvedProcessMonitorConfig;
@@ -131,6 +146,25 @@ export class ProcessMonitor {
       this.#signalHandlers = undefined;
     }
     this.#started = false;
+  }
+
+  getStatus(locale?: Locale): ProcessMonitorStatusSnapshot {
+    const memory = process.memoryUsage();
+    const uptimeMs = Math.max(0, this.#now() - this.#startTime);
+    return {
+      pid: process.pid,
+      uptime: formatUptime(uptimeMs, locale),
+      rssMb: Math.round(memory.rss / 1024 / 1024),
+      heapUsedMb: Math.round(memory.heapUsed / 1024 / 1024),
+      heapTotalMb: Math.round(memory.heapTotal / 1024 / 1024),
+      restartCount: this.#state.restartCount,
+      crashCount: this.#state.crashCount,
+      totalUptime: formatUptime(this.#state.totalUptime, locale),
+      hostname: os.hostname(),
+      platform: `${os.platform()}-${os.arch()}`,
+      nodeVersion: process.version,
+      healthy: this.#config.enabled && (this.#started || this.#state.crashCount === 0),
+    };
   }
 
   formatStatus(locale?: Locale): string {
