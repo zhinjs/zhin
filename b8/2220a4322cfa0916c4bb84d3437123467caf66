@@ -1,0 +1,62 @@
+basic/cli/src/plugin-runtime/console/page-renderer-helpers.ts
+  h_6f5e45c41d0910 1-575
+basic/cli/src/plugin-runtime/console/page-renderer.ts
+  h_6f5e45c41d0910 1-11
+basic/cli/src/plugin-runtime/inference/account-runtime-helpers.ts
+  h_6f5e45c41d0910 1-419
+basic/cli/src/plugin-runtime/inference/account-runtime-oauth.ts
+  h_6f5e45c41d0910 1-443
+basic/cli/src/plugin-runtime/inference/account-runtime.ts
+  h_6f5e45c41d0910 19-44,46,59-76,135,239,249,263,301,355,377,400,404-405,419,457,553,577,579,589,594,598,607
+packages/host/http/src/console-rest-pages-helpers.ts
+  h_6f5e45c41d0910 1-619
+packages/host/http/src/console-rest-pages.ts
+  h_6f5e45c41d0910 12,15-25
+packages/host/http/src/console-rpc-handlers.ts
+  h_6f5e45c41d0910 1-608
+packages/host/http/src/console-rpc.ts
+  h_6f5e45c41d0910 16-22,595-596,608
+packages/im/agent/src/core/agent-core-ports.ts
+  h_6f5e45c41d0910 1-578
+packages/im/agent/src/core/agent-core-run.ts
+  h_6f5e45c41d0910 5-13,15,31,33-67,88-110,114,117-127,154-156,159,162,169,171-178,180-181,183-210,213-245,251-267,272,291,298,303,305-306,321,323-324,326,329,336,339,343-345,349-351,359,366,371,373-374,376,395,397,399,406-407,414-420,424,429,441,450-452,455,463-487,500,506-507,517-518,521,525,527-533
+packages/im/agent/src/core/agent-core-settlement.ts
+  h_6f5e45c41d0910 1-561
+packages/im/agent/src/core/agent-core-vision.ts
+  h_6f5e45c41d0910 1-558
+packages/im/agent/src/plugin-runtime/full-agent-turn-engine.ts
+  h_6f5e45c41d0910 4,8,11,13,29,31,38-59,389-422,452-505,507-520,522-524,526,528-541,543-565,567-568
+packages/im/agent/src/plugin-runtime/ingress/ingress-outbound.ts
+  h_6f5e45c41d0910 1-454
+packages/im/agent/src/plugin-runtime/ingress/ingress-route.ts
+  h_6f5e45c41d0910 1,5-7,9-11,13-22,25-27,47,51-53,66-73,84-98,103,106-112,117-118,120-126,198-199,210,212,214,369-375,377,390-391,396-397,400,409-410,413-423,425-428,432,435,445-448,456-459,461-466,491-494,496,499-500,502-524,527-530
+packages/im/agent/src/plugin-runtime/ingress/ingress-turn-runner.ts
+  h_6f5e45c41d0910 1-459
+packages/im/agent/src/plugin-runtime/ingress/ingress-venue-helpers.ts
+  h_6f5e45c41d0910 1-420
+packages/im/agent/src/plugin-runtime/ingress/request-capabilities.ts
+  h_6f5e45c41d0910 1-525
+packages/im/agent/src/plugin-runtime/ingress/request-ports.ts
+  h_6f5e45c41d0910 1-344
+packages/im/agent/src/plugin-runtime/ingress/request.ts
+  h_6f5e45c41d0910 7-15,19-80
+packages/im/agent/src/plugin-runtime/turn-engine-helpers.ts
+  h_6f5e45c41d0910 1-549
+packages/im/runtime/src/root-runtime-config.ts
+  h_6f5e45c41d0910 1-545
+packages/im/runtime/src/root-runtime-diagnostics.ts
+  h_6f5e45c41d0910 1-399
+packages/im/runtime/src/root-runtime.ts
+  h_6f5e45c41d0910 5-9,11-16,19,21-22,25-26,28-35,37-39,41,44-45,53,107-110,115,129,150-151,156-159,168-170,185-186,208,214,216,246-247,253-255,257-259,285-287,299-307,333-334,340,344,358-375,378-383,387-390,405-415,420-433,435-438,450,461-462,470,475-481,483-484,505,515-516,530-534,539-543,550,555-559,563,569-571
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b82220a4322cfa0916c4bb84d3437123467caf66",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
