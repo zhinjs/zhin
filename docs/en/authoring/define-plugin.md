@@ -270,25 +270,28 @@ async setup(context) {
 | `addTool` / `addSkill` / `addAgent` / `addMcp` | Register AI capabilities (requires the AI features) |
 | `addFeature(feature, name, definition)` | Generic registration; the shortcuts above are typed versions of it |
 
-### metadata, requires, and capabilities (explicit capability graph)
+### metadata, requires, and capabilityGraph (explicit capability graph)
 
 | Field | Purpose |
 | --- | --- |
 | `metadata.displayName` / `icon` / `order` | Name, icon and sort order on the Console plugin card; no runtime effect |
 | `requires` | Resource tokens that must exist; startup refuses if any is missing |
-| `capabilities` | Explicitly declares the plugin's capability graph via `definePluginCapabilityGraph({ ... })` (`commands`, `tools`, `skills`, `agents`, `hooks`, `pages`, `middlewares`, `components`, `handlers`, `schedules`, `mcps`, `requires`, `provides`) for static governance and Console observability |
+| `capabilityGraph` | Explicitly declares the plugin's capability graph via `definePluginCapabilityGraph({ provides, injects, features })` (provided tokens, injected tokens, and feature-grouped capabilities) for static governance and Console observability |
 
 ```ts
 // plugin.ts
-import { definePlugin, definePluginCapabilityGraph } from 'zhin.js';
+import { databaseHostToken, definePlugin, definePluginCapabilityGraph } from 'zhin.js';
 
 export default definePlugin({
   name: 'my-plugin',
   metadata: { displayName: 'My Plugin', icon: 'Blocks' },
-  capabilities: definePluginCapabilityGraph({
-    commands: ['hello'],
-    pages: ['index'],
-    tools: ['weather'],
+  capabilityGraph: definePluginCapabilityGraph({
+    injects: [databaseHostToken],
+    features: {
+      commands: ['hello'],
+      pages: ['index'],
+      tools: ['weather'],
+    },
   }),
 });
 ```
