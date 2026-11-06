@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -6,7 +7,7 @@ import type {
 } from '@zhin.js/ai/provider';
 import { createDatabaseHost } from '../../../src/plugin-runtime/database-host-installer.js';
 import { DatabaseInferenceRepository } from '../../../src/plugin-runtime/inference/repository.js';
-import { InferenceAuthenticationError, InferenceCredentialStore, type EnvironmentExpressionSource } from '../../../src/plugin-runtime/inference/credentials.js';
+import { InferenceAuthenticationError, InferenceCredentialStore, credentialMaterialFingerprint, type CredentialPayload, type EnvironmentExpressionSource } from '../../../src/plugin-runtime/inference/credentials.js';
 import { HostAccountRuntime } from '../../../src/plugin-runtime/inference/account-runtime.js';
 import { expandEnvironmentValue } from '@zhin.js/runtime';
 
@@ -599,4 +600,89 @@ it('keeps read-only preparation cancellation separate from exchange outcome unce
     expect(fixture.refresh).not.toHaveBeenCalled();
     expect(fixture.release).toHaveBeenCalledOnce();
   } finally { result.resolve(credential); await fixture.close(); }
+});
+
+describe('legacy sha256 material fingerprint migration', () => {
+  const sha256 = (value: string) => createHash('sha256').update(value).digest('hex');
+  async function seedApiKey(fixture: Awaited<ReturnType<typeof setup>>, payload: CredentialPayload) {
+    const record = await fixture.store.seal({ account: fixture.account, revision: 1, authContractVersion: '1', payload });
+    expect(await fixture.repo.commitCredential({ rootId: '/root', write: { accountId: fixture.account.id, expectedRevision: 0,
+      expectedIncarnation: fixture.account.incarnation, record } })).toEqual({ status: 'committed' });
+  }
+
+  it('rewrites a ready literal key from sha256 to the current fingerprint and keeps it ready', async () => {
+    const fixture = await setup('api-key');
+    try {
+      await seedApiKey(fixture, { status: 'ready', method: 'api-key', key: 'synthetic-literal-key', materialFingerprint: sha256('synthetic-literal-key') });
+      expect(await fixture.host.createPort(fixture.execution).authorize(fixture.request())).toMatchObject({ token: 'synthetic-literal-key', revision: '2' });
+      const stored = await fixture.store.read(fixture.account);
+      expect(stored?.payload).toMatchObject({ status: 'ready', key: 'synthetic-literal-key', materialFingerprint: credentialMaterialFingerprint('synthetic-literal-key') });
+      expect(fixture.resolveSource).not.toHaveBeenCalled();
+    } finally { await fixture.close(); }
+  });
+
+  it('migrates a ready environment key before authorization instead of flipping it to reauthorize', async () => {
+    const fixture = await setup('api-key', 'env://SYNTHETIC_API_KEY');
+    try {
+      await seedApiKey(fixture, { status: 'ready', method: 'api-key', key: fixture.environment.key, materialFingerprint: sha256(fixture.environment.key) });
+      expect(await fixture.host.createPort(fixture.execution).authorize(fixture.request())).toMatchObject({ token: 'environment-key-one' });
+      expect((await fixture.store.read(fixture.account))?.payload).toMatchObject({ status: 'ready', key: 'environment-key-one',
+        materialFingerprint: credentialMaterialFingerprint('environment-key-one') });
+      // Migration runs once per process; a later authorization does not rewrite again.
+      const revision = (await fixture.store.read(fixture.account))?.record.revision;
+      await fixture.host.createPort(fixture.execution).authorize(fixture.request());
+      expect((await fixture.store.read(fixture.account))?.record.revision).toBe(revision);
+    } finally { await fixture.close(); }
+  });
+
+  it('leaves an already current fingerprint untouched', async () => {
+    const fixture = await setup('api-key', 'env://SYNTHETIC_API_KEY');
+    try {
+      await seedApiKey(fixture, { status: 'ready', method: 'api-key', key: fixture.environment.key, materialFingerprint: credentialMaterialFingerprint(fixture.environment.key) });
+      expect(await fixture.host.createPort(fixture.execution).authorize(fixture.request())).toMatchObject({ token: 'environment-key-one', revision: '1' });
+      expect((await fixture.store.read(fixture.account))?.record.revision).toBe(1);
+    } finally { await fixture.close(); }
+  });
+
+  it('still treats a real environment key change as identity-change after migrating the old fingerprint', async () => {
+    const fixture = await setup('api-key', 'env://SYNTHETIC_API_KEY');
+    try {
+      await seedApiKey(fixture, { status: 'ready', method: 'api-key', key: 'environment-key-one', materialFingerprint: sha256('environment-key-one') });
+      fixture.environment.key = 'rotated-environment-key';
+      await expect(fixture.host.createPort(fixture.execution).authorize(fixture.request())).rejects.toMatchObject({ code: 'identity-change' });
+      const stored = await fixture.store.read(fixture.account);
+      expect(stored?.payload).toMatchObject({ status: 'reauthorize', materialFingerprint: credentialMaterialFingerprint('environment-key-one') });
+      expect(stored?.payload).not.toHaveProperty('key');
+    } finally { await fixture.close(); }
+  });
+
+  it('restores a row locked only by the algorithm change when the same environment key is still present', async () => {
+    const fixture = await setup('api-key', 'env://SYNTHETIC_API_KEY');
+    try {
+      // Exactly what the 1.1.29 identity-change path persisted: no key, legacy fingerprint retained.
+      await seedApiKey(fixture, { status: 'reauthorize', method: 'api-key', identityEstablished: true, materialFingerprint: sha256(fixture.environment.key) });
+      expect(await fixture.host.createPort(fixture.execution).authorize(fixture.request())).toMatchObject({ token: 'environment-key-one' });
+      expect((await fixture.store.read(fixture.account))?.payload).toMatchObject({ status: 'ready', key: 'environment-key-one',
+        materialFingerprint: credentialMaterialFingerprint('environment-key-one') });
+    } finally { await fixture.close(); }
+  });
+
+  it('keeps a reauthorize row locked when the environment key really rotated', async () => {
+    const fixture = await setup('api-key', 'env://SYNTHETIC_API_KEY');
+    try {
+      await seedApiKey(fixture, { status: 'reauthorize', method: 'api-key', identityEstablished: true, materialFingerprint: sha256('previous-environment-key') });
+      await expect(fixture.host.createPort(fixture.execution).authorize(fixture.request())).rejects.toMatchObject({ code: 'reauthorize' });
+      expect((await fixture.store.read(fixture.account))?.payload).toMatchObject({ status: 'reauthorize', materialFingerprint: sha256('previous-environment-key') });
+      expect((await fixture.store.read(fixture.account))?.record.revision).toBe(1);
+    } finally { await fixture.close(); }
+  });
+
+  it('does not restore a reauthorize literal key, whose secret is no longer available', async () => {
+    const fixture = await setup('api-key');
+    try {
+      await seedApiKey(fixture, { status: 'reauthorize', method: 'api-key', identityEstablished: true, materialFingerprint: sha256('synthetic-literal-key') });
+      await expect(fixture.host.createPort(fixture.execution).authorize(fixture.request())).rejects.toMatchObject({ code: 'reauthorize' });
+      expect(fixture.resolveSource).not.toHaveBeenCalled();
+    } finally { await fixture.close(); }
+  });
 });
