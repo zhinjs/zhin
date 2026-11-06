@@ -1,0 +1,16 @@
+packages/toolkit/testing/tests/run-scenario.mjs
+  h_6f5e45c41d0910 105-107,110
+tests/e2e-smoke/scenarios/scenario-lab-export.mjs
+  h_6f5e45c41d0910 94-97
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ce384edc25a4878e3522ca59543c6239257d6200",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
