@@ -1,0 +1,242 @@
+.changeset/consolidate-im-micro-packages.md
+  h_6f5e45c41d0910 1-16
+AGENTS.md
+  h_6f5e45c41d0910 32,56
+basic/cli/src/commands/trace.ts
+  h_6f5e45c41d0910 146
+basic/cli/src/plugin-management/workflow.ts
+  h_6f5e45c41d0910 7,64
+basic/cli/src/plugin-runtime/agent/host-installer.ts
+  h_6f5e45c41d0910 4-14
+basic/cli/src/plugin-runtime/console/configuration.ts
+  h_6f5e45c41d0910 12
+basic/cli/src/plugin-runtime/console/plugin-package-map.ts
+  h_6f5e45c41d0910 2
+basic/cli/src/plugin-runtime/console/plugin-schema-catalog.ts
+  h_6f5e45c41d0910 4
+basic/cli/src/plugin-runtime/inference/headless-host.ts
+  h_6f5e45c41d0910 2
+basic/cli/src/plugin-runtime/inference/host.ts
+  h_6f5e45c41d0910 5
+basic/cli/src/plugin-runtime/inference/operation-resources.ts
+  h_6f5e45c41d0910 2-7
+basic/cli/src/plugin-runtime/migrate/instance-declarations.ts
+  h_6f5e45c41d0910 6
+basic/cli/src/plugin-runtime/plugin-lifecycle-store.ts
+  h_6f5e45c41d0910 3
+basic/cli/src/plugin-runtime/project-commands.ts
+  h_6f5e45c41d0910 6
+basic/cli/src/plugin-runtime/self-change-apply.ts
+  h_6f5e45c41d0910 11
+basic/cli/src/plugin-runtime/start-command.ts
+  h_6f5e45c41d0910 36,39,599
+basic/cli/src/utils/config-file.ts
+  h_6f5e45c41d0910 4
+basic/cli/src/utils/config-offline.ts
+  h_6f5e45c41d0910 4
+basic/cli/src/utils/dev-link-plugin.ts
+  h_6f5e45c41d0910 21
+basic/cli/src/utils/dev-link.ts
+  h_6f5e45c41d0910 23
+basic/cli/src/utils/legacy-config.ts
+  h_6f5e45c41d0910 3
+basic/cli/tests/config-explanation.test.ts
+  h_6f5e45c41d0910 4
+basic/cli/tests/config-file-revision.test.ts
+  h_6f5e45c41d0910 4
+basic/cli/tests/fixtures/inference-console-host.ts
+  h_6f5e45c41d0910 8
+basic/cli/tests/fixtures/inference-native-lifetime.mjs
+  h_6f5e45c41d0910 11
+basic/cli/tests/plugin-management-console-client.test.ts
+  h_6f5e45c41d0910 5
+basic/cli/tests/plugin-management.test.ts
+  h_6f5e45c41d0910 6
+basic/cli/tests/plugin-runtime/agent/self-change-configuration-application.test.ts
+  h_6f5e45c41d0910 5
+basic/cli/tests/plugin-runtime/agent/turn/boundaries.test.ts
+  h_6f5e45c41d0910 4
+basic/cli/tests/plugin-runtime/configuration-cross-entry.test.ts
+  h_6f5e45c41d0910 13
+basic/cli/tests/plugin-runtime/configuration-host-installer.test.ts
+  h_6f5e45c41d0910 10
+basic/cli/tests/plugin-runtime/console/ai-config-validation.test.ts
+  h_6f5e45c41d0910 4
+basic/cli/tests/plugin-runtime/console/api.test.ts
+  h_6f5e45c41d0910 7
+basic/cli/tests/plugin-runtime/console/configuration-adapter-credentials.test.ts
+  h_6f5e45c41d0910 4
+basic/cli/tests/plugin-runtime/console/configuration-application.test.ts
+  h_6f5e45c41d0910 6
+basic/cli/tests/plugin-runtime/console/configuration-chat-field-policy.test.ts
+  h_6f5e45c41d0910 4
+basic/cli/tests/plugin-runtime/console/configuration-chat-shape.test.ts
+  h_6f5e45c41d0910 4
+basic/cli/tests/plugin-runtime/console/configuration-chat-tuple.test.ts
+  h_6f5e45c41d0910 4
+basic/cli/tests/plugin-runtime/console/configuration-chat.test.ts
+  h_6f5e45c41d0910 4
+basic/cli/tests/plugin-runtime/console/configuration-cli-live-host.test.ts
+  h_6f5e45c41d0910 7
+basic/cli/tests/plugin-runtime/console/configuration-patch.test.ts
+  h_6f5e45c41d0910 6
+basic/cli/tests/plugin-runtime/console/configuration-project-patch.test.ts
+  h_6f5e45c41d0910 5
+basic/cli/tests/plugin-runtime/console/configuration.test.ts
+  h_6f5e45c41d0910 7
+basic/cli/tests/plugin-runtime/console/console-schema-coverage.test.ts
+  h_6f5e45c41d0910 4
+basic/cli/tests/plugin-runtime/console/control-plane.test.ts
+  h_6f5e45c41d0910 4
+basic/cli/tests/plugin-runtime/console/disabled-plugin-schema.test.ts
+  h_6f5e45c41d0910 4
+basic/cli/tests/plugin-runtime/console/plugin-metadata.test.ts
+  h_6f5e45c41d0910 5
+basic/cli/tests/plugin-runtime/inference/apply-contract.test.ts
+  h_6f5e45c41d0910 5
+basic/cli/tests/plugin-runtime/inference/configuration-fixture.ts
+  h_6f5e45c41d0910 5,7
+basic/cli/tests/plugin-runtime/inference/host.test.ts
+  h_6f5e45c41d0910 11
+basic/cli/tests/plugin-runtime/inference/operation-resources.test.ts
+  h_6f5e45c41d0910 7-13
+basic/cli/tests/plugin-runtime/inference/support-fixture.ts
+  h_6f5e45c41d0910 11
+basic/cli/tests/plugin-runtime/instance-declarations-migration.test.ts
+  h_6f5e45c41d0910 5
+basic/cli/tests/plugin-runtime/root-host-watch.test.ts
+  h_6f5e45c41d0910 6
+docs/concepts/architecture.md
+  h_6f5e45c41d0910 34,62,78,98,119
+docs/concepts/config-as-data.md
+  h_6f5e45c41d0910 140
+docs/contributing/publishing.md
+  h_6f5e45c41d0910 138,169
+docs/en/concepts/architecture.md
+  h_6f5e45c41d0910 34,59,74,102
+docs/en/concepts/config-as-data.md
+  h_6f5e45c41d0910 140
+docs/plans/plugin-package-and-instance-declarations.md
+  h_6f5e45c41d0910 273
+docs/snippets/install-tiers.md
+  h_6f5e45c41d0910 60
+packages/im/agent/README.md
+  h_6f5e45c41d0910 263
+packages/im/agent/src/security/usage-accounting.ts
+  h_6f5e45c41d0910 5-10
+packages/im/agent/tests/security/usage-accounting.test.ts
+  h_6f5e45c41d0910 2
+packages/im/ai/README.md
+  h_6f5e45c41d0910 13
+packages/im/ai/package.json
+  h_6f5e45c41d0910 72
+packages/im/ai/src/provider/index.ts
+  h_6f5e45c41d0910 17-19
+packages/im/ai/src/provider/lazy-client.ts
+  h_6f5e45c41d0910 1-3
+packages/im/ai/src/provider/plugin-resources.ts
+  h_6f5e45c41d0910 2-3
+packages/im/ai/src/provider/usage.ts
+  h_6f5e45c41d0910 1-2
+packages/im/ai/tests/provider/lazy-client.test.ts
+  h_6f5e45c41d0910 1-7
+packages/im/ai/tests/provider/plugin-resources.test.ts
+  h_6f5e45c41d0910 2-9
+packages/im/command/package.json
+  h_6f5e45c41d0910 31
+packages/im/command/src/command-index.ts
+  h_6f5e45c41d0910 15
+packages/im/command/src/definition.ts
+  h_6f5e45c41d0910 19
+packages/im/core/src/built/user-interaction.ts
+  h_6f5e45c41d0910 7
+packages/im/core/src/index.ts
+  h_6f5e45c41d0910 14
+packages/im/core/src/plugin-runtime/im/im-runtime.ts
+  h_6f5e45c41d0910 45
+packages/im/core/src/plugin-runtime/im/inbound-runtime.ts
+  h_6f5e45c41d0910 16
+packages/im/core/src/plugin-runtime/im/interaction-runtime.ts
+  h_6f5e45c41d0910 5-16
+packages/im/core/src/plugin-runtime/im/message-dispatcher.ts
+  h_6f5e45c41d0910 9
+packages/im/core/tests/canonical-event-endpoint.test.ts
+  h_6f5e45c41d0910 1
+packages/im/core/tests/plugin-runtime/side-event-gateway.test.ts
+  h_6f5e45c41d0910 1
+packages/im/handler/package.json
+  h_6f5e45c41d0910 26
+packages/im/handler/src/context.ts
+  h_6f5e45c41d0910 2
+packages/im/im-contract/package.json
+  h_6f5e45c41d0910 13-17,47-50
+packages/im/im-contract/src/index.ts
+  h_6f5e45c41d0910 12
+packages/im/runtime/package.json
+  h_6f5e45c41d0910 13-22,40-41,72-79
+packages/im/runtime/src/index.ts
+  h_6f5e45c41d0910 26-27
+packages/im/runtime/src/isolate/runtime.ts
+  h_6f5e45c41d0910 14
+packages/im/runtime/tests/config-file/concurrent-transaction.test.ts
+  h_6f5e45c41d0910 5-6,122
+packages/im/runtime/tests/config-file/file-mode.test.ts
+  h_6f5e45c41d0910 4
+packages/im/runtime/tests/config-file/json-config-document.test.ts
+  h_6f5e45c41d0910 6,13
+packages/im/runtime/tests/config-file/v2-source-order.test.ts
+  h_6f5e45c41d0910 4
+packages/im/runtime/tests/config-file/yaml-config-document.test.ts
+  h_6f5e45c41d0910 6,11
+packages/im/runtime/tests/isolate/isolate-runtime.test.ts
+  h_6f5e45c41d0910 14,20
+packages/im/zhin/package.json
+  h_6f5e45c41d0910 83-87,111,211-214
+packages/im/zhin/src/schedule.ts
+  h_6f5e45c41d0910 1-2
+packages/toolkit/scaffold-wizard/package.json
+  h_6f5e45c41d0910 33
+packages/toolkit/scaffold-wizard/src/project-config-plan.ts
+  h_6f5e45c41d0910 5-9
+packages/toolkit/testing/README.md
+  h_6f5e45c41d0910 99
+packages/toolkit/testing/src/index.ts
+  h_6f5e45c41d0910 29
+plugins/services/typesafe/README.md
+  h_6f5e45c41d0910 71
+plugins/services/typesafe/package.json
+  h_6f5e45c41d0910 33
+plugins/services/typesafe/plugin.ts
+  h_6f5e45c41d0910 2
+plugins/services/typesafe/tests/plugin-runtime.test.ts
+  h_6f5e45c41d0910 6
+pnpm-lock.yaml
+  h_6f5e45c41d0910 1356-1358,1405,1407,1529,1531,1683-1685,1807-1809
+scripts/check-architecture-layers.mjs
+  h_6f5e45c41d0910 29,67,69-70,74
+tests/docs/operability-docs.test.ts
+  h_6f5e45c41d0910 5
+tests/e2e-smoke/scenarios/config-explain-and-enum.mjs
+  h_6f5e45c41d0910 7
+tests/e2e-smoke/scenarios/install-migrate-boot-diagnose.mjs
+  h_6f5e45c41d0910 7
+tests/snapshots/api-surface.json
+  h_6f5e45c41d0910 189
+tests/snapshots/plugin-runtime-api.json
+  h_6f5e45c41d0910 334,341,360-371
+tsconfig.typecheck.json
+  h_6f5e45c41d0910 233-234,269-274,332-334
+tsconfig.typedoc.json
+  h_6f5e45c41d0910 83-85,122-127,170-172
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "008ccad8bc2886d8890e8a55be74a049964bf908",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
