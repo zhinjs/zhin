@@ -6,7 +6,17 @@ import {
   type SnapshotState,
 } from '@zhin.js/plugin-runtime';
 import { FeatureDiscovery, type DiscoveryHost } from '@zhin.js/feature-kit';
-import pageFeature, { PageIndex, definePage, isPageIndex, pageIndexProjection, parsePageArtifact } from '../src/index.js';
+import pageFeature, {
+  PageIndex,
+  createAdapterConsolePage,
+  createDeclarativePage,
+  defineAdapterPage,
+  definePage,
+  definePageBlueprint,
+  isPageIndex,
+  pageIndexProjection,
+  parsePageArtifact,
+} from '../src/index.js';
 
 describe('Page Feature', () => {
   it('re-exports definePage and supports extended PageMetadata fields', () => {
@@ -74,6 +84,23 @@ describe('Page Feature', () => {
 
     expect(index.list().map((page) => page.route)).toEqual(['/p-home', '/admin/p-status']);
     expect(index.route('/admin/p-status')?.owner).toBe(child);
+  });
+
+  it('re-exports definePageBlueprint, createDeclarativePage, defineAdapterPage and createAdapterConsolePage', () => {
+    expect(createDeclarativePage).toBe(definePageBlueprint);
+    expect(createAdapterConsolePage).toBe(defineAdapterPage);
+
+    const BlueprintPage = definePageBlueprint({
+      title: { zh: '概览', en: 'Overview' },
+      stats: [{ label: 'Total', value: 'total' }],
+    });
+    expect(BlueprintPage.kind).toBe('zhin.console.page-blueprint');
+    expect(BlueprintPage().title).toBe('Overview');
+    expect(BlueprintPage.sections).toHaveLength(1);
+
+    const AdapterPage = defineAdapterPage('discord');
+    expect(AdapterPage.kind).toBe('zhin.console.adapter-page');
+    expect(AdapterPage().adapterKey).toBe('discord');
   });
 });
 

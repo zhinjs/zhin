@@ -50,7 +50,6 @@
     "url": "https://github.com/lc-cn"
   },
   "dependencies": {
-    "@zhin.js/client": "workspace:*",
     "@zhin.js/console-contract": "workspace:*",
     "@zhin.js/host-http": "workspace:*",
     "@zhin.js/im-contract": "workspace:*",

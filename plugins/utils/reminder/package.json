@@ -32,7 +32,6 @@
     "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean"
   },
   "dependencies": {
-    "@zhin.js/client": "workspace:*",
     "@zhin.js/console-contract": "workspace:*",
     "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/page": "workspace:*",

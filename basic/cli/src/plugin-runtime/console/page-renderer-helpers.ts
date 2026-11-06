@@ -543,7 +543,28 @@ class PageErrorBoundary extends React.Component {
 }
 
 try {
-  function renderBlueprint(bp) {
+  function renderBlueprint(bp, props) {
+    if (typeof globalThis !== 'undefined') {
+      if (bp?.kind === 'zhin.console.adapter-page' && typeof globalThis.__ZHIN_RENDER_ADAPTER_PAGE__ === 'function') {
+        return globalThis.__ZHIN_RENDER_ADAPTER_PAGE__(bp, props);
+      }
+      if (bp?.kind === 'zhin.console.page-blueprint' && typeof globalThis.__ZHIN_RENDER_BLUEPRINT__ === 'function') {
+        return globalThis.__ZHIN_RENDER_BLUEPRINT__(bp, props);
+      }
+    }
+    if (bp?.kind === 'zhin.console.adapter-page') {
+      const adapterKey = String(bp.adapterKey ?? '');
+      return createElement('div', { className: 'p-6 max-w-4xl mx-auto flex flex-col gap-6', 'data-adapter-key': adapterKey },
+        createElement('div', { className: 'flex flex-col gap-1' },
+          createElement('h1', { className: 'text-2xl font-bold' }, String(bp.title ?? (adapterKey || entry.title || 'Adapter'))),
+          (bp.subtitle ?? bp.description) ? createElement('p', { className: 'text-sm text-muted-foreground' }, String(bp.subtitle ?? bp.description)) : null,
+        ),
+        createElement('section', { className: 'p-4 rounded-lg border bg-card flex flex-col gap-2' },
+          createElement('h2', { className: 'text-base font-semibold mb-2' }, 'Adapter Overview'),
+          createElement('p', { className: 'text-sm text-muted-foreground' }, 'Adapter: ' + adapterKey),
+        ),
+      );
+    }
     const sections = Array.isArray(bp.sections) ? bp.sections : [];
     return createElement('div', { className: 'p-6 max-w-4xl mx-auto flex flex-col gap-6' },
       createElement('div', { className: 'flex flex-col gap-1' },
@@ -562,6 +583,39 @@ try {
               ...items.map((item, i) => createElement('div', { key: item?.key ?? String(i), className: 'p-3 rounded border bg-muted flex flex-col gap-1' },
                 createElement('span', { className: 'text-xs text-muted-foreground' }, String(item?.label ?? item?.key ?? '')),
                 createElement('strong', { className: 'text-lg font-semibold' }, String(item?.value ?? '—') + String(item?.suffix ?? '')),
+              )),
+            ),
+          );
+        }
+        if (sec?.kind === 'table' || sec?.type === 'table') {
+          const cols = Array.isArray(sec?.columns) ? sec.columns : [];
+          const rows = Array.isArray(sec?.rows) ? sec.rows : items;
+          return createElement('section', { key, className: 'p-4 rounded-lg border bg-card flex flex-col gap-2' },
+            secTitle,
+            rows.length === 0
+              ? createElement('p', { className: 'text-sm text-muted-foreground' }, String(sec?.emptyText ?? 'No data'))
+              : createElement('table', { className: 'w-full text-sm text-left' },
+                  cols.length > 0 ? createElement('thead', null,
+                    createElement('tr', null, ...cols.map((col, ci) => createElement('th', { key: col?.key ?? String(ci), className: 'py-2 px-3 border-b font-medium' }, String(col?.label ?? col?.key ?? '')))),
+                  ) : null,
+                  createElement('tbody', null,
+                    ...rows.map((row, ri) => createElement('tr', { key: String(row?.[sec?.rowKey ?? 'id'] ?? ri) },
+                      ...(cols.length > 0
+                        ? cols.map((col, ci) => createElement('td', { key: col?.key ?? String(ci), className: 'py-2 px-3 border-b' }, String(row?.[col?.key] ?? '—')))
+                        : Object.entries(row ?? {}).map(([rk, rv]) => createElement('td', { key: rk, className: 'py-2 px-3 border-b' }, String(rv ?? '—')))),
+                    )),
+                  ),
+                ),
+          );
+        }
+        if (sec?.kind === 'entries' || sec?.type === 'entries') {
+          const entryItems = Array.isArray(sec?.entries) ? sec.entries : items;
+          return createElement('section', { key, className: 'p-4 rounded-lg border bg-card flex flex-col gap-2' },
+            secTitle,
+            createElement('dl', { className: 'grid grid-cols-2 gap-2 text-sm' },
+              ...entryItems.map((entryItem, ei) => createElement('div', { key: entryItem?.key ?? entryItem?.label ?? String(ei), className: 'contents' },
+                createElement('dt', { className: 'text-muted-foreground' }, String(entryItem?.label ?? entryItem?.key ?? '')),
+                createElement('dd', { className: 'font-medium m-0' }, String(entryItem?.value ?? '—')),
               )),
             ),
           );
@@ -599,21 +653,22 @@ try {
       addTool() { return entry.localName; },
     });
   }
+  const isBlueprint = (v) => Boolean(v && typeof v === 'object' && (v.kind === 'zhin.console.page-blueprint' || v.kind === 'zhin.console.adapter-page'));
   const ResolvedComponent = typeof Component === 'function'
     ? function ZhinPageShellAdapter(props) {
         globalThis.__ZHIN_ALLOW_RAW_BLUEPRINT__ = true;
         try {
           const out = Component(props);
-          if (out && typeof out === 'object' && out.kind === 'zhin.console.page-blueprint') {
-            return renderBlueprint(out);
+          if (isBlueprint(out)) {
+            return renderBlueprint(out, props);
           }
           return out;
         } finally {
           delete globalThis.__ZHIN_ALLOW_RAW_BLUEPRINT__;
         }
       }
-    : (Component && typeof Component === 'object' && Component.kind === 'zhin.console.page-blueprint'
-        ? function ZhinBlueprintShellPage() { return renderBlueprint(Component); }
+    : (isBlueprint(Component)
+        ? function ZhinBlueprintShellPage(props) { return renderBlueprint(Component, props); }
         : (Component ?? page));
   const content = registeredElement ?? createElement(ResolvedComponent, entry);
   const wrapped = RouterWrapper ? createElement(RouterWrapper, null, content) : content;
