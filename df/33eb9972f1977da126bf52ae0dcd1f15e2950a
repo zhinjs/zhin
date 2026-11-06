@@ -1,0 +1,14 @@
+basic/cli/tests/plugin-runtime/inference/account-runtime.test.ts
+  h_6f5e45c41d0910 605-616,626,637,660,673,683,685,693
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "df33eb9972f1977da126bf52ae0dcd1f15e2950a",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
