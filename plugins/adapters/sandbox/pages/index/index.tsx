@@ -1,5 +1,5 @@
 import { definePage } from '@zhin.js/console-contract';
-import SandboxChat, { type SandboxPageProps } from './SandboxChat';
+import SandboxChat, { type SandboxPageProps } from './SandboxChat.js';
 
 export const meta = definePage({
   title: '会话',
