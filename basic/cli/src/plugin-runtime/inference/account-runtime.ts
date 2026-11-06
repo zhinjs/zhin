@@ -42,6 +42,7 @@ import {
   runAccountRefresh,
   startAccountLogin,
 } from './account-runtime-oauth.js';
+import { migrateLegacyCredentialFingerprints } from './credential-fingerprint-migration.js';
 
 export type { AccountRuntimeOptions, AccountStatusView, LoginChallengeView } from './account-runtime-helpers.js';
 
@@ -53,6 +54,7 @@ export class HostAccountRuntime {
   readonly #logins = new Map<string, PendingLogin>();
   readonly #loginStarts = new Map<string, LoginStart>();
   readonly #uncertain = new Set<string>();
+  readonly #fingerprintMigrations = new Map<string, Promise<void>>();
 
   constructor(private readonly options: AccountRuntimeOptions) {}
 
@@ -130,6 +132,8 @@ export class HostAccountRuntime {
         return { headers: {}, revision: 'none' };
       if (this.#uncertain.has(accountKey(binding.account)))
         throw new InferenceAuthenticationError('outcome-unknown');
+      if (binding.account.authentication.method === 'api-key')
+        await this.#migrateLegacyFingerprints(binding.account.rootId);
       let open = await this.options.credentials.read(binding.account);
       if (binding.account.authentication.method === 'api-key') {
         open = await resolveAccountEnvironmentKey(this.#context(), binding.account, definition.contractVersion, open);
@@ -564,6 +568,27 @@ export class HostAccountRuntime {
       })
       .catch(() => {});
     return promise;
+  }
+
+  /** Once per root and process: legacy sha256 material fingerprints become scrypt before any comparison. */
+  #migrateLegacyFingerprints(rootId: string): Promise<void> {
+    let migration = this.#fingerprintMigrations.get(rootId);
+    if (!migration) {
+      migration = migrateLegacyCredentialFingerprints(this.#context(), rootId).then(
+        ({ migrated, skipped }) => {
+          if (migrated)
+            getLogger('inference').info(`Migrated ${migrated} inference credential fingerprint(s) from legacy sha256`);
+          if (skipped)
+            getLogger('inference').warn(`${skipped} inference credential(s) could not be checked for legacy fingerprint migration`);
+        },
+        (error: unknown) => {
+          this.#fingerprintMigrations.delete(rootId);
+          throw error;
+        }
+      );
+      this.#fingerprintMigrations.set(rootId, migration);
+    }
+    return migration;
   }
 
   async #publish(
