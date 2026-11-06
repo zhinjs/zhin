@@ -1,0 +1,14 @@
+pnpm-lock.yaml
+  h_6f5e45c41d0910 1267-1269
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b51eca2f931837586b611d77d269df2da78ab41a",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
