@@ -439,15 +439,7 @@ wizardText(locale, "templates.environmentExample", [databaseEnvExample]));
 
   // plugin.ts（根插件入口）
   await fs.writeFile(path.join(projectPath, 'plugin.ts'),
-`import { definePlugin } from 'zhin.js';
-
-export default definePlugin({
-  name: '${projectName}',
-  metadata: {
-    displayName: '${projectName}',
-  },
-});
-`);
+    wizardText(locale, "templates.pluginEntry", [projectName]));
 
   // schema.json（根插件配置契约，暂无可配置项）
   await fs.writeJson(path.join(projectPath, 'schema.json'), {
@@ -457,20 +449,10 @@ export default definePlugin({
     "properties": {}
   }, { spaces: 2 });
 
-  // pages/ follows the Feature conventions. These components deliberately
-  // return text, keeping the initial IM project free of a browser UI runtime.
+  // pages/ follows the Feature conventions. HomePage returns a declarative
+  // ConsolePageBlueprint, keeping the initial IM project free of a browser UI runtime.
   await fs.outputFile(path.join(projectPath, 'pages', 'index', 'index.tsx'),
-`import { definePage } from '@zhin.js/console-contract';
-
-export const meta = definePage({
-  title: '${projectName}',
-  order: 10,
-});
-
-export default function HomePage() {
-  return 'Zhin Console is ready. Add pages in pages/ to extend this plugin.';
-}
-`);
+    wizardText(locale, "templates.homePage", [projectName]));
   await fs.outputFile(path.join(projectPath, 'pages', 'nav', 'index.tsx'),
 `import type { NavSlotProps } from '@zhin.js/console-contract';
 

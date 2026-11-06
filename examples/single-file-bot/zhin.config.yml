@@ -2,6 +2,11 @@ configVersion: 2
 log_level: info
 plugins:
   sandbox: "@zhin.js/adapter-sandbox"
+sandbox:
+  commandPrefix: /
+  endpoints:
+    - id: single-file-bot
+      owner: local-user
 http:
   host: 127.0.0.1
   port: 8086

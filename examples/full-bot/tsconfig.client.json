@@ -8,6 +8,6 @@
     "noEmit": true,
     "rootDir": "."
   },
-  "include": ["pages/**/*.tsx"],
+  "include": ["pages/**/*.ts", "pages/**/*.tsx"],
   "exclude": ["dist", "lib", "node_modules"]
 }

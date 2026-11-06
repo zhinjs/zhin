@@ -5,6 +5,7 @@ export default defineCommand({
   execute: () => [
     'Hello from minimal-bot.',
     'Try /card to render the status component.',
+    'Try /jsx or jsx? to preview JSX command and middleware replies.',
     'Type commands directly in this terminal.',
   ].join('\n'),
 });

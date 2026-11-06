@@ -3,15 +3,23 @@
 **一个 `bot.ts` 就是一个机器人。** 不建 `commands/`、`components/` 等任何子目录。
 
 ```ts
-import { defineCommand } from 'zhin.js/command';
 import { definePlugin } from 'zhin.js';
+import { defineCommand } from 'zhin.js/command';
 
 export default definePlugin({
   name: 'single-file-bot',
   setup({ addCommand }) {
     addCommand('hello', defineCommand({
       description: '打招呼',
-      execute: () => 'Hello from single-file-bot!',
+      execute: () => 'Hello from single-file-bot! 👋 (试试发送 /status 查看运行状态)',
+    }));
+    addCommand('status', defineCommand({
+      description: '查看运行状态',
+      execute: () => {
+        const rssMb = Math.round(process.memoryUsage().rss / 1024 / 1024);
+        const uptimeSec = Math.round(process.uptime());
+        return `single-file-bot 运行中 | RSS ${rssMb}MB | Uptime ${uptimeSec}s`;
+      },
     }));
   },
 });
@@ -36,7 +44,7 @@ pnpm dev          # = zhin runtime start
 
 1. 打开 [Remote Console](https://console.zhin.dev)
 2. Host 填 `http://127.0.0.1:8086`（本示例未配 `http.token`，仅限本机）
-3. 进入 **Sandbox / 沙盒**，发送 **`/hello`**
+3. 进入 **Sandbox / 沙盒**，发送 **`/hello`** 或 **`/status`**
 
 应收到 `Hello from single-file-bot!` 一类回复。编辑 `bot.ts` 会热重载。
 

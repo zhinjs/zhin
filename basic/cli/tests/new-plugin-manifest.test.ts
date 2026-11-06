@@ -183,6 +183,14 @@ describe('createPluginManifest', () => {
     await fs.outputFile(path.join(dir, 'plugin.ts'), "import { a } from './src/index.js';\nexport default a;\n");
     await fs.outputFile(path.join(dir, 'commands', 'x', 'index.ts'),
       "import type { T } from '../../src/types.ts';\nimport { b } from '../../src/index.ts';\nexport default b as T;\n");
+    await fs.outputFile(path.join(dir, 'pages', 'index', 'index.ts'),
+      "import { blueprint } from '../../src/console.js';\nexport default blueprint;\n");
+    await fs.outputFile(path.join(dir, 'skills', 'demo', 'SKILL.md'), '# Demo Skill\n');
+    await fs.outputFile(path.join(dir, 'skills', 'demo', 'tools', 'demo_tool', 'index.ts'),
+      "import { runTool } from '../../../../src/index.ts';\nexport default runTool;\n");
+    await fs.outputFile(path.join(dir, 'agents', 'sub', 'agent.json'), '{"name":"sub"}\n');
+    await fs.outputFile(path.join(dir, 'agents', 'sub', 'tools', 'sub_tool', 'index.ts'),
+      "import { runSubTool } from '../../../../src/index.ts';\nexport default runSubTool;\n");
     await fs.outputFile(path.join(dir, 'commands', 'x', 'helper.test.ts'), 'export {};\n');
     await fs.outputFile(path.join(dir, 'commands', 'y', 'index.js'), 'export default 1;\n');
     await fs.outputFile(path.join(dir, RUNTIME_ENTRIES_SCRIPT_PATH), RUNTIME_ENTRIES_SCRIPT);
@@ -194,21 +202,35 @@ describe('createPluginManifest', () => {
     const command = await fs.readFile(path.join(dir, 'commands', 'x', 'index.js'), 'utf8');
     expect(command).toMatch(/from ['"]\.\.\/\.\.\/lib\/index\.js['"]/);
     expect(command).not.toContain('types');
+    const page = await fs.readFile(path.join(dir, 'pages', 'index', 'index.js'), 'utf8');
+    expect(page).toMatch(/from ['"]\.\.\/\.\.\/lib\/console\.js['"]/);
+    const skillTool = await fs.readFile(path.join(dir, 'skills', 'demo', 'tools', 'demo_tool', 'index.js'), 'utf8');
+    expect(skillTool).toMatch(/from ['"]\.\.\/\.\.\/\.\.\/\.\.\/lib\/index\.js['"]/);
+    const agentTool = await fs.readFile(path.join(dir, 'agents', 'sub', 'tools', 'sub_tool', 'index.js'), 'utf8');
+    expect(agentTool).toMatch(/from ['"]\.\.\/\.\.\/\.\.\/\.\.\/lib\/index\.js['"]/);
+    expect(await fs.readFile(path.join(dir, 'skills', 'demo', 'SKILL.md'), 'utf8')).toBe('# Demo Skill\n');
+    expect(await fs.readFile(path.join(dir, 'agents', 'sub', 'agent.json'), 'utf8')).toBe('{"name":"sub"}\n');
     expect(await fs.pathExists(path.join(dir, 'commands', 'x', 'helper.test.js'))).toBe(false);
     execFileSync(process.execPath, [script, '--clean'], { cwd: dir });
     expect(await fs.pathExists(path.join(dir, 'plugin.js'))).toBe(false);
     expect(await fs.pathExists(path.join(dir, 'commands', 'x', 'index.js'))).toBe(false);
+    expect(await fs.pathExists(path.join(dir, 'pages', 'index', 'index.js'))).toBe(false);
+    expect(await fs.pathExists(path.join(dir, 'skills', 'demo', 'tools', 'demo_tool', 'index.js'))).toBe(false);
+    expect(await fs.pathExists(path.join(dir, 'agents', 'sub', 'tools', 'sub_tool', 'index.js'))).toBe(false);
+    expect(await fs.readFile(path.join(dir, 'skills', 'demo', 'SKILL.md'), 'utf8')).toBe('# Demo Skill\n');
+    expect(await fs.readFile(path.join(dir, 'agents', 'sub', 'agent.json'), 'utf8')).toBe('{"name":"sub"}\n');
     expect(await fs.pathExists(path.join(dir, 'commands', 'y', 'index.js'))).toBe(true);
   });
 
   it.each(['normal', 'service', 'adapter'] as const)('%s: ships and type-checks every server-side convention directory', (kind) => {
     const pkg = manifest(kind);
     const { tsconfig } = createPluginTsconfigs(kind);
+    expect(CONVENTION_SOURCE_DIRECTORIES).toContain('pages');
     for (const dir of CONVENTION_SOURCE_DIRECTORIES) {
       expect(pkg.files, dir).toContain(`${dir}/**/*.js`);
       expect(tsconfig.include, dir).toContain(`${dir}/**/*`);
     }
-    expect(tsconfig.include).toContain('src/**/*');
+    expect(tsconfig.include).toEqual(expect.arrayContaining(['src/**/*', 'skills/**/*', 'agents/**/*']));
     expect(pkg.files).toEqual(expect.arrayContaining(['skills', 'agents']));
   });
 

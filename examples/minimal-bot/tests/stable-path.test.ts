@@ -38,6 +38,7 @@ const configText = fs.readFileSync(path.join(botRoot, 'zhin.config.yml'), 'utf8'
 
 afterEach(() => {
   vi.restoreAllMocks();
+  fs.rmSync(path.join(botRoot, '.zhin'), { recursive: true, force: true });
 });
 
 describe('minimal-bot Stable Plugin Runtime contract', () => {
@@ -143,11 +144,13 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
       const hello = await receive('/hello');
       expect(hello).toMatchObject({ matched: true, command: 'hello' });
       expect(writes.join('')).toContain('Hello from minimal-bot.');
+      expect(writes.join('')).toContain('Try /jsx or jsx? to preview JSX command and middleware replies.');
 
       const card = await receive('/card');
       expect(card).toMatchObject({ matched: true, command: 'card' });
       expect(writes.join('')).toContain('minimal-bot');
       expect(writes.join('')).toContain('RSS');
+      expect(writes.join('')).toContain('Uptime');
       await receive('/jsx');
       await receive('jsx?');
       expect(writes.join('')).toContain('来自命令');
