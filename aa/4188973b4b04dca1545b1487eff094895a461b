@@ -1,0 +1,14 @@
+.changeset/plugin-ecosystem-core-decomposition-and-dx.md
+  h_6f5e45c41d0910 1-22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "aa4188973b4b04dca1545b1487eff094895a461b",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
