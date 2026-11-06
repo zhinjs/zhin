@@ -61,3 +61,4 @@ export * from './data-migration.js';
 export * from './relational-target-migration.js';
 export * from './environment-expansion.js';
 export * from './host-installer.js';
+export * from './host-credential-storage.js';

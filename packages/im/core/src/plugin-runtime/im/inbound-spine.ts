@@ -28,7 +28,20 @@ export type InboundCommandObserve = (
   status: 'mismatch' | 'matched' | 'empty_input' | 'commands_unavailable' | 'started',
 ) => void;
 
+export interface InboundTurnRecord {
+  readonly turnId: string;
+  readonly conversation: Message['conversation'];
+  readonly senderId?: string;
+  readonly stage: InboundSpineStage;
+  readonly matched: boolean;
+  readonly command?: string;
+  readonly owner?: PluginId;
+  readonly replied: boolean;
+  readonly durationMs: number;
+}
+
 export interface InboundTurnEnvelope {
+  readonly turnId?: string;
   readonly message: Message;
   readonly lease: SnapshotLease;
   readonly requester: PluginId;
@@ -38,6 +51,7 @@ export interface InboundTurnEnvelope {
   readonly interactionFactory?: UserInteractionFactory;
   readonly ingressRoute?: IngressRoute;
   readonly diagnostics?: Pick<RuntimeMessageDiagnostics, 'route' | 'step'>;
+  readonly onTurnComplete?: (record: InboundTurnRecord) => void | Promise<void>;
   runHandlers(): Promise<void>;
   dispatchInteractive(): Promise<MessageDispatchResult | undefined>;
   dispatchCommand(observe: InboundCommandObserve): Promise<MessageDispatchOutcome>;
@@ -48,6 +62,7 @@ export interface InboundTurnEnvelope {
 export interface InboundSpineOutcome {
   readonly dispatch: MessageDispatchResult;
   readonly stage: InboundSpineStage;
+  readonly record: InboundTurnRecord;
   readonly reply?: { readonly owner: PluginId; readonly content: SendContent };
 }
 
@@ -55,7 +70,34 @@ export async function executeInboundTurnSpine(
   envelope: InboundTurnEnvelope,
   control?: InboundTerminalControl,
 ): Promise<InboundSpineOutcome> {
+  const startedAt = Date.now();
   const { message, lease, requester, conversationSequence, diagnostics } = envelope;
+  const turnId = envelope.turnId ?? `${message.id}:${conversationSequence ?? 0}`;
+  const finish = async (
+    dispatch: MessageDispatchResult,
+    stage: InboundSpineStage,
+    replied: boolean,
+    reply?: { readonly owner: PluginId; readonly content: SendContent },
+  ): Promise<InboundSpineOutcome> => {
+    const record: InboundTurnRecord = Object.freeze({
+      turnId,
+      conversation: message.conversation,
+      ...(message.sender?.id ? { senderId: message.sender.id } : {}),
+      stage,
+      matched: dispatch.matched,
+      ...(dispatch.command ? { command: dispatch.command } : {}),
+      ...(dispatch.owner ? { owner: dispatch.owner } : {}),
+      replied,
+      durationMs: Math.max(0, Date.now() - startedAt),
+    });
+    await envelope.onTurnComplete?.(record);
+    return {
+      dispatch,
+      stage,
+      record,
+      ...(reply ? { reply } : {}),
+    };
+  };
   const ingressRoute = envelope.ingressRoute ?? resolveIngressRoute(lease.value);
 
   const preRouted = await ingressRoute?.preRoute?.(
@@ -67,13 +109,14 @@ export async function executeInboundTurnSpine(
   if (preRouted) {
     diagnostics?.route('agent');
     const dispatch = Object.freeze({ matched: true, command: 'pre-route', owner: requester });
+    const replied = envelope.hasReplied();
     await control?.reportDispatch({
       matched: true,
       path: 'handler',
       handlerId: 'pre-route',
-      replied: envelope.hasReplied(),
+      replied,
     });
-    return { dispatch, stage: 'pre-route' };
+    return finish(dispatch, 'pre-route', replied);
   }
 
   if (ingressRoute?.shouldRouteBeforeDispatch?.(message) === true) {
@@ -86,13 +129,14 @@ export async function executeInboundTurnSpine(
     if (handled) {
       diagnostics?.route('agent');
       const dispatch = Object.freeze({ matched: true, command: 'ai', owner: requester });
+      const replied = envelope.hasReplied();
       await control?.reportDispatch({
         matched: true,
         path: 'handler',
         handlerId: 'ai',
-        replied: envelope.hasReplied(),
+        replied,
       });
-      return { dispatch, stage: 'before-dispatch-route' };
+      return finish(dispatch, 'before-dispatch-route', replied);
     }
   }
 
@@ -175,9 +219,5 @@ export async function executeInboundTurnSpine(
     });
   }
 
-  return {
-    dispatch: result,
-    stage,
-    ...(response ? { reply: response } : {}),
-  };
+  return finish(result, stage, replied, response);
 }

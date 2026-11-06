@@ -13,7 +13,7 @@ import {
 } from './src/config.js';
 import { defineLotteryTables, type LotteryDb } from './src/db.js';
 import { createInMemoryLotteryDb } from './src/memory-db.js';
-import { lotteryRuntimeToken } from './src/runtime-state.js';
+import { lotteryRuntimeStore } from './src/runtime-state.js';
 import { runLotteryPipeline } from './src/pipeline.js';
 
 /**
@@ -60,7 +60,7 @@ export default definePlugin<LotteryConfig>({
         }
       };
     }
-    context.resources.provide(lotteryRuntimeToken, Object.freeze({
+    lotteryRuntimeStore.provide(context, Object.freeze({
       locale,
       db,
       config: Object.freeze({ ...config }),

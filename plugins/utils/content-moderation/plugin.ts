@@ -1,7 +1,7 @@
-import { definePlugin, pluginConsoleRpcToken } from 'zhin.js';
+import { definePlugin } from 'zhin.js';
 import { createModerationConsoleRpc } from './src/console.js';
 import { ModerationEngine } from './src/engine.js';
-import { moderationEngineToken } from './src/runtime.js';
+import { moderationEngineStore } from './src/runtime.js';
 
 export default definePlugin({
   name: 'content-moderation',
@@ -14,13 +14,15 @@ export default definePlugin({
     // provide 自动挂 lifecycle 反注册，代际结束即摘除。
     const engine = new ModerationEngine();
     engine.configure(context.config.get());
-    context.resources.provide(moderationEngineToken, engine);
-    context.resources.provide(pluginConsoleRpcToken, createModerationConsoleRpc(engine));
+    moderationEngineStore.provide(context, engine);
     context.events.on('hmr.resume', ({ details }) => {
       if (details.outcome !== 'committed') return;
       engine.groupReviewQueue.cancelReplacedSources(details.replaced);
       if (details.receiver.state === 'replaced') engine.groupReviewQueue.stop();
     });
-    return () => engine.groupReviewQueue.stop();
+    return {
+      consoleRpc: createModerationConsoleRpc(engine),
+      dispose: () => engine.groupReviewQueue.stop(),
+    };
   },
 });

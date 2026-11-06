@@ -1,4 +1,4 @@
-import { createToken, type Token } from 'zhin.js';
+import { definePluginStore, type Token } from 'zhin.js';
 import type { GroupSuiteMemoryDb } from './memory-store.js';
 
 export interface PendingStatsIncrement {
@@ -22,10 +22,11 @@ export interface GroupSuiteRuntime {
   readonly checkinChains: Map<string, Promise<unknown>>;
 }
 
-export const groupSuiteRuntimeToken = createToken<GroupSuiteRuntime>(
+export const groupSuiteRuntimeStore = definePluginStore<GroupSuiteRuntime>(
   'zhin.group-suite.runtime',
   'Owner-scoped Group Suite database and ephemeral state',
 );
+export const groupSuiteRuntimeToken = groupSuiteRuntimeStore;
 
 export function createGroupSuiteRuntime(db: GroupSuiteMemoryDb): GroupSuiteRuntime {
   return {
@@ -41,5 +42,5 @@ export function resolveGroupSuiteRuntime(context: {
   readonly owner?: unknown;
   use<T>(token: Token<T>): T;
 }): GroupSuiteRuntime {
-  return context.use(groupSuiteRuntimeToken);
+  return groupSuiteRuntimeStore.use(context);
 }

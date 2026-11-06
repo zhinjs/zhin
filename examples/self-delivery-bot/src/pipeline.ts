@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { createToken } from 'zhin.js';
+import { definePluginStore } from 'zhin.js';
 import {
   ALL,
   DEFAULT_GUARD_LIMITS,
@@ -258,7 +258,8 @@ export class SelfDeliveryProject {
   }
 }
 
-export const selfDeliveryProjectToken = createToken<SelfDeliveryProject>(
+export const selfDeliveryProjectStore = definePluginStore<SelfDeliveryProject>(
   'self-delivery.project',
   'Harness-backed self-delivery pipeline service',
 );
+export const selfDeliveryProjectToken = selfDeliveryProjectStore;

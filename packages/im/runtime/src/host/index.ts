@@ -8,3 +8,7 @@ export * from './self-change-impact.js';
 export * from './self-change-plugin-roots.js';
 export * from './start-options.js';
 export * from './root-host.js';
+export * from './data-migration/index.js';
+export * from './readiness.js';
+export * from './readiness-client.js';
+

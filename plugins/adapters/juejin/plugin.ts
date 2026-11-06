@@ -1,5 +1,5 @@
-import { definePlugin, outboundHostToken, pluginConsoleRpcToken } from 'zhin.js';
-import { juejinNotifierToken, type JuejinNotifier } from './src/juejin-runtime-state.js';
+import { definePlugin, outboundHostToken } from 'zhin.js';
+import { juejinNotifierStore, type JuejinNotifier } from './src/juejin-runtime-state.js';
 import { createJuejinConsoleRpc } from './src/console.js';
 
 /**
@@ -26,7 +26,9 @@ export default definePlugin({
       });
       return true;
     };
-    context.resources.provide(juejinNotifierToken, notifier);
-    context.resources.provide(pluginConsoleRpcToken, createJuejinConsoleRpc());
+    juejinNotifierStore.provide(context, () => notifier);
+    return {
+      consoleRpc: createJuejinConsoleRpc(),
+    };
   },
 });

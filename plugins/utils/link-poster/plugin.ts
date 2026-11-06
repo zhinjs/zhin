@@ -1,6 +1,6 @@
 import { definePlugin } from 'zhin.js';
 import { createHtmlRenderer } from '@zhin.js/html-renderer';
-import { linkPosterRendererToken } from './src/runtime.js';
+import { linkPosterRendererStore } from './src/runtime.js';
 
 export default definePlugin({
   name: 'link-poster',
@@ -8,6 +8,6 @@ export default definePlugin({
     displayName: 'Link Poster',
   },
   setup(context) {
-    context.resources.provide(linkPosterRendererToken, createHtmlRenderer());
+    linkPosterRendererStore.provide(context, createHtmlRenderer());
   },
 });

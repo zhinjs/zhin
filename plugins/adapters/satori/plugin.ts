@@ -1,4 +1,4 @@
-import { definePlugin, pluginConsoleRpcToken } from 'zhin.js';
+import { definePlugin } from 'zhin.js';
 import { createSatoriConsoleRpc } from './src/console.js';
 
 export default definePlugin({
@@ -8,6 +8,8 @@ export default definePlugin({
     displayName: 'Satori Adapter',
   },
   setup(context) {
-    context.resources.provide(pluginConsoleRpcToken, createSatoriConsoleRpc(context.resources, () => context.config.get()));
+    return {
+      consoleRpc: createSatoriConsoleRpc(context.resources, () => context.config.get()),
+    };
   },
 });

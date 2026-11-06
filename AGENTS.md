@@ -148,9 +148,9 @@ Agent 与 Console Host；其他低层包不跨层取用上层实现。
 
 ## 高价值路径
 
-- packages/im/core/src/plugin.ts
-- packages/im/core/src/adapter.ts
-- packages/im/core/src/built/dispatcher.ts
+- packages/im/plugin-runtime/src/plugin.ts
+- packages/im/core/src/feature/adapter.ts
+- packages/im/core/src/plugin-runtime/im/inbound-spine.ts
 - packages/im/agent/src/orchestrator/
 - packages/im/agent/src/security/（工具安全检查统一走 `policy-facade.ts` 的 `runToolPolicies`；新增策略只在声明式策略表注册，builtin 工具不再手写策略链）
 - packages/im/agent/src/bootstrap.ts

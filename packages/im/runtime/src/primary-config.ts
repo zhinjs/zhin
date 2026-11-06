@@ -1,12 +1,7 @@
-import { createToken, projectLocaleToken, resolveLocale, type PluginId, type PrimaryConfig, type RuntimeConfigDocument, type SnapshotState, type TokenId } from '@zhin.js/plugin-runtime';
+import { primaryConfigToken, projectLocaleToken, resolveLocale, type PluginId, type PrimaryConfig, type RuntimeConfigDocument, type SnapshotState, type TokenId } from '@zhin.js/plugin-runtime';
 import type { EnvStore } from './environment-store.js';
 
-export type { PrimaryConfig } from '@zhin.js/plugin-runtime';
-
-export const primaryConfigToken = createToken<PrimaryConfig>(
-  'zhin.primary-config',
-  'Validated Root configuration for the current generation',
-);
+export { primaryConfigToken, type PrimaryConfig } from '@zhin.js/plugin-runtime';
 
 export function createPrimaryConfig(
   document: RuntimeConfigDocument,

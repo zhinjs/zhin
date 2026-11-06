@@ -2,7 +2,7 @@
  * QQ 插件实例的瞬态扫码绑定 / 待选 botKind 流程。
  * 账号目录与 SDK 生命周期只由所属 Adapter 持有；此处不保存 Endpoint Map。
  */
-import { createToken } from 'zhin.js';
+import { definePluginStore } from 'zhin.js';
 import type { QqEndpointSavePort } from './qq-endpoint-write.js';
 
 export interface QqBindFlowHandle {
@@ -67,7 +67,8 @@ export function createQqRuntimeState(): QqRuntimeState {
   };
 }
 
-export const qqRuntimeStateToken = createToken<QqRuntimeState>(
+export const qqRuntimeStateStore = definePluginStore<QqRuntimeState>(
   'zhin.qq.runtime-state',
   'QQ transient QR binding state',
 );
+export const qqRuntimeStateToken = qqRuntimeStateStore;

@@ -5,3 +5,6 @@ export * from './runtime-foundation.js';
 export * from './publication-coordinator.js';
 export * from './tool-approval-im-channel.js';
 export * from './self-change-report.js';
+export * from './owner-approval-provider.js';
+export * from './persistence-coordinator.js';
+export * from './tool-feature-publisher.js';

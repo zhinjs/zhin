@@ -126,6 +126,7 @@
     "@zhin.js/agent-feature": "workspace:*",
     "@zhin.js/ai": "workspace:*",
     "@zhin.js/core": "workspace:*",
+    "@zhin.js/database": "workspace:*",
     "@zhin.js/feature-kit": "workspace:*",
     "@zhin.js/harness": "workspace:*",
     "@zhin.js/im-contract": "workspace:*",

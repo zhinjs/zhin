@@ -7,7 +7,7 @@ import {
   MUSIC_CREDENTIALS_TABLE,
 } from './src/credential-store.js';
 import { createMusicServices } from './src/sources/index.js';
-import { musicRuntimeToken } from './src/runtime.js';
+import { musicRuntimeStore } from './src/runtime.js';
 
 function defineCredentialTable(
   db: { define: (name: string, schema: Record<string, unknown>) => void },
@@ -32,13 +32,12 @@ export default definePlugin({
       return host;
     })() : createInMemoryCredentialDb();
     const credentials = new CredentialStore(db);
-    const runtime = Object.freeze({
+    const runtime = musicRuntimeStore.provide(context, Object.freeze({
       credentials,
       services: Object.freeze(createMusicServices(credentials)),
       sessions: new MusicSearchSessions(),
       logins: new QrLoginRuntime(credentials),
-    });
-    context.resources.provide(musicRuntimeToken, runtime);
+    }));
 
     const timer = setInterval(() => {
       runtime.sessions.pruneExpired();

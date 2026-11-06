@@ -1,4 +1,4 @@
-import { definePlugin, pluginConsoleRpcToken } from 'zhin.js';
+import { definePlugin } from 'zhin.js';
 import { createGameHubConsoleRpc } from './src/console.js';
 
 /**
@@ -10,7 +10,9 @@ export default definePlugin({
   metadata: {
     displayName: 'Game Hub',
   },
-  setup(context) {
-    context.resources.provide(pluginConsoleRpcToken, createGameHubConsoleRpc());
+  setup() {
+    return {
+      consoleRpc: createGameHubConsoleRpc(),
+    };
   },
 });

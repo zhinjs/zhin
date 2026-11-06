@@ -1,6 +1,6 @@
 import type { DeliveryTarget, TargetMigrationScopes } from 'zhin.js/plugin-runtime';
 import type { Locale } from 'zhin.js/i18n';
-import { createToken } from 'zhin.js';
+import { definePluginStore } from 'zhin.js';
 import type { RssConfig } from './feed.js';
 import type { RssMemoryDb } from './memory-store.js';
 import type { ChannelInfo } from './channel.js';
@@ -24,7 +24,8 @@ export interface RssRuntime {
   readonly outbound: RssOutboundPush | null;
 }
 
-export const rssRuntimeToken = createToken<RssRuntime>(
+export const rssRuntimeStore = definePluginStore<RssRuntime>(
   'zhin.rss.runtime',
   'Owner-scoped RSS runtime',
 );
+export const rssRuntimeToken = rssRuntimeStore;

@@ -1,4 +1,4 @@
-import { definePlugin, databaseHostToken, pluginConsoleRpcToken } from 'zhin.js';
+import { definePlugin, databaseHostToken } from 'zhin.js';
 import { defineGithubOauthUsersTable } from './src/oauth-users.js';
 import { createGithubConsoleRpc } from './src/console.js';
 
@@ -28,13 +28,14 @@ export default definePlugin({
     displayName: 'GitHub Adapter',
   },
   setup(context) {
-    // 运行中 endpoint 注册表（github endpoint list 的"运行中"数据源）
-    context.resources.provide(pluginConsoleRpcToken, createGithubConsoleRpc(context.resources, () => context.config.get()));
     if (context.resources.has(databaseHostToken)) {
       const host = context.resources.use(databaseHostToken);
       defineGithubOauthUsersTable(host);
       host.define('github_subscriptions', { ...GITHUB_SUBSCRIPTIONS_SCHEMA });
     }
-
+    // 运行中 endpoint 注册表（github endpoint list 的"运行中"数据源）
+    return {
+      consoleRpc: createGithubConsoleRpc(context.resources, () => context.config.get()),
+    };
   },
 });

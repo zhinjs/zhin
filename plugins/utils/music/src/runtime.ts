@@ -1,4 +1,4 @@
-import { createToken } from 'zhin.js';
+import { definePluginStore } from 'zhin.js';
 import type { CredentialStore } from './credential-store.js';
 import type { MusicSearchService, MusicSource } from './types.js';
 import type { MusicSearchSessions } from './session.js';
@@ -11,7 +11,8 @@ export interface MusicRuntime {
   readonly logins: QrLoginRuntime;
 }
 
-export const musicRuntimeToken = createToken<MusicRuntime>(
+export const musicRuntimeStore = definePluginStore<MusicRuntime>(
   'zhin.music.runtime',
   'Owner-scoped Music runtime',
 );
+export const musicRuntimeToken = musicRuntimeStore;

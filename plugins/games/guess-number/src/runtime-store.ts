@@ -1,9 +1,10 @@
-import { createToken, type Token } from 'zhin.js';
+import { definePluginStore, type Token } from 'zhin.js';
 import type { SessionService } from './session-service.js';
 
 /** Owner-scoped service consumed by discovered commands and middleware. */
-export const gameServicesToken = createToken<SessionService>('zhin.game.guess-number.services');
+export const gameServicesStore = definePluginStore<SessionService>('zhin.game.guess-number.services');
+export const gameServicesToken = gameServicesStore;
 
 export function resolveGameServices(context: { use<T>(token: Token<T>): T }): SessionService {
-  return context.use(gameServicesToken);
+  return gameServicesStore.use(context);
 }

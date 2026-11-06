@@ -1,5 +1,5 @@
 import type { Locale } from 'zhin.js/i18n';
-import { createToken } from 'zhin.js';
+import { definePluginStore } from 'zhin.js';
 import type { LotteryConfig } from './config.js';
 import type { LotteryDb } from './db.js';
 import type { GameId } from './types.js';
@@ -12,7 +12,8 @@ export interface LotteryRuntime {
   readonly outbound: ((text: string) => Promise<void>) | null;
 }
 
-export const lotteryRuntimeToken = createToken<LotteryRuntime>(
+export const lotteryRuntimeStore = definePluginStore<LotteryRuntime>(
   'zhin.lottery.runtime',
   'Owner-scoped Lottery runtime',
 );
+export const lotteryRuntimeToken = lotteryRuntimeStore;

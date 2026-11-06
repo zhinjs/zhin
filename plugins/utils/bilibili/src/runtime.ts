@@ -1,6 +1,6 @@
 import type { DeliveryTarget, TargetMigrationScopes } from 'zhin.js/plugin-runtime';
 import type { Locale } from 'zhin.js/i18n';
-import { createToken } from 'zhin.js';
+import { definePluginStore } from 'zhin.js';
 import type { BiliClient } from './api.js';
 import type { ChannelInfo } from './channel.js';
 import type { ResolvedBilibiliConfig } from './config.js';
@@ -29,7 +29,8 @@ export interface BilibiliRuntime {
   readonly persistent: boolean;
 }
 
-export const bilibiliRuntimeToken = createToken<BilibiliRuntime>(
+export const bilibiliRuntimeStore = definePluginStore<BilibiliRuntime>(
   'zhin.bilibili.runtime',
   'Owner-scoped Bilibili subscription runtime',
 );
+export const bilibiliRuntimeToken = bilibiliRuntimeStore;

@@ -1,0 +1,142 @@
+import { currentAgentInference } from '../inference/current-operation.js';
+import { join } from 'node:path';
+import type { AIService, AiAnnouncements, AiGroupRules, AiSessionEvents, McpServerEntry, LocalImageAssetStore } from '../../index.js';
+import {
+  createNativeAgentToolSuite,
+  getAgentTurnDecisionRuntime,
+  createNativeInteractionToolFeatures,
+  createNativeSemanticMemoryToolFeatures,
+  createNativeTodoToolFeatures,
+  createNativeAnnouncementToolFeatures,
+  createNativeSessionEventToolFeatures,
+  createNativeGroupRuleToolFeatures,
+  createNativeSelfChangeToolFeatures,
+  type NativeSelfChangeToolSources,
+  FileTodoStore,
+  projectHostMcp,
+  projectHostTool,
+  toolFeatureId,
+  type KnowledgeIndex,
+  type SemanticMemoryRuntime,
+} from '../index.js';
+import type { RootResourceInstaller } from '@zhin.js/plugin-runtime';
+
+type AddFeature = Parameters<RootResourceInstaller>[0]['addFeature'];
+
+export interface HostAgentTool {
+  readonly name: string;
+  readonly description: string;
+  readonly parameters: {
+    readonly type: 'object';
+    properties?: Record<string, unknown>;
+    required?: string[];
+  };
+  execute(args: Record<string, unknown>): Promise<unknown>;
+  readonly source?: string;
+  readonly platforms?: readonly string[];
+  readonly scopes?: readonly ('private' | 'group' | 'channel')[];
+  readonly permissions?: readonly string[];
+  readonly hidden?: boolean;
+  readonly requiresApproval?: 'always' | 'once' | 'never' | 'on-risk' | 'human';
+  readonly risk?: 'dangerous' | 'safe';
+  readonly riskCategory?: 'member' | 'publish' | 'funds' | 'identity';
+}
+
+interface RuntimeToolFeature {
+  readonly name: string;
+  readonly definition: unknown;
+}
+
+export interface PublishAgentToolFeaturesOptions {
+  readonly addFeature: AddFeature;
+  readonly projectRoot: string;
+  readonly service: AIService;
+  readonly localAssets?: LocalImageAssetStore;
+  readonly mcpServers: readonly McpServerEntry[];
+  readonly hostTools?: readonly HostAgentTool[];
+  readonly runtimeTools: readonly RuntimeToolFeature[];
+  readonly knowledgeIndex?: KnowledgeIndex;
+  readonly semanticMemory?: SemanticMemoryRuntime;
+  /** ADR 0037 切片 B：`announcement_draft` 写入的公告存储；缺省时不发布该工具。 */
+  readonly announcements?: () => AiAnnouncements | undefined;
+  /** ADR 0037 切片 D：`session_event_create` 写入的会话日程存储；缺省时不发布该工具。 */
+  readonly sessionEvents?: () => AiSessionEvents | undefined;
+  /** ADR 0039 切片 B：`rule_draft` 写入的群管规则存储；缺省时不发布该工具。 */
+  readonly groupRules?: () => AiGroupRules | undefined;
+  /** ADR 0040 切片 B：`change_draft` 写入的自我变更暂存区与影响面判定；缺省时不发布该工具。 */
+  readonly selfChanges?: NativeSelfChangeToolSources;
+}
+
+/** Publish every Host-owned Tool through one candidate-generation boundary. */
+export function publishAgentToolFeatures(options: PublishAgentToolFeaturesOptions): void {
+  for (const entry of options.mcpServers) {
+    const projected = projectHostMcp(entry);
+    options.addFeature(projected.feature, projected.name, projected.definition);
+  }
+
+  for (const tool of options.hostTools ?? []) {
+    if (!tool.description.trim()) {
+      throw new TypeError(`Host tool "${tool.name}" description cannot be empty`);
+    }
+    const projected = projectHostTool({
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.parameters,
+      requiresApproval: tool.requiresApproval,
+      ...(tool.risk ? { risk: tool.risk } : {}),
+      ...(tool.riskCategory ? { riskCategory: tool.riskCategory } : {}),
+      platforms: tool.platforms,
+      scopes: tool.scopes,
+      permissions: tool.permissions,
+      hidden: tool.hidden,
+      execute: (input) => tool.execute(input) as unknown | Promise<unknown>,
+    });
+    options.addFeature(projected.feature, projected.name, projected.definition);
+  }
+
+  for (const tool of options.runtimeTools) {
+    options.addFeature(toolFeatureId, tool.name, tool.definition);
+  }
+  for (const tool of createNativeAgentToolSuite({
+    resolveInference: currentAgentInference,
+    imageAssets: options.service.imageAssets,
+    localAssets: options.localAssets,
+    knowledgeIndex: options.knowledgeIndex,
+    resolveDecision: getAgentTurnDecisionRuntime,
+  })) {
+    options.addFeature(toolFeatureId, tool.name, tool.definition);
+  }
+  for (const tool of createNativeTodoToolFeatures(
+    new FileTodoStore(join(options.projectRoot, '.zhin', 'todos')),
+  )) {
+    options.addFeature(tool.feature, tool.name, tool.definition);
+  }
+  if (options.announcements) {
+    for (const tool of createNativeAnnouncementToolFeatures(options.announcements)) {
+      options.addFeature(tool.feature, tool.name, tool.definition);
+    }
+  }
+  if (options.sessionEvents) {
+    for (const tool of createNativeSessionEventToolFeatures(options.sessionEvents)) {
+      options.addFeature(tool.feature, tool.name, tool.definition);
+    }
+  }
+  if (options.groupRules) {
+    for (const tool of createNativeGroupRuleToolFeatures(options.groupRules)) {
+      options.addFeature(tool.feature, tool.name, tool.definition);
+    }
+  }
+  if (options.selfChanges) {
+    for (const tool of createNativeSelfChangeToolFeatures(options.selfChanges)) {
+      options.addFeature(tool.feature, tool.name, tool.definition);
+    }
+  }
+  for (const tool of createNativeInteractionToolFeatures()) {
+    options.addFeature(tool.feature, tool.name, tool.definition);
+  }
+  if (options.semanticMemory) {
+    for (const tool of createNativeSemanticMemoryToolFeatures(options.semanticMemory, getAgentTurnDecisionRuntime)) {
+      options.addFeature(tool.feature, tool.name, tool.definition);
+    }
+  }
+}

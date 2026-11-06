@@ -3,7 +3,10 @@ import { afterEach, expect, it, vi } from 'vitest';
 
 const spawn = vi.hoisted(() => vi.fn());
 vi.mock('node:child_process', () => ({ spawn }));
-vi.mock('@zhin.js/runtime', () => ({ supportsNativeTypeScript: () => true }));
+vi.mock('@zhin.js/runtime', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@zhin.js/runtime')>()),
+  supportsNativeTypeScript: () => true,
+}));
 import { NativeTypeScriptSupervisor } from '../../../src/plugin-runtime/start/process-supervisor.js';
 import { parseStartOptions } from '../../../src/plugin-runtime/start/options.js';
 

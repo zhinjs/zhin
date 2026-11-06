@@ -1,4 +1,4 @@
-import { DataMigrationError, pluginDataMigrationProviderToken, TargetMigrationScopes } from 'zhin.js/plugin-runtime';
+import { DataMigrationError, TargetMigrationScopes } from 'zhin.js/plugin-runtime';
 import { createSubscriptionTargetMigration, subscriptionMigrationScope } from './src/target-migration.js';
 import {
   definePlugin,
@@ -9,7 +9,7 @@ import {
 import { BiliClient } from './src/api.js';
 import { resolveBilibiliConfig, type BilibiliConfig } from './src/config.js';
 import { BilibiliWatcher } from './src/poll.js';
-import { bilibiliRuntimeToken, type BiliOutboundPush } from './src/runtime.js';
+import { bilibiliRuntimeStore, type BiliOutboundPush } from './src/runtime.js';
 import { createInMemoryBiliDb, defineBiliTables, type BiliDb } from './src/store.js';
 
 /**
@@ -36,8 +36,9 @@ export default definePlugin<BilibiliConfig>({
     }
 
     const migrationScopes = database ? new TargetMigrationScopes({ pending: scope => scope.startsWith('historical:') }) : undefined;
-    if (database && migrationScopes) context.resources.provide(pluginDataMigrationProviderToken,
-      createSubscriptionTargetMigration({ database, scopes: migrationScopes }));
+    const dataMigration = database && migrationScopes
+      ? createSubscriptionTargetMigration({ database, scopes: migrationScopes })
+      : undefined;
 
     const outbound = context.resources.has(outboundHostToken) ? context.resources.use(outboundHostToken) : undefined;
     const push: BiliOutboundPush | null = outbound
@@ -52,7 +53,7 @@ export default definePlugin<BilibiliConfig>({
 
     const client = new BiliClient({ timeout: config.timeout, cookie: config.cookie });
     const watcher = new BilibiliWatcher({ db, config, client, outbound: push, signal: context.signal });
-    context.resources.provide(bilibiliRuntimeToken, Object.freeze({
+    bilibiliRuntimeStore.provide(context, Object.freeze({
       db,
       migrationScopes,
       config,
@@ -62,16 +63,19 @@ export default definePlugin<BilibiliConfig>({
       persistent: database !== undefined,
     }));
 
-    if (!context.resources.has(scheduleHostToken) || (!config.live && !config.dynamic)) return;
-    const dispose = context.resources.use(scheduleHostToken).register({
-      id: 'bilibili/watch',
-      cron: config.pollCron,
-      description: 'Poll Bilibili live status and UP dynamics',
-      async execute() {
-        // The watcher records and backs off on its own; never fail the job.
-        await watcher.tick();
-      },
-    });
-    context.lifecycle.add(dispose);
+    if (context.resources.has(scheduleHostToken) && (config.live || config.dynamic)) {
+      const dispose = context.resources.use(scheduleHostToken).register({
+        id: 'bilibili/watch',
+        cron: config.pollCron,
+        description: 'Poll Bilibili live status and UP dynamics',
+        async execute() {
+          // The watcher records and backs off on its own; never fail the job.
+          await watcher.tick();
+        },
+      });
+      context.lifecycle.add(dispose);
+    }
+
+    return dataMigration ? { dataMigration } : undefined;
   },
 });

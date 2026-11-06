@@ -5,7 +5,12 @@ import type { FeatureId } from './identity.js';
 import type { PluginEventSubscriptions } from './plugin.js';
 import type { RuntimeConfigDocument } from './root-config-document.js';
 import type { RuntimeSnapshot, SnapshotLease } from './snapshot.js';
-import type { Scope, Token } from './token.js';
+import { createToken, type Scope, type Token } from './token.js';
+
+export const primaryConfigToken = createToken<PrimaryConfig>(
+  'zhin.primary-config',
+  'Validated Root configuration for the current generation',
+);
 
 /**
  * Generation-owned, validated Root configuration.

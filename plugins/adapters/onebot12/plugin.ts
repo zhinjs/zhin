@@ -1,4 +1,4 @@
-import { definePlugin, pluginConsoleRpcToken } from 'zhin.js';
+import { definePlugin } from 'zhin.js';
 import { createOnebot12ConsoleRpc } from './src/console.js';
 
 export default definePlugin({
@@ -8,6 +8,8 @@ export default definePlugin({
     displayName: 'OneBot 12 Adapter',
   },
   setup(context) {
-    context.resources.provide(pluginConsoleRpcToken, createOnebot12ConsoleRpc(context.resources, () => context.config.get()));
+    return {
+      consoleRpc: createOnebot12ConsoleRpc(context.resources, () => context.config.get()),
+    };
   },
 });

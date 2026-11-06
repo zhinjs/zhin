@@ -58,6 +58,7 @@
     "export * from './host-mcp-projection.js';",
     "export * from './host-tool-projection.js';",
     "export * from './host/index.js';",
+    "export * from './inference/index.js';",
     "export * from './ingress/index.js';",
     "export * from './native-announcement-tools.js';",
     "export * from './native-bash-tool.js';",
@@ -99,11 +100,43 @@
   "agent/runtime/host": [
     "export * from './assistant-runtime.js';",
     "export * from './config.js';",
+    "export * from './owner-approval-provider.js';",
+    "export * from './persistence-coordinator.js';",
     "export * from './publication-coordinator.js';",
     "export * from './runtime-factory.js';",
     "export * from './runtime-foundation.js';",
     "export * from './self-change-report.js';",
-    "export * from './tool-approval-im-channel.js';"
+    "export * from './tool-approval-im-channel.js';",
+    "export * from './tool-feature-publisher.js';"
+  ],
+  "agent/runtime/inference": [
+    "export * from './account-runtime-helpers.js';",
+    "export * from './account-runtime-oauth.js';",
+    "export * from './account-runtime.js';",
+    "export * from './credential-fingerprint-migration.js';",
+    "export * from './credentials.js';",
+    "export * from './current-operation.js';",
+    "export * from './environment-source.js';",
+    "export * from './headless-host.js';",
+    "export * from './host-identity.js';",
+    "export * from './host.js';",
+    "export * from './management.js';",
+    "export * from './migration-record.js';",
+    "export * from './migration-session-bindings.js';",
+    "export * from './migration-session-journal.js';",
+    "export * from './network.js';",
+    "export * from './oauth-refresh-policy.js';",
+    "export * from './operation-resources.js';",
+    "export * from './personal-network.js';",
+    "export * from './principal.js';",
+    "export * from './repository.js';",
+    "export * from './request-access.js';",
+    "export * from './session-directory.js';",
+    "export * from './session-management.js';",
+    "export * from './session-state.js';",
+    "export * from './support-metadata.js';",
+    "export * from './targets.js';",
+    "export * from './turn-context.js';"
   ],
   "agent/runtime/ingress": [
     "export * from './ambient-engagement.js';",
@@ -148,8 +181,7 @@
     "export * from './start-command.js';"
   ],
   "cli/runtime/data-migration": [
-    "export * from './controller.js';",
-    "export * from './plan-store.js';"
+    "export * from '@zhin.js/runtime';"
   ],
   "cli/runtime/migrate": [
     "export * from './instance-declarations.js';",
@@ -319,6 +351,7 @@
     "export * from './dispose.js';",
     "export * from './environment-expansion.js';",
     "export * from './handoff.js';",
+    "export * from './host-credential-storage.js';",
     "export * from './host-installer.js';",
     "export * from './html-renderer.js';",
     "export * from './i18n.js';",
@@ -392,16 +425,23 @@
     "export{readSourcePluginOrder}from './ordered-config-source.js';"
   ],
   "runtime/host": [
+    "export * from './data-migration/index.js';",
     "export * from './host-credential-storage.js';",
     "export * from './plugin-lifecycle-store.js';",
     "export * from './process-lifecycle.js';",
     "export * from './process-rejections.js';",
     "export * from './project-commands.js';",
     "export * from './publish-journal.js';",
+    "export * from './readiness-client.js';",
+    "export * from './readiness.js';",
     "export * from './root-host.js';",
     "export * from './self-change-impact.js';",
     "export * from './self-change-plugin-roots.js';",
     "export * from './start-options.js';"
+  ],
+  "runtime/host/data-migration": [
+    "export * from './controller.js';",
+    "export * from './plan-store.js';"
   ],
   "runtime/isolate": [
     "export * from './contracts.js';",

@@ -22,6 +22,8 @@ function createEnvelope(overrides: Partial<InboundTurnEnvelope> = {}): InboundTu
     stopSignal: new AbortController().signal,
   } as unknown as SnapshotLease;
   const message = {
+    id: 'msg-1',
+    sender: { id: 'sender-1' },
     conversation: {
       endpoint: { id: 'ep-1', adapter: 'sandbox' },
       kind: 'private',
@@ -91,11 +93,43 @@ describe('executeInboundTurnSpine & @zhin.js/core/runtime host installers', () =
       command: 'ai',
       owner: rootPluginId(),
     });
+    expect(outcome.record).toMatchObject({
+      turnId: 'msg-1:1',
+      senderId: 'sender-1',
+      stage: 'agent-ingress',
+      matched: true,
+      command: 'ai',
+      owner: rootPluginId(),
+      replied: false,
+    });
     expect(reportDispatch).toHaveBeenCalledWith({
       matched: true,
       path: 'handler',
       handlerId: 'ai',
       replied: false,
     });
+  });
+
+  it('invokes onTurnComplete with a frozen InboundTurnRecord for command turns', async () => {
+    const onTurnComplete = vi.fn();
+    const outcome = await executeInboundTurnSpine(createEnvelope({
+      turnId: 'custom-turn-42',
+      dispatchCommand: vi.fn(async () => ({
+        dispatch: Object.freeze({ matched: true, command: 'help', owner: rootPluginId() }),
+        reply: { owner: rootPluginId(), content: 'help text' },
+      })),
+      onTurnComplete,
+    }));
+
+    expect(outcome.stage).toBe('command');
+    expect(Object.isFrozen(outcome.record)).toBe(true);
+    expect(onTurnComplete).toHaveBeenCalledOnce();
+    expect(onTurnComplete).toHaveBeenCalledWith(expect.objectContaining({
+      turnId: 'custom-turn-42',
+      stage: 'command',
+      matched: true,
+      command: 'help',
+      replied: true,
+    }));
   });
 });
