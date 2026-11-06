@@ -35,6 +35,7 @@ export class ManifestClientModuleLoader implements ClientModuleLoader {
       module: entry.module,
       hash: entry.hash,
       metadata: entry.metadata,
+      ...(entry.blueprint !== undefined ? { blueprint: entry.blueprint } : {}),
     }) as T;
   }
 }

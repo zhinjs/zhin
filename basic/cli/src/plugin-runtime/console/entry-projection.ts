@@ -22,6 +22,7 @@ export type ExtendedRuntimeConsolePage = RuntimeConsolePage & {
   readonly titleI18n?: ConsolePageTitleI18n;
   readonly requiredPermissions?: readonly string[];
   readonly requiredRoles?: readonly string[];
+  readonly blueprint?: Readonly<Record<string, unknown>>;
 };
 
 export interface ProjectConsoleEntriesOptions {
@@ -94,8 +95,14 @@ export async function listPages(
       ...(page.titleI18n !== undefined ? { titleI18n: page.titleI18n } : {}),
       ...(page.requiredPermissions !== undefined ? { requiredPermissions: page.requiredPermissions } : {}),
       ...(page.requiredRoles !== undefined ? { requiredRoles: page.requiredRoles } : {}),
+      ...(page.blueprint !== undefined ? { blueprint: sanitizeBlueprintJson(page.blueprint) } : {}),
     });
   }));
+}
+
+function sanitizeBlueprintJson(blueprint: Readonly<Record<string, unknown>>): Readonly<Record<string, unknown>> {
+  const { spec: _spec, reviewSpec: _reviewSpec, ...rest } = blueprint;
+  return Object.freeze({ ...rest });
 }
 
 /** Console shell entry shape consumed by `@zhin.js/contract` clients. */
@@ -132,6 +139,7 @@ export type ConsoleEntryBody = {
   readonly titleI18n?: ConsolePageTitleI18n;
   readonly requiredPermissions?: readonly string[];
   readonly requiredRoles?: readonly string[];
+  readonly blueprint?: Readonly<Record<string, unknown>>;
 };
 
 export type ConsoleEntriesBody = {
@@ -189,6 +197,7 @@ export function projectConsoleEntries(
         ...(page.titleI18n !== undefined ? { titleI18n: page.titleI18n } : {}),
         ...(page.requiredPermissions !== undefined ? { requiredPermissions: page.requiredPermissions } : {}),
         ...(page.requiredRoles !== undefined ? { requiredRoles: page.requiredRoles } : {}),
+        ...(page.blueprint !== undefined ? { blueprint: sanitizeBlueprintJson(page.blueprint) } : {}),
       });
     });
   return Object.freeze({ entries: Object.freeze(entries), runtimeEnvHint });

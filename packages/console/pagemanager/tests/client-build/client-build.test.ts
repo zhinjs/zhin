@@ -143,12 +143,19 @@ describe('Client build adapter', () => {
       publicBase: '/assets/zhin',
     });
 
-    const declArtifact = await builder.load<{ module: string; metadata: unknown }>(declSource, {
+    const declArtifact = await builder.load<{ module: string; metadata: unknown; blueprint?: unknown }>(declSource, {
       ...pageEntry(declSource),
       owner: 'root/decl-plugin' as never,
       localName: 'declarative',
     });
+    expect(declArtifact.blueprint).toMatchObject({
+      kind: 'zhin.console.page-blueprint',
+      version: 1,
+      title: 'Declarative Service',
+      dataSource: { action: 'status' },
+    });
     const declChunk = await readFile(join(root, 'dist/client', declArtifact.module.split('/').at(-1)!), 'utf8');
+    expect(declChunk).toContain('zero-esbuild synthesized module');
     expect(declChunk).not.toMatch(/from\s+["']@zhin\.js\/(?:console-contract|client|page)["']/);
     expect(declChunk).toContain('createDeclarativePage');
 
@@ -166,12 +173,19 @@ describe('Client build adapter', () => {
       dataSource: { action: 'status' },
     });
 
-    const adapterArtifact = await builder.load<{ module: string; metadata: unknown }>(adapterSource, {
+    const adapterArtifact = await builder.load<{ module: string; metadata: unknown; blueprint?: unknown }>(adapterSource, {
       ...pageEntry(adapterSource),
       owner: 'root/adapter-demo' as never,
       localName: 'adapter',
     });
+    expect(adapterArtifact.blueprint).toEqual({
+      kind: 'zhin.console.adapter-page',
+      version: 1,
+      adapterKey: 'demo',
+      dataSource: { action: 'status' },
+    });
     const adapterChunk = await readFile(join(root, 'dist/client', adapterArtifact.module.split('/').at(-1)!), 'utf8');
+    expect(adapterChunk).toContain('zero-esbuild synthesized module');
     expect(adapterChunk).not.toMatch(/from\s+["']@zhin\.js\/(?:console-contract|client|page)["']/);
     expect(adapterChunk).toContain('createAdapterConsolePage');
 
@@ -188,6 +202,25 @@ describe('Client build adapter', () => {
       adapterKey: 'demo',
       dataSource: { action: 'status' },
     });
+
+    // Prebuilt static client asset (`<name>.bundle.js`) mounts without invoking esbuild
+    const heavySource = join(root, 'pages/sandbox/index.tsx');
+    await writeSource(heavySource, [
+      "import { definePage } from '@zhin.js/console-contract';",
+      "export const meta = definePage({ title: 'Sandbox' });",
+      'export default function Sandbox() { return <main>Sandbox</main>; }',
+    ].join('\n'));
+    await writeSource(
+      join(root, 'pages/sandbox/index.bundle.js'),
+      '// prebuilt static client bundle\nexport function register(api) { api.addRoute({ path: "/sandbox" }); }\n',
+    );
+    const heavyArtifact = await builder.load<{ module: string; metadata: unknown }>(heavySource, {
+      ...pageEntry(heavySource),
+      owner: 'root/sandbox' as never,
+      localName: 'index',
+    });
+    const heavyChunk = await readFile(join(root, 'dist/client', heavyArtifact.module.split('/').at(-1)!), 'utf8');
+    expect(heavyChunk).toContain('// prebuilt static client bundle');
   });
 
   it('rejects dynamic metadata with a source location', async () => {

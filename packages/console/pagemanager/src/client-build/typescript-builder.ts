@@ -1,8 +1,28 @@
 import { createHash } from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import { basename, dirname, join, relative, resolve, sep } from 'node:path';
+import { createRequire } from 'node:module';
+import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path';
 import { build as esbuild, type Plugin as EsbuildPlugin } from 'esbuild';
-import { pageRoute, type ClientModuleArtifact } from '@zhin.js/console-contract';
+import type ts from 'typescript';
+import {
+  buildBlueprintFromSpec,
+  createAdapterConsolePage,
+  createCommentReviewPage,
+  createDeclarativePage,
+  defineAdapterPage,
+  defineCommentReviewPage,
+  definePage,
+  definePageBlueprint,
+  isConsoleBlueprint,
+  normalizeClientModuleArtifact,
+  normalizePageMetadata,
+  pageRoute,
+  resolveDeclarativeText,
+  type ClientModuleArtifact,
+  type ConsoleAdapterPageBlueprint,
+  type ConsolePageBlueprint,
+} from '@zhin.js/console-contract';
 import type { ClientModuleRequest } from '@zhin.js/feature-kit';
 import { rootPluginId } from '@zhin.js/plugin-runtime';
 import {
@@ -95,7 +115,48 @@ const CONSOLE_CONTRACT_STUB = [
   '  return Object.assign(fn, bp);',
   '}',
   'export function createAdapterConsolePage(adapterKey) { return defineAdapterPage(adapterKey); }',
+  'export function defineCommentReviewPage(reviewSpec = {}) {',
+  '  const zhTitle = ((reviewSpec.platform && reviewSpec.platform.zh) ? reviewSpec.platform.zh : "评论") + "评论审批";',
+  '  const enTitle = ((reviewSpec.platform && reviewSpec.platform.en) ? reviewSpec.platform.en : "Comment") + " comment review";',
+  '  const bp = Object.assign(buildBlueprintFromSpec({',
+  '    pluginId: reviewSpec.adapter,',
+  '    title: { zh: zhTitle, "zh-CN": zhTitle, en: enTitle },',
+  '    mark: reviewSpec.mark,',
+  '    statusMethod: "status",',
+  '    stats: [{ key: "endpoints", label: { zh: "账号数", en: "Accounts" }, value: "endpoints" }, { key: "pendingDrafts", label: { zh: "待审草稿", en: "Pending drafts" }, value: "pendingDrafts" }],',
+  '    sections: [{ id: "endpoints", title: { zh: "评论账号与待审草稿", en: "Accounts & Pending Drafts" }, items: "endpoints", columns: [{ key: "id", label: { zh: "账号", en: "Account" } }, { key: "sendMode", label: { zh: "发送模式", en: "Send Mode" } }, { key: "pendingCount", label: { zh: "待审数", en: "Pending" } }] }],',
+  '    actions: [{ name: "edit", label: { zh: "修改草稿", en: "Edit draft" } }, { name: "send", label: { zh: "发送草稿", en: "Send draft" } }, { name: "drop", label: { zh: "丢弃草稿", en: "Discard draft" } }],',
+  '  }), { reviewSpec });',
+  '  const fn = function CommentReviewBlueprintPage(props) {',
+  '    if (typeof globalThis !== "undefined" && typeof globalThis.__ZHIN_RENDER_BLUEPRINT__ === "function" && props !== undefined) {',
+  '      return globalThis.__ZHIN_RENDER_BLUEPRINT__(bp, props);',
+  '    }',
+  '    return bp;',
+  '  };',
+  '  return Object.assign(fn, bp);',
+  '}',
+  'export function createCommentReviewPage(reviewSpec = {}) { return defineCommentReviewPage(reviewSpec); }',
 ].join('\n');
+
+const require = createRequire(import.meta.url);
+function tsCompiler(): typeof ts {
+  return require('typescript') as typeof ts;
+}
+
+const PURE_CONSOLE_CONTRACT_EXPORTS: Readonly<Record<string, unknown>> = Object.freeze({
+  definePage: (metadata: Record<string, unknown> = {}) => Object.freeze({ ...metadata }),
+  normalizePageMetadata,
+  normalizeClientModuleArtifact,
+  resolveDeclarativeText,
+  buildBlueprintFromSpec,
+  definePageBlueprint,
+  createDeclarativePage,
+  defineAdapterPage,
+  createAdapterConsolePage,
+  defineCommentReviewPage,
+  createCommentReviewPage,
+  isConsoleBlueprint,
+});
 
 export class TypeScriptClientBuilder implements ClientModuleLoader {
   readonly #outDir: string;
@@ -120,7 +181,38 @@ export class TypeScriptClientBuilder implements ClientModuleLoader {
     const hash = contentHash(text);
     const fileName = `${safe(request.owner)}-${safe(request.localName)}-${hash}.js`;
     const output = join(this.#outDir, fileName);
-    // Bundle page TSX (inlines `@zhin.js/console-contract` stubs) + wrap with
+
+    // Fast Path 1: Pure Blueprint (.ts/.js) page — zero esbuild, zero React/DOM imports.
+    if (String(request.feature) === pageFeature && !absSource.endsWith('.tsx')) {
+      const pure = trySynthesizePureBlueprintPage(text, absSource, request, metadata);
+      if (pure) {
+        const code = rewriteBareImportsForBrowser(pure.code, this.#consoleBasePath, '');
+        await atomicWrite(output, code);
+        return Object.freeze({
+          module: `${this.#publicBase}/${fileName}`,
+          hash,
+          metadata,
+          blueprint: pure.blueprint,
+        }) as T;
+      }
+    }
+
+    // Fast Path 2: Prebuilt static client asset (`<name>.bundle.js`) — zero runtime esbuild,
+    // zero Node import() of browser code for heavy interactive plugins (e.g. sandbox).
+    if (String(request.feature) === pageFeature) {
+      const prebuilt = await tryLoadPrebuiltBundle(absSource);
+      if (prebuilt !== undefined) {
+        const code = rewriteBareImportsForBrowser(prebuilt, this.#consoleBasePath, '');
+        await atomicWrite(output, code);
+        return Object.freeze({
+          module: `${this.#publicBase}/${fileName}`,
+          hash,
+          metadata,
+        }) as T;
+      }
+    }
+
+    // Fallback: Bundle page TSX (inlines `@zhin.js/console-contract` stubs) + wrap with
     // `export function register(api)` so Remote Console loadConsoleEntries can mount it.
     // Then rewrite React bare imports to Host `/esm/<enc>.mjs`.
     const bundled = await bundlePageEntry(absSource, this.#projectRoot, request, metadata);
@@ -164,6 +256,139 @@ type PageMeta = {
   readonly requiredPermissions?: readonly string[];
   readonly requiredRoles?: readonly string[];
 };
+
+const PURE_BLUEPRINT_CALL_RE =
+  /\b(?:definePageBlueprint|createDeclarativePage|defineAdapterPage|createAdapterConsolePage|defineCommentReviewPage|createCommentReviewPage)\s*\(/u;
+const FORBIDDEN_BROWSER_IMPORT_RE =
+  /from\s+['"](?:react|react-dom|@zhin\.js\/client)(?:\/[^'"]*)?['"]/u;
+
+function trySynthesizePureBlueprintPage(
+  sourceText: string,
+  absSource: string,
+  request: ClientModuleRequest,
+  metadata: unknown,
+): { readonly blueprint: ConsolePageBlueprint | ConsoleAdapterPageBlueprint; readonly code: string } | undefined {
+  if (!PURE_BLUEPRINT_CALL_RE.test(sourceText) || FORBIDDEN_BROWSER_IMPORT_RE.test(sourceText)) {
+    return undefined;
+  }
+  try {
+    const ts = tsCompiler();
+    const evaluatedCache = new Map<string, Record<string, unknown>>();
+    const evalModule = (filePath: string, rawText?: string): Record<string, unknown> => {
+      const resolved = resolve(filePath);
+      const cached = evaluatedCache.get(resolved);
+      if (cached) return cached;
+      const text = rawText ?? readFileSync(resolved, 'utf8');
+      if (FORBIDDEN_BROWSER_IMPORT_RE.test(text)) {
+        throw new Error(`Browser dependency in ${resolved}`);
+      }
+      const transpiled = ts.transpileModule(text, {
+        fileName: resolved,
+        compilerOptions: {
+          module: ts.ModuleKind.CommonJS,
+          target: ts.ScriptTarget.ES2022,
+        },
+      });
+      const exportsObj: Record<string, unknown> = {};
+      evaluatedCache.set(resolved, exportsObj);
+      const localRequire = (specifier: string): unknown => {
+        if (
+          specifier === '@zhin.js/console-contract' ||
+          specifier === '@zhin.js/contract' ||
+          specifier === '@zhin.js/page' ||
+          specifier === 'zhin.js/page'
+        ) {
+          return PURE_CONSOLE_CONTRACT_EXPORTS;
+        }
+        if (specifier.startsWith('.')) {
+          const baseDir = dirname(resolved);
+          const candidates = [
+            resolve(baseDir, specifier),
+            resolve(baseDir, specifier.replace(/\.js$/u, '.ts')),
+            resolve(baseDir, `${specifier}.ts`),
+            resolve(baseDir, `${specifier}.js`),
+          ];
+          for (const candidate of candidates) {
+            if (existsSync(candidate)) {
+              return evalModule(candidate);
+            }
+          }
+        }
+        throw new Error(`Unsupported import in pure blueprint page: ${specifier}`);
+      };
+      const fn = new Function('exports', 'require', transpiled.outputText);
+      fn(exportsObj, localRequire);
+      return exportsObj;
+    };
+
+    const modExports = evalModule(absSource, sourceText);
+    const defaultExport = modExports.default;
+    const rawBp =
+      typeof defaultExport === 'function'
+        ? (defaultExport as () => unknown)()
+        : defaultExport;
+    if (!isConsoleBlueprint(rawBp)) {
+      return undefined;
+    }
+    const { spec: _spec, reviewSpec: _reviewSpec, ...serializableBp } =
+      rawBp as unknown as Record<string, unknown>;
+    const blueprint = Object.freeze({
+      ...serializableBp,
+    }) as unknown as ConsolePageBlueprint | ConsoleAdapterPageBlueprint;
+
+    const meta = (metadata && typeof metadata === 'object' ? metadata : {}) as PageMeta;
+    const route = safePageRoute(request.owner, request.localName);
+    const title = meta.title ?? request.localName;
+    const serializedMeta = JSON.stringify(meta);
+    const serializedBp = JSON.stringify(blueprint);
+    const stubInternal = CONSOLE_CONTRACT_STUB.replace(/^export\s+/gmu, '');
+    const code = [
+      '// Pure Server-Driven Blueprint (zero-esbuild synthesized module)',
+      stubInternal,
+      `export const meta = definePage(${serializedMeta});`,
+      `const _bp = ${serializedBp};`,
+      'const Page = _bp.kind === "zhin.console.adapter-page"',
+      '  ? createAdapterConsolePage(_bp.adapterKey)',
+      '  : Object.assign(createDeclarativePage(_bp), _bp);',
+      'export default Page;',
+      'const pageNs = { default: Page, meta };',
+      buildRegisterFunctionBody({
+        owner: request.owner,
+        route,
+        title,
+        titleI18n: meta.titleI18n,
+        icon: meta.icon,
+        group: meta.group,
+        order: meta.order,
+        parent: meta.parent,
+        fullWidth: meta.fullWidth,
+        hideInNav: meta.hideInNav === true,
+        localName: request.localName,
+        requiredPermissions: meta.requiredPermissions,
+        requiredRoles: meta.requiredRoles,
+      }),
+    ].join('\n');
+
+    return { blueprint, code };
+  } catch {
+    return undefined;
+  }
+}
+
+async function tryLoadPrebuiltBundle(absSource: string): Promise<string | undefined> {
+  const dir = dirname(absSource);
+  const stem = basename(absSource, extname(absSource));
+  const candidates = [
+    join(dir, `${stem}.bundle.js`),
+    join(dir, 'index.bundle.js'),
+  ];
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      return readFile(candidate, 'utf8');
+    }
+  }
+  return undefined;
+}
 
 async function bundlePageEntry(
   absSource: string,
@@ -271,6 +496,29 @@ export function buildPageRegisterWrapper(
 ): string {
   // abs path import so esbuild resolves the real page regardless of stdin dir.
   const pageImport = JSON.stringify(absSource);
+  return `
+import Page, * as pageNs from ${pageImport};
+export { default } from ${pageImport};
+export const meta = pageNs.meta;
+${buildRegisterFunctionBody(options)}
+`;
+}
+
+function buildRegisterFunctionBody(options: {
+  readonly owner?: string;
+  readonly route: string;
+  readonly title: string;
+  readonly titleI18n?: Readonly<Partial<Record<'zh-CN' | 'en', string>>>;
+  readonly icon?: string;
+  readonly group?: string;
+  readonly order?: number;
+  readonly parent?: string;
+  readonly fullWidth?: boolean;
+  readonly hideInNav: boolean;
+  readonly localName: string;
+  readonly requiredPermissions?: readonly string[];
+  readonly requiredRoles?: readonly string[];
+}): string {
   const owner = JSON.stringify(options.owner ?? rootPluginId());
   const route = JSON.stringify(options.route);
   const title = JSON.stringify(options.title);
@@ -284,14 +532,7 @@ export function buildPageRegisterWrapper(
   const toolId = JSON.stringify(options.localName);
   const requiredPermissions = options.requiredPermissions === undefined ? 'undefined' : JSON.stringify(options.requiredPermissions);
   const requiredRoles = options.requiredRoles === undefined ? 'undefined' : JSON.stringify(options.requiredRoles);
-  // Re-export `meta` only when present via namespace — a hard
-  // `export { meta } from page` fails esbuild for pages that only
-  // export a default component (no meta).
   return `
-import Page, * as pageNs from ${pageImport};
-export { default } from ${pageImport};
-export const meta = pageNs.meta;
-
 const _owner = ${owner};
 const _route = ${route};
 const _localName = ${toolId};

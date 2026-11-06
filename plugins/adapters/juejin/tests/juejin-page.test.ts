@@ -7,7 +7,7 @@ import { TypeScriptClientBuilder, extractPageMetadata } from '@zhin.js/pagemanag
 import { pageFeatureId } from '@zhin.js/page';
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
-const pageSource = join(packageRoot, 'pages/index/index.tsx');
+const pageSource = join(packageRoot, 'pages/index/index.ts');
 const temporary: string[] = [];
 afterEach(async () => { await Promise.all(temporary.splice(0).map(path => rm(path, { recursive: true, force: true }))); });
 

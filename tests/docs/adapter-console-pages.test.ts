@@ -58,9 +58,17 @@ describe('adapter Console pages', () => {
 
   it('shared adapter pages are permission-gated and use the shared component', () => {
     for (const directory of adapterDirectories()) {
-      if (customCommentReviewPages.has(directory) || directory === 'sandbox') continue;
+      if (directory === 'sandbox') continue;
+      expect(
+        fs.existsSync(path.join(adaptersRoot, directory, 'pages/index/index.ts')),
+        `${directory} should use pure .ts blueprint page (zero .tsx)`,
+      ).toBe(true);
       const source = pageSource(directory) ?? '';
-      expect(source, directory).toContain('createAdapterConsolePage');
+      if (customCommentReviewPages.has(directory)) {
+        expect(source, directory).toMatch(/\b(?:defineCommentReviewPage|createCommentReviewPage)\b/u);
+      } else {
+        expect(source, directory).toMatch(/\b(?:defineAdapterPage|createAdapterConsolePage)\b/u);
+      }
       expect(source, directory).toMatch(/requiredPermissions:\s*\[\s*['"][a-z0-9-]+:read['"]\s*\]/u);
     }
   });

@@ -45,6 +45,7 @@ export class PageIndex {
         hideInNav: definition.hideInNav,
         requiredPermissions: definition.requiredPermissions,
         requiredRoles: definition.requiredRoles,
+        ...(definition.blueprint !== undefined ? { blueprint: definition.blueprint } : {}),
       });
       if (byRoute.has(route)) throw new Error(`Duplicate Page route: ${route}`);
       byRoute.set(route, page);
