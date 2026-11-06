@@ -1,5 +1,14 @@
 # @zhin.js/ai
 
+## 1.1.53
+
+### Patch Changes
+
+- 008ccad: Consolidate fragmented IM micro-packages (`@zhin.js/interaction` into `@zhin.js/im-contract`, `@zhin.js/ai-provider` into `@zhin.js/ai/provider`, and `@zhin.js/config-file` + `@zhin.js/isolate` into `@zhin.js/runtime`), and expose `zhin.js/schedule` convenience subpath.
+- Updated dependencies [a1f1028]
+- Updated dependencies [5419b88]
+  - @zhin.js/plugin-runtime@1.1.22
+
 ## 1.1.52
 
 ### Patch Changes

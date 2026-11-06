@@ -1,5 +1,11 @@
 # @zhin.js/im-contract
 
+## 1.1.13
+
+### Patch Changes
+
+- 008ccad: Consolidate fragmented IM micro-packages (`@zhin.js/interaction` into `@zhin.js/im-contract`, `@zhin.js/ai-provider` into `@zhin.js/ai/provider`, and `@zhin.js/config-file` + `@zhin.js/isolate` into `@zhin.js/runtime`), and expose `zhin.js/schedule` convenience subpath.
+
 ## 1.1.12
 
 ### Patch Changes

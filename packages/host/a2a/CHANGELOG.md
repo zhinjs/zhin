@@ -1,5 +1,13 @@
 # @zhin.js/a2a
 
+## 1.1.25
+
+### Patch Changes
+
+- Updated dependencies [008ccad]
+- Updated dependencies [a1f1028]
+  - @zhin.js/core@1.1.58
+
 ## 1.1.24
 
 ### Patch Changes

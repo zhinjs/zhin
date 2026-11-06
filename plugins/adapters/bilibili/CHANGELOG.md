@@ -1,5 +1,20 @@
 # @zhin.js/adapter-bilibili
 
+## 0.1.7
+
+### Patch Changes
+
+- cbf1fb1: Unify Console page blueprints (`definePageBlueprint`, `defineAdapterPage`, `defineCommentReviewPage`, `projectBlueprintToImCard`, `projectBlueprintToCliPanel`) into `@zhin.js/console-contract` and `@zhin.js/page`, add zero-esbuild pure Blueprint synthesis + static client bundle mounting to `@zhin.js/pagemanager`, remove `@zhin.js/client` (React 19) and `.tsx` from all 30 server-side plugins and adapters (including `bilibili` and `juejin`), and remove legacy Era-1 Koa `PageManager` code.
+- Updated dependencies [cbf1fb1]
+- Updated dependencies [008ccad]
+- Updated dependencies [a1f1028]
+  - @zhin.js/console-contract@1.1.4
+  - @zhin.js/page@1.1.16
+  - @zhin.js/core@1.1.58
+  - @zhin.js/im-contract@1.1.13
+  - @zhin.js/adapter@1.1.30
+  - @zhin.js/feature-kit@1.1.14
+
 ## 0.1.6
 
 ### Patch Changes

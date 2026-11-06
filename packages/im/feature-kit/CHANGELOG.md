@@ -1,5 +1,13 @@
 # @zhin.js/feature-kit
 
+## 1.1.14
+
+### Patch Changes
+
+- Updated dependencies [a1f1028]
+- Updated dependencies [5419b88]
+  - @zhin.js/plugin-runtime@1.1.22
+
 ## 1.1.13
 
 ### Patch Changes
