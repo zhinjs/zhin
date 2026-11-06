@@ -5,7 +5,7 @@ import { AdapterIndex, Adapter, endpointSpec, createEndpointSpecification, type 
 import { createHttpHost } from '@zhin.js/host-http';
 import { CONVERSATION_EVENT_MODEL, CONVERSATION_CURSOR_MODEL, DatabaseConversationEventStore, type ConversationRef } from '@zhin.js/im-contract';
 import { createCapabilitySlot, createSnapshotView, SnapshotStore, rootPluginId, childPluginId, type SnapshotState } from '@zhin.js/plugin-runtime';
-import { createDatabaseHost } from '../../../src/plugin-runtime/database-host-installer.js';
+import { createDatabaseHost } from '@zhin.js/core/runtime';
 import { registerConversationHistoryRoutes } from '../../../src/plugin-runtime/console/conversation-history-routes.js';
 
 it('reads the connected endpoint canonical history even when display names cannot select an endpoint', async () => {

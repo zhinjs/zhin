@@ -6,7 +6,7 @@ import adapterFeature, { Adapter, AdapterIndex, adapterFeatureId, createEndpoint
   endpointSpec, endpointEventGatewayToken } from '@zhin.js/adapter';
 import { childPluginId, definePlugin, rootPluginId, type RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
 import { RootRuntime, primaryConfigToken, type PrimaryConfig, type ModuleRuntime } from '@zhin.js/runtime';
-import { createEndpointRoleConfigurationSelection, createEndpointRoleResolver, createSenderEnricher } from '../../src/plugin-runtime/sender-enrichment.js';
+import { createEndpointRoleConfigurationSelection, createEndpointRoleResolver, createSenderEnricher } from '@zhin.js/core/runtime';
 
 const document = (configs: Record<string, unknown>): RuntimeConfigDocument => ({ configVersion: 2,
   plugins: Object.fromEntries(Object.keys(configs).map(key => [key, '@fixture/adapter'])), ...configs });

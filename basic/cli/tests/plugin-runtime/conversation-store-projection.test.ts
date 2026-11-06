@@ -4,8 +4,8 @@ import { join } from 'node:path';
 import { type StructuredDatabase } from '@zhin.js/database';
 import { CONVERSATION_EVENT_MODEL, CONVERSATION_EVENT_QUERY_MODEL, CONVERSATION_CURSOR_MODEL,
   DatabaseConversationEventStore, conversationEventQueryFields, conversationRefKey, messageRefKey, type ConversationEvent, type ConversationRef } from '@zhin.js/im-contract';
-import { createDatabaseHost } from '../../src/plugin-runtime/database-host-installer.js';
-import { migrateConversationColumns } from '../../src/plugin-runtime/conversation-migration.js';
+import { createDatabaseHost } from '@zhin.js/core/runtime';
+import { migrateConversationColumns } from '@zhin.js/core/runtime';
 
 const scene: ConversationRef = { endpoint: { adapter: 'sandbox', id: 'bot\0percent%' }, kind: 'private', id: 'room' };
 const resources: Array<{ host: ReturnType<typeof createDatabaseHost>; directory: string }> = [];

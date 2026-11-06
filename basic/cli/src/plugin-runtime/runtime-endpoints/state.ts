@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { AdapterManagementError, type EndpointDesiredRepository, type EndpointDesiredSnapshot,
   type EndpointDesiredRecord } from '@zhin.js/adapter';
 import { rootPluginId, type CapabilityId, type PersistentStatePort, type StateRecord, type JsonValue } from '@zhin.js/plugin-runtime';
-import { createHostDocumentCipher, HostCredentialStorageError } from '../host-credential-storage.js';
+import { createHostDocumentCipher, HostCredentialStorageError } from '@zhin.js/runtime';
 
 /** One encrypted CAS document per Host/Adapter; the database never receives account credentials in plaintext. */
 export class PersistentEndpointRepository implements EndpointDesiredRepository {

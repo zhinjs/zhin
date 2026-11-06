@@ -4,7 +4,7 @@ import { mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { DEFAULT_SHUTDOWN_BUDGET_MS } from '../process-lifecycle.js';
-import type { StartOptions } from './options.js';
+import type { StartOptions } from '@zhin.js/runtime';
 
 const DISABLE_EXPERIMENTAL_WARNING_FLAG = '--disable-warning=ExperimentalWarning';
 const RESPAWN_WINDOW_MS = 60_000;

@@ -1,4 +1,4 @@
-import { ensureScheduleHistoryIndexes } from '../../../src/plugin-runtime/agent/persistence-coordinator.js';
+import { ensureScheduleHistoryIndexes } from '@zhin.js/agent/runtime';
 import type { StructuredDatabase } from '@zhin.js/database';
 
 it.each(['sqlite', 'mysql', 'pg'] as const)('indexes schedule history with MySQL prefixes only on unbounded TEXT (%s)', async dialectName => {

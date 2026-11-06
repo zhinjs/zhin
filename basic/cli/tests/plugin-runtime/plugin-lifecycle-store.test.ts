@@ -1,7 +1,7 @@
 import {mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
-import {createPluginLifecycleStore, readProjectPluginLifecycleState, resolvePluginLifecycleFile, readDeclaredPlugins} from '../../src/plugin-runtime/plugin-lifecycle-store.js';
+import {createPluginLifecycleStore, readProjectPluginLifecycleState, resolvePluginLifecycleFile, readDeclaredPlugins} from '@zhin.js/runtime';
 
 const roots: string[] = [];
 afterEach(async () => { await Promise.all(roots.splice(0).map(root => rm(root, {recursive: true, force: true}))); });

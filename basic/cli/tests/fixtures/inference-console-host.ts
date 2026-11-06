@@ -7,14 +7,14 @@ import { createHttpHost } from '@zhin.js/host-http';
 import { SnapshotStore, rootPluginId, type SnapshotState } from '@zhin.js/plugin-runtime';
 import { aiProviderDefinitionsToken, type ProviderDefinition } from '@zhin.js/ai/provider';
 import { registerConsoleSystemRoutes } from '../../src/plugin-runtime/console/system-routes.js';
-import { createDatabaseHost } from '../../src/plugin-runtime/database-host-installer.js';
-import { HostInference } from '../../src/plugin-runtime/inference/host.js';
+import { createDatabaseHost } from '@zhin.js/core/runtime';
+import { HostInference } from '@zhin.js/agent/runtime';
 import { registerInferenceRoutes } from '../../src/plugin-runtime/inference/routes.js';
 import {
   InferenceApplyRejectedError,
   InferenceManagementError,
-} from '../../src/plugin-runtime/inference/management.js';
-import { resolveInferenceManagementPrincipal } from '../../src/plugin-runtime/inference/principal.js';
+} from '@zhin.js/agent/runtime';
+import { resolveInferenceManagementPrincipal } from '@zhin.js/agent/runtime';
 import { personalSessionOwnerId } from '@zhin.js/agent/personal-session';
 
 const directory = await mkdtemp(join(tmpdir(), 'zhin-console-inference-fixture-'));

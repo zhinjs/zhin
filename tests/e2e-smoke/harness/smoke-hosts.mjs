@@ -12,7 +12,7 @@ import {
   scheduleHostToken,
   scheduleRootHostToken,
 } from '../../../packages/im/plugin-runtime/src/index.ts';
-import { createDatabaseHost } from '../../../basic/cli/src/plugin-runtime/database-host-installer.ts';
+import { createDatabaseHost } from '../../../packages/im/core/src/plugin-runtime/im/host/database-host-installer.ts';
 
 /**
  * Proactive sends (reminders, RSS pushes) enter the kit's real unified send chain, so they are captured

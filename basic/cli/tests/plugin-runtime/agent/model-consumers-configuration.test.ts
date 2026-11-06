@@ -2,9 +2,9 @@ import { Scope, DisposeStack, rootPluginId } from '@zhin.js/plugin-runtime';
 import { ImRuntime } from '@zhin.js/core/runtime';
 import { aiCompletionToken, type AgentRuntime } from '@zhin.js/agent/runtime';
 import type { ApprovalJudgment } from '@zhin.js/agent/session';
-import { AgentRuntimeFoundation } from '../../../src/plugin-runtime/agent/runtime-foundation.js';
-import { publishAgentToolFeatures } from '../../../src/plugin-runtime/agent/tool-feature-publisher.js';
-import { AgentTurnIngressRoute } from '../../../src/plugin-runtime/agent/turn/ingress-route.js';
+import { AgentRuntimeFoundation } from '@zhin.js/agent/runtime';
+import { publishAgentToolFeatures } from '@zhin.js/agent/runtime';
+import { AgentTurnIngressRoute } from '@zhin.js/agent/runtime';
 import { configurationFixture } from '../inference/configuration-fixture.js';
 
 /** Actual Host graph, credentials, SDK and consumers; file configuration is a separate authority. */

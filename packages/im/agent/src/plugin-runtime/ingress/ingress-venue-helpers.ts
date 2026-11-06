@@ -36,7 +36,6 @@ import {
   type DecisionAudit,
 } from './decision-audit.js';
 import { considerAmbientEngagement } from './ingress-ambient-stage.js';
-import { ingressMessages as t } from './ingress-messages.js';
 import type { AgentAssistantStatusPort, AgentIngressFoundationPort } from './ports.js';
 import {
   runtimeImSessionKey,
@@ -47,9 +46,10 @@ import type { SceneEventIngress } from './scene-event-ingress.js';
 import { observeSessionAndCheckSpeak } from './session-gate.js';
 import {
   hasIgnoredTriggerPrefix,
+  ingressMessages as t,
   resolveRuntimeAgentTrigger,
   routeSpecialistAgent,
-} from './trigger.js';
+} from './unified-mailbox-spine.js';
 
 type RuntimeTriggerMatch = NonNullable<ReturnType<typeof resolveRuntimeAgentTrigger>>;
 

@@ -48,7 +48,7 @@ pnpm dev
 - `ai.memory.semantic.enabled: true`（`autoConsolidate: false`，由 skill 触发）
 - Runtime Host 按配置动态加载 `@zhin.js/a2a` / `@zhin.js/mcp`，统一 Bearer 鉴权
 - `package.json#zhin` 声明三 Adapter 子插件及 Command/Component/Skill/Tool/Page Feature
-- `pages/index/index.ts` 提供声明式 Console 概览页（配合 `plugin.ts` 的 `definePluginConsoleRpc` 暴露 `status` / `ping`）；`pages/workroom/index.tsx` 与 `pages/agent-trace/index.tsx` 由轻量 TypeScript Client Builder 构建，不依赖 Vite
+- `pages/index/index.ts`、`pages/workroom/index.ts` 与 `pages/agent-trace/index.ts` 提供纯 `.ts` 声明式 Console Blueprint 页面（配合 `plugin.ts` 的 `definePluginConsoleRpc` 暴露 `status`、`workroom-summary`、`trace-summary` 等），由轻量 TypeScript Client Builder 零打包直出，不依赖 Vite 或 React 源码
 
 详见 [`zhin.config.yml`](./zhin.config.yml) 与 [`ACCEPTANCE.md`](./ACCEPTANCE.md)。
 

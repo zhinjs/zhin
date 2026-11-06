@@ -1,6 +1,5 @@
 import { createHash } from 'node:crypto';
-import { operationEndpoint } from './operation-endpoint.js';
-import { projectLocale } from './locale.js';
+import { projectLocale, runRuntimeMiddleware } from './inbound-spine.js';
 import {
   resolveLocale,
   type CapabilityId,
@@ -12,17 +11,13 @@ import { collectSegmentMedia } from '../../built/segment-contract/media.js';
 import { isStrictCanonicalSegment } from '../../built/segment-contract/validate.js';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { isJsxElement, type JSXElement } from '@zhin.js/jsx';
-import { createOutboundEnvelope, isComponentCall, isRawContent, type OutboundEnvelope, type SendContent, type SendRequest } from './contracts.js';
-import { OutboundRenderer } from './outbound-renderer.js';
-import { projectOutboundPayload, type OutboundProjection } from './outbound-projection.js';
+import { createOutboundEnvelope, isComponentCall, isRawContent, operationEndpoint, type OutboundEnvelope, type SendContent, type SendRequest } from './contracts.js';
+import { OutboundRenderer, projectOutboundPayload, resolveOutboundPresentation, type OutboundProjection } from './outbound-renderer.js';
 import { flattenOutboundArray } from '../../built/outbound-content-arrays.js';
 import { requireAdapters } from './endpoint-runtime.js';
 import { formatConversationLog, previewMessageContent, type RuntimeMessageEvent, type RuntimeMessageRendering } from './message-events.js';
-import { runRuntimeMiddleware } from './runtime-middleware.js';
-import { collectButtonPayloads, type JsxButtonBatch, type PluginIncarnationRef } from './jsx-button-registry.js';
-import type { RememberFallbackContext } from './interactive-router.js';
+import { collectButtonPayloads, type JsxButtonBatch, type PluginIncarnationRef, type RememberFallbackContext } from './interactive-router.js';
 import type { RuntimeMessageDiagnostics } from './message-diagnostics.js';
-import { resolveOutboundPresentation } from './outbound-presentation.js';
 
 const logger = getLogger('im.outbound');
 

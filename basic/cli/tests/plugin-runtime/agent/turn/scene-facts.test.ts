@@ -5,7 +5,7 @@ import {
   turnFactCacheSize,
   TURN_FACT_CACHE_MAX_ENTRIES,
   TURN_FACT_CACHE_TTL_MS,
-} from '../../../../src/plugin-runtime/agent/turn/request.js';
+} from '@zhin.js/agent/runtime';
 
 /** A declared profile (not a legacy-derived one): group scene lookups are usable, private ones are not. */
 const sceneProfile = { group: { scene: { groupInfo: true, memberProfile: true } } };

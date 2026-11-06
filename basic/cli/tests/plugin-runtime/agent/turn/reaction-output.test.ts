@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { REACTION_SEGMENT_TYPE } from '@zhin.js/agent';
-import { reactionOf } from '../../../../src/plugin-runtime/agent/turn/ingress-route.js';
-import { sendOutputMessages } from '../../../../src/plugin-runtime/agent/turn/reply-messages.js';
+import { reactionOf } from '@zhin.js/agent/runtime';
+import { sendOutputMessages } from '@zhin.js/agent/runtime';
 
 const reaction = (emoji: string) => ({ type: 'message' as const, segments: [{ type: REACTION_SEGMENT_TYPE, data: { emoji } }] });
 const text = (value: string) => ({ type: 'message' as const, segments: [{ type: 'text' as const, data: { text: value } }] });

@@ -1,3 +1,5 @@
+import type { ConsoleAdapterPageBlueprint, ConsolePageBlueprint } from '@zhin.js/console-contract';
+
 export interface ConsoleIndexPage {
   readonly id?: string;
   readonly localName?: string;
@@ -10,6 +12,7 @@ export interface ConsoleIndexPage {
   readonly order?: number;
   readonly hideInNav?: boolean;
   readonly titleI18n?: Readonly<Partial<Record<'zh-CN' | 'en' | string, string>>>;
+  readonly blueprint?: ConsolePageBlueprint | ConsoleAdapterPageBlueprint | Readonly<Record<string, unknown>>;
 }
 
 export interface PageShellDescriptor {
@@ -21,6 +24,7 @@ export interface PageShellDescriptor {
   readonly localName: string;
   readonly description?: string;
   readonly group?: string;
+  readonly blueprint?: ConsolePageBlueprint | ConsoleAdapterPageBlueprint | Readonly<Record<string, unknown>>;
 }
 
 export function inferPageCategory(page: ConsoleIndexPage): string {
@@ -486,6 +490,7 @@ export function pageModuleScript(moduleUrl: string, page: PageShellDescriptor): 
     localName: page.localName,
     route: page.route,
     title: page.title,
+    ...(page.blueprint !== undefined ? { blueprint: page.blueprint } : {}),
   });
   return `${standaloneTokenBootstrapScript(true)}
 <script type="module">
@@ -644,7 +649,7 @@ try {
     );
   }
   const page = await import(${JSON.stringify(moduleUrl)});
-  let Component = page.default ?? page.SandboxPage ?? null;
+  let Component = page.default ?? page.SandboxPage ?? entry.blueprint ?? null;
   let registeredElement = null;
   if (typeof page.register === 'function') {
     page.register({

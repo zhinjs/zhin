@@ -25,6 +25,11 @@
       "types": "./lib/client-build/index.d.ts",
       "development": "./src/client-build/index.ts",
       "import": "./lib/client-build/index.js"
+    },
+    "./shell": {
+      "types": "./lib/shell/page-renderer.d.ts",
+      "development": "./src/shell/page-renderer.ts",
+      "import": "./lib/shell/page-renderer.js"
     }
   },
   "scripts": {
@@ -92,6 +97,10 @@
       "./client-build": {
         "types": "./lib/client-build/index.d.ts",
         "import": "./lib/client-build/index.js"
+      },
+      "./shell": {
+        "types": "./lib/shell/page-renderer.d.ts",
+        "import": "./lib/shell/page-renderer.js"
       }
     }
   }

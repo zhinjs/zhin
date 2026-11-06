@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AiControlPlane, AiSessionOps, DecisionEventLog } from '@zhin.js/agent';
-import { COLD_FIELD_ACTOR_ID, ColdFieldMonitor, coldFieldKey } from '../../../../src/plugin-runtime/agent/turn/cold-field.js';
+import { COLD_FIELD_ACTOR_ID, ColdFieldMonitor, coldFieldKey } from '@zhin.js/agent/runtime';
 
 const g1 = { platform: 'icqq', conversationId: 'g1' };
 const key = coldFieldKey(g1);

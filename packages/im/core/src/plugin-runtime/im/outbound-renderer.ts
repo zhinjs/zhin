@@ -1,8 +1,10 @@
-import { componentHostToken, type ComponentHost, type TemplateContext, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
-import type { ConversationRef } from '@zhin.js/im-contract';
+import { componentHostToken, createToken, htmlRendererToken, type CapabilityId, type ComponentHost, type HtmlRendererHost, type TemplateContext, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { EndpointDeliveryError, type ConversationRef } from '@zhin.js/im-contract';
+import { formatCompact, getLogger } from '@zhin.js/logger';
 import { isJsxElement, type JSXElement, type JSXRenderable } from '@zhin.js/jsx';
 import { isNativeMessageTag, renderToSegments, type MessageRenderOptions } from '../../jsx/message-renderer.js';
 import { flattenOutboundArray, MAX_OUTBOUND_ARRAY_DEPTH } from '../../built/outbound-content-arrays.js';
+import { assertCanonicalSegments } from '../../built/segment-contract/assert.js';
 import {
   ComponentIndex,
   componentFeatureId,
@@ -15,10 +17,145 @@ import {
   type IncomingContext,
   type SendContent,
 } from './contracts.js';
-import { JsxButtonRegistry } from './jsx-button-registry.js';
+import { JsxButtonRegistry } from './interactive-router.js';
 import { requireAdapters } from './endpoint-runtime.js';
-import { projectOutboundPayload, type OutboundProjection } from './outbound-projection.js';
-import { resolveOutboundPresentation } from './outbound-presentation.js';
+import type { OutboundFallbackReason, RuntimeMessageRendering } from './message-events.js';
+import {
+  applyOutboundInteractivePolicy,
+  applyOutboundMarkdownPolicy,
+  normalizeOutboundPayload,
+  resolveOutboundHtmlPolicy,
+  resolveOutboundInteractivePolicy,
+  resolveOutboundMarkdownPolicy,
+  resolveOutboundMediaPolicy,
+  resolveOutboundSupportedSegments,
+} from './outbound-segments.js';
+
+/** Keep the adapter's presentation or prefer its existing readable text fallback. */
+export type OutboundPresentationMode = 'default' | 'text';
+
+export interface OutboundPresentationPreferences {
+  readonly html?: OutboundPresentationMode;
+  readonly markdown?: OutboundPresentationMode;
+  readonly interactive?: OutboundPresentationMode;
+}
+
+export interface OutboundPresentationContext {
+  readonly conversation: ConversationRef;
+  readonly requester: PluginId;
+  readonly generation: number;
+}
+
+/** A synchronous, side-effect-free decision, shared by delivery and target previews. */
+export type OutboundPresentation = (
+  context: OutboundPresentationContext,
+) => OutboundPresentationPreferences | undefined;
+
+export const outboundPresentationToken = createToken<OutboundPresentation>(
+  'zhin.outbound-presentation',
+  'Root-selected outbound presentation within the adapter capability boundary',
+);
+
+const outboundLogger = getLogger('im.outbound');
+
+/** Resolve once per operation; replacements reuse this detached, immutable decision. */
+export function resolveOutboundPresentation(
+  snapshot: RuntimeSnapshot,
+  conversation: ConversationRef,
+  requester: PluginId,
+): OutboundPresentationPreferences | undefined {
+  const policy = snapshot.resources.get(snapshot.root)?.get(outboundPresentationToken.id) as OutboundPresentation | undefined;
+  if (policy === undefined) return undefined;
+  try {
+    const view: ConversationRef = Object.freeze({
+      endpoint: Object.freeze({ id: conversation.endpoint.id, adapter: conversation.endpoint.adapter }),
+      kind: conversation.kind,
+      id: conversation.id,
+      ...(conversation.parent ? { parent: Object.freeze({ kind: conversation.parent.kind, id: conversation.parent.id }) } : {}),
+      ...(conversation.threadId !== undefined ? { threadId: conversation.threadId } : {}),
+    });
+    const result = policy(Object.freeze({ conversation: view, requester, generation: snapshot.generation }));
+    if (result === undefined) return undefined;
+    if (result && typeof result === 'object' && 'then' in result) {
+      // An accidentally async policy is outside the contract. Consume a possible
+      // rejection without waiting for it or applying a later decision to this send.
+      void Promise.resolve(result).catch(() => undefined);
+      throw new TypeError('Outbound presentation must be synchronous');
+    }
+    if (!result || typeof result !== 'object') throw new TypeError('Invalid outbound presentation');
+    const { html, markdown, interactive } = result;
+    for (const value of [html, markdown, interactive]) {
+      if (value !== undefined && value !== 'default' && value !== 'text') throw new TypeError('Invalid outbound presentation mode');
+    }
+    return Object.freeze({ html, markdown, interactive });
+  } catch {
+    // Never log the callback error, content or user-provided values; do not retry it.
+    outboundLogger.warn(formatCompact({ op: 'outbound_presentation', status: 'fallback', reason: 'policy_failed', generation: snapshot.generation }));
+    return undefined;
+  }
+}
+
+export interface OutboundProjection {
+  readonly payload: unknown;
+  readonly rendering: RuntimeMessageRendering;
+}
+
+/** Shared by transport and target-aware previews. Does not send or register callbacks. */
+export async function projectOutboundPayload(
+  rendered: unknown,
+  conversation: ConversationRef,
+  snapshot: RuntimeSnapshot,
+  options: {
+    readonly rememberFallback?: (map: Record<string, string>) => Record<string, string> | void;
+    readonly inheritedFallbacks?: readonly OutboundFallbackReason[];
+    /** Keep keyboard payloads until outbound middleware has had a chance to replace them. */
+    readonly deferInteractive?: boolean;
+    readonly signal?: AbortSignal;
+    readonly presentation?: OutboundPresentationPreferences;
+  } = {},
+): Promise<OutboundProjection> {
+  options.signal?.throwIfAborted();
+  const adapter = conversation.endpoint.id as CapabilityId;
+  const reasons = new Set(options.inheritedFallbacks);
+  const values = Array.isArray(rendered) ? flattenOutboundArray(rendered) : rendered;
+  const contains = (type: string) => (Array.isArray(values) ? values : [values])
+    .some(value => value && typeof value === 'object' && value.type === type);
+  const markdown = options.presentation?.markdown === 'text' ? 'text' : resolveOutboundMarkdownPolicy(adapter, snapshot);
+  if (markdown === 'text' && contains('markdown')) reasons.add('markdown_text_policy');
+  const host = snapshot.resources.get(snapshot.root)?.get(htmlRendererToken.id) as HtmlRendererHost | undefined;
+  let payload = await normalizeOutboundPayload(applyOutboundMarkdownPolicy(values, markdown), host, {
+    mediaPolicy: resolveOutboundMediaPolicy(adapter, snapshot),
+    htmlPolicy: options.presentation?.html === 'text' ? 'text' : resolveOutboundHtmlPolicy(adapter, snapshot),
+    onFallback: reason => reasons.add(reason),
+    signal: options.signal,
+  });
+  options.signal?.throwIfAborted();
+  const interactive = options.presentation?.interactive === 'text' ? 'text' : resolveOutboundInteractivePolicy(adapter, snapshot);
+  if (interactive === 'text' && Array.isArray(payload) && payload.some(item => item?.type === 'keyboard')) {
+    reasons.add('interactive_text_policy');
+  }
+  if (!options.deferInteractive) payload = applyOutboundInteractivePolicy(payload, interactive, options.rememberFallback);
+  if (Array.isArray(payload)) {
+    payload = payload.filter(item => !(item?.type === 'text' && item.data?.text === ''));
+    assertCanonicalSegments(payload);
+  }
+  const supported = resolveOutboundSupportedSegments(adapter, snapshot);
+  const supportedPayload = options.deferInteractive ? applyOutboundInteractivePolicy(payload, interactive) : payload;
+  if (supported && Array.isArray(supportedPayload)) {
+    const unsupported = supportedPayload.find(segment => segment && typeof segment === 'object'
+      && typeof segment.type === 'string' && !supported.includes(segment.type));
+    if (unsupported) throw new EndpointDeliveryError('unsupported_operation', `Adapter does not support canonical segment ${unsupported.type}`, 'not_sent');
+  }
+  const forms = new Set<'text' | 'image' | 'native'>();
+  for (const item of Array.isArray(payload) ? payload : [payload]) {
+    if (typeof item === 'string' || item?.type === 'text') forms.add('text');
+    else if (item?.type === 'image') forms.add('image');
+    else if (item != null) forms.add('native');
+  }
+  return Object.freeze({ payload, rendering: Object.freeze({
+    forms: Object.freeze([...forms]), fallbacks: Object.freeze([...reasons]),
+  }) });
+}
 
 const maxComponentDepth = 32;
 const TEMPLATE_MARKER = '${';

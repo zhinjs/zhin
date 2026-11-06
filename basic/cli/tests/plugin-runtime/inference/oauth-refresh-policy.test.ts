@@ -3,10 +3,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ProviderAccount, ProviderDefinition, ProviderGraph, ProviderService } from '@zhin.js/ai/provider';
 import { codeOAuth } from '../../../../../packages/im/ai/src/providers/oauth.js';
-import { createDatabaseHost } from '../../../src/plugin-runtime/database-host-installer.js';
-import { DatabaseInferenceRepository } from '../../../src/plugin-runtime/inference/repository.js';
-import { InferenceCredentialStore } from '../../../src/plugin-runtime/inference/credentials.js';
-import { HostAccountRuntime } from '../../../src/plugin-runtime/inference/account-runtime.js';
+import { createDatabaseHost } from '@zhin.js/core/runtime';
+import { DatabaseInferenceRepository } from '@zhin.js/agent/runtime';
+import { InferenceCredentialStore } from '@zhin.js/agent/runtime';
+import { HostAccountRuntime } from '@zhin.js/agent/runtime';
 
 interface FixtureOptions {
   readonly expiresAt?: number;

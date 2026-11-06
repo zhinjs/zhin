@@ -305,7 +305,7 @@ Apps depending on `zhin.js` import `define*` from facade subpaths: `zhin.js/comm
 | AI tools | `plugins/utils/music/tools/`, `plugins/utils/group-suite/tools/` |
 | Skills | `examples/full-bot/skills/memory-consolidate/SKILL.md` |
 | Sub-agents | `examples/multi-agent-room/agents/` |
-| Console pages | `examples/full-bot/pages/workroom/index.tsx` |
+| Console pages | `examples/full-bot/pages/workroom/index.ts` |
 
 ## Next steps
 

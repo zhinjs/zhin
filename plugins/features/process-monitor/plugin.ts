@@ -1,4 +1,8 @@
-import { definePlugin, pluginConsoleRpcToken } from 'zhin.js';
+import {
+  definePlugin,
+  definePluginCapabilityGraph,
+  pluginConsoleRpcToken,
+} from 'zhin.js';
 import { createProcessMonitorConsoleRpc } from './src/console.js';
 import {
   ProcessMonitor,
@@ -18,6 +22,15 @@ export default definePlugin<ProcessMonitorConfig>({
   metadata: {
     displayName: 'Process Monitor',
   },
+  capabilityGraph: definePluginCapabilityGraph({
+    provides: [processMonitorToken, pluginConsoleRpcToken],
+    features: {
+      commands: ['process-status'],
+      skills: ['process-monitor'],
+      tools: ['process-status'],
+      pages: ['index'],
+    },
+  }),
   setup(context) {
     const monitor = new ProcessMonitor(context.config.get());
     context.resources.provide(processMonitorToken, monitor);

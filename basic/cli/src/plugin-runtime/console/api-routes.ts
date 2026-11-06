@@ -10,7 +10,7 @@ import {
   createPluginLifecycleStore,
   resolvePluginLifecycleFile,
   type PluginLifecycleStore,
-} from '../plugin-lifecycle-store.js';
+} from '@zhin.js/runtime';
 import { registerAgentConsoleRoutes } from './agent-routes.js';
 import { createAgentRuntimeLeaseResolver } from './agent-runtime-resolver.js';
 import { ConsoleConfigurationStore } from './configuration.js';

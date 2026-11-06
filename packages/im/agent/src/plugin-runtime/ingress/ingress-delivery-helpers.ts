@@ -13,7 +13,7 @@ import {
   type TurnStaleVerdict,
 } from '../../turn/index.js';
 import type { DecisionAudit } from './decision-audit.js';
-import { ingressMessages as t } from './ingress-messages.js';
+import { ingressMessages as t } from './unified-mailbox-spine.js';
 import type { observeAgentTurnTrace } from './ports.js';
 
 /** The emoji of a reaction-only message from the structured reply, if this message is one. */

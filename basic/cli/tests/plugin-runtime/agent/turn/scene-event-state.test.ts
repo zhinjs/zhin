@@ -1,12 +1,12 @@
-import { runtimeSceneTaskSessionKey } from '../../../../src/plugin-runtime/agent/turn/request.js';
+import { runtimeSceneTaskSessionKey } from '@zhin.js/agent/runtime';
 import { describe, expect, it, vi } from 'vitest';
 import type { TurnRequest } from '@zhin.js/agent';
 import { personalSessionIdentity } from '@zhin.js/agent/personal-session';
 import { MemoryConversationEventStore, type ConversationEvent, type ConversationRef } from '@zhin.js/im-contract';
 import { createMemoryContextRepository, isEventMessage, type EventMessage } from '@zhin.js/ai';
-import { sceneEventToStateMessage } from '../../../../src/plugin-runtime/agent/turn/scene-event-state.js';
-import { readSceneEventLines } from '../../../../src/plugin-runtime/agent/turn/scene-event-lines.js';
-import { SceneEventIngress } from '../../../../src/plugin-runtime/agent/turn/scene-event-ingress.js';
+import { sceneEventToStateMessage } from '@zhin.js/agent/runtime';
+import { readSceneEventLines } from '@zhin.js/agent/runtime';
+import { SceneEventIngress } from '@zhin.js/agent/runtime';
 
 const endpoint = Object.freeze({ id: 'icqq', adapter: 'icqq' });
 const group = Object.freeze({ endpoint, kind: 'group' as const, id: 'g1' });

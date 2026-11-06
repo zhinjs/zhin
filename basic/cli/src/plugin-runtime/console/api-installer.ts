@@ -17,7 +17,7 @@ import type { RootResourceInstaller } from '@zhin.js/runtime';
 import {
   resolvePluginLifecycleFile,
   type PluginLifecycleStore,
-} from '../plugin-lifecycle-store.js';
+} from '@zhin.js/runtime';
 import { registerConsoleRoutes } from './api-routes.js';
 import { ConsoleConfigurationStore } from './configuration.js';
 import { normalizeBase } from './http-response.js';

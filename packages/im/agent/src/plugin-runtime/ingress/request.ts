@@ -39,19 +39,25 @@ import {
   type SceneFactDeps,
 } from './request-capabilities.js';
 import {
+  approvalMessages,
   createDeterministicApprovalPort,
   createRuntimeApprovalPort,
   createRuntimeQuestionPort,
   createRuntimeTurnAccess,
   deliveryOutcomeFromReceipt,
   interactiveNetworkPolicy,
+  resolveMasterShellApprovalMode,
+  resolveSandboxTurnPolicy,
   runtimeImSessionKey,
   runtimePersonalSessionAddress,
   runtimeSceneTaskSessionKey,
+  type ResolvedSandboxTurnPolicy,
+  type SandboxTurnPolicyInput,
 } from './request-ports.js';
 
 export {
   adapterLiveEndpointId,
+  approvalMessages,
   capabilityLocalName,
   createDeterministicApprovalPort,
   createRuntimeApprovalPort,
@@ -59,10 +65,12 @@ export {
   createRuntimeTurnAccess,
   deliveryOutcomeFromReceipt,
   interactiveNetworkPolicy,
+  resolveMasterShellApprovalMode,
   resolveOwnerForRuntimeMessage,
   resolveRuntimeSenderRoles,
   resolveRuntimeTurnCapabilities,
   resolveRuntimeTurnContextState,
+  resolveSandboxTurnPolicy,
   resolveTrustedForRuntimeMessage,
   runtimeApprovalPolicy,
   runtimeImSessionKey,
@@ -73,9 +81,11 @@ export {
   TURN_FACT_CACHE_TTL_MS,
   type EndpointOwnerResolver,
   type EndpointTrustedResolver,
+  type ResolvedSandboxTurnPolicy,
   type RuntimeSenderRoleBindings,
   type RuntimeSenderRoles,
   type RuntimeTurnContextRequest,
+  type SandboxTurnPolicyInput,
   type SceneFactDeps,
 };
 

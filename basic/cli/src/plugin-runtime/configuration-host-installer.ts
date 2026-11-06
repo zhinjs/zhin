@@ -5,7 +5,7 @@ import { readOperationSession } from '@zhin.js/feature-kit';
 import { createMessages, type Locale } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 import { ConfigChatAccessError, ConfigChatRequestRejectedError, parseConfigurationPath, formatConfigurationPath, type ConsoleConfigurationStore } from './console/module.js';
-import type { ConfigurationChatAuthorizer } from './sender-enrichment.js';
+import type { ConfigurationChatAuthorizer } from '@zhin.js/core/runtime';
 
 const messages = createMessages({
   description: { 'zh-CN': '管理可在聊天中安全访问的项目配置', en: 'Manage project configuration that is safe to access in chat' },

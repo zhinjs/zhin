@@ -15,21 +15,20 @@ import { flattenOutputElements } from './content.js';
 import { GroupFloodDetector } from './group-flood-detector.js';
 import {
   GroupRuleEnforcer,
+  GroupRuleImChannel,
   type GroupRuleEnforcementResult,
   type GroupRuleViolation,
 } from './group-rule-enforcer.js';
-import { GroupRuleImChannel } from './group-rule-im.js';
 import { reactionOf } from './ingress-delivery-helpers.js';
 import { MemberLifecycle } from './member-lifecycle.js';
 import {
   observeAgentTurnTrace,
   type AgentIngressFoundationPort,
 } from './ports.js';
-import { sendOutputMessages } from './reply-messages.js';
 import { capabilityLocalName, deliveryOutcomeFromReceipt } from './request.js';
 import { SceneEventIngress } from './scene-event-ingress.js';
 import { SessionEventDispatcher } from './session-event-dispatch.js';
-import { resolveTriggerTimeoutMs } from './trigger.js';
+import { resolveTriggerTimeoutMs, sendOutputMessages } from './unified-mailbox-spine.js';
 
 const logger = getLogger('agent');
 

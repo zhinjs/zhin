@@ -2,9 +2,9 @@ import type { CredentialGrant, CredentialPort, ProviderAccount, ProviderService 
 import {
   createCredentialRequestAccess,
   type CredentialTransportFact,
-} from '../../../src/plugin-runtime/inference/request-access.js';
-import { createProviderNetwork } from '../../../src/plugin-runtime/inference/network.js';
-import { createPersonalModelFetch } from '../../../src/plugin-runtime/inference/personal-network.js';
+} from '@zhin.js/agent/runtime';
+import { createProviderNetwork } from '@zhin.js/agent/runtime';
+import { createPersonalModelFetch } from '@zhin.js/agent/runtime';
 
 const account: ProviderAccount = {
   id: 'a',

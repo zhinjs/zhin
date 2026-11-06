@@ -1,7 +1,7 @@
-import { resolveHostCredentialSource } from './inference/environment-source.js';
-import { createConfigurationChatAuthorizer, createEndpointRoleConfigurationSelection, createEndpointRoleResolver, createSenderEnricher } from './sender-enrichment.js';
-export { createEndpointRoleResolver } from './sender-enrichment.js';
-import { migrateConversationColumns, migrateInboxColumns } from './conversation-migration.js';
+import { resolveHostCredentialSource } from '@zhin.js/plugin-runtime';
+import { createConfigurationChatAuthorizer, createEndpointRoleConfigurationSelection, createEndpointRoleResolver, createSenderEnricher } from '@zhin.js/core/runtime';
+export { createEndpointRoleResolver } from '@zhin.js/core/runtime';
+import { migrateConversationColumns, migrateInboxColumns } from '@zhin.js/core/runtime';
 import type { StructuredDatabase } from '@zhin.js/database';
 import { assertNoPendingInstanceMigration } from './migrate/instance-declarations.js';
 import { assertNotLegacyConfig } from '../utils/legacy-config.js';
@@ -56,25 +56,25 @@ import {
   composeHostConsoleRpc,
   defineWorkspaceConversationTable,
 } from './console/module.js';
-import { installHttpHost, resolveHttpConfig } from './http-host-installer.js';
-import { createDatabaseHost, installDatabaseHost, resolveDatabaseConfig } from './database-host-installer.js';
-import { installLocaleHost } from './locale-host-installer.js';
+import { installHttpHost, resolveHttpConfig } from '@zhin.js/host-http';
+import { createDatabaseHost, installDatabaseHost, resolveDatabaseConfig } from '@zhin.js/core/runtime';
+import { installLocaleHost } from '@zhin.js/core/runtime';
 import { installConfigurationHost } from './configuration-host-installer.js';
 import { installHtmlRendererHost, prepareHtmlRendererHost } from './html-renderer-host-installer.js';
-import { installComponentHost } from './component-host-installer.js';
-import { installOutboundHost } from './outbound-host-installer.js';
+import { installComponentHost } from '@zhin.js/core/runtime';
+import { installOutboundHost } from '@zhin.js/core/runtime';
 import { installScheduleHost, createScheduleHost } from './schedule-host-installer.js';
 import { installSpeechHost, prepareSpeechHost, resolveSpeechConfig } from './speech-host-installer.js';
 import { installProtocolHosts } from './protocol-host-installer.js';
 import { RootHost } from './root-host.js';
 import { PersistentEndpointRepository } from './runtime-endpoints/state.js';
 import { HostSelfChangeApply } from './self-change-apply.js';
-import { registerReadinessRoutes, type ReadinessSource } from './readiness.js';
+import { registerReadinessRoutes, type ReadinessSource } from '@zhin.js/runtime';
 import {
   createPluginLifecycleStore,
   readProjectPluginLifecycleState,
   resolvePluginLifecycleFile,
-} from './plugin-lifecycle-store.js';
+} from '@zhin.js/runtime';
 import { installProcessLifecycle, nodeProcessLifecycleAdapter } from './process-lifecycle.js';
 import { installProcessRejectionHandler } from './process-rejections.js';
 import {
@@ -571,7 +571,7 @@ async function loadConfiguredAgentHost(options: Readonly<{
   config: RuntimeConfigDocument | ConfigDocumentPort;
   projectRoot: string;
   database: import('@zhin.js/plugin-runtime').DatabaseHost;
-  resolveSource: (reference: string | import('./inference/credentials.js').EnvironmentExpressionSource) => string | undefined | Promise<string | undefined>;
+  resolveSource: (reference: string | import('@zhin.js/plugin-runtime').EnvironmentExpressionSource) => string | undefined | Promise<string | undefined>;
 }>): Promise<ConfiguredAgentHost | undefined> {
   const { config, projectRoot } = options;
   const document = isConfigDocumentPort(config) ? (await config.read()).document : config;

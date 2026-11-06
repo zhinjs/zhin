@@ -7,8 +7,8 @@
 import { createHttpHost } from '@zhin.js/host-http';
 import { MemoryPersonalSessionRepository, PersonalSessionService } from '@zhin.js/agent/personal-session';
 import { registerInferenceRoutes } from '../../../src/plugin-runtime/inference/routes.js';
-import { resolveInferenceManagementPrincipal } from '../../../src/plugin-runtime/inference/principal.js';
-import { InferenceSessionManagement } from '../../../src/plugin-runtime/inference/session-management.js';
+import { resolveInferenceManagementPrincipal } from '@zhin.js/agent/runtime';
+import { InferenceSessionManagement } from '@zhin.js/agent/runtime';
 import { setupInferenceManagement } from './fixtures.js';
 
 const SECRETS = ['private-synthetic-token', 'private-synthetic-refresh', 'private-fixture-code', 'private-verifier'];

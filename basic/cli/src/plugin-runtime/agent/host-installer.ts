@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import yaml from 'yaml';
-import { createHostOperationResources } from '../inference/operation-resources.js';
+import { createHostOperationResources } from '@zhin.js/agent/runtime';
 import {
   describeSnapshotAiProvider,
   listSnapshotAiProviders,
@@ -13,15 +13,15 @@ import {
   type ProviderService,
 } from '@zhin.js/ai/provider';
 import { builtinAiProviders } from '@zhin.js/ai/providers';
-import type { HostInference } from '../inference/host.js';
+import type { HostInference } from '@zhin.js/agent/runtime';
 import { turnModelPortToken } from '@zhin.js/agent/model-runtime';
-import { createOwnerApprovalMigrationProvider } from '../data-migration/owner-approval-provider.js';
+import { createOwnerApprovalMigrationProvider } from '@zhin.js/agent/runtime';
 import { pluginDataMigrationProviderToken, rootPluginId, type PluginId, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import { getProcessPeerRegistry } from '@zhin.js/adapter';
 import { resolveHostProtectedPaths } from './host-protected-paths.js';
-import { installAgentPersistence } from './persistence-coordinator.js';
+import { installAgentPersistence } from '@zhin.js/agent/runtime';
 import { createSelfChangeTrialOptions } from './self-change-trial.js';
-import { createSelfChangeGenerationPorts } from './self-change-report.js';
+import { createSelfChangeGenerationPorts } from '@zhin.js/agent/runtime';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -64,8 +64,8 @@ import {
   CapabilityIngress,
   type TurnIntentResolver,
 } from '@zhin.js/agent/runtime';
-import { AgentTurnIngressRoute } from './turn/ingress-route.js';
-import { AgentHostPublicationCoordinator } from './publication-coordinator.js';
+import { AgentTurnIngressRoute } from '@zhin.js/agent/runtime';
+import { AgentHostPublicationCoordinator } from '@zhin.js/agent/runtime';
 
 export { AgentRuntime, AgentTurnCoordinator } from '@zhin.js/agent/runtime';
 
@@ -73,14 +73,14 @@ import {
   resolveAgentHostExternalPeers,
   resolveAgentHostMcpServers,
   type AgentHostAIConfig as AIConfig,
-} from './config.js';
+} from '@zhin.js/agent/runtime';
 import {
   publishAgentToolFeatures,
   type HostAgentTool,
-} from './tool-feature-publisher.js';
-import { AgentRuntimeFoundation } from './runtime-foundation.js';
+} from '@zhin.js/agent/runtime';
+import { AgentRuntimeFoundation } from '@zhin.js/agent/runtime';
 import { resolveToolHardGateImApproval } from '@zhin.js/agent/security';
-import { ImToolApprovalChannel } from './tool-approval-im-channel.js';
+import { ImToolApprovalChannel } from '@zhin.js/agent/runtime';
 import { agentToolApprovalQueueToken } from '../console/tool-approval-resource.js';
 
 const logger = getLogger('agent');

@@ -9,7 +9,7 @@ import {
   ANNOUNCEMENTS_WRITE_PERMISSION,
 } from '../../../src/plugin-runtime/console/announcements-rpc.js';
 import { dispatchPluginConsoleRpcRequest } from '../../../src/plugin-runtime/console/plugin-console-rpc.js';
-import { AnnouncementDispatcher } from '../../../src/plugin-runtime/agent/turn/announcement-dispatch.js';
+import { AnnouncementDispatcher } from '@zhin.js/agent/runtime';
 
 const signal = new AbortController().signal;
 

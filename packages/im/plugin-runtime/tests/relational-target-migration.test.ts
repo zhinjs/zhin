@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { createDatabaseHost, type DatabaseHostConfig } from '../../../../basic/cli/src/plugin-runtime/database-host-installer.js';
+import { createDatabaseHost, type DatabaseHostConfig } from '../../core/src/plugin-runtime/im/host/database-host-installer.js';
 import { PluginDatabaseHost } from '../src/database-host.js';
 import { childPluginId, rootPluginId } from '../src/identity.js';
 import {

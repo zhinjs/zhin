@@ -1,4 +1,3 @@
-import { imOperationResourcesToken } from './operation-resources.js';
 import {
   Scope,
   OwnerOperation,
@@ -14,7 +13,6 @@ import {
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { PermissionHost, permissionHostToken } from '@zhin.js/permission';
 import { CommandExecutionBudget, commandExecutionAdmissionToken, type CommandOperationController } from '@zhin.js/command/internal/execution';
-import { MessageBus, messageBusToken } from './message-bus.js';
 import {
   type EndpointContentResolveContext,
   endpointEventGatewayToken,
@@ -35,12 +33,12 @@ import {
 } from '@zhin.js/im-contract';
 import {
   Message,
+  imOperationResourcesToken,
   type IncomingMessage,
   type OutboundMessageService,
   type MessageSenderRef,
   type SendRequest,
 } from './contracts.js';
-import { loginAssistToken } from './login-assist-host.js';
 import { LoginAssist } from '../../built/login-assist.js';
 import type { UserInteraction } from '@zhin.js/im-contract';
 import type { OutboundRenderer } from './outbound-renderer.js';
@@ -51,6 +49,8 @@ import {
   requireAdapters,
 } from './endpoint-runtime.js';
 import {
+  MessageBus,
+  messageBusToken,
   RuntimeMessageEventStream,
   RuntimeSceneEventStream,
   type RuntimeMessageEvent,
@@ -65,11 +65,16 @@ import {
   type OutboundDeliveryExecution,
 } from './outbound-delivery-runtime.js';
 import { InboundRuntime } from './inbound-runtime.js';
-import { messageLocale } from './locale.js';
+import { messageLocale } from './inbound-spine.js';
 import { InboundDeduper } from './inbound-dedup.js';
-import { OutboundLedger, ledgerScopeOf } from './outbound-ledger.js';
-import { createInboundOriginClassifier } from './inbound-origin.js';
+import { createInboundOriginClassifier, OutboundLedger, ledgerScopeOf } from './inbound-origin.js';
 import { RuntimeMessageDiagnostics, type RuntimeMessageDiagnosticsReader } from './message-diagnostics.js';
+
+/**
+ * Plugin Runtime login-assist port（与出站消息服务并列）。
+ * 适配器 waitForInput；Console / stdin 经 listPending + submit 消费。
+ */
+export const loginAssistToken = createToken<LoginAssist>('zhin.im.login-assist');
 
 /** @public Stable inbound and outbound IM gateway token for Adapter integrations. */
 export const outboundMessageToken = createToken<OutboundMessageService>('zhin.im.outbound-message');

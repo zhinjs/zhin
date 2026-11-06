@@ -3,11 +3,11 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import type { DatabaseHost, DatabaseHostTransaction } from '@zhin.js/plugin-runtime';
 import type { ProviderGraph, ProviderCredentialRecord } from '@zhin.js/ai/provider';
-import { createDatabaseHost } from '../../../src/plugin-runtime/database-host-installer.js';
+import { createDatabaseHost } from '@zhin.js/core/runtime';
 import {
   DatabaseInferenceRepository,
   readStoredInferenceGraph,
-} from '../../../src/plugin-runtime/inference/repository.js';
+} from '@zhin.js/agent/runtime';
 
 const rootId = '/synthetic-host';
 function graph(revision: number, root = rootId): ProviderGraph {

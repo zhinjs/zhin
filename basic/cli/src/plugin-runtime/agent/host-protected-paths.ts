@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createHostProtectedPaths, type HostProtectedPaths } from '@zhin.js/agent';
-import { resolvePluginLifecycleFile } from '../plugin-lifecycle-store.js';
+import { resolvePluginLifecycleFile } from '@zhin.js/runtime';
 
 /**
  * #1030 P0: the host-owned half of the agent's protected-path set. The agent package ships the

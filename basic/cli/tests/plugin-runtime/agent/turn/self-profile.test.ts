@@ -1,6 +1,6 @@
 import { adapterFeatureId } from '@zhin.js/adapter';
 import type { SelfProfilePort, SelfProfileSnapshot } from '@zhin.js/im-contract';
-import { resolveRuntimeTurnContextState } from '../../../../src/plugin-runtime/agent/turn/request.js';
+import { resolveRuntimeTurnContextState } from '@zhin.js/agent/runtime';
 
 const signal = new AbortController().signal;
 const conversation = { endpoint: { id: 'endpoint', adapter: 'telegram' }, kind: 'private' as const, id: 'friend' };

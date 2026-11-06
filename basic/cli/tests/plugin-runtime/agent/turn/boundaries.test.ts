@@ -21,13 +21,13 @@ import {
   resolveSnapshotTurnIntentResolver,
   runtimeApprovalPolicy,
   runtimeImSessionKey,
-} from '../../../../src/plugin-runtime/agent/turn/request.js';
+} from '@zhin.js/agent/runtime';
 import {
   renderTriggerError,
   resolveTriggerTimeoutMs,
   routeSpecialistAgent,
   withTriggerTimeout,
-} from '../../../../src/plugin-runtime/agent/turn/trigger.js';
+} from '@zhin.js/agent/runtime';
 import {
   createEndpointRoleResolver,
   readConfiguredEndpointKeys,

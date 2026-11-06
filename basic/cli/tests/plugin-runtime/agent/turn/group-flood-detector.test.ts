@@ -7,7 +7,7 @@ import {
   floodFingerprint,
   normalizeFloodText,
   type FloodObservation,
-} from '../../../../src/plugin-runtime/agent/turn/group-flood-detector.js';
+} from '@zhin.js/agent/runtime';
 
 function say(detector: GroupFloodDetector, at: number, overrides: Partial<FloodObservation> = {}) {
   return detector.observe({ platform: 'icqq', groupId: '123', memberId: 'u-1', content: '大家快来看看这个', at, ...overrides });

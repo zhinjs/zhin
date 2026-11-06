@@ -6,15 +6,15 @@ import { describe, expect, it, vi } from 'vitest';
 import { AiControlPlane, AiSessionOps, DecisionEventLog, SessionProfileStore, type TurnRequest } from '@zhin.js/agent';
 import { MemoryConversationEventStore, type ConversationEvent } from '@zhin.js/im-contract';
 import { rootPluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
-import { AgentTurnIngressRoute } from '../../../../src/plugin-runtime/agent/turn/ingress-route.js';
-import { SceneEventIngress } from '../../../../src/plugin-runtime/agent/turn/scene-event-ingress.js';
+import { AgentTurnIngressRoute } from '@zhin.js/agent/runtime';
+import { SceneEventIngress } from '@zhin.js/agent/runtime';
 import {
   auditControlGate,
   checkControlAtIngress,
   checkControlAtOutbound,
-} from '../../../../src/plugin-runtime/agent/turn/control-gate.js';
-import { createDecisionAudit, decisionScopeOf } from '../../../../src/plugin-runtime/agent/turn/decision-audit.js';
-import { ControlBlockedOutboundError, createRuntimeProactiveOutbound } from '../../../../src/plugin-runtime/agent/runtime-factory.js';
+} from '@zhin.js/agent/runtime';
+import { createDecisionAudit, decisionScopeOf } from '@zhin.js/agent/runtime';
+import { ControlBlockedOutboundError, createRuntimeProactiveOutbound } from '@zhin.js/agent/runtime';
 
 const rows = (log: DecisionEventLog) => log.recent().map((r) => [r.kind, r.outcome, r.reasonCode]);
 const g1 = { platform: 'icqq', scope: 'group' as const, sceneId: 'g1' };

@@ -100,11 +100,49 @@ export type PluginSetupResult<TConfig = Record<string, unknown>> =
   | Dispose
   | PluginSetupCapabilities<TConfig>;
 
+export interface PluginCapabilityGraphDeclaration {
+  readonly provides?: readonly (Token<unknown> | string)[];
+  readonly injects?: readonly (Token<unknown> | string)[];
+  readonly features?: Readonly<Record<string, readonly string[]>>;
+}
+
+export function definePluginCapabilityGraph(
+  graph: PluginCapabilityGraphDeclaration,
+): Readonly<PluginCapabilityGraphDeclaration> {
+  if (!graph || typeof graph !== 'object' || Array.isArray(graph)) {
+    throw new TypeError('Plugin capabilityGraph must be an object');
+  }
+  const provides =
+    graph.provides !== undefined ? Object.freeze([...graph.provides]) : undefined;
+  const injects =
+    graph.injects !== undefined ? Object.freeze([...graph.injects]) : undefined;
+  let features: Readonly<Record<string, readonly string[]>> | undefined;
+  if (graph.features !== undefined) {
+    if (!graph.features || typeof graph.features !== 'object' || Array.isArray(graph.features)) {
+      throw new TypeError('Plugin capabilityGraph.features must be an object');
+    }
+    const frozenEntries: Record<string, readonly string[]> = {};
+    for (const [featureKey, items] of Object.entries(graph.features)) {
+      if (!Array.isArray(items)) {
+        throw new TypeError(`Plugin capabilityGraph.features.${featureKey} must be an array`);
+      }
+      frozenEntries[featureKey] = Object.freeze([...items]);
+    }
+    features = Object.freeze(frozenEntries);
+  }
+  return Object.freeze({
+    ...(provides !== undefined ? { provides } : {}),
+    ...(injects !== undefined ? { injects } : {}),
+    ...(features !== undefined ? { features } : {}),
+  });
+}
+
 export interface PluginDefinition<TConfig = unknown> {
   readonly name: string;
   readonly config?: PluginConfigSchema<TConfig>;
   readonly metadata?: PluginMetadata;
   readonly requires?: readonly Token<unknown>[];
+  readonly capabilityGraph?: PluginCapabilityGraphDeclaration;
   /** Fields owned by Features; setup must not capture these as mutable business configuration. */
   readonly configUpdate?: PluginConfigUpdateDeclaration;
   setup?(
@@ -191,6 +229,9 @@ export function definePlugin<TConfig = unknown>(
     ...(wrappedSetup ? { setup: wrappedSetup } : {}),
     metadata: definition.metadata ? Object.freeze({ ...definition.metadata }) : undefined,
     requires: Object.freeze([...(definition.requires ?? [])]),
+    ...(definition.capabilityGraph !== undefined
+      ? { capabilityGraph: definePluginCapabilityGraph(definition.capabilityGraph) }
+      : {}),
     ...(definition.configUpdate !== undefined ? { configUpdate: freezePluginConfigUpdate(definition.configUpdate) } : {}),
   });
 }

@@ -1,4 +1,4 @@
-import type { EnvironmentExpressionSource } from './credentials.js';
+import type { EnvironmentExpressionSource } from '@zhin.js/agent/runtime';
 import { createHash, randomUUID } from 'node:crypto';
 import { open, readFile, rename, unlink } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
@@ -15,26 +15,26 @@ import {
   type ProviderMutationReceipt,
 } from '@zhin.js/ai/provider';
 import { type JsonValue } from '@zhin.js/plugin-runtime';
-import { normalizeDatabaseHostConfig } from '../database-config.js';
+import { normalizeDatabaseHostConfig } from '@zhin.js/core/runtime';
 import { assertStopped, withProjectLock } from '../migrate/instance-declarations.js';
 import {
   createHostDocumentCipher,
   privateDirectory,
   readPrivateDocument,
   syncPrivateDirectory,
-} from '../host-credential-storage.js';
-import { openHeadlessInferenceHost } from './headless-host.js';
+} from '@zhin.js/runtime';
+import { openHeadlessInferenceHost } from '@zhin.js/agent/runtime';
 import {
   verifyInferenceMigrationPreview,
   type InferenceMigrationPreview,
 } from './migration-preview.js';
 import type { LegacyInferenceSources } from './migration-source.js';
-import { writePrivateMigrationRecord } from './migration-record.js';
+import { writePrivateMigrationRecord } from '@zhin.js/agent/runtime';
 import {
   applyMigrationSessionJournal,
   type MigrationSessionJournal,
-} from './migration-session-journal.js';
-import { InferenceApplyRejectedError, type PreparedInferenceChange } from './management.js';
+} from '@zhin.js/agent/runtime';
+import { InferenceApplyRejectedError, type PreparedInferenceChange } from '@zhin.js/agent/runtime';
 
 interface MigrationUnitJournal {
   readonly id: string;

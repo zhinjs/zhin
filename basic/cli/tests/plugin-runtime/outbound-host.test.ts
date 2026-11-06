@@ -3,7 +3,7 @@ import { PluginOutboundHost, childPluginId, rootPluginId } from '@zhin.js/plugin
 import {
   createOutboundHost,
   type OutboundRuntimePort,
-} from '../../src/plugin-runtime/outbound-host-installer.js';
+} from '@zhin.js/core/runtime';
 
 function createRuntime(
   endpoints: Partial<OutboundRuntimePort['endpoints']>,

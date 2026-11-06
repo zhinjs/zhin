@@ -2,11 +2,11 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { normalizeProviderGraph, type ProviderDefinition, type ProviderGraph } from '@zhin.js/ai/provider';
-import { createDatabaseHost } from '../../../src/plugin-runtime/database-host-installer.js';
-import { DatabaseInferenceRepository } from '../../../src/plugin-runtime/inference/repository.js';
-import { InferenceCredentialStore, type EnvironmentExpressionSource } from '../../../src/plugin-runtime/inference/credentials.js';
-import { HostAccountRuntime } from '../../../src/plugin-runtime/inference/account-runtime.js';
-import { InferenceManagementService } from '../../../src/plugin-runtime/inference/management.js';
+import { createDatabaseHost } from '@zhin.js/core/runtime';
+import { DatabaseInferenceRepository } from '@zhin.js/agent/runtime';
+import { InferenceCredentialStore, type EnvironmentExpressionSource } from '@zhin.js/agent/runtime';
+import { HostAccountRuntime } from '@zhin.js/agent/runtime';
+import { InferenceManagementService } from '@zhin.js/agent/runtime';
 
 export async function setupInferenceManagement(options: Readonly<{ method?: 'api-key' | 'oauth' }> = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'inference-management-'));

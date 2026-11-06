@@ -16,8 +16,8 @@ import { requestPluginConsole } from '../../src/plugin-management/console-client
 import { ConsoleConfigurationStore } from '../../src/plugin-runtime/console/module.js';
 import { registerConsoleRpcRoute } from '../../src/plugin-runtime/console/rpc-route.js';
 import { installConfigurationHost } from '../../src/plugin-runtime/configuration-host-installer.js';
-import { createPluginLifecycleStore, resolvePluginLifecycleFile } from '../../src/plugin-runtime/plugin-lifecycle-store.js';
-import { createConfigurationChatAuthorizer, createEndpointRoleResolver, createSenderEnricher } from '../../src/plugin-runtime/sender-enrichment.js';
+import { createPluginLifecycleStore, resolvePluginLifecycleFile } from '@zhin.js/runtime';
+import { createConfigurationChatAuthorizer, createEndpointRoleResolver, createSenderEnricher } from '@zhin.js/core/runtime';
 
 /**
  * #1139 P4: cross-entry regression. Console (`config:patch` over the real HTTP RPC route),

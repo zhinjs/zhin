@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { PluginNodeSnapshot, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { NodePackageResolver, PackageResolutionError } from '@zhin.js/runtime';
-import { readDeclaredPlugins, readProjectPluginLifecycleState } from '../plugin-lifecycle-store.js';
+import { readDeclaredPlugins, readProjectPluginLifecycleState } from '@zhin.js/runtime';
 import { displayConsolePath } from './display-path.js';
 
 export type ConsolePluginFeature = {

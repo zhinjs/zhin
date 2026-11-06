@@ -12,7 +12,7 @@ import {
   imApprovalOperatorId,
   type ImApprovalCommandInput,
   type ImApprovalDeliveryTarget,
-} from '../../../src/plugin-runtime/agent/tool-approval-im-channel.js';
+} from '@zhin.js/agent/runtime';
 import { HostToolApprovals } from '../../../src/plugin-runtime/console/tool-approvals.js';
 
 const BUSINESS_GROUP = '42';

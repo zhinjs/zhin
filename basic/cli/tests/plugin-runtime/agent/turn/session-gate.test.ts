@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { SessionProfileStore } from '@zhin.js/agent';
-import { observeSessionAndCheckSpeak } from '../../../../src/plugin-runtime/agent/turn/session-gate.js';
+import { observeSessionAndCheckSpeak } from '@zhin.js/agent/runtime';
 
 const conversation = { kind: 'group', id: 'g1', endpoint: { id: 'qq-bot', adapter: 'qq' } } as const;
 

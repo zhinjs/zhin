@@ -2,8 +2,8 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { childPluginId, rootPluginId, PluginDatabaseHost, createDeliveryTarget } from '@zhin.js/plugin-runtime';
-import { createDatabaseHost } from '../../src/plugin-runtime/database-host-installer.js';
-import { createDatabaseState, type StateDatabase } from '../../src/plugin-runtime/database-state.js';
+import { createDatabaseHost } from '@zhin.js/core/runtime';
+import { createDatabaseState, type StateDatabase } from '@zhin.js/core/runtime';
 import { sqliteAvailable } from './sqlite-availability.js';
 
 const ownerA = childPluginId(rootPluginId(), 'reminder');

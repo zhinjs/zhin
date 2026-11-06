@@ -5,7 +5,7 @@ import {
   GROUP_RULE_MIGRATION_ACTOR,
   GroupRuleDefaults,
   defaultGroupRuleTemplate,
-} from '../../../../src/plugin-runtime/agent/turn/group-rule-defaults.js';
+} from '@zhin.js/agent/runtime';
 
 const input = { platform: 'icqq', endpoint: '10086', groupId: '123', trigger: 'advertising' as const };
 

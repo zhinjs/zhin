@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { renderConsoleIndex, renderPageShell } from '../../../src/plugin-runtime/console/page-renderer.js';
+import { renderConsoleIndex, renderPageShell } from '@zhin.js/pagemanager';
 
 const page = {
   title: 'Chat',

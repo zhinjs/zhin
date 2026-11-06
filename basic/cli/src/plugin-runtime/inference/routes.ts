@@ -8,17 +8,17 @@ import {
   type PersonalSessionOwner,
 } from '@zhin.js/agent/personal-session';
 import { writeJson } from '../console/http-response.js';
-import { HostAccountRuntime } from './account-runtime.js';
-import { InferenceAuthenticationError } from './credentials.js';
-import { InferenceStoreError } from './repository.js';
+import { HostAccountRuntime } from '@zhin.js/agent/runtime';
+import { InferenceAuthenticationError } from '@zhin.js/agent/runtime';
+import { InferenceStoreError } from '@zhin.js/agent/runtime';
 import {
   InferenceManagementError,
   InferenceApplyRejectedError,
   type InferenceManagementPrincipal,
   type InferenceManagementService,
-} from './management.js';
-import type { InferenceTargetsReader } from './targets.js';
-import type { InferenceSessionManagement } from './session-management.js';
+} from '@zhin.js/agent/runtime';
+import type { InferenceTargetsReader } from '@zhin.js/agent/runtime';
+import type { InferenceSessionManagement } from '@zhin.js/agent/runtime';
 
 export interface InferenceManagementLease {
   readonly management: InferenceManagementService;

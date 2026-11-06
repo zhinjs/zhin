@@ -2,7 +2,7 @@ import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { resolveHttpConfig } from '../../src/plugin-runtime/http-host-installer.js';
+import { resolveHttpConfig } from '@zhin.js/host-http';
 
 const previousToken = process.env.ZHIN_TEST_HTTP_TOKEN;
 

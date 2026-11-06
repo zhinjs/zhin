@@ -1,11 +1,11 @@
 import { createHttpHost } from '@zhin.js/host-http';
 import { MemoryPersonalSessionRepository, PersonalSessionService } from '@zhin.js/agent/personal-session';
 import { registerInferenceRoutes } from '../../../src/plugin-runtime/inference/routes.js';
-import { resolveInferenceManagementPrincipal } from '../../../src/plugin-runtime/inference/principal.js';
-import { InferenceSessionManagement } from '../../../src/plugin-runtime/inference/session-management.js';
+import { resolveInferenceManagementPrincipal } from '@zhin.js/agent/runtime';
+import { InferenceSessionManagement } from '@zhin.js/agent/runtime';
 import { join } from 'node:path';
-import { InferenceCredentialStore, credentialMaterialFingerprint } from '../../../src/plugin-runtime/inference/credentials.js';
-import { resolveHostCredentialSource } from '../../../src/plugin-runtime/inference/environment-source.js';
+import { InferenceCredentialStore, credentialMaterialFingerprint } from '@zhin.js/agent/runtime';
+import { resolveHostCredentialSource } from '@zhin.js/plugin-runtime';
 import { setupInferenceManagement } from './fixtures.js';
 
 async function setup(method: 'api-key' | 'oauth' = 'oauth') {

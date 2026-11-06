@@ -54,7 +54,7 @@ import { createTracingJournal, registerTurnTrace } from '../../src/trace/turn-tr
 import type { SkillDescriptor } from '@zhin.js/skill';
 import { createJournalFeed } from '../../src/turn/journal-feed.js';
 import { executeAgentTurn } from '../../src/turn/execute-agent-turn.js';
-import { routeSpecialistAgent } from '../../src/plugin-runtime/ingress/trigger.js';
+import { routeSpecialistAgent } from '../../src/plugin-runtime/ingress/unified-mailbox-spine.js';
 import { isTimerInbound, type EvalAgentFixture, type EvalApprovalBehaviour, type EvalCase, type EvalSelfChangeStatus, type EvalPromptSection, type EvalSkill, type EvalInbound, type EvalInboundMessage, type EvalNativeTool, type EvalTimerInbound, type EvalTool } from './fixture.js';
 import { createScriptedModel, PERCEPTION_MODEL_ID, PERCEPTION_PROVIDER_ALIAS, type ScriptedModel, type ScriptedModelRequest } from './scripted-model.js';
 import { resolvePerceptionConfig } from '../../src/media/perception.js';

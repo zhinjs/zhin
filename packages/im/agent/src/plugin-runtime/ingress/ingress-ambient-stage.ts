@@ -24,7 +24,7 @@ import type {
   AgentAssistantStatusPort,
   AgentIngressFoundationPort,
 } from './ports.js';
-import { hasIgnoredTriggerPrefix } from './trigger.js';
+import { hasIgnoredTriggerPrefix } from './unified-mailbox-spine.js';
 
 const logger = getLogger('agent');
 

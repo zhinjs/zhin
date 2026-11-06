@@ -8,7 +8,7 @@ import type {
 } from '@zhin.js/host-http';
 import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
 import type { DatabaseHost, SnapshotReader } from '@zhin.js/plugin-runtime';
-import type { PluginLifecycleStore } from '../plugin-lifecycle-store.js';
+import type { PluginLifecycleStore } from '@zhin.js/runtime';
 
 export interface ConsoleRpcComposition {
   readonly consoleRuntime: ConsoleRuntime;

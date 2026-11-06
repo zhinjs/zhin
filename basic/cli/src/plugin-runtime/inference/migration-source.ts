@@ -9,7 +9,7 @@ import {
   rootPluginId,
 } from '@zhin.js/plugin-runtime';
 import { personalSessionOwnerId } from '@zhin.js/agent/personal-session';
-import { hostModelOwnerId } from './host-identity.js';
+import { hostModelOwnerId } from '@zhin.js/plugin-runtime';
 import { normalizeProviderJson, type JsonObject } from '@zhin.js/ai/provider';
 
 export interface LegacyStateSourceRow {

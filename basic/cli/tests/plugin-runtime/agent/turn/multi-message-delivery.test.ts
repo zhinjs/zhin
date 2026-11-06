@@ -17,8 +17,8 @@ import { asPrivate } from '../../../../../../packages/im/agent/src/internal/as-p
 import { TurnToolRuntime } from '../../../../../../packages/im/agent/src/tool/turn-tool-runtime.js';
 import { executeAgentTurn } from '../../../../../../packages/im/agent/src/turn/execute-agent-turn.js';
 import { assistantTextReply, assistantToolCallReply, wireMockLlmApi } from '../../../../../../packages/im/agent/tests/helpers/mock-llm-api.js';
-import { deliveryOutcomeFromReceipt } from '../../../../src/plugin-runtime/agent/turn/request.js';
-import { sendOutputMessages } from '../../../../src/plugin-runtime/agent/turn/reply-messages.js';
+import { deliveryOutcomeFromReceipt } from '@zhin.js/agent/runtime';
+import { sendOutputMessages } from '@zhin.js/agent/runtime';
 
 function segments(output: readonly AgentOutputElement[]): Segment[] {
   return output.flatMap(element => element.type === 'message' ? element.segments

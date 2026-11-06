@@ -1,5 +1,5 @@
 import type { ProviderAccount, ProviderDefinition, ProviderService } from '@zhin.js/ai/provider';
-import { createProviderNetwork, matchesProviderTarget } from '../../../src/plugin-runtime/inference/network.js';
+import { createProviderNetwork, matchesProviderTarget } from '@zhin.js/agent/runtime';
 const account: ProviderAccount = { id: 'a', rootId: 'r', ownerId: 'host', revision: 1, serviceId: 's', incarnation: 'first', authentication: { method: 'api-key' } };
 const service: ProviderService = { id: 's', rootId: 'r', ownerId: 'host', revision: 1, driver: { id: 'fixture', owner: 'root', contractVersion: '1' }, options: {}, models: {} };
 const definition: ProviderDefinition<unknown, unknown> = { id: 'fixture', contractVersion: '1', serviceSchema: { parse: value => value }, authentication: { methods: ['api-key'] },

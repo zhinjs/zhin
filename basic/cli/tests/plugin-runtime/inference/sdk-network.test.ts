@@ -1,7 +1,7 @@
 import { openAiCompatibleProvider } from '../../../../../packages/im/ai/src/providers/api-key.js';
 import { typeSafeProvider } from '../../../../../plugins/services/typesafe/src/provider.js';
 import { callContext, chatReply, driverFixture, prompt } from '../../../../../packages/im/ai/tests/providers/fixtures.js';
-import { createProviderNetwork } from '../../../src/plugin-runtime/inference/network.js';
+import { createProviderNetwork } from '@zhin.js/agent/runtime';
 import { AiCompletionQuotaError } from '@zhin.js/agent/runtime';
 
 it.each(['same-origin', 'cross-origin'])('keeps actual SDK POST/body/auth inside the Host %s redirect boundary', async mode => {

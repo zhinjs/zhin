@@ -15,9 +15,9 @@ import { createHostToolApprovalConsoleRpc } from '../../../src/plugin-runtime/co
 import { dispatchPluginConsoleRpcRequest } from '../../../src/plugin-runtime/console/plugin-console-rpc.js';
 import { agentToolApprovalQueueToken } from '../../../src/plugin-runtime/console/tool-approval-resource.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createDatabaseHost } from '../../../src/plugin-runtime/database-host-installer.js';
-import { HostInference } from '../../../src/plugin-runtime/inference/host.js';
-import { publishAgentToolFeatures } from '../../../src/plugin-runtime/agent/tool-feature-publisher.js';
+import { createDatabaseHost } from '@zhin.js/core/runtime';
+import { HostInference } from '@zhin.js/agent/runtime';
+import { publishAgentToolFeatures } from '@zhin.js/agent/runtime';
 import type { ModelRuntimeServiceOptions } from '@zhin.js/agent/model-runtime';
 
 // Holds the next candidate Foundation composition so a test can observe the live Host mid-reload.
@@ -26,40 +26,40 @@ const publishHost = vi.hoisted(() => vi.fn());
 // Real ZhinAgent so the test exercises its actual SessionSystem persistence latch.
 const agentRef: { current?: InstanceType<typeof import('@zhin.js/agent/runtime').ZhinAgent> } = {};
 
-vi.mock('../../../src/plugin-runtime/agent/runtime-foundation.js', () => ({
-  AgentRuntimeFoundation: {
-    create: vi.fn(async (options: { modelRuntime: ModelRuntimeServiceOptions }) => {
-      const gate = candidateGate.current;
-      candidateGate.current = undefined;
-      await gate?.();
-      const { AIService } = await import('@zhin.js/agent');
-      const service = new AIService({ agents: { zhin: {} } });
-      await service.prepareModelRuntime(options.modelRuntime);
-      return {
-        service,
-        agent: agentRef.current,
-        knowledgeIndex: undefined,
-        semanticMemory: null,
-        scheduleTools: [],
-        schedule: { start: vi.fn() },
-        homeTools: [],
-        assistantEnabled: false,
-        listBindings: () => [],
-      };
-    }),
-  },
-}));
-vi.mock('../../../src/plugin-runtime/agent/tool-feature-publisher.js', () => ({
-  publishAgentToolFeatures: vi.fn(),
-}));
-vi.mock('../../../src/plugin-runtime/agent/publication-coordinator.js', () => ({
-  AgentHostPublicationCoordinator: class {
-    constructor(options: { resources: Scope }) {
-      publishHost(options);
-      options.resources.provide(agentHostToken, {} as never);
-    }
-  },
-}));
+vi.mock('@zhin.js/agent/runtime', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@zhin.js/agent/runtime')>();
+  return {
+    ...actual,
+    AgentRuntimeFoundation: {
+      create: vi.fn(async (options: { modelRuntime: ModelRuntimeServiceOptions }) => {
+        const gate = candidateGate.current;
+        candidateGate.current = undefined;
+        await gate?.();
+        const { AIService } = await import('@zhin.js/agent');
+        const service = new AIService({ agents: { zhin: {} } });
+        await service.prepareModelRuntime(options.modelRuntime);
+        return {
+          service,
+          agent: agentRef.current,
+          knowledgeIndex: undefined,
+          semanticMemory: null,
+          scheduleTools: [],
+          schedule: { start: vi.fn() },
+          homeTools: [],
+          assistantEnabled: false,
+          listBindings: () => [],
+        };
+      }),
+    },
+    publishAgentToolFeatures: vi.fn(),
+    AgentHostPublicationCoordinator: class {
+      constructor(options: { resources: Scope }) {
+        publishHost(options);
+        options.resources.provide(actual.agentHostToken, {} as never);
+      }
+    },
+  };
+});
 
 const { installAgentHost } = await import('../../../src/plugin-runtime/agent/host-installer.js');
 const { ZhinAgent } = await import('@zhin.js/agent/runtime');

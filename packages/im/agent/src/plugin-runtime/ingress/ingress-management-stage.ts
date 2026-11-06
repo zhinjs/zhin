@@ -7,7 +7,7 @@ import {
   managementCommandText,
 } from '../../index.js';
 import type { TurnAccessContext } from '../../turn/index.js';
-import type { GroupRuleImChannel } from './group-rule-im.js';
+import type { GroupRuleImChannel } from './group-rule-enforcer.js';
 import type {
   AgentIngressFoundationPort,
   ImApprovalChannelPort,

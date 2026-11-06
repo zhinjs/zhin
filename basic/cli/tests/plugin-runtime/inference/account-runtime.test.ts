@@ -4,10 +4,10 @@ import { join } from 'node:path';
 import type {
   OAuthAuthentication, OAuthCredential, ProviderAccount, ProviderDefinition, ProviderDriverLease, ProviderExecutionContext, ProviderGraph,
 } from '@zhin.js/ai/provider';
-import { createDatabaseHost } from '../../../src/plugin-runtime/database-host-installer.js';
-import { DatabaseInferenceRepository } from '../../../src/plugin-runtime/inference/repository.js';
-import { InferenceAuthenticationError, InferenceCredentialStore, credentialMaterialFingerprint, type CredentialPayload, type EnvironmentExpressionSource } from '../../../src/plugin-runtime/inference/credentials.js';
-import { HostAccountRuntime } from '../../../src/plugin-runtime/inference/account-runtime.js';
+import { createDatabaseHost } from '@zhin.js/core/runtime';
+import { DatabaseInferenceRepository } from '@zhin.js/agent/runtime';
+import { InferenceAuthenticationError, InferenceCredentialStore, credentialMaterialFingerprint, type CredentialPayload, type EnvironmentExpressionSource } from '@zhin.js/agent/runtime';
+import { HostAccountRuntime } from '@zhin.js/agent/runtime';
 import { expandEnvironmentValue } from '@zhin.js/runtime';
 
 function deferred<T>() {

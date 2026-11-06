@@ -3,8 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { AiControlPlane, DecisionEventLog } from '@zhin.js/agent';
 import { ToolApprovalQueue, resolveToolHardGateImApproval } from '@zhin.js/agent/security';
 import { rootPluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
-import { AgentTurnIngressRoute } from '../../../../src/plugin-runtime/agent/turn/ingress-route.js';
-import { ImToolApprovalChannel } from '../../../../src/plugin-runtime/agent/tool-approval-im-channel.js';
+import { AgentTurnIngressRoute } from '@zhin.js/agent/runtime';
+import { ImToolApprovalChannel } from '@zhin.js/agent/runtime';
 
 const endpoint = { adapter: 'root', id: 'root\u0000zhin.adapter\u0000fixture' };
 const BUSINESS_GROUP = 'g42';

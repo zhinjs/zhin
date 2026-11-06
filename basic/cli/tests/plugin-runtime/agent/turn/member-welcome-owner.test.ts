@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AiSessionOps, DecisionEventLog } from '@zhin.js/agent';
 import type { ConversationRef } from '@zhin.js/im-contract';
-import { MemberLifecycle } from '../../../../src/plugin-runtime/agent/turn/member-lifecycle.js';
+import { MemberLifecycle } from '@zhin.js/agent/runtime';
 
 const endpoint = Object.freeze({ id: 'root/qq\0zhin.adapter\0icqq~main', adapter: 'icqq' });
 const group = Object.freeze({ endpoint, kind: 'group' as const, id: 'g1' }) as unknown as ConversationRef;

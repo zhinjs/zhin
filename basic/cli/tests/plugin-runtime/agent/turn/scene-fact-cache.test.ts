@@ -2,10 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { adapterFeatureId, type EndpointMemberInspectionRequest, type EndpointGroupInspectionRequest } from '@zhin.js/adapter';
 import { SCENE_FACT_STALE_MS, SceneFactStore, SessionProfileStore } from '@zhin.js/agent';
 import type { ConversationEvent } from '@zhin.js/im-contract';
-import { resolveRuntimeTurnContextState } from '../../../../src/plugin-runtime/agent/turn/request.js';
-import { SceneFactRefresher } from '../../../../src/plugin-runtime/agent/turn/scene-fact-refresher.js';
-import { SceneEventIngress } from '../../../../src/plugin-runtime/agent/turn/scene-event-ingress.js';
-import { applySceneEventToFacts } from '../../../../src/plugin-runtime/agent/turn/scene-fact-events.js';
+import { resolveRuntimeTurnContextState } from '@zhin.js/agent/runtime';
+import { SceneFactRefresher } from '@zhin.js/agent/runtime';
+import { SceneEventIngress } from '@zhin.js/agent/runtime';
+import { applySceneEventToFacts } from '@zhin.js/agent/runtime';
 
 /** A declared profile (not a legacy-derived one): group scene lookups are usable, private ones are not. */
 const sceneProfile = { group: { scene: { groupInfo: true, memberProfile: true } } };

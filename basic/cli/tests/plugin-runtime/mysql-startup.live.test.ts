@@ -1,4 +1,4 @@
-import { createDatabaseHost } from '../../src/plugin-runtime/database-host-installer.js';
+import { createDatabaseHost } from '@zhin.js/core/runtime';
 import {
   CONVERSATION_EVENT_MODEL, CONVERSATION_CURSOR_MODEL, DatabaseConversationEventStore,
   type ConversationEvent,

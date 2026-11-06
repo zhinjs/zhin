@@ -2,8 +2,8 @@ import type { ImRuntime } from '@zhin.js/core/runtime';
 import type { AgentRuntime } from '@zhin.js/agent/runtime';
 import { DisposeStack, Scope, rootPluginId } from '@zhin.js/plugin-runtime';
 import { describe, expect, it, vi } from 'vitest';
-import { AgentRuntimeFoundation } from '../../../src/plugin-runtime/agent/runtime-foundation.js';
-import type { AgentHostAIConfig } from '../../../src/plugin-runtime/agent/config.js';
+import { AgentRuntimeFoundation } from '@zhin.js/agent/runtime';
+import type { AgentHostAIConfig } from '@zhin.js/agent/runtime';
 
 describe('AgentRuntimeFoundation', () => {
   it.each([

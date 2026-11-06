@@ -1,4 +1,4 @@
-import { resolveHostCredentialSource } from '../../../src/plugin-runtime/inference/environment-source.js';
+import { resolveHostCredentialSource } from '@zhin.js/plugin-runtime';
 
 it('uses the trusted environment lookup for legacy references and one private default expression', () => {
   const lookup = vi.fn((key: string) => key === 'PRESENT' ? 'synthetic-environment-key' : key === 'EMPTY' ? '' : undefined);

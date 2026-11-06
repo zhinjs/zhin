@@ -1,5 +1,13 @@
 import { projectLocaleToken } from 'zhin.js/i18n';
-import { databaseHostToken, definePlugin, outboundHostToken } from 'zhin.js';
+import {
+  databaseHostToken,
+  definePlugin,
+  definePluginCapabilityGraph,
+  outboundHostToken,
+  pluginConsoleRpcToken,
+  pluginTaskProviderToken,
+  pluginVerificationToken,
+} from 'zhin.js';
 import { randomUUID } from 'node:crypto';
 import { assertReminderTimezone, type ReminderConfig } from './src/config.js';
 import { createReminderConsoleRpc } from './src/console.js';
@@ -11,6 +19,29 @@ export default definePlugin<ReminderConfig>({
   name: 'reminder',
   metadata: { displayName: '持久提醒' },
   requires: [databaseHostToken, outboundHostToken],
+  capabilityGraph: definePluginCapabilityGraph({
+    provides: [
+      reminderServiceToken,
+      pluginConsoleRpcToken,
+      pluginTaskProviderToken,
+      pluginVerificationToken,
+    ],
+    injects: [databaseHostToken, outboundHostToken, projectLocaleToken],
+    features: {
+      commands: [
+        'remind/after',
+        'remind/at',
+        'remind/cancel',
+        'remind/create',
+        'remind/every',
+        'remind/list',
+      ],
+      schedules: ['poll'],
+      skills: ['reminder'],
+      tools: ['reminder_cancel', 'reminder_create', 'reminder_list'],
+      pages: ['index'],
+    },
+  }),
   setup(context) {
     const config = context.config.get();
     assertReminderTimezone(config.timezone);

@@ -5,7 +5,7 @@ import { createHttpHost } from '@zhin.js/host-http';
 import { GenerationAdmissionGate, SnapshotStore, generationAdmissionSource, pluginDataMigrationProviderToken,
   rootPluginId, type SnapshotState, type TokenId } from '@zhin.js/plugin-runtime';
 import { OwnerApprovalRuntime } from '@zhin.js/agent/security';
-import { createOwnerApprovalMigrationProvider } from '../../../src/plugin-runtime/data-migration/owner-approval-provider.js';
+import { createOwnerApprovalMigrationProvider } from '@zhin.js/agent/runtime';
 import { registerDataMigrationRoutes } from '../../../src/plugin-runtime/console/data-migration-routes.js';
 
 const cleanups: Array<() => Promise<unknown>> = [];

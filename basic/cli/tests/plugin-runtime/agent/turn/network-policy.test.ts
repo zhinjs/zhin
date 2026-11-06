@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { interactiveNetworkPolicy } from '../../../../src/plugin-runtime/agent/turn/request.js';
+import { interactiveNetworkPolicy } from '@zhin.js/agent/runtime';
 
 type Config = Parameters<typeof interactiveNetworkPolicy>[0];
 const policy = (config: Record<string, unknown>) => interactiveNetworkPolicy(config as Config);

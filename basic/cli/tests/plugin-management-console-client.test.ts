@@ -8,7 +8,7 @@ import { createConsoleEventHub, createHttpHost, type PluginManagementState, type
 import { PLUGIN_RPC } from '@zhin.js/console-protocol';
 import { registerConsoleRpcRoute } from '../src/plugin-runtime/console/rpc-route.js';
 import { ConsoleConfigurationStore } from '../src/plugin-runtime/console/configuration.js';
-import { createPluginLifecycleStore, resolvePluginLifecycleFile } from '../src/plugin-runtime/plugin-lifecycle-store.js';
+import { createPluginLifecycleStore, resolvePluginLifecycleFile } from '@zhin.js/runtime';
 import { PluginManagementWorkflow } from '../src/plugin-management/workflow.js';
 import { requestPluginConsole } from '../src/plugin-management/console-client.js';
 import { packagesCommand } from '../src/commands/packages.js';

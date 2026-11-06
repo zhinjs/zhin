@@ -4,7 +4,7 @@ import { ToolApprovalQueue } from '@zhin.js/agent/security';
 import { Adapter, createEndpointSpecification, defineAdapter, endpointSpec } from 'zhin.js/adapter';
 import { createAdapterHarness } from '../../../../../../plugins/adapters/test-utils/endpoint.js';
 import { MemoryDesiredRepository } from '../../../../../../plugins/adapters/test-utils/desired-repository.js';
-import { GroupRuleEnforcer } from '../../../../src/plugin-runtime/agent/turn/group-rule-enforcer.js';
+import { GroupRuleEnforcer } from '@zhin.js/agent/runtime';
 
 class NativeClient extends EventEmitter {
   readonly kicks = vi.fn(async (_group: string, _user: string) => undefined);

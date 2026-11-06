@@ -11,9 +11,9 @@ import {
   type ProviderDefinition,
   type ProviderGraph,
 } from '@zhin.js/ai/provider';
-import { createDatabaseHost } from '../../../src/plugin-runtime/database-host-installer.js';
-import { HostInference } from '../../../src/plugin-runtime/inference/host.js';
-import { createHostOperationResources } from '../../../src/plugin-runtime/inference/operation-resources.js';
+import { createDatabaseHost } from '@zhin.js/core/runtime';
+import { HostInference } from '@zhin.js/agent/runtime';
+import { createHostOperationResources } from '@zhin.js/agent/runtime';
 import { openAiProvider } from '../../../../../packages/im/ai/src/providers/api-key.js';
 import { CommandIndex, commandFeatureId, defineCommand } from '../../../../../packages/im/command/src/index.js';
 import { ToolIndex, toolFeatureId, defineAgentTool } from '../../../../../packages/im/tool/src/index.js';

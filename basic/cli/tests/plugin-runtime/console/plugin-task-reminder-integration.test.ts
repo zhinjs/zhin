@@ -8,7 +8,7 @@ import { createCapabilitySlot, createSnapshotView, SnapshotStore, PluginStateSto
   pluginTaskProviderToken, type PluginId, type TokenId, type SnapshotState } from '@zhin.js/plugin-runtime';
 import { ReminderService } from '../../../../../plugins/utils/reminder/src/service.js';
 import type { ReminderConfig } from '../../../../../plugins/utils/reminder/src/config.js';
-import { createDatabaseHost } from '../../../src/plugin-runtime/database-host-installer.js';
+import { createDatabaseHost } from '@zhin.js/core/runtime';
 import { registerPluginTaskRoutes } from '../../../src/plugin-runtime/console/plugin-task-routes.js';
 import { sqliteAvailable } from '../sqlite-availability.js';
 

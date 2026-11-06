@@ -1,4 +1,10 @@
-import { databaseHostToken, definePlugin, outboundHostToken } from 'zhin.js';
+import {
+  databaseHostToken,
+  definePlugin,
+  definePluginCapabilityGraph,
+  outboundHostToken,
+  pluginConsoleRpcToken,
+} from 'zhin.js';
 import { resolveLedgerConfig, type LedgerConfig } from './src/config.js';
 import { createLedgerConsoleRpc } from './src/console.js';
 import { ledgerServiceStore } from './src/runtime.js';
@@ -9,6 +15,26 @@ export default definePlugin<LedgerConfig>({
   name: 'ledger',
   metadata: { displayName: '记账' },
   requires: [databaseHostToken],
+  capabilityGraph: definePluginCapabilityGraph({
+    provides: [ledgerServiceStore, pluginConsoleRpcToken],
+    injects: [databaseHostToken, outboundHostToken],
+    features: {
+      commands: [
+        'ledger-add',
+        'ledger-delete',
+        'ledger-list',
+        'ledger-month',
+        'ledger-report',
+        'ledger-stats',
+        'ledger-today',
+        'ledger-week',
+      ],
+      schedules: ['daily-report'],
+      skills: ['ledger'],
+      tools: ['ledger_add', 'ledger_delete', 'ledger_list', 'ledger_summary'],
+      pages: ['index'],
+    },
+  }),
   setup(context) {
     const config = resolveLedgerConfig(context.config.get());
     const database = context.resources.use(databaseHostToken);

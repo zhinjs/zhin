@@ -1,5 +1,5 @@
 import { RuntimeInteractionCoordinator } from '../../../../../../packages/im/core/src/plugin-runtime/im/interaction-runtime.js';
-import { createRuntimeApprovalPort } from '../../../../src/plugin-runtime/agent/turn/request.js';
+import { createRuntimeApprovalPort } from '@zhin.js/agent/runtime';
 import type { Locale } from '@zhin.js/plugin-runtime';
 import { parseUserInteractionAnswer, projectUserInteraction, renderUserInteraction } from '../../../../../../packages/im/core/src/built/user-interaction.js';
 import { resolveKeyboardSegments } from '../../../../../../packages/im/core/src/built/interactive-segments/resolve.js';

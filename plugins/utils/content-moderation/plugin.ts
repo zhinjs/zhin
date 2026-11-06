@@ -1,4 +1,8 @@
-import { definePlugin } from 'zhin.js';
+import {
+  definePlugin,
+  definePluginCapabilityGraph,
+  pluginConsoleRpcToken,
+} from 'zhin.js';
 import { createModerationConsoleRpc } from './src/console.js';
 import { ModerationEngine } from './src/engine.js';
 import { moderationEngineStore } from './src/runtime.js';
@@ -8,6 +12,15 @@ export default definePlugin({
   metadata: {
     displayName: 'Content Moderation',
   },
+  capabilityGraph: definePluginCapabilityGraph({
+    provides: [moderationEngineStore, pluginConsoleRpcToken],
+    features: {
+      middlewares: ['inbound', 'outbound'],
+      skills: ['content-moderation'],
+      tools: ['moderation_check', 'moderation_status'],
+      pages: ['index'],
+    },
+  }),
   setup(context) {
     // 每个 generation 配置一次：providers 构建与词库 readFileSync 都在
     // configure 内，绝不能放在每条消息的中间件热路径上。

@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
 import commandFeature, { commandFeatureId, defineCommand } from '@zhin.js/command';
 import { definePlugin, type DatabaseHost } from '@zhin.js/plugin-runtime';
 import { RootRuntime, type ModuleRuntime } from '@zhin.js/runtime';
-import { installLocaleHost } from '../../src/plugin-runtime/locale-host-installer.js';
+import { installLocaleHost } from '@zhin.js/core/runtime';
 class Modules implements ModuleRuntime {
   readonly values = new Map<string, unknown>();
   async load<T>(source: string): Promise<T> { if (!this.values.has(source)) throw new Error(`Missing ${source}`); return this.values.get(source) as T; }

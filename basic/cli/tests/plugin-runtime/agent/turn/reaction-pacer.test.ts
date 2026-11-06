@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { deliverReaction, ReactionPacer, resolveReactionPacing } from '../../../../src/plugin-runtime/agent/turn/reaction-pacer.js';
+import { deliverReaction, ReactionPacer, resolveReactionPacing } from '@zhin.js/agent/runtime';
 
 function seeded(values: number[]) {
   let i = 0;

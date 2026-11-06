@@ -3,8 +3,8 @@ import { createHttpHost, type ProcessHttpHost } from '@zhin.js/host-http';
 import { adapterFeatureId } from '@zhin.js/adapter';
 import { SnapshotStore, databaseHostToken, rootPluginId, type SnapshotState } from '@zhin.js/plugin-runtime';
 import { createPrimaryConfig, createEnvStore, primaryConfigToken } from '@zhin.js/runtime';
-import { readReadiness, registerReadinessRoutes, type ReadinessPolicy } from '../../src/plugin-runtime/readiness.js';
-import { fetchReadiness } from '../../src/plugin-runtime/readiness-client.js';
+import { readReadiness, registerReadinessRoutes, type ReadinessPolicy } from '@zhin.js/runtime';
+import { fetchReadiness } from '@zhin.js/runtime';
 
 const stores: SnapshotStore[] = [];
 const hosts: ProcessHttpHost[] = [];

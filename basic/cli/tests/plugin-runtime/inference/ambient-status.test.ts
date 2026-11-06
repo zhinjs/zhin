@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ProviderGraph } from '@zhin.js/ai/provider';
-import { openHeadlessInferenceHost } from '../../../src/plugin-runtime/inference/headless-host.js';
+import { openHeadlessInferenceHost } from '@zhin.js/agent/runtime';
 
 it('projects ambient selection from the held operation graph without loading Drivers or credentials', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'inference-ambient-status-'));

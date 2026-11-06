@@ -2,7 +2,7 @@ import path from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { extractBearerToken, HttpBodyError, readJsonBody, type HttpHost } from '@zhin.js/host-http';
 import { DataMigrationError, normalizeDeliveryTarget, type PluginId, type SnapshotReader } from '@zhin.js/plugin-runtime';
-import { DataMigrationController, DataMigrationPlanStore } from '../data-migration/index.js';
+import { DataMigrationController, DataMigrationPlanStore } from '@zhin.js/runtime';
 import { writeJson } from './http-response.js';
 
 export interface DataMigrationRouteOptions {

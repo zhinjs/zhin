@@ -5,7 +5,7 @@ import {
   personalSessionIdentity,
   type PersonalSessionAddress,
 } from '@zhin.js/agent/personal-session';
-import { resolveInferenceTurnContext } from '../../../src/plugin-runtime/inference/turn-context.js';
+import { resolveInferenceTurnContext } from '@zhin.js/agent/runtime';
 
 function address(): PersonalSessionAddress {
   return {

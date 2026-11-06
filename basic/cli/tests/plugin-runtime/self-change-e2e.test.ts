@@ -22,7 +22,7 @@ import {
 } from '@zhin.js/agent';
 import { ToolApprovalQueue } from '@zhin.js/agent/security';
 import { HostSelfChangeApply } from '../../src/plugin-runtime/self-change-apply.js';
-import { createSelfChangeGenerationPorts } from '../../src/plugin-runtime/agent/self-change-report.js';
+import { createSelfChangeGenerationPorts } from '@zhin.js/agent/runtime';
 import { planRespawn, processRestartExitCode, processRestartSupported } from '../../src/plugin-runtime/start/process-supervisor.js';
 
 /** The change was asked for in a group; the owner (42) settles it in a private chat. */

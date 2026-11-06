@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { OutboundLedger, ledgerScopeOf } from '../../src/plugin-runtime/im/outbound-ledger.js';
+import { OutboundLedger, ledgerScopeOf } from '../../src/plugin-runtime/im/inbound-origin.js';
 
 const conv = (endpointId = 'e1') => ({
   endpoint: { id: endpointId, adapter: 'qq' }, kind: 'group' as const, id: 'g1',

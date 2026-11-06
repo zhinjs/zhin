@@ -1,15 +1,7 @@
-import { readOperationSession, type VenueProjector, type VenueRegistry } from '@zhin.js/core';
-import { ingressMessages as t } from './ingress-messages.js';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
-import type { ConversationRef } from '@zhin.js/im-contract';
-import type { ApprovalPort } from '../../session/approval-port.js';
-import { normalizeMailboxConfig, type TurnAdmission } from '../../turn/index.js';
-import { HostMailbox } from '../../collaboration/host-mailbox.js';
-import type { CapabilityIngress } from '../capability-ingress.js';
-import type { AgentRuntime } from '../agent-runtime.js';
-import type { TurnIntentResolver } from '../turn-intent-resolver.js';
 import type { InferenceOperationScope } from '@zhin.js/ai/provider';
+import { readOperationSession, type AITriggerConfig, type VenueProjector, type VenueRegistry } from '@zhin.js/core';
 import type {
   GroupRuleDefaultOutcome,
   GroupRuleViolationOutcome,
@@ -21,34 +13,24 @@ import type {
   RuntimeSceneEventSignal,
   SendContent,
 } from '@zhin.js/core/runtime';
+import type { ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
-import type { PluginId, SnapshotLease } from '@zhin.js/plugin-runtime';
-import { isClearCommand } from './content.js';
-import { isMergeableGroupTurn } from './trigger.js';
-import {
-  adapterLiveEndpointId,
-  capabilityLocalName,
-  createRuntimeTurnAccess,
-  isPlainTextRuntimeMessage,
-  resolveOwnerForRuntimeMessage,
-  resolveRuntimeSenderRoles,
-  resolveSnapshotTurnIntentResolver,
-  resolveTrustedForRuntimeMessage,
-  runtimeSceneTaskSessionKey,
-} from './request.js';
+import { createMessages, type Locale, type PluginId, type SnapshotLease } from '@zhin.js/plugin-runtime';
+import { HostMailbox } from '../../collaboration/host-mailbox.js';
+import { chatFailureLine, splitOutputMessages, type AgentOutputElement, type DeliveryOutcome } from '../../index.js';
+import type { ApprovalPort } from '../../session/approval-port.js';
+import { isCancelIntent, normalizeMailboxConfig, type TurnAdmission } from '../../turn/index.js';
+import type { AgentRuntime } from '../agent-runtime.js';
+import type { CapabilityIngress } from '../capability-ingress.js';
+import type { AgentCapabilities } from '../index.js';
+import type { TurnIntentResolver } from '../turn-intent-resolver.js';
 import { AmbientEngagement } from './ambient-engagement.js';
-import { SceneEventIngress } from './scene-event-ingress.js';
-import { MemberLifecycle } from './member-lifecycle.js';
-import { SceneFactRefresher } from './scene-fact-refresher.js';
 import { AnnouncementDispatcher } from './announcement-dispatch.js';
-import { GroupRuleImChannel } from './group-rule-im.js';
-import { GroupRuleEnforcer } from './group-rule-enforcer.js';
-import { GroupFloodDetector } from './group-flood-detector.js';
-import { ReactionPacer } from './reaction-pacer.js';
-import { GroupRuleDefaults } from './group-rule-defaults.js';
 import { ColdFieldMonitor } from './cold-field.js';
-import { SessionEventDispatcher } from './session-event-dispatch.js';
+import { isClearCommand } from './content.js';
 import { createDecisionAudit, decisionScopeOf, NO_DECISION_AUDIT } from './decision-audit.js';
+import { GroupFloodDetector } from './group-flood-detector.js';
+import { GroupRuleDefaults, GroupRuleEnforcer, GroupRuleImChannel } from './group-rule-enforcer.js';
 import { auditAmbientDecision } from './ingress-ambient-stage.js';
 import { auditStaleReply, reactionOf } from './ingress-delivery-helpers.js';
 import { tryHandleIngressCommands } from './ingress-management-stage.js';
@@ -76,11 +58,10 @@ import {
   selectDecisionAgentRoute,
 } from './ingress-turn-execution-stage.js';
 import {
-  observeAgentTurnTrace,
-  type AgentAssistantStatusPort,
-  type AgentIngressFoundationPort,
-  type ImApprovalChannelPort,
-} from './ports.js';
+  executeAdmittedMailTurn,
+  type ExecuteAdmittedMailTurnInput,
+  type IngressTurnExecutionHooks,
+} from './ingress-turn-runner.js';
 import {
   buildAdmittedVenueDescriptor,
   collectIngressSceneEventLines,
@@ -91,16 +72,264 @@ import {
   type IngressGateEvaluation,
   type IngressVenueRoutingContext,
 } from './ingress-venue-helpers.js';
+import { MemberLifecycle } from './member-lifecycle.js';
 import {
-  executeAdmittedMailTurn,
-  type ExecuteAdmittedMailTurnInput,
-  type IngressTurnExecutionHooks,
-} from './ingress-turn-runner.js';
+  observeAgentTurnTrace,
+  type AgentAssistantStatusPort,
+  type AgentIngressFoundationPort,
+  type ImApprovalChannelPort,
+} from './ports.js';
+import { ReactionPacer } from './reaction-pacer.js';
+import {
+  adapterLiveEndpointId,
+  approvalMessages,
+  capabilityLocalName,
+  createRuntimeTurnAccess,
+  isPlainTextRuntimeMessage,
+  resolveMasterShellApprovalMode,
+  resolveOwnerForRuntimeMessage,
+  resolveRuntimeSenderRoles,
+  resolveSandboxTurnPolicy,
+  resolveSnapshotTurnIntentResolver,
+  resolveTrustedForRuntimeMessage,
+  runtimeSceneTaskSessionKey,
+  type ResolvedSandboxTurnPolicy,
+  type SandboxTurnPolicyInput,
+} from './request.js';
+import { SceneEventIngress } from './scene-event-ingress.js';
+import { SceneFactRefresher } from './scene-fact-refresher.js';
+import { SessionEventDispatcher } from './session-event-dispatch.js';
 
 const logger = getLogger('agent');
 
+export const ingressMessages = createMessages({
+  cleared: { 'zh-CN': '已清空本会话的 AI 多轮上下文。', en: 'Cleared the AI conversation context for this session.' },
+  stopped: { 'zh-CN': '好的，已停止当前回复。', en: 'OK, stopped the current reply.' },
+  queue_full: { 'zh-CN': '前面还有几条消息在处理，请稍后再发。', en: 'Other messages are still being processed. Please try again shortly.' },
+  expired: { 'zh-CN': '这条消息排队太久，已跳过，需要的话请重新发送。', en: 'This message waited too long and was skipped. Please send it again if needed.' },
+});
+const t = ingressMessages;
+
+const DEFAULT_TRIGGER_TIMEOUT_MS = 60_000;
+const DEFAULT_TRIGGER_ERROR_TEMPLATE = '❌ AI 处理失败: {error}';
+const DEFAULT_AI_TRIGGER_PREFIXES = ['#', 'AI:', 'ai:'];
+const DEFAULT_AI_TRIGGER_IGNORE_PREFIXES = ['/', '!', '！'];
+
+export function resolveTriggerTimeoutMs(trigger?: AITriggerConfig): number {
+  const raw = trigger?.timeout;
+  return typeof raw === 'number' && Number.isFinite(raw) && raw > 0
+    ? raw
+    : DEFAULT_TRIGGER_TIMEOUT_MS;
+}
+
+export function renderTriggerError(trigger: AITriggerConfig | undefined, detail: string): string {
+  const template = trigger?.errorTemplate?.trim()
+    ? trigger.errorTemplate
+    : DEFAULT_TRIGGER_ERROR_TEMPLATE;
+  return template.replace('{error}', detail);
+}
+
+/**
+ * Chat reply for a failed turn: the configured `errorTemplate` when there is one, otherwise a line a
+ * member would say, with the cause appended only for the owner.
+ */
+export function renderChatTurnError(trigger: AITriggerConfig | undefined, error: unknown, master: boolean, locale?: Locale): string {
+  const detail = error instanceof Error ? error.message : String(error);
+  if (trigger?.errorTemplate?.trim()) return renderTriggerError(trigger, detail);
+  return chatFailureLine(error instanceof TriggerTimeoutError ? 'turn_timeout' : 'turn_error', { master, detail, locale });
+}
+
+export class TriggerTimeoutError extends Error {
+  constructor(timeoutMs: number) {
+    super(`AI 处理超时（${timeoutMs}ms）`);
+    this.name = 'TriggerTimeoutError';
+  }
+}
+
+/** Runs one ingress-owned turn with cancellation propagated through the entire turn. */
+export function withTriggerTimeout<T>(
+  run: (signal: AbortSignal) => Promise<T>,
+  timeoutMs: number,
+): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(new TriggerTimeoutError(timeoutMs)), timeoutMs);
+  return run(controller.signal).finally(() => clearTimeout(timer));
+}
+
+export function routeSpecialistAgent(
+  userText: string,
+  capabilities: Pick<AgentCapabilities, 'agents'>,
+  preferredAgentDefinitionId?: string,
+  defaultAgentDefinitionId?: string,
+  platform?: string,
+): { readonly userText: string; readonly agent?: AgentCapabilities['agents'][number] } {
+  if (preferredAgentDefinitionId) {
+    if (preferredAgentDefinitionId === defaultAgentDefinitionId) return { userText };
+    const preferred = capabilities.agents.find((item) =>
+      item.name === preferredAgentDefinitionId
+      || item.qualifiedName === preferredAgentDefinitionId);
+    if (!preferred) {
+      throw new Error(`Preferred specialist Agent is unavailable: ${preferredAgentDefinitionId}`);
+    }
+    return { userText, agent: preferred };
+  }
+  const match = userText.match(/^@([^\s:：]+)[:：]?\s*/u);
+  if (match) {
+    const name = match[1]!.toLowerCase();
+    const agent = capabilities.agents.find((item) => item.name.toLowerCase() === name);
+    if (agent) return { userText: userText.slice(match[0].length).trim() || userText, agent };
+  }
+  if (!platform) return { userText };
+  const platformAgents = capabilities.agents.filter(
+    (agent) => agent.platforms?.includes(platform),
+  );
+  if (platformAgents.length > 1) {
+    throw new Error(
+      `Multiple specialist Agents target platform ${platform}: ${platformAgents.map((agent) => agent.qualifiedName).join(', ')}`,
+    );
+  }
+  return platformAgents[0] ? { userText, agent: platformAgents[0] } : { userText };
+}
+
+/** Messages starting with a command prefix are never AI turns, addressed or not. */
+export function hasIgnoredTriggerPrefix(text: string, trigger: AITriggerConfig | undefined): boolean {
+  const ignorePrefixes = trigger?.ignorePrefixes?.length
+    ? trigger.ignorePrefixes
+    : DEFAULT_AI_TRIGGER_IGNORE_PREFIXES;
+  return ignorePrefixes.some(prefix => prefix && text.startsWith(prefix));
+}
+
+/**
+ * ADR 0038 §1: may this addressed message join a group merge window? Only
+ * plain-text group / channel messages from non-master senders that are not a
+ * trigger-prefix command or a stop word. Everything else keeps its own turn.
+ */
+export function isMergeableGroupTurn(input: Readonly<{
+  message: Message;
+  trigger: AITriggerConfig | undefined;
+  plainText: boolean;
+  isMaster: boolean;
+  /** Addressed content after trigger stripping. */
+  content: string;
+}>): boolean {
+  const kind = input.message.conversation.kind;
+  if (kind !== 'group' && kind !== 'channel') return false;
+  if (!input.plainText || input.isMaster) return false;
+  if (isCancelIntent(input.content)) return false;
+  const text = input.message.content.trim();
+  const prefixes = input.trigger?.prefixes?.length ? input.trigger.prefixes : DEFAULT_AI_TRIGGER_PREFIXES;
+  if (prefixes.some((prefix) => prefix && text.startsWith(prefix))) return false;
+  if (input.message.commandPrefix && text.startsWith(input.message.commandPrefix)) return false;
+  return !/^[/#]/u.test(input.content.trim());
+}
+
+export function matchAiTrigger(
+  message: Message,
+  trigger: AITriggerConfig | undefined,
+): { content: string } | null {
+  if (trigger?.enabled === false) return null;
+  const text = message.content.trim();
+  if (!text) return null;
+
+  if (hasIgnoredTriggerPrefix(text, trigger)) return null;
+
+  const isPrivate = message.conversation.kind === 'private';
+  const prefixes = trigger?.prefixes?.length ? trigger.prefixes : DEFAULT_AI_TRIGGER_PREFIXES;
+  for (const prefix of prefixes) {
+    if (!prefix) continue;
+    if (text.startsWith(prefix)) {
+      const content = text.slice(prefix.length).trim();
+      return content ? { content } : null;
+    }
+  }
+
+  if (trigger?.respondToAt !== false
+    && !isPrivate
+    && (message.mentioned === true || message.metadata?.mentioned === true)) {
+    return { content: stripMentionMarkup(text) };
+  }
+  if (trigger?.respondToPrivate !== false && isPrivate) return { content: text };
+
+  const keywords = trigger?.keywords ?? [];
+  if (isPrivate && keywords.length > 0) {
+    const lowerText = text.toLowerCase();
+    for (const keyword of keywords) {
+      if (keyword && lowerText.includes(keyword.toLowerCase())) return { content: text };
+    }
+  }
+  return null;
+}
+
+export function resolveRuntimeAgentTrigger(
+  message: Message,
+  trigger: AITriggerConfig | undefined,
+  forceTriggered = false,
+): { content: string } | null {
+  if (!forceTriggered) return matchAiTrigger(message, trigger);
+  if (trigger?.enabled === false) return null;
+  const text = message.content.trim();
+  if (!text) return null;
+  return { content: stripMentionMarkup(text) || text };
+}
+
+function stripMentionMarkup(text: string): string {
+  return text
+    .replace(/\[CQ:(?:at|mention),[^\[\]]*\]/giu, '')
+    .replace(/<@!?[^<>\s]+>/gu, '')
+    .replace(/\[(?:at|mention):[^\[\]]*\]/giu, '')
+    .trim();
+}
+
+/** A short, human-feeling pause before each follow-up message, longer for longer text. */
+export function followUpPauseMs(text: string): number {
+  return Math.min(1_500, 400 + text.length * 30);
+}
+
+/**
+ * Sends the Agent output as the chat messages the model split it into, in order.
+ * The first sent message is the reply's receipt; a failure after a delivered
+ * message is reported as non-retryable so earlier messages are never resent.
+ */
+export async function sendOutputMessages(
+  output: readonly AgentOutputElement[],
+  port: Readonly<{
+    send(message: readonly AgentOutputElement[]): Promise<DeliveryOutcome>;
+    render(message: readonly AgentOutputElement[]): string;
+    pause?(ms: number): Promise<void>;
+  }>,
+): Promise<DeliveryOutcome> {
+  const pause = port.pause ?? (ms => new Promise<void>(resolve => setTimeout(resolve, ms)));
+  let first: DeliveryOutcome | undefined;
+  const messages: NonNullable<Extract<DeliveryOutcome, { status: 'sent' }>['messages']>[number][] = [];
+  const messageContexts: NonNullable<Extract<DeliveryOutcome, { status: 'sent' }>['messageContexts']>[number][] = [];
+  for (const message of splitOutputMessages(output)) {
+    if (first?.status === 'sent') await pause(followUpPauseMs(port.render(message)));
+    let outcome: DeliveryOutcome;
+    try {
+      outcome = await port.send(message);
+    } catch (error) {
+      if (first?.status !== 'sent') throw error;
+      return { status: 'failed', code: 'partial_delivery', retryable: false, deliveryPartial: true, deliveryUnknown: true, ...(messages.length ? { messages } : {}) };
+    }
+    if ('messages' in outcome) messages.push(...outcome.messages ?? []);
+    if (outcome.status === 'suppressed') continue;
+    if (outcome.status !== 'sent' && first?.status === 'sent') {
+      return { status: 'failed', code: 'partial_delivery', retryable: false, deliveryPartial: true,
+        ...(outcome.status === 'failed' && outcome.deliveryUnknown ? { deliveryUnknown: true as const } : {}),
+        ...(messages.length ? { messages } : {}) };
+    }
+    if (outcome.status !== 'sent') return outcome;
+    first ??= outcome;
+    messageContexts.push(...outcome.messageContexts ?? []);
+  }
+  return first?.status === 'sent' && (messageContexts.length || messages.length)
+    ? { ...first, ...(messages.length ? { messages } : {}), ...(messageContexts.length ? { messageContexts } : {}) }
+    : first ?? { status: 'suppressed' };
+}
+
 export {
   admitIngressMailTurn,
+  approvalMessages,
   auditAmbientDecision,
   auditStaleReply,
   buildAdmittedVenueDescriptor,
@@ -115,7 +344,9 @@ export {
   observeAgentTurnTrace,
   reactionOf,
   resolveIngressVenueContext,
+  resolveMasterShellApprovalMode,
   resolvePreRoutedEntryActorName,
+  resolveSandboxTurnPolicy,
   selectDecisionAgentRoute,
   tryStopActiveMailTurn,
   type CreateIngressReplyPortInput,
@@ -124,6 +355,8 @@ export {
   type IngressOutboundHooks,
   type IngressTurnExecutionHooks,
   type IngressVenueRoutingContext,
+  type ResolvedSandboxTurnPolicy,
+  type SandboxTurnPolicyInput,
 };
 
 export interface AgentTurnIngressRouteOptions {

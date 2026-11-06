@@ -1,7 +1,7 @@
 import type { AssistantMessage } from '@zhin.js/ai';
 import type { LanguageRequest } from '@zhin.js/ai/provider';
 import { assistant, context, graphFixture, runtimeFixture } from '../../../../../../packages/im/ai/tests/provider/fixtures.js';
-import type { AgentTurnIngressRouteOptions } from '../../../../src/plugin-runtime/agent/turn/ingress-route.js';
+import type { AgentTurnIngressRouteOptions } from '@zhin.js/agent/runtime';
 
 /** Real operation scopes for ingress consumer tests; synthetic Driver only, no network. */
 export function ingressInferenceFixture(options: Readonly<{

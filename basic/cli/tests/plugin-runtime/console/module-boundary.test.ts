@@ -55,7 +55,6 @@ describe('Console Host module boundary', () => {
       'inbox.ts',
       'login-assist-binding.ts',
       'message-bindings.ts',
-      'page-renderer.ts',
       'plugin-routes.ts',
       'plugin-package-map.ts',
       'plugin-schema-catalog.ts',

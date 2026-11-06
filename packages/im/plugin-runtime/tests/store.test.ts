@@ -6,6 +6,7 @@ import {
   createPluginEventChannel,
   createToken,
   definePlugin,
+  definePluginCapabilityGraph,
   definePluginConsoleRpc,
   definePluginStore,
   pluginConsoleRpcToken,
@@ -191,5 +192,37 @@ describe('Scope.get and definePluginStore', () => {
     });
     await asyncPlugin.setup!(asyncCtx);
     expect(asyncScope.get(pluginConsoleRpcToken)).toBe(prebuiltRpc);
+  });
+
+  it('freezes capabilityGraph declarations in definePluginCapabilityGraph and definePlugin', () => {
+    const providedToken = createToken<string>('test.graph.provided');
+    const injectedToken = createToken<number>('test.graph.injected');
+    const graph = definePluginCapabilityGraph({
+      provides: [providedToken, pluginConsoleRpcToken],
+      injects: [injectedToken],
+      features: {
+        commands: ['hello', 'card'],
+        pages: ['index'],
+      },
+    });
+    expect(Object.isFrozen(graph)).toBe(true);
+    expect(Object.isFrozen(graph.provides)).toBe(true);
+    expect(Object.isFrozen(graph.injects)).toBe(true);
+    expect(Object.isFrozen(graph.features)).toBe(true);
+    expect(Object.isFrozen(graph.features?.commands)).toBe(true);
+
+    const plugin = definePlugin({
+      name: 'graph-plugin',
+      capabilityGraph: graph,
+    });
+    expect(Object.isFrozen(plugin.capabilityGraph)).toBe(true);
+    expect(plugin.capabilityGraph).toEqual({
+      provides: [providedToken, pluginConsoleRpcToken],
+      injects: [injectedToken],
+      features: {
+        commands: ['hello', 'card'],
+        pages: ['index'],
+      },
+    });
   });
 });

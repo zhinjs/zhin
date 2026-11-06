@@ -1,16 +1,75 @@
-import type { CapturedEndpointOperation } from './captured-endpoint-operation.js';
+import type { EndpointChildLease, EndpointControl, EndpointManagement } from '@zhin.js/adapter';
 import type { JSXElement } from '@zhin.js/jsx';
 import { commandFeatureId, isCommandIndex, type CommandMenuPage } from '@zhin.js/command';
-import { resolveLocale, type PluginId, type RuntimeSnapshot, type Locale } from '@zhin.js/plugin-runtime';
+import { createRootPrivateToken, resolveLocale, type PluginId, type RuntimeSnapshot, type SnapshotLease, type SnapshotReader, type Locale } from '@zhin.js/plugin-runtime';
 import { operationInputBinding, operationInputSignal, operationInputResources, operationSession, type OperationSession, type OperationResourceView, type CapabilityOperationFactory } from '@zhin.js/feature-kit';
-import type { ConversationRef, DeliveryReceipt, MessageRef } from '@zhin.js/im-contract';
+import type { ConversationRef, DeliveryReceipt, MessageRef, SelfProfilePort } from '@zhin.js/im-contract';
 import type { MessageOrigin } from './inbound-origin.js';
-import type { OperationEndpointSource } from './operation-endpoint.js';
+import type { CoreReplyStream, OpenReplyStreamOptions } from './progressive-reply.js';
 import type { MediaRef, Segment } from '../../built/segment-contract/types.js';
-import { interactionOperationScope, type InteractionOperationScope } from './interaction-operation.js';
 // 入站段统一使用 canonical Segment SSOT（built/segment-contract）；
 // 经 plugin-runtime/im/index.ts re-export，供 runtime 消费者直接引用。
 export type { MediaRef, Segment };
+
+/** Internal send binding retained by one inbound operation; never a wire/config field. */
+export const operationEndpoint = Symbol('zhin.im.operation-endpoint');
+export interface OperationEndpointSource {
+  readonly [operationEndpoint]?: EndpointChildLease;
+}
+
+/** Capture while the source Message/event is active, before handing work to an asynchronous owner. */
+export interface CaptureEndpointOperationInput {
+  /** Canonical complete source address; never an account alias. */
+  readonly target: ConversationRef;
+  /** Actual source Client, checked against the selected account incarnation. */
+  readonly client: unknown;
+  /** Lifetime of the work that is retaining the source operation. */
+  readonly signal?: AbortSignal;
+  /** Author supplied by trusted composition or the owner-bound Host facade. */
+  readonly requester?: PluginId;
+}
+
+/** Retained execution authority for one concrete Client; consumers must release it in finally. */
+export interface CapturedEndpointOperation {
+  readonly target: ConversationRef;
+  readonly signal: AbortSignal;
+  /** The same guarded semantic ports as ordinary calls, pinned to the retained Client. */
+  readonly control?: EndpointControl;
+  readonly management?: EndpointManagement;
+  /** Current account facts and approved mutations, under the same retained operation. */
+  readonly profile?: SelfProfilePort;
+  /** Uses the ordinary renderer/middleware/delivery pipeline with the captured author. */
+  send(content: SendContent, options?: Readonly<{ locale?: Locale; signal?: AbortSignal }>): Promise<DeliveryReceipt>;
+  openReplyStream?(options?: OpenReplyStreamOptions): CoreReplyStream | undefined;
+  /** Stops new calls and releases source/Root leases after accepted calls drain; never stops the account. */
+  release(): void;
+}
+
+/** Core-only trusted operation binding; never read from message metadata. */
+export const interactionOperationScope = Symbol('InteractionOperationScope');
+export interface InteractionOperationScope {
+  readonly snapshot: RuntimeSnapshot;
+  readonly owner: PluginId;
+  /** Explicit stop/source/caller lifetime; not an HMR replacement notification. */
+  readonly signal?: AbortSignal;
+  /** Pin one actual source Client and independently owned snapshot until the question settles. */
+  readonly retain?: () => CapturedEndpointOperation;
+}
+
+/** Trusted composition port. Only Core supplies the controlled message and real held lease. */
+export interface ImOperationResourcesInput {
+  readonly lease: SnapshotLease;
+  readonly snapshots: SnapshotReader;
+  readonly message: RuntimeMessage;
+  readonly owner: PluginId;
+  readonly signal: AbortSignal;
+}
+export interface ImOperationResourcesPort {
+  open(input: ImOperationResourcesInput): OperationResourceView | undefined;
+}
+export const imOperationResourcesToken = createRootPrivateToken<ImOperationResourcesPort>(
+  'zhin.im.operation-resources', 'Host resources for one authorized IM capability operation',
+);
 
 const componentCallBrand = 'zhin.component-call/1' as const;
 const rawContentBrand = 'zhin.raw-content/1' as const;

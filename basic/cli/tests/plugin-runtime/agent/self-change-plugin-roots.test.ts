@@ -14,7 +14,7 @@ import {
   createSelfChangePluginRoots,
   localPluginRoots,
   type LocalPluginRootSource,
-} from '../../../src/plugin-runtime/agent/self-change-plugin-roots.js';
+} from '@zhin.js/runtime';
 
 const origin: SelfChangeOrigin = { platform: 'icqq', sceneId: 'private:42', userId: '42', endpoint: 'bot-1' };
 

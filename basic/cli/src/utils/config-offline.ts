@@ -7,7 +7,7 @@ import {
 import { findConfigFile } from './config-file.js';
 import { createTsxModuleLoader } from '../plugin-runtime/start/tsx-module-loader.js';
 import { loadAiConfigUtils } from './ai-config-loader.js';
-import { hostModelOwnerId } from '../plugin-runtime/inference/host-identity.js';
+import { hostModelOwnerId } from '@zhin.js/plugin-runtime';
 import { ConsoleConfigurationStore } from '../plugin-runtime/console/configuration.js';
 
 export function requireConfigFile(root: string): string {

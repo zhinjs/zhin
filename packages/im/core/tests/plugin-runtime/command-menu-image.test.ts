@@ -6,9 +6,8 @@ import {
 import type { ConversationRef } from '@zhin.js/im-contract';
 import { getLogger } from '@zhin.js/logger';
 import { jsx } from '@zhin.js/jsx';
-import { projectOutboundPayload } from '../../src/plugin-runtime/im/outbound-projection.js';
-import { commandMenuReply } from '../../src/plugin-runtime/im/command-menu-navigation.js';
-import { commandMenuPresentationToken, type CommandMenuPresenter } from '../../src/plugin-runtime/im/command-menu-presentation.js';
+import { projectOutboundPayload } from '../../src/plugin-runtime/im/outbound-renderer.js';
+import { commandMenuReply, commandMenuPresentationToken, type CommandMenuPresenter } from '../../src/plugin-runtime/im/command-feedback.js';
 
 function fixture(renderer?: HtmlRendererHost, html: 'image' | 'text' = 'image', media = ['base64']) {
   const root = rootPluginId();

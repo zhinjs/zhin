@@ -5,7 +5,7 @@ import {
   GroupRuleEnforcer,
   GROUP_RULE_KICK_TOOL_NAME,
   type GroupRuleViolation,
-} from '../../../../src/plugin-runtime/agent/turn/group-rule-enforcer.js';
+} from '@zhin.js/agent/runtime';
 
 const scene = { platform: 'icqq', sceneId: 'group:123' };
 const remindThenMute: GroupRuleSpecInput = {

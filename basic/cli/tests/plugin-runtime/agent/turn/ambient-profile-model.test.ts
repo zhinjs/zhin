@@ -1,4 +1,4 @@
-import { LlmEngagementJudge } from '../../../../src/plugin-runtime/agent/turn/ambient-engagement.js';
+import { LlmEngagementJudge } from '@zhin.js/agent/runtime';
 import { createInvocationCompletion, invocationModel } from '../../../../../../packages/im/agent/src/model-runtime/completion.js';
 import { codexProvider } from '../../../../../../packages/im/ai/src/providers/subscriptions.js';
 import { openAiProvider } from '../../../../../../packages/im/ai/src/providers/api-key.js';

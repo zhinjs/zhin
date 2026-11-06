@@ -5,7 +5,7 @@ import { Adapter, AdapterIndex, adapterFeatureId, createEndpointSpecification, d
 import { ImRuntime, ingressRouteToken } from '@zhin.js/core/runtime';
 import { SnapshotStore, createCapabilitySlot, createSnapshotView, rootPluginId, type SnapshotState } from '@zhin.js/plugin-runtime';
 import type { TurnRequest } from '@zhin.js/agent';
-import { AgentTurnIngressRoute } from '../../../../src/plugin-runtime/agent/turn/ingress-route.js';
+import { AgentTurnIngressRoute } from '@zhin.js/agent/runtime';
 
 class LocalEndpoint implements EndpointContract {
   readonly [endpointSpec] = createEndpointSpecification(this, {

@@ -10,7 +10,7 @@ import {
   type TurnAccessContext,
   type TurnMergedSender,
 } from '../../turn/index.js';
-import type { routeSpecialistAgent } from './trigger.js';
+import type { routeSpecialistAgent } from './unified-mailbox-spine.js';
 
 /** Semantic selection only fills the gap left by explicit and platform routing. */
 export async function selectDecisionAgentRoute(input: Readonly<{

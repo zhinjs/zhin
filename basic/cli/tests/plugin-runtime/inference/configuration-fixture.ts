@@ -6,8 +6,8 @@ import { aiProviderDefinitionsToken, type ProviderGraph } from '@zhin.js/ai/prov
 import { AIService } from '@zhin.js/agent';
 import { createConfigDocument, RootRuntime } from '@zhin.js/runtime';
 import { openAiProvider } from '../../../../../packages/im/ai/src/providers/api-key.js';
-import { createDatabaseHost } from '../../../src/plugin-runtime/database-host-installer.js';
-import { HostInference } from '../../../src/plugin-runtime/inference/host.js';
+import { createDatabaseHost } from '@zhin.js/core/runtime';
+import { HostInference } from '@zhin.js/agent/runtime';
 import { ConsoleConfigurationStore } from '../../../src/plugin-runtime/console/configuration.js';
 
 /** Local composition of the real file authority and the independent inference repository. */

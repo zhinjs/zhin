@@ -5,9 +5,7 @@ import commandFeature, { CommandIndex, commandFeatureId, defineCommand } from '@
 import { definePlugin, projectLocaleToken, rootPluginId, userLocalePreferencesToken,
   type DatabaseHost, type RuntimeSnapshot, type UserLocalePreferences } from '@zhin.js/plugin-runtime';
 import { RootRuntime, type ModuleRuntime } from '@zhin.js/runtime';
-import { messageLocale } from '../../../../packages/im/core/src/plugin-runtime/im/locale.js';
-import { createDatabaseHost, installDatabaseHost } from '../../src/plugin-runtime/database-host-installer.js';
-import { installLocaleHost } from '../../src/plugin-runtime/locale-host-installer.js';
+import { createDatabaseHost, installDatabaseHost, installLocaleHost, messageLocale } from '@zhin.js/core/runtime';
 import { sqliteAvailable } from './sqlite-availability.js';
 
 const endpoint = { adapter: 'test', id: 'root/test\0zhin.adapter\0one' };
