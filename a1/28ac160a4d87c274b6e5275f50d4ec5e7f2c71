@@ -1,0 +1,54 @@
+basic/cli/src/commands/new-plugin-manifest.ts
+  h_6f5e45c41d0910 157-159,171,175,183-184,188-193,217
+basic/cli/src/commands/new.ts
+  h_6f5e45c41d0910 535-536,543-545,592
+basic/cli/tests/new-integration.test.ts
+  h_6f5e45c41d0910 97,129-130,181,188-190,199,206
+basic/cli/tests/new-plugin-manifest.test.ts
+  h_6f5e45c41d0910 186-193,205-212,217-221,228,233
+examples/full-bot/README.md
+  h_6f5e45c41d0910 51
+examples/full-bot/pages/index/index.ts
+  h_6f5e45c41d0910 1-216
+examples/full-bot/plugin.ts
+  h_6f5e45c41d0910 1-99,106-108
+examples/full-bot/tests/full-bot-l4-contract.test.ts
+  h_6f5e45c41d0910 54,62-110
+examples/full-bot/tsconfig.client.json
+  h_6f5e45c41d0910 11
+examples/minimal-bot/README.md
+  h_6f5e45c41d0910 43,45
+examples/minimal-bot/commands/card/index.ts
+  h_6f5e45c41d0910 13
+examples/minimal-bot/commands/hello/index.ts
+  h_6f5e45c41d0910 8
+examples/minimal-bot/tests/stable-path.test.ts
+  h_6f5e45c41d0910 41,147,153
+examples/single-file-bot/README.md
+  h_6f5e45c41d0910 7,14-22,47
+examples/single-file-bot/bot.ts
+  h_6f5e45c41d0910 3,8-18
+examples/single-file-bot/package.json
+  h_6f5e45c41d0910 10-11
+examples/single-file-bot/tests/single-file-bot.test.ts
+  h_6f5e45c41d0910 1-106
+examples/single-file-bot/zhin.config.yml
+  h_6f5e45c41d0910 5-9
+packages/toolkit/create-zhin/src/workspace.ts
+  h_6f5e45c41d0910 442,452-453,455
+packages/toolkit/create-zhin/tests/workspace.test.ts
+  h_6f5e45c41d0910 9-16,179-182,185,190-194,339-357,364-414
+packages/toolkit/scaffold-wizard/src/message-templates.ts
+  h_6f5e45c41d0910 43-50,56-57
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a128ac160a4d87c274b6e5275f50d4ec5e7f2c71",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
