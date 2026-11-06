@@ -3,9 +3,13 @@ import { createSubscriptionTargetMigration, subscriptionMigrationScope } from '.
 import { projectLocaleToken, resolveLocale } from 'zhin.js/i18n';
 import {
   definePlugin,
+  definePluginCapabilityGraph,
   logger,
   databaseHostToken,
   outboundHostToken,
+  pluginConsoleRpcToken,
+  pluginDataMigrationProviderToken,
+  pluginTaskProviderToken,
   scheduleHostToken,
 } from 'zhin.js';
 import { createAdministratorRssState } from './src/storage.js';
@@ -54,6 +58,21 @@ export default definePlugin<RssConfig>({
   metadata: {
     displayName: 'RSS',
   },
+  capabilityGraph: definePluginCapabilityGraph({
+    provides: [
+      rssRuntimeStore,
+      pluginConsoleRpcToken,
+      pluginDataMigrationProviderToken,
+      pluginTaskProviderToken,
+    ],
+    injects: [databaseHostToken, outboundHostToken, scheduleHostToken, projectLocaleToken],
+    features: {
+      commands: ['rss-add', 'rss-check', 'rss-list', 'rss-preview', 'rss-remove'],
+      skills: ['rss'],
+      tools: ['rss_list_subscriptions', 'rss_preview_feed'],
+      pages: ['index'],
+    },
+  }),
   setup(context) {
     const config = resolveRssConfig(context.config.get());
     const database = context.resources.has(databaseHostToken) ? context.resources.use(databaseHostToken) : undefined;

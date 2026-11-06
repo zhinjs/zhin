@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AiControlPlane, AiSessionEvents, DecisionEventLog, type SessionEventTimer, type SessionProfileStore } from '@zhin.js/agent';
-import { SessionEventDispatcher } from '../../../../src/plugin-runtime/agent/turn/session-event-dispatch.js';
+import { SessionEventDispatcher } from '@zhin.js/agent/runtime';
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;

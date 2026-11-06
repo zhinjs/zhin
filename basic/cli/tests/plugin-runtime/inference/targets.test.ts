@@ -4,10 +4,10 @@ import { join } from 'node:path';
 import { adapterFeatureId } from '@zhin.js/adapter';
 import { CONVERSATION_EVENT_MODEL } from '@zhin.js/im-contract';
 import { encodeTaskTarget, rootPluginId, SnapshotStore, type SnapshotState } from '@zhin.js/plugin-runtime';
-import { createDatabaseHost } from '../../../src/plugin-runtime/database-host-installer.js';
-import { migrateConversationColumns } from '../../../src/plugin-runtime/conversation-migration.js';
+import { createDatabaseHost } from '@zhin.js/core/runtime';
+import { migrateConversationColumns } from '@zhin.js/core/runtime';
 import type { StructuredDatabase } from '@zhin.js/database';
-import { createInferenceTargetsReader } from '../../../src/plugin-runtime/inference/targets.js';
+import { createInferenceTargetsReader } from '@zhin.js/agent/runtime';
 
 function snapshot(canonicalId = 'canonical\0stable-account'): SnapshotState {
   // Only the new Index's public metadata port is supplied. Live endpoints and platform methods do not exist here.

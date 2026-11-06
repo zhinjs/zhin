@@ -9,14 +9,14 @@ import { pathToFileURL } from 'node:url';
 import { builtinAiProviders } from '@zhin.js/ai/providers';
 import { SnapshotStore, rootPluginId } from '@zhin.js/plugin-runtime';
 import { aiProviderDefinitionsToken } from '@zhin.js/ai/provider';
-import { createDatabaseHost } from '../../src/plugin-runtime/database-host-installer.ts';
+import { createDatabaseHost } from '@zhin.js/core/runtime';
 import { createUserMessage } from '../../../../packages/im/ai/src/llm/types/agent-message.ts';
 import { classifyProviderError } from '../../../../packages/im/ai/src/llm/provider-resilience.ts';
 
 const { HostInference } = await import(
   process.argv[2]
     ? pathToFileURL(process.argv[2]).href
-    : '../../src/plugin-runtime/inference/host.ts'
+    : '@zhin.js/agent/runtime'
 );
 assert.equal(typeof globalThis.gc, 'function');
 const rootDirectory = await mkdtemp(

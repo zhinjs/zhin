@@ -1,4 +1,4 @@
-import { credentialMaterialFingerprint } from '../../../src/plugin-runtime/inference/credentials.js';
+import { credentialMaterialFingerprint } from '@zhin.js/agent/runtime';
 import { setupInferenceManagement } from './fixtures.js';
 
 it.each([

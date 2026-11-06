@@ -2,7 +2,7 @@
 import type { AiAnnouncements, AnnouncementRecord, AnnouncementStatus, AnnouncementTransition } from '@zhin.js/agent';
 import { PluginConsoleRpcError, type PluginConsoleRpcInput, type PluginConsoleRpcJson, type PluginConsoleRpcMethod, type PluginConsoleRpcStatus } from '@zhin.js/plugin-runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
-import type { AnnouncementDispatcher, AnnouncementDispatchResult } from '../agent/turn/announcement-dispatch.js';
+import type { AnnouncementDispatcher, AnnouncementDispatchResult } from '@zhin.js/agent/runtime';
 import { OPS_APPROVE_PERMISSION } from './tool-approvals.js';
 
 /**

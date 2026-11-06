@@ -1,6 +1,5 @@
 import { defaultCommandPrefixResolver } from '../../src/plugin-runtime/im/message-dispatcher.js';
-import { commandFeedbackToken, type CommandFeedbackRenderer } from '../../src/plugin-runtime/im/command-feedback.js';
-import { commandMenuPresentationToken, type CommandMenuPresenter } from '../../src/plugin-runtime/im/command-menu-presentation.js';
+import { commandFeedbackToken, commandMenuPresentationToken, type CommandFeedbackRenderer, type CommandMenuPresenter } from '../../src/plugin-runtime/im/command-feedback.js';
 import { composeSideEventName, sideEventConversation } from '../../src/side-event/base.js';
 import { describe, expect, it, vi } from 'vitest';
 import { getLogger } from '@zhin.js/logger';
@@ -66,7 +65,7 @@ import {
 } from '@zhin.js/handler';
 import { EndpointDeliveryError, MemoryConversationEventStore, type ConversationRef, type EndpointSendResult } from '@zhin.js/im-contract';
 import type { ConversationAddress } from '../../src/plugin-runtime/im/contracts.js';
-import type { IngressRoute } from '../../src/plugin-runtime/im/ingress-route.js';
+import type { IngressRoute } from '../../src/plugin-runtime/im/inbound-spine.js';
 import type { RoomInboundRouteInput, RoomRouteDecision } from '../../src/plugin-runtime/im/inbound-origin.js';
 import {
   ImRuntime,
@@ -83,7 +82,7 @@ import {
 import { Fragment, Html, jsx } from '../../src/jsx.js';
 import { OutboundRenderer } from '../../src/plugin-runtime/im/outbound-renderer.js';
 import { InboundDeduper } from '../../src/plugin-runtime/im/inbound-dedup.js';
-import { createOutboundHost } from '../../../../../basic/cli/src/plugin-runtime/outbound-host-installer.js';
+import { createOutboundHost } from '../../src/plugin-runtime/im/host/outbound-host-installer.js';
 
 class TestClient {
   constructor(readonly transmit: (request: EndpointSendRequest) => EndpointSendResult | Promise<EndpointSendResult>) {}

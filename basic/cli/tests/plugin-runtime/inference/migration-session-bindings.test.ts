@@ -20,15 +20,15 @@ import {
   createProfileReference,
   resolveProviderProfile,
 } from "@zhin.js/ai/provider";
-import { openHeadlessInferenceHost } from "../../../src/plugin-runtime/inference/headless-host.js";
-import { InferenceSessionRepository } from "../../../src/plugin-runtime/inference/session-state.js";
+import { openHeadlessInferenceHost } from "@zhin.js/agent/runtime";
+import { InferenceSessionRepository } from "@zhin.js/agent/runtime";
 import {
   previewSessionBindings,
   applySessionBindings,
   readSessionBindingsPreview,
 } from "../../../src/plugin-runtime/inference/migration-session-bindings.js";
-import * as journals from "../../../src/plugin-runtime/inference/migration-session-journal.js";
-import { hostModelOwnerId } from "../../../src/plugin-runtime/inference/host-identity.js";
+import * as journals from "@zhin.js/agent/runtime";
+import { hostModelOwnerId } from "@zhin.js/plugin-runtime";
 
 async function fixture() {
   const root = await realpath(
@@ -746,7 +746,7 @@ it.each(['valid', 'wrong-incarnation'] as const)('checks deferred targets at app
     if (target === 'wrong-incarnation') mapping.sessions[f.identity.key].selection.profile = { ...mapping.sessions[f.identity.key].selection.profile, accountIncarnation: 'wrong' };
     const preview = await previewSessionBindings({ root: f.root, mapping, stateSnapshot: snapshot });
     expect(preview.targetValidation).toBe('deferred-until-apply');
-    const headless = await import('../../../src/plugin-runtime/inference/headless-host.js'), original = headless.openHeadlessInferenceHost;
+    const headless = await import('@zhin.js/agent/runtime'), original = headless.openHeadlessInferenceHost;
     // This is a database-port contract backed by real SQLite, not a live MySQL test.
     const connect = vi.spyOn(headless, 'openHeadlessInferenceHost').mockImplementation(input => {
       expect(input.officialDrivers).toBe(false); expect(input.database.dialect).toBe('mysql');

@@ -16,8 +16,8 @@ import {
   insertInboxRow,
 } from '@zhin.js/plugin-runtime';
 import type { StructuredDatabase } from '@zhin.js/database';
-import { migrateConversationColumns, migrateInboxColumns } from '../../src/plugin-runtime/conversation-migration.js';
-import { createDatabaseHost } from '../../src/plugin-runtime/database-host-installer.js';
+import { migrateConversationColumns, migrateInboxColumns } from '@zhin.js/core/runtime';
+import { createDatabaseHost } from '@zhin.js/core/runtime';
 
 const live = process.env.ZHIN_TEST_EXTERNAL_DATABASES === '1';
 

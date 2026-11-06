@@ -40,6 +40,7 @@ const expectedSurface = new Map([
     'PluginConfigSchema', 'PluginConfigUpdateDeclaration', 'DeliveryTarget', 'createDeliveryTarget', 'JsonValue', 'JsonSerializable',
     'StateScope', 'StateRecord', 'StateWriteOptions', 'PersistentStatePort', 'PluginStateStore',
     'definePluginStore', 'PluginStore', 'PluginStoreOptions', 'PluginStoreCarrier', 'ResourceReaderCarrier', 'SetupResourceCarrier',
+    'definePluginCapabilityGraph', 'PluginCapabilityGraphDeclaration',
     'PluginSetupCapabilities', 'PluginSetupResult',
     'PluginTaskProvider', 'pluginTaskProviderToken', 'PluginVerificationHost', 'pluginVerificationToken',
     'OutboundCaptureInput', 'CapturedOutboundOperation',
@@ -132,7 +133,7 @@ const expectedMembers = new Map([
     'mentioned', 'message', 'metadata', 'origin', 'replyTo', 'segments', 'sender',
     'locale', 'formatCommand', 'commandPrefix', 'commandMenu',
   ]],
-  ['zhin.js.PluginDefinition', ['config', 'configUpdate', 'metadata', 'name', 'requires', 'setup']],
+  ['zhin.js.PluginDefinition', ['capabilityGraph', 'config', 'configUpdate', 'metadata', 'name', 'requires', 'setup']],
   ['zhin.js.PluginConfigSchema', ['output', 'toJsonSchema']],
   ['zhin.js.PluginConfigUpdateDeclaration', ['featurePaths']],
   ['zhin.js.PluginDatabaseHost', [

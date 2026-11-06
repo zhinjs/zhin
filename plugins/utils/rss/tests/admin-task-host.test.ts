@@ -8,7 +8,7 @@ import { createHttpHost } from '../../../../packages/host/http/src/index.js';
 import { childPluginId, createCapabilitySlot, createSnapshotView, PluginStateStore, pluginTaskProviderToken, rootPluginId,
   SnapshotStore, type SnapshotState } from '../../../../packages/im/plugin-runtime/src/index.js';
 import { registerPluginTaskRoutes } from '../../../../basic/cli/src/plugin-runtime/console/plugin-task-routes.js';
-import { createDatabaseHost } from '../../../../basic/cli/src/plugin-runtime/database-host-installer.js';
+import { createDatabaseHost } from '../../../../packages/im/core/src/plugin-runtime/im/index.js';
 import { sqliteAvailable } from '../../../../basic/cli/tests/plugin-runtime/sqlite-availability.js';
 import { AdministratorRssTasks, ADMIN_RSS_STATE_KEY, type AdministratorRssBook } from '../src/admin-tasks.js';
 import { resolveRssConfig } from '../src/feed.js';

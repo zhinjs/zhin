@@ -1,4 +1,4 @@
-import type { DeclaredPluginReference } from '../plugin-lifecycle-store.js';
+import type { DeclaredPluginReference } from '@zhin.js/runtime';
 
 /** An instance key wins over a package alias; package aliases must be unique. */
 export function resolveDiagnosticPlugin(

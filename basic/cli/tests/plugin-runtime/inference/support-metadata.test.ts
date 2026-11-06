@@ -1,4 +1,4 @@
-import { InferenceManagementService } from '../../../src/plugin-runtime/inference/management.js';
+import { InferenceManagementService } from '@zhin.js/agent/runtime';
 import { supportFixture } from './support-fixture.js';
 
 it('projects exact held declarations without exposing extra support fields or invoking execution resolvers', async () => {

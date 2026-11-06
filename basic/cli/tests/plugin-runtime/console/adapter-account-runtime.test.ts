@@ -12,7 +12,7 @@ import { CommandIndex, commandFeatureId, defineCommand } from '@zhin.js/command'
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { createDatabaseHost } from '../../../src/plugin-runtime/database-host-installer.js';
+import { createDatabaseHost } from '@zhin.js/core/runtime';
 import { PersistentEndpointRepository } from '../../../src/plugin-runtime/runtime-endpoints/state.js';
 
 const root = rootPluginId(), owner = childPluginId(root, 'first'), other = childPluginId(root, 'second');

@@ -4,8 +4,8 @@ import type { StructuredDatabase } from '@zhin.js/database';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createDatabaseHost } from '../../../src/plugin-runtime/database-host-installer.js';
-import { migrateConversationColumns } from '../../../src/plugin-runtime/conversation-migration.js';
+import { createDatabaseHost } from '@zhin.js/core/runtime';
+import { migrateConversationColumns } from '@zhin.js/core/runtime';
 import { registerConversationHistoryRoutes } from '../../../src/plugin-runtime/console/conversation-history-routes.js';
 
 type HistoryIm = NonNullable<Parameters<typeof registerConversationHistoryRoutes>[0]['im']>;

@@ -18,7 +18,7 @@ import { explainConfigFields } from './config-explanation.js';
 import type { ConsoleConfigExplanation } from '@zhin.js/console-protocol';
 import { adapterFeatureId, isAdapterIndex } from '@zhin.js/adapter';
 import type { PluginManagementActivity } from './activity.js';
-import { readPluginLifecycleState, resolvePluginLifecycleFile } from '../plugin-runtime/plugin-lifecycle-store.js';
+import { readPluginLifecycleState, resolvePluginLifecycleFile } from '@zhin.js/runtime';
 
 const execute = promisify(execFile);
 type Project = { dependencies?: Record<string, string>; optionalDependencies?: Record<string, string>; devDependencies?: Record<string, string>; zhin?: { plugins?: { package: string; instanceKey: string }[] } };

@@ -7,7 +7,7 @@ import { Adapter, AdapterIndex, adapterFeatureId, createEndpointSpecification, d
 import { DataMigrationError, GenerationAdmissionGate, SnapshotStore, childPluginId, createCapabilitySlot, createSnapshotView, generationAdmissionSource,
   pluginDataMigrationProviderToken, rootPluginId, type DataMigrationPlan, type DataMigrationReceipt,
   type PluginDataMigrationProvider, type SnapshotState, type TokenId } from '@zhin.js/plugin-runtime';
-import { DataMigrationController, DataMigrationPlanStore, type StoredDataMigrationPlan } from '../../../src/plugin-runtime/data-migration/index.js';
+import { DataMigrationController, DataMigrationPlanStore, type StoredDataMigrationPlan } from '@zhin.js/runtime';
 
 class TestEndpoint implements Endpoint {
   readonly [endpointSpec] = createEndpointSpecification(this, { start() {}, open() {}, close() {}, stop() {}, send: () => 'sent' });

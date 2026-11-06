@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createPersonalModelFetch, type PersonalModelTransport } from '../../../src/plugin-runtime/inference/personal-network.js';
+import { createPersonalModelFetch, type PersonalModelTransport } from '@zhin.js/agent/runtime';
 
 // Exercise the actual shared URL/IP rules without loading the unrelated unbuilt Agent barrel.
 vi.mock('@zhin.js/agent/security', async () => import('../../../../../packages/im/agent/src/security/network-policy.js'));

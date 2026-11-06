@@ -4,7 +4,7 @@ import { Adapter, AdapterIndex, adapterFeatureId, createEndpointSpecification, d
 import { ImRuntime, ingressRouteToken } from '@zhin.js/core/runtime';
 import { MemoryConversationEventStore } from '@zhin.js/im-contract';
 import { SnapshotStore, createCapabilitySlot, createSnapshotView, rootPluginId, type SnapshotState } from '@zhin.js/plugin-runtime';
-import { AgentTurnIngressRoute } from '../../../../src/plugin-runtime/agent/turn/ingress-route.js';
+import { AgentTurnIngressRoute } from '@zhin.js/agent/runtime';
 
 it('identifies an unaddressed group participant from the original native account without a profile network read', async () => {
   const read = vi.fn(async () => ({ nickname: 'Native account name' }));

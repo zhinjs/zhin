@@ -6,7 +6,7 @@ import {
   createDatabaseHost,
   installDatabaseHost,
   resolveDatabaseConfig,
-} from '../../src/plugin-runtime/database-host-installer.js';
+} from '@zhin.js/core/runtime';
 import { dispatchRuntimeConsoleRpc, pickRpcReply } from '@zhin.js/host-http';
 import { GenerationHandoffStack, Scope, rootPluginId } from '@zhin.js/plugin-runtime';
 import { Registry } from '@zhin.js/database';

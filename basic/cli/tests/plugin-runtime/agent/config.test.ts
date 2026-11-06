@@ -8,7 +8,7 @@ import {
   resolveAgentHostMcpServers,
   resolveAgentHostVenues,
   resolveAiConfig,
-} from '../../../src/plugin-runtime/agent/config.js';
+} from '@zhin.js/agent/runtime';
 
 describe('Agent Host configuration', () => {
   it('resolves only explicitly configured project-local knowledge directories', () => {

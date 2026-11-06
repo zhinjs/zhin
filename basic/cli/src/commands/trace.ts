@@ -146,7 +146,7 @@ async function openProjectEngagementJournal(root: string): Promise<{
       import('@zhin.js/runtime'),
       import('@zhin.js/plugin-runtime'),
       import('../utils/config-file.js'),
-      import('../plugin-runtime/database-host-installer.js'),
+      import('@zhin.js/core/runtime'),
     ]);
     const selected = findConfigFile(root);
     const file = selected ? `${root}/${selected}` : `${root}/${DEFAULT_ROOT_CONFIG_FILE_NAME}`;

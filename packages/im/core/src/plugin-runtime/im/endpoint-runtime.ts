@@ -1,9 +1,15 @@
-import { operationEndpoint } from './operation-endpoint.js';
 import { createCoreReplyStream } from './progressive-reply.js';
-import { supportsIncrementalOutbound } from './runtime-middleware.js';
+import { supportsIncrementalOutbound } from './inbound-spine.js';
 import type { OutboundDeliveryExecution } from './outbound-delivery-runtime.js';
-import type { CaptureEndpointOperationInput, CapturedEndpointOperation } from './captured-endpoint-operation.js';
-export type { CaptureEndpointOperationInput, CapturedEndpointOperation } from './captured-endpoint-operation.js';
+import {
+  operationEndpoint,
+  type CaptureEndpointOperationInput,
+  type CapturedEndpointOperation,
+  type ConversationAddress,
+  type SendContent,
+  type SendRequest,
+} from './contracts.js';
+export type { CaptureEndpointOperationInput, CapturedEndpointOperation } from './contracts.js';
 import {
   AdapterIndex,
   adapterFeatureId,
@@ -24,11 +30,6 @@ import {
   type EndpointCapabilities,
   type MessageRef,
 } from '@zhin.js/im-contract';
-import type {
-  ConversationAddress,
-  SendContent,
-  SendRequest,
-} from './contracts.js';
 
 export interface EndpointRuntimeSummary {
   readonly id: string;

@@ -2,7 +2,7 @@ import {mkdtemp, writeFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {buildManagedPluginList} from '../../../src/plugin-runtime/console/plugin-projection.js';
-import {createPluginLifecycleStore} from '../../../src/plugin-runtime/plugin-lifecycle-store.js';
+import {createPluginLifecycleStore} from '@zhin.js/runtime';
 
 describe('Console managed plugin list', () => {
   it('keeps a declared disabled plugin visible and manageable while absent from the snapshot', async () => {

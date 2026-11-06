@@ -1,5 +1,19 @@
+import type { PeerRegistry } from '@zhin.js/adapter';
 import type { ConversationRef } from '@zhin.js/im-contract';
-import { ledgerScopeOf } from './outbound-ledger.js';
+import { formatCompact, getLogger } from '@zhin.js/logger';
+import type { CapabilityId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { readMentionSegmentTarget } from '../../built/segment-contract/mention.js';
+import type { IncomingMessage, MessageSenderRef } from './contracts.js';
+import { requireAdapters } from './endpoint-runtime.js';
+import {
+  ledgerScopeOf,
+  roomMembershipToken,
+  type RoomInboundRouteInput,
+  type RoomMembershipPort,
+} from './inbound-origin.js';
+import type { InboundInteractionPort } from './inbound-spine.js';
+import { actionPayloadFromSegments } from './interactive-router.js';
+import { formatConversationLog } from './message-events.js';
 export {
   roomMembershipToken,
   type ResolvedRoomInfo,
@@ -10,6 +24,8 @@ export {
   type RoomReadinessResult,
   type RoomRouteDecision,
 } from './inbound-origin.js';
+
+const logger = getLogger('im.inbound');
 
 /**
  * @internal 入站去重：同一条人类群消息会到达 N 个成员 Endpoint，
@@ -233,5 +249,171 @@ export class InboundDeduper {
       if (at - entry.at <= TTL_MS) break;
       this.#entries.delete(key);
     }
+  }
+}
+
+/** Facts required to route this message within its captured account directory. */
+export interface InboundRoomRouteRequest {
+  readonly conversation: IncomingMessage['conversation'];
+  readonly senderId: string;
+  readonly input: IncomingMessage;
+  readonly adapters: ReturnType<typeof requireAdapters>;
+  readonly generation: number;
+  readonly interactions: InboundInteractionPort;
+  readonly registry?: Pick<PeerRegistry, 'isReady' | 'selfOf'>;
+  readonly inboundClaimPending?: (conversation: IncomingMessage['conversation'], senderId: string) => boolean;
+  readonly resolveReplyTarget?: (conversation: IncomingMessage['conversation'], messageId: string) => string | undefined;
+}
+
+export function buildRoomInboundRouteInput({
+  conversation,
+  senderId,
+  input,
+  adapters,
+  generation,
+  interactions,
+  registry,
+  inboundClaimPending,
+  resolveReplyTarget,
+}: InboundRoomRouteRequest): RoomInboundRouteInput {
+  const mentionTargets = (input.segments ?? [])
+    .map((segment) => readMentionSegmentTarget(segment as { type: unknown; data?: unknown }))
+    .filter((target) => target !== '' && target !== 'all');
+  const replyToId = input.replyTo?.id;
+  const replyToEndpointId = replyToId !== undefined && resolveReplyTarget
+    ? resolveReplyTarget(conversation, replyToId)
+    : undefined;
+  return {
+    conversation,
+    senderId,
+    content: input.content,
+    mentionTargets,
+    ...(replyToEndpointId !== undefined ? { replyToEndpointId } : {}),
+    pending: (endpointId) => {
+      try {
+        const adapter = adapters.clientAdapter(endpointId as CapabilityId);
+        const probe = Object.freeze({ ...conversation, endpoint: Object.freeze({ id: endpointId, adapter }) });
+        return interactions.hasPendingAnswer?.(
+          probe, senderId, generation, { content: input.content, segments: input.segments },
+        ) === true || inboundClaimPending?.(probe, senderId) === true;
+      } catch {
+        return false;
+      }
+    },
+    accountOf: (endpointId) => registry?.selfOf(endpointId),
+    isAvailable: (endpointId) => registry?.isReady(endpointId) === true,
+  };
+}
+
+export async function arbitrateRoomInboundDeduplication(input: {
+  readonly origin: string | undefined;
+  readonly deduper?: Pick<InboundDeduper, 'claim'> & Partial<Pick<InboundDeduper, 'arbitrate'>>;
+  readonly roomMembership: RoomMembershipPort | undefined;
+  readonly conversation: IncomingMessage['conversation'];
+  readonly enrichedSender: MessageSenderRef | undefined;
+  readonly incoming: IncomingMessage;
+  readonly routeRequest: InboundRoomRouteRequest;
+}): Promise<{
+  readonly recordOnly?: 'duplicate' | 'dedup_error';
+  readonly routedTarget: boolean;
+}> {
+  const { origin, deduper, roomMembership, conversation, enrichedSender, incoming, routeRequest } = input;
+  let recordOnly: 'duplicate' | 'dedup_error' | undefined;
+  let routedTarget = false;
+  let pendingSettle: { readonly target: string; readonly listed: boolean; readonly settle: () => Promise<'handle' | 'duplicate'> } | undefined;
+  const platformCallback = actionPayloadFromSegments(incoming.segments) !== undefined;
+  if ((origin === 'human' || origin === undefined) && deduper && !platformCallback
+    && (conversation.kind === 'group' || conversation.kind === 'channel')) {
+    try {
+      if (roomMembership?.hasRoom?.(conversation) === true) {
+        const senderId = String(enrichedSender?.id ?? '');
+        if (typeof roomMembership.route === 'function' && typeof deduper.arbitrate === 'function') {
+          const route = roomMembership.route.bind(roomMembership);
+          const routeInput = buildRoomInboundRouteInput(routeRequest);
+          const verdict = deduper.arbitrate(conversation, senderId, incoming.message?.id, () => {
+            try {
+              const decision = route(routeInput);
+              return decision
+                ? { target: decision.endpointId, fallbacks: decision.fallbackEndpointIds ?? [] }
+                : undefined;
+            } catch (error) {
+              logger.warn(formatCompact({
+                op: 'room_route_error',
+                conv: formatConversationLog(conversation),
+                error: error instanceof Error ? error.message : String(error),
+              }));
+              return undefined;
+            }
+          });
+          switch (verdict.kind) {
+            case 'handle':
+              routedTarget = verdict.routed;
+              break;
+            case 'duplicate':
+              recordOnly = 'duplicate';
+              logger.debug(formatCompact({
+                op: 'room_non_target_copy',
+                conv: formatConversationLog(conversation),
+              }));
+              break;
+            case 'wait':
+              pendingSettle = verdict;
+              break;
+            case 'unkeyed':
+              break;
+          }
+        } else {
+          const claim = deduper.claim(conversation, senderId, incoming.message?.id);
+          if (claim === 'duplicate') recordOnly = 'duplicate';
+        }
+      }
+    } catch (error) {
+      logger.warn(formatCompact({
+        op: 'inbound_dedup_error',
+        conv: formatConversationLog(conversation),
+        error: error instanceof Error ? error.message : String(error),
+      }));
+      recordOnly = 'dedup_error';
+    }
+  }
+  if (pendingSettle) {
+    const outcome = await pendingSettle.settle();
+    if (outcome === 'handle') {
+      routedTarget = true;
+      if (!pendingSettle.listed) {
+        logger.warn(formatCompact({
+          op: 'room_unlisted_member_takeover',
+          conv: formatConversationLog(conversation),
+          target: pendingSettle.target,
+          takeover: conversation.endpoint.id,
+        }));
+      }
+      logger.debug(formatCompact({
+        op: 'room_target_missing_takeover',
+        conv: formatConversationLog(conversation),
+        target: pendingSettle.target,
+        takeover: conversation.endpoint.id,
+      }));
+    } else {
+      recordOnly = 'duplicate';
+    }
+  }
+  return { recordOnly, routedTarget };
+}
+
+export function resolveRoomMembership(snapshot: RuntimeSnapshot): RoomMembershipPort | undefined {
+  try {
+    const candidate = snapshot.resources.get(snapshot.root)?.get(roomMembershipToken.id);
+    return candidate
+      && typeof candidate === 'object'
+      && (
+        typeof (candidate as RoomMembershipPort).isMember === 'function'
+        || typeof (candidate as RoomMembershipPort).resolveRoom === 'function'
+        || typeof (candidate as RoomMembershipPort).isRoomReady === 'function'
+      )
+      ? candidate as RoomMembershipPort
+      : undefined;
+  } catch {
+    return undefined;
   }
 }

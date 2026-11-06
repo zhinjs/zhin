@@ -15,7 +15,7 @@ import {
 import { expandEnvironmentValue, readApplicationPluginDeclaration } from '@zhin.js/runtime';
 import { findConfigFile, readConfig, saveConfig } from './config-file.js';
 import { detectLegacyConfig, formatLegacyConfigHint } from './legacy-config.js';
-import { hostModelOwnerId } from '../plugin-runtime/inference/host-identity.js';
+import { hostModelOwnerId } from '@zhin.js/plugin-runtime';
 import { loadAiConfigUtils, type AiConfigUtils } from './ai-config-loader.js';
 
 export type ConfigIssueSeverity = 'error' | 'warn' | 'info';

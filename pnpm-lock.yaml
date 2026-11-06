@@ -391,9 +391,6 @@ importers:
       '@zhin.js/agent':
         specifier: workspace:*
         version: link:../../packages/im/agent
-      '@zhin.js/client':
-        specifier: workspace:*
-        version: link:../../packages/console/client
       '@zhin.js/components':
         specifier: workspace:*
         version: link:../../packages/toolkit/components

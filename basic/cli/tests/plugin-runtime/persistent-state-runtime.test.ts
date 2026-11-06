@@ -6,7 +6,7 @@ import { createDeliveryTarget, databaseHostToken, databaseRootHostToken, defineP
   type RuntimeSnapshot, type PluginStateStore, type OutboundHost, type DatabaseHost } from '@zhin.js/plugin-runtime';
 import commandFeature, { CommandIndex, commandFeatureId, defineCommand } from '@zhin.js/command';
 import { RootRuntime, type ModuleRuntime } from '@zhin.js/runtime';
-import { createDatabaseHost, installDatabaseHost } from '../../src/plugin-runtime/database-host-installer.js';
+import { createDatabaseHost, installDatabaseHost } from '@zhin.js/core/runtime';
 import { sqliteAvailable } from './sqlite-availability.js';
 
 it('closes captured candidate Host declaration windows when actual Plugin setup fails', async () => {

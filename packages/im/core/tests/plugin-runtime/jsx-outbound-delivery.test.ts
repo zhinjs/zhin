@@ -25,14 +25,12 @@ import { EndpointDeliveryError, type ConversationRef, type EndpointSendResult } 
 import { getLogger } from '@zhin.js/logger';
 import { Fragment, Html, jsx } from '../../src/jsx.js';
 import { segment } from '../../src/utils.js';
-import { operationEndpoint } from '../../src/plugin-runtime/im/operation-endpoint.js';
 import { OutboundDeliveryRuntime } from '../../src/plugin-runtime/im/outbound-delivery-runtime.js';
-import { OutboundRenderer } from '../../src/plugin-runtime/im/outbound-renderer.js';
-import { raw, type OutboundEnvelope, type SendContent } from '../../src/plugin-runtime/im/contracts.js';
-import { outboundPresentationToken, type OutboundPresentation } from '../../src/plugin-runtime/im/outbound-presentation.js';
-import { JsxButtonRegistry } from '../../src/plugin-runtime/im/jsx-button-registry.js';
+import { OutboundRenderer, outboundPresentationToken, type OutboundPresentation } from '../../src/plugin-runtime/im/outbound-renderer.js';
+import { operationEndpoint, raw, type OutboundEnvelope, type SendContent } from '../../src/plugin-runtime/im/contracts.js';
+import { JsxButtonRegistry } from '../../src/plugin-runtime/im/interactive-router.js';
 import { ConversationRuntime } from '../../src/plugin-runtime/im/conversation-runtime.js';
-import { OutboundLedger, ledgerScopeOf } from '../../src/plugin-runtime/im/outbound-ledger.js';
+import { OutboundLedger, ledgerScopeOf } from '../../src/plugin-runtime/im/inbound-origin.js';
 
 const activeAdapters: AdapterIndex[] = [];
 afterEach(async () => {

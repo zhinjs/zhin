@@ -11,11 +11,12 @@
  * 不再额外走旁听判断模型。默认不改好感度。
  */
 import { randomUUID } from 'node:crypto';
-import { sceneEventPriority, type AITriggerConfig } from '@zhin.js/core';
+import { isSceneEvent, sceneEventPriority, summarizeSceneEvent, type AITriggerConfig } from '@zhin.js/core';
 import type { RuntimeSceneEventSignal } from '@zhin.js/core/runtime';
 import type {
   ActorRef,
   ConversationContextBlock,
+  ConversationEvent,
   ConversationEventReader,
   ConversationRef,
 } from '@zhin.js/im-contract';
@@ -32,12 +33,10 @@ import type {
 import { AMBIENT_ENGAGEMENT_METADATA_KEY, SCENE_WAKE_METADATA_KEY } from '../../context/index.js';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { EventMessage } from '@zhin.js/ai';
-import { SceneEventWake, type SceneWakeBatch } from './scene-event-wake.js';
 import type { HostMailbox } from '../../collaboration/host-mailbox.js';
 import { runInMailTurn } from '../../collaboration/mail-turn-context.js';
 import { sceneEventToStateMessage } from './scene-event-state.js';
 import { applySceneEventToFacts } from './scene-fact-events.js';
-import { readSceneEventLines } from './scene-event-lines.js';
 import { observeSceneWakeAndCheckSpeak } from './session-gate.js';
 import {
   auditControlGate,
@@ -58,6 +57,195 @@ import {
 } from './decision-audit.js';
 
 const logger = getLogger('agent');
+
+/** 只看最近这段时间的场景事件（与会话上下文的时间窗一致）。 */
+export const SCENE_EVENT_MAX_AGE_MS = 30 * 60 * 1000;
+/** 每次最多回看的事件条数（含普通消息）。 */
+export const SCENE_EVENT_LOOKBACK = 80;
+/** 注入行数上限。 */
+export const SCENE_EVENT_MAX_LINES = 5;
+
+export interface SceneEventLinesInput {
+  readonly reader: ConversationEventReader | undefined;
+  readonly conversation: ConversationRef;
+  readonly throughSequence: number;
+  /** 已展示到的序号（不含）；之前的不再展示。 */
+  readonly afterSequence?: number;
+  readonly selfIds: readonly string[];
+  /** 关系称呼（`ai_user_relations`），不注分数。 */
+  readonly nicknames?: (actors: readonly ActorRef[]) => Promise<ReadonlyMap<string, string>>;
+  readonly now?: number;
+  /** 进出 / 资料变更已写进会话历史（ADR 0041 §7）时为真：这些事件不再进 [Scene events]。 */
+  readonly omitStateChanges?: boolean;
+}
+
+export async function readSceneEventLines(input: SceneEventLinesInput): Promise<{ lines: string[]; through: number }> {
+  const through = input.throughSequence;
+  if (!input.reader || !Number.isSafeInteger(through) || through <= 0) return { lines: [], through: input.afterSequence ?? 0 };
+  const after = Math.max(input.afterSequence ?? 0, through - SCENE_EVENT_LOOKBACK);
+  if (after >= through) return { lines: [], through };
+  const entries = await input.reader.listBetween(input.conversation, after, through, SCENE_EVENT_LOOKBACK);
+  const notBefore = (input.now ?? Date.now()) - SCENE_EVENT_MAX_AGE_MS;
+  const scene = entries.filter((entry) => isSceneEvent(entry.event) && (!input.omitStateChanges || !sceneEventToStateMessage(entry.event)) && entry.event.timestamp >= notBefore);
+  if (scene.length === 0) return { lines: [], through };
+  const selfIds = new Set(input.selfIds);
+  const actors = new Map<string, ActorRef>();
+  for (const { event } of scene) {
+    for (const actor of [
+      'actor' in event ? event.actor : undefined,
+      'member' in event ? event.member : undefined,
+      'target' in event ? event.target : undefined,
+    ]) {
+      if (actor && !selfIds.has(String(actor.id)) && actors.size < 8) actors.set(String(actor.id), actor);
+    }
+  }
+  let names: ReadonlyMap<string, string> = new Map();
+  if (input.nicknames && actors.size) {
+    try {
+      names = await input.nicknames([...actors.values()]);
+    } catch {
+      names = new Map();
+    }
+  }
+  const counted: { text: string; count: number }[] = [];
+  for (const { event } of [...scene].reverse()) {
+    const text = summarizeSceneEvent(event, { selfIds, nameOf: (actor) => names.get(String(actor.id)) });
+    if (!text) continue;
+    const same = counted.find((item) => item.text === text);
+    if (same) same.count += 1;
+    else counted.push({ text, count: 1 });
+  }
+  const lines = counted.slice(0, SCENE_EVENT_MAX_LINES).map((item) => (item.count > 1 ? `${item.text} ×${item.count}` : item.text));
+  return { lines, through };
+}
+
+export const SCENE_WAKE_DEFAULT_COALESCE_MS = 4_000;
+export const SCENE_WAKE_MIN_COALESCE_MS = 3_000;
+export const SCENE_WAKE_MAX_COALESCE_MS = 5_000;
+export const SCENE_WAKE_DEFAULT_MIN_INTERVAL_MS = 15_000;
+
+export interface SceneWakeItem {
+  readonly sequence: number;
+  readonly event: ConversationEvent;
+  readonly selfIds: readonly string[];
+  readonly endpointId?: string;
+}
+
+export interface SceneWakeBatch {
+  readonly key: string;
+  readonly conversation: ConversationRef;
+  readonly items: readonly SceneWakeItem[];
+  readonly throughSequence: number;
+}
+
+export interface SceneEventWakeOptions {
+  readonly coalesceMs?: number;
+  readonly minIntervalMs?: number;
+  readonly now?: () => number;
+  readonly setTimer?: (run: () => void, ms: number) => unknown;
+  readonly clearTimer?: (handle: unknown) => void;
+  readonly onWake: (batch: SceneWakeBatch) => Promise<void> | void;
+  /** 批次被限频顺延时调用（日志与决策审计）。 */
+  readonly onDeferred?: (key: string, waitMs: number, conversation: ConversationRef) => void;
+  readonly onError?: (key: string, error: unknown, conversation: ConversationRef) => void;
+}
+
+interface PendingScene {
+  conversation: ConversationRef;
+  items: SceneWakeItem[];
+  timer: unknown;
+}
+
+function clampCoalesce(value: number | undefined): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return SCENE_WAKE_DEFAULT_COALESCE_MS;
+  return Math.min(SCENE_WAKE_MAX_COALESCE_MS, Math.max(SCENE_WAKE_MIN_COALESCE_MS, value));
+}
+
+export class SceneEventWake {
+  readonly #coalesceMs: number;
+  readonly #minIntervalMs: number;
+  readonly #now: () => number;
+  readonly #setTimer: (run: () => void, ms: number) => unknown;
+  readonly #clearTimer: (handle: unknown) => void;
+  readonly #pending = new Map<string, PendingScene>();
+  readonly #lastWake = new Map<string, number>();
+  readonly #running = new Set<string>();
+  #disposed = false;
+
+  constructor(private readonly options: SceneEventWakeOptions) {
+    this.#coalesceMs = clampCoalesce(options.coalesceMs);
+    this.#minIntervalMs = typeof options.minIntervalMs === 'number' && options.minIntervalMs >= 0
+      ? options.minIntervalMs
+      : SCENE_WAKE_DEFAULT_MIN_INTERVAL_MS;
+    this.#now = options.now ?? Date.now;
+    this.#setTimer = options.setTimer ?? ((run, ms) => {
+      const handle = setTimeout(run, ms);
+      (handle as { unref?: () => void }).unref?.();
+      return handle;
+    });
+    this.#clearTimer = options.clearTimer ?? ((handle) => clearTimeout(handle as ReturnType<typeof setTimeout>));
+  }
+
+  get coalesceMs(): number { return this.#coalesceMs; }
+  get minIntervalMs(): number { return this.#minIntervalMs; }
+
+  /** 收一条高优先事件；返回 `scheduled`（开了新窗）或 `coalesced`（并入已开的窗）。 */
+  offer(key: string, conversation: ConversationRef, item: SceneWakeItem): 'scheduled' | 'coalesced' | 'disposed' {
+    if (this.#disposed) return 'disposed';
+    const pending = this.#pending.get(key);
+    if (pending) {
+      if (!pending.items.some((existing) => existing.sequence === item.sequence)) pending.items.push(item);
+      return 'coalesced';
+    }
+    const scene: PendingScene = { conversation, items: [item], timer: undefined };
+    this.#pending.set(key, scene);
+    scene.timer = this.#setTimer(() => { void this.#flush(key); }, this.#coalesceMs);
+    return 'scheduled';
+  }
+
+  async #flush(key: string): Promise<void> {
+    const scene = this.#pending.get(key);
+    if (!scene || this.#disposed) return;
+    const now = this.#now();
+    const last = this.#lastWake.get(key);
+    const wait = this.#running.has(key)
+      ? this.#coalesceMs
+      : last === undefined ? 0 : last + this.#minIntervalMs - now;
+    if (wait > 0) {
+      this.options.onDeferred?.(key, wait, scene.conversation);
+      scene.timer = this.#setTimer(() => { void this.#flush(key); }, wait);
+      return;
+    }
+    this.#pending.delete(key);
+    this.#lastWake.set(key, now);
+    this.#running.add(key);
+    const items = [...scene.items].sort((left, right) => left.sequence - right.sequence);
+    try {
+      await this.options.onWake(Object.freeze({
+        key,
+        conversation: scene.conversation,
+        items: Object.freeze(items),
+        throughSequence: items[items.length - 1]!.sequence,
+      }));
+    } catch (error) {
+      this.options.onError?.(key, error, scene.conversation);
+    } finally {
+      this.#running.delete(key);
+    }
+  }
+
+  /** 测试/诊断：当前有待唤醒批次的场景。 */
+  pendingKeys(): string[] {
+    return [...this.#pending.keys()];
+  }
+
+  dispose(): void {
+    this.#disposed = true;
+    for (const scene of this.#pending.values()) this.#clearTimer(scene.timer);
+    this.#pending.clear();
+    this.#lastWake.clear();
+  }
+}
 
 /** 唤醒回合写进会话历史的那一行（真正的事件只在 ephemeral `[Scene events]` 里）。 */
 export const SCENE_WAKE_INPUT_TEXT = '(scene events)';

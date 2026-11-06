@@ -6,7 +6,7 @@ import {
   SESSION_OPS_READ_PERMISSION,
   SESSION_OPS_WRITE_PERMISSION,
 } from '../../../src/plugin-runtime/console/session-ops-rpc.js';
-import { MemberLifecycle } from '../../../src/plugin-runtime/agent/turn/member-lifecycle.js';
+import { MemberLifecycle } from '@zhin.js/agent/runtime';
 
 const signal = new AbortController().signal;
 

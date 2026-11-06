@@ -6,10 +6,10 @@ import {
   finalizeInferenceMigration,
 } from '../../../src/plugin-runtime/inference/migration-apply.js';
 import { previewInferenceMigration } from '../../../src/plugin-runtime/inference/migration-preview.js';
-import { openHeadlessInferenceHost } from '../../../src/plugin-runtime/inference/headless-host.js';
-import { InferenceCredentialStore } from '../../../src/plugin-runtime/inference/credentials.js';
+import { openHeadlessInferenceHost } from '@zhin.js/agent/runtime';
+import { InferenceCredentialStore } from '@zhin.js/agent/runtime';
 import { openAiProvider } from '@zhin.js/ai/providers';
-import { resolveHostCredentialSource } from '../../../src/plugin-runtime/inference/environment-source.js';
+import { resolveHostCredentialSource } from '@zhin.js/plugin-runtime';
 import { validateModelRuntimeConfig } from '../../../../../packages/im/agent/src/model-runtime/validation.js';
 
 async function setup(apiKey = 'synthetic-private-migration-key') {
@@ -149,7 +149,7 @@ it('requires explicit maintenance/backup/credential authority and refuses an act
 it('recovers a committed graph by its original receipt after an acknowledgment loss without depending on changed source bytes', async () => {
   const f = await setup();
   const { DatabaseInferenceRepository } = await import(
-    '../../../src/plugin-runtime/inference/repository.js'
+    '@zhin.js/agent/runtime'
   );
   const original = DatabaseInferenceRepository.prototype.commit;
   const commit = vi
@@ -194,7 +194,7 @@ it('recovers a committed graph by its original receipt after an acknowledgment l
 it('retains an unknown graph intent when no receipt can prove it and does not resubmit the executor', async () => {
   const f = await setup();
   const { DatabaseInferenceRepository } = await import(
-    '../../../src/plugin-runtime/inference/repository.js'
+    '@zhin.js/agent/runtime'
   );
   const commit = vi
     .spyOn(DatabaseInferenceRepository.prototype, 'commit')
@@ -222,10 +222,10 @@ it('retains an unknown graph intent when no receipt can prove it and does not re
 it('migrates an original-owner private vault and exact Session selection without decrypting at preview or flattening into Host', async () => {
   const f = await setup();
   const { createDatabaseHost } = await import(
-    '../../../src/plugin-runtime/database-host-installer.js'
+    '@zhin.js/core/runtime'
   );
   const { createHostDocumentCipher, createPrivateDocument } = await import(
-    '../../../src/plugin-runtime/host-credential-storage.js'
+    '@zhin.js/runtime'
   );
   const { legacyCatalogStateKey } = await import(
     '../../../src/plugin-runtime/inference/migration-source.js'

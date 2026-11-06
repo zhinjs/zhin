@@ -1,8 +1,11 @@
-import type { CommandDispatchResult, CommandExecutionLimit, CommandValidationIssue } from '@zhin.js/command';
+import type { CommandDispatchResult, CommandExecutionLimit, CommandIndex, CommandMenuPage, CommandValidationIssue } from '@zhin.js/command';
+import { readOperationInputResources } from '@zhin.js/feature-kit';
 import type { ConversationRef } from '@zhin.js/im-contract';
+import { Fragment, jsx } from '@zhin.js/jsx';
 import { formatCompact, getLogger } from '@zhin.js/logger';
-import { createToken, createMessages, resolveLocale, type Locale, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { createToken, createMessages, resolveLocale, type CapabilityId, type Locale, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import type { Message, MessageSenderRef, SendContent } from './contracts.js';
+import { resolveOutboundInteractivePolicy, resolveOutboundMarkdownPolicy, resolveOutboundSupportedSegments } from './outbound-segments.js';
 
 interface CommandFeedbackIdentity {
   readonly command?: string;
@@ -104,4 +107,90 @@ export async function renderCommandFeedback(
     }
   }
   return { content: defaultFeedback(feedback, resolveLocale(message.locale)), owner: result.owner };
+}
+
+export interface CommandMenuPresentationInput {
+  readonly page: CommandMenuPage;
+  readonly conversation: ConversationRef;
+  readonly generation: number;
+}
+
+/** Root-selected menu content. `undefined` retains the built-in presentation. */
+export type CommandMenuPresenter = (
+  input: CommandMenuPresentationInput,
+) => SendContent | undefined | Promise<SendContent | undefined>;
+
+export const commandMenuPresentationToken = createToken<CommandMenuPresenter>(
+  'zhin.command-menu-presentation',
+  'Root-selected command menu presentation; framework pagination remains unchanged',
+);
+
+/** The current Root owns both the selected presenter and the resulting content. */
+export async function presentCommandMenu(
+  page: CommandMenuPage,
+  fallback: SendContent,
+  snapshot: RuntimeSnapshot,
+  conversation: ConversationRef,
+): Promise<SendContent> {
+  const presenter = snapshot.resources.get(snapshot.root)?.get(commandMenuPresentationToken.id) as CommandMenuPresenter | undefined;
+  if (!presenter) return fallback;
+  try {
+    const view: ConversationRef = Object.freeze({
+      endpoint: Object.freeze({ id: conversation.endpoint.id, adapter: conversation.endpoint.adapter }),
+      kind: conversation.kind, id: conversation.id,
+      ...(conversation.parent ? { parent: Object.freeze({ kind: conversation.parent.kind, id: conversation.parent.id }) } : {}),
+      ...(conversation.threadId !== undefined ? { threadId: conversation.threadId } : {}),
+    });
+    const content = await presenter(Object.freeze({ page, conversation: view, generation: snapshot.generation }));
+    return content === undefined ? fallback : content;
+  } catch {
+    // A presentation failure must not expose content, re-run commands or cause a second send.
+    logger.warn(formatCompact({ op: 'command_menu_presentation', status: 'fallback', reason: 'presenter_failed', generation: snapshot.generation }));
+    return fallback;
+  }
+}
+
+const menuMessages = createMessages({
+  page: { 'zh-CN': '**指令菜单** · 第 {page}/{pages} 页', en: '**Command menu** · Page {page}/{pages}' },
+  previous: { 'zh-CN': '上一页', en: 'Previous' },
+  next: { 'zh-CN': '下一页', en: 'Next' },
+});
+
+/** Rendering dependencies for one menu response; callbacks retain the same generation. */
+export interface CommandMenuReplyContext {
+  readonly commands: CommandIndex;
+  readonly snapshot: RuntimeSnapshot;
+  readonly conversation: ConversationRef;
+  readonly prefix: string;
+}
+
+/** IM-only presentation: Command remains independent of JSX, adapters and callback registries. */
+export async function commandMenuReply(result: CommandDispatchResult, { commands, snapshot, conversation, prefix }: CommandMenuReplyContext): Promise<SendContent> {
+  // Only validated menus carry this metadata; other command return values stay opaque.
+  const menu = result.menu;
+  if (!menu) return result.value as SendContent;
+  const content = await presentCommandMenu(menu, result.value as SendContent, snapshot, conversation);
+  if (menu.pages <= 1) return content;
+  const endpoint = conversation.endpoint.id as CapabilityId;
+  const supported = resolveOutboundSupportedSegments(endpoint, snapshot);
+  if (resolveOutboundMarkdownPolicy(endpoint, snapshot) !== 'native'
+    || resolveOutboundInteractivePolicy(endpoint, snapshot) !== 'native'
+    || supported && (!supported.includes('markdown') || !supported.includes('keyboard'))) return content;
+
+  const button = (page: number, label: string, disabled: boolean) => jsx('button', {
+    label, disabled, style: disabled ? 'secondary' : 'primary',
+    onClick: async (message: Message): Promise<SendContent> => {
+      if (disabled) return [];
+      const input = `${menu.keyword}${menu.pluginKey ? ` ${menu.pluginKey}` : ''} --page ${page}`;
+      const next = await commands.dispatch({ input: input, source: message, commandPrefix: prefix, snapshot: snapshot, locale: menu.locale, operation: readOperationInputResources(message, snapshot) });
+      return commandMenuReply(next, { commands: commands, snapshot: snapshot, conversation: message.conversation, prefix: prefix });
+    },
+  });
+  return [content,
+    { type: 'markdown', data: { content: menuMessages(menu.locale, 'page', { page: menu.page, pages: menu.pages }) } },
+    jsx(Fragment, { children: [
+      button(menu.page - 1, menuMessages(menu.locale, 'previous'), menu.page === 1),
+      button(menu.page + 1, menuMessages(menu.locale, 'next'), menu.page === menu.pages),
+    ] }),
+  ];
 }

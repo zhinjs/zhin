@@ -8,7 +8,7 @@ import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
 import { afterEach, describe, expect, it } from 'vitest';
 import { startConsoleControlPlane } from '../../../src/plugin-runtime/console/api-installer.js';
 import { ConsoleConfigurationStore } from '../../../src/plugin-runtime/console/configuration.js';
-import { createPluginLifecycleStore } from '../../../src/plugin-runtime/plugin-lifecycle-store.js';
+import { createPluginLifecycleStore } from '@zhin.js/runtime';
 
 const cleanups: Array<() => void | Promise<void>> = [];
 

@@ -3,7 +3,7 @@ import {
   formatStartOptionHelp,
   parseStartOptions,
   START_OPTION_HELP,
-} from '../../../src/plugin-runtime/start/options.js';
+} from '@zhin.js/runtime';
 
 describe('start options', () => {
   it('parses process, runtime, and Remote Console options into one immutable value', () => {

@@ -16,7 +16,7 @@ import type {
   ConsoleRpcComposition,
   ConsoleRpcRequestIdentity,
 } from './rpc-composition.js';
-import { readDeclaredPlugins, setProjectPluginEnabled } from '../plugin-lifecycle-store.js';
+import { readDeclaredPlugins, setProjectPluginEnabled } from '@zhin.js/runtime';
 import { resolveDiagnosticPlugin } from './plugin-diagnostics.js';
 
 /** Owns the generation lease and capability context for one Console RPC request. */

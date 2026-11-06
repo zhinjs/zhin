@@ -8,7 +8,7 @@ vi.mock('@zhin.js/runtime', async (importOriginal) => ({
   supportsNativeTypeScript: () => true,
 }));
 import { NativeTypeScriptSupervisor } from '../../../src/plugin-runtime/start/process-supervisor.js';
-import { parseStartOptions } from '../../../src/plugin-runtime/start/options.js';
+import { parseStartOptions } from '@zhin.js/runtime';
 
 afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); spawn.mockReset(); });
 

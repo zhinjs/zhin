@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AdapterIndex, Adapter, endpointSpec, createEndpointSpecification, type Endpoint, adapterFeatureId, defineAdapter, endpointEventGatewayToken } from '@zhin.js/adapter';
 import { childPluginId, createCapabilitySlot, rootPluginId, type PluginId, type PluginNodeSnapshot, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { Message } from '@zhin.js/core/runtime';
-import { createEndpointRoleResolver, createSenderEnricher } from '../../src/plugin-runtime/sender-enrichment.js';
-import { resolveOwnerForRuntimeMessage, resolveTrustedForRuntimeMessage } from '../../src/plugin-runtime/agent/turn/request.js';
+import { createEndpointRoleResolver, createSenderEnricher } from '@zhin.js/core/runtime';
+import { resolveOwnerForRuntimeMessage, resolveTrustedForRuntimeMessage } from '@zhin.js/agent/runtime';
 
 const document = (configs: Record<string, unknown>) => ({ configVersion: 2 as const,
   plugins: Object.fromEntries(Object.keys(configs).map(key => [key, '@fixture/adapter'])), ...configs });

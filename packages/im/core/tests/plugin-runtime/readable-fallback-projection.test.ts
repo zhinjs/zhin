@@ -1,6 +1,6 @@
 import { htmlRendererToken, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import type { ConversationRef } from '@zhin.js/im-contract';
-import { projectOutboundPayload } from '../../src/plugin-runtime/im/outbound-projection.js';
+import { projectOutboundPayload } from '../../src/plugin-runtime/im/outbound-renderer.js';
 
 const conversation = { endpoint: { id: 'adapter:test', adapter: 'test' }, kind: 'group', id: 'group-1' } as ConversationRef;
 function snapshot(segments: object, failingRenderer = false): RuntimeSnapshot {

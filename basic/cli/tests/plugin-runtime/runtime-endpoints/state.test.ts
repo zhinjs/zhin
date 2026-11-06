@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { capabilityId, featureId, rootPluginId, type CapabilityId, type PersistentStatePort } from '@zhin.js/plugin-runtime';
 import { type EndpointDesiredRecord } from '@zhin.js/adapter';
-import { createDatabaseHost } from '../../../src/plugin-runtime/database-host-installer.js';
+import { createDatabaseHost } from '@zhin.js/core/runtime';
 import { PersistentEndpointRepository } from '../../../src/plugin-runtime/runtime-endpoints/state.js';
 
 const adapterId = capabilityId(rootPluginId(), featureId('zhin.adapter'), 'native');

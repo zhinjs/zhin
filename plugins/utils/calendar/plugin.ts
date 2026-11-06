@@ -2,7 +2,9 @@ import { projectLocaleToken } from 'zhin.js/i18n';
 import {
   databaseHostToken,
   definePlugin,
+  definePluginCapabilityGraph,
   outboundHostToken,
+  pluginConsoleRpcToken,
   type DeliveryTarget,
 } from "zhin.js";
 import { httpHostToken } from "@zhin.js/host-http";
@@ -30,6 +32,16 @@ import { calendarRuntimeStore } from "./src/runtime.js";
 export default definePlugin<CalendarConfig>({
   name: "calendar",
   metadata: { displayName: "日历" },
+  capabilityGraph: definePluginCapabilityGraph({
+    provides: [calendarRuntimeStore, pluginConsoleRpcToken],
+    injects: [databaseHostToken, outboundHostToken, httpHostToken, projectLocaleToken],
+    features: {
+      commands: ["calendar/auth", "calendar/logout", "calendar/status"],
+      skills: ["calendar-scheduling"],
+      tools: ["create_event", "find_free_time", "list_events"],
+      pages: ["index"],
+    },
+  }),
   setup(context) {
     const config = context.config.get();
     assertCalendarTimezone(config.timezone);

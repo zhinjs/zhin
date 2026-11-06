@@ -1,4 +1,4 @@
-import { createDatabaseHost } from '../../../../basic/cli/src/plugin-runtime/database-host-installer.js';
+import { createDatabaseHost } from '../../../../packages/im/core/src/plugin-runtime/im/index.js';
 import { PluginDatabaseHost, rootPluginId, TargetMigrationScopes, decodeTaskTarget } from 'zhin.js/plugin-runtime';
 import { createSubscriptionTargetMigration } from '../src/target-migration.js';
 import { BILI_STATE_TABLE, BILI_SUBS_TABLE, defineBiliTables } from '../src/store.js';

@@ -10,7 +10,7 @@ import type { ConsoleConfigApplication } from '@zhin.js/console-protocol';
 import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
 import { registerConsoleRpcRoute } from '../../../src/plugin-runtime/console/rpc-route.js';
 import { ConsoleConfigurationStore } from '../../../src/plugin-runtime/console/configuration.js';
-import { createPluginLifecycleStore, resolvePluginLifecycleFile } from '../../../src/plugin-runtime/plugin-lifecycle-store.js';
+import { createPluginLifecycleStore, resolvePluginLifecycleFile } from '@zhin.js/runtime';
 import { CONFIG_EXIT_CODES, createConfigCommand } from '../../../src/commands/config.js';
 import { ConsoleRpcError, ConsoleRequestUnconfirmedError, requestPluginConsole } from '../../../src/plugin-management/console-client.js';
 

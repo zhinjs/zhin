@@ -7,9 +7,9 @@ import {
   auditOutbound,
   createDecisionAudit,
   decisionScopeOf,
-} from '../../../../src/plugin-runtime/agent/turn/decision-audit.js';
-import { auditAmbientDecision } from '../../../../src/plugin-runtime/agent/turn/ingress-route.js';
-import { SceneEventIngress } from '../../../../src/plugin-runtime/agent/turn/scene-event-ingress.js';
+} from '@zhin.js/agent/runtime';
+import { auditAmbientDecision } from '@zhin.js/agent/runtime';
+import { SceneEventIngress } from '@zhin.js/agent/runtime';
 
 const scope = decisionScopeOf({ turnId: 't1', platform: 'icqq', scope: 'group', sceneId: 'g1', endpoint: '10000', userId: 'u1' });
 

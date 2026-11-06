@@ -1,7 +1,7 @@
 import type { AmbientEngagementConfig } from '@zhin.js/ai';
 import type { DecisionObservation } from '@zhin.js/agent/runtime';
 import { definePluginConsoleRpc, type PluginConsoleRpc, type PluginConsoleRpcJson } from '@zhin.js/plugin-runtime';
-import type { AmbientDecision } from '../agent/turn/ambient-engagement.js';
+import type { AmbientDecision } from '@zhin.js/agent/runtime';
 import { decisionReplayQueries, type DecisionEventsSource } from './decision-replay.js';
 import { controlActions, controlQueries, type ControlAuditSource, type ControlPlaneSource } from './control-plane-rpc.js';
 import {

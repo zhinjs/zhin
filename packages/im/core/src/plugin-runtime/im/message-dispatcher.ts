@@ -10,8 +10,7 @@ import type { UserInteractionFactory } from '@zhin.js/im-contract';
 import { formatCompact, getLogger, truncatePreview } from '@zhin.js/logger';
 import type { CapabilityId, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import type { Message, MessageDispatchResult, SendContent } from './contracts.js';
-import { renderCommandFeedback } from './command-feedback.js';
-import { commandMenuReply } from './command-menu-navigation.js';
+import { commandMenuReply, renderCommandFeedback } from './command-feedback.js';
 
 const logger = getLogger('command');
 

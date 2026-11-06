@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { AiSessionOps, DecisionEventLog, SessionOpsChange, SessionOpsConfig, SessionOpsSnapshot } from '@zhin.js/agent';
 import { PluginConsoleRpcError, type PluginConsoleRpcInput, type PluginConsoleRpcJson, type PluginConsoleRpcMethod, type PluginConsoleRpcStatus } from '@zhin.js/plugin-runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
-import type { MemberLifecycle } from '../agent/turn/member-lifecycle.js';
+import type { MemberLifecycle } from '@zhin.js/agent/runtime';
 
 /**
  * 会话运营配置 Console RPC（ADR 0037 切片 A：入群欢迎 / 退群记录）：

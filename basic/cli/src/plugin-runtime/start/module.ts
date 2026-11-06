@@ -1,5 +1,5 @@
 export { loadRuntimeEnvironmentLayers, ProjectEnvironmentFileSource } from './environment.js';
-export { parseStartOptions, type StartOptions, type RuntimeWatchScope } from './options.js';
+export { parseStartOptions, type StartOptions, type RuntimeWatchScope } from '@zhin.js/runtime';
 export { createTsxModuleLoader } from './tsx-module-loader.js';
 export {
   MAX_RESPAWNS_PER_MINUTE,

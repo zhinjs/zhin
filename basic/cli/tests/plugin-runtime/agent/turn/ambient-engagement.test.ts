@@ -10,7 +10,7 @@ import {
   parseJudgment,
   type EngagementJudge,
   type EngagementJudgment,
-} from '../../../../src/plugin-runtime/agent/turn/ambient-engagement.js';
+} from '@zhin.js/agent/runtime';
 
 function harness(judgment: EngagementJudgment | Error, config: ConstructorParameters<typeof AmbientEngagement>[0]['config'] = {}) {
   let now = 1_000_000;

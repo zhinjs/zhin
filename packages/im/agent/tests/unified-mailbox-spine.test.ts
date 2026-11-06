@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { InMemoryEngagementJournal } from '@zhin.js/harness';
 import { HostMailbox } from '../src/collaboration/host-mailbox.js';
-import { AgentTurnIngressRoute } from '../src/plugin-runtime/ingress/ingress-route.js';
+import { AgentTurnIngressRoute } from '../src/plugin-runtime/ingress/unified-mailbox-spine.js';
 
 function createMinimalIngressDeps(sharedMailbox?: HostMailbox) {
   return {

@@ -52,14 +52,17 @@ describe('full-bot L4 配置契约', () => {
       'components/status-card/index.ts',
       'skills/runtime-diagnostics/tools/runtime-status/index.ts',
       'pages/index/index.ts',
-      'pages/workroom/index.tsx',
+      'pages/workroom/index.ts',
+      'pages/agent-trace/index.ts',
     ]) {
       expect(fs.existsSync(path.join(botRoot, source)), source).toBe(true);
     }
+    expect(fs.existsSync(path.join(botRoot, 'pages/workroom/index.tsx'))).toBe(false);
+    expect(fs.existsSync(path.join(botRoot, 'pages/agent-trace/index.tsx'))).toBe(false);
     expect(fs.existsSync(path.join(botRoot, 'src', 'plugins'))).toBe(false);
   });
 
-  it('提供声明式 Console 概览页 pages/index/index.ts 与 plugin.ts Console RPC', async () => {
+  it('提供声明式 Console 概览页 pages/index/index.ts、pages/workroom/index.ts、pages/agent-trace/index.ts 与 plugin.ts Console RPC', async () => {
     const pageMod = await import('../pages/index/index.js');
     expect(pageMod.meta).toMatchObject({
       title: 'Full Bot (L4)',
@@ -80,7 +83,53 @@ describe('full-bot L4 配置契约', () => {
       'actions',
     ]);
 
+    const workroomMod = await import('../pages/workroom/index.js');
+    expect(workroomMod.meta).toMatchObject({
+      title: 'Orchestration',
+      icon: 'Workflow',
+      order: 30,
+    });
+    const workroomBp = workroomMod.blueprint ?? workroomMod.default();
+    expect(workroomBp).toMatchObject({
+      kind: 'zhin.console.page-blueprint',
+      version: 1,
+      dataSource: { action: 'workroom-summary' },
+    });
+    expect(workroomBp.sections.map((section: { type: string }) => section.type)).toEqual([
+      'stats',
+      'table',
+      'actions',
+    ]);
+
+    const traceMod = await import('../pages/agent-trace/index.js');
+    expect(traceMod.meta).toMatchObject({
+      title: 'Agent Trace',
+      icon: 'Activity',
+      order: 31,
+    });
+    const traceBp = traceMod.blueprint ?? traceMod.default();
+    expect(traceBp).toMatchObject({
+      kind: 'zhin.console.page-blueprint',
+      version: 1,
+      dataSource: { action: 'trace-summary' },
+    });
+    expect(traceBp.sections.map((section: { type: string }) => section.type)).toEqual([
+      'stats',
+      'table',
+      'actions',
+    ]);
+
     const pluginMod = await import('../plugin.js');
+    expect(pluginMod.default.capabilityGraph).toMatchObject({
+      features: {
+        commands: ['hello', 'card'],
+        components: ['status-card'],
+        skills: ['memory-consolidate', 'runtime-diagnostics'],
+        tools: ['runtime-status'],
+        promptSections: ['custom'],
+        pages: ['index', 'workroom', 'agent-trace'],
+      },
+    });
     const provided = new Map<unknown, unknown>();
     await pluginMod.default.setup?.({
       resources: {
@@ -98,6 +147,21 @@ describe('full-bot L4 配置契约', () => {
     expect(statusPayload).toMatchObject({
       plugin: 'full-bot',
       tier: 'L4 Reference',
+    });
+    const workroomMethod = rpc.methods.get('workroom-summary');
+    expect(workroomMethod?.page).toBe('workroom');
+    const workroomPayload = await workroomMethod?.handler({}, {} as never);
+    expect(workroomPayload).toMatchObject({
+      plugin: 'full-bot',
+      journalMode: 'engagement-journal',
+    });
+    const traceMethod = rpc.methods.get('trace-summary');
+    expect(traceMethod?.page).toBe('agent-trace');
+    const tracePayload = await traceMethod?.handler({}, {} as never);
+    expect(tracePayload).toMatchObject({
+      plugin: 'full-bot',
+      retentionDays: 7,
+      maxArchiveMb: 64,
     });
     const pingMethod = rpc.methods.get('ping');
     expect(pingMethod?.page).toBe('index');

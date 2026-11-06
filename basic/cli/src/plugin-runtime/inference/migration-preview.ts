@@ -16,9 +16,9 @@ import {
   type ProviderService,
   type ProviderDefinition,
 } from '@zhin.js/ai/provider';
-import { createHostDocumentCipher, readPrivateDocument } from '../host-credential-storage.js';
-import { hostModelOwnerId } from './host-identity.js';
-import { inferencePolicyKeys } from './turn-context.js';
+import { createHostDocumentCipher, readPrivateDocument } from '@zhin.js/runtime';
+import { hostModelOwnerId } from '@zhin.js/plugin-runtime';
+import { inferencePolicyKeys } from '@zhin.js/agent/runtime';
 import {
   readLegacyInferenceSources,
   legacyPluginStateId,

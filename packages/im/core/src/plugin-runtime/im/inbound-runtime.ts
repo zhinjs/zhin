@@ -1,4 +1,8 @@
-import type { CaptureEndpointOperationInput, CapturedEndpointOperation } from './captured-endpoint-operation.js';
+import type { EndpointChildLease, EndpointEvent, PeerRegistry } from '@zhin.js/adapter';
+import type { CommandExecutionBudget, CommandOperationController } from '@zhin.js/command/internal/execution';
+import type { OperationResourceView } from '@zhin.js/feature-kit';
+import type { DeliveryReceipt, UserInteraction } from '@zhin.js/im-contract';
+import { formatCompact, getLogger, truncatePreview } from '@zhin.js/logger';
 import type {
   CapabilityId,
   GenerationAdmissionGate,
@@ -6,91 +10,49 @@ import type {
   RuntimeSnapshot,
   SnapshotLease,
 } from '@zhin.js/plugin-runtime';
-import type { EndpointEvent, PeerRegistry, EndpointChildLease } from '@zhin.js/adapter';
-import { operationEndpoint } from './operation-endpoint.js';
-import { isMiddlewareIndex, middlewareFeatureId, type InboundTerminalControl } from '@zhin.js/middleware';
-import { HandlerIndex, isHandlerIndex, handlerFeatureId } from '../../feature/handler.js';
-import type { HandlerDispatchOptions } from '@zhin.js/handler';
-import { bindOperationInput, operationInputBinding, type OperationResourceView } from '@zhin.js/feature-kit';
-import { formatCompact, getLogger, truncatePreview } from '@zhin.js/logger';
-import type { ConversationRef, DeliveryReceipt, UserInteraction } from '@zhin.js/im-contract';
-import type { CommandExecutionBudget, CommandOperationController } from '@zhin.js/command/internal/execution';
-import { RuntimeNotice, type IncomingNotice, type Notice } from '../../notice.js';
-import { RuntimeRequest, type IncomingRequest, type Request } from '../../request.js';
-import { RuntimeSystemEvent, type IncomingSystemEvent, type SystemEvent } from '../../system-event.js';
+import type { IncomingNotice, Notice } from '../../notice.js';
+import type { IncomingRequest, Request } from '../../request.js';
 import type { EndpointEventContext } from '../../side-event/base.js';
+import type { IncomingSystemEvent, SystemEvent } from '../../system-event.js';
 import {
   RuntimeMessage,
-  type Message,
-  type RuntimeMessageOperation,
+  operationEndpoint,
+  type CaptureEndpointOperationInput,
+  type CapturedEndpointOperation,
   type IncomingMessage,
+  type Message,
   type MessageDispatchResult,
   type MessageSenderRef,
-  type SendContent,
+  type RuntimeMessageOperation,
   type SendRequest,
 } from './contracts.js';
-import { defaultCommandPrefixResolver, MessageDispatcher } from './message-dispatcher.js';
-import { messageLocale } from './locale.js';
-import type { RuntimeMessageDiagnostics } from './message-diagnostics.js';
-import type {
-  RuntimeInteractionCoordinator,
-  UserInteractionSource,
-} from './interaction-runtime.js';
 import { requireAdapters } from './endpoint-runtime.js';
+import type { InboundDeduper } from './inbound-dedup.js';
+import type { InboundOriginClassifier } from './inbound-origin.js';
+import {
+  arbitrateRoomInboundDeduplication,
+  dispatchCanonicalEndpointEvent,
+  dispatchInboundHandlers,
+  dispatchInboundInteractive,
+  handlers,
+  interactionResult,
+  messageLocale,
+  resolveIngressRoute,
+  resolveRoomMembership,
+  runInboundMiddlewareAndSpine,
+  withEndpointEventPayload,
+  type InboundInteractionPort,
+  type InboundOutcome,
+} from './inbound-spine.js';
+import type { RuntimeMessageDiagnostics } from './message-diagnostics.js';
+import { defaultCommandPrefixResolver, MessageDispatcher } from './message-dispatcher.js';
 import {
   formatConversationLog,
   previewMessageContent,
   type RuntimeMessageEvent,
 } from './message-events.js';
-import { resolveIngressRoute } from './ingress-route.js';
-import { executeInboundTurnSpine } from './inbound-spine.js';
-import type { InboundDeduper } from './inbound-dedup.js';
-import { actionPayloadFromSegments } from './interactive-router.js';
-import { readMentionSegmentTarget } from '../../built/segment-contract/mention.js';
-import {
-  roomMembershipToken,
-  type InboundOriginClassifier,
-  type RoomInboundRouteInput,
-  type RoomMembershipPort,
-} from './inbound-origin.js';
-
-/** Facts required to route this message within its captured account directory. */
-interface InboundRoomRouteRequest {
-  readonly conversation: IncomingMessage['conversation'];
-  readonly senderId: string;
-  readonly input: IncomingMessage;
-  readonly adapters: ReturnType<typeof requireAdapters>;
-  readonly generation: number;
-}
-/** Native arguments and cancellation belong to the same already-admitted Root operation. */
-interface InboundHandlerDispatch {
-  readonly lease: SnapshotLease;
-  readonly event: string;
-  readonly args: readonly unknown[];
-  readonly signal?: AbortSignal;
-  readonly captureInteraction?: (owner: PluginId, conversation: ConversationRef) => CapturedEndpointOperation;
-}
-/** A side-event interaction uses its admitted author's exact snapshot and cancellation. */
-interface InboundSideInteractionRequest {
-  readonly payload: Notice | Request;
-  readonly snapshot: RuntimeSnapshot;
-  readonly requester: PluginId;
-  readonly signal: AbortSignal;
-  readonly retain?: () => CapturedEndpointOperation;
-}
-interface InboundInteractiveDispatch {
-  readonly message: Message;
-  readonly requester: PluginId;
-  readonly admission?: GenerationAdmissionGate;
-  readonly snapshot: RuntimeSnapshot;
-}
 
 const logger = getLogger('im.inbound');
-
-type InboundInteractionPort = Pick<
-  RuntimeInteractionCoordinator<GenerationAdmissionGate>,
-  'create' | 'createForMessage' | 'createFromUnknown' | 'dispatch' | 'resolveClaim'
-> & Partial<Pick<RuntimeInteractionCoordinator<GenerationAdmissionGate>, 'hasPendingAnswer'>>;
 
 interface InboundRuntimeContext {
   readonly commandExecution?: CommandExecutionBudget;
@@ -98,7 +60,7 @@ interface InboundRuntimeContext {
   readonly diagnostics?: RuntimeMessageDiagnostics;
   readonly interactions: InboundInteractionPort;
   captureOperation(input: CaptureEndpointOperationInput): CapturedEndpointOperation;
-  createOperationResources?(input: Readonly<{ lease: SnapshotLease; message: import('./contracts.js').RuntimeMessage; owner: PluginId; signal: AbortSignal }>): OperationResourceView | undefined;
+  createOperationResources?(input: Readonly<{ lease: SnapshotLease; message: RuntimeMessage; owner: PluginId; signal: AbortSignal }>): OperationResourceView | undefined;
   readonly inboundClaim?: (message: Message) => boolean | Promise<boolean>;
   /** Trusted origin classifier. Absent: messages carry no origin (legacy behavior). */
   readonly originClassifier?: InboundOriginClassifier;
@@ -128,11 +90,6 @@ interface InboundRuntimeContext {
   /** Keep a message that answered an interaction prompt out of later agent context. */
   markInteractionAnswer?(message: NonNullable<IncomingMessage['message']>): void;
   publish(event: RuntimeMessageEvent): void;
-}
-
-interface InboundOutcome {
-  readonly dispatch: MessageDispatchResult;
-  readonly reply?: { readonly owner: PluginId; readonly content: SendContent };
 }
 
 /** Owns Endpoint ingress normalization, routing, dispatch, and side-event action scopes. */
@@ -175,39 +132,6 @@ export class InboundRuntime {
       default:
         return this.#receiveSideEvent(event);
     }
-  }
-
-  #routeInput({ conversation, senderId, input, adapters, generation }: InboundRoomRouteRequest): RoomInboundRouteInput {
-    const mentionTargets = (input.segments ?? [])
-      .map((segment) => readMentionSegmentTarget(segment as { type: unknown; data?: unknown }))
-      .filter((target) => target !== '' && target !== 'all');
-    const replyToId = input.replyTo?.id;
-    const replyToEndpointId = replyToId !== undefined && this.context.resolveReplyTarget
-      ? this.context.resolveReplyTarget(conversation, replyToId)
-      : undefined;
-    const registry = this.context.registry;
-    return {
-      conversation,
-      senderId,
-      content: input.content,
-      mentionTargets,
-      ...(replyToEndpointId !== undefined ? { replyToEndpointId } : {}),
-      pending: (endpointId) => {
-        // Registry/index skew or a throwing probe must never fail the whole message closed:
-        // an Endpoint we cannot probe simply has nothing pending.
-        try {
-          const adapter = adapters.clientAdapter(endpointId as CapabilityId);
-          const probe = Object.freeze({ ...conversation, endpoint: Object.freeze({ id: endpointId, adapter }) });
-          return this.context.interactions.hasPendingAnswer?.(
-            probe, senderId, generation, { content: input.content, segments: input.segments },
-          ) === true || this.context.inboundClaimPending?.(probe, senderId) === true;
-        } catch {
-          return false;
-        }
-      },
-      accountOf: (endpointId) => registry?.selfOf(endpointId),
-      isAvailable: (endpointId) => registry?.isReady(endpointId) === true,
-    };
   }
 
   async #receiveMessage(
@@ -288,106 +212,25 @@ export class InboundRuntime {
           return Object.freeze({ matched: false });
         }
       }
-      // Must stay synchronous and before any await: concurrent arrivals of the same
-      // message from N Endpoints are decided atomically. Only human origin claims,
-      // so bot-origin messages never consume the key. Scoped to Room conversations:
-      // outside a Room each Endpoint keeps handling its own copy (mention / interaction
-      // state is relative to the receiving Endpoint).
-      let recordOnly: 'duplicate' | 'dedup_error' | undefined;
-      // Set when the Room Router picked this Endpoint (or a fallback took over for it): `mentioned`
-      // is relative to the receiving Endpoint, so the copy is forced to mentioned=true or AI ingress
-      // would not trigger.
-      let routedTarget = false;
-      let pendingSettle: { readonly target: string; readonly listed: boolean; readonly settle: () => Promise<'handle' | 'duplicate'> } | undefined;
-      // Action segments are only ever produced by an adapter from a platform callback structure
-      // (e.g. Telegram callback_query); a plain text message cannot carry one. Such a callback is
-      // delivered only to the Endpoint that sent the keyboard, and only that Endpoint holds the
-      // keyboard's JSX registry / fallback. It is handled where it arrived: never routed elsewhere,
-      // never claimed, never turned into a duplicate, never forced to mentioned.
-      const platformCallback = actionPayloadFromSegments(input.segments) !== undefined;
-      if ((origin === 'human' || origin === undefined) && this.context.deduper && !platformCallback
-        && (conversation.kind === 'group' || conversation.kind === 'channel')) {
-        try {
-          if (roomMembership?.hasRoom?.(conversation) === true) {
-            const senderId = String(enrichedSender?.id ?? '');
-            const deduper = this.context.deduper;
-            if (typeof roomMembership.route === 'function' && typeof deduper.arbitrate === 'function') {
-              const route = roomMembership.route.bind(roomMembership);
-              const routeInput = this.#routeInput({ conversation, senderId, input, adapters, generation: lease.value.generation });
-              const verdict = deduper.arbitrate(conversation, senderId, input.message?.id, () => {
-                try {
-                  const decision = route(routeInput);
-                  return decision
-                    ? { target: decision.endpointId, fallbacks: decision.fallbackEndpointIds ?? [] }
-                    : undefined;
-                } catch (error) {
-                  // A broken router must not drop the message: degrade to first-come-first-served.
-                  logger.warn(formatCompact({
-                    op: 'room_route_error',
-                    conv: formatConversationLog(conversation),
-                    error: error instanceof Error ? error.message : String(error),
-                  }));
-                  return undefined;
-                }
-              });
-              switch (verdict.kind) {
-                case 'handle':
-                  routedTarget = verdict.routed;
-                  break;
-                case 'duplicate':
-                  recordOnly = 'duplicate';
-                  logger.debug(formatCompact({
-                    op: 'room_non_target_copy',
-                    conv: formatConversationLog(conversation),
-                  }));
-                  break;
-                case 'wait':
-                  pendingSettle = verdict;
-                  break;
-                case 'unkeyed':
-                  // Known limitation: no message id / sender / private chat cannot be arbitrated,
-                  // so each Endpoint keeps handling its own copy (may duplicate, never drops).
-                  break;
-              }
-            } else {
-              const claim = deduper.claim(conversation, senderId, input.message?.id);
-              if (claim === 'duplicate') recordOnly = 'duplicate';
-            }
-          }
-        } catch (error) {
-          logger.warn(formatCompact({
-            op: 'inbound_dedup_error',
-            conv: formatConversationLog(conversation),
-            error: error instanceof Error ? error.message : String(error),
-          }));
-          recordOnly = 'dedup_error';
-        }
-      }
-      if (pendingSettle) {
-        // The Router's target had not delivered its copy yet. Wait (grace period, a couple of
-        // seconds at most, lease held) for it; if it never shows up this copy takes over so the
-        // message is not lost. Nothing has been recorded yet, so a duplicate stays history-only.
-        const outcome = await pendingSettle.settle();
-        if (outcome === 'handle') {
-          routedTarget = true;
-          if (!pendingSettle.listed) {
-            logger.warn(formatCompact({
-              op: 'room_unlisted_member_takeover',
-              conv: formatConversationLog(conversation),
-              target: pendingSettle.target,
-              takeover: conversation.endpoint.id,
-            }));
-          }
-          logger.debug(formatCompact({
-            op: 'room_target_missing_takeover',
-            conv: formatConversationLog(conversation),
-            target: pendingSettle.target,
-            takeover: conversation.endpoint.id,
-          }));
-        } else {
-          recordOnly = 'duplicate';
-        }
-      }
+      const { recordOnly, routedTarget } = await arbitrateRoomInboundDeduplication({
+        origin,
+        deduper: this.context.deduper,
+        roomMembership,
+        conversation,
+        enrichedSender,
+        incoming: input,
+        routeRequest: {
+          conversation,
+          senderId: String(enrichedSender?.id ?? ''),
+          input,
+          adapters,
+          generation: lease.value.generation,
+          interactions: this.context.interactions,
+          registry: this.context.registry,
+          inboundClaimPending: this.context.inboundClaimPending,
+          resolveReplyTarget: this.context.resolveReplyTarget,
+        },
+      });
       const mentioned = routedTarget ? true : input.mentioned;
       const locale = await messageLocale(lease.value, conversation, enrichedSender?.id);
       let operationReplied = false;
@@ -499,8 +342,6 @@ export class InboundRuntime {
         let reply: InboundOutcome['reply'];
         if (recordOnly === 'duplicate') {
           this.context.diagnostics?.route('duplicate');
-          // Duplicate of a message already routed via another Endpoint: history only,
-          // no publish (avoids N copies in the console message feed).
           logger.debug(formatCompact({
             op: 'inbound_duplicate',
             conv: formatConversationLog(conversation),
@@ -510,8 +351,6 @@ export class InboundRuntime {
         }
         if (recordOnly === 'dedup_error') {
           this.context.diagnostics?.route('dedup_error');
-          // Undecidable: record only and never route (no duplicate routing), but publish so
-          // the console feed still shows the message and a persistent failure is visible.
           this.context.publish({
             direction: 'inbound',
             conversation,
@@ -524,8 +363,6 @@ export class InboundRuntime {
         }
         if (origin === 'member' || origin === 'peer_bot') {
           this.context.diagnostics?.route('bot_origin');
-          // Bot-origin messages are recorded as chat history only: no claim, handlers,
-          // commands, middleware or ingress route (prevents bot-to-bot loops).
           logger.debug(formatCompact({
             op: 'bot_origin_recorded',
             conv: formatConversationLog(conversation),
@@ -553,62 +390,42 @@ export class InboundRuntime {
         } else {
           const interactionFactory = (value: unknown) =>
             this.context.interactions.createFromUnknown(value);
-          const terminal = (control?: InboundTerminalControl): Promise<InboundOutcome> =>
-            executeInboundTurnSpine({
-              message,
+          const outcome = await runInboundMiddlewareAndSpine({
+            message,
+            lease,
+            requester,
+            conversationSequence,
+            admission,
+            signal: operationSignal,
+            interactionFactory,
+            ingressRoute: resolveIngressRoute(lease.value),
+            diagnostics: this.context.diagnostics,
+            runHandlers: () => dispatchInboundHandlers({
               lease,
-              requester,
-              conversationSequence,
-              admission,
+              event: 'message.receive',
+              args: [withEndpointEventPayload(source, message)],
               signal: operationSignal,
+              interactions: this.context.interactions,
+              deliver: (req, snap) => this.context.deliver(req, snap),
+            }),
+            dispatchInteractive: () => dispatchInboundInteractive({
+              message,
+              requester,
+              admission,
+              snapshot: lease.value,
+              interactions: this.context.interactions,
+            }),
+            dispatchCommand: (observe) => this.#dispatcher.dispatchWithReply(
+              message,
+              lease.value,
               interactionFactory,
-              ingressRoute: resolveIngressRoute(lease.value),
-              diagnostics: this.context.diagnostics,
-              runHandlers: () => this.#runHandlers({
-                lease,
-                event: 'message.receive',
-                args: [withEndpointEventPayload(source, message)],
-                signal: operationSignal,
-              }),
-              dispatchInteractive: () => this.#dispatchInteractive({
-                message,
-                requester,
-                admission,
-                snapshot: lease.value,
-              }),
-              dispatchCommand: (observe) => this.#dispatcher.dispatchWithReply(
-                message,
-                lease.value,
-                interactionFactory,
-                observe,
-              ),
-              hasReplied: () => operationReplied,
-              findEventHandlerName: (event) =>
-                handlers(lease.value)?.list().find(descriptor => descriptor.event === event)?.name,
-            }, control);
-          const middleware = lease.value.projections.get(middlewareFeatureId);
-          if (isMiddlewareIndex(middleware)) this.context.diagnostics?.step('middleware', 'entered');
-          const outcome = isMiddlewareIndex(middleware)
-            ? await middleware.runInbound(message, terminal, {
-                stop: (owner): InboundOutcome => {
-                  this.context.diagnostics?.route('middleware');
-                  this.context.diagnostics?.step('middleware', 'stopped');
-                  return { dispatch: { matched: true, command: 'middleware', owner } };
-                },
-                replace: (owner, value, downstream): InboundOutcome => {
-                  this.context.diagnostics?.step('middleware', 'replaced');
-                  if (!downstream?.dispatch.matched) this.context.diagnostics?.route('middleware');
-                  return {
-                    dispatch: downstream?.dispatch.matched
-                      ? downstream.dispatch
-                      : { matched: true, command: 'middleware', owner },
-                    reply: { owner, content: value as SendContent },
-                  };
-                },
-              }, lease.value)
-            : await terminal();
+              observe,
+            ),
+            hasReplied: () => operationReplied,
+            findEventHandlerName: (event) =>
+              handlers(lease.value)?.list().find(descriptor => descriptor.event === event)?.name,
+          }, this.context.diagnostics);
           result = outcome.dispatch;
-          if (isMiddlewareIndex(middleware)) this.context.diagnostics?.step('middleware', 'completed');
           reply = outcome.reply;
         }
         this.context.diagnostics?.dispatch(result);
@@ -655,7 +472,6 @@ export class InboundRuntime {
       const operationSignal = AbortSignal.any([lease.stopSignal, captured.signal]);
       const assertActive = () => {
         if (!active) throw new Error('Endpoint event context expired with its generation operation');
-        // A held Root callback may drain across Root retirement; a retired child may not.
         captured.assertActive();
       };
       const context: EndpointEventContext = {
@@ -670,39 +486,27 @@ export class InboundRuntime {
         },
       };
       const dispatch = async (payload: Notice | Request | SystemEvent) => {
-        await this.#runHandlers({ lease, event: source.name, args: [withEndpointEventPayload(source, payload)], signal: operationSignal,
+        await dispatchInboundHandlers({
+          lease,
+          event: source.name,
+          args: [withEndpointEventPayload(source, payload)],
+          signal: operationSignal,
+          interactions: this.context.interactions,
+          deliver: (req, snap) => this.context.deliver(req, snap),
           captureInteraction: (owner, conversation) => {
             assertActive();
             return this.context.captureOperation({ target: conversation, client: source.client, requester: owner, signal: captured.signal });
           },
         });
       };
-      if (source.payload.type !== source.name.split('.')[0]) {
-        throw new TypeError('Endpoint event payload type does not match its gateway event');
-      }
-      switch (source.payload.type) {
-        case 'notice': {
-          const notice = new RuntimeNotice(source.payload, context);
-          await this.context.recordNotice(notice);
-          await dispatch(notice);
-          break;
-        }
-        case 'request':
-          await withRequestActionScope(source.payload, async (input) => {
-            const request = new RuntimeRequest(input, context);
-            // Recording is best effort and must not delay the request handlers.
-            const recording = Promise.resolve(this.context.recordRequest?.(request)).catch(() => undefined);
-            try {
-              await dispatch(request);
-            } finally {
-              await recording;
-            }
-          }, assertActive);
-          break;
-        case 'system':
-          await dispatch(new RuntimeSystemEvent(source.payload, context));
-          break;
-      }
+      await dispatchCanonicalEndpointEvent({
+        source,
+        context,
+        assertActive,
+        recordNotice: (notice) => this.context.recordNotice(notice),
+        recordRequest: this.context.recordRequest ? (req) => this.context.recordRequest!(req) : undefined,
+        dispatch,
+      });
     } finally {
       active = false;
       try { endpointLease?.release(); } finally { this.context.release(lease); }
@@ -715,128 +519,16 @@ export class InboundRuntime {
     try {
       endpointLease = requireAdapters(lease.value).acquireInbound(event.endpoint.id, event.client);
       const signal = AbortSignal.any([lease.stopSignal, endpointLease.signal]);
-      await this.#runHandlers({ lease, event: event.name, args: [event], signal });
+      await dispatchInboundHandlers({
+        lease,
+        event: event.name,
+        args: [event],
+        signal,
+        interactions: this.context.interactions,
+        deliver: (req, snap) => this.context.deliver(req, snap),
+      });
     } finally {
       try { endpointLease?.release(); } finally { this.context.release(lease); }
     }
   }
-
-  async #runHandlers({ lease, event, args, signal = lease.stopSignal, captureInteraction }: InboundHandlerDispatch): Promise<void> {
-    const snapshot = lease.value;
-    const index = handlers(snapshot);
-    if (!index) return;
-    const options: HandlerDispatchOptions = {
-      snapshot, signal,
-      resolveInteraction: (name, interactionArgs, owner) => {
-        const eventContext = interactionArgs[0] as EndpointEvent | undefined;
-        const payload = eventContext?.payload;
-        if (name === 'message.receive' && payload instanceof RuntimeMessage) {
-          return this.context.interactions.createFromUnknown(bindOperationInput(payload, owner, snapshot));
-        }
-        if (
-          name === 'notice.receive'
-          || name === 'request.receive'
-        ) {
-          return this.#createInteractionForSideEvent({ payload: payload as Notice | Request, snapshot, requester: owner, signal,
-            ...(captureInteraction ? { retain: () => captureInteraction(owner, (payload as Notice | Request).conversation!) } : {}),
-          });
-        }
-        return undefined;
-      },
-    };
-    await index.dispatch(event, args, options);
-  }
-
-  #createInteractionForSideEvent({ payload, snapshot, requester, signal, retain }: InboundSideInteractionRequest): UserInteraction | undefined {
-    const conversation = payload.conversation;
-    if (!conversation) return undefined;
-    const source: UserInteractionSource = Object.freeze({
-      conversation,
-      ...(payload.actor?.id
-        ? { sender: Object.freeze({ id: payload.actor.id }) }
-        : {}),
-      $reply: (content: SendContent) => this.context.deliver({
-        conversation,
-        requester,
-        content,
-      }, snapshot),
-    });
-    return this.context.interactions.create(source, undefined, { snapshot, owner: requester, signal, retain });
-  }
-
-  async #dispatchInteractive({ message, requester, admission, snapshot }: InboundInteractiveDispatch): Promise<MessageDispatchResult | undefined> {
-    const handled = await this.context.interactions.dispatch(message, admission, snapshot);
-    return handled
-      ? Object.freeze({ matched: true, command: 'interactive', owner: requester })
-      : undefined;
-  }
-}
-
-function resolveRoomMembership(snapshot: RuntimeSnapshot): RoomMembershipPort | undefined {
-  try {
-    const candidate = snapshot.resources.get(snapshot.root)?.get(roomMembershipToken.id);
-    return candidate
-      && typeof candidate === 'object'
-      && (
-        typeof (candidate as RoomMembershipPort).isMember === 'function'
-        || typeof (candidate as RoomMembershipPort).resolveRoom === 'function'
-        || typeof (candidate as RoomMembershipPort).isRoomReady === 'function'
-      )
-      ? candidate as RoomMembershipPort
-      : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function interactionResult(requester: PluginId): MessageDispatchResult {
-  return Object.freeze({ matched: true, command: 'interaction', owner: requester });
-}
-
-async function withRequestActionScope(
-  request: IncomingRequest,
-  dispatch: (request: IncomingRequest) => Promise<void>,
-  assertOperation: () => void,
-): Promise<void> {
-  let active = true;
-  const actions = new Set<Promise<void>>();
-  const run = (action: () => void | Promise<void>): Promise<void> => {
-    if (!active) throw new Error('Request action port expired with its generation operation');
-    const operation = Promise.resolve().then(() => { assertOperation(); return action(); });
-    actions.add(operation);
-    void operation.then(
-      () => actions.delete(operation),
-      () => actions.delete(operation),
-    );
-    return operation;
-  };
-  const scoped: IncomingRequest = Object.freeze({ ...request,
-    $approve: async (remark?: string) => run(() => request.$approve(remark)),
-    $reject: async (reason?: string) => run(() => request.$reject(reason)),
-  });
-  try {
-    await dispatch(scoped);
-  } finally {
-    active = false;
-    await Promise.allSettled([...actions]);
-  }
-}
-
-function handlers(snapshot: RuntimeSnapshot): HandlerIndex | undefined {
-  const projection = snapshot.projections.get(handlerFeatureId);
-  return isHandlerIndex(projection) ? projection : undefined;
-}
-
-function withEndpointEventPayload<TPayload, TClient, TName extends string>(
-  source: EndpointEvent<unknown, TClient, TName>,
-  payload: TPayload,
-): EndpointEvent<TPayload, TClient, TName> {
-  return Object.freeze({
-    name: source.name,
-    payload,
-    endpoint: source.endpoint,
-    client: source.client,
-    [operationInputBinding]: (owner: PluginId, snapshot: RuntimeSnapshot) =>
-      withEndpointEventPayload(source, bindOperationInput(payload, owner, snapshot)),
-  });
 }

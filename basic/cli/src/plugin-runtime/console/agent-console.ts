@@ -1,7 +1,7 @@
 import type {
   ConsoleAgentRuntime,
 } from '@zhin.js/host-http';
-import type { RuntimeSnapshot, SnapshotReader, TokenId } from '@zhin.js/plugin-runtime';
+import { tokenId, type RuntimeSnapshot, type SnapshotReader, type TokenId } from '@zhin.js/plugin-runtime';
 import type { ScheduleExecutionHistoryPort } from '@zhin.js/agent/runtime';
 import type { BoardEntry, EngagementEvent, EngagementSummary } from '@zhin.js/harness';
 import type { VenueDefinition } from '@zhin.js/core';
@@ -11,6 +11,8 @@ import type { VenueDefinition } from '@zhin.js/core';
  * 当前 generation snapshot 的 agentHostToken 解析。模块按请求惰性加载，agent
  * 未安装/未 init 时降级（host-http 返回 503 / 空列表 + note）。
  */
+const defaultAgentHostToken = Object.freeze({ id: tokenId('zhin.host.agent') });
+
 let agentModule: {
   agentHostToken?: { readonly id: TokenId };
 } | null | undefined;
@@ -32,9 +34,17 @@ export async function loadAgentConsoleModule(
   }
 }
 
-void loadAgentConsoleModule(
+const agentModuleReady = loadAgentConsoleModule(
   () => import('@zhin.js/agent/runtime'),
-).then(module => { agentModule = module; });
+).then(module => {
+  agentModule = module;
+  return module;
+});
+
+function currentAgentHostToken(): { readonly id: TokenId } | undefined {
+  if (agentModule === null) return undefined;
+  return agentModule?.agentHostToken ?? defaultAgentHostToken;
+}
 
 export type AgentIntrospection = {
   listTools(): readonly { name: string; hidden?: boolean; description?: string }[];
@@ -104,7 +114,7 @@ export function resolveGenerationAgentConsole(
 export function resolveCurrentAgentIntrospection(
   snapshot: RuntimeSnapshot | undefined,
 ): AgentIntrospection | null {
-  return resolveGenerationAgentIntrospection(snapshot, agentModule?.agentHostToken);
+  return resolveGenerationAgentIntrospection(snapshot, currentAgentHostToken());
 }
 
 export function resolveCurrentAgentConsole(
@@ -112,7 +122,7 @@ export function resolveCurrentAgentConsole(
 ): AgentConsolePort | null {
   return resolveGenerationAgentConsole(
     snapshot,
-    agentModule?.agentHostToken,
+    currentAgentHostToken(),
   );
 }
 
@@ -136,6 +146,9 @@ export async function withGenerationAgentConsole(
   snapshots: SnapshotReader | undefined,
   operation: (value: AgentConsolePort) => Promise<void>,
 ): Promise<boolean> {
+  if (agentModule === undefined) {
+    await agentModuleReady;
+  }
   const lease = acquireGenerationAgentConsole(snapshots);
   if (!lease?.value) {
     lease?.release();

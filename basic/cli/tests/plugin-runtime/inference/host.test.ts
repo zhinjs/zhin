@@ -13,9 +13,9 @@ import {
   type ProviderDefinition,
   type ProviderGraph,
 } from '@zhin.js/ai/provider';
-import { createDatabaseHost } from '../../../src/plugin-runtime/database-host-installer.js';
-import { HostInference } from '../../../src/plugin-runtime/inference/host.js';
-import { openHeadlessInferenceHost } from '../../../src/plugin-runtime/inference/headless-host.js';
+import { createDatabaseHost } from '@zhin.js/core/runtime';
+import { HostInference } from '@zhin.js/agent/runtime';
+import { openHeadlessInferenceHost } from '@zhin.js/agent/runtime';
 
 it.each(['none', 'api-key'])(
   'rejects unsupported %s authentication for a real subscription Driver before reading credentials',

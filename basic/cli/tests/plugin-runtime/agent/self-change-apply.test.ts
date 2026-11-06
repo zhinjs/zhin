@@ -16,7 +16,7 @@ import {
   createSelfChangeConfigPort,
   type SelfChangeApplyHostOptions,
 } from '../../../src/plugin-runtime/self-change-apply.js';
-import { createSelfChangeGenerationPorts, type SelfChangeReportTarget } from '../../../src/plugin-runtime/agent/self-change-report.js';
+import { createSelfChangeGenerationPorts, type SelfChangeReportTarget } from '@zhin.js/agent/runtime';
 
 const origin: SelfChangeOrigin = { platform: 'icqq', sceneId: 'group:1001', userId: '42', endpoint: 'bot-1' };
 

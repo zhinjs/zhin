@@ -5,8 +5,8 @@ import { Adapter, adapterFeatureId, type EndpointGroupInspectionRequest, createE
 import { createAdapterHarness } from '../../../../../../plugins/adapters/test-utils/endpoint.js';
 import { MemoryDesiredRepository } from '../../../../../../plugins/adapters/test-utils/desired-repository.js';
 import { SCENE_FACT_STALE_MS, SceneFactStore, SessionProfileStore } from '@zhin.js/agent';
-import { SceneFactRefresher } from '../../../../src/plugin-runtime/agent/turn/scene-fact-refresher.js';
-import { resolveRuntimeTurnContextState } from '../../../../src/plugin-runtime/agent/turn/request.js';
+import { SceneFactRefresher } from '@zhin.js/agent/runtime';
+import { resolveRuntimeTurnContextState } from '@zhin.js/agent/runtime';
 
 class SceneClient extends EventEmitter {
   readonly signals: AbortSignal[] = [];

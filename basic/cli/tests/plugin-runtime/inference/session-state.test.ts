@@ -1,9 +1,9 @@
 import { join } from 'node:path';
 import { rootPluginId } from '@zhin.js/plugin-runtime';
 import { PersonalSessionService, personalSessionIdentity, personalSessionOwnerId } from '@zhin.js/agent/personal-session';
-import { InferenceSessionRepository } from '../../../src/plugin-runtime/inference/session-state.js';
-import { InferenceSessionManagement } from '../../../src/plugin-runtime/inference/session-management.js';
-import { createDatabaseHost } from '../../../src/plugin-runtime/database-host-installer.js';
+import { InferenceSessionRepository } from '@zhin.js/agent/runtime';
+import { InferenceSessionManagement } from '@zhin.js/agent/runtime';
+import { createDatabaseHost } from '@zhin.js/core/runtime';
 import { setupInferenceManagement } from './fixtures.js';
 
 const address = { rootId: '/root', platform: 'qq', endpoint: 'account', subjectId: 'alice',

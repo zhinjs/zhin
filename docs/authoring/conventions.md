@@ -305,7 +305,7 @@ flowchart LR
 | AI 工具 | `plugins/utils/music/tools/`、`plugins/utils/group-suite/tools/` |
 | Skill | `examples/full-bot/skills/memory-consolidate/SKILL.md` |
 | 子 Agent | `examples/multi-agent-room/agents/` |
-| Console 页面 | `examples/full-bot/pages/workroom/index.tsx` |
+| Console 页面 | `examples/full-bot/pages/workroom/index.ts` |
 
 ## 下一步
 

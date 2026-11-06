@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { DatabaseScheduleHistoryRepository, FileScheduleHistoryRepository, ScheduleExecutionHistory, SCHEDULE_RUN_MODEL, SCHEDULE_ATTEMPT_MODEL,
   historyKey, scheduleHistoryCutoff, type ScheduleRunContext, type ScheduleAttemptIdentity, type ScheduleHistoryResult, type ScheduleHistoryRepository, type ScheduleHistoryEvent } from '@zhin.js/agent/runtime';
-import { createDatabaseHost } from '../../../src/plugin-runtime/database-host-installer.js';
+import { createDatabaseHost } from '@zhin.js/core/runtime';
 import { TimerScheduler, ScheduleJobStore, createTaskExecutor, createNotificationRouter } from '@zhin.js/agent';
 import { createScheduleAuditRecord } from '../../../../../packages/im/agent/src/schedule-domain/audit-logger.js';
 

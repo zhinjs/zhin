@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
 import { personalSessionOwnerId } from '@zhin.js/agent/personal-session';
-import { hostModelOwnerId } from '../../../src/plugin-runtime/inference/host-identity.js';
+import { hostModelOwnerId } from '@zhin.js/plugin-runtime';
 import {
   previewInferenceMigration,
   verifyInferenceMigrationPreview,

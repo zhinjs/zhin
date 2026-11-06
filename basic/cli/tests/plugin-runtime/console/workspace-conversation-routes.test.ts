@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { AdapterIndex, Adapter, endpointSpec, createEndpointSpecification, type Endpoint, adapterFeatureId, defineAdapter, endpointEventGatewayToken } from '@zhin.js/adapter';
 import { createHttpHost } from '@zhin.js/host-http';
 import { createCapabilitySlot, createSnapshotView, SnapshotStore, rootPluginId, childPluginId, type PluginId, type PluginNodeSnapshot, type SnapshotState } from '@zhin.js/plugin-runtime';
-import { createDatabaseHost } from '../../../src/plugin-runtime/database-host-installer.js';
+import { createDatabaseHost } from '@zhin.js/core/runtime';
 import { registerWorkspaceConversationRoutes } from '../../../src/plugin-runtime/console/workspace-conversation-routes.js';
 import { defineWorkspaceConversationTable } from '../../../src/plugin-runtime/console/workspace-conversations.js';
 import { sqliteAvailable } from '../sqlite-availability.js';

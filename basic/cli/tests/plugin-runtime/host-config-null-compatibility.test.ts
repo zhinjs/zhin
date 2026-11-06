@@ -8,8 +8,8 @@ import { DEPRECATED_AGENT_BINDING_KEYS } from '../../../../packages/im/agent/src
 import { resolvePerceptionConfig } from '../../../../packages/im/agent/src/config/perception-config.js';
 import { resolveRecallOptions } from '../../../../packages/im/agent/src/memory/semantic-recall.js';
 import { createSpeechPipeline } from '../../../../packages/toolkit/speech/src/pipeline.js';
-import { resolveAgentHostMcpServers } from '../../src/plugin-runtime/agent/config.js';
-import { resolveHttpConfig } from '../../src/plugin-runtime/http-host-installer.js';
+import { resolveAgentHostMcpServers } from '@zhin.js/agent/runtime';
+import { resolveHttpConfig } from '@zhin.js/host-http';
 
 describe('Host schema null compatibility with actual configuration consumers', () => {
   it('does not offer retired switches as usable fields, while preserving saved unknown properties', () => {

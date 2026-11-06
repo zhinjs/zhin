@@ -10,8 +10,8 @@ import { SCHEDULE_JOB_MODEL, SCHEDULE_JOB_MIGRATION_MODEL, DatabaseScheduleJobSt
 import { ScheduleJobStore, type TurnRequest } from '@zhin.js/agent';
 import { createScopedTraceJournal } from '@zhin.js/agent/trace';
 import { AGENT_MESSAGE_MODEL, AGENT_SESSION_MODEL, AGENT_SUMMARY_MODEL, parseAgentMessageRow } from '@zhin.js/ai';
-import { createDatabaseHost } from '../../../src/plugin-runtime/database-host-installer.js';
-import { installAgentPersistence } from '../../../src/plugin-runtime/agent/persistence-coordinator.js';
+import { createDatabaseHost } from '@zhin.js/core/runtime';
+import { installAgentPersistence } from '@zhin.js/agent/runtime';
 
 const request = {
   identity: { turnId: 'turn-1', traceId: 'trace-1' }, session: { key: 'channel:key' },

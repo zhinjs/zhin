@@ -37,8 +37,8 @@ sidebar: false
 - [命令反馈生成](../../packages/im/core/src/plugin-runtime/im/message-dispatcher.ts)：结构化结果转换为固定文案。
 - [入站结果与回复](../../packages/im/core/src/plugin-runtime/im/inbound-runtime.ts)：执行事实和实际内容作者需分别保留。
 - [菜单计算](../../packages/im/command/src/command-index.ts)与[默认布局](../../packages/im/command/src/command-menu.ts)：已有 menuStyle；目录当前按 owner 列出，不等于按访问者权限过滤。
-- [菜单分页](../../packages/im/core/src/plugin-runtime/im/command-menu-navigation.ts)：按钮直接 dispatch 后再展示，不经过 MessageDispatcher。
-- [出站投递](../../packages/im/core/src/plugin-runtime/im/outbound-delivery-runtime.ts)与[平台投影](../../packages/im/core/src/plugin-runtime/im/outbound-projection.ts)：先投影后进入现有出站中间件。
+- [菜单分页](../../packages/im/core/src/plugin-runtime/im/command-feedback.ts)：按钮直接 dispatch 后再展示，不经过 MessageDispatcher。
+- [出站投递](../../packages/im/core/src/plugin-runtime/im/outbound-delivery-runtime.ts)与[平台投影](../../packages/im/core/src/plugin-runtime/im/outbound-renderer.ts)：先投影后进入现有出站中间件。
 - [Scope](../../packages/im/plugin-runtime/src/token.ts)：已有继承、重复绑定拒绝、封存和生命周期。默认实现不应预先占用供 Root 定制的资源键。
 
 ## 接口与所有权原则

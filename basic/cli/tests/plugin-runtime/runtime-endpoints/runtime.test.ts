@@ -6,7 +6,7 @@ import { Adapter, AdapterIndex, adapterFeature, adapterFeatureId, createEndpoint
 import commandFeature, { CommandIndex, commandFeatureId, defineCommand } from '@zhin.js/command';
 import { definePlugin } from '@zhin.js/plugin-runtime';
 import { RootRuntime, type ModuleRuntime } from '@zhin.js/runtime';
-import { createDatabaseHost, installDatabaseHost } from '../../../src/plugin-runtime/database-host-installer.js';
+import { createDatabaseHost, installDatabaseHost } from '@zhin.js/core/runtime';
 import { PersistentEndpointRepository } from '../../../src/plugin-runtime/runtime-endpoints/state.js';
 
 class Modules implements ModuleRuntime {

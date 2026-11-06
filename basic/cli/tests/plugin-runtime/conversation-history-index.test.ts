@@ -1,6 +1,6 @@
 import { CONVERSATION_EVENT_QUERY_MODEL } from '@zhin.js/im-contract';
 import type { StructuredDatabase } from '@zhin.js/database';
-import { migrateConversationColumns } from '../../src/plugin-runtime/conversation-migration.js';
+import { migrateConversationColumns } from '@zhin.js/core/runtime';
 
 it.each(['sqlite', 'mysql', 'pg'])('adds the scene lookup index through the existing %s migration syntax without changing event rows', async dialectName => {
   const selection = { where() { return this; }, orderBy() { return this; }, limit: async () => [] };

@@ -3,7 +3,7 @@ import { Command } from 'commander';
 import { FilePublishJournalStore } from '../plugin-runtime/publish-journal.js';
 import { NodeProcessRunner, ProjectCommands } from '../plugin-runtime/project-commands.js';
 import { NativeTypeScriptSupervisor, parseStartOptions } from '../plugin-runtime/start/module.js';
-import { formatStartOptionHelp } from '../plugin-runtime/start/options.js';
+import { formatStartOptionHelp } from '@zhin.js/runtime';
 
 export const runtimeCommand = new Command('runtime')
   .description('管理约定式 Plugin Runtime 项目');

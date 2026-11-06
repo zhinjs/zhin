@@ -27,7 +27,10 @@
  * - 磁盘有界：执行器不落盘。阶梯进度只在进程内，条目有上限并按最长冷静期过期清理；重启后阶梯归零（偏宽松，不偏严）。
  */
 import { randomUUID } from 'node:crypto';
+import type { GroupRuleDefaultOutcome, GroupRuleViolationTrigger } from '@zhin.js/core/runtime';
 import {
+  DEFAULT_GROUP_RULE_WINDOW_MS,
+  GROUP_RULE_TRIGGERS,
   groupRuleContentHash,
   groupRuleHashShort,
   normalizeGroupRuleSpec,
@@ -43,23 +46,33 @@ import {
   type DeliveryOutcome,
   type GroupRuleAction,
   type GroupRuleRecord,
+  type GroupRuleSpecInput,
+  type GroupRuleStage,
+  type GroupRuleTransition,
   type GroupRuleTrigger,
   type SessionProfileStore,
   type WelcomePart,
 } from '../../index.js';
 import {
+  imApproversFor,
   ToolHardGate,
   type OpsCooldownView,
   type ToolApprovalQueue,
   type ToolHardGateConfig,
+  type ToolHardGateImApprovalSettings,
   type ToolHardGateResult,
 } from '../../security/index.js';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { checkControlAtIngress } from './control-gate.js';
 import { auditOutbound, createDecisionAudit, type DecisionAudit } from './decision-audit.js';
-import { GROUP_RULE_TRIGGER_LABELS } from './group-rule-im.js';
 
 const logger = getLogger('agent');
+
+export const GROUP_RULE_TRIGGER_LABELS: Readonly<Record<GroupRuleTrigger, string>> = Object.freeze({
+  advertising: '发广告',
+  abuse: '辱骂 / 人身攻击',
+  flood: '刷屏复读',
+});
 
 /** 自动禁言交给硬闸评估的工具名：核心名单里的 `member` 类（ADR 0036 §3）。 */
 export const GROUP_RULE_MUTE_TOOL_NAME = 'mute_member';
@@ -669,5 +682,270 @@ function recomputeHash(rule: GroupRuleRecord): string | undefined {
     return groupRuleContentHash({ platform: rule.platform, sceneId: rule.sceneId }, spec);
   } catch {
     return undefined;
+  }
+}
+
+/** 迁移生成的规则的起草人（不是任何真人；审批照旧要群主 / 管理员）。 */
+export const GROUP_RULE_MIGRATION_ACTOR = 'content-moderation';
+/** 原 content-moderation 写死的禁言时长。 */
+export const DEFAULT_GROUP_RULE_MUTE_SEC = 600;
+
+const TEMPLATE_CONTENT: Readonly<Record<GroupRuleViolationTrigger, string>> = Object.freeze({
+  advertising: '发广告：第一次提醒，第二次警告，第三次禁言 10 分钟；30 分钟内不再犯则重新计数（由内容审核插件的原有群管迁移而来）',
+  abuse: '辱骂他人：第一次提醒，第二次警告，第三次禁言 10 分钟；30 分钟内不再犯则重新计数（由内容审核插件的原有群管迁移而来）',
+});
+
+/** 默认模板：与原 content-moderation 写死阶梯一致。 */
+export function defaultGroupRuleTemplate(trigger: GroupRuleViolationTrigger): GroupRuleSpecInput {
+  return {
+    trigger,
+    ladder: [{ action: 'remind' }, { action: 'warn' }, { action: 'mute', durationSec: DEFAULT_GROUP_RULE_MUTE_SEC }],
+    windowMs: DEFAULT_GROUP_RULE_WINDOW_MS,
+    exempt: { ownerAndAdmins: true, userIds: [] },
+    content: TEMPLATE_CONTENT[trigger],
+  };
+}
+
+export interface EnsureDefaultGroupRuleInput {
+  readonly platform: string;
+  readonly endpoint?: string;
+  /** 平台原生群号（不带 `group:` 前缀）。 */
+  readonly groupId: string;
+  readonly trigger: GroupRuleViolationTrigger;
+}
+
+/** 生成默认规则并送审；同群同类型并发调用串行。 */
+export class GroupRuleDefaults {
+  readonly #rules: () => AiGroupRules | undefined;
+  readonly #inFlight = new Map<string, Promise<GroupRuleDefaultOutcome>>();
+
+  constructor(rules: () => AiGroupRules | undefined) {
+    this.#rules = rules;
+  }
+
+  ensure(input: EnsureDefaultGroupRuleInput): Promise<GroupRuleDefaultOutcome> {
+    const key = `${input.platform}\u0000${input.groupId}\u0000${input.trigger}`;
+    const running = this.#inFlight.get(key);
+    if (running) return running;
+    const next = this.#ensure(input).finally(() => this.#inFlight.delete(key));
+    this.#inFlight.set(key, next);
+    return next;
+  }
+
+  async #ensure(input: EnsureDefaultGroupRuleInput): Promise<GroupRuleDefaultOutcome> {
+    const store = this.#rules();
+    if (!store || !input.platform || !input.groupId) return 'unavailable';
+    const sceneId = `group:${input.groupId}`;
+    const existing = await store.list({ platform: input.platform, sceneId, trigger: input.trigger });
+    if (existing.length > 0) return 'exists';
+    const drafted = await store.create({
+      ...defaultGroupRuleTemplate(input.trigger),
+      platform: input.platform,
+      sceneId,
+      createdBy: GROUP_RULE_MIGRATION_ACTOR,
+      createdVia: 'console',
+    });
+    await store.submit({
+      id: drafted.record.id,
+      expectedRevision: drafted.record.revision,
+      actorId: GROUP_RULE_MIGRATION_ACTOR,
+      ...(input.endpoint ? { endpoint: input.endpoint } : {}),
+    });
+    return 'created';
+  }
+}
+
+export interface GroupRuleCardTarget {
+  readonly platform: string;
+  /** 发起送审的 Bot 账号；为空时由宿主按平台唯一在线账号解析。 */
+  readonly endpoint: string | null;
+  /** 平台原生群号（不带 `group:` 前缀）。 */
+  readonly groupId: string;
+}
+
+export interface GroupRuleImDeps {
+  readonly rules: () => AiGroupRules | undefined;
+  readonly controlPlane?: () => AiControlPlane | undefined;
+  /** 读最新配置：审批人名单与 G6 共用 `toolHardGate.imApproval.approverIds`。 */
+  readonly imApproval?: () => ToolHardGateImApprovalSettings | undefined;
+  readonly send: (target: GroupRuleCardTarget, text: string) => Promise<void>;
+}
+
+export interface GroupRuleCommandInput {
+  readonly platform: string;
+  readonly scope: 'private' | 'group' | 'channel';
+  /** 平台原生会话 id。 */
+  readonly sceneId: string;
+  readonly senderId: string;
+  /** 入站消息上的平台角色（群主 / 管理员实时判定）。 */
+  readonly senderRoles: readonly unknown[] | undefined;
+  readonly endpoint?: string;
+  /** 已去掉命令前缀的文本；不是命令时为 undefined。 */
+  readonly commandText: string | undefined;
+}
+
+const RULE_COMMAND = /^rules?(?:\s+(approve|reject|disable)\s+(\S+))?\s*$/iu;
+
+function formatRuleDuration(sec: number): string {
+  if (sec % 3600 === 0) return `${sec / 3600} 小时`;
+  if (sec % 60 === 0) return `${sec / 60} 分钟`;
+  return `${sec} 秒`;
+}
+
+export function formatGroupRuleStage(stage: GroupRuleStage): string {
+  switch (stage.action) {
+    case 'remind':
+      return '提醒';
+    case 'warn':
+      return '警告';
+    case 'mute':
+      return `禁言 ${formatRuleDuration(stage.durationSec ?? 0)}（自动执行）`;
+    case 'suggest_kick':
+      return '建议踢出（每次出审批卡，人批才踢）';
+    default:
+      return String((stage as { action: unknown }).action);
+  }
+}
+
+/** 预览卡：人读版本 + 摘要短码 + 两条命令。 */
+export function formatGroupRuleCard(rule: GroupRuleRecord, approvalTtlMs: number, commandPrefix = '/'): string {
+  const code = groupRuleHashShort(rule.contentHash);
+  const extraExempt = rule.exempt.userIds.length;
+  const exempt = [
+    rule.exempt.ownerAndAdmins ? '群主 / 管理员' : undefined,
+    extraExempt ? `另加 ${extraExempt} 人` : undefined,
+  ].filter(Boolean).join('，') || '无';
+  return [
+    `【群规草案 · 待审批】摘要 ${code}`,
+    `触发：${GROUP_RULE_TRIGGER_LABELS[rule.trigger]}`,
+    ...rule.ladder.map((stage, index) => `第 ${index + 1} 次：${formatGroupRuleStage(stage)}`),
+    `冷静期：${formatRuleDuration(Math.round(rule.windowMs / 1000))}内无再犯则重新计数`,
+    `豁免：${exempt}`,
+    rule.content ? `说明：${rule.content}` : undefined,
+    `批准：${commandPrefix}rule approve ${code}`,
+    `驳回：${commandPrefix}rule reject ${code}`,
+    `仅本群群主 / 管理员可审批；${formatRuleDuration(Math.round(approvalTtlMs / 1000))}内未批自动作废。批准后禁言档自动执行，踢人仍每次审批。`,
+  ].filter((line): line is string => Boolean(line)).join('\n');
+}
+
+function summaryLine(rule: GroupRuleRecord): string {
+  const status = rule.status === 'active' ? '生效中' : '待审批';
+  return `${groupRuleHashShort(rule.contentHash)} ${status} · ${GROUP_RULE_TRIGGER_LABELS[rule.trigger]}：${rule.ladder.map(formatGroupRuleStage).join(' → ')}`;
+}
+
+function parseGroupScene(sceneId: string): string | undefined {
+  return sceneId.startsWith('group:') && sceneId.length > 6 ? sceneId.slice(6) : undefined;
+}
+
+function isRuleTrigger(value: string): value is GroupRuleTrigger {
+  return (GROUP_RULE_TRIGGERS as readonly string[]).includes(value);
+}
+
+export class GroupRuleImChannel {
+  readonly #deps: GroupRuleImDeps;
+  readonly #inFlight = new Set<Promise<void>>();
+
+  constructor(deps: GroupRuleImDeps) {
+    this.#deps = deps;
+  }
+
+  /** 订阅规则迁移并发卡；返回停止函数。 */
+  start(): () => void {
+    const store = this.#deps.rules();
+    if (!store) return () => undefined;
+    return store.onTransition((transition) => {
+      const delivery = this.#onTransition(transition, store.approvalTtlMs);
+      if (!delivery) return;
+      this.#inFlight.add(delivery);
+      void delivery.finally(() => this.#inFlight.delete(delivery));
+    });
+  }
+
+  /** 等所有已开始的发卡结束（测试与有序关停）。 */
+  async drain(): Promise<void> {
+    await Promise.allSettled([...this.#inFlight]);
+  }
+
+  #onTransition(transition: GroupRuleTransition, approvalTtlMs: number): Promise<void> | undefined {
+    const rule = transition.record;
+    let text: string | undefined;
+    if (transition.reasonCode === 'rule_submitted') text = formatGroupRuleCard(rule, approvalTtlMs);
+    else if (transition.reasonCode === 'rule_approved' && rule.approvedVia === 'console') {
+      text = `【群规已生效】${summaryLine(rule)}（Console 批准）`;
+    }
+    if (!text) return undefined;
+    return this.#sendToGroup(rule, transition.endpoint ?? null, text);
+  }
+
+  async #sendToGroup(rule: GroupRuleRecord, endpoint: string | null, text: string): Promise<void> {
+    const groupId = parseGroupScene(rule.sceneId);
+    if (!groupId) return;
+    const verdict = checkControlAtIngress(this.#deps.controlPlane?.(), { platform: rule.platform, scope: 'group', sceneId: groupId }, true);
+    if (verdict.blocked) {
+      logger.info(formatCompact({ op: 'group_rule_card_skipped', ruleId: rule.id, reason: verdict.reasonCode }));
+      return;
+    }
+    try {
+      await this.#deps.send({ platform: rule.platform, endpoint, groupId }, text);
+    } catch (error) {
+      logger.warn(formatCompact({ op: 'group_rule_card_failed', ruleId: rule.id, error: error instanceof Error ? error.message : String(error) }));
+    }
+  }
+
+  #isApprover(input: GroupRuleCommandInput): boolean {
+    if (sceneRoleOf(input.senderRoles)) return true;
+    const settings = this.#deps.imApproval?.();
+    return settings ? imApproversFor(settings, input.platform).includes(input.senderId.trim()) : false;
+  }
+
+  /** 处理 `rule …` / `rules`；不是这类命令返回 null。 */
+  async handleCommand(input: GroupRuleCommandInput): Promise<string | null> {
+    const match = input.commandText ? RULE_COMMAND.exec(input.commandText) : null;
+    if (!match) return null;
+    if (input.scope !== 'group') return '群规命令只能在对应的群里使用。';
+    const store = this.#deps.rules();
+    if (!store) return '群规功能暂不可用。';
+    const scene = { platform: input.platform, sceneId: `group:${input.sceneId}` };
+    try {
+      const open = (await store.list(scene)).filter((rule) => rule.status === 'active' || rule.status === 'pending');
+      const verb = match[1]?.toLowerCase();
+      if (!verb) {
+        return open.length ? ['本群群规：', ...open.map(summaryLine)].join('\n') : '本群还没有生效或待审批的群规。';
+      }
+      if (!this.#isApprover(input)) return '只有本群群主或管理员可以审批 / 停用群规。';
+      const key = match[2]!.toLowerCase();
+      const actorId = input.senderId;
+      const common = { actorId, ...(input.endpoint ? { endpoint: input.endpoint } : {}) };
+      if (verb === 'disable') {
+        const target = isRuleTrigger(key)
+          ? open.find((rule) => rule.status === 'active' && rule.trigger === key)
+          : open.find((rule) => groupRuleHashShort(rule.contentHash) === key);
+        if (!target) return `本群没有匹配 ${key} 的生效或待审批群规。`;
+        await store.disable({ id: target.id, expectedRevision: target.revision, ...common, reason: 'disabled in group' });
+        return `已停用群规 ${groupRuleHashShort(target.contentHash)}（${GROUP_RULE_TRIGGER_LABELS[target.trigger]}）。`;
+      }
+      const target = open.find((rule) => rule.status === 'pending' && groupRuleHashShort(rule.contentHash) === key);
+      if (!target) return `本群没有摘要为 ${key} 的待审批群规（可能已处理、已过期或内容被改过）。`;
+      if (verb === 'reject') {
+        await store.reject({ id: target.id, expectedRevision: target.revision, ...common, reason: 'rejected in group' });
+        return `已驳回群规 ${key}。`;
+      }
+      const approved = await store.approve({
+        id: target.id,
+        expectedRevision: target.revision,
+        ...common,
+        approvedVia: 'im',
+        contentHash: target.contentHash,
+      });
+      const replaced = approved.superseded?.length ? `，原同类规则已停用` : '';
+      return `群规 ${key} 已生效：${GROUP_RULE_TRIGGER_LABELS[target.trigger]}，${target.ladder.map(formatGroupRuleStage).join(' → ')}${replaced}。`;
+    } catch (error) {
+      const name = error instanceof Error ? error.name : '';
+      if (name === 'GroupRuleRevisionConflictError' || name === 'GroupRuleStateError' || name === 'GroupRuleHashMismatchError') {
+        return '这条群规刚被别人处理过或已过期，请发 /rules 查看最新状态。';
+      }
+      logger.warn(formatCompact({ op: 'group_rule_command_failed', error: error instanceof Error ? error.message : String(error) }));
+      return '群规操作失败，未生效，请稍后再试。';
+    }
   }
 }

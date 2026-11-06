@@ -1,4 +1,4 @@
-import { createDatabaseHost } from '../../../../basic/cli/src/plugin-runtime/database-host-installer.js';
+import { createDatabaseHost } from '../../../../packages/im/core/src/plugin-runtime/im/index.js';
 import { PluginDatabaseHost, rootPluginId, TargetMigrationScopes } from 'zhin.js/plugin-runtime';
 import { createEarthquakeTargetMigration } from '../src/target-migration.js';
 import { SubscriptionStore, subscriptionKey, SUBSCRIPTIONS_STATE_KEY } from '../src/subscriptions.js';

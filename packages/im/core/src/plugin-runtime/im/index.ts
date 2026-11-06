@@ -12,7 +12,6 @@ export type {
   RuntimeEndpointSendInput,
   RuntimeEndpointTypingInput,
 } from './endpoint-runtime.js';
-export * from './ingress-route.js';
 export * from './inbound-spine.js';
 export * from './host/index.js';
 export { isMessageOrigin, roomMembershipToken } from './inbound-origin.js';
@@ -23,11 +22,7 @@ export type {
   RoomRouteDecision,
 } from './inbound-origin.js';
 export * from './im-runtime.js';
-export * from './operation-resources.js';
-export * from './login-assist-host.js';
-export * from './group-rule-violation.js';
-export * from './member-welcome.js';
-export * from './message-bus.js';
+export * from './command-feedback.js';
 export * from './message-dispatcher.js';
 export type {
   RuntimeMessageDiagnostic,
@@ -35,13 +30,18 @@ export type {
   RuntimeMessageDiagnosticDelivery,
   RuntimeMessageDiagnosticsReader,
 } from './message-diagnostics.js';
-export type {
-  RuntimeMessageEvent,
-  RuntimeMessageEventSource,
-  RuntimeMessageRendering,
-  RuntimeSceneEventSignal,
-  RuntimeSceneEventSource,
-  OutboundFallbackReason,
+export {
+  MessageBus,
+  messageBusToken,
+  type EndpointEvent,
+  type MessageBusEventMap,
+  type MessageBusEventName,
+  type RuntimeMessageEvent,
+  type RuntimeMessageEventSource,
+  type RuntimeMessageRendering,
+  type RuntimeSceneEventSignal,
+  type RuntimeSceneEventSource,
+  type OutboundFallbackReason,
 } from './message-events.js';
 export * from './outbound-renderer.js';
 export * from './outbound-segments.js';

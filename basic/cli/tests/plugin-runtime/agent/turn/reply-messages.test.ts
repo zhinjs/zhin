@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AgentOutputElement, DeliveryOutcome } from '@zhin.js/agent';
-import { followUpPauseMs, sendOutputMessages } from '../../../../src/plugin-runtime/agent/turn/reply-messages.js';
+import { followUpPauseMs, sendOutputMessages } from '@zhin.js/agent/runtime';
 
 const message = (text: string): AgentOutputElement => ({ type: 'message', segments: [{ type: 'text', data: { text } }] });
 const render = (output: readonly AgentOutputElement[]) =>

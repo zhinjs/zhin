@@ -3,7 +3,7 @@ import { personalSessionIdentity } from '@zhin.js/agent/personal-session';
 import { Message } from '@zhin.js/core/runtime';
 import type { ConversationRef } from '@zhin.js/im-contract';
 import { createRuntimeTurnAccess, createRuntimeTurnRequest, runtimeImSessionKey,
-  runtimePersonalSessionAddress, runtimeSceneTaskSessionKey } from '../../../../src/plugin-runtime/agent/turn/request.js';
+  runtimePersonalSessionAddress, runtimeSceneTaskSessionKey } from '@zhin.js/agent/runtime';
 
 const roles = { isMaster: false, isTrusted: false };
 const conversation: ConversationRef = {

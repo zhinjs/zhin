@@ -62,16 +62,16 @@ import {
   resolveProductTurnIntent,
   resolveRuntimeTurnCapabilities,
   resolveRuntimeTurnContextState,
+  resolveSandboxTurnPolicy,
   runtimePersonalSessionAddress,
   type RuntimeSenderRoles,
 } from './request.js';
-import { resolveSandboxTurnPolicy } from './sandbox-policy.js';
 import type { SceneFactRefresher } from './scene-fact-refresher.js';
 import {
   resolveTriggerTimeoutMs,
   routeSpecialistAgent,
   withTriggerTimeout,
-} from './trigger.js';
+} from './unified-mailbox-spine.js';
 
 export {
   admitIngressMailTurn,

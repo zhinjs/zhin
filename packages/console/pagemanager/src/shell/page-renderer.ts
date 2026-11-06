@@ -409,7 +409,14 @@ export function renderConsoleIndex(pages: readonly ConsoleIndexPage[]): string {
   const groupHtml = [...groups.entries()].map(([group, groupPages]) => {
     const items = groupPages.map((page) => {
       const ownerBadge = page.owner ? `<span class="route-badge">${escapeHtml(page.owner)}</span>` : '';
-      const desc = page.description ? `<div class="text-xs text-muted-foreground">${escapeHtml(page.description)}</div>` : '';
+      const bp = page.blueprint as Readonly<Record<string, unknown>> | undefined;
+      const bpDesc = !page.description && bp && typeof bp === 'object'
+        ? (typeof bp.subtitle === 'string'
+            ? bp.subtitle
+            : (typeof bp.description === 'string' ? bp.description : undefined))
+        : undefined;
+      const effectiveDesc = page.description ?? bpDesc;
+      const desc = effectiveDesc ? `<div class="text-xs text-muted-foreground">${escapeHtml(effectiveDesc)}</div>` : '';
       return `<li class="console-card" data-group="${escapeHtml(group)}">
         <div class="console-card-head">
           <a href="${escapeHtml(page.route)}"><strong>${escapeHtml(page.title)}</strong></a>

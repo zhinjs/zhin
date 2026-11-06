@@ -47,8 +47,8 @@ export function defineMiddleware<TInput, TConfig>(
   return define(definition);
 }
 
-export { outboundPresentationToken } from '../plugin-runtime/im/outbound-presentation.js';
+export { outboundPresentationToken } from '../plugin-runtime/im/outbound-renderer.js';
 export type {
   OutboundPresentation, OutboundPresentationContext, OutboundPresentationMode,
   OutboundPresentationPreferences,
-} from '../plugin-runtime/im/outbound-presentation.js';
+} from '../plugin-runtime/im/outbound-renderer.js';

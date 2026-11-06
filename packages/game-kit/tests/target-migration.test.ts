@@ -19,7 +19,7 @@ import {
   type SnapshotState,
   type TokenId,
 } from 'zhin.js';
-import { createDatabaseHost } from '../../../basic/cli/src/plugin-runtime/database-host-installer.js';
+import { createDatabaseHost } from '../../im/core/src/plugin-runtime/im/host/database-host-installer.js';
 import { MemoryDesiredRepository } from '../../../plugins/adapters/test-utils/desired-repository.js';
 import { ImRuntime } from '../../im/core/src/plugin-runtime/im/index.js';
 import { RuntimeMessage } from '../../im/core/src/plugin-runtime/im/contracts.js';

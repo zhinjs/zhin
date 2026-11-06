@@ -33,7 +33,7 @@ import { findConfigFile, readConfig } from '../utils/config-file.js';
 import { detectLegacyConfig, formatLegacyConfigHint } from '../utils/legacy-config.js';
 import { findMissingEndpointFields, loadPluginSchemaJson } from '../utils/adapter-endpoints-check.js';
 import { findDuplicateZhinInstances } from '../utils/dev-link.js';
-import { fetchReadiness } from '../plugin-runtime/readiness-client.js';
+import { fetchReadiness } from '@zhin.js/runtime';
 
 const execAsync = promisify(exec);
 const CONSOLE_URL = 'https://console.zhin.dev';

@@ -7,8 +7,8 @@ import { AdapterIndex, Adapter, endpointSpec, createEndpointSpecification, type 
 import { CommandIndex, commandFeatureId, defineCommand } from '@zhin.js/command';
 import { MiddlewareIndex, middlewareFeatureId, defineMiddleware } from '@zhin.js/middleware';
 import { ImRuntime, type Message, type SendContent, type OutboundEnvelope } from '../../src/plugin-runtime/im/index.js';
-import { createOutboundHost } from '../../../../../basic/cli/src/plugin-runtime/outbound-host-installer.js';
-import { createRuntimeProactiveOutbound } from '../../../../../basic/cli/src/plugin-runtime/agent/runtime-factory.js';
+import { createOutboundHost } from '../../src/plugin-runtime/im/host/outbound-host-installer.js';
+import { createRuntimeProactiveOutbound } from '../../../agent/src/plugin-runtime/host/runtime-factory.js';
 import { EndpointDeliveryError, type DeliveryReceipt } from '@zhin.js/im-contract';
 import { createNotificationRouter, createTaskExecutor, TimerScheduler, ScheduleJobStore } from '../../../agent/src/index.js';
 import { createScheduleAuditRecord } from '../../../agent/src/schedule-domain/audit-logger.js';

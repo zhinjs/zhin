@@ -15,7 +15,7 @@ import {
 } from '@zhin.js/runtime';
 import { serveCanonicalEsm, serveClientAsset } from './asset-server.js';
 import { writeHtml, writeJson } from './http-response.js';
-import { renderConsoleIndex, renderPageShell } from './page-renderer.js';
+import { renderConsoleIndex, renderPageShell } from '@zhin.js/pagemanager';
 import { createTsxModuleLoader } from '../start/tsx-module-loader.js';
 import {
   listPages,

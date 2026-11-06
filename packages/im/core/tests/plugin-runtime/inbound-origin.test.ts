@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createPeerRegistry } from '@zhin.js/adapter';
-import { createInboundOriginClassifier, MESSAGE_ORIGINS } from '../../src/plugin-runtime/im/inbound-origin.js';
-import { OutboundLedger, ledgerScopeOf } from '../../src/plugin-runtime/im/outbound-ledger.js';
+import { createInboundOriginClassifier, MESSAGE_ORIGINS, OutboundLedger, ledgerScopeOf } from '../../src/plugin-runtime/im/inbound-origin.js';
 
 const conv = (endpointId = 'e1') => ({
   endpoint: { id: endpointId, adapter: 'qq' }, kind: 'group' as const, id: 'g1',

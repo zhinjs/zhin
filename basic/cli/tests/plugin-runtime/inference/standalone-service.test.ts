@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { openHeadlessInferenceHost } from '../../../src/plugin-runtime/inference/headless-host.js';
+import { openHeadlessInferenceHost } from '@zhin.js/agent/runtime';
 
 it('creates, renames and deletes a standalone Service through the real built-in plan schema without credentials or discovery', async () => {
   const root = await mkdtemp(join(tmpdir(), 'inference-standalone-service-'));

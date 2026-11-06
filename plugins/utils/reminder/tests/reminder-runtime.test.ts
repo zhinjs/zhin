@@ -9,7 +9,7 @@ import { childPluginId, rootPluginId, definePlugin, databaseHostToken, databaseR
 import commandFeature, { commandFeatureId, CommandIndex } from '../../../../packages/im/command/src/index.js';
 import scheduleFeature from '@zhin.js/schedule-feature';
 import { RootRuntime, type ModuleRuntime } from '../../../../packages/im/runtime/src/index.js';
-import { createDatabaseHost } from '../../../../basic/cli/src/plugin-runtime/database-host-installer.js';
+import { createDatabaseHost } from '../../../../packages/im/core/src/plugin-runtime/im/index.js';
 import { sqliteAvailable } from '../../../../basic/cli/tests/plugin-runtime/sqlite-availability.js';
 import plugin from '../plugin.js';
 import configSchema from '../schema.json' with { type: 'json' };

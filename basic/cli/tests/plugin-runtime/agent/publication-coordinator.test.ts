@@ -1,7 +1,7 @@
 import { agentHostToken } from '@zhin.js/agent/runtime';
 import { Scope, rootPluginId } from '@zhin.js/plugin-runtime';
 import { describe, expect, it } from 'vitest';
-import { AgentHostPublicationCoordinator } from '../../../src/plugin-runtime/agent/publication-coordinator.js';
+import { AgentHostPublicationCoordinator } from '@zhin.js/agent/runtime';
 
 describe('AgentHostPublicationCoordinator', () => {
   it('rejects an aborted generation before publishing Host resources', () => {

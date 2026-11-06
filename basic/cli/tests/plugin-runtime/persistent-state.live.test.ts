@@ -3,9 +3,9 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { childPluginId, rootPluginId, PluginDatabaseHost, createDeliveryTarget, Scope, userLocalePreferencesToken } from '@zhin.js/plugin-runtime';
-import { createDatabaseHost } from '../../src/plugin-runtime/database-host-installer.js';
-import { installLocaleHost } from '../../src/plugin-runtime/locale-host-installer.js';
-import type { DatabaseHostConfig } from '../../src/plugin-runtime/database-config.js';
+import { createDatabaseHost } from '@zhin.js/core/runtime';
+import { installLocaleHost } from '@zhin.js/core/runtime';
+import type { DatabaseHostConfig } from '@zhin.js/core/runtime';
 
 const dialects = ['sqlite', ...(process.env.ZHIN_TEST_EXTERNAL_DATABASES === '1' ? ['pg', 'mysql'] : [])];
 describe('persistent state database CAS', () => {

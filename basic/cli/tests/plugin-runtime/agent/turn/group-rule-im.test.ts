@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AiControlPlane, AiGroupRules, DecisionEventLog, groupRuleHashShort } from '@zhin.js/agent';
 import { resolveToolHardGateImApproval } from '@zhin.js/agent/security';
-import { GroupRuleImChannel, formatGroupRuleCard, type GroupRuleCommandInput } from '../../../../src/plugin-runtime/agent/turn/group-rule-im.js';
+import { GroupRuleImChannel, formatGroupRuleCard, type GroupRuleCommandInput } from '@zhin.js/agent/runtime';
 
 const scene = { platform: 'icqq', sceneId: 'group:123' };
 const spec = { trigger: 'advertising', ladder: [{ action: 'remind' }, { action: 'mute', durationSec: 600 }], content: '发广告先提醒再禁言' };

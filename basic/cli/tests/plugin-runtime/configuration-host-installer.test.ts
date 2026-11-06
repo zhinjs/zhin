@@ -10,7 +10,7 @@ import { definePlugin, type RuntimeConfigDocument } from '@zhin.js/plugin-runtim
 import { createConfigDocument, RootRuntime, type ModuleRuntime } from '@zhin.js/runtime';
 import { ConsoleConfigurationStore } from '../../src/plugin-runtime/console/module.js';
 import { installConfigurationHost } from '../../src/plugin-runtime/configuration-host-installer.js';
-import { createConfigurationChatAuthorizer, createEndpointRoleResolver, createSenderEnricher } from '../../src/plugin-runtime/sender-enrichment.js';
+import { createConfigurationChatAuthorizer, createEndpointRoleResolver, createSenderEnricher } from '@zhin.js/core/runtime';
 
 class Client extends EventEmitter {
   readonly sendNative = vi.fn(async (_request: EndpointSendRequest) => 'sent');

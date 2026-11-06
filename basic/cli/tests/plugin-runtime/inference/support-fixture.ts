@@ -9,8 +9,8 @@ import {
 } from '@zhin.js/plugin-runtime';
 import { personalSessionOwnerId } from '@zhin.js/agent/personal-session';
 import { aiProviderDefinitionsToken, type ProviderDefinition, type ProviderGraph } from '@zhin.js/ai/provider';
-import { createDatabaseHost } from '../../../src/plugin-runtime/database-host-installer.js';
-import { HostInference } from '../../../src/plugin-runtime/inference/host.js';
+import { createDatabaseHost } from '@zhin.js/core/runtime';
+import { HostInference } from '@zhin.js/agent/runtime';
 
 /** The real management producer with synthetic declarations; no SDK or credential is needed. */
 export async function supportFixture(

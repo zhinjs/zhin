@@ -15,7 +15,7 @@ import { readPluginPackageMap } from './plugin-package-map.js';
 import { assertUnambiguousConfigKey, configKeyPatch, configKeyRemovePatch, flattenConfigDocument } from './configuration-projection.js';
 import { readEnvFile, writeEnvFile } from './environment-files.js';
 import { PluginSchemaCatalog } from './plugin-schema-catalog.js';
-import { hostModelOwnerId } from '../inference/host-identity.js';
+import { hostModelOwnerId } from '@zhin.js/plugin-runtime';
 import {
   assertChatConfigurationAccess, assertChatConfigurationScope, assertChatValueHasNoEnvironmentReference, assertChatOptionalLeaf, chatConfigurationLeaves, chatHostRoots, chatLeafTypes,
   ConfigChatAccessError, type ChatConfigurationScope,

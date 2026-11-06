@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AiAnnouncements, AiControlPlane, DecisionEventLog, type SessionProfileStore } from '@zhin.js/agent';
 import { ToolApprovalQueue } from '@zhin.js/agent/security';
-import { AnnouncementDispatcher, ANNOUNCEMENT_SEND_TOOL_NAME } from '../../../../src/plugin-runtime/agent/turn/announcement-dispatch.js';
+import { AnnouncementDispatcher, ANNOUNCEMENT_SEND_TOOL_NAME } from '@zhin.js/agent/runtime';
 
 async function approved(store: AiAnnouncements, content = '周六 14:00 活动室集合') {
   const { record } = await store.create({ platform: 'icqq', sceneId: 'group:123', content, createdBy: 'op', createdVia: 'console', endpoint: '10086' });

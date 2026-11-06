@@ -5,7 +5,7 @@ import { createAdministratorRssState } from '../../../../plugins/utils/rss/src/s
 import { ADMIN_RSS_STATE_KEY } from '../../../../plugins/utils/rss/src/admin-tasks.js';
 import { CONVERSATION_EVENT_MODEL, CONVERSATION_EVENT_QUERY_MODEL, CONVERSATION_CURSOR_MODEL, DatabaseConversationEventStore, type ConversationEvent } from '@zhin.js/im-contract';
 import { INBOX_MESSAGE_QUERY_COLUMNS, INBOX_MESSAGE_DEFINITION, INBOX_TABLE_MESSAGE } from '@zhin.js/plugin-runtime';
-import { migrateConversationColumns, migrateInboxColumns } from '../../src/plugin-runtime/conversation-migration.js';
+import { migrateConversationColumns, migrateInboxColumns } from '@zhin.js/core/runtime';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -13,7 +13,7 @@ import { childPluginId, rootPluginId, PluginDatabaseHost, createRelationalStateS
 import { AGENT_USAGE_TURN_MODEL, AGENT_USAGE_CALL_MODEL, DatabaseAgentUsageStore, AgentUsageCollector, DatabaseScheduleJobStorage, SCHEDULE_JOB_MODEL, SCHEDULE_JOB_MIGRATION_MODEL } from '@zhin.js/agent/runtime';
 import type { TurnRequest } from '@zhin.js/agent';
 import { ensureDatabaseColumns, ensureDatabaseIndex, type StructuredDatabase } from '@zhin.js/database';
-import { createDatabaseHost } from '../../src/plugin-runtime/database-host-installer.js';
+import { createDatabaseHost } from '@zhin.js/core/runtime';
 
 type Book = { revision: number; items: readonly { id: string; state: string }[] };
 const codec: RelationalStateCodec = {

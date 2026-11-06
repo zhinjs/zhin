@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { createDatabaseHost } from '../../../../basic/cli/src/plugin-runtime/database-host-installer.js';
+import { createDatabaseHost } from '../../../../packages/im/core/src/plugin-runtime/im/index.js';
 import { PluginDatabaseHost, rootPluginId, qualifyPluginResourceName } from 'zhin.js/plugin-runtime';
 import { createHostGameDb } from '@zhin.js/game-kit';
 import { defineHostTables } from '../src/models.js';

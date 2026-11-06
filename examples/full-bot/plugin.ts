@@ -1,8 +1,12 @@
 import {
   definePlugin,
+  definePluginCapabilityGraph,
   definePluginConsoleRpc,
+  pluginConsoleRpcToken,
   type PluginConsoleRpc,
 } from 'zhin.js';
+import type { FullBotTraceStatus } from './pages/agent-trace/index.js';
+import type { FullBotWorkroomStatus } from './pages/workroom/index.js';
 
 export interface FullBotAdapterRow {
   readonly instance: string;
@@ -68,9 +72,31 @@ export function getFullBotConsoleStatus(): FullBotConsoleStatus {
       {
         name: 'workroom & trace',
         kind: 'console-pages',
-        entry: 'pages/workroom & pages/agent-trace',
+        entry: 'pages/workroom/index.ts & pages/agent-trace/index.ts',
       },
     ],
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+export function getFullBotWorkroomSummary(): FullBotWorkroomStatus {
+  return {
+    plugin: 'full-bot',
+    activeRuns: 0,
+    pendingTasks: 0,
+    journalMode: 'engagement-journal',
+    runs: [],
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+export function getFullBotTraceSummary(): FullBotTraceStatus {
+  return {
+    plugin: 'full-bot',
+    retentionDays: 7,
+    maxArchiveMb: 64,
+    recentTurns: 0,
+    turns: [],
     updatedAt: new Date().toISOString(),
   };
 }
@@ -81,6 +107,22 @@ export const fullBotConsoleRpc: PluginConsoleRpc = definePluginConsoleRpc({
     demo: true,
     handler() {
       return { ...getFullBotConsoleStatus() };
+    },
+  },
+  queries: {
+    'workroom-summary': {
+      page: 'workroom',
+      demo: true,
+      handler() {
+        return { ...getFullBotWorkroomSummary() };
+      },
+    },
+    'trace-summary': {
+      page: 'agent-trace',
+      demo: true,
+      handler() {
+        return { ...getFullBotTraceSummary() };
+      },
     },
   },
   actions: {
@@ -94,6 +136,24 @@ export const fullBotConsoleRpc: PluginConsoleRpc = definePluginConsoleRpc({
         };
       },
     },
+    'refresh-workroom': {
+      page: 'workroom',
+      handler() {
+        return {
+          ok: true,
+          summary: { ...getFullBotWorkroomSummary() },
+        };
+      },
+    },
+    'refresh-traces': {
+      page: 'agent-trace',
+      handler() {
+        return {
+          ok: true,
+          summary: { ...getFullBotTraceSummary() },
+        };
+      },
+    },
   },
 });
 
@@ -102,6 +162,17 @@ export default definePlugin({
   metadata: {
     displayName: 'Full Bot (L4 reference)',
   },
+  capabilityGraph: definePluginCapabilityGraph({
+    provides: [pluginConsoleRpcToken],
+    features: {
+      commands: ['hello', 'card'],
+      components: ['status-card'],
+      skills: ['memory-consolidate', 'runtime-diagnostics'],
+      tools: ['runtime-status'],
+      promptSections: ['custom'],
+      pages: ['index', 'workroom', 'agent-trace'],
+    },
+  }),
   setup() {
     return { consoleRpc: fullBotConsoleRpc };
   },

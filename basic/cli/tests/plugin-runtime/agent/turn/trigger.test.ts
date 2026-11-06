@@ -8,7 +8,7 @@ import {
   TriggerTimeoutError,
   matchAiTrigger,
   resolveRuntimeAgentTrigger,
-} from '../../../../src/plugin-runtime/agent/turn/trigger.js';
+} from '@zhin.js/agent/runtime';
 
 const adapter = capabilityId(rootPluginId(), featureId('zhin.adapter'), 'icqq');
 

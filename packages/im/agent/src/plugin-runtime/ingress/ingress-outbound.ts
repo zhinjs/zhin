@@ -43,14 +43,13 @@ import { admissionRejectionNotice, reactionOf } from './ingress-delivery-helpers
 import { buildAdmittedVenueDescriptor } from './ingress-venue-helpers.js';
 import type { AgentIngressFoundationPort } from './ports.js';
 import { deliverReaction, type ReactionPacer } from './reaction-pacer.js';
-import { sendOutputMessages } from './reply-messages.js';
 import {
   deliveryOutcomeFromReceipt,
   resolveRuntimeTurnCapabilities,
+  type resolveSandboxTurnPolicy,
   type RuntimeSenderRoles,
 } from './request.js';
-import type { resolveSandboxTurnPolicy } from './sandbox-policy.js';
-import { renderChatTurnError } from './trigger.js';
+import { renderChatTurnError, sendOutputMessages } from './unified-mailbox-spine.js';
 
 type OperationSession = ReturnType<typeof readOperationSession>;
 type PreprocessedInbound = Awaited<ReturnType<typeof preprocessInboundTurn>>;

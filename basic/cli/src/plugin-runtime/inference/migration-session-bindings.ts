@@ -8,8 +8,8 @@ import {
   type SessionBindingsRunView,
 } from '@zhin.js/agent/runtime';
 import { assertStopped, withProjectLock } from '../migrate/instance-declarations.js';
-import * as headless from './headless-host.js';
-import * as journals from './migration-session-journal.js';
+import * as headless from '@zhin.js/agent/runtime';
+import * as journals from '@zhin.js/agent/runtime';
 import { readLegacyInferenceSources } from './migration-source.js';
 
 export async function previewSessionBindings(

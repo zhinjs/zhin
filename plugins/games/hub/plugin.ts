@@ -1,4 +1,8 @@
-import { definePlugin } from 'zhin.js';
+import {
+  definePlugin,
+  definePluginCapabilityGraph,
+  pluginConsoleRpcToken,
+} from 'zhin.js';
 import { createGameHubConsoleRpc } from './src/console.js';
 
 /**
@@ -10,6 +14,15 @@ export default definePlugin({
   metadata: {
     displayName: 'Game Hub',
   },
+  capabilityGraph: definePluginCapabilityGraph({
+    provides: [pluginConsoleRpcToken],
+    features: {
+      commands: ['games', '战绩', '排行'],
+      skills: ['game-hub'],
+      tools: ['game_catalog'],
+      pages: ['index'],
+    },
+  }),
   setup() {
     return {
       consoleRpc: createGameHubConsoleRpc(),

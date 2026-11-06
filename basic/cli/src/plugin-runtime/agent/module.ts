@@ -8,11 +8,11 @@ export {
   resolveAiConfig,
   resolveAgentHostExternalPeers,
   resolveAgentHostVenues,
-} from './config.js';
-export { createSelfChangeImpactPort } from './self-change-impact.js';
-export { createSelfChangePluginRoots } from './self-change-plugin-roots.js';
+} from '@zhin.js/agent/runtime';
+export { createSelfChangeImpactPort } from '@zhin.js/runtime';
+export { createSelfChangePluginRoots } from '@zhin.js/runtime';
 
-export { HostInference } from '../inference/host.js';
+export { HostInference } from '@zhin.js/agent/runtime';
 export { registerInferenceRoutes } from '../inference/routes.js';
-export { resolveInferenceManagementPrincipal } from '../inference/principal.js';
-export { InferenceManagementError } from '../inference/management.js';
+export { resolveInferenceManagementPrincipal } from '@zhin.js/agent/runtime';
+export { InferenceManagementError } from '@zhin.js/agent/runtime';

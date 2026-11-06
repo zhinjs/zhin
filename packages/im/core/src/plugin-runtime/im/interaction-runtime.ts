@@ -1,7 +1,6 @@
-import type { CapturedEndpointOperation } from './captured-endpoint-operation.js';
 import { resolveLocale, type RuntimeSnapshot, type Locale } from '@zhin.js/plugin-runtime';
 import { interactionMessages as t } from '../../built/interaction-messages.js';
-import { projectLocale } from './locale.js';
+import { projectLocale } from './inbound-spine.js';
 import {
   conversationRefKey,
   type ConversationRef,
@@ -23,25 +22,30 @@ import {
   type UserInteractionView,
 } from '../../built/user-interaction.js';
 import { randomUUID } from 'node:crypto';
-import { RuntimeMessage,
-  type Message, type MessageSenderRef, type SendContent, type SendRequest } from './contracts.js';
-import { interactionOperationScope, type InteractionOperationScope } from './interaction-operation.js';
-import { operationEndpoint } from './operation-endpoint.js';
+import {
+  RuntimeMessage,
+  interactionOperationScope,
+  operationEndpoint,
+  type CapturedEndpointOperation,
+  type InteractionOperationScope,
+  type Message,
+  type MessageSenderRef,
+  type SendContent,
+  type SendRequest,
+} from './contracts.js';
 import {
   actionPayloadFromSegments,
-  RuntimeInteractiveRouter,
-  type RememberFallbackContext,
-} from './interactive-router.js';
-import type { Segment } from '../../built/segment-contract/types.js';
-import {
   isJsxButtonPayload,
   isPluginIncarnationAlive,
   JsxButtonRegistry,
+  RuntimeInteractiveRouter,
   type JsxButtonBatch,
   type PluginIncarnationRef,
-} from './jsx-button-registry.js';
+  type RememberFallbackContext,
+} from './interactive-router.js';
+import type { Segment } from '../../built/segment-contract/types.js';
 
-export { isPluginIncarnationAlive, type PluginIncarnationRef } from './jsx-button-registry.js';
+export { isPluginIncarnationAlive, type PluginIncarnationRef } from './interactive-router.js';
 
 interface InteractionAnswer { readonly value: string; readonly action: boolean; }
 
