@@ -18,6 +18,8 @@ export interface RssConfig {
   readonly maxPerGroup: number;
   readonly maxItems: number;
   readonly timeout: number;
+  readonly maxItemsPerPoll?: number;
+  readonly fetchTimeoutMs?: number;
 }
 
 export const DEFAULT_RSS_CONFIG: RssConfig = {
@@ -28,7 +30,12 @@ export const DEFAULT_RSS_CONFIG: RssConfig = {
 };
 
 export function resolveRssConfig(raw: Partial<RssConfig> | undefined): RssConfig {
-  return { ...DEFAULT_RSS_CONFIG, ...raw };
+  const merged = { ...DEFAULT_RSS_CONFIG, ...raw };
+  return {
+    ...merged,
+    maxItemsPerPoll: raw?.maxItemsPerPoll ?? merged.maxItems,
+    fetchTimeoutMs: raw?.fetchTimeoutMs ?? merged.timeout,
+  };
 }
 
 /**

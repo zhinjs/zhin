@@ -73,6 +73,7 @@ group-suite:
 | `keyword-add <keyword> <reply...>` / `keyword-list` / `keyword-remove <keyword>` | 当前群词库 |
 | `welcomeMessage` | 当前群增加成员时欢迎，默认关闭，只在设置非空文本后发送 |
 | `skills/<name>/tools/<tool>/index.ts` | Skill 激活后披露签到查询、排行、统计和群公告 Tool |
+| `pages/index` + `pluginConsoleRpcToken` | Console「群管套件」页面（`group-suite:read`），展示签到记录数、问答词条数、签到排行榜与关键词问答规则 |
 
 关键词与问答修改命令要求群主、管理员、master 或 trusted；普通成员不能修改。查询命令仍按其
 各自公开 permit 执行。Tool 保持既有审批策略，命令角色判断不能替代 Tool 审批或平台权限。

@@ -73,6 +73,24 @@ ledger:
 
 发送 `记账日报 开启` 订阅。插件每分钟检查一次，按 `timezone` 到达 `reportTime` 后给订阅者私信当天的合计和分类明细，每人每天最多一次；当天没有记账时默认不发送。在群里开启时会先私信一条确认，私信失败则不开启并提示先私聊 Bot。在 `reportTime` 之后开启的，从第二天开始发送。投递失败只记录日志，当天不重试。
 
+## Agent 工具与技能
+
+启用 `@zhin.js/tool` 与 `@zhin.js/skill` Feature 后，本插件提供 `ledger` 技能与以下工具（按当前发送者隔离，群聊遵守同样的金额隐私策略）：
+
+| 工具 | 权限/属性 | 说明 |
+| --- | --- | --- |
+| `ledger_add` | `requiresApproval: 'always'` | 记录一笔个人支出（`category`、`amount`、可选 `note`） |
+| `ledger_summary` | `readOnly: true` | 查看 `today` / `week` / `month` 的消费汇总（`summary`）或分类统计（`categories`） |
+| `ledger_list` | `readOnly: true` | 查看指定时间段内的账单明细与编号（`#seq`） |
+| `ledger_delete` | `requiresApproval: 'always'` | 按编号 `seq` 删除当前发送者自己的账目 |
+
+## Console 页面与 RPC
+
+启用 `@zhin.js/page` Feature 后，插件暴露声明式页面 `pages/index/index.ts` 与 Console RPC：
+
+- `status`（`ledger:read`）：返回日报订阅人数、订阅状态摘要（`ownerKey`、`reportLocale`、`lastReportDate`）与运行配置，不暴露个人消费明细或金额。
+- `run-daily-reports`（`ledger:write`）：立即触发一次当日日报检查与投递。
+
 ## 开发
 
 ```bash

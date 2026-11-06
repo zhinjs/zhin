@@ -93,11 +93,17 @@ remind cancel <任务 ID>
 ## 目录
 
 ```text
-plugin.ts                 # Schema、owner 服务资源及显式检查
-src/                      # 服务、状态契约与指令 helper
+plugin.ts                 # Schema、owner 服务资源、Console RPC 及显式检查
+src/                      # 服务、状态契约、Console RPC 与指令 helper
 commands/remind/*/index.ts # 集中参数声明与标准 Command dispatcher
+pages/index/index.ts      # 声明式 Console 概览页（reminder:read）
 schedules/poll/index.ts   # 正式 Schedule Feature 入口
+skills/reminder/          # Agent 技能与 reminder_create / list / cancel 工具
 ```
+
+## Console 概览页与 RPC
+
+启用 `@zhin.js/page` Feature 后，插件通过 `pages/index/index.ts` 与 `pluginConsoleRpcToken` 提供只读状态页（需要 `reminder:read` 权限），展示当前实例的活跃提醒数量、显示时区、单用户配额上限及活跃提醒列表摘要。
 
 ## Agent 工具与技能
 

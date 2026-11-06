@@ -1,6 +1,13 @@
 {
   "extends": "./tsconfig.json",
-  "compilerOptions": { "noEmit": true, "rootDir": "." },
-  "include": ["src/**/*.ts", "plugin.ts", "skills/**/*.ts", "commands/**/*.ts"],
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".",
+    "paths": {
+      "@zhin.js/client": ["../../../packages/console/client/dist/index.d.ts"],
+      "@zhin.js/console-contract": ["../../../packages/console/contract/lib/index.d.ts"]
+    }
+  },
+  "include": ["src/**/*.ts", "plugin.ts", "skills/**/*.ts", "commands/**/*.ts", "pages/**/*.ts"],
   "exclude": ["lib", "node_modules", "tests"]
 }

@@ -36,6 +36,14 @@ export class GroupReviewQueue {
     this.#moderator = moderator;
   }
 
+  get pendingCount(): number {
+    let total = 0;
+    for (const scene of this.#scenes.values()) {
+      total += scene.pending.length;
+    }
+    return total;
+  }
+
   /** Bind detached review work to its actual Adapter owner, not a replaceable generation gate. */
   captureSource(input: GroupReviewSourceInput): CapturedGroupReviewSource {
     const source = { owner: input.owner, abort: new AbortController() };

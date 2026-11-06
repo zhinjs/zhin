@@ -193,6 +193,10 @@ npx zhin-calendar-auth microsoft
 
 创建前应向用户确认标题、时间与时区。
 
+## Console 状态页 (`pages/index`)
+
+插件提供声明式 Console 页面（路由 `/calendar`，权限 `calendar:read`），通过 `plugin.<pluginId>.status` 只读展示当前日历后端（`provider`）、时区（`timezone`）、就绪状态（`ready`）、OAuth 回调路径（`oauthCallbackPath`）与工作时段（`workingHours`），不暴露任何客户端密钥或 `refresh_token`。
+
 ## Language / 语言
 
 授权命令按当前操作语言回复，OAuth 回调页面、完成通知和后续授权失效通知固定使用发起授权时的语言。refresh_token 轮换保留该语言和原完整通知目标。状态页中的授权指令由当前命令上下文解析真实前缀与插件命名空间；没有可用命令上下文时只描述授权入口，不猜测指令。

@@ -17,6 +17,8 @@
     "plugin.js",
     "schema.json",
     "commands",
+    "pages",
+    "skills",
     "src",
     "lib",
     "README.md"
@@ -31,12 +33,18 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@zhin.js/game-kit": "workspace:*"
+    "@zhin.js/client": "workspace:*",
+    "@zhin.js/console-contract": "workspace:*",
+    "@zhin.js/game-kit": "workspace:*",
+    "@zhin.js/page": "workspace:*",
+    "@zhin.js/skill": "workspace:*",
+    "@zhin.js/tool": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",
-    "zhin.js": "workspace:*"
+    "zhin.js": "workspace:*",
+    "zod": "^4.4.3"
   },
   "repository": {
     "type": "git",
@@ -71,16 +79,44 @@
       {
         "package": "@zhin.js/game-kit",
         "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/tool",
+        "api": "^1.1.0"
+      },
+      {
+        "package": "@zhin.js/skill",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/page",
+        "api": "^1.0.0"
       }
     ],
     "plugins": []
   },
   "peerDependencies": {
     "@zhin.js/command": "workspace:^",
-    "zhin.js": "workspace:^"
+    "@zhin.js/page": "workspace:^",
+    "@zhin.js/skill": "workspace:^",
+    "@zhin.js/tool": "workspace:^",
+    "zhin.js": "workspace:^",
+    "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {
     "@zhin.js/command": {
+      "optional": true
+    },
+    "@zhin.js/page": {
+      "optional": true
+    },
+    "@zhin.js/skill": {
+      "optional": true
+    },
+    "@zhin.js/tool": {
+      "optional": true
+    },
+    "zod": {
       "optional": true
     }
   }

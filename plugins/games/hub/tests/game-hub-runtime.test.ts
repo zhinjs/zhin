@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseCommandDefinition } from 'zhin.js/command';
+import { parseAgentToolDefinition } from '@zhin.js/tool';
 import { childPluginId, createCapabilitySlot, rootPluginId } from 'zhin.js';
 import {
   defineGame,
@@ -13,6 +14,9 @@ import plugin from '../plugin.ts';
 import gamesCommand from '../commands/games/[[action]]/index.ts';
 import statsCommand from '../commands/战绩/index.ts';
 import leaderboardCommand from '../commands/排行/[[query]]/index.ts';
+import gameCatalogTool from '../skills/game-hub/tools/game_catalog/index.ts';
+import pageComponent, { meta as pageMeta } from '../pages/index/index.ts';
+import { createGameHubConsoleRpc, gameIndexToken } from '../src/index.js';
 
 function index(games: RuntimeRegisteredGame[] = [], records?: Partial<GameRecordPort>): GameIndex {
   const port: GameRecordPort = {
@@ -102,6 +106,87 @@ describe('@zhin.js/plugin-game-hub runtime', () => {
       ...commandContext(games), params: { query: '扫雷' }, input: smokeGameMessage() as never,
     });
     expect(String(missing)).toContain('未找到游戏「扫雷」');
+  });
+
+  it('validates and executes the game_catalog AI tool', async () => {
+    expect(parseAgentToolDefinition(gameCatalogTool)).toBe(gameCatalogTool);
+    expect(gameCatalogTool.readOnly).toBe(true);
+
+    const games = index([guess]);
+    const allResult = await gameCatalogTool.execute(
+      {},
+      {
+        use: (token: unknown) => (token === gameIndexToken ? games : undefined),
+        project: (feature: unknown) => (feature === gameFeatureId ? games : undefined),
+      } as never,
+    );
+    expect(allResult.count).toBe(1);
+    expect(allResult.games[0]).toMatchObject({
+      id: 'guess',
+      name: '猜数字',
+      aliases: ['guess'],
+      minPlayers: 1,
+      maxPlayers: 1,
+      description: '1~100 七步猜中神秘数',
+      startCommand: '/猜数 开始',
+    });
+
+    const filtered = await gameCatalogTool.execute(
+      { game: 'nonexistent' },
+      {
+        use: (token: unknown) => (token === gameIndexToken ? games : undefined),
+      } as never,
+    );
+    expect(filtered.count).toBe(0);
+    expect(filtered.games).toEqual([]);
+  });
+
+  it('exposes Console RPC status via createGameHubConsoleRpc', async () => {
+    const games = index([guess]);
+    const rpc = createGameHubConsoleRpc();
+    const statusMethod = rpc.methods.get('status');
+    expect(statusMethod).toBeDefined();
+    expect(statusMethod?.page).toBe('index');
+    expect(statusMethod?.requiredPermissions).toContain('game-hub:read');
+
+    const snapshot = await statusMethod?.handler(
+      {},
+      {
+        signal: new AbortController().signal,
+        runtime: {
+          owner: 'root/game-hub' as never,
+          generation: 1,
+          operator: true,
+          project: (feature: unknown) => (feature === gameFeatureId ? games : undefined),
+          use: (token: unknown) => (token === gameIndexToken ? games : undefined),
+        } as never,
+      },
+    ) as Record<string, unknown>;
+
+    expect(snapshot).toEqual({
+      gameCount: 1,
+      games: [
+        {
+          id: 'guess',
+          name: '猜数字',
+          aliases: 'guess',
+          minPlayers: 1,
+          maxPlayers: 1,
+          description: '1~100 七步猜中神秘数',
+        },
+      ],
+    });
+  });
+
+  it('defines declarative Console page metadata and component', () => {
+    expect(pageMeta).toMatchObject({
+      title: '游戏大厅',
+      titleI18n: { en: 'Game Hub' },
+      icon: 'Gamepad2',
+      order: 57,
+      requiredPermissions: ['game-hub:read'],
+    });
+    expect(typeof pageComponent).toBe('function');
   });
 });
 

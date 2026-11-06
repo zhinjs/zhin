@@ -1,8 +1,9 @@
 import { projectLocaleToken } from 'zhin.js/i18n';
-import { databaseHostToken, definePlugin, outboundHostToken } from 'zhin.js';
+import { databaseHostToken, definePlugin, outboundHostToken, pluginConsoleRpcToken } from 'zhin.js';
 import { pluginVerificationToken, pluginTaskProviderToken } from 'zhin.js/plugin-runtime';
 import { randomUUID } from 'node:crypto';
 import { assertReminderTimezone, type ReminderConfig } from './src/config.js';
+import { createReminderConsoleRpc } from './src/console.js';
 import { createReminderState } from './src/storage.js';
 import { ReminderService } from './src/service.js';
 import { reminderServiceToken } from './src/runtime.js';
@@ -21,6 +22,7 @@ export default definePlugin<ReminderConfig>({
     if (!outbound.sendTarget) throw new Error('提醒需要支持精确 DeliveryTarget 的 Outbound Host');
     const service = new ReminderService(taskState, outbound, config, context.resources.use(projectLocaleToken));
     context.resources.provide(reminderServiceToken, service);
+    context.resources.provide(pluginConsoleRpcToken, createReminderConsoleRpc(service));
     context.resources.provide(pluginTaskProviderToken, service.administratorTasks);
     context.resources.provide(pluginVerificationToken, {
       checks: () => [{ id: 'local-state', title: '持久状态读写检查', titleI18n: { en: 'Persistent state read/write check' }, scope: 'local',

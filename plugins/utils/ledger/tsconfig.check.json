@@ -8,6 +8,7 @@
     "src/**/*.ts",
     "plugin.ts",
     "commands/**/*.ts",
+    "pages/**/*.ts",
     "schedules/**/*.ts",
     "skills/**/*.ts"
   ],

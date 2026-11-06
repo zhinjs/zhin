@@ -26,6 +26,19 @@ export type ReminderTask = {
   readonly claimId: string | null; readonly lastRunAt: number | null; readonly detail: string; readonly detailKey?: ReminderDetailKey; readonly failureCode?: string | null;
 };
 export type ReminderBook = { readonly version: 1; readonly tasks: readonly ReminderTask[] };
+export type ReminderConsoleItem = {
+  readonly id: string;
+  readonly text: string;
+  readonly nextFireAt: string;
+  readonly intervalMs: number | null;
+  readonly status: string;
+};
+export type ReminderConsoleSnapshot = {
+  readonly timezone: string;
+  readonly maxPerUser: number;
+  readonly activeCount: number;
+  readonly reminders: readonly ReminderConsoleItem[];
+};
 
 /** Generation-owned worker; saved state contains plain identities, never live objects. */
 export class ReminderService {
@@ -149,6 +162,25 @@ export class ReminderService {
     const detail = task.detailKey ? t(locale, task.detailKey, { code: task.failureCode ?? '' }) : task.detail;
     return `${task.id} | ${state} | ${date} (${this.#config.timezone})${task.intervalMs === null ? '' : ` | ${t(locale, 'every', { seconds: task.intervalMs / 1000 })}`}`
       + `\n${task.text}${detail ? `\n${detail}` : ''}`;
+  }
+
+  async getConsoleSnapshot(): Promise<ReminderConsoleSnapshot> {
+    this.#assertLive();
+    const book = readBook(await this.#state.get<ReminderBook>(REMINDER_STATE_KEY));
+    const active = book.tasks.filter(item => item.status === 'pending' || item.status === 'unknown');
+    const reminders: ReminderConsoleItem[] = active.map(task => ({
+      id: task.id,
+      text: task.text,
+      nextFireAt: new Date(task.nextRunAt).toISOString(),
+      intervalMs: task.intervalMs,
+      status: task.status,
+    }));
+    return {
+      timezone: this.#config.timezone,
+      maxPerUser: this.#config.maxTasksPerSender,
+      activeCount: reminders.length,
+      reminders,
+    };
   }
 
   #assertLive(locale?: Locale): void { if (this.#stopped) throw new Error(t(locale, 'serviceStopped')); }

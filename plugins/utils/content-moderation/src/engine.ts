@@ -13,9 +13,11 @@ import {
   maxSeverity,
   type Action,
   type Direction,
+  type ExtractedImage,
   type MergedResult,
   type ModerationConfig,
   type ProviderResult,
+  type ScanContext,
   type ScanInput,
   type Severity,
 } from './types.js';
@@ -57,6 +59,47 @@ export class ModerationEngine {
 
   get config(): ModerationConfig {
     return this.#config;
+  }
+
+  get providers(): readonly ModerationProvider[] {
+    return this.#providers;
+  }
+
+  get sensitivity(): string {
+    const local = this.#config.sources.find((source) => source.type === 'local');
+    if (local && local.type === 'local') return local.defaultSeverity;
+    return this.#config.onError === 'closed' ? 'strict' : 'medium';
+  }
+
+  get pendingReviewsCount(): number {
+    return this.groupReviewQueue.pendingCount;
+  }
+
+  async moderate(input: {
+    readonly text: string;
+    readonly direction?: Direction;
+    readonly images?: readonly ExtractedImage[];
+    readonly context?: Partial<ScanContext>;
+  }): Promise<MergedResult & { readonly passed: boolean; readonly actions: readonly Action[] }> {
+    const direction = input.direction ?? 'inbound';
+    const merged = await this.scan({
+      text: input.text,
+      images: input.images ?? [],
+      direction,
+      context: {
+        adapter: input.context?.adapter ?? 'console',
+        endpoint: input.context?.endpoint ?? 'dry-run',
+        conversationKind: input.context?.conversationKind ?? 'private',
+        conversationId: input.context?.conversationId ?? 'dry-run',
+        ...(input.context?.sender !== undefined ? { sender: input.context.sender } : {}),
+      },
+    });
+    const actions = this.#config.actions[merged.severity] ?? [];
+    return Object.freeze({
+      ...merged,
+      passed: merged.severity === 'pass',
+      actions: Object.freeze([...actions]),
+    });
   }
 
   configure(raw: unknown): void {

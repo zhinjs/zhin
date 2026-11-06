@@ -1,4 +1,5 @@
-import { definePlugin } from 'zhin.js';
+import { definePlugin, pluginConsoleRpcToken } from 'zhin.js';
+import { createGameHubConsoleRpc } from './src/console.js';
 
 /**
  * Plugin Runtime game hub — commands read the generation-owned GameIndex projection.
@@ -9,5 +10,7 @@ export default definePlugin({
   metadata: {
     displayName: 'Game Hub',
   },
-  setup() {},
+  setup(context) {
+    context.resources.provide(pluginConsoleRpcToken, createGameHubConsoleRpc());
+  },
 });

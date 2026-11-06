@@ -3,12 +3,14 @@ import {
   databaseHostToken,
   definePlugin,
   outboundHostToken,
+  pluginConsoleRpcToken,
   type DeliveryTarget,
 } from "zhin.js";
 import { httpHostToken } from "@zhin.js/host-http";
 import {
   assertCalendarTimezone,
   type CalendarConfig,
+  createCalendarConsoleRpc,
   createCalendarProvider,
   createOAuthTokenManagers,
 } from "./src/index.js";
@@ -83,11 +85,13 @@ export default definePlugin<CalendarConfig>({
     });
 
     const provider = createCalendarProvider(config, { managers });
-    context.resources.provide(calendarRuntimeToken, {
+    const runtime = {
       config,
       provider,
       auth: auth as CalendarAuthService<unknown>,
-    });
+    };
+    context.resources.provide(calendarRuntimeToken, runtime);
+    context.resources.provide(pluginConsoleRpcToken, createCalendarConsoleRpc(runtime));
     if (config.provider !== "none" && !provider) {
       console.warn(
         "[calendar] provider 已配置但凭据为空，日历工具将不可用；Google/Microsoft 请先配置 client_id，再在聊天中发送 calendar auth <provider>"

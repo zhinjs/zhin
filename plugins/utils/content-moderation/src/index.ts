@@ -46,3 +46,13 @@ export { BUILTIN_LEXICON, mergeLexiconEntries } from './providers/builtin-lexico
 export type { LexiconEntry, LexiconSeverity } from './providers/builtin-lexicon.js';
 export { HttpModerationProvider, parseHttpResult, isPublicHttpUrl } from './providers/http.js';
 export { createProviders } from './providers/registry.js';
+export {
+  createModerationConsoleRpc,
+  MODERATION_CONSOLE_PAGE,
+  MODERATION_READ_PERMISSION,
+} from './console.js';
+export type {
+  ModerationCheckTextResult,
+  ModerationConsoleStatus,
+  ModerationProviderStatusRow,
+} from './console.js';

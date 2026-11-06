@@ -38,3 +38,13 @@ export {
   statsRankText,
   weekStartStr,
 } from './stats-lib.js';
+export {
+  createGroupSuiteConsoleRpc,
+  GROUP_SUITE_CONSOLE_PAGE,
+  GROUP_SUITE_READ_PERMISSION,
+} from './console.js';
+export type {
+  GroupSuiteCheckinLeaderboardRow,
+  GroupSuiteConsoleStatus,
+  GroupSuiteKeywordRow,
+} from './console.js';
