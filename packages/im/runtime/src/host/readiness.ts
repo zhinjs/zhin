@@ -1,5 +1,4 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { AdapterIndex } from '@zhin.js/adapter';
 import {
   databaseHostToken,
   featureId,
@@ -9,8 +8,20 @@ import {
   type SnapshotReader,
 } from '@zhin.js/plugin-runtime';
 
+interface ReadinessAdapterEndpointDescription {
+  readonly id: unknown;
+  readonly owner: string;
+  readonly connected?: boolean;
+  readonly admitted?: boolean;
+  readonly transportState?: string;
+}
+
+interface ReadinessAdapterIndexLike {
+  describe(): readonly ReadinessAdapterEndpointDescription[];
+}
+
 const adapterFeatureId = featureId('zhin.adapter');
-function isAdapterIndex(value: unknown): value is AdapterIndex {
+function isAdapterIndex(value: unknown): value is ReadinessAdapterIndexLike {
   return !!value && typeof value === 'object'
     && (value as { readonly $projection?: unknown }).$projection === 'zhin.adapter-index/1';
 }

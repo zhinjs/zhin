@@ -1,13 +1,17 @@
 import { randomUUID } from 'node:crypto';
-import type { AdapterIndex } from '@zhin.js/adapter';
 import { DataMigrationError, featureId, normalizeDeliveryTarget, pluginDataMigrationProviderToken, generationAdmissionSource,
   type DataMigrationInventory, type DataMigrationPlan, type DataMigrationReceipt, type DataMigrationInspection, type DeliveryTarget,
   type PluginDataMigrationProvider, type PluginId, type RuntimeSnapshot, type SnapshotReader,
 } from '@zhin.js/plugin-runtime';
 import { DataMigrationPlanStore, type StoredDataMigrationPlan } from './plan-store.js';
 
+interface MigrationAdapterIndexLike {
+  list(): readonly { readonly id: unknown }[];
+  clientAdapter(id: unknown): string | undefined;
+}
+
 const adapterFeatureId = featureId('zhin.adapter');
-function isAdapterIndex(value: unknown): value is AdapterIndex {
+function isAdapterIndex(value: unknown): value is MigrationAdapterIndexLike {
   return !!value && typeof value === 'object'
     && (value as { readonly $projection?: unknown }).$projection === 'zhin.adapter-index/1';
 }
