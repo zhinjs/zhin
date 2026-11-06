@@ -1,0 +1,16 @@
+packages/im/runtime/src/host/data-migration/controller.ts
+  h_6f5e45c41d0910 8-12,14
+packages/im/runtime/src/host/readiness.ts
+  h_6f5e45c41d0910 11-22,24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "359ffc24d176d2dd9b9fd1253ca5be85a914a0a1",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
