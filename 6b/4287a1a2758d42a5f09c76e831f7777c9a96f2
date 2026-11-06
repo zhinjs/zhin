@@ -1,0 +1,40 @@
+AGENTS.md
+  h_6f5e45c41d0910 56,59-60,62-64,152,154-159
+README.md
+  h_6f5e45c41d0910 69
+README.zh-CN.md
+  h_6f5e45c41d0910 69
+docs/authoring/console-pages.md
+  h_6f5e45c41d0910 8,10,12,14-21,30-62,65,67,71-94,501,505,514,533,584,588-593,596-598
+docs/authoring/define-plugin.md
+  h_6f5e45c41d0910 273,279-294
+docs/concepts/architecture.md
+  h_6f5e45c41d0910 96-97,99,101,103-105,107-108,115,117,121
+docs/contributing/public-api-surface.md
+  h_6f5e45c41d0910 23-24,130
+docs/contributing/repo-structure.md
+  h_6f5e45c41d0910 14-15,79-83
+docs/en/authoring/console-pages.md
+  h_6f5e45c41d0910 8,10,12,14-21,30-62,65,67,71-94,501,505,514,533,584,588-593,596-598
+docs/en/authoring/define-plugin.md
+  h_6f5e45c41d0910 273,279-294
+docs/en/concepts/architecture.md
+  h_6f5e45c41d0910 82-83,85,87,89-91,93-94,98,100,104
+packages/console/pagemanager/README.md
+  h_6f5e45c41d0910 3,8,23-27,51,53,63-64
+packages/host/http/README.md
+  h_6f5e45c41d0910 7-8
+packages/host/mcp/README.md
+  h_6f5e45c41d0910 53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6b4287a1a2758d42a5f09c76e831f7777c9a96f2",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
