@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { scryptSync } from 'node:crypto';
 import {
   parseCredentialEnvironmentExpression,
   type JsonObject,
@@ -227,7 +227,9 @@ export class InferenceCredentialStore {
   }
 }
 
+const CREDENTIAL_FINGERPRINT_SALT = 'zhin-inference-material-fingerprint-v1';
+
 /** This fingerprint is only retained inside the encrypted private payload, never in public graph/DTO/logs. */
 export function credentialMaterialFingerprint(value: string): string {
-  return createHash('sha256').update(value).digest('hex');
+  return scryptSync(value, CREDENTIAL_FINGERPRINT_SALT, 32).toString('hex');
 }

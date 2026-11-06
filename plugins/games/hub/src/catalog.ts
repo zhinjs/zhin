@@ -59,6 +59,50 @@ export function resolveGameIndex(context?: ContextWithIndexLookup): GameIndex | 
   return undefined;
 }
 
+function isAsciiDigitCode(code: number): boolean {
+  return code >= 48 && code <= 57;
+}
+
+function isAsciiDigitsOnly(value: string): boolean {
+  if (value.length === 0 || value.length > 4) return false;
+  for (let i = 0; i < value.length; i += 1) {
+    if (!isAsciiDigitCode(value.charCodeAt(i))) return false;
+  }
+  return true;
+}
+
+function parsePlayerRangeFromDescription(description: string): {
+  readonly minPlayers: number;
+  readonly maxPlayers: number;
+} | undefined {
+  const text = description.slice(0, 200);
+  let searchFrom = 0;
+  while (searchFrom < text.length) {
+    const personIdx = text.indexOf('人', searchFrom);
+    if (personIdx <= 0) return undefined;
+    searchFrom = personIdx + 1;
+    const prefix = text.slice(0, personIdx).trimEnd();
+    for (const sep of ['-', '~', '至']) {
+      const sepIdx = prefix.lastIndexOf(sep);
+      if (sepIdx <= 0) continue;
+      const rightStr = prefix.slice(sepIdx + sep.length).trim();
+      if (!isAsciiDigitsOnly(rightStr)) continue;
+      const leftPrefix = prefix.slice(0, sepIdx).trimEnd();
+      let leftStart = leftPrefix.length;
+      while (leftStart > 0 && isAsciiDigitCode(leftPrefix.charCodeAt(leftStart - 1))) {
+        leftStart -= 1;
+      }
+      const leftStr = leftPrefix.slice(leftStart);
+      if (!isAsciiDigitsOnly(leftStr)) continue;
+      return {
+        minPlayers: Number(leftStr),
+        maxPlayers: Number(rightStr),
+      };
+    }
+  }
+  return undefined;
+}
+
 export function inferPlayerBounds(game: RuntimeGameWithPlayers): {
   readonly minPlayers: number;
   readonly maxPlayers: number;
@@ -66,12 +110,9 @@ export function inferPlayerBounds(game: RuntimeGameWithPlayers): {
   if (typeof game.minPlayers === 'number' && typeof game.maxPlayers === 'number') {
     return { minPlayers: game.minPlayers, maxPlayers: game.maxPlayers };
   }
-  const rangeMatch = /(\d+)\s*[-~至]\s*(\d+)\s*人/u.exec(game.description);
-  if (rangeMatch) {
-    return {
-      minPlayers: Number(rangeMatch[1]),
-      maxPlayers: Number(rangeMatch[2]),
-    };
+  const parsedRange = parsePlayerRangeFromDescription(game.description);
+  if (parsedRange) {
+    return parsedRange;
   }
   if (game.id === 'roulette') return { minPlayers: 2, maxPlayers: 6 };
   if (game.id === 'ttt') return { minPlayers: 1, maxPlayers: 2 };
