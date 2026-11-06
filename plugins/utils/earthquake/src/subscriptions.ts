@@ -1,6 +1,6 @@
 import { conversationRefKey } from 'zhin.js';
 import { subscriptionDocument } from './migration-document.js';
-import { normalizeDeliveryTarget, type DeliveryTarget, type JsonValue, type TargetMigrationScopes } from 'zhin.js/plugin-runtime';
+import { normalizeDeliveryTarget, type DeliveryTarget, type JsonSerializable, type JsonValue, type TargetMigrationScopes } from 'zhin.js/plugin-runtime';
 import { resolveLocale, type Locale } from 'zhin.js/i18n';
 /**
  * Conversation subscriptions, one per conversation.
@@ -31,8 +31,8 @@ export interface EarthquakeSubscription {
 /** Minimal key-value surface; `PluginStateStore` from the database host satisfies it. */
 export interface KeyValueState {
   get(key: string): Promise<unknown>;
-  set(key: string, value: never): Promise<void>;
-  update?<T extends JsonValue>(key: string, updater: (current: T | undefined) => T | undefined): Promise<T | undefined>;
+  set<T>(key: string, value: T & JsonSerializable<T>): Promise<void>;
+  update?<T = JsonValue>(key: string, updater: (current: T | undefined) => (T & JsonSerializable<T>) | undefined): Promise<T | undefined>;
 }
 
 export const SUBSCRIPTIONS_STATE_KEY = 'subscriptions/v1';
@@ -77,7 +77,7 @@ export function createMemoryState(): KeyValueState {
     async get(key: string) {
       return structuredClone(values.get(key));
     },
-    async set(key: string, value: never) {
+    async set(key: string, value: unknown) {
       values.set(key, structuredClone(value));
     },
   };
@@ -134,7 +134,7 @@ export class SubscriptionStore {
   async #mutate<T>(change: (subscriptions: EarthquakeSubscription[]) => { subscriptions: EarthquakeSubscription[]; result: T }): Promise<T> {
     if (!this.#state.update) {
       const changed = change(await this.list());
-      await this.#state.set(SUBSCRIPTIONS_STATE_KEY, changed.subscriptions as never);
+      await this.#state.set(SUBSCRIPTIONS_STATE_KEY, changed.subscriptions);
       return changed.result;
     }
     let result!: T;

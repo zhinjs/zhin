@@ -315,6 +315,7 @@
     "export * from './schedule-host.js';",
     "export * from './shared-lifetime.js';",
     "export * from './snapshot.js';",
+    "export * from './store.js';",
     "export * from './system-log.js';",
     "export * from './task-storage.js';",
     "export * from './token.js';",

@@ -8,8 +8,30 @@ import type { FeatureId, PluginId } from './identity.js';
 import type { Scope, Token } from './token.js';
 import type { PluginEventSubscriptions } from './plugin-events.js';
 import { freezePluginConfigUpdate, type PluginConfigUpdateDeclaration } from './config-update-declaration.js';
+import {
+  definePluginConsoleRpc,
+  pluginConsoleRpcToken,
+  type PluginConsoleRpc,
+  type PluginConsoleRpcDefinition,
+} from './plugin-console-rpc.js';
+import { pluginTaskProviderToken, type PluginTaskProvider } from './plugin-tasks.js';
+import { pluginVerificationToken, type PluginVerificationHost } from './plugin-verification.js';
+import {
+  pluginDataMigrationProviderToken,
+  type PluginDataMigrationProvider,
+} from './data-migration.js';
 export { freezePluginConfigUpdate } from './config-update-declaration.js';
 export type { PluginConfigUpdateDeclaration } from './config-update-declaration.js';
+export {
+  definePluginStore,
+  type PluginStore,
+  type PluginStoreOptions,
+  type PluginStoreCarrier,
+  type ResourceReaderCarrier,
+  type SetupResourceCarrier,
+} from './store.js';
+export { pluginTaskProviderToken, type PluginTaskProvider } from './plugin-tasks.js';
+export { pluginVerificationToken, type PluginVerificationHost } from './plugin-verification.js';
 
 export interface PluginMetadata {
   readonly displayName?: string;
@@ -65,6 +87,19 @@ export {
   type HmrOutcome,
 } from './plugin-events.js';
 
+export interface PluginSetupCapabilities<TConfig = Record<string, unknown>> {
+  readonly consoleRpc?: PluginConsoleRpc | PluginConsoleRpcDefinition<TConfig>;
+  readonly tasks?: PluginTaskProvider;
+  readonly verification?: PluginVerificationHost;
+  readonly dataMigration?: PluginDataMigrationProvider;
+  readonly dispose?: Dispose;
+}
+
+export type PluginSetupResult<TConfig = Record<string, unknown>> =
+  | void
+  | Dispose
+  | PluginSetupCapabilities<TConfig>;
+
 export interface PluginDefinition<TConfig = unknown> {
   readonly name: string;
   readonly config?: PluginConfigSchema<TConfig>;
@@ -72,10 +107,46 @@ export interface PluginDefinition<TConfig = unknown> {
   readonly requires?: readonly Token<unknown>[];
   /** Fields owned by Features; setup must not capture these as mutable business configuration. */
   readonly configUpdate?: PluginConfigUpdateDeclaration;
-  setup?(context: PluginSetupContext<TConfig>): void | Dispose | Promise<void | Dispose>;
+  setup?(
+    context: PluginSetupContext<TConfig>,
+  ): PluginSetupResult<TConfig> | Promise<PluginSetupResult<TConfig>>;
 }
 
 const pluginNamePattern = /^[a-z][a-z0-9-]*$/;
+
+function isPluginConsoleRpc(value: unknown): value is PluginConsoleRpc {
+  return Boolean(
+    value &&
+      typeof value === 'object' &&
+      'methods' in value &&
+      (value as { methods?: unknown }).methods instanceof Map,
+  );
+}
+
+function applySetupResult<TConfig>(
+  context: PluginSetupContext<TConfig>,
+  result: PluginSetupResult<TConfig>,
+): void | Dispose {
+  if (!result || typeof result === 'function') {
+    return result;
+  }
+  if (result.consoleRpc !== undefined) {
+    const rpc = isPluginConsoleRpc(result.consoleRpc)
+      ? result.consoleRpc
+      : definePluginConsoleRpc(result.consoleRpc as PluginConsoleRpcDefinition<TConfig>);
+    context.resources.provide(pluginConsoleRpcToken, rpc);
+  }
+  if (result.tasks !== undefined) {
+    context.resources.provide(pluginTaskProviderToken, result.tasks);
+  }
+  if (result.verification !== undefined) {
+    context.resources.provide(pluginVerificationToken, result.verification);
+  }
+  if (result.dataMigration !== undefined) {
+    context.resources.provide(pluginDataMigrationProviderToken, result.dataMigration);
+  }
+  return result.dispose;
+}
 
 /**
  * Define the canonical `plugin.ts` entry point.
@@ -104,8 +175,20 @@ export function definePlugin<TConfig = unknown>(
   if (definition.config !== undefined && typeof definition.config.toJsonSchema !== 'function') {
     throw new TypeError('Plugin config must declare a schema with toJsonSchema()');
   }
+  const originalSetup = definition.setup;
+  const wrappedSetup: PluginDefinition<TConfig>['setup'] =
+    typeof originalSetup === 'function'
+      ? (context) => {
+          const outcome = originalSetup.call(definition, context);
+          if (outcome && typeof (outcome as PromiseLike<unknown>).then === 'function') {
+            return Promise.resolve(outcome).then((resolved) => applySetupResult(context, resolved));
+          }
+          return applySetupResult(context, outcome as PluginSetupResult<TConfig>);
+        }
+      : undefined;
   return Object.freeze({
     ...definition,
+    ...(wrappedSetup ? { setup: wrappedSetup } : {}),
     metadata: definition.metadata ? Object.freeze({ ...definition.metadata }) : undefined,
     requires: Object.freeze([...(definition.requires ?? [])]),
     ...(definition.configUpdate !== undefined ? { configUpdate: freezePluginConfigUpdate(definition.configUpdate) } : {}),
@@ -114,7 +197,7 @@ export function definePlugin<TConfig = unknown>(
 
 // The application facade exposes these Host contracts beside definePlugin.
 export { createDeliveryTarget, type DeliveryTarget } from './delivery-target.js';
-export { PluginStateStore, type JsonValue, type StateScope, type StateRecord,
+export { PluginStateStore, type JsonValue, type JsonSerializable, type StateScope, type StateRecord,
   type PersistentStatePort, type StateWriteOptions } from './persistent-state.js';
 export {
   databaseHostToken,

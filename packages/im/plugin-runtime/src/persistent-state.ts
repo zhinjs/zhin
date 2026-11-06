@@ -4,6 +4,15 @@ import type { GenerationAdmissionGate } from './admission.js';
 
 export type JsonValue = null | boolean | number | string | readonly JsonValue[] | { readonly [key: string]: JsonValue };
 
+export type JsonSerializable<T> =
+  [T] extends [JsonValue] ? T
+  : T extends JsonValue ? T
+  : T extends (...args: never[]) => unknown ? never
+  : T extends symbol | bigint ? never
+  : T extends readonly (infer U)[] ? readonly JsonSerializable<U>[]
+  : T extends object ? { readonly [K in keyof T]: T[K] extends undefined ? undefined : JsonSerializable<Exclude<T[K], undefined>> | Extract<T[K], undefined> }
+  : never;
+
 export type StateScope =
   | Readonly<{ kind: 'plugin' }>
   | Readonly<{ kind: 'user'; endpoint: DeliveryTarget['endpoint']; senderId: string }>
@@ -57,7 +66,7 @@ export class PluginStateStore {
       Object.freeze({ kind: 'conversation', target: normalizeDeliveryTarget(target) }), this.#admission);
   }
 
-  async get<T extends JsonValue = JsonValue>(key: string): Promise<T | undefined> {
+  async get<T = JsonValue>(key: string): Promise<T | undefined> {
     return this.#withAdmission(async () => {
       assertKey(key);
       const record = await this.#port.read(this.#owner, this.#scope, key);
@@ -66,17 +75,17 @@ export class PluginStateStore {
     });
   }
 
-  async set<T extends JsonValue>(key: string, value: T, options?: StateWriteOptions): Promise<void> {
-    const json = copyJson(value);
-    await this.update(key, () => json, options);
+  async set<T = JsonValue>(key: string, value: T & JsonSerializable<T>, options?: StateWriteOptions): Promise<void> {
+    const json = copyJson(value as JsonValue);
+    await this.update<JsonValue>(key, () => json, options);
   }
 
   async delete(key: string): Promise<void> {
     await this.update(key, () => undefined);
   }
 
-  async update<T extends JsonValue = JsonValue>(key: string,
-    updater: (current: T | undefined) => T | undefined,
+  async update<T = JsonValue>(key: string,
+    updater: (current: T | undefined) => (T & JsonSerializable<T>) | undefined,
     options?: StateWriteOptions): Promise<T | undefined> {
     return this.#withAdmission(async () => {
       assertKey(key);
@@ -86,7 +95,7 @@ export class PluginStateStore {
         const record = await this.#port.read(this.#owner, this.#scope, key);
         const live = record && (record.expiresAt === null || record.expiresAt > Date.now());
         const next = updater(live ? copyJson(record.value) as T : undefined);
-        const value = next === undefined ? undefined : copyJson(next);
+        const value = next === undefined ? undefined : copyJson(next as JsonValue);
         const expiresAt = ttl === undefined ? null : Date.now() + ttl;
         if (expiresAt !== null && !Number.isSafeInteger(expiresAt)) throw new TypeError('ttlMs exceeds supported time range');
         if (await this.#port.compareExchange(this.#owner, this.#scope, key, record?.revision, value, expiresAt)) {

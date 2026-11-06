@@ -1,4 +1,5 @@
 import type { Locale } from 'zhin.js/i18n';
+import type { JsonSerializable, JsonValue } from 'zhin.js';
 /**
  * Persists OAuth refresh tokens in the plugin's database state (never in .env).
  */
@@ -7,19 +8,19 @@ import type { OAuthProviderKind, RefreshTokenStore } from "./token-manager.js";
 /** The subset of zhin's PluginStateStore used by the calendar plugin. */
 export interface CalendarStateStore {
   get<T>(key: string): Promise<T | undefined>;
-  set(key: string, value: never): Promise<void>;
+  set<T>(key: string, value: T & JsonSerializable<T>): Promise<void>;
   delete(key: string): Promise<void>;
 }
 
 /** Who completed the chat authorization and where to notify them later. */
-export interface CredentialOwner<Target = unknown> {
+export interface CredentialOwner<Target = JsonValue> {
   readonly sender_id: string;
   /** Fixed when authorization starts; token rotation preserves it. */
   readonly locale?: Locale;
   readonly target: Target;
 }
 
-export interface StoredCredential<Target = unknown> {
+export interface StoredCredential<Target = JsonValue> {
   readonly refresh_token: string;
   readonly authorized_at: string;
   readonly authorized_by: CredentialOwner<Target> | null;
@@ -58,7 +59,7 @@ export class CalendarCredentialStore {
       authorized_at: new Date().toISOString(),
       authorized_by: authorizedBy,
     };
-    await this.#state.set(credentialKey(provider), credential as never);
+    await this.#state.set(credentialKey(provider), credential);
   }
 
   async delete(provider: OAuthProviderKind): Promise<void> {

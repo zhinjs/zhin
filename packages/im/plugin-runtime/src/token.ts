@@ -105,6 +105,10 @@ export class Scope {
       : false;
   }
 
+  get<T>(token: Token<T>): T | undefined {
+    return this.has(token) ? this.use(token) : undefined;
+  }
+
   seal(): void {
     this.#sealed = true;
     for (const finalize of this.#setupFinalizers) finalize('seal');

@@ -1,7 +1,6 @@
 import {
   definePlugin,
   definePluginConsoleRpc,
-  pluginConsoleRpcToken,
   type PluginConsoleRpc,
 } from 'zhin.js';
 
@@ -103,7 +102,7 @@ export default definePlugin({
   metadata: {
     displayName: 'Full Bot (L4 reference)',
   },
-  setup(context) {
-    context.resources.provide(pluginConsoleRpcToken, fullBotConsoleRpc);
+  setup() {
+    return { consoleRpc: fullBotConsoleRpc };
   },
 });

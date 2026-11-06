@@ -33,6 +33,7 @@ export * from './shared-lifetime.js';
 /** @internal Runtime 内部：SnapshotStore / RuntimeSnapshot。 */
 export * from './snapshot.js';
 export * from './token.js';
+export * from './store.js';
 /** @public Host token：`scheduleHostToken`（承诺 semver）。 */
 export * from './schedule-host.js';
 /** @public Host token：`databaseHostToken`（承诺 semver）。 */
