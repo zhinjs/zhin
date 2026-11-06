@@ -1,0 +1,20 @@
+.changeset/inference-fingerprint-migration.md
+  h_6f5e45c41d0910 1-5
+basic/cli/src/plugin-runtime/inference/account-runtime.ts
+  h_6f5e45c41d0910 45,57,135-136,573-593
+basic/cli/src/plugin-runtime/inference/credential-fingerprint-migration.ts
+  h_6f5e45c41d0910 1-82
+basic/cli/tests/plugin-runtime/inference/account-runtime.test.ts
+  h_6f5e45c41d0910 1,10,604-688
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3b2c7dc4173cdea36600688dfe1680ee97c9b128",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
