@@ -260,7 +260,7 @@ CLI 装配 Agent Host；Service、Account、Profile 和用途在 Console 管理�
 
 ## 执行上下文
 
-插件能力通过 Plugin Runtime 注册，运行时通过正式 capability context 使用资源。普通 AI 调用的 token 是 `@zhin.js/ai-provider` 的 `aiInferenceClientToken`。命令与工具结束后 Host 关闭本次资源；流必须完整消费或主动关闭，不能把 client 保存到下一次执行。底层 AI 库不依赖 IM/Core。
+插件能力通过 Plugin Runtime 注册，运行时通过正式 capability context 使用资源。普通 AI 调用的 token 是 `@zhin.js/ai/provider` 的 `aiInferenceClientToken`。命令与工具结束后 Host 关闭本次资源；流必须完整消费或主动关闭，不能把 client 保存到下一次执行。底层 AI 库不依赖 IM/Core。
 
 ## MCP（Client）
 

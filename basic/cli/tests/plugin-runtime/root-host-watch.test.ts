@@ -3,8 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
 import { definePlugin, rootPluginId } from '@zhin.js/plugin-runtime';
-import { createConfigDocument } from '@zhin.js/config-file';
-import type { ModuleRuntime } from '@zhin.js/runtime';
+import { createConfigDocument, type ModuleRuntime } from '@zhin.js/runtime';
 import { RootHost } from '../../src/plugin-runtime/root-host.js';
 
 const cleanups: Array<() => Promise<void>> = [];

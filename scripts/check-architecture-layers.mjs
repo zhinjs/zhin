@@ -26,13 +26,12 @@ const repoRoot = path.resolve(__dirname, '..');
 // Plugin Runtime 新层（约定式插件运行时迁移引入）：
 // plugin-runtime（契约/宿主 token，零 zhin 依赖）→ feature-kit（feature provider 基座）
 // → 9 个 provider 包（adapter/command/component/middleware/handler/tool/skill/agent-feature/mcp-feature）
-// → runtime（RootHost 装配）→ isolate / config-file（依赖 runtime，仅契约）。
+// → runtime（RootHost 装配 + isolate / config-file）。
 // packages/host/http-contract 是协议 Host 的最小端口（路由 + body），零业务依赖。
 // packages/host/http 是具体 HTTP / WebSocket Host，仅依赖 basic + plugin-runtime。
 const providerLayerAllowed = [
   'basic',
   'packages/im/im-contract',
-  'packages/im/interaction',
   'packages/im/plugin-runtime',
   'packages/im/permission',
   'packages/im/feature-kit',
@@ -48,7 +47,6 @@ export const layers = {
   'packages/toolkit/tailwind': { level: 0, allowedImports: ['packages/im/jsx'] },
   'packages/toolkit/components': { level: 0, allowedImports: ['packages/im/jsx'] },
   'packages/im/im-contract': { level: 0, allowedImports: [] },
-  'packages/im/interaction': { level: 0, allowedImports: [] },
   'packages/im/plugin-runtime': { level: 1, allowedImports: ['basic'] },
   'packages/im/permission': { level: 1, allowedImports: ['basic', 'packages/im/plugin-runtime'] },
   'packages/im/feature-kit': { level: 1, allowedImports: ['basic', 'packages/im/plugin-runtime'] },
@@ -64,19 +62,16 @@ export const layers = {
   'packages/im/prompt-section': { level: 1, allowedImports: providerLayerAllowed },
   'packages/im/schedule-feature': { level: 1, allowedImports: providerLayerAllowed },
   'packages/im/runtime': { level: 1, allowedImports: [...providerLayerAllowed, 'packages/im/adapter', 'packages/im/command', 'packages/im/component', 'packages/im/middleware', 'packages/im/handler', 'packages/im/tool', 'packages/im/skill', 'packages/im/agent-feature', 'packages/im/mcp-feature', 'packages/im/prompt-section', 'packages/im/schedule-feature'] },
-  'packages/im/isolate': { level: 1, allowedImports: ['basic', 'packages/im/plugin-runtime', 'packages/im/runtime'] },
-  'packages/im/config-file': { level: 1, allowedImports: ['basic', 'packages/im/plugin-runtime', 'packages/im/runtime'] },
   'packages/host/http': { level: 1, allowedImports: ['basic', 'packages/im/plugin-runtime', 'packages/console/protocol', 'packages/host/http-contract'] },
   'packages/im/kernel': { level: 1, allowedImports: ['basic'] },
-  'packages/im/ai': { level: 2, allowedImports: ['basic', 'packages/im/kernel'] },
-  'packages/im/ai-provider': { level: 3, allowedImports: ['packages/im/ai', 'packages/im/plugin-runtime'] },
+  'packages/im/ai': { level: 2, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/plugin-runtime'] },
   'packages/im/harness': { level: 3, allowedImports: ['basic', 'packages/im/im-contract', 'packages/im/kernel', 'packages/im/core'] },
-  'packages/im/core': { level: 3, allowedImports: ['packages/im/feature-kit', 'packages/im/jsx', 'basic', 'packages/im/im-contract', 'packages/im/interaction', 'packages/im/harness', 'packages/im/kernel', 'packages/im/ai', 'packages/im/plugin-runtime', 'packages/im/permission', 'packages/im/adapter', 'packages/im/command', 'packages/im/component', 'packages/im/middleware', 'packages/im/handler'] },
-  'packages/im/agent': { level: 4, allowedImports: ['basic', 'packages/im/im-contract', 'packages/im/harness', 'packages/im/kernel', 'packages/im/ai', 'packages/im/ai-provider', 'packages/im/core', 'packages/im/plugin-runtime', 'packages/im/permission', 'packages/im/feature-kit', 'packages/im/agent-feature', 'packages/im/mcp-feature', 'packages/im/prompt-section', 'packages/im/skill', 'packages/im/tool'] },
+  'packages/im/core': { level: 3, allowedImports: ['packages/im/feature-kit', 'packages/im/jsx', 'basic', 'packages/im/im-contract', 'packages/im/harness', 'packages/im/kernel', 'packages/im/ai', 'packages/im/plugin-runtime', 'packages/im/permission', 'packages/im/adapter', 'packages/im/command', 'packages/im/component', 'packages/im/middleware', 'packages/im/handler'] },
+  'packages/im/agent': { level: 4, allowedImports: ['basic', 'packages/im/im-contract', 'packages/im/harness', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/im/plugin-runtime', 'packages/im/permission', 'packages/im/feature-kit', 'packages/im/agent-feature', 'packages/im/mcp-feature', 'packages/im/prompt-section', 'packages/im/skill', 'packages/im/tool'] },
   // define-plugin.ts 是 @zhin.js/plugin-runtime 的门面 re-export（zhin.js/plugin-runtime 子路径），允许。
   // ADR 0044 §3: shared OneBot-family raw event → canonical side event mapping; adapters depend on it, core never does.
   'packages/im/adapter-onebot-events': { level: 4, allowedImports: ['basic', 'packages/im/core', 'packages/im/adapter', 'packages/im/im-contract'] },
-  'packages/im/zhin': { level: 5, allowedImports: ['packages/im/jsx', 'basic', 'packages/im/harness', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/im/agent', 'packages/im/runtime', 'packages/im/plugin-runtime', 'packages/im/permission'] },
+  'packages/im/zhin': { level: 5, allowedImports: ['packages/im/jsx', 'basic', 'packages/im/harness', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/im/agent', 'packages/im/runtime', 'packages/im/plugin-runtime', 'packages/im/permission', 'packages/im/schedule-feature'] },
   // Protocol Hosts consume only the narrow HTTP route contract; they must not
   // depend on the concrete HTTP Host implementation.
   'packages/host/mcp': { level: 7, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/im/tool', 'packages/host/http-contract'] },
@@ -100,7 +95,6 @@ export const packageNameToPath = {
   '@zhin.js/cli': 'basic/cli',
   '@zhin.js/kernel': 'packages/im/kernel',
   '@zhin.js/ai': 'packages/im/ai',
-  '@zhin.js/ai-provider': 'packages/im/ai-provider',
   '@zhin.js/core': 'packages/im/core',
   '@zhin.js/agent': 'packages/im/agent',
   '@zhin.js/adapter-onebot-events': 'packages/im/adapter-onebot-events',
@@ -125,9 +119,6 @@ export const packageNameToPath = {
   '@zhin.js/prompt-section': 'packages/im/prompt-section',
   '@zhin.js/schedule-feature': 'packages/im/schedule-feature',
   '@zhin.js/runtime': 'packages/im/runtime',
-  '@zhin.js/isolate': 'packages/im/isolate',
-  '@zhin.js/config-file': 'packages/im/config-file',
-  '@zhin.js/interaction': 'packages/im/interaction',
   '@zhin.js/im-contract': 'packages/im/im-contract',
   '@zhin.js/console-protocol': 'packages/console/protocol',
   '@zhin.js/contract': 'packages/console/contract',

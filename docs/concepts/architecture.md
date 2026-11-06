@@ -31,8 +31,7 @@ flowchart BT
         database["@zhin.js/database"]
     end
     subgraph runtime["运行时底座"]
-        interaction["@zhin.js/interaction<br/>用户交互契约"]
-        imc["@zhin.js/im-contract<br/>IM 传输契约"]
+        imc["@zhin.js/im-contract<br/>IM 传输与用户交互契约"]
         pr["@zhin.js/plugin-runtime<br/>generation / snapshot / handoff"]
         fk["@zhin.js/feature-kit<br/>Feature 发现与投影"]
         rt["@zhin.js/runtime<br/>RootRuntime / ProjectGraph / HMR"]
@@ -60,8 +59,7 @@ flowchart BT
     cli["@zhin.js/cli（composition root）"]
 
     pr --> fk --> ad & cmd & comp & mw & tool
-    imc --> ad & core & agent
-    interaction --> cmd & core
+    imc --> ad & cmd & core & agent
     logger & schema & schedule --> k
     logger --> database
     logger --> ai
@@ -77,7 +75,7 @@ flowchart BT
 
 依赖关系以各包的 `package.json` 为准。从下往上读这张图：
 
-底座是三个彼此独立的零依赖契约：`@zhin.js/plugin-runtime` 提供 generation、snapshot、dispose 与 token；`@zhin.js/im-contract` 提供传输中立的身份、消息段、会话事件与投递语义；`@zhin.js/interaction` 描述用户交互的请求与结论。往上一层，`@zhin.js/feature-kit` 只依赖运行时底座，提供 Feature provider 的注册、发现与投影机制。Feature 层各包（adapter / command / component / middleware / handler / tool / skill / …）只依赖这些底层契约，彼此不互相依赖。
+底座是两个彼此独立的零依赖契约：`@zhin.js/plugin-runtime` 提供 generation、snapshot、dispose 与 token；`@zhin.js/im-contract`（含 `/interaction` 子路径）提供传输中立的身份、消息段、会话事件、投递语义与用户交互的请求及结论。往上一层，`@zhin.js/feature-kit` 只依赖运行时底座，提供 Feature provider 的注册、发现与投影机制。Feature 层各包（adapter / command / component / middleware / handler / tool / skill / …）只依赖这些底层契约，彼此不互相依赖。
 
 再往上，`@zhin.js/core` 把 adapter / command / component / middleware 四个 Feature 和 kernel 组装成 IM 层（Plugin、Adapter、Endpoint、消息收发）。门面包 `zhin.js` 把核心包重新导出为统一入口——插件作者只需 `import { ... } from 'zhin.js'`。`@zhin.js/agent`、`@zhin.js/ai` 等是可选 peer 依赖，默认安装只含 IM 核心，AI 按需加装。
 
@@ -97,8 +95,7 @@ Core 从实际入站实例捕获单次操作 Session，提供 Adapter、Endpoint
 |----|----|------|
 | 基础层 | `basic/logger` `schema` `schedule` `database` | 日志、配置校验、定时、数据库，零/近零依赖 |
 | 运行时底座 | `packages/im/plugin-runtime`（用户从 `zhin.js` 导入） | generation 事务、快照租约、handoff、dispose（见 [generation 与生命周期](./generation-lifecycle.md)） |
-| IM 契约 | `@zhin.js/im-contract` | Endpoint、会话、消息段与投递结果；零 Core、零平台 SDK 依赖 |
-| 交互契约 | `@zhin.js/interaction` | `ask` / `sequence` 的结构化请求与类型化结论；零传输、零渲染依赖 |
+| IM 契约 | `@zhin.js/im-contract` | Endpoint、会话、消息段、投递结果与结构化用户交互（`/interaction`）；零 Core、零平台 SDK 依赖 |
 | Feature 机制 | `@zhin.js/feature-kit` | 声明 Feature provider、按约定发现能力、投影成运行时索引 |
 | 内核 | `@zhin.js/kernel` | 插件系统与错误体系，无 IM 概念 |
 | Feature 层 | `@zhin.js/adapter` `command` `component` `middleware` … | 一类能力的契约（如 `defineAdapter`）+ 投影索引（如 `AdapterIndex`） |
@@ -119,7 +116,7 @@ Core 从实际入站实例捕获单次操作 Session，提供 Adapter、Endpoint
 
 `zhin runtime start`（定义在 `basic/cli/src/commands/runtime.ts`，装配逻辑在 `basic/cli/src/plugin-runtime/`）做的事：
 
-1. 用 `createConfigDocument`（`@zhin.js/config-file`）把唯一的 YAML/JSON Root 配置包装成带事务的 `ConfigDocumentPort`；
+1. 用 `createConfigDocument`（`@zhin.js/runtime`）把唯一的 YAML/JSON Root 配置包装成带事务的 `ConfigDocumentPort`；
 2. 创建 `RootRuntime`（`@zhin.js/runtime`），注入模块加载器（开发模式为 `NativeDevelopmentModuleRuntime`）、配置端口和 Root 资源安装器；
 3. 通过 `installResources` 安装 Host 级资源：HTTP Host、数据库、Agent Host（含 AI 兜底处理器）、Console API 等；
 4. 启动后挂上 `HmrCoordinator`，文件变更触发 generation 重载或进程重启。

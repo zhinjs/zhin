@@ -10,7 +10,6 @@ import { PluginManagementActivity } from '../plugin-management/activity.js';
 import { join, relative, resolve } from 'node:path';
 import chalk from 'chalk';
 import open from 'open';
-import { createConfigDocument, type ConfigFileDocument } from '@zhin.js/config-file';
 import { adapterFeatureId, isAdapterIndex, endpointDesiredRepositoryToken, resolveStaticCapabilities } from '@zhin.js/adapter';
 import { ImRuntime, type Message } from '@zhin.js/core/runtime';
 import {
@@ -34,8 +33,10 @@ import {
 import { setLevel, getLogger, formatCompact, type LogLevelInput } from '@zhin.js/logger';
 import {
   ConfigValidationError,
+  createConfigDocument,
   createEnvStore,
   envStoreToken,
+  type ConfigFileDocument,
   type RootResourceInstaller,
   ensureTypeScriptSpecifierRemap,
   expandEnvironmentValue,
@@ -595,7 +596,7 @@ async function loadConfiguredAgentHost(options: Readonly<{
       (error instanceof Error && /Cannot find package|Cannot find module/i.test(error.message))
     ) {
       throw new Error(
-        `检测到配置中启用了 AI / Assistant，但缺少 AI 运行时依赖（${error instanceof Error ? error.message : String(error)}）。请运行 \`npx zhin setup\` 或 \`pnpm add @zhin.js/agent @zhin.js/ai @zhin.js/ai-provider ai zod\` 安装依赖。`,
+        `检测到配置中启用了 AI / Assistant，但缺少 AI 运行时依赖（${error instanceof Error ? error.message : String(error)}）。请运行 \`npx zhin setup\` 或 \`pnpm add @zhin.js/agent @zhin.js/ai ai zod\` 安装依赖。`,
         { cause: error },
       );
     }

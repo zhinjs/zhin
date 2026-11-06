@@ -3,9 +3,8 @@ import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, open, readFile, unlink, access } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { promisify, isDeepStrictEqual } from 'node:util';
-import { createConfigDocument, JsonConfigDocument } from '@zhin.js/config-file';
 import { loadProjectConfig, packageToInstanceKey } from '@zhin.js/scaffold-wizard';
-import { NodePackageResolver, PackageResolutionError, ProjectGraphService, primaryConfigToken, parsePluginConfigSchema, envStoreToken, runtimeEnvironmentToken, type EnvStore, type RuntimeEnvironment, type ResolvedPackage, readApplicationPluginDeclaration } from '@zhin.js/runtime';
+import { createConfigDocument, JsonConfigDocument, NodePackageResolver, PackageResolutionError, ProjectGraphService, primaryConfigToken, parsePluginConfigSchema, envStoreToken, runtimeEnvironmentToken, type ConfigFileDocument, type EnvStore, type RuntimeEnvironment, type ResolvedPackage, readApplicationPluginDeclaration } from '@zhin.js/runtime';
 import {
   pluginVerificationToken, rootPluginId, readPluginConfigurationMap,
   type SnapshotReader, type PluginNodeSnapshot, type RuntimeSnapshot, type RuntimeConfigDocument,
@@ -62,7 +61,7 @@ export class PluginManagementWorkflow implements PluginManagementPort {
     return { document, store: this.#configurationStore(document, snapshot) };
   }
 
-  #configurationStore(document: import('@zhin.js/config-file').ConfigFileDocument, snapshot?: RuntimeSnapshot) {
+  #configurationStore(document: ConfigFileDocument, snapshot?: RuntimeSnapshot) {
     // inspect already holds this lease. Other callers continue to resolve a fresh
     // generation per operation, without maintaining a parallel runtime view.
     const acquire = () => snapshot ? { value: snapshot, release() {} } : this.#options.snapshots?.acquire();

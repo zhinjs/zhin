@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createConfigDocument } from '@zhin.js/config-file';
+import { createConfigDocument } from '@zhin.js/runtime';
 import { applyInstanceDeclarationMigration, assertNoPendingInstanceMigration, planInstanceDeclarationMigration, recoverInstanceDeclarationMigration } from '../../src/plugin-runtime/migrate/instance-declarations.js';
 
 const roots: string[] = [];

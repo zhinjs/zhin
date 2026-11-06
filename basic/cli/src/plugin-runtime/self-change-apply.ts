@@ -8,8 +8,7 @@ import type {
   SelfChangeRecord,
 } from '@zhin.js/agent';
 import type { ConsoleConfigApplicationStatus, ConsoleConfigPatchRequest, ConsoleConfigPatchResult } from '@zhin.js/console-protocol';
-import { ConfigValidationError, ConfigurationSupersededError, HOST_CONFIG_KEYS } from '@zhin.js/runtime';
-import { ConfigDocumentConflictError } from '@zhin.js/config-file';
+import { ConfigDocumentConflictError, ConfigValidationError, ConfigurationSupersededError, HOST_CONFIG_KEYS } from '@zhin.js/runtime';
 import { ConfigPatchScopeError } from './console/module.js';
 
 /**

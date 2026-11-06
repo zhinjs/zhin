@@ -144,9 +144,6 @@ importers:
       '@zhin.js/component':
         specifier: workspace:*
         version: link:../../packages/im/component
-      '@zhin.js/config-file':
-        specifier: workspace:*
-        version: link:../../packages/im/config-file
       '@zhin.js/console-protocol':
         specifier: workspace:*
         version: link:../../packages/console/protocol
@@ -168,9 +165,6 @@ importers:
       '@zhin.js/im-contract':
         specifier: workspace:*
         version: link:../../packages/im/im-contract
-      '@zhin.js/interaction':
-        specifier: workspace:*
-        version: link:../../packages/im/interaction
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../logger
@@ -256,9 +250,6 @@ importers:
       '@zhin.js/agent':
         specifier: workspace:*
         version: link:../../packages/im/agent
-      '@zhin.js/ai-provider':
-        specifier: workspace:*
-        version: link:../../packages/im/ai-provider
       '@zhin.js/mcp':
         specifier: workspace:*
         version: link:../../packages/host/mcp
@@ -1270,9 +1261,6 @@ importers:
       '@zhin.js/ai':
         specifier: workspace:*
         version: link:../ai
-      '@zhin.js/ai-provider':
-        specifier: workspace:*
-        version: link:../ai-provider
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../core
@@ -1365,6 +1353,9 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
+      '@zhin.js/plugin-runtime':
+        specifier: workspace:*
+        version: link:../plugin-runtime
       undici:
         specifier: ^8.12.2
         version: 8.12.3
@@ -1406,33 +1397,14 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
 
-  packages/im/ai-provider:
-    dependencies:
-      '@zhin.js/ai':
-        specifier: workspace:*
-        version: link:../ai
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../plugin-runtime
-    devDependencies:
-      '@types/node':
-        specifier: ^26.1.2
-        version: 26.1.2
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-      vitest:
-        specifier: 4.1.12
-        version: 4.1.12(@opentelemetry/api@1.9.1)(@types/node@26.1.2)(@vitest/coverage-v8@4.1.12)(@vitest/ui@4.1.12)(vite@6.4.5(@types/node@26.1.2)(tsx@4.23.1)(yaml@2.9.0))
-
   packages/im/command:
     dependencies:
       '@zhin.js/feature-kit':
         specifier: workspace:*
         version: link:../feature-kit
-      '@zhin.js/interaction':
+      '@zhin.js/im-contract':
         specifier: workspace:*
-        version: link:../interaction
+        version: link:../im-contract
       '@zhin.js/permission':
         specifier: workspace:*
         version: link:../permission
@@ -1466,25 +1438,6 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
-  packages/im/config-file:
-    dependencies:
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../plugin-runtime
-      yaml:
-        specifier: 2.9.0
-        version: 2.9.0
-    devDependencies:
-      '@types/node':
-        specifier: ^26.1.2
-        version: 26.1.2
-      '@zhin.js/runtime':
-        specifier: workspace:*
-        version: link:../runtime
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
   packages/im/core:
     dependencies:
       '@zhin.js/adapter':
@@ -1508,9 +1461,6 @@ importers:
       '@zhin.js/im-contract':
         specifier: workspace:*
         version: link:../im-contract
-      '@zhin.js/interaction':
-        specifier: workspace:*
-        version: link:../interaction
       '@zhin.js/jsx':
         specifier: workspace:*
         version: link:../jsx
@@ -1576,9 +1526,9 @@ importers:
       '@zhin.js/feature-kit':
         specifier: workspace:*
         version: link:../feature-kit
-      '@zhin.js/interaction':
+      '@zhin.js/im-contract':
         specifier: workspace:*
-        version: link:../interaction
+        version: link:../im-contract
       '@zhin.js/plugin-runtime':
         specifier: workspace:*
         version: link:../plugin-runtime
@@ -1603,31 +1553,6 @@ importers:
         version: 6.0.3
 
   packages/im/im-contract:
-    devDependencies:
-      '@types/node':
-        specifier: ^26.1.2
-        version: 26.1.2
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
-  packages/im/interaction:
-    devDependencies:
-      '@types/node':
-        specifier: ^26.1.2
-        version: 26.1.2
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
-  packages/im/isolate:
-    dependencies:
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../plugin-runtime
-      '@zhin.js/runtime':
-        specifier: workspace:*
-        version: link:../runtime
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
@@ -1755,6 +1680,9 @@ importers:
       semver:
         specifier: 7.8.5
         version: 7.8.5
+      yaml:
+        specifier: 2.9.0
+        version: 2.9.0
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
@@ -1876,6 +1804,9 @@ importers:
       '@zhin.js/plugin-runtime':
         specifier: workspace:*
         version: link:../plugin-runtime
+      '@zhin.js/schedule-feature':
+        specifier: workspace:*
+        version: link:../schedule-feature
       chalk:
         specifier: ^5.6.2
         version: 5.6.2
@@ -1982,9 +1913,6 @@ importers:
 
   packages/toolkit/scaffold-wizard:
     dependencies:
-      '@zhin.js/config-file':
-        specifier: workspace:*
-        version: link:../../im/config-file
       '@zhin.js/plugin-runtime':
         specifier: workspace:*
         version: link:../../im/plugin-runtime
@@ -3866,9 +3794,6 @@ importers:
       '@zhin.js/ai':
         specifier: workspace:*
         version: link:../../../packages/im/ai
-      '@zhin.js/ai-provider':
-        specifier: workspace:*
-        version: link:../../../packages/im/ai-provider
     devDependencies:
       '@types/node':
         specifier: ^26.1.2

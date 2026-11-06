@@ -68,7 +68,7 @@ pnpm --filter @zhin.js/service-typesafe build
 Tests run the installed official SDK against synthetic HTTP fixtures. They do not establish real-account accuracy, latency, availability, provider permission or production cost.
 
 
-The target interface requires the coordinated Provider release: `@zhin.js/ai >=1.1.51` and `@zhin.js/ai-provider >=1.0.0` (planned, not published by this change). Upgrade the Host and plugin together; the [migration guide](../../../docs/ai/provider-upgrade.md) lists the full version boundary. The root exports `typeSafeProvider` and safe decision errors; the old API-key constructor and its configuration type are no longer public author APIs.
+The target interface requires the coordinated Provider release: `@zhin.js/ai >=1.1.51` (`@zhin.js/ai/provider`). Upgrade the Host and plugin together; the [migration guide](../../../docs/ai/provider-upgrade.md) lists the full version boundary. The root exports `typeSafeProvider` and safe decision errors; the old API-key constructor and its configuration type are no longer public author APIs.
 
 
 ## Migrating the former plugin configuration

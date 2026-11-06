@@ -2,8 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SnapshotStore, rootPluginId, type SnapshotState } from '@zhin.js/plugin-runtime';
-import { aiProviderDefinitionsToken } from '@zhin.js/ai-provider';
-import type { AuthenticationMethod, ProviderDefinition } from '@zhin.js/ai/provider';
+import { aiProviderDefinitionsToken, type AuthenticationMethod, type ProviderDefinition } from '@zhin.js/ai/provider';
 import { createDatabaseHost } from '../../../src/plugin-runtime/database-host-installer.js';
 import { HostInference } from '../../../src/plugin-runtime/inference/host.js';
 

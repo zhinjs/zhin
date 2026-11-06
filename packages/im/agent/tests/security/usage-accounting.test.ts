@@ -1,6 +1,5 @@
-import { createLazyInferenceClient } from '@zhin.js/ai-provider';
 import type { AssistantMessage } from '@zhin.js/ai';
-import type { InferenceClient } from '@zhin.js/ai/provider';
+import { createLazyInferenceClient, type InferenceClient } from '@zhin.js/ai/provider';
 import { beginQuotaUsage, createInferenceUsageAccounting } from '../../src/security/usage-accounting.js';
 import { InMemoryUsageQuotaStore, UsageQuota } from '../../src/security/usage-quota.js';
 

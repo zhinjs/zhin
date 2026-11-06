@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { readSourcePluginOrder } from '@zhin.js/config-file';
+import { readSourcePluginOrder } from '@zhin.js/runtime';
 import { applyDatabaseToConfig } from '@zhin.js/scaffold-wizard';
 import { prepareConfigSave, readConfig, saveConfig } from '../src/utils/config-file.js';
 

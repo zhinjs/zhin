@@ -1,6 +1,6 @@
 import fs from 'fs-extra';
 import path from 'path';
-import { createConfigDocument } from '@zhin.js/config-file';
+import { createConfigDocument } from '@zhin.js/runtime';
 import { findConfigFile } from './config-file.js';
 
 /** Public upgrade guide for the configVersion 2 (flat plugin instance) migration. */

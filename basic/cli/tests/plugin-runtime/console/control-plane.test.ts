@@ -1,7 +1,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createConfigDocument } from '@zhin.js/config-file';
+import { createConfigDocument } from '@zhin.js/runtime';
 import { ImRuntime } from '@zhin.js/core/runtime';
 import { createConsoleEventHub, createHttpHost } from '@zhin.js/host-http';
 import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';

@@ -162,13 +162,6 @@
     "export * from './provider.js';",
     "export{default}from './provider.js';"
   ],
-  "config-file": [
-    "export * from './config-file-document.js';",
-    "export * from './create-config-document.js';",
-    "export * from './json-config-document.js';",
-    "export * from './yaml-config-document.js';",
-    "export{readSourcePluginOrder}from './ordered-config-source.js';"
-  ],
   "console-contract": [
     "export * from './layout.js';",
     "export * from './navigation.js';",
@@ -246,11 +239,6 @@
     "export * from './handler-index.js';",
     "export * from './provider.js';",
     "export{default}from './provider.js';"
-  ],
-  "isolate": [
-    "export * from './contracts.js';",
-    "export * from './runtime.js';",
-    "export type{IsolateMode}from './transport.js';"
   ],
   "layout": [
     "export * from './definition.js';",
@@ -343,12 +331,14 @@
   "runtime": [
     "export * from './application-plugin-declaration.js';",
     "export * from './config-composer.js';",
+    "export * from './config-file/index.js';",
     "export * from './config-patch-planner.js';",
     "export * from './configuration-application.js';",
     "export * from './environment-store.js';",
     "export * from './environment.js';",
     "export * from './hmr-coordinator.js';",
     "export * from './invalidation-planner.js';",
+    "export * from './isolate/index.js';",
     "export * from './isolation.js';",
     "export * from './manifest.js';",
     "export * from './module-runtime.js';",
@@ -366,6 +356,18 @@
     "export * from './topology-transaction.js';",
     "export * from './typescript-specifier-remap.js';",
     "export{readPluginConfigSchema}from './plugin-config-schema.js';"
+  ],
+  "runtime/config-file": [
+    "export * from './config-file-document.js';",
+    "export * from './create-config-document.js';",
+    "export * from './json-config-document.js';",
+    "export * from './yaml-config-document.js';",
+    "export{readSourcePluginOrder}from './ordered-config-source.js';"
+  ],
+  "runtime/isolate": [
+    "export * from './contracts.js';",
+    "export * from './runtime.js';",
+    "export type{IsolateMode}from './transport.js';"
   ],
   "skill": [
     "export * from './definition.js';",

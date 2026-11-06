@@ -6,7 +6,7 @@ import {
   type CommandMatchInput,
   type CommandSegment,
 } from '@zhin.js/command';
-import type { UserInteractionFactory } from '@zhin.js/interaction';
+import type { UserInteractionFactory } from '@zhin.js/im-contract';
 import { formatCompact, getLogger, truncatePreview } from '@zhin.js/logger';
 import type { CapabilityId, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import type { Message, MessageDispatchResult, SendContent } from './contracts.js';

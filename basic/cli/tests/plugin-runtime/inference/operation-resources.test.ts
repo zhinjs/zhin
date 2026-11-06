@@ -2,10 +2,15 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SnapshotStore, rootPluginId, createCapabilitySlot, type SnapshotState } from '@zhin.js/plugin-runtime';
-import { aiProviderDefinitionsToken, aiInferenceClientToken } from '@zhin.js/ai-provider';
 import { RuntimeMessage } from '@zhin.js/core/runtime';
 import type { TurnRequest } from '@zhin.js/agent';
-import type { ProviderDefinition, ProviderGraph, InferenceClient } from '@zhin.js/ai/provider';
+import {
+  aiInferenceClientToken,
+  aiProviderDefinitionsToken,
+  type InferenceClient,
+  type ProviderDefinition,
+  type ProviderGraph,
+} from '@zhin.js/ai/provider';
 import { createDatabaseHost } from '../../../src/plugin-runtime/database-host-installer.js';
 import { HostInference } from '../../../src/plugin-runtime/inference/host.js';
 import { createHostOperationResources } from '../../../src/plugin-runtime/inference/operation-resources.js';

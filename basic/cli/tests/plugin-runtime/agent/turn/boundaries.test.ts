@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Message, type ImRuntime } from '@zhin.js/core/runtime';
 import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
-import type { UserInteractionRequest } from '@zhin.js/interaction';
+import type { UserInteractionRequest } from '@zhin.js/im-contract';
 import type { AITriggerConfig } from '@zhin.js/core';
 import { turnIntentResolverToken } from '@zhin.js/agent/runtime';
 import { adapterFeatureId, resolveTurnCapabilities, type AdapterCapabilityProfile } from '@zhin.js/adapter';

@@ -2,15 +2,18 @@ import type { CapturedEndpointOperation } from './captured-endpoint-operation.js
 import { resolveLocale, type RuntimeSnapshot, type Locale } from '@zhin.js/plugin-runtime';
 import { interactionMessages as t } from '../../built/interaction-messages.js';
 import { projectLocale } from './locale.js';
-import { conversationRefKey, type ConversationRef, type DeliveryReceipt, type MessageRef } from '@zhin.js/im-contract';
-import type {
-  UserInteraction,
-  UserInteractionRequest,
-  UserInteractionSequence,
-  UserInteractionSequenceResult,
-  UserInteractionStep,
-  UserInteractionValue,
-} from '@zhin.js/interaction';
+import {
+  conversationRefKey,
+  type ConversationRef,
+  type DeliveryReceipt,
+  type MessageRef,
+  type UserInteraction,
+  type UserInteractionRequest,
+  type UserInteractionSequence,
+  type UserInteractionSequenceResult,
+  type UserInteractionStep,
+  type UserInteractionValue,
+} from '@zhin.js/im-contract';
 import {
   assertUserInteractionRequest,
   parseUserInteractionAnswer,

@@ -1,4 +1,3 @@
-import { ConfigDocumentConflictError, type ConfigFileDocument } from '@zhin.js/config-file';
 import { isDeepStrictEqual } from 'node:util';
 import {
   HOST_CONFIG_PATCH_PATHS, type ConsoleConfigApplication, type ConsoleConfigApplicationStatus, type ConsoleConfigApplyResult, type ConsoleConfigPatchRequest, type ConsoleConfigPatchResult, type ConsoleConfigProjectPatchResult, type ConsoleConfigProjectRead, type ConsoleConfigProjectReadRequest, type ConsoleConfigSource,
@@ -10,7 +9,7 @@ import {
   rootPluginId,
   type RuntimeConfigDocument,
 } from '@zhin.js/plugin-runtime';
-import { ConfigValidationError, ConfigurationSupersededError, HOST_CONFIG_KEYS, readApplicationPluginDeclaration, parsePluginConfigSchema, createEnvStore, type EnvStore } from '@zhin.js/runtime';
+import { ConfigDocumentConflictError, ConfigValidationError, ConfigurationSupersededError, HOST_CONFIG_KEYS, readApplicationPluginDeclaration, parsePluginConfigSchema, createEnvStore, type ConfigFileDocument, type EnvStore } from '@zhin.js/runtime';
 import { loadRuntimeEnvironmentLayers } from '../start/environment.js';
 import { readPluginPackageMap } from './plugin-package-map.js';
 import { assertUnambiguousConfigKey, configKeyPatch, configKeyRemovePatch, flattenConfigDocument } from './configuration-projection.js';

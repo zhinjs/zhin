@@ -80,6 +80,11 @@
       "development": "./src/handler.ts",
       "import": "./lib/handler.js"
     },
+    "./schedule": {
+      "types": "./lib/schedule.d.ts",
+      "development": "./src/schedule.ts",
+      "import": "./lib/schedule.js"
+    },
     "./core/runtime": {
       "types": "./lib/core-runtime.d.ts",
       "development": "./src/core-runtime.ts",
@@ -103,6 +108,7 @@
     "@zhin.js/logger": "workspace:*",
     "@zhin.js/permission": "workspace:*",
     "@zhin.js/plugin-runtime": "workspace:*",
+    "@zhin.js/schedule-feature": "workspace:*",
     "chalk": "^5.6.2"
   },
   "peerDependencies": {
@@ -201,6 +207,10 @@
       "./handler": {
         "types": "./lib/handler.d.ts",
         "import": "./lib/handler.js"
+      },
+      "./schedule": {
+        "types": "./lib/schedule.d.ts",
+        "import": "./lib/schedule.js"
       },
       "./core/runtime": {
         "types": "./lib/core-runtime.d.ts",

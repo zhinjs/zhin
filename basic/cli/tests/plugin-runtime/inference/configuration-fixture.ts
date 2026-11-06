@@ -1,12 +1,10 @@
 import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { aiProviderDefinitionsToken } from '@zhin.js/ai-provider';
 import { definePlugin, rootPluginId } from '@zhin.js/plugin-runtime';
-import type { ProviderGraph } from '@zhin.js/ai/provider';
+import { aiProviderDefinitionsToken, type ProviderGraph } from '@zhin.js/ai/provider';
 import { AIService } from '@zhin.js/agent';
-import { RootRuntime } from '@zhin.js/runtime';
-import { createConfigDocument } from '@zhin.js/config-file';
+import { createConfigDocument, RootRuntime } from '@zhin.js/runtime';
 import { openAiProvider } from '../../../../../packages/im/ai/src/providers/api-key.js';
 import { createDatabaseHost } from '../../../src/plugin-runtime/database-host-installer.js';
 import { HostInference } from '../../../src/plugin-runtime/inference/host.js';

@@ -2,9 +2,8 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createConfigDocument } from '@zhin.js/config-file';
 import type { ConsoleConfigApplication } from '@zhin.js/console-protocol';
-import { ConfigValidationError, ConfigurationSupersededError } from '@zhin.js/runtime';
+import { createConfigDocument, ConfigValidationError, ConfigurationSupersededError } from '@zhin.js/runtime';
 import { ConsoleConfigurationStore } from '../../../src/plugin-runtime/console/configuration.js';
 
 const roots: string[] = [];

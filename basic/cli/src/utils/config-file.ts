@@ -1,8 +1,7 @@
 import fs from 'fs-extra';
 import path from 'path';
-import { ConfigDocumentConflictError, createConfigDocument } from '@zhin.js/config-file';
 import { isDeepStrictEqual } from 'node:util';
-import { readApplicationPluginDeclaration } from '@zhin.js/runtime';
+import { ConfigDocumentConflictError, createConfigDocument, readApplicationPluginDeclaration } from '@zhin.js/runtime';
 import {
   ROOT_CONFIG_FILE_NAMES,
   selectRootConfigFile,

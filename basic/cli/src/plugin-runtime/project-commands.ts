@@ -1,9 +1,9 @@
 import {join} from 'node:path';
-import {createConfigDocument} from '@zhin.js/config-file';
 import {findConfigFile} from '../utils/config-file.js';
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import {
+  createConfigDocument,
   NodePackageResolver,
   ProjectGraphService,
   type PluginGraphNode,

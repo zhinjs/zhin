@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import { aiInferenceClientToken, createLazyInferenceClient } from '@zhin.js/ai-provider';
-import type {
-  InferenceClient,
-  InferenceGraphSnapshot,
-  ProviderCallContext,
+import {
+  aiInferenceClientToken,
+  createLazyInferenceClient,
+  type InferenceClient,
+  type InferenceGraphSnapshot,
+  type ProviderCallContext,
 } from '@zhin.js/ai/provider';
 import type { OperationResourceView } from '@zhin.js/feature-kit';
 import type { SnapshotLease, SnapshotReader, Token } from '@zhin.js/plugin-runtime';

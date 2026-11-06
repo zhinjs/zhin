@@ -31,8 +31,7 @@ flowchart BT
         database["@zhin.js/database"]
     end
     subgraph runtime["Runtime base"]
-        interaction["@zhin.js/interaction<br/>User interaction contract"]
-        imc["@zhin.js/im-contract<br/>IM transport contract"]
+        imc["@zhin.js/im-contract<br/>IM transport & interaction contract"]
         pr["@zhin.js/plugin-runtime<br/>generation / snapshot / handoff"]
         fk["@zhin.js/feature-kit<br/>Feature discovery & projection"]
         rt["@zhin.js/runtime<br/>RootRuntime / ProjectGraph / HMR"]
@@ -57,8 +56,7 @@ flowchart BT
     cli["@zhin.js/cli (composition root)"]
 
     pr --> fk --> ad & cmd & comp & mw & tool
-    imc --> ad & core & agent
-    interaction --> cmd & core
+    imc --> ad & cmd & core & agent
     logger & schema & schedule --> k
     logger --> database
     logger --> ai
@@ -73,7 +71,7 @@ flowchart BT
 
 Dependencies are defined by each package's `package.json`. Read the diagram from the bottom up:
 
-The foundation consists of three independent zero-dependency contracts: `@zhin.js/plugin-runtime` owns generation, snapshots, disposal, and tokens; `@zhin.js/im-contract` owns transport-neutral identities, segments, conversation events, and delivery semantics; `@zhin.js/interaction` owns typed user-interaction requests and conclusions. One layer up, `@zhin.js/feature-kit` depends only on the runtime base and provides the registration, discovery, and projection mechanism for Feature providers. Feature-layer packages (adapter / command / component / middleware / handler / tool / skill / ...) depend only on these foundation contracts and do not depend on each other.
+The foundation consists of two independent zero-dependency contracts: `@zhin.js/plugin-runtime` owns generation, snapshots, disposal, and tokens; `@zhin.js/im-contract` (including `/interaction`) owns transport-neutral identities, segments, conversation events, delivery semantics, and typed user-interaction requests and conclusions. One layer up, `@zhin.js/feature-kit` depends only on the runtime base and provides the registration, discovery, and projection mechanism for Feature providers. Feature-layer packages (adapter / command / component / middleware / handler / tool / skill / ...) depend only on these foundation contracts and do not depend on each other.
 
 Moving further up, `@zhin.js/core` assembles the adapter / command / component / middleware Features together with the kernel into the IM layer (Plugin, Adapter, Endpoint, message send/receive). The facade package `zhin.js` re-exports core packages as a unified entry -- plugin authors only need `import { ... } from 'zhin.js'`. `@zhin.js/agent`, `@zhin.js/ai`, etc. are optional peer dependencies, so the default installation contains only the IM core, with AI added on demand.
 
@@ -101,7 +99,7 @@ The framework itself does not "start" anything -- each layer only provides mecha
 
 `zhin runtime start` (defined in `basic/cli/src/commands/runtime.ts`, assembly logic in `basic/cli/src/plugin-runtime/`) does the following:
 
-1. Wraps the single YAML/JSON Root config with `createConfigDocument` (`@zhin.js/config-file`) into a transactional `ConfigDocumentPort`;
+1. Wraps the single YAML/JSON Root config with `createConfigDocument` (`@zhin.js/runtime`) into a transactional `ConfigDocumentPort`;
 2. Creates `RootRuntime` (`@zhin.js/runtime`), injecting the module loader (in dev mode: `NativeDevelopmentModuleRuntime`), config port, and Root resource installer;
 3. Installs Host-level resources via `installResources`: HTTP Host, database, Agent Host (including AI fallback handler), Console API, etc.;
 4. After startup, attaches `HmrCoordinator` -- file changes trigger generation reloads or process restarts.

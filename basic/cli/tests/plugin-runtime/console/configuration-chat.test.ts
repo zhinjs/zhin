@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { ConfigDocumentConflictError, createConfigDocument } from '@zhin.js/config-file';
+import { ConfigDocumentConflictError, createConfigDocument } from '@zhin.js/runtime';
 import type { ConsoleConfigApplication } from '@zhin.js/console-protocol';
 import { ConsoleConfigurationStore, ConfigChatRequestRejectedError } from '../../../src/plugin-runtime/console/configuration.js';
 import { ConfigChatAccessError, assertChatConfigurationAccess } from '../../../src/plugin-runtime/console/configuration-chat-policy.js';

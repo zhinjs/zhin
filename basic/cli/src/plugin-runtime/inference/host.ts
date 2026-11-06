@@ -2,12 +2,10 @@ import { randomUUID } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import type { DatabaseHost, SnapshotLease, SnapshotReader } from '@zhin.js/plugin-runtime';
 import {
+  createInferenceRuntime,
   createSnapshotProviderResolver,
   describeSnapshotAiProvider,
   listSnapshotAiProviders,
-} from '@zhin.js/ai-provider';
-import {
-  createInferenceRuntime,
   normalizeProviderGraph,
   ProviderBindingResourceOwner,
   ProviderError,

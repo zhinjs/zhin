@@ -1,9 +1,8 @@
 import { mkdtemp, mkdir, writeFile, readFile, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { RootRuntime, NodePackageResolver, primaryConfigToken, type ModuleRuntime } from '@zhin.js/runtime';
+import { createConfigDocument, RootRuntime, NodePackageResolver, primaryConfigToken, type ModuleRuntime } from '@zhin.js/runtime';
 import { definePlugin, rootPluginId, childPluginId } from '@zhin.js/plugin-runtime';
-import { createConfigDocument } from '@zhin.js/config-file';
 import { dispatchRuntimeConsoleRpc, pickRpcReply, createHttpHost, readJsonBody } from '@zhin.js/host-http';
 import { CONFIG_RPC, DEMO_RPC_ALLOWLIST, type ConsoleConfigExplanation } from '@zhin.js/console-protocol';
 import { PluginManagementWorkflow } from '../src/plugin-management/workflow.js';

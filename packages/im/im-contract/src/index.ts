@@ -9,3 +9,4 @@ export * from './conversation.js';
 export * from './conversation-store.js';
 export * from './endpoint.js';
 export * from './self-profile.js';
+export * from './interaction.js';

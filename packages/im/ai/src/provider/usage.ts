@@ -1,4 +1,5 @@
-import type { DecisionQuestions, JsonValue, GenerateImageInput, LanguageRequest } from '@zhin.js/ai/provider';
+import type { DecisionQuestions, JsonValue } from '../decision/types.js';
+import type { GenerateImageInput, LanguageRequest } from './types.js';
 
 /** Semantic input only. Account identity and quota subjects are supplied privately by Host. */
 export type InferenceUsageRequest =

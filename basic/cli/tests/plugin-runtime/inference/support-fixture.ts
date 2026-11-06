@@ -7,9 +7,8 @@ import {
   childPluginId,
   type SnapshotState,
 } from '@zhin.js/plugin-runtime';
-import { aiProviderDefinitionsToken } from '@zhin.js/ai-provider';
 import { personalSessionOwnerId } from '@zhin.js/agent/personal-session';
-import type { ProviderDefinition, ProviderGraph } from '@zhin.js/ai/provider';
+import { aiProviderDefinitionsToken, type ProviderDefinition, type ProviderGraph } from '@zhin.js/ai/provider';
 import { createDatabaseHost } from '../../../src/plugin-runtime/database-host-installer.js';
 import { HostInference } from '../../../src/plugin-runtime/inference/host.js';
 

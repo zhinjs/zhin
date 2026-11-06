@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parse as parseYaml } from 'yaml';
-import { createConfigDocument } from '@zhin.js/config-file';
+import { createConfigDocument } from '@zhin.js/runtime';
 import { createHttpHost, createConsoleEventHub, type HttpHost } from '@zhin.js/host-http';
 import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
 import type { ImRuntime, RuntimeMessageEvent } from '@zhin.js/core/runtime';

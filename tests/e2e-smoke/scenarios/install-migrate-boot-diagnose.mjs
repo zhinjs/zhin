@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { PluginTestKit, FakeClock, FakeScheduleRootHost } from '../../../packages/toolkit/testing/src/index.ts';
 import { PluginScheduleHost, rootPluginId, scheduleHostToken, scheduleRootHostToken } from '../../../packages/im/plugin-runtime/src/index.ts';
-import { createConfigDocument } from '../../../packages/im/config-file/src/index.ts';
+import { createConfigDocument } from '../../../packages/im/runtime/src/config-file/index.ts';
 import { createHttpHost } from '../../../packages/host/http/src/index.ts';
 import { applyInstanceDeclarationMigration, planInstanceDeclarationMigration } from '../../../basic/cli/src/plugin-runtime/migrate/instance-declarations.ts';
 import { registerMessageDiagnosticRoutes } from '../../../basic/cli/src/plugin-runtime/console/message-diagnostic-routes.ts';

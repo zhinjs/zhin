@@ -1,9 +1,13 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { UsageSubject } from '@zhin.js/core';
-import type { InferenceUsageAccounting, InferenceUsageOutcome, InferenceUsageRequest } from '@zhin.js/ai-provider';
 import type { UsageQuota } from './usage-quota.js';
 import { estimatePromptTokens } from '../prompt/estimate-tokens.js';
-import { ProviderAdmissionError } from '@zhin.js/ai/provider';
+import {
+  ProviderAdmissionError,
+  type InferenceUsageAccounting,
+  type InferenceUsageOutcome,
+  type InferenceUsageRequest,
+} from '@zhin.js/ai/provider';
 
 /** Thrown when the `onBehalfOf` user or group is over its usage quota; `message` is user-facing. Recognise it with `isAiCompletionQuotaError`. */
 export class AiCompletionQuotaError extends ProviderAdmissionError {

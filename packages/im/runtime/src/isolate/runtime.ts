@@ -11,7 +11,7 @@ import type {
   IsolatedPluginPrepareRequest,
   IsolatedPluginRuntimePort,
   PreparedIsolatedPlugin,
-} from '@zhin.js/runtime';
+} from '../isolation.js';
 import {
   isolatedPluginToken,
   type IsolatedPluginEvent,

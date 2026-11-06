@@ -2,8 +2,11 @@ import { wizardText } from './messages.js';
 import fs from 'fs-extra';
 import path from 'node:path';
 import yaml from 'yaml';
-import { createConfigDocument, readSourcePluginOrder } from '@zhin.js/config-file';
-import { readApplicationPluginDeclaration } from '@zhin.js/runtime';
+import {
+  createConfigDocument,
+  readApplicationPluginDeclaration,
+  readSourcePluginOrder,
+} from '@zhin.js/runtime';
 import { isDeepStrictEqual } from 'node:util';
 import {
   readPluginConfigurationMap,

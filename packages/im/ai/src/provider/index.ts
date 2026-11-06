@@ -14,5 +14,8 @@ export * from './cleanup.js';
 export * from './plan.js';
 export * from './resources.js';
 export * from './authoring.js';
+export * from './plugin-resources.js';
+export * from './lazy-client.js';
+export * from './usage.js';
 /** Unique declaration-merging entry; re-exported interfaces lose some consumer augmentation. */
 export interface AIProviderRegistry {}

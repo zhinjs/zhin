@@ -20,8 +20,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { parse as parseYaml } from 'yaml';
-import { readApplicationPluginDeclaration } from '@zhin.js/runtime';
-import { readSourcePluginOrder } from '@zhin.js/config-file';
+import { readApplicationPluginDeclaration, readSourcePluginOrder } from '@zhin.js/runtime';
 import { findConfigFile } from './config-file.js';
 
 export const STATE_DIR = '.zhin-local';

@@ -137,7 +137,7 @@ interface PreparedConfigDocument {
 }
 ```
 
-`ConfigFileDocument`（`@zhin.js/config-file`）封装两种格式共享的事务生命周期：
+`ConfigFileDocument`（`@zhin.js/runtime`）封装两种格式共享的事务生命周期：
 
 - **乐观并发**：`prepare` 和 `commit` 都会重读文件并核对 revision；文件在读取后被外部改动则抛 `ConfigDocumentConflictError`。
 - **原子落盘**：`commit` 先写临时文件再 `rename` 替换，保留原文件权限位。

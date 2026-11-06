@@ -2,8 +2,8 @@ import { spawn } from 'node:child_process';
 import { mkdtemp, writeFile, readFile, rm, mkdir, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { JsonConfigDocument } from '../src/json-config-document.js';
-import { withConfigFileLock } from '../src/config-file-lock.js';
+import { JsonConfigDocument } from '../../src/config-file/json-config-document.js';
+import { withConfigFileLock } from '../../src/config-file/config-file-lock.js';
 import { writeFileSync, unlinkSync } from 'node:fs';
 
 it.each(['replaced', 'released'] as const)('rechecks an exited writer marker that was %s before diagnosing abandonment', async mode => {
@@ -119,7 +119,7 @@ it('admits only one writer across real independent Node processes prepared from 
     await writeFile(file, '{"left":0,"right":0}\n');
     const launch = (field: string) => {
       const code = `
-        import { JsonConfigDocument } from ${JSON.stringify(new URL('../src/json-config-document.ts', import.meta.url).href)};
+        import { JsonConfigDocument } from ${JSON.stringify(new URL('../../src/config-file/json-config-document.ts', import.meta.url).href)};
         const doc = new JsonConfigDocument(${JSON.stringify(file)});
         const txn = await doc.prepare(await doc.read(), [{op:'set',path:[${JSON.stringify(field)}],value:1}]);
         console.log('READY');

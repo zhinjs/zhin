@@ -137,7 +137,7 @@ interface PreparedConfigDocument {
 }
 ```
 
-`ConfigFileDocument` (`@zhin.js/config-file`) owns the transaction lifecycle shared by both formats:
+`ConfigFileDocument` (`@zhin.js/runtime`) owns the transaction lifecycle shared by both formats:
 
 - **Optimistic concurrency**: Both `prepare` and `commit` re-read the file and verify the revision; if the file was modified externally after reading, a `ConfigDocumentConflictError` is thrown.
 - **Atomic write to disk**: `commit` first writes to a temporary file then uses `rename` to replace, preserving original file permissions.

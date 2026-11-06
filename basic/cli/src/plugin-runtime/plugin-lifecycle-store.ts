@@ -1,7 +1,6 @@
 import {readFile} from 'node:fs/promises';
 import {isAbsolute, join, resolve} from 'node:path';
-import {createConfigDocument} from '@zhin.js/config-file';
-import {readApplicationPluginDeclaration} from '@zhin.js/runtime';
+import {createConfigDocument, readApplicationPluginDeclaration} from '@zhin.js/runtime';
 import {findConfigFile} from '../utils/config-file.js';
 
 export interface DeclaredPluginReference {

@@ -1,9 +1,8 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { createConfigDocument } from '@zhin.js/config-file';
 import { HOST_CONFIG_PATCH_PATHS, type ConsoleConfigApplication } from '@zhin.js/console-protocol';
-import { ConfigValidationError } from '@zhin.js/runtime';
+import { createConfigDocument, ConfigValidationError } from '@zhin.js/runtime';
 import { ConsoleConfigurationStore } from '../../../src/plugin-runtime/console/configuration.js';
 import { maskConfigValue, REDACTED_CONFIG_VALUE } from '../../../src/plugin-runtime/console/configuration-redaction.js';
 

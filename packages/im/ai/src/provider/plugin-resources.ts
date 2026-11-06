@@ -1,5 +1,6 @@
 import { createToken, type PluginId, type RuntimeSnapshot, type Scope, type SnapshotLease, type SnapshotReader } from '@zhin.js/plugin-runtime';
-import { ProviderError, type InferenceClient, type ProviderDefinition, type ProviderDriverResolver } from '@zhin.js/ai/provider';
+import type { ProviderDefinition, ProviderDriverResolver } from './driver.js';
+import { ProviderError, type InferenceClient } from './types.js';
 export * from './lazy-client.js';
 export * from './usage.js';
 

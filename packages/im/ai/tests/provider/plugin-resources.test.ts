@@ -1,6 +1,12 @@
 import { Scope, SnapshotStore, rootPluginId, childPluginId, type SnapshotState } from '@zhin.js/plugin-runtime';
-import { defineProvider } from '@zhin.js/ai/provider';
-import { aiProviderDefinitionsToken, provideAiProviders, createSnapshotProviderResolver, describeSnapshotAiProvider, listSnapshotAiProviders } from '../src/index.js';
+import {
+  aiProviderDefinitionsToken,
+  createSnapshotProviderResolver,
+  defineProvider,
+  describeSnapshotAiProvider,
+  listSnapshotAiProviders,
+  provideAiProviders,
+} from '../../src/provider/index.js';
 
 const root = rootPluginId(), owner = childPluginId(root, 'providers');
 function definition(id: string) {

@@ -18,8 +18,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { createConfigDocument } from '@zhin.js/config-file';
-import { readApplicationPluginDeclaration } from '@zhin.js/runtime';
+import { createConfigDocument, readApplicationPluginDeclaration } from '@zhin.js/runtime';
 import { DevLinkError, collectZhinInstances, isZhinPackage } from './dev-link.js';
 import { findConfigFile } from './config-file.js';
 

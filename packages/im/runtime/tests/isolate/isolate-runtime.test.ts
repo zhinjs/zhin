@@ -11,13 +11,13 @@ import {
   type RuntimeSnapshot,
   type SnapshotState,
 } from '@zhin.js/plugin-runtime';
-import { RootRuntime, type ModuleRuntime } from '@zhin.js/runtime';
+import { RootRuntime, type ModuleRuntime } from '../../src/index.js';
 import {
   isolatedPluginToken,
   NodeIsolatedPluginRuntime,
   type IsolateMode,
   type IsolatedPluginHandle,
-} from '../src/index.js';
+} from '../../src/isolate/index.js';
 
 const temporary: string[] = [];
 

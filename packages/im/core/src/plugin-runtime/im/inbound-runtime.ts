@@ -13,8 +13,7 @@ import { HandlerIndex, isHandlerIndex, handlerFeatureId } from '../../feature/ha
 import type { HandlerDispatchOptions } from '@zhin.js/handler';
 import { bindOperationInput, operationInputBinding, type OperationResourceView } from '@zhin.js/feature-kit';
 import { formatCompact, getLogger, truncatePreview } from '@zhin.js/logger';
-import type { ConversationRef, DeliveryReceipt } from '@zhin.js/im-contract';
-import type { UserInteraction } from '@zhin.js/interaction';
+import type { ConversationRef, DeliveryReceipt, UserInteraction } from '@zhin.js/im-contract';
 import type { CommandExecutionBudget, CommandOperationController } from '@zhin.js/command/internal/execution';
 import { RuntimeNotice, type IncomingNotice, type Notice } from '../../notice.js';
 import { RuntimeRequest, type IncomingRequest, type Request } from '../../request.js';

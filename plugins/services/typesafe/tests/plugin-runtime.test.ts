@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ConfigComposer, ConfigValidationError, NodePackageResolver, ProjectGraphService } from '../../../../packages/im/runtime/src/index.js';
 import { Scope, DisposeStack, GenerationHandoffStack, childPluginId, rootPluginId, type PluginSetupContext } from 'zhin.js';
-import { aiProviderDefinitionsToken } from '@zhin.js/ai-provider';
+import { aiProviderDefinitionsToken } from '@zhin.js/ai/provider';
 import plugin from '../plugin.js';
 import { typeSafeProvider } from '../src/provider.js';
 import { driverFixture, callContext } from '../../../../packages/im/ai/tests/providers/fixtures.js';

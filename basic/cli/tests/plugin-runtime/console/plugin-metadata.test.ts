@@ -2,8 +2,7 @@ import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { definePlugin } from '@zhin.js/plugin-runtime';
-import { createConfigDocument } from '@zhin.js/config-file';
-import { RootRuntime } from '@zhin.js/runtime';
+import { createConfigDocument, RootRuntime } from '@zhin.js/runtime';
 import { buildManagedPluginList, buildPluginDetail } from '../../../src/plugin-runtime/console/plugin-projection.js';
 
 const roots: string[] = [];

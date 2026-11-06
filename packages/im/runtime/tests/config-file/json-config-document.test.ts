@@ -3,14 +3,14 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { definePlugin } from '@zhin.js/plugin-runtime';
-import { ConfigValidationError, RootRuntime, type ModuleRuntime } from '@zhin.js/runtime';
+import { ConfigValidationError, RootRuntime, type ModuleRuntime } from '../../src/index.js';
 import {
   ConfigDocumentConflictError,
   ConfigDocumentParseError,
   JsonConfigDocument,
   YamlConfigDocument,
   createConfigDocument,
-} from '../src/index.js';
+} from '../../src/config-file/index.js';
 
 const temporary: string[] = [];
 

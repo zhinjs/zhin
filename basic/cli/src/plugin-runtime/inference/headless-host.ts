@@ -1,5 +1,5 @@
 import type { EnvironmentExpressionSource } from './credentials.js';
-import { aiProviderDefinitionsToken } from '@zhin.js/ai-provider';
+import { aiProviderDefinitionsToken } from '@zhin.js/ai/provider';
 import { SnapshotStore, rootPluginId, type SnapshotState } from '@zhin.js/plugin-runtime';
 import type { PersonalSessionOwner } from '@zhin.js/agent/personal-session';
 import { createDatabaseHost, type DatabaseHostConfig } from '../database-host-installer.js';

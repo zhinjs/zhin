@@ -1,7 +1,10 @@
-import { EMPTY_TOKEN_USAGE, type AssistantMessage } from '@zhin.js/ai';
-import { OwnedLanguageRun, type InferenceClient } from '@zhin.js/ai/provider';
-import { createLazyInferenceClient } from '../src/lazy-client.js';
-import type { InferenceUsageAccounting } from '../src/usage.js';
+import { EMPTY_TOKEN_USAGE, type AssistantMessage } from '../../src/index.js';
+import {
+  OwnedLanguageRun,
+  createLazyInferenceClient,
+  type InferenceClient,
+  type InferenceUsageAccounting,
+} from '../../src/provider/index.js';
 
 const request = { context: { messages: [] } };
 function reply(total = 3, reported?: AssistantMessage['usage']['reported']): AssistantMessage {

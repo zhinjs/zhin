@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { createConfigDocument } from '@zhin.js/config-file';
+import { createConfigDocument } from '@zhin.js/runtime';
 import { HOST_CONFIG_PATCH_PATHS } from '@zhin.js/console-protocol';
 import { ConsoleConfigurationStore } from '../../../src/plugin-runtime/console/configuration.js';
 import {

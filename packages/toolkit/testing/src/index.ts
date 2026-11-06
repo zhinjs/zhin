@@ -26,7 +26,7 @@ export interface PluginTestKitOptions {
   readonly projectRoot: string;
   /**
    * A v2 document, or a file-backed document such as `createConfigDocument(path)` from
-   * `@zhin.js/config-file` when the test must share the same file authority as `zhin start`.
+   * `@zhin.js/runtime` when the test must share the same file authority as `zhin start`.
    */
   readonly config?: RuntimeConfigDocument | ConfigDocumentPort;
   /** Adapter names reserved for synthetic transports, default: ['test']. */

@@ -1,5 +1,6 @@
-import { assistantText, type AssistantMessage, type AssistantStreamEvent } from '@zhin.js/ai';
-import { OwnedLanguageRun, ProviderError, type InferenceClient, type LanguageRun } from '@zhin.js/ai/provider';
+import { assistantText, type AssistantMessage, type AssistantStreamEvent } from '../llm/index.js';
+import { OwnedLanguageRun } from './owned-stream.js';
+import { ProviderError, type InferenceClient, type LanguageRun } from './types.js';
 import type { InferenceUsageAccounting, InferenceUsageInvocation, InferenceUsageOutcome, InferenceUsageRequest } from './usage.js';
 
 export interface LazyInferenceClientOptions {
