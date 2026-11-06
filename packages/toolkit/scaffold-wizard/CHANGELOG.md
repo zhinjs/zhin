@@ -1,5 +1,16 @@
 # @zhin.js/scaffold-wizard
 
+## 1.1.17
+
+### Patch Changes
+
+- 008ccad: Consolidate fragmented IM micro-packages (`@zhin.js/interaction` into `@zhin.js/im-contract`, `@zhin.js/ai-provider` into `@zhin.js/ai/provider`, and `@zhin.js/config-file` + `@zhin.js/isolate` into `@zhin.js/runtime`), and expose `zhin.js/schedule` convenience subpath.
+- Updated dependencies [008ccad]
+- Updated dependencies [a1f1028]
+- Updated dependencies [5419b88]
+  - @zhin.js/runtime@1.1.20
+  - @zhin.js/plugin-runtime@1.1.22
+
 ## 1.1.16
 
 ### Patch Changes

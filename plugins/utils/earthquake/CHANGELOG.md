@@ -1,5 +1,13 @@
 # @zhin.js/plugin-earthquake
 
+## 0.1.10
+
+### Patch Changes
+
+- 5419b88: Add generation-scoped `definePluginStore` (`PluginStore`), `Scope.get()`, declarative `PluginSetupCapabilities` return in `definePlugin()`, and `JsonSerializable<T>` typing on `PluginStateStore` to eliminate `as never` casts on TypeScript interfaces.
+  - @zhin.js/tool@1.1.17
+  - @zhin.js/skill@1.1.15
+
 ## 0.1.9
 
 ### Patch Changes

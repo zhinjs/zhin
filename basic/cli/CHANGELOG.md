@@ -1,5 +1,33 @@
 # @zhin.js/cli
 
+## 1.1.30
+
+### Patch Changes
+
+- cbf1fb1: Unify Console page blueprints (`definePageBlueprint`, `defineAdapterPage`, `defineCommentReviewPage`, `projectBlueprintToImCard`, `projectBlueprintToCliPanel`) into `@zhin.js/console-contract` and `@zhin.js/page`, add zero-esbuild pure Blueprint synthesis + static client bundle mounting to `@zhin.js/pagemanager`, remove `@zhin.js/client` (React 19) and `.tsx` from all 30 server-side plugins and adapters (including `bilibili` and `juejin`), and remove legacy Era-1 Koa `PageManager` code.
+- 008ccad: Consolidate fragmented IM micro-packages (`@zhin.js/interaction` into `@zhin.js/im-contract`, `@zhin.js/ai-provider` into `@zhin.js/ai/provider`, and `@zhin.js/config-file` + `@zhin.js/isolate` into `@zhin.js/runtime`), and expose `zhin.js/schedule` convenience subpath.
+- a1f1028: Sink runtime, HTTP, IM, database, inference, and agent host installers from `@zhin.js/cli` into their owning runtime packages (`@zhin.js/runtime`, `@zhin.js/host-http`, `@zhin.js/core/runtime`, `@zhin.js/agent/runtime`), extract the canonical `executeInboundTurnSpine` with `InboundTurnRecord` in `@zhin.js/core/runtime`, and unify `ZhinAgent.hostMailbox`, `AgentTurnIngressRoute`, and `EngagementJournal` onto a single Actor/Mailbox runtime spine.
+- 3b2c7dc: Migrate stored API-key material fingerprints from the legacy sha256 form to the scrypt form introduced in 1.1.29 before authorization compares them, so an unchanged API key (including `env://` keys) is no longer treated as an identity change and locked in `reauthorize`. Rows already locked by the algorithm change are restored when the current environment key is exactly the one fingerprinted; real key rotations stay locked.
+- Updated dependencies [cbf1fb1]
+- Updated dependencies [008ccad]
+- Updated dependencies [a1f1028]
+- Updated dependencies [5419b88]
+  - @zhin.js/pagemanager@1.1.23
+  - @zhin.js/ai@1.1.53
+  - @zhin.js/command@1.1.16
+  - @zhin.js/core@1.1.58
+  - @zhin.js/im-contract@1.1.13
+  - @zhin.js/runtime@1.1.20
+  - @zhin.js/scaffold-wizard@1.1.17
+  - @zhin.js/plugin-runtime@1.1.22
+  - @zhin.js/host-http@1.1.16
+  - @zhin.js/adapter@1.1.30
+  - @zhin.js/component@1.1.15
+  - @zhin.js/feature-kit@1.1.14
+  - @zhin.js/middleware@1.1.15
+  - @zhin.js/permission@1.1.14
+  - @zhin.js/prompt-section@1.1.14
+
 ## 1.1.29
 
 ### Patch Changes

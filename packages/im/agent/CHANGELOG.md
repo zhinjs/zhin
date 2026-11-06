@@ -1,5 +1,27 @@
 # @zhin.js/agent
 
+## 1.1.49
+
+### Patch Changes
+
+- 008ccad: Consolidate fragmented IM micro-packages (`@zhin.js/interaction` into `@zhin.js/im-contract`, `@zhin.js/ai-provider` into `@zhin.js/ai/provider`, and `@zhin.js/config-file` + `@zhin.js/isolate` into `@zhin.js/runtime`), and expose `zhin.js/schedule` convenience subpath.
+- a1f1028: Sink runtime, HTTP, IM, database, inference, and agent host installers from `@zhin.js/cli` into their owning runtime packages (`@zhin.js/runtime`, `@zhin.js/host-http`, `@zhin.js/core/runtime`, `@zhin.js/agent/runtime`), extract the canonical `executeInboundTurnSpine` with `InboundTurnRecord` in `@zhin.js/core/runtime`, and unify `ZhinAgent.hostMailbox`, `AgentTurnIngressRoute`, and `EngagementJournal` onto a single Actor/Mailbox runtime spine.
+- Updated dependencies [008ccad]
+- Updated dependencies [a1f1028]
+- Updated dependencies [5419b88]
+  - @zhin.js/ai@1.1.53
+  - @zhin.js/core@1.1.58
+  - @zhin.js/im-contract@1.1.13
+  - @zhin.js/plugin-runtime@1.1.22
+  - @zhin.js/adapter@1.1.30
+  - @zhin.js/tool@1.1.17
+  - @zhin.js/agent-feature@1.1.15
+  - @zhin.js/feature-kit@1.1.14
+  - @zhin.js/mcp-feature@1.1.15
+  - @zhin.js/permission@1.1.14
+  - @zhin.js/prompt-section@1.1.14
+  - @zhin.js/skill@1.1.15
+
 ## 1.1.48
 
 ### Patch Changes

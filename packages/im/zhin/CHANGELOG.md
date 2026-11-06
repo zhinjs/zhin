@@ -1,5 +1,19 @@
 # zhin.js
 
+## 1.1.23
+
+### Patch Changes
+
+- 008ccad: Consolidate fragmented IM micro-packages (`@zhin.js/interaction` into `@zhin.js/im-contract`, `@zhin.js/ai-provider` into `@zhin.js/ai/provider`, and `@zhin.js/config-file` + `@zhin.js/isolate` into `@zhin.js/runtime`), and expose `zhin.js/schedule` convenience subpath.
+- 5419b88: Add generation-scoped `definePluginStore` (`PluginStore`), `Scope.get()`, declarative `PluginSetupCapabilities` return in `definePlugin()`, and `JsonSerializable<T>` typing on `PluginStateStore` to eliminate `as never` casts on TypeScript interfaces.
+- Updated dependencies [008ccad]
+- Updated dependencies [a1f1028]
+- Updated dependencies [5419b88]
+  - @zhin.js/core@1.1.58
+  - @zhin.js/plugin-runtime@1.1.22
+  - @zhin.js/permission@1.1.14
+  - @zhin.js/schedule-feature@1.1.14
+
 ## 1.1.22
 
 ### Patch Changes

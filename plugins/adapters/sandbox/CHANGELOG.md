@@ -1,5 +1,22 @@
 # @zhin.js/adapter-process
 
+## 1.1.26
+
+### Patch Changes
+
+- Updated dependencies [cbf1fb1]
+- Updated dependencies [008ccad]
+- Updated dependencies [a1f1028]
+  - @zhin.js/client@1.1.26
+  - @zhin.js/console-contract@1.1.4
+  - @zhin.js/page@1.1.16
+  - @zhin.js/core@1.1.58
+  - @zhin.js/im-contract@1.1.13
+  - @zhin.js/host-http@1.1.16
+  - @zhin.js/adapter@1.1.30
+  - @zhin.js/feature-kit@1.1.14
+  - @zhin.js/skill@1.1.15
+
 ## 1.1.25
 
 ### Patch Changes

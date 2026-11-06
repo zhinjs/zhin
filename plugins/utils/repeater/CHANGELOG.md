@@ -1,5 +1,15 @@
 # @zhin.js/plugin-repeater
 
+## 1.1.23
+
+### Patch Changes
+
+- 5419b88: Add generation-scoped `definePluginStore` (`PluginStore`), `Scope.get()`, declarative `PluginSetupCapabilities` return in `definePlugin()`, and `JsonSerializable<T>` typing on `PluginStateStore` to eliminate `as never` casts on TypeScript interfaces.
+- Updated dependencies [008ccad]
+- Updated dependencies [a1f1028]
+  - @zhin.js/core@1.1.58
+  - @zhin.js/skill@1.1.15
+
 ## 1.1.22
 
 ### Patch Changes
