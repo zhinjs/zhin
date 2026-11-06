@@ -1,5 +1,21 @@
 # @zhin.js/plugin-calendar
 
+## 0.1.14
+
+### Patch Changes
+
+- cbf1fb1: Unify Console page blueprints (`definePageBlueprint`, `defineAdapterPage`, `defineCommentReviewPage`, `projectBlueprintToImCard`, `projectBlueprintToCliPanel`) into `@zhin.js/console-contract` and `@zhin.js/page`, add zero-esbuild pure Blueprint synthesis + static client bundle mounting to `@zhin.js/pagemanager`, remove `@zhin.js/client` (React 19) and `.tsx` from all 30 server-side plugins and adapters (including `bilibili` and `juejin`), and remove legacy Era-1 Koa `PageManager` code.
+- 5419b88: Add generation-scoped `definePluginStore` (`PluginStore`), `Scope.get()`, declarative `PluginSetupCapabilities` return in `definePlugin()`, and `JsonSerializable<T>` typing on `PluginStateStore` to eliminate `as never` casts on TypeScript interfaces.
+- Updated dependencies [cbf1fb1]
+- Updated dependencies [008ccad]
+- Updated dependencies [a1f1028]
+  - @zhin.js/console-contract@1.1.4
+  - @zhin.js/page@1.1.16
+  - @zhin.js/im-contract@1.1.13
+  - @zhin.js/host-http@1.1.16
+  - @zhin.js/tool@1.1.17
+  - @zhin.js/skill@1.1.15
+
 ## 0.1.13
 
 ### Patch Changes

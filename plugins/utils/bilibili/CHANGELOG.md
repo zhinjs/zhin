@@ -1,5 +1,12 @@
 # @zhin.js/plugin-bilibili
 
+## 0.1.10
+
+### Patch Changes
+
+- @zhin.js/tool@1.1.17
+- @zhin.js/skill@1.1.15
+
 ## 0.1.9
 
 ### Patch Changes

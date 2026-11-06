@@ -1,5 +1,12 @@
 # create-zhin-app
 
+## 1.1.18
+
+### Patch Changes
+
+- Updated dependencies [008ccad]
+  - @zhin.js/scaffold-wizard@1.1.17
+
 ## 1.1.17
 
 ### Patch Changes

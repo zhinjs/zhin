@@ -1,5 +1,15 @@
 # @zhin.js/plugin-qrcode
 
+## 1.1.23
+
+### Patch Changes
+
+- Updated dependencies [008ccad]
+- Updated dependencies [a1f1028]
+  - @zhin.js/core@1.1.58
+  - @zhin.js/tool@1.1.17
+  - @zhin.js/skill@1.1.15
+
 ## 1.1.22
 
 ### Patch Changes
