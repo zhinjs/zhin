@@ -1264,6 +1264,9 @@ importers:
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../core
+      '@zhin.js/database':
+        specifier: workspace:*
+        version: link:../../../basic/database
       '@zhin.js/feature-kit':
         specifier: workspace:*
         version: link:../feature-kit
