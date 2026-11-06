@@ -1,6 +1,6 @@
 import { definePage } from '@zhin.js/console-contract';
 import { createCommentReviewPage } from '@zhin.js/client';
-import { spec } from './spec';
+import { spec } from './spec.js';
 
 export const meta = definePage({
   title: '评论审批',

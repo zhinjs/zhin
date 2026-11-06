@@ -18,6 +18,7 @@ const capabilityEntries = [
   'agents',
   'evals',
   'hooks',
+  'pages',
   'prompt-sections',
   'skills',
   'tools',
