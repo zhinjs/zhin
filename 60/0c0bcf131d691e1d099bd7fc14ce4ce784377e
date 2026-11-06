@@ -1,0 +1,14 @@
+tests/docs/adapter-console-pages.test.ts
+  h_6f5e45c41d0910 72
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "600c0bcf131d691e1d099bd7fc14ce4ce784377e",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
