@@ -7,7 +7,9 @@ import {
   type ProviderCredentialRecord,
   type ProviderRepository,
 } from '@zhin.js/ai/provider';
-import { createHostDocumentCipher } from '@zhin.js/plugin-runtime';
+import { createHostDocumentCipher, type EnvironmentExpressionSource } from '@zhin.js/plugin-runtime';
+
+export type { EnvironmentExpressionSource };
 
 export interface CredentialIdentity {
   readonly identityEstablished?: boolean;
@@ -16,10 +18,6 @@ export interface CredentialIdentity {
   readonly client?: Readonly<{ clientSecret?: string }>;
   /** A default may itself be secret; this expression never enters public configuration. */
   readonly source?: EnvironmentExpressionSource;
-}
-export interface EnvironmentExpressionSource {
-  readonly kind: 'environment-expression';
-  readonly expression: string;
 }
 export type ApiKeyMaterial = Readonly<{ key: string; source?: never }> | Readonly<{ source: EnvironmentExpressionSource; key?: never }>;
 

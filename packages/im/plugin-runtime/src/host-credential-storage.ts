@@ -1,7 +1,28 @@
-import { createCipheriv, createDecipheriv, randomBytes, randomUUID } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
 import { link, lstat, mkdir, open, unlink } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+import { expandEnvironmentValue } from './environment-expansion.js';
+
+/** One stable Host namespace for configuration validation and execution ownership. */
+export function hostModelOwnerId(projectRoot: string): string {
+  return `host-owner:v1:${createHash('sha256').update(resolve(projectRoot)).digest('hex')}`;
+}
+
+export interface EnvironmentExpressionSource {
+  readonly kind: 'environment-expression';
+  readonly expression: string;
+}
+
+/** Called only after the private source has been validated by the account runtime. Never loads dotenv. */
+export function resolveHostCredentialSource(
+  source: string | EnvironmentExpressionSource,
+  lookup: (name: string) => string | undefined,
+): string | undefined {
+  if (typeof source !== 'string') return expandEnvironmentValue(source.expression, lookup);
+  const match = /^env:\/\/([A-Za-z_][A-Za-z0-9_]*)$/u.exec(source);
+  return match ? lookup(match[1]!) : undefined;
+}
 
 /** Host-private storage error. No filesystem path, credential or crypto cause escapes. */
 export class HostCredentialStorageError extends Error {
