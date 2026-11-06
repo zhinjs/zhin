@@ -12,6 +12,7 @@
 "@zhin.js/cli": patch
 "@zhin.js/host-http": patch
 "@zhin.js/scaffold-wizard": patch
+"@zhin.js/testing": patch
 "create-zhin-app": patch
 ---
 
