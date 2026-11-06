@@ -1,0 +1,24 @@
+basic/cli/src/plugin-runtime/inference/environment-source.ts
+  h_6f5e45c41d0910 1-2
+basic/cli/src/plugin-runtime/inference/host-identity.ts
+  h_6f5e45c41d0910 1-2
+packages/im/agent/src/plugin-runtime/inference/credentials.ts
+  h_6f5e45c41d0910 10-12
+packages/im/agent/src/plugin-runtime/inference/environment-source.ts
+  h_6f5e45c41d0910 1-2
+packages/im/agent/src/plugin-runtime/inference/host-identity.ts
+  h_6f5e45c41d0910 1
+packages/im/plugin-runtime/src/host-credential-storage.ts
+  h_6f5e45c41d0910 1,4-25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6868d86edd416a126ec10d9bf40ac227ce7156a6",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
