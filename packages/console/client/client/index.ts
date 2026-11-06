@@ -1,5 +1,5 @@
 // Types
-export * from "./types";
+export * from "./types.js";
 export {
   AGENT_COLLABORATION_RPC,
   ENDPOINT_RPC,
@@ -47,7 +47,7 @@ export {
 } from './console-events.js';
 
 // Media URL resolution
-export { resolveMediaSrc, pickMediaRawUrl, type MediaKind } from "./mediaSrc";
+export { resolveMediaSrc, pickMediaRawUrl, type MediaKind } from "./mediaSrc.js";
 
 // Safe rich message rendering (Markdown + code blocks; no raw HTML execution)
 export {

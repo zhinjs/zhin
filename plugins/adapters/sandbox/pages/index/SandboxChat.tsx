@@ -8,7 +8,7 @@ import {
   pickMediaRawUrl,
   type MessageSegment,
 } from '@zhin.js/client';
-import { buildSandboxWebSocketUrl, captureSandboxRequestContext, createSandboxMessageId, submitSandboxFrame, SANDBOX_SCOPED_PROTOCOL, type SandboxRequestContext } from './sandboxTransport';
+import { buildSandboxWebSocketUrl, captureSandboxRequestContext, createSandboxMessageId, submitSandboxFrame, SANDBOX_SCOPED_PROTOCOL, type SandboxRequestContext } from './sandboxTransport.js';
 import { createWorkspaceDirectoryController, type DirectoryStatus } from './workspaceDirectoryState.js';
 import type { SandboxWorkspaceScope } from './workspaceDirectory.js';
 import {
@@ -20,7 +20,7 @@ import {
   Square, RotateCcw, FileDiff, Terminal, FlaskConical, ChevronDown,
   FileDown, ListChecks,
 } from 'lucide-react';
-import RichTextEditor, { type RichTextEditorRef } from './RichTextEditor';
+import RichTextEditor, { type RichTextEditorRef } from './RichTextEditor.js';
 import HtmlMessage from './HtmlMessage.js';
 import { sandboxStyles } from './styles.js';
 import ConversationRecoveryPanel from './ConversationRecoveryPanel.js';

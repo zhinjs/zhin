@@ -543,17 +543,79 @@ class PageErrorBoundary extends React.Component {
 }
 
 try {
+  function renderBlueprint(bp) {
+    const sections = Array.isArray(bp.sections) ? bp.sections : [];
+    return createElement('div', { className: 'p-6 max-w-4xl mx-auto flex flex-col gap-6' },
+      createElement('div', { className: 'flex flex-col gap-1' },
+        createElement('h1', { className: 'text-2xl font-bold' }, String(bp.title ?? '')),
+        (bp.subtitle ?? bp.description) ? createElement('p', { className: 'text-sm text-muted-foreground' }, String(bp.subtitle ?? bp.description)) : null,
+      ),
+      ...sections.map((sec, idx) => {
+        const key = sec?.id ?? String(idx);
+        const secTitle = sec?.title ? createElement('h2', { className: 'text-base font-semibold mb-2' }, String(sec.title)) : null;
+        const items = Array.isArray(sec?.items) ? sec.items : [];
+        const actions = Array.isArray(sec?.actions) ? sec.actions : items;
+        if (sec?.kind === 'stats' || sec?.type === 'stats') {
+          return createElement('section', { key, className: 'p-4 rounded-lg border bg-card flex flex-col gap-2' },
+            secTitle,
+            createElement('div', { className: 'grid gap-3', style: { gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' } },
+              ...items.map((item, i) => createElement('div', { key: item?.key ?? String(i), className: 'p-3 rounded border bg-muted flex flex-col gap-1' },
+                createElement('span', { className: 'text-xs text-muted-foreground' }, String(item?.label ?? item?.key ?? '')),
+                createElement('strong', { className: 'text-lg font-semibold' }, String(item?.value ?? '—') + String(item?.suffix ?? '')),
+              )),
+            ),
+          );
+        }
+        if (sec?.kind === 'actions' || sec?.type === 'actions') {
+          return createElement('section', { key, className: 'p-4 rounded-lg border bg-card flex flex-col gap-2' },
+            secTitle,
+            createElement('div', { className: 'flex flex-wrap gap-2' },
+              ...actions.map((act, i) => createElement('button', {
+                key: act?.action ?? act?.name ?? String(i),
+                type: 'button',
+                className: 'px-3 py-1 rounded border bg-secondary text-sm font-medium cursor-pointer',
+                'data-action': String(act?.action ?? act?.name ?? ''),
+              }, String(act?.label ?? act?.action ?? 'Action'))),
+            ),
+          );
+        }
+        if (sec?.kind === 'markdown' || sec?.type === 'markdown') {
+          return createElement('section', { key, className: 'p-4 rounded-lg border bg-card flex flex-col gap-2' },
+            secTitle,
+            createElement('pre', { className: 'whitespace-pre-wrap text-sm font-mono m-0' }, String(sec?.content ?? '')),
+          );
+        }
+        return createElement('section', { key, className: 'p-4 rounded-lg border bg-card flex flex-col gap-2' }, secTitle);
+      }),
+    );
+  }
   const page = await import(${JSON.stringify(moduleUrl)});
   let Component = page.default ?? page.SandboxPage ?? null;
   let registeredElement = null;
-  if (!Component && typeof page.register === 'function') {
+  if (typeof page.register === 'function') {
     page.register({
       React,
       addRoute(routeRecord) { registeredElement = routeRecord?.element ?? null; },
       addTool() { return entry.localName; },
     });
   }
-  const content = registeredElement ?? createElement(Component ?? page, entry);
+  const ResolvedComponent = typeof Component === 'function'
+    ? function ZhinPageShellAdapter(props) {
+        globalThis.__ZHIN_ALLOW_RAW_BLUEPRINT__ = true;
+        try {
+          const out = Component(props);
+          if (out && typeof out === 'object' && out.kind === 'zhin.console.page-blueprint') {
+            return renderBlueprint(out);
+          }
+          return out;
+        } finally {
+          delete globalThis.__ZHIN_ALLOW_RAW_BLUEPRINT__;
+        }
+      }
+    : (Component && typeof Component === 'object' && Component.kind === 'zhin.console.page-blueprint'
+        ? function ZhinBlueprintShellPage() { return renderBlueprint(Component); }
+        : (Component ?? page));
+  const content = registeredElement ?? createElement(ResolvedComponent, entry);
   const wrapped = RouterWrapper ? createElement(RouterWrapper, null, content) : content;
   createRoot(mount).render(createElement(PageErrorBoundary, null, wrapped));
 } catch (error) {

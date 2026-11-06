@@ -102,9 +102,12 @@ try {
   }
   // No parent environment credentials are copied into the trusted fixture process.
   const env = { ZHIN_SCENARIO_FIXTURE_ROOT: temporary, ...(process.platform === 'win32' ? { SystemRoot: process.env.SystemRoot, SystemDrive: process.env.SystemDrive } : {}) };
+  const isolationFlag = process.allowedNodeEnvironmentFlags.has('--test-isolation')
+    ? '--test-isolation=none'
+    : '--experimental-test-isolation=none';
   assert.throws(() => execFileSync(
     process.execPath,
-    ['--conditions=development', '--import', 'tsx', '--test', '--test-isolation=none', '--test-reporter=tap', ...files],
+    ['--conditions=development', '--import', 'tsx', '--test', isolationFlag, '--test-reporter=tap', ...files],
     { cwd: temporary, env, timeout: 45_000, encoding: 'utf8' },
   ), error => {
     const out = String(error.stdout ?? '') + String(error.stderr ?? '');

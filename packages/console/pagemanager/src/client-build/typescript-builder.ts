@@ -248,6 +248,53 @@ export function register(api) {
   if (typeof Component !== 'function' && (typeof Component !== 'object' || Component == null)) {
     throw new Error('Page module default export is not a React component');
   }
+  function _renderBlueprint(bp) {
+    const h = api.React.createElement;
+    const sections = Array.isArray(bp.sections) ? bp.sections : [];
+    return h('div', { className: 'p-6 max-w-4xl mx-auto flex flex-col gap-6' },
+      h('div', { className: 'flex flex-col gap-1' },
+        h('h1', { className: 'text-2xl font-bold' }, String(bp.title ?? '')),
+        (bp.subtitle ?? bp.description) ? h('p', { className: 'text-sm text-muted-foreground' }, String(bp.subtitle ?? bp.description)) : null,
+      ),
+      ...sections.map((sec, idx) => {
+        const key = sec?.id ?? String(idx);
+        const secTitle = sec?.title ? h('h2', { className: 'text-base font-semibold mb-2' }, String(sec.title)) : null;
+        const items = Array.isArray(sec?.items) ? sec.items : [];
+        const actions = Array.isArray(sec?.actions) ? sec.actions : items;
+        if (sec?.kind === 'stats' || sec?.type === 'stats') {
+          return h('section', { key, className: 'p-4 rounded-lg border bg-card flex flex-col gap-2' },
+            secTitle,
+            h('div', { className: 'grid gap-3', style: { gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' } },
+              ...items.map((item, i) => h('div', { key: item?.key ?? String(i), className: 'p-3 rounded border bg-muted flex flex-col gap-1' },
+                h('span', { className: 'text-xs text-muted-foreground' }, String(item?.label ?? item?.key ?? '')),
+                h('strong', { className: 'text-lg font-semibold' }, String(item?.value ?? '—') + String(item?.suffix ?? '')),
+              )),
+            ),
+          );
+        }
+        if (sec?.kind === 'actions' || sec?.type === 'actions') {
+          return h('section', { key, className: 'p-4 rounded-lg border bg-card flex flex-col gap-2' },
+            secTitle,
+            h('div', { className: 'flex flex-wrap gap-2' },
+              ...actions.map((act, i) => h('button', {
+                key: act?.action ?? act?.name ?? String(i),
+                type: 'button',
+                className: 'px-3 py-1 rounded border bg-secondary text-sm font-medium cursor-pointer',
+                'data-action': String(act?.action ?? act?.name ?? ''),
+              }, String(act?.label ?? act?.action ?? 'Action'))),
+            ),
+          );
+        }
+        if (sec?.kind === 'markdown' || sec?.type === 'markdown') {
+          return h('section', { key, className: 'p-4 rounded-lg border bg-card flex flex-col gap-2' },
+            secTitle,
+            h('pre', { className: 'whitespace-pre-wrap text-sm font-mono m-0' }, String(sec?.content ?? '')),
+          );
+        }
+        return h('section', { key, className: 'p-4 rounded-lg border bg-card flex flex-col gap-2' }, secTitle);
+      }),
+    );
+  }
   if (typeof globalThis !== 'undefined') {
     globalThis.__ZHIN_ACTIVE_PLUGIN_ID__ = _owner;
     const _owners = globalThis.__ZHIN_PAGE_OWNERS__ ?? (globalThis.__ZHIN_PAGE_OWNERS__ = {});
@@ -271,7 +318,23 @@ export function register(api) {
     route,
     title: name,
   };
-  const element = api.React.createElement(Component, pageProps);
+  const WrappedComponent = typeof Component === 'function'
+    ? function ZhinPageAdapter(props) {
+        if (typeof globalThis !== 'undefined') globalThis.__ZHIN_ALLOW_RAW_BLUEPRINT__ = true;
+        try {
+          const out = Component(props);
+          if (out && typeof out === 'object' && out.kind === 'zhin.console.page-blueprint') {
+            return _renderBlueprint(out);
+          }
+          return out;
+        } finally {
+          if (typeof globalThis !== 'undefined') delete globalThis.__ZHIN_ALLOW_RAW_BLUEPRINT__;
+        }
+      }
+    : (Component && typeof Component === 'object' && Component.kind === 'zhin.console.page-blueprint'
+        ? function ZhinBlueprintPage() { return _renderBlueprint(Component); }
+        : Component);
+  const element = api.React.createElement(WrappedComponent, pageProps);
   api.addRoute({
     path: route,
     name,

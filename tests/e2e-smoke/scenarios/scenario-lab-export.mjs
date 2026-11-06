@@ -91,7 +91,10 @@ try {
     ? { SystemRoot: process.env.SystemRoot, SystemDrive: process.env.SystemDrive }
     : {};
   const environment = { ZHIN_SCENARIO_FIXTURE_ROOT: project.root, ...windowsSystemVariables };
-  const nodeArguments = ['--conditions=development', '--import', 'tsx', '--test', '--test-isolation=none', '--test-reporter=tap', ...files];
+  const isolationFlag = process.allowedNodeEnvironmentFlags.has('--test-isolation')
+    ? '--test-isolation=none'
+    : '--experimental-test-isolation=none';
+  const nodeArguments = ['--conditions=development', '--import', 'tsx', '--test', isolationFlag, '--test-reporter=tap', ...files];
 
   let batchOutput = '';
   let batchRejected = false;
