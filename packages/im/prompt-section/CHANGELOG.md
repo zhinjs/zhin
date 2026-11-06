@@ -1,5 +1,14 @@
 # @zhin.js/prompt-section
 
+## 1.1.13
+
+### Patch Changes
+
+- Updated dependencies [fed2c27]
+- Updated dependencies [72b5a12]
+  - @zhin.js/plugin-runtime@1.1.21
+  - @zhin.js/feature-kit@1.1.13
+
 ## 1.1.12
 
 ### Patch Changes

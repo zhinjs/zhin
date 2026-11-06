@@ -1,5 +1,19 @@
 # @zhin.js/isolate
 
+## 1.1.19
+
+### Patch Changes
+
+- Updated dependencies [6347b19]
+- Updated dependencies [5ec4728]
+- Updated dependencies [bf00459]
+- Updated dependencies [6163abc]
+- Updated dependencies [fed2c27]
+- Updated dependencies [72b5a12]
+- Updated dependencies [aa41889]
+  - @zhin.js/runtime@1.1.19
+  - @zhin.js/plugin-runtime@1.1.21
+
 ## 1.1.18
 
 ### Patch Changes

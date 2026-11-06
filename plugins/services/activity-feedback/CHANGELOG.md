@@ -1,5 +1,27 @@
 # @zhin.js/service-activity-feedback
 
+## 1.1.25
+
+### Patch Changes
+
+- 6347b19: ADR 0048 H2: delete the sub-agent runtime, `spawn_task`, deferred workers, detached tasks, the standalone `AIService.createAgent` / `runAgent` / `createAgentSession` loop and the `ai.subagent.*` / `subagent_*` events. `ai.agent.subagentTurnMode`, `maxParallelSubagents`, `subagentAutoContinue`, `subagentDirectImDelivery`, `subagentTools`, `subagentTurnWaitMs`, `subagentExecApprovalMode`, `workerExecApprovalMode`, `workerBaseTools`, `deferredAutoContinue`, `deferredAutoContinueMaxDepth` and `ai.agents.<name>.permission.task` now fail startup with a migration hint; declare collaboration in `agents/<name>/agent.json` instead.
+- Updated dependencies [3a8504b]
+- Updated dependencies [6347b19]
+- Updated dependencies [c563f3b]
+- Updated dependencies [bf00459]
+- Updated dependencies [4e646a2]
+- Updated dependencies [6163abc]
+- Updated dependencies [8de6080]
+- Updated dependencies [bc6ccb1]
+- Updated dependencies [72b5a12]
+- Updated dependencies [5ebef1a]
+- Updated dependencies [3c3c1ee]
+- Updated dependencies [8de6080]
+- Updated dependencies [8de6080]
+- Updated dependencies [aa41889]
+- Updated dependencies [8de6080]
+  - @zhin.js/agent@1.1.48
+
 ## 1.1.24
 
 ### Patch Changes

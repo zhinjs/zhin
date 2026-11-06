@@ -1,5 +1,19 @@
 # @zhin.js/ai-provider
 
+## 1.0.2
+
+### Patch Changes
+
+- Updated dependencies [3a8504b]
+- Updated dependencies [fed2c27]
+- Updated dependencies [bc6ccb1]
+- Updated dependencies [8de6080]
+- Updated dependencies [8de6080]
+- Updated dependencies [8de6080]
+- Updated dependencies [8de6080]
+  - @zhin.js/ai@1.1.52
+  - @zhin.js/plugin-runtime@1.1.21
+
 ## 1.0.1
 
 ### Patch Changes
