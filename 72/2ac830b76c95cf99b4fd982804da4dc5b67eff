@@ -1,0 +1,16 @@
+evals/chat/src/workspace.ts
+  h_6f5e45c41d0910 6-7
+evals/chat/tests/workspace.test.ts
+  h_6f5e45c41d0910 6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "722ac830b76c95cf99b4fd982804da4dc5b67eff",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
