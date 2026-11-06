@@ -1,0 +1,18 @@
+.changeset/fix-engagement-journal-database-host.md
+  h_6f5e45c41d0910 1-8
+basic/cli/tests/plugin-runtime/agent/structured-persistence.test.ts
+  h_6f5e45c41d0910 158-171,180-194
+packages/im/agent/src/plugin-runtime/host/persistence-coordinator.ts
+  h_6f5e45c41d0910 3-7,23-35,82
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8adce162391f7c8e83aa8c80e4538815cf196c4f",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
