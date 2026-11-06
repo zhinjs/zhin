@@ -1,9 +1,8 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createConfigDocument } from '@zhin.js/config-file';
 import { SelfChangeApplier, SelfChangeStore, createHostProtectedPaths, configPatchImpact, type DecisionEventInput } from '@zhin.js/agent';
-import { ConfigurationSupersededError, ConfigValidationError, HOST_CONFIG_KEYS } from '@zhin.js/runtime';
+import { createConfigDocument, ConfigurationSupersededError, ConfigValidationError, HOST_CONFIG_KEYS } from '@zhin.js/runtime';
 import type { ConsoleConfigApplication } from '@zhin.js/console-protocol';
 import { ConsoleConfigurationStore } from '../../../src/plugin-runtime/console/configuration.js';
 import { HostSelfChangeApply } from '../../../src/plugin-runtime/self-change-apply.js';

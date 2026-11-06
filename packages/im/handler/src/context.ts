@@ -1,5 +1,5 @@
 import type { OperationSession, CapabilityContext } from '@zhin.js/feature-kit';
-import type { UserInteraction } from '@zhin.js/interaction';
+import type { UserInteraction } from '@zhin.js/im-contract';
 import type { PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 
 /** Handler context contains only generation-safe capabilities and user interactions. */

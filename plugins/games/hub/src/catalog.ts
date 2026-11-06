@@ -1,4 +1,4 @@
-import { createToken } from 'zhin.js';
+import { definePluginStore } from 'zhin.js';
 import {
   gameFeatureId,
   isGameIndex,
@@ -6,10 +6,11 @@ import {
   type RuntimeRegisteredGame,
 } from '@zhin.js/game-kit';
 
-export const gameIndexToken = createToken<GameIndex>(
+export const gameIndexStore = definePluginStore<GameIndex>(
   'zhin.game.index',
   'Game Hub registered game index',
 );
+export const gameIndexToken = gameIndexStore;
 
 export interface GameCatalogEntry {
   readonly id: string;

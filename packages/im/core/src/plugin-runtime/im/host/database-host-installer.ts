@@ -1,0 +1,461 @@
+import { mkdir } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
+import { Registry, ensureDatabaseColumns, type Column, type StructuredDatabase, type TransactionContext } from '@zhin.js/database';
+import { formatCompact, getLogger } from '@zhin.js/logger';
+import {
+  guardTransactionModel,
+  databaseHostToken,
+  databaseRootHostToken,
+  PluginDatabaseHost,
+  rootPluginId,
+  type DatabaseHost,
+  type DatabaseHostConsole,
+  type DatabaseHostModel,
+  type DatabaseHostSelection,
+  type DatabaseHostAggregation,
+  type ConfigDocumentPort,
+  type RootResourceInstaller,
+  type RuntimeConfigDocument,
+} from '@zhin.js/plugin-runtime';
+import {
+  normalizeDatabaseHostConfig,
+  type DatabaseHostConfig,
+} from './database-config.js';
+import { createDatabaseState, type StateDatabase } from './database-state.js';
+
+const logger = getLogger('Database');
+
+export type { DatabaseHostConfig } from './database-config.js';
+
+type RawModel = {
+  aggregate?(): DatabaseHostAggregation;
+  select: (...fields: string[]) => {
+    where(query: Record<string, unknown>): unknown;
+    then?: unknown;
+  };
+  insert: (row: Record<string, unknown>) => unknown;
+  delete: (query: Record<string, unknown>) => unknown;
+  update: (patch: Record<string, unknown>) => {
+    where(query: Record<string, unknown>): unknown;
+  };
+};
+
+type RawConsoleModel = RawModel & {
+  create?: (row: Record<string, unknown>) => unknown;
+  updateById?: (id: string, row: Record<string, unknown>) => unknown;
+  deleteById?: (id: string) => unknown;
+  get?: (key: string) => Promise<unknown>;
+  set?: (key: string, value: unknown, ttl?: number) => Promise<void>;
+  deleteByKey?: (key: string) => Promise<unknown>;
+  entries?: () => Promise<Array<[string, unknown]>>;
+};
+
+type RawDatabase = {
+  define: (name: string, definition: unknown) => void;
+  transaction<T>(callback: (transaction: TransactionContext<Record<string, Record<string, unknown>>>) => Promise<T>, options?: { isolationLevel: 'REPEATABLE_READ' }): Promise<T>;
+  start(): Promise<void>;
+  stop(): Promise<void>;
+  models: Map<string, RawConsoleModel>;
+  definitions: Map<string, Record<string, unknown>>;
+  dialect: { name: string; formatDropTable(name: string, ifExists?: boolean): unknown };
+  dialectName: string;
+  aggregate(name: string): {
+    count(field: string, alias: string): { where(query: Record<string, unknown>): Promise<Array<{ total: number }>> };
+  };
+  query(query: unknown): Promise<unknown>;
+};
+
+function wrapModel(model: RawModel, db?: RawDatabase, tableName?: string): DatabaseHostModel {
+  return {
+    ...(model.aggregate && db && ['sqlite', 'mysql', 'pg'].includes(db.dialectName) ? { aggregate: (): DatabaseHostAggregation => {
+      const source = model.aggregate!();
+      const chain: DatabaseHostAggregation = {
+        min(field, alias) { source.min(field, alias); return chain; },
+        max(field, alias) { source.max(field, alias); return chain; },
+        groupBy(...fields) { source.groupBy(...fields); return chain; },
+        where(query) { source.where(query); return chain; },
+        then(resolve, reject) { return Promise.resolve(source).then(resolve, reject); },
+      };
+      return Object.freeze(chain);
+    } } : {}),
+    select: (...fields) => {
+      if (fields.includes('*')) {
+        throw new TypeError(
+          'select() requires explicit column names; "*" is not supported '
+          + '(pass real column names, e.g. select("id", "title")), or use count() for counting.',
+        );
+      }
+      const selection = (model.select as (...args: string[]) => unknown)(...fields) as {
+        where(query: Record<string, unknown>): unknown;
+        orderBy?(field: string, direction?: 'ASC' | 'DESC'): unknown;
+        limit?(count: number): unknown;
+      };
+      // 链式 + 可 await：console logs 页需要 orderBy/limit，插件侧 `await select().where(q)` 不变
+      const chain: DatabaseHostSelection = {
+        where: (query) => { selection.where(query); return chain; },
+        orderBy: (field, direction) => { selection.orderBy?.(field, direction); return chain; },
+        limit: (count) => { selection.limit?.(count); return chain; },
+        then: (onfulfilled, onrejected) =>
+          Promise.resolve(selection as unknown as PromiseLike<Record<string, unknown>[]>)
+            .then(onfulfilled, onrejected),
+      };
+      return chain;
+    },
+    insert: (row) => Promise.resolve(model.insert(row)),
+    delete: () => ({
+      where: (query) => Promise.resolve(model.delete(query)),
+    }),
+    update: (patch) => ({
+      where: (query) => Promise.resolve(model.update(patch).where(query)),
+    }),
+    // DB 侧 count 聚合（console /api/logs/stats 不再为计数整表加载）；
+    // 方言不支持 aggregate（如 redis/mongodb）时降级为 select('id') 计数。
+    count: async (where) => {
+      const filter = where ?? {};
+      if (db && tableName) {
+        try {
+          const counted = await db.aggregate(tableName).count('*', 'total').where(filter);
+          const total = Number(counted[0]?.total);
+          if (Number.isFinite(total)) return total;
+        } catch {
+          /* fall through to select('id') */
+        }
+      }
+      const selection = (model.select as (...args: string[]) => unknown)('id') as {
+        where(query: Record<string, unknown>): unknown;
+      };
+      const result = Object.keys(filter).length > 0 ? selection.where(filter) : selection;
+      const rows = await Promise.resolve(result as PromiseLike<unknown[]>);
+      return rows.length;
+    },
+  };
+}
+
+export function createDatabaseHost(config: DatabaseHostConfig): DatabaseHost & {
+  readonly db: { define: (name: string, definition: unknown) => void; start(): Promise<void>; stop(): Promise<void>; models: Map<string, unknown> };
+} {
+  const { dialect, ...connectionConfig } = config;
+  const db = Registry.create(
+    dialect as keyof Registry.Config,
+    connectionConfig as never,
+  ) as unknown as RawDatabase;
+  let started = false;
+  const state = createDatabaseState(db as unknown as StateDatabase, config.dialect, () => started);
+  const wrapped = new Map<string, DatabaseHostModel>();
+  const definedTables = new Set<string>();
+  const definitions = new Map<string, Record<string, unknown>>();
+  const additions = new Map<string, Record<string, Column>>();
+  const consolePort = createDatabaseConsole(
+    db,
+    config.dialect,
+    () => started,
+    definedTables,
+    definitions,
+  );
+
+  return {
+    db,
+    state,
+    get dialect() {
+      return config.dialect;
+    },
+    get started() {
+      return started;
+    },
+    define(name, definition, options) {
+      const migration = Object.fromEntries((options?.addColumns ?? []).map(field => {
+        const column = Object.hasOwn(definition, field) ? definition[field] : undefined;
+        if (!column || typeof column !== 'object' || Array.isArray(column)
+          || !('type' in column) || ('primary' in column && column.primary)
+          || ('autoIncrement' in column && column.autoIncrement)
+          || (!('nullable' in column && column.nullable === true) && !('default' in column))) {
+          throw new TypeError(`Additive column '${field}' in '${name}' must be declared, nullable or defaulted, and not a primary key`);
+        }
+        return [field, structuredClone(column) as Column];
+      }));
+      const existing = definitions.get(name);
+      // Host 跨世代共享：reload 后新世代会重复 define 同名表，
+      // 定义一致则幂等跳过（即使已 started），不一致才报错。
+      if (existing !== undefined) {
+        if (isDeepStrictEqual(existing, definition)) {
+          const previous = additions.get(name) ?? {};
+          const merged = { ...previous, ...migration };
+          if (started && !isDeepStrictEqual(previous, merged)) {
+            throw new Error(`DatabaseHost already started; restart to migrate table ${name}`);
+          }
+          if (Object.keys(merged).length) additions.set(name, merged);
+          return;
+        }
+        throw new Error(`Table '${name}' already defined with a different definition`);
+      }
+      if (started) {
+        throw new Error(`DatabaseHost already started; cannot define table ${name}`);
+      }
+      definedTables.add(name);
+      definitions.set(name, definition);
+      if (Object.keys(migration).length) additions.set(name, migration);
+      db.define(name, definition);
+    },
+    tables() {
+      return [...definedTables];
+    },
+    models: {
+      get(name) {
+        if (!started) return undefined;
+        const cached = wrapped.get(name);
+        if (cached) return cached;
+        const raw = db.models.get(name) as RawModel | undefined;
+        if (!raw) return undefined;
+        const model = wrapModel(raw, db, name);
+        wrapped.set(name, model);
+        return model;
+      },
+    },
+    async transaction(callback) {
+      if (!started) throw new Error('Database is not connected');
+      if (!['sqlite', 'mysql', 'pg'].includes(config.dialect)) throw new Error(`Transactions are not supported by '${config.dialect}'`);
+      return db.transaction(async transaction => {
+        let active = true;
+        try {
+          return await callback({ model(name) {
+            if (!active) throw new Error('Database transaction is already closed');
+            if (!definedTables.has(name)) throw new Error(`Table '${name}' is not registered`);
+            return guardTransactionModel({
+              select: (...fields) => {
+                if (fields.includes('*')) {
+                  throw new TypeError(
+                    'select() requires explicit column names; "*" is not supported '
+                    + '(pass real column names, e.g. select("id", "title")), or use count() for counting.',
+                  );
+                }
+                const selection = transaction.select(name, fields) as {
+                  where(query: Record<string, unknown>): unknown;
+                  orderBy?(field: string, direction?: 'ASC' | 'DESC'): unknown;
+                  limit?(count: number): unknown;
+                };
+                const chain: DatabaseHostSelection = {
+                  where: (query) => { selection.where(query); return chain; },
+                  orderBy: (field, direction) => { selection.orderBy?.(field, direction); return chain; },
+                  limit: (count) => { selection.limit?.(count); return chain; },
+                  then: (onfulfilled, onrejected) =>
+                    Promise.resolve(selection as unknown as PromiseLike<Record<string, unknown>[]>)
+                      .then(onfulfilled, onrejected),
+                };
+                return chain;
+              },
+              insert: row => transaction.insert(name, row),
+              update: patch => ({ where: async query => transaction.update(name, patch).where(query) }),
+              delete: () => ({ where: async query => transaction.delete(name).where(query) }),
+            }, () => { if (!active) throw new Error('Database transaction is already closed'); });
+          } });
+        } finally { active = false; }
+      }, { isolationLevel: 'REPEATABLE_READ' });
+    },
+    console: consolePort,
+    getRawDatabase() {
+      if (!started) return undefined;
+      return db;
+    },
+    async start() {
+      if (started) return;
+      try {
+        await db.start();
+        for (const [table, columns] of additions) {
+          await ensureDatabaseColumns(db as unknown as StructuredDatabase, table, columns);
+        }
+        started = true;
+        wrapped.clear();
+        logger.debug(formatCompact({ op: 'database_start', dialect: config.dialect }));
+      } catch (error) {
+        await db.stop().catch(() => undefined);
+        throw error;
+      }
+    },
+    async stop() {
+      if (!started) return;
+      await db.stop();
+      started = false;
+      wrapped.clear();
+    },
+  };
+}
+
+function createDatabaseConsole(
+  db: RawDatabase,
+  configuredDialect: string,
+  isStarted: () => boolean,
+  tableNames: Set<string>,
+  definitions: Map<string, Record<string, unknown>>,
+): DatabaseHostConsole {
+  const type = databaseType(configuredDialect);
+  const requireModel = (table: string): RawConsoleModel => {
+    if (!isStarted()) throw new Error('Database is not connected');
+    const model = db.models.get(table);
+    if (!model) throw new Error(`Table '${table}' not found`);
+    return model;
+  };
+  const port: DatabaseHostConsole = {
+    info: () => ({
+      dialect: configuredDialect,
+      type,
+      tables: [...tableNames],
+      connected: isStarted(),
+    }),
+    tables: () => [...tableNames].map((name) => ({
+      name,
+      columns: definitions.get(name),
+    })),
+    async select(table, page, pageSize, where) {
+      const model = requireModel(table);
+      if (type === 'keyvalue') {
+        if (!model.entries) throw new Error(`Table '${table}' is not a key-value bucket`);
+        const all = await model.entries();
+        const start = (page - 1) * pageSize;
+        return {
+          rows: all.slice(start, start + pageSize).map(([key, value]) => ({ key, value })),
+          total: all.length,
+          page,
+          pageSize,
+        };
+      }
+      const filter = where ?? {};
+      let total: number;
+      try {
+        const counted = await db.aggregate(table).count('*', 'total').where(filter);
+        total = Number(counted[0]?.total ?? 0);
+      } catch {
+        const all = await (model.select() as unknown as PromiseLike<unknown[]>);
+        total = all.length;
+      }
+      let selection = model.select() as unknown as {
+        where(query: Record<string, unknown>): typeof selection;
+        limit(value: number): typeof selection;
+        offset(value: number): Promise<unknown[]>;
+      };
+      if (Object.keys(filter).length > 0) selection = selection.where(filter);
+      const rows = await selection.limit(pageSize).offset((page - 1) * pageSize);
+      return { rows, total, page, pageSize };
+    },
+    async insert(table, row) {
+      const model = requireModel(table);
+      if (type === 'keyvalue') {
+        if (!model.set || row.key == null) throw new Error('key is required for KV insert');
+        await model.set(String(row.key), row.value);
+      } else if (type === 'document' && model.create) {
+        await model.create(row);
+      } else {
+        await model.insert(row);
+      }
+    },
+    async update(table, row, where) {
+      const model = requireModel(table);
+      if (type === 'keyvalue') {
+        if (!model.set || where.key == null) throw new Error('key is required for KV update');
+        await model.set(String(where.key), row.value);
+        return 1;
+      }
+      if (type === 'document' && where._id != null && model.updateById) {
+        return await model.updateById(String(where._id), row);
+      }
+      return await model.update(row).where(where);
+    },
+    async delete(table, where) {
+      const model = requireModel(table);
+      if (type === 'keyvalue') {
+        if (!model.deleteByKey || where.key == null) throw new Error('key is required for KV delete');
+        await model.deleteByKey(String(where.key));
+        return 1;
+      }
+      if (type === 'document' && where._id != null && model.deleteById) {
+        return await model.deleteById(String(where._id));
+      }
+      return await model.delete(where);
+    },
+    async dropTable(table) {
+      requireModel(table);
+      await db.query(db.dialect.formatDropTable(table, true));
+      db.models.delete(table);
+      db.definitions.delete(table);
+      tableNames.delete(table);
+      definitions.delete(table);
+    },
+    async kvGet(table, key) {
+      const model = requireModel(table);
+      if (!model.get) throw new Error(`Table '${table}' is not a key-value bucket`);
+      return await model.get(key);
+    },
+    async kvSet(table, key, value, ttl) {
+      const model = requireModel(table);
+      if (!model.set) throw new Error(`Table '${table}' is not a key-value bucket`);
+      await model.set(key, value, ttl);
+    },
+    async kvDelete(table, key) {
+      const model = requireModel(table);
+      if (!model.deleteByKey) throw new Error(`Table '${table}' is not a key-value bucket`);
+      await model.deleteByKey(key);
+    },
+    async kvEntries(table) {
+      const model = requireModel(table);
+      if (!model.entries) throw new Error(`Table '${table}' is not a key-value bucket`);
+      return (await model.entries()).map(([key, value]) => ({ key, value }));
+    },
+  };
+  return Object.freeze(port);
+}
+
+function databaseType(dialect: string): 'related' | 'document' | 'keyvalue' {
+  if (dialect === 'mongodb') return 'document';
+  if (dialect === 'redis') return 'keyvalue';
+  return 'related';
+}
+
+export async function resolveDatabaseConfig(
+  projectRoot: string,
+  config: RuntimeConfigDocument | ConfigDocumentPort,
+): Promise<DatabaseHostConfig> {
+  const document = await readConfigDocument(config);
+  const configured = document && typeof document === 'object'
+    ? (document as Record<string, unknown>).database
+    : undefined;
+  if (configured && typeof configured === 'object' && !Array.isArray(configured)) {
+    const value = configured as Record<string, unknown>;
+    const dialect = typeof value.dialect === 'string' ? value.dialect : 'sqlite';
+    return normalizeDatabaseHostConfig({ ...value, dialect });
+  }
+  const filename = join(projectRoot, '.zhin', 'data.sqlite');
+  await mkdir(dirname(filename), { recursive: true });
+  return Object.freeze({ dialect: 'sqlite', filename });
+}
+
+export function installDatabaseHost(host: DatabaseHost): RootResourceInstaller {
+  return ({ resources, handoff, admission }) => {
+    // Domain tables (e.g. github_oauth_users) are defined by owning plugins in setup().
+    // Plugins receive a root-scoped facade through the historical token. The
+    // raw host remains available only to CLI composition through its root token.
+    resources.provide(databaseRootHostToken, host);
+    resources.provide(databaseHostToken, new PluginDatabaseHost(rootPluginId(), host, admission));
+    // Host 是进程级共享资源：不能随世代 dispose / 回滚 stop（旧世代仍在用）。
+    // start 幂等，stop 由进程退出路径（start-command control.stop）统一触发。
+    handoff.add({
+      activateNext: async (signal) => {
+        signal.throwIfAborted();
+        await host.start();
+        signal.throwIfAborted();
+      },
+    });
+  };
+}
+
+async function readConfigDocument(
+  config: RuntimeConfigDocument | ConfigDocumentPort,
+): Promise<unknown> {
+  if (!isConfigDocumentPort(config)) return config;
+  return (await config.read()).document;
+}
+
+function isConfigDocumentPort(value: unknown): value is ConfigDocumentPort {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<ConfigDocumentPort>;
+  return typeof candidate.read === 'function';
+}

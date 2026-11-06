@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { parse as parseYaml } from 'yaml';
 import { calendarConfig } from '../../../../../plugins/utils/calendar/src/config.js';
-import { createConfigDocument } from '@zhin.js/config-file';
+import { createConfigDocument } from '@zhin.js/runtime';
 import {
   ConsoleConfigurationStore,
 } from '../../../src/plugin-runtime/console/configuration.js';

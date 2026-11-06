@@ -1,4 +1,4 @@
-import type { UserInteraction } from '@zhin.js/interaction';
+import type { UserInteraction } from '@zhin.js/im-contract';
 import { composeSideEventName, sideEventConversation } from '../../src/side-event/base.js';
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import {

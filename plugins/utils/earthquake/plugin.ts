@@ -1,4 +1,4 @@
-import { DataMigrationError, pluginDataMigrationProviderToken, TargetMigrationScopes, type PluginStateStore } from 'zhin.js/plugin-runtime';
+import { DataMigrationError, TargetMigrationScopes, type PluginStateStore } from 'zhin.js/plugin-runtime';
 import { createEarthquakeTargetMigration } from './src/target-migration.js';
 import { resolveLocale } from 'zhin.js/i18n';
 import {
@@ -13,7 +13,7 @@ import {
   resolveEarthquakeConfig,
   type EarthquakeConfig,
 } from './src/config.js';
-import { earthquakeServiceToken } from './src/runtime.js';
+import { earthquakeServiceStore } from './src/runtime.js';
 import { EarthquakeService, type PushSender } from './src/service.js';
 import { createMemoryState, SubscriptionStore, subscriptionKey, type KeyValueState } from './src/subscriptions.js';
 
@@ -49,11 +49,16 @@ export default definePlugin<EarthquakeConfig>({
     });
 
     const migrationScopes = database && durableState ? new TargetMigrationScopes({ pending: scope => !scope.startsWith('canonical:') }) : undefined;
-    if (database && durableState && migrationScopes) {
-      store.bindMigrationScopes(migrationScopes);
-      context.resources.provide(pluginDataMigrationProviderToken, createEarthquakeTargetMigration({ database,
-        state: durableState, scopes: migrationScopes }));
-    }
+    const dataMigration = database && durableState && migrationScopes
+      ? (() => {
+          store.bindMigrationScopes(migrationScopes);
+          return createEarthquakeTargetMigration({
+            database,
+            state: durableState,
+            scopes: migrationScopes,
+          });
+        })()
+      : undefined;
 
     let push: PushSender | undefined;
     if (context.resources.has(outboundHostToken)) {
@@ -75,20 +80,23 @@ export default definePlugin<EarthquakeConfig>({
       push,
       logger: { warn: (message) => logger.warn(message) },
     });
-    context.resources.provide(earthquakeServiceToken, service);
+    earthquakeServiceStore.provide(context, service);
     context.lifecycle.add(() => service.stop());
 
-    if (!push || !context.resources.has(scheduleHostToken)) return;
-    const schedule = context.resources.use(scheduleHostToken);
-    const dispose = schedule.register({
-      id: 'earthquake/poll',
-      cron: config.pollCron,
-      description: 'Poll CENC/USGS earthquake feeds and push subscription alerts',
-      async execute() {
-        // poll() never throws; failures are logged and the next tick tries again.
-        await service.poll();
-      },
-    });
-    context.lifecycle.add(dispose);
+    if (push && context.resources.has(scheduleHostToken)) {
+      const schedule = context.resources.use(scheduleHostToken);
+      const dispose = schedule.register({
+        id: 'earthquake/poll',
+        cron: config.pollCron,
+        description: 'Poll CENC/USGS earthquake feeds and push subscription alerts',
+        async execute() {
+          // poll() never throws; failures are logged and the next tick tries again.
+          await service.poll();
+        },
+      });
+      context.lifecycle.add(dispose);
+    }
+
+    return dataMigration ? { dataMigration } : undefined;
   },
 });

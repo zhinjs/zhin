@@ -186,7 +186,7 @@
     "export * from './venue/index.js';",
     "export * from '@zhin.js/database'",
     "export * from '@zhin.js/logger'",
-    "export type * from '@zhin.js/interaction'",
+    "export type * from '@zhin.js/im-contract/interaction'",
     "export type{AgentTurnMessage,SyntheticMessageInput}from './built/message-enrich.js'",
     "export type{CapabilityContext,OperationClientPort,OperationSession,OperationScene,OperationSender,OperationMessage,OperationMessageRef}from '@zhin.js/feature-kit'",
     "export type{ConversationRef,DeliveryReceipt}from '@zhin.js/im-contract'",

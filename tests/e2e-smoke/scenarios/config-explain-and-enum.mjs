@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { readFile, writeFile } from 'node:fs/promises';
 import { PluginTestKit } from '../../../packages/toolkit/testing/src/index.ts';
-import { createConfigDocument } from '../../../packages/im/config-file/src/index.ts';
+import { createConfigDocument } from '../../../packages/im/runtime/src/config-file/index.ts';
 import { dispatchRuntimeConsoleRpc, pickRpcReply } from '../../../packages/host/http/src/index.ts';
 import { CONFIG_RPC } from '../../../packages/console/protocol/src/index.ts';
 import { PluginManagementWorkflow } from '../../../basic/cli/src/plugin-management/workflow.ts';

@@ -1,6 +1,6 @@
 import type { Locale } from 'zhin.js/i18n';
 import { messages as t } from './i18n.js';
-import { createToken } from 'zhin.js';
+import { definePluginStore } from 'zhin.js';
 
 export const DEFAULT_API_BASE = 'https://60s.viki.moe';
 
@@ -59,7 +59,8 @@ export class SixtySClient {
   }
 }
 
-export const sixtySClientToken = createToken<SixtySClient>(
+export const sixtySClientStore = definePluginStore<SixtySClient>(
   'zhin.sixty-s.client',
   'Owner-scoped 60s API client',
 );
+export const sixtySClientToken = sixtySClientStore;

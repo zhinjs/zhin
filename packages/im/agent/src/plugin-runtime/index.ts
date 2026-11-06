@@ -65,3 +65,6 @@ export {
 export * from '../usage/usage-store.js';
 export * from '../assistant/job-storage.js';
 export * from './ingress/index.js';
+export * from './host/index.js';
+export * from './inference/index.js';
+export { HostMailbox, type HostMailboxOptions } from '../collaboration/host-mailbox.js';

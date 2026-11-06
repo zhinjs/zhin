@@ -1,7 +1,7 @@
 import { readFile, writeFile, mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { createConfigDocument } from '@zhin.js/config-file';
+import { createConfigDocument } from '@zhin.js/runtime';
 import { ConsoleConfigurationStore } from '../../../src/plugin-runtime/console/configuration.js';
 import { calendarConfig } from '../../../../../plugins/utils/calendar/src/config.js';
 import { reminderConfig } from '../../../../../plugins/utils/reminder/src/config.js';

@@ -1,4 +1,4 @@
-import { definePlugin, pluginConsoleRpcToken } from 'zhin.js';
+import { definePlugin } from 'zhin.js';
 import { createWechatMpConsoleRpc } from './src/console.js';
 
 export default definePlugin({
@@ -9,6 +9,8 @@ export default definePlugin({
   },
   setup(context) {
     // 运行中 endpoint 注册表（wechat-mp endpoint list 的"运行中"数据源）
-    context.resources.provide(pluginConsoleRpcToken, createWechatMpConsoleRpc(context.resources, () => context.config.get()));
+    return {
+      consoleRpc: createWechatMpConsoleRpc(context.resources, () => context.config.get()),
+    };
   },
 });

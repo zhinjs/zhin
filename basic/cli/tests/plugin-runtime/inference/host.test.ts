@@ -7,8 +7,8 @@ import {
   childPluginId,
   type SnapshotState,
 } from '@zhin.js/plugin-runtime';
-import { aiProviderDefinitionsToken } from '@zhin.js/ai-provider';
 import {
+  aiProviderDefinitionsToken,
   createProviderResourceKey,
   type ProviderDefinition,
   type ProviderGraph,

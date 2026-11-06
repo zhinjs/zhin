@@ -1,6 +1,7 @@
 import { readFile, realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
+  createConfigDocument,
   HOST_CONFIG_KEYS,
   readApplicationPluginDeclaration,
   HOST_CONFIG_SCHEMA,
@@ -10,7 +11,6 @@ import {
   type ResolvedPackage,
 } from '@zhin.js/runtime';
 import type { RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
-import { createConfigDocument } from '@zhin.js/config-file';
 import { findConfigFile } from '../../utils/config-file.js';
 import { isConsoleSchemaJson, jsonSchemaToConsoleSchema } from './console-schema.js';
 

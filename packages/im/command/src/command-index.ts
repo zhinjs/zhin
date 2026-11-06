@@ -12,7 +12,7 @@ import {
   type RuntimeSnapshot,
   type Locale,
 } from '@zhin.js/plugin-runtime';
-import type { UserInteractionFactory } from '@zhin.js/interaction';
+import type { UserInteractionFactory } from '@zhin.js/im-contract';
 import { bindOperationInput, type CapabilityOperationFactory } from '@zhin.js/feature-kit';
 import {
   permissionHostToken,

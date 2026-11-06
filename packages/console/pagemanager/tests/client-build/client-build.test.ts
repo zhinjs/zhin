@@ -112,6 +112,84 @@ describe('Client build adapter', () => {
     });
   });
 
+  it('compiles createDeclarativePage and createAdapterConsolePage from @zhin.js/console-contract without @zhin.js/client in node_modules', async () => {
+    const root = await temp();
+    const declSource = join(root, 'pages/declarative.ts');
+    await writeSource(declSource, [
+      "import { definePage, createDeclarativePage } from '@zhin.js/console-contract';",
+      "export const meta = definePage({ title: 'Declarative Service', group: 'services' });",
+      'export default createDeclarativePage({',
+      "  title: { zh: '服务', en: 'Declarative Service' },",
+      "  stats: [{ label: { zh: '计数', en: 'Count' }, value: 'count' }],",
+      '  sections: [{',
+      "    title: { zh: '任务', en: 'Tasks' },",
+      "    items: 'tasks',",
+      "    columns: [{ key: 'id', label: 'ID' }, { key: 'name', label: 'Name' }],",
+      '  }],',
+      "  actions: [{ name: 'runNow', label: { zh: '执行', en: 'Run Now' } }],",
+      '});',
+    ].join('\n'));
+
+    const adapterSource = join(root, 'pages/adapter.ts');
+    await writeSource(adapterSource, [
+      "import { definePage, createAdapterConsolePage } from '@zhin.js/console-contract';",
+      "export const meta = definePage({ title: 'Demo Adapter', group: 'adapters' });",
+      "export default createAdapterConsolePage('demo');",
+    ].join('\n'));
+
+    const builder = new TypeScriptClientBuilder({
+      projectRoot: root,
+      outDir: join(root, 'dist/client'),
+      publicBase: '/assets/zhin',
+    });
+
+    const declArtifact = await builder.load<{ module: string; metadata: unknown }>(declSource, {
+      ...pageEntry(declSource),
+      owner: 'root/decl-plugin' as never,
+      localName: 'declarative',
+    });
+    const declChunk = await readFile(join(root, 'dist/client', declArtifact.module.split('/').at(-1)!), 'utf8');
+    expect(declChunk).not.toMatch(/from\s+["']@zhin\.js\/(?:console-contract|client|page)["']/);
+    expect(declChunk).toContain('createDeclarativePage');
+
+    const declMod = await import(`data:text/javascript;base64,${Buffer.from(declChunk).toString('base64')}`);
+    expect({ ...declMod.default }).toMatchObject({
+      kind: 'zhin.console.page-blueprint',
+      version: 1,
+      title: 'Declarative Service',
+      dataSource: { action: 'status' },
+    });
+    expect(declMod.default()).toMatchObject({
+      kind: 'zhin.console.page-blueprint',
+      version: 1,
+      title: 'Declarative Service',
+      dataSource: { action: 'status' },
+    });
+
+    const adapterArtifact = await builder.load<{ module: string; metadata: unknown }>(adapterSource, {
+      ...pageEntry(adapterSource),
+      owner: 'root/adapter-demo' as never,
+      localName: 'adapter',
+    });
+    const adapterChunk = await readFile(join(root, 'dist/client', adapterArtifact.module.split('/').at(-1)!), 'utf8');
+    expect(adapterChunk).not.toMatch(/from\s+["']@zhin\.js\/(?:console-contract|client|page)["']/);
+    expect(adapterChunk).toContain('createAdapterConsolePage');
+
+    const adapterMod = await import(`data:text/javascript;base64,${Buffer.from(adapterChunk).toString('base64')}`);
+    expect({ ...adapterMod.default }).toMatchObject({
+      kind: 'zhin.console.adapter-page',
+      version: 1,
+      adapterKey: 'demo',
+      dataSource: { action: 'status' },
+    });
+    expect(adapterMod.default()).toMatchObject({
+      kind: 'zhin.console.adapter-page',
+      version: 1,
+      adapterKey: 'demo',
+      dataSource: { action: 'status' },
+    });
+  });
+
   it('rejects dynamic metadata with a source location', async () => {
     const root = await temp();
     const source = join(root, 'pages/status.tsx');

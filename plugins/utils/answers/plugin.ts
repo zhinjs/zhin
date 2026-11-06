@@ -1,7 +1,7 @@
 import { definePlugin } from 'zhin.js';
 import type { AnswersConfig } from './src/config.js';
 import { QuizService } from './src/quiz.js';
-import { quizServiceToken } from './src/runtime.js';
+import { quizServiceStore } from './src/runtime.js';
 
 /**
  * Plugin Runtime:
@@ -15,8 +15,7 @@ export default definePlugin<AnswersConfig>({
     displayName: '答案之书',
   },
   setup(context) {
-    const service = new QuizService();
-    context.resources.provide(quizServiceToken, service);
+    const service = quizServiceStore.provide(context, new QuizService());
     return () => service.dispose();
   },
 });

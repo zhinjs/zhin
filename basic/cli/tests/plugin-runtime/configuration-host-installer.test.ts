@@ -5,10 +5,9 @@ import { dirname, join } from 'node:path';
 import adapterFeature, { Adapter, AdapterIndex, adapterFeatureId, createEndpointSpecification, defineAdapter, endpointSpec,
   type EndpointSendRequest } from '@zhin.js/adapter';
 import commandFeature, { commandFeatureId, type CommandIndex } from '@zhin.js/command';
-import { createConfigDocument } from '@zhin.js/config-file';
 import { ImRuntime } from '@zhin.js/core/runtime';
 import { definePlugin, type RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
-import { RootRuntime, type ModuleRuntime } from '@zhin.js/runtime';
+import { createConfigDocument, RootRuntime, type ModuleRuntime } from '@zhin.js/runtime';
 import { ConsoleConfigurationStore } from '../../src/plugin-runtime/console/module.js';
 import { installConfigurationHost } from '../../src/plugin-runtime/configuration-host-installer.js';
 import { createConfigurationChatAuthorizer, createEndpointRoleResolver, createSenderEnricher } from '../../src/plugin-runtime/sender-enrichment.js';

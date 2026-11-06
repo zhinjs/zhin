@@ -1,7 +1,7 @@
 import {
   createGenerationAdmissionGate,
-  createToken,
   definePlugin,
+  definePluginStore,
   outboundHostToken,
   type GenerationAdmissionGate,
 } from 'zhin.js';
@@ -21,9 +21,10 @@ import {
 } from './src/executor.js';
 
 const logger = getLogger('activity-feedback');
-const activityFeedbackAdmissionToken = createToken<GenerationAdmissionGate>(
+const activityFeedbackAdmissionStore = definePluginStore<GenerationAdmissionGate>(
   'zhin.activity-feedback.generation-admission',
 );
+const activityFeedbackAdmissionToken = activityFeedbackAdmissionStore;
 
 /**
  * Activity Feedback service — Plugin Runtime entry.
@@ -67,7 +68,8 @@ export default definePlugin<ActivityFeedbackServiceConfig>({
       locale,
     );
     const admission = createGenerationAdmissionGate();
-    context.resources.provide(activityFeedbackAdmissionToken, admission);
+    void activityFeedbackAdmissionToken;
+    activityFeedbackAdmissionStore.provide(context, admission);
     const dispose = bindActivityFeedbackToAIEventBus(
       context.resources.use(agentEventBusToken),
       orchestrator,

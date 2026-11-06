@@ -33,6 +33,7 @@ export * from './shared-lifetime.js';
 /** @internal Runtime 内部：SnapshotStore / RuntimeSnapshot。 */
 export * from './snapshot.js';
 export * from './token.js';
+export * from './store.js';
 /** @public Host token：`scheduleHostToken`（承诺 semver）。 */
 export * from './schedule-host.js';
 /** @public Host token：`databaseHostToken`（承诺 semver）。 */
@@ -58,3 +59,6 @@ export * from './plugin-console-rpc.js';
 export * from './data-migration.js';
 
 export * from './relational-target-migration.js';
+export * from './environment-expansion.js';
+export * from './host-installer.js';
+export * from './host-credential-storage.js';

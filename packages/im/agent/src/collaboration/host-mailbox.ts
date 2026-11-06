@@ -103,6 +103,8 @@ export interface HostMailboxOptions {
   readonly budget?: BudgetAmounts;
   /** Optional VenueProjector for multi-bot Venue hop projection (ADR 0048 H4). */
   readonly venueProjector?: VenueProjector;
+  /** Optional EngagementJournal (defaults to an in-memory journal; can be swapped via {@link HostMailbox.setJournal}). */
+  readonly journal?: EngagementJournal;
 }
 
 /** What a turn with peer agents registers for its engagement. */
@@ -198,7 +200,7 @@ export class HostMailbox {
   readonly #now: () => number;
   readonly #grouping: InboxGroupingOptions;
   readonly #budget: BudgetAmounts;
-  readonly #journal = new InMemoryEngagementJournal({ retention: HOST_JOURNAL_RETENTION });
+  #journal: EngagementJournal;
   readonly #tickets = new Map<MailId, Ticket>();
   /** Mails posted on each lane that have neither started nor finished. */
   readonly #queued = new Map<string, QueuedMail[]>();
@@ -218,6 +220,7 @@ export class HostMailbox {
     this.config = config;
     this.#now = options.now ?? Date.now;
     this.#budget = options.budget ?? DEFAULT_ENGAGEMENT_BUDGET;
+    this.#journal = options.journal ?? new InMemoryEngagementJournal({ retention: HOST_JOURNAL_RETENTION });
     this.#venueProjector = options.venueProjector;
     const merge = config.merge.enabled
       ? { quietMs: config.merge.quietMs, maxWaitMs: config.merge.maxWaitMs, maxSenders: config.merge.maxSenders }
@@ -239,7 +242,7 @@ export class HostMailbox {
         return appended;
       },
       read: (engagementId) => this.#journal.read(engagementId),
-      listEngagements: () => this.#journal.listEngagements(),
+      listEngagements: (limit) => this.#journal.listEngagements(limit),
       summarize: (engagementId) => this.#journal.summarize(engagementId),
       compact: (engagementId) => this.#journal.compact(engagementId),
       prune: (now) => this.#journal.prune(now),
@@ -296,6 +299,11 @@ export class HostMailbox {
   /** Underlying engagement journal for inspection and telemetry. */
   get journal(): EngagementJournal {
     return this.#journal;
+  }
+
+  /** Replaces the underlying engagement journal (e.g. when SQL persistence activates). */
+  setJournal(journal: EngagementJournal): void {
+    this.#journal = journal;
   }
 
   /** Sets or updates the default VenueProjector for engagements on this mailbox. */

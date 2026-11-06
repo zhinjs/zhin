@@ -42,7 +42,7 @@ import {
 } from './contracts.js';
 import { loginAssistToken } from './login-assist-host.js';
 import { LoginAssist } from '../../built/login-assist.js';
-import type { UserInteraction } from '@zhin.js/interaction';
+import type { UserInteraction } from '@zhin.js/im-contract';
 import type { OutboundRenderer } from './outbound-renderer.js';
 import { RuntimeInteractionCoordinator, type PendingUserInteraction } from './interaction-runtime.js';
 import { ConversationRuntime } from './conversation-runtime.js';

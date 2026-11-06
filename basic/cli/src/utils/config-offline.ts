@@ -1,8 +1,7 @@
 import { join } from 'node:path';
-import { createConfigDocument } from '@zhin.js/config-file';
 import type { RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
 import {
-  ConfigComposer, ConfigValidationError, NativeDevelopmentModuleRuntime,
+  ConfigComposer, ConfigValidationError, createConfigDocument, NativeDevelopmentModuleRuntime,
   NodePackageResolver, ProjectGraphService,
 } from '@zhin.js/runtime';
 import { findConfigFile } from './config-file.js';

@@ -4,7 +4,7 @@ import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createConfigDocument } from '@zhin.js/config-file';
+import { createConfigDocument } from '@zhin.js/runtime';
 import { createConsoleEventHub, createHttpHost } from '@zhin.js/host-http';
 import type { ConsoleConfigApplication } from '@zhin.js/console-protocol';
 import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';

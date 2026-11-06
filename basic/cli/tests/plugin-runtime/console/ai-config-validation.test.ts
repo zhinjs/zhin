@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createConfigDocument } from '@zhin.js/config-file';
+import { createConfigDocument } from '@zhin.js/runtime';
 import { validateModelRuntimeConfig } from '@zhin.js/agent/config';
 import { dispatchRuntimeConsoleRpc } from '@zhin.js/host-http';
 import { ConsoleConfigurationStore } from '../../../src/plugin-runtime/console/configuration.js';

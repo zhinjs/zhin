@@ -4,7 +4,7 @@ import type {
   UserInteractionContent,
   UserInteractionOption,
   UserInteractionRequest,
-} from '@zhin.js/interaction';
+} from '@zhin.js/im-contract';
 import type { SendContent } from '../plugin-runtime/im/contracts.js';
 import type { ButtonStyle } from './interactive-segments/types.js';
 

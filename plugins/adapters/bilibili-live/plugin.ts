@@ -1,4 +1,4 @@
-import { definePlugin, pluginConsoleRpcToken } from 'zhin.js';
+import { definePlugin } from 'zhin.js';
 import { createBilibiliLiveConsoleRpc } from './src/console.js';
 
 /**
@@ -13,6 +13,8 @@ export default definePlugin({
     displayName: 'Bilibili Live Danmaku Adapter (Experimental)',
   },
   setup(context) {
-    context.resources.provide(pluginConsoleRpcToken, createBilibiliLiveConsoleRpc(context.resources, () => context.config.get()));
+    return {
+      consoleRpc: createBilibiliLiveConsoleRpc(context.resources, () => context.config.get()),
+    };
   },
 });

@@ -1,4 +1,4 @@
-import { definePlugin, pluginConsoleRpcToken } from 'zhin.js';
+import { definePlugin } from 'zhin.js';
 import { permissionHostToken } from '@zhin.js/permission';
 import { checkWecomPlatformPermit } from './src/platform-permit.js';
 import { createWecomConsoleRpc } from './src/console.js';
@@ -10,10 +10,12 @@ export default definePlugin({
     displayName: 'WeCom (企业微信) Adapter',
   },
   setup(context) {
-    context.resources.provide(pluginConsoleRpcToken, createWecomConsoleRpc(context.resources, () => context.config.get()));
-    if (context.resources.has(permissionHostToken)) {
-      const host = context.resources.use(permissionHostToken);
-      return host.registerPlatform('wecom', checkWecomPlatformPermit);
-    }
+    const dispose = context.resources.has(permissionHostToken)
+      ? context.resources.use(permissionHostToken).registerPlatform('wecom', checkWecomPlatformPermit)
+      : undefined;
+    return {
+      consoleRpc: createWecomConsoleRpc(context.resources, () => context.config.get()),
+      ...(dispose ? { dispose } : {}),
+    };
   },
 });

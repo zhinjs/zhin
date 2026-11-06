@@ -1,8 +1,12 @@
-import { definePage } from '@zhin.js/console-contract';
 import {
   createDeclarativePage,
+  definePage,
+  type ConsolePageBlueprint,
   type DeclarativePageComponentProps,
-} from '@zhin.js/client';
+} from '@zhin.js/console-contract';
+
+export type { ConsolePageBlueprint, DeclarativePageComponentProps };
+
 export interface FullBotAdapterRow {
   readonly instance: string;
   readonly package: string;
@@ -34,38 +38,6 @@ export interface FullBotConsoleStatus {
     | readonly FullBotCapabilityRow[];
 }
 
-export interface ConsolePageBlueprint {
-  readonly kind: 'zhin.console.page-blueprint';
-  readonly version: 1;
-  readonly title: string;
-  readonly description: string;
-  readonly dataSource: {
-    readonly action: 'status';
-  };
-  readonly sections: readonly (
-    | {
-        readonly type: 'stats';
-        readonly id: string;
-        readonly title: string;
-        readonly items: readonly { readonly key: string; readonly label: string }[];
-      }
-    | {
-        readonly type: 'table';
-        readonly id: string;
-        readonly title: string;
-        readonly dataKey: string;
-        readonly rowKey: string;
-        readonly columns: readonly { readonly key: string; readonly label: string }[];
-      }
-    | {
-        readonly type: 'actions';
-        readonly id: string;
-        readonly title: string;
-        readonly items: readonly { readonly label: string; readonly action: string }[];
-      }
-  )[];
-}
-
 export const meta = definePage({
   title: 'Full Bot (L4)',
   titleI18n: { 'zh-CN': 'Full Bot 概览', en: 'Full Bot (L4)' },
@@ -73,67 +45,11 @@ export const meta = definePage({
   order: 10,
 });
 
-export const blueprint: ConsolePageBlueprint = Object.freeze({
-  kind: 'zhin.console.page-blueprint',
-  version: 1,
-  title: 'Full Bot (L4 Reference)',
-  description: 'L4 Reference runtime overview: adapters, skills/tools, memory, and orchestration.',
-  dataSource: {
-    action: 'status',
-  },
-  sections: [
-    {
-      type: 'stats',
-      id: 'runtime-stats',
-      title: 'Runtime Stats',
-      items: [
-        { key: 'tier', label: 'Tier' },
-        { key: 'rssMb', label: 'RSS (MB)' },
-        { key: 'heapMb', label: 'Heap Used (MB)' },
-        { key: 'uptimeSec', label: 'Uptime (s)' },
-      ],
-    },
-    {
-      type: 'table',
-      id: 'adapters',
-      title: 'Adapters',
-      dataKey: 'adapters',
-      rowKey: 'instance',
-      columns: [
-        { key: 'instance', label: 'Instance' },
-        { key: 'package', label: 'Package' },
-        { key: 'mode', label: 'Mode' },
-      ],
-    },
-    {
-      type: 'table',
-      id: 'capabilities',
-      title: 'Capabilities',
-      dataKey: 'capabilities',
-      rowKey: 'name',
-      columns: [
-        { key: 'name', label: 'Capability' },
-        { key: 'kind', label: 'Kind' },
-        { key: 'entry', label: 'Entry' },
-      ],
-    },
-    {
-      type: 'actions',
-      id: 'actions',
-      title: 'Actions',
-      items: [
-        { label: 'Refresh Status', action: 'status' },
-        { label: 'Ping Runtime', action: 'ping' },
-      ],
-    },
-  ],
-} as const);
-
-const DeclarativeOverviewPage = createDeclarativePage<FullBotConsoleStatus>({
+const FullBotOverviewPage = createDeclarativePage<FullBotConsoleStatus>({
   title: { zh: 'Full Bot (L4 参考)', en: 'Full Bot (L4 Reference)' },
   description: {
     zh: 'L4 全维度参考运行态概览：三适配器、Skill/Tool、语义记忆与编排监控',
-    en: 'L4 reference runtime overview: adapters, skills/tools, semantic memory, and orchestration',
+    en: 'L4 Reference runtime overview: adapters, skills/tools, memory, and orchestration.',
   },
   stats: [
     {
@@ -199,18 +115,6 @@ const DeclarativeOverviewPage = createDeclarativePage<FullBotConsoleStatus>({
   ],
 });
 
-const FullBotOverviewPage = Object.assign(
-  function FullBotOverviewPage(props?: DeclarativePageComponentProps) {
-    if (props === undefined) {
-      return blueprint;
-    }
-    try {
-      return (DeclarativeOverviewPage as (input: DeclarativePageComponentProps) => unknown)(props);
-    } catch {
-      return blueprint;
-    }
-  },
-  blueprint,
-);
+export const blueprint: ConsolePageBlueprint<FullBotConsoleStatus> = FullBotOverviewPage();
 
 export default FullBotOverviewPage;

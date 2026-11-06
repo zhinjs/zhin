@@ -29,7 +29,7 @@
 - 全仓库 TypeScript（ESM），测试 Vitest，Lint ESLint 10 + typescript-eslint，构建产物经 turbo 并行。
 - workspace 覆盖：`basic/*`、`packages/im/*`、`packages/console/*`、`packages/toolkit/*`、`packages/host/*`、`packages/game-kit`、`plugins/{adapters,features,games,services,utils}/*`、`examples/*`、`docs`。
 - `basic/`：基础层（cli / database / logger / schedule / schema）。
-- `packages/im/`：IM 核心层（adapter、agent、ai、command、component、config-file、core、feature-kit、isolate、kernel、mcp-feature、middleware、plugin-runtime、runtime、skill、tool、zhin 等子包）。
+- `packages/im/`：IM 核心层（adapter、agent、ai、command、component、core、feature-kit、kernel、mcp-feature、middleware、plugin-runtime、runtime、skill、tool、zhin 等子包）。
 - `packages/host/`：Host 运行时（http / mcp / a2a；legacy router / api 插件包已删除，Console Host 由 basic/cli 装配）。
 - `packages/console/`：Remote Console（Host 只提供 API，UI 在 console.zhin.dev）。
 - `packages/toolkit/`：create-zhin（`pnpm create zhin-app`）、scaffold-wizard（配置向导）、components（纯 JSX 样式组件）、tailwind（静态工具类）、html-renderer（Shotium）、speech。
@@ -53,7 +53,7 @@ plugin-runtime + feature-kit ─────────────→ runtime 
 
 | 层 | 包 | 一句话 |
 |----|-----|--------|
-| 基础契约 | `@zhin.js/plugin-runtime` `im-contract` `interaction` | generation、身份、消息与交互语义；零/近零依赖 |
+| 基础契约 | `@zhin.js/plugin-runtime` `im-contract` | generation、身份、消息与交互语义；零/近零依赖 |
 | Feature 机制 | `@zhin.js/feature-kit` 与各 Feature 包 | 能力声明、发现和运行时投影 |
 | 基础服务 | `basic/logger` `schema` `schedule` `database`、`@zhin.js/kernel` | 日志、校验、存储、调度与通用机制 |
 | AI 引擎 | `@zhin.js/ai` | Provider、agentLoop、会话、记忆；无 IM 概念 |
@@ -148,9 +148,9 @@ Agent 与 Console Host；其他低层包不跨层取用上层实现。
 
 ## 高价值路径
 
-- packages/im/core/src/plugin.ts
-- packages/im/core/src/adapter.ts
-- packages/im/core/src/built/dispatcher.ts
+- packages/im/plugin-runtime/src/plugin.ts
+- packages/im/core/src/feature/adapter.ts
+- packages/im/core/src/plugin-runtime/im/inbound-spine.ts
 - packages/im/agent/src/orchestrator/
 - packages/im/agent/src/security/（工具安全检查统一走 `policy-facade.ts` 的 `runToolPolicies`；新增策略只在声明式策略表注册，builtin 工具不再手写策略链）
 - packages/im/agent/src/bootstrap.ts

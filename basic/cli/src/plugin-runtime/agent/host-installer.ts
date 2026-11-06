@@ -1,8 +1,17 @@
 import { randomUUID } from 'node:crypto';
 import yaml from 'yaml';
 import { createHostOperationResources } from '../inference/operation-resources.js';
-import { describeSnapshotAiProvider, listSnapshotAiProviders, provideAiProviders } from '@zhin.js/ai-provider';
-import { ProviderError, providerPlanFingerprint, reviewProviderPlan, type JsonObject, type ProviderGraph, type ProviderService } from '@zhin.js/ai/provider';
+import {
+  describeSnapshotAiProvider,
+  listSnapshotAiProviders,
+  provideAiProviders,
+  ProviderError,
+  providerPlanFingerprint,
+  reviewProviderPlan,
+  type JsonObject,
+  type ProviderGraph,
+  type ProviderService,
+} from '@zhin.js/ai/provider';
 import { builtinAiProviders } from '@zhin.js/ai/providers';
 import type { HostInference } from '../inference/host.js';
 import { turnModelPortToken } from '@zhin.js/agent/model-runtime';

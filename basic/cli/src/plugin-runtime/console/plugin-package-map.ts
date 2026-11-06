@@ -1,6 +1,5 @@
 import { join } from 'node:path';
-import { createConfigDocument } from '@zhin.js/config-file';
-import { readApplicationPluginDeclaration } from '@zhin.js/runtime';
+import { createConfigDocument, readApplicationPluginDeclaration } from '@zhin.js/runtime';
 import { findConfigFile } from '../../utils/config-file.js';
 
 /** Reads only the application's instance declaration authority. */

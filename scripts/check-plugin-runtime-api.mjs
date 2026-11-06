@@ -28,8 +28,6 @@ const migratedRoots = [
   ['pagemanager/plugin-runtime', 'packages/console/pagemanager/src/plugin-runtime'],
   ['pagemanager/client-build', 'packages/console/pagemanager/src/client-build'],
   ['runtime', 'packages/im/runtime/src'],
-  ['config-file', 'packages/im/config-file/src'],
-  ['isolate', 'packages/im/isolate/src'],
   ['cli/runtime', 'basic/cli/src/plugin-runtime'],
 ];
 

@@ -1,5 +1,4 @@
-import { definePage } from '@zhin.js/console-contract';
-import { createAdapterConsolePage } from '@zhin.js/client';
+import { definePage, createAdapterConsolePage } from '@zhin.js/console-contract';
 
 export const meta = definePage({
   title: 'OneBot 11',

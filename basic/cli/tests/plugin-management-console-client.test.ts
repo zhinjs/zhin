@@ -2,9 +2,8 @@ import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { RootRuntime, type ModuleRuntime } from '@zhin.js/runtime';
+import { createConfigDocument, RootRuntime, type ModuleRuntime } from '@zhin.js/runtime';
 import { definePlugin, pluginVerificationToken } from '@zhin.js/plugin-runtime';
-import { createConfigDocument } from '@zhin.js/config-file';
 import { createConsoleEventHub, createHttpHost, type PluginManagementState, type PluginVerificationPlan, type PluginVerificationResult } from '@zhin.js/host-http';
 import { PLUGIN_RPC } from '@zhin.js/console-protocol';
 import { registerConsoleRpcRoute } from '../src/plugin-runtime/console/rpc-route.js';

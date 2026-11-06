@@ -10,7 +10,7 @@
 
 Provider Driver 声明协议和认证能力；Host 统一管理 **Service → Account → Profile**，分别表示部署／产品、真实账号和模型用途。模型能力来自明确目录，SDK 是 Driver 内部实现，不再由业务插件自行拼接 Key 和 SDK 名称。
 
-插件使用当前操作已授权的 `InferenceClient`（Zhin 中由 `@zhin.js/ai-provider` 的 `aiInferenceClientToken` 提供）：
+插件使用当前操作已授权的 `InferenceClient`（Zhin 中由 `@zhin.js/ai/provider` 的 `aiInferenceClientToken` 提供）：
 
 ```typescript
 import { assistantText } from '@zhin.js/ai'

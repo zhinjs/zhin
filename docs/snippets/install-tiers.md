@@ -57,7 +57,7 @@
 | Plugin、Message、Adapter 等 IM 运行时 API | `zhin.js` |
 | `ZhinAgent`、`AIService`、`AgentResourceHub` | `zhin.js/agent` 或 `@zhin.js/agent` |
 | `agentLoop`、消息与 completion 契约 | `zhin.js/ai` 或 `@zhin.js/ai` |
-| `InferenceClient`、Driver／Profile 契约 | `@zhin.js/ai/provider`；Host 执行 token 见 `@zhin.js/ai-provider` |
+| `InferenceClient`、Driver／Profile 契约 | `@zhin.js/ai/provider`（含 Host 执行 token） |
 <!-- #endregion imports -->
 
 <!-- #region deps-install -->

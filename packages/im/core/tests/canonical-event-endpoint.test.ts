@@ -1,4 +1,4 @@
-import type { UserInteraction } from '@zhin.js/interaction';
+import type { UserInteraction } from '@zhin.js/im-contract';
 import { describe, expect, it, vi } from 'vitest';
 import { Adapter, AdapterIndex, endpointSpec, createEndpointSpecification, type Endpoint, adapterFeatureId, defineAdapter, endpointEventGatewayToken,
   type EndpointSendRequest, type EndpointDesiredRepository, type EndpointDesiredSnapshot, type EndpointEvent } from '@zhin.js/adapter';

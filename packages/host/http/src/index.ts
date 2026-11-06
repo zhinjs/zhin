@@ -94,3 +94,5 @@ export {
   type ConsoleWorkroomKnowledgeControlPort,
   type ExtendedRpcResult,
 } from './console-rpc-extended/index.js';
+export * from './host-installer.js';
+

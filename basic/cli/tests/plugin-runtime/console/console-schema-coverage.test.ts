@@ -1,8 +1,7 @@
 import { mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { HOST_CONFIG_KEYS, HOST_CONFIG_SCHEMA } from '@zhin.js/runtime';
-import { createConfigDocument } from '@zhin.js/config-file';
+import { createConfigDocument, HOST_CONFIG_KEYS, HOST_CONFIG_SCHEMA } from '@zhin.js/runtime';
 import { dispatchRuntimeConsoleRpc } from '@zhin.js/host-http';
 import { jsonSchemaToConsoleSchema } from '../../../src/plugin-runtime/console/console-schema.js';
 import { ConsoleConfigurationStore } from '../../../src/plugin-runtime/console/configuration.js';

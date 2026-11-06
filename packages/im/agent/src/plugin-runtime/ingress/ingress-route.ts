@@ -154,6 +154,7 @@ export interface AgentTurnIngressRouteOptions {
 /** Generation-owned IM ingress adapter for management, approval, and Agent turns. */
 export class AgentTurnIngressRoute implements IngressRoute {
   #hostMailbox: HostMailbox | undefined;
+  #ownsMailbox = false;
   /** Whether this generation's mailbox has the ADR 0038 group merge window. */
   #mergeWindowEnabled = false;
   #ambient: AmbientEngagement | null | undefined;
@@ -301,15 +302,27 @@ export class AgentTurnIngressRoute implements IngressRoute {
     this.#reactionPacer.clear();
     this.#sceneEvents.dispose();
     this.#sceneFactRefresher.dispose();
-    this.#hostMailbox?.dispose();
+    if (this.#ownsMailbox) this.#hostMailbox?.dispose();
     this.#hostMailbox = undefined;
+  }
+
+  /** Unified HostMailbox shared with the generation's ZhinAgent. */
+  get hostMailbox(): HostMailbox {
+    return this.#mailbox();
   }
 
   #mailbox(): HostMailbox {
     if (!this.#hostMailbox) {
       const config = normalizeMailboxConfig(this.options.agent.service.getAgentConfig()?.mailbox);
       this.#mergeWindowEnabled = config.merge.enabled;
-      this.#hostMailbox = new HostMailbox({ config });
+      const shared = (this.options.agent.agent as { readonly hostMailbox?: HostMailbox } | undefined)?.hostMailbox;
+      if (shared instanceof HostMailbox) {
+        this.#hostMailbox = shared;
+        this.#ownsMailbox = false;
+      } else {
+        this.#hostMailbox = new HostMailbox({ config });
+        this.#ownsMailbox = true;
+      }
     }
     return this.#hostMailbox;
   }

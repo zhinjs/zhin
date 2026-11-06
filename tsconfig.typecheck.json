@@ -179,9 +179,6 @@
       "@zhin.js/component": [
         "./packages/im/component/src/index.ts"
       ],
-      "@zhin.js/config-file": [
-        "./packages/im/config-file/src/index.ts"
-      ],
       "@zhin.js/core": [
         "./packages/im/core/src/index.ts"
       ],
@@ -233,8 +230,8 @@
       "@zhin.js/im-contract": [
         "./packages/im/im-contract/src/index.ts"
       ],
-      "@zhin.js/isolate": [
-        "./packages/im/isolate/src/index.ts"
+      "@zhin.js/im-contract/interaction": [
+        "./packages/im/im-contract/src/interaction.ts"
       ],
       "@zhin.js/kernel": [
         "./packages/im/kernel/src/index.ts"
@@ -268,6 +265,12 @@
       ],
       "@zhin.js/runtime": [
         "./packages/im/runtime/src/index.ts"
+      ],
+      "@zhin.js/runtime/config-file": [
+        "./packages/im/runtime/src/config-file/index.ts"
+      ],
+      "@zhin.js/runtime/isolate": [
+        "./packages/im/runtime/src/isolate/index.ts"
       ],
       "@zhin.js/scaffold-wizard": [
         "./packages/toolkit/scaffold-wizard/src/index.ts"
@@ -326,6 +329,9 @@
       "zhin.js/runtime": [
         "./packages/im/zhin/src/plugin-runtime.ts"
       ],
+      "zhin.js/schedule": [
+        "./packages/im/zhin/src/schedule.ts"
+      ],
       "@zhin.js/schedule-feature": [
         "./packages/im/schedule-feature/src/index.ts"
       ],
@@ -352,9 +358,6 @@
       ],
       "@zhin.js/ai/providers": [
         "./packages/im/ai/src/providers/index.ts"
-      ],
-      "@zhin.js/ai-provider": [
-        "./packages/im/ai-provider/src/index.ts"
       ],
       "@zhin.js/agent/migration": [
         "./packages/im/agent/src/migration/index.ts"

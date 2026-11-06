@@ -1,25 +1,7 @@
-import { createToken, projectLocaleToken, resolveLocale, type PluginId, type RuntimeConfigDocument, type SnapshotState, type TokenId } from '@zhin.js/plugin-runtime';
+import { primaryConfigToken, projectLocaleToken, resolveLocale, type PluginId, type PrimaryConfig, type RuntimeConfigDocument, type SnapshotState, type TokenId } from '@zhin.js/plugin-runtime';
 import type { EnvStore } from './environment-store.js';
 
-/**
- * Generation-owned, validated Root configuration.
- *
- * `document` deliberately retains environment placeholders for safe display and
- * persistence. Runtime consumers use `expanded`, which is derived exclusively
- * through the Root EnvStore instead of reading process.env themselves.
- */
-export interface PrimaryConfig {
-  /** Actual Runtime composition branch; absent on older authorities, never inferred from values. */
-  readonly compositionMode?: 'document' | 'custom' | 'unknown';
-  readonly document: RuntimeConfigDocument;
-  readonly expanded: RuntimeConfigDocument;
-  get<T = unknown>(key: string): T | undefined;
-}
-
-export const primaryConfigToken = createToken<PrimaryConfig>(
-  'zhin.primary-config',
-  'Validated Root configuration for the current generation',
-);
+export { primaryConfigToken, type PrimaryConfig } from '@zhin.js/plugin-runtime';
 
 export function createPrimaryConfig(
   document: RuntimeConfigDocument,

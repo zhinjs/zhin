@@ -13,8 +13,7 @@ import { HandlerIndex, isHandlerIndex, handlerFeatureId } from '../../feature/ha
 import type { HandlerDispatchOptions } from '@zhin.js/handler';
 import { bindOperationInput, operationInputBinding, type OperationResourceView } from '@zhin.js/feature-kit';
 import { formatCompact, getLogger, truncatePreview } from '@zhin.js/logger';
-import type { ConversationRef, DeliveryReceipt } from '@zhin.js/im-contract';
-import type { UserInteraction } from '@zhin.js/interaction';
+import type { ConversationRef, DeliveryReceipt, UserInteraction } from '@zhin.js/im-contract';
 import type { CommandExecutionBudget, CommandOperationController } from '@zhin.js/command/internal/execution';
 import { RuntimeNotice, type IncomingNotice, type Notice } from '../../notice.js';
 import { RuntimeRequest, type IncomingRequest, type Request } from '../../request.js';
@@ -44,6 +43,7 @@ import {
   type RuntimeMessageEvent,
 } from './message-events.js';
 import { resolveIngressRoute } from './ingress-route.js';
+import { executeInboundTurnSpine } from './inbound-spine.js';
 import type { InboundDeduper } from './inbound-dedup.js';
 import { actionPayloadFromSegments } from './interactive-router.js';
 import { readMentionSegmentTarget } from '../../built/segment-contract/mention.js';
@@ -553,116 +553,39 @@ export class InboundRuntime {
         } else {
           const interactionFactory = (value: unknown) =>
             this.context.interactions.createFromUnknown(value);
-          const terminal = async (control?: InboundTerminalControl): Promise<InboundOutcome> => {
-              const ingressRoute = resolveIngressRoute(lease.value);
-              const preRouted = await ingressRoute?.preRoute?.(
-                message,
+          const terminal = (control?: InboundTerminalControl): Promise<InboundOutcome> =>
+            executeInboundTurnSpine({
+              message,
+              lease,
+              requester,
+              conversationSequence,
+              admission,
+              signal: operationSignal,
+              interactionFactory,
+              ingressRoute: resolveIngressRoute(lease.value),
+              diagnostics: this.context.diagnostics,
+              runHandlers: () => this.#runHandlers({
                 lease,
+                event: 'message.receive',
+                args: [withEndpointEventPayload(source, message)],
+                signal: operationSignal,
+              }),
+              dispatchInteractive: () => this.#dispatchInteractive({
+                message,
                 requester,
-                conversationSequence,
-              ) === true;
-              if (preRouted) {
-                this.context.diagnostics?.route('agent');
-                result = Object.freeze({ matched: true, command: 'pre-route', owner: requester });
-                await control?.reportDispatch({
-                  matched: true,
-                  path: 'handler',
-                  handlerId: 'pre-route',
-                  replied: operationReplied,
-                });
-                return { dispatch: result };
-              }
-              if (ingressRoute?.shouldRouteBeforeDispatch?.(message) === true) {
-                const handled = await ingressRoute.route(
-                  message,
-                  lease,
-                  requester,
-                  conversationSequence,
-                );
-                if (handled) {
-                  this.context.diagnostics?.route('agent');
-                  result = Object.freeze({ matched: true, command: 'ai', owner: requester });
-                  await control?.reportDispatch({
-                    matched: true,
-                    path: 'handler',
-                    handlerId: 'ai',
-                    replied: operationReplied,
-                  });
-                  return { dispatch: result };
-                }
-              }
-              const repliedBeforeHandlers = operationReplied;
-              this.context.diagnostics?.step('handlers', 'started');
-              await this.#runHandlers({ lease, event: 'message.receive', args: [
-                withEndpointEventPayload(source, message),
-              ], signal: operationSignal });
-              this.context.diagnostics?.step('handlers', 'completed');
-              const repliedDuringHandlers = !repliedBeforeHandlers && operationReplied;
-              const interactive = await this.#dispatchInteractive({ message, requester, admission, snapshot: lease.value });
-              if (interactive) this.context.diagnostics?.route('interaction');
-              const dispatched = interactive ? undefined : await this.#dispatcher.dispatchWithReply(message, lease.value, interactionFactory,
-                (stage, status) => this.context.diagnostics?.step(stage, status));
-              result = interactive ?? dispatched!.dispatch;
-              if (!result.matched && ingressRoute) {
-                logger.debug(formatCompact({
-                  op: 'unmatched',
-                  conv: formatConversationLog(conversation),
-                }));
-                const handled = await ingressRoute.route(
-                  message,
-                  lease,
-                  requester,
-                  conversationSequence,
-                );
-                if (handled) {
-                  this.context.diagnostics?.route('agent');
-                  result = Object.freeze({ matched: true, command: 'ai', owner: requester });
-                }
-              }
-              const response = dispatched?.reply ?? (interactive?.value !== undefined && interactive.owner
-                ? { owner: interactive.owner, content: interactive.value as SendContent } : undefined);
-              const replied = operationReplied || response !== undefined;
-              if (interactive) {
-                await control?.reportDispatch({
-                  matched: true,
-                  path: 'button',
-                  handlerId: interactive.command ?? 'interactive',
-                  replied,
-                });
-              } else if (dispatched?.dispatch.matched) {
-                await control?.reportDispatch({
-                  matched: true,
-                  path: 'command',
-                  ...(dispatched.dispatch.command ? { handlerId: dispatched.dispatch.command } : {}),
-                  replied,
-                });
-              } else if (result.matched) {
-                await control?.reportDispatch({
-                  matched: true,
-                  path: 'handler',
-                  ...(result.command ? { handlerId: result.command } : {}),
-                  replied,
-                });
-              } else if (repliedDuringHandlers) {
-                const handlerName = handlers(lease.value)?.list().find(descriptor => descriptor.event === 'message.receive')?.name ?? 'message.receive';
-                await control?.reportDispatch({
-                  matched: true,
-                  path: 'handler',
-                  handlerId: handlerName,
-                  replied: true,
-                });
-              } else {
-                await control?.reportDispatch({
-                  matched: false,
-                  path: 'none',
-                  replied,
-                });
-              }
-              return {
-                dispatch: result,
-                ...(response ? { reply: response } : {}),
-              };
-          };
+                admission,
+                snapshot: lease.value,
+              }),
+              dispatchCommand: (observe) => this.#dispatcher.dispatchWithReply(
+                message,
+                lease.value,
+                interactionFactory,
+                observe,
+              ),
+              hasReplied: () => operationReplied,
+              findEventHandlerName: (event) =>
+                handlers(lease.value)?.list().find(descriptor => descriptor.event === event)?.name,
+            }, control);
           const middleware = lease.value.projections.get(middlewareFeatureId);
           if (isMiddlewareIndex(middleware)) this.context.diagnostics?.step('middleware', 'entered');
           const outcome = isMiddlewareIndex(middleware)

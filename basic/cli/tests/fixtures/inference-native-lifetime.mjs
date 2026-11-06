@@ -8,7 +8,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 import { builtinAiProviders } from '@zhin.js/ai/providers';
 import { SnapshotStore, rootPluginId } from '@zhin.js/plugin-runtime';
-import { aiProviderDefinitionsToken } from '@zhin.js/ai-provider';
+import { aiProviderDefinitionsToken } from '@zhin.js/ai/provider';
 import { createDatabaseHost } from '../../src/plugin-runtime/database-host-installer.ts';
 import { createUserMessage } from '../../../../packages/im/ai/src/llm/types/agent-message.ts';
 import { classifyProviderError } from '../../../../packages/im/ai/src/llm/provider-resilience.ts';

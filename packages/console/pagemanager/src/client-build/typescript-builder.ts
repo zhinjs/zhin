@@ -37,6 +37,64 @@ const CONSOLE_CONTRACT_STUB = [
   'export function defineLayout(metadata = {}) { return metadata; }',
   'export function normalizePageMetadata(_name, metadata) { return metadata; }',
   'export function normalizeClientModuleArtifact(value) { return value; }',
+  'export function resolveDeclarativeText(text, locale = "en") {',
+  '  if (!text) return "";',
+  '  if (typeof text === "string") return text;',
+  '  if (locale === "en") return text.en ?? text["zh-CN"] ?? text.zh ?? "";',
+  '  return text["zh-CN"] ?? text.zh ?? text.en ?? "";',
+  '}',
+  'export function buildBlueprintFromSpec(spec = {}) {',
+  '  if (spec && spec.kind === "zhin.console.page-blueprint") return spec;',
+  '  const sections = [];',
+  '  if (Array.isArray(spec.stats) && spec.stats.length > 0) {',
+  '    sections.push({ type: "stats", id: "runtime-stats", title: "Runtime Stats", items: spec.stats.map((s, i) => ({ key: s.key ?? (typeof s.value === "string" ? s.value : "stat-" + i), label: resolveDeclarativeText(s.label, "en"), ...(typeof s.value === "string" ? { dataKey: s.value } : {}) })) });',
+  '  }',
+  '  for (const [idx, sec] of (spec.sections ?? []).entries()) {',
+  '    const id = sec.id ?? ("section-" + idx);',
+  '    const title = resolveDeclarativeText(sec.title, "en");',
+  '    if (sec.columns !== undefined || sec.items !== undefined) {',
+  '      sections.push({ type: "table", id, title, ...(typeof sec.items === "string" ? { dataKey: sec.items } : {}), rowKey: sec.columns?.[0]?.key ?? "id", columns: (sec.columns ?? []).map((c) => ({ key: c.key, label: resolveDeclarativeText(c.label, "en") })) });',
+  '    } else if (sec.entries !== undefined) {',
+  '      sections.push({ type: "entries", id, title });',
+  '    } else {',
+  '      sections.push({ type: "custom", id, ...(title ? { title } : {}) });',
+  '    }',
+  '  }',
+  '  if (Array.isArray(spec.actions) && spec.actions.length > 0) {',
+  '    sections.push({ type: "actions", id: "actions", title: "Actions", items: spec.actions.map((a) => ({ label: resolveDeclarativeText(a.label, "en"), action: a.name, name: a.name })) });',
+  '  }',
+  '  return {',
+  '    kind: "zhin.console.page-blueprint",',
+  '    version: 1,',
+  '    title: resolveDeclarativeText(spec.title, "en"),',
+  '    ...(spec.description ? { description: resolveDeclarativeText(spec.description, "en") } : {}),',
+  '    dataSource: { action: spec.statusMethod ?? "status" },',
+  '    sections,',
+  '    spec,',
+  '  };',
+  '}',
+  'export function definePageBlueprint(spec = {}) {',
+  '  const bp = buildBlueprintFromSpec(spec);',
+  '  const fn = function BlueprintPage(props) {',
+  '    if (typeof globalThis !== "undefined" && typeof globalThis.__ZHIN_RENDER_BLUEPRINT__ === "function" && props !== undefined) {',
+  '      return globalThis.__ZHIN_RENDER_BLUEPRINT__(bp, props);',
+  '    }',
+  '    return bp;',
+  '  };',
+  '  return Object.assign(fn, bp);',
+  '}',
+  'export function createDeclarativePage(spec = {}) { return definePageBlueprint(spec); }',
+  'export function defineAdapterPage(adapterKey) {',
+  '  const bp = { kind: "zhin.console.adapter-page", version: 1, adapterKey: String(adapterKey ?? ""), dataSource: { action: "status" } };',
+  '  const fn = function AdapterConsoleRoute(props) {',
+  '    if (typeof globalThis !== "undefined" && typeof globalThis.__ZHIN_RENDER_ADAPTER_PAGE__ === "function" && props !== undefined) {',
+  '      return globalThis.__ZHIN_RENDER_ADAPTER_PAGE__(bp, props);',
+  '    }',
+  '    return bp;',
+  '  };',
+  '  return Object.assign(fn, bp);',
+  '}',
+  'export function createAdapterConsolePage(adapterKey) { return defineAdapterPage(adapterKey); }',
 ].join('\n');
 
 export class TypeScriptClientBuilder implements ClientModuleLoader {
@@ -248,8 +306,29 @@ export function register(api) {
   if (typeof Component !== 'function' && (typeof Component !== 'object' || Component == null)) {
     throw new Error('Page module default export is not a React component');
   }
-  function _renderBlueprint(bp) {
+  function _renderBlueprint(bp, props) {
+    if (typeof globalThis !== 'undefined') {
+      if (bp?.kind === 'zhin.console.adapter-page' && typeof globalThis.__ZHIN_RENDER_ADAPTER_PAGE__ === 'function') {
+        return globalThis.__ZHIN_RENDER_ADAPTER_PAGE__(bp, props);
+      }
+      if (bp?.kind === 'zhin.console.page-blueprint' && typeof globalThis.__ZHIN_RENDER_BLUEPRINT__ === 'function') {
+        return globalThis.__ZHIN_RENDER_BLUEPRINT__(bp, props);
+      }
+    }
     const h = api.React.createElement;
+    if (bp?.kind === 'zhin.console.adapter-page') {
+      const adapterKey = String(bp.adapterKey ?? '');
+      return h('div', { className: 'p-6 max-w-4xl mx-auto flex flex-col gap-6', 'data-adapter-key': adapterKey },
+        h('div', { className: 'flex flex-col gap-1' },
+          h('h1', { className: 'text-2xl font-bold' }, String(bp.title ?? (adapterKey || 'Adapter'))),
+          (bp.subtitle ?? bp.description) ? h('p', { className: 'text-sm text-muted-foreground' }, String(bp.subtitle ?? bp.description)) : null,
+        ),
+        h('section', { className: 'p-4 rounded-lg border bg-card flex flex-col gap-2' },
+          h('h2', { className: 'text-base font-semibold mb-2' }, 'Adapter Overview'),
+          h('p', { className: 'text-sm text-muted-foreground' }, 'Adapter: ' + adapterKey),
+        ),
+      );
+    }
     const sections = Array.isArray(bp.sections) ? bp.sections : [];
     return h('div', { className: 'p-6 max-w-4xl mx-auto flex flex-col gap-6' },
       h('div', { className: 'flex flex-col gap-1' },
@@ -268,6 +347,39 @@ export function register(api) {
               ...items.map((item, i) => h('div', { key: item?.key ?? String(i), className: 'p-3 rounded border bg-muted flex flex-col gap-1' },
                 h('span', { className: 'text-xs text-muted-foreground' }, String(item?.label ?? item?.key ?? '')),
                 h('strong', { className: 'text-lg font-semibold' }, String(item?.value ?? '—') + String(item?.suffix ?? '')),
+              )),
+            ),
+          );
+        }
+        if (sec?.kind === 'table' || sec?.type === 'table') {
+          const cols = Array.isArray(sec?.columns) ? sec.columns : [];
+          const rows = Array.isArray(sec?.rows) ? sec.rows : items;
+          return h('section', { key, className: 'p-4 rounded-lg border bg-card flex flex-col gap-2' },
+            secTitle,
+            rows.length === 0
+              ? h('p', { className: 'text-sm text-muted-foreground' }, String(sec?.emptyText ?? 'No data'))
+              : h('table', { className: 'w-full text-sm text-left' },
+                  cols.length > 0 ? h('thead', null,
+                    h('tr', null, ...cols.map((col, ci) => h('th', { key: col?.key ?? String(ci), className: 'py-2 px-3 border-b font-medium' }, String(col?.label ?? col?.key ?? '')))),
+                  ) : null,
+                  h('tbody', null,
+                    ...rows.map((row, ri) => h('tr', { key: String(row?.[sec?.rowKey ?? 'id'] ?? ri) },
+                      ...(cols.length > 0
+                        ? cols.map((col, ci) => h('td', { key: col?.key ?? String(ci), className: 'py-2 px-3 border-b' }, String(row?.[col?.key] ?? '—')))
+                        : Object.entries(row ?? {}).map(([rk, rv]) => h('td', { key: rk, className: 'py-2 px-3 border-b' }, String(rv ?? '—')))),
+                    )),
+                  ),
+                ),
+          );
+        }
+        if (sec?.kind === 'entries' || sec?.type === 'entries') {
+          const entryItems = Array.isArray(sec?.entries) ? sec.entries : items;
+          return h('section', { key, className: 'p-4 rounded-lg border bg-card flex flex-col gap-2' },
+            secTitle,
+            h('dl', { className: 'grid grid-cols-2 gap-2 text-sm' },
+              ...entryItems.map((entry, ei) => h('div', { key: entry?.key ?? entry?.label ?? String(ei), className: 'contents' },
+                h('dt', { className: 'text-muted-foreground' }, String(entry?.label ?? entry?.key ?? '')),
+                h('dd', { className: 'font-medium m-0' }, String(entry?.value ?? '—')),
               )),
             ),
           );
@@ -318,21 +430,22 @@ export function register(api) {
     route,
     title: name,
   };
+  const isBlueprint = (v) => Boolean(v && typeof v === 'object' && (v.kind === 'zhin.console.page-blueprint' || v.kind === 'zhin.console.adapter-page'));
   const WrappedComponent = typeof Component === 'function'
     ? function ZhinPageAdapter(props) {
         if (typeof globalThis !== 'undefined') globalThis.__ZHIN_ALLOW_RAW_BLUEPRINT__ = true;
         try {
           const out = Component(props);
-          if (out && typeof out === 'object' && out.kind === 'zhin.console.page-blueprint') {
-            return _renderBlueprint(out);
+          if (isBlueprint(out)) {
+            return _renderBlueprint(out, props);
           }
           return out;
         } finally {
           if (typeof globalThis !== 'undefined') delete globalThis.__ZHIN_ALLOW_RAW_BLUEPRINT__;
         }
       }
-    : (Component && typeof Component === 'object' && Component.kind === 'zhin.console.page-blueprint'
-        ? function ZhinBlueprintPage() { return _renderBlueprint(Component); }
+    : (isBlueprint(Component)
+        ? function ZhinBlueprintPage(props) { return _renderBlueprint(Component, props); }
         : Component);
   const element = api.React.createElement(WrappedComponent, pageProps);
   api.addRoute({

@@ -1,12 +1,13 @@
 import type { Locale } from 'zhin.js/i18n';
-import { createToken, type Token } from 'zhin.js';
+import { definePluginStore, type Token } from 'zhin.js';
 import { resolveRouletteConfig } from './config.js';
 import type { RouletteFlow } from './game-flow.js';
 import { resolveMutePenalty, type AdapterProjectionContext } from './mute-penalty.js';
 import type { RouletteServices } from './session-service.js';
 
 /** Owner-scoped services consumed by discovered commands, middleware and the deadline job. */
-export const rouletteServicesToken = createToken<RouletteServices>('zhin.game.roulette.services');
+export const rouletteServicesStore = definePluginStore<RouletteServices>('zhin.game.roulette.services');
+export const rouletteServicesToken = rouletteServicesStore;
 
 /** A command, middleware or schedule capability context. */
 export interface RouletteCapabilityContext extends AdapterProjectionContext {
@@ -18,7 +19,7 @@ export interface RouletteCapabilityContext extends AdapterProjectionContext {
 
 export function resolveRouletteFlow(context: RouletteCapabilityContext): RouletteFlow {
   return {
-    services: context.use(rouletteServicesToken),
+    services: rouletteServicesStore.use(context),
     config: resolveRouletteConfig(context.config),
     penalty: resolveMutePenalty(context),
   };

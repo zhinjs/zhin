@@ -8,8 +8,6 @@ export default definePlugin({
     displayName: 'Repeater',
   },
   setup(context) {
-    const engine = new RepeaterEngine();
-    context.resources.provide(repeaterEngineToken, engine);
-    return () => engine.dispose();
+    repeaterEngineToken.provide(context, () => new RepeaterEngine());
   },
 });

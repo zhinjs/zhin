@@ -1,4 +1,4 @@
-import { DataMigrationError, pluginDataMigrationProviderToken, TargetMigrationScopes, pluginTaskProviderToken } from 'zhin.js/plugin-runtime';
+import { DataMigrationError, TargetMigrationScopes } from 'zhin.js/plugin-runtime';
 import { createSubscriptionTargetMigration, subscriptionMigrationScope } from './src/target-migration.js';
 import { projectLocaleToken, resolveLocale } from 'zhin.js/i18n';
 import {
@@ -6,7 +6,6 @@ import {
   logger,
   databaseHostToken,
   outboundHostToken,
-  pluginConsoleRpcToken,
   scheduleHostToken,
 } from 'zhin.js';
 import { createAdministratorRssState } from './src/storage.js';
@@ -19,7 +18,7 @@ import {
   RSS_SUBS_TABLE,
 } from './src/db-store.js';
 import { cleanOldSeen, pollAllFeeds } from './src/poll.js';
-import { rssRuntimeToken, type RssOutboundPush } from './src/runtime.js';
+import { rssRuntimeStore, type RssOutboundPush } from './src/runtime.js';
 
 function defineRssTables(db: { define: (name: string, schema: Record<string, unknown>, options?: { addColumns: readonly string[] }) => void }): void {
   db.define(RSS_SUBS_TABLE, {
@@ -65,8 +64,9 @@ export default definePlugin<RssConfig>({
     })() : createInMemoryRssDb();
 
     const migrationScopes = database ? new TargetMigrationScopes({ pending: scope => scope.startsWith('historical:') }) : undefined;
-    if (database && migrationScopes) context.resources.provide(pluginDataMigrationProviderToken,
-      createSubscriptionTargetMigration({ database, scopes: migrationScopes }));
+    const dataMigration = database && migrationScopes
+      ? createSubscriptionTargetMigration({ database, scopes: migrationScopes })
+      : undefined;
 
     const outbound = context.resources.has(outboundHostToken) ? context.resources.use(outboundHostToken) : undefined;
     let outboundPush: RssOutboundPush | null = null;
@@ -79,15 +79,13 @@ export default definePlugin<RssConfig>({
         else await run();
       };
     }
-    const runtime = Object.freeze({
+    const runtime = rssRuntimeStore.provide(context, Object.freeze({
       db,
       migrationScopes,
       locale: resolveLocale(context.resources.use(projectLocaleToken)),
       config: Object.freeze({ ...config }),
       outbound: outboundPush,
-    });
-    context.resources.provide(rssRuntimeToken, runtime);
-    context.resources.provide(pluginConsoleRpcToken, createRssConsoleRpc(runtime));
+    }));
 
     // Keep optional in-memory/chat-only installations working. Administrator tasks
     // must have the real durable state port, exact outbound and an active scheduler.
@@ -99,34 +97,40 @@ export default definePlugin<RssConfig>({
       try { state = database.state; } catch { /* No persistent state port: no administrator provider. */ }
       if (state) {
         administrator = new AdministratorRssTasks(createAdministratorRssState(database), outbound, config, undefined, runtime.locale);
-        context.resources.provide(pluginTaskProviderToken, administrator);
         context.lifecycle.add(() => administrator?.stop());
       }
     }
 
-    if (!context.resources.has(scheduleHostToken)) return;
-    const schedule = context.resources.use(scheduleHostToken);
-    const dispose = schedule.register({
-      id: 'rss/poll_feeds',
-      cron: config.pollCron,
-      description: 'Poll RSS subscriptions',
-      async execute() {
-        // Both pools share this existing registration. A slow chat feed does not
-        // prevent administrator polling, and neither pool shares the other's cursor.
-        const results = await Promise.allSettled([pollAllFeeds(runtime), administrator?.tick()]);
-        // Keep the schedule lease until both pools drain, even if one fails.
-        for (const result of results) if (result.status === 'rejected') throw result.reason;
-      },
-    });
-    const disposeClean = schedule.register({
-      id: 'rss/clean_old_seen',
-      cron: '0 0 4 * * *',
-      description: 'Clean seen records older than 7 days',
-      async execute() {
-        await cleanOldSeen(runtime);
-      },
-    });
-    context.lifecycle.add(dispose);
-    context.lifecycle.add(disposeClean);
+    if (context.resources.has(scheduleHostToken)) {
+      const schedule = context.resources.use(scheduleHostToken);
+      const dispose = schedule.register({
+        id: 'rss/poll_feeds',
+        cron: config.pollCron,
+        description: 'Poll RSS subscriptions',
+        async execute() {
+          // Both pools share this existing registration. A slow chat feed does not
+          // prevent administrator polling, and neither pool shares the other's cursor.
+          const results = await Promise.allSettled([pollAllFeeds(runtime), administrator?.tick()]);
+          // Keep the schedule lease until both pools drain, even if one fails.
+          for (const result of results) if (result.status === 'rejected') throw result.reason;
+        },
+      });
+      const disposeClean = schedule.register({
+        id: 'rss/clean_old_seen',
+        cron: '0 0 4 * * *',
+        description: 'Clean seen records older than 7 days',
+        async execute() {
+          await cleanOldSeen(runtime);
+        },
+      });
+      context.lifecycle.add(dispose);
+      context.lifecycle.add(disposeClean);
+    }
+
+    return {
+      consoleRpc: createRssConsoleRpc(runtime),
+      ...(dataMigration ? { dataMigration } : {}),
+      ...(administrator ? { tasks: administrator } : {}),
+    };
   },
 });

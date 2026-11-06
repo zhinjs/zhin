@@ -1,4 +1,4 @@
-import { definePlugin, pluginConsoleRpcToken } from 'zhin.js';
+import { definePlugin } from 'zhin.js';
 import { createMilkyConsoleRpc } from './src/console.js';
 
 export default definePlugin({
@@ -8,6 +8,8 @@ export default definePlugin({
     displayName: 'Milky Adapter',
   },
   setup(context) {
-    context.resources.provide(pluginConsoleRpcToken, createMilkyConsoleRpc(context.resources, () => context.config.get()));
+    return {
+      consoleRpc: createMilkyConsoleRpc(context.resources, () => context.config.get()),
+    };
   },
 });

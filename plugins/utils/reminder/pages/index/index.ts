@@ -1,5 +1,4 @@
-import { definePage } from '@zhin.js/console-contract';
-import { createDeclarativePage } from '@zhin.js/client';
+import { definePage, createDeclarativePage } from '@zhin.js/console-contract';
 import type { ReminderConsoleItem, ReminderConsoleSnapshot } from '../../src/service.js';
 
 export const meta = definePage({

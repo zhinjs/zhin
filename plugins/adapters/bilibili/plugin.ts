@@ -1,6 +1,6 @@
-import { definePlugin, outboundHostToken, pluginConsoleRpcToken } from 'zhin.js';
+import { definePlugin, outboundHostToken } from 'zhin.js';
 import {
-  bilibiliNotifierToken,
+  bilibiliNotifierStore,
   type BilibiliNotifier,
 } from './src/bilibili-runtime-state.js';
 import { createBilibiliConsoleRpc } from './src/console.js';
@@ -29,7 +29,9 @@ export default definePlugin({
       });
       return true;
     };
-    context.resources.provide(bilibiliNotifierToken, notifier);
-    context.resources.provide(pluginConsoleRpcToken, createBilibiliConsoleRpc());
+    bilibiliNotifierStore.provide(context, () => notifier);
+    return {
+      consoleRpc: createBilibiliConsoleRpc(),
+    };
   },
 });

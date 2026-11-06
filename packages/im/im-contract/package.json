@@ -10,6 +10,11 @@
       "types": "./lib/index.d.ts",
       "development": "./src/index.ts",
       "import": "./lib/index.js"
+    },
+    "./interaction": {
+      "types": "./lib/interaction.d.ts",
+      "development": "./src/interaction.ts",
+      "import": "./lib/interaction.js"
     }
   },
   "files": [
@@ -39,6 +44,10 @@
       ".": {
         "types": "./lib/index.d.ts",
         "import": "./lib/index.js"
+      },
+      "./interaction": {
+        "types": "./lib/interaction.d.ts",
+        "import": "./lib/interaction.js"
       }
     }
   },

@@ -5,13 +5,12 @@ import { dirname, join } from 'node:path';
 import adapterFeature, { Adapter, AdapterIndex, adapterFeatureId, createEndpointSpecification, defineAdapter, endpointSpec,
   type EndpointSendRequest } from '@zhin.js/adapter';
 import commandFeature from '@zhin.js/command';
-import { createConfigDocument } from '@zhin.js/config-file';
 import type { ConsoleConfigApplyResult, ConsoleConfigPatchResult, ConsoleConfigSource } from '@zhin.js/console-protocol';
 import { ImRuntime } from '@zhin.js/core/runtime';
 import { createConsoleEventHub, createHttpHost } from '@zhin.js/host-http';
 import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
 import { definePlugin, type RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
-import { RootRuntime, type ModuleRuntime } from '@zhin.js/runtime';
+import { createConfigDocument, RootRuntime, type ModuleRuntime } from '@zhin.js/runtime';
 import { CONFIG_EXIT_CODES, createConfigCommand } from '../../src/commands/config.js';
 import { requestPluginConsole } from '../../src/plugin-management/console-client.js';
 import { ConsoleConfigurationStore } from '../../src/plugin-runtime/console/module.js';

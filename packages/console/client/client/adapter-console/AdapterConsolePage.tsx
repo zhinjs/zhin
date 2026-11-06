@@ -759,7 +759,19 @@ function AdapterConsoleSession({ adapterKey, isCurrent }: AdapterConsolePageProp
 
 /** Convention page factory: `pages/index/index.ts` default-exports this. */
 export function createAdapterConsolePage(adapterKey: string): React.ComponentType {
-  return function AdapterConsoleRoute() {
+  const bp = {
+    kind: 'zhin.console.adapter-page' as const,
+    version: 1 as const,
+    adapterKey,
+    dataSource: { action: 'status' as const },
+  };
+  const fn = function AdapterConsoleRoute() {
     return <AdapterConsolePage adapterKey={adapterKey} />;
   };
+  return Object.assign(fn, bp);
+}
+
+if (typeof globalThis !== 'undefined') {
+  (globalThis as Record<string, unknown>).__ZHIN_RENDER_ADAPTER_PAGE__ = (bp: { adapterKey?: string }) =>
+    React.createElement(AdapterConsolePage, { adapterKey: String(bp?.adapterKey ?? '') });
 }

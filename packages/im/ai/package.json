@@ -69,6 +69,7 @@
   },
   "dependencies": {
     "@zhin.js/logger": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
     "undici": "^8.12.2"
   },
   "peerDependencies": {

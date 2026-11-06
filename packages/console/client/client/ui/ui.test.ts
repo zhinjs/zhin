@@ -263,4 +263,85 @@ describe('locale and plugin id helpers', () => {
     expect(serialized).toContain('Job A');
     env.unmount();
   });
+
+  it('createDeclarativePage attaches blueprint metadata, returns blueprint when called with no args, and DeclarativePageView coerces raw blueprint', async () => {
+    vi.useFakeTimers();
+    stubHost(async () => ({
+      data: {
+        activeCount: 7,
+        rows: [{ id: 'r2', name: 'Job B', status: 'running' }],
+      },
+    }));
+    const env = createHookEnv();
+    const { createDeclarativePage, DeclarativePageView } = env.load(file('./declarative-page.tsx'));
+    const Page = createDeclarativePage({
+      pluginId: 'root/my-service',
+      title: { zh: '服务状态', en: 'Service Status' },
+      stats: [{ label: { zh: '活跃任务', en: 'Active Tasks' }, value: 'activeCount' }],
+      sections: [
+        {
+          title: { zh: '任务列表', en: 'Task List' },
+          items: 'rows',
+          columns: [
+            { key: 'name', label: 'Name' },
+            { key: 'status', label: 'Status' },
+          ],
+        },
+      ],
+      actions: [{ name: 'run', label: { zh: '执行', en: 'Run' } }],
+    });
+
+    expect({ ...Page }).toMatchObject({
+      kind: 'zhin.console.page-blueprint',
+      version: 1,
+      title: 'Service Status',
+      dataSource: { action: 'status' },
+    });
+
+    const noArgOut = (Page as unknown as () => unknown)();
+    expect(noArgOut).toMatchObject({
+      kind: 'zhin.console.page-blueprint',
+      version: 1,
+      title: 'Service Status',
+    });
+
+    // Also test rendering a raw ConsolePageBlueprint without .spec via DeclarativePageView
+    const rawBlueprint = {
+      kind: 'zhin.console.page-blueprint',
+      version: 1,
+      title: 'Raw Blueprint Service',
+      dataSource: { action: 'status' },
+      sections: [
+        {
+          type: 'stats',
+          id: 'runtime-stats',
+          items: [{ key: 'activeCount', label: 'Active', dataKey: 'activeCount' }],
+        },
+        {
+          type: 'table',
+          id: 'jobs',
+          title: 'Jobs',
+          dataKey: 'rows',
+          columns: [
+            { key: 'name', label: 'Job Name' },
+            { key: 'status', label: 'State' },
+          ],
+        },
+        {
+          type: 'actions',
+          id: 'actions',
+          items: [{ label: 'Trigger', action: 'trigger' }],
+        },
+      ],
+    };
+
+    env.mount(() => DeclarativePageView({ spec: rawBlueprint as never, pageProps: { pluginId: 'root/my-service' } }));
+    await env.settle();
+    const serialized = JSON.stringify(env.tree());
+    expect(serialized).toContain('Raw Blueprint Service');
+    expect(serialized).toContain('7');
+    expect(serialized).toContain('Job B');
+    expect(serialized).toContain('Trigger');
+    env.unmount();
+  });
 });

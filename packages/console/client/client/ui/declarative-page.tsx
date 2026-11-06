@@ -152,13 +152,195 @@ function formatError(error: unknown, t: PluginUiText['t']): string {
   return error instanceof Error && error.message ? error.message : t('操作失败');
 }
 
+function resolveBlueprintText(text: DeclarativeI18nText | undefined, locale: 'en' | 'zh-CN' = 'en'): string {
+  if (!text) return '';
+  if (typeof text === 'string') return text;
+  if (locale === 'en') return text.en ?? text['zh-CN'] ?? text.zh ?? '';
+  return text['zh-CN'] ?? text.zh ?? text.en ?? '';
+}
+
+function buildDeclarativeBlueprint<TData = Record<string, unknown>>(spec: DeclarativePageSpec<TData>) {
+  if ((spec as { kind?: unknown })?.kind === 'zhin.console.page-blueprint') {
+    return spec as unknown as Record<string, unknown>;
+  }
+  const sections: Record<string, unknown>[] = [];
+  if (Array.isArray(spec.stats) && spec.stats.length > 0) {
+    sections.push({
+      type: 'stats',
+      id: 'runtime-stats',
+      title: 'Runtime Stats',
+      items: spec.stats.map((s, i) => ({
+        key: s.key ?? (typeof s.value === 'string' ? s.value : `stat-${i}`),
+        label: resolveBlueprintText(s.label, 'en'),
+        ...(typeof s.value === 'string' ? { dataKey: s.value } : {}),
+      })),
+    });
+  }
+  for (const [idx, sec] of (spec.sections ?? []).entries()) {
+    const id = sec.id ?? `section-${idx}`;
+    const title = resolveBlueprintText(sec.title, 'en');
+    if (sec.columns !== undefined || sec.items !== undefined) {
+      sections.push({
+        type: 'table',
+        id,
+        title,
+        ...(typeof sec.items === 'string' ? { dataKey: sec.items } : {}),
+        rowKey: sec.columns?.[0]?.key ?? 'id',
+        columns: (sec.columns ?? []).map((c) => ({
+          key: c.key,
+          label: resolveBlueprintText(c.label, 'en'),
+        })),
+      });
+    } else if (sec.entries !== undefined) {
+      sections.push({ type: 'entries', id, title });
+    } else {
+      sections.push({ type: 'custom', id, ...(title ? { title } : {}) });
+    }
+  }
+  if (Array.isArray(spec.actions) && spec.actions.length > 0) {
+    sections.push({
+      type: 'actions',
+      id: 'actions',
+      title: 'Actions',
+      items: spec.actions.map((a) => ({
+        label: resolveBlueprintText(a.label, 'en'),
+        action: a.name,
+        name: a.name,
+      })),
+    });
+  }
+  const description = resolveBlueprintText(spec.description, 'en');
+  return {
+    kind: 'zhin.console.page-blueprint' as const,
+    version: 1 as const,
+    title: resolveBlueprintText(spec.title, 'en'),
+    ...(description ? { description } : {}),
+    dataSource: { action: spec.statusMethod ?? 'status' },
+    sections,
+    spec,
+  };
+}
+
+function coerceDeclarativeSpec<TData = Record<string, unknown>>(
+  input: DeclarativePageSpec<TData>,
+): DeclarativePageSpec<TData> {
+  const raw = input as unknown as Record<string, unknown>;
+  if (!raw || typeof raw !== 'object') return input;
+  if (raw.spec && typeof raw.spec === 'object') {
+    return raw.spec as DeclarativePageSpec<TData>;
+  }
+  if (raw.kind !== 'zhin.console.page-blueprint') {
+    return input;
+  }
+  const rawSections = Array.isArray(raw.sections) ? (raw.sections as Record<string, unknown>[]) : [];
+  const stats: DeclarativeStatSpec<TData>[] = [];
+  const actions: DeclarativeActionSpec<TData>[] = [];
+  const sections: DeclarativeSectionSpec<TData, Record<string, unknown>>[] = [];
+
+  for (const sec of rawSections) {
+    if (!sec || typeof sec !== 'object') continue;
+    const secType = sec.type ?? sec.kind;
+    if (secType === 'stats') {
+      const items = Array.isArray(sec.items) ? (sec.items as Record<string, unknown>[]) : [];
+      for (const item of items) {
+        if (!item || typeof item !== 'object') continue;
+        const dataKey = typeof item.dataKey === 'string' ? item.dataKey : undefined;
+        const staticVal = item.value;
+        stats.push({
+          key: typeof item.key === 'string' ? item.key : dataKey,
+          label: (item.label as DeclarativeI18nText) ?? (typeof item.key === 'string' ? item.key : ''),
+          value: dataKey
+            ? ((data: TData) => String((data as Record<string, unknown>)?.[dataKey] ?? staticVal ?? '-'))
+            : ((data: TData) => {
+                if (typeof item.key === 'string' && data && typeof data === 'object' && item.key in (data as Record<string, unknown>)) {
+                  return String((data as Record<string, unknown>)[item.key] ?? '-');
+                }
+                return String(staticVal ?? '-');
+              }),
+        });
+      }
+    } else if (secType === 'actions') {
+      const actItems = Array.isArray(sec.actions)
+        ? (sec.actions as Record<string, unknown>[])
+        : (Array.isArray(sec.items) ? (sec.items as Record<string, unknown>[]) : []);
+      for (const act of actItems) {
+        if (!act || typeof act !== 'object') continue;
+        const name = String(act.action ?? act.name ?? '');
+        if (!name) continue;
+        actions.push({
+          name,
+          label: (act.label as DeclarativeI18nText) ?? name,
+        });
+      }
+    } else if (secType === 'table') {
+      const dataKey = typeof sec.dataKey === 'string' ? sec.dataKey : undefined;
+      const staticRows = Array.isArray(sec.rows)
+        ? (sec.rows as readonly Record<string, unknown>[])
+        : (Array.isArray(sec.items) ? (sec.items as readonly Record<string, unknown>[]) : []);
+      const cols = Array.isArray(sec.columns) ? (sec.columns as Record<string, unknown>[]) : [];
+      sections.push({
+        id: typeof sec.id === 'string' ? sec.id : undefined,
+        title: sec.title as DeclarativeI18nText | undefined,
+        emptyText: sec.emptyText as DeclarativeI18nText | undefined,
+        items: dataKey
+          ? ((data: TData) => {
+              const fromData = (data as Record<string, unknown>)?.[dataKey];
+              return Array.isArray(fromData) ? (fromData as readonly Record<string, unknown>[]) : staticRows;
+            })
+          : (() => staticRows),
+        columns: cols.map((c) => ({
+          key: String(c.key ?? ''),
+          label: (c.label as DeclarativeI18nText) ?? String(c.key ?? ''),
+        })),
+      });
+    } else if (secType === 'entries') {
+      const rawEntries = Array.isArray(sec.entries)
+        ? (sec.entries as Record<string, unknown>[])
+        : (Array.isArray(sec.items) ? (sec.items as Record<string, unknown>[]) : []);
+      sections.push({
+        id: typeof sec.id === 'string' ? sec.id : undefined,
+        title: sec.title as DeclarativeI18nText | undefined,
+        entries: (data: TData) =>
+          rawEntries.map((e) => {
+            const dk = typeof e.dataKey === 'string' ? e.dataKey : (typeof e.key === 'string' ? e.key : undefined);
+            const val = dk && data && typeof data === 'object' && dk in (data as Record<string, unknown>)
+              ? (data as Record<string, unknown>)[dk]
+              : e.value;
+            return {
+              label: String(e.label ?? e.key ?? ''),
+              value: String(val ?? '-'),
+            };
+          }),
+      });
+    }
+  }
+
+  const dataSource = raw.dataSource && typeof raw.dataSource === 'object'
+    ? (raw.dataSource as Record<string, unknown>)
+    : undefined;
+  const statusMethod = typeof dataSource?.action === 'string'
+    ? dataSource.action
+    : (typeof raw.statusMethod === 'string' ? raw.statusMethod : 'status');
+
+  return {
+    pluginId: typeof raw.pluginId === 'string' ? raw.pluginId : undefined,
+    title: (raw.title as DeclarativeI18nText) ?? '',
+    description: (raw.description ?? raw.subtitle) as DeclarativeI18nText | undefined,
+    statusMethod,
+    ...(stats.length > 0 ? { stats } : {}),
+    ...(actions.length > 0 ? { actions } : {}),
+    ...(sections.length > 0 ? { sections } : {}),
+  };
+}
+
 export function DeclarativePageView<TData = Record<string, unknown>>({
-  spec,
+  spec: rawSpec,
   pageProps,
 }: {
   readonly spec: DeclarativePageSpec<TData>;
   readonly pageProps?: DeclarativePageComponentProps;
 }) {
+  const spec = useMemo(() => coerceDeclarativeSpec(rawSpec), [rawSpec]);
   const { locale, t } = useLocale(spec.dictionary);
   const rawPluginId = resolveSyncPluginId(pageProps?.pluginId ?? pageProps?.owner ?? spec.pluginId);
   const pluginId = rawPluginId === 'unknown' ? undefined : rawPluginId;
@@ -504,7 +686,29 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
 export function createDeclarativePage<TData = Record<string, unknown>>(
   spec: DeclarativePageSpec<TData>,
 ): React.ComponentType<DeclarativePageComponentProps> {
-  return function DeclarativePluginPage(props: DeclarativePageComponentProps = {}) {
-    return DeclarativePageView({ spec, pageProps: props });
+  const bp = buildDeclarativeBlueprint(spec);
+  const fn = function DeclarativePluginPage(props?: DeclarativePageComponentProps) {
+    if (props === undefined && !(globalThis as Record<string, unknown>).__ZHIN_ALLOW_RAW_BLUEPRINT__) {
+      return bp as unknown as React.ReactElement;
+    }
+    return DeclarativePageView({ spec, pageProps: props ?? {} });
   };
+  return Object.assign(fn, bp);
+}
+
+if (typeof globalThis !== 'undefined') {
+  (globalThis as Record<string, unknown>).__ZHIN_RENDER_BLUEPRINT__ = (
+    bp: unknown,
+    props?: DeclarativePageComponentProps,
+  ) =>
+    React.createElement(
+      DeclarativePageView as React.ComponentType<{
+        readonly spec: DeclarativePageSpec;
+        readonly pageProps?: DeclarativePageComponentProps;
+      }>,
+      {
+        spec: (((bp as { spec?: DeclarativePageSpec })?.spec ?? bp) as DeclarativePageSpec),
+        pageProps: props,
+      },
+    );
 }

@@ -23,3 +23,7 @@ export * from './root-runtime.js';
 export * from './source-ownership.js';
 export * from './topology-transaction.js';
 export * from './typescript-specifier-remap.js';
+export * from './config-file/index.js';
+export * from './isolate/index.js';
+export * from './host/index.js';
+

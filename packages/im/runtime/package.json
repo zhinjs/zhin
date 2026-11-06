@@ -10,6 +10,16 @@
       "types": "./lib/index.d.ts",
       "development": "./src/index.ts",
       "import": "./lib/index.js"
+    },
+    "./config-file": {
+      "types": "./lib/config-file/index.d.ts",
+      "development": "./src/config-file/index.ts",
+      "import": "./lib/config-file/index.js"
+    },
+    "./isolate": {
+      "types": "./lib/isolate/index.d.ts",
+      "development": "./src/isolate/index.ts",
+      "import": "./lib/isolate/index.js"
     }
   },
   "files": [
@@ -27,7 +37,8 @@
     "ajv": "8.18.0",
     "es-module-lexer": "2.3.1",
     "import-meta-resolve": "4.2.0",
-    "semver": "7.8.5"
+    "semver": "7.8.5",
+    "yaml": "2.9.0"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
@@ -58,6 +69,14 @@
       ".": {
         "types": "./lib/index.d.ts",
         "import": "./lib/index.js"
+      },
+      "./config-file": {
+        "types": "./lib/config-file/index.d.ts",
+        "import": "./lib/config-file/index.js"
+      },
+      "./isolate": {
+        "types": "./lib/isolate/index.d.ts",
+        "import": "./lib/isolate/index.js"
       }
     }
   },

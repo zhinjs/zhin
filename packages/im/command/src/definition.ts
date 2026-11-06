@@ -16,7 +16,7 @@ import {
 } from '@zhin.js/feature-kit';
 import { assertPermitSyntax } from '@zhin.js/permission';
 import { validateArgumentSchemas } from './arguments.js';
-import type { UserInteraction } from '@zhin.js/interaction';
+import type { UserInteraction } from '@zhin.js/im-contract';
 import { normalizeExecutionPolicy, type CommandExecutionPolicy } from './execution-policy.js';
 export type { CommandExecutionPolicy, CommandExecutionLimit } from './execution-policy.js';
 

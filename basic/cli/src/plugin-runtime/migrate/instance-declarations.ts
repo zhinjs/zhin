@@ -2,9 +2,8 @@ import { createHash, randomUUID } from 'node:crypto';
 import { chmod, lstat, mkdir, open, readFile, readdir, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { basename, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { isAlias, isMap, isScalar, isSeq, Pair, parseDocument, visit, type Document } from 'yaml';
-import { createConfigDocument, readSourcePluginOrder } from '@zhin.js/config-file';
 import { ROOT_CONFIG_FILE_NAMES, selectRootConfigFile } from '@zhin.js/plugin-runtime';
-import { HOST_CONFIG_KEYS, NodePackageResolver, PackageResolutionError, ProjectGraphService, mergeChildPluginReferences, type ChildPluginReference, type ResolvedPackage } from '@zhin.js/runtime';
+import { createConfigDocument, HOST_CONFIG_KEYS, NodePackageResolver, PackageResolutionError, ProjectGraphService, mergeChildPluginReferences, readSourcePluginOrder, type ChildPluginReference, type ResolvedPackage } from '@zhin.js/runtime';
 import { readPluginLifecycleState, resolvePluginLifecycleFile } from '../plugin-lifecycle-store.js';
 
 const JOURNAL_DIRECTORY = '.zhin/instance-declarations-migration';

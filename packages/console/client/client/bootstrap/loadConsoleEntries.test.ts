@@ -41,4 +41,58 @@ describe("console entries bootstrap", () => {
     }));
     expect(createElement).toHaveBeenCalledWith(Page);
   });
+
+  it("mounts DeclarativePageView for raw zhin.console.page-blueprint objects", () => {
+    const blueprint = {
+      kind: "zhin.console.page-blueprint",
+      version: 1,
+      title: "Cron",
+      dataSource: { action: "status" },
+      sections: [],
+    };
+    const register = resolveEntryRegister(
+      { default: blueprint, meta: { title: "Cron Jobs" } },
+      { id: "root/cron", resolvedModule: "/assets/client/cron.js", route: "/p-cron" } as any,
+    );
+    expect(typeof register).toBe("function");
+    const addRoute = vi.fn();
+    const createElement = vi.fn((c: unknown, props: unknown) => ({ type: c, props }));
+    register!({
+      React: { createElement } as any,
+      addRoute,
+      addTool: vi.fn(),
+    });
+    expect(createElement).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.objectContaining({
+        spec: blueprint,
+        pageProps: { pluginId: "root/cron", route: "/p-cron", title: "Cron Jobs" },
+      }),
+    );
+  });
+
+  it("mounts AdapterConsolePage for raw zhin.console.adapter-page objects", () => {
+    const adapterBp = {
+      kind: "zhin.console.adapter-page",
+      version: 1,
+      adapterKey: "telegram",
+      dataSource: { action: "status" },
+    };
+    const register = resolveEntryRegister(
+      { default: adapterBp, meta: { title: "Telegram" } },
+      { id: "root/adapter-telegram", resolvedModule: "/assets/client/tg.js", route: "/p-telegram" } as any,
+    );
+    expect(typeof register).toBe("function");
+    const addRoute = vi.fn();
+    const createElement = vi.fn((c: unknown, props: unknown) => ({ type: c, props }));
+    register!({
+      React: { createElement } as any,
+      addRoute,
+      addTool: vi.fn(),
+    });
+    expect(createElement).toHaveBeenCalledWith(
+      expect.any(Function),
+      { adapterKey: "telegram" },
+    );
+  });
 });

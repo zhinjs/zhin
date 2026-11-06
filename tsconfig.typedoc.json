@@ -80,6 +80,9 @@
       "@zhin.js/im-contract": [
         "./packages/im/im-contract/src/index.ts"
       ],
+      "@zhin.js/im-contract/interaction": [
+        "./packages/im/im-contract/src/interaction.ts"
+      ],
       "@zhin.js/host-http-contract": [
         "./packages/host/http-contract/src/index.ts"
       ],
@@ -110,17 +113,17 @@
       "@zhin.js/tool": [
         "./packages/im/tool/src/index.ts"
       ],
-      "@zhin.js/config-file": [
-        "./packages/im/config-file/src/index.ts"
-      ],
       "@zhin.js/feature-kit": [
         "./packages/im/feature-kit/src/index.ts"
       ],
-      "@zhin.js/isolate": [
-        "./packages/im/isolate/src/index.ts"
-      ],
       "@zhin.js/runtime": [
         "./packages/im/runtime/src/index.ts"
+      ],
+      "@zhin.js/runtime/config-file": [
+        "./packages/im/runtime/src/config-file/index.ts"
+      ],
+      "@zhin.js/runtime/isolate": [
+        "./packages/im/runtime/src/isolate/index.ts"
       ],
       "@zhin.js/contract": [
         "./packages/console/contract/src/index.ts"
@@ -164,6 +167,9 @@
       "zhin.js/handler": [
         "./packages/im/zhin/src/handler.ts"
       ],
+      "zhin.js/schedule": [
+        "./packages/im/zhin/src/schedule.ts"
+      ],
       "@zhin.js/mcp": [
         "./packages/host/mcp/src/index.ts"
       ],
@@ -172,9 +178,6 @@
       ],
       "@zhin.js/ai/providers": [
         "./packages/im/ai/src/providers/index.ts"
-      ],
-      "@zhin.js/ai-provider": [
-        "./packages/im/ai-provider/src/index.ts"
       ],
       "@zhin.js/agent/migration": [
         "./packages/im/agent/src/migration/index.ts"

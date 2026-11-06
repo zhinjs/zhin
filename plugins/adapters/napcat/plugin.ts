@@ -1,4 +1,4 @@
-import { definePlugin, pluginConsoleRpcToken } from 'zhin.js';
+import { definePlugin } from 'zhin.js';
 import { permissionHostToken, createSceneRolePlatformChecker } from '@zhin.js/permission';
 import { createNapcatConsoleRpc } from './src/console.js';
 
@@ -9,10 +9,12 @@ export default definePlugin({
     displayName: 'NapCat Adapter',
   },
   setup(context) {
-    context.resources.provide(pluginConsoleRpcToken, createNapcatConsoleRpc(context.resources, () => context.config.get()));
-    if (context.resources.has(permissionHostToken)) {
-      const host = context.resources.use(permissionHostToken);
-      return host.registerPlatform('napcat', createSceneRolePlatformChecker());
-    }
+    const dispose = context.resources.has(permissionHostToken)
+      ? context.resources.use(permissionHostToken).registerPlatform('napcat', createSceneRolePlatformChecker())
+      : undefined;
+    return {
+      consoleRpc: createNapcatConsoleRpc(context.resources, () => context.config.get()),
+      ...(dispose ? { dispose } : {}),
+    };
   },
 });

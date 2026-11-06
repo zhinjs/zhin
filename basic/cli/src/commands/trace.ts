@@ -143,7 +143,7 @@ async function openProjectEngagementJournal(root: string): Promise<{
 } | null> {
   try {
     const [{ createConfigDocument }, { DEFAULT_ROOT_CONFIG_FILE_NAME }, { findConfigFile }, { createDatabaseHost, resolveDatabaseConfig }] = await Promise.all([
-      import('@zhin.js/config-file'),
+      import('@zhin.js/runtime'),
       import('@zhin.js/plugin-runtime'),
       import('../utils/config-file.js'),
       import('../plugin-runtime/database-host-installer.js'),

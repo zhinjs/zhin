@@ -1,8 +1,8 @@
-import { definePlugin, databaseHostToken, pluginConsoleRpcToken } from 'zhin.js';
+import { definePlugin, databaseHostToken } from 'zhin.js';
 import { resolveGroupSuiteConfig, type GroupSuiteConfig } from './src/config.js';
 import { createGroupSuiteConsoleRpc } from './src/console.js';
 import { createInMemoryGroupSuiteDb, type GroupSuiteMemoryDb } from './src/memory-store.js';
-import { createGroupSuiteRuntime, groupSuiteRuntimeToken } from './src/runtime-state.js';
+import { createGroupSuiteRuntime, groupSuiteRuntimeStore } from './src/runtime-state.js';
 import { defineGroupSuiteTables } from './src/tables.js';
 
 /**
@@ -32,8 +32,9 @@ export default definePlugin<GroupSuiteConfig>({
       if (!context.resources.has(databaseHostToken)) throw new Error('Persistent keywords require a Database Host; demos may explicitly set ephemeralKeywords: true');
       void context.resources.use(databaseHostToken).state;
     }
-    const runtime = createGroupSuiteRuntime(db);
-    context.resources.provide(groupSuiteRuntimeToken, runtime);
-    context.resources.provide(pluginConsoleRpcToken, createGroupSuiteConsoleRpc(runtime));
+    const runtime = groupSuiteRuntimeStore.provide(context, createGroupSuiteRuntime(db));
+    return {
+      consoleRpc: createGroupSuiteConsoleRpc(runtime),
+    };
   },
 });

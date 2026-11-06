@@ -49,7 +49,6 @@
   "dependencies": {
     "@imhelper/satori-v1": "1.0.7",
     "@zhin.js/adapter": "workspace:*",
-    "@zhin.js/client": "workspace:*",
     "@zhin.js/console-contract": "workspace:*",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/feature-kit": "workspace:*",
