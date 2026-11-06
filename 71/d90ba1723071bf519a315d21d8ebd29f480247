@@ -1,0 +1,16 @@
+docs/authoring/define-plugin.md
+  h_6f5e45c41d0910 273,279,283,288-294
+docs/en/authoring/define-plugin.md
+  h_6f5e45c41d0910 273,279,283,288-294
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "71d90ba1723071bf519a315d21d8ebd29f480247",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
