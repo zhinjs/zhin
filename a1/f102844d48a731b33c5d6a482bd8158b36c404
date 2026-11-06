@@ -1,0 +1,162 @@
+.changeset/host-composition-and-single-spine-runtime.md
+  h_6f5e45c41d0910 1-9
+basic/cli/src/plugin-runtime/agent/assistant-runtime.ts
+  h_6f5e45c41d0910 1
+basic/cli/src/plugin-runtime/agent/config.ts
+  h_6f5e45c41d0910 1
+basic/cli/src/plugin-runtime/agent/publication-coordinator.ts
+  h_6f5e45c41d0910 1
+basic/cli/src/plugin-runtime/agent/runtime-factory.ts
+  h_6f5e45c41d0910 1
+basic/cli/src/plugin-runtime/agent/runtime-foundation.ts
+  h_6f5e45c41d0910 1
+basic/cli/src/plugin-runtime/agent/self-change-impact.ts
+  h_6f5e45c41d0910 1-4
+basic/cli/src/plugin-runtime/agent/self-change-plugin-roots.ts
+  h_6f5e45c41d0910 1-5
+basic/cli/src/plugin-runtime/agent/self-change-report.ts
+  h_6f5e45c41d0910 1
+basic/cli/src/plugin-runtime/agent/tool-approval-im-channel.ts
+  h_6f5e45c41d0910 1
+basic/cli/src/plugin-runtime/component-host-installer.ts
+  h_6f5e45c41d0910 1
+basic/cli/src/plugin-runtime/conversation-migration.ts
+  h_6f5e45c41d0910 1
+basic/cli/src/plugin-runtime/database-config.ts
+  h_6f5e45c41d0910 1
+basic/cli/src/plugin-runtime/database-host-installer.ts
+  h_6f5e45c41d0910 1
+basic/cli/src/plugin-runtime/database-state.ts
+  h_6f5e45c41d0910 1
+basic/cli/src/plugin-runtime/host-credential-storage.ts
+  h_6f5e45c41d0910 1-10
+basic/cli/src/plugin-runtime/locale-host-installer.ts
+  h_6f5e45c41d0910 1
+basic/cli/src/plugin-runtime/outbound-host-installer.ts
+  h_6f5e45c41d0910 1
+basic/cli/src/plugin-runtime/plugin-lifecycle-store.ts
+  h_6f5e45c41d0910 1-11
+basic/cli/src/plugin-runtime/process-lifecycle.ts
+  h_6f5e45c41d0910 1-8
+basic/cli/src/plugin-runtime/process-rejections.ts
+  h_6f5e45c41d0910 1-4
+basic/cli/src/plugin-runtime/project-commands.ts
+  h_6f5e45c41d0910 1-7
+basic/cli/src/plugin-runtime/publish-journal.ts
+  h_6f5e45c41d0910 1-10
+basic/cli/src/plugin-runtime/root-host.ts
+  h_6f5e45c41d0910 2-5,7,9,11,13
+basic/cli/src/plugin-runtime/sender-enrichment.ts
+  h_6f5e45c41d0910 1
+basic/cli/src/plugin-runtime/start/options.ts
+  h_6f5e45c41d0910 1-8
+packages/im/agent/src/collaboration/host-mailbox.ts
+  h_6f5e45c41d0910 106-107,203,223,245,304-308
+packages/im/agent/src/plugin-runtime/host/assistant-runtime.ts
+  h_6f5e45c41d0910 1-356
+packages/im/agent/src/plugin-runtime/host/config.ts
+  h_6f5e45c41d0910 1-196
+packages/im/agent/src/plugin-runtime/host/index.ts
+  h_6f5e45c41d0910 1-7
+packages/im/agent/src/plugin-runtime/host/publication-coordinator.ts
+  h_6f5e45c41d0910 1-118
+packages/im/agent/src/plugin-runtime/host/runtime-factory.ts
+  h_6f5e45c41d0910 1-142
+packages/im/agent/src/plugin-runtime/host/runtime-foundation.ts
+  h_6f5e45c41d0910 1-275
+packages/im/agent/src/plugin-runtime/host/self-change-report.ts
+  h_6f5e45c41d0910 1-94
+packages/im/agent/src/plugin-runtime/host/tool-approval-im-channel.ts
+  h_6f5e45c41d0910 1-357
+packages/im/agent/src/plugin-runtime/index.ts
+  h_6f5e45c41d0910 68-69
+packages/im/agent/src/plugin-runtime/ingress/ingress-route.ts
+  h_6f5e45c41d0910 157,305,309-313,318-325
+packages/im/agent/tests/unified-mailbox-spine.test.ts
+  h_6f5e45c41d0910 1-118
+packages/im/core/src/plugin-runtime/im/host/component-host-installer.ts
+  h_6f5e45c41d0910 1-21
+packages/im/core/src/plugin-runtime/im/host/conversation-migration.ts
+  h_6f5e45c41d0910 1-72
+packages/im/core/src/plugin-runtime/im/host/database-config.ts
+  h_6f5e45c41d0910 1-130
+packages/im/core/src/plugin-runtime/im/host/database-host-installer.ts
+  h_6f5e45c41d0910 1-461
+packages/im/core/src/plugin-runtime/im/host/database-state.ts
+  h_6f5e45c41d0910 1-93
+packages/im/core/src/plugin-runtime/im/host/index.ts
+  h_6f5e45c41d0910 1-8
+packages/im/core/src/plugin-runtime/im/host/locale-host-installer.ts
+  h_6f5e45c41d0910 1-62
+packages/im/core/src/plugin-runtime/im/host/outbound-host-installer.ts
+  h_6f5e45c41d0910 1-181
+packages/im/core/src/plugin-runtime/im/host/sender-enrichment.ts
+  h_6f5e45c41d0910 1-222
+packages/im/core/src/plugin-runtime/im/inbound-runtime.ts
+  h_6f5e45c41d0910 46,556-567,569-574,576-588
+packages/im/core/src/plugin-runtime/im/inbound-spine.ts
+  h_6f5e45c41d0910 1-183
+packages/im/core/src/plugin-runtime/im/index.ts
+  h_6f5e45c41d0910 16-17
+packages/im/core/tests/plugin-runtime/inbound-spine.test.ts
+  h_6f5e45c41d0910 1-101
+packages/im/plugin-runtime/src/environment-expansion.ts
+  h_6f5e45c41d0910 1-116
+packages/im/plugin-runtime/src/host-installer.ts
+  h_6f5e45c41d0910 1-131
+packages/im/plugin-runtime/src/index.ts
+  h_6f5e45c41d0910 62-63
+packages/im/runtime/src/config-file/create-config-document.ts
+  h_6f5e45c41d0910 1-3,8-14
+packages/im/runtime/src/configuration-application.ts
+  h_6f5e45c41d0910 1-8
+packages/im/runtime/src/environment-store.ts
+  h_6f5e45c41d0910 1,4-5,185,187,191
+packages/im/runtime/src/host/host-credential-storage.ts
+  h_6f5e45c41d0910 1-104
+packages/im/runtime/src/host/index.ts
+  h_6f5e45c41d0910 1-10
+packages/im/runtime/src/host/plugin-lifecycle-store.ts
+  h_6f5e45c41d0910 1-112
+packages/im/runtime/src/host/process-lifecycle.ts
+  h_6f5e45c41d0910 1-111
+packages/im/runtime/src/host/process-rejections.ts
+  h_6f5e45c41d0910 1-21
+packages/im/runtime/src/host/project-commands.ts
+  h_6f5e45c41d0910 1-303
+packages/im/runtime/src/host/publish-journal.ts
+  h_6f5e45c41d0910 1-133
+packages/im/runtime/src/host/root-host.ts
+  h_6f5e45c41d0910 1-185
+packages/im/runtime/src/host/self-change-impact.ts
+  h_6f5e45c41d0910 1-26
+packages/im/runtime/src/host/self-change-plugin-roots.ts
+  h_6f5e45c41d0910 1-69
+packages/im/runtime/src/host/start-options.ts
+  h_6f5e45c41d0910 1-109
+packages/im/runtime/src/index.ts
+  h_6f5e45c41d0910 28-29
+packages/im/runtime/src/plugin-scope-assembler.ts
+  h_6f5e45c41d0910 38-39,61-62,254-255
+packages/im/runtime/src/primary-config.ts
+  h_6f5e45c41d0910 1,4
+packages/toolkit/testing/src/fake-plugin.ts
+  h_6f5e45c41d0910 105-107
+scripts/check-api-docs-surface.mjs
+  h_6f5e45c41d0910 40,42-44
+scripts/check-plugin-runtime-install-size.mjs
+  h_6f5e45c41d0910 14
+tests/snapshots/plugin-runtime-api.json
+  h_6f5e45c41d0910 60,86,99-107,189,191,208-217,320,322,366,394-405
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a1f102844d48a731b33c5d6a482bd8158b36c404",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
