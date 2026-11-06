@@ -1,180 +1,49 @@
-import { randomUUID } from 'node:crypto';
 import { getLogger } from '@zhin.js/logger';
 import type {
   CredentialPort,
   CredentialGrant,
-  OAuthChallenge,
   ProviderExecutionContext,
   ProviderDriverLease,
   ProviderAccount,
   ProviderDefinition,
-  ProviderDriverResolver,
-  ProviderRepository,
   ProviderService,
   ProviderCredentialWrite,
   ProviderGraph,
 } from '@zhin.js/ai/provider';
 import {
-  credentialMaterialFingerprint,
   InferenceAuthenticationError,
-  InferenceCredentialStore,
   type CredentialPayload,
   type OpenCredential,
-  type OAuthExchangeFailure,
-  type EnvironmentExpressionSource,
   type ApiKeyMaterial,
-  normalizeApiKeyMaterial,
 } from './credentials.js';
-import { oauthExchangeFailure, oauthRecovery, oauthRefreshCooldown, oauthRefreshDue } from './oauth-refresh-policy.js';
+import { oauthRefreshDue } from './oauth-refresh-policy.js';
+import {
+  type AccountRuntimeContext,
+  type AccountRuntimeOptions,
+  type AccountStatusView,
+  type Flight,
+  type LoginChallengeView,
+  type LoginStart,
+  type PendingLogin,
+  accountKey,
+  identity,
+  prepareAccountClient,
+  prepareAccountKey,
+  publishAccountCredential,
+  readAccountStatus,
+  ready,
+  resolveAccountEnvironmentKey,
+  waitFor,
+} from './account-runtime-helpers.js';
+import {
+  completeAccountLogin,
+  parseOAuthCallbackUrl,
+  prepareAccountOAuth,
+  runAccountRefresh,
+  startAccountLogin,
+} from './account-runtime-oauth.js';
 
-interface AccountRuntimeOptions {
-  readonly hostOwnerId: string;
-  readonly repository: ProviderRepository;
-  readonly credentials: InferenceCredentialStore;
-  readonly drivers: ProviderDriverResolver;
-  readonly fetch: (
-    input: Readonly<{
-      service: ProviderService;
-      account: ProviderAccount;
-      definition: ProviderDefinition<unknown, unknown>;
-      purpose?: 'preparation';
-      retainTransportState?: (state: Request | AbortSignal) => void;
-    }>
-  ) => typeof globalThis.fetch;
-  readonly allowTarget: (
-    input: Readonly<{
-      service: ProviderService;
-      definition: ProviderDefinition<unknown, unknown>;
-      target: URL;
-      purpose: 'inference' | 'discovery';
-    }>
-  ) => boolean;
-  /** Explicit Host environment port. Never reads .env or another client's credential cache. */
-  readonly resolveSource: (source: string | EnvironmentExpressionSource) => string | undefined | Promise<string | undefined>;
-  readonly now?: () => number;
-  readonly cleanupFailed?: () => void;
-}
-interface Flight {
-  readonly promise: Promise<OpenCredential>;
-}
-interface PendingLogin {
-  readonly id: string;
-  readonly account: ProviderAccount;
-  readonly service: ProviderService;
-  readonly expectedRevision: number;
-  readonly redirectUri: string;
-  readonly challenge: OAuthChallenge;
-  readonly contractVersion: string;
-  readonly controller: AbortController;
-  readonly definition: ProviderDefinition<unknown, unknown>;
-  readonly release: () => void | Promise<void>;
-  phase: 'ready' | 'exchanging';
-}
-interface LoginStart {
-  readonly controller: AbortController;
-  readonly promise: Promise<LoginChallengeView>;
-}
-export interface AccountStatusView {
-  readonly status: CredentialPayload['status'] | 'authenticated';
-  readonly revision: number;
-  readonly preparation?: 'required' | 'ready';
-  readonly failure?: OAuthExchangeFailure;
-  readonly source?: 'environment-expression';
-  /** Present only while a private account-wide authentication cooldown is active. */
-  readonly retryAt?: number;
-}
-export interface LoginChallengeView {
-  readonly loginId: string;
-  readonly authorizationUrl: string;
-  readonly redirectUri: string;
-  readonly state: string;
-}
-
-function accountKey(account: ProviderAccount): string {
-  return JSON.stringify([account.rootId, account.id, account.incarnation]);
-}
-function identity(open: OpenCredential | undefined): Readonly<{
-  identityEstablished?: boolean;
-  materialFingerprint?: string;
-  subject?: string;
-  client?: Readonly<{ clientSecret?: string }>;
-  source?: EnvironmentExpressionSource;
-}> {
-  const payload = open?.payload;
-  const subject =
-    payload?.subject ??
-    (payload?.status === 'ready' && payload.method === 'oauth'
-      ? payload.credential.subject
-      : undefined);
-  return {
-    ...(payload?.identityEstablished || payload?.status === 'ready'
-      ? { identityEstablished: true }
-      : {}),
-    ...(payload?.materialFingerprint ? { materialFingerprint: payload.materialFingerprint } : {}),
-    ...(subject ? { subject } : {}),
-    ...(payload?.client ? { client: payload.client } : {}),
-    ...(payload?.source ? { source: payload.source } : {}),
-  };
-}
-async function waitFor<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
-  signal.throwIfAborted();
-  let cancel: (() => void) | undefined;
-  try {
-    return await Promise.race([
-      promise,
-      new Promise<never>((_, reject) => {
-        cancel = () => reject(signal.reason);
-        signal.addEventListener('abort', cancel, { once: true });
-      }),
-    ]);
-  } finally {
-    if (cancel) signal.removeEventListener('abort', cancel);
-  }
-}
-function authenticationFailure(
-  error: unknown
-): 'credential-invalid' | 'rejected' | 'not-submitted' | 'outcome-unknown' {
-  const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined;
-  if (
-    code === 'rejected' &&
-    error &&
-    typeof error === 'object' &&
-    'credentialInvalid' in error &&
-    error.credentialInvalid === true
-  ) {
-    return 'credential-invalid';
-  }
-  return code === 'rejected' || code === 'not-submitted' ? code : 'outcome-unknown';
-}
-function publicFailure(
-  error: unknown
-): 'reauthorize' | 'rejected' | 'not-submitted' | 'outcome-unknown' {
-  const result = authenticationFailure(error);
-  return result === 'credential-invalid' ? 'reauthorize' : result;
-}
-/** Cancellation describes this exchange attempt separately from the account's local state. */
-function exchangeFailure(input: Readonly<{
-  error: unknown;
-  signal: AbortSignal;
-  /** Driver callback was invoked; this does not prove an upstream submission. */
-  invoked: boolean;
-}>): unknown {
-  if (input.signal.aborted && input.error === input.signal.reason)
-    return new InferenceAuthenticationError(input.invoked ? 'outcome-unknown' : 'not-submitted');
-  return input.error;
-}
-function ready(open: OpenCredential | undefined): asserts open is OpenCredential & {
-  payload: Extract<CredentialPayload, { status: 'ready' }>;
-} {
-  if (!open) throw new InferenceAuthenticationError('not-authorized');
-  if (open.payload.status === 'not-authorized')
-    throw new InferenceAuthenticationError('not-authorized');
-  if (open.payload.status === 'exchange-pending' || open.payload.status === 'uncertain')
-    throw new InferenceAuthenticationError('outcome-unknown');
-  if (open.payload.status === 'disconnected')
-    throw new InferenceAuthenticationError('disconnected');
-  if (open.payload.status === 'reauthorize') throw new InferenceAuthenticationError('reauthorize');
-}
+export type { AccountRuntimeOptions, AccountStatusView, LoginChallengeView } from './account-runtime-helpers.js';
 
 /** Process-owned account authority. Generation-owned Provider handles borrow it; HMR does not disconnect accounts. */
 export class HostAccountRuntime {
@@ -186,6 +55,24 @@ export class HostAccountRuntime {
   readonly #uncertain = new Set<string>();
 
   constructor(private readonly options: AccountRuntimeOptions) {}
+
+  #context(): AccountRuntimeContext {
+    return {
+      options: this.options,
+      closedSignal: this.#closed.signal,
+      uncertain: this.#uncertain,
+      logins: this.#logins,
+      loginStarts: this.#loginStarts,
+      assertOpen: () => this.#assertOpen(),
+      verifyAccount: (account) => this.#account(account),
+      signal: (account) => this.#signal(account),
+      renewSignal: (account) => this.#renewSignal(account),
+      withFetch: (input, run) => this.#withFetch(input, run),
+      publish: (input) => this.#publish(input),
+      release: (fn) => this.#release(fn),
+      reportCleanup: (message) => this.#reportCleanup(message),
+    };
+  }
 
   createPort(input: ProviderExecutionContext): CredentialPort {
     return this.createAccountPort({
@@ -245,7 +132,7 @@ export class HostAccountRuntime {
         throw new InferenceAuthenticationError('outcome-unknown');
       let open = await this.options.credentials.read(binding.account);
       if (binding.account.authentication.method === 'api-key') {
-        open = await this.#environmentKey(binding.account, definition.contractVersion, open);
+        open = await resolveAccountEnvironmentKey(this.#context(), binding.account, definition.contractVersion, open);
         ready(open);
         if (open.payload.method !== 'api-key' || typeof open.payload.key !== 'string') throw new InferenceAuthenticationError('integrity');
         signal.throwIfAborted();
@@ -349,7 +236,7 @@ export class HostAccountRuntime {
 
   async status(account: ProviderAccount): Promise<AccountStatusView> {
     await this.#account(account);
-    return this.#status(account);
+    return readAccountStatus(this.#context(), account);
   }
 
   /** Host-private UI projection from its already-read graph, never an inference admission check. */
@@ -359,6 +246,7 @@ export class HostAccountRuntime {
       accounts: readonly ProviderAccount[];
     }>
   ): Promise<Readonly<Record<string, AccountStatusView>>> {
+    const ctx = this.#context();
     return Object.fromEntries(
       await Promise.all(
         input.accounts.map(async (account) => {
@@ -372,38 +260,10 @@ export class HostAccountRuntime {
             !input.graph.services[current.serviceId]
           )
             throw new InferenceAuthenticationError('conflict');
-          return [account.id, await this.#status(current)] as const;
+          return [account.id, await readAccountStatus(ctx, current)] as const;
         })
       )
     );
-  }
-
-  async #status(account: ProviderAccount): Promise<AccountStatusView> {
-    if (account.authentication.method === 'none') return { status: 'ready', revision: 0 };
-    const open = await this.options.credentials.read(account);
-    if (this.#uncertain.has(accountKey(account)))
-      return { status: 'uncertain', revision: open?.record.revision ?? 0 };
-    if (
-      open?.payload.status === 'ready' &&
-      open.payload.method === 'oauth' &&
-      open.payload.credential.preparation?.status === 'required'
-    ) {
-      return {
-        status: 'authenticated',
-        preparation: 'required',
-        revision: open.record.revision,
-      };
-    }
-    return {
-      status: this.#uncertain.has(accountKey(account))
-        ? 'uncertain'
-        : open?.payload.status ?? 'not-authorized',
-      revision: open?.record.revision ?? 0,
-      ...(open?.payload.status === 'uncertain' && open.payload.failure ? { failure: open.payload.failure } : {}),
-      ...(open?.payload.source ? { source: 'environment-expression' as const } : {}),
-      ...(open?.payload.status === 'ready' && open.payload.method === 'oauth' && open.payload.refresh
-        && open.payload.refresh.nextAttemptAt > (this.options.now?.() ?? Date.now()) ? { retryAt: open.payload.refresh.nextAttemptAt } : {}),
-    };
   }
 
   async putKey(
@@ -438,52 +298,7 @@ export class HostAccountRuntime {
       authContractVersion: string;
     }> & ApiKeyMaterial
   ): Promise<ProviderCredentialWrite> {
-    this.#assertOpen();
-    await this.#account(input.account);
-    if (
-      input.account.authentication.method !== 'api-key' ||
-      input.account.authentication.source
-    ) {
-      throw new InferenceAuthenticationError('not-authorized');
-    }
-    const current = await this.options.credentials.read(input.account);
-    if ((current?.record.revision ?? 0) !== input.expectedRevision)
-      throw new InferenceAuthenticationError('conflict');
-    const material = normalizeApiKeyMaterial(input);
-    const source = material.source;
-    if (source && input.account.ownerId !== this.options.hostOwnerId)
-      throw new InferenceAuthenticationError('not-authorized');
-    const exactTemplateRepair = source && current?.payload.status === 'ready' && current.payload.method === 'api-key'
-      && current.payload.key === source.expression;
-    const fingerprint = material.key === undefined ? undefined : credentialMaterialFingerprint(material.key);
-    if (
-      current?.payload.materialFingerprint &&
-      current.payload.materialFingerprint !== fingerprint && !source
-    ) {
-      throw new InferenceAuthenticationError('identity-change');
-    }
-    const record = await this.options.credentials.seal({
-      account: input.account,
-      revision: input.expectedRevision + 1,
-      authContractVersion: input.authContractVersion,
-      payload: {
-        status: 'ready',
-        method: 'api-key',
-        ...(source ? {
-          ...identity(current),
-          // Only an exact malformed migration value proves that this fingerprint is synthetic.
-          ...(exactTemplateRepair ? { materialFingerprint: undefined } : {}),
-          source,
-        } : { key: material.key!, materialFingerprint: fingerprint! }),
-      },
-    });
-    return {
-      accountId: input.account.id,
-      expectedRevision: input.expectedRevision,
-      expectedIncarnation: input.account.incarnation,
-      ...(current ? { expectedAuthContractVersion: current.record.authContractVersion } : {}),
-      record,
-    };
+    return prepareAccountKey(this.#context(), input);
   }
 
   async disconnect(
@@ -537,33 +352,7 @@ export class HostAccountRuntime {
       authContractVersion: string;
     }>
   ): Promise<ProviderCredentialWrite> {
-    this.#assertOpen();
-    await this.#account(input.account);
-    if (input.account.authentication.method !== 'oauth' || !input.clientSecret.trim())
-      throw new InferenceAuthenticationError('not-authorized');
-    const current = await this.options.credentials.read(input.account);
-    if (
-      (current?.record.revision ?? 0) !== input.expectedRevision ||
-      current?.payload.status === 'exchange-pending'
-    ) {
-      throw new InferenceAuthenticationError('conflict');
-    }
-    const record = await this.options.credentials.seal({
-      account: input.account,
-      revision: input.expectedRevision + 1,
-      authContractVersion: current?.record.authContractVersion ?? input.authContractVersion,
-      payload: {
-        ...(current?.payload ?? { status: 'not-authorized', method: 'oauth' }),
-        client: { clientSecret: input.clientSecret },
-      },
-    });
-    return {
-      accountId: input.account.id,
-      expectedRevision: input.expectedRevision,
-      expectedIncarnation: input.account.incarnation,
-      ...(current ? { expectedAuthContractVersion: current.record.authContractVersion } : {}),
-      record,
-    };
+    return prepareAccountClient(this.#context(), input);
   }
 
   async beginLogin(
@@ -585,7 +374,7 @@ export class HostAccountRuntime {
       return waitFor(existing.promise, input.signal);
     }
     const controller = new AbortController();
-    const promise = this.#startLogin({
+    const promise = startAccountLogin(this.#context(), {
       account: input.account,
       controller,
       signal: AbortSignal.any([controller.signal, this.#closed.signal]),
@@ -598,70 +387,6 @@ export class HostAccountRuntime {
     return waitFor(promise, input.signal);
   }
 
-  async #startLogin(
-    input: Readonly<{
-      account: ProviderAccount;
-      controller: AbortController;
-      signal: AbortSignal;
-    }>
-  ): Promise<LoginChallengeView> {
-    const { service } = await this.#account(input.account);
-    this.#renewSignal(input.account);
-    if (input.account.authentication.method !== 'oauth')
-      throw new InferenceAuthenticationError('not-authorized');
-    const lease = await this.options.drivers.acquire({
-      service,
-      signal: input.signal,
-    });
-    const oauth = lease.definition.authentication.oauth;
-    if (!oauth) {
-      await this.#release(() => lease.release());
-      throw new InferenceAuthenticationError('not-authorized');
-    }
-    const controller = input.controller;
-    const redirectUri = oauth.redirectUri;
-    try {
-      const current = await this.options.credentials.read(input.account);
-      const signal = AbortSignal.any([input.signal, controller.signal, this.#closed.signal]);
-      const challenge = await this.#withFetch(
-        { service, account: input.account, definition: lease.definition },
-        (fetch) =>
-          oauth.begin({
-            service,
-            redirectUri,
-            signal,
-            ...(current?.payload.client ? { client: current.payload.client } : {}),
-            fetch,
-          })
-      );
-      input.signal.throwIfAborted();
-      this.#assertOpen();
-      const id = randomUUID();
-      this.#logins.set(id, {
-        id,
-        account: input.account,
-        service,
-        expectedRevision: current?.record.revision ?? 0,
-        redirectUri,
-        challenge,
-        contractVersion: oauth.contractVersion,
-        controller,
-        definition: lease.definition,
-        release: () => lease.release(),
-        phase: 'ready',
-      });
-      return {
-        loginId: id,
-        authorizationUrl: challenge.authorizationUrl,
-        redirectUri,
-        state: challenge.state,
-      };
-    } catch (error) {
-      await this.#release(() => lease.release());
-      throw error;
-    }
-  }
-
   /** The pasted callback is parsed locally. It is never fetched or persisted. */
   async completeCallback(
     input: Readonly<{
@@ -672,37 +397,12 @@ export class HostAccountRuntime {
     }>
   ): Promise<void> {
     const login = this.#logins.get(input.loginId);
-    if (
-      !login ||
-      login.phase !== 'ready' ||
-      accountKey(login.account) !== accountKey(input.account)
-    )
-      throw new InferenceAuthenticationError('not-authorized');
-    let callback: URL, expected: URL;
-    try {
-      callback = new URL(input.callbackUrl);
-      expected = new URL(login.redirectUri);
-    } catch {
-      throw new InferenceAuthenticationError('not-authorized');
-    }
-    if (
-      callback.origin !== expected.origin ||
-      callback.pathname !== expected.pathname ||
-      callback.username ||
-      callback.password ||
-      callback.hash ||
-      callback.searchParams.getAll('code').length !== 1 ||
-      callback.searchParams.getAll('state').length !== 1 ||
-      !callback.searchParams.get('code') ||
-      callback.searchParams.get('state') !== login.challenge.state
-    ) {
-      throw new InferenceAuthenticationError('not-authorized');
-    }
+    const { code, state } = parseOAuthCallbackUrl(login, input.account, input.callbackUrl);
     await this.completeLogin({
       account: input.account,
       loginId: input.loginId,
-      code: callback.searchParams.get('code')!,
-      state: callback.searchParams.get('state')!,
+      code,
+      state,
       signal: input.signal,
     });
   }
@@ -716,133 +416,7 @@ export class HostAccountRuntime {
       signal: AbortSignal;
     }>
   ): Promise<void> {
-    if (input.account.ownerId !== this.options.hostOwnerId)
-      throw new InferenceAuthenticationError('not-authorized');
-    this.#assertOpen();
-    await this.#account(input.account);
-    const login = this.#logins.get(input.loginId);
-    if (
-      !login ||
-      login.phase !== 'ready' ||
-      accountKey(login.account) !== accountKey(input.account) ||
-      login.challenge.state !== input.state
-    ) {
-      throw new InferenceAuthenticationError('not-authorized');
-    }
-    login.phase = 'exchanging'; // One-time exchange, including when the result becomes unknown.
-    try {
-      const previous = await this.options.credentials.read(login.account);
-      if ((previous?.record.revision ?? 0) !== login.expectedRevision)
-        throw new InferenceAuthenticationError('conflict');
-      const pending = await this.#publish({
-        account: login.account,
-        previous,
-        authContractVersion: login.contractVersion,
-        payload: {
-          status: 'exchange-pending',
-          method: 'oauth',
-          operationId: login.id,
-          ...identity(previous),
-          ...(oauthRecovery(previous?.payload) ? { recovery: oauthRecovery(previous?.payload) } : {}),
-        },
-      });
-      const signal = AbortSignal.any([
-        input.signal,
-        login.controller.signal,
-        this.#closed.signal,
-        this.#signal(login.account),
-      ]);
-      let invoked = false;
-      try {
-        signal.throwIfAborted();
-        const credential = await this.#withFetch(
-          {
-            service: login.service,
-            account: login.account,
-            definition: login.definition,
-          },
-          (fetch) => {
-            signal.throwIfAborted();
-            invoked = true;
-            return login.definition.authentication.oauth!.complete({
-              service: login.service,
-              redirectUri: login.redirectUri,
-              code: input.code,
-              state: input.state,
-              challenge: login.challenge,
-              signal,
-              ...(previous?.payload.client ? { client: previous.payload.client } : {}),
-              fetch,
-            });
-          }
-        );
-        signal.throwIfAborted();
-        const previousSubject = identity(previous).subject;
-        if (previousSubject && credential.subject && previousSubject !== credential.subject) {
-          throw new InferenceAuthenticationError('identity-change');
-        }
-        if (
-          identity(previous).identityEstablished &&
-          (!previousSubject ||
-            (!credential.subject &&
-              !(
-                credential.preparation?.status === 'required' &&
-                login.definition.authentication.oauth?.prepare
-              )))
-        ) {
-          throw new InferenceAuthenticationError('identity-change');
-        }
-        const saved = await this.#publish({
-          account: login.account,
-          previous: pending,
-          authContractVersion: login.contractVersion,
-          payload: {
-            status: 'ready',
-            method: 'oauth',
-            credential,
-            receivedAt: this.options.now?.() ?? Date.now(),
-            ...identity(previous),
-            identityEstablished: true,
-            ...(credential.subject ? { subject: credential.subject } : {}),
-          },
-        });
-        this.#uncertain.delete(accountKey(login.account));
-        this.#renewSignal(login.account);
-        if (
-          credential.preparation?.status === 'required' &&
-          login.definition.authentication.oauth?.prepare
-        ) {
-          try {
-            await this.#prepare({
-              account: login.account,
-              service: login.service,
-              current: saved,
-              definition: login.definition,
-              signal,
-            });
-          } catch {
-            this.#reportCleanup('Account authenticated; read-only preparation is incomplete');
-          }
-        }
-      } catch (error) {
-        const failure = exchangeFailure({ error, signal, invoked });
-        await this.#finishFailedExchange({
-          account: login.account,
-          pending,
-          contract: login.contractVersion,
-          error: failure,
-          previous,
-        });
-        throw failure instanceof InferenceAuthenticationError
-          ? failure
-          : new InferenceAuthenticationError(publicFailure(failure));
-      }
-    } finally {
-      this.#logins.delete(input.loginId);
-      if (this.#loginStarts.get(accountKey(login.account))?.controller === login.controller)
-        this.#loginStarts.delete(accountKey(login.account));
-      await this.#release(login.release);
-    }
+    await completeAccountLogin(this.#context(), input);
   }
 
   async cancelLogin(input: Readonly<{ account: ProviderAccount; loginId: string }>): Promise<void> {
@@ -880,7 +454,7 @@ export class HostAccountRuntime {
       signal: input.signal,
     });
     try {
-      await this.#prepare({
+      await prepareAccountOAuth(this.#context(), {
         account: input.account,
         service,
         current,
@@ -890,59 +464,6 @@ export class HostAccountRuntime {
     } finally {
       await this.#release(() => lease.release());
     }
-  }
-
-  /** Preparation is read-only upstream. Its failure keeps the already committed token, never repeats code exchange. */
-  async #prepare(
-    input: Readonly<{
-      account: ProviderAccount;
-      service: ProviderService;
-      current: OpenCredential;
-      definition: ProviderDefinition<unknown, unknown>;
-      signal: AbortSignal;
-    }>
-  ): Promise<void> {
-    const { account, service, current, definition } = input;
-    ready(current);
-    const oauth = definition.authentication.oauth;
-    if (current.payload.method !== 'oauth' || !oauth?.prepare)
-      throw new InferenceAuthenticationError('not-prepared');
-    if (current.record.authContractVersion !== oauth.contractVersion)
-      throw new InferenceAuthenticationError('conflict');
-    const signal = AbortSignal.any([input.signal, this.#signal(account), this.#closed.signal]);
-    const bundle = current.payload.credential;
-    const credential = await this.#withFetch(
-      { service, account, definition, purpose: 'preparation' },
-      (fetch) =>
-        oauth.prepare!({
-          service,
-          credential: bundle,
-          signal,
-          ...(current.payload.client ? { client: current.payload.client } : {}),
-          fetch,
-        })
-    );
-    signal.throwIfAborted();
-    if (
-      credential.accessToken !== current.payload.credential.accessToken ||
-      credential.refreshToken !== current.payload.credential.refreshToken ||
-      credential.expiresAt !== current.payload.credential.expiresAt
-    )
-      throw new InferenceAuthenticationError('integrity');
-    const subject = identity(current).subject;
-    if (subject && credential.subject && subject !== credential.subject)
-      throw new InferenceAuthenticationError('identity-change');
-    await this.#publish({
-      account,
-      previous: current,
-      authContractVersion: current.record.authContractVersion,
-      payload: {
-        ...current.payload,
-        credential,
-        ...identity(current),
-        ...(credential.subject ? { subject: credential.subject } : {}),
-      },
-    });
   }
 
   async close(): Promise<void> {
@@ -1017,49 +538,6 @@ export class HostAccountRuntime {
     return { service };
   }
 
-  async #environmentKey(
-    account: ProviderAccount,
-    contract: string,
-    current: OpenCredential | undefined
-  ): Promise<OpenCredential | undefined> {
-    if (account.authentication.method !== 'api-key') return current;
-    const source = account.authentication.source ?? current?.payload.source;
-    if (!source) return current;
-    if (account.ownerId !== this.options.hostOwnerId)
-      throw new InferenceAuthenticationError('not-authorized');
-    if (typeof source === 'string' && !/^env:\/\/[A-Za-z_][A-Za-z0-9_]*$/u.test(source))
-      throw new InferenceAuthenticationError('integrity');
-    if (current?.payload.status !== 'ready' && current !== undefined) return current;
-    const key = await this.options.resolveSource(source);
-    if (!key?.trim()) throw new InferenceAuthenticationError('not-authorized');
-    const fingerprint = credentialMaterialFingerprint(key);
-    if (current?.payload.status === 'ready' && current.payload.method === 'api-key') {
-      if (current.payload.materialFingerprint === fingerprint && current.payload.key !== undefined) return current;
-      if (current.payload.materialFingerprint !== undefined && current.payload.materialFingerprint !== fingerprint) {
-        await this.#publish({
-          account,
-          previous: current,
-          authContractVersion: contract,
-          payload: { status: 'reauthorize', method: 'api-key', ...identity(current) },
-        });
-        throw new InferenceAuthenticationError('identity-change');
-      }
-    }
-    return this.#publish({
-      account,
-      previous: current,
-      authContractVersion: contract,
-      payload: {
-        status: 'ready',
-        method: 'api-key',
-        key,
-        materialFingerprint: fingerprint,
-        ...(typeof source === 'string' ? {} : { source }),
-        ...(current?.payload.subject ? { subject: current.payload.subject } : {}),
-      },
-    });
-  }
-
   #refresh(
     input: Readonly<{
       account: ProviderAccount;
@@ -1072,7 +550,7 @@ export class HostAccountRuntime {
     const key = accountKey(account);
     const existing = this.#flights.get(key);
     if (existing) return existing.promise;
-    const promise = this.#runRefresh({
+    const promise = runAccountRefresh(this.#context(), {
       account,
       service,
       current,
@@ -1087,127 +565,7 @@ export class HostAccountRuntime {
       .catch(() => {});
     return promise;
   }
-  async #runRefresh(
-    input: Readonly<{
-      account: ProviderAccount;
-      service: ProviderService;
-      current: OpenCredential;
-      lease: ProviderDriverLease;
-    }>
-  ): Promise<OpenCredential> {
-    const { account, service, current, lease } = input;
-    // This retained exact lease belongs to the shared refresh, independently of its first waiter.
-    try {
-      ready(current);
-      if (current.payload.method !== 'oauth' || !current.payload.credential.refreshToken)
-        throw new InferenceAuthenticationError('reauthorize');
-      const signal = AbortSignal.any([this.#signal(account), this.#closed.signal]);
-      const oauth = lease.definition.authentication.oauth;
-      if (!oauth || oauth.contractVersion !== current.record.authContractVersion)
-        throw new InferenceAuthenticationError('conflict');
-      const pending = await this.#publish({
-        account,
-        previous: current,
-        authContractVersion: oauth.contractVersion,
-        payload: {
-          status: 'exchange-pending',
-          method: 'oauth',
-          operationId: randomUUID(),
-          ...identity(current),
-          recovery: oauthRecovery(current.payload),
-        },
-      });
-      let invoked = false;
-      try {
-        signal.throwIfAborted();
-        const bundle = current.payload.credential;
-        const credential = await this.#withFetch(
-          { service, account, definition: lease.definition },
-          (fetch) => {
-            signal.throwIfAborted();
-            invoked = true;
-            return oauth.refresh({
-              service,
-              credential: bundle,
-              signal,
-              ...(current.payload.client ? { client: current.payload.client } : {}),
-              fetch,
-            });
-          }
-        );
-        signal.throwIfAborted();
-        const previousSubject = identity(current).subject;
-        if (previousSubject && credential.subject && previousSubject !== credential.subject)
-          throw new InferenceAuthenticationError('identity-change');
-        return await this.#publish({
-          account,
-          previous: pending,
-          authContractVersion: oauth.contractVersion,
-          payload: {
-            status: 'ready',
-            method: 'oauth',
-            credential,
-            receivedAt: this.options.now?.() ?? Date.now(),
-            ...identity(current),
-            ...(credential.subject ? { subject: credential.subject } : {}),
-          },
-        });
-      } catch (error) {
-        const failure = exchangeFailure({ error, signal, invoked });
-        await this.#finishFailedExchange({
-          account,
-          pending,
-          contract: oauth.contractVersion,
-          error: failure,
-          previous: current,
-        });
-        throw failure instanceof InferenceAuthenticationError
-          ? failure
-          : new InferenceAuthenticationError(publicFailure(failure));
-      }
-    } finally {
-      await this.#release(() => lease.release());
-    }
-  }
 
-  async #finishFailedExchange(
-    input: Readonly<{
-      account: ProviderAccount;
-      pending: OpenCredential;
-      contract: string;
-      error: unknown;
-      previous: OpenCredential | undefined;
-    }>
-  ): Promise<void> {
-    const { account, pending, contract, error, previous } = input;
-    const failure = authenticationFailure(error);
-    const cooldown = previous?.payload.status === 'ready' && previous.payload.method === 'oauth'
-      ? oauthRefreshCooldown({ error, previous: previous.payload, now: this.options.now?.() ?? Date.now() }) : undefined;
-    const recovery = oauthRecovery(previous?.payload);
-    const payload: CredentialPayload =
-      failure === 'rejected' || failure === 'not-submitted'
-        ? previous ? { ...previous.payload, ...(cooldown ? { refresh: cooldown } : {}) } : { status: 'reauthorize', method: 'oauth' }
-        : {
-            status: failure === 'credential-invalid' ? 'reauthorize' : 'uncertain',
-            method: 'oauth',
-            ...identity(previous),
-            ...(failure === 'credential-invalid' ? {} : {
-              ...(recovery ? { recovery } : {}),
-              failure: oauthExchangeFailure(error),
-            }),
-          };
-    try {
-      await this.#publish({
-        account,
-        previous: pending,
-        authContractVersion: contract,
-        payload,
-      });
-    } catch (writeError) {
-      if (!(writeError instanceof InferenceAuthenticationError && writeError.code === 'conflict'))
-        this.#uncertain.add(accountKey(account));
-    }
-  }
   async #publish(
     input: Readonly<{
       account: ProviderAccount;
@@ -1216,40 +574,9 @@ export class HostAccountRuntime {
       payload: CredentialPayload;
     }>
   ): Promise<OpenCredential> {
-    const record = await this.options.credentials.seal({
-      account: input.account,
-      revision: (input.previous?.record.revision ?? 0) + 1,
-      authContractVersion: input.authContractVersion,
-      payload: input.payload,
-    });
-    const result = await this.options.repository.commitCredential({
-      rootId: input.account.rootId,
-      write: {
-        accountId: input.account.id,
-        expectedRevision: input.previous?.record.revision ?? 0,
-        expectedIncarnation: input.account.incarnation,
-        ...(input.previous
-          ? {
-              expectedAuthContractVersion: input.previous.record.authContractVersion,
-            }
-          : {}),
-        record,
-      },
-    });
-    if (result.status === 'committed') return { record, payload: input.payload };
-    if (result.status === 'conflict') throw new InferenceAuthenticationError('conflict');
-    if (result.status === 'commit-unknown') {
-      try {
-        const observed = await this.options.credentials.read(input.account);
-        if (observed && JSON.stringify(observed.record) === JSON.stringify(record)) return observed;
-      } catch {
-        /* An unavailable lookup cannot prove that an external exchange was not performed. */
-      }
-      this.#uncertain.add(accountKey(input.account));
-      throw new InferenceAuthenticationError('outcome-unknown');
-    }
-    throw new InferenceAuthenticationError('unavailable');
+    return publishAccountCredential(this.#context(), input);
   }
+
   #signal(account: ProviderAccount): AbortSignal {
     const key = accountKey(account);
     let controller = this.#accounts.get(key);
@@ -1259,13 +586,16 @@ export class HostAccountRuntime {
     }
     return controller.signal;
   }
+
   #renewSignal(account: ProviderAccount): void {
     if (this.#accounts.get(accountKey(account))?.signal.aborted)
       this.#accounts.set(accountKey(account), new AbortController());
   }
+
   #assertOpen(): void {
     if (this.#closed.signal.aborted) throw new InferenceAuthenticationError('operation-closed');
   }
+
   #reportCleanup(message: string): void {
     try {
       if (this.options.cleanupFailed) this.options.cleanupFailed();
@@ -1274,6 +604,7 @@ export class HostAccountRuntime {
       /* Reporting cannot change an operation result. */
     }
   }
+
   async #release(release: () => void | Promise<void>): Promise<void> {
     try {
       await release();
