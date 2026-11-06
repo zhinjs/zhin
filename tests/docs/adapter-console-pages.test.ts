@@ -69,7 +69,7 @@ describe('adapter Console pages', () => {
     for (const directory of adapterDirectories()) {
       if (directory === 'sandbox') continue;
       const plugin = fs.readFileSync(path.join(adaptersRoot, directory, 'plugin.ts'), 'utf8');
-      expect(plugin, directory).toContain('pluginConsoleRpcToken');
+      expect(plugin, directory).toMatch(/\b(?:pluginConsoleRpcToken|consoleRpc)\b/u);
     }
   });
 });
