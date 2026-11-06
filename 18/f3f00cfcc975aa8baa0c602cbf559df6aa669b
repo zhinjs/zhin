@@ -1,0 +1,16 @@
+.changeset/plugin-ecosystem-core-decomposition-and-dx.md
+  h_6f5e45c41d0910 15
+packages/toolkit/testing/src/test-module-runtime.ts
+  h_6f5e45c41d0910 27-42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "18f3f00cfcc975aa8baa0c602cbf559df6aa669b",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
