@@ -1,1 +1,2 @@
-export * from '@zhin.js/agent/runtime';
+export { hostModelOwnerId } from '@zhin.js/plugin-runtime';
+
