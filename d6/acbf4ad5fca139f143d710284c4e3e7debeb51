@@ -1,0 +1,186 @@
+plugins/features/process-monitor/README.md
+  h_6f5e45c41d0910 8-9
+plugins/features/process-monitor/package.json
+  h_6f5e45c41d0910 20,50-52,94-97,104,110-112
+plugins/features/process-monitor/pages/index/index.ts
+  h_6f5e45c41d0910 1-68
+plugins/features/process-monitor/plugin.ts
+  h_6f5e45c41d0910 1-2,14,24
+plugins/features/process-monitor/skills/process-monitor/tools/process-status/index.ts
+  h_6f5e45c41d0910 10
+plugins/features/process-monitor/src/console.ts
+  h_6f5e45c41d0910 1-43
+plugins/features/process-monitor/src/index.ts
+  h_6f5e45c41d0910 12,17-21
+plugins/features/process-monitor/src/monitor.ts
+  h_6f5e45c41d0910 82-96,151-169
+plugins/features/process-monitor/tests/process-monitor-runtime.test.ts
+  h_6f5e45c41d0910 10,13,16,150-195
+plugins/features/process-monitor/tsconfig.json
+  h_6f5e45c41d0910 9
+plugins/games/hub/README.md
+  h_6f5e45c41d0910 3-15
+plugins/games/hub/package.json
+  h_6f5e45c41d0910 20-21,36-41,46-47,82-93,100-104,109-120
+plugins/games/hub/pages/index/index.ts
+  h_6f5e45c41d0910 1-59
+plugins/games/hub/plugin.ts
+  h_6f5e45c41d0910 1-2,13-15
+plugins/games/hub/skills/game-hub/SKILL.md
+  h_6f5e45c41d0910 1-20
+plugins/games/hub/skills/game-hub/tools/game_catalog/index.ts
+  h_6f5e45c41d0910 1-35
+plugins/games/hub/src/catalog.ts
+  h_6f5e45c41d0910 1-95
+plugins/games/hub/src/console.ts
+  h_6f5e45c41d0910 1-57
+plugins/games/hub/src/index.ts
+  h_6f5e45c41d0910 1-14
+plugins/games/hub/tests/game-hub-runtime.test.ts
+  h_6f5e45c41d0910 3,17-19,110-190
+plugins/games/hub/tsconfig.json
+  h_6f5e45c41d0910 10
+plugins/utils/calendar/README.md
+  h_6f5e45c41d0910 196-199
+plugins/utils/calendar/package.json
+  h_6f5e45c41d0910 22,53-54,57,70-72,121-124
+plugins/utils/calendar/pages/index/index.ts
+  h_6f5e45c41d0910 1-67
+plugins/utils/calendar/plugin.ts
+  h_6f5e45c41d0910 6,13,88,92-94
+plugins/utils/calendar/src/console.ts
+  h_6f5e45c41d0910 1-56
+plugins/utils/calendar/src/index.ts
+  h_6f5e45c41d0910 31
+plugins/utils/calendar/tests/console.test.ts
+  h_6f5e45c41d0910 1-106
+plugins/utils/calendar/tsconfig.check.json
+  h_6f5e45c41d0910 3-11
+plugins/utils/content-moderation/README.md
+  h_6f5e45c41d0910 210-218
+plugins/utils/content-moderation/package.json
+  h_6f5e45c41d0910 20-21,51-52,54-57,62-63,94-105,112-116,121-132
+plugins/utils/content-moderation/pages/index/index.ts
+  h_6f5e45c41d0910 1-91
+plugins/utils/content-moderation/plugin.ts
+  h_6f5e45c41d0910 1-2,18
+plugins/utils/content-moderation/skills/content-moderation/SKILL.md
+  h_6f5e45c41d0910 1-27
+plugins/utils/content-moderation/skills/content-moderation/tools/moderation_check/index.ts
+  h_6f5e45c41d0910 1-46
+plugins/utils/content-moderation/skills/content-moderation/tools/moderation_status/index.ts
+  h_6f5e45c41d0910 1-29
+plugins/utils/content-moderation/src/console.ts
+  h_6f5e45c41d0910 1-182
+plugins/utils/content-moderation/src/engine.ts
+  h_6f5e45c41d0910 16,20,64-104
+plugins/utils/content-moderation/src/group-review-queue.ts
+  h_6f5e45c41d0910 39-46
+plugins/utils/content-moderation/src/index.ts
+  h_6f5e45c41d0910 49-58
+plugins/utils/content-moderation/tests/skills-console-page.test.ts
+  h_6f5e45c41d0910 1-129
+plugins/utils/content-moderation/tsconfig.json
+  h_6f5e45c41d0910 9
+plugins/utils/group-suite/README.md
+  h_6f5e45c41d0910 76
+plugins/utils/group-suite/package.json
+  h_6f5e45c41d0910 23,54,56,59,72,85-87,147-150
+plugins/utils/group-suite/pages/index/index.ts
+  h_6f5e45c41d0910 1-63
+plugins/utils/group-suite/plugin.ts
+  h_6f5e45c41d0910 1,3,37
+plugins/utils/group-suite/src/console.ts
+  h_6f5e45c41d0910 1-178
+plugins/utils/group-suite/src/index.ts
+  h_6f5e45c41d0910 41-50
+plugins/utils/group-suite/tests/client-module-shim.mjs
+  h_6f5e45c41d0910 1-21
+plugins/utils/group-suite/tests/console-and-page.test.ts
+  h_6f5e45c41d0910 1-145
+plugins/utils/group-suite/tests/practical-runtime.test.ts
+  h_6f5e45c41d0910 7,11-22
+plugins/utils/group-suite/tests/welcome-native.mjs
+  h_6f5e45c41d0910 7
+plugins/utils/group-suite/tsconfig.json
+  h_6f5e45c41d0910 9
+plugins/utils/ledger/README.md
+  h_6f5e45c41d0910 76-93
+plugins/utils/ledger/package.json
+  h_6f5e45c41d0910 20,23,48-54,58-62,70-72,80-81,117-128
+plugins/utils/ledger/pages/index/index.ts
+  h_6f5e45c41d0910 1-65
+plugins/utils/ledger/plugin.ts
+  h_6f5e45c41d0910 1,3,19
+plugins/utils/ledger/skills/ledger/SKILL.md
+  h_6f5e45c41d0910 1-41
+plugins/utils/ledger/skills/ledger/tools/ledger_add/index.ts
+  h_6f5e45c41d0910 1-26
+plugins/utils/ledger/skills/ledger/tools/ledger_delete/index.ts
+  h_6f5e45c41d0910 1-23
+plugins/utils/ledger/skills/ledger/tools/ledger_list/index.ts
+  h_6f5e45c41d0910 1-24
+plugins/utils/ledger/skills/ledger/tools/ledger_summary/index.ts
+  h_6f5e45c41d0910 1-28
+plugins/utils/ledger/src/console.ts
+  h_6f5e45c41d0910 1-47
+plugins/utils/ledger/src/index.ts
+  h_6f5e45c41d0910 2,29-35,37
+plugins/utils/ledger/src/service.ts
+  h_6f5e45c41d0910 22-35,234-248
+plugins/utils/ledger/src/tool-caller.ts
+  h_6f5e45c41d0910 1-101
+plugins/utils/ledger/tests/tools-and-console.test.ts
+  h_6f5e45c41d0910 1-231
+plugins/utils/ledger/tsconfig.check.json
+  h_6f5e45c41d0910 11
+plugins/utils/reminder/README.md
+  h_6f5e45c41d0910 96-97,99,101,104-107
+plugins/utils/reminder/package.json
+  h_6f5e45c41d0910 19,35-36,38,45,47-48,110-113
+plugins/utils/reminder/pages/index/index.ts
+  h_6f5e45c41d0910 1-50
+plugins/utils/reminder/plugin.ts
+  h_6f5e45c41d0910 2,6,25
+plugins/utils/reminder/src/console.ts
+  h_6f5e45c41d0910 1-31
+plugins/utils/reminder/src/index.ts
+  h_6f5e45c41d0910 2,4
+plugins/utils/reminder/src/service.ts
+  h_6f5e45c41d0910 29-41,167-185
+plugins/utils/reminder/tests/console-and-page.test.ts
+  h_6f5e45c41d0910 1-122
+plugins/utils/reminder/tsconfig.check.json
+  h_6f5e45c41d0910 11
+plugins/utils/rss/README.md
+  h_6f5e45c41d0910 40-48
+plugins/utils/rss/package.json
+  h_6f5e45c41d0910 20,53-54,56,69-71,120-123
+plugins/utils/rss/pages/index/index.ts
+  h_6f5e45c41d0910 1-92
+plugins/utils/rss/plugin.ts
+  h_6f5e45c41d0910 9,14,90
+plugins/utils/rss/src/console.ts
+  h_6f5e45c41d0910 1-90
+plugins/utils/rss/src/db-store.ts
+  h_6f5e45c41d0910 23-51
+plugins/utils/rss/src/feed.ts
+  h_6f5e45c41d0910 21-22,33-38
+plugins/utils/rss/src/index.ts
+  h_6f5e45c41d0910 9,12,14
+plugins/utils/rss/tests/console.test.ts
+  h_6f5e45c41d0910 1-127
+pnpm-lock.yaml
+  h_6f5e45c41d0910 3595-3597,3601-3606,3729-3731,3735-3737,3741-3749,3760-3762,4050-4055,4062-4064,4115-4120,4130-4138,4149-4151,4183-4185,4192-4194,4207-4209,4235-4237,4241-4252,4269-4271,4418-4420,4424-4426,4430-4432,4483-4485,4489-4491,4495-4497
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d6acbf4ad5fca139f143d710284c4e3e7debeb51",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
