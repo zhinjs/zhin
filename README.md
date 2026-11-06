@@ -66,7 +66,7 @@ Zhin.js is a TypeScript framework for **bots that live in chat apps** — commun
 - **A feature is a file.** Drop a file in `commands/`, `middlewares/`, `components/`, `schedules/`, or `tools/` and it registers automatically — zero wiring boilerplate.
 - **Generation-isolated hot reload.** Save a file and Zhin atomically swaps in a new Generation. In-flight messages finish on the previous version; if new code throws on startup, the previous version keeps serving without downtime.
 - **Small by default (<10MB), AI when you want it.** The IM core needs no LLM dependencies. Add AI agents, tools, 3-layer Markdown memory, and MCP anytime with `npx zhin setup --ai`.
-- **Browser Console included.** Manage accounts, edit schema-driven forms, replay AI decisions, and trigger emergency stops from [console.zhin.dev](https://console.zhin.dev).
+- **Browser Console & Server-Driven Blueprints included.** Manage accounts, edit schema-driven forms, replay AI decisions, and trigger emergency stops from [console.zhin.dev](https://console.zhin.dev). Plugins author pure TypeScript `definePageBlueprint` pages (`pages/<name>/index.ts` — zero `.tsx`, zero `esbuild` bundling) that render in Web Console and project into IM cards (`projectBlueprintToImCard`) or CLI TUI panels (`projectBlueprintToCliPanel`).
 
 > Zhin is **not** an in-editor coding agent (like Cursor or Claude Code). Its AI stack is purpose-built for chat platforms, group permissions, and multi-user conversations.
 

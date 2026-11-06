@@ -93,32 +93,32 @@ Core 从实际入站实例捕获单次操作 Session，提供 Adapter、Endpoint
 
 | 层 | 包 | 职责 |
 |----|----|------|
-| 基础层 | `basic/logger` `schema` `schedule` `database` | 日志、配置校验、定时、数据库，零/近零依赖 |
-| 运行时底座 | `packages/im/plugin-runtime`（用户从 `zhin.js` 导入） | generation 事务、快照租约、handoff、dispose（见 [generation 与生命周期](./generation-lifecycle.md)） |
-| IM 契约 | `@zhin.js/im-contract` | Endpoint、会话、消息段、投递结果与结构化用户交互（`/interaction`）；零 Core、零平台 SDK 依赖 |
+| 基础层 | `basic/logger` `schema` `schedule` `database`（亦由 `@zhin.js/kernel` 统一再导出） | 日志、配置校验、定时、数据库，零/近零依赖 |
+| 运行时底座与 IM 契约 | `@zhin.js/plugin-runtime`（含 `/im-contract` 与 `/interaction`，用户从 `zhin.js` 导入） | generation 事务、快照租约、handoff、显式能力图（`definePluginCapabilityGraph`），以及 Endpoint、会话、消息段与结构化用户交互契约 |
 | Feature 机制 | `@zhin.js/feature-kit` | 声明 Feature provider、按约定发现能力、投影成运行时索引 |
-| 内核 | `@zhin.js/kernel` | 插件系统与错误体系，无 IM 概念 |
+| 内核 | `@zhin.js/kernel` | 插件系统、错误体系与基础机制重导出，无 IM 概念 |
 | Feature 层 | `@zhin.js/adapter` `command` `component` `middleware` … | 一类能力的契约（如 `defineAdapter`）+ 投影索引（如 `AdapterIndex`） |
-| AI 引擎 | `@zhin.js/ai` | Provider、agentLoop、会话、记忆，无 IM 概念 |
+| AI 引擎 | `@zhin.js/ai`（含 provider-auth 与 model-registry） | Provider、认证、模型注册表、agentLoop、会话、记忆，无 IM 概念 |
 | Agent Harness | `@zhin.js/harness` | 多 Agent 协作微内核：Actor 串行信箱（Mailbox）、权限收窄（Authority）、守恒预算账本（BudgetLedger）、确定性准入（GuardKernel）、共享黑板（Blackboard）与唯一事件账本（`engagement_events` Journal） |
-| IM 层 | `@zhin.js/core` | Plugin、消息链路、命令分发与多 Bot 协作场所（Venue）（见 [消息流](./message-flow.md)） |
-| Agent | `@zhin.js/agent` | 多模型编排、协作工具（`ask` / `delegate` / `tell` / `follow_up` / `board_read` / `board_write` / `escalate`）、HostMailbox / TimerScheduler、工具安全策略、MCP client |
+| IM 层 | `@zhin.js/core`（含 handler、actor 与 `@zhin.js/core/runtime` IM Host 安装器） | Plugin、消息入站脊柱（`inbound-spine`）、出站链路、命令分发、多 Bot 协作场所（Venue）及 Database/Outbound/Inbox Host 实现 |
+| Agent | `@zhin.js/agent`（含 `@zhin.js/agent/runtime` Agent/Inference/Workroom Host 安装器） | 统一信箱入站脊柱（`unified-mailbox-spine`）、多模型编排、协作工具、工具安全策略、MCP client |
+| Console | `@zhin.js/console-protocol`（含 contract / review-kit）、`@zhin.js/pagemanager`、`@zhin.js/client` | Server-Driven Blueprints（`definePageBlueprint`）、多端投影（Web / IM Card / CLI TUI）、Console 外壳渲染（`renderConsoleShell`）与浏览器 SDK |
 | 门面 | `zhin.js` | 再导出 core 创作面；`zhin.js/agent`、`zhin.js/ai` 子路径按需暴露 |
-| 运行时 | `@zhin.js/runtime` | `RootRuntime`：扫描项目图、组合配置、执行 generation 事务、HMR |
-| 装配 | `@zhin.js/cli` | composition root，`zhin runtime start` 把一切装起来 |
+| 运行时 | `@zhin.js/runtime`（含 `@zhin.js/runtime/host` HTTP/Protocol/Speech/HTML-Renderer Host 安装器） | `RootRuntime`：扫描项目图、组合配置、执行 generation 事务、HMR 及通用 Host 生命周期 |
+| 装配 | `@zhin.js/cli` | 极薄 composition root，`zhin runtime start` 把各域 Host 装配成进程 |
 
 图展示主要依赖，完整依赖仍以各包的 `package.json` 为准。允许的分层边界由
 `scripts/check-architecture-layers.mjs` 执行；新增依赖时同时核对文档与门禁，不能只修改其中一处。
 
 ## Composition root：`@zhin.js/cli`
 
-框架本身不"启动"任何东西——各层只提供机制。把机制组装成一个可运行进程的代码集中在 `@zhin.js/cli`，这是全仓库唯一允许跨层导入所有包的地方（分层规则的唯一例外）。
+框架本身不"启动"任何东西——各层只提供机制。把机制组装成一个可运行进程的入口集中在 `@zhin.js/cli`（`basic/cli/src/commands/runtime.ts` 与 `basic/cli/src/plugin-runtime/`），这是全仓库唯一允许跨层组合所有包的 composition root。具体领域 Host 实现已按职责下沉到所属领域包（`@zhin.js/core/runtime`、`@zhin.js/agent/runtime`、`@zhin.js/runtime/host` 与 `@zhin.js/pagemanager`），CLI 不直接持有领域状态机。
 
-`zhin runtime start`（定义在 `basic/cli/src/commands/runtime.ts`，装配逻辑在 `basic/cli/src/plugin-runtime/`）做的事：
+`zhin runtime start` 做的事：
 
 1. 用 `createConfigDocument`（`@zhin.js/runtime`）把唯一的 YAML/JSON Root 配置包装成带事务的 `ConfigDocumentPort`；
 2. 创建 `RootRuntime`（`@zhin.js/runtime`），注入模块加载器（开发模式为 `NativeDevelopmentModuleRuntime`）、配置端口和 Root 资源安装器；
-3. 通过 `installResources` 安装 Host 级资源：HTTP Host、数据库、Agent Host（含 AI 兜底处理器）、Console API 等；
+3. 通过 `installResources` 组装各域 Host 级资源：HTTP/Protocol/Speech/HTML-Renderer Host（`@zhin.js/runtime/host`）、Database/Outbound/Inbox/IM Host（`@zhin.js/core/runtime`）、Agent/Inference/Workroom Host（`@zhin.js/agent/runtime`）、Console 外壳与 Blueprint 路由（`@zhin.js/pagemanager`）；
 4. 启动后挂上 `HmrCoordinator`，文件变更触发 generation 重载或进程重启。
 
 用户项目的入口因此可以极小。`examples/minimal-bot/package.json`：

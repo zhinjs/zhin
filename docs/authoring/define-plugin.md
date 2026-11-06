@@ -270,12 +270,28 @@ async setup(context) {
 | `addTool` / `addSkill` / `addAgent` / `addMcp` | 注册 AI 相关能力（需安装 AI 能力） |
 | `addFeature(feature, name, definition)` | 通用注册入口，上面的快捷方法都是它的类型化版本 |
 
-### metadata 与 requires
+### metadata、requires 与 capabilities（显式能力图）
 
 | 字段 | 作用 |
 | --- | --- |
 | `metadata.displayName` / `icon` / `order` | Console 插件卡片的名称、图标、排序，不影响运行 |
 | `requires` | 必须存在的资源 token 列表，缺失时拒绝启动 |
+| `capabilities` | 使用 `definePluginCapabilityGraph({ ... })` 显式声明本插件的能力拓扑（`commands`、`tools`、`skills`、`agents`、`hooks`、`pages`、`middlewares`、`components`、`handlers`、`schedules`、`mcps`、`requires`、`provides`），供静态治理与 Console 可观测使用 |
+
+```ts
+// plugin.ts
+import { definePlugin, definePluginCapabilityGraph } from 'zhin.js';
+
+export default definePlugin({
+  name: 'my-plugin',
+  metadata: { displayName: '我的插件', icon: 'Blocks' },
+  capabilities: definePluginCapabilityGraph({
+    commands: ['hello'],
+    pages: ['index'],
+    tools: ['weather'],
+  }),
+});
+```
 
 ### 框架提供的资源（Host token）
 

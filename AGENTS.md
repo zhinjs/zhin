@@ -53,14 +53,15 @@ plugin-runtime + feature-kit ─────────────→ runtime 
 
 | 层 | 包 | 一句话 |
 |----|-----|--------|
-| 基础契约 | `@zhin.js/plugin-runtime` `im-contract` | generation、身份、消息与交互语义；零/近零依赖 |
+| 基础契约 | `@zhin.js/plugin-runtime`（含 `im-contract` 与 `interaction`） | generation、显式能力图（`definePluginCapabilityGraph`）、身份、消息与交互语义；零/近零依赖 |
 | Feature 机制 | `@zhin.js/feature-kit` 与各 Feature 包 | 能力声明、发现和运行时投影 |
 | 基础服务 | `basic/logger` `schema` `schedule` `database`、`@zhin.js/kernel` | 日志、校验、存储、调度与通用机制 |
-| AI 引擎 | `@zhin.js/ai` | Provider、agentLoop、会话、记忆；无 IM 概念 |
-| IM 组装 | `@zhin.js/core` | 组合 Adapter、Command、Component、Middleware、多 Bot 同场 Venue 与消息链路 |
+| AI 引擎 | `@zhin.js/ai`（含 `provider-auth` 与 `model-registry`） | Provider、认证、模型注册表、agentLoop、会话、记忆；无 IM 概念 |
+| IM 组装 | `@zhin.js/core`（含 `handler`、`actor` 与 `@zhin.js/core/runtime`） | 组合 Adapter、Command、Component、Middleware、多 Bot 同场 Venue、入站脊柱（`inbound-spine`）与 Database/Outbound/Inbox Host |
 | Agent Harness | `@zhin.js/harness` | Actor 邮局（Mail / Mailbox / Engagement）、权限单调衰减、预算守恒、GuardKernel 与 Engagement Journal（ADR 0048） |
-| Agent | `@zhin.js/agent` | ZhinAgent、多模型编排、安全沙箱、MCP |
-| 门面与运行时 | `zhin.js`、`@zhin.js/runtime`、`@zhin.js/cli` | 公共入口、generation 编排和进程装配 |
+| Agent | `@zhin.js/agent`（含 `@zhin.js/agent/runtime`） | 统一信箱入站脊柱（`unified-mailbox-spine`）、ZhinAgent、多模型编排、安全沙箱、MCP 与 Agent/Inference/Workroom Host |
+| Console | `@zhin.js/console-protocol`（含 `contract`/`review-kit`）、`@zhin.js/pagemanager`、`@zhin.js/client` | Server-Driven Blueprints（`definePageBlueprint`）、Web / IM Card / CLI TUI 多端投影与 Console 外壳（`renderConsoleShell`） |
+| 门面与运行时 | `zhin.js`、`@zhin.js/runtime`（含 `runtime/host`）、`@zhin.js/cli` | 公共入口、generation 编排、HTTP/Protocol/Speech/HTML-Renderer Host 和极薄进程装配 |
 
 `pnpm check:architecture` 强制依赖方向。`basic/cli` 是唯一 composition root，可装配 IM、
 Agent 与 Console Host；其他低层包不跨层取用上层实现。
@@ -148,9 +149,14 @@ Agent 与 Console Host；其他低层包不跨层取用上层实现。
 
 ## 高价值路径
 
-- packages/im/plugin-runtime/src/plugin.ts
+- packages/im/plugin-runtime/src/plugin.ts（`definePlugin`、`definePluginCapabilityGraph`、`defineResource`）
 - packages/im/core/src/feature/adapter.ts
-- packages/im/core/src/plugin-runtime/im/inbound-spine.ts
+- packages/im/core/src/plugin-runtime/im/inbound-spine.ts（IM 入站准入、去重、分发与渐进回复脊柱）
+- packages/im/core/src/plugin-runtime/im/inbound-runtime.ts（入站编排、交互协调器与会话事实运行时）
+- packages/im/agent/src/plugin-runtime/ingress/unified-mailbox-spine.ts（统一单会话串行信箱、回合执行与主动唤醒脊柱）
+- packages/console/protocol/src/contract/page.ts（`definePage`、`definePageBlueprint`、`projectBlueprintToImCard`、`projectBlueprintToCliPanel`）
+- packages/console/pagemanager/src/shell/page-renderer.ts（`renderConsoleShell` 外壳与 Blueprint 挂载）
+- packages/im/runtime/src/host/（HTTP / Protocol / Speech / HTML-Renderer Host 安装器）
 - packages/im/agent/src/orchestrator/
 - packages/im/agent/src/security/（工具安全检查统一走 `policy-facade.ts` 的 `runToolPolicies`；新增策略只在声明式策略表注册，builtin 工具不再手写策略链）
 - packages/im/agent/src/bootstrap.ts
