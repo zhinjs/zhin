@@ -1,5 +1,30 @@
 # @zhin.js/ai
 
+## 1.1.52
+
+### Patch Changes
+
+- 3a8504b: ADR 0048 Agent Harness (H1–H2): new `@zhin.js/harness` package (attenuated authority, conserved budgets, guard kernel, engagement journal, mailbox). Live turns now collaborate with other agents through the `agents` / `ask` / `delegate` / `tell` / `cancel_delegation` / `escalate` tools instead of `spawn_task`; `agent.json` gains `collaboration: { contacts, accepts_from }`. The sub-agent runtime, deferred workers, detached tasks and their config fields are removed.
+- bc6ccb1: Deep audit bug fixes and 7 architectural improvements:
+  - Sink Agent Turn ingress pipeline from `@zhin.js/cli` into `@zhin.js/agent/runtime` (`plugin-runtime/ingress/`) and decompose `ingress-route.ts` into modular pipeline stages.
+  - Bind Session State Plane (`JsxButtonRegistry`, `InteractionRuntime`, `RuntimeInteractiveRouter`) to `PluginIncarnationRef` so active buttons and interactions survive unrelated-plugin HMR while expiring when the owning plugin reloads, and support per-conversation fallback numbering (`numberingScope: 'conversation'`).
+  - Establish `conversation_events` as the canonical message SSOT and reference `conversation_event_id`, `conversation_key`, `platform_message_id`, and `message_key` in `agent_messages` (`AGENT_MESSAGE_QUERY_VERSION = 2`), threading `conversationSequence` across inbound and outbound delivery receipts.
+  - Push down `DatabaseContextRepository` and `DatabaseScheduleJobStorage` full-session/full-table memory scans to indexed SQL queries.
+  - Add kernel-level inbound `replyTo` and `mentioned` auto-promotion (`promoteInboundMessagePayload`) plus reusable `InboundDeduper` and `TtlLookupCache` primitives in `@zhin.js/adapter`.
+  - Add `MiddlewareContext.dispatch` (`InboundDispatchSummary`) and `onAfterDispatch` hooks for `after-dispatch` middlewares, and support incremental rendering of in-place `envelope.payload` array mutations in `OutboundDeliveryRuntime`.
+  - Unify `HistoryWindowTracker` and `AgentCompactionRuntime` token/message budgets (`resolveUnifiedHistoryAndCompactionBudget`).
+  - Fix schema validation, database transaction connection cleanup and SQLite WAL mode, schedule timer wheel head-of-line blocking, security policy bash read paths and subagent guard propagation, group merge window permission carrier handoff, micro-compact namespaced tool matching, and WebSocket force-close / inbound segment mapping across adapters.
+- 8de6080: Restore MiniMax and Gemini empty-reply retry presets through the supported Anthropic and OpenCode Drivers, and default DeepSeek to one same-model extra attempt. Service defaults and exact-model overrides can still disable these presets with `emptyReplyRetries: 0`. The existing precedence over global resilience settings, Driver identity checks, exploration budgets and tool execution remain unchanged.
+
+  Preserve the model's declared thinking capability in SDK execution metadata, separately from its internal replay protocol. DeepSeek-compatible tool-call histories retain their required placeholder when a gateway omits reasoning; Google, Ollama, Anthropic and OpenAI native protocols do not acquire fabricated thinking. Real reasoning and signed/encrypted state are preserved; model capabilities are not inferred from names and no new user configuration is added.
+
+- 8de6080: Resolve summary and perception models only when they are used. Plain chat no longer validates unused auxiliary Drivers, and a successful perception primary does not validate its backups. Compaction resolves its summary model only after finding a prefix to summarize, while retaining the current operation's graph, deployment summary source, failure handling and cancellation.
+
+  `ModelExecutionScope.summary`, `perception` and `perceptionFallbacks` now expose declared candidates: call `resolve()` to obtain an executable model bundle. Consumers of this API must update both `@zhin.js/ai` and `@zhin.js/agent` to versions containing this changeset; older paired releases do not provide the deferred compaction execution contract.
+
+- 8de6080: Refresh OAuth credentials on demand near expiry using a lifetime-bounded window. Persist account-wide rate-limit cooldowns, preserve normalized token response facts, and retain encrypted recovery material for interrupted exchanges without automatically replaying refresh tokens or authorization codes.
+- 8de6080: Preserve complete environment-default API key expressions as private encrypted sources during migration and explicit credential repair. Resolve them through the Host environment store only at authorization, keep fallback values out of public metadata, and preserve account identity checks when resolved credentials change.
+
 ## 1.1.51
 
 ### Patch Changes

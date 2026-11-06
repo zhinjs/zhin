@@ -1,5 +1,28 @@
 # @zhin.js/adapter-wecom
 
+## 1.1.23
+
+### Patch Changes
+
+- Updated dependencies [3a8504b]
+- Updated dependencies [6163abc]
+- Updated dependencies [fed2c27]
+- Updated dependencies [bc6ccb1]
+- Updated dependencies [72b5a12]
+- Updated dependencies [aa41889]
+- Updated dependencies [4427e72]
+- Updated dependencies [22bd14a]
+  - @zhin.js/agent-feature@1.1.14
+  - @zhin.js/core@1.1.57
+  - @zhin.js/client@1.1.25
+  - @zhin.js/page@1.1.15
+  - @zhin.js/im-contract@1.1.12
+  - @zhin.js/adapter@1.1.29
+  - @zhin.js/host-http@1.1.15
+  - @zhin.js/feature-kit@1.1.13
+  - @zhin.js/tool@1.1.16
+  - @zhin.js/skill@1.1.14
+
 ## 1.1.22
 
 ### Patch Changes

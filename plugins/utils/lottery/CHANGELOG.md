@@ -1,5 +1,13 @@
 # @zhin.js/plugin-lottery
 
+## 1.1.16
+
+### Patch Changes
+
+- Updated dependencies [72b5a12]
+  - @zhin.js/tool@1.1.16
+  - @zhin.js/skill@1.1.14
+
 ## 1.1.15
 
 ### Patch Changes

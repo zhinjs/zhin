@@ -1,5 +1,98 @@
 # @zhin.js/cli
 
+## 1.1.29
+
+### Patch Changes
+
+- 8de6080: Recognize adapter encryption keys and app/verification tokens in the shared configuration sensitivity check. Mask these fields in default project reads and conflict evidence, and reject chat reads and writes. Explicit administrator reveal and ordinary token-budget fields retain their existing behavior.
+- c563f3b: ADR 0048 H3 PR-2: every IM / ZhinAgent turn is a Mail turn of a long-lived host Mailbox. Same-session admission (#725), the ADR 0038 merge / danmaku windows, stale-reply checks and supersede are now the harness inbox policy; scene-event wakes post one event Mail on the scene lane. The mid-turn delivery API is `harness.deliver` (`open` is the same call). `TurnAdmissionGate`, `InboundTurnQueue` and `harness.attach` are removed.
+
+  **Breaking config rename:** `ai.agent.inboundQueue` is now `ai.agent.mailbox` (same `groupMode` / `ttlMs` / `maxQueuedTurns` / `merge` / `live` fields; `coalesceWindowMs` is dropped). A config that still sets `ai.agent.inboundQueue` fails startup validation with a migration message.
+
+- bf00459: ADR 0048 H3 PR-3 (closes #1179): due timers become `timer` Mail on the host Mailbox (lane `timer:<jobId>`). `TimerScheduler` + `createTimerMailDueHandler` replace `ScheduleJobEngine` / `JobWorker` / `job-scheduler` / `job-utils`. Kernel `ScheduleEngine` remains the clock; N retries / dead-letter stay a projection over `ScheduleExecutionQueue`. Event ingress triggers timer / event Mail. Eval Gap A `deliverTimerMailInbound` is real; harness-timer-\*×4 unskipped.
+
+  **Breaking removals:** `ScheduleJobEngine`, `JobWorker`, and the `assistant.queue` config key. A config that still sets `assistant.queue` fails startup with a migration hint (retries are internal to `TimerScheduler`; Mailbox policy stays under `ai.agent.mailbox`).
+
+- 6163abc: Complete ADR 0048 (Agent Harness H4 & H5): migrate multi-Bot Venue routing, floor control, and visibility projection (`visible | summary | backstage`) into `@zhin.js/core/venue`, add shared Engagement blackboard (`board_read` / `board_write`), `follow_up`, `collaboration.budget`, Engagement Journal persistence/compaction, `zhin trace <engagement>` collaboration graph, Console engagement routes & UI, and A2A Remote Mailbox transport (`A2AMailboxTransport`), and remove `@zhin.js/workroom` and legacy `five-agent` orchestration.
+- fed2c27: Upgrade Console Host, Plugin Pages compiler/DX, and `/sandbox` workbench:
+
+  - Populate React 19, `react-dom/client`, and `react-router-dom` named exports and standalone ESM fallback in `@zhin.js/pagemanager`.
+  - Re-export `definePage` from `@zhin.js/page`, forward all `PageMetadata` fields (`group`, `order`, `parent`, `fullWidth`, `titleI18n`), and inject `{ pluginId, owner, localName, route, title }` props into page components.
+  - Add `definePluginConsoleRpc.withConfig<TConfig>()` and `@zhin.js/client` `createDeclarativePage` helper.
+  - Upgrade local Console shell (`page-renderer.ts`), live `log:entry` SSE broadcasts, and `/sandbox` simulated sender identity/role switching and rich segment rendering.
+
+- bc6ccb1: Deep audit bug fixes and 7 architectural improvements:
+  - Sink Agent Turn ingress pipeline from `@zhin.js/cli` into `@zhin.js/agent/runtime` (`plugin-runtime/ingress/`) and decompose `ingress-route.ts` into modular pipeline stages.
+  - Bind Session State Plane (`JsxButtonRegistry`, `InteractionRuntime`, `RuntimeInteractiveRouter`) to `PluginIncarnationRef` so active buttons and interactions survive unrelated-plugin HMR while expiring when the owning plugin reloads, and support per-conversation fallback numbering (`numberingScope: 'conversation'`).
+  - Establish `conversation_events` as the canonical message SSOT and reference `conversation_event_id`, `conversation_key`, `platform_message_id`, and `message_key` in `agent_messages` (`AGENT_MESSAGE_QUERY_VERSION = 2`), threading `conversationSequence` across inbound and outbound delivery receipts.
+  - Push down `DatabaseContextRepository` and `DatabaseScheduleJobStorage` full-session/full-table memory scans to indexed SQL queries.
+  - Add kernel-level inbound `replyTo` and `mentioned` auto-promotion (`promoteInboundMessagePayload`) plus reusable `InboundDeduper` and `TtlLookupCache` primitives in `@zhin.js/adapter`.
+  - Add `MiddlewareContext.dispatch` (`InboundDispatchSummary`) and `onAfterDispatch` hooks for `after-dispatch` middlewares, and support incremental rendering of in-place `envelope.payload` array mutations in `OutboundDeliveryRuntime`.
+  - Unify `HistoryWindowTracker` and `AgentCompactionRuntime` token/message budgets (`resolveUnifiedHistoryAndCompactionBudget`).
+  - Fix schema validation, database transaction connection cleanup and SQLite WAL mode, schedule timer wheel head-of-line blocking, security policy bash read paths and subagent guard propagation, group merge window permission carrier handoff, micro-compact namespaced tool matching, and WebSocket force-close / inbound segment mapping across adapters.
+- 72b5a12: Improve plugin authoring DX, operator/CLI onboarding, IM/AI chat UX, CI reliability, and documentation narrative across the workspace:
+
+  - **Plugin Authoring DX**:
+    - Compare `mtimeMs` between `src/*.ts` and compiled `lib/*.js` in native TypeScript development runtime so stale `lib/` build outputs never shadow newer source edits.
+    - Support `@zhin.js/schema` `Schema.object()` directly in `defineAgentTool` (`inputSchema`) with full TypeScript type inference and default value population.
+    - Allow equivalent `definePlugin({ config })` and `schema.json` to coexist without throwing `PluginConfigSourceConflictError`.
+    - Add `.withConfig<TConfig>()` helpers to `defineMiddleware`, `defineHandler`, `defineComponent`, `defineSchedule`, and `defineMcp`, and expose `has(token)` on `CapabilityContext`.
+    - Enhance `@zhin.js/testing` with `createFakeInteraction`, automatic positional/option default parsing in `runCommand`, and `$sendTo` / `$replyTo*` helpers on `FakeMessage`.
+  - **CLI, Wizard & Local Sandbox UX**:
+    - Automatically seed `ai.plan.yml` into the Host database on first startup when the inference graph is empty.
+    - Add domestic and aggregator AI provider presets (`qwen` / DashScope, `siliconflow`, `volcengine`, `minimax`, `openrouter`) and automatic capability pre-filling in `@zhin.js/scaffold-wizard`.
+    - Add `/sandbox?token=...` query bootstrap and header token input UI for zero-DevTools local sandbox debugging, plus `zhin start` alias and unset `${ENV_VAR}` config warnings.
+  - **IM Command, Interactive Fallback & AI Chat UX**:
+    - Reset per-conversation fallback button numbering once previous interactive prompts finish and ignore TTL-expired bare numeric messages in group chats.
+    - Deduplicate numbered option lists in text-fallback `user-interaction` prompts.
+    - Support out-of-the-box `菜单` / `帮助` / `help` / `menu` aliases, flattened root command menus (when ≤ 8 commands), `-h` help flag, distinct missing-parameter diagnostics, and `@Bot /cmd` mention stripping in group chats.
+    - Preserve `<header>` / `<footer>` in HTML text fallback, format Markdown tables cleanly in plain-text fallback, bind tool approval prompts to master senders, and lower turn progress feedback interval to 15s.
+
+- 8de6080: Refresh OAuth credentials on demand near expiry using a lifetime-bounded window. Persist account-wide rate-limit cooldowns, preserve normalized token response facts, and retain encrypted recovery material for interrupted exchanges without automatically replaying refresh tokens or authorization codes.
+- aa41889: Upgrade official business plugins with declarative Console pages & AI skills/tools, decompose core monolith modules, and polish scaffolding DX:
+
+  - **Official Plugin Ecosystem Upgrade**: Add declarative Console pages (`pages/index/index.ts`), `definePluginConsoleRpc` handlers (`src/console.ts`), and progressive-disclosure AI skills/tools (`skills/<name>/tools/`) across `@zhin.js/plugin-ledger`, `@zhin.js/plugin-reminder`, `@zhin.js/plugin-rss`, `@zhin.js/plugin-calendar`, `@zhin.js/plugin-group-suite`, `@zhin.js/plugin-content-moderation`, `@zhin.js/process-monitor`, and `@zhin.js/plugin-game-hub`.
+  - **Core Monolith Decomposition**: Decompose 9 core monolith modules (`agent-core-run.ts`, `full-agent-turn-engine.ts`, `ingress-route.ts`, `request.ts`, `root-runtime.ts`, `account-runtime.ts`, `page-renderer.ts`, `console-rpc.ts`, and `console-rest-pages.ts`) into cohesive, acyclic submodules (`< 620` lines each) while preserving 100% of public exports.
+  - **Scaffolding & First-Screen DX**: Upgrade `create-zhin-app` and `@zhin.js/scaffold-wizard` to generate declarative `ConsolePageBlueprint` homepages and `definePluginConsoleRpc` status/ping endpoints in both `zh-CN` and `en`; upgrade `zhin new` (`@zhin.js/cli`) to include `pages/` and compile progressive-disclosure tools under `skills/**/tools/` and `agents/**/tools/`.
+
+- 8de6080: Preserve complete environment-default API key expressions as private encrypted sources during migration and explicit credential repair. Resolve them through the Host environment store only at authorization, keep fallback values out of public metadata, and preserve account identity checks when resolved credentials change.
+- 8de6080: Expose read-only discovery availability from each exact held Provider Driver declaration. The Console can show model discovery only when the Driver implements it, without probing a provider or reading credentials during metadata requests.
+- Updated dependencies [3a8504b]
+- Updated dependencies [6347b19]
+- Updated dependencies [5ec4728]
+- Updated dependencies [d3a297d]
+- Updated dependencies [c563f3b]
+- Updated dependencies [bf00459]
+- Updated dependencies [6163abc]
+- Updated dependencies [fed2c27]
+- Updated dependencies [bc6ccb1]
+- Updated dependencies [72b5a12]
+- Updated dependencies [8de6080]
+- Updated dependencies [8de6080]
+- Updated dependencies [8de6080]
+- Updated dependencies [aa41889]
+- Updated dependencies [8de6080]
+  - @zhin.js/harness@1.0.1
+  - @zhin.js/ai@1.1.52
+  - @zhin.js/runtime@1.1.19
+  - @zhin.js/core@1.1.57
+  - @zhin.js/console-protocol@1.1.14
+  - @zhin.js/pagemanager@1.1.22
+  - @zhin.js/plugin-runtime@1.1.21
+  - @zhin.js/database@1.1.7
+  - @zhin.js/schedule@1.1.4
+  - @zhin.js/im-contract@1.1.12
+  - @zhin.js/adapter@1.1.29
+  - @zhin.js/middleware@1.1.14
+  - @zhin.js/host-http@1.1.15
+  - @zhin.js/command@1.1.15
+  - @zhin.js/component@1.1.14
+  - @zhin.js/feature-kit@1.1.13
+  - @zhin.js/scaffold-wizard@1.1.16
+  - @zhin.js/config-file@1.1.13
+  - @zhin.js/permission@1.1.13
+  - @zhin.js/prompt-section@1.1.13
+
 ## 1.1.28
 
 ### Patch Changes

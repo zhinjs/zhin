@@ -1,5 +1,12 @@
 # @zhin.js/kernel
 
+## 1.1.6
+
+### Patch Changes
+
+- Updated dependencies [bc6ccb1]
+  - @zhin.js/schedule@1.1.4
+
 ## 1.1.5
 
 ### Patch Changes

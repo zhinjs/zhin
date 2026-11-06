@@ -1,5 +1,34 @@
 # @zhin.js/adapter-process
 
+## 1.1.25
+
+### Patch Changes
+
+- fed2c27: Upgrade Console Host, Plugin Pages compiler/DX, and `/sandbox` workbench:
+
+  - Populate React 19, `react-dom/client`, and `react-router-dom` named exports and standalone ESM fallback in `@zhin.js/pagemanager`.
+  - Re-export `definePage` from `@zhin.js/page`, forward all `PageMetadata` fields (`group`, `order`, `parent`, `fullWidth`, `titleI18n`), and inject `{ pluginId, owner, localName, route, title }` props into page components.
+  - Add `definePluginConsoleRpc.withConfig<TConfig>()` and `@zhin.js/client` `createDeclarativePage` helper.
+  - Upgrade local Console shell (`page-renderer.ts`), live `log:entry` SSE broadcasts, and `/sandbox` simulated sender identity/role switching and rich segment rendering.
+
+- ed768db: Sandbox `ready` no longer waits on a hung Docker CLI: the shell-isolation probe now has a hard 750ms deadline (SIGKILL + "timed out" status) instead of relying on execFile reporting after stdio closes.
+- 74e7e87: Sandbox 工作台页面现在自带完整样式：改用 Console 主题 token（含回退值）、最小 12px 字号、手机端 44px 点按目标、暗色可用的遮罩色，移除对 Tailwind 工具类和 `adapterConsoleStyles` 的依赖，并为 Markdown 表格/代码块/列表与快捷键提示行补齐样式；表情列表加载失败与消息解析失败会以内联提示显示。本版本发布后 Console 可以删除 `agent-playground.css` 以及 `remote-entry-style-contract.ts` 中的 Sandbox 类名登记。
+- Updated dependencies [6163abc]
+- Updated dependencies [fed2c27]
+- Updated dependencies [bc6ccb1]
+- Updated dependencies [72b5a12]
+- Updated dependencies [aa41889]
+- Updated dependencies [4427e72]
+- Updated dependencies [22bd14a]
+  - @zhin.js/core@1.1.57
+  - @zhin.js/client@1.1.25
+  - @zhin.js/page@1.1.15
+  - @zhin.js/im-contract@1.1.12
+  - @zhin.js/adapter@1.1.29
+  - @zhin.js/host-http@1.1.15
+  - @zhin.js/feature-kit@1.1.13
+  - @zhin.js/skill@1.1.14
+
 ## 1.1.24
 
 ### Patch Changes

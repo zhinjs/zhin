@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/ai",
-  "version": "1.1.51",
+  "version": "1.1.52",
   "description": "Framework-agnostic AI engine: providers, agent loop, sessions, memory, compaction",
   "type": "module",
   "main": "./lib/index.js",

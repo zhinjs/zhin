@@ -1,5 +1,23 @@
 # @zhin.js/adapter-juejin
 
+## 0.1.2
+
+### Patch Changes
+
+- 22bd14a: The Console comment-review page is now a thin spec over `createCommentReviewPage`; the local RPC client and duplicated page components are removed. Discard uses an inline confirmation, error notices stay until dismissed, and a failed refresh is shown as stale data.
+- Updated dependencies [6163abc]
+- Updated dependencies [fed2c27]
+- Updated dependencies [bc6ccb1]
+- Updated dependencies [72b5a12]
+- Updated dependencies [4427e72]
+- Updated dependencies [22bd14a]
+  - @zhin.js/core@1.1.57
+  - @zhin.js/client@1.1.25
+  - @zhin.js/page@1.1.15
+  - @zhin.js/im-contract@1.1.12
+  - @zhin.js/adapter@1.1.29
+  - @zhin.js/feature-kit@1.1.13
+
 ## 0.1.1
 
 ### Patch Changes

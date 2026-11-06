@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/harness",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "ADR 0048 Agent Harness: actors, mail, engagements, attenuated authority, budgets and the guard kernel",
   "type": "module",
   "main": "./lib/index.js",
