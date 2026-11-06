@@ -1,0 +1,32 @@
+basic/cli/src/plugin-runtime/console/page-renderer-helpers.ts
+  h_6f5e45c41d0910 546-591,595,602-618
+packages/console/client/client/index.ts
+  h_6f5e45c41d0910 2,50
+packages/console/pagemanager/src/client-build/typescript-builder.ts
+  h_6f5e45c41d0910 251-297,321-337
+packages/im/harness/package.json
+  h_6f5e45c41d0910 3,17,22-23
+packages/toolkit/scaffold-wizard/src/message-templates.ts
+  h_6f5e45c41d0910 48-49
+plugins/adapters/bilibili/pages/index/index.tsx
+  h_6f5e45c41d0910 3
+plugins/adapters/juejin/pages/index/index.tsx
+  h_6f5e45c41d0910 3
+plugins/adapters/sandbox/pages/index/SandboxChat.tsx
+  h_6f5e45c41d0910 11,23
+plugins/adapters/sandbox/pages/index/index.tsx
+  h_6f5e45c41d0910 2
+scripts/check-plugin-capability-publish.mjs
+  h_6f5e45c41d0910 21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "aab5d372d6cd192321c76f01e898f1b583d2cd32",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
