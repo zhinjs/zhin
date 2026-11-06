@@ -1,0 +1,26 @@
+import {
+  HOST_CONFIG_KEYS,
+  InvalidationPlanner,
+  type InvalidationPlan,
+  type SourceOwnershipIndex,
+} from '../index.js';
+
+export interface SelfChangeImpactPortLike {
+  readonly hostConfigKeys: readonly string[];
+  planFiles(absolutePaths: readonly string[]): InvalidationPlan;
+}
+
+/**
+ * ADR 0040 §2: `change_draft` previews use the same `InvalidationPlanner` as development file
+ * watching, over the committed generation's source ownership; config sections follow Console
+ * `config:patch` (`HOST_CONFIG_KEYS` need a restart). Absent ownership → the preview estimates.
+ */
+export function createSelfChangeImpactPort(
+  sourceOwnership: (() => SourceOwnershipIndex) | undefined,
+): SelfChangeImpactPortLike | undefined {
+  if (!sourceOwnership) return undefined;
+  return Object.freeze({
+    hostConfigKeys: HOST_CONFIG_KEYS,
+    planFiles: (absolutePaths: readonly string[]) => new InvalidationPlanner(sourceOwnership()).plan(absolutePaths),
+  });
+}

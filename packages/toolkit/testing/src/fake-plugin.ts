@@ -102,8 +102,9 @@ export class FakePlugin<TConfig = unknown> {
 
   /** Run `definition.setup()` against this fake; a returned disposer joins `lifecycle`. */
   async setup(definition: PluginDefinition<TConfig>): Promise<void> {
-    const dispose: void | Dispose = await definition.setup?.(this.#context);
-    if (dispose) this.lifecycle.add(dispose);
+    const result = await definition.setup?.(this.#context);
+    if (typeof result === 'function') this.lifecycle.add(result);
+    else if (result?.dispose) this.lifecycle.add(result.dispose);
   }
 
   /** Tokens declared in `requires` that this fake did not provide. */

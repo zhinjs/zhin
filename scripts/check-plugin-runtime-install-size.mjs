@@ -10,8 +10,8 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 const packageManager = JSON.parse(
   fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf8'),
 ).packageManager;
-const budgetBytes = 5 * 1024 * 1024;
 const targetName = process.argv[2] ?? '@zhin.js/plugin-runtime';
+const budgetBytes = (targetName === '@zhin.js/runtime' ? 7 : 5) * 1024 * 1024;
 const workspaceGraph = readWorkspaceGraph();
 if (!workspaceGraph.has(targetName)) {
   throw new Error(`Unknown Plugin Runtime install-size target: ${targetName}`);

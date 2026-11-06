@@ -13,6 +13,8 @@ export type {
   RuntimeEndpointTypingInput,
 } from './endpoint-runtime.js';
 export * from './ingress-route.js';
+export * from './inbound-spine.js';
+export * from './host/index.js';
 export { isMessageOrigin, roomMembershipToken } from './inbound-origin.js';
 export type {
   MessageOrigin,

@@ -57,6 +57,7 @@
     "export * from './full-agent-turn-engine.js';",
     "export * from './host-mcp-projection.js';",
     "export * from './host-tool-projection.js';",
+    "export * from './host/index.js';",
     "export * from './ingress/index.js';",
     "export * from './native-announcement-tools.js';",
     "export * from './native-bash-tool.js';",
@@ -82,6 +83,7 @@
     "export{AI_SCENE_MEMBERS_TABLE}from '../scene-facts.js';",
     "export{DEFAULT_GROUP_RULE_RETENTION_DAYS}from '../group-rules.js';",
     "export{FileJournalStore}from '../journal/file-journal-store.js';",
+    "export{HostMailbox,type HostMailboxOptions}from '../collaboration/host-mailbox.js';",
     "export{JsonlScheduleAuditLogger}from '../schedule-domain/audit-logger.js';",
     "export{ZhinAgent}from '../zhin-agent/index.js';",
     "export{activateAiDatabaseStorage}from '../init/activate-ai-database-storage.js';",
@@ -93,6 +95,15 @@
     "export{ensureMcpConnections,ensureMcpConnectionsForBinding,getMcpToolsForBinding,}from '../resource-hub/mcp-lifecycle.js';",
     "export{normalizeAgentDecisionConfig}from '../decision/config.js';",
     "export{usageSubjectFromTurn}from '../security/usage-subject.js';"
+  ],
+  "agent/runtime/host": [
+    "export * from './assistant-runtime.js';",
+    "export * from './config.js';",
+    "export * from './publication-coordinator.js';",
+    "export * from './runtime-factory.js';",
+    "export * from './runtime-foundation.js';",
+    "export * from './self-change-report.js';",
+    "export * from './tool-approval-im-channel.js';"
   ],
   "agent/runtime/ingress": [
     "export * from './ambient-engagement.js';",
@@ -175,7 +186,9 @@
     "export * from '../../venue/index.js';",
     "export * from './contracts.js';",
     "export * from './group-rule-violation.js';",
+    "export * from './host/index.js';",
     "export * from './im-runtime.js';",
+    "export * from './inbound-spine.js';",
     "export * from './ingress-route.js';",
     "export * from './login-assist-host.js';",
     "export * from './member-welcome.js';",
@@ -191,6 +204,16 @@
     "export type{RuntimeMessageEvent,RuntimeMessageEventSource,RuntimeMessageRendering,RuntimeSceneEventSignal,RuntimeSceneEventSource,OutboundFallbackReason,}from './message-events.js';",
     "export{EndpointRuntime}from './endpoint-runtime.js';",
     "export{isMessageOrigin,roomMembershipToken}from './inbound-origin.js';"
+  ],
+  "core/runtime/host": [
+    "export * from './component-host-installer.js';",
+    "export * from './conversation-migration.js';",
+    "export * from './database-config.js';",
+    "export * from './database-host-installer.js';",
+    "export * from './database-state.js';",
+    "export * from './locale-host-installer.js';",
+    "export * from './outbound-host-installer.js';",
+    "export * from './sender-enrichment.js';"
   ],
   "feature-kit": [
     "export * from './adapter-client.js';",
@@ -294,7 +317,9 @@
     "export * from './database-host.js';",
     "export * from './delivery-target.js';",
     "export * from './dispose.js';",
+    "export * from './environment-expansion.js';",
     "export * from './handoff.js';",
+    "export * from './host-installer.js';",
     "export * from './html-renderer.js';",
     "export * from './i18n.js';",
     "export * from './identity.js';",
@@ -338,6 +363,7 @@
     "export * from './environment-store.js';",
     "export * from './environment.js';",
     "export * from './hmr-coordinator.js';",
+    "export * from './host/index.js';",
     "export * from './invalidation-planner.js';",
     "export * from './isolate/index.js';",
     "export * from './isolation.js';",
@@ -364,6 +390,18 @@
     "export * from './json-config-document.js';",
     "export * from './yaml-config-document.js';",
     "export{readSourcePluginOrder}from './ordered-config-source.js';"
+  ],
+  "runtime/host": [
+    "export * from './host-credential-storage.js';",
+    "export * from './plugin-lifecycle-store.js';",
+    "export * from './process-lifecycle.js';",
+    "export * from './process-rejections.js';",
+    "export * from './project-commands.js';",
+    "export * from './publish-journal.js';",
+    "export * from './root-host.js';",
+    "export * from './self-change-impact.js';",
+    "export * from './self-change-plugin-roots.js';",
+    "export * from './start-options.js';"
   ],
   "runtime/isolate": [
     "export * from './contracts.js';",

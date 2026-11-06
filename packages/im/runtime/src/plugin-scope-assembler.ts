@@ -1,7 +1,6 @@
 import { resolve } from 'node:path';
 import type { CapabilityRoot } from '@zhin.js/feature-kit';
 import {
-  DisposeStack,
   GenerationHandoffStack,
   Scope,
   capabilityId,
@@ -28,7 +27,6 @@ import {
   type FeatureId,
   type GenerationHandoff,
   type GenerationAdmissionGate,
-  type GenerationHandoffRegistry,
   type RuntimeSnapshot,
   type RuntimeConfigDocument,
   type PluginDefinition,
@@ -37,7 +35,8 @@ import {
   type PluginInstanceView,
   type PluginNodeSnapshot,
   type PluginSetupContext,
-  type PluginEventSubscriptions,
+  type RootResourceContext,
+  type RootResourceInstaller,
   type SetupCapabilityRegistration,
   type TokenId,
 } from '@zhin.js/plugin-runtime';
@@ -59,43 +58,14 @@ import {
   type PrimaryConfig,
 } from './primary-config.js';
 
+export type { RootResourceContext, RootResourceInstaller } from '@zhin.js/plugin-runtime';
+
 export interface PluginConfigResolver {
   (node: PluginGraphNode): unknown;
   schema?(node: PluginGraphNode): Readonly<Record<string, unknown>> | undefined;
   /** Set by RootRuntime's actual composition branch, not by Plugin config values. */
   compositionMode?: NonNullable<PrimaryConfig['compositionMode']>;
 }
-
-export interface RootResourceContext {
-  readonly events: PluginEventSubscriptions;
-  /** Whether this generation has loaded a provider for the requested Feature. */
-  readonly hasFeature?: (feature: FeatureId | string) => boolean;
-  /** Exact shadow generation being assembled; never inferred from a latest snapshot. */
-  readonly generation: number;
-  /** Exact projected candidate, available during handoff activation, never the committed previous generation. */
-  readonly readCandidateSnapshot?: () => RuntimeSnapshot;
-  readonly signal: AbortSignal;
-  readonly resources: Scope;
-  readonly lifecycle: DisposeStack;
-  readonly handoff: GenerationHandoffRegistry;
-  /** Candidate-wide gate atomically switched by SnapshotStore at commit. */
-  readonly admission: GenerationAdmissionGate;
-  readonly config: PrimaryConfig;
-  /**
-   * Adds a root-owned capability to this shadow generation. The definition is
-   * validated and projected with convention/setup capabilities; it is never
-   * visible before the generation commits.
-   */
-  addFeature<TDefinition>(
-    feature: FeatureId | string,
-    localName: string,
-    definition: TDefinition,
-  ): void;
-}
-
-export type RootResourceInstaller = (
-  context: RootResourceContext,
-) => void | Promise<void>;
 
 export interface PluginAssemblySeed {
   readonly scopes: ReadonlyMap<PluginId, Scope>;
@@ -281,7 +251,8 @@ export class PluginScopeAssembler {
         Object.freeze(setupContext) as unknown as PluginSetupContext,
       );
       signal.throwIfAborted();
-      if (returned) scope.disposers.add(returned);
+      if (typeof returned === 'function') scope.disposers.add(returned);
+      else if (returned?.dispose) scope.disposers.add(returned.dispose);
     }
     scope.seal();
 
