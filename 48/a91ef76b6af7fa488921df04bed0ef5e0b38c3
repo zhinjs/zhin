@@ -1,0 +1,456 @@
+basic/cli/src/commands/doctor.ts
+  h_6f5e45c41d0910 36
+basic/cli/src/commands/runtime.ts
+  h_6f5e45c41d0910 6
+basic/cli/src/commands/trace.ts
+  h_6f5e45c41d0910 149
+basic/cli/src/plugin-management/workflow.ts
+  h_6f5e45c41d0910 21
+basic/cli/src/plugin-runtime/agent/host-installer.ts
+  h_6f5e45c41d0910 3,16,18,22,24,67-68,76,80-81,83
+basic/cli/src/plugin-runtime/agent/host-protected-paths.ts
+  h_6f5e45c41d0910 4
+basic/cli/src/plugin-runtime/agent/module.ts
+  h_6f5e45c41d0910 11-13,15,17-18
+basic/cli/src/plugin-runtime/configuration-host-installer.ts
+  h_6f5e45c41d0910 8
+basic/cli/src/plugin-runtime/console/agent-console.ts
+  h_6f5e45c41d0910 4,14-15,37,39-47,117,125,149-151
+basic/cli/src/plugin-runtime/console/announcements-rpc.ts
+  h_6f5e45c41d0910 5
+basic/cli/src/plugin-runtime/console/api-installer.ts
+  h_6f5e45c41d0910 20
+basic/cli/src/plugin-runtime/console/api-routes.ts
+  h_6f5e45c41d0910 13
+basic/cli/src/plugin-runtime/console/assistant-status.ts
+  h_6f5e45c41d0910 4
+basic/cli/src/plugin-runtime/console/configuration.ts
+  h_6f5e45c41d0910 18
+basic/cli/src/plugin-runtime/console/data-migration-routes.ts
+  h_6f5e45c41d0910 5
+basic/cli/src/plugin-runtime/console/host.ts
+  h_6f5e45c41d0910 18
+basic/cli/src/plugin-runtime/console/plugin-diagnostics.ts
+  h_6f5e45c41d0910 1
+basic/cli/src/plugin-runtime/console/plugin-projection.ts
+  h_6f5e45c41d0910 5
+basic/cli/src/plugin-runtime/console/rpc-composition.ts
+  h_6f5e45c41d0910 11
+basic/cli/src/plugin-runtime/console/rpc-context.ts
+  h_6f5e45c41d0910 19
+basic/cli/src/plugin-runtime/console/session-ops-rpc.ts
+  h_6f5e45c41d0910 6
+basic/cli/src/plugin-runtime/inference/migration-apply.ts
+  h_6f5e45c41d0910 1,18,25-26,32,36-37
+basic/cli/src/plugin-runtime/inference/migration-preview.ts
+  h_6f5e45c41d0910 19-21
+basic/cli/src/plugin-runtime/inference/migration-session-bindings.ts
+  h_6f5e45c41d0910 11-12
+basic/cli/src/plugin-runtime/inference/migration-source.ts
+  h_6f5e45c41d0910 12
+basic/cli/src/plugin-runtime/inference/routes.ts
+  h_6f5e45c41d0910 11-13,19-21
+basic/cli/src/plugin-runtime/migrate/instance-declarations.ts
+  h_6f5e45c41d0910 7
+basic/cli/src/plugin-runtime/runtime-endpoints/state.ts
+  h_6f5e45c41d0910 5
+basic/cli/src/plugin-runtime/start-command.ts
+  h_6f5e45c41d0910 1-4,59-61,64-65,72,77,574
+basic/cli/src/plugin-runtime/start/module.ts
+  h_6f5e45c41d0910 2
+basic/cli/src/plugin-runtime/start/process-supervisor.ts
+  h_6f5e45c41d0910 7
+basic/cli/src/utils/config-check.ts
+  h_6f5e45c41d0910 18
+basic/cli/src/utils/config-offline.ts
+  h_6f5e45c41d0910 10
+basic/cli/tests/fixtures/inference-console-host.ts
+  h_6f5e45c41d0910 10-11,16-17
+basic/cli/tests/fixtures/inference-native-lifetime.mjs
+  h_6f5e45c41d0910 12,19
+basic/cli/tests/plugin-management-console-client.test.ts
+  h_6f5e45c41d0910 11
+basic/cli/tests/plugin-runtime/agent/config.test.ts
+  h_6f5e45c41d0910 11
+basic/cli/tests/plugin-runtime/agent/host-installer.test.ts
+  h_6f5e45c41d0910 18-20,29-62
+basic/cli/tests/plugin-runtime/agent/model-consumers-configuration.test.ts
+  h_6f5e45c41d0910 5-7
+basic/cli/tests/plugin-runtime/agent/publication-coordinator.test.ts
+  h_6f5e45c41d0910 4
+basic/cli/tests/plugin-runtime/agent/runtime-foundation.test.ts
+  h_6f5e45c41d0910 5-6
+basic/cli/tests/plugin-runtime/agent/schedule-history-index.test.ts
+  h_6f5e45c41d0910 1
+basic/cli/tests/plugin-runtime/agent/schedule-history.test.ts
+  h_6f5e45c41d0910 6
+basic/cli/tests/plugin-runtime/agent/self-change-apply.test.ts
+  h_6f5e45c41d0910 19
+basic/cli/tests/plugin-runtime/agent/self-change-plugin-roots.test.ts
+  h_6f5e45c41d0910 17
+basic/cli/tests/plugin-runtime/agent/structured-persistence.test.ts
+  h_6f5e45c41d0910 13-14
+basic/cli/tests/plugin-runtime/agent/tool-approval-im-channel.test.ts
+  h_6f5e45c41d0910 15
+basic/cli/tests/plugin-runtime/agent/tool-feature-publisher.test.ts
+  h_6f5e45c41d0910 3
+basic/cli/tests/plugin-runtime/agent/turn/ambient-engagement.test.ts
+  h_6f5e45c41d0910 13
+basic/cli/tests/plugin-runtime/agent/turn/ambient-profile-model.test.ts
+  h_6f5e45c41d0910 1
+basic/cli/tests/plugin-runtime/agent/turn/announcement-dispatch.test.ts
+  h_6f5e45c41d0910 4
+basic/cli/tests/plugin-runtime/agent/turn/approval-localization.test.ts
+  h_6f5e45c41d0910 2
+basic/cli/tests/plugin-runtime/agent/turn/boundaries.test.ts
+  h_6f5e45c41d0910 24,30
+basic/cli/tests/plugin-runtime/agent/turn/cold-field.test.ts
+  h_6f5e45c41d0910 3
+basic/cli/tests/plugin-runtime/agent/turn/content.test.ts
+  h_6f5e45c41d0910 10
+basic/cli/tests/plugin-runtime/agent/turn/control-gate.test.ts
+  h_6f5e45c41d0910 9-10,15-17
+basic/cli/tests/plugin-runtime/agent/turn/decision-audit.test.ts
+  h_6f5e45c41d0910 10-12
+basic/cli/tests/plugin-runtime/agent/turn/endpoint-cancellation.test.ts
+  h_6f5e45c41d0910 8
+basic/cli/tests/plugin-runtime/agent/turn/group-flood-detector.test.ts
+  h_6f5e45c41d0910 10
+basic/cli/tests/plugin-runtime/agent/turn/group-rule-defaults.test.ts
+  h_6f5e45c41d0910 8
+basic/cli/tests/plugin-runtime/agent/turn/group-rule-enforcer.test.ts
+  h_6f5e45c41d0910 8
+basic/cli/tests/plugin-runtime/agent/turn/group-rule-im.test.ts
+  h_6f5e45c41d0910 4
+basic/cli/tests/plugin-runtime/agent/turn/group-rule-operation-lifetime.test.ts
+  h_6f5e45c41d0910 7
+basic/cli/tests/plugin-runtime/agent/turn/inference-fixture.ts
+  h_6f5e45c41d0910 4
+basic/cli/tests/plugin-runtime/agent/turn/ingress-route.test.ts
+  h_6f5e45c41d0910 16
+basic/cli/tests/plugin-runtime/agent/turn/member-lifecycle.test.ts
+  h_6f5e45c41d0910 4-5
+basic/cli/tests/plugin-runtime/agent/turn/member-welcome-owner.test.ts
+  h_6f5e45c41d0910 5
+basic/cli/tests/plugin-runtime/agent/turn/multi-message-delivery.test.ts
+  h_6f5e45c41d0910 20-21
+basic/cli/tests/plugin-runtime/agent/turn/network-policy.test.ts
+  h_6f5e45c41d0910 2
+basic/cli/tests/plugin-runtime/agent/turn/personal-session-request.test.ts
+  h_6f5e45c41d0910 6
+basic/cli/tests/plugin-runtime/agent/turn/reaction-output.test.ts
+  h_6f5e45c41d0910 3-4
+basic/cli/tests/plugin-runtime/agent/turn/reaction-pacer.test.ts
+  h_6f5e45c41d0910 2
+basic/cli/tests/plugin-runtime/agent/turn/reply-messages.test.ts
+  h_6f5e45c41d0910 3
+basic/cli/tests/plugin-runtime/agent/turn/sandbox-policy.test.ts
+  h_6f5e45c41d0910 2
+basic/cli/tests/plugin-runtime/agent/turn/scene-event-state.test.ts
+  h_6f5e45c41d0910 1,7-9
+basic/cli/tests/plugin-runtime/agent/turn/scene-event-wake.test.ts
+  h_6f5e45c41d0910 1,5-6
+basic/cli/tests/plugin-runtime/agent/turn/scene-fact-cache.test.ts
+  h_6f5e45c41d0910 5-8
+basic/cli/tests/plugin-runtime/agent/turn/scene-facts-connection.test.ts
+  h_6f5e45c41d0910 8-9
+basic/cli/tests/plugin-runtime/agent/turn/scene-facts.test.ts
+  h_6f5e45c41d0910 8
+basic/cli/tests/plugin-runtime/agent/turn/self-profile-ambient.test.ts
+  h_6f5e45c41d0910 7
+basic/cli/tests/plugin-runtime/agent/turn/self-profile.test.ts
+  h_6f5e45c41d0910 3
+basic/cli/tests/plugin-runtime/agent/turn/session-event-dispatch.test.ts
+  h_6f5e45c41d0910 3
+basic/cli/tests/plugin-runtime/agent/turn/session-gate.test.ts
+  h_6f5e45c41d0910 3
+basic/cli/tests/plugin-runtime/agent/turn/tool-approval-im-ingress.test.ts
+  h_6f5e45c41d0910 6-7
+basic/cli/tests/plugin-runtime/agent/turn/trigger.test.ts
+  h_6f5e45c41d0910 11
+basic/cli/tests/plugin-runtime/configuration-cross-entry.test.ts
+  h_6f5e45c41d0910 19-20
+basic/cli/tests/plugin-runtime/configuration-host-installer.test.ts
+  h_6f5e45c41d0910 13
+basic/cli/tests/plugin-runtime/console/adapter-account-runtime.test.ts
+  h_6f5e45c41d0910 15
+basic/cli/tests/plugin-runtime/console/announcements-rpc.test.ts
+  h_6f5e45c41d0910 12
+basic/cli/tests/plugin-runtime/console/configuration-cli-live-host.test.ts
+  h_6f5e45c41d0910 13
+basic/cli/tests/plugin-runtime/console/control-plane.test.ts
+  h_6f5e45c41d0910 11
+basic/cli/tests/plugin-runtime/console/conversation-history-routes.test.ts
+  h_6f5e45c41d0910 7-8
+basic/cli/tests/plugin-runtime/console/data-migration-routes.test.ts
+  h_6f5e45c41d0910 8
+basic/cli/tests/plugin-runtime/console/page-shell-sandbox.test.ts
+  h_6f5e45c41d0910 2
+basic/cli/tests/plugin-runtime/console/plugin-management-list.test.ts
+  h_6f5e45c41d0910 5
+basic/cli/tests/plugin-runtime/console/plugin-task-reminder-integration.test.ts
+  h_6f5e45c41d0910 11
+basic/cli/tests/plugin-runtime/console/session-ops-rpc.test.ts
+  h_6f5e45c41d0910 9
+basic/cli/tests/plugin-runtime/console/workspace-conversation-routes.test.ts
+  h_6f5e45c41d0910 7
+basic/cli/tests/plugin-runtime/console/workspace-history.test.ts
+  h_6f5e45c41d0910 8
+basic/cli/tests/plugin-runtime/conversation-history-index.test.ts
+  h_6f5e45c41d0910 3
+basic/cli/tests/plugin-runtime/conversation-store-projection.test.ts
+  h_6f5e45c41d0910 7-8
+basic/cli/tests/plugin-runtime/data-migration/controller.test.ts
+  h_6f5e45c41d0910 10
+basic/cli/tests/plugin-runtime/database-conversation-live.test.ts
+  h_6f5e45c41d0910 19-20
+basic/cli/tests/plugin-runtime/database-host.test.ts
+  h_6f5e45c41d0910 9
+basic/cli/tests/plugin-runtime/host-config-null-compatibility.test.ts
+  h_6f5e45c41d0910 11-12
+basic/cli/tests/plugin-runtime/http-host-installer.test.ts
+  h_6f5e45c41d0910 5
+basic/cli/tests/plugin-runtime/inference/account-runtime.test.ts
+  h_6f5e45c41d0910 7-10
+basic/cli/tests/plugin-runtime/inference/ambient-status.test.ts
+  h_6f5e45c41d0910 5
+basic/cli/tests/plugin-runtime/inference/apply-contract.test.ts
+  h_6f5e45c41d0910 6-7
+basic/cli/tests/plugin-runtime/inference/configuration-fixture.ts
+  h_6f5e45c41d0910 9-10
+basic/cli/tests/plugin-runtime/inference/console-s4-acceptance.test.ts
+  h_6f5e45c41d0910 10-11
+basic/cli/tests/plugin-runtime/inference/environment-source.test.ts
+  h_6f5e45c41d0910 1
+basic/cli/tests/plugin-runtime/inference/fixtures.ts
+  h_6f5e45c41d0910 5-9
+basic/cli/tests/plugin-runtime/inference/host.test.ts
+  h_6f5e45c41d0910 16-18
+basic/cli/tests/plugin-runtime/inference/migration-apply.test.ts
+  h_6f5e45c41d0910 9-10,12,152,197,225,228
+basic/cli/tests/plugin-runtime/inference/migration-preview.test.ts
+  h_6f5e45c41d0910 6
+basic/cli/tests/plugin-runtime/inference/migration-session-bindings.test.ts
+  h_6f5e45c41d0910 23-24,30-31,749
+basic/cli/tests/plugin-runtime/inference/network.test.ts
+  h_6f5e45c41d0910 2
+basic/cli/tests/plugin-runtime/inference/oauth-refresh-policy.test.ts
+  h_6f5e45c41d0910 6-9
+basic/cli/tests/plugin-runtime/inference/operation-resources.test.ts
+  h_6f5e45c41d0910 14-16
+basic/cli/tests/plugin-runtime/inference/personal-network.test.ts
+  h_6f5e45c41d0910 2
+basic/cli/tests/plugin-runtime/inference/private-environment-source.test.ts
+  h_6f5e45c41d0910 1
+basic/cli/tests/plugin-runtime/inference/repository.test.ts
+  h_6f5e45c41d0910 6,10
+basic/cli/tests/plugin-runtime/inference/request-access.test.ts
+  h_6f5e45c41d0910 5-7
+basic/cli/tests/plugin-runtime/inference/routes.test.ts
+  h_6f5e45c41d0910 4-5,7-8
+basic/cli/tests/plugin-runtime/inference/sdk-network.test.ts
+  h_6f5e45c41d0910 4
+basic/cli/tests/plugin-runtime/inference/session-directory.test.ts
+  h_6f5e45c41d0910 5
+basic/cli/tests/plugin-runtime/inference/session-state.test.ts
+  h_6f5e45c41d0910 4-6
+basic/cli/tests/plugin-runtime/inference/standalone-service.test.ts
+  h_6f5e45c41d0910 4
+basic/cli/tests/plugin-runtime/inference/support-fixture.ts
+  h_6f5e45c41d0910 12-13
+basic/cli/tests/plugin-runtime/inference/support-metadata.test.ts
+  h_6f5e45c41d0910 1
+basic/cli/tests/plugin-runtime/inference/targets.test.ts
+  h_6f5e45c41d0910 7-8,10
+basic/cli/tests/plugin-runtime/inference/turn-context.test.ts
+  h_6f5e45c41d0910 8
+basic/cli/tests/plugin-runtime/locale-child-feature.test.ts
+  h_6f5e45c41d0910 7
+basic/cli/tests/plugin-runtime/locale-host.test.ts
+  h_6f5e45c41d0910 8
+basic/cli/tests/plugin-runtime/mysql-startup.live.test.ts
+  h_6f5e45c41d0910 1
+basic/cli/tests/plugin-runtime/outbound-host.test.ts
+  h_6f5e45c41d0910 6
+basic/cli/tests/plugin-runtime/persistent-state-runtime.test.ts
+  h_6f5e45c41d0910 9
+basic/cli/tests/plugin-runtime/persistent-state.live.test.ts
+  h_6f5e45c41d0910 6-8
+basic/cli/tests/plugin-runtime/persistent-state.test.ts
+  h_6f5e45c41d0910 5-6
+basic/cli/tests/plugin-runtime/plugin-lifecycle-store.test.ts
+  h_6f5e45c41d0910 4
+basic/cli/tests/plugin-runtime/readiness.test.ts
+  h_6f5e45c41d0910 6-7
+basic/cli/tests/plugin-runtime/relational-state.test.ts
+  h_6f5e45c41d0910 8,16
+basic/cli/tests/plugin-runtime/runtime-endpoints/runtime.test.ts
+  h_6f5e45c41d0910 9
+basic/cli/tests/plugin-runtime/runtime-endpoints/state.test.ts
+  h_6f5e45c41d0910 6
+basic/cli/tests/plugin-runtime/self-change-e2e.test.ts
+  h_6f5e45c41d0910 25
+basic/cli/tests/plugin-runtime/sender-enrichment-configuration.test.ts
+  h_6f5e45c41d0910 9
+basic/cli/tests/plugin-runtime/sender-enrichment.test.ts
+  h_6f5e45c41d0910 5-6
+basic/cli/tests/plugin-runtime/start/foreground-supervisor.test.ts
+  h_6f5e45c41d0910 11
+basic/cli/tests/plugin-runtime/start/options.test.ts
+  h_6f5e45c41d0910 6
+docs/authoring/conventions.md
+  h_6f5e45c41d0910 308
+docs/contributing/behavior-customization-plan.md
+  h_6f5e45c41d0910 40-41
+docs/en/authoring/conventions.md
+  h_6f5e45c41d0910 308
+docs/plans/plugin-package-and-instance-declarations.md
+  h_6f5e45c41d0910 274
+examples/full-bot/ACCEPTANCE.md
+  h_6f5e45c41d0910 34
+examples/full-bot/README.md
+  h_6f5e45c41d0910 51
+examples/full-bot/pages/agent-trace/index.ts
+  h_6f5e45c41d0910 1-30,34,39-95
+examples/full-bot/pages/workroom/index.ts
+  h_6f5e45c41d0910 1-29,33,38-93
+examples/full-bot/plugin.ts
+  h_6f5e45c41d0910 3,5,8-9,75,82-103,112-127,139-156,165-175
+examples/full-bot/tests/full-bot-l4-contract.test.ts
+  h_6f5e45c41d0910 55-56,60-61,65,86-121,123-132,151-165
+examples/minimal-bot/plugin.ts
+  h_6f5e45c41d0910 1,8-14
+packages/console/pagemanager/package.json
+  h_6f5e45c41d0910 28-32,100-103
+packages/console/pagemanager/src/index.ts
+  h_6f5e45c41d0910 1,3-15
+packages/console/pagemanager/src/node/index.ts
+  h_6f5e45c41d0910 11-24
+packages/console/pagemanager/src/shell/page-renderer-helpers.ts
+  h_6f5e45c41d0910 1-2,15,27,493,652
+packages/console/pagemanager/src/shell/page-renderer.ts
+  h_6f5e45c41d0910 412-419
+packages/console/pagemanager/tsconfig.json
+  h_6f5e45c41d0910 10
+packages/game-kit/tests/target-migration.test.ts
+  h_6f5e45c41d0910 22
+packages/im/agent/evals/framework/driver.ts
+  h_6f5e45c41d0910 57
+packages/im/agent/src/plugin-runtime/ingress/group-rule-enforcer.ts
+  h_6f5e45c41d0910 30,32-33,49-51,57,62,71-76,687-951
+packages/im/agent/src/plugin-runtime/ingress/index.ts
+  h_6f5e45c41d0910 24
+packages/im/agent/src/plugin-runtime/ingress/ingress-ambient-stage.ts
+  h_6f5e45c41d0910 27
+packages/im/agent/src/plugin-runtime/ingress/ingress-delivery-helpers.ts
+  h_6f5e45c41d0910 16
+packages/im/agent/src/plugin-runtime/ingress/ingress-management-stage.ts
+  h_6f5e45c41d0910 10
+packages/im/agent/src/plugin-runtime/ingress/ingress-moderation-stage.ts
+  h_6f5e45c41d0910 18,31
+packages/im/agent/src/plugin-runtime/ingress/ingress-outbound.ts
+  h_6f5e45c41d0910 49,52
+packages/im/agent/src/plugin-runtime/ingress/ingress-turn-execution-stage.ts
+  h_6f5e45c41d0910 13
+packages/im/agent/src/plugin-runtime/ingress/ingress-turn-runner.ts
+  h_6f5e45c41d0910 65,74
+packages/im/agent/src/plugin-runtime/ingress/ingress-venue-helpers.ts
+  h_6f5e45c41d0910 49,52
+packages/im/agent/src/plugin-runtime/ingress/request-ports.ts
+  h_6f5e45c41d0910 2,24,27-170
+packages/im/agent/src/plugin-runtime/ingress/request.ts
+  h_6f5e45c41d0910 42,49-50,54-55,60,68,73,84,88
+packages/im/agent/src/plugin-runtime/ingress/scene-event-ingress.ts
+  h_6f5e45c41d0910 14,19,61-249
+packages/im/agent/src/plugin-runtime/ingress/unified-mailbox-spine.ts
+  h_6f5e45c41d0910 4,16,18-26,30,32-33,61-64,75,77-101,105-329,332,347,349,358-359
+packages/im/agent/tests/unified-mailbox-spine.test.ts
+  h_6f5e45c41d0910 4
+packages/im/core/src/feature/command.ts
+  h_6f5e45c41d0910 3-4
+packages/im/core/src/feature/middleware.ts
+  h_6f5e45c41d0910 50,54
+packages/im/core/src/plugin-runtime/im/command-feedback.ts
+  h_6f5e45c41d0910 1-2,4,6,8,111-196
+packages/im/core/src/plugin-runtime/im/contracts.ts
+  h_6f5e45c41d0910 1,4,6,8,14-73
+packages/im/core/src/plugin-runtime/im/endpoint-runtime.ts
+  h_6f5e45c41d0910 2,4-12
+packages/im/core/src/plugin-runtime/im/im-runtime.ts
+  h_6f5e45c41d0910 36,52-53,68,70,73-78
+packages/im/core/src/plugin-runtime/im/inbound-dedup.ts
+  h_6f5e45c41d0910 1,3-16,28-29,254-419
+packages/im/core/src/plugin-runtime/im/inbound-origin.ts
+  h_6f5e45c41d0910 1,3,6-122
+packages/im/core/src/plugin-runtime/im/inbound-runtime.ts
+  h_6f5e45c41d0910 1-5,13-14,16,19-21,23,26,30-48,63,215-233,393-403,405-412,415-420,422-427,489-495,502-509,522-529
+packages/im/core/src/plugin-runtime/im/inbound-spine.ts
+  h_6f5e45c41d0910 1-4,6-22,24-40,42,44-49,53-194,402-637
+packages/im/core/src/plugin-runtime/im/index.ts
+  h_6f5e45c41d0910 25,33-44
+packages/im/core/src/plugin-runtime/im/interaction-runtime.ts
+  h_6f5e45c41d0910 3,26-35,37,41,44-46,48
+packages/im/core/src/plugin-runtime/im/interactive-router.ts
+  h_6f5e45c41d0910 1-2,4-6,8,10-11,13-157
+packages/im/core/src/plugin-runtime/im/message-dispatcher.ts
+  h_6f5e45c41d0910 13
+packages/im/core/src/plugin-runtime/im/message-events.ts
+  h_6f5e45c41d0910 1-73
+packages/im/core/src/plugin-runtime/im/outbound-delivery-runtime.ts
+  h_6f5e45c41d0910 2,14-15,19
+packages/im/core/src/plugin-runtime/im/outbound-renderer.ts
+  h_6f5e45c41d0910 1-3,7,20,22-158
+packages/im/core/tests/plugin-runtime/command-menu-image.test.ts
+  h_6f5e45c41d0910 9-10
+packages/im/core/tests/plugin-runtime/im-runtime.test.ts
+  h_6f5e45c41d0910 2,68,85
+packages/im/core/tests/plugin-runtime/inbound-origin.test.ts
+  h_6f5e45c41d0910 3
+packages/im/core/tests/plugin-runtime/jsx-outbound-delivery.test.ts
+  h_6f5e45c41d0910 29-31,33
+packages/im/core/tests/plugin-runtime/outbound-ledger.test.ts
+  h_6f5e45c41d0910 2
+packages/im/core/tests/plugin-runtime/outbound-locale.test.ts
+  h_6f5e45c41d0910 10-11
+packages/im/core/tests/plugin-runtime/readable-fallback-projection.test.ts
+  h_6f5e45c41d0910 3
+packages/im/plugin-runtime/src/plugin.ts
+  h_6f5e45c41d0910 103-139,145,232-234
+packages/im/plugin-runtime/tests/relational-target-migration.test.ts
+  h_6f5e45c41d0910 2
+packages/im/plugin-runtime/tests/store.test.ts
+  h_6f5e45c41d0910 9,196-227
+plugins/features/process-monitor/plugin.ts
+  h_6f5e45c41d0910 1-5,25-33
+plugins/games/hub/plugin.ts
+  h_6f5e45c41d0910 1-5,17-25
+plugins/utils/calendar/plugin.ts
+  h_6f5e45c41d0910 5,7,35-44
+plugins/utils/content-moderation/plugin.ts
+  h_6f5e45c41d0910 1-5,15-23
+plugins/utils/group-suite/plugin.ts
+  h_6f5e45c41d0910 1-6,24-52
+plugins/utils/ledger/plugin.ts
+  h_6f5e45c41d0910 1-7,18-37
+plugins/utils/reminder/plugin.ts
+  h_6f5e45c41d0910 2-10,22-44
+plugins/utils/rss/plugin.ts
+  h_6f5e45c41d0910 6,10-12,61-75
+scripts/check-api-docs-surface.mjs
+  h_6f5e45c41d0910 43,136
+tests/e2e-smoke/harness/smoke-hosts.mjs
+  h_6f5e45c41d0910 15
+tests/snapshots/plugin-runtime-api.json
+  h_6f5e45c41d0910 165,207,220
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "48a91ef76b6af7fa488921df04bed0ef5e0b38c3",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
