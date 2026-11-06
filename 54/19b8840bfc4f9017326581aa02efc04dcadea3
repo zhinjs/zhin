@@ -1,0 +1,44 @@
+.changeset/plugin-store-and-setup-capabilities.md
+  h_6f5e45c41d0910 1-10
+examples/full-bot/plugin.ts
+  h_6f5e45c41d0910 105-106
+packages/im/plugin-runtime/src/index.ts
+  h_6f5e45c41d0910 36
+packages/im/plugin-runtime/src/persistent-state.ts
+  h_6f5e45c41d0910 7-15,69,78-80,87-88,98
+packages/im/plugin-runtime/src/plugin.ts
+  h_6f5e45c41d0910 11-22,25-34,90-102,110-112,117-150,178-188,191,200
+packages/im/plugin-runtime/src/store.ts
+  h_6f5e45c41d0910 1-129
+packages/im/plugin-runtime/src/token.ts
+  h_6f5e45c41d0910 108-111
+packages/im/plugin-runtime/tests/store.test.ts
+  h_6f5e45c41d0910 1-195
+packages/im/plugin-runtime/tests/types/persistent-state.ts
+  h_6f5e45c41d0910 18-28
+plugins/utils/calendar/src/credential-store.ts
+  h_6f5e45c41d0910 2,11,16,23,62
+plugins/utils/earthquake/src/subscriptions.ts
+  h_6f5e45c41d0910 3,34-35,80,137
+plugins/utils/reminder/plugin.ts
+  h_6f5e45c41d0910 2,23-42,44
+plugins/utils/reminder/src/runtime.ts
+  h_6f5e45c41d0910 1,4
+plugins/utils/repeater/plugin.ts
+  h_6f5e45c41d0910 11
+plugins/utils/repeater/src/runtime.ts
+  h_6f5e45c41d0910 1,4,6
+tests/snapshots/plugin-runtime-api.json
+  h_6f5e45c41d0910 318
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5419b8840bfc4f9017326581aa02efc04dcadea3",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
