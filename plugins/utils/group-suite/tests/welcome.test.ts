@@ -16,8 +16,7 @@ import { SnapshotStore, createCapabilitySlot, createSnapshotView, rootPluginId, 
 import { ImRuntime, memberWelcomeOwnerToken, outboundMessageToken, type IncomingNotice, type OutboundEnvelope } from '../../../../packages/im/core/src/plugin-runtime/im/index.js';
 import { EndpointDeliveryError } from '../../../../packages/im/im-contract/src/index.js';
 import { AiControlPlane, AiSessionOps, SessionProfileStore, type ControlFlagsPatch } from '../../../../packages/im/agent/src/index.js';
-import { MemberLifecycle } from '../../../../basic/cli/src/plugin-runtime/agent/turn/member-lifecycle.js';
-import { capabilityLocalName } from '../../../../basic/cli/src/plugin-runtime/agent/turn/request.js';
+import { MemberLifecycle, capabilityLocalName } from '../../../../packages/im/agent/src/plugin-runtime/index.js';
 import welcome from '../handlers/welcome/index.js';
 
 const root: DeliveryTarget = { endpoint: { adapter: 'icqq', id: 'root/qq\0zhin.adapter\0icqq~main' }, kind: 'group', id: 'g1' };

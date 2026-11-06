@@ -9,7 +9,7 @@ import { aiCompletionToken, databaseHostToken, outboundHostToken, type AiComplet
 import inbound from '../middlewares/inbound/index.ts';
 import { ModerationEngine } from '../src/engine.js';
 import { moderationEngineToken } from '../src/runtime.js';
-import { createOutboundHost } from '../../../../basic/cli/src/plugin-runtime/outbound-host-installer.js';
+import { createOutboundHost } from '../../../../packages/im/core/src/plugin-runtime/im/index.js';
 import type { CapturedOutboundOperation, OutboundCaptureInput, Locale } from 'zhin.js/plugin-runtime';
 
 const NOW = Date.UTC(2026, 9, 23, 12);

@@ -7,7 +7,7 @@ import { childPluginId, rootPluginId, definePlugin, databaseHostToken, databaseR
   pluginTaskProviderToken, type PluginTaskProvider, type PluginTaskSnapshot, type ScheduleHost, type ScheduleJobRegistration,
   type OutboundRootHost } from '../../../../packages/im/plugin-runtime/src/index.js';
 import { RootRuntime, type ModuleRuntime } from '../../../../packages/im/runtime/src/index.js';
-import { createDatabaseHost } from '../../../../basic/cli/src/plugin-runtime/database-host-installer.js';
+import { createDatabaseHost } from '../../../../packages/im/core/src/plugin-runtime/im/index.js';
 import plugin from '../plugin.js';
 import { createAdministratorRssState } from '../src/storage.js';
 import remove from '../commands/rss-remove/[url]/index.js';

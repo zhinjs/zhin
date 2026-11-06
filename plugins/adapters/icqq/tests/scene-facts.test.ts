@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { adapterFeatureId } from '@zhin.js/adapter';
-import { resolveRuntimeTurnContextState } from '../../../../basic/cli/src/plugin-runtime/agent/turn/request.js';
+import { resolveRuntimeTurnContextState } from '../../../../packages/im/agent/src/plugin-runtime/index.js';
 
 vi.mock('@icqqjs/icqq', async () => import('./_icqq-mock.js'));
 
