@@ -1,10 +1,12 @@
 ---
+"@zhin.js/adapter-bilibili": patch
 "@zhin.js/adapter-bilibili-live": patch
 "@zhin.js/adapter-dingtalk": patch
 "@zhin.js/adapter-discord": patch
 "@zhin.js/adapter-email": patch
 "@zhin.js/adapter-github": patch
 "@zhin.js/adapter-icqq": patch
+"@zhin.js/adapter-juejin": patch
 "@zhin.js/adapter-kook": patch
 "@zhin.js/adapter-lark": patch
 "@zhin.js/adapter-line": patch
@@ -34,4 +36,4 @@
 "@zhin.js/process-monitor": patch
 ---
 
-Unify Console page blueprints (`definePageBlueprint` / `createDeclarativePage` and `defineAdapterPage` / `createAdapterConsolePage`) into `@zhin.js/console-contract` and `@zhin.js/page`, remove `@zhin.js/client` (React 19) runtime dependencies from all 28 server-side plugins and adapters, and remove legacy Era-1 Koa `PageManager` code from `@zhin.js/pagemanager`.
+Unify Console page blueprints (`definePageBlueprint`, `defineAdapterPage`, `defineCommentReviewPage`, `projectBlueprintToImCard`, `projectBlueprintToCliPanel`) into `@zhin.js/console-contract` and `@zhin.js/page`, add zero-esbuild pure Blueprint synthesis + static client bundle mounting to `@zhin.js/pagemanager`, remove `@zhin.js/client` (React 19) and `.tsx` from all 30 server-side plugins and adapters (including `bilibili` and `juejin`), and remove legacy Era-1 Koa `PageManager` code.

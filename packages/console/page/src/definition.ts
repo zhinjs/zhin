@@ -1,6 +1,7 @@
 import {
   definePage as baseDefinePage,
   normalizeClientModuleArtifact,
+  isConsoleBlueprint,
   normalizePageMetadata,
   pageRoute,
   assertPageLocalName,
@@ -8,8 +9,12 @@ import {
   createDeclarativePage,
   defineAdapterPage,
   createAdapterConsolePage,
+  defineCommentReviewPage,
+  createCommentReviewPage,
   buildBlueprintFromSpec,
   resolveDeclarativeText,
+  projectBlueprintToImCard,
+  projectBlueprintToCliPanel,
   type NormalizedPageMetadata,
   type PageManifest,
   type ClientModuleArtifact,
@@ -31,22 +36,38 @@ import {
   type ConsolePageBlueprintSection,
   type ConsolePageBlueprint,
   type ConsoleAdapterPageBlueprint,
+  type CommentReviewDraftBase,
+  type CommentReviewEndpointBase,
+  type CommentReviewBlueprintSpec,
   type BlueprintPageComponent,
   type AdapterPageComponent,
+  type BlueprintProjectionOptions,
+  type BlueprintImStatItem,
+  type BlueprintImTableSection,
+  type BlueprintImEntriesSection,
+  type BlueprintImActionItem,
+  type BlueprintImSegment,
+  type BlueprintImCardProjection,
+  type BlueprintCliPanelOptions,
 } from '@zhin.js/console-contract';
 import type { ValidationContext } from '@zhin.js/feature-kit';
 
 export {
   normalizePageMetadata,
   normalizeClientModuleArtifact,
+  isConsoleBlueprint,
   pageRoute,
   assertPageLocalName,
   definePageBlueprint,
   createDeclarativePage,
   defineAdapterPage,
   createAdapterConsolePage,
+  defineCommentReviewPage,
+  createCommentReviewPage,
   buildBlueprintFromSpec,
   resolveDeclarativeText,
+  projectBlueprintToImCard,
+  projectBlueprintToCliPanel,
   type NormalizedPageMetadata,
   type PageManifest,
   type ClientModuleArtifact,
@@ -67,8 +88,19 @@ export {
   type ConsolePageBlueprintSection,
   type ConsolePageBlueprint,
   type ConsoleAdapterPageBlueprint,
+  type CommentReviewDraftBase,
+  type CommentReviewEndpointBase,
+  type CommentReviewBlueprintSpec,
   type BlueprintPageComponent,
   type AdapterPageComponent,
+  type BlueprintProjectionOptions,
+  type BlueprintImStatItem,
+  type BlueprintImTableSection,
+  type BlueprintImEntriesSection,
+  type BlueprintImActionItem,
+  type BlueprintImSegment,
+  type BlueprintImCardProjection,
+  type BlueprintCliPanelOptions,
 };
 
 export type PageTitleI18n = Readonly<Partial<Record<'zh-CN' | 'en', string>>>;
@@ -124,6 +156,7 @@ export interface PageDefinition extends NormalizedPageMetadata {
   readonly fullWidth?: boolean;
   readonly module: string;
   readonly hash: string;
+  readonly blueprint?: ConsolePageBlueprint | ConsoleAdapterPageBlueprint;
 }
 
 export function parsePageArtifact(value: unknown, context: ValidationContext): PageDefinition {
@@ -152,5 +185,6 @@ export function parsePageArtifact(value: unknown, context: ValidationContext): P
     ...(typeof fullWidth === 'boolean' ? { fullWidth } : {}),
     module: artifact.module,
     hash: artifact.hash,
+    ...(artifact.blueprint !== undefined ? { blueprint: artifact.blueprint } : {}),
   });
 }

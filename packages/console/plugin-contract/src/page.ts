@@ -23,6 +23,7 @@ export interface ClientModuleArtifact {
   readonly module: string;
   readonly hash: string;
   readonly metadata?: unknown;
+  readonly blueprint?: ConsolePageBlueprint | ConsoleAdapterPageBlueprint;
 }
 
 export function normalizeClientModuleArtifact(
@@ -33,7 +34,21 @@ export function normalizeClientModuleArtifact(
   const module = optionalString(input.module, `${label} module`);
   const hash = optionalString(input.hash, `${label} hash`);
   if (!module || !hash) throw new TypeError(`${label} must include module and hash`);
-  return Object.freeze({ module, hash, metadata: input.metadata });
+  const blueprint = isConsoleBlueprint(input.blueprint) ? input.blueprint : undefined;
+  return Object.freeze({
+    module,
+    hash,
+    metadata: input.metadata,
+    ...(blueprint !== undefined ? { blueprint } : {}),
+  });
+}
+
+export function isConsoleBlueprint(
+  value: unknown,
+): value is ConsolePageBlueprint | ConsoleAdapterPageBlueprint {
+  if (!value || typeof value !== 'object') return false;
+  const kind = (value as { readonly kind?: unknown }).kind;
+  return kind === 'zhin.console.page-blueprint' || kind === 'zhin.console.adapter-page';
 }
 
 export interface PageManifest extends NormalizedPageMetadata {
@@ -44,6 +59,7 @@ export interface PageManifest extends NormalizedPageMetadata {
   readonly module: string;
   readonly hash: string;
   readonly route: string;
+  readonly blueprint?: ConsolePageBlueprint | ConsoleAdapterPageBlueprint;
 }
 
 export function definePage(metadata: PageMetadata = {}): Readonly<PageMetadata> {
@@ -398,6 +414,55 @@ export interface ConsolePageBlueprint<TData = Record<string, unknown>> {
   };
   readonly sections: readonly ConsolePageBlueprintSection[];
   readonly spec?: DeclarativePageSpec<TData>;
+  readonly reviewSpec?: CommentReviewBlueprintSpec<any, any>;
+}
+
+export interface CommentReviewDraftBase {
+  readonly id: string;
+  readonly url: string;
+  readonly message: string;
+  readonly status: 'pending' | 'sending';
+  readonly interrupted: boolean;
+  readonly createdAt: number;
+  readonly updatedAt?: number;
+  readonly author?: string;
+  readonly original?: string;
+}
+
+export interface CommentReviewEndpointBase<D extends CommentReviewDraftBase = CommentReviewDraftBase> {
+  readonly id: string;
+  readonly sendMode: 'review' | 'off';
+  readonly persistent: boolean;
+  readonly circuit: { readonly code: number } | null;
+  readonly login: { readonly state: 'none' | 'ok' | 'expired' };
+  readonly pendingCount: number;
+  readonly drafts: readonly D[];
+}
+
+export interface CommentReviewBlueprintSpec<
+  E extends CommentReviewEndpointBase<any> = CommentReviewEndpointBase<CommentReviewDraftBase>,
+  D extends CommentReviewDraftBase = CommentReviewDraftBase,
+> {
+  readonly adapter: string;
+  readonly platform: { readonly zh: string; readonly en: string };
+  readonly mark: string;
+  readonly resource: { readonly zh: string; readonly en: string };
+  readonly dictionary?: Readonly<Record<string, string>>;
+  readonly openLabel?: string;
+  readonly account?: (endpoint: E) => { readonly id?: string; readonly name?: string };
+  readonly draftResource?: (
+    draft: D,
+    t: (key: string, ...values: readonly (string | number)[]) => string,
+  ) => string;
+  readonly loginHint?: (
+    endpoint: E,
+    t: (key: string, ...values: readonly (string | number)[]) => string,
+  ) => string | undefined;
+  readonly isLoginPending?: (endpoint: E) => boolean;
+  readonly loginMode?: 'qr' | 'cookie-check';
+  readonly resourcesKey?: string;
+  readonly pollMs?: number;
+  readonly pendingPollMs?: number;
 }
 
 export interface ConsoleAdapterPageBlueprint {
@@ -583,3 +648,683 @@ export function defineAdapterPage(adapterKey: string): AdapterPageComponent {
 }
 
 export const createAdapterConsolePage = defineAdapterPage;
+
+export function defineCommentReviewPage<
+  E extends CommentReviewEndpointBase<any> = CommentReviewEndpointBase<CommentReviewDraftBase>,
+  D extends CommentReviewDraftBase = CommentReviewDraftBase,
+>(
+  reviewSpec: CommentReviewBlueprintSpec<E, D>,
+): BlueprintPageComponent<{ readonly endpoints?: readonly E[]; readonly updatedAt?: number }> {
+  const zhTitle = `${reviewSpec.platform.zh}评论审批`;
+  const enTitle = `${reviewSpec.platform.en} comment review`;
+  const loginActions: DeclarativeActionSpec<any>[] =
+    reviewSpec.loginMode === 'cookie-check'
+      ? [{ name: 'login-check', label: { zh: '重新检查登录', en: 'Check login again' } }]
+      : [
+          { name: 'login', label: { zh: '扫码登录', en: 'Sign in with QR code' }, variant: 'primary' },
+          { name: 'login-cancel', label: { zh: '取消扫码', en: 'Cancel QR login' }, variant: 'ghost' },
+          { name: 'logout', label: { zh: '退出登录', en: 'Sign out' }, variant: 'secondary' },
+        ];
+  const blueprint = buildBlueprintFromSpec<{ readonly endpoints?: readonly E[]; readonly updatedAt?: number }>({
+    pluginId: reviewSpec.adapter,
+    title: { zh: zhTitle, 'zh-CN': zhTitle, en: enTitle },
+    mark: reviewSpec.mark,
+    statusMethod: 'status',
+    pollMs: reviewSpec.pollMs ?? 10_000,
+    ...(reviewSpec.dictionary ? { dictionary: reviewSpec.dictionary } : {}),
+    stats: [
+      {
+        key: 'endpoints',
+        label: { zh: '账号数', en: 'Accounts' },
+        value: (data) => (Array.isArray(data?.endpoints) ? data.endpoints.length : 0),
+      },
+      {
+        key: 'pendingDrafts',
+        label: { zh: '待审草稿', en: 'Pending drafts' },
+        value: (data) =>
+          (data?.endpoints ?? []).reduce(
+            (sum, ep) => sum + (typeof ep?.pendingCount === 'number' ? ep.pendingCount : (ep?.drafts?.length ?? 0)),
+            0,
+          ),
+      },
+    ],
+    sections: [
+      {
+        id: 'endpoints',
+        title: { zh: '评论账号与待审草稿', en: 'Accounts & Pending Drafts' },
+        items: 'endpoints',
+        columns: [
+          { key: 'id', label: { zh: '账号', en: 'Account' } },
+          { key: 'sendMode', label: { zh: '发送模式', en: 'Send Mode' } },
+          { key: 'pendingCount', label: { zh: '待审数', en: 'Pending' } },
+        ],
+      },
+    ],
+    actions: [
+      ...loginActions,
+      {
+        name: 'edit',
+        label: { zh: '修改草稿', en: 'Edit draft' },
+        fields: [
+          { key: 'id', label: { zh: '草稿 ID', en: 'Draft ID' }, required: true },
+          { key: 'message', label: { zh: '回复内容', en: 'Reply content' }, required: true },
+        ],
+      },
+      {
+        name: 'send',
+        label: { zh: '发送草稿', en: 'Send draft' },
+        variant: 'primary',
+        fields: [{ key: 'id', label: { zh: '草稿 ID', en: 'Draft ID' }, required: true }],
+      },
+      {
+        name: 'drop',
+        label: { zh: '丢弃草稿', en: 'Discard draft' },
+        variant: 'danger',
+        confirm: { zh: '确认丢弃该草稿？', en: 'Discard this draft?' },
+        fields: [{ key: 'id', label: { zh: '草稿 ID', en: 'Draft ID' }, required: true }],
+      },
+    ],
+  });
+  const enriched: ConsolePageBlueprint<{ readonly endpoints?: readonly E[]; readonly updatedAt?: number }> =
+    Object.freeze({
+      ...blueprint,
+      reviewSpec,
+    });
+  function CommentReviewBlueprintPage(
+    _props?: DeclarativePageComponentProps,
+  ): ConsolePageBlueprint<{ readonly endpoints?: readonly E[]; readonly updatedAt?: number }> {
+    return enriched;
+  }
+  return Object.freeze(Object.assign(CommentReviewBlueprintPage, enriched));
+}
+
+export const createCommentReviewPage = defineCommentReviewPage;
+
+// ── Multi-Surface Blueprint Projection (IM Card & CLI TUI) ─────────────────
+
+export interface BlueprintProjectionOptions {
+  readonly locale?: DeclarativeUiLocale;
+  readonly pluginId?: string;
+  readonly maxRows?: number;
+}
+
+export interface BlueprintImStatItem {
+  readonly key: string;
+  readonly label: string;
+  readonly value: string;
+  readonly hint?: string;
+  readonly badge?: string;
+}
+
+export interface BlueprintImTableSection {
+  readonly id: string;
+  readonly title: string;
+  readonly columns: readonly { readonly key: string; readonly label: string }[];
+  readonly rows: readonly (readonly string[])[];
+  readonly totalRows: number;
+  readonly emptyText?: string;
+}
+
+export interface BlueprintImEntriesSection {
+  readonly id: string;
+  readonly title: string;
+  readonly items: readonly { readonly label: string; readonly value: string }[];
+}
+
+export interface BlueprintImActionItem {
+  readonly name: string;
+  readonly label: string;
+  readonly rpcMethod: string;
+  readonly description?: string;
+  readonly variant: DeclarativeButtonVariant;
+  readonly disabled: boolean;
+}
+
+export interface BlueprintImSegment {
+  readonly type: 'card' | 'markdown' | 'button' | 'text';
+  readonly data: Readonly<Record<string, unknown>>;
+}
+
+export interface BlueprintImCardProjection {
+  readonly kind: 'zhin.im.blueprint-card';
+  readonly pluginId: string;
+  readonly title: string;
+  readonly description?: string;
+  readonly stats: readonly BlueprintImStatItem[];
+  readonly tables: readonly BlueprintImTableSection[];
+  readonly entries: readonly BlueprintImEntriesSection[];
+  readonly actions: readonly BlueprintImActionItem[];
+  readonly markdown: string;
+  readonly segments: readonly BlueprintImSegment[];
+}
+
+function createProjectionContext<TData = Record<string, unknown>>(
+  data: TData | undefined,
+  locale: DeclarativeUiLocale,
+  pluginId: string,
+  dictionary?: Readonly<Record<string, string>>,
+): DeclarativePageContext<TData> {
+  const t = (key: string, ...values: readonly (string | number)[]): string => {
+    const template = locale === 'en' && dictionary?.[key] ? dictionary[key] : key;
+    return template.replace(/\{(\d+)\}/gu, (_m, idx) => String(values[Number(idx)] ?? ''));
+  };
+  return {
+    pluginId,
+    locale,
+    t,
+    resource: {
+      state: data === undefined ? 'empty' : 'ready',
+      data,
+      error: undefined,
+      lastSuccessAt: Date.now(),
+      refreshing: false,
+      refresh: async () => true,
+      mutate: () => undefined,
+    },
+    call: async () => undefined as never,
+    refresh: async () => true,
+    notify: () => undefined,
+  };
+}
+
+function formatRenderableValue(value: unknown): string {
+  if (value === null || value === undefined) return '—';
+  if (typeof value === 'string') return value || '—';
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (Array.isArray(value)) return value.map((item) => formatRenderableValue(item)).join(', ');
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    if (typeof record.label === 'string') return record.label;
+    if (typeof record.text === 'string') return record.text;
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+  return String(value);
+}
+
+/**
+ * Projects any Server-Driven Console Blueprint (`definePageBlueprint`, `defineAdapterPage`,
+ * `defineCommentReviewPage`, or `DeclarativePageSpec`) + runtime status payload into a
+ * structured IM Card / Markdown / Segment payload ready for `Message.$reply` or `Adapter.sendMessage`.
+ */
+export function projectBlueprintToImCard<TData = Record<string, unknown>>(
+  input:
+    | ConsolePageBlueprint<TData>
+    | ConsoleAdapterPageBlueprint
+    | DeclarativePageSpec<TData>,
+  data?: TData,
+  options: BlueprintProjectionOptions = {},
+): Readonly<BlueprintImCardProjection> {
+  const locale: DeclarativeUiLocale = options.locale ?? 'zh-CN';
+  const maxRows = Math.max(1, options.maxRows ?? 10);
+  const recordData = (data && typeof data === 'object' ? data : {}) as Record<string, unknown>;
+
+  if ((input as ConsoleAdapterPageBlueprint)?.kind === 'zhin.console.adapter-page') {
+    const adapterBp = input as ConsoleAdapterPageBlueprint;
+    const pluginId = options.pluginId ?? adapterBp.adapterKey;
+    const title =
+      locale === 'zh-CN'
+        ? `${adapterBp.adapterKey} 适配器状态`
+        : `${adapterBp.adapterKey} Adapter Status`;
+    const bots = Array.isArray(recordData.bots)
+      ? recordData.bots
+      : Array.isArray(recordData.endpoints)
+        ? recordData.endpoints
+        : [];
+    const onlineCount = bots.filter(
+      (b: any) => b?.online === true || b?.connected === true || b?.status === 'online',
+    ).length;
+    const stats: BlueprintImStatItem[] = [
+      {
+        key: 'adapter',
+        label: locale === 'zh-CN' ? '适配器' : 'Adapter',
+        value: adapterBp.adapterKey,
+      },
+      {
+        key: 'endpoints',
+        label: locale === 'zh-CN' ? '实例数' : 'Instances',
+        value: String(bots.length),
+      },
+      {
+        key: 'online',
+        label: locale === 'zh-CN' ? '在线数' : 'Online',
+        value: String(onlineCount),
+      },
+    ];
+    const columns = [
+      { key: 'id', label: locale === 'zh-CN' ? '账号/端点' : 'Endpoint' },
+      { key: 'status', label: locale === 'zh-CN' ? '状态' : 'Status' },
+    ];
+    const rows = bots.slice(0, maxRows).map((b: any, i: number) => [
+      String(b?.id ?? b?.selfId ?? b?.name ?? `#${i + 1}`),
+      String(
+        b?.status ??
+          (b?.online === true || b?.connected === true
+            ? locale === 'zh-CN'
+              ? '在线'
+              : 'online'
+            : locale === 'zh-CN'
+              ? '离线'
+              : 'offline'),
+      ),
+    ]);
+    const tables: BlueprintImTableSection[] =
+      bots.length > 0
+        ? [
+            {
+              id: 'endpoints',
+              title: locale === 'zh-CN' ? '端点列表' : 'Endpoints',
+              columns,
+              rows,
+              totalRows: bots.length,
+            },
+          ]
+        : [];
+    const mdLines = [
+      `### ${title}`,
+      stats.map((s) => `- **${s.label}**: ${s.value}`).join('\n'),
+    ];
+    if (tables.length > 0) {
+      for (const tbl of tables) {
+        mdLines.push(`\n#### ${tbl.title}`);
+        mdLines.push(`| ${tbl.columns.map((c) => c.label).join(' | ')} |`);
+        mdLines.push(`| ${tbl.columns.map(() => '---').join(' | ')} |`);
+        for (const r of tbl.rows) {
+          mdLines.push(`| ${r.join(' | ')} |`);
+        }
+      }
+    }
+    const markdown = mdLines.filter(Boolean).join('\n');
+    const segments: BlueprintImSegment[] = [
+      {
+        type: 'card',
+        data: {
+          title,
+          pluginId,
+          stats,
+          tables,
+        },
+      },
+      {
+        type: 'markdown',
+        data: { content: markdown },
+      },
+    ];
+    return Object.freeze({
+      kind: 'zhin.im.blueprint-card',
+      pluginId,
+      title,
+      stats: Object.freeze(stats),
+      tables: Object.freeze(tables),
+      entries: Object.freeze([]),
+      actions: Object.freeze([]),
+      markdown,
+      segments: Object.freeze(segments),
+    });
+  }
+
+  const bp =
+    (input as ConsolePageBlueprint<TData>)?.kind === 'zhin.console.page-blueprint'
+      ? (input as ConsolePageBlueprint<TData>)
+      : buildBlueprintFromSpec(input as DeclarativePageSpec<TData>);
+  const spec = bp.spec;
+  const pluginId = options.pluginId ?? spec?.pluginId ?? 'plugin';
+  const ctx = createProjectionContext(data, locale, pluginId, spec?.dictionary);
+  const title =
+    (locale === 'zh-CN' ? bp.titleI18n?.['zh-CN'] : bp.titleI18n?.en) ??
+    (spec?.title ? resolveDeclarativeText(spec.title, locale) : bp.title);
+  const description = spec?.description
+    ? resolveDeclarativeText(spec.description, locale)
+    : bp.description;
+
+  const stats: BlueprintImStatItem[] = [];
+  const rawStats =
+    typeof spec?.stats === 'function'
+      ? spec.stats((data ?? ({} as TData)), ctx)
+      : Array.isArray(spec?.stats)
+        ? spec.stats
+        : undefined;
+  if (rawStats) {
+    for (const [idx, s] of rawStats.entries()) {
+      const val =
+        typeof s.value === 'function'
+          ? s.value((data ?? ({} as TData)), ctx)
+          : recordData[s.value];
+      const hint =
+        typeof s.hint === 'function'
+          ? formatRenderableValue(s.hint((data ?? ({} as TData))))
+          : s.hint
+            ? resolveDeclarativeText(s.hint, locale)
+            : undefined;
+      const badge = s.badge
+        ? typeof s.badge.label === 'function'
+          ? formatRenderableValue(s.badge.label((data ?? ({} as TData))))
+          : resolveDeclarativeText(s.badge.label, locale)
+        : undefined;
+      stats.push(
+        Object.freeze({
+          key: s.key ?? `stat-${idx}`,
+          label: resolveDeclarativeText(s.label, locale),
+          value: formatRenderableValue(val),
+          ...(hint ? { hint } : {}),
+          ...(badge ? { badge } : {}),
+        }),
+      );
+    }
+  } else {
+    for (const sec of bp.sections) {
+      if (sec.type === 'stats') {
+        for (const item of sec.items) {
+          const val = item.dataKey ? recordData[item.dataKey] : item.value;
+          stats.push(
+            Object.freeze({
+              key: item.key,
+              label: item.label,
+              value: `${formatRenderableValue(val)}${item.suffix ?? ''}`,
+            }),
+          );
+        }
+      }
+    }
+  }
+
+  const tables: BlueprintImTableSection[] = [];
+  const entries: BlueprintImEntriesSection[] = [];
+
+  if (Array.isArray(spec?.sections)) {
+    for (const [idx, sec] of spec.sections.entries()) {
+      const id = sec.id ?? `section-${idx}`;
+      const secTitle = resolveDeclarativeText(sec.title, locale) || id;
+      if (sec.items !== undefined) {
+        const rawItems =
+          typeof sec.items === 'function'
+            ? sec.items((data ?? ({} as TData)))
+            : (recordData[sec.items] as readonly Record<string, unknown>[] | undefined);
+        const list = Array.isArray(rawItems) ? rawItems : [];
+        const cols: readonly {
+          readonly key: string;
+          readonly label: string;
+          readonly render?: (
+            value: unknown,
+            row: unknown,
+            ctx: DeclarativePageContext<TData>,
+          ) => DeclarativeRenderable;
+        }[] =
+          sec.columns && sec.columns.length > 0
+            ? sec.columns.map((c: DeclarativeColumnSpec<any, TData>) => ({
+                key: c.key,
+                label: resolveDeclarativeText(c.label, locale),
+                render: c.render,
+              }))
+            : list[0] && typeof list[0] === 'object'
+              ? Object.keys(list[0] as Record<string, unknown>)
+                  .slice(0, 5)
+                  .map((k) => ({ key: k, label: k, render: undefined }))
+              : [{ key: 'value', label: locale === 'zh-CN' ? '内容' : 'Value', render: undefined }];
+        const rows = list.slice(0, maxRows).map((row, rowIdx) => {
+          if (sec.renderItem && (!sec.columns || sec.columns.length === 0)) {
+            return [formatRenderableValue(sec.renderItem(row, rowIdx, ctx))];
+          }
+          const rec = (row && typeof row === 'object' ? row : { value: row }) as Record<string, unknown>;
+          return cols.map((c) =>
+            c.render
+              ? formatRenderableValue(c.render(rec[c.key], row, ctx))
+              : formatRenderableValue(rec[c.key]),
+          );
+        });
+        const emptyText = sec.emptyText ? resolveDeclarativeText(sec.emptyText, locale) : undefined;
+        tables.push(
+          Object.freeze({
+            id,
+            title: secTitle,
+            columns: Object.freeze(cols.map(({ key, label }) => Object.freeze({ key, label }))),
+            rows: Object.freeze(rows.map((r) => Object.freeze(r))),
+            totalRows: list.length,
+            ...(emptyText ? { emptyText } : {}),
+          }),
+        );
+      } else if (sec.entries !== undefined) {
+        const rawEntries = sec.entries((data ?? ({} as TData)), ctx);
+        const items = Array.isArray(rawEntries)
+          ? rawEntries.map((entry) =>
+              Object.freeze({
+                label: formatRenderableValue(entry.label),
+                value: formatRenderableValue(entry.value),
+              }),
+            )
+          : Object.entries(rawEntries ?? {}).map(([k, v]) =>
+              Object.freeze({
+                label: k,
+                value: formatRenderableValue(v),
+              }),
+            );
+        entries.push(
+          Object.freeze({
+            id,
+            title: secTitle,
+            items: Object.freeze(items),
+          }),
+        );
+      }
+    }
+  } else {
+    for (const sec of bp.sections) {
+      if (sec.type === 'table') {
+        const rawItems = sec.dataKey ? recordData[sec.dataKey] : undefined;
+        const list = Array.isArray(rawItems) ? rawItems : [];
+        const rows = list.slice(0, maxRows).map((row) => {
+          const rec = (row && typeof row === 'object' ? row : {}) as Record<string, unknown>;
+          return sec.columns.map((c) => formatRenderableValue(rec[c.key]));
+        });
+        tables.push(
+          Object.freeze({
+            id: sec.id,
+            title: sec.title,
+            columns: sec.columns,
+            rows: Object.freeze(rows.map((r) => Object.freeze(r))),
+            totalRows: list.length,
+          }),
+        );
+      }
+    }
+  }
+
+  const actions: BlueprintImActionItem[] = [];
+  if (Array.isArray(spec?.actions)) {
+    for (const act of spec.actions) {
+      const disabled =
+        typeof act.disabled === 'function' ? act.disabled(data) : Boolean(act.disabled);
+      const desc = act.description ? resolveDeclarativeText(act.description, locale) : undefined;
+      actions.push(
+        Object.freeze({
+          name: act.name,
+          label: resolveDeclarativeText(act.label, locale),
+          rpcMethod: `plugin.${pluginId}.${act.name}`,
+          ...(desc ? { description: desc } : {}),
+          variant: act.variant ?? 'secondary',
+          disabled,
+        }),
+      );
+    }
+  } else {
+    for (const sec of bp.sections) {
+      if (sec.type === 'actions') {
+        for (const item of sec.items) {
+          actions.push(
+            Object.freeze({
+              name: item.name ?? item.action,
+              label: item.label,
+              rpcMethod: `plugin.${pluginId}.${item.action}`,
+              ...(item.description ? { description: item.description } : {}),
+              variant: item.variant ?? 'secondary',
+              disabled: false,
+            }),
+          );
+        }
+      }
+    }
+  }
+
+  const mdLines: string[] = [`### ${title}`];
+  if (description) mdLines.push(description);
+  if (stats.length > 0) {
+    mdLines.push('');
+    for (const s of stats) {
+      const badgeSuffix = s.badge ? ` [${s.badge}]` : '';
+      const hintSuffix = s.hint ? ` (${s.hint})` : '';
+      mdLines.push(`- **${s.label}**: ${s.value}${badgeSuffix}${hintSuffix}`);
+    }
+  }
+  for (const entrySec of entries) {
+    mdLines.push(`\n#### ${entrySec.title}`);
+    for (const item of entrySec.items) {
+      mdLines.push(`- **${item.label}**: ${item.value}`);
+    }
+  }
+  for (const tbl of tables) {
+    mdLines.push(`\n#### ${tbl.title} (${tbl.totalRows})`);
+    if (tbl.rows.length === 0) {
+      mdLines.push(`_${tbl.emptyText ?? (locale === 'zh-CN' ? '暂无数据' : 'No data')}_`);
+    } else {
+      mdLines.push(`| ${tbl.columns.map((c) => c.label).join(' | ')} |`);
+      mdLines.push(`| ${tbl.columns.map(() => '---').join(' | ')} |`);
+      for (const r of tbl.rows) {
+        mdLines.push(`| ${r.join(' | ')} |`);
+      }
+    }
+  }
+  if (actions.length > 0) {
+    mdLines.push(
+      `\n> ${locale === 'zh-CN' ? '可执行操作' : 'Available Actions'}: ${actions
+        .map((a) => `\`${a.label}\` (${a.name})`)
+        .join(' · ')}`,
+    );
+  }
+  const markdown = mdLines.join('\n');
+
+  const segments: BlueprintImSegment[] = [
+    {
+      type: 'card',
+      data: {
+        title,
+        ...(description ? { description } : {}),
+        pluginId,
+        stats,
+        tables,
+        entries,
+        actions,
+      },
+    },
+    {
+      type: 'markdown',
+      data: { content: markdown },
+    },
+    ...actions
+      .filter((a) => !a.disabled)
+      .map(
+        (a): BlueprintImSegment => ({
+          type: 'button',
+          data: {
+            id: a.rpcMethod,
+            label: a.label,
+            action: a.name,
+            variant: a.variant,
+          },
+        }),
+      ),
+  ];
+
+  return Object.freeze({
+    kind: 'zhin.im.blueprint-card',
+    pluginId,
+    title,
+    ...(description ? { description } : {}),
+    stats: Object.freeze(stats),
+    tables: Object.freeze(tables),
+    entries: Object.freeze(entries),
+    actions: Object.freeze(actions),
+    markdown,
+    segments: Object.freeze(segments),
+  });
+}
+
+export interface BlueprintCliPanelOptions extends BlueprintProjectionOptions {
+  readonly width?: number;
+}
+
+/**
+ * Projects any Server-Driven Console Blueprint (`definePageBlueprint`, `defineAdapterPage`,
+ * `defineCommentReviewPage`, or `DeclarativePageSpec`) + runtime status payload into a
+ * formatted CLI TUI panel string.
+ */
+export function projectBlueprintToCliPanel<TData = Record<string, unknown>>(
+  input:
+    | ConsolePageBlueprint<TData>
+    | ConsoleAdapterPageBlueprint
+    | DeclarativePageSpec<TData>,
+  data?: TData,
+  options: BlueprintCliPanelOptions = {},
+): string {
+  const card = projectBlueprintToImCard(input, data, options);
+  const width = Math.max(44, options.width ?? 72);
+  const innerWidth = width - 4;
+  const hr = '─'.repeat(width - 2);
+  const padLine = (text: string): string => {
+    const clean = text.replace(/\r?\n/gu, ' ').slice(0, innerWidth);
+    const pad = Math.max(0, innerWidth - clean.length);
+    return `│ ${clean}${' '.repeat(pad)} │`;
+  };
+
+  const lines: string[] = [`┌${hr}┐`, padLine(`[${card.pluginId}] ${card.title}`)];
+  if (card.description) {
+    lines.push(padLine(card.description));
+  }
+  lines.push(`├${hr}┤`);
+
+  if (card.stats.length > 0) {
+    const statSummary = card.stats
+      .map((s) => `${s.label}: ${s.value}${s.badge ? ` [${s.badge}]` : ''}`)
+      .join('  │  ');
+    lines.push(padLine(statSummary));
+    lines.push(`├${hr}┤`);
+  }
+
+  for (const entrySec of card.entries) {
+    lines.push(padLine(`■ ${entrySec.title}`));
+    for (const item of entrySec.items) {
+      lines.push(padLine(`  ${item.label}: ${item.value}`));
+    }
+    lines.push(`├${hr}┤`);
+  }
+
+  for (const tbl of card.tables) {
+    lines.push(padLine(`■ ${tbl.title} (${tbl.totalRows})`));
+    if (tbl.rows.length === 0) {
+      lines.push(padLine(`  (${tbl.emptyText ?? 'empty'})`));
+    } else {
+      lines.push(padLine(`  ${tbl.columns.map((c) => c.label).join(' | ')}`));
+      for (const row of tbl.rows) {
+        lines.push(padLine(`  ${row.join(' | ')}`));
+      }
+    }
+    lines.push(`├${hr}┤`);
+  }
+
+  if (card.actions.length > 0) {
+    const actionBar = card.actions
+      .map((a) => (a.disabled ? `(${a.label})` : `[${a.label} -> ${a.name}]`))
+      .join(' ');
+    lines.push(padLine(`Actions: ${actionBar}`));
+  } else {
+    // Remove trailing separator if no actions
+    if (lines[lines.length - 1] === `├${hr}┤`) {
+      lines.pop();
+    }
+  }
+
+  lines.push(`└${hr}┘`);
+  return lines.join('\n');
+}

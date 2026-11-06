@@ -2,12 +2,16 @@ import { describe, expect, it } from 'vitest';
 import {
   buildBlueprintFromSpec,
   createAdapterConsolePage,
+  createCommentReviewPage,
   createDeclarativePage,
   defineAdapterPage,
+  defineCommentReviewPage,
   definePage,
   definePageBlueprint,
   normalizePageMetadata,
   pageRoute,
+  projectBlueprintToCliPanel,
+  projectBlueprintToImCard,
   resolveDeclarativeText,
   type ConsolePageBlueprint,
   type ConsoleTopologyResponse,
@@ -218,5 +222,81 @@ describe('Console contract', () => {
     expect(Object.isFrozen(AdapterPage)).toBe(true);
     expect(() => defineAdapterPage('')).toThrow('Adapter page adapterKey must be a non-empty string');
     expect(() => defineAdapterPage('   ')).toThrow('Adapter page adapterKey must be a non-empty string');
+  });
+
+  it('creates zero-React comment review page blueprints and projects Blueprints to IM Card & CLI TUI', () => {
+    expect(createCommentReviewPage).toBe(defineCommentReviewPage);
+    const ReviewPage = defineCommentReviewPage({
+      adapter: 'bilibili',
+      platform: { zh: 'B 站', en: 'Bilibili' },
+      mark: 'B',
+      resource: { zh: '视频', en: 'videos' },
+      loginMode: 'qr',
+    });
+    expect(ReviewPage.kind).toBe('zhin.console.page-blueprint');
+    expect(ReviewPage.title).toBe('Bilibili comment review');
+    expect(ReviewPage.titleI18n).toEqual({ 'zh-CN': 'B 站评论审批', en: 'Bilibili comment review' });
+    expect(ReviewPage.reviewSpec?.adapter).toBe('bilibili');
+
+    const imCard = projectBlueprintToImCard(
+      ReviewPage,
+      {
+        endpoints: [
+          {
+            id: 'main',
+            sendMode: 'review',
+            persistent: true,
+            circuit: null,
+            login: { state: 'ok' },
+            pendingCount: 2,
+            drafts: [],
+          },
+        ],
+      },
+      { locale: 'zh-CN', pluginId: 'bilibili' },
+    );
+    expect(imCard.kind).toBe('zhin.im.blueprint-card');
+    expect(imCard.title).toBe('B 站评论审批');
+    expect(imCard.stats).toEqual([
+      { key: 'endpoints', label: '账号数', value: '1' },
+      { key: 'pendingDrafts', label: '待审草稿', value: '2' },
+    ]);
+    expect(imCard.tables[0]?.rows).toEqual([['main', 'review', '2']]);
+    expect(imCard.markdown).toContain('### B 站评论审批');
+    expect(imCard.markdown).toContain('| main | review | 2 |');
+    expect(imCard.segments.some((s) => s.type === 'card')).toBe(true);
+    expect(imCard.segments.some((s) => s.type === 'button' && s.data.action === 'send')).toBe(true);
+
+    const cliPanel = projectBlueprintToCliPanel(
+      ReviewPage,
+      {
+        endpoints: [
+          {
+            id: 'main',
+            sendMode: 'review',
+            persistent: true,
+            circuit: null,
+            login: { state: 'ok' },
+            pendingCount: 2,
+            drafts: [],
+          },
+        ],
+      },
+      { locale: 'zh-CN', pluginId: 'bilibili', width: 64 },
+    );
+    expect(cliPanel).toContain('┌');
+    expect(cliPanel).toContain('[bilibili] B 站评论审批');
+    expect(cliPanel).toContain('账号数: 1');
+    expect(cliPanel).toContain('待审草稿: 2');
+    expect(cliPanel).toContain('main | review | 2');
+    expect(cliPanel).toContain('└');
+
+    const adapterCard = projectBlueprintToImCard(
+      defineAdapterPage('telegram'),
+      { bots: [{ id: 'tg-1', online: true }] },
+      { locale: 'zh-CN' },
+    );
+    expect(adapterCard.title).toBe('telegram 适配器状态');
+    expect(adapterCard.stats).toContainEqual({ key: 'online', label: '在线数', value: '1' });
   });
 });

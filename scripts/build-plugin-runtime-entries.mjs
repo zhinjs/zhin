@@ -63,8 +63,42 @@ export async function buildPluginRuntimeEntries(packageRoot = process.cwd()) {
     }
     await writeFile(output, `${GENERATED_MARKER}${transpiled.outputText}`, 'utf8');
     outputs.push(output);
+    const rel = relative(root, source).split('\\').join('/');
+    if (/^pages\/[a-z0-9][a-z0-9-]*\/index\.tsx$/u.test(rel)) {
+      await emitPrebuiltClientBundle(root, source, rel.split('/')[1]);
+    }
   }
   return outputs;
+}
+
+async function emitPrebuiltClientBundle(root, source, localName) {
+  try {
+    const { TypeScriptClientBuilder } = await import('@zhin.js/pagemanager/client-build');
+    const { mkdtemp, rm } = await import('node:fs/promises');
+    const { tmpdir } = await import('node:os');
+    const { dirname } = await import('node:path');
+    const tempOut = await mkdtemp(join(tmpdir(), 'zhin-static-page-'));
+    try {
+      const builder = new TypeScriptClientBuilder({
+        projectRoot: root,
+        outDir: tempOut,
+        publicBase: '/assets/client',
+      });
+      const artifact = await builder.load(source, {
+        feature: 'zhin.page',
+        owner: `root/${localName}`,
+        localName,
+      });
+      const builtFile = join(tempOut, artifact.module.split('/').at(-1));
+      const bundledCode = await readFile(builtFile, 'utf8');
+      const bundlePath = join(dirname(source), 'index.bundle.js');
+      await writeFile(bundlePath, `${GENERATED_MARKER}${bundledCode}`, 'utf8');
+    } finally {
+      await rm(tempOut, { recursive: true, force: true });
+    }
+  } catch {
+    // Optional prebuild when @zhin.js/pagemanager is not built yet
+  }
 }
 
 export async function cleanPluginRuntimeEntries(packageRoot = process.cwd()) {

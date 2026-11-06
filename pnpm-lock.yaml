@@ -2029,9 +2029,6 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
-      '@zhin.js/client':
-        specifier: workspace:*
-        version: link:../../../packages/console/client
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
@@ -2053,16 +2050,10 @@ importers:
       '@zhin.js/page':
         specifier: workspace:*
         version: link:../../../packages/console/page
-      react:
-        specifier: ^19.2.8
-        version: 19.2.8
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
-      '@types/react':
-        specifier: ^19.2.18
-        version: 19.2.18
       '@zhin.js/pagemanager':
         specifier: workspace:*
         version: link:../../../packages/console/pagemanager
@@ -2475,9 +2466,6 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
-      '@zhin.js/client':
-        specifier: workspace:*
-        version: link:../../../packages/console/client
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
@@ -2499,16 +2487,10 @@ importers:
       '@zhin.js/page':
         specifier: workspace:*
         version: link:../../../packages/console/page
-      react:
-        specifier: ^19.2.8
-        version: 19.2.8
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
-      '@types/react':
-        specifier: ^19.2.18
-        version: 19.2.18
       '@zhin.js/pagemanager':
         specifier: workspace:*
         version: link:../../../packages/console/pagemanager
