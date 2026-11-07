@@ -88,7 +88,34 @@ export function isolateBootstrap(): void {
       for (const token of definition.requires ?? []) {
         if (!allowed.has(token.id)) throw new Error(`Host resource cannot cross isolation boundary: ${token.id}`);
       }
-      const descriptor = { name: definition.name, metadata: definition.metadata };
+      const rawGraph = definition.capabilityGraph;
+      const capabilityGraph =
+        rawGraph && typeof rawGraph === 'object'
+          ? {
+              ...(Array.isArray(rawGraph.provides)
+                ? {
+                    provides: rawGraph.provides.map((t: any) =>
+                      typeof t === 'string' ? t : t?.id ?? String(t),
+                    ),
+                  }
+                : {}),
+              ...(Array.isArray(rawGraph.injects)
+                ? {
+                    injects: rawGraph.injects.map((t: any) =>
+                      typeof t === 'string' ? t : t?.id ?? String(t),
+                    ),
+                  }
+                : {}),
+              ...(rawGraph.features && typeof rawGraph.features === 'object'
+                ? { features: rawGraph.features }
+                : {}),
+            }
+          : undefined;
+      const descriptor = {
+        name: definition.name,
+        metadata: definition.metadata,
+        ...(capabilityGraph ? { capabilityGraph } : {}),
+      };
       clone(descriptor);
       state = 'prepared';
       return descriptor;

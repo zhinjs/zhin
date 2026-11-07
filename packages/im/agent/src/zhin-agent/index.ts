@@ -496,13 +496,19 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   }
 
   async archiveSession(sessionKey: string): Promise<boolean> {
-    return archiveSessionByKey(
+    const active = await this.agentSessionStore.findActive(sessionKey);
+    const archived = await archiveSessionByKey(
       {
         agentSessionStore: this.agentSessionStore,
         contextRepository: this.contextRepository,
       },
       sessionKey,
     );
+    await this.turnCheckpoints.clear(sessionKey);
+    if (active?.session_id && active.session_id !== sessionKey) {
+      await this.turnCheckpoints.clear(active.session_id);
+    }
+    return archived;
   }
 
   /** Cancel the latest active turn for one stable session key. */

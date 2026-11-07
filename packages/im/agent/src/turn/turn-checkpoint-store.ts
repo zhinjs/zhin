@@ -10,7 +10,7 @@
  * already-completed tools.
  */
 
-import type { AgentMessage, AssistantMessage } from '@zhin.js/ai';
+import type { AgentMessage, AgentMessageExtra, AssistantMessage } from '@zhin.js/ai';
 import type { DatabaseHost } from '@zhin.js/plugin-runtime';
 
 export const AGENT_TURN_CHECKPOINT_TABLE = 'agent_turn_checkpoints';
@@ -23,7 +23,7 @@ export const AGENT_TURN_CHECKPOINT_MODEL = {
   prompt_text: { type: 'text', default: '' },
   messages_json: { type: 'text', nullable: false },
   iterations: { type: 'integer', default: 0 },
-  updated_at: { type: 'integer', nullable: false },
+  updated_at: { type: 'bigint', nullable: false },
 } as const;
 
 export interface TurnCheckpointRecord {
@@ -32,6 +32,7 @@ export interface TurnCheckpointRecord {
   readonly messages: readonly AgentMessage[];
   readonly iterations: number;
   readonly updatedAt: number;
+  readonly userMessageExtra?: AgentMessageExtra;
 }
 
 export interface TurnCheckpointStorage {
@@ -43,7 +44,7 @@ export interface TurnCheckpointStorage {
 
 /**
  * Extract the longest prefix of `messages` that starts with at least one `user` message
- * and ends at a complete `(assistant[toolCall+] -> matching toolResult+)` round.
+ * and ends at a complete, non-error `(assistant[toolCall+] -> matching toolResult+)` round.
  *
  * Returns an empty array if no completed tool round is present.
  */
@@ -75,6 +76,13 @@ export function extractCompletedToolRoundMessages(
     }
 
     const assistant = current as AssistantMessage;
+    if (
+      assistant.stopReason === 'aborted' ||
+      assistant.stopReason === 'error' ||
+      Boolean(assistant.errorMessage)
+    ) {
+      break;
+    }
     if (!Array.isArray(assistant.content)) break;
 
     const toolCallIds = assistant.content
@@ -82,12 +90,17 @@ export function extractCompletedToolRoundMessages(
       .map((block) => block.id)
       .filter((id): id is string => typeof id === 'string' && id.length > 0);
 
-    // A pure text assistant turn without tool calls is a terminal answer, not an intermediate tool step.
     if (toolCallIds.length === 0) {
+      // Allow an intermediate summary assistant message followed by a continuation user message
+      if (messages[cursor + 1]?.role === 'user') {
+        cursor += 1;
+        continue;
+      }
       break;
     }
 
     const matchedIds = new Set<string>();
+    let roundHasError = false;
     let scan = cursor + 1;
     while (scan < messages.length) {
       const next = messages[scan];
@@ -95,6 +108,9 @@ export function extractCompletedToolRoundMessages(
       if (next.role === 'toolResult' && typeof next.toolCallId === 'string') {
         if (toolCallIds.includes(next.toolCallId)) {
           matchedIds.add(next.toolCallId);
+          if ((next as { isError?: boolean }).isError === true) {
+            roundHasError = true;
+          }
         }
       }
       scan += 1;
@@ -105,7 +121,9 @@ export function extractCompletedToolRoundMessages(
       break;
     }
 
-    lastValidEnd = scan;
+    if (!roundHasError) {
+      lastValidEnd = scan;
+    }
     cursor = scan;
   }
 
@@ -166,13 +184,23 @@ export class DatabaseTurnCheckpointStorage implements TurnCheckpointStorage {
       const parsed = typeof latest.messages_json === 'string'
         ? JSON.parse(latest.messages_json)
         : latest.messages_json;
-      if (!Array.isArray(parsed) || parsed.length === 0) return undefined;
+      const messages = Array.isArray(parsed)
+        ? (parsed as AgentMessage[])
+        : parsed && typeof parsed === 'object' && Array.isArray((parsed as { messages?: unknown }).messages)
+          ? ((parsed as { messages: AgentMessage[] }).messages)
+          : undefined;
+      if (!messages || messages.length === 0) return undefined;
+      const userMessageExtra =
+        parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+          ? (parsed as { userMessageExtra?: AgentMessageExtra }).userMessageExtra
+          : undefined;
       return {
         sessionId: String(latest.session_id ?? sessionId),
         promptText: String(latest.prompt_text ?? ''),
-        messages: parsed as AgentMessage[],
+        messages,
         iterations: Number(latest.iterations ?? 0),
         updatedAt: Number(latest.updated_at ?? Date.now()),
+        ...(userMessageExtra !== undefined ? { userMessageExtra } : {}),
       };
     } catch {
       return undefined;
@@ -181,10 +209,14 @@ export class DatabaseTurnCheckpointStorage implements TurnCheckpointStorage {
 
   async write(record: TurnCheckpointRecord): Promise<void> {
     await this.model.delete().where({ session_id: record.sessionId });
+    const payload =
+      record.userMessageExtra !== undefined
+        ? { messages: record.messages, userMessageExtra: record.userMessageExtra }
+        : record.messages;
     await this.model.create({
       session_id: record.sessionId,
       prompt_text: record.promptText,
-      messages_json: JSON.stringify(record.messages),
+      messages_json: JSON.stringify(payload),
       iterations: record.iterations,
       updated_at: record.updatedAt,
     });
@@ -206,6 +238,7 @@ export interface TurnCheckpointStoreOptions {
 
 export class TurnCheckpointStore {
   private readonly memory = new Map<string, TurnCheckpointRecord>();
+  private readonly locks = new Map<string, Promise<unknown>>();
   private storage?: TurnCheckpointStorage;
   private readonly ttlMs: number;
   private readonly now: () => number;
@@ -227,26 +260,30 @@ export class TurnCheckpointStore {
     return this.now() - record.updatedAt > this.ttlMs;
   }
 
-  async save(record: TurnCheckpointRecord): Promise<void> {
-    if (record.messages.length === 0) return;
-    const normalized: TurnCheckpointRecord = {
-      sessionId: record.sessionId,
-      promptText: record.promptText,
-      messages: [...record.messages],
-      iterations: record.iterations,
-      updatedAt: record.updatedAt,
-    };
-    this.memory.set(record.sessionId, normalized);
+  private runExclusive<T>(sessionId: string, fn: () => Promise<T>): Promise<T> {
+    const prev = this.locks.get(sessionId) ?? Promise.resolve();
+    const next = prev.catch(() => undefined).then(fn);
+    const tracked = next.finally(() => {
+      if (this.locks.get(sessionId) === tracked) {
+        this.locks.delete(sessionId);
+      }
+    });
+    this.locks.set(sessionId, tracked);
+    return next;
+  }
+
+  private async clearUnlocked(sessionId: string): Promise<void> {
+    this.memory.delete(sessionId);
     if (this.storage) {
       try {
-        await this.storage.write(normalized);
+        await this.storage.delete(sessionId);
       } catch {
-        // Non-fatal: in-memory checkpoint remains available for same-process resume.
+        // Ignore storage delete errors during cleanup.
       }
     }
   }
 
-  async peek(sessionId: string): Promise<TurnCheckpointRecord | undefined> {
+  private async peekUnlocked(sessionId: string): Promise<TurnCheckpointRecord | undefined> {
     let record = this.memory.get(sessionId);
     if (!record && this.storage) {
       try {
@@ -258,28 +295,51 @@ export class TurnCheckpointStore {
     }
     if (!record) return undefined;
     if (this.isExpired(record)) {
-      await this.clear(sessionId);
+      await this.clearUnlocked(sessionId);
       return undefined;
     }
     return record;
   }
 
+  async save(record: TurnCheckpointRecord): Promise<void> {
+    if (record.messages.length === 0) return;
+    return this.runExclusive(record.sessionId, async () => {
+      const normalized: TurnCheckpointRecord = {
+        sessionId: record.sessionId,
+        promptText: record.promptText,
+        messages: [...record.messages],
+        iterations: record.iterations,
+        updatedAt: record.updatedAt,
+        ...(record.userMessageExtra !== undefined
+          ? { userMessageExtra: record.userMessageExtra }
+          : {}),
+      };
+      this.memory.set(record.sessionId, normalized);
+      if (this.storage) {
+        try {
+          await this.storage.write(normalized);
+        } catch {
+          // Non-fatal: in-memory checkpoint remains available for same-process resume.
+        }
+      }
+    });
+  }
+
+  async peek(sessionId: string): Promise<TurnCheckpointRecord | undefined> {
+    return this.runExclusive(sessionId, () => this.peekUnlocked(sessionId));
+  }
+
   async consume(sessionId: string): Promise<TurnCheckpointRecord | undefined> {
-    const record = await this.peek(sessionId);
-    if (!record) return undefined;
-    await this.clear(sessionId);
-    return record;
+    return this.runExclusive(sessionId, async () => {
+      const record = await this.peekUnlocked(sessionId);
+      if (!record) return undefined;
+      await this.clearUnlocked(sessionId);
+      return record;
+    });
   }
 
   async clear(sessionId: string): Promise<void> {
-    this.memory.delete(sessionId);
-    if (this.storage) {
-      try {
-        await this.storage.delete(sessionId);
-      } catch {
-        // Ignore storage delete errors during cleanup.
-      }
-    }
+    return this.runExclusive(sessionId, () => this.clearUnlocked(sessionId));
   }
 
   async prune(nowMs: number = this.now()): Promise<void> {

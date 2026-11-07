@@ -110,9 +110,14 @@ function evaluateDeclarativeExpr(
     }, 0);
     return String(total);
   }
-  if (rec.$format !== undefined && Array.isArray(rec.args)) {
+  const formatArgs = Array.isArray(rec.args)
+    ? rec.args
+    : Array.isArray(rec.$args)
+      ? rec.$args
+      : undefined;
+  if (rec.$format !== undefined && formatArgs) {
     const template = pickText(rec.$format as DeclarativeI18nText, locale, t);
-    const args = (rec.args as readonly string[]).map((p) => resolveDataPath(data, p));
+    const args = (formatArgs as readonly string[]).map((p) => resolveDataPath(data, p));
     return template.replace(/\{(\d+)\}/gu, (_m, idx) => {
       const v = args[Number(idx)];
       return v === undefined || v === null ? '' : String(v);
@@ -305,6 +310,7 @@ function buildDeclarativeBlueprint<TData = Record<string, unknown>>(spec: Declar
         key: s.key ?? (typeof s.value === 'string' ? s.value : `stat-${i}`),
         label: resolveBlueprintText(s.label, 'en'),
         ...(typeof s.value === 'string' ? { dataKey: s.value } : {}),
+        ...(isDeclarativeValueExpr(s.value) ? { expr: s.value } : {}),
       })),
     });
   }
@@ -330,10 +336,18 @@ function buildDeclarativeBlueprint<TData = Record<string, unknown>>(spec: Declar
         title,
         ...(Array.isArray(sec.entries)
           ? {
-              entries: sec.entries.map((e: { readonly label?: DeclarativeI18nText; readonly value?: unknown }) => ({
-                label: resolveBlueprintText(e.label, 'en'),
-                value: String(e.value ?? ''),
-              })),
+              entries: sec.entries.map(
+                (e: {
+                  readonly label?: DeclarativeI18nText;
+                  readonly value?: unknown;
+                  readonly dataKey?: string;
+                }) => ({
+                  label: resolveBlueprintText(e.label, 'en'),
+                  value: isDeclarativeValueExpr(e.value) ? '' : String(e.value ?? ''),
+                  ...(e.dataKey ? { dataKey: e.dataKey } : {}),
+                  ...(isDeclarativeValueExpr(e.value) ? { expr: e.value } : {}),
+                }),
+              ),
             }
           : {}),
       });
@@ -453,7 +467,7 @@ function coerceDeclarativeSpec<TData = Record<string, unknown>>(
         emptyText: sec.emptyText as DeclarativeI18nText | undefined,
         items: dataKey
           ? ((data: TData) => {
-              const fromData = (data as Record<string, unknown>)?.[dataKey];
+              const fromData = resolveDataPath(data, dataKey);
               return Array.isArray(fromData) ? (fromData as readonly Record<string, unknown>[]) : staticRows;
             })
           : (() => staticRows),
@@ -469,12 +483,17 @@ function coerceDeclarativeSpec<TData = Record<string, unknown>>(
       sections.push({
         id: typeof sec.id === 'string' ? sec.id : undefined,
         title: sec.title as DeclarativeI18nText | undefined,
-        entries: (data: TData) =>
+        entries: (data: TData, ctx: DeclarativePageContext<TData>) =>
           rawEntries.map((e) => {
             const dk = typeof e.dataKey === 'string' ? e.dataKey : (typeof e.key === 'string' ? e.key : undefined);
-            const val = dk && data && typeof data === 'object' && dk in (data as Record<string, unknown>)
-              ? (data as Record<string, unknown>)[dk]
-              : e.value;
+            const expr = isDeclarativeValueExpr(e.expr)
+              ? e.expr
+              : (isDeclarativeValueExpr(e.value) ? e.value : undefined);
+            const val = expr
+              ? evaluateDeclarativeExpr(expr, data, ctx.locale, ctx.t)
+              : dk
+                ? resolveDataPath(data, dk)
+                : e.value;
             return {
               label: String(e.label ?? e.key ?? ''),
               value: String(val ?? '-'),
@@ -833,7 +852,7 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
                       {rows.map((row, rowIdx) => (
                         <tr key={String(row.id ?? row.key ?? rowIdx)}>
                           {(section.columns ?? []).map((col) => {
-                            const cellVal = row[col.key];
+                            const cellVal = resolveDataPath(row, col.key);
                             return (
                               <td key={col.key}>
                                 {col.render ? col.render(cellVal, row, ctx) : String(cellVal ?? '-')}

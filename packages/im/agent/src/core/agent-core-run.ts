@@ -90,7 +90,52 @@ export async function* runAgentLoopTextTurnRun(
     ? await repo.loadContext(sessionId)
     : { messages: [] as AgentMessage[] };
 
-  const setup = await prepareAgentLoopTurnSetup(input, loaded.messages);
+  let resumedCheckpoint: TurnCheckpointRecord | undefined;
+  let resumedWithExplicitContinue = false;
+  if (persistentConversation && host.turnCheckpoints) {
+    const existingCheckpoint = await host.turnCheckpoints.peek(sessionId);
+    if (existingCheckpoint) {
+      const persistedToolCallIds = new Set(
+        loaded.messages
+          .filter((m): m is Extract<AgentMessage, { role: 'toolResult' }> => m.role === 'toolResult')
+          .map((m) => m.toolCallId)
+          .filter((id): id is string => typeof id === 'string' && id.length > 0),
+      );
+      const alreadyPersisted = existingCheckpoint.messages.some(
+        (m) =>
+          m.role === 'toolResult' &&
+          typeof m.toolCallId === 'string' &&
+          persistedToolCallIds.has(m.toolCallId),
+      );
+      if (alreadyPersisted) {
+        await host.turnCheckpoints.clear(sessionId);
+      } else {
+        const resumeMatch = isCheckpointResumePrompt(input.rawContent, existingCheckpoint.promptText);
+        if (resumeMatch.resume) {
+          resumedCheckpoint = await host.turnCheckpoints.consume(sessionId);
+          resumedWithExplicitContinue = resumeMatch.isExplicitContinue;
+          logPhase(host.phaseConfig, 'agent_loop.checkpoint.resume', sessionId, {
+            checkpointIterations: existingCheckpoint.iterations,
+            checkpointMessages: existingCheckpoint.messages.length,
+            explicitContinue: resumedWithExplicitContinue,
+          });
+        } else {
+          await host.turnCheckpoints.clear(sessionId);
+        }
+      }
+    }
+  }
+  const checkpointPromptText = resumedCheckpoint?.promptText || input.rawContent || '';
+  const effectiveUserMessageExtra = resumedCheckpoint?.userMessageExtra ?? userMessageExtra;
+  const effectiveInput: AgentLoopTurnInput = resumedCheckpoint
+    ? {
+        ...input,
+        rawContent: checkpointPromptText,
+        userMessageExtra: effectiveUserMessageExtra,
+      }
+    : input;
+
+  const setup = await prepareAgentLoopTurnSetup(effectiveInput, loaded.messages);
   const {
     providerAlias, llmModel, promptMessages, historyWindow, historyTracker,
     directTools, hasTools, imReply, replyPhases, initialReplyPhase, initialReplyRun,
@@ -291,32 +336,34 @@ export async function* runAgentLoopTextTurnRun(
     && !input.interactiveRun
     && input.autoContinuation !== false
     && autoContinueAllowed(toolBudget.autoContinue, input.turnContext);
-  let resumedCheckpoint: TurnCheckpointRecord | undefined;
-  let resumedWithExplicitContinue = false;
-  if (persistentConversation && host.turnCheckpoints) {
-    const existingCheckpoint = await host.turnCheckpoints.peek(sessionId);
-    if (existingCheckpoint) {
-      const resumeMatch = isCheckpointResumePrompt(input.rawContent, existingCheckpoint.promptText);
-      if (resumeMatch.resume) {
-        resumedCheckpoint = await host.turnCheckpoints.consume(sessionId);
-        resumedWithExplicitContinue = resumeMatch.isExplicitContinue;
-        logPhase(host.phaseConfig, 'agent_loop.checkpoint.resume', sessionId, {
-          checkpointIterations: existingCheckpoint.iterations,
-          checkpointMessages: existingCheckpoint.messages.length,
-          explicitContinue: resumedWithExplicitContinue,
-        });
-      } else {
-        await host.turnCheckpoints.clear(sessionId);
-      }
-    }
-  }
-  const checkpointPromptText = resumedCheckpoint?.promptText || input.rawContent || '';
   let segmentPrompt = resumedCheckpoint
-    ? (resumedWithExplicitContinue
-      ? [...resumedCheckpoint.messages, ...promptMessages]
-      : [...resumedCheckpoint.messages])
+    ? [...resumedCheckpoint.messages]
     : promptMessages;
   let segmentContext = loopContext;
+
+  const saveCompletedCheckpointIfAny = async () => {
+    if (!persistentConversation || !host.turnCheckpoints) return;
+    if (state.replyRun?.offered || state.settledPhaseCount > 0) {
+      await host.turnCheckpoints.clear(sessionId);
+      return;
+    }
+    const checkpointMessages = extractCompletedToolRoundMessages([
+      ...state.turnTranscript,
+      ...state.segmentMessages,
+    ]);
+    if (checkpointMessages.length > 0) {
+      await host.turnCheckpoints.save({
+        sessionId,
+        promptText: checkpointPromptText,
+        messages: checkpointMessages,
+        iterations: state.iterations,
+        updatedAt: Date.now(),
+        ...(effectiveUserMessageExtra !== undefined
+          ? { userMessageExtra: effectiveUserMessageExtra }
+          : {}),
+      });
+    }
+  };
 
   function* drainCompletionUsage(): Generator<TurnEvent> {
     for (const event of completionUsage.drainEvents()) {
@@ -333,108 +380,104 @@ export async function* runAgentLoopTextTurnRun(
       progress.startSegment();
       state.lastAssistantHadToolCalls = false;
       state.segmentMessages = [...segmentPrompt];
-      for await (const event of agentLoop(segmentPrompt, segmentContext, loopConfig, signal)) {
-        if (event.type === 'agent_start') loopDepth += 1;
-        yield* drainCompletionUsage();
-        for (const te of mapAgentEventToTurnEvents(event, mapperState)) {
-          if (te.type === 'usage' && event.type === 'message_end' && event.message.role === 'assistant'
-            && completionUsage.hasReported(event.message)) continue;
-          if (imReply && te.type === 'chunk') continue;
-          if (input.toolEventSource === 'authority'
-            && (te.type === 'tool_call' || te.type === 'tool_result')) continue;
-          emitTurnEvent(te);
-          yield te;
-        }
-        if (event.type === 'turn_start') {
-          // Milestone updates between iterations keep long Turns from looking frozen.
-          if (!input.interactiveRun && !state.answering && reporter && progress.progressedSince(lastReportIteration + 1)) {
-            const sent = await reporter.report(extensionPending ? 'extension' : 'progress', {
-              steps: state.iterations,
-              interimText: !imReply && state.lastAssistantHadToolCalls ? state.lastAssistantText : undefined,
-            });
-            if (sent) lastReportIteration = state.iterations;
+      try {
+        for await (const event of agentLoop(segmentPrompt, segmentContext, loopConfig, signal)) {
+          if (event.type === 'agent_start') loopDepth += 1;
+          yield* drainCompletionUsage();
+          for (const te of mapAgentEventToTurnEvents(event, mapperState)) {
+            if (te.type === 'usage' && event.type === 'message_end' && event.message.role === 'assistant'
+              && completionUsage.hasReported(event.message)) continue;
+            if (imReply && te.type === 'chunk') continue;
+            if (input.toolEventSource === 'authority'
+              && (te.type === 'tool_call' || te.type === 'tool_result')) continue;
+            emitTurnEvent(te);
+            yield te;
           }
-          extensionPending = false;
-          state.iterations += 1;
-        }
-        if (event.type === 'tool_execution_end' && event.result.role === 'toolResult' && typeof event.result.toolCallId === 'string') {
-          pendingToolResults.set(event.result.toolCallId, event.result);
-        }
-        if (event.type === 'turn_end') {
-          flushToolResults();
-          if (persistentConversation && host.turnCheckpoints && event.toolResults.length > 0) {
-            const checkpointMessages = extractCompletedToolRoundMessages([
-              ...state.turnTranscript,
-              ...state.segmentMessages,
-            ]);
-            if (checkpointMessages.length > 0) {
-              await host.turnCheckpoints.save({
-                sessionId,
-                promptText: checkpointPromptText,
-                messages: checkpointMessages,
-                iterations: state.iterations,
-                updatedAt: Date.now(),
+          if (event.type === 'turn_start') {
+            // Milestone updates between iterations keep long Turns from looking frozen.
+            if (!input.interactiveRun && !state.answering && reporter && progress.progressedSince(lastReportIteration + 1)) {
+              const sent = await reporter.report(extensionPending ? 'extension' : 'progress', {
+                steps: state.iterations,
+                interimText: !imReply && state.lastAssistantHadToolCalls ? state.lastAssistantText : undefined,
               });
+              if (sent) lastReportIteration = state.iterations;
+            }
+            extensionPending = false;
+            state.iterations += 1;
+          }
+          if (event.type === 'tool_execution_end' && event.result.role === 'toolResult' && typeof event.result.toolCallId === 'string') {
+            pendingToolResults.set(event.result.toolCallId, event.result);
+          }
+          if (event.type === 'turn_end') {
+            flushToolResults();
+            if (event.toolResults.length > 0) {
+              await saveCompletedCheckpointIfAny();
+            }
+          }
+          if (event.type === 'message_end') {
+            flushToolResults();
+            state.segmentMessages.push(event.message as AgentMessage);
+          }
+          if (!imReply && event.type === 'message_update' && event.delta?.type === 'text_delta') {
+            onChunk?.(event.delta.text, state.lastAssistantText + event.delta.text);
+          }
+          if (event.type === 'message_end' && event.message.role === 'assistant') {
+            const assistant = event.message as AssistantMessage;
+            state.phaseLastAssistant = assistant;
+            state.lastAssistantHadToolCalls = assistant.content.some((block) => block.type === 'toolCall');
+            if (!state.lastAssistantHadToolCalls) state.phaseAssistant = assistant;
+            const answerText = assistant.content
+              .filter((block): block is Extract<typeof block, { type: 'text' }> => block.type === 'text')
+              .map(block => block.text).join('');
+            state.lastAssistantNeedsHostReply = Boolean(assistant.errorMessage)
+              || (!state.lastAssistantHadToolCalls && !answerText.trim());
+            state.lastAssistantText = imReply && !state.lastAssistantNeedsHostReply ? answerText
+              : resolveAssistantReplyText(imReply ? { ...assistant, content: [] } : assistant, chatFailure);
+            logAssistantIterationFailure(assistant, modelId, sessionId);
+            const toolNames = assistant.content
+              .filter((b): b is Extract<typeof b, { type: 'toolCall' }> => b.type === 'toolCall')
+              .map((b) => b.name)
+              .join(',');
+            logAgentLoopIterationEnd(host.phaseConfig, sessionId, {
+              iteration: state.iterations,
+              model: modelId,
+              label: hasTools ? 'orchestrator' : 'chat',
+              usage: assistant.usage,
+              stopReason: assistant.stopReason,
+              toolNames: toolNames || undefined,
+            });
+            if (!imReply) onChunk?.(state.lastAssistantText, state.lastAssistantText);
+          }
+          if (event.type === 'agent_end') {
+            loopDepth -= 1;
+            if (loopDepth > 0) continue;
+            if (signal?.aborted && !state.replyRun?.offered && !state.settledPhaseCount) continue;
+            flushToolResults();
+            const batch = state.segmentMessages;
+            state.turnTranscript = [...state.turnTranscript, ...batch];
+            const messageExtras = batch.map((msg, i) => (
+              msg.role === 'user' && i === 0 && state.continuations === 0 ? effectiveUserMessageExtra : undefined
+            ));
+            if (persistentConversation) {
+              const messages = input.turnContext.origin.kind === 'im' ? stampAssistantHeaders(batch, input.turnContext.input?.contextState?.bot) : batch;
+              for (const [index, source] of batch.entries()) {
+                if (messages[index] === source) continue;
+                const copies = conversationProjectionCopies.get(source) ?? [];
+                copies.push(messages[index]!);
+                conversationProjectionCopies.set(source, copies);
+                const facts = conversationPhaseFacts.get(source);
+                if (facts) conversationPhaseFacts.set(messages[index]!, facts);
+              }
+              conversationBatches.push({ messages, messageExtras });
             }
           }
         }
-        if (event.type === 'message_end') {
+      } catch (loopErr) {
+        if (signal?.aborted) {
           flushToolResults();
-          state.segmentMessages.push(event.message as AgentMessage);
+          await saveCompletedCheckpointIfAny();
         }
-        if (!imReply && event.type === 'message_update' && event.delta?.type === 'text_delta') {
-          onChunk?.(event.delta.text, state.lastAssistantText + event.delta.text);
-        }
-        if (event.type === 'message_end' && event.message.role === 'assistant') {
-          const assistant = event.message as AssistantMessage;
-          state.phaseLastAssistant = assistant;
-          state.lastAssistantHadToolCalls = assistant.content.some((block) => block.type === 'toolCall');
-          if (!state.lastAssistantHadToolCalls) state.phaseAssistant = assistant;
-          const answerText = assistant.content
-            .filter((block): block is Extract<typeof block, { type: 'text' }> => block.type === 'text')
-            .map(block => block.text).join('');
-          state.lastAssistantNeedsHostReply = Boolean(assistant.errorMessage)
-            || (!state.lastAssistantHadToolCalls && !answerText.trim());
-          state.lastAssistantText = imReply && !state.lastAssistantNeedsHostReply ? answerText
-            : resolveAssistantReplyText(imReply ? { ...assistant, content: [] } : assistant, chatFailure);
-          logAssistantIterationFailure(assistant, modelId, sessionId);
-          const toolNames = assistant.content
-            .filter((b): b is Extract<typeof b, { type: 'toolCall' }> => b.type === 'toolCall')
-            .map((b) => b.name)
-            .join(',');
-          logAgentLoopIterationEnd(host.phaseConfig, sessionId, {
-            iteration: state.iterations,
-            model: modelId,
-            label: hasTools ? 'orchestrator' : 'chat',
-            usage: assistant.usage,
-            stopReason: assistant.stopReason,
-            toolNames: toolNames || undefined,
-          });
-          if (!imReply) onChunk?.(state.lastAssistantText, state.lastAssistantText);
-        }
-        if (event.type === 'agent_end') {
-          loopDepth -= 1;
-          if (loopDepth > 0) continue;
-          if (signal?.aborted && !state.replyRun?.offered && !state.settledPhaseCount) continue;
-          flushToolResults();
-          const batch = state.segmentMessages;
-          state.turnTranscript = [...state.turnTranscript, ...batch];
-          const messageExtras = batch.map((msg, i) => (
-            msg.role === 'user' && i === 0 && state.continuations === 0 ? userMessageExtra : undefined
-          ));
-          if (persistentConversation) {
-            const messages = input.turnContext.origin.kind === 'im' ? stampAssistantHeaders(batch, input.turnContext.input?.contextState?.bot) : batch;
-            for (const [index, source] of batch.entries()) {
-              if (messages[index] === source) continue;
-              const copies = conversationProjectionCopies.get(source) ?? [];
-              copies.push(messages[index]!);
-              conversationProjectionCopies.set(source, copies);
-              const facts = conversationPhaseFacts.get(source);
-              if (facts) conversationPhaseFacts.set(messages[index]!, facts);
-            }
-            conversationBatches.push({ messages, messageExtras });
-          }
-        }
+        throw loopErr;
       }
       // Auto-continue only a Turn that stopped mid-task (model still calling tools)
       // after real progress, within the continuation and hard caps.
@@ -486,21 +529,7 @@ export async function* runAgentLoopTextTurnRun(
   yield* drainCompletionUsage();
   if (signal?.aborted) {
     flushToolResults();
-    if (persistentConversation && host.turnCheckpoints) {
-      const checkpointMessages = extractCompletedToolRoundMessages([
-        ...state.turnTranscript,
-        ...state.segmentMessages,
-      ]);
-      if (checkpointMessages.length > 0) {
-        await host.turnCheckpoints.save({
-          sessionId,
-          promptText: checkpointPromptText,
-          messages: checkpointMessages,
-          iterations: state.iterations,
-          updatedAt: Date.now(),
-        });
-      }
-    }
+    await saveCompletedCheckpointIfAny();
     await state.replyRun?.stop();
     if (replyPhases) await settlePhase([], '', true);
     const usage = tokenUsageToLegacy(completionUsage.usage);

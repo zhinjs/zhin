@@ -77,6 +77,60 @@ describe('ModelCapabilityCatalog & applyModelCapabilityDefaults', () => {
       toolCalling: true,
       thinking: true,
     });
+    expect(inferModelCapabilities({ modelId: 'o3-mini', protocol: 'openai-chat' })).toMatchObject({
+      input: ['text'],
+      streaming: true,
+      toolCalling: true,
+      thinking: true,
+    });
+    expect(inferModelCapabilities({ modelId: 'gpt-4-turbo', protocol: 'openai-chat' })).toMatchObject({
+      input: ['text', 'image'],
+      streaming: true,
+      toolCalling: true,
+      thinking: false,
+    });
+    expect(inferModelCapabilities({ modelId: 'gpt-4-vision-preview', protocol: 'openai-chat' })).toMatchObject({
+      input: ['text', 'image'],
+      streaming: true,
+      toolCalling: true,
+      thinking: false,
+    });
+    expect(inferModelCapabilities({ modelId: '@cf/meta/llama-3.1-8b-instruct', protocol: 'openai-chat' })).toMatchObject({
+      input: ['text'],
+      streaming: true,
+      toolCalling: true,
+      thinking: false,
+    });
+    expect(inferModelCapabilities({ modelId: 'deepseek-vl2', protocol: 'openai-chat' })).toMatchObject({
+      input: ['text', 'image'],
+      streaming: true,
+      toolCalling: true,
+      thinking: false,
+    });
+    expect(inferModelCapabilities({ modelId: 'qwen2.5-omni-7b', protocol: 'openai-chat' })).toMatchObject({
+      input: ['text', 'image'],
+      streaming: true,
+      toolCalling: true,
+      thinking: false,
+    });
+    expect(inferModelCapabilities({ modelId: 'glm-4.1v-thinking', protocol: 'openai-chat' })).toMatchObject({
+      input: ['text', 'image'],
+      streaming: true,
+      toolCalling: true,
+      thinking: true,
+    });
+    expect(inferModelCapabilities({ modelId: 'doubao-1-5-thinking-vision-pro', protocol: 'openai-chat' })).toMatchObject({
+      input: ['text', 'image'],
+      streaming: true,
+      toolCalling: true,
+      thinking: true,
+    });
+    expect(inferModelCapabilities({ modelId: 'llama3.2-vision:latest', protocol: 'openai-chat' })).toMatchObject({
+      input: ['text', 'image'],
+      streaming: true,
+      toolCalling: true,
+      thinking: false,
+    });
   });
 
   it('returns non-streaming non-tool text input for non-language models', () => {

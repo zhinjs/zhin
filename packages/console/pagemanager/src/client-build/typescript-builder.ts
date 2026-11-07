@@ -1,11 +1,12 @@
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path';
 import { build as esbuild, stop as stopEsbuild, type BuildOptions, type BuildResult, type Plugin as EsbuildPlugin } from 'esbuild';
 import type ts from 'typescript';
 import {
+  assertPageLocalName,
   buildBlueprintFromSpec,
   createAdapterConsolePage,
   createCommentReviewPage,
@@ -14,10 +15,15 @@ import {
   defineCommentReviewPage,
   definePage,
   definePageBlueprint,
+  evaluateDeclarativeValue,
   isConsoleBlueprint,
+  isDeclarativeValueExpr,
   normalizeClientModuleArtifact,
   normalizePageMetadata,
   pageRoute,
+  projectBlueprintToCliPanel,
+  projectBlueprintToImCard,
+  resolveDataPath,
   resolveDeclarativeText,
   type ClientModuleArtifact,
   type ConsoleAdapterPageBlueprint,
@@ -63,6 +69,39 @@ const CONSOLE_CONTRACT_STUB = [
   '  if (locale === "en") return text.en ?? text["zh-CN"] ?? text.zh ?? "";',
   '  return text["zh-CN"] ?? text.zh ?? text.en ?? "";',
   '}',
+  'export function isDeclarativeValueExpr(value) {',
+  '  if (!value || typeof value !== "object" || Array.isArray(value)) return false;',
+  '  return typeof value.$path === "string" || typeof value.$count === "string" || (value.$sum !== null && typeof value.$sum === "object") || (value.$format !== undefined && Array.isArray(value.$args ?? value.args)) || (value.$map !== null && typeof value.$map === "object") || (value.$join !== null && typeof value.$join === "object") || Array.isArray(value.$coalesce);',
+  '}',
+  'export function resolveDataPath(data, path) {',
+  '  if (!data || typeof data !== "object" || !path) return undefined;',
+  '  if (path in data) return data[path];',
+  '  let cursor = data;',
+  '  for (const seg of String(path).split(".").filter(Boolean)) {',
+  '    if (cursor == null) return undefined;',
+  '    if (Array.isArray(cursor) && seg === "length") return cursor.length;',
+  '    if (typeof cursor !== "object") return undefined;',
+  '    cursor = cursor[seg];',
+  '  }',
+  '  return cursor;',
+  '}',
+  'export function evaluateDeclarativeValue(exprOrKey, data, locale = "en") {',
+  '  if (exprOrKey == null) return undefined;',
+  '  if (typeof exprOrKey === "string") return resolveDataPath(data, exprOrKey);',
+  '  if (!isDeclarativeValueExpr(exprOrKey)) return exprOrKey;',
+  '  if (typeof exprOrKey.$path === "string") { const v = resolveDataPath(data, exprOrKey.$path); return v != null ? v : exprOrKey.fallback; }',
+  '  if (typeof exprOrKey.$count === "string") { const t = resolveDataPath(data, exprOrKey.$count); return Array.isArray(t) ? t.length : (t && typeof t === "object" ? Object.keys(t).length : (typeof t === "number" ? t : 0)); }',
+  '  if (exprOrKey.$sum && typeof exprOrKey.$sum === "object") { const l = exprOrKey.$sum.path ? resolveDataPath(data, exprOrKey.$sum.path) : undefined; return (!Array.isArray(l) || !exprOrKey.$sum.field) ? 0 : l.reduce((a, it) => { const n = Number(resolveDataPath(it, exprOrKey.$sum.field)); return a + (Number.isFinite(n) ? n : 0); }, 0); }',
+  '  const fmtArgs = Array.isArray(exprOrKey.args) ? exprOrKey.args : (Array.isArray(exprOrKey.$args) ? exprOrKey.$args : undefined);',
+  '  if (exprOrKey.$format !== undefined && fmtArgs) { const tpl = resolveDeclarativeText(exprOrKey.$format, locale); const vals = fmtArgs.map((p) => resolveDataPath(data, p)); return tpl.replace(/\\{(\\d+)\\}/gu, (_m, idx) => vals[Number(idx)] == null ? "" : String(vals[Number(idx)])); }',
+  '  if (exprOrKey.$map && typeof exprOrKey.$map === "object") { const rv = exprOrKey.$map.path ? resolveDataPath(data, exprOrKey.$map.path) : undefined; const m = exprOrKey.$map.cases?.[String(rv ?? "")]; if (m !== undefined) return resolveDeclarativeText(m, locale); if (exprOrKey.$map.default !== undefined) return resolveDeclarativeText(exprOrKey.$map.default, locale); return rv; }',
+  '  if (exprOrKey.$join && typeof exprOrKey.$join === "object") { const l = exprOrKey.$join.path ? resolveDataPath(data, exprOrKey.$join.path) : undefined; if (!Array.isArray(l) || l.length === 0) return exprOrKey.$join.empty !== undefined ? resolveDeclarativeText(exprOrKey.$join.empty, locale) : "—"; return l.map((it) => String(it ?? "")).join(exprOrKey.$join.sep ?? ", "); }',
+  '  if (Array.isArray(exprOrKey.$coalesce)) { for (const c of exprOrKey.$coalesce) { const v = resolveDataPath(data, c); if (v != null && v !== "") return v; } return exprOrKey.fallback; }',
+  '  return undefined;',
+  '}',
+  'export function isConsoleBlueprint(value) {',
+  '  return Boolean(value && typeof value === "object" && (value.kind === "zhin.console.page-blueprint" || value.kind === "zhin.console.adapter-page"));',
+  '}',
   'export function buildBlueprintFromSpec(spec = {}) {',
   '  if (spec && spec.kind === "zhin.console.page-blueprint") {',
   '    return {',
@@ -79,7 +118,7 @@ const CONSOLE_CONTRACT_STUB = [
   '  }',
   '  const sections = [];',
   '  if (Array.isArray(spec.stats) && spec.stats.length > 0) {',
-  '    sections.push({ type: "stats", id: "runtime-stats", title: "Runtime Stats", items: spec.stats.map((s, i) => ({ key: s.key ?? (typeof s.value === "string" ? s.value : "stat-" + i), label: resolveDeclarativeText(s.label, "en"), ...(typeof s.value === "string" ? { dataKey: s.value } : {}), ...(s.value && typeof s.value === "object" ? { expr: s.value } : {}) })) });',
+  '    sections.push({ type: "stats", id: "runtime-stats", title: "Runtime Stats", items: spec.stats.map((s, i) => ({ key: s.key ?? (typeof s.value === "string" ? s.value : "stat-" + i), label: resolveDeclarativeText(s.label, "en"), ...(typeof s.value === "string" ? { dataKey: s.value } : {}), ...(isDeclarativeValueExpr(s.value) ? { expr: s.value } : {}) })) });',
   '  }',
   '  for (const [idx, sec] of (spec.sections ?? []).entries()) {',
   '    const id = sec.id ?? ("section-" + idx);',
@@ -87,7 +126,7 @@ const CONSOLE_CONTRACT_STUB = [
   '    if (sec.columns !== undefined || sec.items !== undefined) {',
   '      sections.push({ type: "table", id, title, ...(typeof sec.items === "string" ? { dataKey: sec.items } : {}), rowKey: sec.columns?.[0]?.key ?? "id", columns: (sec.columns ?? []).map((c) => ({ key: c.key, label: resolveDeclarativeText(c.label, "en") })) });',
   '    } else if (sec.entries !== undefined) {',
-  '      sections.push({ type: "entries", id, title, ...(Array.isArray(sec.entries) ? { entries: sec.entries.map((e) => ({ label: resolveDeclarativeText(e.label, "en"), value: String(e.value ?? "") })) } : {}) });',
+  '      sections.push({ type: "entries", id, title, ...(Array.isArray(sec.entries) ? { entries: sec.entries.map((e) => ({ label: resolveDeclarativeText(e.label, "en"), value: isDeclarativeValueExpr(e.value) ? "" : String(e.value ?? ""), ...(e.dataKey ? { dataKey: e.dataKey } : {}), ...(isDeclarativeValueExpr(e.value) ? { expr: e.value } : {}) })) } : {}) });',
   '    } else {',
   '      sections.push({ type: "custom", id, ...(title ? { title } : {}) });',
   '    }',
@@ -181,11 +220,15 @@ function tsCompiler(): typeof ts {
   return require('typescript') as typeof ts;
 }
 
-const PURE_CONSOLE_CONTRACT_EXPORTS: Readonly<Record<string, unknown>> = Object.freeze({
+const PURE_CONSOLE_CONTRACT_TARGET: Readonly<Record<string, unknown>> = Object.freeze({
   definePage: (metadata: Record<string, unknown> = {}) => Object.freeze({ ...metadata }),
+  defineLayout: (metadata: Record<string, unknown> = {}) => Object.freeze({ ...metadata }),
   normalizePageMetadata,
   normalizeClientModuleArtifact,
   resolveDeclarativeText,
+  isDeclarativeValueExpr,
+  resolveDataPath,
+  evaluateDeclarativeValue,
   buildBlueprintFromSpec,
   definePageBlueprint,
   createDeclarativePage,
@@ -194,6 +237,21 @@ const PURE_CONSOLE_CONTRACT_EXPORTS: Readonly<Record<string, unknown>> = Object.
   defineCommentReviewPage,
   createCommentReviewPage,
   isConsoleBlueprint,
+  pageRoute,
+  assertPageLocalName,
+  projectBlueprintToImCard,
+  projectBlueprintToCliPanel,
+});
+
+const PURE_CONSOLE_CONTRACT_EXPORTS = new Proxy(PURE_CONSOLE_CONTRACT_TARGET, {
+  get(target, prop, receiver) {
+    if (prop === '__esModule') return true;
+    if (prop === 'default') return target;
+    if (typeof prop === 'symbol' || prop in target) {
+      return Reflect.get(target, prop, receiver);
+    }
+    throw new Error(`Unsupported contract export in pure blueprint: ${String(prop)}`);
+  },
 });
 
 export class TypeScriptClientBuilder implements ClientModuleLoader {
@@ -349,9 +407,12 @@ function tryExtractPureBlueprint(
             resolve(baseDir, specifier.replace(/\.js$/u, '.ts')),
             resolve(baseDir, `${specifier}.ts`),
             resolve(baseDir, `${specifier}.js`),
+            resolve(baseDir, specifier, 'index.ts'),
+            resolve(baseDir, specifier, 'index.js'),
           ];
           for (const candidate of candidates) {
-            if (existsSync(candidate)) {
+            if (candidate.endsWith('.tsx') || candidate.endsWith('.jsx')) continue;
+            if (statSync(candidate, { throwIfNoEntry: false })?.isFile() === true) {
               const target = resolve(candidate);
               importMap[specifier] = target;
               return evalModule(target);
@@ -405,7 +466,7 @@ function synthesizePureBlueprintModule(
   const cjsContractStub = CONSOLE_CONTRACT_STUB.replace(
     /^export function (\w+)/gmu,
     'function $1',
-  ) + '\nObject.assign(exports, { definePage, defineLayout, normalizePageMetadata, normalizeClientModuleArtifact, resolveDeclarativeText, buildBlueprintFromSpec, definePageBlueprint, createDeclarativePage, defineAdapterPage, createAdapterConsolePage, defineCommentReviewPage, createCommentReviewPage });';
+  ) + '\nObject.assign(exports, { definePage, defineLayout, normalizePageMetadata, normalizeClientModuleArtifact, resolveDeclarativeText, isDeclarativeValueExpr, resolveDataPath, evaluateDeclarativeValue, isConsoleBlueprint, buildBlueprintFromSpec, definePageBlueprint, createDeclarativePage, defineAdapterPage, createAdapterConsolePage, defineCommentReviewPage, createCommentReviewPage });';
 
   const moduleEntries = [...modules.entries()].map(([id, mod]) => {
     return `${JSON.stringify(id)}: { imports: ${JSON.stringify(mod.imports)}, fn(exports, require) {\n${mod.code}\n} }`;
@@ -452,6 +513,7 @@ function synthesizePureBlueprintModule(
     'const Page = pageNs.default;',
     'export default Page;',
     'export const meta = pageNs.meta;',
+    'export const blueprint = pageNs.blueprint ?? (typeof Page === "function" ? Page() : Page);',
     registerBody,
   ].join('\n');
 }
@@ -838,7 +900,7 @@ function consoleContractStubPlugin(): EsbuildPlugin {
   return {
     name: 'zhin-console-contract-stub',
     setup(build) {
-      build.onResolve({ filter: /^(?:@zhin\.js\/console-contract|@zhin\.js\/page|zhin\.js\/page)$/ }, () => ({
+      build.onResolve({ filter: /^(?:@zhin\.js\/console-contract|@zhin\.js\/contract|@zhin\.js\/page|zhin\.js\/page)$/ }, () => ({
         path: 'zhin-console-contract-stub',
         namespace: 'zhin-virtual',
       }));

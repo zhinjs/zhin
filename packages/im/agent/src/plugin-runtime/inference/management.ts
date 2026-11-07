@@ -22,6 +22,7 @@ import {
   type ProviderSupportMetadata,
   normalizeProviderJson,
 } from '@zhin.js/ai/provider';
+import { applyModelCapabilityDefaults } from '@zhin.js/ai/providers';
 import { createHostDocumentCipher } from '@zhin.js/plugin-runtime';
 import { InferenceCredentialStore, credentialMaterialFingerprint, environmentExpressionSource, normalizeApiKeyMaterial, type EnvironmentExpressionSource } from './credentials.js';
 import { createPersonalModelFetch } from './personal-network.js';
@@ -453,7 +454,7 @@ export class InferenceManagementService {
         },
       },
     });
-    const model = checked.services[service.id].models[modelId];
+    const model = applyModelCapabilityDefaults(checked.services[service.id].models[modelId]);
     const schema = this.options.profileSchema({ service, model });
     return {
       serviceId: service.id,

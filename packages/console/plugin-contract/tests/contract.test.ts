@@ -365,4 +365,84 @@ describe('Console contract', () => {
       { key: 'leader', label: 'Leader', value: 'node-b' },
     ]);
   });
+
+  it('supports $format.$args, entries with DeclarativeValueExpr & dataKey, and nested table column paths', () => {
+    const bp = definePageBlueprint({
+      pluginId: 'cluster',
+      title: 'Cluster Overview',
+      stats: [
+        {
+          key: 'version',
+          label: 'Version',
+          value: { $format: 'v{0} ({1})', $args: ['meta.version', 'meta.channel'] },
+        },
+      ],
+      sections: [
+        {
+          id: 'summary-entries',
+          title: 'Summary Entries',
+          entries: [
+            { label: 'Region', value: '', dataKey: 'meta.region' },
+            { label: 'NodeCount', value: { $count: 'cluster.nodes' } },
+            { label: 'LiteralMode', value: 'active-active' },
+          ],
+        },
+        {
+          id: 'nested-table',
+          title: 'Nested Nodes',
+          items: 'cluster.nodes',
+          columns: [
+            { key: 'id', label: 'ID' },
+            { key: 'metrics.cpu', label: 'CPU' },
+          ],
+        },
+      ],
+    });
+
+    const jsonOnlyBp = JSON.parse(JSON.stringify({ ...bp, spec: undefined }));
+    const data = {
+      meta: {
+        version: '1.2.0',
+        channel: 'stable',
+        region: 'ap-east-1',
+      },
+      cluster: {
+        nodes: [
+          { id: 'n1', metrics: { cpu: '12%' } },
+          { id: 'n2', metrics: { cpu: '34%' } },
+        ],
+      },
+    };
+
+    for (const target of [bp, jsonOnlyBp]) {
+      const card = projectBlueprintToImCard(target, data, { locale: 'en' });
+      expect(card.stats).toEqual([{ key: 'version', label: 'Version', value: 'v1.2.0 (stable)' }]);
+      expect(card.entries).toEqual([
+        {
+          id: 'summary-entries',
+          title: 'Summary Entries',
+          items: [
+            { label: 'Region', value: 'ap-east-1' },
+            { label: 'NodeCount', value: '2' },
+            { label: 'LiteralMode', value: 'active-active' },
+          ],
+        },
+      ]);
+      expect(card.tables).toEqual([
+        {
+          id: 'nested-table',
+          title: 'Nested Nodes',
+          columns: [
+            { key: 'id', label: 'ID' },
+            { key: 'metrics.cpu', label: 'CPU' },
+          ],
+          rows: [
+            ['n1', '12%'],
+            ['n2', '34%'],
+          ],
+          totalRows: 2,
+        },
+      ]);
+    }
+  });
 });

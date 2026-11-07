@@ -84,6 +84,59 @@ describe('TurnCheckpointStore & step-level checkpoint resume', () => {
         assistantRound2Incomplete,
       ]),
     ).toEqual([userMsg, assistantRound1, result1, result2]);
+
+    // Round 2 has isError: true -> excluded from completed boundary, truncates at Round 1 end
+    const errorResult3: AgentMessage = {
+      role: 'toolResult',
+      toolCallId: 'call_3',
+      toolName: 'write_report',
+      content: [{ type: 'text', text: 'aborted' }],
+      isError: true,
+      timestamp: Date.now(),
+    };
+    expect(
+      extractCompletedToolRoundMessages([
+        userMsg,
+        assistantRound1,
+        result1,
+        result2,
+        assistantRound2Incomplete,
+        errorResult3,
+      ]),
+    ).toEqual([userMsg, assistantRound1, result1, result2]);
+
+    // Multi-segment autoContinue transcript (summary assistant + continuation user + Round 2 complete)
+    const summaryAssistant = assistantTextReply('Interim summary after segment 1');
+    const continueUser = createUserMessage('Continue from segment 1');
+    const okResult3: AgentMessage = {
+      role: 'toolResult',
+      toolCallId: 'call_3',
+      toolName: 'write_report',
+      content: [{ type: 'text', text: 'Report written' }],
+      isError: false,
+      timestamp: Date.now(),
+    };
+    expect(
+      extractCompletedToolRoundMessages([
+        userMsg,
+        assistantRound1,
+        result1,
+        result2,
+        summaryAssistant,
+        continueUser,
+        assistantRound2Incomplete,
+        okResult3,
+      ]),
+    ).toEqual([
+      userMsg,
+      assistantRound1,
+      result1,
+      result2,
+      summaryAssistant,
+      continueUser,
+      assistantRound2Incomplete,
+      okResult3,
+    ]);
   });
 
   it('matches exact retry prompts and explicit continuation commands', () => {
@@ -161,6 +214,7 @@ describe('TurnCheckpointStore & step-level checkpoint resume', () => {
       messages: sampleMessages,
       iterations: 1,
       updatedAt: now,
+      userMessageExtra: { sourceMessageId: 'msg-42' } as never,
     });
 
     // Fresh store instance reads from DatabaseTurnCheckpointStorage
@@ -171,6 +225,7 @@ describe('TurnCheckpointStore & step-level checkpoint resume', () => {
     expect(loaded).toBeDefined();
     expect(loaded?.promptText).toBe('run pipeline');
     expect(loaded?.messages).toHaveLength(3);
+    expect(loaded?.userMessageExtra).toEqual({ sourceMessageId: 'msg-42' });
 
     // Advance clock past TTL -> peek returns undefined and cleans up
     now += 120_000;

@@ -1,6 +1,7 @@
 import type {
   Dispose,
   GenerationHandoffParticipant,
+  PluginCapabilityGraphDeclaration,
   PluginId,
   PluginMetadata,
   PluginLifecycleEventMap,
@@ -20,6 +21,7 @@ export interface IsolatedPluginPrepareRequest {
 export interface IsolatedPluginDescriptor {
   readonly name: string;
   readonly metadata?: PluginMetadata;
+  readonly capabilityGraph?: PluginCapabilityGraphDeclaration;
 }
 
 export interface IsolatedResourceBinding<T = unknown> {

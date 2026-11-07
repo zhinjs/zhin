@@ -51,4 +51,52 @@ describe('scanConventionCapabilityFeatures & generatePluginCapabilityCodegen', (
       await rm(root, { recursive: true, force: true });
     }
   });
+
+  it('discovers progressive-disclosure tools, skills, hooks, promptSections, and resolves pluginName from plugin.ts', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-convention-progressive-'));
+    try {
+      await writeFile(
+        join(root, 'plugin.ts'),
+        'import { definePlugin } from "zhin.js";\nexport default definePlugin({ name: "my-smart-plugin" });\n',
+      );
+      await mkdir(join(root, 'skills', 'music', 'tools', 'play-song'), { recursive: true });
+      await writeFile(join(root, 'skills', 'music', 'SKILL.md'), '# Music\n');
+      await writeFile(join(root, 'skills', 'music', 'tools', 'play-song', 'index.ts'), 'export default {};\n');
+
+      await mkdir(join(root, 'agents', 'reviewer', 'tools', 'diff-check'), { recursive: true });
+      await writeFile(join(root, 'agents', 'reviewer', 'agent.json'), '{}\n');
+      await writeFile(join(root, 'agents', 'reviewer', 'tools', 'diff-check', 'index.ts'), 'export default {};\n');
+
+      await mkdir(join(root, 'agents', 'reviewer', 'skills', 'security', 'tools', 'cve-scan'), {
+        recursive: true,
+      });
+      await writeFile(join(root, 'agents', 'reviewer', 'skills', 'security', 'SKILL.md'), '# Security\n');
+      await writeFile(
+        join(root, 'agents', 'reviewer', 'skills', 'security', 'tools', 'cve-scan', 'index.cjs'),
+        'module.exports = {};\n',
+      );
+
+      await mkdir(join(root, 'prompt-sections', 'persona'), { recursive: true });
+      await writeFile(join(root, 'prompt-sections', 'persona', 'index.ts'), 'export default {};\n');
+
+      await mkdir(join(root, 'skills', 'music', 'hooks', 'after-play'), { recursive: true });
+      await writeFile(join(root, 'skills', 'music', 'hooks', 'after-play', 'index.ts'), 'export default {};\n');
+
+      const codegen = await generatePluginCapabilityCodegen(root);
+      expect(codegen.pluginName).toBe('my-smart-plugin');
+      expect(codegen.features).toEqual({
+        agents: ['reviewer'],
+        hooks: ['skill/music/after-play'],
+        promptSections: ['persona'],
+        skills: ['agent/reviewer/security', 'music'],
+        tools: [
+          'agent/reviewer/diff-check',
+          'agent/reviewer/skill/security/cve-scan',
+          'skill/music/play-song',
+        ],
+      });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });

@@ -286,9 +286,14 @@ export function evaluateDeclarativeValue(
       return acc + (Number.isFinite(n) ? n : 0);
     }, 0);
   }
-  if (rec.$format !== undefined && Array.isArray(rec.args)) {
+  const formatArgs = Array.isArray(rec.args)
+    ? rec.args
+    : Array.isArray(rec.$args)
+      ? rec.$args
+      : undefined;
+  if (rec.$format !== undefined && formatArgs) {
     const template = resolveDeclarativeText(rec.$format as DeclarativeI18nText, locale);
-    const args = (rec.args as readonly string[]).map((p) => resolveDataPath(data, p));
+    const args = (formatArgs as readonly string[]).map((p) => resolveDataPath(data, p));
     return template.replace(/\{(\d+)\}/gu, (_m, idx) => {
       const v = args[Number(idx)];
       return v === undefined || v === null ? '' : String(v);
@@ -441,7 +446,11 @@ export interface DeclarativeSectionSpec<
   ) => DeclarativeRenderable;
   /** Key-value description list extractor (`<dl className="zk-dl">`). */
   readonly entries?:
-    | readonly { readonly label: DeclarativeI18nText; readonly value: DeclarativeRenderable }[]
+    | readonly {
+        readonly label: DeclarativeI18nText;
+        readonly value: DeclarativeRenderable | DeclarativeValueExpr;
+        readonly dataKey?: string;
+      }[]
     | ((
         data: TData,
         ctx: DeclarativePageContext<TData>,
@@ -519,7 +528,12 @@ export type ConsolePageBlueprintSection =
       readonly type: 'entries';
       readonly id: string;
       readonly title: string;
-      readonly entries?: readonly { readonly label: string; readonly value: string }[];
+      readonly entries?: readonly {
+        readonly label: string;
+        readonly value: string;
+        readonly dataKey?: string;
+        readonly expr?: DeclarativeValueExpr;
+      }[];
     }
   | {
       readonly type: 'actions';
@@ -728,7 +742,9 @@ export function buildBlueprintFromSpec<TData = Record<string, unknown>>(
                   sec.entries.map((e) =>
                     Object.freeze({
                       label: resolveDeclarativeText(e.label, 'en'),
-                      value: String(e.value ?? ''),
+                      value: isDeclarativeValueExpr(e.value) ? '' : String(e.value ?? ''),
+                      ...(e.dataKey ? { dataKey: e.dataKey } : {}),
+                      ...(isDeclarativeValueExpr(e.value) ? { expr: e.value } : {}),
                     }),
                   ),
                 ),
@@ -1248,11 +1264,12 @@ export function projectBlueprintToImCard<TData = Record<string, unknown>>(
             return [formatRenderableValue(sec.renderItem(row, rowIdx, ctx))];
           }
           const rec = (row && typeof row === 'object' ? row : { value: row }) as Record<string, unknown>;
-          return cols.map((c) =>
-            c.render
-              ? formatRenderableValue(c.render(rec[c.key], row, ctx))
-              : formatRenderableValue(rec[c.key]),
-          );
+          return cols.map((c) => {
+            const cellVal = resolveDataPath(rec, c.key);
+            return c.render
+              ? formatRenderableValue(c.render(cellVal, row, ctx))
+              : formatRenderableValue(cellVal);
+          });
         });
         const emptyText = sec.emptyText ? resolveDeclarativeText(sec.emptyText, locale) : undefined;
         tables.push(
@@ -1271,19 +1288,36 @@ export function projectBlueprintToImCard<TData = Record<string, unknown>>(
             ? sec.entries((data ?? ({} as TData)), ctx)
             : sec.entries;
         const items = Array.isArray(rawEntries)
-          ? rawEntries.map((entry) =>
-              Object.freeze({
+          ? rawEntries.map((entry) => {
+              const entryRecord = entry as {
+                readonly label: unknown;
+                readonly value: unknown;
+                readonly dataKey?: string;
+                readonly expr?: DeclarativeValueExpr;
+              };
+              const resolvedValue = isDeclarativeValueExpr(entryRecord.expr)
+                ? evaluateDeclarativeValue(entryRecord.expr, recordData, locale)
+                : isDeclarativeValueExpr(entryRecord.value)
+                  ? evaluateDeclarativeValue(entryRecord.value, recordData, locale)
+                  : entryRecord.dataKey
+                    ? resolveDataPath(recordData, entryRecord.dataKey)
+                    : entryRecord.value;
+              return Object.freeze({
                 label:
-                  typeof entry.label === 'object' && entry.label !== null && ('zh' in entry.label || 'en' in entry.label || 'zh-CN' in entry.label)
-                    ? resolveDeclarativeText(entry.label as DeclarativeI18nText, locale)
-                    : formatRenderableValue(entry.label),
-                value: formatRenderableValue(entry.value),
-              }),
-            )
+                  typeof entryRecord.label === 'object' &&
+                  entryRecord.label !== null &&
+                  ('zh' in entryRecord.label || 'en' in entryRecord.label || 'zh-CN' in entryRecord.label)
+                    ? resolveDeclarativeText(entryRecord.label as DeclarativeI18nText, locale)
+                    : formatRenderableValue(entryRecord.label),
+                value: formatRenderableValue(resolvedValue),
+              });
+            })
           : Object.entries(rawEntries ?? {}).map(([k, v]) =>
               Object.freeze({
                 label: k,
-                value: formatRenderableValue(v),
+                value: formatRenderableValue(
+                  isDeclarativeValueExpr(v) ? evaluateDeclarativeValue(v, recordData, locale) : v,
+                ),
               }),
             );
         entries.push(
@@ -1298,11 +1332,11 @@ export function projectBlueprintToImCard<TData = Record<string, unknown>>(
   } else {
     for (const sec of bp.sections) {
       if (sec.type === 'table') {
-        const rawItems = sec.dataKey ? recordData[sec.dataKey] : undefined;
+        const rawItems = sec.dataKey ? resolveDataPath(recordData, sec.dataKey) : undefined;
         const list = Array.isArray(rawItems) ? rawItems : [];
         const rows = list.slice(0, maxRows).map((row) => {
           const rec = (row && typeof row === 'object' ? row : {}) as Record<string, unknown>;
-          return sec.columns.map((c) => formatRenderableValue(rec[c.key]));
+          return sec.columns.map((c) => formatRenderableValue(resolveDataPath(rec, c.key)));
         });
         tables.push(
           Object.freeze({
@@ -1319,12 +1353,19 @@ export function projectBlueprintToImCard<TData = Record<string, unknown>>(
             id: sec.id,
             title: sec.title,
             items: Object.freeze(
-              sec.entries.map((entry) =>
-                Object.freeze({
+              sec.entries.map((entry) => {
+                const resolvedValue = entry.expr
+                  ? evaluateDeclarativeValue(entry.expr, recordData, locale)
+                  : isDeclarativeValueExpr(entry.value)
+                    ? evaluateDeclarativeValue(entry.value, recordData, locale)
+                    : entry.dataKey
+                      ? resolveDataPath(recordData, entry.dataKey)
+                      : entry.value;
+                return Object.freeze({
                   label: formatRenderableValue(entry.label),
-                  value: formatRenderableValue(entry.value),
-                }),
-              ),
+                  value: formatRenderableValue(resolvedValue),
+                });
+              }),
             ),
           }),
         );

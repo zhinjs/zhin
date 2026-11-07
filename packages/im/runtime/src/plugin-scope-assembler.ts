@@ -221,6 +221,9 @@ export class PluginScopeAssembler {
       }
       if (prepared.handoff) this.#handoffs.add(prepared.handoff);
       metadata = mergePluginMetadata(manifest, prepared.descriptor.metadata, node.id);
+      if (prepared.descriptor.capabilityGraph !== undefined) {
+        declaredCapabilityGraph = prepared.descriptor.capabilityGraph;
+      }
     } else {
       const module = await this.modules.load<ModuleNamespace>(
         resolve(node.package.root, manifest.entry),

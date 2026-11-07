@@ -212,10 +212,10 @@ export function resolveAISetupAgentProvider(config: Pick<AISetupConfig, 'agentPr
 }
 
 const MULTIMODAL_MODEL_PATTERN =
-  /^(?:gemini-|gpt-4o|gpt-4\.1|gpt-4\.5|gpt-5|chatgpt-4o|o1(?!-mini|-preview)|o3|o4|codex|claude-3|claude-(?:sonnet|opus|haiku)-4|claude-4|glm-4(?:\.\d+)?v|qwen(?:\d+(?:\.\d+)?)?-vl|qwen-omni|qvq|kimi-(?:k2\.5|latest)|moonshot-v1-.*vision|pixtral|grok-(?:2-vision|3|4)|doubao-(?:seed|.*vision)|llama-(?:4|3\.2-.*vision))/iu;
+  /^(?:gemini-|gpt-4o|gpt-4\.1|gpt-4\.5|gpt-5|chatgpt-4o|gpt-4-turbo|gpt-4-(?:\d+-)?vision|o1(?!-mini|-preview)|o3(?!-mini)|o4|codex|claude-3|claude-(?:sonnet|opus|haiku)-4|claude-4|deepseek-vl\d*|glm-4(?:\.\d+)?-?(?:v|vision)|qwen(?:\d+(?:\.\d+)?)?-(?:vl|omni)|qvq|kimi-(?:k2\.5|latest|vl|.*vision)|moonshot-v1-.*vision|pixtral|grok-(?:2-vision|3|4)|doubao-(?:seed|.*vision)|llama-?(?:4|3\.2-.*vision))/iu;
 
 const THINKING_MODEL_PATTERN =
-  /^(?:gemini-2\.5-|gemini-3|gemini-2\.0-flash-thinking|claude-(?:sonnet|opus)-4|claude-haiku-4[-.]5|claude-4|claude-3[-.]7|gpt-5|codex|o1|o3|o4|deepseek-(?:reasoner|r1|v3\.[12])|qwen3|qwq|qvq|qwen-(?:plus|max|turbo)-latest|glm-(?:4\.[5-9]|5|z1)|kimi-(?:k2|thinking|latest)|moonshot-v1-thinking|minimax-m[12]|grok-[34]|doubao-(?:seed|.*thinking))/iu;
+  /^(?:gemini-2\.5-|gemini-3|gemini-2\.0-flash-thinking|claude-(?:sonnet|opus)-4|claude-haiku-4[-.]5|claude-4|claude-3[-.]7|gpt-5|codex|o1|o3|o4|deepseek-(?:reasoner|r1|v3\.[12])|qwen3|qwq|qvq|qwen-(?:plus|max|turbo)-latest|glm-(?:4\.[5-9]|5|z1)|kimi-(?:k[12]|thinking|latest)|moonshot-v1-thinking|minimax-m[12]|grok-[34]|doubao-(?:seed|.*thinking))/iu;
 
 export function inferWizardModelCapabilities(modelId: string, protocol: string): {
   input: readonly ('text' | 'image')[];
@@ -223,15 +223,15 @@ export function inferWizardModelCapabilities(modelId: string, protocol: string):
   toolCalling: boolean;
   thinking: boolean;
 } {
-  const normalized = modelId.trim().replace(/^[^/]+\//u, '');
+  const normalized = modelId.trim().replace(/^(?:[^/]+\/)+/u, '');
   const isMultimodal =
     protocol === 'google-generate-content' ||
     MULTIMODAL_MODEL_PATTERN.test(normalized) ||
-    /vision|-vl(?:\b|[-_])/iu.test(normalized);
+    /vision|-vl\d*(?:\b|[-_:])/iu.test(normalized);
   const isLegacyO1 = /^o1-(?:mini|preview)\b/iu.test(normalized);
   const isThinking =
     THINKING_MODEL_PATTERN.test(normalized) ||
-    /thinking|reasoner|-r1(?:\b|[-_])/iu.test(normalized);
+    /thinking|reasoner|-r1(?:\b|[-_:])/iu.test(normalized);
   return {
     input: isMultimodal ? ['text', 'image'] : ['text'],
     streaming: true,
@@ -479,13 +479,15 @@ export async function configureAI(locale: 'zh-CN' | 'en' = 'zh-CN'): Promise<AIS
   }
 
   console.log('');
-  if (selectedModelChoice !== '__custom__') {
-    providerConfig.capabilities = {
-      input: providerInfo.defaultInput ? [...providerInfo.defaultInput] : ['text'],
-      toolCalling: true,
-      streaming: true,
-    };
-  } else {
+  if (selectedModelChoice === '__custom__') {
+    const inferredCustom = inferWizardModelCapabilities(
+      providerConfig.models?.[0] ?? providerInfo.defaultModel ?? '',
+      provider === 'anthropic' || provider === 'minimax'
+        ? 'anthropic-messages'
+        : provider === 'google'
+          ? 'google-generate-content'
+          : 'openai-chat',
+    );
     const featureChoices = [
       { name: wizardText(locale, "未知"), value: 'unknown' },
       { name: wizardText(locale, "支持"), value: 'yes' },
@@ -500,7 +502,7 @@ export async function configureAI(locale: 'zh-CN' | 'en' = 'zh-CN'): Promise<AIS
           value,
           ...(value === 'text'
             ? { checked: true, disabled: true }
-            : (providerInfo.defaultInput as readonly string[]).includes(value)
+            : (inferredCustom.input as readonly string[]).includes(value)
               ? { checked: true }
               : {}),
         })) },

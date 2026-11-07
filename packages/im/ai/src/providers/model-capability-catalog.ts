@@ -86,6 +86,16 @@ export const MODEL_CAPABILITY_CATALOG: readonly ModelCapabilityCatalogEntry[] = 
     maxOutputTokens: 32_768,
   },
   {
+    family: 'openai-o3-mini',
+    pattern: /^o3-mini\b/iu,
+    input: TEXT_ONLY,
+    streaming: true,
+    toolCalling: true,
+    thinking: true,
+    contextWindow: 200_000,
+    maxOutputTokens: 100_000,
+  },
+  {
     family: 'openai-reasoning-multimodal',
     pattern: /^(?:gpt-5|codex|o1|o3|o4)\b/iu,
     input: TEXT_AND_IMAGE,
@@ -107,7 +117,7 @@ export const MODEL_CAPABILITY_CATALOG: readonly ModelCapabilityCatalogEntry[] = 
   },
   {
     family: 'openai-gpt-4o',
-    pattern: /^(?:gpt-4o|gpt-4\.5|chatgpt-4o)\b/iu,
+    pattern: /^(?:gpt-4o|gpt-4\.5|chatgpt-4o|gpt-4-turbo|gpt-4-(?:\d+-)?vision)\b/iu,
     input: TEXT_AND_IMAGE,
     streaming: true,
     toolCalling: true,
@@ -127,6 +137,16 @@ export const MODEL_CAPABILITY_CATALOG: readonly ModelCapabilityCatalogEntry[] = 
   },
 
   // DeepSeek
+  {
+    family: 'deepseek-vision',
+    pattern: /^(?:deepseek-vl\d*|deepseek-.*vision)/iu,
+    input: TEXT_AND_IMAGE,
+    streaming: true,
+    toolCalling: true,
+    thinking: false,
+    contextWindow: 128_000,
+    maxOutputTokens: 8_192,
+  },
   {
     family: 'deepseek-reasoning',
     pattern: /^(?:deepseek-reasoner|deepseek-r1|deepseek-v3\.[12])/iu,
@@ -151,7 +171,7 @@ export const MODEL_CAPABILITY_CATALOG: readonly ModelCapabilityCatalogEntry[] = 
   // Alibaba Qwen
   {
     family: 'qwen-reasoning-vision',
-    pattern: /^(?:qwen3-vl|qvq)/iu,
+    pattern: /^(?:qwen3-(?:vl|omni)|qvq|qwen.*-(?:vl|omni).*thinking)/iu,
     input: TEXT_AND_IMAGE,
     streaming: true,
     toolCalling: true,
@@ -161,7 +181,7 @@ export const MODEL_CAPABILITY_CATALOG: readonly ModelCapabilityCatalogEntry[] = 
   },
   {
     family: 'qwen-vision',
-    pattern: /^(?:qwen(?:\d+(?:\.\d+)?)?-vl|qwen-omni)/iu,
+    pattern: /^(?:qwen(?:\d+(?:\.\d+)?)?-(?:vl|omni))/iu,
     input: TEXT_AND_IMAGE,
     streaming: true,
     toolCalling: true,
@@ -193,7 +213,7 @@ export const MODEL_CAPABILITY_CATALOG: readonly ModelCapabilityCatalogEntry[] = 
   // Zhipu GLM
   {
     family: 'glm-thinking-vision',
-    pattern: /^glm-4\.[5-9]v/iu,
+    pattern: /^glm-(?:4\.[5-9]v|4(?:\.\d+)?v-.*thinking|z1.*vision)/iu,
     input: TEXT_AND_IMAGE,
     streaming: true,
     toolCalling: true,
@@ -203,7 +223,7 @@ export const MODEL_CAPABILITY_CATALOG: readonly ModelCapabilityCatalogEntry[] = 
   },
   {
     family: 'glm-vision',
-    pattern: /^glm-4(?:\.\d+)?v/iu,
+    pattern: /^glm-4(?:\.\d+)?-?(?:v|vision)/iu,
     input: TEXT_AND_IMAGE,
     streaming: true,
     toolCalling: true,
@@ -235,7 +255,7 @@ export const MODEL_CAPABILITY_CATALOG: readonly ModelCapabilityCatalogEntry[] = 
   // Moonshot Kimi
   {
     family: 'kimi-vision-thinking',
-    pattern: /^kimi-(?:k2\.5|latest)/iu,
+    pattern: /^kimi-(?:k2\.5|latest|k1\.5.*vision)/iu,
     input: TEXT_AND_IMAGE,
     streaming: true,
     toolCalling: true,
@@ -245,7 +265,7 @@ export const MODEL_CAPABILITY_CATALOG: readonly ModelCapabilityCatalogEntry[] = 
   },
   {
     family: 'kimi-thinking',
-    pattern: /^(?:kimi-k2|kimi-thinking|moonshot-v1-thinking)/iu,
+    pattern: /^(?:kimi-k[12]|kimi-thinking|moonshot-v1-thinking)/iu,
     input: TEXT_ONLY,
     streaming: true,
     toolCalling: true,
@@ -255,7 +275,7 @@ export const MODEL_CAPABILITY_CATALOG: readonly ModelCapabilityCatalogEntry[] = 
   },
   {
     family: 'moonshot-vision',
-    pattern: /^moonshot-v1-.*vision/iu,
+    pattern: /^(?:moonshot-v1-.*vision|kimi-(?:vl|.*vision))/iu,
     input: TEXT_AND_IMAGE,
     streaming: true,
     toolCalling: true,
@@ -331,7 +351,7 @@ export const MODEL_CAPABILITY_CATALOG: readonly ModelCapabilityCatalogEntry[] = 
   // ByteDance Doubao
   {
     family: 'doubao-seed',
-    pattern: /^doubao-seed/iu,
+    pattern: /^(?:doubao-seed|doubao-.*(?:thinking.*vision|vision.*thinking))/iu,
     input: TEXT_AND_IMAGE,
     streaming: true,
     toolCalling: true,
@@ -373,7 +393,7 @@ export const MODEL_CAPABILITY_CATALOG: readonly ModelCapabilityCatalogEntry[] = 
   // Meta Llama & Mistral
   {
     family: 'vision-multimodal',
-    pattern: /^(?:pixtral|llama-4|llama-3\.2-.*vision)/iu,
+    pattern: /^(?:pixtral|llama-?4|llama-?3\.2-.*vision)/iu,
     input: TEXT_AND_IMAGE,
     streaming: true,
     toolCalling: true,
@@ -383,7 +403,7 @@ export const MODEL_CAPABILITY_CATALOG: readonly ModelCapabilityCatalogEntry[] = 
   },
   {
     family: 'llama-mistral-chat',
-    pattern: /^(?:llama-3|mistral|codestral)/iu,
+    pattern: /^(?:llama-?3|mistral|codestral)/iu,
     input: TEXT_ONLY,
     streaming: true,
     toolCalling: true,
@@ -394,8 +414,11 @@ export const MODEL_CAPABILITY_CATALOG: readonly ModelCapabilityCatalogEntry[] = 
 ]);
 
 function normalizeModelId(modelId: string): string {
-  return modelId.trim().replace(/^[^/]+\//u, '');
+  return modelId.trim().replace(/^(?:[^/]+\/)+/u, '');
 }
+
+const EXPLICIT_VISION_SUFFIX_PATTERN = /vision|-vl\d*(?:\b|[-_:])/iu;
+const EXPLICIT_THINKING_SUFFIX_PATTERN = /thinking|reasoner|-r1(?:\b|[-_:])/iu;
 
 export function inferModelCapabilities(input: InferModelCapabilitiesInput): ModelCapabilityBaseline {
   if (input.kinds && !input.kinds.includes('language')) {
@@ -407,27 +430,27 @@ export function inferModelCapabilities(input: InferModelCapabilitiesInput): Mode
     };
   }
   const normalized = normalizeModelId(input.modelId);
+  const explicitVision =
+    input.protocol === 'google-generate-content' ||
+    EXPLICIT_VISION_SUFFIX_PATTERN.test(normalized);
+  const explicitThinking = EXPLICIT_THINKING_SUFFIX_PATTERN.test(normalized);
   for (const entry of MODEL_CAPABILITY_CATALOG) {
     if (entry.pattern.test(normalized)) {
       return {
-        input: entry.input,
+        input: entry.input === TEXT_ONLY && explicitVision ? TEXT_AND_IMAGE : entry.input,
         streaming: entry.streaming,
         toolCalling: entry.toolCalling,
-        thinking: entry.thinking,
+        thinking: entry.thinking || explicitThinking,
         ...(entry.contextWindow !== undefined ? { contextWindow: entry.contextWindow } : {}),
         ...(entry.maxOutputTokens !== undefined ? { maxOutputTokens: entry.maxOutputTokens } : {}),
       };
     }
   }
-  const isMultimodal =
-    input.protocol === 'google-generate-content' ||
-    /vision|-vl(?:\b|[-_])/iu.test(normalized);
-  const isThinking = /thinking|reasoner|-r1(?:\b|[-_])/iu.test(normalized);
   return {
-    input: isMultimodal ? TEXT_AND_IMAGE : TEXT_ONLY,
+    input: explicitVision ? TEXT_AND_IMAGE : TEXT_ONLY,
     streaming: true,
     toolCalling: true,
-    thinking: isThinking,
+    thinking: explicitThinking,
   };
 }
 

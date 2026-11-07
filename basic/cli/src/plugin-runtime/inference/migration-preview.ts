@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { builtinAiProviders } from '@zhin.js/ai/providers';
+import { applyModelCapabilityDefaults, builtinAiProviders } from '@zhin.js/ai/providers';
 import {
   compileLegacyInferenceMigration,
   type LegacyInferenceMigration,
@@ -165,9 +165,16 @@ function serviceResolver(
       purposes: { defaults: {} },
     });
     const raw = candidate.services.candidate;
+    const enrichedModels = Object.fromEntries(
+      Object.entries(raw.models).map(([id, model]) => [
+        id,
+        applyModelCapabilityDefaults(model),
+      ]),
+    );
     const service: ProviderService = {
       ...raw,
       options: object(definition.serviceSchema.parse(raw.options)),
+      models: enrichedModels,
     };
     return {
       driver: reference,

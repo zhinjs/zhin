@@ -40,7 +40,7 @@ const expectedSurface = new Map([
     'PluginConfigSchema', 'PluginConfigUpdateDeclaration', 'DeliveryTarget', 'createDeliveryTarget', 'JsonValue', 'JsonSerializable',
     'StateScope', 'StateRecord', 'StateWriteOptions', 'PersistentStatePort', 'PluginStateStore',
     'definePluginStore', 'PluginStore', 'PluginStoreOptions', 'PluginStoreCarrier', 'ResourceReaderCarrier', 'SetupResourceCarrier',
-    'definePluginCapabilityGraph', 'PluginCapabilityGraphDeclaration',
+    'definePluginCapabilityGraph', 'mergePluginCapabilityGraph', 'PluginCapabilityGraphDeclaration',
     'PluginSetupCapabilities', 'PluginSetupResult',
     'PluginTaskProvider', 'pluginTaskProviderToken', 'PluginVerificationHost', 'pluginVerificationToken',
     'OutboundCaptureInput', 'CapturedOutboundOperation',
