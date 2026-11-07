@@ -1,0 +1,16 @@
+basic/cli/src/plugin-runtime/start-command.ts
+  h_6f5e45c41d0910 78,338,393,396-397,399-420
+packages/console/pagemanager/src/client-build/typescript-builder.ts
+  h_6f5e45c41d0910 6,389-413,444,473
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3159325e62d83e3b1cf99ff4c4714c1935ceaf93",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
