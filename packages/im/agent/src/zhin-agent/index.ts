@@ -58,6 +58,7 @@ import {
 } from '../config/index.js';
 import { processTextTurn } from '../turn/turn-pipeline.js';
 import { DeferredTurnState } from '../turn/deferred-turn-state.js';
+import { TurnCheckpointStore } from '../turn/turn-checkpoint-store.js';
 import { resolveContextTailMessageLimit } from '../context/context-tail-limit.js';
 import { archiveSessionByKey } from '../session/session-io.js';
 import { asPrivate } from '../internal/as-private.js';
@@ -200,6 +201,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   readonly deferred = new DeferredTurnState();
   readonly compactionRuntime = new AgentCompactionRuntime();
   readonly toldLedger = new SessionToldLedger();
+  readonly turnCheckpoints = new TurnCheckpointStore();
   /** Set by database activation when `ai.memory.semantic.enabled`; drives per-turn recall (#734). */
   semanticMemory: SemanticMemoryRuntime | null = null;
   readonly ownerApprovals = new OwnerApprovalRuntime();

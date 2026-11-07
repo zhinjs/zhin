@@ -3,6 +3,7 @@ import {
   definePluginCapabilityGraph,
   pluginConsoleRpcToken,
 } from 'zhin.js';
+import { gameIndexStore } from './src/catalog.js';
 import { createGameHubConsoleRpc } from './src/console.js';
 
 /**
@@ -16,16 +17,17 @@ export default definePlugin({
   },
   capabilityGraph: definePluginCapabilityGraph({
     provides: [pluginConsoleRpcToken],
+    injects: [gameIndexStore],
     features: {
-      commands: ['games', '战绩', '排行'],
+      commands: ['games/[[action]]', '战绩', '排行/[[query]]'],
       skills: ['game-hub'],
-      tools: ['game_catalog'],
+      tools: ['skill/game-hub/game_catalog'],
       pages: ['index'],
     },
   }),
-  setup() {
+  setup(context) {
     return {
-      consoleRpc: createGameHubConsoleRpc(),
+      consoleRpc: createGameHubConsoleRpc(gameIndexStore.get(context)),
     };
   },
 });

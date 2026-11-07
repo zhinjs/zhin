@@ -4,6 +4,15 @@ export { codexProvider, claudeSubscriptionProvider, openCodeGoProvider, openCode
 export { antigravityProvider } from './antigravity.js';
 export { ProviderAuthenticationError, ProviderPreparationError } from './oauth.js';
 export { ProviderProtocolError } from './errors.js';
+export {
+  MODEL_CAPABILITY_CATALOG,
+  inferModelCapabilities,
+  inferDefaultModelInput,
+  applyModelCapabilityDefaults,
+  type ModelCapabilityBaseline,
+  type ModelCapabilityCatalogEntry,
+  type InferModelCapabilitiesInput,
+} from './model-capability-catalog.js';
 
 import { openAiProvider, anthropicProvider, googleProvider, deepSeekProvider, miniMaxProvider, ollamaProvider, openAiCompatibleProvider, cloudflareProvider } from './api-key.js';
 import { codexProvider, claudeSubscriptionProvider, openCodeGoProvider, openCodeZenProvider } from './subscriptions.js';

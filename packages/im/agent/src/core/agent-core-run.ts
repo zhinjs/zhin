@@ -56,6 +56,11 @@ import {
   type ConversationBatch,
   type TurnReplyPhaseState,
 } from './agent-core-settlement.js';
+import {
+  extractCompletedToolRoundMessages,
+  isCheckpointResumePrompt,
+  type TurnCheckpointRecord,
+} from '../turn/turn-checkpoint-store.js';
 
 export {
   runAgentLoopVisionTurnRun,
@@ -286,7 +291,31 @@ export async function* runAgentLoopTextTurnRun(
     && !input.interactiveRun
     && input.autoContinuation !== false
     && autoContinueAllowed(toolBudget.autoContinue, input.turnContext);
-  let segmentPrompt = promptMessages;
+  let resumedCheckpoint: TurnCheckpointRecord | undefined;
+  let resumedWithExplicitContinue = false;
+  if (persistentConversation && host.turnCheckpoints) {
+    const existingCheckpoint = await host.turnCheckpoints.peek(sessionId);
+    if (existingCheckpoint) {
+      const resumeMatch = isCheckpointResumePrompt(input.rawContent, existingCheckpoint.promptText);
+      if (resumeMatch.resume) {
+        resumedCheckpoint = await host.turnCheckpoints.consume(sessionId);
+        resumedWithExplicitContinue = resumeMatch.isExplicitContinue;
+        logPhase(host.phaseConfig, 'agent_loop.checkpoint.resume', sessionId, {
+          checkpointIterations: existingCheckpoint.iterations,
+          checkpointMessages: existingCheckpoint.messages.length,
+          explicitContinue: resumedWithExplicitContinue,
+        });
+      } else {
+        await host.turnCheckpoints.clear(sessionId);
+      }
+    }
+  }
+  const checkpointPromptText = resumedCheckpoint?.promptText || input.rawContent || '';
+  let segmentPrompt = resumedCheckpoint
+    ? (resumedWithExplicitContinue
+      ? [...resumedCheckpoint.messages, ...promptMessages]
+      : [...resumedCheckpoint.messages])
+    : promptMessages;
   let segmentContext = loopContext;
 
   function* drainCompletionUsage(): Generator<TurnEvent> {
@@ -330,6 +359,24 @@ export async function* runAgentLoopTextTurnRun(
         }
         if (event.type === 'tool_execution_end' && event.result.role === 'toolResult' && typeof event.result.toolCallId === 'string') {
           pendingToolResults.set(event.result.toolCallId, event.result);
+        }
+        if (event.type === 'turn_end') {
+          flushToolResults();
+          if (persistentConversation && host.turnCheckpoints && event.toolResults.length > 0) {
+            const checkpointMessages = extractCompletedToolRoundMessages([
+              ...state.turnTranscript,
+              ...state.segmentMessages,
+            ]);
+            if (checkpointMessages.length > 0) {
+              await host.turnCheckpoints.save({
+                sessionId,
+                promptText: checkpointPromptText,
+                messages: checkpointMessages,
+                iterations: state.iterations,
+                updatedAt: Date.now(),
+              });
+            }
+          }
         }
         if (event.type === 'message_end') {
           flushToolResults();
@@ -438,6 +485,22 @@ export async function* runAgentLoopTextTurnRun(
 
   yield* drainCompletionUsage();
   if (signal?.aborted) {
+    flushToolResults();
+    if (persistentConversation && host.turnCheckpoints) {
+      const checkpointMessages = extractCompletedToolRoundMessages([
+        ...state.turnTranscript,
+        ...state.segmentMessages,
+      ]);
+      if (checkpointMessages.length > 0) {
+        await host.turnCheckpoints.save({
+          sessionId,
+          promptText: checkpointPromptText,
+          messages: checkpointMessages,
+          iterations: state.iterations,
+          updatedAt: Date.now(),
+        });
+      }
+    }
     await state.replyRun?.stop();
     if (replyPhases) await settlePhase([], '', true);
     const usage = tokenUsageToLegacy(completionUsage.usage);
@@ -458,6 +521,9 @@ export async function* runAgentLoopTextTurnRun(
       thinking,
       projectConversation: (delivered) => appendConversationBatches(repo, sessionId, conversationBatches, replyPhases ? undefined : delivered, conversationPhaseFacts),
     };
+  }
+  if (persistentConversation && host.turnCheckpoints) {
+    await host.turnCheckpoints.clear(sessionId);
   }
 
   const {

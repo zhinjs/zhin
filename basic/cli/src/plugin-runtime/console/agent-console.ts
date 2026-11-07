@@ -34,12 +34,16 @@ export async function loadAgentConsoleModule(
   }
 }
 
-const agentModuleReady = loadAgentConsoleModule(
-  () => import('@zhin.js/agent/runtime'),
-).then(module => {
-  agentModule = module;
-  return module;
-});
+let agentModuleReady: Promise<AgentConsoleModule | null> | undefined;
+
+function getAgentConsoleModule(): Promise<AgentConsoleModule | null> {
+  return (agentModuleReady ??= loadAgentConsoleModule(
+    () => import('@zhin.js/agent/runtime'),
+  ).then(module => {
+    agentModule = module;
+    return module;
+  }));
+}
 
 function currentAgentHostToken(): { readonly id: TokenId } | undefined {
   if (agentModule === null) return undefined;
@@ -147,7 +151,7 @@ export async function withGenerationAgentConsole(
   operation: (value: AgentConsolePort) => Promise<void>,
 ): Promise<boolean> {
   if (agentModule === undefined) {
-    await agentModuleReady;
+    await getAgentConsoleModule();
   }
   const lease = acquireGenerationAgentConsole(snapshots);
   if (!lease?.value) {

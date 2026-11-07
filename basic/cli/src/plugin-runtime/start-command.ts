@@ -75,7 +75,7 @@ import {
   readProjectPluginLifecycleState,
   resolvePluginLifecycleFile,
 } from '@zhin.js/runtime';
-import { installProcessLifecycle, nodeProcessLifecycleAdapter } from './process-lifecycle.js';
+import { DEFAULT_SHUTDOWN_BUDGET_MS, installProcessLifecycle, nodeProcessLifecycleAdapter } from './process-lifecycle.js';
 import { installProcessRejectionHandler } from './process-rejections.js';
 import {
   ProjectEnvironmentFileSource,
@@ -335,9 +335,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
         selfChangeApply.deferRestart(() => requestProcessRestart());
         return;
       }
-      process.exitCode = processRestartExitCode;
-      // 仅设置 exitCode，让事件循环自然结束，保证 stderr/管道日志完整写出。
-      await control.stop();
+      await requestProcessRestart();
     },
     onReload(plan, generation, durationMs) {
       getLogger('runtime').info(formatCompact({
@@ -392,15 +390,34 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     snapshots: host.runtime.snapshots,
     onRestart: () => requestProcessRestart(),
   });
-  function requestProcessRestart(): void {
+  function requestProcessRestart(): Promise<void> {
     // The native TypeScript supervisor treats this code as an intentional
     // process-generation restart in both foreground Desktop and daemon mode.
-    // 只设置 exitCode 并完整停止，进程在所有句柄释放后自然退出（端口随之释放）。
+    // 只设置 exitCode 并完整停止，进程在所有句柄释放后自然退出（端口随之释放）；
+    // 若受监管子进程因第三方插件句柄残留或停止钩子挂起未能自然退出，按预算兜底退出。
     process.exitCode = processRestartExitCode;
-    void control.stop().catch((error: unknown) => {
-      options.writeError(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
-      process.exitCode = 1;
-    });
+    const supervised = processRestartSupported(parsed.once);
+    const budgetTimer = supervised
+      ? setTimeout(() => {
+          options.writeError(`${JSON.stringify({ forcedExit: 'budget', stillStopping: [...stoppingComponents] })}\n`);
+          process.exit(process.exitCode ?? processRestartExitCode);
+        }, DEFAULT_SHUTDOWN_BUDGET_MS)
+      : undefined;
+    budgetTimer?.unref?.();
+    return control.stop()
+      .catch((error: unknown) => {
+        options.writeError(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
+        process.exitCode = 1;
+      })
+      .finally(() => {
+        if (budgetTimer) clearTimeout(budgetTimer);
+        if (supervised) {
+          const drainTimer = setTimeout(() => {
+            process.exit(process.exitCode ?? processRestartExitCode);
+          }, 250);
+          drainTimer.unref?.();
+        }
+      });
   }
   const disposeReadiness = registerReadinessRoutes(httpHost, {
     snapshots: host.runtime.snapshots,

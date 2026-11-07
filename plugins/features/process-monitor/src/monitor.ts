@@ -3,7 +3,7 @@ import { messages as t } from './i18n.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createToken } from 'zhin.js';
+import { definePluginStore } from 'zhin.js';
 
 export interface NotifyChannel {
   type: 'webhook';
@@ -31,10 +31,11 @@ export interface ProcessState {
 export type StartupReason = 'start' | 'restart' | 'crash';
 export type ResolvedProcessMonitorConfig = ReturnType<typeof resolveProcessMonitorConfig>;
 
-export const processMonitorToken = createToken<ProcessMonitor>(
+export const processMonitorStore = definePluginStore<ProcessMonitor>(
   'zhin.process-monitor.runtime',
   'Owner-scoped process monitor state and lifecycle',
 );
+export const processMonitorToken = processMonitorStore;
 
 export function resolveProcessMonitorConfig(raw: ProcessMonitorConfig | undefined) {
   return {

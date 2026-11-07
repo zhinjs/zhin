@@ -31,7 +31,12 @@ export default definePlugin<LedgerConfig>({
       ],
       schedules: ['daily-report'],
       skills: ['ledger'],
-      tools: ['ledger_add', 'ledger_delete', 'ledger_list', 'ledger_summary'],
+      tools: [
+        'skill/ledger/ledger_add',
+        'skill/ledger/ledger_delete',
+        'skill/ledger/ledger_list',
+        'skill/ledger/ledger_summary',
+      ],
       pages: ['index'],
     },
   }),

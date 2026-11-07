@@ -137,6 +137,41 @@ export function definePluginCapabilityGraph(
   });
 }
 
+/**
+ * Merges a plugin's explicitly declared `capabilityGraph` with convention-discovered
+ * feature directories (`commands`, `tools`, `skills`, `handlers`, `middlewares`, `components`,
+ * `pages`, `schedules`, `mcps`, `hooks`, `agents`, `adapters`).
+ *
+ * Plugins only need to declare cross-plugin `provides` / `injects` by hand; convention
+ * directories are automatically unioned into `features` and deduplicated in sorted order.
+ */
+export function mergePluginCapabilityGraph(
+  declared: PluginCapabilityGraphDeclaration | undefined,
+  discoveredFeatures: Readonly<Record<string, readonly string[]>>,
+): Readonly<PluginCapabilityGraphDeclaration> {
+  const base = declared ? definePluginCapabilityGraph(declared) : {};
+  const mergedFeatures: Record<string, readonly string[]> = {};
+  const keys = new Set<string>([
+    ...Object.keys(base.features ?? {}),
+    ...Object.keys(discoveredFeatures ?? {}),
+  ]);
+  for (const key of [...keys].sort()) {
+    const combined = [
+      ...(base.features?.[key] ?? []),
+      ...(discoveredFeatures?.[key] ?? []),
+    ];
+    const unique = [...new Set(combined)].filter(Boolean).sort();
+    if (unique.length > 0) {
+      mergedFeatures[key] = Object.freeze(unique);
+    }
+  }
+  return Object.freeze({
+    ...(base.provides !== undefined ? { provides: base.provides } : {}),
+    ...(base.injects !== undefined ? { injects: base.injects } : {}),
+    ...(Object.keys(mergedFeatures).length > 0 ? { features: Object.freeze(mergedFeatures) } : {}),
+  });
+}
+
 export interface PluginDefinition<TConfig = unknown> {
   readonly name: string;
   readonly config?: PluginConfigSchema<TConfig>;

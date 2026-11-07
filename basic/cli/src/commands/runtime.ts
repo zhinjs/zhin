@@ -1,9 +1,10 @@
+import { writeFile } from 'node:fs/promises';
 import { join, relative, resolve } from 'node:path';
 import { Command } from 'commander';
 import { FilePublishJournalStore } from '../plugin-runtime/publish-journal.js';
 import { NodeProcessRunner, ProjectCommands } from '../plugin-runtime/project-commands.js';
 import { NativeTypeScriptSupervisor, parseStartOptions } from '../plugin-runtime/start/module.js';
-import { formatStartOptionHelp } from '@zhin.js/runtime';
+import { formatStartOptionHelp, generatePluginCapabilityCodegen } from '@zhin.js/runtime';
 
 export const runtimeCommand = new Command('runtime')
   .description('管理约定式 Plugin Runtime 项目');
@@ -14,6 +15,24 @@ runtimeCommand.command('inspect')
     process.stdout.write(`${JSON.stringify(commands.describe(
       await commands.inspect(process.cwd()),
     ), null, 2)}\n`);
+  });
+
+runtimeCommand.command('codegen [dir]')
+  .description('扫描约定目录并生成插件能力静态类型声明（plugin.capabilities.d.ts）与 capabilityGraph 摘要')
+  .option('--write', '将生成的类型声明写入目标目录下的 plugin.capabilities.d.ts', false)
+  .option('--json', '以 JSON 格式输出扫描结果', false)
+  .action(async (dir = '.', options: { write?: boolean; json?: boolean }) => {
+    const targetDir = resolve(process.cwd(), dir);
+    const result = await generatePluginCapabilityCodegen(targetDir);
+    if (options.write) {
+      const outPath = join(targetDir, 'plugin.capabilities.d.ts');
+      await writeFile(outPath, result.dts, 'utf8');
+    }
+    if (options.json) {
+      process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+      return;
+    }
+    process.stdout.write(`${result.dts}\n${result.snippet}\n`);
   });
 
 runtimeCommand.command('start')

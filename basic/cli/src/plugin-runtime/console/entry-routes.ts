@@ -12,9 +12,14 @@ export function registerConsoleEntryRoutes(options: RegisterConsoleEntryRoutesOp
   const { http, consoleRuntime } = options;
   http.route('GET', '/entries', async (request, response, url) => {
     try {
-      const pages = await listPages(consoleRuntime, requestConsoleAccess(http, request, url));
+      const rawLocale =
+        url?.searchParams.get('locale') ??
+        new URL(request.url ?? '/', 'http://console.local').searchParams.get('locale') ??
+        undefined;
+      const locale = rawLocale && rawLocale.trim() ? rawLocale.trim() : undefined;
+      const pages = await listPages(consoleRuntime, requestConsoleAccess(http, request, url), { locale });
       // Entries depend on the caller's token, so they must never be cached or shared.
-      writeJson(response, 200, buildConsoleEntriesBody(pages), { 'cache-control': 'no-store' });
+      writeJson(response, 200, buildConsoleEntriesBody(pages, undefined, { locale }), { 'cache-control': 'no-store' });
     } catch (error) {
       writeJson(response, 503, {
         success: false,

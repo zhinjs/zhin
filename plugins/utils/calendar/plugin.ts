@@ -38,7 +38,11 @@ export default definePlugin<CalendarConfig>({
     features: {
       commands: ["calendar/auth", "calendar/logout", "calendar/status"],
       skills: ["calendar-scheduling"],
-      tools: ["create_event", "find_free_time", "list_events"],
+      tools: [
+        "skill/calendar-scheduling/create_event",
+        "skill/calendar-scheduling/find_free_time",
+        "skill/calendar-scheduling/list_events",
+      ],
       pages: ["index"],
     },
   }),
@@ -86,9 +90,17 @@ export default definePlugin<CalendarConfig>({
       onAuthorizationLost: (provider, message) =>
         auth.notifyAuthorizationLost(provider, message),
     });
+    let projectLocale: ReturnType<typeof context.resources.use<typeof projectLocaleToken>> | undefined;
+    try {
+      projectLocale = context.resources.has(projectLocaleToken)
+        ? context.resources.use(projectLocaleToken)
+        : context.resources.use(projectLocaleToken);
+    } catch {
+      projectLocale = undefined;
+    }
     const auth = new CalendarAuthService<DeliveryTarget>({
       config,
-      locale: resources.use(projectLocaleToken),
+      locale: projectLocale,
       managers,
       credentials,
       notify,

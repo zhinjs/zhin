@@ -5,15 +5,20 @@ description: "给插件加一个 Console 页面：pages/ 约定、页面元数�
 
 # Console 页面与布局
 
-插件不仅能往群里发消息，还能给 Remote Console 贡献完整的 React 页面。Sandbox 适配器的 `/sandbox` 聊天页就是这样来的。
+插件不仅能往群里发消息，还能给 Remote Console 贡献管理页面。Zhin 采用 **Server-Driven Blueprints（服务端驱动蓝图）** 作为唯一一等公民（覆盖 90% 的插件），同时为 10% 的重交互插件（如 Sandbox 聊天模拟器）提供静态前端资产挂载协议。
 
-和命令一样，页面放在**约定目录** `pages/` 里，文件会被自动发现，并编译成浏览器能加载的模块。
+和命令一样，页面放在**约定目录** `pages/` 里，文件会被自动发现。
 
-## 写第一个页面
+## 写第一个页面（Pure Blueprint，推荐）
 
-```tsx
-// pages/index/index.tsx
-import { definePage } from '@zhin.js/console-contract';
+绝大多数插件（记账、提醒、RSS、日历、群管、内容审核、平台适配器）需要的只是**统计卡片（`stat-cards`）+ 表格/列表（`table`）+ 过滤表单（`filter-form`）+ 操作按钮（`action-bar`）**。直接使用纯 TypeScript（`pages/<name>/index.ts`）声明 `definePageBlueprint`，由 Console UI 统一渲染：
+
+- **零 `.tsx`、零 `esbuild` 预打包、零 `lib/pages/*.bundle.js`、零 React 版本耦合**；
+- **多端自动投影**：同一份 Blueprint 不仅能在 Web Console 渲染，还能通过 `projectBlueprintToImCard` 自动投影为跨平台 IM 卡片消息（含交互按钮），或通过 `projectBlueprintToCliPanel` 投影为终端 CLI TUI 面板！
+
+```ts
+// pages/index/index.ts
+import { definePage, definePageBlueprint } from '@zhin.js/console-contract';
 
 export const meta = definePage({
   title: '我的插件',
@@ -22,16 +27,70 @@ export const meta = definePage({
   order: 10,
 });
 
-export default function MyPluginPage() {
-  return <div>Hello from my plugin</div>;
-}
+export default definePageBlueprint({
+  kind: 'custom',
+  subtitle: '插件运行概览与快捷操作',
+  statusQuery: 'status',
+  widgets: [
+    {
+      type: 'stat-cards',
+      title: '核心指标',
+      cards: [
+        { key: 'total', label: '总记录数', tone: 'accent' },
+        { key: 'active', label: '今日活跃', tone: 'success' },
+      ],
+    },
+    {
+      type: 'action-bar',
+      title: '快捷操作',
+      actions: [
+        { action: 'refresh-cache', label: '刷新缓存', variant: 'primary' },
+      ],
+    },
+    {
+      type: 'table',
+      title: '最近记录',
+      dataKey: 'items',
+      rowKey: 'id',
+      emptyText: '暂无记录',
+      columns: [
+        { key: 'id', label: 'ID' },
+        { key: 'title', label: '标题' },
+      ],
+    },
+  ],
+});
 ```
 
-- **默认导出**一个 React 组件，就是页面内容。
+- **默认导出** `definePageBlueprint(...)`（纯数据蓝图）或重交互场景下的 React 组件。
 - **命名导出 `meta`** 声明标题、图标和排序。
-- 只有 `pages/<name>/index.tsx`（或 `index.ts`）是页面，同目录的其他文件可以作为组件和辅助模块被引用。
+- 只有 `pages/<name>/index.ts`（或重交互插件的 `index.tsx`）是页面，同目录的其他文件可以作为辅助模块被引用。
 
 启动 Bot 后，打开 Console 就能在导航里看到这个页面。
+
+### 多端自动投影（Web Console / IM Card / CLI TUI）
+
+`@zhin.js/console-contract` 内置了零依赖的多端投影器，允许命令或 CLI 直接复用页面的 Blueprint 与 `status` 数据：
+
+```ts
+import {
+  projectBlueprintToImCard,
+  projectBlueprintToCliPanel,
+} from '@zhin.js/console-contract';
+import blueprint, { meta } from '../pages/index/index.js';
+
+// 1. 投影为跨平台 IM 卡片消息段（Segment[]，自动附带 action 交互按钮）
+const segments = projectBlueprintToImCard(blueprint, statusData, {
+  title: meta.title,
+  commandPrefix: '/my-plugin ',
+});
+
+// 2. 投影为终端 CLI TUI 面板（带 ANSI 色彩的 बॉक्स 表格与统计卡）
+const ansiPanel = projectBlueprintToCliPanel(blueprint, statusData, {
+  title: meta.title,
+  width: 72,
+});
+```
 
 ## 页面元数据
 
@@ -439,12 +498,11 @@ Bot 起草的受控自我变更（见[让 Bot 改自己](../ai/self-change.md)�
 
 ## 适配器 Console 页面
 
-内置平台适配器（`plugins/adapters/*`）各自带一个 `pages/index/index.ts`，统一用 `@zhin.js/client` 的 `createAdapterConsolePage(adapterKey)` 渲染，服务端用 `@zhin.js/adapter` 的 `createAdapterConsoleRpc(spec)` 提供数据：
+内置平台适配器（`plugins/adapters/*`）各自带一个纯 `.ts` 的 `pages/index/index.ts`，统一用 `@zhin.js/console-contract` 的 `defineAdapterPage(adapterKey)` 声明零编译蓝图（无需依赖 `@zhin.js/client` 或 React），服务端用 `@zhin.js/adapter` 的 `createAdapterConsoleRpc(spec)` 提供数据：
 
 ```ts
 // pages/index/index.ts
-import { definePage } from '@zhin.js/console-contract';
-import { createAdapterConsolePage } from '@zhin.js/client';
+import { defineAdapterPage, definePage } from '@zhin.js/console-contract';
 
 export const meta = definePage({
   title: 'Telegram',
@@ -453,7 +511,7 @@ export const meta = definePage({
   requiredPermissions: ['telegram:read'],
 });
 
-export default createAdapterConsolePage('telegram');
+export default defineAdapterPage('telegram');
 ```
 
 页面里能做的事：
@@ -472,7 +530,7 @@ export default createAdapterConsolePage('telegram');
 
 ## 评论审批页
 
-「AI 起草 → 人工审批 → 发送」的评论回复适配器（Bilibili、掘金）不需要自己写页面：`pages/index/index.tsx` 用 `@zhin.js/client` 的 `createCommentReviewPage(spec)` 即可得到账号区、登录状态、草稿卡片（修改 / 发送 / 丢弃草稿）和统一的错误、过期数据提示。`spec` 只描述平台差异：平台名与中英文案、资源名词、账号 / 草稿资源的字段映射，以及可选的 `renderLoginExtras`（如扫码登录）、`renderResources`、`isLoginPending`（登录进行中加快轮询）。服务端按 `plugin.<pluginId>.status` / `edit` / `send` / `drop` 提供数据，各适配器仍在自己的 `src/console.ts` 里实现。完整字段见 [`@zhin.js/client` README](https://github.com/zhinjs/zhin/blob/main/packages/console/client/README.md)。
+「AI 起草 → 人工审批 → 发送」的评论回复适配器（Bilibili、掘金）同样使用纯 `.ts` 蓝图：`pages/index/index.ts` 用 `@zhin.js/console-contract` 的 `defineCommentReviewPage(spec)` 即可得到账号区、登录状态、草稿卡片（修改 / 发送 / 丢弃草稿）和统一的错误、过期数据提示。`spec` 只描述平台差异：平台名与中英文案、资源名词、账号 / 草稿资源的字段映射，以及可选的登录二维码 / 轮询配置。服务端按 `plugin.<pluginId>.status` / `edit` / `send` / `drop` 提供数据，各适配器仍在自己的 `src/console.ts` 里实现。完整字段见 [`@zhin.js/client` README](https://github.com/zhinjs/zhin/blob/main/packages/console/client/README.md)。
 
 ## 在页面里保存设置 (config:patch)
 
@@ -523,22 +581,21 @@ if (result.status === 'invalid') showErrors(result.errors);
 
 ## 它是怎么工作的
 
-页面文件运行在**浏览器**里，所以不会被 Node 直接加载，而是交给客户端构建器（`TypeScriptClientBuilder`，`packages/console/pagemanager`）用 esbuild 打包：
+Console 页面按**纯蓝图（90% 插件）**与**重交互静态模块（10% 插件，如 Sandbox）**分流处理：
 
 ```mermaid
 flowchart LR
-    A["pages/*/index.tsx<br/>meta = definePage()"] --> B["TypeScriptClientBuilder<br/>(esbuild 打包)"]
-    B --> C[".zhin/client/<owner>-<name>-<hash>.js"]
-    B --> D["pages.manifest.json"]
-    C --> E["GET /assets/client/*<br/>(immutable 缓存)"]
-    F["裸导入 react 等<br/>白名单改写"] --> G["GET /esm/:enc.mjs<br/>Host 代理构建"]
-    E --> H[浏览器加载页面模块]
-    G --> H
+    BP["pages/*/index.ts<br/>definePageBlueprint()"] --> PM["PageManager (@zhin.js/pagemanager)<br/>零 esbuild 打包 · 直接注入清单"]
+    PM --> M["GET /console/api/pages<br/>manifest 携带 blueprint"]
+    M --> BR["Console 浏览器外壳<br/>createBlueprintPage 统一渲染"]
+    TSX["pages/*/index.tsx<br/>重交互组件 (如 Sandbox)"] --> B["静态 .bundle.js / TypeScriptClientBuilder"]
+    B --> E["GET /assets/client/*<br/>(immutable 缓存)"]
+    E --> BR
 ```
 
-- **产物**：每个页面打包为 `<owner>-<localName>-<contentHash>.js`，写入项目的 `.zhin/client/`，通过 `GET /assets/client/*` 提供（`cache-control: immutable`，内容变了文件名就变）。`@zhin.js/console-contract` 在打包时被替换成空实现，`meta` 通过静态分析提取。
-- **React 只有一份**：浏览器不认识 `import 'react'` 这样的裸导入，所以白名单 `ALLOWED_ESM_CANONICAL`（`react`、`react-dom`、`react-dom/client`、`react/jsx-runtime(-dev)`、`react-router`、`react-router-dom`）中的导入会被改写成 `/esm/<enc>.mjs`，由 Host 按需构建和代理，保证整个 Console 只有一份 React。白名单之外的包返回 403。
-- **路由**：在 `basic/cli/src/plugin-runtime/console/host.ts` 中注册。`GET /console` 是页面索引，`GET /console/api/pages` 返回页面清单，其余路径按地址匹配页面并返回页面外壳（包含 importmap 和挂载脚本）；未匹配返回 404，权限不足返回 403。浏览器用 `import(moduleUrl)` 加载页面模块，把默认导出挂载到 `#root`。
+- **Pure Blueprint（`.ts`）**：Node 端只解析纯数据蓝图描述，**彻底跳过 `esbuild` 打包与 `.bundle.js` 产物**。`GET /console/api/pages` 在页面清单中直接携带 `blueprint` JSON，`@zhin.js/pagemanager` 的 `renderConsoleShell` 使用 `@zhin.js/client` 的 `createBlueprintPage` 在浏览器端直接渲染统计卡片、过滤表单、动作栏与表格。
+- **重交互静态资产（`.tsx`）**：仅对 `pages/*/index.tsx`（如 `plugins/adapters/sandbox`）启用静态 `.bundle.js` 挂载或 `TypeScriptClientBuilder` 打包，Node 进程绝不在运行时 `import()` 浏览器 React 代码。浏览器裸导入 `ALLOWED_ESM_CANONICAL`（`react`、`react-dom` 等）会被改写为 `/esm/<enc>.mjs` 代理，保证整个 Console 只有一份 React。
+- **路由与外壳**：Console 外壳渲染器位于 `@zhin.js/pagemanager`（`packages/console/pagemanager/src/shell/page-renderer.ts`），由 `basic/cli/src/plugin-runtime/console/host.ts` 装配路由。`GET /console` 是页面索引，`GET /console/api/pages` 返回页面清单，其余路径按地址匹配页面并返回页面外壳；未匹配返回 404，权限不足返回 403。
 
 ## 下一步
 

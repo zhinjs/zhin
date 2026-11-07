@@ -4,6 +4,7 @@ import {
   databaseHostToken,
   pluginConsoleRpcToken,
 } from 'zhin.js';
+import { memberWelcomeOwnerToken, outboundMessageToken } from '@zhin.js/core/runtime';
 import { resolveGroupSuiteConfig, type GroupSuiteConfig } from './src/config.js';
 import { createGroupSuiteConsoleRpc } from './src/console.js';
 import { createInMemoryGroupSuiteDb, type GroupSuiteMemoryDb } from './src/memory-store.js';
@@ -23,14 +24,14 @@ export default definePlugin<GroupSuiteConfig>({
   },
   capabilityGraph: definePluginCapabilityGraph({
     provides: [groupSuiteRuntimeStore, pluginConsoleRpcToken],
-    injects: [databaseHostToken],
+    injects: [databaseHostToken, memberWelcomeOwnerToken, outboundMessageToken],
     features: {
       commands: [
         'checkin',
         'forget',
-        'keyword-add',
+        'keyword-add/[keyword]',
         'keyword-list',
-        'keyword-remove',
+        'keyword-remove/[keyword]',
         'mypoints',
         'mystats',
         'rank',
@@ -39,14 +40,20 @@ export default definePlugin<GroupSuiteConfig>({
         'stats-rank',
         'stats-week',
         'teach',
-        'teach-list',
+        'teach-list/[[page]]',
         'teach-regex',
       ],
       handlers: ['welcome'],
       middlewares: ['keyword-reply', 'stats-count', 'teach-reply'],
       schedules: ['flush-stats'],
       skills: ['checkin', 'group-daily-analysis'],
-      tools: ['checkin_query', 'checkin_rank', 'group_announce', 'stats_query', 'stats_user'],
+      tools: [
+        'skill/checkin/checkin_query',
+        'skill/checkin/checkin_rank',
+        'skill/group-daily-analysis/group_announce',
+        'skill/group-daily-analysis/stats_query',
+        'skill/group-daily-analysis/stats_user',
+      ],
       pages: ['index'],
     },
   }),

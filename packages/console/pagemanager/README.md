@@ -1,15 +1,11 @@
 # @zhin.js/pagemanager
 
-Remote Console **Node 侧运行时**：PageManager、EntryStore、`GET /entries`、esbuild 打包与 `/@dev` 开发资源路由。无 UI；契约在 `@zhin.js/contract`，浏览器 SDK 在 `@zhin.js/client`。
-
-> **路径约定**：本包位于 `packages/console/pagemanager/`。源码在 `src/node/`，构建产物在 `lib/node/`。
+Remote Console **Node 侧运行时与页面外壳**：`ConsoleRuntime`（snapshot-coherent 页面/布局目录）、`renderConsoleShell`（Console 浏览器外壳与 Server-Driven Blueprints 挂载）以及按需静态客户端构建器 `TypeScriptClientBuilder`。契约在 `@zhin.js/console-protocol`（含 `@zhin.js/console-contract`），浏览器 SDK 在 `@zhin.js/client`。
 
 ## 分层
 
-见 [Console 栈概览](../README.md)：
-
 ```
-@zhin.js/contract  →  @zhin.js/pagemanager  →  @zhin.js/client  →  zhin-console（独立仓库）
+@zhin.js/console-protocol  →  @zhin.js/pagemanager  →  @zhin.js/client  →  zhin-console（独立仓库）
 ```
 
 领域术语与关系图见 **[CONTEXT.md](./CONTEXT.md)**。
@@ -24,16 +20,11 @@ pnpm add @zhin.js/pagemanager
 
 ## 主要导出
 
-| 导出 | 用途 |
-|------|------|
-| `PageManager` | 控制台服务端运行时；拥有 EntryStore，注册 Console Entry |
-| `mountConsoleRouter` | 挂载 entries 与静态/dev 资源路由 |
-| `createInMemoryEntryStore` / `EntryStore` | Entry 目录 |
-| `buildEntriesResponse` / `rewriteEntriesForClient` | 序列化 `GET /entries` 响应 |
-| `attachConsoleClientHost` | 将 Console 路由挂到现有 Koa Host |
-| `serverRuntimeEnv` | development / production 运行时标记 |
-
-类型（`ConsoleServerOptions`、`PluginServerRegisterHostApi` 等）自 `./consoleServerOptions.js` 导出。
+| 子路径 / 导出 | 用途 |
+|--------------|------|
+| `ConsoleRuntime`（`@zhin.js/pagemanager/plugin-runtime`） | Snapshot-coherent 页面与布局目录、路由守卫与权限过滤 |
+| `renderConsoleShell` / `renderConsoleIndex` / `renderConsoleForbidden`（`@zhin.js/pagemanager/shell`） | Console HTML 外壳、importmap 与 Server-Driven Blueprint 挂载脚本 |
+| `TypeScriptClientBuilder`（`@zhin.js/pagemanager/client-build`） | 纯 `.ts` Blueprint 零打包提取 + 重交互 `.tsx` 静态 bundle 构建 |
 
 ## Plugin Runtime
 
@@ -57,22 +48,9 @@ TypeScript 是 optional peer，不进入默认 PageManager 或 Plugin Runtime �
 CLI 项目无需安装 TypeScript。实际解析 Page/Layout 元数据的构建 workspace 才需要
 显式安装兼容版本的 `typescript`，缺失时会返回明确的 optional peer 安装错误。
 
-## 插件注册 Entry
+## 插件编写页面
 
-在插件 Node 侧通过 `web` 上下文获取 **PageManager 实例**（非静态全局）：
-
-```typescript
-useContext('web', (pageManager) => {
-  pageManager.addEntry({
-    id: 'my-plugin',
-    name: 'My Plugin',
-    dev: '/@dev/plugins/my-plugin/client/index.tsx',
-    prod: '/@assets/my-plugin/client/index.js',
-  });
-});
-```
-
-浏览器侧由 `@zhin.js/client` 的 `loadConsoleEntries` 拉取并动态 `import`。
+插件在 `pages/<name>/index.ts` 中使用 `definePage` 与 `definePageBlueprint` 声明纯 TypeScript 蓝图（零 `.tsx`、零 `esbuild` 预打包），详见 [Console 页面与布局](../../../docs/authoring/console-pages.md)。
 
 ## 构建
 
@@ -82,7 +60,7 @@ pnpm --filter @zhin.js/pagemanager build
 
 ## 相关文档
 
-- [Remote Console 使用说明](../../../docs/console-remote.md)
-- [@zhin.js/contract](../contract/README.md)
+- [Console 页面与布局](../../../docs/authoring/console-pages.md)
+- [@zhin.js/console-protocol](../protocol/README.md)
 - [@zhin.js/client](../client/README.md)
 - [@zhin.js/host-http（Console/HTTP Host 传输）](../../host/http/README.md)

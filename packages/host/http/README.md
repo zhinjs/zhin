@@ -4,8 +4,8 @@ Minimal HTTP and WebSocket host for Plugin Runtime. Provides `httpHostToken` so 
 Console can register path-scoped WebSocket / HTTP routes without importing Koa or the legacy
 `@zhin.js/host-router`.
 
-Root installs the host via `installResources` (see `basic/cli/src/plugin-runtime/http-host-installer.ts`
-and `console-host-installer.ts`).
+Root installs the host via `installResources` (see `packages/im/runtime/src/host/http-host-installer.ts`
+and `basic/cli/src/plugin-runtime/console-host-installer.ts`).
 
 The composition root owns the process listener through `ProcessHttpHost`. Generation scopes receive
 only the `HttpHost` routing port: they may register HTTP/WS routes but cannot listen or close the

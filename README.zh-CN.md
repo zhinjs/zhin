@@ -66,7 +66,7 @@ Zhin.js 是面向**聊天平台机器人**的 TypeScript 框架——社群运�
 - **写功能 = 放一个文件。** 把文件放进 `commands/`、`middlewares/`、`components/`、`schedules/`、`tools/` 即自动发现注册，零样板代码。
 - **Generation 级无感热重载。** 保存文件即后台装配新 Generation 并原子切换；处理中的消息在旧代跑完，新代码出错时旧版本继续服务，绝不把 Bot 弄挂。
 - **默认核心 <10MB，按需加装 AI。** 纯 IM 场景不装任何大模型依赖；随时用 `npx zhin setup --ai` 一键接入大模型、工具、三层 Markdown 记忆与 MCP。
-- **浏览器管理后台。** 在 [console.zhin.dev](https://console.zhin.dev) 查看账号状态、表单化改配置、回放 AI 决策、一键紧急止损，无需自行部署前端。
+- **浏览器管理后台与 Server-Driven Blueprints。** 在 [console.zhin.dev](https://console.zhin.dev) 查看账号状态、表单化改配置、回放 AI 决策、一键紧急止损。插件只需用纯 TypeScript 编写 `definePageBlueprint`（`pages/<name>/index.ts`——零 `.tsx`、零 `esbuild` 预打包），即可在 Web Console 统一渲染，并自动投影为跨平台 IM 卡片消息（`projectBlueprintToImCard`）或终端 CLI TUI 面板（`projectBlueprintToCliPanel`）。
 
 > Zhin **不是** Cursor / Claude Code 那类代码编辑器里的编程 Agent。它的 AI 能力专为聊天平台、群聊权限和多用户交互设计。
 

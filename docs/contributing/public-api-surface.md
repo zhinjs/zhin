@@ -20,7 +20,8 @@
 
 | API | 稳定性 | 作者 import | 实现包 | 一句话 |
 |-----|--------|-------------|--------|--------|
-| `definePlugin` | `stable` | `zhin.js` | `@zhin.js/plugin-runtime` | 约定式插件入口，`plugin.ts` 默认导出 |
+| `definePlugin` / `definePluginCapabilityGraph` | `stable` | `zhin.js` | `@zhin.js/plugin-runtime` | 约定式插件入口与显式能力图声明，`plugin.ts` 默认导出 |
+| `definePage` / `definePageBlueprint` / `defineAdapterPage` / `defineCommentReviewPage` | `experimental` | `@zhin.js/console-contract` | `@zhin.js/console-protocol` | Console 页面元数据与纯 `.ts` Server-Driven Blueprints（支持 Web / IM Card / CLI TUI 多端投影） |
 | `defineCommand` | `stable` | `zhin.js/command` | `@zhin.js/command` | 命令模块（`commands/*/index.ts` 默认导出） |
 | `defineAdapter` | `stable` | `zhin.js/adapter` | `@zhin.js/adapter` | 适配器模块（`adapters/*/index.ts` 默认导出），`create(context)` 默认返回 `{ client, connect, activate?, send }`，复杂协议可返回 Endpoint 子类 |
 | `defineComponent` | `stable` | `zhin.js/component` | `@zhin.js/component` | Satori/SSR 组件（`components/*/index.ts(x)` 默认导出） |
@@ -126,7 +127,7 @@
 | Workroom / Portfolio / Data Governance domain contracts | `internal` | `@zhin.js/agent` | 领域值对象、策略和持久化端口；不依赖 Agent runtime/config，Host 适配器从 `@zhin.js/agent/runtime` 组合 |
 | Agent Host 装配（`composeZhinAgentRuntime`） | `internal` | `@zhin.js/agent/runtime` | CLI composition root 使用的装配函数；返回显式 `host` 契约，不暴露 `asPrivate` 转换口 |
 | classic `ToolRuntime` / builtin policy resolver | `internal` | `@zhin.js/agent` 包内实现 | 旧独立执行链的内部机制；生产回合只使用 generation-owned `TurnToolRuntime` |
-| `basic/cli/src/plugin-runtime/*-installer.ts` | `internal` | `@zhin.js/cli` | Root Host 安装器（database / schedule / outbound / inbox / http / console / agent / speech / html-renderer / protocol），装配细节随时可变 |
+| Root Host 安装器（`*-host-installer.ts`） | `internal` | `@zhin.js/core/runtime` · `@zhin.js/agent/runtime` · `@zhin.js/runtime/host` · `@zhin.js/cli` | 领域归属的 Root Host 安装器（database/outbound/inbox 归 `core/runtime`，agent/inference/workroom 归 `agent/runtime`，http/protocol/speech/html-renderer 归 `runtime/host`，console 装配归 `cli` + `pagemanager`） |
 
 ## Deprecated / 已迁移
 

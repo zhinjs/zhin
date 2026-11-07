@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path';
-import { build as esbuild, type Plugin as EsbuildPlugin } from 'esbuild';
+import { build as esbuild, stop as stopEsbuild, type BuildOptions, type BuildResult, type Plugin as EsbuildPlugin } from 'esbuild';
 import type ts from 'typescript';
 import {
   buildBlueprintFromSpec,
@@ -64,10 +64,22 @@ const CONSOLE_CONTRACT_STUB = [
   '  return text["zh-CN"] ?? text.zh ?? text.en ?? "";',
   '}',
   'export function buildBlueprintFromSpec(spec = {}) {',
-  '  if (spec && spec.kind === "zhin.console.page-blueprint") return spec;',
+  '  if (spec && spec.kind === "zhin.console.page-blueprint") {',
+  '    return {',
+  '      kind: "zhin.console.page-blueprint",',
+  '      version: 1,',
+  '      title: spec.title,',
+  '      ...(spec.titleI18n ? { titleI18n: { ...spec.titleI18n } } : {}),',
+  '      ...(spec.description !== undefined ? { description: spec.description } : {}),',
+  '      dataSource: { action: spec.dataSource?.action ?? "status" },',
+  '      sections: [...(spec.sections ?? [])],',
+  '      ...(spec.spec !== undefined ? { spec: spec.spec } : {}),',
+  '      ...(spec.reviewSpec !== undefined ? { reviewSpec: spec.reviewSpec } : {}),',
+  '    };',
+  '  }',
   '  const sections = [];',
   '  if (Array.isArray(spec.stats) && spec.stats.length > 0) {',
-  '    sections.push({ type: "stats", id: "runtime-stats", title: "Runtime Stats", items: spec.stats.map((s, i) => ({ key: s.key ?? (typeof s.value === "string" ? s.value : "stat-" + i), label: resolveDeclarativeText(s.label, "en"), ...(typeof s.value === "string" ? { dataKey: s.value } : {}) })) });',
+  '    sections.push({ type: "stats", id: "runtime-stats", title: "Runtime Stats", items: spec.stats.map((s, i) => ({ key: s.key ?? (typeof s.value === "string" ? s.value : "stat-" + i), label: resolveDeclarativeText(s.label, "en"), ...(typeof s.value === "string" ? { dataKey: s.value } : {}), ...(s.value && typeof s.value === "object" ? { expr: s.value } : {}) })) });',
   '  }',
   '  for (const [idx, sec] of (spec.sections ?? []).entries()) {',
   '    const id = sec.id ?? ("section-" + idx);',
@@ -75,22 +87,25 @@ const CONSOLE_CONTRACT_STUB = [
   '    if (sec.columns !== undefined || sec.items !== undefined) {',
   '      sections.push({ type: "table", id, title, ...(typeof sec.items === "string" ? { dataKey: sec.items } : {}), rowKey: sec.columns?.[0]?.key ?? "id", columns: (sec.columns ?? []).map((c) => ({ key: c.key, label: resolveDeclarativeText(c.label, "en") })) });',
   '    } else if (sec.entries !== undefined) {',
-  '      sections.push({ type: "entries", id, title });',
+  '      sections.push({ type: "entries", id, title, ...(Array.isArray(sec.entries) ? { entries: sec.entries.map((e) => ({ label: resolveDeclarativeText(e.label, "en"), value: String(e.value ?? "") })) } : {}) });',
   '    } else {',
   '      sections.push({ type: "custom", id, ...(title ? { title } : {}) });',
   '    }',
   '  }',
   '  if (Array.isArray(spec.actions) && spec.actions.length > 0) {',
-  '    sections.push({ type: "actions", id: "actions", title: "Actions", items: spec.actions.map((a) => ({ label: resolveDeclarativeText(a.label, "en"), action: a.name, name: a.name })) });',
+  '    sections.push({ type: "actions", id: "actions", title: "Actions", items: spec.actions.map((a) => ({ label: resolveDeclarativeText(a.label, "en"), action: a.name, name: a.name, ...(a.description !== undefined ? { description: resolveDeclarativeText(a.description, "en") } : {}), ...(a.variant !== undefined ? { variant: a.variant } : {}), ...(a.confirm !== undefined ? { confirm: a.confirm } : {}), ...(a.confirmLabel !== undefined ? { confirmLabel: a.confirmLabel } : {}), ...(a.fields !== undefined ? { fields: a.fields } : {}), ...(a.params !== undefined ? { params: a.params } : {}), ...(a.disabled !== undefined ? { disabled: a.disabled } : {}), ...(a.successMessage !== undefined ? { successMessage: a.successMessage } : {}) })) });',
   '  }',
+  '  const titleI18n = typeof spec.title === "object" && spec.title !== null ? { "zh-CN": spec.title["zh-CN"] ?? spec.title.zh, ...(spec.title.en ? { en: spec.title.en } : {}) } : undefined;',
   '  return {',
   '    kind: "zhin.console.page-blueprint",',
   '    version: 1,',
   '    title: resolveDeclarativeText(spec.title, "en"),',
+  '    ...(titleI18n ? { titleI18n } : {}),',
   '    ...(spec.description ? { description: resolveDeclarativeText(spec.description, "en") } : {}),',
   '    dataSource: { action: spec.statusMethod ?? "status" },',
   '    sections,',
   '    spec,',
+  '    ...(spec.reviewSpec !== undefined ? { reviewSpec: spec.reviewSpec } : {}),',
   '  };',
   '}',
   'export function definePageBlueprint(spec = {}) {',
@@ -116,16 +131,39 @@ const CONSOLE_CONTRACT_STUB = [
   '}',
   'export function createAdapterConsolePage(adapterKey) { return defineAdapterPage(adapterKey); }',
   'export function defineCommentReviewPage(reviewSpec = {}) {',
+  '  if (typeof globalThis !== "undefined" && typeof globalThis.__ZHIN_DEFINE_COMMENT_REVIEW_PAGE__ === "function") {',
+  '    const delegated = globalThis.__ZHIN_DEFINE_COMMENT_REVIEW_PAGE__(reviewSpec);',
+  '    if (delegated && (typeof delegated === "function" || typeof delegated === "object")) {',
+  '      return Object.assign(delegated, { reviewSpec });',
+  '    }',
+  '  }',
   '  const zhTitle = ((reviewSpec.platform && reviewSpec.platform.zh) ? reviewSpec.platform.zh : "评论") + "评论审批";',
   '  const enTitle = ((reviewSpec.platform && reviewSpec.platform.en) ? reviewSpec.platform.en : "Comment") + " comment review";',
+  '  const loginActions = reviewSpec.loginMode === "cookie-check"',
+  '    ? [{ name: "login-check", label: { zh: "重新检查登录", en: "Check login again" } }]',
+  '    : [',
+  '        { name: "login", label: { zh: "扫码登录", en: "Sign in with QR code" }, variant: "primary" },',
+  '        { name: "login-cancel", label: { zh: "取消扫码", en: "Cancel QR login" }, variant: "ghost" },',
+  '        { name: "logout", label: { zh: "退出登录", en: "Sign out" }, variant: "secondary" },',
+  '      ];',
   '  const bp = Object.assign(buildBlueprintFromSpec({',
   '    pluginId: reviewSpec.adapter,',
   '    title: { zh: zhTitle, "zh-CN": zhTitle, en: enTitle },',
   '    mark: reviewSpec.mark,',
   '    statusMethod: "status",',
-  '    stats: [{ key: "endpoints", label: { zh: "账号数", en: "Accounts" }, value: "endpoints" }, { key: "pendingDrafts", label: { zh: "待审草稿", en: "Pending drafts" }, value: "pendingDrafts" }],',
+  '    pollMs: reviewSpec.pollMs ?? 10000,',
+  '    ...(reviewSpec.dictionary ? { dictionary: reviewSpec.dictionary } : {}),',
+  '    stats: [',
+  '      { key: "endpoints", label: { zh: "账号数", en: "Accounts" }, value: (data) => (Array.isArray(data?.endpoints) ? data.endpoints.length : 0) },',
+  '      { key: "pendingDrafts", label: { zh: "待审草稿", en: "Pending drafts" }, value: (data) => (data?.endpoints ?? []).reduce((sum, ep) => sum + (typeof ep?.pendingCount === "number" ? ep.pendingCount : (ep?.drafts?.length ?? 0)), 0) },',
+  '    ],',
   '    sections: [{ id: "endpoints", title: { zh: "评论账号与待审草稿", en: "Accounts & Pending Drafts" }, items: "endpoints", columns: [{ key: "id", label: { zh: "账号", en: "Account" } }, { key: "sendMode", label: { zh: "发送模式", en: "Send Mode" } }, { key: "pendingCount", label: { zh: "待审数", en: "Pending" } }] }],',
-  '    actions: [{ name: "edit", label: { zh: "修改草稿", en: "Edit draft" } }, { name: "send", label: { zh: "发送草稿", en: "Send draft" } }, { name: "drop", label: { zh: "丢弃草稿", en: "Discard draft" } }],',
+  '    actions: [',
+  '      ...loginActions,',
+  '      { name: "edit", label: { zh: "修改草稿", en: "Edit draft" }, fields: [{ key: "id", label: { zh: "草稿 ID", en: "Draft ID" }, required: true }, { key: "message", label: { zh: "回复内容", en: "Reply content" }, required: true }] },',
+  '      { name: "send", label: { zh: "发送草稿", en: "Send draft" }, variant: "primary", fields: [{ key: "id", label: { zh: "草稿 ID", en: "Draft ID" }, required: true }] },',
+  '      { name: "drop", label: { zh: "丢弃草稿", en: "Discard draft" }, variant: "danger", confirm: { zh: "确认丢弃该草稿？", en: "Discard this draft?" }, fields: [{ key: "id", label: { zh: "草稿 ID", en: "Draft ID" }, required: true }] },',
+  '    ],',
   '  }), { reviewSpec });',
   '  const fn = function CommentReviewBlueprintPage(props) {',
   '    if (typeof globalThis !== "undefined" && typeof globalThis.__ZHIN_RENDER_BLUEPRINT__ === "function" && props !== undefined) {',
@@ -182,22 +220,7 @@ export class TypeScriptClientBuilder implements ClientModuleLoader {
     const fileName = `${safe(request.owner)}-${safe(request.localName)}-${hash}.js`;
     const output = join(this.#outDir, fileName);
 
-    // Fast Path 1: Pure Blueprint (.ts/.js) page — zero esbuild, zero React/DOM imports.
-    if (String(request.feature) === pageFeature && !absSource.endsWith('.tsx')) {
-      const pure = trySynthesizePureBlueprintPage(text, absSource, request, metadata);
-      if (pure) {
-        const code = rewriteBareImportsForBrowser(pure.code, this.#consoleBasePath, '');
-        await atomicWrite(output, code);
-        return Object.freeze({
-          module: `${this.#publicBase}/${fileName}`,
-          hash,
-          metadata,
-          blueprint: pure.blueprint,
-        }) as T;
-      }
-    }
-
-    // Fast Path 2: Prebuilt static client asset (`<name>.bundle.js`) — zero runtime esbuild,
+    // Prebuilt static client asset (`<name>.bundle.js`) — zero runtime esbuild,
     // zero Node import() of browser code for heavy interactive plugins (e.g. sandbox).
     if (String(request.feature) === pageFeature) {
       const prebuilt = await tryLoadPrebuiltBundle(absSource);
@@ -212,16 +235,24 @@ export class TypeScriptClientBuilder implements ClientModuleLoader {
       }
     }
 
-    // Fallback: Bundle page TSX (inlines `@zhin.js/console-contract` stubs) + wrap with
-    // `export function register(api)` so Remote Console loadConsoleEntries can mount it.
-    // Then rewrite React bare imports to Host `/esm/<enc>.mjs`.
-    const bundled = await bundlePageEntry(absSource, this.#projectRoot, request, metadata);
+    const extracted =
+      String(request.feature) === pageFeature && !absSource.endsWith('.tsx')
+        ? tryExtractPureBlueprint(text, absSource)
+        : undefined;
+    const blueprint = extracted?.blueprint;
+
+    // Pure `.ts` Blueprint pages are synthesized directly from in-process `ts.transpileModule`
+    // output (zero `esbuild` child process), while `.tsx` or non-blueprint pages use `bundlePageEntry`.
+    const bundled = extracted
+      ? synthesizePureBlueprintModule(absSource, extracted.modules, request, metadata)
+      : await bundlePageEntry(absSource, this.#projectRoot, request, metadata);
     const code = rewriteBareImportsForBrowser(bundled, this.#consoleBasePath, '');
     await atomicWrite(output, code);
     return Object.freeze({
       module: `${this.#publicBase}/${fileName}`,
       hash,
       metadata,
+      ...(blueprint ? { blueprint } : {}),
     }) as T;
   }
 
@@ -262,18 +293,27 @@ const PURE_BLUEPRINT_CALL_RE =
 const FORBIDDEN_BROWSER_IMPORT_RE =
   /from\s+['"](?:react|react-dom|@zhin\.js\/client)(?:\/[^'"]*)?['"]/u;
 
-function trySynthesizePureBlueprintPage(
+interface TranspiledBlueprintModule {
+  readonly code: string;
+  readonly imports: Readonly<Record<string, string>>;
+}
+
+interface ExtractedPureBlueprint {
+  readonly blueprint: ConsolePageBlueprint | ConsoleAdapterPageBlueprint;
+  readonly modules: ReadonlyMap<string, TranspiledBlueprintModule>;
+}
+
+function tryExtractPureBlueprint(
   sourceText: string,
   absSource: string,
-  request: ClientModuleRequest,
-  metadata: unknown,
-): { readonly blueprint: ConsolePageBlueprint | ConsoleAdapterPageBlueprint; readonly code: string } | undefined {
+): ExtractedPureBlueprint | undefined {
   if (!PURE_BLUEPRINT_CALL_RE.test(sourceText) || FORBIDDEN_BROWSER_IMPORT_RE.test(sourceText)) {
     return undefined;
   }
   try {
     const ts = tsCompiler();
     const evaluatedCache = new Map<string, Record<string, unknown>>();
+    const modules = new Map<string, TranspiledBlueprintModule>();
     const evalModule = (filePath: string, rawText?: string): Record<string, unknown> => {
       const resolved = resolve(filePath);
       const cached = evaluatedCache.get(resolved);
@@ -290,6 +330,7 @@ function trySynthesizePureBlueprintPage(
         },
       });
       const exportsObj: Record<string, unknown> = {};
+      const importMap: Record<string, string> = {};
       evaluatedCache.set(resolved, exportsObj);
       const localRequire = (specifier: string): unknown => {
         if (
@@ -298,6 +339,7 @@ function trySynthesizePureBlueprintPage(
           specifier === '@zhin.js/page' ||
           specifier === 'zhin.js/page'
         ) {
+          importMap[specifier] = '@zhin.js/console-contract';
           return PURE_CONSOLE_CONTRACT_EXPORTS;
         }
         if (specifier.startsWith('.')) {
@@ -310,7 +352,9 @@ function trySynthesizePureBlueprintPage(
           ];
           for (const candidate of candidates) {
             if (existsSync(candidate)) {
-              return evalModule(candidate);
+              const target = resolve(candidate);
+              importMap[specifier] = target;
+              return evalModule(target);
             }
           }
         }
@@ -318,6 +362,10 @@ function trySynthesizePureBlueprintPage(
       };
       const fn = new Function('exports', 'require', transpiled.outputText);
       fn(exportsObj, localRequire);
+      modules.set(resolved, {
+        code: transpiled.outputText,
+        imports: Object.freeze({ ...importMap }),
+      });
       return exportsObj;
     };
 
@@ -332,47 +380,80 @@ function trySynthesizePureBlueprintPage(
     }
     const { spec: _spec, reviewSpec: _reviewSpec, ...serializableBp } =
       rawBp as unknown as Record<string, unknown>;
-    const blueprint = Object.freeze({
-      ...serializableBp,
-    }) as unknown as ConsolePageBlueprint | ConsoleAdapterPageBlueprint;
-
-    const meta = (metadata && typeof metadata === 'object' ? metadata : {}) as PageMeta;
-    const route = safePageRoute(request.owner, request.localName);
-    const title = meta.title ?? request.localName;
-    const serializedMeta = JSON.stringify(meta);
-    const serializedBp = JSON.stringify(blueprint);
-    const stubInternal = CONSOLE_CONTRACT_STUB.replace(/^export\s+/gmu, '');
-    const code = [
-      '// Pure Server-Driven Blueprint (zero-esbuild synthesized module)',
-      stubInternal,
-      `export const meta = definePage(${serializedMeta});`,
-      `const _bp = ${serializedBp};`,
-      'const Page = _bp.kind === "zhin.console.adapter-page"',
-      '  ? createAdapterConsolePage(_bp.adapterKey)',
-      '  : Object.assign(createDeclarativePage(_bp), _bp);',
-      'export default Page;',
-      'const pageNs = { default: Page, meta };',
-      buildRegisterFunctionBody({
-        owner: request.owner,
-        route,
-        title,
-        titleI18n: meta.titleI18n,
-        icon: meta.icon,
-        group: meta.group,
-        order: meta.order,
-        parent: meta.parent,
-        fullWidth: meta.fullWidth,
-        hideInNav: meta.hideInNav === true,
-        localName: request.localName,
-        requiredPermissions: meta.requiredPermissions,
-        requiredRoles: meta.requiredRoles,
-      }),
-    ].join('\n');
-
-    return { blueprint, code };
+    return {
+      blueprint: Object.freeze({
+        ...serializableBp,
+      }) as unknown as ConsolePageBlueprint | ConsoleAdapterPageBlueprint,
+      modules,
+    };
   } catch {
     return undefined;
   }
+}
+
+function synthesizePureBlueprintModule(
+  absSource: string,
+  modules: ReadonlyMap<string, TranspiledBlueprintModule>,
+  request: ClientModuleRequest,
+  metadata: unknown,
+): string {
+  const meta = (metadata && typeof metadata === 'object' ? metadata : {}) as PageMeta;
+  const route = safePageRoute(request.owner, request.localName);
+  const title = meta.title ?? request.localName;
+  const icon = meta.icon;
+  const hideInNav = meta.hideInNav === true;
+  const cjsContractStub = CONSOLE_CONTRACT_STUB.replace(
+    /^export function (\w+)/gmu,
+    'function $1',
+  ) + '\nObject.assign(exports, { definePage, defineLayout, normalizePageMetadata, normalizeClientModuleArtifact, resolveDeclarativeText, buildBlueprintFromSpec, definePageBlueprint, createDeclarativePage, defineAdapterPage, createAdapterConsolePage, defineCommentReviewPage, createCommentReviewPage });';
+
+  const moduleEntries = [...modules.entries()].map(([id, mod]) => {
+    return `${JSON.stringify(id)}: { imports: ${JSON.stringify(mod.imports)}, fn(exports, require) {\n${mod.code}\n} }`;
+  });
+
+  const registerBody = buildRegisterFunctionBody({
+    owner: request.owner,
+    route,
+    title,
+    titleI18n: meta.titleI18n,
+    icon,
+    group: meta.group,
+    order: meta.order,
+    parent: meta.parent,
+    fullWidth: meta.fullWidth,
+    hideInNav,
+    localName: request.localName,
+    requiredPermissions: meta.requiredPermissions,
+    requiredRoles: meta.requiredRoles,
+  });
+
+  return [
+    '// Pure Server-Driven Blueprint (zero-esbuild synthesized module)',
+    'const __zhin_contract__ = (() => {',
+    '  const exports = {};',
+    cjsContractStub,
+    '  return exports;',
+    '})();',
+    `const __zhin_modules__ = {\n${moduleEntries.join(',\n')}\n};`,
+    'const __zhin_cache__ = {};',
+    'function __zhin_require__(id) {',
+    '  if (id === "@zhin.js/console-contract" || id === "@zhin.js/contract" || id === "@zhin.js/page" || id === "zhin.js/page") {',
+    '    return __zhin_contract__;',
+    '  }',
+    '  if (__zhin_cache__[id]) return __zhin_cache__[id];',
+    '  const mod = __zhin_modules__[id];',
+    '  if (!mod) throw new Error("Unknown blueprint module: " + id);',
+    '  const exports = {};',
+    '  __zhin_cache__[id] = exports;',
+    '  mod.fn(exports, (spec) => __zhin_require__(mod.imports[spec] ?? spec));',
+    '  return exports;',
+    '}',
+    `const pageNs = __zhin_require__(${JSON.stringify(resolve(absSource))});`,
+    'const Page = pageNs.default;',
+    'export default Page;',
+    'export const meta = pageNs.meta;',
+    registerBody,
+  ].join('\n');
 }
 
 async function tryLoadPrebuiltBundle(absSource: string): Promise<string | undefined> {
@@ -388,6 +469,31 @@ async function tryLoadPrebuiltBundle(absSource: string): Promise<string | undefi
     }
   }
   return undefined;
+}
+
+let activeEsbuildCalls = 0;
+let stopEsbuildTimer: ReturnType<typeof setTimeout> | undefined;
+
+async function runEsbuild(options: BuildOptions & { write: false }): Promise<BuildResult<{ write: false }>> {
+  activeEsbuildCalls += 1;
+  if (stopEsbuildTimer) {
+    clearTimeout(stopEsbuildTimer);
+    stopEsbuildTimer = undefined;
+  }
+  try {
+    return await esbuild(options);
+  } finally {
+    activeEsbuildCalls -= 1;
+    if (activeEsbuildCalls === 0) {
+      stopEsbuildTimer = setTimeout(() => {
+        stopEsbuildTimer = undefined;
+        if (activeEsbuildCalls === 0) {
+          void Promise.resolve(stopEsbuild()).catch(() => undefined);
+        }
+      }, 100);
+      stopEsbuildTimer.unref?.();
+    }
+  }
 }
 
 async function bundlePageEntry(
@@ -420,7 +526,7 @@ async function bundlePageEntry(
     requiredPermissions: meta.requiredPermissions,
     requiredRoles: meta.requiredRoles,
   });
-  const result = await esbuild({
+  const result = await runEsbuild({
     stdin: {
       contents: wrapperSource,
       resolveDir: dirname(absSource),
@@ -449,7 +555,7 @@ async function bundlePageEntry(
 }
 
 async function bundleSource(absSource: string, projectRoot: string): Promise<string> {
-  const result = await esbuild({
+  const result = await runEsbuild({
     entryPoints: [absSource],
     bundle: true,
     write: false,

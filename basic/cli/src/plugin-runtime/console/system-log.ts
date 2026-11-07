@@ -182,7 +182,7 @@ export class SystemLogDatabaseTransport implements LogTransport {
       await model.delete().where({ timestamp: { $lt: cutoff } });
       // 2. 按数量清理：超过 maxRecords 时删除最旧的（JS 侧排序，
       //    wrapped DatabaseHostModel 不暴露 orderBy/limit）。
-      const rows = await model.select();
+      const rows = await model.select('id', 'timestamp');
       if (rows.length > this.config.maxRecords) {
         const sorted = [...rows].sort((a, b) => toTime(a.timestamp) - toTime(b.timestamp));
         const idsToDelete = sorted

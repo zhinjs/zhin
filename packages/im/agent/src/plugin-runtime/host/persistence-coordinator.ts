@@ -1,6 +1,10 @@
 import { getLogger } from '@zhin.js/logger';
 import { ensureDatabaseColumns, ensureDatabaseIndex, type StructuredDatabase } from '@zhin.js/database';
-import { databaseRootHostToken, type RootResourceInstaller } from '@zhin.js/plugin-runtime';
+import {
+  databaseRootHostToken,
+  type DatabaseHost,
+  type RootResourceInstaller,
+} from '@zhin.js/plugin-runtime';
 import {
   DatabaseEngagementJournal,
   defineEngagementEventModel,
@@ -11,10 +15,28 @@ import { defineAiDatabaseModels, activateAiDatabaseStorage, AGENT_USAGE_TURN_MOD
   DatabaseAgentUsageStore, agentUsageStoreToken, DatabaseScheduleJobStorage, SCHEDULE_JOB_MODEL, SCHEDULE_JOB_MIGRATION_MODEL,
   DatabaseScheduleHistoryRepository, SCHEDULE_RUN_MODEL, SCHEDULE_ATTEMPT_MODEL,
   AI_DECISION_EVENTS_TABLE, AI_SCENE_MEMBERS_TABLE, DEFAULT_DECISION_AUDIT_RETENTION_DAYS, DEFAULT_GROUP_RULE_RETENTION_DAYS } from '../index.js';
+import {
+  AGENT_TURN_CHECKPOINT_MODEL,
+  AGENT_TURN_CHECKPOINT_TABLE,
+  DatabaseTurnCheckpointStorage,
+} from '../../turn/turn-checkpoint-store.js';
 import type { AgentRuntimeFoundation } from './runtime-foundation.js';
 import type { AgentHostAIConfig } from './config.js';
 
 type Context = Parameters<RootResourceInstaller>[0];
+
+function createHostEngagementJournalDatabase(database: DatabaseHost): EngagementJournalDatabase {
+  const model = (table: string) => {
+    const m = database.models.get(table);
+    if (!m) throw new Error(`Database table '${table}' is not ready`);
+    return m;
+  };
+  return {
+    select: (table, fields) => model(table).select(...fields),
+    insert: (table, row) => model(table).insert(row),
+    delete: (table, condition) => model(table).delete().where(condition),
+  };
+}
 
 /** MySQL TEXT needs (128); VARCHAR(64) id/run_id must stay unprefixed (ER_WRONG_SUB_KEY). */
 export async function ensureScheduleHistoryIndexes(database: StructuredDatabase): Promise<void> {
@@ -60,10 +82,8 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
     database.define('agent_schedule_attempts', SCHEDULE_ATTEMPT_MODEL);
     database.define('agent_usage_turns', AGENT_USAGE_TURN_MODEL);
     database.define('agent_usage_calls', AGENT_USAGE_CALL_MODEL);
+    database.define(AGENT_TURN_CHECKPOINT_TABLE, AGENT_TURN_CHECKPOINT_MODEL);
     defineEngagementEventModel(database);
-    foundation.setEngagementJournal?.(
-      new DatabaseEngagementJournal(database as unknown as EngagementJournalDatabase),
-    );
     usage = new DatabaseAgentUsageStore(database, Number(config.usage?.retentionDays ?? 30));
     resources.provide(agentUsageStoreToken, usage);
   } else {
@@ -101,8 +121,15 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
       await activateAiDatabaseStorage(raw, { aiService: foundation.service, zhinAgent: foundation.agent }, config, foundation.semanticMemory);
       foundation.agent.markMemoryPersistenceReady();
     }
-    if (sql) await foundation.schedule.store.activateDatabase(new DatabaseScheduleJobStorage(database));
-    if (sql) foundation.schedule.history.activateRepository(new DatabaseScheduleHistoryRepository(database));
+    if (sql) {
+      foundation.setEngagementJournal?.(
+        new DatabaseEngagementJournal(createHostEngagementJournalDatabase(database)),
+      );
+      await foundation.schedule.store.activateDatabase(new DatabaseScheduleJobStorage(database));
+      foundation.schedule.history.activateRepository(new DatabaseScheduleHistoryRepository(database));
+      foundation.agent.turnCheckpoints?.activateDatabase(new DatabaseTurnCheckpointStorage(database));
+      await foundation.agent.turnCheckpoints?.prune();
+    }
     if (sql && raw) {
       await ensureScheduleHistoryIndexes(raw);
     }
@@ -154,6 +181,7 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
             pruneTraceArchive(),
             pruneEngagementJournal(),
             pruneGroupRules(),
+            foundation.agent.turnCheckpoints?.prune(),
           ]).then(() => undefined).finally(() => { pendingPrune = undefined; });
         }, 3_600_000);
         timer.unref();
