@@ -577,7 +577,12 @@ async function seedInitialAiPlanIfEmpty(
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (allowDeferredDatabase && message.includes('DatabaseHost is not started')) {
+    if (
+      allowDeferredDatabase &&
+      (message.includes('DatabaseHost is not started') ||
+        message.includes('Inference storage: unavailable') ||
+        (error instanceof Error && 'code' in error && error.code === 'unavailable'))
+    ) {
       return;
     }
     logger.warn(`ai.plan.yml auto-seed failed: ${message}`);

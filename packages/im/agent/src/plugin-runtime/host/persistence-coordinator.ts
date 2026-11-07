@@ -78,9 +78,6 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
     database.define('agent_usage_turns', AGENT_USAGE_TURN_MODEL);
     database.define('agent_usage_calls', AGENT_USAGE_CALL_MODEL);
     defineEngagementEventModel(database);
-    foundation.setEngagementJournal?.(
-      new DatabaseEngagementJournal(createHostEngagementJournalDatabase(database)),
-    );
     usage = new DatabaseAgentUsageStore(database, Number(config.usage?.retentionDays ?? 30));
     resources.provide(agentUsageStoreToken, usage);
   } else {
@@ -118,8 +115,13 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
       await activateAiDatabaseStorage(raw, { aiService: foundation.service, zhinAgent: foundation.agent }, config, foundation.semanticMemory);
       foundation.agent.markMemoryPersistenceReady();
     }
-    if (sql) await foundation.schedule.store.activateDatabase(new DatabaseScheduleJobStorage(database));
-    if (sql) foundation.schedule.history.activateRepository(new DatabaseScheduleHistoryRepository(database));
+    if (sql) {
+      foundation.setEngagementJournal?.(
+        new DatabaseEngagementJournal(createHostEngagementJournalDatabase(database)),
+      );
+      await foundation.schedule.store.activateDatabase(new DatabaseScheduleJobStorage(database));
+      foundation.schedule.history.activateRepository(new DatabaseScheduleHistoryRepository(database));
+    }
     if (sql && raw) {
       await ensureScheduleHistoryIndexes(raw);
     }

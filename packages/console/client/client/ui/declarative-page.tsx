@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { pluginRpc, PluginRpcError } from '../console-utils/remoteApi.js';
+import { CommentReviewSession } from '../review-console/CommentReviewPage.js';
 import {
   Badge,
   Button,
@@ -192,7 +193,19 @@ function buildDeclarativeBlueprint<TData = Record<string, unknown>>(spec: Declar
         })),
       });
     } else if (sec.entries !== undefined) {
-      sections.push({ type: 'entries', id, title });
+      sections.push({
+        type: 'entries',
+        id,
+        title,
+        ...(Array.isArray(sec.entries)
+          ? {
+              entries: sec.entries.map((e: { readonly label?: DeclarativeI18nText; readonly value?: unknown }) => ({
+                label: resolveBlueprintText(e.label, 'en'),
+                value: String(e.value ?? ''),
+              })),
+            }
+          : {}),
+      });
     } else {
       sections.push({ type: 'custom', id, ...(title ? { title } : {}) });
     }
@@ -206,10 +219,19 @@ function buildDeclarativeBlueprint<TData = Record<string, unknown>>(spec: Declar
         label: resolveBlueprintText(a.label, 'en'),
         action: a.name,
         name: a.name,
+        ...(a.description !== undefined ? { description: resolveBlueprintText(a.description, 'en') } : {}),
+        ...(a.variant !== undefined ? { variant: a.variant } : {}),
+        ...(a.confirm !== undefined ? { confirm: a.confirm } : {}),
+        ...(a.confirmLabel !== undefined ? { confirmLabel: a.confirmLabel } : {}),
+        ...(a.fields !== undefined ? { fields: a.fields } : {}),
+        ...(a.params !== undefined ? { params: a.params } : {}),
+        ...(a.disabled !== undefined ? { disabled: a.disabled } : {}),
+        ...(a.successMessage !== undefined ? { successMessage: a.successMessage } : {}),
       })),
     });
   }
   const description = resolveBlueprintText(spec.description, 'en');
+  const rawReviewSpec = (spec as unknown as { readonly reviewSpec?: unknown }).reviewSpec;
   return {
     kind: 'zhin.console.page-blueprint' as const,
     version: 1 as const,
@@ -218,6 +240,7 @@ function buildDeclarativeBlueprint<TData = Record<string, unknown>>(spec: Declar
     dataSource: { action: spec.statusMethod ?? 'status' },
     sections,
     spec,
+    ...(rawReviewSpec !== undefined ? { reviewSpec: rawReviewSpec } : {}),
   };
 }
 
@@ -270,6 +293,14 @@ function coerceDeclarativeSpec<TData = Record<string, unknown>>(
         actions.push({
           name,
           label: (act.label as DeclarativeI18nText) ?? name,
+          ...(act.description !== undefined ? { description: act.description as DeclarativeI18nText } : {}),
+          ...(act.variant !== undefined ? { variant: act.variant as ButtonVariant } : {}),
+          ...(act.confirm !== undefined ? { confirm: act.confirm as DeclarativeI18nText } : {}),
+          ...(act.confirmLabel !== undefined ? { confirmLabel: act.confirmLabel as DeclarativeI18nText } : {}),
+          ...(Array.isArray(act.fields) ? { fields: act.fields as readonly DeclarativeActionFieldSpec[] } : {}),
+          ...(act.params !== undefined ? { params: act.params as DeclarativeActionSpec<TData>['params'] } : {}),
+          ...(act.disabled !== undefined ? { disabled: act.disabled as DeclarativeActionSpec<TData>['disabled'] } : {}),
+          ...(act.successMessage !== undefined ? { successMessage: act.successMessage as DeclarativeI18nText } : {}),
         });
       }
     } else if (secType === 'table') {
@@ -340,6 +371,14 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
   readonly spec: DeclarativePageSpec<TData>;
   readonly pageProps?: DeclarativePageComponentProps;
 }) {
+  const reviewSpec =
+    rawSpec && typeof rawSpec === 'object' && (rawSpec as unknown as { reviewSpec?: unknown }).reviewSpec != null
+      ? (rawSpec as unknown as { reviewSpec: unknown }).reviewSpec
+      : undefined;
+  if (reviewSpec) {
+    return <CommentReviewSession spec={reviewSpec as never} />;
+  }
+
   const spec = useMemo(() => coerceDeclarativeSpec(rawSpec), [rawSpec]);
   const { locale, t } = useLocale(spec.dictionary);
   const rawPluginId = resolveSyncPluginId(pageProps?.pluginId ?? pageProps?.owner ?? spec.pluginId);
@@ -707,7 +746,9 @@ if (typeof globalThis !== 'undefined') {
         readonly pageProps?: DeclarativePageComponentProps;
       }>,
       {
-        spec: (((bp as { spec?: DeclarativePageSpec })?.spec ?? bp) as DeclarativePageSpec),
+        spec: (((bp as { reviewSpec?: unknown })?.reviewSpec != null
+          ? bp
+          : ((bp as { spec?: DeclarativePageSpec })?.spec ?? bp)) as DeclarativePageSpec),
         pageProps: props,
       },
     );

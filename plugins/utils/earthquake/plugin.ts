@@ -81,7 +81,6 @@ export default definePlugin<EarthquakeConfig>({
       logger: { warn: (message) => logger.warn(message) },
     });
     earthquakeServiceStore.provide(context, service);
-    context.lifecycle.add(() => service.stop());
 
     if (push && context.resources.has(scheduleHostToken)) {
       const schedule = context.resources.use(scheduleHostToken);

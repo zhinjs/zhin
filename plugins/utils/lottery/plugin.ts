@@ -29,7 +29,15 @@ export default definePlugin<LotteryConfig>({
   },
   async setup(context) {
     const config = resolveLotteryConfig(context.config.get());
-    const locale = resolveLocale(context.resources.use(projectLocaleToken));
+    let projectLocale: ReturnType<typeof context.resources.use<typeof projectLocaleToken>> | undefined;
+    try {
+      projectLocale = context.resources.has(projectLocaleToken)
+        ? context.resources.use(projectLocaleToken)
+        : context.resources.use(projectLocaleToken);
+    } catch {
+      projectLocale = undefined;
+    }
+    const locale = resolveLocale(projectLocale);
     // host 与 memory 模型表面结构兼容（where 均返回 PromiseLike），可直接互换。
     const db: LotteryDb = (() => {
       if (context.resources.has(databaseHostToken)) {

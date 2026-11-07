@@ -137,7 +137,8 @@ export function isolateBootstrap(): void {
           lifecycle,
           handoff: { add() { throw new Error('Nested generation handoff is unavailable in isolation'); } },
         });
-        if (returned) disposers.push(returned);
+        const disposer = typeof returned === 'function' ? returned : returned?.dispose;
+        if (typeof disposer === 'function') disposers.push(disposer);
         state = 'active';
       } catch (error) {
         await disposeSetup();

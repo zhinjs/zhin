@@ -90,10 +90,20 @@ export async function dispatchPluginConsoleRpcRequest(
     const runtime: NonNullable<PluginConsoleRpcCall['runtime']> = Object.freeze({
       owner: pluginId, generation: snapshot.generation, operator: options.access.unrestricted,
       project(feature) {
-        if (feature !== adapterFeatureId) throw new PluginConsoleRpcError('unsupported', '该运行投影未授权');
-        const projection = snapshot.projections.get(adapterFeatureId);
-        if (!isAdapterIndex(projection)) throw new PluginConsoleRpcError('unsupported', '账号运行目录不可用');
-        return projection.forOwner(pluginId);
+        if (feature === adapterFeatureId) {
+          const projection = snapshot.projections.get(adapterFeatureId);
+          if (!isAdapterIndex(projection)) throw new PluginConsoleRpcError('unsupported', '账号运行目录不可用');
+          return projection.forOwner(pluginId);
+        }
+        if (feature === 'zhin.game' || feature === 'zhin.feature.game') {
+          const projection =
+            snapshot.projections.get(feature) ??
+            snapshot.projections.get('zhin.game' as typeof feature) ??
+            snapshot.projections.get('zhin.feature.game' as typeof feature);
+          if (projection === undefined) throw new PluginConsoleRpcError('unsupported', '游戏运行目录不可用');
+          return projection;
+        }
+        throw new PluginConsoleRpcError('unsupported', '该运行投影未授权');
       },
     });
     const config = resolvePluginConfig(snapshot, pluginId, options);

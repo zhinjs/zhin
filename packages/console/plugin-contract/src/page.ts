@@ -302,12 +302,14 @@ export interface DeclarativeSectionSpec<
     ctx: DeclarativePageContext<TData>,
   ) => DeclarativeRenderable;
   /** Key-value description list extractor (`<dl className="zk-dl">`). */
-  readonly entries?: (
-    data: TData,
-    ctx: DeclarativePageContext<TData>,
-  ) =>
-    | Readonly<Record<string, DeclarativeRenderable>>
-    | readonly { readonly label: DeclarativeRenderable; readonly value: DeclarativeRenderable }[];
+  readonly entries?:
+    | readonly { readonly label: DeclarativeI18nText; readonly value: DeclarativeRenderable }[]
+    | ((
+        data: TData,
+        ctx: DeclarativePageContext<TData>,
+      ) =>
+        | Readonly<Record<string, DeclarativeRenderable>>
+        | readonly { readonly label: DeclarativeRenderable; readonly value: DeclarativeRenderable }[]);
   /** Custom section body renderer. */
   readonly render?: (data: TData, ctx: DeclarativePageContext<TData>) => DeclarativeRenderable;
 }
@@ -378,6 +380,7 @@ export type ConsolePageBlueprintSection =
       readonly type: 'entries';
       readonly id: string;
       readonly title: string;
+      readonly entries?: readonly { readonly label: string; readonly value: string }[];
     }
   | {
       readonly type: 'actions';
@@ -389,6 +392,12 @@ export type ConsolePageBlueprintSection =
         readonly name?: string;
         readonly description?: string;
         readonly variant?: DeclarativeButtonVariant;
+        readonly confirm?: DeclarativeI18nText;
+        readonly confirmLabel?: DeclarativeI18nText;
+        readonly fields?: readonly DeclarativeActionFieldSpec[];
+        readonly params?: DeclarativeActionSpec<any>['params'];
+        readonly disabled?: DeclarativeActionSpec<any>['disabled'];
+        readonly successMessage?: DeclarativeI18nText;
       }[];
     }
   | {
@@ -510,6 +519,7 @@ export function buildBlueprintFromSpec<TData = Record<string, unknown>>(
       dataSource: Object.freeze({ action: bp.dataSource?.action ?? 'status' }),
       sections: Object.freeze([...(bp.sections ?? [])]),
       ...(bp.spec !== undefined ? { spec: bp.spec } : {}),
+      ...(bp.reviewSpec !== undefined ? { reviewSpec: bp.reviewSpec } : {}),
     });
   }
 
@@ -572,6 +582,18 @@ export function buildBlueprintFromSpec<TData = Record<string, unknown>>(
           type: 'entries',
           id,
           title: secTitle,
+          ...(Array.isArray(sec.entries)
+            ? {
+                entries: Object.freeze(
+                  sec.entries.map((e) =>
+                    Object.freeze({
+                      label: resolveDeclarativeText(e.label, 'en'),
+                      value: String(e.value ?? ''),
+                    }),
+                  ),
+                ),
+              }
+            : {}),
         }),
       );
     } else {
@@ -601,12 +623,20 @@ export function buildBlueprintFromSpec<TData = Record<string, unknown>>(
                 ? { description: resolveDeclarativeText(act.description, 'en') }
                 : {}),
               ...(act.variant ? { variant: act.variant } : {}),
+              ...(act.confirm !== undefined ? { confirm: act.confirm } : {}),
+              ...(act.confirmLabel !== undefined ? { confirmLabel: act.confirmLabel } : {}),
+              ...(act.fields !== undefined ? { fields: act.fields } : {}),
+              ...(act.params !== undefined ? { params: act.params } : {}),
+              ...(act.disabled !== undefined ? { disabled: act.disabled } : {}),
+              ...(act.successMessage !== undefined ? { successMessage: act.successMessage } : {}),
             }),
           ),
         ),
       }),
     );
   }
+
+  const rawReviewSpec = (spec as unknown as { readonly reviewSpec?: CommentReviewBlueprintSpec<any, any> }).reviewSpec;
 
   return Object.freeze({
     kind: 'zhin.console.page-blueprint',
@@ -617,6 +647,7 @@ export function buildBlueprintFromSpec<TData = Record<string, unknown>>(
     dataSource,
     sections: Object.freeze(sections),
     spec,
+    ...(rawReviewSpec !== undefined ? { reviewSpec: rawReviewSpec } : {}),
   });
 }
 
@@ -1087,11 +1118,17 @@ export function projectBlueprintToImCard<TData = Record<string, unknown>>(
           }),
         );
       } else if (sec.entries !== undefined) {
-        const rawEntries = sec.entries((data ?? ({} as TData)), ctx);
+        const rawEntries =
+          typeof sec.entries === 'function'
+            ? sec.entries((data ?? ({} as TData)), ctx)
+            : sec.entries;
         const items = Array.isArray(rawEntries)
           ? rawEntries.map((entry) =>
               Object.freeze({
-                label: formatRenderableValue(entry.label),
+                label:
+                  typeof entry.label === 'object' && entry.label !== null && ('zh' in entry.label || 'en' in entry.label || 'zh-CN' in entry.label)
+                    ? resolveDeclarativeText(entry.label as DeclarativeI18nText, locale)
+                    : formatRenderableValue(entry.label),
                 value: formatRenderableValue(entry.value),
               }),
             )
@@ -1126,6 +1163,21 @@ export function projectBlueprintToImCard<TData = Record<string, unknown>>(
             columns: sec.columns,
             rows: Object.freeze(rows.map((r) => Object.freeze(r))),
             totalRows: list.length,
+          }),
+        );
+      } else if (sec.type === 'entries' && Array.isArray(sec.entries)) {
+        entries.push(
+          Object.freeze({
+            id: sec.id,
+            title: sec.title,
+            items: Object.freeze(
+              sec.entries.map((entry) =>
+                Object.freeze({
+                  label: formatRenderableValue(entry.label),
+                  value: formatRenderableValue(entry.value),
+                }),
+              ),
+            ),
           }),
         );
       }

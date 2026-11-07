@@ -444,7 +444,15 @@ export async function configureAI(locale: 'zh-CN' | 'en' = 'zh-CN'): Promise<AIS
       { type: 'select', name: 'toolCalling', message: wizardText(locale, "模型支持工具调用？"), choices: featureChoices },
       { type: 'select', name: 'streaming', message: wizardText(locale, "模型支持流式输出？"), choices: featureChoices },
       { type: 'checkbox', name: 'input', message: wizardText(locale, "模型支持的输入类型："),
-        choices: ['text', 'image', 'audio', 'video', 'file'].map(value => ({ name: value, value, ...(value === 'text' ? { checked: true, disabled: true } : {}) })) },
+        choices: ['text', 'image', 'audio', 'video', 'file'].map(value => ({
+          name: value,
+          value,
+          ...(value === 'text'
+            ? { checked: true, disabled: true }
+            : (providerInfo.defaultInput as readonly string[]).includes(value)
+              ? { checked: true }
+              : {}),
+        })) },
     ]);
     providerConfig.capabilities = { input: ['text', ...(features.input ?? []).filter((value: string) => value !== 'text')],
       ...(features.toolCalling === 'unknown' ? {} : { toolCalling: features.toolCalling === 'yes' }),

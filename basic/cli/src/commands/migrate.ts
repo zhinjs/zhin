@@ -588,8 +588,8 @@ migrateCommand.addCommand(
               throw new Error(
                 'Session binding neither finalizes startup files nor imports credentials'
               );
-            const sessions = await import(
-              '../plugin-runtime/inference/migration-session-bindings.js'
+            const sessions = await loadInferenceMigrationModule(
+              () => import('../plugin-runtime/inference/migration-session-bindings.js')
             );
             const preview = await sessions.readSessionBindingsPreview(previewFile);
             if (preview.rootId !== resolve(process.cwd()))
@@ -602,11 +602,15 @@ migrateCommand.addCommand(
             console.log(JSON.stringify(result, null, 2));
             return;
           }
-          const migration = await import('../plugin-runtime/inference/migration-preview.js');
+          const migration = await loadInferenceMigrationModule(
+            () => import('../plugin-runtime/inference/migration-preview.js')
+          );
           const preview = await migration.readInferenceMigrationPreview(previewFile);
           if (preview.rootId !== resolve(process.cwd()))
             throw new Error('Migration preview belongs to another project Root');
-          const writer = await import('../plugin-runtime/inference/migration-apply.js');
+          const writer = await loadInferenceMigrationModule(
+            () => import('../plugin-runtime/inference/migration-apply.js')
+          );
           const run = options.finalize
             ? writer.finalizeInferenceMigration
             : writer.applyInferenceMigration;
@@ -638,8 +642,8 @@ migrateCommand.addCommand(
           if (!mapping) throw new Error('Choose an explicit Session binding --mapping');
           if (options.withCredentials)
             throw new Error('Session binding does not import credentials');
-          const sessions = await import(
-            '../plugin-runtime/inference/migration-session-bindings.js'
+          const sessions = await loadInferenceMigrationModule(
+            () => import('../plugin-runtime/inference/migration-session-bindings.js')
           );
           const preview = await sessions.previewSessionBindings({ ...sources, mapping });
           await fs.writeFile(resolve(options.output), `${JSON.stringify(preview, null, 2)}\n`, {
@@ -662,7 +666,9 @@ migrateCommand.addCommand(
           );
           return;
         }
-        const migration = await import('../plugin-runtime/inference/migration-preview.js');
+        const migration = await loadInferenceMigrationModule(
+          () => import('../plugin-runtime/inference/migration-preview.js')
+        );
         const preview = await migration.previewInferenceMigration({
           ...sources,
           ...(mapping ? { mapping } : {}),
@@ -692,3 +698,24 @@ migrateCommand.addCommand(
       }
     )
 );
+
+async function loadInferenceMigrationModule<T>(loader: () => Promise<T>): Promise<T> {
+  try {
+    return await loader();
+  } catch (error) {
+    if (
+      error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      (error.code === 'ERR_MODULE_NOT_FOUND' || error.code === 'MODULE_NOT_FOUND') &&
+      error instanceof Error &&
+      error.message.includes('@zhin.js/agent')
+    ) {
+      throw new Error(
+        'zhin migrate inference requires @zhin.js/agent to be installed (pnpm add @zhin.js/agent)',
+        { cause: error }
+      );
+    }
+    throw error;
+  }
+}
