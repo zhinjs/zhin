@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path';
-import { build as esbuild, type Plugin as EsbuildPlugin } from 'esbuild';
+import { build as esbuild, stop as stopEsbuild, type BuildOptions, type BuildResult, type Plugin as EsbuildPlugin } from 'esbuild';
 import type ts from 'typescript';
 import {
   buildBlueprintFromSpec,
@@ -386,6 +386,31 @@ async function tryLoadPrebuiltBundle(absSource: string): Promise<string | undefi
   return undefined;
 }
 
+let activeEsbuildCalls = 0;
+let stopEsbuildTimer: ReturnType<typeof setTimeout> | undefined;
+
+async function runEsbuild(options: BuildOptions & { write: false }): Promise<BuildResult<{ write: false }>> {
+  activeEsbuildCalls += 1;
+  if (stopEsbuildTimer) {
+    clearTimeout(stopEsbuildTimer);
+    stopEsbuildTimer = undefined;
+  }
+  try {
+    return await esbuild(options);
+  } finally {
+    activeEsbuildCalls -= 1;
+    if (activeEsbuildCalls === 0) {
+      stopEsbuildTimer = setTimeout(() => {
+        stopEsbuildTimer = undefined;
+        if (activeEsbuildCalls === 0) {
+          void Promise.resolve(stopEsbuild()).catch(() => undefined);
+        }
+      }, 100);
+      stopEsbuildTimer.unref?.();
+    }
+  }
+}
+
 async function bundlePageEntry(
   absSource: string,
   projectRoot: string,
@@ -416,7 +441,7 @@ async function bundlePageEntry(
     requiredPermissions: meta.requiredPermissions,
     requiredRoles: meta.requiredRoles,
   });
-  const result = await esbuild({
+  const result = await runEsbuild({
     stdin: {
       contents: wrapperSource,
       resolveDir: dirname(absSource),
@@ -445,7 +470,7 @@ async function bundlePageEntry(
 }
 
 async function bundleSource(absSource: string, projectRoot: string): Promise<string> {
-  const result = await esbuild({
+  const result = await runEsbuild({
     entryPoints: [absSource],
     bundle: true,
     write: false,
