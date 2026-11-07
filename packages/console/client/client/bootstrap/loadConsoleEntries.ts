@@ -154,29 +154,27 @@ export function resolveEntryRegister(
   const requiredRoles = meta?.requiredRoles ?? entry.requiredRoles;
   return (api) => {
     const rawComp = Component as Record<string, unknown> | React.ComponentType;
-    const isRawObject = typeof rawComp === 'object' && rawComp !== null;
     const pageProps: DeclarativePageComponentProps = {
       pluginId: entry.owner ?? entry.id,
       route: path,
       title: name,
     };
-    const hasBlueprintKind = Boolean(
-      rawComp &&
-      (typeof rawComp === 'object' || typeof rawComp === 'function') &&
-      typeof (rawComp as { kind?: unknown }).kind === 'string',
-    );
-    const element = isRawObject && (rawComp as { kind?: unknown }).kind === 'zhin.console.page-blueprint'
+    const blueprintKind =
+      rawComp && (typeof rawComp === 'object' || typeof rawComp === 'function')
+        ? (rawComp as { kind?: unknown }).kind
+        : undefined;
+    const element = blueprintKind === 'zhin.console.page-blueprint'
       ? api.React.createElement(DeclarativePageView as unknown as React.ComponentType<Record<string, unknown>>, {
           spec: (((rawComp as { reviewSpec?: unknown }).reviewSpec != null
             ? rawComp
             : ((rawComp as { spec?: DeclarativePageSpec }).spec ?? rawComp)) as DeclarativePageSpec),
           pageProps,
         })
-      : isRawObject && (rawComp as { kind?: unknown }).kind === 'zhin.console.adapter-page'
+      : blueprintKind === 'zhin.console.adapter-page'
         ? api.React.createElement(AdapterConsolePage as unknown as React.ComponentType<Record<string, unknown>>, {
             adapterKey: String((rawComp as { adapterKey?: unknown }).adapterKey ?? entry.id),
           })
-        : (hasBlueprintKind || entry.owner !== undefined)
+        : entry.owner !== undefined
           ? api.React.createElement(Component as React.ComponentType<DeclarativePageComponentProps>, pageProps)
           : api.React.createElement(Component as React.ComponentType);
     api.addRoute({
