@@ -1,0 +1,14 @@
+packages/console/client/client/bootstrap/loadConsoleEntries.ts
+  h_6f5e45c41d0910 162-166,173,177
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c7019c0eabb8e0d6b203223ccf8d22867aa4762e",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
