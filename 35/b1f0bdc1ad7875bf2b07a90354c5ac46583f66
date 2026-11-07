@@ -1,0 +1,68 @@
+.changeset/fix-engagement-journal-database-host.md
+  h_6f5e45c41d0910 32-36
+basic/cli/src/commands/runtime.ts
+  h_6f5e45c41d0910 1,7,20-37
+basic/cli/src/plugin-runtime/agent/host-installer.ts
+  h_6f5e45c41d0910 15,527-532,544
+packages/console/client/client/ui/declarative-page.tsx
+  h_6f5e45c41d0910 27-155,158,165-166,168,214-216,402,407-420,630-632,701,704-706,711-715,772-791
+packages/console/pagemanager/src/client-build/typescript-builder.ts
+  h_6f5e45c41d0910 82,238,242,244-249,296-305,309,316,333,342,355-357,365-368,383-388,394-458
+packages/console/plugin-contract/src/page.ts
+  h_6f5e45c41d0910 203-331,357,367-368,370-373,375-378,507,690,1166,1170-1174,1178-1180,1196-1200,1224
+packages/console/plugin-contract/tests/contract.test.ts
+  h_6f5e45c41d0910 302-367
+packages/im/agent/src/core/agent-core-run.ts
+  h_6f5e45c41d0910 59-63,294-318,363-380,488-503,525-527
+packages/im/agent/src/index.ts
+  h_6f5e45c41d0910 976-991
+packages/im/agent/src/internal/agent-host.ts
+  h_6f5e45c41d0910 48-49
+packages/im/agent/src/plugin-runtime/host/persistence-coordinator.ts
+  h_6f5e45c41d0910 18-22,85,130-131,184
+packages/im/agent/src/turn/index.ts
+  h_6f5e45c41d0910 157-172
+packages/im/agent/src/turn/turn-checkpoint-store.ts
+  h_6f5e45c41d0910 1-300
+packages/im/agent/src/zhin-agent/index.ts
+  h_6f5e45c41d0910 61,204
+packages/im/agent/tests/turn/turn-checkpoint-store.test.ts
+  h_6f5e45c41d0910 1-311
+packages/im/ai/src/providers/index.ts
+  h_6f5e45c41d0910 7-15
+packages/im/ai/src/providers/model-capability-catalog.ts
+  h_6f5e45c41d0910 1-470
+packages/im/ai/src/providers/sdk-models.ts
+  h_6f5e45c41d0910 3,9
+packages/im/ai/tests/providers/model-capability-catalog.test.ts
+  h_6f5e45c41d0910 1-173
+packages/im/plugin-runtime/src/plugin.ts
+  h_6f5e45c41d0910 140-174
+packages/im/plugin-runtime/src/snapshot.ts
+  h_6f5e45c41d0910 16,32-33
+packages/im/plugin-runtime/tests/store.test.ts
+  h_6f5e45c41d0910 10,228-249
+packages/im/runtime/src/convention-feature-scanner.ts
+  h_6f5e45c41d0910 1-173
+packages/im/runtime/src/index.ts
+  h_6f5e45c41d0910 2
+packages/im/runtime/src/plugin-scope-assembler.ts
+  h_6f5e45c41d0910 11,33,56,190,235,264-270,282
+packages/im/runtime/tests/convention-feature-scanner.test.ts
+  h_6f5e45c41d0910 1-54
+packages/toolkit/scaffold-wizard/src/ai.ts
+  h_6f5e45c41d0910 16-21,214-242,254-272
+tests/snapshots/plugin-runtime-api.json
+  h_6f5e45c41d0910 379
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "35b1f0bdc1ad7875bf2b07a90354c5ac46583f66",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
