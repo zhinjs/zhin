@@ -45,6 +45,8 @@ export interface AgentSessionHost {
   readonly compactionRuntime: AgentCompactionRuntime;
   /** Conclusions and commitments already sent to the user, per session (#730). Optional for custom hosts. */
   readonly toldLedger?: SessionToldLedger;
+  /** Durable step-level checkpoint store for interrupted multi-step tool turns. Optional for custom hosts. */
+  readonly turnCheckpoints?: import('../turn/turn-checkpoint-store.js').TurnCheckpointStore;
   /** Active semantic memory for per-turn recall (#734). Optional for custom hosts. */
   semanticMemory?: SemanticMemoryRuntime | null;
   readonly ownerApprovals: OwnerApprovalRuntime;

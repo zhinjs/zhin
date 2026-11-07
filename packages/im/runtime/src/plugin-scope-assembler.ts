@@ -8,6 +8,7 @@ import {
   createToken,
   createPluginEventChannel,
   freezePluginConfigUpdate,
+  mergePluginCapabilityGraph,
   projectLocaleToken,
   resolveLocale,
   PluginDatabaseHost,
@@ -29,6 +30,7 @@ import {
   type GenerationAdmissionGate,
   type RuntimeSnapshot,
   type RuntimeConfigDocument,
+  type PluginCapabilityGraphDeclaration,
   type PluginDefinition,
   type PluginConfigUpdateDeclaration,
   type PluginId,
@@ -51,6 +53,7 @@ import type { ZhinPluginManifest } from './manifest.js';
 import type { ModuleRuntime } from './module-runtime.js';
 import type { PluginGraphNode } from './project-graph.js';
 import type { IsolatedPluginRuntimePort } from './isolation.js';
+import { scanConventionCapabilityFeatures } from './convention-feature-scanner.js';
 import {
   createPrimaryConfig,
   projectPrimaryConfigResources,
@@ -184,6 +187,7 @@ export class PluginScopeAssembler {
     });
     let metadata: PluginDefinition['metadata'];
     let configUpdate: PluginConfigUpdateDeclaration | undefined;
+    let declaredCapabilityGraph: PluginCapabilityGraphDeclaration | undefined;
     // Schema composition is Host-owned even when Plugin execution is isolated.
     // Commit the validated JSON declaration with both kinds of Plugin snapshot.
     const configSchema = this.configResolver.schema?.(node);
@@ -228,6 +232,7 @@ export class PluginScopeAssembler {
       }
       metadata = mergePluginMetadata(manifest, definition.metadata, node.id);
       if (definition.configUpdate !== undefined) configUpdate = freezePluginConfigUpdate(definition.configUpdate);
+      if (definition.capabilityGraph !== undefined) declaredCapabilityGraph = definition.capabilityGraph;
       for (const token of definition.requires ?? []) {
         if (!scope.has(token)) {
           throw new Error(`Missing resource ${token.id} for Plugin ${node.id}`);
@@ -256,6 +261,13 @@ export class PluginScopeAssembler {
     }
     scope.seal();
 
+    const discoveredFeatures = await scanConventionCapabilityFeatures(node.package.root);
+    const mergedCapabilityGraph = mergePluginCapabilityGraph(declaredCapabilityGraph, discoveredFeatures);
+    const hasCapabilityGraph =
+      declaredCapabilityGraph !== undefined ||
+      (mergedCapabilityGraph.features !== undefined &&
+        Object.keys(mergedCapabilityGraph.features).length > 0);
+
     this.tree.set(node.id, Object.freeze({
       id: node.id,
       instanceKey: node.instanceKey,
@@ -267,6 +279,7 @@ export class PluginScopeAssembler {
       metadata,
       ...(configSchema ? { configSchema } : {}),
       ...(configUpdate ? { configUpdate } : {}),
+      ...(hasCapabilityGraph ? { capabilityGraph: mergedCapabilityGraph } : {}),
     }));
     this.config.set(node.id, config);
     this.resources.set(node.id, scope.snapshot());

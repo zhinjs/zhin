@@ -973,3 +973,19 @@ export { renderAgentOutput, splitOutputMessages } from './outbound/agent-output.
 export { REACTION_SEGMENT_TYPE } from './outbound/structured-reply.js';
 export { chatFailureLine, chatFailureKindOf } from './outbound/chat-failure.js';
 export type { ChatFailureKind, ChatFailureOptions } from './outbound/chat-failure.js';
+
+export {
+  AGENT_TURN_CHECKPOINT_MODEL,
+  AGENT_TURN_CHECKPOINT_TABLE,
+  DEFAULT_TURN_CHECKPOINT_TTL_MS,
+  DatabaseTurnCheckpointStorage,
+  TurnCheckpointStore,
+  extractCompletedToolRoundMessages,
+  isCheckpointResumePrompt,
+} from './turn/turn-checkpoint-store.js';
+export type {
+  TurnCheckpointRecord,
+  TurnCheckpointStorage,
+  TurnCheckpointStoreOptions,
+} from './turn/turn-checkpoint-store.js';
+

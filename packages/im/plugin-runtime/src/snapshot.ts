@@ -13,7 +13,7 @@ import type {
   PluginId,
   TokenId,
 } from './identity.js';
-import type { PluginMetadata } from './plugin.js';
+import type { PluginCapabilityGraphDeclaration, PluginMetadata } from './plugin.js';
 import { freezePluginConfigUpdate, type PluginConfigUpdateDeclaration } from './config-update-declaration.js';
 
 export interface PluginNodeSnapshot {
@@ -29,6 +29,8 @@ export interface PluginNodeSnapshot {
   /** Immutable schema declaration belonging to this committed generation. */
   readonly configSchema?: Readonly<Record<string, unknown>>;
   readonly configUpdate?: PluginConfigUpdateDeclaration;
+  /** Merged capability graph (explicit provides/injects + auto-discovered convention features). */
+  readonly capabilityGraph?: Readonly<PluginCapabilityGraphDeclaration>;
 }
 
 export interface RuntimeSnapshot {

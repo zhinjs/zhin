@@ -12,7 +12,7 @@ import {
   type ProviderGraph,
   type ProviderService,
 } from '@zhin.js/ai/provider';
-import { builtinAiProviders } from '@zhin.js/ai/providers';
+import { applyModelCapabilityDefaults, builtinAiProviders } from '@zhin.js/ai/providers';
 import type { HostInference } from '@zhin.js/agent/runtime';
 import { turnModelPortToken } from '@zhin.js/agent/model-runtime';
 import { createOwnerApprovalMigrationProvider } from '@zhin.js/agent/runtime';
@@ -524,6 +524,12 @@ async function seedInitialAiPlanIfEmpty(
           throw new ProviderError('driver-contract-mismatch');
         }
         const options = entry.definition.serviceSchema.parse(input.options);
+        const enrichedModels = Object.fromEntries(
+          Object.entries(input.models).map(([id, model]) => [
+            id,
+            applyModelCapabilityDefaults(model),
+          ]),
+        );
         const service: ProviderService<unknown> = {
           id: input.existing?.id ?? `preview:${randomUUID()}`,
           rootId: inference.rootId,
@@ -535,7 +541,7 @@ async function seedInitialAiPlanIfEmpty(
             contractVersion: entry.definition.contractVersion,
           },
           options,
-          models: input.models,
+          models: enrichedModels,
         };
         return {
           driver: service.driver,

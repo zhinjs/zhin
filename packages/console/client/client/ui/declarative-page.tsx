@@ -24,19 +24,148 @@ import { pluginUiStyles } from './styles.js';
 
 export type DeclarativeI18nText = string | { readonly zh: string; readonly en?: string; readonly 'zh-CN'?: string };
 
+export type DeclarativeValueExpr =
+  | { readonly $path: string; readonly fallback?: string | number | boolean }
+  | { readonly $count: string }
+  | { readonly $sum: { readonly path: string; readonly field: string } }
+  | { readonly $format: DeclarativeI18nText; readonly args: readonly string[] }
+  | {
+      readonly $map: {
+        readonly path: string;
+        readonly cases: Readonly<Record<string, DeclarativeI18nText>>;
+        readonly default?: DeclarativeI18nText;
+      };
+    }
+  | {
+      readonly $join: {
+        readonly path: string;
+        readonly sep?: string;
+        readonly empty?: DeclarativeI18nText;
+      };
+    }
+  | { readonly $coalesce: readonly string[]; readonly fallback?: string | number | boolean };
+
+function isDeclarativeValueExpr(value: unknown): value is DeclarativeValueExpr {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const rec = value as Record<string, unknown>;
+  return (
+    typeof rec.$path === 'string' ||
+    typeof rec.$count === 'string' ||
+    (rec.$sum !== null && typeof rec.$sum === 'object') ||
+    (rec.$format !== undefined && Array.isArray(rec.$args ?? rec.args)) ||
+    (rec.$map !== null && typeof rec.$map === 'object') ||
+    (rec.$join !== null && typeof rec.$join === 'object') ||
+    Array.isArray(rec.$coalesce)
+  );
+}
+
+function resolveDataPath(data: unknown, path: string): unknown {
+  if (!data || typeof data !== 'object' || !path) return undefined;
+  const record = data as Record<string, unknown>;
+  if (path in record) return record[path];
+  const segments = path.split('.').filter(Boolean);
+  let cursor: unknown = data;
+  for (const seg of segments) {
+    if (cursor === null || cursor === undefined) return undefined;
+    if (Array.isArray(cursor) && seg === 'length') return cursor.length;
+    if (typeof cursor !== 'object') return undefined;
+    cursor = (cursor as Record<string, unknown>)[seg];
+  }
+  return cursor;
+}
+
+function evaluateDeclarativeExpr(
+  exprOrKey: unknown,
+  data: unknown,
+  locale: PluginUiLocale,
+  t: PluginUiText['t'],
+): React.ReactNode {
+  if (exprOrKey === null || exprOrKey === undefined) return '-';
+  if (typeof exprOrKey === 'string') {
+    const val = resolveDataPath(data, exprOrKey);
+    return val === undefined || val === null ? '-' : String(val);
+  }
+  if (!isDeclarativeValueExpr(exprOrKey)) {
+    return String(exprOrKey);
+  }
+  const rec = exprOrKey as Record<string, unknown>;
+  if (typeof rec.$path === 'string') {
+    const val = resolveDataPath(data, rec.$path);
+    const out = val !== undefined && val !== null ? val : rec.fallback;
+    return out === undefined || out === null ? '-' : String(out);
+  }
+  if (typeof rec.$count === 'string') {
+    const target = resolveDataPath(data, rec.$count);
+    if (Array.isArray(target)) return String(target.length);
+    if (target && typeof target === 'object') return String(Object.keys(target).length);
+    return typeof target === 'number' ? String(target) : '0';
+  }
+  if (rec.$sum && typeof rec.$sum === 'object') {
+    const sumSpec = rec.$sum as { readonly path?: string; readonly field?: string };
+    const list = sumSpec.path ? resolveDataPath(data, sumSpec.path) : undefined;
+    if (!Array.isArray(list) || !sumSpec.field) return '0';
+    const total = list.reduce((acc: number, item: unknown) => {
+      const n = Number(resolveDataPath(item, sumSpec.field!));
+      return acc + (Number.isFinite(n) ? n : 0);
+    }, 0);
+    return String(total);
+  }
+  if (rec.$format !== undefined && Array.isArray(rec.args)) {
+    const template = pickText(rec.$format as DeclarativeI18nText, locale, t);
+    const args = (rec.args as readonly string[]).map((p) => resolveDataPath(data, p));
+    return template.replace(/\{(\d+)\}/gu, (_m, idx) => {
+      const v = args[Number(idx)];
+      return v === undefined || v === null ? '' : String(v);
+    });
+  }
+  if (rec.$map && typeof rec.$map === 'object') {
+    const mapSpec = rec.$map as {
+      readonly path?: string;
+      readonly cases?: Readonly<Record<string, DeclarativeI18nText>>;
+      readonly default?: DeclarativeI18nText;
+    };
+    const rawVal = mapSpec.path ? resolveDataPath(data, mapSpec.path) : undefined;
+    const key = String(rawVal ?? '');
+    const matched = mapSpec.cases?.[key];
+    if (matched !== undefined) return pickText(matched, locale, t);
+    if (mapSpec.default !== undefined) return pickText(mapSpec.default, locale, t);
+    return rawVal === undefined || rawVal === null ? '-' : String(rawVal);
+  }
+  if (rec.$join && typeof rec.$join === 'object') {
+    const joinSpec = rec.$join as {
+      readonly path?: string;
+      readonly sep?: string;
+      readonly empty?: DeclarativeI18nText;
+    };
+    const list = joinSpec.path ? resolveDataPath(data, joinSpec.path) : undefined;
+    if (!Array.isArray(list) || list.length === 0) {
+      return joinSpec.empty !== undefined ? pickText(joinSpec.empty, locale, t) : '-';
+    }
+    return list.map((item) => String(item ?? '')).join(joinSpec.sep ?? ', ');
+  }
+  if (Array.isArray(rec.$coalesce)) {
+    for (const candidate of rec.$coalesce as readonly string[]) {
+      const val = resolveDataPath(data, candidate);
+      if (val !== undefined && val !== null && val !== '') return String(val);
+    }
+    return rec.fallback !== undefined ? String(rec.fallback) : '-';
+  }
+  return '-';
+}
+
 export interface DeclarativeBadgeSpec<TData = Record<string, unknown>> {
   readonly key?: string;
-  readonly label: DeclarativeI18nText | ((data: TData, ctx: DeclarativePageContext<TData>) => React.ReactNode);
+  readonly label: DeclarativeI18nText | DeclarativeValueExpr | ((data: TData, ctx: DeclarativePageContext<TData>) => React.ReactNode);
   readonly tone?: BadgeTone | ((data: TData) => BadgeTone);
 }
 
 export interface DeclarativeStatSpec<TData = Record<string, unknown>> {
   readonly key?: string;
   readonly label: DeclarativeI18nText;
-  readonly value: keyof TData & string | ((data: TData, ctx: DeclarativePageContext<TData>) => React.ReactNode);
-  readonly hint?: DeclarativeI18nText | ((data: TData) => React.ReactNode);
+  readonly value: (keyof TData & string) | string | DeclarativeValueExpr | ((data: TData, ctx: DeclarativePageContext<TData>) => React.ReactNode);
+  readonly hint?: DeclarativeI18nText | DeclarativeValueExpr | ((data: TData) => React.ReactNode);
   readonly badge?: {
-    readonly label: DeclarativeI18nText | ((data: TData) => React.ReactNode);
+    readonly label: DeclarativeI18nText | DeclarativeValueExpr | ((data: TData) => React.ReactNode);
     readonly tone?: BadgeTone | ((data: TData) => BadgeTone);
   };
 }
@@ -82,7 +211,9 @@ export interface DeclarativeSectionSpec<TData = Record<string, unknown>, TRow = 
   /** Custom row renderer when `items` is provided. */
   readonly renderItem?: (item: TRow, index: number, ctx: DeclarativePageContext<TData>) => React.ReactNode;
   /** Key-value description list extractor (`<dl className="zk-dl">`). */
-  readonly entries?: (data: TData, ctx: DeclarativePageContext<TData>) => Readonly<Record<string, React.ReactNode>> | readonly { readonly label: React.ReactNode; readonly value: React.ReactNode }[];
+  readonly entries?:
+    | readonly { readonly label: DeclarativeI18nText | React.ReactNode; readonly value: React.ReactNode | DeclarativeValueExpr; readonly dataKey?: string }[]
+    | ((data: TData, ctx: DeclarativePageContext<TData>) => Readonly<Record<string, React.ReactNode>> | readonly { readonly label: React.ReactNode; readonly value: React.ReactNode }[]);
   /** Custom section body renderer. */
   readonly render?: (data: TData, ctx: DeclarativePageContext<TData>) => React.ReactNode;
 }
@@ -268,18 +399,25 @@ function coerceDeclarativeSpec<TData = Record<string, unknown>>(
       for (const item of items) {
         if (!item || typeof item !== 'object') continue;
         const dataKey = typeof item.dataKey === 'string' ? item.dataKey : undefined;
+        const expr = isDeclarativeValueExpr(item.expr) ? item.expr : (isDeclarativeValueExpr(item.value) ? item.value : undefined);
         const staticVal = item.value;
         stats.push({
           key: typeof item.key === 'string' ? item.key : dataKey,
           label: (item.label as DeclarativeI18nText) ?? (typeof item.key === 'string' ? item.key : ''),
-          value: dataKey
-            ? ((data: TData) => String((data as Record<string, unknown>)?.[dataKey] ?? staticVal ?? '-'))
-            : ((data: TData) => {
-                if (typeof item.key === 'string' && data && typeof data === 'object' && item.key in (data as Record<string, unknown>)) {
-                  return String((data as Record<string, unknown>)[item.key] ?? '-');
-                }
-                return String(staticVal ?? '-');
-              }),
+          value: expr
+            ? expr
+            : dataKey
+              ? ((data: TData) => {
+                  const resolved = resolveDataPath(data, dataKey);
+                  return String(resolved ?? staticVal ?? '-');
+                })
+              : ((data: TData) => {
+                  if (typeof item.key === 'string') {
+                    const resolved = resolveDataPath(data, item.key);
+                    if (resolved !== undefined) return String(resolved ?? '-');
+                  }
+                  return String(staticVal ?? '-');
+                }),
         });
       }
     } else if (secType === 'actions') {
@@ -489,7 +627,9 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
                 : (b.tone ?? 'neutral');
               const label = typeof b.label === 'function'
                 ? (data !== undefined ? b.label(data, ctx) : '')
-                : pickText(b.label, locale, t);
+                : isDeclarativeValueExpr(b.label)
+                  ? evaluateDeclarativeExpr(b.label, data, locale, t)
+                  : pickText(b.label, locale, t);
               return <Badge key={b.key ?? idx} tone={tone}>{label}</Badge>;
             })}
             {headerActions.map((action) => {
@@ -558,15 +698,21 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
           {stats.map((stat, idx) => {
             const val = typeof stat.value === 'function'
               ? stat.value(data, ctx)
-              : String((data as Record<string, unknown>)[stat.value] ?? '-');
+              : evaluateDeclarativeExpr(stat.value, data, locale, t);
             const hint = typeof stat.hint === 'function'
               ? stat.hint(data)
-              : (stat.hint ? pickText(stat.hint, locale, t) : undefined);
+              : isDeclarativeValueExpr(stat.hint)
+                ? evaluateDeclarativeExpr(stat.hint, data, locale, t)
+                : (stat.hint ? pickText(stat.hint, locale, t) : undefined);
             const badgeTone = stat.badge
               ? (typeof stat.badge.tone === 'function' ? stat.badge.tone(data) : (stat.badge.tone ?? 'neutral'))
               : undefined;
             const badgeLabel = stat.badge
-              ? (typeof stat.badge.label === 'function' ? stat.badge.label(data) : pickText(stat.badge.label, locale, t))
+              ? (typeof stat.badge.label === 'function'
+                ? stat.badge.label(data)
+                : isDeclarativeValueExpr(stat.badge.label)
+                  ? evaluateDeclarativeExpr(stat.badge.label, data, locale, t)
+                  : pickText(stat.badge.label, locale, t))
               : undefined;
             return (
               <div key={stat.key ?? idx} className="zk-stat-card">
@@ -623,11 +769,27 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
         const rows: readonly Record<string, unknown>[] | undefined = section.items
           ? (typeof section.items === 'function'
             ? section.items(data)
-            : (Array.isArray((data as Record<string, unknown>)[section.items])
-              ? ((data as Record<string, unknown>)[section.items] as readonly Record<string, unknown>[])
-              : []))
+            : (() => {
+                const resolved = resolveDataPath(data, section.items);
+                return Array.isArray(resolved) ? (resolved as readonly Record<string, unknown>[]) : [];
+              })())
           : undefined;
-        const entries = section.entries ? section.entries(data, ctx) : undefined;
+        const entries = section.entries
+          ? (typeof section.entries === 'function'
+            ? section.entries(data, ctx)
+            : section.entries.map((entry) => ({
+                label:
+                  typeof entry.label === 'string' ||
+                  (entry.label && typeof entry.label === 'object' && ('zh' in entry.label || 'en' in entry.label || 'zh-CN' in entry.label))
+                    ? pickText(entry.label as DeclarativeI18nText, locale, t)
+                    : entry.label,
+                value: isDeclarativeValueExpr(entry.value)
+                  ? evaluateDeclarativeExpr(entry.value, data, locale, t)
+                  : entry.dataKey
+                    ? evaluateDeclarativeExpr(entry.dataKey, data, locale, t)
+                    : (entry.value as React.ReactNode),
+              })))
+          : undefined;
         const entryList = entries
           ? (Array.isArray(entries)
             ? entries

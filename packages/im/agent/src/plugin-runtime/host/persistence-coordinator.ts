@@ -15,6 +15,11 @@ import { defineAiDatabaseModels, activateAiDatabaseStorage, AGENT_USAGE_TURN_MOD
   DatabaseAgentUsageStore, agentUsageStoreToken, DatabaseScheduleJobStorage, SCHEDULE_JOB_MODEL, SCHEDULE_JOB_MIGRATION_MODEL,
   DatabaseScheduleHistoryRepository, SCHEDULE_RUN_MODEL, SCHEDULE_ATTEMPT_MODEL,
   AI_DECISION_EVENTS_TABLE, AI_SCENE_MEMBERS_TABLE, DEFAULT_DECISION_AUDIT_RETENTION_DAYS, DEFAULT_GROUP_RULE_RETENTION_DAYS } from '../index.js';
+import {
+  AGENT_TURN_CHECKPOINT_MODEL,
+  AGENT_TURN_CHECKPOINT_TABLE,
+  DatabaseTurnCheckpointStorage,
+} from '../../turn/turn-checkpoint-store.js';
 import type { AgentRuntimeFoundation } from './runtime-foundation.js';
 import type { AgentHostAIConfig } from './config.js';
 
@@ -77,6 +82,7 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
     database.define('agent_schedule_attempts', SCHEDULE_ATTEMPT_MODEL);
     database.define('agent_usage_turns', AGENT_USAGE_TURN_MODEL);
     database.define('agent_usage_calls', AGENT_USAGE_CALL_MODEL);
+    database.define(AGENT_TURN_CHECKPOINT_TABLE, AGENT_TURN_CHECKPOINT_MODEL);
     defineEngagementEventModel(database);
     usage = new DatabaseAgentUsageStore(database, Number(config.usage?.retentionDays ?? 30));
     resources.provide(agentUsageStoreToken, usage);
@@ -121,6 +127,8 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
       );
       await foundation.schedule.store.activateDatabase(new DatabaseScheduleJobStorage(database));
       foundation.schedule.history.activateRepository(new DatabaseScheduleHistoryRepository(database));
+      foundation.agent.turnCheckpoints?.activateDatabase(new DatabaseTurnCheckpointStorage(database));
+      await foundation.agent.turnCheckpoints?.prune();
     }
     if (sql && raw) {
       await ensureScheduleHistoryIndexes(raw);
@@ -173,6 +181,7 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
             pruneTraceArchive(),
             pruneEngagementJournal(),
             pruneGroupRules(),
+            foundation.agent.turnCheckpoints?.prune(),
           ]).then(() => undefined).finally(() => { pendingPrune = undefined; });
         }, 3_600_000);
         timer.unref();

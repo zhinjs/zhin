@@ -79,7 +79,7 @@ const CONSOLE_CONTRACT_STUB = [
   '  }',
   '  const sections = [];',
   '  if (Array.isArray(spec.stats) && spec.stats.length > 0) {',
-  '    sections.push({ type: "stats", id: "runtime-stats", title: "Runtime Stats", items: spec.stats.map((s, i) => ({ key: s.key ?? (typeof s.value === "string" ? s.value : "stat-" + i), label: resolveDeclarativeText(s.label, "en"), ...(typeof s.value === "string" ? { dataKey: s.value } : {}) })) });',
+  '    sections.push({ type: "stats", id: "runtime-stats", title: "Runtime Stats", items: spec.stats.map((s, i) => ({ key: s.key ?? (typeof s.value === "string" ? s.value : "stat-" + i), label: resolveDeclarativeText(s.label, "en"), ...(typeof s.value === "string" ? { dataKey: s.value } : {}), ...(s.value && typeof s.value === "object" ? { expr: s.value } : {}) })) });',
   '  }',
   '  for (const [idx, sec] of (spec.sections ?? []).entries()) {',
   '    const id = sec.id ?? ("section-" + idx);',
@@ -235,20 +235,18 @@ export class TypeScriptClientBuilder implements ClientModuleLoader {
       }
     }
 
-    const blueprint =
+    const extracted =
       String(request.feature) === pageFeature && !absSource.endsWith('.tsx')
         ? tryExtractPureBlueprint(text, absSource)
         : undefined;
+    const blueprint = extracted?.blueprint;
 
-    // Bundle page entry (inlines `@zhin.js/console-contract` stubs) + wrap with
-    // `export function register(api)` so Remote Console loadConsoleEntries can mount it,
-    // preserving full `spec` functions and `reviewSpec` in the browser.
-    // Then rewrite React bare imports to Host `/esm/<enc>.mjs`.
-    const bundled = await bundlePageEntry(absSource, this.#projectRoot, request, metadata);
-    const rewritten = rewriteBareImportsForBrowser(bundled, this.#consoleBasePath, '');
-    const code = blueprint
-      ? `// Pure Server-Driven Blueprint (zero-esbuild synthesized module)\n${rewritten}`
-      : rewritten;
+    // Pure `.ts` Blueprint pages are synthesized directly from in-process `ts.transpileModule`
+    // output (zero `esbuild` child process), while `.tsx` or non-blueprint pages use `bundlePageEntry`.
+    const bundled = extracted
+      ? synthesizePureBlueprintModule(absSource, extracted.modules, request, metadata)
+      : await bundlePageEntry(absSource, this.#projectRoot, request, metadata);
+    const code = rewriteBareImportsForBrowser(bundled, this.#consoleBasePath, '');
     await atomicWrite(output, code);
     return Object.freeze({
       module: `${this.#publicBase}/${fileName}`,
@@ -295,16 +293,27 @@ const PURE_BLUEPRINT_CALL_RE =
 const FORBIDDEN_BROWSER_IMPORT_RE =
   /from\s+['"](?:react|react-dom|@zhin\.js\/client)(?:\/[^'"]*)?['"]/u;
 
+interface TranspiledBlueprintModule {
+  readonly code: string;
+  readonly imports: Readonly<Record<string, string>>;
+}
+
+interface ExtractedPureBlueprint {
+  readonly blueprint: ConsolePageBlueprint | ConsoleAdapterPageBlueprint;
+  readonly modules: ReadonlyMap<string, TranspiledBlueprintModule>;
+}
+
 function tryExtractPureBlueprint(
   sourceText: string,
   absSource: string,
-): ConsolePageBlueprint | ConsoleAdapterPageBlueprint | undefined {
+): ExtractedPureBlueprint | undefined {
   if (!PURE_BLUEPRINT_CALL_RE.test(sourceText) || FORBIDDEN_BROWSER_IMPORT_RE.test(sourceText)) {
     return undefined;
   }
   try {
     const ts = tsCompiler();
     const evaluatedCache = new Map<string, Record<string, unknown>>();
+    const modules = new Map<string, TranspiledBlueprintModule>();
     const evalModule = (filePath: string, rawText?: string): Record<string, unknown> => {
       const resolved = resolve(filePath);
       const cached = evaluatedCache.get(resolved);
@@ -321,6 +330,7 @@ function tryExtractPureBlueprint(
         },
       });
       const exportsObj: Record<string, unknown> = {};
+      const importMap: Record<string, string> = {};
       evaluatedCache.set(resolved, exportsObj);
       const localRequire = (specifier: string): unknown => {
         if (
@@ -329,6 +339,7 @@ function tryExtractPureBlueprint(
           specifier === '@zhin.js/page' ||
           specifier === 'zhin.js/page'
         ) {
+          importMap[specifier] = '@zhin.js/console-contract';
           return PURE_CONSOLE_CONTRACT_EXPORTS;
         }
         if (specifier.startsWith('.')) {
@@ -341,7 +352,9 @@ function tryExtractPureBlueprint(
           ];
           for (const candidate of candidates) {
             if (existsSync(candidate)) {
-              return evalModule(candidate);
+              const target = resolve(candidate);
+              importMap[specifier] = target;
+              return evalModule(target);
             }
           }
         }
@@ -349,6 +362,10 @@ function tryExtractPureBlueprint(
       };
       const fn = new Function('exports', 'require', transpiled.outputText);
       fn(exportsObj, localRequire);
+      modules.set(resolved, {
+        code: transpiled.outputText,
+        imports: Object.freeze({ ...importMap }),
+      });
       return exportsObj;
     };
 
@@ -363,12 +380,80 @@ function tryExtractPureBlueprint(
     }
     const { spec: _spec, reviewSpec: _reviewSpec, ...serializableBp } =
       rawBp as unknown as Record<string, unknown>;
-    return Object.freeze({
-      ...serializableBp,
-    }) as unknown as ConsolePageBlueprint | ConsoleAdapterPageBlueprint;
+    return {
+      blueprint: Object.freeze({
+        ...serializableBp,
+      }) as unknown as ConsolePageBlueprint | ConsoleAdapterPageBlueprint,
+      modules,
+    };
   } catch {
     return undefined;
   }
+}
+
+function synthesizePureBlueprintModule(
+  absSource: string,
+  modules: ReadonlyMap<string, TranspiledBlueprintModule>,
+  request: ClientModuleRequest,
+  metadata: unknown,
+): string {
+  const meta = (metadata && typeof metadata === 'object' ? metadata : {}) as PageMeta;
+  const route = safePageRoute(request.owner, request.localName);
+  const title = meta.title ?? request.localName;
+  const icon = meta.icon;
+  const hideInNav = meta.hideInNav === true;
+  const cjsContractStub = CONSOLE_CONTRACT_STUB.replace(
+    /^export function (\w+)/gmu,
+    'function $1',
+  ) + '\nObject.assign(exports, { definePage, defineLayout, normalizePageMetadata, normalizeClientModuleArtifact, resolveDeclarativeText, buildBlueprintFromSpec, definePageBlueprint, createDeclarativePage, defineAdapterPage, createAdapterConsolePage, defineCommentReviewPage, createCommentReviewPage });';
+
+  const moduleEntries = [...modules.entries()].map(([id, mod]) => {
+    return `${JSON.stringify(id)}: { imports: ${JSON.stringify(mod.imports)}, fn(exports, require) {\n${mod.code}\n} }`;
+  });
+
+  const registerBody = buildRegisterFunctionBody({
+    owner: request.owner,
+    route,
+    title,
+    titleI18n: meta.titleI18n,
+    icon,
+    group: meta.group,
+    order: meta.order,
+    parent: meta.parent,
+    fullWidth: meta.fullWidth,
+    hideInNav,
+    localName: request.localName,
+    requiredPermissions: meta.requiredPermissions,
+    requiredRoles: meta.requiredRoles,
+  });
+
+  return [
+    '// Pure Server-Driven Blueprint (zero-esbuild synthesized module)',
+    'const __zhin_contract__ = (() => {',
+    '  const exports = {};',
+    cjsContractStub,
+    '  return exports;',
+    '})();',
+    `const __zhin_modules__ = {\n${moduleEntries.join(',\n')}\n};`,
+    'const __zhin_cache__ = {};',
+    'function __zhin_require__(id) {',
+    '  if (id === "@zhin.js/console-contract" || id === "@zhin.js/contract" || id === "@zhin.js/page" || id === "zhin.js/page") {',
+    '    return __zhin_contract__;',
+    '  }',
+    '  if (__zhin_cache__[id]) return __zhin_cache__[id];',
+    '  const mod = __zhin_modules__[id];',
+    '  if (!mod) throw new Error("Unknown blueprint module: " + id);',
+    '  const exports = {};',
+    '  __zhin_cache__[id] = exports;',
+    '  mod.fn(exports, (spec) => __zhin_require__(mod.imports[spec] ?? spec));',
+    '  return exports;',
+    '}',
+    `const pageNs = __zhin_require__(${JSON.stringify(resolve(absSource))});`,
+    'const Page = pageNs.default;',
+    'export default Page;',
+    'export const meta = pageNs.meta;',
+    registerBody,
+  ].join('\n');
 }
 
 async function tryLoadPrebuiltBundle(absSource: string): Promise<string | undefined> {

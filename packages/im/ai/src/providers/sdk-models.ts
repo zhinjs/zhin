@@ -1,31 +1,12 @@
 import { createRequire } from 'node:module';
 import type { ImageModel, LanguageModel } from 'ai';
-import type { ModelInputModality, OpenAiCompatFlags } from '../llm/types/model.js';
+import type { OpenAiCompatFlags } from '../llm/types/model.js';
 import { isGroqGateway, transformGroqRequestBody } from '../llm/groq.js';
 
 const requirePeer = createRequire(import.meta.url);
 
 import type { SdkFamily } from './sdk-family.js';
-
-const MULTIMODAL_MODEL_PATTERN =
-  /^(gemini-|gpt-4o|gpt-4\.1|gpt-4\.5|gpt-5|chatgpt-4o|o1(?!-mini)|o3|o4|claude-3|claude-(?:sonnet|opus|haiku)-4|glm-4(?:\.\d+)?v|qwen(?:\d+(?:\.\d+)?)?-vl|qwen-omni|pixtral|grok-(?:2-vision|3|4))/iu;
-
-export function inferDefaultModelInput(
-  modelId: string,
-  protocol?: string,
-  kinds?: readonly string[],
-): readonly ModelInputModality[] {
-  if (kinds && !kinds.includes('language')) return ['text'];
-  const normalized = modelId.trim().replace(/^[^/]+\//u, '');
-  if (
-    protocol === 'google-generate-content' ||
-    MULTIMODAL_MODEL_PATTERN.test(normalized) ||
-    /vision|-vl(?:\b|[-_])/iu.test(normalized)
-  ) {
-    return ['text', 'image'];
-  }
-  return ['text'];
-}
+export { inferDefaultModelInput } from './model-capability-catalog.js';
 
 function peer<T>(name: string): T {
   let resolved: string;

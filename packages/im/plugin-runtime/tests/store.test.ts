@@ -7,6 +7,7 @@ import {
   createToken,
   definePlugin,
   definePluginCapabilityGraph,
+  mergePluginCapabilityGraph,
   definePluginConsoleRpc,
   definePluginStore,
   pluginConsoleRpcToken,
@@ -222,6 +223,28 @@ describe('Scope.get and definePluginStore', () => {
       features: {
         commands: ['hello', 'card'],
         pages: ['index'],
+      },
+    });
+
+    const merged = mergePluginCapabilityGraph(
+      {
+        provides: [providedToken],
+        injects: [injectedToken],
+        features: { commands: ['hello'] },
+      },
+      {
+        commands: ['ping', 'hello'],
+        tools: ['search'],
+        skills: ['assistant'],
+      },
+    );
+    expect(merged).toEqual({
+      provides: [providedToken],
+      injects: [injectedToken],
+      features: {
+        commands: ['hello', 'ping'],
+        skills: ['assistant'],
+        tools: ['search'],
       },
     });
   });
