@@ -20,7 +20,7 @@ import {
   assertChatConfigurationAccess, assertChatConfigurationScope, assertChatValueHasNoEnvironmentReference, assertChatOptionalLeaf, chatConfigurationLeaves, chatHostRoots, chatLeafTypes,
   ConfigChatAccessError, type ChatConfigurationScope,
 } from './configuration-chat-policy.js';
-import { isForbiddenConfigurationPathSegment } from './configuration-path-segment.js';
+import { isForbiddenConfigurationPathSegment } from './configuration-path.js';
 import {
   assertPatchesInScope,
   normalizeConfigPatchOperations,

@@ -54,10 +54,19 @@ export default createDeclarativePage<LedgerConsoleSnapshot>({
     {
       id: 'config',
       title: { zh: '配置详情', en: 'Configuration' },
-      entries: (data) => [
-        { label: 'Timezone', value: data.timezone },
-        { label: 'Report Time', value: data.reportTime },
-        { label: 'Report When Empty', value: data.reportWhenEmpty ? 'Yes' : 'No' },
+      entries: [
+        { label: 'Timezone', dataKey: 'timezone' },
+        { label: 'Report Time', dataKey: 'reportTime' },
+        {
+          label: 'Report When Empty',
+          value: {
+            $map: {
+              path: 'reportWhenEmpty',
+              cases: { true: 'Yes', false: 'No' },
+              default: 'No',
+            },
+          },
+        },
       ],
     },
   ],

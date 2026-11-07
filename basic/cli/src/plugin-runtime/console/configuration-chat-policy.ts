@@ -1,5 +1,5 @@
 import { expandEnvironmentValue } from '@zhin.js/runtime';
-import { isUnknownConfigurationSchemaBoundary, sensitiveConfigKey as sensitiveKey } from './configuration-schema-safety.js';
+import { isUnknownConfigurationSchemaBoundary, sensitiveConfigKey as sensitiveKey } from './configuration-redaction.js';
 type Schema = Readonly<Record<string, unknown>>;
 type Variants = readonly (readonly Schema[])[];
 /**

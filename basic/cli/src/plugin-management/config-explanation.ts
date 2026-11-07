@@ -1,7 +1,7 @@
 import { isDeepStrictEqual } from 'node:util';
 import { parsePluginConfigSchema } from '@zhin.js/runtime';
 import type { ConsoleConfigExplanation, ConsoleConfigFieldEvidence } from '@zhin.js/console-protocol';
-import { readStringLiteralOptions } from '../plugin-runtime/console/string-literal-options.js';
+import { readStringLiteralOptions } from '../plugin-runtime/console/console-schema.js';
 
 type Projection = Pick<ConsoleConfigExplanation, 'projection' | 'reason' | 'fields'>;
 type Schema = Readonly<Record<string, unknown>>;

@@ -344,4 +344,74 @@ describe('locale and plugin id helpers', () => {
     expect(serialized).toContain('Trigger');
     env.unmount();
   });
+
+  it('renders smart value badges, URL links, code pills, array chips, and declarative badge tones', async () => {
+    vi.useFakeTimers();
+    stubHost(async () => ({
+      data: {
+        healthy: true,
+        pid: 4242,
+        rssMb: 128,
+        feedUrl: 'https://example.com/rss.xml',
+        tags: ['alpha', 'beta'],
+      },
+    }));
+    const env = createHookEnv();
+    const { createDeclarativePage } = env.load(file('./declarative-page.tsx'));
+    const Page = createDeclarativePage({
+      pluginId: 'root/process-monitor',
+      title: { zh: '进程监控', en: 'Process Monitor' },
+      badges: [
+        {
+          key: 'healthy',
+          label: {
+            $map: {
+              path: 'healthy',
+              cases: { true: 'Healthy', false: 'Degraded' },
+              default: 'Degraded',
+            },
+          },
+          tone: {
+            $map: {
+              path: 'healthy',
+              cases: { true: 'success', false: 'warning' },
+              default: 'warning',
+            },
+          },
+        },
+      ],
+      sections: [
+        {
+          id: 'details',
+          title: 'Details',
+          entries: [
+            { label: 'PID', dataKey: 'pid' },
+            { label: 'RSS (MB)', value: { $format: '{0} MB', args: ['rssMb'] } },
+            { label: 'Feed URL', dataKey: 'feedUrl' },
+            { label: 'Tags', dataKey: 'tags' },
+            {
+              label: 'Healthy',
+              value: {
+                $map: {
+                  path: 'healthy',
+                  cases: { true: 'Yes', false: 'No' },
+                  default: 'No',
+                },
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    env.mount(() => Page({ pluginId: 'root/process-monitor' }));
+    await env.settle();
+    const serialized = JSON.stringify(env.tree());
+    expect(serialized).toContain('"tone":"success"');
+    expect(serialized).toContain('128 MB');
+    expect(serialized).toContain('zk-ext-link');
+    expect(serialized).toContain('zk-code-pill');
+    expect(serialized).toContain('zk-chip');
+    env.unmount();
+  });
 });

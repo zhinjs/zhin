@@ -81,11 +81,11 @@ export default createDeclarativePage<RssConsoleStatus>({
     {
       id: 'config',
       title: { zh: '配置详情', en: 'Configuration Details' },
-      entries: (data) => ({
-        pollCron: data.pollCron,
-        maxItemsPerPoll: String(data.maxItemsPerPoll),
-        fetchTimeoutMs: `${data.fetchTimeoutMs} ms`,
-      }),
+      entries: [
+        { label: 'pollCron', dataKey: 'pollCron' },
+        { label: 'maxItemsPerPoll', dataKey: 'maxItemsPerPoll' },
+        { label: 'fetchTimeoutMs', value: { $format: '{0} ms', args: ['fetchTimeoutMs'] } },
+      ],
     },
   ],
 });

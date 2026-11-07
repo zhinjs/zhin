@@ -18,8 +18,26 @@ export default createDeclarativePage<ProcessMonitorStatusSnapshot>({
   badges: [
     {
       key: 'healthy',
-      label: (data) => (data.healthy ? 'Healthy' : 'Degraded'),
-      tone: (data) => (data.healthy ? 'success' : 'warning'),
+      label: {
+        $map: {
+          path: 'healthy',
+          cases: {
+            true: { zh: '健康', en: 'Healthy' },
+            false: { zh: '降级', en: 'Degraded' },
+          },
+          default: { zh: '降级', en: 'Degraded' },
+        },
+      },
+      tone: {
+        $map: {
+          path: 'healthy',
+          cases: {
+            true: 'success',
+            false: 'warning',
+          },
+          default: 'warning',
+        },
+      },
     },
   ],
   stats: [
@@ -48,20 +66,29 @@ export default createDeclarativePage<ProcessMonitorStatusSnapshot>({
     {
       id: 'details',
       title: { zh: '进程详情', en: 'Process Details' },
-      entries: (data) => ({
-        PID: String(data.pid),
-        'RSS (MB)': `${data.rssMb} MB`,
-        'Heap Used (MB)': `${data.heapUsedMb} MB`,
-        'Heap Total (MB)': `${data.heapTotalMb} MB`,
-        Uptime: data.uptime,
-        'Total Uptime': data.totalUptime ?? '-',
-        'Restart Count': String(data.restartCount),
-        'Crash Count': String(data.crashCount ?? 0),
-        Hostname: data.hostname ?? '-',
-        Platform: data.platform ?? '-',
-        'Node Version': data.nodeVersion ?? '-',
-        Healthy: data.healthy ? 'Yes' : 'No',
-      }),
+      entries: [
+        { label: 'PID', dataKey: 'pid' },
+        { label: 'RSS (MB)', value: { $format: '{0} MB', args: ['rssMb'] } },
+        { label: 'Heap Used (MB)', value: { $format: '{0} MB', args: ['heapUsedMb'] } },
+        { label: 'Heap Total (MB)', value: { $format: '{0} MB', args: ['heapTotalMb'] } },
+        { label: 'Uptime', dataKey: 'uptime' },
+        { label: 'Total Uptime', value: { $path: 'totalUptime', fallback: '-' } },
+        { label: 'Restart Count', dataKey: 'restartCount' },
+        { label: 'Crash Count', value: { $path: 'crashCount', fallback: 0 } },
+        { label: 'Hostname', value: { $path: 'hostname', fallback: '-' } },
+        { label: 'Platform', value: { $path: 'platform', fallback: '-' } },
+        { label: 'Node Version', value: { $path: 'nodeVersion', fallback: '-' } },
+        {
+          label: 'Healthy',
+          value: {
+            $map: {
+              path: 'healthy',
+              cases: { true: 'Yes', false: 'No' },
+              default: 'No',
+            },
+          },
+        },
+      ],
     },
   ],
 });

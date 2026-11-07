@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHostToolApprovalConsoleRpc } from '../../../src/plugin-runtime/console/tool-approvals.js';
 import { dispatchPluginConsoleRpcRequest } from '../../../src/plugin-runtime/console/plugin-console-rpc.js';
-import { agentToolApprovalQueueToken } from '../../../src/plugin-runtime/console/tool-approval-resource.js';
+import { agentToolApprovalQueueToken } from '../../../src/plugin-runtime/console/tool-approvals.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDatabaseHost } from '@zhin.js/core/runtime';
 import { HostInference } from '@zhin.js/agent/runtime';

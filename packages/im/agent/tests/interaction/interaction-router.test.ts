@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { InteractionRouter } from '../../src/interaction/interaction-router.js';
+import { InteractionRouter } from '../../src/turn/interaction-router.js';
 
 describe('InteractionRouter', () => {
   it('matches canonical session and subject, validates through the current reply, then settles once', async () => {

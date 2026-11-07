@@ -81,7 +81,7 @@ import {
 import { AgentRuntimeFoundation } from '@zhin.js/agent/runtime';
 import { resolveToolHardGateImApproval } from '@zhin.js/agent/security';
 import { ImToolApprovalChannel } from '@zhin.js/agent/runtime';
-import { agentToolApprovalQueueToken } from '../console/tool-approval-resource.js';
+import { agentToolApprovalQueueToken } from '../console/tool-approvals.js';
 
 const logger = getLogger('agent');
 const BOOTSTRAP_FILES = ['SOUL.md', 'AGENTS.md', 'TOOLS.md'] as const;

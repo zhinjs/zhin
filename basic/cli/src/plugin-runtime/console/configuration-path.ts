@@ -1,7 +1,12 @@
 import { CONFIG_PATCH_LIMITS } from '@zhin.js/console-protocol';
-import { isForbiddenConfigurationPathSegment } from './configuration-path-segment.js';
 
+const forbidden = Object.freeze(['__proto__', 'constructor', 'prototype']);
 const simpleSegment = /^[A-Za-z0-9_-]+$/u;
+
+/** One immutable policy for parsed, structured-write and chat-read paths. */
+export function isForbiddenConfigurationPathSegment(segment: string): boolean {
+  return forbidden.includes(segment);
+}
 
 /** JSON Pointer preserves literal dots and slashes; dotted paths cover simple fields. */
 export function parseConfigurationPath(input: string): readonly string[] {

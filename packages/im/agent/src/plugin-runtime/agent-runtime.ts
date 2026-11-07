@@ -1,7 +1,7 @@
 import { agentOperationResourcesToken, createAgentOperationFactory } from './operation-resources.js';
 import type { TurnEvent } from '../event/turn-event.js';
 import { hostProtectedPathsToken, type HostProtectedPaths } from '../security/host-config-paths.js';
-import { AgentUsageCollector, agentUsageStoreToken, type AgentUsageStore } from '../usage/usage-store.js';
+import { AgentUsageCollector, agentUsageStoreToken, type AgentUsageStore } from '../security/usage-store.js';
 import { getLogger } from '@zhin.js/logger';
 import { logTurnUsage, type UsageLogContext } from '../trace/turn-usage-log.js';
 import { readLeasedRootResource, createToken, type PluginId, type SnapshotLease, type SnapshotReader } from '@zhin.js/plugin-runtime';

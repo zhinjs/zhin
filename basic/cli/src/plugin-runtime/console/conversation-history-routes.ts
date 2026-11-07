@@ -4,8 +4,7 @@ import type { HttpHost } from '@zhin.js/host-http';
 import { encodeStorageIdentity, type DatabaseHost, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import { parseConversationSessionKey } from './conversation-session.js';
 import { writeJson } from './http-response.js';
-import { SandboxWorkspaceBindingError, withSandboxWorkspaceScope } from './sandbox-workspace-scope.js';
-import { parseBoundSandboxSession } from './bound-sandbox-session.js';
+import { parseBoundSandboxSession, SandboxWorkspaceBindingError, withSandboxWorkspaceScope } from './sandbox-workspace-scope.js';
 
 const PAGE_SIZE = 50;
 

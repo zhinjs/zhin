@@ -29,8 +29,26 @@ export default createDeclarativePage<CalendarConsoleStatus>({
   badges: [
     {
       key: 'ready',
-      label: (data, ctx) => (data.ready ? ctx.t('已就绪') : ctx.t('未就绪')),
-      tone: (data) => (data.ready ? 'success' : 'warning'),
+      label: {
+        $map: {
+          path: 'ready',
+          cases: {
+            true: { zh: '已就绪', en: 'Ready' },
+            false: { zh: '未就绪', en: 'Not ready' },
+          },
+          default: { zh: '未就绪', en: 'Not ready' },
+        },
+      },
+      tone: {
+        $map: {
+          path: 'ready',
+          cases: {
+            true: 'success',
+            false: 'warning',
+          },
+          default: 'warning',
+        },
+      },
     },
   ],
   stats: [
@@ -54,13 +72,22 @@ export default createDeclarativePage<CalendarConsoleStatus>({
     {
       id: 'overview',
       title: { zh: '配置概览', en: 'Configuration Overview' },
-      entries: (data) => ({
-        provider: data.provider,
-        timezone: data.timezone,
-        ready: data.ready ? 'true' : 'false',
-        oauthCallbackPath: data.oauthCallbackPath,
-        workingHours: data.workingHours,
-      }),
+      entries: [
+        { label: 'provider', dataKey: 'provider' },
+        { label: 'timezone', dataKey: 'timezone' },
+        {
+          label: 'ready',
+          value: {
+            $map: {
+              path: 'ready',
+              cases: { true: 'true', false: 'false' },
+              default: 'false',
+            },
+          },
+        },
+        { label: 'oauthCallbackPath', dataKey: 'oauthCallbackPath' },
+        { label: 'workingHours', dataKey: 'workingHours' },
+      ],
     },
   ],
 });

@@ -282,7 +282,11 @@ export function evaluateDeclarativeValue(
     const list = sumSpec.path ? resolveDataPath(data, sumSpec.path) : undefined;
     if (!Array.isArray(list) || !sumSpec.field) return 0;
     return list.reduce((acc: number, item: unknown) => {
-      const n = Number(resolveDataPath(item, sumSpec.field!));
+      let raw = resolveDataPath(item, sumSpec.field!);
+      if (raw === undefined && sumSpec.field === 'pendingCount') {
+        raw = resolveDataPath(item, 'drafts.length');
+      }
+      const n = Number(raw);
       return acc + (Number.isFinite(n) ? n : 0);
     }, 0);
   }
@@ -361,7 +365,10 @@ export interface DeclarativeBadgeSpec<TData = Record<string, unknown>> {
     | DeclarativeI18nText
     | DeclarativeValueExpr
     | ((data: TData, ctx: DeclarativePageContext<TData>) => DeclarativeRenderable);
-  readonly tone?: DeclarativeBadgeTone | ((data: TData) => DeclarativeBadgeTone);
+  readonly tone?:
+    | DeclarativeBadgeTone
+    | DeclarativeValueExpr
+    | ((data: TData) => DeclarativeBadgeTone);
 }
 
 export interface DeclarativeStatSpec<TData = Record<string, unknown>> {
@@ -381,7 +388,10 @@ export interface DeclarativeStatSpec<TData = Record<string, unknown>> {
       | DeclarativeI18nText
       | DeclarativeValueExpr
       | ((data: TData) => DeclarativeRenderable);
-    readonly tone?: DeclarativeBadgeTone | ((data: TData) => DeclarativeBadgeTone);
+    readonly tone?:
+      | DeclarativeBadgeTone
+      | DeclarativeValueExpr
+      | ((data: TData) => DeclarativeBadgeTone);
   };
 }
 
@@ -448,7 +458,7 @@ export interface DeclarativeSectionSpec<
   readonly entries?:
     | readonly {
         readonly label: DeclarativeI18nText;
-        readonly value: DeclarativeRenderable | DeclarativeValueExpr;
+        readonly value?: DeclarativeRenderable | DeclarativeValueExpr;
         readonly dataKey?: string;
       }[]
     | ((
@@ -863,16 +873,12 @@ export function defineCommentReviewPage<
       {
         key: 'endpoints',
         label: { zh: '账号数', en: 'Accounts' },
-        value: (data) => (Array.isArray(data?.endpoints) ? data.endpoints.length : 0),
+        value: { $count: 'endpoints' },
       },
       {
         key: 'pendingDrafts',
         label: { zh: '待审草稿', en: 'Pending drafts' },
-        value: (data) =>
-          (data?.endpoints ?? []).reduce(
-            (sum, ep) => sum + (typeof ep?.pendingCount === 'number' ? ep.pendingCount : (ep?.drafts?.length ?? 0)),
-            0,
-          ),
+        value: { $sum: { path: 'endpoints', field: 'pendingCount' } },
       },
     ],
     sections: [

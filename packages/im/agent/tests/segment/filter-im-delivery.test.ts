@@ -1,4 +1,4 @@
-import { filterImDeliveryContent } from '../../src/segment/filter-im-delivery.js';
+import { filterImDeliveryContent } from '../../src/outbound/filter-im-delivery.js';
 
 describe('filterImDeliveryContent', () => {
   it('passes plain string unchanged', () => {

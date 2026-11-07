@@ -105,7 +105,11 @@ function evaluateDeclarativeExpr(
     const list = sumSpec.path ? resolveDataPath(data, sumSpec.path) : undefined;
     if (!Array.isArray(list) || !sumSpec.field) return '0';
     const total = list.reduce((acc: number, item: unknown) => {
-      const n = Number(resolveDataPath(item, sumSpec.field!));
+      let raw = resolveDataPath(item, sumSpec.field!);
+      if (raw === undefined && sumSpec.field === 'pendingCount') {
+        raw = resolveDataPath(item, 'drafts.length');
+      }
+      const n = Number(raw);
       return acc + (Number.isFinite(n) ? n : 0);
     }, 0);
     return String(total);
@@ -161,7 +165,7 @@ function evaluateDeclarativeExpr(
 export interface DeclarativeBadgeSpec<TData = Record<string, unknown>> {
   readonly key?: string;
   readonly label: DeclarativeI18nText | DeclarativeValueExpr | ((data: TData, ctx: DeclarativePageContext<TData>) => React.ReactNode);
-  readonly tone?: BadgeTone | ((data: TData) => BadgeTone);
+  readonly tone?: BadgeTone | DeclarativeValueExpr | ((data: TData) => BadgeTone);
 }
 
 export interface DeclarativeStatSpec<TData = Record<string, unknown>> {
@@ -171,7 +175,7 @@ export interface DeclarativeStatSpec<TData = Record<string, unknown>> {
   readonly hint?: DeclarativeI18nText | DeclarativeValueExpr | ((data: TData) => React.ReactNode);
   readonly badge?: {
     readonly label: DeclarativeI18nText | DeclarativeValueExpr | ((data: TData) => React.ReactNode);
-    readonly tone?: BadgeTone | ((data: TData) => BadgeTone);
+    readonly tone?: BadgeTone | DeclarativeValueExpr | ((data: TData) => BadgeTone);
   };
 }
 
@@ -217,7 +221,7 @@ export interface DeclarativeSectionSpec<TData = Record<string, unknown>, TRow = 
   readonly renderItem?: (item: TRow, index: number, ctx: DeclarativePageContext<TData>) => React.ReactNode;
   /** Key-value description list extractor (`<dl className="zk-dl">`). */
   readonly entries?:
-    | readonly { readonly label: DeclarativeI18nText | React.ReactNode; readonly value: React.ReactNode | DeclarativeValueExpr; readonly dataKey?: string }[]
+    | readonly { readonly label: DeclarativeI18nText | React.ReactNode; readonly value?: React.ReactNode | DeclarativeValueExpr; readonly dataKey?: string }[]
     | ((data: TData, ctx: DeclarativePageContext<TData>) => Readonly<Record<string, React.ReactNode>> | readonly { readonly label: React.ReactNode; readonly value: React.ReactNode }[]);
   /** Custom section body renderer. */
   readonly render?: (data: TData, ctx: DeclarativePageContext<TData>) => React.ReactNode;
@@ -265,16 +269,64 @@ export interface DeclarativePageComponentProps {
 }
 
 const declarativeStyles = `
-.zk-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
-.zk-stat-card { padding: 16px; border: 1px solid var(--zk-line); border-radius: var(--zk-radius-lg); background: var(--zk-surface); display: grid; gap: 6px; min-width: 0; }
+.zk-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; }
+.zk-stat-card {
+  position: relative; overflow: hidden;
+  padding: 16px 18px; border: 1px solid var(--zk-line); border-radius: var(--zk-radius-lg);
+  background: var(--zk-surface); display: grid; gap: 6px; min-width: 0;
+  transition: border-color .16s ease, transform .16s ease;
+}
+.zk-stat-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, var(--zk-primary), transparent); opacity: .75;
+}
+.zk-stat-card:hover { border-color: var(--zk-input-line); transform: translateY(-1px); }
 .zk-stat-card__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .zk-stat-card__label { font-size: var(--zk-text-small); color: var(--zk-muted); font-weight: 500; }
-.zk-stat-card__value { font-size: 22px; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+.zk-stat-card__value { font-size: 24px; font-weight: 700; line-height: 1.25; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; overflow-wrap: anywhere; }
 .zk-table-wrap { overflow-x: auto; border: 1px solid var(--zk-line); border-radius: var(--zk-radius-lg); background: var(--zk-surface); }
 .zk-table { width: 100%; border-collapse: collapse; font-size: var(--zk-text-small); text-align: left; }
-.zk-table th, .zk-table td { padding: 10px 14px; border-bottom: 1px solid var(--zk-line); vertical-align: top; }
-.zk-table th { color: var(--zk-muted); font-weight: 600; background: var(--zk-inset); white-space: nowrap; }
+.zk-table th, .zk-table td { padding: 11px 14px; border-bottom: 1px solid var(--zk-line); vertical-align: middle; }
+.zk-table th { color: var(--zk-muted); font-weight: 600; background: var(--zk-inset); white-space: nowrap; font-size: 12px; letter-spacing: 0.02em; }
+.zk-table tbody tr { transition: background-color .12s ease; }
+.zk-table tbody tr:hover td { background: var(--zk-inset); }
 .zk-table tr:last-child td { border-bottom: none; }
+.zk-table-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.zk-search-input {
+  width: 210px !important; min-height: var(--zk-control-sm) !important;
+  padding: 4px 10px !important; font-size: 12px !important;
+  border-radius: var(--zk-radius-sm) !important;
+}
+.zk-pagination {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 8px 14px; border-top: 1px solid var(--zk-line); background: var(--zk-inset);
+  font-size: 12px; color: var(--zk-muted);
+}
+.zk-chip {
+  display: inline-flex; align-items: center; padding: 1px 8px; margin: 1px 4px 1px 0;
+  border-radius: 999px; background: var(--zk-inset); border: 1px solid var(--zk-line);
+  font-size: 12px; font-weight: 500; color: var(--zk-fg);
+}
+.zk-code-pill {
+  display: inline-flex; align-items: center; gap: 6px; padding: 1px 7px;
+  border-radius: 6px; background: var(--zk-inset); border: 1px solid var(--zk-line);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px; color: var(--zk-fg); max-width: 100%; overflow-wrap: anywhere;
+}
+.zk-copy-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 1px 6px; border-radius: 5px; border: 1px solid var(--zk-line);
+  background: transparent; color: var(--zk-muted); font-size: 11px; cursor: pointer;
+  transition: color .12s, border-color .12s, background-color .12s;
+}
+.zk-copy-btn:hover { color: var(--zk-primary); border-color: var(--zk-primary); background: var(--zk-surface); }
+.zk-ext-link {
+  display: inline-flex; align-items: center; gap: 4px; color: var(--zk-primary);
+  font-weight: 500; text-decoration: none; word-break: break-all;
+}
+.zk-ext-link:hover { text-decoration: underline; }
+.zk-sync-meta { font-size: 12px; color: var(--zk-muted); font-variant-numeric: tabular-nums; }
+.zk-action-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
 `;
 
 function pickText(text: DeclarativeI18nText | undefined, locale: PluginUiLocale, t: PluginUiText['t']): string {
@@ -521,6 +573,152 @@ function coerceDeclarativeSpec<TData = Record<string, unknown>>(
   };
 }
 
+const VALID_BADGE_TONES = new Set<BadgeTone>(['neutral', 'success', 'warning', 'danger', 'info']);
+
+function resolveBadgeTone<TData>(
+  toneSpec: BadgeTone | DeclarativeValueExpr | ((data: TData) => BadgeTone) | undefined,
+  data: TData | undefined,
+  locale: PluginUiLocale,
+  t: PluginUiText['t'],
+): BadgeTone {
+  if (!toneSpec) return 'neutral';
+  if (typeof toneSpec === 'function') {
+    return data !== undefined ? toneSpec(data) : 'neutral';
+  }
+  if (isDeclarativeValueExpr(toneSpec)) {
+    const raw = String(evaluateDeclarativeExpr(toneSpec, data, locale, t)).trim() as BadgeTone;
+    return VALID_BADGE_TONES.has(raw) ? raw : 'neutral';
+  }
+  return VALID_BADGE_TONES.has(toneSpec) ? toneSpec : 'neutral';
+}
+
+const CODE_KEY_PATTERN =
+  /(?:^id$|Id$|_id$|^pid$|^cron$|Cron$|Path$|Key$|^hostname$|^platform$|^nodeVersion$|^intervalMs$)/u;
+
+function classifySemanticStatus(raw: string): BadgeTone | undefined {
+  const lower = raw.trim().toLowerCase();
+  if (
+    lower === 'true' ||
+    lower === 'yes' ||
+    lower === 'enabled' ||
+    lower === 'healthy' ||
+    lower === 'ready' ||
+    lower === 'online' ||
+    lower === 'ok' ||
+    raw === '已就绪' ||
+    raw === '已启用' ||
+    raw === '正常' ||
+    raw === '健康' ||
+    raw === '是'
+  ) {
+    return 'success';
+  }
+  if (
+    lower === 'degraded' ||
+    lower === 'not ready' ||
+    lower === 'pending' ||
+    lower === 'stale' ||
+    raw === '未就绪' ||
+    raw === '降级' ||
+    raw === '待审'
+  ) {
+    return 'warning';
+  }
+  if (
+    lower === 'error' ||
+    lower === 'failed' ||
+    lower === 'crashed' ||
+    raw === '异常' ||
+    raw === '失败'
+  ) {
+    return 'danger';
+  }
+  if (
+    lower === 'false' ||
+    lower === 'no' ||
+    lower === 'disabled' ||
+    lower === 'offline' ||
+    raw === '已禁用' ||
+    raw === '离线' ||
+    raw === '否'
+  ) {
+    return 'neutral';
+  }
+  return undefined;
+}
+
+function renderSmartValue(
+  raw: unknown,
+  fieldKey: string | undefined,
+  copiedKey: string,
+  copiedState: string,
+  onCopy: (key: string, text: string) => void,
+  t: PluginUiText['t'],
+): React.ReactNode {
+  if (raw === null || raw === undefined || raw === '') return '-';
+  if (typeof raw === 'boolean') {
+    return <Badge tone={raw ? 'success' : 'neutral'}>{raw ? 'Yes' : 'No'}</Badge>;
+  }
+  if (Array.isArray(raw)) {
+    if (raw.length === 0) return '-';
+    return (
+      <span>
+        {raw.map((item, idx) => (
+          <span key={idx} className="zk-chip">{String(item ?? '')}</span>
+        ))}
+      </span>
+    );
+  }
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (!trimmed || trimmed === '-') return '-';
+    if (/^https?:\/\/\S+$/iu.test(trimmed)) {
+      return (
+        <span className="zk-row">
+          <a href={trimmed} target="_blank" rel="noopener noreferrer" className="zk-ext-link">
+            {trimmed} <span aria-hidden="true">↗</span>
+          </a>
+          <button
+            type="button"
+            className="zk-copy-btn"
+            onClick={() => onCopy(copiedKey, trimmed)}
+          >
+            {copiedState === copiedKey ? '✓' : t('复制')}
+          </button>
+        </span>
+      );
+    }
+    const statusTone = classifySemanticStatus(trimmed);
+    if (statusTone !== undefined) {
+      return <Badge tone={statusTone}>{trimmed}</Badge>;
+    }
+    if (fieldKey && CODE_KEY_PATTERN.test(fieldKey)) {
+      return (
+        <span className="zk-row">
+          <code className="zk-code-pill">{trimmed}</code>
+          <button
+            type="button"
+            className="zk-copy-btn"
+            onClick={() => onCopy(copiedKey, trimmed)}
+          >
+            {copiedState === copiedKey ? '✓' : t('复制')}
+          </button>
+        </span>
+      );
+    }
+    return trimmed;
+  }
+  if (typeof raw === 'number') {
+    if (fieldKey && CODE_KEY_PATTERN.test(fieldKey)) {
+      return <code className="zk-code-pill">{String(raw)}</code>;
+    }
+    return String(raw);
+  }
+  return raw as React.ReactNode;
+}
+
+const TABLE_PAGE_SIZE = 15;
+
 export function DeclarativePageView<TData = Record<string, unknown>>({
   spec: rawSpec,
   pageProps,
@@ -541,7 +739,9 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
   const rawPluginId = resolveSyncPluginId(pageProps?.pluginId ?? pageProps?.owner ?? spec.pluginId);
   const pluginId = rawPluginId === 'unknown' ? undefined : rawPluginId;
   const statusMethod = spec.statusMethod ?? 'status';
-  const pollMs = spec.pollMs === undefined ? 10_000 : (spec.pollMs > 0 ? spec.pollMs : undefined);
+  const configuredPollMs = spec.pollMs === undefined ? 10_000 : (spec.pollMs > 0 ? spec.pollMs : undefined);
+  const [autoPollEnabled, setAutoPollEnabled] = useState(true);
+  const pollMs = autoPollEnabled ? configuredPollMs : undefined;
 
   const resource = usePluginRpc<TData>(pluginId, statusMethod, undefined, {
     pollMs,
@@ -552,6 +752,21 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
   const [busyAction, setBusyAction] = useState<string>('');
   const [manualRefreshBusy, setManualRefreshBusy] = useState(false);
   const [actionInputs, setActionInputs] = useState<Readonly<Record<string, Readonly<Record<string, string>>>>>({});
+  const [sectionQueries, setSectionQueries] = useState<Readonly<Record<string, string>>>({});
+  const [sectionPages, setSectionPages] = useState<Readonly<Record<string, number>>>({});
+  const [copiedKey, setCopiedKey] = useState<string>('');
+
+  const handleCopy = useCallback((key: string, text: string) => {
+    try {
+      void globalThis.navigator?.clipboard?.writeText?.(text);
+    } catch {
+      // ignore clipboard errors in non-secure or headless test environments
+    }
+    setCopiedKey(key);
+    setTimeout(() => {
+      setCopiedKey((prev) => (prev === key ? '' : prev));
+    }, 1_800);
+  }, []);
 
   useEffect(() => {
     if (!notice || notice.tone === 'danger') return;
@@ -622,6 +837,8 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
   };
 
   const data = resource.data;
+  const resolvedTitle = pickText(spec.title, locale, t) || pageProps?.title || 'Plugin';
+  const defaultMark = spec.mark ?? resolvedTitle.trim().slice(0, 1).toUpperCase();
   const badges = data !== undefined && spec.badges
     ? (typeof spec.badges === 'function' ? spec.badges(data, ctx) : spec.badges)
     : [];
@@ -635,15 +852,13 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
     <PluginPage data-zhin-plugin-id={pluginId}>
       <style>{pluginUiStyles}{declarativeStyles}</style>
       <PageHeader
-        mark={spec.mark}
-        title={pickText(spec.title, locale, t) || pageProps?.title || 'Plugin'}
+        mark={defaultMark}
+        title={resolvedTitle}
         description={spec.description ? pickText(spec.description, locale, t) : undefined}
         actions={
           <div className="zk-row">
             {badges.map((b, idx) => {
-              const tone: BadgeTone = typeof b.tone === 'function'
-                ? (data !== undefined ? b.tone(data) : 'neutral')
-                : (b.tone ?? 'neutral');
+              const tone = resolveBadgeTone(b.tone, data, locale, t);
               const label = typeof b.label === 'function'
                 ? (data !== undefined ? b.label(data, ctx) : '')
                 : isDeclarativeValueExpr(b.label)
@@ -683,6 +898,18 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
                 </Button>
               );
             })}
+            {configuredPollMs !== undefined && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setAutoPollEnabled((prev) => !prev)}
+                title={autoPollEnabled ? t('点击暂停自动轮询') : t('点击恢复自动轮询')}
+              >
+                {autoPollEnabled
+                  ? (locale === 'en' ? 'Auto-sync On' : '自动同步中')
+                  : (locale === 'en' ? 'Auto-sync Off' : '已暂停同步')}
+              </Button>
+            )}
             <Button busy={manualRefreshBusy} onClick={handleManualRefresh}>{t('刷新')}</Button>
           </div>
         }
@@ -724,7 +951,7 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
                 ? evaluateDeclarativeExpr(stat.hint, data, locale, t)
                 : (stat.hint ? pickText(stat.hint, locale, t) : undefined);
             const badgeTone = stat.badge
-              ? (typeof stat.badge.tone === 'function' ? stat.badge.tone(data) : (stat.badge.tone ?? 'neutral'))
+              ? resolveBadgeTone(stat.badge.tone, data, locale, t)
               : undefined;
             const badgeLabel = stat.badge
               ? (typeof stat.badge.label === 'function'
@@ -749,7 +976,7 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
 
       {formActions.length > 0 && (
         <Section title={t('操作')}>
-          <div className="zk-list">
+          <div className="zk-action-grid">
             {formActions.map((action) => {
               const label = pickText(action.label, locale, t);
               const isBusy = busyAction === action.name;
@@ -769,6 +996,12 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
                           ...prev,
                           [action.name]: { ...(prev[action.name] ?? {}), [field.key]: e.target.value },
                         }))}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !isBusy && !isDisabled) {
+                            e.preventDefault();
+                            void runAction(action);
+                          }
+                        }}
                       />
                     </Field>
                   ))}
@@ -785,6 +1018,7 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
       )}
 
       {data !== undefined && (spec.sections ?? []).map((section, idx) => {
+        const secKey = section.id ?? `sec-${idx}`;
         const rows: readonly Record<string, unknown>[] | undefined = section.items
           ? (typeof section.items === 'function'
             ? section.items(data)
@@ -793,10 +1027,24 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
                 return Array.isArray(resolved) ? (resolved as readonly Record<string, unknown>[]) : [];
               })())
           : undefined;
+        const query = (sectionQueries[secKey] ?? '').trim().toLowerCase();
+        const filteredRows = rows && query
+          ? rows.filter((row) =>
+              Object.values(row ?? {}).some((v) => String(v ?? '').toLowerCase().includes(query)),
+            )
+          : rows;
+        const totalFiltered = filteredRows?.length ?? 0;
+        const totalPages = Math.max(1, Math.ceil(totalFiltered / TABLE_PAGE_SIZE));
+        const currentPage = Math.min(sectionPages[secKey] ?? 1, totalPages);
+        const pagedRows = filteredRows
+          ? filteredRows.slice((currentPage - 1) * TABLE_PAGE_SIZE, currentPage * TABLE_PAGE_SIZE)
+          : undefined;
+
         const entries = section.entries
           ? (typeof section.entries === 'function'
             ? section.entries(data, ctx)
             : section.entries.map((entry) => ({
+                key: entry.dataKey,
                 label:
                   typeof entry.label === 'string' ||
                   (entry.label && typeof entry.label === 'object' && ('zh' in entry.label || 'en' in entry.label || 'zh-CN' in entry.label))
@@ -805,39 +1053,88 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
                 value: isDeclarativeValueExpr(entry.value)
                   ? evaluateDeclarativeExpr(entry.value, data, locale, t)
                   : entry.dataKey
-                    ? evaluateDeclarativeExpr(entry.dataKey, data, locale, t)
+                    ? resolveDataPath(data, entry.dataKey)
                     : (entry.value as React.ReactNode),
               })))
           : undefined;
         const entryList = entries
           ? (Array.isArray(entries)
             ? entries
-            : Object.entries(entries).map(([label, value]) => ({ label, value })))
+            : Object.entries(entries).map(([label, value]) => ({ key: label, label, value })))
           : undefined;
 
         return (
           <Section
-            key={section.id ?? idx}
+            key={secKey}
             id={section.id}
             title={section.title ? pickText(section.title, locale, t) : undefined}
             description={section.description ? pickText(section.description, locale, t) : undefined}
+            actions={
+              rows && rows.length > 0 ? (
+                <div className="zk-table-toolbar">
+                  {(rows.length >= 3 || query.length > 0) && (
+                    <input
+                      type="search"
+                      className="zk-search-input"
+                      placeholder={locale === 'en' ? 'Filter rows…' : '搜索过滤…'}
+                      value={sectionQueries[secKey] ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSectionQueries((prev) => ({ ...prev, [secKey]: val }));
+                        setSectionPages((prev) => ({ ...prev, [secKey]: 1 }));
+                      }}
+                    />
+                  )}
+                  <span className="zk-count">
+                    {query
+                      ? `${totalFiltered} / ${rows.length}`
+                      : String(rows.length)}
+                  </span>
+                </div>
+              ) : undefined
+            }
           >
             {section.render && section.render(data, ctx)}
             {entryList && (
               <div className="zk-card">
                 <dl className="zk-dl">
-                  {entryList.map((entry, entryIdx) => (
-                    <React.Fragment key={entryIdx}>
-                      <dt>{entry.label}</dt>
-                      <dd>{entry.value}</dd>
-                    </React.Fragment>
-                  ))}
+                  {entryList.map((entry, entryIdx) => {
+                    const entryFieldKey = (entry as { key?: string }).key ?? (typeof entry.label === 'string' ? entry.label : undefined);
+                    return (
+                      <React.Fragment key={entryIdx}>
+                        <dt>{entry.label}</dt>
+                        <dd>
+                          {renderSmartValue(
+                            entry.value,
+                            entryFieldKey,
+                            `${secKey}-entry-${entryIdx}`,
+                            copiedKey,
+                            handleCopy,
+                            t,
+                          )}
+                        </dd>
+                      </React.Fragment>
+                    );
+                  })}
                 </dl>
               </div>
             )}
             {rows && (
               rows.length === 0 ? (
                 <EmptyState title={section.emptyText ? pickText(section.emptyText, locale, t) : t('暂无数据')} />
+              ) : pagedRows && pagedRows.length === 0 ? (
+                <EmptyState
+                  title={locale === 'en' ? 'No matching rows' : '无匹配记录'}
+                  action={
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSectionQueries((prev) => ({ ...prev, [secKey]: '' }))}
+                    >
+                      {locale === 'en' ? 'Clear filter' : '清除过滤'}
+                    </Button>
+                  }
+                />
               ) : section.columns && section.columns.length > 0 ? (
                 <div className="zk-table-wrap">
                   <table className="zk-table">
@@ -849,13 +1146,22 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
                       </tr>
                     </thead>
                     <tbody>
-                      {rows.map((row, rowIdx) => (
+                      {(pagedRows ?? rows).map((row, rowIdx) => (
                         <tr key={String(row.id ?? row.key ?? rowIdx)}>
                           {(section.columns ?? []).map((col) => {
                             const cellVal = resolveDataPath(row, col.key);
                             return (
                               <td key={col.key}>
-                                {col.render ? col.render(cellVal, row, ctx) : String(cellVal ?? '-')}
+                                {col.render
+                                  ? col.render(cellVal, row, ctx)
+                                  : renderSmartValue(
+                                      cellVal,
+                                      col.key,
+                                      `${secKey}-r${rowIdx}-${col.key}`,
+                                      copiedKey,
+                                      handleCopy,
+                                      t,
+                                    )}
                               </td>
                             );
                           })}
@@ -863,10 +1169,41 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
                       ))}
                     </tbody>
                   </table>
+                  {totalPages > 1 && (
+                    <div className="zk-pagination">
+                      <span>
+                        {locale === 'en'
+                          ? `Page ${currentPage} of ${totalPages} (${totalFiltered} items)`
+                          : `第 ${currentPage} / ${totalPages} 页（共 ${totalFiltered} 条）`}
+                      </span>
+                      <div className="zk-row">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          disabled={currentPage <= 1}
+                          onClick={() =>
+                            setSectionPages((prev) => ({ ...prev, [secKey]: Math.max(1, currentPage - 1) }))
+                          }
+                        >
+                          {locale === 'en' ? 'Previous' : '上一页'}
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          disabled={currentPage >= totalPages}
+                          onClick={() =>
+                            setSectionPages((prev) => ({ ...prev, [secKey]: Math.min(totalPages, currentPage + 1) }))
+                          }
+                        >
+                          {locale === 'en' ? 'Next' : '下一页'}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : section.renderItem ? (
                 <ul className="zk-list">
-                  {rows.map((row, rowIdx) => (
+                  {(pagedRows ?? rows).map((row, rowIdx) => (
                     <li key={String(row.id ?? row.key ?? rowIdx)} className="zk-card">
                       {section.renderItem?.(row, rowIdx, ctx)}
                     </li>
@@ -874,13 +1211,22 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
                 </ul>
               ) : (
                 <ul className="zk-list">
-                  {rows.map((row, rowIdx) => (
+                  {(pagedRows ?? rows).map((row, rowIdx) => (
                     <li key={String(row.id ?? row.key ?? rowIdx)} className="zk-card">
                       <dl className="zk-dl">
                         {Object.entries(row).map(([k, v]) => (
                           <React.Fragment key={k}>
                             <dt>{k}</dt>
-                            <dd>{String(v ?? '-')}</dd>
+                            <dd>
+                              {renderSmartValue(
+                                v,
+                                k,
+                                `${secKey}-card-${rowIdx}-${k}`,
+                                copiedKey,
+                                handleCopy,
+                                t,
+                              )}
+                            </dd>
                           </React.Fragment>
                         ))}
                       </dl>

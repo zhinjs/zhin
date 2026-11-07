@@ -24,12 +24,17 @@ import { registerConsoleEntryRoutes } from './entry-routes.js';
 import { registerConsoleEventRoutes } from './events.js';
 import { normalizeBase } from './http-response.js';
 import { registerConsolePluginRoutes } from './plugin-routes.js';
-import { createPluginManagementPort } from './plugin-management.js';
+import { PluginManagementWorkflow, type PluginManagementOptions } from '../../plugin-management/workflow.js';
 import { registerConsoleRpcRoute } from './rpc-route.js';
 import { registerConsoleSystemRoutes } from './system-routes.js';
 import { registerMessageDiagnosticRoutes } from './message-diagnostic-routes.js';
 import { registerPluginTaskRoutes } from './plugin-task-routes.js';
 import { registerPermissionExplanationRoutes } from './permission-explanation-routes.js';
+
+/** Console uses the same installation authority as CLI; it does not implement a transaction. */
+export function createPluginManagementPort(projectRoot: string, options: PluginManagementOptions = {}) {
+  return new PluginManagementWorkflow(projectRoot, options);
+}
 
 export interface RegisterConsoleRoutesOptions {
   readonly pluginManagementActivity?: import('../../plugin-management/activity.js').PluginManagementActivity;

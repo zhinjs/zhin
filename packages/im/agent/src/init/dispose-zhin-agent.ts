@@ -1,5 +1,5 @@
 import type { HostMailbox } from '../collaboration/host-mailbox.js';
-import type { Disposable } from '../types/disposable.js';
+import type { Disposable } from '../utils/disposable.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 
 /** dispose 的读取目标：权威接口（ZhinAgentPrivate）Pick + 门面内部资源。 */

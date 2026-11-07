@@ -1,4 +1,3 @@
-import { isUnknownConfigurationSchemaBoundary, sensitiveConfigKey } from './configuration-schema-safety.js';
 /**
  * Masks stored configuration values before they leave the store in a response that the
  * caller did not ask to read (e.g. a trusted project patch conflict). Conservative: a
@@ -6,6 +5,25 @@ import { isUnknownConfigurationSchemaBoundary, sensitiveConfigKey } from './conf
  * environment reference (`${…}`, `env://…`) is replaced as a whole and never echoed.
  */
 type Schema = Readonly<Record<string, unknown>>;
+
+const unsupportedApplicators = Object.freeze([
+  'if', 'then', 'else', 'not', 'contains', 'dependencies', 'dependentSchemas',
+  '$dynamicRef', '$recursiveRef', '$dynamicAnchor', 'unevaluatedProperties', 'unevaluatedItems',
+]);
+
+/** Shared proof limit: these branches/resources need a resolver we do not provide. */
+export function isUnknownConfigurationSchemaBoundary(schema: Schema, root: Schema): boolean {
+  return schema !== root && Object.hasOwn(schema, '$id')
+    || unsupportedApplicators.some(keyword => Object.hasOwn(schema, keyword))
+    || schema.$ref !== undefined && (typeof schema.$ref !== 'string' || !schema.$ref.startsWith('#/') || /~(?![01])/u.test(schema.$ref));
+}
+
+/** Credential names, excluding ordinary budgets such as maxTokens and tokenLimit. */
+export function sensitiveConfigKey(key: string): boolean {
+  const normalized = key.replace(/[^a-z0-9]/giu, '').toLowerCase();
+  return /(?:password|passwd|secret|apikey|accesskey|privatekey|encrypt(?:ion)?key|encodingaeskey|credential|authorization|cookie)/u.test(normalized)
+    || normalized === 'pwd' || /(?:^|api|access|refresh|auth|bearer|bot|oauth|session|private|client|app|verify|verification)tokens?(?:v[0-9]+)?$/u.test(normalized);
+}
 
 export const REDACTED_CONFIG_VALUE = '[redacted]';
 const MAX_DEPTH = 32;
@@ -15,9 +33,6 @@ const unresolvedSchema: Schema = Object.freeze({});
 function record(value: unknown): value is Schema {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
-
-/** Credential-like names; shared with the chat field policy (single source). */
-export { sensitiveConfigKey } from './configuration-schema-safety.js';
 
 function sensitiveSchema(schema: Schema): boolean {
   const metadata = schema['x-zhin-config'];
