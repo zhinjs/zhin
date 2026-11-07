@@ -1,0 +1,32 @@
+basic/cli/src/plugin-runtime/inference/migration-source.ts
+  h_6f5e45c41d0910 11-15,19-20
+packages/console/client/client/adapter-console/AdapterConsolePage.tsx
+  h_6f5e45c41d0910 775-778
+packages/console/client/client/ui/declarative-page.tsx
+  h_6f5e45c41d0910 65,72-74,88,96-97,127-129,142-147,149,558,560,672-673,676-679,729-731,828-829,831-834,845,849-855,967,1002,1045,1057-1065,1077-1097,1112,1188-1217,1254-1261,1265-1288,1296
+packages/console/client/client/ui/locale.ts
+  h_6f5e45c41d0910 20-28
+packages/console/pagemanager/src/client-build/typescript-builder.ts
+  h_6f5e45c41d0910 78,84,92,94,96-97,127-128,130,443,445,789,829,842-845,847-849,860-863
+packages/console/pagemanager/src/shell/page-renderer-helpers.ts
+  h_6f5e45c41d0910 623,666-668
+packages/console/plugin-contract/src/page.ts
+  h_6f5e45c41d0910 245,252-254,274,303-305,318-323,734-736,743,763-770,773,775-776
+plugins/features/process-monitor/pages/index/index.ts
+  h_6f5e45c41d0910 78-80
+plugins/utils/calendar/pages/index/index.ts
+  h_6f5e45c41d0910 4,78
+plugins/utils/content-moderation/pages/index/index.ts
+  h_6f5e45c41d0910 29-30,32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "df6f68ff40b9a084701a6bbcc7bc0c057581eaaf",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
