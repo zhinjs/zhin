@@ -62,14 +62,16 @@ function isDeclarativeValueExpr(value: unknown): value is DeclarativeValueExpr {
 function resolveDataPath(data: unknown, path: string): unknown {
   if (!data || typeof data !== 'object' || !path) return undefined;
   const record = data as Record<string, unknown>;
-  if (path in record) return record[path];
+  if (Object.prototype.hasOwnProperty.call(record, path)) return record[path];
   const segments = path.split('.').filter(Boolean);
   let cursor: unknown = data;
   for (const seg of segments) {
     if (cursor === null || cursor === undefined) return undefined;
     if (Array.isArray(cursor) && seg === 'length') return cursor.length;
     if (typeof cursor !== 'object') return undefined;
-    cursor = (cursor as Record<string, unknown>)[seg];
+    cursor = Object.prototype.hasOwnProperty.call(cursor, seg)
+      ? (cursor as Record<string, unknown>)[seg]
+      : undefined;
   }
   return cursor;
 }
@@ -83,7 +85,7 @@ function evaluateDeclarativeExpr(
   if (exprOrKey === null || exprOrKey === undefined) return '-';
   if (typeof exprOrKey === 'string') {
     const val = resolveDataPath(data, exprOrKey);
-    return val === undefined || val === null ? '-' : String(val);
+    return val === undefined || val === null || val === '' ? '-' : String(val);
   }
   if (!isDeclarativeValueExpr(exprOrKey)) {
     return String(exprOrKey);
@@ -91,8 +93,8 @@ function evaluateDeclarativeExpr(
   const rec = exprOrKey as Record<string, unknown>;
   if (typeof rec.$path === 'string') {
     const val = resolveDataPath(data, rec.$path);
-    const out = val !== undefined && val !== null ? val : rec.fallback;
-    return out === undefined || out === null ? '-' : String(out);
+    const out = val !== undefined && val !== null && val !== '' ? val : rec.fallback;
+    return out === undefined || out === null || out === '' ? '-' : String(out);
   }
   if (typeof rec.$count === 'string') {
     const target = resolveDataPath(data, rec.$count);
@@ -122,6 +124,9 @@ function evaluateDeclarativeExpr(
   if (rec.$format !== undefined && formatArgs) {
     const template = pickText(rec.$format as DeclarativeI18nText, locale, t);
     const args = (formatArgs as readonly string[]).map((p) => resolveDataPath(data, p));
+    if (args.length > 0 && args.every((v) => v === undefined || v === null || v === '')) {
+      return '-';
+    }
     return template.replace(/\{(\d+)\}/gu, (_m, idx) => {
       const v = args[Number(idx)];
       return v === undefined || v === null ? '' : String(v);
@@ -134,11 +139,14 @@ function evaluateDeclarativeExpr(
       readonly default?: DeclarativeI18nText;
     };
     const rawVal = mapSpec.path ? resolveDataPath(data, mapSpec.path) : undefined;
-    const key = String(rawVal ?? '');
-    const matched = mapSpec.cases?.[key];
-    if (matched !== undefined) return pickText(matched, locale, t);
+    if (rawVal !== undefined && rawVal !== null && mapSpec.cases) {
+      const key = String(rawVal);
+      if (Object.prototype.hasOwnProperty.call(mapSpec.cases, key)) {
+        return pickText(mapSpec.cases[key]!, locale, t);
+      }
+    }
     if (mapSpec.default !== undefined) return pickText(mapSpec.default, locale, t);
-    return rawVal === undefined || rawVal === null ? '-' : String(rawVal);
+    return rawVal === undefined || rawVal === null || rawVal === '' ? '-' : String(rawVal);
   }
   if (rec.$join && typeof rec.$join === 'object') {
     const joinSpec = rec.$join as {
@@ -547,8 +555,9 @@ function coerceDeclarativeSpec<TData = Record<string, unknown>>(
                 ? resolveDataPath(data, dk)
                 : e.value;
             return {
+              key: dk,
               label: String(e.label ?? e.key ?? ''),
-              value: String(val ?? '-'),
+              value: (val ?? '-') as React.ReactNode,
             };
           }),
       });
@@ -660,11 +669,14 @@ function renderSmartValue(
     return <Badge tone={raw ? 'success' : 'neutral'}>{raw ? 'Yes' : 'No'}</Badge>;
   }
   if (Array.isArray(raw)) {
-    if (raw.length === 0) return '-';
+    const nonEmpty = raw.filter((item) => item !== null && item !== undefined && item !== '');
+    if (nonEmpty.length === 0) return '-';
     return (
       <span>
-        {raw.map((item, idx) => (
-          <span key={idx} className="zk-chip">{String(item ?? '')}</span>
+        {nonEmpty.map((item, idx) => (
+          <span key={idx} className="zk-chip">
+            {typeof item === 'object' ? JSON.stringify(item) : String(item)}
+          </span>
         ))}
       </span>
     );
@@ -713,6 +725,9 @@ function renderSmartValue(
       return <code className="zk-code-pill">{String(raw)}</code>;
     }
     return String(raw);
+  }
+  if (typeof raw === 'object' && !React.isValidElement(raw)) {
+    return <code className="zk-code-pill">{JSON.stringify(raw)}</code>;
   }
   return raw as React.ReactNode;
 }
@@ -810,9 +825,13 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
 
   const runAction = async (action: DeclarativeActionSpec<TData>) => {
     if (!pluginId) return;
-    const values = actionInputs[action.name] ?? {};
+    const rawValues = actionInputs[action.name] ?? {};
+    const values: Record<string, string> = { ...rawValues };
     for (const field of action.fields ?? []) {
-      const val = (values[field.key] ?? field.defaultValue ?? '').trim();
+      if (values[field.key] === undefined && field.defaultValue !== undefined) {
+        values[field.key] = field.defaultValue;
+      }
+      const val = (values[field.key] ?? '').trim();
       if (field.required && !val) {
         notify('danger', `${pickText(field.label, locale, t)} ${t('不能为空')}`);
         return;
@@ -823,11 +842,17 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
       const payload = typeof action.params === 'function'
         ? action.params(resource.data, values)
         : (action.params ?? (action.fields?.length ? values : undefined));
-      const res = await call<{ message?: string } | undefined>(action.name, payload);
+      const res = await call<{ message?: string; passed?: boolean; decision?: string } | undefined>(action.name, payload);
       const msg = (res && typeof res === 'object' && typeof res.message === 'string' && res.message)
         ? res.message
         : (action.successMessage ? pickText(action.successMessage, locale, t) : `${pickText(action.label, locale, t)} ${t('已完成')}`);
-      notify('success', msg);
+      const tone: 'success' | 'warning' | 'danger' =
+        res && typeof res === 'object' && (res.passed === false || res.decision === 'block')
+          ? 'danger'
+          : res && typeof res === 'object' && (res.decision === 'review' || res.decision === 'warn')
+            ? 'warning'
+            : 'success';
+      notify(tone, msg);
       await resource.refresh();
     } catch (err) {
       notify('danger', formatError(err, t));
@@ -939,7 +964,7 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
         />
       )}
 
-      {data !== undefined && stats.length > 0 && (
+      {data !== undefined && resource.state !== 'empty' && stats.length > 0 && (
         <div className="zk-stats-grid">
           {stats.map((stat, idx) => {
             const val = typeof stat.value === 'function'
@@ -974,7 +999,7 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
         </div>
       )}
 
-      {formActions.length > 0 && (
+      {data !== undefined && resource.state !== 'empty' && formActions.length > 0 && (
         <Section title={t('操作')}>
           <div className="zk-action-grid">
             {formActions.map((action) => {
@@ -1017,7 +1042,7 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
         </Section>
       )}
 
-      {data !== undefined && (spec.sections ?? []).map((section, idx) => {
+      {data !== undefined && resource.state !== 'empty' && (spec.sections ?? []).map((section, idx) => {
         const secKey = section.id ?? `sec-${idx}`;
         const rows: readonly Record<string, unknown>[] | undefined = section.items
           ? (typeof section.items === 'function'
@@ -1029,9 +1054,15 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
           : undefined;
         const query = (sectionQueries[secKey] ?? '').trim().toLowerCase();
         const filteredRows = rows && query
-          ? rows.filter((row) =>
-              Object.values(row ?? {}).some((v) => String(v ?? '').toLowerCase().includes(query)),
-            )
+          ? rows.filter((row) => {
+              const colVals = (section.columns ?? []).map((col) => resolveDataPath(row, col.key));
+              const rawVals = Object.values(row ?? {}).filter(
+                (v) => typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean',
+              );
+              return [...colVals, ...rawVals].some((v) =>
+                v !== null && v !== undefined && typeof v !== 'object' && String(v).toLowerCase().includes(query),
+              );
+            })
           : rows;
         const totalFiltered = filteredRows?.length ?? 0;
         const totalPages = Math.max(1, Math.ceil(totalFiltered / TABLE_PAGE_SIZE));
@@ -1043,19 +1074,27 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
         const entries = section.entries
           ? (typeof section.entries === 'function'
             ? section.entries(data, ctx)
-            : section.entries.map((entry) => ({
-                key: entry.dataKey,
-                label:
-                  typeof entry.label === 'string' ||
-                  (entry.label && typeof entry.label === 'object' && ('zh' in entry.label || 'en' in entry.label || 'zh-CN' in entry.label))
-                    ? pickText(entry.label as DeclarativeI18nText, locale, t)
-                    : entry.label,
-                value: isDeclarativeValueExpr(entry.value)
-                  ? evaluateDeclarativeExpr(entry.value, data, locale, t)
-                  : entry.dataKey
-                    ? resolveDataPath(data, entry.dataKey)
-                    : (entry.value as React.ReactNode),
-              })))
+            : section.entries.map((entry) => {
+                const inferredKey =
+                  entry.dataKey ??
+                  (isDeclarativeValueExpr(entry.value) &&
+                  typeof (entry.value as { $path?: unknown }).$path === 'string'
+                    ? (entry.value as { $path: string }).$path
+                    : undefined);
+                return {
+                  key: inferredKey,
+                  label:
+                    typeof entry.label === 'string' ||
+                    (entry.label && typeof entry.label === 'object' && ('zh' in entry.label || 'en' in entry.label || 'zh-CN' in entry.label))
+                      ? pickText(entry.label as DeclarativeI18nText, locale, t)
+                      : entry.label,
+                  value: isDeclarativeValueExpr(entry.value)
+                    ? evaluateDeclarativeExpr(entry.value, data, locale, t)
+                    : entry.dataKey
+                      ? resolveDataPath(data, entry.dataKey)
+                      : (entry.value as React.ReactNode),
+                };
+              }))
           : undefined;
         const entryList = entries
           ? (Array.isArray(entries)
@@ -1070,7 +1109,7 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
             title={section.title ? pickText(section.title, locale, t) : undefined}
             description={section.description ? pickText(section.description, locale, t) : undefined}
             actions={
-              rows && rows.length > 0 ? (
+              rows && (rows.length > 0 || query.length > 0) ? (
                 <div className="zk-table-toolbar">
                   {(rows.length >= 3 || query.length > 0) && (
                     <input
@@ -1146,27 +1185,36 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
                       </tr>
                     </thead>
                     <tbody>
-                      {(pagedRows ?? rows).map((row, rowIdx) => (
-                        <tr key={String(row.id ?? row.key ?? rowIdx)}>
-                          {(section.columns ?? []).map((col) => {
-                            const cellVal = resolveDataPath(row, col.key);
-                            return (
-                              <td key={col.key}>
-                                {col.render
-                                  ? col.render(cellVal, row, ctx)
-                                  : renderSmartValue(
-                                      cellVal,
-                                      col.key,
-                                      `${secKey}-r${rowIdx}-${col.key}`,
-                                      copiedKey,
-                                      handleCopy,
-                                      t,
-                                    )}
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      ))}
+                      {(pagedRows ?? rows).map((row, rowIdx) => {
+                        const globalIdx = (currentPage - 1) * TABLE_PAGE_SIZE + rowIdx;
+                        const rowKeyVal =
+                          row.id ??
+                          row.key ??
+                          row.ownerKey ??
+                          (section.columns?.[0]?.key ? resolveDataPath(row, section.columns[0].key) : undefined) ??
+                          globalIdx;
+                        return (
+                          <tr key={String(rowKeyVal)}>
+                            {(section.columns ?? []).map((col) => {
+                              const cellVal = resolveDataPath(row, col.key);
+                              return (
+                                <td key={col.key}>
+                                  {col.render
+                                    ? col.render(cellVal, row, ctx)
+                                    : renderSmartValue(
+                                        cellVal,
+                                        col.key,
+                                        `${secKey}-r${globalIdx}-${col.key}`,
+                                        copiedKey,
+                                        handleCopy,
+                                        t,
+                                      )}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                   {totalPages > 1 && (
@@ -1203,35 +1251,41 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
                 </div>
               ) : section.renderItem ? (
                 <ul className="zk-list">
-                  {(pagedRows ?? rows).map((row, rowIdx) => (
-                    <li key={String(row.id ?? row.key ?? rowIdx)} className="zk-card">
-                      {section.renderItem?.(row, rowIdx, ctx)}
-                    </li>
-                  ))}
+                  {(pagedRows ?? rows).map((row, rowIdx) => {
+                    const globalIdx = (currentPage - 1) * TABLE_PAGE_SIZE + rowIdx;
+                    return (
+                      <li key={String(row.id ?? row.key ?? row.ownerKey ?? globalIdx)} className="zk-card">
+                        {section.renderItem?.(row, globalIdx, ctx)}
+                      </li>
+                    );
+                  })}
                 </ul>
               ) : (
                 <ul className="zk-list">
-                  {(pagedRows ?? rows).map((row, rowIdx) => (
-                    <li key={String(row.id ?? row.key ?? rowIdx)} className="zk-card">
-                      <dl className="zk-dl">
-                        {Object.entries(row).map(([k, v]) => (
-                          <React.Fragment key={k}>
-                            <dt>{k}</dt>
-                            <dd>
-                              {renderSmartValue(
-                                v,
-                                k,
-                                `${secKey}-card-${rowIdx}-${k}`,
-                                copiedKey,
-                                handleCopy,
-                                t,
-                              )}
-                            </dd>
-                          </React.Fragment>
-                        ))}
-                      </dl>
-                    </li>
-                  ))}
+                  {(pagedRows ?? rows).map((row, rowIdx) => {
+                    const globalIdx = (currentPage - 1) * TABLE_PAGE_SIZE + rowIdx;
+                    return (
+                      <li key={String(row.id ?? row.key ?? row.ownerKey ?? globalIdx)} className="zk-card">
+                        <dl className="zk-dl">
+                          {Object.entries(row).map(([k, v]) => (
+                            <React.Fragment key={k}>
+                              <dt>{k}</dt>
+                              <dd>
+                                {renderSmartValue(
+                                  v,
+                                  k,
+                                  `${secKey}-card-${globalIdx}-${k}`,
+                                  copiedKey,
+                                  handleCopy,
+                                  t,
+                                )}
+                              </dd>
+                            </React.Fragment>
+                          ))}
+                        </dl>
+                      </li>
+                    );
+                  })}
                 </ul>
               )
             )}
@@ -1239,7 +1293,7 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
         );
       })}
 
-      {data !== undefined && spec.render && spec.render(data, ctx)}
+      {data !== undefined && resource.state !== 'empty' && spec.render && spec.render(data, ctx)}
       {spec.footnote && <p className="zk-footnote">{pickText(spec.footnote, locale, t)}</p>}
     </PluginPage>
   );

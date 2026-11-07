@@ -242,14 +242,16 @@ export function isDeclarativeValueExpr(value: unknown): value is DeclarativeValu
 export function resolveDataPath(data: unknown, path: string): unknown {
   if (!data || typeof data !== 'object' || !path) return undefined;
   const record = data as Record<string, unknown>;
-  if (path in record) return record[path];
+  if (Object.prototype.hasOwnProperty.call(record, path)) return record[path];
   const segments = path.split('.').filter(Boolean);
   let cursor: unknown = data;
   for (const seg of segments) {
     if (cursor === null || cursor === undefined) return undefined;
     if (Array.isArray(cursor) && seg === 'length') return cursor.length;
     if (typeof cursor !== 'object') return undefined;
-    cursor = (cursor as Record<string, unknown>)[seg];
+    cursor = Object.prototype.hasOwnProperty.call(cursor, seg)
+      ? (cursor as Record<string, unknown>)[seg]
+      : undefined;
   }
   return cursor;
 }
@@ -269,7 +271,7 @@ export function evaluateDeclarativeValue(
   const rec = exprOrKey as Record<string, unknown>;
   if (typeof rec.$path === 'string') {
     const val = resolveDataPath(data, rec.$path);
-    return val !== undefined && val !== null ? val : rec.fallback;
+    return val !== undefined && val !== null && val !== '' ? val : rec.fallback;
   }
   if (typeof rec.$count === 'string') {
     const target = resolveDataPath(data, rec.$count);
@@ -298,6 +300,9 @@ export function evaluateDeclarativeValue(
   if (rec.$format !== undefined && formatArgs) {
     const template = resolveDeclarativeText(rec.$format as DeclarativeI18nText, locale);
     const args = (formatArgs as readonly string[]).map((p) => resolveDataPath(data, p));
+    if (args.length > 0 && args.every((v) => v === undefined || v === null || v === '')) {
+      return undefined;
+    }
     return template.replace(/\{(\d+)\}/gu, (_m, idx) => {
       const v = args[Number(idx)];
       return v === undefined || v === null ? '' : String(v);
@@ -310,9 +315,12 @@ export function evaluateDeclarativeValue(
       readonly default?: DeclarativeI18nText;
     };
     const rawVal = mapSpec.path ? resolveDataPath(data, mapSpec.path) : undefined;
-    const key = String(rawVal ?? '');
-    const matched = mapSpec.cases?.[key];
-    if (matched !== undefined) return resolveDeclarativeText(matched, locale);
+    if (rawVal !== undefined && rawVal !== null && mapSpec.cases) {
+      const key = String(rawVal);
+      if (Object.prototype.hasOwnProperty.call(mapSpec.cases, key)) {
+        return resolveDeclarativeText(mapSpec.cases[key]!, locale);
+      }
+    }
     if (mapSpec.default !== undefined) return resolveDeclarativeText(mapSpec.default, locale);
     return rawVal;
   }
@@ -723,13 +731,16 @@ export function buildBlueprintFromSpec<TData = Record<string, unknown>>(
     const id = sec.id ?? `section-${idx}`;
     const secTitle = resolveDeclarativeText(sec.title, 'en');
     if (sec.columns !== undefined || sec.items !== undefined) {
+      const preferredRowKey = sec.columns?.find(
+        (c) => c.key === 'id' || c.key === 'key' || c.key === 'ownerKey',
+      )?.key ?? 'id';
       sections.push(
         Object.freeze({
           type: 'table',
           id,
           title: secTitle,
           ...(typeof sec.items === 'string' ? { dataKey: sec.items } : {}),
-          rowKey: sec.columns?.[0]?.key ?? 'id',
+          rowKey: preferredRowKey,
           columns: Object.freeze(
             (sec.columns ?? []).map((col) =>
               Object.freeze({
@@ -749,14 +760,20 @@ export function buildBlueprintFromSpec<TData = Record<string, unknown>>(
           ...(Array.isArray(sec.entries)
             ? {
                 entries: Object.freeze(
-                  sec.entries.map((e) =>
-                    Object.freeze({
+                  sec.entries.map((e) => {
+                    const inferredDataKey =
+                      e.dataKey ??
+                      (isDeclarativeValueExpr(e.value) &&
+                      typeof (e.value as { $path?: unknown }).$path === 'string'
+                        ? (e.value as { $path: string }).$path
+                        : undefined);
+                    return Object.freeze({
                       label: resolveDeclarativeText(e.label, 'en'),
                       value: isDeclarativeValueExpr(e.value) ? '' : String(e.value ?? ''),
-                      ...(e.dataKey ? { dataKey: e.dataKey } : {}),
+                      ...(inferredDataKey ? { dataKey: inferredDataKey } : {}),
                       ...(isDeclarativeValueExpr(e.value) ? { expr: e.value } : {}),
-                    }),
-                  ),
+                    });
+                  }),
                 ),
               }
             : {}),

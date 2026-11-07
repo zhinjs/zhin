@@ -620,7 +620,7 @@ try {
             createElement('dl', { className: 'grid grid-cols-2 gap-2 text-sm' },
               ...entryItems.map((entryItem, ei) => createElement('div', { key: entryItem?.key ?? entryItem?.label ?? String(ei), className: 'contents' },
                 createElement('dt', { className: 'text-muted-foreground' }, String(entryItem?.label ?? entryItem?.key ?? '')),
-                createElement('dd', { className: 'font-medium m-0' }, String(entryItem?.value ?? '—')),
+                createElement('dd', { className: 'font-medium m-0' }, entryItem?.value !== undefined && entryItem?.value !== null && entryItem?.value !== '' ? String(entryItem.value) : '—'),
               )),
             ),
           );
@@ -663,6 +663,9 @@ try {
     ? function ZhinPageShellAdapter(props) {
         globalThis.__ZHIN_ALLOW_RAW_BLUEPRINT__ = true;
         try {
+          if (Component.prototype && Component.prototype.isReactComponent) {
+            return createElement(Component, props);
+          }
           const out = Component(props);
           if (isBlueprint(out)) {
             return renderBlueprint(out, props);

@@ -1,7 +1,7 @@
 import { definePage, createDeclarativePage } from '@zhin.js/console-contract';
 
 export interface CalendarConsoleStatus {
-  readonly provider: 'none' | 'google' | 'microsoft' | 'caldav' | 'ics';
+  readonly provider: 'none' | 'google' | 'microsoft' | 'caldav';
   readonly timezone: string;
   readonly ready: boolean;
   readonly oauthCallbackPath: string;
@@ -75,16 +75,7 @@ export default createDeclarativePage<CalendarConsoleStatus>({
       entries: [
         { label: 'provider', dataKey: 'provider' },
         { label: 'timezone', dataKey: 'timezone' },
-        {
-          label: 'ready',
-          value: {
-            $map: {
-              path: 'ready',
-              cases: { true: 'true', false: 'false' },
-              default: 'false',
-            },
-          },
-        },
+        { label: 'ready', dataKey: 'ready' },
         { label: 'oauthCallbackPath', dataKey: 'oauthCallbackPath' },
         { label: 'workingHours', dataKey: 'workingHours' },
       ],

@@ -26,10 +26,10 @@ export default createDeclarativePage<ModerationConsoleStatus>({
         $map: {
           path: 'enabled',
           cases: {
-            true: { zh: 'Enabled', en: 'Enabled' },
-            false: { zh: 'Disabled', en: 'Disabled' },
+            true: { zh: '已启用', en: 'Enabled' },
+            false: { zh: '已禁用', en: 'Disabled' },
           },
-          default: { zh: 'Disabled', en: 'Disabled' },
+          default: { zh: '已禁用', en: 'Disabled' },
         },
       },
     },

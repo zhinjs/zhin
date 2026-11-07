@@ -6,11 +6,17 @@ import { parseDocument } from 'yaml';
 import {
   ROOT_CONFIG_FILE_NAMES,
   selectRootConfigFile,
-  rootPluginId,
 } from '@zhin.js/plugin-runtime';
 import { personalSessionOwnerId } from '@zhin.js/agent/personal-session';
+import {
+  legacyCatalogStateKey,
+  legacyPluginStateId,
+  legacyRuntimePolicyStateKey,
+} from '@zhin.js/agent/runtime';
 import { hostModelOwnerId } from '@zhin.js/plugin-runtime';
 import { normalizeProviderJson, type JsonObject } from '@zhin.js/ai/provider';
+
+export { legacyCatalogStateKey, legacyPluginStateId, legacyRuntimePolicyStateKey };
 
 export interface LegacyStateSourceRow {
   readonly id: string;
@@ -42,13 +48,6 @@ const digest = (value: unknown): string =>
   createHash('sha256')
     .update(typeof value === 'string' ? value : JSON.stringify(value))
     .digest('hex');
-/** Original PersistentState address format, used only by this offline reader. */
-export const legacyPluginStateId = (key: string): string =>
-  digest([rootPluginId(), ['plugin'], key]);
-export const legacyCatalogStateKey = (ownerId: string): string =>
-  `personal-catalog:v1:${digest(ownerId)}`;
-export const legacyRuntimePolicyStateKey = (rootId: string, ownerId: string): string =>
-  `runtime-model-policy:v1:${digest([rootId, ownerId])}`;
 function object(input: unknown): JsonObject {
   const value = normalizeProviderJson(input);
   if (!value || typeof value !== 'object' || Array.isArray(value))

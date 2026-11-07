@@ -17,6 +17,15 @@ const KIT_EN: Readonly<Record<string, string>> = {
   '数据可能已过期': 'Data may be out of date.',
   '最近一次刷新失败：{0}': 'The latest refresh failed: {0}',
   '确认：{0}': 'Confirm: {0}',
+  '刷新': 'Refresh',
+  '操作': 'Actions',
+  '复制': 'Copy',
+  '不能为空': 'is required',
+  '已完成': 'Completed',
+  '操作失败': 'Action failed',
+  '没有操作权限': 'Permission denied',
+  '点击暂停自动轮询': 'Click to pause polling',
+  '点击恢复自动轮询': 'Click to resume polling',
 };
 
 /**

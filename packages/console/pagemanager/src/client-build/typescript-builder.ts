@@ -75,13 +75,13 @@ const CONSOLE_CONTRACT_STUB = [
   '}',
   'export function resolveDataPath(data, path) {',
   '  if (!data || typeof data !== "object" || !path) return undefined;',
-  '  if (path in data) return data[path];',
+  '  if (Object.prototype.hasOwnProperty.call(data, path)) return data[path];',
   '  let cursor = data;',
   '  for (const seg of String(path).split(".").filter(Boolean)) {',
   '    if (cursor == null) return undefined;',
   '    if (Array.isArray(cursor) && seg === "length") return cursor.length;',
   '    if (typeof cursor !== "object") return undefined;',
-  '    cursor = cursor[seg];',
+  '    cursor = Object.prototype.hasOwnProperty.call(cursor, seg) ? cursor[seg] : undefined;',
   '  }',
   '  return cursor;',
   '}',
@@ -89,12 +89,12 @@ const CONSOLE_CONTRACT_STUB = [
   '  if (exprOrKey == null) return undefined;',
   '  if (typeof exprOrKey === "string") return resolveDataPath(data, exprOrKey);',
   '  if (!isDeclarativeValueExpr(exprOrKey)) return exprOrKey;',
-  '  if (typeof exprOrKey.$path === "string") { const v = resolveDataPath(data, exprOrKey.$path); return v != null ? v : exprOrKey.fallback; }',
+  '  if (typeof exprOrKey.$path === "string") { const v = resolveDataPath(data, exprOrKey.$path); return (v != null && v !== "") ? v : exprOrKey.fallback; }',
   '  if (typeof exprOrKey.$count === "string") { const t = resolveDataPath(data, exprOrKey.$count); return Array.isArray(t) ? t.length : (t && typeof t === "object" ? Object.keys(t).length : (typeof t === "number" ? t : 0)); }',
-  '  if (exprOrKey.$sum && typeof exprOrKey.$sum === "object") { const l = exprOrKey.$sum.path ? resolveDataPath(data, exprOrKey.$sum.path) : undefined; return (!Array.isArray(l) || !exprOrKey.$sum.field) ? 0 : l.reduce((a, it) => { const n = Number(resolveDataPath(it, exprOrKey.$sum.field)); return a + (Number.isFinite(n) ? n : 0); }, 0); }',
+  '  if (exprOrKey.$sum && typeof exprOrKey.$sum === "object") { const l = exprOrKey.$sum.path ? resolveDataPath(data, exprOrKey.$sum.path) : undefined; return (!Array.isArray(l) || !exprOrKey.$sum.field) ? 0 : l.reduce((a, it) => { let raw = resolveDataPath(it, exprOrKey.$sum.field); if (raw === undefined && exprOrKey.$sum.field === "pendingCount") raw = resolveDataPath(it, "drafts.length"); const n = Number(raw); return a + (Number.isFinite(n) ? n : 0); }, 0); }',
   '  const fmtArgs = Array.isArray(exprOrKey.args) ? exprOrKey.args : (Array.isArray(exprOrKey.$args) ? exprOrKey.$args : undefined);',
-  '  if (exprOrKey.$format !== undefined && fmtArgs) { const tpl = resolveDeclarativeText(exprOrKey.$format, locale); const vals = fmtArgs.map((p) => resolveDataPath(data, p)); return tpl.replace(/\\{(\\d+)\\}/gu, (_m, idx) => vals[Number(idx)] == null ? "" : String(vals[Number(idx)])); }',
-  '  if (exprOrKey.$map && typeof exprOrKey.$map === "object") { const rv = exprOrKey.$map.path ? resolveDataPath(data, exprOrKey.$map.path) : undefined; const m = exprOrKey.$map.cases?.[String(rv ?? "")]; if (m !== undefined) return resolveDeclarativeText(m, locale); if (exprOrKey.$map.default !== undefined) return resolveDeclarativeText(exprOrKey.$map.default, locale); return rv; }',
+  '  if (exprOrKey.$format !== undefined && fmtArgs) { const tpl = resolveDeclarativeText(exprOrKey.$format, locale); const vals = fmtArgs.map((p) => resolveDataPath(data, p)); if (vals.length > 0 && vals.every((v) => v == null || v === "")) return undefined; return tpl.replace(/\\{(\\d+)\\}/gu, (_m, idx) => vals[Number(idx)] == null ? "" : String(vals[Number(idx)])); }',
+  '  if (exprOrKey.$map && typeof exprOrKey.$map === "object") { const rv = exprOrKey.$map.path ? resolveDataPath(data, exprOrKey.$map.path) : undefined; if (rv != null && exprOrKey.$map.cases && Object.prototype.hasOwnProperty.call(exprOrKey.$map.cases, String(rv))) return resolveDeclarativeText(exprOrKey.$map.cases[String(rv)], locale); if (exprOrKey.$map.default !== undefined) return resolveDeclarativeText(exprOrKey.$map.default, locale); return rv; }',
   '  if (exprOrKey.$join && typeof exprOrKey.$join === "object") { const l = exprOrKey.$join.path ? resolveDataPath(data, exprOrKey.$join.path) : undefined; if (!Array.isArray(l) || l.length === 0) return exprOrKey.$join.empty !== undefined ? resolveDeclarativeText(exprOrKey.$join.empty, locale) : "—"; return l.map((it) => String(it ?? "")).join(exprOrKey.$join.sep ?? ", "); }',
   '  if (Array.isArray(exprOrKey.$coalesce)) { for (const c of exprOrKey.$coalesce) { const v = resolveDataPath(data, c); if (v != null && v !== "") return v; } return exprOrKey.fallback; }',
   '  return undefined;',
@@ -124,9 +124,10 @@ const CONSOLE_CONTRACT_STUB = [
   '    const id = sec.id ?? ("section-" + idx);',
   '    const title = resolveDeclarativeText(sec.title, "en");',
   '    if (sec.columns !== undefined || sec.items !== undefined) {',
-  '      sections.push({ type: "table", id, title, ...(typeof sec.items === "string" ? { dataKey: sec.items } : {}), rowKey: sec.columns?.[0]?.key ?? "id", columns: (sec.columns ?? []).map((c) => ({ key: c.key, label: resolveDeclarativeText(c.label, "en") })) });',
+  '      const preferredRowKey = sec.columns?.find((c) => c.key === "id" || c.key === "key" || c.key === "ownerKey")?.key ?? "id";',
+  '      sections.push({ type: "table", id, title, ...(typeof sec.items === "string" ? { dataKey: sec.items } : {}), rowKey: preferredRowKey, columns: (sec.columns ?? []).map((c) => ({ key: c.key, label: resolveDeclarativeText(c.label, "en") })) });',
   '    } else if (sec.entries !== undefined) {',
-  '      sections.push({ type: "entries", id, title, ...(Array.isArray(sec.entries) ? { entries: sec.entries.map((e) => ({ label: resolveDeclarativeText(e.label, "en"), value: isDeclarativeValueExpr(e.value) ? "" : String(e.value ?? ""), ...(e.dataKey ? { dataKey: e.dataKey } : {}), ...(isDeclarativeValueExpr(e.value) ? { expr: e.value } : {}) })) } : {}) });',
+  '      sections.push({ type: "entries", id, title, ...(Array.isArray(sec.entries) ? { entries: sec.entries.map((e) => { const dk = e.dataKey ?? (isDeclarativeValueExpr(e.value) && typeof e.value.$path === "string" ? e.value.$path : undefined); return { label: resolveDeclarativeText(e.label, "en"), value: isDeclarativeValueExpr(e.value) ? "" : String(e.value ?? ""), ...(dk ? { dataKey: dk } : {}), ...(isDeclarativeValueExpr(e.value) ? { expr: e.value } : {}) }; }) } : {}) });',
   '    } else {',
   '      sections.push({ type: "custom", id, ...(title ? { title } : {}) });',
   '    }',
@@ -439,12 +440,9 @@ function tryExtractPureBlueprint(
     if (!isConsoleBlueprint(rawBp)) {
       return undefined;
     }
-    const { spec: _spec, reviewSpec: _reviewSpec, ...serializableBp } =
-      rawBp as unknown as Record<string, unknown>;
+    const cleanBp = JSON.parse(JSON.stringify(rawBp)) as Record<string, unknown>;
     return {
-      blueprint: Object.freeze({
-        ...serializableBp,
-      }) as unknown as ConsolePageBlueprint | ConsoleAdapterPageBlueprint,
+      blueprint: Object.freeze(cleanBp) as unknown as ConsolePageBlueprint | ConsoleAdapterPageBlueprint,
       modules,
     };
   } catch {
@@ -788,7 +786,7 @@ export function register(api) {
             h('dl', { className: 'grid grid-cols-2 gap-2 text-sm' },
               ...entryItems.map((entry, ei) => h('div', { key: entry?.key ?? entry?.label ?? String(ei), className: 'contents' },
                 h('dt', { className: 'text-muted-foreground' }, String(entry?.label ?? entry?.key ?? '')),
-                h('dd', { className: 'font-medium m-0' }, String(entry?.value ?? '—')),
+                h('dd', { className: 'font-medium m-0' }, entry?.value !== undefined && entry?.value !== null && entry?.value !== '' ? String(entry.value) : '—'),
               )),
             ),
           );
@@ -817,7 +815,6 @@ export function register(api) {
     );
   }
   if (typeof globalThis !== 'undefined') {
-    globalThis.__ZHIN_ACTIVE_PLUGIN_ID__ = _owner;
     const _owners = globalThis.__ZHIN_PAGE_OWNERS__ ?? (globalThis.__ZHIN_PAGE_OWNERS__ = {});
     _owners[_route] = _owner;
   }
@@ -829,7 +826,7 @@ export function register(api) {
   const order = typeof m.order === 'number' ? m.order : ${order};
   const parent = m.parent ?? ${parent};
   const fullWidth = typeof m.fullWidth === 'boolean' ? m.fullWidth : ${fullWidth};
-  const titleI18n = m.titleI18n ?? ${titleI18n};
+  const titleI18n = m.titleI18n ?? Component?.titleI18n ?? ${titleI18n};
   const requiredPermissions = Array.isArray(m.requiredPermissions) ? m.requiredPermissions : ${requiredPermissions};
   const requiredRoles = Array.isArray(m.requiredRoles) ? m.requiredRoles : ${requiredRoles};
   const pageProps = {
@@ -842,8 +839,14 @@ export function register(api) {
   const isBlueprint = (v) => Boolean(v && typeof v === 'object' && (v.kind === 'zhin.console.page-blueprint' || v.kind === 'zhin.console.adapter-page'));
   const WrappedComponent = typeof Component === 'function'
     ? function ZhinPageAdapter(props) {
-        if (typeof globalThis !== 'undefined') globalThis.__ZHIN_ALLOW_RAW_BLUEPRINT__ = true;
+        if (typeof globalThis !== 'undefined') {
+          globalThis.__ZHIN_ACTIVE_PLUGIN_ID__ = _owner;
+          globalThis.__ZHIN_ALLOW_RAW_BLUEPRINT__ = true;
+        }
         try {
+          if (Component.prototype && Component.prototype.isReactComponent) {
+            return api.React.createElement(Component, props);
+          }
           const out = Component(props);
           if (isBlueprint(out)) {
             return _renderBlueprint(out, props);
@@ -854,7 +857,10 @@ export function register(api) {
         }
       }
     : (isBlueprint(Component)
-        ? function ZhinBlueprintPage(props) { return _renderBlueprint(Component, props); }
+        ? function ZhinBlueprintPage(props) {
+            if (typeof globalThis !== 'undefined') globalThis.__ZHIN_ACTIVE_PLUGIN_ID__ = _owner;
+            return _renderBlueprint(Component, props);
+          }
         : Component);
   const element = api.React.createElement(WrappedComponent, pageProps);
   api.addRoute({

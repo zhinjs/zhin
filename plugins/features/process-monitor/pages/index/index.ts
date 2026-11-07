@@ -75,9 +75,9 @@ export default createDeclarativePage<ProcessMonitorStatusSnapshot>({
         { label: 'Total Uptime', value: { $path: 'totalUptime', fallback: '-' } },
         { label: 'Restart Count', dataKey: 'restartCount' },
         { label: 'Crash Count', value: { $path: 'crashCount', fallback: 0 } },
-        { label: 'Hostname', value: { $path: 'hostname', fallback: '-' } },
-        { label: 'Platform', value: { $path: 'platform', fallback: '-' } },
-        { label: 'Node Version', value: { $path: 'nodeVersion', fallback: '-' } },
+        { label: 'Hostname', dataKey: 'hostname', value: { $path: 'hostname', fallback: '-' } },
+        { label: 'Platform', dataKey: 'platform', value: { $path: 'platform', fallback: '-' } },
+        { label: 'Node Version', dataKey: 'nodeVersion', value: { $path: 'nodeVersion', fallback: '-' } },
         {
           label: 'Healthy',
           value: {
