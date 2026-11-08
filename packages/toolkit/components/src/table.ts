@@ -66,7 +66,7 @@ export function Table(props: TableProps): JSXElement {
 
 export function TableRow(props: TableRowProps): JSXElement {
   const theme = themeOf(props);
-  const { children, header = false, separator = true } = displayProps(props);
+  const { children, header = false, selected = false, separator = true } = displayProps(props);
   const palette = theme.palette;
   const border = separator
     ? `${cssLength(theme.border.width)} ${theme.border.style} ${
@@ -76,6 +76,7 @@ export function TableRow(props: TableRowProps): JSXElement {
   return customizeRoot(
     jsx("div", {
       role: "row",
+      ...(selected ? { "aria-selected": true } : {}),
       style: {
         display: "flex",
         flexDirection: "row",
@@ -85,7 +86,7 @@ export function TableRow(props: TableRowProps): JSXElement {
         margin: 0,
         gap: 0,
         borderTop: border,
-        background: header ? palette.surface : palette.card,
+        background: header || selected ? palette.surface : palette.card,
         color: header ? palette.text : palette.textSecondary,
         fontWeight: header
           ? theme.typography.weights.strong
@@ -103,23 +104,35 @@ export function TableCell(props: TableCellProps): JSXElement {
   const theme = themeOf(props);
   const {
     children,
+    icon,
     header = false,
+    fixed,
     width,
     align = "left",
   } = displayProps(props);
+  const palette = theme.palette;
+  const hasIcon = icon != null && typeof icon !== "boolean";
   return customizeRoot(
     jsx("div", {
       role: header ? "columnheader" : "cell",
       style: {
         display: "flex",
-        flexDirection: "column",
-        justifyContent: "center",
-        alignItems:
-          align === "center"
+        flexDirection: hasIcon ? "row" : "column",
+        justifyContent: hasIcon
+          ? align === "center"
             ? "center"
             : align === "right"
             ? "flex-end"
-            : "flex-start",
+            : "flex-start"
+          : "center",
+        alignItems: hasIcon
+          ? "center"
+          : align === "center"
+          ? "center"
+          : align === "right"
+          ? "flex-end"
+          : "flex-start",
+        ...(hasIcon ? { gap: `${theme.spacing.xs * theme.spacing.scale}px` } : {}),
         flex: width === undefined ? 1 : "none",
         ...(width === undefined ? {} : { width }),
         minWidth: 0,
@@ -130,8 +143,25 @@ export function TableCell(props: TableCellProps): JSXElement {
         }px`,
         textAlign: align,
         ...(header ? { fontWeight: theme.typography.weights.strong } : {}),
+        ...(fixed === "left"
+          ? {
+              position: "sticky",
+              left: 0,
+              zIndex: header ? 3 : 2,
+              background: header ? palette.surface : palette.card,
+              borderRight: `${cssLength(theme.border.width)} ${theme.border.style} ${palette.divider}`,
+            }
+          : fixed === "right"
+          ? {
+              position: "sticky",
+              right: 0,
+              zIndex: header ? 3 : 2,
+              background: header ? palette.surface : palette.card,
+              borderLeft: `${cssLength(theme.border.width)} ${theme.border.style} ${palette.divider}`,
+            }
+          : {}),
       },
-      children,
+      children: hasIcon ? [icon, children] : children,
     }),
     props,
     theme,

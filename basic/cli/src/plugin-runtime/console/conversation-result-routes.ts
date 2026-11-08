@@ -1,8 +1,7 @@
 import { join } from 'node:path';
 import type { HttpHost } from '@zhin.js/host-http';
 import type { SnapshotReader } from '@zhin.js/plugin-runtime';
-import { parseBoundSandboxSession } from './bound-sandbox-session.js';
-import { SandboxWorkspaceBindingError, withSandboxWorkspaceScope } from './sandbox-workspace-scope.js';
+import { parseBoundSandboxSession, SandboxWorkspaceBindingError, withSandboxWorkspaceScope } from './sandbox-workspace-scope.js';
 import { writeJson } from './http-response.js';
 
 /** Read execution output and separate delivery facts; never send or execute a recovered result. */

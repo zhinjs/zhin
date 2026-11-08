@@ -6,6 +6,7 @@ import { isGroqGateway, transformGroqRequestBody } from '../llm/groq.js';
 const requirePeer = createRequire(import.meta.url);
 
 import type { SdkFamily } from './sdk-family.js';
+export { inferDefaultModelInput } from './model-capability-catalog.js';
 
 function peer<T>(name: string): T {
   let resolved: string;

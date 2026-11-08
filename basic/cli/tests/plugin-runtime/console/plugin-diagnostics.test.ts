@@ -1,4 +1,4 @@
-import { resolveDiagnosticPlugin } from '../../../src/plugin-runtime/console/plugin-diagnostics.js';
+import { resolveDiagnosticPlugin } from '../../../src/plugin-runtime/console/rpc-context.js';
 describe('plugin diagnostics exact identity', () => {
   const first = { instanceKey: 'repeater', packageName: '@zhin.js/plugin-repeater' };
   const second = { instanceKey: 'second', packageName: first.packageName };

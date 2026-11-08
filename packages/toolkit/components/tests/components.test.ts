@@ -1,14 +1,28 @@
 import { jsx, renderToHtml, isJsxElement } from "@zhin.js/jsx";
 import {
   Badge,
+  BarChart,
+  Button,
+  Callout,
   Card,
   CardCanvas,
   CardHeader,
+  Checkbox,
+  ComparisonBar,
+  DonutChart,
+  HeatmapGrid,
   KvTable,
   MetricBlock,
   QuoteCard,
   RadarChart,
+  Radio,
   Sparkline,
+  StatusGrid,
+  StepTracker,
+  Table,
+  TableCell,
+  TableRow,
+  Timeline,
   UsageBar,
 } from "../src/index.js";
 
@@ -86,5 +100,110 @@ describe("visual JSX components", () => {
     expect(html).toContain("<polygon");
     expect(html).toContain("<b>A</b>");
     expect(html).toContain('stroke-width="2"');
+  });
+
+  it("renders DonutChart, Callout, Timeline, StepTracker, ComparisonBar, StatusGrid and HeatmapGrid", async () => {
+    const html = await renderToHtml(
+      jsx(CardCanvas, {
+        children: jsx(Card, {
+          children: [
+            jsx(DonutChart, { percent: 75, label: "内存占用" }),
+            jsx(Callout, { tone: "warning", title: "告警", message: "负载偏高" }),
+            jsx(Timeline, {
+              items: [
+                { title: "启动", time: "08:00", description: "初始化完成" },
+                { title: "就绪", time: "08:01", badge: "OK" },
+              ],
+            }),
+            jsx(StepTracker, {
+              current: 1,
+              steps: [
+                { label: "拉取" },
+                { label: "构建", subtitle: "进行中" },
+                { label: "发布" },
+              ],
+            }),
+            jsx(ComparisonBar, {
+              leftLabel: "蓝方",
+              leftValue: 60,
+              rightLabel: "红方",
+              rightValue: 40,
+            }),
+            jsx(StatusGrid, {
+              items: [
+                { label: "Gateway", value: "Online", status: "ok" },
+                { label: "Queue", value: "2 pending", status: "warn" },
+              ],
+            }),
+            jsx(HeatmapGrid, { values: [0, 2, 5, 10, 4, 8], columns: 3 }),
+          ],
+        }),
+      })
+    );
+    expect(html).toContain("75%");
+    expect(html).toContain("内存占用");
+    expect(html).toContain("负载偏高");
+    expect(html).toContain("初始化完成");
+    expect(html).toContain("进行中");
+    expect(html).toContain("60%");
+    expect(html).toContain("Gateway");
+    expect(html).not.toContain("NaN");
+  });
+
+  it("supports icon/badge controls, custom chart images, and fixed/selected table cells", async () => {
+    const html = await renderToHtml(
+      jsx(CardCanvas, {
+        children: jsx(Card, {
+          children: [
+            jsx(Checkbox, { checked: true, icon: "🐧", label: "QQ 适配器", badge: jsx(Badge, { text: "Rec" }) }),
+            jsx(Radio, { checked: false, icon: "✈️", label: "Telegram 适配器" }),
+            jsx(Button, { icon: "⚡", label: "立即同步", badge: "2" }),
+            jsx(DonutChart, { percent: 80, centerImage: "https://example.com/donut-center.png", label: "CPU" }),
+            jsx(BarChart, {
+              values: [10, 40, 25],
+              images: ["https://example.com/b1.png", "https://example.com/b2.png", undefined],
+              backgroundImage: "https://example.com/bar-bg.png",
+            }),
+            jsx(RadarChart, {
+              labels: ["A", "B", "C"],
+              values: [80, 60, 90],
+              centerImage: "https://example.com/radar-center.png",
+            }),
+            jsx(Sparkline, {
+              values: [10, 20, 15, 30],
+              endImage: "https://example.com/spark-end.png",
+            }),
+            jsx(Table, {
+              children: [
+                jsx(TableRow, {
+                  header: true,
+                  separator: false,
+                  children: [
+                    jsx(TableCell, { header: true, fixed: "left", icon: "🔑", children: "ID" }),
+                    jsx(TableCell, { header: true, fixed: "right", children: "Action" }),
+                  ],
+                }),
+                jsx(TableRow, {
+                  selected: true,
+                  children: [
+                    jsx(TableCell, { fixed: "left", children: "bot-1" }),
+                    jsx(TableCell, { fixed: "right", children: "Edit" }),
+                  ],
+                }),
+              ],
+            }),
+          ],
+        }),
+      })
+    );
+    expect(html).toContain("🐧");
+    expect(html).toContain("QQ 适配器");
+    expect(html).toContain("https://example.com/donut-center.png");
+    expect(html).toContain("https://example.com/b1.png");
+    expect(html).toContain("https://example.com/bar-bg.png");
+    expect(html).toContain("https://example.com/radar-center.png");
+    expect(html).toContain("https://example.com/spark-end.png");
+    expect(html).toContain("position: sticky");
+    expect(html).toContain('aria-selected="true"');
   });
 });

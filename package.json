@@ -27,6 +27,8 @@
     "dev": "pnpm --filter minimal-bot dev",
     "dev:test": "pnpm --filter test-bot dev",
     "dev:full": "pnpm --filter full-bot dev",
+    "preview:ui": "vite --config scripts/adapter-preview/vite.config.mts",
+    "preview:components": "pnpm --filter @zhin.js/components preview:serve",
     "start": "pnpm --filter minimal-bot start",
     "start:test": "pnpm --filter test-bot start",
     "daemon:test": "pnpm --filter test-bot daemon",

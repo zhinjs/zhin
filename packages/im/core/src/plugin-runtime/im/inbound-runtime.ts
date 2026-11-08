@@ -514,20 +514,36 @@ export class InboundRuntime {
   }
 
   async #receiveSideEvent(event: EndpointEvent): Promise<void> {
+    let active = true;
     const lease = this.context.acquire();
     let endpointLease: EndpointChildLease | undefined;
     try {
       endpointLease = requireAdapters(lease.value).acquireInbound(event.endpoint.id, event.client);
-      const signal = AbortSignal.any([lease.stopSignal, endpointLease.signal]);
+      const captured = endpointLease;
+      const signal = AbortSignal.any([lease.stopSignal, captured.signal]);
+      const assertActive = () => {
+        if (!active) throw new Error('Endpoint event context expired with its generation operation');
+        captured.assertActive();
+      };
       await dispatchInboundHandlers({
         lease,
         event: event.name,
-        args: [event],
+        args: [withEndpointEventPayload(event, event.payload)],
         signal,
         interactions: this.context.interactions,
         deliver: (req, snap) => this.context.deliver(req, snap),
+        captureInteraction: (owner, conversation) => {
+          assertActive();
+          return this.context.captureOperation({
+            target: conversation,
+            client: event.client,
+            requester: owner,
+            signal: captured.signal,
+          });
+        },
       });
     } finally {
+      active = false;
       try { endpointLease?.release(); } finally { this.context.release(lease); }
     }
   }

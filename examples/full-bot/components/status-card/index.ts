@@ -18,7 +18,15 @@ interface StatusCardProps {
 }
 
 export default defineComponent<StatusCardProps>({
-  render({ title, lines }) {
+  previewProps: {
+    title: "Full Bot 服务状态",
+    lines: [
+      { label: "RSS", value: "58MB" },
+      { label: "分档", value: "L4" },
+      { label: "任务", value: 2 },
+    ],
+  },
+  render({ title = "服务状态", lines = [] }) {
     const body = jsx(Card, {
       children: [
         jsx(CardHeader, { title, subtitle: "full-bot L4" }),

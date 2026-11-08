@@ -33,6 +33,25 @@ export const BASE_STYLE = `
     --input: #27272a;
     --ring: #14b8a6;
     --radius: 0.625rem;
+    --status-success: 152 69% 53%;
+    --status-warning: 38 92% 60%;
+    --status-danger: 0 84% 64%;
+    --status-info: 213 94% 68%;
+  }
+  html.dark .zk-root, .dark .zk-root, .zk-root {
+    --zk-fg: #fafafa !important;
+    --zk-muted: #a1a1aa !important;
+    --zk-line: #27272a !important;
+    --zk-input-line: #3f3f46 !important;
+    --zk-surface: rgba(255, 255, 255, 0.035) !important;
+    --zk-inset: rgba(255, 255, 255, 0.065) !important;
+    --zk-primary: #14b8a6 !important;
+    --zk-on-primary: #042f2e !important;
+    --zk-ring: #14b8a6 !important;
+    --zk-success: #34d399 !important;
+    --zk-warning: #fbbf24 !important;
+    --zk-danger: #f87171 !important;
+    --zk-info: #60a5fa !important;
   }
   *, *::before, *::after { box-sizing: border-box; }
   body {
@@ -281,18 +300,44 @@ export const BASE_STYLE = `
     cursor: pointer;
   }
   /* Console Hub */
-  .console-hub { max-width: 1080px; margin: 0 auto; padding: 1.5rem 1.25rem; }
+  .console-hub { max-width: 1120px; margin: 0 auto; padding: 1.75rem 1.25rem 3rem; }
+  .console-hub-toolbar {
+    display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; justify-content: space-between;
+    margin: 1.1rem 0 1.4rem; padding: 0.75rem 0.9rem; border-radius: 12px;
+    border: 1px solid var(--border); background: var(--card);
+  }
+  .console-hub-search {
+    min-width: 220px; flex: 1; max-width: 340px; padding: 0.42rem 0.75rem;
+    border-radius: 8px; border: 1px solid var(--border); background: var(--muted);
+    color: var(--foreground); font-size: 0.85rem;
+  }
+  .console-hub-search:focus { outline: 2px solid var(--primary); border-color: var(--primary); }
+  .console-hub-pills { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+  .console-hub-pill {
+    padding: 0.28rem 0.7rem; border-radius: 9999px; border: 1px solid var(--border);
+    background: var(--muted); color: var(--muted-foreground); font-size: 0.78rem;
+    font-weight: 500; cursor: pointer; transition: all .15s;
+  }
+  .console-hub-pill:hover, .console-hub-pill.active {
+    border-color: var(--primary); background: rgba(20, 184, 166, 0.14); color: var(--primary);
+  }
   .console-group { margin-top: 1.5rem; }
-  .console-group-title { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted-foreground); margin-bottom: 0.65rem; }
-  .console-grid { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0.75rem; }
+  .console-group-title { font-size: 0.82rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted-foreground); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem; }
+  .console-grid { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 0.85rem; }
   .console-card {
-    padding: 0.9rem 1rem;
-    border-radius: 10px;
+    padding: 1rem 1.1rem;
+    border-radius: 12px;
     border: 1px solid var(--border);
     background: var(--card);
     display: flex;
     flex-direction: column;
-    gap: 0.35rem;
+    gap: 0.45rem;
+    transition: border-color .16s ease, transform .16s ease, box-shadow .16s ease;
+  }
+  .console-card:hover {
+    border-color: var(--primary);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px -8px rgba(20, 184, 166, 0.25);
   }
   .console-card-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
   .console-card-meta { font-size: 0.78rem; color: var(--muted-foreground); display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
@@ -434,6 +479,56 @@ export function renderConsoleIndex(pages: readonly ConsoleIndexPage[]): string {
     </section>`;
   }).join('\n');
 
+  const groupNames = [...groups.keys()];
+  const filterPillsHtml =
+    sorted.length > 0
+      ? `<div class="console-hub-toolbar">
+        <input id="hub-search" type="search" class="console-hub-search" placeholder="搜索页面标题、路由或插件…" autocomplete="off" />
+        <div class="console-hub-pills" id="hub-pills">
+          <button type="button" class="console-hub-pill active" data-filter-group="all">全部 (${sorted.length})</button>
+          ${groupNames
+            .map(
+              (g) =>
+                `<button type="button" class="console-hub-pill" data-filter-group="${escapeHtml(g)}">${escapeHtml(g)} (${groups.get(g)?.length ?? 0})</button>`,
+            )
+            .join('')}
+        </div>
+      </div>
+      <script>
+      (function(){
+        var search = document.getElementById('hub-search');
+        var pills = document.querySelectorAll('#hub-pills [data-filter-group]');
+        var activeGroup = 'all';
+        function applyFilter() {
+          var q = (search && search.value ? search.value : '').trim().toLowerCase();
+          var sections = document.querySelectorAll('[data-group-section]');
+          sections.forEach(function(sec) {
+            var g = sec.getAttribute('data-group-section') || '';
+            var groupMatch = activeGroup === 'all' || activeGroup === g;
+            var cards = sec.querySelectorAll('.console-card');
+            var visibleCount = 0;
+            cards.forEach(function(card) {
+              var text = (card.textContent || '').toLowerCase();
+              var show = groupMatch && (!q || text.indexOf(q) !== -1);
+              card.style.display = show ? '' : 'none';
+              if (show) visibleCount++;
+            });
+            sec.style.display = visibleCount > 0 ? '' : 'none';
+          });
+        }
+        if (search) search.addEventListener('input', applyFilter);
+        pills.forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            pills.forEach(function(p) { p.classList.remove('active'); });
+            btn.classList.add('active');
+            activeGroup = btn.getAttribute('data-filter-group') || 'all';
+            applyFilter();
+          });
+        });
+      })();
+      </script>`
+      : '';
+
   return `<!doctype html>
 <html lang="zh-CN" class="dark">
 <head>
@@ -461,6 +556,7 @@ export function renderConsoleIndex(pages: readonly ConsoleIndexPage[]): string {
     <div id="app">
       <h1>Zhin Console</h1>
       <p class="text-sm text-muted-foreground">Plugin Runtime pages (ADR 0046). Sandbox chat uses WebSocket <code>/sandbox</code>.</p>
+      ${filterPillsHtml}
       ${groupHtml || '<ul><li>No pages discovered yet.</li></ul>'}
     </div>
   </main>

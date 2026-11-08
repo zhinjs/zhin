@@ -46,7 +46,7 @@ export function normalizeClientModuleArtifact(
 export function isConsoleBlueprint(
   value: unknown,
 ): value is ConsolePageBlueprint | ConsoleAdapterPageBlueprint {
-  if (!value || typeof value !== 'object') return false;
+  if (!value || (typeof value !== 'object' && typeof value !== 'function')) return false;
   const kind = (value as { readonly kind?: unknown }).kind;
   return kind === 'zhin.console.page-blueprint' || kind === 'zhin.console.adapter-page';
 }
@@ -200,6 +200,152 @@ export type DeclarativeUiLocale = 'zh-CN' | 'en';
 /** Framework-agnostic renderable value (string, number, boolean, null, undefined, or JSX/ReactNode in browser). */
 export type DeclarativeRenderable = unknown;
 
+/**
+ * Pure JSON-serializable expression descriptor for zero-closure Server-Driven Blueprints.
+ * Can be evaluated identically in Web Console, IM Card projection, and CLI TUI panels.
+ */
+export type DeclarativeValueExpr =
+  | { readonly $path: string; readonly fallback?: string | number | boolean }
+  | { readonly $count: string }
+  | { readonly $sum: { readonly path: string; readonly field: string } }
+  | { readonly $format: DeclarativeI18nText; readonly args: readonly string[] }
+  | {
+      readonly $map: {
+        readonly path: string;
+        readonly cases: Readonly<Record<string, DeclarativeI18nText>>;
+        readonly default?: DeclarativeI18nText;
+      };
+    }
+  | {
+      readonly $join: {
+        readonly path: string;
+        readonly sep?: string;
+        readonly empty?: DeclarativeI18nText;
+      };
+    }
+  | { readonly $coalesce: readonly string[]; readonly fallback?: string | number | boolean };
+
+export function isDeclarativeValueExpr(value: unknown): value is DeclarativeValueExpr {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const rec = value as Record<string, unknown>;
+  return (
+    typeof rec.$path === 'string' ||
+    typeof rec.$count === 'string' ||
+    (rec.$sum !== null && typeof rec.$sum === 'object') ||
+    (rec.$format !== undefined && Array.isArray(rec.$args ?? rec.args)) ||
+    (rec.$map !== null && typeof rec.$map === 'object') ||
+    (rec.$join !== null && typeof rec.$join === 'object') ||
+    Array.isArray(rec.$coalesce)
+  );
+}
+
+export function resolveDataPath(data: unknown, path: string): unknown {
+  if (!data || typeof data !== 'object' || !path) return undefined;
+  const record = data as Record<string, unknown>;
+  if (Object.prototype.hasOwnProperty.call(record, path)) return record[path];
+  const segments = path.split('.').filter(Boolean);
+  let cursor: unknown = data;
+  for (const seg of segments) {
+    if (cursor === null || cursor === undefined) return undefined;
+    if (Array.isArray(cursor) && seg === 'length') return cursor.length;
+    if (typeof cursor !== 'object') return undefined;
+    cursor = Object.prototype.hasOwnProperty.call(cursor, seg)
+      ? (cursor as Record<string, unknown>)[seg]
+      : undefined;
+  }
+  return cursor;
+}
+
+export function evaluateDeclarativeValue(
+  exprOrKey: unknown,
+  data: unknown,
+  locale: DeclarativeUiLocale = 'en',
+): unknown {
+  if (exprOrKey === null || exprOrKey === undefined) return undefined;
+  if (typeof exprOrKey === 'string') {
+    return resolveDataPath(data, exprOrKey);
+  }
+  if (!isDeclarativeValueExpr(exprOrKey)) {
+    return exprOrKey;
+  }
+  const rec = exprOrKey as Record<string, unknown>;
+  if (typeof rec.$path === 'string') {
+    const val = resolveDataPath(data, rec.$path);
+    return val !== undefined && val !== null && val !== '' ? val : rec.fallback;
+  }
+  if (typeof rec.$count === 'string') {
+    const target = resolveDataPath(data, rec.$count);
+    if (Array.isArray(target)) return target.length;
+    if (target && typeof target === 'object') return Object.keys(target).length;
+    return typeof target === 'number' ? target : 0;
+  }
+  if (rec.$sum && typeof rec.$sum === 'object') {
+    const sumSpec = rec.$sum as { readonly path?: string; readonly field?: string };
+    const list = sumSpec.path ? resolveDataPath(data, sumSpec.path) : undefined;
+    if (!Array.isArray(list) || !sumSpec.field) return 0;
+    return list.reduce((acc: number, item: unknown) => {
+      let raw = resolveDataPath(item, sumSpec.field!);
+      if (raw === undefined && sumSpec.field === 'pendingCount') {
+        raw = resolveDataPath(item, 'drafts.length');
+      }
+      const n = Number(raw);
+      return acc + (Number.isFinite(n) ? n : 0);
+    }, 0);
+  }
+  const formatArgs = Array.isArray(rec.args)
+    ? rec.args
+    : Array.isArray(rec.$args)
+      ? rec.$args
+      : undefined;
+  if (rec.$format !== undefined && formatArgs) {
+    const template = resolveDeclarativeText(rec.$format as DeclarativeI18nText, locale);
+    const args = (formatArgs as readonly string[]).map((p) => resolveDataPath(data, p));
+    if (args.length > 0 && args.every((v) => v === undefined || v === null || v === '')) {
+      return undefined;
+    }
+    return template.replace(/\{(\d+)\}/gu, (_m, idx) => {
+      const v = args[Number(idx)];
+      return v === undefined || v === null ? '' : String(v);
+    });
+  }
+  if (rec.$map && typeof rec.$map === 'object') {
+    const mapSpec = rec.$map as {
+      readonly path?: string;
+      readonly cases?: Readonly<Record<string, DeclarativeI18nText>>;
+      readonly default?: DeclarativeI18nText;
+    };
+    const rawVal = mapSpec.path ? resolveDataPath(data, mapSpec.path) : undefined;
+    if (rawVal !== undefined && rawVal !== null && mapSpec.cases) {
+      const key = String(rawVal);
+      if (Object.prototype.hasOwnProperty.call(mapSpec.cases, key)) {
+        return resolveDeclarativeText(mapSpec.cases[key]!, locale);
+      }
+    }
+    if (mapSpec.default !== undefined) return resolveDeclarativeText(mapSpec.default, locale);
+    return rawVal;
+  }
+  if (rec.$join && typeof rec.$join === 'object') {
+    const joinSpec = rec.$join as {
+      readonly path?: string;
+      readonly sep?: string;
+      readonly empty?: DeclarativeI18nText;
+    };
+    const list = joinSpec.path ? resolveDataPath(data, joinSpec.path) : undefined;
+    if (!Array.isArray(list) || list.length === 0) {
+      return joinSpec.empty !== undefined ? resolveDeclarativeText(joinSpec.empty, locale) : '—';
+    }
+    return list.map((item) => String(item ?? '')).join(joinSpec.sep ?? ', ');
+  }
+  if (Array.isArray(rec.$coalesce)) {
+    for (const candidate of rec.$coalesce as readonly string[]) {
+      const val = resolveDataPath(data, candidate);
+      if (val !== undefined && val !== null && val !== '') return val;
+    }
+    return rec.fallback;
+  }
+  return undefined;
+}
+
 export interface DeclarativePageContext<TData = Record<string, unknown>> {
   readonly pluginId: string;
   readonly locale: DeclarativeUiLocale;
@@ -225,8 +371,12 @@ export interface DeclarativeBadgeSpec<TData = Record<string, unknown>> {
   readonly key?: string;
   readonly label:
     | DeclarativeI18nText
+    | DeclarativeValueExpr
     | ((data: TData, ctx: DeclarativePageContext<TData>) => DeclarativeRenderable);
-  readonly tone?: DeclarativeBadgeTone | ((data: TData) => DeclarativeBadgeTone);
+  readonly tone?:
+    | DeclarativeBadgeTone
+    | DeclarativeValueExpr
+    | ((data: TData) => DeclarativeBadgeTone);
 }
 
 export interface DeclarativeStatSpec<TData = Record<string, unknown>> {
@@ -234,17 +384,52 @@ export interface DeclarativeStatSpec<TData = Record<string, unknown>> {
   readonly label: DeclarativeI18nText;
   readonly value:
     | (keyof TData & string)
+    | string
+    | DeclarativeValueExpr
     | ((data: TData, ctx: DeclarativePageContext<TData>) => DeclarativeRenderable);
-  readonly hint?: DeclarativeI18nText | ((data: TData) => DeclarativeRenderable);
+  readonly unit?: DeclarativeI18nText;
+  readonly icon?: DeclarativeRenderable;
+  readonly image?: string;
+  readonly watermark?: DeclarativeRenderable | string;
+  readonly tone?: DeclarativeBadgeTone | 'primary';
+  readonly progress?: number | string | DeclarativeValueExpr;
+  readonly sparkline?: string;
+  readonly trend?: {
+    readonly value: DeclarativeI18nText | DeclarativeValueExpr;
+    readonly direction?: 'up' | 'down' | 'flat';
+  };
+  readonly hint?:
+    | DeclarativeI18nText
+    | DeclarativeValueExpr
+    | ((data: TData) => DeclarativeRenderable);
   readonly badge?: {
-    readonly label: DeclarativeI18nText | ((data: TData) => DeclarativeRenderable);
-    readonly tone?: DeclarativeBadgeTone | ((data: TData) => DeclarativeBadgeTone);
+    readonly label:
+      | DeclarativeI18nText
+      | DeclarativeValueExpr
+      | ((data: TData) => DeclarativeRenderable);
+    readonly tone?:
+      | DeclarativeBadgeTone
+      | DeclarativeValueExpr
+      | ((data: TData) => DeclarativeBadgeTone);
   };
 }
 
 export interface DeclarativeActionFieldSpec {
   readonly key: string;
   readonly label: DeclarativeI18nText;
+  readonly type?: 'text' | 'password' | 'number' | 'textarea' | 'select' | 'switch' | 'radio' | 'checkbox-group' | 'segmented';
+  readonly options?: readonly {
+    readonly value: string;
+    readonly label: DeclarativeI18nText;
+    readonly description?: DeclarativeI18nText;
+    readonly icon?: DeclarativeRenderable;
+    readonly badge?: DeclarativeRenderable;
+    readonly disabled?: boolean;
+  }[];
+  readonly variant?: 'default' | 'card' | 'button';
+  readonly direction?: 'column' | 'row' | 'grid';
+  readonly hint?: DeclarativeI18nText;
+  readonly rows?: number;
   readonly placeholder?: string;
   readonly required?: boolean;
   readonly defaultValue?: string;
@@ -256,6 +441,7 @@ export interface DeclarativeActionSpec<TData = Record<string, unknown>> {
   readonly name: string;
   readonly label: DeclarativeI18nText;
   readonly description?: DeclarativeI18nText;
+  readonly icon?: DeclarativeRenderable;
   readonly variant?: DeclarativeButtonVariant;
   readonly confirm?: DeclarativeI18nText;
   readonly confirmLabel?: DeclarativeI18nText;
@@ -270,17 +456,87 @@ export interface DeclarativeActionSpec<TData = Record<string, unknown>> {
   readonly successMessage?: DeclarativeI18nText;
 }
 
+export type DeclarativeColumnType =
+  | 'auto'
+  | 'text'
+  | 'code'
+  | 'badge'
+  | 'boolean'
+  | 'link'
+  | 'datetime'
+  | 'number'
+  | 'progress'
+  | 'tags'
+  | 'json';
+
 export interface DeclarativeColumnSpec<
   TRow = Record<string, unknown>,
   TData = Record<string, unknown>,
 > {
   readonly key: keyof TRow & string;
   readonly label: DeclarativeI18nText;
+  readonly icon?: DeclarativeRenderable;
+  readonly type?: DeclarativeColumnType;
+  readonly align?: 'left' | 'center' | 'right';
+  readonly fixed?: 'left' | 'right';
+  readonly sortable?: boolean;
+  readonly copyable?: boolean;
+  readonly width?: string | number;
+  readonly toneMap?: Readonly<Record<string, DeclarativeBadgeTone>>;
   readonly render?: (
     value: unknown,
     row: TRow,
     ctx: DeclarativePageContext<TData>,
   ) => DeclarativeRenderable;
+}
+
+export interface DeclarativeBatchActionSpec<
+  TRow = Record<string, unknown>,
+  TData = Record<string, unknown>,
+> {
+  readonly name: string;
+  readonly label: DeclarativeI18nText;
+  readonly icon?: DeclarativeRenderable;
+  readonly variant?: DeclarativeButtonVariant;
+  readonly confirm?: DeclarativeI18nText;
+  readonly confirmLabel?: DeclarativeI18nText;
+  readonly idsParamKey?: string;
+  readonly params?: (
+    selectedRows: readonly TRow[],
+    selectedKeys: readonly string[],
+    data: TData | undefined,
+  ) => Readonly<Record<string, unknown>>;
+  readonly onExecute?: (
+    selectedRows: readonly TRow[],
+    selectedKeys: readonly string[],
+    ctx: DeclarativePageContext<TData>,
+  ) => unknown;
+  readonly successMessage?: DeclarativeI18nText;
+}
+
+export interface DeclarativeRowActionSpec<
+  TRow = Record<string, unknown>,
+  TData = Record<string, unknown>,
+> {
+  readonly name: string;
+  readonly label: DeclarativeI18nText;
+  readonly icon?: DeclarativeRenderable;
+  readonly variant?: DeclarativeButtonVariant;
+  readonly confirm?: DeclarativeI18nText;
+  readonly confirmLabel?: DeclarativeI18nText;
+  readonly idParamKey?: string;
+  readonly params?: (
+    row: TRow,
+    rowKey: string,
+    data: TData | undefined,
+  ) => Readonly<Record<string, unknown>>;
+  readonly onExecute?: (
+    row: TRow,
+    rowKey: string,
+    ctx: DeclarativePageContext<TData>,
+  ) => unknown;
+  readonly disabled?: boolean | ((row: TRow) => boolean);
+  readonly successMessage?: DeclarativeI18nText;
 }
 
 export interface DeclarativeSectionSpec<
@@ -290,7 +546,22 @@ export interface DeclarativeSectionSpec<
   readonly id?: string;
   readonly title?: DeclarativeI18nText;
   readonly description?: DeclarativeI18nText;
+  readonly tab?: DeclarativeI18nText;
+  readonly layout?: 'table' | 'cards' | 'kv' | 'timeline' | 'json';
+  readonly columnsCount?: 1 | 2 | 3;
+  readonly collapsible?: boolean;
+  readonly defaultCollapsed?: boolean;
   readonly emptyText?: DeclarativeI18nText;
+  readonly rowKey?: keyof TRow & string;
+  readonly selectable?: boolean;
+  readonly batchActions?: readonly DeclarativeBatchActionSpec<TRow, TData>[];
+  readonly rowActions?: readonly DeclarativeRowActionSpec<TRow, TData>[];
+  readonly renderExpandedRow?: (
+    row: TRow,
+    index: number,
+    ctx: DeclarativePageContext<TData>,
+  ) => DeclarativeRenderable;
+  readonly responsiveStack?: boolean;
   /** Extract rows for a declarative table or list. */
   readonly items?: (keyof TData & string) | ((data: TData) => readonly TRow[]);
   /** Columns for a declarative table/card list when `items` is provided. */
@@ -302,12 +573,18 @@ export interface DeclarativeSectionSpec<
     ctx: DeclarativePageContext<TData>,
   ) => DeclarativeRenderable;
   /** Key-value description list extractor (`<dl className="zk-dl">`). */
-  readonly entries?: (
-    data: TData,
-    ctx: DeclarativePageContext<TData>,
-  ) =>
-    | Readonly<Record<string, DeclarativeRenderable>>
-    | readonly { readonly label: DeclarativeRenderable; readonly value: DeclarativeRenderable }[];
+  readonly entries?:
+    | readonly {
+        readonly label: DeclarativeI18nText;
+        readonly value?: DeclarativeRenderable | DeclarativeValueExpr;
+        readonly dataKey?: string;
+      }[]
+    | ((
+        data: TData,
+        ctx: DeclarativePageContext<TData>,
+      ) =>
+        | Readonly<Record<string, DeclarativeRenderable>>
+        | readonly { readonly label: DeclarativeRenderable; readonly value: DeclarativeRenderable }[]);
   /** Custom section body renderer. */
   readonly render?: (data: TData, ctx: DeclarativePageContext<TData>) => DeclarativeRenderable;
 }
@@ -364,6 +641,7 @@ export type ConsolePageBlueprintSection =
         readonly value?: unknown;
         readonly suffix?: string;
         readonly dataKey?: string;
+        readonly expr?: DeclarativeValueExpr;
       }[];
     }
   | {
@@ -378,6 +656,12 @@ export type ConsolePageBlueprintSection =
       readonly type: 'entries';
       readonly id: string;
       readonly title: string;
+      readonly entries?: readonly {
+        readonly label: string;
+        readonly value: string;
+        readonly dataKey?: string;
+        readonly expr?: DeclarativeValueExpr;
+      }[];
     }
   | {
       readonly type: 'actions';
@@ -389,6 +673,12 @@ export type ConsolePageBlueprintSection =
         readonly name?: string;
         readonly description?: string;
         readonly variant?: DeclarativeButtonVariant;
+        readonly confirm?: DeclarativeI18nText;
+        readonly confirmLabel?: DeclarativeI18nText;
+        readonly fields?: readonly DeclarativeActionFieldSpec[];
+        readonly params?: DeclarativeActionSpec<any>['params'];
+        readonly disabled?: DeclarativeActionSpec<any>['disabled'];
+        readonly successMessage?: DeclarativeI18nText;
       }[];
     }
   | {
@@ -510,6 +800,7 @@ export function buildBlueprintFromSpec<TData = Record<string, unknown>>(
       dataSource: Object.freeze({ action: bp.dataSource?.action ?? 'status' }),
       sections: Object.freeze([...(bp.sections ?? [])]),
       ...(bp.spec !== undefined ? { spec: bp.spec } : {}),
+      ...(bp.reviewSpec !== undefined ? { reviewSpec: bp.reviewSpec } : {}),
     });
   }
 
@@ -538,6 +829,7 @@ export function buildBlueprintFromSpec<TData = Record<string, unknown>>(
               key: stat.key ?? (typeof stat.value === 'string' ? stat.value : `stat-${idx}`),
               label: resolveDeclarativeText(stat.label, 'en'),
               ...(typeof stat.value === 'string' ? { dataKey: stat.value } : {}),
+              ...(isDeclarativeValueExpr(stat.value) ? { expr: stat.value } : {}),
             }),
           ),
         ),
@@ -549,13 +841,16 @@ export function buildBlueprintFromSpec<TData = Record<string, unknown>>(
     const id = sec.id ?? `section-${idx}`;
     const secTitle = resolveDeclarativeText(sec.title, 'en');
     if (sec.columns !== undefined || sec.items !== undefined) {
+      const preferredRowKey = sec.columns?.find(
+        (c) => c.key === 'id' || c.key === 'key' || c.key === 'ownerKey',
+      )?.key ?? 'id';
       sections.push(
         Object.freeze({
           type: 'table',
           id,
           title: secTitle,
           ...(typeof sec.items === 'string' ? { dataKey: sec.items } : {}),
-          rowKey: sec.columns?.[0]?.key ?? 'id',
+          rowKey: preferredRowKey,
           columns: Object.freeze(
             (sec.columns ?? []).map((col) =>
               Object.freeze({
@@ -572,6 +867,26 @@ export function buildBlueprintFromSpec<TData = Record<string, unknown>>(
           type: 'entries',
           id,
           title: secTitle,
+          ...(Array.isArray(sec.entries)
+            ? {
+                entries: Object.freeze(
+                  sec.entries.map((e) => {
+                    const inferredDataKey =
+                      e.dataKey ??
+                      (isDeclarativeValueExpr(e.value) &&
+                      typeof (e.value as { $path?: unknown }).$path === 'string'
+                        ? (e.value as { $path: string }).$path
+                        : undefined);
+                    return Object.freeze({
+                      label: resolveDeclarativeText(e.label, 'en'),
+                      value: isDeclarativeValueExpr(e.value) ? '' : String(e.value ?? ''),
+                      ...(inferredDataKey ? { dataKey: inferredDataKey } : {}),
+                      ...(isDeclarativeValueExpr(e.value) ? { expr: e.value } : {}),
+                    });
+                  }),
+                ),
+              }
+            : {}),
         }),
       );
     } else {
@@ -601,12 +916,20 @@ export function buildBlueprintFromSpec<TData = Record<string, unknown>>(
                 ? { description: resolveDeclarativeText(act.description, 'en') }
                 : {}),
               ...(act.variant ? { variant: act.variant } : {}),
+              ...(act.confirm !== undefined ? { confirm: act.confirm } : {}),
+              ...(act.confirmLabel !== undefined ? { confirmLabel: act.confirmLabel } : {}),
+              ...(act.fields !== undefined ? { fields: act.fields } : {}),
+              ...(act.params !== undefined ? { params: act.params } : {}),
+              ...(act.disabled !== undefined ? { disabled: act.disabled } : {}),
+              ...(act.successMessage !== undefined ? { successMessage: act.successMessage } : {}),
             }),
           ),
         ),
       }),
     );
   }
+
+  const rawReviewSpec = (spec as unknown as { readonly reviewSpec?: CommentReviewBlueprintSpec<any, any> }).reviewSpec;
 
   return Object.freeze({
     kind: 'zhin.console.page-blueprint',
@@ -617,6 +940,7 @@ export function buildBlueprintFromSpec<TData = Record<string, unknown>>(
     dataSource,
     sections: Object.freeze(sections),
     spec,
+    ...(rawReviewSpec !== undefined ? { reviewSpec: rawReviewSpec } : {}),
   });
 }
 
@@ -676,16 +1000,12 @@ export function defineCommentReviewPage<
       {
         key: 'endpoints',
         label: { zh: '账号数', en: 'Accounts' },
-        value: (data) => (Array.isArray(data?.endpoints) ? data.endpoints.length : 0),
+        value: { $count: 'endpoints' },
       },
       {
         key: 'pendingDrafts',
         label: { zh: '待审草稿', en: 'Pending drafts' },
-        value: (data) =>
-          (data?.endpoints ?? []).reduce(
-            (sum, ep) => sum + (typeof ep?.pendingCount === 'number' ? ep.pendingCount : (ep?.drafts?.length ?? 0)),
-            0,
-          ),
+        value: { $sum: { path: 'endpoints', field: 'pendingCount' } },
       },
     ],
     sections: [
@@ -992,17 +1312,21 @@ export function projectBlueprintToImCard<TData = Record<string, unknown>>(
       const val =
         typeof s.value === 'function'
           ? s.value((data ?? ({} as TData)), ctx)
-          : recordData[s.value];
+          : evaluateDeclarativeValue(s.value, recordData, locale);
       const hint =
         typeof s.hint === 'function'
           ? formatRenderableValue(s.hint((data ?? ({} as TData))))
-          : s.hint
-            ? resolveDeclarativeText(s.hint, locale)
-            : undefined;
+          : isDeclarativeValueExpr(s.hint)
+            ? formatRenderableValue(evaluateDeclarativeValue(s.hint, recordData, locale))
+            : s.hint
+              ? resolveDeclarativeText(s.hint, locale)
+              : undefined;
       const badge = s.badge
         ? typeof s.badge.label === 'function'
           ? formatRenderableValue(s.badge.label((data ?? ({} as TData))))
-          : resolveDeclarativeText(s.badge.label, locale)
+          : isDeclarativeValueExpr(s.badge.label)
+            ? formatRenderableValue(evaluateDeclarativeValue(s.badge.label, recordData, locale))
+            : resolveDeclarativeText(s.badge.label, locale)
         : undefined;
       stats.push(
         Object.freeze({
@@ -1018,7 +1342,11 @@ export function projectBlueprintToImCard<TData = Record<string, unknown>>(
     for (const sec of bp.sections) {
       if (sec.type === 'stats') {
         for (const item of sec.items) {
-          const val = item.dataKey ? recordData[item.dataKey] : item.value;
+          const val = item.expr
+            ? evaluateDeclarativeValue(item.expr, recordData, locale)
+            : item.dataKey
+              ? resolveDataPath(recordData, item.dataKey)
+              : item.value;
           stats.push(
             Object.freeze({
               key: item.key,
@@ -1042,7 +1370,7 @@ export function projectBlueprintToImCard<TData = Record<string, unknown>>(
         const rawItems =
           typeof sec.items === 'function'
             ? sec.items((data ?? ({} as TData)))
-            : (recordData[sec.items] as readonly Record<string, unknown>[] | undefined);
+            : (resolveDataPath(recordData, sec.items) as readonly Record<string, unknown>[] | undefined);
         const list = Array.isArray(rawItems) ? rawItems : [];
         const cols: readonly {
           readonly key: string;
@@ -1069,11 +1397,12 @@ export function projectBlueprintToImCard<TData = Record<string, unknown>>(
             return [formatRenderableValue(sec.renderItem(row, rowIdx, ctx))];
           }
           const rec = (row && typeof row === 'object' ? row : { value: row }) as Record<string, unknown>;
-          return cols.map((c) =>
-            c.render
-              ? formatRenderableValue(c.render(rec[c.key], row, ctx))
-              : formatRenderableValue(rec[c.key]),
-          );
+          return cols.map((c) => {
+            const cellVal = resolveDataPath(rec, c.key);
+            return c.render
+              ? formatRenderableValue(c.render(cellVal, row, ctx))
+              : formatRenderableValue(cellVal);
+          });
         });
         const emptyText = sec.emptyText ? resolveDeclarativeText(sec.emptyText, locale) : undefined;
         tables.push(
@@ -1087,18 +1416,41 @@ export function projectBlueprintToImCard<TData = Record<string, unknown>>(
           }),
         );
       } else if (sec.entries !== undefined) {
-        const rawEntries = sec.entries((data ?? ({} as TData)), ctx);
+        const rawEntries =
+          typeof sec.entries === 'function'
+            ? sec.entries((data ?? ({} as TData)), ctx)
+            : sec.entries;
         const items = Array.isArray(rawEntries)
-          ? rawEntries.map((entry) =>
-              Object.freeze({
-                label: formatRenderableValue(entry.label),
-                value: formatRenderableValue(entry.value),
-              }),
-            )
+          ? rawEntries.map((entry) => {
+              const entryRecord = entry as {
+                readonly label: unknown;
+                readonly value: unknown;
+                readonly dataKey?: string;
+                readonly expr?: DeclarativeValueExpr;
+              };
+              const resolvedValue = isDeclarativeValueExpr(entryRecord.expr)
+                ? evaluateDeclarativeValue(entryRecord.expr, recordData, locale)
+                : isDeclarativeValueExpr(entryRecord.value)
+                  ? evaluateDeclarativeValue(entryRecord.value, recordData, locale)
+                  : entryRecord.dataKey
+                    ? resolveDataPath(recordData, entryRecord.dataKey)
+                    : entryRecord.value;
+              return Object.freeze({
+                label:
+                  typeof entryRecord.label === 'object' &&
+                  entryRecord.label !== null &&
+                  ('zh' in entryRecord.label || 'en' in entryRecord.label || 'zh-CN' in entryRecord.label)
+                    ? resolveDeclarativeText(entryRecord.label as DeclarativeI18nText, locale)
+                    : formatRenderableValue(entryRecord.label),
+                value: formatRenderableValue(resolvedValue),
+              });
+            })
           : Object.entries(rawEntries ?? {}).map(([k, v]) =>
               Object.freeze({
                 label: k,
-                value: formatRenderableValue(v),
+                value: formatRenderableValue(
+                  isDeclarativeValueExpr(v) ? evaluateDeclarativeValue(v, recordData, locale) : v,
+                ),
               }),
             );
         entries.push(
@@ -1113,11 +1465,11 @@ export function projectBlueprintToImCard<TData = Record<string, unknown>>(
   } else {
     for (const sec of bp.sections) {
       if (sec.type === 'table') {
-        const rawItems = sec.dataKey ? recordData[sec.dataKey] : undefined;
+        const rawItems = sec.dataKey ? resolveDataPath(recordData, sec.dataKey) : undefined;
         const list = Array.isArray(rawItems) ? rawItems : [];
         const rows = list.slice(0, maxRows).map((row) => {
           const rec = (row && typeof row === 'object' ? row : {}) as Record<string, unknown>;
-          return sec.columns.map((c) => formatRenderableValue(rec[c.key]));
+          return sec.columns.map((c) => formatRenderableValue(resolveDataPath(rec, c.key)));
         });
         tables.push(
           Object.freeze({
@@ -1126,6 +1478,28 @@ export function projectBlueprintToImCard<TData = Record<string, unknown>>(
             columns: sec.columns,
             rows: Object.freeze(rows.map((r) => Object.freeze(r))),
             totalRows: list.length,
+          }),
+        );
+      } else if (sec.type === 'entries' && Array.isArray(sec.entries)) {
+        entries.push(
+          Object.freeze({
+            id: sec.id,
+            title: sec.title,
+            items: Object.freeze(
+              sec.entries.map((entry) => {
+                const resolvedValue = entry.expr
+                  ? evaluateDeclarativeValue(entry.expr, recordData, locale)
+                  : isDeclarativeValueExpr(entry.value)
+                    ? evaluateDeclarativeValue(entry.value, recordData, locale)
+                    : entry.dataKey
+                      ? resolveDataPath(recordData, entry.dataKey)
+                      : entry.value;
+                return Object.freeze({
+                  label: formatRenderableValue(entry.label),
+                  value: formatRenderableValue(resolvedValue),
+                });
+              }),
+            ),
           }),
         );
       }

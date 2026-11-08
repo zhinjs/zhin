@@ -344,4 +344,276 @@ describe('locale and plugin id helpers', () => {
     expect(serialized).toContain('Trigger');
     env.unmount();
   });
+
+  it('renders smart value badges, URL links, code pills, array chips, and declarative badge tones', async () => {
+    vi.useFakeTimers();
+    stubHost(async () => ({
+      data: {
+        healthy: true,
+        pid: 4242,
+        rssMb: 128,
+        feedUrl: 'https://example.com/rss.xml',
+        tags: ['alpha', 'beta'],
+      },
+    }));
+    const env = createHookEnv();
+    const { createDeclarativePage } = env.load(file('./declarative-page.tsx'));
+    const Page = createDeclarativePage({
+      pluginId: 'root/process-monitor',
+      title: { zh: '进程监控', en: 'Process Monitor' },
+      badges: [
+        {
+          key: 'healthy',
+          label: {
+            $map: {
+              path: 'healthy',
+              cases: { true: 'Healthy', false: 'Degraded' },
+              default: 'Degraded',
+            },
+          },
+          tone: {
+            $map: {
+              path: 'healthy',
+              cases: { true: 'success', false: 'warning' },
+              default: 'warning',
+            },
+          },
+        },
+      ],
+      sections: [
+        {
+          id: 'details',
+          title: 'Details',
+          entries: [
+            { label: 'PID', dataKey: 'pid' },
+            { label: 'RSS (MB)', value: { $format: '{0} MB', args: ['rssMb'] } },
+            { label: 'Feed URL', dataKey: 'feedUrl' },
+            { label: 'Tags', dataKey: 'tags' },
+            {
+              label: 'Healthy',
+              value: {
+                $map: {
+                  path: 'healthy',
+                  cases: { true: 'Yes', false: 'No' },
+                  default: 'No',
+                },
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    env.mount(() => Page({ pluginId: 'root/process-monitor' }));
+    await env.settle();
+    const serialized = JSON.stringify(env.tree());
+    expect(serialized).toContain('"tone":"success"');
+    expect(serialized).toContain('128 MB');
+    expect(serialized).toContain('zk-ext-link');
+    expect(serialized).toContain('zk-code-pill');
+    expect(serialized).toContain('zk-chip');
+    env.unmount();
+  });
+
+  it('renders universal UI components (Card, Tabs, Switch, ProgressBar, RingProgress, StatCard, Timeline, DataTable, Modal)', async () => {
+    vi.useFakeTimers();
+    stubHost(async () => ({
+      data: {
+        cpuPct: 68,
+        trendSeries: [10, 25, 40, 68],
+        events: [
+          { id: 'e1', title: 'Started', status: 'ok', time: '10:00' },
+          { id: 'e2', title: 'Synced', status: 'ready', time: '10:05' },
+        ],
+      },
+    }));
+    const env = createHookEnv();
+    const ui = env.load(file('./index.ts'));
+    const onTabChange = vi.fn();
+    const onSwitchChange = vi.fn();
+
+    env.mount(() =>
+      ui.Card({
+        title: 'System Overview',
+        subtitle: 'Realtime telemetry',
+        tone: 'primary',
+        children: [
+          ui.Tabs({
+            defaultValue: 't1',
+            onChange: onTabChange,
+            items: [
+              { key: 't1', label: 'Metrics', badge: 2, content: 'Metrics Body' },
+              { key: 't2', label: 'Logs', content: 'Logs Body' },
+            ],
+          }),
+          ui.Switch({ checked: true, onChange: onSwitchChange, label: 'Auto-heal' }),
+          ui.ProgressBar({ value: 82, showValue: true, label: 'Disk' }),
+          ui.RingProgress({ value: 64, label: 'CPU' }),
+          ui.StatCard({
+            label: 'Load',
+            value: '1.25',
+            unit: 'req/s',
+            progress: 65,
+            sparkline: [1, 3, 2, 5],
+            trend: { value: '+12%', direction: 'up' },
+          }),
+          ui.Timeline({
+            items: [
+              { id: '1', title: 'Boot', time: '09:00', tone: 'success' },
+              { id: '2', title: 'Ready', description: 'All adapters online' },
+            ],
+          }),
+          ui.DataTable({
+            columns: [
+              { key: 'name', label: 'Name', sortable: true },
+              { key: 'load', label: 'Load', type: 'progress' },
+            ],
+            rows: [
+              { id: '1', name: 'Worker B', load: 80 },
+              { id: '2', name: 'Worker A', load: 30 },
+            ],
+          }),
+          ui.Modal({
+            open: true,
+            onClose: () => undefined,
+            title: 'Confirm Action',
+            children: 'Modal content',
+          }),
+        ],
+      }),
+    );
+
+    const serialized = JSON.stringify(env.tree());
+    expect(serialized).toContain('System Overview');
+    expect(serialized).toContain('Metrics Body');
+    expect(serialized).toContain('82%');
+    expect(serialized).toContain('64%');
+    expect(serialized).toContain('+12%');
+    expect(serialized).toContain('All adapters online');
+    expect(serialized).toContain('Worker B');
+    expect(serialized).toContain('Confirm Action');
+    env.unmount();
+  });
+
+  it('supports icon Radio/Checkbox/SegmentedControl, custom chart images, table fixed columns, batch actions, expandable rows, and responsive stacking', async () => {
+    vi.useFakeTimers();
+    const env = createHookEnv();
+    const ui = env.load(file('./index.ts'));
+    const onBatchDelete = vi.fn();
+    const onRowInspect = vi.fn();
+
+    env.mount(() =>
+      ui.Card({
+        title: 'Advanced UI Suite',
+        children: [
+          ui.RadioGroup({
+            value: 'qq',
+            variant: 'card',
+            direction: 'grid',
+            onChange: () => undefined,
+            options: [
+              { value: 'qq', label: 'QQ Bot', icon: '🐧', badge: ui.Badge({ tone: 'success', children: 'Rec' }), description: 'Official adapter' },
+              { value: 'tg', label: 'Telegram', icon: '✈️', description: 'Webhook/Polling' },
+            ],
+          }),
+          ui.CheckboxGroup({
+            value: ['im', 'ai'],
+            variant: 'card',
+            onChange: () => undefined,
+            options: [
+              { value: 'im', label: 'IM Core', icon: '💬' },
+              { value: 'ai', label: 'AI Agent', icon: '🤖' },
+            ],
+          }),
+          ui.SegmentedControl({
+            value: 'day',
+            onChange: () => undefined,
+            options: [
+              { value: 'day', label: 'Day', icon: '☀️', badge: 24 },
+              { value: 'week', label: 'Week', icon: '📅' },
+            ],
+          }),
+          ui.RingProgress({
+            value: 88,
+            centerImage: 'https://example.com/bot-avatar.png',
+            label: 'Health',
+          }),
+          ui.Sparkline({
+            values: [12, 36, 24, 58],
+            markerImage: 'https://example.com/peak.png',
+            showPeak: true,
+          }),
+          ui.BarChart({
+            backgroundImage: 'https://example.com/bg-grid.png',
+            items: [
+              { label: 'QQ', value: 120, image: 'https://example.com/qq.png', tone: 'primary' },
+              { label: 'Discord', value: 85, icon: '🎮', tone: 'info' },
+            ],
+          }),
+          ui.DonutChart({
+            centerImage: 'https://example.com/center.png',
+            segments: [
+              { label: 'Private', value: 60, tone: 'primary', image: 'https://example.com/u1.png' },
+              { label: 'Group', value: 40, tone: 'success', icon: '👥' },
+            ],
+          }),
+          ui.StatCard({
+            label: 'Messages',
+            value: '9,420',
+            image: 'https://example.com/msg-icon.png',
+            watermark: 'https://example.com/watermark.png',
+          }),
+          ui.DataTable({
+            selectable: true,
+            selectedKeys: ['r1'],
+            responsiveStack: true,
+            batchActions: [
+              {
+                key: 'delete-selected',
+                label: '批量清理',
+                variant: 'danger',
+                onExecute: onBatchDelete,
+              },
+            ],
+            rowActions: [
+              {
+                key: 'inspect',
+                label: '诊断',
+                onExecute: onRowInspect,
+              },
+            ],
+            renderExpandedRow: (row: { id: string; name: string }) => `Expanded detail for ${row.name}`,
+            columns: [
+              { key: 'id', label: 'ID', fixed: 'left', width: 90, icon: '🔑' },
+              { key: 'name', label: 'Name', fixed: 'left', width: 150 },
+              { key: 'status', label: 'Status', fixed: 'right', width: 110 },
+            ],
+            rows: [
+              { id: 'r1', name: 'Node Alpha', status: 'healthy' },
+              { id: 'r2', name: 'Node Beta', status: 'degraded' },
+            ],
+          }),
+        ],
+      }),
+    );
+
+    const serialized = JSON.stringify(env.tree());
+    expect(serialized).toContain('zk-check-card');
+    expect(serialized).toContain('zk-check-icon');
+    expect(serialized).toContain('https://example.com/bot-avatar.png');
+    expect(serialized).toContain('https://example.com/peak.png');
+    expect(serialized).toContain('https://example.com/bg-grid.png');
+    expect(serialized).toContain('https://example.com/center.png');
+    expect(serialized).toContain('https://example.com/watermark.png');
+    expect(serialized).toContain('zk-batch-bar');
+    expect(serialized).toMatch(/已选 1 项|1 selected/);
+    expect(serialized).toContain('批量清理');
+    expect(serialized).toContain('zk-cell-fixed-left');
+    expect(serialized).toContain('zk-cell-fixed-left-last');
+    expect(serialized).toContain('zk-cell-fixed-right');
+    expect(serialized).toContain('96px');
+    expect(serialized).toContain('zk-table--responsive');
+    expect(serialized).toContain('data-label');
+    env.unmount();
+  });
 });

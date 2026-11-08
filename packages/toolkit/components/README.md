@@ -159,16 +159,23 @@ const card = (
 
 `CodeBlock` 提供语言标签、可选 JSX 标题、语法着色与行号；`theme.code` 设置共享配色主题、等宽字体和字号，`themeName` 可单独选择 Shiki 内置主题。默认显示行号并换行；`wrap={false}` 在浏览器中允许横向滚动，静态图片不能滚动，应保留默认换行或选择足够宽的画布。未识别的语言按纯文本展示，代码最长 100,000 字符。`custom.text.title` 和 `theme.text.codeTitle` 可替换标题文案，`custom.style` 覆盖实际根节点；显式覆盖前景色时，代码整体使用该颜色。所有代码 token 都经过 JSX 文本转义，不插入高亮引擎生成的 HTML，也不执行代码。
 
-## 组件画廊
+## 组件画廊与实时预览
 
-画廊展示所有组件的默认、主题与局部自定义场景，包括表格、Row 排版和控件：
+画廊展示所有组件的默认、主题与局部自定义场景，包括表格（固定列、批量选中）、Row 排版、带图标/徽章的控件以及带自定义图片/水印的图表：
 
 ```bash
 pnpm --filter @zhin.js/components build
 pnpm --filter @zhin.js/components preview -- /private/tmp/zhin-jsx-visual/gallery.html
 ```
 
-用浏览器打开输出的 HTML。发布包也包含 `examples/gallery.mjs`，可用 Node 生成本地预览。
+用浏览器打开输出的 HTML。开发调样式时也可启动带热刷新（SSE）与盒模型/分区过滤工具栏的本地预览服务：
+
+```bash
+pnpm preview:components
+# 或：pnpm --filter @zhin.js/components preview:serve
+```
+
+发布包也包含 `examples/gallery.mjs`，可用 Node 生成本地预览。
 
 ## 间距规则
 

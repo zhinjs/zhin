@@ -2,7 +2,7 @@ import { DEFAULT_CONSOLE_BASE_PATH, type ConsoleClientEntry, type ConsoleEntries
 import type * as React from 'react';
 import { AdapterConsolePage } from '../adapter-console/AdapterConsolePage.js';
 import { getToken } from '../console-utils/remoteApi.js';
-import { DeclarativePageView, type DeclarativePageSpec } from '../ui/declarative-page.js';
+import { DeclarativePageView, type DeclarativePageComponentProps, type DeclarativePageSpec } from '../ui/declarative-page.js';
 
 export type FetchConsoleEntriesOptions = {
   entriesUrl?: string;
@@ -22,6 +22,7 @@ export type LoadConsoleEntriesOptions = FetchConsoleEntriesOptions & {
 };
 
 export interface ConsoleEntryMetadataFields {
+  readonly owner?: string;
   readonly route?: string;
   readonly title?: string;
   readonly titleI18n?: Readonly<Partial<Record<'zh-CN' | 'en', string>>>;
@@ -153,17 +154,29 @@ export function resolveEntryRegister(
   const requiredRoles = meta?.requiredRoles ?? entry.requiredRoles;
   return (api) => {
     const rawComp = Component as Record<string, unknown> | React.ComponentType;
-    const isRawObject = typeof rawComp === 'object' && rawComp !== null;
-    const element = isRawObject && (rawComp as { kind?: unknown }).kind === 'zhin.console.page-blueprint'
+    const pageProps: DeclarativePageComponentProps = {
+      pluginId: entry.owner ?? entry.id,
+      route: path,
+      title: name,
+    };
+    const blueprintKind =
+      rawComp && (typeof rawComp === 'object' || typeof rawComp === 'function')
+        ? (rawComp as { kind?: unknown }).kind
+        : undefined;
+    const element = blueprintKind === 'zhin.console.page-blueprint'
       ? api.React.createElement(DeclarativePageView as unknown as React.ComponentType<Record<string, unknown>>, {
-          spec: ((rawComp as { spec?: DeclarativePageSpec }).spec ?? rawComp) as DeclarativePageSpec,
-          pageProps: { pluginId: entry.id, route: path, title: name },
+          spec: (((rawComp as { reviewSpec?: unknown }).reviewSpec != null
+            ? rawComp
+            : ((rawComp as { spec?: DeclarativePageSpec }).spec ?? rawComp)) as DeclarativePageSpec),
+          pageProps,
         })
-      : isRawObject && (rawComp as { kind?: unknown }).kind === 'zhin.console.adapter-page'
+      : blueprintKind === 'zhin.console.adapter-page'
         ? api.React.createElement(AdapterConsolePage as unknown as React.ComponentType<Record<string, unknown>>, {
             adapterKey: String((rawComp as { adapterKey?: unknown }).adapterKey ?? entry.id),
           })
-        : api.React.createElement(Component as React.ComponentType);
+        : entry.owner !== undefined
+          ? api.React.createElement(Component as React.ComponentType<DeclarativePageComponentProps>, pageProps)
+          : api.React.createElement(Component as React.ComponentType);
     api.addRoute({
       path,
       name,

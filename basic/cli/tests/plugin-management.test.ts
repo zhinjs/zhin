@@ -8,7 +8,7 @@ import { loadRuntimeEnvironmentLayers } from '../src/plugin-runtime/start/enviro
 import { definePlugin, pluginVerificationToken } from '@zhin.js/plugin-runtime';
 import { PluginManagementWorkflow, PluginManagementOperationError } from '../src/plugin-management/workflow.js';
 import { PluginManagementActivity } from '../src/plugin-management/activity.js';
-import { createPluginManagementPort } from '../src/plugin-runtime/console/plugin-management.js';
+import { createPluginManagementPort } from '../src/plugin-runtime/console/api-routes.js';
 import adapterFeature, { Adapter, endpointSpec, createEndpointSpecification, type Endpoint, type EndpointSpecification, defineAdapter, adapterFeatureId, isAdapterIndex, endpointEventGatewayToken, type EndpointTransportState } from '@zhin.js/adapter';
 
 const roots: string[] = [];

@@ -60,6 +60,11 @@ import { installHttpHost, resolveHttpConfig } from '@zhin.js/host-http';
 import { createDatabaseHost, installDatabaseHost, resolveDatabaseConfig } from '@zhin.js/core/runtime';
 import { installLocaleHost } from '@zhin.js/core/runtime';
 import { installConfigurationHost } from './configuration-host-installer.js';
+import {
+  createRestartChatAuthorizer,
+  deliverPendingRestartReceipt,
+  installRestartHost,
+} from './restart-host-installer.js';
 import { installHtmlRendererHost, prepareHtmlRendererHost } from './html-renderer-host-installer.js';
 import { installComponentHost } from '@zhin.js/core/runtime';
 import { installOutboundHost } from '@zhin.js/core/runtime';
@@ -75,7 +80,7 @@ import {
   readProjectPluginLifecycleState,
   resolvePluginLifecycleFile,
 } from '@zhin.js/runtime';
-import { installProcessLifecycle, nodeProcessLifecycleAdapter } from './process-lifecycle.js';
+import { DEFAULT_SHUTDOWN_BUDGET_MS, installProcessLifecycle, nodeProcessLifecycleAdapter } from './process-lifecycle.js';
 import { installProcessRejectionHandler } from './process-rejections.js';
 import {
   ProjectEnvironmentFileSource,
@@ -219,6 +224,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     },
   });
   const authorizeConfigurationChat = createConfigurationChatAuthorizer(hostConfig, endpointRoles);
+  const authorizeRestartChat = createRestartChatAuthorizer(hostConfig, endpointRoles);
   // 受控自我进化生效（ADR 0040 §5 / §6）：进程持有热重载 / exit 75 / 健康检查 / 配置补丁；最新 generation 绑定生效器。
   const selfChangeApply = new HostSelfChangeApply({
     projectRoot: options.root,
@@ -255,6 +261,12 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
       }
       installLocaleHost(databaseHost)(context);
       installConfigurationHost({ store: consoleConfigurationStore, authorize: authorizeConfigurationChat })(context);
+      installRestartHost({
+        projectRoot: options.root,
+        authorize: authorizeRestartChat,
+        restartSupported: () => processRestartSupported(parsed.once),
+        requestRestart: () => requestProcessRestart(),
+      })(context);
       if (isRelationalDialect) {
         context.handoff.add({
           activateNext: async (signal) => {
@@ -335,9 +347,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
         selfChangeApply.deferRestart(() => requestProcessRestart());
         return;
       }
-      process.exitCode = processRestartExitCode;
-      // 仅设置 exitCode，让事件循环自然结束，保证 stderr/管道日志完整写出。
-      await control.stop();
+      await requestProcessRestart();
     },
     onReload(plan, generation, durationMs) {
       getLogger('runtime').info(formatCompact({
@@ -392,15 +402,34 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     snapshots: host.runtime.snapshots,
     onRestart: () => requestProcessRestart(),
   });
-  function requestProcessRestart(): void {
+  function requestProcessRestart(): Promise<void> {
     // The native TypeScript supervisor treats this code as an intentional
     // process-generation restart in both foreground Desktop and daemon mode.
-    // 只设置 exitCode 并完整停止，进程在所有句柄释放后自然退出（端口随之释放）。
+    // 只设置 exitCode 并完整停止，进程在所有句柄释放后自然退出（端口随之释放）；
+    // 若受监管子进程因第三方插件句柄残留或停止钩子挂起未能自然退出，按预算兜底退出。
     process.exitCode = processRestartExitCode;
-    void control.stop().catch((error: unknown) => {
-      options.writeError(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
-      process.exitCode = 1;
-    });
+    const supervised = processRestartSupported(parsed.once);
+    const budgetTimer = supervised
+      ? setTimeout(() => {
+          options.writeError(`${JSON.stringify({ forcedExit: 'budget', stillStopping: [...stoppingComponents] })}\n`);
+          process.exit(process.exitCode ?? processRestartExitCode);
+        }, DEFAULT_SHUTDOWN_BUDGET_MS)
+      : undefined;
+    budgetTimer?.unref?.();
+    return control.stop()
+      .catch((error: unknown) => {
+        options.writeError(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
+        process.exitCode = 1;
+      })
+      .finally(() => {
+        if (budgetTimer) clearTimeout(budgetTimer);
+        if (supervised) {
+          const drainTimer = setTimeout(() => {
+            process.exit(process.exitCode ?? processRestartExitCode);
+          }, 250);
+          drainTimer.unref?.();
+        }
+      });
   }
   const disposeReadiness = registerReadinessRoutes(httpHost, {
     snapshots: host.runtime.snapshots,
@@ -507,6 +536,11 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   }
   // ADR 0040 §6：启动完成后接续生效中 / 待校验的自我变更（健康检查、回滚、回报）。
   void selfChangeApply.started().catch(reportSelfChangeRecoverError);
+  void deliverPendingRestartReceipt({
+    projectRoot: options.root,
+    im,
+    snapshot,
+  });
 
   // Orphan watchdog: if the supervising CLI wrapper died (kill -9, terminal
   // closed, wrapper crashed) this bot must not outlive it — a zombie keeps

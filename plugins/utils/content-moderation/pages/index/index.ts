@@ -22,7 +22,16 @@ export default createDeclarativePage<ModerationConsoleStatus>({
     {
       key: 'enabled',
       label: { zh: '引擎状态', en: 'Engine Status' },
-      value: (data) => (data.enabled ? 'Enabled' : 'Disabled'),
+      value: {
+        $map: {
+          path: 'enabled',
+          cases: {
+            true: { zh: '已启用', en: 'Enabled' },
+            false: { zh: '已禁用', en: 'Disabled' },
+          },
+          default: { zh: '已禁用', en: 'Disabled' },
+        },
+      },
     },
     {
       key: 'sensitivity',
@@ -66,12 +75,21 @@ export default createDeclarativePage<ModerationConsoleStatus>({
     {
       id: 'overview',
       title: { zh: '配置概览', en: 'Configuration Overview' },
-      entries: (data) => [
-        { label: 'Enabled', value: data.enabled ? 'Yes' : 'No' },
-        { label: 'Sensitivity', value: data.sensitivity },
-        { label: 'Providers Count', value: String(data.providersCount) },
-        { label: 'Whitelist Count', value: String(data.whitelistCount) },
-        { label: 'Pending Reviews', value: String(data.pendingReviewsCount) },
+      entries: [
+        {
+          label: 'Enabled',
+          value: {
+            $map: {
+              path: 'enabled',
+              cases: { true: 'Yes', false: 'No' },
+              default: 'No',
+            },
+          },
+        },
+        { label: 'Sensitivity', dataKey: 'sensitivity' },
+        { label: 'Providers Count', dataKey: 'providersCount' },
+        { label: 'Whitelist Count', dataKey: 'whitelistCount' },
+        { label: 'Pending Reviews', dataKey: 'pendingReviewsCount' },
       ],
     },
     {

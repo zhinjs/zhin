@@ -67,9 +67,9 @@ export default definePlugin<RssConfig>({
     ],
     injects: [databaseHostToken, outboundHostToken, scheduleHostToken, projectLocaleToken],
     features: {
-      commands: ['rss-add', 'rss-check', 'rss-list', 'rss-preview', 'rss-remove'],
+      commands: ['rss-add/[url]', 'rss-check/[[url]]', 'rss-list', 'rss-preview/[url]', 'rss-remove/[url]'],
       skills: ['rss'],
-      tools: ['rss_list_subscriptions', 'rss_preview_feed'],
+      tools: ['skill/rss/rss_list_subscriptions', 'skill/rss/rss_preview_feed'],
       pages: ['index'],
     },
   }),
@@ -98,10 +98,18 @@ export default definePlugin<RssConfig>({
         else await run();
       };
     }
+    let projectLocale: ReturnType<typeof context.resources.use<typeof projectLocaleToken>> | undefined;
+    try {
+      projectLocale = context.resources.has(projectLocaleToken)
+        ? context.resources.use(projectLocaleToken)
+        : context.resources.use(projectLocaleToken);
+    } catch {
+      projectLocale = undefined;
+    }
     const runtime = rssRuntimeStore.provide(context, Object.freeze({
       db,
       migrationScopes,
-      locale: resolveLocale(context.resources.use(projectLocaleToken)),
+      locale: resolveLocale(projectLocale),
       config: Object.freeze({ ...config }),
       outbound: outboundPush,
     }));

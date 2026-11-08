@@ -299,4 +299,150 @@ describe('Console contract', () => {
     expect(adapterCard.title).toBe('telegram 适配器状态');
     expect(adapterCard.stats).toContainEqual({ key: 'online', label: '在线数', value: '1' });
   });
+
+  it('evaluates zero-closure DeclarativeValueExpr descriptors across IM Card and JSON blueprints', () => {
+    const bp = definePageBlueprint({
+      pluginId: 'metrics',
+      title: { zh: '运行指标', en: 'Runtime Metrics' },
+      stats: [
+        { key: 'total', label: { zh: '节点数', en: 'Nodes' }, value: { $count: 'nodes' } },
+        { key: 'pending', label: { zh: '积压任务', en: 'Pending' }, value: { $sum: { path: 'nodes', field: 'queued' } } },
+        { key: 'latency', label: { zh: '延迟', en: 'Latency' }, value: { $format: '{0} ms', args: ['summary.latencyMs'] } },
+        {
+          key: 'state',
+          label: { zh: '状态', en: 'State' },
+          value: {
+            $map: {
+              path: 'summary.healthy',
+              cases: { true: { zh: '健康', en: 'Healthy' }, false: { zh: '异常', en: 'Degraded' } },
+            },
+          },
+        },
+        { key: 'tags', label: { zh: '标签', en: 'Tags' }, value: { $join: { path: 'tags', sep: ' / ' } } },
+        { key: 'leader', label: { zh: '主节点', en: 'Leader' }, value: { $coalesce: ['summary.primary', 'summary.fallback'], fallback: 'none' } },
+      ],
+      sections: [
+        {
+          id: 'nodes',
+          title: { zh: '节点列表', en: 'Node List' },
+          items: 'nodes',
+          columns: [
+            { key: 'id', label: 'ID' },
+            { key: 'queued', label: { zh: '队列', en: 'Queued' } },
+          ],
+        },
+      ],
+    });
+
+    // Even when `spec` is stripped (pure JSON blueprint over HTTP), `sections[].items[].expr` preserves evaluation
+    const jsonOnlyBp = JSON.parse(JSON.stringify({ ...bp, spec: undefined }));
+    const sampleData = {
+      summary: { latencyMs: 42, healthy: true, fallback: 'node-b' },
+      tags: ['prod', 'cn-east'],
+      nodes: [
+        { id: 'node-a', queued: 3 },
+        { id: 'node-b', queued: 5 },
+      ],
+    };
+
+    const card = projectBlueprintToImCard(bp, sampleData, { locale: 'zh-CN' });
+    expect(card.stats).toEqual([
+      { key: 'total', label: '节点数', value: '2' },
+      { key: 'pending', label: '积压任务', value: '8' },
+      { key: 'latency', label: '延迟', value: '42 ms' },
+      { key: 'state', label: '状态', value: '健康' },
+      { key: 'tags', label: '标签', value: 'prod / cn-east' },
+      { key: 'leader', label: '主节点', value: 'node-b' },
+    ]);
+
+    const jsonCard = projectBlueprintToImCard(jsonOnlyBp, sampleData, { locale: 'en' });
+    expect(jsonCard.stats).toEqual([
+      { key: 'total', label: 'Nodes', value: '2' },
+      { key: 'pending', label: 'Pending', value: '8' },
+      { key: 'latency', label: 'Latency', value: '42 ms' },
+      { key: 'state', label: 'State', value: 'Healthy' },
+      { key: 'tags', label: 'Tags', value: 'prod / cn-east' },
+      { key: 'leader', label: 'Leader', value: 'node-b' },
+    ]);
+  });
+
+  it('supports $format.$args, entries with DeclarativeValueExpr & dataKey, and nested table column paths', () => {
+    const bp = definePageBlueprint({
+      pluginId: 'cluster',
+      title: 'Cluster Overview',
+      stats: [
+        {
+          key: 'version',
+          label: 'Version',
+          value: { $format: 'v{0} ({1})', $args: ['meta.version', 'meta.channel'] },
+        },
+      ],
+      sections: [
+        {
+          id: 'summary-entries',
+          title: 'Summary Entries',
+          entries: [
+            { label: 'Region', value: '', dataKey: 'meta.region' },
+            { label: 'NodeCount', value: { $count: 'cluster.nodes' } },
+            { label: 'LiteralMode', value: 'active-active' },
+          ],
+        },
+        {
+          id: 'nested-table',
+          title: 'Nested Nodes',
+          items: 'cluster.nodes',
+          columns: [
+            { key: 'id', label: 'ID' },
+            { key: 'metrics.cpu', label: 'CPU' },
+          ],
+        },
+      ],
+    });
+
+    const jsonOnlyBp = JSON.parse(JSON.stringify({ ...bp, spec: undefined }));
+    const data = {
+      meta: {
+        version: '1.2.0',
+        channel: 'stable',
+        region: 'ap-east-1',
+      },
+      cluster: {
+        nodes: [
+          { id: 'n1', metrics: { cpu: '12%' } },
+          { id: 'n2', metrics: { cpu: '34%' } },
+        ],
+      },
+    };
+
+    for (const target of [bp, jsonOnlyBp]) {
+      const card = projectBlueprintToImCard(target, data, { locale: 'en' });
+      expect(card.stats).toEqual([{ key: 'version', label: 'Version', value: 'v1.2.0 (stable)' }]);
+      expect(card.entries).toEqual([
+        {
+          id: 'summary-entries',
+          title: 'Summary Entries',
+          items: [
+            { label: 'Region', value: 'ap-east-1' },
+            { label: 'NodeCount', value: '2' },
+            { label: 'LiteralMode', value: 'active-active' },
+          ],
+        },
+      ]);
+      expect(card.tables).toEqual([
+        {
+          id: 'nested-table',
+          title: 'Nested Nodes',
+          columns: [
+            { key: 'id', label: 'ID' },
+            { key: 'metrics.cpu', label: 'CPU' },
+          ],
+          rows: [
+            ['n1', '12%'],
+            ['n2', '34%'],
+          ],
+          totalRows: 2,
+        },
+      ]);
+    }
+  });
 });

@@ -14,6 +14,7 @@ import {
   type InferenceOperationScope,
   type ProviderExecutionContext,
 } from '@zhin.js/ai/provider';
+import { applyModelCapabilityDefaults } from '@zhin.js/ai/providers';
 import { getLogger } from '@zhin.js/logger';
 import { PersonalSessionService, type PersonalSessionOwner } from '../../personal-session/index.js';
 import {
@@ -455,6 +456,12 @@ export class HostInference {
         )
           throw new ProviderError('driver-contract-mismatch');
         const options = entry.definition.serviceSchema.parse(input.options);
+        const enrichedModels = Object.fromEntries(
+          Object.entries(input.models).map(([id, model]) => [
+            id,
+            applyModelCapabilityDefaults(model),
+          ]),
+        );
         const service: ProviderService<unknown> = {
           id: input.existing?.id ?? `preview:${randomUUID()}`,
           rootId: this.rootId,
@@ -466,7 +473,7 @@ export class HostInference {
             contractVersion: entry.definition.contractVersion,
           },
           options,
-          models: input.models,
+          models: enrichedModels,
         };
         return {
           driver: service.driver,

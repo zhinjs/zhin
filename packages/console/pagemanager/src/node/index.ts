@@ -22,3 +22,8 @@ export {
   sandboxFallbackScript,
   standaloneTokenBootstrapScript,
 } from "../shell/page-renderer-helpers.js";
+export {
+  isConsoleBlueprint,
+  projectBlueprintToCliPanel,
+  projectBlueprintToImCard,
+} from "@zhin.js/console-contract";

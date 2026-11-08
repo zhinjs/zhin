@@ -74,6 +74,10 @@ export interface CommentReviewSpec<E extends ReviewEndpointBase<D>, D extends Re
   readonly renderLoginExtras?: (endpoint: E, context: ReviewContext) => React.ReactNode;
   /** 管理的资源列表（视频 / 文章…）；用 {@link ReviewResourceList} 排版。 */
   readonly renderResources?: (endpoint: E, context: ReviewContext) => React.ReactNode;
+  /** 声明式登录模式（当未提供 `renderLoginExtras` 时自动渲染扫码登录或 Cookie 检查控件）。 */
+  readonly loginMode?: 'qr' | 'cookie-check' | 'none';
+  /** 声明式资源字段名（如 `'videos'` 或 `'articles'`，当未提供 `renderResources` 时自动渲染资源列表）。 */
+  readonly resourcesKey?: string;
   /** 有登录流程在进行时（如二维码待扫描）要加快轮询。 */
   readonly isLoginPending?: (endpoint: E) => boolean;
   /** 常规轮询间隔，默认 10 秒。 */

@@ -62,7 +62,7 @@ export {
   type GenerationStampedTool,
 } from './capability-tools.js';
 
-export * from '../usage/usage-store.js';
+export * from '../security/usage-store.js';
 export * from '../assistant/job-storage.js';
 export * from './ingress/index.js';
 export * from './host/index.js';

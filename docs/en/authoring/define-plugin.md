@@ -270,12 +270,31 @@ async setup(context) {
 | `addTool` / `addSkill` / `addAgent` / `addMcp` | Register AI capabilities (requires the AI features) |
 | `addFeature(feature, name, definition)` | Generic registration; the shortcuts above are typed versions of it |
 
-### metadata and requires
+### metadata, requires, and capabilityGraph (explicit capability graph)
 
 | Field | Purpose |
 | --- | --- |
 | `metadata.displayName` / `icon` / `order` | Name, icon and sort order on the Console plugin card; no runtime effect |
 | `requires` | Resource tokens that must exist; startup refuses if any is missing |
+| `capabilityGraph` | Explicitly declares the plugin's capability graph via `definePluginCapabilityGraph({ provides, injects, features })` (provided tokens, injected tokens, and feature-grouped capabilities) for static governance and Console observability |
+
+```ts
+// plugin.ts
+import { databaseHostToken, definePlugin, definePluginCapabilityGraph } from 'zhin.js';
+
+export default definePlugin({
+  name: 'my-plugin',
+  metadata: { displayName: 'My Plugin', icon: 'Blocks' },
+  capabilityGraph: definePluginCapabilityGraph({
+    injects: [databaseHostToken],
+    features: {
+      commands: ['hello'],
+      pages: ['index'],
+      tools: ['weather'],
+    },
+  }),
+});
+```
 
 ### Framework resources (Host tokens)
 

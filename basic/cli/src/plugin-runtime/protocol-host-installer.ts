@@ -49,10 +49,24 @@ export function installProtocolHosts(options: InstallProtocolHostsOptions): Root
     const http = resources.use(httpHostToken);
 
     if (resolved.mcp && resolved.mcp.enabled !== false) {
-      const [{ installRuntimeMcp }, { FileJournalStore, ToolIngressRuntime, turnJournalStoreToken }] = await Promise.all([
-        import('@zhin.js/mcp/runtime'),
-        import('@zhin.js/agent/runtime'),
-      ]);
+      let installRuntimeMcp: typeof import('@zhin.js/mcp/runtime')['installRuntimeMcp'];
+      let FileJournalStore: typeof import('@zhin.js/agent/runtime')['FileJournalStore'];
+      let ToolIngressRuntime: typeof import('@zhin.js/agent/runtime')['ToolIngressRuntime'];
+      let turnJournalStoreToken: typeof import('@zhin.js/agent/runtime')['turnJournalStoreToken'];
+      try {
+        [{ installRuntimeMcp }, { FileJournalStore, ToolIngressRuntime, turnJournalStoreToken }] = await Promise.all([
+          import('@zhin.js/mcp/runtime'),
+          import('@zhin.js/agent/runtime'),
+        ]);
+      } catch (error) {
+        if (isModuleNotFoundError(error)) {
+          throw new Error(
+            'MCP host requires @zhin.js/agent and @zhin.js/mcp to be installed (pnpm add @zhin.js/agent @zhin.js/mcp)',
+            { cause: error },
+          );
+        }
+        throw error;
+      }
       if (!resources.has(turnJournalStoreToken)) {
         resources.provide(
           turnJournalStoreToken,
@@ -104,15 +118,28 @@ export function installProtocolHosts(options: InstallProtocolHostsOptions): Root
           'Configuration keys "a2a.workroomCallbacks" and "a2a.workroomRemoteExecutors" have been removed in ADR 0048. Declare remote peer mail transport under "a2a.mailbox".',
         );
       }
-      const [{
-        installRuntimeA2a,
-        installRuntimeA2aMailbox,
-      }, {
-        agentHostToken,
-      }] = await Promise.all([
-        import('@zhin.js/a2a/runtime'),
-        import('@zhin.js/agent/runtime'),
-      ]);
+      let installRuntimeA2a: typeof import('@zhin.js/a2a/runtime')['installRuntimeA2a'];
+      let installRuntimeA2aMailbox: typeof import('@zhin.js/a2a/runtime')['installRuntimeA2aMailbox'];
+      let agentHostToken: typeof import('@zhin.js/agent/runtime')['agentHostToken'];
+      try {
+        [{
+          installRuntimeA2a,
+          installRuntimeA2aMailbox,
+        }, {
+          agentHostToken,
+        }] = await Promise.all([
+          import('@zhin.js/a2a/runtime'),
+          import('@zhin.js/agent/runtime'),
+        ]);
+      } catch (error) {
+        if (isModuleNotFoundError(error)) {
+          throw new Error(
+            'A2A host requires @zhin.js/agent and @zhin.js/a2a to be installed (pnpm add @zhin.js/agent @zhin.js/a2a)',
+            { cause: error },
+          );
+        }
+        throw error;
+      }
       if (resolved.a2a.enabled !== false) {
         if (!resources.has(agentHostToken)) {
           throw new Error('a2a.enabled requires a ready Agent Host (enable AI Host and select a chat Profile in Console)');
@@ -172,4 +199,13 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 
 function isConfigPort(value: RuntimeConfigDocument | ConfigDocumentPort): value is ConfigDocumentPort {
   return typeof (value as ConfigDocumentPort).read === 'function';
+}
+
+function isModuleNotFoundError(error: unknown): boolean {
+  return Boolean(
+    error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      (error.code === 'ERR_MODULE_NOT_FOUND' || error.code === 'MODULE_NOT_FOUND'),
+  );
 }

@@ -6,7 +6,7 @@ import {
 import { createProcessMonitorConsoleRpc } from './src/console.js';
 import {
   ProcessMonitor,
-  processMonitorToken,
+  processMonitorStore,
   type ProcessMonitorConfig,
 } from './src/monitor.js';
 
@@ -23,19 +23,20 @@ export default definePlugin<ProcessMonitorConfig>({
     displayName: 'Process Monitor',
   },
   capabilityGraph: definePluginCapabilityGraph({
-    provides: [processMonitorToken, pluginConsoleRpcToken],
+    provides: [processMonitorStore, pluginConsoleRpcToken],
     features: {
       commands: ['process-status'],
       skills: ['process-monitor'],
-      tools: ['process-status'],
+      tools: ['skill/process-monitor/process-status'],
       pages: ['index'],
     },
   }),
   setup(context) {
     const monitor = new ProcessMonitor(context.config.get());
-    context.resources.provide(processMonitorToken, monitor);
-    context.resources.provide(pluginConsoleRpcToken, createProcessMonitorConsoleRpc(monitor));
+    processMonitorStore.provide(context, monitor);
     monitor.start();
-    context.lifecycle.add(() => monitor.dispose());
+    return {
+      consoleRpc: createProcessMonitorConsoleRpc(monitor),
+    };
   },
 });

@@ -154,3 +154,19 @@ export type {
 
 // Host-integration seam for external host packages.
 export { getAgentTurnConfiguration, runWithAgentTurnConfiguration } from './agent-turn-context.js';
+
+export {
+  AGENT_TURN_CHECKPOINT_MODEL,
+  AGENT_TURN_CHECKPOINT_TABLE,
+  DEFAULT_TURN_CHECKPOINT_TTL_MS,
+  DatabaseTurnCheckpointStorage,
+  TurnCheckpointStore,
+  extractCompletedToolRoundMessages,
+  isCheckpointResumePrompt,
+} from './turn-checkpoint-store.js';
+export type {
+  TurnCheckpointRecord,
+  TurnCheckpointStorage,
+  TurnCheckpointStoreOptions,
+} from './turn-checkpoint-store.js';
+

@@ -1,4 +1,5 @@
 export * from './config-composer.js';
+export * from './convention-feature-scanner.js';
 export * from './application-plugin-declaration.js';
 export { readPluginConfigSchema } from './plugin-config-schema.js';
 export * from './config-patch-planner.js';

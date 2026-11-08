@@ -336,7 +336,7 @@ describe('mailbox inbox policy plumbing (ADR 0048 H3)', () => {
 
   it('hands the runner a control with facts and a default fresh stale check', async () => {
     const controls: Array<Parameters<MailboxOptions['run']>[3]> = [];
-    const box = createMailbox({ maxConcurrentTurns: 1, maxQueuedPerKey: 5, run: async (_a, _b, _s, control) => { controls.push(control); return ok; } });
+    const box = createMailbox({ maxConcurrentTurns: 1, maxQueuedPerKey: 5, now: () => 100, run: async (_a, _b, _s, control) => { controls.push(control); return ok; } });
     box.post(mail('1', 'a', 'e'));
     await box.idle();
     expect(controls[0]!.facts).toEqual({ queuedMs: 0, mergedMessages: 1, supersededPrevious: false, carried: false, evicted: 0 });

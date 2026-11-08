@@ -190,7 +190,7 @@ export {
 } from './prompt/workspace-prompt.js';
 export type { WorkspacePromptRole } from './prompt/workspace-prompt.js';
 export { createUserProfileTool } from './tool/context-tools.js';
-export * from './interaction/index.js';
+export * from './turn/interaction-router.js';
 
 export {
   UserProfileStore,
@@ -621,7 +621,7 @@ export type {
 } from './seam/index.js';
 export { SeamProviderRegistry, SeamIntegration } from './seam/index.js';
 export { capabilitySeamToken } from './seam/index.js';
-export { BuiltinToolService } from './builtins/builtin-tool-service.js';
+export { BuiltinToolService } from './tool/builtin-tool-service.js';
 export { SkillRegistryAsService } from './skill/skill-registry-as-service.js';
 
 export { RESERVED_TOOL_NAMES, RESERVED_TOOL_NAME_PREFIXES } from './reserved-tools.js';
@@ -756,7 +756,7 @@ export type { ImageAssetPublisher, PublishedImage, R2ImageStorageConfig } from '
 export { createLlmMediaPerceptionPort, resolvePerceptionConfig } from './media/index.js';
 export type { MediaPerception, MediaPerceptionPort, PerceptionMediaKind, ResolvedPerceptionConfig } from './media/index.js';
 
-export { filterImDeliveryContent } from './segment/filter-im-delivery.js';
+export { filterImDeliveryContent } from './outbound/filter-im-delivery.js';
 
 export {
   loadMemoryLayers,
@@ -973,3 +973,19 @@ export { renderAgentOutput, splitOutputMessages } from './outbound/agent-output.
 export { REACTION_SEGMENT_TYPE } from './outbound/structured-reply.js';
 export { chatFailureLine, chatFailureKindOf } from './outbound/chat-failure.js';
 export type { ChatFailureKind, ChatFailureOptions } from './outbound/chat-failure.js';
+
+export {
+  AGENT_TURN_CHECKPOINT_MODEL,
+  AGENT_TURN_CHECKPOINT_TABLE,
+  DEFAULT_TURN_CHECKPOINT_TTL_MS,
+  DatabaseTurnCheckpointStorage,
+  TurnCheckpointStore,
+  extractCompletedToolRoundMessages,
+  isCheckpointResumePrompt,
+} from './turn/turn-checkpoint-store.js';
+export type {
+  TurnCheckpointRecord,
+  TurnCheckpointStorage,
+  TurnCheckpointStoreOptions,
+} from './turn/turn-checkpoint-store.js';
+

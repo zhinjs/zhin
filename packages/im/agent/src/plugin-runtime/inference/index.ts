@@ -9,6 +9,7 @@ export * from './headless-host.js';
 export * from './host-identity.js';
 export * from './host.js';
 export * from './management.js';
+export * from './migration-preview.js';
 export * from './migration-record.js';
 export * from './migration-session-bindings.js';
 export * from './migration-session-journal.js';

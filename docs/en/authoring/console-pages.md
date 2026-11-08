@@ -5,15 +5,20 @@ description: "Add a Console page to your plugin: the pages/ convention, page met
 
 # Console pages and layouts
 
-Plugins can do more than send chat messages — they can contribute whole React pages to Remote Console. The Sandbox adapter's `/sandbox` chat page is one.
+Plugins can do more than send chat messages — they can contribute admin pages to Remote Console. Zhin uses **Server-Driven Blueprints** as its first-class authoring model (covering 90% of plugins), while providing a static frontend asset mounting protocol for the 10% heavy-interaction plugins (such as the Sandbox chat simulator).
 
-Like commands, pages live in a **convention directory**, `pages/`; files are discovered automatically and compiled into modules the browser can load.
+Like commands, pages live in a **convention directory**, `pages/`, and are discovered automatically.
 
-## Your first page
+## Your first page (Pure Blueprint, recommended)
 
-```tsx
-// pages/index/index.tsx
-import { definePage } from '@zhin.js/console-contract';
+Most plugins (ledger, reminders, RSS, calendar, group moderation, content review, platform adapters) only need **stat cards (`stat-cards`) + tables/lists (`table`) + filter forms (`filter-form`) + action buttons (`action-bar`)**. Declare a pure TypeScript `definePageBlueprint` in `pages/<name>/index.ts` and let Console UI render it uniformly:
+
+- **Zero `.tsx`, zero `esbuild` pre-bundling, zero `lib/pages/*.bundle.js`, zero React version coupling**;
+- **Multi-surface projection**: the exact same Blueprint renders in Web Console, projects into cross-platform IM card messages (with interactive buttons) via `projectBlueprintToImCard`, and renders into terminal CLI TUI panels via `projectBlueprintToCliPanel`!
+
+```ts
+// pages/index/index.ts
+import { definePage, definePageBlueprint } from '@zhin.js/console-contract';
 
 export const meta = definePage({
   title: 'My Plugin',
@@ -22,16 +27,70 @@ export const meta = definePage({
   order: 10,
 });
 
-export default function MyPluginPage() {
-  return <div>Hello from my plugin</div>;
-}
+export default definePageBlueprint({
+  kind: 'custom',
+  subtitle: 'Plugin runtime overview and quick actions',
+  statusQuery: 'status',
+  widgets: [
+    {
+      type: 'stat-cards',
+      title: 'Key Metrics',
+      cards: [
+        { key: 'total', label: 'Total Records', tone: 'accent' },
+        { key: 'active', label: 'Active Today', tone: 'success' },
+      ],
+    },
+    {
+      type: 'action-bar',
+      title: 'Quick Actions',
+      actions: [
+        { action: 'refresh-cache', label: 'Refresh Cache', variant: 'primary' },
+      ],
+    },
+    {
+      type: 'table',
+      title: 'Recent Items',
+      dataKey: 'items',
+      rowKey: 'id',
+      emptyText: 'No records yet',
+      columns: [
+        { key: 'id', label: 'ID' },
+        { key: 'title', label: 'Title' },
+      ],
+    },
+  ],
+});
 ```
 
-- The **default export** is a React component — the page content.
+- The **default export** is a `definePageBlueprint(...)` descriptor (or a React component for heavy-interaction `.tsx` pages).
 - The **named export `meta`** declares title, icon and order.
-- Only `pages/<name>/index.tsx` (or `index.ts`) is a page; other files in the folder can be imported as components and helpers.
+- Only `pages/<name>/index.ts` (or `index.tsx` for heavy-interaction plugins) is a page; other files in the folder can be imported as helpers.
 
 Start the bot, open Console, and the page appears in the navigation.
+
+### Multi-surface projection (Web Console / IM Card / CLI TUI)
+
+`@zhin.js/console-contract` includes zero-dependency projectors so commands or CLI tools can reuse your page Blueprint and `status` payload directly:
+
+```ts
+import {
+  projectBlueprintToImCard,
+  projectBlueprintToCliPanel,
+} from '@zhin.js/console-contract';
+import blueprint, { meta } from '../pages/index/index.js';
+
+// 1. Project into cross-platform IM card segments (Segment[], with interactive action buttons)
+const segments = projectBlueprintToImCard(blueprint, statusData, {
+  title: meta.title,
+  commandPrefix: '/my-plugin ',
+});
+
+// 2. Project into a terminal CLI TUI panel (ANSI box-drawing table and stat cards)
+const ansiPanel = projectBlueprintToCliPanel(blueprint, statusData, {
+  title: meta.title,
+  width: 72,
+});
+```
 
 ## Page metadata
 
@@ -439,12 +498,11 @@ Use `@zhin.js/client/ui` instead of hand-rolled styles: buttons, badges, notices
 
 ## Adapter Console pages
 
-Every built-in platform adapter (`plugins/adapters/*`) ships a `pages/index/index.ts`. Pages use `createAdapterConsolePage(adapterKey)` from `@zhin.js/client`; the server side uses `createAdapterConsoleRpc(spec)` from `@zhin.js/adapter`:
+Every built-in platform adapter (`plugins/adapters/*`) ships a pure `.ts` `pages/index/index.ts` that declares a zero-bundle Blueprint using `defineAdapterPage(adapterKey)` from `@zhin.js/console-contract` (no `@zhin.js/client` or React dependency required); the server side uses `createAdapterConsoleRpc(spec)` from `@zhin.js/adapter`:
 
 ```ts
 // pages/index/index.ts
-import { definePage } from '@zhin.js/console-contract';
-import { createAdapterConsolePage } from '@zhin.js/client';
+import { defineAdapterPage, definePage } from '@zhin.js/console-contract';
 
 export const meta = definePage({
   title: 'Telegram',
@@ -453,7 +511,7 @@ export const meta = definePage({
   requiredPermissions: ['telegram:read'],
 });
 
-export default createAdapterConsolePage('telegram');
+export default defineAdapterPage('telegram');
 ```
 
 From the page you can:
@@ -472,7 +530,7 @@ Keep `createAdapterConsoleRpc` specs limited to public field metadata. Fields ma
 
 ## Comment review pages
 
-Reply-drafting adapters that go "AI drafts → human approves → send" (Bilibili, Juejin) do not need a hand-written page: `pages/index/index.tsx` calls `createCommentReviewPage(spec)` from `@zhin.js/client` and gets the account section, login status, draft cards (edit / send / discard draft) and consistent error and stale-data notices. The `spec` only describes what differs per platform: platform name and zh/en copy, the resource noun, field mappers for the account and draft resource, plus optional `renderLoginExtras` (for example QR login), `renderResources` and `isLoginPending` (poll faster while a login is in flight). The server provides `plugin.<pluginId>.status` / `edit` / `send` / `drop`, still implemented per adapter in its own `src/console.ts`. See the [`@zhin.js/client` README](https://github.com/zhinjs/zhin/blob/main/packages/console/client/README.md) for the full field list.
+Reply-drafting adapters that go "AI drafts → human approves → send" (Bilibili, Juejin) also use pure `.ts` Blueprints: `pages/index/index.ts` calls `defineCommentReviewPage(spec)` from `@zhin.js/console-contract` and gets the account section, login status, draft cards (edit / send / discard draft) and consistent error and stale-data notices. The `spec` only describes what differs per platform: platform name and zh/en copy, the resource noun, field mappers for the account and draft resource, plus optional QR login and polling settings. The server provides `plugin.<pluginId>.status` / `edit` / `send` / `drop`, still implemented per adapter in its own `src/console.ts`. See the [`@zhin.js/client` README](https://github.com/zhinjs/zhin/blob/main/packages/console/client/README.md) for the full field list.
 
 ## Saving settings from a page (config:patch)
 
@@ -523,22 +581,21 @@ Declaring cross-scope ownership in a plugin (the TypeSafe decision provider, for
 
 ## How it works
 
-Page files run in the **browser**, so Node doesn't load them; the client builder (`TypeScriptClientBuilder`, `packages/console/pagemanager`) bundles them with esbuild:
+Console pages follow two paths: **Pure Blueprints (90% of plugins)** and **Heavy-Interaction Static Bundles (10% of plugins, such as Sandbox)**:
 
 ```mermaid
 flowchart LR
-    A["pages/*/index.tsx<br/>meta = definePage()"] --> B["TypeScriptClientBuilder<br/>(esbuild bundle)"]
-    B --> C[".zhin/client/<owner>-<name>-<hash>.js"]
-    B --> D["pages.manifest.json"]
-    C --> E["GET /assets/client/*<br/>(immutable cache)"]
-    F["bare imports like react<br/>rewritten via allowlist"] --> G["GET /esm/:enc.mjs<br/>Host proxy build"]
-    E --> H[Browser loads page module]
-    G --> H
+    BP["pages/*/index.ts<br/>definePageBlueprint()"] --> PM["PageManager (@zhin.js/pagemanager)<br/>Zero esbuild bundling · manifest blueprint"]
+    PM --> M["GET /console/api/pages<br/>manifest carries blueprint"]
+    M --> BR["Console Browser Shell<br/>createBlueprintPage renderer"]
+    TSX["pages/*/index.tsx<br/>Heavy-interaction UI (e.g. Sandbox)"] --> B["Static .bundle.js / TypeScriptClientBuilder"]
+    B --> E["GET /assets/client/*<br/>(immutable cache)"]
+    E --> BR
 ```
 
-- **Output**: each page is bundled as `<owner>-<localName>-<contentHash>.js` into the project's `.zhin/client/` and served by `GET /assets/client/*` (`cache-control: immutable`; new content means a new file name). `@zhin.js/console-contract` is replaced with a no-op stub at bundle time, and `meta` is extracted statically.
-- **One React only**: browsers don't understand bare imports like `import 'react'`, so imports on the `ALLOWED_ESM_CANONICAL` allowlist (`react`, `react-dom`, `react-dom/client`, `react/jsx-runtime(-dev)`, `react-router`, `react-router-dom`) are rewritten to `/esm/<enc>.mjs`, built and proxied on demand by the Host so the whole Console shares one React instance. Anything off the allowlist returns 403.
-- **Routes**: registered in `basic/cli/src/plugin-runtime/console/host.ts`. `GET /console` is the page index, `GET /console/api/pages` returns the page manifest, and other paths are matched to pages and served a page shell (with an importmap and mount script); no match returns 404, insufficient permission 403. The browser loads the page with `import(moduleUrl)` and mounts the default export on `#root`.
+- **Pure Blueprint (`.ts`)**: Node evaluates only the pure-data blueprint descriptor, **completely skipping `esbuild` bundling and `.bundle.js` artifacts**. `GET /console/api/pages` embeds the `blueprint` JSON directly in the page manifest, and `renderConsoleShell` (in `@zhin.js/pagemanager`) renders stat cards, filter forms, action bars, and tables in the browser via `createBlueprintPage` from `@zhin.js/client`.
+- **Heavy-Interaction Static Assets (`.tsx`)**: Only `pages/*/index.tsx` (such as `plugins/adapters/sandbox`) uses static `.bundle.js` mounting or `TypeScriptClientBuilder` bundling; the Node process never calls `import()` on browser React code at runtime. Bare imports on `ALLOWED_ESM_CANONICAL` (`react`, `react-dom`, etc.) are rewritten to `/esm/<enc>.mjs` so the entire Console shares a single React instance.
+- **Routes and Shell**: The Console shell renderer lives in `@zhin.js/pagemanager` (`packages/console/pagemanager/src/shell/page-renderer.ts`) and is wired by `basic/cli/src/plugin-runtime/console/host.ts`. `GET /console` is the page index, `GET /console/api/pages` returns the page manifest, and other paths match pages and serve the Console shell; no match returns 404, insufficient permission 403.
 
 ## Next steps
 

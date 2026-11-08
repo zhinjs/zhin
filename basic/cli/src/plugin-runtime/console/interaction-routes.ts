@@ -1,9 +1,8 @@
 import type { ImRuntime } from '@zhin.js/core/runtime';
 import type { HttpHost } from '@zhin.js/host-http';
 import type { SnapshotReader } from '@zhin.js/plugin-runtime';
-import { parseBoundSandboxSession } from './bound-sandbox-session.js';
 import { writeJson } from './http-response.js';
-import { SandboxWorkspaceBindingError, withSandboxWorkspaceScope } from './sandbox-workspace-scope.js';
+import { parseBoundSandboxSession, SandboxWorkspaceBindingError, withSandboxWorkspaceScope } from './sandbox-workspace-scope.js';
 
 /** Current prompts only; responses still enter through the original Sandbox IM interaction path. */
 export function registerInteractionRoutes(options: Readonly<{

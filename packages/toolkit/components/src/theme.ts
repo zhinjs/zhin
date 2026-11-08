@@ -67,7 +67,15 @@ export type ComponentName =
   | "List"
   | "ListItem"
   | "Markdown"
-  | "CodeBlock";
+  | "CodeBlock"
+  | "DonutChart"
+  | "Callout"
+  | "Timeline"
+  | "TimelineItem"
+  | "StepTracker"
+  | "ComparisonBar"
+  | "StatusGrid"
+  | "HeatmapGrid";
 
 /** Content remains JSX; design tokens are intentionally CSS values or numbers. */
 export interface ComponentTheme {

@@ -2,7 +2,7 @@ import { CONFIG_PATCH_LIMITS, HOST_CONFIG_PATCH_PATHS, type ConsoleConfigPatchOp
 import type { ConfigPatch, RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
 import { HOST_CONFIG_KEYS } from '@zhin.js/runtime';
 import { assertUnambiguousConfigKey } from './configuration-projection.js';
-import { isForbiddenConfigurationPathSegment } from './configuration-path-segment.js';
+import { isForbiddenConfigurationPathSegment } from './configuration-path.js';
 
 /** Host keys a plugin may never claim: declarations, the root plugin section and transport. */
 const UNCLAIMABLE_HOST_KEYS = new Set(['plugin', 'http']);

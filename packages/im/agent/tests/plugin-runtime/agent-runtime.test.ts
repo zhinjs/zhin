@@ -3,7 +3,7 @@ import { executionBundle, executionScope } from '../helpers/execution-bundle.js'
 import { createTestZhinAgent, testAgentModels } from '../helpers/scoped-agent.js';
 import { turnModelPortToken } from '../../src/model-runtime/turn-resource.js';
 import type { ModelExecutionScope } from '../../src/model-runtime/types.js';
-import { agentUsageStoreToken } from '../../src/usage/usage-store.js';
+import { agentUsageStoreToken } from '../../src/security/usage-store.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

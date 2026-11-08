@@ -1,8 +1,12 @@
 import {
+  aiCompletionToken,
+  databaseHostToken,
   definePlugin,
   definePluginCapabilityGraph,
+  outboundHostToken,
   pluginConsoleRpcToken,
 } from 'zhin.js';
+import { groupRuleViolationToken } from '@zhin.js/core/runtime';
 import { createModerationConsoleRpc } from './src/console.js';
 import { ModerationEngine } from './src/engine.js';
 import { moderationEngineStore } from './src/runtime.js';
@@ -14,10 +18,19 @@ export default definePlugin({
   },
   capabilityGraph: definePluginCapabilityGraph({
     provides: [moderationEngineStore, pluginConsoleRpcToken],
+    injects: [
+      databaseHostToken,
+      outboundHostToken,
+      groupRuleViolationToken,
+      aiCompletionToken,
+    ],
     features: {
       middlewares: ['inbound', 'outbound'],
       skills: ['content-moderation'],
-      tools: ['moderation_check', 'moderation_status'],
+      tools: [
+        'skill/content-moderation/moderation_check',
+        'skill/content-moderation/moderation_status',
+      ],
       pages: ['index'],
     },
   }),

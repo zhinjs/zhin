@@ -772,6 +772,8 @@ export function createAdapterConsolePage(adapterKey: string): React.ComponentTyp
 }
 
 if (typeof globalThis !== 'undefined') {
-  (globalThis as Record<string, unknown>).__ZHIN_RENDER_ADAPTER_PAGE__ = (bp: { adapterKey?: string }) =>
-    React.createElement(AdapterConsolePage, { adapterKey: String(bp?.adapterKey ?? '') });
+  (globalThis as Record<string, unknown>).__ZHIN_RENDER_ADAPTER_PAGE__ = (bpOrKey: string | { adapterKey?: string }) =>
+    React.createElement(AdapterConsolePage, {
+      adapterKey: typeof bpOrKey === 'string' ? bpOrKey : String(bpOrKey?.adapterKey ?? ''),
+    });
 }

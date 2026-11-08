@@ -40,26 +40,30 @@ function deriveStoreDisposer<TValue, TConfig>(
   options: PluginStoreOptions<TValue, TConfig>,
 ): Dispose | undefined {
   const dispose = options.dispose;
+  let rawDisposer: Dispose | undefined;
   if (dispose) {
-    return () => dispose(value);
+    rawDisposer = () => dispose(value);
+  } else if (value && typeof value === 'object') {
+    const record = value as Record<PropertyKey, unknown>;
+    if (typeof Symbol.asyncDispose === 'symbol' && typeof record[Symbol.asyncDispose] === 'function') {
+      rawDisposer = () => (record[Symbol.asyncDispose] as () => void | Promise<void>).call(value);
+    } else if (typeof Symbol.dispose === 'symbol' && typeof record[Symbol.dispose] === 'function') {
+      rawDisposer = () => (record[Symbol.dispose] as () => void | Promise<void>).call(value);
+    } else if (typeof record.dispose === 'function') {
+      rawDisposer = () => (record.dispose as () => void | Promise<void>).call(value);
+    } else if (typeof record.stop === 'function') {
+      rawDisposer = () => (record.stop as () => void | Promise<void>).call(value);
+    }
   }
-  if (!value || typeof value !== 'object') {
+  if (!rawDisposer) {
     return undefined;
   }
-  const record = value as Record<PropertyKey, unknown>;
-  if (typeof Symbol.asyncDispose === 'symbol' && typeof record[Symbol.asyncDispose] === 'function') {
-    return () => (record[Symbol.asyncDispose] as () => void | Promise<void>).call(value);
-  }
-  if (typeof Symbol.dispose === 'symbol' && typeof record[Symbol.dispose] === 'function') {
-    return () => (record[Symbol.dispose] as () => void | Promise<void>).call(value);
-  }
-  if (typeof record.dispose === 'function') {
-    return () => (record.dispose as () => void | Promise<void>).call(value);
-  }
-  if (typeof record.stop === 'function') {
-    return () => (record.stop as () => void | Promise<void>).call(value);
-  }
-  return undefined;
+  let disposed = false;
+  return () => {
+    if (disposed) return;
+    disposed = true;
+    return rawDisposer();
+  };
 }
 
 export function definePluginStore<TValue>(id: string, description?: string): PluginStore<TValue>;
@@ -101,16 +105,27 @@ export function definePluginStore<TValue, TConfig = unknown>(
       return value;
     },
     use(carrier: PluginStoreCarrier): TValue {
-      if ('resources' in carrier) {
+      if ('use' in carrier && typeof carrier.use === 'function') {
+        return carrier.use(store);
+      }
+      if (
+        'resources' in carrier &&
+        carrier.resources != null &&
+        typeof carrier.resources.use === 'function'
+      ) {
         return carrier.resources.use(store);
       }
-      return carrier.use(store);
+      return (carrier as ResourceReaderCarrier).use(store);
     },
     has(carrier: PluginStoreCarrier): boolean {
       if ('has' in carrier && typeof carrier.has === 'function') {
         return carrier.has(store);
       }
-      if ('resources' in carrier && typeof carrier.resources.has === 'function') {
+      if (
+        'resources' in carrier &&
+        carrier.resources != null &&
+        typeof carrier.resources.has === 'function'
+      ) {
         return carrier.resources.has(store);
       }
       try {

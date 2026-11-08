@@ -12,13 +12,18 @@ export interface TableProps extends ComponentProps {
 export interface TableRowProps extends ComponentProps {
   readonly children?: JSXRenderable;
   readonly header?: boolean;
+  /** Highlight row as selected in batch operations. */
+  readonly selected?: boolean;
   /** Disable for the first composed row when it follows the table's outer border. */
   readonly separator?: boolean;
 }
 
 export interface TableCellProps extends ComponentProps {
   readonly children?: JSXRenderable;
+  readonly icon?: JSXRenderable;
   readonly header?: boolean;
+  /** Pin cell to the left or right edge with sticky positioning and separator border. */
+  readonly fixed?: "left" | "right";
   /** Unspecified cells share available width equally. */
   readonly width?: number | string;
   readonly align?: "left" | "center" | "right";

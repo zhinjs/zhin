@@ -1,5 +1,6 @@
 import type { ToolApprovalEntry, ToolApprovalQueue } from '@zhin.js/agent/security';
 import {
+  createRootPrivateToken,
   definePluginConsoleRpc,
   generationAdmissionSource,
   PluginConsoleRpcError,
@@ -9,7 +10,9 @@ import {
   type SnapshotReader,
   type SnapshotLease,
 } from '@zhin.js/plugin-runtime';
-import { agentToolApprovalQueueToken } from './tool-approval-resource.js';
+
+/** The existing queue belongs to the exact Agent Root, never a process-level current pointer. */
+export const agentToolApprovalQueueToken = createRootPrivateToken<ToolApprovalQueue>('zhin.host.agent.tool-approval-queue');
 
 /**
  * Console approval cards for the dangerous-tool hard gate (ADR 0036 §3, slice E).

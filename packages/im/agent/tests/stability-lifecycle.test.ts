@@ -8,7 +8,7 @@ import {MemoryAgentSessionStore} from '@zhin.js/ai';
 import { wireMockLlmApi } from './helpers/mock-llm-api.js';
 import { AgentCompactionRuntime } from '../src/memory/compaction-runtime.js';
 
-import { collectStabilityMetrics, startStabilityMonitor } from '../src/stability/memory-pressure.js';
+import { collectStabilityMetrics, startStabilityMonitor } from '../src/utils/memory-pressure.js';
 
 function mockProvider(): FixtureTextProvider & { dispose: ReturnType<typeof vi.fn> } {
   const dispose = vi.fn();

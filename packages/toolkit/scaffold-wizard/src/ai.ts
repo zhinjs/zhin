@@ -13,7 +13,12 @@ export interface AISetupConfig {
     host?: string;
     models?: string[];
     baseUrl?: string;
-    capabilities?: { input?: readonly ('text' | 'image' | 'audio' | 'video' | 'file')[]; streaming?: boolean; toolCalling?: boolean };
+    capabilities?: {
+      input?: readonly ('text' | 'image' | 'audio' | 'video' | 'file')[];
+      streaming?: boolean;
+      toolCalling?: boolean;
+      thinking?: boolean;
+    };
   }>;
   sessions?: { useDatabase: boolean; maxHistory: number; expireMs: number };
   context?: { enabled: boolean; maxRecentMessages: number; summaryThreshold: number; keepAfterSummary: number };
@@ -206,6 +211,35 @@ export function resolveAISetupAgentProvider(config: Pick<AISetupConfig, 'agentPr
     ?? 'openai';
 }
 
+const MULTIMODAL_MODEL_PATTERN =
+  /^(?:gemini-|gpt-4o|gpt-4\.1|gpt-4\.5|gpt-5|chatgpt-4o|gpt-4-turbo|gpt-4-(?:\d+-)?vision|o1(?!-mini|-preview)|o3(?!-mini)|o4|codex|claude-3|claude-(?:sonnet|opus|haiku)-4|claude-4|deepseek-vl\d*|glm-4(?:\.\d+)?-?(?:v|vision)|qwen(?:\d+(?:\.\d+)?)?-(?:vl|omni)|qvq|kimi-(?:k2\.5|latest|vl|.*vision)|moonshot-v1-.*vision|pixtral|grok-(?:2-vision|3|4)|doubao-(?:seed|.*vision)|llama-?(?:4|3\.2-.*vision))/iu;
+
+const THINKING_MODEL_PATTERN =
+  /^(?:gemini-2\.5-|gemini-3|gemini-2\.0-flash-thinking|claude-(?:sonnet|opus)-4|claude-haiku-4[-.]5|claude-4|claude-3[-.]7|gpt-5|codex|o1|o3|o4|deepseek-(?:reasoner|r1|v3\.[12])|qwen3|qwq|qvq|qwen-(?:plus|max|turbo)-latest|glm-(?:4\.[5-9]|5|z1)|kimi-(?:k[12]|thinking|latest)|moonshot-v1-thinking|minimax-m[12]|grok-[34]|doubao-(?:seed|.*thinking))/iu;
+
+export function inferWizardModelCapabilities(modelId: string, protocol: string): {
+  input: readonly ('text' | 'image')[];
+  streaming: boolean;
+  toolCalling: boolean;
+  thinking: boolean;
+} {
+  const normalized = modelId.trim().replace(/^(?:[^/]+\/)+/u, '');
+  const isMultimodal =
+    protocol === 'google-generate-content' ||
+    MULTIMODAL_MODEL_PATTERN.test(normalized) ||
+    /vision|-vl\d*(?:\b|[-_:])/iu.test(normalized);
+  const isLegacyO1 = /^o1-(?:mini|preview)\b/iu.test(normalized);
+  const isThinking =
+    THINKING_MODEL_PATTERN.test(normalized) ||
+    /thinking|reasoner|-r1(?:\b|[-_:])/iu.test(normalized);
+  return {
+    input: isMultimodal ? ['text', 'image'] : ['text'],
+    streaming: true,
+    toolCalling: !isLegacyO1,
+    thinking: isThinking,
+  };
+}
+
 /** Produce an import proposal, never a second startup model authority. */
 export function materializeAIPlan(config: AISetupConfig): Record<string, unknown> {
   const primary = resolveAISetupAgentProvider(config);
@@ -217,8 +251,25 @@ export function materializeAIPlan(config: AISetupConfig): Record<string, unknown
     if (!models.length) throw new Error(`A model ID is required for ${name}`);
     const protocol = driver === 'anthropic' || driver === 'minimax' ? 'anthropic-messages' : driver === 'google' ? 'google-generate-content' : 'openai-chat';
     const baseUrl = provider.baseUrl ?? provider.host ?? PROVIDER_DEFAULT_BASE_URLS[name];
-    services[name] = { driver, ...(baseUrl ? { options: { baseUrl } } : {}),
-      models: Object.fromEntries(models.map(id => [id, { id, kinds: ['language'], protocol, input: provider.capabilities?.input ?? ['text'], ...(provider.capabilities?.streaming !== undefined ? { streaming: provider.capabilities.streaming } : {}), ...(provider.capabilities?.toolCalling !== undefined ? { toolCalling: provider.capabilities.toolCalling } : {}) }])) };
+    services[name] = {
+      driver,
+      ...(baseUrl ? { options: { baseUrl } } : {}),
+      models: Object.fromEntries(models.map(id => {
+        const inferred = inferWizardModelCapabilities(id, protocol);
+        return [
+          id,
+          {
+            id,
+            kinds: ['language'],
+            protocol,
+            input: provider.capabilities?.input ?? inferred.input,
+            streaming: provider.capabilities?.streaming ?? inferred.streaming,
+            toolCalling: provider.capabilities?.toolCalling ?? inferred.toolCalling,
+            thinking: provider.capabilities?.thinking ?? inferred.thinking,
+          },
+        ];
+      })),
+    };
     const env = provider.apiKey?.match(/^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$/u);
     if (provider.apiKey && !env) throw new Error('AI setup keys must use an environment reference');
     accounts[name] = { service: name, auth: driver === 'ollama' && !provider.apiKey
@@ -428,13 +479,15 @@ export async function configureAI(locale: 'zh-CN' | 'en' = 'zh-CN'): Promise<AIS
   }
 
   console.log('');
-  if (selectedModelChoice !== '__custom__') {
-    providerConfig.capabilities = {
-      input: providerInfo.defaultInput ? [...providerInfo.defaultInput] : ['text'],
-      toolCalling: true,
-      streaming: true,
-    };
-  } else {
+  if (selectedModelChoice === '__custom__') {
+    const inferredCustom = inferWizardModelCapabilities(
+      providerConfig.models?.[0] ?? providerInfo.defaultModel ?? '',
+      provider === 'anthropic' || provider === 'minimax'
+        ? 'anthropic-messages'
+        : provider === 'google'
+          ? 'google-generate-content'
+          : 'openai-chat',
+    );
     const featureChoices = [
       { name: wizardText(locale, "未知"), value: 'unknown' },
       { name: wizardText(locale, "支持"), value: 'yes' },
@@ -444,7 +497,15 @@ export async function configureAI(locale: 'zh-CN' | 'en' = 'zh-CN'): Promise<AIS
       { type: 'select', name: 'toolCalling', message: wizardText(locale, "模型支持工具调用？"), choices: featureChoices },
       { type: 'select', name: 'streaming', message: wizardText(locale, "模型支持流式输出？"), choices: featureChoices },
       { type: 'checkbox', name: 'input', message: wizardText(locale, "模型支持的输入类型："),
-        choices: ['text', 'image', 'audio', 'video', 'file'].map(value => ({ name: value, value, ...(value === 'text' ? { checked: true, disabled: true } : {}) })) },
+        choices: ['text', 'image', 'audio', 'video', 'file'].map(value => ({
+          name: value,
+          value,
+          ...(value === 'text'
+            ? { checked: true, disabled: true }
+            : (inferredCustom.input as readonly string[]).includes(value)
+              ? { checked: true }
+              : {}),
+        })) },
     ]);
     providerConfig.capabilities = { input: ['text', ...(features.input ?? []).filter((value: string) => value !== 'text')],
       ...(features.toolCalling === 'unknown' ? {} : { toolCalling: features.toolCalling === 'yes' }),

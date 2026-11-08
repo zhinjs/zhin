@@ -9,6 +9,8 @@ export default defineConfig({
   root: path('./'),
   resolve: {
     alias: [
+      { find: /^@zhin\.js\/console-contract$/, replacement: path('../../packages/console/plugin-contract/src/index.ts') },
+      { find: /^@zhin\.js\/client\/ui$/, replacement: path('../../packages/console/client/client/ui/index.ts') },
       { find: /^@zhin\.js\/client$/, replacement: path('../../packages/console/client/client/index.ts') },
       { find: /^react-dom\/client$/, replacement: fromClient.resolve('react-dom/client') },
       { find: /^react$/, replacement: fromClient.resolve('react') },

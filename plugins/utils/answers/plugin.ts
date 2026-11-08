@@ -15,7 +15,6 @@ export default definePlugin<AnswersConfig>({
     displayName: '答案之书',
   },
   setup(context) {
-    const service = quizServiceStore.provide(context, new QuizService());
-    return () => service.dispose();
+    quizServiceStore.provide(context, new QuizService());
   },
 });

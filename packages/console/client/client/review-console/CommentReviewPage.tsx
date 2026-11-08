@@ -150,6 +150,143 @@ export function DraftCard({ draft, endpoint, session }: { draft: ReviewDraftBase
   );
 }
 
+function DeclarativeLoginExtras({
+  endpoint,
+  context,
+  loginMode,
+}: {
+  endpoint: ReviewEndpointBase & Record<string, any>;
+  context: ReviewContext;
+  loginMode?: 'qr' | 'cookie-check' | 'none';
+}) {
+  const { t, pending, act } = context;
+  const qr = endpoint.qr as
+    | {
+        readonly state: 'idle' | 'waiting' | 'scanned' | 'confirmed' | 'expired' | 'failed';
+        readonly image?: string;
+        readonly expiresAt?: number;
+        readonly error?: string;
+      }
+    | undefined;
+  const active = Boolean(qr && (qr.state === 'waiting' || qr.state === 'scanned'));
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (!active) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [active]);
+
+  if (loginMode === 'cookie-check') {
+    return (
+      <div className="zk-row">
+        <Button busy={pending === 'login-check'} disabled={pending !== undefined} onClick={() => act('login-check')}>
+          {t('重新检查登录')}
+        </Button>
+      </div>
+    );
+  }
+
+  if (loginMode === 'qr' && qr) {
+    const login = endpoint.login as { readonly state: 'none' | 'ok' | 'expired'; readonly source?: 'config' | 'qr' };
+    const configCookie = login.source === 'config';
+    if (active && qr.image) {
+      return (
+        <div className="zk-media">
+          <img className="zk-qr" src={qr.image} alt={t('登录二维码')} />
+          <div className="zk-media__body">
+            <strong>{t(qr.state === 'scanned' ? '已扫码，请在手机上确认登录' : '用 B 站 App 扫一扫')}</strong>
+            {qr.expiresAt && (
+              <span className="zk-hint">{t('剩余 {0} 秒', Math.max(0, Math.ceil((qr.expiresAt - now) / 1000)))}</span>
+            )}
+            <span className="zk-hint">{t('登录凭据只保存在运行机器人的这台机器上，不会写进配置文件。')}</span>
+            <div>
+              <Button busy={pending === 'login-cancel'} disabled={pending !== undefined} onClick={() => act('login-cancel')}>
+                {t('取消')}
+              </Button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    const retry = qr.state === 'expired' || qr.state === 'failed';
+    return (
+      <div className="zk-row">
+        {qr.state === 'expired' && <Badge tone="warning">{t('二维码已过期')}</Badge>}
+        {qr.state === 'failed' && qr.error && <Badge tone="danger">{qr.error}</Badge>}
+        {login.state !== 'ok' && !configCookie && (
+          <Button variant="primary" busy={pending === 'login'} disabled={pending !== undefined} onClick={() => act('login')}>
+            {t(retry ? '重新扫码' : '扫码登录 B 站')}
+          </Button>
+        )}
+        {login.state === 'ok' && login.source === 'qr' && (
+          <>
+            <Button busy={pending === 'login'} disabled={pending !== undefined} onClick={() => act('login')}>
+              {t('重新扫码')}
+            </Button>
+            <Button busy={pending === 'logout'} disabled={pending !== undefined} onClick={() => act('logout')}>
+              {t('退出登录')}
+            </Button>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  return null;
+}
+
+function DeclarativeResources({
+  endpoint,
+  context,
+  resourcesKey,
+}: {
+  endpoint: ReviewEndpointBase & Record<string, any>;
+  context: ReviewContext;
+  resourcesKey?: string;
+}) {
+  if (!resourcesKey) return null;
+  const { t, noun } = context;
+  const rawList = Array.isArray(endpoint[resourcesKey]) ? (endpoint[resourcesKey] as Array<Record<string, any>>) : [];
+  const items = rawList.map((item) => {
+    const key = String(item.ref ?? item.id ?? item.url ?? '');
+    const label = String(item.ref ?? item.id ?? item.title ?? item.url ?? '');
+    const url = String(item.url ?? '#');
+    return { key, label, url };
+  });
+  const emptyText =
+    resourcesKey === 'videos'
+      ? t('还没有配置视频。要管理哪些视频请在配置的 videos 里填写 BV 号。')
+      : resourcesKey === 'articles'
+        ? t('还没有配置文章。要管理哪些文章请在配置的 articles 里填写文章 id 或链接。')
+        : t('还没有配置{0}。', noun);
+  const extraResources = Array.isArray(endpoint.resources)
+    ? (endpoint.resources as Array<{ kind: 'dynamic' | 'article'; ref: string; url: string; error?: string }>)
+    : [];
+
+  return (
+    <>
+      <ReviewResourceList
+        title={t('管理的{0}', noun)}
+        items={items}
+        empty={emptyText}
+        footnote={t('{0}列表来自配置，要增删请改配置文件。', noun)}
+      />
+      {extraResources.length > 0 && (
+        <ReviewResourceList
+          title={t('管理的动态 / 专栏')}
+          items={extraResources.map((resource) => ({
+            key: `${resource.kind}:${resource.ref}`,
+            url: resource.url,
+            label: resource.kind === 'article' ? `cv${resource.ref}` : `${t('动态')} ${resource.ref}`,
+            ...(resource.error !== undefined ? { note: t('无法解析，已跳过') } : {}),
+          }))}
+          footnote={t('列表来自配置（dynamics / articles），要增删请改配置文件。')}
+        />
+      )}
+    </>
+  );
+}
+
 export function EndpointSection({ endpoint, showTitle, session }: { endpoint: ReviewEndpointBase; showTitle: boolean; session: Session }) {
   const { spec, t, locale, call, refresh, notify } = session;
   const [pending, setPending] = useState<string | undefined>();
@@ -180,7 +317,9 @@ export function EndpointSection({ endpoint, showTitle, session }: { endpoint: Re
           {identity && <span>{identity}</span>}
         </div>
         {hint && <p className="zk-hint">{hint}</p>}
-        {spec.renderLoginExtras?.(endpoint, context)}
+        {spec.renderLoginExtras
+          ? spec.renderLoginExtras(endpoint, context)
+          : <DeclarativeLoginExtras endpoint={endpoint as ReviewEndpointBase & Record<string, any>} context={context} loginMode={spec.loginMode} />}
       </div>
       {endpoint.circuit && <Notice tone="danger">{t('触发了{0}风控或账号异常（错误码 {1}），已暂停轮询和发送。请到网页端确认账号状态，处理后重启。', platform, endpoint.circuit.code)}</Notice>}
       {endpoint.sendMode === 'off' && <p className="zk-hint">{t('出站已关闭（sendMode: off），草稿无法发送。')}</p>}
@@ -191,7 +330,9 @@ export function EndpointSection({ endpoint, showTitle, session }: { endpoint: Re
           ? <EmptyState title={t('没有待审的回复。新的 AI 回复会自动出现在这里。')} />
           : <ul className="zk-list">{endpoint.drafts.map(draft => <DraftCard key={draft.id} draft={draft} endpoint={endpoint} session={session} />)}</ul>}
       </Section>
-      {spec.renderResources?.(endpoint, context)}
+      {spec.renderResources
+        ? spec.renderResources(endpoint, context)
+        : <DeclarativeResources endpoint={endpoint as ReviewEndpointBase & Record<string, any>} context={context} resourcesKey={spec.resourcesKey} />}
     </div>
   );
 }

@@ -217,7 +217,10 @@ export class NativeTypeScriptSupervisor {
 
   readonly #onSigint = (): void => { this.#forward('SIGINT'); };
   readonly #onSigterm = (): void => { this.#forward('SIGTERM'); };
-  readonly #onSighup = (): void => { this.#forward('SIGHUP'); };
+  readonly #onSighup = (): void => {
+    if (this.#options.daemon) return;
+    this.#forward('SIGHUP');
+  };
   readonly #onExit = (): void => {
     try { this.#activeChild?.kill('SIGTERM'); } catch { /* already gone */ }
     this.#removePidFile();

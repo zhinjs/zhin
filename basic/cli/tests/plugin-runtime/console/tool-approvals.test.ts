@@ -11,7 +11,7 @@ import {
   OPS_APPROVE_PERMISSION,
   composeHostConsoleRpc,
 } from '../../../src/plugin-runtime/console/tool-approvals.js';
-import { agentToolApprovalQueueToken } from '../../../src/plugin-runtime/console/tool-approval-resource.js';
+import { agentToolApprovalQueueToken } from '../../../src/plugin-runtime/console/tool-approvals.js';
 
 const stores: SnapshotStore[] = [];
 afterEach(async () => { for (const store of stores.splice(0)) await store.close(); });
