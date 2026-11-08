@@ -9,14 +9,16 @@ export const pluginUiStyles = `
   --zk-muted: hsl(var(--muted-foreground, 220 10% 42%));
   --zk-line: hsl(var(--border, 220 14% 89%));
   --zk-input-line: hsl(var(--input, 220 12% 72%));
-  --zk-surface: hsl(var(--foreground, 224 20% 12%) / .03);
-  --zk-elevated: hsl(var(--background, 0 0% 100%));
-  --zk-inset: hsl(var(--foreground, 224 20% 12%) / .055);
-  --zk-primary: hsl(var(--primary, 173 80% 36%));
+  --zk-surface: hsl(var(--foreground, 224 20% 12%) / .028);
+  --zk-elevated: hsl(var(--card, 0 0% 100%));
+  --zk-inset: hsl(var(--foreground, 224 20% 12%) / .05);
+  --zk-primary: hsl(var(--primary, 222 62% 50%));
+  --zk-primary-soft: hsl(var(--primary, 222 62% 50%) / .11);
   --zk-on-primary: hsl(var(--primary-foreground, 0 0% 99%));
-  --zk-ring: hsl(var(--ring, 173 80% 36%));
+  --zk-ring: hsl(var(--ring, 222 62% 50%));
   --zk-success: hsl(var(--status-success, 152 62% 32%));
   --zk-warning: hsl(var(--status-warning, 35 88% 36%));
+  --zk-warning-soft: hsl(var(--status-warning, 35 88% 36%) / .12);
   --zk-danger: hsl(var(--status-danger, 0 72% 46%));
   --zk-info: hsl(var(--status-info, 217 78% 52%));
   --zk-radius-xs: 5px;
@@ -47,13 +49,15 @@ html.dark .zk-root, .dark .zk-root, html.dark .zhin-console-surface, .dark .zhin
   --zk-line: hsl(var(--border, 240 4% 18%));
   --zk-input-line: hsl(var(--input, 240 4% 26%));
   --zk-surface: hsl(var(--foreground, 0 0% 96%) / .035);
-  --zk-elevated: hsl(var(--background, 240 6% 10%));
+  --zk-elevated: hsl(var(--card, 240 6% 11%));
   --zk-inset: hsl(var(--foreground, 0 0% 96%) / .065);
-  --zk-primary: hsl(var(--primary, 172 66% 50%));
-  --zk-on-primary: hsl(var(--primary-foreground, 176 80% 10%));
-  --zk-ring: hsl(var(--ring, 172 66% 50%));
+  --zk-primary: hsl(var(--primary, 217 90% 70%));
+  --zk-primary-soft: hsl(var(--primary, 217 90% 70%) / .14);
+  --zk-on-primary: hsl(var(--primary-foreground, 0 0% 12%));
+  --zk-ring: hsl(var(--ring, 217 90% 70%));
   --zk-success: hsl(var(--status-success, 152 69% 53%));
   --zk-warning: hsl(var(--status-warning, 38 92% 60%));
+  --zk-warning-soft: hsl(var(--status-warning, 38 92% 60%) / .15);
   --zk-danger: hsl(var(--status-danger, 0 84% 64%));
   --zk-info: hsl(var(--status-info, 213 94% 68%));
   --zk-shadow-sm: 0 1px 3px hsl(0 0% 0% / .25);
@@ -122,8 +126,8 @@ html.dark .zk-root, .dark .zk-root, html.dark .zhin-console-surface, .dark .zhin
 
 /* ── Card Surface ── */
 .zk-card {
-  padding: 18px; border: 1px solid var(--zk-line); border-radius: var(--zk-radius-lg);
-  background: var(--zk-surface); display: grid; gap: 14px; min-width: 0;
+  padding: 20px; border: 1px solid var(--zk-line); border-radius: var(--zk-radius-lg);
+  background: var(--zk-elevated); display: grid; gap: 14px; min-width: 0;
   box-shadow: var(--zk-shadow-sm);
   transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
 }

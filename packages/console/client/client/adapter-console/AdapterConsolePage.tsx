@@ -642,7 +642,16 @@ function AdapterConsoleSession({ adapterKey, isCurrent }: AdapterConsolePageProp
   const docsUrl = status?.docsUrl;
   const mutationLocked = !runtime?.canManage || runtimeBlocked || !!migration || !!(runtime?.needsMigration && !runtime.canMigrate);
   const addDisabled = mutationLocked || mutating;
-  const hasSidebar = !!status && (status.actions.length > 0 || Object.keys(status.extra ?? {}).length > 0);
+  const hasQqWorkbench = !!status && effectiveAdapterKey === 'qq' && status.actions.some(a => a.name === 'qq-bind-start');
+  const sidebarActions = useMemo(
+    () => (status?.actions ?? []).filter(a => !hasQqWorkbench || !['qq-bind-start', 'qq-bind-kind', 'qq-bind-cancel'].includes(a.name)),
+    [status?.actions, hasQqWorkbench],
+  );
+  const sidebarExtraEntries = useMemo(
+    () => Object.entries(status?.extra ?? {}).filter(([k]) => !hasQqWorkbench || !['bindFlowActive', 'bindState', 'scanUrl', 'bindUrl', 'bindMessage'].includes(k)),
+    [status?.extra, hasQqWorkbench],
+  );
+  const hasSidebar = !!status && (sidebarActions.length > 0 || sidebarExtraEntries.length > 0);
   const statusError = statusRead.error;
 
   return (
@@ -662,7 +671,7 @@ function AdapterConsoleSession({ adapterKey, isCurrent }: AdapterConsolePageProp
       {status && <nav className="zk-nav" aria-label={t(locale, '页面导航')}>
         <a href="#adapter-accounts">{t(locale, '账号')}<span className="zk-count">{runtime?.endpoints.length ?? status.configured.length}</span></a>
         {visibleLogins.length > 0 && <a href="#adapter-logins">{t(locale, '登录待办')}<span className="zk-count">{visibleLogins.length}</span></a>}
-        {status.actions.length > 0 && <a href="#adapter-tools">{t(locale, '平台操作')}</a>}
+        {sidebarActions.length > 0 && <a href="#adapter-tools">{t(locale, '平台操作')}</a>}
       </nav>}
 
       {status && runtime && platformProfile && (
@@ -935,7 +944,7 @@ function AdapterConsoleSession({ adapterKey, isCurrent }: AdapterConsolePageProp
         </div>}
         {!runtime.canManage && <p className="zk-hint">{t(locale, '账号配置存储不可用：当前环境只能查看，不能新增或删除账号。')}</p>}
         {!runtime.endpoints.length && <EmptyState title={t(locale, '还没有账号')} description={t(locale, status?.canAdd && runtime.canManage ? '添加平台账号后，即可在这里管理连接与登录。' : '配置的账号会显示在这里。')} />}
-        <ul className="zk-list">{runtime.endpoints.map(endpoint => {
+        <ul className="zk-bot-grid">{runtime.endpoints.map(endpoint => {
           const connection = endpoints.find(value => value.endpoint?.id === endpoint.canonicalId);
           const configured = status?.configured.find(entry => entry.instanceId === endpoint.instanceId);
           const editable = !endpoint.retiring && !endpoint.removed;
@@ -947,31 +956,44 @@ function AdapterConsoleSession({ adapterKey, isCurrent }: AdapterConsolePageProp
           const pendingTask = visibleLogins.find(
             task => task.endpointIdentity?.instanceId === endpoint.instanceId || task.endpointKey === endpoint.endpointId,
           );
-          return <li key={`${endpoint.instanceId}:${endpoint.epoch}`} className="zk-card">
-            <div className="zk-account__head">
-              <strong>{endpoint.endpointId}</strong>
-              <Badge tone={stateTone}>{endpoint.retiring ? t(locale, '正在关闭') : !endpoint.desiredEnabled ? t(locale, '已停止') : connectionLabel(connection, locale, connectionsKnown)}</Badge>
-              {endpoint.execution && <Badge tone={endpoint.execution.status === 'failed' ? 'danger' : endpoint.execution.status === 'pending' ? 'warning' : 'neutral'}>{executionLabel(endpoint.execution, locale)}</Badge>}
-              {pendingTask && (
-                <Badge tone="warning">
-                  {t(locale, '待验证')} · <a href="#adapter-logins">{t(locale, '前往验证')}</a>
-                </Badge>
-              )}
-              {lastTest && lastTest.latencyMs !== undefined && (
-                <Badge tone={lastTest.connected ? 'success' : 'danger'}>{lastTest.latencyMs} ms</Badge>
-              )}
+          const brandMark = platformProfile?.brandMark ?? title.slice(0, 2);
+          return <li key={`${endpoint.instanceId}:${endpoint.epoch}`} className="zk-bot-tile">
+            <div className="zk-bot-tile__head">
+              <div className="zk-bot-tile__icon" aria-hidden="true">{brandMark}</div>
+              <div className="zk-bot-tile__title-wrap">
+                <div className="zk-bot-tile__title">
+                  <strong>{endpoint.endpointId}</strong>
+                  <Badge tone={stateTone}>{endpoint.retiring ? t(locale, '正在关闭') : !endpoint.desiredEnabled ? t(locale, '已停止') : connectionLabel(connection, locale, connectionsKnown)}</Badge>
+                  {endpoint.execution && <Badge tone={endpoint.execution.status === 'failed' ? 'danger' : endpoint.execution.status === 'pending' ? 'warning' : 'neutral'}>{executionLabel(endpoint.execution, locale)}</Badge>}
+                  {pendingTask && (
+                    <Badge tone="warning">
+                      {t(locale, '待验证')} · <a href="#adapter-logins">{t(locale, '前往验证')}</a>
+                    </Badge>
+                  )}
+                  {lastTest && lastTest.latencyMs !== undefined && (
+                    <Badge tone={lastTest.connected ? 'success' : 'danger'}>{lastTest.latencyMs} ms</Badge>
+                  )}
+                </div>
+                <span className="zk-bot-tile__subtitle">
+                  {platformProfile ? (locale === 'en' ? (platformProfile.categoryBadgeEn ?? platformProfile.categoryBadge) : platformProfile.categoryBadge) : title}
+                </span>
+              </div>
             </div>
             {protocolPills.length > 0 && (
               <div className="zk-account-pills">
                 {protocolPills.map((pill) => (
-                  <span key={pill.label} className="zk-account-pill">{pill.label}</span>
+                  <span key={pill.label} className={`zk-account-pill${pill.tone ? ` zk-account-pill--${pill.tone}` : ''}`}>{pill.label}</span>
                 ))}
               </div>
             )}
-            {configured && Object.keys(configured.values).length > 0 && <details><summary>{t(locale, '连接配置')}</summary><dl className="zk-dl">
-              {Object.entries(configured.values).map(([key, value]) => <React.Fragment key={key}><dt>{key}</dt><dd>{value}</dd></React.Fragment>)}
+            {configured && Object.keys(configured.values).length > 0 && <details className="zk-bot-tile__config"><summary>{t(locale, '连接配置')}</summary><dl className="zk-dl">
+              {Object.entries(configured.values).map(([key, value]) => {
+                const fDef = status?.fields.find(f => f.key === key);
+                const labelText = fDef ? resolveFieldDisplay(effectiveAdapterKey, fDef, locale).displayLabel : key;
+                return <React.Fragment key={key}><dt title={key}>{labelText}</dt><dd>{value}</dd></React.Fragment>;
+              })}
             </dl></details>}
-            {editable && <div className="zk-row">
+            {editable && <div className="zk-bot-tile__actions">
               <Button variant={endpoint.desiredEnabled ? 'secondary' : 'primary'} busy={isBusy(toggleKey)} disabled={disabled} onClick={() => runtimeMutation(endpoint.desiredEnabled ? 'stop' : 'start', { instanceId: endpoint.instanceId }, runtime)}>{t(locale, endpoint.desiredEnabled ? '停止' : '启动')}</Button>
               {endpoint.started && <Button busy={isBusy(`test:${endpoint.canonicalId}`)} onClick={() => testConnection(endpoint.canonicalId)}>{t(locale, '测试连接')}</Button>}
               {(runtime.canUpdate || runtime.canReplace) && <Button disabled={disabled} onClick={() => openEdit(endpoint)}>{t(locale, '编辑')}</Button>}
@@ -985,42 +1007,48 @@ function AdapterConsoleSession({ adapterKey, isCurrent }: AdapterConsolePageProp
         {editor && <div className="zk-card" role="region" aria-label={t(locale, '编辑账号')}>
           <h3>{t(locale, '编辑账号')}</h3>
           {(editor.generation !== runtime.generation || editor.revision !== runtime.revision) && <Notice tone="danger">{t(locale, '账号清单已变化，请取消编辑后重新打开。')}</Notice>}
-          <Field label={t(locale, '账号 ID')} hint={platformProfile?.idLabel}><input disabled={mutating || !!migration || !runtime.canReplace || !runtime.identityFields.includes('id')} value={editor.id} onChange={event => setEditor({ ...editor, id: event.target.value })} /></Field>
-          {status?.fields.filter(field => field.key !== 'id' && (runtime.mutableFields.includes(field.key) || runtime.identityFields.includes(field.key) || editorReplacing)).map(field => {
-            const display = resolveFieldDisplay(effectiveAdapterKey, field, locale);
-            const hintText = display.displayLabel !== field.key
-              ? `${display.displayLabel}${display.hint ? ` — ${display.hint}` : ''}`
-              : display.hint;
-            return <React.Fragment key={field.key}>
-              <Field label={field.key} hint={hintText}>
-                {renderConfigInput({ field, locale, allowDefault: !Object.hasOwn(editor.originalValues, field.key), disabled: mutating || !!migration, value: editor.values[field.key] ?? '', placeholder: display.placeholder, onValueChange: value => setEditor({ ...editor, values: { ...editor.values, [field.key]: value } }) })}
-              </Field>
-              {((display.quickOptions && display.quickOptions.length > 0 && field.type !== 'boolean') || isRandomSecretField(field.key)) && (
-                <div className="zk-option-pills">
-                  {display.quickOptions?.map(opt => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      className="zk-chip-btn"
-                      aria-pressed={(editor.values[field.key] ?? '') === opt.value}
-                      onClick={() => setEditor({ ...editor, values: { ...editor.values, [field.key]: opt.value } })}
-                    >
-                      {pickI18n(locale, opt.label, opt.labelI18n) ?? opt.label}
-                    </button>
-                  ))}
-                  {isRandomSecretField(field.key) && (
-                    <button
-                      type="button"
-                      className="zk-chip-btn"
-                      onClick={() => setEditor({ ...editor, values: { ...editor.values, [field.key]: generateRandomSecret(field.key) } })}
-                    >
-                      🎲 {t(locale, '生成随机密钥')}
-                    </button>
-                  )}
-                </div>
-              )}
-            </React.Fragment>;
-          })}
+          <div className="zk-form-grid">
+            <div className="zk-field-cell zk-field-cell--full">
+              <Field label={t(locale, '账号 ID')} hint={platformProfile?.idLabel}><input disabled={mutating || !!migration || !runtime.canReplace || !runtime.identityFields.includes('id')} value={editor.id} onChange={event => setEditor({ ...editor, id: event.target.value })} /></Field>
+            </div>
+            {status?.fields.filter(field => field.key !== 'id' && (runtime.mutableFields.includes(field.key) || runtime.identityFields.includes(field.key) || editorReplacing)).map(field => {
+              const display = resolveFieldDisplay(effectiveAdapterKey, field, locale);
+              const hintText = display.displayLabel !== field.key
+                ? `${display.hint ? `${display.hint} · ` : ''}${field.key}`
+                : display.hint;
+              return <div key={field.key} className="zk-field-cell">
+                <Field label={display.displayLabel} hint={hintText}>
+                  <div className="zk-input-group">
+                    {renderConfigInput({ field, locale, allowDefault: !Object.hasOwn(editor.originalValues, field.key), disabled: mutating || !!migration, value: editor.values[field.key] ?? '', placeholder: display.placeholder, onValueChange: value => setEditor({ ...editor, values: { ...editor.values, [field.key]: value } }) })}
+                    {isRandomSecretField(field.key) && (
+                      <button
+                        type="button"
+                        className="zk-chip-btn"
+                        onClick={() => setEditor({ ...editor, values: { ...editor.values, [field.key]: generateRandomSecret(field.key) } })}
+                      >
+                        🎲 {t(locale, '生成随机密钥')}
+                      </button>
+                    )}
+                  </div>
+                </Field>
+                {display.quickOptions && display.quickOptions.length > 0 && field.type !== 'boolean' && (
+                  <div className="zk-option-pills">
+                    {display.quickOptions.map(opt => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        className="zk-chip-btn"
+                        aria-pressed={(editor.values[field.key] ?? '') === opt.value}
+                        onClick={() => setEditor({ ...editor, values: { ...editor.values, [field.key]: opt.value } })}
+                      >
+                        {pickI18n(locale, opt.label, opt.labelI18n) ?? opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>;
+            })}
+          </div>
           {formError && <Notice tone="danger">{formError}</Notice>}
           <div className="zk-row">
             {editorReplacing
@@ -1168,71 +1196,109 @@ function AdapterConsoleSession({ adapterKey, isCurrent }: AdapterConsolePageProp
                 </div>
               )}
 
-              <Field
-                label={t(locale, '账号 ID')}
-                required
-                hint={
-                  status.idHint
-                    ? pickI18n(locale, status.idHint, status.idHintI18n)
-                    : platformProfile?.idLabel
-                }
-              >
-                <input
-                  disabled={mutating || !!migration}
-                  value={addId}
-                  placeholder={platformProfile?.idPlaceholder}
-                  onChange={(event) => setAddId(event.target.value)}
-                />
-              </Field>
+              <div className="zk-form-grid">
+                <div className="zk-field-cell zk-field-cell--full">
+                  <Field
+                    label={t(locale, '账号 ID')}
+                    required
+                    hint={
+                      status.idHint
+                        ? pickI18n(locale, status.idHint, status.idHintI18n)
+                        : platformProfile?.idLabel
+                    }
+                  >
+                    <input
+                      disabled={mutating || !!migration}
+                      value={addId}
+                      placeholder={platformProfile?.idPlaceholder}
+                      onChange={(event) => setAddId(event.target.value)}
+                    />
+                  </Field>
+                </div>
+              </div>
               {(() => {
-                let lastGroup: string | undefined;
-                return status.fields.filter(field => field.key !== 'id').map((field) => {
+                const inactiveSet = new Set(activeConnectionMode?.inactiveFields ?? []);
+                const collapsibleSet = new Set(platformProfile?.collapsibleGroups ?? []);
+                const nonIdFields = status.fields.filter(field => field.key !== 'id');
+                const primaryFields: AdapterConsoleFieldView[] = [];
+                const collapsedFields: AdapterConsoleFieldView[] = [];
+                for (const field of nonIdFields) {
                   const display = resolveFieldDisplay(effectiveAdapterKey, field, locale);
-                  const showGroup = display.group && display.group !== lastGroup;
-                  if (display.group) lastGroup = display.group;
-                  const hintText = display.displayLabel !== field.key
-                    ? `${display.displayLabel}${display.hint ? ` — ${display.hint}` : ''}`
-                    : display.hint;
-                  return (
-                    <React.Fragment key={field.key}>
-                      {showGroup && <div className="zk-group-header">{display.group}</div>}
-                      <Field label={field.key} required={field.required} hint={hintText}>
-                        {renderConfigInput({
-                          field,
-                          locale,
-                          disabled: mutating || !!migration,
-                          value: addValues[field.key] ?? '',
-                          placeholder: display.placeholder,
-                          onValueChange: value => setAddValues(values => ({ ...values, [field.key]: value })),
-                        })}
-                      </Field>
-                      {((display.quickOptions && display.quickOptions.length > 0 && field.type !== 'boolean') || isRandomSecretField(field.key)) && (
-                        <div className="zk-option-pills">
-                          {display.quickOptions?.map(opt => (
-                            <button
-                              key={opt.value}
-                              type="button"
-                              className="zk-chip-btn"
-                              aria-pressed={(addValues[field.key] ?? '') === opt.value}
-                              onClick={() => setAddValues(values => ({ ...values, [field.key]: opt.value }))}
-                            >
-                              {pickI18n(locale, opt.label, opt.labelI18n) ?? opt.label}
-                            </button>
-                          ))}
-                          {isRandomSecretField(field.key) && (
-                            <button
-                              type="button"
-                              className="zk-chip-btn"
-                              onClick={() => setAddValues(values => ({ ...values, [field.key]: generateRandomSecret(field.key) }))}
-                            >
-                              🎲 {t(locale, '生成随机密钥')}
-                            </button>
+                  if (inactiveSet.has(field.key) || (display.group && collapsibleSet.has(display.group))) {
+                    collapsedFields.push(field);
+                  } else {
+                    primaryFields.push(field);
+                  }
+                }
+                const renderFieldBlock = (list: readonly AdapterConsoleFieldView[]) => {
+                  let lastGroup: string | undefined;
+                  return list.map((field) => {
+                    const display = resolveFieldDisplay(effectiveAdapterKey, field, locale);
+                    const showGroup = display.group && display.group !== lastGroup;
+                    if (display.group) lastGroup = display.group;
+                    const hintText = display.displayLabel !== field.key
+                      ? `${display.hint ? `${display.hint} · ` : ''}${field.key}`
+                      : display.hint;
+                    return (
+                      <React.Fragment key={field.key}>
+                        {showGroup && <div className="zk-group-header">{display.group}</div>}
+                        <div className="zk-field-cell">
+                          <Field label={display.displayLabel} required={field.required} hint={hintText}>
+                            <div className="zk-input-group">
+                              {renderConfigInput({
+                                field,
+                                locale,
+                                disabled: mutating || !!migration,
+                                value: addValues[field.key] ?? '',
+                                placeholder: display.placeholder,
+                                onValueChange: value => setAddValues(values => ({ ...values, [field.key]: value })),
+                              })}
+                              {isRandomSecretField(field.key) && (
+                                <button
+                                  type="button"
+                                  className="zk-chip-btn"
+                                  onClick={() => setAddValues(values => ({ ...values, [field.key]: generateRandomSecret(field.key) }))}
+                                >
+                                  🎲 {t(locale, '生成随机密钥')}
+                                </button>
+                              )}
+                            </div>
+                          </Field>
+                          {display.quickOptions && display.quickOptions.length > 0 && field.type !== 'boolean' && (
+                            <div className="zk-option-pills">
+                              {display.quickOptions.map(opt => (
+                                <button
+                                  key={opt.value}
+                                  type="button"
+                                  className="zk-chip-btn"
+                                  aria-pressed={(addValues[field.key] ?? '') === opt.value}
+                                  onClick={() => setAddValues(values => ({ ...values, [field.key]: opt.value }))}
+                                >
+                                  {pickI18n(locale, opt.label, opt.labelI18n) ?? opt.label}
+                                </button>
+                              ))}
+                            </div>
                           )}
                         </div>
-                      )}
-                    </React.Fragment>
-                  );
-                });
+                      </React.Fragment>
+                    );
+                  });
+                };
+                return (
+                  <>
+                    <div className="zk-form-grid">
+                      {renderFieldBlock(primaryFields)}
+                    </div>
+                    {collapsedFields.length > 0 && (
+                      <details className="zk-advanced-details">
+                        <summary>{t(locale, '高级与底层连接参数（已按当前模式预设，点击展开）')}</summary>
+                        <div className="zk-form-grid">
+                          {renderFieldBlock(collapsedFields)}
+                        </div>
+                      </details>
+                    )}
+                  </>
+                );
               })()}
               {formError && <Notice tone="danger">{formError}</Notice>}
               <div className="zk-row">
@@ -1246,8 +1312,8 @@ function AdapterConsoleSession({ adapterKey, isCurrent }: AdapterConsolePageProp
 
       </main>
       {hasSidebar && <aside className="zk-stack" aria-label={t(locale, '平台信息')}>
-        {status && status.actions.length > 0 && <Section id="adapter-tools" title={t(locale, '平台操作')}>
-          <ul className="zk-list">{status.actions.map(action => {
+        {status && sidebarActions.length > 0 && <Section id="adapter-tools" title={t(locale, '平台操作')}>
+          <ul className="zk-list">{sidebarActions.map(action => {
             const values = actionValues[action.name] ?? {};
             const result = actionResults[action.name];
             const label = pickI18n(locale, action.label, action.labelI18n) ?? action.name;
@@ -1281,8 +1347,8 @@ function AdapterConsoleSession({ adapterKey, isCurrent }: AdapterConsolePageProp
             </li>;
           })}</ul>
         </Section>}
-        {status?.extra && Object.keys(status.extra).length > 0 && <Section title={t(locale, '平台状态')}>
-          <dl className="zk-dl">{Object.entries(status.extra).map(([key, value]) => <React.Fragment key={key}><dt>{key}</dt><dd>{typeof value === 'string' && isLink(value) ? <a href={value} target="_blank" rel="noreferrer">{value}</a> : typeof value === 'boolean' ? t(locale, value ? '已开启' : '已关闭') : String(value)}</dd></React.Fragment>)}</dl>
+        {sidebarExtraEntries.length > 0 && <Section title={t(locale, '平台状态')}>
+          <dl className="zk-dl">{sidebarExtraEntries.map(([key, value]) => <React.Fragment key={key}><dt>{key}</dt><dd>{typeof value === 'string' && isLink(value) ? <a href={value} target="_blank" rel="noreferrer">{value}</a> : typeof value === 'boolean' ? t(locale, value ? '已开启' : '已关闭') : String(value)}</dd></React.Fragment>)}</dl>
         </Section>}
       </aside>}
       </div>

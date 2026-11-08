@@ -12,6 +12,8 @@ export interface PlatformConnectionMode {
   readonly presetValues: Readonly<Record<string, string>>;
   /** Keys of fields that are primary/highlighted in this mode. */
   readonly primaryFields?: readonly string[];
+  /** Keys of fields belonging to other modes that should be collapsed into Advanced in this mode. */
+  readonly inactiveFields?: readonly string[];
   /** Live callback URL template (e.g. `ws://{host}{path}` or `https://{origin}{webhookPath}`). */
   readonly callbackUrlTemplate?: {
     readonly protocol: 'ws' | 'http';
@@ -52,6 +54,7 @@ export interface PlatformAdapterProfile {
   readonly connectionModes?: readonly PlatformConnectionMode[];
   readonly presets?: readonly PlatformOnboardingPreset[];
   readonly fieldOverrides?: Readonly<Record<string, PlatformFieldOverride>>;
+  readonly collapsibleGroups?: readonly string[];
   readonly supportsEmailSync?: boolean;
   readonly supportsQqOfficialWorkbench?: boolean;
 }
@@ -79,6 +82,7 @@ export const PLATFORM_PROFILES: Readonly<Record<string, PlatformAdapterProfile>>
         description: '启动账号后直接用手机 QQ 扫描工作台二维码确认登录，密码可留空。',
         presetValues: { platform: '5', qqnt: 'true', ntLogin: 'true', autoReconnect: 'true', autoServer: 'true' },
         primaryFields: ['platform', 'signApiAddr', 'qqnt', 'ntLogin'],
+        inactiveFields: ['ver', 'dataDir'],
       },
       {
         key: 'password',
@@ -88,6 +92,7 @@ export const PLATFORM_PROFILES: Readonly<Record<string, PlatformAdapterProfile>>
         description: '使用 QQ 登录密码配合 QSign 签名服务登录，首次异地登录在工作台完成滑块或设备锁验证。',
         presetValues: { platform: '5', qqnt: 'true', autoReconnect: 'true', autoServer: 'true' },
         primaryFields: ['password', 'platform', 'signApiAddr', 'ver'],
+        inactiveFields: ['dataDir'],
       },
     ],
     presets: [
@@ -179,6 +184,7 @@ export const PLATFORM_PROFILES: Readonly<Record<string, PlatformAdapterProfile>>
         description: '主动连接 QQ 官方网关，无需配置公网 Webhook 与 SSL 证书。',
         presetValues: { mode: 'websocket', botKind: 'public', sandbox: 'false', streaming: 'true' },
         primaryFields: ['appid', 'secret', 'mode', 'botKind', 'sandbox', 'streaming'],
+        inactiveFields: ['webhookPath', 'token'],
       },
       {
         key: 'sandbox',
@@ -187,6 +193,7 @@ export const PLATFORM_PROFILES: Readonly<Record<string, PlatformAdapterProfile>>
         description: '连接官方沙箱测试频道与测试群，适合开发阶段验证指令。',
         presetValues: { mode: 'websocket', botKind: 'private', sandbox: 'true', streaming: 'true' },
         primaryFields: ['appid', 'secret', 'sandbox', 'botKind'],
+        inactiveFields: ['webhookPath', 'token'],
       },
       {
         key: 'webhook',
@@ -195,6 +202,7 @@ export const PLATFORM_PROFILES: Readonly<Record<string, PlatformAdapterProfile>>
         description: '通过 HTTP Webhook 接收事件推送，需公网 HTTPS 地址。',
         presetValues: { mode: 'webhook', webhookPath: '/qq/webhook', botKind: 'public', sandbox: 'false' },
         primaryFields: ['appid', 'secret', 'mode', 'webhookPath', 'botKind'],
+        inactiveFields: ['token'],
         callbackUrlTemplate: {
           protocol: 'http',
           pathField: 'webhookPath',
@@ -251,6 +259,7 @@ export const PLATFORM_PROFILES: Readonly<Record<string, PlatformAdapterProfile>>
         description: 'NapCat 开启 WebSocket Server（默认 3001 端口），Zhin 主动发起连接。',
         presetValues: { url: 'ws://127.0.0.1:3001', path: '', http_url: '', post_path: '' },
         primaryFields: ['url', 'access_token'],
+        inactiveFields: ['path', 'http_url', 'post_path'],
       },
       {
         key: 'wss',
@@ -259,6 +268,7 @@ export const PLATFORM_PROFILES: Readonly<Record<string, PlatformAdapterProfile>>
         description: 'Zhin 暴露 WebSocket 路径（如 /napcat），在 NapCat WebUI 中添加反向 WS 客户端指向 Zhin。',
         presetValues: { path: '/napcat', url: '', http_url: '', post_path: '' },
         primaryFields: ['path', 'access_token'],
+        inactiveFields: ['url', 'http_url', 'post_path'],
         callbackUrlTemplate: {
           protocol: 'ws',
           pathField: 'path',
@@ -273,6 +283,7 @@ export const PLATFORM_PROFILES: Readonly<Record<string, PlatformAdapterProfile>>
         description: '通过 HTTP 请求调用 NapCat API，并接收 HTTP POST 事件上报。',
         presetValues: { http_url: 'http://127.0.0.1:3000', post_path: '/napcat/event', url: '', path: '' },
         primaryFields: ['http_url', 'post_path', 'access_token'],
+        inactiveFields: ['url', 'path'],
         callbackUrlTemplate: {
           protocol: 'http',
           pathField: 'post_path',
@@ -310,6 +321,7 @@ export const PLATFORM_PROFILES: Readonly<Record<string, PlatformAdapterProfile>>
         description: 'Zhin 主动连接 LLOneBot / Lagrange 开启的 WS 端口（如 ws://127.0.0.1:3001）。',
         presetValues: { url: 'ws://127.0.0.1:3001', path: '' },
         primaryFields: ['url', 'access_token'],
+        inactiveFields: ['path'],
       },
       {
         key: 'wss',
@@ -318,6 +330,7 @@ export const PLATFORM_PROFILES: Readonly<Record<string, PlatformAdapterProfile>>
         description: 'Zhin 在指定路径监听，协议端配置反向 WS 地址连入。',
         presetValues: { path: '/onebot/v11/ws', url: '' },
         primaryFields: ['path', 'access_token'],
+        inactiveFields: ['url'],
         callbackUrlTemplate: {
           protocol: 'ws',
           pathField: 'path',
@@ -437,6 +450,7 @@ export const PLATFORM_PROFILES: Readonly<Record<string, PlatformAdapterProfile>>
         description: '主动向 Telegram API 拉取消息更新，无需公网域名或 SSL 证书。',
         presetValues: { polling: 'true', streaming: 'true' },
         primaryFields: ['token', 'polling', 'streaming'],
+        inactiveFields: ['webhook.domain', 'webhook.path', 'webhook.port', 'webhook.secretToken'],
       },
       {
         key: 'webhook',
@@ -445,6 +459,7 @@ export const PLATFORM_PROFILES: Readonly<Record<string, PlatformAdapterProfile>>
         description: '由 Telegram 服务器主动推送更新到公网 HTTPS 域名。',
         presetValues: { polling: 'false', 'webhook.path': '/telegram/webhook', streaming: 'true' },
         primaryFields: ['token', 'polling', 'webhook.domain', 'webhook.path', 'webhook.secretToken'],
+        inactiveFields: ['webhook.port'],
         callbackUrlTemplate: {
           protocol: 'http',
           pathField: 'webhook.path',
@@ -487,6 +502,7 @@ export const PLATFORM_PROFILES: Readonly<Record<string, PlatformAdapterProfile>>
         description: '通过 Discord Gateway WebSocket 接收频道与私聊事件，支持自定义在线状态。',
         presetValues: { connection: 'gateway', 'defaultActivity.type': 'PLAYING' },
         primaryFields: ['token', 'connection', 'applicationId', 'defaultActivity.type', 'defaultActivity.name'],
+        inactiveFields: ['publicKey', 'interactionsPath'],
       },
       {
         key: 'interactions',
@@ -495,6 +511,7 @@ export const PLATFORM_PROFILES: Readonly<Record<string, PlatformAdapterProfile>>
         description: '通过公网 HTTP 端点接收 Slash Commands 交互，需填写 Public Key。',
         presetValues: { connection: 'interactions', interactionsPath: '/discord/interactions' },
         primaryFields: ['token', 'connection', 'applicationId', 'publicKey', 'interactionsPath'],
+        inactiveFields: ['defaultActivity.type', 'defaultActivity.name'],
         callbackUrlTemplate: {
           protocol: 'http',
           pathField: 'interactionsPath',
@@ -545,6 +562,7 @@ export const PLATFORM_PROFILES: Readonly<Record<string, PlatformAdapterProfile>>
         description: '使用 WebSocket 接收事件，无需暴露公网 HTTP 回调地址。',
         presetValues: { socketMode: 'true', streaming: 'true' },
         primaryFields: ['token', 'appToken', 'socketMode', 'streaming'],
+        inactiveFields: ['signingSecret', 'webhookPath'],
       },
       {
         key: 'events',
@@ -553,6 +571,7 @@ export const PLATFORM_PROFILES: Readonly<Record<string, PlatformAdapterProfile>>
         description: '通过公网 HTTP 路径接收 Slack Event Subscriptions 推送。',
         presetValues: { socketMode: 'false', webhookPath: '/slack/events', streaming: 'true' },
         primaryFields: ['token', 'signingSecret', 'socketMode', 'webhookPath'],
+        inactiveFields: ['appToken'],
         callbackUrlTemplate: {
           protocol: 'http',
           pathField: 'webhookPath',
@@ -799,6 +818,7 @@ export const PLATFORM_PROFILES: Readonly<Record<string, PlatformAdapterProfile>>
       '2. 填写发件邮箱地址与客户端专用授权码（非网页登录密码），可点击「将发件账号同步至收件账号」一键复用',
     ],
     supportsEmailSync: true,
+    collapsibleGroups: ['SMTP 发件服务器', 'IMAP 收件服务器', '轮询与附件策略'],
     presets: [
       {
         key: 'qq-mail',
@@ -964,6 +984,7 @@ export const PLATFORM_PROFILES: Readonly<Record<string, PlatformAdapterProfile>>
         description: '仅需填写直播间号即可监听弹幕、礼物、上舰与醒目留言 (SC)。',
         presetValues: {},
         primaryFields: ['roomId', 'uid'],
+        inactiveFields: ['sessdata', 'biliJct', 'buvid3'],
       },
       {
         key: 'auth',
@@ -1162,5 +1183,10 @@ export function inferAccountProtocolPills(
     if (values.roomId) pills.push({ label: `房间 #${values.roomId}`, tone: 'primary' });
     if (values.sessdata) pills.push({ label: '已配登录态', tone: 'success' });
   }
-  return pills;
+  const seen = new Set<string>();
+  return pills.filter(pill => {
+    if (seen.has(pill.label)) return false;
+    seen.add(pill.label);
+    return true;
+  });
 }

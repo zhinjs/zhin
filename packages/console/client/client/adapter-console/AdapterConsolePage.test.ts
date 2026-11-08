@@ -464,7 +464,13 @@ describe('platform-tailored onboarding wizards & interactive login workbench', (
     expect(genSecretBtn).toBeDefined();
     await genSecretBtn!.props.onClick();
     await fNap.h.settle();
-    const generatedSecret = String(fNap.h.input(3).value);
+    const generatedSecret = String(
+      fNap.h
+        .nodes()
+        .filter(node => node.type === 'input')
+        .map(node => String(node.props?.value ?? ''))
+        .find(val => val.length === 32) ?? '',
+    );
     expect(generatedSecret.length).toBe(32);
 
     fNap.h.input(0).onChange({ target: { value: 'napcat-1' } });
@@ -501,9 +507,10 @@ describe('platform-tailored onboarding wizards & interactive login workbench', (
     expect(qqMailPreset).toBeDefined();
     await qqMailPreset!.props.onClick();
     await fEmail.h.settle();
-    expect(fEmail.h.input(1).value).toBe('smtp.qq.com');
+    const emailInputs = () => fEmail.h.nodes().filter(node => node.type === 'input');
+    expect(emailInputs().some(n => n.props?.value === 'smtp.qq.com')).toBe(true);
 
-    fEmail.h.input(2).onChange({ target: { value: 'bot@qq.com' } });
+    fEmail.h.input(1).onChange({ target: { value: 'bot@qq.com' } });
     await fEmail.h.settle();
     const syncBtn = fEmail.h.nodes().find(
       node => node.type === 'button' && text(node.props?.children).includes('将发件账号同步至收件账号'),
@@ -511,7 +518,7 @@ describe('platform-tailored onboarding wizards & interactive login workbench', (
     expect(syncBtn).toBeDefined();
     await syncBtn!.props.onClick();
     await fEmail.h.settle();
-    expect(fEmail.h.input(3).value).toBe('bot@qq.com');
+    expect(emailInputs().filter(n => n.props?.value === 'bot@qq.com')).toHaveLength(2);
     fEmail.h.unmount();
   });
 
