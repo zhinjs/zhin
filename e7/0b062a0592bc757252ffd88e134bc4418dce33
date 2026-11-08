@@ -1,0 +1,20 @@
+packages/console/client/CHANGELOG.md
+  h_6f5e45c41d0910 3-9
+packages/console/client/package.json
+  h_6f5e45c41d0910 3
+plugins/adapters/sandbox/CHANGELOG.md
+  h_6f5e45c41d0910 3-10
+plugins/adapters/sandbox/package.json
+  h_6f5e45c41d0910 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e70b062a0592bc757252ffd88e134bc4418dce33",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
