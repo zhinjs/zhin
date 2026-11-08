@@ -1,0 +1,14 @@
+.changeset/diana-grade-console-organization.md
+  h_6f5e45c41d0910 1-5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f948af1a437a31ed894335391c741355c9786929",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
