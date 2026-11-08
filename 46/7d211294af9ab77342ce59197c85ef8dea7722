@@ -1,0 +1,20 @@
+plugins/utils/calendar/plugin.ts
+  h_6f5e45c41d0910 1,93-98
+plugins/utils/lottery/plugin.ts
+  h_6f5e45c41d0910 1,32-37
+plugins/utils/reminder/plugin.ts
+  h_6f5e45c41d0910 1,57-62
+plugins/utils/rss/plugin.ts
+  h_6f5e45c41d0910 3,101-106
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "467d211294af9ab77342ce59197c85ef8dea7722",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
