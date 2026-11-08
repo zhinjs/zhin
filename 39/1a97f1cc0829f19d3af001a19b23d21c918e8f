@@ -1,0 +1,30 @@
+package.json
+  h_6f5e45c41d0910 30-31
+packages/toolkit/components/README.md
+  h_6f5e45c41d0910 162,164,171-178
+packages/toolkit/components/examples/gallery.mjs
+  h_6f5e45c41d0910 2,4-5,9,17,20-26,39-42,64-71,74-77,80-81,204-208,228,244,249-251,255-277,279-291,293-329,413-509
+packages/toolkit/components/package.json
+  h_6f5e45c41d0910 26
+scripts/adapter-preview/README.md
+  h_6f5e45c41d0910 8-9,12
+scripts/adapter-preview/UiKitPreview.tsx
+  h_6f5e45c41d0910 1-747
+scripts/adapter-preview/index.html
+  h_6f5e45c41d0910 22-23
+scripts/adapter-preview/main.tsx
+  h_6f5e45c41d0910 6-8,10,13,153-163
+scripts/adapter-preview/vite.config.mts
+  h_6f5e45c41d0910 12-13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "391a97f1cc0829f19d3af001a19b23d21c918e8f",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
