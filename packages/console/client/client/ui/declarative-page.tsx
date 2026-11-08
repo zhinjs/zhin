@@ -198,7 +198,7 @@ export interface DeclarativeStatSpec<TData = Record<string, unknown>> {
   readonly icon?: React.ReactNode;
   readonly image?: string;
   readonly watermark?: React.ReactNode | string;
-  readonly tone?: BadgeTone | 'primary';
+  readonly tone?: BadgeTone | 'primary' | 'default';
   readonly hint?: DeclarativeI18nText | DeclarativeValueExpr | ((data: TData) => React.ReactNode);
   readonly progress?: number | string | DeclarativeValueExpr;
   readonly sparkline?: string;
@@ -386,20 +386,54 @@ const declarativeStyles = `
 .zk-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; }
 .zk-stat-card {
   position: relative; overflow: hidden;
-  padding: 16px 18px; border: 1px solid var(--zk-line); border-radius: var(--zk-radius-lg);
-  background: var(--zk-surface); display: grid; gap: 6px; min-width: 0;
-  transition: border-color .16s ease, transform .16s ease;
+  padding: 16px 18px; border: 1px solid var(--zk-line); border-left: 3px solid var(--zk-primary);
+  border-radius: var(--zk-radius-lg);
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.04), var(--zk-surface) 65%);
+  display: grid; gap: 6px; min-width: 0;
+  transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease;
 }
 .zk-stat-card::before {
   content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
   background: linear-gradient(90deg, var(--zk-primary), transparent); opacity: .75;
 }
+.zk-stat-card--default, .zk-stat-card--primary {
+  border-left-color: var(--zk-primary);
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.04), var(--zk-surface) 65%);
+}
+.zk-stat-card--success {
+  border-color: rgba(16, 185, 129, 0.35);
+  border-left: 3px solid #10b981;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.07), var(--zk-surface) 65%);
+}
 .zk-stat-card--success::before { background: linear-gradient(90deg, var(--zk-success), transparent); }
+.zk-stat-card--warning {
+  border-color: rgba(245, 158, 11, 0.38);
+  border-left: 3px solid #f59e0b;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.08), var(--zk-surface) 65%);
+}
 .zk-stat-card--warning::before { background: linear-gradient(90deg, var(--zk-warning), transparent); }
+.zk-stat-card--danger {
+  border-color: rgba(244, 63, 94, 0.38);
+  border-left: 3px solid #f43f5e;
+  background: linear-gradient(135deg, rgba(244, 63, 94, 0.08), var(--zk-surface) 65%);
+}
 .zk-stat-card--danger::before { background: linear-gradient(90deg, var(--zk-danger), transparent); }
+.zk-stat-card--info {
+  border-color: rgba(14, 165, 233, 0.35);
+  border-left: 3px solid #0ea5e9;
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.07), var(--zk-surface) 65%);
+}
 .zk-stat-card--info::before { background: linear-gradient(90deg, var(--zk-info), transparent); }
+.zk-stat-card--neutral {
+  border-left: 3px solid var(--zk-muted);
+  background: var(--zk-surface);
+}
 .zk-stat-card--neutral::before { background: linear-gradient(90deg, var(--zk-muted), transparent); }
-.zk-stat-card:hover { border-color: var(--zk-input-line); transform: translateY(-1px); }
+.zk-stat-card:hover {
+  border-color: var(--zk-input-line);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px -6px rgba(15, 23, 42, 0.12);
+}
 .zk-stat-card__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .zk-stat-card__label { font-size: var(--zk-text-small); color: var(--zk-muted); font-weight: 500; }
 .zk-stat-card__value { font-size: 24px; font-weight: 700; line-height: 1.25; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; overflow-wrap: anywhere; }
@@ -407,14 +441,15 @@ const declarativeStyles = `
 .zk-table { width: 100%; border-collapse: collapse; font-size: var(--zk-text-small); text-align: left; }
 .zk-table th, .zk-table td { padding: 11px 14px; border-bottom: 1px solid var(--zk-line); vertical-align: middle; }
 .zk-table th { color: var(--zk-muted); font-weight: 600; background: var(--zk-inset); white-space: nowrap; font-size: 12px; letter-spacing: 0.02em; }
-.zk-th-sort { border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; padding: 0; }
+.zk-th-sort { border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; padding: 0; user-select: none; }
 .zk-th-sort:hover { color: var(--zk-fg); }
+.zk-th-sort__indicator { font-size: 11px; opacity: 0.7; }
 .zk-table tbody tr { transition: background-color .12s ease; }
 .zk-table tbody tr:hover td { background: var(--zk-inset); }
 .zk-table tr:last-child td { border-bottom: none; }
 .zk-table-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .zk-search-input {
-  width: 210px !important; min-height: var(--zk-control-sm) !important;
+  width: 220px !important; min-height: var(--zk-control-sm) !important;
   padding: 4px 10px !important; font-size: 12px !important;
   border-radius: var(--zk-radius-sm) !important;
 }
@@ -447,8 +482,79 @@ const declarativeStyles = `
 }
 .zk-ext-link:hover { text-decoration: underline; }
 .zk-sync-meta { font-size: 12px; color: var(--zk-muted); font-variant-numeric: tabular-nums; }
-.zk-action-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.zk-updated-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 8px; border-radius: 999px;
+  background: var(--zk-inset); border: 1px solid var(--zk-line);
+  font-size: 11px; color: var(--zk-muted); font-variant-numeric: tabular-nums;
+}
+.zk-refresh-select {
+  height: var(--zk-control-sm, 30px); padding: 2px 8px;
+  border-radius: var(--zk-radius-sm, 6px); border: 1px solid var(--zk-line);
+  background: var(--zk-surface); color: var(--zk-fg);
+  font-size: 12px; cursor: pointer;
+}
+.zk-refresh-select:hover { border-color: var(--zk-input-line); }
+.zk-action-jump-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 9px; border-radius: 999px;
+  border: 1px solid var(--zk-line); background: var(--zk-inset);
+  color: var(--zk-fg); font-size: 12px; text-decoration: none; font-weight: 500;
+  transition: border-color .12s, color .12s;
+}
+.zk-action-jump-pill:hover { border-color: var(--zk-primary); color: var(--zk-primary); }
+.zk-entries-grid {
+  display: grid; grid-template-columns: repeat(1, minmax(0, 1fr)); gap: 10px;
+}
+@media (min-width: 640px) {
+  .zk-entries-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.zk-entry-card {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 11px 14px; border-radius: var(--zk-radius-md, 8px);
+  border: 1px solid var(--zk-line); background: var(--zk-surface);
+  min-width: 0; transition: border-color .14s ease;
+}
+.zk-entry-card:hover { border-color: var(--zk-input-line); }
+.zk-entry-card__meta { display: grid; gap: 2px; min-width: 0; }
+.zk-entry-card__label { font-size: 12px; color: var(--zk-muted); font-weight: 500; }
+.zk-entry-card__value {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 13px; font-weight: 600; color: var(--zk-fg);
+  text-align: right; overflow-wrap: anywhere;
+}
+.zk-empty-cell { color: var(--zk-muted); opacity: 0.65; }
+.zk-action-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+.zk-action-card { display: grid; gap: 12px; align-content: start; }
+.zk-action-card__head { display: grid; gap: 4px; }
+.zk-action-fields-grid {
+  display: grid; grid-template-columns: repeat(1, minmax(0, 1fr)); gap: 12px;
+}
+@media (min-width: 640px) {
+  .zk-action-fields-grid--multi { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.zk-field--full { grid-column: 1 / -1; }
+.zk-action-result-preview {
+  margin-top: 6px; padding: 10px 12px;
+  border-radius: var(--zk-radius-md, 8px);
+  border: 1px solid var(--zk-line); background: var(--zk-inset);
+  display: grid; gap: 8px;
+}
+.zk-action-result-preview__head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  font-size: 12px; font-weight: 600; color: var(--zk-muted);
+}
+.zk-action-preview-img {
+  max-width: 200px; max-height: 200px; border-radius: 8px;
+  border: 1px solid var(--zk-line); background: #fff; padding: 6px; object-fit: contain;
+}
 `;
+
+function formatTimeHMS(timestamp: number): string {
+  const date = new Date(timestamp);
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
 
 function pickText(text: DeclarativeI18nText | undefined, locale: PluginUiLocale, t: PluginUiText['t']): string {
   if (!text) return '';
@@ -482,6 +588,8 @@ function buildDeclarativeBlueprint<TData = Record<string, unknown>>(spec: Declar
       items: spec.stats.map((s, i) => ({
         key: s.key ?? (typeof s.value === 'string' ? s.value : `stat-${i}`),
         label: resolveBlueprintText(s.label, 'en'),
+        ...(s.tone ? { tone: s.tone } : {}),
+        ...(s.unit ? { unit: resolveBlueprintText(s.unit, 'en') } : {}),
         ...(typeof s.value === 'string' ? { dataKey: s.value } : {}),
         ...(isDeclarativeValueExpr(s.value) ? { expr: s.value } : {}),
       })),
@@ -500,6 +608,10 @@ function buildDeclarativeBlueprint<TData = Record<string, unknown>>(spec: Declar
         columns: (sec.columns ?? []).map((c) => ({
           key: c.key,
           label: resolveBlueprintText(c.label, 'en'),
+          ...(c.type ? { type: c.type } : {}),
+          ...(c.align ? { align: c.align } : {}),
+          ...(c.sortable !== undefined ? { sortable: c.sortable } : {}),
+          ...(c.copyable !== undefined ? { copyable: c.copyable } : {}),
         })),
       });
     } else if (sec.entries !== undefined) {
@@ -562,20 +674,123 @@ function buildDeclarativeBlueprint<TData = Record<string, unknown>>(spec: Declar
   };
 }
 
+function normalizeActionField(f: Record<string, unknown>): DeclarativeActionFieldSpec {
+  const key = String(f.key ?? f.name ?? '');
+  return {
+    ...(f as unknown as DeclarativeActionFieldSpec),
+    key,
+    label: (f.label as DeclarativeI18nText) ?? key,
+  };
+}
+
+function normalizeActionSpec<TData = Record<string, unknown>>(
+  act: Record<string, unknown>,
+): DeclarativeActionSpec<TData> | undefined {
+  if (!act || typeof act !== 'object') return undefined;
+  const name = String(act.action ?? act.name ?? '');
+  if (!name) return undefined;
+  const rawFields = Array.isArray(act.fields) ? (act.fields as Record<string, unknown>[]) : undefined;
+  const fields = rawFields?.filter((f) => f && typeof f === 'object').map(normalizeActionField);
+  return {
+    ...(act as unknown as DeclarativeActionSpec<TData>),
+    name,
+    label: (act.label as DeclarativeI18nText) ?? name,
+    ...(act.description !== undefined ? { description: act.description as DeclarativeI18nText } : {}),
+    ...(act.variant !== undefined ? { variant: act.variant as ButtonVariant } : {}),
+    ...(act.confirm !== undefined ? { confirm: act.confirm as DeclarativeI18nText } : {}),
+    ...(act.confirmLabel !== undefined ? { confirmLabel: act.confirmLabel as DeclarativeI18nText } : {}),
+    ...(fields !== undefined ? { fields } : {}),
+    ...(act.params !== undefined ? { params: act.params as DeclarativeActionSpec<TData>['params'] } : {}),
+    ...(act.disabled !== undefined ? { disabled: act.disabled as DeclarativeActionSpec<TData>['disabled'] } : {}),
+    ...(act.successMessage !== undefined ? { successMessage: act.successMessage as DeclarativeI18nText } : {}),
+  };
+}
+
+function normalizeDirectSpec<TData = Record<string, unknown>>(
+  specObj: DeclarativePageSpec<TData>,
+): DeclarativePageSpec<TData> {
+  const mergedActions: DeclarativeActionSpec<TData>[] = [];
+  const seenNames = new Set<string>();
+  const pushAct = (rawAct: unknown) => {
+    if (!rawAct || typeof rawAct !== 'object') return;
+    const norm = normalizeActionSpec<TData>(rawAct as Record<string, unknown>);
+    if (norm && !seenNames.has(norm.name)) {
+      seenNames.add(norm.name);
+      mergedActions.push(norm);
+    }
+  };
+  for (const act of specObj.actions ?? []) {
+    pushAct(act);
+  }
+  const filteredSections: DeclarativeSectionSpec<TData, Record<string, unknown>>[] = [];
+  for (const sec of specObj.sections ?? []) {
+    if (!sec || typeof sec !== 'object') continue;
+    const rawSec = sec as unknown as Record<string, unknown>;
+    const secType = rawSec.type ?? rawSec.kind;
+    if (secType === 'actions' || Array.isArray(rawSec.actions)) {
+      const actList = Array.isArray(rawSec.actions)
+        ? rawSec.actions
+        : Array.isArray(rawSec.items)
+          ? rawSec.items
+          : [];
+      for (const act of actList) {
+        pushAct(act);
+      }
+      if (
+        secType === 'actions' &&
+        sec.columns === undefined &&
+        sec.entries === undefined &&
+        sec.render === undefined
+      ) {
+        continue;
+      }
+    }
+    filteredSections.push(sec);
+  }
+  return {
+    ...specObj,
+    ...(mergedActions.length > 0 ? { actions: mergedActions } : {}),
+    ...(specObj.sections !== undefined ? { sections: filteredSections } : {}),
+  };
+}
+
 function coerceDeclarativeSpec<TData = Record<string, unknown>>(
   input: DeclarativePageSpec<TData>,
 ): DeclarativePageSpec<TData> {
   const raw = input as unknown as Record<string, unknown>;
   if (!raw || typeof raw !== 'object') return input;
   if (raw.spec && typeof raw.spec === 'object') {
-    return raw.spec as DeclarativePageSpec<TData>;
+    const inner = normalizeDirectSpec(raw.spec as DeclarativePageSpec<TData>);
+    return {
+      ...(raw.badges !== undefined && inner.badges === undefined
+        ? { badges: raw.badges as DeclarativePageSpec<TData>['badges'] }
+        : {}),
+      ...(raw.dictionary !== undefined && inner.dictionary === undefined
+        ? { dictionary: raw.dictionary as Readonly<Record<string, string>> }
+        : {}),
+      ...inner,
+    };
   }
   if (raw.kind !== 'zhin.console.page-blueprint') {
-    return input;
+    return normalizeDirectSpec(input);
   }
   const rawSections = Array.isArray(raw.sections) ? (raw.sections as Record<string, unknown>[]) : [];
   const stats: DeclarativeStatSpec<TData>[] = [];
   const actions: DeclarativeActionSpec<TData>[] = [];
+  const seenActionNames = new Set<string>();
+  const pushAction = (actObj: unknown) => {
+    if (!actObj || typeof actObj !== 'object') return;
+    const norm = normalizeActionSpec<TData>(actObj as Record<string, unknown>);
+    if (norm && !seenActionNames.has(norm.name)) {
+      seenActionNames.add(norm.name);
+      actions.push(norm);
+    }
+  };
+  if (Array.isArray(raw.actions)) {
+    for (const act of raw.actions) {
+      pushAction(act);
+    }
+  }
   const sections: DeclarativeSectionSpec<TData, Record<string, unknown>>[] = [];
 
   for (const sec of rawSections) {
@@ -591,6 +806,10 @@ function coerceDeclarativeSpec<TData = Record<string, unknown>>(
         stats.push({
           key: typeof item.key === 'string' ? item.key : dataKey,
           label: (item.label as DeclarativeI18nText) ?? (typeof item.key === 'string' ? item.key : ''),
+          ...(typeof item.tone === 'string' ? { tone: item.tone as DeclarativeStatSpec<TData>['tone'] } : {}),
+          ...(item.unit !== undefined ? { unit: item.unit as DeclarativeI18nText } : {}),
+          ...(item.hint !== undefined ? { hint: item.hint as DeclarativeStatSpec<TData>['hint'] } : {}),
+          ...(item.icon !== undefined ? { icon: item.icon as React.ReactNode } : {}),
           value: expr
             ? expr
             : dataKey
@@ -612,21 +831,7 @@ function coerceDeclarativeSpec<TData = Record<string, unknown>>(
         ? (sec.actions as Record<string, unknown>[])
         : (Array.isArray(sec.items) ? (sec.items as Record<string, unknown>[]) : []);
       for (const act of actItems) {
-        if (!act || typeof act !== 'object') continue;
-        const name = String(act.action ?? act.name ?? '');
-        if (!name) continue;
-        actions.push({
-          name,
-          label: (act.label as DeclarativeI18nText) ?? name,
-          ...(act.description !== undefined ? { description: act.description as DeclarativeI18nText } : {}),
-          ...(act.variant !== undefined ? { variant: act.variant as ButtonVariant } : {}),
-          ...(act.confirm !== undefined ? { confirm: act.confirm as DeclarativeI18nText } : {}),
-          ...(act.confirmLabel !== undefined ? { confirmLabel: act.confirmLabel as DeclarativeI18nText } : {}),
-          ...(Array.isArray(act.fields) ? { fields: act.fields as readonly DeclarativeActionFieldSpec[] } : {}),
-          ...(act.params !== undefined ? { params: act.params as DeclarativeActionSpec<TData>['params'] } : {}),
-          ...(act.disabled !== undefined ? { disabled: act.disabled as DeclarativeActionSpec<TData>['disabled'] } : {}),
-          ...(act.successMessage !== undefined ? { successMessage: act.successMessage as DeclarativeI18nText } : {}),
-        });
+        pushAction(act);
       }
     } else if (secType === 'table') {
       const dataKey = typeof sec.dataKey === 'string' ? sec.dataKey : undefined;
@@ -638,6 +843,7 @@ function coerceDeclarativeSpec<TData = Record<string, unknown>>(
         id: typeof sec.id === 'string' ? sec.id : undefined,
         title: sec.title as DeclarativeI18nText | undefined,
         emptyText: sec.emptyText as DeclarativeI18nText | undefined,
+        ...(typeof sec.rowKey === 'string' ? { rowKey: sec.rowKey } : {}),
         items: dataKey
           ? ((data: TData) => {
               const fromData = resolveDataPath(data, dataKey);
@@ -647,6 +853,10 @@ function coerceDeclarativeSpec<TData = Record<string, unknown>>(
         columns: cols.map((c) => ({
           key: String(c.key ?? ''),
           label: (c.label as DeclarativeI18nText) ?? String(c.key ?? ''),
+          ...(typeof c.type === 'string' ? { type: c.type as DeclarativeColumnType } : {}),
+          ...(typeof c.align === 'string' ? { align: c.align as 'left' | 'center' | 'right' } : {}),
+          ...(typeof c.sortable === 'boolean' ? { sortable: c.sortable } : {}),
+          ...(typeof c.copyable === 'boolean' ? { copyable: c.copyable } : {}),
         })),
       });
     } else if (secType === 'entries') {
@@ -669,8 +879,9 @@ function coerceDeclarativeSpec<TData = Record<string, unknown>>(
                 : e.value;
             return {
               key: dk,
+              hint: e.hint ? pickText(e.hint as DeclarativeI18nText, ctx.locale, ctx.t) : undefined,
               label: String(e.label ?? e.key ?? ''),
-              value: (val ?? '-') as React.ReactNode,
+              value: (val ?? '—') as React.ReactNode,
             };
           }),
       });
@@ -689,6 +900,11 @@ function coerceDeclarativeSpec<TData = Record<string, unknown>>(
     title: (raw.title as DeclarativeI18nText) ?? '',
     description: (raw.description ?? raw.subtitle) as DeclarativeI18nText | undefined,
     statusMethod,
+    ...(typeof raw.pollMs === 'number' ? { pollMs: raw.pollMs } : {}),
+    ...(raw.dictionary && typeof raw.dictionary === 'object'
+      ? { dictionary: raw.dictionary as Readonly<Record<string, string>> }
+      : {}),
+    ...(raw.badges !== undefined ? { badges: raw.badges as DeclarativePageSpec<TData>['badges'] } : {}),
     ...(stats.length > 0 ? { stats } : {}),
     ...(actions.length > 0 ? { actions } : {}),
     ...(sections.length > 0 ? { sections } : {}),
@@ -723,14 +939,21 @@ function classifySemanticStatus(raw: string): BadgeTone | undefined {
     lower === 'true' ||
     lower === 'yes' ||
     lower === 'enabled' ||
+    lower === 'active' ||
+    lower === 'running' ||
     lower === 'healthy' ||
     lower === 'ready' ||
     lower === 'online' ||
     lower === 'ok' ||
+    lower === 'connected' ||
     raw === '已就绪' ||
     raw === '已启用' ||
+    raw === '运行中' ||
     raw === '正常' ||
+    raw === '已开启' ||
+    raw === '开启' ||
     raw === '健康' ||
+    raw === '已连接' ||
     raw === '是'
   ) {
     return 'success';
@@ -740,9 +963,11 @@ function classifySemanticStatus(raw: string): BadgeTone | undefined {
     lower === 'not ready' ||
     lower === 'pending' ||
     lower === 'stale' ||
+    lower === 'warning' ||
     raw === '未就绪' ||
     raw === '降级' ||
-    raw === '待审'
+    raw === '待审' ||
+    raw === '警告'
   ) {
     return 'warning';
   }
@@ -750,8 +975,10 @@ function classifySemanticStatus(raw: string): BadgeTone | undefined {
     lower === 'error' ||
     lower === 'failed' ||
     lower === 'crashed' ||
+    lower === 'danger' ||
     raw === '异常' ||
-    raw === '失败'
+    raw === '失败' ||
+    raw === '错误'
   ) {
     return 'danger';
   }
@@ -759,9 +986,17 @@ function classifySemanticStatus(raw: string): BadgeTone | undefined {
     lower === 'false' ||
     lower === 'no' ||
     lower === 'disabled' ||
+    lower === 'inactive' ||
+    lower === 'stopped' ||
     lower === 'offline' ||
+    lower === 'disconnected' ||
+    lower === 'idle' ||
+    raw === '未启用' ||
     raw === '已禁用' ||
+    raw === '已关闭' ||
+    raw === '关闭' ||
     raw === '离线' ||
+    raw === '未连接' ||
     raw === '否'
   ) {
     return 'neutral';
@@ -782,15 +1017,15 @@ function renderSmartValue(
     readonly toneMap?: Readonly<Record<string, BadgeTone>>;
   },
 ): React.ReactNode {
-  if (raw === null || raw === undefined || raw === '') return '-';
+  if (raw === null || raw === undefined || raw === '') return <span className="zk-empty-cell">—</span>;
   const colType = colSpec?.type ?? 'auto';
   if (colType === 'progress') {
     const num = Number(raw);
-    return Number.isFinite(num) ? <ProgressBar value={num} size="sm" showValue /> : '-';
+    return Number.isFinite(num) ? <ProgressBar value={num} size="sm" showValue /> : <span className="zk-empty-cell">—</span>;
   }
   if (colType === 'boolean' || typeof raw === 'boolean') {
     const b = typeof raw === 'boolean' ? raw : String(raw).toLowerCase() === 'true';
-    return <Badge tone={b ? 'success' : 'neutral'}>{b ? 'Yes' : 'No'}</Badge>;
+    return <Badge tone={b ? 'success' : 'neutral'}>{b ? 'true' : 'false'}</Badge>;
   }
   if (colType === 'badge') {
     const s = String(raw);
@@ -809,7 +1044,7 @@ function renderSmartValue(
   if (colType === 'tags' || Array.isArray(raw)) {
     const arr = Array.isArray(raw) ? raw : String(raw).split(',').map((s) => s.trim());
     const nonEmpty = arr.filter((item) => item !== null && item !== undefined && item !== '');
-    if (nonEmpty.length === 0) return '-';
+    if (nonEmpty.length === 0) return <span className="zk-empty-cell">—</span>;
     return (
       <span>
         {nonEmpty.map((item, idx) => (
@@ -822,7 +1057,7 @@ function renderSmartValue(
   }
   if (typeof raw === 'string') {
     const trimmed = raw.trim();
-    if (!trimmed || trimmed === '-') return '-';
+    if (!trimmed || trimmed === '-' || trimmed === '—') return <span className="zk-empty-cell">—</span>;
     if (colType === 'link' || /^https?:\/\/\S+$/iu.test(trimmed)) {
       return (
         <span className="zk-row">
@@ -865,8 +1100,19 @@ function renderSmartValue(
     return trimmed;
   }
   if (typeof raw === 'number') {
-    if (colType === 'code' || (colType === 'auto' && fieldKey && CODE_KEY_PATTERN.test(fieldKey))) {
-      return <code className="zk-code-pill">{String(raw)}</code>;
+    if (colType === 'code' || colSpec?.copyable || (colType === 'auto' && fieldKey && CODE_KEY_PATTERN.test(fieldKey))) {
+      return (
+        <span className="zk-row">
+          <code className="zk-code-pill">{String(raw)}</code>
+          <button
+            type="button"
+            className="zk-copy-btn"
+            onClick={() => onCopy(copiedKey, String(raw))}
+          >
+            {copiedState === copiedKey ? '✓' : t('复制')}
+          </button>
+        </span>
+      );
     }
     return String(raw);
   }
@@ -952,9 +1198,9 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
   const rawPluginId = resolveSyncPluginId(pageProps?.pluginId ?? pageProps?.owner ?? spec.pluginId);
   const pluginId = rawPluginId === 'unknown' ? undefined : rawPluginId;
   const statusMethod = spec.statusMethod ?? 'status';
-  const configuredPollMs = spec.pollMs === undefined ? 10_000 : (spec.pollMs > 0 ? spec.pollMs : undefined);
-  const [autoPollEnabled, setAutoPollEnabled] = useState(true);
-  const pollMs = autoPollEnabled ? configuredPollMs : undefined;
+  const defaultPollMs = spec.pollMs === undefined ? 15_000 : (spec.pollMs > 0 ? spec.pollMs : 0);
+  const [pollIntervalMs, setPollIntervalMs] = useState<number>(defaultPollMs);
+  const pollMs = pollIntervalMs > 0 ? pollIntervalMs : undefined;
 
   const resource = usePluginRpc<TData>(pluginId, statusMethod, undefined, {
     pollMs,
@@ -965,6 +1211,7 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
   const [busyAction, setBusyAction] = useState<string>('');
   const [manualRefreshBusy, setManualRefreshBusy] = useState(false);
   const [actionInputs, setActionInputs] = useState<Readonly<Record<string, Readonly<Record<string, string>>>>>({});
+  const [actionResults, setActionResults] = useState<Readonly<Record<string, Record<string, unknown>>>>({});
   const [sectionQueries, setSectionQueries] = useState<Readonly<Record<string, string>>>({});
   const [sectionPages, setSectionPages] = useState<Readonly<Record<string, number>>>({});
   const [sectionSorts, setSectionSorts] = useState<Readonly<Record<string, { readonly key: string; readonly dir: 'asc' | 'desc' } | undefined>>>({});
@@ -1044,7 +1291,10 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
       const payload = typeof action.params === 'function'
         ? action.params(resource.data, values)
         : (action.params ?? (action.fields?.length ? values : undefined));
-      const res = await call<{ message?: string; passed?: boolean; decision?: string } | undefined>(action.name, payload);
+      const rpcMethod = /[A-Z]/u.test(action.name)
+        ? action.name.replace(/[A-Z]/gu, (m) => `-${m.toLowerCase()}`)
+        : action.name;
+      const res = await call<Record<string, unknown> | undefined>(rpcMethod, payload);
       const msg = (res && typeof res === 'object' && typeof res.message === 'string' && res.message)
         ? res.message
         : (action.successMessage ? pickText(action.successMessage, locale, t) : `${pickText(action.label, locale, t)} ${t('已完成')}`);
@@ -1054,6 +1304,13 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
           : res && typeof res === 'object' && (res.decision === 'review' || res.decision === 'warn')
             ? 'warning'
             : 'success';
+      if (res && typeof res === 'object') {
+        const previewKeys = ['dataUrl', 'qrDataUrl', 'imageUrl', 'shortUrl', 'url', 'text', 'output', 'result'];
+        const hasPreviewable = previewKeys.some((k) => res[k] !== undefined && res[k] !== null && res[k] !== '');
+        if (hasPreviewable) {
+          setActionResults((prev) => ({ ...prev, [action.name]: res }));
+        }
+      }
       notify(tone, msg);
       await resource.refresh();
     } catch (err) {
@@ -1061,6 +1318,70 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
     } finally {
       setBusyAction('');
     }
+  };
+
+  const renderActionResultPreview = (actionName: string, resObj: Record<string, unknown> | undefined) => {
+    if (!resObj) return null;
+    const imgUrl =
+      (typeof resObj.dataUrl === 'string' && resObj.dataUrl.startsWith('data:image/') ? resObj.dataUrl : undefined) ??
+      (typeof resObj.qrDataUrl === 'string' && resObj.qrDataUrl.startsWith('data:image/') ? resObj.qrDataUrl : undefined) ??
+      (typeof resObj.imageUrl === 'string' && resObj.imageUrl ? resObj.imageUrl : undefined);
+    const copyableText =
+      (typeof resObj.shortUrl === 'string' && resObj.shortUrl ? resObj.shortUrl : undefined) ??
+      (typeof resObj.url === 'string' && resObj.url ? resObj.url : undefined) ??
+      (typeof resObj.text === 'string' && resObj.text ? resObj.text : undefined) ??
+      (typeof resObj.output === 'string' && resObj.output ? resObj.output : undefined) ??
+      (typeof resObj.result === 'string' && resObj.result ? resObj.result : undefined);
+    const structuredData =
+      (resObj.output && typeof resObj.output === 'object' ? resObj.output : undefined) ??
+      (resObj.result && typeof resObj.result === 'object' ? resObj.result : undefined);
+    if (!imgUrl && !copyableText && !structuredData) return null;
+    const copyKey = `action-res-${actionName}`;
+    return (
+      <div className="zk-action-result-preview" data-action-preview={actionName}>
+        <div className="zk-action-result-preview__head">
+          <span>{locale === 'en' ? 'Result Preview' : '执行结果预览'}</span>
+          <button
+            type="button"
+            className="zk-copy-btn"
+            onClick={() =>
+              setActionResults((prev) => {
+                const next = { ...prev };
+                delete next[actionName];
+                return next;
+              })
+            }
+          >
+            {t('关闭')}
+          </button>
+        </div>
+        {imgUrl && (
+          <div className="zk-row" style={{ alignItems: 'center', gap: 12 }}>
+            <img src={imgUrl} alt={actionName} className="zk-action-preview-img" />
+            <button
+              type="button"
+              className="zk-copy-btn"
+              onClick={() => handleCopy(`${copyKey}-img`, imgUrl)}
+            >
+              {copiedKey === `${copyKey}-img` ? '✓' : (locale === 'en' ? 'Copy Data URL' : '复制图片数据')}
+            </button>
+          </div>
+        )}
+        {copyableText && (
+          <div className="zk-row" style={{ justifyContent: 'space-between', gap: 8 }}>
+            <code className="zk-code-pill">{copyableText}</code>
+            <button
+              type="button"
+              className="zk-copy-btn"
+              onClick={() => handleCopy(`${copyKey}-txt`, copyableText)}
+            >
+              {copiedKey === `${copyKey}-txt` ? '✓' : t('复制')}
+            </button>
+          </div>
+        )}
+        {structuredData !== undefined && <JsonView data={structuredData} />}
+      </div>
+    );
   };
 
   const runBatchAction = async (
@@ -1152,6 +1473,13 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
                   : pickText(b.label, locale, t);
               return <Badge key={b.key ?? idx} tone={tone}>{label}</Badge>;
             })}
+            {data !== undefined && resource.lastSuccessAt !== undefined && (
+              <span className="zk-sync-meta zk-updated-badge" title={new Date(resource.lastSuccessAt).toLocaleString()}>
+                {locale === 'en'
+                  ? `Updated ${formatTimeHMS(resource.lastSuccessAt)}`
+                  : `更新于 ${formatTimeHMS(resource.lastSuccessAt)}`}
+              </span>
+            )}
             {headerActions.map((action) => {
               const label = pickText(action.label, locale, t);
               const isDisabled = typeof action.disabled === 'function' ? action.disabled(data) : Boolean(action.disabled);
@@ -1185,18 +1513,27 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
                 </Button>
               );
             })}
-            {configuredPollMs !== undefined && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setAutoPollEnabled((prev) => !prev)}
-                title={autoPollEnabled ? t('点击暂停自动轮询') : t('点击恢复自动轮询')}
-              >
-                {autoPollEnabled
-                  ? (locale === 'en' ? 'Auto-sync On' : '自动同步中')
-                  : (locale === 'en' ? 'Auto-sync Off' : '已暂停同步')}
-              </Button>
+            {formActions.length > 0 && formActions.length <= 2 && (
+              <a href="#zk-actions-section" className="zk-action-jump-pill">
+                ⚡ {locale === 'en' ? 'Actions' : '快捷操作'}
+              </a>
             )}
+            <select
+              aria-label={locale === 'en' ? 'Auto refresh interval' : '自动刷新间隔'}
+              className="zk-refresh-select"
+              value={String(pollIntervalMs)}
+              onChange={(e) => setPollIntervalMs(Number(e.target.value))}
+            >
+              <option value="0">{locale === 'en' ? 'Manual Refresh' : '手动刷新'}</option>
+              <option value="5000">{locale === 'en' ? '5s Auto' : '5s 自动'}</option>
+              <option value="15000">{locale === 'en' ? '15s Auto' : '15s 自动'}</option>
+              <option value="30000">{locale === 'en' ? '30s Auto' : '30s 自动'}</option>
+              {![0, 5000, 15000, 30000].includes(pollIntervalMs) && (
+                <option value={String(pollIntervalMs)}>
+                  {locale === 'en' ? `${Math.round(pollIntervalMs / 1000)}s Auto` : `${Math.round(pollIntervalMs / 1000)}s 自动`}
+                </option>
+              )}
+            </select>
             <Button busy={manualRefreshBusy} onClick={handleManualRefresh}>{t('刷新')}</Button>
           </div>
         }
@@ -1206,6 +1543,13 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
         <Notice tone={notice.tone} onDismiss={() => setNotice(undefined)}>
           {notice.message}
         </Notice>
+      )}
+      {headerActions.map((a) =>
+        actionResults[a.name] ? (
+          <React.Fragment key={`header-res-${a.name}`}>
+            {renderActionResultPreview(a.name, actionResults[a.name])}
+          </React.Fragment>
+        ) : null,
       )}
 
       {resource.state === 'loading' && <LoadingState />}
@@ -1266,9 +1610,14 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
               stat.trend?.direction === 'up' ? 'success' : stat.trend?.direction === 'down' ? 'danger' : 'neutral';
             const trendArrow =
               stat.trend?.direction === 'up' ? '↑ ' : stat.trend?.direction === 'down' ? '↓ ' : '';
-            const cardTone = stat.tone ?? 'primary';
+            const cardTone = stat.tone ?? 'default';
+            const chartTone = cardTone === 'neutral' || cardTone === 'default' ? 'primary' : cardTone;
             return (
-              <div key={stat.key ?? idx} className={`zk-stat-card${cardTone !== 'primary' ? ` zk-stat-card--${cardTone}` : ''}`}>
+              <div
+                key={stat.key ?? idx}
+                data-stat-tone={cardTone}
+                className={`zk-stat-card zk-stat-card--${cardTone}`}
+              >
                 {stat.watermark && (
                   <span className="zk-stat-watermark" aria-hidden="true">
                     {typeof stat.watermark === 'string' && (stat.watermark.startsWith('http') || stat.watermark.startsWith('/') || stat.watermark.startsWith('data:')) ? (
@@ -1287,7 +1636,7 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
                   {stat.badge && <Badge tone={badgeTone}>{badgeLabel}</Badge>}
                 </div>
                 <div className="zk-row" style={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
-                  <div className="zk-stat-card__value">
+                  <div className="zk-stat-card__value tabular-nums">
                     {val}
                     {unitText && <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--zk-muted)', marginLeft: 4 }}>{unitText}</span>}
                   </div>
@@ -1302,7 +1651,7 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
                       values={sparklineVals.map(Number).filter(Number.isFinite)}
                       width={84}
                       height={26}
-                      tone={cardTone === 'neutral' ? 'primary' : cardTone}
+                      tone={chartTone}
                     />
                   )}
                 </div>
@@ -1310,7 +1659,7 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
                   <ProgressBar
                     value={rawProgress}
                     size="sm"
-                    tone={cardTone === 'neutral' ? 'primary' : cardTone}
+                    tone={chartTone}
                   />
                 )}
                 {hint && <span className="zk-hint">{hint}</span>}
@@ -1321,137 +1670,175 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
       )}
 
       {data !== undefined && resource.state !== 'empty' && formActions.length > 0 && (
-        <Section title={t('操作')}>
+        <Section id="zk-actions-section" title={t('操作')}>
           <div className="zk-action-grid">
             {formActions.map((action) => {
               const label = pickText(action.label, locale, t);
               const isBusy = busyAction === action.name;
               const isDisabled = typeof action.disabled === 'function' ? action.disabled(data) : Boolean(action.disabled);
               const currentValues = actionInputs[action.name] ?? {};
+              const fieldsList = action.fields ?? [];
+              const isMultiField = fieldsList.length >= 2;
               return (
-                <div key={action.name} className="zk-card">
-                  <strong>{label}</strong>
-                  {action.description && <p className="zk-hint">{pickText(action.description, locale, t)}</p>}
-                  {(action.fields ?? []).map((field) => {
-                    const fieldVal = currentValues[field.key] ?? field.defaultValue ?? '';
-                    const setVal = (nextVal: string) =>
-                      setActionInputs((prev) => ({
-                        ...prev,
-                        [action.name]: { ...(prev[action.name] ?? {}), [field.key]: nextVal },
-                      }));
-                    const fieldHint = field.hint ? pickText(field.hint, locale, t) : undefined;
-                    if (field.type === 'switch') {
-                      return (
-                        <Switch
-                          key={field.key}
-                          checked={fieldVal === 'true'}
-                          onChange={(checked) => setVal(String(checked))}
-                          label={pickText(field.label, locale, t)}
-                          description={fieldHint}
-                          disabled={isDisabled || isBusy}
-                        />
-                      );
-                    }
-                    if (field.type === 'radio' && field.options) {
-                      return (
-                        <Field key={field.key} label={pickText(field.label, locale, t)} hint={fieldHint} required={field.required}>
-                          <RadioGroup
-                            value={fieldVal}
-                            onChange={setVal}
-                            variant={field.variant}
-                            direction={field.direction}
-                            options={field.options.map((opt) => ({
-                              value: opt.value,
-                              label: pickText(opt.label, locale, t),
-                              description: opt.description ? pickText(opt.description, locale, t) : undefined,
-                              icon: opt.icon,
-                              badge: opt.badge,
-                              disabled: opt.disabled || isDisabled || isBusy,
-                            }))}
-                          />
-                        </Field>
-                      );
-                    }
-                    if (field.type === 'checkbox-group' && field.options) {
-                      const selectedList = fieldVal ? fieldVal.split(',').filter(Boolean) : [];
-                      return (
-                        <Field key={field.key} label={pickText(field.label, locale, t)} hint={fieldHint} required={field.required}>
-                          <CheckboxGroup
-                            value={selectedList}
-                            onChange={(next) => setVal(next.join(','))}
-                            variant={field.variant === 'card' ? 'card' : 'default'}
-                            direction={field.direction}
-                            options={field.options.map((opt) => ({
-                              value: opt.value,
-                              label: pickText(opt.label, locale, t),
-                              description: opt.description ? pickText(opt.description, locale, t) : undefined,
-                              icon: opt.icon,
-                              badge: opt.badge,
-                              disabled: opt.disabled || isDisabled || isBusy,
-                            }))}
-                          />
-                        </Field>
-                      );
-                    }
-                    if (field.type === 'segmented' && field.options) {
-                      return (
-                        <Field key={field.key} label={pickText(field.label, locale, t)} hint={fieldHint} required={field.required}>
-                          <SegmentedControl
-                            value={fieldVal || (field.options[0]?.value ?? '')}
-                            onChange={setVal}
-                            options={field.options.map((opt) => ({
-                              value: opt.value,
-                              label: pickText(opt.label, locale, t),
-                              icon: opt.icon,
-                              badge: opt.badge,
-                              disabled: opt.disabled || isDisabled || isBusy,
-                            }))}
-                          />
-                        </Field>
-                      );
-                    }
-                    return (
-                      <Field key={field.key} label={pickText(field.label, locale, t)} hint={fieldHint} required={field.required}>
-                        {field.type === 'select' && field.options ? (
-                          <Select
-                            value={fieldVal}
-                            placeholder={field.placeholder}
-                            onValueChange={setVal}
-                            options={field.options.map((opt) => ({
-                              value: opt.value,
-                              label: pickText(opt.label, locale, t),
-                              disabled: opt.disabled,
-                            }))}
-                          />
-                        ) : field.type === 'textarea' ? (
-                          <Textarea
-                            rows={field.rows ?? 3}
-                            placeholder={field.placeholder}
-                            value={fieldVal}
-                            onChange={(e) => setVal(e.target.value)}
-                          />
-                        ) : (
-                          <input
-                            type={field.secret || field.type === 'password' ? 'password' : field.type === 'number' ? 'number' : 'text'}
-                            placeholder={field.placeholder}
-                            value={fieldVal}
-                            onChange={(e) => setVal(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' && !isBusy && !isDisabled) {
-                                e.preventDefault();
-                                void runAction(action);
-                              }
-                            }}
-                          />
-                        )}
-                      </Field>
-                    );
-                  })}
-                  <div className="zk-row">
-                    <Button variant={action.variant ?? 'primary'} icon={action.icon} busy={isBusy} disabled={isDisabled} onClick={() => runAction(action)}>
-                      {label}
-                    </Button>
+                <div key={action.name} id={`zk-action-${action.name}`} className="zk-card zk-action-card">
+                  <div className="zk-action-card__head">
+                    <strong>{label}</strong>
+                    {action.description && <p className="zk-hint">{pickText(action.description, locale, t)}</p>}
                   </div>
+                  <div className={`zk-action-fields-grid grid grid-cols-1${isMultiField ? ' sm:grid-cols-2 zk-action-fields-grid--multi' : ''} gap-3`}>
+                    {fieldsList.map((field) => {
+                      const fieldVal = currentValues[field.key] ?? field.defaultValue ?? '';
+                      const setVal = (nextVal: string) =>
+                        setActionInputs((prev) => ({
+                          ...prev,
+                          [action.name]: { ...(prev[action.name] ?? {}), [field.key]: nextVal },
+                        }));
+                      const fieldLabelText = pickText(field.label, locale, t);
+                      const fieldHint = field.hint ? pickText(field.hint, locale, t) : undefined;
+                      const isFullWidth =
+                        !isMultiField ||
+                        field.type === 'textarea' ||
+                        field.type === 'radio' ||
+                        field.type === 'checkbox-group';
+                      const wrapperClass = isFullWidth ? 'zk-field--full col-span-full' : undefined;
+                      if (field.type === 'switch') {
+                        return (
+                          <div key={field.key} className={wrapperClass}>
+                            <Switch
+                              checked={fieldVal === 'true'}
+                              onChange={(checked) => setVal(String(checked))}
+                              label={fieldLabelText}
+                              description={fieldHint}
+                              disabled={isDisabled || isBusy}
+                            />
+                          </div>
+                        );
+                      }
+                      if (field.type === 'radio' && field.options) {
+                        return (
+                          <div key={field.key} className={wrapperClass}>
+                            <Field label={fieldLabelText} hint={fieldHint} required={field.required}>
+                              <RadioGroup
+                                value={fieldVal}
+                                onChange={setVal}
+                                variant={field.variant}
+                                direction={field.direction}
+                                options={field.options.map((opt) => ({
+                                  value: opt.value,
+                                  label: pickText(opt.label, locale, t),
+                                  description: opt.description ? pickText(opt.description, locale, t) : undefined,
+                                  icon: opt.icon,
+                                  badge: opt.badge,
+                                  disabled: opt.disabled || isDisabled || isBusy,
+                                }))}
+                              />
+                            </Field>
+                          </div>
+                        );
+                      }
+                      if (field.type === 'checkbox-group' && field.options) {
+                        const selectedList = fieldVal ? fieldVal.split(',').filter(Boolean) : [];
+                        return (
+                          <div key={field.key} className={wrapperClass}>
+                            <Field label={fieldLabelText} hint={fieldHint} required={field.required}>
+                              <CheckboxGroup
+                                value={selectedList}
+                                onChange={(next) => setVal(next.join(','))}
+                                variant={field.variant === 'card' ? 'card' : 'default'}
+                                direction={field.direction}
+                                options={field.options.map((opt) => ({
+                                  value: opt.value,
+                                  label: pickText(opt.label, locale, t),
+                                  description: opt.description ? pickText(opt.description, locale, t) : undefined,
+                                  icon: opt.icon,
+                                  badge: opt.badge,
+                                  disabled: opt.disabled || isDisabled || isBusy,
+                                }))}
+                              />
+                            </Field>
+                          </div>
+                        );
+                      }
+                      if (field.type === 'segmented' && field.options) {
+                        return (
+                          <div key={field.key} className={wrapperClass}>
+                            <Field label={fieldLabelText} hint={fieldHint} required={field.required}>
+                              <SegmentedControl
+                                value={fieldVal || (field.options[0]?.value ?? '')}
+                                onChange={setVal}
+                                options={field.options.map((opt) => ({
+                                  value: opt.value,
+                                  label: pickText(opt.label, locale, t),
+                                  icon: opt.icon,
+                                  badge: opt.badge,
+                                  disabled: opt.disabled || isDisabled || isBusy,
+                                }))}
+                              />
+                            </Field>
+                          </div>
+                        );
+                      }
+                      return (
+                        <div key={field.key} className={wrapperClass}>
+                          <Field label={fieldLabelText} hint={fieldHint} required={field.required}>
+                            {field.type === 'select' && field.options ? (
+                              <Select
+                                value={fieldVal}
+                                placeholder={field.placeholder}
+                                onValueChange={setVal}
+                                options={field.options.map((opt) => ({
+                                  value: opt.value,
+                                  label: pickText(opt.label, locale, t),
+                                  disabled: opt.disabled,
+                                }))}
+                              />
+                            ) : field.type === 'textarea' ? (
+                              <Textarea
+                                rows={field.rows ?? 3}
+                                placeholder={field.placeholder ?? (locale === 'en' ? `Enter ${fieldLabelText}…` : `请输入${fieldLabelText}…`)}
+                                value={fieldVal}
+                                onChange={(e) => setVal(e.target.value)}
+                              />
+                            ) : (
+                              <input
+                                className="zk-input"
+                                type={field.secret || field.type === 'password' ? 'password' : field.type === 'number' ? 'number' : 'text'}
+                                placeholder={field.placeholder ?? (locale === 'en' ? `Enter ${fieldLabelText}…` : `请输入${fieldLabelText}…`)}
+                                value={fieldVal}
+                                onChange={(e) => setVal(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' && !isBusy && !isDisabled) {
+                                    e.preventDefault();
+                                    void runAction(action);
+                                  }
+                                }}
+                              />
+                            )}
+                          </Field>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="zk-row">
+                    {action.confirm ? (
+                      <ConfirmButton
+                        variant={action.variant ?? 'primary'}
+                        danger={action.variant === 'danger'}
+                        disabled={isDisabled}
+                        busy={isBusy}
+                        confirmLabel={action.confirmLabel ? pickText(action.confirmLabel, locale, t) : label}
+                        message={pickText(action.confirm, locale, t)}
+                        onConfirm={() => runAction(action)}
+                      >
+                        {label}
+                      </ConfirmButton>
+                    ) : (
+                      <Button variant={action.variant ?? 'primary'} icon={action.icon} busy={isBusy} disabled={isDisabled} onClick={() => runAction(action)}>
+                        {label}
+                      </Button>
+                    )}
+                  </div>
+                  {renderActionResultPreview(action.name, actionResults[action.name])}
                 </div>
               );
             })}
@@ -1495,9 +1882,12 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
                     const rawVals = Object.values(row ?? {}).filter(
                       (v) => typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean',
                     );
-                    return [...colVals, ...rawVals].some((v) =>
-                      v !== null && v !== undefined && typeof v !== 'object' && String(v).toLowerCase().includes(query),
-                    );
+                    return [...colVals, ...rawVals].some((v) => {
+                      if (v === null || v === undefined) return false;
+                      if (Array.isArray(v)) return v.map(String).join(' ').toLowerCase().includes(query);
+                      if (typeof v === 'object') return false;
+                      return String(v).toLowerCase().includes(query);
+                    });
                   })
                 : rows;
               const sortState = sectionSorts[secKey];
@@ -1619,27 +2009,49 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
                         })}
                       />
                     ) : (
-                      <div className="zk-card">
-                        <dl className="zk-dl">
-                          {entryList.map((entry, entryIdx) => {
-                            const entryFieldKey = (entry as { key?: string }).key ?? (typeof entry.label === 'string' ? entry.label : undefined);
-                            return (
-                              <React.Fragment key={entryIdx}>
-                                <dt>{entry.label}</dt>
-                                <dd>
-                                  {renderSmartValue(
-                                    entry.value,
-                                    entryFieldKey,
-                                    `${secKey}-entry-${entryIdx}`,
-                                    copiedKey,
-                                    handleCopy,
-                                    t,
-                                  )}
-                                </dd>
-                              </React.Fragment>
-                            );
-                          })}
-                        </dl>
+                      <div className="zk-entries-grid grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        {entryList.map((entry, entryIdx) => {
+                          const entryFieldKey = (entry as { key?: string }).key ?? (typeof entry.label === 'string' ? entry.label : undefined);
+                          const copyId = `${secKey}-entry-${entryIdx}`;
+                          const rawVal = entry.value;
+                          const copyText =
+                            typeof rawVal === 'string' || typeof rawVal === 'number' || typeof rawVal === 'boolean'
+                              ? String(rawVal).trim()
+                              : '';
+                          const isAlreadyCopyable =
+                            (typeof rawVal === 'string' && /^https?:\/\/\S+$/iu.test(rawVal.trim())) ||
+                            Boolean(entryFieldKey && CODE_KEY_PATTERN.test(entryFieldKey));
+                          const canQuickCopy = Boolean(copyText && copyText !== '-' && copyText !== '—' && !isAlreadyCopyable);
+                          return (
+                            <div key={entryIdx} className="zk-entry-card">
+                              <div className="zk-entry-card__meta">
+                                <span className="zk-entry-card__label">{entry.label}</span>
+                                {(entry as { hint?: React.ReactNode }).hint && (
+                                  <span className="zk-hint">{(entry as { hint?: React.ReactNode }).hint}</span>
+                                )}
+                              </div>
+                              <div className="zk-entry-card__value">
+                                {renderSmartValue(
+                                  rawVal,
+                                  entryFieldKey,
+                                  copyId,
+                                  copiedKey,
+                                  handleCopy,
+                                  t,
+                                )}
+                                {canQuickCopy && (
+                                  <button
+                                    type="button"
+                                    className="zk-copy-btn"
+                                    onClick={() => handleCopy(copyId, copyText)}
+                                  >
+                                    {copiedKey === copyId ? '✓' : t('复制')}
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     )
                   )}
@@ -1756,7 +2168,7 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
                                 )}
                                 {section.columns.map((col, colIdx) => {
                                   const isSorted = sortState?.key === col.key;
-                                  const canSort = col.sortable !== false && rows.length >= 2;
+                                  const canSort = col.sortable !== false && rows.length >= 1;
                                   const sticky = stickyMetas[colIdx];
                                   return (
                                     <th
@@ -1787,7 +2199,9 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
                                         >
                                           {col.icon}
                                           <span>{pickText(col.label, locale, t)}</span>
-                                          {isSorted && <span aria-hidden="true">{sortState?.dir === 'asc' ? '↑' : '↓'}</span>}
+                                          <span className="zk-th-sort__indicator" aria-hidden="true">
+                                            {isSorted ? (sortState?.dir === 'asc' ? '↑' : '↓') : '↕'}
+                                          </span>
                                         </button>
                                       ) : (
                                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
@@ -2032,7 +2446,7 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
                     title={section.title ? pickText(section.title, locale, t) : secKey}
                     subtitle={section.description ? pickText(section.description, locale, t) : undefined}
                     defaultOpen={!section.defaultCollapsed}
-                    badge={rows ? <span className="zk-count">{rows.length}</span> : undefined}
+                    badge={rows ? <Badge tone="neutral">{t('共 {0} 条', rows.length)}</Badge> : undefined}
                   >
                     {sectionBody}
                   </Collapsible>
@@ -2048,11 +2462,11 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
                   actions={
                     rows && (rows.length > 0 || query.length > 0) ? (
                       <div className="zk-table-toolbar">
-                        {(rows.length >= 3 || query.length > 0) && (
+                        {(rows.length > 4 || query.length > 0) && (
                           <input
                             type="search"
                             className="zk-search-input"
-                            placeholder={locale === 'en' ? 'Filter rows…' : '搜索过滤…'}
+                            placeholder={locale === 'en' ? 'Search table…' : '搜索表格内容…'}
                             value={sectionQueries[secKey] ?? ''}
                             onChange={(e) => {
                               const val = e.target.value;
@@ -2061,11 +2475,11 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
                             }}
                           />
                         )}
-                        <span className="zk-count">
+                        <Badge tone="neutral">
                           {query
-                            ? `${totalFiltered} / ${rows.length}`
-                            : String(rows.length)}
-                        </span>
+                            ? (locale === 'en' ? `${totalFiltered} / ${rows.length} items` : `共 ${totalFiltered} / ${rows.length} 条`)
+                            : t('共 {0} 条', rows.length)}
+                        </Badge>
                       </div>
                     ) : undefined
                   }

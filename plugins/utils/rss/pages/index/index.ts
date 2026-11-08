@@ -1,4 +1,4 @@
-import { definePage, createDeclarativePage } from '@zhin.js/console-contract';
+import { definePage, definePageBlueprint } from '@zhin.js/console-contract';
 
 export interface RssSubscriptionItem {
   readonly id: string;
@@ -29,7 +29,7 @@ export const meta = definePage({
   requiredPermissions: ['rss:read'],
 });
 
-export default createDeclarativePage<RssConsoleStatus>({
+export default definePageBlueprint<RssConsoleStatus>({
   title: { zh: 'RSS 订阅', en: 'RSS Subscriptions' },
   description: {
     zh: '管理 RSS/Atom 订阅源、轮询频率与已读缓存',
@@ -54,19 +54,73 @@ export default createDeclarativePage<RssConsoleStatus>({
   ],
   actions: [
     {
-      name: 'poll-now',
-      label: { zh: '立即轮询', en: 'Poll now' },
+      name: 'addSubscription',
+      label: { zh: '添加订阅', en: 'Add Subscription' },
       variant: 'primary',
+      fields: [
+        {
+          key: 'url',
+          label: { zh: 'RSS 订阅源 URL', en: 'RSS Feed URL' },
+          type: 'text',
+          required: true,
+        },
+        {
+          key: 'title',
+          label: { zh: '订阅名称', en: 'Feed Title' },
+          type: 'text',
+        },
+        {
+          key: 'adapter',
+          label: { zh: '推送平台', en: 'Adapter' },
+          type: 'text',
+          defaultValue: 'sandbox',
+        },
+        {
+          key: 'targetType',
+          label: { zh: '目标类型', en: 'Target Type' },
+          type: 'select',
+          defaultValue: 'group',
+          options: [
+            { value: 'group', label: { zh: '群聊 (group)', en: 'Group' } },
+            { value: 'private', label: { zh: '私聊 (private)', en: 'Private' } },
+          ],
+        },
+        {
+          key: 'targetId',
+          label: { zh: '推送目标 ID', en: 'Target ID' },
+          type: 'text',
+          defaultValue: 'console',
+        },
+      ],
+    },
+    {
+      name: 'removeSubscription',
+      label: { zh: '移除订阅', en: 'Remove Subscription' },
+      variant: 'danger',
+      fields: [
+        {
+          key: 'url',
+          label: { zh: 'RSS 订阅源 URL', en: 'RSS Feed URL' },
+          type: 'text',
+          required: true,
+        },
+      ],
+    },
+    {
+      name: 'pollNow',
+      label: { zh: '立即轮询', en: 'Poll Now' },
+      variant: 'secondary',
     },
     {
       name: 'clean-seen',
       label: { zh: '清理已读缓存', en: 'Clean seen cache' },
-      variant: 'secondary',
+      variant: 'ghost',
     },
   ],
   sections: [
     {
       id: 'subscriptions',
+      layout: 'table',
       title: { zh: '当前订阅列表', en: 'Active Subscriptions' },
       emptyText: { zh: '暂无 RSS 订阅', en: 'No RSS subscriptions' },
       items: 'subscriptions',

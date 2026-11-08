@@ -70,7 +70,17 @@ export async function dispatchPluginConsoleRpcRequest(
   message: Readonly<Record<string, unknown>>,
   options: PluginConsoleRpcRequestOptions,
 ): Promise<PluginConsoleRpcResult | undefined> {
-  const address = parsePluginConsoleRpcType(message.type);
+  let rawMethodName: string | undefined;
+  let address = parsePluginConsoleRpcType(message.type);
+  if (!address && typeof message.type === 'string' && message.type.startsWith('plugin.')) {
+    const normalizedType = message.type.replace(/\.action\.([a-zA-Z0-9-]+)$/u, '.$1');
+    const lastDot = normalizedType.lastIndexOf('.');
+    if (lastDot > 'plugin.'.length) {
+      rawMethodName = normalizedType.slice(lastDot + 1);
+      const kebabMethod = rawMethodName.replace(/[A-Z]/gu, (m) => `-${m.toLowerCase()}`);
+      address = parsePluginConsoleRpcType(`${normalizedType.slice(0, lastDot + 1)}${kebabMethod}`);
+    }
+  }
   if (!address) return undefined;
   const requestId = message.requestId;
   let lease: SnapshotLease | undefined;
@@ -81,9 +91,15 @@ export async function dispatchPluginConsoleRpcRequest(
     const snapshot = lease.value;
     const pluginId = address.pluginId as PluginId;
     if (!snapshot.tree.has(pluginId)) throw new Failure('not_found', '插件未加载');
-    const hostMethod = pluginId === snapshot.root ? options.hostRpc?.(lease).methods.get(address.method) : undefined;
+    const hostMethods = pluginId === snapshot.root ? options.hostRpc?.(lease).methods : undefined;
+    const hostMethod =
+      hostMethods?.get(address.method) ??
+      (rawMethodName ? hostMethods?.get(rawMethodName) : undefined);
     const provider = hostMethod ? undefined : ownProvider(snapshot, pluginId);
-    const method = hostMethod ?? provider?.methods.get(address.method);
+    const method =
+      hostMethod ??
+      provider?.methods.get(address.method) ??
+      (rawMethodName ? provider?.methods.get(rawMethodName) : undefined);
     if (!method) throw new Failure('not_found', '插件未提供该操作');
     authorize(snapshot, pluginId, method, options.access, options.pagesOwnedBy ?? catalogPagesOwnedBy);
     if (provider) releases.push(...admit(provider));

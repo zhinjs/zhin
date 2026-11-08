@@ -17,6 +17,7 @@
     "plugin.js",
     "schema.json",
     "commands",
+    "pages",
     "src",
     "lib",
     "AGENTS.md",
@@ -51,6 +52,8 @@
   },
   "license": "MIT",
   "dependencies": {
+    "@zhin.js/console-contract": "workspace:*",
+    "@zhin.js/page": "workspace:*",
     "@zhin.js/tool": "workspace:*",
     "zod": "^4.4.3",
     "@zhin.js/skill": "workspace:*"
@@ -64,6 +67,7 @@
   "peerDependencies": {
     "@zhin.js/agent": "workspace:^",
     "@zhin.js/command": "workspace:^",
+    "@zhin.js/page": "workspace:^",
     "zhin.js": "workspace:^"
   },
   "peerDependenciesMeta": {
@@ -110,6 +114,10 @@
       },
       {
         "package": "@zhin.js/skill",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/page",
         "api": "^1.0.0"
       }
     ],

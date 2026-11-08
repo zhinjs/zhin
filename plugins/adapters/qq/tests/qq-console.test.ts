@@ -62,7 +62,7 @@ describe('QQ console RPC exact runtime admission', () => {
   it('offers QR then kind actions without leaking transient or persisted credentials', async () => {
     const f = await fixture(), state = createQqRuntimeState(), rpc = createQqConsoleRpc(state, () => ({}));
     const status = () => rpc.methods.get('status')!.handler({}, f.call);
-    expect(await status()).toMatchObject({ actions: [{ name: 'qq-bind-start' }] });
+    expect(await status()).toMatchObject({ canAdd: true, actions: [{ name: 'qq-bind-start' }] });
     state.consoleBind = stateWithPending().consoleBind;
     const pending = await status(); expect(pending).toMatchObject({ actions: [{ name: 'qq-bind-kind' }, { name: 'qq-bind-cancel' }], extra: { bindState: 'scanned', bindEndpoint: 'bot-1' } });
     expect(JSON.stringify(pending)).not.toContain('synthetic-secret'); expect(rpc.methods.get('qq-bind-kind')!.requiredPermissions).toEqual(['qq:write']);

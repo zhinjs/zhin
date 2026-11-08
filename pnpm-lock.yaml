@@ -4105,6 +4105,12 @@ importers:
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
+      '@zhin.js/console-contract':
+        specifier: workspace:*
+        version: link:../../../packages/console/plugin-contract
+      '@zhin.js/page':
+        specifier: workspace:*
+        version: link:../../../packages/console/page
       '@zhin.js/skill':
         specifier: workspace:*
         version: link:../../../packages/im/skill
@@ -4195,9 +4201,15 @@ importers:
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
+      '@zhin.js/console-contract':
+        specifier: workspace:*
+        version: link:../../../packages/console/plugin-contract
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
+      '@zhin.js/page':
+        specifier: workspace:*
+        version: link:../../../packages/console/page
       '@zhin.js/skill':
         specifier: workspace:*
         version: link:../../../packages/im/skill
@@ -4322,6 +4334,12 @@ importers:
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
+      '@zhin.js/console-contract':
+        specifier: workspace:*
+        version: link:../../../packages/console/plugin-contract
+      '@zhin.js/page':
+        specifier: workspace:*
+        version: link:../../../packages/console/page
       '@zhin.js/skill':
         specifier: workspace:*
         version: link:../../../packages/im/skill

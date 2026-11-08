@@ -11,6 +11,7 @@ import { httpHostToken } from "@zhin.js/host-http";
 import {
   assertCalendarTimezone,
   type CalendarConfig,
+  type CalendarConsoleEventItem,
   createCalendarConsoleRpc,
   createCalendarProvider,
   createOAuthTokenManagers,
@@ -28,6 +29,8 @@ import {
 } from "./src/credential-store.js";
 import { registerOAuthCallbackRoute } from "./src/http-callback.js";
 import { calendarRuntimeStore } from "./src/runtime.js";
+
+export type { CalendarConsoleEventItem };
 
 export default definePlugin<CalendarConfig>({
   name: "calendar",
@@ -123,6 +126,7 @@ export default definePlugin<CalendarConfig>({
           auth.handleCallback(searchParams)
         )
       : undefined;
+
     return {
       consoleRpc: createCalendarConsoleRpc(runtime),
       dispose: () => {
