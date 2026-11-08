@@ -1,0 +1,14 @@
+packages/console/client/client/adapter-console/platform-profiles.ts
+  h_6f5e45c41d0910 1152-1159
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b355be85185c2aff3b8516df4090cc2d5d3520d2",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
