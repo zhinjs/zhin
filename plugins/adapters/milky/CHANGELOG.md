@@ -1,5 +1,14 @@
 # @zhin.js/adapter-milky
 
+## 1.1.26
+
+### Patch Changes
+
+- 0d76a7c: Overhaul Console interactive workbenches, platform-specific adapter account onboarding/login flows, DeclarativePageView visual/interactive capabilities, and official utility plugin Console pages.
+- Updated dependencies [0d76a7c]
+  - @zhin.js/adapter@1.1.32
+  - @zhin.js/core@1.1.60
+
 ## 1.1.25
 
 ### Patch Changes

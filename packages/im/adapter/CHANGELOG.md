@@ -1,5 +1,11 @@
 # @zhin.js/adapter
 
+## 1.1.32
+
+### Patch Changes
+
+- 0d76a7c: Overhaul Console interactive workbenches, platform-specific adapter account onboarding/login flows, DeclarativePageView visual/interactive capabilities, and official utility plugin Console pages.
+
 ## 1.1.31
 
 ### Patch Changes
