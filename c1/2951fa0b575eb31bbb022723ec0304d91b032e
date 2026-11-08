@@ -1,0 +1,16 @@
+.changeset/fix-engagement-journal-database-host.md
+  h_6f5e45c41d0910 13,15,39-44
+tests/snapshots/plugin-runtime-api.json
+  h_6f5e45c41d0910 222-223
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c12951fa0b575eb31bbb022723ec0304d91b032e",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
