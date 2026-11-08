@@ -1,7 +1,7 @@
 import { pluginUiStyles } from '../ui/styles.js';
 
 /**
- * 适配器页面与 Diana 风格多平台账号工作台样式。
+ * 适配器页面与 Diana 风格多平台账号工作台样式（Master-Detail 账号卡片网格 ↔ 双栏配置工作台）。
  * 同时挂载在 `.zk-root`（`<PluginPage>` 根节点）与 `.zhin-console-surface` 下，
  * 颜色与圆角全部取自 `@zhin.js/client/ui` 的主题变量。
  */
@@ -15,51 +15,6 @@ const adapterStudioStyles = `
 .zhin-console-surface :where(h1,h2,h3,p,ul,dl) { margin: 0; }
 .zhin-console-surface :where(ul) { list-style: none; padding: 0; }
 .zhin-console-surface :where(dd) { margin: 0; }
-
-/* ── Platform Onboarding Banner ── */
-.zk-root .zk-platform-banner,
-.zhin-console-surface .zk-platform-banner {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 16px 20px;
-  border: 1px solid var(--zk-line);
-  border-radius: var(--zk-radius-lg);
-  background: var(--zk-elevated);
-  box-shadow: var(--zk-shadow-sm);
-}
-.zk-root .zk-platform-banner__head,
-.zhin-console-surface .zk-platform-banner__head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-.zk-root .zk-platform-banner__head strong,
-.zhin-console-surface .zk-platform-banner__head strong {
-  font-size: 14.5px;
-  font-weight: 650;
-  color: var(--zk-fg);
-}
-.zk-root .zk-platform-steps,
-.zhin-console-surface .zk-platform-steps {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.zk-root .zk-platform-step,
-.zhin-console-surface .zk-platform-step {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 11px;
-  border-radius: var(--zk-radius-sm);
-  border: 1px solid var(--zk-line);
-  background: var(--zk-surface);
-  font-size: 12px;
-  color: var(--zk-muted);
-  line-height: 1.45;
-}
 
 /* ── Diana-Style Bot Profile Tile Grid (.bot-profile-grid) ── */
 .zk-root .zk-bot-grid,
@@ -77,33 +32,26 @@ const adapterStudioStyles = `
   flex-direction: column;
   justify-content: space-between;
   min-width: 0;
+  min-height: 164px;
   border: 1px solid var(--zk-line);
   border-radius: var(--zk-radius-lg);
   background: var(--zk-elevated);
   box-shadow: var(--zk-shadow-sm);
   overflow: hidden;
-  transition: border-color 150ms ease, box-shadow 150ms ease;
+  transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
 }
 .zk-root .zk-bot-tile:hover,
 .zhin-console-surface .zk-bot-tile:hover {
   border-color: var(--zk-input-line);
-}
-.zk-root .zk-bot-tile__main,
-.zhin-console-surface .zk-bot-tile__main {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 16px 18px 14px;
-  flex: 1;
-  min-width: 0;
+  box-shadow: var(--zk-shadow-md);
 }
 .zk-root .zk-bot-tile__head,
 .zhin-console-surface .zk-bot-tile__head {
   display: flex;
   align-items: flex-start;
-  justify-content: flex-start;
+  justify-content: space-between;
   gap: 12px;
-  padding: 16px 16px 0;
+  padding: 16px 18px 0;
 }
 .zk-root .zk-bot-tile__identity,
 .zhin-console-surface .zk-bot-tile__identity {
@@ -111,14 +59,15 @@ const adapterStudioStyles = `
   align-items: center;
   gap: 11px;
   min-width: 0;
+  flex: 1;
 }
 .zk-root .zk-bot-tile__icon,
 .zhin-console-surface .zk-bot-tile__icon {
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
-  flex: 0 0 40px;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
   border-radius: 10px;
   background: var(--zk-primary-soft);
   color: var(--zk-primary);
@@ -130,7 +79,7 @@ const adapterStudioStyles = `
 .zhin-console-surface .zk-bot-tile__title-wrap {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
   flex: 1;
   min-width: 0;
 }
@@ -144,13 +93,12 @@ const adapterStudioStyles = `
 }
 .zk-root .zk-bot-tile__title strong,
 .zhin-console-surface .zk-bot-tile__title strong {
-  font-size: 14.5px;
+  font-size: 15px;
   font-weight: 650;
   color: var(--zk-fg);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  margin-right: 2px;
 }
 .zk-root .zk-bot-tile__subtitle,
 .zhin-console-surface .zk-bot-tile__subtitle {
@@ -158,13 +106,11 @@ const adapterStudioStyles = `
   color: var(--zk-muted);
   line-height: 1.35;
 }
-.zk-root .zk-bot-tile__badges,
-.zhin-console-surface .zk-bot-tile__badges {
-  display: flex;
-  flex-wrap: wrap;
+.zk-root .zk-bot-tile__head-right,
+.zhin-console-surface .zk-bot-tile__head-right {
+  display: inline-flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
+  gap: 8px;
   flex-shrink: 0;
 }
 .zk-root .zk-account-pills,
@@ -176,14 +122,14 @@ const adapterStudioStyles = `
 }
 .zk-root .zk-bot-tile > .zk-account-pills,
 .zhin-console-surface .zk-bot-tile > .zk-account-pills {
-  padding: 10px 16px 0;
+  padding: 12px 18px 0;
 }
 .zk-root .zk-account-pill,
 .zhin-console-surface .zk-account-pill {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 2px 7px;
+  padding: 2px 8px;
   border-radius: 6px;
   background: var(--zk-inset);
   color: var(--zk-muted);
@@ -197,17 +143,15 @@ const adapterStudioStyles = `
 .zk-root .zk-bot-tile__config,
 .zhin-console-surface .zk-bot-tile__config {
   font-size: 12px;
-  margin: 10px 16px 0;
-  border-top: 1px dashed var(--zk-line);
-  padding-top: 8px;
+  margin: 8px 18px 0;
 }
 .zk-root .zk-bot-tile__config summary,
 .zhin-console-surface .zk-bot-tile__config summary {
   cursor: pointer;
   color: var(--zk-muted);
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 500;
-  min-height: 24px;
+  min-height: 22px;
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -230,9 +174,10 @@ const adapterStudioStyles = `
 }
 .zk-root .zk-bot-tile__actions .zk-btn,
 .zhin-console-surface .zk-bot-tile__actions .zk-btn {
-  min-height: 30px;
+  min-height: 29px;
   padding: 0 11px;
-  font-size: 12.5px;
+  font-size: 12px;
+  border-radius: 8px;
 }
 .zk-root .zk-bot-tile--add,
 .zhin-console-surface .zk-bot-tile--add {
@@ -241,10 +186,11 @@ const adapterStudioStyles = `
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-height: 148px;
+  width: 100%;
+  min-height: 164px;
   height: 100%;
-  padding: 18px;
-  border: 1px dashed var(--zk-input-line);
+  padding: 20px;
+  border: 1.5px dashed var(--zk-input-line);
   border-radius: var(--zk-radius-lg);
   background: transparent;
   color: var(--zk-muted);
@@ -258,6 +204,119 @@ const adapterStudioStyles = `
   border-color: var(--zk-primary);
   background: var(--zk-primary-soft);
   color: var(--zk-primary);
+}
+.zk-root .zk-bot-tile--add__plus,
+.zhin-console-surface .zk-bot-tile--add__plus {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--zk-inset);
+  color: currentColor;
+  font-size: 18px;
+  font-weight: 500;
+}
+
+/* ── Master-Detail Editor View (.zk-editor-layout / Diana AssistantView edit mode) ── */
+.zk-root .zk-editor-topbar,
+.zhin-console-surface .zk-editor-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  border: 1px solid var(--zk-line);
+  border-radius: var(--zk-radius-lg);
+  background: var(--zk-elevated);
+  box-shadow: var(--zk-shadow-sm);
+}
+.zk-root .zk-editor-topbar__left,
+.zhin-console-surface .zk-editor-topbar__left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.zk-root .zk-editor-topbar__title,
+.zhin-console-surface .zk-editor-topbar__title {
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--zk-fg);
+}
+.zk-root .zk-editor-layout,
+.zhin-console-surface .zk-editor-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 310px;
+  gap: 18px;
+  align-items: start;
+}
+@media (max-width: 960px) {
+  .zk-root .zk-editor-layout,
+  .zhin-console-surface .zk-editor-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.zk-root .zk-editor-main,
+.zhin-console-surface .zk-editor-main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.zk-root .zk-editor-side,
+.zhin-console-surface .zk-editor-side {
+  position: sticky;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+.zk-root .zk-guide-card,
+.zhin-console-surface .zk-guide-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid var(--zk-line);
+  border-radius: var(--zk-radius-lg);
+  background: var(--zk-elevated);
+  box-shadow: var(--zk-shadow-sm);
+}
+.zk-root .zk-guide-card__head,
+.zhin-console-surface .zk-guide-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.zk-root .zk-guide-card__head strong,
+.zhin-console-surface .zk-guide-card__head strong {
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--zk-fg);
+}
+.zk-root .zk-guide-steps,
+.zhin-console-surface .zk-guide-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.zk-root .zk-guide-step,
+.zhin-console-surface .zk-guide-step {
+  padding: 8px 11px;
+  border-radius: var(--zk-radius-sm);
+  border: 1px solid var(--zk-line);
+  background: var(--zk-surface);
+  font-size: 12px;
+  color: var(--zk-muted);
+  line-height: 1.5;
 }
 
 /* ── Connection Mode Selector Tabs & Provider Presets ── */
@@ -276,7 +335,7 @@ const adapterStudioStyles = `
 .zk-root .zk-mode-tabs,
 .zhin-console-surface .zk-mode-tabs {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: 10px;
 }
 .zk-root .zk-mode-tab,
@@ -314,7 +373,7 @@ const adapterStudioStyles = `
 .zk-root .zk-preset-grid,
 .zhin-console-surface .zk-preset-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   gap: 8px;
 }
 .zk-root .zk-preset-card,
@@ -374,7 +433,7 @@ const adapterStudioStyles = `
 .zk-root .zk-form-grid,
 .zhin-console-surface .zk-form-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
   gap: 14px 16px;
   align-items: start;
 }
@@ -386,7 +445,9 @@ const adapterStudioStyles = `
   min-width: 0;
 }
 .zk-root .zk-field-cell--wide,
-.zhin-console-surface .zk-field-cell--wide {
+.zk-root .zk-field-cell--full,
+.zhin-console-surface .zk-field-cell--wide,
+.zhin-console-surface .zk-field-cell--full {
   grid-column: 1 / -1;
 }
 .zk-root .zk-input-group,
