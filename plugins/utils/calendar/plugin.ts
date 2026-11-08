@@ -1,4 +1,4 @@
-import { projectLocaleToken } from 'zhin.js/i18n';
+import { projectLocaleToken, type Locale } from 'zhin.js/i18n';
 import {
   databaseHostToken,
   definePlugin,
@@ -90,9 +90,12 @@ export default definePlugin<CalendarConfig>({
       onAuthorizationLost: (provider, message) =>
         auth.notifyAuthorizationLost(provider, message),
     });
-    const projectLocale = context.resources.has(projectLocaleToken)
-      ? context.resources.use(projectLocaleToken)
-      : undefined;
+    let projectLocale: Locale | undefined;
+    try {
+      projectLocale = context.resources.use(projectLocaleToken);
+    } catch {
+      projectLocale = undefined;
+    }
     const auth = new CalendarAuthService<DeliveryTarget>({
       config,
       locale: projectLocale,

@@ -1,4 +1,4 @@
-import { projectLocaleToken, resolveLocale } from 'zhin.js/i18n';
+import { projectLocaleToken, resolveLocale, type Locale } from 'zhin.js/i18n';
 import {
   definePlugin,
   databaseHostToken,
@@ -29,9 +29,12 @@ export default definePlugin<LotteryConfig>({
   },
   async setup(context) {
     const config = resolveLotteryConfig(context.config.get());
-    const projectLocale = context.resources.has(projectLocaleToken)
-      ? context.resources.use(projectLocaleToken)
-      : undefined;
+    let projectLocale: Locale | undefined;
+    try {
+      projectLocale = context.resources.use(projectLocaleToken);
+    } catch {
+      projectLocale = undefined;
+    }
     const locale = resolveLocale(projectLocale);
     // host 与 memory 模型表面结构兼容（where 均返回 PromiseLike），可直接互换。
     const db: LotteryDb = (() => {

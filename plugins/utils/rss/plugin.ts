@@ -1,6 +1,6 @@
 import { DataMigrationError, TargetMigrationScopes } from 'zhin.js/plugin-runtime';
 import { createSubscriptionTargetMigration, subscriptionMigrationScope } from './src/target-migration.js';
-import { projectLocaleToken, resolveLocale } from 'zhin.js/i18n';
+import { projectLocaleToken, resolveLocale, type Locale } from 'zhin.js/i18n';
 import {
   definePlugin,
   definePluginCapabilityGraph,
@@ -98,9 +98,12 @@ export default definePlugin<RssConfig>({
         else await run();
       };
     }
-    const projectLocale = context.resources.has(projectLocaleToken)
-      ? context.resources.use(projectLocaleToken)
-      : undefined;
+    let projectLocale: Locale | undefined;
+    try {
+      projectLocale = context.resources.use(projectLocaleToken);
+    } catch {
+      projectLocale = undefined;
+    }
     const runtime = rssRuntimeStore.provide(context, Object.freeze({
       db,
       migrationScopes,
