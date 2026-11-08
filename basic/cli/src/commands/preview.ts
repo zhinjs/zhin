@@ -1021,8 +1021,9 @@ export const previewCommand = new Command('preview')
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
           res.end(JSON.stringify({ snapshot: latestSnapshot }));
         } catch (err) {
+          console.error('Failed to render component preview:', err);
           res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
-          res.end(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
+          res.end(JSON.stringify({ error: 'Failed to render component.' }));
         }
         return;
       }
