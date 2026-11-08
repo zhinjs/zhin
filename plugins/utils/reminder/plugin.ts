@@ -1,4 +1,4 @@
-import { projectLocaleToken } from 'zhin.js/i18n';
+import { projectLocaleToken, type Locale } from 'zhin.js/i18n';
 import {
   databaseHostToken,
   definePlugin,
@@ -54,11 +54,9 @@ export default definePlugin<ReminderConfig>({
     const taskState = createReminderState(database);
     const outbound = context.resources.use(outboundHostToken);
     if (!outbound.sendTarget) throw new Error('提醒需要支持精确 DeliveryTarget 的 Outbound Host');
-    let locale: ReturnType<typeof context.resources.use<typeof projectLocaleToken>> | undefined;
+    let locale: Locale | undefined;
     try {
-      locale = context.resources.has(projectLocaleToken)
-        ? context.resources.use(projectLocaleToken)
-        : context.resources.use(projectLocaleToken);
+      locale = context.resources.use(projectLocaleToken);
     } catch {
       locale = undefined;
     }

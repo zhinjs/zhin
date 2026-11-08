@@ -1,4 +1,4 @@
-import { projectLocaleToken, resolveLocale } from 'zhin.js/i18n';
+import { projectLocaleToken, resolveLocale, type Locale } from 'zhin.js/i18n';
 import {
   definePlugin,
   databaseHostToken,
@@ -29,11 +29,9 @@ export default definePlugin<LotteryConfig>({
   },
   async setup(context) {
     const config = resolveLotteryConfig(context.config.get());
-    let projectLocale: ReturnType<typeof context.resources.use<typeof projectLocaleToken>> | undefined;
+    let projectLocale: Locale | undefined;
     try {
-      projectLocale = context.resources.has(projectLocaleToken)
-        ? context.resources.use(projectLocaleToken)
-        : context.resources.use(projectLocaleToken);
+      projectLocale = context.resources.use(projectLocaleToken);
     } catch {
       projectLocale = undefined;
     }

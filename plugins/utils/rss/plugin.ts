@@ -1,6 +1,6 @@
 import { DataMigrationError, TargetMigrationScopes } from 'zhin.js/plugin-runtime';
 import { createSubscriptionTargetMigration, subscriptionMigrationScope } from './src/target-migration.js';
-import { projectLocaleToken, resolveLocale } from 'zhin.js/i18n';
+import { projectLocaleToken, resolveLocale, type Locale } from 'zhin.js/i18n';
 import {
   definePlugin,
   definePluginCapabilityGraph,
@@ -98,11 +98,9 @@ export default definePlugin<RssConfig>({
         else await run();
       };
     }
-    let projectLocale: ReturnType<typeof context.resources.use<typeof projectLocaleToken>> | undefined;
+    let projectLocale: Locale | undefined;
     try {
-      projectLocale = context.resources.has(projectLocaleToken)
-        ? context.resources.use(projectLocaleToken)
-        : context.resources.use(projectLocaleToken);
+      projectLocale = context.resources.use(projectLocaleToken);
     } catch {
       projectLocale = undefined;
     }
