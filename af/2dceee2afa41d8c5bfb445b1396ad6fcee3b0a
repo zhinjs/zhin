@@ -1,0 +1,14 @@
+packages/console/pagemanager/src/client-build/typescript-builder.ts
+  h_6f5e45c41d0910 909
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "af2dceee2afa41d8c5bfb445b1396ad6fcee3b0a",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
