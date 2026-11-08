@@ -1,0 +1,14 @@
+basic/cli/tests/plugin-runtime/agent/structured-persistence.test.ts
+  h_6f5e45c41d0910 184,187,192-195
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0b2cb7e2bcc525b182e2e74adac388b9065c2e9b",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
