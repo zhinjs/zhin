@@ -1,0 +1,38 @@
+packages/console/client/client/ui/components.tsx
+  h_6f5e45c41d0910 1,225-1610
+packages/console/client/client/ui/declarative-page.tsx
+  h_6f5e45c41d0910 7,9,13,18,20-21,23-26,193-194,196-201,211-214,235-247,251-256,264-268,278,337-341,350-351,719-723,726-733,735-751,766,782-789,791,808,856-857,1059,1075-1093,1095,1100-1126,1146-1201,1214-1222,1225-1231,1233-1440,1442-1526,1531-1539,1541-1593,1595,1603-1826
+packages/console/client/client/ui/index.ts
+  h_6f5e45c41d0910 1,4-81,84-91,98-99,108
+packages/console/client/client/ui/locale.ts
+  h_6f5e45c41d0910 29-43
+packages/console/client/client/ui/styles.ts
+  h_6f5e45c41d0910 2,4,8-14,18,22,26-29,32,37,39,48,50,59-61,74-75,79,83,87,90,92-93,108,112,114-117,122-123,126-128,131-144,151-157,161-195,199,202,213,220-348,362-364,373-414,419,431,435
+packages/console/client/client/ui/ui.test.ts
+  h_6f5e45c41d0910 417-496
+packages/console/client/tests/hook-harness.ts
+  h_6f5e45c41d0910 61
+packages/console/plugin-contract/src/page.ts
+  h_6f5e45c41d0910 390-397,417-420,446-458,465-470,485-489
+packages/toolkit/components/src/charts.ts
+  h_6f5e45c41d0910 6-8,241-452
+packages/toolkit/components/src/display.ts
+  h_6f5e45c41d0910 22-26,404-659
+packages/toolkit/components/src/props.ts
+  h_6f5e45c41d0910 161-233
+packages/toolkit/components/src/theme.ts
+  h_6f5e45c41d0910 70-78
+packages/toolkit/components/tests/components.test.ts
+  h_6f5e45c41d0910 4,8-10,16-18,97-144
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "99dd02b4abdc8d80fb584d2d420a1605f2894f7a",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
