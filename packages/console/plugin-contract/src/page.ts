@@ -46,7 +46,7 @@ export function normalizeClientModuleArtifact(
 export function isConsoleBlueprint(
   value: unknown,
 ): value is ConsolePageBlueprint | ConsoleAdapterPageBlueprint {
-  if (!value || typeof value !== 'object') return false;
+  if (!value || (typeof value !== 'object' && typeof value !== 'function')) return false;
   const kind = (value as { readonly kind?: unknown }).kind;
   return kind === 'zhin.console.page-blueprint' || kind === 'zhin.console.adapter-page';
 }

@@ -45,6 +45,7 @@ export {
 } from './message-events.js';
 export * from './outbound-renderer.js';
 export * from './outbound-segments.js';
+export { renderToSegments, isNativeMessageTag, type MessageRenderOptions } from '../../jsx/message-renderer.js';
 export type { CoreReplyStream, OpenReplyStreamOptions, ReplyStreamSnapshot, ConfirmedReplyContent } from './progressive-reply.js';
 
 export * from '../../notice.js';

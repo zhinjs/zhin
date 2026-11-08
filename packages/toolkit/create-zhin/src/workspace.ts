@@ -139,6 +139,7 @@ export async function createWorkspace(projectPath: string, projectName: string, 
     scripts: {
       dev: 'zhin runtime start --watch source config',
       start: 'zhin runtime start --mode production --no-watch',
+      preview: 'zhin preview',
       build: 'tsc --noEmit',
       'pm2:start': 'pm2 start ecosystem.config.cjs',
       'pm2:stop': 'pm2 stop ecosystem.config.cjs',
