@@ -1,10 +1,13 @@
 import { jsx, renderToHtml, isJsxElement } from "@zhin.js/jsx";
 import {
   Badge,
+  BarChart,
+  Button,
   Callout,
   Card,
   CardCanvas,
   CardHeader,
+  Checkbox,
   ComparisonBar,
   DonutChart,
   HeatmapGrid,
@@ -12,9 +15,13 @@ import {
   MetricBlock,
   QuoteCard,
   RadarChart,
+  Radio,
   Sparkline,
   StatusGrid,
   StepTracker,
+  Table,
+  TableCell,
+  TableRow,
   Timeline,
   UsageBar,
 } from "../src/index.js";
@@ -141,5 +148,62 @@ describe("visual JSX components", () => {
     expect(html).toContain("60%");
     expect(html).toContain("Gateway");
     expect(html).not.toContain("NaN");
+  });
+
+  it("supports icon/badge controls, custom chart images, and fixed/selected table cells", async () => {
+    const html = await renderToHtml(
+      jsx(CardCanvas, {
+        children: jsx(Card, {
+          children: [
+            jsx(Checkbox, { checked: true, icon: "🐧", label: "QQ 适配器", badge: jsx(Badge, { text: "Rec" }) }),
+            jsx(Radio, { checked: false, icon: "✈️", label: "Telegram 适配器" }),
+            jsx(Button, { icon: "⚡", label: "立即同步", badge: "2" }),
+            jsx(DonutChart, { percent: 80, centerImage: "https://example.com/donut-center.png", label: "CPU" }),
+            jsx(BarChart, {
+              values: [10, 40, 25],
+              images: ["https://example.com/b1.png", "https://example.com/b2.png", undefined],
+              backgroundImage: "https://example.com/bar-bg.png",
+            }),
+            jsx(RadarChart, {
+              labels: ["A", "B", "C"],
+              values: [80, 60, 90],
+              centerImage: "https://example.com/radar-center.png",
+            }),
+            jsx(Sparkline, {
+              values: [10, 20, 15, 30],
+              endImage: "https://example.com/spark-end.png",
+            }),
+            jsx(Table, {
+              children: [
+                jsx(TableRow, {
+                  header: true,
+                  separator: false,
+                  children: [
+                    jsx(TableCell, { header: true, fixed: "left", icon: "🔑", children: "ID" }),
+                    jsx(TableCell, { header: true, fixed: "right", children: "Action" }),
+                  ],
+                }),
+                jsx(TableRow, {
+                  selected: true,
+                  children: [
+                    jsx(TableCell, { fixed: "left", children: "bot-1" }),
+                    jsx(TableCell, { fixed: "right", children: "Edit" }),
+                  ],
+                }),
+              ],
+            }),
+          ],
+        }),
+      })
+    );
+    expect(html).toContain("🐧");
+    expect(html).toContain("QQ 适配器");
+    expect(html).toContain("https://example.com/donut-center.png");
+    expect(html).toContain("https://example.com/b1.png");
+    expect(html).toContain("https://example.com/bar-bg.png");
+    expect(html).toContain("https://example.com/radar-center.png");
+    expect(html).toContain("https://example.com/spark-end.png");
+    expect(html).toContain("position: sticky");
+    expect(html).toContain('aria-selected="true"');
   });
 });

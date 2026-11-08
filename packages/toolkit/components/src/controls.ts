@@ -28,9 +28,19 @@ function controlRoot(
   const children: JSXRenderable[] = [jsx(indicator.type, {
     ...indicator.props, "aria-hidden": true,
   })];
+  if (props.icon != null && typeof props.icon !== "boolean") {
+    children.push(
+      themedDiv(theme, "display:flex;align-items:center;flex-shrink:0", props.icon)
+    );
+  }
   if (label != null && typeof label !== "boolean") {
     children.push(
       themedDiv(theme, "display:flex;align-items:center;min-width:0", label)
+    );
+  }
+  if (props.badge != null && typeof props.badge !== "boolean") {
+    children.push(
+      themedDiv(theme, "display:flex;align-items:center;flex-shrink:0", props.badge)
     );
   }
   const root = customizeRoot(
@@ -202,10 +212,18 @@ export function Button(input: ButtonProps): JSXElement {
     ? props.accent ?? theme.palette.textSecondary
     : theme.palette.onAccent;
   const border = secondary ? props.accent ?? theme.palette.border : accent;
+  const hasSlot =
+    (props.icon != null && typeof props.icon !== "boolean") ||
+    (props.badge != null && typeof props.badge !== "boolean");
+  const buttonContent = hasSlot
+    ? [props.icon, labelOf(props), props.badge]
+    : labelOf(props);
   return customizeRoot(
     themedDiv(
       theme,
-      `display:flex;align-items:center;justify-content:center;margin:${
+      `display:flex;align-items:center;justify-content:center;${
+        hasSlot ? `gap:${theme.spacing.xs}px;` : ""
+      }margin:${
         theme.spacing.xs
       }px 0;padding:${vertical}px ${horizontal}px;background:${
         secondary ? theme.palette.surface : accent
@@ -216,7 +234,7 @@ export function Button(input: ButtonProps): JSXElement {
       )};font-size:${fontSize}px;font-weight:${
         theme.typography.weights.strong
       };opacity:${props.disabled ? 0.55 : 1}`,
-      labelOf(props)
+      buttonContent
     ),
     props,
     theme,

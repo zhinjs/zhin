@@ -4,6 +4,8 @@ import { CommentReviewSession } from '../review-console/CommentReviewPage.js';
 import {
   Badge,
   Button,
+  Checkbox,
+  CheckboxGroup,
   Collapsible,
   ConfirmButton,
   DescriptionList,
@@ -16,7 +18,9 @@ import {
   PageHeader,
   PluginPage,
   ProgressBar,
+  RadioGroup,
   Section,
+  SegmentedControl,
   Select,
   Sparkline,
   StaleNotice,
@@ -191,6 +195,9 @@ export interface DeclarativeStatSpec<TData = Record<string, unknown>> {
   readonly label: DeclarativeI18nText;
   readonly value: (keyof TData & string) | string | DeclarativeValueExpr | ((data: TData, ctx: DeclarativePageContext<TData>) => React.ReactNode);
   readonly unit?: DeclarativeI18nText;
+  readonly icon?: React.ReactNode;
+  readonly image?: string;
+  readonly watermark?: React.ReactNode | string;
   readonly tone?: BadgeTone | 'primary';
   readonly hint?: DeclarativeI18nText | DeclarativeValueExpr | ((data: TData) => React.ReactNode);
   readonly progress?: number | string | DeclarativeValueExpr;
@@ -208,8 +215,17 @@ export interface DeclarativeStatSpec<TData = Record<string, unknown>> {
 export interface DeclarativeActionFieldSpec {
   readonly key: string;
   readonly label: DeclarativeI18nText;
-  readonly type?: 'text' | 'password' | 'number' | 'textarea' | 'select' | 'switch';
-  readonly options?: readonly { readonly value: string; readonly label: DeclarativeI18nText }[];
+  readonly type?: 'text' | 'password' | 'number' | 'textarea' | 'select' | 'switch' | 'radio' | 'checkbox-group' | 'segmented';
+  readonly options?: readonly {
+    readonly value: string;
+    readonly label: DeclarativeI18nText;
+    readonly description?: DeclarativeI18nText;
+    readonly icon?: React.ReactNode;
+    readonly badge?: React.ReactNode;
+    readonly disabled?: boolean;
+  }[];
+  readonly variant?: 'default' | 'card' | 'button';
+  readonly direction?: 'column' | 'row' | 'grid';
   readonly hint?: DeclarativeI18nText;
   readonly rows?: number;
   readonly placeholder?: string;
@@ -223,6 +239,7 @@ export interface DeclarativeActionSpec<TData = Record<string, unknown>> {
   readonly name: string;
   readonly label: DeclarativeI18nText;
   readonly description?: DeclarativeI18nText;
+  readonly icon?: React.ReactNode;
   readonly variant?: ButtonVariant;
   readonly confirm?: DeclarativeI18nText;
   readonly confirmLabel?: DeclarativeI18nText;
@@ -248,13 +265,45 @@ export type DeclarativeColumnType =
 export interface DeclarativeColumnSpec<TRow = Record<string, unknown>, TData = Record<string, unknown>> {
   readonly key: keyof TRow & string;
   readonly label: DeclarativeI18nText;
+  readonly icon?: React.ReactNode;
   readonly type?: DeclarativeColumnType;
   readonly align?: 'left' | 'center' | 'right';
+  /** 固定列位置（水平滚动时粘性锁定在左侧或右侧并附带边缘阴影）。 */
+  readonly fixed?: 'left' | 'right';
   readonly sortable?: boolean;
   readonly copyable?: boolean;
   readonly width?: string | number;
   readonly toneMap?: Readonly<Record<string, BadgeTone>>;
   readonly render?: (value: unknown, row: TRow, ctx: DeclarativePageContext<TData>) => React.ReactNode;
+}
+
+export interface DeclarativeBatchActionSpec<TRow = Record<string, unknown>, TData = Record<string, unknown>> {
+  /** RPC action method name (`plugin.<pluginId>.<name>`) or action identifier. */
+  readonly name: string;
+  readonly label: DeclarativeI18nText;
+  readonly icon?: React.ReactNode;
+  readonly variant?: ButtonVariant;
+  readonly confirm?: DeclarativeI18nText;
+  readonly confirmLabel?: DeclarativeI18nText;
+  /** Key name in RPC payload for selected row keys; defaults to `'ids'`. */
+  readonly idsParamKey?: string;
+  readonly params?: (selectedRows: readonly TRow[], selectedKeys: readonly string[], data: TData | undefined) => Readonly<Record<string, unknown>>;
+  readonly onExecute?: (selectedRows: readonly TRow[], selectedKeys: readonly string[], ctx: DeclarativePageContext<TData>) => unknown;
+  readonly successMessage?: DeclarativeI18nText;
+}
+
+export interface DeclarativeRowActionSpec<TRow = Record<string, unknown>, TData = Record<string, unknown>> {
+  readonly name: string;
+  readonly label: DeclarativeI18nText;
+  readonly icon?: React.ReactNode;
+  readonly variant?: ButtonVariant;
+  readonly confirm?: DeclarativeI18nText;
+  readonly confirmLabel?: DeclarativeI18nText;
+  readonly idParamKey?: string;
+  readonly params?: (row: TRow, rowKey: string, data: TData | undefined) => Readonly<Record<string, unknown>>;
+  readonly onExecute?: (row: TRow, rowKey: string, ctx: DeclarativePageContext<TData>) => unknown;
+  readonly disabled?: boolean | ((row: TRow) => boolean);
+  readonly successMessage?: DeclarativeI18nText;
 }
 
 export interface DeclarativeSectionSpec<TData = Record<string, unknown>, TRow = Record<string, unknown>> {
@@ -267,6 +316,17 @@ export interface DeclarativeSectionSpec<TData = Record<string, unknown>, TRow = 
   readonly collapsible?: boolean;
   readonly defaultCollapsed?: boolean;
   readonly emptyText?: DeclarativeI18nText;
+  readonly rowKey?: keyof TRow & string;
+  /** 是否开启表格多选与批量操作栏（配置 `batchActions` 时自动开启）。 */
+  readonly selectable?: boolean;
+  /** 表格批量操作配置。 */
+  readonly batchActions?: readonly DeclarativeBatchActionSpec<TRow, TData>[];
+  /** 表格行尾操作按钮配置（固定在右侧）。 */
+  readonly rowActions?: readonly DeclarativeRowActionSpec<TRow, TData>[];
+  /** 可展开详情行渲染函数。 */
+  readonly renderExpandedRow?: (row: TRow, index: number, ctx: DeclarativePageContext<TData>) => React.ReactNode;
+  /** 小屏下是否自动将表格行堆叠为响应式卡片（带 `data-label`）。 */
+  readonly responsiveStack?: boolean;
   /** Extract rows for a declarative table or list. */
   readonly items?: (keyof TData & string) | ((data: TData) => readonly TRow[]);
   /** Columns for a declarative table/card list when `items` is provided. */
@@ -818,6 +878,60 @@ function renderSmartValue(
 
 const TABLE_PAGE_SIZE = 15;
 
+interface StickyColMeta {
+  readonly className?: string;
+  readonly style?: React.CSSProperties;
+}
+
+function parseNumericWidth(width: string | number | undefined, fallback = 140): number {
+  if (typeof width === 'number' && Number.isFinite(width) && width > 0) return width;
+  if (typeof width === 'string') {
+    const m = /^(\d+(?:\.\d+)?)(?:px)?$/iu.exec(width.trim());
+    if (m) return parseFloat(m[1]!);
+  }
+  return fallback;
+}
+
+function computeStickyColumnMeta(
+  columns: readonly { readonly fixed?: 'left' | 'right'; readonly width?: string | number }[],
+  prefixLeftPx = 0,
+  suffixRightPx = 0,
+): readonly StickyColMeta[] {
+  const metas: { className?: string; style?: React.CSSProperties }[] = columns.map(() => ({}));
+  const leftIndices = columns
+    .map((c, idx) => (c.fixed === 'left' ? idx : -1))
+    .filter((idx) => idx >= 0);
+  const rightIndices = columns
+    .map((c, idx) => (c.fixed === 'right' ? idx : -1))
+    .filter((idx) => idx >= 0);
+
+  let curLeft = prefixLeftPx;
+  leftIndices.forEach((colIdx, pos) => {
+    const col = columns[colIdx]!;
+    const w = parseNumericWidth(col.width, 140);
+    const isLastLeft = pos === leftIndices.length - 1;
+    metas[colIdx] = {
+      className: isLastLeft ? 'zk-cell-fixed-left zk-cell-fixed-left-last' : 'zk-cell-fixed-left',
+      style: { left: `${curLeft}px` },
+    };
+    curLeft += w;
+  });
+
+  let curRight = suffixRightPx;
+  for (let pos = rightIndices.length - 1; pos >= 0; pos -= 1) {
+    const colIdx = rightIndices[pos]!;
+    const col = columns[colIdx]!;
+    const w = parseNumericWidth(col.width, 140);
+    const isFirstRight = pos === 0;
+    metas[colIdx] = {
+      className: isFirstRight ? 'zk-cell-fixed-right zk-cell-fixed-right-first' : 'zk-cell-fixed-right',
+      style: { right: `${curRight}px` },
+    };
+    curRight += w;
+  }
+  return metas;
+}
+
 export function DeclarativePageView<TData = Record<string, unknown>>({
   spec: rawSpec,
   pageProps,
@@ -854,6 +968,8 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
   const [sectionQueries, setSectionQueries] = useState<Readonly<Record<string, string>>>({});
   const [sectionPages, setSectionPages] = useState<Readonly<Record<string, number>>>({});
   const [sectionSorts, setSectionSorts] = useState<Readonly<Record<string, { readonly key: string; readonly dir: 'asc' | 'desc' } | undefined>>>({});
+  const [sectionSelections, setSectionSelections] = useState<Readonly<Record<string, readonly string[]>>>({});
+  const [sectionExpanded, setSectionExpanded] = useState<Readonly<Record<string, readonly string[]>>>({});
   const [activeTab, setActiveTab] = useState<string>('');
   const [copiedKey, setCopiedKey] = useState<string>('');
 
@@ -947,6 +1063,65 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
     }
   };
 
+  const runBatchAction = async (
+    secKey: string,
+    batchAction: DeclarativeBatchActionSpec<Record<string, unknown>, TData>,
+    selectedRows: readonly Record<string, unknown>[],
+    selectedKeys: readonly string[],
+  ) => {
+    setBusyAction(`batch:${secKey}:${batchAction.name}`);
+    try {
+      if (batchAction.onExecute) {
+        await batchAction.onExecute(selectedRows, selectedKeys, ctx);
+      } else if (pluginId) {
+        const paramKey = batchAction.idsParamKey ?? 'ids';
+        const payload = batchAction.params
+          ? batchAction.params(selectedRows, selectedKeys, resource.data)
+          : { [paramKey]: selectedKeys };
+        await call(batchAction.name, payload);
+      }
+      const msg = batchAction.successMessage
+        ? pickText(batchAction.successMessage, locale, t)
+        : `${pickText(batchAction.label, locale, t)} (${selectedKeys.length}) ${t('已完成')}`;
+      notify('success', msg);
+      setSectionSelections((prev) => ({ ...prev, [secKey]: [] }));
+      await resource.refresh();
+    } catch (err) {
+      notify('danger', formatError(err, t));
+    } finally {
+      setBusyAction('');
+    }
+  };
+
+  const runRowAction = async (
+    secKey: string,
+    rowAction: DeclarativeRowActionSpec<Record<string, unknown>, TData>,
+    row: Record<string, unknown>,
+    rk: string,
+  ) => {
+    setBusyAction(`row:${secKey}:${rowAction.name}:${rk}`);
+    try {
+      if (rowAction.onExecute) {
+        await rowAction.onExecute(row, rk, ctx);
+      } else if (pluginId) {
+        const paramKey = rowAction.idParamKey ?? 'id';
+        const payload = rowAction.params
+          ? rowAction.params(row, rk, resource.data)
+          : { [paramKey]: rk };
+        await call(rowAction.name, payload);
+      }
+      const msg = rowAction.successMessage
+        ? pickText(rowAction.successMessage, locale, t)
+        : `${pickText(rowAction.label, locale, t)} ${t('已完成')}`;
+      notify('success', msg);
+      await resource.refresh();
+    } catch (err) {
+      notify('danger', formatError(err, t));
+    } finally {
+      setBusyAction('');
+    }
+  };
+
   const data = resource.data;
   const resolvedTitle = pickText(spec.title, locale, t) || pageProps?.title || 'Plugin';
   const defaultMark = spec.mark ?? resolvedTitle.trim().slice(0, 1).toUpperCase();
@@ -1001,6 +1176,7 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
                 <Button
                   key={action.name}
                   variant={action.variant ?? 'secondary'}
+                  icon={action.icon}
                   disabled={isDisabled}
                   busy={isBusy}
                   onClick={() => runAction(action)}
@@ -1093,8 +1269,21 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
             const cardTone = stat.tone ?? 'primary';
             return (
               <div key={stat.key ?? idx} className={`zk-stat-card${cardTone !== 'primary' ? ` zk-stat-card--${cardTone}` : ''}`}>
+                {stat.watermark && (
+                  <span className="zk-stat-watermark" aria-hidden="true">
+                    {typeof stat.watermark === 'string' && (stat.watermark.startsWith('http') || stat.watermark.startsWith('/') || stat.watermark.startsWith('data:')) ? (
+                      <img src={stat.watermark} alt="" />
+                    ) : (
+                      stat.watermark
+                    )}
+                  </span>
+                )}
                 <div className="zk-stat-card__head">
-                  <span className="zk-stat-card__label">{pickText(stat.label, locale, t)}</span>
+                  <span className="zk-stat-card__label" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    {stat.image && <img src={stat.image} alt="" className="zk-stat-icon-img" />}
+                    {stat.icon && <span>{stat.icon}</span>}
+                    {pickText(stat.label, locale, t)}
+                  </span>
                   {stat.badge && <Badge tone={badgeTone}>{badgeLabel}</Badge>}
                 </div>
                 <div className="zk-row" style={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
@@ -1163,6 +1352,64 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
                         />
                       );
                     }
+                    if (field.type === 'radio' && field.options) {
+                      return (
+                        <Field key={field.key} label={pickText(field.label, locale, t)} hint={fieldHint} required={field.required}>
+                          <RadioGroup
+                            value={fieldVal}
+                            onChange={setVal}
+                            variant={field.variant}
+                            direction={field.direction}
+                            options={field.options.map((opt) => ({
+                              value: opt.value,
+                              label: pickText(opt.label, locale, t),
+                              description: opt.description ? pickText(opt.description, locale, t) : undefined,
+                              icon: opt.icon,
+                              badge: opt.badge,
+                              disabled: opt.disabled || isDisabled || isBusy,
+                            }))}
+                          />
+                        </Field>
+                      );
+                    }
+                    if (field.type === 'checkbox-group' && field.options) {
+                      const selectedList = fieldVal ? fieldVal.split(',').filter(Boolean) : [];
+                      return (
+                        <Field key={field.key} label={pickText(field.label, locale, t)} hint={fieldHint} required={field.required}>
+                          <CheckboxGroup
+                            value={selectedList}
+                            onChange={(next) => setVal(next.join(','))}
+                            variant={field.variant === 'card' ? 'card' : 'default'}
+                            direction={field.direction}
+                            options={field.options.map((opt) => ({
+                              value: opt.value,
+                              label: pickText(opt.label, locale, t),
+                              description: opt.description ? pickText(opt.description, locale, t) : undefined,
+                              icon: opt.icon,
+                              badge: opt.badge,
+                              disabled: opt.disabled || isDisabled || isBusy,
+                            }))}
+                          />
+                        </Field>
+                      );
+                    }
+                    if (field.type === 'segmented' && field.options) {
+                      return (
+                        <Field key={field.key} label={pickText(field.label, locale, t)} hint={fieldHint} required={field.required}>
+                          <SegmentedControl
+                            value={fieldVal || (field.options[0]?.value ?? '')}
+                            onChange={setVal}
+                            options={field.options.map((opt) => ({
+                              value: opt.value,
+                              label: pickText(opt.label, locale, t),
+                              icon: opt.icon,
+                              badge: opt.badge,
+                              disabled: opt.disabled || isDisabled || isBusy,
+                            }))}
+                          />
+                        </Field>
+                      );
+                    }
                     return (
                       <Field key={field.key} label={pickText(field.label, locale, t)} hint={fieldHint} required={field.required}>
                         {field.type === 'select' && field.options ? (
@@ -1173,6 +1420,7 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
                             options={field.options.map((opt) => ({
                               value: opt.value,
                               label: pickText(opt.label, locale, t),
+                              disabled: opt.disabled,
                             }))}
                           />
                         ) : field.type === 'textarea' ? (
@@ -1200,7 +1448,7 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
                     );
                   })}
                   <div className="zk-row">
-                    <Button variant={action.variant ?? 'primary'} busy={isBusy} disabled={isDisabled} onClick={() => runAction(action)}>
+                    <Button variant={action.variant ?? 'primary'} icon={action.icon} busy={isBusy} disabled={isDisabled} onClick={() => runAction(action)}>
                       {label}
                     </Button>
                   </div>
@@ -1274,6 +1522,33 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
                 ? sortedRows.slice((currentPage - 1) * TABLE_PAGE_SIZE, currentPage * TABLE_PAGE_SIZE)
                 : undefined;
 
+              const getRowKey = (row: Record<string, unknown>, fallbackIdx: number): string => {
+                const raw =
+                  (section.rowKey ? resolveDataPath(row, section.rowKey) : undefined) ??
+                  row.id ??
+                  row.key ??
+                  row.ownerKey ??
+                  (section.columns?.[0]?.key ? resolveDataPath(row, section.columns[0].key) : undefined) ??
+                  fallbackIdx;
+                return String(raw);
+              };
+
+              const isSelectable = Boolean(section.selectable || (section.batchActions && section.batchActions.length > 0));
+              const hasExpandable = Boolean(section.renderExpandedRow);
+              const hasRowActions = Boolean(section.rowActions && section.rowActions.length > 0);
+              const selectedKeysForSec = sectionSelections[secKey] ?? [];
+              const selectedKeySet = new Set(selectedKeysForSec);
+              const expandedKeysForSec = sectionExpanded[secKey] ?? [];
+              const expandedKeySet = new Set(expandedKeysForSec);
+
+              const prefixLeftPx = (isSelectable ? 42 : 0) + (hasExpandable ? 40 : 0);
+              const suffixRightPx = hasRowActions ? 96 : 0;
+              const stickyMetas = section.columns
+                ? computeStickyColumnMeta(section.columns, prefixLeftPx, suffixRightPx)
+                : [];
+              const anyFixedLeft = Boolean(section.columns?.some((c) => c.fixed === 'left'));
+              const anyFixedRight = Boolean(section.columns?.some((c) => c.fixed === 'right'));
+
               const entries = section.entries
                 ? (typeof section.entries === 'function'
                   ? section.entries(data, ctx)
@@ -1305,6 +1580,18 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
                   ? entries
                   : Object.entries(entries).map(([label, value]) => ({ key: label, label, value })))
                 : undefined;
+
+              const currentPagedRows = pagedRows ?? rows ?? [];
+              const currentPagedKeys = currentPagedRows.map((r, rIdx) =>
+                getRowKey(r, (currentPage - 1) * TABLE_PAGE_SIZE + rIdx),
+              );
+              const allPageSelected =
+                currentPagedKeys.length > 0 && currentPagedKeys.every((k) => selectedKeySet.has(k));
+              const somePageSelected =
+                !allPageSelected && currentPagedKeys.some((k) => selectedKeySet.has(k));
+              const selectedRowObjects = (rows ?? []).filter((r, rIdx) =>
+                selectedKeySet.has(getRowKey(r, rIdx)),
+              );
 
               const sectionBody = (
                 <>
@@ -1386,117 +1673,314 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
                         />
                       </div>
                     ) : section.columns && section.columns.length > 0 && section.layout !== 'cards' ? (
-                      <div className="zk-table-wrap">
-                        <table className="zk-table">
-                          <thead>
-                            <tr>
-                              {section.columns.map((col) => {
-                                const isSorted = sortState?.key === col.key;
-                                const canSort = col.sortable !== false && rows.length >= 2;
+                      <div className="zk-stack" style={{ gap: 10 }}>
+                        {isSelectable && selectedKeysForSec.length > 0 && (
+                          <div role="region" aria-label={t('批量操作')} className="zk-batch-bar">
+                            <div className="zk-batch-bar__info">
+                              <Badge tone="primary">{t('已选 {0} 项', selectedKeysForSec.length)}</Badge>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setSectionSelections((prev) => ({ ...prev, [secKey]: [] }))}
+                              >
+                                {t('清空选择')}
+                              </Button>
+                            </div>
+                            <div className="zk-batch-bar__actions">
+                              {(section.batchActions ?? []).map((ba) => {
+                                const baLabel = pickText(ba.label, locale, t);
+                                const baBusy = busyAction === `batch:${secKey}:${ba.name}`;
+                                if (ba.confirm) {
+                                  return (
+                                    <ConfirmButton
+                                      key={ba.name}
+                                      size="sm"
+                                      variant={ba.variant ?? 'primary'}
+                                      danger={ba.variant === 'danger'}
+                                      busy={baBusy}
+                                      confirmLabel={ba.confirmLabel ? pickText(ba.confirmLabel, locale, t) : baLabel}
+                                      message={pickText(ba.confirm, locale, t)}
+                                      onConfirm={() => runBatchAction(secKey, ba, selectedRowObjects, selectedKeysForSec)}
+                                    >
+                                      {baLabel}
+                                    </ConfirmButton>
+                                  );
+                                }
                                 return (
-                                  <th
-                                    key={col.key}
-                                    style={{
-                                      ...(col.align ? { textAlign: col.align } : {}),
-                                      ...(col.width ? { width: typeof col.width === 'number' ? `${col.width}px` : col.width } : {}),
-                                    }}
+                                  <Button
+                                    key={ba.name}
+                                    size="sm"
+                                    variant={ba.variant ?? 'primary'}
+                                    icon={ba.icon}
+                                    busy={baBusy}
+                                    onClick={() => runBatchAction(secKey, ba, selectedRowObjects, selectedKeysForSec)}
                                   >
-                                    {canSort ? (
-                                      <button
-                                        type="button"
-                                        className="zk-th-sort"
-                                        onClick={() =>
-                                          setSectionSorts((prev) => {
-                                            const cur = prev[secKey];
-                                            const next =
-                                              !cur || cur.key !== col.key
-                                                ? { key: col.key, dir: 'asc' as const }
-                                                : cur.dir === 'asc'
-                                                  ? { key: col.key, dir: 'desc' as const }
-                                                  : undefined;
-                                            return { ...prev, [secKey]: next };
-                                          })
-                                        }
-                                      >
-                                        <span>{pickText(col.label, locale, t)}</span>
-                                        {isSorted && <span aria-hidden="true">{sortState?.dir === 'asc' ? '↑' : '↓'}</span>}
-                                      </button>
-                                    ) : (
-                                      pickText(col.label, locale, t)
-                                    )}
-                                  </th>
+                                    {baLabel}
+                                  </Button>
                                 );
                               })}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {(pagedRows ?? rows).map((row, rowIdx) => {
-                              const globalIdx = (currentPage - 1) * TABLE_PAGE_SIZE + rowIdx;
-                              const rowKeyVal =
-                                row.id ??
-                                row.key ??
-                                row.ownerKey ??
-                                (section.columns?.[0]?.key ? resolveDataPath(row, section.columns[0].key) : undefined) ??
-                                globalIdx;
-                              return (
-                                <tr key={String(rowKeyVal)}>
-                                  {(section.columns ?? []).map((col) => {
-                                    const cellVal = resolveDataPath(row, col.key);
-                                    return (
-                                      <td
-                                        key={col.key}
-                                        style={col.align ? { textAlign: col.align } : undefined}
-                                      >
-                                        {col.render
-                                          ? col.render(cellVal, row, ctx)
-                                          : renderSmartValue(
-                                              cellVal,
-                                              col.key,
-                                              `${secKey}-r${globalIdx}-${col.key}`,
-                                              copiedKey,
-                                              handleCopy,
-                                              t,
-                                              col,
-                                            )}
-                                      </td>
-                                    );
-                                  })}
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                        {totalPages > 1 && (
-                          <div className="zk-pagination">
-                            <span>
-                              {locale === 'en'
-                                ? `Page ${currentPage} of ${totalPages} (${totalFiltered} items)`
-                                : `第 ${currentPage} / ${totalPages} 页（共 ${totalFiltered} 条）`}
-                            </span>
-                            <div className="zk-row">
-                              <Button
-                                variant="secondary"
-                                size="sm"
-                                disabled={currentPage <= 1}
-                                onClick={() =>
-                                  setSectionPages((prev) => ({ ...prev, [secKey]: Math.max(1, currentPage - 1) }))
-                                }
-                              >
-                                {locale === 'en' ? 'Previous' : '上一页'}
-                              </Button>
-                              <Button
-                                variant="secondary"
-                                size="sm"
-                                disabled={currentPage >= totalPages}
-                                onClick={() =>
-                                  setSectionPages((prev) => ({ ...prev, [secKey]: Math.min(totalPages, currentPage + 1) }))
-                                }
-                              >
-                                {locale === 'en' ? 'Next' : '下一页'}
-                              </Button>
                             </div>
                           </div>
                         )}
+                        <div className="zk-table-wrap">
+                          <table className={`zk-table${section.responsiveStack ? ' zk-table--responsive' : ''}`}>
+                            <thead>
+                              <tr>
+                                {isSelectable && (
+                                  <th
+                                    style={{ width: 42, ...(anyFixedLeft ? { left: 0 } : {}) }}
+                                    className={anyFixedLeft ? 'zk-cell-fixed-left' : undefined}
+                                  >
+                                    <Checkbox
+                                      checked={allPageSelected}
+                                      indeterminate={somePageSelected}
+                                      ariaLabel={allPageSelected ? t('取消全选') : t('全选当前页')}
+                                      onChange={(nextChecked) => {
+                                        setSectionSelections((prev) => {
+                                          const set = new Set(prev[secKey] ?? []);
+                                          for (const k of currentPagedKeys) {
+                                            if (nextChecked) set.add(k);
+                                            else set.delete(k);
+                                          }
+                                          return { ...prev, [secKey]: Array.from(set) };
+                                        });
+                                      }}
+                                    />
+                                  </th>
+                                )}
+                                {hasExpandable && (
+                                  <th
+                                    style={{ width: 40, ...(anyFixedLeft ? { left: isSelectable ? 42 : 0 } : {}) }}
+                                    className={anyFixedLeft ? 'zk-cell-fixed-left' : undefined}
+                                  />
+                                )}
+                                {section.columns.map((col, colIdx) => {
+                                  const isSorted = sortState?.key === col.key;
+                                  const canSort = col.sortable !== false && rows.length >= 2;
+                                  const sticky = stickyMetas[colIdx];
+                                  return (
+                                    <th
+                                      key={col.key}
+                                      className={sticky?.className}
+                                      style={{
+                                        ...(col.align ? { textAlign: col.align } : {}),
+                                        ...(col.width ? { width: typeof col.width === 'number' ? `${col.width}px` : col.width } : {}),
+                                        ...(sticky?.style ?? {}),
+                                      }}
+                                    >
+                                      {canSort ? (
+                                        <button
+                                          type="button"
+                                          className="zk-th-sort"
+                                          onClick={() =>
+                                            setSectionSorts((prev) => {
+                                              const cur = prev[secKey];
+                                              const next =
+                                                !cur || cur.key !== col.key
+                                                  ? { key: col.key, dir: 'asc' as const }
+                                                  : cur.dir === 'asc'
+                                                    ? { key: col.key, dir: 'desc' as const }
+                                                    : undefined;
+                                              return { ...prev, [secKey]: next };
+                                            })
+                                          }
+                                        >
+                                          {col.icon}
+                                          <span>{pickText(col.label, locale, t)}</span>
+                                          {isSorted && <span aria-hidden="true">{sortState?.dir === 'asc' ? '↑' : '↓'}</span>}
+                                        </button>
+                                      ) : (
+                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                          {col.icon}
+                                          <span>{pickText(col.label, locale, t)}</span>
+                                        </span>
+                                      )}
+                                    </th>
+                                  );
+                                })}
+                                {hasRowActions && (
+                                  <th
+                                    className={anyFixedRight ? 'zk-cell-fixed-right' : 'zk-cell-fixed-right zk-cell-fixed-right-first'}
+                                    style={{ width: 96, right: 0, textAlign: 'right' }}
+                                  >
+                                    {t('操作')}
+                                  </th>
+                                )}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(pagedRows ?? rows).map((row, rowIdx) => {
+                                const globalIdx = (currentPage - 1) * TABLE_PAGE_SIZE + rowIdx;
+                                const rk = getRowKey(row, globalIdx);
+                                const isRowSelected = selectedKeySet.has(rk);
+                                const isRowExpanded = expandedKeySet.has(rk);
+                                const totalColSpan =
+                                  (section.columns?.length ?? 0) +
+                                  (isSelectable ? 1 : 0) +
+                                  (hasExpandable ? 1 : 0) +
+                                  (hasRowActions ? 1 : 0);
+                                return (
+                                  <React.Fragment key={rk}>
+                                    <tr className={isRowSelected ? 'zk-row-selected' : undefined}>
+                                      {isSelectable && (
+                                        <td
+                                          style={anyFixedLeft ? { left: 0 } : undefined}
+                                          className={anyFixedLeft ? 'zk-cell-fixed-left' : undefined}
+                                        >
+                                          <Checkbox
+                                            checked={isRowSelected}
+                                            ariaLabel={t('选择行')}
+                                            onChange={(nextChecked) => {
+                                              setSectionSelections((prev) => {
+                                                const set = new Set(prev[secKey] ?? []);
+                                                if (nextChecked) set.add(rk);
+                                                else set.delete(rk);
+                                                return { ...prev, [secKey]: Array.from(set) };
+                                              });
+                                            }}
+                                          />
+                                        </td>
+                                      )}
+                                      {hasExpandable && (
+                                        <td
+                                          style={anyFixedLeft ? { left: isSelectable ? 42 : 0 } : undefined}
+                                          className={anyFixedLeft ? 'zk-cell-fixed-left' : undefined}
+                                        >
+                                          <button
+                                            type="button"
+                                            aria-expanded={isRowExpanded}
+                                            aria-label={isRowExpanded ? t('收起详情') : t('展开详情')}
+                                            onClick={() => {
+                                              setSectionExpanded((prev) => {
+                                                const set = new Set(prev[secKey] ?? []);
+                                                if (set.has(rk)) set.delete(rk);
+                                                else set.add(rk);
+                                                return { ...prev, [secKey]: Array.from(set) };
+                                              });
+                                            }}
+                                            className="zk-table-expand-btn"
+                                          >
+                                            ▸
+                                          </button>
+                                        </td>
+                                      )}
+                                      {(section.columns ?? []).map((col, colIdx) => {
+                                        const cellVal = resolveDataPath(row, col.key);
+                                        const sticky = stickyMetas[colIdx];
+                                        return (
+                                          <td
+                                            key={col.key}
+                                            data-label={pickText(col.label, locale, t)}
+                                            className={sticky?.className}
+                                            style={{
+                                              ...(col.align ? { textAlign: col.align } : {}),
+                                              ...(sticky?.style ?? {}),
+                                            }}
+                                          >
+                                            {col.render
+                                              ? col.render(cellVal, row, ctx)
+                                              : renderSmartValue(
+                                                  cellVal,
+                                                  col.key,
+                                                  `${secKey}-r${globalIdx}-${col.key}`,
+                                                  copiedKey,
+                                                  handleCopy,
+                                                  t,
+                                                  col,
+                                                )}
+                                          </td>
+                                        );
+                                      })}
+                                      {hasRowActions && (
+                                        <td
+                                          data-label={t('操作')}
+                                          className={anyFixedRight ? 'zk-cell-fixed-right' : 'zk-cell-fixed-right zk-cell-fixed-right-first'}
+                                          style={{ width: 96, right: 0, textAlign: 'right' }}
+                                        >
+                                          <div className="zk-row" style={{ justifyContent: 'flex-end' }}>
+                                            {(section.rowActions ?? []).map((ra) => {
+                                              const raLabel = pickText(ra.label, locale, t);
+                                              const raDisabled = typeof ra.disabled === 'function' ? ra.disabled(row) : Boolean(ra.disabled);
+                                              const raBusy = busyAction === `row:${secKey}:${ra.name}:${rk}`;
+                                              if (ra.confirm) {
+                                                return (
+                                                  <ConfirmButton
+                                                    key={ra.name}
+                                                    size="sm"
+                                                    variant={ra.variant ?? 'ghost'}
+                                                    danger={ra.variant === 'danger'}
+                                                    disabled={raDisabled}
+                                                    busy={raBusy}
+                                                    confirmLabel={ra.confirmLabel ? pickText(ra.confirmLabel, locale, t) : raLabel}
+                                                    message={pickText(ra.confirm, locale, t)}
+                                                    onConfirm={() => runRowAction(secKey, ra, row, rk)}
+                                                  >
+                                                    {raLabel}
+                                                  </ConfirmButton>
+                                                );
+                                              }
+                                              return (
+                                                <Button
+                                                  key={ra.name}
+                                                  size="sm"
+                                                  variant={ra.variant ?? 'ghost'}
+                                                  icon={ra.icon}
+                                                  disabled={raDisabled}
+                                                  busy={raBusy}
+                                                  onClick={() => runRowAction(secKey, ra, row, rk)}
+                                                >
+                                                  {raLabel}
+                                                </Button>
+                                              );
+                                            })}
+                                          </div>
+                                        </td>
+                                      )}
+                                    </tr>
+                                    {hasExpandable && isRowExpanded && section.renderExpandedRow && (
+                                      <tr className="zk-table-expanded-row">
+                                        <td colSpan={totalColSpan}>
+                                          {section.renderExpandedRow(row, globalIdx, ctx)}
+                                        </td>
+                                      </tr>
+                                    )}
+                                  </React.Fragment>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                          {totalPages > 1 && (
+                            <div className="zk-pagination">
+                              <span>
+                                {locale === 'en'
+                                  ? `Page ${currentPage} of ${totalPages} (${totalFiltered} items)`
+                                  : `第 ${currentPage} / ${totalPages} 页（共 ${totalFiltered} 条）`}
+                              </span>
+                              <div className="zk-row">
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  disabled={currentPage <= 1}
+                                  onClick={() =>
+                                    setSectionPages((prev) => ({ ...prev, [secKey]: Math.max(1, currentPage - 1) }))
+                                  }
+                                >
+                                  {locale === 'en' ? 'Previous' : '上一页'}
+                                </Button>
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  disabled={currentPage >= totalPages}
+                                  onClick={() =>
+                                    setSectionPages((prev) => ({ ...prev, [secKey]: Math.min(totalPages, currentPage + 1) }))
+                                  }
+                                >
+                                  {locale === 'en' ? 'Next' : '下一页'}
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     ) : section.renderItem ? (
                       <ul className="zk-list">
@@ -1600,12 +2084,37 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
   );
 }
 
+export interface DataTableBatchAction<TRow = Record<string, unknown>> {
+  readonly key?: string;
+  readonly label: DeclarativeI18nText;
+  readonly icon?: React.ReactNode;
+  readonly variant?: ButtonVariant;
+  readonly confirm?: DeclarativeI18nText;
+  readonly confirmLabel?: DeclarativeI18nText;
+  readonly disabled?: boolean | ((selectedRows: readonly TRow[], selectedKeys: readonly string[]) => boolean);
+  readonly onExecute: (selectedRows: readonly TRow[], selectedKeys: readonly string[]) => unknown;
+}
+
+export interface DataTableRowAction<TRow = Record<string, unknown>> {
+  readonly key?: string;
+  readonly label: DeclarativeI18nText;
+  readonly icon?: React.ReactNode;
+  readonly variant?: ButtonVariant;
+  readonly confirm?: DeclarativeI18nText;
+  readonly confirmLabel?: DeclarativeI18nText;
+  readonly disabled?: boolean | ((row: TRow, index: number) => boolean);
+  readonly onExecute: (row: TRow, index: number) => unknown;
+}
+
 export interface DataTableProps<TRow = Record<string, unknown>> {
   readonly columns: readonly {
     readonly key: keyof TRow & string;
     readonly label: DeclarativeI18nText;
+    readonly icon?: React.ReactNode;
     readonly type?: DeclarativeColumnType;
     readonly align?: 'left' | 'center' | 'right';
+    /** 固定列位置（水平滚动时粘性锁定在左侧或右侧并附带边缘阴影）。 */
+    readonly fixed?: 'left' | 'right';
     readonly sortable?: boolean;
     readonly copyable?: boolean;
     readonly width?: string | number;
@@ -1618,9 +2127,23 @@ export interface DataTableProps<TRow = Record<string, unknown>> {
   readonly pageSize?: number;
   readonly emptyTitle?: DeclarativeI18nText;
   readonly actions?: React.ReactNode;
+  /** 是否开启多选行（配置 `batchActions` 时自动开启）。 */
+  readonly selectable?: boolean;
+  /** 受控选中行 Key 列表。 */
+  readonly selectedKeys?: readonly string[];
+  /** 选中行变化回调。 */
+  readonly onSelectionChange?: (selectedKeys: string[], selectedRows: TRow[]) => void;
+  /** 顶部浮动批量操作栏配置。 */
+  readonly batchActions?: readonly DataTableBatchAction<TRow>[];
+  /** 固定在右侧的行级操作按钮配置。 */
+  readonly rowActions?: readonly DataTableRowAction<TRow>[];
+  /** 可展开详情行渲染函数。 */
+  readonly renderExpandedRow?: (row: TRow, index: number) => React.ReactNode;
+  /** 小屏下是否自动将表格行堆叠为响应式卡片（带 `data-label`）。 */
+  readonly responsiveStack?: boolean;
 }
 
-/** 通用数据表格组件：自带搜索过滤、列点击排序、分页与智能单元格格式化（徽章/链接/代码胶囊/进度条/标签数组）。 */
+/** 通用数据表格组件：自带搜索过滤、列点击排序、分页、粘性固定列（fixed）、多选与批量操作栏（batchActions）、可展开详情行、响应式堆叠与智能单元格格式化。 */
 export function DataTable<TRow extends Record<string, unknown> = Record<string, unknown>>({
   columns,
   rows,
@@ -1629,12 +2152,56 @@ export function DataTable<TRow extends Record<string, unknown> = Record<string, 
   pageSize = TABLE_PAGE_SIZE,
   emptyTitle,
   actions,
+  selectable,
+  selectedKeys: controlledSelectedKeys,
+  onSelectionChange,
+  batchActions,
+  rowActions,
+  renderExpandedRow,
+  responsiveStack = false,
 }: DataTableProps<TRow>) {
   const { locale, t } = useLocale();
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<{ readonly key: string; readonly dir: 'asc' | 'desc' } | undefined>();
   const [copiedKey, setCopiedKey] = useState('');
+  const [internalSelected, setInternalSelected] = useState<readonly string[]>([]);
+  const [expandedKeys, setExpandedKeys] = useState<readonly string[]>([]);
+
+  const isSelectable = Boolean(selectable || (batchActions && batchActions.length > 0) || onSelectionChange);
+  const hasExpandable = Boolean(renderExpandedRow);
+  const hasRowActions = Boolean(rowActions && rowActions.length > 0);
+  const activeSelectedKeys = controlledSelectedKeys ?? internalSelected;
+  const selectedKeySet = useMemo(() => new Set(activeSelectedKeys), [activeSelectedKeys]);
+  const expandedKeySet = useMemo(() => new Set(expandedKeys), [expandedKeys]);
+
+  const getRowKey = useCallback(
+    (row: TRow, fallbackIdx: number): string => {
+      const raw =
+        (rowKey ? resolveDataPath(row, rowKey) : undefined) ??
+        row.id ??
+        row.key ??
+        row.ownerKey ??
+        (columns[0]?.key ? resolveDataPath(row, columns[0].key) : undefined) ??
+        fallbackIdx;
+      return String(raw);
+    },
+    [rowKey, columns],
+  );
+
+  const updateSelection = useCallback(
+    (nextKeys: string[]) => {
+      if (controlledSelectedKeys === undefined) {
+        setInternalSelected(nextKeys);
+      }
+      if (onSelectionChange) {
+        const nextSet = new Set(nextKeys);
+        const nextRows = rows.filter((r, idx) => nextSet.has(getRowKey(r, idx)));
+        onSelectionChange(nextKeys, nextRows);
+      }
+    },
+    [controlledSelectedKeys, onSelectionChange, rows, getRowKey],
+  );
 
   const handleCopy = useCallback((key: string, text: string) => {
     try {
@@ -1680,6 +2247,28 @@ export function DataTable<TRow extends Record<string, unknown> = Record<string, 
   const currentPage = Math.min(page, totalPages);
   const paged = sorted.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
+  const prefixLeftPx = (isSelectable ? 42 : 0) + (hasExpandable ? 40 : 0);
+  const suffixRightPx = hasRowActions ? 96 : 0;
+  const stickyMetas = useMemo(
+    () => computeStickyColumnMeta(columns, prefixLeftPx, suffixRightPx),
+    [columns, prefixLeftPx, suffixRightPx],
+  );
+  const anyFixedLeft = useMemo(() => columns.some((c) => c.fixed === 'left'), [columns]);
+  const anyFixedRight = useMemo(() => columns.some((c) => c.fixed === 'right'), [columns]);
+
+  const currentPagedKeys = useMemo(
+    () => paged.map((r, rIdx) => getRowKey(r, (currentPage - 1) * pageSize + rIdx)),
+    [paged, currentPage, pageSize, getRowKey],
+  );
+  const allPageSelected =
+    currentPagedKeys.length > 0 && currentPagedKeys.every((k) => selectedKeySet.has(k));
+  const somePageSelected =
+    !allPageSelected && currentPagedKeys.some((k) => selectedKeySet.has(k));
+  const selectedRows = useMemo(
+    () => rows.filter((r, idx) => selectedKeySet.has(getRowKey(r, idx))),
+    [rows, selectedKeySet, getRowKey],
+  );
+
   return (
     <div className="zk-stack" style={{ gap: 10 }}>
       {(searchable && (rows.length >= 3 || q.length > 0)) || actions ? (
@@ -1705,6 +2294,54 @@ export function DataTable<TRow extends Record<string, unknown> = Record<string, 
         </div>
       ) : null}
 
+      {isSelectable && activeSelectedKeys.length > 0 && (
+        <div role="region" aria-label={t('批量操作')} className="zk-batch-bar">
+          <div className="zk-batch-bar__info">
+            <Badge tone="primary">{t('已选 {0} 项', activeSelectedKeys.length)}</Badge>
+            <Button variant="ghost" size="sm" onClick={() => updateSelection([])}>
+              {t('清空选择')}
+            </Button>
+          </div>
+          <div className="zk-batch-bar__actions">
+            {(batchActions ?? []).map((ba, baIdx) => {
+              const baLabel = pickText(ba.label, locale, t);
+              const baDisabled =
+                typeof ba.disabled === 'function'
+                  ? ba.disabled(selectedRows, activeSelectedKeys)
+                  : Boolean(ba.disabled);
+              if (ba.confirm) {
+                return (
+                  <ConfirmButton
+                    key={ba.key ?? baIdx}
+                    size="sm"
+                    variant={ba.variant ?? 'primary'}
+                    danger={ba.variant === 'danger'}
+                    disabled={baDisabled}
+                    confirmLabel={ba.confirmLabel ? pickText(ba.confirmLabel, locale, t) : baLabel}
+                    message={pickText(ba.confirm, locale, t)}
+                    onConfirm={() => ba.onExecute(selectedRows, activeSelectedKeys)}
+                  >
+                    {baLabel}
+                  </ConfirmButton>
+                );
+              }
+              return (
+                <Button
+                  key={ba.key ?? baIdx}
+                  size="sm"
+                  variant={ba.variant ?? 'primary'}
+                  icon={ba.icon}
+                  disabled={baDisabled}
+                  onClick={() => ba.onExecute(selectedRows, activeSelectedKeys)}
+                >
+                  {baLabel}
+                </Button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {rows.length === 0 ? (
         <EmptyState title={emptyTitle ? pickText(emptyTitle, locale, t) : t('暂无数据')} />
       ) : paged.length === 0 ? (
@@ -1718,18 +2355,47 @@ export function DataTable<TRow extends Record<string, unknown> = Record<string, 
         />
       ) : (
         <div className="zk-table-wrap">
-          <table className="zk-table">
+          <table className={`zk-table${responsiveStack ? ' zk-table--responsive' : ''}`}>
             <thead>
               <tr>
-                {columns.map((col) => {
+                {isSelectable && (
+                  <th
+                    style={{ width: 42, ...(anyFixedLeft ? { left: 0 } : {}) }}
+                    className={anyFixedLeft ? 'zk-cell-fixed-left' : undefined}
+                  >
+                    <Checkbox
+                      checked={allPageSelected}
+                      indeterminate={somePageSelected}
+                      ariaLabel={allPageSelected ? t('取消全选') : t('全选当前页')}
+                      onChange={(nextChecked) => {
+                        const set = new Set(activeSelectedKeys);
+                        for (const k of currentPagedKeys) {
+                          if (nextChecked) set.add(k);
+                          else set.delete(k);
+                        }
+                        updateSelection(Array.from(set));
+                      }}
+                    />
+                  </th>
+                )}
+                {hasExpandable && (
+                  <th
+                    style={{ width: 40, ...(anyFixedLeft ? { left: isSelectable ? 42 : 0 } : {}) }}
+                    className={anyFixedLeft ? 'zk-cell-fixed-left' : undefined}
+                  />
+                )}
+                {columns.map((col, colIdx) => {
                   const isSorted = sort?.key === col.key;
                   const canSort = col.sortable !== false && rows.length >= 2;
+                  const sticky = stickyMetas[colIdx];
                   return (
                     <th
                       key={col.key}
+                      className={sticky?.className}
                       style={{
                         ...(col.align ? { textAlign: col.align } : {}),
                         ...(col.width ? { width: typeof col.width === 'number' ? `${col.width}px` : col.width } : {}),
+                        ...(sticky?.style ?? {}),
                       }}
                     >
                       {canSort ? (
@@ -1746,47 +2412,162 @@ export function DataTable<TRow extends Record<string, unknown> = Record<string, 
                             )
                           }
                         >
+                          {col.icon}
                           <span>{pickText(col.label, locale, t)}</span>
                           {isSorted && <span aria-hidden="true">{sort?.dir === 'asc' ? '↑' : '↓'}</span>}
                         </button>
                       ) : (
-                        pickText(col.label, locale, t)
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          {col.icon}
+                          <span>{pickText(col.label, locale, t)}</span>
+                        </span>
                       )}
                     </th>
                   );
                 })}
+                {hasRowActions && (
+                  <th
+                    className={anyFixedRight ? 'zk-cell-fixed-right' : 'zk-cell-fixed-right zk-cell-fixed-right-first'}
+                    style={{ width: 96, right: 0, textAlign: 'right' }}
+                  >
+                    {t('操作')}
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody>
               {paged.map((row, rowIdx) => {
                 const globalIdx = (currentPage - 1) * pageSize + rowIdx;
-                const rk =
-                  (rowKey ? resolveDataPath(row, rowKey) : undefined) ??
-                  row.id ??
-                  row.key ??
-                  row.ownerKey ??
-                  globalIdx;
+                const rk = getRowKey(row, globalIdx);
+                const isRowSelected = selectedKeySet.has(rk);
+                const isRowExpanded = expandedKeySet.has(rk);
+                const totalColSpan =
+                  columns.length +
+                  (isSelectable ? 1 : 0) +
+                  (hasExpandable ? 1 : 0) +
+                  (hasRowActions ? 1 : 0);
                 return (
-                  <tr key={String(rk)}>
-                    {columns.map((col) => {
-                      const cellVal = resolveDataPath(row, col.key);
-                      return (
-                        <td key={col.key} style={col.align ? { textAlign: col.align } : undefined}>
-                          {col.render
-                            ? col.render(cellVal, row, globalIdx)
-                            : renderSmartValue(
-                                cellVal,
-                                col.key,
-                                `dt-r${globalIdx}-${col.key}`,
-                                copiedKey,
-                                handleCopy,
-                                t,
-                                col,
-                              )}
+                  <React.Fragment key={rk}>
+                    <tr className={isRowSelected ? 'zk-row-selected' : undefined}>
+                      {isSelectable && (
+                        <td
+                          style={anyFixedLeft ? { left: 0 } : undefined}
+                          className={anyFixedLeft ? 'zk-cell-fixed-left' : undefined}
+                        >
+                          <Checkbox
+                            checked={isRowSelected}
+                            ariaLabel={t('选择行')}
+                            onChange={(nextChecked) => {
+                              const set = new Set(activeSelectedKeys);
+                              if (nextChecked) set.add(rk);
+                              else set.delete(rk);
+                              updateSelection(Array.from(set));
+                            }}
+                          />
                         </td>
-                      );
-                    })}
-                  </tr>
+                      )}
+                      {hasExpandable && (
+                        <td
+                          style={anyFixedLeft ? { left: isSelectable ? 42 : 0 } : undefined}
+                          className={anyFixedLeft ? 'zk-cell-fixed-left' : undefined}
+                        >
+                          <button
+                            type="button"
+                            aria-expanded={isRowExpanded}
+                            aria-label={isRowExpanded ? t('收起详情') : t('展开详情')}
+                            onClick={() => {
+                              setExpandedKeys((prev) => {
+                                const set = new Set(prev);
+                                if (set.has(rk)) set.delete(rk);
+                                else set.add(rk);
+                                return Array.from(set);
+                              });
+                            }}
+                            className="zk-table-expand-btn"
+                          >
+                            ▸
+                          </button>
+                        </td>
+                      )}
+                      {columns.map((col, colIdx) => {
+                        const cellVal = resolveDataPath(row, col.key);
+                        const sticky = stickyMetas[colIdx];
+                        return (
+                          <td
+                            key={col.key}
+                            data-label={pickText(col.label, locale, t)}
+                            className={sticky?.className}
+                            style={{
+                              ...(col.align ? { textAlign: col.align } : {}),
+                              ...(sticky?.style ?? {}),
+                            }}
+                          >
+                            {col.render
+                              ? col.render(cellVal, row, globalIdx)
+                              : renderSmartValue(
+                                  cellVal,
+                                  col.key,
+                                  `dt-r${globalIdx}-${col.key}`,
+                                  copiedKey,
+                                  handleCopy,
+                                  t,
+                                  col,
+                                )}
+                          </td>
+                        );
+                      })}
+                      {hasRowActions && (
+                        <td
+                          data-label={t('操作')}
+                          className={anyFixedRight ? 'zk-cell-fixed-right' : 'zk-cell-fixed-right zk-cell-fixed-right-first'}
+                          style={{ width: 96, right: 0, textAlign: 'right' }}
+                        >
+                          <div className="zk-row" style={{ justifyContent: 'flex-end' }}>
+                            {(rowActions ?? []).map((ra, raIdx) => {
+                              const raLabel = pickText(ra.label, locale, t);
+                              const raDisabled =
+                                typeof ra.disabled === 'function' ? ra.disabled(row, globalIdx) : Boolean(ra.disabled);
+                              if (ra.confirm) {
+                                return (
+                                  <ConfirmButton
+                                    key={ra.key ?? raIdx}
+                                    size="sm"
+                                    variant={ra.variant ?? 'ghost'}
+                                    danger={ra.variant === 'danger'}
+                                    disabled={raDisabled}
+                                    confirmLabel={ra.confirmLabel ? pickText(ra.confirmLabel, locale, t) : raLabel}
+                                    message={pickText(ra.confirm, locale, t)}
+                                    onConfirm={() => ra.onExecute(row, globalIdx)}
+                                  >
+                                    {raLabel}
+                                  </ConfirmButton>
+                                );
+                              }
+                              return (
+                                <Button
+                                  key={ra.key ?? raIdx}
+                                  size="sm"
+                                  variant={ra.variant ?? 'ghost'}
+                                  icon={ra.icon}
+                                  disabled={raDisabled}
+                                  onClick={() => ra.onExecute(row, globalIdx)}
+                                >
+                                  {raLabel}
+                                </Button>
+                              );
+                            })}
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                    {hasExpandable && isRowExpanded && renderExpandedRow && (
+                      <tr className="zk-table-expanded-row">
+                        <td colSpan={totalColSpan}>
+                          {renderExpandedRow(row, globalIdx)}
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 );
               })}
             </tbody>

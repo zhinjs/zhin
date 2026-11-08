@@ -111,6 +111,12 @@ export interface BarChartProps extends ComponentProps {
   peakAccent?: string;
   tickLabels?: readonly [JSXRenderable, JSXRenderable, JSXRenderable];
   showPeakValue?: boolean;
+  /** Optional custom image URL per bar (rendered above the bar). */
+  images?: readonly (string | undefined)[];
+  /** Optional custom icon node per bar (rendered above the bar). */
+  icons?: readonly JSXRenderable[];
+  /** Optional custom background watermark/texture image URL. */
+  backgroundImage?: string;
 }
 
 export interface RadarChartProps extends ComponentProps {
@@ -120,6 +126,10 @@ export interface RadarChartProps extends ComponentProps {
   size?: number;
   accent?: string;
   fill?: string;
+  /** Optional custom image URL rendered at the radar center. */
+  centerImage?: string;
+  /** Optional custom icon node rendered at the radar center. */
+  centerIcon?: JSXRenderable;
 }
 
 export interface SparklineProps extends ComponentProps {
@@ -127,6 +137,8 @@ export interface SparklineProps extends ComponentProps {
   width?: number;
   height?: number;
   accent?: string;
+  /** Optional custom image URL rendered at the last data point. */
+  endImage?: string;
 }
 
 export interface TopicItemProps extends ComponentProps {
@@ -171,6 +183,10 @@ export interface DonutChartProps extends ComponentProps {
   accent?: string;
   label?: JSXRenderable;
   value?: JSXRenderable;
+  /** Optional custom image URL rendered inside the donut hole. */
+  centerImage?: string;
+  /** Optional custom icon node rendered inside the donut hole. */
+  icon?: JSXRenderable;
 }
 
 export interface CalloutProps extends ComponentProps {

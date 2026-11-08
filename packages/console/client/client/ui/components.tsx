@@ -8,19 +8,38 @@ export function PluginPage({ className, children, ...rest }: React.HTMLAttribute
   return <div {...rest} className={cx('zk-root', 'zk-page', className)}>{children}</div>;
 }
 
-export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
-export type ButtonSize = 'default' | 'sm' | 'icon';
+export type UiSize = 'sm' | 'md' | 'lg' | 'default';
+export type UiTone = 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info';
+
+export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'success' | 'warning';
+export type ButtonSize = 'default' | 'sm' | 'md' | 'lg' | 'icon';
 
 export interface ButtonProps extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'onClick'> {
   readonly variant?: ButtonVariant;
   readonly size?: ButtonSize;
+  readonly icon?: React.ReactNode;
+  readonly trailingIcon?: React.ReactNode;
   /** 本按钮的操作进行中：原位显示转圈，并保持可读文案；不影响其他按钮。 */
   readonly busy?: boolean;
   readonly onClick?: () => unknown;
   readonly buttonRef?: React.Ref<HTMLButtonElement>;
 }
 
-export function Button({ variant = 'secondary', size = 'default', busy, disabled, onClick, buttonRef, className, children, type = 'button', ...rest }: ButtonProps) {
+export function Button({
+  variant = 'secondary',
+  size = 'default',
+  icon,
+  trailingIcon,
+  busy,
+  disabled,
+  onClick,
+  buttonRef,
+  className,
+  children,
+  type = 'button',
+  ...rest
+}: ButtonProps) {
+  const normalizedSize = size === 'md' ? 'default' : size;
   return (
     <button
       {...rest}
@@ -29,19 +48,42 @@ export function Button({ variant = 'secondary', size = 'default', busy, disabled
       disabled={disabled || busy}
       aria-busy={busy || undefined}
       onClick={onClick ? () => { void onClick(); } : undefined}
-      className={cx('zk-btn', `zk-btn--${variant}`, size !== 'default' && `zk-btn--${size}`, className)}
+      className={cx('zk-btn', `zk-btn--${variant}`, normalizedSize !== 'default' && `zk-btn--${normalizedSize}`, className)}
     >
-      {busy && <span className="zk-spinner" aria-hidden="true" />}
+      {busy ? <span className="zk-spinner" aria-hidden="true" /> : icon}
       {children}
+      {trailingIcon}
     </button>
   );
 }
 
-export type BadgeTone = 'neutral' | 'success' | 'warning' | 'danger' | 'info';
+export type BadgeTone = 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info';
 
-/** 状态徽标：状态必须由文字表达，颜色只是辅助。 */
-export function Badge({ tone = 'neutral', children }: { readonly tone?: BadgeTone; readonly children: React.ReactNode }) {
-  return <span className={cx('zk-badge', `zk-badge--${tone}`)}>{children}</span>;
+/** 状态徽标：状态必须由文字表达，颜色只是辅助。支持自定义图标与尺寸规范。 */
+export function Badge({
+  tone = 'neutral',
+  size = 'md',
+  icon,
+  children,
+}: {
+  readonly tone?: BadgeTone;
+  readonly size?: 'sm' | 'md' | 'lg';
+  readonly icon?: React.ReactNode;
+  readonly children: React.ReactNode;
+}) {
+  return (
+    <span
+      className={cx(
+        'zk-badge',
+        `zk-badge--${tone}`,
+        size !== 'md' && `zk-badge--${size}`,
+        Boolean(icon) && 'zk-badge--has-icon',
+      )}
+    >
+      {icon}
+      {children}
+    </span>
+  );
 }
 
 export type NoticeTone = 'info' | 'success' | 'warning' | 'danger';
@@ -484,6 +526,8 @@ export function Tabs({
 export interface SegmentedOption<T extends string = string> {
   readonly value: T;
   readonly label: React.ReactNode;
+  readonly icon?: React.ReactNode;
+  readonly badge?: React.ReactNode | number;
   readonly disabled?: boolean;
 }
 
@@ -510,6 +554,8 @@ export function SegmentedControl<T extends string = string>({
       items={options.map((opt) => ({
         key: opt.value,
         label: opt.label,
+        icon: opt.icon,
+        badge: opt.badge,
         disabled: opt.disabled,
       }))}
     />
@@ -571,7 +617,7 @@ export function Collapsible({
 }
 
 /* ============================================================================
- * 3. Form Controls (Input, Textarea, Select, Switch, Checkbox, RadioGroup)
+ * 3. Form Controls (Input, Textarea, Select, Switch, Checkbox, CheckboxGroup, RadioGroup)
  * ========================================================================== */
 
 export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'prefix' | 'size'> {
@@ -579,7 +625,7 @@ export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElem
   readonly suffix?: React.ReactNode;
   readonly clearable?: boolean;
   readonly onClear?: () => void;
-  readonly size?: 'default' | 'sm';
+  readonly size?: UiSize;
   readonly monospace?: boolean;
 }
 
@@ -613,6 +659,7 @@ export function Input({
       ×
     </button>
   ) : suffix;
+  const sizeCls = size === 'sm' ? 'zk-input--sm' : size === 'lg' ? 'zk-input--lg' : false;
 
   if (!prefix && !effectiveSuffix) {
     return (
@@ -620,11 +667,7 @@ export function Input({
         {...rest}
         value={value}
         onChange={onChange}
-        className={cx(
-          size === 'sm' && 'zk-input--sm',
-          monospace && 'zk-input--mono',
-          className,
-        )}
+        className={cx(sizeCls, monospace && 'zk-input--mono', className)}
       />
     );
   }
@@ -642,7 +685,7 @@ export function Input({
         {...rest}
         value={value}
         onChange={onChange}
-        className={cx(size === 'sm' && 'zk-input--sm', monospace && 'zk-input--mono')}
+        className={cx(sizeCls, monospace && 'zk-input--mono')}
       />
       {effectiveSuffix && <span className="zk-input-wrap__suffix">{effectiveSuffix}</span>}
     </div>
@@ -682,7 +725,7 @@ export interface SelectOption {
 export interface SelectProps extends Omit<React.SelectHTMLAttributes<HTMLSelectElement>, 'size' | 'onChange'> {
   readonly options: readonly SelectOption[];
   readonly placeholder?: string;
-  readonly size?: 'default' | 'sm';
+  readonly size?: UiSize;
   readonly onValueChange?: (value: string) => void;
   readonly onChange?: React.ChangeEventHandler<HTMLSelectElement>;
 }
@@ -696,6 +739,7 @@ export function Select({
   className,
   ...rest
 }: SelectProps) {
+  const sizeCls = size === 'sm' ? 'zk-input--sm' : size === 'lg' ? 'zk-input--lg' : false;
   return (
     <select
       {...rest}
@@ -703,7 +747,7 @@ export function Select({
         onChange?.(e);
         onValueChange?.(e.target.value);
       }}
-      className={cx(size === 'sm' && 'zk-input--sm', className)}
+      className={cx(sizeCls, className)}
     >
       {placeholder !== undefined && <option value="">{placeholder}</option>}
       {options.map((opt) => (
@@ -720,8 +764,9 @@ export interface SwitchProps {
   readonly onChange: (checked: boolean) => void;
   readonly label?: React.ReactNode;
   readonly description?: React.ReactNode;
+  readonly icon?: React.ReactNode;
   readonly disabled?: boolean;
-  readonly size?: 'default' | 'sm';
+  readonly size?: UiSize;
   readonly id?: string;
   readonly ariaLabel?: string;
 }
@@ -731,6 +776,7 @@ export function Switch({
   onChange,
   label,
   description,
+  icon,
   disabled,
   size = 'default',
   id,
@@ -758,10 +804,11 @@ export function Switch({
           e.stopPropagation();
           toggle();
         }}
-        className={cx('zk-switch', size === 'sm' && 'zk-switch--sm')}
+        className={cx('zk-switch', size === 'sm' && 'zk-switch--sm', size === 'lg' && 'zk-switch--lg')}
       >
         <span className="zk-switch__thumb" aria-hidden="true" />
       </button>
+      {icon && <span className="zk-check-icon" aria-hidden="true">{icon}</span>}
       {(label || description) && (
         <div className="zk-control-text">
           {label && <span className="zk-control-text__label">{label}</span>}
@@ -777,25 +824,62 @@ export interface CheckboxProps {
   readonly onChange: (checked: boolean) => void;
   readonly label?: React.ReactNode;
   readonly description?: React.ReactNode;
+  readonly icon?: React.ReactNode;
+  readonly badge?: React.ReactNode;
+  readonly indeterminate?: boolean;
+  readonly variant?: 'default' | 'card';
   readonly disabled?: boolean;
   readonly id?: string;
+  readonly ariaLabel?: string;
 }
 
-export function Checkbox({ checked, onChange, label, description, disabled, id }: CheckboxProps) {
+export function Checkbox({
+  checked,
+  onChange,
+  label,
+  description,
+  icon,
+  badge,
+  indeterminate,
+  variant = 'default',
+  disabled,
+  id,
+  ariaLabel,
+}: CheckboxProps) {
   const autoId = useId();
   const inputId = id ?? autoId;
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.indeterminate = Boolean(indeterminate);
+    }
+  }, [indeterminate]);
   return (
-    <label htmlFor={inputId} className="zk-check-row">
+    <label
+      htmlFor={inputId}
+      aria-disabled={disabled || undefined}
+      data-checked={checked ? 'true' : 'false'}
+      className={cx('zk-check-row', variant === 'card' && 'zk-check-card')}
+    >
       <input
+        ref={inputRef}
         id={inputId}
         type="checkbox"
         checked={checked}
+        aria-checked={indeterminate ? 'mixed' : checked}
+        aria-label={ariaLabel}
         disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
       />
-      {(label || description) && (
+      {icon && <span className="zk-check-icon" aria-hidden="true">{icon}</span>}
+      {(label || description || badge) && (
         <span className="zk-control-text">
-          {label && <span className="zk-control-text__label">{label}</span>}
+          {(label || badge) && (
+            <span className="zk-control-text__label">
+              {label}
+              {badge}
+            </span>
+          )}
           {description && <span className="zk-control-text__desc">{description}</span>}
         </span>
       )}
@@ -803,10 +887,70 @@ export function Checkbox({ checked, onChange, label, description, disabled, id }
   );
 }
 
+export interface CheckboxOption<T extends string = string> {
+  readonly value: T;
+  readonly label: React.ReactNode;
+  readonly description?: React.ReactNode;
+  readonly icon?: React.ReactNode;
+  readonly badge?: React.ReactNode;
+  readonly disabled?: boolean;
+}
+
+export function CheckboxGroup<T extends string = string>({
+  options,
+  value,
+  onChange,
+  direction = 'column',
+  variant = 'default',
+  ariaLabel,
+}: {
+  readonly options: readonly CheckboxOption<T>[];
+  readonly value: readonly T[];
+  readonly onChange: (value: T[]) => void;
+  readonly direction?: 'column' | 'row' | 'grid';
+  readonly variant?: 'default' | 'card';
+  readonly ariaLabel?: string;
+}) {
+  const selectedSet = useMemo(() => new Set<T>(value), [value]);
+  const toggleValue = (itemValue: T, nextChecked: boolean) => {
+    const next = new Set<T>(selectedSet);
+    if (nextChecked) next.add(itemValue);
+    else next.delete(itemValue);
+    onChange(options.map((opt) => opt.value).filter((v) => next.has(v)));
+  };
+  return (
+    <div
+      role="group"
+      aria-label={ariaLabel}
+      className={cx(
+        'zk-check-group',
+        direction === 'row' && 'zk-check-group--row',
+        direction === 'grid' && 'zk-check-group--grid',
+      )}
+    >
+      {options.map((opt) => (
+        <Checkbox
+          key={opt.value}
+          checked={selectedSet.has(opt.value)}
+          disabled={opt.disabled}
+          label={opt.label}
+          description={opt.description}
+          icon={opt.icon}
+          badge={opt.badge}
+          variant={variant}
+          onChange={(nextChecked) => toggleValue(opt.value, nextChecked)}
+        />
+      ))}
+    </div>
+  );
+}
+
 export interface RadioOption<T extends string = string> {
   readonly value: T;
   readonly label: React.ReactNode;
   readonly description?: React.ReactNode;
+  readonly icon?: React.ReactNode;
+  readonly badge?: React.ReactNode;
   readonly disabled?: boolean;
 }
 
@@ -815,13 +959,15 @@ export function RadioGroup<T extends string = string>({
   value,
   onChange,
   direction = 'column',
+  variant = 'default',
   name,
   ariaLabel,
 }: {
   readonly options: readonly RadioOption<T>[];
   readonly value: T;
   readonly onChange: (value: T) => void;
-  readonly direction?: 'column' | 'row';
+  readonly direction?: 'column' | 'row' | 'grid';
+  readonly variant?: 'default' | 'card' | 'button';
   readonly name?: string;
   readonly ariaLabel?: string;
 }) {
@@ -830,24 +976,63 @@ export function RadioGroup<T extends string = string>({
     <div
       role="radiogroup"
       aria-label={ariaLabel}
-      className={cx('zk-radio-group', direction === 'row' && 'zk-radio-group--row')}
+      className={cx(
+        'zk-radio-group',
+        direction === 'row' && 'zk-radio-group--row',
+        direction === 'grid' && 'zk-radio-group--grid',
+        variant === 'button' && 'zk-radio-group--button',
+      )}
     >
-      {options.map((opt) => (
-        <label key={opt.value} className="zk-check-row">
-          <input
-            type="radio"
-            name={name ?? groupName}
-            value={opt.value}
-            checked={value === opt.value}
-            disabled={opt.disabled}
-            onChange={() => onChange(opt.value)}
-          />
-          <span className="zk-control-text">
-            <span className="zk-control-text__label">{opt.label}</span>
-            {opt.description && <span className="zk-control-text__desc">{opt.description}</span>}
-          </span>
-        </label>
-      ))}
+      {options.map((opt) => {
+        const checked = value === opt.value;
+        if (variant === 'button') {
+          return (
+            <label
+              key={opt.value}
+              aria-disabled={opt.disabled || undefined}
+              data-checked={checked ? 'true' : 'false'}
+              className="zk-radio-btn"
+            >
+              <input
+                type="radio"
+                name={name ?? groupName}
+                value={opt.value}
+                checked={checked}
+                disabled={opt.disabled}
+                onChange={() => onChange(opt.value)}
+              />
+              {opt.icon && <span className="zk-check-icon" aria-hidden="true">{opt.icon}</span>}
+              <span>{opt.label}</span>
+              {opt.badge}
+            </label>
+          );
+        }
+        return (
+          <label
+            key={opt.value}
+            aria-disabled={opt.disabled || undefined}
+            data-checked={checked ? 'true' : 'false'}
+            className={cx('zk-check-row', variant === 'card' && 'zk-check-card')}
+          >
+            <input
+              type="radio"
+              name={name ?? groupName}
+              value={opt.value}
+              checked={checked}
+              disabled={opt.disabled}
+              onChange={() => onChange(opt.value)}
+            />
+            {opt.icon && <span className="zk-check-icon" aria-hidden="true">{opt.icon}</span>}
+            <span className="zk-control-text">
+              <span className="zk-control-text__label">
+                {opt.label}
+                {opt.badge}
+              </span>
+              {opt.description && <span className="zk-control-text__desc">{opt.description}</span>}
+            </span>
+          </label>
+        );
+      })}
     </div>
   );
 }
@@ -917,6 +1102,10 @@ export interface RingProgressProps {
   readonly label?: React.ReactNode;
   readonly sublabel?: React.ReactNode;
   readonly centerText?: React.ReactNode;
+  /** 环形图中心自定义图片 URL（如平台图标、Avatar 等）。 */
+  readonly centerImage?: string;
+  /** 环形图中心自定义图标节点。 */
+  readonly centerIcon?: React.ReactNode;
 }
 
 export function RingProgress({
@@ -928,6 +1117,8 @@ export function RingProgress({
   label,
   sublabel,
   centerText,
+  centerImage,
+  centerIcon,
 }: RingProgressProps) {
   const safeMax = max > 0 ? max : 100;
   const pct = Number.isFinite(value) ? Math.min(100, Math.max(0, (value / safeMax) * 100)) : 0;
@@ -970,7 +1161,15 @@ export function RingProgress({
           />
         </svg>
         <span className="zk-ring-progress__center">
-          {centerText !== undefined ? centerText : `${Math.round(pct)}%`}
+          {centerImage ? (
+            <img src={centerImage} alt="" className="zk-ring-progress__img" />
+          ) : centerIcon !== undefined ? (
+            centerIcon
+          ) : centerText !== undefined ? (
+            centerText
+          ) : (
+            `${Math.round(pct)}%`
+          )}
         </span>
       </div>
       {(label || sublabel) && (
@@ -989,6 +1188,9 @@ export interface SparklineProps {
   readonly height?: number;
   readonly tone?: 'primary' | 'success' | 'warning' | 'danger' | 'info';
   readonly fillArea?: boolean;
+  /** 趋势线终点或峰值处自定义图片标记 URL。 */
+  readonly markerImage?: string;
+  readonly showPeak?: boolean;
 }
 
 export function Sparkline({
@@ -997,6 +1199,8 @@ export function Sparkline({
   height = 32,
   tone = 'primary',
   fillArea = true,
+  markerImage,
+  showPeak = false,
 }: SparklineProps) {
   const gradId = useId();
   const finite = values.filter(Number.isFinite);
@@ -1005,7 +1209,7 @@ export function Sparkline({
   }
   const min = Math.min(...finite);
   const max = Math.max(...finite);
-  const pad = 3;
+  const pad = markerImage ? 7 : 3;
   const innerW = width - pad * 2;
   const innerH = height - pad * 2;
   const yOf = (v: number) =>
@@ -1013,6 +1217,7 @@ export function Sparkline({
   const coords = finite.map((v, idx) => ({
     x: pad + (idx / (finite.length - 1)) * innerW,
     y: yOf(v),
+    v,
   }));
   const points = coords.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
   const areaPoints = `${coords[0]!.x.toFixed(1)},${height - pad} ${points} ${coords[coords.length - 1]!.x.toFixed(1)},${height - pad}`;
@@ -1027,6 +1232,7 @@ export function Sparkline({
             ? 'var(--zk-info)'
             : 'var(--zk-primary)';
   const last = coords[coords.length - 1]!;
+  const peak = showPeak ? coords.reduce((best, cur) => (cur.v > best.v ? cur : best), coords[0]!) : undefined;
   return (
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden="true">
       {fillArea && (
@@ -1048,8 +1254,211 @@ export function Sparkline({
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <circle cx={last.x} cy={last.y} r="2.75" fill={colorVar} />
+      {peak && peak !== last && (
+        <circle cx={peak.x} cy={peak.y} r="2.5" fill="var(--zk-warning)" />
+      )}
+      {markerImage ? (
+        <image
+          href={markerImage}
+          x={last.x - 6}
+          y={last.y - 6}
+          width="12"
+          height="12"
+          preserveAspectRatio="xMidYMid slice"
+        />
+      ) : (
+        <circle cx={last.x} cy={last.y} r="2.75" fill={colorVar} />
+      )}
     </svg>
+  );
+}
+
+export interface BarChartItem {
+  readonly label: React.ReactNode;
+  readonly value: number;
+  readonly icon?: React.ReactNode;
+  /** 柱条顶部或底部关联的自定义图片 URL（如适配器图标、用户头像）。 */
+  readonly image?: string;
+  readonly tone?: 'primary' | 'success' | 'warning' | 'danger' | 'info';
+}
+
+export interface BarChartProps {
+  readonly items: readonly BarChartItem[];
+  readonly height?: number;
+  readonly max?: number;
+  readonly showValues?: boolean;
+  /** 图表背景自定义纹理或水印图片 URL。 */
+  readonly backgroundImage?: string;
+  readonly className?: string;
+}
+
+export function BarChart({
+  items,
+  height = 136,
+  max,
+  showValues = true,
+  backgroundImage,
+  className,
+}: BarChartProps) {
+  const computedMax = useMemo(() => {
+    if (typeof max === 'number' && max > 0) return max;
+    const m = Math.max(0, ...items.map((i) => (Number.isFinite(i.value) ? i.value : 0)));
+    return m > 0 ? m : 100;
+  }, [items, max]);
+  const trackHeight = Math.max(48, height - 46);
+  return (
+    <div className={cx('zk-bar-chart', className)}>
+      {backgroundImage && <img src={backgroundImage} alt="" aria-hidden="true" className="zk-bar-chart__bg" />}
+      <div className="zk-bar-chart__bars">
+        {items.map((item, idx) => {
+          const safeVal = Number.isFinite(item.value) ? Math.max(0, item.value) : 0;
+          const pct = Math.min(100, Math.round((safeVal / computedMax) * 100));
+          return (
+            <div key={idx} className="zk-bar-chart__col">
+              {showValues && <span className="zk-bar-chart__val">{safeVal}</span>}
+              {item.image && <img src={item.image} alt="" className="zk-bar-chart__img" />}
+              <div className="zk-bar-chart__track" style={{ height: trackHeight }}>
+                <div
+                  className={cx('zk-bar-chart__bar', item.tone && item.tone !== 'primary' && `zk-bar-chart__bar--${item.tone}`)}
+                  style={{ height: `${Math.max(4, pct)}%` }}
+                />
+              </div>
+              <span className="zk-bar-chart__label">
+                {item.icon}
+                <span>{item.label}</span>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+export interface DonutChartSegment {
+  readonly label: React.ReactNode;
+  readonly value: number;
+  readonly tone?: 'primary' | 'success' | 'warning' | 'danger' | 'info' | 'neutral';
+  readonly color?: string;
+  readonly icon?: React.ReactNode;
+  /** 图例项自定义图片 URL。 */
+  readonly image?: string;
+}
+
+export interface DonutChartProps {
+  readonly segments: readonly DonutChartSegment[];
+  readonly size?: number;
+  readonly thickness?: number;
+  /** 甜甜圈中心自定义图片 URL。 */
+  readonly centerImage?: string;
+  /** 甜甜圈中心自定义图标。 */
+  readonly centerIcon?: React.ReactNode;
+  readonly centerValue?: React.ReactNode;
+  readonly centerLabel?: React.ReactNode;
+  readonly showLegend?: boolean;
+  readonly className?: string;
+}
+
+const TONE_COLOR_MAP: Record<string, string> = {
+  primary: 'var(--zk-primary)',
+  success: 'var(--zk-success)',
+  warning: 'var(--zk-warning)',
+  danger: 'var(--zk-danger)',
+  info: 'var(--zk-info)',
+  neutral: 'var(--zk-muted)',
+};
+
+const FALLBACK_PALETTE = [
+  'var(--zk-primary)',
+  'var(--zk-info)',
+  'var(--zk-success)',
+  'var(--zk-warning)',
+  'var(--zk-danger)',
+];
+
+export function DonutChart({
+  segments,
+  size = 112,
+  thickness = 12,
+  centerImage,
+  centerIcon,
+  centerValue,
+  centerLabel,
+  showLegend = true,
+  className,
+}: DonutChartProps) {
+  const total = segments.reduce((acc, s) => acc + (Number.isFinite(s.value) && s.value > 0 ? s.value : 0), 0);
+  const r = (size - thickness) / 2;
+  const circumference = 2 * Math.PI * r;
+  let accumulated = 0;
+
+  return (
+    <div className={cx('zk-donut-chart', className)}>
+      <div className="zk-ring-progress__svg-wrap" style={{ width: size, height: size }}>
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={r}
+            fill="none"
+            stroke="var(--zk-inset)"
+            strokeWidth={thickness}
+          />
+          {total > 0 &&
+            segments.map((seg, idx) => {
+              const val = Number.isFinite(seg.value) && seg.value > 0 ? seg.value : 0;
+              const segLen = (val / total) * circumference;
+              const dashOffset = -accumulated;
+              accumulated += segLen;
+              const stroke = seg.color ?? (seg.tone ? TONE_COLOR_MAP[seg.tone] : undefined) ?? FALLBACK_PALETTE[idx % FALLBACK_PALETTE.length]!;
+              return (
+                <circle
+                  key={idx}
+                  cx={size / 2}
+                  cy={size / 2}
+                  r={r}
+                  fill="none"
+                  stroke={stroke}
+                  strokeWidth={thickness}
+                  strokeDasharray={`${segLen} ${Math.max(0, circumference - segLen)}`}
+                  strokeDashoffset={dashOffset}
+                  transform={`rotate(-90 ${size / 2} ${size / 2})`}
+                />
+              );
+            })}
+        </svg>
+        <span className="zk-ring-progress__center">
+          {centerImage ? (
+            <img src={centerImage} alt="" className="zk-ring-progress__img" />
+          ) : centerIcon !== undefined ? (
+            centerIcon
+          ) : (
+            <span style={{ display: 'grid', justifyItems: 'center', lineHeight: 1.15 }}>
+              <strong>{centerValue !== undefined ? centerValue : total}</strong>
+              {centerLabel && <span style={{ fontSize: 10, color: 'var(--zk-muted)', fontWeight: 500 }}>{centerLabel}</span>}
+            </span>
+          )}
+        </span>
+      </div>
+      {showLegend && segments.length > 0 && (
+        <div className="zk-donut-chart__legend">
+          {segments.map((seg, idx) => {
+            const stroke = seg.color ?? (seg.tone ? TONE_COLOR_MAP[seg.tone] : undefined) ?? FALLBACK_PALETTE[idx % FALLBACK_PALETTE.length]!;
+            return (
+              <div key={idx} className="zk-donut-chart__item">
+                <span className="zk-donut-chart__item-label">
+                  <span className="zk-donut-chart__swatch" style={{ background: stroke }} aria-hidden="true" />
+                  {seg.image && <img src={seg.image} alt="" className="zk-donut-chart__item-img" />}
+                  {seg.icon}
+                  <span>{seg.label}</span>
+                </span>
+                <span className="zk-donut-chart__item-val">{seg.value}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -1060,6 +1469,10 @@ export interface StatCardProps {
   readonly hint?: React.ReactNode;
   readonly badge?: React.ReactNode;
   readonly icon?: React.ReactNode;
+  /** 标题旁自定义小图标图片 URL。 */
+  readonly image?: string;
+  /** 卡片右下角半透明水印（可传自定义图片 URL 或节点）。 */
+  readonly watermark?: React.ReactNode | string;
   readonly tone?: BadgeTone | 'primary';
   readonly trend?: {
     readonly value: React.ReactNode;
@@ -1076,6 +1489,8 @@ export function StatCard({
   hint,
   badge,
   icon,
+  image,
+  watermark,
   tone = 'primary',
   trend,
   progress,
@@ -1086,10 +1501,20 @@ export function StatCard({
   const trendArrow =
     trend?.direction === 'up' ? '↑ ' : trend?.direction === 'down' ? '↓ ' : '';
   return (
-    <div className={cx('zk-stat-card', tone !== 'primary' && `zk-stat-card--${tone}`)}>
+    <div style={{ position: 'relative', overflow: 'hidden' }} className={cx('zk-stat-card', tone !== 'primary' && `zk-stat-card--${tone}`)}>
+      {watermark && (
+        <span className="zk-stat-watermark" aria-hidden="true">
+          {typeof watermark === 'string' && (watermark.startsWith('http') || watermark.startsWith('/') || watermark.startsWith('data:')) ? (
+            <img src={watermark} alt="" />
+          ) : (
+            watermark
+          )}
+        </span>
+      )}
       <div className="zk-stat-card__head">
-        <span className="zk-stat-card__label">
-          {icon && <span style={{ marginRight: 6 }}>{icon}</span>}
+        <span className="zk-stat-card__label" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          {image && <img src={image} alt="" className="zk-stat-icon-img" />}
+          {icon && <span>{icon}</span>}
           {label}
         </span>
         {badge}
@@ -1386,12 +1811,14 @@ export function Avatar({
 
 export function Tag({
   tone = 'neutral',
+  size = 'md',
   monospace = false,
   icon,
   onRemove,
   children,
 }: {
   readonly tone?: BadgeTone | 'primary';
+  readonly size?: 'sm' | 'md' | 'lg';
   readonly monospace?: boolean;
   readonly icon?: React.ReactNode;
   readonly onRemove?: () => void;
@@ -1399,7 +1826,7 @@ export function Tag({
 }) {
   const { t } = useLocale();
   return (
-    <span className={cx('zk-tag', tone !== 'neutral' && `zk-tag--${tone}`, monospace && 'zk-tag--mono')}>
+    <span className={cx('zk-tag', tone !== 'neutral' && `zk-tag--${tone}`, size !== 'md' && `zk-tag--${size}`, monospace && 'zk-tag--mono')}>
       {icon}
       <span>{children}</span>
       {onRemove && (

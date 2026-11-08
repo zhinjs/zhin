@@ -41,6 +41,14 @@ const KIT_EN: Readonly<Record<string, string>> = {
   '是': 'Yes',
   '否': 'No',
   '移除 {0}': 'Remove {0}',
+  '已选 {0} 项': '{0} selected',
+  '清空选择': 'Clear selection',
+  '全选当前页': 'Select current page',
+  '取消全选': 'Deselect all',
+  '选择行': 'Select row',
+  '展开详情': 'Expand details',
+  '收起详情': 'Collapse details',
+  '批量操作': 'Batch actions',
 };
 
 /**

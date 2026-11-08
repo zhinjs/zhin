@@ -388,6 +388,9 @@ export interface DeclarativeStatSpec<TData = Record<string, unknown>> {
     | DeclarativeValueExpr
     | ((data: TData, ctx: DeclarativePageContext<TData>) => DeclarativeRenderable);
   readonly unit?: DeclarativeI18nText;
+  readonly icon?: DeclarativeRenderable;
+  readonly image?: string;
+  readonly watermark?: DeclarativeRenderable | string;
   readonly tone?: DeclarativeBadgeTone | 'primary';
   readonly progress?: number | string | DeclarativeValueExpr;
   readonly sparkline?: string;
@@ -414,8 +417,17 @@ export interface DeclarativeStatSpec<TData = Record<string, unknown>> {
 export interface DeclarativeActionFieldSpec {
   readonly key: string;
   readonly label: DeclarativeI18nText;
-  readonly type?: 'text' | 'password' | 'number' | 'textarea' | 'select' | 'switch';
-  readonly options?: readonly { readonly value: string; readonly label: DeclarativeI18nText }[];
+  readonly type?: 'text' | 'password' | 'number' | 'textarea' | 'select' | 'switch' | 'radio' | 'checkbox-group' | 'segmented';
+  readonly options?: readonly {
+    readonly value: string;
+    readonly label: DeclarativeI18nText;
+    readonly description?: DeclarativeI18nText;
+    readonly icon?: DeclarativeRenderable;
+    readonly badge?: DeclarativeRenderable;
+    readonly disabled?: boolean;
+  }[];
+  readonly variant?: 'default' | 'card' | 'button';
+  readonly direction?: 'column' | 'row' | 'grid';
   readonly hint?: DeclarativeI18nText;
   readonly rows?: number;
   readonly placeholder?: string;
@@ -429,6 +441,7 @@ export interface DeclarativeActionSpec<TData = Record<string, unknown>> {
   readonly name: string;
   readonly label: DeclarativeI18nText;
   readonly description?: DeclarativeI18nText;
+  readonly icon?: DeclarativeRenderable;
   readonly variant?: DeclarativeButtonVariant;
   readonly confirm?: DeclarativeI18nText;
   readonly confirmLabel?: DeclarativeI18nText;
@@ -462,8 +475,10 @@ export interface DeclarativeColumnSpec<
 > {
   readonly key: keyof TRow & string;
   readonly label: DeclarativeI18nText;
+  readonly icon?: DeclarativeRenderable;
   readonly type?: DeclarativeColumnType;
   readonly align?: 'left' | 'center' | 'right';
+  readonly fixed?: 'left' | 'right';
   readonly sortable?: boolean;
   readonly copyable?: boolean;
   readonly width?: string | number;
@@ -473,6 +488,55 @@ export interface DeclarativeColumnSpec<
     row: TRow,
     ctx: DeclarativePageContext<TData>,
   ) => DeclarativeRenderable;
+}
+
+export interface DeclarativeBatchActionSpec<
+  TRow = Record<string, unknown>,
+  TData = Record<string, unknown>,
+> {
+  readonly name: string;
+  readonly label: DeclarativeI18nText;
+  readonly icon?: DeclarativeRenderable;
+  readonly variant?: DeclarativeButtonVariant;
+  readonly confirm?: DeclarativeI18nText;
+  readonly confirmLabel?: DeclarativeI18nText;
+  readonly idsParamKey?: string;
+  readonly params?: (
+    selectedRows: readonly TRow[],
+    selectedKeys: readonly string[],
+    data: TData | undefined,
+  ) => Readonly<Record<string, unknown>>;
+  readonly onExecute?: (
+    selectedRows: readonly TRow[],
+    selectedKeys: readonly string[],
+    ctx: DeclarativePageContext<TData>,
+  ) => unknown;
+  readonly successMessage?: DeclarativeI18nText;
+}
+
+export interface DeclarativeRowActionSpec<
+  TRow = Record<string, unknown>,
+  TData = Record<string, unknown>,
+> {
+  readonly name: string;
+  readonly label: DeclarativeI18nText;
+  readonly icon?: DeclarativeRenderable;
+  readonly variant?: DeclarativeButtonVariant;
+  readonly confirm?: DeclarativeI18nText;
+  readonly confirmLabel?: DeclarativeI18nText;
+  readonly idParamKey?: string;
+  readonly params?: (
+    row: TRow,
+    rowKey: string,
+    data: TData | undefined,
+  ) => Readonly<Record<string, unknown>>;
+  readonly onExecute?: (
+    row: TRow,
+    rowKey: string,
+    ctx: DeclarativePageContext<TData>,
+  ) => unknown;
+  readonly disabled?: boolean | ((row: TRow) => boolean);
+  readonly successMessage?: DeclarativeI18nText;
 }
 
 export interface DeclarativeSectionSpec<
@@ -488,6 +552,16 @@ export interface DeclarativeSectionSpec<
   readonly collapsible?: boolean;
   readonly defaultCollapsed?: boolean;
   readonly emptyText?: DeclarativeI18nText;
+  readonly rowKey?: keyof TRow & string;
+  readonly selectable?: boolean;
+  readonly batchActions?: readonly DeclarativeBatchActionSpec<TRow, TData>[];
+  readonly rowActions?: readonly DeclarativeRowActionSpec<TRow, TData>[];
+  readonly renderExpandedRow?: (
+    row: TRow,
+    index: number,
+    ctx: DeclarativePageContext<TData>,
+  ) => DeclarativeRenderable;
+  readonly responsiveStack?: boolean;
   /** Extract rows for a declarative table or list. */
   readonly items?: (keyof TData & string) | ((data: TData) => readonly TRow[]);
   /** Columns for a declarative table/card list when `items` is provided. */

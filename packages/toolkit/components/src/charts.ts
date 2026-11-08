@@ -23,6 +23,9 @@ export function BarChart(props: BarChartProps): JSXElement {
     peakAccent = T.barWarn,
     tickLabels = theme.text.chartTicks,
     showPeakValue = false,
+    images,
+    icons,
+    backgroundImage,
   } = displayProps(props);
   const div = (style: string, children?: JSXRenderable) =>
     themedDiv(theme, style, children);
@@ -32,8 +35,19 @@ export function BarChart(props: BarChartProps): JSXElement {
   const max = Math.max(...values, 1);
   const bars = values.map((count, i) => {
     const peak = i === peakIndex && count > 0;
+    const barImg = images?.[i];
+    const barIcon = icons?.[i];
     return column(
       [
+        barImg
+          ? jsx("img", {
+              src: barImg,
+              alt: "",
+              style: `width:16px;height:16px;border-radius:50%;object-fit:cover;margin:${theme.spacing.xs}px 0`,
+            })
+          : barIcon != null && typeof barIcon !== "boolean"
+          ? div(`margin:${theme.spacing.xs}px 0`, barIcon)
+          : null,
         peak && showPeakValue
           ? div(
               `font-size:${theme.typography.sizes.tiny}px;font-weight:${theme.typography.weights.strong};color:${peakAccent};margin:${theme.spacing.xs}px 0`,
@@ -55,24 +69,35 @@ export function BarChart(props: BarChartProps): JSXElement {
     );
   });
   return customizeRoot(
-    column([
-      jsx(Row, {
-        align: "flex-end",
-        gap: theme.spacing.xs,
-        style: `height:${height}px`,
-        children: bars,
-      }),
-      jsx(Row, {
-        justify: "space-between",
-        style: `margin:${theme.spacing.xs}px 0`,
-        children: tickLabels.map((label) =>
-          div(
-            `font-size:${theme.typography.sizes.tiny}px;color:${T.textMuted}`,
-            label
-          )
-        ),
-      }),
-    ]),
+    column(
+      [
+        backgroundImage
+          ? jsx("img", {
+              src: backgroundImage,
+              alt: "",
+              style:
+                "position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.08;pointer-events:none",
+            })
+          : null,
+        jsx(Row, {
+          align: "flex-end",
+          gap: theme.spacing.xs,
+          style: `height:${height}px`,
+          children: bars,
+        }),
+        jsx(Row, {
+          justify: "space-between",
+          style: `margin:${theme.spacing.xs}px 0`,
+          children: tickLabels.map((label) =>
+            div(
+              `font-size:${theme.typography.sizes.tiny}px;color:${T.textMuted}`,
+              label
+            )
+          ),
+        }),
+      ],
+      backgroundImage ? "position:relative;overflow:hidden" : ""
+    ),
     props,
     theme,
     "BarChart"
@@ -89,6 +114,8 @@ export function RadarChart(props: RadarChartProps): JSXElement {
     size = theme.layout.radarSize,
     accent = T.accentMem,
     fill,
+    centerImage,
+    centerIcon,
   } = displayProps(props);
   const div = (style: string, children?: JSXRenderable) =>
     themedDiv(theme, style, children);
@@ -163,6 +190,18 @@ export function RadarChart(props: RadarChartProps): JSXElement {
           ],
         }),
         names,
+        centerImage
+          ? jsx("img", {
+              src: centerImage,
+              alt: "",
+              style: `position:absolute;left:${cx - 12}px;top:${cy - 12}px;width:24px;height:24px;border-radius:50%;object-fit:cover`,
+            })
+          : centerIcon != null && typeof centerIcon !== "boolean"
+          ? div(
+              `position:absolute;left:${cx}px;top:${cy}px;transform:translate(-50%,-50%)`,
+              centerIcon
+            )
+          : null,
       ]),
       "align-items:center;width:100%"
     ),
@@ -180,6 +219,7 @@ export function Sparkline(props: SparklineProps): JSXElement {
     width = theme.layout.sparklineWidth,
     height = theme.layout.sparklineHeight,
     accent = T.accentMem,
+    endImage,
   } = displayProps(props);
   const div = (style: string, children?: JSXRenderable) =>
     themedDiv(theme, style, children);
@@ -209,6 +249,8 @@ export function Sparkline(props: SparklineProps): JSXElement {
         `${pad + (i / (values.length - 1)) * innerW},${y(v)}`
     )
     .join(" ");
+  const endX = pad + innerW;
+  const endY = y(values.at(-1)!);
   return customizeRoot(
     column(
       jsx("svg", {
@@ -224,12 +266,20 @@ export function Sparkline(props: SparklineProps): JSXElement {
             strokeLinecap: "round",
             strokeLinejoin: "round",
           }),
-          jsx("circle", {
-            cx: pad + innerW,
-            cy: y(values.at(-1)!),
-            r: 3,
-            fill: accent,
-          }),
+          endImage
+            ? jsx("image", {
+                href: endImage,
+                x: endX - 6,
+                y: endY - 6,
+                width: 12,
+                height: 12,
+              })
+            : jsx("circle", {
+                cx: endX,
+                cy: endY,
+                r: 3,
+                fill: accent,
+              }),
         ],
       })
     ),
@@ -250,6 +300,8 @@ export function DonutChart(props: DonutChartProps): JSXElement {
     accent = T.accentMem,
     label,
     value,
+    centerImage,
+    icon,
   } = displayProps(props);
   const div = (style: string, children?: JSXRenderable) =>
     themedDiv(theme, style, children);
@@ -334,10 +386,18 @@ export function DonutChart(props: DonutChartProps): JSXElement {
           }),
           column(
             [
-              div(
-                `font-size:${theme.typography.sizes.body}px;font-weight:${theme.typography.weights.heading};color:${T.text}`,
-                centerDisplay
-              ),
+              centerImage
+                ? jsx("img", {
+                    src: centerImage,
+                    alt: "",
+                    style: `width:${Math.round(size * 0.52)}px;height:${Math.round(size * 0.52)}px;border-radius:50%;object-fit:cover`,
+                  })
+                : icon != null && typeof icon !== "boolean"
+                ? div(`color:${accent}`, icon)
+                : div(
+                    `font-size:${theme.typography.sizes.body}px;font-weight:${theme.typography.weights.heading};color:${T.text}`,
+                    centerDisplay
+                  ),
             ],
             "position:absolute;inset:0;align-items:center;justify-content:center"
           ),

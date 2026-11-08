@@ -494,4 +494,126 @@ describe('locale and plugin id helpers', () => {
     expect(serialized).toContain('Confirm Action');
     env.unmount();
   });
+
+  it('supports icon Radio/Checkbox/SegmentedControl, custom chart images, table fixed columns, batch actions, expandable rows, and responsive stacking', async () => {
+    vi.useFakeTimers();
+    const env = createHookEnv();
+    const ui = env.load(file('./index.ts'));
+    const onBatchDelete = vi.fn();
+    const onRowInspect = vi.fn();
+
+    env.mount(() =>
+      ui.Card({
+        title: 'Advanced UI Suite',
+        children: [
+          ui.RadioGroup({
+            value: 'qq',
+            variant: 'card',
+            direction: 'grid',
+            onChange: () => undefined,
+            options: [
+              { value: 'qq', label: 'QQ Bot', icon: '🐧', badge: ui.Badge({ tone: 'success', children: 'Rec' }), description: 'Official adapter' },
+              { value: 'tg', label: 'Telegram', icon: '✈️', description: 'Webhook/Polling' },
+            ],
+          }),
+          ui.CheckboxGroup({
+            value: ['im', 'ai'],
+            variant: 'card',
+            onChange: () => undefined,
+            options: [
+              { value: 'im', label: 'IM Core', icon: '💬' },
+              { value: 'ai', label: 'AI Agent', icon: '🤖' },
+            ],
+          }),
+          ui.SegmentedControl({
+            value: 'day',
+            onChange: () => undefined,
+            options: [
+              { value: 'day', label: 'Day', icon: '☀️', badge: 24 },
+              { value: 'week', label: 'Week', icon: '📅' },
+            ],
+          }),
+          ui.RingProgress({
+            value: 88,
+            centerImage: 'https://example.com/bot-avatar.png',
+            label: 'Health',
+          }),
+          ui.Sparkline({
+            values: [12, 36, 24, 58],
+            markerImage: 'https://example.com/peak.png',
+            showPeak: true,
+          }),
+          ui.BarChart({
+            backgroundImage: 'https://example.com/bg-grid.png',
+            items: [
+              { label: 'QQ', value: 120, image: 'https://example.com/qq.png', tone: 'primary' },
+              { label: 'Discord', value: 85, icon: '🎮', tone: 'info' },
+            ],
+          }),
+          ui.DonutChart({
+            centerImage: 'https://example.com/center.png',
+            segments: [
+              { label: 'Private', value: 60, tone: 'primary', image: 'https://example.com/u1.png' },
+              { label: 'Group', value: 40, tone: 'success', icon: '👥' },
+            ],
+          }),
+          ui.StatCard({
+            label: 'Messages',
+            value: '9,420',
+            image: 'https://example.com/msg-icon.png',
+            watermark: 'https://example.com/watermark.png',
+          }),
+          ui.DataTable({
+            selectable: true,
+            selectedKeys: ['r1'],
+            responsiveStack: true,
+            batchActions: [
+              {
+                key: 'delete-selected',
+                label: '批量清理',
+                variant: 'danger',
+                onExecute: onBatchDelete,
+              },
+            ],
+            rowActions: [
+              {
+                key: 'inspect',
+                label: '诊断',
+                onExecute: onRowInspect,
+              },
+            ],
+            renderExpandedRow: (row: { id: string; name: string }) => `Expanded detail for ${row.name}`,
+            columns: [
+              { key: 'id', label: 'ID', fixed: 'left', width: 90, icon: '🔑' },
+              { key: 'name', label: 'Name', fixed: 'left', width: 150 },
+              { key: 'status', label: 'Status', fixed: 'right', width: 110 },
+            ],
+            rows: [
+              { id: 'r1', name: 'Node Alpha', status: 'healthy' },
+              { id: 'r2', name: 'Node Beta', status: 'degraded' },
+            ],
+          }),
+        ],
+      }),
+    );
+
+    const serialized = JSON.stringify(env.tree());
+    expect(serialized).toContain('zk-check-card');
+    expect(serialized).toContain('zk-check-icon');
+    expect(serialized).toContain('https://example.com/bot-avatar.png');
+    expect(serialized).toContain('https://example.com/peak.png');
+    expect(serialized).toContain('https://example.com/bg-grid.png');
+    expect(serialized).toContain('https://example.com/center.png');
+    expect(serialized).toContain('https://example.com/watermark.png');
+    expect(serialized).toContain('zk-batch-bar');
+    expect(serialized).toMatch(/已选 1 项|1 selected/);
+    expect(serialized).toContain('批量清理');
+    expect(serialized).toContain('zk-cell-fixed-left');
+    expect(serialized).toContain('zk-cell-fixed-left-last');
+    expect(serialized).toContain('zk-cell-fixed-right');
+    expect(serialized).toContain('96px');
+    expect(serialized).toContain('zk-table--responsive');
+    expect(serialized).toContain('data-label');
+    env.unmount();
+  });
 });
