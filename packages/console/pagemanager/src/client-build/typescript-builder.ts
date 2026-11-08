@@ -906,7 +906,7 @@ function consoleContractStubPlugin(): EsbuildPlugin {
   return {
     name: 'zhin-console-contract-stub',
     setup(build) {
-      build.onResolve({ filter: /^(?:@zhin\.js\/console-contract|@zhin\.js\/contract|@zhin\.js\/page|zhin\.js\/page)$/ }, () => ({
+      build.onResolve({ filter: /^(?:@zhin\.js\/console-contract|@zhin\.js\/page|zhin\.js\/page)$/ }, () => ({
         path: 'zhin-console-contract-stub',
         namespace: 'zhin-virtual',
       }));
