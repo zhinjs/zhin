@@ -1,0 +1,28 @@
+basic/cli/src/cli.ts
+  h_6f5e45c41d0910 28,81
+basic/cli/src/commands/preview.ts
+  h_6f5e45c41d0910 1-1082
+basic/cli/tests/preview-command.test.ts
+  h_6f5e45c41d0910 1-56
+examples/full-bot/components/status-card/index.ts
+  h_6f5e45c41d0910 21-29
+packages/console/pagemanager/src/node/index.ts
+  h_6f5e45c41d0910 25-29
+packages/console/plugin-contract/src/page.ts
+  h_6f5e45c41d0910 49
+packages/im/core/src/plugin-runtime/im/index.ts
+  h_6f5e45c41d0910 48
+packages/toolkit/create-zhin/src/workspace.ts
+  h_6f5e45c41d0910 142
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "81a8f16fcc29ed318d27db37e402c8413137058e",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
