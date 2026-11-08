@@ -1,9 +1,12 @@
 // Run after building @zhin.js/jsx and @zhin.js/components:
-// node packages/toolkit/components/examples/gallery.mjs [output.html]
+// node packages/toolkit/components/examples/gallery.mjs [output.html] [--serve]
 import { mkdir, writeFile } from 'node:fs/promises';
+import { watch } from 'node:fs';
+import { createServer } from 'node:http';
 import { dirname, resolve, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import process from 'node:process';
+import { fileURLToPath } from 'node:url';
 import { jsx, rawHtml, renderToHtml } from '@zhin.js/jsx';
 import {
   ThemeProvider, CardCanvas, Card, CardHeader, Surface, Section, Row, Col,
@@ -11,7 +14,15 @@ import {
   RadarChart, Sparkline, TopicItem, ProfileRow, QuoteCard, EmptyState,
   Table, TableRow, TableCell, Checkbox, Radio, Switch, Button,
   List, ListItem, Markdown, CodeBlock,
+  DonutChart, Callout, Timeline, StepTracker, ComparisonBar, StatusGrid, HeatmapGrid,
 } from '../lib/index.js';
+
+const INLINE_AVATAR_SVG = `data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#3b82f6"/><stop offset="100%" stop-color="#8b5cf6"/></linearGradient></defs><rect width="64" height="64" rx="32" fill="url(#g)"/><text x="32" y="40" text-anchor="middle" fill="#fff" font-family="system-ui,sans-serif" font-size="24" font-weight="700">Z</text></svg>'
+)}`;
+const INLINE_WATERMARK_SVG = `data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80" viewBox="0 0 120 80"><circle cx="90" cy="40" r="32" fill="#3b82f6" fill-opacity="0.18"/><path d="M20 65 L50 35 L75 50 L105 18" stroke="#6366f1" stroke-width="5" fill="none" stroke-linecap="round"/></svg>'
+)}`;
 
 let tw;
 let tailwindUrl;
@@ -25,8 +36,10 @@ if (tailwindUrl) {
   tw = await createTailwindStyle({ theme: { '--color-brand': '#2563eb' } });
 }
 
-const output = resolve(process.argv.slice(2).find(argument => argument !== '--')
-  ?? join(tmpdir(), 'zhin-jsx-visual', 'gallery.html'));
+const args = process.argv.slice(2).filter(arg => arg !== '--');
+const serveMode = args.includes('--serve');
+const outputArg = args.find(arg => !arg.startsWith('--'));
+const output = resolve(outputArg ?? join(tmpdir(), 'zhin-jsx-visual', 'gallery.html'));
 const node = (component, props = {}, children) => jsx(component, {
   ...props, ...(children === undefined ? {} : { children }),
 });
@@ -48,20 +61,24 @@ function tableExamples() {
         ['Worker', badge('等待', { accent: '#f59e0b' }), '84'],
       ],
     }),
-    node(Table, { caption: '组合表格 · 单元格嵌套组件与对齐' }, [
-      node(TableRow, { header: true, separator: false }, cells(['负责人 / 项目', '进度', '操作'], true)),
-      node(TableRow, {}, cells([
-        node(Col, { gap: 8 }, [
+    node(Table, { caption: '组合表格 · 单元格嵌套组件、固定列与批量选中态' }, [
+      node(TableRow, { header: true, separator: false }, [
+        node(TableCell, { header: true, width: '42%', fixed: 'left', icon: '📌' }, '负责人 / 项目'),
+        node(TableCell, { header: true }, '进度'),
+        node(TableCell, { header: true, align: 'right', fixed: 'right' }, '操作'),
+      ]),
+      node(TableRow, { selected: true }, [
+        node(TableCell, { width: '42%', fixed: 'left', icon: '🚀' }, node(Col, { gap: 8 }, [
           badge('PM · 归雨'),
           node(Row, { gap: 8, wrap: true }, [badge('需求'), badge('设计')]),
-        ]),
-        node(Col, { gap: 8 }, [badge('进行中'), node(UsageBar, { percent: 68 })]),
-        node(Button, { variant: 'secondary', size: 'sm' }, '查看'),
-      ])),
+        ])),
+        node(TableCell, {}, node(Col, { gap: 8 }, [badge('进行中'), node(UsageBar, { percent: 68 })])),
+        node(TableCell, { align: 'right', fixed: 'right' }, node(Button, { variant: 'secondary', size: 'sm', icon: '🔍' }, '查看')),
+      ]),
       node(TableRow, {}, cells([
         node(Col, { gap: 8 }, [badge('QA · 林'), badge('验收')]),
-        node(Checkbox, { checked: true, disabled: true, label: '完成' }),
-        node(Button, { variant: 'primary', size: 'sm' }, '报告'),
+        node(Checkbox, { checked: true, disabled: true, label: '完成', icon: '✅', badge: '100%' }),
+        node(Button, { variant: 'primary', size: 'sm', badge: 'New' }, '报告'),
       ])),
     ]),
     node(Table, {
@@ -185,6 +202,11 @@ function controlExamples() {
       ]),
     ])),
     node(Row, { gap: 16, wrap: true, align: 'center' }, [
+      node(Checkbox, { checked: true, label: node('strong', {}, '带图标与徽章'), icon: '🛡️', badge: '推荐', accent: '#8b5cf6' }),
+      node(Radio, { checked: true, label: '高速通道', icon: '⚡', badge: 'Pro', accent: '#3b82f6' }),
+      node(Switch, { checked: true, label: '自动巡检', icon: '🔔', badge: 'ON', accent: '#10b981' }),
+    ]),
+    node(Row, { gap: 16, wrap: true, align: 'center' }, [
       node(Checkbox, { checked: true, label: node('strong', {}, 'JSX 标签'), accent: '#8b5cf6' }),
       node(Switch, { checked: true, label: null, accent: '#ec4899' }),
       node(Radio, { checked: true, label: '局部覆盖',
@@ -203,7 +225,7 @@ function buttonExamples() {
       node(Button, { variant, disabled: true }, '禁用'),
     ])),
     node(Row, { gap: 12, wrap: true }, [
-      node(Button, { accent: '#8b5cf6' }, '自定义色'),
+      node(Button, { accent: '#8b5cf6', icon: '✨', badge: 'v2' }, '图标与徽章'),
       node(Button, { variant: 'secondary', label: node(Row, { gap: 8, align: 'center' }, [
         badge('✓'), 'JSX 内容',
       ]) }),
@@ -219,22 +241,92 @@ function themeCard(name, theme, description) {
     node(CardHeader, {
       title: name, subtitle: description, badge: badge('真实 JSX'),
     }),
-    section('table', 'Table / TableRow / TableCell', tableExamples()),
+    section('table', 'Table / TableRow / TableCell · 固定列与批量选中', tableExamples()),
     section('layout', 'Row / Col · 明确 gap 与默认语义间距', layoutExamples()),
     section('lists', 'List / ListItem · 嵌套 JSX 与起始编号', listExamples()),
     section('markdown', 'Markdown · GFM 与安全边界', markdownExamples()),
     section('code', 'CodeBlock · 高亮、行号与长行阅读', codeExamples()),
-    section('controls', 'Checkbox / Radio / Switch · 展示状态', controlExamples()),
-    section('buttons', 'Button · variant / size / disabled', buttonExamples()),
-    section('metrics', '数值与图表', [
+    section('controls', 'Checkbox / Radio / Switch · 图标、徽章与状态', controlExamples()),
+    section('buttons', 'Button · variant / size / icon / badge', buttonExamples()),
+    section('metrics', '数值与图表 · 自定义中心图片与背景水印', [
       node(KvTable, { rows: [{ label: '环境', value: badge('Production') }, { label: '版本', value: '1.1.x' }] }),
       node(MetricBlock, { label: 'CPU', value: '8 / 16 cores', percent: 68 }),
       node(MetricBlock, { label: '内存', value: '12.4 GB', percent: 42, accent: '#8b5cf6' }),
-      node(BarChart, { values: [2, 7, 5, 12, 9, 4], peakIndex: 3, tickLabels: ['08:00', '12:00', '16:00'] }),
-      node(Row, { gap: 24, wrap: true, align: 'center' }, [
-        node(RadarChart, { labels: ['稳定', '速度', '覆盖', '可读', '扩展'], values: [85, 72, 92, 65, 88], max: 100, size: 180 }),
-        node(Sparkline, { values: [2, 5, 3, 8, 6, 12, 9], width: 140, height: 44 }),
+      node(Row, { gap: 20, wrap: true, align: 'center' }, [
+        node(DonutChart, {
+          percent: 78,
+          label: '集群健康度',
+          sublabel: '24/24 节点在线',
+          centerImage: INLINE_AVATAR_SVG,
+          icon: '🛰️',
+        }),
+        node(DonutChart, {
+          percent: 64,
+          label: 'Token 预算',
+          valueText: '64%',
+          accent: '#8b5cf6',
+        }),
       ]),
+      node(BarChart, {
+        values: [2, 7, 5, 12, 9, 4],
+        peakIndex: 3,
+        tickLabels: ['08:00', '12:00', '16:00'],
+        images: [INLINE_AVATAR_SVG, undefined, undefined, INLINE_AVATAR_SVG],
+        icons: ['🌱', '⚡', '🔥', '👑', '🚀', '✨'],
+        backgroundImage: INLINE_WATERMARK_SVG,
+      }),
+      node(Row, { gap: 24, wrap: true, align: 'center' }, [
+        node(RadarChart, {
+          labels: ['稳定', '速度', '覆盖', '可读', '扩展'],
+          values: [85, 72, 92, 65, 88],
+          max: 100,
+          size: 180,
+          centerImage: INLINE_AVATAR_SVG,
+        }),
+        node(Sparkline, {
+          values: [2, 5, 3, 8, 6, 12, 9],
+          width: 140,
+          height: 44,
+          endImage: INLINE_AVATAR_SVG,
+        }),
+      ]),
+      node(ComparisonBar, {
+        leftLabel: '缓存命中 (76%)',
+        rightLabel: '回源请求 (24%)',
+        leftValue: 76,
+        rightValue: 24,
+      }),
+      node(StatusGrid, {
+        columns: 4,
+        items: [
+          { label: 'QQ 网关', status: 'ok', detail: '21ms' },
+          { label: 'Discord', status: 'ok', detail: '38ms' },
+          { label: 'Telegram', status: 'warn', detail: '重试 1' },
+          { label: 'Sandbox', status: 'ok', detail: '就绪' },
+        ],
+      }),
+      node(HeatmapGrid, {
+        columns: 7,
+        values: [1, 3, 5, 2, 8, 9, 4, 2, 6, 10, 7, 4, 1, 3],
+        max: 10,
+      }),
+    ]),
+    section('timeline', 'Callout / Timeline / StepTracker · 流程与告警反馈', [
+      node(Callout, { tone: 'info', title: '热重载就绪', message: '修改组件源码后可在预览服务中实时查看内联样式效果。' }),
+      node(StepTracker, {
+        current: 1,
+        steps: [
+          { label: '构建契约', description: '已完成' },
+          { label: '视觉调优', description: '进行中' },
+          { label: '快照回归', description: '待执行' },
+        ],
+      }),
+      node(Timeline, {
+        items: [
+          { title: '加载插件蓝图', time: '09:00', badge: 'OK', accent: '#10b981', description: '零闭包 JSON 蓝图校验通过' },
+          { title: '渲染 IM 图卡', time: '09:01', badge: '24ms', accent: '#3b82f6', description: '生成自包含内联样式与 SVG 节点' },
+        ],
+      }),
     ]),
     section('spacing', '默认间距 · QuoteCard → EmptyState', [
       node(TopicItem, { index: 1, title: '产品工作流', summary: '组件保持默认语义间距；容器不重复添加 gap。' }),
@@ -318,3 +410,100 @@ const html = await renderToHtml(node('html', { lang: 'zh-CN' }, [
 await mkdir(dirname(output), { recursive: true });
 await writeFile(output, `<!doctype html>\n${html}\n`, 'utf8');
 process.stdout.write(`${output}\n`);
+
+if (serveMode) {
+  const port = Number(process.env.PORT || 4175);
+  const clients = new Set();
+  const devEnhancement = `
+<style>
+  .dev-toolbar { position: sticky; top: 0; z-index: 999; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; background: rgba(15, 23, 42, 0.92); backdrop-filter: blur(8px); color: #f8fafc; padding: 10px 20px; border-radius: 10px; max-width: 1696px; margin: 0 auto 20px; font-size: 13px; box-shadow: 0 8px 24px rgba(15,23,42,0.18); }
+  .dev-toolbar select, .dev-toolbar button { background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; padding: 5px 10px; font-size: 12px; cursor: pointer; }
+  .dev-toolbar button[data-active="true"] { background: #3b82f6; border-color: #60a5fa; }
+  body.debug-outlines [data-gallery-section] * { outline: 1px dashed rgba(236, 72, 153, 0.45) !important; }
+</style>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const bar = document.createElement('div');
+    bar.className = 'dev-toolbar';
+    bar.innerHTML = \`
+      <strong>🛠️ 组件样式调试栏</strong>
+      <label>分区过滤：
+        <select id="dev-sec">
+          <option value="all">全部组件分区</option>
+          <option value="table">Table 表格</option>
+          <option value="controls">Checkbox / Radio / Switch</option>
+          <option value="buttons">Button 按钮</option>
+          <option value="metrics">Charts 图表与指标</option>
+          <option value="timeline">Callout / Timeline / StepTracker</option>
+          <option value="layout">Layout 布局</option>
+          <option value="lists">List 列表</option>
+          <option value="markdown">Markdown</option>
+          <option value="code">CodeBlock 代码</option>
+          <option value="spacing">默认间距</option>
+          <option value="local">局部主题覆盖</option>
+        </select>
+      </label>
+      <label>主题过滤：
+        <select id="dev-theme">
+          <option value="all">三套主题并排对比</option>
+          <option value="theme-default">仅 Default</option>
+          <option value="theme-dark">仅 Dark</option>
+          <option value="theme-project">仅 Project</option>
+        </select>
+      </label>
+      <button id="dev-outline" type="button">📐 显示间距/盒模型辅助线</button>
+      <span style="margin-left:auto;opacity:0.75">已启用实时刷新 (SSE)</span>
+    \`;
+    document.body.insertBefore(bar, document.body.firstChild);
+    const secSel = document.getElementById('dev-sec');
+    const themeSel = document.getElementById('dev-theme');
+    const outlineBtn = document.getElementById('dev-outline');
+    secSel.value = sessionStorage.getItem('zhin.gallery.sec') || 'all';
+    themeSel.value = sessionStorage.getItem('zhin.gallery.theme') || 'all';
+    if (sessionStorage.getItem('zhin.gallery.outline') === '1') {
+      document.body.classList.add('debug-outlines');
+      outlineBtn.dataset.active = 'true';
+    }
+    const applyFilter = () => {
+      sessionStorage.setItem('zhin.gallery.sec', secSel.value);
+      sessionStorage.setItem('zhin.gallery.theme', themeSel.value);
+      document.querySelectorAll('[data-gallery-section]').forEach(el => {
+        el.style.display = (secSel.value === 'all' || el.getAttribute('data-gallery-section') === secSel.value) ? '' : 'none';
+      });
+      document.querySelectorAll('main.gallery > article').forEach(el => {
+        el.style.display = (themeSel.value === 'all' || el.id === themeSel.value) ? '' : 'none';
+      });
+    };
+    secSel.addEventListener('change', applyFilter);
+    themeSel.addEventListener('change', applyFilter);
+    outlineBtn.addEventListener('click', () => {
+      const on = document.body.classList.toggle('debug-outlines');
+      outlineBtn.dataset.active = String(on);
+      sessionStorage.setItem('zhin.gallery.outline', on ? '1' : '0');
+    });
+    applyFilter();
+    const es = new EventSource('/__events');
+    es.onmessage = () => location.reload();
+  });
+</script>`;
+  const server = createServer(async (req, res) => {
+    if (req.url === '/__events') {
+      res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
+      res.write('retry: 300\n\n');
+      clients.add(res);
+      req.on('close', () => clients.delete(res));
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end(`<!doctype html>\n${html.replace('</head>', `${devEnhancement}</head>`)}\n`);
+  });
+  const libDir = fileURLToPath(new URL('../lib', import.meta.url));
+  try {
+    watch(libDir, { recursive: true }, () => {
+      for (const client of clients) client.write('data: reload\n\n');
+    });
+  } catch { /* ignore if watch unsupported */ }
+  server.listen(port, '127.0.0.1', () => {
+    process.stdout.write(`Component gallery dev server listening on http://127.0.0.1:${port}\n`);
+  });
+}
