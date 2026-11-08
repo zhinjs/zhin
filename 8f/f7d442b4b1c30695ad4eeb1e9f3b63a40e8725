@@ -1,0 +1,24 @@
+.changeset/diana-grade-adapter-console.md
+  h_6f5e45c41d0910 1-5
+packages/console/client/client/adapter-console/AdapterConsolePage.test.ts
+  h_6f5e45c41d0910 467-473,510-511,513,521
+packages/console/client/client/adapter-console/AdapterConsolePage.tsx
+  h_6f5e45c41d0910 645-654,674,947,959-980,985,989-994,996,1010-1051,1199-1218,1220-1225,1227-1280,1283-1301,1315-1316,1350-1351
+packages/console/client/client/adapter-console/platform-profiles.ts
+  h_6f5e45c41d0910 15-16,57,85,95,187,196,205,262,271,286,324,333,453,462,505,514,565,574,821,987,1186-1191
+packages/console/client/client/adapter-console/styles.ts
+  h_6f5e45c41d0910 4-6,8,18-532,535-536
+packages/console/client/client/ui/styles.ts
+  h_6f5e45c41d0910 12-16,18,21,52,54-57,60,129-130
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8ff7d442b4b1c30695ad4eeb1e9f3b63a40e8725",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
