@@ -176,22 +176,23 @@ describe.each(dialects)('Agent structured persistence without Workroom (%s)', di
     // Production seals the root DisposeStack before activateNext; cleanup must register in setup.
     cleanup.seal();
     handoff.seal(); await handoff.activateNext(new AbortController().signal);
-    expect(foundation.schedule.start).not.toHaveBeenCalled(); publish();
-    expect((foundation.agent as { markMemoryPersistenceReady: unknown }).markMemoryPersistenceReady).toHaveBeenCalledOnce();
-    expect((foundation.agent as { configure: unknown }).configure).toHaveBeenCalled(); expect((foundation.schedule as { start: unknown }).start).toHaveBeenCalledOnce();
     const engagementJournal = foundation.engagementJournal as {
       append(event: Record<string, unknown>): Promise<unknown>;
       read(id: string): Promise<readonly unknown[]>;
       prune(now: number): Promise<number>;
     };
+    const eventAt = Date.now();
     await engagementJournal.append({
       engagementId: 'eng-test-1',
-      at: 1000,
+      at: eventAt,
       type: 'engagement_opened',
       data: { initiator: 'actor:test', goal: 'verify host database adapter' },
     });
     await expect(engagementJournal.read('eng-test-1')).resolves.toHaveLength(1);
-    await expect(engagementJournal.prune(Date.now())).resolves.toBe(1);
+    await expect(engagementJournal.prune(eventAt + 100 * 86_400_000)).resolves.toBe(1);
+    expect(foundation.schedule.start).not.toHaveBeenCalled(); publish();
+    expect((foundation.agent as { markMemoryPersistenceReady: unknown }).markMemoryPersistenceReady).toHaveBeenCalledOnce();
+    expect((foundation.agent as { configure: unknown }).configure).toHaveBeenCalled(); expect((foundation.schedule as { start: unknown }).start).toHaveBeenCalledOnce();
     expect(new Scope(childPluginId(rootPluginId(), 'plugin'), resources).has(agentUsageStoreToken)).toBe(false);
     return { store: resources.use(agentUsageStoreToken), foundation };
   }
