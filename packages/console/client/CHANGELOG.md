@@ -1,5 +1,12 @@
 # @zhin.js/client
 
+## 1.1.30
+
+### Patch Changes
+
+- 8ff7d44: Upgrade Adapter Console UI with Diana-inspired Bot Profile Tiles (`.zk-bot-grid` / `.zk-bot-tile`), elevated card surface tokens, mode-driven conditional form field filtering, human-first field labels, and deduplicated protocol pills.
+- f948af1: feat(client): redesign AdapterConsolePage with Diana-grade Master-Detail (list ↔ edit) workflow, sticky onboarding guide sidebar, and unified 18px/12px aesthetic radii
+
 ## 1.1.29
 
 ### Patch Changes
