@@ -1,0 +1,22 @@
+packages/console/client/CHANGELOG.md
+  h_6f5e45c41d0910 3-8
+packages/console/client/client/adapter-console/AdapterConsolePage.tsx
+  h_6f5e45c41d0910 672,728,917,930-931,946-964,967-979,1004-1019,1021-1025,1027-1069,1071-1089,1091-1100,1103,1135-1143,1147-1148,1204-1205,1282-1295,1297,1371-1388
+packages/console/client/client/adapter-console/styles.ts
+  h_6f5e45c41d0910 4,35,41,46,52,54,62,68-70,82,96,109-111,113,125,132,146,152,154,177,179-180,189-190,192-193,208-320,338,376,436,448-450
+packages/console/client/client/ui/styles.ts
+  h_6f5e45c41d0910 24,26-31
+packages/console/client/package.json
+  h_6f5e45c41d0910 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "68c5a1a63048b6e1c9ac93c531c2e1bc3ff57e49",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
