@@ -1,5 +1,14 @@
 # @zhin.js/plugin-music
 
+## 1.1.24
+
+### Patch Changes
+
+- Updated dependencies [8adce16]
+  - @zhin.js/core@1.1.59
+  - @zhin.js/skill@1.1.16
+  - @zhin.js/tool@1.1.18
+
 ## 1.1.23
 
 ### Patch Changes

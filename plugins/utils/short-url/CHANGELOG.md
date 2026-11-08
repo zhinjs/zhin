@@ -1,5 +1,12 @@
 # @zhin.js/plugin-short-url
 
+## 1.1.18
+
+### Patch Changes
+
+- @zhin.js/skill@1.1.16
+- @zhin.js/tool@1.1.18
+
 ## 1.1.17
 
 ### Patch Changes

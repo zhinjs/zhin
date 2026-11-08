@@ -1,5 +1,15 @@
 # zhin.js
 
+## 1.1.24
+
+### Patch Changes
+
+- Updated dependencies [8adce16]
+  - @zhin.js/core@1.1.59
+  - @zhin.js/plugin-runtime@1.1.23
+  - @zhin.js/permission@1.1.15
+  - @zhin.js/schedule-feature@1.1.15
+
 ## 1.1.23
 
 ### Patch Changes

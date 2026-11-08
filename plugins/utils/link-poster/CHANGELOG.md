@@ -1,5 +1,14 @@
 # @zhin.js/plugin-link-poster
 
+## 1.1.24
+
+### Patch Changes
+
+- Updated dependencies [8adce16]
+  - @zhin.js/core@1.1.59
+  - @zhin.js/html-renderer@1.1.3
+  - @zhin.js/skill@1.1.16
+
 ## 1.1.23
 
 ### Patch Changes
