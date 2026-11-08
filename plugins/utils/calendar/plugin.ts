@@ -90,14 +90,9 @@ export default definePlugin<CalendarConfig>({
       onAuthorizationLost: (provider, message) =>
         auth.notifyAuthorizationLost(provider, message),
     });
-    let projectLocale: ReturnType<typeof context.resources.use<typeof projectLocaleToken>> | undefined;
-    try {
-      projectLocale = context.resources.has(projectLocaleToken)
-        ? context.resources.use(projectLocaleToken)
-        : context.resources.use(projectLocaleToken);
-    } catch {
-      projectLocale = undefined;
-    }
+    const projectLocale = context.resources.has(projectLocaleToken)
+      ? context.resources.use(projectLocaleToken)
+      : undefined;
     const auth = new CalendarAuthService<DeliveryTarget>({
       config,
       locale: projectLocale,

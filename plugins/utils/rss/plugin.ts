@@ -98,14 +98,9 @@ export default definePlugin<RssConfig>({
         else await run();
       };
     }
-    let projectLocale: ReturnType<typeof context.resources.use<typeof projectLocaleToken>> | undefined;
-    try {
-      projectLocale = context.resources.has(projectLocaleToken)
-        ? context.resources.use(projectLocaleToken)
-        : context.resources.use(projectLocaleToken);
-    } catch {
-      projectLocale = undefined;
-    }
+    const projectLocale = context.resources.has(projectLocaleToken)
+      ? context.resources.use(projectLocaleToken)
+      : undefined;
     const runtime = rssRuntimeStore.provide(context, Object.freeze({
       db,
       migrationScopes,

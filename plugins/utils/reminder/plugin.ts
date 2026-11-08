@@ -54,14 +54,9 @@ export default definePlugin<ReminderConfig>({
     const taskState = createReminderState(database);
     const outbound = context.resources.use(outboundHostToken);
     if (!outbound.sendTarget) throw new Error('提醒需要支持精确 DeliveryTarget 的 Outbound Host');
-    let locale: ReturnType<typeof context.resources.use<typeof projectLocaleToken>> | undefined;
-    try {
-      locale = context.resources.has(projectLocaleToken)
-        ? context.resources.use(projectLocaleToken)
-        : context.resources.use(projectLocaleToken);
-    } catch {
-      locale = undefined;
-    }
+    const locale = context.resources.has(projectLocaleToken)
+      ? context.resources.use(projectLocaleToken)
+      : undefined;
     const service = new ReminderService(taskState, outbound, config, locale);
     reminderServiceToken.provide(context, service);
     return {
