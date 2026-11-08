@@ -1149,13 +1149,14 @@ export function inferAccountProtocolPills(
     if (values.socketMode === 'false') pills.push({ label: 'HTTP Events', tone: 'info' });
     else pills.push({ label: 'Socket Mode', tone: 'primary' });
   } else if (adapterKey === 'email') {
-    const host = values['smtp.host'] ?? '';
-    if (host.includes('exmail.qq.com')) pills.push({ label: '腾讯企业邮', tone: 'primary' });
-    else if (host.includes('qq.com')) pills.push({ label: 'QQ 邮箱', tone: 'primary' });
-    else if (host.includes('163.com')) pills.push({ label: '163 邮箱', tone: 'primary' });
-    else if (host.includes('gmail.com')) pills.push({ label: 'Gmail', tone: 'primary' });
-    else if (host.includes('office365.com')) pills.push({ label: 'Outlook', tone: 'primary' });
-    else if (host) pills.push({ label: host, tone: 'neutral' });
+    const host = (values['smtp.host'] ?? '').trim().toLowerCase();
+    const matchesDomain = (domain: string) => host === domain || host.endsWith(`.${domain}`);
+    if (matchesDomain('exmail.qq.com')) pills.push({ label: '腾讯企业邮', tone: 'primary' });
+    else if (matchesDomain('qq.com')) pills.push({ label: 'QQ 邮箱', tone: 'primary' });
+    else if (matchesDomain('163.com')) pills.push({ label: '163 邮箱', tone: 'primary' });
+    else if (matchesDomain('gmail.com')) pills.push({ label: 'Gmail', tone: 'primary' });
+    else if (matchesDomain('office365.com')) pills.push({ label: 'Outlook', tone: 'primary' });
+    else if (host) pills.push({ label: values['smtp.host'] ?? host, tone: 'neutral' });
     if (values['smtp.auth.user']) pills.push({ label: values['smtp.auth.user'], tone: 'info' });
   } else if (adapterKey === 'bilibili-live') {
     if (values.roomId) pills.push({ label: `房间 #${values.roomId}`, tone: 'primary' });
