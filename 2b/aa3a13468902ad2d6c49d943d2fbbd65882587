@@ -1,0 +1,14 @@
+packages/im/harness/tests/mailbox.test.ts
+  h_6f5e45c41d0910 339
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2baa3a13468902ad2d6c49d943d2fbbd65882587",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
