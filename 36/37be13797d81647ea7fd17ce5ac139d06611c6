@@ -1,0 +1,20 @@
+basic/cli/src/plugin-runtime/restart-host-installer.ts
+  h_6f5e45c41d0910 1-300
+basic/cli/src/plugin-runtime/start-command.ts
+  h_6f5e45c41d0910 63-67,227,264-269,539-543
+basic/cli/src/plugin-runtime/start/process-supervisor.ts
+  h_6f5e45c41d0910 220-223
+basic/cli/tests/plugin-runtime/restart-host-installer.test.ts
+  h_6f5e45c41d0910 1-258
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3637be13797d81647ea7fd17ce5ac139d06611c6",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
