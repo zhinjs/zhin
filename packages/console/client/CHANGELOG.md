@@ -1,5 +1,11 @@
 # @zhin.js/client
 
+## 1.1.29
+
+### Patch Changes
+
+- Redesign `AdapterConsolePage` and `@zhin.js/client/ui` with Diana-grade Master-Detail (`list` ↔ `edit`) page organization, 2-column form + sticky right onboarding guide sidebar, uniform `.zk-bot-tile` cards with top-right switch toggles and dashed `+ 新增平台账号` tile, grouped 2-column field blocks, and refined `18px`/`12px` card/control radii and soft shadows.
+
 ## 1.1.28
 
 ### Patch Changes
