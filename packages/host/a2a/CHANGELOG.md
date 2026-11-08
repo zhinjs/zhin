@@ -1,5 +1,11 @@
 # @zhin.js/a2a
 
+## 1.1.27
+
+### Patch Changes
+
+- @zhin.js/core@1.1.60
+
 ## 1.1.26
 
 ### Patch Changes

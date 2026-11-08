@@ -1,5 +1,11 @@
 # @zhin.js/plugin-reminder
 
+## 1.0.15
+
+### Patch Changes
+
+- 0d76a7c: Overhaul Console interactive workbenches, platform-specific adapter account onboarding/login flows, DeclarativePageView visual/interactive capabilities, and official utility plugin Console pages.
+
 ## 1.0.14
 
 ### Patch Changes

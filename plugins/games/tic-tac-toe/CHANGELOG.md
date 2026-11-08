@@ -1,5 +1,12 @@
 # @zhin.js/plugin-tic-tac-toe
 
+## 1.1.25
+
+### Patch Changes
+
+- @zhin.js/core@1.1.60
+- @zhin.js/game-kit@1.1.25
+
 ## 1.1.24
 
 ### Patch Changes

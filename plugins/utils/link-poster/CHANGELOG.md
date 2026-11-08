@@ -1,5 +1,12 @@
 # @zhin.js/plugin-link-poster
 
+## 1.1.25
+
+### Patch Changes
+
+- @zhin.js/core@1.1.60
+- @zhin.js/html-renderer@1.1.3
+
 ## 1.1.24
 
 ### Patch Changes

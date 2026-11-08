@@ -1,5 +1,11 @@
 # @zhin.js/plugin-short-url
 
+## 1.1.19
+
+### Patch Changes
+
+- 0d76a7c: Overhaul Console interactive workbenches, platform-specific adapter account onboarding/login flows, DeclarativePageView visual/interactive capabilities, and official utility plugin Console pages.
+
 ## 1.1.18
 
 ### Patch Changes

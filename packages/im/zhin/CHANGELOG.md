@@ -1,5 +1,12 @@
 # zhin.js
 
+## 1.1.25
+
+### Patch Changes
+
+- 0d76a7c: Overhaul Console interactive workbenches, platform-specific adapter account onboarding/login flows, DeclarativePageView visual/interactive capabilities, and official utility plugin Console pages.
+  - @zhin.js/core@1.1.60
+
 ## 1.1.24
 
 ### Patch Changes
