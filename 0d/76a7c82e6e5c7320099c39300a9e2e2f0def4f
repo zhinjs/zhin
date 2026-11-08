@@ -1,0 +1,124 @@
+.changeset/console-adapter-interactive-overhaul.md
+  h_6f5e45c41d0910 1-34
+basic/cli/src/plugin-runtime/console/plugin-console-rpc.ts
+  h_6f5e45c41d0910 73-83,94-97,99-102
+basic/cli/tests/plugin-runtime/console/plugin-console-rpc.test.ts
+  h_6f5e45c41d0910 65-66,69
+packages/console/client/client/adapter-console/AdapterConsolePage.test.ts
+  h_6f5e45c41d0910 62-68,71,406-621
+packages/console/client/client/adapter-console/AdapterConsolePage.tsx
+  h_6f5e45c41d0910 26-33,98-111,251-264,336,390-391,393-396,402,406,409-512,514,543-582,586,588-596,599-600,668-683,737-741,751,770-802,805,821-923,945-949,955-962,964-970,988-1023,1069-1185,1187-1236,1238-1242
+packages/console/client/client/adapter-console/messages.ts
+  h_6f5e45c41d0910 131-155
+packages/console/client/client/adapter-console/platform-profiles.ts
+  h_6f5e45c41d0910 1-1165
+packages/console/client/client/adapter-console/styles.ts
+  h_6f5e45c41d0910 17-39
+packages/console/client/client/adapter-console/types.ts
+  h_6f5e45c41d0910 4-9,16-19,23-24
+packages/console/client/client/ui/declarative-page.tsx
+  h_6f5e45c41d0910 201,389-393,399-407,409-413,415-419,421-425,427-430,432-436,444,446,452,485-550,553-558,591-592,611-614,677-756,763-772,775,780-793,809-812,834,846,856-859,882,884,903-907,942-943,948,951,953-954,956,966,969-970,978,980-981,989-990,992-994,996-997,999,1020,1024,1028,1047,1060,1103-1115,1201-1203,1214,1294-1297,1307-1313,1323-1386,1476-1482,1516-1519,1521-1536,1547-1553,1613-1614,1616-1620,1639,1654,1662,1673,1680-1681,1683-1780,1782-1818,1820-1821,1823-1839,1841,1885-1890,2012-2054,2171,2202-2204,2449,2465,2469,2478,2480-2482
+packages/console/client/tests/declarative-page-upgrade.test.ts
+  h_6f5e45c41d0910 1-269
+packages/im/adapter/src/adapter-console-rpc.ts
+  h_6f5e45c41d0910 39-45,55-58,62-63,175-178,182-183,398-399,401-409,416-419,423-424
+packages/im/adapter/tests/adapter-console-rpc.test.ts
+  h_6f5e45c41d0910 98-140
+plugins/adapters/bilibili-live/src/console-spec.ts
+  h_6f5e45c41d0910 10-59
+plugins/adapters/dingtalk/src/console-spec.ts
+  h_6f5e45c41d0910 8,10-46
+plugins/adapters/discord/src/console-spec.ts
+  h_6f5e45c41d0910 10-124
+plugins/adapters/email/src/console-spec.ts
+  h_6f5e45c41d0910 8,10-228
+plugins/adapters/github/src/console-spec.ts
+  h_6f5e45c41d0910 10-45
+plugins/adapters/icqq/src/console-spec.ts
+  h_6f5e45c41d0910 10-112
+plugins/adapters/kook/src/console-spec.ts
+  h_6f5e45c41d0910 10-157
+plugins/adapters/lark/src/console-spec.ts
+  h_6f5e45c41d0910 8,10-79
+plugins/adapters/line/src/console-spec.ts
+  h_6f5e45c41d0910 10-35
+plugins/adapters/milky/src/console-spec.ts
+  h_6f5e45c41d0910 10-42
+plugins/adapters/napcat/src/console-spec.ts
+  h_6f5e45c41d0910 10-61
+plugins/adapters/onebot11/src/console-spec.ts
+  h_6f5e45c41d0910 10-41
+plugins/adapters/onebot12/src/console-spec.ts
+  h_6f5e45c41d0910 10-73
+plugins/adapters/qq/src/qq-console-spec.ts
+  h_6f5e45c41d0910 4-6,12,14-149,151
+plugins/adapters/qq/tests/qq-console.test.ts
+  h_6f5e45c41d0910 65
+plugins/adapters/satori/src/console-spec.ts
+  h_6f5e45c41d0910 10-64
+plugins/adapters/slack/src/console-spec.ts
+  h_6f5e45c41d0910 10-128
+plugins/adapters/telegram/src/console-spec.ts
+  h_6f5e45c41d0910 10-94
+plugins/adapters/wechat-mp/src/console-spec.ts
+  h_6f5e45c41d0910 10-59
+plugins/adapters/wecom/src/console-spec.ts
+  h_6f5e45c41d0910 10-71
+plugins/adapters/weixin-ilink/src/console-spec.ts
+  h_6f5e45c41d0910 10-21
+plugins/utils/calendar/pages/index/index.ts
+  h_6f5e45c41d0910 1-2,10-11,22,25-26,74-127,129-142
+plugins/utils/calendar/plugin.ts
+  h_6f5e45c41d0910 14,33-34,129
+plugins/utils/calendar/src/console.ts
+  h_6f5e45c41d0910 1,14-23,42-43,65-70,74-156
+plugins/utils/calendar/src/index.ts
+  h_6f5e45c41d0910 31-34
+plugins/utils/calendar/tsconfig.check.json
+  h_6f5e45c41d0910 8
+plugins/utils/lottery/package.json
+  h_6f5e45c41d0910 20,55-56,70,118-121
+plugins/utils/lottery/pages/index/index.ts
+  h_6f5e45c41d0910 1-81
+plugins/utils/lottery/plugin.ts
+  h_6f5e45c41d0910 1,5-6,9,11-12,25-67,79-103,143,148,152-201,203,206-245
+plugins/utils/lottery/tests/localization.test.ts
+  h_6f5e45c41d0910 87
+plugins/utils/qrcode/package.json
+  h_6f5e45c41d0910 20,50,52,64,113-116
+plugins/utils/qrcode/pages/index/index.ts
+  h_6f5e45c41d0910 1-68
+plugins/utils/qrcode/plugin.ts
+  h_6f5e45c41d0910 1-27,34-118
+plugins/utils/reminder/pages/index/index.ts
+  h_6f5e45c41d0910 1,12,35-95,99
+plugins/utils/reminder/src/console.ts
+  h_6f5e45c41d0910 2,5,8,25,33-113,115-122
+plugins/utils/reminder/src/service.ts
+  h_6f5e45c41d0910 186-223
+plugins/utils/rss/pages/index/index.ts
+  h_6f5e45c41d0910 1,32,57-58,60-112,117,123
+plugins/utils/rss/src/console.ts
+  h_6f5e45c41d0910 10,61-140,166-174
+plugins/utils/rss/tests/console.test.ts
+  h_6f5e45c41d0910 59-65
+plugins/utils/short-url/package.json
+  h_6f5e45c41d0910 19,57,106-109,115-116
+plugins/utils/short-url/pages/index/index.ts
+  h_6f5e45c41d0910 1-82
+plugins/utils/short-url/plugin.ts
+  h_6f5e45c41d0910 1-34,41-119
+pnpm-lock.yaml
+  h_6f5e45c41d0910 4108-4113,4204-4206,4210-4212,4337-4342
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0d76a7c82e6e5c7320099c39300a9e2e2f0def4f",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
