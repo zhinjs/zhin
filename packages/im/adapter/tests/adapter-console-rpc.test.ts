@@ -95,6 +95,49 @@ describe('createAdapterConsoleRpc uses the exact owned runtime account authority
   it('rejects reserved action names', () => {
     expect(() => createAdapterConsoleRpc({ ...spec, actions: { 'endpoint-add': { label: 'Invalid', handler: async () => ({}) } } })).toThrow(/Reserved/);
   });
+  it('projects rich field metadata (label, group, placeholder, options and i18n) when defined', async () => {
+    const richSpec: AdapterConsoleSpec = {
+      adapterKey: 'demo',
+      adapterDisplayName: 'Demo',
+      fields: [
+        {
+          key: 'mode',
+          label: '连接模式',
+          labelI18n: { en: 'Connection Mode' },
+          group: '基础认证',
+          groupI18n: { en: 'Basic Auth' },
+          placeholder: 'websocket',
+          placeholderI18n: { en: 'websocket' },
+          options: [
+            { value: 'websocket', label: 'WebSocket', labelI18n: { en: 'WebSocket' } },
+            { value: 'webhook', label: 'Webhook', labelI18n: { en: 'Webhook' } },
+          ],
+        },
+      ],
+    };
+    const rpc = createAdapterConsoleRpc(richSpec);
+    const status = await rpc.methods.get('status')!.handler({}, { signal: new AbortController().signal });
+    expect(status).toMatchObject({
+      fields: [
+        {
+          key: 'mode',
+          required: false,
+          env: false,
+          secret: false,
+          label: '连接模式',
+          labelI18n: { en: 'Connection Mode' },
+          group: '基础认证',
+          groupI18n: { en: 'Basic Auth' },
+          placeholder: 'websocket',
+          placeholderI18n: { en: 'websocket' },
+          options: [
+            { value: 'websocket', label: 'WebSocket', labelI18n: { en: 'WebSocket' } },
+            { value: 'webhook', label: 'Webhook', labelI18n: { en: 'Webhook' } },
+          ],
+        },
+      ],
+    });
+  });
 });
 
 it('does not use the removed configuration-file account writer when a runtime directory is absent', async () => {

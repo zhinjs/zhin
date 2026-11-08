@@ -56,7 +56,13 @@ describe('RSS Console RPC & Declarative Page', () => {
     };
 
     const rpc = createRssConsoleRpc();
-    expect([...rpc.methods.keys()]).toEqual(['status', 'poll-now', 'clean-seen']);
+    expect([...rpc.methods.keys()]).toEqual([
+      'status',
+      'add-subscription',
+      'remove-subscription',
+      'poll-now',
+      'clean-seen',
+    ]);
     const statusMethod = rpc.methods.get('status')!;
     expect(statusMethod.page).toBe('index');
     expect(statusMethod.requiredPermissions).toEqual(['rss:read']);

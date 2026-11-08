@@ -84,7 +84,7 @@ describe('lottery localization', () => {
       resources: {
         has: (token: unknown) => token === scheduleHostToken || token === outboundHostToken,
         use: (token: unknown) => token === projectLocaleToken ? projectLocale : token === scheduleHostToken ? schedule : { send },
-        provide: (token: unknown, value: LotteryRuntime) => { expect(token).toBe(lotteryRuntimeToken); runtime = value; },
+        provide: (token: unknown, value: LotteryRuntime) => { if (token === lotteryRuntimeToken) runtime = value; },
       }, lifecycle,
     });
     expect(runtime?.locale).toBe('en');

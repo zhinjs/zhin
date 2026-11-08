@@ -23,6 +23,14 @@ import type {
   AdapterConsoleMutationResult,
   AdapterConsoleExecution,
 } from './types.js';
+import {
+  extractSliderTicket,
+  generateRandomSecret,
+  getPlatformProfile,
+  inferAccountProtocolPills,
+  isRandomSecretField,
+  resolveFieldDisplay,
+} from './platform-profiles.js';
 
 type PageNotice = {
   readonly kind: 'ok' | 'error';
@@ -85,6 +93,20 @@ function executionLabel(execution: AdapterConsoleExecution, locale: AdapterConso
   if (execution.status === 'failed') return execution.code === 'endpoint_cleanup_failed'
     ? t(locale, '关闭未完成') : t(locale, '{0}失败', operationLabel(execution.action, locale));
   return t(locale, execution.status === 'pending' ? '操作进行中' : '已完成');
+}
+
+function sanitizeAddValues(
+  fields: readonly AdapterConsoleFieldView[],
+  raw: Readonly<Record<string, string>>,
+): Record<string, string> {
+  const allowed = new Set(fields.filter((f) => f.key !== 'id').map((f) => f.key));
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (!allowed.has(k)) continue;
+    if (typeof v !== 'string' || v.trim() === '') continue;
+    out[k] = v;
+  }
+  return out;
 }
 
 function renderConfigInput({ field, locale, value, disabled, placeholder, onValueChange, allowDefault = true }: {
@@ -226,6 +248,20 @@ function AdapterConsoleSession({ adapterKey, isCurrent }: AdapterConsolePageProp
   const [migration, setMigration] = useState<{ run: () => Promise<void>; ids: readonly string[] }>();
   const [editor, setEditor] = useState<EditorState>();
   const [addBase, setAddBase] = useState<{ generation: number; revision: number | null }>();
+  const [selectedModeKey, setSelectedModeKey] = useState<string | undefined>();
+  const [lastTestByCanonicalId, setLastTestByCanonicalId] = useState<Record<string, AdapterConsoleConnectionTest>>({});
+  const [copiedCallback, setCopiedCallback] = useState(false);
+
+  const effectiveAdapterKey = status?.adapterKey || adapterKey;
+  const platformProfile = useMemo(
+    () => (status ? getPlatformProfile(effectiveAdapterKey) : undefined),
+    [status, effectiveAdapterKey],
+  );
+  const activeConnectionMode = useMemo(() => {
+    const modes = platformProfile?.connectionModes;
+    if (!modes || modes.length === 0) return undefined;
+    return modes.find((m) => m.key === selectedModeKey) ?? modes[0];
+  }, [platformProfile, selectedModeKey]);
 
   const isBusy = (key: string) => busy[key] === true;
   /** 只有会改账号清单（CAS）的操作互斥；刷新、测试连接、登录提交各自独立。 */
@@ -297,6 +333,7 @@ function AdapterConsoleSession({ adapterKey, isCurrent }: AdapterConsolePageProp
       endpointKey: id,
     });
     if (!current()) return;
+    setLastTestByCanonicalId((prev) => ({ ...prev, [id]: result }));
     const detail = result.message ?? (result.connected ? t(locale, '在线') : t(locale, '离线'));
     setNotice(result.connected
       ? { kind: 'ok', message: result.latencyMs === undefined ? t(locale, '连接测试通过：{0}', detail) : t(locale, '连接测试通过：{0}（{1} ms）', detail, result.latencyMs) }
@@ -350,24 +387,131 @@ function AdapterConsoleSession({ adapterKey, isCurrent }: AdapterConsolePageProp
     setAddBase({ generation: runtime.generation, revision: runtime.revision });
   };
 
-  const addEndpoint = async () => {
-    if (!pluginId || !status?.runtime) return;
+  const validateAddId = (): string | undefined => {
+    if (!status) return undefined;
     const id = addId.trim();
-    if (!id) { setFormError(t(locale, '请填写 {0}', t(locale, '账号 ID'))); return; }
+    if (!id) {
+      setFormError(t(locale, '请填写 {0}', t(locale, '账号 ID')));
+      return undefined;
+    }
     if (status.idPattern) {
       let pattern: RegExp | undefined;
       try { pattern = new RegExp(status.idPattern, 'u'); } catch { pattern = undefined; }
       if (pattern && !pattern.test(id)) {
         setFormError(pickI18n(locale, status.idHint, status.idHintI18n) ?? t(locale, '账号 ID 格式不正确'));
-        return;
+        return undefined;
       }
     }
     setFormError(undefined);
-    await runtimeMutation('add', { id, values: addValues }, addBase ?? status.runtime, () => { setAddOpen(false); setAddId(''); setAddValues({}); restoreTrigger(); });
+    return id;
   };
 
-  const submitLogin = (task: AdapterConsoleLoginTask, value: string) => run(`login:${task.id}`, t(locale, '提交登录验证'), async () => {
+  const addEndpoint = async () => {
+    if (!pluginId || !status?.runtime) return;
+    const id = validateAddId();
+    if (!id) return;
+    const cleanValues = sanitizeAddValues(status.fields, addValues);
+    await runtimeMutation('add', { id, values: cleanValues }, addBase ?? status.runtime, () => { setAddOpen(false); setAddId(''); setAddValues({}); restoreTrigger(); });
+  };
+
+  const addAndStartEndpoint = async () => {
+    if (!pluginId || !status?.runtime || !runtime || !runtime.canManage || runtimeBlocked || !current()) return;
+    const id = validateAddId();
+    if (!id) return;
+    const cleanValues = sanitizeAddValues(status.fields, addValues);
+    const base = addBase ?? status.runtime;
+    const key = 'mutate:add-start:';
+    const perform = async (confirmed = false) => {
+      if (!current()) return;
+      setBusy((value) => ({ ...value, [key]: true }));
+      let added = false;
+      try {
+        const addRes = await pluginRpc<AdapterConsoleMutationResult>(pluginId, 'endpoint-add', {
+          id,
+          values: cleanValues,
+          expectedGeneration: base.generation,
+          expectedRevision: base.revision,
+          ...(confirmed ? { confirmMigration: true } : {}),
+        });
+        added = true;
+        if (!current()) return;
+        latestRuntime.current = addRes.runtime;
+        statusRead.mutate((previous) => (previous ? { ...previous, runtime: addRes.runtime } : previous));
+        setAddOpen(false);
+        setAddId('');
+        setAddValues({});
+        restoreTrigger();
+        setMigration(undefined);
+
+        const created = addRes.runtime.endpoints.find(
+          (ep) => ep.endpointId === id && !ep.removed && !ep.retiring,
+        );
+        if (created && !created.desiredEnabled && addRes.execution.status !== 'failed') {
+          const startRes = await pluginRpc<AdapterConsoleMutationResult>(pluginId, 'endpoint-start', {
+            instanceId: created.instanceId,
+            expectedGeneration: addRes.runtime.generation,
+            expectedRevision: addRes.runtime.revision,
+          });
+          if (!current()) return;
+          latestRuntime.current = startRes.runtime;
+          statusRead.mutate((previous) => (previous ? { ...previous, runtime: startRes.runtime } : previous));
+          setNotice({
+            kind: startRes.execution.status === 'failed' ? 'error' : 'ok',
+            message: t(locale, startRes.execution.status === 'failed' ? '配置已保存，执行失败。请查看账号状态。' : '已保存并启动账号。'),
+          });
+        } else {
+          setNotice({
+            kind: addRes.execution.status === 'failed' ? 'error' : 'ok',
+            message: t(locale, addRes.execution.status === 'failed' ? '配置已保存，执行失败。请查看账号状态。' : '已保存并启动账号。'),
+          });
+        }
+        await refreshAll();
+      } catch (mutationError) {
+        if (!current()) return;
+        const knownInvalid = mutationError instanceof PluginRpcError && mutationError.code === 'invalid_input';
+        if (!knownInvalid) setRuntimeBlocked(true);
+        setMigration(undefined);
+        if (added) {
+          void refreshAll();
+          setNotice({
+            kind: 'error',
+            message: t(locale, '配置已保存，执行失败。请查看账号状态。'),
+          });
+        } else {
+          setNotice({
+            kind: 'error',
+            message: t(
+              locale,
+              knownInvalid
+                ? '输入无效，请检查账号字段。'
+                : mutationError instanceof PluginRpcError && mutationError.code === 'conflict'
+                  ? '账号清单已变化，请刷新后重新操作。'
+                  : mutationError instanceof PluginRpcError && mutationError.code === 'forbidden'
+                    ? '没有此操作的权限。'
+                    : !(mutationError instanceof PluginRpcError) || mutationError.code === 'commit_unknown'
+                      ? '提交结果尚未确认，请刷新核实，不要重复提交。'
+                      : '操作未能完成，请刷新账号清单。',
+            ),
+          });
+        }
+      } finally {
+        if (current()) setBusy((value) => { const { [key]: _done, ...rest } = value; return rest; });
+      }
+    };
+    if (runtime.needsMigration) {
+      if (!runtime.canMigrate) {
+        setNotice({ kind: 'error', message: t(locale, '首次迁移需要管理员确认。') });
+        return;
+      }
+      setMigration({ ids: (status?.configured ?? []).map((entry) => entry.id), run: () => perform(true) });
+    } else {
+      await perform();
+    }
+  };
+
+  const submitLogin = (task: AdapterConsoleLoginTask, rawValue: string) => run(`login:${task.id}`, t(locale, '提交登录验证'), async () => {
     if (!latestRuntime.current || !runtimeLoginMatches(task, latestRuntime.current)) return;
+    const value = task.type === 'slider' ? extractSliderTicket(rawValue) : rawValue;
     await consoleRpc('login.submit', { taskId: task.id, value, ...(task.endpointIdentity ? { endpointIdentity: task.endpointIdentity } : {}) });
     if (!current()) return;
     setLoginValues((values) => ({ ...values, [task.id]: '' }));
@@ -396,41 +540,64 @@ function AdapterConsoleSession({ adapterKey, isCurrent }: AdapterConsolePageProp
     return !problem;
   };
 
-  const runAction = (action: AdapterConsoleActionView) => run(action.accountMutation ? `mutate:action:${action.name}` : `action:${action.name}`, pickI18n(locale, action.label, action.labelI18n) ?? action.name, async () => {
-    if (!pluginId) return;
-    if (!validateAction(action)) return;
+  const runAction = (action: AdapterConsoleActionView) => {
+    const actionKey = action.accountMutation ? `mutate:action:${action.name}` : `action:${action.name}`;
+    const actionContext = pickI18n(locale, action.label, action.labelI18n) ?? action.name;
+    const executePerform = (
+      input: Record<string, string>,
+      base: AdapterConsoleRuntimeView | undefined,
+      confirmed: boolean,
+    ) =>
+      run(actionKey, actionContext, async () => {
+        if (!pluginId || !current()) return;
+        try {
+          const result = await pluginRpc<AdapterConsoleActionResult>(pluginId, action.name, {
+            ...input,
+            ...(base ? { expectedGeneration: base.generation, expectedRevision: base.revision } : {}),
+            ...(confirmed ? { confirmMigration: true } : {}),
+          });
+          if (!current()) return;
+          setActionResults((results) => ({ ...results, [action.name]: result ?? {} }));
+          if (result?.message) {
+            setNotice({
+              kind: result.tone === 'error' ? 'error' : 'ok',
+              message: result.message,
+              ...(result.url ? { url: result.url } : {}),
+              ...(result.image ? { image: result.image } : {}),
+            });
+          }
+          await refreshAll();
+          setMigration(undefined);
+        } catch (actionErr) {
+          if (current() && action.accountMutation) {
+            const knownInvalid = actionErr instanceof PluginRpcError && actionErr.code === 'invalid_input';
+            if (!knownInvalid) setRuntimeBlocked(true);
+            setMigration(undefined);
+          }
+          throw actionErr;
+        }
+      });
+
+    if (!pluginId) return Promise.resolve();
+    if (!validateAction(action)) return Promise.resolve();
     const input: Record<string, string> = { ...(actionValues[action.name] ?? {}) };
     const base = status?.runtime;
-    const perform = async (confirmed = false) => {
-      if (!current()) return;
-      const result = await pluginRpc<AdapterConsoleActionResult>(pluginId, action.name, {
-        ...input,
-        ...(base ? { expectedGeneration: base.generation, expectedRevision: base.revision } : {}),
-        ...(confirmed ? { confirmMigration: true } : {}),
-      });
-      if (!current()) return;
-      setActionResults((results) => ({ ...results, [action.name]: result ?? {} }));
-      if (result?.message) {
-        setNotice({
-          kind: result.tone === 'error' ? 'error' : 'ok',
-          message: result.message,
-          ...(result.url ? { url: result.url } : {}),
-          ...(result.image ? { image: result.image } : {}),
-        });
-      }
-      await refreshAll();
-      setMigration(undefined);
-    };
     if (action.accountMutation) {
-      if (!status || !base?.canManage || runtimeBlocked) return;
+      if (!status || !base?.canManage || runtimeBlocked) return Promise.resolve();
       if (base.needsMigration) {
-        if (!base.canMigrate) { setNotice({ kind: 'error', message: t(locale, '首次迁移需要管理员确认。') }); return; }
-        setMigration({ ids: status.configured.map(entry => entry.id), run: () => perform(true) });
-        return;
+        if (!base.canMigrate) {
+          setNotice({ kind: 'error', message: t(locale, '首次迁移需要管理员确认。') });
+          return Promise.resolve();
+        }
+        setMigration({
+          ids: status.configured.map((entry) => entry.id),
+          run: () => executePerform(input, base, true),
+        });
+        return Promise.resolve();
       }
     }
-    await perform();
-  });
+    return executePerform(input, base, false);
+  };
 
   const visibleLogins = runtime ? loginTasks.filter(task => runtimeLoginMatches(task, runtime)) : [];
 
@@ -498,6 +665,22 @@ function AdapterConsoleSession({ adapterKey, isCurrent }: AdapterConsolePageProp
         {status.actions.length > 0 && <a href="#adapter-tools">{t(locale, '平台操作')}</a>}
       </nav>}
 
+      {status && runtime && platformProfile && (
+        <div className="zk-platform-banner" role="region" aria-label={t(locale, '平台接入指南')}>
+          <div className="zk-platform-banner__head">
+            <Badge tone="neutral">{locale === 'en' ? (platformProfile.categoryBadgeEn ?? platformProfile.categoryBadge) : platformProfile.categoryBadge}</Badge>
+            {platformProfile.onboardingTitle && <strong>{platformProfile.onboardingTitle}</strong>}
+          </div>
+          {platformProfile.onboardingSteps.length > 0 && (
+            <div className="zk-platform-steps">
+              {platformProfile.onboardingSteps.map((step, idx) => (
+                <span key={idx} className="zk-platform-step">{step}</span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {notice && <Notice tone={notice.kind === 'error' ? 'danger' : 'success'} onDismiss={() => setNotice(undefined)}>
         {notice.message}
         {notice.url && <> · <a href={notice.url} target="_blank" rel="noreferrer">{notice.url}</a></>}
@@ -551,6 +734,11 @@ function AdapterConsoleSession({ adapterKey, isCurrent }: AdapterConsolePageProp
 
       {visibleLogins.length > 0 && (
         <Section id="adapter-logins" title={t(locale, '登录待办')} description={t(locale, '完成验证后，账号即可继续连接。')}>
+          <div className="zk-login-steps" aria-label={t(locale, '登录待办')}>
+            <span className="zk-login-step">{t(locale, '1. 发起连接')}</span>
+            <span className="zk-login-step zk-login-step--active">{t(locale, '2. 完成平台安全验证')}</span>
+            <span className="zk-login-step">{t(locale, '3. 账号在线就绪')}</span>
+          </div>
           <ul className="zk-list">
             {visibleLogins.map((task) => {
               const image = typeof task.payload.image === 'string' ? task.payload.image : undefined;
@@ -560,6 +748,7 @@ function AdapterConsoleSession({ adapterKey, isCurrent }: AdapterConsolePageProp
               const remaining = task.expiresAt ? Math.max(0, Math.ceil((task.expiresAt - now) / 1_000)) : undefined;
               const expired = remaining === 0;
               const submitBusy = isBusy(`login:${task.id}`);
+              const currentLoginVal = loginValues[task.id] ?? '';
               return (
                 <li key={task.id} className="zk-card">
                   <div className="zk-account__head">
@@ -578,14 +767,42 @@ function AdapterConsoleSession({ adapterKey, isCurrent }: AdapterConsolePageProp
                     <div className="zk-media__body">
                       {message && <p>{message}</p>}
                       {image && !isImageSource(image) && isLink(image) && <a href={image} target="_blank" rel="noreferrer">{image}</a>}
-                      {url && <a href={url} target="_blank" rel="noreferrer">{url}</a>}
-                      {needsValue ? <Field label={t(locale, '请输入 {0}', loginTypeLabel(task.type, locale))}>
-                        <input value={loginValues[task.id] ?? ''} disabled={submitBusy || expired}
-                          onChange={event => setLoginValues(values => ({ ...values, [task.id]: event.target.value }))} />
-                      </Field> : null}
+                      {url && (
+                        <div className="zk-row">
+                          <a href={url} target="_blank" rel="noreferrer">{url}</a>
+                          {task.type === 'slider' && (
+                            <a href={url} target="_blank" rel="noreferrer" className="zk-chip-btn">{t(locale, '打开滑块验证页面')}</a>
+                          )}
+                        </div>
+                      )}
+                      {task.type === 'slider' && (
+                        <details className="zk-slider-guide">
+                          <summary className="zk-hint">{t(locale, '如何提取滑块 Ticket？（F12 → Network → cap_union_new_verify → ticket）')}</summary>
+                          <p className="zk-hint">
+                            1. 打开上方滑块验证页面并按下 F12 打开开发者工具 → Network（网络）面板；2. 拖动滑块完成拼图；3. 在 `cap_union_new_verify` 响应中复制 `ticket` 字段（或直接粘贴整段 JSON 响应，系统将自动提取 Ticket）。
+                          </p>
+                        </details>
+                      )}
+                      {needsValue ? <>
+                        <Field label={t(locale, '请输入 {0}', loginTypeLabel(task.type, locale))}>
+                          <input value={currentLoginVal} disabled={submitBusy || expired}
+                            onChange={event => setLoginValues(values => ({ ...values, [task.id]: event.target.value }))} />
+                        </Field>
+                        {task.type === 'slider' && currentLoginVal.trim() && extractSliderTicket(currentLoginVal) !== currentLoginVal.trim() && (
+                          <div className="zk-option-pills">
+                            <button
+                              type="button"
+                              className="zk-chip-btn"
+                              onClick={() => setLoginValues(values => ({ ...values, [task.id]: extractSliderTicket(currentLoginVal) }))}
+                            >
+                              {t(locale, '自动提取 Ticket')} ({extractSliderTicket(currentLoginVal).slice(0, 16)}…)
+                            </button>
+                          </div>
+                        )}
+                      </> : null}
                       <div className="zk-row">
                         {needsValue
-                          ? <Button variant="primary" busy={submitBusy} disabled={expired || !(loginValues[task.id] ?? '').trim()} onClick={() => submitLogin(task, loginValues[task.id] ?? '')}>{t(locale, '提交')}</Button>
+                          ? <Button variant="primary" busy={submitBusy} disabled={expired || !currentLoginVal.trim()} onClick={() => submitLogin(task, currentLoginVal)}>{t(locale, '提交')}</Button>
                           : <Button variant="primary" busy={submitBusy} disabled={expired} onClick={() => submitLogin(task, 'ok')}>{task.type === 'qrcode' ? t(locale, '已扫码，继续') : t(locale, '完成')}</Button>}
                         <Button variant="ghost" busy={isBusy(`login-cancel:${task.id}`)} onClick={() => cancelLogin(task)}>{t(locale, '取消')}</Button>
                       </div>
@@ -600,6 +817,109 @@ function AdapterConsoleSession({ adapterKey, isCurrent }: AdapterConsolePageProp
 
       <div className={`zk-split ${hasSidebar ? '' : 'zk-split--single'}`}>
       <main className="zk-stack">
+
+      {status && effectiveAdapterKey === 'qq' && status.actions.some(a => a.name === 'qq-bind-start') && (() => {
+        const startAction = status.actions.find(a => a.name === 'qq-bind-start');
+        const kindAction = status.actions.find(a => a.name === 'qq-bind-kind');
+        const cancelAction = status.actions.find(a => a.name === 'qq-bind-cancel');
+        const startResult = actionResults['qq-bind-start'];
+        const selectedKind = actionValues['qq-bind-kind']?.value ?? '';
+        const publicValue = kindAction?.options.find(o => o.value === 'public' || o.value === '1')?.value ?? 'public';
+        const privateValue = kindAction?.options.find(o => o.value === 'private' || o.value === '4')?.value ?? 'private';
+        const bindImage = startResult?.image;
+        const bindUrl =
+          startResult?.url ??
+          (typeof status.extra?.scanUrl === 'string' ? status.extra.scanUrl : undefined) ??
+          (typeof status.extra?.bindUrl === 'string' ? status.extra.bindUrl : undefined);
+        const bindMessage =
+          (typeof status.extra?.bindMessage === 'string' ? status.extra.bindMessage : undefined) ??
+          startResult?.message;
+        const bindActive = Boolean(
+          bindImage ||
+            bindUrl ||
+            status.extra?.bindFlowActive ||
+            status.extra?.bindState === 'waiting' ||
+            status.extra?.bindState === 'scanned',
+        );
+        return (
+          <div className="zk-qq-workbench" role="region" aria-label={t(locale, 'QQ 官方机器人双轨接入工作台')}>
+            <div className="zk-account__head">
+              <strong>{t(locale, 'QQ 官方机器人双轨接入工作台')}</strong>
+              <Badge tone="neutral">QR + AppID</Badge>
+            </div>
+            <div className="zk-row">
+              {startAction && (
+                <button
+                  type="button"
+                  className="zk-chip-btn"
+                  disabled={addDisabled}
+                  onClick={() => void runAction(startAction)}
+                >
+                  {t(locale, '用手机 QQ 扫码一键创建/绑定官方机器人')}
+                </button>
+              )}
+              {cancelAction && bindActive && (
+                <button
+                  type="button"
+                  className="zk-chip-btn"
+                  onClick={() => void runAction(cancelAction)}
+                >
+                  {t(locale, '取消')}
+                </button>
+              )}
+            </div>
+            {(bindImage || bindUrl || bindMessage) && (
+              <div className="zk-media">
+                {bindImage && <img className="zk-qr" src={bindImage} alt={t(locale, '二维码')} />}
+                <div className="zk-media__body">
+                  <p className="zk-hint">{bindMessage ?? t(locale, '等待手机 QQ 扫码确认…')}</p>
+                  {bindUrl && (
+                    <p>
+                      <a href={bindUrl} target="_blank" rel="noreferrer">{bindUrl}</a>
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+            {kindAction && (
+              <div className="zk-stack">
+                <div className="zk-qq-kind-grid">
+                  <button
+                    type="button"
+                    className="zk-preset-card"
+                    aria-pressed={selectedKind === publicValue}
+                    onClick={() => setActionValues(curr => ({ ...curr, 'qq-bind-kind': { ...curr['qq-bind-kind'], value: publicValue } }))}
+                  >
+                    <strong>{t(locale, '公域机器人 (Public)')}</strong>
+                    <span className="zk-hint">public · 支持开放群聊与频道添加</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="zk-preset-card"
+                    aria-pressed={selectedKind === privateValue}
+                    onClick={() => setActionValues(curr => ({ ...curr, 'qq-bind-kind': { ...curr['qq-bind-kind'], value: privateValue } }))}
+                  >
+                    <strong>{t(locale, '私域机器人 (Private)')}</strong>
+                    <span className="zk-hint">private · 全量群消息权限，适合自用群管</span>
+                  </button>
+                </div>
+                {selectedKind && (
+                  <div className="zk-row">
+                    <button
+                      type="button"
+                      className="zk-chip-btn"
+                      disabled={addDisabled}
+                      onClick={() => void runAction(kindAction)}
+                    >
+                      {t(locale, '确认创建并写入配置')}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {runtime && <Section id="adapter-accounts" title={t(locale, '账号')} description={t(locale, '查看连接状态，按需启动或停止账号。')}>
         {runtime.needsMigration && <Notice tone="warning" title={t(locale, '首次修改前需迁移以下账号，保留身份和历史。')}>
@@ -622,12 +942,32 @@ function AdapterConsoleSession({ adapterKey, isCurrent }: AdapterConsolePageProp
           const disabled = mutationLocked || mutating;
           const stateTone: BadgeTone = endpoint.retiring ? 'warning' : !endpoint.desiredEnabled ? 'neutral' : connectionTone(connection, connectionsKnown);
           const toggleKey = `mutate:${endpoint.desiredEnabled ? 'stop' : 'start'}:${endpoint.instanceId}`;
+          const protocolPills = inferAccountProtocolPills(effectiveAdapterKey, configured?.values, runningModes.get(endpoint.endpointId));
+          const lastTest = lastTestByCanonicalId[endpoint.canonicalId];
+          const pendingTask = visibleLogins.find(
+            task => task.endpointIdentity?.instanceId === endpoint.instanceId || task.endpointKey === endpoint.endpointId,
+          );
           return <li key={`${endpoint.instanceId}:${endpoint.epoch}`} className="zk-card">
             <div className="zk-account__head">
               <strong>{endpoint.endpointId}</strong>
               <Badge tone={stateTone}>{endpoint.retiring ? t(locale, '正在关闭') : !endpoint.desiredEnabled ? t(locale, '已停止') : connectionLabel(connection, locale, connectionsKnown)}</Badge>
               {endpoint.execution && <Badge tone={endpoint.execution.status === 'failed' ? 'danger' : endpoint.execution.status === 'pending' ? 'warning' : 'neutral'}>{executionLabel(endpoint.execution, locale)}</Badge>}
+              {pendingTask && (
+                <Badge tone="warning">
+                  {t(locale, '待验证')} · <a href="#adapter-logins">{t(locale, '前往验证')}</a>
+                </Badge>
+              )}
+              {lastTest && lastTest.latencyMs !== undefined && (
+                <Badge tone={lastTest.connected ? 'success' : 'danger'}>{lastTest.latencyMs} ms</Badge>
+              )}
             </div>
+            {protocolPills.length > 0 && (
+              <div className="zk-account-pills">
+                {protocolPills.map((pill) => (
+                  <span key={pill.label} className="zk-account-pill">{pill.label}</span>
+                ))}
+              </div>
+            )}
             {configured && Object.keys(configured.values).length > 0 && <details><summary>{t(locale, '连接配置')}</summary><dl className="zk-dl">
               {Object.entries(configured.values).map(([key, value]) => <React.Fragment key={key}><dt>{key}</dt><dd>{value}</dd></React.Fragment>)}
             </dl></details>}
@@ -645,10 +985,42 @@ function AdapterConsoleSession({ adapterKey, isCurrent }: AdapterConsolePageProp
         {editor && <div className="zk-card" role="region" aria-label={t(locale, '编辑账号')}>
           <h3>{t(locale, '编辑账号')}</h3>
           {(editor.generation !== runtime.generation || editor.revision !== runtime.revision) && <Notice tone="danger">{t(locale, '账号清单已变化，请取消编辑后重新打开。')}</Notice>}
-          <Field label={t(locale, '账号 ID')}><input disabled={mutating || !!migration || !runtime.canReplace || !runtime.identityFields.includes('id')} value={editor.id} onChange={event => setEditor({ ...editor, id: event.target.value })} /></Field>
-          {status?.fields.filter(field => field.key !== 'id' && (runtime.mutableFields.includes(field.key) || runtime.identityFields.includes(field.key) || editorReplacing)).map(field => <Field key={field.key} label={field.key} hint={pickI18n(locale, field.description, field.descriptionI18n)}>
-            {renderConfigInput({ field, locale, allowDefault: !Object.hasOwn(editor.originalValues, field.key), disabled: mutating || !!migration, value: editor.values[field.key] ?? '', placeholder: field.placeholder, onValueChange: value => setEditor({ ...editor, values: { ...editor.values, [field.key]: value } }) })}
-          </Field>)}
+          <Field label={t(locale, '账号 ID')} hint={platformProfile?.idLabel}><input disabled={mutating || !!migration || !runtime.canReplace || !runtime.identityFields.includes('id')} value={editor.id} onChange={event => setEditor({ ...editor, id: event.target.value })} /></Field>
+          {status?.fields.filter(field => field.key !== 'id' && (runtime.mutableFields.includes(field.key) || runtime.identityFields.includes(field.key) || editorReplacing)).map(field => {
+            const display = resolveFieldDisplay(effectiveAdapterKey, field, locale);
+            const hintText = display.displayLabel !== field.key
+              ? `${display.displayLabel}${display.hint ? ` — ${display.hint}` : ''}`
+              : display.hint;
+            return <React.Fragment key={field.key}>
+              <Field label={field.key} hint={hintText}>
+                {renderConfigInput({ field, locale, allowDefault: !Object.hasOwn(editor.originalValues, field.key), disabled: mutating || !!migration, value: editor.values[field.key] ?? '', placeholder: display.placeholder, onValueChange: value => setEditor({ ...editor, values: { ...editor.values, [field.key]: value } }) })}
+              </Field>
+              {((display.quickOptions && display.quickOptions.length > 0 && field.type !== 'boolean') || isRandomSecretField(field.key)) && (
+                <div className="zk-option-pills">
+                  {display.quickOptions?.map(opt => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      className="zk-chip-btn"
+                      aria-pressed={(editor.values[field.key] ?? '') === opt.value}
+                      onClick={() => setEditor({ ...editor, values: { ...editor.values, [field.key]: opt.value } })}
+                    >
+                      {pickI18n(locale, opt.label, opt.labelI18n) ?? opt.label}
+                    </button>
+                  ))}
+                  {isRandomSecretField(field.key) && (
+                    <button
+                      type="button"
+                      className="zk-chip-btn"
+                      onClick={() => setEditor({ ...editor, values: { ...editor.values, [field.key]: generateRandomSecret(field.key) } })}
+                    >
+                      🎲 {t(locale, '生成随机密钥')}
+                    </button>
+                  )}
+                </div>
+              )}
+            </React.Fragment>;
+          })}
           {formError && <Notice tone="danger">{formError}</Notice>}
           <div className="zk-row">
             {editorReplacing
@@ -694,18 +1066,180 @@ function AdapterConsoleSession({ adapterKey, isCurrent }: AdapterConsolePageProp
           <div className="zk-card">
               <h3>{t(locale, '添加账号')}</h3>
               <p className="zk-hint">{t(locale, '保存后请手动启动账号。')}</p>
-              <Field label={t(locale, '账号 ID')} required hint={status.idHint ? pickI18n(locale, status.idHint, status.idHintI18n) : undefined}>
-                <input disabled={mutating || !!migration} value={addId} onChange={(event) => setAddId(event.target.value)} />
+
+              {platformProfile?.connectionModes && platformProfile.connectionModes.length > 0 && (
+                <div>
+                  <span className="zk-hint">{t(locale, '连接模式')}</span>
+                  <div className="zk-mode-tabs">
+                    {platformProfile.connectionModes.map((mode) => {
+                      const active = activeConnectionMode?.key === mode.key;
+                      return (
+                        <button
+                          key={mode.key}
+                          type="button"
+                          className="zk-mode-tab"
+                          aria-pressed={active}
+                          onClick={() => {
+                            setSelectedModeKey(mode.key);
+                            if (mode.presetValues) {
+                              setAddValues((prev) => ({ ...prev, ...mode.presetValues }));
+                            }
+                          }}
+                        >
+                          <strong>{locale === 'en' ? (mode.labelEn ?? mode.label) : mode.label}</strong>
+                          <span className="zk-hint">{locale === 'en' ? (mode.descriptionEn ?? mode.description) : mode.description}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {activeConnectionMode?.callbackUrlTemplate && (() => {
+                const tpl = activeConnectionMode.callbackUrlTemplate;
+                const rawPath = (addValues[tpl.pathField] ?? '').trim() || tpl.fallbackPath;
+                const normalizedPath = rawPath.startsWith('/') ? rawPath : `/${rawPath}`;
+                const hostPart = typeof location !== 'undefined' && location.host ? location.host : 'localhost:8086';
+                const scheme = tpl.protocol === 'ws' ? 'ws' : 'http';
+                const previewUrl = `${scheme}://${hostPart}${normalizedPath}`;
+                return (
+                  <div className="zk-callback-box">
+                    <span>
+                      {tpl.label}：<code>{previewUrl}</code>
+                    </span>
+                    <button
+                      type="button"
+                      className="zk-chip-btn"
+                      onClick={() => {
+                        if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+                          void navigator.clipboard.writeText(previewUrl);
+                        }
+                        setCopiedCallback(true);
+                        setTimeout(() => setCopiedCallback(false), 2000);
+                      }}
+                    >
+                      {copiedCallback ? t(locale, '已复制') : t(locale, '复制回调地址')}
+                    </button>
+                  </div>
+                );
+              })()}
+
+              {platformProfile?.presets && platformProfile.presets.length > 0 && (
+                <div>
+                  <span className="zk-hint">{t(locale, '快速预设模板')}</span>
+                  <div className="zk-preset-grid">
+                    {platformProfile.presets.map((preset) => (
+                      <button
+                        key={preset.key}
+                        type="button"
+                        className="zk-preset-card"
+                        onClick={() => setAddValues((prev) => ({ ...prev, ...preset.values }))}
+                      >
+                        <strong>
+                          {locale === 'en' ? (preset.labelEn ?? preset.label) : preset.label}
+                          {preset.badge ? ` · ${preset.badge}` : ''}
+                        </strong>
+                        {preset.description && <span className="zk-hint">{preset.description}</span>}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {(effectiveAdapterKey === 'email' || platformProfile?.supportsEmailSync) && (
+                <div className="zk-row">
+                  <button
+                    type="button"
+                    className="zk-chip-btn"
+                    onClick={() =>
+                      setAddValues((prev) => {
+                        const senderUser = prev['smtp.auth.user'] || prev.user || '';
+                        const senderPass = prev['smtp.auth.pass'] || prev.pass || '';
+                        return {
+                          ...prev,
+                          ...(senderUser ? { 'imap.user': senderUser } : {}),
+                          ...(senderPass && !prev['imap.password'] ? { 'imap.password': senderPass } : {}),
+                        };
+                      })
+                    }
+                  >
+                    {t(locale, '将发件账号同步至收件账号')}
+                  </button>
+                </div>
+              )}
+
+              <Field
+                label={t(locale, '账号 ID')}
+                required
+                hint={
+                  status.idHint
+                    ? pickI18n(locale, status.idHint, status.idHintI18n)
+                    : platformProfile?.idLabel
+                }
+              >
+                <input
+                  disabled={mutating || !!migration}
+                  value={addId}
+                  placeholder={platformProfile?.idPlaceholder}
+                  onChange={(event) => setAddId(event.target.value)}
+                />
               </Field>
-              {status.fields.filter(field => field.key !== 'id').map((field) => (
-                <Field key={field.key} label={field.key} required={field.required} hint={pickI18n(locale, field.description, field.descriptionI18n)}>
-                  {renderConfigInput({ field, locale, disabled: mutating || !!migration, value: addValues[field.key] ?? '',
-                    placeholder: field.placeholder,
-                    onValueChange: value => setAddValues(values => ({ ...values, [field.key]: value })) })}
-                </Field>
-              ))}
+              {(() => {
+                let lastGroup: string | undefined;
+                return status.fields.filter(field => field.key !== 'id').map((field) => {
+                  const display = resolveFieldDisplay(effectiveAdapterKey, field, locale);
+                  const showGroup = display.group && display.group !== lastGroup;
+                  if (display.group) lastGroup = display.group;
+                  const hintText = display.displayLabel !== field.key
+                    ? `${display.displayLabel}${display.hint ? ` — ${display.hint}` : ''}`
+                    : display.hint;
+                  return (
+                    <React.Fragment key={field.key}>
+                      {showGroup && <div className="zk-group-header">{display.group}</div>}
+                      <Field label={field.key} required={field.required} hint={hintText}>
+                        {renderConfigInput({
+                          field,
+                          locale,
+                          disabled: mutating || !!migration,
+                          value: addValues[field.key] ?? '',
+                          placeholder: display.placeholder,
+                          onValueChange: value => setAddValues(values => ({ ...values, [field.key]: value })),
+                        })}
+                      </Field>
+                      {((display.quickOptions && display.quickOptions.length > 0 && field.type !== 'boolean') || isRandomSecretField(field.key)) && (
+                        <div className="zk-option-pills">
+                          {display.quickOptions?.map(opt => (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              className="zk-chip-btn"
+                              aria-pressed={(addValues[field.key] ?? '') === opt.value}
+                              onClick={() => setAddValues(values => ({ ...values, [field.key]: opt.value }))}
+                            >
+                              {pickI18n(locale, opt.label, opt.labelI18n) ?? opt.label}
+                            </button>
+                          ))}
+                          {isRandomSecretField(field.key) && (
+                            <button
+                              type="button"
+                              className="zk-chip-btn"
+                              onClick={() => setAddValues(values => ({ ...values, [field.key]: generateRandomSecret(field.key) }))}
+                            >
+                              🎲 {t(locale, '生成随机密钥')}
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </React.Fragment>
+                  );
+                });
+              })()}
               {formError && <Notice tone="danger">{formError}</Notice>}
-              <div className="zk-row"><Button variant="primary" busy={isBusy('mutate:add:')} disabled={addDisabled && !isBusy('mutate:add:')} onClick={addEndpoint}>{t(locale, '添加')}</Button><Button variant="ghost" onClick={toggleAdd}>{t(locale, '取消')}</Button></div>
+              <div className="zk-row">
+                <Button variant="primary" busy={isBusy('mutate:add:')} disabled={addDisabled && !isBusy('mutate:add:')} onClick={addEndpoint}>{t(locale, '添加')}</Button>
+                <Button variant="secondary" busy={isBusy('mutate:add-start:')} disabled={addDisabled && !isBusy('mutate:add-start:')} onClick={addAndStartEndpoint}>{t(locale, '保存并立即启动')}</Button>
+                <Button variant="ghost" onClick={toggleAdd}>{t(locale, '取消')}</Button>
+              </div>
           </div>
         </Section>
       )}

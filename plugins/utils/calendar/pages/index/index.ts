@@ -1,4 +1,5 @@
-import { definePage, createDeclarativePage } from '@zhin.js/console-contract';
+import { definePage, definePageBlueprint } from '@zhin.js/console-contract';
+import type { CalendarConsoleEventItem } from '../../plugin.js';
 
 export interface CalendarConsoleStatus {
   readonly provider: 'none' | 'google' | 'microsoft' | 'caldav';
@@ -6,6 +7,8 @@ export interface CalendarConsoleStatus {
   readonly ready: boolean;
   readonly oauthCallbackPath: string;
   readonly workingHours: string;
+  readonly eventCount?: number;
+  readonly events?: readonly CalendarConsoleEventItem[];
 }
 
 export const meta = definePage({
@@ -16,11 +19,11 @@ export const meta = definePage({
   requiredPermissions: ['calendar:read'],
 });
 
-export default createDeclarativePage<CalendarConsoleStatus>({
+export default definePageBlueprint<CalendarConsoleStatus>({
   title: { zh: '日历日程', en: 'Calendar' },
   description: {
-    zh: '查看日历后端连接状态、时区与工作时间范围',
-    en: 'View calendar provider status, timezone, and working hours configuration',
+    zh: '查看日历后端连接状态、时区与工作时间范围，并在线新建或管理日程',
+    en: 'View calendar provider status, timezone, and working hours configuration, and create or manage events',
   },
   dictionary: {
     '已就绪': 'Ready',
@@ -68,7 +71,75 @@ export default createDeclarativePage<CalendarConsoleStatus>({
       value: 'workingHours',
     },
   ],
+  actions: [
+    {
+      name: 'create',
+      label: { zh: '新建日程', en: 'Create Event' },
+      variant: 'primary',
+      fields: [
+        {
+          key: 'title',
+          label: { zh: '日程标题', en: 'Event Title' },
+          type: 'text',
+          required: true,
+        },
+        {
+          key: 'date',
+          label: { zh: '日期 YYYY-MM-DD', en: 'Date (YYYY-MM-DD)' },
+          type: 'text',
+          required: true,
+          placeholder: '2026-11-08',
+        },
+        {
+          key: 'time',
+          label: { zh: '时间 HH:mm', en: 'Time (HH:mm)' },
+          type: 'text',
+          defaultValue: '09:00',
+        },
+        {
+          key: 'repeat',
+          label: { zh: '重复周期', en: 'Repeat' },
+          type: 'select',
+          defaultValue: 'none',
+          options: [
+            { value: 'none', label: { zh: '不重复 (none)', en: 'None' } },
+            { value: 'daily', label: { zh: '每天 (daily)', en: 'Daily' } },
+            { value: 'weekly', label: { zh: '每周 (weekly)', en: 'Weekly' } },
+            { value: 'monthly', label: { zh: '每月 (monthly)', en: 'Monthly' } },
+            { value: 'yearly', label: { zh: '每年 (yearly)', en: 'Yearly' } },
+          ],
+        },
+      ],
+    },
+    {
+      name: 'delete',
+      label: { zh: '删除日程', en: 'Delete Event' },
+      variant: 'danger',
+      fields: [
+        {
+          key: 'id',
+          label: { zh: '日程 ID', en: 'Event ID' },
+          type: 'text',
+          required: true,
+        },
+      ],
+    },
+  ],
   sections: [
+    {
+      id: 'events',
+      layout: 'table',
+      title: { zh: '日程列表', en: 'Calendar Events' },
+      emptyText: { zh: '暂无日程记录', en: 'No calendar events yet' },
+      items: 'events',
+      columns: [
+        { key: 'id', label: { zh: 'ID', en: 'ID' } },
+        { key: 'title', label: { zh: '日程标题', en: 'Title' } },
+        { key: 'date', label: { zh: '日期', en: 'Date' } },
+        { key: 'time', label: { zh: '时间', en: 'Time' } },
+        { key: 'repeat', label: { zh: '重复', en: 'Repeat' } },
+      ],
+    },
     {
       id: 'overview',
       title: { zh: '配置概览', en: 'Configuration Overview' },

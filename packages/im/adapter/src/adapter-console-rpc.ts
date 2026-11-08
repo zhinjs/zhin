@@ -36,6 +36,13 @@ import {
 import { consoleRuntimeView, mutateConsoleAdapter, ownedConsoleAdapter, type AdapterConsoleRuntimeView } from './adapter-runtime-console.js';
 export type { AdapterConsoleRuntimeView } from './adapter-runtime-console.js';
 
+/** 适配器 Console 页面字段选择项。 */
+export interface AdapterConsoleFieldOption {
+  readonly value: string;
+  readonly label: string;
+  readonly labelI18n?: Readonly<Partial<Record<string, string>>>;
+}
+
 /** 适配器 Console 页面字段；`env` 和 `secret` 都声明需要遮蔽的敏感字段。 */
 export interface AdapterConsoleField {
   readonly key: string;
@@ -45,9 +52,15 @@ export interface AdapterConsoleField {
   readonly env?: boolean;
   /** 非 env 字段也要遮蔽展示（例如 PEM 内容）。 */
   readonly secret?: boolean;
+  readonly label?: string;
+  readonly labelI18n?: Readonly<Partial<Record<string, string>>>;
+  readonly group?: string;
+  readonly groupI18n?: Readonly<Partial<Record<string, string>>>;
   readonly description?: string;
   readonly descriptionI18n?: Readonly<Partial<Record<string, string>>>;
   readonly placeholder?: string;
+  readonly placeholderI18n?: Readonly<Partial<Record<string, string>>>;
+  readonly options?: readonly AdapterConsoleFieldOption[];
 }
 
 /** 适配器自有动作的输入字段（单一文本 / 密码输入）。 */
@@ -159,9 +172,15 @@ interface AdapterConsoleFieldView {
   required: boolean;
   env: boolean;
   secret: boolean;
+  label?: string;
+  labelI18n?: Record<string, string>;
+  group?: string;
+  groupI18n?: Record<string, string>;
   description?: string;
   descriptionI18n?: Record<string, string>;
   placeholder?: string;
+  placeholderI18n?: Record<string, string>;
+  options?: { value: string; label: string; labelI18n?: Record<string, string> }[];
 }
 
 interface AdapterConsoleActionView {
@@ -376,16 +395,33 @@ export function createAdapterConsoleRpc(
   }
 
   function fieldView(field: AdapterConsoleField): AdapterConsoleFieldView {
+    const labelI18n = stringsI18n(field.labelI18n);
+    const groupI18n = stringsI18n(field.groupI18n);
     const descriptionI18n = stringsI18n(field.descriptionI18n);
+    const placeholderI18n = stringsI18n(field.placeholderI18n);
+    const options = field.options?.map((option) => {
+      const optionI18n = stringsI18n(option.labelI18n);
+      return {
+        value: option.value,
+        label: option.label,
+        ...(optionI18n ? { labelI18n: optionI18n } : {}),
+      };
+    });
     return {
       key: field.key,
       ...(field.type ? { type: field.type } : {}),
       required: field.required === true,
       env: field.env === true,
       secret: field.secret === true || field.env === true,
+      ...(field.label ? { label: field.label } : {}),
+      ...(labelI18n ? { labelI18n } : {}),
+      ...(field.group ? { group: field.group } : {}),
+      ...(groupI18n ? { groupI18n } : {}),
       ...(field.description ? { description: field.description } : {}),
       ...(descriptionI18n ? { descriptionI18n } : {}),
       ...(field.placeholder ? { placeholder: field.placeholder } : {}),
+      ...(placeholderI18n ? { placeholderI18n } : {}),
+      ...(options && options.length > 0 ? { options } : {}),
     };
   }
 

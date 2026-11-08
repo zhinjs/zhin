@@ -62,9 +62,11 @@ it('dispatches named actions and keeps them full-scope only', async () => {
   const reset = vi.fn(async (input: Record<string, unknown>) => ({ reset: input.target ?? null }));
   const { call } = setup({ status: status({ demo: true }), actions: { 'reset-cooldown': { handler: reset } } });
   expect((await call('plugin.root/ambient.reset-cooldown', { target: 'g1' }))?.body).toMatchObject({ success: true, data: { reset: 'g1' } });
+  expect((await call('plugin.root/ambient.resetCooldown', { target: 'g2' }))?.body).toMatchObject({ success: true, data: { reset: 'g2' } });
+  expect((await call('plugin.root/ambient.action.resetCooldown', { target: 'g3' }))?.body).toMatchObject({ success: true, data: { reset: 'g3' } });
   const denied = await call('plugin.root/ambient.reset-cooldown', {}, 'demo');
   expect(denied).toMatchObject({ status: 403, body: { success: false, code: 'forbidden' } });
-  expect(reset).toHaveBeenCalledTimes(1);
+  expect(reset).toHaveBeenCalledTimes(3);
 });
 
 it('lets demo read status only when the plugin opts in and the bound page has no requirements', async () => {

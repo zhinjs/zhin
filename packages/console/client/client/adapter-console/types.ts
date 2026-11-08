@@ -1,15 +1,27 @@
 /** Wire shapes for `plugin.<pluginId>.status` and the shared adapter page. */
 import type { ConsoleEndpointSummary } from '@zhin.js/console-protocol';
 
+export interface AdapterConsoleFieldOptionView {
+  readonly value: string;
+  readonly label: string;
+  readonly labelI18n?: Readonly<Record<string, string>>;
+}
+
 export interface AdapterConsoleFieldView {
   readonly key: string;
   readonly type?: 'string' | 'number' | 'boolean';
   readonly required: boolean;
   readonly env: boolean;
   readonly secret: boolean;
+  readonly label?: string;
+  readonly labelI18n?: Readonly<Record<string, string>>;
+  readonly group?: string;
+  readonly groupI18n?: Readonly<Record<string, string>>;
   readonly description?: string;
   readonly descriptionI18n?: Readonly<Record<string, string>>;
   readonly placeholder?: string;
+  readonly placeholderI18n?: Readonly<Record<string, string>>;
+  readonly options?: readonly AdapterConsoleFieldOptionView[];
 }
 
 export interface AdapterConsoleActionFieldView {

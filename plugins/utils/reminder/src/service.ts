@@ -183,6 +183,44 @@ export class ReminderService {
     };
   }
 
+  async deleteById(id: string): Promise<boolean> {
+    this.#assertLive();
+    let removed = false;
+    await this.#state.update<ReminderBook>(REMINDER_STATE_KEY, current => {
+      if (!current || !Array.isArray(current.tasks)) return current;
+      const next = current.tasks.filter(task => {
+        if (task.id === id) {
+          removed = true;
+          return false;
+        }
+        return true;
+      });
+      return { version: 1, tasks: next };
+    });
+    return removed;
+  }
+
+  async clearCompleted(): Promise<number> {
+    this.#assertLive();
+    let cleared = 0;
+    await this.#state.update<ReminderBook>(REMINDER_STATE_KEY, current => {
+      if (!current || !Array.isArray(current.tasks)) return current;
+      const next = current.tasks.filter(task => {
+        const isCompleted =
+          task.status === 'delivered' ||
+          task.status === 'cancelled' ||
+          task.status === 'failed';
+        if (isCompleted) {
+          cleared += 1;
+          return false;
+        }
+        return true;
+      });
+      return { version: 1, tasks: next };
+    });
+    return cleared;
+  }
+
   #assertLive(locale?: Locale): void { if (this.#stopped) throw new Error(t(locale, 'serviceStopped')); }
 }
 

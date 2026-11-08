@@ -59,9 +59,16 @@ function fixture(initial = status(), tasks: AdapterConsoleLoginTask[] = [], star
       if (mode === 'late') await new Promise<void>(resolve => { finish = resolve; });
       if (mode === 'conflict' || (body.data as { expectedRevision: number | null }).expectedRevision !== view.runtime!.revision) return reply(undefined, 409, 'conflict');
       if (mode === 'unknown') return reply(undefined, 503, 'commit_unknown');
-      view = { ...view, runtime: { ...view.runtime!, revision: view.runtime!.revision! + 1, needsMigration: false, endpoints: view.runtime!.endpoints.map(endpoint => String(body.type).endsWith('.endpoint-stop') ? { ...endpoint, desiredEnabled: false } : endpoint) } };
+      const nextRev = view.runtime!.revision! + 1;
+      const addedId = String(body.type).endsWith('.endpoint-add') ? String((body.data as { id?: string }).id ?? '') : '';
+      const nextEndpoints = [
+        ...view.runtime!.endpoints.map(endpoint => String(body.type).endsWith('.endpoint-stop') ? { ...endpoint, desiredEnabled: false } : endpoint),
+        ...(addedId ? [{ instanceId: 'instance-new', canonicalId: 'canonical-new', endpointId: addedId, revision: nextRev, desiredEnabled: false, epoch: 1, incarnationId: 'inc-new', started: false, admitted: false }] : []),
+      ];
+      view = { ...view, runtime: { ...view.runtime!, revision: nextRev, needsMigration: false, endpoints: nextEndpoints } };
       return reply({ saved: true, restartRequired: false, runtime: view.runtime, execution: { status: 'pending' } });
     }
+    if (body.type === 'endpoint.test') return reply({ connected: true, latencyMs: 18, message: 'OK' });
     return reply({});
   }));
   const h = harness(); const current = h.exports.captureAdapterConsoleContext!() as () => boolean;
@@ -394,5 +401,221 @@ describe('loading and failure states (ICQQ page regressions)', () => {
     expect(f.h.text()).not.toContain('即将过期');
     await vi.advanceTimersByTimeAsync(55_000); await f.h.settle();
     expect(f.h.text()).toContain('验证即将过期'); f.h.unmount();
+  });
+});
+
+describe('platform-tailored onboarding wizards & interactive login workbench', () => {
+  it('supports one-step save-and-start (保存并立即启动) chaining endpoint-add then endpoint-start with updated revision', async () => {
+    const f = fixture();
+    await f.h.settle();
+    await f.h.button('添加').onClick();
+    await f.h.settle();
+    f.h.input(0).onChange({ target: { value: '10002' } });
+    await f.h.settle();
+    f.h.input(1).onChange({ target: { value: 's3cr3t' } });
+    await f.h.settle();
+    await f.h.button('保存并立即启动').onClick();
+    await f.h.settle();
+
+    const addCall = f.calls.find(c => c.body.type === 'plugin.plugin-a.endpoint-add');
+    const startCall = f.calls.find(c => c.body.type === 'plugin.plugin-a.endpoint-start');
+    expect(addCall?.body.data).toMatchObject({
+      id: '10002',
+      values: { password: 's3cr3t' },
+      expectedGeneration: 4,
+      expectedRevision: 2,
+    });
+    expect(startCall?.body.data).toMatchObject({
+      instanceId: 'instance-new',
+      expectedGeneration: 4,
+      expectedRevision: 3,
+    });
+    expect(f.h.text()).toContain('已保存并启动账号。');
+    f.h.unmount();
+  });
+
+  it('applies platform presets, connection mode callback URL preview, and email sender-to-IMAP sync while sanitizing undeclared or empty fields', async () => {
+    // 1. NapCat reverse-WS callback URL preview & sanitizeAddValues
+    const napcatStatus: AdapterConsoleStatus = {
+      ...status(),
+      adapterKey: 'napcat',
+      displayName: 'NapCat',
+      fields: [
+        { key: 'url', type: 'string', required: false },
+        { key: 'path', type: 'string', required: false },
+        { key: 'access_token', type: 'string', required: false, secret: true },
+      ],
+    };
+    const fNap = fixture(napcatStatus);
+    await fNap.h.settle();
+    await fNap.h.button('添加').onClick();
+    await fNap.h.settle();
+    const reverseWsTab = fNap.h.nodes().find(
+      node => node.type === 'button' && text(node.props?.children).includes('反向 WebSocket'),
+    );
+    expect(reverseWsTab).toBeDefined();
+    await reverseWsTab!.props.onClick();
+    await fNap.h.settle();
+    expect(fNap.h.text()).toContain('ws://');
+    expect(fNap.h.text()).toContain('/napcat');
+    const genSecretBtn = fNap.h.nodes().find(
+      node => node.type === 'button' && text(node.props?.children).includes('生成随机密钥'),
+    );
+    expect(genSecretBtn).toBeDefined();
+    await genSecretBtn!.props.onClick();
+    await fNap.h.settle();
+    const generatedSecret = String(fNap.h.input(3).value);
+    expect(generatedSecret.length).toBe(32);
+
+    fNap.h.input(0).onChange({ target: { value: 'napcat-1' } });
+    await fNap.h.settle();
+    await fNap.h.button('保存并立即启动').onClick();
+    await fNap.h.settle();
+    const napAddCall = fNap.calls.find(c => c.body.type === 'plugin.plugin-a.endpoint-add');
+    expect(napAddCall?.body.data).toMatchObject({
+      id: 'napcat-1',
+      values: { path: '/napcat', access_token: generatedSecret },
+    });
+    expect((napAddCall?.body.data as { values: Record<string, string> }).values).not.toHaveProperty('url');
+    expect((napAddCall?.body.data as { values: Record<string, string> }).values).not.toHaveProperty('http_url');
+    fNap.h.unmount();
+
+    // 2. Email preset + 1-click sender-to-IMAP sync
+    const emailStatus: AdapterConsoleStatus = {
+      ...status(),
+      adapterKey: 'email',
+      displayName: 'Email',
+      fields: [
+        { key: 'smtp.host', type: 'string', required: true },
+        { key: 'smtp.auth.user', type: 'string', required: true },
+        { key: 'imap.user', type: 'string', required: true },
+      ],
+    };
+    const fEmail = fixture(emailStatus);
+    await fEmail.h.settle();
+    await fEmail.h.button('添加').onClick();
+    await fEmail.h.settle();
+    const qqMailPreset = fEmail.h.nodes().find(
+      node => node.type === 'button' && text(node.props?.children).includes('QQ 邮箱'),
+    );
+    expect(qqMailPreset).toBeDefined();
+    await qqMailPreset!.props.onClick();
+    await fEmail.h.settle();
+    expect(fEmail.h.input(1).value).toBe('smtp.qq.com');
+
+    fEmail.h.input(2).onChange({ target: { value: 'bot@qq.com' } });
+    await fEmail.h.settle();
+    const syncBtn = fEmail.h.nodes().find(
+      node => node.type === 'button' && text(node.props?.children).includes('将发件账号同步至收件账号'),
+    );
+    expect(syncBtn).toBeDefined();
+    await syncBtn!.props.onClick();
+    await fEmail.h.settle();
+    expect(fEmail.h.input(3).value).toBe('bot@qq.com');
+    fEmail.h.unmount();
+  });
+
+  it('extracts slider ticket from pasted JSON response on submit and renders per-account connection test latency badge', async () => {
+    const s = status();
+    s.runtime = {
+      ...s.runtime!,
+      endpoints: s.runtime!.endpoints.map(ep => ({ ...ep, desiredEnabled: true, started: true })),
+    };
+    const identity = {
+      canonicalId: 'canonical-old',
+      instanceId: 'instance-old',
+      epoch: 5,
+      incarnationId: 'incarnation-current',
+    };
+    const f = fixture(s, [
+      {
+        id: 'slider-1',
+        adapter: 'icqq',
+        endpointKey: '10001',
+        type: 'slider',
+        payload: { url: 'https://ssl.captcha.qq.com/template/wireless_mqq_captcha.html' },
+        createdAt: 1,
+        endpointIdentity: identity,
+      },
+    ]);
+    await f.h.settle();
+    expect(f.h.text()).toContain('待验证');
+    expect(f.h.text()).toContain('打开滑块验证页面');
+
+    f.h.input(0).onChange({ target: { value: '{"ret":0,"ticket":"t03_smart_extracted_999","randstr":"@abc"}' } });
+    await f.h.settle();
+    await f.h.button('提交').onClick();
+    await f.h.settle();
+
+    const submitCall = f.calls.find(c => c.body.type === 'login.submit');
+    expect(submitCall?.body).toMatchObject({
+      type: 'login.submit',
+      taskId: 'slider-1',
+      value: 't03_smart_extracted_999',
+    });
+
+    await f.h.button('测试连接').onClick();
+    await f.h.settle();
+    expect(f.h.text()).toContain('18 ms');
+    f.h.unmount();
+  });
+
+  it('renders QQ Official Bot dual-track onboarding workbench and dispatches qq-bind-start and qq-bind-kind', async () => {
+    const qqStatus: AdapterConsoleStatus = {
+      ...status(),
+      adapterKey: 'qq',
+      displayName: 'QQ 官方机器人',
+      extra: {
+        bindState: 'waiting',
+        scanUrl: 'https://q.qq.com/qqbot/open-scan-test',
+        bindMessage: '请使用手机 QQ 扫描二维码确认绑定',
+      },
+      actions: [
+        { name: 'qq-bind-start', label: '获取绑定二维码', fields: [], options: [] },
+        { name: 'qq-bind-cancel', label: '取消绑定', fields: [], options: [] },
+        {
+          name: 'qq-bind-kind',
+          label: '创建机器人并写入配置',
+          accountMutation: true,
+          fields: [],
+          options: [
+            { value: 'public', label: '公域' },
+            { value: 'private', label: '私域' },
+          ],
+        },
+      ],
+    };
+    const f = fixture(qqStatus);
+    await f.h.settle();
+    expect(f.h.text()).toContain('QQ 官方机器人双轨接入工作台');
+    expect(f.h.text()).toContain('https://q.qq.com/qqbot/open-scan-test');
+
+    const startQrBtn = f.h.nodes().find(
+      node => node.type === 'button' && text(node.props?.children).includes('用手机 QQ 扫码一键创建/绑定官方机器人'),
+    );
+    expect(startQrBtn).toBeDefined();
+    await startQrBtn!.props.onClick();
+    await f.h.settle();
+    expect(f.calls.some(c => c.body.type === 'plugin.plugin-a.qq-bind-start')).toBe(true);
+
+    const publicKindBtn = f.h.nodes().find(
+      node => node.type === 'button' && text(node.props?.children).includes('公域机器人 (Public)'),
+    );
+    expect(publicKindBtn).toBeDefined();
+    await publicKindBtn!.props.onClick();
+    await f.h.settle();
+
+    const confirmKindBtn = f.h.nodes().find(
+      node => node.type === 'button' && text(node.props?.children).includes('确认创建并写入配置'),
+    );
+    expect(confirmKindBtn).toBeDefined();
+    await confirmKindBtn!.props.onClick();
+    await f.h.settle();
+    expect(f.calls.find(c => c.body.type === 'plugin.plugin-a.qq-bind-kind')?.body.data).toMatchObject({
+      value: 'public',
+      expectedGeneration: 4,
+      expectedRevision: 2,
+    });
+    f.h.unmount();
   });
 });
