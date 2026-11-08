@@ -1,14 +1,21 @@
 import { jsx, renderToHtml, isJsxElement } from "@zhin.js/jsx";
 import {
   Badge,
+  Callout,
   Card,
   CardCanvas,
   CardHeader,
+  ComparisonBar,
+  DonutChart,
+  HeatmapGrid,
   KvTable,
   MetricBlock,
   QuoteCard,
   RadarChart,
   Sparkline,
+  StatusGrid,
+  StepTracker,
+  Timeline,
   UsageBar,
 } from "../src/index.js";
 
@@ -86,5 +93,53 @@ describe("visual JSX components", () => {
     expect(html).toContain("<polygon");
     expect(html).toContain("<b>A</b>");
     expect(html).toContain('stroke-width="2"');
+  });
+
+  it("renders DonutChart, Callout, Timeline, StepTracker, ComparisonBar, StatusGrid and HeatmapGrid", async () => {
+    const html = await renderToHtml(
+      jsx(CardCanvas, {
+        children: jsx(Card, {
+          children: [
+            jsx(DonutChart, { percent: 75, label: "内存占用" }),
+            jsx(Callout, { tone: "warning", title: "告警", message: "负载偏高" }),
+            jsx(Timeline, {
+              items: [
+                { title: "启动", time: "08:00", description: "初始化完成" },
+                { title: "就绪", time: "08:01", badge: "OK" },
+              ],
+            }),
+            jsx(StepTracker, {
+              current: 1,
+              steps: [
+                { label: "拉取" },
+                { label: "构建", subtitle: "进行中" },
+                { label: "发布" },
+              ],
+            }),
+            jsx(ComparisonBar, {
+              leftLabel: "蓝方",
+              leftValue: 60,
+              rightLabel: "红方",
+              rightValue: 40,
+            }),
+            jsx(StatusGrid, {
+              items: [
+                { label: "Gateway", value: "Online", status: "ok" },
+                { label: "Queue", value: "2 pending", status: "warn" },
+              ],
+            }),
+            jsx(HeatmapGrid, { values: [0, 2, 5, 10, 4, 8], columns: 3 }),
+          ],
+        }),
+      })
+    );
+    expect(html).toContain("75%");
+    expect(html).toContain("内存占用");
+    expect(html).toContain("负载偏高");
+    expect(html).toContain("初始化完成");
+    expect(html).toContain("进行中");
+    expect(html).toContain("60%");
+    expect(html).toContain("Gateway");
+    expect(html).not.toContain("NaN");
   });
 });

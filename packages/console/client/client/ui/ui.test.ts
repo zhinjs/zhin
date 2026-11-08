@@ -414,4 +414,84 @@ describe('locale and plugin id helpers', () => {
     expect(serialized).toContain('zk-chip');
     env.unmount();
   });
+
+  it('renders universal UI components (Card, Tabs, Switch, ProgressBar, RingProgress, StatCard, Timeline, DataTable, Modal)', async () => {
+    vi.useFakeTimers();
+    stubHost(async () => ({
+      data: {
+        cpuPct: 68,
+        trendSeries: [10, 25, 40, 68],
+        events: [
+          { id: 'e1', title: 'Started', status: 'ok', time: '10:00' },
+          { id: 'e2', title: 'Synced', status: 'ready', time: '10:05' },
+        ],
+      },
+    }));
+    const env = createHookEnv();
+    const ui = env.load(file('./index.ts'));
+    const onTabChange = vi.fn();
+    const onSwitchChange = vi.fn();
+
+    env.mount(() =>
+      ui.Card({
+        title: 'System Overview',
+        subtitle: 'Realtime telemetry',
+        tone: 'primary',
+        children: [
+          ui.Tabs({
+            defaultValue: 't1',
+            onChange: onTabChange,
+            items: [
+              { key: 't1', label: 'Metrics', badge: 2, content: 'Metrics Body' },
+              { key: 't2', label: 'Logs', content: 'Logs Body' },
+            ],
+          }),
+          ui.Switch({ checked: true, onChange: onSwitchChange, label: 'Auto-heal' }),
+          ui.ProgressBar({ value: 82, showValue: true, label: 'Disk' }),
+          ui.RingProgress({ value: 64, label: 'CPU' }),
+          ui.StatCard({
+            label: 'Load',
+            value: '1.25',
+            unit: 'req/s',
+            progress: 65,
+            sparkline: [1, 3, 2, 5],
+            trend: { value: '+12%', direction: 'up' },
+          }),
+          ui.Timeline({
+            items: [
+              { id: '1', title: 'Boot', time: '09:00', tone: 'success' },
+              { id: '2', title: 'Ready', description: 'All adapters online' },
+            ],
+          }),
+          ui.DataTable({
+            columns: [
+              { key: 'name', label: 'Name', sortable: true },
+              { key: 'load', label: 'Load', type: 'progress' },
+            ],
+            rows: [
+              { id: '1', name: 'Worker B', load: 80 },
+              { id: '2', name: 'Worker A', load: 30 },
+            ],
+          }),
+          ui.Modal({
+            open: true,
+            onClose: () => undefined,
+            title: 'Confirm Action',
+            children: 'Modal content',
+          }),
+        ],
+      }),
+    );
+
+    const serialized = JSON.stringify(env.tree());
+    expect(serialized).toContain('System Overview');
+    expect(serialized).toContain('Metrics Body');
+    expect(serialized).toContain('82%');
+    expect(serialized).toContain('64%');
+    expect(serialized).toContain('+12%');
+    expect(serialized).toContain('All adapters online');
+    expect(serialized).toContain('Worker B');
+    expect(serialized).toContain('Confirm Action');
+    env.unmount();
+  });
 });

@@ -58,6 +58,7 @@ export function createHookEnv() {
       }];
     },
     useRef(initial: unknown) { const at = cursor++; return slots[at] ?? (slots[at] = { current: initial }); },
+    useId() { const at = cursor++; return slots[at] ?? (slots[at] = `zk-id-${at}`); },
     useMemo(fn: () => unknown, deps: unknown[]) {
       const at = cursor++;
       const old = slots[at] as { deps: unknown[]; value: unknown } | undefined;

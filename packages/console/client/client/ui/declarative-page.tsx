@@ -4,16 +4,26 @@ import { CommentReviewSession } from '../review-console/CommentReviewPage.js';
 import {
   Badge,
   Button,
+  Collapsible,
   ConfirmButton,
+  DescriptionList,
   EmptyState,
   ErrorState,
   Field,
+  JsonView,
   LoadingState,
   Notice,
   PageHeader,
   PluginPage,
+  ProgressBar,
   Section,
+  Select,
+  Sparkline,
   StaleNotice,
+  Switch,
+  Tabs,
+  Textarea,
+  Timeline,
   type BadgeTone,
   type ButtonVariant,
 } from './components.js';
@@ -180,7 +190,15 @@ export interface DeclarativeStatSpec<TData = Record<string, unknown>> {
   readonly key?: string;
   readonly label: DeclarativeI18nText;
   readonly value: (keyof TData & string) | string | DeclarativeValueExpr | ((data: TData, ctx: DeclarativePageContext<TData>) => React.ReactNode);
+  readonly unit?: DeclarativeI18nText;
+  readonly tone?: BadgeTone | 'primary';
   readonly hint?: DeclarativeI18nText | DeclarativeValueExpr | ((data: TData) => React.ReactNode);
+  readonly progress?: number | string | DeclarativeValueExpr;
+  readonly sparkline?: string;
+  readonly trend?: {
+    readonly value: DeclarativeI18nText | DeclarativeValueExpr;
+    readonly direction?: 'up' | 'down' | 'flat';
+  };
   readonly badge?: {
     readonly label: DeclarativeI18nText | DeclarativeValueExpr | ((data: TData) => React.ReactNode);
     readonly tone?: BadgeTone | DeclarativeValueExpr | ((data: TData) => BadgeTone);
@@ -190,6 +208,10 @@ export interface DeclarativeStatSpec<TData = Record<string, unknown>> {
 export interface DeclarativeActionFieldSpec {
   readonly key: string;
   readonly label: DeclarativeI18nText;
+  readonly type?: 'text' | 'password' | 'number' | 'textarea' | 'select' | 'switch';
+  readonly options?: readonly { readonly value: string; readonly label: DeclarativeI18nText }[];
+  readonly hint?: DeclarativeI18nText;
+  readonly rows?: number;
   readonly placeholder?: string;
   readonly required?: boolean;
   readonly defaultValue?: string;
@@ -210,9 +232,28 @@ export interface DeclarativeActionSpec<TData = Record<string, unknown>> {
   readonly successMessage?: DeclarativeI18nText;
 }
 
+export type DeclarativeColumnType =
+  | 'auto'
+  | 'text'
+  | 'code'
+  | 'badge'
+  | 'boolean'
+  | 'link'
+  | 'datetime'
+  | 'number'
+  | 'progress'
+  | 'tags'
+  | 'json';
+
 export interface DeclarativeColumnSpec<TRow = Record<string, unknown>, TData = Record<string, unknown>> {
   readonly key: keyof TRow & string;
   readonly label: DeclarativeI18nText;
+  readonly type?: DeclarativeColumnType;
+  readonly align?: 'left' | 'center' | 'right';
+  readonly sortable?: boolean;
+  readonly copyable?: boolean;
+  readonly width?: string | number;
+  readonly toneMap?: Readonly<Record<string, BadgeTone>>;
   readonly render?: (value: unknown, row: TRow, ctx: DeclarativePageContext<TData>) => React.ReactNode;
 }
 
@@ -220,6 +261,11 @@ export interface DeclarativeSectionSpec<TData = Record<string, unknown>, TRow = 
   readonly id?: string;
   readonly title?: DeclarativeI18nText;
   readonly description?: DeclarativeI18nText;
+  readonly tab?: DeclarativeI18nText;
+  readonly layout?: 'table' | 'cards' | 'kv' | 'timeline' | 'json';
+  readonly columnsCount?: 1 | 2 | 3;
+  readonly collapsible?: boolean;
+  readonly defaultCollapsed?: boolean;
   readonly emptyText?: DeclarativeI18nText;
   /** Extract rows for a declarative table or list. */
   readonly items?: (keyof TData & string) | ((data: TData) => readonly TRow[]);
@@ -229,7 +275,7 @@ export interface DeclarativeSectionSpec<TData = Record<string, unknown>, TRow = 
   readonly renderItem?: (item: TRow, index: number, ctx: DeclarativePageContext<TData>) => React.ReactNode;
   /** Key-value description list extractor (`<dl className="zk-dl">`). */
   readonly entries?:
-    | readonly { readonly label: DeclarativeI18nText | React.ReactNode; readonly value?: React.ReactNode | DeclarativeValueExpr; readonly dataKey?: string }[]
+    | readonly { readonly label: DeclarativeI18nText | React.ReactNode; readonly value?: React.ReactNode | DeclarativeValueExpr; readonly dataKey?: string; readonly hint?: DeclarativeI18nText }[]
     | ((data: TData, ctx: DeclarativePageContext<TData>) => Readonly<Record<string, React.ReactNode>> | readonly { readonly label: React.ReactNode; readonly value: React.ReactNode }[]);
   /** Custom section body renderer. */
   readonly render?: (data: TData, ctx: DeclarativePageContext<TData>) => React.ReactNode;
@@ -288,6 +334,11 @@ const declarativeStyles = `
   content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
   background: linear-gradient(90deg, var(--zk-primary), transparent); opacity: .75;
 }
+.zk-stat-card--success::before { background: linear-gradient(90deg, var(--zk-success), transparent); }
+.zk-stat-card--warning::before { background: linear-gradient(90deg, var(--zk-warning), transparent); }
+.zk-stat-card--danger::before { background: linear-gradient(90deg, var(--zk-danger), transparent); }
+.zk-stat-card--info::before { background: linear-gradient(90deg, var(--zk-info), transparent); }
+.zk-stat-card--neutral::before { background: linear-gradient(90deg, var(--zk-muted), transparent); }
 .zk-stat-card:hover { border-color: var(--zk-input-line); transform: translateY(-1px); }
 .zk-stat-card__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .zk-stat-card__label { font-size: var(--zk-text-small); color: var(--zk-muted); font-weight: 500; }
@@ -296,6 +347,8 @@ const declarativeStyles = `
 .zk-table { width: 100%; border-collapse: collapse; font-size: var(--zk-text-small); text-align: left; }
 .zk-table th, .zk-table td { padding: 11px 14px; border-bottom: 1px solid var(--zk-line); vertical-align: middle; }
 .zk-table th { color: var(--zk-muted); font-weight: 600; background: var(--zk-inset); white-space: nowrap; font-size: 12px; letter-spacing: 0.02em; }
+.zk-th-sort { border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; padding: 0; }
+.zk-th-sort:hover { color: var(--zk-fg); }
 .zk-table tbody tr { transition: background-color .12s ease; }
 .zk-table tbody tr:hover td { background: var(--zk-inset); }
 .zk-table tr:last-child td { border-bottom: none; }
@@ -663,13 +716,39 @@ function renderSmartValue(
   copiedState: string,
   onCopy: (key: string, text: string) => void,
   t: PluginUiText['t'],
+  colSpec?: {
+    readonly type?: DeclarativeColumnType;
+    readonly copyable?: boolean;
+    readonly toneMap?: Readonly<Record<string, BadgeTone>>;
+  },
 ): React.ReactNode {
   if (raw === null || raw === undefined || raw === '') return '-';
-  if (typeof raw === 'boolean') {
-    return <Badge tone={raw ? 'success' : 'neutral'}>{raw ? 'Yes' : 'No'}</Badge>;
+  const colType = colSpec?.type ?? 'auto';
+  if (colType === 'progress') {
+    const num = Number(raw);
+    return Number.isFinite(num) ? <ProgressBar value={num} size="sm" showValue /> : '-';
   }
-  if (Array.isArray(raw)) {
-    const nonEmpty = raw.filter((item) => item !== null && item !== undefined && item !== '');
+  if (colType === 'boolean' || typeof raw === 'boolean') {
+    const b = typeof raw === 'boolean' ? raw : String(raw).toLowerCase() === 'true';
+    return <Badge tone={b ? 'success' : 'neutral'}>{b ? 'Yes' : 'No'}</Badge>;
+  }
+  if (colType === 'badge') {
+    const s = String(raw);
+    const mappedTone = colSpec?.toneMap?.[s] ?? classifySemanticStatus(s) ?? 'neutral';
+    return <Badge tone={mappedTone}>{s}</Badge>;
+  }
+  if (colType === 'datetime') {
+    const d = typeof raw === 'number' || typeof raw === 'string' ? new Date(raw) : null;
+    if (d && !Number.isNaN(d.getTime())) {
+      return <span style={{ fontVariantNumeric: 'tabular-nums' }}>{d.toLocaleString()}</span>;
+    }
+  }
+  if (colType === 'json') {
+    return <code className="zk-code-pill">{typeof raw === 'string' ? raw : JSON.stringify(raw)}</code>;
+  }
+  if (colType === 'tags' || Array.isArray(raw)) {
+    const arr = Array.isArray(raw) ? raw : String(raw).split(',').map((s) => s.trim());
+    const nonEmpty = arr.filter((item) => item !== null && item !== undefined && item !== '');
     if (nonEmpty.length === 0) return '-';
     return (
       <span>
@@ -684,7 +763,7 @@ function renderSmartValue(
   if (typeof raw === 'string') {
     const trimmed = raw.trim();
     if (!trimmed || trimmed === '-') return '-';
-    if (/^https?:\/\/\S+$/iu.test(trimmed)) {
+    if (colType === 'link' || /^https?:\/\/\S+$/iu.test(trimmed)) {
       return (
         <span className="zk-row">
           <a href={trimmed} target="_blank" rel="noopener noreferrer" className="zk-ext-link">
@@ -700,11 +779,16 @@ function renderSmartValue(
         </span>
       );
     }
-    const statusTone = classifySemanticStatus(trimmed);
-    if (statusTone !== undefined) {
-      return <Badge tone={statusTone}>{trimmed}</Badge>;
+    if (colSpec?.toneMap && Object.prototype.hasOwnProperty.call(colSpec.toneMap, trimmed)) {
+      return <Badge tone={colSpec.toneMap[trimmed]}>{trimmed}</Badge>;
     }
-    if (fieldKey && CODE_KEY_PATTERN.test(fieldKey)) {
+    if (colType === 'auto') {
+      const statusTone = classifySemanticStatus(trimmed);
+      if (statusTone !== undefined) {
+        return <Badge tone={statusTone}>{trimmed}</Badge>;
+      }
+    }
+    if (colType === 'code' || colSpec?.copyable || (colType === 'auto' && fieldKey && CODE_KEY_PATTERN.test(fieldKey))) {
       return (
         <span className="zk-row">
           <code className="zk-code-pill">{trimmed}</code>
@@ -721,7 +805,7 @@ function renderSmartValue(
     return trimmed;
   }
   if (typeof raw === 'number') {
-    if (fieldKey && CODE_KEY_PATTERN.test(fieldKey)) {
+    if (colType === 'code' || (colType === 'auto' && fieldKey && CODE_KEY_PATTERN.test(fieldKey))) {
       return <code className="zk-code-pill">{String(raw)}</code>;
     }
     return String(raw);
@@ -769,6 +853,8 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
   const [actionInputs, setActionInputs] = useState<Readonly<Record<string, Readonly<Record<string, string>>>>>({});
   const [sectionQueries, setSectionQueries] = useState<Readonly<Record<string, string>>>({});
   const [sectionPages, setSectionPages] = useState<Readonly<Record<string, number>>>({});
+  const [sectionSorts, setSectionSorts] = useState<Readonly<Record<string, { readonly key: string; readonly dir: 'asc' | 'desc' } | undefined>>>({});
+  const [activeTab, setActiveTab] = useState<string>('');
   const [copiedKey, setCopiedKey] = useState<string>('');
 
   const handleCopy = useCallback((key: string, text: string) => {
@@ -970,6 +1056,7 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
             const val = typeof stat.value === 'function'
               ? stat.value(data, ctx)
               : evaluateDeclarativeExpr(stat.value, data, locale, t);
+            const unitText = stat.unit ? pickText(stat.unit, locale, t) : undefined;
             const hint = typeof stat.hint === 'function'
               ? stat.hint(data)
               : isDeclarativeValueExpr(stat.hint)
@@ -985,13 +1072,58 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
                   ? evaluateDeclarativeExpr(stat.badge.label, data, locale, t)
                   : pickText(stat.badge.label, locale, t))
               : undefined;
+            const rawProgress =
+              typeof stat.progress === 'number'
+                ? stat.progress
+                : typeof stat.progress === 'string'
+                  ? Number(resolveDataPath(data, stat.progress))
+                  : isDeclarativeValueExpr(stat.progress)
+                    ? Number(evaluateDeclarativeExpr(stat.progress, data, locale, t))
+                    : undefined;
+            const sparklineVals = stat.sparkline ? resolveDataPath(data, stat.sparkline) : undefined;
+            const trendText = stat.trend
+              ? (isDeclarativeValueExpr(stat.trend.value)
+                ? evaluateDeclarativeExpr(stat.trend.value, data, locale, t)
+                : pickText(stat.trend.value, locale, t))
+              : undefined;
+            const trendTone: BadgeTone =
+              stat.trend?.direction === 'up' ? 'success' : stat.trend?.direction === 'down' ? 'danger' : 'neutral';
+            const trendArrow =
+              stat.trend?.direction === 'up' ? '↑ ' : stat.trend?.direction === 'down' ? '↓ ' : '';
+            const cardTone = stat.tone ?? 'primary';
             return (
-              <div key={stat.key ?? idx} className="zk-stat-card">
+              <div key={stat.key ?? idx} className={`zk-stat-card${cardTone !== 'primary' ? ` zk-stat-card--${cardTone}` : ''}`}>
                 <div className="zk-stat-card__head">
                   <span className="zk-stat-card__label">{pickText(stat.label, locale, t)}</span>
                   {stat.badge && <Badge tone={badgeTone}>{badgeLabel}</Badge>}
                 </div>
-                <div className="zk-stat-card__value">{val}</div>
+                <div className="zk-row" style={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
+                  <div className="zk-stat-card__value">
+                    {val}
+                    {unitText && <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--zk-muted)', marginLeft: 4 }}>{unitText}</span>}
+                  </div>
+                  {trendText && (
+                    <Badge tone={trendTone}>
+                      {trendArrow}
+                      {trendText}
+                    </Badge>
+                  )}
+                  {Array.isArray(sparklineVals) && sparklineVals.length >= 2 && (
+                    <Sparkline
+                      values={sparklineVals.map(Number).filter(Number.isFinite)}
+                      width={84}
+                      height={26}
+                      tone={cardTone === 'neutral' ? 'primary' : cardTone}
+                    />
+                  )}
+                </div>
+                {rawProgress !== undefined && Number.isFinite(rawProgress) && (
+                  <ProgressBar
+                    value={rawProgress}
+                    size="sm"
+                    tone={cardTone === 'neutral' ? 'primary' : cardTone}
+                  />
+                )}
                 {hint && <span className="zk-hint">{hint}</span>}
               </div>
             );
@@ -1011,25 +1143,62 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
                 <div key={action.name} className="zk-card">
                   <strong>{label}</strong>
                   {action.description && <p className="zk-hint">{pickText(action.description, locale, t)}</p>}
-                  {(action.fields ?? []).map((field) => (
-                    <Field key={field.key} label={pickText(field.label, locale, t)} required={field.required}>
-                      <input
-                        type={field.secret ? 'password' : 'text'}
-                        placeholder={field.placeholder}
-                        value={currentValues[field.key] ?? field.defaultValue ?? ''}
-                        onChange={(e) => setActionInputs((prev) => ({
-                          ...prev,
-                          [action.name]: { ...(prev[action.name] ?? {}), [field.key]: e.target.value },
-                        }))}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && !isBusy && !isDisabled) {
-                            e.preventDefault();
-                            void runAction(action);
-                          }
-                        }}
-                      />
-                    </Field>
-                  ))}
+                  {(action.fields ?? []).map((field) => {
+                    const fieldVal = currentValues[field.key] ?? field.defaultValue ?? '';
+                    const setVal = (nextVal: string) =>
+                      setActionInputs((prev) => ({
+                        ...prev,
+                        [action.name]: { ...(prev[action.name] ?? {}), [field.key]: nextVal },
+                      }));
+                    const fieldHint = field.hint ? pickText(field.hint, locale, t) : undefined;
+                    if (field.type === 'switch') {
+                      return (
+                        <Switch
+                          key={field.key}
+                          checked={fieldVal === 'true'}
+                          onChange={(checked) => setVal(String(checked))}
+                          label={pickText(field.label, locale, t)}
+                          description={fieldHint}
+                          disabled={isDisabled || isBusy}
+                        />
+                      );
+                    }
+                    return (
+                      <Field key={field.key} label={pickText(field.label, locale, t)} hint={fieldHint} required={field.required}>
+                        {field.type === 'select' && field.options ? (
+                          <Select
+                            value={fieldVal}
+                            placeholder={field.placeholder}
+                            onValueChange={setVal}
+                            options={field.options.map((opt) => ({
+                              value: opt.value,
+                              label: pickText(opt.label, locale, t),
+                            }))}
+                          />
+                        ) : field.type === 'textarea' ? (
+                          <Textarea
+                            rows={field.rows ?? 3}
+                            placeholder={field.placeholder}
+                            value={fieldVal}
+                            onChange={(e) => setVal(e.target.value)}
+                          />
+                        ) : (
+                          <input
+                            type={field.secret || field.type === 'password' ? 'password' : field.type === 'number' ? 'number' : 'text'}
+                            placeholder={field.placeholder}
+                            value={fieldVal}
+                            onChange={(e) => setVal(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && !isBusy && !isDisabled) {
+                                e.preventDefault();
+                                void runAction(action);
+                              }
+                            }}
+                          />
+                        )}
+                      </Field>
+                    );
+                  })}
                   <div className="zk-row">
                     <Button variant={action.variant ?? 'primary'} busy={isBusy} disabled={isDisabled} onClick={() => runAction(action)}>
                       {label}
@@ -1042,260 +1211,616 @@ export function DeclarativePageView<TData = Record<string, unknown>>({
         </Section>
       )}
 
-      {data !== undefined && resource.state !== 'empty' && (spec.sections ?? []).map((section, idx) => {
-        const secKey = section.id ?? `sec-${idx}`;
-        const rows: readonly Record<string, unknown>[] | undefined = section.items
-          ? (typeof section.items === 'function'
-            ? section.items(data)
-            : (() => {
-                const resolved = resolveDataPath(data, section.items);
-                return Array.isArray(resolved) ? (resolved as readonly Record<string, unknown>[]) : [];
-              })())
-          : undefined;
-        const query = (sectionQueries[secKey] ?? '').trim().toLowerCase();
-        const filteredRows = rows && query
-          ? rows.filter((row) => {
-              const colVals = (section.columns ?? []).map((col) => resolveDataPath(row, col.key));
-              const rawVals = Object.values(row ?? {}).filter(
-                (v) => typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean',
-              );
-              return [...colVals, ...rawVals].some((v) =>
-                v !== null && v !== undefined && typeof v !== 'object' && String(v).toLowerCase().includes(query),
-              );
-            })
-          : rows;
-        const totalFiltered = filteredRows?.length ?? 0;
-        const totalPages = Math.max(1, Math.ceil(totalFiltered / TABLE_PAGE_SIZE));
-        const currentPage = Math.min(sectionPages[secKey] ?? 1, totalPages);
-        const pagedRows = filteredRows
-          ? filteredRows.slice((currentPage - 1) * TABLE_PAGE_SIZE, currentPage * TABLE_PAGE_SIZE)
-          : undefined;
-
-        const entries = section.entries
-          ? (typeof section.entries === 'function'
-            ? section.entries(data, ctx)
-            : section.entries.map((entry) => {
-                const inferredKey =
-                  entry.dataKey ??
-                  (isDeclarativeValueExpr(entry.value) &&
-                  typeof (entry.value as { $path?: unknown }).$path === 'string'
-                    ? (entry.value as { $path: string }).$path
-                    : undefined);
-                return {
-                  key: inferredKey,
-                  label:
-                    typeof entry.label === 'string' ||
-                    (entry.label && typeof entry.label === 'object' && ('zh' in entry.label || 'en' in entry.label || 'zh-CN' in entry.label))
-                      ? pickText(entry.label as DeclarativeI18nText, locale, t)
-                      : entry.label,
-                  value: isDeclarativeValueExpr(entry.value)
-                    ? evaluateDeclarativeExpr(entry.value, data, locale, t)
-                    : entry.dataKey
-                      ? resolveDataPath(data, entry.dataKey)
-                      : (entry.value as React.ReactNode),
-                };
-              }))
-          : undefined;
-        const entryList = entries
-          ? (Array.isArray(entries)
-            ? entries
-            : Object.entries(entries).map(([label, value]) => ({ key: label, label, value })))
-          : undefined;
+      {data !== undefined && resource.state !== 'empty' && (() => {
+        const allSections = spec.sections ?? [];
+        const tabLabels = Array.from(
+          new Set(allSections.map((s) => (s.tab ? pickText(s.tab, locale, t) : '')).filter(Boolean)),
+        );
+        const currentTab = activeTab && tabLabels.includes(activeTab) ? activeTab : (tabLabels[0] ?? '');
+        const visibleSections = tabLabels.length > 1
+          ? allSections.filter((s) => !s.tab || pickText(s.tab, locale, t) === currentTab)
+          : allSections;
 
         return (
-          <Section
-            key={secKey}
-            id={section.id}
-            title={section.title ? pickText(section.title, locale, t) : undefined}
-            description={section.description ? pickText(section.description, locale, t) : undefined}
-            actions={
-              rows && (rows.length > 0 || query.length > 0) ? (
-                <div className="zk-table-toolbar">
-                  {(rows.length >= 3 || query.length > 0) && (
-                    <input
-                      type="search"
-                      className="zk-search-input"
-                      placeholder={locale === 'en' ? 'Filter rows…' : '搜索过滤…'}
-                      value={sectionQueries[secKey] ?? ''}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setSectionQueries((prev) => ({ ...prev, [secKey]: val }));
-                        setSectionPages((prev) => ({ ...prev, [secKey]: 1 }));
-                      }}
-                    />
-                  )}
-                  <span className="zk-count">
-                    {query
-                      ? `${totalFiltered} / ${rows.length}`
-                      : String(rows.length)}
-                  </span>
-                </div>
-              ) : undefined
-            }
-          >
-            {section.render && section.render(data, ctx)}
-            {entryList && (
-              <div className="zk-card">
-                <dl className="zk-dl">
-                  {entryList.map((entry, entryIdx) => {
-                    const entryFieldKey = (entry as { key?: string }).key ?? (typeof entry.label === 'string' ? entry.label : undefined);
-                    return (
-                      <React.Fragment key={entryIdx}>
-                        <dt>{entry.label}</dt>
-                        <dd>
-                          {renderSmartValue(
-                            entry.value,
-                            entryFieldKey,
-                            `${secKey}-entry-${entryIdx}`,
-                            copiedKey,
-                            handleCopy,
-                            t,
-                          )}
-                        </dd>
-                      </React.Fragment>
-                    );
-                  })}
-                </dl>
-              </div>
+          <>
+            {tabLabels.length > 1 && (
+              <Tabs
+                value={currentTab}
+                onChange={setActiveTab}
+                items={tabLabels.map((lbl) => ({ key: lbl, label: lbl }))}
+              />
             )}
-            {rows && (
-              rows.length === 0 ? (
-                <EmptyState title={section.emptyText ? pickText(section.emptyText, locale, t) : t('暂无数据')} />
-              ) : pagedRows && pagedRows.length === 0 ? (
-                <EmptyState
-                  title={locale === 'en' ? 'No matching rows' : '无匹配记录'}
-                  action={
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setSectionQueries((prev) => ({ ...prev, [secKey]: '' }))}
-                    >
-                      {locale === 'en' ? 'Clear filter' : '清除过滤'}
-                    </Button>
-                  }
-                />
-              ) : section.columns && section.columns.length > 0 ? (
-                <div className="zk-table-wrap">
-                  <table className="zk-table">
-                    <thead>
-                      <tr>
-                        {section.columns.map((col) => (
-                          <th key={col.key}>{pickText(col.label, locale, t)}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(pagedRows ?? rows).map((row, rowIdx) => {
-                        const globalIdx = (currentPage - 1) * TABLE_PAGE_SIZE + rowIdx;
-                        const rowKeyVal =
-                          row.id ??
-                          row.key ??
-                          row.ownerKey ??
-                          (section.columns?.[0]?.key ? resolveDataPath(row, section.columns[0].key) : undefined) ??
-                          globalIdx;
-                        return (
-                          <tr key={String(rowKeyVal)}>
-                            {(section.columns ?? []).map((col) => {
-                              const cellVal = resolveDataPath(row, col.key);
+            {visibleSections.map((section, idx) => {
+              const secKey = section.id ?? `sec-${idx}`;
+              const rows: readonly Record<string, unknown>[] | undefined = section.items
+                ? (typeof section.items === 'function'
+                  ? section.items(data)
+                  : (() => {
+                      const resolved = resolveDataPath(data, section.items);
+                      return Array.isArray(resolved) ? (resolved as readonly Record<string, unknown>[]) : [];
+                    })())
+                : undefined;
+              const query = (sectionQueries[secKey] ?? '').trim().toLowerCase();
+              const filteredRows = rows && query
+                ? rows.filter((row) => {
+                    const colVals = (section.columns ?? []).map((col) => resolveDataPath(row, col.key));
+                    const rawVals = Object.values(row ?? {}).filter(
+                      (v) => typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean',
+                    );
+                    return [...colVals, ...rawVals].some((v) =>
+                      v !== null && v !== undefined && typeof v !== 'object' && String(v).toLowerCase().includes(query),
+                    );
+                  })
+                : rows;
+              const sortState = sectionSorts[secKey];
+              const sortedRows = filteredRows && sortState
+                ? [...filteredRows].sort((a, b) => {
+                    const va = resolveDataPath(a, sortState.key);
+                    const vb = resolveDataPath(b, sortState.key);
+                    if (va === vb) return 0;
+                    if (va === undefined || va === null) return 1;
+                    if (vb === undefined || vb === null) return -1;
+                    const cmp =
+                      typeof va === 'number' && typeof vb === 'number'
+                        ? va - vb
+                        : String(va).localeCompare(String(vb), undefined, { numeric: true });
+                    return sortState.dir === 'asc' ? cmp : -cmp;
+                  })
+                : filteredRows;
+              const totalFiltered = sortedRows?.length ?? 0;
+              const totalPages = Math.max(1, Math.ceil(totalFiltered / TABLE_PAGE_SIZE));
+              const currentPage = Math.min(sectionPages[secKey] ?? 1, totalPages);
+              const pagedRows = sortedRows
+                ? sortedRows.slice((currentPage - 1) * TABLE_PAGE_SIZE, currentPage * TABLE_PAGE_SIZE)
+                : undefined;
+
+              const entries = section.entries
+                ? (typeof section.entries === 'function'
+                  ? section.entries(data, ctx)
+                  : section.entries.map((entry) => {
+                      const inferredKey =
+                        entry.dataKey ??
+                        (isDeclarativeValueExpr(entry.value) &&
+                        typeof (entry.value as { $path?: unknown }).$path === 'string'
+                          ? (entry.value as { $path: string }).$path
+                          : undefined);
+                      return {
+                        key: inferredKey,
+                        hint: entry.hint ? pickText(entry.hint, locale, t) : undefined,
+                        label:
+                          typeof entry.label === 'string' ||
+                          (entry.label && typeof entry.label === 'object' && ('zh' in entry.label || 'en' in entry.label || 'zh-CN' in entry.label))
+                            ? pickText(entry.label as DeclarativeI18nText, locale, t)
+                            : entry.label,
+                        value: isDeclarativeValueExpr(entry.value)
+                          ? evaluateDeclarativeExpr(entry.value, data, locale, t)
+                          : entry.dataKey
+                            ? resolveDataPath(data, entry.dataKey)
+                            : (entry.value as React.ReactNode),
+                      };
+                    }))
+                : undefined;
+              const entryList = entries
+                ? (Array.isArray(entries)
+                  ? entries
+                  : Object.entries(entries).map(([label, value]) => ({ key: label, label, value })))
+                : undefined;
+
+              const sectionBody = (
+                <>
+                  {section.render && section.render(data, ctx)}
+                  {section.layout === 'json' && <JsonView data={rows ?? entryList ?? data} />}
+                  {entryList && section.layout !== 'json' && (
+                    section.columnsCount && section.columnsCount > 1 ? (
+                      <DescriptionList
+                        columns={section.columnsCount}
+                        bordered
+                        items={entryList.map((entry, entryIdx) => {
+                          const entryFieldKey = (entry as { key?: string }).key ?? (typeof entry.label === 'string' ? entry.label : undefined);
+                          return {
+                            label: entry.label,
+                            hint: (entry as { hint?: React.ReactNode }).hint,
+                            value: renderSmartValue(
+                              entry.value,
+                              entryFieldKey,
+                              `${secKey}-entry-${entryIdx}`,
+                              copiedKey,
+                              handleCopy,
+                              t,
+                            ),
+                          };
+                        })}
+                      />
+                    ) : (
+                      <div className="zk-card">
+                        <dl className="zk-dl">
+                          {entryList.map((entry, entryIdx) => {
+                            const entryFieldKey = (entry as { key?: string }).key ?? (typeof entry.label === 'string' ? entry.label : undefined);
+                            return (
+                              <React.Fragment key={entryIdx}>
+                                <dt>{entry.label}</dt>
+                                <dd>
+                                  {renderSmartValue(
+                                    entry.value,
+                                    entryFieldKey,
+                                    `${secKey}-entry-${entryIdx}`,
+                                    copiedKey,
+                                    handleCopy,
+                                    t,
+                                  )}
+                                </dd>
+                              </React.Fragment>
+                            );
+                          })}
+                        </dl>
+                      </div>
+                    )
+                  )}
+                  {rows && section.layout !== 'json' && (
+                    rows.length === 0 ? (
+                      <EmptyState title={section.emptyText ? pickText(section.emptyText, locale, t) : t('暂无数据')} />
+                    ) : pagedRows && pagedRows.length === 0 ? (
+                      <EmptyState
+                        title={locale === 'en' ? 'No matching rows' : '无匹配记录'}
+                        action={
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setSectionQueries((prev) => ({ ...prev, [secKey]: '' }))}
+                          >
+                            {locale === 'en' ? 'Clear filter' : '清除过滤'}
+                          </Button>
+                        }
+                      />
+                    ) : section.layout === 'timeline' ? (
+                      <div className="zk-card">
+                        <Timeline
+                          items={(pagedRows ?? rows).map((row, rowIdx) => ({
+                            id: String(row.id ?? row.key ?? rowIdx),
+                            title: String(row.title ?? row.name ?? row.label ?? row.id ?? `#${rowIdx + 1}`),
+                            description: row.description !== undefined ? String(row.description) : (row.summary !== undefined ? String(row.summary) : undefined),
+                            time: row.time !== undefined ? String(row.time) : (row.createdAt !== undefined ? String(row.createdAt) : undefined),
+                            tone: (typeof row.tone === 'string' ? row.tone : classifySemanticStatus(String(row.status ?? ''))) as 'primary' | 'success' | 'warning' | 'danger' | 'neutral' | undefined,
+                            badge: row.status !== undefined ? renderSmartValue(row.status, 'status', `${secKey}-tl-${rowIdx}`, copiedKey, handleCopy, t) : undefined,
+                          }))}
+                        />
+                      </div>
+                    ) : section.columns && section.columns.length > 0 && section.layout !== 'cards' ? (
+                      <div className="zk-table-wrap">
+                        <table className="zk-table">
+                          <thead>
+                            <tr>
+                              {section.columns.map((col) => {
+                                const isSorted = sortState?.key === col.key;
+                                const canSort = col.sortable !== false && rows.length >= 2;
+                                return (
+                                  <th
+                                    key={col.key}
+                                    style={{
+                                      ...(col.align ? { textAlign: col.align } : {}),
+                                      ...(col.width ? { width: typeof col.width === 'number' ? `${col.width}px` : col.width } : {}),
+                                    }}
+                                  >
+                                    {canSort ? (
+                                      <button
+                                        type="button"
+                                        className="zk-th-sort"
+                                        onClick={() =>
+                                          setSectionSorts((prev) => {
+                                            const cur = prev[secKey];
+                                            const next =
+                                              !cur || cur.key !== col.key
+                                                ? { key: col.key, dir: 'asc' as const }
+                                                : cur.dir === 'asc'
+                                                  ? { key: col.key, dir: 'desc' as const }
+                                                  : undefined;
+                                            return { ...prev, [secKey]: next };
+                                          })
+                                        }
+                                      >
+                                        <span>{pickText(col.label, locale, t)}</span>
+                                        {isSorted && <span aria-hidden="true">{sortState?.dir === 'asc' ? '↑' : '↓'}</span>}
+                                      </button>
+                                    ) : (
+                                      pickText(col.label, locale, t)
+                                    )}
+                                  </th>
+                                );
+                              })}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(pagedRows ?? rows).map((row, rowIdx) => {
+                              const globalIdx = (currentPage - 1) * TABLE_PAGE_SIZE + rowIdx;
+                              const rowKeyVal =
+                                row.id ??
+                                row.key ??
+                                row.ownerKey ??
+                                (section.columns?.[0]?.key ? resolveDataPath(row, section.columns[0].key) : undefined) ??
+                                globalIdx;
                               return (
-                                <td key={col.key}>
-                                  {col.render
-                                    ? col.render(cellVal, row, ctx)
-                                    : renderSmartValue(
-                                        cellVal,
-                                        col.key,
-                                        `${secKey}-r${globalIdx}-${col.key}`,
+                                <tr key={String(rowKeyVal)}>
+                                  {(section.columns ?? []).map((col) => {
+                                    const cellVal = resolveDataPath(row, col.key);
+                                    return (
+                                      <td
+                                        key={col.key}
+                                        style={col.align ? { textAlign: col.align } : undefined}
+                                      >
+                                        {col.render
+                                          ? col.render(cellVal, row, ctx)
+                                          : renderSmartValue(
+                                              cellVal,
+                                              col.key,
+                                              `${secKey}-r${globalIdx}-${col.key}`,
+                                              copiedKey,
+                                              handleCopy,
+                                              t,
+                                              col,
+                                            )}
+                                      </td>
+                                    );
+                                  })}
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                        {totalPages > 1 && (
+                          <div className="zk-pagination">
+                            <span>
+                              {locale === 'en'
+                                ? `Page ${currentPage} of ${totalPages} (${totalFiltered} items)`
+                                : `第 ${currentPage} / ${totalPages} 页（共 ${totalFiltered} 条）`}
+                            </span>
+                            <div className="zk-row">
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                disabled={currentPage <= 1}
+                                onClick={() =>
+                                  setSectionPages((prev) => ({ ...prev, [secKey]: Math.max(1, currentPage - 1) }))
+                                }
+                              >
+                                {locale === 'en' ? 'Previous' : '上一页'}
+                              </Button>
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                disabled={currentPage >= totalPages}
+                                onClick={() =>
+                                  setSectionPages((prev) => ({ ...prev, [secKey]: Math.min(totalPages, currentPage + 1) }))
+                                }
+                              >
+                                {locale === 'en' ? 'Next' : '下一页'}
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : section.renderItem ? (
+                      <ul className="zk-list">
+                        {(pagedRows ?? rows).map((row, rowIdx) => {
+                          const globalIdx = (currentPage - 1) * TABLE_PAGE_SIZE + rowIdx;
+                          return (
+                            <li key={String(row.id ?? row.key ?? row.ownerKey ?? globalIdx)} className="zk-card">
+                              {section.renderItem?.(row, globalIdx, ctx)}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    ) : (
+                      <ul className="zk-list">
+                        {(pagedRows ?? rows).map((row, rowIdx) => {
+                          const globalIdx = (currentPage - 1) * TABLE_PAGE_SIZE + rowIdx;
+                          return (
+                            <li key={String(row.id ?? row.key ?? row.ownerKey ?? globalIdx)} className="zk-card">
+                              <dl className="zk-dl">
+                                {Object.entries(row).map(([k, v]) => (
+                                  <React.Fragment key={k}>
+                                    <dt>{k}</dt>
+                                    <dd>
+                                      {renderSmartValue(
+                                        v,
+                                        k,
+                                        `${secKey}-card-${globalIdx}-${k}`,
                                         copiedKey,
                                         handleCopy,
                                         t,
                                       )}
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                  {totalPages > 1 && (
-                    <div className="zk-pagination">
-                      <span>
-                        {locale === 'en'
-                          ? `Page ${currentPage} of ${totalPages} (${totalFiltered} items)`
-                          : `第 ${currentPage} / ${totalPages} 页（共 ${totalFiltered} 条）`}
-                      </span>
-                      <div className="zk-row">
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          disabled={currentPage <= 1}
-                          onClick={() =>
-                            setSectionPages((prev) => ({ ...prev, [secKey]: Math.max(1, currentPage - 1) }))
-                          }
-                        >
-                          {locale === 'en' ? 'Previous' : '上一页'}
-                        </Button>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          disabled={currentPage >= totalPages}
-                          onClick={() =>
-                            setSectionPages((prev) => ({ ...prev, [secKey]: Math.min(totalPages, currentPage + 1) }))
-                          }
-                        >
-                          {locale === 'en' ? 'Next' : '下一页'}
-                        </Button>
-                      </div>
-                    </div>
+                                    </dd>
+                                  </React.Fragment>
+                                ))}
+                              </dl>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )
                   )}
-                </div>
-              ) : section.renderItem ? (
-                <ul className="zk-list">
-                  {(pagedRows ?? rows).map((row, rowIdx) => {
-                    const globalIdx = (currentPage - 1) * TABLE_PAGE_SIZE + rowIdx;
-                    return (
-                      <li key={String(row.id ?? row.key ?? row.ownerKey ?? globalIdx)} className="zk-card">
-                        {section.renderItem?.(row, globalIdx, ctx)}
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : (
-                <ul className="zk-list">
-                  {(pagedRows ?? rows).map((row, rowIdx) => {
-                    const globalIdx = (currentPage - 1) * TABLE_PAGE_SIZE + rowIdx;
-                    return (
-                      <li key={String(row.id ?? row.key ?? row.ownerKey ?? globalIdx)} className="zk-card">
-                        <dl className="zk-dl">
-                          {Object.entries(row).map(([k, v]) => (
-                            <React.Fragment key={k}>
-                              <dt>{k}</dt>
-                              <dd>
-                                {renderSmartValue(
-                                  v,
-                                  k,
-                                  `${secKey}-card-${globalIdx}-${k}`,
-                                  copiedKey,
-                                  handleCopy,
-                                  t,
-                                )}
-                              </dd>
-                            </React.Fragment>
-                          ))}
-                        </dl>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )
-            )}
-          </Section>
+                </>
+              );
+
+              if (section.collapsible) {
+                return (
+                  <Collapsible
+                    key={secKey}
+                    title={section.title ? pickText(section.title, locale, t) : secKey}
+                    subtitle={section.description ? pickText(section.description, locale, t) : undefined}
+                    defaultOpen={!section.defaultCollapsed}
+                    badge={rows ? <span className="zk-count">{rows.length}</span> : undefined}
+                  >
+                    {sectionBody}
+                  </Collapsible>
+                );
+              }
+
+              return (
+                <Section
+                  key={secKey}
+                  id={section.id}
+                  title={section.title ? pickText(section.title, locale, t) : undefined}
+                  description={section.description ? pickText(section.description, locale, t) : undefined}
+                  actions={
+                    rows && (rows.length > 0 || query.length > 0) ? (
+                      <div className="zk-table-toolbar">
+                        {(rows.length >= 3 || query.length > 0) && (
+                          <input
+                            type="search"
+                            className="zk-search-input"
+                            placeholder={locale === 'en' ? 'Filter rows…' : '搜索过滤…'}
+                            value={sectionQueries[secKey] ?? ''}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setSectionQueries((prev) => ({ ...prev, [secKey]: val }));
+                              setSectionPages((prev) => ({ ...prev, [secKey]: 1 }));
+                            }}
+                          />
+                        )}
+                        <span className="zk-count">
+                          {query
+                            ? `${totalFiltered} / ${rows.length}`
+                            : String(rows.length)}
+                        </span>
+                      </div>
+                    ) : undefined
+                  }
+                >
+                  {sectionBody}
+                </Section>
+              );
+            })}
+          </>
         );
-      })}
+      })()}
 
       {data !== undefined && resource.state !== 'empty' && spec.render && spec.render(data, ctx)}
       {spec.footnote && <p className="zk-footnote">{pickText(spec.footnote, locale, t)}</p>}
     </PluginPage>
+  );
+}
+
+export interface DataTableProps<TRow = Record<string, unknown>> {
+  readonly columns: readonly {
+    readonly key: keyof TRow & string;
+    readonly label: DeclarativeI18nText;
+    readonly type?: DeclarativeColumnType;
+    readonly align?: 'left' | 'center' | 'right';
+    readonly sortable?: boolean;
+    readonly copyable?: boolean;
+    readonly width?: string | number;
+    readonly toneMap?: Readonly<Record<string, BadgeTone>>;
+    readonly render?: (value: unknown, row: TRow, index: number) => React.ReactNode;
+  }[];
+  readonly rows: readonly TRow[];
+  readonly rowKey?: keyof TRow & string;
+  readonly searchable?: boolean;
+  readonly pageSize?: number;
+  readonly emptyTitle?: DeclarativeI18nText;
+  readonly actions?: React.ReactNode;
+}
+
+/** 通用数据表格组件：自带搜索过滤、列点击排序、分页与智能单元格格式化（徽章/链接/代码胶囊/进度条/标签数组）。 */
+export function DataTable<TRow extends Record<string, unknown> = Record<string, unknown>>({
+  columns,
+  rows,
+  rowKey,
+  searchable = true,
+  pageSize = TABLE_PAGE_SIZE,
+  emptyTitle,
+  actions,
+}: DataTableProps<TRow>) {
+  const { locale, t } = useLocale();
+  const [query, setQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const [sort, setSort] = useState<{ readonly key: string; readonly dir: 'asc' | 'desc' } | undefined>();
+  const [copiedKey, setCopiedKey] = useState('');
+
+  const handleCopy = useCallback((key: string, text: string) => {
+    try {
+      void globalThis.navigator?.clipboard?.writeText?.(text);
+    } catch {
+      // ignore
+    }
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey((prev) => (prev === key ? '' : prev)), 1_500);
+  }, []);
+
+  const q = query.trim().toLowerCase();
+  const filtered = useMemo(() => {
+    if (!q) return rows;
+    return rows.filter((row) => {
+      const colVals = columns.map((col) => resolveDataPath(row, col.key));
+      const rawVals = Object.values(row ?? {}).filter(
+        (v) => typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean',
+      );
+      return [...colVals, ...rawVals].some(
+        (v) => v !== null && v !== undefined && typeof v !== 'object' && String(v).toLowerCase().includes(q),
+      );
+    });
+  }, [rows, columns, q]);
+
+  const sorted = useMemo(() => {
+    if (!sort) return filtered;
+    return [...filtered].sort((a, b) => {
+      const va = resolveDataPath(a, sort.key);
+      const vb = resolveDataPath(b, sort.key);
+      if (va === vb) return 0;
+      if (va === undefined || va === null) return 1;
+      if (vb === undefined || vb === null) return -1;
+      const cmp =
+        typeof va === 'number' && typeof vb === 'number'
+          ? va - vb
+          : String(va).localeCompare(String(vb), undefined, { numeric: true });
+      return sort.dir === 'asc' ? cmp : -cmp;
+    });
+  }, [filtered, sort]);
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const paged = sorted.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  return (
+    <div className="zk-stack" style={{ gap: 10 }}>
+      {(searchable && (rows.length >= 3 || q.length > 0)) || actions ? (
+        <div className="zk-section__head">
+          <div className="zk-table-toolbar">
+            {searchable && (rows.length >= 3 || q.length > 0) && (
+              <input
+                type="search"
+                className="zk-search-input"
+                placeholder={t('搜索…')}
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setPage(1);
+                }}
+              />
+            )}
+            <span className="zk-count">
+              {q ? `${sorted.length} / ${rows.length}` : t('共 {0} 条', rows.length)}
+            </span>
+          </div>
+          {actions && <div className="zk-row">{actions}</div>}
+        </div>
+      ) : null}
+
+      {rows.length === 0 ? (
+        <EmptyState title={emptyTitle ? pickText(emptyTitle, locale, t) : t('暂无数据')} />
+      ) : paged.length === 0 ? (
+        <EmptyState
+          title={locale === 'en' ? 'No matching rows' : '无匹配记录'}
+          action={
+            <Button variant="ghost" size="sm" onClick={() => setQuery('')}>
+              {t('清空')}
+            </Button>
+          }
+        />
+      ) : (
+        <div className="zk-table-wrap">
+          <table className="zk-table">
+            <thead>
+              <tr>
+                {columns.map((col) => {
+                  const isSorted = sort?.key === col.key;
+                  const canSort = col.sortable !== false && rows.length >= 2;
+                  return (
+                    <th
+                      key={col.key}
+                      style={{
+                        ...(col.align ? { textAlign: col.align } : {}),
+                        ...(col.width ? { width: typeof col.width === 'number' ? `${col.width}px` : col.width } : {}),
+                      }}
+                    >
+                      {canSort ? (
+                        <button
+                          type="button"
+                          className="zk-th-sort"
+                          onClick={() =>
+                            setSort((cur) =>
+                              !cur || cur.key !== col.key
+                                ? { key: col.key, dir: 'asc' }
+                                : cur.dir === 'asc'
+                                  ? { key: col.key, dir: 'desc' }
+                                  : undefined,
+                            )
+                          }
+                        >
+                          <span>{pickText(col.label, locale, t)}</span>
+                          {isSorted && <span aria-hidden="true">{sort?.dir === 'asc' ? '↑' : '↓'}</span>}
+                        </button>
+                      ) : (
+                        pickText(col.label, locale, t)
+                      )}
+                    </th>
+                  );
+                })}
+              </tr>
+            </thead>
+            <tbody>
+              {paged.map((row, rowIdx) => {
+                const globalIdx = (currentPage - 1) * pageSize + rowIdx;
+                const rk =
+                  (rowKey ? resolveDataPath(row, rowKey) : undefined) ??
+                  row.id ??
+                  row.key ??
+                  row.ownerKey ??
+                  globalIdx;
+                return (
+                  <tr key={String(rk)}>
+                    {columns.map((col) => {
+                      const cellVal = resolveDataPath(row, col.key);
+                      return (
+                        <td key={col.key} style={col.align ? { textAlign: col.align } : undefined}>
+                          {col.render
+                            ? col.render(cellVal, row, globalIdx)
+                            : renderSmartValue(
+                                cellVal,
+                                col.key,
+                                `dt-r${globalIdx}-${col.key}`,
+                                copiedKey,
+                                handleCopy,
+                                t,
+                                col,
+                              )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {totalPages > 1 && (
+            <div className="zk-pagination">
+              <span>
+                {locale === 'en'
+                  ? `Page ${currentPage} of ${totalPages} (${sorted.length} items)`
+                  : `第 ${currentPage} / ${totalPages} 页（共 ${sorted.length} 条）`}
+              </span>
+              <div className="zk-row">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={currentPage <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  {t('上一页')}
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={currentPage >= totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                >
+                  {t('下一页')}
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

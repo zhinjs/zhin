@@ -3,6 +3,9 @@ import { themeOf, displayProps } from "./theme.js";
 import { cssLength, customizeRoot, themedDiv, themedColumn } from "./styles.js";
 import type {
   BarChartProps,
+  ComparisonBarProps,
+  DonutChartProps,
+  HeatmapGridProps,
   RadarChartProps,
   SparklineProps,
 } from "./props.js";
@@ -233,5 +236,217 @@ export function Sparkline(props: SparklineProps): JSXElement {
     props,
     theme,
     "Sparkline"
+  );
+}
+
+export function DonutChart(props: DonutChartProps): JSXElement {
+  const theme = themeOf(props);
+  const T = theme.palette;
+  const {
+    percent,
+    segments,
+    size = 96,
+    thickness = 10,
+    accent = T.accentMem,
+    label,
+    value,
+  } = displayProps(props);
+  const div = (style: string, children?: JSXRenderable) =>
+    themedDiv(theme, style, children);
+  const column = (children: JSXRenderable, style = "") =>
+    themedColumn(theme, children, style);
+
+  const r = Math.max(4, (size - thickness) / 2);
+  const c = 2 * Math.PI * r;
+  const cx = size / 2;
+  const cy = size / 2;
+
+  let arcs: JSXRenderable;
+  let centerDisplay: JSXRenderable = value;
+  if (segments && segments.length > 0) {
+    const total = Math.max(
+      segments.reduce((acc, s) => acc + (Number.isFinite(s.value) && s.value > 0 ? s.value : 0), 0),
+      1
+    );
+    let accOffset = 0;
+    arcs = segments.map((seg) => {
+      const v = Number.isFinite(seg.value) && seg.value > 0 ? seg.value : 0;
+      const len = (v / total) * c;
+      const dashOffset = -accOffset;
+      accOffset += len;
+      return jsx("circle", {
+        cx,
+        cy,
+        r,
+        fill: "none",
+        stroke: seg.color,
+        strokeWidth: thickness,
+        strokeDasharray: `${len.toFixed(2)} ${(c - len).toFixed(2)}`,
+        strokeDashoffset: dashOffset.toFixed(2),
+        transform: `rotate(-90 ${cx} ${cy})`,
+      });
+    });
+    if (centerDisplay === undefined) {
+      centerDisplay = formatCount(total);
+    }
+  } else {
+    const p = Number.isFinite(percent) ? Math.min(100, Math.max(0, percent!)) : 0;
+    const offset = c - (p / 100) * c;
+    arcs = jsx("circle", {
+      cx,
+      cy,
+      r,
+      fill: "none",
+      stroke: accent,
+      strokeWidth: thickness,
+      strokeDasharray: c.toFixed(2),
+      strokeDashoffset: offset.toFixed(2),
+      strokeLinecap: "round",
+      transform: `rotate(-90 ${cx} ${cy})`,
+    });
+    if (centerDisplay === undefined) {
+      centerDisplay = Number.isFinite(percent) ? `${Math.round(p)}%` : theme.text.unavailable;
+    }
+  }
+
+  return customizeRoot(
+    jsx(Row, {
+      align: "center",
+      gap: theme.spacing.md,
+      style: `margin:${theme.spacing.xs}px 0`,
+      children: [
+        div(`display:flex;position:relative;width:${size}px;height:${size}px;flex-shrink:0`, [
+          jsx("svg", {
+            width: size,
+            height: size,
+            viewBox: `0 0 ${size} ${size}`,
+            children: [
+              jsx("circle", {
+                cx,
+                cy,
+                r,
+                fill: "none",
+                stroke: T.barTrack,
+                strokeWidth: thickness,
+              }),
+              arcs,
+            ],
+          }),
+          column(
+            [
+              div(
+                `font-size:${theme.typography.sizes.body}px;font-weight:${theme.typography.weights.heading};color:${T.text}`,
+                centerDisplay
+              ),
+            ],
+            "position:absolute;inset:0;align-items:center;justify-content:center"
+          ),
+        ]),
+        label !== undefined
+          ? column(
+              [
+                div(
+                  `font-size:${theme.typography.sizes.body}px;font-weight:${theme.typography.weights.strong};color:${T.text}`,
+                  label
+                ),
+              ],
+              `flex:1;min-width:0;gap:${theme.spacing.xs}px`
+            )
+          : null,
+      ],
+    }),
+    props,
+    theme,
+    "DonutChart"
+  );
+}
+
+export function ComparisonBar(props: ComparisonBarProps): JSXElement {
+  const theme = themeOf(props);
+  const T = theme.palette;
+  const {
+    leftLabel,
+    leftValue,
+    leftText,
+    rightLabel,
+    rightValue,
+    rightText,
+    leftAccent = T.accentMem,
+    rightAccent = T.accentSwap,
+  } = displayProps(props);
+  const div = (style: string, children?: JSXRenderable) =>
+    themedDiv(theme, style, children);
+  const column = (children: JSXRenderable, style = "") =>
+    themedColumn(theme, children, style);
+
+  const lv = Number.isFinite(leftValue) && leftValue > 0 ? leftValue : 0;
+  const rv = Number.isFinite(rightValue) && rightValue > 0 ? rightValue : 0;
+  const total = lv + rv;
+  const leftPct = total > 0 ? Math.round((lv / total) * 100) : 50;
+  const rightPct = 100 - leftPct;
+
+  return customizeRoot(
+    column(
+      [
+        jsx(Row, {
+          justify: "space-between",
+          style: `margin:${theme.spacing.xs}px 0`,
+          children: [
+            div(
+              `font-size:${theme.typography.sizes.small}px;font-weight:${theme.typography.weights.strong};color:${leftAccent}`,
+              [leftLabel, " ", leftText !== undefined ? leftText : `${leftPct}%`]
+            ),
+            div(
+              `font-size:${theme.typography.sizes.small}px;font-weight:${theme.typography.weights.strong};color:${rightAccent}`,
+              [rightText !== undefined ? rightText : `${rightPct}%`, " ", rightLabel]
+            ),
+          ],
+        }),
+        div(
+          `display:flex;flex-direction:row;width:100%;height:${theme.spacing.sm}px;border-radius:${cssLength(theme.radii.bar)};overflow:hidden;background:${T.barTrack}`,
+          [
+            div(`width:${leftPct}%;height:100%;background:${leftAccent}`),
+            div(`width:${rightPct}%;height:100%;background:${rightAccent}`),
+          ]
+        ),
+      ],
+      `margin:${theme.spacing.xs}px 0`
+    ),
+    props,
+    theme,
+    "ComparisonBar"
+  );
+}
+
+export function HeatmapGrid(props: HeatmapGridProps): JSXElement {
+  const theme = themeOf(props);
+  const T = theme.palette;
+  const {
+    values,
+    columns = 12,
+    cellSize = 12,
+    accent = T.accentCpu,
+  } = displayProps(props);
+  const div = (style: string, children?: JSXRenderable) =>
+    themedDiv(theme, style, children);
+
+  const finite = values.map((v) => (Number.isFinite(v) && v > 0 ? v : 0));
+  const max = Math.max(...finite, 1);
+  const cells = finite.map((val) => {
+    const ratio = val / max;
+    const fill = val <= 0 ? T.barTrack : tint(accent, Math.max(0.2, ratio));
+    return div(
+      `width:${cellSize}px;height:${cellSize}px;border-radius:${cssLength(theme.radii.chart)};background:${fill}`
+    );
+  });
+
+  return customizeRoot(
+    div(
+      `display:grid;grid-template-columns:repeat(${Math.max(1, columns)}, ${cellSize}px);gap:${theme.spacing.xs}px;margin:${theme.spacing.xs}px 0`,
+      cells
+    ),
+    props,
+    theme,
+    "HeatmapGrid"
   );
 }

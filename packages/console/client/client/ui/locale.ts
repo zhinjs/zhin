@@ -26,6 +26,21 @@ const KIT_EN: Readonly<Record<string, string>> = {
   '没有操作权限': 'Permission denied',
   '点击暂停自动轮询': 'Click to pause polling',
   '点击恢复自动轮询': 'Click to resume polling',
+  '已复制': 'Copied',
+  '清空': 'Clear',
+  '展开': 'Expand',
+  '收起': 'Collapse',
+  '搜索…': 'Search…',
+  '请选择…': 'Select…',
+  '上一页': 'Prev',
+  '下一页': 'Next',
+  '共 {0} 条': '{0} items',
+  '升序排列': 'Sort ascending',
+  '降序排列': 'Sort descending',
+  '点击排序': 'Click to sort',
+  '是': 'Yes',
+  '否': 'No',
+  '移除 {0}': 'Remove {0}',
 };
 
 /**

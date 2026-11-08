@@ -387,6 +387,14 @@ export interface DeclarativeStatSpec<TData = Record<string, unknown>> {
     | string
     | DeclarativeValueExpr
     | ((data: TData, ctx: DeclarativePageContext<TData>) => DeclarativeRenderable);
+  readonly unit?: DeclarativeI18nText;
+  readonly tone?: DeclarativeBadgeTone | 'primary';
+  readonly progress?: number | string | DeclarativeValueExpr;
+  readonly sparkline?: string;
+  readonly trend?: {
+    readonly value: DeclarativeI18nText | DeclarativeValueExpr;
+    readonly direction?: 'up' | 'down' | 'flat';
+  };
   readonly hint?:
     | DeclarativeI18nText
     | DeclarativeValueExpr
@@ -406,6 +414,10 @@ export interface DeclarativeStatSpec<TData = Record<string, unknown>> {
 export interface DeclarativeActionFieldSpec {
   readonly key: string;
   readonly label: DeclarativeI18nText;
+  readonly type?: 'text' | 'password' | 'number' | 'textarea' | 'select' | 'switch';
+  readonly options?: readonly { readonly value: string; readonly label: DeclarativeI18nText }[];
+  readonly hint?: DeclarativeI18nText;
+  readonly rows?: number;
   readonly placeholder?: string;
   readonly required?: boolean;
   readonly defaultValue?: string;
@@ -431,12 +443,31 @@ export interface DeclarativeActionSpec<TData = Record<string, unknown>> {
   readonly successMessage?: DeclarativeI18nText;
 }
 
+export type DeclarativeColumnType =
+  | 'auto'
+  | 'text'
+  | 'code'
+  | 'badge'
+  | 'boolean'
+  | 'link'
+  | 'datetime'
+  | 'number'
+  | 'progress'
+  | 'tags'
+  | 'json';
+
 export interface DeclarativeColumnSpec<
   TRow = Record<string, unknown>,
   TData = Record<string, unknown>,
 > {
   readonly key: keyof TRow & string;
   readonly label: DeclarativeI18nText;
+  readonly type?: DeclarativeColumnType;
+  readonly align?: 'left' | 'center' | 'right';
+  readonly sortable?: boolean;
+  readonly copyable?: boolean;
+  readonly width?: string | number;
+  readonly toneMap?: Readonly<Record<string, DeclarativeBadgeTone>>;
   readonly render?: (
     value: unknown,
     row: TRow,
@@ -451,6 +482,11 @@ export interface DeclarativeSectionSpec<
   readonly id?: string;
   readonly title?: DeclarativeI18nText;
   readonly description?: DeclarativeI18nText;
+  readonly tab?: DeclarativeI18nText;
+  readonly layout?: 'table' | 'cards' | 'kv' | 'timeline' | 'json';
+  readonly columnsCount?: 1 | 2 | 3;
+  readonly collapsible?: boolean;
+  readonly defaultCollapsed?: boolean;
   readonly emptyText?: DeclarativeI18nText;
   /** Extract rows for a declarative table or list. */
   readonly items?: (keyof TData & string) | ((data: TData) => readonly TRow[]);

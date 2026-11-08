@@ -19,6 +19,11 @@ import type {
   ProfileRowProps,
   BadgeProps,
   EmptyStateProps,
+  CalloutProps,
+  TimelineProps,
+  TimelineItemProps,
+  StepTrackerProps,
+  StatusGridProps,
 } from "./props.js";
 import { Surface, Row } from "./layout.js";
 import { barTone, rankAccent } from "./utilities.js";
@@ -394,5 +399,261 @@ export function EmptyState(props: EmptyStateProps): JSXElement {
     props,
     theme,
     "EmptyState"
+  );
+}
+
+export function Callout(props: CalloutProps): JSXElement {
+  const theme = themeOf(props);
+  const T = theme.palette;
+  const {
+    title,
+    message,
+    children,
+    tone = "info",
+    accent,
+  } = displayProps(props);
+  const div = (style: string, children?: JSXRenderable) =>
+    themedDiv(theme, style, children);
+  const column = (children: JSXRenderable, style = "") =>
+    themedColumn(theme, children, style);
+
+  const resolvedAccent =
+    accent ??
+    (tone === "danger"
+      ? T.barCrit
+      : tone === "warning"
+      ? T.barWarn
+      : tone === "success"
+      ? T.accentCpu
+      : T.accentMem);
+  const body = message === undefined ? children : message;
+
+  return customizeRoot(
+    jsx(Surface, {
+      padding: `${theme.spacing.sm}px ${theme.spacing.md}px`,
+      style: `margin:${theme.spacing.xs}px 0;border:2px solid ${resolvedAccent}`,
+      children: column(
+        [
+          title != null
+            ? div(
+                `font-size:${theme.typography.sizes.body}px;font-weight:${theme.typography.weights.strong};color:${resolvedAccent}`,
+                title
+              )
+            : null,
+          body != null
+            ? div(
+                `font-size:${theme.typography.sizes.small}px;color:${T.textSecondary};line-height:${theme.typography.lineHeight}`,
+                body
+              )
+            : null,
+        ],
+        `gap:${theme.spacing.xs}px`
+      ),
+    }),
+    props,
+    theme,
+    "Callout"
+  );
+}
+
+export function TimelineItem(props: TimelineItemProps): JSXElement {
+  const theme = themeOf(props);
+  const T = theme.palette;
+  const {
+    title,
+    description,
+    time,
+    badge,
+    accent = T.accentMem,
+  } = displayProps(props);
+  const div = (style: string, children?: JSXRenderable) =>
+    themedDiv(theme, style, children);
+  const column = (children: JSXRenderable, style = "") =>
+    themedColumn(theme, children, style);
+
+  return customizeRoot(
+    jsx(Row, {
+      align: "flex-start",
+      gap: theme.spacing.sm,
+      style: `margin:${theme.spacing.xs}px 0`,
+      children: [
+        div(
+          `width:${theme.spacing.sm}px;height:${theme.spacing.sm}px;border-radius:50%;background:${accent};margin:${theme.spacing.xs}px 0;flex-shrink:0`
+        ),
+        column(
+          [
+            jsx(Row, {
+              justify: "space-between",
+              align: "center",
+              gap: theme.spacing.sm,
+              children: [
+                jsx(Row, {
+                  align: "center",
+                  gap: theme.spacing.sm,
+                  children: [
+                    div(
+                      `font-size:${theme.typography.sizes.body}px;font-weight:${theme.typography.weights.strong};color:${T.text}`,
+                      title
+                    ),
+                    badge != null
+                      ? div(
+                          `font-size:${theme.typography.sizes.caption}px;font-weight:${theme.typography.weights.strong};color:${accent}`,
+                          badge
+                        )
+                      : null,
+                  ],
+                }),
+                time != null
+                  ? div(
+                      `font-size:${theme.typography.sizes.caption}px;color:${T.textMuted}`,
+                      time
+                    )
+                  : null,
+              ],
+            }),
+            description != null
+              ? div(
+                  `font-size:${theme.typography.sizes.small}px;color:${T.textSecondary};line-height:${theme.typography.lineHeight}`,
+                  description
+                )
+              : null,
+          ],
+          `flex:1;min-width:0;gap:${theme.spacing.xs}px`
+        ),
+      ],
+    }),
+    props,
+    theme,
+    "TimelineItem"
+  );
+}
+
+export function Timeline(props: TimelineProps): JSXElement {
+  const theme = themeOf(props);
+  const { items, children } = displayProps(props);
+  const column = (children: JSXRenderable, style = "") =>
+    themedColumn(theme, children, style);
+
+  return customizeRoot(
+    column([
+      items?.map((item) => jsx(TimelineItem, { ...item })),
+      children,
+    ]),
+    props,
+    theme,
+    "Timeline"
+  );
+}
+
+export function StepTracker(props: StepTrackerProps): JSXElement {
+  const theme = themeOf(props);
+  const T = theme.palette;
+  const { steps, current = 0, accent = T.accentMem } = displayProps(props);
+  const div = (style: string, children?: JSXRenderable) =>
+    themedDiv(theme, style, children);
+  const column = (children: JSXRenderable, style = "") =>
+    themedColumn(theme, children, style);
+
+  return customizeRoot(
+    jsx(Row, {
+      align: "flex-start",
+      gap: theme.spacing.sm,
+      style: `margin:${theme.spacing.xs}px 0`,
+      children: steps.map((step, idx) => {
+        const status =
+          step.status ??
+          (idx < current ? "done" : idx === current ? "active" : "pending");
+        const color =
+          status === "done"
+            ? T.accentCpu
+            : status === "active"
+            ? accent
+            : T.textMuted;
+        return column(
+          [
+            div(
+              `width:100%;height:${theme.spacing.xs}px;border-radius:${cssLength(theme.radii.bar)};background:${
+                status === "pending" ? T.barTrack : color
+              }`
+            ),
+            div(
+              `font-size:${theme.typography.sizes.small}px;font-weight:${
+                status === "pending"
+                  ? theme.typography.weights.normal
+                  : theme.typography.weights.strong
+              };color:${status === "pending" ? T.textMuted : T.text}`,
+              step.label
+            ),
+            step.subtitle != null
+              ? div(
+                  `font-size:${theme.typography.sizes.tiny}px;color:${T.textMuted}`,
+                  step.subtitle
+                )
+              : null,
+          ],
+          `flex:1;min-width:0;gap:${theme.spacing.xs}px`
+        );
+      }),
+    }),
+    props,
+    theme,
+    "StepTracker"
+  );
+}
+
+export function StatusGrid(props: StatusGridProps): JSXElement {
+  const theme = themeOf(props);
+  const T = theme.palette;
+  const { items, columns = 2 } = displayProps(props);
+  const div = (style: string, children?: JSXRenderable) =>
+    themedDiv(theme, style, children);
+
+  const cells = items.map((item) => {
+    const dotColor =
+      item.accent ??
+      (item.status === "ok"
+        ? T.accentCpu
+        : item.status === "warn"
+        ? T.barWarn
+        : item.status === "crit"
+        ? T.barCrit
+        : T.textMuted);
+    return jsx(Surface, {
+      padding: `${theme.spacing.sm}px ${theme.spacing.md}px`,
+      children: jsx(Row, {
+        justify: "space-between",
+        align: "center",
+        gap: theme.spacing.sm,
+        children: [
+          jsx(Row, {
+            align: "center",
+            gap: theme.spacing.sm,
+            children: [
+              div(
+                `width:${theme.spacing.sm}px;height:${theme.spacing.sm}px;border-radius:50%;background:${dotColor};flex-shrink:0`
+              ),
+              div(
+                `font-size:${theme.typography.sizes.small}px;color:${T.textSecondary}`,
+                item.label
+              ),
+            ],
+          }),
+          div(
+            `font-size:${theme.typography.sizes.body}px;font-weight:${theme.typography.weights.strong};color:${T.text}`,
+            item.value
+          ),
+        ],
+      }),
+    });
+  });
+
+  return customizeRoot(
+    div(
+      `display:grid;grid-template-columns:repeat(${Math.max(1, columns)}, minmax(0, 1fr));gap:${theme.spacing.sm}px;margin:${theme.spacing.xs}px 0`,
+      cells
+    ),
+    props,
+    theme,
+    "StatusGrid"
   );
 }
