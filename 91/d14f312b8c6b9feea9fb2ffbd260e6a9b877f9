@@ -1,0 +1,38 @@
+.changeset/endpoint-access-lists.md
+  h_6f5e45c41d0910 1-7
+docs/concepts/config-as-data.md
+  h_6f5e45c41d0910 119-151
+docs/en/concepts/config-as-data.md
+  h_6f5e45c41d0910 119-151
+packages/im/core/src/plugin-runtime/im/endpoint-access-gate.ts
+  h_6f5e45c41d0910 1-75
+packages/im/core/src/plugin-runtime/im/inbound-runtime.ts
+  h_6f5e45c41d0910 30,199-214,505-521
+packages/im/core/src/plugin-runtime/im/message-diagnostics.ts
+  h_6f5e45c41d0910 12,35
+packages/im/core/tests/plugin-runtime/endpoint-access.test.ts
+  h_6f5e45c41d0910 1-129
+packages/im/plugin-runtime/src/endpoint-access.ts
+  h_6f5e45c41d0910 1-222
+packages/im/plugin-runtime/src/index.ts
+  h_6f5e45c41d0910 63
+packages/im/plugin-runtime/tests/endpoint-access.test.ts
+  h_6f5e45c41d0910 1-101
+packages/im/runtime/src/config-composer.ts
+  h_6f5e45c41d0910 1,163-168,170,172,186,188,213
+packages/im/runtime/tests/config-composer.test.ts
+  h_6f5e45c41d0910 464-515
+tests/snapshots/plugin-runtime-api.json
+  h_6f5e45c41d0910 337
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "91d14f312b8c6b9feea9fb2ffbd260e6a9b877f9",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
