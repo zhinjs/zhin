@@ -1,6 +1,7 @@
 import { createDiscordRestApiAgent } from './rest-api-proxy.js';
 import { createDiscordSelfProfile, createDiscordRestSelfProfile } from './self-profile.js';
 import { DiscordRestRequestError } from './rest-request-error.js';
+import { isDiscordChannelObfuscated } from './channel-visibility.js';
 /**
  * DiscordEndpoint — lifecycle, outbound, admit, gateway / interactions modes, agent tool surface.
  */
@@ -606,6 +607,7 @@ async function resolveDiscordContent(
 /**
  * DiscordGatewayEndpoint 的 EndpointManagement 语义端口（参照 qq 的工厂模式）。
  * 数据源为 discord.js SDK 缓存：guilds.cache / guild.channels.cache / guild.members。
+ * listChannels 会过滤带 CHANNEL_OBFUSCATED flag 的混淆频道（见 channel-visibility.ts）。
  */
 export function createDiscordEndpointManagement(
   requireClient: () => DiscordClientTransport,
@@ -634,6 +636,8 @@ export function createDiscordEndpointManagement(
           for (const channel of guild.channels?.cache?.values() ?? []) {
             if (!channel?.id) continue;
             if (channel.type !== ChannelType.GuildText) continue;
+            // 机器人无 VIEW_CHANNEL 的频道会被 Gateway 混淆下发（HTTP 列表已不返回），默认过滤以保持两条路径一致。
+            if (isDiscordChannelObfuscated(channel)) continue;
             channels.push({
               id: String(channel.id),
               name: channel.name ? String(channel.name) : undefined,
