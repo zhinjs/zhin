@@ -21,9 +21,22 @@ describe('discord channel obfuscation', () => {
   });
 
   it('uses discord.js ChannelFlagsBitField.Flags.ChannelObfuscated', () => {
-    expect(DISCORD_CHANNEL_FLAG_OBFUSCATED).toBe(ChannelFlagsBitField.Flags.ChannelObfuscated);
+    expect(DISCORD_CHANNEL_FLAG_OBFUSCATED).toBe(1 << 17);
     expect(isDiscordChannelObfuscated({ flags: new ChannelFlagsBitField(ChannelFlagsBitField.Flags.ChannelObfuscated) })).toBe(true);
     expect(isDiscordChannelObfuscated({ flags: new ChannelFlagsBitField(0) })).toBe(false);
+  });
+
+  it('still filters when the official ChannelObfuscated enum is undefined', () => {
+    const flags = ChannelFlagsBitField.Flags;
+    const previous = Reflect.get(flags, 'ChannelObfuscated');
+    Reflect.set(flags, 'ChannelObfuscated', undefined);
+    try {
+      expect(isDiscordChannelObfuscated({ flags: 1 << 17 })).toBe(true);
+      expect(isDiscordChannelObfuscated({ flags: (1 << 17) | (1 << 1) })).toBe(true);
+      expect(isDiscordChannelObfuscated({ flags: 1 << 1 })).toBe(false);
+    } finally {
+      Reflect.set(flags, 'ChannelObfuscated', previous);
+    }
   });
 
   it('does not rely on the obfuscated name', () => {
