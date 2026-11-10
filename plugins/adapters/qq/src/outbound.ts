@@ -12,13 +12,22 @@
  *   msg_type=2 时 content 不展示，故含按钮或内联 markdown 时文本与内联 markdown
  *   段按顺序合并为同一 markdown 段（模板 markdown 原样透传）。
  *   data.id 模板键盘原样透传。
- * canonical share 当前明确 not_sent/unsupported，避免静默丢标题/描述/URL。
+ * - card：群聊/单聊图文卡片（msg_type=8，type=tuwen）。一条消息只能有这一张卡片，
+ *   可附带 reply。字段和长度见 qq-v2.ts。
+ * - mention / at：`target` 或 `user_id` 为 `all` 时编码成 `<qqbot-at-everyone />`。
+ *   与 markdown 同条时写进 markdown.content（官方要求带 markdown 时 content 必须为空）；
+ *   纯文本时交给 SDK 的 at 段写入 content。
+ * canonical share 只有四字段都齐、且不是音乐分享时，才转成同一张图文卡片；
+ * 缺字段仍 not_sent，避免静默丢掉标题、描述或 URL。
  * 其他未识别段保持既有 data.text fallback；正常发送另受声明的 supported 白名单约束。
  */
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { EndpointDeliveryError, isMediaRef } from '@zhin.js/im-contract';
 import type { QqWireSegment } from './protocol.js';
 import { probeImageSize, type QqImageSize } from './image-size.js';
+import { QQ_AT_EVERYONE, parseQqTuwenContent, qqAtUserMarkup, type QqTuwenContent } from './qq-v2.js';
+
+export { QQ_AT_EVERYONE };
 
 const logger = getLogger('qq');
 
@@ -157,6 +166,69 @@ function expandKeyboardSegment(seg: QqWireSegment): QqOutboundElem[] {
   return out;
 }
 
+function mentionIdentity(type: string, data: Record<string, unknown>): { readonly all: true } | { readonly id: string } | undefined {
+  const raw = type === 'mention' ? data.target : data.user_id ?? data.qq ?? data.id;
+  if (raw == null || raw === '') return undefined;
+  const id = String(raw);
+  return id === 'all' ? { all: true } : { id };
+}
+
+/** 音乐分享和其他不完整 share 保持拒绝；四字段齐全的链接卡转成 tuwen。 */
+function shareAsCard(seg: QqWireSegment): QqWireSegment {
+  const data = seg.data ?? {};
+  if (data.audio || data.platform || data.config || data.content) {
+    throw new EndpointDeliveryError('unsupported_operation', 'QQ canonical share cards are not implemented', 'not_sent');
+  }
+  const title = data.title;
+  const description = data.description;
+  const url = data.url;
+  const image = data.image;
+  if (typeof title !== 'string' || !title || typeof description !== 'string' || !description
+    || typeof url !== 'string' || !url || typeof image !== 'string' || !image) {
+    throw new EndpointDeliveryError('unsupported_operation', 'QQ canonical share cards are not implemented', 'not_sent');
+  }
+  return { type: 'card', data: { type: 'tuwen', content: { title, description, url, pic_url: image } } };
+}
+
+function replyElem(data: Record<string, unknown>): QqOutboundElem | undefined {
+  const id = data.message_id ?? data.id ?? data.event_id;
+  if (id == null || id === '') return undefined;
+  return {
+    type: 'reply',
+    data: data.event_id != null ? { event_id: String(data.event_id) } : { id: String(id) },
+  };
+}
+
+/**
+ * 图文卡片独占正文槽位。没有卡片时返回 undefined，调用方继续走原有编码。
+ * 混入文本、markdown、媒体或第二张卡片时直接拒绝。
+ */
+function cardMessage(segments: readonly (string | QqWireSegment)[]): QqOutboundMessage | undefined {
+  const prepared = segments.map(item => typeof item !== 'string' && item.type === 'share' ? shareAsCard(item) : item);
+  if (!prepared.some(item => typeof item !== 'string' && item.type === 'card')) return undefined;
+  const replies: QqOutboundElem[] = [];
+  let content: QqTuwenContent | undefined;
+  for (const item of prepared) {
+    if (typeof item === 'string') {
+      if (item.length > 0) throw new EndpointDeliveryError('unsupported_operation', 'QQ 图文卡片不能与其他正文放在同一条消息里', 'not_sent');
+      continue;
+    }
+    if (item.type === 'reply') {
+      const reply = replyElem(item.data ?? {});
+      if (reply) replies.push(reply);
+      continue;
+    }
+    if (item.type !== 'card') {
+      throw new EndpointDeliveryError('unsupported_operation', 'QQ 图文卡片不能与其他正文放在同一条消息里', 'not_sent');
+    }
+    if (content) throw new EndpointDeliveryError('unsupported_operation', 'QQ 一条消息只能发送一张图文卡片', 'not_sent');
+    content = parseQqTuwenContent(item.data);
+  }
+  if (!content) throw new EndpointDeliveryError('unsupported_operation', 'QQ 图文卡片缺少 content', 'not_sent');
+  const card: QqOutboundElem = { type: 'card', data: { type: 'tuwen', content } };
+  return replies.length > 0 ? [...replies, card] : card;
+}
+
 function toSegmentList(payload: unknown): Array<string | QqWireSegment> {
   if (Array.isArray(payload)) return payload as Array<string | QqWireSegment>;
   if (payload && typeof payload === 'object' && 'type' in payload) {
@@ -178,6 +250,8 @@ export function formatOutbound(payload: unknown): QqOutboundMessage {
   if (typeof payload === 'string') return payload;
 
   const segments = toSegmentList(payload);
+  const card = cardMessage(segments);
+  if (card) return card;
   if (segments.length === 0) {
     return payload == null
       ? ''
@@ -234,11 +308,18 @@ export function formatOutbound(payload: unknown): QqOutboundMessage {
       case 'text':
         textBuf += String(data.text ?? data.content ?? '');
         break;
+      case 'mention':
       case 'at': {
-        const id = String(data.user_id ?? data.qq ?? data.id ?? '');
-        if (!id) break;
+        const identity = mentionIdentity(item.type, data);
+        if (!identity) break;
         flushText();
-        parts.push({ type: 'at', data: { user_id: id } });
+        const userId = 'all' in identity ? 'all' : identity.id;
+        const markup = userId === 'all' ? QQ_AT_EVERYONE : qqAtUserMarkup(userId);
+        if (mergeIntoMarkdown) {
+          appendMarkdown(markup, false);
+          break;
+        }
+        parts.push({ type: 'at', data: { user_id: userId } });
         break;
       }
       case 'image':
@@ -322,6 +403,9 @@ function requireKeyboardMarkdown(messages: QqOutboundMessage[]): QqOutboundMessa
  */
 export function formatOutboundMessages(payload: unknown, options: FormatOutboundMessagesOptions = {}): QqOutboundMessage[] {
   const items = toSegmentList(payload);
+  if (items.some(item => typeof item !== 'string' && (item.type === 'card' || item.type === 'share'))) {
+    return [formatOutbound(items)];
+  }
   const rich = items.some(item => typeof item !== 'string' && MARKDOWN_MESSAGE_TYPES.has(item.type));
   const media = items.some(item => typeof item !== 'string' && SPLIT_MEDIA_TYPES.has(item.type));
   if (!rich || !media) return requireKeyboardMarkdown([formatOutbound(payload)]);

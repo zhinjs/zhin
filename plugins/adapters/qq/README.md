@@ -11,7 +11,8 @@ Zhin.js QQ 官方机器人适配器（Plugin Runtime），默认通过 **WebSock
 - Webhook / middleware 模式已实现（经 `httpHostToken` 注册 POST 路由）
 - AI `@` 触发标注：群消息（GROUP_AT_MESSAGE_CREATE 仅 @ 时下发）与频道 `mentions[].bot` 会在入站 metadata 标 `mentioned: true`（新 Plugin Runtime 纯文本 content 经 metadata 传递 @）
 - 群事件：机器人进群/退群、群成员加入/退出、入群申请（支持 `$approve()` / `$reject()`）
-- 群管理（官方 v2 群接口）：成员列表 / 详情、移出（可拉黑）、禁言（≤30 天）、入群申请审批、黑名单查询；Endpoint 管理端口与自动群审核（`inspectGroupMember` / `moderateGroupMember`）可直接使用
+- 群聊和单聊图文卡片（`msg_type=8`，`card.type=tuwen`）；群聊和文字子频道 `@全体成员`（`<qqbot-at-everyone />`，群内要求管理员且每群每天 1 次）
+- 群管理（官方 v2 群接口）：成员列表 / 详情、移出（可拉黑）、禁言（≤30 天）、入群申请列表与审批、黑名单查询和增删；Endpoint 管理端口与自动群审核（`inspectGroupMember` / `moderateGroupMember`）可直接使用
 - 撤回：自己的消息，以及机器人为群管理员时普通成员 2 分钟内的消息（入站原生消息 ID 也可撤回）
 - 频道子频道消息表情回应（`reaction` 操作，Unicode emoji 或 `type:id`）
 - 完整 SDK 业务 API：当前消息操作的 `session.endpoint` 就是 `qq-official-bot` 实例，可直接使用群管理、禁言、自动审批策略、自定义菜单和指令面板等原生 Service

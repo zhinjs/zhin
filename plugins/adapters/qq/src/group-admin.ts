@@ -13,6 +13,13 @@ import type {
 } from 'qq-official-bot';
 import {
   createEndpointOperation,
+  type EndpointGroupBlacklistChangeRequest,
+  type EndpointGroupBlacklistChangeResult,
+  type EndpointGroupBlacklistPage,
+  type EndpointGroupJoinApprovalRequest,
+  type EndpointGroupJoinDeclineRequest,
+  type EndpointGroupJoinRequestPage,
+  type EndpointGroupPageRequest,
   type EndpointGroupRequest, type EndpointMemberRequest, type EndpointMuteRequest,
   type EndpointGroupInspectionRequest, type EndpointMemberInspectionRequest, type EndpointModerationRequest,
   type GroupMemberProfile,
@@ -20,11 +27,25 @@ import {
   type GroupSceneFacts,
 } from 'zhin.js/adapter';
 import type { QqOfficialApi } from './ws.js';
+import {
+  callQqHttp,
+  qqBlacklistChangeRequest,
+  qqBlacklistListRequest,
+  qqHttpOf,
+  qqJoinApprovalRequest,
+  qqJoinRequestListRequest,
+  readQqBlacklistChange,
+  readQqBlacklistPage,
+  readQqJoinRequestPage,
+  type QqHttpCaller,
+} from './qq-v2.js';
 
 /** 官方 restrict_chat_setting 上限：30 天。 */
 export const QQ_GROUP_MUTE_MAX_SECONDS = 30 * 24 * 60 * 60;
 
 export type QqGroupService = QqOfficialApi['groupService'];
+
+export type QqGroupApi = Partial<QqOfficialApi> & { readonly request?: QqHttpCaller };
 
 export function qqGroupService(api: Partial<QqOfficialApi> | undefined): QqGroupService {
   const service = api?.groupService;
@@ -140,6 +161,72 @@ export async function inspectQqGroupScene(
   const name = typeof info?.group_name === 'string' && info.group_name.trim() ? info.group_name.trim() : undefined;
   const memberCount = Number.isSafeInteger(info?.group_member_num) && info.group_member_num > 0 ? info.group_member_num : undefined;
   return { ...(name ? { name } : {}), ...(memberCount ? { memberCount } : {}) };
+}
+
+function withQqHttp<T>(signal: AbortSignal | undefined, run: () => Promise<T>): Promise<T> {
+  return createEndpointOperation({ signal }).run(run);
+}
+
+/** 拉取一页入群申请。不传 cursor/limit 时与官方示例一样不带 query。 */
+export async function listQqGroupJoinRequests(
+  api: QqGroupApi | undefined, request: EndpointGroupPageRequest,
+): Promise<EndpointGroupJoinRequestPage> {
+  const data = await withQqHttp(request.signal, () => callQqHttp(qqHttpOf(api), qqJoinRequestListRequest(request.groupId, request.cursor, request.limit)));
+  return readQqJoinRequestPage(data);
+}
+
+/** 通过一条入群申请。拒绝理由和拉黑只属于 decline。 */
+export async function approveQqGroupJoinRequest(
+  api: QqGroupApi | undefined, request: EndpointGroupJoinApprovalRequest,
+): Promise<void> {
+  await withQqHttp(request.signal, () => callQqHttp(qqHttpOf(api), qqJoinApprovalRequest({
+    groupId: request.groupId,
+    memberId: request.userId,
+    op: 'approve',
+    ...(request.joinRequestId !== undefined ? { joinRequestId: request.joinRequestId } : {}),
+  })));
+}
+
+/** 拒绝一条入群申请。`addToBlacklist` 对应官方 `add_to_member_blacklist`，仅 decline 可带。 */
+export async function declineQqGroupJoinRequest(
+  api: QqGroupApi | undefined, request: EndpointGroupJoinDeclineRequest,
+): Promise<void> {
+  await withQqHttp(request.signal, () => callQqHttp(qqHttpOf(api), qqJoinApprovalRequest({
+    groupId: request.groupId,
+    memberId: request.userId,
+    op: 'decline',
+    ...(request.joinRequestId !== undefined ? { joinRequestId: request.joinRequestId } : {}),
+    ...(request.reason !== undefined ? { rejectReason: request.reason } : {}),
+    ...(request.addToBlacklist === true ? { addToBlacklist: true } : {}),
+  })));
+}
+
+/** 查询一页群黑名单。该接口官方标注为内邀，无权限时平台返回 11253。 */
+export async function listQqGroupBlacklist(
+  api: QqGroupApi | undefined, request: EndpointGroupPageRequest,
+): Promise<EndpointGroupBlacklistPage> {
+  const data = await withQqHttp(request.signal, () => callQqHttp(qqHttpOf(api), qqBlacklistListRequest(request.groupId, request.cursor, request.limit)));
+  return readQqBlacklistPage(data);
+}
+
+async function changeQqGroupBlacklist(
+  api: QqGroupApi | undefined, op: 'add' | 'del', request: EndpointGroupBlacklistChangeRequest,
+): Promise<EndpointGroupBlacklistChangeResult> {
+  const data = await withQqHttp(request.signal, () => callQqHttp(qqHttpOf(api), qqBlacklistChangeRequest(request.groupId, op, request.userIds)));
+  return readQqBlacklistChange(data);
+}
+
+/** 把不在群里的成员加入黑名单。目标仍在群中时平台会记入 fail_openids，这里不把失败改写成成功。 */
+export function addQqGroupBlacklist(
+  api: QqGroupApi | undefined, request: EndpointGroupBlacklistChangeRequest,
+): Promise<EndpointGroupBlacklistChangeResult> {
+  return changeQqGroupBlacklist(api, 'add', request);
+}
+
+export function removeQqGroupBlacklist(
+  api: QqGroupApi | undefined, request: EndpointGroupBlacklistChangeRequest,
+): Promise<EndpointGroupBlacklistChangeResult> {
+  return changeQqGroupBlacklist(api, 'del', request);
 }
 
 /** ADR 0041 成员事实：一次成员读取（群名片/头衔/禁言到期官方不提供）。 */

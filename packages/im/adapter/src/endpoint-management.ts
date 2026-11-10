@@ -52,6 +52,57 @@ export interface EndpointAdminRequest extends EndpointMemberRequest { readonly e
 export interface EndpointApproveRequest extends EndpointManagementRequest { readonly requestId: string; readonly remark?: string; }
 export interface EndpointRejectRequest extends EndpointManagementRequest { readonly requestId: string; readonly reason?: string; }
 export interface EndpointGroupNoticeRequest extends EndpointGroupRequest { readonly content: string; }
+/** One page of a group-scoped list. `cursor` omitted means the first page. */
+export interface EndpointGroupPageRequest extends EndpointGroupRequest {
+  readonly cursor?: string;
+  readonly limit?: number;
+}
+export interface EndpointGroupJoinQuestion {
+  readonly question: string;
+  readonly answer: string;
+}
+/** One pending group-join application. */
+export interface EndpointGroupJoinRequest {
+  readonly joinRequestId: string;
+  readonly memberId: string;
+  readonly username?: string;
+  readonly appliedAt?: string;
+  readonly source?: string;
+  readonly invitedBy?: string;
+  readonly bot?: boolean;
+  readonly verifyMessage?: string;
+  readonly riskTips?: string;
+  readonly questions?: readonly EndpointGroupJoinQuestion[];
+}
+export interface EndpointGroupJoinRequestPage {
+  readonly requests: readonly EndpointGroupJoinRequest[];
+  /** Empty string means the last page. */
+  readonly nextCursor: string;
+}
+export interface EndpointGroupJoinApprovalRequest extends EndpointMemberRequest {
+  readonly joinRequestId?: string;
+}
+export interface EndpointGroupJoinDeclineRequest extends EndpointGroupJoinApprovalRequest {
+  readonly reason?: string;
+  readonly addToBlacklist?: boolean;
+}
+export interface EndpointGroupBlacklistUser {
+  readonly userId: string;
+  readonly username?: string;
+  readonly bannedAt?: string;
+  readonly bot?: boolean;
+  readonly unionId?: string;
+}
+export interface EndpointGroupBlacklistPage {
+  readonly users: readonly EndpointGroupBlacklistUser[];
+  readonly nextCursor: string;
+}
+export interface EndpointGroupBlacklistChangeRequest extends EndpointGroupRequest {
+  readonly userIds: readonly string[];
+}
+export interface EndpointGroupBlacklistChangeResult {
+  readonly failedUserIds: readonly string[];
+}
 /** ADR 0044 action requests. */
 export interface EndpointPokeRequest extends EndpointUserRequest { readonly groupId?: string; }
 export interface EndpointMuteAllRequest extends EndpointGroupRequest { readonly enabled: boolean; }
@@ -105,6 +156,17 @@ export interface EndpointManagement {
   setGroupEssence?(request: EndpointEssenceRequest): Promise<void>;
   /** `actions.invite` */
   inviteGroupMember?(request: EndpointMemberRequest): Promise<void>;
+  /**
+   * Group-scoped join applications. Absent when the platform has no such API.
+   * These stay off {@link endpointManagementCapabilityIds}: `listRequests` has no group id.
+   */
+  listGroupJoinRequests?(request: EndpointGroupPageRequest): Promise<EndpointGroupJoinRequestPage>;
+  approveGroupJoinRequest?(request: EndpointGroupJoinApprovalRequest): Promise<void>;
+  declineGroupJoinRequest?(request: EndpointGroupJoinDeclineRequest): Promise<void>;
+  /** Group blacklist. Adding someone the platform still considers a member fails per platform rules. */
+  listGroupBlacklist?(request: EndpointGroupPageRequest): Promise<EndpointGroupBlacklistPage>;
+  addGroupBlacklist?(request: EndpointGroupBlacklistChangeRequest): Promise<EndpointGroupBlacklistChangeResult>;
+  removeGroupBlacklist?(request: EndpointGroupBlacklistChangeRequest): Promise<EndpointGroupBlacklistChangeResult>;
 }
 
 export { createEndpointOperation } from './endpoint-operation.js';

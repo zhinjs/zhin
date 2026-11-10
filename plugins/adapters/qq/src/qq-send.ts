@@ -13,7 +13,8 @@
 import { createEndpointOperation, type EndpointOperation } from 'zhin.js/adapter';
 import { EndpointDeliveryError, type ConversationRef } from '@zhin.js/im-contract';
 import type { Sendable } from 'qq-official-bot';
-import type { QqOutboundElem, QqOutboundMessage } from './outbound.js';
+import { QQ_AT_EVERYONE, type QqOutboundElem, type QqOutboundMessage } from './outbound.js';
+import { callQqHttp, qqCardSendRequest, qqHttpOf, type QqTuwenContent } from './qq-v2.js';
 import {
   QQ_ACTIVE_UNAVAILABLE_CODES,
   QQ_MARKDOWN_DENIED_CODES,
@@ -84,7 +85,59 @@ export function markdownAsText(message: QqOutboundMessage): QqOutboundMessage | 
   return text ? [...kept, text] : undefined;
 }
 
-function dispatch(bot: QqBotTransport, { kind, id, message, source, options }: QqMessageDispatch): Promise<unknown> {
+function cardContent(message: QqOutboundMessage): QqTuwenContent | undefined {
+  const cards = elements(message).filter((part): part is QqOutboundElem => typeof part !== 'string' && part.type === 'card');
+  if (cards.length === 0) return undefined;
+  const content = cards[0]?.data.content;
+  if (!content || typeof content !== 'object') return undefined;
+  return content as QqTuwenContent;
+}
+
+function referenceMessageId(message: QqOutboundMessage): string | undefined {
+  for (const part of elements(message)) {
+    if (typeof part !== 'string' && part.type === 'reply' && typeof part.data.id === 'string' && part.data.id) return part.data.id;
+  }
+  return undefined;
+}
+
+/** 图文卡片和 @全体成员的场景以官方文本交互、发消息文档为准，不在未记载的会话里试发。 */
+export function assertQqOutboundScene(kind: Kind, message: QqOutboundMessage): void {
+  if (cardContent(message) && kind !== 'private' && kind !== 'group') {
+    throw new EndpointDeliveryError('unsupported_operation', 'QQ 图文卡片只支持群聊和单聊', 'not_sent');
+  }
+  if (qqMessageMentionsEveryone(message) && kind !== 'group' && kind !== 'channel') {
+    throw new EndpointDeliveryError('unsupported_operation', 'QQ @全体成员只支持群聊和文字子频道', 'not_sent');
+  }
+}
+
+export function qqMessageMentionsEveryone(message: QqOutboundMessage): boolean {
+  return elements(message).some(part => {
+    if (typeof part === 'string') return part.includes(QQ_AT_EVERYONE);
+    if (part.type === 'at' && String(part.data.user_id ?? '') === 'all') return true;
+    return part.type === 'markdown' && typeof part.data.content === 'string' && part.data.content.includes(QQ_AT_EVERYONE);
+  });
+}
+
+async function postCard(bot: QqBotTransport, { kind, id, message, source, options }: QqMessageDispatch): Promise<unknown> {
+  const content = cardContent(message);
+  if (!content || (kind !== 'private' && kind !== 'group')) {
+    throw new EndpointDeliveryError('unsupported_operation', 'QQ 图文卡片只支持群聊和单聊', 'not_sent');
+  }
+  const request = qqCardSendRequest({
+    kind,
+    targetId: id,
+    content,
+    ...(source && 'id' in source ? { msgId: source.id } : {}),
+    ...(source && 'event_id' in source ? { eventId: source.event_id } : {}),
+    ...(options?.msgSeq !== undefined ? { msgSeq: options.msgSeq } : {}),
+    ...(referenceMessageId(message) ? { referenceMessageId: referenceMessageId(message) } : {}),
+  });
+  return callQqHttp(qqHttpOf(bot), request);
+}
+
+function dispatch(bot: QqBotTransport, dispatching: QqMessageDispatch): Promise<unknown> {
+  if (cardContent(dispatching.message)) return postCard(bot, dispatching);
+  const { kind, id, message, source, options } = dispatching;
   switch (kind) {
     case 'private': return bot.sendPrivateMessage(id, message as Sendable, source, options);
     case 'group': return bot.sendGroupMessage(id, message as Sendable, source, options);
@@ -101,6 +154,7 @@ function platformCode(error: unknown): number | undefined {
 
 /** Sends one message, passive if possible; returns the platform result. */
 async function sendOne(context: QqSendExecution, { kind, id, message }: QqMessageDispatch): Promise<unknown> {
+  assertQqOutboundScene(kind, message);
   const passive = (body: QqOutboundMessage, grant: PassiveReplyGrant) =>
     context.operation.run(() => dispatch(context.bot, { kind, id, message: body, source: grant.source, options: { msgSeq: grant.msgSeq } }));
   const active = async (body: QqOutboundMessage): Promise<unknown> => {

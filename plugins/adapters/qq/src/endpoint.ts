@@ -8,13 +8,19 @@ import { awaitQqStartup } from './start-deadline.js';
 import { createQqStreaming } from './streaming.js';
 import { EndpointDeliveryError, type MessageRef } from '@zhin.js/im-contract';
 import {
+  addQqGroupBlacklist,
+  approveQqGroupJoinRequest,
+  declineQqGroupJoinRequest,
   inspectQqGroupMember,
   inspectQqGroupMemberProfile,
   inspectQqGroupScene,
   kickQqGroupMember,
+  listQqGroupBlacklist,
+  listQqGroupJoinRequests,
   moderateQqGroupMember,
   muteQqGroupMember,
   qqGroupService,
+  removeQqGroupBlacklist,
 } from './group-admin.js';
 /**
  * QQ endpoints — lifecycle, outbound, admit, agent tool surface.
@@ -700,6 +706,12 @@ function createQqEndpointManagement(
     async muteGroupMember({ groupId, userId, durationSeconds, signal }: EndpointMuteRequest): Promise<void> {
       await muteQqGroupMember(api(), { groupId, userId, durationSeconds, signal });
     },
+    listGroupJoinRequests: request => listQqGroupJoinRequests(api(), request),
+    approveGroupJoinRequest: request => approveQqGroupJoinRequest(api(), request),
+    declineGroupJoinRequest: request => declineQqGroupJoinRequest(api(), request),
+    listGroupBlacklist: request => listQqGroupBlacklist(api(), request),
+    addGroupBlacklist: request => addQqGroupBlacklist(api(), request),
+    removeGroupBlacklist: request => removeQqGroupBlacklist(api(), request),
     async listChannels(request: EndpointManagementRequest = {}): Promise<readonly EndpointChannel[]> {
       const operation = createEndpointOperation(request);
       const channels: EndpointChannel[] = [];
