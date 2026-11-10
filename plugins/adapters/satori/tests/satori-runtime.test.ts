@@ -130,21 +130,21 @@ describe('satori protocol helpers', () => {
     expect(formatSatoriOutbound([
       { type: 'text', data: { text: 'hi ' } },
       { type: 'mention', data: { name: 'Bot' } },
-    ])).toBe('hi @Bot');
+    ])).toBe('hi <at name="Bot"/>');
   });
 
   it('formats outbound media segments from canonical data.media', () => {
     expect(formatSatoriOutbound([
       { type: 'image', data: { media: { kind: 'url', value: 'https://example.com/a.png' } } },
-    ])).toBe('[image:https://example.com/a.png]');
+    ])).toBe('<img src="https://example.com/a.png"/>');
     expect(formatSatoriOutbound([
       { type: 'audio', data: { media: { kind: 'url', value: 'https://example.com/a.mp3' } } },
       { type: 'file', data: { media: { kind: 'base64', value: 'aGk=', mime_type: 'text/plain' } } },
-    ])).toBe('[audio:https://example.com/a.mp3][file:base64://aGk=]');
+    ])).toBe('<audio src="https://example.com/a.mp3"/><file src="base64://aGk="/>');
     // 已带 base64:// 前缀的值不重复加前缀
     expect(formatSatoriOutbound([
       { type: 'video', data: { media: { kind: 'base64', value: 'base64://aGk=' } } },
-    ])).toBe('[video:base64://aGk=]');
+    ])).toBe('<video src="base64://aGk="/>');
   });
 
   it('drops outbound media segments without a deliverable canonical media ref', () => {
@@ -264,6 +264,10 @@ describe('satori plugin runtime adapter', () => {
       conversation: expect.objectContaining({ kind: 'group', id: 'ch-1' }),
       content: '<at id="bot-1"/> 在吗',
       mentioned: true,
+      segments: [
+        { type: 'mention', data: { target: 'bot-1' } },
+        { type: 'text', data: { text: ' 在吗' } },
+      ],
     }));
     await endpoint.stop();
   });
@@ -340,6 +344,88 @@ describe('satori plugin runtime adapter', () => {
     }));
     await endpoint.stop();
   });
+
+  it('returns the triggering referrer unchanged on a passive reply', async () => {
+    const referrer = {
+      type: 'im.message.receive_v1',
+      event: { message: { message_id: 'xxxxxxxx', thread_id: 'thread-1' } },
+    };
+    const callApi = vi.fn(async () => [{ id: 'out-1' }]);
+    const reply: { current?: () => Promise<string> } = {};
+    const receive = vi.fn(async () => {
+      await reply.current?.();
+      return Object.freeze({ matched: true, value: 'ok' });
+    });
+    const endpoint = await createEndpointHarness(() => new SatoriWsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'satori'),
+      config: baseConfig,
+      createWebSocket: createWsFactory(createMockSocket()),
+      callApi,
+    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall', 'reaction'], gateway: createTestEventGateway({ receive, send: vi.fn(async () => 'sent') }, undefined) });
+    reply.current = () => endpoint.send({
+      conversation: { endpoint: { id: 'test-endpoint', adapter: 'test' }, kind: 'group', id: 'ch-1' },
+      payload: 'reply',
+    });
+    await endpoint.start();
+    endpoint.open();
+    endpoint.endpoint.ingest({
+      type: 'message-created',
+      login: { platform: 'test', user: { id: 'bot-1' } },
+      referrer,
+      message: { id: 'msg-1', content: 'hi' },
+      channel: { id: 'ch-1', type: 0 },
+      user: { id: 'u-1' },
+    });
+    await vi.waitFor(() => expect(callApi).toHaveBeenCalled());
+    expect(callApi).toHaveBeenCalledWith(expect.objectContaining({
+      resource: 'message',
+      method: 'create',
+      params: { channel_id: 'ch-1', content: 'reply', referrer },
+    }));
+    await endpoint.send({
+      conversation: { endpoint: { id: 'test-endpoint', adapter: 'test' }, kind: 'group', id: 'ch-1' },
+      payload: 'later',
+    });
+    expect(callApi).toHaveBeenLastCalledWith(expect.objectContaining({
+      params: { channel_id: 'ch-1', content: 'later' },
+    }));
+    await endpoint.stop();
+  });
+
+  it('admits guild emoji events as notices', async () => {
+    const receiveNotice = vi.fn(async () => undefined);
+    const endpoint = await createEndpointHarness(() => new SatoriWsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'satori'),
+      config: baseConfig,
+      createWebSocket: createWsFactory(createMockSocket()),
+    }), {
+      name: 'satori',
+      capabilities: ['inbound', 'outbound'],
+      operations: ['recall', 'reaction'],
+      gateway: createTestEventGateway(
+        { receive: vi.fn(async () => Object.freeze({ matched: false })) },
+        { receiveNotice },
+      ),
+    });
+    await endpoint.start();
+    endpoint.open();
+    endpoint.endpoint.ingest({
+      type: 'guild-emoji-added',
+      sn: 8,
+      timestamp: 1_700_000_000_000,
+      login: { platform: 'test', user: { id: 'bot-1' } },
+      guild: { id: 'guild-1' },
+      emoji: { id: 'emoji-1', name: 'smile' },
+    });
+    await vi.waitFor(() => expect(receiveNotice).toHaveBeenCalled());
+    expect(receiveNotice).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'notice',
+      name: 'notice.group.emoji_added',
+      value: 'smile',
+    }));
+    await endpoint.stop();
+  });
+
 
   it('admits friend-request into the request pipeline and approves with message_id', async () => {
     const callApi = vi.fn(async () => undefined);
