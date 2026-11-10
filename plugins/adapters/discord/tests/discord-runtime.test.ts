@@ -769,9 +769,8 @@ config: baseConfig}), () => mock, { receive: vi.fn(), send: vi.fn(async () => 's
     await endpoint.stop();
   });
 
-  it('lists a channel again after CHANNEL_OBFUSCATED is cleared with flags: 0', async () => {
+  it('returns the channel after a direct _patch({ flags: 0 }) clears CHANNEL_OBFUSCATED', async () => {
     const mock = createMockClient();
-    // discord.js BaseChannel#_patch：payload 不含 flags 时保留旧 bitfield，只有显式 flags 才会改写。
     const channel = new TextChannel(
       { id: GUILD_ID } as ConstructorParameters<typeof TextChannel>[0],
       { id: '123456789012345678', type: 0, name: '___hidden___', flags: 1 << 17 },
@@ -787,6 +786,7 @@ config: baseConfig}), () => mock, { receive: vi.fn(), send: vi.fn(async () => 's
     await endpoint.start();
     await expect(endpoint.management.listChannels?.()).resolves.toEqual([]);
 
+    // 已知限制（来自 discord.js 的行为：_patch 在更新里没有 flags 时保留旧值）。
     channel._patch({ id: channel.id, name: 'renamed-without-flags' });
     await expect(endpoint.management.listChannels?.()).resolves.toEqual([]);
 
