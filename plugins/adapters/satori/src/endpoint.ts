@@ -7,7 +7,13 @@ import {
   createEndpointSpecification,
   endpointSpec,
   type Endpoint,
+  type EndpointApproveRequest,
+  type EndpointFriend,
+  type EndpointReactionRequest,
+  type EndpointRejectRequest,
+  type EndpointRemoveReactionRequest,
   type EndpointSpecification,
+  type EndpointUserRequest,
   createEndpointLifecycle,
   type EndpointChannel,
   type EndpointConnectHandle,
@@ -32,6 +38,11 @@ import {
   formatMessageId,
   formatSatoriOutbound,
   isMessageEvent,
+  mapSatoriFriendRequest,
+  readSatoriFriend,
+  satoriFriendApproveParams,
+  satoriReactionParams,
+  withSatoriGuildRoles,
   isSelfMentioned,
   parseMessageRef,
   resolveInboundSender,
@@ -74,6 +85,8 @@ export class SatoriWsEndpoint extends SatoriClient implements Endpoint {
   readonly #call: SatoriActionCaller;
   readonly #control: EndpointControl = Object.freeze<EndpointControl>({
     recall: request => this.#recall(request),
+    addReaction: request => this.#addReaction(request),
+    removeReaction: request => this.#removeReaction(request),
   });
 
   constructor(options: SatoriWsEndpointOptions) {
@@ -159,6 +172,15 @@ export class SatoriWsEndpoint extends SatoriClient implements Endpoint {
 
   #admitRaw(body: SatoriEventBody): void {
     if (!matchesSatoriLogin(this.#options.config, body.login)) return;
+    if (emitSatoriFriendRequest(body, {
+      endpointId: this.#options.config.id,
+      call: this.#call,
+      emit: request => {
+        void this[endpointSpec].events.emit('request.receive', request).catch(error => {
+          this.#warnPlatformEvent('request.receive', error);
+        });
+      },
+    })) return;
     if (!isMessageEvent(body)) return;
     const conversation = { ...satoriInboundConversation(String(this.#options.id), body), endpoint: this[endpointSpec].identity };
     const content = formatInboundContent(body);
@@ -195,6 +217,14 @@ export class SatoriWsEndpoint extends SatoriClient implements Endpoint {
       channel_id: channelId || message.conversation.id,
       message_id: messageId,
     } });
+  }
+
+  #addReaction(request: EndpointReactionRequest): Promise<string | null> {
+    return addSatoriReaction(this.#call, request);
+  }
+
+  #removeReaction(request: EndpointRemoveReactionRequest): Promise<void> {
+    return removeSatoriReaction(this.#call, request);
   }
 
   #warnPlatformEvent(name: string, error: unknown): void {
@@ -359,6 +389,8 @@ export class SatoriWebhookEndpoint extends SatoriClient implements Endpoint {
   readonly #call: SatoriActionCaller;
   readonly #control: EndpointControl = Object.freeze<EndpointControl>({
     recall: request => this.#recall(request),
+    addReaction: request => this.#addReaction(request),
+    removeReaction: request => this.#removeReaction(request),
   });
 
   constructor(options: SatoriWebhookEndpointOptions) {
@@ -444,6 +476,15 @@ export class SatoriWebhookEndpoint extends SatoriClient implements Endpoint {
 
   #admitRaw(body: SatoriEventBody): void {
     if (!matchesSatoriLogin(this.#options.config, body.login)) return;
+    if (emitSatoriFriendRequest(body, {
+      endpointId: this.#options.config.id,
+      call: this.#call,
+      emit: request => {
+        void this[endpointSpec].events.emit('request.receive', request).catch(error => {
+          this.#warnPlatformEvent('request.receive', error);
+        });
+      },
+    })) return;
     if (!isMessageEvent(body)) return;
     const conversation = { ...satoriInboundConversation(String(this.#options.id), body), endpoint: this[endpointSpec].identity };
     const content = formatInboundContent(body);
@@ -480,6 +521,14 @@ export class SatoriWebhookEndpoint extends SatoriClient implements Endpoint {
       channel_id: channelId || message.conversation.id,
       message_id: messageId,
     } });
+  }
+
+  #addReaction(request: EndpointReactionRequest): Promise<string | null> {
+    return addSatoriReaction(this.#call, request);
+  }
+
+  #removeReaction(request: EndpointRemoveReactionRequest): Promise<void> {
+    return removeSatoriReaction(this.#call, request);
   }
 
   #warnPlatformEvent(name: string, error: unknown): void {
@@ -583,13 +632,98 @@ export function createSatoriEndpointManagement(api: SatoriManagementApi): Endpoi
       return channels;
     },
     async listGroupMembers({ groupId, signal }: EndpointGroupRequest): Promise<readonly unknown[]> {
-      // 平台形状（GuildMember[]）原样返回
-      return listSatoriPages(api, { resource: 'guild-member', params: { guild_id: groupId }, signal });
+      const members = await listSatoriPages(api, { resource: 'guild-member', params: { guild_id: groupId }, signal });
+      return members.map(member => withSatoriGuildRoles(member));
+    },
+    async listFriends(request: EndpointManagementRequest = {}): Promise<readonly EndpointFriend[]> {
+      const friends: EndpointFriend[] = [];
+      for (const value of await listSatoriPages(api, { resource: 'friend', signal: request.signal })) {
+        const friend = readSatoriFriend(value);
+        if (!friend?.user?.id) continue;
+        const nick = friend.nick ?? '';
+        const name = friend.user.name ?? '';
+        friends.push({
+          user_id: friend.user.id,
+          nickname: name || nick || friend.user.id,
+          remark: nick,
+        });
+      }
+      return friends;
+    },
+    async deleteFriend({ userId, signal }: EndpointUserRequest): Promise<void> {
+      await api({ resource: 'friend', method: 'delete', params: { user_id: userId }, signal });
+    },
+    async approveRequest({ requestId, remark, signal }: EndpointApproveRequest): Promise<void> {
+      await api({
+        resource: 'friend',
+        method: 'approve',
+        signal,
+        params: satoriFriendApproveParams(requestId, true, remark),
+      });
+    },
+    async rejectRequest({ requestId, reason, signal }: EndpointRejectRequest): Promise<void> {
+      await api({
+        resource: 'friend',
+        method: 'approve',
+        signal,
+        params: satoriFriendApproveParams(requestId, false, reason),
+      });
     },
   });
 }
 
 export type { CreateSatoriWebSocket, SatoriWsSocket } from './ws.js';
+
+function emitSatoriFriendRequest(body: SatoriEventBody, input: {
+  readonly endpointId: string;
+  readonly call: SatoriActionCaller;
+  readonly emit: (request: ReturnType<typeof mapSatoriFriendRequest>) => void;
+}): boolean {
+  if (body.type !== 'friend-request') return false;
+  const request = mapSatoriFriendRequest(body, input.endpointId, {
+    approve: (messageId, comment) => input.call({
+      resource: 'friend',
+      method: 'approve',
+      params: satoriFriendApproveParams(messageId, true, comment),
+    }).then(() => undefined),
+    reject: (messageId, reason) => input.call({
+      resource: 'friend',
+      method: 'approve',
+      params: satoriFriendApproveParams(messageId, false, reason),
+    }).then(() => undefined),
+  });
+  if (request) input.emit(request);
+  return true;
+}
+
+async function addSatoriReaction(call: SatoriActionCaller, request: EndpointReactionRequest): Promise<string | null> {
+  const { channelId, messageId } = parseMessageRef(request.message.id);
+  await call({
+    resource: 'reaction',
+    method: 'create',
+    signal: request.signal,
+    params: satoriReactionParams('create', {
+      channelId: channelId || request.message.conversation.id,
+      messageId,
+      emojiId: request.emoji,
+    }),
+  });
+  return request.emoji;
+}
+
+async function removeSatoriReaction(call: SatoriActionCaller, request: EndpointRemoveReactionRequest): Promise<void> {
+  const { channelId, messageId } = parseMessageRef(request.message.id);
+  await call({
+    resource: 'reaction',
+    method: 'delete',
+    signal: request.signal,
+    params: satoriReactionParams('delete', {
+      channelId: channelId || request.message.conversation.id,
+      messageId,
+      emojiId: request.reactionId,
+    }),
+  });
+}
 
 /** A transport connection may multiplex logins; this Endpoint admits only its selected account. */
 function matchesSatoriLogin(config: { readonly platform: string; readonly userId: string }, login: SatoriLogin | undefined): boolean {

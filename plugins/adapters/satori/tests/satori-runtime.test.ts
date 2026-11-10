@@ -163,7 +163,7 @@ describe('satori plugin runtime adapter', () => {
       id: capabilityId(rootPluginId(), adapterFeature, 'satori'),
       config: baseConfig,
       createWebSocket: createWsFactory(createMockSocket()),
-    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({ receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined) });
+    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall', 'reaction'], gateway: createTestEventGateway({ receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined) });
     const request = vi.fn();
     endpoint.endpoint.on('request.group', request);
 
@@ -194,7 +194,7 @@ describe('satori plugin runtime adapter', () => {
       id: capabilityId(rootPluginId(), adapterFeature, 'satori'),
       config: baseConfig,
       createWebSocket: createWsFactory(socket),
-    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway(gateway, undefined) });
+    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall', 'reaction'], gateway: createTestEventGateway(gateway, undefined) });
 
     await endpoint.start();
     endpoint.open();
@@ -227,7 +227,7 @@ describe('satori plugin runtime adapter', () => {
       id: capabilityId(rootPluginId(), adapterFeature, 'satori'),
       config: baseConfig,
       createWebSocket: createWsFactory(socket),
-    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway(gateway, undefined) });
+    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall', 'reaction'], gateway: createTestEventGateway(gateway, undefined) });
     await endpoint.start();
     endpoint.endpoint.ingest({
       type: 'message-created', login: { platform: 'test', user: { id: 'bot-1' } },
@@ -247,7 +247,7 @@ describe('satori plugin runtime adapter', () => {
       id: capabilityId(rootPluginId(), adapterFeature, 'satori'),
       config: baseConfig,
       createWebSocket: createWsFactory(socket),
-    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway(gateway, undefined) });
+    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall', 'reaction'], gateway: createTestEventGateway(gateway, undefined) });
     await endpoint.start();
     endpoint.open();
     endpoint.endpoint.ingest({ type: 'login-updated', login: { platform: 'test', user: { id: 'bot-1' } } });
@@ -276,7 +276,7 @@ describe('satori plugin runtime adapter', () => {
       id: capabilityId(rootPluginId(), adapterFeature, 'satori'),
       config: baseConfig,
       createWebSocket: createWsFactory(socket),
-    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway(gateway, undefined) });
+    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall', 'reaction'], gateway: createTestEventGateway(gateway, undefined) });
     await endpoint.start();
     endpoint.open();
     endpoint.endpoint.ingest({ type: 'login-updated', login: { platform: 'test', user: { id: 'bot-1' } } });
@@ -300,7 +300,7 @@ describe('satori plugin runtime adapter', () => {
       id: capabilityId(rootPluginId(), adapterFeature, 'satori'),
       config: baseConfig,
       createWebSocket: createWsFactory(socket),
-    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({
+    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall', 'reaction'], gateway: createTestEventGateway({
         receive: vi.fn(async () => Object.freeze({ matched: false })),
         send: vi.fn(async () => 'sent'),
       }, undefined) });
@@ -319,7 +319,7 @@ describe('satori plugin runtime adapter', () => {
       id: capabilityId(rootPluginId(), adapterFeature, 'satori'),
       config: baseConfig,
       createWebSocket: createWsFactory(socket),
-    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({ receive, send: vi.fn(async () => 'sent') }, undefined) });
+    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall', 'reaction'], gateway: createTestEventGateway({ receive, send: vi.fn(async () => 'sent') }, undefined) });
     await endpoint.start();
     endpoint.open();
     socket.emit('message', JSON.stringify({
@@ -341,6 +341,96 @@ describe('satori plugin runtime adapter', () => {
     await endpoint.stop();
   });
 
+  it('admits friend-request into the request pipeline and approves with message_id', async () => {
+    const callApi = vi.fn(async () => undefined);
+    const receiveRequest = vi.fn(async () => undefined);
+    const endpoint = await createEndpointHarness(() => new SatoriWsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'satori'),
+      config: baseConfig,
+      createWebSocket: createWsFactory(createMockSocket()),
+      callApi,
+    }), {
+      name: 'satori',
+      capabilities: ['inbound', 'outbound'],
+      operations: ['recall', 'reaction'],
+      gateway: createTestEventGateway(
+        { receive: vi.fn(async () => Object.freeze({ matched: false })) },
+        { receiveRequest },
+      ),
+    });
+    await endpoint.start();
+    endpoint.open();
+    endpoint.endpoint.ingest({
+      type: 'friend-request',
+      timestamp: 1_700_000_000_000,
+      login: { platform: 'test', user: { id: 'bot-1' } },
+      user: { id: 'user-9', name: 'neo' },
+      friend: { user: { id: 'user-9', name: 'neo' }, nick: 'N' },
+      message: { id: 'req-9', content: 'add me' },
+    });
+    await vi.waitFor(() => expect(receiveRequest).toHaveBeenCalled());
+    const request = receiveRequest.mock.calls[0]?.[0] as {
+      name: string;
+      actor: { id: string; name?: string };
+      comment?: string;
+      $approve: (remark?: string) => Promise<void>;
+      $reject: (reason?: string) => Promise<void>;
+    };
+    expect(request).toMatchObject({
+      type: 'request',
+      name: 'request.friend.add',
+      actor: { id: 'user-9', name: 'neo' },
+      comment: 'add me',
+      conversation: expect.objectContaining({ kind: 'private', id: 'user-9' }),
+    });
+    await request.$approve('ok');
+    await request.$reject('no');
+    expect(callApi).toHaveBeenCalledWith(expect.objectContaining({
+      resource: 'friend',
+      method: 'approve',
+      params: { message_id: 'req-9', approve: true, comment: 'ok' },
+    }));
+    expect(callApi).toHaveBeenCalledWith(expect.objectContaining({
+      resource: 'friend',
+      method: 'approve',
+      params: { message_id: 'req-9', approve: false, comment: 'no' },
+    }));
+    await endpoint.stop();
+  });
+
+  it('creates and deletes reactions with emoji_id', async () => {
+    const callApi = vi.fn(async () => undefined);
+    const endpoint = await createEndpointHarness(() => new SatoriWsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'satori'),
+      config: baseConfig,
+      createWebSocket: createWsFactory(createMockSocket()),
+      callApi,
+    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall', 'reaction'], gateway: createTestEventGateway({
+      receive: vi.fn(async () => Object.freeze({ matched: false })),
+      send: vi.fn(async () => 'sent'),
+    }, undefined) });
+    await endpoint.start();
+    endpoint.open();
+    const message = {
+      conversation: { endpoint: { id: 'test-endpoint', adapter: 'satori' }, kind: 'group' as const, id: 'ch-9' },
+      id: 'ch-9:msg-1',
+    };
+    await expect(endpoint.index.control(endpoint.canonicalId, 'reaction')!.addReaction?.({ message, emoji: 'smile' })).resolves.toBe('smile');
+    await endpoint.index.control(endpoint.canonicalId, 'reaction')!.removeReaction?.({ message, reactionId: 'smile' });
+    expect(callApi).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      resource: 'reaction',
+      method: 'create',
+      params: { channel_id: 'ch-9', message_id: 'msg-1', emoji_id: 'smile' },
+    }));
+    expect(callApi).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      resource: 'reaction',
+      method: 'delete',
+      params: { channel_id: 'ch-9', message_id: 'msg-1', emoji_id: 'smile' },
+    }));
+    expect(JSON.stringify(callApi.mock.calls)).not.toContain('"emoji":');
+    await endpoint.stop();
+  });
+
   it('sends outbound payloads via Satori API', async () => {
     const callApi = vi.fn(async () => [{ id: 'out-1' }]);
     const socket = createMockSocket();
@@ -349,7 +439,7 @@ describe('satori plugin runtime adapter', () => {
       config: baseConfig,
       createWebSocket: createWsFactory(socket),
       callApi,
-    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({
+    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall', 'reaction'], gateway: createTestEventGateway({
         receive: vi.fn(async () => Object.freeze({ matched: false })),
         send: vi.fn(async () => 'sent'),
       }, undefined) });
@@ -378,7 +468,7 @@ describe('satori plugin runtime adapter', () => {
       config: baseConfig,
       createWebSocket: createWsFactory(createMockSocket()),
       callApi,
-    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({
+    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall', 'reaction'], gateway: createTestEventGateway({
         receive: vi.fn(async () => Object.freeze({ matched: false })),
         send: vi.fn(async () => 'sent'),
       }, undefined) });
@@ -426,7 +516,7 @@ describe('satori plugin runtime adapter', () => {
         token: 'secret',
       }) as ReturnType<typeof resolveSatoriConfig> & { connection: 'webhook' },
       callApi: vi.fn(async () => [{ id: 'out-1' }]),
-    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway(gateway, undefined) });
+    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall', 'reaction'], gateway: createTestEventGateway(gateway, undefined) });
 
     await endpoint.start();
     const { port } = await http.listen();
@@ -490,7 +580,7 @@ describe('satori ws heartbeat', () => {
       id: capabilityId(rootPluginId(), adapterFeature, 'satori'),
       config: baseConfig,
       createWebSocket: () => createMockSocket(), // 永不 open，模拟连接挂起
-    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({
+    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall', 'reaction'], gateway: createTestEventGateway({
         receive: vi.fn(async () => Object.freeze({ matched: false })),
         send: vi.fn(async () => 'sent'),
       }, undefined) });
@@ -516,7 +606,7 @@ describe('satori ws heartbeat', () => {
         heartbeat_interval: 1_000,
       }),
       createWebSocket: createWsFactory(socket),
-    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({
+    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall', 'reaction'], gateway: createTestEventGateway({
         receive: vi.fn(async () => Object.freeze({ matched: false })),
         send: vi.fn(async () => 'sent'),
       }, undefined) });
@@ -566,7 +656,7 @@ describe('satori endpoint management', () => {
       if (resource === 'guild-member' && method === 'list') {
         return {
           data: [
-            { user: { id: 'user-1', name: 'alice' }, nick: 'Alice', roles: ['role-1'] },
+            { user: { id: 'user-1', name: 'alice' }, nick: 'Alice', roles: ['role-1', { id: 'role-2', name: 'Admin' }] },
           ],
         };
       }
@@ -579,16 +669,20 @@ describe('satori endpoint management', () => {
       id: capabilityId(rootPluginId(), adapterFeature, 'satori'),
       config: baseConfig,
       callApi, createWebSocket: createWsFactory(createMockSocket()),
-    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({ receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined) });
+    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall', 'reaction'], gateway: createTestEventGateway({ receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined) });
   }
 
   it('advertises only implemented management capabilities', async () => {
     const endpoint = await createManagementEndpoint(createManagementCallApi());
     await endpoint.start(); endpoint.open();
     expect(listEndpointManagementCapabilities(endpoint.endpoint)).toEqual([
+      'listFriends',
       'listGroups',
       'listChannels',
       'listGroupMembers',
+      'approveRequest',
+      'rejectRequest',
+      'deleteFriend',
     ]);
   });
 
@@ -618,12 +712,57 @@ describe('satori endpoint management', () => {
     ]);
   });
 
+  it('lists friends as { user, nick } and ignores the pre-1.3 user shape', async () => {
+    const callApi = vi.fn(async ({ resource, method, params = {} }: SatoriApiRequest) => {
+      if (resource === 'friend' && method === 'list') {
+        if (params.next === 'p2') {
+          return { data: [{ user: { id: 'user-2', name: 'bob' } }] };
+        }
+        return {
+          data: [
+            { user: { id: 'user-1', name: 'alice', avatar: 'a' }, nick: 'Ali' },
+            { id: 'legacy-user', name: 'not a friend resource' },
+          ],
+          next: 'p2',
+        };
+      }
+      if (resource === 'friend' && method === 'delete') return undefined;
+      if (resource === 'friend' && method === 'approve') return undefined;
+      throw new Error(`unexpected api call: ${resource}.${method}`);
+    });
+    const endpoint = await createManagementEndpoint(callApi);
+    await endpoint.start();
+    endpoint.open();
+    await expect(endpoint.index.management(endpoint.canonicalId)!.listFriends?.()).resolves.toEqual([
+      { user_id: 'user-1', nickname: 'alice', remark: 'Ali' },
+      { user_id: 'user-2', nickname: 'bob', remark: '' },
+    ]);
+    await endpoint.index.management(endpoint.canonicalId)!.deleteFriend?.({ userId: 'user-1' });
+    await endpoint.index.management(endpoint.canonicalId)!.approveRequest?.({ requestId: 'req-1', remark: 'welcome' });
+    await endpoint.index.management(endpoint.canonicalId)!.rejectRequest?.({ requestId: 'req-2', reason: 'no' });
+    expect(callApi).toHaveBeenCalledWith(expect.objectContaining({
+      resource: 'friend',
+      method: 'delete',
+      params: { user_id: 'user-1' },
+    }));
+    expect(callApi).toHaveBeenCalledWith(expect.objectContaining({
+      resource: 'friend',
+      method: 'approve',
+      params: { message_id: 'req-1', approve: true, comment: 'welcome' },
+    }));
+    expect(callApi).toHaveBeenCalledWith(expect.objectContaining({
+      resource: 'friend',
+      method: 'approve',
+      params: { message_id: 'req-2', approve: false, comment: 'no' },
+    }));
+  });
+
   it('lists guild members in platform shape', async () => {
     const callApi = createManagementCallApi();
     const endpoint = await createManagementEndpoint(callApi);
     await endpoint.start(); endpoint.open();
     await expect(endpoint.index.management(endpoint.canonicalId)!.listGroupMembers?.({ groupId: 'guild-1' })).resolves.toEqual([
-      { user: { id: 'user-1', name: 'alice' }, nick: 'Alice', roles: ['role-1'] },
+      { user: { id: 'user-1', name: 'alice' }, nick: 'Alice', roles: [{ id: 'role-1' }, { id: 'role-2', name: 'Admin' }] },
     ]);
     expect(callApi).toHaveBeenCalledWith(
       expect.objectContaining({ resource: 'guild-member', method: 'list', params: { guild_id: 'guild-1' } }),
@@ -644,11 +783,15 @@ describe('satori endpoint management', () => {
         token: 'secret',
       }) as ReturnType<typeof resolveSatoriConfig> & { connection: 'webhook' },
       callApi: createManagementCallApi(),
-    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({ receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined) });
+    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall', 'reaction'], gateway: createTestEventGateway({ receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined) });
     expect(listEndpointManagementCapabilities(endpoint.endpoint)).toEqual([
+      'listFriends',
       'listGroups',
       'listChannels',
       'listGroupMembers',
+      'approveRequest',
+      'rejectRequest',
+      'deleteFriend',
     ]);
   });
 });
