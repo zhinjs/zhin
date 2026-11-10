@@ -735,6 +735,32 @@ config: baseConfig}), () => mock, { receive: vi.fn(), send: vi.fn(async () => 's
     await endpoint.stop();
   });
 
+  it('omits obfuscated channels the bot cannot view (CHANNEL_OBFUSCATED, 1 << 17)', async () => {
+    const mock = createMockClient();
+    const visible = { id: 'chan-visible', name: 'general', type: 0, flags: { bitfield: 0 } };
+    // Gateway 混淆下发：name 被替换为 ___hidden___，flags 置 CHANNEL_OBFUSCATED
+    const hiddenBitField = { id: 'chan-hidden-a', name: '___hidden___', type: 0, flags: { bitfield: 1 << 17 } };
+    const hiddenRaw = { id: 'chan-hidden-b', name: '___hidden___', type: 0, flags: (1 << 17) | (1 << 4) };
+    const guild = {
+      id: GUILD_ID,
+      name: 'Guild',
+      channels: {
+        cache: { values: () => [visible, hiddenBitField, hiddenRaw][Symbol.iterator]() },
+      },
+    };
+    mock.guilds.cache = { values: () => [guild][Symbol.iterator]() };
+    const endpoint = await createManagementEndpoint(mock);
+    await endpoint.start();
+    await expect(endpoint.management.listChannels?.()).resolves.toEqual([
+      {
+        id: 'chan-visible',
+        name: 'general',
+        parent: { type: 'guild', id: GUILD_ID, name: 'Guild' },
+      },
+    ]);
+    await endpoint.stop();
+  });
+
   it('lists guild members through the SDK', async () => {
     const endpoint = await createManagementEndpoint(managementMock());
     await endpoint.start();
