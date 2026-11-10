@@ -1,0 +1,37 @@
+.changeset/discord-obfuscated-channels.md
+  s_f21319594bee88::t_1a99b46798fc12 5
+.changeset/satori-guild-member-list-path.md
+  s_f21319594bee88::t_862efcf34535c7 1-5
+docs/adapters/discord.md
+  s_f21319594bee88::t_e3b01526f583e5 11,22
+docs/en/adapters/discord.md
+  s_f21319594bee88::t_3532ccf5109be3 22
+plugins/adapters/discord/README.md
+  s_f21319594bee88::t_bb59e40da4249f 10
+plugins/adapters/discord/src/channel-visibility.ts
+  s_f21319594bee88::t_6b921338bd9771 1-2,15-18,22-26,41,43
+plugins/adapters/discord/tests/channel-visibility.test.ts
+  s_f21319594bee88::t_18eff9b0535fa1 23-25,29-41
+plugins/adapters/discord/tests/discord-runtime.test.ts
+  s_f21319594bee88::t_7b54263e679996 772,789
+plugins/adapters/satori/tests/satori-runtime.test.ts
+  s_f21319594bee88::t_e505e058ff7d8c 742,854
+pnpm-lock.yaml
+  s_f21319594bee88::t_9e7eb9e5ebf36d 7408-7409,9945,9956,9965,9972,9982,12679,12690
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f397b29d6f42a817b16902ef0d74230d3095576c",
+  "prompts": {},
+  "sessions": {
+    "s_f21319594bee88": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a03291-207e-7d10-a69e-0838833440c1",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
