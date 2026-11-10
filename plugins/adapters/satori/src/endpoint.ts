@@ -615,7 +615,8 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 /**
  * Satori endpoint 的 EndpointManagement 语义端口（ws / webhook 共用），
- * 数据走协议 API：guild.list / channel.list / guild-member.list。
+ * 数据走协议 API：guild.list / channel.list / guild.member.list。
+ * @see https://satori.chat/zh-CN/resources/member.html
  */
 export function createSatoriEndpointManagement(api: SatoriManagementApi): EndpointManagement {
   return Object.freeze<EndpointManagement>({
@@ -653,7 +654,8 @@ export function createSatoriEndpointManagement(api: SatoriManagementApi): Endpoi
       return channels;
     },
     async listGroupMembers({ groupId, signal }: EndpointGroupRequest): Promise<readonly unknown[]> {
-      const members = await listSatoriPages(api, { resource: 'guild-member', params: { guild_id: groupId }, signal });
+      // 平台形状（GuildMember[]）原样返回，再规范化 1.3 的 GuildRole 角色
+      const members = await listSatoriPages(api, { resource: 'guild.member', params: { guild_id: groupId }, signal });
       return members.map(member => withSatoriGuildRoles(member));
     },
     async listFriends(request: EndpointManagementRequest = {}): Promise<readonly EndpointFriend[]> {

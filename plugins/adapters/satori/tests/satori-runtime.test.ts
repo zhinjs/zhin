@@ -739,7 +739,7 @@ describe('satori endpoint management', () => {
           ],
         };
       }
-      if (resource === 'guild-member' && method === 'list') {
+      if (resource === 'guild.member' && method === 'list') {
         return {
           data: [
             { user: { id: 'user-1', name: 'alice' }, nick: 'Alice', roles: ['role-1', { id: 'role-2', name: 'Admin' }] },
@@ -851,7 +851,7 @@ describe('satori endpoint management', () => {
       { user: { id: 'user-1', name: 'alice' }, nick: 'Alice', roles: [{ id: 'role-1' }, { id: 'role-2', name: 'Admin' }] },
     ]);
     expect(callApi).toHaveBeenCalledWith(
-      expect.objectContaining({ resource: 'guild-member', method: 'list', params: { guild_id: 'guild-1' } }),
+      expect.objectContaining({ resource: 'guild.member', method: 'list', params: { guild_id: 'guild-1' } }),
     );
   });
 
