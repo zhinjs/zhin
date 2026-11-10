@@ -42,7 +42,7 @@ The owning `Adapter` manages desired accounts and running incarnations. The actu
 - Configuration goes to the top-level `<instanceKey>` block via the plugin's `schema.json` (`baseUrl` / `token` / ...)
 
 Inbound: `endpoint[endpointSpec].events.emit('message.receive', { conversation, message, content, sender, metadata })` (`conversation.id` is the channelId; guild lands in `parent`)
-Outbound: `send({ conversation, payload })` -> Satori `message.create` (`channel_id` is `conversation.id`; payload is rendered by gateway/core; no segment-mapper)
+Outbound: `send({ conversation, payload })` -> Satori `message.create` (`channel_id` is `conversation.id`). A passive reply made before that inbound turn settles sends `referrer` back unchanged. Mention segments become `<at>`, media becomes `<img>` / `<audio>` / `<video>` / `<file>`, and `emoji` or canonical `face` becomes `<emoji>`.
 
 Inbound `metadata.mentioned`: set to `true` when the id of an `<at id="..."/>` element in the message content equals the login selfId (from READY/event `login.user.id`).
 

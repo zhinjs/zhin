@@ -7,6 +7,8 @@ import {
   createEndpointSpecification,
   endpointSpec,
   type Endpoint,
+  type EndpointEventSink,
+  type EndpointIdentity,
   type EndpointSpecification,
   createEndpointLifecycle,
   type EndpointChannel,
@@ -31,11 +33,15 @@ import {
   formatInboundContent,
   formatMessageId,
   formatSatoriOutbound,
+  inboundSatoriSegments,
   isMessageEvent,
   isSelfMentioned,
+  mapGuildEmojiNotice,
   parseMessageRef,
   resolveInboundSender,
   satoriInboundConversation,
+  satoriMessageCreateParams,
+  withSatoriReferrer,
   type ResolvedSatoriWebhookConfig,
   type ResolvedSatoriWsConfig,
   type SatoriEventBody,
@@ -143,10 +149,7 @@ export class SatoriWsEndpoint extends SatoriClient implements Endpoint {
 
   async #send({ conversation, payload, signal }: EndpointSendRequest): Promise<string> {
     const content = formatSatoriOutbound(payload);
-    const result = await this.#call({ resource: 'message', method: 'create', signal, params: {
-      channel_id: conversation.id,
-      content,
-    } });
+    const result = await this.#call({ resource: 'message', method: 'create', signal, params: satoriMessageCreateParams(conversation.id, content) });
     const msgId = extractCreatedMessageId(result);
     this.#logger.debug(formatCompact({
       op: 'satori_send',
@@ -159,34 +162,24 @@ export class SatoriWsEndpoint extends SatoriClient implements Endpoint {
 
   #admitRaw(body: SatoriEventBody): void {
     if (!matchesSatoriLogin(this.#options.config, body.login)) return;
-    if (!isMessageEvent(body)) return;
-    const conversation = { ...satoriInboundConversation(String(this.#options.id), body), endpoint: this[endpointSpec].identity };
-    const content = formatInboundContent(body);
-    const sender = resolveInboundSender(body);
-    const selfId = this.#options.config.userId;
-    const mentioned = isSelfMentioned(body, selfId);
-    void this[endpointSpec].events.message({
-      event: body,
-      ...(typeof body.timestamp === 'number' ? { platformSentAt: body.timestamp } : {}),
-      conversation,
-      message: { conversation, id: body.message.id },
-      content,
-      sender,
-      endpointId: this.#options.config.id,
-      ...(mentioned ? { mentioned: true } : {}),
-      metadata: Object.freeze({
-        type: body.type,
-        channelType: isPrivateChannelType(body) ? 'private' : 'group',
-        sn: body.sn,
+    const deliver = () => deliverSatoriInbound(body, {
+        endpointId: this.#options.config.id,
+        endpointKey: String(this.#options.id),
+        identity: this[endpointSpec].identity,
+        selfId: this.#options.config.userId,
         platform: this.#options.config.platform,
-      }),
-    }).catch((err) => {
-      this.#logger.warn(formatCompact({
-        op: 'satori_gateway_receive_failed',
-        channel: conversation.id,
-        error: err instanceof Error ? err.message : String(err),
-      }));
+        events: this[endpointSpec].events,
+        warnReceive: (channel, error) => {
+          this.#logger.warn(formatCompact({
+            op: 'satori_gateway_receive_failed',
+            channel,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+        },
+        warnEvent: (event, error) => this.#warnPlatformEvent(event, error),
     });
+    if (body.referrer !== undefined) withSatoriReferrer(body.referrer, deliver);
+    else deliver();
   }
 
   async #recall({ message, signal }: EndpointRecallRequest): Promise<void> {
@@ -428,10 +421,7 @@ export class SatoriWebhookEndpoint extends SatoriClient implements Endpoint {
 
   async #send({ conversation, payload, signal }: EndpointSendRequest): Promise<string> {
     const content = formatSatoriOutbound(payload);
-    const result = await this.#call({ resource: 'message', method: 'create', signal, params: {
-      channel_id: conversation.id,
-      content,
-    } });
+    const result = await this.#call({ resource: 'message', method: 'create', signal, params: satoriMessageCreateParams(conversation.id, content) });
     const msgId = extractCreatedMessageId(result);
     this.#logger.debug(formatCompact({
       op: 'satori_send',
@@ -444,34 +434,24 @@ export class SatoriWebhookEndpoint extends SatoriClient implements Endpoint {
 
   #admitRaw(body: SatoriEventBody): void {
     if (!matchesSatoriLogin(this.#options.config, body.login)) return;
-    if (!isMessageEvent(body)) return;
-    const conversation = { ...satoriInboundConversation(String(this.#options.id), body), endpoint: this[endpointSpec].identity };
-    const content = formatInboundContent(body);
-    const sender = resolveInboundSender(body);
-    const selfId = this.#options.config.userId;
-    const mentioned = isSelfMentioned(body, selfId);
-    void this[endpointSpec].events.message({
-      event: body,
-      ...(typeof body.timestamp === 'number' ? { platformSentAt: body.timestamp } : {}),
-      conversation,
-      message: { conversation, id: body.message.id },
-      content,
-      sender,
-      endpointId: this.#options.config.id,
-      ...(mentioned ? { mentioned: true } : {}),
-      metadata: Object.freeze({
-        type: body.type,
-        channelType: isPrivateChannelType(body) ? 'private' : 'group',
-        sn: body.sn,
+    const deliver = () => deliverSatoriInbound(body, {
+        endpointId: this.#options.config.id,
+        endpointKey: String(this.#options.id),
+        identity: this[endpointSpec].identity,
+        selfId: this.#options.config.userId,
         platform: this.#options.config.platform,
-      }),
-    }).catch((err) => {
-      this.#logger.warn(formatCompact({
-        op: 'satori_gateway_receive_failed',
-        channel: conversation.id,
-        error: err instanceof Error ? err.message : String(err),
-      }));
+        events: this[endpointSpec].events,
+        warnReceive: (channel, error) => {
+          this.#logger.warn(formatCompact({
+            op: 'satori_gateway_receive_failed',
+            channel,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+        },
+        warnEvent: (event, error) => this.#warnPlatformEvent(event, error),
     });
+    if (body.referrer !== undefined) withSatoriReferrer(body.referrer, deliver);
+    else deliver();
   }
 
   async #recall({ message, signal }: EndpointRecallRequest): Promise<void> {
@@ -496,6 +476,47 @@ export class SatoriWebhookEndpoint extends SatoriClient implements Endpoint {
     this.ingest(body as Parameters<SatoriClient['ingest']>[0]);
   }
 
+}
+
+function deliverSatoriInbound(body: SatoriEventBody, input: {
+  readonly endpointId: string;
+  readonly endpointKey: string;
+  readonly identity: EndpointIdentity;
+  readonly selfId: string;
+  readonly platform: string;
+  readonly events: EndpointEventSink;
+  readonly warnReceive: (channel: string, error: unknown) => void;
+  readonly warnEvent: (event: string, error: unknown) => void;
+}): Promise<unknown> {
+  const notice = mapGuildEmojiNotice(body, input.endpointId);
+  if (notice) {
+    return input.events.emit('notice.receive', notice).catch(error => input.warnEvent('notice.receive', error));
+  }
+  if (!isMessageEvent(body)) return Promise.resolve();
+  const conversation = { ...satoriInboundConversation(input.endpointKey, body), endpoint: input.identity };
+  const content = formatInboundContent(body);
+  const segments = typeof body.message.content === 'string'
+    ? inboundSatoriSegments(body.message.content)
+    : undefined;
+  const sender = resolveInboundSender(body);
+  const mentioned = isSelfMentioned(body, input.selfId);
+  return input.events.message({
+    event: body,
+    ...(typeof body.timestamp === 'number' ? { platformSentAt: body.timestamp } : {}),
+    conversation,
+    message: { conversation, id: body.message.id },
+    content,
+    ...(segments ? { segments } : {}),
+    sender,
+    endpointId: input.endpointId,
+    ...(mentioned ? { mentioned: true } : {}),
+    metadata: Object.freeze({
+      type: body.type,
+      channelType: isPrivateChannelType(body) ? 'private' : 'group',
+      sn: body.sn,
+      platform: input.platform,
+    }),
+  }).catch(error => input.warnReceive(conversation.id, error));
 }
 
 function isPrivateChannelType(body: SatoriEventBody): boolean {
