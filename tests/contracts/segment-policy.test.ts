@@ -63,10 +63,17 @@ const EXPECTED: Record<string, AdapterDefinition['segments']> = {
   onebot11: { outboundMedia: ['url', 'base64'], interactive: 'text' },
   onebot12: { outboundMedia: ['url', 'path', 'base64', 'upload'], interactive: 'text' },
   qq: {
+    supported: ['text', 'mention', 'image', 'audio', 'video', 'file', 'reply', 'markdown', 'keyboard', 'card', 'share'],
     outboundMedia: ['url', 'upload'],
     interactive: 'native',
     markdown: 'native',
-    supported: ['text', 'mention', 'image', 'audio', 'video', 'file', 'reply', 'markdown', 'keyboard'],
+    model: {
+      share: {
+        fields: ['description', 'image'],
+        hint: 'QQ 群聊和单聊把 title、description、url、image 都填写完整的 share 发成图文卡片（msg_type=8，type=tuwen）。url 和 image 必须是 https；title 1-50 个字符，description 1-200 个字符。缺任一字段或带音频/音乐平台时不会发送。频道不支持。',
+        scopes: ['private', 'group'],
+      },
+    },
   },
   sandbox: { outboundMedia: ['url', 'base64', 'path'], interactive: 'native', html: 'direct', markdown: 'native' },
   satori: { outboundMedia: ['url', 'base64'], interactive: 'text' },
