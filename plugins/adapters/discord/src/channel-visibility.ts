@@ -1,3 +1,5 @@
+import { ChannelFlagsBitField } from 'discord.js';
+
 /**
  * Discord 频道混淆（Channel Obfuscation）判定。
  *
@@ -10,16 +12,12 @@
  *   （Channel Flags 表：`CHANNEL_OBFUSCATED` = `1 << 17`）
  * - https://docs.discord.com/developers/resources/channel#channel-object-obfuscated-channels
  * - https://docs.discord.com/developers/change-log （2026-08-12 "Channel Obfuscation for Users and Bots"）
- * - discord-api-types 上游 `ChannelFlags.ChannelObfuscated = 1 << 17`
- *   （payloads/v10/channel.ts）；但本仓库锁定的 discord.js 14.27.0 / discord-api-types 0.38.52
- *   的 `ChannelFlags` 尚未包含该值，因此这里用位运算自行判断。
+ * - discord-api-types `ChannelFlags.ChannelObfuscated`（0.38.58 起，值为 `131072`）。
+ *   discord.js 14.27.0 的 peer 是 `^0.38.49`，通过 `ChannelFlagsBitField.Flags` 暴露同一枚举。
  *
  * 官方要求以 flag 判定，不要依赖 `name` 等被混淆字段。
- *
- * TODO: discord-api-types 与 discord.js 发布 `ChannelFlags.ChannelObfuscated` 后，
- * 用该官方常量替换下面的 `1 << 17`。
  */
-export const DISCORD_CHANNEL_FLAG_OBFUSCATED = 1 << 17;
+export const DISCORD_CHANNEL_FLAG_OBFUSCATED = ChannelFlagsBitField.Flags.ChannelObfuscated;
 
 type ChannelFlagsLike = number | bigint | { readonly bitfield?: number | bigint } | null | undefined;
 
@@ -34,7 +32,7 @@ function readFlagBits(flags: ChannelFlagsLike): number {
 }
 
 /** 频道是否被 Discord 混淆（机器人无 `VIEW_CHANNEL`）。兼容 discord.js 的 `ChannelFlagsBitField` 与原始 `flags` 数值。 */
-export function isDiscordChannelObfuscated(channel: { readonly flags?: unknown } | null | undefined): boolean {
+export function isDiscordChannelObfuscated(channel: { readonly flags?: ChannelFlagsLike } | null | undefined): boolean {
   if (!channel) return false;
-  return (readFlagBits(channel.flags as ChannelFlagsLike) & DISCORD_CHANNEL_FLAG_OBFUSCATED) !== 0;
+  return (readFlagBits(channel.flags) & DISCORD_CHANNEL_FLAG_OBFUSCATED) !== 0;
 }

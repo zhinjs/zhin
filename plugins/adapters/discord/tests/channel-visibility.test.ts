@@ -20,8 +20,9 @@ describe('discord channel obfuscation', () => {
     expect(isDiscordChannelObfuscated({ flags: 1n << 17n })).toBe(true);
   });
 
-  it('works with discord.js ChannelFlagsBitField even though its enum lacks the flag', () => {
-    expect(isDiscordChannelObfuscated({ flags: new ChannelFlagsBitField(1 << 17) })).toBe(true);
+  it('uses discord.js ChannelFlagsBitField.Flags.ChannelObfuscated', () => {
+    expect(DISCORD_CHANNEL_FLAG_OBFUSCATED).toBe(ChannelFlagsBitField.Flags.ChannelObfuscated);
+    expect(isDiscordChannelObfuscated({ flags: new ChannelFlagsBitField(ChannelFlagsBitField.Flags.ChannelObfuscated) })).toBe(true);
     expect(isDiscordChannelObfuscated({ flags: new ChannelFlagsBitField(0) })).toBe(false);
   });
 

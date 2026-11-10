@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/discord/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/discord/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=64cec9e909d5b16b -->
+<!-- sync-adapter-docs:sha256=8da8d1e45ef87f4a -->
 
 # @zhin.js/adapter-discord
 
@@ -19,7 +19,7 @@ Zhin.js Discord 适配器（Plugin Runtime），默认通过 **Gateway WebSocket
 - Gateway WebSocket 入站（默认；无需公网 HTTPS / host）
 - 解析 text / mention / attachment / embed / sticker / button
 - 支持私聊、群组与服务器频道
-- `listChannels` 会过滤带 `CHANNEL_OBFUSCATED`（`1 << 17`）的混淆频道：机器人缺少 `VIEW_CHANNEL` 时 Gateway 仍会下发这些频道（名字常为 `___hidden___`），HTTP 频道列表则不会返回它们。
+- 自 2026-11-16 起，`listChannels` 会过滤带 `CHANNEL_OBFUSCATED`（`1 << 17`）的混淆频道：机器人缺少 `VIEW_CHANNEL` 时 Gateway 仍会下发这些频道（名字常为 `___hidden___`），HTTP 频道列表则不会返回它们。
 - 出站 `send({ conversation, payload })` → Discord channel message（Markdown content / media / embed / keyboard）
 - 约定式 `defineAdapter` / `definePlugin`（无需 `usePlugin`）
 - Interactions HTTP webhook（需 `httpHostToken`），支持验签、PING 与 slash command
