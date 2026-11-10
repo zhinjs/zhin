@@ -102,6 +102,7 @@ export interface SatoriApiOptions {
 export interface SatoriWireSegment {
   readonly type: string;
   readonly data?: Record<string, unknown>;
+  readonly platform?: Record<string, unknown>;
 }
 
 /** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
@@ -263,7 +264,12 @@ export function formatInboundContent(body: SatoriEventBody & { message: SatoriMe
  * 只识别标准元素 at / img / emoji / audio / video / file。
  * @see https://satori.chat/zh-CN/protocol/elements.html
  */
-export function decodeSatoriContent(content: string): Segment[] {
+const MAX_SATORI_ELEMENT_DEPTH = 8;
+
+export function decodeSatoriContent(content: string, depth = 0): Segment[] {
+  if (depth >= MAX_SATORI_ELEMENT_DEPTH) {
+    return [{ type: 'text', data: { text: unescapeXml(content) } }];
+  }
   const segments: Segment[] = [];
   let text = '';
   const flush = () => {
@@ -277,15 +283,20 @@ export function decodeSatoriContent(content: string): Segment[] {
       index += 1;
       continue;
     }
-    const parsed = readSatoriElement(content, index);
-    if (!parsed || !DECODABLE_SATORI_TAGS.has(parsed.name)) {
+    const scanned = readSatoriElement(content, index);
+    if (scanned.kind === 'incomplete') {
+      text += content.slice(index);
+      break;
+    }
+    if (scanned.kind === 'literal' || !DECODABLE_SATORI_TAGS.has(scanned.element.name)) {
       text += content[index];
       index += 1;
       continue;
     }
+    const parsed = scanned.element;
     flush();
     segments.push(segmentFromSatoriElement(parsed.name, parsed.attrs));
-    if (parsed.inner) segments.push(...decodeSatoriContent(parsed.inner));
+    if (parsed.inner) segments.push(...decodeSatoriContent(parsed.inner, depth + 1));
     index = parsed.end;
   }
   flush();
@@ -329,23 +340,44 @@ export function mapGuildEmojiNotice(body: SatoriEventBody, endpointId: string): 
 }
 
 /**
- * 被动回复的 referrer 只活在这次事件的异步调用链里。
- * 不把「最近一次 referrer」存成端点字段，避免之后的主动消息带上过期来源。
+ * 被动回复的 referrer 只在这次入站处理结束前有效。
+ * 处理返回的 Promise 结算后，同一异步资源里更晚的发送不再附带它。
  * @see https://satori.chat/zh-CN/advanced/passive.html
  */
-const satoriReferrer = new AsyncLocalStorage<unknown>();
-
-export function withSatoriReferrer<T>(referrer: unknown, run: () => T): T {
-  return satoriReferrer.run(referrer, run);
+interface SatoriReferrerFrame {
+  readonly value: unknown;
+  open: boolean;
 }
 
-/** `message.create` 参数。有来源上下文时原样附带，不挑字段、不改名。 */
+const satoriReferrer = new AsyncLocalStorage<SatoriReferrerFrame>();
+
+export function withSatoriReferrer<T>(referrer: unknown, run: () => T): T {
+  const frame: SatoriReferrerFrame = { value: referrer, open: true };
+  const close = () => { frame.open = false; };
+  return satoriReferrer.run(frame, () => {
+    try {
+      const result = run();
+      if (isPromiseLike(result)) return result.finally(close) as T;
+      close();
+      return result;
+    } catch (error) {
+      close();
+      throw error;
+    }
+  });
+}
+
+function isPromiseLike(value: unknown): value is Promise<unknown> {
+  return typeof value === 'object' && value !== null && typeof (value as { then?: unknown }).then === 'function';
+}
+
+/** `message.create` 参数。处理尚未结束时原样附带 referrer，不挑字段、不改名。 */
 export function satoriMessageCreateParams(channelId: string, content: string): Record<string, unknown> {
-  const referrer = satoriReferrer.getStore();
+  const frame = satoriReferrer.getStore();
   return {
     channel_id: channelId,
     content,
-    ...(referrer !== undefined ? { referrer } : {}),
+    ...(frame?.open ? { referrer: frame.value } : {}),
   };
 }
 
@@ -463,15 +495,17 @@ export function formatSatoriOutbound(payload: unknown): string {
       continue;
     }
     const data = item.data ?? {};
+    const platform = item.platform;
     switch (item.type) {
       case 'text':
         parts.push(escapeXmlText(String(data.text ?? data.content ?? '')));
         break;
       case 'at':
       case 'mention':
-        parts.push(encodeAtElement(data));
+        parts.push(encodeAtElement(data, platform));
         break;
       case 'emoji':
+      case 'face':
         parts.push(encodeEmojiElement(data));
         break;
       case 'image':
@@ -479,7 +513,7 @@ export function formatSatoriOutbound(payload: unknown): string {
       case 'video':
       case 'file': {
         const src = resolveMediaSrc(item.type, data);
-        if (src) parts.push(encodeMediaElement(item.type, src, data));
+        if (src) parts.push(encodeMediaElement(item.type, src, data, platform));
         break;
       }
       default:
@@ -498,22 +532,22 @@ const MEDIA_ELEMENT_NAMES = {
 
 const DECODABLE_SATORI_TAGS = new Set(['at', 'img', 'emoji', 'audio', 'video', 'file']);
 
-function encodeAtElement(data: Record<string, unknown>): string {
-  const explicitType = readString(data.type);
+function encodeAtElement(data: Record<string, unknown>, platform?: Record<string, unknown>): string {
+  const explicitType = readString(data.type) ?? readString(platform?.type);
   const rawId = readString(data.id) ?? readString(data.target);
   const id = rawId === 'all' || rawId === 'here' ? undefined : rawId;
   const type = explicitType ?? (rawId === 'all' || rawId === 'here' ? rawId : undefined);
   return renderSatoriElement('at', [
     ['id', id],
     ['name', readString(data.name)],
-    ['role', readString(data.role)],
+    ['role', readString(data.role) ?? readString(platform?.role)],
     ['type', type],
   ]);
 }
 
 function encodeEmojiElement(data: Record<string, unknown>): string {
   return renderSatoriElement('emoji', [
-    ['id', readString(data.id) ?? readString(data.emoji)],
+    ['id', readToken(data.id) ?? readToken(data.face_id) ?? readString(data.emoji)],
     ['name', readString(data.name)],
   ]);
 }
@@ -522,11 +556,12 @@ function encodeMediaElement(
   type: keyof typeof MEDIA_ELEMENT_NAMES,
   src: string,
   data: Record<string, unknown>,
+  platform?: Record<string, unknown>,
 ): string {
   const title = readString(data.title) ?? readString(data.name);
   const fileName = isMediaRef(data.media) ? data.media.file_name : undefined;
   const duration = typeof data.duration === 'number' ? String(data.duration) : undefined;
-  const poster = readString(data.poster);
+  const poster = readString(data.poster) ?? readString(platform?.poster);
   const timed = type === 'audio' || type === 'video';
   return renderSatoriElement(MEDIA_ELEMENT_NAMES[type], [
     ['src', src],
@@ -551,6 +586,12 @@ function readString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
+function readToken(value: unknown): string | undefined {
+  if (typeof value === 'string' && value) return value;
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  return undefined;
+}
+
 function escapeXmlText(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
@@ -560,12 +601,69 @@ function escapeXmlAttr(value: string): string {
 }
 
 function unescapeXml(value: string): string {
-  return value
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'")
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&amp;/g, '&');
+  let out = '';
+  for (let index = 0; index < value.length;) {
+    if (value[index] !== '&') {
+      out += value[index];
+      index += 1;
+      continue;
+    }
+    const window = value.slice(index + 1, index + 13);
+    const semi = window.indexOf(';');
+    if (semi <= 0) {
+      out += '&';
+      index += 1;
+      continue;
+    }
+    const decoded = decodeXmlEntity(window.slice(0, semi));
+    if (decoded === undefined) {
+      out += '&';
+      index += 1;
+      continue;
+    }
+    out += decoded;
+    index += semi + 2;
+  }
+  return out;
+}
+
+function decodeXmlEntity(body: string): string | undefined {
+  switch (body) {
+    case 'quot': return '"';
+    case 'apos': return "'";
+    case 'lt': return '<';
+    case 'gt': return '>';
+    case 'amp': return '&';
+    default: break;
+  }
+  if (body.startsWith('#x') || body.startsWith('#X')) return xmlCodePoint(body.slice(2), 16);
+  if (body.startsWith('#')) return xmlCodePoint(body.slice(1), 10);
+  return undefined;
+}
+
+function xmlCodePoint(body: string, radix: 10 | 16): string | undefined {
+  if (!body || (radix === 16 ? !isHex(body) : !isDigits(body))) return undefined;
+  const code = Number.parseInt(body, radix);
+  if (!Number.isInteger(code) || code < 0 || code > 0x10ffff) return undefined;
+  if (code >= 0xd800 && code <= 0xdfff) return undefined;
+  return String.fromCodePoint(code);
+}
+
+function isDigits(body: string): boolean {
+  for (const char of body) {
+    if (char < '0' || char > '9') return false;
+  }
+  return true;
+}
+
+function isHex(body: string): boolean {
+  for (const char of body) {
+    const hex = (char >= '0' && char <= '9')
+      || (char >= 'a' && char <= 'f')
+      || (char >= 'A' && char <= 'F');
+    if (!hex) return false;
+  }
+  return true;
 }
 
 interface SatoriParsedElement {
@@ -575,26 +673,46 @@ interface SatoriParsedElement {
   readonly end: number;
 }
 
-function readSatoriElement(content: string, start: number): SatoriParsedElement | undefined {
-  if (content[start] !== '<') return undefined;
+type SatoriTagScan =
+  | { readonly kind: 'element'; readonly element: SatoriParsedElement }
+  | { readonly kind: 'incomplete' }
+  | { readonly kind: 'literal' };
+
+function readSatoriElement(content: string, start: number): SatoriTagScan {
+  if (content[start] !== '<') return { kind: 'literal' };
   const next = content[start + 1];
-  if (!next || next === '/' || next === '!' || next === '?' || !isAsciiLetter(next)) return undefined;
+  if (!next || next === '/' || next === '!' || next === '?' || !isAsciiLetter(next)) return { kind: 'literal' };
   let index = start + 2;
   while (index < content.length && isTagNameChar(content[index] ?? '')) index += 1;
   const name = content.slice(start + 1, index).toLowerCase();
   const attrStart = index;
-  while (index < content.length && content[index] !== '>') index += 1;
-  if (index >= content.length) return undefined;
+  let quote = '';
+  while (index < content.length) {
+    const char = content[index] ?? '';
+    if (quote) {
+      if (char === quote) quote = '';
+      index += 1;
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      index += 1;
+      continue;
+    }
+    if (char === '>') break;
+    index += 1;
+  }
+  if (index >= content.length || content[index] !== '>') return { kind: 'incomplete' };
   const rawAttrs = content.slice(attrStart, index);
   const trimmed = rawAttrs.trimEnd();
   const selfClosing = trimmed.endsWith('/');
   const attrs = parseXmlAttributes(selfClosing ? trimmed.slice(0, -1) : rawAttrs);
   const end = index + 1;
-  if (selfClosing) return { name, attrs, end };
+  if (selfClosing) return { kind: 'element', element: { name, attrs, end } };
   const close = findClosingTag(content, end, name);
-  if (!close) return { name, attrs, end };
+  if (!close) return { kind: 'element', element: { name, attrs, end } };
   const inner = content.slice(end, close.start);
-  return { name, attrs, ...(inner ? { inner } : {}), end: close.end };
+  return { kind: 'element', element: { name, attrs, ...(inner ? { inner } : {}), end: close.end } };
 }
 
 function parseXmlAttributes(source: string): Readonly<Record<string, string>> {
@@ -674,15 +792,17 @@ function isXmlSpace(char: string): boolean {
 function segmentFromSatoriElement(name: string, attrs: Readonly<Record<string, string>>): Segment {
   if (name === 'at') {
     const type = attrs.type;
-    const target = attrs.id || (type === 'all' || type === 'here' ? type : undefined);
+    const target = attrs.id || (type === 'all' || type === 'here' ? type : attrs.role);
+    const platform: Record<string, string> = {};
+    if (attrs.role) platform.role = attrs.role;
+    if (type) platform.type = type;
     return {
       type: 'mention',
       data: {
         ...(target ? { target } : {}),
         ...(attrs.name ? { name: attrs.name } : {}),
-        ...(attrs.role ? { role: attrs.role } : {}),
-        ...(type ? { type } : {}),
       },
+      ...(Object.keys(platform).length > 0 ? { platform } : {}),
     };
   }
   if (name === 'emoji') {
@@ -697,6 +817,7 @@ function segmentFromSatoriElement(name: string, attrs: Readonly<Record<string, s
   const type = name === 'img' ? 'image' : name;
   const src = attrs.src ?? '';
   const base64 = src.startsWith('base64://');
+  const duration = attrs.duration && Number.isFinite(Number(attrs.duration)) ? Number(attrs.duration) : undefined;
   return {
     type,
     data: {
@@ -704,8 +825,10 @@ function segmentFromSatoriElement(name: string, attrs: Readonly<Record<string, s
         ? { kind: 'base64', value: src.slice('base64://'.length) }
         : { kind: 'url', value: src },
       ...(attrs.title ? { name: attrs.title } : {}),
-      ...(attrs.duration && Number.isFinite(Number(attrs.duration)) ? { duration: Number(attrs.duration) } : {}),
+      ...(duration !== undefined ? { duration } : {}),
+      ...(attrs.poster ? { poster: attrs.poster } : {}),
     },
+    ...(attrs.poster ? { platform: { poster: attrs.poster } } : {}),
   };
 }
 

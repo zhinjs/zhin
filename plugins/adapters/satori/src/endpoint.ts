@@ -162,8 +162,7 @@ export class SatoriWsEndpoint extends SatoriClient implements Endpoint {
 
   #admitRaw(body: SatoriEventBody): void {
     if (!matchesSatoriLogin(this.#options.config, body.login)) return;
-    const deliver = () => {
-      deliverSatoriInbound(body, {
+    const deliver = () => deliverSatoriInbound(body, {
         endpointId: this.#options.config.id,
         endpointKey: String(this.#options.id),
         identity: this[endpointSpec].identity,
@@ -178,8 +177,7 @@ export class SatoriWsEndpoint extends SatoriClient implements Endpoint {
           }));
         },
         warnEvent: (event, error) => this.#warnPlatformEvent(event, error),
-      });
-    };
+    });
     if (body.referrer !== undefined) withSatoriReferrer(body.referrer, deliver);
     else deliver();
   }
@@ -436,8 +434,7 @@ export class SatoriWebhookEndpoint extends SatoriClient implements Endpoint {
 
   #admitRaw(body: SatoriEventBody): void {
     if (!matchesSatoriLogin(this.#options.config, body.login)) return;
-    const deliver = () => {
-      deliverSatoriInbound(body, {
+    const deliver = () => deliverSatoriInbound(body, {
         endpointId: this.#options.config.id,
         endpointKey: String(this.#options.id),
         identity: this[endpointSpec].identity,
@@ -452,8 +449,7 @@ export class SatoriWebhookEndpoint extends SatoriClient implements Endpoint {
           }));
         },
         warnEvent: (event, error) => this.#warnPlatformEvent(event, error),
-      });
-    };
+    });
     if (body.referrer !== undefined) withSatoriReferrer(body.referrer, deliver);
     else deliver();
   }
@@ -491,13 +487,12 @@ function deliverSatoriInbound(body: SatoriEventBody, input: {
   readonly events: EndpointEventSink;
   readonly warnReceive: (channel: string, error: unknown) => void;
   readonly warnEvent: (event: string, error: unknown) => void;
-}): void {
+}): Promise<unknown> {
   const notice = mapGuildEmojiNotice(body, input.endpointId);
   if (notice) {
-    void input.events.emit('notice.receive', notice).catch(error => input.warnEvent('notice.receive', error));
-    return;
+    return input.events.emit('notice.receive', notice).catch(error => input.warnEvent('notice.receive', error));
   }
-  if (!isMessageEvent(body)) return;
+  if (!isMessageEvent(body)) return Promise.resolve();
   const conversation = { ...satoriInboundConversation(input.endpointKey, body), endpoint: input.identity };
   const content = formatInboundContent(body);
   const segments = typeof body.message.content === 'string'
@@ -505,7 +500,7 @@ function deliverSatoriInbound(body: SatoriEventBody, input: {
     : undefined;
   const sender = resolveInboundSender(body);
   const mentioned = isSelfMentioned(body, input.selfId);
-  void input.events.message({
+  return input.events.message({
     event: body,
     ...(typeof body.timestamp === 'number' ? { platformSentAt: body.timestamp } : {}),
     conversation,
