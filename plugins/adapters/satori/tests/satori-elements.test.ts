@@ -50,6 +50,20 @@ describe('satori element codec', () => {
     ]);
   });
 
+  it('scans long tag and attribute names without nested backtracking', () => {
+    const hyphens = '-'.repeat(4_000);
+    const colons = ':'.repeat(4_000);
+    expect(decodeSatoriContent(`<A${hyphens}`)).toEqual([
+      { type: 'text', data: { text: `<A${hyphens}` } },
+    ]);
+    expect(decodeSatoriContent(`<at ${colons}="x"/>`)).toEqual([
+      { type: 'mention', data: {} },
+    ]);
+    expect(decodeSatoriContent('<at id="user-1"/>')).toEqual([
+      { type: 'mention', data: { target: 'user-1' } },
+    ]);
+  });
+
   it('round-trips mention, emoji and media elements', () => {
     const payload = [
       { type: 'mention', data: { target: 'user-1', name: 'Alice' } },

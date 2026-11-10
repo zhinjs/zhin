@@ -576,31 +576,99 @@ interface SatoriParsedElement {
 }
 
 function readSatoriElement(content: string, start: number): SatoriParsedElement | undefined {
+  if (content[start] !== '<') return undefined;
   const next = content[start + 1];
-  if (next === '/' || next === '!' || next === '?') return undefined;
-  const head = /^<([A-Za-z][\w:-]*)([^>]*)>/u.exec(content.slice(start));
-  if (!head?.[1]) return undefined;
-  const name = head[1].toLowerCase();
-  const rawAttrs = head[2] ?? '';
-  const selfClosing = /\/\s*$/u.test(rawAttrs);
-  const attrs = parseXmlAttributes(selfClosing ? rawAttrs.replace(/\/\s*$/u, '') : rawAttrs);
-  let end = start + head[0].length;
+  if (!next || next === '/' || next === '!' || next === '?' || !isAsciiLetter(next)) return undefined;
+  let index = start + 2;
+  while (index < content.length && isTagNameChar(content[index] ?? '')) index += 1;
+  const name = content.slice(start + 1, index).toLowerCase();
+  const attrStart = index;
+  while (index < content.length && content[index] !== '>') index += 1;
+  if (index >= content.length) return undefined;
+  const rawAttrs = content.slice(attrStart, index);
+  const trimmed = rawAttrs.trimEnd();
+  const selfClosing = trimmed.endsWith('/');
+  const attrs = parseXmlAttributes(selfClosing ? trimmed.slice(0, -1) : rawAttrs);
+  const end = index + 1;
   if (selfClosing) return { name, attrs, end };
-  const close = new RegExp(`</${name}\\s*>`, 'iu').exec(content.slice(end));
+  const close = findClosingTag(content, end, name);
   if (!close) return { name, attrs, end };
-  const inner = content.slice(end, end + close.index);
-  end += close.index + close[0].length;
-  return { name, attrs, ...(inner ? { inner } : {}), end };
+  const inner = content.slice(end, close.start);
+  return { name, attrs, ...(inner ? { inner } : {}), end: close.end };
 }
 
 function parseXmlAttributes(source: string): Readonly<Record<string, string>> {
   const attrs: Record<string, string> = {};
-  for (const match of source.matchAll(/([A-Za-z_:][\w:.-]*)\s*=\s*(?:"([^"]*)"|'([^']*)')/gu)) {
-    const key = match[1]?.toLowerCase();
-    if (!key) continue;
-    attrs[key] = unescapeXml(match[2] ?? match[3] ?? '');
+  let index = 0;
+  while (index < source.length) {
+    while (index < source.length && isXmlSpace(source[index] ?? '')) index += 1;
+    if (index >= source.length) break;
+    const first = source[index] ?? '';
+    if (!isAttrNameStart(first)) {
+      index += 1;
+      continue;
+    }
+    const keyStart = index;
+    index += 1;
+    while (index < source.length && isAttrNameChar(source[index] ?? '')) index += 1;
+    const key = source.slice(keyStart, index).toLowerCase();
+    while (index < source.length && isXmlSpace(source[index] ?? '')) index += 1;
+    if (source[index] !== '=') continue;
+    index += 1;
+    while (index < source.length && isXmlSpace(source[index] ?? '')) index += 1;
+    const quote = source[index];
+    if (quote !== '"' && quote !== "'") continue;
+    index += 1;
+    const valueStart = index;
+    while (index < source.length && source[index] !== quote) index += 1;
+    const value = source.slice(valueStart, index);
+    if (index < source.length) index += 1;
+    attrs[key] = unescapeXml(value);
   }
   return attrs;
+}
+
+function findClosingTag(content: string, from: number, name: string): { start: number; end: number } | undefined {
+  for (let index = from; index < content.length; index += 1) {
+    if (content[index] !== '<' || content[index + 1] !== '/') continue;
+    let cursor = index + 2;
+    let matched = true;
+    for (let offset = 0; offset < name.length; offset += 1) {
+      if ((content[cursor + offset] ?? '').toLowerCase() !== name[offset]) {
+        matched = false;
+        break;
+      }
+    }
+    if (!matched) continue;
+    cursor += name.length;
+    while (isXmlSpace(content[cursor] ?? '')) cursor += 1;
+    if (content[cursor] === '>') return { start: index, end: cursor + 1 };
+  }
+  return undefined;
+}
+
+function isAsciiLetter(char: string): boolean {
+  return (char >= 'A' && char <= 'Z') || (char >= 'a' && char <= 'z');
+}
+
+function isTagNameChar(char: string): boolean {
+  return isAsciiLetter(char) || isAsciiDigit(char) || char === '_' || char === ':' || char === '-';
+}
+
+function isAttrNameStart(char: string): boolean {
+  return isAsciiLetter(char) || char === '_' || char === ':';
+}
+
+function isAttrNameChar(char: string): boolean {
+  return isAttrNameStart(char) || isAsciiDigit(char) || char === '.' || char === '-';
+}
+
+function isAsciiDigit(char: string): boolean {
+  return char >= '0' && char <= '9';
+}
+
+function isXmlSpace(char: string): boolean {
+  return char === ' ' || char === '\t' || char === '\n' || char === '\r';
 }
 
 function segmentFromSatoriElement(name: string, attrs: Readonly<Record<string, string>>): Segment {
