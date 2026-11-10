@@ -1,0 +1,23 @@
+plugins/adapters/satori/src/endpoint.ts
+  s_f21319594bee88::t_9c46579b8bd61e 15-16,42,50,54-55,165,187-191,193-201,203-204,456,478-482,484-492,494-495,530-570
+plugins/adapters/satori/src/index.ts
+  s_f21319594bee88::t_954c6faf0bf351 6,9,16-18,29
+plugins/adapters/satori/src/protocol.ts
+  s_f21319594bee88::t_073c99a70cccf3 4-6,32-41,118-131,146,303-424,511-516,535,539,542,546-550,557,567-891
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "42c5b7cb39b6a8cff971b9e3474cee2978deb773",
+  "prompts": {},
+  "sessions": {
+    "s_f21319594bee88": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a03291-207e-7d10-a69e-0838833440c1",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
