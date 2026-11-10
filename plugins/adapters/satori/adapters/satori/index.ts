@@ -27,9 +27,14 @@ export default defineAdapter<SatoriEndpointConfig>({
           interactive: 'text',
         },
         recall: {},
+        reaction: {},
       },
       actions: {
         recall: { scopes: ['private', 'group', 'channel'] },
+        reaction: {
+          scopes: ['private', 'group', 'channel'],
+          params: { cancellable: true },
+        },
       },
       delivery: { send: true, spool: true },
     },

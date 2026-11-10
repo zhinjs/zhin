@@ -2,7 +2,7 @@ import type { EndpointProfileConfiguration } from 'zhin.js/adapter';
 /** Satori protocol helpers. Spec: https://satori.chat/zh-CN/protocol/overview.html */
 
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { buildNotice, composeSideEventName, senderFromId, type IncomingNotice } from '@zhin.js/core';
+import { buildNotice, buildRequest, composeSideEventName, senderFromId, sideEventConversation, type IncomingNotice, type IncomingRequest } from '@zhin.js/core';
 import { EndpointDeliveryError, isMediaRef, type ConversationKind, type ConversationRef, type Segment } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
@@ -39,6 +39,42 @@ export interface SatoriEmoji {
   readonly name?: string;
 }
 
+/**
+ * 群组角色。文档只声明 `id` 和 `name?`。
+ * 协议源码里还有 color、position 等字段，这里以文档为准，不建模它们。
+ * `@imhelper/satori-v1` 没有这个类型。上游 `feat/satori-1.3-alignment` 会补，但未发 npm。
+ * 上游发版后可以换成官方类型。
+ * @see https://satori.chat/zh-CN/resources/role.html
+ */
+export interface SatoriGuildRole {
+  readonly id: string;
+  readonly name?: string;
+}
+
+/**
+ * 好友。文档形状是 `{ user?, nick? }`，不是带顶层 `id` / `name` / `avatar` 的 User。
+ * 1.0.10 的 `directory-api.getFriendList` 仍按 User 读取 `friend.id`。本地按文档解析。
+ * 上游发版后可以换成官方类型。
+ * @see https://satori.chat/zh-CN/resources/friend.html
+ */
+export interface SatoriFriend {
+  readonly user?: SatoriUser;
+  readonly nick?: string;
+}
+
+/**
+ * 群组成员。`roles` 在 1.3 起是 `GuildRole[]`，不再是 `string[]`。
+ * 本地类型。上游发版后可以换成官方类型。
+ * @see https://satori.chat/zh-CN/resources/member.html
+ */
+export interface SatoriGuildMember {
+  readonly user?: SatoriUser;
+  readonly nick?: string;
+  readonly avatar?: string;
+  readonly joined_at?: number;
+  readonly roles?: readonly SatoriGuildRole[];
+}
+
 export interface SatoriChannel {
   readonly id: string;
   /** 0=TEXT, 1=DIRECT, 2=CATEGORY, 3=VOICE */
@@ -73,7 +109,12 @@ export interface SatoriEventBody {
   readonly channel?: SatoriChannel;
   readonly user?: SatoriUser;
   readonly guild?: { readonly id: string; readonly name?: string };
-  readonly member?: { readonly user?: SatoriUser; readonly nick?: string; readonly roles?: string[] };
+  readonly member?: SatoriGuildMember;
+  /**
+   * 事件里的好友。本地字段，原因见 {@link SatoriFriend}。
+   * @see https://satori.chat/zh-CN/protocol/events.html
+   */
+  readonly friend?: SatoriFriend;
   readonly operator?: SatoriUser;
   /**
    * 事件表情。本地字段，原因见 {@link SatoriEmoji}。
@@ -854,4 +895,143 @@ export function extractCreatedMessageId(result: unknown): string {
     : (result as { data?: unknown[] } | null)?.data;
   const msg = list?.[0] as { id?: string } | undefined;
   return msg?.id ?? '';
+}
+
+/**
+ * 把 `guild-member.list` 的 `roles` 收成 `GuildRole[]`。
+ * 旧 SDK 可能仍下发 `string[]`，这里收成 `{ id }`。上游发版并保证对象数组后，字符串分支可以去掉。
+ */
+export function normalizeSatoriGuildRoles(value: unknown): readonly SatoriGuildRole[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const roles: SatoriGuildRole[] = [];
+  for (const role of value) {
+    if (typeof role === 'string' && role) {
+      roles.push({ id: role });
+      continue;
+    }
+    if (!role || typeof role !== 'object') continue;
+    const record = role as { id?: unknown; name?: unknown };
+    if (typeof record.id !== 'string' || !record.id) continue;
+    roles.push({
+      id: record.id,
+      ...(typeof record.name === 'string' ? { name: record.name } : {}),
+    });
+  }
+  return roles;
+}
+
+/** 成员列表原样保留其余字段，只把 roles 收成 GuildRole[]。 */
+export function withSatoriGuildRoles<T>(member: T): T {
+  if (!member || typeof member !== 'object' || !('roles' in member)) return member;
+  const roles = normalizeSatoriGuildRoles((member as { roles?: unknown }).roles);
+  if (!roles) return member;
+  return { ...member, roles };
+}
+
+/**
+ * 按 `{ user, nick }` 读取好友。顶层 `id` / `name` 是 1.0.10 误用的 User 形状，这里不认。
+ */
+export function readSatoriFriend(value: unknown): SatoriFriend | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const record = value as { user?: unknown; nick?: unknown };
+  if (!record.user || typeof record.user !== 'object') return undefined;
+  const user = record.user as { id?: unknown; name?: unknown; avatar?: unknown };
+  if (typeof user.id !== 'string' || !user.id) return undefined;
+  return {
+    user: {
+      id: user.id,
+      ...(typeof user.name === 'string' ? { name: user.name } : {}),
+      ...(typeof user.avatar === 'string' ? { avatar: user.avatar } : {}),
+    },
+    ...(typeof record.nick === 'string' ? { nick: record.nick } : {}),
+  };
+}
+
+export type SatoriReactionMethod = 'create' | 'delete' | 'clear' | 'list';
+
+/**
+ * reaction.* 的参数名是 `emoji_id`，不是 1.0.10 `addMessageReactionIn` 用的 `emoji`。
+ * clear 不传 emoji_id 表示清除全部表态。
+ * @see https://satori.chat/zh-CN/resources/reaction.html
+ */
+export function satoriReactionParams(
+  method: SatoriReactionMethod,
+  input: {
+    readonly channelId: string;
+    readonly messageId: string;
+    readonly emojiId?: string;
+    readonly userId?: string;
+    readonly next?: string;
+  },
+): Record<string, unknown> {
+  const params: Record<string, unknown> = {
+    channel_id: input.channelId,
+    message_id: input.messageId,
+  };
+  if (input.emojiId !== undefined && (method !== 'clear' || input.emojiId !== '')) {
+    params.emoji_id = input.emojiId;
+  }
+  if (method === 'delete' && input.userId !== undefined) params.user_id = input.userId;
+  if (method === 'list' && input.next !== undefined) params.next = input.next;
+  return params;
+}
+
+/** `friend.approve` 同时表达通过和拒绝。 */
+export function satoriFriendApproveParams(
+  messageId: string,
+  approve: boolean,
+  comment?: string,
+): Record<string, unknown> {
+  return {
+    message_id: messageId,
+    approve,
+    ...(comment !== undefined ? { comment } : {}),
+  };
+}
+
+export interface SatoriFriendRequestActions {
+  approve(messageId: string, comment?: string): Promise<void>;
+  reject(messageId: string, reason?: string): Promise<void>;
+}
+
+/**
+ * `friend-request` → `request.friend.add`，让它进入 request.receive 管道。
+ * 文档的必需资源是 `user`。`friend.approve` 的请求 ID 是 `message_id`；
+ * 事件没有 `message.id` 时仍然投递，但批准/拒绝会说明缺少该字段。
+ * @see https://satori.chat/zh-CN/resources/friend.html
+ */
+export function mapSatoriFriendRequest(
+  body: SatoriEventBody,
+  endpointId: string,
+  actions: SatoriFriendRequestActions,
+): IncomingRequest | undefined {
+  if (body.type !== 'friend-request') return undefined;
+  const user = body.user ?? body.friend?.user;
+  if (!user?.id) return undefined;
+  const actor = senderFromId(user.id, user.name ?? body.friend?.nick);
+  if (!actor) return undefined;
+  const messageId = typeof body.message?.id === 'string' && body.message.id ? body.message.id : undefined;
+  const requireMessageId = (kind: 'approve' | 'reject') => {
+    if (!messageId) {
+      throw new Error(`Satori friend.approve 需要事件 message.id 作为 message_id，无法${kind === 'approve' ? '通过' : '拒绝'}该好友申请`);
+    }
+    return messageId;
+  };
+  return buildRequest(body, {
+    id: messageId ?? `satori:friend-request:${user.id}:${String(body.sn ?? body.timestamp ?? 0)}`,
+    clientAdapter: 'satori',
+    endpointId,
+    type: 'request',
+    name: 'request.friend.add',
+    conversation: sideEventConversation('friend', user.id),
+    actor,
+    ...(typeof body.message?.content === 'string' ? { comment: body.message.content } : {}),
+    timestamp: typeof body.timestamp === 'number' ? body.timestamp : Date.now(),
+    async $approve(remark?: string) {
+      await actions.approve(requireMessageId('approve'), remark);
+    },
+    async $reject(reason?: string) {
+      await actions.reject(requireMessageId('reject'), reason);
+    },
+  });
 }
