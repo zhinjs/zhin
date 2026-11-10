@@ -738,14 +738,16 @@ config: baseConfig}), () => mock, { receive: vi.fn(), send: vi.fn(async () => 's
   it('omits obfuscated channels the bot cannot view (CHANNEL_OBFUSCATED, 1 << 17)', async () => {
     const mock = createMockClient();
     const visible = { id: 'chan-visible', name: 'general', type: 0, flags: { bitfield: 0 } };
-    // Gateway 混淆下发：name 被替换为 ___hidden___，flags 置 CHANNEL_OBFUSCATED
-    const hiddenBitField = { id: 'chan-hidden-a', name: '___hidden___', type: 0, flags: { bitfield: 1 << 17 } };
-    const hiddenRaw = { id: 'chan-hidden-b', name: '___hidden___', type: 0, flags: (1 << 17) | (1 << 4) };
+    // 名字是占位符但没有 flag，必须保留：过滤只看 CHANNEL_OBFUSCATED，不看 name。
+    const namedHidden = { id: 'chan-named-hidden', name: '___hidden___', type: 0, flags: { bitfield: 0 } };
+    // 有 flag 就要过滤，即使名字不是 ___hidden___。
+    const hiddenBitField = { id: 'chan-hidden-a', name: 'secret-a', type: 0, flags: { bitfield: 1 << 17 } };
+    const hiddenRaw = { id: 'chan-hidden-b', name: 'secret-b', type: 0, flags: (1 << 17) | (1 << 4) };
     const guild = {
       id: GUILD_ID,
       name: 'Guild',
       channels: {
-        cache: { values: () => [visible, hiddenBitField, hiddenRaw][Symbol.iterator]() },
+        cache: { values: () => [visible, namedHidden, hiddenBitField, hiddenRaw][Symbol.iterator]() },
       },
     };
     mock.guilds.cache = { values: () => [guild][Symbol.iterator]() };
@@ -755,6 +757,11 @@ config: baseConfig}), () => mock, { receive: vi.fn(), send: vi.fn(async () => 's
       {
         id: 'chan-visible',
         name: 'general',
+        parent: { type: 'guild', id: GUILD_ID, name: 'Guild' },
+      },
+      {
+        id: 'chan-named-hidden',
+        name: '___hidden___',
         parent: { type: 'guild', id: GUILD_ID, name: 'Guild' },
       },
     ]);
