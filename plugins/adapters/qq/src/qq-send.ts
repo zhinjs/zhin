@@ -43,6 +43,7 @@ interface QqMessageDispatch {
   readonly message: QqOutboundMessage;
   readonly source?: QqReplySource;
   readonly options?: QqSendOptions;
+  readonly signal?: AbortSignal;
 }
 export interface QqMessagesRequest {
   readonly conversation: ConversationRef;
@@ -93,11 +94,13 @@ function cardContent(message: QqOutboundMessage): QqTuwenContent | undefined {
   return content as QqTuwenContent;
 }
 
-function referenceMessageId(message: QqOutboundMessage): string | undefined {
+function replyReference(message: QqOutboundMessage): { readonly eventId?: string; readonly messageId?: string } {
   for (const part of elements(message)) {
-    if (typeof part !== 'string' && part.type === 'reply' && typeof part.data.id === 'string' && part.data.id) return part.data.id;
+    if (typeof part === 'string' || part.type !== 'reply') continue;
+    if (typeof part.data.event_id === 'string' && part.data.event_id) return { eventId: part.data.event_id };
+    if (typeof part.data.id === 'string' && part.data.id) return { messageId: part.data.id };
   }
-  return undefined;
+  return {};
 }
 
 /** 图文卡片和 @全体成员的场景以官方文本交互、发消息文档为准，不在未记载的会话里试发。 */
@@ -118,21 +121,23 @@ export function qqMessageMentionsEveryone(message: QqOutboundMessage): boolean {
   });
 }
 
-async function postCard(bot: QqBotTransport, { kind, id, message, source, options }: QqMessageDispatch): Promise<unknown> {
+async function postCard(bot: QqBotTransport, { kind, id, message, source, options, signal }: QqMessageDispatch): Promise<unknown> {
   const content = cardContent(message);
   if (!content || (kind !== 'private' && kind !== 'group')) {
     throw new EndpointDeliveryError('unsupported_operation', 'QQ 图文卡片只支持群聊和单聊', 'not_sent');
   }
+  const reply = replyReference(message);
+  const eventId = source && 'event_id' in source ? source.event_id : reply.eventId;
   const request = qqCardSendRequest({
     kind,
     targetId: id,
     content,
     ...(source && 'id' in source ? { msgId: source.id } : {}),
-    ...(source && 'event_id' in source ? { eventId: source.event_id } : {}),
+    ...(eventId ? { eventId } : {}),
     ...(options?.msgSeq !== undefined ? { msgSeq: options.msgSeq } : {}),
-    ...(referenceMessageId(message) ? { referenceMessageId: referenceMessageId(message) } : {}),
+    ...(reply.messageId ? { referenceMessageId: reply.messageId } : {}),
   });
-  return callQqHttp(qqHttpOf(bot), request);
+  return callQqHttp(qqHttpOf(bot), request, signal);
 }
 
 function dispatch(bot: QqBotTransport, dispatching: QqMessageDispatch): Promise<unknown> {
@@ -156,13 +161,13 @@ function platformCode(error: unknown): number | undefined {
 async function sendOne(context: QqSendExecution, { kind, id, message }: QqMessageDispatch): Promise<unknown> {
   assertQqOutboundScene(kind, message);
   const passive = (body: QqOutboundMessage, grant: PassiveReplyGrant) =>
-    context.operation.run(() => dispatch(context.bot, { kind, id, message: body, source: grant.source, options: { msgSeq: grant.msgSeq } }));
+    context.operation.run(() => dispatch(context.bot, { kind, id, message: body, source: grant.source, options: { msgSeq: grant.msgSeq }, signal: context.operation.signal }));
   const active = async (body: QqOutboundMessage): Promise<unknown> => {
     if (context.activeGate.blocked(kind, id)) {
       throw new EndpointDeliveryError('platform_rejected', 'QQ active messages are unavailable for this conversation', 'not_sent');
     }
     try {
-      return await context.operation.run(() => dispatch(context.bot, { kind, id, message: body }));
+      return await context.operation.run(() => dispatch(context.bot, { kind, id, message: body, signal: context.operation.signal }));
     } catch (error) {
       const code = platformCode(error);
       if (code !== undefined && QQ_ACTIVE_UNAVAILABLE_CODES.has(code) && context.activeGate.block(kind, id)) {

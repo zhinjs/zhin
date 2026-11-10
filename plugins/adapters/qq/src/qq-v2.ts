@@ -45,8 +45,8 @@ export interface QqTuwenContent {
 }
 
 export interface QqHttpCaller {
-  get(url: string, config?: { readonly params?: Readonly<Record<string, string | number>> }): Promise<{ data: unknown }>;
-  post(url: string, body?: unknown): Promise<{ data: unknown }>;
+  get(url: string, config?: { readonly params?: Readonly<Record<string, string | number>>; readonly signal?: AbortSignal }): Promise<{ data: unknown }>;
+  post(url: string, body?: unknown, config?: { readonly signal?: AbortSignal }): Promise<{ data: unknown }>;
 }
 
 export interface QqV2Request {
@@ -64,12 +64,16 @@ export function qqHttpOf(api: { readonly request?: QqHttpCaller } | undefined): 
   return request;
 }
 
-export async function callQqHttp(http: QqHttpCaller, request: QqV2Request): Promise<unknown> {
+export async function callQqHttp(http: QqHttpCaller, request: QqV2Request, signal?: AbortSignal): Promise<unknown> {
   if (request.method === 'GET') {
-    const { data } = await http.get(request.path, request.query ? { params: request.query } : undefined);
+    const config = {
+      ...(request.query ? { params: request.query } : {}),
+      ...(signal ? { signal } : {}),
+    };
+    const { data } = await http.get(request.path, Object.keys(config).length > 0 ? config : undefined);
     return data;
   }
-  const { data } = await http.post(request.path, request.body ?? {});
+  const { data } = await http.post(request.path, request.body ?? {}, signal ? { signal } : undefined);
   return data;
 }
 
@@ -249,6 +253,7 @@ function questions(value: unknown): readonly EndpointGroupJoinQuestion[] | undef
 
 export function readQqJoinRequestPage(data: unknown): EndpointGroupJoinRequestPage {
   const body = record(data, 'join request list');
+  // 官方响应示例的数组字段是 list。https://bot.q.qq.com/wiki/develop/api-v2/autogen/api/v2_groups_group_openid_join_request_list.get.html
   if (!Array.isArray(body.list)) throw new Error('QQ join request response is missing list');
   const requests = body.list.map((item): EndpointGroupJoinRequest => {
     const row = record(item, 'join request');

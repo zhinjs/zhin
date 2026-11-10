@@ -1,6 +1,9 @@
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
-import type { EndpointManagement } from 'zhin.js/adapter';
+import { capabilityId, featureId, rootPluginId } from 'zhin.js';
+import { qqFixture } from './fixture.js';
+import { QqWebsocketEndpoint } from '../src/endpoint.js';
+import { resolveQqConfig } from '../src/protocol.js';
 import { formatOutbound } from '../src/outbound.js';
 import { QqActiveMessageGate, QqPassiveReplyLedger } from '../src/passive-reply.js';
 import {
@@ -131,6 +134,22 @@ describe('QQ 图文卡片与 @全体成员', () => {
     ])).toEqual({ type: 'markdown', data: { content: `hello\n\n<qqbot-at-user id="${MEMBER}" />` } });
   });
 
+  it('模板 markdown 没有 content，拒绝把 @ 写进 content', () => {
+    expect(() => formatOutbound([
+      { type: 'markdown', data: { custom_template_id: 'tpl', params: [] } },
+      { type: 'mention', data: { target: 'all' } },
+    ])).toThrow(/模板 markdown/);
+  });
+
+  it('事件回复的图文卡片带 event_id，不写成 message_reference', async () => {
+    const { calls } = await deliver('group', [
+      { type: 'reply', data: { event_id: 'evt-1' } },
+      { type: 'card', data: CARD },
+    ]);
+    expect(calls[0]?.body).toMatchObject({ msg_type: 8, event_id: 'evt-1' });
+    expect(calls[0]?.body).not.toHaveProperty('message_reference');
+  });
+
   it('不在单聊发送 @全体成员', async () => {
     await expect(deliver('private', [
       { type: 'text', data: { text: '通知' } },
@@ -243,17 +262,41 @@ describe('QQ 入群审批与群黑名单', () => {
     await expect(addQqGroupBlacklist(added.api, { groupId: GROUP, userIds: [] })).rejects.toThrow(RangeError);
   });
 
-  it('management 端口上的方法就是这组 HTTP 调用', async () => {
-    const client = http({ list: [], next_cursor: '', users: [], fail_openids: [] });
-    const management = {
-      listGroupJoinRequests: (request: { groupId: string }) => listQqGroupJoinRequests(client.api, request),
-      listGroupBlacklist: (request: { groupId: string }) => listQqGroupBlacklist(client.api, request),
-    } as EndpointManagement;
-    await management.listGroupJoinRequests?.({ groupId: GROUP });
-    await management.listGroupBlacklist?.({ groupId: GROUP });
-    expect(client.calls.map(call => call.url)).toEqual([
-      `/v2/groups/${GROUP}/join_request_list`,
-      `/v2/groups/${GROUP}/member_blacklist`,
-    ]);
+  it('取消进行中的请求时把同一个 signal 交给 HTTP 客户端', async () => {
+    const controller = new AbortController();
+    let seen: AbortSignal | undefined;
+    const request = {
+      get: vi.fn(async (_url: string, config?: { signal?: AbortSignal }) => {
+        seen = config?.signal;
+        await new Promise((_resolve, reject) => {
+          config?.signal?.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+        });
+      }),
+      post: vi.fn(),
+    };
+    const pending = listQqGroupJoinRequests({ request }, { groupId: GROUP, signal: controller.signal });
+    await vi.waitFor(() => expect(seen).toBe(controller.signal));
+    controller.abort();
+    await expect(pending).rejects.toBeTruthy();
+  });
+
+  it('endpoint.management 调到官方路径', async () => {
+    const endpoint = await qqFixture(() => new QqWebsocketEndpoint({
+      id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'qq'),
+      config: resolveQqConfig({ id: 'test-qq-bot', appid: 'app-1', secret: 'secret-1', mode: 'websocket' }) as ReturnType<typeof resolveQqConfig> & { mode: 'websocket' },
+    }), () => ({}));
+    const get = vi.spyOn(endpoint.endpoint.request, 'get').mockResolvedValue({ data: { list: [], users: [], next_cursor: '' } } as never);
+    try {
+      await endpoint.start();
+      await endpoint.management.listGroupJoinRequests?.({ groupId: GROUP });
+      await endpoint.management.listGroupBlacklist?.({ groupId: GROUP });
+      expect(get.mock.calls.map(call => call[0])).toEqual([
+        `/v2/groups/${GROUP}/join_request_list`,
+        `/v2/groups/${GROUP}/member_blacklist`,
+      ]);
+    } finally {
+      get.mockRestore();
+      await endpoint.stop();
+    }
   });
 });

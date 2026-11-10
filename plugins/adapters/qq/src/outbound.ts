@@ -270,6 +270,16 @@ export function formatOutbound(payload: unknown): QqOutboundMessage {
   const hasInlineMarkdown = segments.some(
     (item) => typeof item !== 'string' && item.type === 'markdown' && !markdownTemplateId(item.data ?? {}),
   );
+  const hasTemplateMarkdown = segments.some(
+    (item) => typeof item !== 'string' && item.type === 'markdown' && markdownTemplateId(item.data ?? {}),
+  );
+  const hasMention = segments.some(
+    (item) => typeof item !== 'string' && (item.type === 'mention' || item.type === 'at') && mentionIdentity(item.type, item.data ?? {}),
+  );
+  // 模板 markdown 没有 content。@ 不能写进 content，否则和 markdown 字段冲突。
+  if (hasTemplateMarkdown && hasMention && !hasInlineMarkdown) {
+    throw new EndpointDeliveryError('unsupported_operation', 'QQ 模板 markdown 没有 content，不能在同一条消息里 @', 'not_sent');
+  }
   const mergeIntoMarkdown = hasKeyboard || hasInlineMarkdown;
 
   const parts: Array<string | QqOutboundElem> = [];

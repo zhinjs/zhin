@@ -171,7 +171,7 @@ function withQqHttp<T>(signal: AbortSignal | undefined, run: () => Promise<T>): 
 export async function listQqGroupJoinRequests(
   api: QqGroupApi | undefined, request: EndpointGroupPageRequest,
 ): Promise<EndpointGroupJoinRequestPage> {
-  const data = await withQqHttp(request.signal, () => callQqHttp(qqHttpOf(api), qqJoinRequestListRequest(request.groupId, request.cursor, request.limit)));
+  const data = await withQqHttp(request.signal, () => callQqHttp(qqHttpOf(api), qqJoinRequestListRequest(request.groupId, request.cursor, request.limit), request.signal));
   return readQqJoinRequestPage(data);
 }
 
@@ -184,7 +184,7 @@ export async function approveQqGroupJoinRequest(
     memberId: request.userId,
     op: 'approve',
     ...(request.joinRequestId !== undefined ? { joinRequestId: request.joinRequestId } : {}),
-  })));
+  }), request.signal));
 }
 
 /** 拒绝一条入群申请。`addToBlacklist` 对应官方 `add_to_member_blacklist`，仅 decline 可带。 */
@@ -198,21 +198,21 @@ export async function declineQqGroupJoinRequest(
     ...(request.joinRequestId !== undefined ? { joinRequestId: request.joinRequestId } : {}),
     ...(request.reason !== undefined ? { rejectReason: request.reason } : {}),
     ...(request.addToBlacklist === true ? { addToBlacklist: true } : {}),
-  })));
+  }), request.signal));
 }
 
 /** 查询一页群黑名单。该接口官方标注为内邀，无权限时平台返回 11253。 */
 export async function listQqGroupBlacklist(
   api: QqGroupApi | undefined, request: EndpointGroupPageRequest,
 ): Promise<EndpointGroupBlacklistPage> {
-  const data = await withQqHttp(request.signal, () => callQqHttp(qqHttpOf(api), qqBlacklistListRequest(request.groupId, request.cursor, request.limit)));
+  const data = await withQqHttp(request.signal, () => callQqHttp(qqHttpOf(api), qqBlacklistListRequest(request.groupId, request.cursor, request.limit), request.signal));
   return readQqBlacklistPage(data);
 }
 
 async function changeQqGroupBlacklist(
   api: QqGroupApi | undefined, op: 'add' | 'del', request: EndpointGroupBlacklistChangeRequest,
 ): Promise<EndpointGroupBlacklistChangeResult> {
-  const data = await withQqHttp(request.signal, () => callQqHttp(qqHttpOf(api), qqBlacklistChangeRequest(request.groupId, op, request.userIds)));
+  const data = await withQqHttp(request.signal, () => callQqHttp(qqHttpOf(api), qqBlacklistChangeRequest(request.groupId, op, request.userIds), request.signal));
   return readQqBlacklistChange(data);
 }
 

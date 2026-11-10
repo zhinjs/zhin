@@ -60,7 +60,16 @@ export default defineAdapter<QqEndpointConfig>({
       delivery: { passiveWindow: { seconds: 300, maxMessages: 5 } },
     },
     channel: {
-      messaging: { mention: { all: true } },
+      messaging: {
+        mention: { all: true },
+        // segments 整段覆盖 default。频道没有图文卡片，不能继承 card/share。
+        segments: {
+          supported: ['text', 'mention', 'image', 'audio', 'video', 'file', 'reply', 'markdown', 'keyboard'],
+          markdown: 'native',
+          outboundMedia: ['url', 'upload'],
+          interactive: 'native',
+        },
+      },
       prompt: {
         text: '文字子频道 @全体成员使用 mention target "all"（发送为 <qqbot-at-everyone />），机器人需要拥有发送 @全体成员的权限。图文卡片不能发到频道。',
       },
