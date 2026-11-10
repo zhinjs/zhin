@@ -15,6 +15,9 @@
  *   的 `ChannelFlags` 尚未包含该值，因此这里用位运算自行判断。
  *
  * 官方要求以 flag 判定，不要依赖 `name` 等被混淆字段。
+ *
+ * TODO: discord-api-types 与 discord.js 发布 `ChannelFlags.ChannelObfuscated` 后，
+ * 用该官方常量替换下面的 `1 << 17`。
  */
 export const DISCORD_CHANNEL_FLAG_OBFUSCATED = 1 << 17;
 

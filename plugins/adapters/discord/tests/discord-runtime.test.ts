@@ -1,5 +1,6 @@
 import { discordFixture, managedDiscordFixture } from './fixture.js';
-import { Status } from 'discord.js';
+import { Collection } from '@discordjs/collection';
+import { Status, TextChannel } from 'discord.js';
 import { createAdapterHarness } from '../../test-utils/endpoint.js';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import {
@@ -762,6 +763,38 @@ config: baseConfig}), () => mock, { receive: vi.fn(), send: vi.fn(async () => 's
       {
         id: 'chan-named-hidden',
         name: '___hidden___',
+        parent: { type: 'guild', id: GUILD_ID, name: 'Guild' },
+      },
+    ]);
+    await endpoint.stop();
+  });
+
+  it('lists a channel again after CHANNEL_OBFUSCATED is cleared with flags: 0', async () => {
+    const mock = createMockClient();
+    // discord.js BaseChannel#_patch：payload 不含 flags 时保留旧 bitfield，只有显式 flags 才会改写。
+    const channel = new TextChannel(
+      { id: GUILD_ID } as ConstructorParameters<typeof TextChannel>[0],
+      { id: '123456789012345678', type: 0, name: '___hidden___', flags: 1 << 17 },
+      { options: { makeCache: () => new Collection() } } as ConstructorParameters<typeof TextChannel>[2],
+    );
+    const guild = {
+      id: GUILD_ID,
+      name: 'Guild',
+      channels: { cache: { values: () => [channel][Symbol.iterator]() } },
+    };
+    mock.guilds.cache = { values: () => [guild][Symbol.iterator]() };
+    const endpoint = await createManagementEndpoint(mock);
+    await endpoint.start();
+    await expect(endpoint.management.listChannels?.()).resolves.toEqual([]);
+
+    channel._patch({ id: channel.id, name: 'renamed-without-flags' });
+    await expect(endpoint.management.listChannels?.()).resolves.toEqual([]);
+
+    channel._patch({ id: channel.id, name: 'general', flags: 0 });
+    await expect(endpoint.management.listChannels?.()).resolves.toEqual([
+      {
+        id: '123456789012345678',
+        name: 'general',
         parent: { type: 'guild', id: GUILD_ID, name: 'Guild' },
       },
     ]);

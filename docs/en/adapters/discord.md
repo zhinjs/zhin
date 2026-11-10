@@ -19,6 +19,7 @@ Zhin.js Discord adapter (Plugin Runtime). By default, it sends and receives mess
 - Gateway WebSocket inbound (default; no public HTTPS / host required)
 - Parses text / mention / attachment / embed / sticker / button
 - Supports private chat, group, and server channels
+- `listChannels` omits channels flagged `CHANNEL_OBFUSCATED` (`1 << 17`): when the bot lacks `VIEW_CHANNEL`, the Gateway still delivers them (often named `___hidden___`), while the HTTP channel list does not.
 - Outbound `send({ conversation, payload })` -> Discord channel message (text / media / embed / keyboard)
 - Convention-based `defineAdapter` / `definePlugin` (no `usePlugin` needed)
 - Interactions HTTP webhook deferred (requires `httpHostToken`); configuring `connection: interactions` will produce an explicit error
