@@ -23,7 +23,11 @@ import {
 } from './session-tree.js';
 import { assignRowAliasMetadata } from './message-alias.js';
 import { SessionWriteLock } from './session-write-lock.js';
-import { EMPTY_DEFERRED_TOOL_SNAPSHOT, type DeferredToolSessionSnapshot } from './deferred-tool-session.js';
+import {
+  DeferredToolSnapshotCache,
+  EMPTY_DEFERRED_TOOL_SNAPSHOT,
+  type DeferredToolSessionSnapshot,
+} from './deferred-tool-session.js';
 import { persistenceFailure } from './persistence-error.js';
 
 export interface ContextRepositoryConfig {
@@ -234,7 +238,7 @@ export class DatabaseContextRepository implements ContextRepository {
   private readonly writeLock = new SessionWriteLock();
   private readonly checkpoints = new CompactionCheckpoints();
   private readonly config: Required<Pick<ContextRepositoryConfig, 'tailMessageLimit'>>;
-  private readonly deferredToolSnapshots = new Map<string, DeferredToolSessionSnapshot>();
+  private readonly deferredToolSnapshots = new DeferredToolSnapshotCache();
 
   constructor(
     messageModel: MessageDbModel,
@@ -329,7 +333,11 @@ export class DatabaseContextRepository implements ContextRepository {
   }
 
   async archiveSession(sessionKey: string): Promise<boolean> {
-    return this.sessionStore.archiveByKey(sessionKey);
+    // The snapshot is keyed by the epoch id, which stops being reachable once archived.
+    const active = await this.sessionStore.findActive(sessionKey);
+    const archived = await this.sessionStore.archiveByKey(sessionKey);
+    if (active) this.deferredToolSnapshots.delete(active.session_id);
+    return archived;
   }
 
   async saveSummary(
@@ -545,7 +553,7 @@ export class MemoryContextRepository implements ContextRepository {
   private readonly writeLock = new SessionWriteLock();
   private readonly checkpoints = new CompactionCheckpoints();
   private readonly config: Required<Pick<ContextRepositoryConfig, 'tailMessageLimit'>>;
-  private readonly deferredToolSnapshots = new Map<string, DeferredToolSessionSnapshot>();
+  private readonly deferredToolSnapshots = new DeferredToolSnapshotCache();
 
   constructor(
     sessionStore: AgentSessionRepository,
@@ -640,7 +648,11 @@ export class MemoryContextRepository implements ContextRepository {
   }
 
   async archiveSession(sessionKey: string): Promise<boolean> {
-    return this.sessionStore.archiveByKey(sessionKey);
+    // The snapshot is keyed by the epoch id, which stops being reachable once archived.
+    const active = await this.sessionStore.findActive(sessionKey);
+    const archived = await this.sessionStore.archiveByKey(sessionKey);
+    if (active) this.deferredToolSnapshots.delete(active.session_id);
+    return archived;
   }
 
   async saveSummary(

@@ -28,6 +28,42 @@ describe('Runtime A2A Host', () => {
     })).toThrow('requires a2a.token or http.token');
   });
 
+  it('without a token only serves loopback callers', async () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    let handler!: (request: never, response: never, url: URL) => Promise<void>;
+    const routeHost = {
+      route: (_method: string, _path: string, registered: typeof handler) => {
+        handler = registered;
+        return () => undefined;
+      },
+    };
+    installRuntimeA2a({
+      http: routeHost as never,
+      agentHost: testAgentHost(),
+      fallbackPublicUrl: 'http://localhost',
+    });
+    const call = async (remoteAddress: string) => {
+      let status = 0;
+      const response = {
+        setHeader: () => undefined,
+        writeHead: (code: number) => { status = code; },
+        end: () => undefined,
+      };
+      await handler(
+        { method: 'GET', headers: {}, socket: { remoteAddress } } as never,
+        response as never,
+        new URL('http://bot.test/a2a/zhin/.well-known/agent-card.json'),
+      );
+      return status;
+    };
+
+    expect(await call('203.0.113.9')).toBe(401);
+    expect(await call('::ffff:10.0.0.4')).toBe(401);
+    expect(await call('127.0.0.1')).toBe(200);
+    expect(await call('::1')).toBe(200);
+  });
+
   it('serves authenticated Agent Cards from the active binding registry', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);

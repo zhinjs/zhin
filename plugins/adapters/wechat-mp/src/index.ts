@@ -12,7 +12,6 @@ export {
   normalizeEchostrParam,
   parseXMLMessage,
   queryParam,
-  readTextBody,
   resolveEventPassiveReply,
   resolveWeChatMpConfig,
   verifySignature,

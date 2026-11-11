@@ -104,5 +104,5 @@ Zhin 默认只安装纯 IM 核心（`node_modules` 生产体积 <10MB），不�
 | [0045](../adr/0045-current-message-runtime-context.md) | 当前消息运行时上下文后置 | 将本轮动态上下文放在正文之后以保护提示词缓存 |
 | [0046](../adr/0046-personal-session-model-policy.md) | 个人 Session、模型目录与作用域策略 | 个人会话隔离、模型 Profile 路由与分层覆盖 |
 
-0036–0040 的整体规划见[受控落地路线图](../plans/controlled-ops-roadmap.md)。
+0036–0040 的整体规划见[受控落地路线图](https://github.com/zhinjs/zhin/blob/main/docs/plans/controlled-ops-roadmap.md)。
 :::

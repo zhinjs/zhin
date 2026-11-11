@@ -20,7 +20,6 @@ outline: [2, 3]
 - [同一个包出现多个安装位置](#multiple-package-locations)
 - [Agent 无模型或 Provider 不可用](#agent-provider-unavailable)
 - [工具等待审批或被策略拒绝](#tool-approval-stuck)
-- [群、频道或仓库没有路由到 Workroom](#workroom-not-routing)
 - [容器反复重启或健康检查失败](#container-not-healthy)
 
 <section id="console-cannot-connect">
@@ -237,30 +236,6 @@ Agent 回合停在工具步骤，显示待审批、拒绝或取消。
 ### 验证
 
 - 用只读工具执行探针任务；Trace 中工具终态与回合终态应一致，且审批记录可追溯。
-
-</section>
-
-<section id="workroom-not-routing">
-
-## 群、频道或仓库没有路由到 Workroom
-
-### 症状
-
-消息进入普通聊天，或任务没有出现在预期 Workroom 看板。
-
-### 原因
-
-- Catalog 中缺少该 interaction space 的精确绑定，或绑定仍指向旧 Agent。
-- 同一 Bot 可服务多个 Workroom，但群/频道/仓库标识填写错误或发生冲突。
-
-### 操作
-
-- 在 Console Workroom 配置中核对 Bot、Endpoint、空间 ID、成员角色与 Agent binding。
-- 保存 Catalog 后发送一条新消息；历史消息不会被重新解释。
-
-### 验证
-
-- 新消息应在对应 Workroom 创建 task/run，并在详情中显示命中的空间与 Agent。
 
 </section>
 

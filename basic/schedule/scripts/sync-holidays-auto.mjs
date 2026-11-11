@@ -6,7 +6,7 @@
 import { appendFile, readdir, readFile, writeFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const holidaysDir = join(root, 'src/data/holidays');
@@ -45,7 +45,7 @@ function runGenerateRegistry() {
 }
 
 async function main() {
-  const { fetchHolidayYearData } = await import(join(root, 'dist/index.mjs'));
+  const { fetchHolidayYearData } = await import(pathToFileURL(join(root, 'lib/index.js')).href);
 
   const calendarYear = new Date().getFullYear();
   const localYears = await listLocalYears();

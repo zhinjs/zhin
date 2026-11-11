@@ -2,8 +2,10 @@ const TOKEN_KEY = "zhin_api_token";
 const API_BASE_KEY = "zhin_api_base";
 
 export function getApiBase(): string {
-  const stored = localStorage.getItem(API_BASE_KEY)?.trim();
-  if (stored) return trimTrailingSlash(stored);
+  if (typeof localStorage !== "undefined") {
+    const stored = localStorage.getItem(API_BASE_KEY)?.trim();
+    if (stored) return trimTrailingSlash(stored);
+  }
   if (typeof window !== "undefined") return window.location.origin;
   return "";
 }
@@ -28,6 +30,37 @@ export function resolveApiUrl(path: string): string {
   return `${base}${p}`;
 }
 
+/** Host and credential a request was sent with, captured before the request. */
+export interface AuthRequestSnapshot {
+  readonly apiBase: string;
+  readonly token: string | null;
+}
+
+export function captureAuthRequest(): AuthRequestSnapshot {
+  return { apiBase: getApiBase(), token: getToken() };
+}
+
+/**
+ * Single 401 reaction for every Console client path (REST helpers and transport):
+ * drop the rejected credential everywhere it can live, then ask the shell to re-login.
+ *
+ * A response to a request sent with an older host or credential is ignored, so a late
+ * 401 cannot sign out a connection that has been re-authenticated meanwhile.
+ * Returns whether the credential was invalidated.
+ */
+export function handleUnauthorized(request?: AuthRequestSnapshot): boolean {
+  if (request && (getApiBase() !== request.apiBase || getToken() !== request.token)) return false;
+  // The runtime token (demo preset) outranks storage in getToken(); leaving it would
+  // make every following request fail with 401 again.
+  clearRuntimeToken();
+  if (typeof sessionStorage !== "undefined") sessionStorage.removeItem(TOKEN_KEY);
+  if (typeof localStorage !== "undefined") localStorage.removeItem(TOKEN_KEY);
+  if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+    window.dispatchEvent(new CustomEvent("zhin:auth-required"));
+  }
+  return true;
+}
+
 /** fetch with Bearer token; relative paths resolve against {@link getApiBase}. */
 export async function apiFetch(
   input: RequestInfo | URL,
@@ -44,14 +77,7 @@ export async function apiFetch(
       : input;
 
   const res = await fetch(url, { ...init, headers });
-  if (res.status === 401 && getApiBase() === requestBase && getToken() === token) {
-    // runtime token（Demo 预置）过期后也必须失效，否则 getToken() 永远优先命中它，
-    // local/sessionStorage 清理不掉，造成 401 死循环。
-    clearRuntimeToken();
-    sessionStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(TOKEN_KEY);
-    window.dispatchEvent(new CustomEvent("zhin:auth-required"));
-  }
+  if (res.status === 401) handleUnauthorized({ apiBase: requestBase, token });
   return res;
 }
 

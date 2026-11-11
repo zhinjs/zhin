@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import {
   Logger,
   LogLevel,
@@ -312,5 +312,27 @@ describe('Logger 错误堆栈', () => {
     expect(lines[0]).toContain('x:')
     const occurrences = lines[0].split('Error: boom').length - 1
     expect(occurrences).toBe(1)
+  })
+})
+
+describe('Logger 子 Logger 上限', () => {
+  it('取已存在的子 Logger 不触发淘汰，新增时才淘汰最旧的', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const parent = new Logger(null, 'limit', { performance: { maxChildLoggers: 10 } })
+    const children = Array.from({ length: 10 }, (_, index) => parent.getLogger(`child-${index}`))
+
+    // The parent is full: lookups must return the same instances and evict nothing.
+    for (let index = 0; index < 10; index += 1) {
+      expect(parent.getLogger(`child-${index}`)).toBe(children[index])
+    }
+    expect(warn).not.toHaveBeenCalled()
+
+    // A genuinely new child evicts the oldest 10%.
+    parent.getLogger('child-new')
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(parent.hasLogger('child-0')).toBe(false)
+    expect(parent.hasLogger('child-1')).toBe(true)
+    expect(parent.hasLogger('child-new')).toBe(true)
+    warn.mockRestore()
   })
 })

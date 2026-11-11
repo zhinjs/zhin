@@ -5,7 +5,7 @@ description: "Run the bot as a recoverable service: release checks, reverse prox
 
 # Run Zhin as a recoverable service
 
-Use this for a single Bot, a team Workroom, or Remote Console. The goal is explicit ownership for process, ingress, secrets, state, monitoring, backup, and recovery.
+Use this for a single Bot, a multi-Bot collaboration venue, or Remote Console. The goal is explicit ownership for process, ingress, secrets, state, monitoring, backup, and recovery.
 
 ## Five things to have before going live
 
@@ -122,7 +122,7 @@ kubectl rollout status deployment/zhin
 kubectl port-forward service/zhin 8068:8068
 ```
 
-The image keeps your project's own `zhin.config.yml`, while the Secret projects the complete `.env`, so the template does not drop Provider or Adapter keys. Recreate the Secret and roll the Deployment after changing secrets. The template deliberately uses one replica and `Recreate`: default SQLite, file-backed Workroom state, and `ReadWriteOnce` volumes are not multi-writer systems. Before scaling horizontally, move to a shared database and a Workroom store with one write authority. `/pub/health` is only a process probe; use Console acceptance for business readiness.
+The image keeps your project's own `zhin.config.yml`, while the Secret projects the complete `.env`, so the template does not drop Provider or Adapter keys. Recreate the Secret and roll the Deployment after changing secrets. The template deliberately uses one replica and `Recreate`: default SQLite, file-backed state under `.zhin/`, and `ReadWriteOnce` volumes are not multi-writer systems. Before scaling horizontally, move to a shared database and make sure each file-backed state has a single writer. `/pub/health` is only a process probe; use Console acceptance for business readiness.
 
 ## 4. Process supervision
 
@@ -144,8 +144,7 @@ Exit code 51 means Console requested a restart; 75 means Runtime requires one. A
 | State | Default location or authority | Backup requirement |
 | --- | --- | --- |
 | Primary database | `.zhin/data.sqlite` or configured backend | Database-consistent snapshot |
-| Workroom Catalog | `workroom_catalog`; file mode `.zhin/workroom-catalog.json` | Same restore point as Journal |
-| Workroom Journal | `workroom_events`; file mode `.zhin/workroom-journal` | Copy the full append-only store |
+| Multi-Agent collaboration Journal | `engagement_events` table in the main database | Restored from the same snapshot as the main database; copy the full append-only data |
 | Scheduled jobs | `data/schedule-jobs.json` | Save with config, timezone, and Endpoint targets |
 | Runtime-private state | `.zhin/` | Select by feature; never expose through Agent file tools |
 | Secrets | Secret manager / environment injection | Rotate separately; exclude from normal backup archives |
@@ -154,14 +153,14 @@ Use a database snapshot or stop writes before copying SQLite. Use the native bac
 
 ## 6. Monitoring and alerts
 
-Monitor the HTTP probe, restart count, Endpoint health, SSE recovery gaps, error rate, database capacity, blocked Workroom items, and Agent failure/cancellation ratio.
+Monitor the HTTP probe, restart count, Endpoint health, SSE recovery gaps, error rate, database capacity, collaborations (Engagements) frozen and waiting for a human, and Agent failure/cancellation ratio.
 
 Logs go to stdout by default; daemon mode writes `.zhin/runtime.log`. Configure host-level rotation. Include Endpoint, Project, runtimeId, or runId in alerts instead of forwarding only an error string.
 
 ## 7. Release and rollback
 
 1. Pause ingress that creates new side effects while keeping read-only probes.
-2. Back up database, Workroom state, scheduled jobs, configuration, and lockfile.
+2. Back up the database (including `engagement_events`), scheduled jobs, configuration, and lockfile.
 3. Install locked dependencies, then run doctor, tests, and one-shot startup.
 4. Start production and complete [Console acceptance](/en/console/#standard-acceptance-run).
 5. Observe one full business window before expiring the previous version and backup.
@@ -174,6 +173,6 @@ Rollback restores code, lockfile, configuration, and data from one checkpoint. I
 2. Does Dashboard show the expected Host and version?
 3. Is the Endpoint online and receiving inbox events?
 4. Did the current generation publish the required capability?
-5. Did Database, SSE history, and Workroom Journal recover from one authority?
+5. Did the Database (including `engagement_events`) and SSE history recover from one authority?
 
 See [Version compatibility and migration](./upgrades) and the [Console guide](/en/console/).

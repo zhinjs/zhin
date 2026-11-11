@@ -84,4 +84,11 @@ describe('OneBot / NapCat / icqq produce the same canonical event', () => {
     // 标准 OneBot 没有覆盖表：notice_type=group 走通用解析
     expect(mapNoticeParts('onebot', 'group', { sub_type: 'increase' }).scene_type).toBe('group');
   });
+
+  it('icqq friend removal is published as notice.friend.decrease, not as a recall', async () => {
+    expect(mapNoticeParts('icqq', 'friend', { sub_type: 'decrease' })).toEqual({ scene_type: 'friend', sub_type: 'decrease' });
+    expect(mapNoticeParts('icqq', 'friend', { sub_type: 'recall' })).toEqual({ scene_type: 'friend', sub_type: 'recall' });
+    const notice = await canonical('icqq', { notice_type: 'friend', sub_type: 'decrease', user_id: 2 });
+    expect(notice.name).toBe('notice.friend.decrease');
+  });
 });

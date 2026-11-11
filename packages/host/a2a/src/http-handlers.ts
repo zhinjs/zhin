@@ -44,6 +44,46 @@ function formatSSEErrorEvent(data: unknown): string {
   return `event: error\ndata: ${JSON.stringify(data)}\n\n`;
 }
 
+/**
+ * Pipe an async iterator to the response as SSE.
+ *
+ * The first item is pulled before any header is flushed, so a failure there still
+ * propagates to the caller's JSON error path. Once the stream has started, a failure
+ * becomes an SSE `error` event and the response is always ended. A client disconnect
+ * stops the iteration and lets the source run its cleanup.
+ */
+async function writeSseStream<T>(
+  res: ServerResponse,
+  iterator: AsyncIterator<T>,
+  toJson: (value: T) => unknown,
+  toError: (err: unknown) => unknown,
+): Promise<void> {
+  let closed = res.destroyed;
+  const onClose = (): void => {
+    closed = true;
+    void Promise.resolve(iterator.return?.()).catch(() => undefined);
+  };
+  res.once('close', onClose);
+  let started = false;
+  try {
+    let next = await iterator.next();
+    for (const [key, value] of Object.entries(SSE_HEADERS)) {
+      res.setHeader(key, value);
+    }
+    started = true;
+    while (!next.done && !closed) {
+      res.write(formatSSEEvent(toJson(next.value)));
+      next = await iterator.next();
+    }
+  } catch (err) {
+    if (!started) throw err;
+    if (!closed && !res.writableEnded) res.write(formatSSEErrorEvent(toError(err)));
+  } finally {
+    res.off('close', onClose);
+  }
+  if (!res.writableEnded) res.end();
+}
+
 async function readA2aJsonBody(req: IncomingMessage): Promise<unknown> {
   return (await readJsonBody(req)) ?? {};
 }
@@ -123,21 +163,12 @@ export async function handleJsonRpc(
 
     if (rpcResponseOrStream && typeof (rpcResponseOrStream as AsyncIterable<unknown>)[Symbol.asyncIterator] === 'function') {
       const stream = rpcResponseOrStream as AsyncGenerator<unknown, void, undefined>;
-      const iterator = stream[Symbol.asyncIterator]();
-      const firstResult = await iterator.next();
-
-      for (const [key, value] of Object.entries(SSE_HEADERS)) {
-        res.setHeader(key, value);
-      }
-      if (!firstResult.done) {
-        res.write(formatSSEEvent(firstResult.value));
-      }
-      for (;;) {
-        const next = await iterator.next();
-        if (next.done) break;
-        res.write(formatSSEEvent(next.value));
-      }
-      if (!res.writableEnded) res.end();
+      const requestId = (body as { id?: unknown } | null)?.id ?? null;
+      await writeSseStream(res, stream[Symbol.asyncIterator](), (value) => value, (err) => ({
+        jsonrpc: '2.0',
+        id: requestId,
+        error: JsonRpcTransportHandler.mapToJSONRPCError(err),
+      }));
       return;
     }
 
@@ -194,13 +225,12 @@ export async function handleRest(
     if (method === 'POST' && path === 'message:stream') {
       const params = preParsedBody !== undefined ? preParsedBody : await readA2aJsonBody(req);
       const stream = await transport.sendMessageStream(SendMessageRequest.fromJSON(params), context);
-      for (const [key, value] of Object.entries(SSE_HEADERS)) {
-        res.setHeader(key, value);
-      }
-      for await (const event of stream) {
-        res.write(formatSSEEvent(StreamResponse.toJSON(event)));
-      }
-      if (!res.writableEnded) res.end();
+      await writeSseStream(
+        res,
+        stream[Symbol.asyncIterator](),
+        (event) => StreamResponse.toJSON(event),
+        (err) => ({ error: err instanceof Error ? err.message : String(err) }),
+      );
       return;
     }
 
@@ -262,21 +292,4 @@ function restErrorStatus(error: unknown): number {
   }
   if (error instanceof InvalidAgentResponseError) return 500;
   return 500;
-}
-
-export async function handleRestStreamError(
-  res: ServerResponse,
-  err: unknown,
-  requestId: unknown,
-): Promise<void> {
-  if (!res.headersSent) {
-    sendJson(res, 500, { error: err instanceof Error ? err.message : String(err) });
-    return;
-  }
-  res.write(formatSSEErrorEvent({
-    jsonrpc: '2.0',
-    id: requestId ?? null,
-    error: JsonRpcTransportHandler.mapToJSONRPCError(err),
-  }));
-  if (!res.writableEnded) res.end();
 }

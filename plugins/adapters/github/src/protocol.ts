@@ -250,24 +250,6 @@ export function headerValue(
   return raw ?? '';
 }
 
-export async function readTextBody(
-  request: IncomingMessage,
-  options: { readonly limit?: number } = {},
-): Promise<string> {
-  const limit = options.limit ?? 1_048_576;
-  const chunks: Buffer[] = [];
-  let size = 0;
-  for await (const chunk of request) {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    size += buffer.length;
-    if (size > limit) {
-      request.destroy();
-      throw new Error(`Request body exceeds ${limit} bytes`);
-    }
-    chunks.push(buffer);
-  }
-  return Buffer.concat(chunks).toString('utf8');
-}
 
 export function parseIssueCommentInbound(payload: IssueCommentPayload): GithubInboundComment | null {
   if (payload.action !== 'created' || !payload.comment) return null;
@@ -365,9 +347,4 @@ export function formatNotification(event: string, p: GenericWebhookPayload): str
     default:
       return `📬 ${repo}\n📡 ${event}${p.action ? ` (${p.action})` : ''} by ${sender}\n🔗 ${repoUrl}`;
   }
-}
-
-/** Parse @mentions in markdown into a flat display string (gateway text path). */
-export function parseMarkdownMentions(md: string): string {
-  return md;
 }

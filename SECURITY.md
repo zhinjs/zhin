@@ -88,18 +88,15 @@ Zhin.js 团队和社区非常重视安全问题。我们感谢您帮助我们保
    - 使用最小权限原则配置机器人账号
 
 6. **生产环境配置**
-   - 避免在 `plugin_dirs` 中配置 `node_modules`（会监听大量文件）
-   - 使用环境变量区分开发和生产配置
+   - 生产环境关闭文件监听与热重载，使用环境变量区分开发和生产配置
    ```bash
-   # 生产环境启动
-   NODE_ENV=production pnpm start
+   # 生产环境启动（脚手架项目的 pnpm start 即此命令）
+   zhin runtime start --mode production --no-watch
    ```
-   - 在生产环境中仅加载必要的插件目录
-   ```typescript
-   plugin_dirs: [
-     './plugins',  // ✅ 仅监听项目插件目录
-     // 'node_modules',  // ❌ 避免监听整个 node_modules
-   ]
+   - 只在 `zhin.config.yml` 的 `plugins` 中声明实际需要的插件；未声明的包不会被加载
+   ```yaml
+   plugins:
+     sandbox: "@zhin.js/adapter-sandbox"   # ✅ 只声明用到的插件
    ```
 
 #### 对于插件开发者
@@ -144,17 +141,31 @@ Zhin.js 团队和社区非常重视安全问题。我们感谢您帮助我们保
    - 实现适当的权限检查
    - 使用中间件进行访问控制
    ```typescript
-   addCommand(new MessageCommand('admin')
-     .use(async (message, next) => {
-       if (!message.sender.isAdmin) {
-         return '权限不足'
-       }
-       return next()
-     })
-     .action(async () => {
+   // commands/admin/index.ts —— 用 permit 声明谁可以执行，运行时在 execute 之前拦截
+   import { defineCommand } from 'zhin.js/command'
+
+   export default defineCommand({
+     description: '管理员操作',
+     permit: ['role(master,admin)'],
+     async execute() {
        // 管理员操作
-     })
-   )
+       return '已执行'
+     },
+   })
+   ```
+   ```typescript
+   // middlewares/blocklist/index.ts —— 入站中间件：不调用 next() 即终止分发
+   import { defineMiddleware } from 'zhin.js/middleware'
+   import type { Message } from '@zhin.js/core/runtime'
+
+   export default defineMiddleware<Message, { blocked?: string[] }>({
+     target: 'inbound',
+     async handle(context, next) {
+       const senderId = context.input.sender?.id
+       if (senderId && context.config.blocked?.includes(senderId)) return
+       await next()
+     },
+   })
    ```
 
 5. **依赖管理**
@@ -195,9 +206,9 @@ Zhin.js 团队和社区非常重视安全问题。我们感谢您帮助我们保
 
 5. **文件监听性能**
    - 避免监听 `node_modules` 等大型目录
-   - 在生产环境中禁用文件监听（设置 `NODE_ENV=production`）
+   - 在生产环境中禁用文件监听（`zhin runtime start --mode production --no-watch`）
    - 监听大量文件可能导致服务器资源耗尽（inotify 限制）
-   - 建议仅在 `plugin_dirs` 中指定实际插件目录路径
+   - 开发时用 `--watch source config` 只监听项目源码与配置
 
 ### 🔐 安全功能路线图
 
@@ -303,18 +314,15 @@ We currently do not have a formal bug bounty program, but we will:
    - Use least privilege principle for bot accounts
 
 6. **Production Environment Configuration**
-   - Avoid configuring `node_modules` in `plugin_dirs` (watches too many files)
-   - Use environment variables to distinguish dev and production configs
+   - Turn off file watching and hot reload in production; use environment variables to distinguish dev and production configs
    ```bash
-   # Production startup
-   NODE_ENV=production pnpm start
+   # Production startup (this is what `pnpm start` runs in a scaffolded project)
+   zhin runtime start --mode production --no-watch
    ```
-   - Load only necessary plugin directories in production
-   ```typescript
-   plugin_dirs: [
-     './plugins',  // ✅ Only watch project plugin directory
-     // 'node_modules',  // ❌ Avoid watching entire node_modules
-   ]
+   - Declare only the plugins you need under `plugins` in `zhin.config.yml`; undeclared packages are not loaded
+   ```yaml
+   plugins:
+     sandbox: "@zhin.js/adapter-sandbox"   # ✅ Declare only the plugins in use
    ```
 
 #### For Plugin Developers
@@ -359,17 +367,31 @@ We currently do not have a formal bug bounty program, but we will:
    - Implement proper permission checks
    - Use middleware for access control
    ```typescript
-   addCommand(new MessageCommand('admin')
-     .use(async (message, next) => {
-       if (!message.sender.isAdmin) {
-         return 'Insufficient permissions'
-       }
-       return next()
-     })
-     .action(async () => {
+   // commands/admin/index.ts — declare who may run it with `permit`; the runtime rejects others before `execute`
+   import { defineCommand } from 'zhin.js/command'
+
+   export default defineCommand({
+     description: 'Admin operation',
+     permit: ['role(master,admin)'],
+     async execute() {
        // Admin operations
-     })
-   )
+       return 'Done'
+     },
+   })
+   ```
+   ```typescript
+   // middlewares/blocklist/index.ts — inbound middleware: not calling next() stops dispatch
+   import { defineMiddleware } from 'zhin.js/middleware'
+   import type { Message } from '@zhin.js/core/runtime'
+
+   export default defineMiddleware<Message, { blocked?: string[] }>({
+     target: 'inbound',
+     async handle(context, next) {
+       const senderId = context.input.sender?.id
+       if (senderId && context.config.blocked?.includes(senderId)) return
+       await next()
+     },
+   })
    ```
 
 5. **Dependency Management**
@@ -411,9 +433,9 @@ We currently do not have a formal bug bounty program, but we will:
 
 5. **File Watching Performance**
    - Avoid watching large directories like `node_modules`
-   - Disable file watching in production (set `NODE_ENV=production`)
+   - Disable file watching in production (`zhin runtime start --mode production --no-watch`)
    - Watching too many files can exhaust server resources (inotify limits)
-   - Recommend specifying only actual plugin directories in `plugin_dirs`
+   - In development, `--watch source config` watches only project sources and configuration
 
 ### 🔐 Security Roadmap
 

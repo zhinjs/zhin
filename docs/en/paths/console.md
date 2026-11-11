@@ -1,6 +1,6 @@
 ---
 title: "Console path: manage a running bot in the browser"
-description: "Connect Console, find the right page for each task, inspect messages and AI runs, manage Workrooms, and diagnose problems in a fixed order"
+description: "Connect Console, find the right page for each task, inspect messages and AI runs, inspect multi-Agent collaboration, and diagnose problems in a fixed order"
 ---
 
 # Console path: manage a running bot in the browser
@@ -34,7 +34,7 @@ Projects created by the scaffold default to port `8068`, but go by the terminal 
 | Look back at what the bot and people said | Chat history | AI conversations per session; continue from any point |
 | Try the bot without a platform account | Try a chat | built-in simulated chat (Sandbox): send a message, see the reply |
 | See how the AI handled a message | Bot status | each run's steps, tool results, cancel and retry actions |
-| Manage multi-Agent projects | Workroom (Advanced) | tasks, assignments, reviews, and approval gates in a project |
+| Inspect multi-Agent collaboration | Collaboration graph (Advanced) | participants, mail hops, shared Blackboard, and budget of each collaboration |
 | Confirm a command or tool is actually loaded | Runtime Capabilities (Advanced) | commands, middleware, components, Tools, Prompt Sections, MCP |
 | Diagnose a failure | Activity log | level, source, timeline, details |
 | Change the system | Advanced → Config, Environment, Project files, Database | full-scope administration only |
@@ -59,15 +59,15 @@ The workbench can also open lab sessions: choose a working directory and securit
 Each run is uniquely identified by `runtimeId + turnId`; don't guess from time or message text. The tools, Prompt Sections, and MCP servers in use are fixed when a run starts, so saving code midway doesn't affect it.
 :::
 
-## 5. Manage Workrooms
+## 5. Inspect multi-Agent collaboration
 
-A Workroom is a space where several Agents work on tasks together, bound to a group, channel, or GitHub repository; one bot account can serve several Workrooms. For the concept, see [Agent deep dive](../ai/agent.md#workroom-kernel).
+Several Agents can ask, delegate, and share a Blackboard inside one collaboration (an Engagement); a group or channel shared by several Bots is declared under `ai.venues` in `zhin.config.yml`. For the concept and configuration, see [Multi-Agent Collaboration and Venues](../ai/multi-agent-harness.md).
 
-- **Workroom Configuration**: create or edit a Workroom; changes apply on save with no restart. Member Agents must already be configured in `ai.agents`.
-- **Board**: see the current state of tasks, assignments, reviewers, and approval gates.
+- **Collaboration graph**: list recent Engagements and inspect participants, mail hops (`ask` / `delegate` / `tell` / `result`), the shared Blackboard, and budget usage.
+- **Venues**: see the active Venues, their member Agents, and the Bot Endpoint each one is bound to.
 
-::: details Where is the config stored? Can I change task state on the board?
-Workroom configuration from Console is stored in the persistent Runtime Catalog and is **not** written back to `ai.workrooms` in `zhin.config.yml`. The board is a read-only view of the Workroom Journal (an event log); Console can't rewrite task state directly, and every change goes through an authenticated control interface.
+::: details Where is the config stored? Can I change collaboration state on the page?
+Venues live under `ai.venues` in `zhin.config.yml`, and each Agent's contacts live under `collaboration` in `agents/<name>/agent.json`; Console keeps no second copy. The collaboration graph is a read-only view of the `engagement_events` Journal, so Console can't rewrite collaboration state. `zhin trace --engagements` shows the same data on the command line.
 :::
 
 ## 6. Full token vs Demo token
@@ -162,5 +162,5 @@ For actual welcome restrictions, configure the [exact welcome allowlist](../solu
 ## Next steps
 
 - [Console overview](../console/): how Console and the Host split work, and page extensions
-- [Agent deep dive · Workroom Kernel](../ai/agent.md#workroom-kernel): Workroom rules and configuration
+- [Multi-Agent Collaboration and Venues](../ai/multi-agent-harness.md): collaboration tools, `ai.venues`, and `zhin trace`
 - [Community bot](../showcase/community-bot.md): a multi-platform production example

@@ -1,22 +1,36 @@
 version: 1
-mode: manual
-default:
-  provider: deepseek
-  model: deepseek-chat
+services:
+  deepseek:
+    driver: openai-compatible
+    options:
+      baseUrl: https://api.deepseek.com/v1
+    models:
+      deepseek-chat:
+        id: deepseek-chat
+        kinds:
+          - language
+        protocol: openai-chat
+        input:
+          - text
+        streaming: true
+        toolCalling: true
+accounts:
+  deepseek:
+    service: deepseek
+    auth:
+      method: api-key
+      source: env://DEEPSEEK_API_KEY
+profiles:
+  deepseek:deepseek-chat:
+    account: deepseek
+    model: deepseek-chat
 purposes:
-  conversation:
-    provider: deepseek
-    model: deepseek-chat
-  reasoning:
-    provider: deepseek
-    model: deepseek-chat
+  chat:
+    profile: deepseek:deepseek-chat
   agents:
     planner:
-      provider: deepseek
-      model: deepseek-chat
+      profile: deepseek:deepseek-chat
     builder:
-      provider: deepseek
-      model: deepseek-chat
+      profile: deepseek:deepseek-chat
     reviewer:
-      provider: deepseek
-      model: deepseek-chat
+      profile: deepseek:deepseek-chat

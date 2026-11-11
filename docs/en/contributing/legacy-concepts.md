@@ -63,19 +63,20 @@ export default defineAdapter<MyConfig>({
   - Interactive TTY: one-line stdin confirm (aligned with the official icqq example)
 - Out-of-band path still works: `icqq login <uin>` daemon QR scan, then start zhin; `zhin setup` wizard.
 
-## Legacy Multi-Agent Execution APIs -> chat subagent / Workroom
+## Legacy Multi-Agent Execution APIs -> Agent Harness {#legacy-multi-agent}
 
-The old orchestration stack combined mutable repositories, `AgentDispatcher`, immediate-execution workflow helpers, and `remote_mesh` state. It could not reliably represent acceptance, lease recovery, preemption, or Project Memory, so it is replaced in a major release without a dual-write compatibility layer.
+The old orchestration stack (mutable repositories, `AgentDispatcher`, executing workflow helpers, `remote_mesh`) and the later Workroom Kernel have both been removed without a compatibility layer. Multi-Agent collaboration now has a single model: the Agent Harness ([ADR 0048](../../adr/0048-agent-harness.md)).
 
-| Legacy surface | Migration |
+| Old surface | Migration |
 | --- | --- |
-| `runPipeline` / `runParallel` / `route` from `zhin.js/agent` | Use `AIService.runAgent` for an ordinary one-shot model call (compose Promises explicitly when needed). Durable multi-Agent collaboration enters a Workroom Inbox/Plan proposal. A future workflow builder will only construct Plans; it will not execute Agents. |
-| `spawn_task(run_id, task_id, ...)` | Ordinary chat keeps only temporary `spawn_task` without Workroom identity. Project work must be created as a Workroom Task/Assignment; a subtask id is never a Task id. |
-| `OrchestrationService` / `OrchestrationKernel` / repositories / `AgentDispatcher` | There is no compatibility object. Read state from Workroom Journal replay/projections; write only through principal- and role-scoped Workroom command ports. |
-| `ai.remoteAgents` / `remote_mesh` / Remote Agent poller | No longer supported. Remote A2A is attached as a standard `AssignmentExecutorPort` transport using the same lease/fence/report/acceptance contract as local execution, and accepts only persistent Catalog plus generation-owned authority. Do not emulate it with legacy configuration or bypass its Grant. |
-| `/api/agent/orchestration/runs` / `/console/orchestration` | Use the Project-scoped `/api/agent/workroom/runs?projectId=...` endpoint and Workroom Console page. Both are read-only projections. |
+| `runPipeline` / `runParallel` / `route` from `zhin.js/agent` | Use `AIService.runAgent` for an ordinary one-shot model call (compose Promises explicitly when needed). For multi-Agent collaboration, let Agents use the collaboration tools such as `ask` / `delegate`. |
+| `spawn_task(run_id, task_id, ...)` | `spawn_task` has been removed; Agents collaborate through `ask` / `delegate` and the other collaboration tools (see [Agent deep dive · Multi-Agent collaboration](../ai/agent.md#multi-agent-collaboration)). |
+| `OrchestrationService` / `OrchestrationKernel` / repositories / `AgentDispatcher` | There is no compatibility object. Collaboration state is read only from the `engagement_events` Journal (`zhin trace --engagements`, the Console collaboration graph). |
+| `ai.remoteAgents` / `remote_mesh` / Remote Agent poller | No longer supported; startup fails when `ai.remoteAgents` is present. Declare remote Agents under `a2a.mailbox.peers`; each Mail is signed together with its Authority and budget. |
+| `ai.workroom` / `ai.workrooms`, `a2a.workroomCallbacks` / `a2a.workroomRemoteExecutors`, `@zhin.js/workroom` | Removed; startup fails when these keys are present. Declare groups or channels shared by several Bots under `ai.venues`, and each Agent's contacts and budget ceiling under `collaboration` in `agents/<name>/agent.json`. |
+| `/api/agent/orchestration/runs`, `/api/agent/workroom/runs` | Use the read-only `GET /api/agent/engagements[/*]` endpoint and the Console collaboration graph page. |
 
-Legacy Runs and Journals with embedded payloads are no longer supported and have no migration tooling; opening a legacy-format store fails closed. An old `completed` record has no claim-level Acceptance Record and cannot become accepted Project State. Legacy Runs are no longer supported and there is no migration tooling; to keep historical information, curate it by hand and resubmit it as a new task for fresh planning and acceptance. See the [Agent CONTEXT on GitHub](https://github.com/zhinjs/zhin/blob/main/packages/im/agent/CONTEXT.md) for the implemented authority boundary.
+Old Runs, Workroom Journals, and Catalogs are no longer supported and there is no migration tooling; to keep historical information, curate it by hand and resubmit it as a new message. See the [Agent CONTEXT on GitHub](https://github.com/zhinjs/zhin/blob/main/packages/im/agent/CONTEXT.md) for the implemented authority boundary.
 
 ## Related Reading
 

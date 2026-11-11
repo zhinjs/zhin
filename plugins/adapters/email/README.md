@@ -99,10 +99,6 @@ SMTP 与 IMAP 的主机、账号、密码和连接参数分项填写；两种协
 
 建议使用环境变量存储邮箱密码，勿提交到版本库。
 
-## AI 工具
-
-技能说明见 `skills/email/SKILL.md`。
-
 ## 文档链接
 
 - [Email 适配器文档](https://zhin.js.org/adapters/email)

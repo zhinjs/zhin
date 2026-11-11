@@ -5,4 +5,3 @@ export * from './resolve.js';
 export * from './prompt.js';
 export * from './structured-detect.js';
 export * from './extensions/onebot-keyboard.js';
-export * from './extensions/qq-message.js';

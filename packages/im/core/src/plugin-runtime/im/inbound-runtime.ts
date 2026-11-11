@@ -264,7 +264,7 @@ export class InboundRuntime {
         };
       commandOperation = this.context.commandExecution?.openOperation({
         snapshot: lease.value, conversation, senderId: enrichedSender?.id,
-        retirementSignal: operationSignal, reply: (owner, text) => operationReply(text, owner),
+        retirementSignal: operationSignal, locale, reply: (owner, text) => operationReply(text, owner),
       });
       const execute = async (): Promise<MessageDispatchResult> => {
         const segments = input.segments ? Object.freeze([...input.segments]) : undefined;

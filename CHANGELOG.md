@@ -14,14 +14,27 @@
 
 **Heads-up (next major):** redundant published TypeScript sources (`src/**/*.ts` in many packages, and convention-directory `index.ts` next to `index.js` in plugin packages) will be removed. They are not loaded at runtime and no source map refers to them. If you deep-import a package's `.ts` file, switch to the package's `exports` entry. Nothing changes until the next major.
 
+## 版本号说明：当前稳定线是 1.1.x
+
+主包 `zhin.js` 的版本号经历过一次重编号，下文的 4.x / 3.x / 2.x 小节都是**历史版本线**，不是当前主线：
+
+- 2025-10 ~ 2026-06：`1.0.0` → `1.0.9x`（zhin-next 重写）。
+- 2026-06 ~ 2026-07：因 changesets 级联升级，主版本在短时间内 `2.0.x` → `3.0.0` → `4.0.x` → `4.1.x` → `5.0.x` → `6.0.x` → `7.0.x` 快速递进。
+- 之后：全部官方发布包统一重置到由维护者治理的 **1.1.x 稳定线**（`zhin.js` 从 `1.1.0` 起，当前为 1.1.x）。npm 上 1.1.0 已被永久占用的包使用下一个可用的 1.1.x patch；此后的常规发布只走 patch。
+- 历史上更高的版本线（2.x ~ 7.x）在 npm 上仍可安装，但已被 1.1.x 取代，不再维护。请以 dist-tag `latest`（1.1.x）为准，不要按数值大小选择版本。
+
+逐版本记录见 [packages/im/zhin/CHANGELOG.md](./packages/im/zhin/CHANGELOG.md)（其中 `1.1.0` 条目记录了这次重置）。
+
+**Version note:** `zhin.js` is on the **1.1.x** stable line. The 2.x–7.x numbers below were published before the package line was reset to 1.1.0; they remain installable but are superseded. Follow the `latest` dist-tag, not the highest number.
+
 ## [4.1.x] - 2026-06 ~ 2026-07
 
-当前主线。4.1.0 引入语音管线，4.1.3 完成约定式插件运行时（Plugin Runtime）迁移。
+历史版本线（发布时的主线，现已被 1.1.x 取代）。4.1.0 引入语音管线，4.1.3 完成约定式插件运行时（Plugin Runtime）迁移。
 
 ### 💥 破坏性变更（4.1.3，按仓库惯例以 patch 形式发布）
 
 - **约定式插件运行时迁移**：插件与适配器由 `usePlugin()` / `extends Adapter` 迁移为 `definePlugin` / `defineAdapter` + `plugin.ts` 入口 + 约定目录（`adapters/`、`commands/`、`components/`、`tools/` 等），旧 `usePlugin` / `extends Adapter` 生产入口已删除；全部 20 个平台适配器完成迁移。迁移边界见 [ADR 0050](./docs/adr/0050-plugin-runtime-migration-boundary.md)，开发形态见 [examples/plugin-runtime-migration-bot](./examples/plugin-runtime-migration-bot/)。
-- **CLI daemon 化**：`zhin runtime start --daemon`（pidfile / 崩溃拉起 / 风暴保护 / orphan watchdog）；legacy `zhin dev` / `zhin start`（含 `zhin restart`）已移除，`zhin stop` 兼容新 daemon。命令参考见 [docs/cli/index.md](./docs/cli/index.md)。
+- **CLI daemon 化**：`zhin runtime start --daemon`（pidfile / 崩溃拉起 / 风暴保护 / orphan watchdog）；legacy 启动实现（旧 `zhin dev` 开发启动、旧 `zhin start`、`zhin restart`）已移除，`zhin stop` 兼容新 daemon。命令名仍在：`zhin start` 现在是 `zhin runtime start` 的别名，`zhin dev` 现在是开发辅助命令组（`zhin dev link` / `zhin dev unlink`），不再负责启动 Bot。命令参考见 [docs/cli/index.md](./docs/cli/index.md)。
 - 注：为避免 zhin.js 5.0 级联，本次 breaking 迁移统一以 patch 版本发布（见 [docs/CHANGELOG.md](./docs/CHANGELOG.md) 1.0.45 条）。
 
 ### ✨ 新能力主线
@@ -51,7 +64,7 @@
 
 ### 🔄 变更
 
-- **架构分层落地（2.0.x）**：抽离 `@zhin.js/kernel`（插件系统 / 定时任务 / 错误体系，无 IM 概念），依赖方向收敛为 basic → kernel → ai → core → agent → zhin，由架构门禁强制。见 [docs/architecture/README.md](./docs/architecture/README.md)。
+- **架构分层落地（2.0.x）**：抽离 `@zhin.js/kernel`（插件系统 / 定时任务 / 错误体系，无 IM 概念），依赖方向收敛为 basic → kernel → ai → core → agent → zhin，由架构门禁强制。见 [docs/concepts/architecture.md](./docs/concepts/architecture.md)。
 - **概念更名 Bot → Endpoint（2.0.1）**：统一角色权限，适配多 Endpoint 业务场景。
 - **AI 双代 API 统一 + Plugin 类拆分（3.0.0）**：`@zhin.js/ai` 1.3 / `@zhin.js/agent` 0.3，为 4.x 安装分层铺路。
 

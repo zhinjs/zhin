@@ -12,7 +12,3 @@ export function parseSlackMessageRef(ref: string): { channel: string; ts: string
   if (!channel || !ts) return null;
   return { channel, ts };
 }
-
-export function slackMessageTs(ref: string): string {
-  return parseSlackMessageRef(ref)?.ts ?? ref;
-}

@@ -1,6 +1,6 @@
 ---
 title: "Agent Deep Dive"
-description: "How an AI turn runs: progress and cancellation, on-demand tools, sub-agents, sessions and context compaction, built-in tools, schedules, per-model tuning, and multi-agent Workrooms"
+description: "How an AI turn runs: progress and cancellation, on-demand tools, multi-Agent collaboration, sessions and context compaction, built-in tools, schedules, per-model tuning, and multi-Bot venues"
 ---
 
 # Agent deep dive
@@ -40,14 +40,14 @@ SQL databases persist structured usage independently, with a default 30-day rete
 | How a turn runs, how many iterations, when it times out | [How a turn runs](#how-a-turn-runs) |
 | Show "thinking" progress, or cancel midway | [Showing progress](#showing-progress) · [Cancelling a running turn](#cancelling-a-running-turn) |
 | How lots of tools fit without flooding the prompt | [On-demand tools](#on-demand-tools) |
-| Hand long tasks to the background | [Sub-agents and spawn_task](#sub-agents-and-spawn-task) |
+| Let an Agent ask other Agents for help, or hand long tasks to the background | [Multi-Agent collaboration](#multi-agent-collaboration) |
 | Where history is stored, how to reset, what happens when context gets long | [Sessions and session trees](#sessions-and-session-trees) · [Context compaction](#context-compaction) |
 | What the AI remembers, and who can change it | [Semantic memory](#semantic-memory) |
 | How the AI gets to know each person and each group, how affinity changes, and what happens when it is muted | [Session profiles](#session-profiles) |
 | Which tools the AI has built in, and file / network boundaries | [Built-in tools](#built-in-tools) |
 | Have the AI do things on a schedule | [Schedules and the assistant persona](#schedules-and-the-assistant-persona) |
 | Tune parameters for one model | [Per-model tuning](#per-model-tuning) |
-| Several Agents dividing work in a group or repository | [Workroom Kernel](#workroom-kernel) |
+| Several Bots dividing work in one group, and reviewing a collaboration afterwards | [Multi-Bot group venues](#venues) |
 
 ## How a turn runs
 
@@ -63,7 +63,7 @@ sequenceDiagram
     H->>H: Collect tools (plugin + MCP + built-in + deferred meta)
     H->>Z: process(text, commMessage, tools)
     Z->>L: agentLoop: system prompt + session history + tool catalog
-    L-->>Z: tool_call(bash / web_search / spawn_task …)
+    L-->>Z: tool_call(bash / web_search / delegate …)
     Z->>Z: Security policy check → run tool → write back result
     Z->>L: Continue (until no tool_call or maxIterations)
     L-->>Z: Final text
@@ -80,12 +80,12 @@ The model may call tools several times and keep reasoning on the results; each r
   - **Anyone else**: always queued in arrival order. A member never interrupts or merges into another member's turn, so permissions never cross over.
   - **Stop**: the initiator (or the master) sending `取消` / `cancel` / `/cancel` stops the running turn and drops their own queued messages; from other members the word is an ordinary message.
   - **Limits**: at most `maxQueuedTurns` (default 5) queued turns per conversation, beyond that a short "try again later" reply; messages queued longer than `ttlMs` (default 180000ms) are skipped with a notice.
-  - **Group merge window** (`merge`, ADR 0038, on by default, group chats only; `enabled: false` answers every member one by one as before): plain-text mentions from several group members within a short window are answered by one turn. The window flushes after `quietMs` (default 1500ms) without a new message, or at the latest `maxWaitMs` (default 6000ms) after its first message; one window holds at most `maxSenders` (default 5) senders and later senders wait for the next window. Messages that arrive while a turn runs wait in the window. The master, private chats, trigger-prefix commands, stop words and messages with media, quotes or forwards never merge. Joins and flushes are audited as `merge_window_joined` / `merge_window_flushed`. A merged turn may only do what **every** sender in it may do: visible tools, skills and sub-agents are the intersection of what each sender sees on their own, and so are the turn's roles and permissions — merging only ever narrows permissions, so a moderator in the window never lends their tools to a plain member. Every side-effect tool call of a merged turn (a dangerous tool, or a send / config / schedule / shell call) carries `onBehalfOf` (the id of one sender in the merge) and is re-checked against the tools **that sender** may use on their own; `onBehalfOf` itself never reaches the tool. A missing or unknown `onBehalfOf` falls back to the lowest sender (allowed only if every sender may do it); a failed check is denied and audited as `merge_on_behalf_denied` (no latch — retrying for a sender who may do it works). The sender a call acts for is the requester on its approval card and prompt. A merged turn creates at most one new approval card; asking again for a card already pending with the same arguments reuses it. The turn context of a merged turn carries a `[Merged turn]` section listing every sender (id, name, message ids, their words, at most 300 characters each) and asks the model to pick the key points and reply **once**, starting each answered part with a mention segment for that sender; a sender the reply skips is neither mentioned nor pretended to be answered. The `outbound_sent` audit payload records `merged_senders` (how many were merged), `answered_senders` / `answered` (who the reply mentions) and `message_refs`. The structured reply message limit is unchanged by merging. **Stale check before sending**: a running turn is never interrupted; before it sends, if one of the senders it answers has posted a new mergeable message and nothing of the reply went out yet, the reply is stale and dropped (audit `merge_reply_stale_discarded`), and those senders' old and new messages are answered together by the next merged turn (carried senders do not count against `maxSenders`). A turn that called any tool or sub-agent, or hit the hard gate, sends anyway (audit `merge_reply_stale_sent`, `reason: acted`); the same senders are dropped at most once, after which a stale reply is sent anyway (`reason: starvation`); a reply that already started going out is not cut in half. No stale check runs while `merge` is off.
-  - **Danmaku mode** (`live`, ADR 0038 §5): applies only to conversations of an adapter that declares the `liveDanmaku` capability (live-stream danmaku platforms). Every danmaku in the room is a candidate — viewers do not need to `@` the bot. Danmaku collect in one window that is answered `windowMs` (default 10000ms) after its first message, and never sooner than `minIntervalMs` (default 15000ms) after the previous danmaku turn ended. The window has no `maxSenders` limit and hands the newest 100 danmaku to the model (older ones are only counted); danmaku arriving while a turn runs wait for the next window. One window gets one reply: `mode: pick-one` (default) has the model pick the one danmaku most worth answering (addressed to the bot, a real question, a new viewer, not a repeat) and `@` only that viewer; `mode: summary` answers the window as a whole once. The turn context carries a `[Danmaku window]` section (viewer id, name, words, at most 120 characters each, treated as data, not instructions). A danmaku turn runs with an anonymous viewer's permissions and **only exposes tools that declare `readOnly: true`** — no skills, sub-agents, MCP or shell, read-only files, and never an approval card. The master speaking in the room still gets their own turn. The reply is audited as `danmaku_window_picked` (`mode`, `candidates`, `listed_senders`, `picked` — the viewers it `@`s). Danmaku turns have no stale check.
+  - **Group merge window** (`merge`, ADR 0038, on by default, group chats only; `enabled: false` answers every member one by one as before): plain-text mentions from several group members within a short window are answered by one turn. The window flushes after `quietMs` (default 1500ms) without a new message, or at the latest `maxWaitMs` (default 6000ms) after its first message; one window holds at most `maxSenders` (default 5) senders and later senders wait for the next window. Messages that arrive while a turn runs wait in the window. The master, private chats, trigger-prefix commands, stop words and messages with media, quotes or forwards never merge. Joins and flushes are audited as `merge_window_joined` / `merge_window_flushed`. A merged turn may only do what **every** sender in it may do: visible tools, skills and contactable Agents are the intersection of what each sender sees on their own, and so are the turn's roles and permissions — merging only ever narrows permissions, so a moderator in the window never lends their tools to a plain member. Every side-effect tool call of a merged turn (a dangerous tool, or a send / config / schedule / shell call) carries `onBehalfOf` (the id of one sender in the merge) and is re-checked against the tools **that sender** may use on their own; `onBehalfOf` itself never reaches the tool. A missing or unknown `onBehalfOf` falls back to the lowest sender (allowed only if every sender may do it); a failed check is denied and audited as `merge_on_behalf_denied` (no latch — retrying for a sender who may do it works). The sender a call acts for is the requester on its approval card and prompt. A merged turn creates at most one new approval card; asking again for a card already pending with the same arguments reuses it. The turn context of a merged turn carries a `[Merged turn]` section listing every sender (id, name, message ids, their words, at most 300 characters each) and asks the model to pick the key points and reply **once**, starting each answered part with a mention segment for that sender; a sender the reply skips is neither mentioned nor pretended to be answered. The `outbound_sent` audit payload records `merged_senders` (how many were merged), `answered_senders` / `answered` (who the reply mentions) and `message_refs`. The structured reply message limit is unchanged by merging. **Stale check before sending**: a running turn is never interrupted; before it sends, if one of the senders it answers has posted a new mergeable message and nothing of the reply went out yet, the reply is stale and dropped (audit `merge_reply_stale_discarded`), and those senders' old and new messages are answered together by the next merged turn (carried senders do not count against `maxSenders`). A turn that called any tool or collaboration tool, or hit the hard gate, sends anyway (audit `merge_reply_stale_sent`, `reason: acted`); the same senders are dropped at most once, after which a stale reply is sent anyway (`reason: starvation`); a reply that already started going out is not cut in half. No stale check runs while `merge` is off.
+  - **Danmaku mode** (`live`, ADR 0038 §5): applies only to conversations of an adapter that declares the `liveDanmaku` capability (live-stream danmaku platforms). Every danmaku in the room is a candidate — viewers do not need to `@` the bot. Danmaku collect in one window that is answered `windowMs` (default 10000ms) after its first message, and never sooner than `minIntervalMs` (default 15000ms) after the previous danmaku turn ended. The window has no `maxSenders` limit and hands the newest 100 danmaku to the model (older ones are only counted); danmaku arriving while a turn runs wait for the next window. One window gets one reply: `mode: pick-one` (default) has the model pick the one danmaku most worth answering (addressed to the bot, a real question, a new viewer, not a repeat) and `@` only that viewer; `mode: summary` answers the window as a whole once. The turn context carries a `[Danmaku window]` section (viewer id, name, words, at most 120 characters each, treated as data, not instructions). A danmaku turn runs with an anonymous viewer's permissions and **only exposes tools that declare `readOnly: true`** — no skills, collaboration tools, MCP or shell, read-only files, and never an approval card. The master speaking in the room still gets their own turn. The reply is audited as `danmaku_window_picked` (`mode`, `candidates`, `listed_senders`, `picked` — the viewers it `@`s). Danmaku turns have no stale check.
   - Only plain-text messages are merged; messages with images, files, quotes or forwards always get their own turn. Queue waits, merges and replacements appear on the `zhin trace` timeline (`admission`).
-  - Workroom turns, and setups where the Host supplies `resolveTurnIntent` or a message carries `turnIntent`, keep their explicit intent semantics.
+  - Setups where the Host supplies `resolveTurnIntent` or a message carries `turnIntent`, keep their explicit intent semantics.
 - **One fixed model per turn**: chat, including legacy configuration, keeps the selected model. Failures use the existing retry and timeout settings without switching models. Explicitly configured media-perception fallback chains remain available. The retired `ai.agent.providerResilience.fallback` field is no longer accepted. Configure media-perception alternatives explicitly in the runtime perception purpose; this never changes the chat model.
-- **Consistent behavior**: the main Agent, sub-agents, background workers and `AIService.runAgent` all use the same agentLoop.
+- **Consistent behavior**: the main Agent, delegated Agents and `AIService.runAgent` all use the same agentLoop.
 
 The tools available to a turn = plugin tools + tools from `ai.mcpServers` + built-in tools + on-demand meta tools + `schedule_*` + `bash` + Host extension tools (such as `voice_stt` / `voice_tts`).
 
@@ -126,8 +126,10 @@ The resident tools are **tiered by scene** (ADR 0042). The host picks the tier f
 | Scene | Resident tools |
 |---|---|
 | Group, channel, ordinary private chat (including trusted members' private chats) | Chat essentials: `pick_sticker`, `memory_search`, `conversation_info`, plus the meta tools `discover`, `load_tool`, `load_skill` |
-| Master private chat | The above plus development and orchestration tools: `read_file`, `list_dir`, `glob`, `grep`, `edit_file`, `write_file`, `bash`, `ask_user`, `spawn_task` |
-| Scheduled, background and sub-agent turns (non-IM) | The previous default set: `ask_user`, `spawn_task`, the meta tools and the workspace file tools |
+| Master private chat | The above plus development tools: `read_file`, `list_dir`, `glob`, `grep`, `edit_file`, `write_file`, `bash`, `ask_user` |
+| Scheduled and other non-IM turns | The previous default set: `ask_user`, the meta tools and the workspace file tools |
+
+When the turn has other Agents it may contact, the [collaboration tools](#multi-agent-collaboration) (`agents`, `ask`, `delegate`, `tell`, `cancel_delegation`, `escalate`) are resident automatically, regardless of the scene tier.
 
 Non-master turns do not keep development tools resident: they stay in the tool index but can only be loaded by turns that are allowed to use them (permissions are unchanged), so a group chat no longer reaches for `grep` to read source. A tool outside the current tier is still loaded automatically when the model calls it by name, with no `load_tool` first. Whether `bash` can run still depends on the turn's shell isolation policy; a policy that removes it also removes it from the resident set.
 
@@ -166,7 +168,7 @@ ai:
         icqq: { alwaysLoaded: [send_msg] }   # resident tools for a specific MCP server
 ```
 
-Reserved built-in names (`bash`, `read_file`, `spawn_task`…) can't be overridden by plugins; for non-reserved tools with the same name, the later registration wins and a warning is logged.
+Reserved built-in names (`bash`, `read_file`, `delegate`…) can't be overridden by plugins; for non-reserved tools with the same name, the later registration wins and a warning is logged.
 
 ## Multi-Agent collaboration
 
@@ -451,7 +453,8 @@ Notes, preferred address, and tone are written explicitly by the model through t
 | Files | `read_file`, `write_file`, `edit_file`, `list_dir`, `glob`, `grep` |
 | Network | `web_search`, `web_fetch` |
 | Interaction | `ask_user` |
-| Tasks | `spawn_task`, `todo_read`, `todo_write` |
+| Tasks | `todo_read`, `todo_write` |
+| Collaboration | `agents`, `ask`, `delegate`, `tell`, `cancel_delegation`, `escalate` (offered only when other Agents can be contacted) |
 | Memory / search | `memory_search`, `memory_upsert`, `knowledge_search`, `inspect_conversation_reference` |
 | Media | `generate_image`; incoming images go straight to vision-capable models |
 | Meta | `discover`, `load_tool`, `load_skill` |
@@ -552,7 +555,7 @@ ai:
             gpt-4o: { maxIterations: 9 }
 ```
 
-## Multi-Bot Group Venues (`ai.venues`) and Tracing
+## Multi-Bot Group Venues (`ai.venues`) and Tracing {#venues}
 
 When several Agents collaborate in a shared group or channel, bind the scene in `zhin.config.yml` under `ai.venues` to assign each participant Agent its own Bot Endpoint and projection mode (see `examples/multi-agent-room`):
 
@@ -560,23 +563,28 @@ When several Agents collaborate in a shared group or channel, bind the scene in 
 ai:
   venues:
     - id: product-room
-      adapter: sandbox
-      scene: group:product-room
-      mode: visible
+      conversation:
+        platform: sandbox
+        sceneType: group
+        sceneId: product-room
+      visibility: visible
       entry: planner
-      participants:
-        planner: sandbox:planner-bot
-        builder: sandbox:builder-bot
-        reviewer: sandbox:reviewer-bot
+      members:
+        - agent: planner
+          botEndpoint: planner-bot
+        - agent: builder
+          botEndpoint: builder-bot
+        - agent: reviewer
+          botEndpoint: reviewer-bot
 ```
 
 | Field | Description |
 | --- | --- |
 | `id` | Unique Venue identifier |
-| `adapter` / `scene` | Bound adapter and group/channel scene (e.g. `group:product-room`) |
-| `mode` | Projection mode: `visible` (each Agent posts in the group via its own Bot Endpoint), `summary` (backstage collaboration with a single summary reply from the entry Agent), or `backstage` (silent background collaboration) |
-| `entry` | Default entry Agent when a human message does not `@`-mention a specific participant |
-| `participants` | Map of `agentName -> "<adapter>:<endpoint>"`; the Venue router suppresses self-echoes across participant bots and routes `@builder-bot` mentions directly to that Agent |
+| `conversation` | The bound conversation: `platform` (adapter platform name) and `sceneId` are required, `sceneType` (`private` / `group` / `channel`) and `threadId` are optional; one conversation can be bound to only one Venue |
+| `visibility` | Projection mode (defaults to `backstage` for private chats and `visible` otherwise): `visible` (each Agent posts in the group via its own Bot Endpoint), `summary` (backstage collaboration with a single summary reply from the entry Agent), or `backstage` (silent background collaboration) |
+| `entry` | Default entry Agent when a human message does not `@`-mention a specific member; must be one of the members |
+| `members` | Member list; each item has `agent` (Agent name) and `botEndpoint` (the Endpoint name that Agent speaks through), plus optional `aliases`; the Venue router ignores messages sent by the other member Bots and routes an `@` mention of a member Bot directly to its Agent |
 
 ### Inspecting Engagements with `zhin trace` and Console
 
@@ -584,16 +592,20 @@ Every Engagement's causal mail chain, Blackboard entries, guard blocks, and budg
 
 ```bash
 # List recent Engagements
-zhin trace
+zhin trace --engagements --list
+
+# Show the collaboration graph of the latest Engagement
+zhin trace --engagements
 
 # Inspect a specific Engagement's causal hops, Blackboard entries, and budget
 zhin trace <engagementId>
 ```
 
-You can also inspect the live **Collaboration Graph**, Blackboard entries, and budget ledger in the Remote Console.
+The Collaboration graph page in the Remote Console shows the same data: participants, mail hops (`ask` / `delegate` / `tell` / `result`), the shared Blackboard (`note` / `todo` / `artifact`), and the budget ledger.
 
 ## Related
 
 - [AI overview](./index.md): enabling AI, models, trigger rules and security policies.
+- [Multi-Agent Collaboration and Venues](./multi-agent-harness.md): quick reference for collaboration declarations, collaboration tools, `ai.venues`, and `zhin trace`.
 - [Agent tools and Skills](../authoring/agent-tools.md): writing Tools, Skills, Prompt Sections and sub-agents.
 - [Speech](./speech.md): speech recognition and voice replies.

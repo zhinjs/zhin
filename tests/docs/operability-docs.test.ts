@@ -45,7 +45,7 @@ describe('product documentation operability', () => {
       const content = read(relativePath);
       expect(content, relativePath).toMatch(/recovery gap/i);
       expect(content, relativePath).toMatch(/Runtime Capabilities|运行时能力/);
-      expect(content, relativePath).toMatch(/Persistent Workroom Catalog|持久 Workroom Catalog/);
+      expect(content, relativePath).toContain('/api/agent/engagements');
       expect(content, relativePath).toMatch(/event stream and history|事件流与历史/);
       expect(content, relativePath).not.toMatch(/config:get\/set\(ai\)/);
     }
@@ -92,8 +92,8 @@ describe('product documentation operability', () => {
 
   it('production and migration guides stay paired across locales', () => {
     const pairedFacts = {
-      production: ['/pub/health', 'Workroom', 'lockfile'],
-      upgrades: ['featureApi', 'Workroom', 'lockfile'],
+      production: ['/pub/health', 'engagement_events', 'lockfile'],
+      upgrades: ['featureApi', 'engagement_events', 'lockfile'],
     } as const;
     for (const [slug, facts] of Object.entries(pairedFacts)) {
       const zh = read(`docs/operations/${slug}.md`);

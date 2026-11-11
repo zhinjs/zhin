@@ -73,7 +73,7 @@ await scheduler.holidays.update(2027, { force: true });
 unsubscribe();
 ```
 
-同步脚本：`scripts/sync-holiday.mjs`、`scripts/generate-holiday-calendar.mjs`。
+同步脚本（先 `pnpm --filter @zhin.js/schedule build`）：`pnpm --filter @zhin.js/schedule sync-holiday <year>`、`sync-holidays-auto`、`generate-holiday-calendar`；`next-runs` 用于预览触发时间。
 
 ## 持久化 JobStore
 

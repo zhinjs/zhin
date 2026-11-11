@@ -33,7 +33,6 @@ export function extractPageMetadata(source: string, fileName: string): unknown {
 export const DEFINE_PAGE_PACKAGE = '@zhin.js/console-contract';
 export const DEFINE_PAGE_PACKAGES = new Set([
   '@zhin.js/console-contract',
-  '@zhin.js/contract',
   '@zhin.js/page',
   'zhin.js/page',
 ]);

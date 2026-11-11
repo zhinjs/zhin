@@ -1,47 +1,49 @@
+configVersion: 2
 log_level: info
+
+http:
+  token: ${HTTP_TOKEN:-multi-agent-room-dev-token}
+  port: 8070
 
 database:
   dialect: sqlite
   filename: ./data/room.db
 
-plugins:
-  - adapter-sandbox
-
-sandbox:
-  enabled: true
-  path: /sandbox
-  endpoints:
-    - context: sandbox
-      name: planner-bot
-      capabilities: [inbound, outbound]
-    - context: sandbox
-      name: builder-bot
-      capabilities: [inbound, outbound]
-    - context: sandbox
-      name: reviewer-bot
-      capabilities: [inbound, outbound]
-
 ai:
   enabled: true
-  defaultProvider: deepseek
-  providers:
-    deepseek:
-      apiKey: ${DEEPSEEK_API_KEY}
-      models:
-        - deepseek-chat
+  # ADR 0048: one shared IM room, one Bot Endpoint per member Agent.
   venues:
     - id: product-room
-      adapter: sandbox
-      scene: group:product-room
-      mode: visible
+      conversation:
+        platform: sandbox
+        sceneType: group
+        sceneId: product-room
+      visibility: visible
       entry: planner
-      participants:
-        planner: sandbox:planner-bot
-        builder: sandbox:builder-bot
-        reviewer: sandbox:reviewer-bot
-  routing:
-    respondOnDirect: true
-    respondOnMention: true
-  security:
+      members:
+        - agent: planner
+          botEndpoint: planner-bot
+        - agent: builder
+          botEndpoint: builder-bot
+        - agent: reviewer
+          botEndpoint: reviewer-bot
+  agent:
     execSecurity: allowlist
+    execPreset: readonly
     execApprovalMode: ask
+  trigger:
+    respondToAt: true
+    respondToPrivate: true
+
+plugin: {}
+
+plugins:
+  sandbox: "@zhin.js/adapter-sandbox"
+sandbox:
+  endpoints:
+    - id: planner-bot
+      owner: local-user
+    - id: builder-bot
+      owner: local-user
+    - id: reviewer-bot
+      owner: local-user

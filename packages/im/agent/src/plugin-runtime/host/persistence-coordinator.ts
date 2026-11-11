@@ -167,10 +167,12 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
         pruneTraceArchive(),
         pruneEngagementJournal(),
       ]).then(() => undefined).finally(() => { pendingPrune = undefined; });
-      if (usage || decisions() || pruneTraces || foundation.engagementJournal || foundation.agent.getGroupRules?.()?.persistent || foundation.schedule.history) {
+      if (usage || decisions() || pruneTraces || foundation.engagementJournal || foundation.agent.getGroupRules?.()?.persistent || foundation.schedule.history || foundation.agent.usageQuota) {
         timer = setInterval(() => {
           if (stopped) return;
           foundation.schedule.history.housekeeping();
+          // In-memory quota buckets (one per user/group) are only reclaimed here.
+          foundation.agent.usageQuota?.prune();
           if (pendingPrune) return;
           pendingPrune = Promise.all([
             usage?.prune().catch(() => {

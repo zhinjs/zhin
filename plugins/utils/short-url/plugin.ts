@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import {
   definePlugin,
   definePluginCapabilityGraph,
@@ -7,29 +6,19 @@ import {
   pluginConsoleRpcToken,
   type PluginConsoleRpcInput,
 } from 'zhin.js';
-
-function isValidHttpUrl(input: string): boolean {
-  try {
-    const parsed = new URL(input);
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
-  } catch {
-    return false;
-  }
-}
+import { isValidUrl, shortenUrl } from './src/short-url-lib.js';
 
 export interface ShortUrlRecord {
   readonly id: string;
   readonly code: string;
   readonly url: string;
   readonly shortUrl: string;
-  readonly clicks: number;
   readonly createdAt: string;
-  readonly [key: string]: string | number;
+  readonly [key: string]: string;
 }
 
 export interface ShortUrlConsoleStatus {
   readonly totalCount: number;
-  readonly totalClicks: number;
   readonly items: readonly ShortUrlRecord[];
 }
 
@@ -48,6 +37,7 @@ export default definePlugin({
     },
   }),
   setup() {
+    // Links created from the Console in this process; is.gd itself has no listing API.
     const store = new Map<string, ShortUrlRecord>();
 
     const rpc = definePluginConsoleRpc({
@@ -57,35 +47,33 @@ export default definePlugin({
         requiredPermissions: ['short-url:read'],
         handler() {
           const items = [...store.values()];
-          const totalClicks = items.reduce((sum, item) => sum + item.clicks, 0);
-          return {
-            totalCount: items.length,
-            totalClicks,
-            items,
-          };
+          return { totalCount: items.length, items };
         },
       },
       actions: {
         create: {
           page: 'index',
           requiredPermissions: ['short-url:write'],
-          handler(input: PluginConsoleRpcInput) {
+          async handler(input: PluginConsoleRpcInput) {
             const rawUrl = typeof input.url === 'string' ? input.url.trim() : '';
-            if (!isValidHttpUrl(rawUrl)) {
+            if (!isValidUrl(rawUrl)) {
               throw new PluginConsoleRpcError('invalid_input', '请提供有效的 HTTP/HTTPS 链接');
             }
-            const rawCode = typeof input.code === 'string' ? input.code.trim() : '';
-            const code = rawCode || randomUUID().replace(/-/gu, '').slice(0, 6);
-            const shortUrl = `https://is.gd/${code}`;
-            const record: ShortUrlRecord = {
+            let shortUrl: string;
+            try {
+              shortUrl = await shortenUrl(rawUrl);
+            } catch (error) {
+              throw new PluginConsoleRpcError('unavailable', `缩短失败: ${error instanceof Error ? error.message : String(error)}`);
+            }
+            // The code is whatever the service issued; it is never invented locally.
+            const code = new URL(shortUrl).pathname.replace(/^\/+/u, '') || shortUrl;
+            store.set(code, {
               id: code,
               code,
               url: rawUrl,
               shortUrl,
-              clicks: 0,
               createdAt: new Date().toISOString(),
-            };
-            store.set(code, record);
+            });
             return {
               message: `短链接已创建：${shortUrl}`,
               code,
@@ -106,7 +94,7 @@ export default definePlugin({
             return {
               ok: deleted,
               code,
-              message: deleted ? `短链接 ${code} 已删除` : `未找到短链接 ${code}`,
+              message: deleted ? `已从列表移除 ${code}` : `未找到短链接 ${code}`,
             };
           },
         },

@@ -60,21 +60,6 @@ export async function handleQqWebhookRequest(
   }
 }
 
-export async function readRequestBodyText(request: IncomingMessage): Promise<string> {
-  const chunks: Buffer[] = [];
-  let size = 0;
-  for await (const chunk of request) {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    size += buffer.length;
-    if (size > 1_048_576) {
-      request.destroy();
-      throw new Error('Request body exceeds 1MB');
-    }
-    chunks.push(buffer);
-  }
-  return Buffer.concat(chunks).toString('utf8');
-}
-
 export function qqHttpBotOptions(config: ResolvedQqHttpConfig): ConstructorParameters<typeof Bot<ReceiverMode.MIDDLEWARE, 'koa'>>[0] {
   return { handleProcessErrors: false, appid: config.appid, secret: config.secret,
     mode: ReceiverMode.MIDDLEWARE, platform: 'koa', sandbox: config.sandbox,

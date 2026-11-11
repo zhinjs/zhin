@@ -420,9 +420,11 @@ export class CommandIndex {
   /** Diagnose only a reliable static route prefix; fully dynamic routes are ordinary chat candidates. */
   #invalidRoute(input: CommandMatchInput): CommandRecord | undefined {
     const segments = normalizeSegments(typeof input === 'string' ? [{ type: 'text', data: { text: input } }] : input);
+    // segment-matcher clones its input before matching, so one copy serves every route.
+    const matcherSegments = asMatcherSegments(segments);
     for (const route of this.#routes) {
       if (!route.record.parameter) continue;
-      const result = route.literalMatcher?.match(asMatcherSegments(segments));
+      const result = route.literalMatcher?.match(matcherSegments);
       if (result && hasCommandBoundary(result.remaining)) return route.record;
     }
     return undefined;
@@ -468,14 +470,16 @@ export class CommandIndex {
     );
     if (segments.length === 0) return undefined;
 
+    // segment-matcher clones its input before matching, so one copy serves every route.
+    const matcherSegments = asMatcherSegments(segments);
     for (const route of this.#routes) {
       // Options may appear between the literal route and a directory-bound parameter.
-      const literalResult = !exact ? route.literalMatcher?.match(asMatcherSegments(segments)) : undefined;
+      const literalResult = !exact ? route.literalMatcher?.match(matcherSegments) : undefined;
       const helpRequested = literalResult && hasCommandBoundary(literalResult.remaining)
         && requestsCommandHelp(normalizeSegments(literalResult.remaining));
       const parseDeclaredArguments = !exact && route.record.parameter && route.literalMatcher !== undefined
         && (Object.hasOwn(route.record.slot.definition.params ?? {}, route.record.parameter.name) || helpRequested);
-      const result = parseDeclaredArguments ? literalResult : route.matcher.match(asMatcherSegments(segments));
+      const result = parseDeclaredArguments ? literalResult : route.matcher.match(matcherSegments);
       if (!result || !hasCommandBoundary(result.remaining)) continue;
       const parameter = route.record.parameter;
       const params: Record<string, CommandDynamicValue> = { ...result.params };

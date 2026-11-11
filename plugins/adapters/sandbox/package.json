@@ -62,8 +62,7 @@
     "@zhin.js/logger": "workspace:*",
     "@zhin.js/page": "workspace:*",
     "lucide-react": "^0.525.0",
-    "react": "^19.2.8",
-    "@zhin.js/skill": "workspace:*"
+    "react": "^19.2.8"
   },
   "devDependencies": {
     "@types/react": "^19.2.18",
@@ -115,10 +114,6 @@
       },
       {
         "package": "@zhin.js/page",
-        "api": "^1.0.0"
-      },
-      {
-        "package": "@zhin.js/skill",
         "api": "^1.0.0"
       }
     ],

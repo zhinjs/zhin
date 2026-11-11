@@ -69,6 +69,29 @@ describe('native bash ToolFeature', () => {
   });
 });
 
+describe.skipIf(process.platform === 'win32')('SandboxBashExecutionPort cancellation', () => {
+  it('kills the running command when the Turn signal aborts', async () => {
+    const controller = new AbortController();
+    const started = Date.now();
+    const pending = new SandboxBashExecutionPort().execute({
+      command: 'sleep 30 | cat',
+      cwd: process.cwd(),
+      timeoutMs: 20_000,
+      signal: controller.signal,
+      policy: {
+        permissions: [],
+        unattended: false,
+        network: { enabled: false },
+        shell: { security: 'full', approvalMode: 'bypass', isolation: 'none' },
+        filesystem: { workspaceRoot: process.cwd(), access: 'danger-full-access' },
+      },
+    });
+    setTimeout(() => controller.abort(), 100);
+    await expect(pending).rejects.toThrow();
+    expect(Date.now() - started).toBeLessThan(5_000);
+  });
+});
+
 function executionContext(): ToolExecutionContext {
   return {
     signal: new AbortController().signal,

@@ -4,17 +4,24 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "zhin runtime start --watch",
-    "start": "zhin runtime start --daemon",
-    "stop": "zhin stop",
+    "dev": "zhin runtime start --watch source config",
+    "start": "zhin runtime start --mode production --no-watch",
+    "build": "tsc --noEmit",
     "test": "vitest run --root ../.. examples/multi-agent-room/tests"
   },
   "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./plugin.ts",
+    "engine": "^1.0.0",
+    "runtime": "trusted",
     "features": [
       {
-        "package": "@zhin.js/agent-feature"
+        "package": "@zhin.js/agent-feature",
+        "api": "^1.0.0"
       }
-    ]
+    ],
+    "plugins": []
   },
   "dependencies": {
     "zhin.js": "workspace:*",
@@ -28,5 +35,8 @@
   "devDependencies": {
     "@zhin.js/cli": "workspace:*",
     "typescript": "^6.0.3"
+  },
+  "engines": {
+    "node": ">=22.19.0"
   }
 }

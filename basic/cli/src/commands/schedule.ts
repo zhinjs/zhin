@@ -1,5 +1,6 @@
 /**
- * 持久化调度任务 CLI — data/schedule-jobs.json
+ * 持久化调度任务 CLI — 通过运行中 Host 的 `/assistant/jobs` 操作。
+ * 调度器在首次启动后以数据库为准，离线改 data/schedule-jobs.json 不会生效，因此不再直接改文件。
  */
 import { Command } from 'commander';
 import { logger } from '../utils/logger.js';
@@ -7,10 +8,36 @@ import {
   type ScheduleJobRecordCli,
   type JobScheduleCli,
   parseNotifyChannel,
-  readScheduleJobs,
-  writeScheduleJobs,
   normalizeCronExpression,
 } from '../utils/assistant-jobs.js';
+import {
+  hostGet,
+  hostPost,
+  loadHostHttpConfig,
+  type HostFetchResult,
+  type HostHttpConfig,
+} from '../utils/host-http.js';
+
+async function requireHost(): Promise<HostHttpConfig> {
+  const http = await loadHostHttpConfig();
+  if (!http) {
+    logger.error('未找到 zhin 配置文件，无法确定 Host API 地址');
+    process.exit(1);
+  }
+  return http;
+}
+
+function requireOk<T>(result: HostFetchResult<T>): T | undefined {
+  if (result.ok) return result.data;
+  logger.error(result.status === 404 && result.error === 'assistant.enabled is false'
+    ? '运行中的实例未启用 assistant（assistant.enabled），无法管理调度任务'
+    : (result.error ?? `HTTP ${result.status}`));
+  process.exit(1);
+}
+
+async function mutateJob(action: 'remove' | 'pause' | 'resume', id: string): Promise<void> {
+  requireOk(await hostPost(await requireHost(), `/assistant/jobs/${action}`, { id }));
+}
 
 function parseEveryMs(s: string): number {
   const m = s.trim().match(/^(\d+)(m|h|d|s)$/i);
@@ -22,10 +49,6 @@ function parseEveryMs(s: string): number {
   if (unit === 'h') return n * 60 * 60 * 1000;
   if (unit === 'd') return n * 24 * 60 * 60 * 1000;
   throw new Error(`Unknown unit: ${unit}`);
-}
-
-function generateId(): string {
-  return `sched_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function notifySummary(notify: ScheduleJobRecordCli['notify']): string {
@@ -46,18 +69,22 @@ function scheduleSummary(s: JobScheduleCli): string {
     if (h < 24) return `every ${h}h`;
     return `every ${h / 24}d`;
   }
-  return `${s.kind} ${s.cron}`;
+  // The Host may also return kinds the CLI cannot create (holiday/scatter/event).
+  return `${s.kind} ${(s as { cron?: string }).cron ?? ''}`.trimEnd();
 }
 
 const listCommand = new Command('list')
-  .description('列出 data/schedule-jobs.json 中的持久化调度任务')
+  .description('列出运行中实例的持久化调度任务')
   .action(async () => {
-    const jobs = await readScheduleJobs();
+    const data = requireOk(
+      await hostGet<{ jobs?: ScheduleJobRecordCli[] }>(await requireHost(), '/assistant/jobs'),
+    );
+    const jobs = data?.jobs ?? [];
     if (jobs.length === 0) {
       logger.log('暂无调度任务。使用 zhin schedule add 添加。');
       return;
     }
-    logger.log('\n调度任务（修改后需重启应用生效）\n');
+    logger.log('\n调度任务\n');
     for (const j of jobs) {
       const status = j.enabled ? '启用' : '暂停';
       const label = j.label ? ` (${j.label})` : '';
@@ -66,11 +93,10 @@ const listCommand = new Command('list')
       logger.log(`    投递:   ${notifySummary(j.notify)}`);
       logger.log(`    内容:   ${j.action.prompt}`);
     }
-    logger.log('\n重启应用（zhin runtime start）后生效。');
   });
 
 const addCommand = new Command('add')
-  .description('添加持久化调度任务（6 段 cron，或 --at / --every）')
+  .description('添加持久化调度任务（6 段 cron，或 --at / --every）；需要实例正在运行')
   .argument('[cronExpression]', 'Cron 表达式，如 "0 0 9 * * *"（与 --at/--every 二选一）')
   .option('--prompt <prompt>', '到点触发时发给 AI 的提示词（必填）')
   .option('-l, --label <label>', '可选标签')
@@ -131,36 +157,19 @@ const addCommand = new Command('add')
       process.exit(1);
     }
 
-    const jobs = await readScheduleJobs();
-    const id = generateId();
-    jobs.push({
-      id,
-      label: opts.label,
-      enabled: true,
-      schedule,
-      action: { kind: 'agent', prompt },
-      notify,
-      createdAt: now,
-      updatedAt: now,
-      state: {},
-      source: 'manual',
-    });
-    await writeScheduleJobs(process.cwd(), jobs);
-    logger.log(`已添加调度任务: ${id}`);
-    logger.log('重启应用后生效。');
+    const data = requireOk(await hostPost<{ job?: { id?: string } }>(
+      await requireHost(),
+      '/assistant/jobs',
+      { label: opts.label, schedule, prompt, notify },
+    ));
+    logger.log(`已添加调度任务: ${data?.job?.id ?? ''}`);
   });
 
 const removeCommand = new Command('remove')
   .description('按 ID 删除持久化调度任务')
   .argument('<id>', '任务 ID')
   .action(async (id: string) => {
-    const jobs = await readScheduleJobs();
-    const next = jobs.filter((j) => j.id !== id);
-    if (next.length === jobs.length) {
-      logger.error(`未找到任务: ${id}`);
-      process.exit(1);
-    }
-    await writeScheduleJobs(process.cwd(), next);
+    await mutateJob('remove', id);
     logger.log(`已删除任务: ${id}`);
   });
 
@@ -168,15 +177,7 @@ const pauseCommand = new Command('pause')
   .description('暂停指定任务')
   .argument('<id>', '任务 ID')
   .action(async (id: string) => {
-    const jobs = await readScheduleJobs();
-    const j = jobs.find((x) => x.id === id);
-    if (!j) {
-      logger.error(`未找到任务: ${id}`);
-      process.exit(1);
-    }
-    j.enabled = false;
-    j.updatedAt = Date.now();
-    await writeScheduleJobs(process.cwd(), jobs);
+    await mutateJob('pause', id);
     logger.log(`已暂停任务: ${id}`);
   });
 
@@ -184,20 +185,12 @@ const resumeCommand = new Command('resume')
   .description('恢复已暂停的任务')
   .argument('<id>', '任务 ID')
   .action(async (id: string) => {
-    const jobs = await readScheduleJobs();
-    const j = jobs.find((x) => x.id === id);
-    if (!j) {
-      logger.error(`未找到任务: ${id}`);
-      process.exit(1);
-    }
-    j.enabled = true;
-    j.updatedAt = Date.now();
-    await writeScheduleJobs(process.cwd(), jobs);
+    await mutateJob('resume', id);
     logger.log(`已恢复任务: ${id}`);
   });
 
 export const scheduleCommand = new Command('schedule')
-  .description('持久化调度任务（data/schedule-jobs.json）')
+  .description('持久化调度任务（操作运行中的实例）')
   .addCommand(listCommand)
   .addCommand(addCommand)
   .addCommand(removeCommand)

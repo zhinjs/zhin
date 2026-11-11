@@ -20,7 +20,6 @@ Start from the symptom. Change one condition at a time and retain startup logs, 
 - [Multiple package locations for one package](#multiple-package-locations)
 - [Agent has no available model or provider](#agent-provider-unavailable)
 - [Tool is awaiting approval or denied by policy](#tool-approval-stuck)
-- [A chat, channel, or repository does not route to a Workroom](#workroom-not-routing)
 - [Container restarts or health checks fail](#container-not-healthy)
 
 <section id="console-cannot-connect">
@@ -237,30 +236,6 @@ An Agent turn stops at a tool step marked pending approval, denied, or cancelled
 ### Verification
 
 - Run a read-only probe; the tool and turn terminal states should agree and the approval record should be traceable.
-
-</section>
-
-<section id="workroom-not-routing">
-
-## A chat, channel, or repository does not route to a Workroom
-
-### Symptom
-
-A message falls back to normal chat, or a task does not appear on the expected Workroom board.
-
-### Cause
-
-- The Catalog lacks an exact interaction-space binding or still points to an old Agent.
-- One Bot may serve multiple Workrooms, but the chat, channel, or repository identity is wrong or conflicting.
-
-### Action
-
-- Check Bot, Endpoint, space ID, member roles, and Agent binding in Console Workroom configuration.
-- After saving the Catalog, send a new message; historical messages are not reinterpreted.
-
-### Verification
-
-- A new message should create a task/run in the target Workroom and show the matched space and Agent in details.
 
 </section>
 

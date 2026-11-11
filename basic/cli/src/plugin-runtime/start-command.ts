@@ -489,6 +489,9 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
       }
     }
     snapshot = await host.start();
+    // The constructor-time prune ran before the database host started and was skipped;
+    // without this a frequently restarted process would never prune (next tick is hours away).
+    void systemLogStore.prune();
   } catch (error) {
     // #742: HTTP listens before the first generation is committed, so a
     // Console restart or a signal can request stop while host.start() is
@@ -500,10 +503,9 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
       await stopping;
       return;
     }
-    disposeReadiness();
-    disposeConsoleControlPlane();
-    await httpHost.close().catch(() => undefined);
-    systemLogStore.dispose();
+    // A failed start may already have started the database, schedule and Agent hosts:
+    // run the full stop sequence instead of closing HTTP only. The start error wins.
+    await control.stop().catch(() => undefined);
     // Annotate schema validation failures with the source config file name.
     if (configFile && error instanceof ConfigValidationError) {
       throw new ConfigValidationError(error.issues, configFile);

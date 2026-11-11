@@ -70,27 +70,58 @@ export function createConsoleEventHub(options: ConsoleEventHubOptions = {}): Con
   );
   const journal: JournalEntry[] = [];
   let journalBytes = 0;
-  const subscribers = new Set<ServerResponse>();
+  /**
+   * `null` while a subscriber is live. During replay catch-up it holds the frames
+   * (replay suffix, then live events) still waiting for the socket to drain.
+   */
+  const subscribers = new Map<ServerResponse, JournalEntry[] | null>();
   const listeners = new Set<(event: ConsoleEventEnvelope) => void>();
 
   const remove = (response: ServerResponse): void => {
     subscribers.delete(response);
   };
 
-  const write = (response: ServerResponse, entry: JournalEntry): void => {
-    let failed = false;
-    const accepted = response.write(entry.frame, (error) => {
-      if (error) {
-        failed = true;
-        remove(response);
-      }
+  const drop = (response: ServerResponse): void => {
+    remove(response);
+    response.destroy(new Error('Console event subscriber backpressure limit reached'));
+  };
+
+  /** Returns false when the writable asks the producer to wait for `drain`. */
+  const write = (response: ServerResponse, entry: JournalEntry): boolean =>
+    response.write(entry.frame, (error) => {
+      if (error) remove(response);
     });
-    if (failed) throw new Error('Console event subscriber rejected replay');
-    if (!accepted) {
+
+  /** Write queued frames until the socket pushes back again or the queue is empty. */
+  const flush = (response: ServerResponse): void => {
+    const pending = subscribers.get(response);
+    if (!pending) return;
+    try {
+      while (pending.length > 0) {
+        if (!write(response, pending.shift()!)) {
+          response.once('drain', () => flush(response));
+          return;
+        }
+      }
+      subscribers.set(response, null);
+    } catch {
       remove(response);
-      response.destroy(new Error('Console event subscriber backpressure limit reached'));
-      throw new Error('Console event subscriber backpressure limit reached');
     }
+  };
+
+  const deliver = (response: ServerResponse, entry: JournalEntry): void => {
+    const pending = subscribers.get(response);
+    if (pending === undefined) return;
+    if (pending === null) {
+      // A live subscriber that cannot keep up is disconnected; it resumes from history.
+      if (!write(response, entry)) drop(response);
+      return;
+    }
+    pending.push(entry);
+    // Catch-up may not outgrow what the journal itself is allowed to retain.
+    let bytes = 0;
+    for (const queued of pending) bytes += queued.bytes;
+    if (pending.length > historyLimit || bytes > historyByteLimit) drop(response);
   };
 
   return {
@@ -120,9 +151,9 @@ export function createConsoleEventHub(options: ConsoleEventHubOptions = {}): Con
       while (journal.length > historyLimit || journalBytes > historyByteLimit) {
         journalBytes -= journal.shift()?.bytes ?? 0;
       }
-      for (const response of [...subscribers]) {
+      for (const response of [...subscribers.keys()]) {
         try {
-          write(response, entry);
+          deliver(response, entry);
         } catch {
           remove(response);
         }
@@ -180,14 +211,10 @@ export function createConsoleEventHub(options: ConsoleEventHubOptions = {}): Con
         || requestedAfter > nextId
         ? 0
         : requestedAfter;
-      try {
-        for (const entry of journal) {
-          if (entry.event.eventId > after) write(response, entry);
-        }
-        subscribers.add(response);
-      } catch {
-        remove(response);
-      }
+      // Backpressure during replay is expected for a large suffix: the remaining frames
+      // (and any event published meanwhile) wait in order for the socket to drain.
+      subscribers.set(response, journal.filter((entry) => entry.event.eventId > after));
+      flush(response);
       response.once('close', () => remove(response));
       response.once('error', () => remove(response));
       return () => remove(response);

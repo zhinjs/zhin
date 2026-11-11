@@ -1,68 +1,39 @@
 import type { LinkMeta } from './types.js'
 import { resolveLocale, type Locale } from 'zhin.js/i18n'
 import { messages as t } from './i18n.js'
+import { fetchPublic, readCappedBody } from './public-fetch.js'
 
 // ── 工具函数 ──────────────────────────────────────────────────────────────────
 
 const FETCH_TIMEOUT = 10_000
 
-const MAX_REDIRECTS = 5
 /** Upper bound for a cover/avatar image; larger bodies are dropped instead of buffered. */
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 
-/** Read a body with a byte cap, aborting the stream as soon as the cap is exceeded. */
-async function readCappedBody(res: Response, maxBytes: number): Promise<Buffer | undefined> {
-  const declared = Number(res.headers.get('content-length'))
-  if (Number.isFinite(declared) && declared > maxBytes) {
-    await res.body?.cancel()
-    return undefined
-  }
-  if (!res.body) return Buffer.alloc(0)
-  const chunks: Uint8Array[] = []
-  let total = 0
-  const reader = res.body.getReader()
-  for (;;) {
-    const { done, value } = await reader.read()
-    if (done) break
-    total += value.byteLength
-    if (total > maxBytes) {
-      await reader.cancel()
-      return undefined
-    }
-    chunks.push(value)
-  }
-  return Buffer.concat(chunks)
-}
-
 /**
- * Fetch with redirects followed by hand so every hop is checked with `isAllowed`
- * before it is requested. Automatic redirect following would let an allowed short link
- * bounce the request to an arbitrary (possibly internal) host. One timeout bounds all
- * hops and the body.
+ * Fetch with redirects followed by hand. Every hop must pass `isAllowed` (the platform host
+ * allow-list, or the structural image rule) AND resolve to public addresses only, so neither an
+ * allowed short link nor a public CDN name pointing at a private address can reach an internal
+ * host. One timeout bounds all hops and the body.
  */
 async function fetchWithTimeout(
   url: string,
-  init?: RequestInit,
+  init?: Omit<RequestInit, 'redirect' | 'signal'>,
   isAllowed: (url: string) => boolean = isSupportedLinkHost,
 ): Promise<Response> {
-  const signal = AbortSignal.timeout(FETCH_TIMEOUT)
-  let current = url
-  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-    if (!isAllowed(current)) throw new Error('link-poster: refusing to fetch a host outside the allow-list')
-    const res = await fetch(current, { ...init, redirect: 'manual', signal })
-    const location = res.status >= 300 && res.status < 400 ? res.headers.get('location') : null
-    if (!location) return res
-    await res.body?.cancel()
-    current = new URL(location, current).toString()
-  }
-  throw new Error('link-poster: too many redirects')
+  const { response } = await fetchPublic(url, {
+    timeoutMs: FETCH_TIMEOUT,
+    init,
+    allow: (hop) => isAllowed(hop.href),
+  })
+  return response
 }
 
 /**
  * Cover/avatar URLs come from third-party page metadata and live on CDN hosts that cannot be
  * enumerated, so they are checked structurally: https only, a real DNS name (no IP literal,
- * no single-label or internal-suffix host). This does not defend against a public name that
- * resolves to a private address; that needs a resolver-level address policy.
+ * no single-label or internal-suffix host). The resolved addresses are checked separately by
+ * `fetchPublic` on every hop.
  */
 export function isPublicImageUrl(url: string): boolean {
   let parsed: URL

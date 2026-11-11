@@ -4,7 +4,7 @@ Zhin.js 飞书 / Lark 适配器（Plugin Runtime），通过 Runtime Host HTTP W
 
 ## 功能
 
-- Webhook 事件接收（`httpHostToken` POST + 可选 verificationToken / encryptKey 签名）
+- Webhook 事件接收（`httpHostToken` POST + 可选 verificationToken / encryptKey 签名）；配置 `encryptKey` 后自动解密 `{"encrypt": ...}` 事件体（AES-256-CBC）
 - URL 验证挑战（`url_verification`）
 - Tenant Access Token 自动刷新
 - 支持飞书与 Lark 国际版 API 基址

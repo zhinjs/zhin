@@ -15,6 +15,49 @@ export const EMPTY_DEFERRED_TOOL_SNAPSHOT: DeferredToolSessionSnapshot = {
   loadedSkills: [],
 };
 
+/** Upper bound of in-memory session snapshots kept by a context repository. */
+export const DEFERRED_TOOL_SNAPSHOT_CACHE_LIMIT = 1000;
+
+/**
+ * Bounded, least-recently-used store of per-session snapshots. Snapshots are a process-local
+ * cache (a lost entry only means deferred tools are loaded again), so eviction is safe.
+ */
+export class DeferredToolSnapshotCache {
+  readonly #entries = new Map<string, DeferredToolSessionSnapshot>();
+  readonly #limit: number;
+
+  constructor(limit: number = DEFERRED_TOOL_SNAPSHOT_CACHE_LIMIT) {
+    this.#limit = Math.max(1, limit);
+  }
+
+  get size(): number {
+    return this.#entries.size;
+  }
+
+  get(sessionId: string): DeferredToolSessionSnapshot | undefined {
+    const snapshot = this.#entries.get(sessionId);
+    if (snapshot === undefined) return undefined;
+    // Re-insert so the entry becomes the most recently used.
+    this.#entries.delete(sessionId);
+    this.#entries.set(sessionId, snapshot);
+    return snapshot;
+  }
+
+  set(sessionId: string, snapshot: DeferredToolSessionSnapshot): void {
+    this.#entries.delete(sessionId);
+    this.#entries.set(sessionId, snapshot);
+    while (this.#entries.size > this.#limit) {
+      const oldest = this.#entries.keys().next().value;
+      if (oldest === undefined) break;
+      this.#entries.delete(oldest);
+    }
+  }
+
+  delete(sessionId: string): void {
+    this.#entries.delete(sessionId);
+  }
+}
+
 export function getLoadedToolNamesFromSnapshot(snapshot: DeferredToolSessionSnapshot): string[] {
   return Object.entries(snapshot.loadedTools)
     .sort((a, b) => b[1] - a[1])

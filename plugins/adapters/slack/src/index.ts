@@ -6,7 +6,6 @@ export {
   headerValue,
   keyboardToBlockKitBlocks,
   normalizeWebhookPath,
-  readTextBody,
   resolveSlackChannelType,
   resolveSlackConfig,
   slackInboundConversation,

@@ -238,7 +238,7 @@ tools:
 | `agents/` | 一级目录名；只识别含 `agent.json` 的目录 | `agents/planner/agent.json` → `planner` |
 | `mcps/` | 一级命名目录 | `mcps/my-server/index.ts` → `my-server` |
 | `schedules/` | 一级命名目录 | `schedules/daily-report/index.ts` → `daily-report` |
-| `pages/` | 一级命名目录；`nav` / `footer` 是布局槽 | `pages/workroom/index.tsx` → `workroom`；`pages/nav/index.tsx` → `nav` |
+| `pages/` | 一级命名目录；`nav` / `footer` 是布局槽 | `pages/reports/index.tsx` → `reports`；`pages/nav/index.tsx` → `nav` |
 
 命令参数目录的方括号写错会抛 `CommandPathSyntaxError`；参数有默认值时目录名必须用双方括号，且 `params` 中必须声明对应参数，否则同样报错。一条命令出现多个参数目录、或参数目录后面还有静态目录（如 `commands/[name]/info/`）时也会报错，错误信息会列出文件路径和改正后的写法；目录参数没有放在 `params` 第一项时，错误信息会给出调整后的顺序。
 :::
@@ -305,7 +305,7 @@ flowchart LR
 | AI 工具 | `plugins/utils/music/tools/`、`plugins/utils/group-suite/tools/` |
 | Skill | `examples/full-bot/skills/memory-consolidate/SKILL.md` |
 | 子 Agent | `examples/multi-agent-room/agents/` |
-| Console 页面 | `examples/full-bot/pages/workroom/index.ts` |
+| Console 页面 | `examples/full-bot/pages/agent-trace/index.ts` |
 
 ## 下一步
 

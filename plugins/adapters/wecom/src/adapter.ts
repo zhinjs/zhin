@@ -12,7 +12,7 @@ export class WecomAdapter extends Adapter<WecomEndpoint, WecomEndpointConfig, We
   override get configurationIdentityProbeFields(): readonly string[] { return ['agentSecret', 'apiBaseUrl']; }
   protected override async identifyConfiguration(input: WecomEndpointConfig, signal: AbortSignal, _changed: readonly string[]): Promise<string | undefined> {
     const config = resolveWecomConfig(input);
-    const fetch = async (url: string, init?: Parameters<typeof globalThis.fetch>[1]) => { signal.throwIfAborted(); return globalThis.fetch(url, { ...init, signal }); };
+    const fetch = async (url: string, init?: Parameters<typeof globalThis.fetch>[1]) => { signal.throwIfAborted(); return globalThis.fetch(url, { ...init, signal: init?.signal ? AbortSignal.any([signal, init.signal]) : signal }); };
     const client = new WecomClient({ id: this.descriptor.id, config, fetch });
     const response = await client.getApplicationInfo();
     if (typeof response.agentid !== 'string' && typeof response.agentid !== 'number') throw new Error('WeCom identity verification returned no agentid');

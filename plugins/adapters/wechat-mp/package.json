@@ -19,10 +19,10 @@
     "@zhin.js/core": "workspace:*",
     "@zhin.js/feature-kit": "workspace:*",
     "@zhin.js/host-http": "workspace:*",
+    "@zhin.js/host-http-contract": "workspace:*",
     "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/logger": "workspace:*",
     "@zhin.js/page": "workspace:*",
-    "@zhin.js/skill": "workspace:*",
     "axios": "^1.20.0",
     "xml2js": "^0.6.2"
   },
@@ -115,10 +115,6 @@
       },
       {
         "package": "@zhin.js/command",
-        "api": "^1.0.0"
-      },
-      {
-        "package": "@zhin.js/skill",
         "api": "^1.0.0"
       },
       {

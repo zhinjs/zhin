@@ -6,6 +6,8 @@ const zhinVersion = JSON.parse(
   readFileSync(new URL('../../packages/im/zhin/package.json', import.meta.url), 'utf8'),
 ).version as string
 
+const ZHIN_CHANGELOG_URL = 'https://github.com/zhinjs/zhin/blob/main/packages/im/zhin/CHANGELOG.md'
+
 /** 可折叠侧栏分组（默认折叠；含当前页的分组由 VitePress 自动展开） */
 function sidebarGroup(
   text: string,
@@ -92,6 +94,7 @@ const zhUseDocsSidebar: DefaultTheme.SidebarItem[] = [
   sidebarGroup('AI 能力（可选）', [
     { text: 'AI 总览与启用', link: '/ai/' },
     { text: 'Agent 深入', link: '/ai/agent' },
+    { text: '多 Agent 协作与场所', link: '/ai/multi-agent-harness' },
     { text: '默认行为规范', link: '/ai/default-behavior' },
     { text: '让 Bot 改自己', link: '/ai/self-change' },
     { text: '模型服务与订阅账号', link: '/ai/providers' },
@@ -99,7 +102,6 @@ const zhUseDocsSidebar: DefaultTheme.SidebarItem[] = [
     { text: 'Provider 接口升级', link: '/ai/provider-upgrade' },
     { text: '结构化消息回复', link: '/ai/structured-replies' },
     { text: '结构化决策', link: '/ai/structured-decisions' },
-    { text: '后台任务', link: '/ai/detached-tasks' },
     { text: '执行状态反馈', link: '/advanced/activity-feedback' },
     { text: '语音', link: '/ai/speech' },
     { text: '智能家居（HA）', link: '/advanced/assistant-home-setup' },
@@ -145,8 +147,6 @@ const zhUseDocsSidebar: DefaultTheme.SidebarItem[] = [
       { text: '只在选定的群欢迎', link: '/solutions/group-welcome' },
       { text: '多 Endpoint 运营', link: '/solutions/multi-endpoint-operations' },
       { text: '受治理的业务 Agent', link: '/solutions/governed-agent' },
-      { text: 'GitHub 仓库 Workroom', link: '/solutions/github-workroom' },
-      { text: '受治理的研发交付', link: '/solutions/governed-software-delivery' },
     ]),
     sidebarGroup('真实案例', [
       { text: '案例总览', link: '/showcase/' },
@@ -261,6 +261,7 @@ const enUseDocsSidebar: DefaultTheme.SidebarItem[] = [
   sidebarGroup('AI (Optional)', [
     { text: 'Overview & Enabling AI', link: '/en/ai/' },
     { text: 'Agent Deep Dive', link: '/en/ai/agent' },
+    { text: 'Multi-Agent Collaboration & Venues', link: '/en/ai/multi-agent-harness' },
     { text: 'Default Behavior', link: '/en/ai/default-behavior' },
     { text: 'Letting the Bot Change Itself', link: '/en/ai/self-change' },
     { text: 'Personal Sessions & Model Policy', link: '/en/ai/model-policy' },
@@ -309,7 +310,6 @@ const enUseDocsSidebar: DefaultTheme.SidebarItem[] = [
       { text: 'Welcome Only Selected Groups', link: '/en/solutions/group-welcome' },
       { text: 'Multi-Endpoint Operations', link: '/en/solutions/multi-endpoint-operations' },
       { text: 'Governed Business Agent', link: '/en/solutions/governed-agent' },
-      { text: 'GitHub Repository Workroom', link: '/en/solutions/github-workroom' },
     ]),
     sidebarGroup('Showcase', [
       { text: 'Showcase Overview', link: '/en/showcase/' },
@@ -349,7 +349,6 @@ const zhWikiSidebar: DefaultTheme.SidebarItem[] = [
   { text: '消息从哪里来、往哪里去？', link: '/wiki/notes/message-path' },
   { text: '工具为什么不可用？', link: '/wiki/notes/tool-access' },
   { text: '启动后怎样确认可用？', link: '/wiki/notes/production-ready' },
-  { text: '资料存档与勘误', link: '/wiki/archive' },
 ]
 
 const enWikiSidebar: DefaultTheme.SidebarItem[] = [
@@ -359,7 +358,6 @@ const enWikiSidebar: DefaultTheme.SidebarItem[] = [
   { text: 'Where do messages flow?', link: '/en/wiki/notes/message-path' },
   { text: 'Why is a Tool unavailable?', link: '/en/wiki/notes/tool-access' },
   { text: 'Is the running Bot ready?', link: '/en/wiki/notes/production-ready' },
-  { text: 'Source archive and corrections', link: '/en/wiki/archive' },
 ]
 
 function mapSidebar(
@@ -376,7 +374,8 @@ export default withMermaid(defineConfig({
   ignoreDeadLinks: false,
   lastUpdated: true,
 
-  srcExclude: ['**/snippets/**', 'README.md'],
+  // plans/ are internal working notes: kept in the repo, linked by GitHub URL, not published.
+  srcExclude: ['**/snippets/**', 'README.md', 'CHANGELOG.md', 'plans/**'],
 
   locales: {
     root: {
@@ -386,7 +385,7 @@ export default withMermaid(defineConfig({
       themeConfig: {
         nav: [
           { text: '首页', link: '/' },
-          { text: `v${zhinVersion}`, link: '/CHANGELOG' },
+          { text: `v${zhinVersion}`, link: ZHIN_CHANGELOG_URL },
           {
             text: '使用文档',
             activeMatch: '^/(getting-started|solutions|concepts|examples|paths|showcase)/',
@@ -502,7 +501,7 @@ export default withMermaid(defineConfig({
       themeConfig: {
         nav: [
           { text: 'Home', link: '/en/' },
-          { text: `v${zhinVersion}`, link: '/CHANGELOG' },
+          { text: `v${zhinVersion}`, link: ZHIN_CHANGELOG_URL },
           {
             text: 'Guide',
             activeMatch: '^/en/(getting-started|solutions|concepts|examples|paths|showcase)/',

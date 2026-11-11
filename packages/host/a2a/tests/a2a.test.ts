@@ -221,3 +221,115 @@ describe('A2AMailboxTransport & signed envelope verification (ADR 0048 §3.6)', 
     expect(execute).toHaveBeenCalledOnce();
   });
 });
+
+describe('A2AMailboxTransport credential fallbacks', () => {
+  function capture() {
+    const calls: Array<{ headers: Record<string, string>; envelope: Record<string, unknown> }> = [];
+    const fetchImpl = (async (_url: unknown, init?: RequestInit) => {
+      calls.push({
+        headers: init?.headers as Record<string, string>,
+        envelope: JSON.parse(String(init?.body)),
+      });
+      return new Response(JSON.stringify({ status: 'completed', content: 'ok' }), { status: 200 });
+    }) as typeof fetch;
+    return { calls, fetchImpl };
+  }
+
+  it('signs and authenticates with the token of a peer that only declares a token', async () => {
+    const { calls, fetchImpl } = capture();
+    const sender = new A2AMailboxTransport({
+      fetchImpl,
+      peers: [{ actor: 'coder', url: 'http://peer.test/a2a/mailbox', token: 'peer-token' }],
+    });
+
+    const result = await sender.send(sampleMail(), sampleBudget);
+
+    expect(result.status).toBe('completed');
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.headers.authorization).toBe('Bearer peer-token');
+    const { signature, ...unsigned } = calls[0]!.envelope;
+    expect(signature).toBe(signMailboxEnvelope(unsigned as never, 'peer-token'));
+  });
+
+  it('falls back to the secret as Bearer for a peer that only declares a secret', async () => {
+    const { calls, fetchImpl } = capture();
+    const sender = new A2AMailboxTransport({
+      fetchImpl,
+      peers: [{ actor: 'coder', url: 'http://peer.test/a2a/mailbox', secret: 'peer-secret' }],
+    });
+
+    await sender.send(sampleMail(), sampleBudget);
+
+    expect(calls[0]!.headers.authorization).toBe('Bearer peer-secret');
+    const { signature, ...unsigned } = calls[0]!.envelope;
+    expect(signature).toBe(signMailboxEnvelope(unsigned as never, 'peer-secret'));
+  });
+
+  it('prefers the peer token over the transport token and treats empty strings as unset', async () => {
+    const { calls, fetchImpl } = capture();
+    const sender = new A2AMailboxTransport({
+      fetchImpl,
+      secret: '',
+      token: 'cluster-token',
+      peers: [
+        { actor: 'coder', url: 'http://peer.test/a', token: 'peer-token', secret: '' },
+        { actor: 'writer', url: 'http://peer.test/b' },
+      ],
+    });
+
+    await sender.send(sampleMail(), sampleBudget);
+    await sender.send(sampleMail({ to: 'writer' }), sampleBudget);
+
+    expect(calls[0]!.headers.authorization).toBe('Bearer peer-token');
+    expect(calls[1]!.headers.authorization).toBe('Bearer cluster-token');
+    const { signature, ...unsigned } = calls[0]!.envelope;
+    // secret '' falls through to the transport secret, which itself fell back to the token.
+    expect(signature).toBe(signMailboxEnvelope(unsigned as never, 'cluster-token'));
+  });
+});
+
+describe('installRuntimeA2aMailbox hardening', () => {
+  it('requires a secret in production unless the mailbox is explicitly disabled', () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const message = 'A2A Mailbox requires a2a.mailbox.secret';
+
+    // `enabled` omitted mounts the route, so it must be checked too.
+    expect(() => installRuntimeA2aMailbox({ http, config: { path: '/mb' }, production: true }))
+      .toThrow(message);
+    expect(() => installRuntimeA2aMailbox({ http, config: { enabled: true, secret: '' }, production: true }))
+      .toThrow(message);
+    expect(() => installRuntimeA2aMailbox({ http, config: { enabled: false }, production: true }))
+      .not.toThrow();
+    const installed = installRuntimeA2aMailbox({
+      http, config: { path: '/mb' }, fallbackToken: 'http-token', production: true,
+    });
+    installed.dispose();
+  });
+
+  it('answers 413 for an oversized envelope and 400 for an empty or malformed one', async () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    installRuntimeA2aMailbox({
+      http,
+      config: { secret: 'mesh-secret', maxBodyBytes: 1_024 },
+      onReceive: async () => ({ status: 'completed', content: 'ok' }),
+    });
+    const { port } = await http.listen();
+    const url = `http://127.0.0.1:${port}/a2a/mailbox`;
+    const headers = { authorization: 'Bearer mesh-secret', 'content-type': 'application/json' };
+
+    const tooLarge = await fetch(url, {
+      method: 'POST', headers, body: JSON.stringify({ padding: 'x'.repeat(200_000) }),
+    });
+    expect(tooLarge.status).toBe(413);
+    expect(await tooLarge.json()).toEqual({ error: 'Request body exceeds 1024 bytes' });
+
+    const malformed = await fetch(url, { method: 'POST', headers, body: '{nope' });
+    expect(malformed.status).toBe(400);
+    expect(await malformed.json()).toEqual({ error: 'Invalid JSON body' });
+
+    const empty = await fetch(url, { method: 'POST', headers });
+    expect(empty.status).toBe(400);
+  });
+});

@@ -1,6 +1,6 @@
 ---
 title: "Console 管理路径：在浏览器里管理运行中的 Bot"
-description: "连接 Console，按任务找到对应页面，查看消息和 AI 执行过程，管理 Workroom，并用一条固定顺序排查问题"
+description: "连接 Console，按任务找到对应页面，查看消息和 AI 执行过程，查看多 Agent 协作，并用一条固定顺序排查问题"
 ---
 
 # Console 管理路径：在浏览器里管理运行中的 Bot
@@ -34,7 +34,7 @@ Console 是独立的网页应用（[console.zhin.dev](https://console.zhin.dev)�
 | 回看机器人和大家聊过什么 | 聊天记录 | 按会话查看 AI 对话，并可从某段继续 |
 | 不用平台账号先试一试 | 试聊一下 | 内置模拟聊天（Sandbox），发消息看回复 |
 | 查看 AI 处理一条消息的过程 | 机器人状态 | 每次执行的步骤、工具结果、取消与重试入口 |
-| 管理多 Agent 协作项目 | Workroom（高级） | 项目内的任务、分派、审核与放行关卡 |
+| 查看多 Agent 协作 | 协作图谱（高级） | 每次协作的参与者、消息跳数、共享黑板与预算 |
 | 确认某个命令或工具真的加载了 | 运行时能力（高级） | 命令、中间件、组件、Tool、Prompt Section 与 MCP |
 | 排查失败 | 运行记录 | 级别、来源、时间线和详情 |
 | 修改系统 | 高级 → 配置、环境变量、项目文件、数据库 | 仅 full scope 开放的管理面 |
@@ -59,15 +59,15 @@ Console 是独立的网页应用（[console.zhin.dev](https://console.zhin.dev)�
 每次执行以 `runtimeId + turnId` 唯一标识，不要靠时间或消息文本去猜。执行开始时用到的工具、Prompt Section 和 MCP 会被固定下来，中途保存代码不会影响这一次执行。
 :::
 
-## 5. 管理 Workroom
+## 5. 查看多 Agent 协作
 
-Workroom 是多个 Agent 协作完成任务的空间，绑定一个群、频道或 GitHub 仓库；同一个 Bot 账号可以服务多个 Workroom。概念介绍见 [Agent 深入](../ai/agent.md#workroom-kernel)。
+多个 Agent 可以在一次协作（Engagement）里互相提问、委派和共享黑板；多个 Bot 共用的群或频道在 `zhin.config.yml` 的 `ai.venues` 中声明。概念与配置见[多 Agent 协作与场所](../ai/multi-agent-harness.md)。
 
-- **“Workroom 配置”**：新建或修改 Workroom，保存后立即生效，不用重启。成员里的 Agent 必须是 `ai.agents` 中已经配置的。
-- **看板**：查看任务、分派、审核人和放行关卡的当前状态。
+- **协作图谱**：列出最近的 Engagement，查看参与者、消息跳数（`ask` / `delegate` / `tell` / `result`）、共享黑板与预算消耗。
+- **场所**：查看当前生效的 Venue、成员 Agent 与各自绑定的 Bot Endpoint。
 
-::: details 配置存在哪？看板上能直接改任务状态吗？
-Console 里的 Workroom 配置保存在持久化的 Runtime Catalog 中，**不会**写回 `zhin.config.yml` 的 `ai.workrooms`。看板内容是 Workroom Journal（事件日志）的只读视图；Console 不能直接改写任务状态，所有修改都要通过经过认证的控制接口提交。
+::: details 配置存在哪？能在页面上直接改协作状态吗？
+Venue 写在 `zhin.config.yml` 的 `ai.venues`，Agent 之间能联系谁写在 `agents/<name>/agent.json` 的 `collaboration`；Console 不保存另一份。协作图谱是 `engagement_events` Journal 的只读视图，Console 不能改写协作状态。命令行里用 `zhin trace --engagements` 可以看到同样的数据。
 :::
 
 ## 6. Full token 与 Demo token
@@ -162,5 +162,5 @@ Host 接口为 `GET /api/tasks/use-cases`、`GET /api/tasks/providers`、`POST /
 ## 下一步
 
 - [Console 概览](../console/)：Console 与 Host 如何分工、页面扩展
-- [Agent 深入 · Workroom Kernel](../ai/agent.md#workroom-kernel)：Workroom 的规则与配置
+- [多 Agent 协作与场所](../ai/multi-agent-harness.md)：协作工具、`ai.venues` 与 `zhin trace`
 - [多平台社区 Bot](../showcase/community-bot.md)：一个多平台生产案例

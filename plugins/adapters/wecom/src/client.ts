@@ -226,8 +226,10 @@ export class WecomClient extends EventEmitter {
     await createEndpointOperation({ signal }).prepare(() => this.#ensureAccessToken());
     const binary = await createEndpointOperation({ signal }).prepare(() => resolveMediaBinary(media, { signal }));
     const form = buildMediaUploadForm(binary);
-    const url = `${this.#options.config.apiBaseUrl}/cgi-bin/media/upload?access_token=${this.#accessToken.access_token}&type=image`;
-    const response = await this.#fetch(url, { method: 'POST', body: form, signal });
+    const query = new URLSearchParams({ access_token: this.#accessToken.access_token, type: 'image' });
+    const url = `${this.#options.config.apiBaseUrl}/cgi-bin/media/upload?${query.toString()}`;
+    const response = await this.#fetch(url, { method: 'POST', body: form, signal: requestSignal(signal) });
+    if (!response.ok) throw new Error(`WeCom media upload failed: HTTP ${response.status}`);
     const data = await response.json() as WecomMediaUploadResult;
     if (data.errcode === 0 && data.media_id) return data.media_id;
     throw new Error(`WeCom media upload failed: ${data.errmsg ?? 'unknown'} (${data.errcode ?? '?'})`);
@@ -368,7 +370,7 @@ export class WecomClient extends EventEmitter {
       method,
       headers: { 'Content-Type': 'application/json; charset=utf-8' },
       body: body && method === 'POST' ? JSON.stringify(body) : undefined,
-      signal: options.signal,
+      signal: requestSignal(options.signal),
     });
     if (!response.ok) {
       const text = await response.text().catch(() => '');
@@ -397,8 +399,11 @@ export class WecomClient extends EventEmitter {
 
   async #refreshAccessToken(): Promise<void> {
     const { corpId, agentSecret, apiBaseUrl } = this.#options.config;
-    const url = `${apiBaseUrl}/cgi-bin/gettoken?corpid=${corpId}&corpsecret=${agentSecret}`;
-    const response = await this.#fetch(url);
+    const query = new URLSearchParams({ corpid: corpId, corpsecret: agentSecret });
+    const url = `${apiBaseUrl}/cgi-bin/gettoken?${query.toString()}`;
+    // The refresh promise is shared by every sender, so it must never hang.
+    const response = await this.#fetch(url, { signal: requestSignal() });
+    if (!response.ok) throw new Error(`Failed to get access token: HTTP ${response.status}`);
     const data = await response.json() as WecomApiResponse;
     if (data.errcode === 0 && data.access_token) {
       this.#accessToken = {
@@ -411,6 +416,13 @@ export class WecomClient extends EventEmitter {
     }
     throw new Error(`Failed to get access token: ${data.errmsg} (${data.errcode})`);
   }
+}
+
+const REQUEST_TIMEOUT_MS = 30_000;
+
+function requestSignal(signal?: AbortSignal): AbortSignal {
+  const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+  return signal ? AbortSignal.any([signal, timeout]) : timeout;
 }
 
 export type WecomClientEventMap = Record<string, WecomMessage>;

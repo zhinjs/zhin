@@ -55,7 +55,6 @@
     "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/logger": "workspace:*",
     "@zhin.js/page": "workspace:*",
-    "@zhin.js/skill": "workspace:*",
     "imhelper": "1.0.7",
     "ws": "^8.21.1"
   },
@@ -112,10 +111,6 @@
       },
       {
         "package": "@zhin.js/command",
-        "api": "^1.0.0"
-      },
-      {
-        "package": "@zhin.js/skill",
         "api": "^1.0.0"
       },
       {

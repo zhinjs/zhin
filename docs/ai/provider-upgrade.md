@@ -31,7 +31,6 @@ description: 新旧插件版本边界、显式模型迁移与恢复流程。
 | `@zhin.js/database` | `1.1.5` | `1.1.6` |
 | `@zhin.js/host-http` | `1.1.13` | `1.1.14` |
 | `@zhin.js/a2a` | `1.1.22` | `1.1.23` |
-| `@zhin.js/workroom` | `0.0.15` | `0.0.16` |
 
 新插件声明所用配套版本的最低依赖，不混用旧 FeatureKit／Command／Tool 的执行上下文。使用旧 Provider、Catalog、运行时 override 或位置参数接口的插件，应把依赖上限锁在表中旧版本，完成迁移后再提升。实际发布以最终 changeset 和发布说明为准；本次修改不执行 bump、发布或部署。
 
@@ -53,13 +52,11 @@ zhin migrate inference --apply migration.json --maintenance --backup-confirmed
 zhin migrate inference --finalize migration.json --maintenance --backup-confirmed
 ```
 
-预览可省略 `--mapping` 先查看待补项；非 SQLite 的旧元数据通过 `--state-snapshot` 显式提供，需要独立数据库连接文件时使用 `--database-config`，这些只用于生成预览。Apply／finalize 使用同一已审查文件，不接受另换源或映射。私有备份和 `migration.json` 应由本机管理员保管，不公开提交。数据库提交与启动文件切换分步记录 journal；只有 finalize 完成后才恢复正常启动。详见[离线迁移入口](../plans/inference-migration-cli-contract.md)。
+预览可省略 `--mapping` 先查看待补项；非 SQLite 的旧元数据通过 `--state-snapshot` 显式提供，需要独立数据库连接文件时使用 `--database-config`，这些只用于生成预览。Apply／finalize 使用同一已审查文件，不接受另换源或映射。私有备份和 `migration.json` 应由本机管理员保管，不公开提交。数据库提交与启动文件切换分步记录 journal；只有 finalize 完成后才恢复正常启动。详见[离线迁移入口](https://github.com/zhinjs/zhin/blob/main/docs/plans/inference-migration-cli-contract.md)。
 
 原有权限、MCP、昵称等角色设置仍属于 Agent 启动配置，不混入 Profile。生成参数属于 Profile；摘要、审批、旁听不再添加各自隐式温度／输出上限。通用 SDK 未显式设上限时仍沿用模型目录声明值／既有 8192 有效默认，Codex 协议无该字段；本次没有全局取消默认预算。兼容协议和 Google 缓存设置属于 Service。旧 API Key／Vault 记录由 Host 在单独授权的私有迁移边界内解密并重新封装，公开预览只含来源定位。源版本、选中范围、完整预览指纹及 receipt 都须在提交时核对。
 
 个人 Session 的旧 preset 选择必须由管理员映射到真实目标 Profile 身份，不按同名别名自动继承；继承默认值的 Session 保留 `inherit`。删除重建账号或改变真实身份后，旧选择不能自动绑定新 incarnation。
-
-Workroom 的旧 `disclosure.modelProviders` 需要明确映射到 `modelServices` 的真实 Service ID。处理合同与实际所选 Service 不匹配时停止披露，不以模型名称或旧 Provider 别名推断合同。
 
 
 ### 修正已迁移的环境默认值密钥
@@ -120,7 +117,7 @@ SQLite 预览只读数据库并提前验证目标；非 SQLite 使用已有 `--s
 
 数据库类型入口已隔离：`@zhin.js/database` 默认入口保留中性数据库／模型／事务 API 与 Memory／SQLite；Core、Agent、Zhin 的默认声明不再牵引未选外部方言。SQLite 用户无需安装 MySQL、PostgreSQL、MongoDB、Redis 驱动或声明。使用外部方言的 TypeScript 作者从 `@zhin.js/database/dialects/mysql`、`@zhin.js/database/dialects/pg`、`@zhin.js/database/dialects/mongodb` 或 `@zhin.js/database/dialects/redis` 引入对应类与完整原厂配置类型。
 
-PostgreSQL 的 TypeScript 消费者还需显式安装与 `pg` 匹配的 `@types/pg`；JavaScript-only 用户只需 `pg`。默认入口仍自动注册六个 factory，`Registry.create()` 保持同步，所选客户端只在连接时加载。导入示例见 [Database TypeScript 入口](https://github.com/zhinjs/zhin/blob/main/basic/database/README.md#typescript-entry-points)，隔离合同与真实归档验证见[数据库可选方言类型隔离](../plans/database-optional-dialect-types.md)。
+PostgreSQL 的 TypeScript 消费者还需显式安装与 `pg` 匹配的 `@types/pg`；JavaScript-only 用户只需 `pg`。默认入口仍自动注册六个 factory，`Registry.create()` 保持同步，所选客户端只在连接时加载。导入示例见 [Database TypeScript 入口](https://github.com/zhinjs/zhin/blob/main/basic/database/README.md#typescript-entry-points)，隔离合同与真实归档验证见[数据库可选方言类型隔离](https://github.com/zhinjs/zhin/blob/main/docs/plans/database-optional-dialect-types.md)。
 
 ## 恢复
 

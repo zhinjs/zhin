@@ -64,6 +64,23 @@ describe('Console contract', () => {
     expect(() => definePage({ route: '/custom' } as never)).toThrow('Unknown Page metadata: route');
   });
 
+  it('accepts the same presentation keys as @zhin.js/page', () => {
+    const result = definePage({
+      title: 'Status', description: 'Live status', group: 'ops', parent: '/ops', fullWidth: true,
+    });
+    expect(result).toMatchObject({
+      title: 'Status', description: 'Live status', group: 'ops', parent: '/ops', fullWidth: true,
+    });
+    expect(Object.isFrozen(result)).toBe(true);
+    expect(definePage({ title: 'Status' })).not.toHaveProperty('group');
+    expect(() => definePage({ group: ' ' })).toThrow('Page group must be a non-empty string');
+    expect(() => definePage({ description: 1 } as never)).toThrow('Page description must be a non-empty string');
+    expect(() => definePage({ parent: '' })).toThrow('Page parent must be a non-empty string');
+    expect(() => definePage({ fullWidth: 'yes' } as never)).toThrow('Page fullWidth must be boolean');
+    // Manifest normalization stays strict: these keys are not route/navigation authority.
+    expect(() => normalizePageMetadata('status', { group: 'ops' })).toThrow('Unknown Page metadata: group');
+  });
+
   it('keeps route layouts in the topology response contract', () => {
     const response = {
       generation: 7,

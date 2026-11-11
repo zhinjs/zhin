@@ -7,7 +7,6 @@ import { Socket } from 'node:net';
 import {
   mcpAuthRequired,
   verifyMcpBearer,
-  extractMcpToolName,
 } from '../src/mesh-auth.js';
 
 function mockReq(opts: {
@@ -50,10 +49,5 @@ describe('MCP auth', () => {
   it('verifyMcpBearer accepts matching Bearer token', () => {
     const req = mockReq({ authorization: 'Bearer my-token' });
     expect(verifyMcpBearer(req, 'my-token')).toBe(true);
-  });
-
-  it('extractMcpToolName parses JSON-RPC body', () => {
-    expect(extractMcpToolName({ params: { name: 'tools/list' } })).toBe('tools/list');
-    expect(extractMcpToolName({})).toBeUndefined();
   });
 });

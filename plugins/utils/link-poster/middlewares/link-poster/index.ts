@@ -16,13 +16,15 @@ export default defineMiddleware<Message>({
       ? context.input.content
       : '';
 
-    if (!text.includes('http')) {
-      await next();
-      return;
-    }
+    if (!text.includes('http')) return next();
+
+    // Capture the language before any await: an in-flight operation keeps the language it started with.
+    const locale = resolveLocale(context.input.locale);
+    // Let commands and the Agent handle the message first; fetching and rendering a poster can
+    // take seconds and must not hold them back. The poster is an extra reply sent afterwards.
+    const downstream = await next();
 
     try {
-      const locale = resolveLocale(context.input.locale);
       const meta = await detectAndParse(text, locale);
       if (meta) {
         const html = renderPoster(meta, locale);
@@ -34,10 +36,10 @@ export default defineMiddleware<Message>({
         }
       }
     } catch (e) {
-      // keep pipeline moving on poster failures, but do not swallow silently
+      // A poster failure never affects the rest of the pipeline, but it is not swallowed silently.
       console.warn(`[link-poster] render failed: ${e instanceof Error ? e.message : String(e)}`);
     }
 
-    await next();
+    return downstream;
   },
 });

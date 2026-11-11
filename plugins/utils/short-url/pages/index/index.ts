@@ -12,19 +12,14 @@ export const meta = definePage({
 export default definePageBlueprint<ShortUrlConsoleStatus>({
   title: { zh: '短链服务', en: 'Short URL' },
   description: {
-    zh: '在线创建、管理短链接并查看近期访问与生成记录',
-    en: 'Create and manage short links and inspect recent link records',
+    zh: '通过 is.gd 创建短链接，并查看本次运行期间创建的记录',
+    en: 'Create short links through is.gd and review the ones created since this process started',
   },
   stats: [
     {
       key: 'totalCount',
       label: { zh: '短链数量', en: 'Total Links' },
       value: 'totalCount',
-    },
-    {
-      key: 'totalClicks',
-      label: { zh: '累计点击', en: 'Total Clicks' },
-      value: 'totalClicks',
     },
   ],
   actions: [
@@ -39,16 +34,11 @@ export default definePageBlueprint<ShortUrlConsoleStatus>({
           type: 'text',
           required: true,
         },
-        {
-          key: 'code',
-          label: { zh: '自定义短码 (可选)', en: 'Custom Code (Optional)' },
-          type: 'text',
-        },
       ],
     },
     {
       name: 'remove',
-      label: { zh: '删除短链', en: 'Remove Short URL' },
+      label: { zh: '从列表移除', en: 'Remove From List' },
       variant: 'danger',
       fields: [
         {
@@ -70,8 +60,8 @@ export default definePageBlueprint<ShortUrlConsoleStatus>({
       items: 'items',
       columns: [
         { key: 'code', label: { zh: '短码', en: 'Code' } },
+        { key: 'shortUrl', label: { zh: '短链接', en: 'Short URL' } },
         { key: 'url', label: { zh: '原始链接', en: 'URL' } },
-        { key: 'clicks', label: { zh: '点击量', en: 'Clicks' } },
         { key: 'createdAt', label: { zh: '创建时间', en: 'Created At' } },
       ] satisfies readonly {
         readonly key: keyof ShortUrlRecord & string;

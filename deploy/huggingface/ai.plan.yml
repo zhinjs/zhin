@@ -1,0 +1,29 @@
+version: 1
+services:
+  openrouter:
+    driver: openai-compatible
+    options:
+      baseUrl: https://openrouter.ai/api/v1
+    models:
+      openrouter/free:
+        id: openrouter/free
+        kinds:
+          - language
+        protocol: openai-chat
+        input:
+          - text
+        streaming: true
+        toolCalling: true
+accounts:
+  openrouter:
+    service: openrouter
+    auth:
+      method: api-key
+      source: env://OPENROUTER_API_KEY
+profiles:
+  openrouter:free:
+    account: openrouter
+    model: openrouter/free
+purposes:
+  chat:
+    profile: openrouter:free

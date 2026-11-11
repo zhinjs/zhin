@@ -56,3 +56,65 @@ export class MarketplaceRegistry {
     return plugins;
   }
 }
+
+/** npm package name grammar (optionally scoped, lower-case, URL-safe, at most 214 chars). */
+const NPM_PACKAGE_NAME = /^(?:@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/u;
+
+export function isValidNpmPackageName(name: string): boolean {
+  return name.length > 0 && name.length <= 214 && NPM_PACKAGE_NAME.test(name);
+}
+
+export interface MarketplaceDetailCacheOptions<T> {
+  readonly load: (name: string) => Promise<T>;
+  readonly ttlMs: number;
+  readonly maxEntries: number;
+  readonly now?: () => number;
+}
+
+/**
+ * Per-package detail cache: TTL, bounded size (oldest entry evicted first) and
+ * coalescing of concurrent loads. Failures are not cached.
+ */
+export class MarketplaceDetailCache<T> {
+  readonly #load: (name: string) => Promise<T>;
+  readonly #ttlMs: number;
+  readonly #maxEntries: number;
+  readonly #now: () => number;
+  readonly #entries = new Map<string, { readonly value: T; readonly expiresAt: number }>();
+  readonly #inflight = new Map<string, Promise<T>>();
+
+  constructor(options: MarketplaceDetailCacheOptions<T>) {
+    this.#load = options.load;
+    this.#ttlMs = options.ttlMs;
+    this.#maxEntries = Math.max(1, options.maxEntries);
+    this.#now = options.now ?? Date.now;
+  }
+
+  get size(): number {
+    return this.#entries.size;
+  }
+
+  get(name: string): Promise<T> {
+    const cached = this.#entries.get(name);
+    if (cached && this.#now() < cached.expiresAt) return Promise.resolve(cached.value);
+    const pending = this.#inflight.get(name);
+    if (pending) return pending;
+
+    const request = this.#load(name).then((value) => {
+      this.#entries.delete(name);
+      this.#entries.set(name, { value, expiresAt: this.#now() + this.#ttlMs });
+      while (this.#entries.size > this.#maxEntries) {
+        const oldest = this.#entries.keys().next().value;
+        if (oldest === undefined) break;
+        this.#entries.delete(oldest);
+      }
+      return value;
+    });
+    this.#inflight.set(name, request);
+    const clear = () => {
+      if (this.#inflight.get(name) === request) this.#inflight.delete(name);
+    };
+    void request.then(clear, clear);
+    return request;
+  }
+}

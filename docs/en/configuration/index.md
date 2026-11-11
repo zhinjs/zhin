@@ -47,7 +47,8 @@ Run `npx zhin doctor` before committing. After startup, trust what Console shows
 | Installed plugins and Features | dependencies and `package.json#zhin` |
 | Host, plugin-instance, and AI values | `zhin.config.yml` |
 | Secrets and environment differences | `.env` / `.env.<environment>`, referenced with `${VAR}` |
-| Workrooms, members, and chat or repository bindings | persistent Workroom Catalog, managed in Console |
+| Multi-Bot collaboration venues | `ai.venues` in `zhin.config.yml` |
+| Which Agents may contact each other, and collaboration budget ceilings | `collaboration` in `agents/<name>/agent.json` |
 | What the runtime actually published | Endpoint, capability catalog, and generation state in Console |
 
 Use `configVersion: 2`. Install dependencies, map instance aliases to packages in `plugins`, and place business values in same-named top-level blocks. `disable_plugins` lists inactive instances; Feature requirements remain in `package.json#zhin.features`. See the [migration guide](../../migrations/plugin-instance-declarations.md).
@@ -292,7 +293,7 @@ assistant:
 
 The remaining sub-key is `queue` (Schedule execution concurrency/retry/timeout). Schedule facts are always persisted to `schedule-jobs.json`; manage them with [`zhin schedule`](../cli/index.md#schedule-persistent-scheduled-tasks).
 
-## mcp / a2a
+## mcp / a2a {#mcp-a2a}
 
 ```yaml
 mcp:
@@ -306,7 +307,24 @@ a2a:
   path: /a2a
 ```
 
-Both sections are mounted on the HTTP Host and enabled as needed; when not configured, the corresponding SDK is not loaded. Remote Workroom execution uses fixed-generation `a2a.workroomCallbacks` and `a2a.workroomRemoteExecutors` transport bindings (an A2A extension: frozen and moved out of the package root to `@zhin.js/workroom/remote`; the transport bindings are only active when configured, but default assembly still creates the internal placeholder Remote Callback Runtime and Remote Assignment Authority, to be handled after C2). Project membership and conversation bindings remain in the persistent Workroom Catalog, not in process configuration. See the complete [`@zhin.js/a2a` example on GitHub](https://github.com/zhinjs/zhin/blob/main/packages/host/a2a/README.md#workroom-execution-callbacks).
+Both sections are mounted on the HTTP Host and enabled as needed; when not configured, the corresponding SDK is not loaded.
+
+Cross-process Agent collaboration travels over `a2a.mailbox` (ADR 0048): each Mail is signed together with its Authority and budget grant, so a remote peer cannot widen authority or exceed the granted budget.
+
+```yaml
+a2a:
+  enabled: true
+  mailbox:
+    enabled: true
+    path: /a2a/mailbox                  # inbound route, defaults to /a2a/mailbox
+    secret: ${A2A_MAILBOX_SECRET}       # signing secret; required in production (falls back to a2a.token / http.token)
+    peers:
+      - actor: remote-reviewer          # the name local Agents list under contacts
+        url: https://agents.example.com/a2a/mailbox
+        secret: ${A2A_MAILBOX_SECRET}   # optional, overrides the global secret
+```
+
+`a2a.workroomCallbacks` and `a2a.workroomRemoteExecutors` were removed with ADR 0048; startup fails if either is present. See [Configuration Fields (Generated)](./generated.md) for the field list.
 
 ## ai
 
@@ -334,7 +352,6 @@ ai:
 | --- | --- |
 | `nickname` | Task role display name; the Endpoint supplies the current account profile |
 | `mcpServers` | MCP Server names visible to this Agent |
-| `permission.task` | Visible `spawn_task` child roles (glob → `allow` / `deny`) |
 
 Model role bindings belong to runtime purpose configuration. IM messages always enter `zhin`. `priority` / `match` are deprecated (they never took effect); `zhin config check --fix` removes them.
 
@@ -404,9 +421,7 @@ ai:
 
 `ai.multimodal` governs multimodal input and output. When the main model cannot see images, the perception purpose in model management selects a Profile to describe them first; see [AI · ai.multimodal.perception](../ai/index.md#ai-multimodal-perception). `knowledge_search` is published only when `ai.knowledge.baseDir` is explicitly configured, and that directory must stay inside the project root.
 
-Remote Agents no longer attach through `ai.remoteAgents`. An optional A2A Executor enters through the persistent Workroom Catalog and generation-owned authority, under Assignment lease/fence and Journal contracts.
-
-`ai.workrooms` has been removed. Projects, members, and collaboration spaces are managed by the persistent Workroom Catalog in Console; revision-checked saves take effect without restarting the runtime.
+`ai.remoteAgents` and `ai.workroom` / `ai.workrooms` were removed with ADR 0048; startup fails if any of them is present. Declare remote Agents under `a2a.mailbox.peers`, groups or channels shared by several Bots under `ai.venues`, and each Agent's contacts and per-collaboration budget ceiling under `collaboration` in `agents/<name>/agent.json`. See [Multi-Agent Collaboration and Venues](../ai/multi-agent-harness.md).
 
 ## plugin and plugins
 

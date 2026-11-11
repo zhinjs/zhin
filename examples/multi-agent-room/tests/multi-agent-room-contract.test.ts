@@ -4,6 +4,13 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { rootPluginId } from 'zhin.js';
 import { agentFeatureId, parseAgentPackage } from '@zhin.js/agent-feature';
+import { parse } from 'yaml';
+import { validateModelRuntimeConfig } from '../../../packages/im/agent/src/config/index.js';
+import { resolveAgentHostVenues } from '../../../packages/im/agent/src/plugin-runtime/host/config.js';
+import { readApplicationPluginDeclaration } from '../../../packages/im/runtime/src/application-plugin-declaration.js';
+import { HOST_CONFIG_SCHEMA, validatePluginConfigSchema } from '../../../packages/im/runtime/src/config-composer.js';
+import { parsePackageJson } from '../../../packages/im/runtime/src/manifest.js';
+import { reviewAIPlan } from '../../../tests/helpers/review-ai-plan.js';
 
 const exampleRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const readText = (relPath: string) => fs.readFileSync(path.join(exampleRoot, relPath), 'utf8');
@@ -12,20 +19,42 @@ const BOTS = ['planner', 'builder', 'reviewer'] as const;
 
 describe('examples/multi-agent-room contract (ADR 0048 ai.venues + collaboration)', () => {
   it('declares 3 sandbox endpoints and a visible ai.venues entry in zhin.config.yml', () => {
-    const configText = readText('zhin.config.yml');
+    const config = parse(readText('zhin.config.yml')) as Record<string, any>;
 
-    expect(configText).toContain('adapter-sandbox');
-    expect(configText).toContain('name: planner-bot');
-    expect(configText).toContain('name: builder-bot');
-    expect(configText).toContain('name: reviewer-bot');
-    expect(configText).toContain('id: product-room');
-    expect(configText).toContain('adapter: sandbox');
-    expect(configText).toContain('scene: group:product-room');
-    expect(configText).toContain('mode: visible');
-    expect(configText).toContain('entry: planner');
-    expect(configText).toContain('planner: sandbox:planner-bot');
-    expect(configText).toContain('builder: sandbox:builder-bot');
-    expect(configText).toContain('reviewer: sandbox:reviewer-bot');
+    // Real application protocol: configVersion 2 + alias → package map + top-level instance block.
+    expect(readApplicationPluginDeclaration(config).instances).toEqual([
+      { instanceKey: 'sandbox', package: '@zhin.js/adapter-sandbox', enabled: true },
+    ]);
+    const host = Object.fromEntries(Object.entries(config)
+      .filter(([key]) => Object.hasOwn(HOST_CONFIG_SCHEMA.properties, key)));
+    expect(validatePluginConfigSchema(HOST_CONFIG_SCHEMA, host)).toEqual([]);
+    const sandboxSchema = JSON.parse(fs.readFileSync(
+      path.join(exampleRoot, '../../plugins/adapters/sandbox/schema.json'), 'utf8'));
+    expect(validatePluginConfigSchema(sandboxSchema, config.sandbox)).toEqual([]);
+    expect(validateModelRuntimeConfig(config.ai, 'host:example')).toEqual([]);
+
+    const [venue, ...rest] = resolveAgentHostVenues(config.ai);
+    expect(rest).toEqual([]);
+    expect(venue).toMatchObject({
+      id: 'product-room',
+      conversation: { platform: 'sandbox', sceneType: 'group', sceneId: 'product-room' },
+      visibility: 'visible',
+      entry: 'planner',
+    });
+    expect(venue.members.map(member => member.agent)).toEqual([...BOTS]);
+    // Every member speaks through a Sandbox Endpoint that the instance actually declares.
+    const endpointIds = config.sandbox.endpoints.map((endpoint: { id: string }) => endpoint.id);
+    expect(venue.members.map(member => member.botEndpoint)).toEqual(endpointIds);
+  });
+
+  it('has a complete Plugin Runtime manifest', () => {
+    const parsed = parsePackageJson(JSON.parse(readText('package.json')), 'package.json');
+    expect(parsed.zhin).toMatchObject({
+      protocol: 1, type: 'plugin', entry: './plugin.ts', engine: '^1.0.0', runtime: 'trusted', plugins: [],
+    });
+    expect(parsed.zhin && 'features' in parsed.zhin ? parsed.zhin.features.map(feature => feature.package) : [])
+      .toEqual(['@zhin.js/agent-feature']);
+    expect(parsed.scripts?.dev).toBe('zhin runtime start --watch source config');
   });
 
   it('ships valid agent packages for planner, builder, and reviewer with collaboration rules', () => {
@@ -55,11 +84,12 @@ describe('examples/multi-agent-room contract (ADR 0048 ai.venues + collaboration
     }
   });
 
-  it('maps all 3 agents in ai.plan.yml and does not depend on @zhin.js/workroom', () => {
-    const planText = readText('ai.plan.yml');
-    for (const bot of BOTS) {
-      expect(planText).toContain(`${bot}:`);
-    }
+  it('maps all 3 agents in ai.plan.yml and does not depend on @zhin.js/workroom', async () => {
+    const reviewed = await reviewAIPlan(parse(readText('ai.plan.yml')));
+    const chat = reviewed.graph.purposes.defaults.chat!;
+    expect(reviewed.graph.profiles[chat].model).toBe('deepseek-chat');
+    expect(Object.keys(reviewed.graph.purposes.agents ?? {}).sort()).toEqual([...BOTS].sort());
+    for (const bot of BOTS) expect(reviewed.graph.purposes.agents?.[bot]).toBe(chat);
 
     const manifest = JSON.parse(readText('package.json')) as {
       dependencies?: Record<string, string>;

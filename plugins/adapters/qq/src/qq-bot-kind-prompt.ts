@@ -29,4 +29,3 @@ export function parseQqBotKindAnswer(raw: unknown, locale?: Locale): QqBotKind |
 export function qqBotKindPrompt(locale?: Locale, cancelCommand?: string): string {
   return t(locale, 'kindPrompt') + (cancelCommand ? '\n' + t(locale, 'cancelHint', { command: cancelCommand }) : '');
 }
-export const QQ_BOT_KIND_PROMPT = qqBotKindPrompt();

@@ -6,8 +6,14 @@ import {
   type ConsoleTransportMessage,
   type ConsoleTransportConfig,
   type ConsoleTransportCallbacks,
+  type ConsoleRequestOptions,
 } from './types.js';
-import { getApiBase, getToken, resolveApiUrl } from '../console-utils/remoteApi.js';
+import {
+  captureAuthRequest,
+  getApiBase,
+  handleUnauthorized,
+  resolveApiUrl,
+} from '../console-utils/remoteApi.js';
 import { applyConsoleEvent } from "../persistence/idb-store.js";
 import { fetchConsoleEventHistory } from '../console-events.js';
 import {
@@ -63,6 +69,7 @@ export class ConsoleTransport {
       reconnectInterval: config.reconnectInterval ?? 3000,
       maxReconnectAttempts: config.maxReconnectAttempts ?? 10,
       requestTimeout: config.requestTimeout ?? 10000,
+      packageOperationTimeout: config.packageOperationTimeout ?? 120_000,
     };
     this.callbacks = callbacks;
   }
@@ -111,7 +118,8 @@ export class ConsoleTransport {
     // Host without http.token allows unauthenticated SSE (authenticateHttp
     // returns full when TokenRegistry is empty). Still open the stream so
     // local dev Console receives hmr:reload / message.receive broadcasts.
-    const token = getToken();
+    const auth = captureAuthRequest();
+    const token = auth.token;
     this.setState(ConnectionState.CONNECTING);
     this.sseAbort?.abort();
     this.sseAbort = new AbortController();
@@ -135,9 +143,7 @@ export class ConsoleTransport {
         return;
       }
       if (!res.ok || !res.body) {
-        if (res.status === 401) {
-          this.notifyAuthRequired();
-        }
+        if (res.status === 401) handleUnauthorized(auth);
         throw new ConnectionError(`SSE failed: HTTP ${res.status}`);
       }
       this.setState(ConnectionState.CONNECTED);
@@ -148,12 +154,8 @@ export class ConsoleTransport {
     } catch (error) {
       if (!this.isCurrentConnection(generation)) return;
       if ((error as Error).name === "AbortError") return;
-      if (
-        (error as { status?: number })?.status === 401
-        || (error instanceof Error && /\bHTTP 401\b/.test(error.message))
-      ) {
-        this.notifyAuthRequired();
-      }
+      // The SSE branch above already reacted; this covers event-history recovery.
+      if ((error as { status?: number })?.status === 401) handleUnauthorized(auth);
       // Reconnect timers only run while the transport remains in RECONNECTING.
       const connectionError = error instanceof Error ? error : new Error(String(error));
       this.callbacks.onError?.(connectionError);
@@ -314,12 +316,13 @@ export class ConsoleTransport {
     void this.sendRequest(message);
   }
 
-  async sendRequest<T = unknown>(message: unknown): Promise<T> {
+  async sendRequest<T = unknown>(message: unknown, options: ConsoleRequestOptions = {}): Promise<T> {
     this.assertActive();
     // Host may run without http.token (local smoke). Only require a token when
     // one is configured client-side; otherwise POST without Authorization and
     // let the Host accept (TokenRegistry empty → full scope).
-    const token = getToken();
+    const auth = captureAuthRequest();
+    const token = auth.token;
     const requestId = ++this.requestId;
     const body = { ...(message as Record<string, unknown>), requestId };
     try {
@@ -331,7 +334,7 @@ export class ConsoleTransport {
         method: "POST",
         headers,
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(this.config.requestTimeout),
+        signal: AbortSignal.timeout(options.timeoutMs ?? this.config.requestTimeout),
       });
       const json = (await res.json()) as {
         success?: boolean;
@@ -340,9 +343,7 @@ export class ConsoleTransport {
         requestId?: number;
       };
       if (!res.ok || json.success === false) {
-        if (res.status === 401) {
-          this.notifyAuthRequired();
-        }
+        if (res.status === 401) handleUnauthorized(auth);
         throw new ConsoleTransportError(json.error ?? `HTTP ${res.status}`, "SERVER_ERROR");
       }
       return json.data as T;
@@ -383,12 +384,12 @@ export class ConsoleTransport {
       warnings: string[];
     }>({ type: PLUGIN_RPC.PLAN_INSTALL, packageName });
   }
-  async installPlugin(packageName: string, expectedRevision?: string) {
+  async installPlugin(packageName: string, expectedRevision?: string, options?: ConsoleRequestOptions) {
     return this.sendRequest<{
       success: boolean;
       plan: Awaited<ReturnType<ConsoleTransport['planPluginInstall']>>;
       restartRequired: boolean;
-    }>({ type: PLUGIN_RPC.INSTALL, packageName, expectedRevision });
+    }>({ type: PLUGIN_RPC.INSTALL, packageName, expectedRevision }, this.packageOperation(options));
   }
   async planPluginUninstall(packageName: string) {
     return this.sendRequest<{
@@ -400,7 +401,7 @@ export class ConsoleTransport {
       restartRequired: boolean;
     }>({ type: PLUGIN_RPC.PLAN_UNINSTALL, packageName });
   }
-  async uninstallPlugin(packageName: string, expectedRevision?: string) {
+  async uninstallPlugin(packageName: string, expectedRevision?: string, options?: ConsoleRequestOptions) {
     return this.sendRequest<{
       success: boolean;
       plan: Awaited<ReturnType<ConsoleTransport['planPluginUninstall']>>;
@@ -410,7 +411,7 @@ export class ConsoleTransport {
       packageName,
       confirmation: packageName,
       expectedRevision,
-    });
+    }, this.packageOperation(options));
   }
   async planPluginUpdate(packageName: string, targetVersion: string) {
     return this.sendRequest<{
@@ -424,13 +425,18 @@ export class ConsoleTransport {
       restartRequired: boolean;
     }>({ type: PLUGIN_RPC.PLAN_UPDATE, packageName, targetVersion });
   }
-  async updatePlugin(packageName: string, targetVersion: string, expectedRevision?: string) {
+  async updatePlugin(
+    packageName: string,
+    targetVersion: string,
+    expectedRevision?: string,
+    options?: ConsoleRequestOptions,
+  ) {
     return this.sendRequest<{
       success: boolean;
       plan: Awaited<ReturnType<ConsoleTransport['planPluginUpdate']>>;
       installedVersion: string;
       restartRequired: boolean;
-    }>({ type: PLUGIN_RPC.UPDATE, packageName, targetVersion, expectedRevision });
+    }>({ type: PLUGIN_RPC.UPDATE, packageName, targetVersion, expectedRevision }, this.packageOperation(options));
   }
   async validatePluginConfig(pluginName: string, data: unknown) {
     return this.sendRequest<{
@@ -589,8 +595,14 @@ export class ConsoleTransport {
     return this.sendRequest<{ entries: import("./types.js").KvEntry[] }>({ type: "db:kv:entries", table });
   }
 
+  /** These RPCs run the package manager on the Host and routinely outlast the default timeout. */
+  private packageOperation(options?: ConsoleRequestOptions): ConsoleRequestOptions {
+    return { timeoutMs: options?.timeoutMs ?? this.config.packageOperationTimeout };
+  }
+
   private async getRest<T>(path: string): Promise<T> {
-    const token = getToken();
+    const auth = captureAuthRequest();
+    const token = auth.token;
     const headers: Record<string, string> = { Accept: 'application/json' };
     if (token) headers.Authorization = `Bearer ${token}`;
     const response = await this.config.fetch(resolveApiUrl(path), {
@@ -599,18 +611,10 @@ export class ConsoleTransport {
     });
     const body = await response.json() as { success?: boolean; data?: T; error?: string };
     if (!response.ok || body.success === false) {
-      if (response.status === 401) {
-        this.notifyAuthRequired();
-      }
+      if (response.status === 401) handleUnauthorized(auth);
       throw new ConsoleTransportError(body.error ?? `HTTP ${response.status}`, 'SERVER_ERROR');
     }
     return body.data as T;
-  }
-
-  private notifyAuthRequired(): void {
-    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
-      window.dispatchEvent(new CustomEvent('zhin:auth-required'));
-    }
   }
 
   private setState(newState: ConnectionState): void {

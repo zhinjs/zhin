@@ -10,7 +10,6 @@
 - [Protocol Hosts](./packages/host/mcp/) / [A2A](./packages/host/a2a/) - 建立在最小 HTTP route contract 之上的 MCP 与 Agent-to-Agent 协议。
 - [PageManager](./packages/console/pagemanager/CONTEXT.md) - 负责控制台页面目录、PageManager、入口注册和浏览器插件启动。
 - [Toolkit Runtime](./packages/toolkit/CONTEXT.md) - 可选 peer：`@zhin.js/speech`、`@zhin.js/html-renderer`、脚手架与 Satori HTML；由 `zhin.js` setup 按配置注册，非 IM 核心。
-- [CodeGraph 记忆索引](./.codegraph/MEMORY.md) - 基于 CodeGraph 索引的符号/调用链速查与文档审计入口（[DOC-AUDIT.md](./.codegraph/DOC-AUDIT.md)）。
 
 ## 关系
 

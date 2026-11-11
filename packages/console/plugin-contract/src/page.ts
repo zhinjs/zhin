@@ -7,6 +7,11 @@ export interface PageMetadata {
   readonly hideInNav?: boolean;
   readonly requiredPermissions?: readonly string[];
   readonly requiredRoles?: readonly string[];
+  /** Presentation hints carried through to the Console entry projection. */
+  readonly description?: string;
+  readonly group?: string;
+  readonly parent?: string;
+  readonly fullWidth?: boolean;
 }
 
 export interface NormalizedPageMetadata {
@@ -63,7 +68,23 @@ export interface PageManifest extends NormalizedPageMetadata {
 }
 
 export function definePage(metadata: PageMetadata = {}): Readonly<PageMetadata> {
-  return normalizePageInput(metadata);
+  // Same optional keys as `@zhin.js/page`; anything else is still rejected below.
+  const { description, group, parent, fullWidth, ...base } = requireRecord(metadata, 'Page metadata');
+  for (const [key, value] of [['description', description], ['group', group], ['parent', parent]] as const) {
+    if (value !== undefined && (typeof value !== 'string' || !value.trim())) {
+      throw new TypeError(`Page ${key} must be a non-empty string`);
+    }
+  }
+  if (fullWidth !== undefined && typeof fullWidth !== 'boolean') {
+    throw new TypeError('Page fullWidth must be boolean');
+  }
+  return Object.freeze({
+    ...normalizePageInput(base as PageMetadata),
+    ...(description !== undefined ? { description: description as string } : {}),
+    ...(group !== undefined ? { group: group as string } : {}),
+    ...(parent !== undefined ? { parent: parent as string } : {}),
+    ...(fullWidth !== undefined ? { fullWidth } : {}),
+  });
 }
 
 export function normalizePageMetadata(

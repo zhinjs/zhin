@@ -6,9 +6,9 @@ import { createHostProtectedPaths, toProtectedPathData } from '../../src/securit
 import { computeReadOnlyOverlays } from '../../src/security/sandbox-mounts.js';
 import { executeInDocker, isDockerAvailable } from '../../src/security/sandbox-docker.js';
 
-/** Opt-in: needs a running Docker daemon and an image (`ZHIN_DOCKER_TEST_IMAGE`, default node:20-alpine). */
+/** Opt-in: needs a running Docker daemon and an image (`ZHIN_DOCKER_TEST_IMAGE`, default node:22-bookworm-slim). */
 const enabled = process.env.ZHIN_DOCKER_TESTS === '1' && isDockerAvailable();
-const image = process.env.ZHIN_DOCKER_TEST_IMAGE ?? 'node:20-alpine';
+const image = process.env.ZHIN_DOCKER_TEST_IMAGE ?? 'node:22-bookworm-slim';
 
 describe.skipIf(!enabled)('isolated shell read-only mounts (docker)', () => {
   let ws: string;

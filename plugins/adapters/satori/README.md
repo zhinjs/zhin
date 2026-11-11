@@ -100,10 +100,6 @@ SDK 会向 `path` 发送 POST，请求头 `Satori-Opcode: 0` 表示事件；每�
 - 消息 id 格式为 `channelId:messageId`，便于发消息 / 撤回时解析。
 - 撤回时需 `channel_id` + `message_id`，适配器已按上述格式解析。
 
-## AI 工具
-
-技能说明见 `skills/satori/SKILL.md`。
-
 ## 协议文档
 
 - [介绍](https://satori.chat/zh-CN/introduction.html)

@@ -11,7 +11,7 @@
  */
 
 import * as child_process from 'node:child_process';
-import * as fs from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import type { SandboxConfig, SandboxResult } from './sandbox.js';
 import {
   CONTAINER_WORKSPACE,
@@ -22,11 +22,14 @@ import {
 
 /** Docker 沙箱配置 */
 export interface DockerSandboxConfig extends SandboxConfig {
-  /** Docker 镜像（默认 node:20-alpine） */
+  /** Docker 镜像（默认 node:22-bookworm-slim，自带 bash） */
   dockerImage?: string;
   /** 是否启用网络（默认 false） */
   enableNetwork?: boolean;
 }
+
+/** Matches the repo's Node floor and ships bash, which the exec policy parses for. */
+export const DEFAULT_SANDBOX_DOCKER_IMAGE = 'node:22-bookworm-slim';
 
 const DEFAULT_DOCKER_CONFIG: DockerSandboxConfig = {
   enabled: true,
@@ -37,7 +40,7 @@ const DEFAULT_DOCKER_CONFIG: DockerSandboxConfig = {
   preserveHome: false,
   preservePath: true,
   enableNetwork: false,
-  dockerImage: 'node:20-alpine',
+  dockerImage: DEFAULT_SANDBOX_DOCKER_IMAGE,
 };
 
 /**
@@ -55,29 +58,73 @@ export function isDockerAvailable(): boolean {
   }
 }
 
-/**
- * 确保 Docker 镜像存在（不存在则拉取）
- */
-function ensureImage(image: string): { ok: boolean; error?: string } {
-  try {
-    // 检查镜像是否存在
-    const check = child_process.spawnSync('docker', ['image', 'inspect', image], {
-      timeout: 5000,
-      stdio: 'pipe',
-    });
-    if (check.status === 0) return { ok: true };
+/** Run a docker CLI command without blocking the event loop; resolves false on failure or timeout. */
+function runDocker(args: readonly string[], timeoutMs: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (ok: boolean) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(ok);
+    };
+    const child = child_process.spawn('docker', [...args], { stdio: 'ignore' });
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL');
+      finish(false);
+    }, timeoutMs);
+    child.on('error', () => finish(false));
+    child.on('close', code => finish(code === 0));
+  });
+}
 
-    // 拉取镜像
-    const pull = child_process.spawnSync('docker', ['pull', image], {
-      timeout: 120000,
-      stdio: 'pipe',
-    });
-    return pull.status === 0
-      ? { ok: true }
-      : { ok: false, error: `拉取镜像 ${image} 失败` };
-  } catch (e) {
-    return { ok: false, error: `Docker 操作失败: ${e}` };
-  }
+/** Images already confirmed present; only positive results are cached so a later pull can succeed. */
+const verifiedImages = new Set<string>();
+const pendingImageChecks = new Map<string, Promise<{ ok: boolean; error?: string }>>();
+
+/**
+ * 确保 Docker 镜像存在（不存在则拉取）。每个镜像只在首次成功前检查，且不阻塞事件循环。
+ */
+export function ensureImage(
+  image: string,
+  run: (args: readonly string[], timeoutMs: number) => Promise<boolean> = runDocker,
+): Promise<{ ok: boolean; error?: string }> {
+  if (verifiedImages.has(image)) return Promise.resolve({ ok: true });
+  const pending = pendingImageChecks.get(image);
+  if (pending) return pending;
+  const check = (async () => {
+    try {
+      if (await run(['image', 'inspect', image], 5000) || await run(['pull', image], 120000)) {
+        verifiedImages.add(image);
+        return { ok: true };
+      }
+      return { ok: false, error: `拉取镜像 ${image} 失败` };
+    } catch (e) {
+      return { ok: false, error: `Docker 操作失败: ${e}` };
+    } finally {
+      pendingImageChecks.delete(image);
+    }
+  })();
+  pendingImageChecks.set(image, check);
+  return check;
+}
+
+/** Unique per-run container name so a timeout or cancel kills exactly this container. */
+export function createSandboxContainerName(): string {
+  return `zhin-sandbox-${randomUUID()}`;
+}
+
+export function buildDockerKillArgs(containerName: string): string[] {
+  return ['kill', containerName];
+}
+
+/** Fire-and-forget `docker kill <name>`; the container is `--rm`, so killing it also removes it. */
+function killContainer(containerName: string): void {
+  try {
+    const killer = child_process.spawn('docker', buildDockerKillArgs(containerName), { stdio: 'ignore' });
+    killer.on('error', () => { /* docker gone: nothing left to kill */ });
+    killer.unref();
+  } catch { /* ignore */ }
 }
 
 /**
@@ -89,12 +136,14 @@ export function buildDockerRunArgs(
   config: Partial<DockerSandboxConfig>,
   cwd: string,
   env: NodeJS.ProcessEnv = {},
+  containerName?: string,
 ): string[] {
   const merged: DockerSandboxConfig = { ...DEFAULT_DOCKER_CONFIG, ...config };
   const writable = merged.filesystemAccess === 'workspace-write';
   const dockerArgs: string[] = [
     'run',
     '--rm',                          // 执行完自动删除容器
+    ...(containerName ? ['--name', containerName] : []),
     '--read-only',                    // 只读文件系统
     '--tmpfs', '/tmp:size=64m',      // /tmp 可写，限制 64MB
     '--memory', `${merged.maxMemoryMB}m`,
@@ -117,7 +166,7 @@ export function buildDockerRunArgs(
       if (value) dockerArgs.push('-e', `${varName}=${value}`);
     }
   }
-  dockerArgs.push(merged.dockerImage!, 'sh', '-c', command);
+  dockerArgs.push(merged.dockerImage!, 'bash', '-c', command);
   return dockerArgs;
 }
 
@@ -127,12 +176,13 @@ export function buildDockerRunArgs(
 export async function executeInDocker(
   command: string,
   config: Partial<DockerSandboxConfig> = {},
+  options: { signal?: AbortSignal } = {},
 ): Promise<SandboxResult> {
   const merged: DockerSandboxConfig = { ...DEFAULT_DOCKER_CONFIG, ...config };
   const startTime = Date.now();
 
   // 确保镜像存在
-  const imageCheck = ensureImage(merged.dockerImage!);
+  const imageCheck = await ensureImage(merged.dockerImage!);
   if (!imageCheck.ok) {
     return {
       success: false,
@@ -152,13 +202,16 @@ export async function executeInDocker(
 
   const writable = merged.filesystemAccess === 'workspace-write';
   const overlays = writable ? (merged.readOnlyOverlays ?? []) : [];
-  const dockerArgs = buildDockerRunArgs(command, merged, cwd, process.env);
+  const containerName = createSandboxContainerName();
+  const dockerArgs = buildDockerRunArgs(command, merged, cwd, process.env, containerName);
   // Docker creates missing mount points on the host; remember which ones are ours to remove.
   const createdMountPoints = missingMountPointDirs(cwd, overlays);
   const cleanup = () => removeMountPointDirs(createdMountPoints);
 
   return new Promise((resolve) => {
     let timedOut = false;
+    let aborted = false;
+    const signal = options.signal;
 
     const child = child_process.spawn('docker', dockerArgs, {
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -185,23 +238,28 @@ export async function executeInDocker(
       }
     });
 
+    // Killing the docker CLI does not stop the container; kill it by its unique name.
+    const stop = () => {
+      child.kill('SIGKILL');
+      killContainer(containerName);
+    };
     const timer = setTimeout(() => {
       timedOut = true;
-      child.kill('SIGKILL');
-      // 尝试强制删除容器
-      try {
-        child_process.spawnSync('docker', ['kill', `$(docker ps -q --filter "ancestor=${merged.dockerImage}")`], {
-          timeout: 3000,
-          stdio: 'pipe',
-        });
-      } catch { /* ignore */ }
+      stop();
     }, timeout);
+    const onAbort = () => {
+      aborted = true;
+      stop();
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+    if (signal?.aborted) onAbort();
 
     child.on('close', (exitCode) => {
       clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
       cleanup();
       resolve({
-        success: exitCode === 0 && !timedOut,
+        success: exitCode === 0 && !timedOut && !aborted,
         stdout: stdoutChunks.join('').slice(0, maxOutput),
         stderr: stderrChunks.join('').slice(0, maxOutput),
         exitCode,
@@ -213,6 +271,7 @@ export async function executeInDocker(
 
     child.on('error', (error) => {
       clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
       cleanup();
       resolve({
         success: false,

@@ -6,7 +6,7 @@
  * verification, replay protection, and Bearer authentication.
  */
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
-import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { ServerResponse } from 'node:http';
 import {
   BUDGET_KEYS,
   TRUST_LEVELS,
@@ -17,7 +17,7 @@ import {
   type RemoteMailTransport,
   type TrustLevel,
 } from '@zhin.js/harness';
-import type { HttpRouteHost } from '@zhin.js/host-http-contract';
+import { HttpBodyError, readJsonBody, type HttpRouteHost } from '@zhin.js/host-http-contract';
 import type { AgentHostPort } from '@zhin.js/agent/runtime';
 import { verifyA2aBearer } from './auth.js';
 
@@ -261,8 +261,9 @@ export class A2AMailboxTransport implements RemoteMailTransport {
         this.#peers.set(actor, Object.freeze({ ...peer, actor, url: peer.url.trim() }));
       }
     }
-    this.#secret = options.secret ?? options.token ?? '';
-    this.#token = options.token ?? options.secret ?? '';
+    // `||`: an empty string means "not configured" and must fall through.
+    this.#secret = options.secret || options.token || '';
+    this.#token = options.token || options.secret || '';
     this.#fetch = options.fetchImpl ?? globalThis.fetch;
     this.#now = options.now ?? Date.now;
     this.#maxClockSkewMs = options.maxClockSkewMs ?? DEFAULT_MAX_CLOCK_SKEW_MS;
@@ -289,7 +290,7 @@ export class A2AMailboxTransport implements RemoteMailTransport {
         content: `No remote A2A mailbox peer configured for actor "${mail.to}"`,
       };
     }
-    const secret = peer.secret ?? this.#secret ?? peer.token ?? this.#token;
+    const secret = peer.secret || this.#secret || peer.token || this.#token;
     if (!secret) {
       return {
         status: 'rejected',
@@ -307,7 +308,7 @@ export class A2AMailboxTransport implements RemoteMailTransport {
       ...unsignedPayload,
       signature,
     };
-    const bearer = peer.token ?? this.#token ?? secret;
+    const bearer = peer.token || this.#token || secret;
     const headers: Record<string, string> = {
       'content-type': 'application/json; charset=utf-8',
       'x-zhin-mailbox-signature': signature,
@@ -528,8 +529,8 @@ export function installRuntimeA2aMailbox(
   options: InstallRuntimeA2aMailboxOptions,
 ): RuntimeA2aMailboxInstallation {
   const config = options.config;
-  const secret = config?.secret ?? options.fallbackToken ?? '';
-  if (options.production === true && config?.enabled && !secret) {
+  const secret = config?.secret || options.fallbackToken || '';
+  if (options.production === true && config?.enabled !== false && !secret) {
     throw new Error('A2A Mailbox requires a2a.mailbox.secret or a2a.token/http.token in production');
   }
   const onReceive = options.onReceive
@@ -537,7 +538,7 @@ export function installRuntimeA2aMailbox(
   const transport = new A2AMailboxTransport({
     peers: config?.peers,
     secret,
-    token: options.fallbackToken ?? secret,
+    token: options.fallbackToken || secret,
     now: options.now,
     onReceive,
   });
@@ -550,15 +551,26 @@ export function installRuntimeA2aMailbox(
   const maxBodyBytes = typeof config?.maxBodyBytes === 'number' && config.maxBodyBytes > 0
     ? config.maxBodyBytes
     : DEFAULT_MAX_BODY_BYTES;
-  const bearerToken = options.fallbackToken ?? secret;
+  const bearerToken = options.fallbackToken || secret;
 
   const unregister = options.http.route('POST', routePath, async (request, response) => {
     if (bearerToken && !verifyA2aBearer(request, bearerToken)) {
       writeJson(response, 401, { error: 'Unauthorized - Bearer token required' });
       return;
     }
-    const rawBody = await readBoundedJsonBody(request, response, maxBodyBytes);
-    if (rawBody === undefined) return;
+    let rawBody: unknown;
+    try {
+      // Drains an oversized body before failing, so the 413 reaches the client.
+      rawBody = await readJsonBody(request, { limit: maxBodyBytes });
+    } catch (error) {
+      if (!(error instanceof HttpBodyError)) throw error;
+      writeJson(response, error.statusCode, { error: error.message });
+      return;
+    }
+    if (rawBody === undefined) {
+      writeJson(response, 400, { error: 'Invalid JSON body' });
+      return;
+    }
     const signatureHeader = request.headers['x-zhin-mailbox-signature'];
     const headerSignature = Array.isArray(signatureHeader) ? signatureHeader[0] : signatureHeader;
     const result = await transport.receiveEnvelope(rawBody, { headerSignature });
@@ -571,31 +583,6 @@ export function installRuntimeA2aMailbox(
       unregister();
     },
   };
-}
-
-async function readBoundedJsonBody(
-  request: IncomingMessage,
-  response: ServerResponse,
-  maxBytes: number,
-): Promise<unknown | undefined> {
-  const chunks: Buffer[] = [];
-  let total = 0;
-  for await (const chunk of request) {
-    const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    total += buf.byteLength;
-    if (total > maxBytes) {
-      writeJson(response, 413, { error: `Request body exceeds ${maxBytes} bytes` });
-      return undefined;
-    }
-    chunks.push(buf);
-  }
-  const text = Buffer.concat(chunks).toString('utf8');
-  try {
-    return JSON.parse(text);
-  } catch {
-    writeJson(response, 400, { error: 'Invalid JSON body' });
-    return undefined;
-  }
 }
 
 function writeJson(response: ServerResponse, status: number, body: unknown): void {

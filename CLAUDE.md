@@ -47,7 +47,7 @@ Custom lint checks:
 
 Monorepo managed with **pnpm 9.0.2 workspaces** + **Turborepo** (`turbo.json`). Versioning via **Changesets**.
 
-Build pipeline (`turbo.json`): `build` depends on `^build` (topological), outputs `lib/**` and `dist/**`. `test` depends on `build`. `type-check` depends on `^build`.
+Build pipeline (`turbo.json`): `build` depends on `^build` (topological), outputs `lib/**` and `dist/**`. `test` depends on `build`. Root `type-check` / `lint` are plain root scripts (`tsc` / `eslint`), not turbo tasks.
 
 ### Dependency layers (bottom → top)
 

@@ -465,10 +465,10 @@ export class Logger {
    * @param options 可选配置，会覆盖从父级继承的配置
    */
   getLogger(namespace: string, options?: LoggerOptions): Logger {
-    // 🔧 内存管理：检查子Logger数量
-    this.checkChildLoggerLimit()
-    
     if (!this.childLoggers.has(namespace)) {
+      // Evict only when a new child is about to be added: looking up an existing
+      // child must never evict it (or its siblings) from a full parent.
+      this.checkChildLoggerLimit()
       // 根 logger 的直接子级用裸 namespace，避免空根名拼出 `:icqq`
       const childName = this.#parent === null
         ? namespace

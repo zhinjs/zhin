@@ -66,6 +66,8 @@ export interface JobSnapshot {
 export interface SchedulerOptions {
   timezone?: string;
   onError?: (err: Error, job: JobInfo) => void;
+  /** Store failures outside a single job (background reconciliation); never throws into a timer. */
+  onStoreError?: (err: Error) => void;
   store?: JobStore;
   storePath?: string;
   /** 初始化内置 handler 注册表 */

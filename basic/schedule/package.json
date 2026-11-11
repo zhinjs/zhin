@@ -18,7 +18,11 @@
   "scripts": {
     "build": "tsc",
     "clean": "rimraf lib",
-    "test": "cd ../.. && vitest run basic/schedule/tests"
+    "test": "cd ../.. && vitest run basic/schedule/tests",
+    "next-runs": "node scripts/next-runs.mjs",
+    "sync-holiday": "node scripts/sync-holiday.mjs",
+    "sync-holidays-auto": "node scripts/sync-holidays-auto.mjs",
+    "generate-holiday-calendar": "node scripts/generate-holiday-calendar.mjs"
   },
   "keywords": [
     "zhin",

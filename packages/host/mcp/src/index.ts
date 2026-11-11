@@ -14,7 +14,6 @@ export {
 } from './runtime.js';
 export type { RuntimeMcpConfig as McpConfig } from './runtime.js';
 export {
-  extractMcpToolName,
   isLocalhost,
   mcpAuthRequired,
   timingSafeEqualString,

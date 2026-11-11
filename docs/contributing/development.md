@@ -111,7 +111,6 @@ Sandbox 验收同时用已安装的 CLI 在工作区子包预演和执行 `migra
 | IM Session SSOT（`pnpm check:im-session-ssot`） | IM 场景/session 身份解析走 core SSOT |
 | No Platform Branches（`pnpm check:no-platform-branches`） | core / agent / ai / adapter `src` 与 `basic/cli/src/plugin-runtime` 禁止平台名字面量与平台名表键（`icqq`、`discord`…），差异须读适配器能力画像（ADR 0044）；例外登记在 `scripts/no-platform-branches-allowlist.json` 并写明理由 |
 | Removed Plugin API（`pnpm check:no-removed-plugin-api`） | 禁止在生产源码中重新引入已删除的 Plugin lookup API |
-| Workroom SSOT（`pnpm check:workroom-ssot`） | Workroom 状态只经 Journal + CAS Kernel；禁止恢复并行可变权威 |
 
 **AI 层**
 
@@ -137,7 +136,6 @@ Sandbox 验收同时用已安装的 CLI 在工作区子包预演和执行 `migra
 | --- | --- |
 | Doc Links（`pnpm check:doc-links`） | 文档相对链接不断裂 |
 | Doc Orphans（`pnpm check:doc-orphans`） | 站点 Markdown 都在侧栏或 allowlist |
-| ADR Manifest（`pnpm check:adr-manifest`） | ADR README 与侧栏覆盖所有 ADR |
 | README Exports（`pnpm check:readme-exports`） | README import 与包导出一致 |
 | Config Docs（`pnpm check:config-docs`） | 配置文档与 DEFAULT_CONFIG 关键字段对齐 |
 | Generated Config Reference（`pnpm check:config-reference`） | 自动生成配置字段与 Runtime 源码、插件 JSON Schema 无漂移 |
@@ -185,7 +183,7 @@ workspace 包的 `exports` 带 `"development": "./src/*.ts"` 条件，仓库内�
 无法兼容时先单独讨论发布策略、版本边界与迁移方案，不能仅为通过 patch 门禁而直接发布。
 本次 Adapter 操作迁移已由维护者明确批准使用 patch，并以 Adapter Feature API 2 和明确的
 新旧 npm 版本边界标记不兼容；范围与恢复要求见
-[版本边界方案](../plans/adapter-operation-version-boundaries.md)。这项批准不替代发布、部署或
+[版本边界方案](https://github.com/zhinjs/zhin/blob/main/docs/plans/adapter-operation-version-boundaries.md)。这项批准不替代发布、部署或
 生产数据变更审批，也不构成对其他破坏性 patch 的默认授权。
 
 新增门禁必须证明既能拒绝违规样例，也能接受合法样例；说明它保护的范围，避免把

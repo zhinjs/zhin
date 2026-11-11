@@ -6,7 +6,6 @@ import { createMessages, type Locale } from 'zhin.js/i18n';
  */
 
 import { createHash, createDecipheriv, createCipheriv, randomBytes, timingSafeEqual } from 'node:crypto';
-import type { IncomingMessage } from 'node:http';
 import * as xml2js from 'xml2js';
 import type { ConversationRef } from '@zhin.js/im-contract';
 
@@ -501,21 +500,3 @@ export function extractOutboundText(payload: unknown): string {
   return parts.join('\n');
 }
 
-export async function readTextBody(
-  request: IncomingMessage,
-  options: { readonly limit?: number } = {},
-): Promise<string> {
-  const limit = options.limit ?? 1_048_576;
-  const chunks: Buffer[] = [];
-  let size = 0;
-  for await (const chunk of request) {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    size += buffer.length;
-    if (size > limit) {
-      request.destroy();
-      throw new Error(`Request body exceeds ${limit} bytes`);
-    }
-    chunks.push(buffer);
-  }
-  return Buffer.concat(chunks).toString('utf8');
-}

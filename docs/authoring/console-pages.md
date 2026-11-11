@@ -117,7 +117,7 @@ Console 根据独立的界面语言选择 `titleI18n`，只改变导航和面包
 | 文件 | 所属插件 | 地址 |
 | --- | --- | --- |
 | `pages/index/index.tsx` | `sandbox` | `/sandbox` |
-| `pages/workroom/index.tsx` | 你的 Bot（root） | `/p-workroom` |
+| `pages/reports/index.tsx` | 你的 Bot（root） | `/p-reports` |
 | `pages/index/index.tsx` | 你的 Bot（root） | `/` |
 
 `index` 对应插件路径本身，其他页面对应 `p-<name>`。两个页面算出同一个地址时，启动会报错。规则实现见 `packages/console/plugin-contract/src/page.ts` 的 `pageRoute`。
