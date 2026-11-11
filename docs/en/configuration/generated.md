@@ -417,7 +417,6 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `htmlRenderer.idleTimeoutMs` | number | no | — | Daemon idle-exit timeout in milliseconds. |
 | `htmlRenderer.logStats` | boolean | no | — | Log render timing statistics. |
 | `htmlRenderer.mode` | string: `"inprocess"`, `"daemon"` | no | — | Whether Shotium runs in-process or as a daemon. |
-| `htmlRenderer.aiTextAsImage` | boolean \| object | no | — | Optional plain-text to image conversion before send. |
 | `assistant` | object | no | — | Scheduled jobs, event ingress, and failure notifications. |
 | `assistant.enabled` | boolean \| string | no | — | 启用统一 JobStore（默认 false，Stable 行为不变） |
 | `assistant.defaults` | object \| null | no | — | — |

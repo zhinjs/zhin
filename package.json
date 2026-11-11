@@ -7,6 +7,21 @@
   "engines": {
     "node": ">=22.19.0"
   },
+  "workspaces": [
+    "basic/*",
+    "packages/im/*",
+    "packages/console/*",
+    "packages/toolkit/*",
+    "packages/host/*",
+    "packages/game-kit",
+    "plugins/adapters/*",
+    "plugins/features/*",
+    "plugins/games/*",
+    "plugins/services/*",
+    "plugins/utils/*",
+    "examples/*",
+    "docs"
+  ],
   "packageManager": "pnpm@9.0.2",
   "scripts": {
     "dev": "pnpm --filter minimal-bot dev",

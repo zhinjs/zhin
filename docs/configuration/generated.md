@@ -417,7 +417,6 @@ outline: [2, 3]
 | `htmlRenderer.idleTimeoutMs` | number | 否 | — | daemon 空闲退出超时（毫秒）。 |
 | `htmlRenderer.logStats` | boolean | 否 | — | 记录渲染耗时统计。 |
 | `htmlRenderer.mode` | string: `"inprocess"`, `"daemon"` | 否 | — | Shotium 在进程内运行还是以 daemon 运行。 |
-| `htmlRenderer.aiTextAsImage` | boolean \| object | 否 | — | 发送前可选的纯文本转图片。 |
 | `assistant` | object | 否 | — | 调度任务、事件入口和失败通知。 |
 | `assistant.enabled` | boolean \| string | 否 | — | 启用统一 JobStore（默认 false，Stable 行为不变） |
 | `assistant.defaults` | object \| null | 否 | — | — |
