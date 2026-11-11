@@ -9,7 +9,9 @@
  *    those routes authenticate themselves.
  *
  * The instance being offline never takes gateway-owned routes down: forwarded requests get
- * `503 { code: 'instance_unavailable' }` with `Retry-After`.
+ * `503 { code: 'instance_unavailable', state }` with `Retry-After`; an instance that does not
+ * answer in time gives `504 { code: 'instance_timeout' }`, any other bridge failure
+ * `502 { code: 'instance_error' }` (mapped from {@link InstanceTransportError}).
  */
 import {
   authorizeConsoleWebSocket,
@@ -36,9 +38,14 @@ import {
   type WsUpgradeDecision,
   type WsUpgradeRequest,
 } from '@zhin.js/host-http';
+import {
+  InstanceTransportError,
+  type InstanceTransport,
+  type InstanceWsOpenInfo,
+} from '@zhin.js/host-http/bridge';
 import { createNodeHttpListener, type NodeHttpListener } from '@zhin.js/host-http/node';
 import { formatCompact, getLogger } from '@zhin.js/logger';
-import type { InstanceTransport, InstanceWsOpenInfo } from './instance-transport.js';
+import { GATEWAY_RPC_PREFIX, type GatewayConsoleRpc } from './console-rpc.js';
 
 const logger = getLogger('gateway');
 
@@ -68,6 +75,11 @@ export interface GatewayHttpServerOptions {
   readonly tokenRegistry?: TokenRegistry;
   readonly retryAfterSeconds?: number;
   readonly maxRequestBodyBytes?: number;
+  /**
+   * Gateway-owned Console RPC (`gateway.*`) answered on `POST {base}/console/request`; every other
+   * RPC type on that route is forwarded to the instance unchanged.
+   */
+  readonly consoleRpc?: GatewayConsoleRpc;
 }
 
 const HOP_BY_HOP_HEADERS = Object.freeze([
@@ -91,6 +103,7 @@ export class GatewayHttpServer {
   readonly #instance: GatewayInstanceSource;
   readonly #retryAfter: string;
   readonly #maxBody: number;
+  readonly #consoleRpc: GatewayConsoleRpc | undefined;
   #closed = false;
   #closeResult: Promise<void> | undefined;
 
@@ -100,6 +113,7 @@ export class GatewayHttpServer {
     this.#instance = options.instance;
     this.#retryAfter = String(Math.max(1, Math.round(options.retryAfterSeconds ?? DEFAULT_GATEWAY_RETRY_AFTER_SECONDS)));
     this.#maxBody = options.maxRequestBodyBytes ?? DEFAULT_GATEWAY_MAX_REQUEST_BODY_BYTES;
+    this.#consoleRpc = options.consoleRpc;
     this.tokenRegistry = options.tokenRegistry ?? new TokenRegistry({ primaryToken: primary.token });
     this.apiBase = normalizePath(primary.apiBase ?? '/api');
     this.#router = createHttpRouter({
@@ -112,6 +126,12 @@ export class GatewayHttpServer {
       builtinRoutes: false,
     });
     this.#router.route('GET', '/pub/health', () => this.#health(), { summary: 'Gateway health probe', tags: ['pub'] });
+    if (this.#consoleRpc) {
+      this.#router.route('POST', `${this.apiBase}/console/request`, (request, context) => this.#consoleRequest(request, context), {
+        summary: 'Console RPC (gateway.* answered by the gateway, the rest forwarded)',
+        tags: ['console'],
+      });
+    }
     // Lowest precedence: every path no gateway route claims goes to the instance.
     this.#router.route('ALL', '/*', (request, context) => this.#forward(request, context));
     this.#listeners = listenerOptions.map((entry) => createNodeHttpListener({
@@ -220,16 +240,69 @@ export class GatewayHttpServer {
       });
     } catch (error) {
       if (request.signal.aborted) return new Response(null, { status: 499 });
-      if (error instanceof BodyLimitError) return tooLarge();
-      if (!transport.ready) return this.#unavailable();
-      logger.warn(formatCompact({
-        op: 'gateway_forward_failed',
-        path: context.url.pathname,
-        error: error instanceof Error ? error.message : String(error),
-      }));
-      return jsonResponse(502, { success: false, code: 'instance_error', error: 'The instance failed to answer' });
+      if (error instanceof BodyLimitError || (error instanceof Error && error.cause instanceof BodyLimitError)) return tooLarge();
+      return this.#transportFailure(error, transport, context.url.pathname);
     }
     return stripHopByHop(response);
+  }
+
+  /** Maps a failed forward onto the documented gateway error responses (ADR 0054 §3). */
+  #transportFailure(error: unknown, transport: InstanceTransport, path: string): Response {
+    const code = error instanceof InstanceTransportError ? error.code : undefined;
+    // A transport that is no longer ready failed because the instance went away.
+    if (code === 'instance-offline' || (code === undefined && !transport.ready)) return this.#unavailable();
+    if (code === 'timeout') {
+      return jsonResponse(504, { success: false, code: 'instance_timeout', error: 'The instance did not answer in time' }, { 'cache-control': 'no-store' });
+    }
+    if (code === 'overloaded') {
+      return jsonResponse(502, { success: false, code: 'instance_error', error: 'The instance is overloaded' }, { 'retry-after': this.#retryAfter, 'cache-control': 'no-store' });
+    }
+    logger.warn(formatCompact({
+      op: 'gateway_forward_failed',
+      path,
+      ...(code ? { code } : {}),
+      error: error instanceof Error ? error.message : String(error),
+    }));
+    return jsonResponse(502, { success: false, code: 'instance_error', error: 'The instance failed to answer' }, { 'cache-control': 'no-store' });
+  }
+
+  /**
+   * `POST {base}/console/request`: the router authenticated and authorized the route; `gateway.*`
+   * types are dispatched here (the dispatcher checks the per-RPC permission), the rest are
+   * forwarded to the instance with the body as received.
+   */
+  async #consoleRequest(request: Request, context: RouteContext): Promise<Response> {
+    const declared = request.headers.get('content-length');
+    if (declared !== null && Number(declared) > this.#maxBody) return tooLarge();
+    let bytes: ArrayBuffer;
+    try {
+      bytes = request.body
+        ? await new Response(limitBody(request.body, this.#maxBody)).arrayBuffer()
+        : new ArrayBuffer(0);
+    } catch (error) {
+      if (request.signal.aborted) return new Response(null, { status: 499 });
+      if (error instanceof BodyLimitError) return tooLarge();
+      return jsonResponse(400, { success: false, code: 'invalid_body', error: 'Invalid request body' });
+    }
+    const type = peekRpcType(bytes);
+    if (type !== undefined && type.startsWith(GATEWAY_RPC_PREFIX) && this.#consoleRpc) {
+      let message: Record<string, unknown>;
+      try {
+        message = JSON.parse(new TextDecoder().decode(bytes)) as Record<string, unknown>;
+      } catch {
+        return jsonResponse(400, { success: false, code: 'invalid_body', error: 'Invalid JSON body' });
+      }
+      return this.#consoleRpc.handle(message, context, this.tokenRegistry);
+    }
+    const headers = new Headers(request.headers);
+    for (const name of HOP_BY_HOP_HEADERS) headers.delete(name);
+    headers.delete('content-length');
+    return this.#forward(new Request(context.url, {
+      method: request.method,
+      headers,
+      signal: request.signal,
+      body: bytes,
+    }), context);
   }
 
   async #upgrade(request: WsUpgradeRequest): Promise<WsUpgradeDecision> {
@@ -365,4 +438,17 @@ function bufferedConnection(info: InstanceWsOpenInfo, socket: WsTransport): WsCo
     onClose: (listener: (code: number, reason: string) => void) => socket.onClose(listener),
     get bufferedAmount() { return socket.bufferedAmount; },
   });
+}
+
+/** Reads `type` from a JSON RPC envelope without failing on malformed input. */
+function peekRpcType(bytes: ArrayBuffer): string | undefined {
+  if (bytes.byteLength === 0) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(new TextDecoder().decode(bytes));
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return undefined;
+    const type = (parsed as { type?: unknown }).type;
+    return typeof type === 'string' ? type : undefined;
+  } catch {
+    return undefined;
+  }
 }

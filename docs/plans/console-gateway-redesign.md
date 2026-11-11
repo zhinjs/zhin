@@ -126,7 +126,7 @@ ADR 0049–0054 与本计划。
 | A4 Console 导航重构 | done | [zhinjs/console#92](https://github.com/zhinjs/console/pull/92) 已合并。待办：zhin 侧页面元数据加 `section` 字段，`packages/console/client` 的 `resolveEntryRegister` 透传 `meta.section`（M2）；`feature.matrix` 返回形状已与 A2 对齐 |
 | A5 create-zhin 精简 | done | 已提交；生成项目 README / 首页 / hello 模板（`scaffold-wizard/message-templates.ts`）里的首跑步骤留到 B1.6 随 `zhin start` 一起改 |
 | M2 集成批 1 | done | [zhinjs/zhin#1226](https://github.com/zhinjs/zhin/pull/1226) 已合并（含 B1.-1）。终端接线、Host 配置 Schema、适配器反向 WS 改为自鉴权、页面 `section`、文档与升级指南、发版门禁（6 minor / 0 major，`zhin.js` patch）、锁文件、changesets；`check:all` 全过。偏差：终端会话按用户（`user:<id>`）吊销，单独吊销 API 令牌或改角色定义不断开会话。未验证：`check:created-project*`、真实 OneBot/NapCat/Milky 客户端、Windows 原生模块、真实 SSH |
-| B1 管理网关 | doing | B1.-1 拆包 done（`@zhin.js/gateway` 新包；装配根迁到 `zhin.js/instance`；CLI 无 IM 依赖）。B1.0 done（在 `feat/friendly-volta-ejc3wl`）：路由契约改为 Web 标准 `Request` / `Response` + `WsConnection`，Node 服务器在 `@zhin.js/host-http/node`，主体经 `context.principal` 传入，未预期错误只返回通用信息；`@zhin.js/host-http-contract` 按 minor 发布（已加入批准列表）。B1.1 done（在分支，已合并 `wt/b11`）：`InstanceSupervisor` + IPC 控制通道（`@zhin.js/host-http/bridge`），退出码 75 路径删除。临时边：`zhin.js/instance` 依赖 `@zhin.js/gateway`（配置存储、插件管理事务、IAM、终端、TSX 加载器、supervisor 辅助）。决定：配置存储与插件管理事务归网关所有，B1.4 起实例的 Console 配置 / 插件 RPC 改由网关处理，届时删除这条边。下一步 B1.2 |
+| B1 管理网关 | doing | B1.-1 拆包 done（`@zhin.js/gateway` 新包；装配根迁到 `zhin.js/instance`；CLI 无 IM 依赖）。B1.0 done（在 `feat/friendly-volta-ejc3wl`）：路由契约改为 Web 标准 `Request` / `Response` + `WsConnection`，Node 服务器在 `@zhin.js/host-http/node`，主体经 `context.principal` 传入，未预期错误只返回通用信息；`@zhin.js/host-http-contract` 按 minor 发布（已加入批准列表）。B1.1 done（在分支，已合并 `wt/b11`）：`InstanceSupervisor` + IPC 控制通道（`@zhin.js/host-http/bridge`），退出码 75 路径删除。临时边：`zhin.js/instance` 依赖 `@zhin.js/gateway`（配置存储、插件管理事务、IAM、终端、TSX 加载器、supervisor 辅助）。决定：配置存储与插件管理事务归网关所有，B1.4 起实例的 Console 配置 / 插件 RPC 改由网关处理，届时删除这条边。B1.2 done（在分支，已合并 `wt/b12`）：桥接协议 2（路由表、分块体与信用背压、WS 帧、主体转发），`BridgedHttpHost` / `IpcInstanceTransport`，实例无控制通道拒绝启动（`--standalone` 例外）。B1.3 done（在分支，已合并 `wt/b13`）：`GatewayHttpServer` / `startGateway`，`createNodeHttpListener`，改用 `@zhin.js/host-http/bridge` 的真实传输类型；转发失败映射为 `503 instance_unavailable`（`state` + `Retry-After`）/ `504 instance_timeout` / `502 instance_error`。B1.5 done（在分支，已合并 `wt/b15`）：`GatewayPackageService`、`gateway.*` RPC 契约与权限、`dispatchGatewayRpc`、Windows 命令解析。集成：`zhin runtime start` / `pnpm dev` 经 `runGateway` 启动网关（监听 `http.port`，`transport = supervisor.transport`，监听后 `setAddresses`），关闭了 B1.2 引入的“不带 `--standalone` 无法访问 HTTP”的临时回退；`POST {base}/console/request` 的 `gateway.*` 由网关处理、其余转发；网关服务器挪到 `@zhin.js/gateway/server`（`/http` 只留实例也用的响应工具）。过渡：账号仍在实例，网关经桥接 `auth.*` 消息委托实例解析会话 / API 令牌并镜像“是否已有所有者”（未上报前按已有处理），没有所有者且无 `http.token` 时转发 `{ kind: 'bootstrap', open: true }`；B1.4 用网关本地 IAM 替换委托并删除 `auth.*`。下一步 B1.4 / B1.6 / B1.7 |
 | B2 引导后端 | doing | 服务核心已合并（`wt/b2`）：引导状态、安装白名单、`authorizeInstall`、经依赖事务安装、`zhin setup` 非交互参数、`zhin console init` 记录步骤。HTTP / RPC 接线等 B1.4（见「已知待办」） |
 | 插件权限级别 + 插件 RPC 鉴权 | done | 已合并（`wt/perm` + `wt/rpcperm`，在分支）：插件权限按 read / operate / manage 授予内置角色，自定义角色与 API 令牌可写入插件权限；插件 RPC 对已登录用户按方法 / 页面 / 兜底权限逐一检查；适配器账号方法的授权目标与处理函数一致；rss / reminder / ledger / calendar / qrcode / short-url 补充级别声明 |
 | M4 集成批 2 | todo | |
@@ -153,10 +153,13 @@ ADR 0049–0054 与本计划。
 ## 已知待办
 
 - 只绑定适配器 / 账号作用域的用户在导航里看不到插件页面，即使其作用域已满足页面权限（页面目录可见性需要按作用域判断）。
-- 登录限速的 `Retry-After` 响应头未加入 CORS `Access-Control-Expose-Headers`，跨域 Console 读不到等待时长。
-- Windows 下引导安装直接 spawn `pnpm` 会失败（需要 `pnpm.cmd` 或经 shell 解析），B2 安装服务待处理。
 - 引导服务的 HTTP / RPC 接线（Console 向导调用 `status` / `markStep` / 安装）等 B1.4 认证迁到网关后再接。
 - 引导第 3–4 步（AI、适配器）的标记与安装需要补 `agent.configure` / `endpoint.manage` 权限检查（随上一条接线一起做）。
+- 桥接协议的 `principal-revoked`（ADR 0054 §3：网关通知实例断开该主体的 SSE / WS）尚未实现；目前吊销只在下一次请求时生效。
+- `{base}/auth/*`（登录、初始化、`/auth/me`、自助令牌）目前由网关原样转发给实例处理；B1.4 由网关自己接管（遮蔽实例路由），同时网关打开项目数据库、用本地 `ConsoleIamService` 替换 `auth.*` 委托（`createDelegatedAccessProvider`），删除桥接的 `auth.*` 消息。
+- `GatewayPackageService.subscribe()` 的进度还没有推给 Console（`gateway.packages.progress`）：Console 事件流 `/api/events` 由实例提供，网关侧需要自己的 SSE 路由（加入 `CONSOLE_HTTP_PERMISSIONS`）或在转发的事件流里注入帧，随 C4 / B1.6 做。
+- 委托认证的边界：实例离线且从未上报过所有者状态时，网关按“已有所有者”处理（失败即关闭）——本地开放 Host 在实例第一次就绪前需要初始化令牌才能调用 `gateway.*`；实例离线时用户会话 / API 令牌无法校验（只有初始化令牌可用），B1.4 解决。
+- 前台 `zhin runtime start` 的进程生命周期：实例自行退出或崩溃（未经 Console 停止、无依赖事务）时网关随之退出，与此前一致；“网关常驻、实例崩溃后 Console 仍可用”随 B1.6 的 `zhin start` 一起做。
 
 ## 待所有者决定
 

@@ -18,8 +18,12 @@ export {
   type BridgedHttpHostOptions,
 } from './bridged-host.js';
 export {
+  createDelegatedAccessProvider,
+  DEFAULT_BRIDGE_AUTH_TIMEOUT_MS,
   InstanceTransportError,
   IpcInstanceTransport,
+  isInstanceAccessDelegate,
+  type InstanceAccessDelegate,
   type GatewayInstancePort,
   type InstanceChildProcessLike,
   type InstanceRequestContext,

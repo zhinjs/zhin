@@ -620,3 +620,50 @@ describe('bridge protocol limits and versions', () => {
     channel?.close();
   });
 });
+
+describe('delegated authentication (interim until B1.4)', () => {
+  const owner = Object.freeze({
+    kind: 'user' as const, userId: 'u1', username: 'owner', displayName: 'Owner', credentialId: 's1',
+    grants: Object.freeze([{ role: 'owner', scope: { kind: 'global' as const }, permissions: Object.freeze(['status.view']) }]),
+    roles: Object.freeze(['owner']),
+  });
+
+  it('resolves bearers in the instance, mirrors the owner state and relays audit entries', async () => {
+    const context = await started();
+    let initialized = false;
+    const audits: unknown[] = [];
+    context.host.tokenRegistry.useAccessProvider({
+      initialized: () => initialized,
+      authenticate: async (token) => (token === 'owner-token' ? owner : null),
+      audit: (entry) => { audits.push(entry); },
+    });
+    // Unknown before the instance reported (the provider fails closed on it).
+    expect(context.transport.ownerInitialized).toBeUndefined();
+    await opened(context);
+    await until(() => context.transport.ownerInitialized === false, 'initial auth.state');
+    expect(await context.transport.authenticate('owner-token', { ip: '10.0.0.1' })).toEqual(owner);
+    expect(await context.transport.authenticate('nope')).toBeNull();
+    expect(await context.transport.authenticate('')).toBeNull();
+    initialized = true;
+    // Re-read after each exchange / auth result, and by the poll.
+    await context.transport.authenticate('nope');
+    await until(() => context.transport.ownerInitialized === true, 'auth.state after setup');
+    context.transport.audit({ actor: 'user:u1', action: 'rpc:gateway.instance.stop', outcome: 'ok' });
+    await until(() => audits.length === 1, 'audit relay');
+    expect(audits[0]).toEqual({ actor: 'user:u1', action: 'rpc:gateway.instance.stop', outcome: 'ok' });
+    // Offline: no round trip, null; the last known state survives the detach.
+    context.disconnect();
+    expect(await context.transport.authenticate('owner-token')).toBeNull();
+    expect(context.transport.ownerInitialized).toBe(true);
+    await context.host.close();
+  });
+
+  it('refuses a bootstrap principal or malformed auth messages from the instance', () => {
+    expect(parseInstanceMessage({ type: 'auth.result', id: 'a1', payload: { principal: { kind: 'bootstrap', open: true } } })).toBeUndefined();
+    expect(parseInstanceMessage({ type: 'auth.result', payload: { principal: null } })).toBeUndefined();
+    expect(parseInstanceMessage({ type: 'auth.state', payload: { initialized: 'yes' } })).toBeUndefined();
+    expect(parseInstanceMessage({ type: 'auth.result', id: 'a1', payload: { principal: null } })).toEqual({ type: 'auth.result', id: 'a1', payload: { principal: null } });
+    expect(parseGatewayMessage({ type: 'auth.authenticate', id: 'a1', payload: { token: 'x'.repeat(5000) } })).toBeUndefined();
+    expect(parseGatewayMessage({ type: 'auth.audit', payload: { entry: { actor: 'a', action: 'b', outcome: 'maybe' } } })).toBeUndefined();
+  });
+});

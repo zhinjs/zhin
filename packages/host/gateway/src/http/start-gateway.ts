@@ -3,20 +3,30 @@
  * pluggable instance transport (the bridge supplies the IPC one). CLI wiring lives elsewhere.
  */
 import { resolveHttpConfig, type ResolvedHttpConfig, type TokenRegistry } from '@zhin.js/host-http';
+import {
+  createDelegatedAccessProvider,
+  isInstanceAccessDelegate,
+  type InstanceTransport,
+} from '@zhin.js/host-http/bridge';
 import { join } from 'node:path';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { createConfigDocument } from '@zhin.js/runtime';
 import { findConfigFile } from '../project/config-file.js';
 import { loadRuntimeEnvironmentLayers } from '../project/environment.js';
 import { InstanceSupervisor, type InstanceSupervisorOptions } from '../supervisor/instance-supervisor.js';
+import { runSupervisedInstance, type RunSupervisedInstanceOptions } from '../supervisor/run-instance.js';
+import { GatewayPackageService } from '../packages/service.js';
+import { createGatewayRpcDispatcher, type GatewayRpcInstance } from '../packages/rpc.js';
+import { createGatewayConsoleRpc } from './console-rpc.js';
 import { GatewayHttpServer } from './gateway-http-server.js';
-import type { InstanceTransport } from './instance-transport.js';
 
 const logger = getLogger('gateway');
 
 /** A transport the gateway owns; `dispose` runs on gateway close. */
 export interface GatewayInstanceTransport extends InstanceTransport {
   dispose?(): void | Promise<void>;
+  /** Told the bound listener addresses after listen (the instance's `HttpHost.address`). */
+  setAddresses?(addresses: readonly import('@zhin.js/host-http').HttpHostAddress[]): void;
 }
 
 export interface InstanceTransportFactoryContext {
@@ -41,12 +51,23 @@ export interface StartGatewayOptions {
   readonly maxRequestBodyBytes?: number;
   /** Start the instance after the server listens. Default true; a failed start keeps the gateway up. */
   readonly startInstance?: boolean;
+  /**
+   * Dependency transactions (`gateway.packages.*`). Default: a {@link GatewayPackageService} on
+   * the project root over the supervisor; `false` disables the package RPC.
+   */
+  readonly packages?: GatewayPackageService | false;
 }
 
 export interface RunningGateway {
   readonly http: GatewayHttpServer;
   readonly supervisor: InstanceSupervisor;
   readonly transport: GatewayInstanceTransport;
+  readonly packages: GatewayPackageService | undefined;
+  /**
+   * True while the gateway owns the instance's lifecycle: a dependency transaction runs, or the
+   * Console stopped the instance (a run must not end because of it).
+   */
+  ownsInstanceLifecycle(): boolean;
   /** Resolves when the first instance start attempt settled (never rejects). */
   readonly instanceStarted: Promise<void>;
   /** Stops the instance, then closes the listeners. */
@@ -74,20 +95,50 @@ export async function startGateway(options: StartGatewayOptions): Promise<Runnin
     ? options.supervisor
     : new InstanceSupervisor(options.supervisor);
   const transport = options.transport({ supervisor, projectRoot: options.projectRoot });
+  // `tokenRegistry` is read lazily: the server creates the default one.
+  let registry: TokenRegistry | undefined = options.tokenRegistry;
+  const packages = options.packages === false
+    ? undefined
+    : options.packages ?? new GatewayPackageService({
+      projectRoot: options.projectRoot,
+      instance: supervisor,
+      hasOwner: () => registry?.initialized() ?? true,
+    });
+  let consoleStopped = false;
+  const lifecycle: GatewayRpcInstance = {
+    start: async () => { await supervisor.start(); consoleStopped = false; },
+    stop: async (stopOptions) => { consoleStopped = true; await supervisor.stop(stopOptions); },
+    restart: async (restartOptions) => { await supervisor.restart(restartOptions); consoleStopped = false; },
+    status: () => supervisor.status(),
+    logs: supervisor.logs,
+  };
   const server = new GatewayHttpServer({
     http,
     instance: { transport: () => transport, state: () => supervisor.state },
     ...(options.tokenRegistry ? { tokenRegistry: options.tokenRegistry } : {}),
     ...(options.retryAfterSeconds !== undefined ? { retryAfterSeconds: options.retryAfterSeconds } : {}),
     ...(options.maxRequestBodyBytes !== undefined ? { maxRequestBodyBytes: options.maxRequestBodyBytes } : {}),
+    consoleRpc: createGatewayConsoleRpc(createGatewayRpcDispatcher({
+      ...(packages ? { packages } : {}),
+      instance: lifecycle,
+    })),
   });
+  registry = server.tokenRegistry;
+  // Interim until B1.4: Console accounts live in the instance, which resolves user / API-token
+  // bearers and reports whether an owner exists; without an owner (and without `http.token`)
+  // the registry yields the open bootstrap principal `{ kind: 'bootstrap', open: true }`.
+  const disposeAccess = !options.tokenRegistry && !server.tokenRegistry.accessProvider && isInstanceAccessDelegate(transport)
+    ? server.tokenRegistry.useAccessProvider(createDelegatedAccessProvider(transport))
+    : undefined;
   try {
     await server.listen();
   } catch (error) {
+    disposeAccess?.();
     await transport.dispose?.();
     supervisor.dispose();
     throw error;
   }
+  transport.setAddresses?.(server.addresses);
   const instanceStarted = options.startInstance === false
     ? Promise.resolve()
     : supervisor.start().catch((error: unknown) => {
@@ -102,6 +153,8 @@ export async function startGateway(options: StartGatewayOptions): Promise<Runnin
     http: server,
     supervisor,
     transport,
+    packages,
+    ownsInstanceLifecycle: () => consoleStopped || packages?.activeTransaction !== undefined,
     instanceStarted,
     close(): Promise<void> {
       closeResult ??= (async () => {
@@ -109,11 +162,43 @@ export async function startGateway(options: StartGatewayOptions): Promise<Runnin
           await supervisor.stop({ reason: 'gateway-stop' }).catch(() => undefined);
           await transport.dispose?.();
         } finally {
+          disposeAccess?.();
           supervisor.dispose();
           await server.close();
         }
       })();
       return closeResult;
+    },
+  });
+}
+
+export interface RunGatewayOptions extends Omit<RunSupervisedInstanceOptions, 'attach'> {
+  /** Overrides the project's `http` block (tests). */
+  readonly http?: ResolvedHttpConfig;
+}
+
+/**
+ * `zhin runtime start` / `pnpm dev` (ADR 0054 §1): the gateway HTTP server on the configured
+ * `http` port in front of the supervised instance, bridged by `supervisor.transport`. Resolves
+ * with the exit code, like {@link runSupervisedInstance}.
+ */
+export function runGateway(input: RunGatewayOptions): Promise<number> {
+  return runSupervisedInstance({
+    ...input,
+    attach: async (supervisor) => {
+      const gateway = await startGateway({
+        projectRoot: input.root,
+        environment: input.options.environment,
+        ...(input.http ? { http: input.http } : {}),
+        supervisor,
+        transport: () => supervisor.transport,
+        // runSupervisedInstance starts the instance and owns its run.
+        startInstance: false,
+      });
+      return {
+        keepAlive: () => gateway.ownsInstanceLifecycle(),
+        close: () => gateway.close(),
+      };
     },
   });
 }

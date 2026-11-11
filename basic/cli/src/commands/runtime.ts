@@ -3,7 +3,8 @@ import { join, relative, resolve } from 'node:path';
 import { Command } from 'commander';
 import { FilePublishJournalStore } from '../plugin-runtime/publish-journal.js';
 import { NodeProcessRunner, ProjectCommands } from '../plugin-runtime/project-commands.js';
-import { isSupervisedInstanceProcess, runSupervisedInstance } from '@zhin.js/gateway/supervisor';
+import { isSupervisedInstanceProcess } from '@zhin.js/gateway/supervisor';
+import { runGateway } from '@zhin.js/gateway/server';
 import { formatStartOptionHelp, generatePluginCapabilityCodegen, parseStartOptions } from '@zhin.js/runtime';
 import { importProjectInstance } from '../utils/project-instance.js';
 
@@ -47,8 +48,9 @@ runtimeCommand.command('start')
     const root = resolve(process.cwd());
     const parsed = parseStartOptions(command.args);
     if (!isSupervisedInstanceProcess() && !parsed.standalone) {
-      // Parent: the gateway supervisor spawns this command again as the instance (ADR 0054 §3).
-      process.exitCode = await runSupervisedInstance({ root, options: parsed });
+      // Parent: the gateway (HTTP server on `http.port` + supervisor) spawns this command again
+      // as the instance and forwards HTTP to it over the control channel (ADR 0054 §1 / §3).
+      process.exitCode = await runGateway({ root, options: parsed });
       return;
     }
     // The instance composition root lives in the project's `zhin.js` (ADR 0054 §0). Under the

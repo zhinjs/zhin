@@ -13,4 +13,4 @@ process.on('message', (message) => {
   process.disconnect?.();
 });
 console.log('instance ready');
-process.send?.({ type: 'ready', payload: { version: 1, pid: process.pid, generation: 1 } });
+process.send?.({ type: 'ready', payload: { version: Number(process.env.ZHIN_RUNTIME_CHILD), pid: process.pid, generation: 1 } });

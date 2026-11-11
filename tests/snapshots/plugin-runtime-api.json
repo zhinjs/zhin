@@ -278,6 +278,7 @@
     "export * from './packages.js';",
     "export * from './plugin-management.js';",
     "export * from './project.js';",
+    "export * from './server.js';",
     "export * from './supervisor.js';",
     "export * from './terminal.js';",
     "export * from './usage.js';"

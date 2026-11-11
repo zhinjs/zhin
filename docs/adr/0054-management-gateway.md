@@ -85,7 +85,7 @@ interface HttpHost {
 **请求流**（网关唯一的 HTTP 服务器，监听 `http.port`，`http.base` 默认 `/api`）：
 
 1. **网关自有路由**——网关直接处理：`{base}/auth/*`（含初始化，ADR 0049）、`{base}/gateway/*`（§4、§5）、`{base}/console/terminal*`（ADR 0051）、`/pub/health`、本地 Console 静态资源。
-2. **实例注册的 `{base}/*` 路由**（Console RPC、SSE、REST、MCP、A2A）——网关先认证（会话 / API 令牌 → 主体、权限、作用域绑定），未认证 401；实例离线 `503 { code: 'instance-offline', state }`；认证通过后连同主体一起转发给实例。
+2. **实例注册的 `{base}/*` 路由**（Console RPC、SSE、REST、MCP、A2A）——网关先认证（会话 / API 令牌 → 主体、权限、作用域绑定），未认证 401；实例离线 `503 { code: 'instance_unavailable', state }`（带 `Retry-After`）；实例在期限内没有响应 `504 { code: 'instance_timeout' }`；其他桥接失败（实例处理出错、流过多）`502 { code: 'instance_error' }`；认证通过后连同主体一起转发给实例。
 3. **实例注册的其他路由**（适配器 Webhook、反向 WS 等）——不认证，原样转发，鉴权由插件自己负责，与今天一致。
 
 **授权在处理处完成**：实例的 Console RPC 分发点按 `CONSOLE_RPC_PERMISSIONS`（ADR 0049 §3）检查随请求转发的主体——只有分发点知道 RPC 类型与载荷里的作用域目标。网关自有路由由网关检查。两边用 `@zhin.js/host-http` 的同一个访问控制模块与同一份权限表。控制通道只存在于父子进程之间，主体随消息传递，不需要签名。
@@ -102,6 +102,8 @@ interface HttpHost {
 | 实例 → 网关 | `restart-request` | 需要整进程重启的变更（`restart-process` effect、`disable_plugins`、数据库切换、Agent 自我变更）。**取代退出码 75** |
 | 网关 → 实例 | `shutdown` | `{ reason, budgetMs }` |
 | 网关 → 实例 | `principal-revoked` | 实例断开该主体的 SSE / WS |
+| 网关 → 实例 | `auth.authenticate` / `auth.audit` | **过渡（至 B1.4）**：账号仍在实例时，网关请实例解析用户会话 / API 令牌（`auth.result`）并把网关侧审计写入实例的审计日志 |
+| 实例 → 网关 | `auth.state` / `auth.result` | **过渡（至 B1.4）**：是否已有所有者（变化时上报；未上报前网关按“已有所有者”处理，失败即关闭）；解析结果只可能是用户 / API 令牌主体，初始化令牌与开放 Host 由网关自己判断 |
 
 **日志**：网关采集实例 stdout / stderr，写入 `.zhin/logs/instance.log`（按大小轮转），并保留内存环形缓冲，供 `gateway.instance.logs` 与实例离线时查看。
 

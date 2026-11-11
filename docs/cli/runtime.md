@@ -120,8 +120,12 @@ zhin stop                              # 停止（读取 .zhin.pid）
 | 实例 → 监管 | `http.response.head` / `http.response.body` / `http.response.end` / `http.response.error` | 响应头与分块响应体（SSE、大文件） |
 | 双向 | `http.request.credit` / `http.response.credit` | 按信用额度的背压：每个方向最多 256 KiB 在途，单块 ≤ 64 KiB |
 | 双向 | `ws.open` / `ws.accepted` / `ws.rejected` / `ws.message` / `ws.close` / `ws.drain` | WebSocket 连接与帧（文本 / 二进制），`ws.drain` 驱动 `bufferedAmount` |
+| 监管 → 实例 | `auth.authenticate` / `auth.audit` | 过渡：Console 账号迁到网关（B1.4）之前，由实例解析会话 / API 令牌，网关侧审计写入实例 |
+| 实例 → 监管 | `auth.state` / `auth.result` | 过渡：是否已有所有者（变化时上报）与令牌解析结果 |
 
 **实例不含 HTTP 服务器**（ADR 0054 §2）：在监管进程下，实例用 `BridgedHttpHost` 经控制通道承载自己的路由，不监听端口，也不导入 `node:http` / `ws`；HTTP 由网关唯一的服务器接收后转发。网关认证调用方并随请求传递主体，实例只做授权（按 Console 权限表），不再自行解析凭据。
+
+**网关监听 `http.port`**：`zhin runtime start`（`pnpm dev`）的监管进程同时是网关，在配置的 `http.host` / `http.port`（以及 `http.listeners` 额外端口）上监听，按项目的 `http.*` 与 `.env.<environment>` 解析。`/pub/health` 由网关回答（含实例状态）；`POST {base}/console/request` 里的 `gateway.*` RPC（依赖事务、实例起停与日志）由网关处理，其他类型原样转发给实例；其余请求全部转发。实例未就绪时转发请求得到 `503 { code: 'instance_unavailable', state }` 与 `Retry-After`，超时 `504 instance_timeout`，其他桥接失败 `502 instance_error`。经 Console 停止实例、或依赖事务进行中，监管进程不会因实例停止而退出。
 
 实例就绪超时（默认 60 秒）按启动失败处理。`--once` 不处理重启请求。`ZHIN_RUNTIME_CHILD` 的值是网关的协议版本，版本不兼容时实例拒绝启动。`zhin.js/instance` 没有控制通道时拒绝启动；开发与测试可用 `zhin runtime start --standalone`（编程方式：`runStartCommand({ standaloneHttp: true })`）在本进程内自带 HTTP 服务器，此时没有受管重启，重启请求只会停止进程。
 

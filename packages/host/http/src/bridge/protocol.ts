@@ -20,14 +20,15 @@
  *
  * This module must not import `node:http` / `ws`: the instance loads it.
  */
-import type { ConsolePrincipal } from '../access-control.js';
+import type { ConsoleAuditEntry, ConsolePrincipal } from '../access-control.js';
 import type { HttpHostAddress } from '../host-options.js';
 import type { RouteMeta } from '../openapi.js';
 
 /**
  * Bumped on any incompatible change to the control channel messages.
  * - 1: `ready` / `restart-request` / `shutdown` (B1.1).
- * - 2: route table, HTTP streams, WebSocket frames, forwarded principal (B1.2).
+ * - 2: route table, HTTP streams, WebSocket frames, forwarded principal (B1.2); delegated
+ *   credential resolution (`auth.*`) while Console accounts still live in the instance (until B1.4).
  */
 export const INSTANCE_BRIDGE_PROTOCOL_VERSION = 2;
 
@@ -186,8 +187,29 @@ export type WsMessageMessage = BridgeStreamMessage<'ws.message', WsMessagePayloa
 export type WsCloseMessage = BridgeStreamMessage<'ws.close', WsClosePayload>;
 export type WsDrainMessage = BridgeStreamMessage<'ws.drain', CreditPayload>;
 
+/**
+ * Delegated authentication (interim until B1.4 moves Console accounts into the gateway): the
+ * instance owns the user / session store, so the gateway asks it to resolve a bearer and mirrors
+ * whether an owner exists (`auth.state`, sent on change). Only user / API-token principals are
+ * resolved this way; the bootstrap token and an open Host are decided by the gateway itself.
+ */
+export interface AuthStatePayload {
+  /** An enabled global owner exists (`ConsoleAccessProvider.initialized()`). */
+  readonly initialized: boolean;
+}
+
+export interface AuthResultPayload {
+  /** Resolved user / API-token principal; null when unknown, expired or revoked. */
+  readonly principal: ConsolePrincipal | null;
+}
+
+export type InstanceAuthStateMessage = BridgeMessage<'auth.state', AuthStatePayload>;
+export type InstanceAuthResultMessage = BridgeStreamMessage<'auth.result', AuthResultPayload>;
+
 export type InstanceToGatewayMessage =
   | InstanceReadyMessage
+  | InstanceAuthStateMessage
+  | InstanceAuthResultMessage
   | InstanceRestartRequestMessage
   | InstanceRoutesMessage
   | HttpResponseHeadMessage
@@ -229,7 +251,20 @@ export interface WsOpenPayload {
   readonly remoteAddress?: string;
 }
 
+export interface AuthAuthenticatePayload {
+  /** The bearer the client presented (never logged). */
+  readonly token: string;
+  readonly ip?: string;
+  readonly userAgent?: string;
+}
+
+export interface AuthAuditPayload {
+  readonly entry: ConsoleAuditEntry;
+}
+
 export type GatewayShutdownMessage = BridgeMessage<'shutdown', GatewayShutdownPayload>;
+export type GatewayAuthAuthenticateMessage = BridgeStreamMessage<'auth.authenticate', AuthAuthenticatePayload>;
+export type GatewayAuthAuditMessage = BridgeMessage<'auth.audit', AuthAuditPayload>;
 export type GatewayAddressesMessage = BridgeMessage<'host.addresses', { readonly addresses: readonly HttpHostAddress[] }>;
 export type HttpRequestMessage = BridgeStreamMessage<'http.request', HttpRequestPayload>;
 export type HttpRequestBodyMessage = BridgeStreamMessage<'http.request.body', BodyChunkPayload>;
@@ -240,6 +275,8 @@ export type WsOpenMessage = BridgeStreamMessage<'ws.open', WsOpenPayload>;
 
 export type GatewayToInstanceMessage =
   | GatewayShutdownMessage
+  | GatewayAuthAuthenticateMessage
+  | GatewayAuthAuditMessage
   | GatewayAddressesMessage
   | HttpRequestMessage
   | HttpRequestBodyMessage
@@ -376,6 +413,18 @@ function isRouteTable(value: unknown, limits: BridgeLimits): value is BridgeRout
   return true;
 }
 
+const MAX_BEARER_LENGTH = 4096;
+
+function isAuditEntry(value: unknown): value is ConsoleAuditEntry {
+  if (!isRecord(value)) return false;
+  if (!isText(value.actor, 256) || !isText(value.action, 512)) return false;
+  if (value.outcome !== 'ok' && value.outcome !== 'denied' && value.outcome !== 'error') return false;
+  if (value.target !== undefined && !isText(value.target, 512)) return false;
+  if (value.ip !== undefined && !isText(value.ip, 256)) return false;
+  if (value.detail !== undefined && !isRecord(value.detail)) return false;
+  return true;
+}
+
 function isOptionalPrincipal(value: unknown): boolean {
   return value === undefined || parseBridgePrincipal(value) !== undefined;
 }
@@ -403,11 +452,20 @@ export function parseInstanceMessage(
       return value as unknown as InstanceRestartRequestMessage;
     case 'routes':
       return isRouteTable(payload.table, limits) ? value as unknown as InstanceRoutesMessage : undefined;
+    case 'auth.state':
+      return typeof payload.initialized === 'boolean' ? value as unknown as InstanceAuthStateMessage : undefined;
     default:
       break;
   }
   if (!hasStreamId(value)) return undefined;
   switch (value.type) {
+    case 'auth.result': {
+      if (payload.principal === null) return value as unknown as InstanceAuthResultMessage;
+      const principal = parseBridgePrincipal(payload.principal);
+      // Only accounts resolve through the instance; the gateway decides bootstrap itself.
+      if (!principal || principal.kind === 'bootstrap') return undefined;
+      return { type: 'auth.result', id: value.id as string, payload: { principal } };
+    }
     case 'http.response.head':
       if (!Number.isSafeInteger(payload.status) || (payload.status as number) < 200 || (payload.status as number) > 599) return undefined;
       if (payload.statusText !== undefined && !isText(payload.statusText)) return undefined;
@@ -448,11 +506,17 @@ export function parseGatewayMessage(
     case 'host.addresses':
       if (!Array.isArray(payload.addresses) || payload.addresses.length > 64 || !payload.addresses.every(isAddress)) return undefined;
       return value as unknown as GatewayAddressesMessage;
+    case 'auth.audit':
+      return isAuditEntry(payload.entry) ? value as unknown as GatewayAuthAuditMessage : undefined;
     default:
       break;
   }
   if (!hasStreamId(value)) return undefined;
   switch (value.type) {
+    case 'auth.authenticate':
+      if (!isText(payload.token, MAX_BEARER_LENGTH)) return undefined;
+      if (!isOptionalRemote(payload.ip) || (payload.userAgent !== undefined && !isText(payload.userAgent))) return undefined;
+      return value as unknown as GatewayAuthAuthenticateMessage;
     case 'http.request':
       if (!isText(payload.method, 16) || !/^[A-Za-z]+$/u.test(payload.method)) return undefined;
       if (!isText(payload.url, limits.maxHeadBytes) || typeof payload.body !== 'boolean') return undefined;

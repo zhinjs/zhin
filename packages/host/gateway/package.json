@@ -60,6 +60,11 @@
       "types": "./lib/packages.d.ts",
       "development": "./src/packages.ts",
       "import": "./lib/packages.js"
+    },
+    "./server": {
+      "types": "./lib/server.d.ts",
+      "development": "./src/server.ts",
+      "import": "./lib/server.js"
     }
   },
   "files": [
@@ -151,6 +156,10 @@
       "./packages": {
         "types": "./lib/packages.d.ts",
         "import": "./lib/packages.js"
+      },
+      "./server": {
+        "types": "./lib/server.d.ts",
+        "import": "./lib/server.js"
       }
     }
   },

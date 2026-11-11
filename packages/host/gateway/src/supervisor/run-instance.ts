@@ -68,7 +68,21 @@ export interface RunSupervisedInstanceOptions {
   /** Arguments after the entry; defaults to `process.argv.slice(2)`. */
   readonly args?: readonly string[];
   readonly logs?: Omit<InstanceLogOptions, 'file'>;
+  /**
+   * Attaches a component (the gateway HTTP server) to the supervisor before the instance starts;
+   * closed when the run ends. Its `keepAlive()` keeps the run going while it owns the instance's
+   * lifecycle (a Console stop, a dependency transaction).
+   */
+  readonly attach?: (supervisor: InstanceSupervisor) => Promise<SupervisedAttachment>;
 }
+
+export interface SupervisedAttachment {
+  /** True while a stopped / crashed instance must not end the run. */
+  keepAlive?(): boolean;
+  close(): Promise<void>;
+}
+
+const KEEP_ALIVE_POLL_MS = 500;
 
 /**
  * Runs the instance under supervision and resolves with the exit code this process should use.
@@ -137,21 +151,32 @@ export async function runSupervisedInstance(input: RunSupervisedInstanceOptions)
   process.on('SIGTERM', onSignal);
   process.on('SIGHUP', onSighup);
   process.on('exit', onExit);
+  let attachment: SupervisedAttachment | undefined;
+  let keepAliveTimer: ReturnType<typeof setInterval> | undefined;
   try {
+    attachment = await input.attach?.(supervisor);
+    const ended = (): boolean => (supervisor.state === 'stopped' || supervisor.state === 'crashed')
+      && (interrupted || attachment?.keepAlive?.() !== true);
     const settled = new Promise<InstanceStatus>((resolve) => {
-      const check = (status: InstanceStatus): void => {
-        if (status.state === 'stopped' || status.state === 'crashed') resolve(status);
+      const check = (): void => {
+        if (ended()) resolve(supervisor.status());
       };
       supervisor.on('state', check);
+      if (attachment?.keepAlive) {
+        keepAliveTimer = setInterval(check, KEEP_ALIVE_POLL_MS);
+        keepAliveTimer.unref?.();
+      }
     });
     await supervisor.start().catch(() => undefined);
-    const status = supervisor.state === 'stopped' || supervisor.state === 'crashed'
-      ? supervisor.status()
-      : await settled;
+    const status = ended() ? supervisor.status() : await settled;
     if (interrupted) return status.lastExitCode ?? 130;
     if (status.state === 'crashed') return status.lastExitCode || 1;
     return status.lastExitCode ?? 0;
   } finally {
+    clearInterval(keepAliveTimer);
+    await attachment?.close().catch((error: unknown) => {
+      logger.warn(formatCompact({ op: 'gateway_close_failed', error: error instanceof Error ? error.message : String(error) }));
+    });
     process.off('SIGINT', onSignal);
     process.off('SIGTERM', onSignal);
     process.off('SIGHUP', onSighup);

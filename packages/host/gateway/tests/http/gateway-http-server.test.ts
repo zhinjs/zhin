@@ -4,19 +4,24 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
 import { jsonResponse, type HttpHost, type WsConnection } from '@zhin.js/host-http';
 import { GatewayHttpServer } from '../../src/http/gateway-http-server.js';
-import type {
-  InstanceRequestContext,
-  InstanceTransport,
-  InstanceWsOpenInfo,
-  RouteTable,
-} from '../../src/http/instance-transport.js';
+import { createGatewayConsoleRpc } from '../../src/http/console-rpc.js';
+import { createGatewayRpcDispatcher } from '../../src/packages/rpc.js';
+import {
+  InstanceTransportError,
+  type BridgeRouteTable,
+  type InstanceRequestContext,
+  type InstanceTransport,
+  type InstanceWsOpenInfo,
+} from '@zhin.js/host-http/bridge';
 import { installTestConsoleUsers } from '../utils/console-users.js';
 
 /** In-memory stand-in for the bridge transport: records requests, echoes WebSocket frames. */
 class FakeTransport implements InstanceTransport {
   ready = true;
-  table: RouteTable = {
-    http: [{ method: 'ALL', path: '/*' }],
+  table: BridgeRouteTable = {
+    revision: 1,
+    apiBase: '/api',
+    http: [{ method: 'ALL', pattern: '/*' }],
     ws: [{ path: '/sandbox', auth: 'host' }, { path: '/adapter/reverse', auth: 'protocol' }],
   };
   readonly requests: Array<{ request: Request; context: InstanceRequestContext; body: string }> = [];
@@ -25,7 +30,7 @@ class FakeTransport implements InstanceTransport {
     jsonResponse(200, { from: 'instance', path: new URL(request.url).pathname });
   acceptSockets = true;
 
-  routes(): RouteTable { return this.table; }
+  routes(): BridgeRouteTable { return this.table; }
   onRoutes(): () => void { return () => undefined; }
 
   async fetch(request: Request, context: InstanceRequestContext): Promise<Response> {
@@ -56,7 +61,7 @@ afterEach(async () => {
 
 async function startServer(
   transport: FakeTransport | undefined,
-  options: { state?: () => string; extra?: boolean; tls?: boolean; maxBody?: number } = {},
+  options: { state?: () => string; extra?: boolean; tls?: boolean; maxBody?: number; rpc?: boolean } = {},
 ): Promise<{ server: GatewayHttpServer; origin: string }> {
   const key = readFileSync(new URL('../../../http/tests/fixtures/localhost-key.pem', import.meta.url));
   const cert = readFileSync(new URL('../../../http/tests/fixtures/localhost-cert.pem', import.meta.url));
@@ -70,6 +75,17 @@ async function startServer(
     instance: { transport: () => transport, state: options.state ?? (() => (transport?.ready ? 'running' : 'stopped')) },
     retryAfterSeconds: 7,
     ...(options.maxBody !== undefined ? { maxRequestBodyBytes: options.maxBody } : {}),
+    ...(options.rpc ? {
+      consoleRpc: createGatewayConsoleRpc(createGatewayRpcDispatcher({
+        instance: {
+          start: async () => undefined,
+          stop: async () => undefined,
+          restart: async () => undefined,
+          status: () => ({ state: 'running', lastExitCode: null, lastExitSignal: null, recentRestarts: 0 }) as never,
+          logs: { tail: () => [] },
+        },
+      })),
+    } : {}),
   });
   servers.push(server);
   const address = await server.listen();
@@ -92,6 +108,37 @@ function waitFor<T>(check: () => T | undefined | false, timeoutMs = 3_000): Prom
     tick();
   });
 }
+
+describe('GatewayHttpServer Console RPC', () => {
+  const post = (origin: string, token: string, body: unknown) => fetch(`${origin}/api/console/request`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  it('answers gateway.* itself and forwards every other type unchanged', async () => {
+    const transport = new FakeTransport();
+    const { server, origin } = await startServer(transport, { rpc: true });
+    withUsers(server);
+    const own = await post(origin, 'viewer-token', { type: 'gateway.instance.status', requestId: 'q1' });
+    expect(own.status).toBe(200);
+    expect(await own.json()).toMatchObject({ success: true, type: 'gateway.instance.status', requestId: 'q1', data: { instanceId: 'default', state: 'running' } });
+    // viewer lacks ops.restart; an unknown gateway.* type is unmapped, not forwarded.
+    const denied = await post(origin, 'viewer-token', { type: 'gateway.instance.restart', requestId: 'q2' });
+    expect(denied.status).toBe(403);
+    expect(await denied.json()).toMatchObject({ success: false, code: 'forbidden', requestId: 'q2' });
+    expect((await (await post(origin, 'owner-token', { type: 'gateway.nope' })).json())).toMatchObject({ code: 'unmapped' });
+    expect(transport.requests).toHaveLength(0);
+    const forwardedBody = { type: 'config:get', requestId: 'q3', data: { name: 'x' } };
+    const forwarded = await post(origin, 'viewer-token', forwardedBody);
+    expect(forwarded.status).toBe(200);
+    expect(transport.requests).toHaveLength(1);
+    expect(transport.requests[0]!.body).toBe(JSON.stringify(forwardedBody));
+    expect(transport.requests[0]!.context.principal).toMatchObject({ userId: 'viewer-token' });
+    // The route is authenticated at the gateway before anything is dispatched.
+    expect((await post(origin, 'wrong', { type: 'gateway.instance.status' })).status).toBe(401);
+  });
+});
 
 describe('GatewayHttpServer routing', () => {
   it('serves gateway-owned routes before forwarding', async () => {
@@ -369,6 +416,28 @@ describe('GatewayHttpServer instance availability', () => {
     transport.ready = true;
     transport.handler = async () => { throw new Error('boom'); };
     expect((await fetch(`${origin}/webhook/x`)).status).toBe(502);
+  });
+
+  it('maps InstanceTransportError codes to 503 / 504 / 502', async () => {
+    const transport = new FakeTransport();
+    const { origin } = await startServer(transport, { state: () => 'stopping' });
+    transport.handler = async () => { throw new InstanceTransportError('instance-offline', 'gone'); };
+    const offline = await fetch(`${origin}/webhook/x`);
+    expect(offline.status).toBe(503);
+    expect(offline.headers.get('retry-after')).toBe('7');
+    expect(await offline.json()).toMatchObject({ code: 'instance_unavailable', state: 'stopping' });
+    transport.handler = async () => { throw new InstanceTransportError('timeout', 'slow'); };
+    const timeout = await fetch(`${origin}/webhook/x`);
+    expect(timeout.status).toBe(504);
+    expect(await timeout.json()).toMatchObject({ code: 'instance_timeout' });
+    transport.handler = async () => { throw new InstanceTransportError('instance-error', 'handler failed'); };
+    const failed = await fetch(`${origin}/webhook/x`);
+    expect(failed.status).toBe(502);
+    expect(await failed.json()).toMatchObject({ code: 'instance_error' });
+    transport.handler = async () => { throw new InstanceTransportError('overloaded', 'busy'); };
+    const busy = await fetch(`${origin}/webhook/x`);
+    expect(busy.status).toBe(502);
+    expect(busy.headers.get('retry-after')).toBe('7');
   });
 });
 

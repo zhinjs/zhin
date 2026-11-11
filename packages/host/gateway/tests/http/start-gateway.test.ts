@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { jsonResponse } from '@zhin.js/host-http';
 import { loadGatewayHttpConfig, startGateway, type RunningGateway } from '../../src/http/start-gateway.js';
-import type { InstanceTransport } from '../../src/http/instance-transport.js';
+import { EMPTY_ROUTE_TABLE, type InstanceTransport } from '@zhin.js/host-http/bridge';
 
 const fixture = fileURLToPath(new URL('../supervisor/fixtures/fake-instance.mjs', import.meta.url));
 const gateways: RunningGateway[] = [];
@@ -45,7 +45,7 @@ describe('startGateway', () => {
       transport: ({ supervisor }) => {
         const transport: InstanceTransport & { dispose(): void } = {
           get ready() { return supervisor.state === 'running'; },
-          routes: () => ({ http: [], ws: [] }),
+          routes: () => EMPTY_ROUTE_TABLE,
           onRoutes: () => () => undefined,
           fetch: async (request) => jsonResponse(200, { forwarded: new URL(request.url).pathname }),
           openWebSocket: async () => false,
@@ -82,7 +82,7 @@ describe('startGateway', () => {
       },
       transport: ({ supervisor }) => ({
         get ready() { return supervisor.state === 'running'; },
-        routes: () => ({ http: [], ws: [] }),
+        routes: () => EMPTY_ROUTE_TABLE,
         onRoutes: () => () => undefined,
         fetch: async () => new Response('never'),
         openWebSocket: async () => false,

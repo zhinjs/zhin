@@ -20,6 +20,7 @@ import {
   type HttpRouterOptions,
   type WsTransport,
 } from '../http-host.js';
+import type { ConsoleUserPrincipal } from '../access-control.js';
 import type { HttpHostAddress } from '../host-options.js';
 import { httpHostAddressProvider, type AddressAwareHttpHost } from '../addresses.js';
 import type { RouteMeta } from '../openapi.js';
@@ -40,6 +41,8 @@ import {
 
 const logger = getLogger('http');
 const BODYLESS_METHODS = new Set(['GET', 'HEAD']);
+/** How often the owner-exists flag is re-read for `auth.state` (also re-read after each exchange). */
+const AUTH_STATE_POLL_MS = 1_000;
 
 /** What the bridged Host needs from the control channel (see `openInstanceControlChannel`). */
 export interface BridgeChannel {
@@ -107,10 +110,38 @@ export function createBridgedHttpHost(options: BridgedHttpHostOptions): BridgedH
   let publishScheduled = false;
   let closeResult: Promise<void> | undefined;
   const disposers: Array<() => void> = [];
+  let authState: boolean | undefined;
 
   const send = (message: InstanceToGatewayMessage): void => {
     try { channel.send(message); } catch { /* channel gone */ }
   };
+
+  // ---- delegated authentication (interim until B1.4, see protocol `auth.*`)
+
+  function publishAuthState(): void {
+    if (!listening || closed) return;
+    const initialized = router.tokenRegistry.initialized();
+    if (initialized === authState) return;
+    authState = initialized;
+    send({ type: 'auth.state', payload: { initialized } });
+  }
+
+  async function handleAuthenticate(id: string, token: string, ip: string | undefined, userAgent: string | undefined): Promise<void> {
+    const provider = router.tokenRegistry.accessProvider;
+    let principal: ConsoleUserPrincipal | null = null;
+    if (provider && token && listening && !closed) {
+      try {
+        principal = await provider.authenticate(token, {
+          ...(ip ? { ip } : {}),
+          ...(userAgent ? { userAgent } : {}),
+        });
+      } catch {
+        principal = null;
+      }
+    }
+    publishAuthState();
+    send({ type: 'auth.result', id, payload: { principal } });
+  }
 
   function routeTable(): BridgeRouteTable {
     if (closed) {
@@ -211,6 +242,8 @@ export function createBridgedHttpHost(options: BridgedHttpHostOptions): BridgedH
       if (exchanges.get(id) === exchange) exchanges.delete(id);
       exchange.gate.close();
       exchange.body?.fail(new Error('Exchange finished'));
+      // Setup (first owner) happens over HTTP: report it before the next request.
+      publishAuthState();
     }
   }
 
@@ -351,6 +384,12 @@ export function createBridgedHttpHost(options: BridgedHttpHostOptions): BridgedH
       case 'http.request':
         void handleRequest(message);
         return;
+      case 'auth.authenticate':
+        void handleAuthenticate(message.id, message.payload.token, message.payload.ip, message.payload.userAgent);
+        return;
+      case 'auth.audit':
+        try { router.tokenRegistry.accessProvider?.audit?.(message.payload.entry); } catch { /* audit never breaks the bridge */ }
+        return;
       case 'http.request.body': {
         const exchange = exchanges.get(message.id);
         if (exchange?.body && !exchange.body.push(message.payload.chunk)) {
@@ -413,6 +452,10 @@ export function createBridgedHttpHost(options: BridgedHttpHostOptions): BridgedH
         // Like a listening server, a listening bridge keeps the instance alive until close().
         if (channel.hold) disposers.push(channel.hold());
         sendRoutes(true);
+        publishAuthState();
+        const authPoll = setInterval(publishAuthState, AUTH_STATE_POLL_MS);
+        authPoll.unref?.();
+        disposers.push(() => clearInterval(authPoll));
         logger.debug(formatCompact({ op: 'bridge_listening', routes: router.routeCount, ws: router.wsPaths.length }));
       }
       return addresses[0];
