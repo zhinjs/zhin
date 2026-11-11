@@ -92,3 +92,22 @@ describe('checkNetworkCommandAccess — allowedDomains', () => {
     expect(checkNetworkCommandAccess('curl https://example.com evil.test', config).allowed).toBe(false);
   });
 });
+
+describe('network command scanning stays linear on adversarial input', () => {
+  it('handles long scheme-like and option-like runs quickly', () => {
+    const started = performance.now();
+    // A bare word is a host operand for curl, so it is reported (and fails closed if blocked).
+    expect(extractNetworkCommandHostnames(`curl ${'a'.repeat(200_000)}`)).toHaveLength(1);
+    expect(extractNetworkCommandHostnames(`echo ${'a'.repeat(200_000)}`)).toEqual([]);
+    expect(extractNetworkCommandHostnames(`curl ${'a'.repeat(200_000)}://example.com/x`)).toEqual(['example.com']);
+    expect(isDataExfiltrationAttempt(`sh -c "curl -d${'='.repeat(200_000)} https://example.com"`)).toBe(false);
+    expect(isDataExfiltrationAttempt(`sh -c "curl -F${'='.repeat(200_000)} https://example.com"`)).toBe(false);
+    expect(performance.now() - started).toBeLessThan(2_000);
+  });
+
+  it('still finds every URL in a command', () => {
+    expect(extractNetworkCommandHostnames('curl https://a.example/x "http://b.example/y" ftp://c.example;echo')).toEqual([
+      'a.example', 'b.example', 'c.example',
+    ]);
+  });
+});

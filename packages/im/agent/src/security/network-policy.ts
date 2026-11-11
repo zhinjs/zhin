@@ -161,6 +161,31 @@ const BARE_HOST_ARG = /^(?:\[[0-9a-f:.]+\]|[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\.?)(
  * Option values that merely look like a host are included too — over-inclusion only
  * matters when such a value names a blocked address, which fails closed.
  */
+const URL_TERMINATORS: ReadonlySet<string> = new Set(['\'', '"', '`', '&', '|', ';', ')', '}', ']']);
+const MAX_SCHEME_LENGTH = 32;
+
+/**
+ * Every `scheme://rest` run in a command, found with index scans instead of a regex:
+ * a pattern such as `[a-z][a-z0-9+.-]*:\/\/…` is quadratic on a long run of scheme characters.
+ */
+function findUrlCandidates(command: string): string[] {
+  const candidates: string[] = [];
+  let from = 0;
+  for (;;) {
+    const separator = command.indexOf('://', from);
+    if (separator < 0) break;
+    let start = separator;
+    while (start > 0 && separator - start < MAX_SCHEME_LENGTH && /[a-z0-9+.-]/i.test(command[start - 1]!)) start--;
+    // A scheme starts with a letter.
+    while (start < separator && !/[a-z]/i.test(command[start]!)) start++;
+    let end = separator + 3;
+    while (end < command.length && !URL_TERMINATORS.has(command[end]!) && !/\s/.test(command[end]!)) end++;
+    if (start < separator && end > separator + 3) candidates.push(command.slice(start, end));
+    from = Math.max(end, separator + 3);
+  }
+  return candidates;
+}
+
 export function extractNetworkCommandHostnames(command: string): string[] {
   const hostnames = new Set<string>();
   const add = (candidate: string) => {
@@ -171,7 +196,7 @@ export function extractNetworkCommandHostnames(command: string): string[] {
       // not a parsable URL
     }
   };
-  for (const url of command.match(/[a-z][a-z0-9+.-]*:\/\/[^\s'"`&|;)}\]]+/gi) ?? []) add(url);
+  for (const url of findUrlCandidates(command)) add(url);
   const invocation = findNetworkToolInvocation(command);
   if (invocation) {
     for (const word of positionalNetworkArgs(invocation.tool, invocation.args)) {
@@ -263,9 +288,14 @@ function uploadsLocalFile(tool: 'curl' | 'wget', words: readonly string[]): bool
 export function isDataExfiltrationAttempt(command: string): boolean {
   const invocation = findNetworkToolInvocation(command);
   if (invocation && uploadsLocalFile(invocation.tool, invocation.args)) return true;
-  // Fallback for curl nested in another command's argument (e.g. `sh -c "curl -d @f …"`).
-  return /\bcurl\b/i.test(command)
-    && /(?:\s-[a-z]*d|--data(?:-binary|-ascii|-urlencode)?|--json)[\s=]*['"]?[^\s'"]*@|(?:\s-[a-z]*F|--form)[\s=]*['"]?[^\s'"]*=[@<]|\s-[a-zA-Z]*T\b|--upload-file\b/.test(command);
+  // Fallback for curl nested in another command's argument (e.g. `sh -c "curl -d @f …"`):
+  // split on whitespace and quotes (linear) and run the same token check after each `curl` word.
+  const words = command.split(/[\s'"`]+/);
+  for (let i = 0; i < words.length; i++) {
+    const word = words[i]!.toLowerCase();
+    if ((word === 'curl' || word.endsWith('/curl')) && uploadsLocalFile('curl', words.slice(i + 1))) return true;
+  }
+  return false;
 }
 
 // ── 网络命令访问控制 ───────────────────────────────────────────────────
