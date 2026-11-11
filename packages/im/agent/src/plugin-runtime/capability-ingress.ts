@@ -1,6 +1,6 @@
 import type { CapabilityOperationFactory } from '@zhin.js/feature-kit';
 import { adapterFeatureId, isAdapterIndex } from '@zhin.js/core';
-import type { CapabilityId, FeatureId, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { isFeatureOwnerEnabled, resolveEndpointFeatureKey, type CapabilityId, type FeatureId, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { permissionHostToken, type PermissionHost } from '@zhin.js/permission';
 import { turnPermissionSubject, type TurnAccessContext } from '../turn/turn-ingress.js';
 import {
@@ -90,14 +90,17 @@ export class CapabilityIngress {
     const promptProjection = snapshot.projections.get(promptSectionFeatureId);
     const promptSections = isPromptSectionIndex(promptProjection) ? promptProjection : undefined;
     const promptProfile: PromptProfile = turn?.origin.kind === 'schedule' ? 'schedule' : 'interactive';
-    const featureTools = await bindTools({ index: tools, owner, isActive, turn,
-      host: resolvePermissionHost(snapshot), selectedAgent, operationSnapshot: snapshot, operation });
-    const featureSkills = await bindSkills(
+    // ADR 0050 §6: Plugins switched off for this conversation's endpoint disclose no tools or skills.
+    const enabled = featureGate(snapshot, turn);
+    const featureTools = (await bindTools({ index: tools, owner, isActive, turn,
+      host: resolvePermissionHost(snapshot), selectedAgent, operationSnapshot: snapshot, operation }))
+      .filter(tool => enabled(tool.owner));
+    const featureSkills = (await bindSkills(
       projection(snapshot, skillFeatureId, isSkillIndex),
       turn,
       resolvePermissionHost(snapshot),
       selectedAgent,
-    );
+    )).filter(skill => enabled(skill.owner));
     const seam = resolveSeamIntegration(snapshot);
     const seamTools = seam
       ? await bindSeamTools(seam, owner, isActive, turn, resolvePermissionHost(snapshot))
@@ -145,6 +148,14 @@ export class CapabilityIngress {
 const TRUSTED_ADAPTER_SCOPE = '@zhin.js/';
 export function isTrustedOfficialAdapterPackage(packageName: string | undefined): boolean {
   return typeof packageName === 'string' && packageName.startsWith(TRUSTED_ADAPTER_SCOPE);
+}
+
+/** Owner predicate for the turn's endpoint; non-IM turns and unknown endpoints see every owner. */
+export function featureGate(snapshot: RuntimeSnapshot, turn?: TurnAccessContext): (owner: PluginId) => boolean {
+  const endpoint = turn?.origin.kind === 'im' ? turn.origin.conversation?.endpoint.id : undefined;
+  const key = endpoint ? resolveEndpointFeatureKey(snapshot, endpoint) : undefined;
+  if (!key) return () => true;
+  return owner => isFeatureOwnerEnabled(snapshot, owner, key);
 }
 
 function adapterIsExternal(snapshot: RuntimeSnapshot, owner: PluginId, turn?: TurnAccessContext): boolean {

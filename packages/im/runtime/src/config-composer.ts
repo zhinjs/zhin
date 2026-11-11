@@ -1,4 +1,11 @@
-import type { RuntimeConfigDocument, PluginId } from '@zhin.js/plugin-runtime';
+import {
+  FEATURE_OVERRIDES_KEY, escapeJsonPointerSegment, readPluginConfigBlock,
+  type RuntimeConfigDocument, type PluginId,
+} from '@zhin.js/plugin-runtime';
+import {
+  FEATURE_OVERRIDES_SCHEMA, assertFeatureLevelDeclarations, collectFeatureOverrideWarnings, validateFeatureOverrides,
+  type FeatureOverrideWarning,
+} from './layered-config.js';
 import Ajv2020, { type ErrorObject } from 'ajv/dist/2020.js';
 import type { PluginGraphNode, ProjectGraph } from './project-graph.js';
 import hostConfigSchema from './host-config-schema.json' with { type: 'json' };
@@ -34,6 +41,8 @@ export interface ComposedConfig {
   readonly document: RuntimeConfigDocument;
   readonly views: ReadonlyMap<PluginId, unknown>;
   readonly ownSchemas: ReadonlyMap<PluginId, JsonSchema>;
+  /** Non-fatal ADR 0050 findings (unknown adapter / endpoint keys, ineffective `enabled: true`). */
+  readonly warnings?: readonly FeatureOverrideWarning[];
 }
 
 export class ConfigSchemaCollisionError extends Error {
@@ -116,6 +125,25 @@ export class ConfigComposer {
     if (!validate(document)) {
       throw new ConfigValidationError(formatErrors(validate.errors ?? []), source);
     }
+    const overrideIssues: string[] = [];
+    const warnings: FeatureOverrideWarning[] = [];
+    for (const node of descendants(graph.root)) {
+      const path = String(node.id).split('/').slice(1);
+      const block = readPluginConfigBlock(document, node.id);
+      if (!block || block[FEATURE_OVERRIDES_KEY] === undefined) continue;
+      const pointer = `/${path.map(escapeJsonPointerSegment).join('/')}`;
+      for (const issue of validateFeatureOverrides(requireOwnSchema(ownSchemas, node.id), block)) {
+        overrideIssues.push(`${pointer}${issue.path} ${issue.message}`);
+      }
+      warnings.push(...collectFeatureOverrideWarnings(document, path.join('/'), block[FEATURE_OVERRIDES_KEY]));
+    }
+    if (overrideIssues.length) throw new ConfigValidationError(overrideIssues, source);
+    // Globally disabled instances are not composed, but their stored switches are still reported.
+    for (const instance of declaration.instances.filter(item => !item.enabled)) {
+      const block = document[instance.instanceKey];
+      const overrides = block && typeof block === 'object' ? (block as Record<string, unknown>)[FEATURE_OVERRIDES_KEY] : undefined;
+      if (overrides !== undefined) warnings.push(...collectFeatureOverrideWarnings(document, instance.instanceKey, overrides, false));
+    }
 
     const views = new Map<PluginId, unknown>();
     // A Plugin never receives its effective node object because that object
@@ -138,8 +166,13 @@ export class ConfigComposer {
       document: Object.freeze(document),
       views,
       ownSchemas,
+      warnings: Object.freeze(warnings),
     });
   }
+}
+
+function descendants(node: PluginGraphNode): readonly PluginGraphNode[] {
+  return node.children.flatMap(child => [child, ...descendants(child)]);
 }
 
 const FRAMEWORK_ROLE_SCHEMA: Readonly<Record<string, JsonSchema>> = Object.freeze({
@@ -249,9 +282,10 @@ async function readOwnSchema(node: PluginGraphNode, modules?: Pick<ModuleRuntime
     );
   }
   const properties = schemaProperties(schema);
-  for (const key of [...COMMAND_CONFIG_KEYS, ...(!node.parent ? ROOT_FEATURE_CONFIG_KEYS : [])]) {
+  for (const key of [...COMMAND_CONFIG_KEYS, ...(!node.parent ? ROOT_FEATURE_CONFIG_KEYS : [FEATURE_OVERRIDES_KEY])]) {
     if (Object.hasOwn(properties, key)) throw new ConfigSchemaCollisionError(node.id, key);
   }
+  assertFeatureLevelDeclarations(schema, file);
   return deepFreeze({
     $id: `urn:zhin:plugin-config:${encodeURIComponent(String(node.id))}`,
     type: 'object',
@@ -272,6 +306,8 @@ async function readOwnSchema(node: PluginGraphNode, modules?: Pick<ModuleRuntime
         description: 'Commands of this Plugin instance to leave out of routing, by local path without commandNamespace or parameters (e.g. "fanyi", "netease login"). A parent path also disables its subcommands.',
         'x-descriptionZh': '不注册的指令：写插件内的指令路径（不含 commandNamespace 和参数，如 fanyi、netease login），写上级路径会连同子命令一起禁用。',
       },
+      // ADR 0050: every feature Plugin accepts the reserved per adapter / endpoint override block.
+      ...(node.parent ? { [FEATURE_OVERRIDES_KEY]: FEATURE_OVERRIDES_SCHEMA } : {}),
       ...properties,
     },
   });
@@ -301,18 +337,19 @@ function collectChildViews(
     : {};
   for (const child of parent.children) {
     const childConfig = record[child.instanceKey] ?? Object.freeze({});
-    views.set(child.id, pickOwnFields(childConfig, requireOwnSchema(ownSchemas, child.id)));
+    // `overrides` never enters context.config: it is read per target through configFor (ADR 0050).
+    views.set(child.id, pickOwnFields(childConfig, requireOwnSchema(ownSchemas, child.id), [FEATURE_OVERRIDES_KEY]));
     collectChildViews(child, childConfig, ownSchemas, views);
   }
 }
 
-function pickOwnFields(value: unknown, schema: JsonSchema): Readonly<Record<string, unknown>> {
+function pickOwnFields(value: unknown, schema: JsonSchema, omit: readonly string[] = []): Readonly<Record<string, unknown>> {
   const record = value && typeof value === 'object'
     ? value as Record<string, unknown>
     : {};
   const result: Record<string, unknown> = {};
   for (const key of Object.keys(schemaProperties(schema))) {
-    if (Object.hasOwn(record, key)) result[key] = record[key];
+    if (!omit.includes(key) && Object.hasOwn(record, key)) result[key] = record[key];
   }
   return Object.freeze(result);
 }
@@ -361,7 +398,8 @@ export function validatePluginConfigSchema(schema: JsonSchema, input: unknown): 
   return parsePluginConfigSchema(schema, input).errors;
 }
 
-function configurationValidator(): Ajv2020 {
+/** @internal Shared Ajv configuration for Plugin config and ADR 0050 override validation. */
+export function configurationValidator(): Ajv2020 {
   const ajv = new Ajv2020({
     allErrors: true,
     useDefaults: true,

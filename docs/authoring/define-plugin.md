@@ -134,6 +134,65 @@ export default definePlugin({
 
 更多规则见页尾 [配置声明细则](#配置声明细则)。
 
+#### 按适配器 / 账号覆盖配置 {#layered-config}
+
+同一个插件可以在不同适配器实例、不同账号上用不同的设置（[ADR 0050](../adr/0050-layered-feature-config.md)）。层级从上到下是 `global`（插件自己的配置块）< `adapter`（适配器实例别名，如 `qq`）< `endpoint`（`<别名>/<账号 id>`，如 `qq/bot-1`）。
+
+**1. 在 Schema 根上声明支持的层级。** 省略时等同 `["global"]`：只能写全局配置，覆盖里只能写启用开关。单个属性可以用同名关键字收窄（例如密钥只允许全局），但不能比根更宽，否则启动报错：
+
+```json
+{
+  "type": "object",
+  "x-zhin-config": { "levels": ["global", "adapter", "endpoint"] },
+  "properties": {
+    "maxItems": { "type": "integer", "minimum": 1, "default": 5 },
+    "apiKey": { "type": "string", "x-zhin-config": { "levels": ["global"], "secret": true } }
+  }
+}
+```
+
+用内联 `config` 时，在 `toJsonSchema()` 的结果根上加同样的 `x-zhin-config.levels`。
+
+**2. 覆盖写在插件自己的块里，保留键 `overrides`。** 每个覆盖值是插件 Schema 的部分对象，外加保留字段 `enabled`：
+
+```yaml
+rss:
+  maxItems: 5
+  overrides:
+    adapters:
+      qq: { enabled: false }
+    endpoints:
+      "tg-main/news": { maxItems: 1 }
+```
+
+- 字段自下而上合并：普通对象逐键深合并，数组和标量整体替换，`null` 表示“显式清空”（该字段不再继承上级的值）。
+- 启用自上而下：上级 `enabled: false` 时，下级写 `enabled: true` 也打不开，只会得到一条警告。全局层的启停仍是 `disable_plugins`（改动后重启）。
+- 指向未声明的适配器别名或账号的键会保留并给出警告，不报错，方便先写配置、后加账号。
+- 插件的 Schema 里不能再声明名为 `overrides` 的属性；插件自己的 `enabled` 字段不参与覆盖。
+- 没有配置 Schema 的插件也能用三级启停开关（只写 `enabled`）。
+
+**3. 在代码里读取有效配置。** `context.config` 仍是全局视图，不含 `overrides`：
+
+```ts
+setup(context) {
+  const schedule = context.resources.use(scheduleHostToken);
+  context.lifecycle.add(schedule.register({ id: 'push', cron: '0 */10 * * * *', async execute() {
+    for (const target of targets) {
+      // target 可以是消息、{ adapter: 'qq', endpointId: 'bot-1' } 或解析键 'qq/bot-1'
+      if (!context.isEnabledFor(target)) continue;
+      const { maxItems } = context.configFor(target);
+      // ...
+    }
+  } }));
+}
+```
+
+`configFor(target)` 返回合并后冻结的有效配置，按“配置代次 + 解析键”缓存，读到的总是最新生效的配置。只改 `overrides`（包括适配器 / 账号层的开关）会原地生效：不重启、不重载插件，下一条消息就读到新值；改全局字段沿用字段自己的 `x-zhin-config.effect`。
+
+**自动门禁：** 插件在某个账号上被停用时，命令（含菜单）、中间件、带账号的消息与事件处理器、Agent 工具与技能披露都会直接跳过，表现和插件不存在一样（命令不会回复“已禁用”）。定时任务、后台轮询等不经过消息的能力，需要像上例那样自己调用 `isEnabledFor`。
+
+Console 的功能页通过 `feature.*` RPC（`feature.list` / `feature.matrix` / `feature.get` / `feature.set-override` / `feature.remove-override` / `feature.set-enabled`）读写同一份 `overrides`，手改 YAML 与 Console 改等价。activity-feedback 现有的 `platforms` / `endpoints` 仍然兼容，新插件推荐使用 `overrides`。
+
 ### 使用数据库
 
 在 `zhin.config.yml` 里配置了 `database:` 后，插件可以定义自己的表：
@@ -263,6 +322,7 @@ async setup(context) {
 | --- | --- |
 | `plugin` | 当前插件实例的信息：`id`、`instanceKey`、`parent`、`root`、`role`（`'root'` 或 `'child'`） |
 | `config` | `config.get()` 返回只读的配置 |
+| `configFor(target)` / `isEnabledFor(target)` | 某个适配器 / 账号上的有效配置与启用状态，见 [按适配器 / 账号覆盖配置](#layered-config) |
 | `resources` | 取用和提供资源：`has(token)`、`use(token)`、`provide(token, value, dispose?)` |
 | `lifecycle` | `lifecycle.add(dispose)` 登记清理函数，热重载或卸载时逆序执行 |
 | `handoff` | 让自定义资源参与热重载切换，见下文「热重载交接」 |

@@ -475,7 +475,7 @@ export class RootRuntime {
     return inspectRuntimeProject({
       projectRoot: this.#projectRoot, modules: this.#modules, environment: this.#environment,
       disabledPluginInstanceKeys: this.#disabledPluginInstanceKeys, configResolver: this.#configResolver,
-      snapshot: this.snapshot, getConfigDocument: () => this.#configDocument,
+      snapshot: this.snapshot, readCommittedSnapshot: () => this.snapshot, getConfigDocument: () => this.#configDocument,
       getConfigSnapshot: () => this.#configSnapshot, refreshConfigDocument: () => this.#refreshConfigDocument(),
       onInitialSchemas: (schemas) => {
         this.#initialConfigSchemas = schemas;

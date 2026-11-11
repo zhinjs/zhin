@@ -24,6 +24,7 @@ import {
   scheduleRootHostToken,
   type CapabilityId,
   type ConfigView,
+  type FeatureTarget,
   type Dispose,
   type FeatureId,
   type GenerationHandoff,
@@ -61,6 +62,7 @@ import {
   type PrimaryConfig,
 } from './primary-config.js';
 import { isWithin } from './topology-transaction.js';
+import { createLayeredConfigAccessor } from './layered-config.js';
 
 export type { RootResourceContext, RootResourceInstaller } from '@zhin.js/plugin-runtime';
 
@@ -69,6 +71,8 @@ export interface PluginConfigResolver {
   schema?(node: PluginGraphNode): Readonly<Record<string, unknown>> | undefined;
   /** Set by RootRuntime's actual composition branch, not by Plugin config values. */
   compositionMode?: NonNullable<PrimaryConfig['compositionMode']>;
+  /** Latest committed generation; lets retained Scopes see in-place override changes (ADR 0050). */
+  readCommittedSnapshot?: () => RuntimeSnapshot | undefined;
 }
 
 export interface PluginAssemblySeed {
@@ -242,11 +246,23 @@ export class PluginScopeAssembler {
           throw new Error(`Missing resource ${token.id} for Plugin ${node.id}`);
         }
       }
+      const layered = createLayeredConfigAccessor({
+        owner: node.id,
+        generation: this.generation,
+        schema: configSchema,
+        candidate: this.#primaryConfig,
+        readCommitted: this.configResolver.readCommittedSnapshot,
+        readCandidate: () => this.#candidateSnapshot,
+        expand: value => environment.expandMissingAsEmpty(value),
+        view: config as Readonly<Record<string, unknown>>,
+      });
       const setupContext: Record<string, unknown> = {
         events: eventChannel.events,
         signal,
         plugin,
         config: view,
+        configFor: (target: FeatureTarget) => layered.configFor(target),
+        isEnabledFor: (target: FeatureTarget) => layered.isEnabledFor(target),
         resources: scope,
         lifecycle: scope.disposers,
         handoff: this.#handoffs,

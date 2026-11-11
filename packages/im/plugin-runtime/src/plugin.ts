@@ -6,6 +6,7 @@ import type { Dispose, DisposeStack } from './dispose.js';
 import type { GenerationHandoffRegistry } from './handoff.js';
 import type { FeatureId, PluginId } from './identity.js';
 import type { Scope, Token } from './token.js';
+import type { FeatureTarget } from './layered-config.js';
 import type { PluginEventSubscriptions } from './plugin-events.js';
 import { freezePluginConfigUpdate, type PluginConfigUpdateDeclaration } from './config-update-declaration.js';
 import {
@@ -62,6 +63,15 @@ export interface PluginSetupContext<TConfig = unknown> {
   readonly signal: AbortSignal;
   readonly plugin: PluginInstanceView;
   readonly config: ConfigView<TConfig>;
+  /**
+   * Effective configuration for one adapter / endpoint (ADR 0050): `global ← adapter ← endpoint`,
+   * merged, frozen and cached per configuration generation. `target` is a message, an explicit
+   * `{ adapter: <instance alias>, endpointId? }` or a resolution key such as `'qq/bot-1'`.
+   * Reads the latest committed configuration, so in-place override changes are visible without reload.
+   */
+  configFor(target: FeatureTarget): Readonly<TConfig>;
+  /** Effective enable state for one adapter / endpoint; an upper-level disable always wins. */
+  isEnabledFor(target: FeatureTarget): boolean;
   readonly resources: Scope;
   readonly lifecycle: DisposeStack;
   readonly handoff: GenerationHandoffRegistry;

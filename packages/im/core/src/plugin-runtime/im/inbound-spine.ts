@@ -22,6 +22,7 @@ import {
   type UserLocalePreferences,
 } from '@zhin.js/plugin-runtime';
 import { HandlerIndex, handlerFeatureId, isHandlerIndex } from '../../feature/handler.js';
+import { gatedHandlerIndex, gatedMiddlewareIndex } from './feature-gate.js';
 import { RuntimeNotice, type IncomingNotice, type Notice } from '../../notice.js';
 import { RuntimeRequest, type IncomingRequest, type Request } from '../../request.js';
 import type { EndpointEventContext } from '../../side-event/base.js';
@@ -162,7 +163,7 @@ export async function runRuntimeMiddleware<TInput>(
   terminal: () => Promise<void>,
   target: 'inbound' | 'outbound',
 ): Promise<void> {
-  const index = middlewareProjection(snapshot);
+  const index = gatedMiddlewareIndex(input, snapshot);
   if (index) await index.run(input, terminal, target, snapshot);
   else await terminal();
 }
@@ -447,7 +448,7 @@ export async function runInboundMiddlewareAndSpine(
   const { message, lease } = envelope;
   const terminal = (control?: InboundTerminalControl): Promise<InboundOutcome> =>
     executeInboundTurnSpine(envelope, control);
-  const middleware = lease.value.projections.get(middlewareFeatureId);
+  const middleware = gatedMiddlewareIndex(message, lease.value);
   if (isMiddlewareIndex(middleware)) diagnostics?.step('middleware', 'entered');
   const outcome = isMiddlewareIndex(middleware)
     ? await middleware.runInbound(message, terminal, {
@@ -482,7 +483,8 @@ export async function dispatchInboundHandlers({
   captureInteraction,
 }: InboundHandlerDispatch): Promise<void> {
   const snapshot = lease.value;
-  const index = handlers(snapshot);
+  // ADR 0050: only events carrying an endpoint are gated; others keep the full index.
+  const index = gatedHandlerIndex(args[0], snapshot);
   if (!index) return;
   const options: HandlerDispatchOptions = {
     snapshot,
