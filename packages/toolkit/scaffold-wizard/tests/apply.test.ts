@@ -90,6 +90,16 @@ describe('applyDatabaseToConfig', () => {
 });
 
 describe('appendWizardEnvVars', () => {
+  it('accepts AI enabled without a provider and writes no plan proposal', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'zhin-wizard-env-'));
+    try {
+      await appendWizardEnvVars(dir, undefined, { enabled: true });
+      expect(await fs.pathExists(path.join(dir, 'ai.plan.yml'))).toBe(false);
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it('writes database/adapter/ai env vars and is idempotent per KEY', async () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'zhin-wizard-env-'));
     try {

@@ -9,6 +9,7 @@ import * as config from '../src/config.js';
 import * as pluginManagement from '../src/plugin-management.js';
 import * as project from '../src/project.js';
 import * as supervisor from '../src/supervisor.js';
+import * as onboarding from '../src/onboarding.js';
 
 const packageRoot = fileURLToPath(new URL('..', import.meta.url));
 // ADR 0054 §0: the gateway never loads zhin.js or IM layers.
@@ -36,7 +37,9 @@ describe('@zhin.js/gateway package boundary', () => {
     expect(project.findConfigFile).toBeTypeOf('function');
     expect(project.loadRuntimeEnvironmentLayers).toBeTypeOf('function');
     expect(supervisor.NativeTypeScriptSupervisor).toBeTypeOf('function');
-    for (const area of [iam, terminal, config, pluginManagement, project, supervisor]) {
+    expect(onboarding.OnboardingService).toBeTypeOf('function');
+    expect(onboarding.authorizeInstall).toBeTypeOf('function');
+    for (const area of [iam, terminal, config, pluginManagement, project, supervisor, onboarding]) {
       for (const [name, value] of Object.entries(area)) expect(gateway[name as keyof typeof gateway]).toBe(value);
     }
   });

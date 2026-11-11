@@ -17,6 +17,7 @@ Zhin.js 管理网关（[ADR 0054](../../../docs/adr/0054-management-gateway.md)�
 | `@zhin.js/gateway/project` | 项目文件工具：`findConfigFile`、`loadRuntimeEnvironmentLayers`、`createTsxModuleLoader`、实例声明迁移、旧配置检测、Node 版本要求 |
 | `@zhin.js/gateway/supervisor` | 实例进程监管 `NativeTypeScriptSupervisor`（B1.1 由 IPC 实例监管取代） |
 | `@zhin.js/gateway/usage` | 用量统计聚合 |
+| `@zhin.js/gateway/onboarding` | Console 引导（ADR 0053）：`.zhin/onboarding.json` 状态（`OnboardingStateStore`、自动识别已配置步骤）、`OnboardingService`、安装白名单与 `authorizeInstall`、流式 `installPackages` |
 | `@zhin.js/gateway/http` | JSON / HTML / SSE 响应工具 |
 | `@zhin.js/gateway` | 以上全部 |
 
