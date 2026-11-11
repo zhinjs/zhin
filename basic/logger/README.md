@@ -4,8 +4,8 @@
 
 ## ✨ 特性
 
-- 🎯 **轻量级**: 仅依赖 chalk，无额外第三方库
-- 🎨 **自定义格式**: 【date】【level】【name】：【message】
+- 🎯 **轻量级**: 仅依赖 chalk 与 string-width
+- 🎨 **默认格式**: `[HH:mm:ss.SSS][LEVEL] [name] message`，可换成自定义格式化器
 - 🌈 **智能着色**: 自动为不同级别和名称分配颜色
 - 🎨 **颜色自定义**: 完全自定义级别、名称、日期颜色（新功能）
 - 📊 **多输出支持**: 控制台、文件、流等多种输出方式
@@ -41,12 +41,12 @@ logger.info('这是来自 MyApp 的日志')
 ### 输出格式
 
 ```
-[09-08 04:07:55.852] [INFO] [MyApp]: 应用启动
-[09-08 04:07:55.854] [WARN] [Database]: 连接超时
-[09-08 04:07:55.855] [ERROR] [Auth]: 用户验证失败
+[04:07:55.852][INFO] [MyApp] 应用启动
+[04:07:55.854][WARN] [Database] 连接超时
+[04:07:55.855][ERROR] [Auth] 用户验证失败
 ```
 
-- **日期格式**: `MM-dd HH:MM:ss.SSS`
+- **时间格式**: `HH:mm:ss.SSS`（本地时间；名称为空时省略 `[name]` 段）
 - **级别着色**: DEBUG(灰), INFO(蓝), WARN(黄), ERROR(红)
 - **名称着色**: 自动为不同名称分配颜色，便于区分
 
@@ -132,9 +132,10 @@ const debugLogger = appLogger.getLogger('Debug', {
 })
 
 // 父子关系管理
-console.log(dbLogger.getParent()?.getName())     // 'App'
-console.log(appLogger.isRoot())                  // true
-console.log(appLogger.getChildLoggerNames())     // ['Database', 'Debug']
+console.log(dbLogger.parent?.getName())          // 'App'
+console.log(appLogger.isRoot())                  // false（根是包内的默认 logger）
+console.log(appLogger.getLoggerNames())          // ['Database', 'Debug']
+appLogger.removeLogger('Debug')                  // true
 ```
 
 ### 6. 文件输出
@@ -187,8 +188,8 @@ import { getLogger, StreamTransport } from '@zhin.js/logger'
 
 const logger = getLogger('StreamApp', {
   transports: [
-    new StreamTransport(process.stdout, false), // 保留颜色
-    new StreamTransport(process.stderr, true)   // 移除颜色
+    new StreamTransport(process.stdout),                                           // 保留颜色
+    new StreamTransport(process.stderr, { removeAnsi: true, maskSensitive: true }) // 去颜色并脱敏
   ]
 })
 ```
@@ -316,80 +317,92 @@ setFormatter(customFormatter)
 ### 添加全局输出器
 
 ```typescript
-import { addGlobalTransport, FileTransport } from '@zhin.js/logger'
+import { addTransport, FileTransport } from '@zhin.js/logger'
 import fs from 'node:fs'
 
+// 不传第二个参数时作用于默认（根）logger
 const globalLogFile = fs.createWriteStream('./global.log', { flags: 'a' })
-addGlobalTransport(new FileTransport(globalLogFile))
+addTransport(new FileTransport(globalLogFile))
 ```
 
 ## 📚 API 参考
 
-### LogLevel 枚举
+### LogLevel
+
+`LogLevel` 是字符串常量（同时是类型 `'debug' | 'info' | 'warn' | 'error' | 'silent'`）。
+凡是接收级别的参数都是 `LogLevelInput`：也接受 log4js 风格名称（`trace` / `fatal` / `off` …）与旧的数字级别。
 
 ```typescript
-enum LogLevel {
-  DEBUG = 0,
-  INFO = 1,
-  WARN = 2,
-  ERROR = 3,
-  SILENT = 4
-}
+const LogLevel = {
+  DEBUG: 'debug',
+  INFO: 'info',
+  WARN: 'warn',
+  ERROR: 'error',
+  SILENT: 'silent',
+} as const
 ```
 
 ### Logger 类
 
+通常通过 `getLogger()` 取得实例，而不是直接 `new Logger(parent, name, options)`。
+
 ```typescript
 class Logger {
-  // 构造函数
-  constructor(name: string, options?: LoggerOptions, parent?: Logger)
-  
-  // 日志方法
-  debug(message: string, ...args: any[]): void
-  info(message: string, ...args: any[]): void
-  success(message: string, ...args: any[]): void
-  warn(message: string, ...args: any[]): void
-  error(message: string, ...args: any[]): void
-  
-  // 子 Logger 管理（新架构核心功能）
+  constructor(parent: Logger | null, name: string, options?: LoggerOptions)
+
+  // 日志方法（printf 风格参数）
+  debug(...args: any[]): void
+  info(...args: any[]): void
+  success(...args: any[]): void
+  warn(...args: any[]): void
+  error(...args: any[]): void
+  logIf(condition: boolean, level: LogLevel, message: string, ...args: any[]): void
+
+  // 子 Logger 管理
   getLogger(namespace: string, options?: LoggerOptions): Logger
-  removeChildLogger(namespace: string): boolean
-  getChildLoggerNames(): string[]
-  getParent(): Logger | undefined
+  setLogger(name: string, options?: LoggerOptions): Logger
+  hasLogger(name: string): boolean
+  removeLogger(namespace: string): boolean
+  getLoggerNames(): string[]
+  readonly parent: Logger | null
   isRoot(): boolean
-  
-  // 配置管理（支持递归操作）
-  setLevel(level: LogLevel, recursive?: boolean): void
+
+  // 配置管理（recursive 为 true 时同时作用于所有子 Logger）
+  setOptions(options?: LoggerOptions): void
+  setLevel(level: LogLevelInput, recursive?: boolean): void
   setFormatter(formatter: LogFormatter, recursive?: boolean): void
   addTransport(transport: LogTransport, recursive?: boolean): void
   removeTransport(transport: LogTransport, recursive?: boolean): void
-  
+
   // 工具方法
+  name: string
+  getName(): string
   getLevel(): LogLevel
-  isLevelEnabled(level: LogLevel): boolean
+  isLevelEnabled(level: LogLevelInput): boolean
   time(label: string): Timer
   timeEnd(label: string): void
-  logIf(condition: boolean, level: LogLevel, message: string, ...args: any[]): void
-  getName(): string
 }
 ```
 
 ### 便捷函数
 
 ```typescript
-// Logger 管理（新架构）
-function getLogger(name: string, options?: LoggerOptions): Logger
-function getDefaultLogger(): Logger
+// Logger 管理（parent 省略时为默认 logger）
 function getLogger(name: string, options?: LoggerOptions, parent?: Logger): Logger
+function getAdapterLogger(adapter: string, endpoint: string, options?: LoggerOptions): Logger
 function setLogger(name: string, options?: LoggerOptions, parent?: Logger): Logger
+function getLoggerNames(logger?: Logger): string[]
 
-// 全局设置（应用到默认 logger）
-function setLevel(level: LogLevel, logger?: Logger): void
+// 全局设置（logger 省略时应用到默认 logger）
+function setLevel(level: LogLevelInput, logger?: Logger, recursive?: boolean): void
+function getLevel(logger?: Logger): LogLevel
+function isLevelEnabled(level: LogLevelInput, logger?: Logger): boolean
 function setFormatter(formatter: LogFormatter, logger?: Logger): void
 function addTransport(transport: LogTransport, logger?: Logger): void
 function removeTransport(transport: LogTransport, logger?: Logger): void
-function setOptions(options: LoggerOptions, logger?: Logger): void
-function getLoggerNames(logger?: Logger): string[]
+function setOptions(options?: LoggerOptions, logger?: Logger): void
+function setName(name: string, logger?: Logger): void
+function getName(logger?: Logger): string
 
 // 便捷日志方法（使用默认 logger）
 function debug(message: string, ...args: any[]): void
@@ -401,63 +414,43 @@ function time(label: string): Timer
 function timeEnd(label: string): void
 ```
 
+默认导出是默认（根）logger 实例：`import logger from '@zhin.js/logger'`。
+
 ## 🔧 在 Zhin 插件中使用
 
 ```typescript
-import { Plugin } from 'zhin.js'
+// plugin.ts
+import { definePlugin } from 'zhin.js'
 import { getLogger } from '@zhin.js/logger'
 
-export default class MyPlugin extends Plugin {
-  private logger = getLogger(`Plugin:${this.name}`)
+const logger = getLogger('my-plugin')
 
-  async onMounted() {
-    this.logger.success('插件加载成功')
-    
-    this.logger.info('插件配置: %o', this.config)
+export default definePlugin({
+  name: 'my-plugin',
+  setup(context) {
+    logger.success('插件加载成功')
+    logger.info('插件配置: %o', context.config)
 
-    // 创建子模块 Logger
-    const dbLogger = this.logger.getLogger('Database')
-    const apiLogger = this.logger.getLogger('API')
-    
+    // 子模块各自的 Logger：[my-plugin:Database] / [my-plugin:API]
+    const dbLogger = logger.getLogger('Database')
+    const apiLogger = logger.getLogger('API')
     dbLogger.info('数据库模块初始化')
     apiLogger.info('API模块初始化')
-  }
 
-  async handleMessage(message: Message) {
-    // 为每个消息创建独立的处理 Logger
-    const msgLogger = this.logger.getLogger('MessageHandler')
-    const timer = msgLogger.time('消息处理')
-    
-    try {
-      msgLogger.debug('收到消息: %s', message.content)
-      
-      // 使用不同子 Logger 处理不同逻辑
-      const validatorLogger = msgLogger.getLogger('Validator')
-      const processorLogger = msgLogger.getLogger('Processor')
-      
-      validatorLogger.debug('开始验证消息')
-      processorLogger.debug('开始处理消息')
-      
-      await this.processMessage(message)
-      
-      msgLogger.success('消息处理完成')
-      
-    } catch (error) {
-      msgLogger.error('消息处理失败: %s', error.message)
-      throw error
-      
-    } finally {
-      timer.end()
-    }
-  }
-}
+    const timer = logger.time('初始化')
+    // ... 执行初始化
+    timer.end() // 输出: 初始化 took 12.34ms
+
+    return () => logger.info('插件已卸载')
+  },
+})
 ```
 
 ## 🎯 设计特点
 
 ### 轻量级依赖
-- 仅依赖 `chalk` 用于颜色输出
-- 无其他第三方库，包体积小
+- 仅依赖 `chalk`（颜色）与 `string-width`（终端宽度）
+- 包体积小
 - 启动速度快，内存占用低
 
 ### 自管理架构（核心特色）
@@ -484,7 +477,7 @@ export default class MyPlugin extends Plugin {
 | 特性 | @zhin.js/logger | pino | winston |
 |------|----------------|------|---------|
 | 包大小 | < 50KB | > 500KB | > 1MB |
-| 依赖数量 | 1 | 10+ | 20+ |
+| 依赖数量 | 2 | 10+ | 20+ |
 | 启动时间 | 极快 | 快 | 中等 |
 | 自定义格式 | ✅ 简单 | ⚠️ 复杂 | ⚠️ 复杂 |
 | 颜色输出 | ✅ 内置 | ❌ 需插件 | ❌ 需插件 |

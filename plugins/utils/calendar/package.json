@@ -29,6 +29,7 @@
   ],
   "scripts": {
     "build": "tsc",
+    "clean": "rimraf lib",
     "check": "tsc -p tsconfig.check.json",
     "test": "vitest run --root ../../.. plugins/utils/calendar/tests",
     "prepublishOnly": "pnpm run build",
@@ -52,7 +53,6 @@
   "dependencies": {
     "@zhin.js/console-contract": "workspace:*",
     "@zhin.js/host-http": "workspace:*",
-    "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/page": "workspace:*",
     "@zhin.js/skill": "workspace:*",
     "@zhin.js/tool": "workspace:*"

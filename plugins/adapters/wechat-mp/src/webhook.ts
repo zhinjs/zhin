@@ -4,6 +4,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Locale } from 'zhin.js/i18n';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
+import { readTextBody } from '@zhin.js/host-http-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
 import {
@@ -22,7 +23,6 @@ import {
   normalizeEchostrParam,
   parseXMLMessage,
   queryParam,
-  readTextBody,
   resolveEventPassiveReply,
   verifySignature,
   wechatMpInboundConversation,

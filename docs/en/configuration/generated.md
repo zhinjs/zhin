@@ -417,7 +417,6 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `htmlRenderer.idleTimeoutMs` | number | no | — | Daemon idle-exit timeout in milliseconds. |
 | `htmlRenderer.logStats` | boolean | no | — | Log render timing statistics. |
 | `htmlRenderer.mode` | string: `"inprocess"`, `"daemon"` | no | — | Whether Shotium runs in-process or as a daemon. |
-| `htmlRenderer.aiTextAsImage` | boolean \| object | no | — | Optional plain-text to image conversion before send. |
 | `assistant` | object | no | — | Scheduled jobs, event ingress, and failure notifications. |
 | `assistant.enabled` | boolean \| string | no | — | 启用统一 JobStore（默认 false，Stable 行为不变） |
 | `assistant.defaults` | object \| null | no | — | — |
@@ -2456,7 +2455,7 @@ _This Schema declares no fields._
 | `group-suite.rankSize` | number | no | `10` | — |
 | `group-suite.teachMaxPerGroup` | number | no | `200` | — |
 | `group-suite.teachCooldownMs` | number | no | `3000` | — |
-| `group-suite.teachAllowRegex` | boolean | no | `true` | — |
+| `group-suite.teachAllowRegex` | boolean | no | `false` | Allow members to teach regular-expression rules. Off by default: patterns run against every inbound message. Only structurally safe patterns are accepted and they are tried on messages of at most 200 characters. |
 | `group-suite.teachPageSize` | number | no | `10` | — |
 | `group-suite.welcomeMessage` | string | no | `""` | Group welcome text. Empty disables; {name}/{id} refer to the joined member. |
 | `group-suite.welcomeConversations` | array&lt;object&gt; | no | — | Exact welcome conversations. Omitted welcomes all groups; [] welcomes none. Missing parent/thread requires their absence; no wildcards. |
@@ -2575,6 +2574,7 @@ _This Schema declares no fields._
 | `rss.maxPerGroup` | number | no | `30` | — |
 | `rss.maxItems` | number | no | `5` | — |
 | `rss.timeout` | number | no | `15000` | — |
+| `rss.allowPrivateNetwork` | boolean | no | `false` | Allow feeds on loopback/LAN addresses (for example a self-hosted RSSHub). Refused by default because feed URLs come from chat users. |
 
 ### short-url
 

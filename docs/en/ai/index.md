@@ -59,7 +59,7 @@ purposes:
 
 API Keys live in `.env` (referenced via `env://AI_API_KEY`) or in the Host-private key form in Console. Host subscription Accounts use an explicit OAuth flow. Install the optional AI stack (`@zhin.js/agent zod ai`) and the selected Driver's SDK; pure IM installations remain independent.
 
-See [Services and subscription Accounts](../../ai/providers.md) and [upgrade and version boundaries](../../ai/provider-upgrade.md).
+See [Services and subscription Accounts](./providers.md) and [upgrade and version boundaries](./provider-upgrade.md).
 
 ## When the AI replies
 
@@ -102,10 +102,10 @@ Restricting tools, requiring confirmation, packaging procedures as Skills and ad
 
 | I want to… | Change |
 | --- | --- |
-| Switch model or vendor, or use a local model | [Services and Profiles](../../ai/providers.md) |
+| Switch model or vendor, or use a local model | [Services and Profiles](./providers.md) |
 | Trigger in groups without a mention, or change prefixes | [ai.trigger](#ai-trigger) |
 | Open the AI to only some users or groups | [ai.access](#ai-access) |
-| Use different Agents or models in different groups | [ai.agents](#ai-agents) |
+| Give a role a nickname and choose its MCP servers | [ai.agents](../configuration/index.md#ai-agents) |
 | Let the AI use tools from external MCP servers | [ai.mcpServers](#ai-mcpservers) |
 | Control which shell commands the AI may run and whether they need approval | [ai.agent](#ai-agent) |
 | Understand and reply with voice | [Speech](./speech.md) |
@@ -201,7 +201,7 @@ Each judgment logs an `ambient_engagement` line (decision, confidence, reason). 
 
 ##### Structured decisions
 
-Configure a decision Profile per task under the import proposal's `purposes.decisions`, or in Console. The six tasks are skills, tools, memory, agents, approval and ambient. Missing tasks are off; shadow records raw evidence, while active lets the owning task apply it. Public `evaluate` returns genuine Choice/Score/Noul evidence, not task application state. See [structured decisions](../../ai/structured-decisions.md).
+Configure a decision Profile per task under the import proposal's `purposes.decisions`, or in Console. The six tasks are skills, tools, memory, agents, approval and ambient. Missing tasks are off; shadow records raw evidence, while active lets the owning task apply it. Public `evaluate` returns genuine Choice/Score/Noul evidence, not task application state. See [structured decisions](./structured-decisions.md).
 
 The independent Language `ambient` purpose supplies the normal engagement judge, inheriting deployment chat when omitted. It is distinct from `decisions.ambient`; personal chat overrides do not select either Host task. Existing trigger timing and addressed-message rules remain in effect.
 

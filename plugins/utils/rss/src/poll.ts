@@ -8,8 +8,20 @@ import { fetchFeed, type FeedItem } from './feed.js';
 import { getRssSeen, getRssSubs } from './db-store.js';
 import type { RssRuntime } from './runtime.js';
 
+/** Seen rows are kept this long after the item was last present in its feed. */
+export const SEEN_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+/** Seen rows of items still in the feed are re-stamped at most this often. */
+const SEEN_REFRESH_MS = 24 * 60 * 60 * 1000;
+
 function ts(): string {
   return new Date().toISOString();
+}
+
+/** True for an item whose own publish date is past the retention window. Undated items are never stale. */
+function isStale(item: FeedItem, cutoffMs: number): boolean {
+  if (!item.date) return false;
+  const published = Date.parse(item.date);
+  return Number.isFinite(published) && published < cutoffMs;
 }
 
 export function formatNewItems(feedTitle: string, items: FeedItem[], maxItems: number, locale: Locale = 'zh-CN'): string {
@@ -26,19 +38,28 @@ export function formatNewItems(feedTitle: string, items: FeedItem[], maxItems: n
   return lines.join('\n');
 }
 
-export async function markItemsSeen(runtime: RssRuntime, feedUrl: string, items: FeedItem[]): Promise<void> {
+export async function markItemsSeen(
+  runtime: RssRuntime,
+  feedUrl: string,
+  items: FeedItem[],
+  /** Guids already stored for this feed; loaded once when the caller does not have them. */
+  knownGuids?: ReadonlySet<string>,
+): Promise<void> {
   const Seen = getRssSeen(runtime.db);
-  if (!Seen) return;
+  if (!Seen || items.length === 0) return;
+  const known = new Set(knownGuids
+    ?? (await Seen.select().where({ feed_url: feedUrl })).map((row) => String(row.item_guid ?? '')));
+  // One timestamp per batch so cleanup can drop the whole batch with a single delete.
+  const seenAt = ts();
   for (const item of items) {
-    const dup = await Seen.select().where({ feed_url: feedUrl, item_guid: item.guid });
-    if (dup.length === 0) {
-      await Seen.insert({
-        feed_url: feedUrl,
-        item_guid: item.guid,
-        item_title: item.title,
-        seen_at: ts(),
-      });
-    }
+    if (known.has(item.guid)) continue;
+    known.add(item.guid);
+    await Seen.insert({
+      feed_url: feedUrl,
+      item_guid: item.guid,
+      item_title: item.title,
+      seen_at: seenAt,
+    });
   }
 }
 
@@ -110,15 +131,28 @@ export async function checkSubscriptions(runtime: RssRuntime, options: {
 
   for (const url of options.urls) {
     try {
-      const { title, items } = await fetchFeed(url, runtime.config.timeout);
+      const { title, items } = await fetchFeed(url, runtime.config);
       const seenRows = await Seen.select().where({ feed_url: url });
-      const seenGuids = new Set(seenRows.map((r) => String(r.item_guid ?? '')));
-      const newItems = items.filter((item) => item.guid && !seenGuids.has(item.guid));
+      const seenAt = new Map(seenRows.map((r) => [String(r.item_guid ?? ''), String(r.seen_at ?? '')]));
+      const seenGuids = new Set(seenAt.keys());
+      const now = Date.now();
+      // Keep the seen row of an item that is still listed, so it is not re-announced after cleanup.
+      const refreshBefore = new Date(now - SEEN_REFRESH_MS).toISOString();
+      const refreshed = ts();
+      for (const item of items) {
+        const stamp = seenAt.get(item.guid);
+        if (item.guid && stamp !== undefined && stamp < refreshBefore) {
+          await Seen.update({ seen_at: refreshed }).where({ feed_url: url, item_guid: item.guid });
+        }
+      }
+      // An item older than the retention window can no longer have a seen row; never treat it as new.
+      const newItems = items.filter((item) => item.guid && !seenGuids.has(item.guid)
+        && !isStale(item, now - SEEN_RETENTION_MS));
       if (newItems.length === 0) {
         parts.push(t(locale, 'noNew', { title: title || url }));
         continue;
       }
-      await markItemsSeen(runtime, url, newItems);
+      await markItemsSeen(runtime, url, newItems, seenGuids);
       totalNew += newItems.length;
       const body = formatNewItems(title || url, newItems, runtime.config.maxItems, locale);
       parts.push(body);
@@ -139,21 +173,22 @@ export async function checkSubscriptions(runtime: RssRuntime, options: {
 }
 
 /**
- * Periodically clean seen records older than 7 days.
+ * Periodically clean seen records older than 7 days. Rows of items still listed in their
+ * feed are re-stamped by checkSubscriptions and therefore survive.
  */
 export async function cleanOldSeen(runtime: RssRuntime): Promise<void> {
   const Seen = getRssSeen(runtime.db);
   if (!Seen) return;
   try {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - 7);
-    const cutoffStr = cutoff.toISOString();
+    const cutoffStr = new Date(Date.now() - SEEN_RETENTION_MS).toISOString();
     const all = await Seen.select();
-    const expired = all.filter((r) => typeof r.seen_at === 'string' && r.seen_at < cutoffStr);
-    for (const row of expired) {
-      // 表结构没有 id 列，按业务键 (feed_url, item_guid) 删除。
-      await Seen.delete().where({ feed_url: row.feed_url, item_guid: row.item_guid });
+    // The table has no id column. Rows of one batch share (feed_url, seen_at), so one delete per batch.
+    const batches = new Map<string, { feed_url: unknown; seen_at: string }>();
+    for (const row of all) {
+      if (typeof row.seen_at !== 'string' || row.seen_at >= cutoffStr) continue;
+      batches.set(`${String(row.feed_url)}\0${row.seen_at}`, { feed_url: row.feed_url, seen_at: row.seen_at });
     }
+    for (const batch of batches.values()) await Seen.delete().where(batch);
   } catch (e) {
     // Cleanup failure must not break the main flow, but it must be visible.
     console.warn(`[rss] cleanOldSeen failed: ${e instanceof Error ? e.message : String(e)}`);

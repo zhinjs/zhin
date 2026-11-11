@@ -14,7 +14,6 @@ graphify-out/
 .codex/
 .pnp
 .pnp.js
-test-bot/data
 docs/.vitepress/cache
 docs/.vitepress/dist
 # Testing
@@ -40,6 +39,7 @@ examples/**/zhin.config.*
 !examples/multi-agent-room/zhin.config.yml
 !examples/qq-games-bot/zhin.config.yml
 !examples/single-file-bot/zhin.config.yml
+!examples/test-bot/zhin.config.example.yml
 # full-bot L4 种子 MEMORY（其余 data/ 仍忽略）
 !examples/full-bot/data/
 examples/full-bot/data/*
@@ -102,7 +102,6 @@ pids
 .yarn-integrity
 
 # dotenv environment variables file
-.env
 .env.test
 
 # TypeScript cache
@@ -120,27 +119,12 @@ pids
 # Optional REPL history
 .node_repl_history
 
-# Output of 'npm pack'
-*.tgz
-
 # Yarn v2
 .yarn/cache
 .yarn/unplugged
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
-
-# Test directory - ignore config files and env files
-test/.env*
-test/zhin.config.*
-test/config.*
-!test/env.example
-
-# Apps directory - ignore config files and env files
-apps/**/.env*
-apps/**/zhin.config.*
-apps/**/config.*
-!apps/**/env.example 
 
 **/dist/**
 

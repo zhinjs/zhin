@@ -123,7 +123,6 @@ describe('create-zhin config', () => {
       try {
         const options: InitOptions = {
           config: 'json',
-          runtime: 'node',
           httpToken: 'token',
           database: {
             dialect: 'sqlite',
@@ -164,7 +163,6 @@ describe('create-zhin config', () => {
       try {
         const options: InitOptions = {
           config: 'yaml',
-          runtime: 'node',
           httpToken: 'token',
           database: {
             dialect: 'sqlite',

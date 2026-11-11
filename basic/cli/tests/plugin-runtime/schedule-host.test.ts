@@ -11,6 +11,7 @@ import type { RootResourceContext } from '@zhin.js/runtime';
 import {
   createScheduleHost,
   installScheduleHost,
+  resolveScheduleTimezone,
 } from '../../src/plugin-runtime/schedule-host-installer.js';
 
 describe('ScheduleHost', () => {
@@ -106,3 +107,15 @@ function createInstallContext(): RootResourceContext {
     config: {} as RootResourceContext['config'],
   };
 }
+
+describe('resolveScheduleTimezone', () => {
+  it('prefers TZ, then the system zone, then UTC', () => {
+    expect(resolveScheduleTimezone({ TZ: 'Europe/Berlin' }, () => 'America/New_York')).toBe('Europe/Berlin');
+    expect(resolveScheduleTimezone({}, () => 'America/New_York')).toBe('America/New_York');
+    expect(resolveScheduleTimezone({ TZ: '' }, () => undefined)).toBe('UTC');
+  });
+
+  it('reads the real system zone by default', () => {
+    expect(resolveScheduleTimezone({})).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  });
+});

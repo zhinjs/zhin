@@ -4,8 +4,9 @@
 import { timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
+import { readTextBody } from '@zhin.js/host-http-contract';
 import { getLogger } from '@zhin.js/logger';
-import { readTextBody, type ResolvedTelegramConfig, type TelegramUpdate } from './protocol.js';
+import { type ResolvedTelegramConfig, type TelegramUpdate } from './protocol.js';
 
 const logger = getLogger('telegram');
 

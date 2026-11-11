@@ -1,6 +1,0 @@
-packages:
-  - 'adapters/*'
-  - 'services/*'
-  - 'features/*'
-  - 'utils/*'
-  - 'games/*'

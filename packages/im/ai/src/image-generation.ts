@@ -1,15 +1,6 @@
 /**
- * Text-to-image generation types and helpers (provider-agnostic).
+ * Text-to-image generation types (provider-agnostic).
  */
-
-export const ZHIPU_DEFAULT_IMAGE_MODEL = 'cogview-3-flash';
-export const CLOUDFLARE_DEFAULT_IMAGE_MODEL = '@cf/black-forest-labs/flux-1-schnell';
-/** OpenAI Images API：gpt-image-2 / gpt-image-1.5 / gpt-image-1 等 */
-export const OPENAI_DEFAULT_IMAGE_MODEL = 'gpt-image-2';
-/** Gemini Nano Banana（generateContent + IMAGE modality） */
-export const GOOGLE_DEFAULT_IMAGE_MODEL = 'gemini-2.5-flash-image';
-/** MiniMax 文生图 */
-export const MINIMAX_DEFAULT_IMAGE_MODEL = 'image-01';
 
 /**
  * 文生图默认项（`ai.imageGeneration` 或 `ai.providers.<alias>.imageGeneration`）。
@@ -61,86 +52,4 @@ export interface ImageGenerateResult {
   base64: string;
   model: string;
   revisedPrompt?: string;
-}
-
-export interface ImageGenerationCapable {
-  generateImage(request: ImageGenerateRequest): Promise<ImageGenerateResult>;
-}
-
-export function hasGenerateImage(
-  provider: unknown,
-): provider is ImageGenerationCapable {
-  return (
-    provider != null
-    && typeof provider === 'object'
-    && typeof (provider as ImageGenerationCapable).generateImage === 'function'
-  );
-}
-
-const MAX_IMAGE_FETCH_BYTES = 26_214_400;
-
-export async function fetchImageUrlAsBase64(
-  url: string,
-  fetchFn: typeof globalThis.fetch = globalThis.fetch,
-): Promise<{ base64: string; mimeType: string } | null> {
-  try {
-    const res = await fetchFn(url, { signal: AbortSignal.timeout(60_000) });
-    if (!res.ok) return null;
-    const buf = Buffer.from(await res.arrayBuffer());
-    if (buf.length > MAX_IMAGE_FETCH_BYTES) return null;
-    const mime = res.headers.get('content-type')?.split(';')[0]?.trim() || 'image/png';
-    return { base64: buf.toString('base64'), mimeType: mime };
-  } catch {
-    return null;
-  }
-}
-
-export function parseDataUrlBase64(dataUrl: string): { base64: string; mimeType: string } | null {
-  const m = dataUrl.match(/^data:([^;,]+);base64,(.+)$/s);
-  if (!m) return null;
-  return { mimeType: m[1], base64: m[2] };
-}
-
-/** OpenAI 兼容 `/images/generations` 单条结果 */
-export interface OpenAIImagesGenerationItem {
-  url?: string;
-  b64_json?: string;
-  revised_prompt?: string;
-}
-
-/** 解析 OpenAI / 智谱等 Images API 响应中的首图 */
-export async function resolveOpenAIImagesGenerationItem(
-  item: OpenAIImagesGenerationItem | undefined,
-  model: string,
-  errorLabel = 'Image generation',
-  fetchFn: typeof globalThis.fetch = globalThis.fetch,
-): Promise<ImageGenerateResult> {
-  if (!item) {
-    throw new Error(`${errorLabel} returned no data`);
-  }
-
-  let base64: string | undefined;
-  let mimeType = 'image/png';
-
-  if (item.b64_json) {
-    base64 = item.b64_json;
-  } else if (item.url) {
-    const fetched = await fetchImageUrlAsBase64(item.url, fetchFn);
-    if (!fetched) {
-      throw new Error(`Failed to fetch generated image from URL: ${item.url}`);
-    }
-    base64 = fetched.base64;
-    mimeType = fetched.mimeType;
-  }
-
-  if (!base64) {
-    throw new Error(`${errorLabel} returned neither b64_json nor url`);
-  }
-
-  return {
-    mimeType,
-    base64,
-    model,
-    revisedPrompt: item.revised_prompt,
-  };
 }

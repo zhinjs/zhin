@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import type { MediaRef } from '@zhin.js/im-contract';
 import type { MediaContentBlock } from '@zhin.js/ai';
 import type { MediaBinaryPayload, MediaKind } from './media-types.js';
-import { checkUrlNetworkAccess } from '../security/network-policy.js';
+import { checkUrlNetworkAccess, hostnameResolvesToBlockedAddress } from '../security/network-policy.js';
 import { authorizeTurnFileInput } from '../security/turn-file-authority.js';
 import type { ImageAssetPublisher } from './image-assets.js';
 
@@ -150,6 +150,8 @@ export async function fetchUrlAsBase64(
     let res: Response | undefined;
     for (let redirects = 0; redirects <= 5; redirects += 1) {
       if (!checkUrlNetworkAccess(current, { httpsOnly: true, allowedDomains: [...allowedDomains] }).allowed) return null;
+      // No Turn network client here: at least refuse names that resolve to private addresses.
+      if (await hostnameResolvesToBlockedAddress(new URL(current).hostname)) return null;
       res = await fetch(current, {
         redirect: 'manual',
         signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30_000)]) : AbortSignal.timeout(30_000),
@@ -239,10 +241,6 @@ export async function normalizeMediaRefsToPayloads(
   return out;
 }
 
-
-export function payloadToDataUri(payload: MediaBinaryPayload): string {
-  return `data:${payload.mimeType};base64,${payload.base64}`;
-}
 
 
 

@@ -12,9 +12,8 @@ import type {
 const DEFAULT_SPEECH_CONFIG: SpeechConfig = {
   stt: {
     enabled: true,
+    // No host/model here: each STT provider applies its own defaults.
     provider: 'ollama',
-    model: 'whisper',
-    host: 'http://localhost:11434',
   },
   tts: {
     enabled: true,

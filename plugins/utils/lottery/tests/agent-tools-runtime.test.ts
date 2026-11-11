@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { parseAgentToolDefinition } from '@zhin.js/tool';
 import { createInMemoryLotteryDb } from '../src/memory-db.js';
@@ -50,7 +51,11 @@ describe('lottery ToolFeature definitions', () => {
       peerDependencies?: Record<string, string>;
       zhin?: { features?: Array<{ package: string }> };
     };
-    expect(manifest.files).toContain('tools');
+    // Tools are Skill-private (skills/lottery/tools/*); there is no top-level tools/ directory to publish.
+    expect(manifest.files).toContain('skills');
+    expect(manifest.files).not.toContain('tools');
+    expect(existsSync(new URL('../tools', import.meta.url))).toBe(false);
+    expect(existsSync(new URL('../skills/lottery/tools/sync/index.ts', import.meta.url))).toBe(true);
     expect(manifest.scripts?.build).toContain('pnpm run clean');
     expect(manifest.dependencies?.zod).toBeDefined();
     expect(manifest.peerDependencies?.zod).toBeUndefined();

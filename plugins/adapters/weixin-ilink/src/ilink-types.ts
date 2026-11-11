@@ -211,12 +211,6 @@ export interface SendMessageResp {
   // empty
 }
 
-/** Typing status: 1 = typing (default), 2 = cancel typing. */
-export const TypingStatus = {
-  TYPING: 1,
-  CANCEL: 2,
-} as const;
-
 /** SendTyping request: send a typing indicator to a user. */
 export interface SendTypingReq {
   ilink_user_id?: string;

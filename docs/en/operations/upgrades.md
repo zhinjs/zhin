@@ -136,7 +136,7 @@ zhin doctor
 
 Read root Changesets/CHANGELOG and affected package notes. Check breaking manifests, Feature APIs, removed config, database migrations, and Adapter connection changes.
 
-Create one checkpoint: Git commit, `package.json`, lockfile, config, `.env` key inventory, database snapshot, Workroom store, and `data/schedule-jobs.json`. Protect secret values separately.
+Create one checkpoint: Git commit, `package.json`, lockfile, config, `.env` key inventory, database snapshot (including `engagement_events`), and `data/schedule-jobs.json`. Protect secret values separately.
 
 ## Execute
 
@@ -144,13 +144,13 @@ Create one checkpoint: Git commit, `package.json`, lockfile, config, `.env` key 
 2. Enter a maintenance window and stop the Bot and any ingress that creates new side effects (before upgrading dependencies).
 3. Run `zhin migrate` and review package, script, and directory changes.
 4. Run doctor, type checks, tests, and `runtime start --once --mode test`.
-5. Start production and accept Sandbox, a real Endpoint, Agent, and Workroom.
+5. Start production and accept Sandbox, a real Endpoint, Agent, and multi-Agent collaboration (when `ai.venues` is configured).
 
 Never share one writable SQLite file or file Journal between live instances. Blue/green release needs isolated copies and an explicit cutover; only one instance may own write authority.
 
 ## Rollback decision
 
-Stop the release if the candidate cannot publish, Endpoints cannot recover, SSE history has an unrebuildable gap, Workroom authority fails, or a data migration has no recovery plan.
+Stop the release if the candidate cannot publish, Endpoints cannot recover, SSE history has an unrebuildable gap, startup is refused because the config still has removed keys (such as `ai.workrooms` or `a2a.workroomCallbacks`), or a data migration has no recovery plan.
 
 Restore the complete checkpoint. Database recovery cannot undo real messages, approvals, Git operations, or payments. Use idempotency keys, Effect Ledger, or human compensation for external effects.
 

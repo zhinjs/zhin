@@ -29,6 +29,16 @@ pnpm install && pnpm build   # 仓库根
 pnpm dev:test                # 或 cd examples/test-bot && pnpm dev
 ```
 
+首次启动前先准备配置（`zhin.config.yml` 含本机账号信息，不入库；模板是 [`zhin.config.example.yml`](./zhin.config.example.yml)）：
+
+```bash
+cd examples/test-bot
+cp zhin.config.example.yml zhin.config.yml   # 模板默认只启用 Sandbox + 工具/游戏插件
+cp .env.example .env                         # 按需填入平台凭据后，取消模板里对应平台块的注释
+```
+
+模板由 `tests/config-template.test.ts` 用真实解析器校验（`configVersion: 2`、`plugins` 映射、各插件 `schema.json`）。
+
 Node `>=22.19.0`（Plugin Runtime 依赖 Node 原生 TypeScript）。依赖本目录 `.env`（与 legacy 相同变量）。Console：https://console.zhin.dev → `http://127.0.0.1:8086`，Token `test-bot-dev-token`。
 
 **ICQQ 协议库**：`@icqqjs/icqq` 是 `@zhin.js/adapter-icqq` 的可选对等依赖。启用 `icqq` endpoint 时在本目录安装：

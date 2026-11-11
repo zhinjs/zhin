@@ -1,6 +1,7 @@
 /** Internal composition contract. Not part of the command authoring facade. */
-import { createToken, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { createToken, type Locale, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import type { CommandExecutionLimit, CommandExecutionPolicy } from './execution-policy.js';
+import { commandMessages } from './messages.js';
 
 interface ConversationIdentity {
   readonly endpoint: { readonly adapter: string; readonly id: string };
@@ -44,6 +45,7 @@ interface Operation {
   progressStopped: boolean;
   admitted: boolean;
   signal: AbortSignal;
+  locale?: Locale;
   reply?: (owner: PluginId, text: string) => Promise<unknown>;
   readonly releases: (() => void)[];
   readonly timers: Set<ReturnType<typeof setTimeout>>;
@@ -73,6 +75,8 @@ export class CommandExecutionBudget {
     readonly conversation: ConversationIdentity;
     readonly senderId?: string;
     readonly retirementSignal: AbortSignal;
+    /** The operation's language for progress feedback; defaults to the catalog default. */
+    readonly locale?: Locale;
     readonly reply: (owner: PluginId, text: string) => Promise<unknown>;
   }): CommandOperationController {
     const c = input.conversation;
@@ -83,7 +87,7 @@ export class CommandExecutionBudget {
     const operation: Operation = {
       snapshot: input.snapshot, key: valid ? Object.freeze(values) : undefined,
       active: true, progressStopped: false, admitted: false, signal: input.retirementSignal,
-      reply: input.reply, releases: [], timers: new Set(), feedback: [], accepted: new Set(), sends: new Set(),
+      locale: input.locale, reply: input.reply, releases: [], timers: new Set(), feedback: [], accepted: new Set(), sends: new Set(),
     };
     const stop = () => {
       operation.progressStopped = true;
@@ -173,7 +177,7 @@ export class CommandExecutionBudget {
         if (!operation.active || operation.progressStopped || operation.signal.aborted || !operation.reply) return;
         // Observe failure once. Never retry uncertain delivery and never expose the exception.
         let send: Promise<void>;
-        try { send = Promise.resolve(operation.reply(owner, '正在处理中，请稍候。')).then(() => {}, () => {}); }
+        try { send = Promise.resolve(operation.reply(owner, commandMessages(operation.locale, 'progress'))).then(() => {}, () => {}); }
         catch { send = Promise.resolve(); }
         operation.feedback.push(send);
       }, policy.progressAfterMs);

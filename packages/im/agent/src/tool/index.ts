@@ -21,7 +21,6 @@ export {
   createToolSystem,
   createDefaultToolSources,
   planToolRun,
-  buildPreExecFastPathPrompt,
 } from './tool-system.js';
 
 export {

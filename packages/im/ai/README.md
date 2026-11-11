@@ -94,10 +94,6 @@ import {
 const { repository, sessionStore } = createMemoryContextRepository({ tailMessageLimit: 200 })
 ```
 
-### ContextManager（辅助）
-
-`ContextManager`（`context_summaries`）仍可用于独立的场景级摘要实验；**ZhinAgent 生产回合的历史只以 `ContextRepository` 为准**，不再构造第二套话题记忆、定时器或 `ai_messages` 表。
-
 ### Compaction（上下文压缩）
 
 管理上下文窗口，防止 token 超限：
@@ -108,19 +104,15 @@ Agent 历史摘要保留工具调用的参数、调用关联和结果状态，�
 
 ```typescript
 import {
-  estimateTokens,
-  evaluateContextWindowGuard,
-  pruneHistoryForContext,
-  compactSession,
+  autoCompactAgentMessagesIfNeeded,
+  estimateAgentMessagesTokens,
+  microCompactAgentMessages,
 } from '@zhin.js/ai'
 
-const guard = evaluateContextWindowGuard({
-  messages: history,
-  maxContextTokens: 128000,
-  maxHistoryShare: 0.5,
-})
-// guard.status: 'ok' | 'warning' | 'critical'
+const tokens = estimateAgentMessagesTokens(messages)
 ```
+
+IM 生产路径经 `@zhin.js/agent` 的 `transformContext`（ADR 0010）调用 `autoCompactAgentMessagesIfNeeded`；阈值常量为 `DEFAULT_CONTEXT_TOKENS`、`AUTOCOMPACT_BUFFER_TOKENS`、`MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES`。
 
 ### Output（输出解析）
 
@@ -153,44 +145,6 @@ const result = limiter.check('user-123')
 if (!result.allowed) {
   console.log(`请等待 ${result.retryAfterMs}ms`)
 }
-```
-
-### Storage（存储抽象）
-
-统一存储后端，支持内存和数据库模式，可在运行时热切换：
-
-```typescript
-import { MemoryStorageBackend, createSwappableBackend } from '@zhin.js/ai'
-
-const backend = createSwappableBackend(new MemoryStorageBackend())
-
-// 运行时切换到数据库
-backend.swap(new DatabaseStorageBackend(model))
-```
-
-### CostTracker（成本追踪）
-
-追踪每次 LLM 调用的 token 用量和估算成本，支持按模型/Provider 统计：
-
-```typescript
-import { CostTracker } from '@zhin.js/ai'
-
-const tracker = new CostTracker()
-tracker.record({ model: 'qwen3:14b', inputTokens: 1200, outputTokens: 350 })
-
-console.log(tracker.summary())
-// { totalCalls: 1, totalInputTokens: 1200, totalOutputTokens: 350, estimatedCost: 0.002 }
-```
-
-### FileStateCache（文件状态缓存）
-
-缓存文件 mtime 和内容摘要，避免工具多次读取同一文件时重复访问磁盘：
-
-```typescript
-import { FileStateCache } from '@zhin.js/ai'
-
-const cache = new FileStateCache({ maxEntries: 500, ttlMs: 30000 })
-const content = await cache.getOrRead('/path/to/file.ts')
 ```
 
 ### microCompactMessages（微压缩）
@@ -226,7 +180,7 @@ Provider 领域契约从 `@zhin.js/ai/provider` 导入；纯引擎配置保留�
 | `InferenceClient` | 当前 operation 授权后的统一 generate / stream / evaluate / generateImage 消费端口 |
 | `AgentLoopConfig` | `agentLoop`：模型、工具列表、超时、回调等（替代已删除的 `createAgent`） |
 | `SessionConfig` | 会话 `maxHistory`、`expireMs` |
-| `ContextConfig` | `ContextManager` 总结阈值与 token 预算 |
+| `ContextConfig` | `ai.context` 的历史条数、总结阈值与 token 预算 |
 | `AIPlan` | 声明服务、账号、Profiles 和用途选择；不包含 Host 凭据材料 |
 
 完整 AI 模块文档：[zhin.js.org/ai/](https://zhin.js.org/ai/)
@@ -240,16 +194,12 @@ Provider 领域契约从 `@zhin.js/ai/provider` 导入；纯引擎配置保留�
 | `@zhin.js/ai/provider` | Provider Driver、Service / Account / Profile、InferenceClient 和唯一类型注册入口 |
 | `ContextRepository` / `AgentSessionStore` | Agent 会话持久化原语 |
 | `@zhin.js/ai/providers` | 内置产品 Driver 声明；原生 SDK 按需安装 |
-| `TextCompletionPort` | 压缩模块接收的已绑定纯文字回调；不负责账号或模型选择 |
-| `ContextManager` | 场景摘要实验（辅助，不接入 ZhinAgent 生产回合） |
-| `compactSession` / `pruneHistoryForContext` / `microCompactMessages` | 上下文压缩库 API；IM 生产路径经 `@zhin.js/agent` 的 `transformContext`（ADR 0010） |
-| `CostTracker` | Token 用量与成本追踪 |
-| `FileStateCache` | 文件状态缓存 |
+| `TextCompletionPort` | 已绑定纯文字回调类型；不负责账号或模型选择 |
+| `autoCompactAgentMessagesIfNeeded` / `compactAgentMessages` / `microCompactMessages` | 上下文压缩库 API；IM 生产路径经 `@zhin.js/agent` 的 `transformContext`（ADR 0010） |
 | `CachedToolFilter` | 工具过滤缓存 |
 | `parseOutput` / `renderToPlainText` | 输出解析 |
 | `RateLimiter` | 速率限制 |
 | `detectTone` | 情绪检测 |
-| `MemoryStorageBackend` / `createSwappableBackend` | 存储抽象 |
 
 ## 安装
 

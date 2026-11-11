@@ -2,10 +2,12 @@ import { createToken } from './token.js';
 
 /**
  * Outbound template context — conversation + incoming message metadata
- * available as top-level variables inside `${expr}` template expressions.
+ * addressable by `${path}` placeholders in outbound text.
  *
- * Templates can reference e.g. `${sender.name}`, `${adapter}`,
- * `${content}`, `${messageId}`, `${timestamp}`.
+ * A placeholder is a plain property path over these fields, e.g.
+ * `${sender.name}`, `${adapter}`, `${content}`, `${segments[0].type}`.
+ * Nothing is evaluated: arithmetic, calls, unknown names and undefined
+ * values stay in the text exactly as written.
  */
 export interface TemplateContext {
   /** Adapter feature name (e.g. 'qq', 'sandbox'). */
@@ -37,8 +39,9 @@ export interface TemplateContext {
 }
 
 /**
- * Thin Host Resource for Plugin Runtime outbound template compilation.
- * Evaluates `${expr}` template expressions in a sandboxed VM context
+ * Thin Host Resource for Plugin Runtime outbound template substitution.
+ * Replaces `${path}` placeholders by whitelist path lookup over the
+ * `TemplateContext`; it never evaluates expressions.
  * The Host keeps render authority inside the active Runtime operation.
  *
  * Implemented by the CLI Host; absent when not wired — consumers must

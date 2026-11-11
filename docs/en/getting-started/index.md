@@ -55,7 +55,7 @@ Two things are enough for now:
 
 Full definitions: [Core concepts at a glance](./concepts.md).
 
-## 4. Observe hot reload — Add features directly to your Bot (1→2)
+## 4. Observe hot reload — Add features directly to your Bot (1→2) {#hot-reload}
 
 Change the reply in `commands/hello/index.ts`, save it, and send `/hello` again — the new reply appears without a restart. Messages already in flight finish on the old code; if the new code throws an error, the previous version keeps serving and the terminal prints the cause.
 

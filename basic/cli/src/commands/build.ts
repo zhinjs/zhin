@@ -14,8 +14,8 @@ export const buildCommand = new Command("build")
   .description("构建插件：按目录自动编译 src（tsc）与 client（esbuild）；也可在 zhin workspace 下批量构建 plugins/*")
   .argument("[plugin]", "插件路径（相对 plugins/，如 adapters/icqq）；省略时在智能目录下构建当前包，或在 workspace 根构建全部插件")
   .option("--clean", "清理 lib/ 与 dist/ 后再构建", false)
-  .option("--production", "生产构建（client 压缩）", true)
-  .option("--analyze", "（预留）分析包体积", false)
+  .option("--production", "生产构建（client 压缩，默认开启）", true)
+  .option("--no-production", "开发构建（不压缩 client）")
   .option(
     "--watch",
     "仅监听 client/ 增量写入 dist（需存在 client；不支持批量构建）",
@@ -27,7 +27,6 @@ export const buildCommand = new Command("build")
       options: {
         clean: boolean;
         production: boolean;
-        analyze: boolean;
         watch: boolean;
       },
     ) => {
@@ -138,7 +137,7 @@ export const buildCommand = new Command("build")
 async function buildOnePluginPath(
   pluginPath: string,
   pluginName: string,
-  options: { clean: boolean; production: boolean; analyze: boolean },
+  options: { clean: boolean; production: boolean },
 ): Promise<void> {
   logger.info(formatCompact( { cmd: "build", op: "build", plugin: pluginName }));
 

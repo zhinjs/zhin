@@ -34,7 +34,3 @@ export function forwardEndpointClientEvents(
     for (const { name, listener } of subscriptions) client.off(name, listener);
   };
 }
-
-export type ClientEventSubscription = (
-  receive: (name: string, payload: unknown) => void,
-) => () => void;

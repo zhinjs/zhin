@@ -5,7 +5,7 @@ description: "把 Bot 部署成可恢复的服务：发布前检查、反向代�
 
 # 把 Zhin 部署成可恢复的服务
 
-这份方案面向单实例 Bot、团队 Workroom 和远程 Console。目标是让进程、入口、密钥、状态、监控、备份与恢复都有明确责任人。
+这份方案面向单实例 Bot、多 Bot 协作场所和远程 Console。目标是让进程、入口、密钥、状态、监控、备份与恢复都有明确责任人。
 
 ## 上线前至少做到这五件事
 
@@ -122,7 +122,7 @@ kubectl rollout status deployment/zhin
 kubectl port-forward service/zhin 8068:8068
 ```
 
-镜像会保留项目自己的 `zhin.config.yml`，Secret 则从 `.env` 整体投影，因此 Provider 与 Adapter 密钥不会被模板吞掉；修改密钥后需要重建 Secret 并滚动重启。模板固定单副本与 `Recreate`，因为默认 SQLite、Workroom 文件状态和 `ReadWriteOnce` 卷不是多写者系统。需要水平扩容时，先迁移到共享数据库与具备单一写入权威的 Workroom 存储。Kubernetes 模板分别使用 `/pub/health` 判断存活、`/pub/ready` 判断运行时就绪；请先升级到提供就绪探针的 CLI 版本再应用模板。
+镜像会保留项目自己的 `zhin.config.yml`，Secret 则从 `.env` 整体投影，因此 Provider 与 Adapter 密钥不会被模板吞掉；修改密钥后需要重建 Secret 并滚动重启。模板固定单副本与 `Recreate`，因为默认 SQLite、`.zhin/` 下的文件状态和 `ReadWriteOnce` 卷不是多写者系统。需要水平扩容时，先迁移到共享数据库，并确认每份文件状态只有一个写入者。Kubernetes 模板分别使用 `/pub/health` 判断存活、`/pub/ready` 判断运行时就绪；请先升级到提供就绪探针的 CLI 版本再应用模板。
 
 ## 4. 进程托管
 
@@ -144,8 +144,7 @@ macOS 使用不带 `--user` 的 launchd 服务命令。只保留一层进程重�
 | 状态 | 默认位置或权威源 | 备份要求 |
 | --- | --- | --- |
 | 主数据库 | `.zhin/data.sqlite` 或 `database` 指定后端 | 使用数据库一致性快照 |
-| Workroom Catalog | 数据库 `workroom_catalog`；文件模式 `.zhin/workroom-catalog.json` | 与 Workroom Journal 同一恢复点 |
-| Workroom Journal | 数据库 `workroom_events`；文件模式 `.zhin/workroom-journal` | append-only 数据必须完整复制 |
+| 多 Agent 协作 Journal | 主数据库的 `engagement_events` 表 | 随主数据库同一快照恢复；append-only 数据必须完整复制 |
 | 调度任务 | `data/schedule-jobs.json` | 与配置、时区和目标 Endpoint 一起保存 |
 | Runtime 私有状态 | `.zhin/` | 按功能选择；不要通过 Agent 文件工具暴露 |
 | 密钥 | Secret manager / 环境注入 | 单独轮换，不进入普通备份包 |
@@ -154,7 +153,7 @@ SQLite 备份应使用数据库快照或停写复制，不要在写入中直接�
 
 ## 6. 监控与告警
 
-监控至少覆盖 HTTP 探针、进程重启次数、Endpoint 在线状态、SSE recovery gap、日志错误率、数据库容量、Workroom 阻塞项和 Agent 失败/取消比例。
+监控至少覆盖 HTTP 探针、进程重启次数、Endpoint 在线状态、SSE recovery gap、日志错误率、数据库容量、被冻结待人处理的协作（Engagement）和 Agent 失败/取消比例。
 
 日志默认进入 stdout；daemon 模式写 `.zhin/runtime.log`。设置宿主日志轮转，不要只依赖 Console 清理。告警应携带 Endpoint、Project、runtimeId 或 runId，避免只报一段错误文本。
 
@@ -163,7 +162,7 @@ Runtime Process Host 在启动和运行期间记录 `unhandledRejection`，避�
 ## 7. 发布与回滚
 
 1. 暂停会产生新副作用的入口，保留只读探针。
-2. 备份数据库、Workroom 状态、调度任务、配置与 lockfile。
+2. 备份数据库（含 `engagement_events`）、调度任务、配置与 lockfile。
 3. 安装锁定依赖，运行 doctor、测试与一次性启动。
 4. 启动生产进程，完成 [Console 标准验收](/console/#一次标准验收)。
 5. 观察一个完整业务窗口，再解除旧版本与备份保留。
@@ -176,6 +175,6 @@ Runtime Process Host 在启动和运行期间记录 `unhandledRejection`，避�
 2. Dashboard 是否连接到预期 Host 与版本。
 3. Endpoint 是否在线，统一收件箱是否收到事件。
 4. 当前 generation 是否发布所需能力。
-5. Database、SSE history 与 Workroom Journal 是否从同一权威恢复。
+5. Database（含 `engagement_events`）与 SSE history 是否从同一权威恢复。
 
 升级操作见[版本兼容与迁移](./upgrades)，页面级诊断见 [Console](/console/)。

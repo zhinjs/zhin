@@ -28,7 +28,9 @@ export const NETWORK_COMMAND_PATTERNS: ReadonlyArray<RegExp> = [
 
 // ── SSRF 防护 ─────────────────────────────────────────────────────────
 
+import { lookup as dnsLookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
+import { scanShellSegment } from './shell-syntax.js';
 
 /** SSRF 防护：检查主机名是否属于内网/私有/危险地址 */
 export function isBlockedSsrfHostname(hostname: string): boolean {
@@ -100,6 +102,26 @@ export function isBlockedIpAddress(address: string): boolean {
   return true;
 }
 
+/**
+ * True when `hostname` resolves to at least one private/loopback/metadata address.
+ * For callers that cannot use the DNS-pinned `TurnNetworkClient`: it closes the
+ * "public name, private A record" hole of string-only URL checks, but the later
+ * connection re-resolves, so it is weaker than pinning. An unresolvable name is
+ * reported as not blocked — the request itself will fail.
+ */
+export async function hostnameResolvesToBlockedAddress(
+  hostname: string,
+  resolve: (host: string) => Promise<ReadonlyArray<{ address: string }>> = host => dnsLookup(host, { all: true, verbatim: true }),
+): Promise<boolean> {
+  const host = hostname.replace(/^\[|\]$/g, '');
+  if (isIP(host)) return isBlockedIpAddress(host);
+  try {
+    return (await resolve(host)).some(entry => isBlockedIpAddress(entry.address));
+  } catch {
+    return false;
+  }
+}
+
 export class NetworkAccessDeniedError extends Error {
   readonly policy = 'network-access';
 
@@ -129,18 +151,151 @@ export function extractUrlsFromCommand(command: string): string[] {
   return (command.match(URL_PATTERN) || []).map(u => u.toLowerCase());
 }
 
-/** 从命令中提取第一个 URL（原始大小写） */
-export function extractFirstUrlFromCommand(command: string): string | undefined {
-  const match = command.match(/https?:\/\/[^\s'"`&|;)}\]]+/i);
-  return match ? match[0] : undefined;
+// ── 网络命令目标提取 ───────────────────────────────────────────────────
+
+const BARE_HOST_ARG = /^(?:\[[0-9a-f:.]+\]|[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\.?)(?::\d+)?(?:[/?#].*)?$/i;
+
+/**
+ * Every hostname a curl/wget command may contact: all scheme-qualified URLs plus bare
+ * `host[:port][/path]` positional arguments, which curl/wget treat as `http://host`.
+ * Option values that merely look like a host are included too — over-inclusion only
+ * matters when such a value names a blocked address, which fails closed.
+ */
+const URL_TERMINATORS: ReadonlySet<string> = new Set(['\'', '"', '`', '&', '|', ';', ')', '}', ']']);
+const MAX_SCHEME_LENGTH = 32;
+
+/**
+ * Every `scheme://rest` run in a command, found with index scans instead of a regex:
+ * a pattern such as `[a-z][a-z0-9+.-]*:\/\/…` is quadratic on a long run of scheme characters.
+ */
+function findUrlCandidates(command: string): string[] {
+  const candidates: string[] = [];
+  let from = 0;
+  for (;;) {
+    const separator = command.indexOf('://', from);
+    if (separator < 0) break;
+    let start = separator;
+    while (start > 0 && separator - start < MAX_SCHEME_LENGTH && /[a-z0-9+.-]/i.test(command[start - 1]!)) start--;
+    // A scheme starts with a letter.
+    while (start < separator && !/[a-z]/i.test(command[start]!)) start++;
+    let end = separator + 3;
+    while (end < command.length && !URL_TERMINATORS.has(command[end]!) && !/\s/.test(command[end]!)) end++;
+    if (start < separator && end > separator + 3) candidates.push(command.slice(start, end));
+    from = Math.max(end, separator + 3);
+  }
+  return candidates;
+}
+
+export function extractNetworkCommandHostnames(command: string): string[] {
+  const hostnames = new Set<string>();
+  const add = (candidate: string) => {
+    try {
+      const hostname = new URL(candidate).hostname;
+      if (hostname) hostnames.add(hostname);
+    } catch {
+      // not a parsable URL
+    }
+  };
+  for (const url of findUrlCandidates(command)) add(url);
+  const invocation = findNetworkToolInvocation(command);
+  if (invocation) {
+    for (const word of positionalNetworkArgs(invocation.tool, invocation.args)) {
+      if (word.includes('://') || !BARE_HOST_ARG.test(word)) continue;
+      add(`http://${word}`);
+    }
+  }
+  return [...hostnames];
 }
 
 // ── 数据外泄检测 ───────────────────────────────────────────────────────
 
-/** 检测 curl 数据外泄模式（curl -d @file） */
+/** Short options that consume a value; the rest of a short cluster (or the next word) belongs to them. */
+const SHORT_VALUE_OPTIONS: Readonly<Record<'curl' | 'wget', string>> = {
+  curl: 'AbcCdDeEFHKmoPQrtTuUwxXyYz',
+  wget: 'aABDeiIlLoOPQRtTUwX',
+};
+/** Common long options written as `--name value`; `--url` is absent on purpose (its value is a target). */
+const LONG_VALUE_OPTIONS: ReadonlySet<string> = new Set([
+  '--output', '--header', '--request', '--user', '--user-agent', '--referer', '--cookie', '--cookie-jar',
+  '--max-time', '--connect-timeout', '--retry', '--retry-delay', '--write-out', '--range', '--cacert',
+  '--cert', '--key', '--data', '--data-raw', '--data-binary', '--data-ascii', '--data-urlencode', '--json',
+  '--form', '--form-string', '--upload-file', '--output-dir', '--max-filesize', '--limit-rate',
+  '--output-document', '--output-file', '--directory-prefix', '--timeout', '--tries', '--wait',
+]);
+
+function findNetworkToolInvocation(command: string): { tool: 'curl' | 'wget'; args: string[] } | undefined {
+  const { words } = scanShellSegment(command);
+  const start = words.findIndex(word => /(?:^|\/)(?:curl|wget)$/.test(word));
+  if (start < 0) return undefined;
+  return { tool: words[start]!.endsWith('wget') ? 'wget' : 'curl', args: words.slice(start + 1) };
+}
+
+/** Arguments that are not options or option values. Unknown long options do not consume a value (over-inclusive). */
+function positionalNetworkArgs(tool: 'curl' | 'wget', args: readonly string[]): string[] {
+  const positional: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const word = args[i]!;
+    if (word.startsWith('--')) {
+      if (!word.includes('=') && LONG_VALUE_OPTIONS.has(word)) i++;
+      continue;
+    }
+    if (word.startsWith('-') && word.length > 1) {
+      const valueFlag = [...word.slice(1)].findIndex(flag => SHORT_VALUE_OPTIONS[tool].includes(flag));
+      // Value attached to the cluster (`-ofile`) stays in this word; otherwise it is the next word.
+      if (valueFlag >= 0 && valueFlag === word.length - 2) i++;
+      continue;
+    }
+    positional.push(word);
+  }
+  return positional;
+}
+
+const CURL_DATA_LONG_OPTIONS: ReadonlySet<string> = new Set([
+  '--data', '--data-binary', '--data-ascii', '--data-urlencode', '--json',
+]);
+
+function uploadsLocalFile(tool: 'curl' | 'wget', words: readonly string[]): boolean {
+  for (let i = 0; i < words.length; i++) {
+    const word = words[i]!;
+    if (word.startsWith('--')) {
+      const eq = word.indexOf('=');
+      const name = eq >= 0 ? word.slice(0, eq) : word;
+      const value = eq >= 0 ? word.slice(eq + 1) : words[i + 1] ?? '';
+      if (name === '--upload-file' || name === '--post-file' || name === '--body-file') return true;
+      // `--data-urlencode name@file` also reads a file.
+      if (CURL_DATA_LONG_OPTIONS.has(name) && value.includes('@')) return true;
+      if (name === '--form' && /=[@<]/.test(value)) return true;
+      continue;
+    }
+    if (tool !== 'curl' || !word.startsWith('-') || word.length < 2) continue;
+    for (let j = 1; j < word.length; j++) {
+      const flag = word[j]!;
+      const value = word.slice(j + 1) || words[i + 1] || '';
+      if (flag === 'T') return true;
+      if (flag === 'd' && value.startsWith('@')) return true;
+      if (flag === 'F' && /=[@<]/.test(value)) return true;
+      if (SHORT_VALUE_OPTIONS.curl.includes(flag)) break;
+    }
+  }
+  return false;
+}
+
+/**
+ * 检测 curl/wget 上传本地文件的数据外泄模式：
+ * `-d @file` / `-d@file` / `--data* @file` / `-F name=@file` / `-T file` / `--upload-file`，
+ * 以及 wget `--post-file` / `--body-file`。
+ */
 export function isDataExfiltrationAttempt(command: string): boolean {
-  const lower = command.toLowerCase();
-  return /\bcurl\b/.test(lower) && /-d\s+@|--data-binary\s+@/.test(lower);
+  const invocation = findNetworkToolInvocation(command);
+  if (invocation && uploadsLocalFile(invocation.tool, invocation.args)) return true;
+  // Fallback for curl nested in another command's argument (e.g. `sh -c "curl -d @f …"`):
+  // split on whitespace and quotes (linear) and run the same token check after each `curl` word.
+  const words = command.split(/[\s'"`]+/);
+  for (let i = 0; i < words.length; i++) {
+    const word = words[i]!.toLowerCase();
+    if ((word === 'curl' || word.endsWith('/curl')) && uploadsLocalFile('curl', words.slice(i + 1))) return true;
+  }
+  return false;
 }
 
 // ── 网络命令访问控制 ───────────────────────────────────────────────────
@@ -148,6 +303,12 @@ export function isDataExfiltrationAttempt(command: string): boolean {
 export interface NetworkPolicyConfig {
   enableNetwork?: boolean;
   allowedDomains?: string[];
+}
+
+/** Per-tool-call network narrowing passed to the policy facade. */
+export interface ToolNetworkPolicy {
+  httpsOnly?: boolean;
+  allowedDomains?: readonly string[];
 }
 
 export interface UrlNetworkPolicyConfig {
@@ -208,8 +369,8 @@ export function checkNetworkCommandAccess(
 
   // 网络已启用但有域名白名单时，校验 URL
   if (config.allowedDomains && config.allowedDomains.length > 0) {
-    const urls = extractUrlsFromCommand(command);
-    if (urls.length === 0) {
+    const hostnames = extractNetworkCommandHostnames(command);
+    if (hostnames.length === 0) {
       // 网络命令必须包含可校验的 URL
       const hasNetworkCommand = NETWORK_COMMAND_PATTERNS.some(pattern => pattern.test(command));
       if (hasNetworkCommand) {
@@ -221,17 +382,12 @@ export function checkNetworkCommandAccess(
       return { allowed: true };
     }
 
-    for (const url of urls) {
-      try {
-        const hostname = new URL(url).hostname;
-        if (!hostnameMatchesList(hostname, config.allowedDomains)) {
-          return {
-            allowed: false,
-            reason: `域名 ${hostname} 不在允许列表中（允许: ${config.allowedDomains.join(', ')}）`,
-          };
-        }
-      } catch {
-        // URL 解析失败，放行（可能是相对路径或其他格式）
+    for (const hostname of hostnames) {
+      if (!hostnameMatchesList(hostname, config.allowedDomains)) {
+        return {
+          allowed: false,
+          reason: `域名 ${hostname} 不在允许列表中（允许: ${config.allowedDomains.join(', ')}）`,
+        };
       }
     }
   }
@@ -243,7 +399,7 @@ export function checkNetworkCommandAccess(
 
 /**
  * 校验 exec-policy 允许的网络命令（curl/wget）的 URL 安全性
- * - 阻断数据外泄模式（curl -d @file）
+ * - 阻断数据外泄模式（curl -d @file / -F f=@file / -T file …）
  * - 阻断 SSRF 目标（内网/元数据端点）
  */
 export function validateNetworkCommandUrl(command: string): { safe: boolean; reason?: string } {
@@ -251,23 +407,17 @@ export function validateNetworkCommandUrl(command: string): { safe: boolean; rea
   if (isDataExfiltrationAttempt(command)) {
     return {
       safe: false,
-      reason: '检测到潜在数据外泄模式（curl -d @file）。如需上传文件，请使用具体的文件路径。',
+      reason: '检测到潜在数据外泄模式（curl/wget 上传本地文件：-d @file、-F name=@file、-T file 等）。',
     };
   }
 
-  // SSRF 检测
-  const url = extractFirstUrlFromCommand(command);
-  if (url) {
-    try {
-      const hostname = new URL(url).hostname;
-      if (isBlockedSsrfHostname(hostname)) {
-        return {
-          safe: false,
-          reason: `URL 目标 ${hostname} 属于内网/私有/危险地址，已被 SSRF 防护拦截。`,
-        };
-      }
-    } catch {
-      // URL 解析失败，不拦截
+  // SSRF 检测 — every URL and bare host argument, not just the first one
+  for (const hostname of extractNetworkCommandHostnames(command)) {
+    if (isBlockedSsrfHostname(hostname)) {
+      return {
+        safe: false,
+        reason: `URL 目标 ${hostname} 属于内网/私有/危险地址，已被 SSRF 防护拦截。`,
+      };
     }
   }
 

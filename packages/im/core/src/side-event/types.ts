@@ -25,6 +25,7 @@ export type ComposedNoticeName =
   | 'notice.group.essence_delete'
   | 'notice.friend.recall'
   | 'notice.friend.increase'
+  | 'notice.friend.decrease'
   | 'notice.friend.poke'
   | 'notice.endpoint.lifecycle'
   | (string & {});

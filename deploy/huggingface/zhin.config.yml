@@ -1,9 +1,5 @@
-plugins:
-  sandbox:
-    endpoints:
-      - context: sandbox
-        name: demo
-        owner: demo-user
+configVersion: 2
+
 http:
   host: 0.0.0.0
   port: 7860
@@ -11,22 +7,15 @@ http:
   corsOrigins:
     - "https://console.zhin.dev"
     - "https://zhinjs-demo.hf.space"
-  trustProxy: true
 
-# OpenRouter free tier — API key via Space Secret OPENROUTER_API_KEY
+# Model settings live in the Host database; ai.plan.yml seeds it on first start.
+database:
+  dialect: sqlite
+  filename: ./data/playground.db
+
+# OpenRouter free tier — see ai.plan.yml; API key via Space Secret OPENROUTER_API_KEY
 ai:
   enabled: true
-  providers:
-    openrouter:
-      sdk: openai-compatible
-      baseUrl: ${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
-      apiKey: ${OPENROUTER_API_KEY}
-      models:
-        - openrouter/free
-  agents:
-    zhin:
-      provider: openrouter
-      model: openrouter/free
   agent:
     execSecurity: deny
     execApprovalMode: auto
@@ -47,3 +36,12 @@ ai:
       - "!"
       - "！"
     timeout: 90000
+
+plugin: {}
+
+plugins:
+  sandbox: "@zhin.js/adapter-sandbox"
+sandbox:
+  endpoints:
+    - id: demo
+      owner: demo-user

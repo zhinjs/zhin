@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/juejin/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/juejin/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=441bd9c4bcaa063a -->
+<!-- sync-adapter-docs:sha256=1b7931071cd3ca81 -->
 
 # @zhin.js/adapter-juejin
 
@@ -53,6 +53,12 @@ Zhin.js 掘金评论适配器（Plugin Runtime）：让 AI 辅助回复**你自�
 4. Cookie 会过期；失效时页面显示「登录已失效」、日志出现 `juejin_login_invalid`，更新环境变量后重启
 
 必填字段（`endpoints[i]`）：`id`。
+
+## 安装
+
+```bash
+pnpm add @zhin.js/adapter-juejin
+```
 
 ## 最小配置
 

@@ -5,40 +5,21 @@ import { User } from './models/user.js';
 import type { SenderRole } from './built/roles.js';
 export type { SenderRole } from "./built/roles.js";
 
-export type ArrayItem<T>=T extends Array<infer R>?R:unknown
 export interface Models extends Record<string,object>{
   SystemLog: SystemLog
   User: User,
 }
 export type MaybePromise<T> = [T] extends [Promise<infer U>] ? T|U : T|Promise<T>;
 /**
- * 获取对象所有value类型
- */
-export type ObjectItem<T extends object>=T[keyof T]
-/**
  * 消息段结构，支持 text/image/at/face 等类型
  */
 export type { Segment as MessageSegment } from './built/segment-contract/types.js';
 export type MessageElement = import('./built/segment-contract/types.js').Segment;
 /**
- * 单个或数组类型
- */
-export type MaybeArray<T>=T|T[]
-/**
  * 消息发送内容类型
  */
 export type { SendContent } from './plugin-runtime/im/contracts.js';
 import type { SendContent } from './plugin-runtime/im/contracts.js';
-
-/** 可选：编辑已发送消息（交互式棋盘更新） */
-export interface EditMessageOptions {
-  messageId: string;
-  context: string;
-  endpoint: string;
-  id: string;
-  type: 'private' | 'group' | 'channel';
-  content: SendContent;
-}
 
 /**
  * 消息发送者信息
@@ -61,16 +42,6 @@ export interface MessageSender{
 // 原 K extends string|symbol 形参全仓零使用，已随收敛删除。
 export type { Dict } from '@zhin.js/kernel';
 /**
- * 用户信息结构
- */
-export interface UserInfo {
-  user_id: string;
-  nickname: string;
-  card?: string;
-  role?: string;
-}
-
-/**
  * 群组信息结构
  */
 export interface Group {
@@ -78,15 +49,6 @@ export interface Group {
   group_name: string;
   member_count: number;
 }
-
-/** 消息中间件函数 */
-export type MessageMiddleware = (message: Message, next: () => Promise<void>) => MaybePromise<void>;
-
-
-/**
- * defineConfig辅助类型，支持函数式/对象式配置
- */
-export type DefineConfig<T> = T | ((env:Record<string,string>)=>MaybePromise<T>);
 
 export interface SendOptions extends MessageChannel{
   locale?: import('@zhin.js/plugin-runtime').Locale
@@ -96,17 +58,6 @@ export interface SendOptions extends MessageChannel{
   quoteId?: string
   threadId?: string
 }
-
-export interface ProcessMessage {
-  type: string;
-  pid?: number;
-  body: any;
-}
-export type QueueItem = {
-  action: string;
-  payload: any;
-};
-export type BeforeSendHandler=(options:SendOptions)=>MaybePromise<SendOptions|void>
 
 // ============================================================================
 // 统一 Tool 类型定义

@@ -21,7 +21,7 @@ There is nothing to deploy: open <https://console.zhin.dev> and enter the API ad
 | Bot status | See AI conversations, tool calls, approvals and cancellations. Its decision replay lists, newest first, why the bot replied or stayed quiet each time; expand one turn into a timeline or export a time range as JSON (needs a token with `decisions:read`; kept 14 days by default, change with `ai.audit.retentionDays`) |
 | Group chime-in (群聊插话) | Choose whether the bot joins a group conversation when nobody @-mentions it (Off / Watch only / Join in), in which groups, and how often per hour, and see the last 24 hours. Saved changes take effect after a restart. Viewing needs a token with `ambient:read`; changing settings needs the admin token |
 | Skills assistant (技能助手) | Let a dedicated helper pick skills, tools and memories, choose which agent handles a request, auto-approve approvals, and judge whether to chime in to a group. Each item is Off / Watch only / On, and you can see how often it was used and how often it worked in the last 24 hours. Requires `@zhin.js/service-typesafe` (`zhin setup --decisions`). Saved changes take effect after a restart. Viewing needs a token with `skills:read`; changing settings needs the admin token |
-| Workroom (Advanced) | See persistent task spaces and task boards |
+| Collaboration graph (Advanced) | Read-only view of multi-Agent collaborations (Engagements): participants, mail hops, the shared Blackboard and budget, plus the configured venues (`ai.venues`) |
 
 ## Sidebar navigation
 
@@ -32,7 +32,7 @@ Console is aimed at everyday users: the sidebar is grouped by what you want to d
 | Everyday (常用) | Home, Chat accounts, Chat history, Reminders, Activity log |
 | Bot (机器人) | Bot status, Try a chat, Assistant jobs (shown when the assistant is enabled), Group chime-in, Skills assistant |
 | Features (功能) | Manage features, Feature store, Task center |
-| Advanced (高级, folded by default) | Config, Environment, Project files, Database, Runtime Capabilities, Message scenario lab, Workroom |
+| Advanced (高级, folded by default) | Config, Environment, Project files, Database, Runtime Capabilities, Message scenario lab, Collaboration graph |
 
 Old → new names: Dashboard → Home, Conversations & Channels → Chat accounts, Conversation branches → Chat history, Agent playground → Try a chat, Agent Overview / Agent workbench → Bot status, Scheduled tasks → Reminders, Logs → Activity log, Plugins → Manage features, Marketplace → Feature store.
 
@@ -51,7 +51,7 @@ flowchart LR
     H --> R2[RPC /api/console/request]
     H --> R3[SSE /api/events]
     H --> R4[WS /sandbox]
-    R1 --> P[Plugin / Endpoint / Session / Workroom projection]
+    R1 --> P[Plugin / Endpoint / Session / Collaboration projection]
 ```
 
 ## Deployment and Configuration
@@ -86,7 +86,7 @@ Runtime falls back to 8086 when no config exists; the current scaffold writes 80
 | Command, middleware, or component is missing | Runtime Capabilities | Current-generation capability, order, and owner |
 | Agent does not call a tool | Agent Studio + Runtime Capabilities | Visibility, approval, security policy, trace, and cancellation |
 | Messages disappear after refresh | Endpoint conversation + Logs | History RPC recovery and SSE recovery gap |
-| Workroom does not claim a chat or repository | Workrooms + Task board | Catalog revision, full space address, Orchestrator, and Project Inbox |
+| The expected Agent does not answer in a multi-Bot group | Collaboration graph + Bot status | whether `conversation` in `ai.venues` matches the group, whether every `members[].botEndpoint` is online, and whether `entry` is one of the members |
 | File changed but behavior did not | Config + Dashboard | Successful save and publication of a new generation |
 
 ## Page Features
@@ -105,7 +105,7 @@ Runtime falls back to 8086 when no config exists; the current scaffold writes 80
 | Runtime Capabilities | `GET /api/introspection/{commands,middlewares,components,tools,prompt-sections,endpoints,bindings,mcp}`, `POST /api/introspection/components/render` | Current-generation contracts, owners, middleware order, component rendering lab, and Prompt Section governance metadata |
 | Agent Sessions | `GET/POST /api/agent/sessions/*` | AI session tree viewing and branch switching; GET returns an empty `state: not_started` tree before a channel conversation creates an AI session |
 | Conversation History | `GET /api/conversations/history?sessionKey=...&beforeSequence=...` | Recorded canonical inbound and sent messages, separate from Agent context; no prior AI turn required |
-| Workrooms | Persistent Workroom Catalog + Profile RPC + `GET /api/agent/workroom/runs[/*]` | Revision-CAS management for Projects, members, Agent roles, and chat/channel/repository bindings; diagnose and initialize Profile/Planning Policy; inspect replayed Runs, Tasks, and Assignments |
+| Collaboration graph | `GET /api/agent/engagements[/*]` (full scope required); RPC `agent.engagements.list` / `agent.engagements.get` / `agent.venues.list` | Read-only projection: recent Engagements, one Engagement's events and Blackboard, and the configured Venues; the data comes from the `engagement_events` Journal and Console cannot rewrite it |
 | Marketplace | `GET /pub/marketplace/search`, `/pub/marketplace/detail/*`, `GET /api/marketplace/updates` | Plugin marketplace (plugins.json + npmmirror) and update checks |
 | Sandbox | WS `/sandbox` | Built-in sandbox chat, direct conversation without platform integration |
 
@@ -152,7 +152,7 @@ These values are a closed contract, not free-form labels. Unknown `safetyMode` o
 2. Send a Sandbox message, refresh, and confirm Endpoint history remains.
 3. Inspect current owners for commands, middleware, components, Tools, and Prompt Sections.
 4. Run an Agent task and verify working directory, security policy, approval, cancellation, trace, and artifacts.
-5. For a Workroom, prove that a real chat, channel, or repository event enters the correct Project.
+5. If `ai.venues` is configured, send a real message in that group, confirm the entry Agent answers, and check that `zhin trace --engagements` lists the collaboration.
 
 A release is ready only when the current generation and durable projections agree. Disk configuration and plugin manifests are candidate inputs.
 

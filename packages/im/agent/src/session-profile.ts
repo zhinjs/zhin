@@ -141,8 +141,8 @@ export type FoldableConversationEvent =
   | { type: 'member.role_changed'; member: { id: string; displayName?: string }; role: string; enabled: boolean }
   | { type: string; timestamp?: number; member?: { id: string; displayName?: string } };
 
-/** OneBot 等平台以 user_id 0 表示「全员」。 */
-const WHOLE_SCENE_IDS = new Set(['0', 'all']);
+/** OneBot 等平台以 user_id 0 表示「全员」(mute-all / unmute-all events). */
+export const WHOLE_SCENE_IDS: ReadonlySet<string> = new Set(['0', 'all']);
 
 function upsertAdmin(admins: SessionAdmin[], admin: SessionAdmin): SessionAdmin[] {
   const rest = admins.filter((item) => item.id !== admin.id);

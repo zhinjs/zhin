@@ -25,20 +25,3 @@ export function resolveDeferredToolsConfig(
     mcpServers: dt.mcpServers ?? {},
   };
 }
-
-export function resolveAlwaysLoadedSet(
-  config: Pick<ZhinAgentConfig, 'deferredTools'>,
-): Set<string> {
-  return new Set(resolveDeferredToolsConfig(config).alwaysLoadedTools);
-}
-
-export function isMcpToolDeferred(
-  toolName: string,
-  mcpServer: string | undefined,
-  deferredConfig: ReturnType<typeof resolveDeferredToolsConfig>,
-): boolean {
-  if (!mcpServer) return true;
-  const serverCfg = deferredConfig.mcpServers[mcpServer];
-  const always = new Set(serverCfg?.alwaysLoaded ?? []);
-  return !always.has(toolName);
-}

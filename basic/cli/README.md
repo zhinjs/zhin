@@ -3,7 +3,7 @@
 zhin.js 的命令行入口：启动/管理 bot、插件开发、配置向导与诊断。
 
 > 完整的命令参考见文档站 [CLI 参考](https://zhin.dev/cli/)（仓内源文件：`docs/cli/index.md`）。
-> 本 README 只保留速览；历史上这里的 `zhin dev` / `zhin start` / `zhin restart`（含 `--port` / `--bun`）文档已随命令下线删除——运行入口统一为 `zhin runtime start`。
+> 本 README 只保留速览。运行入口统一为 `zhin runtime start`；`zhin start` 是它的别名（参数原样转发）。旧的 `zhin restart` 与 `--port` / `--bun` 选项已下线。
 
 ## 安装
 
@@ -19,16 +19,17 @@ pnpm add -g @zhin.js/cli   # 或 npm i -g @zhin.js/cli
 zhin runtime start        # 启动 bot（dev 热重载 / --mode production / --daemon）
 zhin stop                 # 停止 daemon 实例
 zhin new <name>           # 创建约定式插件
-zhin install <pkg>        # 安装插件并写入 plugins.<instanceKey>
+zhin install <pkg>        # 安装插件并写入 plugins.<instanceKey>（别名 zhin add）
 zhin setup                # 交互式配置向导（适配器 / AI / 数据库）
 zhin config check [--fix] # 校验/修复 zhin.config.yml
 zhin config set <key> <value> # 经运行中 Host 校验、保存并按需生效；--offline 显式离线
 zhin doctor               # 环境诊断
-zhin send <scene_id> ...  # 向运行中的实例发消息
+zhin send <scene_id> ...  # 向运行中的实例发消息（多适配器时加 -a <adapter>）
+zhin schedule list|add|remove|pause|resume  # 管理运行中实例的持久化调度任务
 zhin --help               # 全部命令
 ```
 
-命令分五组：运行（`runtime` / `stop`）、插件开发（`new` / `build` / `pub` / `install` / `uninstall` / `search` / `info` / `packages`）、配置与诊断（`setup` / `onboard` / `config` / `doctor` / `migrate`）、运行中实例（`send` / `watch` / `schedule` / `agent`）、系统服务（`service`）。每组的具体参数见 [docs/cli/index.md](../../docs/cli/index.md) 与 `zhin <command> --help`。
+命令分五组：运行（`runtime` / `stop`）、插件开发（`new` / `build` / `pub` / `install` / `uninstall` / `search` / `info` / `packages`）、配置与诊断（`setup` / `onboard` / `config` / `doctor` / `migrate`）、运行中实例（`send` / `watch` / `schedule` / `agent`）、系统服务（`service install` / `service uninstall`）。每组的具体参数见 [docs/cli/index.md](../../docs/cli/index.md) 与 `zhin <command> --help`。
 
 ## 进程模型与退出码
 

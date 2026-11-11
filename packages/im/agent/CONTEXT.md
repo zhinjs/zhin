@@ -54,7 +54,7 @@ _避免使用_：tool glue、runtime helper
 
 TODO capability 以 canonical session key 为唯一地址，由 `TodoStore` 哈希命名并原子替换；模型输入不得包含 `chat_id` 或文件路径。`.zhin/` 是 runtime-private state，所有通用文件 Tool 必须拒绝读取或枚举，Journal、TODO 与其他 authority-owned 文件只通过各自深模块访问。
 
-交互 Tool 只消费 canonical `QuestionPort`。Root-owned `InteractionRouter` 以 session + authenticated subject 作为唯一匹配键，一次 session 只允许一个待答问题；IM 只在 composition root 投影 address 与 delivery，`ask_user` 不得读取 Plugin、Adapter、Message、Prompt middleware 或模块级 generation store。unattended Turn 不提供 QuestionPort，调用必须 fail closed。
+交互 Tool 只消费 canonical `QuestionPort`。IM 入口由 `createRuntimeQuestionPort` 接到 `@zhin.js/core` 的会话交互，一次 session 只允许一个待答问题；IM 只在 composition root 投影 address 与 delivery，`ask_user` 不得读取 Plugin、Adapter、Message、Prompt middleware 或模块级 generation store。unattended Turn 不提供 QuestionPort，调用必须 fail closed。
 
 **Capability Feature**:
 Plugin 侧可写能力表（Tool / Skill / Agent / MCP），承载装配与生命周期；**不是**回合执行时的运行时权威。

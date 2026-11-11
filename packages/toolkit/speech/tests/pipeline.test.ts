@@ -195,6 +195,66 @@ describe('OpenAI STT mime → 扩展名映射', () => {
   });
 });
 
+describe('OpenAI STT provider defaults', () => {
+  it('uses the OpenAI host/model defaults when only provider and apiKey are set', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ text: 'hi' }),
+    } as Response);
+    vi.stubGlobal('fetch', fetchMock);
+
+    const pipeline = createSpeechPipeline({ stt: { provider: 'openai', apiKey: 'sk-test' } });
+    await pipeline.transcribe({ data: Buffer.from('audio-bytes') });
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const formData = init.body as FormData;
+    expect(url).toBe('https://api.openai.com/v1/audio/transcriptions');
+    expect(formData.get('model')).toBe('whisper-1');
+    // No language hint unless configured.
+    expect(formData.has('language')).toBe(false);
+
+    vi.unstubAllGlobals();
+  });
+
+  it('forwards a configured language', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ text: 'hi' }),
+    } as Response);
+    vi.stubGlobal('fetch', fetchMock);
+
+    const pipeline = createSpeechPipeline({
+      stt: { provider: 'openai', apiKey: 'sk-test', language: 'zh' },
+    });
+    await pipeline.transcribe({ data: Buffer.from('audio-bytes') });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect((init.body as FormData).get('language')).toBe('zh');
+
+    vi.unstubAllGlobals();
+  });
+});
+
+describe('Azure TTS voice escaping', () => {
+  it('escapes the voice name inside the SSML attribute', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      arrayBuffer: async () => Buffer.from('mp3').buffer,
+    } as Response);
+    vi.stubGlobal('fetch', fetchMock);
+
+    const provider = createAzureTtsProvider({ subscriptionKey: 'k' });
+    await provider.synthesize({ text: 'hi', voice: "x'><break/><voice name='y" });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(init.body).toBe(
+      "<speak version='1.0' xml:lang='zh-CN'><voice name='x&apos;&gt;&lt;break/&gt;&lt;voice name=&apos;y'>hi</voice></speak>",
+    );
+
+    vi.unstubAllGlobals();
+  });
+});
+
 describe('resolveTtsProvider', () => {
   it('未知 provider 抛错并列出合法值，不再静默回退 edge', () => {
     expect(() =>

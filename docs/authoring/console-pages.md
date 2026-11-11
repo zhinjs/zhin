@@ -117,7 +117,7 @@ Console 根据独立的界面语言选择 `titleI18n`，只改变导航和面包
 | 文件 | 所属插件 | 地址 |
 | --- | --- | --- |
 | `pages/index/index.tsx` | `sandbox` | `/sandbox` |
-| `pages/workroom/index.tsx` | 你的 Bot（root） | `/p-workroom` |
+| `pages/reports/index.tsx` | 你的 Bot（root） | `/p-reports` |
 | `pages/index/index.tsx` | 你的 Bot（root） | `/` |
 
 `index` 对应插件路径本身，其他页面对应 `p-<name>`。两个页面算出同一个地址时，启动会报错。规则实现见 `packages/console/plugin-contract/src/page.ts` 的 `pageRoute`。
@@ -167,7 +167,7 @@ export default definePlugin({
 });
 ```
 
-## 页面数据：插件 RPC
+## 页面数据：插件 RPC {#plugin-rpc}
 
 页面需要显示插件的运行状态，或者提供几个按钮时，插件可以注册自己的 Console RPC，不用自己开 WebSocket 或 HTTP 路由。
 
@@ -251,7 +251,7 @@ actions: {
 
 插件 RPC 不负责改配置。改配置请用 `config:patch`。
 
-### 内置状态：群聊插话和技能助手
+### 内置状态：群聊插话和技能助手 {#builtin-status}
 
 群聊插话和技能助手由 Host 自己提供，不是插件，所以挂在根插件下：
 
@@ -313,7 +313,7 @@ interface SkillsStatus {
 }
 ```
 
-### 内置查询：决策回放
+### 内置查询：决策回放 {#builtin-decision-replay}
 
 「机器人状态」页的决策回放（ADR 0036 切片 C）同样由 Host 提供，读的是 `ai_decision_events` 决策审计表：机器人每次进不进模型、说不说话、调没调工具，各记一行，同一回合的行共享 `turn_id`。
 
@@ -343,7 +343,7 @@ interface SkillsStatus {
 - 返回：`range`（含主机时区 `timeZone`）、`totals`、`byModel`（按输入 token 降序）、`bySession`（前 50）、`series`（范围内每个时间桶一项，缺的补 0，按时间升序）、`segments`（历史 / 固定 / 用户的上下文估算之和）、`filesRead`、`malformedLines`。`totals`、`byModel`、`bySession`、`series` 里都带 `cacheReadTokens`、`cacheWriteTokens` 和 `cacheShare`（0 到 1）；`totals.cacheShareByCall` 是单次调用缓存命中率的 p50 / p90。
 - 只返回计数、会话键和 provider / model 名，不返回消息文本。结果在内存里缓存 60 秒（最多 32 条），换代时清空。
 
-### 内置操作：控制面
+### 内置操作：控制面 {#builtin-control-plane}
 
 「机器人状态」页的控制面（ADR 0036 切片 D）也由 Host 提供，是让机器人立刻安静的统一止损开关。
 
@@ -408,7 +408,7 @@ interface SkillsStatus {
 
 ### 内置操作：公告（草稿 → 审批 → 发送）
 
-公告（ADR 0037 第 1 期切片 B）由 Host 提供 RPC，前端页面另做。读用 `control:read`；起草、编辑、提交用 `control:write`；**批准、驳回、重发用审批权限 `ops:approve`**（切片 E），只有 `control:write` 不能批准。`ops:approve` 同时可以查看并结算危险工具审批卡（见 [危险工具审批卡](#内置操作危险工具审批卡)）。
+公告（ADR 0037 第 1 期切片 B）由 Host 提供 RPC，前端页面另做。读用 `control:read`；起草、编辑、提交用 `control:write`；**批准、驳回、重发用审批权限 `ops:approve`**（切片 E），只有 `control:write` 不能批准。`ops:approve` 同时可以查看并结算危险工具审批卡（见 [危险工具审批卡](#builtin-tool-approval)）。
 
 | 方法 | 调用 | 需要的权限 |
 | --- | --- | --- |
@@ -472,7 +472,7 @@ interface SkillsStatus {
   - `flood`（复读刷屏）：本地判定、不调模型。**同一成员** 60 秒内发送规范化后相同或高度相似的消息达 3 条即命中（多人各发一次同一句不算）；文本去空白 / 标点 / 大小写后比较，6 字以上的文本按字符二元组相似度 ≥ 0.8 也算；纯表情 / 图片按内容摘要比较，引用段不计。命中交给本群生效的 `flood` 规则执行，另写一行 `rule_hit_flood`（与执行行同 `turn_id`）；没有生效规则时什么都不做。检测只在进程内（每成员至多 20 条、至多跟踪 5000 个成员、过窗清理），不落盘。
   - `advertising` / `abuse`：由 content-moderation 插件判定（LLM 审核），经 `groupRuleViolationToken`（`@zhin.js/core/runtime`）上报给执行器；插件自己不再禁言或踢人。**迁移（行为收紧）**：插件 `groupModeration` 名单里的群首次有消息时，按默认模板「提醒 → 警告 → 禁言 600 秒，冷静期 30 分钟」为广告、辱骂各生成一条 `pending` 规则（起草人 `content-moderation`）并出预览卡，群主 / 管理员确认一次才自动禁言；确认前插件只提醒 / 警告。该群该类型已有任意状态的规则（含驳回 / 停用）就不再生成。入群 10 分钟内发广告改为出一张踢人审批卡（引用生效或待确认的广告规则，不推进阶梯，审计带 `newcomer: true`），不再无人审批直接踢。
 
-### 内置操作：危险工具审批卡
+### 内置操作：危险工具审批卡 {#builtin-tool-approval}
 
 硬闸（ADR 0036 §3）拦下的危险调用在这里留审批卡。审批人权限是 `ops:approve`（ADR 0037 §3，切片 E），与 `control:write` 分开；为了兼容已有令牌，旧权限仍然有效，持有任意一个即可。
 

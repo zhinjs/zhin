@@ -6,7 +6,6 @@ export * from './media-router.js';
 export * from './media-publisher.js';
 export * from './media-capabilities.js';
 export * from './media-tool-bridge.js';
-export * from './vision-capability.js';
 export * from './inbound-refs.js';
 export * from './perception.js';
 

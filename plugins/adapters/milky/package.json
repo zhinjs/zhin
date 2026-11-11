@@ -15,7 +15,7 @@
   "scripts": {
     "build": "tsc",
     "clean": "rimraf lib",
-    "test": "NODE_OPTIONS=--experimental-strip-types vitest run --root ../../.. plugins/adapters/milky/tests",
+    "test": "vitest run --root ../../.. plugins/adapters/milky/tests",
     "prepublishOnly": "pnpm run build",
     "prepack": "pnpm run build && node ../../../scripts/build-plugin-runtime-entries.mjs",
     "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean"
@@ -44,7 +44,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/zhinjs/zhin",
+    "url": "git+https://github.com/zhinjs/zhin.git",
     "directory": "plugins/adapters/milky"
   },
   "dependencies": {
@@ -57,39 +57,28 @@
     "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/logger": "workspace:*",
     "@zhin.js/page": "workspace:*",
-    "@zhin.js/skill": "workspace:*",
     "imhelper": "1.0.7",
     "ws": "^8.21.1"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
     "@types/ws": "^8.18.1",
-    "@zhin.js/agent": "workspace:*",
     "@zhin.js/host-http": "workspace:*",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",
-    "zhin.js": "workspace:*",
-    "zod": "^4.4.3"
+    "zhin.js": "workspace:*"
   },
   "peerDependencies": {
     "@zhin.js/adapter": "workspace:^",
-    "@zhin.js/agent": "workspace:^",
     "@zhin.js/command": "workspace:^",
     "@zhin.js/core": "workspace:^",
-    "zhin.js": "workspace:^",
-    "zod": "^4.0.0"
+    "zhin.js": "workspace:^"
   },
   "peerDependenciesMeta": {
-    "@zhin.js/agent": {
-      "optional": true
-    },
     "@zhin.js/command": {
       "optional": true
     },
     "zhin.js": {
-      "optional": true
-    },
-    "zod": {
       "optional": true
     }
   },
@@ -124,10 +113,6 @@
       },
       {
         "package": "@zhin.js/command",
-        "api": "^1.0.0"
-      },
-      {
-        "package": "@zhin.js/skill",
         "api": "^1.0.0"
       },
       {

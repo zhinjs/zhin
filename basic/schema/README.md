@@ -207,8 +207,8 @@ plugins:
 | `.default(value)` | 设置默认值 |
 | `.option(label, value)` | 添加可选项 |
 | `.multiple()` | 允许多选 |
-| `.min(value)` | 设置最小值 |
-| `.max(value)` | 设置最大值 |
+| `.min(value)` | 设置最小值（数字下限 / 字符串最小长度 / 列表最少项）；写入导出的 JSON Schema，由 Runtime 配置校验执行，`schema(value)` 与 `safeParse` 只做结构校验 |
+| `.max(value)` | 设置最大值，规则同 `.min` |
 | `.step(value)` | 设置步长 |
 | `.component(name)` | 指定渲染组件 |
 | `.toJSON()` | 业务 Schema 的内部序列化 |

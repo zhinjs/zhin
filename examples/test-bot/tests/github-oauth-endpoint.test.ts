@@ -91,13 +91,15 @@ describe('test-bot GitHub OAuth endpoint access', () => {
       interval: 5,
       expires_in: 900,
     });
-    mocks.pollToken.mockResolvedValueOnce(null);
+    mocks.pollToken.mockResolvedValueOnce({ status: 'expired' });
     const endpoint = { clientId: 'client-id', host: 'https://github.example' };
 
     await expect(startDeviceFlowBind(endpoint as never, model as never, 'icqq', '10001'))
       .resolves.toContain('ABCD-EFGH');
     expect(mocks.requestCode).toHaveBeenCalledWith('client-id', endpoint.host);
-    expect(mocks.pollToken).toHaveBeenCalledWith('client-id', 'device', 5, 900, endpoint.host);
+    expect(mocks.pollToken).toHaveBeenCalledWith({
+      clientId: 'client-id', deviceCode: 'device', interval: 5, expiresIn: 900, host: endpoint.host,
+    });
   });
 
   it('persists and announces a completed Device Flow binding', async () => {
@@ -110,7 +112,7 @@ describe('test-bot GitHub OAuth endpoint access', () => {
       interval: 5,
       expires_in: 900,
     });
-    mocks.pollToken.mockResolvedValueOnce({ access_token: 'device-token' });
+    mocks.pollToken.mockResolvedValueOnce({ status: 'authorized', access_token: 'device-token', token_type: 'bearer', scope: '' });
     mocks.verifyAuth.mockResolvedValueOnce({ ok: true, user: 'alice' });
     const endpoint = { clientId: 'client-id', host: 'https://github.example' };
 

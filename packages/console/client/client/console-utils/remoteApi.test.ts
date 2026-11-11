@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { apiFetch, consoleRpc, getToken } from "./remoteApi.js";
+import { apiFetch, captureAuthRequest, consoleRpc, getToken, handleUnauthorized } from "./remoteApi.js";
 
 function mockStorage(map: Record<string, string> = {}): Storage {
   return {
@@ -101,5 +101,45 @@ describe("apiFetch 401 handling", () => {
     expect(JSON.parse(String(init.body))).toMatchObject({
       type: "workroom.profile.status", projectId: "alpha",
     });
+  });
+});
+
+describe("handleUnauthorized", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("clears the runtime, local and session credentials and asks for re-login once", () => {
+    const win = installBrowserGlobals("runtime-token");
+    localStorage.setItem("zhin_api_token", "local-token");
+    sessionStorage.setItem("zhin_api_token", "session-token");
+
+    expect(handleUnauthorized()).toBe(true);
+
+    expect(win.__ZHIN_API_TOKEN).toBeUndefined();
+    expect(localStorage.getItem("zhin_api_token")).toBeNull();
+    expect(sessionStorage.getItem("zhin_api_token")).toBeNull();
+    expect(win.dispatchEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores a 401 for a request sent with a credential that has since been replaced", () => {
+    const win = installBrowserGlobals();
+    localStorage.setItem("zhin_api_token", "old-token");
+    const request = captureAuthRequest();
+    localStorage.setItem("zhin_api_token", "new-token");
+
+    expect(handleUnauthorized(request)).toBe(false);
+    expect(getToken()).toBe("new-token");
+    expect(win.dispatchEvent).not.toHaveBeenCalled();
+  });
+
+  it("does not throw where browser storage is unavailable", () => {
+    vi.stubGlobal("window", undefined);
+    vi.stubGlobal("localStorage", undefined);
+    vi.stubGlobal("sessionStorage", undefined);
+
+    expect(() => handleUnauthorized()).not.toThrow();
+    expect(getToken()).toBeNull();
   });
 });

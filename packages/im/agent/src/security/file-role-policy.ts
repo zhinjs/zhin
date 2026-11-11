@@ -208,19 +208,6 @@ export function isDangerousFileOperation(operation: FileOperation, filePath: str
 }
 
 /**
- * 统一处理文件角色权限门控：拒绝或需 Owner/二次确认时返回工具结果字符串，否则 null。
- */
-export function resolveFilePermissionGate(
-  permResult: FilePermissionResult,
-  toolName: string,
-): string | null {
-  const msg = formatFilePermissionMessage(permResult, toolName);
-  if (!permResult.allowed) return msg;
-  if (msg) return msg;
-  return null;
-}
-
-/**
  * 从 SenderRole 集合推导 FileRole
  */
 export function inferFileRole(context: { roles?: readonly SenderRole[] }): FileRole {

@@ -37,7 +37,8 @@
     },
     "teachAllowRegex": {
       "type": "boolean",
-      "default": true
+      "default": false,
+      "description": "Allow members to teach regular-expression rules. Off by default: patterns run against every inbound message. Only structurally safe patterns are accepted and they are tried on messages of at most 200 characters."
     },
     "teachPageSize": {
       "type": "number",

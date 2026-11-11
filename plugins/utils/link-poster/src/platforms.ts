@@ -1,68 +1,49 @@
 import type { LinkMeta } from './types.js'
 import { resolveLocale, type Locale } from 'zhin.js/i18n'
 import { messages as t } from './i18n.js'
+import { fetchPublic, readCappedBody } from './public-fetch.js'
 
 // ── 工具函数 ──────────────────────────────────────────────────────────────────
 
 const FETCH_TIMEOUT = 10_000
 
-const MAX_REDIRECTS = 5
 /** Upper bound for a cover/avatar image; larger bodies are dropped instead of buffered. */
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 
-/** Read a body with a byte cap, aborting the stream as soon as the cap is exceeded. */
-async function readCappedBody(res: Response, maxBytes: number): Promise<Buffer | undefined> {
-  const declared = Number(res.headers.get('content-length'))
-  if (Number.isFinite(declared) && declared > maxBytes) {
-    await res.body?.cancel()
-    return undefined
-  }
-  if (!res.body) return Buffer.alloc(0)
-  const chunks: Uint8Array[] = []
-  let total = 0
-  const reader = res.body.getReader()
-  for (;;) {
-    const { done, value } = await reader.read()
-    if (done) break
-    total += value.byteLength
-    if (total > maxBytes) {
-      await reader.cancel()
-      return undefined
-    }
-    chunks.push(value)
-  }
-  return Buffer.concat(chunks)
+/** Upper bound for a platform page or API response. */
+const MAX_PAGE_BYTES = 2 * 1024 * 1024
+
+/** Read a text body under the page cap; an oversized body is cancelled and reported as an error. */
+async function readText(res: Response): Promise<string> {
+  const body = await readCappedBody(res, MAX_PAGE_BYTES)
+  if (!body) throw new Error('link-poster: response body is too large')
+  return body.toString('utf8')
 }
 
 /**
- * Fetch with redirects followed by hand so every hop is checked with `isAllowed`
- * before it is requested. Automatic redirect following would let an allowed short link
- * bounce the request to an arbitrary (possibly internal) host. One timeout bounds all
- * hops and the body.
+ * Fetch with redirects followed by hand. Every hop must pass `isAllowed` (the platform host
+ * allow-list, or the structural image rule) AND resolve to public addresses only, so neither an
+ * allowed short link nor a public CDN name pointing at a private address can reach an internal
+ * host. One timeout bounds all hops and the body.
  */
 async function fetchWithTimeout(
   url: string,
-  init?: RequestInit,
+  init?: Omit<RequestInit, 'redirect' | 'signal'>,
   isAllowed: (url: string) => boolean = isSupportedLinkHost,
 ): Promise<Response> {
-  const signal = AbortSignal.timeout(FETCH_TIMEOUT)
-  let current = url
-  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-    if (!isAllowed(current)) throw new Error('link-poster: refusing to fetch a host outside the allow-list')
-    const res = await fetch(current, { ...init, redirect: 'manual', signal })
-    const location = res.status >= 300 && res.status < 400 ? res.headers.get('location') : null
-    if (!location) return res
-    await res.body?.cancel()
-    current = new URL(location, current).toString()
-  }
-  throw new Error('link-poster: too many redirects')
+  const { response } = await fetchPublic(url, {
+    timeoutMs: FETCH_TIMEOUT,
+    init,
+    allow: (hop) => isAllowed(hop.href),
+  })
+  return response
 }
 
 /**
  * Cover/avatar URLs come from third-party page metadata and live on CDN hosts that cannot be
  * enumerated, so they are checked structurally: https only, a real DNS name (no IP literal,
- * no single-label or internal-suffix host). This does not defend against a public name that
- * resolves to a private address; that needs a resolver-level address policy.
+ * no single-label or internal-suffix host). The resolved addresses are checked separately by
+ * `fetchPublic` on every hop.
  */
 export function isPublicImageUrl(url: string): boolean {
   let parsed: URL
@@ -142,7 +123,7 @@ async function parseBilibili(url: string, locale?: Locale): Promise<LinkMeta | n
   const res = await fetchWithTimeout(api, {
     headers: { 'User-Agent': 'Mozilla/5.0', Referer: 'https://www.bilibili.com/' },
   })
-  const json = await res.json() as any
+  const json = JSON.parse(await readText(res)) as any
   if (json.code !== 0) return null
 
   const d = json.data
@@ -182,7 +163,7 @@ async function parseGithub(url: string, locale?: Locale): Promise<LinkMeta | nul
       { headers },
     )
     if (!res.ok) return null
-    const d = await res.json() as any
+    const d = JSON.parse(await readText(res)) as any
     return {
       platform: 'github',
       title: `${type === 'pull' ? 'PR' : 'Issue'} #${num}: ${d.title}`,
@@ -200,7 +181,7 @@ async function parseGithub(url: string, locale?: Locale): Promise<LinkMeta | nul
   // 仓库
   const res = await fetchWithTimeout(`https://api.github.com/repos/${owner}/${repo}`, { headers })
   if (!res.ok) return null
-  const d = await res.json() as any
+  const d = JSON.parse(await readText(res)) as any
   return {
     platform: 'github',
     title: d.full_name || `${owner}/${repo}`,
@@ -229,7 +210,7 @@ async function parseDouyin(url: string, locale?: Locale): Promise<LinkMeta | nul
           'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
       },
     })
-    const html = await res.text()
+    const html = await readText(res)
     const title = extractMeta(html, 'og:title')
     if (!title) return null
 
@@ -258,7 +239,7 @@ async function parseXiaohongshu(url: string, locale?: Locale): Promise<LinkMeta 
           'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
       },
     })
-    const html = await res.text()
+    const html = await readText(res)
     const title = extractMeta(html, 'og:title')
     if (!title) return null
 

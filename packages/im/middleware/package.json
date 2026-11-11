@@ -13,8 +13,7 @@
     }
   },
   "files": [
-    "lib",
-    "src"
+    "lib"
   ],
   "scripts": {
     "build": "tsc",

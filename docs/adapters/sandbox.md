@@ -8,7 +8,7 @@ tier: Stable
 本页由 [`plugins/adapters/sandbox/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/sandbox/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=6b9b54cd45a042f4 -->
+<!-- sync-adapter-docs:sha256=1382e9e6a35e4d0f -->
 
 # @zhin.js/adapter-sandbox
 
@@ -251,11 +251,6 @@ Console 沙盒页和自己写的测试客户端都用这套协议。每个 WebSo
 - 本地开发调试插件逻辑
 - 测试命令和 AI 工具调用
 - 不依赖外部平台的功能验证
-
-## AI 工具
-
-技能说明见 `skills/sandbox/SKILL.md`（本地沙箱调试约束）。
-
 
 ## 故障排查
 

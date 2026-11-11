@@ -1,4 +1,4 @@
-import type { Usage, TokenUsage } from '@zhin.js/ai';
+import type { TokenUsage } from '@zhin.js/ai';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 export type { HostPhaseTraceConfig as PhaseTraceConfig } from './host-types.js';
@@ -20,15 +20,6 @@ export function logPhase(
     flat[k] = typeof v === 'object' ? JSON.stringify(v) : (v as string | number | boolean);
   }
   logger.info(formatCompact(flat));
-}
-
-export function usageLogFields(usage?: Usage): Record<string, number> {
-  if (!usage) return {};
-  return {
-    promptTokens: usage.prompt_tokens,
-    completionTokens: usage.completion_tokens,
-    totalTokens: usage.total_tokens,
-  };
 }
 
 export function tokenUsageLogFields(usage?: TokenUsage): Record<string, number> {

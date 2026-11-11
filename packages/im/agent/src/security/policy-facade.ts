@@ -57,7 +57,7 @@ import {
   extractUrlsFromCommand,
   NETWORK_COMMAND_PATTERNS,
 } from './network-policy.js';
-import type { ToolNetworkPolicy } from './network-policy-context.js';
+import type { ToolNetworkPolicy } from './network-policy.js';
 import type { ToolDescriptor } from '@zhin.js/tool';
 import type { TurnIngress } from '../turn/turn-ingress.js';
 import { authorizeTurnFileInput } from './turn-file-authority.js';

@@ -6,6 +6,10 @@ import {
 } from '../../src/memory/context-repository.js';
 import { MemoryAgentSessionStore } from '../../src/memory/agent-session-store.js';
 import {
+  DEFERRED_TOOL_SNAPSHOT_CACHE_LIMIT,
+  DeferredToolSnapshotCache,
+} from '../../src/memory/deferred-tool-session.js';
+import {
   createUserMessage,
   EMPTY_TOKEN_USAGE,
   type AssistantMessage,
@@ -165,6 +169,30 @@ describe('ContextRepository', () => {
     expect(archived).toBe(true);
     const active = await sessionStore.findActive('icqq:bot1:group:123');
     expect(active).toBeNull();
+  });
+
+  it('archiveSession drops the archived epoch deferred-tool snapshot', async () => {
+    await repository.setDeferredToolSnapshot(sessionId, { loadedTools: { grep: 1 }, loadedSkills: ['s'] });
+    expect((await repository.getDeferredToolSnapshot(sessionId)).loadedTools).toEqual({ grep: 1 });
+
+    await repository.archiveSession('icqq:bot1:group:123');
+
+    expect(await repository.getDeferredToolSnapshot(sessionId)).toEqual({ loadedTools: {}, loadedSkills: [] });
+  });
+
+  it('bounds deferred-tool snapshots with least-recently-used eviction', () => {
+    const cache = new DeferredToolSnapshotCache(2);
+    const snapshot = (at: number) => ({ loadedTools: { tool: at }, loadedSkills: [] });
+    cache.set('a', snapshot(1));
+    cache.set('b', snapshot(2));
+    expect(cache.get('a')).toEqual(snapshot(1)); // touch: b is now the oldest
+    cache.set('c', snapshot(3));
+
+    expect(cache.size).toBe(2);
+    expect(cache.get('b')).toBeUndefined();
+    expect(cache.get('a')).toEqual(snapshot(1));
+    expect(cache.get('c')).toEqual(snapshot(3));
+    expect(DEFERRED_TOOL_SNAPSHOT_CACHE_LIMIT).toBe(1000);
   });
 
   it('new epoch after archive has no prior messages (epoch-only)', async () => {

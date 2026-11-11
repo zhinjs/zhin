@@ -38,8 +38,12 @@ function context(runtime: RssRuntime, input: unknown) {
   };
 }
 
+// fetchFeed downloads through the public-address policy, then parses the body: stub DNS and transport.
+vi.mock('node:dns/promises', () => ({ lookup: async () => [{ address: '93.184.216.34', family: 4 }] }));
+
 function mockFeed(guid: string) {
-  return vi.spyOn(Parser.prototype, 'parseURL').mockResolvedValue({
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response('<rss/>'));
+  return vi.spyOn(Parser.prototype, 'parseString').mockResolvedValue({
     title: 'Example',
     items: [{ title: 'Update', guid, link: `${url}#${guid}` }],
   });

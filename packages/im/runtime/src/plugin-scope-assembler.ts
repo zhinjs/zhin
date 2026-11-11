@@ -60,6 +60,7 @@ import {
   primaryConfigToken,
   type PrimaryConfig,
 } from './primary-config.js';
+import { isWithin } from './topology-transaction.js';
 
 export type { RootResourceContext, RootResourceInstaller } from '@zhin.js/plugin-runtime';
 
@@ -386,10 +387,6 @@ const rootGenerationAdmissionToken = createToken<GenerationAdmissionGate>(
 
 interface ModuleNamespace {
   readonly default?: unknown;
-}
-
-function isWithin(plugin: PluginId, root: PluginId): boolean {
-  return plugin === root || plugin.startsWith(`${root}/`);
 }
 
 function mergePluginMetadata(

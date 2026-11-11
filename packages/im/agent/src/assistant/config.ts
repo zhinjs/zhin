@@ -96,11 +96,3 @@ export function resolveAssistantEventsConfig(
     rateLimitPerMinute: raw?.rateLimitPerMinute ?? DEFAULT_EVENTS_CONFIG.rateLimitPerMinute,
   };
 }
-
-export function isAssistantEventsActive(
-  assistant?: AssistantConfig,
-): boolean {
-  const base = resolveAssistantConfig(assistant);
-  const events = resolveAssistantEventsConfig(base.events);
-  return base.enabled && events.enabled;
-}

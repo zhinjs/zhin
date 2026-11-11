@@ -89,3 +89,28 @@ describe('@zhin.js/plugin-lottery runtime', () => {
 function neverToken(): never {
   throw new Error('unexpected token');
 }
+
+describe('lottery Console RPC surface', () => {
+  it('exposes status only: no demo action and no runtime-added method aliases', async () => {
+    const { pluginConsoleRpcToken } = await import('zhin.js');
+    const plugin = (await import('../plugin.ts')).default;
+    let rpc: { methods: ReadonlyMap<string, { handler: (input: unknown, call: unknown) => unknown }> } | undefined;
+    await (plugin as unknown as { setup: (context: unknown) => Promise<unknown> }).setup({
+      config: { get: () => ({}) },
+      resources: {
+        has: () => false,
+        use: () => { throw new Error('not provided'); },
+        provide: (token: unknown, value: never) => { if (token === pluginConsoleRpcToken) rpc = value; },
+      },
+      lifecycle: { add: () => undefined },
+    });
+    expect([...rpc!.methods.keys()]).toEqual(['status']);
+    const status = await rpc!.methods.get('status')!.handler({}, {}) as Record<string, unknown>;
+    expect(status).not.toHaveProperty('recentDraws');
+    expect(status).not.toHaveProperty('recentTestCount');
+    expect(status.historyLimit).toBe(500);
+
+    const page = (await import('../pages/index/index.ts')).default as unknown as () => unknown;
+    expect(JSON.stringify(page())).not.toMatch(/drawTest|draw-test|recentDraws/);
+  });
+});

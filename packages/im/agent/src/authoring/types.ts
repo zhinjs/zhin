@@ -75,8 +75,3 @@ export interface DiscoveredPluginAgentSurface {
   hooks: DiscoveredAuthoringHook[];
   evals: DiscoveredAuthoringEval[];
 }
-
-export function isAuthoringDefinition(value: unknown, kind: AuthoringKind): boolean {
-  return typeof value === 'object' && value !== null
-    && (value as AuthoringMarker)[AUTHORING_KIND] === kind;
-}

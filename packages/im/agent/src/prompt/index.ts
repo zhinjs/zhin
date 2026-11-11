@@ -59,8 +59,6 @@ export {
   joinSystemPrompt,
   type SystemPromptSplit,
   buildMultimodalVisionSystemPrompt,
-  buildAgentUserMessage,
 } from './assembly.js';
 
 export * from './prompt-builder.js';
-export * from './templates.js';

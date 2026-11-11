@@ -1,5 +1,6 @@
 import type { AgentMessage, AgentTool } from '@zhin.js/ai';
 import { formatCompact, truncatePreview, getLogger } from '@zhin.js/logger';
+import { estimatePromptTokens } from '../prompt/estimate-tokens.js';
 import type { PromptSectionDebugInfo } from '../prompt/system-prompt.js';
 
 const logger = getLogger('ZhinAgent');
@@ -7,29 +8,22 @@ const logger = getLogger('ZhinAgent');
 export type { HostPromptTraceConfig as PromptTraceConfig } from '../internal/host-types.js';
 import type { HostPromptTraceConfig as PromptTraceConfig } from '../internal/host-types.js';
 
-function estTokensFromChars(chars: number): number {
-  return Math.ceil(chars / 4);
-}
-
-function agentMessageChars(msg: AgentMessage): number {
+/** Same CJK-aware estimator as the context budget report, so both traces agree. */
+function agentMessageTokens(msg: AgentMessage): number {
   if (!Array.isArray(msg.content)) return 0;
   let n = 0;
   for (const part of msg.content) {
-    if (part.type === 'text') n += part.text.length;
-    else n += JSON.stringify(part).length;
+    n += estimatePromptTokens(part.type === 'text' ? part.text : JSON.stringify(part));
   }
   return n;
 }
 
-function toolsSchemaChars(tools: AgentTool[]): number {
-  return tools.reduce((sum, t) => {
-    const blob = JSON.stringify({
-      name: t.name,
-      description: t.description,
-      parameters: t.parameters,
-    });
-    return sum + blob.length;
-  }, 0);
+function toolsSchemaTokens(tools: AgentTool[]): number {
+  return tools.reduce((sum, t) => sum + estimatePromptTokens(JSON.stringify({
+    name: t.name,
+    description: t.description,
+    parameters: t.parameters,
+  })), 0);
 }
 
 function formatSections(sections?: PromptSectionDebugInfo[]): string | undefined {
@@ -52,17 +46,17 @@ export interface LogPromptCompositionInput {
 export function logPromptComposition(input: LogPromptCompositionInput): void {
   if (!input.config.promptTraceEnabled) return;
 
-  const systemChars = input.systemPrompt.length;
-  const historyChars = input.historyMessages.reduce((sum, m) => sum + agentMessageChars(m), 0);
-  const schemaChars = toolsSchemaChars(input.tools);
+  const systemTokens = estimatePromptTokens(input.systemPrompt);
+  const historyTokens = input.historyMessages.reduce((sum, m) => sum + agentMessageTokens(m), 0);
   const userChars = input.userPreview?.length ?? 0;
-  const totalEst = estTokensFromChars(systemChars + historyChars + schemaChars + userChars);
+  const totalEst = systemTokens + historyTokens + toolsSchemaTokens(input.tools)
+    + estimatePromptTokens(input.userPreview ?? '');
 
   const flat: Record<string, string | number | boolean> = {
     phase: 'prompt.compose',
     label: input.label,
-    system: estTokensFromChars(systemChars),
-    history: `${input.historyMessages.length}msg/${estTokensFromChars(historyChars)}tok`,
+    system: systemTokens,
+    history: `${input.historyMessages.length}msg/${historyTokens}tok`,
     tools: input.tools.length,
     total: totalEst,
   };

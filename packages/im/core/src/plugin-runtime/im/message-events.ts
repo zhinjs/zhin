@@ -173,7 +173,8 @@ export function previewMessageContent(content: unknown): string {
     : text;
 }
 
-function flattenContent(content: unknown): string {
+/** Flattens any SendContent-like value to display text; non-text segments become `[type]`. */
+export function flattenContent(content: unknown): string {
   if (typeof content === 'string') return content;
   if (content == null) return '';
   if (Array.isArray(content)) return content.map((item) => flattenContent(item)).join('');

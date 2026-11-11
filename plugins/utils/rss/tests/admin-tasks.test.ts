@@ -167,7 +167,7 @@ describe.skipIf(!sqliteAvailable)('administrator RSS through real Runtime and SQ
     await createTask(provider); await expect(changeTask(provider, 'update', undefined, 'https://other.test/feed')).rejects.toMatchObject({ code: 'invalid_input' });
     await changeTask(provider, 'pause'); const updated = await changeTask(provider, 'update', undefined, 'https://other.test/feed');
     expect(updated.tasks[0]).toMatchObject({ state: 'paused', parameters: { url: 'https://other.test/feed' } });
-    await changeTask(provider, 'resume'); await f.tick(); expect(load).toHaveBeenLastCalledWith('https://other.test/feed', 15000); expect(f.send).not.toHaveBeenCalled();
+    await changeTask(provider, 'resume'); await f.tick(); expect(load).toHaveBeenLastCalledWith('https://other.test/feed', expect.objectContaining({ timeout: 15000 })); expect(f.send).not.toHaveBeenCalled();
   });
 
   it('keeps cursors, revision and receipt facts through HMR and rejects stale providers/jobs after retirement', async () => {

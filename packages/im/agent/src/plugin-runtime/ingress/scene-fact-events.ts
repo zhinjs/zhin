@@ -5,10 +5,9 @@
  */
 import type { RuntimeSceneEventSignal } from '@zhin.js/core/runtime';
 import type { SceneFactStore, SceneMemberRole } from '../../index.js';
+import { WHOLE_SCENE_IDS } from '../../session-profile.js';
 import { capabilityLocalName } from './request.js';
 
-/** OneBot-style ids that mean "everyone" (a scene-wide mute, not a member). */
-const WHOLE_SCENE_IDS = new Set(['0', 'all']);
 const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
 
 function roleOf(role: string, enabled: boolean): SceneMemberRole | undefined {

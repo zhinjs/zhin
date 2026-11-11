@@ -47,7 +47,8 @@ description: "zhin.config.yml 的结构与每个顶层键：HTTP、数据库、A
 | 安装哪些插件与 Feature | `package.json#zhin` 与依赖 |
 | Host、插件实例与 AI 参数 | `zhin.config.yml` |
 | 密钥与环境差异 | `.env` / `.env.<环境>`，由 `${VAR}` 引用 |
-| Workroom、成员与群/仓库绑定 | 持久 Workroom Catalog，通过 Console 管理 |
+| 多 Bot 协作场所（Venue） | `zhin.config.yml` 的 `ai.venues` |
+| Agent 之间能联系谁、协作预算上限 | `agents/<name>/agent.json` 的 `collaboration` |
 | 当前运行时到底发布了什么 | Console 的 Endpoint、能力目录与 generation 状态 |
 
 主配置使用 `configVersion: 2`。先安装依赖，再在 `plugins` 映射实例名与包，业务参数放在顶层同名块；`disable_plugins` 列出停用实例。Feature 需求仍在 `package.json#zhin.features`。旧配置请先阅读[迁移指南](../migrations/plugin-instance-declarations.md)。
@@ -283,9 +284,9 @@ assistant:
     notifyOnFailure: false         # Job 失败时是否通知，默认 false
 ```
 
-其余子键：`queue`（Schedule execution 的并发/重试/超时）。任务事实固定持久化到 `schedule-jobs.json`，可用 [`zhin schedule`](../cli/index.md#schedule-持久化调度任务) 管理。
+其余子键：`queue`（Schedule execution 的并发/重试/超时）。任务事实持久化在数据库中（未配置关系型数据库时回退到 `schedule-jobs.json`），可在 Bot 运行时用 [`zhin schedule`](../cli/index.md#schedule-持久化调度任务) 管理。
 
-## mcp / a2a
+## mcp / a2a {#mcp-a2a}
 
 ```yaml
 mcp:
@@ -299,10 +300,24 @@ a2a:
   path: /a2a
 ```
 
-两段都挂在 HTTP Host 上，按需启用；未配置时对应 SDK 不会被加载。Workroom
-远程执行使用 `a2a.workroomCallbacks` 与 `a2a.workroomRemoteExecutors` 的固定代级
-transport binding（A2A 扩展，已冻结并移出 `@zhin.js/workroom` 包根，子路径 `@zhin.js/workroom/remote`；仅 transport 配置按需生效，默认装配仍会创建其内部占位 Remote Callback Runtime 与 Remote Assignment Authority，留到 C2 之后处理）；Project/成员/群绑定不放在这里，而由持久 Workroom Catalog 管理。
-完整示例见 GitHub 上的 [`@zhin.js/a2a` README](https://github.com/zhinjs/zhin/blob/main/packages/host/a2a/README.md#workroom-execution-callbacks)。
+两段都挂在 HTTP Host 上，按需启用；未配置时对应 SDK 不会被加载。
+
+跨进程的 Agent 协作通过 `a2a.mailbox` 传输（ADR 0048）：Mail 连同 Authority 与预算一起签名传递，远端不能放大权限或超出划拨的预算。
+
+```yaml
+a2a:
+  enabled: true
+  mailbox:
+    enabled: true
+    path: /a2a/mailbox                  # 入站路由，默认 /a2a/mailbox
+    secret: ${A2A_MAILBOX_SECRET}       # 签名密钥；生产环境必须配置（或回退 a2a.token / http.token）
+    peers:
+      - actor: remote-reviewer          # 本地 Agent 的 contacts 里写这个名字
+        url: https://agents.example.com/a2a/mailbox
+        secret: ${A2A_MAILBOX_SECRET}   # 可选，覆盖全局 secret
+```
+
+`a2a.workroomCallbacks` 与 `a2a.workroomRemoteExecutors` 已随 ADR 0048 删除，启动时遇到会直接报错。字段清单见[配置字段（自动生成）](./generated.md)。
 
 ## ai
 
@@ -312,9 +327,9 @@ transport binding（A2A 扩展，已冻结并移出 `@zhin.js/workroom` 包根�
 
 启动文件不再接受 `ai.providers`、`modelCatalog`、`modelPolicy`、`decisions` 或 Agent 的 `provider/model/preset` 选择器。Service 描述服务协议，Account 保存认证方式与私有凭据引用，Profile 选择模型与参数；chat、summary、ambient、image、perception 和决策用途引用 Profile。个人 Session 可单独选择已授权的语言 Profile。
 
-`ai.plan.yml` 是显式 review/apply/export 的输入，不是启动种子，也不放在 `zhin.config.yml` 的 `ai.plan` 下。升级步骤、备份和恢复边界见[模型接口升级](../ai/provider-upgrade.md)。
+项目根目录的 `ai.plan.yml` 只在模型数据库为空时自动导入一次作为初始配置；之后它是显式 review/apply/export 的输入，不会覆盖已有设置，也不放在 `zhin.config.yml` 的 `ai.plan` 下。升级步骤、备份和恢复边界见[模型接口升级](../ai/provider-upgrade.md)。
 
-### agents：角色与工具权限
+### agents：角色与工具权限 {#ai-agents}
 
 ```yaml
 ai:
@@ -330,7 +345,6 @@ ai:
 | --- | --- |
 | `nickname` | 任务角色显示名；当前账号资料仍由 Endpoint 提供 |
 | `mcpServers` | 该 Agent 可见的 MCP Server 名列表 |
-| `permission.task` | `spawn_task` 可见子 Agent 类型（glob → `allow` / `deny`） |
 
 模型角色绑定在运行时用途配置中管理。IM 消息总是交给 `zhin`。`priority` / `match` 已弃用（从未生效），`zhin config check --fix` 会删除。
 
@@ -400,9 +414,7 @@ ai:
 
 `ai.multimodal` 管理多模态入出站；主模型不能看图时可用 模型管理中的 perception 用途让另一个 Profile 先描述图片，见 [AI · ai.multimodal.perception](../ai/index.md#ai-multimodal-perception)。仅在显式配置 `ai.knowledge.baseDir` 时发布 `knowledge_search`；该目录必须位于项目根目录内。
 
-远程 Agent 不再通过 `ai.remoteAgents` 旁路接入。可选 A2A Executor 只通过持久 Workroom Catalog 和 generation-owned authority 接入，并服从 Assignment lease/fence 与 Journal 契约。
-
-`ai.workrooms` 已删除。Project、成员和协作空间由 Console 的持久化 Workroom Catalog 管理，保存后通过 revision CAS 立即生效，不需要重启运行时。
+`ai.remoteAgents`、`ai.workroom` / `ai.workrooms` 已随 ADR 0048 删除，启动时遇到会直接报错。远程 Agent 改在 `a2a.mailbox.peers` 声明；多 Bot 共享的群或频道改在 `ai.venues` 声明；Agent 之间能联系谁、单次协作预算上限写在 `agents/<name>/agent.json` 的 `collaboration`。用法见[多 Agent 协作与场所](../ai/multi-agent-harness.md)。
 
 ## plugin 与 plugins
 

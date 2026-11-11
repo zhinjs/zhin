@@ -1,4 +1,4 @@
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import fs from 'fs-extra';
 import path from 'path';
 import { formatCompact } from '@zhin.js/logger';
@@ -11,123 +11,112 @@ const PROCESS_EXIT_POLL_MS = 100;
 /** The supervisor must outlive the Runtime child's complete graceful-stop budget. */
 export const PROCESS_STOP_GRACE_MS = DEFAULT_SHUTDOWN_BUDGET_MS + 2_000;
 
-/**
- * 检查进程是否存在的跨平台实现
- */
-async function isProcessRunning(pid: number): Promise<boolean> {
-  return new Promise((resolve) => {
-    const platform = os.platform();
-    
-    if (platform === 'win32') {
-      // Windows: 使用 tasklist 命令
-      exec(`tasklist /FI "PID eq ${pid}" /FO CSV /NH`, (error, stdout) => {
-        if (error) {
-          resolve(false);
-          return;
-        }
-        // tasklist 输出包含进程信息表示进程存在
-        resolve(stdout.trim().length > 0 && !stdout.includes('INFO: No tasks'));
-      });
-    } else {
-      // Linux/macOS: 使用 ps 命令
-      exec(`ps -p ${pid} -o pid=`, (error, stdout) => {
-        if (error) {
-          resolve(false);
-          return;
-        }
-        // ps 输出包含 PID 表示进程存在
-        resolve(stdout.trim().length > 0);
-      });
-    }
-  });
+/** Signal 0 probes liveness without a shell; EPERM means the pid exists but belongs to someone else. */
+export function isProcessRunning(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'EPERM';
+  }
+}
+
+export interface ProcessControl {
+  isRunning(pid: number): boolean;
+  /** Returns false when the termination request itself was rejected. */
+  terminate(pid: number, force: boolean): Promise<boolean>;
+}
+
+function terminateProcess(pid: number, force: boolean): Promise<boolean> {
+  if (os.platform() === 'win32') {
+    // Windows has no SIGTERM: taskkill without /F asks the process to close and
+    // fails for windowless daemons; /T also takes the supervised Runtime child.
+    return new Promise((resolve) => {
+      execFile('taskkill', ['/PID', String(pid), ...(force ? ['/T', '/F'] : [])], (error) => resolve(!error));
+    });
+  }
+  try {
+    process.kill(pid, force ? 'SIGKILL' : 'SIGTERM');
+    return Promise.resolve(true);
+  } catch {
+    return Promise.resolve(false);
+  }
+}
+
+const systemProcessControl: ProcessControl = { isRunning: isProcessRunning, terminate: terminateProcess };
+
+export type StopPidOutcome = 'not_running' | 'stopped' | 'kill_failed' | 'still_running';
+
+async function waitForExit(
+  pid: number,
+  control: ProcessControl,
+  budgetMs: number,
+  pollMs: number,
+  sleep: (ms: number) => Promise<void>,
+): Promise<boolean> {
+  for (let waitedMs = 0; waitedMs < budgetMs; waitedMs += pollMs) {
+    if (!control.isRunning(pid)) return true;
+    await sleep(pollMs);
+  }
+  return !control.isRunning(pid);
 }
 
 /**
- * 终止进程的跨平台实现
+ * Graceful stop, then force. Only `not_running` and `stopped` mean the pid is gone:
+ * the caller must keep the pid file otherwise, or the daemon becomes an untracked orphan.
  */
-async function killProcess(pid: number, signal: string = 'SIGTERM'): Promise<boolean> {
-  return new Promise((resolve) => {
-    const platform = os.platform();
-    
-    if (platform === 'win32') {
-      // Windows: 使用 taskkill 命令
-      const forceFlag = signal === 'SIGKILL' ? '/F' : '';
-      exec(`taskkill /PID ${pid} ${forceFlag}`, (error) => {
-        resolve(!error);
-      });
-    } else {
-      // Linux/macOS: 使用 kill 命令
-      const signalFlag = signal === 'SIGKILL' ? '-9' : '-15';
-      exec(`kill ${signalFlag} ${pid}`, (error) => {
-        resolve(!error);
-      });
-    }
-  });
+export async function stopPid(
+  pid: number,
+  control: ProcessControl = systemProcessControl,
+  options: Readonly<{ graceMs?: number; forceWaitMs?: number; pollMs?: number; sleep?: (ms: number) => Promise<void> }> = {},
+): Promise<StopPidOutcome> {
+  const {
+    graceMs = PROCESS_STOP_GRACE_MS,
+    forceWaitMs = 1_000,
+    pollMs = PROCESS_EXIT_POLL_MS,
+    sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
+  } = options;
+  if (!control.isRunning(pid)) return 'not_running';
+
+  const graceful = await control.terminate(pid, false);
+  if (graceful && await waitForExit(pid, control, graceMs, pollMs, sleep)) return 'stopped';
+
+  // Either the graceful request was rejected (Windows taskkill without /F) or the grace budget ran out.
+  logger.warn(formatCompact({ op: 'kill', signal: 'SIGKILL' }));
+  const forced = await control.terminate(pid, true);
+  if (await waitForExit(pid, control, forceWaitMs, pollMs, sleep)) return 'stopped';
+  return forced ? 'still_running' : 'kill_failed';
 }
 
-export async function stopProcess(cwd: string): Promise<void> {
+export async function stopProcess(cwd: string, control: ProcessControl = systemProcessControl): Promise<void> {
   const pidFile = path.join(cwd, PID_FILE);
-  
+
   if (!fs.existsSync(pidFile)) {
     logger.warn(formatCompact( { op: 'no_process' }));
     return;
   }
 
-  try {
-    const pid = parseInt(fs.readFileSync(pidFile, 'utf8'));
-    
-    // 检查进程是否存在
-    const isRunning = await isProcessRunning(pid);
-    if (!isRunning) {
-      logger.warn(formatCompact( { op: 'stale_pid', action: 'cleanup' }));
-      fs.removeSync(pidFile);
-      return;
-    }
+  const pid = parseInt(fs.readFileSync(pidFile, 'utf8'), 10);
+  if (!Number.isInteger(pid) || pid <= 0) {
+    logger.warn(formatCompact({ op: 'stale_pid', action: 'cleanup' }));
+    fs.removeSync(pidFile);
+    return;
+  }
 
-    // 终止进程
-    const killed = await killProcess(pid, 'SIGTERM');
-    if (!killed) {
-      logger.warn(formatCompact( { op: 'kill_failed' }));
-      fs.removeSync(pidFile);
-      return;
-    }
-    
-    // 等待进程结束
-    let waitedMs = 0;
-    while (waitedMs < PROCESS_STOP_GRACE_MS) {
-      const stillRunning = await isProcessRunning(pid);
-      if (!stillRunning) {
-        break;
-      }
-      await new Promise(resolve => setTimeout(resolve, PROCESS_EXIT_POLL_MS));
-      waitedMs += PROCESS_EXIT_POLL_MS;
-    }
-
-    // 如果进程仍然存在，强制结束
-    if (waitedMs >= PROCESS_STOP_GRACE_MS) {
-      logger.warn(formatCompact( { op: 'kill', signal: 'SIGKILL' }));
-      await killProcess(pid, 'SIGKILL');
-      
-      // 再次等待
-      waitedMs = 0;
-      while (waitedMs < 1_000) {
-        const stillRunning = await isProcessRunning(pid);
-        if (!stillRunning) {
-          break;
-        }
-        await new Promise(resolve => setTimeout(resolve, PROCESS_EXIT_POLL_MS));
-        waitedMs += PROCESS_EXIT_POLL_MS;
-      }
-    }
-
+  const outcome = await stopPid(pid, control);
+  if (outcome === 'not_running') {
+    logger.warn(formatCompact( { op: 'stale_pid', action: 'cleanup' }));
+    fs.removeSync(pidFile);
+    return;
+  }
+  if (outcome === 'stopped') {
     fs.removeSync(pidFile);
     logger.success('机器人已停止');
-    
-  } catch (error) {
-    logger.error(`停止进程时发生错误: ${error}`);
-    // 清理PID文件
-    fs.removeSync(pidFile);
+    return;
   }
+  // The process is still alive: keep the pid file so a later `zhin stop` can find it.
+  logger.error(formatCompact({ op: outcome, pid, pidFile: PID_FILE, action: 'kept_pid_file' }));
+  throw new Error(`无法终止进程 ${pid}（${outcome}）；已保留 ${PID_FILE}`);
 }
 
 export async function getProcessStatus(cwd: string): Promise<{ running: boolean; pid?: number }> {
@@ -138,11 +127,9 @@ export async function getProcessStatus(cwd: string): Promise<{ running: boolean;
   }
 
   try {
-    const pid = parseInt(fs.readFileSync(pidFile, 'utf8'));
-    
-    // 检查进程是否存在
-    const isRunning = await isProcessRunning(pid);
-    if (!isRunning) {
+    const pid = parseInt(fs.readFileSync(pidFile, 'utf8'), 10);
+
+    if (!Number.isInteger(pid) || pid <= 0 || !isProcessRunning(pid)) {
       // 进程不存在，清理PID文件
       fs.removeSync(pidFile);
       return { running: false };

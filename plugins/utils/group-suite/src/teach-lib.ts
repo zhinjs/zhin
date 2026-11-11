@@ -11,15 +11,82 @@ import type { GroupSuiteRuntime } from './runtime-state.js';
 
 export const TEACH_USAGE_HINT = '格式：关键词 回答，或 问题|答案';
 
-function isSafeRegex(pattern: string): boolean {
+/** Regex rules are only tried against messages up to this length. */
+export const TEACH_REGEX_MAX_CONTENT = 200;
+/** `*`, `+` and `{n,m}` quantifiers allowed in one pattern (bounds polynomial backtracking). */
+const TEACH_REGEX_MAX_QUANTIFIERS = 3;
+
+/**
+ * Conservative structural check for user-taught patterns, which run against every inbound
+ * message. It refuses the shapes that backtrack super-linearly:
+ * - a repeated group whose body contains a quantifier or an alternation
+ *   (`(\w+\s?)+`, `(a|aa)+`, `(.*a){10}`);
+ * - backreferences and lookarounds;
+ * - more than a few repeat operators in one pattern (`.*.*.*.*x`).
+ * A character class (`[ab]+`) is the accepted way to repeat a set of alternatives.
+ */
+export function isSafeRegex(pattern: string): boolean {
   if (pattern.length > 200) return false;
-  if (/(\+|\*|\{)\)?(\+|\*|\{)/.test(pattern)) return false;
-  if (/\([^)]*(\+|\*)[^)]*(\+|\*)[^)]*\)[+*]/.test(pattern)) return false;
-  const altGroups = pattern.match(/\([^)]*\|[^)]*\)/g) || [];
-  for (const g of altGroups) {
-    if ((g.match(/\|/g) || []).length > 10) return false;
+  /** One entry per open group: true once its body holds a quantifier or an alternation. */
+  const open: boolean[] = [];
+  /** Set right after `)`: whether the group that just closed is "complex". */
+  let closed: boolean | undefined;
+  let repeats = 0;
+  for (let i = 0; i < pattern.length; i += 1) {
+    const ch = pattern[i]!;
+    const group = closed;
+    closed = undefined;
+    if (ch === '\\') {
+      const next = pattern[i + 1] ?? '';
+      if (/[1-9k]/.test(next)) return false;
+      i += 1;
+    } else if (ch === '[') {
+      // Skip the class body; quantifier characters inside it are literals.
+      for (i += 1; i < pattern.length && pattern[i] !== ']'; i += 1) if (pattern[i] === '\\') i += 1;
+    } else if (ch === '(') {
+      if (/^\(\?<?[=!]/.test(pattern.slice(i, i + 4))) return false;
+      open.push(false);
+    } else if (ch === ')') {
+      const complex = open.pop();
+      if (complex === undefined) return false;
+      // A complex group makes its parent complex too: `((a+))+`.
+      if (complex && open.length > 0) open[open.length - 1] = true;
+      closed = complex;
+    } else if (ch === '|') {
+      if (open.length > 0) open[open.length - 1] = true;
+    } else if (ch === '*' || ch === '+' || ch === '?' || (ch === '{' && /^\{\d+(?:,\d*)?\}/.test(pattern.slice(i)))) {
+      if (ch !== '?') {
+        if (group) return false;
+        repeats += 1;
+        if (repeats > TEACH_REGEX_MAX_QUANTIFIERS) return false;
+      }
+      if (open.length > 0) open[open.length - 1] = true;
+      if (ch === '{') i = pattern.indexOf('}', i);
+      // A following `?` only makes the quantifier lazy.
+      if (pattern[i + 1] === '?') i += 1;
+    }
   }
-  return true;
+  return open.length === 0;
+}
+
+/** Compiled teach patterns, keyed by source. `null` marks a pattern that must not run. */
+const compiledTeachRegex = new Map<string, RegExp | null>();
+
+function teachRegex(source: string): RegExp | null {
+  const cached = compiledTeachRegex.get(source);
+  if (cached !== undefined) return cached;
+  let compiled: RegExp | null = null;
+  // Rules stored before the stricter check are re-validated here, not only when they are taught.
+  if (isSafeRegex(source)) {
+    try {
+      compiled = new RegExp(source, 'i');
+    } catch {
+      compiled = null;
+    }
+  }
+  if (compiledTeachRegex.size >= 1000) compiledTeachRegex.clear();
+  compiledTeachRegex.set(source, compiled);
+  return compiled;
 }
 
 export function parseTeachPair(raw: string): { question: string; answer: string } | null {
@@ -83,20 +150,20 @@ async function findMatch(
 ): Promise<Record<string, unknown> | null> {
   const QA = getTeachModel(runtime.db);
   if (!QA) return null;
-  const candidates = (await QA.select().where({
-    context_type: ctxType, context_id: ctxId,
+  // Exact rules are a point lookup; the full rule list is only loaded when regex rules can apply.
+  const exact = (await QA.select().where({
+    question: content, context_type: ctxType, context_id: ctxId,
   })) as Record<string, unknown>[];
-  for (const item of candidates) {
-    if (!item.is_regex && item.question === content) return item;
+  for (const item of exact) {
+    if (!item.is_regex) return item;
   }
-  if (cfg.teachAllowRegex) {
+  if (cfg.teachAllowRegex && content.length <= TEACH_REGEX_MAX_CONTENT) {
+    const candidates = (await QA.select().where({
+      context_type: ctxType, context_id: ctxId,
+    })) as Record<string, unknown>[];
     for (const item of candidates) {
       if (!item.is_regex) continue;
-      try {
-        if (new RegExp(String(item.question), 'i').test(content)) return item;
-      } catch {
-        continue;
-      }
+      if (teachRegex(String(item.question))?.test(content)) return item;
     }
   }
   return null;
@@ -273,12 +340,8 @@ export async function tryTeachReply(
   const sender = resolveSender(input);
   let answer = String(matched.answer ?? '');
   if (matched.is_regex) {
-    try {
-      const m = content.match(new RegExp(String(matched.question), 'i'));
-      answer = processAnswer(answer, sender, m || undefined, input.locale);
-    } catch {
-      /* ignore */
-    }
+    const m = teachRegex(String(matched.question))?.exec(content);
+    answer = processAnswer(answer, sender, m || undefined, input.locale);
   } else {
     answer = processAnswer(answer, sender, undefined, input.locale);
   }

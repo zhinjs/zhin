@@ -48,7 +48,6 @@ export {
 export {
   registerQqWebhookRoutes,
   handleQqWebhookRequest,
-  readRequestBodyText,
   qqHttpBotOptions,
   type QqWebhookHandler,
 } from './webhook.js';

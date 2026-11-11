@@ -51,4 +51,14 @@ python3 -m venv .venv-speech
 
 将 `speech.tts.edgeTtsCommand` 设置为该环境内 `edge-tts` 的绝对路径；服务进程的 PATH 未必与终端相同。缺少命令时框架会提示这个配置项，不会假装生成成功。不使用 CLI 时可配置现有 openai / azure / custom provider。
 
+STT 未配置 `host` / `model` 时使用所选 provider 自己的默认值（`openai`：`https://api.openai.com`、`whisper-1`）。`speech.stt.language`（ISO-639-1，如 `zh`）可选；不设置时不向转写服务发送语言提示，由服务自动识别。
+
+```yaml
+speech:
+  stt:
+    provider: openai
+    apiKey: ${OPENAI_API_KEY}
+    language: zh # 可选
+```
+
 注意：Ollama 不支持音频转写，`provider: ollama, model: whisper` 无法启用 STT。入站语音转写需配置 `speech.stt.provider: openai` 和支持音频转写的服务及凭据，再启用 `ai.multimodal.audio.strategy: transcribe`。TTS 可独立使用，不要求先启用 STT。

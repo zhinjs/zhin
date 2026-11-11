@@ -77,7 +77,3 @@ export function resolvePayloadFromText(
   }
   return undefined;
 }
-
-export function formatActionAsRaw(data: ActionSegmentData): string {
-  return data.payload;
-}

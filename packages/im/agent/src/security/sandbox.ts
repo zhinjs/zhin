@@ -79,8 +79,27 @@ function killProcessGroup(child: child_process.ChildProcess, signal: NodeJS.Sign
       process.kill(-child.pid, signal); // 负 PID = 杀整个进程组
     }
   } catch {
-    // 进程已退出
+    // Already exited, or no process groups on this platform: fall back to the child itself.
+    try { child.kill(signal); } catch { /* already gone */ }
   }
+}
+
+/** Options accepted by every Sandbox execution path. */
+export interface SandboxExecuteOptions {
+  cwd?: string;
+  env?: Record<string, string>;
+  timeout?: number;
+  /** Aborting kills the running process group (or the named container). */
+  signal?: AbortSignal;
+}
+
+/** Kill `child`'s process group when `signal` aborts; returns the listener remover. */
+function killOnAbort(child: child_process.ChildProcess, signal: AbortSignal | undefined): () => void {
+  if (!signal) return () => {};
+  const onAbort = () => killProcessGroup(child, 'SIGKILL');
+  signal.addEventListener('abort', onAbort, { once: true });
+  if (signal.aborted) onAbort();
+  return () => signal.removeEventListener('abort', onAbort);
 }
 
 // ── 沙箱配置 ──────────────────────────────────────────────────────────
@@ -114,7 +133,7 @@ export interface SandboxConfig {
   allowedDomains?: string[];
   /** 是否使用 Docker 容器隔离（默认 'auto'：检测到 Docker 就用） */
   useDocker?: 'auto' | 'always' | 'never';
-  /** Docker 镜像（默认 node:20-alpine） */
+  /** Docker 镜像（默认 node:22-bookworm-slim） */
   dockerImage?: string;
   /** Host workspace mount access when a container boundary is required. */
   filesystemAccess?: 'read-only' | 'workspace-write';
@@ -377,11 +396,7 @@ export class Sandbox {
   /**
    * 在沙箱中执行命令
    */
-  async execute(command: string, options?: {
-    cwd?: string;
-    env?: Record<string, string>;
-    timeout?: number;
-  }): Promise<SandboxResult> {
+  async execute(command: string, options?: SandboxExecuteOptions): Promise<SandboxResult> {
     if (!this.config.enabled) {
       return this.executeUnsafe(command, options);
     }
@@ -412,7 +427,7 @@ export class Sandbox {
           ...this.config,
           workingDirectory: options?.cwd || this.config.workingDirectory,
           timeout: options?.timeout || this.config.timeout,
-        });
+        }, { signal: options?.signal });
       } catch (e) {
         if (this.config.useDocker === 'always') {
           const reason = e instanceof Error ? e.message : String(e);
@@ -435,11 +450,7 @@ export class Sandbox {
   }
 
   /** 软沙箱执行（ulimit 包装 + detached 进程组 + /proc 资源监控） */
-  private async executeSoft(command: string, options?: {
-    cwd?: string;
-    env?: Record<string, string>;
-    timeout?: number;
-  }): Promise<SandboxResult> {
+  private async executeSoft(command: string, options?: SandboxExecuteOptions): Promise<SandboxResult> {
     const startTime = Date.now();
 
     // 清理环境变量
@@ -483,6 +494,7 @@ export class Sandbox {
         stdio: ['pipe', 'pipe', 'pipe'],
         detached: true, // 新进程组，便于整棵进程树 kill
       });
+      const stopAbortWatch = killOnAbort(child, options?.signal);
 
       const maxOutput = this.config.maxOutputSize || 10 * 1024 * 1024;
       const stdoutChunks: string[] = [];
@@ -528,6 +540,7 @@ export class Sandbox {
       child.on('close', (exitCode) => {
         clearTimeout(timer);
         clearInterval(resourceTimer);
+        stopAbortWatch();
 
         // 超时后补一次资源采样
         if (child.pid && peakMemoryKB === 0) {
@@ -557,6 +570,7 @@ export class Sandbox {
       child.on('error', (error) => {
         clearTimeout(timer);
         clearInterval(resourceTimer);
+        stopAbortWatch();
 
         resolve({
           success: false,
@@ -571,11 +585,7 @@ export class Sandbox {
     });
   }
 
-  private async executeUnsafe(command: string, options?: {
-    cwd?: string;
-    env?: Record<string, string>;
-    timeout?: number;
-  }): Promise<SandboxResult> {
+  private async executeUnsafe(command: string, options?: SandboxExecuteOptions): Promise<SandboxResult> {
     const startTime = Date.now();
 
     return new Promise((resolve) => {
@@ -594,7 +604,9 @@ export class Sandbox {
         cwd: options?.cwd || process.cwd(),
         env: { ...cleanEnv, ...options?.env },
         stdio: ['pipe', 'pipe', 'pipe'],
+        detached: true, // own process group so timeout/cancel kills the whole tree
       });
+      const stopAbortWatch = killOnAbort(child, options?.signal);
 
       const maxOutput = this.config.maxOutputSize || 10 * 1024 * 1024;
       const stdoutChunks: string[] = [];
@@ -620,11 +632,12 @@ export class Sandbox {
 
       const timer = setTimeout(() => {
         timedOut = true;
-        child.kill('SIGKILL');
+        killProcessGroup(child, 'SIGKILL');
       }, timeout);
 
       child.on('close', (exitCode) => {
         clearTimeout(timer);
+        stopAbortWatch();
         const duration = Date.now() - startTime;
         const didTimeout = timedOut || duration >= timeout;
 
@@ -641,6 +654,7 @@ export class Sandbox {
 
       child.on('error', (error) => {
         clearTimeout(timer);
+        stopAbortWatch();
 
         resolve({
           success: false,

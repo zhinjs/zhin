@@ -24,7 +24,6 @@
   },
   "files": [
     "lib",
-    "src",
     "README.md"
   ],
   "scripts": {

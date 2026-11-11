@@ -29,13 +29,6 @@
       "cache": false,
       "outputs": []
     },
-    "type-check": {
-      "dependsOn": ["^build"],
-      "outputs": []
-    },
-    "lint": {
-      "outputs": []
-    },
     "clean": {
       "cache": false
     }

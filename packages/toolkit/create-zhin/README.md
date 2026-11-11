@@ -11,13 +11,13 @@
 - 🚀 **一键创建**: 使用标准的 `npm create` / `yarn create` / `pnpm create` 命令
 - 📦 **Workspace 结构**: 自动创建 pnpm workspace，支持插件开发
 - 🔧 **智能配置**: 自动安装 pnpm、项目依赖
-- 🎯 **交互式配置**: 选择运行时、配置格式、数据库类型
+- 🎯 **交互式配置**: 选择项目语言、模板、配置格式、数据库类型
 - 🗄️ **数据库支持**: 支持 SQLite、MySQL、PostgreSQL、MongoDB、Redis
 - 🔐 **安全配置**: 自动生成 HTTP Token 认证和环境变量管理
 - 🖥️ **Remote Console**: 默认配置 `https://console.zhin.dev` 访问所需的 API Base 与 CORS
 - 🤖 **AI Agent 引导**: 可选配置 Provider、触发方式、会话、上下文和安全默认值
 - 📊 **日志配置**: 内置完整的日志等级和清理配置
-- 🌐 **零安装**: 无需全局安装，直接使用
+- 🌐 **零安装**: 无需全局安装，CLI 作为项目 devDependency 通过 `pnpm` / `npx zhin` 使用
 
 ## 快速开始
 
@@ -44,9 +44,9 @@ cd my-awesome-bot
 pnpm dev
 
 # 创建项目内本地插件（独立可发布插件：npx @zhin.js/cli new my-plugin --standalone）
-zhin new my-plugin
+npx zhin new my-plugin
 
-# 构建插件
+# 类型检查
 pnpm build
 ```
 
@@ -58,7 +58,7 @@ pnpm build
 
 1. **启动脚手架**: 当你运行 `npm create zhin-app` 时
 2. **检测 pnpm**: 自动检测并安装 pnpm（如果未安装）
-3. **交互式配置**: 询问项目名称、运行时、配置格式
+3. **交互式配置**: 询问项目语言、项目名称、模板、配置格式
 4. **HTTP Token 认证配置**: 配置 Web 控制台访问 Token
    - 默认 Token：随机生成 32 位 hex 字符串
 5. **数据库 / 适配器 / AI 向导**（`@zhin.js/scaffold-wizard`）: 分步选择并写入配置
@@ -84,22 +84,26 @@ npm create zhin-app my-awesome-bot
 ```
 
 **交互式配置流程：**
-1. 📝 输入项目名称
-2. ⚙️ 选择运行时（Node.js / Bun）
-3. 📄 选择配置格式（YAML / JSON）
-4. 🔐 配置 Web 控制台 Token
+1. 🌐 选择项目语言（或用 `--locale zh-CN|en` 指定）
+2. 📝 输入项目名称
+3. 📋 选择模板（默认 / 生活助手）
+4. 📄 选择配置格式（YAML / JSON）
+5. 🔐 配置 Web 控制台 Token
    - Token（默认：随机 32 位 hex 字符串，用于 Authorization: Bearer 或 ?token= 认证）
-5. 🗄️ 配置数据库
+6. 🗄️ 配置数据库
    - SQLite（推荐，零配置）
    - MySQL（主机、端口、用户名、密码、数据库名）
    - PostgreSQL（主机、端口、用户名、密码、数据库名）
    - MongoDB（连接字符串、数据库名）
    - Redis（主机、端口、密码、数据库索引）
+7. 🔌 选择适配器、🤖 可选 AI、🛠️ 可选插件开发技能
+
+运行时固定为 Node.js（>=22.19.0），向导不再询问运行时，也不会全局安装 CLI。
 
 ### 快速创建（跳过交互）
 
 ```bash
-# 使用默认配置（YAML + Node.js + 随机 Token）
+# 使用默认配置（YAML + 随机 Token）
 npm create zhin-app my-bot -y
 # 或
 npm create zhin-app my-bot --yes
@@ -112,20 +116,20 @@ npm create zhin-app my-bot --yes
 | `[project-name]` | 项目名称（可选，会提示输入） | `my-zhin-bot` |
 | `-y, --yes` | 跳过交互，使用默认配置 | `false` |
 | `--skip-install` | 仅生成文件，稍后自行运行 `pnpm install` | `false` |
+| `--locale <zh-CN\|en>` | 生成项目的语言（模板、README、提示） | 交互选择；`-y` 时使用默认语言 |
 
 **默认配置（使用 `-y` 时，见 `src/stable-yes-defaults.ts`，由 `tests/stable-yes.test.ts` 断言）：**
 - 配置格式: YAML (`zhin.config.yml`)
-- 运行时: Node.js
 - 包管理器: pnpm（自动安装）
 - 数据库: 无（内存会话；需持久化请交互式创建或手动加 SQLite）
 - HTTP Token: 随机生成
-- 适配器: `@zhin.js/adapter-sandbox`；`endpoints: []`（与 minimal-bot 一致，沙盒 bot 由 Console 连接时自动创建）
+- 适配器: `@zhin.js/adapter-sandbox`，实例键 `sandbox`，`commandPrefix: /`，预置 Endpoint `sandbox-bot`
 - AI: 不启用（首跑 IM-only，无 Ollama / API Key 前置条件；跑通后用 `zhin setup --ai`）
-- Remote Console: `https://console.zhin.dev`；API Base `http://127.0.0.1:8086`（见 [docs/console/index.md](../../../docs/console/index.md)）
+- Remote Console: `https://console.zhin.dev`；脚手架写入 `http.port: 8068`，API Base 为 `http://127.0.0.1:8068`（见 [docs/console/index.md](../../../docs/console/index.md)）
 - 统一收件箱: 未启用（无 `database:` 块）
 - 插件开发技能模板: 未安装（`devSkills: false`）
 
-**与 [examples/minimal-bot](../../../examples/minimal-bot/) 对齐：** `-y` 使用 `endpoints: []`、Sandbox + Host 插件；首跑步骤见 minimal-bot README 与生成项目 README。
+**与 [examples/minimal-bot](../../../examples/minimal-bot/) 对齐：** `-y` 只启用 Sandbox 适配器，Console/HTTP Host 由 CLI 自动装配；首跑步骤见 minimal-bot README 与生成项目 README。
 
 ## 与 @zhin.js/cli 的分工
 
@@ -148,7 +152,7 @@ npm create zhin-app my-bot --yes
 # 使用默认配置快速创建
 npm create zhin-app quick-prototype -y
 cd quick-prototype
-npm run dev
+pnpm dev
 ```
 
 ### 2. 生产项目创建
@@ -161,14 +165,14 @@ npm create zhin-app production-bot
 ### 3. 团队标准项目
 
 ```bash
-# 使用默认 Host/Node 模板，后续在 zhin.config.yml 中提交团队约定
+# 使用默认模板，后续在 zhin.config.yml 中提交团队约定
 npm create zhin-app team-bot -y
 ```
 
 ### 4. 实验性项目
 
 ```bash
-# 通过交互向导选择 Bun 或额外适配器
+# 通过交互向导选择模板、数据库与额外适配器
 npm create zhin-app experimental-bot
 ```
 
@@ -178,27 +182,31 @@ npm create zhin-app experimental-bot
 
 ```
 my-awesome-bot/
-├── plugin.ts                 # 根 Plugin Runtime 入口
+├── plugin.ts                 # 根 Plugin Runtime 入口（definePlugin）
 ├── schema.json               # 根插件配置 JSON Schema
-├── commands/                 # 消息命令
-├── components/               # 消息组件
+├── commands/                 # 消息命令（hello、card 示例）
+├── components/               # 消息组件（status-card 示例）
 ├── middlewares/              # 消息中间件
-├── tools/              # 可选 AI tools（默认空）
-├── skills/<name>/SKILL.md    # Skill 能力包，可附带参考资料与脚本
-├── agents/                   # 可选 Agent 定义（默认空）
-├── pages/                    # Console page + $nav/$footer 布局
+├── tools/                    # AI tools（启用 AI 时生成 echo 示例）
+├── skills/<name>/SKILL.md    # Skill 能力包
+├── agents/                   # 可选 Agent 定义
+├── hooks/                    # 可选 Agent hooks
+├── prompt-sections/          # 可选 Prompt 片段
+├── pages/                    # Console 页面：index/、nav/、footer/
 ├── plugins/                  # 仅一级的本地子插件 workspace
 ├── packages/                 # 提供给 Zhin 的 Feature workspace
 ├── data/                     # 数据存储目录
 ├── zhin.config.yml           # Root 配置文件（YAML 或 JSON）
-├── package.json             # 根 package.json（包含依赖和脚本）
-├── tsconfig.json            # TypeScript 根配置
-├── pnpm-workspace.yaml      # workspace 配置
-├── .gitignore               # Git 忽略规则
-├── .env                     # 环境变量（包含 HTTP 认证信息）
-├── .env.example             # 环境变量模板
-└── README.md                # 项目说明文档
+├── package.json              # 依赖、脚本与 zhin 清单
+├── tsconfig.json             # TypeScript 配置
+├── pnpm-workspace.yaml       # workspace 配置
+├── ecosystem.config.cjs      # PM2 配置
+├── .env / .env.development / .env.production / .env.example
+├── .gitignore
+└── README.md
 ```
+
+另外会生成系统服务模板（systemd `.service`、launchd `.plist`、Windows `install-service.ps1` 与计划任务 XML）；启用 AI 时还有 `SOUL.md`、`TOOLS.md`、`AGENTS.md` 与 `assistant.profile.yml.example`。
 
 **⚠️ 重要**: `.env` 文件包含敏感信息（HTTP Token），已自动添加到 `.gitignore`，不会被提交到版本控制。
 
@@ -216,10 +224,19 @@ packages:
   "scripts": {
     "dev": "zhin runtime start --watch source config",
     "start": "zhin runtime start --mode production --no-watch",
-    "build": "tsc --noEmit"
+    "preview": "zhin preview",
+    "build": "tsc --noEmit",
+    "pm2:start": "pm2 start ecosystem.config.cjs",
+    "pm2:stop": "pm2 stop ecosystem.config.cjs",
+    "pm2:restart": "pm2 restart ecosystem.config.cjs",
+    "pm2:delete": "pm2 delete ecosystem.config.cjs",
+    "pm2:logs": "pm2 logs",
+    "pm2:monit": "pm2 monit"
   }
 }
 ```
+
+`package.json#zhin` 是 Plugin Runtime 拓扑清单（`entry: ./plugin.ts`、`features`、`plugins`）。
 
 ## 配置文件格式
 
@@ -259,13 +276,13 @@ cd my-awesome-bot
 pnpm dev
 ```
 
-访问 Remote Console `https://console.zhin.dev`，API Base 填写与 Host 一致的地址（如 `http://127.0.0.1:8086`）。
+访问 Remote Console `https://console.zhin.dev`，API Base 填写与 Host 一致的地址：脚手架写入的端口是 `8068`，即 `http://127.0.0.1:8068`。
 
 **访问信息：**
 - Token 在创建项目时已配置
 - 保存在 `.env` 文件中
-- 创建完成时会在终端显示
-- 登录后进入 Sandbox / 沙盒页，连接后发送 `hello`
+- 创建完成时终端只显示打码后的长度，完整值请查看 `.env`
+- 登录后进入 Sandbox / 沙盒页，连接后发送 `/hello`
 
 > 💡 **修改 Token**: 编辑 `.env` 文件中的 `HTTP_TOKEN`
 
@@ -280,59 +297,47 @@ pnpm dev
 ### 4. 创建插件
 
 ```bash
-# 创建新插件（自动添加到依赖）
-zhin new my-awesome-plugin
-
-# 插件会创建在 plugins/my-awesome-plugin/
-# 自动添加到根 package.json 的 dependencies
+# 在 plugins/my-awesome-plugin/ 生成项目内插件
+npx zhin new my-awesome-plugin
 ```
 
-### 4. 开发插件
+生成的是约定式插件包：`plugin.ts` 默认导出 `definePlugin()`，能力放在约定目录。
+
+### 5. 开发插件
 
 ```bash
-# 编辑插件文件
-# plugins/my-awesome-plugin/src/index.ts              # 插件逻辑
-# plugins/my-awesome-plugin/skills/my-awesome-plugin/SKILL.md  # AI 技能说明（可选完善）
-# plugins/my-awesome-plugin/client/                   # 控制台客户端页面
+# plugins/my-awesome-plugin/plugin.ts                    # 插件入口（definePlugin）
+# plugins/my-awesome-plugin/commands/<name>/index.ts     # 命令（defineCommand）
+# plugins/my-awesome-plugin/pages/<name>/index.ts        # Console 页面（definePage）
+# plugins/my-awesome-plugin/skills/<name>/SKILL.md       # Skill 说明（可选）
 
-# 保存后自动热重载 ⚡
+# pnpm dev 监听 source 与 config，保存后自动重载
 ```
 
-### 5. 构建插件
+### 6. 配置插件
 
-```bash
-# 构建所有插件
-pnpm build
-
-# 或只构建特定插件
-zhin build my-awesome-plugin
-```
-
-### 6. 在配置中启用插件
-
-编辑 `zhin.config.yml`：
+`zhin.config.yml` 的 `plugins` 是「实例键 → 配置」的映射（不是包名数组），插件拓扑由 `package.json#zhin.plugins` 声明：
 
 ```yaml
 plugins:
-  - "@zhin.js/adapter-sandbox"
-  - example
-  - my-awesome-plugin
+  sandbox:
+    commandPrefix: /
+  my-awesome-plugin: {}
 ```
 
 ### 7. 生产环境部署
 
 ```bash
-# 确保插件已构建
+# 类型检查
 pnpm build
 
-# 生产启动
+# 前台启动
 pnpm start
 
-# 或后台运行
-pnpm daemon
-
-# 停止服务
-pnpm stop
+# 或交给 PM2 守护
+pnpm pm2:start
+pnpm pm2:logs
+pnpm pm2:stop
 ```
 
 ## 错误处理
@@ -376,20 +381,10 @@ pnpm stop
 |------|-------------|------------------|------------|
 | 零配置创建 | ✅ | ✅ | ✅ |
 | 多配置格式 | ✅ | ❌ | ✅ |  
-| 多运行时支持 | ✅ | ❌ | ❌ |
 | AI Agent 运行时（Endpoint） | ✅ | ❌ | ❌ |
 | 热重载开发 | ✅ | ✅ | ✅ |
 
 ## 高级用法
-
-### 自定义模板
-
-虽然 `create-zhin-app` 主要调用 CLI 工具，但你可以通过环境变量自定义行为：
-
-```bash
-# 设置自定义模板路径
-ZHIN_TEMPLATE_DIR=/path/to/custom/template npm create zhin-app my-bot
-```
 
 ### 批量创建
 
@@ -409,8 +404,7 @@ done
   run: |
     npm create zhin-app my-bot -- --yes
     cd my-bot
-    npm run build
-    npm run test
+    pnpm build
 ```
 
 ## 故障排查
@@ -418,11 +412,8 @@ done
 ### 调试模式
 
 ```bash
-# 启用详细日志
-DEBUG=create-zhin-app npm create zhin-app my-bot
-
-# 检查参数传递
-npm create zhin-app my-bot -- --help
+# 失败时打印完整堆栈与安装输出（任意非空值即可）
+DEBUG=1 npm create zhin-app my-bot
 ```
 
 ### 清理缓存

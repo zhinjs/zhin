@@ -3,13 +3,13 @@
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
+import { readTextBody } from '@zhin.js/host-http-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
   headerValue,
   parseIssueCommentInbound,
   parsePrReviewCommentInbound,
   parsePrReviewInbound,
-  readTextBody,
   verifyWebhookSignature,
   type GithubInboundComment,
   type IssueCommentPayload,

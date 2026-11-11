@@ -49,10 +49,6 @@ export function runWithDeferredTurnController<TResult>(
   return activeController.run(controller, operation);
 }
 
-export function getActiveDeferredTurnController(): DeferredTurnController | undefined {
-  return activeController.getStore();
-}
-
 const MEMORY_HINT_KEYWORDS = ['memory', 'remember', 'recall', 'store', '记忆', '记住', '记下', '回忆', '备忘'];
 const MEMORY_FALLBACK_HINT =
   'No matches. 语义记忆工具未启用（需配置 ai.memory.semantic.enabled: true）。'
@@ -181,9 +177,4 @@ export function createDeferredTurnController(
       persistSnapshot: async () => undefined,
     }),
   });
-}
-
-export function isToolsMutatedResult(result: ToolResult): boolean {
-  const text = typeof result === 'string' ? result : JSON.stringify(result);
-  return text.includes(TOOLS_MUTATED_MARKER);
 }

@@ -1,13 +1,14 @@
 /**
- * Lark/Feishu webhook HTTP: verification → signature → challenge/event → admit.
+ * Lark/Feishu webhook HTTP: signature → decrypt → verification token → challenge/event → admit.
  */
 import type { LarkCardAction } from './cards.js';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
+import { readTextBody } from '@zhin.js/host-http-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
+  decryptLarkEvent,
   headerValue,
-  readTextBody,
   verifySignature,
   verifyToken,
   type LarkEventBody,
@@ -54,17 +55,7 @@ export async function handleLarkWebhookRequest(
       return;
     }
 
-    if (handler.config.verificationToken) {
-      const bodyToken = (event as LarkEventBody & { header?: { token?: unknown } }).header?.token ?? event.token;
-      const token = typeof bodyToken === 'string' ? bodyToken : headerValue(request.headers, 'x-lark-request-token');
-      if (!verifyToken(token, handler.config.verificationToken)) {
-        logger.warn(formatCompact({ op: 'webhook', ok: false, error: 'invalid verification token' }));
-        response.writeHead(403, { 'Content-Type': 'text/plain' });
-        response.end('Forbidden');
-        return;
-      }
-    }
-
+    // Signature first: it covers the raw (possibly encrypted) body.
     if (handler.config.encryptKey) {
       const timestamp = headerValue(request.headers, 'x-lark-request-timestamp');
       const nonce = headerValue(request.headers, 'x-lark-request-nonce');
@@ -82,6 +73,40 @@ export async function handleLarkWebhookRequest(
       }
     }
 
+    if (typeof event?.encrypt === 'string') {
+      if (!handler.config.encryptKey) {
+        logger.warn(formatCompact({ op: 'webhook', ok: false, error: 'encrypted event received but encryptKey is not configured' }));
+        response.writeHead(400, { 'Content-Type': 'application/json' });
+        response.end(JSON.stringify({ code: -1, msg: 'Encrypt key is not configured' }));
+        return;
+      }
+      try {
+        event = JSON.parse(decryptLarkEvent(handler.config.encryptKey, event.encrypt)) as LarkEventBody;
+      } catch {
+        logger.warn(formatCompact({ op: 'webhook', ok: false, error: 'event decryption failed' }));
+        response.writeHead(400, { 'Content-Type': 'application/json' });
+        response.end(JSON.stringify({ code: -1, msg: 'Decryption failed' }));
+        return;
+      }
+    }
+
+    if (!event || typeof event !== 'object') {
+      response.writeHead(200, { 'Content-Type': 'application/json' });
+      response.end(JSON.stringify({ code: 0, msg: 'success' }));
+      return;
+    }
+
+    // Token and challenge live inside the decrypted event.
+    if (handler.config.verificationToken) {
+      const bodyToken = (event as LarkEventBody & { header?: { token?: unknown } }).header?.token ?? event.token;
+      const token = typeof bodyToken === 'string' ? bodyToken : headerValue(request.headers, 'x-lark-request-token');
+      if (!verifyToken(token, handler.config.verificationToken)) {
+        logger.warn(formatCompact({ op: 'webhook', ok: false, error: 'invalid verification token' }));
+        response.writeHead(403, { 'Content-Type': 'text/plain' });
+        response.end('Forbidden');
+        return;
+      }
+    }
 
     if (handler.isOpen) {
       const eventName = event.type === 'event_callback'

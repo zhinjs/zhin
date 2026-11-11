@@ -122,9 +122,10 @@ export class NodeNetworkTransport implements NetworkTransport {
     signal: AbortSignal,
     maxBytes: number,
   ): Promise<Omit<NetworkBinaryResponse, 'url'>> {
-    const addresses = isIP(url.hostname)
-      ? [{ address: url.hostname, family: isIP(url.hostname) }]
-      : await lookup(url.hostname, { all: true, verbatim: true });
+    const host = bareUrlHost(url);
+    const addresses = isIP(host)
+      ? [{ address: host, family: isIP(host) }]
+      : await lookup(host, { all: true, verbatim: true });
     if (addresses.length === 0) throw new Error(`DNS returned no address for ${url.hostname}`);
     for (const entry of addresses) {
       if (isBlockedSsrfHostname(entry.address)) {
@@ -134,6 +135,11 @@ export class NodeNetworkTransport implements NetworkTransport {
     const selected = addresses[0]!;
     return requestPinnedAddress(url, selected.address, headers, signal, maxBytes);
   }
+}
+
+/** `URL.hostname` keeps the brackets of an IPv6 literal; `isIP`, DNS and SNI need the bare address. */
+export function bareUrlHost(url: URL): string {
+  return url.hostname.replace(/^\[|\]$/g, '');
 }
 
 export function authorizeNetworkUrl(url: string, policy: ToolInvocationPolicy): URL {
@@ -165,7 +171,7 @@ function requestPinnedAddress(
       method: 'GET',
       headers: { ...headers, Host: url.host, 'Accept-Encoding': 'identity' },
       signal,
-      ...(url.protocol === 'https:' && !isIP(url.hostname) ? { servername: url.hostname } : {}),
+      ...(url.protocol === 'https:' && !isIP(bareUrlHost(url)) ? { servername: bareUrlHost(url) } : {}),
     }, (response) => {
       const chunks: Buffer[] = [];
       let size = 0;

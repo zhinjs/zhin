@@ -1,0 +1,96 @@
+# test-bot 配置模板。真正的 zhin.config.yml 含本机账号信息，不入库：
+#   cp zhin.config.example.yml zhin.config.yml
+# 然后按需取消注释下面的平台块，并在 .env 里填入对应凭据（见 .env.example）。
+# 模型不写在这里：启动后在 Console 里添加，或放一份 ai.plan.yml（见 docs/ai/providers.md）。
+configVersion: 2
+log_level: info
+
+http:
+  token: ${HTTP_TOKEN:-test-bot-dev-token}
+  port: 8086
+  corsOrigins:
+    - https://console.zhin.dev
+
+database:
+  dialect: sqlite
+  filename: ./data/test-bot.db
+
+ai:
+  enabled: true
+  agent:
+    execSecurity: allowlist
+    execPreset: readonly
+  trigger:
+    prefixes:
+      - "ai:"
+    respondToAt: true
+    respondToPrivate: true
+
+plugin: {}
+
+# 实例别名 → 包名；每个实例的业务配置写在同名顶层块里。
+plugins:
+  sandbox: "@zhin.js/adapter-sandbox"
+  # icqq: "@zhin.js/adapter-icqq"        # 需另装 @icqqjs/icqq（见 README）
+  # slack: "@zhin.js/adapter-slack"
+  # github: "@zhin.js/adapter-github"
+  # qq: "@zhin.js/adapter-qq"
+  group-suite: "@zhin.js/plugin-group-suite"
+  activity-feedback: "@zhin.js/service-activity-feedback"
+  lottery: "@zhin.js/plugin-lottery"
+  qrcode: "@zhin.js/plugin-qrcode"
+  short-url: "@zhin.js/plugin-short-url"
+  link-poster: "@zhin.js/plugin-link-poster"
+  code-runner: "@zhin.js/plugin-code-runner"
+  game-hub: "@zhin.js/plugin-game-hub"
+  guess-number: "@zhin.js/plugin-guess-number"
+  dice-duel: "@zhin.js/plugin-dice-duel"
+  blackjack: "@zhin.js/plugin-blackjack"
+  rps: "@zhin.js/plugin-rps"
+  tic-tac-toe: "@zhin.js/plugin-tic-tac-toe"
+
+sandbox:
+  endpoints:
+    - id: test-bot-sandbox
+      owner: local-user
+
+# icqq:
+#   master: ${ICQQ_MASTER}
+#   endpoints:
+#     - id: ${ICQQ_ACCOUNT}
+#     - id: ${ICQQ_ACCOUNT_2}
+
+# slack:
+#   endpoints:
+#     - id: test-bot-slack
+#       token: ${SLACK_TOKEN}
+#       appToken: ${SLACK_APP_TOKEN}
+#       signingSecret: ${SLACK_SIGNING_SECRET}
+
+# github:
+#   endpoints:
+#     - id: test-bot-github
+#       app_id: ${GITHUB_APP_ID}
+#       private_key: ${GITHUB_PRIVATE_KEY}
+
+# qq:
+#   mode: websocket
+#   endpoints:
+#     - id: zhin
+#       appid: ${QQ_APPID_2}
+#       secret: ${QQ_SECRET_2}
+
+group-suite:
+  keywordReply: false
+activity-feedback: {}
+lottery: {}
+qrcode: {}
+short-url: {}
+link-poster: {}
+code-runner: {}
+game-hub: {}
+guess-number: {}
+dice-duel: {}
+blackjack: {}
+rps: {}
+tic-tac-toe: {}

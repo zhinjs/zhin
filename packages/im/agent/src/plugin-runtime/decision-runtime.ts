@@ -55,11 +55,6 @@ export function getAgentTurnDecisionRuntime(): AgentDecisionRuntime | undefined 
   return decisionTurnStorage.getStore()?.runtime;
 }
 
-/** Delegated work keeps its origin's policy restriction, but never its client. */
-export function isAgentTurnDecisionDisabled(): boolean {
-  return decisionTurnStorage.getStore()?.disabled ?? false;
-}
-
 /** Opaque capture for the same root, turn, session and held generation. */
 export function getAgentTurnInferenceSnapshot(): InferenceGraphSnapshot | undefined {
   return decisionTurnStorage.getStore()?.inferenceSnapshot;

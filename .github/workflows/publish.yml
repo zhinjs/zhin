@@ -164,10 +164,6 @@ jobs:
           fi
           echo "npm $(npm --version)"
 
-      - name: configure github packages auth
-        if: env.NPM_TOKEN != ''
-        run: echo "//npm.pkg.github.com/:_authToken=${NPM_TOKEN}" >> .npmrc
-
       - name: install dependencies
         run: pnpm install
         env:

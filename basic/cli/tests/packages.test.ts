@@ -1,28 +1,11 @@
-import { afterEach, describe, expect, it } from 'vitest';
-import fs from 'fs-extra';
-import os from 'node:os';
-import path from 'node:path';
+import { describe, expect, it } from 'vitest';
 import {
   adapterConfigHintForPackage,
   classifyPackage,
   filterSearchResults,
   formatPackageBadge,
-  readInstalledZhinField,
-  registerPluginInstance,
   resolveInstallRoute,
 } from '../src/utils/plugin-registry.js';
-
-const tmpRoots: string[] = [];
-
-async function makeTempProject(): Promise<string> {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'zhin-packages-'));
-  tmpRoots.push(root);
-  return root;
-}
-
-afterEach(async () => {
-  await Promise.all(tmpRoots.splice(0).map((root) => fs.remove(root)));
-});
 
 describe('classifyPackage / formatPackageBadge', () => {
   it('官方适配器标注 [official] [adapter]', () => {
@@ -123,51 +106,6 @@ describe('resolveInstallRoute（a/b/c 分流）', () => {
     const r = resolveInstallRoute('zhin.js-plugin-rss@^1.0.0');
     expect(r.route).toBe('npm');
     expect(r.package).toBe('zhin.js-plugin-rss');
-  });
-});
-
-describe('readInstalledZhinField', () => {
-  it('读取 node_modules 中已安装包的 zhin 字段', async () => {
-    const root = await makeTempProject();
-    const pkgDir = path.join(root, 'node_modules', '@scope', 'my-plugin');
-    await fs.ensureDir(pkgDir);
-    await fs.writeJson(path.join(pkgDir, 'package.json'), {
-      name: '@scope/my-plugin',
-      zhin: { protocol: 1, type: 'plugin' },
-    });
-
-    expect(readInstalledZhinField(root, '@scope/my-plugin')).toEqual({ protocol: 1, type: 'plugin' });
-  });
-
-  it('包未安装或无 zhin 字段时返回 null', async () => {
-    const root = await makeTempProject();
-    expect(readInstalledZhinField(root, 'not-installed')).toBeNull();
-
-    const pkgDir = path.join(root, 'node_modules', 'plain-lib');
-    await fs.ensureDir(pkgDir);
-    await fs.writeJson(path.join(pkgDir, 'package.json'), { name: 'plain-lib' });
-    expect(readInstalledZhinField(root, 'plain-lib')).toBeNull();
-  });
-});
-
-describe('registerPluginInstance（应用声明注册）', () => {
-  it('只向主配置注册实例且幂等', async () => {
-    const root = await makeTempProject();
-    await fs.writeJson(path.join(root, 'package.json'), { name: 'demo-bot', version: '0.0.0' });
-    await fs.writeJson(path.join(root, 'zhin.config.json'), {configVersion: 2, plugins: {}});
-
-    const first = await registerPluginInstance(root, '@zhin.js/adapter-telegram');
-    const second = await registerPluginInstance(root, '@zhin.js/adapter-telegram');
-
-    expect(first).toBe(true);
-    expect(second).toBe(false);
-
-    const pkg = await fs.readJson(path.join(root, 'package.json'));
-    expect(pkg.name).toBe('demo-bot');
-    expect(pkg.zhin).toBeUndefined();
-    const config = await fs.readJson(path.join(root, 'zhin.config.json'));
-    expect(config).toMatchObject({plugins: {telegram: '@zhin.js/adapter-telegram'}});
-
   });
 });
 

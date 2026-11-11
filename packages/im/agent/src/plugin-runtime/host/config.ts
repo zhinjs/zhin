@@ -1,6 +1,5 @@
 import type {
   AIService,
-  AssistantConfig,
   McpServerEntry,
 } from '../../index.js';
 import { validateVenueDefinitions, type VenueDefinition } from '@zhin.js/core';
@@ -44,16 +43,6 @@ export async function resolveAiConfig(
   resolveAgentHostVenues(expanded);
   resolveAgentHostExternalPeers(expanded);
   return expanded;
-}
-
-export async function resolveAssistantConfigDocument(
-  config: RuntimeConfigDocument | ConfigDocumentPort,
-): Promise<AssistantConfig | undefined> {
-  const document = await readConfigDocument(config);
-  if (!document || typeof document !== 'object') return undefined;
-  const assistant = (document as Record<string, unknown>).assistant;
-  if (!assistant || typeof assistant !== 'object') return undefined;
-  return expandEnvironmentValue(assistant, (key) => process.env[key]) as AssistantConfig;
 }
 
 export function resolveAgentHostVenues(

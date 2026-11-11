@@ -131,7 +131,7 @@ zhin doctor
 
 阅读根 Changesets/CHANGELOG 与涉及包的发布说明。特别检查 breaking manifest、Feature API、配置删除、数据库迁移和 Adapter 接入方式。
 
-创建同一检查点：Git commit、`package.json`、lockfile、配置、`.env` 键名清单、数据库快照、Workroom store 与 `data/schedule-jobs.json`。密钥值单独由 Secret manager 保护。
+创建同一检查点：Git commit、`package.json`、lockfile、配置、`.env` 键名清单、数据库快照（含 `engagement_events`）与 `data/schedule-jobs.json`。密钥值单独由 Secret manager 保护。
 
 ## 执行升级
 
@@ -139,13 +139,13 @@ zhin doctor
 2. 进入维护窗口，停止 Bot 和会产生新副作用的入口（必须在升级依赖之前）。
 3. 执行 `zhin migrate`，审阅 package、scripts 与目录变化。
 4. 运行 `zhin doctor`、类型检查、测试和 `runtime start --once --mode test`。
-5. 启动生产，完成 Sandbox、真实 Endpoint、Agent 与 Workroom 验收。
+5. 启动生产，完成 Sandbox、真实 Endpoint、Agent 与多 Agent 协作（若配置了 `ai.venues`）验收。
 
 不要在运行中的实例之间共享一份可写 SQLite 或文件 Journal。蓝绿发布需要独立副本和明确切换点；只有一个实例能拥有写 authority。
 
 ## 回滚判定
 
-以下任一情况应停止发布：候选 generation 不能发布、Endpoint 无法恢复、SSE history 出现无法重建的 gap、Workroom authority 校验失败，或数据迁移没有逆向方案。
+以下任一情况应停止发布：候选 generation 不能发布、Endpoint 无法恢复、SSE history 出现无法重建的 gap、配置里仍有已删除的键（如 `ai.workrooms`、`a2a.workroomCallbacks`）导致启动被拒，或数据迁移没有逆向方案。
 
 回滚时恢复完整检查点。若已产生外部消息、审批、Git 操作或支付类副作用，数据恢复不能撤销现实世界；必须通过幂等键、Effect Ledger 或人工补偿处理。
 

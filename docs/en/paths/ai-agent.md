@@ -106,7 +106,7 @@ import { defineAgentPromptSection } from '@zhin.js/prompt-section';
 
 export default defineAgentPromptSection({
   title: 'Product language',
-  content: 'Use Workroom for a governed collaboration space.',
+  content: 'Call a shared multi-Bot group a Venue.',
   layer: 'context',
   order: 70,
   retention: 'preferred',
@@ -156,4 +156,4 @@ Each turn has a prompt budget. A section with `retention: 'required'` that doesn
 
 - [Agent Tools and Skills](../authoring/agent-tools.md): tool approval, Skills, and sub-agents in full
 - [MCP configuration](../configuration/#mcpservers-external-mcp-servers): connect external MCP tool servers
-- [Agent deep dive](../ai/agent.md): how a turn runs, how to cancel it, and multi-Agent Workrooms
+- [Agent deep dive](../ai/agent.md): how a turn runs, how to cancel it, and multi-Agent collaboration

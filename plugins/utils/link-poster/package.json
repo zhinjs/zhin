@@ -24,7 +24,7 @@
   "scripts": {
     "build": "tsc",
     "clean": "rimraf lib",
-    "test": "NODE_OPTIONS=--experimental-strip-types vitest run --root ../../.. plugins/utils/link-poster/tests",
+    "test": "vitest run --root ../../.. plugins/utils/link-poster/tests",
     "prepublishOnly": "pnpm run build",
     "prepack": "pnpm run build && node ../../../scripts/build-plugin-runtime-entries.mjs",
     "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean"
@@ -48,8 +48,7 @@
   "license": "MIT",
   "dependencies": {
     "@zhin.js/core": "workspace:*",
-    "@zhin.js/html-renderer": "workspace:*",
-    "@zhin.js/skill": "workspace:*"
+    "@zhin.js/html-renderer": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^6.0.3",
@@ -84,10 +83,6 @@
     "features": [
       {
         "package": "@zhin.js/middleware",
-        "api": "^1.0.0"
-      },
-      {
-        "package": "@zhin.js/skill",
         "api": "^1.0.0"
       }
     ],

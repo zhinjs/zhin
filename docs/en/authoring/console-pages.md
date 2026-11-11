@@ -117,7 +117,7 @@ Address = plugin path + page name:
 | File | Owning plugin | Address |
 | --- | --- | --- |
 | `pages/index/index.tsx` | `sandbox` | `/sandbox` |
-| `pages/workroom/index.tsx` | your bot (root) | `/p-workroom` |
+| `pages/reports/index.tsx` | your bot (root) | `/p-reports` |
 | `pages/index/index.tsx` | your bot (root) | `/` |
 
 `index` maps to the plugin path itself; other pages map to `p-<name>`. Two pages resolving to the same address fail at startup. Implementation: `pageRoute` in `packages/console/plugin-contract/src/page.ts`.

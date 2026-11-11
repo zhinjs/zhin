@@ -1,2 +1,2 @@
-# 勿在 examples/ 下放 zhin.config.yml（会干扰 deno-deploy-playground 等子项目）
+# 勿在 examples/ 根目录放 zhin.config.yml（各 example 使用自己目录内的配置）
 /zhin.config.yml

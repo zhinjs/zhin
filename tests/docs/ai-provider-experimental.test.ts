@@ -33,8 +33,6 @@ describe('AI provider experimental channel docs (ADR 0047 §1a)', () => {
     'packages/im/ai/README.md',
     'README.md',
     'README.zh-CN.md',
-    'docs/wiki/cubic/ai-providers.md',
-    'docs/en/wiki/cubic/ai-providers.md',
   ])('%s carries the §1a risk notice', (relativePath) => {
     expect(read(relativePath)).toContain(RISK_NOTICE);
   });

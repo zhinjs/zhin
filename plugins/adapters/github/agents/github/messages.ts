@@ -33,6 +33,26 @@ export const messages = createMessages({
     "zh-CN": "✅ GitHub 账号绑定成功！\n👤 {login}",
     "en": "✅ GitHub account linked!\n👤 {login}"
   },
+  "bindInProgress": {
+    "zh-CN": "⏳ 已有一个 GitHub 账号绑定正在等待授权，请先完成或等待其过期。",
+    "en": "⏳ A GitHub account link is already waiting for authorization. Finish it or wait for it to expire."
+  },
+  "bindExpired": {
+    "zh-CN": "⌛ GitHub 授权已超时，账号未绑定。请重新发起账号绑定。",
+    "en": "⌛ GitHub authorization timed out; no account was linked. Start account linking again."
+  },
+  "bindDenied": {
+    "zh-CN": "🚫 GitHub 授权被拒绝，账号未绑定。",
+    "en": "🚫 GitHub authorization was denied; no account was linked."
+  },
+  "bindFailed": {
+    "zh-CN": "❌ GitHub 账号绑定失败: {error}",
+    "en": "❌ GitHub account linking failed: {error}"
+  },
+  "bindVerifyFailed": {
+    "zh-CN": "❌ 已获得授权，但无法确认 GitHub 账号身份，账号未绑定。请重新发起账号绑定。",
+    "en": "❌ Authorization succeeded, but the GitHub account could not be verified; no account was linked. Start account linking again."
+  },
   "flowFailed": {
     "zh-CN": "❌ Device Flow 启动失败: {error}",
     "en": "❌ Could not start Device Flow: {error}"

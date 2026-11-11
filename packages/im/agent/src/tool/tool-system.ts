@@ -1,7 +1,6 @@
 import type { AgentTool } from '@zhin.js/ai';
 import { type PreExecuteResult, runPreExecutableTools } from './pre-exec.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
-import type { Tool } from '../resource-hub/types.js';
 import type { ToolFilter, ToolSource, ToolSystemConfig } from './contracts.js';
 import {
   BuiltinToolSource,
@@ -103,15 +102,6 @@ export async function planToolRun(
       ? 'chat'
       : (!hasNonPreExecTools && preExecution.data ? 'pre-exec-fast-path' : 'agent'),
   };
-}
-
-export function buildPreExecFastPathPrompt(persona: string, preData: string): string {
-  return `${persona}
-
-Pre-fetched data (from user's question):
-${preData}
-
-Answer the user's question based on the data above. Be clear and concise; use emoji when appropriate.`;
 }
 
 /** Stamps the owning generation so ToolRuntime can reject retired-generation tools. */

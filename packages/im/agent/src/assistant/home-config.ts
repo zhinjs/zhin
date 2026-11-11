@@ -67,10 +67,5 @@ export function resolveAssistantHomeConfig(raw?: AssistantHomeConfig): ResolvedA
   };
 }
 
-export function isAssistantHomeActive(home?: AssistantHomeConfig): boolean {
-  const cfg = resolveAssistantHomeConfig(home);
-  return cfg.enabled && Boolean(cfg.restUrl && cfg.restToken);
-}
-
 /** 占位：Home notify 可指向 HA（M3 router ha 通道） */
 export type HomeJobNotify = Extract<JobNotify, { channel: 'ha' }>;

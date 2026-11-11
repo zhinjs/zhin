@@ -5,7 +5,6 @@ export {
   generateMessageId,
   headerValue,
   normalizeWebhookPath,
-  readTextBody,
   resolveChatType,
   resolveDingTalkConfig,
   resolveSender,

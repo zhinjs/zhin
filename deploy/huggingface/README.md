@@ -37,5 +37,6 @@ short_description: Zhin.js Plugin Runtime Sandbox playground
 ## 说明
 
 - 栈：Plugin Runtime + Sandbox + `@zhin.js/agent`（OpenRouter free）
-- Secret：`OPENROUTER_API_KEY`（可选 `OPENROUTER_BASE_URL`，默认 `https://openrouter.ai/api/v1`）
+- Secret：`OPENROUTER_API_KEY`
+- 模型声明在 `ai.plan.yml`（首次启动、数据库为空时自动导入）；启动策略在 `zhin.config.yml`（`configVersion: 2`）
 - Host 由 CLI 装配；仓库镜像：[`deploy/huggingface`](https://github.com/zhinjs/zhin/tree/main/deploy/huggingface)

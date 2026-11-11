@@ -43,4 +43,4 @@ prepare shadow state -> validate -> handoff -> atomic commit
 
 验证：`pnpm --filter @zhin.js/plugin-runtime test && pnpm --filter @zhin.js/plugin-runtime build`。
 
-详细契约见 [Kernel 与 Generation](../../../docs/architecture/target-implementation/kernel-and-generation.md)。
+详细契约见 [Generation 生命周期](../../../docs/concepts/generation-lifecycle.md)。

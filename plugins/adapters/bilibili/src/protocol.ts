@@ -296,10 +296,6 @@ export function threadRootOf(reply: Pick<BilibiliReply, 'rpid' | 'root'>): strin
   return String(reply.root && reply.root !== 0 ? reply.root : reply.rpid);
 }
 
-export function videoResourceId(aid: string | number): string {
-  return resourceId('video', aid);
-}
-
 /** 评论区资源会话 id（评论楼的 parent）：`<kind>:<oid>`。 */
 export function resourceId(kind: BilibiliResourceKind, oid: string | number): string {
   return `${kind}:${oid}`;

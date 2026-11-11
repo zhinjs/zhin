@@ -42,10 +42,12 @@ npx zhin --help        # 查看全部命令
 
 ```bash
 zhin runtime start [--mode production] [--watch source config | --no-watch] [--daemon]
+zhin start [...]            # 等同于 zhin runtime start，参数原样透传
 zhin runtime inspect
+zhin runtime codegen [dir] [--write] [--json]
 zhin runtime build
 zhin runtime publish [--execute|--resume] [--tag latest]
-zhin runtime migrate [extract|cutover|status] [--check|--write]
+zhin runtime migrate [extract|cutover|verify|status] [--check|--write]
 ```
 
 `--watch` 与兼容参数 `--no-watch` 互斥；都不传时不监听文件变化。
@@ -54,6 +56,7 @@ zhin runtime migrate [extract|cutover|status] [--check|--write]
 | --- | --- |
 | `start` | 启动 Bot。支持开发热重载、生产模式和守护进程，详见 [zhin runtime start](./runtime.md) |
 | `inspect` | 输出项目结构 JSON（插件清单、构建计划） |
+| `codegen` | 扫描约定目录，输出插件能力的静态类型声明与 `capabilityGraph` 摘要；`--write` 写入目标目录的 `plugin.capabilities.d.ts`，`--json` 输出扫描结果。`dir` 默认当前目录 |
 | `build` / `publish` | 按项目结构构建、发布。`publish` 默认只打印计划，加 `--execute` 才执行，中断后可 `--resume` |
 | `migrate` | 生成并应用项目结构迁移计划：`--check` 只看计划，`--write` 原子写入，`status` 输出就绪报告 |
 
@@ -98,9 +101,12 @@ zhin setup --ai            # 仅配置 AI
 zhin setup --decisions     # 可选的 TypeSafe Jev 决策服务（需要已有 AI 配置）
 zhin setup --bootstrap     # 仅生成引导文件（SOUL.md / TOOLS.md / AGENTS.md）
 zhin setup --global        # 在 ~/.zhin 初始化全局实例
+zhin setup --locale en     # 设置项目语言（zh-CN 或 en），可与其他选项组合
 ```
 
 向导修改的就是 [`zhin.config.yml`](../configuration/index.md) 中对应的部分，密钥写入 `.env`。
+
+不传 `--locale` 时保留项目已有的语言；语言与时区相互独立，详见[语言与本地化](../configuration/localization.md)。
 
 选择网络数据库时，CLI 会检查端口范围，把连接字段写成环境变量引用，实际值写入 `.env`。完成后运行 `npx zhin config check`，可以在启动前发现缺失的数据库变量；如果连接值只在 `.env.production` 里，使用 `npx zhin config check --environment production`。
 
@@ -176,6 +182,17 @@ zhin migrate [--dry-run] [--no-install] [--include-pinned]
 
 `zhin migrate` 不改配置文件。启动报 `configVersion must be 2` 或 `zhin doctor` / `zhin config check` 提示 v1 配置时，使用下文的 `zhin migrate instances`。`zhin runtime migrate` 是旧插件能力代码迁移，与配置版本无关。
 
+#### migrate inference：迁移旧 AI 模型配置
+
+```bash
+zhin migrate inference [--mapping <file>] --output migration.json     # 离线预览
+zhin migrate inference --apply migration.json --maintenance --backup-confirmed [--with-credentials]
+zhin migrate inference --finalize migration.json --maintenance --backup-confirmed
+zhin migrate inference --sessions-only --mapping <file> --output <file>   # 只把旧 Session 绑定到现有 Profile
+```
+
+离线预览并迁移旧的 `ai.providers` 等模型配置与 Session，不加载 `.env`，也不启动 Bot。`--apply` 与 `--finalize` 必须同时带 `--maintenance`（确认 Bot 已停止）和 `--backup-confirmed`（确认已备份配置、数据库与加密主密钥）；非 SQLite 数据库用 `--state-snapshot <file>` 提供旧元数据，`--database-config <file>` 提供离线数据库连接。完整步骤与恢复边界见[Provider 接口升级](../ai/provider-upgrade.md)。
+
 ## 插件
 
 ### new：创建插件
@@ -211,7 +228,6 @@ zhin add ...          # install 的别名
 
 | 选项 | 说明 |
 | --- | --- |
-| `-S, --save` | 写入 `dependencies`（默认） |
 | `-D, --save-dev` | 写入 `devDependencies` |
 | `-g, --global` | 全局安装（不启用插件） |
 | `--no-enable` | 只装依赖，不改配置 |
@@ -222,10 +238,9 @@ zhin add ...          # install 的别名
 ```bash
 zhin uninstall plugin <name> [--remove-pkg]
 zhin uninstall adapter <name> [--remove-pkg]
-zhin uninstall service
 ```
 
-`name` 可以是 npm 包名或 instanceKey；`--remove-pkg` 同时从 `package.json` 移除依赖。`uninstall service` 卸载系统服务。
+`name` 可以是 npm 包名或 instanceKey；`--remove-pkg` 同时从 `package.json` 移除依赖。系统服务用 `zhin service uninstall` 卸载。
 
 ### search / info：发现插件
 
@@ -236,7 +251,7 @@ zhin info <package>
 
 搜索插件市场，或查看单个插件的详情。
 
-### use-cases：按用途找到配置入口
+### use-cases：按用途找到配置入口 {#use-cases}
 
 ```bash
 zhin use-cases
@@ -250,10 +265,20 @@ zhin use-cases keyword-reply
 
 Console 的[任务中心](../paths/console.md#管理员任务中心)使用同一份用途目录。首版可在网页创建和管理管理员提醒；群欢迎和关键词回复目前提供现有入口指南，不能在网页伪造群成员执行命令。
 
+### preview：预览组件与页面
+
+```bash
+zhin preview [dir] [-p 4176] [-H 127.0.0.1] [--open]
+zhin preview --export preview.html     # 导出单文件静态 HTML 快照后退出
+zhin preview --json                    # 输出扫描与渲染结果后退出
+```
+
+启动本地预览工作台：自动扫描项目或插件目录（默认当前目录）的 `components/*` 与 `pages/*`，支持热重载，并可在线修改 Props、调整样式。默认监听 `127.0.0.1:4176`，`--open` 启动后自动打开浏览器。
+
 ### build：构建插件
 
 ```bash
-zhin build [plugin] [--clean] [--production] [--analyze]
+zhin build [plugin] [--clean] [--no-production]
 ```
 
 `plugin` 是相对于 `plugins/` 的路径（如 `adapters/icqq`）；省略时在插件目录内构建当前包，或在 workspace 根目录批量构建 `plugins/*`。`src/` 用 tsc 编译，`client/` 用 esbuild 打包；`--clean` 先清理 `lib/` 与 `dist/`；`--production`（默认开启）压缩 client 产物。
@@ -340,7 +365,7 @@ zhin packages verify <instanceKey> <check-id> --live http://127.0.0.1:8068 \
 zhin send <scene_id> [content...] [-s private|group|channel] [-a <adapter>] [-e <endpoint>]
 ```
 
-`scene_id` 私聊时是用户 ID，群聊时是群号；不传 `content` 时从标准输入读一行。`-a` 默认 `process`；`-e` 指定账号 ID，省略时用该适配器下第一个在线账号。
+`scene_id` 私聊时是用户 ID，群聊时是群号；不传 `content` 时从标准输入读一行。只有一个适配器时可省略 `-a`，否则必须指定；`-e` 指定账号 ID，省略时用该适配器下第一个在线账号。
 
 ### watch：监视运行实例
 
@@ -352,7 +377,7 @@ zhin watch [-i 3] [--once] [--json] [--no-clear]
 
 ### schedule：持久化调度任务
 
-让 AI 在指定时间执行一段提示词。任务保存在 `data/schedule-jobs.json`，修改后需要重启 Bot 才生效。
+让 AI 在指定时间执行一段提示词。命令通过 Host API 操作运行中的实例，立即生效；需要 Bot 已用 `zhin runtime start` 启动并启用 `assistant.enabled`。
 
 ```bash
 zhin schedule list
@@ -396,12 +421,16 @@ zhin trace --sessions            # 列出有 trace 的会话
 zhin trace --session qq:bot:private:12345 --since 2h   # 某个会话最近 2 小时的回合
 zhin trace --list --since 2026-10-14 --until 2026-10-15 -n 200
 zhin trace last --json
+zhin trace --engagements --list   # 列出最近的多 Agent 协作（Engagement）
+zhin trace --engagements          # 最近一次协作的协作图
+zhin trace <engagementId>         # 指定协作，可以只写 id 前缀
 ```
 
 | 选项 | 作用 |
 | --- | --- |
 | `-l, --list` | 每个回合一行：时间、结束状态、回合 id、会话、工具次数、token 数 |
 | `--sessions` | 每个会话一行：回合数、最近一次时间与状态、累计 token |
+| `--engagements` | 改为读取多 Agent 协作记录（数据库 `engagement_events` 表，需要 SQLite、MySQL 或 PostgreSQL）：配合 `--list` 列出最近的协作，否则显示最近一次或指定协作的参与者、消息跳数、黑板与预算。见[多 Agent 协作与场所](../ai/multi-agent-harness.md) |
 | `-s, --session <key>` | 只看这个会话（sessionKey），会自动按列表输出 |
 | `--since <time>` / `--until <time>` | 时间范围（`--until` 不含）：`30m`、`2h`、`7d`（多久以前）、ISO 日期/时间或毫秒时间戳 |
 | `-n, --limit <n>` | 最多显示最近 n 条，默认 50 |

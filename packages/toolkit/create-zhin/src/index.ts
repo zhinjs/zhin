@@ -46,7 +46,6 @@ async function main() {
   
   if (options.yes) {
     options.config = 'yaml';
-    options.runtime = 'node';
     options.httpToken = generateToken(16, locale);
   }
   
@@ -98,22 +97,6 @@ async function main() {
     }
     if (!options.template) {
       options.template = 'default';
-    }
-    
-    if (!options.runtime) {
-      const { runtime } = await inquirer.prompt([
-        {
-          type: 'select',
-          name: 'runtime',
-          message: wizardText(locale, "选择运行时:"),
-          choices: [
-            { name: wizardText(locale, "Node.js (推荐)"), value: 'node' },
-            { name: 'Bun', value: 'bun' }
-          ],
-          default: 'node'
-        }
-      ]);
-      options.runtime = runtime;
     }
     
     if (!options.config) {
@@ -178,28 +161,6 @@ async function main() {
 
     ensureDatabaseForAI(options);
     ensureDatabaseForAdapters(options);
-
-    // 全局 CLI 安装选项
-    if (options.installGlobalCli === undefined && !options.yes) {
-      console.log('');
-      console.log(chalk.blue(wizardText(locale, "🌍 全局 CLI 安装")));
-      console.log(chalk.gray(wizardText(locale, "这将允许你在任何目录下使用 \"zhin\" 命令")));
-      
-      const { globalCli } = await inquirer.prompt([
-        {
-          type: 'confirm',
-          name: 'globalCli',
-          message: wizardText(locale, "是否全局安装 @zhin.js/cli 命令行工具？"),
-          default: false
-        }
-      ]);
-      options.installGlobalCli = globalCli;
-    }
-
-    // -y 模式下默认不全局安装
-    if (options.installGlobalCli === undefined) {
-      options.installGlobalCli = false;
-    }
 
     // 开发技能安装选项
     if (options.devSkills === undefined && !options.yes) {
@@ -360,47 +321,24 @@ async function main() {
     }
 
 
-    // 根据是否全局安装 CLI，显示不同的命令
-    if (options.installGlobalCli) {
-      console.log('');
-      console.log(chalk.green(wizardText(locale, "✓ 已为你配置全局 CLI")));
-      console.log(`  ${chalk.cyan('pnpm dev')} ${chalk.gray(wizardText(locale, "# 启动开发模式（或直接运行 zhin runtime start）"))}`);
-      console.log('');
-      console.log(chalk.yellow(wizardText(locale, "开发环境：")));
-      console.log(`  ${chalk.cyan('zhin runtime start')} ${chalk.gray(wizardText(locale, "# 或 pnpm dev - 开发模式（自动监听，支持热重载）"))}`);
-      console.log(`  ${chalk.cyan('zhin doctor')} ${chalk.gray(wizardText(locale, "# 检查 Console / Host / Sandbox / 依赖状态"))}`);
-      console.log('');
-      console.log(chalk.yellow(wizardText(locale, "生产环境：")));
-      console.log(`  ${chalk.cyan('zhin runtime start --mode production --no-watch')} ${chalk.gray(wizardText(locale, "# 或 pnpm start - 前台运行"))}`);
-      console.log('');
-      console.log(chalk.yellow(wizardText(locale, "PM2 进程管理（推荐生产环境）：")));
-      console.log(`  ${chalk.cyan('pnpm pm2:start')} ${chalk.gray(wizardText(locale, "# 启动 PM2 守护进程"))}`);
-      console.log(`  ${chalk.cyan('pnpm pm2:stop')} ${chalk.gray(wizardText(locale, "# 停止服务"))}`);
-      console.log(`  ${chalk.cyan('pnpm pm2:restart')} ${chalk.gray(wizardText(locale, "# 重启服务"))}`);
-      console.log(`  ${chalk.cyan('pnpm pm2:logs')} ${chalk.gray(wizardText(locale, "# 查看日志"))}`);
-      console.log('');
-      console.log(chalk.yellow(wizardText(locale, "插件开发：")));
-      console.log(`  ${chalk.cyan('zhin new <plugin-name>')} ${chalk.gray(wizardText(locale, "# 创建项目内插件；独立插件加 --standalone"))}`);
-    } else {
-      console.log('');
-      console.log(chalk.blue(wizardText(locale, "💡 使用 pnpm 和 npx 运行命令：")));
-      console.log('');
-      console.log(chalk.yellow(wizardText(locale, "开发环境：")));
-      console.log(`  ${chalk.cyan('pnpm dev')} ${chalk.gray(wizardText(locale, "# 或 npx zhin runtime start - 开发模式（自动监听，支持热重载）"))}`);
-      console.log(`  ${chalk.cyan('npx zhin doctor')} ${chalk.gray(wizardText(locale, "# 检查 Console / Host / Sandbox / 依赖状态"))}`);
-      console.log('');
-      console.log(chalk.yellow(wizardText(locale, "生产环境：")));
-      console.log(`  ${chalk.cyan('pnpm start')} ${chalk.gray(wizardText(locale, "# 或 npx zhin runtime start --mode production --no-watch - 前台运行"))}`);
-      console.log('');
-      console.log(chalk.yellow(wizardText(locale, "PM2 进程管理（推荐生产环境）：")));
-      console.log(`  ${chalk.cyan('pnpm pm2:start')} ${chalk.gray(wizardText(locale, "# 启动 PM2 守护进程"))}`);
-      console.log(`  ${chalk.cyan('pnpm pm2:stop')} ${chalk.gray(wizardText(locale, "# 停止服务"))}`);
-      console.log(`  ${chalk.cyan('pnpm pm2:restart')} ${chalk.gray(wizardText(locale, "# 重启服务"))}`);
-      console.log(`  ${chalk.cyan('pnpm pm2:logs')} ${chalk.gray(wizardText(locale, "# 查看日志"))}`);
-      console.log('');
-      console.log(chalk.yellow(wizardText(locale, "插件开发：")));
-      console.log(`  ${chalk.cyan('npx zhin new <plugin-name>')} ${chalk.gray(wizardText(locale, "# 创建项目内插件；独立插件加 --standalone"))}`);
-    }
+    console.log('');
+    console.log(chalk.blue(wizardText(locale, "💡 使用 pnpm 和 npx 运行命令：")));
+    console.log('');
+    console.log(chalk.yellow(wizardText(locale, "开发环境：")));
+    console.log(`  ${chalk.cyan('pnpm dev')} ${chalk.gray(wizardText(locale, "# 或 npx zhin runtime start - 开发模式（自动监听，支持热重载）"))}`);
+    console.log(`  ${chalk.cyan('npx zhin doctor')} ${chalk.gray(wizardText(locale, "# 检查 Console / Host / Sandbox / 依赖状态"))}`);
+    console.log('');
+    console.log(chalk.yellow(wizardText(locale, "生产环境：")));
+    console.log(`  ${chalk.cyan('pnpm start')} ${chalk.gray(wizardText(locale, "# 或 npx zhin runtime start --mode production --no-watch - 前台运行"))}`);
+    console.log('');
+    console.log(chalk.yellow(wizardText(locale, "PM2 进程管理（推荐生产环境）：")));
+    console.log(`  ${chalk.cyan('pnpm pm2:start')} ${chalk.gray(wizardText(locale, "# 启动 PM2 守护进程"))}`);
+    console.log(`  ${chalk.cyan('pnpm pm2:stop')} ${chalk.gray(wizardText(locale, "# 停止服务"))}`);
+    console.log(`  ${chalk.cyan('pnpm pm2:restart')} ${chalk.gray(wizardText(locale, "# 重启服务"))}`);
+    console.log(`  ${chalk.cyan('pnpm pm2:logs')} ${chalk.gray(wizardText(locale, "# 查看日志"))}`);
+    console.log('');
+    console.log(chalk.yellow(wizardText(locale, "插件开发：")));
+    console.log(`  ${chalk.cyan('npx zhin new <plugin-name>')} ${chalk.gray(wizardText(locale, "# 创建项目内插件；独立插件加 --standalone"))}`);
     
     console.log('');
     console.log(wizardText(locale, "📚 相关文档："));

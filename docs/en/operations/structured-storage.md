@@ -13,7 +13,7 @@ Plugins do not open their own database connections or hard-code global table nam
 1. **Key-Value Store (KV Store)**: Ideal for lightweight state, cursors, and flags, automatically namespaced by plugin instance (`owner`) and inspectable in Console's **Database** page.
 2. **Structured Tables (`DatabaseFeature` table declarations)**: Plugins declare logical table schemas and the Host maps them to owner-scoped physical tables with single-transaction atomic updates (CAS, claims, and receipts), preventing collisions across multiple plugin instances.
 
-In addition, with Agent enabled and SQLite, MySQL or PostgreSQL configured, the runtime persists turn and model-call usage independently of log level, Workroom and trace archives. The Console database page can inspect these tables. Charts, statistics commands and a dedicated query API are not included yet.
+In addition, with Agent enabled and SQLite, MySQL or PostgreSQL configured, the runtime persists turn and model-call usage independently of log level, multi-Agent collaboration and trace archives. The Console database page can inspect these tables. Charts, statistics commands and a dedicated query API are not included yet.
 
 ```yaml
 ai:

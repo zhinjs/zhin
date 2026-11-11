@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  supervisorOrphanReason,
   MAX_RESPAWNS_PER_MINUTE,
   planRespawn,
   processRestartExitCode,
@@ -92,5 +93,30 @@ describe('native TypeScript process supervisor', () => {
     );
     expect(planRespawn(processRestartExitCode, false, false, stale, now))
       .toEqual({ respawn: true, attempts: [now] });
+  });
+});
+
+describe('supervisorOrphanReason', () => {
+  const esrch = () => { throw Object.assign(new Error('kill ESRCH'), { code: 'ESRCH' }); };
+  const eperm = () => { throw Object.assign(new Error('kill EPERM'), { code: 'EPERM' }); };
+
+  it('never reports an orphan without an explicit supervisor pid, even when the parent is init', () => {
+    // ppid is irrelevant by design: systemd- and container-started bots have ppid 1.
+    expect(supervisorOrphanReason({}, esrch)).toBeUndefined();
+    expect(supervisorOrphanReason({ ZHIN_SUPERVISOR_PID: '' }, esrch)).toBeUndefined();
+    expect(supervisorOrphanReason({ ZHIN_SUPERVISOR_PID: 'abc' }, esrch)).toBeUndefined();
+  });
+
+  it('reports an orphan only when the stamped supervisor no longer exists', () => {
+    expect(supervisorOrphanReason({ ZHIN_SUPERVISOR_PID: '4242' }, () => undefined)).toBeUndefined();
+    expect(supervisorOrphanReason({ ZHIN_SUPERVISOR_PID: '4242' }, esrch)).toBe('supervisor 4242 exited');
+  });
+
+  it('treats EPERM as alive (a supervisor owned by another user, e.g. PID 1)', () => {
+    expect(supervisorOrphanReason({ ZHIN_SUPERVISOR_PID: '1' }, eperm)).toBeUndefined();
+  });
+
+  it('probes the real process table by default', () => {
+    expect(supervisorOrphanReason({ ZHIN_SUPERVISOR_PID: String(process.pid) })).toBeUndefined();
   });
 });

@@ -45,6 +45,12 @@ Zhin.js Bilibili 评论适配器（Plugin Runtime）：让 AI 辅助回复**你�
 
 必填字段（`endpoints[i]`）：`id`。只读公开评论可不登录。
 
+## 安装
+
+```bash
+pnpm add @zhin.js/adapter-bilibili
+```
+
 ## 最小配置
 
 ```yaml

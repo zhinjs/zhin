@@ -394,7 +394,6 @@ function tryExtractPureBlueprint(
       const localRequire = (specifier: string): unknown => {
         if (
           specifier === '@zhin.js/console-contract' ||
-          specifier === '@zhin.js/contract' ||
           specifier === '@zhin.js/page' ||
           specifier === 'zhin.js/page'
         ) {
@@ -496,7 +495,7 @@ function synthesizePureBlueprintModule(
     `const __zhin_modules__ = {\n${moduleEntries.join(',\n')}\n};`,
     'const __zhin_cache__ = {};',
     'function __zhin_require__(id) {',
-    '  if (id === "@zhin.js/console-contract" || id === "@zhin.js/contract" || id === "@zhin.js/page" || id === "zhin.js/page") {',
+    '  if (id === "@zhin.js/console-contract" || id === "@zhin.js/page" || id === "zhin.js/page") {',
     '    return __zhin_contract__;',
     '  }',
     '  if (__zhin_cache__[id]) return __zhin_cache__[id];',

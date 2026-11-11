@@ -1,46 +1,15 @@
 /**
- * 读取 zhin.config + .env，连接运行中 Host API（与 `zhin send` 一致）
+ * 读取 zhin.config + .env，连接运行中 Host API（`zhin send` / `zhin watch` / `zhin schedule` 共用）
  */
-import fs from 'fs-extra';
 import path from 'path';
-import yaml from 'yaml';
-import { ROOT_CONFIG_FILE_NAMES, selectRootConfigFile } from '@zhin.js/plugin-runtime';
+import { resolveHttpConfig } from '@zhin.js/host-http';
+import { createConfigDocument } from '@zhin.js/runtime';
+import { findConfigFile } from './config-file.js';
+import { loadRuntimeEnvironmentLayers } from '../plugin-runtime/start/environment.js';
 
 export interface HostHttpConfig {
   baseUrl: string;
   token: string;
-}
-
-function parseEnv(content: string): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const line of content.split('\n')) {
-    const t = line.trim();
-    if (!t || t.startsWith('#')) continue;
-    const eq = t.indexOf('=');
-    if (eq <= 0) continue;
-    out[t.slice(0, eq).trim()] = t.slice(eq + 1).trim().replace(/^["']|["']$/g, '');
-  }
-  return out;
-}
-
-function findConfigFile(dir: string): string | null {
-  const existing = ROOT_CONFIG_FILE_NAMES
-    .filter((file) => fs.existsSync(path.join(dir, file)));
-  return selectRootConfigFile(existing) ?? null;
-}
-
-async function readConfig(filePath: string): Promise<Record<string, unknown>> {
-  const content = await fs.readFile(filePath, 'utf-8');
-  const ext = path.extname(filePath).toLowerCase();
-  return (ext === '.json' ? JSON.parse(content) : yaml.parse(content)) as Record<string, unknown>;
-}
-
-function resolveEnvRef(value: string, env: Record<string, string>): string {
-  if (value.startsWith('${') && value.endsWith('}')) {
-    const key = value.slice(2, -1).trim();
-    return env[key] ?? process.env[key] ?? '';
-  }
-  return value;
 }
 
 /**
@@ -54,25 +23,30 @@ export function connectableHost(host: string): string {
   return bare.includes(':') ? `[${bare}]` : bare;
 }
 
-/** 从项目目录解析 Host API baseUrl 与 Bearer token */
-export async function loadHostHttpConfig(cwd = process.cwd()): Promise<HostHttpConfig | null> {
+/**
+ * 从项目目录解析 Host API baseUrl 与 Bearer token。
+ * Uses the same config document, `.env` + `.env.<environment>` layers and `http` resolver as `zhin runtime start`.
+ */
+export async function loadHostHttpConfig(
+  cwd = process.cwd(),
+  environment = process.env.NODE_ENV === 'production' ? 'production' : 'development',
+): Promise<HostHttpConfig | null> {
   const configFile = findConfigFile(cwd);
   if (!configFile) return null;
 
-  const config = await readConfig(path.join(cwd, configFile));
-  const http = (config?.http ?? {}) as Record<string, unknown>;
-  const port = (http.port as number | undefined) ?? 8086;
-  const host = connectableHost(String(http.host ?? '127.0.0.1'));
-  const base = String(http.base ?? '/api').replace(/^\/+|\/+$/g, '') || 'api';
-  const baseUrl = `http://${host}:${port}/${base}`;
-
-  const envPath = path.join(cwd, '.env');
-  const env = fs.existsSync(envPath) ? parseEnv(await fs.readFile(envPath, 'utf-8')) : {};
-
-  let token = String(http.token ?? '');
-  token = resolveEnvRef(token, env);
-
-  return { baseUrl, token };
+  const layers = await loadRuntimeEnvironmentLayers(cwd, environment);
+  const http = await resolveHttpConfig(
+    createConfigDocument(path.join(cwd, configFile)),
+    layers.environments?.[environment],
+    cwd,
+  );
+  const scheme = http.tls ? 'https' : 'http';
+  const host = connectableHost(http.host ?? '127.0.0.1');
+  const base = (http.apiBase ?? '/api').replace(/^\/+|\/+$/g, '') || 'api';
+  return {
+    baseUrl: `${scheme}://${host}:${http.port ?? 8086}/${base}`,
+    token: http.token ?? '',
+  };
 }
 
 export interface HostFetchResult<T> {
@@ -150,4 +124,42 @@ function errorCode(value: unknown): string | undefined {
   if (!cause || typeof cause !== 'object') return undefined;
   const nested = Reflect.get(cause, 'code');
   return typeof nested === 'string' ? nested : undefined;
+}
+
+export interface HostEndpointRow {
+  readonly name: string;
+  readonly adapter: string;
+  readonly status: 'online' | 'offline';
+}
+
+interface EndpointPage {
+  readonly items?: readonly Partial<HostEndpointRow>[];
+  readonly totalPages?: number;
+}
+
+const ENDPOINT_PAGE_SIZE = 100;
+const ENDPOINT_PAGE_LIMIT = 50;
+
+/** Reads every page of `GET /introspection/endpoints` (paginated as `data.items`). */
+export async function listHostEndpoints(
+  http: HostHttpConfig,
+): Promise<HostFetchResult<HostEndpointRow[]>> {
+  const rows: HostEndpointRow[] = [];
+  for (let page = 1; page <= ENDPOINT_PAGE_LIMIT; page += 1) {
+    const res = await hostGet<EndpointPage>(
+      http,
+      `/introspection/endpoints?page=${page}&pageSize=${ENDPOINT_PAGE_SIZE}`,
+    );
+    if (!res.ok) return { ok: false, status: res.status, error: res.error };
+    for (const item of res.data?.items ?? []) {
+      if (typeof item.name !== 'string' || typeof item.adapter !== 'string') continue;
+      rows.push({
+        name: item.name,
+        adapter: item.adapter,
+        status: item.status === 'online' ? 'online' : 'offline',
+      });
+    }
+    if (page >= (res.data?.totalPages ?? 1)) break;
+  }
+  return { ok: true, status: 200, data: rows };
 }

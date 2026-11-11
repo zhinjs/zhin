@@ -8,10 +8,10 @@ Status: Partially Superseded — Personal Session Boundary Implemented (@zhin.js
 
 > [!IMPORTANT]
 > **Status & Supersession Boundary:**
-> - **Active:** The **Personal Session** contract (`PersonalSessionTask`, `PersonalSessionPolicy`, `preparePersonalSessionTurn` in `@zhin.js/agent/personal-session`) and the **Adapter Session Runtime** contract ([Adapter、Endpoint 与消息 Session 实施方案](../plans/adapter-session-runtime-refactor.md)) remain active.
+> - **Active:** The **Personal Session** contract (`PersonalSessionTask`, `PersonalSessionPolicy`, `preparePersonalSessionTurn` in `@zhin.js/agent/personal-session`) and the **Adapter Session Runtime** contract ([Adapter、Endpoint 与消息 Session 实施方案](https://github.com/zhinjs/zhin/blob/main/docs/plans/adapter-session-runtime-refactor.md)) remain active.
 > - **Superseded:** The **Model Catalog and Policy** (`@zhin.js/ai/model-catalog`, `@zhin.js/agent/model-policy`, and the `connection -> model definition -> invocation preset` chain) described in the second half of this ADR was superseded and retired by [ADR 0047](./0047-ai-provider-subscriptions-and-decision-models.md) in favor of `@zhin.js/ai/provider` (`Service -> Account -> Model Profile -> Purpose Policy`).
 
-The approved in-process Adapter/Endpoint and typed message Session evolution is specified in [Adapter、Endpoint 与消息 Session 实施方案](../plans/adapter-session-runtime-refactor.md). Worker isolation and a separate public AdapterController are superseded by the Adapter base class plan.
+The approved in-process Adapter/Endpoint and typed message Session evolution is specified in [Adapter、Endpoint 与消息 Session 实施方案](https://github.com/zhinjs/zhin/blob/main/docs/plans/adapter-session-runtime-refactor.md). Worker isolation and a separate public AdapterController are superseded by the Adapter base class plan.
 
 ## Confirmed requirements
 

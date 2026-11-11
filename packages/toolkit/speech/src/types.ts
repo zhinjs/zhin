@@ -7,6 +7,8 @@ export interface STTConfig {
   model?: string;
   host?: string;
   apiKey?: string;
+  /** ISO-639-1 hint for the transcription service; omitted (auto-detect) when unset. */
+  language?: string;
 }
 
 export interface TTSConfig {

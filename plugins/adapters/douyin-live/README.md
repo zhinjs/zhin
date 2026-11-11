@@ -40,6 +40,12 @@ Zhin.js 抖音直播弹幕适配器（Plugin Runtime）：让 Bot 在**你自己
 3. 可选：自建签名服务地址 `signerUrl`（见下文「签名」）
 4. Agent 已启用（`ai.agent`）：弹幕窗口由 Agent 的 `mailbox.live` 驱动
 
+## 安装
+
+```bash
+pnpm add @zhin.js/adapter-douyin-live
+```
+
 ## 最小配置
 
 ```yaml

@@ -417,7 +417,6 @@ outline: [2, 3]
 | `htmlRenderer.idleTimeoutMs` | number | 否 | — | daemon 空闲退出超时（毫秒）。 |
 | `htmlRenderer.logStats` | boolean | 否 | — | 记录渲染耗时统计。 |
 | `htmlRenderer.mode` | string: `"inprocess"`, `"daemon"` | 否 | — | Shotium 在进程内运行还是以 daemon 运行。 |
-| `htmlRenderer.aiTextAsImage` | boolean \| object | 否 | — | 发送前可选的纯文本转图片。 |
 | `assistant` | object | 否 | — | 调度任务、事件入口和失败通知。 |
 | `assistant.enabled` | boolean \| string | 否 | — | 启用统一 JobStore（默认 false，Stable 行为不变） |
 | `assistant.defaults` | object \| null | 否 | — | — |
@@ -2456,7 +2455,7 @@ _该 Schema 没有声明字段。_
 | `group-suite.rankSize` | number | 否 | `10` | — |
 | `group-suite.teachMaxPerGroup` | number | 否 | `200` | — |
 | `group-suite.teachCooldownMs` | number | 否 | `3000` | — |
-| `group-suite.teachAllowRegex` | boolean | 否 | `true` | — |
+| `group-suite.teachAllowRegex` | boolean | 否 | `false` | Allow members to teach regular-expression rules. Off by default: patterns run against every inbound message. Only structurally safe patterns are accepted and they are tried on messages of at most 200 characters. |
 | `group-suite.teachPageSize` | number | 否 | `10` | — |
 | `group-suite.welcomeMessage` | string | 否 | `""` | Group welcome text. Empty disables; {name}/{id} refer to the joined member. |
 | `group-suite.welcomeConversations` | array&lt;object&gt; | 否 | — | Exact welcome conversations. Omitted welcomes all groups; [] welcomes none. Missing parent/thread requires their absence; no wildcards. |
@@ -2575,6 +2574,7 @@ _该 Schema 没有声明字段。_
 | `rss.maxPerGroup` | number | 否 | `30` | — |
 | `rss.maxItems` | number | 否 | `5` | — |
 | `rss.timeout` | number | 否 | `15000` | — |
+| `rss.allowPrivateNetwork` | boolean | 否 | `false` | 允许订阅回环/内网地址上的 feed（如自建 RSSHub）。默认拒绝，因为订阅地址来自聊天用户。 |
 
 ### short-url
 

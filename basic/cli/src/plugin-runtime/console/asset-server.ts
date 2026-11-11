@@ -1,6 +1,6 @@
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import type { ServerResponse } from 'node:http';
-import { relative, resolve, sep } from 'node:path';
+import { extname, relative, resolve, sep } from 'node:path';
 import {
   ALLOWED_ESM_CANONICAL,
   decodeSpecifierSegment,
@@ -75,9 +75,45 @@ export async function serveClientAsset(
     response.end();
     return;
   }
-  response.writeHead(200, {
-    'content-type': 'text/javascript; charset=utf-8',
-    'cache-control': 'public, max-age=31536000, immutable',
+  const stream = createReadStream(file);
+  // Headers go out only once the file is readable; a read error (unlinked or
+  // unreadable file) must not crash the process as an unhandled 'error' event.
+  stream.once('open', () => {
+    response.writeHead(200, {
+      'content-type': clientAssetContentType(file),
+      'cache-control': 'public, max-age=31536000, immutable',
+    });
+    stream.pipe(response);
   });
-  createReadStream(file).pipe(response);
+  stream.once('error', () => {
+    if (!response.headersSent) {
+      response.writeHead(500);
+      response.end();
+    } else {
+      response.destroy();
+    }
+  });
+}
+
+const CLIENT_ASSET_CONTENT_TYPES: Readonly<Record<string, string>> = {
+  '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.map': 'application/json; charset=utf-8',
+  '.html': 'text/html; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.ico': 'image/x-icon',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.wasm': 'application/wasm',
+};
+
+export function clientAssetContentType(file: string): string {
+  return CLIENT_ASSET_CONTENT_TYPES[extname(file).toLowerCase()] ?? 'application/octet-stream';
 }

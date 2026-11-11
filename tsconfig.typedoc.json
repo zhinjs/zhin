@@ -35,9 +35,6 @@
       "@zhin.js/ai/agent-stream-consumer": [
         "./packages/im/ai/src/agent-stream-consumer.ts"
       ],
-      "@zhin.js/ai/agent-step-checkpoint": [
-        "./packages/im/ai/src/agent-step-checkpoint.ts"
-      ],
       "@zhin.js/ai/tool-policy": [
         "./packages/im/ai/src/tool-policy.ts"
       ],
@@ -49,9 +46,6 @@
       ],
       "@zhin.js/core": [
         "./packages/im/core/src/index.ts"
-      ],
-      "@zhin.js/core/queue-im-field-contract": [
-        "./packages/im/core/src/built/queue-im-field-contract.ts"
       ],
       "@zhin.js/agent": [
         "./packages/im/agent/src/index.ts"

@@ -26,8 +26,3 @@ export function validateHomeMcpServer(
   if (registered.includes(name)) return null;
   return `assistant.home.mcpServer="${name}" 未在 ai.mcpServers 中注册；REST 仍可用，MCP 工具需补全配置`;
 }
-
-export function isHomeMcpMode(home?: AssistantHomeConfig): boolean {
-  const cfg = resolveAssistantHomeConfig(home);
-  return Boolean(cfg.mcpServer?.trim() && !cfg.restUrl);
-}

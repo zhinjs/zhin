@@ -13,9 +13,17 @@ import type { RootResourceInstaller } from '@zhin.js/runtime';
 
 const logger = getLogger('Schedule');
 
+/** `TZ` wins; otherwise the zone this process actually runs in, not a hard-coded one. */
+export function resolveScheduleTimezone(
+  environment: Readonly<Record<string, string | undefined>> = process.env,
+  systemTimezone: () => string | undefined = () => Intl.DateTimeFormat().resolvedOptions().timeZone,
+): string {
+  return environment.TZ || systemTimezone() || 'UTC';
+}
+
 export function createScheduleHost(): ScheduleHost & { stop(): void } {
   const scheduler = new CalendarScheduler({
-    timezone: process.env.TZ || 'Asia/Shanghai',
+    timezone: resolveScheduleTimezone(),
     onError: (error, job) => {
       logger.warn(formatCompact({
         op: 'schedule_job_error',

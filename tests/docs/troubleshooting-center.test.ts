@@ -50,6 +50,6 @@ describe('troubleshooting center', () => {
     expect(zh).toContain('症状 → 原因 → 操作 → 验证');
     expect(en).toContain('Symptom → Cause → Action → Verification');
     expect(zh).toContain('id="console-cannot-connect"');
-    expect(en).toContain('id="workroom-not-routing"');
+    expect(en).toContain('id="container-not-healthy"');
   });
 });

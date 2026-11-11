@@ -101,6 +101,8 @@ export class SandboxBashExecutionPort implements BashExecutionPort {
     const result = await sandbox.execute(request.command, {
       cwd: request.cwd,
       timeout: request.timeoutMs,
+      // Cancelling the Turn kills the running process group / container.
+      signal: request.signal,
     });
     request.signal.throwIfAborted();
     return result;

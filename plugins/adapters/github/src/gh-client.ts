@@ -67,6 +67,8 @@ export class GhClient {
   protected apiHost?: string;
   protected executionSignal?: AbortSignal;
   protected bindExecutionSignal(signal: AbortSignal): void { this.executionSignal = signal; }
+  /** Aborted when the owning endpoint stops; long-running background work should observe it. */
+  get lifecycleSignal(): AbortSignal | undefined { return this.executionSignal; }
   private token?: string;
   private _appAuth?: AppAuth;
   private _resolvedKey?: string;
@@ -691,46 +693,99 @@ export class GhClient {
   }
 
   /**
-   * 第二步：轮询等待用户授权
-   * @returns access_token 或 null（超时/拒绝）
+   * 第二步：轮询等待用户授权。
+   * 可通过 `signal` 取消；单次请求有超时；网络/JSON 等瞬时错误会重试到设备码过期为止。
    */
-  static async deviceFlowPollToken(
-    clientId: string,
-    deviceCode: string,
-    interval: number = 5,
-    expiresIn: number = 900,
-    host?: string,
-  ): Promise<{ access_token: string; token_type: string; scope: string } | null> {
+  static async deviceFlowPollToken({
+    clientId,
+    deviceCode,
+    interval = 5,
+    expiresIn = 900,
+    host,
+    signal,
+    requestTimeoutMs = 15_000,
+  }: GhDeviceFlowPollRequest): Promise<GhDeviceFlowPollResult> {
     const baseUrl = host ? `https://${host}` : 'https://github.com';
     const deadline = Date.now() + expiresIn * 1000;
     let pollInterval = interval * 1000;
 
-    while (Date.now() < deadline) {
-      await new Promise(r => setTimeout(r, pollInterval));
-      const res = await fetch(`${baseUrl}/login/oauth/access_token`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify({
-          client_id: clientId,
-          device_code: deviceCode,
-          grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
-        }),
-      });
-      const data = await res.json() as Record<string, any>;
-      if (data.access_token) {
-        return { access_token: data.access_token, token_type: data.token_type, scope: data.scope };
-      }
-      if (data.error === 'slow_down') {
-        pollInterval = (data.interval || interval + 5) * 1000;
+    while (true) {
+      if (signal?.aborted) return { status: 'aborted' };
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) return { status: 'expired' };
+      if (!await abortableDelay(Math.min(pollInterval, remaining), signal)) return { status: 'aborted' };
+      if (Date.now() >= deadline) return { status: 'expired' };
+
+      let data: Record<string, unknown>;
+      try {
+        const timeout = AbortSignal.timeout(requestTimeoutMs);
+        const res = await fetch(`${baseUrl}/login/oauth/access_token`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify({
+            client_id: clientId,
+            device_code: deviceCode,
+            grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
+          }),
+          signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+        });
+        data = await res.json() as Record<string, unknown>;
+      } catch {
+        if (signal?.aborted) return { status: 'aborted' };
+        // Transient network / timeout / non-JSON response: keep polling until the deadline.
         continue;
       }
+      if (!data || typeof data !== 'object') continue;
+      if (typeof data.access_token === 'string' && data.access_token) {
+        return {
+          status: 'authorized',
+          access_token: data.access_token,
+          token_type: typeof data.token_type === 'string' ? data.token_type : 'bearer',
+          scope: typeof data.scope === 'string' ? data.scope : '',
+        };
+      }
       if (data.error === 'authorization_pending') continue;
-      // expired_token / access_denied / 其他错误
-      return null;
+      if (data.error === 'slow_down') {
+        const next = Number(data.interval);
+        pollInterval = (Number.isFinite(next) && next > 0 ? next : pollInterval / 1000 + 5) * 1000;
+        continue;
+      }
+      if (data.error === 'expired_token') return { status: 'expired' };
+      if (data.error === 'access_denied') return { status: 'denied' };
+      if (typeof data.error === 'string') {
+        return { status: 'error', error: typeof data.error_description === 'string' ? data.error_description : data.error };
+      }
+      // No token and no error (e.g. a 5xx JSON body): treat as transient.
     }
-    return null;
   }
+}
+
+export interface GhDeviceFlowPollRequest {
+  readonly clientId: string;
+  readonly deviceCode: string;
+  /** Seconds between polls (GitHub default 5). */
+  readonly interval?: number;
+  /** Seconds until the device code expires (GitHub default 900). */
+  readonly expiresIn?: number;
+  readonly host?: string;
+  readonly signal?: AbortSignal;
+  readonly requestTimeoutMs?: number;
+}
+
+export type GhDeviceFlowPollResult =
+  | { readonly status: 'authorized'; readonly access_token: string; readonly token_type: string; readonly scope: string }
+  | { readonly status: 'expired' | 'denied' | 'aborted' }
+  | { readonly status: 'error'; readonly error: string };
+
+/** Resolves true after `ms`, or false as soon as `signal` aborts. */
+function abortableDelay(ms: number, signal?: AbortSignal): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (signal?.aborted) { resolve(false); return; }
+    const onAbort = () => { clearTimeout(timer); resolve(false); };
+    const timer = setTimeout(() => { signal?.removeEventListener('abort', onAbort); resolve(true); }, ms);
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
 }

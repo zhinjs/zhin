@@ -171,4 +171,49 @@ describe('console event hub', () => {
     expect(hub.subscriberCount).toBe(0);
     expect(destroyed).toBe(true);
   });
+
+  it('keeps a slow subscriber during replay and delivers everything in order after drain', () => {
+    const hub = createConsoleEventHub({ runtimeId: 'runtime-a' });
+    const replayed = [1, 2, 3].map((index) => hub.publish('test', { index }));
+    const emitter = new EventEmitter();
+    const written: string[] = [];
+    let destroyed = false;
+    // Accepts one frame per drain cycle, like a socket with a full send buffer.
+    const response = Object.assign(emitter, {
+      write(chunk: string, _callback?: WriteCallback) { written.push(chunk); return false; },
+      destroy() { destroyed = true; emitter.emit('close'); },
+    }) as unknown as ServerResponse;
+
+    hub.subscribe(response, { runtimeId: 'runtime-a', after: 0 });
+    expect(written).toEqual([serializeConsoleEvent(replayed[0]!)]);
+    expect(hub.subscriberCount).toBe(1);
+
+    // Published while the replay is still waiting: must come after the replayed frames.
+    const live = hub.publish('test', { index: 4 });
+    expect(written).toHaveLength(1);
+
+    for (let i = 0; i < 4; i += 1) emitter.emit('drain');
+
+    expect(destroyed).toBe(false);
+    expect(hub.subscriberCount).toBe(1);
+    expect(written).toEqual([...replayed, live].map((event) => serializeConsoleEvent(event)));
+  });
+
+  it('disconnects a subscriber whose replay backlog outgrows the journal bounds', () => {
+    const hub = createConsoleEventHub({ runtimeId: 'runtime-a', historyLimit: 3 });
+    hub.publish('test', { index: 0 });
+    const emitter = new EventEmitter();
+    let destroyed = false;
+    const response = Object.assign(emitter, {
+      write(_chunk: string, _callback?: WriteCallback) { return false; },
+      destroy() { destroyed = true; emitter.emit('close'); },
+    }) as unknown as ServerResponse;
+
+    hub.subscribe(response, { runtimeId: 'runtime-a', after: 0 });
+    for (let index = 1; index <= 3; index += 1) hub.publish('test', { index });
+    expect(destroyed).toBe(false);
+    hub.publish('test', { index: 4 });
+    expect(destroyed).toBe(true);
+    expect(hub.subscriberCount).toBe(0);
+  });
 });

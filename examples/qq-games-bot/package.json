@@ -23,7 +23,7 @@
     "@zhin.js/plugin-text-adventure": "workspace:*",
     "@zhin.js/plugin-tic-tac-toe": "workspace:*",
     "@zhin.js/plugin-word-riddle": "workspace:*",
-    "sqlite3": "latest",
+    "sqlite3": "^6.0.1",
     "zhin.js": "workspace:*"
   },
   "devDependencies": {

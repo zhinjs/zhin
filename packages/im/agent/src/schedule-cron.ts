@@ -14,13 +14,6 @@ function splitCronFields(cron: string): string[] {
   return cron.trim().split(/\s+/).filter(Boolean);
 }
 
-/** 5 段 cron 补秒字段为 6 段 */
-export function toSixFieldCron(cron: string): string {
-  const parts = splitCronFields(cron);
-  if (parts.length === 5) return ['0', ...parts].join(' ');
-  return cron.trim();
-}
-
 /**
  * 未显式指定 schedule_kind 时：solar + 周一段 `1-5` → workday
  * （中国大陆法定工作日，含调休上班日，不是公历周一至周五）

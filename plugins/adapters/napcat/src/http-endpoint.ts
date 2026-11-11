@@ -40,7 +40,7 @@ import {
 import { receiveNapCatSideEvent } from './side-event-dispatch.js';
 import { createNapCatContentPort } from './onebot-get-msg.js';
 import { NapcatClient } from './client.js';
-import { readRequestBody } from './webhook.js';
+import { readTextBody } from '@zhin.js/host-http-contract';
 import { verifyNapCatAccessToken } from './wss-auth.js';
 
 export interface NapCatHttpEndpointOptions {
@@ -224,7 +224,7 @@ export class NapCatHttpEndpoint extends NapcatClient implements Endpoint {
         response.end(JSON.stringify({ message: 'Unauthorized' }));
         return;
       }
-      const raw = await readRequestBody(request);
+      const raw = await readTextBody(request);
       let ev: NapCatEvent;
       try {
         ev = JSON.parse(raw) as NapCatEvent;

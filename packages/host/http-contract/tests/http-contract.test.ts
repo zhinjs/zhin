@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Readable } from 'node:stream';
 import type { IncomingMessage } from 'node:http';
-import { HttpBodyError, readJsonBody } from '../src/index.js';
+import { HttpBodyError, readJsonBody, readTextBody } from '../src/index.js';
 
 function requestOf(chunks: readonly (string | Buffer)[]): IncomingMessage {
   return Readable.from(chunks) as IncomingMessage;
@@ -39,6 +39,33 @@ describe('readJsonBody', () => {
   it('自定义 limit 内正常解析', async () => {
     const body = await readJsonBody(requestOf(['{"ok":true}']), { limit: 16 });
     expect(body).toEqual({ ok: true });
+  });
+});
+
+describe('readTextBody', () => {
+  it('returns the body verbatim, including surrounding whitespace', async () => {
+    expect(await readTextBody(requestOf([' {"a":', Buffer.from('1}\n')]))).toBe(' {"a":1}\n');
+    expect(await readTextBody(requestOf([]))).toBe('');
+  });
+
+  it('keeps multi-byte characters split across chunks intact', async () => {
+    const bytes = Buffer.from('你好');
+    expect(await readTextBody(requestOf([bytes.subarray(0, 2), bytes.subarray(2)]))).toBe('你好');
+  });
+
+  it('drains an oversize body and rejects with HttpBodyError 413', async () => {
+    const big = 'x'.repeat(64);
+    const req = requestOf([big, big, big]);
+    await expect(readTextBody(req, { limit: 32 })).rejects.toMatchObject({
+      name: 'HttpBodyError',
+      statusCode: 413,
+      message: 'Request body exceeds 32 bytes',
+    });
+    expect(req.readableEnded).toBe(true);
+  });
+
+  it('accepts a body of exactly the limit', async () => {
+    expect(await readTextBody(requestOf(['12345678']), { limit: 8 })).toBe('12345678');
   });
 });
 

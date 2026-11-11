@@ -22,10 +22,6 @@ export function getCurrentCommMessage(): Message | undefined {
   return als.getStore()?.commMessage;
 }
 
-export function isDirectAgentExecution(): boolean {
-  return als.getStore()?.directExecution === true;
-}
-
 export function getCurrentOwnerApprovalRuntime(): OwnerApprovalRuntime | undefined {
   return als.getStore()?.ownerApprovals;
 }

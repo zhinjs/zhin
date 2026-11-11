@@ -81,7 +81,7 @@ check_node() {
     echo ""
     local os
     os=$(detect_os)
-    echo "请先安装 Node.js >= 20.19.0 或 >= 22.12.0："
+    echo "请先安装 Node.js >= 22.19.0："
     echo ""
     echo "  方式 1 - 使用 nvm（推荐）:"
     echo -e "    ${CYAN}curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash${NC}"
@@ -101,20 +101,14 @@ check_node() {
   local node_version
   node_version=$(node -v | sed 's/^v//')
 
-  local major
-  major=$(echo "$node_version" | cut -d. -f1)
-
-  # 版本要求: ^20.19.0 || >=22.12.0
-  if [ "$major" -ge 22 ] && version_gte "$node_version" "22.12.0"; then
-    log_success "Node.js v${node_version} ✓"
-    return
-  elif [ "$major" -eq 20 ] && version_gte "$node_version" "20.19.0"; then
+  # 版本要求: >=22.19.0
+  if version_gte "$node_version" "22.19.0"; then
     log_success "Node.js v${node_version} ✓"
     return
   fi
 
   log_error "Node.js 版本不满足要求: v${node_version}"
-  echo "  需要 ^20.19.0 或 >=22.12.0"
+  echo "  需要 >=22.19.0"
   echo "  建议运行: nvm install 22"
   exit 1
 }

@@ -1,6 +1,10 @@
 import { readFile, readdir } from 'node:fs/promises';
 import { join, relative, resolve } from 'node:path';
-import ts from 'typescript';
+import type ts from 'typescript';
+import { loadTypeScript } from './typescript-loader.js';
+
+/** Set by the async entry points before any synchronous analysis runs. */
+let tsApi!: typeof ts;
 import {
   LegacyCapabilityMigrator,
   type LegacyMigrationSummary,
@@ -123,19 +127,20 @@ function readinessState(
 }
 
 async function importReferences(root: string): Promise<MigrationImportReference[]> {
+  tsApi = await loadTypeScript();
   const result: MigrationImportReference[] = [];
   for (const source of await sourceFiles(root)) {
-    const file = ts.createSourceFile(
+    const file = tsApi.createSourceFile(
       source,
       await readFile(source, 'utf8'),
-      ts.ScriptTarget.Latest,
+      tsApi.ScriptTarget.Latest,
       true,
-      source.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+      source.endsWith('.tsx') ? tsApi.ScriptKind.TSX : tsApi.ScriptKind.TS,
     );
     const visit = (node: ts.Node): void => {
       const reference = importReference(node, source, file);
       if (reference) result.push(reference);
-      ts.forEachChild(node, visit);
+      tsApi.forEachChild(node, visit);
     };
     visit(file);
   }
@@ -148,8 +153,8 @@ function importReference(
   source: string,
   file: ts.SourceFile,
 ): MigrationImportReference | undefined {
-  if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node))
-    && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
+  if ((tsApi.isImportDeclaration(node) || tsApi.isExportDeclaration(node))
+    && node.moduleSpecifier && tsApi.isStringLiteral(node.moduleSpecifier)) {
     const position = file.getLineAndCharacterOfPosition(node.getStart(file));
     const { kind, bindings } = classifyModuleImport(node);
     return Object.freeze({
@@ -161,11 +166,11 @@ function importReference(
       bindings: Object.freeze(bindings),
     });
   }
-  if (ts.isCallExpression(node) && node.arguments.length === 1) {
-    const dynamicImport = node.expression.kind === ts.SyntaxKind.ImportKeyword;
-    const requireCall = ts.isIdentifier(node.expression) && node.expression.text === 'require';
+  if (tsApi.isCallExpression(node) && node.arguments.length === 1) {
+    const dynamicImport = node.expression.kind === tsApi.SyntaxKind.ImportKeyword;
+    const requireCall = tsApi.isIdentifier(node.expression) && node.expression.text === 'require';
     const argument = node.arguments[0];
-    if ((dynamicImport || requireCall) && argument && ts.isStringLiteral(argument)) {
+    if ((dynamicImport || requireCall) && argument && tsApi.isStringLiteral(argument)) {
       const position = file.getLineAndCharacterOfPosition(node.getStart(file));
       return Object.freeze({
         source,
@@ -184,10 +189,10 @@ function classifyModuleImport(node: ts.ImportDeclaration | ts.ExportDeclaration)
   readonly kind: MigrationImportReference['kind'];
   readonly bindings: readonly string[];
 } {
-  if (ts.isExportDeclaration(node)) {
+  if (tsApi.isExportDeclaration(node)) {
     if (!node.exportClause) return { kind: 'star', bindings: [] };
-    if (ts.isNamespaceExport(node.exportClause)) return { kind: 'namespace', bindings: [] };
-    if (ts.isNamedExports(node.exportClause)) {
+    if (tsApi.isNamespaceExport(node.exportClause)) return { kind: 'namespace', bindings: [] };
+    if (tsApi.isNamedExports(node.exportClause)) {
       return {
         kind: 'named',
         bindings: node.exportClause.elements.map((el) => (
@@ -206,8 +211,8 @@ function classifyModuleImport(node: ts.ImportDeclaration | ts.ExportDeclaration)
     return { kind: 'default', bindings: [] };
   }
   const named = node.importClause.namedBindings;
-  if (named && ts.isNamespaceImport(named)) return { kind: 'namespace', bindings: [] };
-  if (named && ts.isNamedImports(named)) {
+  if (named && tsApi.isNamespaceImport(named)) return { kind: 'namespace', bindings: [] };
+  if (named && tsApi.isNamedImports(named)) {
     return {
       kind: 'named',
       bindings: named.elements.map((el) => (el.propertyName ? el.propertyName.text : el.name.text)),

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type {
   DatabaseHost, DatabaseHostModel, DatabaseHostSelection, DeliveryTarget, JsonValue,
   OutboundEditInput, OutboundReactionInput, OutboundRecallInput, OutboundRootHost, OutboundSendInput,
-  OutboundTypingInput, PersistentStatePort, PluginId, StateRecord, StateScope,
+  Locale, OutboundTypingInput, PersistentStatePort, PluginId, StateRecord, StateScope,
 } from 'zhin.js/plugin-runtime';
 
 type Row = Record<string, unknown>;
@@ -119,7 +119,7 @@ export class FakeOutboundRootHost implements OutboundRootHost {
   }
 
   send(input: OutboundSendInput): Promise<string | null> { return this.#record('send', input); }
-  sendTarget(target: DeliveryTarget, content: unknown, requester: PluginId, options?: Readonly<{ locale?: import('@zhin.js/plugin-runtime').Locale }>): Promise<string | null> {
+  sendTarget(target: DeliveryTarget, content: unknown, requester: PluginId, options?: Readonly<{ locale?: Locale }>): Promise<string | null> {
     return this.#record('sendTarget', { target, content, ...(options?.locale ? { locale: options.locale } : {}) }, requester);
   }
   addReaction(input: OutboundReactionInput): Promise<string | null> { return this.#record('addReaction', input); }

@@ -17,6 +17,9 @@ function oauthModel(client: GithubEndpoint) {
   } | undefined;
 }
 
+/** `platform\u0000uid` keys with a device flow still polling. */
+const pendingBinds = new Set<string>();
+
 function depsLogger() {
   return {
     debug: (...args: unknown[]) => console.debug(...args),
@@ -42,12 +45,24 @@ export async function executeGithubBind(_args: Record<string, never>, client: Gi
     return t(locale, 'alreadyBound', { login: existing.github_login });
   }
 
+  // One device flow per user: a second request would race the first one's insert.
+  const flowKey = `${msg.clientAdapter}\u0000${msg.sender.id}`;
+  if (pendingBinds.has(flowKey)) return t(locale, 'bindInProgress');
+  pendingBinds.add(flowKey);
+
+  const platform = msg.clientAdapter;
+  const senderId = msg.sender.id;
+  const reply = async (text: string): Promise<void> => {
+    try {
+      await msg.$reply?.(text);
+    } catch (err) {
+      log.warn(formatCompact({ op: 'device_flow_reply', ok: false, platform, sender: senderId, error: err instanceof Error ? err.message : String(err) }));
+    }
+  };
+
   try {
     const host = client.host;
     const codeResp = await GhClient.deviceFlowRequestCode(clientId, host);
-    const tokenPromise = GhClient.deviceFlowPollToken(
-      clientId, codeResp.device_code, codeResp.interval, codeResp.expires_in, host,
-    );
 
     const replyMsg = [
       t(locale, 'openDeviceLink'),
@@ -58,35 +73,60 @@ export async function executeGithubBind(_args: Record<string, never>, client: Gi
       t(locale, 'waiting', { minutes: Math.floor(codeResp.expires_in / 60) }),
     ].join('\n');
 
-    tokenPromise.then(async (tokenData) => {
-      if (!tokenData) {
-        log.warn(formatCompact({ op: 'device_flow', ok: false, platform: msg.clientAdapter, sender: msg.sender!.id }));
-        return;
+    void (async () => {
+      try {
+        const result = await GhClient.deviceFlowPollToken({
+          clientId,
+          deviceCode: codeResp.device_code,
+          interval: codeResp.interval,
+          expiresIn: codeResp.expires_in,
+          host,
+          signal: client.lifecycleSignal,
+        });
+        // Endpoint stopped: nothing to tell the user through a closed endpoint.
+        if (result.status === 'aborted') return;
+        if (result.status !== 'authorized') {
+          log.warn(formatCompact({ op: 'device_flow', ok: false, status: result.status, platform, sender: senderId }));
+          await reply(result.status === 'error'
+            ? t(locale, 'bindFailed', { error: result.error })
+            : result.status === 'expired'
+              ? t(locale, 'bindExpired')
+              : t(locale, 'bindDenied'));
+          return;
+        }
+
+        const userGh = new GhClient({ host, token: result.access_token, signal: client.lifecycleSignal });
+        const authResult = await userGh.verifyAuth();
+        if (!authResult.ok || !authResult.user) {
+          log.warn(formatCompact({ op: 'device_flow', ok: false, status: 'verify_failed', platform, sender: senderId }));
+          await reply(t(locale, 'bindVerifyFailed'));
+          return;
+        }
+        const login = authResult.user;
+
+        await model.insert({
+          id: Date.now(),
+          platform,
+          platform_uid: senderId,
+          github_login: login,
+          access_token: result.access_token,
+          created_at: Date.now(),
+        });
+        log.debug(formatCompact({ op: 'bind', platform, sender: senderId, login }));
+        await reply(t(locale, 'bound', { login }));
+      } catch (err) {
+        log.error('GitHub Device Flow 错误:', err);
+        if (!client.lifecycleSignal?.aborted) {
+          await reply(t(locale, 'bindFailed', { error: err instanceof Error ? err.message : String(err) }));
+        }
+      } finally {
+        pendingBinds.delete(flowKey);
       }
-
-      const userGh = new GhClient({ host, token: tokenData.access_token });
-      const authResult = await userGh.verifyAuth();
-      const login = authResult.ok ? authResult.user : 'unknown';
-
-      await model.insert({
-        id: Date.now(),
-        platform: msg.clientAdapter,
-        platform_uid: msg.sender!.id,
-        github_login: login,
-        access_token: tokenData.access_token,
-        created_at: Date.now(),
-      });
-      log.debug(formatCompact({ op: 'bind', platform: msg.clientAdapter, sender: msg.sender!.id, login }));
-
-      if (msg?.$reply) {
-        await msg.$reply(t(locale, 'bound', { login }));
-      }
-    }).catch((err) => {
-      log.error('GitHub Device Flow 错误:', err);
-    });
+    })();
 
     return replyMsg;
   } catch (e: unknown) {
+    pendingBinds.delete(flowKey);
     return t(locale, 'flowFailed', { error: e instanceof Error ? e.message : String(e) });
   }
 }

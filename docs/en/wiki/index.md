@@ -30,7 +30,3 @@ These notes answer recurring questions about using Zhin and point to sources you
 
 - [The process started; is the Bot usable?](./notes/production-ready) Check liveness, runtime readiness, and real platform delivery.
 - For deployment and diagnosis, see [Production Deployment](/en/operations/production) and [Troubleshooting](/en/troubleshooting/).
-
-## Source archive
-
-The [29 original Cubic Wiki articles, Chinese translations, and known corrections](./archive) remain at their existing URLs. Use them to find leads; use current documentation and source code to confirm runtime behavior.

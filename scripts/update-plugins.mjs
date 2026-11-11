@@ -4,6 +4,10 @@
  * 从 npm registry 获取 Zhin.js 生态插件数据
  * 输出到 docs/public/plugins.json
  *
+ * 官方插件以 workspace 为准：只收录 plugins/<分类>/<包>/package.json 中
+ * `zhin.type` 为 plugin / adapter 的公开包（框架包、Feature 包、已删除的包都不是插件）。
+ * 社区插件来自 npm 搜索（zhin.js-* 命名）。
+ *
  * 用法: node scripts/update-plugins.mjs
  *
  * 增强功能：
@@ -13,7 +17,7 @@
  * - 许可证信息
  */
 
-import { writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { writeFileSync, mkdirSync, existsSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -23,68 +27,53 @@ const OUTPUT_PATH = resolve(__dirname, '../docs/public/plugins.json');
 // 并发控制：避免同时发起过多请求
 const CONCURRENCY = 5;
 
-// ---- 核心包排除列表（框架内部包，不是用户插件） ----
+// ---- 官方插件：workspace 中真实存在的插件包 ----
 
-const CORE_PACKAGES = new Set([
-  '@zhin.js/core',
-  '@zhin.js/kernel',
-  '@zhin.js/ai',
-  '@zhin.js/agent',
-  '@zhin.js/cli',
-  '@zhin.js/client',
-  '@zhin.js/config-file',
-  '@zhin.js/config-yaml', // 已由格式无关的 config-file 包替代
-  '@zhin.js/database',
-  '@zhin.js/logger',
-  '@zhin.js/schema',
-  '@zhin.js/types',
-  '@zhin.js/satori', // 已删除的图片工具包，不能重新收录为插件
-  '@zhin.js/jsx',
-  '@zhin.js/components',
-  '@zhin.js/tailwind',
-  '@zhin.js/html-renderer',
-  '@zhin.js/speech',
-  '@zhin.js/hmr',
-  '@zhin.js/dependency',
-  '@zhin.js/create-zhin',
-  '@zhin.js/queue-runtime',
-  '@zhin.js/storage-port',
-  '@zhin.js/adapter-process', // 已废弃，见 @zhin.js/adapter-sandbox
-  '@zhin.js/host-router', // 已删除，Console Host 由 basic/cli 装配
-  '@zhin.js/host-api', // 已删除，同上
-  'zhin.js',
-]);
+const PLUGINS_ROOT = resolve(__dirname, '../plugins');
+const PLUGIN_TYPES = new Set(['plugin', 'adapter']);
+// plugins/<dir> -> category
+const CATEGORY_BY_DIR = {
+  adapters: 'adapter',
+  services: 'service',
+  games: 'game',
+  features: 'feature',
+  utils: 'util',
+};
 
-// ---- 分类判断 ----
-// 分类：adapter | service | util | game | feature
-// 基于包名前缀精确匹配，而非关键词子串
+/**
+ * @param {string} [root]
+ * @returns {Map<string, { category: string, manifest: Record<string, any>, dir: string }>}
+ */
+export function collectWorkspacePlugins(root = PLUGINS_ROOT) {
+  const found = new Map();
+  if (!existsSync(root)) return found;
+  for (const group of readdirSync(root, { withFileTypes: true })) {
+    if (!group.isDirectory()) continue;
+    const category = CATEGORY_BY_DIR[group.name];
+    if (!category) continue;
+    for (const entry of readdirSync(resolve(root, group.name), { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const manifestPath = resolve(root, group.name, entry.name, 'package.json');
+      if (!existsSync(manifestPath)) continue;
+      const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+      if (manifest.private || typeof manifest.name !== 'string') continue;
+      if (!PLUGIN_TYPES.has(manifest.zhin?.type)) continue;
+      found.set(manifest.name, { category, manifest, dir: `plugins/${group.name}/${entry.name}` });
+    }
+  }
+  return found;
+}
 
-function getPluginCategory(name, keywords = []) {
+// ---- 社区插件分类（官方插件的分类来自 workspace 目录） ----
+
+function getCommunityCategory(name, keywords = []) {
   const lowerName = name.toLowerCase();
-
-  // 适配器：名称含 adapter-
   if (lowerName.includes('adapter-')) return 'adapter';
-
-  // 已知服务（packages/host 为内置；plugins/services 为可选第三方）
-  if (['@zhin.js/mcp'].includes(lowerName)) return 'service';
-
-  // 已知特性插件（与 plugins/features/ 目录对应）
-  if (['@zhin.js/process-monitor'].includes(lowerName)) return 'feature';
-
-  // 关键字精确匹配（完整词）
   const kwSet = new Set(keywords.map(k => k.toLowerCase()));
   if (kwSet.has('adapter')) return 'adapter';
   if (kwSet.has('game')) return 'game';
   if (kwSet.has('service')) return 'service';
   if (kwSet.has('feature')) return 'feature';
-
-  // plugin-* 命名的默认归为 util
-  if (lowerName.includes('plugin-')) return 'util';
-
-  // 名称中含 -filter, -music 等工具类
-  if (lowerName.includes('-filter') || lowerName.includes('-music')) return 'util';
-
-  // 兜底：无法归类的官方包当 util，社区包也当 util
   return 'util';
 }
 
@@ -124,6 +113,12 @@ async function fetchPackageDetail(name) {
 
     return {
       readme,
+      version: latest || '',
+      homepage: latestVersion?.homepage || '',
+      description: latestVersion?.description || data.description || '',
+      keywords: latestVersion?.keywords || [],
+      lastUpdate: (latest && data.time?.[latest]) || data.time?.modified || '',
+      author: latestVersion?._npmUser?.name || (typeof latestVersion?.author === 'string' ? latestVersion.author : latestVersion?.author?.name) || '',
       license: data.license || latestVersion?.license || '',
       engines: latestVersion?.engines || {},
       peerDependencies: latestVersion?.peerDependencies || {},
@@ -141,11 +136,13 @@ async function fetchDownloads(name) {
       fetch(`https://api.npmjs.org/downloads/point/last-week/${encodeURIComponent(name)}`),
       fetch(`https://api.npmjs.org/downloads/point/last-month/${encodeURIComponent(name)}`),
     ]);
-    const week = weekRes.ok ? (await weekRes.json()).downloads || 0 : 0;
-    const month = monthRes.ok ? (await monthRes.json()).downloads || 0 : 0;
+    // null = the downloads API was unreachable; the caller keeps the previous numbers.
+    if (!weekRes.ok || !monthRes.ok) return null;
+    const week = (await weekRes.json()).downloads || 0;
+    const month = (await monthRes.json()).downloads || 0;
     return { weekly: week, monthly: month };
   } catch {
-    return { weekly: 0, monthly: 0 };
+    return null;
   }
 }
 
@@ -163,52 +160,66 @@ async function processBatch(items, fn) {
 
 // ---- 主逻辑 ----
 
+/** Download counts from the existing plugins.json, used when the downloads API is unreachable. */
+function readPreviousDownloads() {
+  const previous = new Map();
+  try {
+    for (const plugin of JSON.parse(readFileSync(OUTPUT_PATH, 'utf8')).plugins ?? []) {
+      if (plugin?.name && plugin.downloads) previous.set(plugin.name, plugin.downloads);
+    }
+  } catch {
+    // no previous file
+  }
+  return previous;
+}
+
 async function main() {
   console.log('Fetching plugins from npm...');
+  const previousDownloads = readPreviousDownloads();
 
-  const [officialResults, communityResults] = await Promise.all([
-    searchNpm('@zhin.js', 100),
-    searchNpm('zhin.js plugin', 100),
-  ]);
+  const workspacePlugins = collectWorkspacePlugins();
+  const communityResults = await searchNpm('zhin.js plugin', 100);
 
-  // 合并去重
-  const map = new Map();
-  for (const obj of [...officialResults, ...communityResults]) {
-    map.set(obj.package.name, obj);
+  const basicPlugins = [];
+
+  // 官方：workspace 是事实来源；未发布到 npm 的包稍后按 404 跳过
+  for (const [name, { category, manifest, dir }] of workspacePlugins) {
+    basicPlugins.push({
+      name,
+      displayName: name.replace('@zhin.js/', '').replace(/^adapter-/, ''),
+      description: manifest.description || '',
+      author: '',
+      isOfficial: true,
+      category,
+      version: '',
+      npm: `https://www.npmjs.com/package/${name}`,
+      github: `https://github.com/zhinjs/zhin/tree/main/${dir}`,
+      homepage: '',
+      tags: manifest.keywords || [],
+      lastUpdate: '',
+    });
   }
 
-  // 收集基础信息
-  const basicPlugins = [];
-  for (const [, obj] of map) {
+  // 社区：npm 搜索到的 zhin.js-* 包
+  const seen = new Set();
+  for (const obj of communityResults) {
     const pkg = obj.package;
     const name = pkg.name;
+    if (!name.startsWith('zhin.js-') || seen.has(name)) continue;
+    seen.add(name);
 
-    // 只保留 @zhin.js/* 或 zhin.js-* 开头的包，排除核心框架包
-    if (!name.startsWith('@zhin.js/') && !name.startsWith('zhin.js-')) continue;
-    if (CORE_PACKAGES.has(name)) continue;
-
-    const isOfficial = name.startsWith('@zhin.js/');
-
-    // 提取作者
     let author = 'Unknown';
     if (pkg.publisher?.username) author = pkg.publisher.username;
     else if (typeof pkg.author === 'string') author = pkg.author;
     else if (pkg.author?.name) author = pkg.author.name;
 
-    // 显示名
-    const displayName = isOfficial
-      ? name.replace('@zhin.js/', '').replace('adapter-', '')
-      : name.replace('zhin.js-', '');
-
-    const category = getPluginCategory(name, pkg.keywords || []);
-
     basicPlugins.push({
       name,
-      displayName,
+      displayName: name.replace('zhin.js-', ''),
       description: pkg.description || '',
       author,
-      isOfficial,
-      category,
+      isOfficial: false,
+      category: getCommunityCategory(name, pkg.keywords || []),
       version: pkg.version || '',
       npm: pkg.links?.npm || `https://www.npmjs.com/package/${name}`,
       github: pkg.links?.repository || '',
@@ -229,10 +240,24 @@ async function main() {
     return { ...p, detail, downloads };
   });
 
-  // 组装最终数据
-  const plugins = details.map(({ detail, downloads, ...base }) => ({
+  // 组装最终数据；官方包若未发布到 npm（registry 404）则不收录
+  const unpublished = details.filter(({ detail, isOfficial }) => isOfficial && !detail?.version);
+  if (unpublished.length > 0) {
+    console.warn(`Skipped ${unpublished.length} unpublished workspace plugin(s): ${unpublished.map(p => p.name).join(', ')}`);
+  }
+  const plugins = details.filter(({ detail, isOfficial }) => !isOfficial || detail?.version).map(({ detail, downloads, ...base }) => ({
     ...base,
-    downloads: downloads || { weekly: 0, monthly: 0 },
+    ...(base.isOfficial
+      ? {
+          version: detail.version,
+          description: detail.description || base.description,
+          author: detail.author || 'Unknown',
+          tags: detail.keywords?.length ? detail.keywords : base.tags,
+          lastUpdate: detail.lastUpdate,
+          homepage: detail.homepage,
+        }
+      : {}),
+    downloads: downloads || previousDownloads.get(base.name) || { weekly: 0, monthly: 0 },
     readme: detail?.readme || '',
     license: detail?.license || '',
     engines: detail?.engines || {},
@@ -270,7 +295,10 @@ async function main() {
   console.log(`  adapters: ${stats.adapters}, services: ${stats.services}, utils: ${stats.utils}, games: ${stats.games}, features: ${stats.features}`);
 }
 
-main().catch(err => {
-  console.error('Failed to update plugins:', err);
-  process.exit(1);
-});
+// Only run when executed directly, so tests can import collectWorkspacePlugins.
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch(err => {
+    console.error('Failed to update plugins:', err);
+    process.exit(1);
+  });
+}

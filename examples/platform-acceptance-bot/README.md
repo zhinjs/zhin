@@ -152,7 +152,7 @@ Markdown 应呈现粗体、行内代码、可点击 Zhin 链接及 `& < >` 字�
 钉钉原生按钮验收需已关联当前应用的互动卡片模板。模板搭建按[卡片模板指南](../../plugins/adapters/dingtalk/CARD-TEMPLATE.md)配置，其中正文 `text` 使用富文本变量，按钮 label/payload 使用普通文本变量。启动时注入 `DINGTALK_CARD_TEMPLATE_ID` 和可选 `DINGTALK_CARD_BUTTON_COUNT`（1–5，默认 2）；固定按钮数须与模板一致。例如：
 
 ```bash
-DINGTALK_CARD_TEMPLATE_ID=your-template.schema DINGTALK_CARD_BUTTON_COUNT=2 pnpm dev:dingtalk
+DINGTALK_CARD_TEMPLATE_ID=your-template.schema DINGTALK_CARD_BUTTON_COUNT=2 pnpm --filter platform-acceptance-bot dev:dingtalk
 ```
 
 生成配置保留模板 ID 的环境变量引用，按钮数量经整数范围校验。无需修改真实 `.env`。模板接入和配置测试通过不能代替卡片展示、点击及 Core 接纳的实机证据。

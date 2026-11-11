@@ -161,16 +161,6 @@ Root Capability Seam ─┘                         │
 - A scoped provider can replace a global provider with the same ID.
 - Duplicate visible Tool or Skill names fail during capability projection.
 
-::: details Existing adapters
-| Class | Purpose |
-|---|---|
-| `BuiltinToolService` | Adapts QuestionPort interaction for custom Host compositions |
-| `SkillRegistryAsService` | Explicitly bridges a generation-owned `SkillRegistry` and reads Skill documents |
-
-The standard Agent Host does not publish these adapters globally. Built-in Tool and Skill
-capabilities continue to use Feature projection, preserving one visibility and lifecycle model.
-:::
-
 ## Related
 
 - [Plugin Model](./plugin-model.md): how Features and convention directories are discovered

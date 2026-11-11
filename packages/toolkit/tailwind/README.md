@@ -69,6 +69,6 @@ Tailwind 4 的部分渐变工具类会生成 `@supports`，因此会被拒绝；
 
 建议按插件或主题创建工厂并复用。每个工厂最多缓存 256 个结果组合，最多接收 4096 个不同工具类（包含失败的编译输入）；到达上限后，新类会报错，已有类仍可使用。每次调用最多 256 个类、16384 个字符。需要另一套动态样式集合时创建新工厂，旧工厂可随作用域释放。
 
-包内默认主题来自固定版本 `tailwindcss@4.3.3/theme.css`，保留其 MIT 许可。维护者升级该依赖后运行 `pnpm sync:theme`；构建会检查主题快照是否一致。
+包内默认主题来自固定版本 `tailwindcss@4.3.3/theme.css`，保留其 MIT 许可。维护者升级该依赖后运行 `pnpm --filter @zhin.js/tailwind sync:theme`；构建会检查主题快照是否一致。
 
 参考：[Tailwind 主题](https://tailwindcss.com/docs/theme)、[Tailwind 兼容性](https://tailwindcss.com/docs/compatibility)、[官方编译器](https://github.com/tailwindlabs/tailwindcss/blob/main/packages/tailwindcss/src/index.ts)。

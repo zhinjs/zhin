@@ -1,27 +1,49 @@
 /**
- * send — 在 daemon 运行时向指定平台发送消息（借鉴 OpenClaw message send）
+ * send — 在 daemon 运行时向指定平台发送消息
  *
- * 调用运行中实例的 HTTP API POST /api/message/send（Console Host 由 CLI 装配）。
- * 默认 --scene private，--adapter process（sandbox）。
+ * 调用运行中实例的 `POST {base}/message/send`（Host 经出站链投递）。
+ * 默认 --scene private；适配器未指定时仅当实例只有一个适配器才自动选用。
  */
 
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
-import { hostGet, loadHostHttpConfig } from '../utils/host-http.js';
+import {
+  hostPost,
+  listHostEndpoints,
+  loadHostHttpConfig,
+  type HostEndpointRow,
+} from '../utils/host-http.js';
 
-async function getFirstEndpointForAdapter(
-  baseUrl: string,
-  token: string,
-  adapter: string,
-): Promise<string | null> {
-  const res = await hostGet<{ name: string; adapter: string }[]>(
-    { baseUrl, token },
-    '/endpoints',
-  );
-  if (!res.ok || !Array.isArray(res.data)) return null;
-  const ep = res.data.find((b) => b.adapter === adapter);
-  return ep?.name ?? null;
+export type SendTarget =
+  | { readonly ok: true; readonly adapter: string; readonly endpoint: string }
+  | { readonly ok: false; readonly error: string };
+
+/** Picks the adapter/endpoint pair for `zhin send` from the running Host's endpoint list. */
+export function resolveSendTarget(
+  endpoints: readonly HostEndpointRow[],
+  adapter?: string,
+  endpoint?: string,
+): SendTarget {
+  let adapterName = adapter;
+  if (!adapterName) {
+    const candidates = endpoint ? endpoints.filter((row) => row.name === endpoint) : endpoints;
+    const adapters = [...new Set(candidates.map((row) => row.adapter))];
+    if (adapters.length === 0) {
+      return { ok: false, error: endpoint ? `未找到 Endpoint "${endpoint}"` : '运行中的实例没有任何 Endpoint' };
+    }
+    if (adapters.length > 1) {
+      return { ok: false, error: `存在多个适配器（${adapters.join('、')}），请使用 --adapter <name> 指定` };
+    }
+    adapterName = adapters[0]!;
+  }
+  if (endpoint) return { ok: true, adapter: adapterName, endpoint };
+  const rows = endpoints.filter((row) => row.adapter === adapterName);
+  const picked = rows.find((row) => row.status === 'online') ?? rows[0];
+  if (!picked) {
+    return { ok: false, error: `未找到适配器 "${adapterName}" 下的 Endpoint，请使用 --endpoint <id> 指定` };
+  }
+  return { ok: true, adapter: adapterName, endpoint: picked.name };
 }
 
 export const sendCommand = new Command('send')
@@ -29,13 +51,17 @@ export const sendCommand = new Command('send')
   .argument('<scene_id>', '场景 ID（私聊为用户 ID，群聊为群号等）')
   .argument('[content...]', '消息内容（可多词，用空格连接）；不传则从 stdin 读取一行')
   .option('-s, --scene <type>', '场景类型：private | group | channel', 'private')
-  .option('-a, --adapter <name>', '适配器名称（icqq、discord、process 等），默认 process', 'process')
+  .option('-a, --adapter <name>', '适配器名称（icqq、discord 等）；实例只有一个适配器时可省略')
   .option('-e, --endpoint <id>', '指定 Endpoint ID，不传则使用该适配器下第一个在线 Endpoint')
   .action(async (sceneId: string, contentParts: string[]) => {
     const opts = sendCommand.opts();
     const sceneType = (opts.scene as string) || 'private';
-    const adapterName = (opts.adapter as string) || 'process';
+    const adapterOption = opts.adapter as string | undefined;
     const endpointKey = opts.endpoint as string | undefined;
+    if (!['private', 'group', 'channel'].includes(sceneType)) {
+      logger.error('--scene 必须是 private | group | channel');
+      process.exit(1);
+    }
 
     let content: string;
     if (Array.isArray(contentParts) && contentParts.length > 0) {
@@ -53,56 +79,42 @@ export const sendCommand = new Command('send')
       process.exit(1);
     }
 
-    const httpOpts = await loadHostHttpConfig();
-    if (!httpOpts) {
+    const http = await loadHostHttpConfig();
+    if (!http) {
       logger.error('未找到 zhin 配置文件，无法确定 HTTP 地址');
       process.exit(1);
     }
 
-    const token = httpOpts.token;
-    let endpoint_id = endpointKey;
-    if (!endpoint_id) {
-      const ep = await getFirstEndpointForAdapter(httpOpts.baseUrl, token, adapterName);
-      if (!ep) {
-        logger.error(`未找到适配器 "${adapterName}" 下的 Endpoint，请使用 --endpoint <id> 指定`);
+    let adapter = adapterOption;
+    let endpoint = endpointKey;
+    if (!adapter || !endpoint) {
+      const listed = await listHostEndpoints(http);
+      if (!listed.ok) {
+        logger.error(listed.error ?? `HTTP ${listed.status}`);
         process.exit(1);
       }
-      endpoint_id = ep;
+      const target = resolveSendTarget(listed.data ?? [], adapterOption, endpointKey);
+      if (!target.ok) {
+        logger.error(target.error);
+        process.exit(1);
+      }
+      adapter = target.adapter;
+      endpoint = target.endpoint;
     }
 
-    const body = {
-      context: adapterName,
-      endpoint: endpoint_id,
+    const res = await hostPost<{ messageId?: string }>(http, '/message/send', {
+      adapter,
+      endpoint,
       id: sceneId,
       type: sceneType,
       content,
-    };
-
-    try {
-      const res = await fetch(`${httpOpts.baseUrl}/message/send`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(body),
-      });
-      const data = (await res.json().catch(() => ({}))) as { success?: boolean; error?: string; data?: { messageId?: string } };
-      if (!res.ok) {
-        logger.error(data.error || `HTTP ${res.status}`);
-        process.exit(1);
-      }
-      if (!data.success) {
-        logger.error(data.error || '发送失败');
-        process.exit(1);
-      }
-      console.log(chalk.green('已发送'));
-      if (data.data?.messageId) {
-        console.log(chalk.gray('  messageId: ' + data.data.messageId));
-      }
-    } catch (e: unknown) {
-      const err = e as Error;
-      logger.error(err?.message || String(e));
+    });
+    if (!res.ok) {
+      logger.error(res.error || '发送失败');
       process.exit(1);
+    }
+    console.log(chalk.green('已发送'));
+    if (res.data?.messageId) {
+      console.log(chalk.gray('  messageId: ' + res.data.messageId));
     }
   });

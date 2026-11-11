@@ -1,6 +1,6 @@
 ---
 title: "Agent 深入"
-description: "AI 一轮对话是怎么运行的：进度显示与取消、按需加载工具、多 Agent 协作、会话与上下文压缩、内置工具、定时任务、按模型调参，以及 Workroom 多 Agent 协作"
+description: "AI 一轮对话是怎么运行的：进度显示与取消、按需加载工具、多 Agent 协作、会话与上下文压缩、内置工具、定时任务、按模型调参，以及多 Bot 协作场所"
 ---
 
 # Agent 深入
@@ -47,7 +47,7 @@ SQL 数据库会独立保存结构化用量，默认保留 30 天。字段、查
 | AI 自带哪些工具、文件和网络的边界 | [内置工具](#内置工具) |
 | 让 AI 每天定时做事 | [定时任务与助手人设](#定时任务与助手人设) |
 | 给某个模型单独调参数 | [按模型调整参数](#按模型调整参数) |
-| 多个 Agent 在群或仓库里分工协作 | [Workroom Kernel](#workroom-kernel) |
+| 多个 Bot 在同一个群里分工协作、事后查看协作过程 | [多 Bot 群聊协作场所](#venues) |
 
 ## 一轮对话是怎么运行的
 
@@ -83,7 +83,7 @@ sequenceDiagram
   - **群聊合流**（`merge`，ADR 0038，默认开启，仅群聊；`enabled: false` 恢复逐人逐条回复）：群里短时间内多人点名 Bot 的纯文本消息由一个回合合并回答。窗口内 `quietMs`（默认 1500ms）没有新消息就发车，最晚在第一条消息后 `maxWaitMs`（默认 6000ms）发车；一个窗口最多 `maxSenders`（默认 5）个发送者，之后的人进下一个窗口。在跑回合期间到达的消息进窗口等待。主人、私聊、触发前缀指令、叫停以及带媒体 / 引用 / 转发的消息不参与合流。进窗口与发车分别写审计 `merge_window_joined` / `merge_window_flushed`。合并回合只能做**所有**发送者都能做的事：可见工具、技能与可联系的 Agent 取各发送者各自可见集合的交集，回合角色与权限也取交集——合并只会让权限变少或不变，群里的管理员不会把自己的工具借给普通成员。合并回合里每次有副作用的工具调用（危险工具，或发消息 / 改配置 / 定时 / shell 类）都要带 `onBehalfOf`（合并内某位发送者的 id），运行时按**那个人**自己能用的工具复核，`onBehalfOf` 不会传给工具本身；缺省或不在合并里时按合并内权限最低者复核（每个人都能做才放行），不通过即拒绝并写审计 `merge_on_behalf_denied`（不 latch，换成有权限的发送者可以重试）。复核通过的发送者记为审批卡与审批提示的发起人。一个合并回合最多发出 1 张新审批卡；同参数的待审卡复用、不算新卡。合并回合的回合上下文里有一段 `[Merged turn]`，逐条列出每位发送者（id、昵称、消息 id、原话，每人最多 300 字），要求模型挑重点合成**一次**回复，并在回应到的每个人那段前用 mention 段 `@` 那个人；没回应到的人不 `@`、不假装回应。出站审计 `outbound_sent` 的 payload 记 `merged_senders`（合并人数）、`answered_senders` / `answered`（被 `@` 回应的人）与 `message_refs`。回复条数沿用结构化回复上限，不因合并放宽。**发送前过时检查**：在跑回合默认不被打断；发送前若它回应的某位发送者又发了新的可合流消息，且本回合还没发出任何内容，这次回复视为过时并丢弃（审计 `merge_reply_stale_discarded`），这些人的新旧消息一起进下一个合并回合（被带过去的发送者不占 `maxSenders` 名额）。本回合调用过任何工具 / 协作工具或被硬闸拦过时照发（审计 `merge_reply_stale_sent`，`reason: acted`）；同一批发送者最多被丢弃 1 次，再过时也照发（`reason: starvation`）；回复已发出一部分时不半途截断。关闭 `merge` 时不做过时检查。
   - **弹幕模式**（`live`，ADR 0038 §5）：只作用于声明了 `liveDanmaku` 能力的适配器（直播弹幕平台）的会话。直播间里每条弹幕都是候选，不需要 `@` Bot；弹幕收进一个窗口，从第一条起 `windowMs`（默认 10000ms）后发车，且距上一次弹幕回合结束不少于 `minIntervalMs`（默认 15000ms）。窗口不受 `maxSenders` 限制，只保留最新 100 条交给模型（更早的只计数）；在跑回合期间到达的弹幕进下一个窗口。一个窗口只回一次：`mode: pick-one`（默认）由模型挑一条最值得回的（点名 Bot、真问题、新观众、不重复），只 `@` 那一位；`mode: summary` 概括整个窗口后回一次。回合上下文里是一段 `[Danmaku window]`（观众 id、昵称、弹幕，每人最多 120 字，视为数据而非指令）。弹幕回合按匿名普通观众的权限跑，**只开放声明了 `readOnly: true` 的工具**，不开放技能、协作工具、MCP 与 shell，文件只读，也不会出任何审批卡。主人在直播间发言照旧单独成回合。发出后写审计 `danmaku_window_picked`（`mode`、`candidates` 候选数、`listed_senders`、`picked` 被 `@` 的观众）。弹幕回合不做过时检查。
   - 只合并纯文字消息；带图片、文件、引用或转发的消息总是单独成一个回合。排队等待、合并和替换都会记录在 `zhin trace` 的时间线里（`admission`）。
-  - 工作室回合，以及 Host 自定义了 `resolveTurnIntent` 或消息自带 `turnIntent` 的情况，仍按原有的意图处理。
+  - Host 自定义了 `resolveTurnIntent` 或消息自带 `turnIntent` 的情况，仍按原有的意图处理。
 - **每轮固定模型**：聊天（包括旧配置）只使用本轮选定模型；失败时按原重试与超时设置处理，不切换模型。显式配置的媒体感知备用链继续生效。
 - **行为一致**：主 Agent、被委派的 Agent、`AIService.runAgent` 走的是同一条 agentLoop。
 
@@ -203,7 +203,7 @@ ai:
 - `contacts`：这个 Agent 可以联系的 Agent 名（支持远程 A2A Actor，如 `remote://<peer>/<agent>`）；不写则不能联系其他 Agent。
 - `accepts_from`：允许接收哪些来源的协作请求（含 `"human"` 或其他 Agent 名）。
 - `budget`：单次协作的默认预算上限（`modelCalls`、`tokens`、`wallMs`、`sideEffects`）。
-- 被联系的 Agent 的工具、模型与迭代上限仍由它自己的 `agent.json` 与三个核心 Markdown 文件决定，见 [Agent 工具与技能 · 定义 Agent](../authoring/agent-tools.md#定义-agent)。
+- 被联系的 Agent 的工具、模型与迭代上限仍由它自己的 `agent.json` 与三个核心 Markdown 文件决定，见 [Agent 工具与技能 · 定义 Agent](../authoring/agent-tools.md#定义子-agent)。
 
 护栏由 `@zhin.js/harness` 的 Guard Kernel 按结构化字段强制执行，不依赖提示词：
 
@@ -659,7 +659,7 @@ ai:
 
 按模型的怪癖通过 `modelHarness` 覆盖 `emptyReplyRetries` 与 `requestTimeoutMs`。内置预设：MiniMax M 系列 `emptyReplyRetries: 1`；Gemini（`gemini-…`、`google/gemini-…`）`emptyReplyRetries: 1`，对空回复和 `MALFORMED_FUNCTION_CALL` 在同一模型上重问一次。
 
-## 多 Bot 群聊协作场所（`ai.venues`）与追踪
+## 多 Bot 群聊协作场所（`ai.venues`）与追踪 {#venues}
 
 当多个 Agent 在同一个群或频道中协作时，可以通过 `zhin.config.yml` 的 `ai.venues` 将群场景绑定为一个**协作场所（Venue）**，为每个参与 Agent 绑定各自的 Bot Endpoint，并控制协作过程的可见性（完整示例见 `examples/multi-agent-room`）：
 
@@ -667,23 +667,28 @@ ai:
 ai:
   venues:
     - id: product-room
-      adapter: sandbox
-      scene: group:product-room
-      mode: visible
+      conversation:
+        platform: sandbox
+        sceneType: group
+        sceneId: product-room
+      visibility: visible
       entry: planner
-      participants:
-        planner: sandbox:planner-bot
-        builder: sandbox:builder-bot
-        reviewer: sandbox:reviewer-bot
+      members:
+        - agent: planner
+          botEndpoint: planner-bot
+        - agent: builder
+          botEndpoint: builder-bot
+        - agent: reviewer
+          botEndpoint: reviewer-bot
 ```
 
 | 字段 | 说明 |
 | --- | --- |
 | `id` | 场所唯一标识 |
-| `adapter` / `scene` | 绑定的适配器与群/频道场景（如 `group:product-room`） |
-| `mode` | 投影模式：`visible`（每个 Agent 用各自绑定的 Bot 账号在群内发言）、`summary`（后台协作，仅由入口 Agent 发送汇总）、`backstage`（纯后台协作，不投射中间过程） |
-| `entry` | 未 `@` 特定成员时默认接管人类消息的入口 Agent |
-| `participants` | `agentName -> "<adapter>:<endpoint>"` 映射；Venue 路由器会自动过滤同群内其他参与 Bot 发出的自发回声消息，并支持群成员直接 `@builder-bot` 点名特定 Agent |
+| `conversation` | 绑定的会话：`platform`（适配器平台名）与 `sceneId` 必填，`sceneType`（`private` / `group` / `channel`）与 `threadId` 可选；同一会话只能绑定一个 Venue |
+| `visibility` | 投影模式（不写时私聊为 `backstage`，其余为 `visible`）：`visible`（每个 Agent 用各自绑定的 Bot 账号在群内发言）、`summary`（后台协作，仅由入口 Agent 发送汇总）、`backstage`（纯后台协作，不投射中间过程） |
+| `entry` | 未 `@` 特定成员时默认接管人类消息的入口 Agent，必须是成员之一 |
+| `members` | 成员列表，每项是 `agent`（Agent 名）与 `botEndpoint`（该 Agent 发言用的 Endpoint 名），可选 `aliases`（点名用的别名）；Venue 路由器会自动过滤同群内其他成员 Bot 发出的消息，并支持群成员直接 `@` 某个成员 Bot 点名对应的 Agent |
 
 ### 用 `zhin trace` 与 Console 检视协作
 
@@ -691,16 +696,20 @@ ai:
 
 ```bash
 # 列出最近的 Engagement 摘要
-zhin trace
+zhin trace --engagements --list
+
+# 查看最近一次 Engagement 的协作图
+zhin trace --engagements
 
 # 查看指定 Engagement 的完整因果跳数、黑板条目、护栏阻断与预算消耗
 zhin trace <engagementId>
 ```
 
-在 Remote Console 的 **Collaboration Graph** 页面中，也可以可视化查看每个 Engagement 的参与者拓扑、消息跳数（`ask` / `delegate` / `tell` / `result`）、共享黑板（`note` / `todo` / `artifact`）与预算账本。
+在 Remote Console 的协作图谱页面中，也可以可视化查看每个 Engagement 的参与者拓扑、消息跳数（`ask` / `delegate` / `tell` / `result`）、共享黑板（`note` / `todo` / `artifact`）与预算账本。
 
 ## 相关
 
 - [AI 总览](./index.md)：启用 AI、模型、触发规则与安全策略。
+- [多 Agent 协作与场所](./multi-agent-harness.md)：协作声明、协作工具、`ai.venues` 与 `zhin trace` 的速查。
 - [Agent 工具与技能](../authoring/agent-tools.md)：编写工具、Skill、Prompt Section 与 Agent。
 - [语音](./speech.md)：语音识别与语音回复。

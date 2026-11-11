@@ -16,7 +16,7 @@ describe('GitHub account localization', () => {
   });
 
   it('captures the binding language before the asynchronous authorization result', async () => {
-    let finish!: (result: { access_token: string }) => void;
+    let finish!: (result: { status: 'authorized'; access_token: string; token_type: string; scope: string }) => void;
     vi.spyOn(GhClient, 'deviceFlowRequestCode').mockResolvedValue({ device_code: 'synthetic-device', user_code: 'TEST-CODE', verification_uri: 'https://github.example.test/device', interval: 5, expires_in: 600 });
     vi.spyOn(GhClient, 'deviceFlowPollToken').mockImplementation(() => new Promise(resolve => { finish = resolve; }));
     vi.spyOn(GhClient.prototype, 'verifyAuth').mockResolvedValue({ ok: true, user: 'fixture-user', message: '' });
@@ -29,7 +29,7 @@ describe('GitHub account localization', () => {
     expect(prompt).toContain('Open this link in a browser');
     expect(prompt).toContain('TEST-CODE');
     message.locale = 'zh-CN';
-    finish({ access_token: 'synthetic-access-token' });
+    finish({ status: 'authorized', access_token: 'synthetic-access-token', token_type: 'bearer', scope: '' });
     await vi.waitFor(() => expect(message.$reply).toHaveBeenCalledWith('✅ GitHub account linked!\n👤 fixture-user'));
     expect(insert).toHaveBeenCalledTimes(1);
   });

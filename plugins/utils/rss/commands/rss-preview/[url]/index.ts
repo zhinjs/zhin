@@ -11,7 +11,7 @@ export default defineCommand<RssConfig>({
     if (!/^https?:\/\//i.test(url)) return t(locale, 'httpRequired');
     const cfg = resolveRssConfig(config);
     try {
-      const { title, items } = await fetchFeed(url, cfg.timeout);
+      const { title, items } = await fetchFeed(url, cfg);
       return formatFeedPreview(title, items, locale);
     } catch (e) {
       return t(locale, 'previewFailed', { error: (e as Error).message });

@@ -94,10 +94,6 @@ WS、反向 WS 和 Webhook 都在进入原生 SDK 前过滤其他 bot 的事件�
 - 事件：`type`（meta/message/notice/request）、`detail_type`、`message` 等，见 [事件](https://12.onebot.dev/connect/data-protocol/event/)。
 - 动作：`send_message`、`delete_message`、`get_status` 等，见 [动作请求](https://12.onebot.dev/connect/data-protocol/action-request/)。
 
-## AI 工具
-
-技能说明见 `skills/onebot12/SKILL.md`。
-
 ## 文档链接
 
 - [OneBot 12 标准](https://12.onebot.dev/)

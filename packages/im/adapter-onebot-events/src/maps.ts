@@ -19,7 +19,7 @@ export const ONEBOT_NOTICE_PARTS_MAP: Record<string, SideEventParts> = {
   'group.ban': { scene_type: 'group', sub_type: 'ban' },
   'group.recall': { scene_type: 'group', sub_type: 'recall' },
   'friend.increase': { scene_type: 'friend', sub_type: 'increase' },
-  'friend.decrease': { scene_type: 'friend', sub_type: 'recall' },
+  'friend.decrease': { scene_type: 'friend', sub_type: 'decrease' },
   'friend.recall': { scene_type: 'friend', sub_type: 'recall' },
   'group.poke': { scene_type: 'group', sub_type: 'poke' },
   'group.reaction': { scene_type: 'group', sub_type: 'emoji_reaction' },

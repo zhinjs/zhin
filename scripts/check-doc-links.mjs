@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 /**
  * 检查 Markdown / Cursor 规则中的相对链接是否指向仓库内存在的文件。
+ * 除下方 scanRoots 外，还扫描 basic/、packages/、plugins/、examples/ 下所有受版本控制的 README.md。
  */
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -34,7 +36,8 @@ function* extractLinks(filePath) {
   const text = fs.readFileSync(filePath, 'utf8');
   const lines = text.split('\n');
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+    // Inline code spans are examples, not links.
+    const line = lines[i].replace(/`[^`\n]*`/g, '');
     let m;
     LINK_RE.lastIndex = 0;
     while ((m = LINK_RE.exec(line)) !== null) {
@@ -73,11 +76,52 @@ function collectFiles(dir) {
   return out;
 }
 
+const README_ROOTS = ['basic', 'packages', 'plugins', 'examples'];
+
+/**
+ * Every tracked README.md under the workspace package roots (falls back to a
+ * filesystem walk when git is unavailable, e.g. in an exported tarball).
+ * @returns {string[]}
+ */
+function collectPackageReadmes() {
+  try {
+    const out = execFileSync('git', ['ls-files', '-z', '--', ...README_ROOTS], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      maxBuffer: 64 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    return out
+      .split('\0')
+      .filter((rel) => path.basename(rel) === 'README.md')
+      .map((rel) => path.join(repoRoot, rel))
+      .filter((abs) => fs.existsSync(abs));
+  } catch {
+    /** @type {string[]} */
+    const found = [];
+    /** @param {string} dir */
+    const walk = (dir) => {
+      for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (['node_modules', '.git', 'lib', 'dist'].includes(ent.name)) continue;
+        const child = path.join(dir, ent.name);
+        if (ent.isDirectory()) walk(child);
+        else if (ent.name === 'README.md') found.push(child);
+      }
+    };
+    for (const root of README_ROOTS) {
+      const abs = path.join(repoRoot, root);
+      if (fs.existsSync(abs)) walk(abs);
+    }
+    return found;
+  }
+}
+
 /** @type {string[]} */
 const files = [];
 for (const root of scanRoots) {
   files.push(...collectFiles(root));
 }
+files.push(...collectPackageReadmes());
 
 /**
  * @param {string} fromFile
@@ -86,7 +130,11 @@ for (const root of scanRoots) {
 function resolveTarget(fromFile, href) {
   const decoded = decodeURIComponent(href.split('#')[0]);
   if (decoded.startsWith('/')) {
-    return path.join(repoRoot, 'docs', decoded.slice(1));
+    // Site-absolute inside docs/ (VitePress); repo-root-absolute everywhere else (GitHub).
+    const inDocs = !path.relative(path.join(repoRoot, 'docs'), fromFile).startsWith('..');
+    return inDocs
+      ? path.join(repoRoot, 'docs', decoded.slice(1))
+      : path.join(repoRoot, decoded.slice(1));
   }
   const base = path.dirname(fromFile);
   return path.normalize(path.join(base, decoded));

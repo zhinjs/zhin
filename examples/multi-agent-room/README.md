@@ -1,6 +1,6 @@
 # Multi-Agent Room (`ai.venues` + Agent Harness)
 
-3 个 Bot（`planner` / `builder` / `reviewer`）在同一个群聊（`sandbox:group:product-room`）中协作的示例（ADR 0048 Agent Harness）。
+3 个 Bot（`planner` / `builder` / `reviewer`）在同一个 Sandbox 群聊（`product-room`）中协作的示例（ADR 0048 Agent Harness）。
 
 ## 架构与配置
 
@@ -26,21 +26,40 @@
 
 ### 2. 群聊场所投影（`zhin.config.yml` `ai.venues`）
 
-`ai.venues` 将群场景 `group:product-room` 绑定为 `visible` 模式场所，入口为 `planner`，并为每个参与 Agent 绑定各自的 Sandbox Endpoint：
+`ai.venues` 把 Sandbox 群 `product-room` 声明为一个共享房间：`visibility: visible`，入口为 `planner`，每个成员 Agent 绑定各自的 Sandbox Endpoint（`botEndpoint` 是 `sandbox.endpoints[].id`）：
 
 ```yaml
+configVersion: 2
 ai:
   venues:
     - id: product-room
-      adapter: sandbox
-      scene: group:product-room
-      mode: visible
+      conversation:
+        platform: sandbox
+        sceneType: group
+        sceneId: product-room
+      visibility: visible
       entry: planner
-      participants:
-        planner: sandbox:planner-bot
-        builder: sandbox:builder-bot
-        reviewer: sandbox:reviewer-bot
+      members:
+        - agent: planner
+          botEndpoint: planner-bot
+        - agent: builder
+          botEndpoint: builder-bot
+        - agent: reviewer
+          botEndpoint: reviewer-bot
+
+plugins:
+  sandbox: "@zhin.js/adapter-sandbox"
+sandbox:
+  endpoints:
+    - id: planner-bot
+      owner: local-user
+    - id: builder-bot
+      owner: local-user
+    - id: reviewer-bot
+      owner: local-user
 ```
+
+模型不写在启动配置里：`ai.plan.yml` 声明 DeepSeek（OpenAI 兼容）服务、账号（`env://DEEPSEEK_API_KEY`）与三个 Agent 的 Profile 绑定，首次启动数据库为空时自动导入。
 
 - `visible`：每个参与 Agent 在协作回合中的发言与结果通过各自绑定的 Bot Endpoint 投射到群聊，对群成员可见。
 - `summary`：协作在后台完成，仅由入口 Agent 向群聊发送汇总消息。

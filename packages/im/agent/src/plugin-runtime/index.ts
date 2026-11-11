@@ -58,7 +58,6 @@ export { FileJournalStore } from '../journal/file-journal-store.js';
 export {
   capabilityToTool,
   toolInvocationFromTurn,
-  toolsFromCapabilities,
   type GenerationStampedTool,
 } from './capability-tools.js';
 

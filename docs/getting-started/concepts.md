@@ -117,7 +117,7 @@ Bot 进程对外开放的 HTTP 服务。Console、Webhook 类平台回调、MCP 
 | **Skill** | 一份 `SKILL.md` 说明书，AI 需要时才加载，适合封装一套操作流程 | [Agent 工具](../authoring/agent-tools.md) |
 | **Prompt Section** | 插件贡献给 AI 的背景知识片段（产品术语、规则），只影响上下文，不授予权限 | [Agent 工具](../authoring/agent-tools.md) |
 | **MCP** | 两个方向：让 AI 使用外部 MCP 服务器的工具；或把你的 Bot 暴露成 MCP 服务器 | [AI 总览](../ai/index.md) |
-| **Workroom** | 让 Agent 处理多步骤、可持久化、需要审核的长任务 | [受治理的业务 Agent](../solutions/governed-agent.md) |
+| **多 Agent 协作** | 多个 Agent 在一次协作里互相提问、委派、共享黑板；权限只减不增，审批始终归人 | [多 Agent 协作与场所](../ai/multi-agent-harness.md) |
 
 ## 下一步
 

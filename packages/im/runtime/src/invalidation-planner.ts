@@ -2,6 +2,7 @@ import { normalizeSourcePath } from './source-path.js';
 import { basename } from 'node:path';
 import { rootPluginId, type CapabilityId, type PluginId } from '@zhin.js/plugin-runtime';
 import type { SourceOwnershipIndex, SourceOwnershipRecord } from './source-ownership.js';
+import { isWithin } from './topology-transaction.js';
 
 export interface DependencyImpactPort {
   affectedSources(source: string): readonly string[];
@@ -185,10 +186,6 @@ function collapseSubtrees(values: ReadonlySet<PluginId>): readonly PluginId[] {
     if (!result.some((root) => isWithin(candidate, root))) result.push(candidate);
   }
   return result;
-}
-
-function isWithin(plugin: PluginId, root: PluginId): boolean {
-  return plugin === root || plugin.startsWith(`${root}/`);
 }
 
 function unique<T>(values: readonly T[]): readonly T[] {

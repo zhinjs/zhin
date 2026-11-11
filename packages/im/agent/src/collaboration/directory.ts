@@ -37,16 +37,6 @@ export type BuildCollaborationDirectoryInput = CollaborationDirectoryInput;
 const COLLABORATION_TOOLS: readonly string[] = Object.values(COLLABORATION_TOOL_NAMES);
 const EGRESS = Object.freeze({ network: true, hosts: ALL });
 
-/** Default root budget for an engagement (matches HostMailbox DEFAULT_ENGAGEMENT_BUDGET). */
-export function defaultRootBudget(): BudgetAmounts {
-  return Object.freeze({
-    modelCalls: 60,
-    tokens: 400_000,
-    wallMs: 10 * 60 * 1000,
-    sideEffects: 30,
-  });
-}
-
 function normalizeDefaultBudget(raw?: AgentCollaborationBudget): Partial<BudgetAmounts> | undefined {
   if (!raw) return undefined;
   const out: { modelCalls?: number; tokens?: number; wallMs?: number; sideEffects?: number } = {};

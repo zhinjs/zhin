@@ -117,7 +117,7 @@ The one rule for plugin authors: **anything you acquire in `setup()` (timers, co
 | **Skill** | A `SKILL.md` playbook the AI loads only when needed — good for packaging a procedure | [Agent tools](../authoring/agent-tools.md) |
 | **Prompt Section** | Background knowledge a plugin contributes to the AI (terms, rules). It changes context only and grants no permissions | [Agent tools](../authoring/agent-tools.md) |
 | **MCP** | Two directions: let the AI use tools from external MCP servers, or expose your bot as an MCP server | [AI overview](../ai/index.md) |
-| **Workroom** | Lets an Agent run multi-step, persistent, reviewable long tasks | [Governed business Agent](../solutions/governed-agent.md) |
+| **Multi-Agent collaboration** | Several Agents ask, delegate, and share a Blackboard within one collaboration; authority only narrows and approvals always go to a human | [Multi-Agent Collaboration and Venues](../ai/multi-agent-harness.md) |
 
 ## Next steps
 

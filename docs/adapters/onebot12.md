@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/onebot12/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/onebot12/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=6a8d5b6975ffef0d -->
+<!-- sync-adapter-docs:sha256=ba0055988a06c841 -->
 
 # @zhin.js/adapter-onebot12
 
@@ -105,10 +105,6 @@ WS、反向 WS 和 Webhook 都在进入原生 SDK 前过滤其他 bot 的事件�
 
 - 事件：`type`（meta/message/notice/request）、`detail_type`、`message` 等，见 [事件](https://12.onebot.dev/connect/data-protocol/event/)。
 - 动作：`send_message`、`delete_message`、`get_status` 等，见 [动作请求](https://12.onebot.dev/connect/data-protocol/action-request/)。
-
-## AI 工具
-
-技能说明见 `skills/onebot12/SKILL.md`。
 
 ## 文档链接
 

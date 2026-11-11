@@ -21,7 +21,7 @@ Console 是 Bot 的浏览器管理后台。你可以在里面**发测试消息�
 | 机器人状态 | 查看 AI 的对话、调用了哪些工具、审批与取消记录；「决策回放」按时间倒序列出机器人每次回 / 不回的原因，可按回合展开时间线、按时间范围导出 JSON（需要令牌有 `decisions:read` 权限，默认保留 14 天，`ai.audit.retentionDays` 可改） |
 | 群聊插话 | 决定没人 @ 机器人时它要不要自己在群里接话（关闭 / 只观察 / 主动参与）、在哪些群、每小时最多几次，并查看最近 24 小时的情况。保存后需要重启才生效；查看需要令牌有 `ambient:read` 权限，修改需要管理员令牌 |
 | 技能助手 | 让一个专门的小助手帮机器人挑技能、挑工具、挑记忆、决定交给哪个助手、自动通过审批、判断群里要不要接话，每项选「关闭 / 只观察 / 正式使用」，并查看最近 24 小时用了几次、成功几次。需要先安装 `@zhin.js/service-typesafe`（`zhin setup --decisions`）。保存后需要重启才生效；查看需要令牌有 `skills:read` 权限，修改需要管理员令牌 |
-| Workroom（高级） | 查看持久任务空间与任务看板 |
+| 协作图谱（高级） | 只读查看多 Agent 协作（Engagement）的参与者、消息跳数、共享黑板与预算，以及已配置的协作场所（`ai.venues`） |
 
 ## 侧栏导航
 
@@ -32,7 +32,7 @@ Console 面向普通用户，侧栏按“想做什么”分组，页面用大白
 | 常用 | 首页、聊天账号、聊天记录、定时提醒、运行记录 |
 | 机器人 | 机器人状态、试聊一下、助手任务（启用助手时显示）、群聊插话、技能助手 |
 | 功能 | 功能管理、功能商店、任务中心 |
-| 高级（默认折叠） | 配置、环境变量、项目文件、数据库、运行时能力、消息场景试验台、Workroom |
+| 高级（默认折叠） | 配置、环境变量、项目文件、数据库、运行时能力、消息场景试验台、协作图谱 |
 
 旧名对照：工作台 → 首页，渠道与会话 → 聊天账号，对话分支 → 聊天记录，Agent 试验台 → 试聊一下，Agent 概览 / Agent 工作台 → 机器人状态，定时任务 → 定时提醒，日志 → 运行记录，插件 → 功能管理，市场 → 功能商店。
 
@@ -51,7 +51,7 @@ flowchart LR
     H --> R2[RPC /api/console/request]
     H --> R3[SSE /api/events]
     H --> R4[WS /sandbox]
-    R1 --> P[插件 / Endpoint / 会话 / Workroom 投影]
+    R1 --> P[插件 / Endpoint / 会话 / 协作投影]
 ```
 
 ## 部署与配置
@@ -86,7 +86,7 @@ Runtime 无配置时回退到 8086，当前脚手架默认写入 8068。连接�
 | 命令、中间件或组件没生效 | 运行时能力 | 当前 generation 是否发布能力、顺序与 owner |
 | Agent 没调用工具 | Agent 工作台 + 运行时能力 | Tool 可见性、审批、安全策略、轨迹与取消终态 |
 | 刷新后消息缺失 | Endpoint 会话 + 日志 | history RPC 是否恢复、SSE 是否报告 recovery gap |
-| Workroom 没接管群或仓库 | Workrooms + Task 看板 | Catalog revision、完整空间地址、Orchestrator 与 Project Inbox |
+| 多 Bot 群里没有按预期的 Agent 接话 | 协作图谱 + 机器人状态 | `ai.venues` 的 `conversation` 是否与群一致、`members[].botEndpoint` 是否在线、`entry` 是否是成员之一 |
 | 配置文件写了但行为没变 | Config + Dashboard | 保存是否成功，是否发布了新 generation |
 
 ## 页面功能
@@ -105,7 +105,7 @@ Runtime 无配置时回退到 8086，当前脚手架默认写入 8068。连接�
 | 运行时能力 | `GET /api/introspection/{commands,middlewares,components,tools,prompt-sections,endpoints,bindings,mcp}`、`POST /api/introspection/components/render` | 当前 generation 的能力契约、owner、中间件顺序、组件渲染实验台与 Prompt Section 治理信息 |
 | Agent Sessions | `GET/POST /api/agent/sessions/*` | AI 会话树查看与分支切换；渠道会话尚未产生 AI 对话时，GET 返回 `state: not_started` 空树 |
 | 聊天记录 | `GET /api/conversations/history?sessionKey=...&beforeSequence=...` | 实际收发的 canonical 记录，与 Agent 内部会话树分开；不要求曾触发 AI |
-| Workrooms | 持久 Workroom Catalog + Profile RPC + `GET /api/agent/workroom/runs[/*]` | 以 revision CAS 管理 Project、成员、Agent 角色和群/频道/仓库绑定；诊断并初始化 Profile/Planning Policy；查看 replayed Run / Task / Assignment |
+| 协作图谱 | `GET /api/agent/engagements[/*]`（需要 full scope）；RPC `agent.engagements.list` / `agent.engagements.get` / `agent.venues.list` | 只读投影：最近的 Engagement、单个 Engagement 的事件与黑板、已配置的 Venue；数据来自 `engagement_events` Journal，Console 不能改写 |
 | Marketplace | `GET /pub/marketplace/search`、`/pub/marketplace/detail/*`、`GET /api/marketplace/updates` | 插件市场（plugins.json + npmmirror）与更新检查 |
 | Sandbox | WS `/sandbox` | 内置沙箱聊天，免平台联调直接对话 |
 
@@ -155,7 +155,7 @@ Runtime 无配置时回退到 8086，当前脚手架默认写入 8068。连接�
 2. 在 Sandbox 发送消息，并在 Endpoint 会话刷新后确认历史仍存在。
 3. 在运行时能力核对命令、中间件、组件、Tool 与 Prompt Section 的当前 owner。
 4. 运行一条 Agent 任务，验证工作目录、安全策略、审批、取消、轨迹和产物。
-5. 若启用 Workroom，用一个真实群、频道或仓库事件验证它进入正确 Project。
+5. 若配置了 `ai.venues`，在对应的群里发一条真实消息，验证由入口 Agent 接话，并能用 `zhin trace --engagements` 看到这次协作。
 
 只有当前 generation 与持久投影都符合预期，才算发布成功。磁盘配置和插件清单只是候选输入。
 
@@ -186,12 +186,12 @@ http:
 
 - **full 令牌**（包括主 `token`）能看到全部页面，`permissions` 和 `roles` 对它不起作用。
 - **`scope: user` 令牌**是普通用户。`user` 和 `demo` 完全等价，新配置建议写 `user`；没写 `scope` 或写了其他值时也按普通用户处理，不会变成管理员。
-- 普通用户只能看到 `permissions` 和 `roles` 满足 `requiredPermissions` 和 `requiredRoles` 的页面。插件动作只有在动作自己声明了 `requiredPermissions` 或 `requiredRoles`、并且令牌全部满足时才能执行（见 [插件 RPC](../authoring/console-pages.md#页面数据插件-rpc)）。改配置、管理插件等内置管理操作仍然只给 full 令牌。
+- 普通用户只能看到 `permissions` 和 `roles` 满足 `requiredPermissions` 和 `requiredRoles` 的页面。插件动作只有在动作自己声明了 `requiredPermissions` 或 `requiredRoles`、并且令牌全部满足时才能执行（见 [插件 RPC](../authoring/console-pages.md#plugin-rpc)）。改配置、管理插件等内置管理操作仍然只给 full 令牌。
 - **不带令牌**只能看到没有任何要求的页面。
 - **没有配置任何令牌**时（本地开发），所有人都等同于管理员，和以前一样。
 - 页面清单（`/entries`、`/console/api/pages`、`/console/api/topology`）都按令牌过滤，且不会被缓存。
 
-权限名和角色名由页面自己约定，比如 `ambient:read`。内置的群聊插话和技能助手状态使用 `ambient:read` 和 `skills:read`（见 [内置状态](../authoring/console-pages.md#内置状态群聊插话和技能助手)），决策回放使用 `decisions:read`（见 [决策回放](../authoring/console-pages.md#内置查询决策回放)），控制面使用 `control:read` 和 `control:write`（见 [控制面](../authoring/console-pages.md#内置操作控制面)），审批人（危险工具审批卡、公告批准 / 驳回 / 重发）使用 `ops:approve`（见 [危险工具审批卡](../authoring/console-pages.md#内置操作危险工具审批卡)）。
+权限名和角色名由页面自己约定，比如 `ambient:read`。内置的群聊插话和技能助手状态使用 `ambient:read` 和 `skills:read`（见 [内置状态](../authoring/console-pages.md#builtin-status)），决策回放使用 `decisions:read`（见 [决策回放](../authoring/console-pages.md#builtin-decision-replay)），控制面使用 `control:read` 和 `control:write`（见 [控制面](../authoring/console-pages.md#builtin-control-plane)），审批人（危险工具审批卡、公告批准 / 驳回 / 重发）使用 `ops:approve`（见 [危险工具审批卡](../authoring/console-pages.md#builtin-tool-approval)）。
 
 ## Demo scope（只读部署）
 

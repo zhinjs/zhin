@@ -4,7 +4,6 @@
  */
 /** @internal 适配器 projection（AdapterIndex），框架内部机制，不承诺不 break。 */
 export * from './adapter-index.js';
-export * from './credentials.js';
 /** @public 用户侧创作面：`defineAdapter`（`adapters/` 约定目录默认导出，承诺 semver）。 */
 export * from './definition.js';
 /** @public ADR 0044 capability profile spec, resolution and `TurnCapabilities`. */
