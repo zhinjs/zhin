@@ -133,17 +133,19 @@ export async function startDeviceFlowBind(
     ].join('\n');
   }
 
-  void GhClient.deviceFlowPollToken(
+  void GhClient.deviceFlowPollToken({
     clientId,
-    codeResp.device_code,
-    codeResp.interval,
-    codeResp.expires_in,
+    deviceCode: codeResp.device_code,
+    interval: codeResp.interval,
+    expiresIn: codeResp.expires_in,
     host,
-  ).then(async (tokenData) => {
-    if (!tokenData) return;
+  }).then(async (tokenData) => {
+    if (tokenData.status !== 'authorized') return;
     const userGh = new GhClient({ host, token: tokenData.access_token });
     const auth = await userGh.verifyAuth();
-    const login = auth.ok ? auth.user : 'unknown';
+    // Do not store a token that GitHub would not vouch for.
+    if (!auth.ok || !auth.user) return;
+    const login = auth.user;
     const still = await findOauthBinding(model, platform, uid);
     if (still) return;
     await model.insert({
