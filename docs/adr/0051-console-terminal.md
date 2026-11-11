@@ -28,8 +28,15 @@ console:
         port: 22
         username: deploy
         privateKeyPath: ~/.ssh/id_ed25519   # 或 passwordEnv / privateKeyEnv / passphraseEnv
-        hostFingerprint: SHA256:…            # 可选；填写后严格校验
+        hostFingerprint: SHA256:…            # 必填，严格校验；`ssh-keyscan -t ed25519 <host> | ssh-keygen -lf -`
+      - name: lab-box
+        host: 10.0.0.13
+        username: lab
+        passwordEnv: LAB_SSH_PASSWORD
+        insecureAcceptAnyHostKey: true       # 显式放弃主机密钥校验（不安全，可被中间人攻击）
 ```
+
+- 主机密钥校验默认强制：每个 SSH 目标必须填写 `hostFingerprint`（在可信网络中用 `ssh-keyscan -t ed25519 <host> | ssh-keygen -lf -` 获取），否则配置校验失败；只有显式写 `insecureAcceptAnyHostKey: true` 才接受任意主机密钥（两者互斥）。这类目标在目标列表中带 `insecureHostKey: true`，标签后缀「（不安全：未校验主机密钥）」，每次连接记录一条警告日志与实际指纹。
 
 - SSH 目标只能来自这份白名单。凭据只从环境变量或本地密钥文件读取，从不经浏览器传输，也不出现在任何 RPC 响应里。
 - 依赖：`node-pty`（宿主 Shell）与 `ssh2`（SSH）都是 CLI 的 `optionalDependencies`，缺失时对应目标显示「不可用」与安装提示。
@@ -41,7 +48,7 @@ console:
 
 ### 3. 协议
 
-1. `GET {base}/console/terminal/targets`（`ops.terminal`）→ `[{ id: 'local' | <ssh name>, kind: 'local'|'ssh', label, available, reason? }]`
+1. `GET {base}/console/terminal/targets`（`ops.terminal`）→ `[{ id: 'local' | <ssh name>, kind: 'local'|'ssh', label, available, reason?, insecureHostKey? }]`
 2. `POST {base}/console/terminal/tickets`，`{ target, cols, rows }` → `{ ticket, expiresAt }`。一次性票据，30 秒有效，绑定主体。浏览器 WebSocket 不能带 `Authorization` 头，所以用票据，不把长期令牌放进 URL。
 3. `WS {base}/console/terminal?ticket=…`：
    - 服务端 → 客户端：二进制帧为终端输出；文本帧为 JSON 控制消息 `{ type: 'ready' | 'exit' | 'error', … }`

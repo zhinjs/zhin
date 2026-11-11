@@ -60,6 +60,8 @@ export interface TerminalTarget {
   readonly label: string;
   readonly available: boolean;
   readonly reason?: string;
+  /** SSH target configured with `insecureAcceptAnyHostKey`: the host key is not verified. */
+  readonly insecureHostKey?: true;
 }
 
 export interface TerminalSessionInfo {
@@ -194,9 +196,10 @@ export class TerminalService {
       targets.push({
         id: target.name,
         kind: 'ssh',
-        label: target.label ?? sshLabel(target),
+        label: `${target.label ?? sshLabel(target)}${target.insecureAcceptAnyHostKey ? '（不安全：未校验主机密钥）' : ''}`,
         available: problem === undefined,
         ...(problem === undefined ? {} : { reason: problem }),
+        ...(target.insecureAcceptAnyHostKey ? { insecureHostKey: true as const } : {}),
       });
     }
     return targets;
@@ -479,8 +482,8 @@ export class TerminalService {
     }
     return startSshBackend(ssh.module, target, credentials, size, events, {
       onHostKey: (fingerprint) => {
-        if (!target.hostFingerprint) {
-          this.#options.logger?.info?.(`terminal ssh ${target.name} host key ${fingerprint} (not pinned; set hostFingerprint to enforce)`);
+        if (target.insecureAcceptAnyHostKey) {
+          this.#options.logger?.warn?.(`terminal ssh ${target.name} host key ${fingerprint} accepted WITHOUT verification (insecureAcceptAnyHostKey); pin it with hostFingerprint`);
         }
       },
     });

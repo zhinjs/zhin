@@ -53,7 +53,7 @@ describe('Host configuration field coverage', () => {
       ssh: [
         { name: 'build-box', host: '10.0.0.12', port: 22, username: 'deploy', privateKeyPath: '~/.ssh/id_ed25519',
           hostFingerprint: `SHA256:${'A'.repeat(43)}` },
-        { name: 'db', host: 'db.internal', port: 2222, username: 'ops', passwordEnv: 'DB_SSH_PASSWORD' },
+        { name: 'db', host: 'db.internal', port: 2222, username: 'ops', passwordEnv: 'DB_SSH_PASSWORD', insecureAcceptAnyHostKey: true },
       ],
     };
     expect(check({ console: { terminal } })).toEqual({ console: { terminal } });
@@ -67,7 +67,13 @@ describe('Host configuration field coverage', () => {
     expect(ssh({ name: 'box' })).not.toEqual([]);
     expect(ssh({ name: 'box', privateKeyPath: 'k', privateKeyEnv: 'K' })).not.toEqual([]);
     expect(ssh({ name: 'box', passwordEnv: 'P', hostFingerprint: 'MD5:aa' })).not.toEqual([]);
-    expect(ssh({ name: 'box', privateKeyEnv: 'KEY' })).toEqual([]);
+    const pin = `SHA256:${'B'.repeat(43)}`;
+    expect(ssh({ name: 'box', privateKeyEnv: 'KEY', hostFingerprint: pin })).toEqual([]);
+    expect(ssh({ name: 'box', privateKeyEnv: 'KEY', insecureAcceptAnyHostKey: true })).toEqual([]);
+    // Host key verification is required by default (ADR 0051): neither, false, or both is invalid.
+    expect(ssh({ name: 'box', privateKeyEnv: 'KEY' })).not.toEqual([]);
+    expect(ssh({ name: 'box', privateKeyEnv: 'KEY', insecureAcceptAnyHostKey: false })).not.toEqual([]);
+    expect(ssh({ name: 'box', privateKeyEnv: 'KEY', hostFingerprint: pin, insecureAcceptAnyHostKey: true })).not.toEqual([]);
   });
 
   it.each([
