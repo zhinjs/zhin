@@ -85,23 +85,15 @@ import {
 } from '@zhin.js/runtime';
 import { DEFAULT_SHUTDOWN_BUDGET_MS, installProcessLifecycle, nodeProcessLifecycleAdapter } from './process-lifecycle.js';
 import { installProcessRejectionHandler } from './process-rejections.js';
+import { openInstanceControlChannel } from '@zhin.js/host-http/bridge';
 import {
   ProjectEnvironmentFileSource,
   parseStartOptions,
-  processRestartExitCode,
-  processRestartSupported,
-  startSupervisorWatchdog,
 } from './start/module.js';
 
 export {
-  MAX_RESPAWNS_PER_MINUTE,
-  RESPAWN_DELAY_MS,
-  SUPERVISOR_CHILD_EXIT_GRACE_MS,
   loadRuntimeEnvironmentLayers,
   parseStartOptions,
-  planRespawn,
-  processRestartExitCode,
-  type RespawnPlan,
   type StartOptions,
 } from './start/module.js';
 
@@ -149,6 +141,9 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   await assertNotLegacyConfig(options.root);
   const pluginManagementActivity = new PluginManagementActivity();
   const parsed = parseStartOptions(options.args);
+  // Gateway control channel (ADR 0054 §3): present when the supervisor spawned this instance.
+  const controlChannel = openInstanceControlChannel();
+  const restartSupported = controlChannel !== undefined && !parsed.once;
   ensureTypeScriptSpecifierRemap();
   const packageManifest = JSON.parse(await readFile(join(options.root, 'package.json'), 'utf8'));
   if (Array.isArray(packageManifest.zhin?.plugins) && packageManifest.zhin.plugins.length) throw new Error('Legacy package.json zhin.plugins detected; run zhin migrate instances');
@@ -241,7 +236,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     projectRoot: options.root,
     apiBase: httpConfig.apiBase,
     logger: getLogger('console'),
-    requestRestart: () => { void requestProcessRestart(); },
+    requestRestart: () => { void requestProcessRestart('database'); },
   });
   // Console terminal (ADR 0051): off unless `console.terminal.enabled`; owner-only via ops.terminal.
   const consoleTerminal = installHostConsoleTerminal(httpHost, {
@@ -253,16 +248,16 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   });
   const authorizeConfigurationChat = createConfigurationChatAuthorizer(hostConfig, endpointRoles);
   const authorizeRestartChat = createRestartChatAuthorizer(hostConfig, endpointRoles);
-  // 受控自我进化生效（ADR 0040 §5 / §6）：进程持有热重载 / exit 75 / 健康检查 / 配置补丁；最新 generation 绑定生效器。
+  // 受控自我进化生效（ADR 0040 §5 / §6）：进程持有热重载 / 受控重启 / 健康检查 / 配置补丁；最新 generation 绑定生效器。
   const selfChangeApply = new HostSelfChangeApply({
     projectRoot: options.root,
     reload: sources => host.reloadSources(sources),
-    restart: () => requestProcessRestart(),
+    restart: () => requestProcessRestart('self-change'),
     snapshot: () => host.runtime.snapshot,
     ownership: () => host.runtime.sourceOwnership,
     configuration: consoleConfigurationStore,
     configFile,
-    restartSupported: processRestartSupported(parsed.once),
+    restartSupported,
   });
   const host = new RootHost({
     projectRoot: options.root,
@@ -293,8 +288,8 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
       installRestartHost({
         projectRoot: options.root,
         authorize: authorizeRestartChat,
-        restartSupported: () => processRestartSupported(parsed.once),
-        requestRestart: () => requestProcessRestart(),
+        restartSupported: () => restartSupported,
+        requestRestart: () => requestProcessRestart('chat'),
       })(context);
       if (isRelationalDialect) {
         context.handoff.add({
@@ -373,10 +368,10 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
       // 自我变更生效中：先让生效器落盘 verifying 再重启（否则重启后只能按中途被杀回滚），生效流程结束后补发。
       if (selfChangeApply.active) {
         getLogger('runtime').info('自我变更生效中，重启推迟到变更流程记录进度之后');
-        selfChangeApply.deferRestart(() => requestProcessRestart());
+        selfChangeApply.deferRestart(() => requestProcessRestart('dependencies'));
         return;
       }
-      await requestProcessRestart();
+      await requestProcessRestart('dependencies');
     },
     onReload(plan, generation, durationMs) {
       getLogger('runtime').info(formatCompact({
@@ -429,36 +424,37 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     pluginManagementActivity,
     snapshot: () => host.runtime.snapshot,
     snapshots: host.runtime.snapshots,
-    onRestart: () => requestProcessRestart(),
+    onRestart: () => requestProcessRestart('console'),
     consoleIam: () => (consoleIam.supported ? consoleIam.service : undefined),
   });
-  function requestProcessRestart(): Promise<void> {
-    // The native TypeScript supervisor treats this code as an intentional
-    // process-generation restart in both foreground Desktop and daemon mode.
-    // 只设置 exitCode 并完整停止，进程在所有句柄释放后自然退出（端口随之释放）；
-    // 若受监管子进程因第三方插件句柄残留或停止钩子挂起未能自然退出，按预算兜底退出。
-    process.exitCode = processRestartExitCode;
-    const supervised = processRestartSupported(parsed.once);
-    const budgetTimer = supervised
-      ? setTimeout(() => {
-          options.writeError(`${JSON.stringify({ forcedExit: 'budget', stillStopping: [...stoppingComponents] })}\n`);
-          process.exit(process.exitCode ?? processRestartExitCode);
-        }, DEFAULT_SHUTDOWN_BUDGET_MS)
-      : undefined;
-    budgetTimer?.unref?.();
+  function requestProcessRestart(reason: string): Promise<void> {
+    // ADR 0054 §3: restarts belong to the gateway. It answers `restart-request` with `shutdown`
+    // and starts a fresh instance once this one has exited.
+    if (restartSupported) {
+      controlChannel!.requestRestart(reason);
+      return Promise.resolve();
+    }
+    // Not supervised (or `--once`): nothing would bring the process back, so only stop it.
+    options.writeError(`${JSON.stringify({ restartUnavailable: reason, hint: 'start the instance with zhin runtime start' })}\n`);
+    return stopForShutdown(DEFAULT_SHUTDOWN_BUDGET_MS);
+  }
+  /** Full stop within `budgetMs`; a stop that hangs (third-party handles) is ended by force. */
+  function stopForShutdown(budgetMs: number): Promise<void> {
+    const budgetTimer = setTimeout(() => {
+      options.writeError(`${JSON.stringify({ forcedExit: 'budget', stillStopping: [...stoppingComponents] })}\n`);
+      process.exit(process.exitCode ?? 0);
+    }, budgetMs);
+    budgetTimer.unref?.();
     return control.stop()
       .catch((error: unknown) => {
         options.writeError(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
         process.exitCode = 1;
       })
       .finally(() => {
-        if (budgetTimer) clearTimeout(budgetTimer);
-        if (supervised) {
-          const drainTimer = setTimeout(() => {
-            process.exit(process.exitCode ?? processRestartExitCode);
-          }, 250);
-          drainTimer.unref?.();
-        }
+        clearTimeout(budgetTimer);
+        controlChannel?.close();
+        const drainTimer = setTimeout(() => { process.exit(process.exitCode ?? 0); }, 250);
+        drainTimer.unref?.();
       });
   }
   const disposeReadiness = registerReadinessRoutes(httpHost, {
@@ -474,6 +470,13 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   };
   // 幂等：Console 重启、依赖变更、信号与孤儿看门狗可能并发请求停止。
   control.stop = () => (stopping ??= stopAll());
+  // `shutdown` may arrive while the first generation is still starting; stop() aborts that start.
+  controlChannel?.onShutdown(({ budgetMs }) => { void stopForShutdown(budgetMs); });
+  // The gateway went away (killed, crashed): this instance must not outlive it.
+  controlChannel?.onDisconnect(() => {
+    getLogger('runtime').error(formatCompact({ op: 'orphan_shutdown', reason: 'gateway disconnected' }));
+    void stopForShutdown(DEFAULT_SHUTDOWN_BUDGET_MS);
+  });
   const stopAll = async (): Promise<void> => {
     try {
       disposeReadiness();
@@ -530,7 +533,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     // still running. stop() aborts that start transaction on purpose; the
     // rejection is the expected consequence, not a startup failure. Let the
     // stop that is already running finish (it owns the cleanup) and return
-    // normally so the requested exit code (75 restart, 130 signal) stands.
+    // normally so the requested exit code (130 for a signal) stands.
     if (stopping) {
       await stopping;
       return;
@@ -564,8 +567,10 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   } else {
     options.writeOutput(`${JSON.stringify({ started: true, ...snapshot }, null, 2)}\n`);
   }
+  controlChannel?.ready({ generation: snapshot.generation });
   if (parsed.once) {
     await control.stop();
+    controlChannel?.close();
     return;
   }
   // ADR 0040 §6：启动完成后接续生效中 / 待校验的自我变更（健康检查、回滚、回报）。
@@ -576,18 +581,9 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     snapshot,
   });
 
-  // Orphan watchdog: if the supervising CLI wrapper died (kill -9, terminal
-  // closed, wrapper crashed) this bot must not outlive it — a zombie keeps
-  // platform connections alive and keeps watching project files.
   const reportStopError = (error: unknown): void => {
     options.writeError(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
   };
-  const orphanWatchdog = startSupervisorWatchdog(() => {
-    void control.stop().then(() => process.exit(0), (error) => {
-      reportStopError(error);
-      process.exit(1);
-    });
-  });
   const disposeProcessLifecycle = installProcessLifecycle({
     process: nodeProcessLifecycleAdapter,
     requestStop: () => control.stop(),
@@ -599,7 +595,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   });
   try { await completed; }
   finally {
-    clearInterval(orphanWatchdog);
+    controlChannel?.close();
     disposeProcessLifecycle();
   }
 }

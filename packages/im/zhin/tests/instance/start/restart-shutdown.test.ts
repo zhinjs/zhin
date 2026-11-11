@@ -28,8 +28,14 @@ function portIsFree(port: number): Promise<boolean> {
   });
 }
 
-/** Starts the real process composition, requests a Console restart, and waits for a natural exit. */
-function startAndRestart(root: string, port: number): Promise<{ code: number | null; output: string; killed: boolean }> {
+interface GatewayRun { code: number | null; output: string; killed: boolean; messages: { type: string; payload: unknown }[] }
+
+/**
+ * Starts the real process composition under a stand-in gateway (IPC, advanced serialization),
+ * requests a Console restart and answers the instance's `restart-request` with `shutdown`
+ * (ADR 0054 §3), then waits for a natural exit.
+ */
+function startAndRestart(root: string, port: number, mode: 'restart' | 'early-restart' | 'disconnect' = 'restart'): Promise<GatewayRun> {
   const script = `
     import { runStartCommand } from ${JSON.stringify(entry)};
     const request = async () => {
@@ -44,26 +50,40 @@ function startAndRestart(root: string, port: number): Promise<{ code: number | n
         await new Promise(done => setTimeout(done, 200).unref());
       }
     };
-    void request();
+    // The stand-in gateway says go once it saw \`ready\`.
+    process.on('message', message => { if (message?.type === 'test:go') void request(); });
+    if (process.env.TEST_REQUEST_EARLY) void request();
     await runStartCommand({ root: ${JSON.stringify(root)}, args: ['--no-watch'], writeOutput: () => {}, writeError: value => process.stderr.write(value) });
   `;
   return new Promise((done, reject) => {
     const child = spawn(process.execPath, ['--import', tsx, '--input-type=module', '-e', script], {
-      cwd: root, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, ZHIN_SUPERVISOR_PID: String(process.pid) },
+      cwd: root, stdio: ['ignore', 'pipe', 'pipe', 'ipc'], serialization: 'advanced',
+      env: { ...process.env, ZHIN_RUNTIME_CHILD: '1', ...(mode === 'early-restart' ? { TEST_REQUEST_EARLY: '1' } : {}) },
     });
     let output = '';
     let killed = false;
-    child.stdout.on('data', chunk => { output += String(chunk); });
-    child.stderr.on('data', chunk => { output += String(chunk); });
+    const messages: GatewayRun['messages'] = [];
+    child.stdout!.on('data', chunk => { output += String(chunk); });
+    child.stderr!.on('data', chunk => { output += String(chunk); });
+    child.on('message', (message: { type: string; payload: unknown }) => {
+      messages.push(message);
+      if (message.type === 'restart-request') child.send({ type: 'shutdown', payload: { reason: 'restart', budgetMs: 5_000 } });
+      if (message.type === 'ready' && mode === 'disconnect') child.disconnect();
+      if (message.type === 'ready' && mode === 'restart') child.send({ type: 'test:go', payload: {} });
+    });
     // A lingering handle would keep the process alive after stop(); fail instead of hanging.
-    const timer = setTimeout(() => { killed = true; child.kill('SIGKILL'); }, 45_000);
+    const timer = setTimeout(() => { killed = true; child.kill('SIGKILL'); }, 30_000);
     child.once('error', reject);
-    child.once('close', code => { clearTimeout(timer); done({ code, output, killed }); });
+    // `exit`, not `close`: after the gateway disconnects, the IPC handle never reports `close`.
+    child.once('exit', code => {
+      clearTimeout(timer);
+      setTimeout(() => { done({ code, output, killed, messages }); }, 100);
+    });
   });
 }
 
 describe('process restart shutdown', () => {
-  it('exits with the restart code without lingering handles and frees the port for the next start', async () => {
+  it('requests the restart from the gateway, stops on shutdown without lingering handles and frees the port', async () => {
     const root = await mkdtemp(join(tmpdir(), 'zhin-restart-'));
     roots.push(root);
     await cp(join(fixtureSource, 'package.json'), join(root, 'package.json'));
@@ -79,12 +99,15 @@ describe('process restart shutdown', () => {
       expect(result.killed, `attempt ${attempt} hung:\n${result.output}`).toBe(false);
       expect(result.output).toContain('restart-requested');
       expect(result.output).not.toContain('EADDRINUSE');
-      expect(result.code, result.output).toBe(75);
+      expect(result.messages.map(message => message.type)).toEqual(['ready', 'restart-request']);
+      expect(result.messages[0]!.payload).toMatchObject({ version: 1, generation: expect.any(Number) });
+      expect(result.messages[1]!.payload).toEqual({ reason: 'console' });
+      expect(result.code, result.output).toBe(0);
       expect(await portIsFree(port)).toBe(true);
     }
   }, 120_000);
 
-  it('a restart requested while the first generation is still starting exits with the restart code (#742)', async () => {
+  it('a shutdown answering a restart requested while the first generation is still starting exits cleanly (#742)', async () => {
     const root = await mkdtemp(join(tmpdir(), 'zhin-restart-slow-'));
     roots.push(root);
     await cp(join(fixtureSource, 'package.json'), join(root, 'package.json'));
@@ -94,11 +117,22 @@ describe('process restart shutdown', () => {
     await symlink(join(fixtureSource, 'node_modules'), join(root, 'node_modules'), 'junction');
     const port = await freePort();
     await writeFile(join(root, 'zhin.config.yml'), `configVersion: 2\nplugins: {}\nhttp:\n  host: 127.0.0.1\n  port: ${port}\n`);
-    const result = await startAndRestart(root, port);
+    const result = await startAndRestart(root, port, 'early-restart');
     expect(result.killed, result.output).toBe(false);
     expect(result.output).toContain('restart-requested');
     expect(result.output).not.toContain('Root lifecycle is stopping');
-    expect(result.code, result.output).toBe(75);
+    expect(result.messages.map(message => message.type)).toEqual(['restart-request']);
+    expect(result.code, result.output).toBe(0);
+    expect(await portIsFree(port)).toBe(true);
+  }, 60_000);
+
+  it('stops when the gateway disconnects (no orphaned instance)', async () => {
+    const { root, port } = await project();
+    const result = await startAndRestart(root, port, 'disconnect');
+    expect(result.killed, result.output).toBe(false);
+    expect(result.messages.map(message => message.type)).toEqual(['ready']);
+    expect(result.output).toContain('gateway disconnected');
+    expect(result.code, result.output).toBe(0);
     expect(await portIsFree(port)).toBe(true);
   }, 60_000);
 });
@@ -149,7 +183,7 @@ function startAndSignal(root: string, signals: readonly NodeJS.Signals[], gapMs 
   `;
   return new Promise<{ code: number | null; output: string; elapsedMs: number; killed: boolean }>((done, reject) => {
     const child = spawn(process.execPath, ['--import', tsx, '--input-type=module', '-e', script], {
-      cwd: root, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, ZHIN_SUPERVISOR_PID: String(process.pid) },
+      cwd: root, stdio: ['ignore', 'pipe', 'pipe'], env: process.env,
     });
     let output = '';
     let killed = false;

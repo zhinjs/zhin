@@ -199,7 +199,7 @@ lsof -nP -iTCP:<端口> -sTCP:LISTEN
 - **Ctrl+C（SIGINT）/ SIGTERM / SIGHUP**：开始优雅停止，依次关闭 HTTP/WS 监听、Runtime（适配器、插件资源）、调度、数据库，正常结束退出码为 `0`，端口随之释放。
 - **5 秒未停完**：stderr 输出一行 `{"forcedExit":"budget","stillStopping":[...]}` 指出仍在停止的组件，并强制退出（SIGINT `130`、SIGTERM `143`、SIGHUP `129`）。
 - **停止期间再次 Ctrl+C**：立即退出（`130`），输出 `"forcedExit":"repeated-signal"`。
-- **Console 重启 / 依赖变更需要重启**：完整停止后以退出码 `75` 自然退出，由 supervisor 重新拉起；插件管理操作进行中时不会被依赖变更打断，由管理流程的“应用/重启”步骤统一触发。
+- **Console 重启 / 依赖变更需要重启**：实例经控制通道向监管进程发送 `restart-request`，监管进程回以 `shutdown`，实例完整停止后被重新拉起；插件管理操作进行中时不会被依赖变更打断，由管理流程的“应用/重启”步骤统一触发。
 - 终端或脚本会话关闭会发送 SIGHUP，同样触发优雅停止；后台长期运行请使用 `--daemon` 或进程管理器。
 
 插件自己的定时器、连接要在 dispose 中释放；dispose 永不完成会被 5 秒预算强制结束，并在 `stillStopping` 中显示为 `runtime`。

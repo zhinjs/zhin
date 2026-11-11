@@ -1,8 +1,8 @@
 /**
  * #1051 F5 — controlled self-change end to end across process restarts (ADR 0040 §5 / §6).
  *
- * A fake supervisor stands in for `zhin start`: it records each exit code, decides with the real `planRespawn`
- * whether to start the runtime again, and every "process" is rebuilt from disk the way `startCommand` wires it
+ * A fake gateway supervisor stands in for `zhin start` (ADR 0054 §3 / §5): it records each `restart-request`
+ * and crash, respawns after a requested restart (and after a crash in daemon mode), and every "process" is rebuilt from disk the way `startCommand` wires it
  * (fresh `SelfChangeStore` + `HostSelfChangeApply` + `SelfChangeApplier` bound to the generation's report ports,
  * then `started()` → `recover()`). Health is the host's own check: a process that reported a runtime error
  * after it started is unhealthy.
@@ -23,13 +23,11 @@ import {
 import { ToolApprovalQueue } from '@zhin.js/agent/security';
 import { HostSelfChangeApply } from '../../src/instance/self-change-apply.js';
 import { createSelfChangeGenerationPorts } from '@zhin.js/agent/runtime';
-import { planRespawn, processRestartExitCode, processRestartSupported } from '../../../../host/gateway/src/supervisor/process-supervisor.js';
 
 /** The change was asked for in a group; the owner (42) settles it in a private chat. */
 const origin: SelfChangeOrigin = { platform: 'icqq', sceneId: 'group:1001', userId: '42', endpoint: 'bot-1' };
 const OWNER_DM = 'private:42';
 const GROUP = 'group:1001';
-const SUPERVISOR_PID = 4242;
 const NEW_PING = 'export default "pong v2";\n';
 const OLD_PING = 'export default "pong v1";\n';
 
@@ -62,14 +60,14 @@ interface RuntimeProcess {
   readonly queue: ToolApprovalQueue;
 }
 
-/** `zhin start` stand-in: exit codes in, respawn decisions out (real {@link planRespawn}). */
+/** `zhin start` stand-in: restart requests and crashes in, respawn decisions out. */
 class FakeSupervisor {
-  readonly exits: number[] = [];
+  /** `restart-request` (controlled restart over the control channel) or `crash:<code>`. */
+  readonly exits: string[] = [];
   readonly sent: { to: string; text: string }[] = [];
   /** The control plane outlives a restart (it is persisted host state). */
   readonly control = new AiControlPlane();
   readonly processes: RuntimeProcess[] = [];
-  #attempts: readonly number[] = [];
   #respawn = true;
   readonly #daemon: boolean;
 
@@ -77,17 +75,21 @@ class FakeSupervisor {
     this.#daemon = options.daemon ?? false;
   }
 
-  /** The runtime process ended with `code` (75 = controlled restart, 137 = killed). */
-  exit(code: number): void {
-    this.exits.push(code);
-    const plan = planRespawn(code, false, this.#daemon, this.#attempts);
-    this.#attempts = plan.attempts;
-    this.#respawn = plan.respawn;
+  /** The instance sent `restart-request`; the gateway stops it and starts a fresh one. */
+  restartRequested(): void {
+    this.exits.push('restart-request');
+    this.#respawn = true;
+  }
+
+  /** The instance died (e.g. 137 = killed); only a daemon gateway restarts crashes. */
+  crash(code: number): void {
+    this.exits.push(`crash:${code}`);
+    this.#respawn = this.#daemon;
   }
 
   /** Start a runtime process the way `startCommand` wires self-change (first start, or after a respawn). */
   async start(options: ProcessOptions = {}): Promise<RuntimeProcess> {
-    if (!this.#respawn) throw new Error(`supervisor would not respawn after exit ${this.exits.at(-1)}`);
+    if (!this.#respawn) throw new Error(`supervisor would not respawn after ${this.exits.at(-1)}`);
     this.#respawn = false;
     const store = new SelfChangeStore({
       root: join(project, '.zhin', 'changes'),
@@ -97,10 +99,10 @@ class FakeSupervisor {
     const host = new HostSelfChangeApply({
       projectRoot: project,
       reload: options.reload ?? (async () => 'reloaded'),
-      restart: () => this.exit(processRestartExitCode),
+      restart: () => this.restartRequested(),
       snapshot: () => ({ generation: 1, tree: new Map<string, unknown>([['app', {}]]) }),
-      // Started by the supervisor: ZHIN_SUPERVISOR_PID is our parent pid and not --once.
-      restartSupported: processRestartSupported(false, { ZHIN_SUPERVISOR_PID: String(SUPERVISOR_PID) }, SUPERVISOR_PID),
+      // Started by the gateway with a control channel and not --once.
+      restartSupported: true,
     });
     const generation = createSelfChangeGenerationPorts({
       send: async (target, text) => { this.sent.push({ to: `${target.conversation.kind}:${target.conversation.id}`, text }); },
@@ -160,14 +162,14 @@ async function onDisk(id: string): Promise<SelfChangeRecord | null> {
 
 const ping = () => readFileSync(join(project, 'commands', 'ping.ts'), 'utf8');
 
-describe('self-change e2e: restart path with a supervisor (exit 75)', () => {
-  it('process change → verifying on disk → exit 75 → respawn → recover → applied, reported to the group', async () => {
+describe('self-change e2e: restart path with a supervisor (restart-request)', () => {
+  it('process change → verifying on disk → restart-request → respawn → recover → applied, reported to the group', async () => {
     const supervisor = new FakeSupervisor();
     const first = await supervisor.start();
     const change = await submittedChange(first, 'process');
     await approve(first, change.id);
 
-    expect(supervisor.exits).toEqual([75]);
+    expect(supervisor.exits).toEqual(['restart-request']);
     expect(ping()).toBe(NEW_PING);
     expect(await onDisk(change.id)).toMatchObject({ status: 'verifying', apply: { phase: 'forward', mode: 'process', restarts: 1 } });
     expect(supervisor.sent).toEqual([]); // the verdict belongs to the next process
@@ -175,7 +177,7 @@ describe('self-change e2e: restart path with a supervisor (exit 75)', () => {
     await supervisor.start();
     expect((await onDisk(change.id))?.status).toBe('applied');
     expect(supervisor.sent).toEqual([{ to: GROUP, text: expect.stringMatching(/^已生效：把 \/ping 改成 v2（已重启）/u) }]);
-    expect(supervisor.exits).toEqual([75]);
+    expect(supervisor.exits).toEqual(['restart-request']);
   });
 
   it('unhealthy after the restart → snapshot rollback + one more restart → rolled_back reported to the group', async () => {
@@ -183,17 +185,17 @@ describe('self-change e2e: restart path with a supervisor (exit 75)', () => {
     const first = await supervisor.start();
     const change = await submittedChange(first, 'process');
     await approve(first, change.id);
-    expect(supervisor.exits).toEqual([75]);
+    expect(supervisor.exits).toEqual(['restart-request']);
 
     await supervisor.start({ healthy: false });
     expect(ping()).toBe(OLD_PING);
-    expect(supervisor.exits).toEqual([75, 75]);
+    expect(supervisor.exits).toEqual(['restart-request', 'restart-request']);
     expect(await onDisk(change.id)).toMatchObject({ status: 'verifying', apply: { phase: 'rollback', restarts: 2 } });
 
     await supervisor.start();
     expect(await onDisk(change.id)).toMatchObject({ status: 'rolled_back', error: expect.stringContaining('health check failed') });
     expect(supervisor.sent).toEqual([{ to: GROUP, text: expect.stringMatching(/^失败，已回滚：把 \/ping 改成 v2/u) }]);
-    expect(supervisor.exits).toEqual([75, 75]);
+    expect(supervisor.exits).toEqual(['restart-request', 'restart-request']);
   });
 
   it('still unhealthy after the rollback restart → failed + emergency_stop, reported to the owner DM only, no more restarts', async () => {
@@ -202,7 +204,7 @@ describe('self-change e2e: restart path with a supervisor (exit 75)', () => {
     const change = await submittedChange(first, 'process');
     await approve(first, change.id);
     await supervisor.start({ healthy: false });
-    expect(supervisor.exits).toEqual([75, 75]);
+    expect(supervisor.exits).toEqual(['restart-request', 'restart-request']);
 
     await supervisor.start({ healthy: false });
     expect(await onDisk(change.id)).toMatchObject({ status: 'failed', error: expect.stringContaining('still unhealthy after rollback') });
@@ -210,7 +212,7 @@ describe('self-change e2e: restart path with a supervisor (exit 75)', () => {
     expect(supervisor.control.snapshot().updatedBy).toBe(`self_change:${change.id}`);
     expect(supervisor.sent).toEqual([{ to: OWNER_DM, text: expect.stringContaining('已急停') }]);
     expect(supervisor.sent.some(message => message.to === GROUP)).toBe(false);
-    expect(supervisor.exits).toEqual([75, 75]);
+    expect(supervisor.exits).toEqual(['restart-request', 'restart-request']);
     await expect(supervisor.start()).rejects.toThrow('would not respawn');
   });
 });
@@ -223,7 +225,7 @@ describe('self-change e2e: interrupted apply', () => {
     const change = await submittedChange(first, 'generation');
     await first.approvals.decide(change.id, true, '42', 'im_dm');
     await waitFor(async () => (await onDisk(change.id))?.status === 'applying' && ping() === NEW_PING, 'applying with files written');
-    supervisor.exit(137);
+    supervisor.crash(137);
 
     await supervisor.start();
     expect(ping()).toBe(OLD_PING);

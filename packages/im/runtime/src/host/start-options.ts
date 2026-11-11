@@ -32,7 +32,7 @@ export const START_OPTION_HELP: readonly StartOptionHelp[] = Object.freeze([
   { flags: '--once', description: '完成一次启动后输出 JSON 快照并退出（适合 CI）' },
   { flags: '--open', description: '在终端（TTY）启动成功后用浏览器打开 Remote Console；也可设置 ZHIN_OPEN=1' },
   { flags: '-d, --daemon', description: '守护进程模式：写 pid 文件、日志重定向、崩溃自动重启' },
-  { flags: '--log-file <path>', description: 'daemon 日志文件，默认 <项目根>/.zhin/runtime.log' },
+  { flags: '--log-file <path>', description: 'daemon 日志文件，默认 <项目根>/.zhin/logs/instance.log（按大小轮转）' },
 ]);
 
 /** Help section listing {@link START_OPTION_HELP}, aligned like Commander's own option list. */

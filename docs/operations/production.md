@@ -137,7 +137,7 @@ zhin service status --user
 
 macOS 使用不带 `--user` 的 launchd 服务命令。只保留一层进程重启策略：使用 systemd、launchd、Kubernetes 或 PM2 时，让外部 supervisor 管理前台 Runtime；只有直接裸机运行时才使用 `--daemon`。
 
-退出码 51 表示 Console 请求重启，75 表示 Runtime 需要重启。若外部 supervisor 接管，需允许这两类退出重新拉起，同时配置重启风暴限制。
+Console 重启、依赖变化等需要整进程重启时，实例经控制通道请求 `zhin runtime start` 的监管进程重启，进程不会因此退出；外部 supervisor 只需在进程异常退出（非零退出码）时重新拉起，并配置重启风暴限制。
 
 ## 5. 持久状态与备份
 
@@ -155,7 +155,7 @@ SQLite 备份应使用数据库快照或停写复制，不要在写入中直接�
 
 监控至少覆盖 HTTP 探针、进程重启次数、Endpoint 在线状态、SSE recovery gap、日志错误率、数据库容量、被冻结待人处理的协作（Engagement）和 Agent 失败/取消比例。
 
-日志默认进入 stdout；daemon 模式写 `.zhin/runtime.log`。设置宿主日志轮转，不要只依赖 Console 清理。告警应携带 Endpoint、Project、runtimeId 或 runId，避免只报一段错误文本。
+日志默认进入 stdout；daemon 模式写 `.zhin/logs/instance.log`，超过 10 MiB 自动轮转（保留 5 份）。告警应携带 Endpoint、Project、runtimeId 或 runId，避免只报一段错误文本。
 
 Runtime Process Host 在启动和运行期间记录 `unhandledRejection`，避免未观察的后台 Promise 拒绝按 Node 默认策略直接结束整个进程；操作恢复仍由对应适配器负责，例如 ICQQ 心跳超时走网络断线与重连流程。启动、命令和消息发送中被调用方观察到的拒绝仍按原链路报错。停止 Runtime 时移除该监听器，不接管 `uncaughtException`；显式配置 Node `--unhandled-rejections=strict` 时仍遵循该严格退出策略。
 

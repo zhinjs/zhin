@@ -245,6 +245,9 @@
       "@zhin.js/host-http/node": [
         "./packages/host/http/src/node/index.ts"
       ],
+      "@zhin.js/host-http/bridge": [
+        "./packages/host/http/src/bridge/index.ts"
+      ],
       "@zhin.js/host-http-contract": [
         "./packages/host/http-contract/src/index.ts"
       ],
