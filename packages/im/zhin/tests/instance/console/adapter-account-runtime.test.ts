@@ -8,6 +8,9 @@ import { Adapter, AdapterIndex, AdapterManagementError, adapterFeatureId, create
 import { SnapshotStore, childPluginId, createToken, createCapabilitySlot, pluginConsoleRpcToken, rootPluginId,
   type CapabilityId, type PluginConsoleRpcCall, type SnapshotState, type TokenId } from '@zhin.js/plugin-runtime';
 import { dispatchPluginConsoleRpcRequest } from '../../../src/instance/console/plugin-console-rpc.js';
+import { collectPluginPermissionCatalog } from '../../../src/instance/console/plugin-permission-catalog.js';
+import { CONSOLE_BUILTIN_ROLES, pluginPermissionLevelResolver, resolveConsoleRpcPermission,
+  type ConsoleBindingScope, type ConsoleGrant } from '@zhin.js/console-protocol';
 import { CommandIndex, commandFeatureId, defineCommand } from '@zhin.js/command';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -360,5 +363,71 @@ describe('declared nested account fields through the authenticated Console RPC',
       expect(await f.call('endpoint-update', { ...update, expectedRevision: revision, values })).toMatchObject({ status: 400 });
     }
     expect(f.repository.compareAndSet).toHaveBeenCalledTimes(writes); expect(adapter.revision).toBe(revision);
+  });
+});
+
+describe('adapter account RPC for signed-in principals (ADR 0049 amendment 2026-11-11)', () => {
+  const grant = (role: keyof typeof CONSOLE_BUILTIN_ROLES | readonly string[], scope: ConsoleBindingScope = { kind: 'global' }): ConsoleGrant =>
+    typeof role === 'string' ? { role, scope, permissions: CONSOLE_BUILTIN_ROLES[role].permissions } : { role: 'custom', scope, permissions: role };
+  async function principalFixture() {
+    const f = await fixture();
+    const levelOf = pluginPermissionLevelResolver(collectPluginPermissionCatalog(f.store.current));
+    const as = (grants: readonly ConsoleGrant[], action: string, data: Record<string, unknown> = {}, id = owner) => {
+      const message = { type: `plugin.${id}.${action}`, data };
+      return dispatchPluginConsoleRpcRequest(message, { snapshots: f.store, access: { unrestricted: false, permissions: [], roles: [] },
+        pagesOwnedBy: () => [{ localName: 'index', requiredPermissions: ['account:read'], requiredRoles: [] }] as never,
+        principal: { grants, roles: grants.map(entry => entry.role ?? ''), rule: resolveConsoleRpcPermission(message.type, message), levelOf } });
+    };
+    // Migrate both adapters first (admin-only), so later writes are ordinary account edits.
+    for (const id of [owner, other]) {
+      const reply = await f.call('endpoint-add', { expectedGeneration: 0, expectedRevision: null, confirmMigration: true, id: 'seed', values: { password: 'synthetic' } }, unrestrictedConsoleAccess, id);
+      expect(reply).toMatchObject({ status: 200 });
+    }
+    const add = (id = owner) => ({ expectedGeneration: 0, expectedRevision: f.adapters.get(id)!.revision, id: `n${Math.random().toString(36).slice(2, 8)}`, values: { password: 'synthetic' } });
+    return { f, as, add };
+  }
+
+  it('declares the account write permission as operate and the read one as read', async () => {
+    const { f } = await principalFixture();
+    expect(f.rpcs.get(owner)!.permissions).toEqual([{ id: 'account:write', level: 'operate' }, { id: 'account:read', level: 'read' }]);
+  });
+
+  it('lets an adapter-scoped operator manage accounts of its adapter but not of another adapter', async () => {
+    const { as, add } = await principalFixture();
+    const scopedOperator = [grant('operator', { kind: 'adapter', key: 'first' })];
+    expect(await as(scopedOperator, 'status')).toMatchObject({ status: 200 });
+    expect(await as(scopedOperator, 'endpoint-add', add())).toMatchObject({ status: 200, body: { data: { saved: true } } });
+    expect(await as(scopedOperator, 'status', {}, other)).toMatchObject({ status: 403, body: { code: 'forbidden' } });
+    expect(await as(scopedOperator, 'endpoint-add', add(other), other)).toMatchObject({ status: 403, body: { code: 'forbidden' } });
+    // A global operator holds account:write (operate) everywhere; a viewer only reads.
+    expect(await as([grant('operator')], 'endpoint-add', add(other), other)).toMatchObject({ status: 200 });
+    expect(await as([grant('viewer')], 'status', {}, other)).toMatchObject({ status: 200 });
+    expect(await as([grant('viewer')], 'endpoint-add', add(other), other)).toMatchObject({ status: 403 });
+  });
+
+  it('keeps adapter-scoped endpoint.manage roles managing (and migrating) their adapter accounts', async () => {
+    const f = await fixture();
+    const levelOf = pluginPermissionLevelResolver(collectPluginPermissionCatalog(f.store.current));
+    const manager = [grant(['endpoint.view', 'endpoint.manage'], { kind: 'adapter', key: 'first' })];
+    const as = (action: string, data: Record<string, unknown>, id = owner) => {
+      const message = { type: `plugin.${id}.${action}`, data };
+      return dispatchPluginConsoleRpcRequest(message, { snapshots: f.store, access: { unrestricted: false, permissions: [], roles: [] },
+        pagesOwnedBy: () => [{ localName: 'index', requiredPermissions: ['account:read'], requiredRoles: [] }] as never,
+        principal: { grants: manager, roles: ['custom'], rule: resolveConsoleRpcPermission(message.type, message), levelOf } });
+    };
+    const input = { expectedGeneration: 0, expectedRevision: null, confirmMigration: true, id: 'managed', values: { password: 'synthetic' } };
+    expect(await as('endpoint-add', input)).toMatchObject({ status: 200, body: { data: { saved: true } } });
+    expect(await as('endpoint-add', input, other)).toMatchObject({ status: 403, body: { code: 'forbidden' } });
+  });
+
+  it('does not let a scoped operator confirm the first migration (admin-level endpoint.manage)', async () => {
+    const f = await fixture();
+    const levelOf = pluginPermissionLevelResolver(collectPluginPermissionCatalog(f.store.current));
+    const message = { type: `plugin.${owner}.endpoint-add`, data: { expectedGeneration: 0, expectedRevision: null, confirmMigration: true, id: 'x', values: { password: 'synthetic' } } };
+    const reply = await dispatchPluginConsoleRpcRequest(message, { snapshots: f.store, access: { unrestricted: false, permissions: [], roles: [] },
+      pagesOwnedBy: () => [{ localName: 'index', requiredPermissions: ['account:read'], requiredRoles: [] }] as never,
+      principal: { grants: [grant('operator', { kind: 'adapter', key: 'first' })], roles: ['operator'], rule: resolveConsoleRpcPermission(message.type, message), levelOf } });
+    expect(reply).toMatchObject({ status: 403, body: { code: 'forbidden' } });
+    expect(f.repository.compareAndSet).not.toHaveBeenCalled();
   });
 });

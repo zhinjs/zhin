@@ -39,6 +39,8 @@ function resolveRssRuntime(call: PluginConsoleRpcCall, fallback?: RssRuntime): R
 
 export function createRssConsoleRpc(defaultRuntime?: RssRuntime): PluginConsoleRpc {
   const rpc = definePluginConsoleRpc({
+    // Day-to-day edits belong to operators; `:write` would otherwise infer `manage` (ADR 0049).
+    permissions: [{ id: 'rss:write', level: 'operate', description: '编辑订阅' }],
     status: {
       page: 'index',
       requiredPermissions: ['rss:read'],

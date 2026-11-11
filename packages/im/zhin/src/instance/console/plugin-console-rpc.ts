@@ -1,6 +1,14 @@
 import { adapterFeatureId, isAdapterIndex } from '@zhin.js/adapter';
 import type { ConsoleAccess } from '@zhin.js/host-http';
-import { parsePluginConsoleRpcType } from '@zhin.js/console-protocol';
+import {
+  CONSOLE_PERMISSIONS,
+  grantsAllow,
+  parsePluginConsoleRpcType,
+  type ConsoleGrant,
+  type ConsolePluginPermissionLevelResolver,
+  type ConsoleRpcPermissionRule,
+  type ConsoleScopeTarget,
+} from '@zhin.js/console-protocol';
 import { ConsoleCatalog } from '@zhin.js/pagemanager/plugin-runtime';
 import {
   GenerationAdmissionGate,
@@ -38,10 +46,10 @@ export interface PluginConsoleRpcRequestOptions {
   /** Caller access from its bearer token (`TokenRegistry.resolveAccess`). */
   readonly access: ConsoleAccess;
   /**
-   * Console user / API token (ADR 0049): it already holds the read permission for this RPC;
-   * `write` says whether it may call methods that are not read-only. Replaces Page checks.
+   * Console user / API token (ADR 0049). When set (and `access` is not unrestricted), every
+   * method is authorized against the principal's bindings — see {@link authorizePrincipal}.
    */
-  readonly principalGrant?: Readonly<{ write: boolean }>;
+  readonly principal?: PluginConsoleRpcPrincipal;
   readonly timeoutMs?: number;
   /**
    * Host-owned methods answered as `plugin.root.<name>`, resolved once from this request's lease.
@@ -53,6 +61,17 @@ export interface PluginConsoleRpcRequestOptions {
   readonly resolveConfig?: (pluginId: PluginId, snapshot: RuntimeSnapshot) => unknown;
   /** @internal Test seam; defaults to the generation's Console Page catalog. */
   readonly pagesOwnedBy?: (snapshot: RuntimeSnapshot, owner: PluginId) => ReturnType<ConsoleCatalog['pagesOwnedBy']>;
+}
+
+/** What the dispatcher needs from a signed-in Console principal. */
+export interface PluginConsoleRpcPrincipal {
+  readonly grants: readonly ConsoleGrant[];
+  /** Role names across all bindings (matched against `requiredRoles`). */
+  readonly roles: readonly string[];
+  /** The RPC's catalog rule (`resolveConsoleRpcPermission`): account methods carry their target. */
+  readonly rule?: ConsoleRpcPermissionRule | null;
+  /** Declared plugin permission levels (default: inferred from the suffix). */
+  readonly levelOf?: ConsolePluginPermissionLevelResolver;
 }
 
 const catalogPagesOwnedBy = (snapshot: RuntimeSnapshot, owner: PluginId) =>
@@ -106,15 +125,17 @@ export async function dispatchPluginConsoleRpcRequest(
       provider?.methods.get(address.method) ??
       (rawMethodName ? provider?.methods.get(rawMethodName) : undefined);
     if (!method) throw new Failure('not_found', '插件未提供该操作');
-    if (options.principalGrant) {
-      if (!method.readOnly && !options.principalGrant.write) throw new Failure('forbidden', '没有操作权限');
+    const pagesOwnedBy = options.pagesOwnedBy ?? catalogPagesOwnedBy;
+    let operator = options.access.unrestricted;
+    if (options.principal && !options.access.unrestricted) {
+      operator = authorizePrincipal(snapshot, pluginId, method, options.principal, pagesOwnedBy);
     } else {
-      authorize(snapshot, pluginId, method, options.access, options.pagesOwnedBy ?? catalogPagesOwnedBy);
+      authorize(snapshot, pluginId, method, options.access, pagesOwnedBy);
     }
     if (provider) releases.push(...admit(provider));
     const runtime: NonNullable<PluginConsoleRpcCall['runtime']> = Object.freeze({
       owner: pluginId, generation: snapshot.generation,
-      operator: options.access.unrestricted || options.principalGrant?.write === true,
+      operator,
       project(feature) {
         if (feature === adapterFeatureId) {
           const projection = snapshot.projections.get(adapterFeatureId);
@@ -190,6 +211,74 @@ function authorize(
   }
   if (!satisfied || (!guarded && !method.demo)) throw new Failure('forbidden', '没有查看权限');
 }
+
+const P = CONSOLE_PERMISSIONS;
+
+/**
+ * Method authorization for a signed-in principal (ADR 0049, amendment 2026-11-11). Deny by default:
+ * - The method's own requirements (`requiredPermissions`, `requiredRoles`, at least one of
+ *   `anyOfPermissions`) and those of the Page it is bound to must all hold.
+ * - With no requirement at all, a read-only method needs `feature.view`; an action without its own
+ *   requirements needs `feature.configure` (plus its Page's) — the catalog fallback.
+ * - Adapter account methods (`endpoint-*`) also admit `endpoint.manage` at their target.
+ * - Target: the account (rule target) for account methods; the adapter for any other method of a
+ *   plugin that owns an adapter; else global. A binding scoped to that adapter / endpoint counts,
+ *   one scoped elsewhere never does.
+ * Returns whether the principal is an account operator (`endpoint.manage` at an adapter target,
+ * `feature.configure` otherwise), exposed to handlers as `runtime.operator`.
+ */
+function authorizePrincipal(
+  snapshot: RuntimeSnapshot,
+  pluginId: PluginId,
+  method: NormalizedPluginConsoleRpcMethod,
+  principal: PluginConsoleRpcPrincipal,
+  pagesOwnedBy: NonNullable<PluginConsoleRpcRequestOptions['pagesOwnedBy']>,
+): boolean {
+  const rule = principal.rule ?? null;
+  const account = rule?.kind === 'exact' && rule.permission === P.ENDPOINT_MANAGE;
+  const target: ConsoleScopeTarget = account ? rule.target : adapterTarget(snapshot, pluginId);
+  const allows = (permission: string) => grantsAllow(principal.grants, permission, target, principal.levelOf);
+  const operator = allows(target.kind === 'global' ? P.FEATURE_CONFIGURE : P.ENDPOINT_MANAGE);
+  const permissions = new Set(method.requiredPermissions);
+  const roles = new Set(method.requiredRoles);
+  if (method.page !== undefined) {
+    const page = pagesOwnedBy(snapshot, pluginId).find((candidate) => candidate.localName === method.page);
+    if (!page) throw new Failure('unavailable', '该操作对应的页面未加载');
+    page.requiredPermissions.forEach((permission) => permissions.add(permission));
+    page.requiredRoles.forEach((role) => roles.add(role));
+  }
+  if (account && allows(P.ENDPOINT_MANAGE)) return operator;
+  const anyOf = method.anyOfPermissions ?? [];
+  const own = method.requiredPermissions.length > 0 || method.requiredRoles.length > 0 || anyOf.length > 0;
+  const heldRoles = new Set(principal.roles);
+  const satisfied = [...permissions].every(allows)
+    && [...roles].every((role) => heldRoles.has(role))
+    && (anyOf.length === 0 || anyOf.some(allows));
+  if (method.readOnly) {
+    const guarded = permissions.size > 0 || roles.size > 0 || anyOf.length > 0;
+    if (!(guarded ? satisfied : allows(P.FEATURE_VIEW))) throw new Failure('forbidden', '没有查看权限');
+    return operator;
+  }
+  // An account method without its own permission stays with `endpoint.manage` (checked above).
+  if (!own && (account || !allows(P.FEATURE_CONFIGURE))) throw new Failure('forbidden', '没有操作权限');
+  if (!satisfied) throw new Failure('forbidden', '没有操作权限');
+  return operator;
+}
+
+/** `adapter:<alias>` when the plugin `root/<alias>` owns an adapter in this generation, else global. */
+function adapterTarget(snapshot: RuntimeSnapshot, pluginId: PluginId): ConsoleScopeTarget {
+  const parts = String(pluginId).split('/');
+  if (parts.length !== 2 || parts[0] !== 'root' || !parts[1]) return GLOBAL;
+  const projection = snapshot.projections.get(adapterFeatureId);
+  if (!isAdapterIndex(projection)) return GLOBAL;
+  try {
+    return projection.forOwner(pluginId).adapters().length > 0 ? Object.freeze({ kind: 'adapter', adapter: parts[1] }) : GLOBAL;
+  } catch {
+    return GLOBAL;
+  }
+}
+
+const GLOBAL: ConsoleScopeTarget = Object.freeze({ kind: 'global' });
 
 function acquire(snapshots?: SnapshotReader): SnapshotLease {
   if (!snapshots) throw new Failure('unavailable', '运行时未就绪');

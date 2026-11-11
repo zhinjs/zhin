@@ -3,7 +3,7 @@ import type { DecisionObservation } from '@zhin.js/agent/runtime';
 import { definePluginConsoleRpc, type PluginConsoleRpc, type PluginConsoleRpcJson } from '@zhin.js/plugin-runtime';
 import type { AmbientDecision } from '@zhin.js/agent/runtime';
 import { decisionReplayQueries, type DecisionEventsSource } from './decision-replay.js';
-import { controlActions, controlQueries, type ControlAuditSource, type ControlPlaneSource } from './control-plane-rpc.js';
+import { CONTROL_WRITE_PERMISSION, controlActions, controlQueries, type ControlAuditSource, type ControlPlaneSource } from './control-plane-rpc.js';
 import {
   sessionOpsActions,
   sessionOpsQueries,
@@ -153,6 +153,9 @@ export class AssistantStatus {
   /** Request-owned metadata reader; no model runtime is cached by this process status store. */
   forOperation(options: Readonly<{ ambientModels?: (signal: AbortSignal) => Promise<readonly string[]> }> = {}): PluginConsoleRpc {
     return definePluginConsoleRpc({
+      // Control switches, session ops, announcement / group-rule drafts are day-to-day operator work;
+      // approving them stays `ops:approve` (manage). `control:write` would otherwise infer `manage`.
+      permissions: [{ id: CONTROL_WRITE_PERMISSION, level: 'operate', description: '控制开关、会话运营与公告 / 群规草稿' }],
       queries: {
         ambient: { requiredPermissions: [AMBIENT_STATUS_PERMISSION], handler: async (_input, call) => this.ambient(await options.ambientModels?.(call.signal) ?? []) as unknown as PluginConsoleRpcJson },
         skills: { requiredPermissions: [SKILLS_STATUS_PERMISSION], handler: () => this.skills() as unknown as PluginConsoleRpcJson },

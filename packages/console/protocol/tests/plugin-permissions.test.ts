@@ -96,9 +96,16 @@ describe('plugin permission levels (ADR 0049 amendment 2026-11-11)', () => {
     expect(grantsAllow(grant('operator'), 'rss:write')).toBe(false);
   });
 
-  it('honours only global bindings for plugin permissions', () => {
-    expect(grantsAllow(grant('admin', { kind: 'adapter', key: 'qq' }), 'qq:read')).toBe(false);
-    expect(grantsAllow(grant('admin', { kind: 'adapter', key: 'qq' }), 'qq:read', { kind: 'adapter', adapter: 'qq' })).toBe(false);
+  it('honours scoped bindings for plugin permissions only at a matching adapter / endpoint target', () => {
+    const qqAdmin = grant('admin', { kind: 'adapter', key: 'qq' });
+    expect(grantsAllow(qqAdmin, 'qq:read')).toBe(false);
+    expect(grantsAllow(qqAdmin, 'qq:read', { kind: 'any' })).toBe(false);
+    expect(grantsAllow(qqAdmin, 'qq:read', { kind: 'adapter', adapter: 'qq' })).toBe(true);
+    expect(grantsAllow(qqAdmin, 'qq:write', { kind: 'endpoint', adapter: 'qq', endpoint: 'bot' })).toBe(true);
+    expect(grantsAllow(qqAdmin, 'qq:read', { kind: 'adapter', adapter: 'tg' })).toBe(false);
+    const bot = grant('admin', { kind: 'endpoint', key: 'qq/bot' });
+    expect(grantsAllow(bot, 'qq:write', { kind: 'endpoint', adapter: 'qq', endpoint: 'bot' })).toBe(true);
+    expect(grantsAllow(bot, 'qq:write', { kind: 'adapter', adapter: 'qq' })).toBe(false);
     expect(grantsAllow(grant('viewer'), 'qq:read', { kind: 'any' })).toBe(true);
     // Scoped catalog permissions are unchanged.
     expect(grantsAllow(grant('operator', { kind: 'adapter', key: 'qq' }), 'endpoint.operate', { kind: 'adapter', adapter: 'qq' })).toBe(true);

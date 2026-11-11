@@ -196,7 +196,7 @@ Built-in roles grant plugin permissions by level through three catalog permissio
 | `owner` | everything (unchanged) |
 
 - **Custom roles** can include those level permissions, or list single plugin permissions (for example only `ops:approve`). The format must be `<plugin>:<action>`. A name no loaded plugin uses is still saved (the plugin may not be installed yet, or be disabled); the call returns `warnings`, and the name grants nothing until a plugin uses it.
-- **Global bindings only**: like other unscoped permissions, plugin permissions count only from globally bound roles. A role bound to an adapter or account gets no plugin permissions from it.
+- **Scope**: page visibility uses global bindings only. Plugin Console RPC checks each method's declared permissions; for a plugin that owns an adapter (`root/<adapter>`), a role bound to that adapter (or to the account an account method names) also counts, one bound to another adapter never does.
 - **API tokens** can be narrowed to single plugin permissions (such as `onebot11:read`); they take effect only when the issuing user holds them (by name or by level), so a token never exceeds its user.
 - `iam.roles.list` returns each role's effective plugin permissions (`pluginPermissions`, with source `level` / `explicit`) and the loaded plugins' permission catalog (top-level `pluginPermissions: [{ permission, plugin, level, description? }]`), for the Console's role editor.
 

@@ -228,10 +228,10 @@ definePluginConsoleRpc({
 Access rules:
 
 - **Follows the page**: with `page` set, the caller must meet that page's `requiredPermissions` and `requiredRoles`, plus any the method declares itself. If the page isn't loaded in the current generation, the call is refused.
-- The Console permission map applies first: read methods need `feature.view`, actions need `feature.configure`.
 - **A global owner** can call every method.
-- **Other users** can read `status` if they hold every required permission and role. A `status` with no requirements at all is open to them only when it sets `demo: true`.
-- **Actions**: other users can run an action only when the action **itself** declares `requiredPermissions`, `requiredRoles` or `anyOfPermissions` and they meet all of them, including the page's. Otherwise the call is refused. An action with no requirements of its own needs an owner; a page's requirements never grant an action by themselves.
+- **Other users and API tokens** are checked per method: they must meet the method's own requirements and the page's. Plugin permissions are granted by level (see [Plugin permission levels](#plugin-permission-levels)). Otherwise the call returns 403.
+- **Fallback when nothing is declared**: a read method with no requirements (and no page requirements) needs `feature.view`; an action that declares no requirements of its own needs `feature.configure`, with the page's requirements on top. A page's requirements never grant an action by themselves.
+- **Adapter plugins**: for a plugin that owns an adapter (`root/<adapter>`), a role bound to that adapter (or, for account methods that name an `id`, to that account) also counts; one bound to another adapter never does. Account methods (`endpoint-add` and the rest) also accept `endpoint.manage` at their target; only holders of `endpoint.manage` can confirm the first migration of the account list.
 - **Any one of**: holding **one** of the permissions in `anyOfPermissions` is enough (on top of `requiredPermissions`). Use it when a new permission sits beside an older one, for example approval cards accept `ops:approve` or the older `tool_approvals:resolve`.
 
 ```ts
@@ -546,7 +546,7 @@ From the page you can:
 - consume LoginAssist tasks from `login.list` with `login.submit` / `login.cancel` (QR code, slider, SMS, device confirmation);
 - render adapter-specific actions from `status.actions` (for example QQ QR binding and public/private selection).
 
-Permissions are per adapter: page reads need `<adapterKey>:read`; writes (account changes and custom actions) need `<adapterKey>:write`. A global owner is unrestricted. An administrator must review and confirm the existing account list before its first migration. Without a persistence management port, `runtime.canManage` is false or the request explicitly fails as unavailable; there is no configuration-file fallback.
+Permissions are per adapter: page reads need `<adapterKey>:read` (level `read`); writes (account changes and custom actions) need `<adapterKey>:write`, declared at level `operate` by default so `operator` can maintain accounts (set `writePermissionLevel: 'manage'` to keep it with admins). Roles bound to that adapter count too, and `endpoint.manage` on the adapter also allows account changes. A global owner is unrestricted. An administrator holding `endpoint.manage` must review and confirm the existing account list before its first migration. Without a persistence management port, `runtime.canManage` is false or the request explicitly fails as unavailable; there is no configuration-file fallback.
 
 Each mutation supplies the directory’s `expectedGeneration` and `expectedRevision` and targets an `instanceId`; the first migration adds `confirmMigration: true` only after user confirmation. New and replacement accounts are saved disabled; connection updates reconnect only the target account. Refresh to verify conflicts or unknown commit outcomes rather than automatically retrying. Persistence acknowledgment and asynchronous startup or cleanup completion are separate states.
 

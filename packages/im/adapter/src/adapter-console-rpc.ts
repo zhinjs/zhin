@@ -22,6 +22,8 @@ import { readConfigurationPath } from './configuration-fields.js';
 import {
   definePluginConsoleRpc,
   PluginConsoleRpcError,
+  type PluginConsolePermission,
+  type PluginConsolePermissionLevel,
   type PluginConsoleRpc,
   type PluginConsoleRpcDefinition,
   type PluginConsoleRpcInput,
@@ -122,8 +124,14 @@ export interface AdapterConsoleSpec {
   readonly page?: string;
   readonly fields?: readonly AdapterConsoleField[];
   readonly docsUrl?: string;
+  /** 查看账号页的插件权限（`<适配器>:read`），声明为 `read` 级别。 */
   readonly readPermission?: string;
+  /**
+   * 增删改、启停账号的插件权限（`<适配器>:write`）。默认声明为 `operate` 级别，日常账号维护交给
+   * 运营（ADR 0049 修订 2026-11-11）；需要只给管理员时设 `writePermissionLevel: 'manage'`。
+   */
   readonly writePermission?: string;
+  readonly writePermissionLevel?: PluginConsolePermissionLevel;
   /** 默认 true；没有配置存储时仍会降级为 false。 */
   readonly canAdd?: boolean;
   readonly canRemove?: boolean;
@@ -203,6 +211,17 @@ interface AdapterConsoleActionView {
 }
 
 const ACTION_NAME = /^[a-z0-9][a-z0-9-]*$/;
+// Same shape as `CONSOLE_PLUGIN_PERMISSION_PATTERN`; other strings keep their inferred level.
+const PLUGIN_PERMISSION = /^[a-z][a-z0-9_-]{0,63}:[a-z][a-z0-9_.-]{0,63}$/u;
+
+/** Level declarations for the account page: read views → read; account writes → operate by default. */
+function permissionLevels(read: string | undefined, write: string | undefined,
+  writeLevel: PluginConsolePermissionLevel): PluginConsolePermission[] {
+  const out: PluginConsolePermission[] = [];
+  if (write && PLUGIN_PERMISSION.test(write)) out.push({ id: write, level: writeLevel });
+  if (read && read !== write && PLUGIN_PERMISSION.test(read)) out.push({ id: read, level: 'read' });
+  return out;
+}
 const ENV_REFERENCE = /^\$\{[A-Za-z_][A-Za-z0-9_]*\}$/;
 
 /** 过滤掉 i18n 里的 undefined，保证返回值是纯 JSON 对象。 */
@@ -283,7 +302,8 @@ export function createAdapterConsoleRpc(
     };
   }
 
-  return definePluginConsoleRpc({ ...definition, actions: methods });
+  const permissions = permissionLevels(readPermission, writePermission, spec.writePermissionLevel ?? 'operate');
+  return definePluginConsoleRpc({ ...definition, ...(permissions.length ? { permissions } : {}), actions: methods });
   async function statusView(call: PluginConsoleRpcCall): Promise<StatusView> {
     const adapter = call.runtime ? ownedConsoleAdapter(spec, call) : undefined;
     if (adapter) {

@@ -40,7 +40,7 @@ Console 不再只认配置文件里的令牌。用户、角色、会话和 API �
 | `http.token`（full） | 初始化令牌；之后用所有者账号登录 |
 | `http.tokens[]` 里 `scope: user` 的成员 | 在 Console「访问控制」里为他创建用户，绑定合适的角色（`viewer` 只读、`operator` 运营、`admin` 管理员），可限定到某个适配器或账号 |
 | `http.tokens[]` 里 `scope: demo` 的演示令牌 | 演示模式已删除。给演示环境开一个 `viewer` 账号 |
-| `http.tokens[].permissions` 里的插件权限（如 `onebot11:read`） | 按级别授予内置角色：`*:read` 给 `viewer` 及以上，日常操作类给 `operator` 及以上，`*:write` / `*:approve` / `*:manage` 等给 `admin`；也可以在自定义角色或 API 令牌里直接列出（见[插件权限的级别](../console/index.md#插件权限的级别)） |
+| `http.tokens[].permissions` 里的插件权限（如 `onebot11:read`） | 按级别授予内置角色：`*:read` 给 `viewer` 及以上，日常操作类给 `operator` 及以上，未声明级别的 `*:write` 与 `*:approve` / `*:manage` 等给 `admin`（适配器账号写权限和内置插件的 `:write` 已声明为 `operate`）；也可以在自定义角色或 API 令牌里直接列出（见[插件权限的级别](../console/index.md#插件权限的级别)） |
 
 删除 `http.tokens` 后再启动。
 

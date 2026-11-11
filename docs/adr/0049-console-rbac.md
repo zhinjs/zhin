@@ -154,7 +154,7 @@ RPC（`iam.*`，需 `iam.view` / `iam.manage`）：`iam.users.list|create|update
 ### 决定
 
 1. **格式与级别**：插件权限写成 `<插件>:<动作>`（`/^[a-z][a-z0-9_-]{0,63}:[a-z][a-z0-9_.-]{0,63}$/`），属于 `read` / `operate` / `manage` 之一。插件在 `definePluginConsoleRpc({ permissions: [{ id, level, description? }] })` 里声明级别；页面元数据不新增字段。未声明的按动作最后一段推断：`read` / `view` → `read`；`approve` / `manage` / `admin` / `write` / `config` → `manage`；其余 → `operate`。同一权限名被多个插件声明为不同级别时取最严格者。
-2. **级别权限**：目录新增 `plugin.perms.read`、`plugin.perms.operate`、`plugin.perms.manage`，分别授予该级别的全部插件权限。它们不是作用域权限：只有全局绑定生效（§3 规则不变，插件权限本身也只认全局绑定）。
+2. **级别权限**：目录新增 `plugin.perms.read`、`plugin.perms.operate`、`plugin.perms.manage`，分别授予该级别的全部插件权限。级别权限本身不进入作用域权限列表；页面可见性与 `/auth/me` 只看全局绑定。调用插件 Console RPC 时，若调用目标是某个适配器或账号（见下文「插件 RPC 按方法授权」），绑定到该适配器 / 账号的角色所含的插件权限（按名或按级别）也算数，绑定到别的适配器的不算。
 3. **内置角色**：`viewer` 含 `plugin.perms.read`（随 `*.read` 规则自动纳入）；`operator` 增加 `plugin.perms.read`、`plugin.perms.operate`；`admin` 与 `owner` 含全部三项。`owner` 的全局会话仍然不受限。
 4. **自定义角色**可以写入级别权限，也可以按名列出插件权限。当前没有已加载插件使用的权限名**允许保存并返回警告**（`iam.roles.create|update` 的 `warnings`）：插件的安装、停用、热重载与角色编辑相互独立，拒绝会让管理员无法为即将安装的插件预先配置角色；而一个没有插件使用的权限名不放行任何东西，默认拒绝不受影响。格式不合法的仍然拒绝（`invalid_input`）。
 5. **API 令牌**的权限列表也可以写插件权限名。收窄时，令牌列出的插件权限只有在签发用户的角色按名或按级别持有它时才保留——令牌不会超过用户。收窄到目录之下的所有者令牌不再视为不受限。
@@ -164,5 +164,14 @@ RPC（`iam.*`，需 `iam.view` / `iam.manage`）：`iam.users.list|create|update
 ### 后果
 
 - 升级后已有数据库在启动时重写内置角色，admin / operator / viewer 立即按级别看到插件页面。
-- 以 `:write` 结尾的插件权限（适配器账号写操作、`control:write` 等）默认归 `manage`，即只有 admin 及以上持有；需要交给运营的插件应把它声明为 `operate`。
-- 用户（会话 / API 令牌）调用插件 RPC 时，准入仍按 §3 的 `feature.view`（读）/ `feature.configure`（写）判定；插件权限目前决定页面可见性与 `/auth/me` 报告的权限。
+- 未声明级别、以 `:write` 结尾的插件权限默认归 `manage`，只有 admin 及以上持有。仓库内已声明为 `operate`：适配器账号写权限（`createAdapterConsoleRpc` 的 `writePermission`，可用 `writePermissionLevel` 改回 `manage`）、`control:write`，以及 rss / reminder / ledger / calendar / qrcode / short-url 的 `:write`。审批（`ops:approve`、`tool_approvals:resolve`）声明为 `manage`；后者按后缀会推断成 `operate`，因此必须显式声明。
+- 插件 RPC 按方法强制执行，见下文「插件 RPC 按方法授权」。
+
+### 插件 RPC 按方法授权
+
+此前用户会话与 API 令牌调用插件 RPC 只检查 `feature.view`（读）/ `feature.configure`（写），忽略方法和页面声明的权限，`operator` 因此能调用 `ops:approve` 的动作。现改为：
+
+1. 权限表对插件 RPC（`plugin.<pluginId>.<method>`）只做准入（`delegated`），由插件 RPC 分发器逐个方法判定；分发器没有应答时拒绝。全局所有者仍不受限，初始化令牌的行为不变。
+2. 已登录主体必须满足方法自己的 `requiredPermissions` / `requiredRoles` / `anyOfPermissions` 与所绑定页面的要求（插件权限按级别）。都没声明时兜底：读方法需要 `feature.view`；动作自己没有声明要求时需要 `feature.configure`（页面要求照样叠加）。不满足返回 403 `forbidden`。
+3. 目标：适配器账号方法（`endpoint-*`）用权限表算出的适配器 / 账号目标；拥有适配器的插件（`root/<别名>`，当前代的适配器目录里确有它的适配器）的其他方法以该适配器为目标；其余为全局。绑定到目标适配器 / 账号的角色对目录权限（如 `endpoint.manage`、`feature.configure`）和插件权限都算数；绑定到别的适配器的不算。
+4. 账号方法另外接受目标上的 `endpoint.manage`，原有只含 `endpoint.manage` 的适配器作用域角色可继续维护该适配器的账号。处理函数看到的 `runtime.operator`（首次迁移确认）为：适配器目标上持有 `endpoint.manage`，否则全局持有 `feature.configure`。

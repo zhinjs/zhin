@@ -4,6 +4,7 @@ import {
   CONSOLE_WRITE_PERMISSIONS,
   expandPluginPermissions,
   grantsAllow,
+  isPluginConsoleRpcType,
   resolveConsoleHttpPermission,
   resolveConsoleRpcPermission,
   resolveConsoleWsPermission,
@@ -131,7 +132,15 @@ export function globalPermissions(
 }
 
 export type ConsoleRpcDecision =
-  | Readonly<{ allowed: true; rule: ConsoleRpcPermissionRule | null; permission: ConsolePermission | null; write: boolean }>
+  | Readonly<{
+      allowed: true; rule: ConsoleRpcPermissionRule | null; permission: ConsolePermission | null; write: boolean;
+      /**
+       * Plugin Console RPC for a signed-in principal: admitted here only so the plugin RPC
+       * dispatcher can check the method's own (or page / fallback) permissions. The caller must
+       * deny when no plugin dispatcher answers.
+       */
+      delegated?: true;
+    }>
   | Readonly<{ allowed: false; code: 'setup_required' | 'unmapped' | 'forbidden'; error: string; permission: ConsolePermission | null }>;
 
 /** RPC authorization for one principal and message (deny by default). */
@@ -147,6 +156,9 @@ export function authorizeConsoleRpc(principal: ConsolePrincipal, message: Readon
   if (!rule) {
     return Object.freeze({ allowed: false, code: 'unmapped', error: `RPC "${String(message.type ?? '')}" 未登记权限`, permission: null });
   }
+  if (isPluginConsoleRpcType(message.type)) {
+    return Object.freeze({ allowed: true, rule, permission, write: isWriteRule(rule), delegated: true });
+  }
   if (!grantsAllow(principal.grants, permission!, rule.target)) {
     return Object.freeze({ allowed: false, code: 'forbidden', error: `缺少权限 ${permission}`, permission });
   }
@@ -157,7 +169,11 @@ function isWriteRule(rule: ConsoleRpcPermissionRule): boolean {
   return rule.kind === 'exact' ? CONSOLE_WRITE_PERMISSIONS.has(rule.permission) : false;
 }
 
-/** For plugin RPC: whether the principal may call a non-read-only method. */
+/**
+ * For plugin RPC: whether the principal holds the rule's write permission (`feature.configure`,
+ * or `endpoint.manage` for adapter account methods) at its target. The plugin RPC dispatcher
+ * authorizes each method itself; this is only the catalog fallback.
+ */
 export function pluginRpcWriteAllowed(principal: ConsolePrincipal, rule: ConsoleRpcPermissionRule | null): boolean {
   if (principal.kind === 'bootstrap') return principal.open;
   if (!rule) return false;

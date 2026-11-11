@@ -86,7 +86,10 @@ describe('access control decisions', () => {
     expect(authorizeConsoleRpc(userPrincipal('admin'), { type: 'iam.users.create' })).toMatchObject({ allowed: false, code: 'forbidden' });
     expect(authorizeConsoleRpc(userPrincipal('admin'), { type: 'iam.users.list' })).toMatchObject({ allowed: true, write: false });
     const plugin = authorizeConsoleRpc(VIEWER, { type: 'plugin.root/rss.status' });
-    expect(plugin.allowed).toBe(true);
+    expect(plugin).toMatchObject({ allowed: true, delegated: true, write: false });
+    // Delegation needs a mapped plugin type; bootstrap keeps its own rules.
+    expect(authorizeConsoleRpc(VIEWER, { type: 'plugin.not-root.status' })).toMatchObject({ allowed: false, code: 'unmapped' });
+    expect(authorizeConsoleRpc({ kind: 'bootstrap', open: false }, { type: 'plugin.root/rss.status' })).toMatchObject({ allowed: false, code: 'setup_required' });
     expect(pluginRpcWriteAllowed(VIEWER, resolveConsoleRpcPermission('plugin.root/rss.status'))).toBe(false);
     expect(pluginRpcWriteAllowed(userPrincipal('operator'), resolveConsoleRpcPermission('plugin.root/rss.add'))).toBe(true);
     expect(authorizeConsoleRpc({ kind: 'bootstrap', open: true }, { type: 'something.new' }).allowed).toBe(true);
@@ -105,7 +108,9 @@ describe('access control decisions', () => {
     const endpointOperator = userPrincipal('operator', { kind: 'endpoint', key: 'qq/bot-1' });
     expect(authorizeConsoleRpc(endpointOperator, send('qq', 'bot-1')).allowed).toBe(true);
     expect(authorizeConsoleRpc(endpointOperator, send('qq', 'bot-2')).allowed).toBe(false);
-    expect(authorizeConsoleRpc(endpointOperator, { type: 'plugin.root/qq.endpoint-stop', data: { id: 'bot-1' } }).allowed).toBe(false);
+    // Plugin RPC is delegated to the plugin dispatcher, which checks the method's permissions.
+    expect(authorizeConsoleRpc(endpointOperator, { type: 'plugin.root/qq.endpoint-stop', data: { id: 'bot-1' } }))
+      .toMatchObject({ allowed: true, delegated: true, write: true });
     expect(globalPermissions(endpointOperator)).toEqual([]);
   });
 
