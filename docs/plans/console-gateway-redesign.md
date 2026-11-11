@@ -123,9 +123,9 @@ ADR 0049–0054 与本计划。
 | A1 RBAC 后端 | done | 已提交。偏差：无 `http.token` 且无所有者时 Host 保持开放（本地开发）；`/auth/me` 公开返回 `anonymous`；新增 `/auth/tokens` 自助令牌；登录限速返回 429；全局所有者对插件自定义页面权限视为不受限 |
 | A2 三级配置后端 | done | 已提交；`feature.*` 接线与 `export * from './feature.js'` 交给 A1（同文件）。偏差：解析器在 `plugin-runtime`（core/agent 不能依赖 runtime）；覆盖字段校验为第二遍校验；`null` 清空即删除字段；插件自身 `enabled`、`commandNamespace`、`disabledCommands` 不可覆盖。待办：`basic/schema` 的 `Schema#levels()` 构建器（可选）；Console 整块保存插件配置时不能丢 `overrides`（C3 核对） |
 | A3 终端后端 | done | 已提交，待 M2 接线 |
-| A4 Console 导航重构 | review | [zhinjs/console#92](https://github.com/zhinjs/console/pull/92)。待办：zhin 侧页面元数据加 `section` 字段，`packages/console/client` 的 `resolveEntryRegister` 透传 `meta.section`（M2）；`feature.matrix` 返回形状已与 A2 对齐 |
+| A4 Console 导航重构 | done | [zhinjs/console#92](https://github.com/zhinjs/console/pull/92) 已合并。待办：zhin 侧页面元数据加 `section` 字段，`packages/console/client` 的 `resolveEntryRegister` 透传 `meta.section`（M2）；`feature.matrix` 返回形状已与 A2 对齐 |
 | A5 create-zhin 精简 | done | 已提交；生成项目 README / 首页 / hello 模板（`scaffold-wizard/message-templates.ts`）里的首跑步骤留到 B1.6 随 `zhin start` 一起改 |
-| M2 集成批 1 | review | PR-1（见 PR 列表）。终端接线、Host 配置 Schema、适配器反向 WS 改为自鉴权、页面 `section`、文档与升级指南、发版门禁（6 minor / 0 major，`zhin.js` patch）、锁文件、changesets；`check:all` 全过。偏差：终端会话按用户（`user:<id>`）吊销，单独吊销 API 令牌或改角色定义不断开会话。未验证：`check:created-project*`、真实 OneBot/NapCat/Milky 客户端、Windows 原生模块、真实 SSH |
+| M2 集成批 1 | done | [zhinjs/zhin#1226](https://github.com/zhinjs/zhin/pull/1226) 已合并（含 B1.-1）。终端接线、Host 配置 Schema、适配器反向 WS 改为自鉴权、页面 `section`、文档与升级指南、发版门禁（6 minor / 0 major，`zhin.js` patch）、锁文件、changesets；`check:all` 全过。偏差：终端会话按用户（`user:<id>`）吊销，单独吊销 API 令牌或改角色定义不断开会话。未验证：`check:created-project*`、真实 OneBot/NapCat/Milky 客户端、Windows 原生模块、真实 SSH |
 | B1 管理网关 | doing | B1.-1 拆包已完成（`@zhin.js/gateway` 新包；装配根迁到 `zhin.js/instance`；CLI 无 IM 依赖；`check:all` 全过）。临时边：`zhin.js/instance` 依赖 `@zhin.js/gateway`（配置存储、插件管理事务、IAM、终端、TSX 加载器、supervisor 辅助）。决定：配置存储与插件管理事务归网关所有，B1.4 起实例的 Console 配置 / 插件 RPC 改由网关处理，届时删除这条边。下一步 B1.0 |
 | B2 引导后端 | todo | 依赖 B1.4 |
 | M4 集成批 2 | todo | |
@@ -140,9 +140,13 @@ ADR 0049–0054 与本计划。
 - 不强推、不跳过测试；PR 进入合并队列后不再推送。
 - 需要仓库所有者决定的事项记在下方，不阻塞其他项。
 
+## 所有者已决定（2026-11-11）
+
+1. 反向 WebSocket 未配 `access_token` 时只接受回环连接：按 patch 发布，保持现状。
+2. 插件自定义权限：采用方案 A，内置角色按约定补上插件权限——`<plugin>:read` 类给 viewer 及以上，操作类给 operator 及以上，管理 / 审批类（如 `ops:approve`）给 admin。B1.0 完成后派发（与 IAM 路由同路径）。
+3. `zhin` 别名包随本次发布（保留 `.changeset/zhin-shim-follow-cli.md`）。
+4. 发版后由协调者清空 `.changeset/version-policy.json#approvedNonPatchReleases`（下一个 PR 里做）。
+
 ## 待所有者决定
 
-1. 适配器反向 WebSocket（OneBot 11/12、NapCat、Milky）未配 `access_token` 时现在只接受本机回环连接（原来谁连都放行）。目前按 patch 发；若视为破坏性变更，改为 minor 并加入 `.changeset/version-policy.json` 批准列表。注意：Host 在本机反向代理之后时，所有对端都显示为回环地址。
-2. 插件自定义权限（如 `onebot11:read`、`ops:approve`）目前只有全局所有者能满足，admin / operator 看不到对应页面。是否给内置角色补上，或允许自定义角色写入插件权限？
-3. `zhin@4.0.1`（`packages/toolkit/zhin-shim`）此前未发布也无 tag，已加 patch changeset 让它随 cli 一起发布；如不想发布此别名包请告知。
-4. 发版后清空 `.changeset/version-policy.json#approvedNonPatchReleases`。
+（暂无）
