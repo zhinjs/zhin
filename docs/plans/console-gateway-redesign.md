@@ -127,13 +127,15 @@ ADR 0049–0054 与本计划。
 | A5 create-zhin 精简 | done | 已提交；生成项目 README / 首页 / hello 模板（`scaffold-wizard/message-templates.ts`）里的首跑步骤留到 B1.6 随 `zhin start` 一起改 |
 | M2 集成批 1 | done | [zhinjs/zhin#1226](https://github.com/zhinjs/zhin/pull/1226) 已合并（含 B1.-1）。终端接线、Host 配置 Schema、适配器反向 WS 改为自鉴权、页面 `section`、文档与升级指南、发版门禁（6 minor / 0 major，`zhin.js` patch）、锁文件、changesets；`check:all` 全过。偏差：终端会话按用户（`user:<id>`）吊销，单独吊销 API 令牌或改角色定义不断开会话。未验证：`check:created-project*`、真实 OneBot/NapCat/Milky 客户端、Windows 原生模块、真实 SSH |
 | B1 管理网关 | doing | B1.-1 拆包已完成（`@zhin.js/gateway` 新包；装配根迁到 `zhin.js/instance`；CLI 无 IM 依赖；`check:all` 全过）。临时边：`zhin.js/instance` 依赖 `@zhin.js/gateway`（配置存储、插件管理事务、IAM、终端、TSX 加载器、supervisor 辅助）。决定：配置存储与插件管理事务归网关所有，B1.4 起实例的 Console 配置 / 插件 RPC 改由网关处理，届时删除这条边。下一步 B1.0 |
-| B2 引导后端 | todo | 依赖 B1.4 |
+| B2 引导后端 | doing | 服务核心（状态文件、安装白名单、`zhin setup`）在 worktree `wt/b2` 并行；HTTP / RPC 接线等 B1.4 |
 | M4 集成批 2 | todo | |
-| C1–C4 | todo | 依赖发版 |
+| C1–C4 | doing | C1（`console` 主 checkout）、C2（worktree `wt/console-c2`）、C3（`wt/console-c3`）并行，接口类型先在 console 仓库本地镜像；C4 等 B1.5/B1.6 |
 | M6 文档与迁移 | todo | |
 | M7 端到端验收 | todo | |
 
 ## 推进方式
+
+- 2026-11-11 起并行：B1.0 在主 checkout；B1.1（`wt/b11`）、B2 核心（`wt/b2`）、插件权限默认授予（`wt/perm`）在独立 worktree，由协调者合并到 `feat/friendly-volta-ejc3wl`。
 
 - 定时检查（每小时）唤醒本会话：读本节进度与后台任务结果 → 集成已完成的工作并跑检查 → 派发依赖已满足的下一项 → 更新本节并提交。
 - 并行工作者只改各自路径，不做 git 写操作；集成、锁文件、Changesets、提交与 PR 由协调者完成。
