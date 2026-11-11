@@ -28,12 +28,12 @@ sidebar: false
 ✔ 项目已创建：my-bot
   启动：cd my-bot && pnpm dev
   然后打开 Console 完成初始化：
-  https://console.zhin.dev/?apiBaseUrl=http://127.0.0.1:8086/api#token=<初始化令牌>
+  https://console.zhin.dev/?apiBaseUrl=http%3A%2F%2F127.0.0.1%3A8068#token=<初始化令牌>
 ```
 
 - 模板、配置格式、开发技能等保留为命令行参数（`--template`、`--config-format`、`--dev-skills`），不再交互提问，取默认值。
 - 自动化场景保留非交互参数：`--database`、`--adapter`、`--ai` 等原有参数仍然生效，传了就按原逻辑写入；不传就留给 Console。`-y` 只确认默认值，不再预装适配器 / AI。
-- 链接沿用 Console 现有格式（`?apiBaseUrl=` + `#token=`）：令牌放在 `#` 之后，不会发送到 console.zhin.dev 的服务器，Console 读取后立即从地址栏移除；未知 Host 先让用户确认。端口与 base 取自生成的配置。
+- 链接沿用 Console 现有格式（`?apiBaseUrl=` + `#token=`）：令牌放在 `#` 之后，不会发送到 console.zhin.dev 的服务器，Console 读取后立即从地址栏移除；未知 Host 先让用户确认。端口取自生成的配置（默认 8068）；`apiBaseUrl` 不含 `/api`，Console 自己拼接。完整链接只在终端（TTY）里打印，非 TTY（CI 日志）只打印不带令牌的链接并提示令牌在 `.env` 的 `HTTP_TOKEN`。
 
 ### 2. Console 引导（onboarding）
 

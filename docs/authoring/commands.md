@@ -434,7 +434,7 @@ qq:
       commandPrefix: '' # 可为单个账号单独覆盖
 ```
 
-`npm create zhin-app` 生成的 Sandbox 已设置为 `/`。
+`npm create zhin-app` 的 `--adapter sandbox` 生成的 Sandbox 已设置为 `/`。
 
 ### 查看已加载的指令菜单
 

@@ -61,29 +61,13 @@ function renderDatabaseReadme(database: DatabaseConfig | undefined, configFilena
   return wizardText(locale, "templates.databaseNetwork", [database.dialect, configFilename]);
 }
 
-/** 未显式配置适配器时默认挂载 Sandbox（对齐 examples/test-bot 的 sandbox 实例） */
-function resolveAdapterResult(options: InitOptions): AdapterSetupResult {
-  if (options.adapters) return options.adapters;
-  return {
-    packages: ['@zhin.js/adapter-sandbox'],
-    plugins: ['@zhin.js/adapter-sandbox'],
-    instances: [{
-      package: '@zhin.js/adapter-sandbox',
-      instanceKey: 'sandbox',
-      // 对齐 examples/minimal-bot 的 Stable 黄金路径：命令保留 / 前缀（/hello）
-      config: {
-        commandPrefix: '/',
-        endpoints: [{ id: 'sandbox-bot', owner: 'sandbox-user' }],
-      },
-    }],
-    envVars: {},
-  };
-}
+const NO_ADAPTERS: AdapterSetupResult = { packages: [], plugins: [], instances: [], envVars: {} };
 
 export async function createWorkspace(projectPath: string, projectName: string, options: InitOptions): Promise<void> {
   const locale = options.locale;
   const configFilename = getConfigFilename(options.config);
-  const adapters = resolveAdapterResult(options);
+  // ADR 0053: adapters are installed only when requested; the Console onboarding adds them later.
+  const adapters = options.adapters;
   const aiEnabled = options.ai?.enabled === true;
 
   await fs.ensureDir(projectPath);
@@ -104,10 +88,7 @@ export async function createWorkspace(projectPath: string, projectName: string, 
   }
 
   // 根据适配器选择添加依赖
-  const adapterDeps: Record<string, string> = { ...getAdapterDependencies(adapters) };
-  if (!adapterDeps['@zhin.js/adapter-sandbox']) {
-    adapterDeps['@zhin.js/adapter-sandbox'] = 'latest';
-  }
+  const adapterDeps: Record<string, string> = { ...getAdapterDependencies(adapters ?? NO_ADAPTERS) };
 
   // AI 依赖（agent 栈 + 所选 @ai-sdk/*）及 AI authoring Features
   const aiDeps: Record<string, string> = { ...getAIDependencies(options.ai) };
@@ -185,7 +166,7 @@ export async function createWorkspace(projectPath: string, projectName: string, 
   }, { spaces: 2 });
 
   // Plugin Runtime 项目骨架（对齐 examples/minimal-bot）
-  await createRuntimeProjectFiles(projectPath, projectName, { ...options, adapters });
+  await createRuntimeProjectFiles(projectPath, projectName, options);
 
   // AI 引导文件（人格 / 工具约定 / 记忆），仅启用 AI 时生成
   if (aiEnabled) {

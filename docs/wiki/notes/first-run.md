@@ -11,12 +11,12 @@ title: 怎样确认第一个 Bot 跑通？
 ## 从空目录开始
 
 ```bash
-npm create zhin-app my-bot -y
+npm create zhin-app my-bot -- -y --adapter sandbox
 cd my-bot
 pnpm dev
 ```
 
-终端会打印 API Base；新项目当前默认端口为 `8068`，但应以终端输出或 `zhin.config.yml` 为准。在 [console.zhin.dev](https://console.zhin.dev) 填入 API Base，Token 使用项目 `.env` 中的 `HTTP_TOKEN`，然后进入 Sandbox 会话发送 `/hello`。
+`--adapter sandbox` 在创建时就装上 Sandbox；不加时项目里没有适配器，要在 Console 引导的「适配器」一步里选 Sandbox。创建结束时终端会打印 Console 链接（`?apiBaseUrl=` 指向 Host，初始化令牌在 `#token=` 之后）；新项目当前默认端口为 `8068`，但应以终端输出或 `zhin.config.yml` 为准。打开链接，按引导保持默认数据库、创建所有者账号，然后进入 Sandbox 会话发送 `/hello`。链接丢了就在 [console.zhin.dev](https://console.zhin.dev) 填入 API Base，令牌使用项目 `.env` 中的 `HTTP_TOKEN`。
 
 如果 Console 连接不上，先核对 API Base 和 Token，再运行 `npx zhin doctor`。如果能连接却没有回复，就看命令是否被发现、Sandbox Endpoint 是否在线，以及终端是否报错。
 

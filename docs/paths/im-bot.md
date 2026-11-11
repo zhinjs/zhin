@@ -16,12 +16,12 @@ description: "从 Sandbox 开始，加一个命令、一条定时通知，再接
 ## 1. 先在 Sandbox 里跑通
 
 ```bash
-npm create zhin-app my-bot -y
+npm create zhin-app my-bot -- -y --adapter sandbox
 cd my-bot
 pnpm dev
 ```
 
-Sandbox 是内置的模拟聊天窗口，不需要任何平台账号。用终端打印的 API Base 和 `.env` 中的 `HTTP_TOKEN` 连接 [Console](https://console.zhin.dev)，打开侧栏「机器人 → 试聊一下」（Sandbox），发送 `/hello`，确认有回复。
+Sandbox 是内置的模拟聊天窗口，不需要任何平台账号；`--adapter sandbox` 让它在创建时就装好（不加的话，在 Console 引导的「适配器」一步里选 Sandbox）。打开创建结束时打印的 [Console](https://console.zhin.dev) 链接，按引导保持默认数据库、创建所有者账号，然后打开侧栏「机器人 → 试聊一下」（Sandbox），发送 `/hello`，确认有回复。
 
 ## 2. 添加一个命令
 

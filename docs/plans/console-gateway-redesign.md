@@ -123,7 +123,7 @@ ADR 0049–0054 与本计划。
 | A2 三级配置后端 | doing | |
 | A3 终端后端 | done | 已提交，待 M2 接线 |
 | A4 Console 导航重构 | doing | |
-| A5 create-zhin 精简 | doing | |
+| A5 create-zhin 精简 | done | 已提交；生成项目 README / 首页 / hello 模板（`scaffold-wizard/message-templates.ts`）里的首跑步骤留到 B1.6 随 `zhin start` 一起改 |
 | M2 集成批 1 | todo | |
 | B1 管理网关 | todo | 依赖 M2；B1.0 可在 M2 后立即开始 |
 | B2 引导后端 | todo | 依赖 B1.4 |

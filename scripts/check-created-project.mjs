@@ -295,7 +295,7 @@ try {
   }), null, 2));
   await run('pnpm', ['install', '--no-frozen-lockfile'], creator);
   console.log('Creating an empty project with the packed creator CLI…');
-  await run(process.execPath, [path.join(creator, 'node_modules/create-zhin-app/lib/index.js'), 'acceptance-bot', '-y', '--skip-install', ...localeFlags], creator);
+  await run(process.execPath, [path.join(creator, 'node_modules/create-zhin-app/lib/index.js'), 'acceptance-bot', '-y', '--skip-install', '--adapter', 'sandbox', ...localeFlags], creator);
   const manifestFile = path.join(project, 'package.json');
   const manifest = JSON.parse(await readFile(manifestFile, 'utf8'));
   if (platform !== 'sandbox') {

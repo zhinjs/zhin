@@ -11,14 +11,14 @@ This check is for a newly created IM project. It needs no platform account or mo
 ## Start from an empty directory
 
 ```bash
-npm create zhin-app my-bot -y
+npm create zhin-app my-bot -- -y --adapter sandbox
 cd my-bot
 pnpm dev
 ```
 
-The terminal prints the API Base. New projects currently default to port `8068`, but use the terminal output or `zhin.config.yml` for your project.
+`--adapter sandbox` installs Sandbox at creation time; without it the project has no adapter and you pick Sandbox in the Console onboarding's adapter step. Creation ends with a Console link (`?apiBaseUrl=` points at the Host, the bootstrap token sits after `#token=`). New projects currently default to port `8068`, but use the terminal output or `zhin.config.yml` for your project.
 
-At [console.zhin.dev](https://console.zhin.dev), enter that API Base and the `HTTP_TOKEN` from the project's `.env`. Open a Sandbox conversation and send `/hello`.
+Open the link, keep the default database, create the owner account, then open a Sandbox conversation and send `/hello`. Lost the link? At [console.zhin.dev](https://console.zhin.dev), enter the API Base and the `HTTP_TOKEN` from the project's `.env`.
 
 If Console cannot connect, check the API Base and Token, then run `npx zhin doctor`. If it connects but the Bot does not reply, check command discovery, the Sandbox Endpoint state, and terminal errors.
 

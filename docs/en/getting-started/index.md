@@ -12,28 +12,49 @@ This page takes you from zero to a running Zhin Bot, then shows how to drop para
 ## 1. Create and start
 
 ```bash
-npm create zhin-app my-bot -y
+npm create zhin-app my-bot
 cd my-bot
 pnpm dev
 ```
 
-`-y` accepts every default: only the Sandbox adapter (a simulated chat window in the browser), the HTTP service, one `/hello` command, and no AI. Drop `-y` to pick a real platform, database, or AI in the wizard — or add them later with `npx zhin setup`.
+The terminal asks three things only: project language, project name, and the bootstrap token (random by default; press Enter to accept). You get a minimal project — IM core plus the Console Host, with no database driver, adapter or AI dependencies; the database, platforms and AI are configured in the Console. Creation ends with the start command and a Console link:
 
-## 2. Open the debug UI and verify
+```text
+✔ Project created: my-bot
+  Start: cd my-bot && pnpm dev
+  Then open the Console to finish setup:
+  https://console.zhin.dev/?apiBaseUrl=http%3A%2F%2F127.0.0.1%3A8068#token=<bootstrap token>
+```
 
-The startup output prints the API Base. New projects default to `http://127.0.0.1:8068` (always trust the terminal output or `http.port` in `zhin.config.yml`). Pick either way to test:
+The token sits after `#`, so it is never sent to console.zhin.dev's server. `-y` accepts every default without asking anything.
 
-- **Option A: Local built-in Sandbox (instant, zero setup)**
+::: tip Skip the adapter step in the Console
+For scripts, or to chat right away, install Sandbox (a simulated chat window in the browser) at creation time: `npm create zhin-app my-bot -- -y --adapter sandbox`. See the [create-zhin-app README](https://github.com/zhinjs/zhin/tree/main/packages/toolkit/create-zhin) for `--database`, `--adapter`, `--ai` and the other flags.
+:::
+
+## 2. Finish setup in the Console
+
+Once `pnpm dev` is running, open the link above (lost it? Open [console.zhin.dev](https://console.zhin.dev), set API Base to `http://127.0.0.1:8068` and use `HTTP_TOKEN` from `.env`). Trust the terminal output or `http.port` in `zhin.config.yml` for the port. The Console walks you through:
+
+1. **Database**: keep the default SQLite (stored in `.zhin/data.sqlite`).
+2. **Owner account**: choose a username and password and sign in; the bootstrap token stops working after this, and you sign in with the account from then on.
+3. **AI**: skip it for now; enable it later from the Console or with `npx zhin setup --ai`.
+4. **Adapters**: pick **Sandbox** — no platform account needed.
+
+Every step can be skipped and revisited later from the Features section.
+
+## 3. Send `/hello` to verify
+
+Pick either way:
+
+- **Option A: Local built-in Sandbox (fastest)**
   Open `http://127.0.0.1:8068/sandbox` directly in your browser, send `/hello`, and see the reply immediately.
-- **Option B: Remote Console (full admin & debugging UI)**
-  1. Open [console.zhin.dev](https://console.zhin.dev).
-  2. Enter the API Base printed by the Host (e.g. `http://127.0.0.1:8068`).
-  3. Use `HTTP_TOKEN` from the project `.env` file (when the project is created, the terminal masks the token so it stays out of CI logs).
-  4. Open **Bot → Try a chat** (Sandbox) in the sidebar and send `/hello`.
+- **Option B: Remote Console**
+  Open **Bot → Try a chat** (Sandbox) in the sidebar and send `/hello`.
 
 A reply means the whole pipeline works: the Sandbox adapter received the inbound message → matched `commands/hello` → sent the reply back through the unified outbound pipeline. Connecting a real platform later just mounts that platform's adapter in config.
 
-## 3. Know the generated project
+## 4. Know the generated project
 
 To discover loaded commands at any time, send **`/菜单`** in the conversation (`菜单` if no command prefix is configured). It lists the root plugin's commands and child plugins; use `/hello --help` for a command's usage (see [Browse loaded commands](../authoring/commands.md#browse-loaded-commands)).
 
@@ -55,7 +76,7 @@ Two things are enough for now:
 
 Full definitions: [Core concepts at a glance](./concepts.md).
 
-## 4. Observe hot reload — Add features directly to your Bot (1→2) {#hot-reload}
+## 5. Observe hot reload — Add features directly to your Bot (1→2) {#hot-reload}
 
 Change the reply in `commands/hello/index.ts`, save it, and send `/hello` again — the new reply appears without a restart. Messages already in flight finish on the old code; if the new code throws an error, the previous version keeps serving and the terminal prints the cause.
 
