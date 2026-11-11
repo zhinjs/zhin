@@ -124,7 +124,7 @@ RPC（`iam.*`，需 `iam.view` / `iam.manage`）：`iam.users.list|create|update
 
 ### 8. 初始化细节
 
-- 可选驱动：`sqlite`（默认，`.zhin/data.sqlite`）、`mysql`、`pg`、`mongodb`。`redis` 与 `memory` 不能存账号，不出现在列表里。驱动包（`mysql2`、`pg`、`mongodb`）是 `@zhin.js/database` 的可选依赖，缺失时提示「需安装 `pnpm add <包>`」，不在线安装。
+- 可选驱动：`sqlite`（默认，`.zhin/data.sqlite`）、`mysql`、`pg`、`mongodb`。`redis` 与 `memory` 不能存账号，不出现在列表里。驱动包（`mysql2`、`pg`、`mongodb`）是 `@zhin.js/database` 的可选依赖，缺失时可在线安装（白名单与安装路径见 ADR 0053 §3），也可手动 `pnpm add <包>`。
 - 测试连接：临时连接，执行一次探测查询后断开；错误信息去掉凭据。保存前必定先测试。
 - 「保持当前数据库」可以跳过数据库步骤；配置文件里已显式写了 `database` 时默认跳过，但仍可修改。
 - 切换数据库不迁移旧库数据（初始化前旧库里没有账号；插件数据留在原库，两个入口都提示这一点）。
