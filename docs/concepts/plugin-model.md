@@ -126,10 +126,10 @@ sandbox:
 "Root Plugin"不是特殊类型——任何一个 `type: "plugin"` 的包都可以作为 Root 独立启动。在包目录下执行：
 
 ```bash
-zhin runtime start
+zhin start --foreground
 ```
 
-CLI 会以当前目录为项目根，读取包契约和 `configVersion: 2` 主配置后启动。应用声明直接创建主配置中列出的插件实例，不会隐式挂载依赖包中的子插件。这意味着：开发一个游戏插件时，你可以直接在插件目录里启动它自测，不需要先装进某个 Bot 项目。`examples/minimal-bot` 就是一个 Root Plugin 的最小完整形态。
+CLI 启动管理网关，网关拉起的实例以当前目录为项目根，读取包契约和 `configVersion: 2` 主配置后启动。应用声明直接创建主配置中列出的插件实例，不会隐式挂载依赖包中的子插件。这意味着：开发一个游戏插件时，你可以直接在插件目录里启动它自测，不需要先装进某个 Bot 项目。`examples/minimal-bot` 就是一个 Root Plugin 的最小完整形态。
 
 ## platformFeatures：Root 继承的平台 Features
 

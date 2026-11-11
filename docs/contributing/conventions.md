@@ -31,7 +31,7 @@ import { DisposeStack } from './dispose';           // ❌
 
 ## 新插件：Plugin Runtime（默认）
 
-唯一启动路径是 `zhin runtime start`。新插件：
+唯一启动路径是 `zhin start`（管理网关拉起实例；`zhin runtime start` 是 `zhin start --foreground` 的别名）。新插件：
 
 - `plugin.ts` default-export `definePlugin()`（从 `zhin.js` 导入）
 - 能力放在约定目录（`commands/` → `defineCommand`，`tools/` → `defineAgentTool`，…），一个文件一个 default export
@@ -41,7 +41,7 @@ import { DisposeStack } from './dispose';           // ❌
 
 ## Removed：`usePlugin()` / `getPlugin()` / `bootstrapNode`
 
-`zhin.js/node`、`bootstrapNode`、`usePlugin()` 与 `getPlugin()` **已删除且不再导出**。唯一入口是 `definePlugin()` + `zhin runtime start`。门禁 `pnpm check:no-removed-plugin-api` 阻止重新引入这些调用。迁移：`.github/skills/migrate-zhin-plugin-runtime`。
+`zhin.js/node`、`bootstrapNode`、`usePlugin()` 与 `getPlugin()` **已删除且不再导出**。唯一入口是 `definePlugin()` + `zhin start`。门禁 `pnpm check:no-removed-plugin-api` 阻止重新引入这些调用。迁移：`.github/skills/migrate-zhin-plugin-runtime`。
 ## 代级状态：Snapshot Resource
 
 共享连接、数据库和其他有状态对象必须在 setup 中通过 `context.resources.provide`

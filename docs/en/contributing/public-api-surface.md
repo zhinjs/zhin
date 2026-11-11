@@ -69,9 +69,9 @@ The stable authoring surface at `zhin.js/i18n` includes `createMessages`, `Local
 
 | API | Stability | Source Package | One-liner |
 |-----|-----------|----------------|-----------|
-| `usePlugin()` / `getPlugin()` | `removed` | none (no longer exported) | The only entry is `definePlugin` + `zhin runtime start` |
+| `usePlugin()` / `getPlugin()` | `removed` | none (no longer exported) | The only entry is `definePlugin` + `zhin start` |
 | `MessageCommand` / `CommandFeature` | `removed` | none (no longer exported) | Commands use `defineCommand` and Runtime `CommandIndex` |
-| `bootstrapNode` / `zhin.js/node` | `removed` | none (subpath deleted) | The only startup entry is `zhin runtime start` |
+| `bootstrapNode` / `zhin.js/node` | `removed` | none (subpath deleted) | The only startup entry is `zhin start` |
 | `AgentMessageSenderExtra` / `SenderScope` | `removed` | none (no longer exported) | Participant identity lives only in `UserMessage.actor` |
 | `buildSenderPrefix` / `applySenderExtraToUserMessage` / `stripSenderPrefixFromText` | `removed` | none (no longer exported) | The AI boundary renders participant labels from actor and never infers identity from text or extra |
 | `buildSenderPrefixForMessage` | `removed` | none (no longer exported) | Core triggers return user content without encoding Agent identity |
@@ -95,7 +95,7 @@ The stable authoring surface at `zhin.js/i18n` includes `createMessages`, `Local
 
 | Command | Stability | Source Package | One-liner |
 |---------|-----------|----------------|-----------|
-| `zhin runtime start` | `stable` | `@zhin.js/cli` | Plugin Runtime entry point (composition root) |
+| `zhin start` | `stable` | `@zhin.js/cli` | Starts the management gateway, which launches the instance (ADR 0054); `zhin runtime start` is an alias for `zhin start --foreground` |
 | `zhin setup` | `stable` | `@zhin.js/cli` | Incremental configuration wizard for existing projects |
 | `zhin doctor` | `stable` | `@zhin.js/cli` | Environment/config health check |
 | `pnpm create zhin-app` | `stable` | `create-zhin-app` | New project scaffold |
@@ -121,7 +121,7 @@ The stable authoring surface at `zhin.js/i18n` includes `createMessages`, `Local
 
 | Item | Stability | Status | One-liner |
 |------|-----------|--------|-----------|
-| Legacy `usePlugin()` / `getPlugin()` plugin system | `removed` | Deleted from source and the public surface | The only entry is `definePlugin` + `zhin runtime start` |
+| Legacy `usePlugin()` / `getPlugin()` plugin system | `removed` | Deleted from source and the public surface | The only entry is `definePlugin` + `zhin start` |
 | `MessageCommand` / classic `CommandFeature` | `removed` | Deleted from source and the public surface | Commands use `defineCommand` and Runtime `CommandIndex` |
 | Core `ToolFeature` / `SkillFeature` | `removed` | Deleted from source and the public surface | Tool / Skill use Feature providers, generation projections, and Agent `CapabilityIngress` |
 | Agent `FeatureCapabilityIngress` | `removed` | Deleted from source and the public surface | Agent retains only the `CapabilityIngress` that reads Runtime snapshots |
@@ -131,7 +131,7 @@ The stable authoring surface at `zhin.js/i18n` includes `createMessages`, `Local
 | Classic Core `Plugin` runtime | `removed` | The Plugin class, Context ALS, duplicate Dispatcher, and inbound pipeline were deleted | Plugin lifecycle belongs to generation snapshots; IM dispatch only uses `ImRuntime` |
 | Kernel `PluginBase` / mutable `Feature` registry | `removed` | The Plugin tree, string DI, prototype extension registry, and self-tests were deleted | Lifecycle belongs to `@zhin.js/plugin-runtime`; discovery and projection belong to `@zhin.js/feature-kit` |
 | Kernel global Schedule getters/setters | `removed` | `get/setScheduleEngine` and `get/setScheduler` were deleted | Each `ScheduleJobEngine` owns and disposes its scheduler; Host scheduling uses a generation-owned token |
-| `bootstrapNode` / `zhin.js/node` | `removed` | No longer exported | Use `zhin runtime start` |
+| `bootstrapNode` / `zhin.js/node` | `removed` | No longer exported | Use `zhin start` |
 | `AgentOrchestrator` / `ResourceHub` | `removed` | Compatibility names are no longer exported | Use `AgentResourceHub` for capability registration; multi-Agent collaboration goes through `@zhin.js/harness` (ADR 0048) |
 | "Host plugin" narrative | `deprecated` | Documentation has been consolidated | Host capabilities are now token-based (see Host Token table above), no longer a plugin concept |
 | `examples/test-bot` as a user path | `deprecated` | Maintainer kitchen sink | User paths are minimal-bot (Stable) -> full-bot (L4); do not use test-bot config as a template |

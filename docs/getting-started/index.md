@@ -28,6 +28,8 @@ pnpm dev
 
 令牌只放在 `#` 之后，不会发送到 console.zhin.dev 的服务器。`-y` 表示全部接受默认值、一个问题都不问。
 
+`pnpm dev` 就是 `zhin start --foreground --watch source config`：前台启动**管理网关**，网关再拉起 **Zhin 实例**（你的 Bot）。网关监听 HTTP 端口、负责 Console 登录与初始化；实例跑插件和适配器，改代码会热重载。Ctrl+C 同时停止两者。不想占着终端时用 `npx zhin start`（后台运行），再用 `npx zhin status`、`npx zhin logs -f`、`npx zhin stop` 管理，见 [zhin start](../cli/runtime.md)。
+
 ::: tip 跳过 Console 里的适配器步骤
 脚本或想直接试聊时，可以在创建时就装上 Sandbox（浏览器里的模拟聊天窗口）：`npm create zhin-app my-bot -- -y --adapter sandbox`。`--database`、`--adapter`、`--ai` 等参数的完整说明见 [create-zhin-app README](https://github.com/zhinjs/zhin/tree/main/packages/toolkit/create-zhin#参数详解)。
 :::
@@ -40,8 +42,9 @@ pnpm dev
 2. **所有者账号**：设置用户名和密码并登录；此后初始化令牌失效，日常用账号登录。
 3. **AI**：这一页先跳过，之后再用 `npx zhin setup --ai` 或 Console 打开。
 4. **适配器**：选 **Sandbox**，不需要任何平台账号。
+5. **完成**：汇总后进入仪表盘。
 
-每一步都可以跳过、以后从「功能」区再进入。
+每一步都可以跳过、以后从「功能」区再进入。每一步用什么凭据、需要什么权限见 [Console 初始化与引导](../console/onboarding.md)。
 
 ## 3. 发送 `/hello` 验证
 
@@ -50,7 +53,7 @@ pnpm dev
 - **方式 A：本地内置 Sandbox（最快）**
   直接在浏览器打开 `http://127.0.0.1:8068/sandbox`，输入 `/hello` 并发送，立即看到回复。
 - **方式 B：Remote Console**
-  打开侧栏「机器人 → 试聊一下」（Sandbox），发送 `/hello`。
+  打开侧栏「会话 → 沙盒」，发送 `/hello`。
 
 收到回复即代表完整链路跑通：Sandbox 适配器收到入站消息 → 匹配到 `commands/hello` → 回复经统一出站链路发回。之后接入真实平台，只是在配置里挂载对应的适配器。
 
