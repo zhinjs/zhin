@@ -8,17 +8,17 @@ import inquirer from 'inquirer';
 import {
   CONSOLE_BUILTIN_ROLE_NAMES,
 } from '@zhin.js/console-protocol';
-import { createDatabaseHost, resolveDatabaseConfig } from '@zhin.js/core/runtime';
 import { DEFAULT_ROOT_CONFIG_FILE_NAME, expandEnvironmentValue } from '@zhin.js/plugin-runtime';
 import { createConfigDocument } from '@zhin.js/runtime';
-import { ConsoleConfigurationStore } from '../plugin-runtime/console/configuration.js';
-import { readEnvFile, writeEnvFile } from '../plugin-runtime/console/environment-files.js';
-import { projectEnvironment } from '../plugin-runtime/console/iam/install.js';
-import { ConsoleIamService, IamError } from '../plugin-runtime/console/iam/service.js';
-import { ConsoleSetupService, type SetupDatabaseField, type SetupDriver } from '../plugin-runtime/console/iam/setup-service.js';
-import { defineConsoleIamTables } from '../plugin-runtime/console/iam/tables.js';
-import { findConfigFile } from '../utils/config-file.js';
+import { ConsoleConfigurationStore } from '@zhin.js/gateway/config';
+import { readEnvFile, writeEnvFile } from '@zhin.js/gateway/config';
+import { projectEnvironment } from '@zhin.js/gateway/iam';
+import { ConsoleIamService, IamError } from '@zhin.js/gateway/iam';
+import { ConsoleSetupService, type SetupDatabaseField, type SetupDriver } from '@zhin.js/gateway/iam';
+import { defineConsoleIamTables } from '@zhin.js/gateway/iam';
+import { findConfigFile } from '@zhin.js/gateway/project';
 import { loadHostHttpConfig } from '../utils/host-http.js';
+import { importProjectInstanceCli, type ProjectDatabaseHost } from '../utils/project-instance.js';
 
 export interface ConsoleCliIo {
   log(message: string): void;
@@ -45,12 +45,15 @@ export async function openProjectConsole(projectRoot: string): Promise<OpenedPro
   const environment = await projectEnvironment(projectRoot);
   const raw = (await document.read()).document;
   const expanded = expandEnvironmentValue(raw, key => environment[key]);
-  const resolved = await resolveDatabaseConfig(projectRoot, expanded as never) as { dialect: string; filename?: unknown };
+  // DatabaseHost is instance (IM) code until the gateway opens the database itself (B1.4).
+  const instance = await importProjectInstanceCli(projectRoot);
+  const resolved = await instance.resolveDatabaseConfig(projectRoot, expanded as never) as { dialect: string; filename?: unknown };
   // The Host runs from the project root; the CLI may not, so anchor a relative sqlite file there.
   const config = resolved.dialect === 'sqlite' && typeof resolved.filename === 'string' && !path.isAbsolute(resolved.filename)
     ? { ...resolved, filename: path.resolve(projectRoot, resolved.filename) }
     : resolved;
-  const database = createDatabaseHost(config as never);
+  const database = instance.createDatabaseHost(config as never) as ProjectDatabaseHost
+    & Parameters<typeof defineConsoleIamTables>[0] & ConstructorParameters<typeof ConsoleIamService>[0]['database'];
   const supported = defineConsoleIamTables(database);
   let iam: ConsoleIamService | undefined;
   if (supported) {

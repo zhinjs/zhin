@@ -5,7 +5,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import inquirer from 'inquirer';
 import { execFileSync } from 'node:child_process';
-import { PluginManagementWorkflow } from '../plugin-management/workflow.js';
+import { PluginManagementWorkflow } from '@zhin.js/gateway/plugin-management';
 import {
   applyProjectConfigPlan,
   createProjectConfigPlan,

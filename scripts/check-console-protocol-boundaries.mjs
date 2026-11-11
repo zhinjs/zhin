@@ -13,7 +13,7 @@ const files = [
     .map(entry => `${extendedRpcDirectory}/${entry.name}`)
     .sort(),
   'packages/console/client/client/transport/console-transport.ts',
-  'basic/cli/src/plugin-runtime/console/api-routes.ts',
+  'packages/im/zhin/src/instance/console/api-routes.ts',
 ];
 const forbidden = [
   [/\bnormalizeConsole(?:PushType|PushMessage|RpcType|RpcMessage)\b/u, 'Console compatibility normalizer'],

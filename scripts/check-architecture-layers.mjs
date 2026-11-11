@@ -18,17 +18,33 @@ const repoRoot = path.resolve(__dirname, '..');
 
 // 定义层级和允许的依赖关系
 // basic/ 内部的包可以相互导入
-// 注意：basic/cli 是 Plugin Runtime 的 composition root（`zhin runtime start`
-// 直接装配 ImRuntime / Agent Host / Console Host，见
-// docs/architecture/target-implementation/in-place-migration.md「start、migrate、
-// scaffold | @zhin.js/cli」），因此它必须能导入 packages/im 各层。
-// 该例外只适用于 basic/cli，basic/{logger,schema,database} 仍保持最底层约束。
+// 注意（ADR 0054 §0）：Zhin 实例的装配根是 zhin.js 的 `src/instance/`（`zhin.js/instance`
+// 装配 ImRuntime / Agent Host / 运行时侧 Console 后端），因此只有这个目录能导入
+// packages/im 各层、协议 Host 与 Console 栈。@zhin.js/cli 与 @zhin.js/gateway 不得导入
+// IM 层（只允许 plugin-runtime 契约与 runtime 的配置 / 项目文件工具）；CLI 需要实例代码时
+// 按项目根解析 `zhin.js/instance`，不静态导入。
+// basic/{logger,schema,database} 仍保持最底层约束。
 // Plugin Runtime 新层（约定式插件运行时迁移引入）：
 // plugin-runtime（契约/宿主 token，零 zhin 依赖）→ feature-kit（feature provider 基座）
 // → 9 个 provider 包（adapter/command/component/middleware/handler/tool/skill/agent-feature/mcp-feature）
 // → runtime（RootHost 装配 + isolate / config-file）。
 // packages/host/http-contract 是协议 Host 的最小端口（路由 + body），零业务依赖。
 // packages/host/http 是具体 HTTP / WebSocket Host，仅依赖 basic + plugin-runtime。
+/** `@zhin.js/cli` and `@zhin.js/gateway`: no IM layer (ADR 0054 §0). */
+export const managementLayerAllowed = Object.freeze([
+  // basic/* except basic/cli: the gateway must not import the CLI (the CLI depends on it).
+  'basic/logger',
+  'basic/schema',
+  'basic/database',
+  'basic/schedule',
+  'packages/im/plugin-runtime',
+  'packages/im/runtime',
+  'packages/host/http',
+  'packages/host/http-contract',
+]);
+function managementAllowed(extra) {
+  return [...managementLayerAllowed, ...extra];
+}
 const providerLayerAllowed = [
   'basic',
   'packages/im/im-contract',
@@ -41,7 +57,7 @@ export const layers = {
   // external Console builds can share it without pulling runtime packages.
   'packages/console/protocol': { level: 0, allowedImports: [] },
   'packages/host/http-contract': { level: 0, allowedImports: [] },
-  'basic/cli': { level: 0, allowedImports: ['basic', 'packages/im', 'packages/host', 'packages/console'] },
+  'basic/cli': { level: 0, allowedImports: managementAllowed(['basic', 'packages/host/gateway', 'packages/console']) },
   'basic': { level: 0, allowedImports: ['basic'] },
   'packages/im/jsx': { level: 0, allowedImports: ['packages/im/im-contract'] },
   'packages/toolkit/tailwind': { level: 0, allowedImports: ['packages/im/jsx'] },
@@ -62,6 +78,8 @@ export const layers = {
   'packages/im/prompt-section': { level: 1, allowedImports: providerLayerAllowed },
   'packages/im/schedule-feature': { level: 1, allowedImports: providerLayerAllowed },
   'packages/im/runtime': { level: 1, allowedImports: [...providerLayerAllowed, 'packages/im/adapter', 'packages/im/command', 'packages/im/component', 'packages/im/middleware', 'packages/im/handler', 'packages/im/tool', 'packages/im/skill', 'packages/im/agent-feature', 'packages/im/mcp-feature', 'packages/im/prompt-section', 'packages/im/schedule-feature'] },
+  // ADR 0054: the management gateway never loads zhin.js, IM layers or plugin code.
+  'packages/host/gateway': { level: 1, allowedImports: managementAllowed(['packages/console/protocol']) },
   'packages/host/http': { level: 1, allowedImports: ['basic', 'packages/im/plugin-runtime', 'packages/console/protocol', 'packages/host/http-contract'] },
   'packages/im/kernel': { level: 1, allowedImports: ['basic'] },
   'packages/im/ai': { level: 2, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/plugin-runtime'] },
@@ -71,6 +89,10 @@ export const layers = {
   // define-plugin.ts 是 @zhin.js/plugin-runtime 的门面 re-export（zhin.js/plugin-runtime 子路径），允许。
   // ADR 0044 §3: shared OneBot-family raw event → canonical side event mapping; adapters depend on it, core never does.
   'packages/im/adapter-onebot-events': { level: 4, allowedImports: ['basic', 'packages/im/core', 'packages/im/adapter', 'packages/im/im-contract'] },
+  // ADR 0054 §0: the instance composition root (moved from basic/cli). The
+  // packages/host/gateway edge is temporary (IAM / terminal installers and shared
+  // project-file services) until the gateway process owns them (B1.4).
+  'packages/im/zhin/src/instance': { level: 6, allowedImports: ['basic', 'packages/im', 'packages/host', 'packages/console', 'packages/toolkit'] },
   'packages/im/zhin': { level: 5, allowedImports: ['packages/im/jsx', 'basic', 'packages/im/harness', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/im/agent', 'packages/im/runtime', 'packages/im/plugin-runtime', 'packages/im/permission', 'packages/im/schedule-feature'] },
   // Protocol Hosts consume only the narrow HTTP route contract; they must not
   // depend on the concrete HTTP Host implementation.
@@ -100,6 +122,10 @@ export const packageNameToPath = {
   '@zhin.js/adapter-onebot-events': 'packages/im/adapter-onebot-events',
   'zhin.js': 'packages/im/zhin',
   '@zhin.js/host-http': 'packages/host/http',
+  '@zhin.js/gateway': 'packages/host/gateway',
+  '@zhin.js/speech': 'packages/toolkit/speech',
+  '@zhin.js/testing': 'packages/toolkit/testing',
+  '@zhin.js/html-renderer': 'packages/toolkit/html-renderer',
   '@zhin.js/host-http-contract': 'packages/host/http-contract',
   '@zhin.js/mcp': 'packages/host/mcp',
   '@zhin.js/a2a': 'packages/host/a2a',
@@ -288,6 +314,36 @@ export function findUndeclaredWorkspaceImports({
   return violations;
 }
 
+/**
+ * Manifest-level ADR 0054 rule: `@zhin.js/cli` / `@zhin.js/gateway` must not depend on `zhin.js`
+ * or any IM layer (dependencies, peer, optional or dev).
+ * @param {Record<string, any>} manifest
+ * @param {string} manifestPath
+ * @param {string} packageName
+ */
+export function findManagementManifestViolations(manifest, manifestPath, packageName) {
+  const violations = [];
+  for (const section of ['dependencies', 'peerDependencies', 'optionalDependencies', 'devDependencies']) {
+    for (const dependency of Object.keys(manifest[section] ?? {})) {
+      const target = packageNameToPath[dependency];
+      if (!target) continue;
+      const allowed = layers[managementLayerKey(packageName)].allowedImports.some(prefix => target === prefix || target.startsWith(`${prefix}/`));
+      if (!allowed) {
+        violations.push({
+          file: manifestPath,
+          import: dependency,
+          reason: `${packageName} must not depend on IM layers or zhin.js (${section}; ADR 0054 §0)`,
+        });
+      }
+    }
+  }
+  return violations;
+}
+
+function managementLayerKey(packageName) {
+  return packageName === '@zhin.js/cli' ? 'basic/cli' : 'packages/host/gateway';
+}
+
 function runMain() {
 const violations = [];
 const seenFiles = new Set();
@@ -306,7 +362,8 @@ for (const layerPath of layerPathsBySpecificity) {
     const content = fs.readFileSync(file, 'utf8');
     const imports = parseImports(content, { includeTypeOnly: true });
 
-    if (sourceLayer.startsWith('packages/host/')
+    // Protocol Hosts only; the management gateway is a process with its own module state.
+    if (sourceLayer.startsWith('packages/host/') && sourceLayer !== 'packages/host/gateway'
       && /^let\s+[A-Za-z_$][\w$]*(?:\s*:[^=;]+)?\s*(?:=|;)/mu.test(content)) {
       violations.push({
         file: relativeFilePath,
@@ -355,6 +412,17 @@ for (const contract of zeroRuntimeDependencyContracts) {
       });
     }
   }
+}
+
+// ADR 0054 §0: the CLI and the gateway take no IM-layer dependency in any manifest
+// section, so a dynamic import cannot hide one either.
+for (const managed of [
+  { directory: 'basic/cli', packageName: '@zhin.js/cli' },
+  { directory: 'packages/host/gateway', packageName: '@zhin.js/gateway' },
+]) {
+  const manifestPath = `${managed.directory}/package.json`;
+  const manifest = JSON.parse(fs.readFileSync(path.join(repoRoot, manifestPath), 'utf8'));
+  violations.push(...findManagementManifestViolations(manifest, manifestPath, managed.packageName));
 }
 
 {

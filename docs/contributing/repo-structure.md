@@ -13,7 +13,7 @@ title: 仓库结构
 | `basic/` | 基础层：`cli`、`database`、`logger`、`schedule`、`schema`（日志、数据库、配置校验、命令行） |
 | `packages/im/` | IM 核心层：`adapter`、`agent`、`ai`、`command`、`component`、`config-file`、`core`、`feature-kit`、`harness`、`isolate`、`kernel`、`mcp-feature`、`middleware`、`plugin-runtime`（含 `im-contract`）、`runtime`（含 `host/` 通用安装器）、`skill`、`tool`、`zhin` 等 |
 | `packages/console/` | Remote Console 支撑包（`client`、`layout`、`page`、`pagemanager`、`protocol` 含 `contract`/`review-kit`）。Host 提供 Server-Driven Blueprints 与 API，UI 在独立仓库 [zhin-console](https://github.com/zhinjs/console)（console.zhin.dev） |
-| `packages/host/` | Host 运行时：`http`（`@zhin.js/host-http`）、`mcp`（MCP Server）、`a2a`（A2A Server） |
+| `packages/host/` | Host 运行时：`http`（`@zhin.js/host-http`）、`mcp`（MCP Server）、`a2a`（A2A Server）、`gateway`（`@zhin.js/gateway`，管理网关，ADR 0054） |
 | `packages/toolkit/` | `create-zhin`（`pnpm create zhin-app`）、`scaffold-wizard`（配置向导）、`components`（纯 JSX 样式）、`tailwind`（静态工具类）、`html-renderer`（Shotium）、`speech` |
 | `packages/game-kit/` | 游戏开发套件（供 `plugins/games/` 使用） |
 | `plugins/adapters/` | 平台适配器：sandbox、qq、icqq、napcat、onebot11/12、discord、telegram、slack、kook、dingtalk、lark、line、wecom、email、github、satori 等 |
@@ -48,15 +48,19 @@ flowchart BT
   core --> zhin["zhin.js"]
   contract --> runtime["runtime"]
   featureKit --> runtime
-  runtime --> cli["cli composition root"]
-  agent --> cli
+  runtime --> instance["zhin.js/instance（实例装配根）"]
+  agent --> instance
+  runtime --> gateway["@zhin.js/gateway（管理网关）"]
+  gateway --> cli["@zhin.js/cli"]
 ```
 
 `packages/im/harness`（`@zhin.js/harness`）是 ADR 0048 的多 Agent 协作微内核（Mailbox、Authority、预算账本、Guard Kernel、Engagement Journal），不含 IM 概念；`packages/im/agent/src/collaboration/` 把它接到 Agent 运行时并提供协作工具，多 Bot 协作场所（Venue）在 `packages/im/core/src/venue/`。
 
 `plugin-runtime`、`im-contract` 与 `interaction` 是底层契约；Feature 包在其上描述单一能力，
 `core` 负责组装 IM 链路。`kernel` 与 `ai` 不含 IM 概念。唯一跨层装配点是
-`basic/cli`，`zhin runtime start` 在这里组合 IM、Agent 与 Console Host。
+`packages/im/zhin/src/instance/`（`zhin.js/instance`，ADR 0054 §0），在这里组合 IM、Agent 与 Console Host。
+`@zhin.js/gateway`（`packages/host/gateway`：Console 账号与权限、终端、项目配置与依赖事务）与
+`@zhin.js/cli` 不依赖 `zhin.js` 与 IM 层；`zhin runtime start` 由 CLI 按项目根解析 `zhin.js/instance` 启动实例。
 
 大型领域采用“一个 canonical 入口 + 单向内部协作”的深模块结构。当前收敛后的阅读入口是：
 
@@ -75,11 +79,13 @@ CODEOWNERS 负责请求审查；是否要求审查通过由 GitHub 分支保护�
 
 | 模块 | 修改入口 | 状态与职责边界 | 主要验证 |
 | --- | --- | --- | --- |
-| Plugin Runtime / RootRuntime | `packages/im/plugin-runtime/CONTEXT.md`、`packages/im/runtime/src/root-runtime.ts`、`packages/im/runtime/src/host/` | generation、snapshot、资源租约与切换；`runtime/src/host/` 是进程生命周期、就绪探针与发布日志等通用 Host 机制，HTTP/Protocol/Speech/HTML-Renderer Host 安装器在 `basic/cli/src/plugin-runtime/*-host-installer.ts` | 生命周期与热重载测试、`check:architecture` |
+| Plugin Runtime / RootRuntime | `packages/im/plugin-runtime/CONTEXT.md`、`packages/im/runtime/src/root-runtime.ts`、`packages/im/runtime/src/host/` | generation、snapshot、资源租约与切换；`runtime/src/host/` 是进程生命周期、就绪探针与发布日志等通用 Host 机制，HTTP/Protocol/Speech/HTML-Renderer Host 安装器在 `packages/im/zhin/src/instance/*-host-installer.ts` | 生命周期与热重载测试、`check:architecture` |
 | IM / Adapter | `packages/im/core/src/plugin-runtime/im/inbound-spine.ts`、`packages/im/adapter/src/adapter-index.ts` | Core 组合入站脊柱（`inbound-spine` / `inbound-runtime`）与出站链路；Database/Outbound/Inbox Host 位于 `@zhin.js/core/runtime` | 消息链路与端点测试、`check:harness-paths`、`check:adapter-endpoint-boundaries` |
-| Agent / Harness | `packages/im/agent/src/plugin-runtime/ingress/unified-mailbox-spine.ts`、`packages/im/harness/src/harness.ts`、`packages/im/agent/src/collaboration/` | 统一信箱入站脊柱（`unified-mailbox-spine`）与协作护栏分开；Agent/Inference Host 运行时位于 `@zhin.js/agent/runtime`，其安装器在 `basic/cli/src/plugin-runtime/agent/host-installer.ts` | 领域与持久化测试、`check:architecture` |
+| Agent / Harness | `packages/im/agent/src/plugin-runtime/ingress/unified-mailbox-spine.ts`、`packages/im/harness/src/harness.ts`、`packages/im/agent/src/collaboration/` | 统一信箱入站脊柱（`unified-mailbox-spine`）与协作护栏分开；Agent/Inference Host 运行时位于 `@zhin.js/agent/runtime`，其安装器在 `packages/im/zhin/src/instance/agent/host-installer.ts` | 领域与持久化测试、`check:architecture` |
 | HTTP / Console | `packages/host/http/src/http-host.ts`、`packages/console/protocol/`、`packages/console/pagemanager/src/shell/page-renderer.ts` | Host 拥有监听与路由；wire 与 Blueprint 契约在 `protocol/`；Console 外壳与 Blueprint 渲染在 `pagemanager/` | Host/RPC 测试、`check:console-protocol-boundaries`、`check:console-contract` |
-| CLI / 脚手架 | `basic/cli/src/plugin-runtime/start-command.ts`、`packages/toolkit/scaffold-wizard/src/` | CLI 是极薄装配点；向导提供配置机制，用户配置文件不由模板覆盖 | CLI/向导测试、`check:created-project` |
+| 实例装配根 | `packages/im/zhin/src/instance/start-command.ts` | `zhin.js/instance` 组合 IM、Agent 与 Console Host；运行时侧 Console 后端在 `instance/console/` | 装配与 Console 测试、`check:architecture` |
+| 管理网关 | `packages/host/gateway/src/` | Console 账号与权限（`iam/`）、终端（`terminal/`）、项目配置（`config/`、`project/`）、依赖事务（`plugin-management/`）、实例监管；不依赖 `zhin.js` 与 IM 层 | 网关测试、`check:architecture` |
+| CLI / 脚手架 | `basic/cli/src/commands/`、`packages/toolkit/scaffold-wizard/src/` | CLI 只管理项目、不依赖 IM 层，需要实例代码时按项目解析 `zhin.js/instance`；向导提供配置机制，用户配置文件不由模板覆盖 | CLI/向导测试、`check:created-project` |
 
 修改前先确认状态归属、公开入口和实际调用方。拆分大型文件时，以可独立变化的规则、
 状态所有权和 IO 为边界，保留对外入口；不要同时引入新的能力或配置格式。

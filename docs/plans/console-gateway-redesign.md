@@ -126,7 +126,7 @@ ADR 0049–0054 与本计划。
 | A4 Console 导航重构 | review | [zhinjs/console#92](https://github.com/zhinjs/console/pull/92)。待办：zhin 侧页面元数据加 `section` 字段，`packages/console/client` 的 `resolveEntryRegister` 透传 `meta.section`（M2）；`feature.matrix` 返回形状已与 A2 对齐 |
 | A5 create-zhin 精简 | done | 已提交；生成项目 README / 首页 / hello 模板（`scaffold-wizard/message-templates.ts`）里的首跑步骤留到 B1.6 随 `zhin start` 一起改 |
 | M2 集成批 1 | review | PR-1（见 PR 列表）。终端接线、Host 配置 Schema、适配器反向 WS 改为自鉴权、页面 `section`、文档与升级指南、发版门禁（6 minor / 0 major，`zhin.js` patch）、锁文件、changesets；`check:all` 全过。偏差：终端会话按用户（`user:<id>`）吊销，单独吊销 API 令牌或改角色定义不断开会话。未验证：`check:created-project*`、真实 OneBot/NapCat/Milky 客户端、Windows 原生模块、真实 SSH |
-| B1 管理网关 | doing | B1.-1 包拆分已派发 |
+| B1 管理网关 | doing | B1.-1 拆包已完成（`@zhin.js/gateway` 新包；装配根迁到 `zhin.js/instance`；CLI 无 IM 依赖；`check:all` 全过）。临时边：`zhin.js/instance` 依赖 `@zhin.js/gateway`（配置存储、插件管理事务、IAM、终端、TSX 加载器、supervisor 辅助）。决定：配置存储与插件管理事务归网关所有，B1.4 起实例的 Console 配置 / 插件 RPC 改由网关处理，届时删除这条边。下一步 B1.0 |
 | B2 引导后端 | todo | 依赖 B1.4 |
 | M4 集成批 2 | todo | |
 | C1–C4 | todo | 依赖发版 |

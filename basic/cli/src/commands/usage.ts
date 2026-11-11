@@ -6,7 +6,7 @@
  */
 import { join } from 'node:path';
 import { Command } from 'commander';
-import { FIXED_SEGMENTS, num, scanTraces } from '../usage/aggregate.js';
+import { FIXED_SEGMENTS, num, scanTraces } from '@zhin.js/gateway/usage';
 import { parseTraceTime } from './trace.js';
 
 export interface UsageReportOptions {

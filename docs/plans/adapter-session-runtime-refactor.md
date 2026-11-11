@@ -294,7 +294,7 @@ summary 仅部署级：runtime 显式 summary 优先，否则保留静态显式 
 - 冻结后构建：45 个 workspace 构建任务通过；ICQQ 与 Command 独立类型合同通过，覆盖字符串注册、params/options、withConfig、工厂与预期错误。
 - 全仓门禁：`HARNESS_SEQUENTIAL=1 pnpm check:all`，59 项全部通过，包括全量单测、架构/边界、类型、lint、Stable Smoke、L4-CI 与安装体积。
 - Agent 评测：冻结源码上的 `pnpm eval:agent`，10 个测试文件、195 项用例全部通过。
-- 实际构建后的 CLI：[账号验收](../../basic/cli/tests/plugin-runtime/runtime-endpoints/live-host.test.ts)与[模型验收](https://github.com/zhinjs/zhin/blob/d8532ddbf8194dd422818463deb554bb97d587e7/basic/cli/tests/plugin-runtime/runtime-model-policy/live-host.test.ts)通过。本地子进程、HTTP、SQLite 为真实实现，平台 Client 与模型服务为合成实现。验证 PID/generation/启动文件不变、重启恢复、停用不复活及无原子持久化 Host 的静态兼容路径。
+- 实际构建后的 CLI：[账号验收](../../packages/im/zhin/tests/instance/runtime-endpoints/live-host.test.ts)与[模型验收](https://github.com/zhinjs/zhin/blob/d8532ddbf8194dd422818463deb554bb97d587e7/basic/cli/tests/plugin-runtime/runtime-model-policy/live-host.test.ts)通过。本地子进程、HTTP、SQLite 为真实实现，平台 Client 与模型服务为合成实现。验证 PID/generation/启动文件不变、重启恢复、停用不复活及无原子持久化 Host 的静态兼容路径。
 - 原失败边界的回归：[消息 Session](../../packages/im/core/tests/operation-session-runtime.test.ts)、[系统/请求事件](../../packages/im/core/tests/canonical-event-endpoint.test.ts)、账号 CAS 与登录隔离均已覆盖原红到修后绿；后台审核持有独立账号租约。
 - Console：独立 Console 分支 571 项测试及构建/类型检查通过；共享 Adapter SDK 69 项测试通过，另做双本地模拟 Host 的浏览器交互与桌面/移动端检查。此证据不是已部署页面验收。
 - 默认并行门禁曾出现旧 Client 夹具失败（已修复，业务断言保留），及本机 `git-ai` 写 `refs/notes/ai` 与临时 Git 目录删除竞争。保留原 CI 断言与全局工具配置，最终使用仓库支持的串行模式通过同样 59 项门禁。

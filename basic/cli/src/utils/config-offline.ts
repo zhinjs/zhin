@@ -4,11 +4,11 @@ import {
   ConfigComposer, ConfigValidationError, createConfigDocument, NativeDevelopmentModuleRuntime,
   NodePackageResolver, ProjectGraphService,
 } from '@zhin.js/runtime';
-import { findConfigFile } from './config-file.js';
-import { createTsxModuleLoader } from '../plugin-runtime/start/tsx-module-loader.js';
-import { loadAiConfigUtils } from './ai-config-loader.js';
+import { findConfigFile } from '@zhin.js/gateway/project';
+import { createTsxModuleLoader } from '@zhin.js/gateway/project';
+import { loadAiConfigUtils } from '@zhin.js/gateway/config';
 import { hostModelOwnerId } from '@zhin.js/plugin-runtime';
-import { ConsoleConfigurationStore } from '../plugin-runtime/console/configuration.js';
+import { ConsoleConfigurationStore } from '@zhin.js/gateway/config';
 
 export function requireConfigFile(root: string): string {
   const name = findConfigFile(root);

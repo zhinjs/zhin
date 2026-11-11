@@ -1,0 +1,146 @@
+{
+  "name": "@zhin.js/gateway",
+  "version": "1.1.0",
+  "description": "Zhin.js management gateway: Console access control, terminal, project configuration and instance supervision (ADR 0054)",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    },
+    "./iam": {
+      "types": "./lib/iam.d.ts",
+      "development": "./src/iam.ts",
+      "import": "./lib/iam.js"
+    },
+    "./terminal": {
+      "types": "./lib/terminal.d.ts",
+      "development": "./src/terminal.ts",
+      "import": "./lib/terminal.js"
+    },
+    "./config": {
+      "types": "./lib/config.d.ts",
+      "development": "./src/config.ts",
+      "import": "./lib/config.js"
+    },
+    "./plugin-management": {
+      "types": "./lib/plugin-management.d.ts",
+      "development": "./src/plugin-management.ts",
+      "import": "./lib/plugin-management.js"
+    },
+    "./project": {
+      "types": "./lib/project.d.ts",
+      "development": "./src/project.ts",
+      "import": "./lib/project.js"
+    },
+    "./supervisor": {
+      "types": "./lib/supervisor.d.ts",
+      "development": "./src/supervisor.ts",
+      "import": "./lib/supervisor.js"
+    },
+    "./usage": {
+      "types": "./lib/usage.d.ts",
+      "development": "./src/usage.ts",
+      "import": "./lib/usage.js"
+    },
+    "./http": {
+      "types": "./lib/http.d.ts",
+      "development": "./src/http.ts",
+      "import": "./lib/http.js"
+    }
+  },
+  "files": [
+    "lib",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rimraf lib",
+    "test": "vitest run --root ../../.. packages/host/gateway/tests"
+  },
+  "dependencies": {
+    "@zhin.js/console-protocol": "workspace:*",
+    "@zhin.js/database": "workspace:*",
+    "@zhin.js/host-http": "workspace:*",
+    "@zhin.js/logger": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
+    "@zhin.js/runtime": "workspace:*",
+    "@zhin.js/scaffold-wizard": "workspace:*",
+    "dotenv": "^17.4.2",
+    "fs-extra": "^11.4.0",
+    "tsx": "^4.23.1",
+    "yaml": "^2.9.0"
+  },
+  "optionalDependencies": {
+    "node-pty": "^1.0.0",
+    "ssh2": "^1.16.0"
+  },
+  "devDependencies": {
+    "@types/fs-extra": "^11.0.4",
+    "@types/node": "^26.1.2",
+    "@types/ssh2": "^1.15.5",
+    "@types/ws": "^8.18.1",
+    "typescript": "^6.0.3",
+    "ws": "^8.21.1"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "packages/host/gateway"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org",
+    "exports": {
+      ".": {
+        "types": "./lib/index.d.ts",
+        "import": "./lib/index.js"
+      },
+      "./iam": {
+        "types": "./lib/iam.d.ts",
+        "import": "./lib/iam.js"
+      },
+      "./terminal": {
+        "types": "./lib/terminal.d.ts",
+        "import": "./lib/terminal.js"
+      },
+      "./config": {
+        "types": "./lib/config.d.ts",
+        "import": "./lib/config.js"
+      },
+      "./plugin-management": {
+        "types": "./lib/plugin-management.d.ts",
+        "import": "./lib/plugin-management.js"
+      },
+      "./project": {
+        "types": "./lib/project.d.ts",
+        "import": "./lib/project.js"
+      },
+      "./supervisor": {
+        "types": "./lib/supervisor.d.ts",
+        "import": "./lib/supervisor.js"
+      },
+      "./usage": {
+        "types": "./lib/usage.d.ts",
+        "import": "./lib/usage.js"
+      },
+      "./http": {
+        "types": "./lib/http.d.ts",
+        "import": "./lib/http.js"
+      }
+    }
+  },
+  "keywords": [
+    "zhin",
+    "gateway",
+    "console",
+    "rbac"
+  ],
+  "license": "MIT"
+}

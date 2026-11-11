@@ -3,8 +3,9 @@ import { join, relative, resolve } from 'node:path';
 import { Command } from 'commander';
 import { FilePublishJournalStore } from '../plugin-runtime/publish-journal.js';
 import { NodeProcessRunner, ProjectCommands } from '../plugin-runtime/project-commands.js';
-import { NativeTypeScriptSupervisor, parseStartOptions } from '../plugin-runtime/start/module.js';
-import { formatStartOptionHelp, generatePluginCapabilityCodegen } from '@zhin.js/runtime';
+import { NativeTypeScriptSupervisor } from '@zhin.js/gateway/supervisor';
+import { formatStartOptionHelp, generatePluginCapabilityCodegen, parseStartOptions } from '@zhin.js/runtime';
+import { importProjectInstance } from '../utils/project-instance.js';
 
 export const runtimeCommand = new Command('runtime')
   .description('管理约定式 Plugin Runtime 项目');
@@ -46,7 +47,8 @@ runtimeCommand.command('start')
     const root = resolve(process.cwd());
     const parsed = parseStartOptions(command.args);
     if (await new NativeTypeScriptSupervisor(root, parsed).runIfRequired()) return;
-    const { runStartCommand } = await import('../plugin-runtime/start-command.js');
+    // The instance composition root lives in the project's `zhin.js` (ADR 0054 §0).
+    const { runStartCommand } = await importProjectInstance(root);
     await runStartCommand({
       root,
       args: command.args,

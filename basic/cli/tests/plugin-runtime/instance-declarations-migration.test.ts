@@ -3,7 +3,7 @@ import { chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'n
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createConfigDocument } from '@zhin.js/runtime';
-import { applyInstanceDeclarationMigration, assertNoPendingInstanceMigration, planInstanceDeclarationMigration, recoverInstanceDeclarationMigration } from '../../src/plugin-runtime/migrate/instance-declarations.js';
+import { applyInstanceDeclarationMigration, assertNoPendingInstanceMigration, planInstanceDeclarationMigration, recoverInstanceDeclarationMigration } from '../../../../packages/host/gateway/src/project/instance-declarations.js';
 
 const roots: string[] = [];
 afterEach(async () => { await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
@@ -232,7 +232,7 @@ it.each(['continue', 'rollback'] as const)('preserves 0660 permissions under uma
 });
 
 it('preview is readable, value-free and the CLI apply prints a timestamped backup it can restore from', async () => {
-  const { formatInstanceMigrationPreview } = await import('../../src/plugin-runtime/migrate/instance-declarations.js');
+  const { formatInstanceMigrationPreview } = await import('../../../../packages/host/gateway/src/project/instance-declarations.js');
   const { root, config, source } = await fixture();
   const plan = await planInstanceDeclarationMigration(root);
   const preview = formatInstanceMigrationPreview(plan);

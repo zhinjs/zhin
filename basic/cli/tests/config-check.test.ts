@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
-import { readConfig, saveConfig } from '../src/utils/config-file.js';
+import { readConfig, saveConfig } from '../../../packages/host/gateway/src/project/config-file.js';
 import {
   applyConfigFixes,
   runConfigCheck,

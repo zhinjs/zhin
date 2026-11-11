@@ -10,7 +10,7 @@ import { ImRuntime, type IncomingMessage } from '../../../../packages/im/core/sr
 import type { OutboundEnvelope } from '../../../../packages/im/core/src/plugin-runtime/im/contracts.js';
 import { EndpointDeliveryError } from '@zhin.js/im-contract';
 import { createDatabaseHost } from '../../../../packages/im/core/src/plugin-runtime/im/index.js';
-import { sqliteAvailable } from '../../../../basic/cli/tests/plugin-runtime/sqlite-availability.js';
+import { sqliteAvailable } from '../../../../packages/im/zhin/tests/instance/sqlite-availability.js';
 import create from '../commands/remind/create/index.js';
 import { ReminderService } from '../src/service.js';
 import { reminderServiceToken } from '../src/runtime.js';

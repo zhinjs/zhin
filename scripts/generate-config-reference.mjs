@@ -15,7 +15,7 @@ if (!process.execArgv.includes('--conditions=development')) {
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const checkOnly = process.argv.includes('--check');
-const hostSource = 'basic/cli/src/plugin-runtime/console/configuration-projection.ts';
+const hostSource = 'packages/host/gateway/src/config/configuration-projection.ts';
 const hostReferencePath = 'packages/im/runtime/src/host-config-schema.json';
 const planReferencePath = 'packages/im/ai/provider-plan.schema.json';
 const planReference = JSON.parse(fs.readFileSync(path.join(repoRoot, planReferencePath), 'utf8'));

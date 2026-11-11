@@ -135,7 +135,7 @@ done < names.txt
 
 ## 包清单
 
-以下 105 个非 private 包都需要配置可信发布者（由 `pnpm sync:publishing-manifest` 从各 `package.json` 生成；CI 以 `pnpm check:publishing-manifest` 校验，新增或转为 public 的包须先同步本清单）。
+以下 106 个非 private 包都需要配置可信发布者（由 `pnpm sync:publishing-manifest` 从各 `package.json` 生成；CI 以 `pnpm check:publishing-manifest` 校验，新增或转为 public 的包须先同步本清单）。
 
 ### `basic/`（5）
 
@@ -159,9 +159,10 @@ done < names.txt
 
 - [ ] `@zhin.js/game-kit` — `packages/game-kit`
 
-### `packages/host/`（4）
+### `packages/host/`（5）
 
 - [ ] `@zhin.js/a2a` — `packages/host/a2a`
+- [ ] `@zhin.js/gateway` — `packages/host/gateway`
 - [ ] `@zhin.js/host-http` — `packages/host/http`
 - [ ] `@zhin.js/host-http-contract` — `packages/host/http-contract`
 - [ ] `@zhin.js/mcp` — `packages/host/mcp`

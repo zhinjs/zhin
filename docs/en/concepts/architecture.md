@@ -53,7 +53,9 @@ flowchart BT
     end
     zhin["zhin.js (facade)"]
     host["packages/host/* (http / mcp / a2a)"]
-    cli["@zhin.js/cli (composition root)"]
+    gateway["@zhin.js/gateway (management gateway)"]
+    instance["zhin.js/instance (instance composition root)"]
+    cli["@zhin.js/cli"]
 
     pr --> fk --> ad & cmd & comp & mw & tool
     imc --> ad & cmd & core & agent
@@ -66,7 +68,8 @@ flowchart BT
     agent -. peer .-> zhin
     pr & fk --> rt
     zhin --> host
-    rt & core & host --> cli
+    rt & core & host & gateway --> instance
+    rt --> gateway --> cli
 ```
 
 Dependencies are defined by each package's `package.json`. Read the diagram from the bottom up:
@@ -91,11 +94,12 @@ Moving further up, `@zhin.js/core` assembles the adapter / command / component /
 | Console | `@zhin.js/console-protocol` (including contract / review-kit), `@zhin.js/pagemanager`, `@zhin.js/client` | Server-Driven Blueprints (`definePageBlueprint`), multi-surface projection (Web / IM Card / CLI TUI), Console shell rendering (`renderConsoleShell`), and browser SDK |
 | Facade | `zhin.js` | Re-exports the core authoring surface; `zhin.js/agent`, `zhin.js/ai` sub-paths exposed on demand |
 | Runtime | `@zhin.js/runtime` (including the `/config-file` and `/isolate` subpaths) | `RootRuntime`: scans the project graph, composes configuration, executes generation transactions, HMR, and shared Host lifecycle |
-| Assembly | `@zhin.js/cli` | Composition root -- `zhin runtime start` wires domain Hosts into a runnable process and owns the installers for the generic HTTP/Protocol (MCP, A2A)/Speech/HTML-Renderer/Schedule Hosts (`basic/cli/src/plugin-runtime/*-host-installer.ts`) |
+| Assembly | `zhin.js/instance` | Instance composition root (ADR 0054 §0) -- wires domain Hosts into a runnable process and owns the installers for the generic HTTP/Protocol (MCP, A2A)/Speech/HTML-Renderer/Schedule Hosts (`packages/im/zhin/src/instance/*-host-installer.ts`) and the runtime-side Console backend |
+| Management | `@zhin.js/gateway`, `@zhin.js/cli` | Management gateway: Console accounts and permissions, terminal, project configuration and package transactions, instance supervision; the CLI manages the project and resolves `zhin.js/instance` from it. Neither depends on `zhin.js` or IM layers |
 
-## Composition root: `@zhin.js/cli`
+## Composition root: `zhin.js/instance`
 
-The framework itself does not "start" anything -- each layer only provides mechanisms. The entry code that assembles these mechanisms into a runnable process lives in `@zhin.js/cli` (`basic/cli/src/commands/runtime.ts` and `basic/cli/src/plugin-runtime/`), the only composition root allowed to wire across all layers. IM and Agent Host implementations live in their owning domain packages (`@zhin.js/core/runtime`, `@zhin.js/agent/runtime`, and `@zhin.js/pagemanager`) so the CLI holds no domain state machines; the installers for the generic HTTP, Protocol, Speech, and HTML-Renderer Hosts stay in the CLI's own `basic/cli/src/plugin-runtime/`.
+The framework itself does not "start" anything -- each layer only provides mechanisms. The entry code that assembles these mechanisms into a runnable process lives in `zhin.js/instance` (`packages/im/zhin/src/instance/`, ADR 0054 §0), the only composition root allowed to wire across all layers. IM and Agent Host implementations live in their owning domain packages (`@zhin.js/core/runtime`, `@zhin.js/agent/runtime`, and `@zhin.js/pagemanager`) so the composition root holds no domain state machines; the installers for the generic HTTP, Protocol, Speech, and HTML-Renderer Hosts live in `packages/im/zhin/src/instance/`. `zhin runtime start` (`basic/cli/src/commands/runtime.ts`) resolves `zhin.js/instance` from the project root; Console accounts, permissions and the terminal come from `@zhin.js/gateway` and are still installed into the in-process HTTP Host by the instance until B1.4.
 
 `zhin runtime start` does the following:
 

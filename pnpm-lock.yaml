@@ -130,66 +130,30 @@ importers:
 
   basic/cli:
     dependencies:
-      '@zhin.js/adapter':
-        specifier: workspace:*
-        version: link:../../packages/im/adapter
-      '@zhin.js/ai':
-        specifier: workspace:*
-        version: link:../../packages/im/ai
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../packages/im/command
-      '@zhin.js/component':
-        specifier: workspace:*
-        version: link:../../packages/im/component
       '@zhin.js/console-protocol':
         specifier: workspace:*
         version: link:../../packages/console/protocol
-      '@zhin.js/core':
+      '@zhin.js/gateway':
         specifier: workspace:*
-        version: link:../../packages/im/core
-      '@zhin.js/database':
-        specifier: workspace:*
-        version: link:../database
-      '@zhin.js/feature-kit':
-        specifier: workspace:*
-        version: link:../../packages/im/feature-kit
-      '@zhin.js/harness':
-        specifier: workspace:*
-        version: link:../../packages/im/harness
+        version: link:../../packages/host/gateway
       '@zhin.js/host-http':
         specifier: workspace:*
         version: link:../../packages/host/http
-      '@zhin.js/im-contract':
-        specifier: workspace:*
-        version: link:../../packages/im/im-contract
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../logger
-      '@zhin.js/middleware':
-        specifier: workspace:*
-        version: link:../../packages/im/middleware
       '@zhin.js/pagemanager':
         specifier: workspace:*
         version: link:../../packages/console/pagemanager
-      '@zhin.js/permission':
-        specifier: workspace:*
-        version: link:../../packages/im/permission
       '@zhin.js/plugin-runtime':
         specifier: workspace:*
         version: link:../../packages/im/plugin-runtime
-      '@zhin.js/prompt-section':
-        specifier: workspace:*
-        version: link:../../packages/im/prompt-section
       '@zhin.js/runtime':
         specifier: workspace:*
         version: link:../../packages/im/runtime
       '@zhin.js/scaffold-wizard':
         specifier: workspace:*
         version: link:../../packages/toolkit/scaffold-wizard
-      '@zhin.js/schedule':
-        specifier: workspace:*
-        version: link:../schedule
       chalk:
         specifier: ^5.6.2
         version: 5.6.2
@@ -199,15 +163,15 @@ importers:
       cross-spawn:
         specifier: ^7.0.6
         version: 7.0.6
-      dotenv:
-        specifier: ^17.4.2
-        version: 17.4.2
       esbuild:
         specifier: ^0.28.1
         version: 0.28.1
       fs-extra:
         specifier: ^11.4.0
         version: 11.4.0
+      import-meta-resolve:
+        specifier: 4.2.0
+        version: 4.2.0
       inquirer:
         specifier: ^14.0.2
         version: 14.0.2(@types/node@26.1.2)
@@ -223,13 +187,6 @@ importers:
       yaml:
         specifier: ^2.9.0
         version: 2.9.0
-    optionalDependencies:
-      node-pty:
-        specifier: ^1.0.0
-        version: 1.1.0
-      ssh2:
-        specifier: ^1.16.0
-        version: 1.17.0
     devDependencies:
       '@types/cross-spawn':
         specifier: ^6.0.6
@@ -240,27 +197,9 @@ importers:
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
-      '@types/ssh2':
-        specifier: ^1.15.5
-        version: 1.15.6
-      '@zhin.js/a2a':
-        specifier: workspace:*
-        version: link:../../packages/host/a2a
-      '@zhin.js/agent':
-        specifier: workspace:*
-        version: link:../../packages/im/agent
-      '@zhin.js/mcp':
-        specifier: workspace:*
-        version: link:../../packages/host/mcp
-      '@zhin.js/speech':
-        specifier: workspace:*
-        version: link:../../packages/toolkit/speech
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
 
   basic/database:
     dependencies:
@@ -1089,6 +1028,68 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
+  packages/host/gateway:
+    dependencies:
+      '@zhin.js/console-protocol':
+        specifier: workspace:*
+        version: link:../../console/protocol
+      '@zhin.js/database':
+        specifier: workspace:*
+        version: link:../../../basic/database
+      '@zhin.js/host-http':
+        specifier: workspace:*
+        version: link:../http
+      '@zhin.js/logger':
+        specifier: workspace:*
+        version: link:../../../basic/logger
+      '@zhin.js/plugin-runtime':
+        specifier: workspace:*
+        version: link:../../im/plugin-runtime
+      '@zhin.js/runtime':
+        specifier: workspace:*
+        version: link:../../im/runtime
+      '@zhin.js/scaffold-wizard':
+        specifier: workspace:*
+        version: link:../../toolkit/scaffold-wizard
+      dotenv:
+        specifier: ^17.4.2
+        version: 17.4.2
+      fs-extra:
+        specifier: ^11.4.0
+        version: 11.4.0
+      tsx:
+        specifier: ^4.23.1
+        version: 4.23.1
+      yaml:
+        specifier: ^2.9.0
+        version: 2.9.0
+    optionalDependencies:
+      node-pty:
+        specifier: ^1.0.0
+        version: 1.1.0
+      ssh2:
+        specifier: ^1.16.0
+        version: 1.17.0
+    devDependencies:
+      '@types/fs-extra':
+        specifier: ^11.0.4
+        version: 11.0.4
+      '@types/node':
+        specifier: ^26.1.2
+        version: 26.1.2
+      '@types/ssh2':
+        specifier: ^1.15.5
+        version: 1.15.6
+      '@types/ws':
+        specifier: ^8.18.1
+        version: 8.18.1
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      ws:
+        specifier: ^8.21.1
+        version: 8.22.0
+
   packages/host/http:
     dependencies:
       '@zhin.js/console-protocol':
@@ -1734,37 +1735,109 @@ importers:
 
   packages/im/zhin:
     dependencies:
+      '@zhin.js/adapter':
+        specifier: workspace:*
+        version: link:../adapter
+      '@zhin.js/command':
+        specifier: workspace:*
+        version: link:../command
+      '@zhin.js/component':
+        specifier: workspace:*
+        version: link:../component
+      '@zhin.js/console-protocol':
+        specifier: workspace:*
+        version: link:../../console/protocol
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../core
+      '@zhin.js/database':
+        specifier: workspace:*
+        version: link:../../../basic/database
+      '@zhin.js/feature-kit':
+        specifier: workspace:*
+        version: link:../feature-kit
+      '@zhin.js/harness':
+        specifier: workspace:*
+        version: link:../harness
+      '@zhin.js/host-http':
+        specifier: workspace:*
+        version: link:../../host/http
+      '@zhin.js/im-contract':
+        specifier: workspace:*
+        version: link:../im-contract
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
+      '@zhin.js/mcp':
+        specifier: workspace:^
+        version: link:../../host/mcp
+      '@zhin.js/middleware':
+        specifier: workspace:*
+        version: link:../middleware
       '@zhin.js/permission':
         specifier: workspace:*
         version: link:../permission
       '@zhin.js/plugin-runtime':
         specifier: workspace:*
         version: link:../plugin-runtime
+      '@zhin.js/prompt-section':
+        specifier: workspace:*
+        version: link:../prompt-section
+      '@zhin.js/schedule':
+        specifier: workspace:*
+        version: link:../../../basic/schedule
       '@zhin.js/schedule-feature':
         specifier: workspace:*
         version: link:../schedule-feature
+      chalk:
+        specifier: ^5.6.2
+        version: 5.6.2
+      open:
+        specifier: ^11.0.0
+        version: 11.0.0
+      yaml:
+        specifier: ^2.9.0
+        version: 2.9.0
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
+      '@types/ws':
+        specifier: ^8.18.1
+        version: 8.18.1
+      '@zhin.js/a2a':
+        specifier: workspace:*
+        version: link:../../host/a2a
       '@zhin.js/agent':
         specifier: workspace:*
         version: link:../agent
       '@zhin.js/ai':
         specifier: workspace:*
         version: link:../ai
+      '@zhin.js/gateway':
+        specifier: workspace:*
+        version: link:../../host/gateway
+      '@zhin.js/pagemanager':
+        specifier: workspace:*
+        version: link:../../console/pagemanager
       '@zhin.js/runtime':
         specifier: workspace:*
         version: link:../runtime
+      '@zhin.js/speech':
+        specifier: workspace:*
+        version: link:../../toolkit/speech
+      esbuild:
+        specifier: ^0.28.1
+        version: 0.28.1
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
+      ws:
+        specifier: ^8.21.1
+        version: 8.22.0
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
 
   packages/toolkit/components:
     dependencies:

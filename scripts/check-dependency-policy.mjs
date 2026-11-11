@@ -23,6 +23,8 @@ const sourceRoots = [
   'packages/toolkit/scaffold-wizard/src',
   'packages/toolkit/create-zhin/src',
   'basic/cli/src',
+  'packages/host/gateway/src',
+  'packages/im/zhin/src/instance',
 ];
 
 for (const sourceRoot of sourceRoots) {

@@ -7,9 +7,9 @@ import {
   summarizeIssues,
   type ConfigIssue,
 } from '../utils/config-check.js';
-import { saveConfig } from '../utils/config-file.js';
+import { saveConfig } from '@zhin.js/gateway/project';
 import { logger } from '../utils/logger.js';
-import { loadRuntimeEnvironmentLayers } from '../plugin-runtime/start/module.js';
+import { loadRuntimeEnvironmentLayers } from '@zhin.js/gateway/project';
 
 function printIssue(issue: ConfigIssue): void {
   const icon = issue.severity === 'error' ? '❌' : issue.severity === 'warn' ? '⚠️' : 'ℹ️';

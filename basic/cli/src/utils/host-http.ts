@@ -4,8 +4,8 @@
 import path from 'path';
 import { resolveHttpConfig } from '@zhin.js/host-http';
 import { createConfigDocument } from '@zhin.js/runtime';
-import { findConfigFile } from './config-file.js';
-import { loadRuntimeEnvironmentLayers } from '../plugin-runtime/start/environment.js';
+import { findConfigFile } from '@zhin.js/gateway/project';
+import { loadRuntimeEnvironmentLayers } from '@zhin.js/gateway/project';
 
 export interface HostHttpConfig {
   baseUrl: string;

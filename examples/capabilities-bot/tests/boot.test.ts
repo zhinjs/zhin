@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { runStartCommand } from '@zhin.js/cli';
+import { runStartCommand } from 'zhin.js/instance';
 import { supportsNativeTypeScript } from '@zhin.js/runtime';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';

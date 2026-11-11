@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { formatPluginUseCases } from '../plugin-management/use-cases.js';
+import { formatPluginUseCases } from '@zhin.js/gateway/plugin-management';
 
 export const useCasesCommand = new Command('use-cases')
   .description('按用途找到插件、配置步骤与适用范围（只读，不安装或发送）')

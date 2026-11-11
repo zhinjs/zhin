@@ -167,36 +167,14 @@
   "cli/runtime": [
     "export * from './migrate/index.js';",
     "export * from './project-commands.js';",
-    "export * from './publish-journal.js';",
-    "export * from './root-host.js';",
-    "export * from './start-command.js';"
-  ],
-  "cli/runtime/console/iam": [
-    "export{ConsoleIamService,IamError,type BindingInput,type ConsoleAuditView,type ConsoleBindingView,type ConsoleCredentialRevocation,type ConsoleCredentialRevocationReason,type ConsoleIamServiceOptions,type ConsoleRoleView,type ConsoleTokenView,type ConsoleUserView,type IamDatabase,type IamErrorCode,}from './service.js';",
-    "export{ConsoleSetupService,SETUP_NO_MIGRATION_NOTICE,upsertDotenv,type ConsoleSetupServiceOptions,type SetupConfigPort,type SetupDatabaseField,type SetupDatabaseInput,type SetupDatabaseSummary,type SetupDriver,type SetupEnvFilePort,type SetupStatus,}from './setup-service.js';",
-    "export{LoginRateLimiter}from './rate-limit.js';",
-    "export{defineConsoleIamTables,IAM_DIALECTS,IAM_TABLE_DEFINITIONS,IAM_TABLES}from './tables.js';",
-    "export{dispatchIamRpc,isIamRpc}from './rpc.js';",
-    "export{installConsoleIam,projectEnvironment,type ConsoleIamInstallation,type InstallConsoleIamOptions}from './install.js';",
-    "export{registerConsoleAuthRoutes}from './routes.js';"
-  ],
-  "cli/runtime/console/terminal": [
-    "export * from './config.js';",
-    "export * from './service.js';",
-    "export * from './tickets.js';",
-    "export function installConsoleTerminal( host: TerminalHttpHost,options: InstallConsoleTerminalOptions,): ConsoleTerminalHandle{// Parsing is idempotent,so an already parsed TerminalConfig is accepted too. const config = parseTerminalConfig(options.config,{projectRoot: options.projectRoot,...(options.env ?{env: options.env}:{}),});if (!config.enabled){// ADR 0051: disabled → no routes,optional modules never loaded. return Object.freeze({enabled: false,config,terminatePrincipal: () => 0,sessions: () => [],close: () => undefined,});}const base = normalizeBase(options.base ?? '/api');const service = new TerminalService({config,projectRoot: options.projectRoot,authorize: options.authorize,...(options.audit ?{audit: options.audit}:{}),...(options.logger ?{logger: options.logger}:{}),...(options.modules ?{modules: options.modules}:{}),...(options.env ?{env: options.env}:{}),...(options.readFile ?{readFile: options.readFile}:{}),});const authenticate = async ( request: IncomingMessage,url: URL,authScope?: string,tokenPrincipal?: TerminalPrincipalContext['tokenPrincipal'],): Promise<TerminalPrincipal> =>{const token = bearerToken(request,url);let principal: TerminalPrincipal | null = null;try{principal = await options.resolvePrincipal(token,{request,...(authScope ?{authScope}:{}),...(tokenPrincipal ?{tokenPrincipal}:{}),});}catch{principal = null;}return service.requireAuthorized(principal,request.socket?.remoteAddress);};const fail = (response: ServerResponse,error: unknown) =>{if (error instanceof TerminalRequestError){writeJson(response,error.status,{success: false,code: error.code,error: error.message});return;}throw error;};const unregister: Array<() => void> = [];unregister.push(host.route('GET',`${base}/console/terminal/targets`,async (request,response,url,authScope,tokenPrincipal) =>{try{await authenticate(request,url,authScope,tokenPrincipal);writeJson(response,200,{success: true,data: await service.listTargets()});}catch (error){fail(response,error);}},{summary: 'List Console terminal targets',tags: ['console','terminal']}));unregister.push(host.route('POST',`${base}/console/terminal/tickets`,async (request,response,url,authScope,tokenPrincipal) =>{try{const principal = await authenticate(request,url,authScope,tokenPrincipal);const body = await readJsonBody(request,{limit: 4096});writeJson(response,200,{success: true,data: await service.issueTicket(principal,body,request.socket?.remoteAddress)});}catch (error){fail(response,error);}},{summary: 'Issue a one-time Console terminal WebSocket ticket',tags: ['console','terminal']}));// Browsers cannot set Authorization on WebSocket upgrades: the ticket is the credential. const ws = host.ws(`${base}/console/terminal`,{auth: 'protocol'});const stopWs = ws.onConnection(({socket,request}) =>{void (async () =>{let presented: TerminalPrincipal | null | undefined;const header = request.headers.authorization;if (typeof header === 'string' && header.startsWith('Bearer ')){try{presented = await options.resolvePrincipal(header.slice(7).trim(),{request});}catch{presented = null;}// A bearer that resolves to nobody must not fall back to ticket-only auth. if (!presented) presented ={id: '\\u0000invalid'};}await service.handleConnection(socket,request,presented);})().catch((error: unknown) =>{options.logger?.warn?.(`terminal connection failed: ${error instanceof Error ? error.message : String(error)}`);try{socket.close(1011,'internal-error');}catch{/* ignore */}});});unregister.push(stopWs,() => ws.close());let closed = false;return Object.freeze({enabled: true,config,terminatePrincipal: (principalId: string,reason?: TerminalEndReason) => service.terminatePrincipal(principalId,reason),sessions: () => service.sessions(),close: () =>{if (closed) return;closed = true;for (const stop of unregister) stop();service.closeAll('disabled',true);},});}",
-    "export interface ConsoleTerminalHandle{readonly enabled: boolean;readonly config: TerminalConfig;/** Ends every session and pending ticket of a principal (credential revoked,user disabled…). */ terminatePrincipal(principalId: string,reason?: TerminalEndReason): number;sessions(): TerminalSessionInfo[];/** Unregisters routes and ends all sessions (`exit` reason `disabled`). Idempotent. */ close(): void;}",
-    "export interface InstallConsoleTerminalOptions{/** Raw `console.terminal` block,or an already parsed config. */ readonly config: unknown;readonly projectRoot: string;/** API base the Console uses (default `/api`). */ readonly base?: string;/** Must return true only for principals holding `ops.terminal`. Errors deny. */ readonly authorize: (principal: TerminalPrincipal) => boolean | Promise<boolean>;/** Maps a bearer credential to a principal;`null` → 401. */ readonly resolvePrincipal: ( bearerToken: string,context: TerminalPrincipalContext,) => TerminalPrincipal | null | Promise<TerminalPrincipal | null>;readonly audit?: (event: TerminalAuditEvent) => void;readonly logger?: TerminalLogger;/** Test seam for `node-pty` / `ssh2`. */ readonly modules?: TerminalModuleLoaders;readonly env?: NodeJS.ProcessEnv;readonly readFile?: (path: string) => Promise<Buffer>;}",
-    "export interface TerminalHttpHost{route( method: string,path: string,handler: ( request: IncomingMessage,response: ServerResponse,url: URL,authScope: string,authenticatedPrincipal?:{readonly principalId: string;readonly scope: string},) => void | Promise<void>,meta?:{summary?: string;tags?: string[]},): () => void;ws(path: string,options?:{readonly auth?: 'host' | 'protocol'}):{onConnection(listener: (connection:{readonly socket: TerminalSocket;readonly request: IncomingMessage}) => void): () => void;close(): void;};}",
-    "export interface TerminalPrincipalContext{readonly request: IncomingMessage;/** Host token scope for HTTP routes;absent on WebSocket upgrades (ticket auth). */ readonly authScope?: string;readonly tokenPrincipal?:{readonly principalId: string;readonly scope: string};}",
-    "export type{TerminalModuleLoaders,PtyModule,SshModule}from './modules.js';"
+    "export * from './publish-journal.js';"
   ],
   "cli/runtime/migrate": [
-    "export * from './instance-declarations.js';",
     "export * from './legacy-command-migrator.js';",
     "export * from './package-cutover.js';",
     "export * from './readiness.js';",
-    "export * from './verify.js';"
+    "export * from './verify.js';",
+    "export{applyInstanceDeclarationMigration,assertNoPendingInstanceMigration,assertStopped,formatInstanceMigrationPreview,planInstanceDeclarationMigration,recoverInstanceDeclarationMigration,withProjectLock,type InstanceDeclarationMigrationPlan,type InstanceMigrationApplyOptions,type InstanceMigrationApplyResult,type InstanceMigrationFile,}from '@zhin.js/gateway/project';"
   ],
   "command": [
     "export * from './command-index.js';",
@@ -291,6 +269,36 @@
     "export * from './target-migration.js';",
     "export * from './versioned-session-service.js';",
     "export{formatGameHelp,gameCommandHint,gameCommandFeedback,type GameHelpRequest}from './game-command-help.js';"
+  ],
+  "gateway": [
+    "export * from './config.js';",
+    "export * from './http.js';",
+    "export * from './iam.js';",
+    "export * from './plugin-management.js';",
+    "export * from './project.js';",
+    "export * from './supervisor.js';",
+    "export * from './terminal.js';",
+    "export * from './usage.js';"
+  ],
+  "gateway/iam": [
+    "export{ConsoleIamService,IamError,type BindingInput,type ConsoleAuditView,type ConsoleBindingView,type ConsoleCredentialRevocation,type ConsoleCredentialRevocationReason,type ConsoleIamServiceOptions,type ConsoleRoleView,type ConsoleTokenView,type ConsoleUserView,type IamDatabase,type IamErrorCode,}from './service.js';",
+    "export{ConsoleSetupService,SETUP_NO_MIGRATION_NOTICE,upsertDotenv,type ConsoleSetupServiceOptions,type SetupConfigPort,type SetupDatabaseField,type SetupDatabaseInput,type SetupDatabaseSummary,type SetupDriver,type SetupEnvFilePort,type SetupStatus,}from './setup-service.js';",
+    "export{LoginRateLimiter}from './rate-limit.js';",
+    "export{defineConsoleIamTables,IAM_DIALECTS,IAM_TABLE_DEFINITIONS,IAM_TABLES}from './tables.js';",
+    "export{dispatchIamRpc,isIamRpc}from './rpc.js';",
+    "export{installConsoleIam,projectEnvironment,type ConsoleIamInstallation,type InstallConsoleIamOptions}from './install.js';",
+    "export{registerConsoleAuthRoutes}from './routes.js';"
+  ],
+  "gateway/terminal": [
+    "export * from './config.js';",
+    "export * from './service.js';",
+    "export * from './tickets.js';",
+    "export function installConsoleTerminal( host: TerminalHttpHost,options: InstallConsoleTerminalOptions,): ConsoleTerminalHandle{// Parsing is idempotent,so an already parsed TerminalConfig is accepted too. const config = parseTerminalConfig(options.config,{projectRoot: options.projectRoot,...(options.env ?{env: options.env}:{}),});if (!config.enabled){// ADR 0051: disabled → no routes,optional modules never loaded. return Object.freeze({enabled: false,config,terminatePrincipal: () => 0,sessions: () => [],close: () => undefined,});}const base = normalizeBase(options.base ?? '/api');const service = new TerminalService({config,projectRoot: options.projectRoot,authorize: options.authorize,...(options.audit ?{audit: options.audit}:{}),...(options.logger ?{logger: options.logger}:{}),...(options.modules ?{modules: options.modules}:{}),...(options.env ?{env: options.env}:{}),...(options.readFile ?{readFile: options.readFile}:{}),});const authenticate = async ( request: IncomingMessage,url: URL,authScope?: string,tokenPrincipal?: TerminalPrincipalContext['tokenPrincipal'],): Promise<TerminalPrincipal> =>{const token = bearerToken(request,url);let principal: TerminalPrincipal | null = null;try{principal = await options.resolvePrincipal(token,{request,...(authScope ?{authScope}:{}),...(tokenPrincipal ?{tokenPrincipal}:{}),});}catch{principal = null;}return service.requireAuthorized(principal,request.socket?.remoteAddress);};const fail = (response: ServerResponse,error: unknown) =>{if (error instanceof TerminalRequestError){writeJson(response,error.status,{success: false,code: error.code,error: error.message});return;}throw error;};const unregister: Array<() => void> = [];unregister.push(host.route('GET',`${base}/console/terminal/targets`,async (request,response,url,authScope,tokenPrincipal) =>{try{await authenticate(request,url,authScope,tokenPrincipal);writeJson(response,200,{success: true,data: await service.listTargets()});}catch (error){fail(response,error);}},{summary: 'List Console terminal targets',tags: ['console','terminal']}));unregister.push(host.route('POST',`${base}/console/terminal/tickets`,async (request,response,url,authScope,tokenPrincipal) =>{try{const principal = await authenticate(request,url,authScope,tokenPrincipal);const body = await readJsonBody(request,{limit: 4096});writeJson(response,200,{success: true,data: await service.issueTicket(principal,body,request.socket?.remoteAddress)});}catch (error){fail(response,error);}},{summary: 'Issue a one-time Console terminal WebSocket ticket',tags: ['console','terminal']}));// Browsers cannot set Authorization on WebSocket upgrades: the ticket is the credential. const ws = host.ws(`${base}/console/terminal`,{auth: 'protocol'});const stopWs = ws.onConnection(({socket,request}) =>{void (async () =>{let presented: TerminalPrincipal | null | undefined;const header = request.headers.authorization;if (typeof header === 'string' && header.startsWith('Bearer ')){try{presented = await options.resolvePrincipal(header.slice(7).trim(),{request});}catch{presented = null;}// A bearer that resolves to nobody must not fall back to ticket-only auth. if (!presented) presented ={id: '\\u0000invalid'};}await service.handleConnection(socket,request,presented);})().catch((error: unknown) =>{options.logger?.warn?.(`terminal connection failed: ${error instanceof Error ? error.message : String(error)}`);try{socket.close(1011,'internal-error');}catch{/* ignore */}});});unregister.push(stopWs,() => ws.close());let closed = false;return Object.freeze({enabled: true,config,terminatePrincipal: (principalId: string,reason?: TerminalEndReason) => service.terminatePrincipal(principalId,reason),sessions: () => service.sessions(),close: () =>{if (closed) return;closed = true;for (const stop of unregister) stop();service.closeAll('disabled',true);},});}",
+    "export interface ConsoleTerminalHandle{readonly enabled: boolean;readonly config: TerminalConfig;/** Ends every session and pending ticket of a principal (credential revoked,user disabled…). */ terminatePrincipal(principalId: string,reason?: TerminalEndReason): number;sessions(): TerminalSessionInfo[];/** Unregisters routes and ends all sessions (`exit` reason `disabled`). Idempotent. */ close(): void;}",
+    "export interface InstallConsoleTerminalOptions{/** Raw `console.terminal` block,or an already parsed config. */ readonly config: unknown;readonly projectRoot: string;/** API base the Console uses (default `/api`). */ readonly base?: string;/** Must return true only for principals holding `ops.terminal`. Errors deny. */ readonly authorize: (principal: TerminalPrincipal) => boolean | Promise<boolean>;/** Maps a bearer credential to a principal;`null` → 401. */ readonly resolvePrincipal: ( bearerToken: string,context: TerminalPrincipalContext,) => TerminalPrincipal | null | Promise<TerminalPrincipal | null>;readonly audit?: (event: TerminalAuditEvent) => void;readonly logger?: TerminalLogger;/** Test seam for `node-pty` / `ssh2`. */ readonly modules?: TerminalModuleLoaders;readonly env?: NodeJS.ProcessEnv;readonly readFile?: (path: string) => Promise<Buffer>;}",
+    "export interface TerminalHttpHost{route( method: string,path: string,handler: ( request: IncomingMessage,response: ServerResponse,url: URL,authScope: string,authenticatedPrincipal?:{readonly principalId: string;readonly scope: string},) => void | Promise<void>,meta?:{summary?: string;tags?: string[]},): () => void;ws(path: string,options?:{readonly auth?: 'host' | 'protocol'}):{onConnection(listener: (connection:{readonly socket: TerminalSocket;readonly request: IncomingMessage}) => void): () => void;close(): void;};}",
+    "export interface TerminalPrincipalContext{readonly request: IncomingMessage;/** Host token scope for HTTP routes;absent on WebSocket upgrades (ticket auth). */ readonly authScope?: string;readonly tokenPrincipal?:{readonly principalId: string;readonly scope: string};}",
+    "export type{TerminalModuleLoaders,PtyModule,SshModule}from './modules.js';"
   ],
   "handler": [
     "export * from './context.js';",
@@ -468,5 +476,19 @@
     "export * from './tool-index.js';",
     "export{default}from './provider.js';",
     "export{readOperationClient,type AdapterClient,type RegisteredAdapterName,}from '@zhin.js/feature-kit';"
+  ],
+  "zhin.js/instance": [
+    "export * from './root-host.js';",
+    "export * from './start-command.js';"
+  ],
+  "zhin.js/instance/cli": [
+    "export function loadAgentModule(): Promise<typeof import('@zhin.js/agent')>{return import('@zhin.js/agent');}",
+    "export function loadAgentTraceModule(): Promise<typeof import('@zhin.js/agent/trace')>{return import('@zhin.js/agent/trace');}",
+    "export function loadInferenceMigrationApply(): Promise<typeof import('../inference/migration-apply.js')>{return import('../inference/migration-apply.js');}",
+    "export function loadInferenceMigrationPreview(): Promise<typeof import('../inference/migration-preview.js')>{return import('../inference/migration-preview.js');}",
+    "export function loadInferenceMigrationSessionBindings(): Promise<typeof import('../inference/migration-session-bindings.js')>{return import('../inference/migration-session-bindings.js');}",
+    "export{createDatabaseHost,renderToSegments,resolveDatabaseConfig}from '@zhin.js/core/runtime';",
+    "export{describeEngagement,formatEngagementCollaborationGraph,formatEngagementList,openProjectEngagementJournal,}from './trace.js';",
+    "export{parseComponentDefinition}from '@zhin.js/component';"
   ]
 }

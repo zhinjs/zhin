@@ -12,7 +12,7 @@ import os from 'node:os';
 import path from 'node:path';
 import yaml from 'yaml';
 import { diagnoseConsoleConfig } from '@zhin.js/scaffold-wizard';
-import { findConfigFile, readConfig, saveConfig } from '../src/utils/config-file.js';
+import { findConfigFile, readConfig, saveConfig } from '../../../packages/host/gateway/src/project/config-file.js';
 import { configCommand } from '../src/commands/config.js';
 import { createDefaultConfig } from '../src/commands/doctor.js';
 import {

@@ -14,7 +14,7 @@
 - TypeScript 本地相对导入必须带 `.js` 扩展名。
 - 新插件：`plugin.ts` default-export `definePlugin()`；能力按目录发现。
 - IM 出站：`Message.$reply` / `Adapter.sendMessage` → `renderSendMessage` → `before.sendMessage` → Endpoint；禁止旁路。
-- 分层：`basic → kernel → ai → core → agent → zhin`（`basic/cli` 可为 composition root）。
+- 分层：`basic → kernel → ai → core → agent → zhin`（实例装配根 `packages/im/zhin/src/instance/` 可跨层装配；`@zhin.js/cli` 与 `@zhin.js/gateway` 不得导入 IM 层，ADR 0054）。
 - 改架构前读 `docs/concepts/architecture.md`、`docs/contributing/repo-structure.md`。
 
 ## 最小创作面示例

@@ -16,7 +16,8 @@ import {
   RootRuntime,
   supportsNativeTypeScript,
 } from '@zhin.js/runtime';
-import { MigrationReadiness, runStartCommand } from '@zhin.js/cli';
+import { MigrationReadiness } from '@zhin.js/cli';
+import { runStartCommand } from 'zhin.js/instance';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createTerminalEndpoint,

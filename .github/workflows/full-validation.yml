@@ -143,22 +143,22 @@ jobs:
 
       - name: install dependencies
         run: >-
-          pnpm --filter @zhin.js/database... --filter @zhin.js/cli... --filter @zhin.js/plugin-reminder... --filter @zhin.js/plugin-rss...
+          pnpm --filter @zhin.js/database... --filter @zhin.js/cli... --filter zhin.js... --filter @zhin.js/plugin-reminder... --filter @zhin.js/plugin-rss...
           install --frozen-lockfile --ignore-scripts --ignore-pnpmfile --config.dedupe-peer-dependents=false
 
       - name: run dependency lifecycle scripts without registry credentials
-        run: pnpm --filter @zhin.js/database... --filter @zhin.js/cli... --filter @zhin.js/plugin-reminder... --filter @zhin.js/plugin-rss... rebuild
+        run: pnpm --filter @zhin.js/database... --filter @zhin.js/cli... --filter zhin.js... --filter @zhin.js/plugin-reminder... --filter @zhin.js/plugin-rss... rebuild
 
       - name: build database acceptance dependencies
-        run: pnpm --filter @zhin.js/database... --filter @zhin.js/cli... --filter @zhin.js/plugin-reminder... --filter @zhin.js/plugin-rss... build
+        run: pnpm --filter @zhin.js/database... --filter @zhin.js/cli... --filter zhin.js... --filter @zhin.js/plugin-reminder... --filter @zhin.js/plugin-rss... build
 
       - name: verify live database dialects and conversation storage
         run: >-
           pnpm exec vitest run
           basic/database/tests/live-dialects.test.ts
-          basic/cli/tests/plugin-runtime/database-conversation-live.test.ts
-          basic/cli/tests/plugin-runtime/mysql-startup.live.test.ts
-          basic/cli/tests/plugin-runtime/persistent-state.live.test.ts
+          packages/im/zhin/tests/instance/database-conversation-live.test.ts
+          packages/im/zhin/tests/instance/mysql-startup.live.test.ts
+          packages/im/zhin/tests/instance/persistent-state.live.test.ts
           packages/im/ai/tests/memory/context-repository-database.test.ts
         env:
           NODE_OPTIONS: --throw-deprecation
@@ -179,8 +179,8 @@ jobs:
 
       - name: verify structured storage across SQL dialects
         run: >-
-          pnpm exec vitest run basic/cli/tests/plugin-runtime/relational-state.test.ts
-          basic/cli/tests/plugin-runtime/agent/structured-persistence.test.ts --no-file-parallelism
+          pnpm exec vitest run packages/im/zhin/tests/instance/relational-state.test.ts
+          packages/im/zhin/tests/instance/agent/structured-persistence.test.ts --no-file-parallelism
         env:
           ZHIN_TEST_STRUCTURED_SQL: '1'
           ZHIN_TEST_MYSQL_PORT: '3306'

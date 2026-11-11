@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { PluginTestKit, FakeClock, FakeScheduleRootHost } from '../../../packages/toolkit/testing/src/index.ts';
 import { createHttpHost } from '../../../packages/host/http/src/index.ts';
 import { installSmokeConsoleUsers } from '../harness/smoke-console-users.mjs';
-import { registerPluginTaskRoutes } from '../../../basic/cli/src/plugin-runtime/console/plugin-task-routes.ts';
+import { registerPluginTaskRoutes } from '../../../packages/im/zhin/src/instance/console/plugin-task-routes.ts';
 import { createSmokeProject } from '../harness/smoke-project.mjs';
 import { createSmokeHosts } from '../harness/smoke-hosts.mjs';
 import { useFakeWallClock } from '../harness/fake-wall-clock.mjs';

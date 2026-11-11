@@ -1,4 +1,4 @@
-import { formatPluginUseCases, pluginUseCases } from '../../src/plugin-management/use-cases.js';
+import { formatPluginUseCases, pluginUseCases } from '../../../../packages/host/gateway/src/plugin-management/use-cases.js';
 import { useCasesCommand } from '../../src/commands/use-cases.js';
 
 it('makes useful tasks discoverable without loading plugins or making mutations', () => {

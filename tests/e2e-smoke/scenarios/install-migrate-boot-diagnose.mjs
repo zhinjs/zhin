@@ -7,8 +7,8 @@ import { PluginScheduleHost, rootPluginId, scheduleHostToken, scheduleRootHostTo
 import { createConfigDocument } from '../../../packages/im/runtime/src/config-file/index.ts';
 import { createHttpHost } from '../../../packages/host/http/src/index.ts';
 import { installSmokeConsoleUsers } from '../harness/smoke-console-users.mjs';
-import { applyInstanceDeclarationMigration, planInstanceDeclarationMigration } from '../../../basic/cli/src/plugin-runtime/migrate/instance-declarations.ts';
-import { registerMessageDiagnosticRoutes } from '../../../basic/cli/src/plugin-runtime/console/message-diagnostic-routes.ts';
+import { applyInstanceDeclarationMigration, planInstanceDeclarationMigration } from '../../../packages/host/gateway/src/project/instance-declarations.ts';
+import { registerMessageDiagnosticRoutes } from '../../../packages/im/zhin/src/instance/console/message-diagnostic-routes.ts';
 import { createSmokeProject } from '../harness/smoke-project.mjs';
 import { lastDeliveryText, smokeStep } from '../harness/smoke-checks.mjs';
 

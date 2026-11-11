@@ -10,7 +10,7 @@ import commandFeature, { commandFeatureId, CommandIndex } from '../../../../pack
 import scheduleFeature from '@zhin.js/schedule-feature';
 import { RootRuntime, type ModuleRuntime } from '../../../../packages/im/runtime/src/index.js';
 import { createDatabaseHost } from '../../../../packages/im/core/src/plugin-runtime/im/index.js';
-import { sqliteAvailable } from '../../../../basic/cli/tests/plugin-runtime/sqlite-availability.js';
+import { sqliteAvailable } from '../../../../packages/im/zhin/tests/instance/sqlite-availability.js';
 import plugin from '../plugin.js';
 import configSchema from '../schema.json' with { type: 'json' };
 import poll from '../schedules/poll/index.js';

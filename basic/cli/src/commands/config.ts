@@ -9,7 +9,7 @@ import { loadHostHttpConfig } from '../utils/host-http.js';
 import {
   ConsoleAuthenticationError, ConsoleConnectionError, ConsoleRequestUnconfirmedError, ConsoleRpcError, requestPluginConsole,
 } from '../plugin-management/console-client.js';
-import { parseConfigurationPath } from '../plugin-runtime/console/configuration-path.js';
+import { parseConfigurationPath } from '@zhin.js/gateway/config';
 import { createOfflineConfigurationStore, ENVIRONMENT_NAME, requireConfigFile } from '../utils/config-offline.js';
 
 /**

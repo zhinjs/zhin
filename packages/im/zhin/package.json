@@ -90,6 +90,16 @@
       "types": "./lib/i18n.d.ts",
       "development": "./src/i18n.ts",
       "import": "./lib/i18n.js"
+    },
+    "./instance": {
+      "types": "./lib/instance/index.d.ts",
+      "development": "./src/instance/index.ts",
+      "import": "./lib/instance/index.js"
+    },
+    "./instance/cli": {
+      "types": "./lib/instance/cli/index.d.ts",
+      "development": "./src/instance/cli/index.ts",
+      "import": "./lib/instance/cli/index.js"
     }
   },
   "files": [
@@ -100,34 +110,81 @@
     "clean": "rimraf lib"
   },
   "dependencies": {
+    "@zhin.js/adapter": "workspace:*",
+    "@zhin.js/command": "workspace:*",
+    "@zhin.js/component": "workspace:*",
+    "@zhin.js/console-protocol": "workspace:*",
     "@zhin.js/core": "workspace:*",
+    "@zhin.js/database": "workspace:*",
+    "@zhin.js/feature-kit": "workspace:*",
+    "@zhin.js/harness": "workspace:*",
+    "@zhin.js/host-http": "workspace:*",
+    "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/logger": "workspace:*",
+    "@zhin.js/middleware": "workspace:*",
     "@zhin.js/permission": "workspace:*",
     "@zhin.js/plugin-runtime": "workspace:*",
-    "@zhin.js/schedule-feature": "workspace:*"
+    "@zhin.js/prompt-section": "workspace:*",
+    "@zhin.js/schedule": "workspace:*",
+    "@zhin.js/schedule-feature": "workspace:*",
+    "chalk": "^5.6.2",
+    "open": "^11.0.0",
+    "yaml": "^2.9.0"
   },
   "peerDependencies": {
+    "@zhin.js/a2a": "workspace:^",
     "@zhin.js/agent": "workspace:^",
     "@zhin.js/ai": "workspace:^",
-    "@zhin.js/runtime": "workspace:^"
+    "@zhin.js/gateway": "workspace:^",
+    "@zhin.js/mcp": "workspace:^",
+    "@zhin.js/pagemanager": "workspace:^",
+    "@zhin.js/runtime": "workspace:^",
+    "@zhin.js/speech": "workspace:^",
+    "esbuild": "^0.28.1"
   },
   "peerDependenciesMeta": {
+    "@zhin.js/a2a": {
+      "optional": true
+    },
     "@zhin.js/agent": {
       "optional": true
     },
     "@zhin.js/ai": {
       "optional": true
     },
+    "@zhin.js/gateway": {
+      "optional": true
+    },
+    "@zhin.js/mcp": {
+      "optional": true
+    },
+    "@zhin.js/pagemanager": {
+      "optional": true
+    },
     "@zhin.js/runtime": {
+      "optional": true
+    },
+    "@zhin.js/speech": {
+      "optional": true
+    },
+    "esbuild": {
       "optional": true
     }
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
+    "@types/ws": "^8.18.1",
+    "@zhin.js/a2a": "workspace:*",
     "@zhin.js/agent": "workspace:*",
     "@zhin.js/ai": "workspace:*",
+    "@zhin.js/gateway": "workspace:*",
+    "@zhin.js/pagemanager": "workspace:*",
     "@zhin.js/runtime": "workspace:*",
-    "typescript": "^6.0.3"
+    "@zhin.js/speech": "workspace:*",
+    "esbuild": "^0.28.1",
+    "typescript": "^6.0.3",
+    "ws": "^8.21.1",
+    "zod": "^4.4.3"
   },
   "repository": {
     "type": "git",
@@ -205,6 +262,14 @@
       "./i18n": {
         "types": "./lib/i18n.d.ts",
         "import": "./lib/i18n.js"
+      },
+      "./instance": {
+        "types": "./lib/instance/index.d.ts",
+        "import": "./lib/instance/index.js"
+      },
+      "./instance/cli": {
+        "types": "./lib/instance/cli/index.d.ts",
+        "import": "./lib/instance/cli/index.js"
       }
     }
   },

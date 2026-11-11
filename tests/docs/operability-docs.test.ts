@@ -75,7 +75,7 @@ describe('product documentation operability', () => {
       database: { dialect: 'sqlite', filename: './data/bot.db' },
     });
 
-    const nodeRequirements = read('basic/cli/src/utils/node-requirements.ts');
+    const nodeRequirements = read('packages/host/gateway/src/project/node-requirements.ts');
     const engine = nodeRequirements.match(/NODE_ENGINES_HINT = '([^']+)'/u)?.[1];
     expect(engine).toBeTruthy();
     for (const relativePath of [

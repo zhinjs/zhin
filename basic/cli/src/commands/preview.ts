@@ -5,13 +5,14 @@ import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { dirname, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { parseComponentDefinition, type ComponentDefinition } from '@zhin.js/component';
 import {
   isConsoleBlueprint,
   projectBlueprintToCliPanel,
   projectBlueprintToImCard,
 } from '@zhin.js/pagemanager';
-import { renderToSegments } from '@zhin.js/core/runtime';
+import { importProjectInstanceCli, type ComponentDefinitionView, type InstanceCliModule } from '../utils/project-instance.js';
+
+type ComponentDefinition<_Props = unknown> = ComponentDefinitionView;
 
 export interface DiscoveredComponentPreview {
   readonly id: string;
@@ -90,6 +91,7 @@ async function discoverCandidateRoots(projectRoot: string): Promise<{ owner: str
 }
 
 async function renderComponentNodeToPreview(
+  instance: InstanceCliModule,
   definition: ComponentDefinition<any>,
   props: unknown,
   allDefinitions: ReadonlyMap<string, ComponentDefinition<any>>,
@@ -110,7 +112,7 @@ async function renderComponentNodeToPreview(
 
   let segments: readonly any[];
   try {
-    segments = await renderToSegments(rawNode as never, {
+    segments = await instance.renderToSegments(rawNode as never, {
       renderComponent: renderNested as never,
       bindButton: (btnProps: { label?: unknown; action?: string; id?: string; variant?: string }) => ({
         type: 'button',
@@ -130,7 +132,7 @@ async function renderComponentNodeToPreview(
         type: 'html',
         props: Object.freeze({ children: rawNode }),
       });
-      segments = await renderToSegments(wrappedHtmlElement as never, {
+      segments = await instance.renderToSegments(wrappedHtmlElement as never, {
         renderComponent: renderNested as never,
       });
     } else {
@@ -173,6 +175,8 @@ export async function buildProjectPreviewSnapshot(
   customPageData: ReadonlyMap<string, Record<string, unknown>> = new Map(),
 ): Promise<ProjectPreviewSnapshot> {
   const projectRoot = resolve(projectRootInput);
+  // Component parsing and segment rendering are instance (IM) code, resolved from the project's zhin.js.
+  const instance = await importProjectInstanceCli(projectRoot);
   const roots = await discoverCandidateRoots(projectRoot);
   const projectName = roots[0]?.owner ?? 'zhin-project';
 
@@ -203,7 +207,7 @@ export async function buildProjectPreviewSnapshot(
           const mod = (await scoped.import(pathToFileURL(entry.filePath).href, pathToFileURL(projectRoot + '/').href)) as {
             default?: unknown;
           };
-          const def = parseComponentDefinition(mod.default);
+          const def = instance.parseComponentDefinition(mod.default);
           loadedComponents.push({ id, name: entry.name, owner, source: relSource, definition: def });
           definitionMap.set(entry.name, def);
         } catch (err) {
@@ -237,7 +241,7 @@ export async function buildProjectPreviewSnapshot(
         ? customComponentProps.get(item.id)
         : (item.definition.previewProps ?? {});
       try {
-        const rendered = await renderComponentNodeToPreview(item.definition, effectiveProps, definitionMap);
+        const rendered = await renderComponentNodeToPreview(instance, item.definition, effectiveProps, definitionMap);
         components.push({
           id: item.id,
           name: item.name,

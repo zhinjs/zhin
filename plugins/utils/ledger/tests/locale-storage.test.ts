@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createDatabaseHost } from '../../../../packages/im/core/src/plugin-runtime/im/index.js';
-import { sqliteAvailable } from '../../../../basic/cli/tests/plugin-runtime/sqlite-availability.js';
+import { sqliteAvailable } from '../../../../packages/im/zhin/tests/instance/sqlite-availability.js';
 import { PluginDatabaseHost, rootPluginId } from 'zhin.js';
 import { defineLedgerTables, LedgerStore, USER_TABLE } from '../src/store.js';
 

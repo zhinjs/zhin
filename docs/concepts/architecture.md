@@ -56,7 +56,9 @@ flowchart BT
     http["HTTP / WebSocket Host"]
     protocolHost["MCP / A2A Host"]
     wire["Console wire 契约"]
-    cli["@zhin.js/cli（composition root）"]
+    instance["zhin.js/instance（实例装配根）"]
+    gateway["@zhin.js/gateway（管理网关）"]
+    cli["@zhin.js/cli"]
 
     pr --> fk --> ad & cmd & comp & mw & tool
     imc --> ad & cmd & core & agent
@@ -70,7 +72,9 @@ flowchart BT
     pr & fk --> rt
     pr & logger & schedule & httpContract & wire --> http
     core & ai & k & httpContract --> protocolHost
-    rt & core & http & protocolHost --> cli
+    rt & core & http & protocolHost & gateway --> instance
+    rt & http & wire --> gateway
+    gateway --> cli
 ```
 
 依赖关系以各包的 `package.json` 为准。从下往上读这张图：
@@ -105,14 +109,15 @@ Core 从实际入站实例捕获单次操作 Session，提供 Adapter、Endpoint
 | Console | `@zhin.js/console-protocol`（含 contract / review-kit）、`@zhin.js/pagemanager`、`@zhin.js/client` | Server-Driven Blueprints（`definePageBlueprint`）、多端投影（Web / IM Card / CLI TUI）、Console 外壳渲染（`renderConsoleShell`）与浏览器 SDK |
 | 门面 | `zhin.js` | 再导出 core 创作面；`zhin.js/agent`、`zhin.js/ai` 子路径按需暴露 |
 | 运行时 | `@zhin.js/runtime`（含 `/config-file`、`/isolate` 子路径） | `RootRuntime`：扫描项目图、组合配置、执行 generation 事务、HMR 及通用 Host 生命周期 |
-| 装配 | `@zhin.js/cli` | composition root：`zhin runtime start` 把各域 Host 装配成进程，并持有 HTTP/Protocol（MCP、A2A）/Speech/HTML-Renderer/Schedule 等通用 Host 安装器（`basic/cli/src/plugin-runtime/*-host-installer.ts`） |
+| 装配 | `zhin.js/instance` | 实例装配根（ADR 0054 §0）：把各域 Host 装配成进程，并持有 HTTP/Protocol（MCP、A2A）/Speech/HTML-Renderer/Schedule 等通用 Host 安装器（`packages/im/zhin/src/instance/*-host-installer.ts`）与运行时侧 Console 后端 |
+| 管理 | `@zhin.js/gateway`、`@zhin.js/cli` | 管理网关：Console 账号与权限、终端、项目配置与依赖事务、实例监管；CLI 管理项目并按项目解析 `zhin.js/instance`。两者都不依赖 `zhin.js` 与 IM 层 |
 
 图展示主要依赖，完整依赖仍以各包的 `package.json` 为准。允许的分层边界由
 `scripts/check-architecture-layers.mjs` 执行；新增依赖时同时核对文档与门禁，不能只修改其中一处。
 
-## Composition root：`@zhin.js/cli`
+## Composition root：`zhin.js/instance`
 
-框架本身不"启动"任何东西——各层只提供机制。把机制组装成一个可运行进程的入口集中在 `@zhin.js/cli`（`basic/cli/src/commands/runtime.ts` 与 `basic/cli/src/plugin-runtime/`），这是全仓库唯一允许跨层组合所有包的 composition root。IM 与 Agent 的领域 Host 实现已下沉到所属领域包（`@zhin.js/core/runtime`、`@zhin.js/agent/runtime` 与 `@zhin.js/pagemanager`），CLI 不直接持有领域状态机；HTTP、Protocol、Speech、HTML-Renderer 等通用 Host 的安装器留在 CLI 自己的 `basic/cli/src/plugin-runtime/`。
+框架本身不"启动"任何东西——各层只提供机制。把机制组装成一个可运行进程的入口集中在 `zhin.js/instance`（`packages/im/zhin/src/instance/`，ADR 0054 §0），这是全仓库唯一允许跨层组合所有包的 composition root。IM 与 Agent 的领域 Host 实现已下沉到所属领域包（`@zhin.js/core/runtime`、`@zhin.js/agent/runtime` 与 `@zhin.js/pagemanager`），装配根不直接持有领域状态机；HTTP、Protocol、Speech、HTML-Renderer 等通用 Host 的安装器在 `packages/im/zhin/src/instance/`。`zhin runtime start`（`basic/cli/src/commands/runtime.ts`）由 CLI 按项目根解析 `zhin.js/instance` 启动实例；Console 账号与权限、终端等由 `@zhin.js/gateway` 提供，目前仍由实例装配进进程内 HTTP Host（B1.4 迁到网关进程）。
 
 `zhin runtime start` 做的事：
 

@@ -12,7 +12,7 @@ outline: [2, 3]
 
 ## Host top-level fields
 
-The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`](https://github.com/zhinjs/zhin/blob/main/packages/im/runtime/src/host-config-schema.json), consumed by the Runtime at [`basic/cli/src/plugin-runtime/console/configuration-projection.ts`](https://github.com/zhinjs/zhin/blob/main/basic/cli/src/plugin-runtime/console/configuration-projection.ts).
+The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`](https://github.com/zhinjs/zhin/blob/main/packages/im/runtime/src/host-config-schema.json), consumed by the Runtime at [`packages/host/gateway/src/config/configuration-projection.ts`](https://github.com/zhinjs/zhin/blob/main/packages/host/gateway/src/config/configuration-projection.ts).
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
