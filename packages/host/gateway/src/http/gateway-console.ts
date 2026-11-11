@@ -102,6 +102,11 @@ interface Connection {
 
 export async function startGatewayConsole(options: GatewayConsoleOptions): Promise<GatewayConsole> {
   const { server, projectRoot } = options;
+  const failClosed = (): Connection => ({
+    service: new ConsoleIamService({ database: UNAVAILABLE_DATABASE, projectRoot }),
+    supported: true,
+    dispose: [],
+  });
   const environment = options.environment ?? 'development';
   const retryMs = options.retryMs ?? DEFAULT_RETRY_MS;
   const registry: TokenRegistry = server.tokenRegistry;
@@ -109,7 +114,8 @@ export async function startGatewayConsole(options: GatewayConsoleOptions): Promi
     logger.warn(formatCompact({ op: 'gateway_config_read_failed', error: errorText(error) }));
     return Object.freeze({}) as Readonly<Record<string, unknown>>;
   });
-  let connection: Connection = { supported: false, dispose: [] };
+  // Until (and while re-) connecting, fail closed: the owner state comes from the setup marker.
+  let connection: Connection = failClosed();
   let closed = false;
   let retryTimer: ReturnType<typeof setTimeout> | undefined;
   let opening: Promise<void> | undefined;
@@ -182,9 +188,6 @@ export async function startGatewayConsole(options: GatewayConsoleOptions): Promi
     }
   }
 
-  function failClosed(): Connection {
-    return { service: new ConsoleIamService({ database: UNAVAILABLE_DATABASE, projectRoot }), supported: true, dispose: [] };
-  }
 
   function scheduleRetry(): void {
     if (closed || retryTimer) return;
@@ -198,7 +201,7 @@ export async function startGatewayConsole(options: GatewayConsoleOptions): Promi
 
   async function disconnect(): Promise<void> {
     const current = connection;
-    connection = { supported: false, dispose: [] };
+    connection = failClosed();
     for (const dispose of current.dispose.splice(0)) dispose();
     current.service?.stop();
     await current.database?.stop().catch((error: unknown) => {

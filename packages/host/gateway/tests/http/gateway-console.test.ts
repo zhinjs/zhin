@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -61,10 +61,14 @@ class FakeInstance implements GatewayInstanceTransport {
   emitAudit(entry: ConsoleAuditEntry): void { for (const listener of [...this.#audit]) listener(entry); }
 }
 
-async function gatewayOnly(options: { token?: string; config?: string } = {}) {
+async function gatewayOnly(options: { token?: string; config?: string; marker?: boolean; database?: Record<string, unknown> } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'zhin-gateway-console-'));
   dirs.push(root);
   await writeFile(join(root, 'zhin.config.yml'), options.config ?? 'configVersion: 2\nplugins: {}\n');
+  if (options.marker) {
+    await mkdir(join(root, '.zhin'), { recursive: true });
+    await writeFile(join(root, '.zhin', 'console-iam.initialized'), '1\n');
+  }
   const instance = new FakeInstance();
   const gateway = await startGateway({
     projectRoot: root,
@@ -74,6 +78,7 @@ async function gatewayOnly(options: { token?: string; config?: string } = {}) {
     // No instance process at all: the Console must work on the gateway alone.
     startInstance: false,
     packages: false,
+    ...(options.database ? { console: { database: options.database as never, retryMs: 60_000 }, databaseWaitMs: 2_000 } : {}),
   });
   gateways.push(gateway);
   const origin = gateway.http.address!.origin;
@@ -188,6 +193,14 @@ describe('gateway Console access control without an instance (B1.4)', () => {
     expect(audit.body.data.entries).toEqual([expect.objectContaining({ actor: 'user:x', outcome: 'denied' })]);
     const denied = await context.rpc('iam.audit.list', { action: 'rpc:iam.users.delete' }, session);
     expect(denied.body.data.entries).toEqual([expect.objectContaining({ actor: `user:${viewerId}`, outcome: 'denied' })]);
+  });
+
+  it('fails closed when the database cannot be opened after setup was completed', async () => {
+    // A directory where the SQLite file should be: the open fails.
+    const context = await gatewayOnly({ marker: true, database: { dialect: 'sqlite', filename: tmpdir() } });
+    expect((await context.call('GET', '/auth/me')).body.data).toMatchObject({ kind: 'anonymous', setupRequired: false });
+    expect((await context.rpc('gateway.instance.status', {})).status).toBe(401);
+    expect((await context.call('POST', '/auth/login', { username: 'owner', password: PASSWORD })).status).toBe(503);
   });
 
   it('answers onboarding.update with the step permissions of ADR 0053 §2', async () => {
