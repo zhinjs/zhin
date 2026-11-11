@@ -35,8 +35,7 @@ export async function handleLineWebhookRequest(
   handler: LineWebhookHandler,
 ): Promise<Response> {
   try {
-    const signature = request.headers['x-line-signature'];
-    const signatureValue = Array.isArray(signature) ? signature[0] : signature;
+    const signatureValue = request.headers.get('x-line-signature');
     if (!signatureValue) {
       return new Response(JSON.stringify({ message: 'Missing signature' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
     }

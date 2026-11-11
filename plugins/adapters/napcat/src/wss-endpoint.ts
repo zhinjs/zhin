@@ -40,9 +40,7 @@ import {
 import { receiveNapCatSideEvent } from './side-event-dispatch.js';
 import { createNapCatContentPort } from './onebot-get-msg.js';
 import { NapcatClient } from './client.js';
-import {
-  type NapCatWsSocket,
-} from './ws-types.js';
+import { socketOfConnection, type NapCatWsSocket } from './ws-types.js';
 
 export interface NapCatWssEndpointOptions {
   readonly id: CapabilityId;
@@ -243,14 +241,14 @@ export class NapCatWssEndpoint extends NapcatClient implements Endpoint {
 
   async #acceptConnection(connection: WsConnection): Promise<void> {
     if (!this.#started || this.#stopped) {
-      connection.socket.close();
+      connection.close();
       return;
     }
-    if (!verifyProtocolAccessToken(this.#options.config.access_token, connection.request)) {
-      connection.socket.close(4003, 'Unauthorized');
+    if (!verifyProtocolAccessToken(this.#options.config.access_token, connection)) {
+      connection.close(4003, 'Unauthorized');
       return;
     }
-    const socket = connection.socket as unknown as NapCatWsSocket;
+    const socket = socketOfConnection(connection);
     await this.#connectionLifecycle.stop();
     this.rpc.disconnect('Connection replaced');
     await this.#connectionLifecycle.start(async (lifecycleHandle) => {
@@ -266,16 +264,7 @@ export class NapCatWssEndpoint extends NapcatClient implements Endpoint {
           /* ignore */
         }
       });
-      this.#connectionLifecycle.startHeartbeat(() => {
-        try {
-          socket.ping?.();
-        } catch {
-          /* ignore */
-        }
-      }, this.#options.config.heartbeat_interval);
-      socket.on('pong', () => {
-        if (this.transportSocket === socket) this.#connectionLifecycle.notifyHeartbeatAck();
-      });
+      // Dead-peer detection is the Host transport's keepalive (protocol ping / pong).
       socket.on('message', (data) => {
         if (this.transportSocket !== socket || this.#connectionLifecycle.state === 'closed') return;
         this.#connectionLifecycle.notifyHeartbeatAck();
@@ -295,7 +284,7 @@ export class NapCatWssEndpoint extends NapcatClient implements Endpoint {
     this.#logger.debug(formatCompact({
       endpoint: this.#options.config.id,
       mode: 'wss',
-      peer: connection.request.socket.remoteAddress,
+      peer: connection.remoteAddress,
     }));
   }
 }

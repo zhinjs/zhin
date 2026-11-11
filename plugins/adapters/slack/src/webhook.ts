@@ -51,15 +51,13 @@ export async function handleSlackWebhookRequest(
       const payloadStr = params.get('payload');
       if (payloadStr) {
         const payload = JSON.parse(payloadStr) as SlackInteractionPayload;
-        return new Response('', { status: 200 });
         handler.admitInteraction(payload);
-        return;
+        return new Response('', { status: 200 });
       }
       const body = Object.fromEntries(params) as unknown as SlackSlashCommand;
       if (body.command) {
-        return new Response('', { status: 200 });
         handler.admitSlashCommand(body);
-        return;
+        return new Response('', { status: 200 });
       }
     }
 
@@ -76,9 +74,8 @@ export async function handleSlackWebhookRequest(
     }
 
     if (envelope.type === 'event_callback' && envelope.event) {
-      return new Response('', { status: 200 });
       handler.handleEnvelope(envelope);
-      return;
+      return new Response('', { status: 200 });
     }
 
     return new Response('', { status: 200 });

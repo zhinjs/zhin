@@ -34,7 +34,7 @@ import {
   type MilkyIncomingMessage,
   type MilkyWssConfig,
 } from './protocol.js';
-import type { MilkyWsSocket } from './ws-types.js';
+import { socketOfConnection, type MilkyWsSocket } from './ws-types.js';
 
 const WS_OPEN = 1;
 
@@ -216,11 +216,11 @@ export class MilkyWssEndpoint extends MilkyClient implements Endpoint {
   }
 
   async #acceptConnection(connection: WsConnection): Promise<void> {
-    if (!verifyProtocolAccessToken(this.#options.config.access_token, connection.request)) {
-      connection.socket.close(4003, 'Unauthorized');
+    if (!verifyProtocolAccessToken(this.#options.config.access_token, connection)) {
+      connection.close(4003, 'Unauthorized');
       return;
     }
-    const socket = connection.socket as unknown as MilkyWsSocket;
+    const socket = socketOfConnection(connection);
     await this.#connectionLifecycle.stop();
     await this.#connectionLifecycle.start(async (lifecycleHandle) => {
       this.#ws = socket;
@@ -238,13 +238,7 @@ export class MilkyWssEndpoint extends MilkyClient implements Endpoint {
         }
         if (this.#ws === socket) this.#ws = undefined;
       });
-      this.#connectionLifecycle.startHeartbeat(() => {
-        try {
-          if (socket.readyState === WS_OPEN) socket.ping?.();
-        } catch {
-          /* ignore */
-        }
-      }, this.#options.config.heartbeat_interval);
+      // Dead-peer detection is the Host transport's keepalive (protocol ping / pong).
       socket.on('message', () => {
         this.#connectionLifecycle.notifyHeartbeatAck();
       });
@@ -260,7 +254,7 @@ export class MilkyWssEndpoint extends MilkyClient implements Endpoint {
     this.#logger.debug(formatCompact({
       endpoint: this.#options.config.id,
       mode: 'wss',
-      peer: connection.request.socket.remoteAddress,
+      peer: connection.remoteAddress,
     }));
   }
 

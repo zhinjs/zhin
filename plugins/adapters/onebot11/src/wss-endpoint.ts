@@ -34,9 +34,7 @@ import {
 import { receiveOneBot11SideEvent } from './side-event-dispatch.js';
 import { createOneBot11ContentPort } from './content-port.js';
 import { createOneBot11Rpc, type OneBot11Rpc } from './ws-transport.js';
-import {
-  type OneBot11WsSocket,
-} from './ws-types.js';
+import { socketOfConnection, type OneBot11WsSocket } from './ws-types.js';
 import { probeOnebot11SelfId, resolveOnebot11SelfId } from './self-id.js';
 import { callOnebot11Client, readOnebot11Response, onebot11ClientOptions, forwardOnebot11ClientEvents, Onebot11Client } from './client.js';
 
@@ -240,14 +238,14 @@ export class OneBot11WssEndpoint extends Onebot11Client implements Endpoint {
 
   async #acceptConnection(connection: WsConnection): Promise<void> {
     if (!this.#started || this.#stopped) {
-      connection.socket.close();
+      connection.close();
       return;
     }
-    if (!verifyProtocolAccessToken(this.#options.config.access_token, connection.request)) {
-      connection.socket.close(4003, 'Unauthorized');
+    if (!verifyProtocolAccessToken(this.#options.config.access_token, connection)) {
+      connection.close(4003, 'Unauthorized');
       return;
     }
-    const socket = connection.socket as unknown as OneBot11WsSocket;
+    const socket = socketOfConnection(connection);
     await this.#connectionLifecycle.stop();
     this.#rpc.disconnect('连接已替换');
     await this.#connectionLifecycle.start(async (lifecycleHandle) => {
@@ -264,16 +262,7 @@ export class OneBot11WssEndpoint extends Onebot11Client implements Endpoint {
         }
         if (this.#ws === socket) this.#ws = undefined;
       });
-      this.#connectionLifecycle.startHeartbeat(() => {
-        try {
-          socket.ping?.();
-        } catch {
-          /* ignore */
-        }
-      }, this.#options.config.heartbeat_interval);
-      socket.on('pong', () => {
-        if (this.#ws === socket) this.#connectionLifecycle.notifyHeartbeatAck();
-      });
+      // Dead-peer detection is the Host transport's keepalive (protocol ping / pong).
       socket.on('message', (data) => {
         if (this.#ws !== socket || this.#connectionLifecycle.state === 'closed') return;
         this.#connectionLifecycle.notifyHeartbeatAck();
@@ -296,7 +285,7 @@ export class OneBot11WssEndpoint extends Onebot11Client implements Endpoint {
     this.#logger.debug(formatCompact({
       endpoint: this.#options.config.id,
       mode: 'wss',
-      peer: connection.request.socket.remoteAddress,
+      peer: connection.remoteAddress,
     }));
   }
 }

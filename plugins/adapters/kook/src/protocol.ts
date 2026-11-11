@@ -3,7 +3,7 @@ import type { EndpointProfileConfiguration } from 'zhin.js/adapter';
 
 import { createDecipheriv, timingSafeEqual } from 'node:crypto';
 import { inflateSync } from 'node:zlib';
-import type { IncomingMessage } from 'node:http';
+import { readBodyBytes } from '@zhin.js/host-http';
 import { EndpointDeliveryError, isMediaRef, type ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { Locale } from 'zhin.js/i18n';
@@ -331,22 +331,11 @@ export function normalizeWebhookPath(path: string): string {
 
 
 export async function readRequestBody(
-  request: IncomingMessage,
+  request: Request,
   options: { readonly limit?: number } = {},
 ): Promise<Buffer> {
-  const limit = options.limit ?? 1_048_576;
-  const chunks: Buffer[] = [];
-  let size = 0;
-  for await (const chunk of request) {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    size += buffer.length;
-    if (size > limit) {
-      request.destroy();
-      throw new Error(`Request body exceeds ${limit} bytes`);
-    }
-    chunks.push(buffer);
-  }
-  return Buffer.concat(chunks);
+  // Oversize bodies throw (the webhook answers its generic OK), as before.
+  return Buffer.from(await readBodyBytes(request, { limit: options.limit ?? 1_048_576 }));
 }
 
 export function padKookEncryptKey(key: string): Buffer {

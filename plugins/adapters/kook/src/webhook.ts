@@ -74,7 +74,7 @@ export async function handleKookWebhookRequest(
     if (!handler.isOpen) {
       return new Response(JSON.stringify({ message: 'Endpoint unavailable' }), { status: 503, headers: { 'Content-Type': 'application/json' } });
     }
-    await handler[endpointSpec].events.run(async () => {
+    return await handler[endpointSpec].events.run(async () => {
       if (frame.sn != null) {
         if (!handler.checkAndRememberSn(frame.sn)) {
           return new Response(JSON.stringify({ message: 'OK' }), { status: 200, headers: { 'Content-Type': 'application/json' } });

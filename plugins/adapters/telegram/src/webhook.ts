@@ -39,8 +39,7 @@ export async function handleTelegramWebhookRequest(
   try {
     const secret = handler.config.webhook?.secretToken;
     if (secret) {
-      const header = request.headers['x-telegram-bot-api-secret-token'];
-      const token = Array.isArray(header) ? header[0] : header;
+      const token = request.headers.get('x-telegram-bot-api-secret-token');
       if (!token || !safeTokenEqual(token, secret)) {
         return new Response(JSON.stringify({ ok: false, description: 'Invalid secret token' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
       }
