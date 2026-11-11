@@ -34,7 +34,7 @@ async function startHost(root: string, options: { token?: string } = {}) {
   const http: ProcessHttpHost = createHttpHost({ host: '127.0.0.1', port: 0, ...(options.token ? { token: options.token } : {}) });
   const configStore = new ConsoleConfigurationStore({ projectRoot: root, document: createConfigDocument(join(root, 'zhin.config.yml')) });
   const requestRestart = vi.fn();
-  const iam = installConsoleIam(http, { database, configStore, projectRoot: root, requestRestart });
+  const iam = installConsoleIam(http, { database: database.gatewayTableHost(), configStore, projectRoot: root, requestRestart });
   registerConsoleRpcRoute({ http, base: '/api', projectRoot: root, consoleRuntime: { runView: async () => ({ pages: [] }) } as unknown as ConsoleRuntime,
     hub: createConsoleEventHub(), pluginLifecycleFile: resolvePluginLifecycleFile(root), pluginLifecycleStore: createPluginLifecycleStore(root),
     configuration: configStore, consoleIam: () => iam.service,
@@ -277,7 +277,7 @@ async function startHostOn(root: string, filename = '.zhin/data.sqlite') {
   const database = createDatabaseHost({ dialect: 'sqlite', filename: join(root, filename) } as never);
   const http = createHttpHost({ host: '127.0.0.1', port: 0 });
   const configStore = new ConsoleConfigurationStore({ projectRoot: root, document: createConfigDocument(join(root, 'zhin.config.yml')) });
-  const iam = installConsoleIam(http, { database, configStore, projectRoot: root });
+  const iam = installConsoleIam(http, { database: database.gatewayTableHost(), configStore, projectRoot: root });
   await database.start();
   await iam.activate();
   const { origin } = await http.listen();

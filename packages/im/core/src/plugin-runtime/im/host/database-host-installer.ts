@@ -21,6 +21,7 @@ import {
   type DatabaseHostModel,
   type DatabaseHostSelection,
   type DatabaseHostAggregation,
+  type DatabaseTableOptions,
   type ConfigDocumentPort,
   type RootResourceInstaller,
   type RuntimeConfigDocument,
@@ -139,8 +140,23 @@ function wrapModel(model: RawModel, db?: RawDatabase, tableName?: string): Datab
   };
 }
 
+/**
+ * Root-only view of the gateway-owned `console_*` tables. Only a standalone composition (no
+ * gateway, dev / test) hands it to its in-process Console access control; every other path of
+ * the host refuses those tables.
+ */
+export interface GatewayTableHost {
+  readonly dialect: string;
+  readonly started: boolean;
+  define(name: string, definition: Record<string, unknown>): void;
+  tables(): readonly string[];
+  readonly models: { get(name: string): DatabaseHostModel | undefined };
+}
+
 export function createDatabaseHost(config: DatabaseHostConfig): DatabaseHost & {
   readonly db: { define: (name: string, definition: unknown) => void; start(): Promise<void>; stop(): Promise<void>; models: Map<string, unknown> };
+  /** See {@link GatewayTableHost}; never pass it to plugins, Agent or Console database RPC. */
+  gatewayTableHost(): GatewayTableHost;
 } {
   const { dialect, ...connectionConfig } = config;
   const db = Registry.create(
@@ -154,6 +170,7 @@ export function createDatabaseHost(config: DatabaseHostConfig): DatabaseHost & {
   const definitions = new Map<string, Record<string, unknown>>();
   const additions = new Map<string, Record<string, Column>>();
   let rawGuard: RawDatabase | undefined;
+  let gatewayView: GatewayTableHost | undefined;
   const consolePort = createDatabaseConsole(
     db,
     config.dialect,
@@ -161,6 +178,50 @@ export function createDatabaseHost(config: DatabaseHostConfig): DatabaseHost & {
     definedTables,
     definitions,
   );
+  const modelOf = (name: string): DatabaseHostModel | undefined => {
+    if (!started) return undefined;
+    const cached = wrapped.get(name);
+    if (cached) return cached;
+    const raw = db.models.get(name) as RawModel | undefined;
+    if (!raw) return undefined;
+    const model = wrapModel(raw, db, name);
+    wrapped.set(name, model);
+    return model;
+  };
+  const defineTable = (name: string, definition: Record<string, unknown>, options?: DatabaseTableOptions): void => {
+    const migration = Object.fromEntries((options?.addColumns ?? []).map(field => {
+      const column = Object.hasOwn(definition, field) ? definition[field] : undefined;
+      if (!column || typeof column !== 'object' || Array.isArray(column)
+        || !('type' in column) || ('primary' in column && column.primary)
+        || ('autoIncrement' in column && column.autoIncrement)
+        || (!('nullable' in column && column.nullable === true) && !('default' in column))) {
+        throw new TypeError(`Additive column '${field}' in '${name}' must be declared, nullable or defaulted, and not a primary key`);
+      }
+      return [field, structuredClone(column) as Column];
+    }));
+    const existing = definitions.get(name);
+    // Host 跨世代共享：reload 后新世代会重复 define 同名表，
+    // 定义一致则幂等跳过（即使已 started），不一致才报错。
+    if (existing !== undefined) {
+      if (isDeepStrictEqual(existing, definition)) {
+        const previous = additions.get(name) ?? {};
+        const merged = { ...previous, ...migration };
+        if (started && !isDeepStrictEqual(previous, merged)) {
+          throw new Error(`DatabaseHost already started; restart to migrate table ${name}`);
+        }
+        if (Object.keys(merged).length) additions.set(name, merged);
+        return;
+      }
+      throw new Error(`Table '${name}' already defined with a different definition`);
+    }
+    if (started) {
+      throw new Error(`DatabaseHost already started; cannot define table ${name}`);
+    }
+    definedTables.add(name);
+    definitions.set(name, definition);
+    if (Object.keys(migration).length) additions.set(name, migration);
+    db.define(name, definition);
+  };
 
   return {
     db,
@@ -173,53 +234,27 @@ export function createDatabaseHost(config: DatabaseHostConfig): DatabaseHost & {
     },
     define(name, definition, options) {
       assertInstanceTable(name);
-      const migration = Object.fromEntries((options?.addColumns ?? []).map(field => {
-        const column = Object.hasOwn(definition, field) ? definition[field] : undefined;
-        if (!column || typeof column !== 'object' || Array.isArray(column)
-          || !('type' in column) || ('primary' in column && column.primary)
-          || ('autoIncrement' in column && column.autoIncrement)
-          || (!('nullable' in column && column.nullable === true) && !('default' in column))) {
-          throw new TypeError(`Additive column '${field}' in '${name}' must be declared, nullable or defaulted, and not a primary key`);
-        }
-        return [field, structuredClone(column) as Column];
-      }));
-      const existing = definitions.get(name);
-      // Host 跨世代共享：reload 后新世代会重复 define 同名表，
-      // 定义一致则幂等跳过（即使已 started），不一致才报错。
-      if (existing !== undefined) {
-        if (isDeepStrictEqual(existing, definition)) {
-          const previous = additions.get(name) ?? {};
-          const merged = { ...previous, ...migration };
-          if (started && !isDeepStrictEqual(previous, merged)) {
-            throw new Error(`DatabaseHost already started; restart to migrate table ${name}`);
-          }
-          if (Object.keys(merged).length) additions.set(name, merged);
-          return;
-        }
-        throw new Error(`Table '${name}' already defined with a different definition`);
-      }
-      if (started) {
-        throw new Error(`DatabaseHost already started; cannot define table ${name}`);
-      }
-      definedTables.add(name);
-      definitions.set(name, definition);
-      if (Object.keys(migration).length) additions.set(name, migration);
-      db.define(name, definition);
+      defineTable(name, definition, options);
     },
     tables() {
-      return [...definedTables];
+      return [...definedTables].filter(name => !isGatewayOwnedTable(name));
     },
     models: {
       get(name) {
-        if (!started || isGatewayOwnedTable(name)) return undefined;
-        const cached = wrapped.get(name);
-        if (cached) return cached;
-        const raw = db.models.get(name) as RawModel | undefined;
-        if (!raw) return undefined;
-        const model = wrapModel(raw, db, name);
-        wrapped.set(name, model);
-        return model;
+        return isGatewayOwnedTable(name) ? undefined : modelOf(name);
       },
+    },
+    gatewayTableHost() {
+      return gatewayView ??= Object.freeze({
+        get dialect() { return config.dialect; },
+        get started() { return started; },
+        define(name: string, definition: Record<string, unknown>) {
+          if (!isGatewayOwnedTable(name)) throw new Error(`Table '${name}' is not a gateway table`);
+          defineTable(name, definition);
+        },
+        tables: () => [...definedTables].filter(isGatewayOwnedTable),
+        models: Object.freeze({ get: (name: string) => (isGatewayOwnedTable(name) ? modelOf(name) : undefined) }),
+      });
     },
     async transaction(callback) {
       if (!started) throw new Error('Database is not connected');

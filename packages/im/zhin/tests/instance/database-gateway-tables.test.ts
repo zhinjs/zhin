@@ -98,3 +98,26 @@ describe('instance database paths never reach the gateway console_* tables', () 
     } finally { await db.close(); }
   });
 });
+
+describe('standalone Console access control (no gateway)', () => {
+  it('reaches console_* only through the root-only gateway table view', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'zhin-gateway-view-'));
+    const host = createDatabaseHost({ dialect: 'sqlite', filename: join(directory, 'bot.db') });
+    try {
+      const view = host.gatewayTableHost();
+      defineConsoleIamTables(view);
+      expect(() => view.define('notes', { id: { type: 'integer', primary: true } })).toThrow(/not a gateway table/);
+      host.define('notes', { id: { type: 'integer', primary: true } });
+      await host.start();
+      expect(view.started).toBe(true);
+      expect(view.tables()).toContain(IAM_TABLES.users);
+      expect(view.models.get(IAM_TABLES.users)).toBeDefined();
+      expect(view.models.get('notes')).toBeUndefined();
+      // Every other surface of the same host still refuses them.
+      expect(host.tables()).toEqual(['notes']);
+      expect(host.models.get(IAM_TABLES.users)).toBeUndefined();
+      expect((await rpc(host, { type: 'db:select', table: IAM_TABLES.users })).error).toMatch(/owned by the management gateway/);
+      expect(JSON.stringify((await rpc(host, { type: 'db:tables' })).data)).not.toContain('console_');
+    } finally { await host.stop(); await rm(directory, { recursive: true, force: true }); }
+  });
+});
