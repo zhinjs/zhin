@@ -9,11 +9,22 @@ import { RelatedDatabase } from '../type/related/database.js';
 export interface SQLiteDialectConfig {
   filename: string;
   mode?: string;
+  /**
+   * `PRAGMA busy_timeout` in ms (default 0: fail fast with SQLITE_BUSY, callers retry). The wait
+   * is synchronous (`node:sqlite`), so only a connection whose own writes are short statements
+   * should set it — the gateway does for its `console_*` connection (ADR 0054 §7). Two
+   * connections of one process with async transactions would block each other's event loop.
+   */
+  busyTimeoutMs?: number;
+}
+
+function isInMemoryFilename(filename: string): boolean {
+  return filename === ':memory:' || filename === '' || filename.startsWith('file::memory:');
 }
 
 export class SQLiteDialect<S extends Record<string, object> = Record<string, object>> extends Dialect<SQLiteDialectConfig, S, string> {
   /** Node 内置 SQLite 连接（node:sqlite），在 connect() 中动态加载 */
-  private db: { prepare(sql: string): any; close(): void } | null = null;
+  private db: { prepare(sql: string): any; exec(sql: string): void; close(): void } | null = null;
 
   constructor(config: SQLiteDialectConfig) {
     super('sqlite', config);
@@ -32,7 +43,18 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
       if (!fs.existsSync(dirname)) {
         fs.mkdirSync(dirname, { recursive: true });
       }
-      this.db = new DatabaseSync(this.config.filename);
+      const db = new DatabaseSync(this.config.filename);
+      try {
+        // Two processes share the file (gateway: console_* tables, instance: the rest):
+        // WAL lets readers run beside one writer and never blocks readers on a writer.
+        const busy = this.config.busyTimeoutMs;
+        if (busy !== undefined && Number.isSafeInteger(busy) && busy > 0) db.exec(`PRAGMA busy_timeout = ${busy}`);
+        if (!isInMemoryFilename(this.config.filename)) db.exec('PRAGMA journal_mode = WAL');
+      } catch (error) {
+        db.close();
+        throw error;
+      }
+      this.db = db;
     } catch (error) {
       throw new Error(`SQLite 连接失败（需要 Node.js 22.5+，推荐 24+）: ${error}`);
     }

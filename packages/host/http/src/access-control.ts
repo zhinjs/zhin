@@ -72,6 +72,14 @@ export function isUserPrincipal(principal: ConsolePrincipal | undefined): princi
   return principal?.kind === 'user' || principal?.kind === 'api-token';
 }
 
+/**
+ * Whether the request carried an explicit credential: a user session / API token, or the
+ * still-valid bootstrap token (`{ kind: 'bootstrap', open: false }`). An open Host is not explicit.
+ */
+export function isExplicitConsolePrincipal(principal: ConsolePrincipal | undefined): boolean {
+  return isUserPrincipal(principal) || (principal?.kind === 'bootstrap' && !principal.open);
+}
+
 export function auditActor(principal: ConsolePrincipal | undefined): string {
   if (!principal) return 'anonymous';
   if (principal.kind === 'bootstrap') return 'bootstrap';

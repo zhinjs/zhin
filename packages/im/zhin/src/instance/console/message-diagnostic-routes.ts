@@ -1,6 +1,6 @@
 import type { RuntimeMessageDiagnosticsReader } from '@zhin.js/core/runtime';
 import type { ConversationRef } from '@zhin.js/im-contract';
-import { isUserPrincipal, jsonResponse, type HttpHost } from '@zhin.js/host-http';
+import { isExplicitConsolePrincipal, jsonResponse, type HttpHost } from '@zhin.js/host-http';
 import { withNoStore } from './no-store.js';
 import type { ConsoleMessageDiagnostic } from '@zhin.js/console-protocol';
 import { parseBoundedInteger } from '@zhin.js/gateway/http';
@@ -15,7 +15,7 @@ export function registerMessageDiagnosticRoutes(options: Readonly<{
   http.route('GET', `${base}/messages/diagnostics`, (request, { url, principal }) => {
     const authorization = request.headers.get('authorization');
     const bearer = authorization?.startsWith('Bearer ') ? authorization.slice(7).trim() : '';
-    const explicit = isUserPrincipal(principal) || http.tokenRegistry.resolve(bearer) === 'full';
+    const explicit = isExplicitConsolePrincipal(principal) || http.tokenRegistry.resolve(bearer) === 'full';
     if (!explicit) {
       return jsonResponse(403, { success: false, error: '需要以 Console 账号或 API 令牌登录才能读取消息诊断' });
     }

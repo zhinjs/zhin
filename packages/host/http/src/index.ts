@@ -37,6 +37,7 @@ export {
   authorizeConsoleWebSocket,
   globalPermissions,
   isUserPrincipal,
+  isExplicitConsolePrincipal,
   pluginRpcWriteAllowed,
   principalAllows,
   requestMeta,

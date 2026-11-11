@@ -28,6 +28,11 @@ export interface GatewayConsoleRpc {
   handle(message: Readonly<Record<string, unknown>>, context: RouteContext, tokenRegistry: TokenRegistry): Promise<Response>;
 }
 
+/** Further gateway-owned RPC types (`iam.*`, `onboarding.update`), see `GatewayHttpServer.useConsoleRpc`. */
+export interface GatewayRpcHandler extends GatewayConsoleRpc {
+  owns(type: string): boolean;
+}
+
 export function createGatewayConsoleRpc(dispatch: GatewayRpcDispatcher): GatewayConsoleRpc {
   return Object.freeze({
     async handle(message: Readonly<Record<string, unknown>>, context: RouteContext, tokenRegistry: TokenRegistry): Promise<Response> {

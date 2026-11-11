@@ -3,8 +3,9 @@
 Zhin.js 管理网关（[ADR 0054](../../../docs/adr/0054-management-gateway.md)）。网关负责宿主层面的事：Console 账号与权限、终端、
 项目配置与 `.env`、依赖事务、实例监管。它**不依赖 `zhin.js` 与 IM 层**，不加载插件代码（`pnpm check:architecture` 强制）。
 
-> 当前阶段（B1.-1）本包是库：网关进程尚未落地，Console 访问控制与终端仍由 Zhin 实例（`zhin.js/instance`）装配进进程内
-> HTTP Host；`@zhin.js/cli` 与实例共用这里的项目文件服务。B1.1–B1.4 依次把实例监管、HTTP 服务器、认证与终端移到网关进程。
+网关进程（`zhin runtime start`）自己打开项目数据库并持有 `console_*` 表：登录、初始化、`iam.*`、`onboarding.update`、终端与审计
+都在网关里，没有实例时 Console 照样可用；受管实例只按转发的主体做授权。`--standalone`（开发 / 测试，无网关）的实例仍在进程内
+装配 `installConsoleIam` / `installHostConsoleTerminal`。
 
 ## 子路径
 
@@ -19,7 +20,8 @@ Zhin.js 管理网关（[ADR 0054](../../../docs/adr/0054-management-gateway.md)�
 | `@zhin.js/gateway/usage` | 用量统计聚合 |
 | `@zhin.js/gateway/onboarding` | Console 引导（ADR 0053）：`.zhin/onboarding.json` 状态（`OnboardingStateStore`、自动识别已配置步骤）、`OnboardingService`、安装白名单与 `authorizeInstall`、流式 `installPackages` |
 | `@zhin.js/gateway/http` | HTML / SSE 响应工具（实例也导入，不加载 Node HTTP 栈） |
-| `@zhin.js/gateway/server` | 网关 HTTP 服务器（`GatewayHttpServer`：自有路由、`{base}` 认证后转发、其他路由原样转发、实例离线 503 / 超时 504 / 其他 502）、`gateway.*` Console RPC 路由、`startGateway`（服务器 + 实例监管 + `@zhin.js/host-http/bridge` 实例传输）、`runGateway`（`zhin runtime start` 的监管 + 网关入口） |
+| `@zhin.js/gateway/server` | 网关 HTTP 服务器（`GatewayHttpServer`：自有路由、`{base}` 认证后转发、其他路由原样转发、实例离线 503 / 超时 504 / 其他 502；`useConsoleRpc` 登记更多网关 RPC）、`gateway.*` Console RPC 路由、`startGatewayConsole`（项目数据库、本地认证、`/auth/*`、`iam.*`、`onboarding.update`、初始化向导、终端、审计）、`registerGatewayEventRoutes`（合并 `{base}/events`、`{base}/gateway/packages/progress`）、`startGateway`（服务器 + Console + 实例监管 + `@zhin.js/host-http/bridge` 实例传输）、`runGateway`（`zhin runtime start` 的监管 + 网关入口） |
+| `@zhin.js/gateway/database` | 网关自己的项目数据库连接（ADR 0054 §7）：`loadProjectDatabaseConfig` / `resolveProjectDatabaseConfig`（与实例 `resolveDatabaseConfig` 同一规则）、`ProjectDatabase`（SQLite WAL + `busy_timeout`） |
 | `@zhin.js/gateway` | 以上全部 |
 
 ```ts

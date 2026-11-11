@@ -272,6 +272,7 @@
   ],
   "gateway": [
     "export * from './config.js';",
+    "export * from './database.js';",
     "export * from './http.js';",
     "export * from './iam.js';",
     "export * from './onboarding.js';",
@@ -282,6 +283,10 @@
     "export * from './supervisor.js';",
     "export * from './terminal.js';",
     "export * from './usage.js';"
+  ],
+  "gateway/database": [
+    "export * from './config.js';",
+    "export * from './project-database.js';"
   ],
   "gateway/iam": [
     "export{ConsoleIamService,IamError,type BindingInput,type ConsoleAuditView,type ConsoleBindingView,type ConsoleCredentialRevocation,type ConsoleCredentialRevocationReason,type ConsoleIamServiceOptions,type ConsoleRoleView,type ConsoleTokenView,type ConsoleUserView,type IamDatabase,type IamErrorCode,}from './service.js';",

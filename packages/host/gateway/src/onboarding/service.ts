@@ -63,6 +63,12 @@ export interface MarkStepOptions {
 
 const OPTIONAL_STEPS: ReadonlySet<OnboardingStep> = new Set(['database', 'ai', 'adapters']);
 
+/** Permissions a step needs besides `plugin.manage` (ADR 0053 §2). */
+const STEP_PERMISSIONS: Readonly<Partial<Record<OnboardingStep, string>>> = Object.freeze({
+  ai: CONSOLE_PERMISSIONS.AGENT_CONFIGURE,
+  adapters: CONSOLE_PERMISSIONS.ENDPOINT_MANAGE,
+});
+
 /**
  * The one onboarding service (ADR 0053 §2/§5): Console and `zhin setup` / `zhin console init`
  * call the same methods. Transport-independent; routes / RPC wrap it.
@@ -158,6 +164,10 @@ export class OnboardingService {
       return;
     }
     this.#requireManager(principal);
+    const extra = STEP_PERMISSIONS[step];
+    if (extra && (principal.kind === 'bootstrap' || !grantsAllow(principal.grants, extra))) {
+      throw new OnboardingError('forbidden', `需要 ${extra} 权限`);
+    }
   }
 
   #requireManager(principal: ConsolePrincipal): void {

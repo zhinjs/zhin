@@ -12,6 +12,7 @@ import {
   IpcInstanceTransport,
   openInstanceControlChannel,
   parseGatewayMessage,
+  PRINCIPAL_REVOKED_CLOSE_CODE,
   parseInstanceMessage,
   type BridgeChannel,
   type BridgeRouteTable,
@@ -621,49 +622,95 @@ describe('bridge protocol limits and versions', () => {
   });
 });
 
-describe('delegated authentication (interim until B1.4)', () => {
-  const owner = Object.freeze({
-    kind: 'user' as const, userId: 'u1', username: 'owner', displayName: 'Owner', credentialId: 's1',
-    grants: Object.freeze([{ role: 'owner', scope: { kind: 'global' as const }, permissions: Object.freeze(['status.view']) }]),
-    roles: Object.freeze(['owner']),
-  });
+describe('Console accounts in the gateway (B1.4)', () => {
+  const other = (permissions: readonly string[]): ConsolePrincipal => Object.freeze({ ...user(permissions), userId: 'u2', credentialId: 'session-2' }) as ConsolePrincipal;
 
-  it('resolves bearers in the instance, mirrors the owner state and relays audit entries', async () => {
+  it('keeps the instance registry closed: no open Host, no bearer resolution, audit goes to the gateway', async () => {
     const context = await started();
-    let initialized = false;
     const audits: unknown[] = [];
-    context.host.tokenRegistry.useAccessProvider({
-      initialized: () => initialized,
-      authenticate: async (token) => (token === 'owner-token' ? owner : null),
-      audit: (entry) => { audits.push(entry); },
-    });
-    // Unknown before the instance reported (the provider fails closed on it).
-    expect(context.transport.ownerInitialized).toBeUndefined();
+    context.transport.onAudit((entry) => { audits.push(entry); });
+    expect(context.host.tokenRegistry.initialized()).toBe(true);
+    expect(context.host.tokenRegistry.hasAnyToken()).toBe(true);
+    expect(await context.host.tokenRegistry.authenticate('anything')).toBeNull();
+    expect(context.host.tokenRegistry.resolveAccess('')).toMatchObject({ unrestricted: false });
+    expect(context.host.tokenRegistry.authorizePrincipal(user(['mcp.access']), 'mcp.access')).toBe(true);
+    expect(context.host.tokenRegistry.authorizePrincipal({ kind: 'bootstrap', open: true }, 'mcp.access')).toBe(false);
     await opened(context);
-    await until(() => context.transport.ownerInitialized === false, 'initial auth.state');
-    expect(await context.transport.authenticate('owner-token', { ip: '10.0.0.1' })).toEqual(owner);
-    expect(await context.transport.authenticate('nope')).toBeNull();
-    expect(await context.transport.authenticate('')).toBeNull();
-    initialized = true;
-    // Re-read after each exchange / auth result, and by the poll.
-    await context.transport.authenticate('nope');
-    await until(() => context.transport.ownerInitialized === true, 'auth.state after setup');
-    context.transport.audit({ actor: 'user:u1', action: 'rpc:gateway.instance.stop', outcome: 'ok' });
+    context.host.tokenRegistry.accessProvider?.audit?.({ actor: 'user:u1', action: 'rpc:config:patch', outcome: 'denied', detail: { keys: ['a'] } });
     await until(() => audits.length === 1, 'audit relay');
-    expect(audits[0]).toEqual({ actor: 'user:u1', action: 'rpc:gateway.instance.stop', outcome: 'ok' });
-    // Offline: no round trip, null; the last known state survives the detach.
-    context.disconnect();
-    expect(await context.transport.authenticate('owner-token')).toBeNull();
-    expect(context.transport.ownerInitialized).toBe(true);
+    expect(audits[0]).toEqual({ actor: 'user:u1', action: 'rpc:config:patch', outcome: 'denied', detail: { keys: ['a'] } });
     await context.host.close();
   });
 
-  it('refuses a bootstrap principal or malformed auth messages from the instance', () => {
-    expect(parseInstanceMessage({ type: 'auth.result', id: 'a1', payload: { principal: { kind: 'bootstrap', open: true } } })).toBeUndefined();
-    expect(parseInstanceMessage({ type: 'auth.result', payload: { principal: null } })).toBeUndefined();
-    expect(parseInstanceMessage({ type: 'auth.state', payload: { initialized: 'yes' } })).toBeUndefined();
-    expect(parseInstanceMessage({ type: 'auth.result', id: 'a1', payload: { principal: null } })).toEqual({ type: 'auth.result', id: 'a1', payload: { principal: null } });
-    expect(parseGatewayMessage({ type: 'auth.authenticate', id: 'a1', payload: { token: 'x'.repeat(5000) } })).toBeUndefined();
-    expect(parseGatewayMessage({ type: 'auth.audit', payload: { entry: { actor: 'a', action: 'b', outcome: 'maybe' } } })).toBeUndefined();
+  it('reports the plugin permission catalog on listen and when it changes', async () => {
+    const context = await started();
+    let catalog = [{ id: 'ambient:read', level: 'read' as const, declared: true, owners: ['root/ambient'] }];
+    context.host.tokenRegistry.usePluginPermissions(() => catalog);
+    const seen: unknown[] = [];
+    context.transport.onCatalog((next) => { seen.push(next); });
+    await opened(context);
+    await until(() => context.transport.pluginPermissions().length === 1, 'initial catalog');
+    expect(context.transport.pluginPermissions()).toEqual(catalog);
+    catalog = [...catalog, { id: 'ops:approve', level: 'manage' as const, declared: false, owners: ['root/ops'] }];
+    context.host.publishRoutes(2);
+    await until(() => context.transport.pluginPermissions().length === 2, 'catalog after generation commit');
+    // Unchanged catalogs are not sent again; the last one survives an instance restart.
+    context.host.publishRoutes(3);
+    await tick(10);
+    expect(seen).toHaveLength(2);
+    context.disconnect();
+    expect(context.transport.pluginPermissions()).toHaveLength(2);
+    await context.host.close();
+  });
+
+  it('closes the revoked principal’s SSE exchanges and sockets, and nobody else’s', async () => {
+    const context = await started();
+    const streams: Array<{ principal?: string; closed: boolean }> = [];
+    context.host.route('GET', '/api/events', (_request, routeContext) => {
+      const stream = createResponseStream();
+      const entry = { principal: routeContext.principal?.kind === 'user' ? routeContext.principal.userId : undefined, closed: false };
+      streams.push(entry);
+      stream.onClose(() => { entry.closed = true; });
+      stream.write('event: hello\ndata: 1\n\n');
+      return new Response(stream.stream, { headers: SSE_HEADERS });
+    });
+    context.host.ws('/sandbox').onConnection(() => undefined);
+    const revoked: string[] = [];
+    context.host.onPrincipalRevoked((id) => { revoked.push(id); });
+    await opened(context);
+    const mine = await context.transport.fetch(new Request('http://gateway/api/events'), { principal: user(['status.view']) });
+    const theirs = await context.transport.fetch(new Request('http://gateway/api/events'), { principal: other(['status.view']) });
+    const mineReader = mine.body!.getReader();
+    const theirReader = theirs.body!.getReader();
+    await mineReader.read();
+    await theirReader.read();
+    const peer = new FakePeer();
+    const otherPeer = new FakePeer();
+    expect(await context.transport.openWebSocket({ url: new URL('http://gateway/sandbox'), headers: new Headers(), principal: user(['endpoint.operate']) }, peer)).toBe(true);
+    expect(await context.transport.openWebSocket({ url: new URL('http://gateway/sandbox'), headers: new Headers(), principal: other(['endpoint.operate']) }, otherPeer)).toBe(true);
+
+    context.transport.revokePrincipal('u1', 'disabled');
+    await expect(mineReader.read()).rejects.toThrow();
+    await until(() => peer.closed !== undefined, 'revoked socket closed');
+    expect(peer.closed?.code).toBe(PRINCIPAL_REVOKED_CLOSE_CODE);
+    await until(() => streams[0]!.closed, 'instance stream released');
+    expect(revoked).toEqual(['u1']);
+    expect(streams[1]!.closed).toBe(false);
+    expect(otherPeer.closed).toBeUndefined();
+    await theirReader.cancel();
+    await context.host.close();
+  });
+
+  it('validates catalog, audit and principal-revoked messages and drops the interim auth.* messages', () => {
+    expect(parseInstanceMessage({ type: 'catalog', payload: { pluginPermissions: [{ id: 'a:read', level: 'read', declared: true, owners: [] }] } })).toBeDefined();
+    expect(parseInstanceMessage({ type: 'catalog', payload: { pluginPermissions: [{ id: 'a:read', level: 'root', declared: true, owners: [] }] } })).toBeUndefined();
+    expect(parseInstanceMessage({ type: 'audit', payload: { entry: { actor: 'a', action: 'b', outcome: 'maybe' } } })).toBeUndefined();
+    expect(parseInstanceMessage({ type: 'audit', payload: { entry: { actor: 'a', action: 'b', outcome: 'ok' } } })).toBeDefined();
+    expect(parseGatewayMessage({ type: 'principal-revoked', payload: { principalId: '' } })).toBeUndefined();
+    expect(parseGatewayMessage({ type: 'principal-revoked', payload: { principalId: 'u1', reason: 'disabled' } })).toBeDefined();
+    expect(parseInstanceMessage({ type: 'auth.state', payload: { initialized: true } })).toBeUndefined();
+    expect(parseInstanceMessage({ type: 'auth.result', id: 'a1', payload: { principal: null } })).toBeUndefined();
+    expect(parseGatewayMessage({ type: 'auth.authenticate', id: 'a1', payload: { token: 'x' } })).toBeUndefined();
+    expect(parseGatewayMessage({ type: 'auth.audit', payload: { entry: { actor: 'a', action: 'b', outcome: 'ok' } } })).toBeUndefined();
   });
 });

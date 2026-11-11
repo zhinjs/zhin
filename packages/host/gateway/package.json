@@ -65,6 +65,11 @@
       "types": "./lib/server.d.ts",
       "development": "./src/server.ts",
       "import": "./lib/server.js"
+    },
+    "./database": {
+      "types": "./lib/database.d.ts",
+      "development": "./src/database.ts",
+      "import": "./lib/database.js"
     }
   },
   "files": [
@@ -160,6 +165,10 @@
       "./server": {
         "types": "./lib/server.d.ts",
         "import": "./lib/server.js"
+      },
+      "./database": {
+        "types": "./lib/database.d.ts",
+        "import": "./lib/database.js"
       }
     }
   },

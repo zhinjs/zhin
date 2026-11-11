@@ -1,6 +1,6 @@
 import { adapterFeatureId, isAdapterIndex } from '@zhin.js/adapter';
 import { commandFeatureId, explainCommandPermissions, isCommandIndex, type CommandDescriptor } from '@zhin.js/command';
-import { extractBearerToken, HttpBodyError, isUserPrincipal, jsonResponse, readJsonBody, type HttpHost, type RouteContext } from '@zhin.js/host-http';
+import { extractBearerToken, HttpBodyError, isExplicitConsolePrincipal, jsonResponse, readJsonBody, type HttpHost, type RouteContext } from '@zhin.js/host-http';
 import { PermissionHost, permissionHostToken } from '@zhin.js/permission';
 import { createMessages, isLocale, resolveLocale, type Locale, normalizeDeliveryTarget, type CapabilityId, type DeliveryTarget, type RuntimeSnapshot, type SnapshotLease, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import { noStore } from './no-store.js';
@@ -91,7 +91,7 @@ export function registerPermissionExplanationRoutes(options: Readonly<{ http: Ht
 
 /** Denial response, or undefined when the caller presented an explicit Console credential. */
 function authorize(request: Request, context: RouteContext, http: HttpHost, locale: Locale): Response | undefined {
-  const explicit = isUserPrincipal(context.principal)
+  const explicit = isExplicitConsolePrincipal(context.principal)
     || http.tokenRegistry.resolve(extractBearerToken(request.headers.get('authorization') ?? undefined, null)) === 'full';
   if (explicit) return undefined;
   return jsonResponse(401, { success: false, error: messages(locale, 'auth') });

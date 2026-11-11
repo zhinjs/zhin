@@ -136,6 +136,14 @@ export const IAM_RPC = Object.freeze({
   AUDIT_LIST: 'iam.audit.list',
 } as const);
 
+/**
+ * Onboarding RPC (ADR 0053 §4), answered by the gateway: `onboarding.update { step, status }`
+ * marks step 3 (`ai`) / 4 (`adapters`) `done` | `skipped`, or `step: 'finish'` completes it.
+ */
+export const ONBOARDING_RPC = Object.freeze({
+  UPDATE: 'onboarding.update',
+} as const);
+
 /** `/auth/*` REST paths relative to the HTTP API base (ADR 0049 §5). */
 export const CONSOLE_AUTH_ROUTES = Object.freeze({
   LOGIN: '/auth/login',
@@ -315,6 +323,8 @@ export const CONSOLE_RPC_PERMISSIONS: Readonly<Record<string, ConsolePermission>
   'iam.tokens.revoke': P.IAM_MANAGE,
   // Terminal (ADR 0051): session open is a WebSocket; listed so the Console can gate the page.
   'terminal.open': P.OPS_TERMINAL,
+  // Onboarding (ADR 0053 §4), gateway; steps also need agent.configure / endpoint.manage (§2).
+  'onboarding.update': P.PLUGIN_MANAGE,
   // Management gateway (ADR 0054 §4 / §5), handled by the gateway process.
   ...GATEWAY_RPC_PERMISSIONS,
 });
@@ -473,6 +483,8 @@ export const CONSOLE_HTTP_PERMISSIONS: readonly ConsoleHttpPermissionRule[] = Ob
   // ADR 0051: the WebSocket `/console/terminal` authenticates with a one-time ticket.
   httpRule('GET', '/console/terminal/targets', P.OPS_TERMINAL),
   httpRule('POST', '/console/terminal/tickets', P.OPS_TERMINAL),
+  // ADR 0054 §4: gateway-side SSE of package transactions (also merged into `/events`).
+  httpRule('GET', '/gateway/packages/progress', P.PLUGIN_MANAGE),
 ]);
 
 /**

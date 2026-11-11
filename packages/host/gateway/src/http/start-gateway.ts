@@ -3,11 +3,7 @@
  * pluggable instance transport (the bridge supplies the IPC one). CLI wiring lives elsewhere.
  */
 import { resolveHttpConfig, type ResolvedHttpConfig, type TokenRegistry } from '@zhin.js/host-http';
-import {
-  createDelegatedAccessProvider,
-  isInstanceAccessDelegate,
-  type InstanceTransport,
-} from '@zhin.js/host-http/bridge';
+import type { InstanceTransport } from '@zhin.js/host-http/bridge';
 import { join } from 'node:path';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { createConfigDocument } from '@zhin.js/runtime';
@@ -18,12 +14,18 @@ import { runSupervisedInstance, type RunSupervisedInstanceOptions } from '../sup
 import { GatewayPackageService } from '../packages/service.js';
 import { createGatewayRpcDispatcher, type GatewayRpcInstance } from '../packages/rpc.js';
 import { createGatewayConsoleRpc } from './console-rpc.js';
+import { startGatewayConsole, type GatewayConsole, type GatewayConsoleInstancePort, type GatewayConsoleOptions } from './gateway-console.js';
+import { registerGatewayEventRoutes } from './gateway-events.js';
 import { GatewayHttpServer } from './gateway-http-server.js';
 
 const logger = getLogger('gateway');
 
-/** A transport the gateway owns; `dispose` runs on gateway close. */
-export interface GatewayInstanceTransport extends InstanceTransport {
+/**
+ * A transport the gateway owns; `dispose` runs on gateway close. The Console module also uses the
+ * optional {@link GatewayConsoleInstancePort} methods (plugin catalog, instance audit,
+ * `principal-revoked`) when the transport has them (`IpcInstanceTransport` does).
+ */
+export interface GatewayInstanceTransport extends InstanceTransport, GatewayConsoleInstancePort {
   dispose?(): void | Promise<void>;
   /** Told the bound listener addresses after listen (the instance's `HttpHost.address`). */
   setAddresses?(addresses: readonly import('@zhin.js/host-http').HttpHostAddress[]): void;
@@ -45,8 +47,15 @@ export interface StartGatewayOptions {
   /** Instance supervision; pass a supervisor to own its construction. */
   readonly supervisor: InstanceSupervisorOptions | InstanceSupervisor;
   readonly transport: InstanceTransportFactory;
-  /** Console authentication registry (the IAM module installs its access provider on it). */
+  /** Console authentication registry (the Console module installs its access provider on it). */
   readonly tokenRegistry?: TokenRegistry;
+  /**
+   * Console access control in the gateway (project database, `/auth/*`, `iam.*`, setup,
+   * onboarding, terminal, audit). Default on; `false` leaves only the bootstrap token (tests).
+   */
+  readonly console?: false | Omit<GatewayConsoleOptions, 'server' | 'projectRoot' | 'environment' | 'instance' | 'restartInstance'>;
+  /** Longest wait for the project database before listening anyway (default 10 s). */
+  readonly databaseWaitMs?: number;
   readonly retryAfterSeconds?: number;
   readonly maxRequestBodyBytes?: number;
   /** Start the instance after the server listens. Default true; a failed start keeps the gateway up. */
@@ -63,6 +72,8 @@ export interface RunningGateway {
   readonly supervisor: InstanceSupervisor;
   readonly transport: GatewayInstanceTransport;
   readonly packages: GatewayPackageService | undefined;
+  /** Console access control; undefined with `console: false`. */
+  readonly console: GatewayConsole | undefined;
   /**
    * True while the gateway owns the instance's lifecycle: a dependency transaction runs, or the
    * Console stopped the instance (a run must not end because of it).
@@ -124,16 +135,31 @@ export async function startGateway(options: StartGatewayOptions): Promise<Runnin
     })),
   });
   registry = server.tokenRegistry;
-  // Interim until B1.4: Console accounts live in the instance, which resolves user / API-token
-  // bearers and reports whether an owner exists; without an owner (and without `http.token`)
-  // the registry yields the open bootstrap principal `{ kind: 'bootstrap', open: true }`.
-  const disposeAccess = !options.tokenRegistry && !server.tokenRegistry.accessProvider && isInstanceAccessDelegate(transport)
-    ? server.tokenRegistry.useAccessProvider(createDelegatedAccessProvider(transport))
-    : undefined;
+  const disposeEvents = registerGatewayEventRoutes({
+    server,
+    ...(packages ? { packages } : {}),
+    instance: { onChange: (listener) => transport.onRoutes(() => listener()) },
+  });
+  let gatewayConsole: GatewayConsole | undefined;
   try {
+    // ADR 0054 §7: Console accounts live in the gateway's own connection to the project database.
+    if (options.console !== false) {
+      gatewayConsole = await startGatewayConsole({
+        ...(options.console ?? {}),
+        server,
+        projectRoot: options.projectRoot,
+        ...(options.environment ? { environment: options.environment } : {}),
+        instance: transport,
+        restartInstance: async () => {
+          if (supervisor.state !== 'stopped') await supervisor.restart({ reason: 'database' });
+        },
+      });
+      await settleWithin(gatewayConsole.ready, options.databaseWaitMs ?? 10_000);
+    }
     await server.listen();
   } catch (error) {
-    disposeAccess?.();
+    disposeEvents();
+    await gatewayConsole?.close().catch(() => undefined);
     await transport.dispose?.();
     supervisor.dispose();
     throw error;
@@ -154,6 +180,7 @@ export async function startGateway(options: StartGatewayOptions): Promise<Runnin
     supervisor,
     transport,
     packages,
+    console: gatewayConsole,
     ownsInstanceLifecycle: () => consoleStopped || packages?.activeTransaction !== undefined,
     instanceStarted,
     close(): Promise<void> {
@@ -162,7 +189,8 @@ export async function startGateway(options: StartGatewayOptions): Promise<Runnin
           await supervisor.stop({ reason: 'gateway-stop' }).catch(() => undefined);
           await transport.dispose?.();
         } finally {
-          disposeAccess?.();
+          disposeEvents();
+          await gatewayConsole?.close().catch(() => undefined);
           supervisor.dispose();
           await server.close();
         }
@@ -170,6 +198,15 @@ export async function startGateway(options: StartGatewayOptions): Promise<Runnin
       return closeResult;
     },
   });
+}
+
+/** Waits for `promise` at most `ms` (the gateway listens anyway; the work continues). */
+function settleWithin(promise: Promise<unknown>, ms: number): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    promise.then(() => undefined, () => undefined),
+    new Promise<void>((resolve) => { timer = setTimeout(resolve, ms); timer.unref?.(); }),
+  ]).finally(() => clearTimeout(timer));
 }
 
 export interface RunGatewayOptions extends Omit<RunSupervisedInstanceOptions, 'attach'> {

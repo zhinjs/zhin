@@ -26,7 +26,8 @@ export interface InstallRuntimeA2aOptions {
    * Shared Host credential check (ADR 0049): user API tokens with `a2a.access`, or the
    * bootstrap token before setup. Tried when the bearer does not match `config.token`.
    */
-  readonly authenticateBearer?: (token: string, request: Request, remoteAddress?: string) => Promise<boolean>;
+  /** `principal`: what the Host (or the gateway in front of it) resolved from that bearer. */
+  readonly authenticateBearer?: (token: string, request: Request, remoteAddress?: string, principal?: unknown) => Promise<boolean>;
   readonly fallbackPublicUrl: string;
   readonly production?: boolean;
 }
@@ -60,14 +61,14 @@ export function installRuntimeA2a(options: InstallRuntimeA2aOptions): () => void
     });
   }
 
-  const unregister = options.http.route('ALL', `${basePath}/*`, async (request, { url, remoteAddress }) => {
+  const unregister = options.http.route('ALL', `${basePath}/*`, async (request, { url, remoteAddress, principal }) => {
     // No token (non-production only): accept loopback callers alone, like the MCP Host,
     // so a token-less dev instance is not open to the network.
     const auth = { headers: request.headers, ...(remoteAddress ? { remoteAddress } : {}) };
     const bearer = extractBearerToken(auth);
     const authenticated = (token !== '' && verifyA2aBearer(auth, token))
       || (bearer !== '' && options.authenticateBearer !== undefined
-        && await options.authenticateBearer(bearer, request, remoteAddress).catch(() => false))
+        && await options.authenticateBearer(bearer, request, remoteAddress, principal).catch(() => false))
       || (token === '' && options.production !== true && isLocalhost(auth));
     if (!authenticated) {
       return jsonResponse(401, { error: 'Unauthorized - Bearer token required' });

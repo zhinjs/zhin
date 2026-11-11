@@ -248,6 +248,9 @@
       "@zhin.js/gateway/server": [
         "./packages/host/gateway/src/server.ts"
       ],
+      "@zhin.js/gateway/database": [
+        "./packages/host/gateway/src/database.ts"
+      ],
       "@zhin.js/host-http": [
         "./packages/host/http/src/index.ts"
       ],

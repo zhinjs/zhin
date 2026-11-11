@@ -88,6 +88,8 @@ interface HttpHost {
 2. **实例注册的 `{base}/*` 路由**（Console RPC、SSE、REST、MCP、A2A）——网关先认证（会话 / API 令牌 → 主体、权限、作用域绑定），未认证 401；实例离线 `503 { code: 'instance_unavailable', state }`（带 `Retry-After`）；实例在期限内没有响应 `504 { code: 'instance_timeout' }`；其他桥接失败（实例处理出错、流过多）`502 { code: 'instance_error' }`；认证通过后连同主体一起转发给实例。
 3. **实例注册的其他路由**（适配器 Webhook、反向 WS 等）——不认证，原样转发，鉴权由插件自己负责，与今天一致。
 
+**认证只在网关**（B1.4）：会话、API 令牌与初始化令牌都由网关在自己的数据库连接上解析；实例的令牌表是“关闭”的——不认开放 Host、不认初始化令牌、不解析任何 bearer，权限只来自随请求转发的主体（开放 Host 时网关转发 `{ kind: 'bootstrap', open: true }`，初始化令牌转发 `{ kind: 'bootstrap', open: false }`）。实例自己的协议面（MCP / A2A）按转发主体判断 `mcp.access` / `a2a.access`。早期的过渡消息 `auth.authenticate` / `auth.result` / `auth.state` / `auth.audit` 已删除（协议版本 3）。
+
 **授权在处理处完成**：实例的 Console RPC 分发点按 `CONSOLE_RPC_PERMISSIONS`（ADR 0049 §3）检查随请求转发的主体——只有分发点知道 RPC 类型与载荷里的作用域目标。网关自有路由由网关检查。两边用 `@zhin.js/host-http` 的同一个访问控制模块与同一份权限表。控制通道只存在于父子进程之间，主体随消息传递，不需要签名。
 
 **控制通道**：Node 子进程 IPC（`spawn(..., { stdio: ['ignore', 'pipe', 'pipe', 'ipc'], serialization: 'advanced' })`，可直接传 `Uint8Array`）。消息为 `{ type, id?, payload }`：
@@ -101,9 +103,9 @@ interface HttpHost {
 | 双向 | `ws.open` / `ws.message` / `ws.close` / `ws.drain` | WebSocket 连接与帧 |
 | 实例 → 网关 | `restart-request` | 需要整进程重启的变更（`restart-process` effect、`disable_plugins`、数据库切换、Agent 自我变更）。**取代退出码 75** |
 | 网关 → 实例 | `shutdown` | `{ reason, budgetMs }` |
-| 网关 → 实例 | `principal-revoked` | 实例断开该主体的 SSE / WS |
-| 网关 → 实例 | `auth.authenticate` / `auth.audit` | **过渡（至 B1.4）**：账号仍在实例时，网关请实例解析用户会话 / API 令牌（`auth.result`）并把网关侧审计写入实例的审计日志 |
-| 实例 → 网关 | `auth.state` / `auth.result` | **过渡（至 B1.4）**：是否已有所有者（变化时上报；未上报前网关按“已有所有者”处理，失败即关闭）；解析结果只可能是用户 / API 令牌主体，初始化令牌与开放 Host 由网关自己判断 |
+| 网关 → 实例 | `principal-revoked` | `{ principalId, reason? }`：用户被禁用 / 删除、改密或绑定变化（ADR 0049 §6）后，实例关闭该用户（`userId`）经桥接打开的 SSE 与 WS（WS 关闭码 4401）。终端会话在网关本地，由网关直接结束 |
+| 实例 → 网关 | `catalog` | `{ pluginPermissions }`：当前世代的插件权限目录（ADR 0049 增补），监听时与每次变化（世代提交）时上报；网关缓存（实例重启期间沿用上一份），用于 `/auth/me` 的等级展开、`iam.roles.list` 与网关自己的授权 |
+| 实例 → 网关 | `audit` | `{ entry }`：实例侧写的审计条目（RPC 分发点的拒绝与写操作）；审计日志归网关所有，网关写入 |
 
 **日志**：网关采集实例 stdout / stderr，写入 `.zhin/logs/instance.log`（按大小轮转），并保留内存环形缓冲，供 `gateway.instance.logs` 与实例离线时查看。
 
@@ -115,7 +117,7 @@ interface HttpHost {
 
 1. 生成计划并校验白名单与 revision；备份 `package.json`、锁文件、配置文件；
 2. 向实例发送 `shutdown`，等待退出；
-3. 执行事务，输出以 SSE（`gateway.packages.progress`）推给 Console；
+3. 执行事务，输出以 SSE（`gateway.packages.progress`）推给 Console：网关接管 `GET {base}/events`，实例在线时转发实例的事件流并在帧边界插入网关帧（网关帧不带 `id:`，续传游标仍是实例的），实例离线时给只含网关事件的流（实例就绪后关闭，Console 重连回合并流），`{base}/events/history` 离线时返回保留调用方游标的空页；`GET {base}/gateway/packages/progress`（`plugin.manage`）只推进度；
 4. 启动实例，等待 `ready`（默认 60 秒，`gateway.readyTimeout`）；
 5. 失败：恢复备份、重新安装、启动旧版本；向 Console 报告失败阶段与日志尾部。
 
@@ -143,7 +145,8 @@ interface HttpHost {
 ### 7. 数据
 
 - 网关自己打开项目数据库（与实例同一份 `database` 配置），读写 `console_*` 表（ADR 0049）；实例不访问这些表。
-- SQLite：两个进程同时连接，启用 `journal_mode=WAL` 与 `busy_timeout`。
+- SQLite：两个进程同时连接，启用 `journal_mode=WAL`（`@zhin.js/database` 对文件库总是开启）；网关的连接设 `busy_timeout`（2 秒，网关只有单语句写入），实例保持立即返回 `SQLITE_BUSY` 由其存储重试——`node:sqlite` 的等待是同步的，同一进程内两个带异步事务的连接互等会卡住事件循环。
+- 配置解析：网关按实例 `resolveDatabaseConfig` 的同一规则解析 `database`（`@zhin.js/gateway/database`，不导入 IM 层），相对 SQLite 路径以项目根为准；数据库不可用时网关照常监听，`/auth/*` 返回 503，“是否已初始化”取初始化标记文件（失败即关闭），并定时重试。
 - 数据库切换（ADR 0049 §7）：网关写配置、关闭自己的连接、重新打开新库，再重启实例。
 
 ### 8. 多实例

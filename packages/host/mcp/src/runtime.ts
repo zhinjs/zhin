@@ -39,8 +39,9 @@ export interface InstallRuntimeMcpOptions {
   /**
    * Shared Host credential check (ADR 0049): user API tokens with `mcp.access`, or the
    * bootstrap token before setup. Tried when the bearer does not match `config.token`.
+   * `principal` is what the Host (or the gateway in front of it) resolved from that bearer.
    */
-  readonly authenticateBearer?: (token: string, request: Request, remoteAddress?: string) => Promise<boolean>;
+  readonly authenticateBearer?: (token: string, request: Request, remoteAddress?: string, principal?: unknown) => Promise<boolean>;
   readonly production?: boolean;
   readonly tools: RuntimeMcpToolProvider;
 }
@@ -49,8 +50,8 @@ export interface InstallRuntimeMcpOptions {
 export function installRuntimeMcp(options: InstallRuntimeMcpOptions): () => void {
   if (options.config.enabled === false) return () => undefined;
   const path = normalizePath(options.config.path ?? '/mcp');
-  const unregister = options.http.route('ALL', `${path}/*`, (request, { remoteAddress }) => (
-    handleRuntimeMcpRequest(request, options, remoteAddress)
+  const unregister = options.http.route('ALL', `${path}/*`, (request, { remoteAddress, principal }) => (
+    handleRuntimeMcpRequest(request, options, remoteAddress, principal)
   ), { summary: 'Model Context Protocol', tags: ['mcp'] });
   return unregister;
 }
@@ -59,6 +60,7 @@ export async function handleRuntimeMcpRequest(
   request: Request,
   options: Omit<InstallRuntimeMcpOptions, 'http'>,
   remoteAddress?: string,
+  principal?: unknown,
 ): Promise<Response> {
   if (request.method !== 'POST') {
     return jsonResponse(405, {
@@ -86,7 +88,7 @@ export async function handleRuntimeMcpRequest(
   const bearer = bearerOf(request);
   const bearerAuthenticated = verifyMcpBearer(auth, expectedToken)
     || (bearer !== '' && options.authenticateBearer !== undefined
-      && await options.authenticateBearer(bearer, request, remoteAddress).catch(() => false));
+      && await options.authenticateBearer(bearer, request, remoteAddress, principal).catch(() => false));
   if (mcpAuthRequired(body, auth, options.config, options.production ?? false)
     && !bearerAuthenticated) {
     return jsonResponse(401, {

@@ -17,8 +17,8 @@ import { ConsoleIamService, IamError } from '@zhin.js/gateway/iam';
 import { ConsoleSetupService, type SetupDatabaseField, type SetupDriver } from '@zhin.js/gateway/iam';
 import { defineConsoleIamTables } from '@zhin.js/gateway/iam';
 import { findConfigFile } from '@zhin.js/gateway/project';
+import { ProjectDatabase, resolveProjectDatabaseConfig } from '@zhin.js/gateway/database';
 import { loadHostHttpConfig } from '../utils/host-http.js';
-import { importProjectInstanceCli, type ProjectDatabaseHost } from '../utils/project-instance.js';
 import { recordOnboardingSteps, setupOnboardingDeps } from './setup-onboarding.js';
 
 export interface ConsoleCliIo {
@@ -38,7 +38,7 @@ export interface OpenedProject {
   close(): Promise<void>;
 }
 
-/** Opens the project database the same way `zhin runtime start` resolves it. */
+/** Opens the project database the same way the gateway resolves it (ADR 0054 §7). */
 export async function openProjectConsole(projectRoot: string): Promise<OpenedProject> {
   const configFile = path.join(projectRoot, findConfigFile(projectRoot) ?? DEFAULT_ROOT_CONFIG_FILE_NAME);
   const document = createConfigDocument(configFile);
@@ -46,15 +46,8 @@ export async function openProjectConsole(projectRoot: string): Promise<OpenedPro
   const environment = await projectEnvironment(projectRoot);
   const raw = (await document.read()).document;
   const expanded = expandEnvironmentValue(raw, key => environment[key]);
-  // DatabaseHost is instance (IM) code until the gateway opens the database itself (B1.4).
-  const instance = await importProjectInstanceCli(projectRoot);
-  const resolved = await instance.resolveDatabaseConfig(projectRoot, expanded as never) as { dialect: string; filename?: unknown };
-  // The Host runs from the project root; the CLI may not, so anchor a relative sqlite file there.
-  const config = resolved.dialect === 'sqlite' && typeof resolved.filename === 'string' && !path.isAbsolute(resolved.filename)
-    ? { ...resolved, filename: path.resolve(projectRoot, resolved.filename) }
-    : resolved;
-  const database = instance.createDatabaseHost(config as never) as ProjectDatabaseHost
-    & Parameters<typeof defineConsoleIamTables>[0] & ConstructorParameters<typeof ConsoleIamService>[0]['database'];
+  // Relative SQLite files are anchored at the project root, whatever the CLI's cwd.
+  const database = new ProjectDatabase(await resolveProjectDatabaseConfig(projectRoot, expanded));
   const supported = defineConsoleIamTables(database);
   let iam: ConsoleIamService | undefined;
   if (supported) {

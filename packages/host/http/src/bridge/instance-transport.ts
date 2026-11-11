@@ -7,13 +7,8 @@
  * Nothing here imports `node:http` or `ws`; the gateway converts its Node server objects to
  * `Request` / `WsConnection` itself.
  */
-import type {
-  ConsoleAccessProvider,
-  ConsoleAuditEntry,
-  ConsolePrincipal,
-  ConsoleRequestMeta,
-  ConsoleUserPrincipal,
-} from '../access-control.js';
+import type { ConsolePluginPermissionInfo } from '@zhin.js/console-protocol';
+import type { ConsoleAuditEntry, ConsolePrincipal } from '../access-control.js';
 import type { WsConnection } from '../http-host.js';
 import type { HttpHostAddress } from '../host-options.js';
 import { sendableCloseCode } from './bridged-host.js';
@@ -81,43 +76,6 @@ export interface InstanceTransport {
   openWebSocket(info: InstanceWsOpenInfo, peer: WsConnection): Promise<boolean>;
 }
 
-/**
- * Interim (until B1.4 moves Console accounts into the gateway): the instance resolves user /
- * API-token bearers and reports whether an owner exists. {@link createDelegatedAccessProvider}
- * turns it into the gateway TokenRegistry's access provider.
- */
-export interface InstanceAccessDelegate {
-  /** Last owner-exists flag the instance reported; undefined before the first report. */
-  readonly ownerInitialized: boolean | undefined;
-  /** Resolves a bearer in the instance; null when unknown, revoked, or the instance is offline. */
-  authenticate(token: string, meta?: ConsoleRequestMeta): Promise<ConsoleUserPrincipal | null>;
-  /** Hands an audit entry to the instance's audit log (fire and forget). */
-  audit(entry: ConsoleAuditEntry): void;
-}
-
-/** Default time to wait for `auth.result`. */
-export const DEFAULT_BRIDGE_AUTH_TIMEOUT_MS = 10_000;
-
-/**
- * A {@link ConsoleAccessProvider} backed by the instance. Fails closed: before the instance first
- * reported its state an owner is assumed to exist, so the gateway never treats an unknown
- * project as an open Host (it then needs the bootstrap token or a valid account).
- */
-export function createDelegatedAccessProvider(delegate: InstanceAccessDelegate): ConsoleAccessProvider {
-  return Object.freeze({
-    initialized: () => delegate.ownerInitialized ?? true,
-    authenticate: (token: string, meta: ConsoleRequestMeta) => delegate.authenticate(token, meta),
-    audit: (entry: ConsoleAuditEntry) => delegate.audit(entry),
-  });
-}
-
-export function isInstanceAccessDelegate(value: unknown): value is InstanceAccessDelegate {
-  return typeof value === 'object' && value !== null
-    && typeof (value as InstanceAccessDelegate).authenticate === 'function'
-    && typeof (value as InstanceAccessDelegate).audit === 'function'
-    && 'ownerInitialized' in value;
-}
-
 export type InstanceTransportErrorCode = 'instance-offline' | 'timeout' | 'instance-error' | 'overloaded';
 
 export class InstanceTransportError extends Error {
@@ -149,8 +107,6 @@ export interface IpcInstanceTransportOptions {
   readonly wsOpenTimeoutMs?: number;
   /** Client socket backlog below which instance frames are acknowledged. Default 1 MiB. */
   readonly wsLowWaterBytes?: number;
-  /** Time to wait for `auth.result`. Default {@link DEFAULT_BRIDGE_AUTH_TIMEOUT_MS}. */
-  readonly authTimeoutMs?: number;
 }
 
 const NULL_BODY_STATUSES = new Set([204, 205, 304]);
@@ -183,12 +139,12 @@ interface BridgedPeer {
   cleanup(): void;
 }
 
-export class IpcInstanceTransport implements InstanceTransport, InstanceAccessDelegate {
+export class IpcInstanceTransport implements InstanceTransport {
   readonly #limits: BridgeLimits;
-  readonly #authTimeoutMs: number;
-  /** Survives restarts: the last known owner state of the project. */
-  #ownerInitialized: boolean | undefined;
-  readonly #authRequests = new Map<string, (principal: ConsoleUserPrincipal | null) => void>();
+  /** Survives restarts: the last catalog the instance reported (plugins rarely change). */
+  #catalog: readonly ConsolePluginPermissionInfo[] = Object.freeze([]);
+  readonly #catalogListeners = new Set<(catalog: readonly ConsolePluginPermissionInfo[]) => void>();
+  readonly #auditListeners = new Set<(entry: ConsoleAuditEntry) => void>();
   readonly #responseTimeoutMs: number;
   readonly #wsOpenTimeoutMs: number;
   readonly #wsLowWater: number;
@@ -207,40 +163,28 @@ export class IpcInstanceTransport implements InstanceTransport, InstanceAccessDe
     this.#responseTimeoutMs = options.responseTimeoutMs ?? DEFAULT_BRIDGE_RESPONSE_TIMEOUT_MS;
     this.#wsOpenTimeoutMs = options.wsOpenTimeoutMs ?? DEFAULT_BRIDGE_WS_OPEN_TIMEOUT_MS;
     this.#wsLowWater = options.wsLowWaterBytes ?? 1024 * 1024;
-    this.#authTimeoutMs = options.authTimeoutMs ?? DEFAULT_BRIDGE_AUTH_TIMEOUT_MS;
   }
 
-  get ownerInitialized(): boolean | undefined {
-    return this.#ownerInitialized;
+  /** Plugin permission catalog the instance last reported (kept across restarts). */
+  pluginPermissions(): readonly ConsolePluginPermissionInfo[] {
+    return this.#catalog;
   }
 
-  authenticate(token: string, meta: ConsoleRequestMeta = {}): Promise<ConsoleUserPrincipal | null> {
-    if (!token || !this.ready) return Promise.resolve(null);
-    const id = `a${++this.#sequence}`;
-    return new Promise((resolve) => {
-      const timer = setTimeout(() => settle(null), this.#authTimeoutMs);
-      timer.unref?.();
-      const settle = (principal: ConsoleUserPrincipal | null): void => {
-        if (!this.#authRequests.delete(id)) return;
-        clearTimeout(timer);
-        resolve(principal);
-      };
-      this.#authRequests.set(id, settle);
-      this.#send({
-        type: 'auth.authenticate',
-        id,
-        payload: {
-          token,
-          ...(meta.ip ? { ip: meta.ip.slice(0, 256) } : {}),
-          ...(meta.userAgent ? { userAgent: meta.userAgent.slice(0, 1024) } : {}),
-        },
-      });
-    });
+  onCatalog(listener: (catalog: readonly ConsolePluginPermissionInfo[]) => void): () => void {
+    this.#catalogListeners.add(listener);
+    return () => { this.#catalogListeners.delete(listener); };
   }
 
-  audit(entry: ConsoleAuditEntry): void {
-    if (!this.#port) return;
-    this.#send({ type: 'auth.audit', payload: { entry } });
+  /** Audit entries the instance wrote (the gateway owns the audit log). */
+  onAudit(listener: (entry: ConsoleAuditEntry) => void): () => void {
+    this.#auditListeners.add(listener);
+    return () => { this.#auditListeners.delete(listener); };
+  }
+
+  /** Tells the instance to close the live connections of `principalId` (a user id). */
+  revokePrincipal(principalId: string, reason?: string): void {
+    if (!principalId) return;
+    this.#send({ type: 'principal-revoked', payload: { principalId, ...(reason ? { reason: reason.slice(0, 64) } : {}) } });
   }
 
   get ready(): boolean {
@@ -320,7 +264,6 @@ export class IpcInstanceTransport implements InstanceTransport, InstanceAccessDe
       peer.settle(false);
       peer.closePeer(1012, 'Instance restarting');
     }
-    for (const settle of [...this.#authRequests.values()]) settle(null);
     this.#table = EMPTY_ROUTE_TABLE;
     if (wasReady) this.#emitRoutes();
   }
@@ -546,15 +489,18 @@ export class IpcInstanceTransport implements InstanceTransport, InstanceAccessDe
         return;
       case 'restart-request':
         return;
-      case 'auth.state':
-        this.#ownerInitialized = message.payload.initialized;
-        return;
-      case 'auth.result': {
-        const settle = this.#authRequests.get(message.id);
-        const principal = message.payload.principal;
-        settle?.(principal && principal.kind !== 'bootstrap' ? principal : null);
+      case 'catalog': {
+        this.#catalog = deepFreeze(message.payload.pluginPermissions.map((entry) => ({ ...entry, owners: [...entry.owners] })));
+        for (const listener of [...this.#catalogListeners]) {
+          try { listener(this.#catalog); } catch { /* observers never break the bridge */ }
+        }
         return;
       }
+      case 'audit':
+        for (const listener of [...this.#auditListeners]) {
+          try { listener(message.payload.entry); } catch { /* audit never breaks the bridge */ }
+        }
+        return;
       case 'http.response.head': {
         const exchange = this.#exchanges.get(message.id);
         if (!exchange || exchange.headReceived) return;
