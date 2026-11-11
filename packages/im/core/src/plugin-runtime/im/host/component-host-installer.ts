@@ -1,4 +1,4 @@
-import { compiler } from '../../../utils.js';
+import { renderTemplatePaths } from '@zhin.js/kernel';
 import {
   componentHostToken,
   type ComponentHost,
@@ -9,7 +9,7 @@ import {
 function createComponentHost(): ComponentHost {
   return {
     compileTemplate(text: string, context: TemplateContext): string {
-      return compiler(text, { ...context });
+      return renderTemplatePaths(text, { ...context });
     },
   };
 }

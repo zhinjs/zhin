@@ -13,6 +13,12 @@
 
 import * as path from 'node:path';
 import * as os from 'node:os';
+import {
+  findUnsafeShellSyntax,
+  scanShellSegment,
+  splitCompoundCommand,
+  splitPipeSegments,
+} from './shell-syntax.js';
 
 // ── 设备路径阻止──────────────
 
@@ -266,49 +272,6 @@ export function assertFileAccess(filePath: string): void {
  */
 const ENV_DUMP_COMMANDS = /^\s*(env|printenv|export|set)\b/;
 const ENV_ECHO_PATTERN = /\$\{?\w*(KEY|SECRET|TOKEN|PASSWORD|PASS|CREDENTIAL|AUTH|APIKEY|API_KEY)\w*\}?/i;
-function splitPipeSegments(command: string): string[] {
-  const parts: string[] = [];
-  let current = '';
-  for (let i = 0; i < command.length; i++) {
-    if (command[i] === '|' && command[i + 1] !== '|') {
-      const seg = current.trim();
-      if (seg) parts.push(seg);
-      current = '';
-      continue;
-    }
-    current += command[i];
-  }
-  const tail = current.trim();
-  if (tail) parts.push(tail);
-  return parts;
-}
-
-/**
- * 构建 ripgrep/grep 排除敏感路径的 glob（防止从项目根搜索时泄漏 .env 等）。
- */
-export function buildSensitiveSearchExcludeGlobs(): string[] {
-  return [
-    '!**/.env',
-    '!**/.env.*',
-    '!**/*.pem',
-    '!**/*.key',
-    '!**/*.p12',
-    '!**/*.pfx',
-    '!**/.npmrc',
-    '!**/.netrc',
-    '!**/.pgpass',
-    '!**/.my.cnf',
-    '!**/.bash_history',
-    '!**/.zsh_history',
-    '!**/.ssh/**',
-    '!**/.gnupg/**',
-    '!**/.aws/**',
-    '!**/.kube/**',
-    '!**/.docker/**',
-    '!**/.gcloud/**',
-    '!**/.config/gcloud/**',
-  ];
-}
 
 function splitShellOperatorParts(command: string): string[] {
   const parts: string[] = [];
@@ -460,15 +423,22 @@ const BASH_SEARCH_COMMANDS: ReadonlySet<string> = new Set([
 /** 读取/查看类命令 */
 const BASH_READ_COMMANDS: ReadonlySet<string> = new Set([
   'cat', 'head', 'tail', 'less', 'more', 'wc', 'stat', 'file', 'strings',
-  'jq', 'awk', 'cut', 'sort', 'uniq', 'tr', 'sed', 'base64', 'xxd', 'od', 'hexdump',
+  'jq', 'cut', 'sort', 'uniq', 'tr', 'sed', 'base64', 'xxd', 'od', 'hexdump',
 ]);
+
+/**
+ * awk can run commands (`system()`, `| "cmd"`) and write files, so it is never read-only;
+ * its file operands are still inspected for sensitive paths.
+ */
+const BASH_PATH_OPERAND_ONLY_COMMANDS: ReadonlySet<string> = new Set(['awk', 'gawk', 'mawk']);
 
 /**
  * 从 bash 只读/搜索命令及输入重定向中提取可能的目标文件路径（不含 flag）。
  */
 export function extractBashReadPaths(command: string): string[] {
   const paths: string[] = [];
-  for (const part of splitShellOperatorParts(command.trim())) {
+  // Quote-aware split: `grep 'a|b' .env` must keep `.env` attached to grep.
+  for (const part of command.trim().split(/[\r\n]+/).flatMap(line => splitCompoundCommand(line))) {
     for (const segment of splitPipeSegments(part)) {
       const resolved = resolveEffectiveCommandTokens(segment);
       if (!resolved) continue;
@@ -484,7 +454,10 @@ export function extractBashReadPaths(command: string): string[] {
           if (redirTarget) paths.push(redirTarget);
         }
       }
-      if (!BASH_READ_COMMANDS.has(baseCmd) && !BASH_SEARCH_COMMANDS.has(baseCmd)) continue;
+      if (
+        !BASH_READ_COMMANDS.has(baseCmd) && !BASH_SEARCH_COMMANDS.has(baseCmd)
+        && !BASH_PATH_OPERAND_ONLY_COMMANDS.has(baseCmd)
+      ) continue;
       for (let i = argStartIndex; i < tokens.length; i++) {
         const rawTok = tokens[i];
         if (!rawTok || rawTok === '<') continue;
@@ -519,16 +492,147 @@ export interface BashCommandClassification {
   isReadOnly: boolean;
 }
 
+// ── Write / exec side-effect detection ──────────────────────────────
+
+/** Environment assignments that cannot redirect which binary or helper gets executed. */
+const BENIGN_ENV_ASSIGNMENT = /^(LC_[A-Z_]+|LANG|LANGUAGE|TZ|NO_COLOR|TERM|COLUMNS|LINES)=/;
+
+/** Wrappers that run the following command unchanged (mirrors exec-policy SAFE_WRAPPERS). */
+const TRANSPARENT_WRAPPERS: ReadonlySet<string> = new Set([
+  'timeout', 'time', 'nice', 'nohup', 'ionice', 'stdbuf', 'unbuffer',
+]);
+
+const FIND_SIDE_EFFECT_ACTION = /^-(delete|exec|execdir|ok|okdir|fprint.*|fls)$/;
+/** sed flags that neither edit in place nor load a script file. */
+const SED_SAFE_SHORT_FLAGS = /^-[nErsuz]+$/;
+const SED_SAFE_LONG_FLAGS: ReadonlySet<string> = new Set([
+  '--quiet', '--silent', '--regexp-extended', '--separate', '--unbuffered', '--null-data', '--posix',
+]);
+const SED_ADDRESS = String.raw`(?:\d+|\$|/[^/\\]*/)`;
+/** One sed command that cannot write (`w`), execute (`e`) or read arbitrary files. */
+const SED_SAFE_COMMAND = new RegExp(
+  String.raw`^\s*(?:${SED_ADDRESS}(?:,${SED_ADDRESS})?)?\s*!?\s*(?:[pdDqgGhHnNxl=]|s([/|,#:@])[^\\]*?\1[^\\]*?\1[gpiI\d]*)\s*$`,
+);
+
+function isSedScriptReadOnly(script: string): boolean {
+  return script.split(';').every(command => {
+    if (!command.trim()) return true;
+    const match = SED_SAFE_COMMAND.exec(command);
+    if (!match) return false;
+    // A substitution must contain its delimiter exactly three times, otherwise flags are ambiguous.
+    const delimiter = match[1];
+    return !delimiter || command.split(delimiter).length === 4;
+  });
+}
+
+function isSedInvocationReadOnly(args: readonly string[]): boolean {
+  let scriptSeen = false;
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]!;
+    if (arg === '-e' || arg === '--expression' || /^-[nErsuz]*e$/.test(arg)) {
+      const script = args[++i];
+      if (script === undefined || !isSedScriptReadOnly(script)) return false;
+      scriptSeen = true;
+      continue;
+    }
+    if (arg.startsWith('--expression=')) {
+      if (!isSedScriptReadOnly(arg.slice('--expression='.length))) return false;
+      scriptSeen = true;
+      continue;
+    }
+    if (arg.startsWith('-') && arg !== '-') {
+      if (!SED_SAFE_SHORT_FLAGS.test(arg) && !SED_SAFE_LONG_FLAGS.has(arg)) return false;
+      continue;
+    }
+    if (!scriptSeen) {
+      if (!isSedScriptReadOnly(arg)) return false;
+      scriptSeen = true;
+    }
+  }
+  return true;
+}
+
+function countOperands(args: readonly string[]): number {
+  return args.filter(arg => arg === '-' || !arg.startsWith('-')).length;
+}
+
+/** Commands that are never read-only even though they look like filters. */
+const NEVER_READ_ONLY_COMMANDS: ReadonlySet<string> = new Set([
+  'awk', 'gawk', 'mawk', 'tee', 'xargs',
+]);
+
+/**
+ * Per-command arguments that turn a normally read-only command into one that writes files
+ * or runs another program. Returns true when the invocation has such a side effect.
+ */
+const COMMAND_SIDE_EFFECTS: Readonly<Record<string, (args: readonly string[]) => boolean>> = {
+  find: args => args.some(arg => FIND_SIDE_EFFECT_ACTION.test(arg)),
+  sed: args => !isSedInvocationReadOnly(args),
+  sort: args => args.some(arg => /^-[A-Za-z]*o/.test(arg) || arg.startsWith('--output') || arg.startsWith('--compress-program')),
+  // `uniq IN OUT` and `xxd IN OUT` write their second operand.
+  uniq: args => countOperands(args) > 1,
+  xxd: args => countOperands(args) > 1,
+  tree: args => args.some(arg => arg === '-o' || arg.startsWith('--output')),
+  file: args => args.some(arg => /^-[A-Za-z]*C/.test(arg) || arg === '--compile'),
+  rg: args => args.some(arg => arg.startsWith('--pre') || arg.startsWith('--hostname-bin')),
+  ag: args => args.some(arg => arg.startsWith('--pager')),
+  ack: args => args.some(arg => arg.startsWith('--pager')),
+  less: args => args.some(arg => /^-[A-Za-z]*[oO]/.test(arg) || /^--log-file/i.test(arg)),
+};
+
+function isBenignRedirectTarget(target: string): boolean {
+  return target === '/dev/null' || /^&(\d+|-)$/.test(target);
+}
+
+/**
+ * Detect shell syntax or arguments that make a single command (one pipe segment) write files,
+ * run in the background or execute another program. Returns the reason, or undefined when the
+ * segment has no such side effect. Quote-aware: `grep '>' file` and `echo "a & b"` are clean.
+ */
+export function findBashWriteOrExecRisk(segment: string): string | undefined {
+  const unsafeSyntax = findUnsafeShellSyntax(segment);
+  if (unsafeSyntax) return unsafeSyntax;
+  const scan = scanShellSegment(segment);
+  if (!scan.balanced) return '命令引号未闭合，无法判定是否只读。';
+  if (scan.hasProcessSubstitution) return '命令含进程替换，可执行任意命令。';
+  if (scan.hasBackground) return '命令含后台执行符 &。';
+  const writeTarget = scan.outputRedirects.find(target => !isBenignRedirectTarget(target));
+  if (writeTarget !== undefined) return `命令含输出重定向（写入 ${writeTarget || '文件'}）。`;
+
+  let i = 0;
+  while (i < scan.words.length && isEnvAssignmentToken(scan.rawWords[i]!)) {
+    if (!BENIGN_ENV_ASSIGNMENT.test(scan.rawWords[i]!)) {
+      return `命令前缀设置了环境变量 ${scan.rawWords[i]!.split('=')[0]}，可改变实际执行的程序。`;
+    }
+    i++;
+  }
+  // Skip transparent wrappers and their flags / duration operands, like stripSafeWrappers does.
+  for (let depth = 0; depth < 5 && i < scan.words.length - 1 && TRANSPARENT_WRAPPERS.has(scan.words[i]!); depth++) {
+    let j = i + 1;
+    while (j < scan.words.length && /^(-[A-Za-z0-9]|[0-9]+[smhd]?$)/.test(scan.words[j]!)) j++;
+    if (j >= scan.words.length) break;
+    i = j;
+  }
+  const baseCmd = scan.words[i];
+  if (!baseCmd) return undefined;
+  const args = scan.words.slice(i + 1);
+  if (NEVER_READ_ONLY_COMMANDS.has(baseCmd)) return `命令「${baseCmd}」可写文件或执行其它程序。`;
+  if (COMMAND_SIDE_EFFECTS[baseCmd]?.(args)) return `命令「${baseCmd}」的参数会写文件或执行其它程序。`;
+  return undefined;
+}
+
 /**
  * 对 bash 命令进行读/写分类。
  *
- * 对管道命令（如 `cat file | grep pattern`），所有非中性部分
- * 都必须是搜索/读/列出类，整条命令才算只读。
- *
+ * 对管道/复合命令（如 `cat file | grep pattern`），所有非中性部分
+ * 都必须是搜索/读/列出类，且任何一段都不能含写入/执行副作用
+ * （输出重定向、后台 `&`、进程/命令替换、`find -delete`、`sed -i` 等），整条命令才算只读。
  */
 export function classifyBashCommand(command: string): BashCommandClassification {
+  const notReadOnly: BashCommandClassification = { isSearch: false, isRead: false, isList: false, isReadOnly: false };
   const trimmed = command.trim();
-  const parts = splitShellOperatorParts(trimmed);
+  if (findUnsafeShellSyntax(trimmed)) return notReadOnly;
+  const parts = splitCompoundCommand(trimmed).flatMap(part => splitPipeSegments(part));
 
   let hasSearch = false;
   let hasRead = false;
@@ -536,7 +640,8 @@ export function classifyBashCommand(command: string): BashCommandClassification 
   let hasNonNeutral = false;
 
   for (const part of parts) {
-    const baseCmd = part.trim().split(/\s+/)[0];
+    if (findBashWriteOrExecRisk(part)) return notReadOnly;
+    const baseCmd = scanShellSegment(part).words[0];
     if (!baseCmd) continue;
 
     // 跳过中性命令
@@ -548,7 +653,7 @@ export function classifyBashCommand(command: string): BashCommandClassification 
     else if (BASH_LIST_COMMANDS.has(baseCmd)) hasList = true;
     else {
       // 包含非只读命令 → 整条命令不是只读
-      return { isSearch: false, isRead: false, isList: false, isReadOnly: false };
+      return notReadOnly;
     }
   }
 
@@ -566,15 +671,6 @@ export function classifyBashCommand(command: string): BashCommandClassification 
 }
 
 // ── 文件 mtime 比对──────────────
-
-/**
- * 文件修改时间快照，用于检测编辑前是否被并发修改。
- */
-export async function getFileMtime(filePath: string): Promise<number> {
-  const { default: fsPromises } = await import('fs/promises');
-  const stat = await fsPromises.stat(filePath);
-  return stat.mtimeMs;
-}
 
 /**
  * 检查文件在读取后是否被修改。

@@ -36,7 +36,7 @@
   "scripts": {
     "build": "tsc",
     "clean": "rimraf lib",
-    "test": "NODE_OPTIONS=--experimental-strip-types vitest run --root ../../.. plugins/adapters/qq/tests",
+    "test": "vitest run --root ../../.. plugins/adapters/qq/tests",
     "prepublishOnly": "pnpm run build",
     "prepack": "pnpm run build && node ../../../scripts/build-plugin-runtime-entries.mjs",
     "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean"
@@ -84,6 +84,7 @@
     "@zhin.js/host-http": "workspace:*",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",
+    "ws": "^8.21.1",
     "zhin.js": "workspace:*",
     "zod": "^4.4.3"
   },

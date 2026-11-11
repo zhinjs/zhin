@@ -98,6 +98,6 @@ pnpm --filter @zhin.js/feature-kit build
 
 ## 相关文档
 
-- [Plugin Monorepo 与 Feature Provider](../../../docs/architecture/target-implementation/plugin-monorepo-and-features.md)
-- [Config、Discovery 与 HMR](../../../docs/architecture/target-implementation/config-discovery-hmr.md)
+- [插件模型](../../../docs/concepts/plugin-model.md)
+- [配置即数据](../../../docs/concepts/config-as-data.md)与 [Generation 生命周期](../../../docs/concepts/generation-lifecycle.md)
 - [Plugin-first 目标架构](../../../docs/target-architecture.md)

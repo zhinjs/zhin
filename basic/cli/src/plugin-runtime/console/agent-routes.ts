@@ -6,6 +6,7 @@ import { withGenerationAgentConsole } from './agent-console.js';
 import { parseBoundedInteger, writeJson } from './http-response.js';
 import { registerTraceArchiveRoutes } from './trace-archive-routes.js';
 import { registerScheduleExecutionRoutes } from './schedule-execution-routes.js';
+import { registerAssistantJobRoutes } from './assistant-job-routes.js';
 
 export interface RegisterAgentConsoleRoutesOptions {
   readonly http: HttpHost;
@@ -20,6 +21,7 @@ export function registerAgentConsoleRoutes(
 ): void {
   const { http, base, snapshots } = options;
   registerScheduleExecutionRoutes({ http, base, snapshots });
+  registerAssistantJobRoutes({ http, base, snapshots });
   // Assistant Event Ingress (M2) — needs Agent Host setAssistantRuntime.
   http.route('POST', `${base}/assistant/events`, async (request, response) => {
     let body: unknown;

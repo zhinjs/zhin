@@ -1,20 +1,5 @@
-/**
- * Build public base URL for Agent Card interfaces.
- */
-export function resolvePublicBaseUrl(config: {
-  http?: { host?: string; port?: number; publicUrl?: string };
-}): string {
-  const http = config.http ?? {};
-  if (http.publicUrl?.trim()) {
-    return http.publicUrl.trim().replace(/\/$/, '');
-  }
-  const host = http.host?.trim() || '127.0.0.1';
-  const port = http.port ?? 8086;
-  const hostname = host === '0.0.0.0' ? '127.0.0.1' : host;
-  return `http://${hostname}:${port}`;
-}
-
-export function a2aAgentBasePath(agentName: string): string {
+/** Per-agent A2A endpoint URLs used by Agent Card interfaces. */
+function a2aAgentBasePath(agentName: string): string {
   return `/a2a/${encodeURIComponent(agentName)}`;
 }
 

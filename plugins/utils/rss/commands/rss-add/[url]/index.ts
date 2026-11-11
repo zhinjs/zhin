@@ -39,7 +39,7 @@ export default defineCommand<RssConfig>({
 
       let feedTitle = '';
       try {
-        const { title, items } = await fetchFeed(url, cfg.timeout);
+        const { title, items } = await fetchFeed(url, cfg);
         feedTitle = title;
         await markItemsSeen(runtime, url, items);
       } catch (e) {

@@ -8,7 +8,7 @@ Universal database abstraction layer for Zhin.js framework with support for mult
 npm install @zhin.js/database
 ```
 
-Install the database driver you need（SQLite 使用 Node 内置 `node:sqlite`，无需安装，需 Node.js 22.5+，推荐 24+）:
+Install the database driver you need（SQLite 使用 Node 内置 `node:sqlite`，无需安装，需 Node.js >=22.19.0，推荐 24+）:
 
 ```bash
 # For MySQL
@@ -83,7 +83,7 @@ const user = await userModel.create({
 ## Supported Databases
 
 ### ✅ Relational Databases (已完整实现)
-- **SQLite** - 内置支持，使用 Node 自带 `node:sqlite`（无需安装驱动，需 Node.js 22.5+，推荐 24+）
+- **SQLite** - 内置支持，使用 Node 自带 `node:sqlite`（无需安装驱动，需 Node.js >=22.19.0，推荐 24+）
   - 轻量级、零配置
   - 适合中小型应用
   - 支持 WAL 模式
@@ -262,27 +262,33 @@ await db.start();
 
 ## Model API
 
+以下为关系型模型（`RelatedModel`，SQLite / MySQL / PostgreSQL）的便捷方法；更复杂的查询见下方链式查询 API。
+
 ```typescript
 const model = db.model('users');
 
 // Create
 const user = await model.create({ name: 'John', email: 'john@example.com' });
+const created = await model.createMany([{ name: 'A' }, { name: 'B' }]);
 
 // Read
-const users = await model.find({ name: 'John' });
-const user = await model.findOne({ email: 'john@example.com' });
+const users = await model.findAll({ name: 'John' });
+const one = await model.findOne({ email: 'john@example.com' });
+const byId = await model.findById(1);
 
-// Update
-await model.update({ name: 'John' }, { name: 'Jane' });
+// Update —— 条件在前、数据在后；返回受影响行数
+await model.updateWhere({ name: 'John' }, { name: 'Jane' });
+await model.updateById(1, { name: 'Jane' });
 
-// Delete
-await model.remove({ name: 'Jane' });
+// Delete —— 启用软删除的模型会改为标记 deletedAt
+await model.deleteWhere({ name: 'Jane' });
+await model.deleteById(1);
 
 // Count
 const count = await model.count({ email: { $like: '%@example.com' } });
 
-// Pagination
-const result = await model.find({}, { limit: 10, offset: 0 });
+// Pagination —— 用链式查询
+const page = await model.select().where({}).limit(10).offset(0);
 ```
 
 ## 链式查询 API (Fluent Query Builder)

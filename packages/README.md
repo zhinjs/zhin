@@ -62,10 +62,10 @@ Plugin 主链：`plugin-runtime` → `feature-kit` → 领域 Feature → `core`
 | [`im/core`](im/core/README.md) | canonical IM Runtime、消息/侧事件契约与出站渲染 |
 | [`im/agent`](im/agent/README.md) | ZhinAgent、`AIService`、工具与安全策略、模型 `/v1/models` 发现 |
 | [`im/runtime`](im/runtime/README.md) | Root control plane、Plugin graph、配置、发现、generation transaction 与 HMR |
-| [`im/config-file`](im/config-file/README.md) | YAML/JSON 配置文档 adapter，共享事务、revision、原子提交与回滚生命周期 |
-| [`im/isolate`](im/isolate/README.md) | 可选 Worker/process 隔离、RPC、generation handoff 与 crash propagation |
+| [`im/runtime` · `/config-file`](im/runtime/README.md) | YAML/JSON 配置文档 adapter，共享事务、revision、原子提交与回滚生命周期 |
+| [`im/runtime` · `/isolate`](im/runtime/README.md) | 可选 Worker/process 隔离、RPC、generation handoff 与 crash propagation |
 | [`im/zhin`](im/zhin/README.md) | 主入口 re-export、`registerChatMessageStore` |
 
-持久化与模型发现细节见 [docs/advanced/ai.md](../docs/advanced/ai.md)、[架构概览](../docs/architecture-overview.md)。
+持久化与模型发现细节见 [docs/ai/index.md](../docs/ai/index.md)、[架构概览](../docs/concepts/architecture.md)。
 
 详见 [docs/contributing/repo-structure.md](../docs/contributing/repo-structure.md)。

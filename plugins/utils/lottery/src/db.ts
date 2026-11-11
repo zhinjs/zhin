@@ -40,39 +40,40 @@ export function defineLotteryTables(db: { define: (name: string, schema: Record<
   defineEvalTables(db);
 }
 
+function toRow(draw: NormalizedDraw, syncedAt: string): Record<string, unknown> {
+  return {
+    game_id: draw.gameId,
+    issue: draw.issue,
+    draw_time: draw.drawTime,
+    numbers: JSON.stringify(draw.numbers),
+    source: draw.source,
+    raw_json: JSON.stringify(draw),
+    synced_at: syncedAt,
+  };
+}
+
+/** Issues already stored for one game (a single query). */
+async function storedIssues(model: LotteryModel, gameId: string): Promise<Set<string>> {
+  const rows = (await model.select().where({ game_id: gameId })) as Array<{ issue: string }>;
+  return new Set(rows.map((row) => String(row.issue)));
+}
+
 export async function upsertDraws(db: LotteryDb, draws: NormalizedDraw[]): Promise<{ count: number; inserted: NormalizedDraw[] }> {
   const model = db.models.get(DRAWS_TABLE);
   if (!model) return { count: 0, inserted: [] };
-  let inserted = 0;
   const insertedDraws: NormalizedDraw[] = [];
   const now = new Date().toISOString();
+  const known = new Map<string, Set<string>>();
   for (const d of draws) {
     if (!d.issue) continue;
-    const existing = (await model.select().where({ game_id: d.gameId, issue: d.issue })) as unknown[];
-    if (existing.length > 0) continue;
-    await model.insert({
-      game_id: d.gameId,
-      issue: d.issue,
-      draw_time: d.drawTime,
-      numbers: JSON.stringify(d.numbers),
-      source: d.source,
-      raw_json: JSON.stringify(d),
-      synced_at: now,
-    });
-    inserted++;
+    let issues = known.get(d.gameId);
+    if (!issues) known.set(d.gameId, issues = await storedIssues(model, d.gameId));
+    if (issues.has(d.issue)) continue;
+    issues.add(d.issue);
+    await model.insert(toRow(d, now));
     insertedDraws.push(d);
   }
-  return { count: inserted, inserted: insertedDraws };
-}
-
-export async function trimHistory(db: LotteryDb, gameId: GameId, limit: number): Promise<void> {
-  const model = db.models.get(DRAWS_TABLE);
-  if (!model || limit <= 0) return;
-  const rows = (await model.select().where({ game_id: gameId })) as Array<{ issue: string }>;
-  const sorted = [...rows].sort((a, b) => b.issue.localeCompare(a.issue));
-  for (const row of sorted.slice(limit)) {
-    await model.delete().where({ game_id: gameId, issue: row.issue });
-  }
+  return { count: insertedDraws.length, inserted: insertedDraws };
 }
 
 export function parseStoredJson<T>(value: unknown, fallback: T): T {
@@ -121,13 +122,37 @@ export async function fetchGameDraws(gameId: GameId, count: number): Promise<Nor
   return [];
 }
 
+/**
+ * Bring one game's stored history up to date and keep at most `historyLimit` issues.
+ * Only draws that survive the limit are written, so `inserted` lists genuinely new rows:
+ * a draw that would be trimmed straight away is never inserted (and never reported).
+ */
 export async function syncGame(
   db: LotteryDb,
   gameId: GameId,
   historyLimit: number,
+  fetchDraws: typeof fetchGameDraws = fetchGameDraws,
 ): Promise<{ count: number; inserted: NormalizedDraw[] }> {
-  const draws = await fetchGameDraws(gameId, Math.max(historyLimit, 100));
-  const { count, inserted } = await upsertDraws(db, draws);
-  await trimHistory(db, gameId, historyLimit);
-  return { count, inserted };
+  const limited = historyLimit > 0;
+  const draws = await fetchDraws(gameId, limited ? historyLimit : 100);
+  const model = db.models.get(DRAWS_TABLE);
+  if (!model) return { count: 0, inserted: [] };
+  const existing = await storedIssues(model, gameId);
+  const fresh = new Map<string, NormalizedDraw>();
+  for (const draw of draws) {
+    if (draw.issue && !existing.has(draw.issue) && !fresh.has(draw.issue)) fresh.set(draw.issue, draw);
+  }
+  const newestFirst = [...existing, ...fresh.keys()].sort((a, b) => b.localeCompare(a));
+  const keep = new Set(limited ? newestFirst.slice(0, historyLimit) : newestFirst);
+  const now = new Date().toISOString();
+  const inserted: NormalizedDraw[] = [];
+  for (const draw of fresh.values()) {
+    if (!keep.has(draw.issue)) continue;
+    await model.insert(toRow(draw, now));
+    inserted.push(draw);
+  }
+  for (const issue of existing) {
+    if (!keep.has(issue)) await model.delete().where({ game_id: gameId, issue });
+  }
+  return { count: inserted.length, inserted };
 }

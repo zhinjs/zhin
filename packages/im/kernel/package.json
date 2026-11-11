@@ -21,7 +21,6 @@
     "test": "vitest run --root ../../.. packages/im/kernel/tests"
   },
   "dependencies": {
-    "@zhin.js/logger": "workspace:*",
     "@zhin.js/schedule": "workspace:*"
   },
   "devDependencies": {

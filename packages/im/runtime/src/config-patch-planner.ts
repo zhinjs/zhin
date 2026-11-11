@@ -1,13 +1,13 @@
 import { isDeepStrictEqual } from 'node:util';
 import {
   applyConfigPatches,
-  rootPluginId,
   type ConfigPatch,
   type PluginId,
   type RuntimeConfigDocument,
 } from '@zhin.js/plugin-runtime';
 import { ConfigComposer, type ComposedConfig } from './config-composer.js';
 import type { PluginGraphNode, ProjectGraph } from './project-graph.js';
+import { collapseRoots } from './topology-transaction.js';
 
 export interface ConfigPatchPlan extends ComposedConfig {
   readonly candidate: RuntimeConfigDocument;
@@ -55,22 +55,4 @@ function indexGraph(graph: ProjectGraph): readonly PluginGraphNode[] {
   };
   visit(graph.root);
   return result;
-}
-
-function collapseRoots(plugins: readonly PluginId[]): readonly PluginId[] {
-  if (plugins.includes(rootPluginId())) return [rootPluginId()];
-  const selected = new Set(plugins);
-  return plugins.filter((plugin) => {
-    let parent = parentPlugin(plugin);
-    while (parent) {
-      if (selected.has(parent)) return false;
-      parent = parentPlugin(parent);
-    }
-    return true;
-  });
-}
-
-function parentPlugin(plugin: PluginId): PluginId | undefined {
-  const separator = plugin.lastIndexOf('/');
-  return separator < 0 ? undefined : plugin.slice(0, separator) as PluginId;
 }

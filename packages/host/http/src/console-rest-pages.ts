@@ -10,7 +10,11 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { HttpHost } from './http-host.js';
 import { readJsonBody } from './json-body.js';
-import { MarketplaceRegistry } from './marketplace-registry.js';
+import {
+  MarketplaceDetailCache,
+  MarketplaceRegistry,
+  isValidNpmPackageName,
+} from './marketplace-registry.js';
 import type { ConsoleMessageEventData } from '@zhin.js/console-protocol';
 import {
   clampPositiveInt,
@@ -135,6 +139,8 @@ type LogRow = {
 };
 
 const PLUGINS_CACHE_TTL = 5 * 60 * 1000;
+const PACKAGE_DETAIL_CACHE_TTL = 5 * 60 * 1000;
+const PACKAGE_DETAIL_CACHE_MAX_ENTRIES = 64;
 
 /**
  * 注册 Console 页面 REST 路由。返回注销函数（注销全部已注册路由）。
@@ -368,6 +374,46 @@ function registerMarketplaceRoutes(
     ttlMs: PLUGINS_CACHE_TTL,
   });
 
+  // The detail route is unauthenticated: cache the projected packument so repeated
+  // requests cannot be used to hammer the npm registry.
+  const details = new MarketplaceDetailCache<Record<string, unknown>>({
+    ttlMs: PACKAGE_DETAIL_CACHE_TTL,
+    maxEntries: PACKAGE_DETAIL_CACHE_MAX_ENTRIES,
+    load: async (pkgName) => {
+      const metaResp = await fetchFn(
+        `${npmRegistryUrl}/${encodeURIComponent(pkgName)}`,
+        { signal: AbortSignal.timeout(30_000) },
+      );
+      if (!metaResp.ok) throw new Error(`Package not found: ${metaResp.status}`);
+      const meta = (await metaResp.json()) as Record<string, unknown>;
+      const latest = (meta['dist-tags'] as Record<string, string> | undefined)?.latest;
+      const versions = meta.versions as Record<string, Record<string, unknown>> | undefined;
+      const latestInfo = latest && versions ? versions[latest] : undefined;
+      const time = meta.time as Record<string, string> | undefined;
+      return {
+        name: meta.name,
+        version: latest,
+        description: meta.description || '',
+        readme: meta.readme || '',
+        license: meta.license || latestInfo?.license || '',
+        homepage: meta.homepage || latestInfo?.homepage || '',
+        repository:
+          (meta.repository as { url?: string } | undefined)?.url ||
+          (latestInfo?.repository as { url?: string } | undefined)?.url ||
+          '',
+        author:
+          typeof meta.author === 'string'
+            ? meta.author
+            : (meta.author as { name?: string } | undefined)?.name || '',
+        keywords: (latestInfo?.keywords as string[]) || [],
+        engines: latestInfo?.engines || {},
+        peerDependencies: latestInfo?.peerDependencies || {},
+        versions: Object.keys(versions || {}),
+        lastPublish: (latest && time?.[latest]) || '',
+      };
+    },
+  });
+
   route('GET', '/pub/marketplace/search', async (_request, response, url) => {
     const q = url.searchParams.get('q') ?? url.searchParams.get('keyword') ?? '';
     const pageNum = Math.max(1, parseInt(url.searchParams.get('page') ?? '1', 10) || 1);
@@ -438,6 +484,10 @@ function registerMarketplaceRoutes(
       return;
     }
     const pkgName = decodePathParam(rawName);
+    if (!isValidNpmPackageName(pkgName)) {
+      writeJson(response, 400, { success: false, error: 'Invalid package name' });
+      return;
+    }
     try {
       let cachedDownloads = { weekly: 0, monthly: 0 };
       try {
@@ -453,40 +503,10 @@ function registerMarketplaceRoutes(
         /* ignore cache miss */
       }
 
-      const metaResp = await fetchFn(
-        `${npmRegistryUrl}/${encodeURIComponent(pkgName)}`,
-        { signal: AbortSignal.timeout(30_000) },
-      );
-      if (!metaResp.ok) throw new Error(`Package not found: ${metaResp.status}`);
-      const meta = (await metaResp.json()) as Record<string, unknown>;
-      const latest = (meta['dist-tags'] as Record<string, string> | undefined)?.latest;
-      const versions = meta.versions as Record<string, Record<string, unknown>> | undefined;
-      const latestInfo = latest && versions ? versions[latest] : undefined;
-      const time = meta.time as Record<string, string> | undefined;
+      const detail = await details.get(pkgName);
       writeJson(response, 200, {
         success: true,
-        data: {
-          name: meta.name,
-          version: latest,
-          description: meta.description || '',
-          readme: meta.readme || '',
-          license: meta.license || latestInfo?.license || '',
-          homepage: meta.homepage || latestInfo?.homepage || '',
-          repository:
-            (meta.repository as { url?: string } | undefined)?.url ||
-            (latestInfo?.repository as { url?: string } | undefined)?.url ||
-            '',
-          author:
-            typeof meta.author === 'string'
-              ? meta.author
-              : (meta.author as { name?: string } | undefined)?.name || '',
-          keywords: (latestInfo?.keywords as string[]) || [],
-          engines: latestInfo?.engines || {},
-          peerDependencies: latestInfo?.peerDependencies || {},
-          downloads: cachedDownloads,
-          versions: Object.keys(versions || {}),
-          lastPublish: (latest && time?.[latest]) || '',
-        },
+        data: { ...detail, downloads: cachedDownloads },
       });
     } catch (err) {
       writeJson(response, 502, {

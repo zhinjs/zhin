@@ -13,7 +13,7 @@ Implement the requested Zhin.js plugin work using the repository's standard plug
 - First classify the plugin capability type (commands, middleware, events, cron, components, AI tools, services, database, web) and choose an appropriate structure
 - Use the skill assets and references when needed instead of inventing ad hoc layouts
 - Prefer minimal viable structure before expanding directories
-- Keep implementation aligned with repository conventions, especially `.js` import extensions and `declareConfig()` usage
+- Keep implementation aligned with repository conventions, especially `.js` import extensions, `plugin.ts` default-exporting `definePlugin()`, config declared in `schema.json` and read through `context.config`, and shared services passed through `context.resources`
 - When relevant, include commands, middleware, events, components, cron jobs, Contexts, database, router, web console integration, or AI tools
 - Validate the critical path after changes
 
@@ -24,6 +24,6 @@ Implement the requested Zhin.js plugin work using the repository's standard plug
 1. **任务类型**：属于哪类插件能力（命令/中间件/事件/定时/组件/AI 工具/服务/数据/Web），为什么
 2. **结构选择**：选了哪种目录骨架，判断依据是什么
 3. **实现内容**：创建或修改了哪些文件，核心逻辑说明
-4. **约定检查**：`.js` 导入、`declareConfig()`、`usePlugin()` 作用域、生命周期清理是否合规
+4. **约定检查**：`.js` 导入、`schema.json` + `context.config`、`context.resources`（Scope + Token）作用域、生命周期清理（`setup` 返回值或 `context.lifecycle`）是否合规
 5. **验证结果**：已执行的检查（类型/构建/测试/关键路径）及结果
 6. **残余风险**：仅与当前改动直接相关的风险

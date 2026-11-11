@@ -16,9 +16,9 @@ sidebar: false
 
 领域结构与配置权威已合入 `main`（代码落盘于 `packages/im/ai/src/provider/`、`packages/im/ai/src/providers/`、`packages/im/agent/src/decision/`），设计基准与实施台账见：
 
-- [AI Provider 目标架构](../plans/ai-provider-target-architecture.md)（设计基准，2026-11-03 确认）
-- [AI Provider 运行时实施台账](../plans/ai-provider-runtime-implementation.md)（实施台账）
-- [AI Provider Driver 本地证据与未验证项](../plans/ai-provider-driver-evidence.md)（各 Driver 本地证据与未验证项）
+- [AI Provider 目标架构](https://github.com/zhinjs/zhin/blob/main/docs/plans/ai-provider-target-architecture.md)（设计基准，2026-11-03 确认）
+- [AI Provider 运行时实施台账](https://github.com/zhinjs/zhin/blob/main/docs/plans/ai-provider-runtime-implementation.md)（实施台账）
+- [AI Provider Driver 本地证据与未验证项](https://github.com/zhinjs/zhin/blob/main/docs/plans/ai-provider-driver-evidence.md)（各 Driver 本地证据与未验证项）
 
 本文只引用其中的关键概念，不复制架构正文：
 

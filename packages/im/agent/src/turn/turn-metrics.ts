@@ -1,7 +1,6 @@
 import { renderAgentOutput, type AgentOutputElement } from '../outbound/agent-output.js';
 import type { Usage } from '@zhin.js/ai';
 import {
-  formatCompact,
   formatCompactUsage,
   formatLogKvTable,
   truncatePreview,
@@ -101,12 +100,4 @@ export function formatOutputElementsPreview(elements: AgentOutputElement[]): str
     return '';
   }).join('\n').trim();
   return text || undefined;
-}
-
-export function formatAiHandlerFallbackLog(totalMs: number, path?: string): string {
-  return formatCompact({
-    op: 'turn_fallback',
-    ms: Math.round(totalMs),
-    ...(path ? { path } : {}),
-  });
 }

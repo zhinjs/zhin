@@ -427,6 +427,40 @@ describe('console-rest-pages marketplace', () => {
     expect(await json(response)).toMatchObject({ success: false });
   });
 
+  it('GET /pub/marketplace/detail caches the packument and coalesces concurrent requests', async () => {
+    const packumentRequests: string[] = [];
+    const fetchFn = ((url: unknown) => {
+      if (String(url) === 'https://npm.test/%40zhin.js%2Fplugin-foo') packumentRequests.push(String(url));
+      return fakeMarketplaceFetch(url);
+    }) as typeof fetch;
+    const base = await startHost(baseCtx(), { ...marketplaceOptions, fetchFn });
+    const url = `${base}/pub/marketplace/detail/${encodeURIComponent('@zhin.js/plugin-foo')}`;
+
+    const bodies = await Promise.all([fetch(url), fetch(url), fetch(url)].map(async (r) => json(await r)));
+    const later = await json(await fetch(url));
+
+    expect(packumentRequests).toHaveLength(1);
+    for (const body of [...bodies, later]) {
+      expect(body.data).toMatchObject({ version: '1.1.0', downloads: { weekly: 10, monthly: 40 } });
+    }
+  });
+
+  it('GET /pub/marketplace/detail rejects names outside the npm grammar without fetching', async () => {
+    let fetched = 0;
+    const fetchFn = ((url: unknown) => {
+      fetched += 1;
+      return fakeMarketplaceFetch(url);
+    }) as typeof fetch;
+    const base = await startHost(baseCtx(), { ...marketplaceOptions, fetchFn });
+
+    for (const name of ['Has-Upper', '..%2F..%2Fetc', '@scope', 'a b', '-/all/docs?x=1', 'x'.repeat(215)]) {
+      const response = await fetch(`${base}/pub/marketplace/detail/${encodeURIComponent(name)}`);
+      expect(response.status, name).toBe(400);
+      expect(await json(response)).toEqual({ success: false, error: 'Invalid package name' });
+    }
+    expect(fetched).toBe(0);
+  });
+
   it('GET /api/marketplace/updates 对照本地已装版本', async () => {
     const projectRoot = await mkdtemp(join(tmpdir(), 'zhin-rest-pages-'));
     tempDirs.push(projectRoot);

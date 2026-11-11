@@ -24,7 +24,6 @@ export {
   prepareUserContentForSession,
   resolveTurnUserMessage,
   buildAgentSessionCreateInput,
-  buildHistoryMessagesFromContext,
   resolveSessionIsNewBeforeCreate,
   beginTurnSession,
   touchSession,

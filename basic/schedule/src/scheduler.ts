@@ -79,6 +79,7 @@ export class CalendarScheduler {
   readonly holidays: HolidayCalendar;
   private readonly timezone: string;
   private readonly onError?: SchedulerOptions['onError'];
+  private readonly onStoreError?: SchedulerOptions['onStoreError'];
   private readonly onJob?: SchedulerOptions['onJob'];
   private readonly store?: JobStore;
   readonly handlers: HandlerRegistry;
@@ -99,6 +100,7 @@ export class CalendarScheduler {
   constructor(options: SchedulerOptions = {}) {
     this.timezone = options.timezone ?? DEFAULT_TIMEZONE;
     this.onError = options.onError;
+    this.onStoreError = options.onStoreError;
     this.onJob = options.onJob;
     this.handlers = createHandlerRegistry(options.handlers);
     this.reconcileIntervalMs = options.reconcileIntervalMs ?? DEFAULT_RECONCILE_INTERVAL_MS;
@@ -113,9 +115,10 @@ export class CalendarScheduler {
       this.store = createLocalJsonStore({ path: options.storePath });
     }
 
-    this.timer = new TimerWheel((job) => this.executeJob(job));
+    // Timer and holiday callbacks are fire-and-forget: a rejection there would be unhandled.
+    this.timer = new TimerWheel((job) => this.executeJob(job).catch((error) => this.reportJobError(error, job)));
     this.unsubscribeHolidayUpdate = this.holidays.onUpdate(() => {
-      void this.recalculateAllJobs();
+      void this.recalculateAllJobs().catch((error) => this.reportStoreError(error));
     });
 
     if (this.store) {
@@ -201,6 +204,10 @@ export class CalendarScheduler {
   private async doStart(): Promise<void> {
     if (this.store) {
       const stored = await this.store.load();
+      // stop() may have run while the store was loading: do not arm timers nobody will clear.
+      if (!this.running) {
+        return;
+      }
       for (const record of stored) {
         if (record.cancelled) {
           continue;
@@ -216,7 +223,7 @@ export class CalendarScheduler {
     this.started = true;
     if (this.store) {
       this.reconcileTimer = setInterval(() => {
-        void this.reconcile();
+        void this.reconcile().catch((error) => this.reportStoreError(error));
       }, this.reconcileIntervalMs);
     }
   }
@@ -650,6 +657,22 @@ export class CalendarScheduler {
       if (this.store && !job.ephemeral) {
         await this.persistJob(job);
       }
+    }
+  }
+
+  private reportStoreError(error: unknown): void {
+    try {
+      this.onStoreError?.(error instanceof Error ? error : new Error(String(error)));
+    } catch {
+      // a throwing error callback must not become an unhandled rejection
+    }
+  }
+
+  private reportJobError(error: unknown, job: InternalJob): void {
+    try {
+      this.onError?.(error instanceof Error ? error : new Error(String(error)), toJobInfo(job, () => this.cancel(job.id)));
+    } catch {
+      // see reportStoreError
     }
   }
 

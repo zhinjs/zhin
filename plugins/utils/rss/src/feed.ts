@@ -4,6 +4,10 @@ import { rssMessages as t } from './i18n.js';
  * RSS feed fetch/preview helpers (no Plugin host).
  */
 import Parser from 'rss-parser';
+import { fetchPublic, readCappedBody, type HostLookup } from './public-fetch.js';
+
+/** Feeds larger than this are refused instead of buffered. */
+const MAX_FEED_BYTES = 5 * 1024 * 1024;
 
 export interface FeedItem {
   title: string;
@@ -20,6 +24,8 @@ export interface RssConfig {
   readonly timeout: number;
   readonly maxItemsPerPoll?: number;
   readonly fetchTimeoutMs?: number;
+  /** Let feeds live on loopback/LAN addresses (self-hosted RSSHub and the like). Default false. */
+  readonly allowPrivateNetwork?: boolean;
 }
 
 export const DEFAULT_RSS_CONFIG: RssConfig = {
@@ -79,18 +85,35 @@ export function stripHtml(html: string): string {
   return out;
 }
 
+/**
+ * Fetch and parse a feed. The URL comes from chat users, so it is requested through the
+ * public-address policy (every redirect hop re-checked), with one timeout for the whole
+ * exchange and a body cap.
+ */
 export async function fetchFeed(
   url: string,
-  timeout = DEFAULT_RSS_CONFIG.timeout,
+  options: number | Pick<RssConfig, 'timeout' | 'allowPrivateNetwork'> = DEFAULT_RSS_CONFIG,
+  lookup?: HostLookup,
 ): Promise<{ title: string; items: FeedItem[] }> {
-  const parser = new Parser({
-    timeout,
-    headers: {
-      'User-Agent': 'ZhinBot-RSS/1.0',
-      Accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml',
+  const { timeout, allowPrivateNetwork = false } = typeof options === 'number' ? { timeout: options } : options;
+  const { response } = await fetchPublic(url, {
+    timeoutMs: timeout,
+    lookup,
+    allowPrivateNetwork,
+    init: {
+      headers: {
+        'User-Agent': 'ZhinBot-RSS/1.0',
+        Accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml',
+      },
     },
   });
-  const feed = await parser.parseURL(url);
+  if (!response.ok) {
+    await response.body?.cancel();
+    throw new Error(`Status code ${response.status}`);
+  }
+  const body = await readCappedBody(response, MAX_FEED_BYTES);
+  if (!body) throw new Error(`Feed is larger than ${MAX_FEED_BYTES} bytes`);
+  const feed = await new Parser().parseString(body.toString('utf8'));
   const items: FeedItem[] = (feed.items || []).slice(0, 20).map((item) => ({
     title: (item.title || '').trim(),
     link: (item.link || '').trim(),

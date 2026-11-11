@@ -45,7 +45,6 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.0",
-    "@zhin.js/core": "workspace:*",
     "@zhin.js/host-http-contract": "workspace:*",
     "@zhin.js/tool": "workspace:*",
     "zod": "^4.4.3"

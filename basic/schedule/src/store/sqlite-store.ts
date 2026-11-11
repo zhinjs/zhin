@@ -26,7 +26,7 @@ export class SqliteJobStore implements JobStore {
       ({ DatabaseSync: DatabaseSyncCtor } = await import('node:sqlite'));
     } catch {
       throw new Error(
-        'SQLite store requires Node.js 22.5+ with built-in node:sqlite. Upgrade Node or use LocalJsonJobStore.',
+        'SQLite store requires the built-in node:sqlite module (Node.js >=22.19.0). Upgrade Node or use LocalJsonJobStore.',
       );
     }
 

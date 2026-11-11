@@ -25,12 +25,6 @@ export function isLocalhost(req: IncomingMessage): boolean {
   );
 }
 
-export function extractMcpToolName(body: unknown): string | undefined {
-  if (!body || typeof body !== 'object') return undefined;
-  const params = (body as { params?: { name?: string } }).params;
-  return typeof params?.name === 'string' ? params.name : undefined;
-}
-
 export function mcpAuthRequired(
   _body: unknown,
   req: IncomingMessage,

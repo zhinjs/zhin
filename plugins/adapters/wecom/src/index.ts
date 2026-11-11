@@ -9,7 +9,6 @@ export {
   normalizeWebhookPath,
   parseXmlMessage,
   queryParam,
-  readTextBody,
   resolveChatType,
   resolveWecomConfig,
   verifySignature,

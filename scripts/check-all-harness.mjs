@@ -66,7 +66,7 @@ const checks = [
   {
     name: 'L4-CI (deterministic subset)',
     command: 'pnpm check:l4-ci',
-    description: 'PR 门禁 L4 子集；全量 check:l4 需本地手动运行',
+    description: 'PR 门禁 L4 子集；全量 check:l4 见 nightly full-validation',
   },
   {
     name: 'Stable Smoke',
@@ -232,11 +232,6 @@ const checks = [
     name: 'Doc Links',
     command: 'pnpm check:doc-links',
     description: '检查文档相对链接是否断裂',
-  },
-  {
-    name: 'Cubic Wiki Translations',
-    command: 'pnpm check:cubic-wiki-translations',
-    description: '校验中英文 Wiki 页面的源码哈希与 Markdown 结构一致',
   },
   {
     name: 'Install Tiers SSOT',

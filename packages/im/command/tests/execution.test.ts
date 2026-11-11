@@ -32,6 +32,20 @@ describe('command execution policy', () => {
     expect(definition.execution?.maxConcurrent).toBe(2);
     expect(Object.isFrozen(definition.execution)).toBe(true);
   });
+  it.each([['en', 'Working on it, please wait.'], ['zh-CN', '正在处理中，请稍候。'], [undefined, '正在处理中，请稍候。']] as const)(
+    'sends progress feedback in the operation locale %s', async (locale, expected) => {
+      const f = setup(); const replies: string[] = [];
+      vi.useFakeTimers();
+      try {
+        const control = f.budget.openOperation({ snapshot: f.snapshot, conversation: { endpoint: { adapter: 'test', id: 'account' }, kind: 'private', id: 'user' },
+          senderId: 'alice', retirementSignal: f.retirement.signal, ...(locale ? { locale } : {}), reply: async (_owner, text) => { replies.push(text); } });
+        const source = Object.freeze({}); control.bind(source, f.root);
+        expect(f.admit(source, { maxConcurrent: 1, progressAfterMs: 50 })).toBeUndefined();
+        await vi.advanceTimersByTimeAsync(50);
+        await control.finish();
+        expect(replies).toEqual([expected]);
+      } finally { vi.useRealTimers(); }
+    });
   it('rejects a raw object without reading public callbacks or fields', () => {
     const fixture = setup();
     const getter = vi.fn(() => { throw new Error('untrusted'); });

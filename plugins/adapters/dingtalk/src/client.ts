@@ -509,7 +509,9 @@ export class DingTalkClient extends EventEmitter {
     const { appKey, appSecret, apiBaseUrl } = this.#options.config;
     const params = new URLSearchParams({ appkey: appKey, appsecret: appSecret });
     const url = `${apiBaseUrl}/gettoken?${params.toString()}`;
-    const response = await this.#fetch(url);
+    // The refresh promise is shared by every sender, so it must never hang.
+    const response = await this.#fetch(url, { signal: AbortSignal.timeout(30_000) });
+    if (!response.ok) throw new Error(`Failed to get access token: HTTP ${response.status}`);
     const data = await response.json() as DingTalkApiResponse;
     if (data.errcode === 0 && data.access_token) {
       this.#accessToken = {

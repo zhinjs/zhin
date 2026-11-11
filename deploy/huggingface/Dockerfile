@@ -14,10 +14,10 @@ WORKDIR /app
 COPY package.json ./
 RUN pnpm install
 
-COPY zhin.config.yml tsconfig.json plugin.ts ./
+COPY zhin.config.yml ai.plan.yml tsconfig.json plugin.ts ./
 COPY commands ./commands
 
-RUN chown -R node:node /app
+RUN mkdir -p /app/data && chown -R node:node /app
 USER node
 
 ENV NODE_ENV=production \

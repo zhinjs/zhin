@@ -1,5 +1,5 @@
-import { type AgentSessionRepository, type ContextRepository, type CreateAgentSessionInput, type AgentMessage, type ConversationActor, createUserMessage, renderUserMessageForLlm, type UserMessage } from '@zhin.js/ai';
-import { type AgentTurnMessage, type Message, formatSenderRolesForLabel, resolveSceneFieldsFromMessage, senderRolesFromMessage, stripUserSpoofedSenderPrefix } from '@zhin.js/core';
+import { type AgentSessionRepository, type ContextRepository, type CreateAgentSessionInput, type ConversationActor, createUserMessage, renderUserMessageForLlm, type UserMessage } from '@zhin.js/ai';
+import { type AgentTurnMessage, type Message, formatSenderRolesForLabel, senderRolesFromMessage, stripUserSpoofedSenderPrefix } from '@zhin.js/core';
 import { stampUserHeader } from './participant-header-stamp.js';
 export interface SessionIODeps {
   agentSessionStore: AgentSessionRepository;
@@ -89,16 +89,6 @@ export function buildAgentSessionCreateInput(
   sessionKey: string,
 ): CreateAgentSessionInput {
   return { session_key: sessionKey };
-}
-
-export async function buildHistoryMessagesFromContext(
-  deps: SessionIODeps,
-  sessionId: string,
-  currentUserContent: string,
-): Promise<AgentMessage[]> {
-  const loaded = await deps.contextRepository.loadContext(sessionId);
-  const timestamp = Date.now();
-  return [...loaded.messages, { role: 'user', content: [{ type: 'text', text: currentUserContent }], timestamp }];
 }
 
 /**

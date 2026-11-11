@@ -45,6 +45,8 @@ export class ConsoleClient {
       React: ReactRuntime,
       addRoute: (input) => this.app.addRoute(input),
       addTool: (input) => this.app.addTool(input),
+      removeRoute: (path) => this.app.removeRoute(path),
+      removeTool: (id) => this.app.removeTool(id),
     };
   }
 

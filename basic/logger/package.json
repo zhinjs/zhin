@@ -16,9 +16,13 @@
   },
   "scripts": {
     "build": "tsc",
+    "clean": "rimraf lib",
     "dev": "tsc --watch",
-    "test": "vitest",
-    "test:coverage": "vitest --coverage"
+    "test": "cd ../.. && vitest run basic/logger/tests",
+    "test:coverage": "cd ../.. && vitest run basic/logger/tests --coverage"
+  },
+  "engines": {
+    "node": ">=22.19.0"
   },
   "keywords": [
     "zhin",

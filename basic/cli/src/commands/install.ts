@@ -15,7 +15,6 @@ import {
 } from '@zhin.js/scaffold-wizard';
 
 interface InstallOptions {
-  save?: boolean;
   saveDev?: boolean;
   global?: boolean;
   enable?: boolean;
@@ -118,21 +117,10 @@ async function installPluginAction(plugin: string, options: InstallOptions) {
 }
 
 export const installCommand = new Command('install')
+  .alias('add')
   .description('安装插件（npm 包或 git 仓库）')
   .argument('[plugin]', '插件名称或 git 地址')
-  .option('-S, --save', '安装到 dependencies（默认）', true)
-  .option('-D, --save-dev', '安装到 devDependencies', false)
-  .option('-g, --global', '全局安装', false)
-  .option('--no-enable', '只安装依赖，不自动写入 zhin.config')
-  .option('--dry-run', '打印将要执行的安装和配置改动，不写入文件')
-  .action(installPluginAction);
-
-// 别名命令
-export const addCommand = new Command('add')
-  .description('安装插件（install 的别名）')
-  .argument('[plugin]', '插件名称或 git 地址')
-  .option('-S, --save', '安装到 dependencies（默认）', true)
-  .option('-D, --save-dev', '安装到 devDependencies', false)
+  .option('-D, --save-dev', '安装到 devDependencies（默认 dependencies）', false)
   .option('-g, --global', '全局安装', false)
   .option('--no-enable', '只安装依赖，不自动写入 zhin.config')
   .option('--dry-run', '打印将要执行的安装和配置改动，不写入文件')

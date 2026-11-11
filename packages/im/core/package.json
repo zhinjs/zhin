@@ -11,11 +11,6 @@
       "development": "./src/index.ts",
       "import": "./lib/index.js"
     },
-    "./queue-im-field-contract": {
-      "types": "./lib/built/queue-im-field-contract.d.ts",
-      "development": "./src/built/queue-im-field-contract.ts",
-      "import": "./lib/built/queue-im-field-contract.js"
-    },
     "./runtime": {
       "types": "./lib/plugin-runtime/im/index.d.ts",
       "development": "./src/plugin-runtime/im/index.ts",
@@ -84,14 +79,12 @@
     "@zhin.js/schedule-feature": "workspace:*",
     "@zhin.js/schema": "workspace:*",
     "qrcode": "^1.5.4",
-    "segment-matcher": "^1.0.5",
     "@zhin.js/jsx": "workspace:*",
     "@zhin.js/feature-kit": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
     "@types/qrcode": "^1.5.6",
-    "@zhin.js/ai": "workspace:*",
     "ajv": "8.18.0",
     "typescript": "^6.0.3"
   },
@@ -107,10 +100,6 @@
       ".": {
         "types": "./lib/index.d.ts",
         "import": "./lib/index.js"
-      },
-      "./queue-im-field-contract": {
-        "types": "./lib/built/queue-im-field-contract.d.ts",
-        "import": "./lib/built/queue-im-field-contract.js"
       },
       "./runtime": {
         "types": "./lib/plugin-runtime/im/index.d.ts",

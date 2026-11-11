@@ -236,6 +236,62 @@ describe("ConsoleTransport REST/SSE transport", () => {
     });
   });
 
+  it('gives package-manager RPCs a longer, overridable timeout', async () => {
+    installBrowserGlobals();
+    const timeout = vi.spyOn(AbortSignal, 'timeout');
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, data: { success: true } }),
+    } as Response));
+    const manager = new ConsoleTransport({ fetch: fetchMock, requestTimeout: 5_000 });
+
+    await manager.getConfig('sandbox');
+    await manager.installPlugin('@zhin.js/adapter-telegram');
+    await manager.updatePlugin('@zhin.js/adapter-telegram', '2.0.0');
+    await manager.uninstallPlugin('@zhin.js/adapter-telegram');
+    await manager.installPlugin('@zhin.js/adapter-telegram', undefined, { timeoutMs: 300_000 });
+    await manager.sendRequest({ type: 'custom' }, { timeoutMs: 1_234 });
+
+    expect(timeout.mock.calls.map(([ms]) => ms)).toEqual([5_000, 120_000, 120_000, 120_000, 300_000, 1_234]);
+
+    const configured = new ConsoleTransport({ fetch: fetchMock, packageOperationTimeout: 60_000 });
+    timeout.mockClear();
+    await configured.installPlugin('@zhin.js/adapter-telegram');
+    expect(timeout).toHaveBeenCalledWith(60_000);
+  });
+
+  it('invalidates the rejected credential and requests re-login on a 401 RPC response', async () => {
+    const { win, storage } = installBrowserGlobals(mockStorage({ zhin_api_token: 'expired' }));
+    win.__ZHIN_API_TOKEN = undefined;
+    const fetchMock = vi.fn(async () => ({
+      ok: false,
+      status: 401,
+      json: async () => ({ success: false, error: 'Unauthorized' }),
+    } as Response));
+    const manager = new ConsoleTransport({ fetch: fetchMock });
+
+    await expect(manager.getConfig('sandbox')).rejects.toThrow('Unauthorized');
+
+    expect(storage.getItem('zhin_api_token')).toBeNull();
+    expect(win.dispatchEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores a late 401 for a credential that was replaced while the request was in flight', async () => {
+    const { win, storage } = installBrowserGlobals(mockStorage({ zhin_api_token: 'old' }));
+    let finish!: (response: Response) => void;
+    const fetchMock = vi.fn(() => new Promise<Response>((resolve) => { finish = resolve; }));
+    const manager = new ConsoleTransport({ fetch: fetchMock });
+
+    const pending = manager.getConfig('sandbox');
+    storage.setItem('zhin_api_token', 'new');
+    finish({ ok: false, status: 401, json: async () => ({ success: false, error: 'Unauthorized' }) } as Response);
+    await expect(pending).rejects.toThrow('Unauthorized');
+
+    expect(storage.getItem('zhin_api_token')).toBe('new');
+    expect(win.dispatchEvent).not.toHaveBeenCalled();
+  });
+
   it("stops reconnecting after maxReconnectAttempts", async () => {
     installBrowserGlobals();
     const fetchMock = mockConsoleTransport(() => sseResponse(500, null));

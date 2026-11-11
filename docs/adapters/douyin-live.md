@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/douyin-live/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/douyin-live/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=5158338101f34e06 -->
+<!-- sync-adapter-docs:sha256=449c278147476637 -->
 
 # @zhin.js/adapter-douyin-live
 
@@ -51,6 +51,12 @@ Zhin.js 抖音直播弹幕适配器（Plugin Runtime）：让 Bot 在**你自己
 2. 可选：浏览器 Cookie 整串，放进 `.env`（已被 gitignore）：`DOUYIN_LIVE_COOKIE`。不填则使用游客 `ttwid`
 3. 可选：自建签名服务地址 `signerUrl`（见下文「签名」）
 4. Agent 已启用（`ai.agent`）：弹幕窗口由 Agent 的 `mailbox.live` 驱动
+
+## 安装
+
+```bash
+pnpm add @zhin.js/adapter-douyin-live
+```
 
 ## 最小配置
 

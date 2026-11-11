@@ -11,9 +11,7 @@ import {
   type EventMessage,
 } from '@zhin.js/ai';
 import type { ConversationEvent } from '@zhin.js/im-contract';
-
-/** OneBot-style ids that mean "everyone" (a scene-wide mute, not a member). */
-const WHOLE_SCENE_IDS = new Set(['0', 'all']);
+import { WHOLE_SCENE_IDS } from '../../session-profile.js';
 
 function idOf(actor: { id: unknown } | undefined): string | undefined {
   return actor ? String(actor.id) : undefined;

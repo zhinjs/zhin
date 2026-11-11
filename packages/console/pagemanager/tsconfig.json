@@ -7,6 +7,6 @@
     "declarationMap": false,
     "ignoreDeprecations": "6.0"
   },
-  "include": ["src/index.ts", "src/node/**/*", "src/plugin-runtime/**/*", "src/client-build/**/*", "src/shell/**/*"],
+  "include": ["src/node/**/*", "src/plugin-runtime/**/*", "src/client-build/**/*", "src/shell/**/*"],
   "exclude": ["**/*.test.ts"]
 }

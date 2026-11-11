@@ -109,6 +109,7 @@ export {
   consoleRpc,
   getApiBase,
   getToken,
+  handleUnauthorized,
   pluginRpc,
   PluginRpcError,
   resolveApiUrl,
@@ -188,13 +189,3 @@ export {
   useEngagementDetail,
   useVenues,
 } from "./workroom/WorkroomRunsPage.js";
-
-export {
-  startAgentSession,
-  continueAgentSession,
-  subscribeAgentStream,
-  iterateAgentStreamNdjson,
-  foldAgentStreamNdjson,
-  type AgentStreamClientOptions,
-  type SubscribeAgentStreamOptions,
-} from "./agent-stream.js";

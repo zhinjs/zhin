@@ -19,7 +19,6 @@ description: "不用先理解包结构：按你想交付的结果，找到对应
 | 运营和排查已部署的 Bot | [Console 管理路径](/paths/console) | 能查看 Endpoint、日志、能力目录和 Agent 运行状态 |
 | 用多个账号稳定运营同一套业务 | [用多个账号运营同一套业务](/solutions/multi-endpoint-operations) | 每个账号可独立诊断，业务能力仍只维护一份 |
 | 让 Agent 理解业务但不越权 | [让 Agent 懂业务，但不越权](/solutions/governed-agent) | Prompt、Tool、审批和执行策略各自可审计 |
-| 把一个 GitHub 仓库作为协作空间 | [把 GitHub 仓库作为 Workroom](/solutions/github-workroom) | 仓库事件进入正确的项目，任务状态以 Workroom 为准 |
 | 做个人日程、提醒与语音助手 | [个人生活助手](/showcase/personal-assistant) | 消息、定时任务、语音与主动通知组成闭环 |
 | 做多平台社区 Bot | [多平台社区 Bot](/showcase/community-bot) | 业务命令与组件不绑定某个适配器 |
 

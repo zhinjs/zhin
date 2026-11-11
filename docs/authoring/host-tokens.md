@@ -81,7 +81,6 @@ export default definePlugin<ReminderConfig>({
 | Token | 得到 | 主要方法 |
 | --- | --- | --- |
 | `agentHostToken`（`@zhin.js/agent/runtime`） | Agent Host 端口 | 列出 Agent 绑定、提交 `TurnRequest`、读取 Console / 诊断信息；不暴露 ZhinAgent / AIService 实例 |
-| `workroomHostToken`（`@zhin.js/workroom`） | Workroom Host 端口 | 由 CLI 组合根与 `agentHostToken` 一同发布；其 `console` 只含 Workroom 控制端口（run 控制、catalog、profiles / knowledge / sponsor / 数据生命周期）。供 Console / host-http 使用，不供插件注入；Console 视图是两个 console 的 key 不相交合并 |
 | `turnIntentResolverToken`（`@zhin.js/agent/runtime`） | 由账号所属插件提供的可信意图解析器 | 按平台 / 场景把消息解析为 `supersede`、`new`、`steer`、`follow_up` 或 `observe`；只有它能为跨参与者的控制签发 `authorizedBy: 'product_policy'` |
 | `aiCompletionToken`（`zhin.js`；`zhin.js/agent` / `@zhin.js/agent/runtime` 再导出同一个 token） | `AiCompletion`（可选，只在配置了 AI 时存在，见 [下文](#调用纯文本-ai-补全)） | `completeText({ purpose, system?, prompt, untrusted?, agent?, model?, maxTokens?, timeoutMs?, signal?, onBehalfOf?, usageShares? })` 只做一次纯文本补全，**不带任何工具**，自带重试、超时和同 provider 模型降级；`untrusted` 里的群聊等内容按数据渲染，内部指令无效；传 `onBehalfOf`（类型 `UsageSubject`：`{ userId, groupId?, owner }`，群 / 频道里 `groupId` 为 `${platform}:${endpoint}:${sceneId}`）时计入该用户 / 群的用量配额（超额抛 `AiCompletionQuotaError`）。插件只需要文本时用它，不要借整轮 Agent |
 

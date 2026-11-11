@@ -5,7 +5,6 @@ import type { EndpointProfileConfiguration } from 'zhin.js/adapter';
  */
 
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import type { IncomingMessage } from 'node:http';
 import { isMediaRef, type ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
@@ -421,21 +420,3 @@ export function formatOutboundMessages(payload: unknown): LineReplyMessage[] {
   return messages.slice(0, 5);
 }
 
-export async function readTextBody(
-  request: IncomingMessage,
-  options: { readonly limit?: number } = {},
-): Promise<string> {
-  const limit = options.limit ?? 1_048_576;
-  const chunks: Buffer[] = [];
-  let size = 0;
-  for await (const chunk of request) {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    size += buffer.length;
-    if (size > limit) {
-      request.destroy();
-      throw new Error(`Request body exceeds ${limit} bytes`);
-    }
-    chunks.push(buffer);
-  }
-  return Buffer.concat(chunks).toString('utf8');
-}

@@ -87,7 +87,7 @@ Plugin 正常注册 command、component、page、middleware 等能力，Adapter 
 
 Core 从实际入站实例捕获单次操作 Session，提供 Adapter、Endpoint、场景、发言者、规范消息与原生事件。Command、Handler、Middleware 读取同一数据的作者绑定视图；平台类型通过开放注册表与 `adapter: 'icqq'` 推导。这个操作 Session 与持久化的个人 AI Session 分开。
 
-账号的运行时配置加密持久化，账号停止/重连只取消目标实例的操作，Root generation 与其他账号保持运行。框架回复和群管端口持有具体 incarnation 租约，不能在停止后改用同名新连接。私有账号仓储只交给所属 Feature 的构建阶段，不进入公开 snapshot 或普通插件资源。详细合同与实施验收见[重构方案](../plans/adapter-session-runtime-refactor.md)。
+账号的运行时配置加密持久化，账号停止/重连只取消目标实例的操作，Root generation 与其他账号保持运行。框架回复和群管端口持有具体 incarnation 租约，不能在停止后改用同名新连接。私有账号仓储只交给所属 Feature 的构建阶段，不进入公开 snapshot 或普通插件资源。详细合同与实施验收见[重构方案](https://github.com/zhinjs/zhin/blob/main/docs/plans/adapter-session-runtime-refactor.md)。
 
 ## 各层职责
 
@@ -101,24 +101,24 @@ Core 从实际入站实例捕获单次操作 Session，提供 Adapter、Endpoint
 | AI 引擎 | `@zhin.js/ai`（含 provider-auth 与 model-registry） | Provider、认证、模型注册表、agentLoop、会话、记忆，无 IM 概念 |
 | Agent Harness | `@zhin.js/harness` | 多 Agent 协作微内核：Actor 串行信箱（Mailbox）、权限收窄（Authority）、守恒预算账本（BudgetLedger）、确定性准入（GuardKernel）、共享黑板（Blackboard）与唯一事件账本（`engagement_events` Journal） |
 | IM 层 | `@zhin.js/core`（含 handler、actor 与 `@zhin.js/core/runtime` IM Host 安装器） | Plugin、消息入站脊柱（`inbound-spine`）、出站链路、命令分发、多 Bot 协作场所（Venue）及 Database/Outbound/Inbox Host 实现 |
-| Agent | `@zhin.js/agent`（含 `@zhin.js/agent/runtime` Agent/Inference/Workroom Host 安装器） | 统一信箱入站脊柱（`unified-mailbox-spine`）、多模型编排、协作工具、工具安全策略、MCP client |
+| Agent | `@zhin.js/agent`（含 `@zhin.js/agent/runtime` Agent/Inference Host 运行时） | 统一信箱入站脊柱（`unified-mailbox-spine`）、多模型编排、协作工具、工具安全策略、MCP client |
 | Console | `@zhin.js/console-protocol`（含 contract / review-kit）、`@zhin.js/pagemanager`、`@zhin.js/client` | Server-Driven Blueprints（`definePageBlueprint`）、多端投影（Web / IM Card / CLI TUI）、Console 外壳渲染（`renderConsoleShell`）与浏览器 SDK |
 | 门面 | `zhin.js` | 再导出 core 创作面；`zhin.js/agent`、`zhin.js/ai` 子路径按需暴露 |
-| 运行时 | `@zhin.js/runtime`（含 `@zhin.js/runtime/host` HTTP/Protocol/Speech/HTML-Renderer Host 安装器） | `RootRuntime`：扫描项目图、组合配置、执行 generation 事务、HMR 及通用 Host 生命周期 |
-| 装配 | `@zhin.js/cli` | 极薄 composition root，`zhin runtime start` 把各域 Host 装配成进程 |
+| 运行时 | `@zhin.js/runtime`（含 `/config-file`、`/isolate` 子路径） | `RootRuntime`：扫描项目图、组合配置、执行 generation 事务、HMR 及通用 Host 生命周期 |
+| 装配 | `@zhin.js/cli` | composition root：`zhin runtime start` 把各域 Host 装配成进程，并持有 HTTP/Protocol（MCP、A2A）/Speech/HTML-Renderer/Schedule 等通用 Host 安装器（`basic/cli/src/plugin-runtime/*-host-installer.ts`） |
 
 图展示主要依赖，完整依赖仍以各包的 `package.json` 为准。允许的分层边界由
 `scripts/check-architecture-layers.mjs` 执行；新增依赖时同时核对文档与门禁，不能只修改其中一处。
 
 ## Composition root：`@zhin.js/cli`
 
-框架本身不"启动"任何东西——各层只提供机制。把机制组装成一个可运行进程的入口集中在 `@zhin.js/cli`（`basic/cli/src/commands/runtime.ts` 与 `basic/cli/src/plugin-runtime/`），这是全仓库唯一允许跨层组合所有包的 composition root。具体领域 Host 实现已按职责下沉到所属领域包（`@zhin.js/core/runtime`、`@zhin.js/agent/runtime`、`@zhin.js/runtime/host` 与 `@zhin.js/pagemanager`），CLI 不直接持有领域状态机。
+框架本身不"启动"任何东西——各层只提供机制。把机制组装成一个可运行进程的入口集中在 `@zhin.js/cli`（`basic/cli/src/commands/runtime.ts` 与 `basic/cli/src/plugin-runtime/`），这是全仓库唯一允许跨层组合所有包的 composition root。IM 与 Agent 的领域 Host 实现已下沉到所属领域包（`@zhin.js/core/runtime`、`@zhin.js/agent/runtime` 与 `@zhin.js/pagemanager`），CLI 不直接持有领域状态机；HTTP、Protocol、Speech、HTML-Renderer 等通用 Host 的安装器留在 CLI 自己的 `basic/cli/src/plugin-runtime/`。
 
 `zhin runtime start` 做的事：
 
 1. 用 `createConfigDocument`（`@zhin.js/runtime`）把唯一的 YAML/JSON Root 配置包装成带事务的 `ConfigDocumentPort`；
 2. 创建 `RootRuntime`（`@zhin.js/runtime`），注入模块加载器（开发模式为 `NativeDevelopmentModuleRuntime`）、配置端口和 Root 资源安装器；
-3. 通过 `installResources` 组装各域 Host 级资源：HTTP/Protocol/Speech/HTML-Renderer Host（`@zhin.js/runtime/host`）、Database/Outbound/Inbox/IM Host（`@zhin.js/core/runtime`）、Agent/Inference/Workroom Host（`@zhin.js/agent/runtime`）、Console 外壳与 Blueprint 路由（`@zhin.js/pagemanager`）；
+3. 通过 `installResources` 组装各域 Host 级资源：HTTP/Protocol/Speech/HTML-Renderer Host（CLI 内的 `*-host-installer.ts`）、Database/Outbound/Inbox/IM Host（`@zhin.js/core/runtime`）、Agent/Inference Host（`@zhin.js/agent/runtime`）、Console 外壳与 Blueprint 路由（`@zhin.js/pagemanager`）；
 4. 启动后挂上 `HmrCoordinator`，文件变更触发 generation 重载或进程重启。
 
 用户项目的入口因此可以极小。`examples/minimal-bot/package.json`：

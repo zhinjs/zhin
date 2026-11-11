@@ -272,9 +272,17 @@ function isUnsupportedTsxError(error: unknown): boolean {
     && error.code === 'ERR_UNKNOWN_FILE_EXTENSION';
 }
 
+/** The polling fallback walks every watch root synchronously, so it must stay infrequent. */
+const pollIntervalMs = 1000;
+const nativeRetryInitialDelayMs = 5_000;
+const nativeRetryMaxDelayMs = 60_000;
+
 class PortableSourceWatcher {
   #watchers = new Set<FSWatcher>();
   #pollTimer?: NodeJS.Timeout;
+  #retryTimer?: NodeJS.Timeout;
+  #retryDelayMs = nativeRetryInitialDelayMs;
+  #nativeSince = 0;
   #snapshot: ReadonlyMap<string, number>;
   #closed = false;
   #roots: readonly string[];
@@ -285,7 +293,7 @@ class PortableSourceWatcher {
   ) {
     this.#roots = normalizeWatchRoots(roots);
     this.#snapshot = sourceSnapshot(this.#roots);
-    this.#startNativeWatchers();
+    if (!this.#attachNativeWatchers()) this.#startPolling();
   }
 
   replaceRoots(roots: readonly string[]): void {
@@ -296,7 +304,8 @@ class PortableSourceWatcher {
     // replaced afterwards; stale handles are filtered by the committed set.
     this.#roots = next;
     this.#snapshot = sourceSnapshot(next);
-    if (!this.#pollTimer) this.#startNativeWatchers();
+    // While polling, the scheduled native retry picks the new roots up.
+    if (!this.#pollTimer && !this.#attachNativeWatchers()) this.#startPolling();
   }
 
   close(): void {
@@ -304,10 +313,14 @@ class PortableSourceWatcher {
     this.#closed = true;
     this.#closeNativeWatchers();
     if (this.#pollTimer) clearInterval(this.#pollTimer);
+    if (this.#retryTimer) clearTimeout(this.#retryTimer);
+    this.#pollTimer = undefined;
+    this.#retryTimer = undefined;
   }
 
-  #startNativeWatchers(): void {
-    if (this.#closed || this.#pollTimer) return;
+  /** Replaces the native handles for the current roots; false when the platform refuses. */
+  #attachNativeWatchers(): boolean {
+    if (this.#closed) return false;
     const next = new Set<FSWatcher>();
     try {
       for (const root of this.#roots) {
@@ -316,30 +329,58 @@ class PortableSourceWatcher {
           const source = resolve(root, name.toString());
           if (isWatchedSource(source) && !isIgnoredSource(root, source)) this.listener(source);
         });
-        watcher.on('error', () => this.#startPolling());
+        // A handle that was already replaced or closed must not degrade the live ones.
+        watcher.on('error', () => { if (this.#watchers.has(watcher)) this.#startPolling(); });
         next.add(watcher);
       }
     } catch {
       for (const watcher of next) watcher.close();
-      this.#startPolling();
-      return;
+      return false;
     }
     const previous = this.#watchers;
     this.#watchers = next;
+    this.#nativeSince = Date.now();
     for (const watcher of previous) watcher.close();
+    return true;
   }
 
   #startPolling(): void {
-    if (this.#closed || this.#pollTimer) return;
+    if (this.#closed) return;
+    // Watchers that stayed healthy for a while earn a fresh backoff; a flapping platform does not.
+    if (this.#watchers.size > 0 && Date.now() - this.#nativeSince >= nativeRetryMaxDelayMs) {
+      this.#retryDelayMs = nativeRetryInitialDelayMs;
+    }
     this.#closeNativeWatchers();
-    this.#pollTimer = setInterval(() => {
-      const next = sourceSnapshot(this.#roots);
-      const sources = new Set([...this.#snapshot.keys(), ...next.keys()]);
-      for (const source of sources) {
-        if (this.#snapshot.get(source) !== next.get(source)) this.listener(source);
+    this.#pollTimer ??= setInterval(() => this.#poll(), pollIntervalMs);
+    this.#scheduleNativeRetry();
+  }
+
+  #poll(): void {
+    const next = sourceSnapshot(this.#roots);
+    const sources = new Set([...this.#snapshot.keys(), ...next.keys()]);
+    for (const source of sources) {
+      if (this.#snapshot.get(source) !== next.get(source)) this.listener(source);
+    }
+    this.#snapshot = next;
+  }
+
+  /** Polling is a degraded mode: keep trying to get native watching back, with backoff. */
+  #scheduleNativeRetry(): void {
+    if (this.#closed || this.#retryTimer) return;
+    const delay = this.#retryDelayMs;
+    this.#retryDelayMs = Math.min(delay * 2, nativeRetryMaxDelayMs);
+    this.#retryTimer = setTimeout(() => {
+      this.#retryTimer = undefined;
+      if (this.#closed || !this.#pollTimer) return;
+      if (!this.#attachNativeWatchers()) {
+        this.#scheduleNativeRetry();
+        return;
       }
-      this.#snapshot = next;
-    }, 100);
+      clearInterval(this.#pollTimer);
+      this.#pollTimer = undefined;
+      // Report what changed between the last poll and the native handles attaching.
+      this.#poll();
+    }, delay);
   }
 
   #closeNativeWatchers(): void {

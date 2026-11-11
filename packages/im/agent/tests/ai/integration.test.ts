@@ -4,7 +4,6 @@
  * 完整测试环境，包括：
  * 1. AI 服务初始化
  * 2. 工具服务功能
- * 3. AI 触发中间件
  * 4. 显式工具注册
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -39,9 +38,8 @@ vi.mock('@zhin.js/core', async (importOriginal) => {
   };
 });
 
-// Import after mocking — AIService from agent; Tool/trigger contracts from core
+// Import after mocking
 import { AIService } from '@zhin.js/agent';
-import { shouldTriggerAI, resolveSenderRoles } from '@zhin.js/core';
 
 // ============================================================================
 // AI Service 测试
@@ -109,80 +107,6 @@ describe('AI Service 集成测试', () => {
     it('应该正确清理资源', async () => {
       await aiService.dispose();
       await expect(aiService.prepareModelRuntime({} as never)).rejects.toThrow('disposed');
-    });
-  });
-});
-
-// ============================================================================
-// AI Trigger 工具函数测试
-// ============================================================================
-
-describe('AI Trigger 工具函数测试', () => {
-  function createMockMessage(options: {
-    content: string | any[];
-    endpoint?: string;
-    channelType?: 'private' | 'group' | 'channel';
-    senderId?: string;
-    senderPermissions?: string[];
-  }) {
-    const segments = typeof options.content === 'string'
-      ? [{ type: 'text', data: { text: options.content } }]
-      : options.content;
-    const endpointId = options.endpoint || 'bot123';
-    return {
-      content: segments.filter((item: any) => item.type === 'text').map((item: any) => item.data.text).join(''),
-      segments,
-      endpointId,
-      clientAdapter: 'test',
-      conversation: { endpoint: { adapter: 'test', id: endpointId }, kind: options.channelType || 'private', id: 'channel1' },
-      sender: { id: options.senderId || 'user1', roles: options.senderPermissions || [] },
-      metadata: {},
-    };
-  }
-
-  describe('shouldTriggerAI', () => {
-    it('应该检测前缀触发', () => {
-      const message = createMockMessage({ content: '# 你好' });
-      const result = shouldTriggerAI(message as any, { prefixes: ['#'], respondToPrivate: false });
-      
-      expect(result.triggered).toBe(true);
-      expect(result.content).toBe('你好');
-    });
-
-    it('没有匹配前缀时不应触发', () => {
-      const message = createMockMessage({ content: '普通消息' });
-      const result = shouldTriggerAI(message as any, { prefixes: ['#'], respondToPrivate: false });
-      
-      expect(result.triggered).toBe(false);
-    });
-
-    it('私聊应该直接触发', () => {
-      const message = createMockMessage({ content: '你好', channelType: 'private' });
-      const result = shouldTriggerAI(message as any, { respondToPrivate: true });
-      
-      expect(result.triggered).toBe(true);
-      expect(result.content).toBe('你好');
-    });
-
-    it('禁用时不应触发', () => {
-      const message = createMockMessage({ content: '# 你好' });
-      const result = shouldTriggerAI(message as any, { enabled: false, prefixes: ['#'] });
-      
-      expect(result.triggered).toBe(false);
-    });
-  });
-
-  describe('resolveSenderRoles', () => {
-    it('应该正确解析 master 角色', () => {
-      const message = createMockMessage({ content: 'test', senderId: 'owner1' });
-      const result = resolveSenderRoles(message as any, { masters: ['owner1'] });
-      expect(result.roles).toContain('master');
-    });
-
-    it('默认应该是 user 角色', () => {
-      const message = createMockMessage({ content: 'test' });
-      const result = resolveSenderRoles(message as any, {});
-      expect(result.roles).toEqual(['user']);
     });
   });
 });

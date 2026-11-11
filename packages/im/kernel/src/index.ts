@@ -5,19 +5,7 @@
  */
 
 // ── Errors ──
-export {
-  ZhinError,
-  ConfigError,
-  PluginError,
-  ConnectionError,
-  ContextError,
-  ValidationError,
-  PermissionError,
-  TimeoutError,
-  ErrorManager,
-  RetryManager,
-  CircuitBreaker,
-} from './errors.js';
+export { ZhinError } from './errors.js';
 
 // ── Schedule engine ──
 export {
@@ -40,19 +28,8 @@ export type {
 } from './schedule-engine.js';
 export type { HolidayInput, ScatterInput, FestivalName } from '@zhin.js/schedule';
 
-// ── Scheduler ──
-export { Scheduler, isHeartbeatEmpty } from './scheduler/index.js';
-export type {
-  Schedule,
-  JobPayload,
-  JobState,
-  ScheduledJob,
-  JobStore,
-  JobCallback,
-  AddJobOptions,
-  IScheduler,
-  SchedulerOptions,
-} from './scheduler/index.js';
+// ── Heartbeat ──
+export { isHeartbeatEmpty } from './heartbeat.js';
 
 // ── IM identity (scene/session keys) ──
 export type {
@@ -67,16 +44,6 @@ export {
 } from './im-identity.js';
 
 // ── Utils ──
-export {
-  evaluate,
-  execute,
-  getValueWithRuntime,
-  compiler,
-  remove,
-  isEmpty,
-  Time,
-  supportedPluginExtensions,
-  resolveEntry,
-  sleep,
-} from './utils.js';
+export { renderTemplatePaths } from './template-paths.js';
+export { Time, sleep } from './utils.js';
 export type { Dict } from './utils.js';

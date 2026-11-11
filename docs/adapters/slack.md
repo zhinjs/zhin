@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/slack/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/slack/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=443a950fc26511cb -->
+<!-- sync-adapter-docs:sha256=80150dea0c5a0767 -->
 
 # @zhin.js/adapter-slack
 
@@ -20,7 +20,7 @@ Zhin.js Slack 适配器（Plugin Runtime），优先 Socket Mode，也可经 Run
 - **HTTP Events API**：`httpHostToken` POST（签名验证），**非** legacy host-router/Koa
 - 入站经 `endpoint[endpointSpec].events`；出站 `send({ conversation, payload })` → `chat.postMessage` / Block Kit
 - 约定式 `defineAdapter` / `definePlugin`（无需 `usePlugin`）
-- Block Kit 按钮、斜杠命令、消息编辑、表情反应等（见 `tools/`）
+- Block Kit 按钮、斜杠命令、消息编辑、表情反应等（见 `agents/slack/skills/slack-*/tools/`）
 
 ## 渐进式回复
 
@@ -146,8 +146,8 @@ HTTP 模式下 Runtime Host（`http`）须已 listen；Slack App 的 Event Subsc
 | 类别 | 路径 |
 |------|------|
 | Permit 词汇 | `PERMITS.md` |
-| 平台工具 | `tools/`（邀请、话题、反应、置顶、编辑等） |
-| 技能说明 | `agents/slack/skills/slack-channels/SKILL.md`、`agents/slack/skills/slack-messages/SKILL.md` |
+| 平台工具（11 个） | `agents/slack/skills/slack-{channels,messages,users}/tools/`（邀请、话题、反应、置顶、编辑等） |
+| 技能说明 | `agents/slack/skills/slack-channels/SKILL.md`、`agents/slack/skills/slack-messages/SKILL.md`、`agents/slack/skills/slack-users/SKILL.md` |
 
 ## 限制
 

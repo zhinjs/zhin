@@ -1,11 +1,8 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { ROOT_CONFIG_FILE_NAMES } from '@zhin.js/plugin-runtime';
 
 export const ZHIN_PROJECT_ROOT_ENV = 'ZHIN_PROJECT_ROOT';
-
-export type ZhinInstanceKind = 'project' | 'global';
 
 export interface ZhinProjectInstance {
   kind: 'project';
@@ -42,10 +39,6 @@ export function hasZhinPackageJson(dir: string): boolean {
   }
 }
 
-export function hasZhinConfig(dir: string): boolean {
-  return ROOT_CONFIG_FILE_NAMES.some((name) => fs.existsSync(path.join(dir, name)));
-}
-
 export function hasNodeModules(dir: string): boolean {
   return fs.existsSync(path.join(dir, 'node_modules'));
 }
@@ -71,29 +64,4 @@ export function resolveProjectOrGlobal(
   homeDir = os.homedir(),
 ): ZhinInstance | null {
   return findProjectInstance(cwd) ?? findGlobalInstance(homeDir);
-}
-
-/**
- * 构建子进程环境：剔除 pnpm 注入的 npm_*，并设置 `ZHIN_PROJECT_ROOT`。
- */
-export function buildSpawnEnv(
-  instanceRoot: string,
-  extra: Record<string, string | undefined> = {},
-): Record<string, string | undefined> {
-  const cleanEnv: Record<string, string | undefined> = {};
-  for (const [key, value] of Object.entries(process.env)) {
-    if (/^npm_/i.test(key)) continue;
-    cleanEnv[key] = value;
-  }
-  const devSourcesAvailable = fs.existsSync(
-    path.join(instanceRoot, 'node_modules/zhin.js/src'),
-  );
-  const nodeOptions = (cleanEnv.NODE_OPTIONS || '')
-    + (devSourcesAvailable ? ' --conditions=development' : '');
-  return {
-    ...cleanEnv,
-    [ZHIN_PROJECT_ROOT_ENV]: instanceRoot,
-    ...(nodeOptions.trim() ? { NODE_OPTIONS: nodeOptions.trim() } : {}),
-    ...extra,
-  };
 }

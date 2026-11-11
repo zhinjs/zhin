@@ -17,28 +17,28 @@ const linked = new Set();
 for (const m of configText.matchAll(/link:\s*['"](\/[^'"]+)['"]/g)) {
   let route = m[1];
   if (!route.endsWith('/')) route += '/';
-  linked.add(route);
+  linked.add(route.toLowerCase());
 }
 
-/** 无需侧栏的页面（首页、变更日志、维护者参考、snippets 等） */
-const ALLOWLIST = new Set([
-  '/',
-  '/changelog/',
-  '/playground/',
-  '/advanced/miniclawd-reference/',
-  '/advanced/typing-indicator-adapters/',
-  '/snippets/',
-  '/snippets/install-tiers/',
-  '/snippets/platform-tiers/',
-]);
+/** 无需侧栏的页面（仅首页；其余页面用侧栏链接或 frontmatter `sidebar: false`） */
+const ALLOWLIST = new Set(['/']);
 
-// The imported Cubic pages are reached from the two Wiki archive indexes.
-// Keep only manifest-listed snapshots out of the primary sidebar.
-const wikiManifest = JSON.parse(fs.readFileSync(path.join(docsRoot, 'public/wiki/cubic/source.json'), 'utf8'));
-const ARCHIVE_ROUTES = new Set(wikiManifest.pages.flatMap(({ file }) => {
-  const slug = file.replace(/\.md$/, '');
-  return [`/wiki/cubic/${slug}/`, `/en/wiki/cubic/${slug}/`];
-}));
+// 不发布为站点页面的文件，与 .vitepress/config.ts 的 srcExclude 保持一致：
+// snippets 目录、根 README.md、根 CHANGELOG.md、plans 目录。
+/** @param {string} rel docs 下相对路径（posix） */
+function isExcludedFromSite(rel) {
+  if (rel === 'README.md' || rel === 'CHANGELOG.md') return true;
+  if (rel.startsWith('plans/')) return true;
+  return rel.split('/').includes('snippets');
+}
+
+const srcExcludeLine = configText.split('\n').find((line) => line.includes('srcExclude:')) ?? '';
+for (const pattern of ["'**/snippets/**'", "'README.md'", "'CHANGELOG.md'", "'plans/**'"]) {
+  if (!srcExcludeLine.includes(pattern)) {
+    console.error(`check-doc-orphans: srcExclude in docs/.vitepress/config.ts no longer lists ${pattern}; update isExcludedFromSite().`);
+    process.exit(1);
+  }
+}
 
 /**
  * @param {string} filePath
@@ -52,11 +52,7 @@ function hasSidebarFalse(filePath) {
  * @param {string} rel docs 下相对路径，如 getting-started/index.md
  */
 function toRoute(rel) {
-  if (/readme\.md$/i.test(rel)) {
-    const dir = path.dirname(rel).replace(/\\/g, '/');
-    if (!dir || dir === '.') return '/';
-    return `/${dir}/`;
-  }
+  // Only index.md is a directory index in VitePress; README.md is an ordinary page.
   let r = '/' + rel.replace(/\.md$/i, '').replace(/\\/g, '/');
   if (r === '/index' || r === '/index/') return '/';
   if (r.endsWith('/index')) r = r.slice(0, -'/index'.length) + '/';
@@ -72,7 +68,7 @@ function collectMd(dir) {
   /** @type {string[]} */
   const out = [];
   for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (ent.name.startsWith('.') || ent.name === 'public') continue;
+    if (ent.name.startsWith('.') || ent.name === 'public' || ent.name === 'node_modules') continue;
     const abs = path.join(dir, ent.name);
     if (ent.isDirectory()) out.push(...collectMd(abs));
     else if (ent.name.endsWith('.md')) out.push(abs);
@@ -84,13 +80,29 @@ function collectMd(dir) {
 const orphans = [];
 
 for (const abs of collectMd(docsRoot)) {
-  const rel = path.relative(docsRoot, abs);
+  const rel = path.relative(docsRoot, abs).replace(/\\/g, '/');
+  if (isExcludedFromSite(rel)) continue;
   const route = toRoute(rel);
   if (ALLOWLIST.has(route)) continue;
-  if (ARCHIVE_ROUTES.has(route)) continue;
   if (hasSidebarFalse(abs)) continue;
   if (linked.has(route)) continue;
   orphans.push({ file: rel, route });
+}
+
+/** @type {string[]} */
+const dangling = [];
+const pageRoutes = new Set(collectMd(docsRoot)
+  .map((abs) => path.relative(docsRoot, abs).replace(/\\/g, '/'))
+  .filter((rel) => !isExcludedFromSite(rel))
+  .map(toRoute));
+for (const route of linked) {
+  if (!pageRoutes.has(route)) dangling.push(route);
+}
+if (dangling.length > 0) {
+  console.error('VitePress nav/sidebar links that point to no page:\n');
+  for (const route of dangling.sort()) console.error(`  ${route}`);
+  console.error(`\n${dangling.length} dangling link(s).`);
+  process.exit(1);
 }
 
 if (orphans.length > 0) {

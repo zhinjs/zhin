@@ -29,7 +29,7 @@
   "scripts": {
     "build": "tsc",
     "clean": "rimraf lib",
-    "test": "NODE_OPTIONS=--experimental-strip-types vitest run --root ../../.. plugins/utils/group-suite/tests",
+    "test": "vitest run --root ../../.. plugins/utils/group-suite/tests",
     "prepublishOnly": "pnpm run build",
     "prepack": "pnpm run build && node ../../../scripts/build-plugin-runtime-entries.mjs",
     "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean"
@@ -62,15 +62,13 @@
   "devDependencies": {
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",
-    "zhin.js": "workspace:*",
-    "zod": "^4.4.3"
+    "zhin.js": "workspace:*"
   },
   "peerDependencies": {
     "@zhin.js/command": "workspace:^",
     "@zhin.js/middleware": "workspace:^",
     "@zhin.js/page": "workspace:^",
     "zhin.js": "workspace:^",
-    "zod": "^4.0.0",
     "@zhin.js/handler": "workspace:^",
     "@zhin.js/schedule-feature": "workspace:^"
   },
@@ -82,9 +80,6 @@
       "optional": true
     },
     "@zhin.js/page": {
-      "optional": true
-    },
-    "zod": {
       "optional": true
     },
     "@zhin.js/handler": {

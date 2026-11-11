@@ -4,8 +4,7 @@
  */
 import type { Tool } from '@zhin.js/core';
 import { toolInputSchemaToParameters } from '@zhin.js/tool';
-import { stampToolGeneration } from '../tool/tool-system.js';
-import type { AgentCapabilities, ToolCapability } from './capability-ingress.js';
+import type { ToolCapability } from './capability-ingress.js';
 import type { ToolInvocationContext } from '@zhin.js/tool';
 import type { TurnIngress, TurnRequest } from '../turn/turn-ingress.js';
 import { isLocale } from '@zhin.js/plugin-runtime';
@@ -41,17 +40,6 @@ export function capabilityToTool(
       return await tool.execute(args, invocation) as Awaited<ReturnType<Tool['execute']>>;
     },
   };
-}
-
-/** Owner-visible capabilities → generation-stamped tools for the turn runner. */
-export function toolsFromCapabilities(
-  capabilities: AgentCapabilities,
-  turn: TurnIngress | TurnRequest,
-): GenerationStampedTool[] {
-  return stampToolGeneration(
-    capabilities.tools.map((tool) => capabilityToTool(tool, toolInvocationFromTurn(turn))),
-    capabilities.generation,
-  );
 }
 
 export function toolInvocationFromTurn(turn: TurnIngress | TurnRequest): ToolInvocationContext {

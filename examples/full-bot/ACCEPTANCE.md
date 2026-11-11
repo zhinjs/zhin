@@ -25,23 +25,23 @@ pnpm check:l4
 - [ ] **私聊协作**（入口 Agent `ask` / `delegate` 其他 Agent）：Sandbox 发 `ai: <触发 vision 路由的文本>`，应收到入口 Agent 整理后的文本结果
 - [ ] **空 summary**：被委派的 Agent 返回空文本时，IM 应收到固定 fallback：`任务已完成，但没有可展示的文本结果。`
 - [ ] **失败**：被委派的 Agent 抛错时，IM 应收到 `trigger.errorTemplate` 错误回复（非仅日志）
-- [ ] **Remote A2A**：尚未进入生产路径；接入后必须复用相同 Assignment lease/fence/report 契约，不恢复旧 poller
+- [ ] **Remote A2A**：远程 Agent 通过 `a2a.mailbox.peers` 接入，Mail 携带签名的 Authority 与预算；不恢复旧 poller
 
 ### C. API / Console 投影（v1 = API；v1.1 = UI）
 
-- [ ] `GET /api/agent/workroom/runs?projectId=` 与 Journal replay 一致
-- [ ] `GET /api/agent/workroom/runs/:runId` 含 tasks + assignments
-- [ ] Remote Console「Workroom」页可查看 Run / Task / Assignment（`pages/workroom/index.ts`）
+- [ ] `GET /api/agent/engagements` 与 Engagement Journal 一致（需要 full scope）
+- [ ] `GET /api/agent/engagements/:engagementId` 含事件与黑板
+- [ ] Remote Console 协作图谱页可查看 Engagement；本示例自带的 `pages/workroom/index.ts` 是示例页面，数据来自 `plugin.ts` 的 `workroom-summary` RPC
 
 ## 手工验收
 
-### 1. Sandbox + Workroom boundary
+### 1. Sandbox + 协作边界
 
 1. `cd examples/full-bot && cp .env.example .env && pnpm dev`
-2. Remote Console 连接 Host（端口默认 `8069`），确认 Workroom 查询必须提供显式 `projectId`
-3. 普通 Agent 工具目录不得出现通用 Workroom transition 工具
-4. 普通 Agent 协作（`ask` / `delegate`）不应创建或修改 Workroom Run
-5. 未配置 Database Host 时文件 Journal 回归通过；显式数据库激活失败时候选 generation 必须失败
+2. Remote Console 连接 Host（端口默认 `8069`），确认协作图谱只读，demo token 读取 `/api/agent/engagements` 得到 403
+3. 协作工具（`ask` / `delegate` 等）只在本回合确实有其他可联系的 Agent 时出现
+4. 一次协作结束后，`zhin trace --engagements --list` 能看到对应的 Engagement
+5. 显式数据库激活失败时候选 generation 必须失败
 
 ### 2. 语义记忆
 
@@ -83,5 +83,6 @@ CI 不依赖实机；本地验证不设 `L4_SKIP_PLATFORM` 时可跑适配器 op
 
 ## 可观测
 
-- REST：`GET /api/agent/workroom/runs?projectId=`
-- Console：Workroom Journal 只读投影 / 会话树
+- REST：`GET /api/agent/engagements`
+- CLI：`zhin trace --engagements`
+- Console：协作图谱只读投影 / 会话树

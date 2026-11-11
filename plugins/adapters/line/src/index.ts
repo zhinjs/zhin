@@ -6,7 +6,6 @@ export {
   isPostbackEvent,
   isValidLineRecipientId,
   normalizeWebhookPath,
-  readTextBody,
   resolveChannel,
   resolveLineConfig,
   verifySignature,

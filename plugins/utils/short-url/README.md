@@ -21,7 +21,12 @@ short-url: {}
 
 ## Configuration
 
-This plugin currently has no configuration fields. Its `plugin.ts` declares `config: Schema.object({})`, shared by Runtime validation and Console forms, and accepts an empty object; do not place package names in a `plugins` array.
+This plugin currently has no configuration fields. The empty, strict schema lives in `schema.json` (`plugin.ts` declares no `config`), is shared by Runtime validation and Console forms, and accepts only an empty object; do not place package names in a `plugins` array.
+
+## Behaviour
+
+- `shorten` (command, Agent tool and the Console "Create" action) calls the public is.gd API and returns the link it issues. The Console page lists the links created since the process started; is.gd offers no listing, click statistics or deletion, so "Remove From List" only clears the local row.
+- `expand` follows the redirect chain itself. Every hop must be an `http(s)` URL on a public address: loopback, private, link-local, cloud-metadata and internal host names are refused, each request times out after 10 seconds and response bodies are never read.
 
 ## Language / 语言
 

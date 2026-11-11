@@ -48,7 +48,8 @@ try {
     await project.write('plugin.ts', "import { definePlugin } from 'zhin.js';\n\nexport default definePlugin({ name: 'smoke-bot' });\n");
     kit = await PluginTestKit.create({
       projectRoot: project.root,
-      config: { configVersion: 2, plugins: { rss: rssPackage } },
+      // The scenario serves its feeds from a loopback server, which the plugin refuses unless opted in.
+      config: { configVersion: 2, plugins: { rss: rssPackage }, rss: { allowPrivateNetwork: true } },
       installResources: hosts.installResources,
     });
     await kit.start();

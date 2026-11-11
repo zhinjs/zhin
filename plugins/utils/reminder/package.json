@@ -10,7 +10,8 @@
       "types": "./lib/index.d.ts",
       "development": "./src/index.ts",
       "import": "./lib/index.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "README.md",
@@ -25,6 +26,7 @@
   ],
   "scripts": {
     "build": "tsc",
+    "clean": "rimraf lib",
     "check": "tsc -p tsconfig.check.json",
     "test": "vitest run --root ../../.. plugins/utils/reminder/tests",
     "prepublishOnly": "pnpm run build",
@@ -81,7 +83,8 @@
       ".": {
         "types": "./lib/index.d.ts",
         "import": "./lib/index.js"
-      }
+      },
+      "./package.json": "./package.json"
     }
   },
   "zhin": {

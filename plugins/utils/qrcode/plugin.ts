@@ -5,10 +5,9 @@ import {
   definePluginConsoleRpc,
   PluginConsoleRpcError,
   pluginConsoleRpcToken,
-  type NormalizedPluginConsoleRpcMethod,
   type PluginConsoleRpcInput,
 } from 'zhin.js';
-import { generateQrCode } from 'zhin.js/qrcode';
+import { buildQrDataUrl } from './src/qrcode-lib.js';
 
 export interface QrCodeHistoryItem {
   readonly id: string;
@@ -72,9 +71,7 @@ export default definePlugin({
               Number.isFinite(rawWidth) && rawWidth >= 64 && rawWidth <= 1024
                 ? Math.round(rawWidth)
                 : 280;
-            // Generates QR data URL via QRCode.toDataURL(...) under the hood
-            const qr = await generateQrCode(rawText, { width });
-            const dataUrl = qr.toDataUrl();
+            const dataUrl = await buildQrDataUrl(rawText, width);
             const entry: QrCodeHistoryItem = {
               id: randomUUID(),
               content: rawText,
@@ -105,12 +102,6 @@ export default definePlugin({
         },
       },
     });
-
-    const methods = rpc.methods as Map<string, NormalizedPluginConsoleRpcMethod>;
-    const clearHistoryMethod = methods.get('clear-history');
-    if (clearHistoryMethod) {
-      methods.set('clearHistory', clearHistoryMethod);
-    }
 
     return {
       consoleRpc: rpc,

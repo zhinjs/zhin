@@ -24,7 +24,6 @@ async function makeProject(options: Partial<InitOptions> = {}) {
   const projectPath = path.join(root, 'bot')
   const initOptions: InitOptions = {
     config: 'yaml',
-    runtime: 'node',
     httpToken: 'test-token',
     yes: true,
     database: {
@@ -44,7 +43,6 @@ async function makeProject(options: Partial<InitOptions> = {}) {
     },
     ai: { enabled: false },
     devSkills: true,
-    installGlobalCli: false,
     ...options,
   }
 

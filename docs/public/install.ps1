@@ -69,7 +69,7 @@ function Test-Node {
     if (-not (Test-CommandExists "node")) {
         Log-Error "未检测到 Node.js"
         Write-Host ""
-        Write-Host "请先安装 Node.js >= 20.19.0 或 >= 22.12.0："
+        Write-Host "请先安装 Node.js >= 22.19.0："
         Write-Host ""
         Write-Host "  方式 1 - 使用 nvm-windows（推荐）:"
         Write-Host "    https://github.com/coreybutler/nvm-windows/releases" -ForegroundColor Cyan
@@ -83,22 +83,14 @@ function Test-Node {
 
     $nodeVersionRaw = (node -v) -replace '^v', ''
 
-    # 检查版本: >= 20.19.0 或 >= 22.12.0
-    if (Test-VersionGte $nodeVersionRaw "22.12.0") {
+    # 检查版本: >= 22.19.0
+    if (Test-VersionGte $nodeVersionRaw "22.19.0") {
         Log-Success "Node.js v${nodeVersionRaw} ✓"
         return
     }
-    elseif (Test-VersionGte $nodeVersionRaw "20.19.0") {
-        # 检查不是 21.x（因为 21 < 22.12）
-        $major = [int]($nodeVersionRaw.Split('.')[0])
-        if ($major -eq 20 -or $major -ge 22) {
-            Log-Success "Node.js v${nodeVersionRaw} ✓"
-            return
-        }
-    }
 
     Log-Error "Node.js 版本过低: v${nodeVersionRaw}"
-    Write-Host "  需要 >= 20.19.0 或 >= 22.12.0"
+    Write-Host "  需要 >= 22.19.0"
     Write-Host "  建议运行: nvm install 22"
     exit 1
 }

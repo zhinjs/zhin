@@ -34,4 +34,4 @@ plugins/games/
 
 ## 贡献
 
-新游戏请放在 `plugins/games/<name>/`，遵循 [插件开发文档](../../docs/essentials/plugins.md)。
+新游戏请放在 `plugins/games/<name>/`，遵循 [插件开发文档](../../docs/authoring/define-plugin.md)。

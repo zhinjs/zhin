@@ -19,6 +19,10 @@
     "build": "tsc",
     "clean": "rimraf lib"
   },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "license": "MIT",
   "devDependencies": {
     "@types/node": "^26.1.2",
     "typescript": "^6.0.3"

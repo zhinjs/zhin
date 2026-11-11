@@ -1,11 +1,9 @@
-import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import fs from 'fs-extra';
 import {
   findAdapterByPackage,
   type AdapterDefinition,
 } from '@zhin.js/scaffold-wizard';
-import { stripNpmVersion, enablePluginInProjectConfig } from '../commands/install.js';
+import { stripNpmVersion } from '../commands/install.js';
 
 /** 插件生态包分类 */
 export type PluginKind = 'adapter' | 'plugin' | 'skill-pack';
@@ -171,27 +169,6 @@ export function resolveInstallRoute(spec: string): ResolvedInstall {
     return { route: 'adapter', package: name, adapter };
   }
   return { route: 'npm', package: name };
-}
-
-/** 读取已安装包的 package.json zhin 字段（判断是否 zhin 插件） */
-export function readInstalledZhinField(cwd: string, packageName: string): Record<string, unknown> | null {
-  try {
-    const pkgPath = path.join(cwd, 'node_modules', packageName, 'package.json');
-    if (!fs.existsSync(pkgPath)) return null;
-    const pkg = fs.readJsonSync(pkgPath) as { zhin?: unknown };
-    return pkg.zhin && typeof pkg.zhin === 'object' && !Array.isArray(pkg.zhin)
-      ? (pkg.zhin as Record<string, unknown>)
-      : null;
-  } catch {
-    return null;
-  }
-}
-
-/** Registers an application instance without introducing a second manifest authority. */
-export async function registerPluginInstance(cwd: string, packageName: string): Promise<boolean> {
-  const result = await enablePluginInProjectConfig(cwd, packageName);
-  if (result.status !== 'enabled' && result.status !== 'already-enabled') throw new Error(result.message);
-  return result.status === 'enabled';
 }
 
 /** 官方适配器的一行配置入口提示 */

@@ -36,7 +36,7 @@
   "scripts": {
     "build": "tsc",
     "clean": "rimraf lib",
-    "test": "NODE_OPTIONS=--experimental-strip-types vitest run --root ../../.. plugins/adapters/lark/tests",
+    "test": "vitest run --root ../../.. plugins/adapters/lark/tests",
     "prepublishOnly": "pnpm run build",
     "prepack": "pnpm run build && node ../../../scripts/build-plugin-runtime-entries.mjs",
     "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean"
@@ -49,6 +49,7 @@
     "@zhin.js/core": "workspace:*",
     "@zhin.js/feature-kit": "workspace:*",
     "@zhin.js/host-http": "workspace:*",
+    "@zhin.js/host-http-contract": "workspace:*",
     "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/logger": "workspace:*",
     "@zhin.js/page": "workspace:*",
@@ -78,8 +79,11 @@
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
+    "@types/ws": "^8.18.1",
+    "ajv": "8.18.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",
+    "ws": "^8.21.1",
     "zhin.js": "workspace:*",
     "zod": "^4.4.3"
   },

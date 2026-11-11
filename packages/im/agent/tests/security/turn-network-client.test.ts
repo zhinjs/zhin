@@ -3,6 +3,7 @@ import type { ToolInvocationPolicy } from '@zhin.js/tool';
 import {
   NodeNetworkTransport,
   TurnNetworkClient,
+  bareUrlHost,
   type NetworkTransport,
 } from '../../src/security/turn-network-client.js';
 import { isBlockedIpAddress } from '../../src/security/network-policy.js';
@@ -33,6 +34,21 @@ describe('TurnNetworkClient', () => {
       new AbortController().signal,
       1024,
     )).rejects.toMatchObject({ name: 'NetworkAccessDeniedError' });
+  });
+
+  it('treats a bracketed IPv6 literal as an address instead of a DNS name', async () => {
+    expect(bareUrlHost(new URL('http://[2001:db8::1]:8080/x'))).toBe('2001:db8::1');
+    expect(bareUrlHost(new URL('https://example.com/x'))).toBe('example.com');
+    // Before the fix `[::1]` went to DNS and failed with ENOTFOUND instead of the SSRF denial.
+    await expect(new NodeNetworkTransport().request(
+      new URL('http://[::1]/resource'),
+      {},
+      new AbortController().signal,
+      1024,
+    )).rejects.toMatchObject({
+      name: 'NetworkAccessDeniedError',
+      message: expect.stringContaining('DNS target ::1'),
+    });
   });
 
   it('authorizes every redirect hop before transport execution', async () => {

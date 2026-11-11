@@ -147,22 +147,6 @@
       ]
     },
     {
-      "id": "workroom-not-routing",
-      "title": { "zh": "群、频道或仓库没有路由到 Workroom", "en": "A chat, channel, or repository does not route to a Workroom" },
-      "symptom": { "zh": "消息进入普通聊天，或任务没有出现在预期 Workroom 看板。", "en": "A message falls back to normal chat, or a task does not appear on the expected Workroom board." },
-      "causes": [
-        { "zh": "Catalog 中缺少该 interaction space 的精确绑定，或绑定仍指向旧 Agent。", "en": "The Catalog lacks an exact interaction-space binding or still points to an old Agent." },
-        { "zh": "同一 Bot 可服务多个 Workroom，但群/频道/仓库标识填写错误或发生冲突。", "en": "One Bot may serve multiple Workrooms, but the chat, channel, or repository identity is wrong or conflicting." }
-      ],
-      "actions": [
-        { "zh": "在 Console Workroom 配置中核对 Bot、Endpoint、空间 ID、成员角色与 Agent binding。", "en": "Check Bot, Endpoint, space ID, member roles, and Agent binding in Console Workroom configuration." },
-        { "zh": "保存 Catalog 后发送一条新消息；历史消息不会被重新解释。", "en": "After saving the Catalog, send a new message; historical messages are not reinterpreted." }
-      ],
-      "verification": [
-        { "zh": "新消息应在对应 Workroom 创建 task/run，并在详情中显示命中的空间与 Agent。", "en": "A new message should create a task/run in the target Workroom and show the matched space and Agent in details." }
-      ]
-    },
-    {
       "id": "container-not-healthy",
       "title": { "zh": "容器反复重启或健康检查失败", "en": "Container restarts or health checks fail" },
       "symptom": { "zh": "Compose/Kubernetes 报 unhealthy、CrashLoopBackOff 或持久目录权限错误。", "en": "Compose or Kubernetes reports unhealthy, CrashLoopBackOff, or persistence permission errors." },

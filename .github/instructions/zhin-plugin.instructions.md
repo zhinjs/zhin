@@ -96,8 +96,9 @@ and default must live in `defineCommand({ params })`, not in the file name.
 
 ## Config, Resources and lifecycle
 
-- `schema.json` declares only the package's own config fields. Root values are under `plugin`;
-  child values are under `plugins.<instanceKey>` recursively.
+- `schema.json` declares only the package's own config fields. Root values are under `plugin`.
+  The application config (`configVersion: 2`) mounts a child in the `plugins` map
+  (`<alias>: "<package>"`) and puts that child's values in a top-level `<alias>:` block.
 - Capability callbacks use owner-scoped `context.config` and `context.use(token)`.
 - Shared database, router, credentials and connections are Plugin Resources, never module globals.
 - Register setup cleanup with `context.lifecycle`. Adapter authors use

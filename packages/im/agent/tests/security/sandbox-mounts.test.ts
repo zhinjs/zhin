@@ -161,7 +161,7 @@ describe('docker argument building', () => {
       'type=tmpfs,target=/workspace/skills,tmpfs-size=4096,readonly',
     ]);
     expect(args.indexOf('--mount')).toBeGreaterThan(v);
-    expect(args.slice(-3)).toEqual(['sh', '-c', 'echo hi']);
+    expect(args.slice(-3)).toEqual(['bash', '-c', 'echo hi']);
   });
 
   it('adds no overlays to a read-only mount', () => {

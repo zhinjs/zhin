@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-import { simulateNextRuns } from '../dist/planning/simulate-runs.mjs';
-import { resolveScatterJob, resolveWorkdayJob } from '../dist/resolve-job.mjs';
-import { listScatterSlotsForDay } from '../dist/resolvers/scatter.mjs';
+// Requires a build first: `pnpm --filter @zhin.js/schedule build`.
+import { simulateNextRuns } from '../lib/planning/simulate-runs.js';
+import { resolveScatterJob, resolveWorkdayJob } from '../lib/resolve-job.js';
+import { listScatterSlotsForDay } from '../lib/resolvers/scatter.js';
 
 const args = process.argv.slice(2);
 const kind = readArg('--kind') ?? 'scatter';

@@ -1379,14 +1379,6 @@ export const WIZARD_MESSAGES = {
     "zh-CN": "生活助手 — AI 对话 + 知识库 + 记忆 + 定时提醒",
     "en": "Life assistant — AI chat, knowledge base, memory and reminders"
   },
-  "选择运行时:": {
-    "zh-CN": "选择运行时:",
-    "en": "Choose a runtime:"
-  },
-  "Node.js (推荐)": {
-    "zh-CN": "Node.js (推荐)",
-    "en": "Node.js (recommended)"
-  },
   "选择配置文件格式:": {
     "zh-CN": "选择配置文件格式:",
     "en": "Choose a configuration format:"
@@ -1406,18 +1398,6 @@ export const WIZARD_MESSAGES = {
   "🗄️  配置数据库": {
     "zh-CN": "🗄️  配置数据库",
     "en": "🗄️  Configure database"
-  },
-  "🌍 全局 CLI 安装": {
-    "zh-CN": "🌍 全局 CLI 安装",
-    "en": "🌍 Global CLI installation"
-  },
-  "这将允许你在任何目录下使用 \"zhin\" 命令": {
-    "zh-CN": "这将允许你在任何目录下使用 \"zhin\" 命令",
-    "en": "This makes the \"zhin\" command available from any directory"
-  },
-  "是否全局安装 @zhin.js/cli 命令行工具？": {
-    "zh-CN": "是否全局安装 @zhin.js/cli 命令行工具？",
-    "en": "Install @zhin.js/cli globally?"
   },
   "🛠️  Zhin 插件开发技能": {
     "zh-CN": "🛠️  Zhin 插件开发技能",
@@ -1655,21 +1635,9 @@ export const WIZARD_MESSAGES = {
     "zh-CN": "# SQLite 使用 Node 内置 node:sqlite，请使用 Node.js 22.5+（推荐 24+）",
     "en": "# SQLite uses built-in Node.js node:sqlite; use Node.js 22.5+ (24+ recommended)"
   },
-  "✓ 已为你配置全局 CLI": {
-    "zh-CN": "✓ 已为你配置全局 CLI",
-    "en": "✓ Global CLI configured"
-  },
-  "# 执行一次以链接全局 CLI": {
-    "zh-CN": "# 执行一次以链接全局 CLI",
-    "en": "# Run once to link the global CLI"
-  },
   "开发环境：": {
     "zh-CN": "开发环境：",
     "en": "Development:"
-  },
-  "# 或 pnpm dev - 开发模式（自动监听，支持热重载）": {
-    "zh-CN": "# 或 pnpm dev - 开发模式（自动监听，支持热重载）",
-    "en": "# Or pnpm dev - development mode with file watching and hot reload"
   },
   "# 检查 Console / Host / Sandbox / 依赖状态": {
     "zh-CN": "# 检查 Console / Host / Sandbox / 依赖状态",
@@ -1678,10 +1646,6 @@ export const WIZARD_MESSAGES = {
   "生产环境：": {
     "zh-CN": "生产环境：",
     "en": "Production:"
-  },
-  "# 或 pnpm start - 前台运行": {
-    "zh-CN": "# 或 pnpm start - 前台运行",
-    "en": "# Or pnpm start - foreground mode"
   },
   "PM2 进程管理（推荐生产环境）：": {
     "zh-CN": "PM2 进程管理（推荐生产环境）：",
@@ -1726,10 +1690,6 @@ export const WIZARD_MESSAGES = {
   "💡 后续如需全局安装 CLI，可运行：": {
     "zh-CN": "💡 后续如需全局安装 CLI，可运行：",
     "en": "💡 To install the CLI globally later:"
-  },
-  "# 在项目根目录执行，链接全局 CLI": {
-    "zh-CN": "# 在项目根目录执行，链接全局 CLI",
-    "en": "# Run in the project root to link the global CLI"
   },
   "📚 相关文档：": {
     "zh-CN": "📚 相关文档：",

@@ -483,22 +483,6 @@ export function turnPermissionSubject(turn: TurnAccessContext): PermissionSubjec
   });
 }
 
-export function resolveTurnContextValue(turn: TurnIngress, key: string): unknown {
-  const im = turn.origin.kind === 'im' ? turn.origin : undefined;
-  switch (key) {
-    case 'platform': return im?.platform;
-    case 'endpointKey': return im?.endpoint;
-    case 'messageId': return im?.messageId;
-    case 'sceneId': return im?.sceneId;
-    case 'senderId': return turn.principal.subjectId;
-    case 'scope': return im?.scope;
-    case 'sessionKey': return turn.session.key;
-    case 'turnId': return turn.identity.turnId;
-    case 'traceId': return turn.identity.traceId;
-    default: return turn.input.metadata?.[key];
-  }
-}
-
 function requireText(value: string, field: string): void {
   if (!value.trim()) throw new TypeError(`TurnIngress ${field} is required`);
 }

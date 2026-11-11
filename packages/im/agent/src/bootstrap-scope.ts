@@ -76,10 +76,6 @@ export function bootstrapSceneFromTurn(
   return { kind, master: turn?.principal.roles.includes('master') === true };
 }
 
-export function bootstrapSceneKey(scene: BootstrapScene): string {
-  return `${scene.kind}${scene.master ? ':master' : ''}`;
-}
-
 /**
  * Parse a scope list (`group, master-private`). Items are OR-ed; `a-b` means a AND b.
  * Unknown items are ignored; returns null when no valid item remains (annotation

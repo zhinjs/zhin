@@ -1,15 +1,12 @@
-import {
-  DefaultRequestHandler,
-  InMemoryTaskStore,
-  type A2ARequestHandler,
-} from '@a2a-js/sdk/server';
+import { DefaultRequestHandler, type A2ARequestHandler } from '@a2a-js/sdk/server';
 import { AGENT_CARD_PATH, type AgentCard } from '@a2a-js/sdk';
 import type { HttpRouteHost } from '@zhin.js/host-http-contract';
 import type { AgentHostPort } from '@zhin.js/agent/runtime';
 import { buildAgentCardForBinding } from './card-builder.js';
 import { ZhinA2AExecutor } from './agent-executor.js';
 import { handleAgentCard, handleJsonRpc, handleRest } from './http-handlers.js';
-import { verifyA2aBearer } from './auth.js';
+import { isLocalhost, verifyA2aBearer } from './auth.js';
+import { BoundedTaskStore } from './bounded-task-store.js';
 import type { RuntimeA2aMailboxConfig } from './mailbox-remote-transport.js';
 
 export interface RuntimeA2aConfig {
@@ -54,12 +51,15 @@ export function installRuntimeA2a(options: InstallRuntimeA2aOptions): () => void
     });
     stacks.set(agentName, {
       card,
-      handler: new DefaultRequestHandler(card, new InMemoryTaskStore(), executor),
+      handler: new DefaultRequestHandler(card, new BoundedTaskStore(), executor),
     });
   }
 
   const unregister = options.http.route('ALL', `${basePath}/*`, async (request, response, url) => {
-    if (token && !verifyA2aBearer(request, token)) {
+    // No token (non-production only): accept loopback callers alone, like the MCP Host,
+    // so a token-less dev instance is not open to the network.
+    const authenticated = token ? verifyA2aBearer(request, token) : isLocalhost(request);
+    if (!authenticated) {
       writeJson(response, 401, { error: 'Unauthorized - Bearer token required' });
       return;
     }

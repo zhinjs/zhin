@@ -171,6 +171,12 @@ export class ConsoleApp {
     return id;
   }
 
+  removeTool(id: string): void {
+    this.#assertActive();
+    this.#tools = this.#tools.filter((tool) => tool.id !== id);
+    this.#bump();
+  }
+
   getRouteTree(): RouteTreeNode[] {
     return buildRouteTree(this.#routes);
   }

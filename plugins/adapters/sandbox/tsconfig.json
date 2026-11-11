@@ -8,5 +8,5 @@
     "declarationMap": false
   },
   "include": ["src/**/*"],
-  "exclude": ["lib", "node_modules", "tests", "client", "dist", "adapters"]
+  "exclude": ["lib", "node_modules", "tests", "adapters"]
 }

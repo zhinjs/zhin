@@ -1,6 +1,6 @@
 /**
  * Canonical Segment[] log / debug preview (SSOT).
- * @see docs/architecture/segment-content-model.md
+ * @see ./types.ts (canonical Segment contract) and docs/concepts/message-flow.md
  */
 import { htmlToFallbackText } from '../html-to-text.js';
 import { readMentionName, readMentionTarget } from './mention.js';

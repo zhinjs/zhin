@@ -106,7 +106,7 @@ import { defineAgentPromptSection } from '@zhin.js/prompt-section';
 
 export default defineAgentPromptSection({
   title: 'Product language',
-  content: 'Use Workroom for a governed collaboration space.',
+  content: 'Call a shared multi-Bot group a Venue.',
   layer: 'context',
   order: 70,
   retention: 'preferred',
@@ -156,4 +156,4 @@ AI 会读取三层 Markdown 记忆文件：
 
 - [Agent 工具与技能](../authoring/agent-tools.md)：工具审批、Skill、子 Agent 的完整写法
 - [MCP 配置](../configuration/#mcpservers-外部-mcp-server)：接入外部 MCP 工具服务
-- [Agent 深入](../ai/agent.md)：一轮对话怎么运行、怎么取消，以及多 Agent 协作的 Workroom
+- [Agent 深入](../ai/agent.md)：一轮对话怎么运行、怎么取消，以及多 Agent 协作

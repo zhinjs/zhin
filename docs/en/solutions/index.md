@@ -19,7 +19,6 @@ You don't need to learn Zhin's package layout first. Find what you want to build
 | Operate and diagnose a deployed bot | [Console Admin path](/en/paths/console) | You can inspect endpoints, logs, capabilities, and Agent runs |
 | Operate one product through multiple accounts | [Run one product through multiple accounts](/en/solutions/multi-endpoint-operations) | Each account is diagnosable while business capabilities stay shared |
 | Give an Agent business context without excess authority | [Teach an Agent your business without widening its authority](/en/solutions/governed-agent) | Prompts, tools, approvals, and execution policy are independently auditable |
-| Use one GitHub repository as a collaboration space | [Use a GitHub repository as a Workroom](/en/solutions/github-workroom) | Repository events enter the right project, and the Workroom is the source of task state |
 | A personal schedule, reminder, and voice assistant | [Personal Assistant](/en/showcase/personal-assistant) | Messages, scheduled jobs, voice, and proactive delivery form one loop |
 | A multi-platform community bot | [Multi-platform Bot](/en/showcase/community-bot) | Business commands and components do not depend on one adapter |
 

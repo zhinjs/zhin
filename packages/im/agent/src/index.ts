@@ -49,7 +49,6 @@ export type {
 } from './event/turn-event.js';
 export {
   createTurnIngress,
-  resolveTurnContextValue,
   turnPermissionSubject,
 } from './turn/turn-ingress.js';
 export { executeAgentTurn } from './turn/execute-agent-turn.js';
@@ -190,7 +189,6 @@ export {
 } from './prompt/workspace-prompt.js';
 export type { WorkspacePromptRole } from './prompt/workspace-prompt.js';
 export { createUserProfileTool } from './tool/context-tools.js';
-export * from './turn/interaction-router.js';
 
 export {
   UserProfileStore,
@@ -621,8 +619,6 @@ export type {
 } from './seam/index.js';
 export { SeamProviderRegistry, SeamIntegration } from './seam/index.js';
 export { capabilitySeamToken } from './seam/index.js';
-export { BuiltinToolService } from './tool/builtin-tool-service.js';
-export { SkillRegistryAsService } from './skill/skill-registry-as-service.js';
 
 export { RESERVED_TOOL_NAMES, RESERVED_TOOL_NAME_PREFIXES } from './reserved-tools.js';
 
@@ -650,7 +646,6 @@ export {
   resolveAssistantConfig,
   resolveAssistantDefaultsConfig,
   resolveAssistantEventsConfig,
-  isAssistantEventsActive,
   createNotificationRouter,
   imNotifyToSendOptions,
   parseJobNotify,
@@ -664,7 +659,6 @@ export {
   parseScheduleAddFromToolArgs,
   parseScheduleAddFromRpcMessage,
   bootstrapAssistantHome,
-  isAssistantHomeActive,
   resolveAssistantHomeConfig,
 } from './assistant/index.js';
 export * from './schedule-domain/index.js';
@@ -738,7 +732,10 @@ export {
   STABLE_BOOTSTRAP_FILENAMES,
 } from './bootstrap.js';
 export {
-  scopeBootstrapText, bootstrapSceneFromTurn, bootstrapSceneKey, parseScopeList, sceneMatches,
+  scopeBootstrapText,
+  bootstrapSceneFromTurn,
+  parseScopeList,
+  sceneMatches,
 } from './bootstrap-scope.js';
 export type { BootstrapScene, BootstrapSceneKind, ScopedBootstrapText } from './bootstrap-scope.js';
 export { getFileMemoryContext, getMemoryDir } from './memory-layers.js';
@@ -756,7 +753,6 @@ export type { ImageAssetPublisher, PublishedImage, R2ImageStorageConfig } from '
 export { createLlmMediaPerceptionPort, resolvePerceptionConfig } from './media/index.js';
 export type { MediaPerception, MediaPerceptionPort, PerceptionMediaKind, ResolvedPerceptionConfig } from './media/index.js';
 
-export { filterImDeliveryContent } from './outbound/filter-im-delivery.js';
 
 export {
   loadMemoryLayers,
@@ -927,8 +923,6 @@ export {
   defineSkill,
   defineHook,
   defineEval,
-  disableTool,
-  normalizeToolDenylist,
   namespaceAuthoringName,
   slotNameFromFile,
   slotNameFromDir,
@@ -940,9 +934,6 @@ export type {
   AuthoringEvalContext,
   DiscoveredPluginAgentSurface,
 } from './authoring/index.js';
-export {
-  discoverPluginAgentSurface,
-} from './discovery/agent-surface.js';
 export {
   discoverWorkspaceAgents,
   type AgentMeta,

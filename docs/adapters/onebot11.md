@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/onebot11/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/onebot11/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=612131f6b42da380 -->
+<!-- sync-adapter-docs:sha256=d18d6615cfdbb3be -->
 
 # @zhin.js/adapter-onebot11
 
@@ -98,7 +98,7 @@ onebot11:
 | 类别 | 路径 |
 |------|------|
 | Permit 词汇 | `PERMITS.md` |
-| 平台工具 | `tools/set_title/index.ts` → `onebot11_set_title` |
+| 平台工具（1 个） | `agents/onebot11/skills/onebot11/tools/set_title/index.ts` → `onebot11_set_title` |
 | 技能说明 | `agents/onebot11/skills/onebot11/SKILL.md` |
 
 ## 迁移说明（Plugin Runtime）

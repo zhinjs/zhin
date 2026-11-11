@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/bilibili-live/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/bilibili-live/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=23e9e19c2a489c95 -->
+<!-- sync-adapter-docs:sha256=8506547ee80d809c -->
 
 # @zhin.js/adapter-bilibili-live
 
@@ -48,6 +48,12 @@ Zhin.js Bilibili 直播弹幕适配器（Plugin Runtime）：让 Bot 像主播�
 1. 你自己的 B 站直播间号（`roomId`，短号长号都行）
 2. 要让 Bot 发弹幕：你的账号 Cookie `SESSDATA` 与 `bili_jct`，放进 `.env`（已被 gitignore）：`BILIBILI_SESSDATA`、`BILIBILI_BILI_JCT`。只想让 Bot 听弹幕可以不填
 3. Agent 已启用（`ai.agent`）：弹幕窗口由 Agent 的 `mailbox.live` 驱动
+
+## 安装
+
+```bash
+pnpm add @zhin.js/adapter-bilibili-live
+```
 
 ## 最小配置
 

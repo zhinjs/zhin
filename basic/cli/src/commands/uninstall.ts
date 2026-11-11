@@ -1,123 +1,8 @@
 import { Command } from 'commander';
 import inquirer from 'inquirer';
-import chalk from 'chalk';
 import fs from 'fs-extra';
 import path from 'path';
-import { execSync } from 'child_process';
-import { formatCompact } from '@zhin.js/logger';
 import { logger } from '../utils/logger.js';
-
-
-
-
-function getServiceName(): string {
-  const pkgPath = path.join(process.cwd(), 'package.json');
-  if (fs.existsSync(pkgPath)) {
-    const pkg = fs.readJsonSync(pkgPath);
-    return pkg.name || 'zhin';
-  }
-  return 'zhin';
-}
-
-async function uninstallLinuxService(serviceName: string): Promise<void> {
-  const serviceFile = `/etc/systemd/system/${serviceName}.service`;
-  
-  if (!fs.existsSync(serviceFile)) {
-    logger.warn(formatCompact( { cmd: 'uninstall', op: 'service_not_installed' }));
-    return;
-  }
-
-  try {
-    // 停止服务
-    execSync(`sudo systemctl stop ${serviceName}`, { stdio: 'inherit' });
-    // 禁用服务
-    execSync(`sudo systemctl disable ${serviceName}`, { stdio: 'inherit' });
-    // 删除服务文件
-    execSync(`sudo rm ${serviceFile}`, { stdio: 'inherit' });
-    // 重新加载 systemd
-    execSync('sudo systemctl daemon-reload', { stdio: 'inherit' });
-    
-    logger.success('服务已卸载');
-  } catch (error: unknown) {
-    logger.error(`卸载服务失败: ${error instanceof Error ? error.message : String(error)}`);
-    process.exit(1);
-  }
-}
-
-async function uninstallMacService(serviceName: string): Promise<void> {
-  const plistFile = path.join(process.env.HOME!, 'Library', 'LaunchAgents', `${serviceName}.plist`);
-  
-  if (!fs.existsSync(plistFile)) {
-    logger.warn(formatCompact( { cmd: 'uninstall', op: 'service_not_installed' }));
-    return;
-  }
-
-  try {
-    // 卸载服务
-    execSync(`launchctl unload ${plistFile}`, { stdio: 'inherit' });
-    // 删除 plist 文件
-    await fs.remove(plistFile);
-    
-    logger.success('服务已卸载');
-  } catch (error: unknown) {
-    logger.error(`卸载服务失败: ${error instanceof Error ? error.message : String(error)}`);
-    process.exit(1);
-  }
-}
-
-async function uninstallWindowsService(serviceName: string): Promise<void> {
-  try {
-    // 检查服务是否存在
-    const services = execSync('sc query', { encoding: 'utf-8' });
-    if (!services.includes(serviceName)) {
-      logger.warn(formatCompact( { cmd: 'uninstall', op: 'service_not_installed' }));
-      return;
-    }
-
-    // 停止服务
-    execSync(`sc stop ${serviceName}`, { stdio: 'inherit' });
-    // 删除服务
-    execSync(`sc delete ${serviceName}`, { stdio: 'inherit' });
-    
-    logger.success('服务已卸载');
-  } catch (error: unknown) {
-    logger.error(`卸载服务失败: ${error instanceof Error ? error.message : String(error)}`);
-    process.exit(1);
-  }
-}
-
-const serviceCommand = new Command('service')
-  .description('卸载系统服务')
-  .action(async () => {
-    const serviceName = getServiceName();
-    
-    const { confirm } = await inquirer.prompt([
-      {
-        type: 'confirm',
-        name: 'confirm',
-        message: `确认卸载服务 "${serviceName}"?`,
-        default: false
-      }
-    ]);
-
-    if (!confirm) {
-      logger.info(formatCompact( { cmd: 'uninstall', op: 'cancelled' }));
-      return;
-    }
-
-    const platform = process.platform;
-    
-    if (platform === 'linux') {
-      await uninstallLinuxService(serviceName);
-    } else if (platform === 'darwin') {
-      await uninstallMacService(serviceName);
-    } else if (platform === 'win32') {
-      await uninstallWindowsService(serviceName);
-    } else {
-      logger.error(`不支持的平台: ${platform}`);
-      process.exit(1);
-    }
-  });
 
 const pluginCommand = new Command('plugin')
   .description('卸载插件')
@@ -178,7 +63,6 @@ const adapterCommand = new Command('adapter')
   });
 
 export const uninstallCommand = new Command('uninstall')
-  .description('卸载服务、插件或适配器')
-  .addCommand(serviceCommand)
+  .description('卸载插件或适配器（系统服务请用 zhin service uninstall）')
   .addCommand(pluginCommand)
   .addCommand(adapterCommand);

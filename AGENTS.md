@@ -20,7 +20,6 @@
 3. [docs/contributing/repo-structure.md](docs/contributing/repo-structure.md)
 4. [README.md](README.md)
 5. 与当前改动最近的包 README 或 docs 页面
-6. 符号/调用链速查：`.codegraph/MEMORY.md`（CodeGraph 本地索引，需先 `codegraph init`；不入库）
 
 如果任务属于插件实现，再读 [.github/instructions/zhin-plugin.instructions.md](.github/instructions/zhin-plugin.instructions.md)。
 
@@ -58,9 +57,9 @@ plugin-runtime + feature-kit ─────────────→ runtime 
 | AI 引擎 | `@zhin.js/ai`（含 `provider-auth` 与 `model-registry`） | Provider、认证、模型注册表、agentLoop、会话、记忆；无 IM 概念 |
 | IM 组装 | `@zhin.js/core`（含 `handler`、`actor` 与 `@zhin.js/core/runtime`） | 组合 Adapter、Command、Component、Middleware、多 Bot 同场 Venue、入站脊柱（`inbound-spine`）与 Database/Outbound/Inbox Host |
 | Agent Harness | `@zhin.js/harness` | Actor 邮局（Mail / Mailbox / Engagement）、权限单调衰减、预算守恒、GuardKernel 与 Engagement Journal（ADR 0048） |
-| Agent | `@zhin.js/agent`（含 `@zhin.js/agent/runtime`） | 统一信箱入站脊柱（`unified-mailbox-spine`）、ZhinAgent、多模型编排、安全沙箱、MCP 与 Agent/Inference/Workroom Host |
-| Console | `@zhin.js/console-protocol`（含 `contract`/`review-kit`）、`@zhin.js/pagemanager`、`@zhin.js/client` | Server-Driven Blueprints（`definePageBlueprint`）、Web / IM Card / CLI TUI 多端投影与 Console 外壳（`renderConsoleShell`） |
-| 门面与运行时 | `zhin.js`、`@zhin.js/runtime`（含 `runtime/host`）、`@zhin.js/cli` | 公共入口、generation 编排、HTTP/Protocol/Speech/HTML-Renderer Host 和极薄进程装配 |
+| Agent | `@zhin.js/agent`（含 `@zhin.js/agent/runtime`） | 统一信箱入站脊柱（`unified-mailbox-spine`）、ZhinAgent、多模型编排、安全沙箱、MCP 与 Agent/Inference Host |
+| Console | `@zhin.js/console-protocol`、`@zhin.js/console-contract`、`@zhin.js/page`、`@zhin.js/pagemanager`、`@zhin.js/client` | RPC/事件协议常量、Server-Driven Blueprints（`definePageBlueprint`）、Web / IM Card / CLI TUI 多端投影与 Console 外壳（`renderPageShell` / `renderConsoleIndex`） |
+| 门面与运行时 | `zhin.js`、`@zhin.js/runtime`（含 `config-file` / `isolate` 子路径）、`@zhin.js/cli` | 公共入口、generation 编排、Root Host 与进程生命周期；HTTP/Protocol/Speech/HTML-Renderer Host 由 CLI 极薄进程装配 |
 
 `pnpm check:architecture` 强制依赖方向。`basic/cli` 是唯一 composition root，可装配 IM、
 Agent 与 Console Host；其他低层包不跨层取用上层实现。
@@ -96,7 +95,7 @@ Agent 与 Console Host；其他低层包不跨层取用上层实现。
 - `pnpm check:plugin-capability-publish`：插件 `package.json` 须发布实际存在的能力目录与文档，并用 `prepublishOnly` 先构建。
 - `pnpm --filter <pkg> build|test`：只验证单个包。
 - `pnpm check:l4-ci`：PR 门禁 L4 确定性子集（编排/记忆/full-bot 契约）。
-- `pnpm check:l4`：L4 全维度验收（编排 + 语义记忆 + full-bot 契约 + MCP 鉴权 + adapter L4；实机 IM 项 `L4_SKIP_PLATFORM=1` 跳过）；目前未接入任何 workflow，需本地手动运行。
+- `pnpm check:l4`：L4 全维度验收（编排 + 语义记忆 + full-bot 契约 + MCP 鉴权 + adapter L4；实机 IM 项 `L4_SKIP_PLATFORM=1` 跳过）；nightly workflow（`full-validation.yml` 的 `checks` 作业）跑全量。
 - 暂无官方 Docker 镜像；自建容器使用 [`docs/public/deploy/production/`](docs/public/deploy/production/) 中由 `pnpm check:deployment-templates` 校验的模板，并参考[生产部署与运维](docs/operations/production.md)。
 - `pnpm check:install-size`：zhin.js IM 核心 production `node_modules` ≤10MB（ADR 0019）。
 - `pnpm check:install-tiers-ssot`：根 `README` Install tiers 表与 `docs/snippets/install-tiers.md` 一致。
@@ -118,7 +117,7 @@ Agent 与 Console Host；其他低层包不跨层取用上层实现。
 - 代级运行时状态必须通过 snapshot Resource / 当前 operation 的 Generation View 解析；禁止新增裸模块级单例或 latest-value stack；`createGenerationStore` 已删除并由门禁禁止回归。WS 类端点的 start/stop/重连/心跳统一走 `createEndpointLifecycle`（`zhin.js/adapter`），不要手写状态机。
 - Node 侧源码放 `src/`，产物放 `lib/`；浏览器侧源码放 `client/`，产物放 `dist/`。
 - 新增 workspace 包必须落在 `pnpm-workspace.yaml` 覆盖的目录里，并带独立 `package.json`。
-- 依赖策略受 `pnpm check:dependency-policy` 门禁约束；根 `pnpm-workspace.yaml` 的 `overrides` 承担大量安全版本抬升，不要随手删改。
+- 依赖策略受 `pnpm check:dependency-policy` 门禁约束；根 `package.json` 的 `pnpm.overrides` 承担大量安全版本抬升（pnpm 9 只读取这里，不读取 `pnpm-workspace.yaml` 的 `overrides`），不要随手删改。
 
 ## 测试约定
 
@@ -131,7 +130,7 @@ Agent 与 Console Host；其他低层包不跨层取用上层实现。
 
 - 密钥走环境变量并在 `zhin.config.yml` 中以 `${VAR}` 引用（如 `apiKey: ${AI_API_KEY}`），不要硬编码。
 - Agent 执行安全：builtin 工具默认 `execSecurity: allowlist`、`execApprovalMode: ask`；工具安全检查统一走 `packages/im/agent/src/security/policy-facade.ts` 的 `runToolPolicies`，新增策略只在声明式策略表注册，builtin 工具不再手写策略链。
-- 新增依赖时注意 `pnpm-workspace.yaml` 中已有的安全 `overrides`（undici / hono / tar / js-yaml / nodemailer 等大量抬升条目）。
+- 新增依赖时注意根 `package.json` 的 `pnpm.overrides` 中已有的安全抬升条目（undici / hono / tar / js-yaml / nodemailer 等）。
 
 ## 任务路由
 
@@ -148,28 +147,28 @@ Agent 与 Console Host；其他低层包不跨层取用上层实现。
 
 ## 高价值路径
 
-- packages/im/plugin-runtime/src/plugin.ts（`definePlugin`、`definePluginCapabilityGraph`、`defineResource`）
+- packages/im/plugin-runtime/src/plugin.ts（`definePlugin`、`definePluginCapabilityGraph`）；Resource Token 在同目录 `token.ts`（`createToken`）
 - packages/im/core/src/feature/adapter.ts
 - packages/im/core/src/plugin-runtime/im/inbound-spine.ts（IM 入站准入、去重、分发与渐进回复脊柱）
 - packages/im/core/src/plugin-runtime/im/inbound-runtime.ts（入站编排、交互协调器与会话事实运行时）
 - packages/im/agent/src/plugin-runtime/ingress/unified-mailbox-spine.ts（统一单会话串行信箱、回合执行与主动唤醒脊柱）
-- packages/console/protocol/src/contract/page.ts（`definePage`、`definePageBlueprint`、`projectBlueprintToImCard`、`projectBlueprintToCliPanel`）
-- packages/console/pagemanager/src/shell/page-renderer.ts（`renderConsoleShell` 外壳与 Blueprint 挂载）
-- packages/im/runtime/src/host/（HTTP / Protocol / Speech / HTML-Renderer Host 安装器）
-- packages/im/agent/src/orchestrator/
+- packages/console/plugin-contract/src/page.ts（`definePage`、`definePageBlueprint`、`projectBlueprintToImCard`、`projectBlueprintToCliPanel`）
+- packages/console/pagemanager/src/shell/page-renderer.ts（`renderPageShell` / `renderConsoleIndex` 外壳与 Blueprint 挂载）
+- packages/im/runtime/src/host/（Root Host、进程生命周期、readiness、start options）；HTTP / Protocol / Speech / HTML-Renderer Host 安装器在 packages/host/http/src/host-installer.ts 与 basic/cli/src/plugin-runtime/*-host-installer.ts
+- packages/im/agent/src/plugin-runtime/（`agent-runtime.ts`、`full-agent-turn-engine.ts`：Agent 运行时与回合引擎）
 - packages/im/agent/src/security/（工具安全检查统一走 `policy-facade.ts` 的 `runToolPolicies`；新增策略只在声明式策略表注册，builtin 工具不再手写策略链）
 - packages/im/agent/src/bootstrap.ts
 - packages/im/zhin/src/index.ts
-- packages/im/zhin/src/setup/register-chat-message-store.ts
-- packages/im/ai/src/llm/api-registry.ts
-- packages/im/agent/src/service.ts（`refreshLlmApiRegistry` / `hasExplicitModelList`）
+- packages/im/im-contract/src/conversation-store.ts（`CONVERSATION_EVENT_MODEL`；canonical `conversation_events` 在 basic/cli/src/plugin-runtime/start-command.ts 由 Database Host 装配）
+- packages/im/ai/src/provider/（Provider driver / runtime / selection）与 packages/im/ai/src/llm/llm-api-runtime.ts（流式调用契约）
+- packages/im/agent/src/service.ts（`AIService`）与 packages/im/agent/src/model-runtime/
 - packages/toolkit/scaffold-wizard/src/（`adapter.ts`、`ai.ts`、`apply.ts` — 改向导时优先改这里）
 - packages/toolkit/create-zhin/src/workspace.ts（生成项目文件树，不含向导逻辑）
 - basic/cli/src/commands/setup.ts（已有项目增量向导入口）
 
 ## 现成自定义能力
 
-- 自定义 agents 在 .github/agents/ 和仓库根 agents/。
+- 自定义 agents 在 .github/agents/。
 - 自定义 skills 在 .github/skills/。
 - 插件文件专用说明在 .github/instructions/zhin-plugin.instructions.md。
 

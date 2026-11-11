@@ -82,19 +82,6 @@ describe('config documentation alignment', () => {
     }
   });
 
-  it('解决方案明确 Workroom 与 GitHub Project Item 的权威边界', () => {
-    for (const relativePath of [
-      'docs/solutions/github-workroom.md',
-      'docs/en/solutions/github-workroom.md',
-    ]) {
-      const content = fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
-      expect(content, relativePath).toContain('Workroom');
-      expect(content, relativePath).toContain('Project Item');
-      expect(content, relativePath).toMatch(/Integration Port/);
-      expect(content, relativePath).toMatch(/task-key/);
-    }
-  });
-
   it('minimal-bot 与 Stable 文档契约一致', () => {
     expect(minimalConfig).not.toMatch(/toolSearch:/);
     expect(minimalConfig).toMatch(/plugins:\s*\{\}/);
@@ -132,10 +119,11 @@ describe('config documentation alignment', () => {
     }
   });
 
-  it('Console 路径把 Workroom Catalog 与 ai 配置分离', () => {
+  it('Console 路径说明协作图谱只读，Venue 配置来自 ai.venues', () => {
     for (const content of [consolePathMd, consolePathEnMd]) {
-      expect(content).toMatch(/Runtime Catalog/);
-      expect(content).toContain('ai.workrooms');
+      expect(content).toContain('ai.venues');
+      expect(content).toContain('engagement_events');
+      expect(content).not.toContain('ai.workrooms');
     }
   });
 });

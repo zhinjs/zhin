@@ -36,9 +36,17 @@ group-suite:
   rankSize: 10
   teachMaxPerGroup: 200
   teachCooldownMs: 3000
-  teachAllowRegex: true
+  teachAllowRegex: false # 默认关闭；见下方“正则问答”
   teachPageSize: 10
 ```
+
+### 正则问答
+
+`teachAllowRegex` 默认 `false`：正则规则会对每条入站消息执行，开启前请确认群成员可信。开启后：
+
+- `teach-regex` 只接受结构安全的表达式。带量词的分组内部不能再有量词或 `|`（如 `(\w+\s?)+`、`(a|aa)+`、`(.*a){10}` 会被拒绝，可改用字符类 `[ab]+`），不支持反向引用与环视，一条表达式最多 3 个 `*` / `+` / `{n,m}`。
+- 正则规则只对不超过 200 个字符的消息尝试匹配；精确问答不受此限制。
+- 关闭后已保存的正则规则保留但不再触发；旧版本存下的不安全表达式在匹配时会被跳过。
 
 约束以 [schema.json](./schema.json) 为准。启用关键词回复时默认要求 Database Host 的原子
 状态服务；没有该服务会启动失败并提示原因。演示环境可显式设置 `ephemeralKeywords: true`，

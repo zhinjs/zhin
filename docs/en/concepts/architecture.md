@@ -87,21 +87,21 @@ Moving further up, `@zhin.js/core` assembles the adapter / command / component /
 | AI engine | `@zhin.js/ai` (including provider-auth & model-registry) | Provider, auth, model registry, agentLoop, sessions, memory -- no IM concepts |
 | Agent Harness | `@zhin.js/harness` | Multi-agent collaboration microkernel: per-actor serial Mailbox, Authority attenuation, conserved BudgetLedger, deterministic GuardKernel, shared Blackboard, and single-authority `engagement_events` Journal |
 | IM layer | `@zhin.js/core` (including handler, actor, and `@zhin.js/core/runtime` IM Host installers) | Plugin, inbound spine (`inbound-spine`), outbound pipeline, command dispatch, multi-bot collaboration Venues, and Database/Outbound/Inbox Host implementations |
-| Agent | `@zhin.js/agent` (including `@zhin.js/agent/runtime` Agent/Inference/Workroom Host installers) | Unified mailbox ingress spine (`unified-mailbox-spine`), multi-model orchestration, collaboration tools, tool security policies, MCP client |
+| Agent | `@zhin.js/agent` (including the `@zhin.js/agent/runtime` Agent/Inference Host runtime) | Unified mailbox ingress spine (`unified-mailbox-spine`), multi-model orchestration, collaboration tools, tool security policies, MCP client |
 | Console | `@zhin.js/console-protocol` (including contract / review-kit), `@zhin.js/pagemanager`, `@zhin.js/client` | Server-Driven Blueprints (`definePageBlueprint`), multi-surface projection (Web / IM Card / CLI TUI), Console shell rendering (`renderConsoleShell`), and browser SDK |
 | Facade | `zhin.js` | Re-exports the core authoring surface; `zhin.js/agent`, `zhin.js/ai` sub-paths exposed on demand |
-| Runtime | `@zhin.js/runtime` (including `@zhin.js/runtime/host` HTTP/Protocol/Speech/HTML-Renderer Host installers) | `RootRuntime`: scans the project graph, composes configuration, executes generation transactions, HMR, and shared Host lifecycle |
-| Assembly | `@zhin.js/cli` | Thin composition root -- `zhin runtime start` wires domain Hosts into a runnable process |
+| Runtime | `@zhin.js/runtime` (including the `/config-file` and `/isolate` subpaths) | `RootRuntime`: scans the project graph, composes configuration, executes generation transactions, HMR, and shared Host lifecycle |
+| Assembly | `@zhin.js/cli` | Composition root -- `zhin runtime start` wires domain Hosts into a runnable process and owns the installers for the generic HTTP/Protocol (MCP, A2A)/Speech/HTML-Renderer/Schedule Hosts (`basic/cli/src/plugin-runtime/*-host-installer.ts`) |
 
 ## Composition root: `@zhin.js/cli`
 
-The framework itself does not "start" anything -- each layer only provides mechanisms. The entry code that assembles these mechanisms into a runnable process lives in `@zhin.js/cli` (`basic/cli/src/commands/runtime.ts` and `basic/cli/src/plugin-runtime/`), the only composition root allowed to wire across all layers. Domain-specific Host implementations live in their owning domain packages (`@zhin.js/core/runtime`, `@zhin.js/agent/runtime`, `@zhin.js/runtime/host`, and `@zhin.js/pagemanager`) so the CLI holds no domain state machines.
+The framework itself does not "start" anything -- each layer only provides mechanisms. The entry code that assembles these mechanisms into a runnable process lives in `@zhin.js/cli` (`basic/cli/src/commands/runtime.ts` and `basic/cli/src/plugin-runtime/`), the only composition root allowed to wire across all layers. IM and Agent Host implementations live in their owning domain packages (`@zhin.js/core/runtime`, `@zhin.js/agent/runtime`, and `@zhin.js/pagemanager`) so the CLI holds no domain state machines; the installers for the generic HTTP, Protocol, Speech, and HTML-Renderer Hosts stay in the CLI's own `basic/cli/src/plugin-runtime/`.
 
 `zhin runtime start` does the following:
 
 1. Wraps the single YAML/JSON Root config with `createConfigDocument` (`@zhin.js/runtime`) into a transactional `ConfigDocumentPort`;
 2. Creates `RootRuntime` (`@zhin.js/runtime`), injecting the module loader (in dev mode: `NativeDevelopmentModuleRuntime`), config port, and Root resource installer;
-3. Assembles Host-level resources via `installResources`: HTTP/Protocol/Speech/HTML-Renderer Hosts (`@zhin.js/runtime/host`), Database/Outbound/Inbox/IM Hosts (`@zhin.js/core/runtime`), Agent/Inference/Workroom Hosts (`@zhin.js/agent/runtime`), and Console shell & Blueprint routes (`@zhin.js/pagemanager`);
+3. Assembles Host-level resources via `installResources`: HTTP/Protocol/Speech/HTML-Renderer Hosts (the CLI's `*-host-installer.ts`), Database/Outbound/Inbox/IM Hosts (`@zhin.js/core/runtime`), Agent/Inference Hosts (`@zhin.js/agent/runtime`), and Console shell & Blueprint routes (`@zhin.js/pagemanager`);
 4. After startup, attaches `HmrCoordinator` -- file changes trigger generation reloads or process restarts.
 
 A user project's entry point can therefore be minimal. `examples/minimal-bot/package.json`:

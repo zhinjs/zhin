@@ -152,8 +152,8 @@ Webhook 接收确认不等于业务处理完成；需要幂等性的业务应自
 
 | Kind | Path |
 |------|------|
-| Platform tools (10) | `tools/`（invite / pin / admins / sticker / poll 等） |
-| Skill doc | `agents/telegram/skills/telegram-chat-admin/SKILL.md`, `agents/telegram/skills/telegram-messages/SKILL.md` |
+| Platform tools (10) | `agents/telegram/skills/telegram-{chat-admin,group-permissions,messages}/tools/`（invite / pin / admins / sticker / poll 等） |
+| Skill doc | `agents/telegram/skills/telegram-chat-admin/SKILL.md`, `agents/telegram/skills/telegram-group-permissions/SKILL.md`, `agents/telegram/skills/telegram-messages/SKILL.md` |
 
 ## Console 页面
 

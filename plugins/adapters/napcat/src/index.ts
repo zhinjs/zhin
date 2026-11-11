@@ -73,5 +73,3 @@ export {
 } from './ws-transport.js';
 
 export { verifyNapCatAccessToken } from './wss-auth.js';
-
-export { readRequestBody } from './webhook.js';

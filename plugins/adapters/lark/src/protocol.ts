@@ -6,7 +6,7 @@ import { validateLarkWebApiProxy } from './web-api-proxy.js';
  * Canonicalization is owned by gateway/core before endpoint.send.
  */
 
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { createDecipheriv, createHash, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import { EndpointDeliveryError, isMediaRef, type ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -88,6 +88,8 @@ export interface LarkEventBody {
   readonly ts?: string;
   readonly type?: string;
   readonly challenge?: string;
+  /** Present instead of every other field when the app has an Encrypt Key. */
+  readonly encrypt?: string;
   readonly event?: {
     readonly sender?: LarkMessage['sender'];
     readonly message?: LarkMessage;
@@ -273,6 +275,22 @@ export function verifySignature(
   }
 }
 
+/**
+ * Decrypt an `{"encrypt": "..."}` webhook payload (Lark/Feishu open-platform
+ * spec): key = SHA-256(Encrypt Key), base64 payload = 16-byte IV followed by
+ * AES-256-CBC ciphertext with PKCS#7 padding. Throws when the payload cannot
+ * be decrypted with this key.
+ */
+export function decryptLarkEvent(encryptKey: string, encrypted: string): string {
+  const payload = Buffer.from(encrypted, 'base64');
+  if (payload.length <= 16 || (payload.length - 16) % 16 !== 0) {
+    throw new Error('Malformed encrypted Lark event');
+  }
+  const key = createHash('sha256').update(encryptKey).digest();
+  const decipher = createDecipheriv('aes-256-cbc', key, payload.subarray(0, 16));
+  return Buffer.concat([decipher.update(payload.subarray(16)), decipher.final()]).toString('utf8');
+}
+
 /** timing-safe 比较 webhook verification token（长度不同快速失败）。 */
 export function verifyToken(token: string, expected: string): boolean {
   try {
@@ -447,21 +465,3 @@ export function headerValue(
   return value ?? '';
 }
 
-export async function readTextBody(
-  request: IncomingMessage,
-  options: { readonly limit?: number } = {},
-): Promise<string> {
-  const limit = options.limit ?? 1_048_576;
-  const chunks: Buffer[] = [];
-  let size = 0;
-  for await (const chunk of request) {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    size += buffer.length;
-    if (size > limit) {
-      request.destroy();
-      throw new Error(`Request body exceeds ${limit} bytes`);
-    }
-    chunks.push(buffer);
-  }
-  return Buffer.concat(chunks).toString('utf8');
-}

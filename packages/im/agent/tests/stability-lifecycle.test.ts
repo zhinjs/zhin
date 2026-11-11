@@ -2,13 +2,10 @@ import type { FixtureTextProvider } from '../../ai/tests/helpers/text-provider-f
 /**
  * ADR 0014 P2-2 — 稳定性生命周期集成测试
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { ZhinAgent } from '../src/zhin-agent/index.js';
 import {MemoryAgentSessionStore} from '@zhin.js/ai';
 import { wireMockLlmApi } from './helpers/mock-llm-api.js';
-import { AgentCompactionRuntime } from '../src/memory/compaction-runtime.js';
-
-import { collectStabilityMetrics, startStabilityMonitor } from '../src/utils/memory-pressure.js';
 
 function mockProvider(): FixtureTextProvider & { dispose: ReturnType<typeof vi.fn> } {
   const dispose = vi.fn();
@@ -17,12 +14,6 @@ function mockProvider(): FixtureTextProvider & { dispose: ReturnType<typeof vi.f
 }
 
 describe('stability lifecycle (ADR 0014 P2-2)', () => {
-  let compactionRuntime: AgentCompactionRuntime;
-
-  beforeEach(() => {
-    compactionRuntime = new AgentCompactionRuntime();
-  });
-
   describe('dispose-cascade', () => {
     it('ZhinAgent.dispose 后 compaction 状态清空', async () => {
       const provider = mockProvider();
@@ -48,28 +39,6 @@ describe('stability lifecycle (ADR 0014 P2-2)', () => {
       expect(store.sessionCount).toBe(1);
       store.dispose();
       expect(store.sessionCount).toBe(0);
-    });
-  });
-
-  describe('memory-pressure', () => {
-    it('collectStabilityMetrics 返回关键计数', async () => {
-      const metrics = await collectStabilityMetrics(compactionRuntime, { includeRss: true });
-      expect(metrics.compactionStates).toBeGreaterThanOrEqual(0);
-      expect(metrics.rssMb).toBeGreaterThan(0);
-    });
-
-    it('startStabilityMonitor 可启动并停止', () => {
-      const stop = startStabilityMonitor({
-        compactionRuntime,
-        intervalMs: 60_000,
-        collectors: [{
-          name: 'compactionStates',
-          collect: () => compactionRuntime.stateCount,
-          threshold: 1,
-        }],
-      });
-      expect(typeof stop).toBe('function');
-      stop();
     });
   });
 });

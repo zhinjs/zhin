@@ -14,7 +14,6 @@
     "components/**/*",
     "lib/**/*.ts",
     "lib/**/*.tsx",
-    "client/**/*",
     "agents/**/*.ts",
     "tests/**/*"
   ],

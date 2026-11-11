@@ -2,14 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { componentHostToken, createCapabilitySlot, createSnapshotView, rootPluginId, type ComponentHost, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { ComponentIndex, componentFeatureId, defineComponent } from '@zhin.js/component';
 import type { ConversationRef } from '@zhin.js/im-contract';
-import { compiler } from '@zhin.js/kernel';
+import { renderTemplatePaths } from '@zhin.js/kernel';
 import { OutboundRenderer } from '../../src/plugin-runtime/im/outbound-renderer.js';
 import { component, type IncomingContext, type SendContent } from '../../src/plugin-runtime/im/contracts.js';
 
 const rootId = 'plugin:root';
 
 function createHost(): ComponentHost {
-  return { compileTemplate: (text, ctx) => compiler(text, { ...ctx }) };
+  return { compileTemplate: (text, ctx) => renderTemplatePaths(text, { ...ctx }) };
 }
 
 function snapshotWithHost(): RuntimeSnapshot {
@@ -49,14 +49,14 @@ const incoming: IncomingContext = {
 describe('OutboundRenderer template compilation', () => {
   const renderer = new OutboundRenderer();
 
-  it('evaluates ${expr} in plain string content', async () => {
+  it('never evaluates ${expr} in plain string content', async () => {
     const result = await renderer.render('1+1=${1+1}', {
       requester: requester,
       snapshot: snapshotWithHost(),
       conversation: conversation,
       incoming: incoming,
     });
-    expect(result).toBe('1+1=2');
+    expect(result).toBe('1+1=${1+1}');
   });
 
   it('leaves plain strings without ${} unchanged', async () => {
@@ -69,7 +69,7 @@ describe('OutboundRenderer template compilation', () => {
     expect(result).toBe('hello world');
   });
 
-  it('evaluates ${expr} in text segment data', async () => {
+  it('leaves expressions in text segment data unchanged and substitutes context paths', async () => {
     const seg = { type: 'text', data: { text: '结果=${2*3}' } };
     const result = await renderer.render(seg, {
       requester: requester,
@@ -77,7 +77,13 @@ describe('OutboundRenderer template compilation', () => {
       conversation: conversation,
       incoming: incoming,
     });
-    expect(result).toEqual({ type: 'text', data: { text: '结果=6' } });
+    expect(result).toEqual({ type: 'text', data: { text: '结果=${2*3}' } });
+    expect(await renderer.render({ type: 'text', data: { text: '平台=${adapter}' } }, {
+      requester: requester,
+      snapshot: snapshotWithHost(),
+      conversation: conversation,
+      incoming: incoming,
+    })).toEqual({ type: 'text', data: { text: '平台=sandbox' } });
   });
 
   it('passes non-text segments through unchanged', async () => {
@@ -93,7 +99,7 @@ describe('OutboundRenderer template compilation', () => {
 
   it('compiles templates inside arrays', async () => {
     const content = [
-      { type: 'text', data: { text: '${1+1}' } },
+      { type: 'text', data: { text: '${1+1} ${kind}' } },
       { type: 'image', data: { url: 'a.png' } },
     ] as const;
     const result = await renderer.render(content as any, {
@@ -103,20 +109,20 @@ describe('OutboundRenderer template compilation', () => {
       incoming: incoming,
     });
     expect(result).toEqual([
-      { type: 'text', data: { text: '2' } },
+      { type: 'text', data: { text: '${1+1} group' } },
       { type: 'image', data: { url: 'a.png' } },
     ]);
   });
 
   it('does not spend component recursion depth on nested plain arrays', async () => {
-    let content: SendContent = 'value=${1+1}';
+    let content: SendContent = 'value=${kind}';
     for (let index = 0; index < 80; index++) content = [content];
     expect(await renderer.render(content, {
       requester: requester,
       snapshot: snapshotWithHost(),
       conversation: conversation,
       incoming: incoming,
-    })).toEqual(['value=2']);
+    })).toEqual(['value=group']);
   });
 
   it('rejects direct and indirect array cycles without rejecting shared sibling arrays', async () => {
@@ -162,14 +168,28 @@ describe('OutboundRenderer template compilation', () => {
     await expect(renderer.render(componentCycle, { requester: owner, snapshot: snapshot })).rejects.toThrow('Cyclic SendContent array');
   });
 
-  it('blocks dangerous globalThis access via sandbox', async () => {
-    const result = await renderer.render('${globalThis}', {
+  it('leaves globals, calls and unknown names exactly as written', async () => {
+    for (const text of [
+      '${globalThis}', '${process.env.HOME}', "${sender.constructor.constructor('return process')()}",
+      'price is ${amount} USD', 'echo ${HOME:-/root} && for (const x of xs) { console.log(`${x + 1}`) }',
+    ]) {
+      expect(await renderer.render(text, {
+        requester: requester,
+        snapshot: snapshotWithHost(),
+        conversation: conversation,
+        incoming: incoming,
+      })).toBe(text);
+    }
+  });
+
+  it('inserts echoed user content verbatim without rescanning it', async () => {
+    const result = await renderer.render('你说了: ${content}', {
       requester: requester,
       snapshot: snapshotWithHost(),
       conversation: conversation,
-      incoming: incoming,
+      incoming: { ...incoming, content: '${sender.id} ${1+1}' },
     });
-    expect(result).not.toContain('[object');
+    expect(result).toBe('你说了: ${sender.id} ${1+1}');
   });
 
   it('passes ${} through unchanged when ComponentHost is absent', async () => {
@@ -282,7 +302,7 @@ describe('OutboundRenderer template compilation', () => {
         snapshot: snapshotWithHost(),
         conversation: conversation,
       });
-      expect(result).toBe('undefined');
+      expect(result).toBe('${sender}');
     });
   });
 });

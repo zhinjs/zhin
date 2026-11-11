@@ -47,8 +47,8 @@ _避免使用_：import map、peer shim
 
 ## 示例对话
 
-> **开发者：** “适配器可以静态调用 `PageManager.addEntry` 吗？”
-> **领域专家：** “不可以。应该使用 `web` 上下文里的实例。**PageManager** 拥有自己的 **EntryStore**，不再提供静态注册路径。”
+> **开发者：** “适配器可以调用 `addEntry` 注册页面吗？”
+> **领域专家：** “不可以，已经没有命令式注册路径。在插件包的 `pages/<name>/index.ts|tsx` 里导出 `definePage` 元数据与默认导出，由 `@zhin.js/page` 按约定发现；**Console Entry** 是这些页面经 `GET /entries` 投影出来的结果。”
 
 ## 已标记歧义
 

@@ -196,6 +196,75 @@ export function resolveEntryRegister(
   };
 }
 
+interface EntryRegistration {
+  readonly routes: Set<string>;
+  readonly tools: Set<string>;
+}
+
+/**
+ * What each entry registered, per host API object. Reloading with the same `hostApi`
+ * diffs against this so routes/tools of entries that disappeared can be removed.
+ */
+const registrationsByHost = new WeakMap<PluginRegisterHostApi, Map<string, EntryRegistration>>();
+
+function registrationsOf(hostApi: PluginRegisterHostApi): Map<string, EntryRegistration> {
+  let registrations = registrationsByHost.get(hostApi);
+  if (!registrations) {
+    registrations = new Map();
+    registrationsByHost.set(hostApi, registrations);
+  }
+  return registrations;
+}
+
+function toolSlug(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "tool";
+}
+
+function removeRegistration(hostApi: PluginRegisterHostApi, stale: EntryRegistration, keep?: EntryRegistration): void {
+  for (const path of stale.routes) {
+    if (!keep?.routes.has(path)) hostApi.removeRoute?.(path);
+  }
+  for (const id of stale.tools) {
+    if (!keep?.tools.has(id)) hostApi.removeTool?.(id);
+  }
+}
+
+/** Host API view that records what one entry registers and keeps its tool ids stable. */
+function trackEntryRegistration(
+  hostApi: PluginRegisterHostApi,
+  entry: ConsoleClientEntry,
+  previous: EntryRegistration | undefined,
+  current: EntryRegistration,
+): PluginRegisterHostApi {
+  const unnamedTools = new Map<string, number>();
+  return {
+    ...hostApi,
+    addRoute(input) {
+      current.routes.add(input.path);
+      hostApi.addRoute(input);
+    },
+    addTool(input) {
+      let id = input.id;
+      if (!id) {
+        // Derive the id from the entry instead of a random suffix, so a reload
+        // addresses the same tool rather than adding a duplicate.
+        const slug = toolSlug(input.name);
+        const seen = unnamedTools.get(slug) ?? 0;
+        unnamedTools.set(slug, seen + 1);
+        id = `${entry.id}:${slug}${seen === 0 ? "" : `-${seen + 1}`}`;
+      }
+      if (current.tools.has(id)) return id;
+      current.tools.add(id);
+      if (previous?.tools.has(id)) {
+        // Already registered by the previous load of this entry.
+        if (!hostApi.removeTool) return id;
+        hostApi.removeTool(id);
+      }
+      return hostApi.addTool({ ...input, id });
+    },
+  };
+}
+
 export async function registerConsolePluginsFromEntries(
   entries: ConsoleClientEntry[],
   hostApi: PluginRegisterHostApi,
@@ -204,15 +273,28 @@ export async function registerConsolePluginsFromEntries(
   locale?: 'zh-CN' | 'en',
 ): Promise<void> {
   if (!entries.length) return;
+  const registrations = registrationsOf(hostApi);
   await Promise.all(
     entries.map(async (entry) => {
+      const previous = registrations.get(entry.id);
+      const current: EntryRegistration = { routes: new Set(), tools: new Set() };
       try {
         const specifier = resolvePluginImportUrl(entry.resolvedModule, assetOrigin);
         const mod = (await import(/* @vite-ignore */ specifier)) as Record<string, unknown>;
         const register = resolveEntryRegister(mod, entry, locale);
-        if (register) await register(hostApi);
+        if (register) await register(trackEntryRegistration(hostApi, entry, previous, current));
         else throw new Error(`entry "${entry.id}" has no register export`);
+        // The entry stays; drop only what it no longer registers.
+        if (previous) removeRegistration(hostApi, previous, current);
+        registrations.set(entry.id, current);
       } catch (error) {
+        // A failed reload keeps the previous registration (plus anything added before the failure).
+        if (previous || current.routes.size > 0 || current.tools.size > 0) {
+          registrations.set(entry.id, {
+            routes: new Set([...(previous?.routes ?? []), ...current.routes]),
+            tools: new Set([...(previous?.tools ?? []), ...current.tools]),
+          });
+        }
         if (onEntryError) onEntryError(entry, error);
         else throw error;
       }
@@ -220,22 +302,24 @@ export async function registerConsolePluginsFromEntries(
   );
 }
 
-const entryLoaderState: {
-  activePromise: Promise<void> | null;
-  lastOptions: LoadConsoleEntriesOptions | null;
-} = {
-  activePromise: null,
-  lastOptions: null,
-};
+/** Remove everything registered by entries that are no longer served. */
+function pruneRemovedEntries(hostApi: PluginRegisterHostApi, entries: readonly ConsoleClientEntry[]): void {
+  const registrations = registrationsByHost.get(hostApi);
+  if (!registrations) return;
+  const live = new Set(entries.map((entry) => entry.id));
+  for (const [id, registration] of registrations) {
+    if (live.has(id)) continue;
+    removeRegistration(hostApi, registration);
+    registrations.delete(id);
+  }
+}
 
 export async function loadConsoleEntries(options: LoadConsoleEntriesOptions): Promise<void> {
-  entryLoaderState.lastOptions = options;
   options.beforeLoad?.();
   let data: ConsoleEntriesResponse;
   try {
     data = await fetchConsoleEntries(options);
   } catch (error) {
-    entryLoaderState.activePromise = null;
     const status = typeof (error as { status?: unknown }).status === "number"
       ? (error as { status: number }).status
       : 0;
@@ -245,33 +329,28 @@ export async function loadConsoleEntries(options: LoadConsoleEntriesOptions): Pr
     }
     throw error;
   }
-  if (!data.entries?.length) {
+  const entries = data.entries ?? [];
+  pruneRemovedEntries(options.hostApi, entries);
+  if (!entries.length) {
     options.onEmpty?.();
     return;
   }
-  try {
-    await registerConsolePluginsFromEntries(
-      data.entries,
-      options.hostApi,
-      options.onEntryError,
-      options.assetOrigin,
-      options.locale,
-    );
-  } catch (error) {
-    entryLoaderState.activePromise = null;
-    throw error;
-  }
+  await registerConsolePluginsFromEntries(
+    entries,
+    options.hostApi,
+    options.onEntryError,
+    options.assetOrigin,
+    options.locale,
+  );
 }
 
-export async function reloadConsoleEntries(options?: LoadConsoleEntriesOptions): Promise<void> {
-  entryLoaderState.activePromise = null;
-  const resolved = options ?? entryLoaderState.lastOptions;
-  if (!resolved) return;
-  entryLoaderState.activePromise = loadConsoleEntries(resolved).catch((error) => {
-    entryLoaderState.activePromise = null;
-    throw error;
-  });
-  return entryLoaderState.activePromise;
+/**
+ * Fetch `/entries` again and reconcile. Pass the same `hostApi` object as the initial load
+ * so removed entries can be diffed away; the host API needs `removeRoute` / `removeTool`
+ * for the removal to take effect.
+ */
+export async function reloadConsoleEntries(options: LoadConsoleEntriesOptions): Promise<void> {
+  return loadConsoleEntries(options);
 }
 
 export const CONSOLE_ENTRY_LIFECYCLE_EVENTS = [
@@ -287,7 +366,7 @@ export function subscribeConsoleEntryReload(
   const unsubscribes = CONSOLE_ENTRY_LIFECYCLE_EVENTS.map((eventType) =>
     transport.onConsoleEvent(eventType, () => {
       const resolved = typeof options === 'function' ? options() : options;
-      void reloadConsoleEntries(resolved).catch(() => {});
+      if (resolved) void reloadConsoleEntries(resolved).catch(() => {});
     }),
   );
   return () => {

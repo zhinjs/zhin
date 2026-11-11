@@ -76,15 +76,3 @@ export function mergeSkillDirsWithResolver(resolver?: () => string[]): string[] 
   }
   return list;
 }
-
-/** 将 Node 文件错误转为 miniclawd 风格的结构化短句，便于模型区分并重试 */
-export function nodeErrToFileMessage(err: unknown, filePath: string, kind: 'read' | 'write' | 'edit' | 'list'): string {
-  const e = err as NodeJS.ErrnoException;
-  if (e?.code === 'ENOENT') {
-    if (kind === 'list') return `Error: Directory not found: ${filePath}`;
-    return `Error: File not found: ${filePath}`;
-  }
-  if (e?.code === 'EACCES') return `Error: Permission denied: ${filePath}`;
-  const action = kind === 'read' ? 'reading file' : kind === 'write' ? 'writing file' : kind === 'edit' ? 'editing file' : 'listing directory';
-  return `Error ${action}: ${e?.message ?? String(err)}`;
-}

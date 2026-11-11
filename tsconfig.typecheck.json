@@ -152,9 +152,6 @@
       "@zhin.js/ai": [
         "./packages/im/ai/src/index.ts"
       ],
-      "@zhin.js/ai/agent-step-checkpoint": [
-        "./packages/im/ai/src/agent-step-checkpoint.ts"
-      ],
       "@zhin.js/ai/agent-stream": [
         "./packages/im/ai/src/agent-stream.ts"
       ],
@@ -202,9 +199,6 @@
       ],
       "@zhin.js/core/jsx-runtime": [
         "./packages/im/core/src/jsx-runtime.ts"
-      ],
-      "@zhin.js/core/queue-im-field-contract": [
-        "./packages/im/core/src/built/queue-im-field-contract.ts"
       ],
       "@zhin.js/core/runtime": [
         "./packages/im/core/src/plugin-runtime/im/index.ts"

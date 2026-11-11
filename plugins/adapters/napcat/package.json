@@ -15,7 +15,7 @@
   "scripts": {
     "build": "tsc",
     "clean": "rimraf lib",
-    "test": "NODE_OPTIONS=--experimental-strip-types vitest run --root ../../.. plugins/adapters/napcat/tests",
+    "test": "vitest run --root ../../.. plugins/adapters/napcat/tests",
     "prepublishOnly": "pnpm run build",
     "prepack": "pnpm run build && node ../../../scripts/build-plugin-runtime-entries.mjs",
     "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean"
@@ -48,7 +48,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/zhinjs/zhin",
+    "url": "git+https://github.com/zhinjs/zhin.git",
     "directory": "plugins/adapters/napcat"
   },
   "dependencies": {
@@ -59,6 +59,7 @@
     "@zhin.js/core": "workspace:*",
     "@zhin.js/feature-kit": "workspace:*",
     "@zhin.js/host-http": "workspace:*",
+    "@zhin.js/host-http-contract": "workspace:*",
     "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/logger": "workspace:*",
     "@zhin.js/page": "workspace:*",

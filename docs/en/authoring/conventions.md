@@ -238,7 +238,7 @@ tools:
 | `agents/` | First-level folder name; only folders with `agent.json` | `agents/planner/agent.json` → `planner` |
 | `mcps/` | One named folder level | `mcps/my-server/index.ts` → `my-server` |
 | `schedules/` | One named folder level | `schedules/daily-report/index.ts` → `daily-report` |
-| `pages/` | One named folder level; `nav` / `footer` are layout slots | `pages/workroom/index.tsx` → `workroom`; `pages/nav/index.tsx` → `nav` |
+| `pages/` | One named folder level; `nav` / `footer` are layout slots | `pages/reports/index.tsx` → `reports`; `pages/nav/index.tsx` → `nav` |
 
 Malformed brackets in command param folders throw `CommandPathSyntaxError`. A param with a default must use double brackets and be declared in `params`, or the same error is thrown. The same error is thrown when a command has more than one param folder or a static folder after a param folder (such as `commands/[name]/info/`); the message names the file and shows the corrected path. When the folder param is not the first entry in `params`, the message shows the reordered list.
 :::
@@ -305,7 +305,7 @@ Apps depending on `zhin.js` import `define*` from facade subpaths: `zhin.js/comm
 | AI tools | `plugins/utils/music/tools/`, `plugins/utils/group-suite/tools/` |
 | Skills | `examples/full-bot/skills/memory-consolidate/SKILL.md` |
 | Sub-agents | `examples/multi-agent-room/agents/` |
-| Console pages | `examples/full-bot/pages/workroom/index.ts` |
+| Console pages | `examples/full-bot/pages/agent-trace/index.ts` |
 
 ## Next steps
 

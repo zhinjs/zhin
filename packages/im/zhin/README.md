@@ -2,7 +2,7 @@
 
 Zhin.js **IM 核心**主入口（1.1.x）：多通道 **Endpoint**、Plugin、Adapter、命令与热重载。**production 安装预算 <10MB**。
 
-AI / Agent 能力在 **`@zhin.js/agent`**（及 `@zhin.js/ai`），须显式安装或通过 `npm create zhin-app` 向导写入依赖。详见 [ADR 0019](../../../docs/adr/0019-install-size-layering.md)。
+AI / Agent 能力在 **`@zhin.js/agent`**（及 `@zhin.js/ai`），须显式安装或通过 `npm create zhin-app` 向导写入依赖。详见 ADR 0019（安装体积分层）。
 
 ## Install tiers
 
@@ -20,7 +20,7 @@ AI / Agent 能力在 **`@zhin.js/agent`**（及 `@zhin.js/ai`），须显式安�
 | 子路径 | 内容 |
 |--------|------|
 | `zhin.js` | `@zhin.js/core`、`@zhin.js/plugin-runtime`、日志，以及 `checkPermissions` / `permissionHostToken` 和对应权限上下文类型 |
-| `zhin.js/agent` | `@zhin.js/agent` 的 Agent、chat subagent 与 Workroom Kernel 能力 |
+| `zhin.js/agent` | `@zhin.js/agent` 的 Agent 与多 Agent 协作（Agent Harness）能力 |
 | `zhin.js/ai` | `@zhin.js/ai` 引擎 API |
 | `zhin.js/runtime` | `@zhin.js/runtime` optional-peer facade；不进入默认 IM 闭包 |
 | `zhin.js/jsx*` | 消息 JSX / 原生 Segment 标签 / 显式 Html 边界 |
@@ -165,7 +165,7 @@ export default defineAgentTool({
 
 ## 多 Agent 编排
 
-安装 agent 栈后，从 **`zhin.js/agent`** 使用 Agent 与 Workroom API（见 [AI 模块文档](https://zhin.js.org/ai/)）。旧的执行型 `runPipeline` / `runParallel` / `route` 已删除；普通一次性调用使用 `AIService.runAgent`，Project 级协作进入 Workroom。
+安装 agent 栈后，从 **`zhin.js/agent`** 使用 Agent API（见 [AI 模块文档](https://zhin.js.org/ai/)）。旧的执行型 `runPipeline` / `runParallel` / `route` 已删除；普通一次性调用使用 `AIService.runAgent`，多 Agent 协作使用 `ask` / `delegate` 等协作工具（ADR 0048）。
 
 ## 常用命令
 

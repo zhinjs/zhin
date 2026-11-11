@@ -52,7 +52,7 @@ flowchart BT
   agent --> cli
 ```
 
-`packages/im/workroom`（`@zhin.js/workroom`）承载 Workroom、Portfolio、Data Governance 领域代码，以及把它们接到 Agent 运行时的 `src/workroom-runtime/`；它位于 `agent` 之上（workroom → agent），领域目录（`workroom/`、`portfolio/`、`data-governance/`）仍仅依赖 `im-contract`。
+`packages/im/harness`（`@zhin.js/harness`）是 ADR 0048 的多 Agent 协作微内核（Mailbox、Authority、预算账本、Guard Kernel、Engagement Journal），不含 IM 概念；`packages/im/agent/src/collaboration/` 把它接到 Agent 运行时并提供协作工具，多 Bot 协作场所（Venue）在 `packages/im/core/src/venue/`。
 
 `plugin-runtime`、`im-contract` 与 `interaction` 是底层契约；Feature 包在其上描述单一能力，
 `core` 负责组装 IM 链路。`kernel` 与 `ai` 不含 IM 概念。唯一跨层装配点是
@@ -62,12 +62,11 @@ flowchart BT
 
 | 领域 | 阅读入口 | 内部职责 |
 | --- | --- | --- |
-| Workroom Journal | `packages/im/workroom/src/workroom/journal/index.ts` | 契约、事件校验/编解码、受治理载荷、Memory/File/Database 适配器 |
-| Workroom Projection | `packages/im/workroom/src/workroom/projection-outbox/index.ts` | 契约、Repository CAS、投影规则、Tracer、Delivery Worker |
-| Extended Console RPC | `packages/host/http/src/console-rpc-extended/index.ts` | 薄 Dispatcher、schedule/inbox/login/Endpoint/Workroom RPC 域 |
+| Agent Harness | `packages/im/harness/src/index.ts` | Mailbox、Authority 收窄、预算账本、Guard Kernel、Engagement Journal |
+| Extended Console RPC | `packages/host/http/src/console-rpc-extended/index.ts` | 薄 Dispatcher、schedule/inbox/login/Endpoint RPC 域 |
 
 目录存在的目的不是缩短单个文件，而是让调用方只依赖稳定入口，让状态、策略和 IO
-实现保持单向关系。`pnpm check:domain-module-boundaries` 禁止模块外深层导入和旧平面入口回归。
+实现保持单向关系。`pnpm check:domain-module-boundaries` 禁止模块外深层导入和旧平面入口回归（当前登记的受保护目录是 Extended Console RPC）。
 
 ## 核心模块的维护边界
 
@@ -76,16 +75,16 @@ CODEOWNERS 负责请求审查；是否要求审查通过由 GitHub 分支保护�
 
 | 模块 | 修改入口 | 状态与职责边界 | 主要验证 |
 | --- | --- | --- | --- |
-| Plugin Runtime / RootRuntime | `packages/im/plugin-runtime/CONTEXT.md`、`packages/im/runtime/src/root-runtime.ts`、`packages/im/runtime/src/host/` | generation、snapshot、资源租约与切换；HTTP/Protocol/Speech/HTML-Renderer Host 安装器位于 `runtime/src/host/` | 生命周期与热重载测试、`check:architecture` |
+| Plugin Runtime / RootRuntime | `packages/im/plugin-runtime/CONTEXT.md`、`packages/im/runtime/src/root-runtime.ts`、`packages/im/runtime/src/host/` | generation、snapshot、资源租约与切换；`runtime/src/host/` 是进程生命周期、就绪探针与发布日志等通用 Host 机制，HTTP/Protocol/Speech/HTML-Renderer Host 安装器在 `basic/cli/src/plugin-runtime/*-host-installer.ts` | 生命周期与热重载测试、`check:architecture` |
 | IM / Adapter | `packages/im/core/src/plugin-runtime/im/inbound-spine.ts`、`packages/im/adapter/src/adapter-index.ts` | Core 组合入站脊柱（`inbound-spine` / `inbound-runtime`）与出站链路；Database/Outbound/Inbox Host 位于 `@zhin.js/core/runtime` | 消息链路与端点测试、`check:harness-paths`、`check:adapter-endpoint-boundaries` |
-| Agent / Workroom | `packages/im/agent/src/plugin-runtime/ingress/unified-mailbox-spine.ts`、`packages/im/workroom/src/workroom/workroom-kernel.ts` | 统一信箱入站脊柱（`unified-mailbox-spine`）与领域规则分开；Agent/Inference/Workroom Host 位于 `@zhin.js/agent/runtime` | 领域与持久化测试、`check:architecture`、`check:domain-module-boundaries` |
+| Agent / Harness | `packages/im/agent/src/plugin-runtime/ingress/unified-mailbox-spine.ts`、`packages/im/harness/src/harness.ts`、`packages/im/agent/src/collaboration/` | 统一信箱入站脊柱（`unified-mailbox-spine`）与协作护栏分开；Agent/Inference Host 运行时位于 `@zhin.js/agent/runtime`，其安装器在 `basic/cli/src/plugin-runtime/agent/host-installer.ts` | 领域与持久化测试、`check:architecture` |
 | HTTP / Console | `packages/host/http/src/http-host.ts`、`packages/console/protocol/`、`packages/console/pagemanager/src/shell/page-renderer.ts` | Host 拥有监听与路由；wire 与 Blueprint 契约在 `protocol/`；Console 外壳与 Blueprint 渲染在 `pagemanager/` | Host/RPC 测试、`check:console-protocol-boundaries`、`check:console-contract` |
 | CLI / 脚手架 | `basic/cli/src/plugin-runtime/start-command.ts`、`packages/toolkit/scaffold-wizard/src/` | CLI 是极薄装配点；向导提供配置机制，用户配置文件不由模板覆盖 | CLI/向导测试、`check:created-project` |
 
 修改前先确认状态归属、公开入口和实际调用方。拆分大型文件时，以可独立变化的规则、
 状态所有权和 IO 为边界，保留对外入口；不要同时引入新的能力或配置格式。
 新增受保护领域目录时，登记门禁并补充允许入口、违规导入与失败路径测试。
-当前领域目录门禁只保护上表之前列出的三个深模块，不代表所有领域内部都已受到相同约束。
+当前领域目录门禁只保护已登记的深模块（Extended Console RPC），不代表所有领域内部都已受到相同约束。
 
 插件的约定能力也遵循同一原则：`commands/<path>/index.ts`、`adapters/<name>/index.ts`、
 `agents/<name>/`、`skills/<name>/`、`tools/<name>/index.ts` 是能力所有权边界。仅供某个能力

@@ -9,46 +9,7 @@ export {
   SIDE_EVENT_NAMES,
 } from "./constants.js";
 
-export {
-  ZHIN_SESSION_ID_HEADER,
-  AGENT_STREAM_MEDIA_TYPE,
-  ZHIN_AGENT_SESSION_API_PREFIX,
-  AgentStreamEventType,
-  formatAgentStreamNdjsonLine,
-  createAgentStreamReduceState,
-  reduceAgentStreamEvent,
-  createAgentStreamNdjsonParserState,
-  parseAgentStreamNdjsonChunk,
-  flushAgentStreamNdjsonParser,
-  iterateAgentStreamNdjson,
-  foldAgentStreamNdjson,
-} from "./agent-stream.js";
-export type {
-  AgentStreamEvent,
-  AgentStreamEventTypeName,
-  StartAgentSessionResponse,
-  ContinueAgentSessionBody,
-  ContinueAgentSessionResponse,
-  AgentStreamReduceState,
-  AgentStreamNdjsonParserState,
-  FoldAgentStreamOptions,
-} from "./agent-stream.js";
-
 export type RuntimeEnv = "development" | "production";
-
-export type ConsoleUser = {
-  id: string;
-  name: string;
-  roles?: string[];
-  permissions: string[];
-};
-
-export type ConsoleAuthContext = unknown;
-
-export type ConsoleAuthAdapter = {
-  getUser(ctx: ConsoleAuthContext): Promise<ConsoleUser | null> | ConsoleUser | null;
-  hasPermission(user: ConsoleUser, permission: string): boolean;
-};
 
 export type EntryModuleSpec =
   | string
@@ -68,18 +29,6 @@ export type ConsoleEntry = {
   serverPaths?: { development: string; production: string };
   module?: EntryModuleSpec;
   packageEntry?: string;
-  order?: number;
-  enabled?: boolean;
-  meta?: { name?: string; version?: string };
-  requiredPermissions?: string[];
-};
-
-export type ConsoleFileAddEntryInput = {
-  id?: string;
-  development: string;
-  production: string;
-  serverDevelopment?: string;
-  serverProduction?: string;
   order?: number;
   enabled?: boolean;
   meta?: { name?: string; version?: string };
@@ -119,6 +68,9 @@ export type PluginRegisterHostApi = {
   React: typeof import("react");
   addRoute(input: PluginAddRouteInput): void;
   addTool(input: PluginAddToolInput): string;
+  /** Optional: lets the entry loader drop what a removed plugin entry registered. */
+  removeRoute?(path: string): void;
+  removeTool?(id: string): void;
 };
 
 export type ConsolePluginRegister = (api: PluginRegisterHostApi) => void | Promise<void>;
@@ -127,35 +79,3 @@ export type ConsoleEntriesResponse = {
   entries: ConsoleClientEntry[];
   runtimeEnvHint: RuntimeEnv | null;
 };
-
-export type PageTitleI18n = Readonly<Partial<Record<'zh-CN' | 'en', string>>>;
-
-export interface PageComponentProps {
-  pluginId?: string;
-  owner?: string;
-  localName?: string;
-  route?: string;
-  title?: string;
-  [key: string]: unknown;
-}
-
-export interface PageMetadata {
-  readonly title?: string;
-  readonly titleI18n?: PageTitleI18n;
-  readonly icon?: string;
-  readonly group?: string;
-  readonly order?: number;
-  readonly parent?: string;
-  readonly fullWidth?: boolean;
-  readonly hideInNav?: boolean;
-  readonly requiredPermissions?: readonly string[];
-  readonly requiredRoles?: readonly string[];
-}
-
-export type DefinedPage = Readonly<PageMetadata>;
-
-export type PageExport<P = PageComponentProps> = import("react").ComponentType<P>;
-
-export function definePage(metadata: PageMetadata = {}): DefinedPage {
-  return Object.freeze({ ...metadata });
-}

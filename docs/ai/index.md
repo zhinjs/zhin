@@ -105,7 +105,7 @@ export default defineAgentTool<{ city: string }>({
 | 换模型或厂商、接入本地模型 | [服务、账号与 Profile](./providers.md) |
 | 让群里不 @ 也能触发，或修改前缀 | [ai.trigger](#ai-trigger) |
 | 只对部分用户或群开放 AI | [ai.access](#ai-access) |
-| 不同的群用不同的 Agent 或模型 | [ai.agents](#ai-agents) |
+| 给角色设置昵称、可用的 MCP 服务器 | [ai.agents](../configuration/index.md#ai-agents) |
 | 让 AI 使用外部 MCP 服务器的工具 | [ai.mcpServers](#ai-mcpservers) |
 | 控制 AI 能执行哪些 Shell 命令、是否需要审批 | [ai.agent](#ai-agent) |
 | 让 AI 理解语音、回复语音 | [语音](./speech.md) |

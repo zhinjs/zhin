@@ -3,9 +3,9 @@
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
+import { readTextBody } from '@zhin.js/host-http-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
-  readTextBody,
   verifySignature,
   type LineEvent,
   type LineWebhookBody,

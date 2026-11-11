@@ -120,7 +120,14 @@ export class Schema<S = any, T = S> {
         this.meta.multiple = true;
         return this;
     }
-    /** 设置最小值 */
+    /**
+     * 设置最小值。
+     * `min` / `max` / `step` are range constraints of the exported JSON Schema
+     * (minimum/minLength/minItems, maximum/…, multipleOf) and are enforced where that
+     * schema is compiled (Runtime config validation). The callable schema and
+     * `safeParse` are structural only; `toJsonSchema` relies on that when it matches
+     * union branches (see assertPublicDefault).
+     */
     min(value: number): this {
         this.meta.min = value;
         return this;
@@ -425,8 +432,11 @@ Schema.extend('const', function (this: Schema, key: string, value: any) {
     return value;
 });
 Schema.extend('tuple', function (this: Schema, key: string, value: any) {
-    value = Schema.checkDefault(this, key, value, []);
-    if (value.length > 0 && value.length !== this.options.list!.length) throw new TypeError(`${key} tuple length mismatch`);
+    // No `[]` fallback: an empty array is not a valid tuple (JSON Schema exports
+    // minItems = maxItems = length, and safeParse rejects it), so absent stays absent.
+    value = Schema.checkDefault(this, key, value);
+    if (value === undefined) return value;
+    if (value.length !== this.options.list!.length) throw new TypeError(`${key} tuple length mismatch`);
     return value.map((item: any, index: number) => this.options.list![index](item, `${key}[${index}]`));
 });
 Schema.extend('union', function (this: Schema, key: string, value: any) {

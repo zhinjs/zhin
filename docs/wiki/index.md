@@ -30,7 +30,3 @@ title: Zhin 知识索引
 
 - [进程已经启动，怎样确认 Bot 真正可用？](./notes/production-ready) 分别检查存活、运行时就绪和平台收发。
 - 具体部署与故障处理，见[生产部署](/operations/production)和[故障排查](/troubleshooting/)。
-
-## 资料存档
-
-[Cubic Wiki 的 29 篇原始文章、中文译文和已确认勘误](./archive)保留在原 URL。这批内容适合查找线索；运行时行为以当前文档和源码为准。

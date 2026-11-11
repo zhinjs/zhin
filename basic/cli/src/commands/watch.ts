@@ -2,7 +2,7 @@
  * watch — 连接运行中 Host API，展示 runtime / bots / assistant jobs（TTY 定时刷新）
  */
 import { Command } from 'commander';
-import { hostGet, loadHostHttpConfig } from '../utils/host-http.js';
+import { hostGet, listHostEndpoints, loadHostHttpConfig } from '../utils/host-http.js';
 import {
   jobRowsFromApi,
   renderWatchText,
@@ -32,12 +32,6 @@ interface SystemStatusApiData {
   runtime?: string;
 }
 
-interface EndpointsApiData {
-  name: string;
-  adapter: string;
-  status: 'online' | 'offline';
-}
-
 interface AssistantJobsApiData {
   jobs: unknown[];
   eventsActive?: boolean;
@@ -60,9 +54,12 @@ export interface WatchSnapshot {
 
 export async function fetchWatchSnapshot(http: { baseUrl: string; token: string }): Promise<WatchSnapshot> {
   const fetchedAt = new Date().toISOString();
-  const [statsRes, systemRes] = await Promise.all([
+  // Independent reads: one round trip instead of four sequential ones.
+  const [statsRes, systemRes, endpointsRes, jobsRes] = await Promise.all([
     hostGet<StatsApiData>(http, '/stats'),
     hostGet<SystemStatusApiData>(http, '/system/status'),
+    listHostEndpoints(http),
+    hostGet<AssistantJobsApiData>(http, '/assistant/jobs'),
   ]);
 
   if (!statsRes.ok) {
@@ -80,16 +77,12 @@ export async function fetchWatchSnapshot(http: { baseUrl: string; token: string 
       : undefined,
   );
 
-  const endpointsRes = await hostGet<EndpointsApiData[]>(http, '/endpoints');
-  const endpoints: WatchEndpointRow[] = Array.isArray(endpointsRes.data)
-    ? endpointsRes.data.map((b) => ({
-        name: b.name,
-        adapter: b.adapter,
-        status: b.status,
-      }))
-    : [];
+  const endpoints: WatchEndpointRow[] = (endpointsRes.data ?? []).map((row) => ({
+    name: row.name,
+    adapter: row.adapter,
+    status: row.status,
+  }));
 
-  const jobsRes = await hostGet<AssistantJobsApiData>(http, '/assistant/jobs');
   let assistant: WatchSnapshot['assistant'];
   if (jobsRes.status === 404) {
     assistant = { enabled: false, jobs: [] };

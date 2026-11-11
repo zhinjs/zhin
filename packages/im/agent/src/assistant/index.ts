@@ -2,7 +2,6 @@ export type { AssistantConfig, AssistantDefaultsConfig, AssistantEventsConfig, A
 export type { AssistantHomeConfig, HomePolicyConfig, ResolvedHomePolicyConfig } from './home-config.js';
 export {
   resolveAssistantHomeConfig,
-  isAssistantHomeActive,
   DEFAULT_HOME_POLICY,
   DEFAULT_ALLOWED_SERVICE_DOMAINS,
   DEFAULT_DEBOUNCE_MS,
@@ -60,7 +59,7 @@ export {
 } from './timer-scheduler.js';
 export type { ScheduleDispose, TimerDueHandler, TimerSchedulerOptions } from './timer-scheduler.js';
 export { createTimerMailDueHandler } from './timer-due.js';
-export { validateHomeMcpServer, listConfiguredMcpServerNames, isHomeMcpMode } from './home-mcp-bridge.js';
+export { validateHomeMcpServer, listConfiguredMcpServerNames } from './home-mcp-bridge.js';
 
 export { checkHomeToolAccess, toHomeOwnerSignal, toHomeDenyError } from './home-policy.js';
 
@@ -71,7 +70,6 @@ export {
   resolveAssistantDefaultsConfig,
   resolveAssistantEventsConfig,
   resolveAssistantQueueConfig,
-  isAssistantEventsActive,
 } from './config.js';
 
 export type { AssistantEventRequest, AssistantEventResult, AssistantEventStatus } from './event-types.js';

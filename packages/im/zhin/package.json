@@ -41,10 +41,6 @@
       "development": "./src/jsx-dev-runtime.ts",
       "import": "./lib/jsx-dev-runtime.js"
     },
-    "./contexts": {
-      "types": "./lib/zhin-contexts.d.ts",
-      "development": "./zhin-contexts.d.ts"
-    },
     "./runtime": {
       "types": "./lib/plugin-runtime.d.ts",
       "development": "./src/plugin-runtime.ts",
@@ -100,7 +96,7 @@
     "lib"
   ],
   "scripts": {
-    "build": "rimraf lib && tsc && cp zhin-contexts.d.ts lib/zhin-contexts.d.ts",
+    "build": "rimraf lib && tsc",
     "clean": "rimraf lib"
   },
   "dependencies": {
@@ -108,13 +104,11 @@
     "@zhin.js/logger": "workspace:*",
     "@zhin.js/permission": "workspace:*",
     "@zhin.js/plugin-runtime": "workspace:*",
-    "@zhin.js/schedule-feature": "workspace:*",
-    "chalk": "^5.6.2"
+    "@zhin.js/schedule-feature": "workspace:*"
   },
   "peerDependencies": {
     "@zhin.js/agent": "workspace:^",
     "@zhin.js/ai": "workspace:^",
-    "@zhin.js/html-renderer": "workspace:^",
     "@zhin.js/runtime": "workspace:^"
   },
   "peerDependenciesMeta": {
@@ -122,9 +116,6 @@
       "optional": true
     },
     "@zhin.js/ai": {
-      "optional": true
-    },
-    "@zhin.js/html-renderer": {
       "optional": true
     },
     "@zhin.js/runtime": {
@@ -135,10 +126,8 @@
     "@types/node": "^26.1.2",
     "@zhin.js/agent": "workspace:*",
     "@zhin.js/ai": "workspace:*",
-    "@zhin.js/html-renderer": "workspace:*",
     "@zhin.js/runtime": "workspace:*",
-    "typescript": "^6.0.3",
-    "yaml": "^2.9.0"
+    "typescript": "^6.0.3"
   },
   "repository": {
     "type": "git",
@@ -176,9 +165,6 @@
       "./jsx-dev-runtime": {
         "types": "./lib/jsx-dev-runtime.d.ts",
         "import": "./lib/jsx-dev-runtime.js"
-      },
-      "./contexts": {
-        "types": "./lib/zhin-contexts.d.ts"
       },
       "./runtime": {
         "types": "./lib/plugin-runtime.d.ts",

@@ -14,7 +14,6 @@ export type { TurnEventSink, TurnEventSourceInput } from './turn-event-source.js
 
 export {
   createTurnIngress,
-  resolveTurnContextValue,
   turnPermissionSubject,
 } from './turn-ingress.js';
 export type {
@@ -103,15 +102,6 @@ export {
 } from './turn-context-bridge.js';
 export type { TurnContextBridgeState } from './turn-context-bridge.js';
 
-export {
-  TaskContinuationManager,
-  decomposeTask,
-} from './task-continuation.js';
-export type {
-  TaskStatus,
-  TaskProgress,
-  TaskDecomposition,
-} from './task-continuation.js';
 export { DEFAULT_MAX_QUEUED_TURNS, LIVE_WINDOW_MAX_MESSAGES } from './turn-admission.js';
 // ADR 0048 H3: same-session admission is the host Mailbox (replaces TurnAdmissionGate).
 export { HostMailbox, type HostMailboxOptions } from '../collaboration/host-mailbox.js';

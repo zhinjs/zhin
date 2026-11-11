@@ -11,7 +11,7 @@ export default defineAgentTool<{ url: string }>({
     if (!url) return t(context.locale, 'urlRequired');
     try {
       const runtime = context.use(rssRuntimeToken);
-      const { title, items } = await fetchFeed(url, runtime.config.timeout);
+      const { title, items } = await fetchFeed(url, runtime.config);
       if (items.length === 0) return t(context.locale, 'toolPreviewEmpty', { title });
       return items
         .slice(0, 5)

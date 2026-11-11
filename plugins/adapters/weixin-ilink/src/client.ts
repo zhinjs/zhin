@@ -112,6 +112,9 @@ export class WeixinIlinkClient extends EventEmitter {
   readonly #metadata: IlinkClientMetadata;
   #creds: WeixinIlinkCredentials | null = null;
   #pollAbort?: AbortController;
+  /** Aborts the in-flight long poll when input closes. */
+  #pollRequestAbort?: AbortController;
+  #openWaiters: (() => void)[] = [];
   #pollPromise?: Promise<void>;
   #loginAbort?: AbortController;
   #configManager?: WeixinConfigManager;
@@ -291,11 +294,29 @@ export class WeixinIlinkClient extends EventEmitter {
 
   protected openInput(): void {
     this.#open = true;
+    for (const resume of this.#openWaiters.splice(0)) resume();
     if (this.#pollAbort && !this.#pollPromise) this.#pollPromise = this.#pollLoop(this.#pollAbort.signal);
   }
 
   protected closeInput(): void {
     this.#open = false;
+    // Nothing can be admitted while closed: stop the long poll instead of re-fetching the same batch.
+    this.#pollRequestAbort?.abort();
+  }
+
+  /** Resolves on the next openInput(), or when the poll loop is aborted. */
+  #waitForOpen(abortSignal: AbortSignal): Promise<void> {
+    if (this.#open || abortSignal.aborted) return Promise.resolve();
+    return new Promise((resolve) => {
+      const done = (): void => {
+        abortSignal.removeEventListener('abort', done);
+        const index = this.#openWaiters.indexOf(done);
+        if (index >= 0) this.#openWaiters.splice(index, 1);
+        resolve();
+      };
+      this.#openWaiters.push(done);
+      abortSignal.addEventListener('abort', done, { once: true });
+    });
   }
 
   protected disconnectTransport(): Promise<void> { return this.#disconnecting ??= this.#disconnectNative(); }
@@ -449,11 +470,17 @@ export class WeixinIlinkClient extends EventEmitter {
     let consecutiveFailures = 0;
 
     while (!abortSignal.aborted) {
+      if (!this.#open) {
+        await this.#waitForOpen(abortSignal);
+        continue;
+      }
       if (this.#sessionGuard.paused) {
         await sleep(this.#sessionGuard.remainingMs, abortSignal);
         continue;
       }
 
+      const request = new AbortController();
+      this.#pollRequestAbort = request;
       try {
         const resp = await this.#getUpdates({
           baseUrl: this.apiBaseUrl,
@@ -461,10 +488,12 @@ export class WeixinIlinkClient extends EventEmitter {
           token: this.#creds.botToken,
           get_updates_buf: getUpdatesBuf,
           timeoutMs: nextTimeoutMs,
-          abortSignal,
+          abortSignal: AbortSignal.any([abortSignal, request.signal]),
         });
 
         abortSignal.throwIfAborted();
+        // Closed while polling: drop the batch without advancing the cursor; it is re-fetched after reopen.
+        if (!this.#open) continue;
         if (resp.longpolling_timeout_ms != null && resp.longpolling_timeout_ms > 0) {
           nextTimeoutMs = resp.longpolling_timeout_ms;
         }
@@ -504,6 +533,8 @@ export class WeixinIlinkClient extends EventEmitter {
         }
       } catch (err) {
         if (abortSignal.aborted) return;
+        // Input closed mid-request or mid-batch is a pause, not a failure.
+        if (!this.#open) continue;
         consecutiveFailures += 1;
         this.#logger.error(formatCompact({
           op: 'poll',

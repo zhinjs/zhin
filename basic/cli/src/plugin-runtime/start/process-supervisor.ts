@@ -4,6 +4,7 @@ import { mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { DEFAULT_SHUTDOWN_BUDGET_MS } from '../process-lifecycle.js';
+import { isNodeVersionSupported, NODE_ENGINES_HINT } from '../../utils/node-requirements.js';
 import type { StartOptions } from '@zhin.js/runtime';
 
 const DISABLE_EXPERIMENTAL_WARNING_FLAG = '--disable-warning=ExperimentalWarning';
@@ -253,36 +254,44 @@ export class NativeTypeScriptSupervisor {
   }
 
   #assertSupportedNodeVersion(): void {
-    const [major = 0, minor = 0] = process.versions.node.split('.').map(Number);
-    if (major < 22 || (major === 22 && minor < 6)) {
+    if (!isNodeVersionSupported()) {
       throw new Error(
-        `zhin runtime start requires Node >=22.6.0 for native TypeScript; found ${process.versions.node}`,
+        `zhin runtime start requires Node ${NODE_ENGINES_HINT}; found ${process.versions.node}`,
       );
     }
   }
 }
 
-/** Poll parent liveness; when the supervisor (or any parent) is gone, shut down. */
+/**
+ * Returns why this process is orphaned, or undefined while it is not.
+ *
+ * Only an explicit `ZHIN_SUPERVISOR_PID` is evidence of a supervisor. `ppid === 1` alone is not:
+ * a bot started by systemd, or as a child of a container's PID 1, legitimately has init as parent.
+ */
+export function supervisorOrphanReason(
+  environment: Readonly<Record<string, string | undefined>> = process.env,
+  probe: (pid: number) => void = (pid) => { process.kill(pid, 0); },
+): string | undefined {
+  const raw = environment.ZHIN_SUPERVISOR_PID;
+  if (raw === undefined || !SUPERVISOR_PID_PATTERN.test(raw)) return undefined;
+  const supervisorPid = Number(raw);
+  try {
+    probe(supervisorPid);
+    return undefined;
+  } catch (error) {
+    // EPERM: the pid exists but is owned by another user (e.g. PID 1) — still alive.
+    if ((error as NodeJS.ErrnoException).code === 'EPERM') return undefined;
+    return `supervisor ${supervisorPid} exited`;
+  }
+}
+
+/** Poll supervisor liveness; when the supervisor is gone, shut down. */
 export function startSupervisorWatchdog(onOrphaned: () => void): NodeJS.Timeout {
-  const supervisorPid = Number(process.env.ZHIN_SUPERVISOR_PID ?? '');
   const logger = getLogger('runtime');
   return setInterval(() => {
-    if (Number.isInteger(supervisorPid) && supervisorPid > 0) {
-      try {
-        process.kill(supervisorPid, 0);
-        return;
-      } catch {
-        // ESRCH — supervisor is gone
-      }
-    } else if (process.ppid && process.ppid !== 1) {
-      return;
-    }
-    logger.error(formatCompact({
-      op: 'orphan_shutdown',
-      reason: Number.isInteger(supervisorPid) && supervisorPid > 0
-        ? `supervisor ${supervisorPid} exited`
-        : 'reparented to init (parent died)',
-    }));
+    const reason = supervisorOrphanReason();
+    if (!reason) return;
+    logger.error(formatCompact({ op: 'orphan_shutdown', reason }));
     onOrphaned();
   }, 2_000).unref();
 }

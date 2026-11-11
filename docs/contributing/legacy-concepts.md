@@ -63,19 +63,20 @@ export default defineAdapter<MyConfig>({
   - 交互式 TTY：stdin 一行确认（对齐 icqq 官方示例）
 - 带外路径仍可用：`icqq login <uin>` 守护进程扫码后再启动 zhin；`zhin setup` 配置向导。
 
-## 旧多 Agent 执行 API → chat subagent / Workroom
+## 旧多 Agent 执行 API → Agent Harness {#legacy-multi-agent}
 
-旧编排栈同时存在 mutable Repository、`AgentDispatcher`、执行型 workflow helper 与 `remote_mesh` 状态，无法可靠表达验收、租约恢复、抢占和 Project Memory，因此采用 major breaking replacement，不提供双写兼容层。
+旧编排栈（mutable Repository、`AgentDispatcher`、执行型 workflow helper、`remote_mesh`）以及之后的 Workroom Kernel 都已删除，没有兼容层。多 Agent 协作现在只有一套模型：Agent Harness（[ADR 0048](../adr/0048-agent-harness.md)）。
 
 | 旧表面 | 迁移方式 |
 | --- | --- |
-| `zhin.js/agent` 的 `runPipeline` / `runParallel` / `route` | 普通一次性模型调用改用 `AIService.runAgent`（需要并行时由调用方显式组合 Promise）；需要 durable 多 Agent 协作时提交 Workroom Inbox/Plan proposal。未来的 workflow builder 只构造 Plan，不直接执行 Agent。 |
-| `spawn_task(run_id, task_id, ...)` | `spawn_task` 已删除，Agent 之间的协作改用 `ask` / `delegate` 等协作工具（见 [AI Agent · 多 Agent 协作](../ai/agent.md#多-agent-协作)）；Project 工作必须由 Workroom Kernel 创建 Task/Assignment，不能把 subtask id 当 Task id。 |
-| `OrchestrationService` / `OrchestrationKernel` / repositories / `AgentDispatcher` | 无兼容替代对象。状态读取转向 Workroom Journal replay/projection；写入必须使用受 principal/role 约束的 Workroom command port。 |
-| `ai.remoteAgents` / `remote_mesh` / Remote Agent poller | 不再支持。Remote A2A 已作为标准 `AssignmentExecutorPort` transport 接入，复用 local Assignment 的 lease/fence/report/acceptance，并且只接受持久 Catalog 与 generation-owned authority；不得用旧配置模拟或绕过 Grant。 |
-| `/api/agent/orchestration/runs` / `/console/orchestration` | 改为 Project-scoped `/api/agent/workroom/runs?projectId=...` 与 Workroom Console 页面；它们都是只读 projection。 |
+| `zhin.js/agent` 的 `runPipeline` / `runParallel` / `route` | 普通一次性模型调用改用 `AIService.runAgent`（需要并行时由调用方显式组合 Promise）；需要多 Agent 协作时，让 Agent 使用 `ask` / `delegate` 等协作工具。 |
+| `spawn_task(run_id, task_id, ...)` | `spawn_task` 已删除，Agent 之间的协作改用 `ask` / `delegate` 等协作工具（见 [AI Agent · 多 Agent 协作](../ai/agent.md#多-agent-协作)）。 |
+| `OrchestrationService` / `OrchestrationKernel` / repositories / `AgentDispatcher` | 无兼容替代对象。协作状态只读自 `engagement_events` Journal（`zhin trace --engagements`、Console 协作图谱）。 |
+| `ai.remoteAgents` / `remote_mesh` / Remote Agent poller | 不再支持，启动时遇到 `ai.remoteAgents` 会直接报错。远程 Agent 在 `a2a.mailbox.peers` 声明，Mail 连同 Authority 与预算签名传递。 |
+| `ai.workroom` / `ai.workrooms`、`a2a.workroomCallbacks` / `a2a.workroomRemoteExecutors`、`@zhin.js/workroom` | 已删除，启动时遇到这些配置键会直接报错。多 Bot 共享的群或频道改在 `ai.venues` 声明，Agent 能联系谁与预算上限写在 `agents/<name>/agent.json` 的 `collaboration`。 |
+| `/api/agent/orchestration/runs`、`/api/agent/workroom/runs` | 改为只读的 `GET /api/agent/engagements[/*]` 与 Console 协作图谱页面。 |
 
-旧 Run 与内嵌 payload 的 Journal 不再受支持，也没有迁移工具；打开旧格式 store 会 fail-closed。旧 `completed` 没有 claim-level Acceptance Record，不能当成 `accepted` Project State；旧 Run 不再受支持，也没有迁移工具。如需保留历史信息，请人工整理后作为新任务重新提交，由 Workroom 重新规划和验收。已落地的权威边界见 GitHub 上的 [Agent CONTEXT](https://github.com/zhinjs/zhin/blob/main/packages/im/agent/CONTEXT.md)。
+旧 Run、Workroom Journal 与 Catalog 不再受支持，也没有迁移工具。如需保留历史信息，请人工整理后作为新消息重新提交。已落地的权威边界见 GitHub 上的 [Agent CONTEXT](https://github.com/zhinjs/zhin/blob/main/packages/im/agent/CONTEXT.md)。
 
 ## 相关阅读
 

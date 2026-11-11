@@ -4,7 +4,6 @@ import type { EndpointProfileConfiguration } from 'zhin.js/adapter';
  * Canonicalization is owned by gateway/core before endpoint.send.
  */
 
-import type { IncomingMessage } from 'node:http';
 import { EndpointDeliveryError, isMediaRef, type ConversationKind, type ConversationRef } from '@zhin.js/im-contract';
 import type { Segment } from '@zhin.js/core/runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -297,24 +296,6 @@ export function buildWebhookUrl(webhook: NonNullable<ResolvedTelegramConfig['web
   return `${domain}${webhook.path}`;
 }
 
-export async function readTextBody(
-  request: IncomingMessage,
-  options: { readonly limit?: number } = {},
-): Promise<string> {
-  const limit = options.limit ?? 1_048_576;
-  const chunks: Buffer[] = [];
-  let size = 0;
-  for await (const chunk of request) {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    size += buffer.length;
-    if (size > limit) {
-      request.destroy();
-      throw new Error(`Request body exceeds ${limit} bytes`);
-    }
-    chunks.push(buffer);
-  }
-  return Buffer.concat(chunks).toString('utf8');
-}
 
 export function botApiUrl(config: Pick<ResolvedTelegramConfig, 'apiBaseUrl' | 'token'>, method: string): string {
   return `${config.apiBaseUrl}/bot${config.token}/${method}`;

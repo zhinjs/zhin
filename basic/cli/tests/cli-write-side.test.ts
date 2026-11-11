@@ -4,7 +4,7 @@
  * - config 命令：JSON 配置 set 真正落盘
  * - doctor createDefaultConfig：新 Plugin Runtime map 形态
  * - migrate：engines.node、中文模板多命中判定、覆盖前 .bak 备份
- * - schedule add：--prompt option + --at/--every 可用、非法输入统一报错
+ * - schedule：经运行中 Host 的 /assistant/jobs 读写、非法输入统一报错
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
@@ -236,41 +236,72 @@ describe('migrate', () => {
   });
 });
 
-describe('schedule add', () => {
-  function readJobs(): any[] {
-    const file = path.join(tmp, 'data', 'schedule-jobs.json');
-    return JSON.parse(fs.readFileSync(file, 'utf-8')).jobs;
+describe('schedule (running Host)', () => {
+  let requests: { url: string; method: string; body: any }[];
+  function stubHost(reply: (path: string) => { status: number; body: unknown }) {
+    requests = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+      requests.push({ url, method: init?.method ?? 'GET', body });
+      const { status, body: payload } = reply(new URL(url).pathname);
+      return { ok: status < 400, status, json: async () => payload } as Response;
+    }));
   }
+  beforeEach(() => {
+    fs.writeFileSync(path.join(tmp, 'zhin.config.yml'), 'http:\n  port: 9321\n  token: secret\n');
+    stubHost(() => ({ status: 201, body: { success: true, data: { job: { id: 'sched_1' } } } }));
+  });
+  afterEach(() => { vi.unstubAllGlobals(); });
 
-  it('--every + --prompt 可正常添加（不再报 missing prompt）', async () => {
+  it('--every + --prompt 通过 Host 添加，且不写 data/schedule-jobs.json', async () => {
     await scheduleCommand.parseAsync(['node', 'zhin', 'add', '--every', '30m', '--prompt', '检查待办']);
-    const jobs = readJobs();
-    expect(jobs).toHaveLength(1);
-    expect(jobs[0].schedule).toEqual({ kind: 'every', everyMs: 30 * 60 * 1000 });
-    expect(jobs[0].action.prompt).toBe('检查待办');
+    expect(requests).toHaveLength(1);
+    expect(requests[0]).toMatchObject({ url: 'http://127.0.0.1:9321/api/assistant/jobs', method: 'POST' });
+    expect(requests[0].body.schedule).toEqual({ kind: 'every', everyMs: 30 * 60 * 1000 });
+    expect(requests[0].body.prompt).toBe('检查待办');
+    expect(requests[0].body.notify).toEqual({ channel: 'silent' });
+    expect(fs.existsSync(path.join(tmp, 'data', 'schedule-jobs.json'))).toBe(false);
   });
 
   it('--at + --prompt 可正常添加', async () => {
     await scheduleCommand.parseAsync(['node', 'zhin', 'add', '--at', '2099-12-31T09:00:00Z', '--prompt', '年终提醒']);
-    const jobs = readJobs();
-    expect(jobs[0].schedule.kind).toBe('at');
-    expect(jobs[0].action.prompt).toBe('年终提醒');
+    expect(requests[0].body.schedule.kind).toBe('at');
+    expect(requests[0].body.prompt).toBe('年终提醒');
   });
 
   it('cron 位置参数 + --prompt 仍可添加', async () => {
     await scheduleCommand.parseAsync(['node', 'zhin', 'add', '0 0 9 * * *', '--prompt', '早报']);
-    const jobs = readJobs();
-    expect(jobs[0].schedule).toEqual({ kind: 'solar', cron: '0 0 9 * * *' });
+    expect(requests[0].body.schedule).toEqual({ kind: 'solar', cron: '0 0 9 * * *' });
   });
 
-  it('非法 --every 统一走 logger.error + exit(1)，而非未捕获异常', async () => {
+  it('remove / pause / resume 发往对应的 Host 路由', async () => {
+    stubHost(() => ({ status: 200, body: { success: true, data: { id: 'j1' } } }));
+    for (const action of ['remove', 'pause', 'resume']) {
+      await scheduleCommand.parseAsync(['node', 'zhin', action, 'j1']);
+    }
+    expect(requests.map((request) => [new URL(request.url).pathname, request.body])).toEqual([
+      ['/api/assistant/jobs/remove', { id: 'j1' }],
+      ['/api/assistant/jobs/pause', { id: 'j1' }],
+      ['/api/assistant/jobs/resume', { id: 'j1' }],
+    ]);
+  });
+
+  it('Host 拒绝时退出码为 1', async () => {
+    stubHost(() => ({ status: 404, body: { success: false, error: '任务不存在: ghost' } }));
+    vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      throw new Error(`process.exit:${code}`);
+    }) as never);
+    await expect(scheduleCommand.parseAsync(['node', 'zhin', 'remove', 'ghost'])).rejects.toThrow('process.exit:1');
+  });
+
+  it('非法 --every 统一走 logger.error + exit(1)，不发请求', async () => {
     vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
       throw new Error(`process.exit:${code}`);
     }) as never);
     await expect(
       scheduleCommand.parseAsync(['node', 'zhin', 'add', '--every', 'xyz', '--prompt', 'hi']),
     ).rejects.toThrow('process.exit:1');
-    expect(fs.existsSync(path.join(tmp, 'data', 'schedule-jobs.json'))).toBe(false);
+    expect(requests).toHaveLength(0);
   });
 
   it('缺少 --prompt 时报错退出', async () => {
@@ -280,5 +311,6 @@ describe('schedule add', () => {
     await expect(
       scheduleCommand.parseAsync(['node', 'zhin', 'add', '--every', '30m']),
     ).rejects.toThrow('process.exit:1');
+    expect(requests).toHaveLength(0);
   });
 });

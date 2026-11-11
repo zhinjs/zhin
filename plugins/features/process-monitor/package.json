@@ -21,7 +21,8 @@
     "skills",
     "src",
     "lib",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "build": "tsc",
@@ -39,7 +40,11 @@
     "process",
     "notification"
   ],
-  "author": "Zhin.js Team",
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -85,7 +90,7 @@
       },
       {
         "package": "@zhin.js/tool",
-        "api": "^1.0.0"
+        "api": "^1.1.0"
       },
       {
         "package": "@zhin.js/skill",

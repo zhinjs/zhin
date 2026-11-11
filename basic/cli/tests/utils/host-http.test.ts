@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { connectableHost, hostGet } from '../../src/utils/host-http.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { connectableHost, hostGet, listHostEndpoints, loadHostHttpConfig } from '../../src/utils/host-http.js';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -58,5 +61,71 @@ describe('connectableHost', () => {
     ['127.0.0.1', '127.0.0.1'], ['localhost', 'localhost'], ['bot.example.com', 'bot.example.com'],
   ])('maps the bind address %s to the connectable host %s', (bind, host) => {
     expect(connectableHost(bind)).toBe(host);
+  });
+});
+
+describe('listHostEndpoints', () => {
+  it('pages through /introspection/endpoints and reads data.items', async () => {
+    const urls: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      urls.push(url);
+      const page = Number(new URL(url).searchParams.get('page'));
+      const items = page === 1
+        ? [{ name: 'a', adapter: 'icqq', online: true, status: 'online' }, { adapter: 'broken' }]
+        : [{ name: 'b', adapter: 'discord', online: false, status: 'offline' }];
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ success: true, data: { items, page, pageSize: 100, total: 3, totalPages: 2 } }),
+      } as Response;
+    }));
+
+    const result = await listHostEndpoints({ baseUrl: 'http://127.0.0.1:8086/api', token: 't' });
+
+    expect(result.data).toEqual([
+      { name: 'a', adapter: 'icqq', status: 'online' },
+      { name: 'b', adapter: 'discord', status: 'offline' },
+    ]);
+    expect(urls).toEqual([
+      'http://127.0.0.1:8086/api/introspection/endpoints?page=1&pageSize=100',
+      'http://127.0.0.1:8086/api/introspection/endpoints?page=2&pageSize=100',
+    ]);
+  });
+
+  it('propagates a failed page', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: false, status: 401, json: async () => ({ success: false, error: 'Unauthorized' }),
+    } as Response)));
+    expect(await listHostEndpoints({ baseUrl: 'http://127.0.0.1:8086/api', token: '' }))
+      .toEqual({ ok: false, status: 401, error: 'Unauthorized' });
+  });
+});
+
+describe('loadHostHttpConfig', () => {
+  let dir: string;
+  afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }); });
+
+  it('returns null without a Root config file', async () => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-host-http-'));
+    expect(await loadHostHttpConfig(dir)).toBeNull();
+  });
+
+  it('resolves the token through .env and lets .env.<environment> override it', async () => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-host-http-'));
+    fs.writeFileSync(path.join(dir, 'zhin.config.yml'),
+      'http:\n  host: 0.0.0.0\n  port: 9100\n  base: /admin/\n  token: ${ZHIN_TEST_HOST_HTTP_TOKEN}\n');
+    fs.writeFileSync(path.join(dir, '.env'), 'ZHIN_TEST_HOST_HTTP_TOKEN="base-token"\n');
+    expect(await loadHostHttpConfig(dir, 'development'))
+      .toEqual({ baseUrl: 'http://127.0.0.1:9100/admin', token: 'base-token' });
+
+    fs.writeFileSync(path.join(dir, '.env.production'), 'ZHIN_TEST_HOST_HTTP_TOKEN=prod-token\n');
+    expect((await loadHostHttpConfig(dir, 'production'))?.token).toBe('prod-token');
+    expect((await loadHostHttpConfig(dir, 'development'))?.token).toBe('base-token');
+  });
+
+  it('falls back to the default listener', async () => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-host-http-'));
+    fs.writeFileSync(path.join(dir, 'zhin.config.yml'), 'log_level: info\n');
+    expect(await loadHostHttpConfig(dir)).toEqual({ baseUrl: 'http://127.0.0.1:8086/api', token: '' });
   });
 });

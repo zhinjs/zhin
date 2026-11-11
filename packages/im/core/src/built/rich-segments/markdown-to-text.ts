@@ -106,14 +106,6 @@ export function markdownToPlainText(md: string): string {
   return chunks.join('').trim() + (md.length > MAX_INPUT_LENGTH ? '\n\n[内容过长，已省略后续内容；请缩小查询范围或分页查看。]' : '');
 }
 
-export function markdownToHtmlForRender(md: string): string {
-  const escaped = md
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-  return `<pre style="white-space:pre-wrap;font-family:sans-serif;font-size:14px;line-height:1.5;padding:16px;">${escaped}</pre>`;
-}
-
 function formatMarkdownTables(text: string): string {
   if (!text.includes('|')) return text;
   const out: string[] = [];

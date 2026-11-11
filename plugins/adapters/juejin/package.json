@@ -35,7 +35,7 @@
   "scripts": {
     "build": "tsc",
     "clean": "rimraf lib",
-    "test": "NODE_OPTIONS=--experimental-strip-types vitest run --root ../../.. plugins/adapters/juejin/tests",
+    "test": "vitest run --root ../../.. plugins/adapters/juejin/tests",
     "prepublishOnly": "pnpm run build",
     "prepack": "pnpm run build && node ../../../scripts/build-plugin-runtime-entries.mjs",
     "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean"
@@ -79,7 +79,8 @@
     "schema.json",
     "src",
     "lib",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
   "publishConfig": {
     "access": "public",

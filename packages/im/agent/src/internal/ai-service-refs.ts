@@ -5,10 +5,3 @@ export interface AIServiceRefs {
   aiService: AIService | null;
   zhinAgent: ZhinAgent | null;
 }
-
-export function createRefs(): AIServiceRefs {
-  return {
-    aiService: null,
-    zhinAgent: null,
-  };
-}

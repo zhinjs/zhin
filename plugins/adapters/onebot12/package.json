@@ -15,7 +15,7 @@
   "scripts": {
     "build": "tsc",
     "clean": "rimraf lib",
-    "test": "NODE_OPTIONS=--experimental-strip-types vitest run --root ../../.. plugins/adapters/onebot12/tests",
+    "test": "vitest run --root ../../.. plugins/adapters/onebot12/tests",
     "prepublishOnly": "pnpm run build",
     "prepack": "pnpm run build && node ../../../scripts/build-plugin-runtime-entries.mjs",
     "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean"
@@ -43,7 +43,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/zhinjs/zhin",
+    "url": "git+https://github.com/zhinjs/zhin.git",
     "directory": "plugins/adapters/onebot12"
   },
   "dependencies": {
@@ -57,7 +57,6 @@
     "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/logger": "workspace:*",
     "@zhin.js/page": "workspace:*",
-    "@zhin.js/skill": "workspace:*",
     "imhelper": "1.0.7",
     "ws": "^8.21.1"
   },
@@ -114,10 +113,6 @@
       },
       {
         "package": "@zhin.js/command",
-        "api": "^1.0.0"
-      },
-      {
-        "package": "@zhin.js/skill",
         "api": "^1.0.0"
       },
       {

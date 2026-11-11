@@ -23,6 +23,10 @@
     "build": "tsc",
     "clean": "rimraf lib"
   },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "license": "MIT",
   "dependencies": {
     "@zhin.js/adapter": "workspace:*",
     "@zhin.js/feature-kit": "workspace:*",
@@ -50,10 +54,8 @@
     "dotenv": "^17.4.2",
     "esbuild": "^0.28.1",
     "fs-extra": "^11.4.0",
-    "glob": "^13.0.6",
     "inquirer": "^14.0.2",
     "open": "^11.0.0",
-    "ora": "^9.4.1",
     "semver": "^7.8.5",
     "tsx": "^4.23.1",
     "yaml": "^2.9.0"
@@ -61,7 +63,6 @@
   "devDependencies": {
     "@types/cross-spawn": "^6.0.6",
     "@types/fs-extra": "^11.0.4",
-    "@types/inquirer": "^9.0.10",
     "@types/node": "^26.1.2",
     "@zhin.js/a2a": "workspace:*",
     "@zhin.js/agent": "workspace:*",
@@ -77,6 +78,9 @@
     "@zhin.js/agent": {
       "optional": true
     },
+    "@zhin.js/mcp": {
+      "optional": true
+    },
     "@zhin.js/speech": {
       "optional": true
     },
@@ -87,6 +91,7 @@
   "peerDependencies": {
     "@zhin.js/a2a": "workspace:^",
     "@zhin.js/agent": "workspace:^",
+    "@zhin.js/mcp": "workspace:^",
     "@zhin.js/speech": "workspace:^",
     "typescript": ">=5.8.0 <7.0.0"
   },

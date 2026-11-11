@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { createSerialTick } from '../src/commands/watch.js';
+import { afterEach, describe, it, expect, vi } from 'vitest';
+import { createSerialTick, fetchWatchSnapshot } from '../src/commands/watch.js';
 import {
   formatBytes,
   formatJobSchedule,
@@ -128,5 +128,35 @@ describe('createSerialTick', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     guarded();
     expect(calls).toBe(2);
+  });
+});
+
+describe('fetchWatchSnapshot', () => {
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it('reads endpoints from the paginated introspection route and issues all reads at once', async () => {
+    const started: string[] = [];
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      const pathname = new URL(url).pathname;
+      started.push(pathname);
+      await gate;
+      const data = pathname.endsWith('/introspection/endpoints')
+        ? { items: [{ name: 'bot', adapter: 'icqq', status: 'online' }], totalPages: 1 }
+        : pathname.endsWith('/assistant/jobs') ? { jobs: [], eventsActive: false } : {};
+      return { ok: true, status: 200, json: async () => ({ success: true, data }) } as Response;
+    }));
+
+    const pending = fetchWatchSnapshot({ baseUrl: 'http://127.0.0.1:8086/api', token: '' });
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(started.sort()).toEqual([
+      '/api/assistant/jobs', '/api/introspection/endpoints', '/api/stats', '/api/system/status',
+    ]);
+    release();
+    const snapshot = await pending;
+    expect(snapshot.ok).toBe(true);
+    expect(snapshot.endpoints).toEqual([{ name: 'bot', adapter: 'icqq', status: 'online' }]);
+    expect(snapshot.assistant).toEqual({ enabled: true, eventsActive: false, jobs: [] });
   });
 });

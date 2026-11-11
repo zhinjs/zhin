@@ -21,6 +21,7 @@ import type { Notice } from '../../notice.js';
 import type { Request } from '../../request.js';
 import { SCENE_ONLY_EVENT_TYPES, SCENE_EVENT_TEXT_MAX, clipSceneText } from '../../side-event/scene-events.js';
 import type { IncomingMessage, MessageSenderRef, SendRequest } from './contracts.js';
+import { flattenContent } from './message-events.js';
 
 /**
  * Backlog messages older than this are dropped from the next turn's context:
@@ -482,25 +483,4 @@ function segmentsFromContent(content: unknown): readonly Segment[] {
     }
   }
   return Object.freeze([{ type: 'text', data: Object.freeze({ text: flattenContent(content) }) }]);
-}
-
-function flattenContent(content: unknown): string {
-  if (typeof content === 'string') return content;
-  if (content == null) return '';
-  if (Array.isArray(content)) return content.map((item) => flattenContent(item)).join('');
-  if (typeof content === 'object') {
-    const record = content as Record<string, unknown>;
-    const data = record.data as Record<string, unknown> | undefined;
-    if (typeof record.type === 'string') {
-      if (data && typeof data.text === 'string') return data.text;
-      return `[${record.type}]`;
-    }
-    if (typeof record.text === 'string') return record.text;
-    try {
-      return JSON.stringify(content) ?? '';
-    } catch {
-      return String(content);
-    }
-  }
-  return String(content);
 }

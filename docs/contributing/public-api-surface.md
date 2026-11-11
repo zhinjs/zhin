@@ -119,15 +119,10 @@
 | `MessageDispatcher` | `internal` | `@zhin.js/core/runtime` | `InboundRuntime` 持有的 generation-owned 消息分发器 |
 | `EndpointRuntime` | `internal` | `@zhin.js/core/runtime` | `ImRuntime.endpoints` 持有的 generation-leased Endpoint 目录、控制与管理边界 |
 | `RuntimeMessageEventSource` | `internal` | `@zhin.js/core/runtime` | `ImRuntime.messageEvents` 暴露的只读消息观察端口；发布权留在 Core |
-| `@zhin.js/agent/runtime` Workroom tokens / composition ports | `internal` | `@zhin.js/agent` | generation-owned Host 装配机制；不是插件作者可直接取得 Run 状态写权限的 API |
-| `@zhin.js/workroom/remote` remote dispatch / callback / assignment | `internal` | `@zhin.js/workroom` | A2A 扩展；已移出包根并冻结；默认装配仍创建 Remote Callback Runtime / Remote Assignment Authority（旧 Kernel/runtime 路径依赖，C2 之后处理），仅 A2A transport 接线按配置懒加载 |
-| `@zhin.js/workroom/scheduler` scheduler / preemption / priority authority | `internal` | `@zhin.js/workroom` | 已移出包根并冻结（C4b）；仅移出包根导出，默认装配（旧 Kernel 路径）仍创建 scheduler / preemption runtime，C2 之后处理 |
-| `@zhin.js/workroom/portfolio` portfolio journal / admission / capacity outbox / sponsor | `internal` | `@zhin.js/workroom` | 已移出包根并冻结（C4b）；仅移出包根导出，默认装配（旧 Kernel 路径）仍创建 portfolio runtime，C2 之后处理 |
-| `@zhin.js/workroom/data-governance` payload vault / disclosure manifest & authority / payload lifecycle / workroom-data-* & workroom-payload-* runtime | `internal` | `@zhin.js/workroom` | 已移出包根并冻结（C4c）；仅移出包根导出，默认装配（旧 Kernel 路径）仍创建 data-governance runtime，C2 之后处理 |
-| Workroom / Portfolio / Data Governance domain contracts | `internal` | `@zhin.js/agent` | 领域值对象、策略和持久化端口；不依赖 Agent runtime/config，Host 适配器从 `@zhin.js/agent/runtime` 组合 |
 | Agent Host 装配（`composeZhinAgentRuntime`） | `internal` | `@zhin.js/agent/runtime` | CLI composition root 使用的装配函数；返回显式 `host` 契约，不暴露 `asPrivate` 转换口 |
 | classic `ToolRuntime` / builtin policy resolver | `internal` | `@zhin.js/agent` 包内实现 | 旧独立执行链的内部机制；生产回合只使用 generation-owned `TurnToolRuntime` |
-| Root Host 安装器（`*-host-installer.ts`） | `internal` | `@zhin.js/core/runtime` · `@zhin.js/agent/runtime` · `@zhin.js/runtime/host` · `@zhin.js/cli` | 领域归属的 Root Host 安装器（database/outbound/inbox 归 `core/runtime`，agent/inference/workroom 归 `agent/runtime`，http/protocol/speech/html-renderer 归 `runtime/host`，console 装配归 `cli` + `pagemanager`） |
+| Root Host 安装器（`*-host-installer.ts`） | `internal` | `@zhin.js/core/runtime` · `@zhin.js/cli` | database / outbound / component / locale 安装器归 `@zhin.js/core/runtime`；agent、configuration、schedule、restart、protocol（MCP / A2A）、speech、html-renderer 安装器与 console 装配在 `basic/cli/src/plugin-runtime/`；装配细节随时可变 |
+| `@zhin.js/harness`（Mailbox / Authority / BudgetLedger / GuardKernel / Journal） | `internal` | `@zhin.js/harness` | ADR 0048 多 Agent 协作微内核，由 `@zhin.js/agent` 装配；插件作者通过 `agent.json` 的 `collaboration` 与协作工具使用，不直接依赖 |
 
 ## Deprecated / 已迁移
 
@@ -153,7 +148,7 @@
 | Kernel `PluginBase` / mutable `Feature` registry | `removed` | Plugin tree、字符串 DI、prototype extension registry 与自证测试已删除 | 生命周期统一属于 `@zhin.js/plugin-runtime`；能力发现和投影统一属于 `@zhin.js/feature-kit` |
 | Kernel global Schedule getters/setters | `removed` | `get/setScheduleEngine` 与 `get/setScheduler` 已删除 | 每个 `ScheduleJobEngine` 私有持有并销毁自己的调度引擎，Host 调度走 generation-owned token |
 | `bootstrapNode` / `zhin.js/node` | `removed` | 不再导出 | 唯一启动入口：`zhin runtime start` |
-| `AgentOrchestrator` / `ResourceHub` | `removed` | 兼容名称不再导出 | 能力注册改用 `AgentResourceHub`；Workroom 编排改走 Kernel 与专用 typed ports |
+| `AgentOrchestrator` / `ResourceHub` | `removed` | 兼容名称不再导出 | 能力注册改用 `AgentResourceHub`；多 Agent 协作改走 `@zhin.js/harness`（ADR 0048） |
 | 「`host` 插件」叙事 | `deprecated` | 文档已收口 | Host 能力改为 token 化（见上表 Host Token），不再是插件概念 |
 | `examples/test-bot` 作为用户路径 | `deprecated` | 维护者厨房水槽 | 用户路径为 minimal-bot（Stable）→ full-bot（L4），勿把 test-bot 配置当模板 |
 | `plugin.yml` / Core `PluginManifest` | `removed` | 构建识别、源码类型与仓库重复清单均已删除 | 插件身份与清单只认严格校验的 `package.json#zhin` |
