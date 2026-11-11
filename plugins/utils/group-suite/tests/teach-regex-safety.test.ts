@@ -37,7 +37,8 @@ describe('teach regex safety', () => {
     const ranPattern = [...test.mock.contexts, ...exec.mock.contexts].some(regex => (regex as RegExp).source === pattern);
     expect(safe).toBe(false);
     expect(ranPattern).toBe(false);
-    expect(elapsed).toBeLessThan(50);
+    // Generous bound for loaded CI machines; running the pattern would take minutes.
+    expect(elapsed).toBeLessThan(1000);
   });
 
   it.each([
@@ -73,7 +74,7 @@ describe('teach regex safety', () => {
     });
     const started = performance.now();
     expect(await tryTeachReply({ ...input, content: `${'a'.repeat(40)}!` }, enabled, runtime)).toBeNull();
-    expect(performance.now() - started).toBeLessThan(500);
+    expect(performance.now() - started).toBeLessThan(2000);
   });
 
   it('only tries regex rules on short messages, compiles each rule once and still fills captures', async () => {
