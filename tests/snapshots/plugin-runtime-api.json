@@ -275,6 +275,7 @@
     "export * from './http.js';",
     "export * from './iam.js';",
     "export * from './onboarding.js';",
+    "export * from './packages.js';",
     "export * from './plugin-management.js';",
     "export * from './project.js';",
     "export * from './supervisor.js';",
@@ -297,6 +298,13 @@
     "export * from './package-manager.js';",
     "export * from './service.js';",
     "export * from './state-store.js';"
+  ],
+  "gateway/packages": [
+    "export * from './authorization.js';",
+    "export * from './errors.js';",
+    "export * from './rpc.js';",
+    "export * from './service.js';",
+    "export * from './snapshot.js';"
   ],
   "gateway/terminal": [
     "export * from './config.js';",

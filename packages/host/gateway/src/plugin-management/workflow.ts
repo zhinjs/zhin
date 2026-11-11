@@ -17,6 +17,7 @@ import { ConsoleConfigurationStore } from '../config/configuration.js';
 import { explainConfigFields } from './config-explanation.js';
 import type { ConsoleConfigExplanation } from '@zhin.js/console-protocol';
 import type { PluginManagementActivity } from './activity.js';
+import { resolveCommand } from '../onboarding/package-manager.js';
 import { readPluginLifecycleState, resolvePluginLifecycleFile } from '@zhin.js/runtime';
 
 const execute = promisify(execFile);
@@ -364,7 +365,12 @@ export class PluginManagementWorkflow implements PluginManagementPort {
     const workspace = await access(join(this.#root, 'pnpm-workspace.yaml')).then(() => true, error => { if (notFound(error)) return false; throw error; });
     const invocation = [args[0]!, ...(workspace ? ['-w'] : []), ...args.slice(1)];
     if (this.#options.installDependencies) await this.#options.installDependencies(invocation, this.#root);
-    else await execute('pnpm', invocation, { cwd: this.#root, maxBuffer: 10 * 1024 * 1024 });
+    else {
+      // No shell: on Windows `pnpm.cmd` is resolved and run through `cmd.exe /d /s /c` with quoted arguments.
+      const resolved = resolveCommand('pnpm', invocation);
+      await execute(resolved.command, [...resolved.args], { cwd: this.#root, maxBuffer: 10 * 1024 * 1024, windowsHide: true,
+        ...(resolved.windowsVerbatimArguments ? { windowsVerbatimArguments: true } : {}) });
+    }
   }
 
   async install(request: string, expectedRevision?: string, expectedProjectRevision?: string, options: PluginInstallOptions = {}) {

@@ -55,6 +55,11 @@
       "types": "./lib/http.d.ts",
       "development": "./src/http.ts",
       "import": "./lib/http.js"
+    },
+    "./packages": {
+      "types": "./lib/packages.d.ts",
+      "development": "./src/packages.ts",
+      "import": "./lib/packages.js"
     }
   },
   "files": [
@@ -142,6 +147,10 @@
       "./http": {
         "types": "./lib/http.d.ts",
         "import": "./lib/http.js"
+      },
+      "./packages": {
+        "types": "./lib/packages.d.ts",
+        "import": "./lib/packages.js"
       }
     }
   },
