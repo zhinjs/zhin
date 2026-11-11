@@ -187,7 +187,7 @@ if (violations.length) {
   for (const v of violations) {
     console.error(`  ${v.plugin}: ${v.issue}`);
   }
-  console.error('\nPlugins must follow the standard structure. See docs/guide/ for details.\n');
+  console.error('\nPlugins must follow the standard structure. See docs/authoring/ for details.\n');
   process.exit(1);
 }
 

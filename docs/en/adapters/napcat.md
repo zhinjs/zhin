@@ -99,7 +99,7 @@ The root plugin the main configuration `plugins` map (or project graph) must ref
 ## Documentation Links
 
 - [NapCatQQ](https://github.com/NapNeko/NapCatQQ)
-- [Adapters overview](https://zhin.js.org/essentials/adapters)
+- [Adapters overview](https://zhin.js.org/adapters/)
 
 ## Console page
 

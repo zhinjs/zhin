@@ -88,7 +88,7 @@ endpoint 配置，不会从环境变量推断 endpoint id。
 ## 文档链接
 
 - [NapCatQQ](https://github.com/NapNeko/NapCatQQ)
-- [适配器概览](https://zhin.js.org/essentials/adapters)
+- [适配器概览](https://zhin.js.org/adapters/)
 
 ## Console 页面
 

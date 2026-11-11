@@ -66,7 +66,7 @@ const checks = [
   {
     name: 'L4-CI (deterministic subset)',
     command: 'pnpm check:l4-ci',
-    description: 'PR 门禁 L4 子集；全量 check:l4 见 nightly-smoke',
+    description: 'PR 门禁 L4 子集；全量 check:l4 需本地手动运行',
   },
   {
     name: 'Stable Smoke',

@@ -219,6 +219,6 @@ pnpm --filter @zhin.js/client build
 
 ## 相关文档
 
-- [Remote Console 使用说明](../../../docs/console-remote.md)
+- [Remote Console 使用说明](../../../docs/console/index.md)
 - [Console 栈概览](../README.md)
 - [@zhin.js/host-http（Console/HTTP Host 传输）](../../host/http/README.md)

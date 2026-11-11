@@ -31,7 +31,7 @@ Console Host（PageManager 与管理面 REST）由 `@zhin.js/cli` 作为 composi
 2. 打开 **https://console.zhin.dev**（或本地 `zhin-console/` 开发服）。
 3. 登录页填写 API Base 与 Bearer Token。
 
-详见 **[docs/console-remote.md](../../docs/console-remote.md)**。本地 submodule 可选挂载在 monorepo 根 **`zhin-console/`**。
+详见 **[docs/console/index.md](../../docs/console/index.md)**。
 
 ## 插件扩展
 

@@ -39,7 +39,8 @@ function formatCompactValue(
 ): string {
   if (typeof value !== 'string') return String(value);
   if (/^https?:\/\//i.test(value.trim())) return value;
-  if (isPathLikeField(key) || looksLikeAbsolutePath(value)) {
+  // A path-like key alone is not enough: `config: 'yaml'` or `direction: 'in'` are not paths.
+  if (looksLikeAbsolutePath(value) || (isPathLikeField(key) && /[\\/]/.test(value))) {
     return formatDisplayPath(value, pathOptions);
   }
   return value;

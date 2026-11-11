@@ -183,7 +183,7 @@ Telegram 的 token / apiBaseUrl 更新通过只读 `getMe` 核验真实 bot ID�
 ## Documentation
 
 - [Telegram adapter on zhin.js.org](https://zhin.js.org/adapters/telegram)
-- [Adapters overview](https://zhin.js.org/essentials/adapters)
+- [Adapters overview](https://zhin.js.org/adapters/)
 
 ## License
 

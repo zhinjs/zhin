@@ -5,11 +5,12 @@
 ## 安装
 
 ```yaml
+configVersion: 2
 plugins:
-  - "@zhin.js/plugin-idiom-chain"
+  idiom-chain: "@zhin.js/plugin-idiom-chain"
 database:
   dialect: sqlite
-  storage: ./data/zhin.db
+  filename: ./data/zhin.db
 ```
 
 ## 命令

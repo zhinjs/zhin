@@ -5,11 +5,12 @@
 ## 安装
 
 ```yaml
+configVersion: 2
 plugins:
-  - "@zhin.js/plugin-tic-tac-toe"
+  tic-tac-toe: "@zhin.js/plugin-tic-tac-toe"
 database:
   dialect: sqlite
-  storage: ./data/zhin.db
+  filename: ./data/zhin.db
 ```
 
 ## 命令

@@ -20,6 +20,6 @@ Host **不提供**内置管理页 UI，仅暴露 Console API。官方 UI 在独�
 2. 浏览器打开 **https://console.zhin.dev**（或本地 `zhin-console/` 开发服）。
 3. 登录页填写 **API Base URL**（如 `http://127.0.0.1:8086`）与 **Bearer Token**（`.env` 中 `HTTP_TOKEN` / `http.token`）。
 
-协议：`POST /api/console/request` + SSE `GET /api/events`；插件扩展经 `GET /entries` 动态加载。完整说明见 **[docs/console-remote.md](../../docs/console-remote.md)**。
+协议：`POST /api/console/request` + SSE `GET /api/events`；插件扩展经 `GET /entries` 动态加载。完整说明见 **[docs/console/index.md](../../docs/console/index.md)**。
 
 构建顺序（Host 栈）：`packages/console/*` → `packages/host/http`（见 [repo-structure](../../docs/contributing/repo-structure.md)）。

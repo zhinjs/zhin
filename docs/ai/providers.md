@@ -175,7 +175,7 @@ Claude 订阅与 Antigravity：实验 · 不受官方支持 · 可能违反供�
 
 ```ts
 import { defineCommand } from '@zhin.js/command';
-import { aiInferenceClientToken } from '@zhin.js/ai-provider';
+import { aiInferenceClientToken } from '@zhin.js/ai/provider';
 
 export default defineCommand({
   description: 'List available model profiles',

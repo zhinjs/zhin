@@ -5,12 +5,13 @@
 ## 安装
 
 ```yaml
+configVersion: 2
 plugins:
   game-hub: "@zhin.js/plugin-game-hub"
   roulette: "@zhin.js/plugin-roulette"
 database:
   dialect: sqlite
-  storage: ./data/zhin.db
+  filename: ./data/zhin.db
 ```
 
 没有数据库时对局保存在内存里，重启后丢失。

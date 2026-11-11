@@ -28,7 +28,7 @@
         "required": ["adapter", "channelId"],
         "properties": {
           "adapter": { "type": "string" },
-          "endpointId": { "type": "string" },
+          "endpointKey": { "type": "string" },
           "channelType": { "type": "string", "default": "private" },
           "channelId": { "type": "string" }
         }

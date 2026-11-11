@@ -91,7 +91,7 @@ milky:
 
 - [Milky 快速开始](https://milky.ntqqrev.org/)
 - [Milky 通信](https://milky.ntqqrev.org/guide/communication)
-- [适配器概览](https://zhin.js.org/essentials/adapters)
+- [适配器概览](https://zhin.js.org/adapters/)
 
 ## Console 页面
 

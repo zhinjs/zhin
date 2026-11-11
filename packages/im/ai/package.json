@@ -65,7 +65,7 @@
   "scripts": {
     "build": "tsc",
     "clean": "rimraf lib",
-    "test": "vitest run --config ../../vitest.config.ts"
+    "test": "vitest run --root ../../.. packages/im/ai/tests"
   },
   "dependencies": {
     "@zhin.js/logger": "workspace:*",

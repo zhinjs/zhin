@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/milky/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/milky/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=669ba614d11771d1 -->
+<!-- sync-adapter-docs:sha256=d2f500ee7fa27cf5 -->
 
 # @zhin.js/adapter-milky
 
@@ -103,7 +103,7 @@ milky:
 
 - [Milky 快速开始](https://milky.ntqqrev.org/)
 - [Milky 通信](https://milky.ntqqrev.org/guide/communication)
-- [适配器概览](https://zhin.js.org/essentials/adapters)
+- [适配器概览](https://zhin.js.org/adapters/)
 
 ## Console 页面
 

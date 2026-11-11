@@ -33,4 +33,4 @@ You don't need to learn Zhin's package layout first. Find what you want to build
 ## Next steps
 
 - No project yet? Start with [Quick start](/en/getting-started/)
-- Want full examples? See [Example projects](/en/examples/) and the [Showcase](/en/showcase/README)
+- Want full examples? See [Example projects](/en/examples/) and the [Showcase](/en/showcase/)

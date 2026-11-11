@@ -10,7 +10,7 @@ export const ADAPTERS_DOCS_URL = 'https://zhin.js.org/adapters/';
 export const ADAPTERS_INDEX_URL = ADAPTERS_DOCS_URL;
 
 /** 框架级适配器概念（多平台、群管工具等） */
-export const ADAPTERS_ESSENTIALS_URL = 'https://zhin.js.org/essentials/adapters';
+export const ADAPTERS_ESSENTIALS_URL = 'https://zhin.js.org/adapters/';
 
 /** 各适配器文档页（与 docs/adapters/*.md 同步） */
 export const adapterDocsUrl = (slug: string) => `https://zhin.js.org/adapters/${slug}`;
