@@ -1,5 +1,11 @@
 # @zhin.js/client
 
+## 1.1.31
+
+### Patch Changes
+
+- 0c62176: Upgrade Console UI optical elevation tokens (`--zk-shadow-sm/md/lg/xl` bridged to `--console-shadow-*`), frosted backdrop scrims and entrance transitions for `Modal` / `Drawer`, and interactive `BarChart` / `DonutChart` legend progress cards.
+
 ## 1.1.30
 
 ### Patch Changes
