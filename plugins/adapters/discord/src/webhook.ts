@@ -108,9 +108,7 @@ export async function handleDiscordInteractionRequest(
     });
   } catch (error) {
     logger.error('Discord interactions error:', error);
-    if (!response.headersSent) {
-      return new Response('Internal Server Error', { status: 500, headers: { 'Content-Type': 'text/plain' } });
-    }
+    return new Response('Internal Server Error', { status: 500, headers: { 'Content-Type': 'text/plain' } });
   }
 }
 

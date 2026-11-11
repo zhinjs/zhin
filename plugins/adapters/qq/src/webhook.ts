@@ -47,9 +47,7 @@ export async function handleQqWebhookRequest(
     }, async () => undefined);
   } catch (error) {
     logger.error('QQ webhook error:', error);
-    if (!response.headersSent) {
-      return new Response('Internal Server Error', { status: 500, headers: { 'Content-Type': 'text/plain' } });
-    }
+    return new Response('Internal Server Error', { status: 500, headers: { 'Content-Type': 'text/plain' } });
   }
 }
 

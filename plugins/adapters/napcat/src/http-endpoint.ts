@@ -234,9 +234,7 @@ export class NapCatHttpEndpoint extends NapcatClient implements Endpoint {
       return new Response(JSON.stringify({ status: 'ok' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     } catch (error) {
       this.#logger.error('NapCat HTTP webhook error:', error);
-      if (!response.headersSent) {
-        return new Response(JSON.stringify({ message: 'Internal Server Error' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
-      }
+      return new Response(JSON.stringify({ message: 'Internal Server Error' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
     }
   }
 }

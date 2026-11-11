@@ -14,7 +14,7 @@ const logger = getLogger('satori');
 export interface SatoriWebhookHandler {
   readonly config: ResolvedSatoriWebhookConfig;
   readonly isOpen: boolean;
-  acceptHttp(request: Request, response: ServerResponse): Promise<void>;
+  acceptHttp(request: Request): Promise<Response>;
 }
 
 export function registerSatoriWebhookRoutes(
@@ -39,30 +39,24 @@ export async function handleSatoriWebhookRequest(
     if (opcode !== SatoriOpcode.EVENT && opcode !== SatoriOpcode.META) {
       return new Response(JSON.stringify({ message: 'OK' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
-    if (handler.isOpen) {
-      await handler.acceptHttp(request, response);
-    } else {
-      return new Response(JSON.stringify({ status: 'ok' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-    }
+    if (handler.isOpen) return await handler.acceptHttp(request);
+    return new Response(JSON.stringify({ status: 'ok' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   } catch (error) {
     logger.error('Satori webhook error:', error);
-    if (!response.headersSent) {
-      return new Response(JSON.stringify({ message: 'Internal Server Error' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
-    }
+    return new Response(JSON.stringify({ message: 'Internal Server Error' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
 }
 
-export function resolveSatoriOpcode(request: Request): number | undefined {
-  const raw = request.headers['satori-opcode'] ?? request.headers['Satori-Opcode'];
-  const value = Array.isArray(raw) ? raw[0] : raw;
+export function resolveSatoriOpcode(request: { readonly headers: Headers }): number | undefined {
+  const value = request.headers.get('satori-opcode');
   if (value == null || value === '') return undefined;
   const parsed = Number.parseInt(String(value), 10);
   return Number.isNaN(parsed) ? undefined : parsed;
 }
 
-export function verifySatoriToken(token: string | undefined, request: Request): boolean {
+export function verifySatoriToken(token: string | undefined, request: { readonly headers: Headers }): boolean {
   if (!token) return true;
-  const auth = request.headers.authorization ?? '';
+  const auth = request.headers.get('authorization') ?? '';
   const expected = Buffer.from(`Bearer ${token}`, 'utf8');
   const actual = Buffer.from(auth, 'utf8');
   return actual.length === expected.length && timingSafeEqual(actual, expected);

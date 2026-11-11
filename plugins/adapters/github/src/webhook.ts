@@ -78,9 +78,7 @@ export async function handleGithubWebhookRequest(
     });
   } catch (error) {
     logger.error('Webhook error:', error);
-    if (!response.headersSent) {
-      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
-    }
+    return new Response(JSON.stringify({ error: 'Internal Server Error' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
 }
 

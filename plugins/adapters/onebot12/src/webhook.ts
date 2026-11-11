@@ -219,16 +219,15 @@ export class OneBot12WebhookEndpoint extends Onebot12Client implements Endpoint 
       if (!this.#open) {
         return new Response(JSON.stringify({ status: 'ok' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
       }
-      await acceptHttpIngress<OneBot12Event>(request, response, event => {
+      const result = await acceptHttpIngress<OneBot12Event>(request, undefined, event => {
         if (!matchesOneBot12Self(this.#options.config, event)) return;
         void this[endpointSpec].events.run(() => this.ingest(event as Parameters<Onebot12Client['ingest']>[0]))
           .catch(error => this.#warnPlatformEvent(error));
       });
+      return new Response(JSON.stringify(result.body), { status: result.status, headers: result.headers });
     } catch (error) {
       logger.error('OneBot12 webhook error:', error);
-      if (!response.headersSent) {
-        return new Response(JSON.stringify({ message: 'Internal Server Error' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
-      }
+      return new Response(JSON.stringify({ message: 'Internal Server Error' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
     }
   }
 }

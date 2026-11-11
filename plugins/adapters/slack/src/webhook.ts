@@ -84,8 +84,6 @@ export async function handleSlackWebhookRequest(
     return new Response('', { status: 200 });
   } catch (error) {
     logger.error('Slack webhook error:', error);
-    if (!response.headersSent) {
-      return new Response('', { status: 200 });
-    }
+    return new Response('', { status: 200 });
   }
 }

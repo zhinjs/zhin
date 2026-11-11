@@ -193,15 +193,14 @@ export class MilkyWebhookEndpoint extends MilkyClient implements Endpoint {
       if (!this.#open) {
         return new Response(JSON.stringify({ status: 'ok' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
       }
-      await acceptHttpIngress<MilkyEvent>(request, response, event => {
+      const result = await acceptHttpIngress<MilkyEvent>(request, undefined, event => {
         void this[endpointSpec].events.run(() => this.ingest(event as Parameters<MilkyClient['ingest']>[0]))
           .catch(error => this.#warnPlatformEvent(error));
       });
+      return new Response(JSON.stringify(result.body), { status: result.status, headers: result.headers });
     } catch (error) {
       this.#logger.error('Milky webhook error:', error);
-      if (!response.headersSent) {
-        return new Response(JSON.stringify({ message: 'Internal Server Error' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
-      }
+      return new Response(JSON.stringify({ message: 'Internal Server Error' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
     }
   }
 }
