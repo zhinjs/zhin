@@ -7,6 +7,11 @@
 export { createHttpHost, type ProcessHttpHost } from './server.js';
 export { createHttpHostGroup } from './listener-group.js';
 export {
+  createNodeHttpListener,
+  type NodeHttpListener,
+  type NodeHttpListenerOptions,
+} from './listener.js';
+export {
   createNodeRequest,
   nodeRequestHeaders,
   writeNodeResponse,

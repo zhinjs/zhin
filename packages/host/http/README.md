@@ -10,8 +10,9 @@ and `packages/im/zhin/src/instance/console/host.ts`).
 The route contract is transport independent (ADR 0054 §2): HTTP routes take a Web standard
 `Request` and return a `Response`; WebSocket routes receive a `WsConnection`. The main entry never
 loads `node:http` or `ws`. The in-process Node listener (`createHttpHost`, `createHttpHostGroup`)
-and the Node ↔ Web conversion (`createNodeRequest`, `writeNodeResponse`, `wrapNodeWebSocket`) live
-in `@zhin.js/host-http/node`.
+the Node ↔ Web conversion (`createNodeRequest`, `writeNodeResponse`, `wrapNodeWebSocket`) and the
+bare listener both of them and the gateway run on (`createNodeHttpListener`) live in
+`@zhin.js/host-http/node`.
 
 The composition root owns the process listener through `ProcessHttpHost`. Generation scopes receive
 only the `HttpHost` routing port: they may register HTTP/WS routes but cannot listen or close the

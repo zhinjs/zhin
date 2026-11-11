@@ -18,7 +18,7 @@ Zhin.js 管理网关（[ADR 0054](../../../docs/adr/0054-management-gateway.md)�
 | `@zhin.js/gateway/supervisor` | 实例进程监管 `InstanceSupervisor`：IPC 控制通道（`ready` / `shutdown` / `restart-request`）、崩溃重启与风暴保护、日志采集（环形缓冲 + `.zhin/logs/instance.log` 按大小轮转）；`runSupervisedInstance` 供 `zhin runtime start` 使用 |
 | `@zhin.js/gateway/usage` | 用量统计聚合 |
 | `@zhin.js/gateway/onboarding` | Console 引导（ADR 0053）：`.zhin/onboarding.json` 状态（`OnboardingStateStore`、自动识别已配置步骤）、`OnboardingService`、安装白名单与 `authorizeInstall`、流式 `installPackages` |
-| `@zhin.js/gateway/http` | JSON / HTML / SSE 响应工具 |
+| `@zhin.js/gateway/http` | 网关 HTTP 服务器（`GatewayHttpServer`：自有路由、`{base}` 认证后转发、其他路由原样转发、实例离线 503）、`startGateway`（服务器 + 实例监管 + 可插拔实例传输）、HTML / SSE 响应工具 |
 | `@zhin.js/gateway` | 以上全部 |
 
 ```ts

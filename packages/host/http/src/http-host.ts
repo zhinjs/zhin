@@ -124,6 +124,11 @@ export interface HttpRouterOptions {
   readonly secure?: boolean;
   /** Bound listener address as reported by the transport. */
   readonly address?: () => HttpHostAddress | undefined;
+  /**
+   * Register the built-in `/pub/health` and `/pub/openapi.json` routes (default true). The
+   * gateway turns them off: it owns its own health probe and forwards the instance's catalog.
+   */
+  readonly builtinRoutes?: boolean;
 }
 
 export interface HttpRequestInfo {
@@ -146,7 +151,13 @@ export interface WsTransport {
 }
 
 export type WsUpgradeDecision =
-  | Readonly<{ accepted: false; status: 401 | 404 }>
+  | Readonly<{
+    accepted: false;
+    /** 404 drops the socket silently; other statuses are written as a bare HTTP response. */
+    status: 401 | 404 | 503;
+    /** Extra response headers for the refusal (e.g. `Retry-After`). */
+    headers?: Readonly<Record<string, string>>;
+  }>
   | Readonly<{
     accepted: true;
     /** Hand the established socket to the route listeners. */
@@ -203,37 +214,41 @@ export function createHttpRouter(options: HttpRouterOptions = {}): HttpRouter {
   const httpRoutes: HttpRoute[] = [];
   let closed = false;
 
-  // Built-in public health probe (parity with host-router `/pub/health`).
-  httpRoutes.push(Object.freeze({
-    method: 'GET',
-    path: '/pub/health',
-    pattern: '/pub/health',
-    prefix: false,
-    meta: Object.freeze({ summary: 'Health probe', tags: ['pub'] }),
-    handler: () => jsonResponse(200, {
-      success: true,
-      status: 'ok',
-      timestamp: new Date().toISOString(),
-    }),
-  }));
+  if (options.builtinRoutes !== false) registerBuiltinRoutes();
 
-  // OpenAPI catalog (parity with host-router `/pub/openapi.json`).
-  httpRoutes.push(Object.freeze({
-    method: 'GET',
-    path: '/pub/openapi.json',
-    pattern: '/pub/openapi.json',
-    prefix: false,
-    meta: Object.freeze({ summary: 'OpenAPI 3.1 document', tags: ['pub'] }),
-    handler: (request: Request) => {
-      const hostHeader = request.headers.get('host') ?? 'localhost';
-      const proto = request.headers.get('x-forwarded-proto') ?? (secure ? 'https' : 'http');
-      return jsonResponse(200, buildOpenApiDocument(listListedRoutes(), {
-        apiBase,
-        serverUrl: `${proto}://${hostHeader}`,
-        version: process.env.npm_package_version ?? '0.0.0',
-      }));
-    },
-  }));
+  function registerBuiltinRoutes(): void {
+    // Built-in public health probe (parity with host-router `/pub/health`).
+    httpRoutes.push(Object.freeze({
+      method: 'GET',
+      path: '/pub/health',
+      pattern: '/pub/health',
+      prefix: false,
+      meta: Object.freeze({ summary: 'Health probe', tags: ['pub'] }),
+      handler: () => jsonResponse(200, {
+        success: true,
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+      }),
+    }));
+
+    // OpenAPI catalog (parity with host-router `/pub/openapi.json`).
+    httpRoutes.push(Object.freeze({
+      method: 'GET',
+      path: '/pub/openapi.json',
+      pattern: '/pub/openapi.json',
+      prefix: false,
+      meta: Object.freeze({ summary: 'OpenAPI 3.1 document', tags: ['pub'] }),
+      handler: (request: Request) => {
+        const hostHeader = request.headers.get('host') ?? 'localhost';
+        const proto = request.headers.get('x-forwarded-proto') ?? (secure ? 'https' : 'http');
+        return jsonResponse(200, buildOpenApiDocument(listListedRoutes(), {
+          apiBase,
+          serverUrl: `${proto}://${hostHeader}`,
+          version: process.env.npm_package_version ?? '0.0.0',
+        }));
+      },
+    }));
+  }
 
   async function authenticateUpgrade(
     url: URL,
@@ -627,6 +642,8 @@ function corsHeaders(origin: string, allowed: readonly string[]): Record<string,
     'access-control-allow-methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'access-control-allow-headers': 'Authorization, Content-Type, Accept',
     'access-control-max-age': '86400',
+    // Browsers hide non-safelisted response headers unless exposed (503 instance-unavailable).
+    'access-control-expose-headers': 'Retry-After',
   };
 }
 
