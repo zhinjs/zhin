@@ -1,11 +1,12 @@
 /** CLI side of the local control socket (ADR 0054 §6). */
 import { lstat } from 'node:fs/promises';
 import { connect, type Socket } from 'node:net';
-import type { GatewayPackageEvent, GatewayRpcErrorCode } from '@zhin.js/console-protocol';
+import type { GatewayPackageEvent } from '@zhin.js/console-protocol';
 import { gatewaySocketPath, isNamedPipe } from './paths.js';
 import {
   LineDecoder,
   LOCAL_GATEWAY_RPC,
+  type LocalGatewayErrorCode,
   type LocalGatewayInfoResult,
   type LocalGatewayServerLine,
 } from './protocol.js';
@@ -28,7 +29,7 @@ export class LocalGatewayClientError extends Error {
 
 /** The gateway answered `{ ok: false }`. */
 export class LocalGatewayRpcError extends Error {
-  constructor(readonly code: GatewayRpcErrorCode, message: string, readonly status: number) {
+  constructor(readonly code: LocalGatewayErrorCode, message: string, readonly status: number) {
     super(message);
     this.name = 'LocalGatewayRpcError';
   }

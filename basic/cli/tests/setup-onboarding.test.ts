@@ -5,6 +5,8 @@ import path from 'node:path';
 import yaml from 'yaml';
 import { OnboardingService } from '@zhin.js/gateway/onboarding';
 import { PluginManagementWorkflow } from '@zhin.js/gateway/plugin-management';
+import { gatewaySocketPath, LOCAL_GATEWAY_RPC, LocalControlServer, type LocalGatewayRequest } from '@zhin.js/gateway/local';
+import type { GatewayPackageTransactionResult } from '@zhin.js/console-protocol';
 
 let tmp: string;
 let prevCwd: string;
@@ -100,5 +102,72 @@ describe('zhin setup (non-interactive)', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     await expect(setupCommand.parseAsync(['node', 'zhin', '--adapter', 'sandbox', '--skip-adapters'])).rejects.toThrow('exit 1');
     expect(exit).toHaveBeenCalledWith(1);
+  });
+});
+
+/** A gateway answering on the project's control socket: `gateway.info` and package installs. */
+async function fakeGateway(ok: boolean) {
+  const requests: LocalGatewayRequest[] = [];
+  const server = await LocalControlServer.open({
+    path: gatewaySocketPath(tmp),
+    handler: async (request, emit) => {
+      requests.push(request);
+      if (request.type === LOCAL_GATEWAY_RPC.INFO) {
+        return { ok: true, data: {
+          gateway: { pid: process.pid, ports: [], origins: [], socket: gatewaySocketPath(tmp), startedAt: Date.now(), version: '0.0.0', mode: 'daemon', args: [] },
+          instance: { state: 'running' }, consoleInitialized: true,
+        } };
+      }
+      const packages = ((request.data as { packages: string[] }).packages).map(spec => ({ name: spec.replace(/(?<=.)@.*$/u, ''), spec, source: 'npm' as const }));
+      emit({ type: 'start', id: 't1', operation: 'install', packages });
+      emit({ type: 'phase', id: 't1', phase: 'stop-instance' });
+      emit({ type: 'output', id: 't1', stream: 'stdout', chunk: 'Packages: +5\n' });
+      emit({ type: 'phase', id: 't1', phase: 'start-instance' });
+      const result: GatewayPackageTransactionResult = {
+        id: 't1', operation: 'install', packages, ok, status: ok ? 'succeeded' : 'rolledBack',
+        ...(ok ? {} : { failedPhase: 'start-instance', error: 'instance failed to start' }),
+        instance: { before: 'running', after: 'running' }, startedAt: 1, finishedAt: 2,
+      };
+      return { ok: true, data: result };
+    },
+  });
+  return { requests, close: () => server.close() };
+}
+
+describe.runIf(process.platform !== 'win32')('zhin setup --install beside a running gateway', () => {
+  it('installs through gateway.packages.install with streamed progress, not locally', async () => {
+    const gateway = await fakeGateway(true);
+    try {
+      const calls: string[][] = [];
+      const { setupCommand, output } = await load(calls);
+      await setupCommand.parseAsync(['node', 'zhin', '-y', '--enable-ai', '--skip-adapters', '--install']);
+      expect(calls).toEqual([]);
+      const install = gateway.requests.find(request => request.type === 'gateway.packages.install');
+      expect(install?.data).toMatchObject({ enable: false });
+      const specs = (install!.data as { packages: string[] }).packages.map(spec => spec.replace(/(?<=.)@.*$/u, ''));
+      expect(specs).toEqual(expect.arrayContaining(['@zhin.js/agent', 'zod', 'ai', '@zhin.js/tool', '@zhin.js/prompt-section']));
+      const text = output.join('');
+      expect(text).toContain('经由网关安装');
+      expect(text).toContain('  · 停止实例');
+      expect(text).toContain('Packages: +5');
+      expect(text).toContain('✓ install 完成');
+      expect(process.exitCode).toBeUndefined();
+    } finally {
+      await gateway.close();
+    }
+  });
+
+  it('reports a rolled-back gateway transaction with a failing exit code', async () => {
+    const gateway = await fakeGateway(false);
+    try {
+      const calls: string[][] = [];
+      const { setupCommand, output } = await load(calls);
+      await setupCommand.parseAsync(['node', 'zhin', '-y', '--enable-ai', '--install']);
+      expect(calls).toEqual([]);
+      expect(output.join('')).toContain('已回滚');
+      expect(process.exitCode).toBe(1);
+    } finally {
+      await gateway.close();
+    }
   });
 });

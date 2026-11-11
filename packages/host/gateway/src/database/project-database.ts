@@ -1,20 +1,50 @@
 /**
  * The gateway's own connection to the project database (ADR 0054 §7). It defines and serves only
  * the tables the gateway owns (`console_*`, ADR 0049); the instance opens the same database for
- * everything else. SQLite runs in WAL mode with a busy timeout (`@zhin.js/database`), so both
- * processes can hold the file open.
+ * everything else. SQLite runs in WAL mode (`@zhin.js/database`), so both processes can hold the
+ * file open.
  */
-import { Registry } from '@zhin.js/database';
+import { isSqliteBusyError, Registry } from '@zhin.js/database';
 import type { DatabaseHostModel, DatabaseHostSelection } from '@zhin.js/plugin-runtime';
 import type { ProjectDatabaseConfig } from './config.js';
 
 /**
- * How long the gateway's SQLite connection waits for the instance's write lock. The gateway's
- * writes are single autocommit statements (no transactions), so its lock time stays minimal and a
- * wait never deadlocks it; the instance's connection retries `SQLITE_BUSY` asynchronously instead
- * (`busyRetryMs` in `@zhin.js/database`).
+ * How long a gateway statement retries `SQLITE_BUSY` while the instance holds the write lock
+ * (`busyRetryMs` in `@zhin.js/database`). The retry backs off asynchronously, so the gateway's
+ * event loop keeps serving requests during the wait; a synchronous `busy_timeout` would stall
+ * every request for as long as an instance transaction runs. Past the budget the request
+ * answers `503 database_busy` ({@link isDatabaseBusyError}).
  */
-export const GATEWAY_SQLITE_BUSY_TIMEOUT_MS = 2_000;
+export const GATEWAY_SQLITE_BUSY_RETRY_MS = 5_000;
+
+/** Seconds a `503 database_busy` asks the client to wait. */
+export const DATABASE_BUSY_RETRY_AFTER_SECONDS = 2;
+
+/** The database stayed locked by another connection for the whole retry budget. */
+export function isDatabaseBusyError(error: unknown): boolean {
+  for (let current = error, depth = 0; current && depth < 4; depth += 1) {
+    if (isSqliteBusyError(current)) return true;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
+}
+
+/** `503 { code: 'database_busy' }` with `Retry-After`. */
+export function databaseBusyResponse(extra: Readonly<Record<string, unknown>> = {}): Response {
+  return new Response(JSON.stringify({
+    success: false,
+    code: 'database_busy',
+    error: '数据库正忙，请稍后重试',
+    ...extra,
+  }), {
+    status: 503,
+    headers: {
+      'content-type': 'application/json; charset=utf-8',
+      'cache-control': 'no-store',
+      'retry-after': String(DATABASE_BUSY_RETRY_AFTER_SECONDS),
+    },
+  });
+}
 
 interface RawSelection {
   where(query: Record<string, unknown>): unknown;
@@ -66,8 +96,9 @@ export class ProjectDatabase {
   constructor(config: ProjectDatabaseConfig) {
     this.config = config;
     const { dialect, ...connection } = config;
-    const options = dialect === 'sqlite' && connection.busyTimeoutMs === undefined
-      ? { ...connection, busyTimeoutMs: GATEWAY_SQLITE_BUSY_TIMEOUT_MS }
+    // No synchronous busy_timeout: it would block the gateway's event loop (ADR 0054 §7).
+    const options = dialect === 'sqlite' && connection.busyRetryMs === undefined
+      ? { ...connection, busyRetryMs: GATEWAY_SQLITE_BUSY_RETRY_MS }
       : connection;
     this.#db = Registry.create(dialect as keyof Registry.Config, options as never) as unknown as RawDatabase;
   }

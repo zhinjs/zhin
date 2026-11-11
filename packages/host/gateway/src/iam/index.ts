@@ -31,3 +31,4 @@ export { defineConsoleIamTables, IAM_DIALECTS, IAM_TABLE_DEFINITIONS, IAM_TABLES
 export { dispatchIamRpc, isIamRpc } from './rpc.js';
 export { registerConsoleAuthRoutes } from './routes.js';
 export { LoginRateLimiter } from './rate-limit.js';
+export { createLocalConsoleAdmin, type LocalConsoleAdmin, type LocalConsoleAdminOptions, type LocalConsoleAdminResult } from './local-admin.js';

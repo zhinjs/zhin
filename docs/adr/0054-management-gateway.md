@@ -147,7 +147,7 @@ interface HttpHost {
 ### 7. 数据
 
 - 网关自己打开项目数据库（与实例同一份 `database` 配置），读写 `console_*` 表（ADR 0049）；实例不访问这些表。
-- SQLite：两个进程同时连接，启用 `journal_mode=WAL`（`@zhin.js/database` 对文件库总是开启）；网关的连接设 `busy_timeout`（2 秒，网关只有单语句写入），网关的写入都是单语句自动提交（不开事务），持锁时间最短；实例的连接不设 `busy_timeout`——`node:sqlite` 的等待是同步的，同一进程内两个带异步事务的连接互等会卡住事件循环——而由 SQLite 方言对事务外语句与 `BEGIN IMMEDIATE` 遇到 `SQLITE_BUSY` 时做有界的异步退避重试（默认 5 秒，`busyRetryMs`）；事务以 `BEGIN IMMEDIATE` 开始，写锁在开头拿到，不会在事务中途遇到 `SQLITE_BUSY_SNAPSHOT`。
+- SQLite：两个进程同时连接，启用 `journal_mode=WAL`（`@zhin.js/database` 对文件库总是开启）；两个连接都不设 `busy_timeout`——`node:sqlite` 的等待是同步的，会卡住整个事件循环（实例的长异步事务持锁时，网关的每个请求都会停顿）——而由 SQLite 方言对事务外语句与 `BEGIN IMMEDIATE` 遇到 `SQLITE_BUSY` 时做有界的异步退避重试（`busyRetryMs`，实例默认 5 秒，网关 5 秒）；网关的写入都是单语句自动提交（不开事务），持锁时间最短，预算用尽时网关返回 `503 { code: 'database_busy' }` 与 `Retry-After`，认证时的簿记写入（会话续期、令牌最近使用）遇忙则跳过。写事务以 `BEGIN IMMEDIATE` 开始，写锁在开头拿到，不会在事务中途遇到 `SQLITE_BUSY_SNAPSHOT`；声明为只读的事务（`transaction(cb, { readOnly: true })`）以 `BEGIN DEFERRED` 开始且 `query_only`，不拿写锁。插件运行时的 Database Host 事务接口无法声明只读，仍按写事务处理。
 - 配置解析：网关按实例 `resolveDatabaseConfig` 的同一规则解析 `database`（`@zhin.js/gateway/database`，不导入 IM 层），相对 SQLite 路径以项目根为准；数据库不可用时网关照常监听，`/auth/*` 返回 503，“是否已初始化”取初始化标记文件（失败即关闭），并定时重试。
 - 数据库切换（ADR 0049 §7）：网关写配置、关闭自己的连接、重新打开新库，再重启实例。
 

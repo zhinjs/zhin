@@ -168,6 +168,7 @@ export async function runGateway(input: RunGatewayOptions): Promise<number> {
   control?.setHandler(createLocalRpcHandler({
     dispatch: gateway.rpc,
     ...(gateway.packages ? { packages: gateway.packages } : {}),
+    ...(gateway.console ? { console: gateway.console.localAdmin } : {}),
     info: infoResult,
     shutdown: () => shutdown(0),
   }));

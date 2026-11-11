@@ -89,4 +89,23 @@ describe('SQLite dialect: SQLITE_BUSY from another connection', () => {
     await released;
     expect(isSqliteBusyError(error)).toBe(true);
   });
+
+  it('opens a declared read-only transaction without the write lock and refuses writes inside it', async () => {
+    // No retry budget: BEGIN IMMEDIATE would fail at once while the gateway holds the lock.
+    const { instance, gateway } = await setup({ busyRetryMs: 0 });
+    await instance.query('INSERT INTO bot_state (id, value) VALUES (1, ?)', ['a']);
+    const released = holdWriteLock(gateway, 50);
+    const transaction = await instance.beginTransaction({ readOnly: true });
+    expect(await transaction.query('SELECT value FROM bot_state WHERE id = 1')).toEqual([{ value: 'a' }]);
+    await expect(transaction.query('UPDATE bot_state SET value = ? WHERE id = 1', ['b'])).rejects.toThrow(/readonly|read-only|query_only/iu);
+    await transaction.commit();
+    await released;
+    // query_only is lifted after the transaction.
+    expect(await instance.query('UPDATE bot_state SET value = ? WHERE id = 1', ['c'])).toBe(1);
+    // Without readOnly the transaction still takes the write lock up front.
+    const again = holdWriteLock(gateway, 50);
+    const error = await instance.beginTransaction().catch((caught: unknown) => caught);
+    expect(isSqliteBusyError(error)).toBe(true);
+    await again;
+  });
 });

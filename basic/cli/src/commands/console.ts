@@ -1,6 +1,9 @@
 /**
- * `zhin console init` / `zhin console user …` (ADR 0049 §7): offline setup and rescue that open
- * the project database directly, without a running Host. Same ConsoleSetupService as `/auth/setup*`.
+ * `zhin console init` / `zhin console user …` (ADR 0049 §7). With a gateway running for the
+ * project they go through its local control socket (`gateway.console.*`, principal `'local'`):
+ * the gateway's own setup / IAM services answer, so a database switch is applied live and the owner
+ * state changes at once. Without one they open the project database directly (offline setup and
+ * rescue). Both paths run the same ConsoleSetupService as `/auth/setup*`.
  */
 import path from 'node:path';
 import { Command } from 'commander';
@@ -13,12 +16,19 @@ import { createConfigDocument } from '@zhin.js/runtime';
 import { ConsoleConfigurationStore } from '@zhin.js/gateway/config';
 import { readEnvFile, writeEnvFile } from '@zhin.js/gateway/config';
 import { projectEnvironment } from '@zhin.js/gateway/iam';
-import { ConsoleIamService, IamError } from '@zhin.js/gateway/iam';
+import { ConsoleIamService, IamError, type ConsoleUserView, type SetupDatabaseInput, type SetupStatus } from '@zhin.js/gateway/iam';
 import { ConsoleSetupService, type SetupDatabaseField, type SetupDriver } from '@zhin.js/gateway/iam';
 import { defineConsoleIamTables } from '@zhin.js/gateway/iam';
+import {
+  LOCAL_GATEWAY_RPC,
+  LocalGatewayClient,
+  LocalGatewayClientError,
+  LocalGatewayRpcError,
+} from '@zhin.js/gateway/local';
 import { findConfigFile } from '@zhin.js/gateway/project';
 import { ProjectDatabase, resolveProjectDatabaseConfig } from '@zhin.js/gateway/database';
 import { loadHostHttpConfig } from '../utils/host-http.js';
+import { describeGatewayError, probeGateway } from '../utils/gateway.js';
 import { recordOnboardingSteps, setupOnboardingDeps } from './setup-onboarding.js';
 
 export interface ConsoleCliIo {
@@ -31,15 +41,34 @@ export interface ConsoleCliIo {
   hostRunning(projectRoot: string): Promise<boolean>;
 }
 
-export interface OpenedProject {
-  readonly setup: ConsoleSetupService;
-  readonly iam: ConsoleIamService | undefined;
-  readonly dialect: string;
+export type DatabaseProbe = Awaited<ReturnType<ConsoleSetupService['testDatabase']>>;
+
+export interface ConsoleUserAdmin {
+  list(): Promise<readonly ConsoleUserView[]>;
+  create(input: Readonly<{ username: string; password: string; displayName?: string; role: string }>): Promise<ConsoleUserView>;
+  /** Resets the password (revokes the user's sessions). */
+  passwd(username: string, password: string): Promise<ConsoleUserView>;
+  setDisabled(username: string, disabled: boolean): Promise<ConsoleUserView>;
+}
+
+/** The setup flow and user administration, through the running gateway or the database itself. */
+export interface ConsoleAdmin {
+  readonly via: 'gateway' | 'database';
+  status(): Promise<SetupStatus>;
+  drivers(): Promise<readonly SetupDriver[]>;
+  testDatabase(input: SetupDatabaseInput): Promise<DatabaseProbe>;
+  /** `switched`: the gateway already uses the new database (and restarts the instance). */
+  applyDatabase(input: SetupDatabaseInput): Promise<{ notice: string; switched: boolean; restarting?: boolean }>;
+  createOwner(input: Readonly<{ username: unknown; password: unknown; displayName?: unknown }>): Promise<{ user: ConsoleUserView }>;
+  /** Undefined when the configured database cannot store Console users (direct access only). */
+  readonly users: ConsoleUserAdmin | undefined;
+  /** Dialect of the directly opened database (direct access only). */
+  readonly dialect?: string;
   close(): Promise<void>;
 }
 
 /** Opens the project database the same way the gateway resolves it (ADR 0054 §7). */
-export async function openProjectConsole(projectRoot: string): Promise<OpenedProject> {
+export async function openProjectConsole(projectRoot: string): Promise<ConsoleAdmin> {
   const configFile = path.join(projectRoot, findConfigFile(projectRoot) ?? DEFAULT_ROOT_CONFIG_FILE_NAME);
   const document = createConfigDocument(configFile);
   const configStore = new ConsoleConfigurationStore({ projectRoot, document });
@@ -62,12 +91,77 @@ export async function openProjectConsole(projectRoot: string): Promise<OpenedPro
     iam: () => iam,
     environment: () => projectEnvironment(projectRoot),
   });
+  const requireUser = async (service: ConsoleIamService, username: string) => {
+    const user = await service.findUser(username);
+    if (!user) throw new IamError('not_found', `用户不存在：${username}`);
+    return user;
+  };
+  const users: ConsoleUserAdmin | undefined = iam && (service => ({
+    list: () => service.listUsers(),
+    create: input => service.createUser({ username: input.username, password: input.password, displayName: input.displayName, bindings: [{ role: input.role, scopeKind: 'global' }] }),
+    passwd: async (username, password) => {
+      const user = await requireUser(service, username);
+      await service.resetPassword(user.id, password);
+      return user;
+    },
+    setDisabled: async (username, disabled) => service.setDisabled((await requireUser(service, username)).id, disabled),
+  }))(iam);
   return {
-    setup,
-    iam,
+    via: 'database',
+    status: () => setup.status(),
+    drivers: () => setup.drivers(),
+    testDatabase: input => setup.testDatabase(input),
+    applyDatabase: async input => ({ notice: (await setup.applyDatabase(input)).notice, switched: false }),
+    createOwner: input => setup.createOwner(input),
+    users,
     dialect: database.dialect,
     close: async () => { iam?.stop(); if (supported) await database.stop(); },
   };
+}
+
+/** The running gateway's `gateway.console.*` over one local socket connection. */
+export function gatewayConsoleAdmin(client: LocalGatewayClient): ConsoleAdmin {
+  const call = <T>(type: string, data?: unknown): Promise<T> => client.request<T>(type, data);
+  const user = async (type: string, data: unknown) => (await call<{ user: ConsoleUserView }>(type, data)).user;
+  return {
+    via: 'gateway',
+    status: () => call(LOCAL_GATEWAY_RPC.CONSOLE_SETUP_STATUS),
+    drivers: () => call(LOCAL_GATEWAY_RPC.CONSOLE_SETUP_DRIVERS),
+    testDatabase: input => call(LOCAL_GATEWAY_RPC.CONSOLE_SETUP_DATABASE_TEST, input),
+    applyDatabase: input => call(LOCAL_GATEWAY_RPC.CONSOLE_SETUP_DATABASE, input),
+    createOwner: input => call(LOCAL_GATEWAY_RPC.CONSOLE_SETUP_OWNER, input),
+    users: {
+      list: async () => (await call<{ users: readonly ConsoleUserView[] }>(LOCAL_GATEWAY_RPC.CONSOLE_USER_LIST)).users,
+      create: input => user(LOCAL_GATEWAY_RPC.CONSOLE_USER_CREATE, input),
+      passwd: (username, password) => user(LOCAL_GATEWAY_RPC.CONSOLE_USER_PASSWD, { username, password }),
+      setDisabled: (username, disabled) => user(LOCAL_GATEWAY_RPC.CONSOLE_USER_DISABLE, { username, disabled }),
+    },
+    close: async () => { client.close(); },
+  };
+}
+
+export interface OpenConsoleAdminOptions {
+  /** Socket owner check override (tests). */
+  readonly uid?: () => number | undefined;
+}
+
+/**
+ * Through the gateway when one runs for the project, else directly on the database. A gateway
+ * that exists but cannot be used (other user, not answering) is an error: working on the files
+ * behind its back would leave it on stale state.
+ */
+export async function openConsoleAdmin(projectRoot: string, options: OpenConsoleAdminOptions = {}): Promise<ConsoleAdmin> {
+  const target = { root: projectRoot, ...(options.uid ? { uid: options.uid } : {}) };
+  if (!await probeGateway(target)) return openProjectConsole(projectRoot);
+  return gatewayConsoleAdmin(await LocalGatewayClient.connect(target));
+}
+
+/** Errors the commands report as a message (exit 1) instead of a stack. */
+function reportable(error: unknown): string | undefined {
+  if (error instanceof IamError) return error.message;
+  if (error instanceof LocalGatewayRpcError) return error.message;
+  if (error instanceof LocalGatewayClientError) return describeGatewayError(error);
+  return undefined;
 }
 
 export const defaultConsoleCliIo: ConsoleCliIo = {
@@ -104,7 +198,7 @@ export interface ConsoleInitOptions {
   readonly yes?: boolean;
 }
 
-type Opener = (projectRoot: string) => Promise<OpenedProject>;
+type Opener = (projectRoot: string) => Promise<ConsoleAdmin>;
 
 function firstLine(text: string): string {
   return text.replace(/\r?\n$/u, '').split(/\r?\n/u)[0] ?? '';
@@ -115,11 +209,19 @@ export async function runConsoleInit(
   projectRoot: string,
   options: ConsoleInitOptions,
   io: ConsoleCliIo = defaultConsoleCliIo,
-  open: Opener = openProjectConsole,
+  open: Opener = openConsoleAdmin,
 ): Promise<number> {
-  let project = await open(projectRoot);
+  let project: ConsoleAdmin;
   try {
-    const status = await project.setup.status();
+    project = await open(projectRoot);
+  } catch (error) {
+    const message = reportable(error);
+    if (message === undefined) throw error;
+    io.error(message);
+    return 1;
+  }
+  try {
+    const status = await project.status();
     if (options.status) {
       io.log(JSON.stringify(status, null, 2));
       return 0;
@@ -130,7 +232,7 @@ export async function runConsoleInit(
     }
     const interactive = !options.yes && !options.database && !options.owner;
     // Onboarding steps 1–2 (ADR 0053 §5); the owner step follows IAM.
-    const onboarding = setupOnboardingDeps.createService(projectRoot, () => !project.setup.setupRequired());
+    const onboarding = setupOnboardingDeps.createService(projectRoot, async () => !(await project.status()).setupRequired);
     // ---- step 1: database
     let databaseInput: { dialect: string; connection: Record<string, unknown> } | undefined;
     if (options.database) {
@@ -145,20 +247,27 @@ export async function runConsoleInit(
       const { change } = await io.prompt<{ change: boolean }>([{
         type: 'confirm', name: 'change', message: '要更换数据库吗？', default: false,
       }]);
-      if (change) databaseInput = await promptDatabase(project.setup, io);
+      if (change) databaseInput = await promptDatabase(project, io);
     }
+    let switched = false;
     if (databaseInput) {
-      const tested = await project.setup.testDatabase(databaseInput);
+      const tested = await project.testDatabase(databaseInput);
       if (!tested.ok) {
         io.error(`数据库连接失败：${tested.error ?? 'unknown error'}`);
         return 1;
       }
-      const applied = await project.setup.applyDatabase(databaseInput);
+      const applied = await project.applyDatabase(databaseInput);
+      switched = applied.switched;
       io.log(`已写入数据库配置。${applied.notice}`);
-      // Continue on the new database directly.
-      await project.close();
-      project = await open(projectRoot);
-      if (!(await project.setup.status()).setupRequired) {
+      if (switched) {
+        // The gateway reconnected before it answered; it serves the new database already.
+        io.log(applied.restarting ? '网关已切换到新数据库，并在重启实例。' : '网关已切换到新数据库。');
+      } else {
+        // Continue on the new database directly.
+        await project.close();
+        project = await open(projectRoot);
+      }
+      if (!(await project.status()).setupRequired) {
         io.error('新数据库里已有所有者：请改用 `zhin console user …`。');
         return 1;
       }
@@ -198,25 +307,24 @@ export async function runConsoleInit(
         password = answers.password;
       }
     }
-    const { user } = await project.setup.createOwner({ username, password, displayName });
+    const { user } = await project.createOwner({ username, password, displayName });
     io.log(`已创建所有者 ${user.username}。现在可以用它登录 Console。`);
     await recordOnboardingSteps(onboarding, {}, setupOnboardingDeps.io);
-    if (databaseInput && await io.hostRunning(projectRoot)) {
+    if (databaseInput && !switched && await io.hostRunning(projectRoot)) {
       io.log('检测到 Host 正在运行：请重启它以使用新的数据库。');
     }
     return 0;
   } catch (error) {
-    if (error instanceof IamError) {
-      io.error(error.message);
-      return 1;
-    }
-    throw error;
+    const message = reportable(error);
+    if (message === undefined) throw error;
+    io.error(message);
+    return 1;
   } finally {
     await project.close();
   }
 }
 
-async function promptDatabase(setup: ConsoleSetupService, io: ConsoleCliIo): Promise<{ dialect: string; connection: Record<string, unknown> }> {
+async function promptDatabase(setup: Pick<ConsoleAdmin, 'drivers' | 'testDatabase'>, io: ConsoleCliIo): Promise<{ dialect: string; connection: Record<string, unknown> }> {
   const drivers = await setup.drivers();
   const { dialect } = await io.prompt<{ dialect: string }>([{
     type: 'list',
@@ -249,23 +357,23 @@ async function promptDatabase(setup: ConsoleSetupService, io: ConsoleCliIo): Pro
   }
 }
 
-async function withProject<T>(projectRoot: string, open: Opener, io: ConsoleCliIo, run: (iam: ConsoleIamService) => Promise<T>): Promise<number> {
-  const project = await open(projectRoot);
+async function withProject<T>(projectRoot: string, open: Opener, io: ConsoleCliIo, run: (users: ConsoleUserAdmin) => Promise<T>): Promise<number> {
+  let project: ConsoleAdmin | undefined;
   try {
-    if (!project.iam) {
-      io.error(`当前数据库（${project.dialect}）不能存储 Console 用户；请先运行 zhin console init 选择 sqlite/mysql/pg/mongodb`);
+    project = await open(projectRoot);
+    if (!project.users) {
+      io.error(`当前数据库（${project.dialect ?? 'unknown'}）不能存储 Console 用户；请先运行 zhin console init 选择 sqlite/mysql/pg/mongodb`);
       return 1;
     }
-    await run(project.iam);
+    await run(project.users);
     return 0;
   } catch (error) {
-    if (error instanceof IamError) {
-      io.error(error.message);
-      return 1;
-    }
-    throw error;
+    const message = reportable(error);
+    if (message === undefined) throw error;
+    io.error(message);
+    return 1;
   } finally {
-    await project.close();
+    await project?.close();
   }
 }
 
@@ -279,40 +387,33 @@ async function readPassword(io: ConsoleCliIo, fromStdin: boolean | undefined): P
   return password;
 }
 
-async function requireUser(iam: ConsoleIamService, username: string) {
-  const user = await iam.findUser(username);
-  if (!user) throw new IamError('not_found', `用户不存在：${username}`);
-  return user;
-}
-
 export const consoleUserActions = {
-  async create(projectRoot: string, username: string, options: { role?: string; displayName?: string; passwordStdin?: boolean }, io = defaultConsoleCliIo, open: Opener = openProjectConsole) {
-    return withProject(projectRoot, open, io, async iam => {
+  async create(projectRoot: string, username: string, options: { role?: string; displayName?: string; passwordStdin?: boolean }, io = defaultConsoleCliIo, open: Opener = openConsoleAdmin) {
+    return withProject(projectRoot, open, io, async users => {
       const role = options.role ?? 'viewer';
       const password = await readPassword(io, options.passwordStdin);
-      const user = await iam.createUser({ username, password, displayName: options.displayName, bindings: [{ role, scopeKind: 'global' }] });
+      const user = await users.create({ username, password, ...(options.displayName ? { displayName: options.displayName } : {}), role });
       io.log(`已创建用户 ${user.username}（${role}）`);
     });
   },
-  async passwd(projectRoot: string, username: string, options: { passwordStdin?: boolean }, io = defaultConsoleCliIo, open: Opener = openProjectConsole) {
-    return withProject(projectRoot, open, io, async iam => {
-      const user = await requireUser(iam, username);
-      await iam.resetPassword(user.id, await readPassword(io, options.passwordStdin));
+  async passwd(projectRoot: string, username: string, options: { passwordStdin?: boolean }, io = defaultConsoleCliIo, open: Opener = openConsoleAdmin) {
+    return withProject(projectRoot, open, io, async users => {
+      const password = await readPassword(io, options.passwordStdin);
+      const user = await users.passwd(username, password);
       io.log(`已重置 ${user.username} 的密码，其全部会话已失效`);
     });
   },
-  async setDisabled(projectRoot: string, username: string, disabled: boolean, io = defaultConsoleCliIo, open: Opener = openProjectConsole) {
-    return withProject(projectRoot, open, io, async iam => {
-      const user = await requireUser(iam, username);
-      await iam.setDisabled(user.id, disabled);
+  async setDisabled(projectRoot: string, username: string, disabled: boolean, io = defaultConsoleCliIo, open: Opener = openConsoleAdmin) {
+    return withProject(projectRoot, open, io, async users => {
+      const user = await users.setDisabled(username, disabled);
       io.log(`${user.username} 已${disabled ? '禁用' : '启用'}`);
     });
   },
-  async list(projectRoot: string, io = defaultConsoleCliIo, open: Opener = openProjectConsole) {
-    return withProject(projectRoot, open, io, async iam => {
-      const users = await iam.listUsers();
-      if (!users.length) io.log('（还没有用户，运行 zhin console init 初始化）');
-      for (const user of users) {
+  async list(projectRoot: string, io = defaultConsoleCliIo, open: Opener = openConsoleAdmin) {
+    return withProject(projectRoot, open, io, async users => {
+      const all = await users.list();
+      if (!all.length) io.log('（还没有用户，运行 zhin console init 初始化）');
+      for (const user of all) {
         const roles = user.bindings.map(binding => binding.scope.kind === 'global' ? binding.role : `${binding.role}@${binding.scope.kind}:${binding.scope.key}`);
         io.log(`${user.username}\t${user.displayName}\t${user.disabled ? 'disabled' : 'enabled'}\t${roles.join(',') || '-'}`);
       }
@@ -355,7 +456,7 @@ initCommand.action(async (raw: Record<string, unknown>) => {
   }));
 });
 
-const userCommand = new Command('user').description('离线管理 Console 用户（直接打开项目数据库）');
+const userCommand = new Command('user').description('管理 Console 用户（网关运行时经由网关，否则直接打开项目数据库）');
 userCommand.command('create <username>')
   .description('创建用户')
   .option('--role <role>', `全局角色（${CONSOLE_BUILTIN_ROLE_NAMES.join(' / ')} 或自定义）`, 'viewer')

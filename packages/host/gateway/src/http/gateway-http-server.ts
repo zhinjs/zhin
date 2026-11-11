@@ -46,6 +46,7 @@ import {
 } from '@zhin.js/host-http/bridge';
 import { createNodeHttpListener, type NodeHttpListener } from '@zhin.js/host-http/node';
 import { formatCompact, getLogger } from '@zhin.js/logger';
+import { databaseBusyResponse, isDatabaseBusyError } from '../database/project-database.js';
 import { GATEWAY_RPC_PREFIX, type GatewayConsoleRpc, type GatewayRpcHandler } from './console-rpc.js';
 
 const logger = getLogger('gateway');
@@ -148,7 +149,7 @@ export class GatewayHttpServer {
 
   /** Registers a gateway-owned route; it takes precedence over the instance's routes. */
   route(method: string, path: string, handler: HttpHandler, meta?: RouteMeta): HttpRouteRegistration {
-    return this.#router.route(method, path, handler, meta);
+    return this.#router.route(method, path, withDatabaseBusy(handler), meta);
   }
 
   /** Registers a gateway-owned WebSocket route. */
@@ -319,7 +320,12 @@ export class GatewayHttpServer {
       } catch {
         return jsonResponse(400, { success: false, code: 'invalid_body', error: 'Invalid JSON body' });
       }
-      return owner.handle(message, context, this.tokenRegistry);
+      try {
+        return await owner.handle(message, context, this.tokenRegistry);
+      } catch (error) {
+        if (isDatabaseBusyError(error)) return databaseBusyResponse({ requestId: message.requestId });
+        throw error;
+      }
     }
     const headers = new Headers(request.headers);
     for (const name of HOP_BY_HOP_HEADERS) headers.delete(name);
@@ -388,6 +394,18 @@ export class GatewayHttpServer {
     }
     return principal;
   }
+}
+
+/** A gateway route whose database stayed locked past the retry budget answers 503 `database_busy`. */
+function withDatabaseBusy(handler: HttpHandler): HttpHandler {
+  return async (request, context) => {
+    try {
+      return await handler(request, context);
+    } catch (error) {
+      if (isDatabaseBusyError(error)) return databaseBusyResponse();
+      throw error;
+    }
+  };
 }
 
 class BodyLimitError extends Error {}
