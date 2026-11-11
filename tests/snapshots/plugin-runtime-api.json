@@ -274,6 +274,7 @@
     "export * from './config.js';",
     "export * from './http.js';",
     "export * from './iam.js';",
+    "export * from './onboarding.js';",
     "export * from './plugin-management.js';",
     "export * from './project.js';",
     "export * from './supervisor.js';",
@@ -288,6 +289,14 @@
     "export{dispatchIamRpc,isIamRpc}from './rpc.js';",
     "export{installConsoleIam,projectEnvironment,type ConsoleIamInstallation,type InstallConsoleIamOptions}from './install.js';",
     "export{registerConsoleAuthRoutes}from './routes.js';"
+  ],
+  "gateway/onboarding": [
+    "export * from './allowlist.js';",
+    "export * from './errors.js';",
+    "export * from './install.js';",
+    "export * from './package-manager.js';",
+    "export * from './service.js';",
+    "export * from './state-store.js';"
   ],
   "gateway/terminal": [
     "export * from './config.js';",
