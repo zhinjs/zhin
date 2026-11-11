@@ -87,6 +87,18 @@ pnpm release / pnpm bump / pnpm pub   # changesets
 
 - Host 由 CLI 装配；插件侧 `context.resources.has(token)` 再 `use(token)`。
 - Console 访问控制（ADR 0049）：账号与 API 令牌在数据库里，`http.token` 只是初始化令牌，`http.tokens` 已删除。新增 `/api` 路由或 Console RPC 时在 `@zhin.js/console-protocol` 权限表登记权限；插件自己的 Webhook / 反向 WS 用 `ws(path, { auth: 'protocol' })` 并自行校验凭据（`verifyProtocolAccessToken`）。
+- HTTP 路由契约（ADR 0054 §2）：`http.route(method, path, (request, { url, params, principal, remoteAddress }) => Response)`，收 Web 标准 `Request`、返回 `Response`；流式（SSE）用 `createResponseStream()` 作为响应体；WebSocket 收 `WsConnection`（`send` / `close` / `onMessage` / `onClose` / `bufferedAmount`）。插件不导入 `node:http` / `ws`；Node 监听器在 `@zhin.js/host-http/node`。
+
+```ts
+http.route('POST', '/my-plugin/webhook', async (request, { url, remoteAddress }) => {
+  if (!verifyProtocolAccessToken(token, { headers: request.headers, url, remoteAddress })) return new Response('Forbidden', { status: 403 });
+  return jsonResponse(200, { ok: true, body: await readJsonBody(request) });
+});
+http.ws('/my-plugin/ws', { auth: 'protocol' }).onConnection((connection) => {
+  if (!verifyProtocolAccessToken(token, connection)) return connection.close(4003, 'Unauthorized');
+  connection.onMessage((data) => connection.send(data));
+});
+```
 - 定时：`scheduleHostToken.register` + `context.lifecycle.add(dispose)`（见 skill assets/cron-template）。
 - 配置：插件自有字段写 `schema.json`，`context.config.get()` 读取。
 - 代级状态通过 snapshot Resource / 当前 operation 的 Generation View 解析；禁止新增模块级单例或 `createGenerationStore`。
