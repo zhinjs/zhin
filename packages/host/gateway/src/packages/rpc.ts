@@ -178,5 +178,5 @@ function failure(error: unknown): GatewayRpcResponse {
   const code = known?.code ?? 'internal';
   // Unexpected errors are not echoed: they may carry paths or package-manager output.
   const message = known?.message ?? '网关内部错误';
-  return Object.freeze({ ok: false, error: Object.freeze({ code, message, status: known?.status ?? 500 }) });
+  return Object.freeze({ ok: false, error: Object.freeze({ code, message, status: known?.status ?? 500, ...known?.details }) });
 }

@@ -256,6 +256,39 @@ export interface GatewayRpcRequest {
 
 export type GatewayRpcErrorCode = 'invalid_input' | 'forbidden' | 'unmapped' | 'conflict' | 'unavailable' | 'internal';
 
+/**
+ * One schema violation of a `gateway.plugins.declare` config. `path` is relative to the instance
+ * section: `$` is the section itself, each further segment is `.` + an object key or array index
+ * (`$.endpoints.0.id`); keys are not escaped. A `required` violation names the missing key.
+ */
+export interface GatewayValidationIssue {
+  readonly path: string;
+  readonly message: string;
+}
+
+/**
+ * Structured details of an `invalid_input` error (today only `gateway.plugins.declare` schema
+ * validation). Present only when non-empty; `message` still carries the same text joined.
+ */
+export interface GatewayRpcErrorDetails {
+  readonly errors?: readonly GatewayValidationIssue[];
+  /** Environment variables the config references (`${NAME}`) that are not set, sorted. */
+  readonly missingEnv?: readonly string[];
+}
+
+export type GatewayRpcError = Readonly<{ code: GatewayRpcErrorCode; message: string; status: number }> & GatewayRpcErrorDetails;
+
 export type GatewayRpcResponse<T = unknown> =
   | Readonly<{ ok: true; data: T }>
-  | Readonly<{ ok: false; error: Readonly<{ code: GatewayRpcErrorCode; message: string; status: number }> }>;
+  | Readonly<{ ok: false; error: GatewayRpcError }>;
+
+/**
+ * Error reply of a `gateway.*` RPC on `POST {base}/console/request` (HTTP status = `status`).
+ * `errors` / `missingEnv` are the {@link GatewayRpcErrorDetails}, present only when non-empty.
+ */
+export type GatewayRpcHttpErrorReply = Readonly<{
+  success: false;
+  code: GatewayRpcErrorCode;
+  error: string;
+  requestId?: unknown;
+}> & GatewayRpcErrorDetails;

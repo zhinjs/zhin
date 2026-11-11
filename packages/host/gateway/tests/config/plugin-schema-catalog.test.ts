@@ -205,6 +205,30 @@ describe('PluginSchemaCatalog', () => {
     await expect(catalog.read('root/qq-main')).resolves.toEqual(expectField('account'));
   });
 
+  it('reads the schema of an installed but undeclared production-dependency plugin by package name', async () => {
+    const root = await createProject();
+    await writePackage(root, 'schema-project', [{ package: '@zhin.js/adapter-sandbox', instanceKey: 'sandbox' }],
+      { '@zhin.js/adapter-icqq': '*', '@zhin.js/adapter-sandbox': '*', 'plain-lib': '*', '@zhin.js/adapter-bare': '*' });
+    const catalog = new PluginSchemaCatalog(root);
+    await expect(catalog.readUndeclared('@zhin.js/adapter-icqq')).resolves.toEqual({ ...expectField('account') as object, declared: false });
+    // A plugin package without schema.json has no form.
+    await writePackage(join(root, 'node_modules/@zhin.js/adapter-bare'), '@zhin.js/adapter-bare');
+    await expect(catalog.readUndeclared('@zhin.js/adapter-bare')).resolves.toBeNull();
+    // Not such a package: declared, not a Plugin, not installed, not a dependency, or not a package name.
+    await mkdir(join(root, 'node_modules/plain-lib'), { recursive: true });
+    await writeFile(join(root, 'node_modules/plain-lib/package.json'), JSON.stringify({ name: 'plain-lib' }));
+    await writeFile(join(root, 'node_modules/plain-lib/schema.json'), JSON.stringify({ type: 'object' }));
+    for (const name of ['@zhin.js/adapter-sandbox', 'sandbox', 'plain-lib', 'http', 'root', '../outside', './plugins/x']) {
+      await expect(catalog.readUndeclared(name)).resolves.toBeUndefined();
+    }
+    const dev = join(root, 'node_modules/@zhin.js/adapter-dev');
+    await writePackage(dev, '@zhin.js/adapter-dev');
+    await writeSchema(dev, 'dev');
+    await expect(catalog.readUndeclared('@zhin.js/adapter-dev')).resolves.toBeUndefined();
+    // Declared instances keep the strict read (no package fallback outside readUndeclared).
+    await expect(catalog.read('@zhin.js/adapter-bare')).resolves.toBeNull();
+  });
+
   it('reads a batch and omits unresolved plugins without requiring an unrelated package to resolve', async () => {
     const catalog = new PluginSchemaCatalog(await createProject());
     await expect(catalog.readAll(['qq-main', 'sandbox', 'unknown'])).resolves.toEqual({
