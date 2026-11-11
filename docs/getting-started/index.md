@@ -12,28 +12,49 @@
 ## 1. 创建并启动
 
 ```bash
-npm create zhin-app my-bot -y
+npm create zhin-app my-bot
 cd my-bot
 pnpm dev
 ```
 
-`-y` 表示全部使用默认选项：只接入 Sandbox（浏览器里的模拟聊天窗口）、开启 HTTP 服务、附带一个 `/hello` 命令，不启用 AI。想在创建时就选择真实平台、数据库或 AI，去掉 `-y` 使用交互向导；之后也可以随时用 `npx zhin setup` 补充。
+终端只问三件事：项目语言、项目名称、初始化令牌（默认随机生成，回车确认）。生成的是最小项目——IM 核心 + Console Host，不含数据库驱动、适配器和 AI 依赖；数据库、平台和 AI 都留到 Console 里配置。创建结束时会打印启动命令和一条 Console 链接：
 
-## 2. 打开调试界面验证
+```text
+✔ 项目已创建：my-bot
+  启动：cd my-bot && pnpm dev
+  然后打开 Console 完成初始化：
+  https://console.zhin.dev/?apiBaseUrl=http%3A%2F%2F127.0.0.1%3A8068#token=<初始化令牌>
+```
 
-启动日志会打印 API Base；新脚手架默认端口是 `http://127.0.0.1:8068`（以终端实际输出或 `zhin.config.yml` 的 `http.port` 为准）。你可以任选以下一种方式验证：
+令牌只放在 `#` 之后，不会发送到 console.zhin.dev 的服务器。`-y` 表示全部接受默认值、一个问题都不问。
 
-- **方式 A：本地内置 Sandbox（最快，零配置）**
+::: tip 跳过 Console 里的适配器步骤
+脚本或想直接试聊时，可以在创建时就装上 Sandbox（浏览器里的模拟聊天窗口）：`npm create zhin-app my-bot -- -y --adapter sandbox`。`--database`、`--adapter`、`--ai` 等参数的完整说明见 [create-zhin-app README](https://github.com/zhinjs/zhin/tree/main/packages/toolkit/create-zhin#参数详解)。
+:::
+
+## 2. 在 Console 里完成初始化
+
+`pnpm dev` 启动后打开上面的链接（链接丢了就打开 [console.zhin.dev](https://console.zhin.dev)，API Base 填 `http://127.0.0.1:8068`，令牌填 `.env` 的 `HTTP_TOKEN`）。端口以终端输出或 `zhin.config.yml` 的 `http.port` 为准。Console 会依次引导：
+
+1. **数据库**：保持默认 SQLite 即可（文件在 `.zhin/data.sqlite`）。
+2. **所有者账号**：设置用户名和密码并登录；此后初始化令牌失效，日常用账号登录。
+3. **AI**：这一页先跳过，之后再用 `npx zhin setup --ai` 或 Console 打开。
+4. **适配器**：选 **Sandbox**，不需要任何平台账号。
+
+每一步都可以跳过、以后从「功能」区再进入。
+
+## 3. 发送 `/hello` 验证
+
+任选以下一种方式：
+
+- **方式 A：本地内置 Sandbox（最快）**
   直接在浏览器打开 `http://127.0.0.1:8068/sandbox`，输入 `/hello` 并发送，立即看到回复。
-- **方式 B：Remote Console 管理后台（完整运维与调试能力）**
-  1. 打开 [console.zhin.dev](https://console.zhin.dev)。
-  2. 填入终端显示的 API Base（如 `http://127.0.0.1:8068`）。
-  3. Token 使用项目 `.env` 中的 `HTTP_TOKEN`（创建项目时终端只显示打码后的 Token，避免泄露到 CI 日志）。
-  4. 打开侧栏「机器人 → 试聊一下」（Sandbox），发送 `/hello`。
+- **方式 B：Remote Console**
+  打开侧栏「机器人 → 试聊一下」（Sandbox），发送 `/hello`。
 
 收到回复即代表完整链路跑通：Sandbox 适配器收到入站消息 → 匹配到 `commands/hello` → 回复经统一出站链路发回。之后接入真实平台，只是在配置里挂载对应的适配器。
 
-## 3. 认识刚生成的项目
+## 4. 认识刚生成的项目
 
 想知道 Bot 当前加载了哪些指令？在会话中发送 **`/菜单`**（无命令前缀时发 `菜单`），会列出根插件的指令与子插件；某条指令的参数用法可通过 `/hello --help` 查看（详见[指令菜单](../authoring/commands.md#查看已加载的指令菜单)）。
 
@@ -55,7 +76,7 @@ my-bot/
 
 名词速查见 [核心概念速览](./concepts.md)。
 
-## 4. 修改并观察热重载 —— 在你的 Bot 里直接加功能 (1→2) {#hot-reload}
+## 5. 修改并观察热重载 —— 在你的 Bot 里直接加功能 (1→2) {#hot-reload}
 
 打开 `commands/hello/index.ts`，修改返回文案并保存，再发 `/hello`——不用重启就能看到新回复。正在处理中的消息会用旧代码跑完；如果新代码有语法或运行错误，旧版本继续服务，终端会打印错误原因。
 

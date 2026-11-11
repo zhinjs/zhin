@@ -4,15 +4,7 @@
  * graph from `engagement_events` (ADR 0048 H5).
  */
 import { Command } from 'commander';
-import {
-  DatabaseEngagementJournal,
-  defineEngagementEventModel,
-  reconstructBoardFromEvents,
-  summarizeEngagementEvents,
-  type EngagementEvent,
-  type EngagementJournalDatabase,
-  type EngagementSummary,
-} from '@zhin.js/harness';
+import { importProjectInstanceCli, type InstanceCliModule } from '../utils/project-instance.js';
 
 interface TraceCommandOptions {
   readonly json?: boolean;
@@ -43,137 +35,6 @@ export function parseTraceTime(value: string | undefined, now = Date.now()): num
   return parsed;
 }
 
-/**
- * Formats an EngagementSummary (and optional raw events) into an ASCII
- * Collaboration Graph, Blackboard summary, and governance diagnostics (ADR 0048 H5).
- */
-export function formatEngagementCollaborationGraph(
-  summary: EngagementSummary,
-  events?: readonly EngagementEvent[],
-): string {
-  const lines: string[] = [];
-  const durationText = summary.endedAt !== undefined
-    ? `${Math.max(0, summary.endedAt - summary.startedAt)}ms`
-    : 'open';
-  lines.push(`Engagement ${summary.engagementId}  [${summary.status}]`);
-  if (summary.initiator) {
-    lines.push(`  Initiator: ${summary.initiator.id} (trust: ${summary.initiator.trust})`);
-  }
-  if (summary.venue) {
-    lines.push(`  Venue:     ${summary.venue.kind}:${summary.venue.id}`);
-  }
-  lines.push(`  Duration:  ${durationText}`);
-  lines.push(
-    `  Budget:    modelCalls=${summary.consumed.modelCalls}  tokens=${summary.consumed.tokens}  wallMs=${summary.consumed.wallMs}  sideEffects=${summary.consumed.sideEffects}`,
-  );
-  lines.push(`  Actors:    ${summary.actors.length > 0 ? summary.actors.join(', ') : '(none)'}`);
-  if (summary.reason) {
-    lines.push(`  Reason:    ${summary.reason}`);
-  }
-
-  lines.push('');
-  lines.push(`Collaboration Hop Graph (${summary.hops.length} hops, ${summary.mailCount} mails):`);
-  if (summary.hops.length === 0) {
-    lines.push('  (no mail hops)');
-  } else {
-    for (const hop of summary.hops) {
-      const cause = hop.causationId ? `, cause=${hop.causationId}` : '';
-      lines.push(`  ${hop.from} ──[${hop.kind}]──► ${hop.to}  (${hop.status}, id=${hop.mailId}${cause})`);
-    }
-  }
-
-  lines.push('');
-  lines.push(`Blackboard (${summary.boardEntries.length} entries):`);
-  if (summary.boardEntries.length === 0) {
-    lines.push('  (empty)');
-  } else {
-    for (const entry of summary.boardEntries) {
-      const preview = entry.content.length > 80 ? `${entry.content.slice(0, 77)}...` : entry.content;
-      const statusSuffix = entry.status ? `, status=${entry.status}` : '';
-      lines.push(
-        `  [${entry.kind}] ${entry.key} = ${preview}  (by ${entry.author || 'unknown'}, v${entry.version}${statusSuffix})`,
-      );
-    }
-  }
-
-  lines.push('');
-  lines.push(`Diagnostics (tools=${summary.toolCallCount}, guardBlocks=${summary.guardBlocks.length}, escalations=${summary.escalations.length}, projections=${summary.projections.length}):`);
-  if (events && events.length > 0) {
-    for (const ev of events) {
-      if (ev.type === 'tool_called') {
-        const actor = typeof ev.data.actor === 'string' ? ev.data.actor : 'agent';
-        const tool = typeof ev.data.tool === 'string' ? ev.data.tool : typeof ev.data.name === 'string' ? ev.data.name : 'tool';
-        lines.push(`  [tool] ${actor} -> ${tool}`);
-      }
-    }
-  }
-  for (const block of summary.guardBlocks) {
-    const target = block.to ? ` -> ${block.to}` : '';
-    const detail = block.reason.detail ? ` (${block.reason.detail})` : '';
-    lines.push(`  [guard_blocked] ${block.from}${target}: ${block.reason.code}${detail}`);
-  }
-  for (const esc of summary.escalations) {
-    lines.push(`  [escalated] ${esc.by}: ${esc.reason}`);
-  }
-  for (const proj of summary.projections) {
-    lines.push(
-      `  [venue_projected] ${proj.venue.kind}:${proj.venue.id} by ${proj.actor} [${proj.mode}] (mail=${proj.mailId})`,
-    );
-  }
-
-  return lines.join('\n');
-}
-
-export function formatEngagementList(summaries: readonly EngagementSummary[]): string {
-  if (summaries.length === 0) {
-    return '没有协作 Engagement 记录。';
-  }
-  return summaries
-    .map((s) => {
-      const duration = s.endedAt !== undefined ? `${Math.max(0, s.endedAt - s.startedAt)}ms` : 'open';
-      const actors = s.actors.length > 0 ? s.actors.join(',') : '-';
-      return `${s.engagementId}  [${s.status}]  ${duration}  actors=${actors}  hops=${s.hops.length}  tools=${s.toolCallCount}  tokens=${s.consumed.tokens}`;
-    })
-    .join('\n');
-}
-
-async function openProjectEngagementJournal(root: string): Promise<{
-  readonly journal: DatabaseEngagementJournal;
-  close(): Promise<void>;
-} | null> {
-  try {
-    const [{ createConfigDocument }, { DEFAULT_ROOT_CONFIG_FILE_NAME }, { findConfigFile }, { createDatabaseHost, resolveDatabaseConfig }] = await Promise.all([
-      import('@zhin.js/runtime'),
-      import('@zhin.js/plugin-runtime'),
-      import('../utils/config-file.js'),
-      import('@zhin.js/core/runtime'),
-    ]);
-    const selected = findConfigFile(root);
-    const file = selected ? `${root}/${selected}` : `${root}/${DEFAULT_ROOT_CONFIG_FILE_NAME}`;
-    let rawDoc: Record<string, unknown> = {};
-    try {
-      const doc = createConfigDocument(file);
-      rawDoc = ((await doc.read()).document ?? {}) as Record<string, unknown>;
-    } catch {
-      rawDoc = {};
-    }
-    const dbConfig = await resolveDatabaseConfig(root, rawDoc);
-    const dbHost = createDatabaseHost(dbConfig);
-    if (!['sqlite', 'mysql', 'pg'].includes(dbHost.dialect)) {
-      return null;
-    }
-    defineEngagementEventModel(dbHost);
-    await dbHost.start();
-    const journal = new DatabaseEngagementJournal(dbHost as unknown as EngagementJournalDatabase);
-    return {
-      journal,
-      close: () => dbHost.stop(),
-    };
-  } catch {
-    return null;
-  }
-}
-
 export const traceCommand = new Command('trace')
   .description('查看 Agent 回合的 trace 或多 Agent 协作 Engagement 拓扑图')
   .argument('[turn]', '回合 id / engagement id（可只写前缀），或 last 表示最近一次', 'last')
@@ -192,9 +53,17 @@ export const traceCommand = new Command('trace')
     const root = options.cwd ?? process.cwd();
     const limit = Number.parseInt(options.limit ?? '50', 10);
     const effectiveLimit = Number.isFinite(limit) && limit > 0 ? limit : 50;
+    let instance: InstanceCliModule | undefined;
+    let instanceError: unknown;
+    try {
+      instance = await importProjectInstanceCli(root);
+    } catch (error) {
+      instanceError = error;
+    }
+    const openProjectEngagementJournal = async () => instance ? await instance.openProjectEngagementJournal(root) : null;
 
     if (options.engagements) {
-      const opened = await openProjectEngagementJournal(root);
+      const opened = await openProjectEngagementJournal();
       if (!opened) {
         console.error('无法打开协作事件数据库（需要 SQLite、MySQL 或 PostgreSQL）。');
         process.exitCode = 1;
@@ -204,12 +73,12 @@ export const traceCommand = new Command('trace')
         if (options.list || turn === 'last') {
           const ids = await opened.journal.listEngagements(effectiveLimit);
           if (options.list) {
-            const summaries: EngagementSummary[] = [];
+            const summaries: unknown[] = [];
             for (const id of ids) {
               const s = await opened.journal.summarize(id);
               if (s) summaries.push(s);
             }
-            console.log(options.json ? JSON.stringify(summaries, null, 2) : formatEngagementList(summaries));
+            console.log(options.json ? JSON.stringify(summaries, null, 2) : instance!.formatEngagementList(summaries as never[]));
             return;
           }
           const latestId = ids[0];
@@ -219,12 +88,11 @@ export const traceCommand = new Command('trace')
             return;
           }
           const events = await opened.journal.read(latestId);
-          const summary = summarizeEngagementEvents(latestId, events);
-          const board = reconstructBoardFromEvents(events);
-          console.log(
+          const { summary, board } = instance!.describeEngagement(latestId, events);
+                    console.log(
             options.json
               ? JSON.stringify({ summary, events, board }, null, 2)
-              : formatEngagementCollaborationGraph(summary, events),
+              : instance!.formatEngagementCollaborationGraph(summary as never, events as never[]),
           );
           return;
         }
@@ -237,12 +105,11 @@ export const traceCommand = new Command('trace')
           process.exitCode = 1;
           return;
         }
-        const summary = summarizeEngagementEvents(targetId, events);
-        const board = reconstructBoardFromEvents(events);
-        console.log(
+        const { summary, board } = instance!.describeEngagement(targetId, events);
+                console.log(
           options.json
             ? JSON.stringify({ summary, events, board }, null, 2)
-            : formatEngagementCollaborationGraph(summary, events),
+            : instance!.formatEngagementCollaborationGraph(summary as never, events as never[]),
         );
         return;
       } finally {
@@ -250,9 +117,10 @@ export const traceCommand = new Command('trace')
       }
     }
 
-    let mod: typeof import('@zhin.js/agent/trace');
+    let mod: Awaited<ReturnType<InstanceCliModule['loadAgentTraceModule']>>;
     try {
-      mod = await import('@zhin.js/agent/trace');
+      if (!instance) throw instanceError;
+      mod = await instance.loadAgentTraceModule();
     } catch {
       console.error('需要安装 @zhin.js/agent（AI 栈）。运行: pnpm add @zhin.js/agent');
       process.exitCode = 1;
@@ -291,7 +159,7 @@ export const traceCommand = new Command('trace')
 
     const trace = turn === 'last' ? await store.latest() : await store.find(turn);
     if (!trace && turn !== 'last') {
-      const opened = await openProjectEngagementJournal(root);
+      const opened = await openProjectEngagementJournal();
       if (opened) {
         try {
           const ids = await opened.journal.listEngagements(500);
@@ -299,12 +167,11 @@ export const traceCommand = new Command('trace')
           if (matchedId) {
             const events = await opened.journal.read(matchedId);
             if (events.length > 0) {
-              const summary = summarizeEngagementEvents(matchedId, events);
-              const board = reconstructBoardFromEvents(events);
-              console.log(
+              const { summary, board } = instance!.describeEngagement(matchedId, events);
+                            console.log(
                 options.json
                   ? JSON.stringify({ summary, events, board }, null, 2)
-                  : formatEngagementCollaborationGraph(summary, events),
+                  : instance!.formatEngagementCollaborationGraph(summary as never, events as never[]),
               );
               return;
             }

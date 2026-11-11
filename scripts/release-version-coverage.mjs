@@ -4,7 +4,8 @@ const NON_RELEASE_PATH = /(?:^|\/)(?:tests?|__tests__)(?:\/|$)|\.(?:test|spec)\.
 
 // Tags are created only after publishing. Until then, use verified Changesets
 // output as the baseline, and still check for package changes after that commit.
-export function findVersionedReleaseBaseline({ root, directory, name, version, evidenceCache = new Map() }) {
+// `approvedMinors` (package names) may also be versioned X.Y.Z → X.(Y+1).0 from a minor declaration.
+export function findVersionedReleaseBaseline({ root, directory, name, version, evidenceCache = new Map(), approvedMinors = new Map() }) {
   const git = (...args) => {
     const result = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
     if (result.status !== 0) throw new Error(result.stderr || 'Failed to read release history');
@@ -27,15 +28,17 @@ export function findVersionedReleaseBaseline({ root, directory, name, version, e
 
     const before = /^(\d+)\.(\d+)\.(\d+)$/.exec(previous.version);
     const after = /^(\d+)\.(\d+)\.(\d+)$/.exec(version);
-    if (!before || !after || before[1] !== after[1] || before[2] !== after[2]
-      || Number(after[3]) <= Number(before[3])) return undefined;
+    if (!before || !after || before[1] !== after[1]) return undefined;
+    const patchBump = before[2] === after[2] && Number(after[3]) > Number(before[3]);
+    const minorBump = Number(after[2]) === Number(before[2]) + 1 && after[3] === '0';
+    if (!patchBump && !(minorBump && approvedMinors.has(name))) return undefined;
 
     const changelogFile = `${directory}/CHANGELOG.md`;
     const hasHeading = (text) => (text ?? '').split(/\r?\n/).some((line) => line.trim() === `## ${version}`);
     if (!hasHeading(readAt(commit, changelogFile)) || hasHeading(readAt(`${commit}^`, changelogFile))) return undefined;
 
-    let related = evidenceCache.get(commit);
-    if (related === undefined) {
+    let evidence = evidenceCache.get(commit);
+    if (evidence === undefined) {
       const deleted = git('diff', '--name-only', '--diff-filter=D', `${commit}^`, commit, '--', '.changeset')
         .trim().split('\n').filter((file) => /^\.changeset\/[^/]+\.md$/.test(file) && file !== '.changeset/README.md');
       const declarations = deleted.flatMap((file) => {
@@ -46,7 +49,8 @@ export function findVersionedReleaseBaseline({ root, directory, name, version, e
           return match ? [{ name: match[1] ?? match[2] ?? match[3], type: match[4] }] : [];
         });
       });
-      const declaredPackages = declarations.length > 0 && declarations.every(({ type }) => type === 'patch')
+      const allowed = ({ name: packageName, type }) => type === 'patch' || (type === 'minor' && approvedMinors.has(packageName));
+      const declaredPackages = declarations.length > 0 && declarations.every(allowed)
         ? new Set(declarations.map(({ name: packageName }) => packageName))
         : null;
       if (declaredPackages) {
@@ -56,7 +60,8 @@ export function findVersionedReleaseBaseline({ root, directory, name, version, e
           .trim().split('\n').filter((file) => file === 'package.json' || file.endsWith('/package.json'));
         const workspacePackages = files.map((file) => JSON.parse(readAt(commit, file)))
           .filter((pkg) => !pkg.private && pkg.name);
-        related = new Set(declaredPackages);
+        const related = new Set(declaredPackages);
+        const minors = new Set(declarations.filter(({ type }) => type === 'minor').map(({ name: packageName }) => packageName));
         let expanded = true;
         while (expanded) {
           expanded = false;
@@ -69,12 +74,15 @@ export function findVersionedReleaseBaseline({ root, directory, name, version, e
             }
           }
         }
+        evidence = { related, minors };
       } else {
-        related = null;
+        evidence = null;
       }
-      evidenceCache.set(commit, related);
+      evidenceCache.set(commit, evidence);
     }
-    if (!related?.has(name)) return undefined;
+    if (!evidence?.related.has(name)) return undefined;
+    // A minor output needs this package's own minor declaration, not just propagation.
+    if (minorBump && !patchBump && !evidence.minors.has(name)) return undefined;
     return commit;
   }
   return undefined;

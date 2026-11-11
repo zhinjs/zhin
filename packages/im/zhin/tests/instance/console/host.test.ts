@@ -1,0 +1,249 @@
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { describe, expect, it, vi } from 'vitest';
+import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
+import { TokenRegistry } from '@zhin.js/host-http';
+import {
+  createConsoleHostModules,
+  registerConsoleHttp,
+} from '../../../src/instance/console/host.js';
+import { projectConsoleEntries } from '../../../src/instance/console/entry-projection.js';
+
+describe('Console topology Host endpoint', () => {
+  it('loads and reloads server TSX through the CLI fallback loader', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-cli-tsx-'));
+    const source = join(root, 'commands/hello/index.tsx');
+    const jsxPackage = join(root, 'node_modules/test-jsx');
+    await mkdir(join(root, 'commands/hello'), { recursive: true });
+    await mkdir(jsxPackage, { recursive: true });
+    await writeFile(join(root, 'package.json'), '{"type":"module"}\n');
+    await writeFile(join(root, 'tsconfig.json'), JSON.stringify({
+      compilerOptions: { jsx: 'react-jsx', jsxImportSource: 'test-jsx' },
+    }));
+    await writeFile(join(jsxPackage, 'package.json'), JSON.stringify({
+      type: 'module',
+      exports: {
+        './jsx-runtime': './jsx-runtime.js',
+        './jsx-dev-runtime': './jsx-runtime.js',
+      },
+    }));
+    await writeFile(
+      join(jsxPackage, 'jsx-runtime.js'),
+      'export const jsx=(type,props)=>({type,props});export const jsxs=jsx;export const jsxDEV=jsx;export const Fragment=Symbol();\n',
+    );
+    const host = createConsoleHostModules(root, false);
+    try {
+      await writeFile(source, 'export default <message value={1}>hello</message>;\n');
+      expect((await host.modules.load<{ default: { props: { value: number } } }>(source)).default.props.value)
+        .toBe(1);
+
+      await writeFile(source, 'export default <message value={2}>hello</message>;\n');
+      host.modules.invalidate?.(source);
+      expect((await host.modules.load<{ default: { props: { value: number } } }>(source)).default.props.value)
+        .toBe(2);
+    } finally {
+      await host.modules.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('serializes a route resolution from one Console topology view', async () => {
+    const route = vi.fn();
+    const topology = Object.freeze({
+      generation: 12,
+      pages: Object.freeze([{ id: 'status', route: '/a/p-status', title: 'Status' }]),
+      navigation: Object.freeze([{ type: 'page', label: 'Status', route: '/a/p-status' }]),
+      resolve: (path: string) => Object.freeze({
+        status: 'found' as const,
+        page: { id: 'status', route: path, title: 'Status' },
+        layouts: { nav: { module: '/a-nav-v12.js' }, footer: { module: '/root-footer-v12.js' } },
+      }),
+    });
+    const consoleRuntime = {
+      runView: async (_access: unknown, operation: (catalog: { topology: () => typeof topology }) => unknown) =>
+        operation({ topology: () => topology }),
+    } as unknown as ConsoleRuntime;
+    registerConsoleHttp({
+      http: { route, tokenRegistry: new TokenRegistry() } as never,
+      console: consoleRuntime,
+      clientOutDir: '/tmp/client',
+      projectRoot: '/tmp/project',
+    });
+
+    const handler = route.mock.calls.find((call) => call[1] === '/console/api/topology')?.[2] as (
+      request: unknown,
+      response: { writeHead: (status: number, headers?: Record<string, string>) => void; end: (body?: string) => void },
+      url: URL,
+    ) => Promise<void>;
+    const writeHead = vi.fn();
+    const end = vi.fn();
+    await handler({}, { writeHead, end }, new URL('http://localhost/console/api/topology?route=/a/p-status'));
+
+    expect(writeHead).toHaveBeenCalledWith(200, expect.objectContaining({
+      'content-type': 'application/json; charset=utf-8',
+    }));
+    expect(JSON.parse(end.mock.calls[0]?.[0] as string)).toEqual({
+      generation: 12,
+      pages: [{ id: 'status', route: '/a/p-status', title: 'Status' }],
+      navigation: [{ type: 'page', label: 'Status', route: '/a/p-status' }],
+      route: '/a/p-status',
+      resolution: {
+        status: 'found',
+        page: { id: 'status', route: '/a/p-status', title: 'Status' },
+        layouts: { nav: { module: '/a-nav-v12.js' }, footer: { module: '/root-footer-v12.js' } },
+      },
+    });
+  });
+  it('resolves a page route while the Console view lease is still active', async () => {
+    const route = vi.fn();
+    let active = false;
+    const assertActive = () => {
+      if (!active) throw new Error('Console catalog view scope has ended');
+    };
+    const page = { id: 'sandbox', route: '/sandbox', title: 'Sandbox' };
+    const consoleRuntime = {
+      runView: async (_access: unknown, operation: (catalog: unknown) => unknown) => {
+        active = true;
+        try {
+          return await operation({
+            topology: () => {
+              assertActive();
+              return Object.freeze({
+                generation: 1,
+                pages: Object.freeze([page]),
+                navigation: Object.freeze([]),
+                resolve: (path: string) => {
+                  assertActive();
+                  return path === '/sandbox'
+                    ? Object.freeze({ status: 'found' as const, page, layouts: {} })
+                    : Object.freeze({ status: 'missing' as const });
+                },
+              });
+            },
+          });
+        } finally {
+          active = false;
+        }
+      },
+    } as unknown as ConsoleRuntime;
+    registerConsoleHttp({
+      http: { route, tokenRegistry: new TokenRegistry() } as never,
+      console: consoleRuntime,
+      clientOutDir: '/tmp/client',
+      projectRoot: '/tmp/project',
+    });
+
+    const handler = route.mock.calls.find((call) => call[1] === '/*')?.[2] as (
+      request: unknown,
+      response: { writeHead: (status: number, headers?: Record<string, string>) => void; end: (body?: string) => void; setHeader?: () => void },
+      url: URL,
+    ) => Promise<void>;
+    const writeHead = vi.fn();
+    const end = vi.fn();
+    await handler({}, { writeHead, end, setHeader: vi.fn() }, new URL('http://localhost/sandbox'));
+    expect(writeHead).not.toHaveBeenCalledWith(503);
+    expect(writeHead.mock.calls[0]?.[0]).toBe(200);
+
+    const missingHead = vi.fn();
+    await handler({}, { writeHead: missingHead, end: vi.fn(), setHeader: vi.fn() }, new URL('http://localhost/nope'));
+    expect(missingHead).toHaveBeenCalledWith(404);
+  });
+
+  it('projects Console entries with rich PageMetadata and locale title resolution across GET /entries and GET /pages', async () => {
+    const richPage = {
+      id: 'root/ambient:ambient',
+      localName: 'ambient',
+      route: '/ambient',
+      title: '群潜望',
+      titleI18n: { 'zh-CN': '群潜望', 'en-US': 'Ambient Insights' },
+      description: 'Ambient group radar',
+      icon: 'Radar',
+      group: 'Agent',
+      order: 10,
+      parent: 'overview',
+      fullWidth: true,
+      section: 'conversations',
+      hideInNav: false,
+      module: '/assets/client/ambient.js',
+      owner: 'root/ambient' as never,
+      source: '/app/ambient/pages/ambient/index.tsx',
+      requiredPermissions: ['ambient:read'],
+      requiredRoles: ['member'],
+    };
+
+    const projected = projectConsoleEntries([richPage], { locale: 'en' });
+    expect(projected.entries[0]).toMatchObject({
+      id: 'ambient',
+      name: 'ambient',
+      title: 'Ambient Insights',
+      titleI18n: { 'zh-CN': '群潜望', 'en-US': 'Ambient Insights' },
+      description: 'Ambient group radar',
+      icon: 'Radar',
+      group: 'Agent',
+      order: 10,
+      parent: 'overview',
+      fullWidth: true,
+      section: 'conversations',
+      hideInNav: false,
+      owner: 'root/ambient',
+      requiredPermissions: ['ambient:read'],
+      requiredRoles: ['member'],
+    });
+
+    const route = vi.fn();
+    const consoleRuntime = {
+      runView: async (_access: unknown, operation: (catalog: unknown) => unknown) =>
+        operation({
+          pages: () => [richPage],
+          topology: () => ({
+            generation: 1,
+            pages: [richPage],
+            navigation: [],
+            resolve: () => ({ status: 'missing' as const }),
+          }),
+        }),
+    } as unknown as ConsoleRuntime;
+
+    registerConsoleHttp({
+      http: { route, tokenRegistry: new TokenRegistry() } as never,
+      console: consoleRuntime,
+      clientOutDir: '/tmp/client',
+      projectRoot: '/tmp/project',
+    });
+
+    const entriesHandler = route.mock.calls.find((call) => call[1] === '/entries')?.[2] as (
+      request: unknown,
+      response: { writeHead: (status: number, headers?: Record<string, string>) => void; end: (body?: string) => void },
+      url: URL,
+    ) => Promise<void>;
+    const writeEntriesHead = vi.fn();
+    const writeEntriesEnd = vi.fn();
+    await entriesHandler({}, { writeHead: writeEntriesHead, end: writeEntriesEnd }, new URL('http://localhost/entries?locale=en'));
+    expect(writeEntriesHead).toHaveBeenCalledWith(200, expect.objectContaining({
+      'content-type': 'application/json; charset=utf-8',
+    }));
+    const entriesBody = JSON.parse(writeEntriesEnd.mock.calls[0]?.[0] as string);
+    expect(entriesBody.entries[0]).toMatchObject({
+      id: 'ambient',
+      title: 'Ambient Insights',
+      group: 'Agent',
+      icon: 'Radar',
+      section: 'conversations',
+      meta: expect.objectContaining({ section: 'conversations' }),
+    });
+
+    const pagesHandler = route.mock.calls.find((call) => call[1] === '/pages')?.[2] as (
+      request: unknown,
+      response: { writeHead: (status: number, headers?: Record<string, string>) => void; end: (body?: string) => void },
+      url: URL,
+    ) => Promise<void>;
+    const writePagesHead = vi.fn();
+    const writePagesEnd = vi.fn();
+    await pagesHandler({}, { writeHead: writePagesHead, end: writePagesEnd }, new URL('http://localhost/pages'));
+    expect(writePagesHead).toHaveBeenCalledWith(200, expect.objectContaining({
+      'content-type': 'text/html; charset=utf-8',
+    }));
+    expect(writePagesEnd.mock.calls[0]?.[0]).toContain('Ambient group radar');
+  });
+});

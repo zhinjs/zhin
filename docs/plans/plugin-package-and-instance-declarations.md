@@ -271,7 +271,7 @@ pnpm check:all
 - 图、解析与继承：[project-graph](../../packages/im/runtime/src/project-graph.ts)、[package-resolver](../../packages/im/runtime/src/package-resolver.ts)、[platform-features](../../packages/im/runtime/src/platform-features.ts)。
 - 作者契约：[PluginDefinition](../../packages/im/plugin-runtime/src/plugin.ts)、[Token](../../packages/im/plugin-runtime/src/token.ts)、[Schema reader](../../packages/im/runtime/src/plugin-config-schema.ts)、[配置组合](../../packages/im/runtime/src/config-composer.ts)。
 - 候选提交：[RootRuntime](../../packages/im/runtime/src/root-runtime.ts)、[RuntimeInputPlanner](../../packages/im/runtime/src/runtime-input-planner.ts)、[TopologyGenerationPreparer](../../packages/im/runtime/src/topology-generation-preparer.ts)、[ConfigFileDocument](../../packages/im/runtime/src/config-file/config-file-document.ts)。
-- 管理和展示：[lifecycle store](../../packages/im/runtime/src/host/plugin-lifecycle-store.ts)、[workflow](../../basic/cli/src/plugin-management/workflow.ts)、[旧卸载入口](../../basic/cli/src/commands/uninstall.ts)、[Console Schema catalog](../../basic/cli/src/plugin-runtime/console/plugin-schema-catalog.ts)。
+- 管理和展示：[lifecycle store](../../packages/im/runtime/src/host/plugin-lifecycle-store.ts)、[workflow](../../packages/host/gateway/src/plugin-management/workflow.ts)、[旧卸载入口](../../basic/cli/src/commands/uninstall.ts)、[Console Schema catalog](../../packages/host/gateway/src/config/plugin-schema-catalog.ts)。
 - 创建与迁移：[wizard apply](../../packages/toolkit/scaffold-wizard/src/apply.ts)、[create workspace](../../packages/toolkit/create-zhin/src/workspace.ts)、[CLI migrate](../../basic/cli/src/commands/migrate.ts)。`migrate instances` 为独立实例迁移入口，不与普通依赖升级隐式绑定。
 
 用户已确认第 1 节扁平格式和直接破坏性更新，P0–P7 按此范围实施。若调整主配置位置、包内组合归属或兼容策略，应先改本文和 fixture，再开始相应实现；不在实施途中以局部修补悄悄改变公共契约。

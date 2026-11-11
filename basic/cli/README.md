@@ -38,7 +38,7 @@ zhin --help               # 全部命令
 
 ## 开发
 
-本包同时是 Plugin Runtime 的 composition root（`zhin runtime start` 装配 IM / Agent / Console Host）。仓库内改动后：
+本包不依赖 `zhin.js` 与 IM 层（ADR 0054 §0）：`zhin runtime start` 按项目根解析 `zhin.js/instance`（实例装配根）启动实例；Console 账号与权限、终端、项目配置与依赖事务来自 `@zhin.js/gateway`。仓库内改动后：
 
 ```bash
 pnpm --filter @zhin.js/cli build

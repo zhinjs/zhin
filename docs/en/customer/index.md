@@ -31,12 +31,12 @@ Not sure yet? Open the [online demo](https://demo.zhin.dev) to see Console (the 
 
 Console is a standalone web app; you don't deploy it:
 
-1. Ask whoever deployed the bot for two things: the **API address** (e.g. `http://127.0.0.1:8068` or your domain) and the **token** (`HTTP_TOKEN` in the project's `.env`).
-2. Open [console.zhin.dev](https://console.zhin.dev) and enter both.
+1. Ask whoever deployed the bot for two things: the **API address** (e.g. `http://127.0.0.1:8068` or your domain) and a **Console account** (username and password).
+2. Open [console.zhin.dev](https://console.zhin.dev), enter the address and sign in.
 3. When the accounts (Endpoints) on the home page show online, you're connected.
 
-::: warning The token is a password
-Never paste it in a group, a screenshot or a link. A **Full token** can send messages and change config; a **Demo token** can only read. Colleagues who only watch status need nothing more than a Demo token.
+::: warning Keep credentials private
+Never paste a password or API token in a group, a screenshot or a link. Everyone gets their own account: an **operator** can send messages and change feature settings; a **viewer** can only read. Colleagues who only watch status need nothing more than a viewer account.
 :::
 
 No running bot yet? A developer or ops person does this once: create a project with the [quick start](/en/getting-started/) or go live with [Deployment and Recovery](/en/operations/production). Day-to-day operations then happen in Console.

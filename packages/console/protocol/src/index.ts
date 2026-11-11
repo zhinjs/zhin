@@ -710,95 +710,9 @@ export interface ConsoleVenueDefinition {
   readonly floor?: 'moderated' | 'open';
 }
 
-export const DEMO_RPC_ALLOWLIST: ReadonlySet<string> = new Set([
-  'ping',
-  'entries:get',
-  'pages:list',
-  // Raw persisted configuration may contain secrets; demo is not a general read-only authority.
-  PLUGIN_RPC.INSPECT,
-  PLUGIN_RPC.PLAN_INSTALL,
-  PLUGIN_RPC.PLAN_UNINSTALL,
-  PLUGIN_RPC.PLAN_UPDATE,
-  PLUGIN_RPC.VALIDATE_CONFIG,
-  PLUGIN_RPC.DIAGNOSE,
-  'schema:get',
-  'schema:get-all',
-  'workrooms:get',
-  AGENT_COLLABORATION_RPC.ENGAGEMENTS_LIST,
-  AGENT_COLLABORATION_RPC.ENGAGEMENTS_GET,
-  AGENT_COLLABORATION_RPC.VENUES_LIST,
-  'schedule:list',
-  'cron:list',
-  'cron:validate',
-  ENDPOINT_RPC.LIST,
-  ENDPOINT_RPC.INFO,
-  ENDPOINT_RPC.TEST,
-  ENDPOINT_RPC.FRIENDS,
-  ENDPOINT_RPC.GROUPS,
-  ENDPOINT_RPC.CHANNELS,
-  ENDPOINT_RPC.GROUP_MEMBERS,
-  SIDE_EVENT_RPC.REQUEST_LIST,
-  LOGIN_RPC.LIST,
-  INBOX_RPC.MESSAGES,
-  INBOX_RPC.REQUESTS,
-  INBOX_RPC.NOTICES,
-]);
-
-export const DEMO_RPC_WRITE_BLOCKLIST: ReadonlySet<string> = new Set([
-  CONFIG_RPC.SET,
-  CONFIG_RPC.PATCH,
-  CONFIG_RPC.PATCH_PROJECT,
-  CONFIG_RPC.REPLACE_SOURCE,
-  CONFIG_RPC.APPLY,
-  PLUGIN_RPC.APPLY,
-  PLUGIN_RPC.VERIFY,
-  PLUGIN_RPC.INSTALL,
-  PLUGIN_RPC.UNINSTALL,
-  PLUGIN_RPC.UPDATE,
-  PLUGIN_RPC.SET_ENABLED,
-  'files:save',
-  'env:save',
-  'db:insert',
-  'db:update',
-  'db:delete',
-  'db:drop-table',
-  'db:kv:set',
-  'db:kv:delete',
-  'system:restart',
-  'schedule:add',
-  'schedule:remove',
-  'schedule:pause',
-  'schedule:resume',
-  'cron:add',
-  'cron:remove',
-  'cron:pause',
-  'cron:resume',
-  SIDE_EVENT_RPC.REQUEST_APPROVE,
-  SIDE_EVENT_RPC.REQUEST_REJECT,
-  SIDE_EVENT_RPC.REQUEST_CONSUMED,
-  SIDE_EVENT_RPC.NOTICE_CONSUMED,
-  LOGIN_RPC.SUBMIT,
-  LOGIN_RPC.CANCEL,
-  ENDPOINT_RPC.SEND_MESSAGE,
-  ENDPOINT_RPC.GROUP_KICK,
-  ENDPOINT_RPC.GROUP_MUTE,
-  ENDPOINT_RPC.GROUP_ADMIN,
-  ENDPOINT_RPC.DELETE_FRIEND,
-]);
-
-export function isDemoConsoleRpcAllowed(type: unknown): boolean {
-  const value = String(type ?? '');
-  if (value.startsWith('db:')) return false;
-  if (DEMO_RPC_WRITE_BLOCKLIST.has(value)) return false;
-  return DEMO_RPC_ALLOWLIST.has(value);
-}
-
-export function assertDemoConsoleRpcAllowed(type: unknown): string | null {
-  const value = String(type ?? '');
-  return isDemoConsoleRpcAllowed(value)
-    ? null
-    : `Demo scope: RPC "${value}" is forbidden`;
-}
+export * from './permissions.js';
+export * from './navigation.js';
+export * from './feature.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);

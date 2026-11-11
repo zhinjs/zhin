@@ -56,17 +56,17 @@ Console 持续显示离线或重连中，页面数据不再更新。
 
 ### 原因
 
-- Console Token 与当前 generation 的 `http.token` 不一致。
-- 当前是只读 Demo 会话，或 Token 没有该操作需要的 scope。
+- 会话已过期或被吊销（改密码、禁用用户都会吊销全部会话），或 API 令牌已被吊销。
+- 账号的角色没有该操作需要的权限（403 响应会写明缺少哪个权限）；或初始化完成后仍在用 `http.token`，它只在创建第一个所有者之前有效。
 
 ### 操作
 
-- 重新从部署环境读取 `HTTP_TOKEN`，不要从浏览器历史或旧配置复制。
-- 生产环境修改 Token 后发布新 generation，并重新登录。
+- 重新登录；自动化换一个新签发的 API 令牌，或让所有者在「访问控制」里绑定合适的角色。
+- 所有者无法登录时，停下 Host，用 `zhin console user passwd <用户名>` 或 `zhin console user enable <用户名>` 离线恢复。
 
 ### 验证
 
-- 使用 `curl -H "Authorization: Bearer $HTTP_TOKEN" http://127.0.0.1:8086/api/system/stats` 验证同一 Token。
+- 使用 `curl -H "Authorization: Bearer $ZHIN_CONSOLE_TOKEN" http://127.0.0.1:8086/api/auth/me` 查看凭据对应的主体与权限。
 
 </section>
 

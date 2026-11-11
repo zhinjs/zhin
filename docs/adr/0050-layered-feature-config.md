@@ -1,0 +1,126 @@
+---
+sidebar: false
+---
+
+# ADR 0050：功能配置三级覆盖——全局 < 适配器 < 账号
+
+状态：Accepted（2026-11-11）
+
+## 背景
+
+插件配置只有一份全局视图：`context.config` 来自配置文档里插件自己的块，启用 / 禁用只有顶层 `disable_plugins`，而且切换会重启进程。实际运营中，同一个功能在不同平台、不同账号上要有不同的设置（某个 QQ 账号不开 RSS，某个 Telegram 账号每次只推 1 条）。现有零散先例——activity-feedback 的 `defaults / platforms / endpoints`、命令前缀解析器——各自实现，语义也不一致（activity-feedback 的 `enabled` 允许下级重新打开）。
+
+## 决策
+
+### 1. 层级与标识
+
+| 层级 | 键 | 来源 |
+|---|---|---|
+| `global` | — | 插件自己的配置块 |
+| `adapter` | 适配器**实例别名**（配置文档里的顶层键，如 `qq`、`tg-main`） | `overrides.adapters.<alias>` |
+| `endpoint` | `<别名>/<endpointId>`（如 `qq/bot-1`） | `overrides.endpoints.<别名>/<endpointId>` |
+
+消息上的 `conversation.endpoint {adapter, id}` 通过 `AdapterIndex` 映射回实例别名与 endpointId，得到解析键。
+
+### 2. 插件声明支持的层级
+
+在插件配置 Schema 根上的 `x-zhin-config`：
+
+```json
+{ "type": "object", "x-zhin-config": { "levels": ["global", "adapter", "endpoint"] }, "properties": { … } }
+```
+
+- 省略 `levels` 等同 `["global"]`：只支持全局配置，`overrides` 不可写，Console 不显示适配器 / 账号层。
+- 单个属性可用 `"x-zhin-config": { "levels": ["global"] }` 收窄为仅全局（如数据库连接、API 密钥）；属性不能放宽插件根声明。
+- 没有配置 Schema 的插件：只支持启用 / 禁用的三级开关（见下），没有字段覆盖。
+
+### 3. 存储
+
+覆盖写在插件自己的配置块里，保留键 `overrides`（与 `commandNamespace`、`disabledCommands` 一样由 composer 注入 Schema、在 `pickOwnFields` 之前剥离）：
+
+```yaml
+rss:
+  maxItems: 5
+  overrides:
+    adapters:
+      qq: { enabled: false }
+    endpoints:
+      "tg-main/news": { maxItems: 1 }
+```
+
+- `overrides.adapters.*` / `overrides.endpoints.*` 的值是插件 Schema 的**部分对象**（所有字段可选，仅允许 `levels` 包含对应层级的字段），外加保留字段 `enabled: boolean`。
+- 校验：覆盖值按插件 Schema 的对应子集用 Ajv 校验；指向不存在的适配器别名或账号的键保留并给出警告（账号可能稍后添加），不报错。
+- 全局层的启用 / 禁用仍是 `disable_plugins`，不新增第二种写法。
+
+### 4. 解析规则
+
+**启用（自上而下，上级优先）：**
+
+```
+effectiveEnabled = !disable_plugins.includes(plugin)
+                && overrides.adapters[alias]?.enabled !== false
+                && overrides.endpoints[alias/id]?.enabled !== false
+```
+
+下级的 `enabled: true` 不能重新打开被上级禁用的功能；写入时校验器给出警告，Console 把下级开关显示为「被上级禁用」并锁定。
+
+**其他字段（自下而上，下级优先）：**
+
+```
+effective = deepMerge(global, overrides.adapters[alias], overrides.endpoints[alias/id])
+```
+
+- 普通对象逐键深合并；数组与标量整体替换；`null` 表示「显式清空」，不是「继承」。
+- 每个字段的来源可以单独查询（`global` / `adapter` / `endpoint`），供 Console 显示「继承自…」「已覆盖」。
+
+### 5. 运行时 API
+
+- `context.config`：保持不变，仍是全局视图（不含 `overrides`）。
+- `context.configFor(target)`：`target` 是消息、`{ adapter, endpointId }` 或解析键；返回该账号的有效配置（已合并、已校验、冻结）。结果按 `(配置代次, 解析键)` 缓存，配置应用后失效。
+- `context.isEnabledFor(target)`：返回有效启用状态。
+
+### 6. 自动门禁
+
+插件在某账号上 `effectiveEnabled === false` 时，Runtime 在分发处直接跳过，插件代码不需要自己判断：
+
+- 命令匹配与执行（`commands/`）
+- 中间件链（`middlewares/`）
+- 消息与事件处理器（`handlers/`，限带 `conversation.endpoint` 的事件）
+- Agent 工具披露与调用（`tools/`、技能私有工具）——该账号会话里看不到，也调不到
+- 定时任务、后台轮询等不经过消息的能力：由插件用 `isEnabledFor` 自行判断（例如 RSS 推送前按目标账号过滤）
+
+门禁失败视为「功能不存在」：命令不回复「已禁用」，与当前全局禁用的行为一致。
+
+### 7. 生效方式
+
+- 只改 `overrides`：原地生效（`in-place`），不重启、不重载插件——`configFor` 缓存失效即可，下一条消息读到新值。
+- 改全局字段：沿用字段现有的 `x-zhin-config.effect`。
+- 改 `disable_plugins`：沿用现状（重启）。适配器 / 账号层的 `enabled` 走原地生效。
+
+### 8. Console 接口（RPC，`feature.*`）
+
+| 类型 | 权限 | 说明 |
+|---|---|---|
+| `feature.list` | `feature.view` | 全部功能：`{ plugin, displayName, levels, hasSchema, globalEnabled }` |
+| `feature.matrix` | `feature.view` | 行为功能、列为全局 + 每个适配器实例：每格 `{ enabled, lockedBy?: 'global'|'adapter', overridden: boolean }` |
+| `feature.get` | `feature.view` | `{ plugin, level, key? }` → `{ schema, values, effective, sources: { [path]: level }, enabled, lockedBy? }`；机密字段值以掩码返回 |
+| `feature.set-override` | `feature.configure` | `{ plugin, level: 'adapter'|'endpoint', key, patch }`：写入覆盖（合并 patch，`undefined` 删除字段） |
+| `feature.remove-override` | `feature.configure` | `{ plugin, level, key, paths? }`：删除整层或指定字段，回到继承 |
+| `feature.set-enabled` | `feature.toggle` | `{ plugin, level, key?, enabled }`：`global` 层写 `disable_plugins`；其余层写 `overrides.*.enabled`（`true` 时删除该键，而不是写 `true`） |
+
+所有写入走 `ConsoleConfigurationStore` 现有的修订号与原子写入路径。RBAC 作用域（ADR 0049）按 `level` + `key` 检查。
+
+## 落盘位置
+
+- Schema 关键字、保留键注入与覆盖校验：`packages/im/runtime/src/`（`config-composer.ts`、`application-plugin-declaration.ts`）
+- 解析器（纯函数，带来源追踪）：`packages/im/runtime/src/layered-config.ts`
+- `configFor` / `isEnabledFor`：`packages/im/plugin-runtime`（插件上下文）
+- 分发门禁：`packages/im/core/src/plugin-runtime/im/`（命令、中间件、处理器索引）与 `packages/im/agent`（工具披露）
+- `feature.*` RPC：`basic/cli/src/plugin-runtime/console/`
+- 现有 activity-feedback 的 `platforms / endpoints` 保持兼容，文档标注推荐迁移到 `overrides`
+
+## 后果
+
+- 插件作者零改动即可获得三级启停；声明 `levels` 后获得字段级覆盖。
+- 启停语义统一为「上级禁用，下级不能开」。
+- 配置文件里的 `overrides` 是普通 YAML，手改与 Console 改等价。

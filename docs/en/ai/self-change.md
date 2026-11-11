@@ -66,7 +66,7 @@ The configuration allowlist is unchanged: the self-change tool can directly patc
 Any setting that would loosen security or widen the tool surface is refused at draft time — no card is sent. For example:
 
 - under `ai.agent`: the dangerous-tool hard gate (`toolHardGate`, including the IM approver list), exec approval and exec security (`execApprovalMode`, `execSecurity`, `execPreset`, `execAllowlist`, …), the owner shell, injection guard, the owner's quota exemption, schedule security;
-- `ai.decisions.approval`, `http.token` / `http.tokens`, `a2a` remote executors and callbacks, `mcp` / `ai.mcpServers` (a new MCP server means new tools), and more.
+- `ai.decisions.approval`, `http.token`, `console.terminal` (the Console terminal), `a2a` remote executors and callbacks, `mcp` / `ai.mcpServers` (a new MCP server means new tools), and more.
 
 The full list is in [Default Behavior](./default-behavior.md#dangerous-tool-hard-gate). Edit these in the config file yourself.
 

@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createWorkspace } from '../src/workspace.js';
-import { applyStableYesDefaults } from '../src/stable-yes-defaults.js';
+import { applyCreateDefaults } from '../src/stable-yes-defaults.js';
 import type { InitOptions } from '../src/types.js';
 import { DEFAULT_CREATE_BOT_HTTP_PORT } from '@zhin.js/scaffold-wizard';
 import { parse } from 'yaml';
@@ -18,7 +18,7 @@ function stableYesOptions(): InitOptions {
     config: 'yaml',
     httpToken: 'bootstrap-e2e-token',
   };
-  applyStableYesDefaults(options);
+  applyCreateDefaults(options);
   return options;
 }
 

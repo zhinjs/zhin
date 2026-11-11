@@ -11,10 +11,9 @@ import {
   type EndpointManagement,
   type EndpointSendRequest,
 } from 'zhin.js/adapter';
-import type { HttpHost, WsConnection } from '@zhin.js/host-http';
+import { verifyProtocolAccessToken, type HttpHost, type WsConnection } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
-import { verifyMilkyAccessToken } from './milky-auth.js';
 import { createMilkyEndpointManagement } from './endpoint-management.js';
 import { createMilkyActionCaller, readMilkyResponse, type MilkyActionCaller, milkyClientOptions, forwardMilkyClientEvents, MilkyClient } from './client.js';
 import {
@@ -99,7 +98,17 @@ export class MilkyWssEndpoint extends MilkyClient implements Endpoint {
   async #start(): Promise<void> {
     if (this.#started) return;
     this.#started = true;
-    const handle = this.#options.http.ws(this.#options.config.path);
+    if (!this.#options.config.access_token) {
+      // 未配 access_token 时只接受本机回环连接（verifyProtocolAccessToken）。
+      this.#logger.warn(formatCompact({
+        endpoint: this.#options.config.id,
+        mode: 'wss',
+        ok: false,
+        error: 'missing access_token: only loopback peers are accepted',
+      }));
+    }
+    // The peer authenticates with this endpoint's own access_token, not a Console credential.
+    const handle = this.#options.http.ws(this.#options.config.path, { auth: 'protocol' });
     this.#wsRelease = handle.onConnection((connection) => {
       this.#connectionTask = this.#connectionTask
         .then(() => this.#acceptConnection(connection))
@@ -207,7 +216,7 @@ export class MilkyWssEndpoint extends MilkyClient implements Endpoint {
   }
 
   async #acceptConnection(connection: WsConnection): Promise<void> {
-    if (!verifyMilkyAccessToken(this.#options.config.access_token, connection.request)) {
+    if (!verifyProtocolAccessToken(this.#options.config.access_token, connection.request)) {
       connection.socket.close(4003, 'Unauthorized');
       return;
     }

@@ -50,7 +50,7 @@ rss:
 
 在 Console 的任务中心选择对应 RSS 实例的“管理员 RSS 订阅”，填写 RSS / Atom 的 HTTP(S) 地址，并选择精确的账号、会话、父容器和线程后创建。先确认页面所列的抓取与发送影响；地址不接受 URL 用户名或密码。任务保存时不会抓取源站或发送测试消息。
 
-该入口需要持久数据库状态、支持 `sendTarget` 的 Outbound Host 和 Schedule Host 同时可用；缺少其中任一能力时不显示管理员任务 Provider，原有聊天订阅和可选内存模式继续可用。管理员操作经 Console Host 的 full scope Bearer Token 鉴权。
+该入口需要持久数据库状态、支持 `sendTarget` 的 Outbound Host 和 Schedule Host 同时可用；缺少其中任一能力时不显示管理员任务 Provider，原有聊天订阅和可选内存模式继续可用。管理员操作需要以持有 `feature.configure` 的 Console 账号（会话或 API 令牌）登录。
 
 1. 新建后，等待下一次实例 `pollCron` 轮询。**首次成功抓取只建立已读基线，不推送历史文章**；后续新文章才发送到所选目标。
 2. 在任务中心暂停订阅后可修改源地址，再恢复；恢复后的首次成功抓取同样只建立新基线，**不补发暂停期间的文章**。

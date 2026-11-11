@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/bilibili/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/bilibili/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=023301f244b23bf9 -->
+<!-- sync-adapter-docs:sha256=13064cd05d3b76e8 -->
 
 # @zhin.js/adapter-bilibili
 
@@ -111,7 +111,7 @@ bilibili:
 
 页面每 10 秒自动刷新（扫码时 2 秒），新草稿会自动出现。
 
-访问权限（普通用户令牌在 `http.tokens[].permissions` 里给，full 令牌不受限）：
+访问权限（插件自定义权限，目前只有全局所有者拥有）：
 
 | 权限 | 允许 |
 |---|---|

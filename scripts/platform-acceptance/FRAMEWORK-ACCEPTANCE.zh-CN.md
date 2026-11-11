@@ -117,7 +117,7 @@
 - 命令：文本匹配 trim 前导空白，而结构化 prefix 去除没有同步处理，图片参数因此回退成纯文本。
   修复保留结构化参数；命令权限失败、中间件并发错误、组件显式 signal 取消等聚焦 9 文件 206 项本地测试、Core build 与改动 lint 通过。
   取消证据只针对组件显式 signal，不代表任意作者任务都能强制取消。
-- Console：`pnpm exec vitest run basic/cli/tests/plugin-runtime/console tests/contracts/console-endpoint-contract.test.ts`，15 文件 80 项通过。
+- Console：`pnpm exec vitest run packages/im/zhin/tests/instance/console tests/contracts/console-endpoint-contract.test.ts`，15 文件 80 项通过。
 - Stable 首跑被沙箱 `listen EPERM` 阻断（15 项失败，8 个异常）；允许本地回环监听后同一命令重跑，46 文件 576 项通过。
   不能将环境失败计为通过，也不能从这次失败直接判定产品缺陷。
 - Host：`pnpm exec vitest run packages/host/http/tests packages/host/mcp/tests packages/host/a2a/tests`，18 文件 174 项通过。

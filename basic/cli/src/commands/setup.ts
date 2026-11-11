@@ -9,7 +9,7 @@ import { CREATE_PROJECT_COMMAND } from '../utils/create-project.js';
 import { ensureGlobalHome, installGlobalHomeDeps } from '../utils/global-home-init.js';
 import { globalZhinHome } from '../utils/zhin-home.js';
 import { logger } from '../utils/logger.js';
-import { findConfigFile, prepareConfigSave, readConfig } from '../utils/config-file.js';
+import { findConfigFile, prepareConfigSave, readConfig } from '@zhin.js/gateway/project';
 import {
   wizardText,
   configureDatabaseOptions,

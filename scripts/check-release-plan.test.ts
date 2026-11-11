@@ -245,4 +245,91 @@ describe.skipIf(process.platform === 'win32')('release plan gate across versioni
     repo.commit();
     expect(repo.check().status).toBe(1);
   });
+
+  describe('approved minor releases (.changeset/version-policy.json)', () => {
+    const approve = (repo: ReturnType<typeof fixture>, approvals: unknown) => {
+      repo.write('.changeset/version-policy.json', JSON.stringify({ defaultReleaseType: 'patch', approvedNonPatchReleases: approvals }));
+    };
+    const demoMinor = [{ package: '@test/demo', type: 'minor', reason: '破坏性变更' }];
+
+    it('accepts a pending minor for an approved package', () => {
+      const repo = fixture();
+      approve(repo, demoMinor);
+      repo.write('.changeset/fix.md', '---\n"@test/demo": minor\n---\nBreaking demo.\n');
+      repo.commit();
+      const result = repo.check();
+      expect(result.output).toContain('0 pending patch releases, 1 approved minor releases');
+      expect(result.status).toBe(0);
+    });
+
+    it('rejects a minor declaration for a package that is not approved', () => {
+      const repo = fixture();
+      approve(repo, [{ package: '@test/other', type: 'minor', reason: '别的包' }]);
+      repo.write('.changeset/fix.md', '---\n"@test/demo": minor\n---\nBreaking demo.\n');
+      repo.commit();
+      const result = repo.check();
+      expect(result.status).toBe(1);
+      expect(result.output).toContain('fix.md: @test/demo (minor)');
+    });
+
+    it('rejects any major declaration, approved list or not', () => {
+      const repo = fixture();
+      approve(repo, demoMinor);
+      repo.write('.changeset/fix.md', '---\n"@test/demo": major\n---\nBreaking demo.\n');
+      repo.commit();
+      const result = repo.check();
+      expect(result.status).toBe(1);
+      expect(result.output).toContain('fix.md: @test/demo (major)');
+    });
+
+    it.each([
+      [[{ package: '@test/demo', type: 'major', reason: 'x' }], 'type must be "minor"'],
+      [[{ package: '@test/demo', type: 'minor' }], 'reason must explain'],
+      [[...demoMinor, ...demoMinor], 'listed twice'],
+      [[{ package: '', type: 'minor', reason: 'x' }], 'package must be a package name'],
+    ])('rejects an invalid approval list %#', (approvals, message) => {
+      const repo = fixture();
+      approve(repo, approvals);
+      repo.commit();
+      const result = repo.check();
+      expect(result.status).toBe(1);
+      expect(result.output).toContain(message);
+    });
+
+    it('rejects a computed major for a dependent even when the minor itself is approved', () => {
+      const repo = fixture();
+      approve(repo, demoMinor);
+      // Without onlyUpdatePeerDependentsWhenOutOfRange, Changesets bumps peer dependents of a minor to major.
+      repo.write('packages/peer/package.json', JSON.stringify({
+        name: '@test/peer', version: '1.1.0', peerDependencies: { '@test/demo': 'workspace:^' },
+      }));
+      repo.write('packages/peer/CHANGELOG.md', '# Peer\n\n## 1.1.0\n');
+      repo.write('.changeset/fix.md', '---\n"@test/demo": minor\n---\nBreaking demo.\n');
+      repo.commit();
+      repo.git('tag', '@test/peer@1.1.0');
+      const result = repo.check();
+      expect(result.status).toBe(1);
+      expect(result.output).toContain('@test/peer (major');
+    });
+
+    it('accepts an approved minor version output before its publication tag exists', () => {
+      const repo = fixture();
+      approve(repo, demoMinor);
+      repo.write('.changeset/fix.md', '---\n"@test/demo": minor\n---\nBreaking demo.\n');
+      repo.commit();
+      repo.bump({ version: '1.2.0' });
+      const result = repo.check();
+      expect(result.output).toContain('1 versioned packages awaiting tags');
+      expect(result.status).toBe(0);
+    });
+
+    it('rejects a minor version output whose consumed changeset only declared a patch', () => {
+      const repo = fixture();
+      approve(repo, demoMinor);
+      repo.commit();
+      repo.bump({ version: '1.2.0' });
+      expect(repo.check().status).toBe(1);
+    });
+  });
 });
+

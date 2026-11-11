@@ -124,7 +124,7 @@ function readChangesetDeclarations() {
   return declarations;
 }
 
-function readWorkspacePackagesWithVersionTags(plannedPackages) {
+function readWorkspacePackagesWithVersionTags(plannedPackages, approvedMinors) {
   const packages = listWorkspacePackages();
   const tags = spawnSync(
     'git',
@@ -156,6 +156,7 @@ function readWorkspacePackagesWithVersionTags(plannedPackages) {
       name: pkg.name,
       version: pkg.version,
       evidenceCache,
+      approvedMinors,
     });
     if (baseline) versionedBaselines.set(pkg.name, baseline);
   }
@@ -209,17 +210,50 @@ if (versionPolicy.defaultReleaseType !== 'patch') {
   process.exit(1);
 }
 
-const declarations = readChangesetDeclarations();
-const approvals = versionPolicy.approvedNonPatchReleases ?? [];
-if (approvals.length > 0) {
-  console.error('Version policy must not contain non-patch approvals.');
-  process.exit(1);
+/**
+ * `approvedNonPatchReleases`: `[{ package, type: 'minor', reason }]`. Only listed packages may
+ * release a minor; a major is never allowed, approved or not. Clear the list after publishing.
+ */
+function readApprovedMinors(policy) {
+  const approvals = policy.approvedNonPatchReleases ?? [];
+  if (!Array.isArray(approvals)) {
+    console.error('.changeset/version-policy.json approvedNonPatchReleases must be an array');
+    process.exit(1);
+  }
+  const approved = new Map();
+  const problems = [];
+  for (const [index, approval] of approvals.entries()) {
+    const where = `approvedNonPatchReleases[${index}]`;
+    if (!approval || typeof approval !== 'object' || Array.isArray(approval)) {
+      problems.push(`${where} must be an object`);
+      continue;
+    }
+    const { package: name, type, reason } = approval;
+    if (typeof name !== 'string' || !name.trim()) problems.push(`${where}.package must be a package name`);
+    else if (approved.has(name)) problems.push(`${where}.package ${name} is listed twice`);
+    if (type !== 'minor') problems.push(`${where}.type must be "minor" (major releases are never allowed)`);
+    if (typeof reason !== 'string' || !reason.trim()) problems.push(`${where}.reason must explain the breaking change`);
+    for (const key of Object.keys(approval)) {
+      if (!['package', 'type', 'reason'].includes(key)) problems.push(`${where} has unknown key ${key}`);
+    }
+    if (typeof name === 'string' && name.trim() && type === 'minor') approved.set(name, reason);
+  }
+  if (problems.length > 0) {
+    console.error('Invalid .changeset/version-policy.json:');
+    for (const problem of problems) console.error(`- ${problem}`);
+    process.exit(1);
+  }
+  return approved;
 }
 
-const nonPatchDeclarations = declarations.filter((declaration) => declaration.type !== 'patch');
-if (nonPatchDeclarations.length > 0) {
-  console.error('Every changeset declaration must use patch:');
-  for (const declaration of nonPatchDeclarations) {
+const declarations = readChangesetDeclarations();
+const approvedMinors = readApprovedMinors(versionPolicy);
+
+const forbiddenDeclarations = declarations.filter((declaration) => declaration.type === 'major'
+  || (declaration.type === 'minor' && !approvedMinors.has(declaration.package)));
+if (forbiddenDeclarations.length > 0) {
+  console.error('Changeset declarations must use patch, or minor for packages in approvedNonPatchReleases (never major):');
+  for (const declaration of forbiddenDeclarations) {
     console.error(`- ${declaration.changeset}: ${declaration.package} (${declaration.type})`);
   }
   process.exit(1);
@@ -245,19 +279,20 @@ try {
     }
     plan = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
   }
-  const nonPatchReleases = plan.releases
-    .filter((release) => release.type === 'minor' || release.type === 'major')
-    .map((release) => `${release.name} (${release.oldVersion} -> ${release.newVersion})`);
+  // Covers dependents bumped by Changesets too: only approved packages may go minor, nothing major.
+  const forbiddenReleases = plan.releases
+    .filter((release) => release.type === 'major' || (release.type === 'minor' && !approvedMinors.has(release.name)))
+    .map((release) => `${release.name} (${release.type}: ${release.oldVersion} -> ${release.newVersion})`);
 
-  if (nonPatchReleases.length > 0) {
-    console.error('Release plan contains forbidden minor or major bumps:');
-    for (const release of nonPatchReleases) console.error(`- ${release}`);
+  if (forbiddenReleases.length > 0) {
+    console.error('Release plan contains forbidden bumps (unapproved minor, or any major):');
+    for (const release of forbiddenReleases) console.error(`- ${release}`);
     process.exit(1);
   }
 
   const plannedReleases = plan.releases.filter((release) => release.type !== 'none');
   const plannedPackages = new Set(plannedReleases.map((release) => release.name));
-  const coverage = readWorkspacePackagesWithVersionTags(plannedPackages);
+  const coverage = readWorkspacePackagesWithVersionTags(plannedPackages, approvedMinors);
   const uncovered = findUncoveredPackageChanges({
     packages: coverage.packages,
     plannedPackages,
@@ -271,8 +306,9 @@ try {
     process.exit(1);
   }
 
+  const minorCount = plannedReleases.filter((release) => release.type === 'minor').length;
   console.log(
-    `Release plan check passed (${plannedReleases.length} pending patch releases, ${coverage.versionedCount} versioned packages awaiting tags).`,
+    `Release plan check passed (${plannedReleases.length - minorCount} pending patch releases, ${minorCount} approved minor releases, ${coverage.versionedCount} versioned packages awaiting tags).`,
   );
 } finally {
   fs.rmSync(tempDir, { recursive: true, force: true });

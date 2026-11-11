@@ -15,7 +15,7 @@ import { execSync, spawnSync } from 'child_process';
 import { DEFAULT_CREATE_BOT_HTTP_PORT, loadProjectConfig } from '@zhin.js/scaffold-wizard';
 import { readPluginConfigurationMap } from '@zhin.js/plugin-runtime';
 import { logger } from '../utils/logger.js';
-import { saveConfig } from '../utils/config-file.js';
+import { saveConfig } from '@zhin.js/gateway/project';
 import {
   CREATE_PROJECT_COMMAND,
   spawnCreateProject,
@@ -24,7 +24,7 @@ import {
   formatNodeRequirementMessage,
   isNodeVersionSupported,
   NODE_ENGINES_HINT,
-} from '../utils/node-requirements.js';
+} from '@zhin.js/gateway/project';
 
 const cwd = process.cwd();
 

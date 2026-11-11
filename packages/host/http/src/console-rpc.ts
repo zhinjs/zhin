@@ -9,8 +9,8 @@ import {
   type ConsoleConfigSource,
   type ConsoleConfigExplanation,
   type ConsoleEndpointSummary,
-  assertDemoConsoleRpcAllowed,
 } from '@zhin.js/console-protocol';
+import { authorizeConsoleRpc, type ConsolePrincipal } from './access-control.js';
 import { dispatchExtendedConsoleRpc, type ConsoleRpcExtendedCtx } from './console-rpc-extended/index.js';
 import { dispatchPluginConsoleRpc } from './console-plugin-rpc.js';
 import {
@@ -19,7 +19,6 @@ import {
   invalidProjectPatchOperations,
 } from './console-rpc-handlers.js';
 
-export { isDemoHttpAllowed } from './console-rpc-handlers.js';
 
 /**
  * Console RPC 请求结构：未锚定 endpoint 的会话地址（结构对齐
@@ -172,6 +171,11 @@ export type RuntimeConsolePage = {
 
 export type RuntimeConsoleRpcContext = {
   readonly authScope: AuthScope;
+  /**
+   * Caller principal. When set, every message is checked against the ADR 0049 permission map
+   * before dispatch (defence in depth; the route also checks).
+   */
+  readonly principal?: ConsolePrincipal;
   listPages(): Promise<readonly RuntimeConsolePage[]>;
   /** Optional project config accessors for read-only config RPCs. */
   readConfigSource?(): Promise<ConsoleConfigSource>;
@@ -282,10 +286,10 @@ export async function dispatchRuntimeConsoleRpc(
   const type = String(message.type ?? '');
   const requestId = message.requestId as number | string | undefined;
 
-  if (ctx.authScope === 'demo') {
-    const denied = assertDemoConsoleRpcAllowed(type);
-    if (denied) {
-      emit({ requestId, error: denied });
+  if (ctx.principal) {
+    const decision = authorizeConsoleRpc(ctx.principal, message as Record<string, unknown>);
+    if (!decision.allowed) {
+      emit({ requestId, error: decision.error, code: decision.code });
       return payloads;
     }
   }

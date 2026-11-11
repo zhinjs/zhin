@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  assertDemoConsoleRpcAllowed,
+  consoleRpcPermission,
   parseConsoleInboxEvent,
   parseConsoleSseFrame,
 } from '../src/index.js';
@@ -29,12 +29,12 @@ describe('Console RPC protocol', () => {
     expect(parseConsoleInboxEvent({ type: 'message.receive', data: {} })).toBeNull();
   });
 
-  it('applies demo scope directly to canonical RPC names', () => {
-    expect(assertDemoConsoleRpcAllowed('endpoint.friends')).toBeNull();
-    expect(assertDemoConsoleRpcAllowed('endpoint.group_kick')).toContain('forbidden');
-    expect(assertDemoConsoleRpcAllowed('db:delete')).toContain('forbidden');
-    expect(assertDemoConsoleRpcAllowed('endpoint.send_message')).toContain('forbidden');
-    expect(assertDemoConsoleRpcAllowed('endpoint:friends')).toContain('forbidden');
+  it('maps canonical RPC names to permissions and leaves legacy names unmapped', () => {
+    expect(consoleRpcPermission('endpoint.friends')).toBe('endpoint.view');
+    expect(consoleRpcPermission('endpoint.group_kick')).toBe('endpoint.operate');
+    expect(consoleRpcPermission('db:delete')).toBe('ops.database.write');
+    expect(consoleRpcPermission('endpoint.send_message')).toBe('endpoint.operate');
+    expect(consoleRpcPermission('endpoint:friends')).toBeNull();
   });
 
   it('parses standard SSE event, id and typed extension fields', () => {

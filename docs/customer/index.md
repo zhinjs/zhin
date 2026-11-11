@@ -31,12 +31,12 @@ description: "给运营和群主：不写 TypeScript，用 Console 和配置管�
 
 Console 是独立的网页后台，不需要你部署：
 
-1. 向部署 Bot 的人要两样东西：**API 地址**（例如 `http://127.0.0.1:8068` 或你们的域名）和 **Token**（项目 `.env` 里的 `HTTP_TOKEN`）。
-2. 打开 [console.zhin.dev](https://console.zhin.dev)，填入地址和 Token。
+1. 向部署 Bot 的人要两样东西：**API 地址**（例如 `http://127.0.0.1:8068` 或你们的域名）和一个 **Console 账号**（用户名和密码）。
+2. 打开 [console.zhin.dev](https://console.zhin.dev)，填入地址，用账号登录。
 3. 看到首页里的账号（Endpoint）显示在线，就连上了。
 
-::: warning Token 就是密码
-不要把 Token 发到群里、放进截图或链接。Token 分两种：**Full token** 可以发消息、改配置；**Demo token** 只能看。日常只看状态的同事给 Demo token 就够了。
+::: warning 账号密码不要外传
+不要把密码或 API 令牌发到群里、放进截图或链接。每人一个账号：**运营**（`operator`）可以收发消息、改功能配置；**只读**（`viewer`）只能看。日常只看状态的同事给只读账号就够了。
 :::
 
 还没有一个在运行的 Bot？这一步需要开发者或运维做一次：按 [快速开始](/getting-started/) 创建项目，或按 [部署与恢复](/operations/production) 上线。之后的日常运营都可以在 Console 里完成。

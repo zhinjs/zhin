@@ -22,7 +22,7 @@ The instance's `pollCron` controls polling, every five minutes by default. Sched
 
 ## Create and verify
 
-Open the task center using a full-scope token for the current Host. Select the exact instance and administrator RSS provider. Enter an HTTP(S) feed URL without username or password. Select the account, conversation kind and ID, preserving parent and thread identities. Enter exact IDs manually when the platform has no directory; display names cannot replace addresses.
+Sign in with a Console account holding `feature.configure` and open the task center. Select the exact instance and administrator RSS provider. Enter an HTTP(S) feed URL without username or password. Select the account, conversation kind and ID, preserving parent and thread identities. Enter exact IDs manually when the platform has no directory; display names cannot replace addresses.
 
 Review the listed fetching and delivery effects before creating. Creation only saves the task: it does not fetch the feed or send a test message. Wait for a successful check whose details confirm the baseline. Add one article to a controlled test feed, wait for the next poll, then check the task result and original target conversation separately. Real-platform validation requires an authorized test target. Successful storage proves neither account connectivity nor delivery.
 

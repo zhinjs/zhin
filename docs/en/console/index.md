@@ -62,16 +62,13 @@ All configuration is in the `http:` section at the top level of `zhin.config.yml
 http:
   port: 8068                 # Scaffold default; trust project config
   host: 127.0.0.1            # Default 127.0.0.1; change to 0.0.0.0 for remote access
-  token: ${HTTP_TOKEN}       # Main token (full scope)
-  tokens:                    # Additional scoped tokens (optional)
-    - token: ${DEMO_TOKEN}
-      scope: demo            # full | demo
+  token: ${HTTP_TOKEN}       # Bootstrap token: only creates the first owner
   corsOrigins:               # CORS whitelist; https://console.zhin.dev is always automatically included
     - "http://localhost:5173"
   base: /api                 # API prefix, default /api
 ```
 
-With a token configured, `/api` requests require a Bearer token. `/pub/*`, the Console shell, and page routes stay public. `corsOrigins` is merged with the Remote Console origin.
+`/api` requests need a Bearer credential (a sign-in session or an API token, see [Users and permissions](#users-and-permissions)). `/pub/*`, the Console shell, and page routes stay public. `corsOrigins` is merged with the Remote Console origin.
 
 A port conflict soft-degrades the HTTP Host: Adapters and Agents keep running, but Console is unavailable. A Console restart exits with code 51 and the CLI daemon relaunches the process.
 
@@ -105,19 +102,19 @@ Runtime falls back to 8086 when no config exists; the current scaffold writes 80
 | Runtime Capabilities | `GET /api/introspection/{commands,middlewares,components,tools,prompt-sections,endpoints,bindings,mcp}`, `POST /api/introspection/components/render` | Current-generation contracts, owners, middleware order, component rendering lab, and Prompt Section governance metadata |
 | Agent Sessions | `GET/POST /api/agent/sessions/*` | AI session tree viewing and branch switching; GET returns an empty `state: not_started` tree before a channel conversation creates an AI session |
 | Conversation History | `GET /api/conversations/history?sessionKey=...&beforeSequence=...` | Recorded canonical inbound and sent messages, separate from Agent context; no prior AI turn required |
-| Collaboration graph | `GET /api/agent/engagements[/*]` (full scope required); RPC `agent.engagements.list` / `agent.engagements.get` / `agent.venues.list` | Read-only projection: recent Engagements, one Engagement's events and Blackboard, and the configured Venues; the data comes from the `engagement_events` Journal and Console cannot rewrite it |
+| Collaboration graph | `GET /api/agent/engagements[/*]` (requires `agent.view`); RPC `agent.engagements.list` / `agent.engagements.get` / `agent.venues.list` | Read-only projection: recent Engagements, one Engagement's events and Blackboard, and the configured Venues; the data comes from the `engagement_events` Journal and Console cannot rewrite it |
 | Marketplace | `GET /pub/marketplace/search`, `/pub/marketplace/detail/*`, `GET /api/marketplace/updates` | Plugin marketplace (plugins.json + npmmirror) and update checks |
 | Sandbox | WS `/sandbox` | Built-in sandbox chat, direct conversation without platform integration |
 
-Real-time pushes go through SSE: `GET /api/events` (page directory sync, HMR reload, message/configuration events).
+Real-time pushes go through SSE: `GET /api/events` (page directory sync, HMR reload, message/configuration events). The event stream and history (`/api/events`, `/api/events/history`) require `status.view`.
 
 ::: details HTTP / RPC Protocol Status Codes and Boundary Contracts
 
 Tree `preview` values remain short summaries. Read a complete user message on demand with `GET /api/agent/sessions/<encoded-sessionKey>/message?sessionId=<tree.sessionId>&messageId=<positive-safe-integer>` under the existing session HTTP authentication boundary. The response is `data: { messageId, text }`, without image payloads or branch mutation. A changed session incarnation returns `409`; a missing message, a message from another session, or a non-user message returns `404`; an older runtime without the reader returns `501`. Only retained message text is available.
 
-Conversation history requires full scope and returns the latest 50 canonical events in ascending sequence order. The response is `data: { conversation, items, nextBeforeSequence, hasMore }`; load earlier events with the exclusive `beforeSequence` cursor. Created messages include complete text and safe media references; recalls include `messageRef`. Other event types expose only type, timestamp, and sequence, and still count toward pagination. Local media paths, base64, and raw platform payloads are omitted. Missing history returns `404 history_not_recorded`, an ambiguous parent/thread address returns `409 conversation_ambiguous`, and an unavailable Endpoint mapping or store returns `503 history_unavailable`. Agent context is never substituted for recorded chat. Responses are not cached; clients must verify the complete `conversation` is unchanged before joining pages.
+Conversation history requires `endpoint.view` and returns the latest 50 canonical events in ascending sequence order. The response is `data: { conversation, items, nextBeforeSequence, hasMore }`; load earlier events with the exclusive `beforeSequence` cursor. Created messages include complete text and safe media references; recalls include `messageRef`. Other event types expose only type, timestamp, and sequence, and still count toward pagination. Local media paths, base64, and raw platform payloads are omitted. Missing history returns `404 history_not_recorded`, an ambiguous parent/thread address returns `409 conversation_ambiguous`, and an unavailable Endpoint mapping or store returns `503 history_unavailable`. Agent context is never substituted for recorded chat. Responses are not cached; clients must verify the complete `conversation` is unchanged before joining pages.
 
-The conversation's turn-usage action and Trace view read the existing Agent archive. `GET /api/agent/trace-archive/turns` returns turn summaries, trusted origins and usage calls including subagents. `GET /api/agent/trace-archive/turn` loads execution details without request bodies; `GET /api/agent/trace-archive/request?sessionKey=...&turnId=...&requestId=...` loads an individual body on demand. A current-conversation query supplies the complete canonical `conversation` as JSON. Timestamps and coarse session keys are not message associations; older records without a proven origin are not attributed to the selected chat. All routes require full scope and prohibit HTTP caching.
+The conversation's turn-usage action and Trace view read the existing Agent archive. `GET /api/agent/trace-archive/turns` returns turn summaries, trusted origins and usage calls including subagents. `GET /api/agent/trace-archive/turn` loads execution details without request bodies; `GET /api/agent/trace-archive/request?sessionKey=...&turnId=...&requestId=...` loads an individual body on demand. A current-conversation query supplies the complete canonical `conversation` as JSON. Timestamps and coarse session keys are not message associations; older records without a proven origin are not attributed to the selected chat. All routes require `agent.view` and prohibit HTTP caching.
 
 Reported usage separates input/output and cache/reasoning details; missing fields are not zero. Category token estimates are not a distribution of billed usage. Request bodies are model inputs captured at the SDK invocation boundary, grouped as instructions, tool definitions, ordered messages and output format. They are not HTTP wire captures or proof of upstream receipt. Framework retries and model fallback have separate request records; SDK-internal retries of the same input remain one semantic request rather than individual HTTP attempt records. Historical bodies are never reconstructed from current configuration.
 
@@ -168,37 +165,22 @@ Page directory changes are pushed in real-time to connected UIs via SSE `sync` e
 
 ## Users and permissions
 
-Console users are the `http.tokens` entries in `zhin.config.yml`: each extra token is one user. There's no separate account store, sign-up or login. To add a user, add a token; to remove one, delete its token. Give it `permissions` and `roles`, and the Console shows it only the pages whose requirements those meet. Plugin page status endpoints follow the same rules:
+Console users, roles, sessions and API tokens live in the project database (ADR 0049), not in the config file. Upgrading from an older version: see [Upgrading to Console access control](../migrations/console-access-control.md).
 
-```yaml
-http:
-  token: ${HTTP_TOKEN}            # Admin: full, can see and change everything
-  tokens:
-    - token: ${ALICE_TOKEN}
-      scope: user                 # Ordinary user (same as demo): can't change config
-      principalId: alice
-      permissions: [ambient:read, ambient:write] # matched against page and plugin action requiredPermissions
-      roles: [member]             # matched against a page's requiredRoles
-```
+- **Setup**: while the database has no owner, `http.token` is a bootstrap token that can only create the first owner (Console wizard, or `zhin console init`). After that it is refused everywhere. A local Host without `http.token` is open to everyone until setup.
+- **Sign-in**: users sign in with username and password and get a session token (12-hour sliding expiry, 30 days at most). Changing the password, disabling or deleting a user revokes all of that user's sessions at once.
+- **API tokens**: users issue long-lived tokens for automation, never exceeding their own permissions and revocable one by one. CLI tools read them from `ZHIN_CONSOLE_TOKEN`.
+- **Roles**: built-in `owner` (everything), `admin` (everything except the terminal and user management), `operator` (messaging and feature configuration) and `viewer` (read-only). A role binds globally, to one adapter, or to one account.
+- **Permission checks**: every Console RPC and every `/api` route is listed in the permission map of `@zhin.js/console-protocol`; anything unlisted is denied. Every denied request and every write is written to the audit log.
+- **Offline rescue**: `zhin console user create|passwd|disable|enable|list` opens the project database directly, without a running Host.
 
-- **Full tokens**, including the primary `token`, see every page. `permissions` and `roles` don't affect them.
-- **`scope: user` tokens** are ordinary users. `user` and `demo` mean exactly the same; prefer `user` in new configs. A missing or unknown `scope` is also treated as an ordinary user, never as the admin.
-- Ordinary users see only pages whose `requiredPermissions` and `requiredRoles` their `permissions` and `roles` meet. They can run a plugin action only when the action declares its own `requiredPermissions` or `requiredRoles` and the token meets all of them (see [plugin RPC](../authoring/console-pages.md#page-data-plugin-rpc)). Built-in admin operations, such as changing config or managing plugins, still need a full token.
-- **Without a token**, only pages with no requirements show.
-- **With no tokens configured** (local development), everyone counts as the admin, as before.
-- The page lists (`/entries`, `/console/api/pages` and `/console/api/topology`) are filtered by token and never cached.
+A page's `requiredPermissions` and `requiredRoles` decide who sees it: built-in permissions (such as `status.view`) come from roles; plugin-defined permission names (such as `ambient:read`, `decisions:read`, `control:read`, `ops:approve`) are currently satisfied only by a global owner. The page lists (`/entries`, `/console/api/pages` and `/console/api/topology`) are filtered per caller and never cached.
 
-Pages choose their own permission and role names, such as `ambient:read`. The built-in ambient engagement and skills assistant status use `ambient:read` and `skills:read` (see [Built-in status](../authoring/console-pages.md#built-in-status-ambient-engagement-and-skills-assistant)); the decision replay uses `decisions:read` (see [Decision replay](../authoring/console-pages.md#built-in-queries-decision-replay)); the control plane uses `control:read` and `control:write` (see [Control plane](../authoring/console-pages.md#built-in-actions-control-plane)); approvers (dangerous-tool approval cards, approving / rejecting / resending announcements) use `ops:approve` (see [Approval cards](../authoring/console-pages.md#built-in-actions-dangerous-tool-approval-cards)).
+Plugin routes such as reverse WebSockets and Webhooks do not use Console accounts; the plugin authenticates them with its own credential (for example OneBot's `access_token`).
 
-## Demo Scope (Read-Only Deployment)
+## Terminal
 
-Issue a `scope: demo` token for demonstrations. Demo exposes only server-authorized, redacted data; a client-side mask is never a secret boundary.
-
-- Allowed: event stream and history, Runtime Capabilities, read-only Console RPC, system status, statistics, and plugin catalog;
-- WebSocket only for `/sandbox`;
-- All other write operations (changing config, clearing logs, DB writes, etc.) return `403`.
-
-The main token has `full` scope with all permissions.
+With `console.terminal.enabled: true` the Console offers a host shell and allow-listed SSH targets (ADR 0051). Only owners holding `ops.terminal` can use it, and session start and end are audited. It is off by default; when off, no terminal route is registered. See the [configuration reference](../configuration/generated.md) for the fields.
 
 ## Related
 

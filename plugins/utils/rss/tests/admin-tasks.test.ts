@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { EndpointDeliveryError } from '@zhin.js/im-contract';
 import { childPluginId, rootPluginId } from '../../../../packages/im/plugin-runtime/src/index.js';
-import { sqliteAvailable } from '../../../../basic/cli/tests/plugin-runtime/sqlite-availability.js';
+import { sqliteAvailable } from '../../../../packages/im/zhin/tests/instance/sqlite-availability.js';
 import * as feed from '../src/feed.js';
 import { ADMIN_RSS_STATE_KEY, type AdministratorRssBook } from '../src/admin-tasks.js';
 import { getRssSeen, getRssSubs } from '../src/db-store.js';

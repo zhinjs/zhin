@@ -4,7 +4,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createWorkspace } from '../src/workspace.js';
-import { applyStableYesDefaults } from '../src/stable-yes-defaults.js';
+import { applyCreateDefaults } from '../src/stable-yes-defaults.js';
+import { buildAdapterSetup } from '../src/flow.js';
 import type { InitOptions } from '../src/types.js';
 import { scaffoldDependencyRange } from '@zhin.js/scaffold-wizard';
 import { parse } from 'yaml';
@@ -18,7 +19,7 @@ function stableYesOptions(): InitOptions {
     config: 'yaml',
     httpToken: 'test-token',
   };
-  applyStableYesDefaults(options);
+  applyCreateDefaults(options);
   return options;
 }
 
@@ -26,12 +27,20 @@ afterEach(async () => {
   await Promise.all(tmpRoots.splice(0).map((root) => fs.remove(root)));
 });
 
-describe('create-zhin -y Stable 默认值', () => {
-  it.each([true, false])('generates schema-valid Sandbox endpoints (explicit defaults: %s)', async (explicit) => {
+describe('create-zhin -y 默认值（ADR 0053：最小项目）', () => {
+  it('fills only unset defaults and leaves database / adapters / AI to the Console', () => {
+    const options = stableYesOptions();
+    expect(options).toEqual({ yes: true, config: 'yaml', httpToken: 'test-token', template: 'default', devSkills: false });
+    const flagged: InitOptions = { config: 'json', template: 'life-assistant', devSkills: true };
+    applyCreateDefaults(flagged);
+    expect(flagged).toEqual({ config: 'json', template: 'life-assistant', devSkills: true });
+  });
+
+  it('generates schema-valid Sandbox endpoints when --adapter sandbox is passed', async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'create-zhin-schema-'));
     tmpRoots.push(root);
     const options = stableYesOptions();
-    if (!explicit) options.adapters = undefined;
+    options.adapters = await buildAdapterSetup(['sandbox'], 'zh-CN');
     await createWorkspace(root, 'schema-bot', options);
     const doc = parse(await fs.readFile(path.join(root, 'zhin.config.yml'), 'utf8'));
     const schema = await fs.readJson(fileURLToPath(new URL('../../../../plugins/adapters/sandbox/schema.json', import.meta.url)));
@@ -49,7 +58,7 @@ describe('create-zhin -y Stable 默认值', () => {
     expect(manifest.engines.node).toBe('>=22.19.0');
   });
 
-  it('Sandbox 实例 + IM-only、无 database', async () => {
+  it('IM-only、无适配器、无 database', async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'create-zhin-stable-'));
     tmpRoots.push(root);
     const projectPath = path.join(root, 'stable-bot');
@@ -57,11 +66,10 @@ describe('create-zhin -y Stable 默认值', () => {
     await createWorkspace(projectPath, 'stable-bot', stableYesOptions());
 
     const config = await fs.readFile(path.join(projectPath, 'zhin.config.yml'), 'utf8');
-    // 新 runtime 格式：plugins.<instanceKey> 映射，sandbox 带默认 Endpoint
-    expect(config).toContain('plugins:');
-    expect(config).toContain('sandbox:');
-    expect(config).toContain('id: sandbox-bot');
-    expect(config).not.toContain('context: sandbox');
+    // 新 runtime 格式：plugins 映射为空，适配器在 Console 引导中添加
+    expect(parse(config).plugins).toEqual({});
+    expect(config).not.toContain('sandbox');
+    expect(config).not.toContain('tokens:');
     expect(config).not.toMatch(/^endpoints:/m);
     expect(config).not.toContain('toolSearch:');
     expect(config).not.toContain('ai:');
@@ -96,6 +104,8 @@ describe('create-zhin -y Stable 默认值', () => {
 
     const pkg = await fs.readJson(path.join(projectPath, 'package.json'));
     expect(pkg.dependencies['@zhin.js/agent']).toBeUndefined();
+    expect(Object.keys(pkg.dependencies).filter((name) => name.startsWith('@zhin.js/adapter-'))).toEqual([]);
+    expect(pkg.dependencies['@zhin.js/database']).toBeUndefined();
     expect(pkg.dependencies['@zhin.js/skill']).toBe(scaffoldDependencyRange('@zhin.js/skill'));
     expect(pkg.dependencies['@zhin.js/skill']).toMatch(/^\^\d+\.\d+\.\d+/u);
     expect(pkg.dependencies['@modelcontextprotocol/sdk']).toBeUndefined();

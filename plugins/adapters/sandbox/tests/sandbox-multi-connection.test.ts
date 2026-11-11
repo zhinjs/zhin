@@ -32,11 +32,8 @@ function conversation(scene: Scene): ConversationRef {
   return { endpoint: { id: endpointKey, adapter: 'sandbox' }, kind: scene.type, id: scene.id };
 }
 
-async function fixture(authenticated = false) {
-  const http = createHttpHost({ host: '127.0.0.1', port: 0, ...(authenticated ? { tokens: [
-    { token: 'full-test-token', scope: 'full' as const },
-    { token: 'demo-test-token', scope: 'demo' as const },
-  ] } : {}) });
+async function fixture() {
+  const http = createHttpHost({ host: '127.0.0.1', port: 0 });
   hosts.push(http);
   const receive = vi.fn(async (_input: unknown) => Object.freeze({ matched: true }));
   const events = vi.fn(async (event: EndpointEvent) => event.name === 'message.receive' ? receive(event.payload) : undefined);
@@ -161,9 +158,10 @@ describe('Sandbox scoped multi-connection transport', () => {
     await vi.waitFor(() => expect(third.frames.some(frame => frame.messageId === privateReceipt)).toBe(true));
   });
 
-  it('rejects malformed and unauthorized control frames without changing subscriptions or admitting model input', async () => {
-    const { endpoint, receive, events, connect } = await fixture(true);
-    const full = await connect('full-test-token'), demo = await connect('demo-test-token');
+  // Who may open the socket at all is the Host's RBAC gate (`/sandbox` → endpoint.operate, http-host tests).
+  it('rejects malformed control frames without changing subscriptions or admitting model input', async () => {
+    const { endpoint, receive, events, connect } = await fixture();
+    const full = await connect();
     await full.subscribe({ type: 'private', id: 'shared-owner' });
     const invalid = [
       { op: 'subscribe' }, { op: 'subscribe', conversation: null },
@@ -173,13 +171,9 @@ describe('Sandbox scoped multi-connection transport', () => {
       { op: 'not-a-chat-operation' },
     ];
     for (const frame of invalid) full.client.send(JSON.stringify(frame));
-    demo.client.send(JSON.stringify({ op: 'subscribe', conversation: { type: 'private', id: 'shared-owner' } }));
-    demo.client.send(JSON.stringify({ type: 'private', id: 'shared-owner', content: 'denied' }));
     await vi.waitFor(() => expect(full.frames.filter(frame => frame.type === 'error')).toHaveLength(invalid.length));
-    await vi.waitFor(() => expect(demo.frames.filter(frame => frame.type === 'error')).toHaveLength(2));
-    const receipt = await endpoint.send({ conversation: conversation({ type: 'private', id: 'shared-owner' }), payload: 'full only' });
+    const receipt = await endpoint.send({ conversation: conversation({ type: 'private', id: 'shared-owner' }), payload: 'still subscribed' });
     await vi.waitFor(() => expect(full.frames.some(frame => frame.messageId === receipt)).toBe(true));
-    expect(demo.frames.some(frame => frame.messageId === receipt)).toBe(false);
     expect(receive).not.toHaveBeenCalled();
     expect(events.mock.calls.filter(([event]) => event.name === 'platform.receive'
       && (event.payload as { name: string }).name === 'message')).toHaveLength(0);
@@ -188,8 +182,8 @@ describe('Sandbox scoped multi-connection transport', () => {
     const fullClosed = new Promise<void>(resolve => full.client.once('close', () => resolve()));
     full.client.close();
     await fullClosed;
-    await vi.waitFor(() => expect(endpoint.endpoint.connections()).toHaveLength(1));
-    await expect(endpoint.send({ conversation: conversation({ type: 'private', id: 'shared-owner' }), payload: 'demo cannot receive' }))
+    await vi.waitFor(() => expect(endpoint.endpoint.connections()).toHaveLength(0));
+    await expect(endpoint.send({ conversation: conversation({ type: 'private', id: 'shared-owner' }), payload: 'nobody listens' }))
       .rejects.toThrow(expect.objectContaining({ disposition: 'not_sent' }));
   });
 

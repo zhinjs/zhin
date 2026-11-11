@@ -432,7 +432,7 @@ qq:
       commandPrefix: '' # override for a single account
 ```
 
-The Sandbox created by `npm create zhin-app` is set to `/`.
+The Sandbox created by `npm create zhin-app --adapter sandbox` is set to `/`.
 
 ### Browse loaded commands
 

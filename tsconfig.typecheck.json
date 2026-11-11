@@ -212,6 +212,33 @@
       "@zhin.js/game-kit": [
         "./packages/game-kit/src/index.ts"
       ],
+      "@zhin.js/gateway": [
+        "./packages/host/gateway/src/index.ts"
+      ],
+      "@zhin.js/gateway/iam": [
+        "./packages/host/gateway/src/iam.ts"
+      ],
+      "@zhin.js/gateway/terminal": [
+        "./packages/host/gateway/src/terminal.ts"
+      ],
+      "@zhin.js/gateway/config": [
+        "./packages/host/gateway/src/config.ts"
+      ],
+      "@zhin.js/gateway/plugin-management": [
+        "./packages/host/gateway/src/plugin-management.ts"
+      ],
+      "@zhin.js/gateway/project": [
+        "./packages/host/gateway/src/project.ts"
+      ],
+      "@zhin.js/gateway/supervisor": [
+        "./packages/host/gateway/src/supervisor.ts"
+      ],
+      "@zhin.js/gateway/usage": [
+        "./packages/host/gateway/src/usage.ts"
+      ],
+      "@zhin.js/gateway/http": [
+        "./packages/host/gateway/src/http.ts"
+      ],
       "@zhin.js/host-http": [
         "./packages/host/http/src/index.ts"
       ],
@@ -341,6 +368,12 @@
       "zhin.js/i18n": [
         "./packages/im/zhin/src/i18n.ts"
       ],
+      "zhin.js/instance": [
+        "./packages/im/zhin/src/instance/index.ts"
+      ],
+      "zhin.js/instance/cli": [
+        "./packages/im/zhin/src/instance/cli/index.ts"
+      ],
       "@zhin.js/agent/model-runtime": [
         "./packages/im/agent/src/model-runtime/index.ts"
       ],
@@ -385,6 +418,8 @@
     "packages/im/adapter-onebot-events/src/**/*",
     "packages/im/core/tests/public-events.test-d.ts",
     "packages/im/agent/src/**/*",
+    "packages/im/zhin/src/instance/**/*",
+    "packages/host/gateway/src/**/*",
     "packages/im/agent/evals/**/*.ts",
     "examples/minimal-bot/plugin.ts",
     "examples/minimal-bot/adapters/**/*",

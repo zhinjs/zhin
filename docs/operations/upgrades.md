@@ -18,6 +18,10 @@ npx zhin runtime start --once --mode test  # 装配冒烟
 
 生产环境请按下文完整流程执行，并在升级前做好备份。升级前先停止 Bot，避免依赖目录在运行中被替换。
 
+## 升级到 `@zhin.js/cli` 1.2：Console 访问控制 {#console-access-control}
+
+1.2 把 Console 的用户、角色与 API 令牌存进数据库：`http.token` 只用于创建第一个所有者，`http.tokens` 已删除（仍在配置里时 Host 拒绝启动），自动化改用 `ZHIN_CONSOLE_TOKEN` 里的 API 令牌。完整步骤见[升级到 Console 访问控制](../migrations/console-access-control.md)。
+
 ## Adapter API 2：本批 patch 的插件边界 {#adapter-api-2}
 
 本批是包含插件接口变更的 patch，不能仅凭 `1.1.x` 判断兼容。下表是首批目标版本，尚未

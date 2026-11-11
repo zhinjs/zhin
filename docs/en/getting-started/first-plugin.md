@@ -12,7 +12,7 @@ For everyday bot features — adding commands, JSX cards, or AI tools — you do
 This page walks you through building `ping-pong` from scratch: a user sends `/ping` and the bot replies with text **you can change in config**. By the end you will know the four building blocks of a reusable plugin package — manifest, entry, command, config schema — and how to mount it in `zhin.config.yml`. It takes about 15 minutes.
 
 ::: tip Before you start
-- You have created and run `my-bot` from the [Quick start](./index.md) (if not, run `npm create zhin-app my-bot -y`).
+- You have created and run `my-bot` from the [Quick start](./index.md) (if not, run `npm create zhin-app my-bot -- -y --adapter sandbox`).
 - Node.js ≥22.19.0 and pnpm 9+. `pnpm dev` runs TypeScript source directly — no build step.
 :::
 

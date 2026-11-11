@@ -25,9 +25,11 @@ describe('Page Feature', () => {
       group: 'ops',
       parent: 'root',
       fullWidth: true,
+      section: 'ops',
       order: 15,
     });
     expect(meta).toMatchObject({
+      section: 'ops',
       title: 'Dashboard',
       group: 'ops',
       parent: 'root',
@@ -43,9 +45,14 @@ describe('Page Feature', () => {
       group: 'ops',
       parent: 'root',
       fullWidth: true,
+      section: 'ops',
       order: 15,
       module: '/assets/dash.js',
     });
+    expect(() => parsePageArtifact(
+      { module: '/assets/dash.js', hash: 'h1', metadata: { section: 'elsewhere' } },
+      { owner: rootPluginId(), feature: pageFeature.id, localName: 'dashboard', source: '/app/pages/dashboard/index.tsx' },
+    )).toThrow('Page section must be one of');
   });
 
   it('recognizes PageIndex by its projection brand rather than prototype identity', () => {

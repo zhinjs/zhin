@@ -16,9 +16,10 @@ import path, { join, resolve } from 'path';
 import { execSync } from 'child_process';
 import { formatCompact } from '@zhin.js/logger';
 import { logger } from '../utils/logger.js';
-import { NODE_ENGINES_HINT } from '../utils/node-requirements.js';
-import { applyInstanceDeclarationMigration, formatInstanceMigrationPreview, planInstanceDeclarationMigration, recoverInstanceDeclarationMigration } from '../plugin-runtime/migrate/instance-declarations.js';
-import { CONFIG_V2_MIGRATION_DOCS_URL, detectLegacyConfig } from '../utils/legacy-config.js';
+import { NODE_ENGINES_HINT } from '@zhin.js/gateway/project';
+import { applyInstanceDeclarationMigration, formatInstanceMigrationPreview, planInstanceDeclarationMigration, recoverInstanceDeclarationMigration } from '@zhin.js/gateway/project';
+import { CONFIG_V2_MIGRATION_DOCS_URL, detectLegacyConfig } from '@zhin.js/gateway/project';
+import { importProjectInstanceCli } from '../utils/project-instance.js';
 
 const cwd = process.cwd();
 
@@ -589,7 +590,7 @@ migrateCommand.addCommand(
                 'Session binding neither finalizes startup files nor imports credentials'
               );
             const sessions = await loadInferenceMigrationModule(
-              () => import('../plugin-runtime/inference/migration-session-bindings.js')
+              async () => (await importProjectInstanceCli(process.cwd())).loadInferenceMigrationSessionBindings()
             );
             const preview = await sessions.readSessionBindingsPreview(previewFile);
             if (preview.rootId !== resolve(process.cwd()))
@@ -603,13 +604,13 @@ migrateCommand.addCommand(
             return;
           }
           const migration = await loadInferenceMigrationModule(
-            () => import('../plugin-runtime/inference/migration-preview.js')
+            async () => (await importProjectInstanceCli(process.cwd())).loadInferenceMigrationPreview()
           );
           const preview = await migration.readInferenceMigrationPreview(previewFile);
           if (preview.rootId !== resolve(process.cwd()))
             throw new Error('Migration preview belongs to another project Root');
           const writer = await loadInferenceMigrationModule(
-            () => import('../plugin-runtime/inference/migration-apply.js')
+            async () => (await importProjectInstanceCli(process.cwd())).loadInferenceMigrationApply()
           );
           const run = options.finalize
             ? writer.finalizeInferenceMigration
@@ -643,7 +644,7 @@ migrateCommand.addCommand(
           if (options.withCredentials)
             throw new Error('Session binding does not import credentials');
           const sessions = await loadInferenceMigrationModule(
-            () => import('../plugin-runtime/inference/migration-session-bindings.js')
+            async () => (await importProjectInstanceCli(process.cwd())).loadInferenceMigrationSessionBindings()
           );
           const preview = await sessions.previewSessionBindings({ ...sources, mapping });
           await fs.writeFile(resolve(options.output), `${JSON.stringify(preview, null, 2)}\n`, {
@@ -667,7 +668,7 @@ migrateCommand.addCommand(
           return;
         }
         const migration = await loadInferenceMigrationModule(
-          () => import('../plugin-runtime/inference/migration-preview.js')
+          async () => (await importProjectInstanceCli(process.cwd())).loadInferenceMigrationPreview()
         );
         const preview = await migration.previewInferenceMigration({
           ...sources,
@@ -683,7 +684,7 @@ migrateCommand.addCommand(
               id: preview.id,
               output: resolve(options.output),
               stateSource: preview.stateSource,
-              units: preview.units.map((unit) => ({
+              units: preview.units.map((unit: any) => ({
                 id: unit.id,
                 ownerId: unit.ownerId,
                 blocked: unit.migration.blocked,

@@ -147,3 +147,42 @@ describe('milky endpoint management wiring', () => {
     }
   });
 });
+
+describe('milky reverse WebSocket access (ADR 0054 §3)', () => {
+  async function mount(accessToken?: string) {
+    let accept!: (connection: unknown) => void;
+    const ws = vi.fn((_path: string, _options?: unknown) => ({ onConnection: (listener: (connection: unknown) => void) => { accept = listener; return () => undefined; } }));
+    const http = { ws, route: vi.fn(() => () => undefined) } as unknown as HttpHost;
+    const config = resolveMilkyConfig({ connection: 'wss', id: 'acl-milky', baseUrl: 'http://127.0.0.1:3000', path: '/milky', ...(accessToken ? { access_token: accessToken } : {}) }) as MilkyWssConfig;
+    const endpoint = await createEndpointHarness(() => new MilkyWssEndpoint({ id: endpointKey, http, config, callApi: vi.fn(async () => ({ status: 'ok' as const, retcode: 0, data: {} })) }), { name: 'milky', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway(gateway, undefined) });
+    await endpoint.start();
+    const connect = (request: { authorization?: string; url?: string; ip: string }) => {
+      const socket = createSocket();
+      accept({ socket, request: { headers: request.authorization ? { authorization: request.authorization } : {}, url: request.url ?? '/milky', socket: { remoteAddress: request.ip } } });
+      return socket;
+    };
+    return { ws, endpoint, connect };
+  }
+  const rejected = (socket: { close: ReturnType<typeof vi.fn> }) => socket.close.mock.calls.some(([code]) => code === 4003);
+
+  it('mounts with protocol auth and checks its own access_token', async () => {
+    const { ws, endpoint, connect } = await mount('secret');
+    expect(ws).toHaveBeenCalledWith('/milky', { auth: 'protocol' });
+    const wrong = connect({ authorization: 'Bearer console-session-token', ip: '127.0.0.1' });
+    await vi.waitFor(() => expect(rejected(wrong)).toBe(true));
+    const good = connect({ url: `${'/milky'}?access_token=secret`, ip: '203.0.113.9' });
+    await new Promise(resolve => setTimeout(resolve, 10));
+    expect(rejected(good)).toBe(false);
+    await endpoint.stop();
+  });
+
+  it('without access_token admits loopback peers only', async () => {
+    const { endpoint, connect } = await mount();
+    const remote = connect({ ip: '192.168.1.20' });
+    await vi.waitFor(() => expect(rejected(remote)).toBe(true));
+    const local = connect({ ip: '127.0.0.1' });
+    await new Promise(resolve => setTimeout(resolve, 10));
+    expect(rejected(local)).toBe(false);
+    await endpoint.stop();
+  });
+});

@@ -18,6 +18,10 @@ npx zhin runtime start --once --mode test  # assembly smoke test
 
 For production, follow the full flow below and take a backup first. Stop the Bot before upgrading so dependency directories are not replaced under a running process.
 
+## Upgrading to `@zhin.js/cli` 1.2: Console access control {#console-access-control}
+
+1.2 stores Console users, roles and API tokens in the database: `http.token` only creates the first owner, `http.tokens` is removed (the Host refuses to start while it is configured), and automation uses an API token from `ZHIN_CONSOLE_TOKEN`. See [Upgrading to Console access control](../migrations/console-access-control.md) for the full steps.
+
 ## Adapter API 2: this patch batch's plugin boundary {#adapter-api-2}
 
 This patch batch intentionally changes plugin interfaces. `1.1.x` alone does not prove compatibility.

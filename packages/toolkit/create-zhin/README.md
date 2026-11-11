@@ -11,11 +11,11 @@
 - 🚀 **一键创建**: 使用标准的 `npm create` / `yarn create` / `pnpm create` 命令
 - 📦 **Workspace 结构**: 自动创建 pnpm workspace，支持插件开发
 - 🔧 **智能配置**: 自动安装 pnpm、项目依赖
-- 🎯 **交互式配置**: 选择项目语言、模板、配置格式、数据库类型
-- 🗄️ **数据库支持**: 支持 SQLite、MySQL、PostgreSQL、MongoDB、Redis
-- 🔐 **安全配置**: 自动生成 HTTP Token 认证和环境变量管理
-- 🖥️ **Remote Console**: 默认配置 `https://console.zhin.dev` 访问所需的 API Base 与 CORS
-- 🤖 **AI Agent 引导**: 可选配置 Provider、触发方式、会话、上下文和安全默认值
+- 🎯 **两个问题**: 终端里只问项目语言、项目名称，并确认初始化令牌
+- 🧭 **Console 引导**: 数据库、所有者账号、AI、适配器都在 Console 里完成（[ADR 0053](../../../docs/adr/0053-console-onboarding.md)）
+- 🔐 **初始化令牌**: 随机生成并写入 `.env` 的 `HTTP_TOKEN`，只用于创建第一个所有者账号
+- 🖥️ **Remote Console**: 默认配置 `https://console.zhin.dev` 访问所需的 API Base 与 CORS，结束时打印一键打开的链接
+- 🤖 **自动化参数**: `--database`、`--adapter`、`--ai` 等参数仍可在创建时写入对应配置
 - 📊 **日志配置**: 内置完整的日志等级和清理配置
 - 🌐 **零安装**: 无需全局安装，CLI 作为项目 devDependency 通过 `pnpm` / `npx zhin` 使用
 
@@ -52,24 +52,17 @@ pnpm build
 
 ## 工作原理
 
-`create-zhin-app` 负责**生成 workspace 文件树**与依赖安装；适配器 / AI / 数据库的**交互向导**来自共享包 [`@zhin.js/scaffold-wizard`](../scaffold-wizard/)（与 `zhin setup` 同一套逻辑）。
+`create-zhin-app` 只负责**生成最小 workspace 项目**与依赖安装（[ADR 0053 §1](../../../docs/adr/0053-console-onboarding.md)）。数据库、所有者账号、AI、适配器在 Host 启动后由 Console 引导完成；`zhin setup` 也能在终端里补充。显式传入 `--database` / `--adapter` / `--ai` 时，写入逻辑来自共享包 [`@zhin.js/scaffold-wizard`](../scaffold-wizard/)（与 `zhin setup` 同一套）。
 
 工作流程：
 
 1. **启动脚手架**: 当你运行 `npm create zhin-app` 时
 2. **检测 pnpm**: 自动检测并安装 pnpm（如果未安装）
-3. **交互式配置**: 询问项目语言、项目名称、模板、配置格式
-4. **HTTP Token 认证配置**: 配置 Web 控制台访问 Token
-   - 默认 Token：随机生成 32 位 hex 字符串
-5. **数据库 / 适配器 / AI 向导**（`@zhin.js/scaffold-wizard`）: 分步选择并写入配置
-   - 数据库：SQLite、MySQL、PostgreSQL、MongoDB、Redis
-   - 适配器：Sandbox、Telegram、Discord、GitHub 等（含模式与 env 引导）
-   - AI：Provider、触发、会话；默认首跑不启用，后续可用 `zhin setup --ai` 追加
-6. **创建 Workspace**: 生成 pnpm workspace 结构
-7. **生成配置文件**: 合并 wizard 结果到 `zhin.config.*`
-8. **生成 .env 文件**: 保存 Token、适配器与 AI 环境变量
-9. **自动安装依赖**: 在项目根目录执行 `pnpm install`
-10. **完成提示**: 显示 Token 的存放位置（`.env` 的 `HTTP_TOKEN`，终端里只显示打码后的长度，不打印完整值，避免进入 CI 日志）、数据库配置和下一步操作
+3. **两个问题**: 项目语言、项目名称（已在命令行给出则跳过）
+4. **确认初始化令牌**: 默认随机生成 32 位 hex 字符串，回车确认；写入 `.env` 的 `HTTP_TOKEN`，配置里是 `http.token: ${HTTP_TOKEN}`
+5. **生成最小项目**: IM 核心 + Console Host，不含数据库驱动、适配器、AI 依赖（未配置数据库时 Runtime 使用默认 SQLite `.zhin/data.sqlite`）
+6. **自动安装依赖**: 在项目根目录执行 `pnpm install`
+7. **完成提示**: 打印启动命令和 Console 链接 `https://console.zhin.dev/?apiBaseUrl=<编码后的 http://127.0.0.1:8068>#token=<初始化令牌>`（Console 会自行拼接 `http.base` 的 `/api`）。令牌只出现在 `#` 之后，不会发送到 console.zhin.dev 的服务器；输出不是终端（例如 CI 日志）时链接里省略令牌，到 `.env` 查看
 
 ## 支持的参数
 
@@ -83,53 +76,63 @@ npm create zhin-app my-bot
 npm create zhin-app my-awesome-bot
 ```
 
-**交互式配置流程：**
+**交互式问题（只有三个）：**
 1. 🌐 选择项目语言（或用 `--locale zh-CN|en` 指定）
-2. 📝 输入项目名称
-3. 📋 选择模板（默认 / 生活助手）
-4. 📄 选择配置格式（YAML / JSON）
-5. 🔐 配置 Web 控制台 Token
-   - Token（默认：随机 32 位 hex 字符串，用于 Authorization: Bearer 或 ?token= 认证）
-6. 🗄️ 配置数据库
-   - SQLite（推荐，零配置）
-   - MySQL（主机、端口、用户名、密码、数据库名）
-   - PostgreSQL（主机、端口、用户名、密码、数据库名）
-   - MongoDB（连接字符串、数据库名）
-   - Redis（主机、端口、密码、数据库索引）
-7. 🔌 选择适配器、🤖 可选 AI、🛠️ 可选插件开发技能
+2. 📝 输入项目名称（命令行已给出则跳过）
+3. 🔐 确认初始化令牌（默认随机 32 位 hex 字符串，回车确认）
 
-运行时固定为 Node.js（>=22.19.0），向导不再询问运行时，也不会全局安装 CLI。
+模板、配置格式、数据库、适配器、AI、插件开发技能不再提问，取默认值；需要时用下方参数指定。运行时固定为 Node.js（>=22.19.0），也不会全局安装 CLI。
+
+结束时的输出（示例）：
+
+```
+✔ 项目已创建：my-bot
+  启动：cd my-bot && pnpm dev
+  然后打开 Console 完成初始化：
+  https://console.zhin.dev/?apiBaseUrl=http%3A%2F%2F127.0.0.1%3A8068#token=<初始化令牌>
+```
+
+端口与 base 取自生成的配置（`http.port`、`http.base`）。打开链接后 Console 依次引导：数据库 → 所有者账号 → AI → 适配器，每一步都可以跳过、以后再回来。初始化令牌在创建第一个所有者后失效。
 
 ### 快速创建（跳过交互）
 
 ```bash
-# 使用默认配置（YAML + 随机 Token）
+# 接受全部默认值（YAML + 随机初始化令牌 + 默认项目名）
 npm create zhin-app my-bot -y
 # 或
 npm create zhin-app my-bot --yes
 ```
 
+`-y` 只确认默认值，不会预装适配器或 AI。
+
 ### 参数详解
 
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
-| `[project-name]` | 项目名称（可选，会提示输入） | `my-zhin-bot` |
-| `-y, --yes` | 跳过交互，使用默认配置 | `false` |
+| `[project-name]` | 项目名称（可选，会提示输入；`-y` 时用默认值） | `my-zhin-bot` |
+| `-y, --yes` | 不提问，接受默认值 | `false` |
 | `--skip-install` | 仅生成文件，稍后自行运行 `pnpm install` | `false` |
 | `--locale <zh-CN\|en>` | 生成项目的语言（模板、README、提示） | 交互选择；`-y` 时使用默认语言 |
+| `--template <default\|life-assistant>` | 项目模板 | `default` |
+| `--config-format <yaml\|json>` | 配置文件格式 | `yaml` |
+| `--dev-skills` / `--no-dev-skills` | 是否复制插件开发技能模板到 `skills/` | 不复制 |
+| `--database [<dialect>]` | 写入 `database:`。给出方言（`sqlite`、`mysql`、`pg`、`mongodb`、`redis`、`memory`）时使用该方言的默认连接参数，连接信息写入 `.env`；不带值时进入数据库向导 | 不写入，使用默认 SQLite |
+| `--adapter <name>[,<name>]` | 安装并挂载适配器（可重复）。`sandbox` 与字段式适配器使用默认值，凭据写成 `.env` 引用；带专用配置流程的平台（如 `telegram`、`qq`、`discord`）会询问该平台的凭据 | 不安装 |
+| `--adapters` | 进入适配器选择向导（与 `zhin setup --adapters` 相同） | — |
+| `--ai` | 进入 AI 向导并安装 AI 依赖（与 `zhin setup --ai` 相同） | 不启用 |
 
-**默认配置（使用 `-y` 时，见 `src/stable-yes-defaults.ts`，由 `tests/stable-yes.test.ts` 断言）：**
+**默认配置（交互与 `-y` 相同，见 `src/stable-yes-defaults.ts`，由 `tests/stable-yes.test.ts`、`tests/onboarding-flow.test.ts` 断言）：**
 - 配置格式: YAML (`zhin.config.yml`)
 - 包管理器: pnpm（自动安装）
-- 数据库: 无（内存会话；需持久化请交互式创建或手动加 SQLite）
-- HTTP Token: 随机生成
-- 适配器: `@zhin.js/adapter-sandbox`，实例键 `sandbox`，`commandPrefix: /`，预置 Endpoint `sandbox-bot`
-- AI: 不启用（首跑 IM-only，无 Ollama / API Key 前置条件；跑通后用 `zhin setup --ai`）
-- Remote Console: `https://console.zhin.dev`；脚手架写入 `http.port: 8068`，API Base 为 `http://127.0.0.1:8068`（见 [docs/console/index.md](../../../docs/console/index.md)）
-- 统一收件箱: 未启用（无 `database:` 块）
+- 依赖: `zhin.js`、`@zhin.js/skill`、`@zhin.js/components` 与 Console 页面 Feature（`@zhin.js/console-contract`、`@zhin.js/page`、`@zhin.js/layout`）；`@zhin.js/cli` 为 devDependency
+- 数据库: 不写 `database:`，Runtime 使用默认 SQLite（`.zhin/data.sqlite`），可在 Console 引导里更换
+- 初始化令牌: 随机生成，写入 `.env` 的 `HTTP_TOKEN`
+- 适配器: 无（`plugins: {}`），在 Console 引导或 `zhin setup --adapters` 中添加
+- AI: 不启用，在 Console 引导或 `zhin setup --ai` 中启用
+- Remote Console: `https://console.zhin.dev`；脚手架写入 `http.port: 8068`、`http.base: /api`，Console 里的 API Base 为 `http://127.0.0.1:8068`（见 [docs/console/index.md](../../../docs/console/index.md)）
 - 插件开发技能模板: 未安装（`devSkills: false`）
 
-**与 [examples/minimal-bot](../../../examples/minimal-bot/) 对齐：** `-y` 只启用 Sandbox 适配器，Console/HTTP Host 由 CLI 自动装配；首跑步骤见 minimal-bot README 与生成项目 README。
+需要本地 Sandbox 调试时加 `--adapter sandbox`；它与 [examples/minimal-bot](../../../examples/minimal-bot/) 的 Sandbox 实例一致（实例键 `sandbox`、`commandPrefix: /`、Endpoint `sandbox-bot`）。
 
 ## 与 @zhin.js/cli 的分工
 
@@ -158,7 +161,7 @@ pnpm dev
 ### 2. 生产项目创建
 
 ```bash
-# 按向导选择数据库、聊天适配器和 AI Provider
+# 创建后在 Console 引导里选择数据库、聊天适配器和 AI Provider
 npm create zhin-app production-bot
 ```
 
@@ -169,11 +172,11 @@ npm create zhin-app production-bot
 npm create zhin-app team-bot -y
 ```
 
-### 4. 实验性项目
+### 4. 脚本 / 容器里一次写好
 
 ```bash
-# 通过交互向导选择模板、数据库与额外适配器
-npm create zhin-app experimental-bot
+# 非交互：PostgreSQL（默认连接参数写入 .env）+ Sandbox 适配器 + JSON 配置
+npm create zhin-app ci-bot -- -y --database pg --adapter sandbox --config-format json
 ```
 
 ## 生成的项目结构
@@ -250,15 +253,10 @@ http:
   corsOrigins:
     - "https://console.zhin.dev"
 
-plugins:
-  sandbox:
-    commandPrefix: /
-    endpoints:
-      - id: sandbox-bot
-        owner: sandbox-user
+plugins: {}
 ```
 
-交互式选择数据库时会追加 `database:`。Remote Console 用法见 [Console 文档](../../../docs/console/index.md)；Stable 手测见 [examples/minimal-bot/README.md](../../../examples/minimal-bot/README.md)。
+`http.token` 是初始化令牌，只用于在 Console 创建第一个所有者账号（[ADR 0049](../../../docs/adr/0049-console-rbac.md)）。传入 `--database` 时会追加 `database:`，传入 `--adapter` 时 `plugins` 下会出现对应实例；Console 引导保存的数据库与适配器也写在这里。Remote Console 用法见 [Console 文档](../../../docs/console/index.md)；Stable 手测见 [examples/minimal-bot/README.md](../../../examples/minimal-bot/README.md)。
 
 ## 完整工作流
 
@@ -276,17 +274,18 @@ cd my-awesome-bot
 pnpm dev
 ```
 
-访问 Remote Console `https://console.zhin.dev`，API Base 填写与 Host 一致的地址：脚手架写入的端口是 `8068`，即 `http://127.0.0.1:8068`。
+打开创建结束时打印的 Console 链接（API Base 为 `http://127.0.0.1:8068`，初始化令牌在 `#token=` 之后）。链接丢了也没关系：打开 `https://console.zhin.dev`，API Base 填 `http://127.0.0.1:8068`，令牌填 `.env` 的 `HTTP_TOKEN`。
 
-**访问信息：**
-- Token 在创建项目时已配置
-- 保存在 `.env` 文件中
-- 创建完成时终端只显示打码后的长度，完整值请查看 `.env`
-- 登录后进入 Sandbox / 沙盒页，连接后发送 `/hello`
+Console 引导依次完成：
 
-> 💡 **修改 Token**: 编辑 `.env` 文件中的 `HTTP_TOKEN`
+1. **数据库**：保持默认 SQLite，或选择 MySQL / PostgreSQL / MongoDB 并测试连接；
+2. **所有者账号**：创建第一个所有者并登录，此后初始化令牌失效；
+3. **AI**（可跳过）：安装 AI 依赖并添加第一个模型 Provider；
+4. **适配器**（可跳过）：选择平台（本地调试可选 Sandbox）、填写账号并测试上线。
 
-### 3. 可选：启用 AI
+> 💡 跳过的步骤之后可以在 Console「功能 → AI 与模型」「功能 → 适配器」里继续，也可以在终端运行 `npx zhin setup --ai` / `npx zhin setup --adapters`。
+
+### 3. 可选：在终端里配置
 
 ```bash
 npx zhin setup --ai

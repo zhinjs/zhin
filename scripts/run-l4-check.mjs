@@ -21,7 +21,7 @@ const l4TestFiles = [
   'packages/host/mcp/tests/mesh-auth.test.ts',
   'packages/host/mcp/tests/runtime.test.ts',
   'packages/host/a2a/tests/runtime.test.ts',
-  'basic/cli/tests/plugin-runtime/database-host.test.ts',
+  'packages/im/zhin/tests/instance/database-host.test.ts',
   'packages/im/agent/tests/plugin-runtime/agent-runtime.test.ts',
   'packages/im/agent/tests/tool/tool-system.test.ts',
   'packages/im/tool/tests/tool.test.ts',

@@ -13,7 +13,7 @@ AI / Agent 能力在 **`@zhin.js/agent`**（及 `@zhin.js/ai`），须显式安�
 | **IM** | `pnpm add zhin.js` | `@zhin.js/core` 全部 API |
 | **AI** | `+ @zhin.js/agent zod ai` | ZhinAgent、`ctx.ai`、会话与工具 |
 | **Provider** | `+ @ai-sdk/openai` 等 | 大模型调用 |
-| **Host** | 无需安装，由 `@zhin.js/cli` 自动装配 | Console API（可选 peer） |
+| **Host** | 无需安装，由 `zhin.js/instance` 自动装配 | Console API（可选 peer） |
 
 ## 子路径导出
 
@@ -24,6 +24,8 @@ AI / Agent 能力在 **`@zhin.js/agent`**（及 `@zhin.js/ai`），须显式安�
 | `zhin.js/ai` | `@zhin.js/ai` 引擎 API |
 | `zhin.js/runtime` | `@zhin.js/runtime` optional-peer facade；不进入默认 IM 闭包 |
 | `zhin.js/jsx*` | 消息 JSX / 原生 Segment 标签 / 显式 Html 边界 |
+| `zhin.js/instance` | Zhin 实例装配根（ADR 0054 §0，原 `@zhin.js/cli` 的 `runStartCommand` / `RootHost`）：IM Runtime、Agent Host、运行时侧 Console 后端；由 `zhin runtime start` 按项目解析加载。需要项目安装 `@zhin.js/runtime`、`@zhin.js/gateway`、`@zhin.js/pagemanager`（随 `@zhin.js/cli` 安装）；MCP / A2A / 语音按需安装 `@zhin.js/mcp`、`@zhin.js/a2a`、`@zhin.js/speech` |
+| `zhin.js/instance/cli` | `@zhin.js/cli` 在运行时从项目加载的 IM 侧辅助（`zhin console`、`zhin preview`、`zhin trace`、`zhin agent info`、`zhin migrate inference`），不是插件 API |
 
 **4.x breaking**：`import from 'zhin.js'` 不再含 `ZhinAgent`、`AIService`、`ModelRegistry`。请改用 `zhin.js/agent` 或 `zhin.js/ai`。
 

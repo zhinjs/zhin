@@ -21,7 +21,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import { readApplicationPluginDeclaration, readSourcePluginOrder } from '@zhin.js/runtime';
-import { findConfigFile } from './config-file.js';
+import { findConfigFile } from '@zhin.js/gateway/project';
 
 export const STATE_DIR = '.zhin-local';
 const DEP_FIELDS = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'] as const;

@@ -5,7 +5,7 @@ import type { AgentHostPort } from '@zhin.js/agent/runtime';
 import { buildAgentCardForBinding } from './card-builder.js';
 import { ZhinA2AExecutor } from './agent-executor.js';
 import { handleAgentCard, handleJsonRpc, handleRest } from './http-handlers.js';
-import { isLocalhost, verifyA2aBearer } from './auth.js';
+import { extractBearerToken, isLocalhost, verifyA2aBearer } from './auth.js';
 import { BoundedTaskStore } from './bounded-task-store.js';
 import type { RuntimeA2aMailboxConfig } from './mailbox-remote-transport.js';
 
@@ -22,6 +22,11 @@ export interface InstallRuntimeA2aOptions {
   readonly agentHost: AgentHostPort;
   readonly config?: RuntimeA2aConfig;
   readonly fallbackToken?: string;
+  /**
+   * Shared Host credential check (ADR 0049): user API tokens with `a2a.access`, or the
+   * bootstrap token before setup. Tried when the bearer does not match `config.token`.
+   */
+  readonly authenticateBearer?: (token: string, request: import('node:http').IncomingMessage) => Promise<boolean>;
   readonly fallbackPublicUrl: string;
   readonly production?: boolean;
 }
@@ -37,8 +42,8 @@ export function installRuntimeA2a(options: InstallRuntimeA2aOptions): () => void
   const basePath = normalizePath(options.config?.path ?? '/a2a');
   const publicBaseUrl = trimTrailingSlashes(options.config?.publicUrl ?? options.fallbackPublicUrl);
   const token = options.config?.token ?? options.fallbackToken ?? '';
-  if (options.production === true && !token) {
-    throw new Error('A2A requires a2a.token or http.token in production');
+  if (options.production === true && !token && !options.authenticateBearer) {
+    throw new Error('A2A requires a2a.token or Host API tokens in production');
   }
   const stacks = new Map<string, AgentStack>();
 
@@ -58,7 +63,11 @@ export function installRuntimeA2a(options: InstallRuntimeA2aOptions): () => void
   const unregister = options.http.route('ALL', `${basePath}/*`, async (request, response, url) => {
     // No token (non-production only): accept loopback callers alone, like the MCP Host,
     // so a token-less dev instance is not open to the network.
-    const authenticated = token ? verifyA2aBearer(request, token) : isLocalhost(request);
+    const bearer = extractBearerToken(request);
+    const authenticated = (token !== '' && verifyA2aBearer(request, token))
+      || (bearer !== '' && options.authenticateBearer !== undefined
+        && await options.authenticateBearer(bearer, request).catch(() => false))
+      || (token === '' && options.production !== true && isLocalhost(request));
     if (!authenticated) {
       writeJson(response, 401, { error: 'Unauthorized - Bearer token required' });
       return;

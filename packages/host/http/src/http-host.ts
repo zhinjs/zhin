@@ -21,10 +21,8 @@ import {
 import {
   TokenRegistry,
   extractBearerToken,
-  isDemoWebSocketPath,
   type AuthenticatedTokenPrincipal,
   type AuthScope,
-  type ScopedTokenConfig,
   type TokenRegistryConfig,
 } from './token-registry.js';
 import {
@@ -32,8 +30,16 @@ import {
   type ListedRoute,
   type RouteMeta,
 } from './openapi.js';
-import { isDemoHttpAllowed } from './console-rpc.js';
 import { HttpBodyError } from './json-body.js';
+import {
+  auditActor,
+  authorizeConsoleHttp,
+  authorizeConsoleWebSocket,
+  bindRequestPrincipal,
+  isUserPrincipal,
+  requestMeta,
+  type ConsolePrincipal,
+} from './access-control.js';
 
 const logger = getLogger('http');
 
@@ -44,6 +50,8 @@ export interface WsConnection {
   readonly socket: WebSocket;
   readonly request: IncomingMessage;
   readonly authScope: AuthScope;
+  /** Authenticated principal (absent for `auth: 'protocol'` routes, which authenticate themselves). */
+  readonly principal?: ConsolePrincipal;
 }
 
 export interface WsHandle {
@@ -79,10 +87,8 @@ export interface HttpHostTlsOptions {
 export interface HttpHostOptions {
   readonly host?: string;
   readonly port?: number;
-  /** Primary full-scope Bearer token (`http.token`). */
+  /** Bootstrap Bearer token (`http.token`), accepted only until the first owner exists. */
   readonly token?: string;
-  /** Additional scoped tokens (`http.tokens`). */
-  readonly tokens?: readonly ScopedTokenConfig[];
   /** CORS allowlist; always merged with Remote Console origin. */
   readonly corsOrigins?: readonly string[];
   /**
@@ -94,6 +100,8 @@ export interface HttpHostOptions {
   readonly authExemptPaths?: readonly string[];
   /** Enables HTTPS and WSS on this listener. Certificate lifecycle belongs to the process composition root. */
   readonly tls?: HttpHostTlsOptions;
+  /** @internal Shared registry for listener groups; `token` is ignored when set. */
+  readonly tokenRegistry?: TokenRegistry;
 }
 
 export type HttpHandler = (
@@ -161,9 +169,8 @@ export function createHttpHost(options: HttpHostOptions = {}): ProcessHttpHost {
   const authExempt = Object.freeze(
     (options.authExemptPaths ?? []).map((path) => normalizePath(path)),
   );
-  const tokenRegistry = new TokenRegistry({
+  const tokenRegistry = options.tokenRegistry ?? new TokenRegistry({
     primaryToken: options.token,
-    scopedTokens: options.tokens,
   } satisfies TokenRegistryConfig);
   const wsRoutes = new Map<string, Set<WsRoute>>();
   const httpRoutes: HttpRoute[] = [];
@@ -244,11 +251,16 @@ export function createHttpHost(options: HttpHostOptions = {}): ProcessHttpHost {
       return;
     }
     const protocolAuthenticated = admitted.every(({ entry }) => entry.options.auth === 'protocol');
-    const auth = protocolAuthenticated
-      ? { ok: true as const, scope: 'full' as const }
-      : authenticateUpgrade(request, pathname);
-    if (!auth.ok) {
-      socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+    void (protocolAuthenticated
+      ? Promise.resolve({ ok: true as const, scope: 'full' as const, principal: undefined })
+      : authenticateUpgrade(request, pathname)
+    ).then((auth) => completeUpgrade(auth), () => completeUpgrade({ ok: false }));
+
+    function completeUpgrade(
+      auth: { ok: true; scope: AuthScope; principal?: ConsolePrincipal } | { ok: false },
+    ): void {
+    if (!auth.ok || closed || socket.destroyed) {
+      if (!socket.destroyed) socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
       socket.destroy();
       for (const item of admitted) item.release?.();
       return;
@@ -280,6 +292,7 @@ export function createHttpHost(options: HttpHostOptions = {}): ProcessHttpHost {
           socket: ws,
           request,
           authScope: auth.scope,
+          ...(auth.principal ? { principal: auth.principal } : {}),
         });
         for (const item of admitted) item.entry.listener(connection);
       });
@@ -296,13 +309,13 @@ export function createHttpHost(options: HttpHostOptions = {}): ProcessHttpHost {
         /* already destroyed */
       }
     }
+    }
   });
 
-  function authenticateUpgrade(
+  async function authenticateUpgrade(
     request: IncomingMessage,
     pathname: string,
-  ): { ok: true; scope: AuthScope } | { ok: false } {
-    if (!tokenRegistry.hasAnyToken()) return { ok: true, scope: 'full' };
+  ): Promise<{ ok: true; scope: AuthScope; principal?: ConsolePrincipal } | { ok: false }> {
     let url: URL;
     try {
       url = new URL(request.url ?? '/', 'http://localhost');
@@ -313,10 +326,34 @@ export function createHttpHost(options: HttpHostOptions = {}): ProcessHttpHost {
       headerValue(request.headers.authorization),
       url.searchParams.get('token'),
     );
-    const scope = tokenRegistry.resolve(token);
-    if (!scope) return { ok: false };
-    if (scope === 'demo' && !isDemoWebSocketPath(pathname)) return { ok: false };
-    return { ok: true, scope };
+    const principal = await tokenRegistry.authenticate(token, requestMeta(request));
+    if (!principal) return { ok: false };
+    if (!authorizeConsoleWebSocket(principal, pathname)) {
+      audit(principal, request, `ws:${pathname}`, 'denied');
+      return { ok: false };
+    }
+    if (isUserPrincipal(principal)) bindRequestPrincipal(request, principal);
+    return { ok: true, scope: 'full', principal };
+  }
+
+  function audit(
+    principal: ConsolePrincipal | undefined,
+    request: IncomingMessage,
+    action: string,
+    outcome: 'ok' | 'denied' | 'error',
+    detail?: Readonly<Record<string, unknown>>,
+  ): void {
+    const sink = tokenRegistry.accessProvider?.audit;
+    if (!sink) return;
+    try {
+      sink.call(tokenRegistry.accessProvider, {
+        actor: auditActor(principal),
+        action,
+        outcome,
+        ...(detail ? { detail } : {}),
+        ...(request.socket?.remoteAddress ? { ip: request.socket.remoteAddress } : {}),
+      });
+    } catch { /* audit never breaks a request */ }
   }
 
   async function dispatchHttp(request: IncomingMessage, response: ServerResponse): Promise<void> {
@@ -345,14 +382,14 @@ export function createHttpHost(options: HttpHostOptions = {}): ProcessHttpHost {
       return;
     }
 
-    const auth = authenticateHttp(request, url, pathname);
+    const auth = await authenticateHttp(request, url, pathname, method);
     if (!auth.ok) {
       if (corsOk && origin) applyCors(response, origin, corsOrigins);
-      writeJson(response, auth.forbidden ? 403 : 401, {
+      writeJson(response, auth.status, {
         success: false,
-        code: auth.forbidden ? 'forbidden' : 'unauthorized',
+        code: auth.code,
         requestOutcome: 'not-dispatched',
-        error: auth.forbidden ? 'Token scope does not allow this route' : 'Invalid or missing token',
+        error: auth.error,
       });
       return;
     }
@@ -410,29 +447,42 @@ export function createHttpHost(options: HttpHostOptions = {}): ProcessHttpHost {
     }
   }
 
-  function authenticateHttp(
+  async function authenticateHttp(
     request: IncomingMessage,
     url: URL,
     pathname: string,
-  ): { ok: true; scope: AuthScope; principal?: AuthenticatedTokenPrincipal } | { ok: false; forbidden?: boolean } {
-    if (!requiresHttpAuth(pathname, apiBase, authExempt)) {
-      return { ok: true, scope: 'full' };
-    }
-    if (!tokenRegistry.hasAnyToken()) {
-      return { ok: true, scope: 'full' };
-    }
+    method: string,
+  ): Promise<
+    | { ok: true; scope: AuthScope; principal?: AuthenticatedTokenPrincipal }
+    | { ok: false; status: 401 | 403; code: string; error: string }
+  > {
     const token = extractBearerToken(
       headerValue(request.headers.authorization),
       url.searchParams.get('token'),
     );
-    const scope = tokenRegistry.resolve(token);
-    if (!scope) return { ok: false };
-    if (scope === 'demo') {
-      const method = (request.method ?? 'GET').toUpperCase();
-      if (!isDemoHttpAllowed(method, pathname, apiBase)) return { ok: false, forbidden: true };
+    if (!requiresHttpAuth(pathname, apiBase, authExempt)) {
+      // Public route: still attach a presented credential so page catalogs can filter by it.
+      if (token || !tokenRegistry.hasAnyToken()) {
+        const principal = await tokenRegistry.authenticate(token, requestMeta(request));
+        if (principal) bindRequestPrincipal(request, principal);
+      }
+      return { ok: true, scope: 'full' };
     }
-    const principal = tokenRegistry.resolvePrincipal(token);
-    return { ok: true, scope, ...(principal ? { principal } : {}) };
+    const principal = await tokenRegistry.authenticate(token, requestMeta(request)) ?? undefined;
+    if (principal) bindRequestPrincipal(request, principal);
+    const relative = pathname === apiBase ? '/' : pathname.slice(apiBase.length);
+    const decision = authorizeConsoleHttp(principal, method, relative);
+    if (!decision.allowed) {
+      if (principal) audit(principal, request, `http:${method} ${relative}`, 'denied');
+      return { ok: false, status: decision.status, code: decision.code, error: decision.error };
+    }
+    return {
+      ok: true,
+      scope: 'full',
+      ...(isUserPrincipal(principal)
+        ? { principal: Object.freeze({ principalId: `user:${principal.userId}`, scope: 'full' as const }) }
+        : {}),
+    };
   }
 
   function listListedRoutes(): readonly ListedRoute[] {
@@ -569,7 +619,7 @@ export function createHttpHost(options: HttpHostOptions = {}): ProcessHttpHost {
             `listening ${address.origin}`
             + ` | routes: ${httpRoutes.length}`
             + ` | token: ${tokenRegistry.hasAnyToken()
-              ? `${tokenRegistry.primaryTokenPrefixForLog()}…`
+              ? tokenRegistry.primaryTokenPrefixForLog()
               : '(none)'}`,
           );
           logger.debug(

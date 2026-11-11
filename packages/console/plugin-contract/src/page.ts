@@ -1,3 +1,27 @@
+/**
+ * Console navigation sections (ADR 0052); a Page declares which one its entry belongs to.
+ * Kept dependency-free here; `tests/contracts/console-page-sections.test.ts` keeps it equal
+ * to the wire vocabulary in `@zhin.js/console-protocol`.
+ */
+export const CONSOLE_PAGE_SECTIONS = Object.freeze([
+  'overview', 'conversations', 'features', 'plugins', 'ops', 'access',
+] as const);
+
+export type ConsolePageSection = (typeof CONSOLE_PAGE_SECTIONS)[number];
+
+export function isConsolePageSection(value: unknown): value is ConsolePageSection {
+  return typeof value === 'string' && (CONSOLE_PAGE_SECTIONS as readonly string[]).includes(value);
+}
+
+/** Validates an optional `section`; throws for anything outside {@link CONSOLE_PAGE_SECTIONS}. */
+export function optionalPageSection(value: unknown): ConsolePageSection | undefined {
+  if (value === undefined) return undefined;
+  if (!isConsolePageSection(value)) {
+    throw new TypeError(`Page section must be one of ${CONSOLE_PAGE_SECTIONS.join(', ')}`);
+  }
+  return value;
+}
+
 export interface PageMetadata {
   readonly title?: string;
   /** Explicit display titles; missing locales retain title. */
@@ -12,6 +36,8 @@ export interface PageMetadata {
   readonly group?: string;
   readonly parent?: string;
   readonly fullWidth?: boolean;
+  /** Console navigation section (ADR 0052); omitted → the Console's default for plugin pages. */
+  readonly section?: ConsolePageSection;
 }
 
 export interface NormalizedPageMetadata {
@@ -69,7 +95,8 @@ export interface PageManifest extends NormalizedPageMetadata {
 
 export function definePage(metadata: PageMetadata = {}): Readonly<PageMetadata> {
   // Same optional keys as `@zhin.js/page`; anything else is still rejected below.
-  const { description, group, parent, fullWidth, ...base } = requireRecord(metadata, 'Page metadata');
+  const { description, group, parent, fullWidth, section: rawSection, ...base } = requireRecord(metadata, 'Page metadata');
+  const section = optionalPageSection(rawSection);
   for (const [key, value] of [['description', description], ['group', group], ['parent', parent]] as const) {
     if (value !== undefined && (typeof value !== 'string' || !value.trim())) {
       throw new TypeError(`Page ${key} must be a non-empty string`);
@@ -84,6 +111,7 @@ export function definePage(metadata: PageMetadata = {}): Readonly<PageMetadata> 
     ...(group !== undefined ? { group: group as string } : {}),
     ...(parent !== undefined ? { parent: parent as string } : {}),
     ...(fullWidth !== undefined ? { fullWidth } : {}),
+    ...(section !== undefined ? { section } : {}),
   });
 }
 

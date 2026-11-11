@@ -13,7 +13,6 @@ import {
   type HttpHostOptions,
   type ProcessHttpHost,
 } from './http-host.js';
-import type { ScopedTokenConfig } from './token-registry.js';
 
 export interface ResolvedHttpConfig extends HttpHostOptions {
   /** Additional listeners that mirror the primary Host route surface. */
@@ -33,11 +32,11 @@ export async function resolveHttpConfig(
     http,
     (key) => envOverlay?.[key] ?? process.env[key],
   ) as Record<string, unknown>;
+  if (value.tokens !== undefined && value.tokens !== null) throw new Error(HTTP_TOKENS_REMOVED_MESSAGE);
   const primary: HttpHostOptions = Object.freeze({
     host: typeof value.host === 'string' ? value.host : undefined,
     port: typeof value.port === 'number' ? value.port : undefined,
     token: typeof value.token === 'string' ? value.token : undefined,
-    tokens: parseScopedTokens(value.tokens),
     corsOrigins: injectDesktopWebviewOrigins(parseStringList(value.corsOrigins), envOverlay),
     apiBase: typeof value.base === 'string' ? value.base : undefined,
     tls: await parseTlsConfig(value.tls, projectRoot),
@@ -197,41 +196,11 @@ export function installHttpHost(host: ProcessHttpHost): RootResourceInstaller {
   };
 }
 
-function parseScopedTokens(value: unknown): readonly ScopedTokenConfig[] | undefined {
-  if (!Array.isArray(value)) return undefined;
-  const tokens: ScopedTokenConfig[] = [];
-  for (const entry of value) {
-    if (!entry || typeof entry !== 'object') continue;
-    const record = entry as Record<string, unknown>;
-    if (typeof record.token !== 'string' || !record.token) continue;
-    // `user` is an alias of `demo` (an ordinary Console user); anything but `full` is never the operator.
-    const scope = record.scope === 'full' ? 'full' : 'demo';
-    const principalId = typeof record.principalId === 'string' && record.principalId.trim() === record.principalId
-      && record.principalId.length > 0
-      ? record.principalId
-      : undefined;
-    const permissions = parseAccessList(record.permissions);
-    const roles = parseAccessList(record.roles);
-    tokens.push(Object.freeze({
-      token: record.token,
-      scope,
-      ...(principalId ? { principalId } : {}),
-      ...(permissions ? { permissions } : {}),
-      ...(roles ? { roles } : {}),
-    }));
-  }
-  return tokens.length > 0 ? Object.freeze(tokens) : undefined;
-}
-
-/** Console permissions / roles of a scoped token; blank or non-string entries are dropped. */
-function parseAccessList(value: unknown): readonly string[] | undefined {
-  if (!Array.isArray(value)) return undefined;
-  const result = value
-    .filter((item): item is string => typeof item === 'string')
-    .map((item) => item.trim())
-    .filter((item) => item.length > 0);
-  return result.length > 0 ? Object.freeze([...new Set(result)]) : undefined;
-}
+/** `http.tokens` was removed by ADR 0049; the Host refuses to start rather than ignore it. */
+export const HTTP_TOKENS_REMOVED_MESSAGE = 'http.tokens 已移除（ADR 0049）：请删除该配置，'
+  + '改为 Console 用户（`zhin console user create`）与用户签发的 API 令牌；'
+  + '`http.token` 只作为首次初始化令牌使用。'
+  + ' / http.tokens was removed: delete it and use Console users and their API tokens instead.';
 
 function parseStringList(value: unknown): readonly string[] | undefined {
   if (!Array.isArray(value)) return undefined;

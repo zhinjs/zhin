@@ -7,8 +7,8 @@ import { PluginTestKit } from '../../../packages/toolkit/testing/src/index.ts';
 import { createConfigDocument } from '../../../packages/im/runtime/src/config-file/index.ts';
 import { dispatchRuntimeConsoleRpc, pickRpcReply } from '../../../packages/host/http/src/index.ts';
 import { CONFIG_RPC } from '../../../packages/console/protocol/src/index.ts';
-import { PluginManagementWorkflow } from '../../../basic/cli/src/plugin-management/workflow.ts';
-import { jsonSchemaToConsoleSchema } from '../../../basic/cli/src/plugin-runtime/console/console-schema.ts';
+import { PluginManagementWorkflow } from '../../../packages/host/gateway/src/plugin-management/workflow.ts';
+import { jsonSchemaToConsoleSchema } from '../../../packages/host/gateway/src/config/console-schema.ts';
 import { createSmokeProject } from '../harness/smoke-project.mjs';
 import { lastDeliveryText, smokeStep } from '../harness/smoke-checks.mjs';
 

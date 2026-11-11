@@ -40,6 +40,7 @@ export class PageIndex {
         ...(definition.group === undefined ? {} : { group: definition.group }),
         ...(definition.parent === undefined ? {} : { parent: definition.parent }),
         ...(definition.fullWidth === undefined ? {} : { fullWidth: definition.fullWidth }),
+        ...(definition.section === undefined ? {} : { section: definition.section }),
         icon: definition.icon,
         order: definition.order,
         hideInNav: definition.hideInNav,

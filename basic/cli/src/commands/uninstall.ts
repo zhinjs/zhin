@@ -17,7 +17,7 @@ const pluginCommand = new Command('plugin')
       process.exit(1);
     }
 
-    const { PluginManagementWorkflow } = await import('../plugin-management/workflow.js');
+    const { PluginManagementWorkflow } = await import('@zhin.js/gateway/plugin-management');
     await new PluginManagementWorkflow(cwd).uninstall(name, undefined, undefined, {removeDependency: options.removePkg === true});
     logger.success(`已移除插件实例 "${name}"${options.removePkg ? '（无其他引用时移除依赖）' : '（保留依赖）'}`);
 
@@ -53,7 +53,7 @@ const adapterCommand = new Command('adapter')
       process.exit(1);
     }
 
-    const { PluginManagementWorkflow } = await import('../plugin-management/workflow.js');
+    const { PluginManagementWorkflow } = await import('@zhin.js/gateway/plugin-management');
     const workflow = new PluginManagementWorkflow(cwd);
     const direct = await workflow.inspect(name);
     const target = direct.declared ? name : name.startsWith('@') ? name : `@zhin.js/adapter-${name.replace(/^adapter-/, '')}`;

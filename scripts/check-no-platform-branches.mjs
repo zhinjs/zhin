@@ -18,7 +18,8 @@ export const SCAN_ROOTS = [
   'packages/im/agent/src',
   'packages/im/ai/src',
   'packages/im/adapter/src',
-  'basic/cli/src/plugin-runtime',
+  'packages/im/zhin/src/instance',
+  'packages/host/gateway/src',
 ];
 
 export const PLATFORM_NAMES = [

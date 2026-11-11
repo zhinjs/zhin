@@ -29,7 +29,7 @@ pnpm check:l4
 
 ### C. API / Console 投影（v1 = API；v1.1 = UI）
 
-- [ ] `GET /api/agent/engagements` 与 Engagement Journal 一致（需要 full scope）
+- [ ] `GET /api/agent/engagements` 与 Engagement Journal 一致（需要 `agent.view`）
 - [ ] `GET /api/agent/engagements/:engagementId` 含事件与黑板
 - [ ] Remote Console 协作图谱页可查看 Engagement；本示例自带的 `pages/workroom/index.ts` 是示例页面，数据来自 `plugin.ts` 的 `workroom-summary` RPC
 
@@ -38,7 +38,7 @@ pnpm check:l4
 ### 1. Sandbox + 协作边界
 
 1. `cd examples/full-bot && cp .env.example .env && pnpm dev`
-2. Remote Console 连接 Host（端口默认 `8069`），确认协作图谱只读，demo token 读取 `/api/agent/engagements` 得到 403
+2. Remote Console 连接 Host（端口默认 `8069`），确认协作图谱只读，没有 `agent.view` 的账号读取 `/api/agent/engagements` 得到 403
 3. 协作工具（`ask` / `delegate` 等）只在本回合确实有其他可联系的 Agent 时出现
 4. 一次协作结束后，`zhin trace --engagements --list` 能看到对应的 Engagement
 5. 显式数据库激活失败时候选 generation 必须失败

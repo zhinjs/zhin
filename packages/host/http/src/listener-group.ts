@@ -14,6 +14,7 @@ import {
   type WsHandle,
   type WsRouteOptions,
 } from './http-host.js';
+import { TokenRegistry } from './token-registry.js';
 
 const addressProvider = Symbol('HttpHostAddressProvider');
 
@@ -32,7 +33,9 @@ export function createHttpHostGroup(
   options: readonly HttpHostOptions[],
 ): ProcessHttpHost {
   if (options.length === 0) throw new Error('HttpHostGroup requires at least one listener');
-  const listeners = options.map((entry) => createHttpHost(entry));
+  // One authentication state for the whole surface: every listener sees the same sessions.
+  const tokenRegistry = options[0]!.tokenRegistry ?? new TokenRegistry({ primaryToken: options[0]!.token });
+  const listeners = options.map((entry) => createHttpHost({ ...entry, tokenRegistry }));
 
   const createSurface = (hosts: readonly HttpHost[]): BoundHttpHost => {
     const primary = hosts[0]!;

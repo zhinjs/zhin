@@ -16,12 +16,12 @@ When you're done you'll have:
 ## 1. Get it working in Sandbox
 
 ```bash
-npm create zhin-app my-bot -y
+npm create zhin-app my-bot -- -y --adapter sandbox
 cd my-bot
 pnpm dev
 ```
 
-Sandbox is a built-in simulated chat window; it needs no platform account. Connect [Console](https://console.zhin.dev) with the API Base printed in the terminal and `HTTP_TOKEN` from `.env`, open **Bot → Try a chat** (Sandbox) in the sidebar, send `/hello`, and check that it replies.
+Sandbox is a built-in simulated chat window; it needs no platform account. `--adapter sandbox` installs it at creation time (without it, pick Sandbox in the Console onboarding's adapter step). Open the [Console](https://console.zhin.dev) link printed at the end of creation, keep the default database, create the owner account, then open **Bot → Try a chat** (Sandbox) in the sidebar, send `/hello`, and check that it replies.
 
 ## 2. Add a command
 

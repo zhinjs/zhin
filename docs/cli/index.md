@@ -454,7 +454,7 @@ export const meta = definePage({ title: 'Agent Trace', icon: 'Activity', order: 
 export default TraceArchivePage;
 ```
 
-页面背后是只读接口 `GET /api/agent/trace-archive/sessions`、`/turns?sessionKey=&since=&until=&limit=`、`/turn?turnId=`，需要 `full` 权限的 token，demo token 会得到 403。
+页面背后是只读接口 `GET /api/agent/trace-archive/sessions`、`/turns?sessionKey=&since=&until=&limit=`、`/turn?turnId=`，需要 `agent.view` 权限，没有该权限的账号或 API 令牌会得到 403。
 
 **评测联动。** `pnpm eval:agent` 里失败的用例会把它的回合 trace 写进 `ZHIN_EVAL_TRACE_DIR`（默认系统临时目录下的 `zhin-eval-traces`），报告里每个回合一行 `↪ zhin trace <turnId> --dir …`，复制运行即可查看。
 

@@ -29,7 +29,7 @@
 - workspace 覆盖：`basic/*`、`packages/im/*`、`packages/console/*`、`packages/toolkit/*`、`packages/host/*`、`packages/game-kit`、`plugins/{adapters,features,games,services,utils}/*`、`examples/*`、`docs`。
 - `basic/`：基础层（cli / database / logger / schedule / schema）。
 - `packages/im/`：IM 核心层（adapter、agent、ai、command、component、core、feature-kit、kernel、mcp-feature、middleware、plugin-runtime、runtime、skill、tool、zhin 等子包）。
-- `packages/host/`：Host 运行时（http / mcp / a2a；legacy router / api 插件包已删除，Console Host 由 basic/cli 装配）。
+- `packages/host/`：Host 运行时（http / mcp / a2a / gateway；legacy router / api 插件包已删除）。`gateway` 是管理网关（ADR 0054：Console 账号与权限、终端、项目配置、依赖事务、实例监管），不依赖 `zhin.js` 与 IM 层；Console Host 由 `zhin.js/instance` 装配。
 - `packages/console/`：Remote Console（Host 只提供 API，UI 在 console.zhin.dev）。
 - `packages/toolkit/`：create-zhin（`pnpm create zhin-app`）、scaffold-wizard（配置向导）、components（纯 JSX 样式组件）、tailwind（静态工具类）、html-renderer（Shotium）、speech。
 - `plugins/adapters/`：平台适配器（Sandbox / QQ / ICQQ / NapCat / OneBot11·12 / Discord / Telegram / Slack / KOOK / 钉钉 / 飞书 / GitHub / Email / 企微 / LINE / Satori 等）。
@@ -59,10 +59,11 @@ plugin-runtime + feature-kit ─────────────→ runtime 
 | Agent Harness | `@zhin.js/harness` | Actor 邮局（Mail / Mailbox / Engagement）、权限单调衰减、预算守恒、GuardKernel 与 Engagement Journal（ADR 0048） |
 | Agent | `@zhin.js/agent`（含 `@zhin.js/agent/runtime`） | 统一信箱入站脊柱（`unified-mailbox-spine`）、ZhinAgent、多模型编排、安全沙箱、MCP 与 Agent/Inference Host |
 | Console | `@zhin.js/console-protocol`、`@zhin.js/console-contract`、`@zhin.js/page`、`@zhin.js/pagemanager`、`@zhin.js/client` | RPC/事件协议常量、Server-Driven Blueprints（`definePageBlueprint`）、Web / IM Card / CLI TUI 多端投影与 Console 外壳（`renderPageShell` / `renderConsoleIndex`） |
-| 门面与运行时 | `zhin.js`、`@zhin.js/runtime`（含 `config-file` / `isolate` 子路径）、`@zhin.js/cli` | 公共入口、generation 编排、Root Host 与进程生命周期；HTTP/Protocol/Speech/HTML-Renderer Host 由 CLI 极薄进程装配 |
+| 门面与运行时 | `zhin.js`（含 `zhin.js/instance` 实例装配根）、`@zhin.js/runtime`（含 `config-file` / `isolate` 子路径）、`@zhin.js/gateway`、`@zhin.js/cli` | 公共入口、generation 编排、Root Host 与进程生命周期；HTTP/Protocol/Speech/HTML-Renderer Host 由 `zhin.js/instance` 装配；CLI 管理项目并按项目解析实例入口 |
 
-`pnpm check:architecture` 强制依赖方向。`basic/cli` 是唯一 composition root，可装配 IM、
-Agent 与 Console Host；其他低层包不跨层取用上层实现。
+`pnpm check:architecture` 强制依赖方向。`packages/im/zhin/src/instance/`（`zhin.js/instance`，ADR 0054 §0）是唯一
+composition root，可装配 IM、Agent 与 Console Host；`@zhin.js/cli` 与 `@zhin.js/gateway` 不得导入 `zhin.js` 与 IM 层；
+其他低层包不跨层取用上层实现。
 
 ### 示例分层（跑哪个 example 取决于任务层级）
 
@@ -113,7 +114,7 @@ Agent 与 Console Host；其他低层包不跨层取用上层实现。
 - **Legacy API 已移除**：`usePlugin()` / `getPlugin()` 已不再导出，也勿导入已不存在的 `zhin.js/node`；门禁 `pnpm check:no-removed-plugin-api` 防止仓库内重新引入这些调用。
 - 发送消息不能绕过统一链路：`Message.$reply` 或 `Adapter.sendMessage` → `renderSendMessage` → `before.sendMessage` → 平台 Endpoint（`pnpm check:harness-paths` 门禁）。
 - Endpoint 可按 `capabilities`（`inbound` / `outbound`）拆分 IO；跨平台出站用 `inject(adapter).sendMessage`，见 [docs/concepts/message-flow.md](docs/concepts/message-flow.md)。
-- 保持 [架构 SSOT](docs/concepts/architecture.md) 中的依赖方向；契约与运行时底座不依赖 Core/Agent。例外仅限 composition root `basic/cli`（见上）。
+- 保持 [架构 SSOT](docs/concepts/architecture.md) 中的依赖方向；契约与运行时底座不依赖 Core/Agent。例外仅限实例装配根 `packages/im/zhin/src/instance/`（见上）。
 - 代级运行时状态必须通过 snapshot Resource / 当前 operation 的 Generation View 解析；禁止新增裸模块级单例或 latest-value stack；`createGenerationStore` 已删除并由门禁禁止回归。WS 类端点的 start/stop/重连/心跳统一走 `createEndpointLifecycle`（`zhin.js/adapter`），不要手写状态机。
 - Node 侧源码放 `src/`，产物放 `lib/`；浏览器侧源码放 `client/`，产物放 `dist/`。
 - 新增 workspace 包必须落在 `pnpm-workspace.yaml` 覆盖的目录里，并带独立 `package.json`。
@@ -129,6 +130,7 @@ Agent 与 Console Host；其他低层包不跨层取用上层实现。
 ## 安全注意事项
 
 - 密钥走环境变量并在 `zhin.config.yml` 中以 `${VAR}` 引用（如 `apiKey: ${AI_API_KEY}`），不要硬编码。
+- Console 访问控制（ADR 0049）：用户、角色、会话、API 令牌与审计在项目数据库里；`http.token` 只是初始化令牌（创建第一个所有者之前有效），`http.tokens` 已删除；自动化用 `ZHIN_CONSOLE_TOKEN` 里的 API 令牌。每条 `/api` 路由、每个 Console RPC 与需要 Host 鉴权的 WebSocket 都必须登记在 `@zhin.js/console-protocol` 的权限表里，未登记的对所有账号一律拒绝（所有者也不例外）。适配器 Webhook / 反向 WS 用 `ws(path, { auth: 'protocol' })` 与自己的凭据鉴权（`verifyProtocolAccessToken`）。
 - Agent 执行安全：builtin 工具默认 `execSecurity: allowlist`、`execApprovalMode: ask`；工具安全检查统一走 `packages/im/agent/src/security/policy-facade.ts` 的 `runToolPolicies`，新增策略只在声明式策略表注册，builtin 工具不再手写策略链。
 - 新增依赖时注意根 `package.json` 的 `pnpm.overrides` 中已有的安全抬升条目（undici / hono / tar / js-yaml / nodemailer 等）。
 
@@ -154,12 +156,12 @@ Agent 与 Console Host；其他低层包不跨层取用上层实现。
 - packages/im/agent/src/plugin-runtime/ingress/unified-mailbox-spine.ts（统一单会话串行信箱、回合执行与主动唤醒脊柱）
 - packages/console/plugin-contract/src/page.ts（`definePage`、`definePageBlueprint`、`projectBlueprintToImCard`、`projectBlueprintToCliPanel`）
 - packages/console/pagemanager/src/shell/page-renderer.ts（`renderPageShell` / `renderConsoleIndex` 外壳与 Blueprint 挂载）
-- packages/im/runtime/src/host/（Root Host、进程生命周期、readiness、start options）；HTTP / Protocol / Speech / HTML-Renderer Host 安装器在 packages/host/http/src/host-installer.ts 与 basic/cli/src/plugin-runtime/*-host-installer.ts
+- packages/im/runtime/src/host/（Root Host、进程生命周期、readiness、start options）；HTTP / Protocol / Speech / HTML-Renderer Host 安装器在 packages/host/http/src/host-installer.ts 与 packages/im/zhin/src/instance/*-host-installer.ts
 - packages/im/agent/src/plugin-runtime/（`agent-runtime.ts`、`full-agent-turn-engine.ts`：Agent 运行时与回合引擎）
 - packages/im/agent/src/security/（工具安全检查统一走 `policy-facade.ts` 的 `runToolPolicies`；新增策略只在声明式策略表注册，builtin 工具不再手写策略链）
 - packages/im/agent/src/bootstrap.ts
 - packages/im/zhin/src/index.ts
-- packages/im/im-contract/src/conversation-store.ts（`CONVERSATION_EVENT_MODEL`；canonical `conversation_events` 在 basic/cli/src/plugin-runtime/start-command.ts 由 Database Host 装配）
+- packages/im/im-contract/src/conversation-store.ts（`CONVERSATION_EVENT_MODEL`；canonical `conversation_events` 在 packages/im/zhin/src/instance/start-command.ts 由 Database Host 装配）
 - packages/im/ai/src/provider/（Provider driver / runtime / selection）与 packages/im/ai/src/llm/llm-api-runtime.ts（流式调用契约）
 - packages/im/agent/src/service.ts（`AIService`）与 packages/im/agent/src/model-runtime/
 - packages/toolkit/scaffold-wizard/src/（`adapter.ts`、`ai.ts`、`apply.ts` — 改向导时优先改这里）

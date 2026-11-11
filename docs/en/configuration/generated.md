@@ -12,7 +12,7 @@ outline: [2, 3]
 
 ## Host top-level fields
 
-The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`](https://github.com/zhinjs/zhin/blob/main/packages/im/runtime/src/host-config-schema.json), consumed by the Runtime at [`basic/cli/src/plugin-runtime/console/configuration-projection.ts`](https://github.com/zhinjs/zhin/blob/main/basic/cli/src/plugin-runtime/console/configuration-projection.ts).
+The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`](https://github.com/zhinjs/zhin/blob/main/packages/im/runtime/src/host-config-schema.json), consumed by the Runtime at [`packages/host/gateway/src/config/configuration-projection.ts`](https://github.com/zhinjs/zhin/blob/main/packages/host/gateway/src/config/configuration-projection.ts).
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -25,8 +25,7 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `http.readiness.agents` | array&lt;string&gt; | no | — | Required configured Agent bindings; does not verify model credentials or provider reachability. |
 | `http.host` | string \| null | no | — | 监听地址。 |
 | `http.port` | number \| string \| null | no | — | 监听端口。 |
-| `http.token` | string \| null | no | — | HTTP Host 访问令牌。 |
-| `http.tokens` | array \| null | no | — | — |
+| `http.token` | string \| null | no | — | Bootstrap token: signs in to the setup wizard until the first Console owner exists, then stops working (ADR 0049). |
 | `http.corsOrigins` | array \| null | no | — | — |
 | `http.base` | string \| null | no | — | API 路径前缀。 |
 | `http.tls` | `false` \| null \| object | no | — | — |
@@ -35,6 +34,24 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `http.listeners[].host` | string | no | — | 监听地址。 |
 | `http.listeners[].port` | number \| string | no | — | 监听端口。 |
 | `http.listeners[].tls` | `false` \| null \| object | no | — | — |
+| `console` | object | no | — | Console Host features. |
+| `console.terminal` | object | no | — | Console terminal (host shell / SSH) for owners holding ops.terminal; off by default. |
+| `console.terminal.enabled` | boolean | no | `false` | Register the terminal routes. |
+| `console.terminal.shell` | string | no | — | Local shell; defaults to $SHELL (powershell.exe on Windows). |
+| `console.terminal.cwd` | string | no | `"."` | Working directory, relative to the project root. |
+| `console.terminal.idleTimeout` | integer | no | `900` | Seconds without input before the session closes (0 = never). |
+| `console.terminal.maxSessions` | integer | no | `4` | Concurrent sessions across all users. |
+| `console.terminal.ssh` | array&lt;object&gt; | no | — | SSH targets the Console may open. |
+| `console.terminal.ssh[].name` | string | yes | — | Target id the Console selects (not "local"). |
+| `console.terminal.ssh[].label` | string | no | — | Display name. |
+| `console.terminal.ssh[].host` | string | yes | — | SSH host. |
+| `console.terminal.ssh[].port` | integer | no | `22` | SSH port. |
+| `console.terminal.ssh[].username` | string | yes | — | SSH user. |
+| `console.terminal.ssh[].privateKeyPath` | string | no | — | Private key file (relative to the project root, ~ allowed); exclusive with privateKeyEnv. |
+| `console.terminal.ssh[].privateKeyEnv` | string | no | — | Environment variable holding the private key. |
+| `console.terminal.ssh[].passwordEnv` | string | no | — | Environment variable holding the password. |
+| `console.terminal.ssh[].passphraseEnv` | string | no | — | Environment variable holding the key passphrase. |
+| `console.terminal.ssh[].hostFingerprint` | string | no | — | Expected host key fingerprint (SHA256:…); verified strictly when set. |
 | `database` | object | no | — | Database Host and dialect connection options. |
 | `database.dialect` | string | no | — | 数据库方言。 |
 | `database.filename` | string | no | — | SQLite 文件路径。 |

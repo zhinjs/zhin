@@ -14,6 +14,7 @@ export * from './dialects/sqlite.js';
 export * from './migration.js';
 
 export * from './structured-schema.js';
+export * from './probe.js';
 
 import { registerBuiltinDatabases } from './builtin-runtime.js';
 

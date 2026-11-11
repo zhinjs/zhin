@@ -1,0 +1,55 @@
+import type { ServerResponse } from 'node:http';
+
+export function parseBoundedInteger(
+  value: string | null,
+  fallback: number,
+  minimum: number,
+  maximum: number,
+): number {
+  if (value == null || value.trim() === '') return fallback;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed)) return fallback;
+  return Math.min(maximum, Math.max(minimum, parsed));
+}
+
+export function writeJson(
+  response: ServerResponse,
+  status: number,
+  body: unknown,
+  headers: Readonly<Record<string, string>> = {},
+): void {
+  const payload = JSON.stringify(body);
+  response.writeHead(status, {
+    ...headers,
+    'content-type': 'application/json; charset=utf-8',
+    'content-length': Buffer.byteLength(payload),
+  });
+  response.end(payload);
+}
+
+export function writeHtml(response: ServerResponse, html: string): void {
+  response.writeHead(200, {
+    'content-type': 'text/html; charset=utf-8',
+    'content-length': Buffer.byteLength(html),
+  });
+  response.end(html);
+}
+
+export function writeSse(
+  response: ServerResponse,
+  type: string,
+  data: unknown,
+  id?: string,
+): void {
+  if (id) response.write(`id: ${id}\n`);
+  response.write(`event: ${type}\n`);
+  response.write(`data: ${JSON.stringify(data)}\n\n`);
+}
+
+export function normalizeBase(value: string): string {
+  if (!value.startsWith('/')) return `/${value}`;
+  // Linear trim instead of /\/+$/ (polynomial backtracking on long runs of '/').
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 0x2f) end -= 1;
+  return value.slice(0, end) || '/api';
+}

@@ -2,7 +2,7 @@ import fs from 'fs-extra';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { scaffoldDependencyRange, type StackVersionRanges } from '@zhin.js/scaffold-wizard';
-import { NODE_ENGINES_HINT } from '../utils/node-requirements.js';
+import { NODE_ENGINES_HINT } from '@zhin.js/gateway/project';
 
 export type PluginKind = 'normal' | 'service' | 'adapter';
 

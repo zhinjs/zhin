@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from 'node:util';
 import {
-  applyConfigPatches, createSnapshotView, GenerationHandoffStack, isRootPrivateToken, rootPluginId,
+  applyConfigPatches, createSnapshotView, FEATURE_OVERRIDES_KEY, GenerationHandoffStack, isRootPrivateToken, rootPluginId,
   type ConfigDocumentPort, type ConfigDocumentSnapshot, type ConfigPatch, type ControlErrorHandler,
   type FeatureId, type PluginId, type PreparedGeneration, type RuntimeConfigDocument,
   type RuntimeSnapshot, type SnapshotReader, type Token,
@@ -123,6 +123,8 @@ export interface InspectProjectContext {
   readonly getConfigSnapshot: () => ConfigDocumentSnapshot | undefined;
   readonly refreshConfigDocument: () => Promise<void>;
   readonly onInitialSchemas: (schemas: ReadonlyMap<string, JsonSchema>) => void;
+  /** Live committed snapshot for Plugin `configFor` / `isEnabledFor` (ADR 0050). */
+  readonly readCommittedSnapshot?: () => RuntimeSnapshot;
 }
 
 export async function inspectRuntimeProject(
@@ -148,6 +150,7 @@ export async function inspectRuntimeProject(
     const configResolver: PluginConfigResolver = node => customResolver(node);
     configResolver.schema = node => schemas.get(node.id);
     configResolver.compositionMode = 'custom';
+    if (ctx.readCommittedSnapshot) configResolver.readCommittedSnapshot = ctx.readCommittedSnapshot;
     if (ctx.snapshot.generation === 0) {
       ctx.onInitialSchemas(new Map(graphNodes(graph.root).flatMap(node => {
         const schema = schemas.get(node.id);
@@ -167,9 +170,11 @@ export async function inspectRuntimeProject(
       return schema ? [[node.package.root, schema] as const] : [];
     })));
   }
+  const configResolver = createConfigViewResolver(ctx.environment, composed.views, environmentLayers, composed.ownSchemas);
+  if (ctx.readCommittedSnapshot) configResolver.readCommittedSnapshot = ctx.readCommittedSnapshot;
   return {
     graph,
-    configResolver: createConfigViewResolver(ctx.environment, composed.views, environmentLayers, composed.ownSchemas),
+    configResolver,
     primaryConfigDocument: composed.document,
     environmentLayers,
     composed,
@@ -400,17 +405,27 @@ export async function planRuntimeInputs(
     } : {}),
   });
   const updates = await preparePureConfigViews(ctx.snapshot, ctx.model, inspected, inputPlan.roots, signal);
+  const pluginPaths = isDeepStrictEqual(ctx.configDocument, document) ? []
+    : changedConfigurationPaths(ctx.configDocument, document).filter(path => !HOST_RESOURCE_CONFIG_KEYS.includes(path[0]!));
+  // ADR 0050: override-only edits reach dispatch through the next primary config; no owner reloads.
+  const overridesOnly = pluginPaths.length > 0 && pluginPaths.every(path => isFeatureOverridePath(document, path));
   return Object.freeze({
     document, configSnapshot, environmentLayers, inputSources, roots: updates.roots, inspected,
     topologyChanged: new TopologyTransactionPlanner().plan(ctx.model.graph, inspected.graph).changed,
     primaryConfigChanged: hasPrimaryConfigChanged(ctx.snapshot, inspected.primaryConfigDocument),
     applicationGroups: [...selected.groups, ...environmentGroups,
-      ...(!isDeepStrictEqual(ctx.configDocument, document) && inputPlan.roots.length
-        ? [configGroup('plugins', changedConfigurationPaths(ctx.configDocument, document)
-          .filter(path => !HOST_RESOURCE_CONFIG_KEYS.includes(path[0]!)), updates.roots.length ? 'reload-plugin' : 'in-place', 'applied')] : []),
+      ...((!isDeepStrictEqual(ctx.configDocument, document) && inputPlan.roots.length) || overridesOnly
+        ? [configGroup('plugins', pluginPaths, updates.roots.length ? 'reload-plugin' : 'in-place', 'applied')] : []),
     ],
     rootResources: selected.rootResources, configUpdates: updates,
   });
+}
+
+/** `<alias>[/<child>...]/overrides/...` of a declared Plugin instance block. */
+export function isFeatureOverridePath(document: RuntimeConfigDocument, path: readonly string[]): boolean {
+  const declared = document.plugins && typeof document.plugins === 'object' ? document.plugins : {};
+  const index = path.indexOf(FEATURE_OVERRIDES_KEY);
+  return index >= 1 && Object.hasOwn(declared, path[0]!) && path.slice(1, index).every(segment => /^[a-z0-9][a-z0-9-]*$/u.test(segment));
 }
 
 export function rejectedApplicationGroups(

@@ -9,7 +9,7 @@ import { loadHostHttpConfig } from '../utils/host-http.js';
 import {
   ConsoleAuthenticationError, ConsoleConnectionError, ConsoleRequestUnconfirmedError, ConsoleRpcError, requestPluginConsole,
 } from '../plugin-management/console-client.js';
-import { parseConfigurationPath } from '../plugin-runtime/console/configuration-path.js';
+import { parseConfigurationPath } from '@zhin.js/gateway/config';
 import { createOfflineConfigurationStore, ENVIRONMENT_NAME, requireConfigFile } from '../utils/config-offline.js';
 
 /**
@@ -268,7 +268,7 @@ export function createConfigCommand(): Command {
     .option('--offline', '不连接 Host：本地校验后保存（不启动 Runtime、不执行插件 setup，可能执行模块顶层代码），不请求生效')
     .option('--host <url>', '运行中 Host 的 HTTP(S) API 地址（默认按配置 http.* 推导）')
     .addOption(new Option('--live <url>', '--host 的别名（兼容）').hideHelp())
-    .option('--token-env <name>', 'Console full token 所在环境变量（优先于配置 http.token）', 'ZHIN_CONSOLE_TOKEN')
+    .option('--token-env <name>', 'Console API 令牌所在环境变量（优先于配置 http.token）', 'ZHIN_CONSOLE_TOKEN')
     .option('--environment <name>', '--offline 校验时加载 .env.<name>', 'development')
     .option('--reveal', '读取时显示原值（默认按 Schema 打码敏感值）')
     .option('--json', '仅输出紧凑 JSON');

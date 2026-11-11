@@ -12,7 +12,7 @@ description: "从零写一个可配置的 /ping 子插件，挂载到你的 Bot 
 这一页带你从零写一个叫 `ping-pong` 的子插件包（`plugins/ping-pong`）：用户发 `/ping`，Bot 回复一段**可以在配置里修改**的文字。做完后你会掌握独立插件包的四个基本组成——清单、入口、命令、配置 Schema——以及怎样在 `zhin.config.yml` 中把它挂载到 Bot 上。大约需要 15 分钟。
 
 ::: tip 开始前
-- 已经按 [快速开始](./index.md) 创建并跑通了 `my-bot`（没有的话先运行 `npm create zhin-app my-bot -y`）。
+- 已经按 [快速开始](./index.md) 创建并跑通了 `my-bot`（没有的话先运行 `npm create zhin-app my-bot -- -y --adapter sandbox`）。
 - Node.js ≥22.19.0、pnpm 9+。`pnpm dev` 会直接运行 TypeScript 源码，不需要先编译。
 :::
 

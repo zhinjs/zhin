@@ -292,8 +292,8 @@ POST /api/assistant/executions/cleanup
 | 观察故障不阻塞／重跑业务 | [观察链回归](../../packages/im/agent/tests/schedule-domain/observation-runtime.test.ts)覆盖 history／audit／activity 永久挂起、单次工具执行、借用与自建 owner 关闭 | 通过 | 不能承诺底层驱动的已提交 I/O 已物理取消 |
 | 容量包含旧在途正文及状态重建 | [owner 回归](../../packages/im/agent/tests/schedule-observation-owner.test.ts)覆盖精确 128 份／16 MiB UTF-8、active-inflight、同 run 多版本与实例、超大、释放和恢复接纳 | 通过 | 该预算针对观察正文；不代表任务结果、活动运行或整个进程的堆上限 |
 | 保存结果未知后可被新事实修复 | 真实文件仓库保存成功后再抛错，下一新事实可保存；lookup 错误不视为 absence，外部已存在 run 仍拒绝 | 通过 | 不新增业务重试或定时存储重试 |
-| 不误删活跃旧代记录，不阻塞发布与关闭 | [真实 RootController／旧 lease 回归](../../packages/im/agent/tests/schedule-domain/history-generation-lifecycle.test.ts)保留过期但仍活跃的旧代记录；[Host 生命周期回归](../../basic/cli/tests/plugin-runtime/agent/structured-persistence.test.ts)覆盖挂起清理，原 Trace 等待仍保留 | 通过 | 跨代红对比只移除被验证的保护条件，未声称完整旧版本验收 |
-| 文件／SQL 与受权 API 一致 | [存储回归](../../basic/cli/tests/plugin-runtime/agent/schedule-history.test.ts)覆盖真实文件与 SQLite、缺口标记重读、大正文、自然月清理、稳定游标；[注册路由回归](../../basic/cli/tests/plugin-runtime/console/schedule-execution-routes.test.ts)覆盖 full／503／删除任务后历史 | 通过 | 未连接真实 MySQL／PostgreSQL；只核对对应驱动及字段合同 |
+| 不误删活跃旧代记录，不阻塞发布与关闭 | [真实 RootController／旧 lease 回归](../../packages/im/agent/tests/schedule-domain/history-generation-lifecycle.test.ts)保留过期但仍活跃的旧代记录；[Host 生命周期回归](../../packages/im/zhin/tests/instance/agent/structured-persistence.test.ts)覆盖挂起清理，原 Trace 等待仍保留 | 通过 | 跨代红对比只移除被验证的保护条件，未声称完整旧版本验收 |
+| 文件／SQL 与受权 API 一致 | [存储回归](../../packages/im/zhin/tests/instance/agent/schedule-history.test.ts)覆盖真实文件与 SQLite、缺口标记重读、大正文、自然月清理、稳定游标；[注册路由回归](../../packages/im/zhin/tests/instance/console/schedule-execution-routes.test.ts)覆盖 full／503／删除任务后历史 | 通过 | 未连接真实 MySQL／PostgreSQL；只核对对应驱动及字段合同 |
 | Console 显示实际产物，挂起请求不困住用户 | 严格 parser 接受真实 Worker→工具→文件→Host 产物；实际 Farm 页面核验两次只读尝试、已提交停止重放、50＋6 分页、权限／存储错误与缺口；挂起清理可 Esc 关闭、刷新仍可用、重复入口禁用 | 通过 | 使用本地合成 Host，未部署远端 Console |
 
 真实供应商调用、真实账号操作、生产送达、发布与部署均未执行。本轮没有添加自动续跑、补发、合并或发布操作。

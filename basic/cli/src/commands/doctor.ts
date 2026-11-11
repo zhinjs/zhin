@@ -28,9 +28,9 @@ import {
   type ConsoleConfigDiagnosis,
 } from '@zhin.js/scaffold-wizard';
 import { logger } from '../utils/logger.js';
-import { formatNodeRequirementMessage, isNodeVersionSupported } from '../utils/node-requirements.js';
-import { findConfigFile, readConfig } from '../utils/config-file.js';
-import { detectLegacyConfig, formatLegacyConfigHint } from '../utils/legacy-config.js';
+import { formatNodeRequirementMessage, isNodeVersionSupported } from '@zhin.js/gateway/project';
+import { findConfigFile, readConfig } from '@zhin.js/gateway/project';
+import { detectLegacyConfig, formatLegacyConfigHint } from '@zhin.js/gateway/project';
 import { findMissingEndpointFields, loadPluginSchemaJson } from '../utils/adapter-endpoints-check.js';
 import { findDuplicateZhinInstances } from '../utils/dev-link.js';
 import { fetchReadiness } from '@zhin.js/runtime';

@@ -26,6 +26,7 @@ import { devCommand } from './commands/dev.js';
 import { useCasesCommand } from './commands/use-cases.js';
 import { pluginCommand } from './commands/plugin.js';
 import { previewCommand } from './commands/preview.js';
+import { consoleCommand } from './commands/console.js';
 
 // src/cli.ts 与 lib/cli.js 都在包根下一层，../package.json 就是 @zhin.js/cli 自己的清单。
 const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string };
@@ -78,6 +79,7 @@ program.addCommand(usageCommand);
 program.addCommand(devCommand);
 program.addCommand(useCasesCommand);
 program.addCommand(previewCommand);
+program.addCommand(consoleCommand);
 
 try {
   await program.parseAsync();

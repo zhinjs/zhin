@@ -4,7 +4,7 @@ import path from 'path';
 import { formatCompact } from '@zhin.js/logger';
 import { logger } from './logger.js';
 import os from 'os';
-import { DEFAULT_SHUTDOWN_BUDGET_MS } from '../plugin-runtime/process-lifecycle.js';
+import { DEFAULT_SHUTDOWN_BUDGET_MS } from '@zhin.js/runtime';
 
 const PID_FILE = '.zhin.pid';
 const PROCESS_EXIT_POLL_MS = 100;

@@ -61,10 +61,10 @@ http:
 
 `owner` is the exact plugin instance path. `name` is the stable last part of the capability ID: `adapter-slot~endpoints[].id` for expanded accounts, otherwise the adapter slot. Display names are not selectors. Unlisted endpoints are optional; missing or disabled required instances fail readiness.
 
-`GET /api/system/readiness` returns generation, check time, component reasons and remediation, protected by full-scope Host authentication. It respects custom `http.base`. The CLI consumes that same report:
+`GET /api/system/readiness` returns generation, check time, component reasons and remediation, which requires the `status.view` permission. It respects custom `http.base`. The CLI consumes that same report:
 
 ```bash
-# Inject the full-scope Host token through ZHIN_HTTP_TOKEN.
+# Inject a Console API token with status.view through ZHIN_CONSOLE_TOKEN.
 zhin doctor --live http://127.0.0.1:8068 --json
 # For http.base=/control:
 zhin doctor --live http://127.0.0.1:8068/control --json
@@ -72,7 +72,7 @@ zhin doctor --live http://127.0.0.1:8068/control --json
 
 Exit status is 0 when ready and 1 for non-readiness, authentication or request failures. These checks make no external network calls: database `initialized` is not a live SQL test, endpoint readiness requires admission and a locally observed `transportState` of `open`; disconnecting, reconnecting and unobserved transports are not ready, and agent `binding_configured` is not provider credential validation. Real platform delivery still requires separate acceptance evidence. Upgrade the CLI to a version exposing `/pub/ready` before using the updated Kubernetes readiness probe.
 
-Set a full token in production. Use a separate demo token for read-only observation. Platform Webhooks keep their own signing secrets; a Console token cannot replace them.
+In production, set `http.token` before the first start and finish setup right away (create the first owner, see [Upgrading to Console access control](../migrations/console-access-control.md)); then sign in with accounts. Give read-only observers a `viewer` account and automation an API token. Platform Webhooks and reverse WebSockets keep their own signing secrets or `access_token`; a Console credential cannot replace them.
 
 ## 3. Copy-ready deployment templates
 

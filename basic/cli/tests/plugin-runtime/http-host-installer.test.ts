@@ -17,32 +17,19 @@ describe('Plugin Runtime HTTP Host config', () => {
     await expect(resolveHttpConfig({
       http: {
         token: '${ZHIN_TEST_HTTP_TOKEN}',
-        tokens: [{ token: '${MISSING_DEMO_TOKEN:-demo-default}', scope: 'demo', principalId: 'human:alice' }],
         corsOrigins: ['${MISSING_CONSOLE_ORIGIN:-https://console.example.com}'],
       },
     })).resolves.toMatchObject({
       token: 'secret-from-env',
-      tokens: [{ token: 'demo-default', scope: 'demo', principalId: 'human:alice' }],
       corsOrigins: ['https://console.example.com'],
     });
   });
 
-  it('accepts scope: user as an alias of demo and never upgrades unknown scopes', async () => {
+  it('refuses the removed http.tokens list with a migration message (ADR 0049)', async () => {
     await expect(resolveHttpConfig({
-      http: {
-        tokens: [
-          { token: 'alice-secret', scope: 'user', permissions: ['ambient:read'] },
-          { token: 'bob-secret', scope: 'root' },
-          { token: 'ops-secret', scope: 'full' },
-        ],
-      },
-    })).resolves.toMatchObject({
-      tokens: [
-        { token: 'alice-secret', scope: 'demo', permissions: ['ambient:read'] },
-        { token: 'bob-secret', scope: 'demo' },
-        { token: 'ops-secret', scope: 'full' },
-      ],
-    });
+      http: { tokens: [{ token: 'ops-secret', scope: 'full' }] },
+    })).rejects.toThrow(/http\.tokens.*zhin console user create/su);
+    await expect(resolveHttpConfig({ http: { tokens: null } })).resolves.not.toHaveProperty('tokens');
   });
 
   it('loads HTTPS key, certificate and CA files relative to the project root', async () => {
