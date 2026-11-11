@@ -104,34 +104,37 @@ RPC（`iam.*`，需 `iam.view` / `iam.manage`）：`iam.users.list|create|update
 
 写入 `console_audit_log` 的事件：登录成功与失败、登出、改密码、所有 `iam.*` 写操作、所有被拒绝的请求（`outcome: denied`）、所有映射为写权限的 RPC、终端会话开始/结束。`detail` 只记录 RPC 类型、目标与参数键名，不记录参数值。保留 180 天，按天清理。
 
-### 7. CLI
+### 7. 初始化：CLI 与 Web 同一套动作
 
-`zhin console user create <username> [--role owner] [--password-stdin]`、`zhin console user passwd <username>`、`zhin console user disable|enable <username>`、`zhin console user list`。CLI 直接打开项目数据库，不经过运行中的 Host，用于首次初始化与救援。
+初始化有两个入口，执行的是同一个服务（`ConsoleSetupService`，`basic/cli/src/plugin-runtime/console/iam/setup-service.ts`），步骤、校验、写入结果完全一致：
 
-### 8. 初始化向导（数据库 → 所有者）
+| 步骤 | 服务方法 | Web（初始化令牌） | CLI |
+|---|---|---|---|
+| 查看状态 | `status()` → `{ setupRequired, database: { dialect, source: 'default'|'config', summary } }` | `GET /auth/setup` | `zhin console init --status` |
+| 可选驱动 | `drivers()` → `[{ dialect, label, available, missingPackage?, fields }]` | `GET /auth/setup/database` | 交互选择列表 |
+| 测试连接 | `testDatabase({ dialect, connection })` → `{ ok, latencyMs?, error? }` | `POST /auth/setup/database/test` | 选择后自动测试，失败可重填 |
+| 保存数据库 | `applyDatabase({ dialect, connection })` → `{ restartRequired }` | `POST /auth/setup/database`（随后由 Host 重启进程，返回 `{ restarting: true }`，Console 轮询 `/auth/me`） | 写入后直接用新库继续下一步（CLI 不依赖运行中的 Host；若检测到 Host 正在运行，提示重启它） |
+| 创建所有者 | `createOwner({ username, password, displayName? })` → `{ user }` | `POST /auth/setup`（额外签发会话并返回） | 交互输入，或 `--owner <name> --password-stdin` |
 
-未初始化（`setupRequired: true`）时，Console 用初始化令牌进入两步向导，之后 `/auth/setup/*` 全部返回 409。
+- 驱动列表与连接字段来自 `@zhin.js/scaffold-wizard` 的 `DATABASE_DIALECT_DEFINITIONS`，与 `zhin setup` / `create-zhin` 的数据库步骤同源，校验用同一个 `validateDatabaseConfig`。Web 表单和 CLI 提问都由同一份 `fields` 生成。
+- 写入规则（两个入口相同）：配置文件顶层 `database` 块经现有原子写入路径保存；机密字段写入项目 `.env`（`ZHIN_DATABASE_PASSWORD` 等），配置里只留 `${…}` 引用。
+- 非交互：`zhin console init --database <dialect> --database-<field> <value>… --owner <name> --password-stdin [--yes]`，用于脚本与容器部署；机密字段也可用 `--database-password-env <VAR>` 指向已有环境变量。
+- 已初始化后：Web 的 `/auth/setup/*` 返回 409，`zhin console init` 退出并提示改用 `zhin console user …`。
+- 救援与日常用户管理（离线，直接打开项目数据库）：`zhin console user create <username> [--role <role>] [--password-stdin]`、`passwd`、`disable|enable`、`list`。
 
-**第一步：数据库。** 账号数据存在哪个库，由用户在线选择：
+### 8. 初始化细节
 
-| 方法 | 路径 | 说明 |
-|---|---|---|
-| GET | `/auth/setup/database` | 当前数据库 `{ dialect, source: 'default'|'config', summary }`（`summary` 不含密码）与可选驱动 `[{ dialect, label, available, missingPackage?, fields }]`。`fields` 是连接表单描述（名称、类型、必填、是否机密、默认值） |
-| POST | `/auth/setup/database/test` | `{ dialect, connection }`：临时连接、执行一次探测查询后断开，返回 `{ ok, latencyMs?, error? }`（错误信息去掉凭据） |
-| POST | `/auth/setup/database` | `{ dialect, connection }`：先测试，成功后写入配置文件顶层 `database` 块，机密字段写入项目 `.env`（如 `ZHIN_DATABASE_PASSWORD`），配置里只放 `${ZHIN_DATABASE_PASSWORD}` 引用；然后重启进程（数据库是进程级资源）。返回 `{ restarting: true }`，Console 轮询 `/auth/me` 直到 Host 回来 |
-
-- 可选驱动：`sqlite`（默认，`.zhin/data.sqlite`）、`mysql`、`pg`、`mongodb`。`redis` 与 `memory` 不能存账号，不出现在列表里。驱动包（`mysql2`、`pg`、`mongodb`）是 `@zhin.js/database` 的可选依赖，缺失时显示「需安装 `pnpm add <包>`」，不在线安装。
-- 「保持当前数据库」可直接跳过本步；配置文件里已显式写了 `database` 时默认跳过，但仍可修改。
-- 切换数据库不迁移旧库数据（初始化前旧库里没有账号；插件数据留在原库，向导提示这一点）。
-
-**第二步：所有者。** `POST /auth/setup`（§5）在新库里创建第一个所有者，返回会话，向导结束。
+- 可选驱动：`sqlite`（默认，`.zhin/data.sqlite`）、`mysql`、`pg`、`mongodb`。`redis` 与 `memory` 不能存账号，不出现在列表里。驱动包（`mysql2`、`pg`、`mongodb`）是 `@zhin.js/database` 的可选依赖，缺失时提示「需安装 `pnpm add <包>`」，不在线安装。
+- 测试连接：临时连接，执行一次探测查询后断开；错误信息去掉凭据。保存前必定先测试。
+- 「保持当前数据库」可以跳过数据库步骤；配置文件里已显式写了 `database` 时默认跳过，但仍可修改。
+- 切换数据库不迁移旧库数据（初始化前旧库里没有账号；插件数据留在原库，两个入口都提示这一点）。
 
 ## 落盘位置
 
 - 权限常量与 RPC→权限映射：`packages/console/protocol/src/permissions.ts`
 - 主体解析、权限检查：`packages/host/http/src/`（`TokenRegistry` 扩展为可接入外部会话解析器；新增 `access-control.ts`）
 - 数据表、密码与会话、`/auth/*`、`iam.*`、审计：`basic/cli/src/plugin-runtime/console/iam/`
-- CLI 命令：`basic/cli/src/commands/console-user.ts`
+- 初始化服务：`basic/cli/src/plugin-runtime/console/iam/setup-service.ts`；CLI 命令：`basic/cli/src/commands/console.ts`（`init`、`user`）
 - Console UI：登录页（用户名密码；未初始化时显示初始化向导）、访问控制区（用户、角色、API 令牌、审计）、个人设置（改密码、我的令牌）
 
 ## 后果
