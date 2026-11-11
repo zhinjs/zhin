@@ -1,7 +1,6 @@
 /**
  * WeCom webhook HTTP: URL verification (GET) + encrypted inbound (POST).
  */
-import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { readTextBody } from '@zhin.js/host-http-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -30,21 +29,18 @@ export function registerWecomWebhookRoutes(
 ): HttpRouteRegistration[] {
   const path = handler.config.webhookPath;
   return [
-    http.route('GET', path, (request, response, url) => {
-      handleWecomVerificationRequest(request, response, url, handler);
-    }, { summary: 'WeCom URL verification', tags: ['wecom'] }),
-    http.route('POST', path, async (request, response, url) => {
-      await handleWecomWebhookRequest(request, response, url, handler);
-    }, { summary: 'WeCom inbound webhook', tags: ['wecom'] }),
+    http.route('GET', path, (request, { url }) => handleWecomVerificationRequest(request, url, handler),
+      { summary: 'WeCom URL verification', tags: ['wecom'] }),
+    http.route('POST', path, (request, { url }) => handleWecomWebhookRequest(request, url, handler),
+      { summary: 'WeCom inbound webhook', tags: ['wecom'] }),
   ];
 }
 
 export function handleWecomVerificationRequest(
-  _request: IncomingMessage,
-  response: ServerResponse,
+  _request: Request,
   url: URL,
   handler: WecomWebhookHandler,
-): void {
+): Response {
   try {
     const msgSignature = queryParam(url.searchParams.get('msg_signature'));
     const timestamp = queryParam(url.searchParams.get('timestamp'));
@@ -73,11 +69,10 @@ export function handleWecomVerificationRequest(
 }
 
 export async function handleWecomWebhookRequest(
-  request: IncomingMessage,
-  response: ServerResponse,
+  request: Request,
   url: URL,
   handler: WecomWebhookHandler,
-): Promise<void> {
+): Promise<Response> {
   try {
     const msgSignature = queryParam(url.searchParams.get('msg_signature'));
     const timestamp = queryParam(url.searchParams.get('timestamp'));
