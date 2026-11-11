@@ -174,7 +174,31 @@ Console users, roles, sessions and API tokens live in the project database (ADR 
 - **Permission checks**: every Console RPC and every `/api` route is listed in the permission map of `@zhin.js/console-protocol`; anything unlisted is denied. Every denied request and every write is written to the audit log.
 - **Offline rescue**: `zhin console user create|passwd|disable|enable|list` opens the project database directly, without a running Host.
 
-A page's `requiredPermissions` and `requiredRoles` decide who sees it: built-in permissions (such as `status.view`) come from roles; plugin-defined permission names (such as `ambient:read`, `decisions:read`, `control:read`, `ops:approve`) are currently satisfied only by a global owner. The page lists (`/entries`, `/console/api/pages` and `/console/api/topology`) are filtered per caller and never cached.
+A page's `requiredPermissions` and `requiredRoles` decide who sees it: built-in permissions (such as `status.view`) come from roles; plugin-defined permission names (`<plugin>:<action>`, such as `ambient:read`, `decisions:read`, `control:read`, `ops:approve`) are granted by **level**. The page lists (`/entries`, `/console/api/pages` and `/console/api/topology`) are filtered per caller and never cached.
+
+### Plugin permission levels
+
+Every plugin permission has a level: `read` (view), `operate` (day-to-day actions) or `manage` (manage, approve, change configuration). A plugin can declare the level in `definePluginConsoleRpc({ permissions })` (see [Plugin Console pages](../authoring/console-pages.md#plugin-permission-levels)); otherwise it is inferred from the suffix:
+
+| Suffix | Level |
+| --- | --- |
+| `:read`, `:view` | `read` |
+| `:approve`, `:manage`, `:admin`, `:write`, `:config` | `manage` |
+| anything else (such as `:resolve`, `:send`) | `operate` |
+
+Built-in roles grant plugin permissions by level through three catalog permissions, `plugin.perms.read`, `plugin.perms.operate` and `plugin.perms.manage`:
+
+| Role | Plugin permissions |
+| --- | --- |
+| `viewer` | `read` |
+| `operator` | `read`, `operate` |
+| `admin` | every level |
+| `owner` | everything (unchanged) |
+
+- **Custom roles** can include those level permissions, or list single plugin permissions (for example only `ops:approve`). The format must be `<plugin>:<action>`. A name no loaded plugin uses is still saved (the plugin may not be installed yet, or be disabled); the call returns `warnings`, and the name grants nothing until a plugin uses it.
+- **Scope**: page visibility uses global bindings only. Plugin Console RPC checks each method's declared permissions; for a plugin that owns an adapter (`root/<adapter>`), a role bound to that adapter (or to the account an account method names) also counts, one bound to another adapter never does.
+- **API tokens** can be narrowed to single plugin permissions (such as `onebot11:read`); they take effect only when the issuing user holds them (by name or by level), so a token never exceeds its user.
+- `iam.roles.list` returns each role's effective plugin permissions (`pluginPermissions`, with source `level` / `explicit`) and the loaded plugins' permission catalog (top-level `pluginPermissions: [{ permission, plugin, level, description? }]`), for the Console's role editor.
 
 Plugin routes such as reverse WebSockets and Webhooks do not use Console accounts; the plugin authenticates them with its own credential (for example OneBot's `access_token`).
 

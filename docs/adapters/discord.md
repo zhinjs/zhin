@@ -109,7 +109,7 @@ discord:
 - 在账号库保存、修改、启动、停止、替换或删除该 Adapter 的账号；新增仅保存，不创建 SDK Client，需手动启动；
 - 如果适配器要求登录，页面会显示 LoginAssist 的扫码 / 滑块 / 设备确认待办；
 
-读取需要 `discord:read`，写操作需要 `discord:write`；全局所有者不受限（这类插件权限目前只有所有者拥有）。页面里的「添加 endpoint」等价于原来的 `discord endpoint add`。
+读取需要 `discord:read`，写操作需要 `discord:write`；全局所有者不受限。插件权限按级别授予（见[插件权限的级别](../console/index.md#插件权限的级别)）：`:read` 给 `viewer` 及以上，`:write` 给 `admin` 及以上。页面里的「添加 endpoint」等价于原来的 `discord endpoint add`。
 
 首次修改启动配置里的既有账号前，管理员必须核对清单并确认一次迁移。原 canonical 身份与历史保留，完整账号配置加密进入 Host 数据库；此后账号管理只写数据库，不修改启动文件或 `.env`，不重启进程。没有持久化账号端口的环境可使用静态配置连接，动态写操作明确不可用。
 

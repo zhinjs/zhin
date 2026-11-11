@@ -94,6 +94,7 @@ describe('Console permission catalog (ADR 0049 §3)', () => {
     expect(CONSOLE_BUILTIN_ROLES.viewer.permissions.every(p => p.endsWith('.view') || p.endsWith('.read'))).toBe(true);
     expect(CONSOLE_BUILTIN_ROLES.operator.permissions).toEqual([
       'status.view', 'endpoint.view', 'endpoint.operate', 'feature.view', 'feature.configure', 'feature.toggle', 'agent.view', 'ops.schedule.read',
+      'plugin.perms.read', 'plugin.perms.operate',
     ]);
   });
 

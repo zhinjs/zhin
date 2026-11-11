@@ -144,6 +144,19 @@ describe('/auth and iam.* after setup', () => {
     expect((await host.call('GET', '/system/status', undefined, vera)).status).toBe(401);
   });
 
+  it('denies a delegated plugin RPC that no plugin dispatcher answers and audits it', async () => {
+    const { host, owner } = await initialised();
+    await host.rpc('iam.users.create', { username: 'olga', password: PASSWORD, bindings: [{ role: 'operator' }] }, owner);
+    const olga = (await host.call('POST', '/auth/login', { username: 'olga', password: PASSWORD })).body.data.token as string;
+    // The gate admits plugin RPC only for the plugin dispatcher; a type it cannot address
+    // (dotted method) must not fall through to the runtime handlers.
+    expect(await host.rpc('plugin.root/missing.deep.status', {}, olga)).toMatchObject({ status: 403, body: { success: false, code: 'forbidden' } });
+    const audit = await host.rpc('iam.audit.list', { limit: 100 }, owner);
+    expect(audit.body.data.entries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ action: 'rpc:plugin.root/missing.deep.status', outcome: 'denied' }),
+    ]));
+  });
+
   it('changes the password, revoking other sessions, and refuses to remove the last owner over RPC', async () => {
     const { host, owner } = await initialised();
     const other = (await host.call('POST', '/auth/login', { username: 'alice', password: PASSWORD })).body.data.token as string;

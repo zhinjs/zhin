@@ -34,6 +34,15 @@ export const TOOL_APPROVALS_RESOLVE_PERMISSION = 'tool_approvals:resolve';
  * rejects / resends announcements. Separate from `control:write`.
  */
 export const OPS_APPROVE_PERMISSION = 'ops:approve';
+/**
+ * Levels (ADR 0049 amendment 2026-11-11): settling a card is an approval (`manage`, admin and up).
+ * `tool_approvals:resolve` would infer `operate` from its suffix, which would let operators approve.
+ */
+export const TOOL_APPROVAL_PERMISSION_LEVELS = Object.freeze([
+  Object.freeze({ id: TOOL_APPROVALS_READ_PERMISSION, level: 'read', description: '查看工具审批卡片' } as const),
+  Object.freeze({ id: TOOL_APPROVALS_RESOLVE_PERMISSION, level: 'manage', description: '处理工具审批卡片（旧权限名）' } as const),
+  Object.freeze({ id: OPS_APPROVE_PERMISSION, level: 'manage', description: '审批：工具审批、公告、群规与自我修改' } as const),
+]);
 /** Recorded as the deciding operator: the Console RPC call does not carry a per-user identity yet. */
 export const CONSOLE_TOOL_APPROVAL_OPERATOR = 'console';
 
@@ -70,6 +79,7 @@ export class HostToolApprovals {
   constructor(private readonly queue?: ToolApprovalQueue) {}
 
   readonly consoleRpc: PluginConsoleRpc = definePluginConsoleRpc({
+    permissions: TOOL_APPROVAL_PERMISSION_LEVELS,
     queries: {
       'tool-approvals': {
         anyOfPermissions: [TOOL_APPROVALS_READ_PERMISSION, OPS_APPROVE_PERMISSION],
@@ -119,8 +129,10 @@ export function composeHostConsoleRpc(...surfaces: readonly PluginConsoleRpc[]):
     }
   }
   const gates = Object.freeze(surfaces.flatMap((surface) => [...surface[generationAdmissionSource]]));
+  const permissions = Object.freeze(surfaces.flatMap((surface) => surface.permissions ?? []));
   return Object.freeze({
     methods,
+    ...(permissions.length ? { permissions } : {}),
     get [generationAdmissionSource]() { return gates; },
   });
 }

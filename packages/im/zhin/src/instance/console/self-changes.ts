@@ -16,7 +16,9 @@ import {
 import {
   CONSOLE_TOOL_APPROVAL_OPERATOR,
   OPS_APPROVE_PERMISSION,
+  TOOL_APPROVAL_PERMISSION_LEVELS,
   TOOL_APPROVALS_READ_PERMISSION,
+  TOOL_APPROVALS_RESOLVE_PERMISSION,
 } from './tool-approvals.js';
 
 /**
@@ -106,6 +108,7 @@ export class HostSelfChanges {
   #binding: Binding | undefined;
 
   readonly consoleRpc: PluginConsoleRpc = definePluginConsoleRpc({
+    permissions: TOOL_APPROVAL_PERMISSION_LEVELS.filter((entry) => entry.id !== TOOL_APPROVALS_RESOLVE_PERMISSION),
     queries: {
       'self-changes': {
         anyOfPermissions: [TOOL_APPROVALS_READ_PERMISSION, OPS_APPROVE_PERMISSION],

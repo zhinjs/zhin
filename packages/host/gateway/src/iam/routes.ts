@@ -96,7 +96,8 @@ export function registerConsoleAuthRoutes(options: RegisterConsoleAuthRoutesOpti
       return ok({
         kind: principal.kind,
         user: user ? { id: user.id, username: user.username, displayName: user.displayName } : { id: principal.userId, username: principal.username, displayName: principal.displayName },
-        permissions: globalPermissions(principal),
+        // Level grants expanded over the loaded plugins' permission catalog.
+        permissions: globalPermissions(principal, options.http.tokenRegistry?.pluginPermissions?.() ?? []),
         bindings: principal.grants.map(grant => ({ role: grant.role, scope: grant.scope, permissions: grant.permissions })),
         setupRequired,
       });

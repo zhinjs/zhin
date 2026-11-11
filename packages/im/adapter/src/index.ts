@@ -32,7 +32,7 @@ export * from './adapter-types.js';
 export { endpointSpec, createEndpointSpecification, isEndpoint } from './endpoint-specification.js';
 export type { Endpoint, EndpointSpecification, EndpointHooks } from './endpoint-specification.js';
 
-export { ownedConsoleAdapter, mutateConsoleAdapter, prepareConsoleAdapterMutation } from './adapter-runtime-console.js';
+export { consoleAccountTarget, ownedConsoleAdapter, mutateConsoleAdapter, prepareConsoleAdapterMutation, type AdapterConsoleMutation } from './adapter-runtime-console.js';
 
 /** @internal Shared request ownership for protocol Clients, without connection/reconnect policy. */
 export { createPendingRpc } from './pending-rpc.js';

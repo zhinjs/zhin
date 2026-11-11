@@ -20,6 +20,8 @@ function resolveService(
 
 export function createLedgerConsoleRpc(service?: LedgerService): PluginConsoleRpc {
   const rpc = definePluginConsoleRpc({
+    // Day-to-day edits belong to operators; `:write` would otherwise infer `manage` (ADR 0049).
+    permissions: [{ id: 'ledger:write', level: 'operate', description: '记账' }],
     status: {
       page: 'index',
       requiredPermissions: ['ledger:read'],

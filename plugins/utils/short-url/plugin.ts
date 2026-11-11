@@ -41,6 +41,8 @@ export default definePlugin({
     const store = new Map<string, ShortUrlRecord>();
 
     const rpc = definePluginConsoleRpc({
+      // Day-to-day edits belong to operators; `:write` would otherwise infer `manage` (ADR 0049).
+      permissions: [{ id: 'short-url:write', level: 'operate', description: '管理短链接' }],
       status: {
         page: 'index',
         demo: true,

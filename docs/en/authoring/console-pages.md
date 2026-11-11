@@ -107,7 +107,7 @@ Every `meta` field is optional; `definePage` throws on unknown keys:
 | `requiredRoles` | `[]` | Role names required to access (such as `operator`) |
 | `section` | — | Console navigation section: `overview` / `conversations` / `features` / `plugins` / `ops` / `access`; omitted → the Console decides (ADR 0052) |
 
-Navigation and the page list are filtered per caller. A global owner sees every page. Other users see only pages whose requirements their roles meet (plugin-defined permission names are currently satisfied only by owners). Signed-out callers see only pages with no requirements. For users and roles, see [Console users and permissions](../console/index.md#users-and-permissions).
+Navigation and the page list are filtered per caller. A global owner sees every page. Other users see only pages whose requirements their roles meet (plugin-defined permission names are granted by level, see [Plugin permission levels](#plugin-permission-levels)). Signed-out callers see only pages with no requirements. For users and roles, see [Console users and permissions](../console/index.md#users-and-permissions).
 
 Console selects `titleI18n` using its independent interface language. This only changes navigation and breadcrumb display, never routes, permissions or page content. Plugins localize their own components; third-party titles without translations remain unchanged.
 
@@ -228,10 +228,10 @@ definePluginConsoleRpc({
 Access rules:
 
 - **Follows the page**: with `page` set, the caller must meet that page's `requiredPermissions` and `requiredRoles`, plus any the method declares itself. If the page isn't loaded in the current generation, the call is refused.
-- The Console permission map applies first: read methods need `feature.view`, actions need `feature.configure`.
 - **A global owner** can call every method.
-- **Other users** can read `status` if they hold every required permission and role. A `status` with no requirements at all is open to them only when it sets `demo: true`.
-- **Actions**: other users can run an action only when the action **itself** declares `requiredPermissions`, `requiredRoles` or `anyOfPermissions` and they meet all of them, including the page's. Otherwise the call is refused. An action with no requirements of its own needs an owner; a page's requirements never grant an action by themselves.
+- **Other users and API tokens** are checked per method: they must meet the method's own requirements and the page's. Plugin permissions are granted by level (see [Plugin permission levels](#plugin-permission-levels)). Otherwise the call returns 403.
+- **Fallback when nothing is declared**: a read method with no requirements (and no page requirements) needs `feature.view`; an action that declares no requirements of its own needs `feature.configure`, with the page's requirements on top. A page's requirements never grant an action by themselves.
+- **Adapter plugins**: for a plugin that owns an adapter (`root/<adapter>`), a role bound to that adapter (or, for account methods that name an `id`, to that account) also counts; one bound to another adapter never does. Account methods (`endpoint-add` and the rest) also accept `endpoint.manage` at their target; only holders of `endpoint.manage` can confirm the first migration of the account list.
 - **Any one of**: holding **one** of the permissions in `anyOfPermissions` is enough (on top of `requiredPermissions`). Use it when a new permission sits beside an older one, for example approval cards accept `ops:approve` or the older `tool_approvals:resolve`.
 
 ```ts
@@ -253,6 +253,28 @@ Ordinary users see what you return, so:
 
 Plugin RPC doesn't change configuration. Use `config:patch` for that.
 
+### Plugin permission levels
+
+Plugin-defined permission names are written `<plugin>:<action>` (such as `rss:read`, `rss:write`, `ops:approve`). Each has a level, and built-in roles grant them by level (`viewer` → `read`, `operator` → `read` + `operate`, `admin` / `owner` → all; see [Plugin permission levels](../console/index.md#plugin-permission-levels) in the Console guide). Without a declaration the level comes from the suffix: `:read` / `:view` are `read`; `:approve` / `:manage` / `:admin` / `:write` / `:config` are `manage`; anything else is `operate`.
+
+When the inferred level is wrong for your plugin, declare it in the `permissions` of `definePluginConsoleRpc`:
+
+```ts
+definePluginConsoleRpc({
+  permissions: [
+    { id: 'rss:read', level: 'read', description: 'View feeds' },
+    // Operators add and remove feeds: undeclared, `:write` would infer manage (admins only)
+    { id: 'rss:write', level: 'operate', description: 'Edit feeds' },
+  ],
+  status: { page: 'index', requiredPermissions: ['rss:read'], handler: readStatus },
+  actions: { add: { page: 'index', requiredPermissions: ['rss:write'], handler: addFeed } },
+});
+```
+
+- Declare the names your plugin's pages and methods use. When several plugins declare one name with different levels, the strictest wins (`manage` > `operate` > `read`), so a later plugin cannot lower another plugin's gate.
+- Names that appear only in page metadata, with no RPC, use the inferred level.
+- `level` must be `read`, `operate` or `manage`; a malformed or duplicate `id` throws at setup time.
+
 ### Built-in status: ambient engagement and skills assistant
 
 Ambient engagement (群聊插话) and the skills assistant (技能助手) are provided by the Host itself, not by a plugin, so they sit under the root plugin:
@@ -262,7 +284,7 @@ Ambient engagement (群聊插话) and the skills assistant (技能助手) are pr
 | `plugin.root.ambient` | `pluginRpc('root', 'ambient')` | `ambient:read` |
 | `plugin.root.skills` | `pluginRpc('root', 'skills')` | `skills:read` |
 
-A global owner doesn't need these permissions; they are plugin-defined names that only owners currently satisfy (see [Users and permissions](../console/index.md#users-and-permissions)). Both queries are read-only and take no input.
+A global owner doesn't need these permissions; they are plugin-defined names granted by level: `*:read` goes to `viewer` and above (see [Plugin permission levels](../console/index.md#plugin-permission-levels)). Both queries are read-only and take no input.
 
 The data lives only in memory: the last 24 hours, at most 2000 entries, cleared on restart. It never includes chat text, prompts, judge reasons or secrets. All times are millisecond timestamps.
 
@@ -524,7 +546,7 @@ From the page you can:
 - consume LoginAssist tasks from `login.list` with `login.submit` / `login.cancel` (QR code, slider, SMS, device confirmation);
 - render adapter-specific actions from `status.actions` (for example QQ QR binding and public/private selection).
 
-Permissions are per adapter: page reads need `<adapterKey>:read`; writes (account changes and custom actions) need `<adapterKey>:write`. A global owner is unrestricted. An administrator must review and confirm the existing account list before its first migration. Without a persistence management port, `runtime.canManage` is false or the request explicitly fails as unavailable; there is no configuration-file fallback.
+Permissions are per adapter: page reads need `<adapterKey>:read` (level `read`); writes (account changes and custom actions) need `<adapterKey>:write`, declared at level `operate` by default so `operator` can maintain accounts (set `writePermissionLevel: 'manage'` to keep it with admins). Roles bound to that adapter count too, and `endpoint.manage` on the adapter also allows account changes. A global owner is unrestricted. An administrator holding `endpoint.manage` must review and confirm the existing account list before its first migration. Without a persistence management port, `runtime.canManage` is false or the request explicitly fails as unavailable; there is no configuration-file fallback.
 
 Each mutation supplies the directory’s `expectedGeneration` and `expectedRevision` and targets an `instanceId`; the first migration adds `confirmMigration: true` only after user confirmation. New and replacement accounts are saved disabled; connection updates reconnect only the target account. Refresh to verify conflicts or unknown commit outcomes rather than automatically retrying. Persistence acknowledgment and asynchronous startup or cleanup completion are separate states.
 

@@ -177,7 +177,31 @@ Console 的用户、角色、会话和 API 令牌存在项目数据库里（ADR 
 - **权限检查**：每个 Console RPC 和每条 `/api` 路由都在 `@zhin.js/console-protocol` 的权限表里登记；没登记的一律拒绝。所有被拒绝的请求和写操作都记入审计日志。
 - **离线救援**：`zhin console user create|passwd|disable|enable|list` 直接打开项目数据库，不需要运行中的 Host。
 
-页面的 `requiredPermissions` 与 `requiredRoles` 决定谁能看到它：内置权限（如 `status.view`）按角色授予；插件自己定义的权限名（如 `ambient:read`、`decisions:read`、`control:read`、`ops:approve`）目前只有全局所有者满足。页面清单（`/entries`、`/console/api/pages`、`/console/api/topology`）按调用者过滤，且不会被缓存。
+页面的 `requiredPermissions` 与 `requiredRoles` 决定谁能看到它：内置权限（如 `status.view`）按角色授予；插件自己定义的权限名（形如 `<插件>:<动作>`，如 `ambient:read`、`decisions:read`、`control:read`、`ops:approve`）按**级别**授予。页面清单（`/entries`、`/console/api/pages`、`/console/api/topology`）按调用者过滤，且不会被缓存。
+
+### 插件权限的级别
+
+每个插件权限属于一个级别：`read`（查看）、`operate`（日常操作）或 `manage`（管理、审批、改配置）。插件可以在 `definePluginConsoleRpc({ permissions })` 里声明级别（见[插件 Console 页面](../authoring/console-pages.md#插件权限的级别)）；没声明时按动作后缀推断：
+
+| 后缀 | 级别 |
+| --- | --- |
+| `:read`、`:view` | `read` |
+| `:approve`、`:manage`、`:admin`、`:write`、`:config` | `manage` |
+| 其他（如 `:resolve`、`:send`） | `operate` |
+
+内置角色按级别授予插件权限，靠的是三个目录权限 `plugin.perms.read`、`plugin.perms.operate`、`plugin.perms.manage`：
+
+| 角色 | 插件权限 |
+| --- | --- |
+| `viewer` | `read` |
+| `operator` | `read`、`operate` |
+| `admin` | 全部级别 |
+| `owner` | 全部（不变） |
+
+- **自定义角色**可以勾选上面三个级别权限，也可以直接列出某个插件权限（如只给 `ops:approve`）。格式必须是 `<插件>:<动作>`；当前没有插件使用的权限名也能保存（插件可能还没装或被停用），接口会返回 `warnings` 提示，在有插件用到它之前它不放行任何东西。
+- **作用域**：页面可见性只看全局绑定。调用插件 Console RPC 时逐个方法检查它声明的权限；调用拥有适配器的插件（`root/<适配器>`）时，绑定到这个适配器（或账号方法指名的账号）的角色也算数，绑定到别的适配器的不算。
+- **API 令牌**签发时可以只列某个插件权限（如 `onebot11:read`）；只有签发人自己持有它（按名或按级别）时才生效，不会超过签发人。
+- `iam.roles.list` 返回每个角色当前生效的插件权限（`pluginPermissions`，含来源 `level` / `explicit`）和已加载插件的权限目录（顶层 `pluginPermissions: [{ permission, plugin, level, description? }]`），Console 用它渲染角色编辑器。
 
 插件的反向 WebSocket、Webhook 等路由不经过 Console 账号，由插件用自己的凭据鉴权（例如 OneBot 的 `access_token`）。
 

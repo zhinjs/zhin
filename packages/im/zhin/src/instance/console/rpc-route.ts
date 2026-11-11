@@ -1,4 +1,20 @@
-import { auditActor, authorizeConsoleRpc, dispatchRuntimeConsoleRpc, HttpBodyError, isUserPrincipal, pickRpcReply, pluginRpcWriteAllowed, principalAllows, readJsonBody, rpcAuditDetail, rpcAuditTarget, unrestrictedConsoleAccess, type ConsolePrincipal, type ConsoleRpcDecision, type HttpHost, jsonResponse } from '@zhin.js/host-http';
+import {
+  auditActor,
+  authorizeConsoleRpc,
+  dispatchRuntimeConsoleRpc,
+  HttpBodyError,
+  isUserPrincipal,
+  jsonResponse,
+  pickRpcReply,
+  principalAllows,
+  readJsonBody,
+  rpcAuditDetail,
+  rpcAuditTarget,
+  unrestrictedConsoleAccess,
+  type ConsolePrincipal,
+  type ConsoleRpcDecision,
+  type HttpHost,
+} from '@zhin.js/host-http';
 import {
   ConsoleRpcRequestScope,
 } from './rpc-context.js';
@@ -74,17 +90,31 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
       if (featureReply) {
         return reply(featureReply.status, featureReply.body, noStore);
       }
-      // `plugin.<pluginId>.<method>`: the gate admitted the read permission; writes need the write one.
+      // `plugin.<pluginId>.<method>`: the dispatcher authorizes signed-in principals per method
+      // (its own, its Page's, or the catalog fallback permission).
       const pluginReply = await dispatchPluginConsoleRpcRequest(message, {
         snapshots: options.snapshots,
         access,
-        ...(principal.kind === 'bootstrap' ? {} : {
-          principalGrant: Object.freeze({ write: pluginRpcWriteAllowed(principal, decision.rule) }),
-        }),
+        ...(isUserPrincipal(principal) ? {
+          principal: Object.freeze({
+            grants: principal.grants,
+            roles: principal.roles,
+            rule: decision.rule,
+            ...(http.tokenRegistry ? { levelOf: http.tokenRegistry.pluginPermissionLevels() } : {}),
+          }),
+        } : {}),
         ...(options.hostConsoleRpc ? { hostRpc: options.hostConsoleRpc } : {}),
       });
       if (pluginReply) {
+        if (pluginReply.status === 403 && !pluginReply.body.success && pluginReply.body.code === 'forbidden' && !decision.write) {
+          audit('denied');
+        }
         return reply(pluginReply.status, pluginReply.body as Record<string, unknown>, noStore);
+      }
+      if (decision.delegated) {
+        // Admitted only for the plugin dispatcher: nothing else may answer it.
+        audit('denied');
+        return jsonResponse(403, { success: false, code: 'forbidden', error: '没有操作权限', requestId: message.requestId });
       }
       const requestScope = new ConsoleRpcRequestScope(options, {
         authScope,
