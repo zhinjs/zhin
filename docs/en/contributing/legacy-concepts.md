@@ -19,7 +19,7 @@ export default definePlugin({
 ## "Host Plugin" Narrative -> basic/cli Assembly + Host Tokens
 
 - **Old approach**: `@zhin.js/host` series router / api plugin packages that installed HTTP routing and Console API as "plugins" (these packages have been deleted).
-- **New approach**: The Host is a composition root -- `basic/cli`'s `zhin runtime start` assembles IM / Agent / Console Host uniformly. Plugins do not install Hosts; instead they consume Host capabilities through Host tokens in `setup` (`zhin.js` exports six tokens like `databaseHostToken`, `@zhin.js/host-http` exports `httpHostToken`). When a token is not assembled, use `has()` to check and degrade gracefully.
+- **New approach**: The Host is a composition root -- the instance composition root `zhin.js/instance` (launched by the management gateway that `zhin start` runs) assembles IM / Agent / Console Host uniformly. Plugins do not install Hosts; instead they consume Host capabilities through Host tokens in `setup` (`zhin.js` exports six tokens like `databaseHostToken`, `@zhin.js/host-http` exports `httpHostToken`). When a token is not assembled, use `has()` to check and degrade gracefully.
 
 ```ts
 // Old: Install host plugin to get HTTP capability

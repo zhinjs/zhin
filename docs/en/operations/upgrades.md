@@ -24,7 +24,7 @@ For production, follow the full flow below and take a backup first. Stop the Bot
 
 ## Upgrading to the management gateway: `zhin start` {#management-gateway}
 
-`zhin start` now starts the long-lived management gateway (ADR 0054), which launches and supervises the instance:
+`zhin start` now starts the long-lived management gateway (ADR 0054), which launches and supervises the instance. Full steps (dependencies, systemd / Docker / PM2, HTTP routes moving to `Request` / `Response`, reverse WebSockets, plugin permissions, logs and SQLite): [Upgrading to the management gateway](../migrations/management-gateway.md). Key points:
 
 - **It runs in the background by default.** For development, systemd, Docker and PM2 use `zhin start --foreground` (`zhin runtime start` is its alias, so existing scripts keep working). Scaffolded `pnpm dev` becomes `zhin start --foreground --watch source config` and `pnpm start` becomes `zhin start --foreground --mode production --no-watch`.
 - **An instance crash no longer ends the process**: crashes are restarted under the 10-per-minute storm guard; past it the instance stays `crashed` and the gateway keeps running. Only SIGTERM / Ctrl+C / `zhin stop` end the gateway (exit code 0 / 130). Monitoring that relied on the process exit code to detect instance crashes should read `zhin status --json`, `/pub/health` or `/pub/ready` instead.

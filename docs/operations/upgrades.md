@@ -24,7 +24,7 @@ npx zhin start --once --mode test  # 装配冒烟
 
 ## 升级到管理网关：`zhin start` {#management-gateway}
 
-`zhin start` 现在启动常驻的管理网关（ADR 0054），由网关拉起并监管实例：
+`zhin start` 现在启动常驻的管理网关（ADR 0054），由网关拉起并监管实例。完整步骤（依赖、systemd / Docker / PM2、HTTP 路由改为 `Request` / `Response`、反向 WebSocket、插件权限、日志与 SQLite）见[升级到管理网关](../migrations/management-gateway.md)。要点：
 
 - **默认后台运行**。开发、systemd、Docker、PM2 请用 `zhin start --foreground`（`zhin runtime start` 是它的别名，旧脚本照常可用）。脚手架的 `pnpm dev` 改为 `zhin start --foreground --watch source config`，`pnpm start` 改为 `zhin start --foreground --mode production --no-watch`。
 - **实例崩溃不再结束进程**：崩溃按每分钟 10 次的风暴保护重启，超限后实例停在 `crashed`、网关继续运行；只有 SIGTERM / Ctrl+C / `zhin stop` 才结束网关（退出码 0 / 130）。依赖进程退出码判断实例崩溃的监控需改为看 `zhin status --json`、`/pub/health` 或 `/pub/ready`。

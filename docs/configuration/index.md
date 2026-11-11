@@ -25,7 +25,7 @@ description: "zhin.config.yml 的结构与每个顶层键：HTTP、数据库、A
 
 ## 配置文件的位置
 
-启动时 `zhin runtime start` 会在项目根目录找配置文件，按下面的顺序找到第一个就停；同时存在多个则直接报错，不会帮你猜：
+启动时（`zhin start`）实例会在项目根目录找配置文件，按下面的顺序找到第一个就停；同时存在多个则直接报错，不会帮你猜：
 
 1. `config.yml`
 2. `config.yaml`
@@ -67,17 +67,17 @@ flowchart LR
 
 配置文件会经过 JSON Schema 校验，**顶层只允许下文列出的键**。键名写错会在启动时报 `Invalid Plugin config in zhin.config.yml`。
 
-Host 键由 CLI 装配层消费；每个插件只收到顶层同名块的业务值，不会收到其他实例的配置。
+Host 键由实例装配层（`zhin.js/instance`）与管理网关消费；每个插件只收到顶层同名块的业务值，不会收到其他实例的配置。
 
 ## 修改后如何生效
 
-`zhin runtime start` **只有显式传入 `--watch` 才监听变化**。不传时，编辑文件不会自动应用；已有开发脚本若需要热更新，应显式选择范围：
+`zhin start` **只有显式传入 `--watch` 才监听变化**。不传时，编辑文件不会自动应用；已有开发脚本若需要热更新，应显式选择范围：
 
 ```bash
-npx zhin runtime start --watch source config  # 源码与配置
-npx zhin runtime start --watch config         # 仅配置
-npx zhin runtime start --watch source         # 仅源码
-npx zhin runtime start --mode production      # 均不监听
+npx zhin start --foreground --watch source config  # 源码与配置
+npx zhin start --foreground --watch config         # 仅配置
+npx zhin start --foreground --watch source         # 仅源码
+npx zhin start --foreground --mode production      # 均不监听
 ```
 
 `--no-watch` 保留为均不监听的兼容入口，不能与 `--watch` 同用。源码监听不代替配置监听；源码重载也不会顺带应用尚待重启的配置。
@@ -188,7 +188,7 @@ npx zhin config check
 
 `setup` 会把非敏感结构写入 `zhin.config.yml`，把实际连接值写入项目根目录 `.env`。Runtime
 先读取 `.env`，再用所选环境的 `.env.<environment>` 覆盖同名变量；例如生产启动使用
-`zhin runtime start --mode production` 默认读取 `.env.production`；显式传入
+`zhin start --mode production` 默认读取 `.env.production`；显式传入
 `--environment <name>` 可选择其他环境覆盖层。
 
 ### SQLite

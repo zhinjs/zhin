@@ -225,8 +225,8 @@ packages:
 ```json
 {
   "scripts": {
-    "dev": "zhin runtime start --watch source config",
-    "start": "zhin runtime start --mode production --no-watch",
+    "dev": "zhin start --foreground --watch source config",
+    "start": "zhin start --foreground --mode production --no-watch",
     "preview": "zhin preview",
     "build": "tsc --noEmit",
     "pm2:start": "pm2 start ecosystem.config.cjs",

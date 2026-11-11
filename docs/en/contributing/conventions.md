@@ -21,7 +21,7 @@ import { DisposeStack } from './dispose';           // Wrong
 
 ## New Plugins: Plugin Runtime (Default)
 
-The only startup path is `zhin runtime start`. For new plugins:
+The only startup path is `zhin start` (the management gateway launches the instance; `zhin runtime start` is an alias for `zhin start --foreground`). For new plugins:
 
 - `plugin.ts` default-exports `definePlugin()` (import from `zhin.js`)
 - Capabilities go in convention directories (`commands/` -> `defineCommand`, `tools/` -> `defineAgentTool`, ...), one default export per file
@@ -31,7 +31,7 @@ See [Writing Your First Plugin](../getting-started/first-plugin.md), [definePlug
 
 ## Removed: `zhin.js/node`
 
-`zhin.js/node` and `bootstrapNode` have been deleted and are no longer exported. The only startup entry is `definePlugin()` + `zhin runtime start`. New features must use Plugin Runtime. Migration guide: `.github/skills/migrate-zhin-plugin-runtime`.
+`zhin.js/node` and `bootstrapNode` have been deleted and are no longer exported. The only startup entry is `definePlugin()` + `zhin start`. New features must use Plugin Runtime. Migration guide: `.github/skills/migrate-zhin-plugin-runtime`.
 
 ## Generation State: Snapshot Resources
 

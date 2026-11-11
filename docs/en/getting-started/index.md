@@ -28,6 +28,8 @@ The terminal asks three things only: project language, project name, and the boo
 
 The token sits after `#`, so it is never sent to console.zhin.dev's server. `-y` accepts every default without asking anything.
 
+`pnpm dev` is `zhin start --foreground --watch source config`: it starts the **management gateway** in the foreground, and the gateway launches the **Zhin instance** (your Bot). The gateway listens on the HTTP port and handles Console sign-in and setup; the instance runs plugins and adapters and hot-reloads your code. Ctrl+C stops both. To keep the terminal free, run `npx zhin start` (background) and manage it with `npx zhin status`, `npx zhin logs -f` and `npx zhin stop`, see [zhin start](../cli/runtime.md).
+
 ::: tip Skip the adapter step in the Console
 For scripts, or to chat right away, install Sandbox (a simulated chat window in the browser) at creation time: `npm create zhin-app my-bot -- -y --adapter sandbox`. See the [create-zhin-app README](https://github.com/zhinjs/zhin/tree/main/packages/toolkit/create-zhin) for `--database`, `--adapter`, `--ai` and the other flags.
 :::
@@ -40,8 +42,9 @@ Once `pnpm dev` is running, open the link above (lost it? Open [console.zhin.dev
 2. **Owner account**: choose a username and password and sign in; the bootstrap token stops working after this, and you sign in with the account from then on.
 3. **AI**: skip it for now; enable it later from the Console or with `npx zhin setup --ai`.
 4. **Adapters**: pick **Sandbox** — no platform account needed.
+5. **Finish**: a summary, then the dashboard.
 
-Every step can be skipped and revisited later from the Features section.
+Every step can be skipped and revisited later from the Features section. The credential and permissions each step needs are described in [Console setup and onboarding](../console/onboarding.md).
 
 ## 3. Send `/hello` to verify
 
@@ -50,7 +53,7 @@ Pick either way:
 - **Option A: Local built-in Sandbox (fastest)**
   Open `http://127.0.0.1:8068/sandbox` directly in your browser, send `/hello`, and see the reply immediately.
 - **Option B: Remote Console**
-  Open **Bot → Try a chat** (Sandbox) in the sidebar and send `/hello`.
+  Open **Conversations → Sandbox** in the sidebar and send `/hello`.
 
 A reply means the whole pipeline works: the Sandbox adapter received the inbound message → matched `commands/hello` → sent the reply back through the unified outbound pipeline. Connecting a real platform later just mounts that platform's adapter in config.
 

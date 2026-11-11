@@ -25,7 +25,7 @@ This is the complete reference for `zhin.config.yml`. When configuring for the f
 
 ## Where the config file lives
 
-At startup, `zhin runtime start` checks these project-root candidates in order. If more than one exists, startup fails instead of guessing:
+At startup (`zhin start`), the instance checks these project-root candidates in order. If more than one exists, startup fails instead of guessing:
 
 1. `config.yml`
 2. `config.yaml`
@@ -67,17 +67,17 @@ flowchart LR
 
 Configuration passes JSON Schema validation, and **only the keys listed below are allowed at the top level**. A misspelled key produces `Invalid Plugin config in zhin.config.yml` at startup.
 
-Host sections are consumed by CLI assembly. Each plugin receives only its own same-named business block.
+Host sections are consumed by the instance composition root (`zhin.js/instance`) and the management gateway. Each plugin receives only its own same-named business block.
 
 ## Applying configuration changes
 
-`zhin runtime start` **watches changes only when `--watch` is explicit**. Without it, editing a file does not apply it automatically. Development scripts that need watching should select their scopes:
+`zhin start` **watches changes only when `--watch` is explicit**. Without it, editing a file does not apply it automatically. Development scripts that need watching should select their scopes:
 
 ```bash
-npx zhin runtime start --watch source config  # Source and configuration
-npx zhin runtime start --watch config         # Configuration only
-npx zhin runtime start --watch source         # Source only
-npx zhin runtime start --mode production      # Neither
+npx zhin start --foreground --watch source config  # Source and configuration
+npx zhin start --foreground --watch config         # Configuration only
+npx zhin start --foreground --watch source         # Source only
+npx zhin start --foreground --mode production      # Neither
 ```
 
 `--no-watch` remains a compatibility alias for watching neither and cannot be combined with `--watch`. Source watching does not enable configuration watching; a source reload does not pull in configuration that is still pending a restart.
@@ -189,7 +189,7 @@ npx zhin config check
 `setup` writes the non-secret structure to `zhin.config.yml` and the actual connection values to the
 project-root `.env`. Runtime reads `.env` first, then overrides matching keys from the selected
 `.env.<environment>`. For example, use
-`zhin runtime start --mode production` to load `.env.production` by default; an explicit
+`zhin start --mode production` to load `.env.production` by default; an explicit
 `--environment <name>` selects a different environment overlay.
 
 ### SQLite

@@ -45,18 +45,21 @@
 No platform account and no model key required (Node.js **≥22.19.0**, pnpm 9+):
 
 ```bash
-npm create zhin-app my-bot -y
+npm create zhin-app my-bot -- -y --adapter sandbox
 cd my-bot
-pnpm dev
+pnpm dev          # zhin start --foreground: management gateway + your bot, hot reload
 ```
 
-1. **Instant local Sandbox**: Open `http://127.0.0.1:8068/sandbox` in your browser and send `/hello` to get an immediate reply.
-2. **Full Remote Console**: Open [console.zhin.dev](https://console.zhin.dev), connect to `http://127.0.0.1:8068` with the `HTTP_TOKEN` from `.env`, and inspect logs, plugins, and live messages.
+1. **Finish setup in the Console**: open the Console link printed in the terminal (`https://console.zhin.dev/?apiBaseUrl=…#token=…`; the bootstrap token after `#` never leaves your browser). Keep the default SQLite database and create the owner account.
+2. **Chat with the Sandbox**: open `http://127.0.0.1:8068/sandbox` (or **Conversations → Sandbox** in the Console) and send `/hello`.
+3. **Run it in the background**: `npx zhin start` (then `zhin status`, `zhin logs -f`, `zhin stop`).
 
 Full walkthrough: [Quick start](./docs/en/getting-started/index.md) · Something wrong? Run `npx zhin doctor`.
 
 > [!IMPORTANT]
 > **Upgrading an existing bot from 1.1.13 or earlier?** The Runtime now only accepts `configVersion: 2`. Stop the Bot first, upgrade `zhin.js` / `@zhin.js/cli` to the latest, then run `zhin migrate instances` (preview) and `zhin migrate instances --apply` (backs up first). Full steps and restore: [Upgrading to configVersion 2](./docs/en/operations/upgrades.md#configversion-2).
+>
+> **Upgrading from single-process `zhin runtime start`?** `zhin start` now runs a long-lived management gateway that supervises the bot; Console accounts replace `http.tokens`. Install `@zhin.js/gateway` with the same release of `zhin.js` / `@zhin.js/cli` and follow [Upgrading to the management gateway](./docs/en/migrations/management-gateway.md).
 
 ## Why Zhin.js?
 
