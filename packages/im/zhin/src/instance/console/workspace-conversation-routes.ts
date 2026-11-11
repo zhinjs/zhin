@@ -1,6 +1,5 @@
-import { HttpBodyError, readJsonBody, type HttpHost } from '@zhin.js/host-http';
+import { HttpBodyError, readJsonBody, type HttpHost, jsonResponse } from '@zhin.js/host-http';
 import type { DatabaseHost, SnapshotReader } from '@zhin.js/plugin-runtime';
-import { writeJson } from '@zhin.js/gateway/http';
 import { SandboxWorkspaceBindingError, withSandboxWorkspaceScope } from './sandbox-workspace-scope.js';
 import {
   listWorkspaceConversations,
@@ -9,6 +8,7 @@ import {
   WorkspaceStoreUnavailableError,
   type WorkspaceConversationInput,
 } from './workspace-conversations.js';
+import { noStore } from './no-store.js';
 
 /** Metadata only: no message replay, migration, expiry, or task execution. */
 export function registerWorkspaceConversationRoutes(options: Readonly<{
@@ -18,57 +18,45 @@ export function registerWorkspaceConversationRoutes(options: Readonly<{
   databaseHost?: DatabaseHost;
 }>): void {
   const { http, base, snapshots, databaseHost } = options;
-  http.route('GET', `${base}/conversations/workspaces`, async (_request, response, url, authScope) => {
-    response.setHeader('cache-control', 'no-store');
-    if (authScope !== 'full') {
-      writeJson(response, 403, { success: false, error: '当前凭据不能读取会话目录' });
-      return;
-    }
+  http.route('GET', `${base}/conversations/workspaces`, noStore(async (_request, { url }) => {
     const connectionId = url.searchParams.get('connectionId');
     if (!connectionId) {
-      writeJson(response, 400, { success: false, code: 'invalid_workspace_query', error: '请提供当前 Sandbox 连接' });
-      return;
+      return jsonResponse(400, { success: false, code: 'invalid_workspace_query', error: '请提供当前 Sandbox 连接' });
     }
     try {
       const data = await withSandboxWorkspaceScope(snapshots, connectionId, async scope => ({
         scope, items: await listWorkspaceConversations(databaseHost, scope),
       }));
-      writeJson(response, 200, { success: true, data });
-    } catch (error) { writeWorkspaceError(response, error); }
-  }, { summary: 'Read Console conversation workspaces', tags: ['conversations'] });
+      return jsonResponse(200, { success: true, data });
+    } catch (error) { return workspaceError(error); }
+  }), { summary: 'Read Console conversation workspaces', tags: ['conversations'] });
 
-  http.route('PUT', `${base}/conversations/workspaces`, async (request, response, _url, authScope) => {
-    response.setHeader('cache-control', 'no-store');
-    if (authScope !== 'full') {
-      writeJson(response, 403, { success: false, error: '当前凭据不能保存会话目录' });
-      return;
-    }
+  http.route('PUT', `${base}/conversations/workspaces`, noStore(async (request) => {
     try {
       const body = await readJsonBody<Record<string, unknown>>(request);
       const input = parseWorkspaceConversation(body?.conversation);
       if (!body || typeof body.connectionId !== 'string' || !body.connectionId || !input
         || (body.expectedRevision !== null && (typeof body.expectedRevision !== 'string' || !body.expectedRevision))) {
-        writeJson(response, 400, { success: false, code: 'invalid_workspace_input', error: '请提供完整的会话配置及预期版本' });
-        return;
+        return jsonResponse(400, { success: false, code: 'invalid_workspace_input', error: '请提供完整的会话配置及预期版本' });
       }
       const data = await withSandboxWorkspaceScope(snapshots, body.connectionId, async scope => ({
         scope, item: await saveWorkspaceConversation(databaseHost, scope, input, body.expectedRevision as string | null),
       }));
-      writeJson(response, 200, { success: true, data });
-    } catch (error) { writeWorkspaceError(response, error); }
-  }, { summary: 'Save one Console conversation workspace with a revision', tags: ['conversations'] });
+      return jsonResponse(200, { success: true, data });
+    } catch (error) { return workspaceError(error); }
+  }), { summary: 'Save one Console conversation workspace with a revision', tags: ['conversations'] });
 }
 
-function writeWorkspaceError(response: Parameters<typeof writeJson>[0], error: unknown): void {
+function workspaceError(error: unknown): Response {
   if (error instanceof HttpBodyError) {
-    writeJson(response, error.statusCode, { success: false, code: 'invalid_workspace_input', error: error.message });
+    return jsonResponse(error.statusCode, { success: false, code: 'invalid_workspace_input', error: error.message });
   } else if (error instanceof WorkspaceRevisionConflictError) {
-    writeJson(response, 409, { success: false, code: error.code, error: error.message });
+    return jsonResponse(409, { success: false, code: error.code, error: error.message });
   } else if (error instanceof SandboxWorkspaceBindingError || error instanceof WorkspaceStoreUnavailableError) {
-    writeJson(response, 503, { success: false, code: error.code, error: error.message });
+    return jsonResponse(503, { success: false, code: error.code, error: error.message });
   } else {
     // A failed read or uncertain write is not an empty/unavailable store and must not be migrated over.
-    writeJson(response, 503, { success: false, code: 'workspace_store_error', error: '无法确认会话目录操作结果，请重新读取后确认' });
+    return jsonResponse(503, { success: false, code: 'workspace_store_error', error: '无法确认会话目录操作结果，请重新读取后确认' });
   }
 }
 

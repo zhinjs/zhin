@@ -1,6 +1,6 @@
 import { vi } from 'vitest';
 import { createEndpointHarness } from '../../test-utils/endpoint.js';
-import { createHttpHost } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import { LarkEndpoint } from '../src/endpoint.js';
 import { resolveLarkConfig } from '../src/protocol.js';
 import type { EndpointStreamRequest } from 'zhin.js/adapter';

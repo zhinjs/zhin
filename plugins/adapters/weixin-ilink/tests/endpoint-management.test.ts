@@ -1,4 +1,4 @@
-import { createHttpHost } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import { idleIlinkTransport } from './transport-fixture.js';
 import { createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
 import fs from 'node:fs';

@@ -13,10 +13,12 @@ import {
   type GenerationAdmissionGate,
   type SnapshotState,
 } from '@zhin.js/plugin-runtime';
-import { createHttpHost, type HttpHost, type HttpHandler } from '../src/http-host.js';
-import { createHttpHostGroup, listHttpHostAddresses } from '../src/listener-group.js';
+import { type HttpHost, type HttpHandler, type WsConnection } from '../src/http-host.js';
+import { createHttpHost } from '../src/node/server.js';
+import { createHttpHostGroup } from '../src/node/listener-group.js';
+import { listHttpHostAddresses } from '../src/addresses.js';
+import { createResponseStream, jsonResponse } from '@zhin.js/host-http-contract';
 import {
-  requestConsolePrincipal,
   type ConsoleAccessProvider,
   type ConsoleAuditEntry,
   type ConsoleUserPrincipal,
@@ -74,7 +76,7 @@ describe('HttpHost', () => {
     const cert = readFileSync(new URL('./fixtures/localhost-cert.pem', import.meta.url));
     const host = createHttpHost({ host: '127.0.0.1', port: 0, tls: {key, cert} });
     hosts.push(host);
-    host.ws('/secure').onConnection(({socket}) => socket.send('secure'));
+    host.ws('/secure').onConnection((connection) => connection.send('secure'));
     const address = await host.listen();
 
     expect(address).toEqual({
@@ -99,18 +101,18 @@ describe('HttpHost', () => {
     const previousHost = bindGenerationAdmission<HttpHost>(host, previous);
     const nextHost = bindGenerationAdmission<HttpHost>(host, next);
     const wsSeen: string[] = [];
-    previousHost.route('GET', '/generation', (_request, response) => response.end('previous'));
-    previousHost.ws('/generation').onConnection(({ socket }) => {
+    previousHost.route('GET', '/generation', () => new Response('previous'));
+    previousHost.ws('/generation').onConnection((connection) => {
       wsSeen.push('previous');
-      socket.close();
+      connection.close();
     });
     const store = new SnapshotStore(admissionState(previous));
     const { port } = await host.listen();
 
-    nextHost.route('GET', '/generation', (_request, response) => response.end('next'));
-    nextHost.ws('/generation').onConnection(({ socket }) => {
+    nextHost.route('GET', '/generation', () => new Response('next'));
+    nextHost.ws('/generation').onConnection((connection) => {
       wsSeen.push('next');
-      socket.close();
+      connection.close();
     });
     expect(await (await fetch(`http://127.0.0.1:${port}/generation`)).text()).toBe('previous');
     await connectWebSocket(port, '/generation');
@@ -133,15 +135,15 @@ describe('HttpHost', () => {
     const httpGate = new Promise<void>((resolve) => { releaseHttp = resolve; });
     let enteredHttp!: () => void;
     const httpEntered = new Promise<void>((resolve) => { enteredHttp = resolve; });
-    previousHost.route('GET', '/slow', async (_request, response) => {
+    previousHost.route('GET', '/slow', async () => {
       enteredHttp();
       await httpGate;
-      response.end('done');
+      return new Response('done');
     });
-    let ownedSocket!: WebSocket;
-    previousHost.ws('/slow').onConnection(({ socket }) => {
-      ownedSocket = socket;
-      socket.on('message', () => socket.send('previous-owner'));
+    let ownedSocket!: WsConnection;
+    previousHost.ws('/slow').onConnection((connection) => {
+      ownedSocket = connection;
+      connection.onMessage(() => connection.send('previous-owner'));
     });
     const store = new SnapshotStore(admissionState(previous));
     let disposed = false;
@@ -207,14 +209,13 @@ describe('HttpHost', () => {
     const previous = createGenerationAdmissionGate();
     const next = createGenerationAdmissionGate();
     const previousHost = bindGenerationAdmission<HttpHost>(host, previous);
-    let response!: import('node:http').ServerResponse;
+    const response = createResponseStream();
     let started!: () => void;
     const streamStarted = new Promise<void>((resolve) => { started = resolve; });
-    previousHost.route('GET', '/stream', (_request, current) => {
-      response = current;
-      current.writeHead(200, { 'content-type': 'text/event-stream' });
-      current.write('data: ready\n\n');
+    previousHost.route('GET', '/stream', () => {
+      response.write('data: ready\n\n');
       started();
+      return new Response(response.stream, { headers: { 'content-type': 'text/event-stream' } });
     });
     const store = new SnapshotStore(admissionState(previous));
     let disposed = false;
@@ -228,8 +229,8 @@ describe('HttpHost', () => {
 
     store.commit(1, { snapshot: admissionState(next), dispose: () => undefined });
     expect(disposed).toBe(false);
-    response.end();
-    await request;
+    response.close();
+    await (await request).text();
     await vi.waitFor(() => expect(disposed).toBe(true));
     await store.close();
   });
@@ -277,14 +278,12 @@ describe('HttpHost', () => {
   it('routes HTTP GET by exact and prefix paths', async () => {
     const host = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(host);
-    host.route('GET', '/console/api/pages', (_request, response) => {
-      response.writeHead(200, { 'content-type': 'application/json' });
-      response.end('{"pages":[]}');
-    });
-    host.route('GET', '/assets/client/*', (_request, response, url) => {
-      response.writeHead(200, { 'content-type': 'text/plain' });
-      response.end(url.pathname);
-    });
+    host.route('GET', '/console/api/pages', () => new Response('{"pages":[]}', {
+      headers: { 'content-type': 'application/json' },
+    }));
+    host.route('GET', '/assets/client/*', (_request, { url, params }) => new Response(`${url.pathname}|${params['*']}`, {
+      headers: { 'content-type': 'text/plain' },
+    }));
     const { port } = await host.listen();
 
     const pages = await fetch(`http://127.0.0.1:${port}/console/api/pages`);
@@ -293,7 +292,7 @@ describe('HttpHost', () => {
 
     const asset = await fetch(`http://127.0.0.1:${port}/assets/client/demo.js`);
     expect(asset.status).toBe(200);
-    expect(await asset.text()).toBe('/assets/client/demo.js');
+    expect(await asset.text()).toBe('/assets/client/demo.js|demo.js');
 
     const missing = await fetch(`http://127.0.0.1:${port}/missing`);
     expect(missing.status).toBe(404);
@@ -302,10 +301,9 @@ describe('HttpHost', () => {
   it('normalizes trailing slashes when matching routes', async () => {
     const host = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(host);
-    host.route('GET', '/console/api/pages', (_request, response) => {
-      response.writeHead(200, { 'content-type': 'application/json' });
-      response.end('{"pages":[]}');
-    });
+    host.route('GET', '/console/api/pages', () => new Response('{"pages":[]}', {
+      headers: { 'content-type': 'application/json' },
+    }));
     const { port } = await host.listen();
 
     const pages = await fetch(`http://127.0.0.1:${port}/console/api/pages///`);
@@ -315,10 +313,9 @@ describe('HttpHost', () => {
   it('handles paths with long slash runs in linear time (no ReDoS)', async () => {
     const host = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(host);
-    host.route('GET', '/console/api/pages', (_request, response) => {
-      response.writeHead(200, { 'content-type': 'application/json' });
-      response.end('{"pages":[]}');
-    });
+    host.route('GET', '/console/api/pages', () => new Response('{"pages":[]}', {
+      headers: { 'content-type': 'application/json' },
+    }));
     const { port } = await host.listen();
 
     // 中段长串 `/` 不以字符串结尾：旧正则 /\/+$/ 在此呈二次方回溯。
@@ -337,14 +334,8 @@ describe('HttpHost', () => {
       corsOrigins: ['https://example.test'],
     });
     hosts.push(host);
-    host.route('GET', '/api/system/status', (_request, response, _url, scope) => {
-      response.writeHead(200, { 'content-type': 'application/json' });
-      response.end(JSON.stringify({ scope }));
-    });
-    host.route('GET', '/api/auth/setup', (request, response) => {
-      response.writeHead(200, { 'content-type': 'application/json' });
-      response.end(JSON.stringify({ principal: requestConsolePrincipal(request) }));
-    });
+    host.route('GET', '/api/system/status', (_request, { principal }) => jsonResponse(200, { kind: principal?.kind }));
+    host.route('GET', '/api/auth/setup', (_request, { principal }) => jsonResponse(200, { principal }));
     const { port } = await host.listen();
 
     const health = await fetch(`http://127.0.0.1:${port}/pub/health`);
@@ -380,10 +371,10 @@ describe('HttpHost', () => {
     const provider = fakeProvider({ initialized: false });
     host.tokenRegistry.useAccessProvider(provider);
     const opened: string[] = [];
-    host.ws('/sandbox').onConnection((connection) => { opened.push(`sandbox:${connection.principal?.kind}`); connection.socket.close(); });
-    host.ws('/sandbox/bot-2').onConnection((connection) => { opened.push(`sandbox/bot-2:${connection.principal?.kind}`); connection.socket.close(); });
+    host.ws('/sandbox').onConnection((connection) => { opened.push(`sandbox:${connection.principal?.kind}`); connection.close(); });
+    host.ws('/sandbox/bot-2').onConnection((connection) => { opened.push(`sandbox/bot-2:${connection.principal?.kind}`); connection.close(); });
     // A host-authenticated plugin socket is not a Console socket: nobody but an open Host may use it.
-    host.ws('/plugin-socket').onConnection((connection) => { opened.push(`plugin:${connection.principal?.kind}`); connection.socket.close(); });
+    host.ws('/plugin-socket').onConnection((connection) => { opened.push(`plugin:${connection.principal?.kind}`); connection.close(); });
     const { port } = await host.listen();
 
     expect(await wsOutcome(`ws://127.0.0.1:${port}/sandbox`)).toBe('rejected');
@@ -403,7 +394,7 @@ describe('HttpHost', () => {
   it('serves an open Host (no credential configured) on any host-authenticated socket', async () => {
     const host = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(host);
-    host.ws('/plugin-socket').onConnection((connection) => { connection.socket.close(); });
+    host.ws('/plugin-socket').onConnection((connection) => { connection.close(); });
     const { port } = await host.listen();
     expect(await wsOutcome(`ws://127.0.0.1:${port}/plugin-socket`)).toBe('opened');
   });
@@ -412,9 +403,10 @@ describe('HttpHost', () => {
     const host = createHttpHost({ host: '127.0.0.1', port: 0, token: 'host-token' });
     hosts.push(host);
     let connected = false;
-    host.ws('/device/v1', { auth: 'protocol' }).onConnection(({ socket }) => {
+    host.ws('/device/v1', { auth: 'protocol' }).onConnection((connection) => {
       connected = true;
-      socket.close(1000, 'protocol handshake test');
+      expect(connection.principal).toBeUndefined();
+      connection.close(1000, 'protocol handshake test');
     });
     const { port } = await host.listen();
 
@@ -429,13 +421,13 @@ describe('HttpHost', () => {
   it('close() resolves within 1s even with long-lived SSE and WS connections', async () => {
     const host = createHttpHost({ host: '127.0.0.1', port: 0 });
     // Not tracked in `hosts`: this test closes the host itself.
-    host.route('GET', '/api/events', (_request, response) => {
+    host.route('GET', '/api/events', () => {
       // Mimic the Console SSE stream: headers flushed, response never ends.
-      response.writeHead(200, {
-        'content-type': 'text/event-stream; charset=utf-8',
-        'cache-control': 'no-cache',
+      const stream = createResponseStream();
+      stream.write(': connected\n\n');
+      return new Response(stream.stream, {
+        headers: { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-cache' },
       });
-      response.write(': connected\n\n');
     });
     const sandbox = host.ws('/sandbox');
     sandbox.onConnection(() => { /* keep the socket open */ });
@@ -466,10 +458,9 @@ describe('HttpHost', () => {
     const host = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(host);
     const { readJsonBody } = await import('../src/json-body.js');
-    host.route('POST', '/api/echo', async (request, response, _url, scope) => {
+    host.route('POST', '/api/echo', async (request, { principal }) => {
       const body = await readJsonBody<{ message?: string }>(request);
-      response.writeHead(200, { 'content-type': 'application/json' });
-      response.end(JSON.stringify({ scope, message: body?.message ?? null }));
+      return jsonResponse(200, { kind: principal?.kind, message: body?.message ?? null });
     }, { summary: 'Echo JSON', tags: ['echo'] });
     const { port } = await host.listen();
 
@@ -494,7 +485,7 @@ describe('HttpHost', () => {
       body: JSON.stringify({ message: 'hi' }),
     });
     expect(echo.status).toBe(200);
-    expect(await echo.json()).toEqual({ scope: 'full', message: 'hi' });
+    expect(await echo.json()).toEqual({ kind: 'bootstrap', message: 'hi' });
   });
 
   it('returns HttpBodyError status codes for handlers that do not catch them', async () => {
@@ -502,10 +493,9 @@ describe('HttpHost', () => {
     hosts.push(host);
     const { readJsonBody } = await import('../src/json-body.js');
     // 模拟 console-rest-pages / console-api-installer 中未捕获 HttpBodyError 的端点。
-    host.route('POST', '/api/body', async (request, response) => {
+    host.route('POST', '/api/body', async (request) => {
       const body = await readJsonBody(request, { limit: 16 });
-      response.writeHead(200, { 'content-type': 'application/json' });
-      response.end(JSON.stringify({ body: body ?? null }));
+      return jsonResponse(200, { body: body ?? null });
     });
     const { port } = await host.listen();
 
@@ -547,10 +537,9 @@ describe('HttpHost', () => {
     host.tokenRegistry.useAccessProvider(provider);
     const seen: unknown[] = [];
     for (const [method, path] of [['POST', '/api/console/request'], ['GET', '/api/system/status'], ['GET', '/api/secret'], ['POST', '/api/message/send'], ['GET', '/api/auth/me']] as const) {
-      host.route(method, path, (request, response, _url, scope) => {
+      host.route(method, path, (_request, { principal }) => {
         seen.push(path);
-        response.writeHead(200, { 'content-type': 'application/json' });
-        response.end(JSON.stringify({ scope, kind: requestConsolePrincipal(request)?.kind ?? null }));
+        return jsonResponse(200, { kind: principal?.kind ?? null });
       });
     }
     const { port } = await host.listen();
@@ -560,7 +549,7 @@ describe('HttpHost', () => {
 
     expect((await call('/api/system/status', 'full-token')).status).toBe(401);
     expect((await call('/api/console/request', 'full-token', 'POST')).status).toBe(401);
-    expect(await (await call('/api/system/status', 'viewer-session')).json()).toEqual({ scope: 'full', kind: 'user' });
+    expect(await (await call('/api/system/status', 'viewer-session')).json()).toEqual({ kind: 'user' });
     expect((await call('/api/console/request', 'viewer-session', 'POST')).status).toBe(200);
     const unmapped = await call('/api/secret', 'operator-session');
     expect(unmapped.status).toBe(403);
@@ -569,7 +558,7 @@ describe('HttpHost', () => {
     // Adapter-scoped endpoint.operate is not enough for a route without a knowable target.
     expect((await call('/api/message/send', 'scoped-session', 'POST')).status).toBe(403);
     expect((await call('/api/message/send', 'operator-session', 'POST')).status).toBe(200);
-    expect(await (await call('/api/auth/me')).json()).toEqual({ scope: 'full', kind: null });
+    expect(await (await call('/api/auth/me')).json()).toEqual({ kind: null });
     const invalid = await call('/api/system/status', 'invalid-token');
     expect(invalid.status).toBe(401);
     expect(await invalid.json()).toMatchObject({ requestOutcome: 'not-dispatched', code: 'unauthorized' });
@@ -584,10 +573,7 @@ describe('HttpHost', () => {
     const host = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(host);
     host.tokenRegistry.useAccessProvider(fakeProvider({ initialized: false }));
-    host.route('GET', '/api/anything', (request, response) => {
-      response.writeHead(200, { 'content-type': 'application/json' });
-      response.end(JSON.stringify(requestConsolePrincipal(request)));
-    });
+    host.route('GET', '/api/anything', (_request, { principal }) => jsonResponse(200, principal));
     const { port } = await host.listen();
     const response = await fetch(`http://127.0.0.1:${port}/api/anything`);
     expect(response.status).toBe(200);
@@ -597,7 +583,7 @@ describe('HttpHost', () => {
   it('proves only a matched admission rejection was not dispatched and preserves the 503 status', async () => {
     const host = createHttpHost({ host: '127.0.0.1', port: 0 }); hosts.push(host);
     const admission = createGenerationAdmissionGate();
-    const bound = bindGenerationAdmission<HttpHost>(host, admission), handler = vi.fn<HttpHandler>((_request, response) => { response.end('unexpected'); });
+    const bound = bindGenerationAdmission<HttpHost>(host, admission), handler = vi.fn<HttpHandler>(() => new Response('unexpected'));
     bound.route('POST', '/mutation', handler);
     const store = new SnapshotStore(admissionState(admission));
     const { port } = await host.listen();
@@ -613,12 +599,10 @@ describe('HttpHost', () => {
     const host = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(host);
     host.tokenRegistry.useAccessProvider(fakeProvider({ initialized: true }));
-    host.route('POST', '/api/message/send', async (request, response, _url, _scope, principal) => {
-      const chunks: Buffer[] = [];
-      for await (const chunk of request) chunks.push(Buffer.from(chunk));
-      response.writeHead(200, { 'content-type': 'application/json' });
-      response.end(JSON.stringify({ principal, body: JSON.parse(Buffer.concat(chunks).toString()) }));
-    });
+    host.route('POST', '/api/message/send', async (request, { principal }) => jsonResponse(200, {
+      principal: principal?.kind === 'user' ? `user:${principal.userId}` : null,
+      body: await request.json(),
+    }));
     const { port } = await host.listen();
 
     const result = await fetch(`http://127.0.0.1:${port}/api/message/send`, {
@@ -627,7 +611,7 @@ describe('HttpHost', () => {
       body: JSON.stringify({ principalId: 'human:mallory' }),
     });
     expect(await result.json()).toEqual({
-      principal: { principalId: 'user:operator', scope: 'full' },
+      principal: 'user:operator',
       body: { principalId: 'human:mallory' },
     });
   });
@@ -636,7 +620,7 @@ describe('HttpHost', () => {
     const group = createHttpHostGroup([{ host: '127.0.0.1', port: 0, token: 't' }, { host: '127.0.0.1', port: 0, token: 't' }]);
     hosts.push(group as never);
     group.tokenRegistry.useAccessProvider(fakeProvider({ initialized: true }));
-    group.route('GET', '/api/system/status', (_request, response) => { response.end('ok'); });
+    group.route('GET', '/api/system/status', () => new Response('ok'));
     await group.listen();
     for (const address of listHttpHostAddresses(group)) {
       const response = await fetch(`${address.origin}/api/system/status`, { headers: { Authorization: 'Bearer viewer-session' } });

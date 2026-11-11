@@ -8,10 +8,9 @@ import { createScheduleExecutionFixture, createFixtureFileWriter, scheduleFixtur
 
 const state = vi.hoisted(() => ({ port: undefined as unknown, enabled: true }));
 vi.mock('../../../src/instance/console/agent-console.js', () => ({
-  withGenerationAgentConsole: async (_snapshots: unknown, run: (value: unknown) => Promise<void>) => {
-    if (!state.enabled) return false;
-    await run({ assistant: null, scheduleExecutions: state.port });
-    return true;
+  withGenerationAgentConsole: async (_snapshots: unknown, run: (value: unknown) => Promise<unknown>) => {
+    if (!state.enabled) return undefined;
+    return run({ assistant: null, scheduleExecutions: state.port });
   },
 }));
 const NOW = Date.UTC(2026, 10, 2, 12);

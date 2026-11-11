@@ -1,7 +1,6 @@
 /**
  * Bearer auth for A2A HTTP endpoints (reuses MCP mesh-auth timing-safe compare).
  */
-import type { IncomingMessage } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 
 export function timingSafeEqualString(a: string, b: string): boolean {
@@ -12,18 +11,24 @@ export function timingSafeEqualString(a: string, b: string): boolean {
   return timingSafeEqual(bufA, bufB);
 }
 
-export function extractBearerToken(req: IncomingMessage): string {
-  const auth = req.headers.authorization ?? '';
+/** What the auth helpers read from a request: its headers and the peer address. */
+export interface A2aAuthRequest {
+  readonly headers: Headers;
+  readonly remoteAddress?: string;
+}
+
+export function extractBearerToken(req: A2aAuthRequest): string {
+  const auth = req.headers.get('authorization') ?? '';
   return auth.startsWith('Bearer ') ? auth.slice(7) : '';
 }
 
 /** Same loopback test as the MCP Host (duplicated: Hosts do not import each other). */
-export function isLocalhost(req: IncomingMessage): boolean {
-  const addr = req.socket.remoteAddress ?? '';
+export function isLocalhost(req: A2aAuthRequest): boolean {
+  const addr = req.remoteAddress ?? '';
   return addr === '127.0.0.1' || addr === '::1' || addr === '::ffff:127.0.0.1';
 }
 
-export function verifyA2aBearer(req: IncomingMessage, expectedToken: string): boolean {
+export function verifyA2aBearer(req: A2aAuthRequest, expectedToken: string): boolean {
   if (!expectedToken) return false;
   return timingSafeEqualString(expectedToken, extractBearerToken(req));
 }

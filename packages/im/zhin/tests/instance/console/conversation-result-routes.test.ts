@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile, readdir } from 'node:fs/promises';
 import { withTestUsers } from '../utils/console-users.js';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { createHttpHost } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import { SnapshotStore, rootPluginId, type SnapshotState } from '@zhin.js/plugin-runtime';
 import { adapterFeatureId } from '@zhin.js/adapter';
 import { FileJournalStore, PersistentTurnJournal } from '@zhin.js/agent';

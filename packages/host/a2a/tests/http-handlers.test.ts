@@ -1,4 +1,5 @@
 import { createServer, request as httpRequest, type Server } from 'node:http';
+import { createNodeRequest, writeNodeResponse } from '@zhin.js/host-http/node';
 import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
 import { StreamResponse } from '@a2a-js/sdk';
@@ -43,9 +44,12 @@ async function serve(kind: 'rest' | 'jsonrpc', handler: A2ARequestHandler): Prom
   let settle!: (value: void | PromiseLike<void>) => void;
   const handled = new Promise<void>((resolve) => { settle = resolve; });
   const server = createServer((req, res) => {
-    settle(kind === 'rest'
-      ? handleRest(req, res, handler, 'message:stream')
-      : handleJsonRpc(req, res, handler));
+    const abort = new AbortController();
+    res.once('close', () => { if (!res.writableFinished) abort.abort(); });
+    const request = createNodeRequest(req, { url: new URL(req.url ?? '/', 'http://localhost'), signal: abort.signal });
+    settle((kind === 'rest'
+      ? handleRest(request, handler, 'message:stream')
+      : handleJsonRpc(request, handler)).then((response) => writeNodeResponse(res, response)));
   });
   servers.push(server);
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));

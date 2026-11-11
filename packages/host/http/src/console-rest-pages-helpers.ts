@@ -1,7 +1,6 @@
-import type { ServerResponse } from 'node:http';
 import type { HttpHost } from './http-host.js';
 import { HttpBodyError, readJsonBody } from './json-body.js';
-import type { AuthScope } from './token-registry.js';
+import { jsonResponse } from '@zhin.js/host-http-contract';
 import type {
   ConsoleAgentIntrospection,
   ConsoleAgentSessionTree,
@@ -125,7 +124,7 @@ export function registerIntrospectionRoutes(
   ];
 
   for (const { kind, collect, fields } of collectors) {
-    route('GET', `${base}/introspection/${kind}`, async (_request, response, url) => {
+    route('GET', `${base}/introspection/${kind}`, async (_request, { url }) => {
       const lease = kind === 'endpoints' ? null : ctx.acquireAgentRuntime?.() ?? null;
       try {
         const introspection = lease?.value.introspection;
@@ -146,12 +145,12 @@ export function registerIntrospectionRoutes(
             ? 'Endpoints 数据源未接线（ctx.getEndpoints 缺失）'
             : 'Agent runtime 未装配（basic/cli 未接线 acquireAgentRuntime）'
           : undefined);
-        writeJson(response, 200, {
+        return jsonResponse(200, {
           success: true,
           data: { ...slice, filter, note: degradedNote },
         });
       } catch (err) {
-        writeJson(response, 503, {
+        return jsonResponse(503, {
           success: false,
           data: { items: [], page: 1, pageSize: 0, total: 0, totalPages: 0 },
           error: err instanceof Error ? err.message : String(err),
@@ -163,27 +162,25 @@ export function registerIntrospectionRoutes(
   }
 
   let activeComponentPreviews = 0;
-  route('POST', `${base}/introspection/components/render`, async (request, response, _url, authScope) => {
-    if (!requireWriteScope(response, ctx, authScope)) return;
+  route('POST', `${base}/introspection/components/render`, async (request) => {
+    const denied = requireWriteScope(ctx);
+    if (denied) return denied;
     const body = (await readJsonBody<Record<string, unknown>>(request)) ?? {};
     const requester = typeof body.requester === 'string' ? body.requester.trim() : '';
     const name = typeof body.name === 'string' ? body.name.trim() : '';
     if (!requester || !name || requester.length > 256 || name.length > 160) {
-      writeJson(response, 400, { success: false, error: '请提供有效的 requester 与 component name' });
-      return;
+      return jsonResponse(400, { success: false, error: '请提供有效的 requester 与 component name' });
     }
     const maxConcurrent = clampPositiveInt(options.componentPreviewMaxConcurrent, 2, 8);
     if (activeComponentPreviews >= maxConcurrent) {
-      writeJson(response, 503, { success: false, error: 'Component preview 正忙，请稍后重试' });
-      return;
+      return jsonResponse(503, { success: false, error: 'Component preview 正忙，请稍后重试' });
     }
     const lease = ctx.acquireAgentRuntime?.();
     const render = lease?.value.introspection?.renderComponent;
     const previewDelivery = lease?.value.introspection?.previewComponentDelivery;
     if (!lease || !render) {
       lease?.release();
-      writeJson(response, 503, { success: false, error: 'Component Runtime 未就绪' });
-      return;
+      return jsonResponse(503, { success: false, error: 'Component Runtime 未就绪' });
     }
     const controller = new AbortController();
     const timeoutMs = clampPositiveInt(options.componentPreviewTimeoutMs, 5_000, 30_000);
@@ -214,12 +211,12 @@ export function registerIntrospectionRoutes(
         controller.signal,
       );
       assertPreviewOutput(preview, options.componentPreviewMaxBytes ?? 256 * 1024);
-      writeJson(response, 200, { success: true, data: { requester, name, ...preview } });
+      return jsonResponse(200, { success: true, data: { requester, name, ...preview } });
     } catch (error) {
       const status = error instanceof ComponentPreviewTimeoutError
         ? 408
         : error instanceof ComponentPreviewLimitError ? 413 : 422;
-      writeJson(response, status, {
+      return jsonResponse(status, {
         success: false,
         error: error instanceof Error ? error.message : String(error),
       });
@@ -311,77 +308,68 @@ export function registerAgentSessionRoutes(
     }
     return { tree, release: () => lease.release() };
   };
-  const unavailable = (response: ServerResponse) => {
-    writeJson(response, 503, {
+  const unavailable = (headers?: HeadersInit) => {
+    return jsonResponse(503, {
       success: false,
       error: 'Agent session tree runtime 未就绪（新 Runtime 需经 acquireAgentRuntime 装配 sessionTree）',
-    });
+    }, headers);
   };
 
   // HttpHost 无 `:param` 路由，用前缀路由匹配 `<sessionKey>/tree|message|leaf`。
-  route('GET', `${base}/agent/sessions/*`, async (_request, response, url) => {
+  route('GET', `${base}/agent/sessions/*`, async (_request, { url }) => {
     const messageAction = parseSessionAction(url.pathname, prefix, 'message');
-    if (messageAction) response.setHeader('Cache-Control', 'no-store');
+    const headers: HeadersInit | undefined = messageAction ? { 'cache-control': 'no-store' } : undefined;
+    const reply = (status: number, body: unknown) => jsonResponse(status, body, headers);
     const parsed = messageAction ?? parseSessionAction(url.pathname, prefix, 'tree');
     if (!parsed) {
-      writeJson(response, 404, { success: false, error: 'Not found' });
-      return;
+      return reply(404, { success: false, error: 'Not found' });
     }
     const messageId = Number(url.searchParams.get('messageId'));
     const expectedSessionId = url.searchParams.get('sessionId');
     if (messageAction && (!Number.isSafeInteger(messageId) || messageId < 1 || !expectedSessionId)) {
-      writeJson(response, 400, { success: false, error: '需要 sessionId 和正安全整数 messageId' });
-      return;
+      return reply(400, { success: false, error: '需要 sessionId 和正安全整数 messageId' });
     }
     const lease = acquireSessionTree();
     if (!lease) {
-      unavailable(response);
-      return;
+      return unavailable(headers);
     }
     const runtime = lease.tree;
     try {
       if (messageAction && !runtime.readBranchMessage) {
-        writeJson(response, 501, { success: false, error: '当前 Agent runtime 不支持读取完整消息' });
-        return;
+        return reply(501, { success: false, error: '当前 Agent runtime 不支持读取完整消息' });
       }
       const sessionId = await runtime.resolveActiveSessionId(parsed.sessionKey);
       if (messageAction) {
         if (!sessionId) {
-          writeJson(response, 404, { success: false, error: '未找到活跃会话' });
-          return;
+          return reply(404, { success: false, error: '未找到活跃会话' });
         }
         if (sessionId !== expectedSessionId) {
-          writeJson(response, 409, { success: false, error: '会话已变化，请重新读取会话列表' });
-          return;
+          return reply(409, { success: false, error: '会话已变化，请重新读取会话列表' });
         }
         const text = await runtime.readBranchMessage!(sessionId, messageId);
         if (text === null) {
-          writeJson(response, 404, { success: false, error: '未找到此会话的用户消息' });
-          return;
+          return reply(404, { success: false, error: '未找到此会话的用户消息' });
         }
-        writeJson(response, 200, { success: true, data: { messageId, text } });
-        return;
+        return reply(200, { success: true, data: { messageId, text } });
       }
       if (!sessionId) {
         if (!isRuntimeImSessionKey(parsed.sessionKey)) {
-          writeJson(response, 404, {
+          return reply(404, {
             success: false,
             error: `未找到会话：${parsed.sessionKey}`,
           });
-          return;
         }
         const knownConversation = await ctx.isKnownConversationSession?.(parsed.sessionKey);
         if (knownConversation === false) {
-          writeJson(response, 404, {
+          return reply(404, {
             success: false,
             error: `未找到会话：${parsed.sessionKey}`,
           });
-          return;
         }
         // 渠道会话与 Agent 会话的生命周期不同：用户可以先在 Console
         // 选中一个真实渠道会话，而该会话尚未触发过 Agent。树查询是只读操作，
         // 因而将这种正常状态返回为可渲染空态，而不是误报资源不存在。
-        writeJson(response, 200, {
+        return reply(200, {
           success: true,
           data: {
             state: 'not_started',
@@ -391,12 +379,11 @@ export function registerAgentSessionRoutes(
             points: [],
           },
         });
-        return;
       }
 
       const activeLeafMessageId = await runtime.getActiveLeafMessageId(sessionId);
       const points = await runtime.listBranchPoints(sessionId);
-      writeJson(response, 200, {
+      return reply(200, {
         success: true,
         data: {
           state: 'active',
@@ -411,20 +398,19 @@ export function registerAgentSessionRoutes(
     }
   }, { summary: 'Get agent session tree or message', tags: ['console', 'agent'] });
 
-  route('POST', `${base}/agent/sessions/*`, async (request, response, url, authScope) => {
+  route('POST', `${base}/agent/sessions/*`, async (request, { url }) => {
     const parsed = parseSessionAction(url.pathname, prefix, 'leaf');
     if (!parsed) {
-      writeJson(response, 404, { success: false, error: 'Not found' });
-      return;
+      return jsonResponse(404, { success: false, error: 'Not found' });
     }
-    if (!requireWriteScope(response, ctx, authScope)) return;
+    const denied = requireWriteScope(ctx);
+    if (denied) return denied;
     let body: Record<string, unknown>;
     try {
       body = (await readJsonBody(request) ?? {}) as Record<string, unknown>;
     } catch (error) {
       if (error instanceof HttpBodyError) {
-        writeJson(response, error.statusCode, { success: false, error: error.message });
-        return;
+        return jsonResponse(error.statusCode, { success: false, error: error.message });
       }
       throw error;
     }
@@ -435,42 +421,37 @@ export function registerAgentSessionRoutes(
     if (messageIdRaw != null && messageIdRaw !== '') {
       const value = Number(messageIdRaw);
       if (!Number.isFinite(value) || value < 1) {
-        writeJson(response, 400, { success: false, error: 'messageId 须为正整数' });
-        return;
+        return jsonResponse(400, { success: false, error: 'messageId 须为正整数' });
       }
       messageId = value;
     } else if (indexRaw != null && indexRaw !== '') {
       const value = Number(indexRaw);
       if (!Number.isFinite(value) || value < 1) {
-        writeJson(response, 400, { success: false, error: 'index 须为正整数' });
-        return;
+        return jsonResponse(400, { success: false, error: 'index 须为正整数' });
       }
       branchIndex = value;
     } else {
-      writeJson(response, 400, { success: false, error: '需要 messageId 或 index 之一' });
-      return;
+      return jsonResponse(400, { success: false, error: '需要 messageId 或 index 之一' });
     }
 
     const lease = acquireSessionTree();
     if (!lease) {
-      unavailable(response);
-      return;
+      return unavailable();
     }
     const runtime = lease.tree;
     try {
       const sessionId = await runtime.resolveActiveSessionId(parsed.sessionKey);
       if (!sessionId) {
-        writeJson(response, 404, {
+        return jsonResponse(404, {
           success: false,
           error: `未找到活跃会话：${parsed.sessionKey}`,
         });
-        return;
       }
 
       if (branchIndex !== undefined) {
         const result = await runtime.jumpToBranchIndex(sessionId, branchIndex);
         const activeLeafMessageId = await runtime.getActiveLeafMessageId(sessionId);
-        writeJson(response, result.ok ? 200 : 400, {
+        return jsonResponse(result.ok ? 200 : 400, {
           success: result.ok,
           message: result.message,
           data: {
@@ -479,12 +460,11 @@ export function registerAgentSessionRoutes(
             activeLeafMessageId,
           },
         });
-        return;
       }
 
       const ok = await runtime.switchActiveLeaf(sessionId, messageId!);
       const activeLeafMessageId = await runtime.getActiveLeafMessageId(sessionId);
-      writeJson(response, ok ? 200 : 400, {
+      return jsonResponse(ok ? 200 : 400, {
         success: ok,
         message: ok ? `已切换 active leaf 至消息 #${messageId}` : '切换失败',
         data: {
@@ -576,18 +556,13 @@ export function parsePositiveInt(raw: string | null, fallback: number): number {
 // helpers
 // ---------------------------------------------------------------------------
 
-/** 写操作门禁：demo 部署（ctx.fullScope=false）或 demo token 均 403。 */
-export function requireWriteScope(
-  response: ServerResponse,
-  ctx: ConsoleRestCtx,
-  authScope: AuthScope,
-): boolean {
-  if (ctx.fullScope && authScope === 'full') return true;
-  writeJson(response, 403, {
+/** 写操作门禁：demo 部署（ctx.fullScope=false）返回 403 响应，放行时返回 undefined。 */
+export function requireWriteScope(ctx: ConsoleRestCtx): Response | undefined {
+  if (ctx.fullScope) return undefined;
+  return jsonResponse(403, {
     success: false,
     error: 'Demo scope: 只读访问，写操作被拒绝',
   });
-  return false;
 }
 
 export function decodePathParam(raw: string): string {
@@ -607,13 +582,4 @@ export function trimTrailingSlashes(s: string): string {
 export function normalizeBase(value: string): string {
   if (!value.startsWith('/')) return `/${value}`;
   return trimTrailingSlashes(value) || '/api';
-}
-
-export function writeJson(response: ServerResponse, status: number, body: unknown): void {
-  const payload = JSON.stringify(body);
-  response.writeHead(status, {
-    'content-type': 'application/json; charset=utf-8',
-    'content-length': Buffer.byteLength(payload),
-  });
-  response.end(payload);
 }

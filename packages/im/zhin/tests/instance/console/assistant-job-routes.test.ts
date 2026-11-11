@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { withTestUsers } from '../utils/console-users.js';
-import { createHttpHost } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import {
   parseAssistantJobInput,
   registerAssistantJobRoutes,
@@ -8,10 +8,9 @@ import {
 
 const state = vi.hoisted(() => ({ assistant: undefined as unknown, generation: true }));
 vi.mock('../../../src/instance/console/agent-console.js', () => ({
-  withGenerationAgentConsole: async (_snapshots: unknown, run: (value: unknown) => Promise<void>) => {
-    if (!state.generation) return false;
-    await run({ assistant: state.assistant });
-    return true;
+  withGenerationAgentConsole: async (_snapshots: unknown, run: (value: unknown) => Promise<unknown>) => {
+    if (!state.generation) return undefined;
+    return run({ assistant: state.assistant });
   },
 }));
 

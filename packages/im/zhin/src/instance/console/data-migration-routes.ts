@@ -1,9 +1,8 @@
 import path from 'node:path';
-import type { IncomingMessage, ServerResponse } from 'node:http';
-import { extractBearerToken, HttpBodyError, isUserPrincipal, readJsonBody, requestConsolePrincipal, type HttpHost } from '@zhin.js/host-http';
+import { extractBearerToken, HttpBodyError, isUserPrincipal, jsonResponse, readJsonBody, type HttpHost, type RouteContext } from '@zhin.js/host-http';
+import { withNoStore } from './no-store.js';
 import { DataMigrationError, normalizeDeliveryTarget, type PluginId, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import { DataMigrationController, DataMigrationPlanStore } from '@zhin.js/runtime';
-import { writeJson } from '@zhin.js/gateway/http';
 
 export interface DataMigrationRouteOptions {
   readonly http: HttpHost;
@@ -13,9 +12,8 @@ export interface DataMigrationRouteOptions {
 }
 
 interface MigrationHttpOperation {
-  readonly request: IncomingMessage;
-  readonly response: ServerResponse;
-  readonly scope: string;
+  readonly request: Request;
+  readonly context: RouteContext;
   readonly run: (service: DataMigrationController, signal: AbortSignal) => Promise<unknown>;
 }
 
@@ -25,31 +23,32 @@ export function registerDataMigrationRoutes(options: DataMigrationRouteOptions):
   const controller = snapshots ? new DataMigrationController({ snapshots,
     store: new DataMigrationPlanStore({ directory: path.join(options.projectRoot, 'data', 'migration-plans') }),
   }) : undefined;
-  const serve = async ({ request, response, scope, run }: MigrationHttpOperation) => {
-    response.setHeader('cache-control', 'no-store');
-    const explicit = isUserPrincipal(requestConsolePrincipal(request))
-      || http.tokenRegistry.resolve(extractBearerToken(request.headers.authorization, null)) === 'full';
-    if (scope !== 'full' || !explicit) {
-      writeJson(response, 401, { success: false, code: 'forbidden', error: '需要管理员凭据' });
-      return;
+  const serve = async (operation: MigrationHttpOperation): Promise<Response> => withNoStore(await execute(operation));
+  const execute = async ({ request, context, run }: MigrationHttpOperation): Promise<Response> => {
+    const explicit = isUserPrincipal(context.principal)
+      || http.tokenRegistry.resolve(extractBearerToken(request.headers.get('authorization') ?? undefined, null)) === 'full';
+    if (!explicit) {
+      return jsonResponse(401, { success: false, code: 'forbidden', error: '需要管理员凭据' });
     }
     if (!controller) {
-      writeJson(response, 503, { success: false, code: 'unavailable', error: '迁移运行时尚未就绪' }); return;
+      return jsonResponse(503, { success: false, code: 'unavailable', error: '迁移运行时尚未就绪' });
     }
     const cancellation = new AbortController();
-    const disconnect = () => { if (!response.writableEnded) cancellation.abort(new Error('Migration request disconnected')); };
-    response.on('close', disconnect);
+    const disconnect = () => cancellation.abort(new Error('Migration request disconnected'));
+    if (request.signal.aborted) disconnect();
+    else request.signal.addEventListener('abort', disconnect, { once: true });
     try {
       const data = await run(controller, cancellation.signal);
-      writeJson(response, 200, { success: true, data });
+      return jsonResponse(200, { success: true, data });
     } catch (error) {
       const failure = error instanceof DataMigrationError ? error
         : error instanceof HttpBodyError ? new DataMigrationError('invalid_input', '请求体无效或过大') : undefined;
       const status = failure ? statusFor(failure.code) : 500;
-      writeJson(response, status, { success: false, code: failure?.code ?? 'failed', error: failure?.message ?? '迁移操作失败' });
-    } finally { response.off('close', disconnect); }
+      return jsonResponse(status, { success: false, code: failure?.code ?? 'failed', error: failure?.message ?? '迁移操作失败' });
+    } finally { request.signal.removeEventListener('abort', disconnect); }
   };
-  http.route('GET', `${base}/data-migrations`, (request, response, url, scope) => serve({ request, response, scope, run: async (service, signal) => {
+  http.route('GET', `${base}/data-migrations`, (request, context) => serve({ request, context, run: async (service, signal) => {
+    const { url } = context;
     const planId = url.searchParams.get('planId');
     const owner = url.searchParams.get('owner');
     if ([...url.searchParams.keys()].some(key => !['planId', 'owner'].includes(key)) || planId && owner
@@ -58,7 +57,7 @@ export function registerDataMigrationRoutes(options: DataMigrationRouteOptions):
     if (owner !== null) return service.preview({ owner: nonempty(owner) as PluginId, signal });
     return service.listProviders({ signal });
   } }), { summary: 'Preview historical data or read a migration plan', tags: ['console', 'data-migration'] });
-  http.route('POST', `${base}/data-migrations/commands`, (request, response, _url, scope) => serve({ request, response, scope, run: async (service, signal) => {
+  http.route('POST', `${base}/data-migrations/commands`, (request, context) => serve({ request, context, run: async (service, signal) => {
     const body = await readJsonBody<unknown>(request);
     if (!body || typeof body !== 'object' || Array.isArray(body)) invalid();
     const input = body as Record<string, unknown>;

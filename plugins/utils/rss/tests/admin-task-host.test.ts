@@ -4,7 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Adapter, adapterFeatureId, AdapterIndex, createEndpointSpecification, defineAdapter, endpointSpec, endpointEventGatewayToken } from '../../../../packages/im/adapter/src/index.js';
-import { createHttpHost } from '../../../../packages/host/http/src/index.js';
+import { createHttpHost } from '../../../../packages/host/http/src/node/index.js';
 import { childPluginId, createCapabilitySlot, createSnapshotView, PluginStateStore, pluginTaskProviderToken, rootPluginId,
   SnapshotStore, type SnapshotState } from '../../../../packages/im/plugin-runtime/src/index.js';
 import { registerPluginTaskRoutes } from '../../../../packages/im/zhin/src/instance/console/plugin-task-routes.js';

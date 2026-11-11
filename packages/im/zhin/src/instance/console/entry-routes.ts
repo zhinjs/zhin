@@ -1,6 +1,6 @@
+import { jsonResponse } from '@zhin.js/host-http';
 import type { HttpHost } from '@zhin.js/host-http';
 import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
-import { writeJson } from '@zhin.js/gateway/http';
 import { buildConsoleEntriesBody, listPages, requestConsoleAccess } from './entry-projection.js';
 
 export interface RegisterConsoleEntryRoutesOptions {
@@ -10,18 +10,15 @@ export interface RegisterConsoleEntryRoutesOptions {
 
 export function registerConsoleEntryRoutes(options: RegisterConsoleEntryRoutesOptions): void {
   const { http, consoleRuntime } = options;
-  http.route('GET', '/entries', async (request, response, url) => {
+  http.route('GET', '/entries', async (request, context) => {
     try {
-      const rawLocale =
-        url?.searchParams.get('locale') ??
-        new URL(request.url ?? '/', 'http://console.local').searchParams.get('locale') ??
-        undefined;
+      const rawLocale = context.url.searchParams.get('locale') ?? undefined;
       const locale = rawLocale && rawLocale.trim() ? rawLocale.trim() : undefined;
-      const pages = await listPages(consoleRuntime, requestConsoleAccess(http, request, url), { locale });
+      const pages = await listPages(consoleRuntime, requestConsoleAccess(http, request, context), { locale });
       // Entries depend on the caller's token, so they must never be cached or shared.
-      writeJson(response, 200, buildConsoleEntriesBody(pages, undefined, { locale }), { 'cache-control': 'no-store' });
+      return jsonResponse(200, buildConsoleEntriesBody(pages, undefined, { locale }), { 'cache-control': 'no-store' });
     } catch (error) {
-      writeJson(response, 503, {
+      return jsonResponse(503, {
         success: false,
         error: error instanceof Error ? error.message : String(error),
       });

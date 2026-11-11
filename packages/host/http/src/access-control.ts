@@ -1,4 +1,3 @@
-import type { IncomingMessage } from 'node:http';
 import {
   CONSOLE_PERMISSION_LIST,
   CONSOLE_WRITE_PERMISSIONS,
@@ -65,18 +64,6 @@ export interface ConsoleAccessProvider {
   audit?(entry: ConsoleAuditEntry): void;
 }
 
-const principals = new WeakMap<IncomingMessage, ConsolePrincipal>();
-
-/** @internal Set by the HTTP Host after authentication. */
-export function bindRequestPrincipal(request: IncomingMessage, principal: ConsolePrincipal): void {
-  principals.set(request, principal);
-}
-
-/** The authenticated Console principal of a request, if the Host resolved one. */
-export function requestConsolePrincipal(request: IncomingMessage): ConsolePrincipal | undefined {
-  return principals.get(request);
-}
-
 export function isUserPrincipal(principal: ConsolePrincipal | undefined): principal is ConsoleUserPrincipal {
   return principal?.kind === 'user' || principal?.kind === 'api-token';
 }
@@ -87,10 +74,14 @@ export function auditActor(principal: ConsolePrincipal | undefined): string {
   return principal.kind === 'user' ? `user:${principal.userId}` : `api-token:${principal.credentialId}`;
 }
 
-export function requestMeta(request: IncomingMessage): ConsoleRequestMeta {
-  const agent = request.headers?.['user-agent'];
+/** Audit/session metadata of a request: peer address and a bounded user agent. */
+export function requestMeta(
+  request: { readonly headers: Headers },
+  remoteAddress?: string,
+): ConsoleRequestMeta {
+  const agent = request.headers.get('user-agent');
   return Object.freeze({
-    ...(request.socket?.remoteAddress ? { ip: request.socket.remoteAddress } : {}),
+    ...(remoteAddress ? { ip: remoteAddress } : {}),
     ...(typeof agent === 'string' ? { userAgent: agent.slice(0, 256) } : {}),
   });
 }

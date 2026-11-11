@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import { createHttpHost } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import { installRuntimeMcp, type RuntimeMcpTool } from '../src/runtime.js';
 
 const hosts: Array<ReturnType<typeof createHttpHost>> = [];

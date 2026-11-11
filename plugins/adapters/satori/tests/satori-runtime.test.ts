@@ -4,7 +4,8 @@ import { describe, expect, it, vi, afterEach } from 'vitest';
 import { listEndpointManagementCapabilities } from 'zhin.js/adapter';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import type { OutboundMessageService } from '@zhin.js/core/runtime';
-import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
+import { httpHostToken } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import defineSatoriAdapter from '../adapters/satori/index.js';
 import {
   SatoriWebhookEndpoint,

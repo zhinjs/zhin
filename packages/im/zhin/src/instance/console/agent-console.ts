@@ -146,21 +146,21 @@ export function acquireGenerationAgentConsole(snapshots?: SnapshotReader): {
   }
 }
 
-export async function withGenerationAgentConsole(
+/** Runs `operation` on the request generation's Agent Console; `undefined` when there is none. */
+export async function withGenerationAgentConsole<T>(
   snapshots: SnapshotReader | undefined,
-  operation: (value: AgentConsolePort) => Promise<void>,
-): Promise<boolean> {
+  operation: (value: AgentConsolePort) => Promise<T>,
+): Promise<T | undefined> {
   if (agentModule === undefined) {
     await getAgentConsoleModule();
   }
   const lease = acquireGenerationAgentConsole(snapshots);
   if (!lease?.value) {
     lease?.release();
-    return false;
+    return undefined;
   }
   try {
-    await operation(lease.value);
-    return true;
+    return await operation(lease.value);
   } finally {
     lease.release();
   }

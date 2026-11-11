@@ -1,4 +1,4 @@
-import { createHttpHost, type ProcessHttpHost } from '@zhin.js/host-http';
+import { createHttpHost, type ProcessHttpHost } from '@zhin.js/host-http/node';
 import { WebSocket } from 'ws';
 import {
   installConsoleTerminal,

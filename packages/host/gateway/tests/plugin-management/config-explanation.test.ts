@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createConfigDocument, RootRuntime, NodePackageResolver, primaryConfigToken, type ModuleRuntime } from '@zhin.js/runtime';
 import { definePlugin, rootPluginId, childPluginId } from '@zhin.js/plugin-runtime';
-import { dispatchRuntimeConsoleRpc, pickRpcReply, createHttpHost, readJsonBody, requestConsolePrincipal } from '@zhin.js/host-http';
+import { dispatchRuntimeConsoleRpc, jsonResponse, pickRpcReply, readJsonBody } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import { CONFIG_RPC, consoleRpcPermission, type ConsoleConfigExplanation } from '@zhin.js/console-protocol';
 import { withTestUsers } from '../utils/console-users.js';
 import { PluginManagementWorkflow } from '../../src/plugin-management/workflow.js';
@@ -175,11 +176,10 @@ describe('metadata-only config explanations through the actual Runtime and file 
   it('uses the real authenticated HTTP/RPC principal and never enters the authority for viewers or invalid credentials', async () => {
     const f = await fixture(simple), explain = vi.spyOn(f.workflow, 'explainConfiguration');
     const host = withTestUsers(createHttpHost({ host: '127.0.0.1', port: 0 }), { 'synthetic-full-token': 'owner', 'synthetic-demo-token': 'viewer' });
-    host.route('POST', '/api/console/request', async (request, response, _url, scope) => {
+    host.route('POST', '/api/console/request', async (request, { principal }) => {
       const message = await readJsonBody<Record<string, unknown>>(request) ?? {};
-      const principal = requestConsolePrincipal(request);
-      const replies = await dispatchRuntimeConsoleRpc(message, { authScope: scope, ...(principal ? { principal } : {}), listPages: async () => [], pluginManagement: f.workflow });
-      response.writeHead(200, { 'content-type': 'application/json' }); response.end(JSON.stringify(pickRpcReply(message, replies)));
+      const replies = await dispatchRuntimeConsoleRpc(message, { authScope: 'full', ...(principal ? { principal } : {}), listPages: async () => [], pluginManagement: f.workflow });
+      return jsonResponse(200, pickRpcReply(message, replies));
     });
     const { port } = await host.listen();
     const message = { type: CONFIG_RPC.EXPLAIN, instanceKey: 'demo', expectedRevision: (await f.document.read()).revision, requestId: 7 };

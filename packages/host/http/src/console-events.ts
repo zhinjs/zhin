@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { ServerResponse } from 'node:http';
+import type { HttpResponseStream } from '@zhin.js/host-http-contract';
 import type {
   ConsoleEventEnvelope,
   ConsoleEventHistoryPage,
@@ -11,9 +11,13 @@ import { createToken } from '@zhin.js/plugin-runtime';
 
 /**
  * Console 实时事件枢纽（Plugin Runtime Host 的 `/api/events` SSE 事件源）。
- * 单进程内 fan-out：`publish` 向所有已订阅的 SSE response 写帧；
+ * 单进程内 fan-out：`publish` 向所有已订阅的 SSE 响应流写帧；
  * write 失败或连接断开自动摘除订阅。
  */
+
+/** The SSE response body a subscriber reads from (`createResponseStream()`). */
+export type ConsoleEventSink = Pick<HttpResponseStream, 'write' | 'onDrain' | 'onClose' | 'error'>;
+
 export interface ConsoleEventSubscriptionOptions {
   readonly runtimeId?: string;
   readonly after?: number;
@@ -31,7 +35,7 @@ export interface ConsoleEventHub {
   /** In-process delivery for trusted Host bridges such as Device Protocol. */
   listen(listener: (event: ConsoleEventEnvelope) => void): () => void;
   /** Atomically replay the resumable suffix, then join live fan-out. */
-  subscribe(response: ServerResponse, options?: ConsoleEventSubscriptionOptions): () => void;
+  subscribe(sink: ConsoleEventSink, options?: ConsoleEventSubscriptionOptions): () => void;
   readonly runtimeId: string;
   readonly subscriberCount: number;
 }
@@ -74,32 +78,33 @@ export function createConsoleEventHub(options: ConsoleEventHubOptions = {}): Con
    * `null` while a subscriber is live. During replay catch-up it holds the frames
    * (replay suffix, then live events) still waiting for the socket to drain.
    */
-  const subscribers = new Map<ServerResponse, JournalEntry[] | null>();
+  const subscribers = new Map<ConsoleEventSink, JournalEntry[] | null>();
   const listeners = new Set<(event: ConsoleEventEnvelope) => void>();
 
-  const remove = (response: ServerResponse): void => {
+  const remove = (response: ConsoleEventSink): void => {
     subscribers.delete(response);
   };
 
-  const drop = (response: ServerResponse): void => {
+  const drop = (response: ConsoleEventSink): void => {
     remove(response);
-    response.destroy(new Error('Console event subscriber backpressure limit reached'));
+    response.error(new Error('Console event subscriber backpressure limit reached'));
   };
 
-  /** Returns false when the writable asks the producer to wait for `drain`. */
-  const write = (response: ServerResponse, entry: JournalEntry): boolean =>
-    response.write(entry.frame, (error) => {
-      if (error) remove(response);
-    });
+  /** Returns false when the consumer asks the producer to wait for drain. */
+  const write = (response: ConsoleEventSink, entry: JournalEntry): boolean =>
+    response.write(entry.frame);
 
   /** Write queued frames until the socket pushes back again or the queue is empty. */
-  const flush = (response: ServerResponse): void => {
+  const flush = (response: ConsoleEventSink): void => {
     const pending = subscribers.get(response);
     if (!pending) return;
     try {
       while (pending.length > 0) {
         if (!write(response, pending.shift()!)) {
-          response.once('drain', () => flush(response));
+          const stop = response.onDrain(() => {
+            stop();
+            flush(response);
+          });
           return;
         }
       }
@@ -109,7 +114,7 @@ export function createConsoleEventHub(options: ConsoleEventHubOptions = {}): Con
     }
   };
 
-  const deliver = (response: ServerResponse, entry: JournalEntry): void => {
+  const deliver = (response: ConsoleEventSink, entry: JournalEntry): void => {
     const pending = subscribers.get(response);
     if (pending === undefined) return;
     if (pending === null) {
@@ -214,9 +219,8 @@ export function createConsoleEventHub(options: ConsoleEventHubOptions = {}): Con
       // Backpressure during replay is expected for a large suffix: the remaining frames
       // (and any event published meanwhile) wait in order for the socket to drain.
       subscribers.set(response, journal.filter((entry) => entry.event.eventId > after));
+      response.onClose(() => remove(response));
       flush(response);
-      response.once('close', () => remove(response));
-      response.once('error', () => remove(response));
       return () => remove(response);
     },
   };

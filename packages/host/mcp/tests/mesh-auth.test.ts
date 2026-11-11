@@ -2,29 +2,21 @@
  * L4 MCP Bearer auth contract.
  */
 import { describe, it, expect } from 'vitest';
-import type { IncomingMessage } from 'node:http';
-import { Socket } from 'node:net';
 import {
   mcpAuthRequired,
   verifyMcpBearer,
+  type McpAuthRequest,
 } from '../src/mesh-auth.js';
 
 function mockReq(opts: {
   authorization?: string;
   host?: string;
   remoteAddress?: string;
-}): IncomingMessage {
-  const socket = new Socket();
-  if (opts.remoteAddress) {
-    Object.defineProperty(socket, 'remoteAddress', { value: opts.remoteAddress });
-  }
-  return {
-    headers: {
-      authorization: opts.authorization,
-      host: opts.host,
-    },
-    socket,
-  } as IncomingMessage;
+}): McpAuthRequest {
+  const headers = new Headers();
+  if (opts.authorization) headers.set('authorization', opts.authorization);
+  if (opts.host) headers.set('host', opts.host);
+  return { headers, ...(opts.remoteAddress ? { remoteAddress: opts.remoteAddress } : {}) };
 }
 
 describe('MCP auth', () => {

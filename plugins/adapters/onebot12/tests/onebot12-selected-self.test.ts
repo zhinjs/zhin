@@ -1,6 +1,7 @@
 import WebSocket, { WebSocketServer } from 'ws';
 import { describe, expect, it, vi } from 'vitest';
-import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
+import { httpHostToken } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import { createAdapterHarness, createTestEndpointEventGateway } from '../../test-utils/endpoint.js';
 import definition from '../adapters/onebot12/index.js';
 import { Onebot12Client } from '../src/client.js';

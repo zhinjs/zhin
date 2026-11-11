@@ -3,7 +3,7 @@ import { withTestUsers } from '../utils/console-users.js';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AdapterIndex, Adapter, endpointSpec, createEndpointSpecification, type Endpoint, adapterFeatureId, defineAdapter, endpointEventGatewayToken } from '@zhin.js/adapter';
-import { createHttpHost } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import { createCapabilitySlot, createSnapshotView, SnapshotStore, rootPluginId, childPluginId, type PluginId, type PluginNodeSnapshot, type SnapshotState } from '@zhin.js/plugin-runtime';
 import { createDatabaseHost } from '@zhin.js/core/runtime';
 import { registerWorkspaceConversationRoutes } from '../../../src/instance/console/workspace-conversation-routes.js';

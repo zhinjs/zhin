@@ -1,4 +1,5 @@
-import { createHttpHost, type HttpHost } from '@zhin.js/host-http';
+import { type HttpHost } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import { withTestUsers } from '../utils/console-users.js';
 import type { RuntimeMessageDiagnostic, RuntimeMessageDiagnosticsReader } from '@zhin.js/core/runtime';
 import { registerMessageDiagnosticRoutes } from '../../../src/instance/console/message-diagnostic-routes.js';

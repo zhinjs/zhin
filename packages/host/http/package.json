@@ -10,6 +10,11 @@
       "types": "./lib/index.d.ts",
       "development": "./src/index.ts",
       "import": "./lib/index.js"
+    },
+    "./node": {
+      "types": "./lib/node/index.d.ts",
+      "development": "./src/node/index.ts",
+      "import": "./lib/node/index.js"
     }
   },
   "files": [
@@ -49,6 +54,10 @@
       ".": {
         "types": "./lib/index.d.ts",
         "import": "./lib/index.js"
+      },
+      "./node": {
+        "types": "./lib/node/index.d.ts",
+        "import": "./lib/node/index.js"
       }
     }
   },

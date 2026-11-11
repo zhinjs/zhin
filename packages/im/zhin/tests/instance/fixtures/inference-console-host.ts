@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { z } from 'zod';
-import { createHttpHost } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import { SnapshotStore, rootPluginId, type SnapshotState } from '@zhin.js/plugin-runtime';
 import { aiProviderDefinitionsToken, type ProviderDefinition } from '@zhin.js/ai/provider';
 import { registerConsoleSystemRoutes } from '../../../src/instance/console/system-routes.js';

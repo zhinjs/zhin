@@ -2,7 +2,7 @@ import { AdapterIndex, Adapter, endpointSpec, createEndpointSpecification, type 
 import { CommandIndex, commandFeatureId, defineCommand } from '@zhin.js/command';
 import { withTestUsers } from '../utils/console-users.js';
 import { ImRuntime } from '@zhin.js/core/runtime';
-import { createHttpHost } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import { PermissionHost, permissionHostToken } from '@zhin.js/permission';
 import { SnapshotStore, childPluginId, createCapabilitySlot, createSnapshotView, rootPluginId, type FeatureId, type PluginId, type TokenId, type SnapshotState } from '@zhin.js/plugin-runtime';
 import { registerPermissionExplanationRoutes } from '../../../src/instance/console/permission-explanation-routes.js';

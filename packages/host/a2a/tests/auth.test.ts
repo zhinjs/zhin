@@ -1,15 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import type { IncomingMessage } from 'node:http';
 import {
   extractBearerToken,
   timingSafeEqualString,
   verifyA2aBearer,
+  type A2aAuthRequest,
 } from '../src/auth.js';
 
-function mockReq(authorization?: string): IncomingMessage {
-  return {
-    headers: { authorization },
-  } as IncomingMessage;
+function mockReq(authorization?: string): A2aAuthRequest {
+  return { headers: new Headers(authorization ? { authorization } : {}) };
 }
 
 describe('A2A auth', () => {

@@ -1,16 +1,15 @@
-import type { IncomingMessage, ServerResponse } from 'node:http';
 import { CONSOLE_AUTH_ROUTES } from '@zhin.js/console-protocol';
 import {
   HttpBodyError,
   globalPermissions,
   isUserPrincipal,
+  jsonResponse,
   readJsonBody,
-  requestConsolePrincipal,
   requestMeta,
   type ConsolePrincipal,
+  type ConsoleRequestMeta,
   type HttpHost,
 } from '@zhin.js/host-http';
-import { writeJson } from '../http-response.js';
 import { IamError, type ConsoleIamService } from './service.js';
 import type { ConsoleSetupService } from './setup-service.js';
 
@@ -24,8 +23,9 @@ export interface RegisterConsoleAuthRoutesOptions {
 }
 
 type Handler = (input: Readonly<{
-  request: IncomingMessage;
-  response: ServerResponse;
+  request: Request;
+  /** Audit / session metadata (peer address, user agent). */
+  meta: ConsoleRequestMeta;
   principal: ConsolePrincipal | undefined;
   body: () => Promise<Record<string, unknown>>;
 }>) => Promise<{ status: number; body: unknown; headers?: Record<string, string> }>;
@@ -35,30 +35,28 @@ const BODY_LIMIT = 16 * 1024;
 /** `/auth/*` (ADR 0049 §5, §7). The HTTP Host has already authenticated the caller. */
 export function registerConsoleAuthRoutes(options: RegisterConsoleAuthRoutesOptions): Array<() => void> {
   const { http, base } = options;
-  const route = (method: string, path: string, handler: Handler, summary: string) => http.route(method, `${base}${path}`, async (request, response) => {
-    response.setHeader('cache-control', 'no-store');
+  const route = (method: string, path: string, handler: Handler, summary: string) => http.route(method, `${base}${path}`, async (request, { principal, remoteAddress }) => {
+    const noStore = { 'cache-control': 'no-store' };
     try {
       const result = await handler({
         request,
-        response,
-        principal: requestConsolePrincipal(request),
+        meta: requestMeta(request, remoteAddress),
+        principal,
         body: async () => {
           const value = await readJsonBody<Record<string, unknown>>(request, { limit: BODY_LIMIT });
           return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
         },
       });
-      writeJson(response, result.status, result.body, result.headers);
+      return jsonResponse(result.status, result.body, { ...noStore, ...result.headers });
     } catch (error) {
       if (error instanceof HttpBodyError) {
-        writeJson(response, error.statusCode, { success: false, error: error.message });
-        return;
+        return jsonResponse(error.statusCode, { success: false, error: error.message }, noStore);
       }
       if (error instanceof IamError) {
-        writeJson(response, error.status, { success: false, code: error.code, error: error.message },
-          error.retryAfterMs ? { 'retry-after': String(Math.ceil(error.retryAfterMs / 1000)) } : {});
-        return;
+        return jsonResponse(error.status, { success: false, code: error.code, error: error.message },
+          error.retryAfterMs ? { ...noStore, 'retry-after': String(Math.ceil(error.retryAfterMs / 1000)) } : noStore);
       }
-      writeJson(response, 500, { success: false, code: 'failed', error: '操作失败' });
+      return jsonResponse(500, { success: false, code: 'failed', error: '操作失败' }, noStore);
     }
   }, { summary, tags: ['auth'] });
 
@@ -79,9 +77,9 @@ export function registerConsoleAuthRoutes(options: RegisterConsoleAuthRoutesOpti
   const ok = (data: unknown, status = 200) => ({ status, body: { success: true, data } });
 
   return [
-    route('POST', CONSOLE_AUTH_ROUTES.LOGIN, async ({ request, body }) => {
+    route('POST', CONSOLE_AUTH_ROUTES.LOGIN, async ({ meta, body }) => {
       const input = await body();
-      const result = await requireIam().login(input.username, input.password, requestMeta(request));
+      const result = await requireIam().login(input.username, input.password, meta);
       return ok(result);
     }, 'Console login'),
     route('POST', CONSOLE_AUTH_ROUTES.LOGOUT, async ({ principal }) => {
@@ -103,9 +101,9 @@ export function registerConsoleAuthRoutes(options: RegisterConsoleAuthRoutesOpti
         setupRequired,
       });
     }, 'Current Console principal'),
-    route('POST', CONSOLE_AUTH_ROUTES.PASSWORD, async ({ request, principal, body }) => {
+    route('POST', CONSOLE_AUTH_ROUTES.PASSWORD, async ({ meta, principal, body }) => {
       const input = await body();
-      const issued = await requireIam().changePassword(requireUser(principal), input.currentPassword, input.newPassword, requestMeta(request));
+      const issued = await requireIam().changePassword(requireUser(principal), input.currentPassword, input.newPassword, meta);
       return ok({ changed: true, ...issued });
     }, 'Change own password'),
     route('GET', CONSOLE_AUTH_ROUTES.TOKENS, async ({ principal }) => {
@@ -130,12 +128,12 @@ export function registerConsoleAuthRoutes(options: RegisterConsoleAuthRoutesOpti
       requireSetup(principal);
       return ok(await options.setup.status());
     }, 'Setup status'),
-    route('POST', CONSOLE_AUTH_ROUTES.SETUP, async ({ request, principal, body }) => {
+    route('POST', CONSOLE_AUTH_ROUTES.SETUP, async ({ meta, principal, body }) => {
       requireSetup(principal);
       const input = await body();
       const { user } = await options.setup.createOwner({ username: input.username, password: input.password, displayName: input.displayName });
       const iam = requireIam();
-      const session = await iam.issueSession(user.id, requestMeta(request));
+      const session = await iam.issueSession(user.id, meta);
       iam.audit({ actor: 'bootstrap', action: 'auth.setup', target: `user:${user.id}`, outcome: 'ok' });
       return ok({ ...session, user }, 201);
     }, 'Create the first owner'),

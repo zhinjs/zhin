@@ -18,7 +18,8 @@ import {
   DatabaseConversationEventStore,
   type ConversationDbModel,
 } from '@zhin.js/im-contract';
-import { createConsoleEventHub, createHttpHostGroup } from '@zhin.js/host-http';
+import { createConsoleEventHub } from '@zhin.js/host-http';
+import { createHttpHostGroup } from '@zhin.js/host-http/node';
 import {
   defineInboxTables,
   DEFAULT_ROOT_CONFIG_FILE_NAME,

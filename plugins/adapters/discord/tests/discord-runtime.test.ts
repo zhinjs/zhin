@@ -8,7 +8,8 @@ import {
   resolveAdapterOperations,
 } from 'zhin.js/adapter';
 import { generateKeyPairSync, sign as cryptoSign } from 'node:crypto';
-import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
+import { httpHostToken } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import { outboundMessageToken, sideEventGatewayToken, type OutboundMessageService } from '@zhin.js/core/runtime';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import defineDiscordAdapter from '../adapters/discord/index.js';

@@ -2,7 +2,8 @@ import { createAdapterHarness, createEndpointHarness, createTestEventGateway } f
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import type { OutboundMessageService } from '@zhin.js/core/runtime';
-import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
+import { httpHostToken } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import defineNapCatAdapter from '../adapters/napcat/index.js';
 import {
   NapCatHttpEndpoint,

@@ -3,7 +3,8 @@ import { MilkyV1Client, ProtocolError } from '@imhelper/milky-v1';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import type { OutboundMessageService } from '@zhin.js/core/runtime';
-import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
+import { httpHostToken } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import defineMilkyAdapter from '../adapters/milky/index.js';
 import {
   MilkySseEndpoint,

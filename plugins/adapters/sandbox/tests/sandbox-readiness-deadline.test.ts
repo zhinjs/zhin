@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import WebSocket from 'ws';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
-import { createHttpHost } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import { createEndpointHarness, createTestEndpointEventGateway } from '../../test-utils/endpoint.js';
 import { SandboxWsEndpoint } from '../src/endpoint.js';
 import { resolveSandboxEndpoint } from '../src/protocol.js';

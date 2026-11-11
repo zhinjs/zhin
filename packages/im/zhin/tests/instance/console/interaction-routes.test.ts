@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { withTestUsers } from '../utils/console-users.js';
-import { createHttpHost, type HttpHost } from '@zhin.js/host-http';
+import { type HttpHost } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import { adapterFeatureId } from '@zhin.js/adapter';
 import { SnapshotStore, rootPluginId, type SnapshotState } from '@zhin.js/plugin-runtime';
 import { ImRuntime, RuntimeMessage } from '@zhin.js/core/runtime';

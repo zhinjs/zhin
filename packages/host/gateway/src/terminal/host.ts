@@ -33,7 +33,7 @@ export function installHostConsoleTerminal(http: HttpHost, options: InstallHostC
     ...(options.base ? { base: options.base } : {}),
     resolvePrincipal: async (token, context) => {
       if (!token) return null;
-      const principal = await http.tokenRegistry.authenticate(token, requestMeta(context.request)) ?? undefined;
+      const principal = await http.tokenRegistry.authenticate(token, requestMeta(context, context.remoteAddress)) ?? undefined;
       // Bootstrap (setup token or open Host) is not a person: terminal access needs a user.
       if (!isUserPrincipal(principal)) return null;
       const resolved: TerminalPrincipal = Object.freeze({ id: `user:${principal.userId}`, kind: principal.kind });

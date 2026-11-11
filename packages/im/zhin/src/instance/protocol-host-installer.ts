@@ -35,7 +35,7 @@ interface McpRuntimeModule {
   installRuntimeMcp(options: {
     readonly http: unknown;
     readonly config: RuntimeMcpConfig;
-    readonly authenticateBearer?: (token: string, request: import('node:http').IncomingMessage) => Promise<boolean>;
+    readonly authenticateBearer?: (token: string, request: Request, remoteAddress?: string) => Promise<boolean>;
     readonly production?: boolean;
     readonly tools: {
       withTools<TResult>(
@@ -111,7 +111,7 @@ export function installProtocolHosts(options: InstallProtocolHostsOptions): Root
         http,
         config: resolved.mcp,
         // http.token is only a bootstrap credential now (ADR 0049): it goes through the registry.
-        authenticateBearer: (token, request) => http.tokenRegistry.authorizeBearer(token, 'mcp.access', requestMeta(request)),
+        authenticateBearer: (token, request, remoteAddress) => http.tokenRegistry.authorizeBearer(token, 'mcp.access', requestMeta(request, remoteAddress)),
         production: options.production,
         tools: {
           withTools: (invocation, operation) => runtime.withTools(rootPluginId(), {
@@ -181,7 +181,7 @@ export function installProtocolHosts(options: InstallProtocolHostsOptions): Root
           http,
           agentHost: resources.use(agentHostToken),
           config: resolved.a2a,
-          authenticateBearer: (token, request) => http.tokenRegistry.authorizeBearer(token, 'a2a.access', requestMeta(request)),
+          authenticateBearer: (token, request, remoteAddress) => http.tokenRegistry.authorizeBearer(token, 'a2a.access', requestMeta(request, remoteAddress)),
           fallbackPublicUrl: resolved.publicBaseUrl,
           production: options.production,
         }));

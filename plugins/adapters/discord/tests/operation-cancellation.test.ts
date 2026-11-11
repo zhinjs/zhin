@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { AttachmentBuilder } from 'discord.js';
 import { toMessageCreateOptions } from '../src/gateway.js';
-import { createHttpHost } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import { adapterFeatureId } from 'zhin.js/adapter';
 import { capabilityId, rootPluginId } from 'zhin.js';
 import { discordFixture } from './fixture.js';

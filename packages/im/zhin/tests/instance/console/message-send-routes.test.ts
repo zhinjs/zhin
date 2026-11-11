@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { withTestUsers } from '../utils/console-users.js';
-import { createHttpHost } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import { registerMessageSendRoutes } from '../../../src/instance/console/message-send-routes.js';
 
 const cleanups: (() => Promise<unknown>)[] = [];

@@ -12,7 +12,7 @@ import { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
 import { definePlugin, type RuntimeSnapshot } from 'zhin.js';
 import pageFeature, { PageIndex, pageFeatureId } from '@zhin.js/page';
 import { RootRuntime, type ModuleRuntime } from '@zhin.js/runtime';
-import { createHttpHost } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 
 const temporary: string[] = [];
 const hosts: Array<ReturnType<typeof createHttpHost>> = [];

@@ -1,22 +1,23 @@
 export {
-  createHttpHost,
+  createHttpRouter,
   httpHostToken,
   REMOTE_CONSOLE_ORIGIN,
   type HttpHandler,
   type HttpHost,
-  type ProcessHttpHost,
-  type HttpHostAddress,
-  type HttpHostOptions,
-  type HttpHostTlsOptions,
+  type HttpRequestInfo,
+  type HttpRouter,
+  type HttpRouterOptions,
   type HttpRouteRegistration,
+  type RouteContext,
   type WsConnection,
   type WsHandle,
   type WsRouteOptions,
+  type WsTransport,
+  type WsUpgradeDecision,
+  type WsUpgradeRequest,
 } from './http-host.js';
-export {
-  createHttpHostGroup,
-  listHttpHostAddresses,
-} from './listener-group.js';
+export type { HttpHostAddress, HttpHostOptions, HttpHostTlsOptions } from './host-options.js';
+export { listHttpHostAddresses } from './addresses.js';
 export {
   TokenRegistry,
   extractBearerToken,
@@ -36,7 +37,6 @@ export {
   isUserPrincipal,
   pluginRpcWriteAllowed,
   principalAllows,
-  requestConsolePrincipal,
   requestMeta,
   rpcAuditDetail,
   rpcAuditTarget,
@@ -50,7 +50,7 @@ export {
   type ConsoleUserPrincipal,
 } from './access-control.js';
 export { timingSafeEqualString } from './timing-safe-equal.js';
-export { isLoopbackAddress, verifyProtocolAccessToken } from './protocol-auth.js';
+export { isLoopbackAddress, verifyProtocolAccessToken, type ProtocolAuthRequest } from './protocol-auth.js';
 export {
   createConsoleEventHub,
   consoleEventHubToken,
@@ -67,8 +67,19 @@ export {
 } from './openapi.js';
 export {
   HttpBodyError,
+  readBodyBytes,
   readJsonBody,
+  readTextBody,
+  type HttpBodyReadOptions,
 } from './json-body.js';
+export {
+  createResponseStream,
+  emptyResponse,
+  jsonResponse,
+  SSE_HEADERS,
+  type HttpResponseStream,
+  type HttpResponseStreamOptions,
+} from '@zhin.js/host-http-contract';
 export {
   dispatchRuntimeConsoleRpc,
   pickRpcReply,

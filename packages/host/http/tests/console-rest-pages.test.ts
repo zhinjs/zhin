@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createHttpHost, type HttpHost } from '../src/http-host.js';
+import { createHttpHost, type ProcessHttpHost } from '../src/node/server.js';
 import { userPrincipal } from './fixtures/principals.js';
 import {
   registerConsoleRestPages,
@@ -10,7 +10,7 @@ import {
   type ConsoleRestCtx,
 } from '../src/console-rest-pages.js';
 
-const hosts: HttpHost[] = [];
+const hosts: ProcessHttpHost[] = [];
 const tempDirs: string[] = [];
 
 afterEach(async () => {

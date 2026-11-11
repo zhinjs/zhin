@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest';
-import { createHttpHost } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
 import { LarkEndpoint } from '../src/endpoint.js';

@@ -1,5 +1,5 @@
 import { createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
-import { createHttpHost } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import https from 'node:https';
 import tls from 'node:tls';
 import net from 'node:net';

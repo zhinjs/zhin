@@ -1,5 +1,4 @@
 import { EventEmitter } from 'node:events';
-import type { IncomingMessage } from 'node:http';
 import {
   hostKeyFingerprint,
   installConsoleTerminal,
@@ -21,20 +20,38 @@ const owner: TerminalPrincipal = { id: 'user:owner', kind: 'user' };
 const other: TerminalPrincipal = { id: 'user:other', kind: 'user' };
 
 class FakeSocket extends EventEmitter {
-  readyState = 1;
-  readonly sent: Array<{ data: string | Buffer; binary: boolean }> = [];
+  open = true;
+  url = new URL('http://localhost/api/console/terminal');
+  readonly remoteAddress = '10.1.2.3';
+  bufferedAmount = 0;
+  readonly sent: Array<{ data: string | Uint8Array; binary: boolean }> = [];
   closed?: { code?: number; reason?: string };
 
-  send(data: string | Buffer, options?: { binary?: boolean }, callback?: (error?: Error) => void): void {
-    this.sent.push({ data, binary: options?.binary === true });
-    callback?.();
+  /** The upgrade URL this connection arrived on. */
+  at(url: string): this {
+    this.url = new URL(url, 'http://localhost');
+    return this;
+  }
+
+  send(data: string | Uint8Array): void {
+    this.sent.push({ data, binary: typeof data !== 'string' });
   }
 
   close(code?: number, reason?: string): void {
-    if (this.readyState !== 1) return;
-    this.readyState = 3;
+    if (!this.open) return;
+    this.open = false;
     this.closed = { code, reason };
-    this.emit('close');
+    this.emit('close', code ?? 1005, reason ?? '');
+  }
+
+  onMessage(listener: (data: string | Uint8Array) => void): () => void {
+    this.on('message', listener);
+    return () => { this.off('message', listener); };
+  }
+
+  onClose(listener: (code: number, reason: string) => void): () => void {
+    this.once('close', listener);
+    return () => { this.off('close', listener); };
   }
 
   controls(): Array<Record<string, unknown>> {
@@ -42,20 +59,20 @@ class FakeSocket extends EventEmitter {
   }
 
   output(): string {
-    return this.sent.filter((frame) => frame.binary).map((frame) => frame.data.toString()).join('');
+    return this.sent.filter((frame) => frame.binary).map((frame) => Buffer.from(frame.data as Uint8Array).toString()).join('');
   }
 
   input(text: string): void {
-    this.emit('message', Buffer.from(text), true);
+    this.emit('message', Buffer.from(text));
   }
 
   control(message: unknown): void {
-    this.emit('message', Buffer.from(JSON.stringify(message)), false);
+    this.emit('message', JSON.stringify(message));
   }
 
-  disconnect(): void {
-    this.readyState = 3;
-    this.emit('close');
+  disconnect(code = 1001): void {
+    this.open = false;
+    this.emit('close', code, '');
   }
 }
 
@@ -142,10 +159,6 @@ function fakeSsh(hostKey: Buffer): { module: SshModule; state: FakeSshState } {
   return { module: { Client: Client as unknown as SshModule['Client'] }, state };
 }
 
-function request(url: string): Pick<IncomingMessage, 'url' | 'socket'> {
-  return { url, socket: { remoteAddress: '10.1.2.3' } } as Pick<IncomingMessage, 'url' | 'socket'>;
-}
-
 function makeService(overrides: Partial<TerminalServiceOptions> & { raw?: Record<string, unknown> } = {}) {
   const pty = fakePty();
   const audits: TerminalAuditEvent[] = [];
@@ -165,7 +178,7 @@ function makeService(overrides: Partial<TerminalServiceOptions> & { raw?: Record
 async function connect(service: TerminalService, principal: TerminalPrincipal = owner, target = 'local') {
   const { ticket } = await service.issueTicket(principal, { target, cols: 100, rows: 30 });
   const socket = new FakeSocket();
-  await service.handleConnection(socket, request(`/api/console/terminal?ticket=${ticket}`));
+  await service.handleConnection(socket.at(`/api/console/terminal?ticket=${ticket}`));
   return socket;
 }
 
@@ -354,7 +367,7 @@ describe('TerminalService', () => {
     expect(socket.controls().at(-1)).toMatchObject({ type: 'error', code: 'bad-message' });
     socket.control({ type: 'ping' });
     expect(socket.controls().at(-1)).toEqual({ type: 'pong' });
-    socket.emit('message', Buffer.from('not json'), false);
+    socket.emit('message', 'not json');
     expect(socket.controls().at(-1)).toMatchObject({ type: 'error', code: 'bad-message' });
 
     proc.emitExit(3);
@@ -382,14 +395,14 @@ describe('TerminalService', () => {
   it('rejects invalid, reused and expired tickets on the WebSocket', async () => {
     const { service, pty } = makeService();
     const bad = new FakeSocket();
-    await service.handleConnection(bad, request('/api/console/terminal?ticket=nope'));
+    await service.handleConnection(bad.at('/api/console/terminal?ticket=nope'));
     expect(bad.controls()[0]).toMatchObject({ type: 'error', code: 'invalid-ticket' });
     expect(bad.closed?.code).toBe(4401);
 
     const { ticket } = await service.issueTicket(owner, { target: 'local' });
-    await service.handleConnection(new FakeSocket(), request(`/x?ticket=${ticket}`));
+    await service.handleConnection(new FakeSocket().at(`/x?ticket=${ticket}`));
     const reused = new FakeSocket();
-    await service.handleConnection(reused, request(`/x?ticket=${ticket}`));
+    await service.handleConnection(reused.at(`/x?ticket=${ticket}`));
     expect(reused.closed?.code).toBe(4401);
     expect(pty.procs).toHaveLength(1);
   });
@@ -398,7 +411,7 @@ describe('TerminalService', () => {
     const { service, pty } = makeService();
     const { ticket } = await service.issueTicket(owner, { target: 'local' });
     const socket = new FakeSocket();
-    await service.handleConnection(socket, request(`/x?ticket=${ticket}`), other);
+    await service.handleConnection(socket.at(`/x?ticket=${ticket}`), other);
     expect(socket.closed?.code).toBe(4401);
     expect(pty.procs).toHaveLength(0);
   });
@@ -409,7 +422,7 @@ describe('TerminalService', () => {
     const { ticket } = await service.issueTicket(owner, { target: 'local' });
     allowed = false;
     const socket = new FakeSocket();
-    await service.handleConnection(socket, request(`/x?ticket=${ticket}`));
+    await service.handleConnection(socket.at(`/x?ticket=${ticket}`));
     expect(socket.closed?.code).toBe(4403);
     expect(pty.procs).toHaveLength(0);
   });
@@ -420,7 +433,7 @@ describe('TerminalService', () => {
     await connect(service);
     await expect(service.issueTicket(owner, { target: 'local' })).rejects.toMatchObject({ status: 429, code: 'too-many-sessions' });
     const late = new FakeSocket();
-    await service.handleConnection(late, request(`/x?ticket=${pending.ticket}`));
+    await service.handleConnection(late.at(`/x?ticket=${pending.ticket}`));
     expect(late.closed?.code).toBe(4429);
   });
 
@@ -454,7 +467,7 @@ describe('TerminalService', () => {
     expect(pty.procs[0]!.killed).toBe(true);
     expect(theirs.closed).toBeUndefined();
     const late = new FakeSocket();
-    await service.handleConnection(late, request(`/x?ticket=${ticket}`));
+    await service.handleConnection(late.at(`/x?ticket=${ticket}`));
     expect(late.closed?.code).toBe(4401);
   });
 
@@ -513,7 +526,7 @@ describe('TerminalService', () => {
       channel.emit('close');
       expect(socket.controls().at(-1)).toEqual({ type: 'exit', reason: 'process-exit', code: 0 });
       expect(fake.state.ended).toBeGreaterThan(0);
-      const dump = JSON.stringify([targets, audits, socket.sent.map((frame) => String(frame.data))]);
+      const dump = JSON.stringify([targets, audits, socket.sent.map((frame) => typeof frame.data === 'string' ? frame.data : Buffer.from(frame.data).toString())]);
       expect(dump).not.toMatch(/PRIVATE-KEY-PEM|top-secret|BOX_KEY/u);
     });
 
@@ -551,7 +564,7 @@ describe('TerminalService', () => {
       const { ticket } = await service.issueTicket(owner, { target: 'build-box' });
       const configsBefore = fake.state.configs.length;
       const socket = new FakeSocket();
-      const started = service.handleConnection(socket, request(`/x?ticket=${ticket}`));
+      const started = service.handleConnection(socket.at(`/x?ticket=${ticket}`));
       socket.disconnect();
       await started;
       expect(service.sessions()).toEqual([]);
@@ -574,7 +587,7 @@ describe('TerminalService', () => {
         resumeConnect = () => originalConnect.call(this, config);
       };
       const socket = new FakeSocket();
-      const started = service.handleConnection(socket, request(`/x?ticket=${ticket}`));
+      const started = service.handleConnection(socket.at(`/x?ticket=${ticket}`));
       await vi.waitFor(() => expect(service.sessions()).toHaveLength(1));
       socket.disconnect();
       expect(service.sessions()).toEqual([]);

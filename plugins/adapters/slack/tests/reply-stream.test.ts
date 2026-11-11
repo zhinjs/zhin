@@ -10,7 +10,7 @@ async function setup(streaming?: boolean) {
     appendStream: vi.fn(async (_args: unknown) => ({})), stopStream: vi.fn(async (_args: unknown) => ({})) };
   const f = await slackFixture({ id: 'stream-fixture' as never,
     config: resolveSlackConfig({ id: 'fixture', token: 'synthetic', signingSecret: 'synthetic', socketMode: false, streaming }),
-    http: (await import('@zhin.js/host-http')).createHttpHost({ host: '127.0.0.1', port: 0 }),
+    http: (await import('@zhin.js/host-http/node')).createHttpHost({ host: '127.0.0.1', port: 0 }),
   }, () => ({ auth: { test: async () => ({ user_id: 'BOT' }) }, chat: calls }));
   await f.start(); f.open();
   const lease = f.index.acquire(f.canonicalId);

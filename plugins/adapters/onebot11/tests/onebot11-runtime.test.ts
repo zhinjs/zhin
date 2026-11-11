@@ -1,7 +1,8 @@
 import { createAdapterHarness, createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
 import { ProtocolError } from '@imhelper/onebot-v11';
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
+import { httpHostToken } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import { type OutboundMessageService } from '@zhin.js/core/runtime';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { OneBot11WsEndpoint } from '../src/ws-endpoint.js';

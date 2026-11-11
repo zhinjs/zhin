@@ -1,7 +1,7 @@
 import { LineEndpoint } from '../src/endpoint.js';
 import { resolveLineConfig, type LineEvent } from '../src/protocol.js';
 import { createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
-import { createHttpHost } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import { capabilityId, rootPluginId, featureId } from 'zhin.js';
 
 const event: LineEvent = { webhookEventId: 'fixture-event', type: 'message', replyToken: 'fixture-reply', timestamp: 1, source: { type: 'user', userId: 'Ufixture' }, message: { id: 'fixture-message', type: 'text', text: 'probe' } };

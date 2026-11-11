@@ -1,10 +1,11 @@
+import { jsonResponse } from '@zhin.js/host-http';
 import type { ImRuntime } from '@zhin.js/core/runtime';
 import { conversationEventQueryFields, conversationRefKey, type ConversationEvent, type ConversationRef, type ForwardEntry, type MessageRef, type Segment } from '@zhin.js/im-contract';
 import type { HttpHost } from '@zhin.js/host-http';
 import { encodeStorageIdentity, type DatabaseHost, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import { parseConversationSessionKey } from './conversation-session.js';
-import { writeJson } from '@zhin.js/gateway/http';
 import { parseBoundSandboxSession, SandboxWorkspaceBindingError, withSandboxWorkspaceScope } from './sandbox-workspace-scope.js';
+import { noStore } from './no-store.js';
 
 const PAGE_SIZE = 50;
 
@@ -17,12 +18,7 @@ export function registerConversationHistoryRoutes(options: Readonly<{
   snapshots?: SnapshotReader;
 }>): void {
   const { http, base, im, databaseHost } = options;
-  http.route('GET', `${base}/conversations/history`, async (_request, response, url, authScope) => {
-    response.setHeader('cache-control', 'no-store');
-    if (authScope !== 'full') {
-      writeJson(response, 403, { success: false, error: '当前凭据不能读取聊天记录' });
-      return;
-    }
+  http.route('GET', `${base}/conversations/history`, noStore(async (_request, { url }) => {
     const sessionKey = url.searchParams.get('sessionKey');
     const connectionId = url.searchParams.get('connectionId');
     const session = sessionKey && !connectionId ? parseConversationSessionKey(sessionKey) : undefined;
@@ -30,13 +26,11 @@ export function registerConversationHistoryRoutes(options: Readonly<{
     const beforeSequence = before === null ? undefined : Number(before);
     if (!sessionKey || (!connectionId && (!session || !['private', 'group', 'channel'].includes(session.kind)))
       || (before !== null && (!/^\d+$/u.test(before) || !Number.isSafeInteger(beforeSequence) || beforeSequence! <= 0))) {
-      writeJson(response, 400, { success: false, code: 'invalid_history_query', error: '请提供有效的会话和历史游标' });
-      return;
+      return jsonResponse(400, { success: false, code: 'invalid_history_query', error: '请提供有效的会话和历史游标' });
     }
     const model = databaseHost?.started ? databaseHost.models.get('conversation_events') : undefined;
     if (!im || !model) {
-      writeJson(response, 503, { success: false, code: 'history_unavailable', error: '聊天记录读取尚未就绪' });
-      return;
+      return jsonResponse(503, { success: false, code: 'history_unavailable', error: '聊天记录读取尚未就绪' });
     }
     try {
       const read = (session: NonNullable<ReturnType<typeof parseConversationSessionKey>>, connectedEndpoint?: ConversationRef['endpoint']) => im.runWithSnapshotView(async () => {
@@ -98,14 +92,14 @@ export function registerConversationHistoryRoutes(options: Readonly<{
             return read({ adapter: scope.endpoint.adapter, endpointKey: scope.endpointKey, kind: bound.kind, id: bound.id }, scope.endpoint);
           })
         : await read(session!);
-      if (result.status === 200) writeJson(response, 200, { success: true, data: result.data });
-      else writeJson(response, result.status, { success: false, code: result.code, error: result.error });
+      if (result.status === 200) return jsonResponse(200, { success: true, data: result.data });
+      else return jsonResponse(result.status, { success: false, code: result.code, error: result.error });
     } catch (error) {
-      writeJson(response, 503, error instanceof SandboxWorkspaceBindingError
+      return jsonResponse(503, error instanceof SandboxWorkspaceBindingError
         ? { success: false, code: error.code, error: error.message }
         : { success: false, code: 'history_unavailable', error: '暂时无法读取聊天记录，请稍后重试' });
     }
-  }, { summary: 'Read recorded conversation history', tags: ['conversations'], description: 'Full-scope, read-only canonical history. Fifty latest message entities per page (legacy readers use events); ambiguous parent/thread addresses are unavailable.' });
+  }), { summary: 'Read recorded conversation history', tags: ['conversations'], description: 'Full-scope, read-only canonical history. Fifty latest message entities per page (legacy readers use events); ambiguous parent/thread addresses are unavailable.' });
 }
 
 function projectConversation(conversation: ConversationRef): ConversationRef {

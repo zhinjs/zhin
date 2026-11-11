@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WebSocket } from 'ws';
 import { createDatabaseHost } from '@zhin.js/core/runtime';
-import { createHttpHost, type ProcessHttpHost } from '@zhin.js/host-http';
+import { createHttpHost, type ProcessHttpHost } from '@zhin.js/host-http/node';
 import { installConsoleIam } from '../../../../../host/gateway/src/iam/install.js';
 import { installHostConsoleTerminal } from '../../../../../host/gateway/src/terminal/host.js';
 import type { PtyModule } from '../../../../../host/gateway/src/terminal/modules.js';

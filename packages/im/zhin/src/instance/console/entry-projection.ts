@@ -1,12 +1,11 @@
 import {
   extractBearerToken,
   publicConsoleAccess,
-  requestConsolePrincipal,
   type ConsoleAccess,
   type HttpHost,
+  type RouteContext,
   type RuntimeConsolePage,
 } from '@zhin.js/host-http';
-import type { IncomingMessage } from 'node:http';
 import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
 
 export type ConsolePageTitleI18n = Readonly<Partial<Record<'zh-CN' | 'en' | string, string>>>;
@@ -37,12 +36,14 @@ export interface ProjectConsoleEntriesOptions {
  * Console access of one HTTP request, from its bearer token (header, or `?token=` for page
  * navigations). Routes outside the API base are public, so a missing token means public access.
  */
-export function requestConsoleAccess(http: HttpHost, request: IncomingMessage, url?: URL): ConsoleAccess {
-  // The Host binds the authenticated principal (also on public routes when a token is sent).
-  const principal = requestConsolePrincipal(request);
-  if (principal) return http.tokenRegistry.accessFor(principal);
-  const header = request.headers?.authorization;
-  const token = extractBearerToken(Array.isArray(header) ? header[0] : header, url?.searchParams.get('token') ?? null);
+export function requestConsoleAccess(
+  http: HttpHost,
+  request: Request,
+  context: Pick<RouteContext, 'url' | 'principal'>,
+): ConsoleAccess {
+  // The Host resolves the authenticated principal (also on public routes when a token is sent).
+  if (context.principal) return http.tokenRegistry.accessFor(context.principal);
+  const token = extractBearerToken(request.headers.get('authorization') ?? undefined, context.url.searchParams.get('token'));
   return http.tokenRegistry.resolveAccess(token);
 }
 

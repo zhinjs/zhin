@@ -1,5 +1,6 @@
 import WebSocket, { WebSocketServer } from 'ws';
-import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
+import { httpHostToken } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import { createAdapterHarness } from '../../test-utils/endpoint.js';
 import definition from '../adapters/onebot11/index.js';
 import { Onebot11Client } from '../src/client.js';

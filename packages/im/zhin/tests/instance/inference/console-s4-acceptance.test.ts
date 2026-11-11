@@ -4,7 +4,7 @@
  * - Console DTOs and log lines carry no access / refresh / OAuth token material;
  * - save (plan + apply) and page / status loads make zero Provider network requests.
  */
-import { createHttpHost } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import { withTestUsers } from '../utils/console-users.js';
 import { MemoryPersonalSessionRepository, PersonalSessionService } from '@zhin.js/agent/personal-session';
 import { registerInferenceRoutes } from '../../../src/instance/inference/routes.js';

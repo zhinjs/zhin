@@ -1,7 +1,6 @@
 /**
- * HTTP handlers for A2A JSON-RPC, REST, and Agent Card (Node http — no Express).
+ * HTTP handlers for A2A JSON-RPC, REST, and Agent Card (Web `Request` / `Response` — no Express).
  */
-import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createHash } from 'node:crypto';
 import {
   AgentCard,
@@ -45,62 +44,67 @@ function formatSSEErrorEvent(data: unknown): string {
 }
 
 /**
- * Pipe an async iterator to the response as SSE.
+ * An SSE response over an async iterator.
  *
- * The first item is pulled before any header is flushed, so a failure there still
+ * The first item is pulled before the response exists, so a failure there still
  * propagates to the caller's JSON error path. Once the stream has started, a failure
- * becomes an SSE `error` event and the response is always ended. A client disconnect
- * stops the iteration and lets the source run its cleanup.
+ * becomes an SSE `error` event and the body is always ended. A client disconnect
+ * (body cancellation) stops the iteration and lets the source run its cleanup.
  */
-async function writeSseStream<T>(
-  res: ServerResponse,
+async function sseResponse<T>(
   iterator: AsyncIterator<T>,
   toJson: (value: T) => unknown,
   toError: (err: unknown) => unknown,
-): Promise<void> {
-  let closed = res.destroyed;
-  const onClose = (): void => {
-    closed = true;
-    void Promise.resolve(iterator.return?.()).catch(() => undefined);
-  };
-  res.once('close', onClose);
-  let started = false;
-  try {
-    let next = await iterator.next();
-    for (const [key, value] of Object.entries(SSE_HEADERS)) {
-      res.setHeader(key, value);
-    }
-    started = true;
-    while (!next.done && !closed) {
-      res.write(formatSSEEvent(toJson(next.value)));
-      next = await iterator.next();
-    }
-  } catch (err) {
-    if (!started) throw err;
-    if (!closed && !res.writableEnded) res.write(formatSSEErrorEvent(toError(err)));
-  } finally {
-    res.off('close', onClose);
-  }
-  if (!res.writableEnded) res.end();
+  headers: Headers,
+): Promise<Response> {
+  const encoder = new TextEncoder();
+  let next: IteratorResult<T> | undefined = await iterator.next();
+  let finished = false;
+  const body = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      if (finished) return;
+      try {
+        const current = next ?? await iterator.next();
+        next = undefined;
+        if (current.done) {
+          finished = true;
+          controller.close();
+          return;
+        }
+        controller.enqueue(encoder.encode(formatSSEEvent(toJson(current.value))));
+      } catch (err) {
+        finished = true;
+        controller.enqueue(encoder.encode(formatSSEErrorEvent(toError(err))));
+        controller.close();
+      }
+    },
+    async cancel() {
+      finished = true;
+      await Promise.resolve(iterator.return?.()).catch(() => undefined);
+    },
+  }, { highWaterMark: 0 });
+  for (const [key, value] of Object.entries(SSE_HEADERS)) headers.set(key, value);
+  return new Response(body, { status: 200, headers });
 }
 
-async function readA2aJsonBody(req: IncomingMessage): Promise<unknown> {
+async function readA2aJsonBody(req: Request): Promise<unknown> {
   return (await readJsonBody(req)) ?? {};
 }
 
-function buildServerContext(req: IncomingMessage): ServerCallContext {
+function buildServerContext(req: Request): ServerCallContext {
   return new ServerCallContext({
     requestedExtensions: Extensions.parseServiceParameter(
-      req.headers[HTTP_EXTENSION_HEADER.toLowerCase()] as string | undefined,
+      req.headers.get(HTTP_EXTENSION_HEADER) ?? undefined,
     ),
     user: new UnauthenticatedUser(),
-    requestedVersion: req.headers[A2A_VERSION_HEADER.toLowerCase()] as string | undefined,
+    requestedVersion: req.headers.get(A2A_VERSION_HEADER) ?? undefined,
   });
 }
 
-function sendJson(res: ServerResponse, status: number, body: unknown, extraHeaders?: Record<string, string>): void {
-  res.writeHead(status, { 'Content-Type': 'application/json', ...extraHeaders });
-  res.end(JSON.stringify(body));
+function sendJson(status: number, body: unknown, extraHeaders?: HeadersInit): Response {
+  const headers = new Headers({ 'Content-Type': 'application/json' });
+  for (const [key, value] of new Headers(extraHeaders)) headers.set(key, value);
+  return new Response(JSON.stringify(body), { status, headers });
 }
 
 function computeETag(json: string): string {
@@ -109,41 +113,35 @@ function computeETag(json: string): string {
 }
 
 export async function handleAgentCard(
-  req: IncomingMessage,
-  res: ServerResponse,
+  req: Request,
   requestHandler: A2ARequestHandler,
-): Promise<void> {
+): Promise<Response> {
   if (req.method !== 'GET') {
-    sendJson(res, 405, { error: 'Method not allowed' });
-    return;
+    return sendJson(405, { error: 'Method not allowed' });
   }
   try {
     const agentCard = await requestHandler.getAgentCard();
     const body = JSON.stringify(AgentCard.toJSON(agentCard));
     const etag = computeETag(body);
-    res.setHeader('ETag', etag);
-    res.setHeader('Cache-Control', 'public, max-age=3600');
-    if (req.headers['if-none-match'] === etag) {
-      res.writeHead(304);
-      res.end();
-      return;
+    const cacheHeaders = { ETag: etag, 'Cache-Control': 'public, max-age=3600' };
+    if (req.headers.get('if-none-match') === etag) {
+      return new Response(null, { status: 304, headers: cacheHeaders });
     }
-    sendJson(res, 200, AgentCard.toJSON(agentCard));
+    return sendJson(200, AgentCard.toJSON(agentCard), cacheHeaders);
   } catch (err) {
-    sendJson(res, 500, { error: err instanceof Error ? err.message : String(err) });
+    return sendJson(500, { error: err instanceof Error ? err.message : String(err) });
   }
 }
 
 export async function handleJsonRpc(
-  req: IncomingMessage,
-  res: ServerResponse,
+  req: Request,
   requestHandler: A2ARequestHandler,
   preParsedBody?: unknown,
-): Promise<void> {
+): Promise<Response> {
   if (req.method !== 'POST') {
-    sendJson(res, 405, { error: 'Method not allowed' }, { Allow: 'POST' });
-    return;
+    return sendJson(405, { error: 'Method not allowed' }, { Allow: 'POST' });
   }
+  const headers = new Headers();
 
   const transport = new JsonRpcTransportHandler(requestHandler);
   try {
@@ -158,49 +156,47 @@ export async function handleJsonRpc(
     );
 
     if (context.activatedExtensions) {
-      res.setHeader(HTTP_EXTENSION_HEADER, Array.from(context.activatedExtensions).join(', '));
+      headers.set(HTTP_EXTENSION_HEADER, Array.from(context.activatedExtensions).join(', '));
     }
 
     if (rpcResponseOrStream && typeof (rpcResponseOrStream as AsyncIterable<unknown>)[Symbol.asyncIterator] === 'function') {
       const stream = rpcResponseOrStream as AsyncGenerator<unknown, void, undefined>;
       const requestId = (body as { id?: unknown } | null)?.id ?? null;
-      await writeSseStream(res, stream[Symbol.asyncIterator](), (value) => value, (err) => ({
+      return await sseResponse(stream[Symbol.asyncIterator](), (value) => value, (err) => ({
         jsonrpc: '2.0',
         id: requestId,
         error: JsonRpcTransportHandler.mapToJSONRPCError(err),
-      }));
-      return;
+      }), headers);
     }
 
-    sendJson(res, 200, rpcResponseOrStream);
+    return sendJson(200, rpcResponseOrStream, headers);
   } catch (err) {
     if (err instanceof HttpBodyError) {
-      sendJson(res, err.statusCode, {
+      return sendJson(err.statusCode, {
         jsonrpc: '2.0',
         id: null,
         error: { code: -32700, message: 'Parse error' },
-      });
-      return;
+      }, headers);
     }
     const errorResponse = {
       jsonrpc: '2.0',
       id: null,
       error: JsonRpcTransportHandler.mapToJSONRPCError(err),
     };
-    sendJson(res, 200, errorResponse);
+    return sendJson(200, errorResponse, headers);
   }
 }
 
 export async function handleRest(
-  req: IncomingMessage,
-  res: ServerResponse,
+  req: Request,
   requestHandler: A2ARequestHandler,
   subPath: string,
   preParsedBody?: unknown,
-): Promise<void> {
+): Promise<Response> {
   const transport = new RestTransportHandler(requestHandler);
   const context = buildServerContext(req);
-  const method = req.method ?? 'GET';
+  const method = req.method;
+  const url = new URL(req.url);
   // v1.0 uses unprefixed relative paths; retain the existing /v1 aliases.
   const path = subPath.replace(/^\//, '').replace(/^v1\//, '');
 
@@ -209,70 +205,59 @@ export async function handleRest(
     validateVersion(context.requestedVersion, agentCard, 'HTTP+JSON');
 
     if (method === 'GET' && (path === '' || path === 'card')) {
-      sendJson(res, 200, AgentCard.toJSON(await transport.getAgentCard()), { 'Content-Type': A2A_CONTENT_TYPE });
-      return;
+      return sendJson(200, AgentCard.toJSON(await transport.getAgentCard()), { 'Content-Type': A2A_CONTENT_TYPE });
     }
 
     if (method === 'POST' && path === 'message:send') {
       const params = preParsedBody !== undefined ? preParsedBody : await readA2aJsonBody(req);
       const result = await transport.sendMessage(SendMessageRequest.fromJSON(params), context);
-      sendJson(res, 200, 'messageId' in result
+      return sendJson(200, 'messageId' in result
         ? { message: Message.toJSON(result) }
         : { task: Task.toJSON(result) }, { 'Content-Type': A2A_CONTENT_TYPE });
-      return;
     }
 
     if (method === 'POST' && path === 'message:stream') {
       const params = preParsedBody !== undefined ? preParsedBody : await readA2aJsonBody(req);
       const stream = await transport.sendMessageStream(SendMessageRequest.fromJSON(params), context);
-      await writeSseStream(
-        res,
+      return await sseResponse(
         stream[Symbol.asyncIterator](),
         (event) => StreamResponse.toJSON(event),
         (err) => ({ error: err instanceof Error ? err.message : String(err) }),
+        new Headers(),
       );
-      return;
     }
 
     const taskGet = path.match(/^tasks\/([^/]+)$/);
     if (method === 'GET' && taskGet) {
       const taskId = taskGet[1];
       if (!taskId) {
-        sendJson(res, 400, { error: 'invalid task id' });
-        return;
+        return sendJson(400, { error: 'invalid task id' });
       }
-      const historyLength = req.url?.includes('historyLength=')
-        ? new URL(req.url, 'http://localhost').searchParams.get('historyLength') ?? undefined
-        : undefined;
+      const historyLength = url.searchParams.get('historyLength') ?? undefined;
       const result = await transport.getTask(taskId, context, historyLength ?? undefined);
-      sendJson(res, 200, Task.toJSON(result), { 'Content-Type': A2A_CONTENT_TYPE });
-      return;
+      return sendJson(200, Task.toJSON(result), { 'Content-Type': A2A_CONTENT_TYPE });
     }
 
     const taskCancel = path.match(/^tasks\/([^/]+):cancel$/);
     if (method === 'POST' && taskCancel) {
       const taskId = taskCancel[1];
       if (!taskId) {
-        sendJson(res, 400, { error: 'invalid task id' });
-        return;
+        return sendJson(400, { error: 'invalid task id' });
       }
       const result = await transport.cancelTask(taskId, context);
-      sendJson(res, 200, Task.toJSON(result), { 'Content-Type': A2A_CONTENT_TYPE });
-      return;
+      return sendJson(200, Task.toJSON(result), { 'Content-Type': A2A_CONTENT_TYPE });
     }
 
     if (method === 'GET' && path === 'tasks') {
-      const url = new URL(req.url ?? '/', 'http://localhost');
       const query: Record<string, string | undefined> = {};
       url.searchParams.forEach((v, k) => { query[k] = v; });
       const result = await transport.listTasks(query, context);
-      sendJson(res, 200, ListTasksResponse.toJSON(result), { 'Content-Type': A2A_CONTENT_TYPE });
-      return;
+      return sendJson(200, ListTasksResponse.toJSON(result), { 'Content-Type': A2A_CONTENT_TYPE });
     }
 
-    sendJson(res, 404, { error: 'Not found' });
+    return sendJson(404, { error: 'Not found' });
   } catch (err) {
-    sendJson(res, restErrorStatus(err), { error: err instanceof Error ? err.message : String(err) });
+    return sendJson(restErrorStatus(err), { error: err instanceof Error ? err.message : String(err) });
   }
 }
 

@@ -8,8 +8,10 @@ export {
   type HttpHost,
   type HttpHostAddress,
   type HttpRouteRegistration,
+  type RouteContext,
   type WsConnection,
   type WsHandle,
+  type WsRouteOptions,
 } from './http-host.js';
 export type { AuthenticatedTokenPrincipal, AuthScope } from './token-registry.js';
 export type { ListedRoute, OpenApiParameter, RouteMeta } from './openapi.js';

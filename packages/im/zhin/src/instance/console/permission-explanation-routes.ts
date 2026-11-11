@@ -1,10 +1,9 @@
 import { adapterFeatureId, isAdapterIndex } from '@zhin.js/adapter';
 import { commandFeatureId, explainCommandPermissions, isCommandIndex, type CommandDescriptor } from '@zhin.js/command';
-import { extractBearerToken, HttpBodyError, isUserPrincipal, readJsonBody, requestConsolePrincipal, type HttpHost } from '@zhin.js/host-http';
+import { extractBearerToken, HttpBodyError, isUserPrincipal, jsonResponse, readJsonBody, type HttpHost, type RouteContext } from '@zhin.js/host-http';
 import { PermissionHost, permissionHostToken } from '@zhin.js/permission';
 import { createMessages, isLocale, resolveLocale, type Locale, normalizeDeliveryTarget, type CapabilityId, type DeliveryTarget, type RuntimeSnapshot, type SnapshotLease, type SnapshotReader } from '@zhin.js/plugin-runtime';
-import type { IncomingMessage, ServerResponse } from 'node:http';
-import { writeJson } from '@zhin.js/gateway/http';
+import { noStore } from './no-store.js';
 
 const messages = createMessages({
   generation: { 'zh-CN': "运行代已变化，请刷新命令列表后重新模拟", en: "The generation changed. Refresh the command list before simulating again." },
@@ -33,9 +32,11 @@ class ExplanationError extends Error {
 /** Describes command conditions without executing a command, checker, default factory or Endpoint operation. */
 export function registerPermissionExplanationRoutes(options: Readonly<{ http: HttpHost; base: string; snapshots?: SnapshotReader }>): void {
   const { http, base, snapshots } = options;
-  http.route('GET', `${base}/commands/permissions`, (request, response, url, scope) => {
+  http.route('GET', `${base}/commands/permissions`, noStore((request, context) => {
+    const { url } = context;
     const locale = resolveLocale(url.searchParams.get('locale'));
-    if (!authorize(request, response, http, scope, locale)) return;
+    const denied = authorize(request, context, http, locale);
+    if (denied) return denied;
     let lease: SnapshotLease | undefined;
     try {
       for (const key of url.searchParams.keys()) if (!['page', 'pageSize', 'q', 'locale'].includes(key) || url.searchParams.getAll(key).length !== 1) invalid();
@@ -49,15 +50,17 @@ export function registerPermissionExplanationRoutes(options: Readonly<{ http: Ht
       const commands = commandIndex(snapshot).list(locale).filter(command => !q || `${command.name}\n${command.description ?? ''}\n${command.owner}`.toLocaleLowerCase().includes(q.toLocaleLowerCase()));
       const offset = (page - 1) * pageSize;
       if (!Number.isSafeInteger(offset)) invalid();
-      send(response, { generation: snapshot.generation, page, pageSize, total: commands.length,
+      return send({ generation: snapshot.generation, page, pageSize, total: commands.length,
         commands: commands.slice(offset, offset + pageSize).map(projectCommand) });
-    } catch (error) { failure(response, error, locale); }
+    } catch (error) { return failure(error, locale); }
     finally { lease?.release(); }
-  }, { summary: 'Explain declared command conditions', tags: ['commands'], description: 'Authenticated full-scope, read-only metadata. No command execution or permission checker calls.' });
+  }), { summary: 'Explain declared command conditions', tags: ['commands'], description: 'Authenticated full-scope, read-only metadata. No command execution or permission checker calls.' });
 
-  http.route('POST', `${base}/commands/permissions/explain`, async (request, response, url, scope) => {
+  http.route('POST', `${base}/commands/permissions/explain`, noStore(async (request, context) => {
+    const { url } = context;
     const locale = resolveLocale(url.searchParams.get('locale'));
-    if (!authorize(request, response, http, scope, locale)) return;
+    const denied = authorize(request, context, http, locale);
+    if (denied) return denied;
     let lease: SnapshotLease | undefined;
     try {
       validateLocale(url);
@@ -79,20 +82,19 @@ export function registerPermissionExplanationRoutes(options: Readonly<{ http: Ht
       const explanation = explainCommandPermissions(command, { source, locale,
         rolesKnown: input.sender?.roles !== undefined,
         permissionHost: host instanceof PermissionHost ? 'present' : host === undefined || host === null ? 'missing' : 'unverified' });
-      send(response, { generation: snapshot.generation, simulation: true, command: commandData,
+      return send({ generation: snapshot.generation, simulation: true, command: commandData,
         ...(input.target ? { target: input.target } : {}), ...(input.sender ? { sender: input.sender } : {}), ...explanation });
-    } catch (error) { failure(response, error, locale); }
+    } catch (error) { return failure(error, locale); }
     finally { lease?.release(); }
-  }, { summary: 'Simulate command builtin conditions', tags: ['commands'], description: 'Hypothetical conditions only, never authorization. Full canonical targets are checked against the current Endpoint catalog without probing connectivity.' });
+  }), { summary: 'Simulate command builtin conditions', tags: ['commands'], description: 'Hypothetical conditions only, never authorization. Full canonical targets are checked against the current Endpoint catalog without probing connectivity.' });
 }
 
-function authorize(request: IncomingMessage, response: ServerResponse, http: HttpHost, scope: string, locale: Locale): boolean {
-  response.setHeader('cache-control', 'no-store');
-  const explicit = isUserPrincipal(requestConsolePrincipal(request))
-    || http.tokenRegistry.resolve(extractBearerToken(request.headers.authorization, null)) === 'full';
-  if (scope === 'full' && explicit) return true;
-  writeJson(response, 401, { success: false, error: messages(locale, 'auth') });
-  return false;
+/** Denial response, or undefined when the caller presented an explicit Console credential. */
+function authorize(request: Request, context: RouteContext, http: HttpHost, locale: Locale): Response | undefined {
+  const explicit = isUserPrincipal(context.principal)
+    || http.tokenRegistry.resolve(extractBearerToken(request.headers.get('authorization') ?? undefined, null)) === 'full';
+  if (explicit) return undefined;
+  return jsonResponse(401, { success: false, error: messages(locale, 'auth') });
 }
 function acquire(snapshots?: SnapshotReader): SnapshotLease {
   if (!snapshots) throw new ExplanationError(503, 'runtime');
@@ -168,14 +170,14 @@ function integerQuery(value: string | null, fallback: number, max: number): numb
   return Number(value);
 }
 function invalid(): never { throw new ExplanationError(400, 'invalid'); }
-function send(response: ServerResponse, data: unknown): void {
+function send(data: unknown): Response {
   if (Buffer.byteLength(JSON.stringify(data)) > OUTPUT_LIMIT) throw new ExplanationError(503, 'large');
-  writeJson(response, 200, { success: true, data });
+  return jsonResponse(200, { success: true, data });
 }
-function failure(response: ServerResponse, error: unknown, locale: Locale): void {
-  if (error instanceof ExplanationError) writeJson(response, error.status, { success: false, error: messages(locale, error.key) });
-  else if (error instanceof HttpBodyError) writeJson(response, error.statusCode, { success: false, error: messages(locale, 'body') });
-  else writeJson(response, 500, { success: false, error: messages(locale, 'unavailable') });
+function failure(error: unknown, locale: Locale): Response {
+  if (error instanceof ExplanationError) return jsonResponse(error.status, { success: false, error: messages(locale, error.key) });
+  else if (error instanceof HttpBodyError) return jsonResponse(error.statusCode, { success: false, error: messages(locale, 'body') });
+  else return jsonResponse(500, { success: false, error: messages(locale, 'unavailable') });
 }
 
 function validateLocale(url: URL): void {
