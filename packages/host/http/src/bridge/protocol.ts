@@ -20,6 +20,7 @@
  *
  * This module must not import `node:http` / `ws`: the instance loads it.
  */
+import type { ConsolePluginPermissionInfo } from '@zhin.js/console-protocol';
 import type { ConsoleAuditEntry, ConsolePrincipal } from '../access-control.js';
 import type { HttpHostAddress } from '../host-options.js';
 import type { RouteMeta } from '../openapi.js';
@@ -27,10 +28,13 @@ import type { RouteMeta } from '../openapi.js';
 /**
  * Bumped on any incompatible change to the control channel messages.
  * - 1: `ready` / `restart-request` / `shutdown` (B1.1).
- * - 2: route table, HTTP streams, WebSocket frames, forwarded principal (B1.2); delegated
- *   credential resolution (`auth.*`) while Console accounts still live in the instance (until B1.4).
+ * - 2: route table, HTTP streams, WebSocket frames, forwarded principal (B1.2); interim delegated
+ *   credential resolution (`auth.*`).
+ * - 3: Console accounts live in the gateway (B1.4): `auth.*` removed; `catalog` (plugin permission
+ *   catalog) and `audit` (instance-side audit entries) from the instance; `principal-revoked`
+ *   from the gateway.
  */
-export const INSTANCE_BRIDGE_PROTOCOL_VERSION = 2;
+export const INSTANCE_BRIDGE_PROTOCOL_VERSION = 3;
 
 /** Protocol versions this build can talk to. */
 export const SUPPORTED_BRIDGE_PROTOCOL_VERSIONS: readonly number[] = Object.freeze([INSTANCE_BRIDGE_PROTOCOL_VERSION]);
@@ -188,28 +192,26 @@ export type WsCloseMessage = BridgeStreamMessage<'ws.close', WsClosePayload>;
 export type WsDrainMessage = BridgeStreamMessage<'ws.drain', CreditPayload>;
 
 /**
- * Delegated authentication (interim until B1.4 moves Console accounts into the gateway): the
- * instance owns the user / session store, so the gateway asks it to resolve a bearer and mirrors
- * whether an owner exists (`auth.state`, sent on change). Only user / API-token principals are
- * resolved this way; the bootstrap token and an open Host are decided by the gateway itself.
+ * Plugin permission catalog of the instance's current generation (ADR 0049 amendment): the
+ * gateway uses it for level grants in `/auth/me`, `iam.roles.list` and its own authorization.
+ * Sent on listen and whenever it changes (generation commit).
  */
-export interface AuthStatePayload {
-  /** An enabled global owner exists (`ConsoleAccessProvider.initialized()`). */
-  readonly initialized: boolean;
+export interface InstanceCatalogPayload {
+  readonly pluginPermissions: readonly ConsolePluginPermissionInfo[];
 }
 
-export interface AuthResultPayload {
-  /** Resolved user / API-token principal; null when unknown, expired or revoked. */
-  readonly principal: ConsolePrincipal | null;
+/** An audit entry written by the instance (its RPC dispatcher); the gateway owns the audit log. */
+export interface InstanceAuditPayload {
+  readonly entry: ConsoleAuditEntry;
 }
 
-export type InstanceAuthStateMessage = BridgeMessage<'auth.state', AuthStatePayload>;
-export type InstanceAuthResultMessage = BridgeStreamMessage<'auth.result', AuthResultPayload>;
+export type InstanceCatalogMessage = BridgeMessage<'catalog', InstanceCatalogPayload>;
+export type InstanceAuditMessage = BridgeMessage<'audit', InstanceAuditPayload>;
 
 export type InstanceToGatewayMessage =
   | InstanceReadyMessage
-  | InstanceAuthStateMessage
-  | InstanceAuthResultMessage
+  | InstanceCatalogMessage
+  | InstanceAuditMessage
   | InstanceRestartRequestMessage
   | InstanceRoutesMessage
   | HttpResponseHeadMessage
@@ -251,20 +253,18 @@ export interface WsOpenPayload {
   readonly remoteAddress?: string;
 }
 
-export interface AuthAuthenticatePayload {
-  /** The bearer the client presented (never logged). */
-  readonly token: string;
-  readonly ip?: string;
-  readonly userAgent?: string;
-}
-
-export interface AuthAuditPayload {
-  readonly entry: ConsoleAuditEntry;
+/**
+ * A user's credentials were revoked or narrowed (disabled, deleted, password changed, bindings
+ * changed): the instance closes that principal's live connections (SSE, WebSocket).
+ */
+export interface PrincipalRevokedPayload {
+  /** `ConsoleUserPrincipal.userId`. */
+  readonly principalId: string;
+  readonly reason?: string;
 }
 
 export type GatewayShutdownMessage = BridgeMessage<'shutdown', GatewayShutdownPayload>;
-export type GatewayAuthAuthenticateMessage = BridgeStreamMessage<'auth.authenticate', AuthAuthenticatePayload>;
-export type GatewayAuthAuditMessage = BridgeMessage<'auth.audit', AuthAuditPayload>;
+export type GatewayPrincipalRevokedMessage = BridgeMessage<'principal-revoked', PrincipalRevokedPayload>;
 export type GatewayAddressesMessage = BridgeMessage<'host.addresses', { readonly addresses: readonly HttpHostAddress[] }>;
 export type HttpRequestMessage = BridgeStreamMessage<'http.request', HttpRequestPayload>;
 export type HttpRequestBodyMessage = BridgeStreamMessage<'http.request.body', BodyChunkPayload>;
@@ -275,8 +275,7 @@ export type WsOpenMessage = BridgeStreamMessage<'ws.open', WsOpenPayload>;
 
 export type GatewayToInstanceMessage =
   | GatewayShutdownMessage
-  | GatewayAuthAuthenticateMessage
-  | GatewayAuthAuditMessage
+  | GatewayPrincipalRevokedMessage
   | GatewayAddressesMessage
   | HttpRequestMessage
   | HttpRequestBodyMessage
@@ -413,7 +412,15 @@ function isRouteTable(value: unknown, limits: BridgeLimits): value is BridgeRout
   return true;
 }
 
-const MAX_BEARER_LENGTH = 4096;
+const MAX_CATALOG_ENTRIES = 4096;
+const PLUGIN_PERMISSION_LEVELS: ReadonlySet<unknown> = new Set(['read', 'operate', 'manage']);
+
+function isCatalogEntry(value: unknown): value is ConsolePluginPermissionInfo {
+  if (!isRecord(value)) return false;
+  if (!isText(value.id, 256) || !PLUGIN_PERMISSION_LEVELS.has(value.level) || typeof value.declared !== 'boolean') return false;
+  if (value.description !== undefined && !isText(value.description)) return false;
+  return Array.isArray(value.owners) && value.owners.length <= 256 && value.owners.every((owner) => isText(owner, 256));
+}
 
 function isAuditEntry(value: unknown): value is ConsoleAuditEntry {
   if (!isRecord(value)) return false;
@@ -452,20 +459,18 @@ export function parseInstanceMessage(
       return value as unknown as InstanceRestartRequestMessage;
     case 'routes':
       return isRouteTable(payload.table, limits) ? value as unknown as InstanceRoutesMessage : undefined;
-    case 'auth.state':
-      return typeof payload.initialized === 'boolean' ? value as unknown as InstanceAuthStateMessage : undefined;
+    case 'catalog': {
+      const list = payload.pluginPermissions;
+      if (!Array.isArray(list) || list.length > MAX_CATALOG_ENTRIES || !list.every(isCatalogEntry)) return undefined;
+      return value as unknown as InstanceCatalogMessage;
+    }
+    case 'audit':
+      return isAuditEntry(payload.entry) ? value as unknown as InstanceAuditMessage : undefined;
     default:
       break;
   }
   if (!hasStreamId(value)) return undefined;
   switch (value.type) {
-    case 'auth.result': {
-      if (payload.principal === null) return value as unknown as InstanceAuthResultMessage;
-      const principal = parseBridgePrincipal(payload.principal);
-      // Only accounts resolve through the instance; the gateway decides bootstrap itself.
-      if (!principal || principal.kind === 'bootstrap') return undefined;
-      return { type: 'auth.result', id: value.id as string, payload: { principal } };
-    }
     case 'http.response.head':
       if (!Number.isSafeInteger(payload.status) || (payload.status as number) < 200 || (payload.status as number) > 599) return undefined;
       if (payload.statusText !== undefined && !isText(payload.statusText)) return undefined;
@@ -506,17 +511,15 @@ export function parseGatewayMessage(
     case 'host.addresses':
       if (!Array.isArray(payload.addresses) || payload.addresses.length > 64 || !payload.addresses.every(isAddress)) return undefined;
       return value as unknown as GatewayAddressesMessage;
-    case 'auth.audit':
-      return isAuditEntry(payload.entry) ? value as unknown as GatewayAuthAuditMessage : undefined;
+    case 'principal-revoked':
+      if (!isText(payload.principalId) || payload.principalId.length === 0) return undefined;
+      if (payload.reason !== undefined && !isText(payload.reason, 64)) return undefined;
+      return value as unknown as GatewayPrincipalRevokedMessage;
     default:
       break;
   }
   if (!hasStreamId(value)) return undefined;
   switch (value.type) {
-    case 'auth.authenticate':
-      if (!isText(payload.token, MAX_BEARER_LENGTH)) return undefined;
-      if (!isOptionalRemote(payload.ip) || (payload.userAgent !== undefined && !isText(payload.userAgent))) return undefined;
-      return value as unknown as GatewayAuthAuthenticateMessage;
     case 'http.request':
       if (!isText(payload.method, 16) || !/^[A-Za-z]+$/u.test(payload.method)) return undefined;
       if (!isText(payload.url, limits.maxHeadBytes) || typeof payload.body !== 'boolean') return undefined;

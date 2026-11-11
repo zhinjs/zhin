@@ -206,7 +206,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   const bridgedHttpHost: BridgedHttpHost | undefined = controlChannel
     ? createBridgedHttpHost({
       channel: controlChannel,
-      token: primaryHttpListener.token,
+      // No `http.token` here: the gateway decides bootstrap and forwards the principal.
       corsOrigins: primaryHttpListener.corsOrigins,
       apiBase: primaryHttpListener.apiBase,
       authExemptPaths: primaryHttpListener.authExemptPaths,
@@ -276,8 +276,11 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
       return host.runtime.configurationSchemas;
     },
   });
-  // Console access control (ADR 0049): tables before the database starts, activated after it.
-  const consoleIam = installConsoleIam(httpHost, {
+  // Console access control (ADR 0049) and the terminal (ADR 0051) belong to the gateway, which
+  // owns the console_* tables and authenticates every request (ADR 0054 §3 / §7); this instance
+  // only authorizes the forwarded principal. A standalone (dev / test) instance has no gateway,
+  // so it still serves them itself.
+  const consoleIam = bridgedHttpHost ? undefined : installConsoleIam(httpHost, {
     database: databaseHost,
     configStore: consoleConfigurationStore,
     projectRoot: options.root,
@@ -285,14 +288,14 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     logger: getLogger('console'),
     requestRestart: () => { void requestProcessRestart('database'); },
   });
-  // Console terminal (ADR 0051): off unless `console.terminal.enabled`; owner-only via ops.terminal.
-  const consoleTerminal = installHostConsoleTerminal(httpHost, {
+  const consoleTerminal = bridgedHttpHost ? undefined : installHostConsoleTerminal(httpHost, {
     config: readConsoleTerminalConfig(hostConfig),
     projectRoot: options.root,
     base: httpConfig.apiBase ?? '/api',
-    iam: () => (consoleIam.supported ? consoleIam.service : undefined),
+    iam: () => (consoleIam?.supported ? consoleIam.service : undefined),
     logger: getLogger('console'),
   });
+  const consoleIamService = () => (consoleIam?.supported ? consoleIam.service : undefined);
   const authorizeConfigurationChat = createConfigurationChatAuthorizer(hostConfig, endpointRoles);
   const authorizeRestartChat = createRestartChatAuthorizer(hostConfig, endpointRoles);
   // 受控自我进化生效（ADR 0040 §5 / §6）：进程持有热重载 / 受控重启 / 健康检查 / 配置补丁；最新 generation 绑定生效器。
@@ -326,7 +329,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
       im.install(context.resources);
       installHttpHost(httpHost)(context);
       installDatabaseHost(databaseHost)(context);
-      context.handoff.add({ activateNext: async () => { await consoleIam.activate(); } });
+      if (consoleIam) context.handoff.add({ activateNext: async () => { await consoleIam.activate(); } });
       // Match DatabaseHost's atomic-state capability. Unsupported dialects keep
       // static accounts; a failed read on a supported database still fails startup.
       if (['sqlite', 'mysql', 'pg'].includes(databaseHost.dialect)) {
@@ -474,7 +477,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     snapshot: () => host.runtime.snapshot,
     snapshots: host.runtime.snapshots,
     onRestart: () => requestProcessRestart('console'),
-    consoleIam: () => (consoleIam.supported ? consoleIam.service : undefined),
+    consoleIam: consoleIamService,
   });
   function requestProcessRestart(reason: string): Promise<void> {
     // ADR 0054 §3: restarts belong to the gateway. It answers `restart-request` with `shutdown`
@@ -539,8 +542,8 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     try {
       disposeReadiness();
       disposeConsoleControlPlane();
-      consoleTerminal.close();
-      consoleIam.dispose();
+      consoleTerminal?.close();
+      consoleIam?.dispose();
       // Process ingress owns WebSocket operation leases. Close it before Root
       // drain so long-lived connections release those leases instead of
       // deadlocking SnapshotStore.close().

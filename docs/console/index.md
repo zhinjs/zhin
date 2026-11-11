@@ -176,6 +176,8 @@ Console 的用户、角色、会话和 API 令牌存在项目数据库里（ADR 
 - **角色**：内置 `owner`（全部）、`admin`（除终端和用户管理外全部）、`operator`（运营：收发消息、功能配置）、`viewer`（只读）。角色可以绑定到全局、某个适配器或某个账号。
 - **权限检查**：每个 Console RPC 和每条 `/api` 路由都在 `@zhin.js/console-protocol` 的权限表里登记；没登记的一律拒绝。所有被拒绝的请求和写操作都记入审计日志。
 - **离线救援**：`zhin console user create|passwd|disable|enable|list` 直接打开项目数据库，不需要运行中的 Host。
+- **在网关里**（ADR 0054 §3、§7）：登录、初始化向导、`/auth/me`、`iam.*`、`onboarding.update`、终端和审计日志都由管理网关处理，网关自己打开项目数据库（SQLite 为 WAL 模式，与实例共用同一个文件）。实例停止、崩溃或依赖安装期间 Console 仍能登录、初始化、看实例状态与日志；只有实例提供的页面和接口返回 `503`。禁用 / 删除用户、改密码或改角色绑定时，该用户在实例上的实时连接（事件流、WebSocket）随即断开。
+- **引导状态**：`GET {base}/auth/setup` 与（持有 `plugin.manage` 的调用方的）`/auth/me` 带 `onboarding` 字段；RPC `onboarding.update { step: 'ai' | 'adapters' | 'finish', status: 'done' | 'skipped' }` 需要 `plugin.manage`，第 3 步（`ai`）另需 `agent.configure`，第 4 步（`adapters`）另需 `endpoint.manage`（ADR 0053 §2）。依赖安装进度在 Console 事件流上以 `gateway.packages.progress` 推送，也可单独订阅 `GET {base}/gateway/packages/progress`。
 
 页面的 `requiredPermissions` 与 `requiredRoles` 决定谁能看到它：内置权限（如 `status.view`）按角色授予；插件自己定义的权限名（形如 `<插件>:<动作>`，如 `ambient:read`、`decisions:read`、`control:read`、`ops:approve`）按**级别**授予。页面清单（`/entries`、`/console/api/pages`、`/console/api/topology`）按调用者过滤，且不会被缓存。
 

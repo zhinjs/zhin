@@ -6,6 +6,12 @@
  * authentication mode: the gateway authenticated the caller and the principal travels with the
  * request; the router still authorizes it against the Console permission map.
  *
+ * Console accounts live in the gateway (ADR 0054 §7): the instance never resolves a bearer. Its
+ * token registry is closed (no bootstrap token, no open Host): every grant arrives as the
+ * forwarded principal. Audit entries the instance writes go to the gateway (`audit`), the plugin
+ * permission catalog of the current generation is reported (`catalog`), and `principal-revoked`
+ * closes that user's live exchanges and sockets.
+ *
  * Nothing here imports `node:http` or `ws`.
  */
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -20,7 +26,8 @@ import {
   type HttpRouterOptions,
   type WsTransport,
 } from '../http-host.js';
-import type { ConsoleUserPrincipal } from '../access-control.js';
+import type { ConsoleAccessProvider, ConsoleAuditEntry, ConsolePrincipal } from '../access-control.js';
+import { TokenRegistry } from '../token-registry.js';
 import type { HttpHostAddress } from '../host-options.js';
 import { httpHostAddressProvider, type AddressAwareHttpHost } from '../addresses.js';
 import type { RouteMeta } from '../openapi.js';
@@ -41,8 +48,8 @@ import {
 
 const logger = getLogger('http');
 const BODYLESS_METHODS = new Set(['GET', 'HEAD']);
-/** How often the owner-exists flag is re-read for `auth.state` (also re-read after each exchange). */
-const AUTH_STATE_POLL_MS = 1_000;
+/** Close code / reason used when the gateway revoked the socket's principal. */
+export const PRINCIPAL_REVOKED_CLOSE_CODE = 4401;
 
 /** What the bridged Host needs from the control channel (see `openInstanceControlChannel`). */
 export interface BridgeChannel {
@@ -53,7 +60,7 @@ export interface BridgeChannel {
   hold?(): () => void;
 }
 
-export interface BridgedHttpHostOptions extends Omit<HttpRouterOptions, 'address' | 'authentication' | 'secure'> {
+export interface BridgedHttpHostOptions extends Omit<HttpRouterOptions, 'address' | 'authentication' | 'secure' | 'token' | 'tokenRegistry'> {
   readonly channel: BridgeChannel;
   readonly limits?: Partial<BridgeLimits>;
 }
@@ -73,15 +80,23 @@ export interface BridgedHttpHost extends HttpHost, GenerationAdmissionBindable<H
   publishRoutes(generation?: number): void;
   /** Open HTTP exchanges plus WebSocket connections. */
   readonly activeStreams: number;
+  /**
+   * Called when the gateway revoked a principal (after its exchanges and sockets were closed),
+   * for state the bridge does not see (e.g. sessions keyed by user). Returns an unsubscriber.
+   */
+  onPrincipalRevoked(listener: (principalId: string) => void): () => void;
 }
 
 interface Exchange {
   readonly abort: AbortController;
   readonly gate: CreditGate;
   body?: InboundBody;
+  /** User id of the forwarded principal (closed on `principal-revoked`). */
+  readonly principalId?: string;
 }
 
 interface BridgedSocket {
+  principalId?: string;
   readonly messageListeners: Set<(data: string | Uint8Array) => void>;
   readonly closeListeners: Set<(code: number, reason: string) => void>;
   buffered: number;
@@ -94,8 +109,10 @@ export function createBridgedHttpHost(options: BridgedHttpHostOptions): BridgedH
   const limits: BridgeLimits = Object.freeze({ ...DEFAULT_BRIDGE_LIMITS, ...options.limits });
   const { channel } = options;
   let addresses: readonly HttpHostAddress[] = Object.freeze([]);
+  const tokenRegistry = new TokenRegistry();
   const router: HttpRouter = createHttpRouter({
     ...options,
+    tokenRegistry,
     authentication: 'forwarded',
     address: () => addresses[0],
     secure: false,
@@ -110,37 +127,49 @@ export function createBridgedHttpHost(options: BridgedHttpHostOptions): BridgedH
   let publishScheduled = false;
   let closeResult: Promise<void> | undefined;
   const disposers: Array<() => void> = [];
-  let authState: boolean | undefined;
+  let lastCatalog: string | undefined;
+  const revokedListeners = new Set<(principalId: string) => void>();
 
   const send = (message: InstanceToGatewayMessage): void => {
     try { channel.send(message); } catch { /* channel gone */ }
   };
 
-  // ---- delegated authentication (interim until B1.4, see protocol `auth.*`)
+  // Closed registry: initialized (no open Host, no bootstrap token), never resolves a bearer;
+  // audit entries are written by the gateway.
+  const forwardedAccess: ConsoleAccessProvider = Object.freeze({
+    initialized: () => true,
+    authenticate: async () => null,
+    audit: (entry: ConsoleAuditEntry) => {
+      if (listening && !closed) send({ type: 'audit', payload: { entry: cloneableAudit(entry) } });
+    },
+  });
+  tokenRegistry.useAccessProvider(forwardedAccess);
 
-  function publishAuthState(): void {
+  /** Reports the plugin permission catalog when it changed (or always with `force`). */
+  function sendCatalog(force: boolean): void {
     if (!listening || closed) return;
-    const initialized = router.tokenRegistry.initialized();
-    if (initialized === authState) return;
-    authState = initialized;
-    send({ type: 'auth.state', payload: { initialized } });
+    let pluginPermissions;
+    try {
+      pluginPermissions = JSON.parse(JSON.stringify(tokenRegistry.pluginPermissions())) as ReturnType<TokenRegistry['pluginPermissions']>;
+    } catch {
+      return;
+    }
+    const fingerprint = JSON.stringify(pluginPermissions);
+    if (!force && fingerprint === lastCatalog) return;
+    lastCatalog = fingerprint;
+    send({ type: 'catalog', payload: { pluginPermissions } });
   }
 
-  async function handleAuthenticate(id: string, token: string, ip: string | undefined, userAgent: string | undefined): Promise<void> {
-    const provider = router.tokenRegistry.accessProvider;
-    let principal: ConsoleUserPrincipal | null = null;
-    if (provider && token && listening && !closed) {
-      try {
-        principal = await provider.authenticate(token, {
-          ...(ip ? { ip } : {}),
-          ...(userAgent ? { userAgent } : {}),
-        });
-      } catch {
-        principal = null;
-      }
+  function revokePrincipal(principalId: string): void {
+    for (const [id, exchange] of [...exchanges]) {
+      if (exchange.principalId === principalId) abortExchange(id, 'Credentials revoked', true);
     }
-    publishAuthState();
-    send({ type: 'auth.result', id, payload: { principal } });
+    for (const socket of [...sockets.values()]) {
+      if (socket.principalId === principalId) socket.finish(PRINCIPAL_REVOKED_CLOSE_CODE, 'Credentials revoked', true);
+    }
+    for (const listener of [...revokedListeners]) {
+      try { listener(principalId); } catch { /* listener failure stays local */ }
+    }
   }
 
   function routeTable(): BridgeRouteTable {
@@ -166,6 +195,8 @@ export function createBridgedHttpHost(options: BridgedHttpHostOptions): BridgedH
     if (!force && fingerprint === lastSent) return;
     lastSent = fingerprint;
     revision += 1;
+    // The catalog follows the generation: report it before the table that serves it.
+    sendCatalog(false);
     send({ type: 'routes', payload: { table: { ...table, revision } } });
   }
 
@@ -189,7 +220,13 @@ export function createBridgedHttpHost(options: BridgedHttpHostOptions): BridgedH
       send({ type: 'http.response.end', id, payload: {} });
       return;
     }
-    const exchange: Exchange = { abort: new AbortController(), gate: new CreditGate(limits.initialCreditBytes) };
+    const principal = payload.principal === undefined ? undefined : parseBridgePrincipal(payload.principal);
+    const principalId = userIdOf(principal);
+    const exchange: Exchange = {
+      abort: new AbortController(),
+      gate: new CreditGate(limits.initialCreditBytes),
+      ...(principalId ? { principalId } : {}),
+    };
     exchanges.set(id, exchange);
     const method = payload.method.toUpperCase();
     if (payload.body && !BODYLESS_METHODS.has(method)) {
@@ -214,7 +251,6 @@ export function createBridgedHttpHost(options: BridgedHttpHostOptions): BridgedH
         send({ type: 'http.response.end', id, payload: {} });
         return;
       }
-      const principal = payload.principal === undefined ? undefined : parseBridgePrincipal(payload.principal);
       const response = await router.handle(request, {
         ...(payload.remoteAddress ? { remoteAddress: payload.remoteAddress } : {}),
         ...(principal ? { principal } : {}),
@@ -242,8 +278,6 @@ export function createBridgedHttpHost(options: BridgedHttpHostOptions): BridgedH
       if (exchanges.get(id) === exchange) exchanges.delete(id);
       exchange.gate.close();
       exchange.body?.fail(new Error('Exchange finished'));
-      // Setup (first owner) happens over HTTP: report it before the next request.
-      publishAuthState();
     }
   }
 
@@ -290,6 +324,8 @@ export function createBridgedHttpHost(options: BridgedHttpHostOptions): BridgedH
     const principal = payload.principal === undefined ? undefined : parseBridgePrincipal(payload.principal);
     // Reserve the id while the upgrade is decided, so a racing ws.close is not lost.
     const socket = createSocket(id);
+    const principalId = userIdOf(principal);
+    if (principalId) socket.principalId = principalId;
     sockets.set(id, socket);
     const decision = await router.upgrade({
       url,
@@ -384,11 +420,8 @@ export function createBridgedHttpHost(options: BridgedHttpHostOptions): BridgedH
       case 'http.request':
         void handleRequest(message);
         return;
-      case 'auth.authenticate':
-        void handleAuthenticate(message.id, message.payload.token, message.payload.ip, message.payload.userAgent);
-        return;
-      case 'auth.audit':
-        try { router.tokenRegistry.accessProvider?.audit?.(message.payload.entry); } catch { /* audit never breaks the bridge */ }
+      case 'principal-revoked':
+        revokePrincipal(message.payload.principalId);
         return;
       case 'http.request.body': {
         const exchange = exchanges.get(message.id);
@@ -444,6 +477,10 @@ export function createBridgedHttpHost(options: BridgedHttpHostOptions): BridgedH
       if (next !== undefined) generation = next;
       sendRoutes(true);
     },
+    onPrincipalRevoked(listener) {
+      revokedListeners.add(listener);
+      return () => { revokedListeners.delete(listener); };
+    },
     async listen() {
       if (closed) throw new Error('HTTP Host is closed');
       if (!listening) {
@@ -451,11 +488,8 @@ export function createBridgedHttpHost(options: BridgedHttpHostOptions): BridgedH
         disposers.push(channel.onMessage(onMessage), channel.onDisconnect(onDisconnect), router.onRoutesChanged(schedulePublish));
         // Like a listening server, a listening bridge keeps the instance alive until close().
         if (channel.hold) disposers.push(channel.hold());
+        sendCatalog(true);
         sendRoutes(true);
-        publishAuthState();
-        const authPoll = setInterval(publishAuthState, AUTH_STATE_POLL_MS);
-        authPoll.unref?.();
-        disposers.push(() => clearInterval(authPoll));
         logger.debug(formatCompact({ op: 'bridge_listening', routes: router.routeCount, ws: router.wsPaths.length }));
       }
       return addresses[0];
@@ -484,6 +518,21 @@ function cloneableMeta(meta: RouteMeta | undefined): RouteMeta | undefined {
     return JSON.parse(JSON.stringify(meta)) as RouteMeta;
   } catch {
     return undefined;
+  }
+}
+
+/** User id of a forwarded user / API-token principal (what `principal-revoked` names). */
+function userIdOf(principal: ConsolePrincipal | undefined): string | undefined {
+  return principal && principal.kind !== 'bootstrap' ? principal.userId : undefined;
+}
+
+/** An audit entry that survives structured clone (JSON detail only). */
+function cloneableAudit(entry: ConsoleAuditEntry): ConsoleAuditEntry {
+  try {
+    return JSON.parse(JSON.stringify(entry)) as ConsoleAuditEntry;
+  } catch {
+    const { detail: _detail, ...rest } = entry;
+    return rest;
   }
 }
 

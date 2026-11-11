@@ -9,17 +9,30 @@ import {
   type ConsolePrincipal,
   type ConsoleRequestMeta,
   type HttpHost,
+  type TokenRegistry,
 } from '@zhin.js/host-http';
+import { CONSOLE_PERMISSIONS } from '@zhin.js/console-protocol';
 import { IamError, type ConsoleIamService } from './service.js';
 import type { ConsoleSetupService } from './setup-service.js';
 
+/** What `/auth/*` needs from a Host: the gateway's HTTP server or an in-process `HttpHost`. */
+export interface ConsoleAuthRouteHost {
+  route: HttpHost['route'];
+  readonly tokenRegistry: TokenRegistry;
+}
+
 export interface RegisterConsoleAuthRoutesOptions {
-  readonly http: HttpHost;
+  readonly http: ConsoleAuthRouteHost;
   readonly base: string;
   readonly iam: () => ConsoleIamService | undefined;
   readonly setup: ConsoleSetupService;
   /** Restarts the process after the database changed (injected; never exits directly). */
   readonly requestRestart?: () => void;
+  /**
+   * Onboarding state (ADR 0053 §4): added to `GET /auth/setup`, and to `/auth/me` for callers
+   * holding `plugin.manage`.
+   */
+  readonly onboarding?: () => Promise<unknown>;
 }
 
 type Handler = (input: Readonly<{
@@ -75,6 +88,15 @@ export function registerConsoleAuthRoutes(options: RegisterConsoleAuthRoutesOpti
     if (principal?.kind !== 'bootstrap') throw new IamError('forbidden', '需要初始化令牌');
   };
   const ok = (data: unknown, status = 200) => ({ status, body: { success: true, data } });
+  const onboarding = async (): Promise<{ onboarding?: unknown }> => {
+    if (!options.onboarding) return {};
+    try {
+      return { onboarding: await options.onboarding() };
+    } catch {
+      return {};
+    }
+  };
+  const managesPlugins = (permissions: readonly string[]) => permissions.includes(CONSOLE_PERMISSIONS.PLUGIN_MANAGE);
 
   return [
     route('POST', CONSOLE_AUTH_ROUTES.LOGIN, async ({ meta, body }) => {
@@ -90,16 +112,22 @@ export function registerConsoleAuthRoutes(options: RegisterConsoleAuthRoutesOpti
       const setupRequired = options.setup.setupRequired();
       if (!principal) return ok({ kind: 'anonymous', permissions: [], bindings: [], setupRequired });
       if (principal.kind === 'bootstrap') {
-        return ok({ kind: 'bootstrap', open: principal.open, permissions: globalPermissions(principal), bindings: [], setupRequired });
+        const permissions = globalPermissions(principal);
+        return ok({
+          kind: 'bootstrap', open: principal.open, permissions, bindings: [], setupRequired,
+          ...(managesPlugins(permissions) ? await onboarding() : {}),
+        });
       }
       const user = await options.iam()?.getUser(principal.userId);
+      // Level grants expanded over the loaded plugins' permission catalog.
+      const permissions = globalPermissions(principal, options.http.tokenRegistry?.pluginPermissions?.() ?? []);
       return ok({
         kind: principal.kind,
         user: user ? { id: user.id, username: user.username, displayName: user.displayName } : { id: principal.userId, username: principal.username, displayName: principal.displayName },
-        // Level grants expanded over the loaded plugins' permission catalog.
-        permissions: globalPermissions(principal, options.http.tokenRegistry?.pluginPermissions?.() ?? []),
+        permissions,
         bindings: principal.grants.map(grant => ({ role: grant.role, scope: grant.scope, permissions: grant.permissions })),
         setupRequired,
+        ...(managesPlugins(permissions) ? await onboarding() : {}),
       });
     }, 'Current Console principal'),
     route('POST', CONSOLE_AUTH_ROUTES.PASSWORD, async ({ meta, principal, body }) => {
@@ -127,7 +155,7 @@ export function registerConsoleAuthRoutes(options: RegisterConsoleAuthRoutesOpti
     // ---------------------------------------------------------------- setup (bootstrap only)
     route('GET', CONSOLE_AUTH_ROUTES.SETUP, async ({ principal }) => {
       requireSetup(principal);
-      return ok(await options.setup.status());
+      return ok({ ...await options.setup.status(), ...await onboarding() });
     }, 'Setup status'),
     route('POST', CONSOLE_AUTH_ROUTES.SETUP, async ({ meta, principal, body }) => {
       requireSetup(principal);

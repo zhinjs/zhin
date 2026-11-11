@@ -12,18 +12,15 @@ export {
 } from './flow.js';
 export {
   createBridgedHttpHost,
+  PRINCIPAL_REVOKED_CLOSE_CODE,
   sendableCloseCode,
   type BridgeChannel,
   type BridgedHttpHost,
   type BridgedHttpHostOptions,
 } from './bridged-host.js';
 export {
-  createDelegatedAccessProvider,
-  DEFAULT_BRIDGE_AUTH_TIMEOUT_MS,
   InstanceTransportError,
   IpcInstanceTransport,
-  isInstanceAccessDelegate,
-  type InstanceAccessDelegate,
   type GatewayInstancePort,
   type InstanceChildProcessLike,
   type InstanceRequestContext,

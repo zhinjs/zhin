@@ -142,7 +142,15 @@ export class TokenRegistry {
    */
   async authorizeBearer(token: string, permission: string, meta: ConsoleRequestMeta = {}): Promise<boolean> {
     if (!token || !this.hasAnyToken()) return false;
-    const principal = await this.authenticate(token, meta);
+    return this.authorizePrincipal(await this.authenticate(token, meta), permission);
+  }
+
+  /**
+   * {@link authorizeBearer} for a principal already resolved from the request's bearer (by this
+   * registry, or by the gateway that forwarded the request): the bootstrap token before setup,
+   * or a user credential holding `permission` globally. An open Host yields false.
+   */
+  authorizePrincipal(principal: ConsolePrincipal | null | undefined, permission: string): boolean {
     if (!principal) return false;
     if (principal.kind === 'bootstrap') return !principal.open;
     return principal.grants.some(grant => grant.scope.kind === 'global' && grant.permissions.includes(permission));

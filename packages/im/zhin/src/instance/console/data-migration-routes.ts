@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { extractBearerToken, HttpBodyError, isUserPrincipal, jsonResponse, readJsonBody, type HttpHost, type RouteContext } from '@zhin.js/host-http';
+import { extractBearerToken, HttpBodyError, isExplicitConsolePrincipal, jsonResponse, readJsonBody, type HttpHost, type RouteContext } from '@zhin.js/host-http';
 import { withNoStore } from './no-store.js';
 import { DataMigrationError, normalizeDeliveryTarget, type PluginId, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import { DataMigrationController, DataMigrationPlanStore } from '@zhin.js/runtime';
@@ -25,7 +25,7 @@ export function registerDataMigrationRoutes(options: DataMigrationRouteOptions):
   }) : undefined;
   const serve = async (operation: MigrationHttpOperation): Promise<Response> => withNoStore(await execute(operation));
   const execute = async ({ request, context, run }: MigrationHttpOperation): Promise<Response> => {
-    const explicit = isUserPrincipal(context.principal)
+    const explicit = isExplicitConsolePrincipal(context.principal)
       || http.tokenRegistry.resolve(extractBearerToken(request.headers.get('authorization') ?? undefined, null)) === 'full';
     if (!explicit) {
       return jsonResponse(401, { success: false, code: 'forbidden', error: '需要管理员凭据' });

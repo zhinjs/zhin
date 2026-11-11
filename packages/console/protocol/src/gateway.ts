@@ -44,8 +44,15 @@ export const GATEWAY_RPC_PERMISSIONS = Object.freeze({
   'gateway.instance.restart': 'ops.restart',
 } as const satisfies Readonly<Record<GatewayRpcType, string>>);
 
-/** Server-sent progress stream of the running package transaction (HTTP wiring comes with the gateway server). */
+/**
+ * SSE event type of package transaction progress (`data`: a {@link GatewayPackageEvent}). The
+ * gateway merges it into the Console event stream (`GET {base}/events`, also while the instance
+ * is stopped) and serves it alone on {@link GATEWAY_PACKAGES_PROGRESS_PATH}.
+ */
 export const GATEWAY_PACKAGES_PROGRESS = 'gateway.packages.progress' as const;
+
+/** `GET {base}` + this: SSE of package progress only (`plugin.manage`). */
+export const GATEWAY_PACKAGES_PROGRESS_PATH = '/gateway/packages/progress' as const;
 
 // ---- gateway.packages.* ----
 

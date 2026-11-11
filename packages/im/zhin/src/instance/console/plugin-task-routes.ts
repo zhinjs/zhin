@@ -1,5 +1,5 @@
 import { adapterFeatureId, isAdapterIndex } from '@zhin.js/adapter';
-import { HttpBodyError, extractBearerToken, isUserPrincipal, jsonResponse, readJsonBody, type HttpHost, type RouteContext } from '@zhin.js/host-http';
+import { HttpBodyError, extractBearerToken, isExplicitConsolePrincipal, jsonResponse, readJsonBody, type HttpHost, type RouteContext } from '@zhin.js/host-http';
 import {
   GenerationAdmissionGate, generationAdmissionSource, normalizeDeliveryTarget,
   PluginTaskError, pluginTaskProviderToken, createMessages, isLocale, resolveLocale, type Locale,
@@ -110,7 +110,7 @@ function queryLocale(url: URL): Locale {
 /** Denial response, or undefined when the caller presented an explicit Console credential. */
 function authorize(request: Request, context: RouteContext, http: HttpHost, locale: Locale): Response | undefined {
   const token = extractBearerToken(request.headers.get('authorization') ?? undefined, null);
-  const explicit = isUserPrincipal(context.principal) || http.tokenRegistry.resolve(token) === 'full';
+  const explicit = isExplicitConsolePrincipal(context.principal) || http.tokenRegistry.resolve(token) === 'full';
   if (explicit) return undefined;
   return jsonResponse(401, { success: false, code: 'forbidden', error: taskMessages(locale, 'auth') });
 }

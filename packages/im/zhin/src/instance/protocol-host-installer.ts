@@ -7,7 +7,7 @@ import {
   type Token,
 } from '@zhin.js/plugin-runtime';
 import { join } from 'node:path';
-import type { HttpHostOptions } from '@zhin.js/host-http';
+import type { ConsolePrincipal, ConsoleRequestMeta, HttpHost, HttpHostOptions } from '@zhin.js/host-http';
 import type { A2AMailboxTransport, RuntimeA2aConfig } from '@zhin.js/a2a/runtime';
 import {
   expandEnvironmentValue,
@@ -35,7 +35,7 @@ interface McpRuntimeModule {
   installRuntimeMcp(options: {
     readonly http: unknown;
     readonly config: RuntimeMcpConfig;
-    readonly authenticateBearer?: (token: string, request: Request, remoteAddress?: string) => Promise<boolean>;
+    readonly authenticateBearer?: (token: string, request: Request, remoteAddress?: string, principal?: unknown) => Promise<boolean>;
     readonly production?: boolean;
     readonly tools: {
       withTools<TResult>(
@@ -111,7 +111,7 @@ export function installProtocolHosts(options: InstallProtocolHostsOptions): Root
         http,
         config: resolved.mcp,
         // http.token is only a bootstrap credential now (ADR 0049): it goes through the registry.
-        authenticateBearer: (token, request, remoteAddress) => http.tokenRegistry.authorizeBearer(token, 'mcp.access', requestMeta(request, remoteAddress)),
+        authenticateBearer: (token, request, remoteAddress, principal) => bearerAllowed(http, token, 'mcp.access', () => requestMeta(request, remoteAddress), principal),
         production: options.production,
         tools: {
           withTools: (invocation, operation) => runtime.withTools(rootPluginId(), {
@@ -181,7 +181,7 @@ export function installProtocolHosts(options: InstallProtocolHostsOptions): Root
           http,
           agentHost: resources.use(agentHostToken),
           config: resolved.a2a,
-          authenticateBearer: (token, request, remoteAddress) => http.tokenRegistry.authorizeBearer(token, 'a2a.access', requestMeta(request, remoteAddress)),
+          authenticateBearer: (token, request, remoteAddress, principal) => bearerAllowed(http, token, 'a2a.access', () => requestMeta(request, remoteAddress), principal),
           fallbackPublicUrl: resolved.publicBaseUrl,
           production: options.production,
         }));
@@ -243,4 +243,19 @@ function isModuleNotFoundError(error: unknown): boolean {
       'code' in error &&
       (error.code === 'ERR_MODULE_NOT_FOUND' || error.code === 'MODULE_NOT_FOUND'),
   );
+}
+
+/**
+ * MCP / A2A credential check: the principal the Host resolved from the bearer (under the gateway
+ * the gateway authenticated it, ADR 0054 §3), else the Host's own registry (standalone).
+ */
+async function bearerAllowed(
+  http: HttpHost,
+  token: string,
+  permission: string,
+  meta: () => ConsoleRequestMeta,
+  principal: unknown,
+): Promise<boolean> {
+  if (principal !== undefined) return http.tokenRegistry.authorizePrincipal(principal as ConsolePrincipal, permission);
+  return http.tokenRegistry.authorizeBearer(token, permission, meta());
 }

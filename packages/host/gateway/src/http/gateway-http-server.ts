@@ -2,8 +2,9 @@
  * The gateway's HTTP server (ADR 0054 §2 / §3): the project's only listener.
  *
  * Request flow:
- * 1. gateway-owned routes ({@link GatewayHttpServer.route} / `ws`) — health, later `/auth/*`,
- *    `iam.*`, terminal, onboarding, `gateway.*`;
+ * 1. gateway-owned routes ({@link GatewayHttpServer.route} / `ws`) — health, `/auth/*`,
+ *    terminal, the merged Console event stream, package progress; gateway-owned Console RPC
+ *    (`gateway.*`, `iam.*`, `onboarding.update`) inside `POST {base}/console/request`;
  * 2. `{base}/…` — authenticated and authorized here, then forwarded with the principal;
  * 3. anything else (plugin webhooks, adapter reverse WebSockets, static pages) — forwarded as-is;
  *    those routes authenticate themselves.
@@ -45,7 +46,7 @@ import {
 } from '@zhin.js/host-http/bridge';
 import { createNodeHttpListener, type NodeHttpListener } from '@zhin.js/host-http/node';
 import { formatCompact, getLogger } from '@zhin.js/logger';
-import { GATEWAY_RPC_PREFIX, type GatewayConsoleRpc } from './console-rpc.js';
+import { GATEWAY_RPC_PREFIX, type GatewayConsoleRpc, type GatewayRpcHandler } from './console-rpc.js';
 
 const logger = getLogger('gateway');
 
@@ -104,6 +105,7 @@ export class GatewayHttpServer {
   readonly #retryAfter: string;
   readonly #maxBody: number;
   readonly #consoleRpc: GatewayConsoleRpc | undefined;
+  readonly #rpcHandlers = new Set<GatewayRpcHandler>();
   #closed = false;
   #closeResult: Promise<void> | undefined;
 
@@ -126,12 +128,10 @@ export class GatewayHttpServer {
       builtinRoutes: false,
     });
     this.#router.route('GET', '/pub/health', () => this.#health(), { summary: 'Gateway health probe', tags: ['pub'] });
-    if (this.#consoleRpc) {
-      this.#router.route('POST', `${this.apiBase}/console/request`, (request, context) => this.#consoleRequest(request, context), {
-        summary: 'Console RPC (gateway.* answered by the gateway, the rest forwarded)',
-        tags: ['console'],
-      });
-    }
+    this.#router.route('POST', `${this.apiBase}/console/request`, (request, context) => this.#consoleRequest(request, context), {
+      summary: 'Console RPC (gateway-owned types answered by the gateway, the rest forwarded)',
+      tags: ['console'],
+    });
     // Lowest precedence: every path no gateway route claims goes to the instance.
     this.#router.route('ALL', '/*', (request, context) => this.#forward(request, context));
     this.#listeners = listenerOptions.map((entry) => createNodeHttpListener({
@@ -154,6 +154,28 @@ export class GatewayHttpServer {
   /** Registers a gateway-owned WebSocket route. */
   ws(path: string, options?: WsRouteOptions): WsHandle {
     return this.#router.ws(path, options);
+  }
+
+  /**
+   * Answers further RPC types on `POST {base}/console/request` (e.g. `iam.*`); the handler checks
+   * the per-RPC permission itself. Returns an unregister function.
+   */
+  useConsoleRpc(handler: GatewayRpcHandler): () => void {
+    this.#rpcHandlers.add(handler);
+    return () => { this.#rpcHandlers.delete(handler); };
+  }
+
+  /** Whether an instance is connected and serving its route table. */
+  get instanceReady(): boolean {
+    return this.#readyTransport() !== undefined;
+  }
+
+  /**
+   * Forwards one request to the instance (the router already authenticated and authorized it):
+   * the instance's response, or the documented 502 / 503 / 504 / 413 gateway responses.
+   */
+  forward(request: Request, context: RouteContext): Promise<Response> {
+    return this.#forward(request, context);
   }
 
   /** Handles one request without a socket (tests, local socket bridge). */
@@ -285,14 +307,19 @@ export class GatewayHttpServer {
       return jsonResponse(400, { success: false, code: 'invalid_body', error: 'Invalid request body' });
     }
     const type = peekRpcType(bytes);
-    if (type !== undefined && type.startsWith(GATEWAY_RPC_PREFIX) && this.#consoleRpc) {
+    const owner = type === undefined
+      ? undefined
+      : type.startsWith(GATEWAY_RPC_PREFIX) && this.#consoleRpc
+        ? this.#consoleRpc
+        : [...this.#rpcHandlers].find((handler) => handler.owns(type));
+    if (owner) {
       let message: Record<string, unknown>;
       try {
         message = JSON.parse(new TextDecoder().decode(bytes)) as Record<string, unknown>;
       } catch {
         return jsonResponse(400, { success: false, code: 'invalid_body', error: 'Invalid JSON body' });
       }
-      return this.#consoleRpc.handle(message, context, this.tokenRegistry);
+      return owner.handle(message, context, this.tokenRegistry);
     }
     const headers = new Headers(request.headers);
     for (const name of HOP_BY_HOP_HEADERS) headers.delete(name);
