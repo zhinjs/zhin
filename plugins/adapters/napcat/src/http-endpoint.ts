@@ -3,7 +3,6 @@ import { toCanonicalSegments } from '@zhin.js/core';
 /**
  * NapCat HTTP endpoint — POST inbound events + HTTP API outbound.
  */
-import type { IncomingMessage, ServerResponse } from 'node:http';
 import {
   createEndpointSpecification, endpointSpec, type Endpoint, type EndpointSpecification,
   createRecallEndpointControl,
@@ -211,13 +210,11 @@ export class NapCatHttpEndpoint extends NapcatClient implements Endpoint {
   #setupRoutes(): void {
     const path = this.#options.config.post_path;
     this.#routeReleases.push(
-      this.#options.http.route('POST', path, async (request, response) => {
-        await this.#handlePost(request, response);
-      }, { summary: 'NapCat HTTP event callback', tags: ['napcat'] }),
+      this.#options.http.route('POST', path, (request) => this.#handlePost(request), { summary: 'NapCat HTTP event callback', tags: ['napcat'] }),
     );
   }
 
-  async #handlePost(request: IncomingMessage, response: ServerResponse): Promise<void> {
+  async #handlePost(request: Request): Promise<Response> {
     try {
       if (!verifyNapCatAccessToken(this.#options.config.access_token, request)) {
         return new Response(JSON.stringify({ message: 'Unauthorized' }), { status: 403, headers: { 'Content-Type': 'application/json' } });

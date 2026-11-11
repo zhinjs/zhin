@@ -4,7 +4,6 @@ import { acceptHttpIngress } from 'imhelper';
 /**
  * OneBot12 HTTP webhook endpoint — POST inbound + api_url outbound.
  */
-import type { IncomingMessage, ServerResponse } from 'node:http';
 import {
   createEndpointSpecification, endpointSpec,
   type Endpoint, type EndpointSpecification,
@@ -208,13 +207,11 @@ export class OneBot12WebhookEndpoint extends Onebot12Client implements Endpoint 
   #setupRoutes(): void {
     const path = this.#options.config.path;
     this.#routeReleases.push(
-      this.#options.http.route('POST', path, async (request, response) => {
-        await this.#handleWebhook(request, response);
-      }, { summary: 'OneBot12 webhook callback', tags: ['onebot12'] }),
+      this.#options.http.route('POST', path, (request) => this.#handleWebhook(request), { summary: 'OneBot12 webhook callback', tags: ['onebot12'] }),
     );
   }
 
-  async #handleWebhook(request: IncomingMessage, response: ServerResponse): Promise<void> {
+  async #handleWebhook(request: Request): Promise<Response> {
     try {
       if (!verifyOneBotAccessToken(this.#options.config.access_token, request)) {
         return new Response(JSON.stringify({ message: 'Unauthorized' }), { status: 403, headers: { 'Content-Type': 'application/json' } });

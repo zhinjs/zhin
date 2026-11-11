@@ -2,7 +2,6 @@ import { createMilkySelfProfile } from './self-profile.js';
 /**
  * Milky webhook endpoint — httpHostToken POST inbound + baseUrl HTTP API outbound.
  */
-import type { IncomingMessage, ServerResponse } from 'node:http';
 import { acceptHttpIngress } from 'imhelper';
 import {
   createEndpointSpecification, endpointSpec, type Endpoint, type EndpointSpecification,
@@ -182,13 +181,11 @@ export class MilkyWebhookEndpoint extends MilkyClient implements Endpoint {
   #setupRoutes(): void {
     const path = this.#options.config.path;
     this.#routeReleases.push(
-      this.#options.http.route('POST', path, async (request, response) => {
-        await this.#handleWebhook(request, response);
-      }, { summary: 'Milky webhook callback', tags: ['milky'] }),
+      this.#options.http.route('POST', path, (request) => this.#handleWebhook(request), { summary: 'Milky webhook callback', tags: ['milky'] }),
     );
   }
 
-  async #handleWebhook(request: IncomingMessage, response: ServerResponse): Promise<void> {
+  async #handleWebhook(request: Request): Promise<Response> {
     try {
       if (!verifyMilkyAccessToken(this.#options.config.access_token, request)) {
         return new Response(JSON.stringify({ message: 'Unauthorized' }), { status: 403, headers: { 'Content-Type': 'application/json' } });

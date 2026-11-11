@@ -1,7 +1,6 @@
 /**
  * DingTalk webhook HTTP: signature → parse → admit.
  */
-import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { readTextBody } from '@zhin.js/host-http-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -26,17 +25,14 @@ export function registerDingTalkWebhookRoutes(
 ): HttpRouteRegistration[] {
   const path = handler.config.webhookPath;
   return [
-    http.route('POST', path, async (request, response) => {
-      await handleDingTalkWebhookRequest(request, response, handler);
-    }, { summary: 'DingTalk robot webhook', tags: ['dingtalk'] }),
+    http.route('POST', path, (request) => handleDingTalkWebhookRequest(request, handler), { summary: 'DingTalk robot webhook', tags: ['dingtalk'] }),
   ];
 }
 
 export async function handleDingTalkWebhookRequest(
-  request: IncomingMessage,
-  response: ServerResponse,
+  request: Request,
   handler: DingTalkWebhookHandler,
-): Promise<void> {
+): Promise<Response> {
   try {
     // DingTalk outgoing callbacks put timestamp/sign on the URL query;
     // headers are accepted as a fallback for legacy senders.

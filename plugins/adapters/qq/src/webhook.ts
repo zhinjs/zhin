@@ -2,7 +2,6 @@
  * QQ HTTP webhook / middleware inbound via httpHostToken POST.
  */
 import path from 'node:path';
-import type { IncomingMessage, ServerResponse } from 'node:http';
 import { Bot, ReceiverMode } from 'qq-official-bot';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -24,17 +23,14 @@ export function registerQqWebhookRoutes(
 ): HttpRouteRegistration[] {
   const webhookPath = handler.config.webhookPath;
   return [
-    http.route('POST', webhookPath, async (request, response) => {
-      await handleQqWebhookRequest(request, response, handler);
-    }, { summary: 'QQ webhook callback', tags: ['qq'] }),
+    http.route('POST', webhookPath, (request) => handleQqWebhookRequest(request, handler), { summary: 'QQ webhook callback', tags: ['qq'] }),
   ];
 }
 
 export async function handleQqWebhookRequest(
-  request: IncomingMessage,
-  response: ServerResponse,
+  request: Request,
   handler: QqWebhookHandler,
-): Promise<void> {
+): Promise<Response> {
   const bot = handler.getBot();
   if (!bot?.middleware) {
     return new Response('QQ receiver not ready', { status: 503, headers: { 'Content-Type': 'text/plain' } });

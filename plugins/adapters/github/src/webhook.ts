@@ -1,7 +1,6 @@
 /**
  * GitHub webhook HTTP: verify → parse → admit inbound comments.
  */
-import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { readTextBody } from '@zhin.js/host-http-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -32,17 +31,14 @@ export function registerGithubWebhookRoutes(
 ): HttpRouteRegistration[] {
   const routePath = handler.config.webhookPath;
   return [
-    http.route('POST', routePath, async (request, response) => {
-      await handleGithubWebhookRequest(request, response, handler);
-    }, { summary: 'GitHub webhook', tags: ['github'] }),
+    http.route('POST', routePath, (request) => handleGithubWebhookRequest(request, handler), { summary: 'GitHub webhook', tags: ['github'] }),
   ];
 }
 
 export async function handleGithubWebhookRequest(
-  request: IncomingMessage,
-  response: ServerResponse,
+  request: Request,
   handler: GithubWebhookHandler,
-): Promise<void> {
+): Promise<Response> {
   const secret = handler.config.webhookSecret;
   if (!secret) {
     return new Response(JSON.stringify({ error: 'Webhook not configured' }), { status: 503, headers: { 'Content-Type': 'application/json' } });

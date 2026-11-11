@@ -1,7 +1,6 @@
 /**
  * WeChat MP webhook HTTP: URL verification + inbound message handling.
  */
-import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Locale } from 'zhin.js/i18n';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { readTextBody } from '@zhin.js/host-http-contract';
@@ -49,21 +48,16 @@ export function registerWeChatMpWebhookRoutes(
 ): HttpRouteRegistration[] {
   const path = handler.config.path;
   return [
-    http.route('GET', path, (request, response, url) => {
-      handleWeChatMpVerification(request, response, url, handler.config);
-    }, { summary: 'WeChat MP URL verification', tags: ['wechat-mp'] }),
-    http.route('POST', path, async (request, response, url) => {
-      await handleWeChatMpMessage(request, response, url, handler);
-    }, { summary: 'WeChat MP inbound webhook', tags: ['wechat-mp'] }),
+    http.route('GET', path, (request, { url }) => handleWeChatMpVerification(request, url, handler.config), { summary: 'WeChat MP URL verification', tags: ['wechat-mp'] }),
+    http.route('POST', path, (request, { url }) => handleWeChatMpMessage(request, url, handler), { summary: 'WeChat MP inbound webhook', tags: ['wechat-mp'] }),
   ];
 }
 
 export function handleWeChatMpVerification(
-  _request: IncomingMessage,
-  response: ServerResponse,
+  _request: Request,
   url: URL,
   config: ResolvedWeChatMpConfig,
-): void {
+): Response {
   const signature = queryParam(url.searchParams.get('signature'));
   const msgSignature = queryParam(url.searchParams.get('msg_signature'));
   const timestamp = queryParam(url.searchParams.get('timestamp'));
@@ -114,11 +108,10 @@ export function handleWeChatMpVerification(
 }
 
 export async function handleWeChatMpMessage(
-  request: IncomingMessage,
-  response: ServerResponse,
+  request: Request,
   url: URL,
   handler: WeChatMpWebhookHandler,
-): Promise<void> {
+): Promise<Response> {
   try {
     const config = handler.config;
     const signature = queryParam(url.searchParams.get('signature'));

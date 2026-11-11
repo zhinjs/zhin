@@ -2,7 +2,6 @@ import { endpointSpec, type Endpoint } from 'zhin.js/adapter';
 /**
  * Discord interactions HTTP: signature → parse → admit.
  */
-import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createMessages } from 'zhin.js/i18n';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -40,17 +39,14 @@ export function registerDiscordInteractionRoutes(
 ): HttpRouteRegistration[] {
   const path = handler.config.interactionsPath;
   return [
-    http.route('POST', path, async (request, response) => {
-      await handleDiscordInteractionRequest(request, response, handler);
-    }, { summary: 'Discord interactions callback', tags: ['discord'] }),
+    http.route('POST', path, (request) => handleDiscordInteractionRequest(request, handler), { summary: 'Discord interactions callback', tags: ['discord'] }),
   ];
 }
 
 export async function handleDiscordInteractionRequest(
-  request: IncomingMessage,
-  response: ServerResponse,
+  request: Request,
   handler: DiscordInteractionsHandler,
-): Promise<void> {
+): Promise<Response> {
   try {
     const signature = headerValue(request.headers['x-signature-ed25519']);
     const timestamp = headerValue(request.headers['x-signature-timestamp']);
@@ -123,7 +119,7 @@ function headerValue(value: string | string[] | undefined): string {
   return value ?? '';
 }
 
-async function readInteractionBody(request: IncomingMessage): Promise<string> {
+async function readInteractionBody(request: Request): Promise<string> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of request) {
@@ -138,6 +134,6 @@ async function readInteractionBody(request: IncomingMessage): Promise<string> {
   return Buffer.concat(chunks).toString('utf8');
 }
 
-function writeJson(response: ServerResponse, status: number, body: unknown): void {
+function writeJson( status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status: status, headers: { 'Content-Type': 'application/json' } });
 }

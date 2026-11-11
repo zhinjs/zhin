@@ -2,7 +2,6 @@
  * Lark/Feishu webhook HTTP: signature → decrypt → verification token → challenge/event → admit.
  */
 import type { LarkCardAction } from './cards.js';
-import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { readTextBody } from '@zhin.js/host-http-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -32,17 +31,14 @@ export function registerLarkWebhookRoutes(
 ): HttpRouteRegistration[] {
   const path = handler.config.webhookPath;
   return [
-    http.route('POST', path, async (request, response) => {
-      await handleLarkWebhookRequest(request, response, handler);
-    }, { summary: 'Lark/Feishu event webhook', tags: ['lark'] }),
+    http.route('POST', path, (request) => handleLarkWebhookRequest(request, handler), { summary: 'Lark/Feishu event webhook', tags: ['lark'] }),
   ];
 }
 
 export async function handleLarkWebhookRequest(
-  request: IncomingMessage,
-  response: ServerResponse,
+  request: Request,
   handler: LarkWebhookHandler,
-): Promise<void> {
+): Promise<Response> {
   try {
     const rawBody = await readTextBody(request);
 

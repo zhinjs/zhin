@@ -1,7 +1,6 @@
 /**
  * LINE webhook HTTP: signature → parse → admit.
  */
-import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { readTextBody } from '@zhin.js/host-http-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -27,17 +26,14 @@ export function registerLineWebhookRoutes(
 ): HttpRouteRegistration[] {
   const path = handler.config.webhookPath;
   return [
-    http.route('POST', path, async (request, response) => {
-      await handleLineWebhookRequest(request, response, handler);
-    }, { summary: 'LINE Messaging API webhook', tags: ['line'] }),
+    http.route('POST', path, (request) => handleLineWebhookRequest(request, handler), { summary: 'LINE Messaging API webhook', tags: ['line'] }),
   ];
 }
 
 export async function handleLineWebhookRequest(
-  request: IncomingMessage,
-  response: ServerResponse,
+  request: Request,
   handler: LineWebhookHandler,
-): Promise<void> {
+): Promise<Response> {
   try {
     const signature = request.headers['x-line-signature'];
     const signatureValue = Array.isArray(signature) ? signature[0] : signature;

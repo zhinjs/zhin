@@ -2,7 +2,6 @@
  * Telegram webhook HTTP: secret token → parse → handle update.
  */
 import { timingSafeEqual } from 'node:crypto';
-import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { readTextBody } from '@zhin.js/host-http-contract';
 import { getLogger } from '@zhin.js/logger';
@@ -29,17 +28,14 @@ export function registerTelegramWebhookRoutes(
 ): HttpRouteRegistration[] {
   const path = handler.config.webhook!.path;
   return [
-    http.route('POST', path, async (request, response) => {
-      await handleTelegramWebhookRequest(request, response, handler);
-    }, { summary: 'Telegram Bot API webhook', tags: ['telegram'] }),
+    http.route('POST', path, (request) => handleTelegramWebhookRequest(request, handler), { summary: 'Telegram Bot API webhook', tags: ['telegram'] }),
   ];
 }
 
 export async function handleTelegramWebhookRequest(
-  request: IncomingMessage,
-  response: ServerResponse,
+  request: Request,
   handler: TelegramWebhookHandler,
-): Promise<void> {
+): Promise<Response> {
   try {
     const secret = handler.config.webhook?.secretToken;
     if (secret) {

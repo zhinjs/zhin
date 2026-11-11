@@ -2,7 +2,6 @@ import { endpointSpec, type Endpoint } from 'zhin.js/adapter';
 /**
  * KOOK webhook HTTP: verify → parse → admit.
  */
-import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
@@ -34,17 +33,14 @@ export function registerKookWebhookRoutes(
 ): HttpRouteRegistration[] {
   const path = handler.endpointConfig.webhookPath;
   return [
-    http.route('POST', path, async (request, response) => {
-      await handleKookWebhookRequest(request, response, handler);
-    }, { summary: 'KOOK webhook callback', tags: ['kook'] }),
+    http.route('POST', path, (request) => handleKookWebhookRequest(request, handler), { summary: 'KOOK webhook callback', tags: ['kook'] }),
   ];
 }
 
 export async function handleKookWebhookRequest(
-  request: IncomingMessage,
-  response: ServerResponse,
+  request: Request,
   handler: KookWebhookHandler,
-): Promise<void> {
+): Promise<Response> {
   try {
     const rawBody = await readRequestBody(request);
     let frame: KookWebhookFrame;

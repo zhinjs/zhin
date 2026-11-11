@@ -1,7 +1,6 @@
 /**
  * Slack webhook HTTP: signature → parse → admit.
  */
-import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { readTextBody } from '@zhin.js/host-http-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -29,17 +28,14 @@ export function registerSlackWebhookRoutes(
 ): HttpRouteRegistration[] {
   const path = handler.config.webhookPath;
   return [
-    http.route('POST', path, async (request, response) => {
-      await handleSlackWebhookRequest(request, response, handler);
-    }, { summary: 'Slack Events API / Interactivity', tags: ['slack'] }),
+    http.route('POST', path, (request) => handleSlackWebhookRequest(request, handler), { summary: 'Slack Events API / Interactivity', tags: ['slack'] }),
   ];
 }
 
 export async function handleSlackWebhookRequest(
-  request: IncomingMessage,
-  response: ServerResponse,
+  request: Request,
   handler: SlackWebhookHandler,
-): Promise<void> {
+): Promise<Response> {
   try {
     const rawBody = await readTextBody(request);
     const timestamp = headerValue(request.headers, 'x-slack-request-timestamp');

@@ -2,7 +2,6 @@
  * Satori webhook HTTP: token → opcode → parse → admit.
  */
 import { timingSafeEqual } from 'node:crypto';
-import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { getLogger } from '@zhin.js/logger';
 import {
@@ -15,7 +14,7 @@ const logger = getLogger('satori');
 export interface SatoriWebhookHandler {
   readonly config: ResolvedSatoriWebhookConfig;
   readonly isOpen: boolean;
-  acceptHttp(request: IncomingMessage, response: ServerResponse): Promise<void>;
+  acceptHttp(request: Request, response: ServerResponse): Promise<void>;
 }
 
 export function registerSatoriWebhookRoutes(
@@ -24,17 +23,14 @@ export function registerSatoriWebhookRoutes(
 ): HttpRouteRegistration[] {
   const path = handler.config.path;
   return [
-    http.route('POST', path, async (request, response) => {
-      await handleSatoriWebhookRequest(request, response, handler);
-    }, { summary: 'Satori webhook callback', tags: ['satori'] }),
+    http.route('POST', path, (request) => handleSatoriWebhookRequest(request, handler), { summary: 'Satori webhook callback', tags: ['satori'] }),
   ];
 }
 
 export async function handleSatoriWebhookRequest(
-  request: IncomingMessage,
-  response: ServerResponse,
+  request: Request,
   handler: SatoriWebhookHandler,
-): Promise<void> {
+): Promise<Response> {
   try {
     if (!verifySatoriToken(handler.config.token, request)) {
       return new Response(JSON.stringify({ message: 'Unauthorized' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
@@ -56,7 +52,7 @@ export async function handleSatoriWebhookRequest(
   }
 }
 
-export function resolveSatoriOpcode(request: IncomingMessage): number | undefined {
+export function resolveSatoriOpcode(request: Request): number | undefined {
   const raw = request.headers['satori-opcode'] ?? request.headers['Satori-Opcode'];
   const value = Array.isArray(raw) ? raw[0] : raw;
   if (value == null || value === '') return undefined;
@@ -64,7 +60,7 @@ export function resolveSatoriOpcode(request: IncomingMessage): number | undefine
   return Number.isNaN(parsed) ? undefined : parsed;
 }
 
-export function verifySatoriToken(token: string | undefined, request: IncomingMessage): boolean {
+export function verifySatoriToken(token: string | undefined, request: Request): boolean {
   if (!token) return true;
   const auth = request.headers.authorization ?? '';
   const expected = Buffer.from(`Bearer ${token}`, 'utf8');
