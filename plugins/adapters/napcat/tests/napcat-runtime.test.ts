@@ -710,7 +710,7 @@ describe('napcat ws lifecycle', () => {
 });
 
 describe('napcat reverse ws lifecycle', () => {
-  it('owns the accepted connection heartbeat and closes it on stop', async () => {
+  it('leaves keepalive to the Host and closes the accepted connection on stop', async () => {
     let acceptConnection: ((connection: unknown) => void) | undefined;
     const releaseRoute = vi.fn();
     const http = {
@@ -740,12 +740,11 @@ describe('napcat reverse ws lifecycle', () => {
       socket: ws,
       request: { headers: {}, url: '/', socket: { remoteAddress: '127.0.0.1' } },
     }));
-    await vi.waitFor(() => expect((ws.ping as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(0));
+    // Keepalive pings belong to the Host transport; the endpoint never pings itself.
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(ws.ping).not.toHaveBeenCalled();
 
     await endpoint.stop();
-    const pingsAfterStop = (ws.ping as ReturnType<typeof vi.fn>).mock.calls.length;
-    await new Promise((resolve) => setTimeout(resolve, 60));
-    expect((ws.ping as ReturnType<typeof vi.fn>).mock.calls.length).toBe(pingsAfterStop);
     expect(ws.close).toHaveBeenCalled();
     expect(releaseRoute).toHaveBeenCalledOnce();
   });

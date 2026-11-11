@@ -101,14 +101,13 @@ describe('sandbox console page', () => {
 
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
-    http.route('GET', '/', async (_request, response) => {
+    http.route('GET', '/', async () => {
       const match = await consoleRuntime.runView(
         { permissions: [], roles: [] },
         (catalog) => catalog.match('/'),
       );
       expect(match.status).toBe('found');
-      response.writeHead(200, { 'content-type': 'text/html' });
-      response.end('<html>sandbox-shell</html>');
+      return new Response('<html>sandbox-shell</html>', { status: 200, headers: { 'content-type': 'text/html' } });
     });
     const { port } = await http.listen();
     const shell = await fetch(`http://127.0.0.1:${port}/`);

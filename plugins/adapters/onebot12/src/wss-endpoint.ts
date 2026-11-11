@@ -242,7 +242,9 @@ export class OneBot12WssEndpoint extends Onebot12Client implements Endpoint {
         }
         if (this.#ws === socket) this.#ws = undefined;
       });
-      // Dead-peer detection is the Host transport's keepalive (protocol ping / pong).
+      this.#connectionLifecycle.startHeartbeat(() => {
+        this.#callAction('get_status', {}).catch(() => {});
+      }, this.#options.config.heartbeat_interval);
       socket.on('message', (data) => {
         if (this.#ws !== socket) return;
         this.#connectionLifecycle.notifyHeartbeatAck();

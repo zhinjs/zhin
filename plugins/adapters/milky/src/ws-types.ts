@@ -29,7 +29,6 @@ export function socketOfConnection(connection: WsConnection): MilkyWsSocket {
     get readyState() { return readyState; },
     send: (data: string) => connection.send(data),
     close: (code?: number, reason?: string) => connection.close(code, reason),
-    terminate: () => connection.close(),
     on(event: string, listener: (...args: unknown[]) => void) {
       if (event === 'message') {
         subscriptions.set(listener, connection.onMessage((data) => {
