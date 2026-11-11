@@ -191,14 +191,10 @@ export class MilkyWebhookEndpoint extends MilkyClient implements Endpoint {
   async #handleWebhook(request: IncomingMessage, response: ServerResponse): Promise<void> {
     try {
       if (!verifyMilkyAccessToken(this.#options.config.access_token, request)) {
-        response.writeHead(403, { 'Content-Type': 'application/json' });
-        response.end(JSON.stringify({ message: 'Unauthorized' }));
-        return;
+        return new Response(JSON.stringify({ message: 'Unauthorized' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
       }
       if (!this.#open) {
-        response.writeHead(200, { 'Content-Type': 'application/json' });
-        response.end(JSON.stringify({ status: 'ok' }));
-        return;
+        return new Response(JSON.stringify({ status: 'ok' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
       }
       await acceptHttpIngress<MilkyEvent>(request, response, event => {
         void this[endpointSpec].events.run(() => this.ingest(event as Parameters<MilkyClient['ingest']>[0]))
@@ -207,8 +203,7 @@ export class MilkyWebhookEndpoint extends MilkyClient implements Endpoint {
     } catch (error) {
       this.#logger.error('Milky webhook error:', error);
       if (!response.headersSent) {
-        response.writeHead(500, { 'Content-Type': 'application/json' });
-        response.end(JSON.stringify({ message: 'Internal Server Error' }));
+        return new Response(JSON.stringify({ message: 'Internal Server Error' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
       }
     }
   }

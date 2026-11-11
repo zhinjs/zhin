@@ -50,9 +50,7 @@ export async function handleLarkWebhookRequest(
     try {
       event = JSON.parse(rawBody) as LarkEventBody;
     } catch {
-      response.writeHead(200, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ code: 0, msg: 'success' }));
-      return;
+      return new Response(JSON.stringify({ code: 0, msg: 'success' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
 
     // Signature first: it covers the raw (possibly encrypted) body.
@@ -67,33 +65,25 @@ export async function handleLarkWebhookRequest(
         || !verifySignature(handler.config.encryptKey, timestamp, nonce, rawBody, signature)
       ) {
         logger.warn(formatCompact({ op: 'webhook', ok: false, error: 'invalid signature' }));
-        response.writeHead(403, { 'Content-Type': 'text/plain' });
-        response.end('Forbidden');
-        return;
+        return new Response('Forbidden', { status: 403, headers: { 'Content-Type': 'text/plain' } });
       }
     }
 
     if (typeof event?.encrypt === 'string') {
       if (!handler.config.encryptKey) {
         logger.warn(formatCompact({ op: 'webhook', ok: false, error: 'encrypted event received but encryptKey is not configured' }));
-        response.writeHead(400, { 'Content-Type': 'application/json' });
-        response.end(JSON.stringify({ code: -1, msg: 'Encrypt key is not configured' }));
-        return;
+        return new Response(JSON.stringify({ code: -1, msg: 'Encrypt key is not configured' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
       }
       try {
         event = JSON.parse(decryptLarkEvent(handler.config.encryptKey, event.encrypt)) as LarkEventBody;
       } catch {
         logger.warn(formatCompact({ op: 'webhook', ok: false, error: 'event decryption failed' }));
-        response.writeHead(400, { 'Content-Type': 'application/json' });
-        response.end(JSON.stringify({ code: -1, msg: 'Decryption failed' }));
-        return;
+        return new Response(JSON.stringify({ code: -1, msg: 'Decryption failed' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
       }
     }
 
     if (!event || typeof event !== 'object') {
-      response.writeHead(200, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ code: 0, msg: 'success' }));
-      return;
+      return new Response(JSON.stringify({ code: 0, msg: 'success' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
 
     // Token and challenge live inside the decrypted event.
@@ -102,9 +92,7 @@ export async function handleLarkWebhookRequest(
       const token = typeof bodyToken === 'string' ? bodyToken : headerValue(request.headers, 'x-lark-request-token');
       if (!verifyToken(token, handler.config.verificationToken)) {
         logger.warn(formatCompact({ op: 'webhook', ok: false, error: 'invalid verification token' }));
-        response.writeHead(403, { 'Content-Type': 'text/plain' });
-        response.end('Forbidden');
-        return;
+        return new Response('Forbidden', { status: 403, headers: { 'Content-Type': 'text/plain' } });
       }
     }
 
@@ -116,9 +104,7 @@ export async function handleLarkWebhookRequest(
     }
 
     if (event.type === 'url_verification') {
-      response.writeHead(200, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ challenge: event.challenge }));
-      return;
+      return new Response(JSON.stringify({ challenge: event.challenge }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
 
     const headerEventType = (event as LarkEventBody & { header?: { event_type?: string } }).header?.event_type;
@@ -132,11 +118,9 @@ export async function handleLarkWebhookRequest(
       handler.admit(message, event);
     }
 
-    response.writeHead(200, { 'Content-Type': 'application/json' });
-    response.end(JSON.stringify({ code: 0, msg: 'success' }));
+    return new Response(JSON.stringify({ code: 0, msg: 'success' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   } catch (error) {
     logger.error('Webhook error:', error);
-    response.writeHead(500, { 'Content-Type': 'application/json' });
-    response.end(JSON.stringify({ code: -1, msg: 'Internal Server Error' }));
+    return new Response(JSON.stringify({ code: -1, msg: 'Internal Server Error' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
 }

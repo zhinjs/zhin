@@ -217,14 +217,10 @@ export class OneBot12WebhookEndpoint extends Onebot12Client implements Endpoint 
   async #handleWebhook(request: IncomingMessage, response: ServerResponse): Promise<void> {
     try {
       if (!verifyOneBotAccessToken(this.#options.config.access_token, request)) {
-        response.writeHead(403, { 'Content-Type': 'application/json' });
-        response.end(JSON.stringify({ message: 'Unauthorized' }));
-        return;
+        return new Response(JSON.stringify({ message: 'Unauthorized' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
       }
       if (!this.#open) {
-        response.writeHead(200, { 'Content-Type': 'application/json' });
-        response.end(JSON.stringify({ status: 'ok' }));
-        return;
+        return new Response(JSON.stringify({ status: 'ok' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
       }
       await acceptHttpIngress<OneBot12Event>(request, response, event => {
         if (!matchesOneBot12Self(this.#options.config, event)) return;
@@ -234,8 +230,7 @@ export class OneBot12WebhookEndpoint extends Onebot12Client implements Endpoint 
     } catch (error) {
       logger.error('OneBot12 webhook error:', error);
       if (!response.headersSent) {
-        response.writeHead(500, { 'Content-Type': 'application/json' });
-        response.end(JSON.stringify({ message: 'Internal Server Error' }));
+        return new Response(JSON.stringify({ message: 'Internal Server Error' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
       }
     }
   }

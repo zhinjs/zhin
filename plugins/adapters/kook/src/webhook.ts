@@ -56,46 +56,32 @@ export async function handleKookWebhookRequest(
         ok: false,
         error: error instanceof Error ? error.message : String(error),
       }));
-      response.writeHead(400, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ message: 'Invalid webhook payload' }));
-      return;
+      return new Response(JSON.stringify({ message: 'Invalid webhook payload' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
     }
 
     const event = frame.d;
     if (!event || typeof event !== 'object') {
-      response.writeHead(200, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ message: 'OK' }));
-      return;
+      return new Response(JSON.stringify({ message: 'OK' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
 
     if (isKookWebhookChallenge(event)) {
       if (!verifyKookWebhookToken(handler.endpointConfig.verifyToken, event.verify_token)) {
-        response.writeHead(403, { 'Content-Type': 'application/json' });
-        response.end(JSON.stringify({ message: 'Invalid verify_token' }));
-        return;
+        return new Response(JSON.stringify({ message: 'Invalid verify_token' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
       }
-      response.writeHead(200, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ challenge: event.challenge ?? '' }));
-      return;
+      return new Response(JSON.stringify({ challenge: event.challenge ?? '' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
 
     if (!verifyKookWebhookToken(handler.endpointConfig.verifyToken, event.verify_token)) {
-      response.writeHead(403, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ message: 'Invalid verify_token' }));
-      return;
+      return new Response(JSON.stringify({ message: 'Invalid verify_token' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
     }
 
     if (!handler.isOpen) {
-      response.writeHead(503, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ message: 'Endpoint unavailable' }));
-      return;
+      return new Response(JSON.stringify({ message: 'Endpoint unavailable' }), { status: 503, headers: { 'Content-Type': 'application/json' } });
     }
     await handler[endpointSpec].events.run(async () => {
       if (frame.sn != null) {
         if (!handler.checkAndRememberSn(frame.sn)) {
-          response.writeHead(200, { 'Content-Type': 'application/json' });
-          response.end(JSON.stringify({ message: 'OK' }));
-          return;
+          return new Response(JSON.stringify({ message: 'OK' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
         }
       }
 
@@ -103,17 +89,13 @@ export async function handleKookWebhookRequest(
         await handler.admitEvent(event);
       } catch {
         if (frame.sn != null) handler.forgetSn?.(frame.sn);
-        response.writeHead(503, { 'Content-Type': 'application/json' });
-        response.end(JSON.stringify({ message: 'Admission unavailable' }));
-        return;
+        return new Response(JSON.stringify({ message: 'Admission unavailable' }), { status: 503, headers: { 'Content-Type': 'application/json' } });
       }
 
-      response.writeHead(200, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ message: 'OK' }));
+      return new Response(JSON.stringify({ message: 'OK' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     });
   } catch (error) {
     logger.error('KOOK webhook error:', error);
-    response.writeHead(200, { 'Content-Type': 'application/json' });
-    response.end(JSON.stringify({ message: 'OK' }));
+    return new Response(JSON.stringify({ message: 'OK' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   }
 }

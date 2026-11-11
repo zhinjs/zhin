@@ -56,9 +56,7 @@ export async function handleDiscordInteractionRequest(
     const timestamp = headerValue(request.headers['x-signature-timestamp']);
     const rawBody = await readInteractionBody(request);
     if (!signature || !timestamp) {
-      response.writeHead(401, { 'Content-Type': 'text/plain' });
-      response.end('Unauthorized');
-      return;
+      return new Response('Unauthorized', { status: 401, headers: { 'Content-Type': 'text/plain' } });
     }
     if (!verifyDiscordInteractionSignature(
       handler.config.publicKey,
@@ -66,15 +64,11 @@ export async function handleDiscordInteractionRequest(
       signature,
       timestamp,
     )) {
-      response.writeHead(401, { 'Content-Type': 'text/plain' });
-      response.end('Unauthorized');
-      return;
+      return new Response('Unauthorized', { status: 401, headers: { 'Content-Type': 'text/plain' } });
     }
     const interaction = JSON.parse(rawBody) as Record<string, unknown>;
     if (!interaction || interaction.application_id !== handler.config.applicationId) {
-      response.writeHead(401, { 'Content-Type': 'text/plain' });
-      response.end('Unauthorized');
-      return;
+      return new Response('Unauthorized', { status: 401, headers: { 'Content-Type': 'text/plain' } });
     }
     // A verified protocol challenge is not a business message and keeps its immediate ACK.
     if (interaction.type === INTERACTION_TYPE_PING) {
@@ -88,7 +82,7 @@ export async function handleDiscordInteractionRequest(
       if (interaction.type === 3) {
         const data = interaction.data as { component_type?: number; custom_id?: string } | undefined;
         if (data?.component_type === 2 && typeof data.custom_id === 'string') {
-          if (!handler.isOpen) { response.writeHead(503); response.end('Unavailable'); return; }
+          if (!handler.isOpen) { return new Response('Unavailable', { status: 503 }); }
           const message = interactionToInboundMessage(interaction);
           handler.admitButton({ event: interaction, id: message.id, customId: data.custom_id, channelId: message.channelId, channelKind: message.channelKind, userId: message.authorId, userName: message.authorName, ...(message.guildId ? { guildId: message.guildId } : {}), sourceMessageId: (interaction.message as { id?: string } | undefined)?.id });
           writeJson(response, 200, { type: 6 });
@@ -114,14 +108,12 @@ export async function handleDiscordInteractionRequest(
         });
         return;
       }
-      response.writeHead(400, { 'Content-Type': 'text/plain' });
-      response.end('Unsupported interaction type');
+      return new Response('Unsupported interaction type', { status: 400, headers: { 'Content-Type': 'text/plain' } });
     });
   } catch (error) {
     logger.error('Discord interactions error:', error);
     if (!response.headersSent) {
-      response.writeHead(500, { 'Content-Type': 'text/plain' });
-      response.end('Internal Server Error');
+      return new Response('Internal Server Error', { status: 500, headers: { 'Content-Type': 'text/plain' } });
     }
   }
 }
@@ -147,6 +139,5 @@ async function readInteractionBody(request: IncomingMessage): Promise<string> {
 }
 
 function writeJson(response: ServerResponse, status: number, body: unknown): void {
-  response.writeHead(status, { 'Content-Type': 'application/json' });
-  response.end(JSON.stringify(body));
+  return new Response(JSON.stringify(body), { status: status, headers: { 'Content-Type': 'application/json' } });
 }

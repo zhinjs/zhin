@@ -46,9 +46,7 @@ export async function handleSlackWebhookRequest(
     const signature = headerValue(request.headers, 'x-slack-signature');
 
     if (!verifySlackSignature(handler.config.signingSecret, rawBody, timestamp, signature)) {
-      response.writeHead(401, { 'Content-Type': 'text/plain' });
-      response.end('Invalid signature');
-      return;
+      return new Response('Invalid signature', { status: 401, headers: { 'Content-Type': 'text/plain' } });
     }
 
     const contentType = headerValue(request.headers, 'content-type');
@@ -57,15 +55,13 @@ export async function handleSlackWebhookRequest(
       const payloadStr = params.get('payload');
       if (payloadStr) {
         const payload = JSON.parse(payloadStr) as SlackInteractionPayload;
-        response.writeHead(200);
-        response.end('');
+        return new Response('', { status: 200 });
         handler.admitInteraction(payload);
         return;
       }
       const body = Object.fromEntries(params) as unknown as SlackSlashCommand;
       if (body.command) {
-        response.writeHead(200);
-        response.end('');
+        return new Response('', { status: 200 });
         handler.admitSlashCommand(body);
         return;
       }
@@ -75,32 +71,25 @@ export async function handleSlackWebhookRequest(
     try {
       envelope = JSON.parse(rawBody) as Record<string, unknown>;
     } catch {
-      response.writeHead(200);
-      response.end('');
-      return;
+      return new Response('', { status: 200 });
     }
 
     if (envelope.type === 'url_verification') {
       const challenge = (envelope as unknown as SlackUrlVerification).challenge;
-      response.writeHead(200, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ challenge }));
-      return;
+      return new Response(JSON.stringify({ challenge }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
 
     if (envelope.type === 'event_callback' && envelope.event) {
-      response.writeHead(200);
-      response.end('');
+      return new Response('', { status: 200 });
       handler.handleEnvelope(envelope);
       return;
     }
 
-    response.writeHead(200);
-    response.end('');
+    return new Response('', { status: 200 });
   } catch (error) {
     logger.error('Slack webhook error:', error);
     if (!response.headersSent) {
-      response.writeHead(200);
-      response.end('');
+      return new Response('', { status: 200 });
     }
   }
 }

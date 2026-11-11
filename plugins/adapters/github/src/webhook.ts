@@ -45,9 +45,7 @@ export async function handleGithubWebhookRequest(
 ): Promise<void> {
   const secret = handler.config.webhookSecret;
   if (!secret) {
-    response.writeHead(503, { 'Content-Type': 'application/json' });
-    response.end(JSON.stringify({ error: 'Webhook not configured' }));
-    return;
+    return new Response(JSON.stringify({ error: 'Webhook not configured' }), { status: 503, headers: { 'Content-Type': 'application/json' } });
   }
 
   const signature = headerValue(request.headers, 'x-hub-signature-256');
@@ -55,9 +53,7 @@ export async function handleGithubWebhookRequest(
   const deliveryId = headerValue(request.headers, 'x-github-delivery');
 
   if (!signature || !event) {
-    response.writeHead(400, { 'Content-Type': 'application/json' });
-    response.end(JSON.stringify({ error: 'Missing signature or event header' }));
-    return;
+    return new Response(JSON.stringify({ error: 'Missing signature or event header' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
   }
 
   try {
@@ -69,22 +65,17 @@ export async function handleGithubWebhookRequest(
         error: 'invalid signature',
         delivery: deliveryId,
       }));
-      response.writeHead(401, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ error: 'Invalid signature' }));
-      return;
+      return new Response(JSON.stringify({ error: 'Invalid signature' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
     }
 
     let payload: unknown;
     try {
       payload = rawBody ? JSON.parse(rawBody) : {};
     } catch {
-      response.writeHead(400, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ error: 'Invalid JSON' }));
-      return;
+      return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
     }
 
-    response.writeHead(200, { 'Content-Type': 'application/json' });
-    response.end(JSON.stringify({ ok: true }));
+    return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
 
     void dispatchGithubWebhookPayload(event, payload, handler).catch((e) => {
       logger.error(`Webhook 事件处理失败 (${event}):`, e);
@@ -92,8 +83,7 @@ export async function handleGithubWebhookRequest(
   } catch (error) {
     logger.error('Webhook error:', error);
     if (!response.headersSent) {
-      response.writeHead(500, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ error: 'Internal Server Error' }));
+      return new Response(JSON.stringify({ error: 'Internal Server Error' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
     }
   }
 }

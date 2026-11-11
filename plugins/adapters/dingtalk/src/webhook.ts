@@ -46,9 +46,7 @@ export async function handleDingTalkWebhookRequest(
     // Missing credentials must never be admitted: verify unconditionally.
     if (!timestamp || !sign || !verifySignature(handler.config.appSecret, timestamp, sign)) {
       logger.warn(formatCompact({ op: 'webhook', ok: false, error: 'invalid signature' }));
-      response.writeHead(403, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ code: -1, msg: 'Forbidden' }));
-      return;
+      return new Response(JSON.stringify({ code: -1, msg: 'Forbidden' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
     }
 
     const rawBody = await readTextBody(request);
@@ -56,20 +54,16 @@ export async function handleDingTalkWebhookRequest(
     try {
       event = JSON.parse(rawBody) as DingTalkEvent;
     } catch {
-      response.writeHead(200, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ code: 0, msg: 'success' }));
-      return;
+      return new Response(JSON.stringify({ code: 0, msg: 'success' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
 
     if (event.msgtype && handler.isOpen) {
       await handler.admit(event);
     }
 
-    response.writeHead(200, { 'Content-Type': 'application/json' });
-    response.end(JSON.stringify({ code: 0, msg: 'success' }));
+    return new Response(JSON.stringify({ code: 0, msg: 'success' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   } catch (error) {
     logger.error('Webhook error:', error);
-    response.writeHead(500, { 'Content-Type': 'application/json' });
-    response.end(JSON.stringify({ code: -1, msg: 'Internal Server Error' }));
+    return new Response(JSON.stringify({ code: -1, msg: 'Internal Server Error' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
 }

@@ -42,47 +42,35 @@ export async function handleLineWebhookRequest(
     const signature = request.headers['x-line-signature'];
     const signatureValue = Array.isArray(signature) ? signature[0] : signature;
     if (!signatureValue) {
-      response.writeHead(403, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ message: 'Missing signature' }));
-      return;
+      return new Response(JSON.stringify({ message: 'Missing signature' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
     }
 
     const rawBody = await readTextBody(request);
     if (!verifySignature(handler.config.channelSecret, rawBody, signatureValue)) {
       logger.warn(formatCompact({ op: 'webhook', ok: false, error: 'invalid signature' }));
-      response.writeHead(403, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ message: 'Invalid signature' }));
-      return;
+      return new Response(JSON.stringify({ message: 'Invalid signature' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
     }
 
     let body: LineWebhookBody;
     try {
       body = JSON.parse(rawBody) as LineWebhookBody;
     } catch {
-      response.writeHead(400, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ message: 'Invalid JSON' }));
-      return;
+      return new Response(JSON.stringify({ message: 'Invalid JSON' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
     }
 
     if (!body || !Array.isArray(body.events) || body.events.some(event => !event || typeof event.type !== 'string' || !event.source || !['user', 'group', 'room'].includes(event.source.type) || (event.type === 'message' && !('message' in event && event.message && typeof event.message.id === 'string')))) {
-      response.writeHead(400, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ message: 'Invalid events' }));
-      return;
+      return new Response(JSON.stringify({ message: 'Invalid events' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
     }
     if (body.events.length && !handler.isOpen) {
-      response.writeHead(503, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ message: 'Endpoint unavailable' }));
-      return;
+      return new Response(JSON.stringify({ message: 'Endpoint unavailable' }), { status: 503, headers: { 'Content-Type': 'application/json' } });
     }
     for (const event of body.events) {
       await handler.admitAccepted(event);
     }
 
-    response.writeHead(200, { 'Content-Type': 'application/json' });
-    response.end(JSON.stringify({ message: 'OK' }));
+    return new Response(JSON.stringify({ message: 'OK' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   } catch (error) {
     logger.error('LINE webhook error:', error);
-    response.writeHead(503, { 'Content-Type': 'application/json' });
-    response.end(JSON.stringify({ message: 'Admission unavailable' }));
+    return new Response(JSON.stringify({ message: 'Admission unavailable' }), { status: 503, headers: { 'Content-Type': 'application/json' } });
   }
 }

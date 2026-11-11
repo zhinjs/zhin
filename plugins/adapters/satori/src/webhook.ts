@@ -37,27 +37,21 @@ export async function handleSatoriWebhookRequest(
 ): Promise<void> {
   try {
     if (!verifySatoriToken(handler.config.token, request)) {
-      response.writeHead(403, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ message: 'Unauthorized' }));
-      return;
+      return new Response(JSON.stringify({ message: 'Unauthorized' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
     }
     const opcode = resolveSatoriOpcode(request);
     if (opcode !== SatoriOpcode.EVENT && opcode !== SatoriOpcode.META) {
-      response.writeHead(200, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ message: 'OK' }));
-      return;
+      return new Response(JSON.stringify({ message: 'OK' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
     if (handler.isOpen) {
       await handler.acceptHttp(request, response);
     } else {
-      response.writeHead(200, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ status: 'ok' }));
+      return new Response(JSON.stringify({ status: 'ok' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
   } catch (error) {
     logger.error('Satori webhook error:', error);
     if (!response.headersSent) {
-      response.writeHead(500, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ message: 'Internal Server Error' }));
+      return new Response(JSON.stringify({ message: 'Internal Server Error' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
     }
   }
 }

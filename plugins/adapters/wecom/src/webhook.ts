@@ -53,30 +53,22 @@ export function handleWecomVerificationRequest(
     const { token, encodingAESKey, corpId } = handler.config;
 
     if (!msgSignature || !timestamp || !nonce || !echostr) {
-      response.writeHead(400, { 'Content-Type': 'text/plain' });
-      response.end('Missing required query parameters');
-      return;
+      return new Response('Missing required query parameters', { status: 400, headers: { 'Content-Type': 'text/plain' } });
     }
 
     if (!verifySignature(token, timestamp, nonce, echostr, msgSignature)) {
       logger.warn(formatCompact({ op: 'verify', ok: false, error: 'invalid signature' }));
-      response.writeHead(403, { 'Content-Type': 'text/plain' });
-      response.end('Forbidden');
-      return;
+      return new Response('Forbidden', { status: 403, headers: { 'Content-Type': 'text/plain' } });
     }
 
     const decrypted = decryptMessage(echostr, encodingAESKey, corpId);
     if (!decrypted) {
-      response.writeHead(400, { 'Content-Type': 'text/plain' });
-      response.end('Decryption failed');
-      return;
+      return new Response('Decryption failed', { status: 400, headers: { 'Content-Type': 'text/plain' } });
     }
-    response.writeHead(200, { 'Content-Type': 'text/plain' });
-    response.end(decrypted);
+    return new Response(decrypted, { status: 200, headers: { 'Content-Type': 'text/plain' } });
   } catch (error) {
     logger.error('URL verification error:', error);
-    response.writeHead(500, { 'Content-Type': 'text/plain' });
-    response.end('Internal Server Error');
+    return new Response('Internal Server Error', { status: 500, headers: { 'Content-Type': 'text/plain' } });
   }
 }
 
@@ -96,23 +88,17 @@ export async function handleWecomWebhookRequest(
     const encrypted = extractEncryptFromXml(rawBody);
     if (!encrypted) {
       logger.warn(formatCompact({ op: 'webhook', ok: false, error: 'no Encrypt field' }));
-      response.writeHead(200, { 'Content-Type': 'text/plain' });
-      response.end('success');
-      return;
+      return new Response('success', { status: 200, headers: { 'Content-Type': 'text/plain' } });
     }
 
     if (!verifySignature(token, timestamp, nonce, encrypted, msgSignature)) {
       logger.warn(formatCompact({ op: 'webhook', ok: false, error: 'invalid signature' }));
-      response.writeHead(403, { 'Content-Type': 'text/plain' });
-      response.end('Forbidden');
-      return;
+      return new Response('Forbidden', { status: 403, headers: { 'Content-Type': 'text/plain' } });
     }
 
     const decryptedXml = decryptMessage(encrypted, encodingAESKey, corpId);
     if (!decryptedXml) {
-      response.writeHead(200, { 'Content-Type': 'text/plain' });
-      response.end('success');
-      return;
+      return new Response('success', { status: 200, headers: { 'Content-Type': 'text/plain' } });
     }
 
     const message = parseXmlMessage(decryptedXml);
@@ -120,11 +106,9 @@ export async function handleWecomWebhookRequest(
       handler.admit(message);
     }
 
-    response.writeHead(200, { 'Content-Type': 'text/plain' });
-    response.end('success');
+    return new Response('success', { status: 200, headers: { 'Content-Type': 'text/plain' } });
   } catch (error) {
     logger.error('Webhook error:', error);
-    response.writeHead(200, { 'Content-Type': 'text/plain' });
-    response.end('success');
+    return new Response('success', { status: 200, headers: { 'Content-Type': 'text/plain' } });
   }
 }

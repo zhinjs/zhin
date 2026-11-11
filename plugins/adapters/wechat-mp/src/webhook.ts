@@ -76,9 +76,7 @@ export function handleWeChatMpVerification(
     : { signature, timestamp, nonce };
 
   if (!signToCheck || !timestamp || !nonce) {
-    response.writeHead(403, { 'Content-Type': 'text/plain' });
-    response.end('Forbidden');
-    return;
+    return new Response('Forbidden', { status: 403, headers: { 'Content-Type': 'text/plain' } });
   }
 
   if (!verifySignature(config.token, signPayload)) {
@@ -94,9 +92,7 @@ export function handleWeChatMpVerification(
       expectedPrefix: expected.slice(0, 8),
       gotPrefix: signToCheck.slice(0, 8),
     }));
-    response.writeHead(403, { 'Content-Type': 'text/plain' });
-    response.end('Forbidden');
-    return;
+    return new Response('Forbidden', { status: 403, headers: { 'Content-Type': 'text/plain' } });
   }
 
   let body = echostr;
@@ -110,14 +106,11 @@ export function handleWeChatMpVerification(
         ok: false,
         error: error instanceof Error ? error.message : String(error),
       }));
-      response.writeHead(403, { 'Content-Type': 'text/plain' });
-      response.end('Forbidden');
-      return;
+      return new Response('Forbidden', { status: 403, headers: { 'Content-Type': 'text/plain' } });
     }
   }
 
-  response.writeHead(200, { 'Content-Type': 'text/plain' });
-  response.end(body);
+  return new Response(body, { status: 200, headers: { 'Content-Type': 'text/plain' } });
 }
 
 export async function handleWeChatMpMessage(
@@ -136,9 +129,7 @@ export async function handleWeChatMpMessage(
 
     if (!verifySignature(config.token, { signature, timestamp, nonce })) {
       logger.error('Invalid signature');
-      response.writeHead(403, { 'Content-Type': 'text/plain' });
-      response.end('Forbidden');
-      return;
+      return new Response('Forbidden', { status: 403, headers: { 'Content-Type': 'text/plain' } });
     }
 
     let xmlString = await readTextBody(request);
@@ -157,9 +148,7 @@ export async function handleWeChatMpMessage(
 
     const wechatMessage = await parseXMLMessage(xmlString);
     if (!wechatMessage) {
-      response.writeHead(200, { 'Content-Type': 'text/plain' });
-      response.end('success');
-      return;
+      return new Response('success', { status: 200, headers: { 'Content-Type': 'text/plain' } });
     }
 
     // 微信 5s 重推去重：同一 MsgId 直接回放首次回复，避免二次 admit。
@@ -168,9 +157,7 @@ export async function handleWeChatMpMessage(
       const cached = handler.getCachedReply(msgId);
       if (cached !== undefined) {
         logger.debug(formatCompact({ op: 'wechat_mp_dedup_replay', msgId }));
-        response.writeHead(200, { 'Content-Type': cached ? 'text/xml' : 'text/plain' });
-        response.end(cached || 'success');
-        return;
+        return new Response(cached || 'success', { status: 200, headers: { 'Content-Type': cached ? 'text/xml' : 'text/plain' } });
       }
     }
 
@@ -207,12 +194,10 @@ export async function handleWeChatMpMessage(
       handler.cacheReply(msgId, replyXML || '');
     }
 
-    response.writeHead(200, { 'Content-Type': 'text/xml' });
-    response.end(replyXML || 'success');
+    return new Response(replyXML || 'success', { status: 200, headers: { 'Content-Type': 'text/xml' } });
   } catch (error) {
     logger.error('Error handling WeChat message:', error);
-    response.writeHead(200, { 'Content-Type': 'text/plain' });
-    response.end('success');
+    return new Response('success', { status: 200, headers: { 'Content-Type': 'text/plain' } });
   }
 }
 

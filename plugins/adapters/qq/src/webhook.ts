@@ -37,9 +37,7 @@ export async function handleQqWebhookRequest(
 ): Promise<void> {
   const bot = handler.getBot();
   if (!bot?.middleware) {
-    response.writeHead(503, { 'Content-Type': 'text/plain' });
-    response.end('QQ receiver not ready');
-    return;
+    return new Response('QQ receiver not ready', { status: 503, headers: { 'Content-Type': 'text/plain' } });
   }
   try {
     // 不预消费请求流：库的验签必须基于原始字节（JSON.parse → JSON.stringify
@@ -54,8 +52,7 @@ export async function handleQqWebhookRequest(
   } catch (error) {
     logger.error('QQ webhook error:', error);
     if (!response.headersSent) {
-      response.writeHead(500, { 'Content-Type': 'text/plain' });
-      response.end('Internal Server Error');
+      return new Response('Internal Server Error', { status: 500, headers: { 'Content-Type': 'text/plain' } });
     }
   }
 }

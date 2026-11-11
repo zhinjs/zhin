@@ -46,9 +46,7 @@ export async function handleTelegramWebhookRequest(
       const header = request.headers['x-telegram-bot-api-secret-token'];
       const token = Array.isArray(header) ? header[0] : header;
       if (!token || !safeTokenEqual(token, secret)) {
-        response.writeHead(403, { 'Content-Type': 'application/json' });
-        response.end(JSON.stringify({ ok: false, description: 'Invalid secret token' }));
-        return;
+        return new Response(JSON.stringify({ ok: false, description: 'Invalid secret token' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
       }
     }
 
@@ -57,23 +55,17 @@ export async function handleTelegramWebhookRequest(
     try {
       update = JSON.parse(rawBody) as TelegramUpdate;
     } catch {
-      response.writeHead(400, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ ok: false, description: 'Invalid JSON' }));
-      return;
+      return new Response(JSON.stringify({ ok: false, description: 'Invalid JSON' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
     }
     if (!update || !Number.isSafeInteger(update.update_id) || update.update_id < 0) {
-      response.writeHead(400, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ ok: false, description: 'Invalid update_id' }));
-      return;
+      return new Response(JSON.stringify({ ok: false, description: 'Invalid update_id' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
     }
     if (!handler.isOpen) throw new Error('Telegram endpoint is not accepting updates');
     await handler.handleUpdate(update);
 
-    response.writeHead(200, { 'Content-Type': 'application/json' });
-    response.end(JSON.stringify({ ok: true }));
+    return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   } catch (error) {
     logger.error('Telegram webhook error:', error);
-    response.writeHead(503, { 'Content-Type': 'application/json' });
-    response.end(JSON.stringify({ ok: false, description: 'Update was not admitted' }));
+    return new Response(JSON.stringify({ ok: false, description: 'Update was not admitted' }), { status: 503, headers: { 'Content-Type': 'application/json' } });
   }
 }
