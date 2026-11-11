@@ -672,7 +672,7 @@ describe('runtime console RPC', () => {
     const tables = await dispatchRuntimeConsoleRpc({ type: 'db:tables', requestId: 34 }, ctx);
     expect(pickRpcReply({ type: 'db:tables', requestId: 34 }, tables)).toEqual({
       requestId: 34,
-      data: ['im_messages', 'github_oauth_users'],
+      data: { tables: ['im_messages', 'github_oauth_users'] },
     });
   });
 

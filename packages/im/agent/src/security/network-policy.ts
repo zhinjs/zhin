@@ -32,7 +32,8 @@ import { isIP } from 'node:net';
 
 /** SSRF 防护：检查主机名是否属于内网/私有/危险地址 */
 export function isBlockedSsrfHostname(hostname: string): boolean {
-  const h = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  // A fully-qualified trailing dot (`localhost.`) resolves the same host; strip it before matching.
+  const h = hostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
   if (isIP(h)) return isBlockedIpAddress(h);
   return (
     // Localhost

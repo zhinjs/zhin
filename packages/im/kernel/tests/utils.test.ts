@@ -73,6 +73,29 @@ describe('Sandbox Escape Prevention (Proxy-based)', () => {
     expect(evaluate('Math.__proto__', { Math })).toBeUndefined()
   })
 
+  it('should not leak host objects returned or thrown by host functions', () => {
+    const ctx = { segments: [{ type: 'text', data: { text: 'hi' } }], sender: { roles: ['member'] } }
+    // `map`/`slice` build a fresh host Array; it must come back proxied.
+    expect(evaluate("typeof segments.map(x=>x).constructor", ctx)).toBe('undefined')
+    expect(evaluate("typeof sender.roles.slice().constructor", ctx)).toBe('undefined')
+    expect(compiler("${segments.map(x=>x).constructor.constructor('return process.pid')()}", ctx)).toBe('undefined')
+    // A host TypeError thrown by `map()` must not expose the host Function either.
+    expect(evaluate("(()=>{try{segments.map()}catch(e){return typeof e.constructor}})()", ctx)).toBe('undefined')
+    // Bound host functions are host objects too.
+    expect(evaluate("typeof segments.map.bind(segments).constructor", ctx)).toBe('undefined')
+    // Legitimate read-only use keeps working.
+    expect(evaluate("segments.map(s=>s.type).join(',')", ctx)).toBe('text')
+    expect(compiler("${sender.roles}", ctx)).toBe(JSON.stringify(['member'], null, 2))
+  })
+
+  it('should keep host objects read-only', () => {
+    const o: Record<string, unknown> = { a: 1 }
+    evaluate('delete o.a', { o })
+    evaluate('o.a = 2', { o })
+    evaluate('o.b = 3', { o })
+    expect(o).toEqual({ a: 1 })
+  })
+
   it('should block string-concatenation bypass on host objects', () => {
     // This bypasses regex-based blocklists, but Proxy catches it at engine level
     expect(evaluate("var a='constr',b='uctor';Math[a+b]", { Math })).toBeUndefined()

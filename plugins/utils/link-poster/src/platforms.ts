@@ -7,13 +7,8 @@ import { messages as t } from './i18n.js'
 const FETCH_TIMEOUT = 10_000
 
 async function fetchWithTimeout(url: string, init?: RequestInit): Promise<Response> {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT)
-  try {
-    return await fetch(url, { ...init, signal: controller.signal })
-  } finally {
-    clearTimeout(timer)
-  }
+  // AbortSignal.timeout also bounds the body read, not just the headers.
+  return await fetch(url, { ...init, signal: AbortSignal.timeout(FETCH_TIMEOUT) })
 }
 
 /** 将远程图片下载并转为 data URI，避免 satori 渲染时遇到防盗链/CORS */
@@ -27,7 +22,9 @@ async function imageToDataUri(url: string | undefined): Promise<string | undefin
     })
     if (!res.ok) return undefined
     const buf = Buffer.from(await res.arrayBuffer())
-    const mime = res.headers.get('content-type') || 'image/jpeg'
+    const mime = (res.headers.get('content-type') || 'image/jpeg').split(';')[0]!.trim()
+    // The value is interpolated into a data URI inside rendered HTML: accept plain image types only.
+    if (!/^image\/[\w.+-]+$/i.test(mime)) return undefined
     return `data:${mime};base64,${buf.toString('base64')}`
   } catch {
     return undefined
@@ -217,6 +214,25 @@ interface PlatformParser {
   parse: (url: string, locale?: Locale) => Promise<LinkMeta | null>
 }
 
+/**
+ * Hosts this plugin is allowed to fetch. The platform regexes match anywhere in the URL, so
+ * without a hostname check `http://10.0.0.5/x?v.douyin.com/` would be fetched server-side
+ * for any chat user (SSRF).
+ */
+const SUPPORTED_HOSTS = [
+  'bilibili.com', 'b23.tv', 'github.com', 'douyin.com', 'xiaohongshu.com', 'xhslink.com',
+] as const
+
+export function isSupportedLinkHost(url: string): boolean {
+  let hostname: string
+  try {
+    hostname = new URL(url).hostname.toLowerCase().replace(/\.$/, '')
+  } catch {
+    return false
+  }
+  return SUPPORTED_HOSTS.some((host) => hostname === host || hostname.endsWith(`.${host}`))
+}
+
 const PARSERS: PlatformParser[] = [
   { test: BILIBILI_RE, parse: parseBilibili },
   { test: GITHUB_RE, parse: parseGithub },
@@ -234,6 +250,7 @@ export async function detectAndParse(text: string, locale?: Locale): Promise<Lin
   if (!urls) return null
 
   for (const url of urls) {
+    if (!isSupportedLinkHost(url)) continue
     for (const { test, parse } of PARSERS) {
       if (test.test(url)) {
         const meta = await parse(url, locale)

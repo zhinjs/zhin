@@ -5,11 +5,12 @@
 ## 安装
 
 ```yaml
+configVersion: 2
 plugins:
-  - "@zhin.js/plugin-dice-duel"
+  dice-duel: "@zhin.js/plugin-dice-duel"
 database:
   dialect: sqlite
-  storage: ./data/zhin.db
+  filename: ./data/zhin.db
 ```
 
 ## 命令

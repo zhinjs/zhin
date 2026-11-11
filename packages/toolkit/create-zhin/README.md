@@ -121,11 +121,11 @@ npm create zhin-app my-bot --yes
 - HTTP Token: 随机生成
 - 适配器: `@zhin.js/adapter-sandbox`；`endpoints: []`（与 minimal-bot 一致，沙盒 bot 由 Console 连接时自动创建）
 - AI: 不启用（首跑 IM-only，无 Ollama / API Key 前置条件；跑通后用 `zhin setup --ai`）
-- Remote Console: `https://console.zhin.dev`；API Base `http://127.0.0.1:8086`（见 [docs/console-remote.md](../../docs/console-remote.md)）
+- Remote Console: `https://console.zhin.dev`；API Base `http://127.0.0.1:8086`（见 [docs/console/index.md](../../../docs/console/index.md)）
 - 统一收件箱: 未启用（无 `database:` 块）
 - 插件开发技能模板: 未安装（`devSkills: false`）
 
-**与 [examples/minimal-bot](../../examples/minimal-bot/) 对齐：** `-y` 使用 `endpoints: []`、Sandbox + Host 插件；首跑步骤见 minimal-bot README 与生成项目 README。
+**与 [examples/minimal-bot](../../../examples/minimal-bot/) 对齐：** `-y` 使用 `endpoints: []`、Sandbox + Host 插件；首跑步骤见 minimal-bot README 与生成项目 README。
 
 ## 与 @zhin.js/cli 的分工
 
@@ -241,7 +241,7 @@ plugins:
         owner: sandbox-user
 ```
 
-交互式选择数据库时会追加 `database:`。Remote Console 用法见 [Console 文档](../../docs/console/index.md)；Stable 手测见 [examples/minimal-bot/README.md](../../examples/minimal-bot/README.md)。
+交互式选择数据库时会追加 `database:`。Remote Console 用法见 [Console 文档](../../../docs/console/index.md)；Stable 手测见 [examples/minimal-bot/README.md](../../../examples/minimal-bot/README.md)。
 
 ## 完整工作流
 

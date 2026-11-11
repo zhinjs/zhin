@@ -407,7 +407,8 @@ export class Sandbox {
     // promised an isolation boundary must never fall back to the soft runner.
     if (this.shouldUseDocker()) {
       try {
-        return executeInDocker(command, {
+        // `await` here so a rejection reaches the fail-closed catch below.
+        return await executeInDocker(command, {
           ...this.config,
           workingDirectory: options?.cwd || this.config.workingDirectory,
           timeout: options?.timeout || this.config.timeout,

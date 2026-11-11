@@ -99,7 +99,7 @@ See `skills/onebot12/SKILL.md` for skill documentation.
 
 - [OneBot 12 Standard](https://12.onebot.dev/)
 - [OneBot Connect WebSocket](https://12.onebot.dev/connect/communication/websocket/)
-- [Adapters overview](https://zhin.js.org/essentials/adapters)
+- [Adapters overview](https://zhin.js.org/adapters/)
 
 ## Console page
 

@@ -17,4 +17,4 @@ Every story maps to an example you can run from the repo; config snippets are sa
 ## Next steps
 
 - [Example projects](../examples/index.md): run an example locally first
-- [Learning paths](../paths/README.md): pick a getting-started route by goal
+- [Learning paths](../paths/index.md): pick a getting-started route by goal

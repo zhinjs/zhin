@@ -112,7 +112,7 @@ See `skills/email/SKILL.md` for skill documentation.
 ## Documentation Links
 
 - [Email adapter docs](https://zhin.js.org/adapters/email)
-- [Adapters overview](https://zhin.js.org/essentials/adapters)
+- [Adapters overview](https://zhin.js.org/adapters/)
 
 ## License
 

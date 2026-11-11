@@ -17,7 +17,6 @@ if (!process.env.L4_SKIP_PLATFORM) {
 /** @type {string[]} */
 const l4TestFiles = [
   'packages/im/harness/tests/harness.test.ts',
-  'packages/im/agent/tests/remote-loopback.test.ts',
   'packages/im/agent/tests/memory/memory-system.test.ts',
   'packages/host/mcp/tests/mesh-auth.test.ts',
   'packages/host/mcp/tests/runtime.test.ts',
@@ -32,7 +31,6 @@ const l4TestFiles = [
   'packages/im/core/tests/plugin-runtime/outbound-segments.test.ts',
   'plugins/adapters/napcat/tests/napcat-runtime.test.ts',
   'plugins/adapters/kook/tests/kook-runtime.test.ts',
-  'examples/demo-bot/tests/demo-config.test.ts',
   'examples/life-assistant-bot/tests/config-contract.test.ts',
   'examples/multi-agent-room/tests/multi-agent-room-contract.test.ts',
   'examples/qq-games-bot/tests/runtime-contract.test.ts',

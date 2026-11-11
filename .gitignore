@@ -35,7 +35,7 @@ examples/**/zhin.config.*
 !examples/minimal-bot/zhin.config.yml
 !examples/capabilities-bot/zhin.config.yml
 !examples/full-bot/zhin.config.yml
-!examples/demo-bot/zhin.config.yml
+!examples/self-delivery-bot/zhin.config.yml
 !examples/life-assistant-bot/zhin.config.yml
 !examples/multi-agent-room/zhin.config.yml
 !examples/qq-games-bot/zhin.config.yml
@@ -158,10 +158,16 @@ playwright-report/
 # Publish-time Plugin Runtime JavaScript (generated beside convention sources)
 plugins/*/*/plugin.js
 plugins/*/*/adapters/**/*.js
+plugins/*/*/agents/**/tools/**/*.js
 plugins/*/*/commands/**/*.js
 plugins/*/*/components/**/*.js
-plugins/*/*/mcp/**/*.js
+plugins/*/*/handlers/**/*.js
+plugins/*/*/hooks/**/*.js
+plugins/*/*/mcps/**/*.js
 plugins/*/*/middlewares/**/*.js
 plugins/*/*/pages/**/*.js
+plugins/*/*/prompt-sections/**/*.js
+plugins/*/*/schedules/**/*.js
+plugins/*/*/skills/**/tools/**/*.js
 plugins/*/*/tools/**/*.js
 eval-reports/

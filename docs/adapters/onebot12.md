@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/onebot12/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/onebot12/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=582d7f9d518c56bb -->
+<!-- sync-adapter-docs:sha256=6a8d5b6975ffef0d -->
 
 # @zhin.js/adapter-onebot12
 
@@ -114,7 +114,7 @@ WS、反向 WS 和 Webhook 都在进入原生 SDK 前过滤其他 bot 的事件�
 
 - [OneBot 12 标准](https://12.onebot.dev/)
 - [OneBot Connect WebSocket](https://12.onebot.dev/connect/communication/websocket/)
-- [适配器概览](https://zhin.js.org/essentials/adapters)
+- [适配器概览](https://zhin.js.org/adapters/)
 
 ## Console 页面
 

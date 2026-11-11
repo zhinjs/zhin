@@ -72,7 +72,7 @@ export default defineCommand({
 **工具示例** `tools/get_weather/index.ts`：
 
 ```typescript
-import { defineAgentTool } from 'zhin.js/tool';
+import { defineAgentTool } from '@zhin.js/tool';
 
 export default defineAgentTool({
   description: '查询天气',

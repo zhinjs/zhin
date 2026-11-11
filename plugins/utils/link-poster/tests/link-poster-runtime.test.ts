@@ -60,3 +60,26 @@ it('keeps custom author text while translating generated platform names', () => 
     expect(html).toContain('原作者');
   }
 });
+
+describe('link host allow-list', () => {
+  it('accepts supported platforms and their subdomains', async () => {
+    const { isSupportedLinkHost } = await import('../src/platforms.js');
+    expect(isSupportedLinkHost('https://github.com/zhinjs/zhin')).toBe(true);
+    expect(isSupportedLinkHost('https://www.bilibili.com/video/BV1xx411c7mD')).toBe(true);
+    expect(isSupportedLinkHost('https://v.douyin.com/abc/')).toBe(true);
+  });
+
+  it('rejects URLs that only mention a platform in the path or query', async () => {
+    const { detectAndParse, isSupportedLinkHost } = await import('../src/platforms.js');
+    expect(isSupportedLinkHost('http://10.0.0.5:8080/x?v.douyin.com/')).toBe(false);
+    expect(isSupportedLinkHost('http://127.0.0.1/github.com/a/b')).toBe(false);
+    expect(isSupportedLinkHost('https://evilgithub.com/a/b')).toBe(false);
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    try {
+      expect(await detectAndParse('see http://10.0.0.5:8080/x?v.douyin.com/')).toBeNull();
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+});

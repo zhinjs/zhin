@@ -53,7 +53,8 @@
     "@zhin.js/permission": "workspace:*",
     "@zhin.js/skill": "workspace:*",
     "@zhin.js/tool": "workspace:*",
-    "kook-client": "^1.0.5"
+    "kook-client": "^1.0.5",
+    "ws": "^8.21.1"
   },
   "peerDependencies": {
     "@zhin.js/adapter": "workspace:^",
@@ -75,6 +76,7 @@
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
+    "@types/ws": "^8.18.1",
     "@zhin.js/host-http": "workspace:*",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",
@@ -89,7 +91,6 @@
     "schema.json",
     "src",
     "lib",
-    "tools",
     "agents",
     "README.md",
     "CHANGELOG.md",

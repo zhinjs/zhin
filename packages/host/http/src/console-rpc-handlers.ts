@@ -241,7 +241,8 @@ export async function dispatchHostResourceConsoleRpc(
           return true;
         }
         const tables = ctx.dbTables ? await ctx.dbTables() : [];
-        emit({ requestId, data: tables });
+        // Same `{ tables }` envelope as the database branch above; clients read `.tables`.
+        emit({ requestId, data: { tables } });
       } catch (error) {
         emit({
           requestId,

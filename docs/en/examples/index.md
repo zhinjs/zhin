@@ -119,4 +119,4 @@ pnpm dev:test                # or cd examples/test-bot && pnpm dev
 
 - [Quick start](../getting-started/index.md): create your own project with the scaffold
 - [Write your first plugin](../getting-started/first-plugin.md): write a configurable command from scratch
-- [Showcase](../showcase/README.md): see how others run Zhin in production
+- [Showcase](../showcase/index.md): see how others run Zhin in production

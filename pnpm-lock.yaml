@@ -1303,6 +1303,9 @@ importers:
       aws4fetch:
         specifier: ^1.0.20
         version: 1.0.20
+      chalk:
+        specifier: ^5.6.2
+        version: 5.6.2
       he:
         specifier: ^1.2.0
         version: 1.2.0
@@ -2545,10 +2548,16 @@ importers:
       kook-client:
         specifier: ^1.0.5
         version: 1.0.5
+      ws:
+        specifier: ^8.21.1
+        version: 8.22.0
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
+      '@types/ws':
+        specifier: ^8.18.1
+        version: 8.18.1
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -10288,7 +10297,7 @@ snapshots:
   '@imhelper/milky-v1@1.0.7(imhelper@1.0.7)':
     dependencies:
       imhelper: 1.0.7
-      ws: 8.21.3
+      ws: 8.22.0
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
@@ -10296,7 +10305,7 @@ snapshots:
   '@imhelper/onebot-v11@1.0.7(imhelper@1.0.7)':
     dependencies:
       imhelper: 1.0.7
-      ws: 8.21.3
+      ws: 8.22.0
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
@@ -10304,7 +10313,7 @@ snapshots:
   '@imhelper/onebot-v12@1.0.7(imhelper@1.0.7)':
     dependencies:
       imhelper: 1.0.7
-      ws: 8.21.3
+      ws: 8.22.0
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
@@ -10312,7 +10321,7 @@ snapshots:
   '@imhelper/satori-v1@1.0.7(imhelper@1.0.7)':
     dependencies:
       imhelper: 1.0.7
-      ws: 8.21.3
+      ws: 8.22.0
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
@@ -10464,7 +10473,7 @@ snapshots:
       lodash.pickby: 4.6.0
       protobufjs: 7.6.5
       qs: 6.16.0
-      ws: 8.21.3
+      ws: 8.22.0
     transitivePeerDependencies:
       - bufferutil
       - debug
@@ -11575,7 +11584,7 @@ snapshots:
       '@types/node': 26.1.2
       '@types/ws': 8.18.1
       eventemitter3: 5.0.4
-      ws: 8.21.3
+      ws: 8.22.0
     transitivePeerDependencies:
       - bufferutil
       - debug
@@ -13293,7 +13302,7 @@ snapshots:
   imhelper@1.0.7:
     dependencies:
       eventsource: 4.1.1
-      ws: 8.21.3
+      ws: 8.22.0
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate

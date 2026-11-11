@@ -125,7 +125,7 @@ Below are the checks grouped by responsibility (the command in parentheses can b
 | Check | Description |
 | --- | --- |
 | Stable Smoke (`pnpm check:stable`) | Sandbox + Agent core unit tests + minimal-bot contract |
-| L4-CI (`pnpm check:l4-ci`) | L4 deterministic subset (orchestration/memory/full-bot contract); full `pnpm check:l4` runs nightly |
+| L4-CI (`pnpm check:l4-ci`) | L4 deterministic subset (orchestration/memory/full-bot contract); full `pnpm check:l4` is run manually (not wired into a workflow yet) |
 
 ## Package Exports and Published Manifests
 

@@ -19,8 +19,6 @@
     "schema.json",
     "src",
     "lib",
-    "dist",
-    "skills",
     "README.md",
     "CHANGELOG.md"
   ],

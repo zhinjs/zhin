@@ -5,7 +5,7 @@ import { createMessages, type Locale } from 'zhin.js/i18n';
  * Canonicalization is owned by gateway/core before endpoint.send.
  */
 
-import { createHash, createDecipheriv, createCipheriv, randomBytes } from 'node:crypto';
+import { createHash, createDecipheriv, createCipheriv, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import * as xml2js from 'xml2js';
 import type { ConversationRef } from '@zhin.js/im-contract';
@@ -161,7 +161,14 @@ export function verifySignature(
 ): boolean {
   const { signature, timestamp, nonce, echostr } = params;
   if (!signature || !timestamp || !nonce) return false;
-  return computeSignatureHash(token, { timestamp, nonce, echostr }) === signature;
+  return safeEqualHex(computeSignatureHash(token, { timestamp, nonce, echostr }), signature);
+}
+
+/** Constant-time comparison for hex signatures (same approach as the other webhook adapters). */
+function safeEqualHex(expected: string, actual: string): boolean {
+  const a = Buffer.from(expected);
+  const b = Buffer.from(actual);
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 
 export function getAESKey(encodingAESKey: string): Buffer {
@@ -228,7 +235,7 @@ export async function decryptMessage(
   const expected = createHash('sha1')
     .update([token, timestamp, nonce, encrypt].sort().join(''))
     .digest('hex');
-  if (expected !== msgSignature) {
+  if (!safeEqualHex(expected, msgSignature)) {
     throw new Error('msg_signature verification failed');
   }
 

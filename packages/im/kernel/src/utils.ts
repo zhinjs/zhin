@@ -38,10 +38,31 @@ function createSafeProxy<T>(value: T, proxies: WeakMap<object, object>): T {
   const cached = proxies.get(obj);
   if (cached) return cached as T;
 
+  // Host code reached through a trap can hand back raw host-realm values in two ways:
+  // its return value (`arr.map(x => x)` builds a fresh, unproxied host Array) and anything
+  // it throws (a host TypeError). Either one exposes `.constructor.constructor`, i.e. the
+  // host `Function`, so both are re-wrapped before sandboxed code can touch them.
+  const guard = <R>(run: () => R): R => {
+    let result: R;
+    try {
+      result = run();
+    } catch (error) {
+      throw createSafeProxy(error, proxies);
+    }
+    return createSafeProxy(result, proxies);
+  };
+
   const handler: ProxyHandler<any> = {
     get(target, prop) {
       if (BLOCKED_PROTO_PROPS.has(prop)) return undefined;
-      return createSafeProxy(Reflect.get(target, prop), proxies);
+      return guard(() => Reflect.get(target, prop));
+    },
+    // Read-only proxy: template expressions must not mutate host objects.
+    set() {
+      return false;
+    },
+    deleteProperty() {
+      return false;
     },
     has(target, prop) {
       if (BLOCKED_PROTO_PROPS.has(prop)) return false;
@@ -85,7 +106,8 @@ function createSafeProxy<T>(value: T, proxies: WeakMap<object, object>): T {
   };
 
   if (type === 'function') {
-    handler.apply = (target, thisArg, args) => Reflect.apply(target, thisArg, args);
+    handler.apply = (target, thisArg, args) => guard(() => Reflect.apply(target, thisArg, args));
+    handler.construct = (target, args) => guard(() => Reflect.construct(target, args));
   }
 
   const proxy = new Proxy(obj, handler) as T;

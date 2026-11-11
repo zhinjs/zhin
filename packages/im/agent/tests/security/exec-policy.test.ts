@@ -5,7 +5,9 @@ import {
   stripSafeWrappers,
   splitCompoundCommand,
   extractCommandName,
+  checkExecPolicy,
 } from '../../src/security/exec-policy.js'
+import { isBlockedSsrfHostname } from '../../src/security/network-policy.js'
 
 describe('exec-policy — isDangerousCommand', () => {
   it('sudo is dangerous', () => {
@@ -174,5 +176,31 @@ describe('exec-policy — extractCommandName', () => {
 
   it('strips backslash escapes in command name', () => {
     expect(extractCommandName('r\\m -rf /')).toBe('rm')
+  })
+})
+
+describe('exec-policy — allowlist pattern anchoring', () => {
+  const config = {
+    execSecurity: 'allowlist',
+    execPreset: 'custom',
+    execAllowlist: ['git|npm'],
+    execAsk: false,
+  } as unknown as Parameters<typeof checkExecPolicy>[0]
+
+  it('anchors every alternative of an allowlist pattern', () => {
+    expect(checkExecPolicy(config, 'git status', 'owner').allowed).toBe(true)
+    expect(checkExecPolicy(config, 'npm ls', 'owner').allowed).toBe(true)
+    // `^git|npm$` used to match any command name starting with `git` or ending with `npm`.
+    expect(checkExecPolicy(config, 'gitevil status', 'owner').allowed).toBe(false)
+    expect(checkExecPolicy(config, 'xnpm ls', 'owner').allowed).toBe(false)
+  })
+})
+
+describe('network-policy — trailing-dot hostnames', () => {
+  it('blocks fully-qualified forms of blocked hostnames', () => {
+    expect(isBlockedSsrfHostname('localhost.')).toBe(true)
+    expect(isBlockedSsrfHostname('foo.localhost.')).toBe(true)
+    expect(isBlockedSsrfHostname('metadata.google.internal.')).toBe(true)
+    expect(isBlockedSsrfHostname('example.com.')).toBe(false)
   })
 })

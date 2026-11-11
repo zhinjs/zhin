@@ -510,7 +510,7 @@ export class DatabaseContextRepository implements ContextRepository {
     try {
       const probe = this.summaryModel.select().where({ session_id: sessionId });
       if (isSummaryQueryChain(probe)) {
-        return ((await probe.orderBy('created_at', 'ASC').limit(500)) as AgentSummaryRecord[])
+        return ((await probe.orderBy('created_at', 'DESC').limit(500)) as AgentSummaryRecord[])
           .sort((a, b) => a.created_at - b.created_at || (a.id ?? 0) - (b.id ?? 0));
       }
       const rows = (await Promise.resolve(probe as PromiseLike<AgentSummaryRecord[]>)) ?? [];

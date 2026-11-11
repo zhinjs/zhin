@@ -372,24 +372,17 @@ zhin schedule resume <id>
 | `--notify-channel` | `im` / `silent`（默认）/ `log` |
 | cron 表达式、`--at`、`--every` | 三选一：六段 cron（秒 分 时 日 月 周）、单次 ISO8601 时间、或间隔（如 `30m`、`1h`、`1d`） |
 
-### agent：Agent 诊断与 Workroom 观察
+### agent：Agent 诊断
 
 需要安装 AI 栈（`@zhin.js/agent` + `zod` + `ai`）。
 
 ```bash
 zhin agent info [--json]
-zhin agent workroom runs --project <projectId> [--json]
-zhin agent workroom run <runId> --project <projectId> [--json]
-zhin agent workroom readiness <runId> --project <projectId> [--json]
-zhin agent workroom cancel <runId> --project <projectId> --expected-sequence <n> --reason-code <code> --control-deadline <timestamp> [--operation-id <id>] [--json]
-zhin agent workroom request-replan <runId> --project <projectId> --expected-sequence <n> --reason-code <code> [--operation-id <id>] [--json]
 ```
 
 | 命令 | 作用 |
 | --- | --- |
 | `info` | 列出发现的 Agent 能力与命名 Agent（Tools、Skills、Hooks 等） |
-| `workroom runs` / `run` / `readiness` | 连接运行中的 Bot，用配置中的 token 身份读取 Run、Task、Assignment 与 Blocker 的状态（不含内容） |
-| `workroom cancel` / `request-replan` | 需要当前 Project Sponsor 权限，并用 `expected-sequence` 防止并发冲突。`request-replan` 只记录重规划请求并暂停调度，不会假装已经生成了新的计划版本 |
 
 ### trace：查看 Agent 回合
 

@@ -27,10 +27,10 @@ pnpm prepare:cli        # Build scaffold-wizard + CLI + reinstall
 
 # Single package
 pnpm --filter @zhin.js/core build
-pnpm --filter @zhin.js/core test
+pnpm vitest run packages/im/core        # @zhin.js/core has no `test` script; run its tests from the root
 
 # Run a single test file
-pnpm vitest run packages/im/core/tests/plugin.test.ts
+pnpm vitest run packages/im/core/tests/ai-access.test.ts
 ```
 
 Custom lint checks:
@@ -40,7 +40,7 @@ Custom lint checks:
 - `pnpm check:plugin` — 检查插件是否符合标准规范（入口文件、测试、README）
 - `pnpm check:no-platform-branches` — 检测运行时代码是否出现平台名分支（应读适配器能力画像，ADR 0044；白名单 `scripts/no-platform-branches-allowlist.json`）
 - `pnpm check:no-removed-plugin-api` — 检测是否重新调用已从 public surface 删除的 Plugin lookup API
-- `pnpm check:plugin-agent-publish` — 带 agent/ 的插件发布清单（files、prepublishOnly）
+- `pnpm check:plugin-capability-publish` — 带 agent/ 的插件发布清单（files、prepublishOnly）
 - `pnpm check:all` — 运行所有 harness 检查（含 type-check / lint / test）
 
 ## Architecture
@@ -62,9 +62,9 @@ packages/im/core            # Canonical IM runtime and message contracts
   ↓
 packages/im/agent           # Agent orchestration (ZhinAgent, security policies, MCP client)
   ↓
-packages/im/zhin            # Main entry — IM core (4.x); agent via optional peer + zhin.js/agent
+packages/im/zhin            # Main entry — IM core; agent via optional peer + zhin.js/agent
 
-packages/console/{contract,pagemanager,client}  # 控制台栈（平行，不经 IM 发送链）
+packages/console/{contract,protocol,plugin-contract,page,layout,pagemanager,client}  # 控制台栈（平行，不经 IM 发送链）
 packages/toolkit/{create-zhin,components,tailwind,html-renderer}         # 脚手架与渲染库
 ```
 
@@ -78,8 +78,8 @@ packages/toolkit/{create-zhin,components,tailwind,html-renderer}         # 脚�
 | ai | `packages/im/ai/src/` | Provider abstraction, Agent, ModelRegistry, Memory, Compaction, CostTracker |
 | core | `packages/im/core/src/` | ImRuntime, messages, side events, rendering, interaction |
 | agent | `packages/im/agent/src/` | ZhinAgent orchestrator, security (ExecPolicy, FilePolicy), MCP client |
-| host-router | `packages/host/router/src/` | Koa 监听、Router、Bearer/CORS |
-| host-api | `packages/host/api/src/` | Host 管理面 REST、Console 协议、entries |
+| host-http | `packages/host/http/src/` | 极简 HTTP/WS Host（Bearer、CORS，无 Koa）；Console/管理面由 `basic/cli` 装配 |
+| mcp / a2a | `packages/host/{mcp,a2a}/src/` | MCP Server、A2A Server |
 
 ### Outbound send chain (do not bypass)
 
@@ -108,11 +108,11 @@ Capabilities are **discovered from convention directories**, not registered impe
 
 | Directory | Authoring API |
 |---|---|
-| `commands/**/*.ts` | `defineCommand()` (`zhin.js/command`) — path is the route; Next.js-style param files `[name].ts` / `[[name]].ts` (optional) / `[...name].ts` (catch-all), type and default declared in `defineCommand({ params })` |
-| `middlewares/*.ts` | `defineMiddleware()` (`zhin.js/middleware`) |
-| `handlers/**/*.ts` | `defineHandler()` (`zhin.js/handler`) — path uses `/` (e.g. `handlers/message/receive.ts` → localName `message/receive` → event `message.receive` when `event` omitted); `this.prompt` available |
-| `components/*.tsx` | `defineComponent()` (`zhin.js/component`) |
-| `tools/*.ts` | `defineAgentTool()` (`@zhin.js/tool`) |
+| `commands/**/index.ts` | `defineCommand()` (`zhin.js/command`) — directory path is the route; Next.js-style param directories `[name]/` / `[[name]]/` (optional) / `[...name]/` (catch-all), type and default declared in `defineCommand({ params })` |
+| `middlewares/<name>/index.ts` | `defineMiddleware()` (`zhin.js/middleware`) |
+| `handlers/**/index.ts` | `defineHandler()` (`zhin.js/handler`) — path uses `/` (e.g. `handlers/message/receive/index.ts` → localName `message/receive` → event `message.receive` when `event` omitted); `this.prompt` available |
+| `components/<name>/index.tsx` | `defineComponent()` (`zhin.js/component`) |
+| `tools/<name>/index.ts` | `defineAgentTool()` (`@zhin.js/tool`) |
 | `pages/<name>/index.tsx` | `definePage()` (`nav/index.tsx` / `footer/index.tsx` for chrome) |
 | `skills/<name>/SKILL.md` | Markdown Skill package |
 | `skills/<name>/tools/<name>/index.ts` | Skill-private Tool, disclosed after Skill activation |
@@ -129,17 +129,17 @@ DI is **Scope + Token** based (`context.resources`), generation-scoped rather th
 ### Build output
 
 - Most packages: `src/` → `lib/` (via `tsc`)
-- Client package: `src/` → `dist/`
+- Browser-side packages (e.g. console client): `client/` → `dist/`
 - Dual exports: `./lib/index.js` (production) + `./src/index.ts` (development condition)
 - Module resolution uses `conditions: ['development']` in tests to resolve `src/` directly
 
 ### TypeScript configuration
 
-All packages extend `tsconfig.base.json`（根目录），只需设置 `outDir`、`rootDir`、`types`：
+All packages extend `tsconfig.base.json`（根目录，相对路径按包深度调整），只需设置 `outDir`、`rootDir`、`types`：
 
 ```json
 {
-  "extends": "../../tsconfig.base.json",
+  "extends": "../../../tsconfig.base.json",
   "compilerOptions": {
     "types": ["node"],
     "outDir": "./lib",
@@ -150,7 +150,7 @@ All packages extend `tsconfig.base.json`（根目录），只需设置 `outDir`�
 }
 ```
 
-`pnpm type-check` uses a separate `tsconfig.typecheck.json` with explicit path aliases and limited scope (`basic/*/src` + `packages/im/*/src` only).
+`pnpm type-check` uses a separate `tsconfig.typecheck.json` with explicit path aliases and limited scope — see its `include` list (selected `basic/` and `packages/im/` sources, examples, plugin convention directories, docs snippets and type fixtures), not every workspace package.
 
 ## Testing
 
@@ -158,7 +158,7 @@ All packages extend `tsconfig.base.json`（根目录），只需设置 `outDir`�
 
 Key config (`vitest.config.ts`):
 - Environment: `node`
-- Isolation: `false` locally, `true` in CI (avoids `vi.spyOn` leakage across files)
+- Isolation: `true` (avoids `vi.spyOn` leakage across files)
 - Timeout: 10s
 - Test pattern: `**/*.test.ts`
 - Excludes: `**/lib/**`
@@ -175,7 +175,9 @@ Key config (`vitest.config.ts`):
 
 ## CI
 
-GitHub Actions (`ci.yml`): Install → changeset check → build → type-check → lint → 15+ harness checks → test+coverage → codecov. Runs on PR to and push on `main`, matrix OS (ubuntu/windows) × Node.js (22/24/26), `fail-fast: false`. Full checks + coverage only on `ubuntu-latest` + Node 24; other combinations run build + tests only. 25-min timeout, concurrency-cancelled per ref.
+GitHub Actions (`ci.yml`): PR/push/merge-queue gate on `ubuntu-latest` — `plan` (affected scope) → `contracts` (source contracts + changed-file lint) → `build` → `test` (4 shards) → `checks`; 10–15 min timeouts, concurrency-cancelled per ref.
+
+Full validation (`full-validation.yml`): nightly / manual / reusable. Matrix OS (ubuntu/windows) × Node.js (22/24/26), `fail-fast: true`, 25-min timeout. Coverage + codecov upload only on `ubuntu-latest` + Node 24.
 
 Publish workflow (`publish.yml`): On push to `main`, auto-bumps versions via Changesets and publishes to npm.
 
@@ -208,11 +210,11 @@ Agent harness engineering 提供多层安全防护：执行策略（5 层防御�
 
 | What | Where |
 |------|-------|
-| Plugin/Command/Middleware | `packages/im/core/src/plugin.ts` |
-| Adapter and send chain | `packages/im/core/src/adapter.ts` |
-| Message dispatcher | `packages/im/core/src/built/dispatcher.ts` |
-| Agent orchestrator | `packages/im/agent/src/orchestrator/` |
-| Agent dispatcher | `packages/im/agent/src/orchestrator/agent-dispatcher.ts` |
+| Plugin definition (`definePlugin`) | `packages/im/plugin-runtime/src/plugin.ts` |
+| Adapter and send chain | `packages/im/core/src/feature/adapter.ts` |
+| Message dispatcher | `packages/im/core/src/plugin-runtime/im/message-dispatcher.ts` |
+| Agent runtime / turn engine | `packages/im/agent/src/plugin-runtime/` (`agent-runtime.ts`, `full-agent-turn-engine.ts`) |
+| Agent ingress (mailbox spine) | `packages/im/agent/src/plugin-runtime/ingress/unified-mailbox-spine.ts` |
 | Security policies | `packages/im/agent/src/security/` |
 | Sandbox environment | `packages/im/agent/src/security/sandbox.ts` |
 | Prompt builder | `packages/im/agent/src/prompt/prompt-builder.ts` |

@@ -2507,7 +2507,7 @@ _该 Schema 没有声明字段。_
 | `lottery.games` | array&lt;string&gt; | 否 | `["kl8","ssq","dlt","fc3d","pl3","pl5"]` | — |
 | `lottery.pushTargets` | array&lt;object&gt; | 否 | `[]` | OutboundHost push destinations for cron/publish reports |
 | `lottery.pushTargets[].adapter` | string | 是 | — | — |
-| `lottery.pushTargets[].endpointId` | string | 否 | — | — |
+| `lottery.pushTargets[].endpointKey` | string | 否 | — | — |
 | `lottery.pushTargets[].channelType` | string | 否 | `"private"` | — |
 | `lottery.pushTargets[].channelId` | string | 是 | — | — |
 | `lottery.kl8` | object | 否 | — | — |

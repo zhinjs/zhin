@@ -15,6 +15,12 @@ describe('page shell and runtime.sandbox (ADR 0044)', () => {
     expect(renderPageShell({ ...page, localName: 'dev-chat' }, { runtimeSandbox: true })).toContain('sandbox-shell');
   });
 
+  it('escapes `<` in metadata inlined into the module script', () => {
+    const html = renderPageShell({ ...page, title: '</script><img src=x onerror=alert(1)>' });
+    expect(html).not.toContain('</script><img');
+    expect(html).toContain('\\u003c/script>\\u003cimg src=x onerror=alert(1)>');
+  });
+
   it('serves the page module otherwise, even for a page called sandbox', () => {
     const html = renderPageShell(page);
     expect(html).toContain('/assets/client/sandbox.js');

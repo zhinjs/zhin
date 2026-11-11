@@ -101,7 +101,7 @@ export async function handleJsonRpc(
   preParsedBody?: unknown,
 ): Promise<void> {
   if (req.method !== 'POST') {
-    sendJson(res, 405, { error: 'Method not allowed', Allow: 'POST' });
+    sendJson(res, 405, { error: 'Method not allowed' }, { Allow: 'POST' });
     return;
   }
 

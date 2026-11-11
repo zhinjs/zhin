@@ -101,7 +101,7 @@ The root plugin the main configuration `plugins` map (or project graph) must ref
 ## Documentation Links
 
 - [OneBot 11 Standard](https://github.com/botuniverse/onebot-11)
-- [Adapter Overview](https://zhin.js.org/essentials/adapters)
+- [Adapter Overview](https://zhin.js.org/adapters/)
 
 ## Console page
 

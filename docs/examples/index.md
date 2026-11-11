@@ -119,4 +119,4 @@ pnpm dev:test                # 或 cd examples/test-bot && pnpm dev
 
 - [快速开始](../getting-started/index.md)：用脚手架创建你自己的项目
 - [编写第一个插件](../getting-started/first-plugin.md)：从零写一个可配置的命令
-- [真实部署案例](../showcase/README.md)：看别人怎么在生产中使用 Zhin
+- [真实部署案例](../showcase/index.md)：看别人怎么在生产中使用 Zhin

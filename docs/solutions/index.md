@@ -33,4 +33,4 @@ description: "不用先理解包结构：按你想交付的结果，找到对应
 ## 下一步
 
 - 还没有项目？先看 [快速开始](/getting-started/)
-- 想看完整的例子？见 [示例项目](/examples/) 和 [真实部署案例](/showcase/README)
+- 想看完整的例子？见 [示例项目](/examples/) 和 [真实部署案例](/showcase/)

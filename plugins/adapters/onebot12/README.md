@@ -102,7 +102,7 @@ WS、反向 WS 和 Webhook 都在进入原生 SDK 前过滤其他 bot 的事件�
 
 - [OneBot 12 标准](https://12.onebot.dev/)
 - [OneBot Connect WebSocket](https://12.onebot.dev/connect/communication/websocket/)
-- [适配器概览](https://zhin.js.org/essentials/adapters)
+- [适配器概览](https://zhin.js.org/adapters/)
 
 ## Console 页面
 
