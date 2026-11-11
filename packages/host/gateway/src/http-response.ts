@@ -48,5 +48,8 @@ export function writeSse(
 
 export function normalizeBase(value: string): string {
   if (!value.startsWith('/')) return `/${value}`;
-  return value.replace(/\/+$/u, '') || '/api';
+  // Linear trim instead of /\/+$/ (polynomial backtracking on long runs of '/').
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 0x2f) end -= 1;
+  return value.slice(0, end) || '/api';
 }
