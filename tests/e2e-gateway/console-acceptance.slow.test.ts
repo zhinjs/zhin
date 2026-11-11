@@ -141,26 +141,27 @@ describe.skipIf(!enabled)('Console acceptance walk through the gateway (M7)', ()
 
   it('onboarding installs the sandbox adapter through the gateway and the instance loads it', async () => {
     const before = await project.status();
-    // The adapter needs its first account before it can be declared: install the package only…
-    const install = await project.rpc(token, 'gateway.packages.install', { packages: [SANDBOX], enable: false });
+    // Installing with the default (enable) keeps the adapter undeclared: its schema requires an
+    // account (`endpoints`) without a default, so the instance must not load it yet.
+    const install = await project.rpc(token, 'gateway.packages.install', { packages: [SANDBOX] });
     expect(install.status, JSON.stringify(install.body)).toBe(200);
-    expect(install.body.data, JSON.stringify(install.body.data)).toMatchObject({ ok: true, status: 'succeeded', packages: [{ name: SANDBOX, source: 'adapter' }] });
+    expect(install.body.data, JSON.stringify(install.body.data)).toMatchObject({
+      ok: true, status: 'succeeded', packages: [{ name: SANDBOX, source: 'adapter' }],
+      needsConfiguration: [{ name: SANDBOX, instanceKey: 'sandbox', missing: ['endpoints'], missingEnv: [] }],
+    });
     expect(JSON.parse(await project.read('package.json')).dependencies[SANDBOX]).toBeTruthy();
-    await running('instance after the package install', before.instance!.pid);
+    expect(await project.read('zhin.config.yml')).not.toContain(SANDBOX);
+    const afterInstall = await running('instance after the package install', before.instance!.pid);
 
-    // …then write its first account and declare it in the configuration source editor.
-    const source = await project.rpcMessage(token, { type: 'config:get-source' });
-    expect(source.status, JSON.stringify(source.body)).toBe(200);
-    const yaml = String(source.body.data.source)
-      .replace('plugins: {}', `plugins:\n  sandbox: "${SANDBOX}"`)
-      .concat(`sandbox:\n  endpoints:\n    - id: ${SANDBOX_ENDPOINT}\n`);
-    const replaced = await project.rpcMessage(token, { type: 'config:replace-source', source: yaml, expectedRevision: source.body.data.revision });
-    expect(replaced.status, JSON.stringify(replaced.body)).toBe(200);
-    expect(replaced.body.data, JSON.stringify(replaced.body)).toMatchObject({ success: true });
-    const instanceBefore = (await project.status()).instance!;
-    const restarted = await project.rpc(token, 'gateway.instance.restart');
-    expect(restarted.status, JSON.stringify(restarted.body)).toBe(200);
-    await running('instance with the sandbox adapter', instanceBefore.pid);
+    // …then declare it with its first account: schema-validated, written atomically, instance restarted.
+    const invalid = await project.rpc(token, 'gateway.plugins.declare', { package: SANDBOX, config: { endpoints: [{}] } });
+    expect(invalid.status, JSON.stringify(invalid.body)).toBe(400);
+    expect(invalid.body, JSON.stringify(invalid.body)).toMatchObject({ success: false, code: 'invalid_input' });
+    const declared = await project.rpc(token, 'gateway.plugins.declare', { package: SANDBOX, config: { endpoints: [{ id: SANDBOX_ENDPOINT }] } });
+    expect(declared.status, JSON.stringify(declared.body)).toBe(200);
+    expect(declared.body.data, JSON.stringify(declared.body.data)).toMatchObject({ ok: true, status: 'succeeded', operation: 'declare' });
+    expect(await project.read('zhin.config.yml')).toContain(SANDBOX_ENDPOINT);
+    await running('instance with the sandbox adapter', afterInstall.instance!.pid);
 
     const endpoints = await project.rpc(token, 'endpoint.list');
     expect(endpoints.status).toBe(200);

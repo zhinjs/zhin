@@ -647,9 +647,9 @@ function projectDeclarationErrors(document: RuntimeConfigDocument, paths: readon
   const errors: Array<{ path: string; message: string }> = [];
   for (const section of new Set(paths.map(path => path[0]!))) {
     if (PROJECT_PATCH_DECLARATION_KEYS.has(section)) {
-      errors.push({ path: `$.${section}`, message: '插件声明与根插件配置请在配置源码或插件管理中修改' });
+      errors.push({ path: `$.${section}`, message: '插件声明与根插件配置请用 gateway.plugins.declare、配置源码或插件管理修改' });
     } else if (!HOST_CONFIG_KEYS.includes(section) && !declared.has(section)) {
-      errors.push({ path: `$.${section}`, message: '未声明的插件实例；请先在 plugins 中声明' });
+      errors.push({ path: `$.${section}`, message: '未声明的插件实例；请先用 gateway.plugins.declare 声明' });
     }
   }
   return errors;

@@ -22,7 +22,12 @@ export const GATEWAY_INSTANCE_RPC = Object.freeze({
   LOGS: 'gateway.instance.logs',
 } as const);
 
-export const GATEWAY_RPC = Object.freeze({ ...GATEWAY_PACKAGES_RPC, ...GATEWAY_INSTANCE_RPC });
+/** Plugin declarations written by the gateway (ADR 0053 §2 step 4, ADR 0054 §4). */
+export const GATEWAY_PLUGINS_RPC = Object.freeze({
+  DECLARE: 'gateway.plugins.declare',
+} as const);
+
+export const GATEWAY_RPC = Object.freeze({ ...GATEWAY_PACKAGES_RPC, ...GATEWAY_INSTANCE_RPC, ...GATEWAY_PLUGINS_RPC });
 
 export type GatewayRpcType = (typeof GATEWAY_RPC)[keyof typeof GATEWAY_RPC];
 
@@ -42,6 +47,7 @@ export const GATEWAY_RPC_PERMISSIONS = Object.freeze({
   'gateway.instance.start': 'ops.restart',
   'gateway.instance.stop': 'ops.restart',
   'gateway.instance.restart': 'ops.restart',
+  'gateway.plugins.declare': 'plugin.manage',
 } as const satisfies Readonly<Record<GatewayRpcType, string>>);
 
 /**
@@ -58,6 +64,9 @@ export const GATEWAY_PACKAGES_PROGRESS_PATH = '/gateway/packages/progress' as co
 
 export type GatewayPackageOperation = 'install' | 'uninstall' | 'update';
 
+/** Every gateway transaction: package operations plus `declare` (`gateway.plugins.declare`). */
+export type GatewayTransactionOperation = GatewayPackageOperation | 'declare';
+
 /** Where an authorized package came from: an allowlist catalog, or any npm name (owners only). */
 export type GatewayPackageSource = 'database-driver' | 'adapter' | 'ai' | 'market' | 'npm';
 
@@ -68,6 +77,35 @@ export interface GatewayPackagesInstallRequest {
   readonly enable?: boolean;
   /** Start the instance afterwards even when it was stopped before (default: only if it was running). */
   readonly startInstance?: boolean;
+}
+
+/**
+ * `gateway.plugins.declare`: declare an installed plugin package as `plugins.<instanceKey>` with
+ * its first configuration, validated against the plugin's schema, written atomically, then the
+ * instance restarted (rolled back when it does not come up). Refused when the instance key is
+ * already declared — change a declared plugin's configuration with `config:patch-project`.
+ */
+export interface GatewayPluginsDeclareRequest {
+  /** Installed plugin package name (a production dependency), without a version. */
+  readonly package: string;
+  /** Default: derived from the package name (`@zhin.js/adapter-sandbox` → `sandbox`). */
+  readonly instanceKey?: string;
+  /** The instance's configuration section (`<instanceKey>:`); default `{}`. */
+  readonly config?: Readonly<Record<string, unknown>>;
+  readonly startInstance?: boolean;
+}
+
+/**
+ * An installed plugin left undeclared because its schema requires fields without defaults (or
+ * environment variables are missing). Declare it with `gateway.plugins.declare` once configured.
+ */
+export interface GatewayPluginConfigurationNeed {
+  readonly name: string;
+  readonly instanceKey: string;
+  /** Config paths to fill or fix, relative to the instance section (`endpoints`, `endpoints.0.id`). */
+  readonly missing: readonly string[];
+  /** Environment variables referenced by defaults that are not set. */
+  readonly missingEnv: readonly string[];
 }
 
 export interface GatewayPackagesUninstallRequest {
@@ -127,6 +165,7 @@ export type GatewayPackagePhase =
   | 'snapshot'
   | 'stop-instance'
   | 'package-manager'
+  | 'configure'
   | 'start-instance'
   | 'rollback'
   | 'restore-files'
@@ -138,7 +177,7 @@ export type GatewayPackageTransactionStatus = 'succeeded' | 'rolledBack' | 'roll
 
 export interface GatewayPackageTransactionResult {
   readonly id: string;
-  readonly operation: GatewayPackageOperation;
+  readonly operation: GatewayTransactionOperation;
   readonly packages: readonly GatewayAuthorizedPackage[];
   readonly ok: boolean;
   readonly status: GatewayPackageTransactionStatus;
@@ -150,13 +189,18 @@ export interface GatewayPackageTransactionResult {
   readonly rollbackError?: string;
   /** Last instance log lines when starting the instance failed. */
   readonly logTail?: readonly string[];
+  /**
+   * `install` only: plugins installed but not declared because their configuration is incomplete
+   * (the transaction still succeeds and the instance stays healthy). Absent when none.
+   */
+  readonly needsConfiguration?: readonly GatewayPluginConfigurationNeed[];
   readonly instance: Readonly<{ before: GatewayInstanceState | 'unmanaged'; after: GatewayInstanceState | 'unmanaged' }>;
   readonly startedAt: number;
   readonly finishedAt: number;
 }
 
 export type GatewayPackageEvent =
-  | Readonly<{ type: 'start'; id: string; operation: GatewayPackageOperation; packages: readonly GatewayAuthorizedPackage[] }>
+  | Readonly<{ type: 'start'; id: string; operation: GatewayTransactionOperation; packages: readonly GatewayAuthorizedPackage[] }>
   | Readonly<{ type: 'phase'; id: string; phase: GatewayPackagePhase }>
   | Readonly<{ type: 'output'; id: string; stream: 'stdout' | 'stderr'; chunk: string }>
   | Readonly<{ type: 'result'; id: string; result: GatewayPackageTransactionResult }>;

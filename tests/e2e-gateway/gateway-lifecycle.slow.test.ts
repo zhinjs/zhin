@@ -189,6 +189,9 @@ describe.skipIf(!enabled)('management gateway end to end (zhin start, examples/m
     expect(install.stderr).toContain('已回滚');
     expect(install.stderr).toContain('start-instance');
     expect(`${install.stdout}\n${install.stderr}`).toContain('e2e broken plugin');
+    // Through the gateway the CLI prints the transaction phases, not a local pnpm command line.
+    expect(install.stdout).not.toContain('执行命令');
+    expect(install.stdout).toContain('执行包管理器');
 
     // The fake package manager ran the install, then the rollback reinstall.
     const calls = (await project.read('.fake-pnpm.log')).trim().split('\n').map((line) => JSON.parse(line) as string[]);

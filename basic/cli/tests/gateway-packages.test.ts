@@ -9,6 +9,7 @@ import { splitStartArguments } from '../src/commands/lifecycle.js';
 import {
   describeGatewayError,
   probeGateway,
+  renderTransactionResult,
   runPackageOperationDirect,
   runPackageOperationViaGateway,
   type Output,
@@ -73,6 +74,19 @@ describe.runIf(process.platform !== 'win32')('dependency transactions from the C
       '✓ install 完成：zod（实例 running → running）',
       '',
     ].join('\n'));
+  });
+
+  it('hints how to configure a plugin installed without its required configuration', () => {
+    const lines = renderTransactionResult({
+      ...result(true),
+      packages: [{ name: '@zhin.js/adapter-sandbox', spec: '@zhin.js/adapter-sandbox', source: 'adapter' }],
+      needsConfiguration: [{ name: '@zhin.js/adapter-sandbox', instanceKey: 'sandbox', missing: ['endpoints'], missingEnv: ['SANDBOX_TOKEN'] }],
+    });
+    expect(lines).toHaveLength(2);
+    expect(lines[1]).toContain('@zhin.js/adapter-sandbox 已安装但未启用');
+    expect(lines[1]).toContain('endpoints、环境变量 SANDBOX_TOKEN');
+    expect(lines[1]).toContain('plugins.sandbox');
+    expect(lines[1]).toContain('gateway.plugins.declare');
   });
 
   it('reports a rolled-back transaction with the instance log tail', async () => {

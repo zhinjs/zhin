@@ -4,7 +4,7 @@ import { mkdir, open, readFile, unlink, access } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { promisify, isDeepStrictEqual } from 'node:util';
 import { loadProjectConfig, packageToInstanceKey } from '@zhin.js/scaffold-wizard';
-import { createConfigDocument, JsonConfigDocument, NodePackageResolver, PackageResolutionError, ProjectGraphService, primaryConfigToken, parsePluginConfigSchema, envStoreToken, runtimeEnvironmentToken, type ConfigFileDocument, type EnvStore, type RuntimeEnvironment, type ResolvedPackage, readApplicationPluginDeclaration } from '@zhin.js/runtime';
+import { createConfigDocument, HOST_CONFIG_KEYS, JsonConfigDocument, NodePackageResolver, PackageResolutionError, ProjectGraphService, primaryConfigToken, parsePluginConfigSchema, envStoreToken, runtimeEnvironmentToken, type ConfigFileDocument, type EnvStore, type RuntimeEnvironment, type ResolvedPackage, readApplicationPluginDeclaration } from '@zhin.js/runtime';
 import {
   featureId, pluginVerificationToken, rootPluginId, readPluginConfigurationMap,
   type SnapshotReader, type PluginNodeSnapshot, type RuntimeSnapshot, type RuntimeConfigDocument,
@@ -15,7 +15,7 @@ import type {
 } from '@zhin.js/host-http';
 import { ConsoleConfigurationStore } from '../config/configuration.js';
 import { explainConfigFields } from './config-explanation.js';
-import type { ConsoleConfigExplanation } from '@zhin.js/console-protocol';
+import type { ConsoleConfigExplanation, GatewayPluginConfigurationNeed } from '@zhin.js/console-protocol';
 import type { PluginManagementActivity } from './activity.js';
 import { resolveCommand } from '../onboarding/package-manager.js';
 import { readPluginLifecycleState, resolvePluginLifecycleFile } from '@zhin.js/runtime';
@@ -50,6 +50,25 @@ export interface PluginInstallOptions {
   readonly enable?: boolean;
   readonly saveDev?: boolean;
   readonly source?: string;
+}
+
+export interface PluginDeclareOptions {
+  /** Default: derived from the package name. */
+  readonly instanceKey?: string;
+  /** Root config revision the caller read (CAS). */
+  readonly expectedRevision?: string;
+}
+
+/** A declaration refused before anything was written (invalid request or configuration). */
+export class PluginDeclarationError extends Error {
+  readonly errors: readonly { readonly path: string; readonly message: string }[];
+  readonly missingEnv: readonly string[];
+  constructor(message: string, errors: readonly { path: string; message: string }[] = [], missingEnv: readonly string[] = []) {
+    super(message);
+    this.name = 'PluginDeclarationError';
+    this.errors = Object.freeze(errors.map(error => Object.freeze({ ...error })));
+    this.missingEnv = Object.freeze([...missingEnv]);
+  }
 }
 
 /** One installation authority for CLI and Console. No generation or package parser of its own. */
@@ -395,6 +414,7 @@ export class PluginManagementWorkflow implements PluginManagementPort {
       const installed = await this.#installed(spec.name);
       if (!installed.installed) throw new Error('Package manager completed but the installed package is unavailable');
       if (installed.error) throw new Error(installed.error);
+      let needsConfiguration: GatewayPluginConfigurationNeed | undefined;
       if (options.enable !== false && installed.plugin) {
         if (options.saveDev) throw new Error('Runtime plugins must be production dependencies; use installation without --save-dev');
         if ((await this.#revisions()).revision !== previous.revision) throw new Error('Root config changed during installation');
@@ -407,16 +427,91 @@ export class PluginManagementWorkflow implements PluginManagementPort {
         if (previous.revision && currentConfig.revision !== previous.revision) throw new Error('Root config changed during installation');
         const entries = currentConfig.document.plugins as Record<string, unknown>;
         if (Object.hasOwn(entries, target.instanceKey) && entries[target.instanceKey] !== target.packageName) throw new Error(`Plugin instanceKey collision: ${target.instanceKey}`);
-        const patches: import('@zhin.js/plugin-runtime').ConfigPatch[] = [];
-        if (!Object.hasOwn(entries, target.instanceKey)) patches.push({op: 'set', path: ['plugins', target.instanceKey], value: target.packageName});
-        if (!Object.hasOwn(currentConfig.document, target.instanceKey)) patches.push({op: 'set', path: [target.instanceKey], value: {}});
-        if (patches.length) await (await configuration.document.prepare(currentConfig, patches)).commit();
-        completed.push('application-declaration', 'minimum-config');
+        if (!Object.hasOwn(entries, target.instanceKey)) {
+          // An undeclared instance has no section yet (the declaration reader refuses one): the
+          // instance would load `{}` completed by the schema defaults. Required fields without
+          // defaults keep the plugin undeclared until it is declared with its configuration.
+          const candidate = { ...currentConfig.document, plugins: { ...entries, [target.instanceKey]: target.packageName } };
+          const validation = await configuration.store.validatePluginConfig(target.instanceKey, {}, candidate);
+          if (!validation.valid || validation.missingEnv.length) {
+            needsConfiguration = Object.freeze({ name: target.packageName, instanceKey: target.instanceKey,
+              missing: Object.freeze([...new Set(validation.errors.map(error => relativeConfigPath(error.path)))]),
+              missingEnv: Object.freeze([...validation.missingEnv]) });
+          }
+        }
+        if (needsConfiguration) completed.push('configuration-required');
+        else {
+          const patches: import('@zhin.js/plugin-runtime').ConfigPatch[] = [];
+          if (!Object.hasOwn(entries, target.instanceKey)) patches.push({op: 'set', path: ['plugins', target.instanceKey], value: target.packageName});
+          // Defaults stay owned by the package schema (completed at load), not pinned in the file.
+          if (!Object.hasOwn(currentConfig.document, target.instanceKey)) patches.push({op: 'set', path: [target.instanceKey], value: {}});
+          if (patches.length) await (await configuration.document.prepare(currentConfig, patches)).commit();
+          completed.push('application-declaration', 'minimum-config');
+        }
       }
 
       const state = await this.inspect(spec.name);
-      return Object.freeze({ plan, restartRequired: state.restartRequired, state });
+      const result: { readonly plan: PluginInstallPlan; readonly restartRequired: boolean; readonly state: PluginManagementState; readonly needsConfiguration?: GatewayPluginConfigurationNeed } = { plan, restartRequired: state.restartRequired, state, ...(needsConfiguration ? { needsConfiguration } : {}) };
+      return Object.freeze(result);
     }, spec.name);
+  }
+
+  /**
+   * Validates a declaration without writing: the package must be an installed production plugin,
+   * the instance key free, and `config` must satisfy the plugin schema (defaults applied).
+   */
+  async planDeclaration(request: string, config: unknown = {}, options: Pick<PluginDeclareOptions, 'instanceKey'> = {}) {
+    const spec = npmSpec(request);
+    if (spec.version !== undefined) throw new PluginDeclarationError('声明插件时不能指定版本');
+    const instanceKey = options.instanceKey ?? packageToInstanceKey(spec.name);
+    if (typeof instanceKey !== 'string' || instanceKey.length > 128 || !/^[a-z0-9][a-z0-9-]*$/u.test(instanceKey)) throw new PluginDeclarationError('instanceKey 只能包含小写字母、数字和连字符');
+    if ((HOST_CONFIG_KEYS as readonly string[]).includes(instanceKey) || ['configVersion', 'plugins', 'disable_plugins', 'plugin', 'root'].includes(instanceKey)) throw new PluginDeclarationError(`instanceKey ${instanceKey} 是保留配置键`);
+    if (!config || typeof config !== 'object' || Array.isArray(config)) throw new PluginDeclarationError('config 必须是对象');
+    const configuration = this.#configuration();
+    if (!configuration) throw new PluginDeclarationError('Missing configVersion: 2 configuration; run zhin setup');
+    const current = await configuration.document.read();
+    const declaration = readApplicationPluginDeclaration(current.document);
+    if (declaration.version !== 2) throw new PluginDeclarationError('Root configuration must use configVersion: 2');
+    const entries = (current.document.plugins ?? {}) as Record<string, unknown>;
+    if (Object.hasOwn(entries, instanceKey)) {
+      throw new PluginDeclarationError(entries[instanceKey] === spec.name
+        ? `插件实例 ${instanceKey} 已声明；修改其配置请使用 config:patch-project`
+        : `Plugin instanceKey collision: ${instanceKey}`);
+    }
+    const { project } = await this.#project();
+    if (project.zhin?.plugins?.length) throw new PluginDeclarationError('Legacy package.json zhin.plugins detected; run zhin migrate instances');
+    if (!project.dependencies?.[spec.name] && !project.optionalDependencies?.[spec.name]) throw new PluginDeclarationError(`${spec.name} 不是项目的生产依赖，请先安装`);
+    const installed = await this.#installed(spec.name);
+    if (!installed.installed || !installed.plugin || installed.error) throw new PluginDeclarationError(installed.error ?? `${spec.name} 未安装或不是 Plugin 包`);
+    const target = { packageName: spec.name, instanceKey };
+    const candidate = { ...current.document, plugins: { ...entries, [instanceKey]: spec.name } };
+    await this.#checkDependencies(target, candidate);
+    const validation = await configuration.store.validatePluginConfig(instanceKey, config, candidate);
+    if (!validation.valid || validation.missingEnv.length) {
+      throw new PluginDeclarationError(`配置未通过插件 Schema 校验，未声明：${[
+        ...validation.errors.map(error => `${error.path} ${error.message}`),
+        ...validation.missingEnv.map(name => `缺少环境变量 ${name}`)].join('；')}`, validation.errors, validation.missingEnv);
+    }
+    return Object.freeze({ ...target, revision: current.revision, schemaAvailable: validation.schemaAvailable });
+  }
+
+  /** Declares `plugins.<instanceKey>` and writes its section in one atomic config write. */
+  async declare(request: string, config: unknown = {}, options: PluginDeclareOptions = {}) {
+    return this.#mutate(async completed => {
+      const plan = await this.planDeclaration(request, config, options);
+      if (options.expectedRevision !== undefined && plan.revision !== options.expectedRevision) throw new PluginDeclarationError('项目或配置已被其他会话修改，请刷新后重试');
+      const configuration = this.#configuration();
+      if (!configuration) throw new PluginDeclarationError('Missing configVersion: 2 configuration; run zhin setup');
+      const current = await configuration.document.read();
+      if (current.revision !== plan.revision) throw new PluginDeclarationError('配置在校验期间变化，请刷新后重试');
+      await (await configuration.document.prepare(current, [
+        { op: 'set', path: ['plugins', plan.instanceKey], value: plan.packageName },
+        { op: 'set', path: [plan.instanceKey], value: structuredClone(config) },
+      ])).commit();
+      completed.push('application-declaration', 'config');
+      const state = await this.inspect(plan.instanceKey);
+      return Object.freeze({ packageName: plan.packageName, instanceKey: plan.instanceKey, restartRequired: state.restartRequired, state });
+    }, request);
   }
 
   async planUninstall(request: string): Promise<PluginUninstallPlan> {
@@ -590,5 +685,7 @@ function npmSpec(value: string) {
   const name = match.groups.name!;
   return { name, version: match.groups.version, spec: match.groups.version ? `${name}@${match.groups.version}` : name };
 }
+/** `$.endpoints.0.id` → `endpoints.0.id` (validation paths are rooted at the instance section). */
+function relativeConfigPath(path: string) { return path.replace(/^\$\.?/u, ''); }
 function errorMessage(error: unknown) { return error instanceof Error ? error.message : String(error); }
 function notFound(error: unknown) { return error instanceof Error && 'code' in error && error.code === 'ENOENT'; }

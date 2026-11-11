@@ -41,6 +41,15 @@ async function installModule(name: string, version: string) {
   await writeFile(join(directory, 'package.json'), JSON.stringify({ name, version }));
 }
 
+/** A Plugin package with an optional `schema.json`. */
+async function installPlugin(name: string, version: string, schema?: unknown) {
+  const directory = join(root, 'node_modules', ...name.split('/'));
+  await mkdir(directory, { recursive: true });
+  await writeFile(join(directory, 'package.json'), JSON.stringify({ name, version, zhin: { protocol: 1, type: 'plugin', entry: './plugin.js', platformFeatures: false } }));
+  await writeFile(join(directory, 'plugin.js'), 'export default {};');
+  if (schema) await writeFile(join(directory, 'schema.json'), JSON.stringify(schema));
+}
+
 function nameOf(spec: string) {
   const at = spec.indexOf('@', spec.startsWith('@') ? 1 : 0);
   return at < 0 ? spec : spec.slice(0, at);
@@ -50,7 +59,7 @@ function nameOf(spec: string) {
  * Fake package manager acting on package.json, the lockfile and node_modules:
  * `add` / `remove` edit all three, `install` syncs node_modules to package.json, `update` bumps.
  */
-function fakePackageManager(options: { fail?: (args: readonly string[]) => boolean; calls?: string[][] } = {}): GatewayPackageManager {
+function fakePackageManager(options: { fail?: (args: readonly string[]) => boolean; calls?: string[][]; plugins?: Readonly<Record<string, unknown>> } = {}): GatewayPackageManager {
   return async (args, projectRoot, output) => {
     options.calls?.push([...args]);
     output('stdout', `$ pnpm ${args.join(' ')}\n`);
@@ -65,7 +74,8 @@ function fakePackageManager(options: { fail?: (args: readonly string[]) => boole
         const name = nameOf(spec);
         const version = spec.slice(name.length + 1).replace(/^[\^~]/u, '') || '1.0.0';
         manifest.dependencies[name] = `^${version}`;
-        await installModule(name, version);
+        if (options.plugins && Object.hasOwn(options.plugins, name)) await installPlugin(name, version, options.plugins[name]);
+        else await installModule(name, version);
       }
     } else if (command === 'remove') {
       for (const name of specs) {
@@ -98,7 +108,10 @@ class FakeInstance extends EventEmitter implements PackageTransactionInstance {
     super();
     this.state = initial;
   }
-  readonly logs = { tail: () => [{ seq: 1, time: 0, stream: 'stderr' as const, line: 'Error: cannot load plugin' }] };
+  // An earlier run's output: rollback tails must not include it.
+  readonly lines: { seq: number; time: number; stream: 'stdout' | 'stderr'; line: string }[] = [{ seq: 1, time: 0, stream: 'stdout', line: 'previous run' }];
+  readonly logs = { tail: (limit = 1000) => this.lines.slice(-limit) };
+  print(line: string): void { this.lines.push({ seq: this.lines.length + 1, time: 0, stream: 'stderr', line }); }
   status(): InstanceStatus { return { state: this.state, lastExitCode: null, lastExitSignal: null, recentRestarts: 0 }; }
   async stop(): Promise<void> { this.calls.push('stop'); this.state = 'stopped'; }
   async start(): Promise<void> {
@@ -106,7 +119,8 @@ class FakeInstance extends EventEmitter implements PackageTransactionInstance {
     this.starts.push(behaviour);
     this.calls.push('start');
     this.state = 'starting';
-    if (behaviour === 'hang') return new Promise(() => undefined);
+    if (behaviour === 'hang') { this.print('Error: cannot load plugin'); return new Promise(() => undefined); }
+    if (behaviour !== 'ready') this.print('boom from instance');
     if (behaviour === 'fail') {
       this.state = 'backoff';
       throw new InstanceStartError(failure('Instance exited unexpectedly (code 1)'));
@@ -355,6 +369,77 @@ describe('GatewayPackageService authorization matrix', () => {
   });
 });
 
+describe('GatewayPackageService plugin configuration (ADR 0053 §2 step 4)', () => {
+  const SANDBOX = '@zhin.js/adapter-sandbox';
+  const schema = { type: 'object', required: ['endpoints'], properties: { endpoints: { type: 'array', items: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } } } } };
+  const readConfig = () => readJson(join(root, 'zhin.config.json'));
+
+  function realService(instance: FakeInstance, calls: string[][] = []) {
+    const pm = fakePackageManager({ calls, plugins: { [SANDBOX]: schema } });
+    return new GatewayPackageService({
+      projectRoot: root, instance, packageManager: pm, hasOwner: () => true, readyTimeoutMs: 200, stableMs: 30,
+    });
+  }
+
+  it('installs an adapter whose schema needs an account without declaring it, and the transaction succeeds', async () => {
+    const instance = new FakeInstance('running');
+    const result = await realService(instance).install([SANDBOX], { principal: owner });
+    expect(result).toMatchObject({ ok: true, status: 'succeeded', instance: { after: 'running' } });
+    expect(result.needsConfiguration).toEqual([{ name: SANDBOX, instanceKey: 'sandbox', missing: ['endpoints'], missingEnv: [] }]);
+    expect((await readJson(join(root, 'package.json'))).dependencies[SANDBOX]).toBeTruthy();
+    expect(await readConfig()).toEqual({ configVersion: 2, plugins: {} });
+    expect(instance.calls).toEqual(['stop', 'start']);
+  });
+
+  it('declares an installed plugin with a validated configuration, restarting the instance', async () => {
+    const instance = new FakeInstance('running');
+    const calls: string[][] = [];
+    const subject = realService(instance, calls);
+    await subject.install([SANDBOX], { principal: owner });
+    const events: GatewayPackageEvent[] = [];
+    const result = await subject.declare({ package: SANDBOX, config: { endpoints: [{ id: 'bot' }] } }, { principal: admin, onEvent: event => events.push(event) });
+    expect(result).toMatchObject({ ok: true, status: 'succeeded', operation: 'declare', packages: [{ name: SANDBOX, spec: SANDBOX, source: 'adapter' }] });
+    expect(result.needsConfiguration).toBeUndefined();
+    expect(events.filter(event => event.type === 'phase').map(event => (event as { phase: string }).phase))
+      .toEqual(['snapshot', 'stop-instance', 'configure', 'start-instance', 'done']);
+    expect(await readConfig()).toEqual({ configVersion: 2, plugins: { sandbox: SANDBOX }, sandbox: { endpoints: [{ id: 'bot' }] } });
+    expect(calls.map(call => call[0])).toEqual(['add']);
+    expect(instance.calls).toEqual(['stop', 'start', 'stop', 'start']);
+  });
+
+  it('refuses an invalid configuration before touching the instance', async () => {
+    const instance = new FakeInstance('running');
+    const subject = realService(instance);
+    await subject.install([SANDBOX], { principal: owner });
+    instance.calls.length = 0;
+    await expect(subject.declare({ package: SANDBOX, config: { endpoints: [{}] } }, { principal: owner }))
+      .rejects.toMatchObject({ code: 'invalid_input', message: expect.stringContaining('$.endpoints.0.id') });
+    await expect(subject.declare({ package: SANDBOX }, { principal: owner })).rejects.toMatchObject({ code: 'invalid_input' });
+    await expect(subject.declare({ package: 'left-pad', config: {} }, { principal: admin })).rejects.toMatchObject({ code: 'forbidden' });
+    await expect(subject.declare({ package: `${SANDBOX}@1.0.0`, config: {} }, { principal: owner })).rejects.toMatchObject({ code: 'invalid_input' });
+    await expect(subject.declare({ package: SANDBOX, config: { endpoints: [] } }, { principal: testUser('viewer') })).rejects.toMatchObject({ code: 'forbidden' });
+    expect(instance.calls).toEqual([]);
+    expect((await readConfig()).plugins).toEqual({});
+  });
+
+  it('rolls the configuration back without reinstalling when the declared plugin does not start', async () => {
+    const instance = new FakeInstance('running', attempt => (attempt === 1 ? 'fail' : 'ready'));
+    const calls: string[][] = [];
+    const subject = realService(instance, calls);
+    await subject.install([SANDBOX], { principal: owner });
+    const before = await readFile(join(root, 'zhin.config.json'), 'utf8');
+    const events: GatewayPackageEvent[] = [];
+    const result = await subject.declare({ package: SANDBOX, config: { endpoints: [{ id: 'bot' }] } }, { principal: owner, onEvent: event => events.push(event) });
+    expect(result).toMatchObject({ ok: false, status: 'rolledBack', failedPhase: 'start-instance', operation: 'declare', instance: { after: 'running' } });
+    // Only this transaction's output: not the earlier runs' lines.
+    expect(result.logTail).toEqual(['boom from instance']);
+    expect(events.filter(event => event.type === 'phase').map(event => (event as { phase: string }).phase))
+      .toEqual(['snapshot', 'stop-instance', 'configure', 'start-instance', 'rollback', 'restore-files', 'restart-instance', 'done']);
+    expect(await readFile(join(root, 'zhin.config.json'), 'utf8')).toBe(before);
+    expect(calls.map(call => call[0])).toEqual(['add']);
+  });
+});
+
 describe('GatewayPackageService with the real workflow and supervisor', () => {
   const fixture = fileURLToPath(new URL('./fixtures/project-instance.mjs', import.meta.url));
 
@@ -379,6 +464,8 @@ describe('GatewayPackageService with the real workflow and supervisor', () => {
       const result = await packages.install(['broken-pkg'], { principal: 'local' });
       expect(result).toMatchObject({ ok: false, status: 'rolledBack', failedPhase: 'start-instance', instance: { before: 'running', after: 'running' } });
       expect(result.logTail).toContain('broken-pkg cannot be loaded');
+      // The tail covers this transaction only, not the instance's earlier run.
+      expect(result.logTail).not.toContain('instance ready');
       expect(calls.map(call => call.join(' '))).toEqual(['add broken-pkg', 'install --frozen-lockfile']);
       expect(await exists(join(root, 'node_modules/broken-pkg'))).toBe(false);
       expect((await readJson(join(root, 'package.json'))).dependencies).toEqual({ zod: '^3.0.0' });

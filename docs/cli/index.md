@@ -229,7 +229,7 @@ zhin install <插件名或 git 地址> [--no-enable] [--dry-run]
 zhin add ...          # install 的别名
 ```
 
-默认会用 pnpm 安装，再把包引用写进 `zhin.config.yml` 的 `plugins.<instanceKey>`；业务参数写在顶层同名实例块，启停由 `disable_plugins` 控制。安装的是适配器时，按提示运行 `zhin setup --adapters` 添加账号。
+默认会用 pnpm 安装，再把包引用写进 `zhin.config.yml` 的 `plugins.<instanceKey>`；业务参数写在顶层同名实例块，启停由 `disable_plugins` 控制。插件 Schema 有无默认值的必填字段（例如适配器的 `endpoints` 账号）时，只安装依赖、不写声明，并提示缺少的配置项：在 Console 填写后声明（`gateway.plugins.declare`），或运行 `zhin setup --adapters`，或手动在配置文件中添加 `plugins.<instanceKey>` 与实例块后重启。
 
 | 选项 | 说明 |
 | --- | --- |

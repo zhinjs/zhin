@@ -229,7 +229,7 @@ zhin install <plugin name or git URL> [--no-enable] [--dry-run]
 zhin add ...          # alias of install
 ```
 
-By default it installs with pnpm and writes the package reference into `plugins.<instanceKey>` in `zhin.config.yml`. Business settings use the top-level alias block; `disable_plugins` controls activation. For adapters, follow the prompt to run `zhin setup --adapters` and add an account.
+By default it installs with pnpm and writes the package reference into `plugins.<instanceKey>` in `zhin.config.yml`. Business settings use the top-level alias block; `disable_plugins` controls activation. When the plugin schema has required fields without defaults (such as an adapter's `endpoints` accounts), only the dependency is installed, nothing is declared, and the missing fields are printed: fill them in the Console and declare the plugin there (`gateway.plugins.declare`), run `zhin setup --adapters`, or add `plugins.<instanceKey>` and the instance block to the config file yourself and restart.
 
 | Option | Description |
 | --- | --- |
