@@ -28,6 +28,7 @@ import { PluginManagementWorkflow, type PluginManagementOptions } from '../../pl
 import { registerConsoleRpcRoute } from './rpc-route.js';
 import { registerConsoleSystemRoutes } from './system-routes.js';
 import { registerMessageDiagnosticRoutes } from './message-diagnostic-routes.js';
+import { registerMessageSendRoutes } from './message-send-routes.js';
 import { registerPluginTaskRoutes } from './plugin-task-routes.js';
 import { registerPermissionExplanationRoutes } from './permission-explanation-routes.js';
 
@@ -95,6 +96,7 @@ export function registerConsoleRoutes(options: RegisterConsoleRoutesOptions): vo
   registerConsoleEntryRoutes({ http, consoleRuntime });
   registerConsoleSystemRoutes({ http, base, im, snapshot });
   registerMessageDiagnosticRoutes({ http, base, diagnostics: im?.messageDiagnostics });
+  registerMessageSendRoutes({ http, base, im });
   registerConversationHistoryRoutes({ http, base, im, databaseHost, snapshots });
   registerConversationResultRoutes({ http, base, projectRoot, snapshots });
   registerInteractionRoutes({ http, base, im, snapshots });

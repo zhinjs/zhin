@@ -2,8 +2,9 @@
 
 The zero-business-dependency boundary shared by Zhin HTTP protocol hosts.
 
-It provides `HttpRouteHost` for mounting protocol routes and `readJsonBody()`
-for bounded JSON request parsing. It intentionally does not expose listeners,
+It provides `HttpRouteHost` for mounting protocol routes, `readJsonBody()`
+for bounded JSON request parsing and `readTextBody()` for bounded raw-text
+bodies (webhook signature verification). It intentionally does not expose listeners,
 authentication, WebSockets, or OpenAPI construction; those are responsibilities
 of `@zhin.js/host-http`.
 
@@ -23,6 +24,6 @@ try {
 }
 ```
 
-`readJsonBody()` drains oversized bodies before throwing `HttpBodyError(413)`.
+`readJsonBody()` and `readTextBody()` drain oversized bodies before throwing `HttpBodyError(413)`.
 That lets the caller send a reliable response without prematurely destroying a
 keep-alive socket.

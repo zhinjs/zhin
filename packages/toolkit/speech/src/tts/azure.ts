@@ -13,7 +13,7 @@ export function createAzureTtsProvider(config: TTSConfig): TtsProvider {
       const voice = input.voice || config.voice || 'zh-CN-XiaoxiaoNeural';
       const url = `https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`;
 
-      const ssml = `<speak version='1.0' xml:lang='zh-CN'><voice name='${voice}'>${escapeXml(input.text)}</voice></speak>`;
+      const ssml = `<speak version='1.0' xml:lang='zh-CN'><voice name='${escapeXml(voice)}'>${escapeXml(input.text)}</voice></speak>`;
 
       const response = await fetch(url, {
         method: 'POST',

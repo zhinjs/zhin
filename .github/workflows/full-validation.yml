@@ -347,6 +347,12 @@ jobs:
           HARNESS_SKIP_TEST: '1'
           HARNESS_SEQUENTIAL: '1'
 
+      # check:all only runs the deterministic L4 subset (check:l4-ci); the full matrix runs here.
+      - name: L4 full acceptance (platform items skipped)
+        run: pnpm check:l4
+        env:
+          L4_SKIP_PLATFORM: '1'
+
       # Fail fast across jobs: `fail-fast` only stops one matrix, so a failing job
       # cancels the whole run instead of letting the other jobs finish for nothing.
       - name: cancel the rest of this run

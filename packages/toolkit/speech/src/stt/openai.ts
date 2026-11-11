@@ -39,7 +39,7 @@ export async function transcribeWithOpenAI(
   const blob = new Blob([new Uint8Array(audioData)], { type: mimeType });
   formData.append('file', blob, `audio.${ext}`);
   formData.append('model', model);
-  formData.append('language', 'zh');
+  if (sttConfig.language) formData.append('language', sttConfig.language);
 
   const response = await fetch(`${host}/v1/audio/transcriptions`, {
     method: 'POST',
