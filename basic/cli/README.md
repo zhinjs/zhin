@@ -33,7 +33,7 @@ zhin --help               # 全部命令
 
 ## 进程模型与退出码
 
-- CLI daemon 监听退出码：`51` = Console 请求重启（自动拉起新进程）；`75` = 运行时报 restartRequired（按风暴保护策略重启）。
+- `zhin runtime start` 的父进程是监管进程（`@zhin.js/gateway/supervisor`），经 IPC 控制通道拉起实例：实例就绪发 `ready`，需要整进程重启时发 `restart-request`（Console 重启、依赖变化等），监管进程回以 `shutdown` 后重新拉起；不再使用退出码重启。daemon 模式下崩溃按风暴保护（每分钟 10 次、间隔 3 秒）重启，日志写 `.zhin/logs/instance.log` 并按大小轮转。
 - 热重载语义见 [docs/cli/runtime.md](../../docs/cli/runtime.md)。
 
 ## 开发

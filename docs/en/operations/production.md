@@ -137,7 +137,7 @@ zhin service status --user
 
 On macOS, use the launchd service commands without `--user`. Keep one restart owner: with systemd, launchd, Kubernetes, or PM2, let the external supervisor own a foreground Runtime. Use `--daemon` only for a directly managed bare-metal process.
 
-Exit code 51 means Console requested a restart; 75 means Runtime requires one. An external supervisor should restart both while enforcing a storm limit.
+When Console, a dependency change and the like need a whole-process restart, the instance asks the `zhin runtime start` supervisor over its control channel; the process does not exit for it. An external supervisor only needs to restart the process after an abnormal (non-zero) exit, with a storm limit.
 
 ## 5. Durable state and backup
 
@@ -155,7 +155,7 @@ Use a database snapshot or stop writes before copying SQLite. Use the native bac
 
 Monitor the HTTP probe, restart count, Endpoint health, SSE recovery gaps, error rate, database capacity, collaborations (Engagements) frozen and waiting for a human, and Agent failure/cancellation ratio.
 
-Logs go to stdout by default; daemon mode writes `.zhin/runtime.log`. Configure host-level rotation. Include Endpoint, Project, runtimeId, or runId in alerts instead of forwarding only an error string.
+Logs go to stdout by default; daemon mode writes `.zhin/logs/instance.log`, rotated past 10 MiB (5 files kept). Include Endpoint, Project, runtimeId, or runId in alerts instead of forwarding only an error string.
 
 ## 7. Release and rollback
 

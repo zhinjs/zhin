@@ -10,6 +10,11 @@
       "types": "./lib/index.d.ts",
       "development": "./src/index.ts",
       "import": "./lib/index.js"
+    },
+    "./bridge": {
+      "types": "./lib/bridge/index.d.ts",
+      "development": "./src/bridge/index.ts",
+      "import": "./lib/bridge/index.js"
     }
   },
   "files": [
@@ -49,6 +54,10 @@
       ".": {
         "types": "./lib/index.d.ts",
         "import": "./lib/index.js"
+      },
+      "./bridge": {
+        "types": "./lib/bridge/index.d.ts",
+        "import": "./lib/bridge/index.js"
       }
     }
   },

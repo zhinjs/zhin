@@ -496,8 +496,9 @@ Per day: turns, model calls, calls per turn and per-call input tokens (p50 / p90
 
 | Code | Meaning |
 | --- | --- |
-| `51` | Console requested a restart (the daemon starts a new process) |
-| `75` | The runtime requires a restart (e.g. lockfile changed); the daemon restarts with storm protection |
+| `0` | Normal exit |
+| `130` | Interrupted by a signal |
+| other non-zero | The instance failed to start or crashed and was not restarted; restarts are requested from the supervisor over the control channel, not through exit codes |
 
 Process model and hot-reload behavior: [zhin runtime start](./runtime.md).
 

@@ -3,7 +3,7 @@ import { join, relative, resolve } from 'node:path';
 import { Command } from 'commander';
 import { FilePublishJournalStore } from '../plugin-runtime/publish-journal.js';
 import { NodeProcessRunner, ProjectCommands } from '../plugin-runtime/project-commands.js';
-import { NativeTypeScriptSupervisor } from '@zhin.js/gateway/supervisor';
+import { isSupervisedInstanceProcess, runSupervisedInstance } from '@zhin.js/gateway/supervisor';
 import { formatStartOptionHelp, generatePluginCapabilityCodegen, parseStartOptions } from '@zhin.js/runtime';
 import { importProjectInstance } from '../utils/project-instance.js';
 
@@ -46,7 +46,11 @@ runtimeCommand.command('start')
     // Process supervision belongs to the executable, not the reusable startup API.
     const root = resolve(process.cwd());
     const parsed = parseStartOptions(command.args);
-    if (await new NativeTypeScriptSupervisor(root, parsed).runIfRequired()) return;
+    if (!isSupervisedInstanceProcess()) {
+      // Parent: the gateway supervisor spawns this command again as the instance (ADR 0054 §3).
+      process.exitCode = await runSupervisedInstance({ root, options: parsed });
+      return;
+    }
     // The instance composition root lives in the project's `zhin.js` (ADR 0054 §0).
     const { runStartCommand } = await importProjectInstance(root);
     await runStartCommand({

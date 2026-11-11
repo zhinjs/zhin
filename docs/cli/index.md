@@ -483,8 +483,9 @@ zhin usage report --session 'icqq:*:group:*' --json
 
 | 退出码 | 含义 |
 | --- | --- |
-| `51` | Console 请求重启（daemon 会自动拉起新进程） |
-| `75` | 运行时要求重启（如 lockfile 变更），daemon 按防风暴策略重启 |
+| `0` | 正常退出 |
+| `130` | 被信号中断 |
+| 其他非零 | 实例启动失败或崩溃且未被重新拉起；需要重启时实例经控制通道请求监管进程，不再通过退出码 |
 
 进程模型与热重载行为见 [zhin runtime start](./runtime.md)。
 

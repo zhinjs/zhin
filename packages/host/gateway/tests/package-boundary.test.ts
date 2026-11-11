@@ -35,7 +35,8 @@ describe('@zhin.js/gateway package boundary', () => {
     expect(pluginManagement.PluginManagementWorkflow).toBeTypeOf('function');
     expect(project.findConfigFile).toBeTypeOf('function');
     expect(project.loadRuntimeEnvironmentLayers).toBeTypeOf('function');
-    expect(supervisor.NativeTypeScriptSupervisor).toBeTypeOf('function');
+    expect(supervisor.InstanceSupervisor).toBeTypeOf('function');
+    expect(supervisor.runSupervisedInstance).toBeTypeOf('function');
     for (const area of [iam, terminal, config, pluginManagement, project, supervisor]) {
       for (const [name, value] of Object.entries(area)) expect(gateway[name as keyof typeof gateway]).toBe(value);
     }

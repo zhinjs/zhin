@@ -42,7 +42,7 @@ zhin runtime start --once --mode test
 | `--once` | 完成一次启动后输出 JSON 快照并退出 |
 | `--open` | 在终端（TTY）启动成功后用浏览器打开 Remote Console；也可设置 `ZHIN_OPEN=1` |
 | `-d, --daemon` | 守护进程模式：写 pid 文件、日志重定向、崩溃自动重启 |
-| `--log-file <path>` | daemon 日志文件，默认 `<项目根>/.zhin/runtime.log` |
+| `--log-file <path>` | daemon 日志文件，默认 `<项目根>/.zhin/logs/instance.log`（按大小轮转） |
 
 `zhin runtime start --help` 会列出以上选项和常用示例。未知选项会在启动前直接报错（fail fast），不会进入重启循环。
 
@@ -62,10 +62,9 @@ zhin runtime start --once --mode test
 
 ```mermaid
 flowchart TD
-    A[解析选项] --> B{需要 strip-types 子进程?}
-    B -- 是 --> C[spawn 子进程<br/>ZHIN_RUNTIME_CHILD=1]
-    B -- 否 --> D[加载 .env / .env.&lt;environment&gt;]
-    C --> D
+    A[解析选项] --> B[监管进程 InstanceSupervisor]
+    B --> C[spawn 实例子进程<br/>IPC 控制通道 + ZHIN_RUNTIME_CHILD=1]
+    C --> D[加载 .env / .env.&lt;environment&gt;]
     D --> E[读取 zhin.config.yml<br/>并校验 schema]
     E --> F[装配 Host<br/>HTTP / database / schedule<br/>speech / console]
     F --> G{配置了 ai / assistant?}
@@ -73,7 +72,8 @@ flowchart TD
     G -- 否 --> I[仅 IM 核心]
     H --> J[首代 generation commit<br/>适配器上线]
     I --> J
-    J --> K{--once?}
+    J --> R[实例发送 ready<br/>携带协议版本]
+    R --> K{--once?}
     K -- 是 --> L[输出 JSON 快照并退出]
     K -- 否 --> M[进入 watch / 常驻]
 ```
@@ -89,7 +89,7 @@ flowchart TD
 | 变更内容 | 处理方式 |
 | --- | --- |
 | 插件 / 应用源码 | **进程内世代（generation）重载**：只重建受影响的 capability slot 与插件子树，Console 经 SSE 收到 `hmr:reload` |
-| 依赖清单类文件（`pnpm-lock.yaml`、`pnpm-workspace.yaml`、`package-lock.json`、`yarn.lock`） | **进程级重启**：进程以退出码 `75` 退出，由外层 supervisor 重新拉起 |
+| 依赖清单类文件（`pnpm-lock.yaml`、`pnpm-workspace.yaml`、`package-lock.json`、`yarn.lock`） | **进程级重启**：实例经控制通道发送 `restart-request`，监管进程回以 `shutdown`，实例完整停止后由监管进程重新拉起 |
 
 世代重载是事务式的：新世代先完成装配与 commit，再异步 dispose 旧世代；HTTP 端口在世代切换时先释放再 listen，不会出现端口占用导致的 Console 丢失。同一批文件事件会合并为一次世代事务，避免连续抖动。
 
@@ -98,24 +98,36 @@ flowchart TD
 ### daemon 模式
 
 ```bash
-zhin runtime start --daemon            # 日志进 .zhin/runtime.log
+zhin runtime start --daemon            # 日志进 .zhin/logs/instance.log（按大小轮转）
 zhin runtime start -d --log-file ./bot.log
 zhin stop                              # 停止（读取 .zhin.pid）
 ```
 
-supervisor 常驻并把自身 pid 写入 `<项目根>/.zhin.pid`，bot 进程的 stdout/stderr 追加到日志文件。崩溃（信号或非零退出）与退出码 `75` 都会触发重新拉起；`zhin stop` 或 `kill -TERM <pid>` 正常结束。另有**风暴保护**：最多每分钟重启 10 次、每次间隔 3 秒，超出预算 supervisor 放弃并退出，避免崩溃循环刷爆平台连接。
+监管进程常驻并把自身 pid 写入 `<项目根>/.zhin.pid`，实例的 stdout/stderr 写入日志文件（默认 `.zhin/logs/instance.log`，超过 10 MiB 轮转为 `instance.log.1` … `.5`），同时保留最近 1000 行的内存缓冲。崩溃（信号或非零退出）会触发重新拉起；`zhin stop` 或 `kill -TERM <pid>` 正常结束。另有**风暴保护**：自动重启（崩溃与实例请求的重启）最多每分钟 10 次、每次间隔 3 秒，超出预算实例停在 `crashed`，监管进程退出，避免崩溃循环刷爆平台连接。前台运行（不带 `--daemon`）共享终端输出，实例请求的重启照常执行，崩溃不自动重启。
+
+### 控制通道与重启
+
+监管进程以 Node IPC（`serialization: 'advanced'`）拉起实例（ADR 0054 §3），协议定义在 `@zhin.js/host-http/bridge`：
+
+| 方向 | 消息 | 说明 |
+| --- | --- | --- |
+| 实例 → 监管 | `ready` | 启动完成，携带协议版本与 generation；版本不兼容时监管进程拒绝该实例并停止它，不再重启 |
+| 实例 → 监管 | `restart-request` | Console 重启、依赖变化、数据库切换、受控自我变更等需要整进程重启的场景（取代旧的退出码 `75`） |
+| 监管 → 实例 | `shutdown` | `{ reason, budgetMs }`：实例在预算内完整停止；超时后监管进程依次发送 SIGTERM、SIGKILL |
+
+实例就绪超时（默认 60 秒）按启动失败处理。`--once` 不处理重启请求。没有控制通道时（例如直接以 `ZHIN_RUNTIME_CHILD=1` 运行）实例无法自动重启，重启请求只会停止进程。
 
 ### 退出码
 
 | 退出码 | 含义 |
 | --- | --- |
 | `0` | 正常退出 |
-| `51` | Console 请求重启（daemon 下会被自动拉起） |
-| `75` | restartRequired（依赖状态变化等），supervisor 按风暴保护重启 |
+| `130` | 被信号中断（Ctrl+C / SIGTERM） |
+| 其他非零 | 实例启动失败或崩溃且未被重新拉起（取实例的退出码） |
 
-### 孤儿看门狗
+### 孤儿保护
 
-bot 进程每 2 秒检查一次 supervisor（`ZHIN_SUPERVISOR_PID`）与父进程存活状态。wrapper 被 `kill -9`、终端关闭或崩溃时，bot 会主动关闭——不会留下仍握着平台连接和文件监听的僵尸进程。SIGINT / SIGTERM / SIGHUP 也会被转发给子进程。
+监管进程消失（被 `kill -9`、终端关闭或崩溃）时 IPC 通道断开，实例随即完整停止并退出——不会留下仍握着平台连接和文件监听的僵尸进程。监管进程收到 SIGINT / SIGTERM（前台还有 SIGHUP）时向实例发送 `shutdown`；第二次信号直接结束实例。
 
 ## 下一步
 

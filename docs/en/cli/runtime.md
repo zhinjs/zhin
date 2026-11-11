@@ -42,7 +42,7 @@ zhin runtime start --once --mode test
 | `--once` | Output a JSON snapshot after completing one startup, then exit |
 | `--open` | Open Remote Console in the browser after a successful start in a terminal (TTY); `ZHIN_OPEN=1` does the same |
 | `-d, --daemon` | Daemon mode: writes a pid file, redirects logs, auto-restarts on crash |
-| `--log-file <path>` | Daemon log file, default `<project-root>/.zhin/runtime.log` |
+| `--log-file <path>` | Daemon log file, default `<project-root>/.zhin/logs/instance.log` (size-rotated) |
 
 `zhin runtime start --help` lists these options with common examples. Unknown options cause an immediate error before startup (fail fast), and will not enter a restart loop.
 
@@ -62,10 +62,9 @@ Server convention entries also support `.tsx`. The CLI first delegates to the pr
 
 ```mermaid
 flowchart TD
-    A[Parse options] --> B{Need strip-types child process?}
-    B -- Yes --> C[Spawn child process<br/>ZHIN_RUNTIME_CHILD=1]
-    B -- No --> D[Load .env / .env.&lt;environment&gt;]
-    C --> D
+    A[Parse options] --> B[Supervisor process InstanceSupervisor]
+    B --> C[Spawn instance child<br/>IPC control channel + ZHIN_RUNTIME_CHILD=1]
+    C --> D[Load .env / .env.&lt;environment&gt;]
     D --> E[Read zhin.config.yml<br/>and validate schema]
     E --> F[Assemble Hosts<br/>HTTP / database / schedule<br/>speech / console]
     F --> G{ai / assistant configured?}
@@ -73,7 +72,8 @@ flowchart TD
     G -- No --> I[IM core only]
     H --> J[First generation commit<br/>adapters go online]
     I --> J
-    J --> K{--once?}
+    J --> R[Instance sends ready<br/>with protocol version]
+    R --> K{--once?}
     K -- Yes --> L[Output JSON snapshot and exit]
     K -- No --> M[Enter watch / stay resident]
 ```
@@ -89,7 +89,7 @@ Source changes are handled at two levels based on their scope of impact:
 | Change | Handling |
 | --- | --- |
 | Plugin / application source code | **In-process generation reload**: only the affected capability slots and plugin subtrees are rebuilt; Console receives `hmr:reload` via SSE |
-| Dependency manifest files (`pnpm-lock.yaml`, `pnpm-workspace.yaml`, `package-lock.json`, `yarn.lock`) | **Process-level restart**: the process exits with code `75`, and the outer supervisor re-launches it |
+| Dependency manifest files (`pnpm-lock.yaml`, `pnpm-workspace.yaml`, `package-lock.json`, `yarn.lock`) | **Process-level restart**: the instance sends `restart-request` over the control channel, the supervisor answers with `shutdown` and starts a fresh instance once it has stopped |
 
 Generation reload is transactional: the new generation completes assembly and commit first, then asynchronously disposes the old generation. The HTTP port is released then re-listened during generation switching, preventing port-occupied Console loss. File events from the same batch are merged into a single generation transaction to avoid continuous jitter.
 
@@ -98,24 +98,36 @@ Generation reload is transactional: the new generation completes assembly and co
 ### Daemon Mode
 
 ```bash
-zhin runtime start --daemon            # Logs go to .zhin/runtime.log
+zhin runtime start --daemon            # Logs go to .zhin/logs/instance.log (size-rotated)
 zhin runtime start -d --log-file ./bot.log
 zhin stop                              # Stop (reads .zhin.pid)
 ```
 
-The supervisor stays resident and writes its pid to `<project-root>/.zhin.pid`; the bot process's stdout/stderr is appended to the log file. Crashes (signals or non-zero exit) and exit code `75` both trigger a re-launch; `zhin stop` or `kill -TERM <pid>` performs a normal shutdown. There is also **storm protection**: a maximum of 10 restarts per minute with 3-second intervals; if the budget is exceeded, the supervisor gives up and exits, preventing a crash loop from flooding platform connections.
+The supervisor stays resident and writes its pid to `<project-root>/.zhin.pid`; the instance's stdout/stderr goes to the log file (default `.zhin/logs/instance.log`, rotated to `instance.log.1` … `.5` past 10 MiB) and the last 1000 lines are kept in memory. Crashes (signals or non-zero exit) trigger a re-launch; `zhin stop` or `kill -TERM <pid>` performs a normal shutdown. There is also **storm protection**: automatic restarts (crashes and restarts requested by the instance) are limited to 10 per minute, 3 seconds apart; past the budget the instance stays `crashed` and the supervisor exits, preventing a crash loop from flooding platform connections. In the foreground (without `--daemon`) the instance shares the terminal, restarts it requests still happen, and crashes are not restarted.
+
+### Control channel and restarts
+
+The supervisor spawns the instance over Node IPC (`serialization: 'advanced'`, ADR 0054 §3); the protocol lives in `@zhin.js/host-http/bridge`:
+
+| Direction | Message | Meaning |
+| --- | --- | --- |
+| instance → supervisor | `ready` | Startup finished; carries the protocol version and generation. An incompatible version is rejected: the supervisor stops that instance and does not restart it |
+| instance → supervisor | `restart-request` | Anything that needs a whole-process restart: Console restart, dependency changes, database switch, controlled self-change (replaces the former exit code `75`) |
+| supervisor → instance | `shutdown` | `{ reason, budgetMs }`: the instance stops completely within the budget; after it the supervisor sends SIGTERM, then SIGKILL |
+
+A missing `ready` (60 seconds by default) counts as a failed start. `--once` ignores restart requests. Without a control channel (e.g. running directly with `ZHIN_RUNTIME_CHILD=1`) the instance cannot restart itself; a restart request only stops the process.
 
 ### Exit Codes
 
 | Exit Code | Meaning |
 | --- | --- |
 | `0` | Normal exit |
-| `51` | Console requested restart (automatically re-launched under daemon) |
-| `75` | restartRequired (dependency state changes, etc.); supervisor restarts with storm protection |
+| `130` | Interrupted by a signal (Ctrl+C / SIGTERM) |
+| other non-zero | The instance failed to start or crashed and was not restarted (its own exit code) |
 
-### Orphan Watchdog
+### Orphan protection
 
-The bot process checks supervisor (`ZHIN_SUPERVISOR_PID`) and parent process liveness every 2 seconds. If the wrapper is `kill -9`'d, the terminal is closed, or it crashes, the bot will proactively shut down -- preventing zombie processes that still hold platform connections and file watchers. SIGINT / SIGTERM / SIGHUP are also forwarded to the child process.
+When the supervisor disappears (`kill -9`, closed terminal, crash) the IPC channel closes and the instance stops completely and exits -- no zombie keeps platform connections and file watchers alive. On SIGINT / SIGTERM (and SIGHUP in the foreground) the supervisor sends `shutdown` to the instance; a second signal ends the instance immediately.
 
 ## Next steps
 

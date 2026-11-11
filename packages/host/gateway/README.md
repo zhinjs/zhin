@@ -15,7 +15,7 @@ Zhin.js 管理网关（[ADR 0054](../../../docs/adr/0054-management-gateway.md)�
 | `@zhin.js/gateway/config` | 原始配置文件与 `.env` 读写：`ConsoleConfigurationStore`、`readEnvFile` / `writeEnvFile`、配置路径与补丁、Console Schema |
 | `@zhin.js/gateway/plugin-management` | 项目级依赖事务：`PluginManagementWorkflow`、`PluginManagementActivity`、插件用例 |
 | `@zhin.js/gateway/project` | 项目文件工具：`findConfigFile`、`loadRuntimeEnvironmentLayers`、`createTsxModuleLoader`、实例声明迁移、旧配置检测、Node 版本要求 |
-| `@zhin.js/gateway/supervisor` | 实例进程监管 `NativeTypeScriptSupervisor`（B1.1 由 IPC 实例监管取代） |
+| `@zhin.js/gateway/supervisor` | 实例进程监管 `InstanceSupervisor`：IPC 控制通道（`ready` / `shutdown` / `restart-request`）、崩溃重启与风暴保护、日志采集（环形缓冲 + `.zhin/logs/instance.log` 按大小轮转）；`runSupervisedInstance` 供 `zhin runtime start` 使用 |
 | `@zhin.js/gateway/usage` | 用量统计聚合 |
 | `@zhin.js/gateway/http` | JSON / HTML / SSE 响应工具 |
 | `@zhin.js/gateway` | 以上全部 |

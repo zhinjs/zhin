@@ -16,7 +16,7 @@ import { ConfigPatchScopeError } from './console/module.js';
  * needs that only the Root process can provide.
  *
  * - `reload`: `RootHost.reloadSources()` — the same HMR path, also when file watching is disabled.
- * - `requestRestart`: the controlled exit 75 the supervisor turns into a fresh process.
+ * - `requestRestart`: a `restart-request` the gateway turns into a fresh process (ADR 0054 §3).
  * - `health`: the committed generation is up, the plugins owning the changed files are assembled, and no
  *   runtime error was reported since the change started applying (after a restart: since this process started).
  * - `config`: field patches and whole-source rollback through `ConsoleConfigurationStore`.
@@ -34,7 +34,7 @@ export interface SelfChangeApplyHostOptions {
   readonly projectRoot: string;
   /** `RootHost.reloadSources` (absolute paths). */
   readonly reload: (sources: readonly string[]) => Promise<'reloaded' | 'restart'>;
-  /** Controlled exit 75. */
+  /** Controlled restart via the gateway (`restart-request`). */
   readonly restart: () => void;
   /** Committed Root snapshot; throws / undefined while none is committed. */
   readonly snapshot: () => Readonly<{ generation: number; tree: ReadonlyMap<string, unknown> }> | undefined;
@@ -43,7 +43,7 @@ export interface SelfChangeApplyHostOptions {
   /** Absolute root config file; reloaded with a change that carries a config patch. */
   readonly configFile?: string;
   /**
-   * #1051 F1 / Q6=A: whether a controlled exit 75 brings the process back (a `zhin` supervisor is present and
+   * #1051 F1 / Q6=A: whether a controlled restart brings the process back (a `zhin` supervisor is present and
    * the process was not started with `--once`). Default true. When false, `change_draft` does not submit changes
    * that need a restart, and the applier rolls back instead of restarting.
    */
@@ -77,7 +77,7 @@ export class HostSelfChangeApply {
     this.#options = options;
   }
 
-  /** A controlled restart (exit 75) brings this process back; see {@link SelfChangeApplyHostOptions.restartSupported}. */
+  /** A controlled restart (gateway `restart-request`) brings this process back; see {@link SelfChangeApplyHostOptions.restartSupported}. */
   get restartSupported(): boolean {
     return this.#options.restartSupported ?? true;
   }
