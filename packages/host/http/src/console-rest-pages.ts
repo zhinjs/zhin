@@ -4,12 +4,13 @@
  * 统一提供日志、市场、Runtime snapshot 内省和 Agent session tree 页面。
  *
  * 数据源不可用时降级：读操作返回空数组 + `note` 说明，session tree 返回 503；
- * 写操作要求 `ctx.fullScope && authScope === 'full'`，否则 403。
+ * 写操作要求 `ctx.fullScope`，否则 403。
  */
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { HttpHost } from './http-host.js';
 import { readJsonBody } from './json-body.js';
+import { jsonResponse } from '@zhin.js/host-http-contract';
 import {
   MarketplaceDetailCache,
   MarketplaceRegistry,
@@ -19,13 +20,13 @@ import type { ConsoleMessageEventData } from '@zhin.js/console-protocol';
 import {
   clampPositiveInt,
   decodePathParam,
+  logInternalError,
   normalizeBase,
   parsePositiveInt,
   registerAgentSessionRoutes,
   registerIntrospectionRoutes,
   requireWriteScope,
   trimTrailingSlashes,
-  writeJson,
 } from './console-rest-pages-helpers.js';
 
 /** 与 basic/cli 接线方对齐的上下文约定。 */
@@ -194,7 +195,7 @@ function registerLogsRoutes(
   };
   const unavailableNote = 'SystemLog 模型不可用（Database 未启动或未注册 DatabaseLogTransport）';
 
-  route('GET', `${base}/logs`, async (_request, response, url) => {
+  route('GET', `${base}/logs`, async (_request, { url }) => {
     const pageSize = clampPositiveInt(parsePositiveInt(url.searchParams.get('pageSize') ?? url.searchParams.get('limit'), 100), 100, 1000);
     const requestedPage = clampPositiveInt(parsePositiveInt(url.searchParams.get('page'), 1), 1, Number.MAX_SAFE_INTEGER);
     const level = url.searchParams.get('level');
@@ -206,8 +207,7 @@ function registerLogsRoutes(
     const where = { ...baseWhere, ...(source ? { source } : {}) };
     const LogModel = getModel();
     if (!LogModel) {
-      writeJson(response, 200, { success: true, data: [], total: 0, page: 1, pageSize, totalPages: 1, sources: [], note: unavailableNote });
-      return;
+      return jsonResponse(200, { success: true, data: [], total: 0, page: 1, pageSize, totalPages: 1, sources: [], note: unavailableNote });
     }
     // Database $like has no portable ESCAPE contract. Keep q literal (including
     // %/_ and Unicode) and filter actual retained rows on the Host, not wildcard SQL.
@@ -234,7 +234,7 @@ function registerLogsRoutes(
       if (!name || !matchesQuery(row)) continue;
       counts.set(name, (counts.get(name) ?? 0) + 1);
     }
-    writeJson(response, 200, {
+    return jsonResponse(200, {
       success: true,
       data: logs.map((log) => ({
         id: log.id,
@@ -249,19 +249,20 @@ function registerLogsRoutes(
     });
   }, { summary: 'List system logs', tags: ['console', 'logs'] });
 
-  route('DELETE', `${base}/logs`, async (_request, response, _url, authScope) => {
-    if (!requireWriteScope(response, ctx, authScope)) return;
+  route('DELETE', `${base}/logs`, async () => {
+    const denied = requireWriteScope(ctx);
+    if (denied) return denied;
     const LogModel = getModel();
     if (LogModel) {
       await LogModel.delete({});
     }
-    writeJson(response, 200, { success: true, message: '日志已清空' });
+    return jsonResponse(200, { success: true, message: '日志已清空' });
   }, { summary: 'Clear system logs', tags: ['console', 'logs'] });
 
-  route('GET', `${base}/logs/stats`, async (_request, response) => {
+  route('GET', `${base}/logs/stats`, async () => {
     const LogModel = getModel();
     if (!LogModel) {
-      writeJson(response, 200, {
+      return jsonResponse(200, {
         success: true,
         data: {
           total: 0,
@@ -270,7 +271,6 @@ function registerLogsRoutes(
         },
         note: unavailableNote,
       });
-      return;
     }
 
     // 计数走 DB 侧聚合（count）；模型未实现 count 时降级为 select('id') 只取主键列
@@ -299,23 +299,23 @@ function registerLogsRoutes(
           : (oldestLog[0].timestamp ?? null)
         : null;
 
-    writeJson(response, 200, {
+    return jsonResponse(200, {
       success: true,
       data: { total, byLevel: levelCounts, oldestTimestamp },
     });
   }, { summary: 'System log stats', tags: ['console', 'logs'] });
 
-  route('POST', `${base}/logs/cleanup`, async (request, response, _url, authScope) => {
-    if (!requireWriteScope(response, ctx, authScope)) return;
+  route('POST', `${base}/logs/cleanup`, async (request) => {
+    const denied = requireWriteScope(ctx);
+    if (denied) return denied;
     const LogModel = getModel();
     if (!LogModel) {
-      writeJson(response, 200, {
+      return jsonResponse(200, {
         success: true,
         message: '已清理 0 条日志',
         deletedCount: 0,
         note: unavailableNote,
       });
-      return;
     }
 
     const body = (await readJsonBody(request) ?? {}) as {
@@ -348,7 +348,7 @@ function registerLogsRoutes(
       }
     }
 
-    writeJson(response, 200, {
+    return jsonResponse(200, {
       success: true,
       message: `已清理 ${deletedCount} 条日志`,
       deletedCount,
@@ -414,7 +414,7 @@ function registerMarketplaceRoutes(
     },
   });
 
-  route('GET', '/pub/marketplace/search', async (_request, response, url) => {
+  route('GET', '/pub/marketplace/search', async (_request, { url }) => {
     const q = url.searchParams.get('q') ?? url.searchParams.get('keyword') ?? '';
     const pageNum = Math.max(1, parseInt(url.searchParams.get('page') ?? '1', 10) || 1);
     const pageSize = Math.min(
@@ -459,7 +459,7 @@ function registerMarketplaceRoutes(
       const total = plugins.length;
       const start = (pageNum - 1) * pageSize;
       const items = plugins.slice(start, start + pageSize);
-      writeJson(response, 200, {
+      return jsonResponse(200, {
         success: true,
         data: items,
         total,
@@ -467,26 +467,25 @@ function registerMarketplaceRoutes(
         size: pageSize,
       });
     } catch (err) {
-      writeJson(response, 502, {
+      logInternalError('marketplace_search_failed', err);
+      return jsonResponse(502, {
         success: false,
-        error: err instanceof Error ? err.message : 'Search failed',
+        error: 'Search failed',
       });
     }
   }, { summary: 'Search plugin marketplace', tags: ['pub', 'marketplace'] });
 
-  route('GET', '/pub/marketplace/detail/*', async (_request, response, url) => {
+  route('GET', '/pub/marketplace/detail/*', async (_request, { url }) => {
     const prefix = '/pub/marketplace/detail/';
     const rawName = url.pathname.startsWith(prefix)
       ? url.pathname.slice(prefix.length).replace(/\/+$/u, '')
       : '';
     if (!rawName) {
-      writeJson(response, 404, { success: false, error: 'Package name is required' });
-      return;
+      return jsonResponse(404, { success: false, error: 'Package name is required' });
     }
     const pkgName = decodePathParam(rawName);
     if (!isValidNpmPackageName(pkgName)) {
-      writeJson(response, 400, { success: false, error: 'Invalid package name' });
-      return;
+      return jsonResponse(400, { success: false, error: 'Invalid package name' });
     }
     try {
       let cachedDownloads = { weekly: 0, monthly: 0 };
@@ -504,24 +503,24 @@ function registerMarketplaceRoutes(
       }
 
       const detail = await details.get(pkgName);
-      writeJson(response, 200, {
+      return jsonResponse(200, {
         success: true,
         data: { ...detail, downloads: cachedDownloads },
       });
     } catch (err) {
-      writeJson(response, 502, {
+      logInternalError('marketplace_detail_failed', err);
+      return jsonResponse(502, {
         success: false,
-        error: err instanceof Error ? err.message : 'Detail fetch failed',
+        error: 'Detail fetch failed',
       });
     }
   }, { summary: 'Plugin marketplace detail', tags: ['pub', 'marketplace'] });
 
-  route('GET', `${base}/marketplace/updates`, async (_request, response) => {
+  route('GET', `${base}/marketplace/updates`, async () => {
     try {
       const installed = await listInstalledPluginPackages(ctx.projectRoot);
       if (!installed.length) {
-        writeJson(response, 200, { success: true, data: [] });
-        return;
+        return jsonResponse(200, { success: true, data: [] });
       }
       const updates = await Promise.all(
         installed.map(async ({ name, current }) => {
@@ -544,11 +543,12 @@ function registerMarketplaceRoutes(
           }
         }),
       );
-      writeJson(response, 200, { success: true, data: updates.filter(Boolean) });
+      return jsonResponse(200, { success: true, data: updates.filter(Boolean) });
     } catch (err) {
-      writeJson(response, 500, {
+      logInternalError('marketplace_updates_failed', err);
+      return jsonResponse(500, {
         success: false,
-        error: err instanceof Error ? err.message : 'Update check failed',
+        error: 'Update check failed',
       });
     }
   }, { summary: 'Check installed plugin updates', tags: ['console', 'marketplace'] });

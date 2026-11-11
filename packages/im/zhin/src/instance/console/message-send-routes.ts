@@ -1,6 +1,6 @@
 import type { ImRuntime } from '@zhin.js/core/runtime';
-import { readJsonBody, type HttpHost } from '@zhin.js/host-http';
-import { writeJson } from '@zhin.js/gateway/http';
+import { readJsonBody, type HttpHost, jsonResponse } from '@zhin.js/host-http';
+import { internalErrorResponse } from './internal-error.js';
 
 type EndpointSender = Pick<ImRuntime['endpoints'], 'send'>;
 
@@ -25,14 +25,9 @@ export function registerMessageSendRoutes(options: Readonly<{
   im?: { readonly endpoints: EndpointSender };
 }>): void {
   const { http, base, im } = options;
-  http.route('POST', `${base}/message/send`, async (request, response, _url, authScope) => {
-    if (authScope !== 'full') {
-      writeJson(response, 403, { success: false, error: '当前凭据不能发送消息' });
-      return;
-    }
+  http.route('POST', `${base}/message/send`, async (request) => {
     if (!im) {
-      writeJson(response, 503, { success: false, error: 'IM runtime 尚未就绪' });
-      return;
+      return jsonResponse(503, { success: false, error: 'IM runtime 尚未就绪' });
     }
     // HttpBodyError (400/413) is mapped to its status by the Host.
     const body: unknown = await readJsonBody(request);
@@ -46,11 +41,10 @@ export function registerMessageSendRoutes(options: Readonly<{
     const content = data.content;
     if (!adapter || !endpointKey || !id || !isConversationKind(kind)
       || content === undefined || content === null || content === '') {
-      writeJson(response, 400, {
+      return jsonResponse(400, {
         success: false,
         error: 'adapter, endpoint, id, content are required; type must be private | group | channel',
       });
-      return;
     }
     try {
       const result = await im.endpoints.send({
@@ -59,10 +53,12 @@ export function registerMessageSendRoutes(options: Readonly<{
         conversation: { kind, id },
         content,
       });
-      writeJson(response, 200, { success: true, data: { messageId: result.messageId } });
+      return jsonResponse(200, { success: true, data: { messageId: result.messageId } });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      writeJson(response, message === 'endpoint not found' ? 404 : 502, { success: false, error: message });
+      if (error instanceof Error && error.message === 'endpoint not found') {
+        return jsonResponse(404, { success: false, error: 'endpoint not found' });
+      }
+      return internalErrorResponse(502, 'console_message_send_failed', error);
     }
   }, {
     summary: 'Send a message through an Endpoint',

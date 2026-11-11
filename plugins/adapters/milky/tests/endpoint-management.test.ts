@@ -1,3 +1,4 @@
+import { wsConnectionFromMock } from '../../test-utils/http.js';
 import { EventEmitter } from 'node:events';
 import { createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
 import { describe, expect, it, vi } from 'vitest';
@@ -158,7 +159,7 @@ describe('milky reverse WebSocket access (ADR 0054 §3)', () => {
     await endpoint.start();
     const connect = (request: { authorization?: string; url?: string; ip: string }) => {
       const socket = createSocket();
-      accept({ socket, request: { headers: request.authorization ? { authorization: request.authorization } : {}, url: request.url ?? '/milky', socket: { remoteAddress: request.ip } } });
+      accept(wsConnectionFromMock({ socket, request: { headers: request.authorization ? { authorization: request.authorization } : {}, url: request.url ?? '/milky', socket: { remoteAddress: request.ip } } }));
       return socket;
     };
     return { ws, endpoint, connect };

@@ -2,9 +2,8 @@ import { endpointSpec, type Endpoint } from 'zhin.js/adapter';
 /**
  * Discord interactions HTTP: signature → parse → admit.
  */
-import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createMessages } from 'zhin.js/i18n';
-import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
+import { readTextBody, type HttpHost, type HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
   interactionToInboundMessage,
@@ -40,25 +39,21 @@ export function registerDiscordInteractionRoutes(
 ): HttpRouteRegistration[] {
   const path = handler.config.interactionsPath;
   return [
-    http.route('POST', path, async (request, response) => {
-      await handleDiscordInteractionRequest(request, response, handler);
-    }, { summary: 'Discord interactions callback', tags: ['discord'] }),
+    http.route('POST', path, (request) => handleDiscordInteractionRequest(request, handler), { summary: 'Discord interactions callback', tags: ['discord'] }),
   ];
 }
 
 export async function handleDiscordInteractionRequest(
-  request: IncomingMessage,
-  response: ServerResponse,
+  request: Request,
   handler: DiscordInteractionsHandler,
-): Promise<void> {
+): Promise<Response> {
   try {
-    const signature = headerValue(request.headers['x-signature-ed25519']);
-    const timestamp = headerValue(request.headers['x-signature-timestamp']);
-    const rawBody = await readInteractionBody(request);
+    const signature = request.headers.get('x-signature-ed25519') ?? '';
+    const timestamp = request.headers.get('x-signature-timestamp') ?? '';
+    // Oversize bodies (> 1 MiB) fail and answer 500, as before.
+    const rawBody = await readTextBody(request);
     if (!signature || !timestamp) {
-      response.writeHead(401, { 'Content-Type': 'text/plain' });
-      response.end('Unauthorized');
-      return;
+      return new Response('Unauthorized', { status: 401, headers: { 'Content-Type': 'text/plain' } });
     }
     if (!verifyDiscordInteractionSignature(
       handler.config.publicKey,
@@ -66,33 +61,27 @@ export async function handleDiscordInteractionRequest(
       signature,
       timestamp,
     )) {
-      response.writeHead(401, { 'Content-Type': 'text/plain' });
-      response.end('Unauthorized');
-      return;
+      return new Response('Unauthorized', { status: 401, headers: { 'Content-Type': 'text/plain' } });
     }
     const interaction = JSON.parse(rawBody) as Record<string, unknown>;
     if (!interaction || interaction.application_id !== handler.config.applicationId) {
-      response.writeHead(401, { 'Content-Type': 'text/plain' });
-      response.end('Unauthorized');
-      return;
+      return new Response('Unauthorized', { status: 401, headers: { 'Content-Type': 'text/plain' } });
     }
     // A verified protocol challenge is not a business message and keeps its immediate ACK.
     if (interaction.type === INTERACTION_TYPE_PING) {
       if (handler.isOpen) void handler[endpointSpec].events.run(() => handler.admitPlatform(interaction))
         .catch(() => logger.debug('Protocol event dispatch did not complete'));
-      writeJson(response, 200, { type: INTERACTION_RESPONSE_PONG });
-      return;
+      return writeJson(200, { type: INTERACTION_RESPONSE_PONG });
     }
-    await handler[endpointSpec].events.run(async () => {
+    return await handler[endpointSpec].events.run(async () => {
       if (handler.isOpen) handler.admitPlatform(interaction);
       if (interaction.type === 3) {
         const data = interaction.data as { component_type?: number; custom_id?: string } | undefined;
         if (data?.component_type === 2 && typeof data.custom_id === 'string') {
-          if (!handler.isOpen) { response.writeHead(503); response.end('Unavailable'); return; }
+          if (!handler.isOpen) { return new Response('Unavailable', { status: 503 }); }
           const message = interactionToInboundMessage(interaction);
           handler.admitButton({ event: interaction, id: message.id, customId: data.custom_id, channelId: message.channelId, channelKind: message.channelKind, userId: message.authorId, userName: message.authorName, ...(message.guildId ? { guildId: message.guildId } : {}), sourceMessageId: (interaction.message as { id?: string } | undefined)?.id });
-          writeJson(response, 200, { type: 6 });
-          return;
+          return writeJson(200, { type: 6 });
         }
       }
       if (interaction.type === INTERACTION_TYPE_APPLICATION_COMMAND) {
@@ -105,48 +94,22 @@ export async function handleDiscordInteractionRequest(
         const commandName = String(
           (interaction.data as { name?: unknown } | undefined)?.name ?? '',
         );
-        writeJson(response, 200, {
+        return writeJson(200, {
           type: INTERACTION_RESPONSE_CHANNEL_MESSAGE_WITH_SOURCE,
           data: {
             content: messages(locale, 'processing', { command: commandName }),
             flags: INTERACTION_FLAG_EPHEMERAL,
           },
         });
-        return;
       }
-      response.writeHead(400, { 'Content-Type': 'text/plain' });
-      response.end('Unsupported interaction type');
+      return new Response('Unsupported interaction type', { status: 400, headers: { 'Content-Type': 'text/plain' } });
     });
   } catch (error) {
     logger.error('Discord interactions error:', error);
-    if (!response.headersSent) {
-      response.writeHead(500, { 'Content-Type': 'text/plain' });
-      response.end('Internal Server Error');
-    }
+    return new Response('Internal Server Error', { status: 500, headers: { 'Content-Type': 'text/plain' } });
   }
 }
 
-function headerValue(value: string | string[] | undefined): string {
-  if (Array.isArray(value)) return value[0] ?? '';
-  return value ?? '';
-}
-
-async function readInteractionBody(request: IncomingMessage): Promise<string> {
-  const chunks: Buffer[] = [];
-  let size = 0;
-  for await (const chunk of request) {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    size += buffer.length;
-    if (size > 1_048_576) {
-      request.destroy();
-      throw new Error('Request body exceeds 1MB');
-    }
-    chunks.push(buffer);
-  }
-  return Buffer.concat(chunks).toString('utf8');
-}
-
-function writeJson(response: ServerResponse, status: number, body: unknown): void {
-  response.writeHead(status, { 'Content-Type': 'application/json' });
-  response.end(JSON.stringify(body));
+function writeJson(status: number, body: unknown): Response {
+  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 }

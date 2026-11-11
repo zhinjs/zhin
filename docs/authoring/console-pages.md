@@ -107,7 +107,7 @@ const ansiPanel = projectBlueprintToCliPanel(blueprint, statusData, {
 | `requiredRoles` | `[]` | 访问所需角色名（如 `operator`） |
 | `section` | — | Console 导航分区：`overview` / `conversations` / `features` / `plugins` / `ops` / `access`；省略时由 Console 决定（ADR 0052） |
 
-导航和页面清单按调用者过滤：全局所有者能看到全部页面；其他用户只能看到角色权限满足要求的页面（插件自定义的权限名目前只有所有者满足）；未登录只能看到没有要求的页面。用户与角色见 [Console 的用户与权限](../console/index.md#用户与权限)。
+导航和页面清单按调用者过滤：全局所有者能看到全部页面；其他用户只能看到角色权限满足要求的页面（插件自定义的权限名按级别授予，见[插件权限的级别](#插件权限的级别)）；未登录只能看到没有要求的页面。用户与角色见 [Console 的用户与权限](../console/index.md#用户与权限)。
 
 Console 根据独立的界面语言选择 `titleI18n`，只改变导航和面包屑显示，不改路由、权限或页面正文。Page 正文本地化由插件自己的组件负责；未声明翻译的第三方标题保留原文。
 
@@ -228,10 +228,10 @@ definePluginConsoleRpc({
 访问规则：
 
 - **跟随页面**：写了 `page` 时，调用者必须满足这个页面的 `requiredPermissions` 和 `requiredRoles`，方法自己声明的要求会叠加上去。页面在当前代没有加载时直接拒绝。
-- 先过 Console 的权限表：读方法需要 `feature.view`，动作需要 `feature.configure`。
 - **全局所有者**可以调用全部方法。
-- **其他用户**可以读取 `status`，前提是持有全部要求的权限和角色。`status` 完全没有要求时，只有写了 `demo: true` 才对他们开放。
-- **动作**：其他用户只有在动作**自己**声明了 `requiredPermissions`、`requiredRoles` 或 `anyOfPermissions`，并且满足全部要求（包括页面的要求）时才能执行，否则返回「没有操作权限」。动作自己没有声明任何要求时只允许所有者调用，页面的要求不会单独放行动作。
+- **其他用户和 API 令牌**逐个方法检查：方法自己的要求和页面的要求都要满足，插件权限按级别授予（见[插件权限的级别](#插件权限的级别)）。不满足返回 403「没有查看权限」/「没有操作权限」。
+- **都没声明时的兜底**：读方法和页面都没有要求时需要 `feature.view`；动作自己没有声明要求时需要 `feature.configure`（页面的要求照样叠加），页面的要求不会单独放行动作。
+- **适配器插件**：调用拥有适配器的插件（`root/<适配器>`）时，绑定在这个适配器（账号方法带 `id` 时也包括这个账号）上的角色同样算数；绑定在别的适配器上的不算。账号方法（`endpoint-add` 等）另外接受目标上的 `endpoint.manage`；首次迁移账号清单只有持有 `endpoint.manage` 的用户能确认。
 - **任选其一**：`anyOfPermissions` 列出的权限持有其中**一个**即可（和 `requiredPermissions` 叠加）。适合新权限点与旧权限点并存，例如审批卡结算接受 `ops:approve` 或旧的 `tool_approvals:resolve`。
 
 ```ts
@@ -253,6 +253,28 @@ actions: {
 
 插件 RPC 不负责改配置。改配置请用 `config:patch`。
 
+### 插件权限的级别
+
+插件自定义的权限名写成 `<插件>:<动作>`（如 `rss:read`、`rss:write`、`ops:approve`），每个属于一个级别，内置角色按级别授予（`viewer` → `read`，`operator` → `read` + `operate`，`admin` / `owner` → 全部；见 [Console 的插件权限的级别](../console/index.md#插件权限的级别)）。没声明时按后缀推断：`:read` / `:view` 是 `read`；`:approve` / `:manage` / `:admin` / `:write` / `:config` 是 `manage`；其他是 `operate`。
+
+推断结果不合适时，在 `definePluginConsoleRpc` 的 `permissions` 里声明：
+
+```ts
+definePluginConsoleRpc({
+  permissions: [
+    { id: 'rss:read', level: 'read', description: '查看订阅' },
+    // 日常增删订阅交给运营：不声明的话 `:write` 会推断为 manage，只有管理员能用
+    { id: 'rss:write', level: 'operate', description: '编辑订阅' },
+  ],
+  status: { page: 'index', requiredPermissions: ['rss:read'], handler: readStatus },
+  actions: { add: { page: 'index', requiredPermissions: ['rss:write'], handler: addFeed } },
+});
+```
+
+- 声明只作用于本插件页面与方法用到的权限名；同一个权限名被几个插件声明成不同级别时取最严格的（`manage` > `operate` > `read`），后加载的插件不能把别人的门槛调低。
+- 只在页面元数据里出现、没有 RPC 的权限名按后缀推断。
+- `level` 只能是 `read`、`operate`、`manage`；`id` 不合格式或重复会在 setup 时抛错。
+
 ### 内置状态：群聊插话和技能助手 {#builtin-status}
 
 群聊插话和技能助手由 Host 自己提供，不是插件，所以挂在根插件下：
@@ -262,7 +284,7 @@ actions: {
 | `plugin.root.ambient` | `pluginRpc('root', 'ambient')` | `ambient:read` |
 | `plugin.root.skills` | `pluginRpc('root', 'skills')` | `skills:read` |
 
-全局所有者不需要这些权限；它们是插件自定义的权限名，目前只有所有者满足（见 [用户与权限](../console/index.md#用户与权限)）。两个查询都只读，不接收参数。
+全局所有者不需要这些权限；它们是插件自定义的权限名，按级别授予：`*:read` 给 `viewer` 及以上（见 [插件权限的级别](../console/index.md#插件权限的级别)）。两个查询都只读，不接收参数。
 
 数据只保存在内存里：最近 24 小时，最多 2000 条，重启后清空。不包含聊天内容、提示词、判断理由或密钥。时间都是毫秒时间戳。
 
@@ -524,7 +546,7 @@ export default defineAdapterPage('telegram');
 - 显示 LoginAssist 的 `login.list` 待办，并用 `login.submit` / `login.cancel` 完成扫码、滑块、短信或设备确认；
 - 渲染适配器自定义动作（`status.actions`），例如 QQ 的扫码绑定、公域 / 私域选择。
 
-权限按适配器分开：页面读取需要 `<adapterKey>:read`，写操作（账号变更、自定义动作）需要 `<adapterKey>:write`；全局所有者不受限。首次修改启动账号需管理员核对清单并确认迁移；缺少持久化管理端口时，`runtime.canManage` 为 `false` 或请求明确不可用，不回退写配置文件。
+权限按适配器分开：页面读取需要 `<adapterKey>:read`（`read` 级别），写操作（账号变更、自定义动作）需要 `<adapterKey>:write`，默认声明为 `operate` 级别，`operator` 就能维护账号（只给管理员时设 `writePermissionLevel: 'manage'`）；绑定到该适配器的角色同样有效，持有该适配器 `endpoint.manage` 的角色也能维护账号；全局所有者不受限。首次修改启动账号需持有 `endpoint.manage` 的管理员核对清单并确认迁移；缺少持久化管理端口时，`runtime.canManage` 为 `false` 或请求明确不可用，不回退写配置文件。
 
 每次变更提交清单中的 `expectedGeneration` 与 `expectedRevision`，目标使用 `instanceId`；首次迁移经用户确认附 `confirmMigration: true`。新增与替换只保存为未启动状态；普通配置更新只重连目标账号。冲突或提交结果未知时先刷新核实，不自动重试；持久化保存成功与异步启动、关闭完成是不同状态。
 

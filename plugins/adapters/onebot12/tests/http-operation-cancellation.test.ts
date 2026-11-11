@@ -1,5 +1,6 @@
 import { createServer, type ServerResponse } from 'node:http';
-import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
+import { httpHostToken } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import { createAdapterHarness } from '../../test-utils/endpoint.js';
 import definition from '../adapters/onebot12/index.js';
 

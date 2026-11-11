@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { request } from 'node:http';
 import { expect, it, vi } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
-import { createHttpHost } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import { NapCatWsEndpoint } from '../src/ws-endpoint.js';
 import { NapCatHttpEndpoint } from '../src/http-endpoint.js';
 import { resolveNapCatConfig } from '../src/protocol.js';

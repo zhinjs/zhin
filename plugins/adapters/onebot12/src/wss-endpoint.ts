@@ -36,7 +36,7 @@ import {
 import { receiveOneBot12SideEvent } from './side-event-dispatch.js';
 import { createOneBot12ContentPort } from './content-port.js';
 import { callOnebot12Client, readOnebot12Response, onebot12ClientOptions, forwardOnebot12ClientEvents, Onebot12Client } from './client.js';
-import { type OneBot12WsSocket } from './ws-types.js';
+import { socketOfConnection, type OneBot12WsSocket } from './ws-types.js';
 import { createOneBot12Rpc, type OneBot12Rpc } from './ws-transport.js';
 
 export interface OneBot12WssEndpointOptions {
@@ -221,11 +221,11 @@ export class OneBot12WssEndpoint extends Onebot12Client implements Endpoint {
   }
 
   async #acceptConnection(connection: WsConnection): Promise<void> {
-    if (!verifyProtocolAccessToken(this.#options.config.access_token, connection.request)) {
-      connection.socket.close(4003, 'Unauthorized');
+    if (!verifyProtocolAccessToken(this.#options.config.access_token, connection)) {
+      connection.close(4003, 'Unauthorized');
       return;
     }
-    const socket = connection.socket as unknown as OneBot12WsSocket;
+    const socket = socketOfConnection(connection);
     await this.#connectionLifecycle.stop();
     this.#rpc.disconnect('连接已替换');
     await this.#connectionLifecycle.start(async (lifecycleHandle) => {
@@ -263,7 +263,7 @@ export class OneBot12WssEndpoint extends Onebot12Client implements Endpoint {
     this.#logger.debug(formatCompact({
       endpoint: this.#options.config.id,
       mode: 'wss',
-      peer: connection.request.socket.remoteAddress,
+      peer: connection.remoteAddress,
     }));
   }
 

@@ -12,6 +12,7 @@ import type { CapabilityId } from 'zhin.js';
 import { EndpointDeliveryError } from '@zhin.js/im-contract';
 import {
   bindSandboxWsSocket,
+  sandboxSocketOf,
   formatSandboxOutbound,
   parseSandboxWsFrame,
   sandboxInboundConversation,
@@ -320,8 +321,9 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
       ? `sandbox-${randomUUID().slice(0, 8)}`
       : this.#options.defaults.id;
     const owner = this.#options.defaults.owner;
-    const canExecute = connection.authScope === 'full';
-    const socket = connection.socket as SandboxWsSocket;
+    // Every admitted host-authenticated socket carries a Console principal allowed to use it.
+    const canExecute = true;
+    const socket = sandboxSocketOf(connection);
     const connectionId = randomUUID();
     const subscription: SandboxConnection = {
       connectionId, target, owner, socket, canExecute, scoped: false,

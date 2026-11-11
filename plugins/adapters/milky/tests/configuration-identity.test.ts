@@ -1,4 +1,5 @@
-import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
+import { httpHostToken } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import { createAdapterHarness } from '../../test-utils/endpoint.js';
 import { MemoryDesiredRepository } from '../../test-utils/desired-repository.js';
 import definition from '../adapters/milky/index.js';

@@ -124,10 +124,10 @@ The main configuration `plugins.<instanceKey>` supports two reference formats:
 "Root Plugin" is not a special type -- any `type: "plugin"` package can be started independently as Root. In the package directory, run:
 
 ```bash
-zhin runtime start
+zhin start --foreground
 ```
 
-The CLI treats the current directory as the project root, scans its manifest tree, and starts up. This means: when developing a game plugin, you can start it directly in the plugin directory for testing, without first installing it into a Bot project. `examples/minimal-bot` is the minimal complete form of a Root Plugin.
+The CLI starts the management gateway; the instance it launches treats the current directory as the project root, scans its manifest tree, and starts up. This means: when developing a game plugin, you can start it directly in the plugin directory for testing, without first installing it into a Bot project. `examples/minimal-bot` is the minimal complete form of a Root Plugin.
 
 ## platformFeatures: Inherited Platform Features of Root
 

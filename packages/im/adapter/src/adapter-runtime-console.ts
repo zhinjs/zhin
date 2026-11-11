@@ -126,6 +126,24 @@ export async function mutateConsoleAdapter(spec: AdapterConsoleSpec, call: Plugi
   }
 }
 
+/**
+ * The account an `endpoint-<action>` call acts on, resolved exactly like {@link mutateConsoleAdapter}
+ * selects it (`instanceId` first, else `id`; `add` / `replace` name no existing account for scoping).
+ * The Host authorizes against this before calling the handler. `undefined`: adapter-level target.
+ * Throws `invalid_input` when `id` and `instanceId` are both present and disagree.
+ */
+export function consoleAccountTarget(adapters: readonly AdapterInstance[], action: AdapterConsoleMutation,
+  input: PluginConsoleRpcInput): string | undefined {
+  if (action === 'add' || action === 'replace') return undefined;
+  if (typeof input.instanceId === 'string' && input.instanceId) {
+    const selected = adapters.flatMap(adapter => adapter.list()).find(entry => entry.instanceId === input.instanceId);
+    if (!selected) return undefined;
+    if (input.id !== undefined && input.id !== selected.endpointId) throw new PluginConsoleRpcError('invalid_input', '账号实例与 id 不匹配');
+    return selected.endpointId;
+  }
+  return typeof input.id === 'string' ? input.id : undefined;
+}
+
 function runtimeTarget(adapter: AdapterInstance, input: PluginConsoleRpcInput, replacing: boolean): EndpointMetadata {
   const entries = adapter.list();
   if (typeof input.instanceId === 'string' && input.instanceId) {

@@ -6,7 +6,7 @@ title: Upgrading to Console access control
 
 The Console no longer trusts tokens from the config file. Users, roles, sessions and API tokens live in the project database (`.zhin/data.sqlite` when no database is configured), every Console endpoint checks a permission, and every denied request and every write is audited. See [ADR 0049](../../adr/0049-console-rbac.md) for the design.
 
-After upgrading to `@zhin.js/cli` 1.2 or later, work through these steps in order.
+After upgrading to `@zhin.js/cli` 1.2 or later, work through these steps in order. The same release also moved HTTP, sign-in and the Console backend into the long-lived management gateway; start commands, deployment templates and plugin HTTP routes are covered in [Upgrading to the management gateway](./management-gateway.md).
 
 ## 1. Initialize first: create the first owner
 
@@ -39,8 +39,8 @@ Forgot the password or locked out the owner: stop the Host and use the offline c
 | --- | --- |
 | `http.token` (full) | Bootstrap token; afterwards sign in as the owner |
 | `scope: user` members of `http.tokens[]` | Create a user for each in Console → Access, bound to a role (`viewer` read-only, `operator`, `admin`), optionally scoped to one adapter or account |
-| `scope: demo` tokens | Demo mode is removed. Give the demo site a `viewer` account |
-| Plugin permissions in `http.tokens[].permissions` (such as `onebot11:read`) | Only a global owner currently satisfies plugin-defined page permissions; other roles are granted from the built-in permission catalog |
+| `scope: demo` tokens | Demo mode is removed. Give the demo site a `viewer` account, see [Deploying a demo site](../operations/demo-deployment.md) |
+| Plugin permissions in `http.tokens[].permissions` (such as `onebot11:read`) | Granted to built-in roles by level: `*:read` to `viewer` and above, day-to-day actions to `operator` and above, undeclared `*:write` plus `*:approve` / `*:manage` and similar to `admin` (adapter account writes and built-in plugins' `:write` are declared `operate`); custom roles and API tokens can also list them directly (see [Plugin permission levels](../console/index.md#plugin-permission-levels)) |
 
 Delete `http.tokens`, then start the Host.
 

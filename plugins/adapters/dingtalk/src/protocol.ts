@@ -7,7 +7,6 @@ import type { Locale } from 'zhin.js/i18n';
  */
 
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import type { IncomingMessage } from 'node:http';
 
 import { EndpointDeliveryError, isMediaRef, type ConversationRef } from '@zhin.js/im-contract';
 
@@ -369,11 +368,9 @@ export function formatOutboundBody(payload: unknown, locale?: Locale): DingTalkS
 }
 
 export function headerValue(
-  headers: IncomingMessage['headers'],
+  headers: Headers,
   name: string,
 ): string {
-  const value = headers[name] ?? headers[name.toLowerCase()];
-  if (Array.isArray(value)) return value[0] ?? '';
-  return value ?? '';
+  return headers.get(name) ?? '';
 }
 

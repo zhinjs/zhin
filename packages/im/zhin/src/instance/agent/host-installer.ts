@@ -255,7 +255,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       if (details.outcome === 'committed' && details.receiver.state === 'replaced') zhinAgent.toolApprovals.dispose();
     });
     lifecycle.add(() => zhinAgent.toolApprovals.dispose());
-    // ADR 0040 §5 / §6: approved changes are applied by the process-owned host (reload / exit 75 / health),
+    // ADR 0040 §5 / §6: approved changes are applied by the process-owned host (reload / gateway restart-request / health),
     // reported through this generation's IM and control plane; the newest generation's applier is the bound one.
     const selfChangeApplyHost = options.selfChangeApply;
     const reportSelfChangeError = (op: string) => (error: unknown) => logger.warn(formatCompact({

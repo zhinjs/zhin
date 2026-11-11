@@ -54,7 +54,32 @@ flowchart BT
   gateway --> cli["@zhin.js/cli"]
 ```
 
-`plugin-runtime`, `im-contract`, and `interaction` are the foundation contracts. Feature packages describe one capability above them, while `core` assembles the IM path. `kernel` and `ai` contain no IM concepts. The only cross-layer assembly point is `packages/im/zhin/src/instance/` (`zhin.js/instance`, ADR 0054 §0), which composes IM, Agent, and Console Host. `@zhin.js/gateway` (`packages/host/gateway`: Console accounts and permissions, terminal, project configuration and package transactions) and `@zhin.js/cli` do not depend on `zhin.js` or IM layers; `zhin runtime start` resolves `zhin.js/instance` from the project root.
+`plugin-runtime`, `im-contract`, and `interaction` are the foundation contracts. Feature packages describe one capability above them, while `core` assembles the IM path. `kernel` and `ai` contain no IM concepts. The only cross-layer assembly point is `packages/im/zhin/src/instance/` (`zhin.js/instance`, ADR 0054 §0), which composes IM, Agent, and Console Host. `@zhin.js/gateway` (`packages/host/gateway`: Console accounts and permissions, terminal, project configuration and package transactions) and `@zhin.js/cli` do not depend on `zhin.js` or IM layers.
+
+## Four packages and two processes
+
+| Package | Directory | Where it runs |
+| --- | --- | --- |
+| `create-zhin-app` | `packages/toolkit/create-zhin` | Only when creating a project |
+| `@zhin.js/cli` (`zhin`) | `basic/cli` | The user's terminal; after `zhin start` launches the gateway, `stop / status / logs / install` call it over `.zhin/gateway.sock` |
+| `@zhin.js/gateway` | `packages/host/gateway` | Gateway process: the only HTTP port, authentication, `console_*` tables, setup and onboarding, terminal, instance supervision, dependency transactions, logs |
+| `zhin.js` | `packages/im/zhin` (instance composition root `src/instance/`) | Instance process: launched by the gateway as a child; IM Runtime, plugins, adapters, Agent, most Console APIs |
+
+The two processes talk over a Node IPC control channel whose protocol (route table, chunked requests / responses, WebSocket frames, `restart-request`, `shutdown`, `catalog`, `audit`) lives in `packages/host/http/src/bridge/` (`@zhin.js/host-http/bridge`) and is shared by both. Change both sides together and bump the protocol version; gateway and instance releases must ship together. Process model and ownership: [Layered architecture](../concepts/architecture.md#gateway-and-instance).
+
+| To change | Look in |
+| --- | --- |
+| Sign-in, users, roles, API tokens, audit | `packages/host/gateway/src/iam/` |
+| Gateway HTTP server, forwarding and `gateway.*` RPC | `packages/host/gateway/src/http/` |
+| Instance supervision, log collection | `packages/host/gateway/src/supervisor/` |
+| Local control socket | `packages/host/gateway/src/local/` |
+| Dependency transactions | `packages/host/gateway/src/packages/`, `plugin-management/` |
+| Setup and onboarding | `packages/host/gateway/src/onboarding/`, `iam/` (setup service) |
+| Terminal | `packages/host/gateway/src/terminal/` |
+| The gateway's own database connection | `packages/host/gateway/src/database/` |
+| Permission maps | `packages/console/protocol/src/permissions.ts` |
+| Instance-side Console RPC and routes | `packages/im/zhin/src/instance/console/` |
+| CLI commands | `basic/cli/src/commands/` |
 
 ## AGENTS.md Overview
 

@@ -1,6 +1,4 @@
-import type { IncomingMessage, ServerResponse } from 'node:http';
-import { readJsonBody } from '@zhin.js/host-http';
-import { writeJson } from '../http-response.js';
+import { jsonResponse, readJsonBody, type ConsolePrincipal } from '@zhin.js/host-http';
 import { parseTerminalConfig, type TerminalConfig } from './config.js';
 import type { TerminalModuleLoaders } from './modules.js';
 import {
@@ -10,8 +8,8 @@ import {
   type TerminalEndReason,
   type TerminalLogger,
   type TerminalPrincipal,
+  type TerminalConnection,
   type TerminalSessionInfo,
-  type TerminalSocket,
 } from './service.js';
 
 export * from './config.js';
@@ -25,25 +23,22 @@ export interface TerminalHttpHost {
     method: string,
     path: string,
     handler: (
-      request: IncomingMessage,
-      response: ServerResponse,
-      url: URL,
-      authScope: string,
-      authenticatedPrincipal?: { readonly principalId: string; readonly scope: string },
-    ) => void | Promise<void>,
+      request: Request,
+      context: { readonly url: URL; readonly principal?: ConsolePrincipal; readonly remoteAddress?: string },
+    ) => Response | Promise<Response>,
     meta?: { summary?: string; tags?: string[] },
   ): () => void;
   ws(path: string, options?: { readonly auth?: 'host' | 'protocol' }): {
-    onConnection(listener: (connection: { readonly socket: TerminalSocket; readonly request: IncomingMessage }) => void): () => void;
+    onConnection(listener: (connection: TerminalConnection & { readonly headers: Headers }) => void): () => void;
     close(): void;
   };
 }
 
 export interface TerminalPrincipalContext {
-  readonly request: IncomingMessage;
-  /** Host token scope for HTTP routes; absent on WebSocket upgrades (ticket auth). */
-  readonly authScope?: string;
-  readonly tokenPrincipal?: { readonly principalId: string; readonly scope: string };
+  readonly headers: Headers;
+  readonly remoteAddress?: string;
+  /** Principal the Host already authenticated (HTTP routes); absent on WebSocket upgrades. */
+  readonly principal?: ConsolePrincipal;
 }
 
 export interface InstallConsoleTerminalOptions {
@@ -109,73 +104,73 @@ export function installConsoleTerminal(
   });
 
   const authenticate = async (
-    request: IncomingMessage,
-    url: URL,
-    authScope?: string,
-    tokenPrincipal?: TerminalPrincipalContext['tokenPrincipal'],
+    request: Request,
+    context: { readonly url: URL; readonly principal?: ConsolePrincipal; readonly remoteAddress?: string },
   ): Promise<TerminalPrincipal> => {
-    const token = bearerToken(request, url);
+    const token = bearerToken(request.headers, context.url);
     let principal: TerminalPrincipal | null = null;
     try {
       principal = await options.resolvePrincipal(token, {
-        request,
-        ...(authScope ? { authScope } : {}),
-        ...(tokenPrincipal ? { tokenPrincipal } : {}),
+        headers: request.headers,
+        ...(context.remoteAddress ? { remoteAddress: context.remoteAddress } : {}),
+        ...(context.principal ? { principal: context.principal } : {}),
       });
     } catch {
       principal = null;
     }
-    return service.requireAuthorized(principal, request.socket?.remoteAddress);
+    return service.requireAuthorized(principal, context.remoteAddress);
   };
 
-  const fail = (response: ServerResponse, error: unknown) => {
+  const fail = (error: unknown): Response => {
     if (error instanceof TerminalRequestError) {
-      writeJson(response, error.status, { success: false, code: error.code, error: error.message });
-      return;
+      return jsonResponse(error.status, { success: false, code: error.code, error: error.message });
     }
     throw error;
   };
 
   const unregister: Array<() => void> = [];
-  unregister.push(host.route('GET', `${base}/console/terminal/targets`, async (request, response, url, authScope, tokenPrincipal) => {
+  unregister.push(host.route('GET', `${base}/console/terminal/targets`, async (request, context) => {
     try {
-      await authenticate(request, url, authScope, tokenPrincipal);
-      writeJson(response, 200, { success: true, data: await service.listTargets() });
+      await authenticate(request, context);
+      return jsonResponse(200, { success: true, data: await service.listTargets() });
     } catch (error) {
-      fail(response, error);
+      return fail(error);
     }
   }, { summary: 'List Console terminal targets', tags: ['console', 'terminal'] }));
 
-  unregister.push(host.route('POST', `${base}/console/terminal/tickets`, async (request, response, url, authScope, tokenPrincipal) => {
+  unregister.push(host.route('POST', `${base}/console/terminal/tickets`, async (request, context) => {
     try {
-      const principal = await authenticate(request, url, authScope, tokenPrincipal);
+      const principal = await authenticate(request, context);
       const body = await readJsonBody(request, { limit: 4096 });
-      writeJson(response, 200, { success: true, data: await service.issueTicket(principal, body, request.socket?.remoteAddress) });
+      return jsonResponse(200, { success: true, data: await service.issueTicket(principal, body, context.remoteAddress) });
     } catch (error) {
-      fail(response, error);
+      return fail(error);
     }
   }, { summary: 'Issue a one-time Console terminal WebSocket ticket', tags: ['console', 'terminal'] }));
 
   // Browsers cannot set Authorization on WebSocket upgrades: the ticket is the credential.
   const ws = host.ws(`${base}/console/terminal`, { auth: 'protocol' });
-  const stopWs = ws.onConnection(({ socket, request }) => {
+  const stopWs = ws.onConnection((connection) => {
     void (async () => {
       let presented: TerminalPrincipal | null | undefined;
-      const header = request.headers.authorization;
+      const header = connection.headers.get('authorization');
       if (typeof header === 'string' && header.startsWith('Bearer ')) {
         try {
-          presented = await options.resolvePrincipal(header.slice(7).trim(), { request });
+          presented = await options.resolvePrincipal(header.slice(7).trim(), {
+            headers: connection.headers,
+            ...(connection.remoteAddress ? { remoteAddress: connection.remoteAddress } : {}),
+          });
         } catch {
           presented = null;
         }
         // A bearer that resolves to nobody must not fall back to ticket-only auth.
         if (!presented) presented = { id: '\u0000invalid' };
       }
-      await service.handleConnection(socket, request, presented);
+      await service.handleConnection(connection, presented);
     })().catch((error: unknown) => {
       options.logger?.warn?.(`terminal connection failed: ${error instanceof Error ? error.message : String(error)}`);
       try {
-        socket.close(1011, 'internal-error');
+        connection.close(1011, 'internal-error');
       } catch {
         /* ignore */
       }
@@ -198,8 +193,8 @@ export function installConsoleTerminal(
   });
 }
 
-function bearerToken(request: IncomingMessage, url: URL): string {
-  const header = request.headers.authorization;
+function bearerToken(headers: Headers, url: URL): string {
+  const header = headers.get('authorization');
   if (typeof header === 'string' && header.startsWith('Bearer ')) return header.slice(7).trim();
   return url.searchParams.get('token')?.trim() ?? '';
 }

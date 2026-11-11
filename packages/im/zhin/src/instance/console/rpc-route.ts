@@ -4,11 +4,10 @@ import {
   dispatchRuntimeConsoleRpc,
   HttpBodyError,
   isUserPrincipal,
+  jsonResponse,
   pickRpcReply,
-  pluginRpcWriteAllowed,
   principalAllows,
   readJsonBody,
-  requestConsolePrincipal,
   rpcAuditDetail,
   rpcAuditTarget,
   unrestrictedConsoleAccess,
@@ -16,8 +15,6 @@ import {
   type ConsoleRpcDecision,
   type HttpHost,
 } from '@zhin.js/host-http';
-import type { IncomingMessage } from 'node:http';
-import { writeJson } from '@zhin.js/gateway/http';
 import {
   ConsoleRpcRequestScope,
 } from './rpc-context.js';
@@ -28,6 +25,7 @@ import { dispatchIamRpc, isIamRpc } from '@zhin.js/gateway/iam';
 import { createFeatureRpcContext, dispatchFeatureConsoleRpc } from './console-feature-rpc.js';
 import type { ConsoleScopeTarget } from '@zhin.js/console-protocol';
 import type { ConsoleIamService } from '@zhin.js/gateway/iam';
+import { internalErrorResponse } from './internal-error.js';
 
 export interface RegisterConsoleRpcRouteOptions extends ConsoleRpcComposition {
   readonly http: HttpHost;
@@ -38,17 +36,16 @@ export interface RegisterConsoleRpcRouteOptions extends ConsoleRpcComposition {
 
 const OPEN_HOST: ConsolePrincipal = Object.freeze({ kind: 'bootstrap', open: true });
 
-/** The Host binds a principal to every `/api` request; a bare test host without credentials is open. */
-function rpcPrincipal(http: HttpHost, request: IncomingMessage): ConsolePrincipal | undefined {
-  return requestConsolePrincipal(request) ?? (http.tokenRegistry?.hasAnyToken() ? undefined : OPEN_HOST);
+/** The Host resolves a principal for every `/api` request; a bare test host without credentials is open. */
+function rpcPrincipal(http: HttpHost, resolved: ConsolePrincipal | undefined): ConsolePrincipal | undefined {
+  return resolved ?? (http.tokenRegistry?.hasAnyToken() ? undefined : OPEN_HOST);
 }
 
 export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions): void {
   const { http, base } = options;
 
-  http.route('POST', `${base}/console/request`, async (
-    request, response, _url, authScope, authenticatedPrincipal,
-  ) => {
+  http.route('POST', `${base}/console/request`, async (request, context) => {
+    const authScope = 'full' as const;
     let principal: ConsolePrincipal | undefined;
     let message: Record<string, unknown> = {};
     let decision: ConsoleRpcDecision | undefined;
@@ -62,67 +59,75 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
           ...(decision.allowed && rpcAuditTarget(decision.rule) ? { target: rpcAuditTarget(decision.rule)! } : {}),
           outcome,
           detail: rpcAuditDetail(message),
-          ...(request.socket?.remoteAddress ? { ip: request.socket.remoteAddress } : {}),
+          ...(context.remoteAddress ? { ip: context.remoteAddress } : {}),
         });
       } catch { /* audit never breaks a request */ }
     };
-    const reply = (status: number, body: Record<string, unknown>) => {
+    const reply = (status: number, body: Record<string, unknown>, headers?: HeadersInit) => {
       if (decision?.allowed && decision.write) audit(status < 400 && body.success !== false ? 'ok' : 'error');
-      writeJson(response, status, body);
+      return jsonResponse(status, body, headers);
     };
+    const noStore = { 'cache-control': 'no-store' };
     try {
       message = (await readJsonBody<Record<string, unknown>>(request)) ?? {};
-      principal = rpcPrincipal(http, request);
+      principal = rpcPrincipal(http, context.principal);
       if (!principal) {
-        writeJson(response, 401, { success: false, code: 'unauthorized', error: 'Invalid or missing token', requestId: message.requestId });
-        return;
+        return jsonResponse(401, { success: false, code: 'unauthorized', error: 'Invalid or missing token', requestId: message.requestId });
       }
       decision = authorizeConsoleRpc(principal, message);
       if (!decision.allowed) {
         audit('denied');
-        writeJson(response, 403, { success: false, code: decision.code, error: decision.error, requestId: message.requestId });
-        return;
+        return jsonResponse(403, { success: false, code: decision.code, error: decision.error, requestId: message.requestId });
       }
       const access = http.tokenRegistry?.accessFor(principal) ?? unrestrictedConsoleAccess;
       if (isIamRpc(message.type)) {
         const result = await dispatchIamRpc(message, options.consoleIam?.(), principal);
-        response.setHeader('cache-control', 'no-store');
-        reply(result.status, result.body);
-        return;
+        return reply(result.status, result.body, noStore);
       }
       const authorizedPrincipal = principal;
       const featureReply = await dispatchFeatureConsoleRpc(message, createFeatureRpcContext(options, authScope,
         request => principalAllows(authorizedPrincipal, request.permission, featureTarget(request.level, request.key))));
       if (featureReply) {
-        response.setHeader('cache-control', 'no-store');
-        reply(featureReply.status, featureReply.body);
-        return;
+        return reply(featureReply.status, featureReply.body, noStore);
       }
-      // `plugin.<pluginId>.<method>`: the gate admitted the read permission; writes need the write one.
+      // `plugin.<pluginId>.<method>`: the dispatcher authorizes signed-in principals per method
+      // (its own, its Page's, or the catalog fallback permission).
       const pluginReply = await dispatchPluginConsoleRpcRequest(message, {
         snapshots: options.snapshots,
         access,
-        ...(principal.kind === 'bootstrap' ? {} : {
-          principalGrant: Object.freeze({ write: pluginRpcWriteAllowed(principal, decision.rule) }),
-        }),
+        ...(isUserPrincipal(principal) ? {
+          principal: Object.freeze({
+            grants: principal.grants,
+            roles: principal.roles,
+            rule: decision.rule,
+            ...(http.tokenRegistry ? { levelOf: http.tokenRegistry.pluginPermissionLevels() } : {}),
+          }),
+        } : {}),
         ...(options.hostConsoleRpc ? { hostRpc: options.hostConsoleRpc } : {}),
       });
       if (pluginReply) {
-        response.setHeader('cache-control', 'no-store');
-        reply(pluginReply.status, pluginReply.body as Record<string, unknown>);
-        return;
+        if (pluginReply.status === 403 && !pluginReply.body.success && pluginReply.body.code === 'forbidden' && !decision.write) {
+          audit('denied');
+        }
+        return reply(pluginReply.status, pluginReply.body as Record<string, unknown>, noStore);
+      }
+      if (decision.delegated) {
+        // Admitted only for the plugin dispatcher: nothing else may answer it.
+        audit('denied');
+        return jsonResponse(403, { success: false, code: 'forbidden', error: '没有操作权限', requestId: message.requestId });
       }
       const requestScope = new ConsoleRpcRequestScope(options, {
         authScope,
-        authenticatedPrincipal,
+        ...(isUserPrincipal(principal)
+          ? { authenticatedPrincipal: Object.freeze({ principalId: `user:${principal.userId}`, scope: authScope }) }
+          : {}),
         access,
       });
       let payloads: Awaited<ReturnType<typeof dispatchRuntimeConsoleRpc>>;
       try {
         const collaborationReply = await dispatchAgentCollaborationRpc(message, requestScope.agent);
         if (collaborationReply) {
-          reply(collaborationReply.status, collaborationReply.body);
-          return;
+          return reply(collaborationReply.status, collaborationReply.body);
         }
         payloads = await dispatchRuntimeConsoleRpc(message, { ...requestScope.context, principal });
       } finally {
@@ -130,19 +135,17 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
       }
       const match = pickRpcReply(message, payloads);
       if (!match) {
-        reply(500, { success: false, error: 'No response' });
-        return;
+        return reply(500, { success: false, error: 'No response' });
       }
       if (match.error) {
-        reply(400, {
+        return reply(400, {
           success: false,
           error: match.error,
           ...(match.data !== undefined ? { data: match.data } : {}),
           requestId: match.requestId,
         });
-        return;
       }
-      reply(200, {
+      return reply(200, {
         success: true,
         data: scopedEndpointList(principal, message.type, match.data),
         type: match.type,
@@ -150,13 +153,10 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
       });
     } catch (error) {
       if (error instanceof HttpBodyError) {
-        writeJson(response, error.statusCode, { success: false, error: error.message });
-        return;
+        return jsonResponse(error.statusCode, { success: false, error: error.message });
       }
-      reply(500, {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      });
+      if (decision?.allowed && decision.write) audit('error');
+      return internalErrorResponse(500, 'console_rpc_failed', error);
     }
   }, {
     summary: 'Console RPC',

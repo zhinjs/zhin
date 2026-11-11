@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { z } from 'zod';
-import { createHttpHost } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import { SnapshotStore, rootPluginId, type SnapshotState } from '@zhin.js/plugin-runtime';
 import { aiProviderDefinitionsToken, type ProviderDefinition } from '@zhin.js/ai/provider';
 import { registerConsoleSystemRoutes } from '../../../src/instance/console/system-routes.js';
@@ -152,21 +152,13 @@ registerInferenceRoutes({
       ? [{ id: inference.hostOwnerId, label: '合成部署模型', kind: 'host' }]
       : [{ id: personalSessionOwnerId(personal), label: '合成个人身份', kind: 'personal', personal }],
 });
-http.route('POST', '/fixture/next-save-unknown', (_request, response, _url, scope) => {
-  if (scope !== 'full') {
-    response.writeHead(403).end();
-    return;
-  }
+http.route('POST', '/fixture/next-save-unknown', () => {
   nextUnknown = true;
-  response.writeHead(204).end();
+  return new Response(null, { status: 204 });
 });
-http.route('POST', '/fixture/next-save-rejected', (_request, response, _url, scope) => {
-  if (scope !== 'full') {
-    response.writeHead(403).end();
-    return;
-  }
+http.route('POST', '/fixture/next-save-rejected', () => {
   nextRejected = true;
-  response.writeHead(204).end();
+  return new Response(null, { status: 204 });
 });
 await database.start();
 const lease = inference.acquireManagement(),

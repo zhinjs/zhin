@@ -1,2 +1,7 @@
-/** @deprecated Import from @zhin.js/host-http-contract in protocol hosts. */
-export { HttpBodyError, readJsonBody } from '@zhin.js/host-http-contract';
+export {
+  HttpBodyError,
+  readBodyBytes,
+  readJsonBody,
+  readTextBody,
+  type HttpBodyReadOptions,
+} from '@zhin.js/host-http-contract';

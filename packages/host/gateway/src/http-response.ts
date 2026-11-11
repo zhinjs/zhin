@@ -1,5 +1,3 @@
-import type { ServerResponse } from 'node:http';
-
 export function parseBoundedInteger(
   value: string | null,
   fallback: number,
@@ -12,38 +10,14 @@ export function parseBoundedInteger(
   return Math.min(maximum, Math.max(minimum, parsed));
 }
 
-export function writeJson(
-  response: ServerResponse,
-  status: number,
-  body: unknown,
-  headers: Readonly<Record<string, string>> = {},
-): void {
-  const payload = JSON.stringify(body);
-  response.writeHead(status, {
-    ...headers,
-    'content-type': 'application/json; charset=utf-8',
-    'content-length': Buffer.byteLength(payload),
-  });
-  response.end(payload);
+/** A complete HTML page response. */
+export function htmlResponse(html: string, status = 200): Response {
+  return new Response(html, { status, headers: { 'content-type': 'text/html; charset=utf-8' } });
 }
 
-export function writeHtml(response: ServerResponse, html: string): void {
-  response.writeHead(200, {
-    'content-type': 'text/html; charset=utf-8',
-    'content-length': Buffer.byteLength(html),
-  });
-  response.end(html);
-}
-
-export function writeSse(
-  response: ServerResponse,
-  type: string,
-  data: unknown,
-  id?: string,
-): void {
-  if (id) response.write(`id: ${id}\n`);
-  response.write(`event: ${type}\n`);
-  response.write(`data: ${JSON.stringify(data)}\n\n`);
+/** One Server-Sent Events frame. */
+export function sseFrame(type: string, data: unknown, id?: string): string {
+  return `${id ? `id: ${id}\n` : ''}event: ${type}\ndata: ${JSON.stringify(data)}\n\n`;
 }
 
 export function normalizeBase(value: string): string {

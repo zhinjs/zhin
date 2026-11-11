@@ -1,4 +1,3 @@
-import type { IncomingMessage, ServerResponse } from 'node:http';
 import {
   databaseHostToken,
   featureId,
@@ -30,12 +29,7 @@ export interface ReadinessHttpHostLike {
   route(
     method: 'GET',
     path: string,
-    handler: (
-      request: IncomingMessage,
-      response: ServerResponse,
-      url: URL,
-      authScope: 'full' | 'demo',
-    ) => void | Promise<void>,
+    handler: (request: Request, context: { readonly url: URL }) => Response | Promise<Response>,
     meta?: { readonly summary?: string; readonly tags?: readonly string[]; readonly public?: boolean },
   ): () => void;
 }
@@ -130,24 +124,14 @@ export function readReadiness(source: ReadinessSource): ReadinessReport {
 /** Process routes remain available before first commit and across generation replacement. */
 export function registerReadinessRoutes(http: ReadinessHttpHostLike, source: ReadinessSource, apiBase = '/api'): () => void {
   const base = `/${apiBase.split('/').filter(Boolean).join('/')}`;
-  const disposePublic = http.route('GET', '/pub/ready', (_request, response) => {
+  const headers = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
+  const disposePublic = http.route('GET', '/pub/ready', () => {
     const report = readReadiness(source);
-    response.statusCode = report.ready ? 200 : 503;
-    response.setHeader('Content-Type', 'application/json');
-    response.setHeader('Cache-Control', 'no-store');
-    response.end(JSON.stringify({ ready: report.ready }));
+    return new Response(JSON.stringify({ ready: report.ready }), { status: report.ready ? 200 : 503, headers });
   }, { summary: 'Runtime readiness (no external network probes)', tags: ['pub'] });
-  const disposeDetails = http.route('GET', `${base}/system/readiness`, (_request, response, _url, scope) => {
-    response.setHeader('Content-Type', 'application/json');
-    response.setHeader('Cache-Control', 'no-store');
-    if (scope !== 'full') {
-      response.statusCode = 403;
-      response.end(JSON.stringify({ success: false, error: 'Full scope required' }));
-      return;
-    }
+  const disposeDetails = http.route('GET', `${base}/system/readiness`, () => {
     const report = readReadiness(source);
-    response.statusCode = report.ready ? 200 : 503;
-    response.end(JSON.stringify({ success: report.ready, data: report }));
+    return new Response(JSON.stringify({ success: report.ready, data: report }), { status: report.ready ? 200 : 503, headers });
   }, { summary: 'Required runtime components and remediation', tags: ['system'] });
   return () => { disposePublic(); disposeDetails(); };
 }

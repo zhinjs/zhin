@@ -13,7 +13,7 @@ description: "安全升级 Zhin：兼容边界、升级前准备、执行步骤�
 npx zhin migrate --dry-run   # 先看会改什么
 npx zhin migrate             # 执行升级
 npx zhin doctor && pnpm test # 检查
-npx zhin runtime start --once --mode test  # 装配冒烟
+npx zhin start --once --mode test  # 装配冒烟
 ```
 
 生产环境请按下文完整流程执行，并在升级前做好备份。升级前先停止 Bot，避免依赖目录在运行中被替换。
@@ -21,6 +21,16 @@ npx zhin runtime start --once --mode test  # 装配冒烟
 ## 升级到 `@zhin.js/cli` 1.2：Console 访问控制 {#console-access-control}
 
 1.2 把 Console 的用户、角色与 API 令牌存进数据库：`http.token` 只用于创建第一个所有者，`http.tokens` 已删除（仍在配置里时 Host 拒绝启动），自动化改用 `ZHIN_CONSOLE_TOKEN` 里的 API 令牌。完整步骤见[升级到 Console 访问控制](../migrations/console-access-control.md)。
+
+## 升级到管理网关：`zhin start` {#management-gateway}
+
+`zhin start` 现在启动常驻的管理网关（ADR 0054），由网关拉起并监管实例。完整步骤（依赖、systemd / Docker / PM2、HTTP 路由改为 `Request` / `Response`、反向 WebSocket、插件权限、日志与 SQLite）见[升级到管理网关](../migrations/management-gateway.md)。要点：
+
+- **默认后台运行**。开发、systemd、Docker、PM2 请用 `zhin start --foreground`（`zhin runtime start` 是它的别名，旧脚本照常可用）。脚手架的 `pnpm dev` 改为 `zhin start --foreground --watch source config`，`pnpm start` 改为 `zhin start --foreground --mode production --no-watch`。
+- **实例崩溃不再结束进程**：崩溃按每分钟 10 次的风暴保护重启，超限后实例停在 `crashed`、网关继续运行；只有 SIGTERM / Ctrl+C / `zhin stop` 才结束网关（退出码 0 / 130）。依赖进程退出码判断实例崩溃的监控需改为看 `zhin status --json`、`/pub/health` 或 `/pub/ready`。
+- **`zhin stop` / `restart` / `status` / `logs`** 经本地控制套接字 `.zhin/gateway.sock`（`0600`）与网关通信，必须以启动网关的同一用户运行。`zhin stop` 仍能停止旧版只写了 `.zhin.pid` 的进程。
+- **`zhin install` / `uninstall` / `update`** 在网关运行时经网关执行（停实例 → 安装 → 启实例，失败回滚）；git 地址、本地路径与 `--save-dev` 需先 `zhin stop`。
+- `--daemon` 不再是「前台 + 崩溃重启」：崩溃重启对所有模式生效，`--daemon` 只表示后台运行。
 
 ## Adapter API 2：本批 patch 的插件边界 {#adapter-api-2}
 
@@ -142,7 +152,7 @@ zhin doctor
 1. 在副本或预发布环境运行 `zhin migrate --dry-run`。
 2. 进入维护窗口，停止 Bot 和会产生新副作用的入口（必须在升级依赖之前）。
 3. 执行 `zhin migrate`，审阅 package、scripts 与目录变化。
-4. 运行 `zhin doctor`、类型检查、测试和 `runtime start --once --mode test`。
+4. 运行 `zhin doctor`、类型检查、测试和 `zhin start --once --mode test`。
 5. 启动生产，完成 Sandbox、真实 Endpoint、Agent 与多 Agent 协作（若配置了 `ai.venues`）验收。
 
 不要在运行中的实例之间共享一份可写 SQLite 或文件 Journal。蓝绿发布需要独立副本和明确切换点；只有一个实例能拥有写 authority。

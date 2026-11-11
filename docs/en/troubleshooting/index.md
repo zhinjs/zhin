@@ -138,7 +138,7 @@ Startup reports `Invalid Plugin config`, an unknown top-level field, or environm
 
 ### Verification
 
-- `npx zhin doctor` should pass, followed by `npx zhin runtime start` without validation errors.
+- `npx zhin doctor` should pass, followed by `npx zhin start --foreground` without validation errors.
 
 </section>
 
@@ -187,7 +187,7 @@ Startup fails with `Multiple package locations for @zhin.js/... are not supporte
 
 ### Verification
 
-- After `pnpm install`, each zhin package has a single resolved path and `zhin runtime start --once` prints `"started": true`.
+- After `pnpm install`, each zhin package has a single resolved path and `zhin start --once` prints `"started": true`.
 
 </section>
 

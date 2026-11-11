@@ -1,13 +1,16 @@
-import type { IncomingMessage } from 'node:http';
 import {
   CONSOLE_PERMISSION_LIST,
   CONSOLE_WRITE_PERMISSIONS,
+  expandPluginPermissions,
   grantsAllow,
+  isPluginConsoleRpcType,
   resolveConsoleHttpPermission,
   resolveConsoleRpcPermission,
   resolveConsoleWsPermission,
   type ConsoleGrant,
   type ConsolePermission,
+  type ConsolePluginPermissionInfo,
+  type ConsolePluginPermissionLevelResolver,
   type ConsoleRpcPermissionRule,
   type ConsoleScopeTarget,
 } from '@zhin.js/console-protocol';
@@ -65,20 +68,16 @@ export interface ConsoleAccessProvider {
   audit?(entry: ConsoleAuditEntry): void;
 }
 
-const principals = new WeakMap<IncomingMessage, ConsolePrincipal>();
-
-/** @internal Set by the HTTP Host after authentication. */
-export function bindRequestPrincipal(request: IncomingMessage, principal: ConsolePrincipal): void {
-  principals.set(request, principal);
-}
-
-/** The authenticated Console principal of a request, if the Host resolved one. */
-export function requestConsolePrincipal(request: IncomingMessage): ConsolePrincipal | undefined {
-  return principals.get(request);
-}
-
 export function isUserPrincipal(principal: ConsolePrincipal | undefined): principal is ConsoleUserPrincipal {
   return principal?.kind === 'user' || principal?.kind === 'api-token';
+}
+
+/**
+ * Whether the request carried an explicit credential: a user session / API token, or the
+ * still-valid bootstrap token (`{ kind: 'bootstrap', open: false }`). An open Host is not explicit.
+ */
+export function isExplicitConsolePrincipal(principal: ConsolePrincipal | undefined): boolean {
+  return isUserPrincipal(principal) || (principal?.kind === 'bootstrap' && !principal.open);
 }
 
 export function auditActor(principal: ConsolePrincipal | undefined): string {
@@ -87,38 +86,60 @@ export function auditActor(principal: ConsolePrincipal | undefined): string {
   return principal.kind === 'user' ? `user:${principal.userId}` : `api-token:${principal.credentialId}`;
 }
 
-export function requestMeta(request: IncomingMessage): ConsoleRequestMeta {
-  const agent = request.headers?.['user-agent'];
+/** Audit/session metadata of a request: peer address and a bounded user agent. */
+export function requestMeta(
+  request: { readonly headers: Headers },
+  remoteAddress?: string,
+): ConsoleRequestMeta {
+  const agent = request.headers.get('user-agent');
   return Object.freeze({
-    ...(request.socket?.remoteAddress ? { ip: request.socket.remoteAddress } : {}),
+    ...(remoteAddress ? { ip: remoteAddress } : {}),
     ...(typeof agent === 'string' ? { userAgent: agent.slice(0, 256) } : {}),
   });
 }
 
-/** Whether the principal holds `permission` at `target` (bootstrap: only an open Host). */
+/**
+ * Whether the principal holds `permission` at `target` (bootstrap: only an open Host). Plugin
+ * permissions also match by level; `levelOf` supplies declared levels (default: inferred).
+ */
 export function principalAllows(
   principal: ConsolePrincipal | undefined,
   permission: string,
   target?: ConsoleScopeTarget,
+  levelOf?: ConsolePluginPermissionLevelResolver,
 ): boolean {
   if (!principal) return false;
   if (principal.kind === 'bootstrap') return principal.open;
-  return grantsAllow(principal.grants, permission, target);
+  return grantsAllow(principal.grants, permission, target, levelOf);
 }
 
-/** Permissions held through global bindings, sorted (what `/auth/me` and page gating use). */
-export function globalPermissions(principal: ConsolePrincipal | undefined): readonly string[] {
+/**
+ * Permissions held through global bindings, sorted (what `/auth/me` and page gating use).
+ * With a plugin permission catalog, `plugin.perms.<level>` expands to the catalog ids of that level.
+ */
+export function globalPermissions(
+  principal: ConsolePrincipal | undefined,
+  pluginPermissions: Iterable<Pick<ConsolePluginPermissionInfo, 'id' | 'level'>> = [],
+): readonly string[] {
   if (!principal) return Object.freeze([]);
   if (principal.kind === 'bootstrap') return principal.open ? CONSOLE_PERMISSION_LIST : Object.freeze([]);
   const held = new Set<string>();
   for (const grant of principal.grants) {
     if (grant.scope.kind === 'global') for (const permission of grant.permissions) held.add(permission);
   }
-  return Object.freeze([...held].sort());
+  return expandPluginPermissions([...held], pluginPermissions);
 }
 
 export type ConsoleRpcDecision =
-  | Readonly<{ allowed: true; rule: ConsoleRpcPermissionRule | null; permission: ConsolePermission | null; write: boolean }>
+  | Readonly<{
+      allowed: true; rule: ConsoleRpcPermissionRule | null; permission: ConsolePermission | null; write: boolean;
+      /**
+       * Plugin Console RPC for a signed-in principal: admitted here only so the plugin RPC
+       * dispatcher can check the method's own (or page / fallback) permissions. The caller must
+       * deny when no plugin dispatcher answers.
+       */
+      delegated?: true;
+    }>
   | Readonly<{ allowed: false; code: 'setup_required' | 'unmapped' | 'forbidden'; error: string; permission: ConsolePermission | null }>;
 
 /** RPC authorization for one principal and message (deny by default). */
@@ -134,6 +155,9 @@ export function authorizeConsoleRpc(principal: ConsolePrincipal, message: Readon
   if (!rule) {
     return Object.freeze({ allowed: false, code: 'unmapped', error: `RPC "${String(message.type ?? '')}" 未登记权限`, permission: null });
   }
+  if (isPluginConsoleRpcType(message.type)) {
+    return Object.freeze({ allowed: true, rule, permission, write: isWriteRule(rule), delegated: true });
+  }
   if (!grantsAllow(principal.grants, permission!, rule.target)) {
     return Object.freeze({ allowed: false, code: 'forbidden', error: `缺少权限 ${permission}`, permission });
   }
@@ -144,7 +168,11 @@ function isWriteRule(rule: ConsoleRpcPermissionRule): boolean {
   return rule.kind === 'exact' ? CONSOLE_WRITE_PERMISSIONS.has(rule.permission) : false;
 }
 
-/** For plugin RPC: whether the principal may call a non-read-only method. */
+/**
+ * For plugin RPC: whether the principal holds the rule's write permission (`feature.configure`,
+ * or `endpoint.manage` for adapter account methods) at its target. The plugin RPC dispatcher
+ * authorizes each method itself; this is only the catalog fallback.
+ */
 export function pluginRpcWriteAllowed(principal: ConsolePrincipal, rule: ConsoleRpcPermissionRule | null): boolean {
   if (principal.kind === 'bootstrap') return principal.open;
   if (!rule) return false;

@@ -1,3 +1,4 @@
+import { wsConnectionFromMock } from '../../test-utils/http.js';
 import { EventEmitter } from 'node:events';
 import { createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
 import { OneBotV11Client } from '@imhelper/onebot-v11';
@@ -21,7 +22,7 @@ const gateway: OutboundMessageService = { receive: vi.fn(), send: vi.fn(async ()
 const sockets: ReturnType<typeof createSocket>[] = [];
 const httpStub = {
   ws: vi.fn(() => ({ onConnection: (receive: (connection: unknown) => void) => {
-    queueMicrotask(() => receive({ socket: createSocket(), request: { headers: {}, socket: { remoteAddress: '127.0.0.1' } } }));
+    queueMicrotask(() => receive(wsConnectionFromMock({ socket: createSocket(), request: { headers: {}, socket: { remoteAddress: '127.0.0.1' } } })));
     return () => undefined;
   } })), route: vi.fn(() => () => undefined),
 } as unknown as HttpHost;
@@ -149,7 +150,7 @@ describe('onebot11 reverse WebSocket access (ADR 0054 §3)', () => {
     await endpoint.start();
     const connect = (request: { authorization?: string; url?: string; ip: string }) => {
       const socket = createSocket();
-      accept({ socket, request: { headers: request.authorization ? { authorization: request.authorization } : {}, url: request.url ?? '/onebot11', socket: { remoteAddress: request.ip } } });
+      accept(wsConnectionFromMock({ socket, request: { headers: request.authorization ? { authorization: request.authorization } : {}, url: request.url ?? '/onebot11', socket: { remoteAddress: request.ip } } }));
       return socket;
     };
     return { ws, endpoint, connect };

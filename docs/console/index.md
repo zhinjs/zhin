@@ -7,7 +7,16 @@ description: "在浏览器里管理 Bot：连接方式、能看到什么、出�
 
 Console 是 Bot 的浏览器管理后台。你可以在里面**发测试消息、看日志、改配置、管理插件和账号、观察 AI 在做什么**。
 
-它不需要你部署：打开 <https://console.zhin.dev>，填入 Bot 启动时打印的 API 地址（新项目默认 `http://127.0.0.1:8068`）和 `.env` 里的 `HTTP_TOKEN` 即可。也可以直接打开 Bot 自带的本地 `/console` 与 Sandbox 页面。
+它不需要你部署：打开 <https://console.zhin.dev>，填入 `zhin start` 启动时打印的 API 地址（新项目默认 `http://127.0.0.1:8068`）。第一次连接时用 `.env` 里的 `HTTP_TOKEN`（初始化令牌）完成[初始化与引导](./onboarding.md)，之后用账号登录。也可以直接打开 Host 自带的本地 `/console` 与 Sandbox 页面。
+
+Console 连接的是**管理网关**（[ADR 0054](../adr/0054-management-gateway.md)）：网关负责登录、权限、初始化、实例起停、依赖安装与终端，其余接口转发给 Zhin 实例。实例崩溃、停止或正在安装依赖时，Console 仍能登录、看实例状态与日志；只有实例提供的页面暂时返回 `503`。
+
+| 专题 | 内容 |
+| --- | --- |
+| [初始化与引导](./onboarding.md) | 数据库 → 所有者 → AI → 适配器，每步的凭据与权限 |
+| [访问控制](./access-control.md) | 用户、角色、API 令牌、审计日志，权限目录与插件权限级别 |
+| [功能矩阵与三级配置](./features.md) | 全局 / 适配器 / 账号三层启停与覆盖 |
+| [运维](./operations.md) | 实例状态与起停、依赖安装与回滚、数据库 / 配置 / 文件、终端 |
 
 ## 连上之后能做什么
 
@@ -25,18 +34,18 @@ Console 是 Bot 的浏览器管理后台。你可以在里面**发测试消息�
 
 ## 侧栏导航
 
-Console 面向普通用户，侧栏按“想做什么”分组，页面用大白话命名。原来的页面链接（路由）都不变。
+导航分六个区（[ADR 0052](../adr/0052-console-information-architecture.md)）：前四个是日常，后两个是管理。没有权限的区整体隐藏。
 
-| 分组 | 页面 |
-| --- | --- |
-| 常用 | 首页、聊天账号、聊天记录、定时提醒、运行记录 |
-| 机器人 | 机器人状态、试聊一下、助手任务（启用助手时显示）、群聊插话、技能助手 |
-| 功能 | 功能管理、功能商店、任务中心 |
-| 高级（默认折叠） | 配置、环境变量、项目文件、数据库、运行时能力、消息场景试验台、协作图谱 |
+| 区 | 回答的问题 | 页面 | 权限 |
+| --- | --- | --- | --- |
+| 概览 | 现在怎么样？ | 仪表盘、日志、Agent 观测 | `status.view` |
+| 会话 | 在和谁说话？ | 账号工作区（会话、收件箱、请求通知）、沙盒 | `endpoint.view` / `endpoint.operate` |
+| 功能 | 机器人能做什么、在哪里做？ | 功能矩阵、全局配置、适配器、账号配置、AI 与模型 | `feature.*`、`agent.*` |
+| 插件 | 装了什么？ | 已安装、市场、插件详情（版本、依赖、日志） | `plugin.manage` |
+| 运维 | 宿主机怎么样？ | 实例、数据库、配置文件、环境变量、定时任务、文件、终端 | `ops.*`、`status.view` |
+| 访问控制 | 谁能做什么？ | 用户、角色、API 令牌、审计日志 | `iam.*` |
 
-旧名对照：工作台 → 首页，渠道与会话 → 聊天账号，对话分支 → 聊天记录，Agent 试验台 → 试聊一下，Agent 概览 / Agent 工作台 → 机器人状态，定时任务 → 定时提醒，日志 → 运行记录，插件 → 功能管理，市场 → 功能商店。
-
-`zhin.config.yml` 等 YAML 编辑能力仍然保留，放在「高级 → 配置」里，供熟悉配置的用户和 CI 使用。
+插件贡献的页面按 `metadata.section` 落到对应区，未声明的落到「功能」。旧路由保留重定向：插件详情的配置页 → `/features/global/:plugin`，旧的数据库 / 配置 / 定时任务页 → `/ops/*`。
 
 ::: details 为什么 Bot 还在登录时 Console 就能连上？
 HTTP 服务、Console RPC 与 SSE 属于进程控制面，会在插件全部启动（首个 generation 发布）之前就开始监听。所以 ICQQ 等适配器即使还在等待扫码、滑块或设备确认，浏览器也能通过 `login.list`、`login.submit` 与 `endpoint.login.pending` 完成登录。此时依赖已启动插件的页面可能暂时为空或显示未就绪；适配器全部启动完成后才会正常显示。
@@ -46,11 +55,13 @@ HTTP 服务、Console RPC 与 SSE 属于进程控制面，会在插件全部启�
 flowchart LR
     B[浏览器] -->|Remote UI| RC[console.zhin.dev]
     B -->|本地页面| H
-    RC -->|Bearer token + CORS| H[Http Host]
-    H --> R1[REST /api/*]
-    H --> R2[RPC /api/console/request]
-    H --> R3[SSE /api/events]
-    H --> R4[WS /sandbox]
+    RC -->|Bearer token + CORS| H[管理网关]
+    H --> G1["/api/auth/*、iam.*、终端、实例与依赖"]
+    H -->|IPC 转发| R0[Zhin 实例]
+    R0 --> R1[REST /api/*]
+    R0 --> R2[RPC /api/console/request]
+    R0 --> R3[SSE /api/events]
+    R0 --> R4[WS /sandbox]
     R1 --> P[插件 / Endpoint / 会话 / 协作投影]
 ```
 
@@ -70,7 +81,7 @@ http:
 
 `/api` 请求需携带 Bearer 凭据（登录会话或 API 令牌，见[用户与权限](#用户与权限)）；`/pub/*`、Console shell 与页面路由保持公开。`corsOrigins` 会与 Remote Console 源合并。
 
-端口占用会让 HTTP Host 软降级：Adapter 与 Agent 继续启动，但 Console 不可用。Console 发起重启时，CLI daemon 会在进程以 code 51 退出后重新拉起。
+`http.port` 由管理网关监听；端口被占用时 `zhin start` 直接启动失败。Console 发起的重启只重启实例（经控制通道），网关与 Console 连接不中断。
 
 Runtime 无配置时回退到 8086，当前脚手架默认写入 8068。连接地址始终以项目配置和启动日志为准。
 
@@ -168,7 +179,7 @@ Runtime 无配置时回退到 8086，当前脚手架默认写入 8068。连接�
 
 ## 用户与权限
 
-Console 的用户、角色、会话和 API 令牌存在项目数据库里（ADR 0049），不写在配置文件中。从旧版本升级见[升级到 Console 访问控制](../migrations/console-access-control.md)。
+Console 的用户、角色、会话和 API 令牌存在项目数据库里（ADR 0049），不写在配置文件中。页面与权限的完整说明见[访问控制](./access-control.md)；从旧版本升级见[升级到 Console 访问控制](../migrations/console-access-control.md)与[升级到管理网关](../migrations/management-gateway.md)。
 
 - **初始化**：数据库里还没有所有者时，`http.token` 是初始化令牌，只能用来创建第一个所有者（Console 向导，或 `zhin console init`）。创建之后它在所有接口上失效。没有配置 `http.token` 的本地 Host 在初始化前对所有人开放。
 - **登录**：用户用用户名和密码登录，得到会话令牌（默认 12 小时滑动过期，最长 30 天）。改密码、禁用或删除用户会立即吊销该用户的全部会话。
@@ -176,14 +187,40 @@ Console 的用户、角色、会话和 API 令牌存在项目数据库里（ADR 
 - **角色**：内置 `owner`（全部）、`admin`（除终端和用户管理外全部）、`operator`（运营：收发消息、功能配置）、`viewer`（只读）。角色可以绑定到全局、某个适配器或某个账号。
 - **权限检查**：每个 Console RPC 和每条 `/api` 路由都在 `@zhin.js/console-protocol` 的权限表里登记；没登记的一律拒绝。所有被拒绝的请求和写操作都记入审计日志。
 - **离线救援**：`zhin console user create|passwd|disable|enable|list` 直接打开项目数据库，不需要运行中的 Host。
+- **在网关里**（ADR 0054 §3、§7）：登录、初始化向导、`/auth/me`、`iam.*`、`onboarding.update`、终端和审计日志都由管理网关处理，网关自己打开项目数据库（SQLite 为 WAL 模式，与实例共用同一个文件）。实例停止、崩溃或依赖安装期间 Console 仍能登录、初始化、看实例状态与日志；只有实例提供的页面和接口返回 `503`。禁用 / 删除用户、改密码或改角色绑定时，该用户在实例上的实时连接（事件流、WebSocket）随即断开。
+- **引导状态**：`GET {base}/auth/setup` 与（持有 `plugin.manage` 的调用方的）`/auth/me` 带 `onboarding` 字段；RPC `onboarding.update { step: 'ai' | 'adapters' | 'finish', status: 'done' | 'skipped' }` 需要 `plugin.manage`，第 3 步（`ai`）另需 `agent.configure`，第 4 步（`adapters`）另需 `endpoint.manage`（ADR 0053 §2）。依赖安装进度在 Console 事件流上以 `gateway.packages.progress` 推送，也可单独订阅 `GET {base}/gateway/packages/progress`。
 
-页面的 `requiredPermissions` 与 `requiredRoles` 决定谁能看到它：内置权限（如 `status.view`）按角色授予；插件自己定义的权限名（如 `ambient:read`、`decisions:read`、`control:read`、`ops:approve`）目前只有全局所有者满足。页面清单（`/entries`、`/console/api/pages`、`/console/api/topology`）按调用者过滤，且不会被缓存。
+页面的 `requiredPermissions` 与 `requiredRoles` 决定谁能看到它：内置权限（如 `status.view`）按角色授予；插件自己定义的权限名（形如 `<插件>:<动作>`，如 `ambient:read`、`decisions:read`、`control:read`、`ops:approve`）按**级别**授予。页面清单（`/entries`、`/console/api/pages`、`/console/api/topology`）按调用者过滤，且不会被缓存。
+
+### 插件权限的级别
+
+每个插件权限属于一个级别：`read`（查看）、`operate`（日常操作）或 `manage`（管理、审批、改配置）。插件可以在 `definePluginConsoleRpc({ permissions })` 里声明级别（见[插件 Console 页面](../authoring/console-pages.md#插件权限的级别)）；没声明时按动作后缀推断：
+
+| 后缀 | 级别 |
+| --- | --- |
+| `:read`、`:view` | `read` |
+| `:approve`、`:manage`、`:admin`、`:write`、`:config` | `manage` |
+| 其他（如 `:resolve`、`:send`） | `operate` |
+
+内置角色按级别授予插件权限，靠的是三个目录权限 `plugin.perms.read`、`plugin.perms.operate`、`plugin.perms.manage`：
+
+| 角色 | 插件权限 |
+| --- | --- |
+| `viewer` | `read` |
+| `operator` | `read`、`operate` |
+| `admin` | 全部级别 |
+| `owner` | 全部（不变） |
+
+- **自定义角色**可以勾选上面三个级别权限，也可以直接列出某个插件权限（如只给 `ops:approve`）。格式必须是 `<插件>:<动作>`；当前没有插件使用的权限名也能保存（插件可能还没装或被停用），接口会返回 `warnings` 提示，在有插件用到它之前它不放行任何东西。
+- **作用域**：页面可见性只看全局绑定。调用插件 Console RPC 时逐个方法检查它声明的权限；调用拥有适配器的插件（`root/<适配器>`）时，绑定到这个适配器（或账号方法指名的账号）的角色也算数，绑定到别的适配器的不算。
+- **API 令牌**签发时可以只列某个插件权限（如 `onebot11:read`）；只有签发人自己持有它（按名或按级别）时才生效，不会超过签发人。
+- `iam.roles.list` 返回每个角色当前生效的插件权限（`pluginPermissions`，含来源 `level` / `explicit`）和已加载插件的权限目录（顶层 `pluginPermissions: [{ permission, plugin, level, description? }]`），Console 用它渲染角色编辑器。
 
 插件的反向 WebSocket、Webhook 等路由不经过 Console 账号，由插件用自己的凭据鉴权（例如 OneBot 的 `access_token`）。
 
 ## 终端
 
-`console.terminal.enabled: true` 时 Console 提供宿主 Shell 与白名单 SSH 目标（ADR 0051），只有持有 `ops.terminal` 的所有者能用，会话开始与结束写入审计日志。默认关闭；关闭时不注册任何终端路由。字段见[配置参考](../configuration/generated.md)。
+`console.terminal.enabled: true` 时 Console 提供宿主 Shell 与白名单 SSH 目标（ADR 0051），只有持有 `ops.terminal` 的所有者能用，会话开始与结束写入审计日志。默认关闭；关闭时不注册任何终端路由。开启前先读[终端的安全须知与 SSH 指纹固定](./operations.md#terminal)；字段见[配置参考](../configuration/generated.md)。
 
 ## 相关
 

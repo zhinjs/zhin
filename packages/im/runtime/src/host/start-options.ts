@@ -11,6 +11,11 @@ export interface StartOptions {
   readonly mode: RuntimeMode;
   readonly daemon: boolean;
   readonly logFile?: string;
+  /**
+   * Development / test only: run the instance in this process with its own Node HTTP server
+   * instead of under the gateway (ADR 0054 §3). No supervised restarts.
+   */
+  readonly standalone: boolean;
 }
 
 /** One `zhin runtime start` option as shown in `--help`; parsing stays in {@link parseStartOptions}. */
@@ -31,8 +36,9 @@ export const START_OPTION_HELP: readonly StartOptionHelp[] = Object.freeze([
   { flags: '--no-watch', description: '不监听（兼容入口，与 --watch 不能同时使用）' },
   { flags: '--once', description: '完成一次启动后输出 JSON 快照并退出（适合 CI）' },
   { flags: '--open', description: '在终端（TTY）启动成功后用浏览器打开 Remote Console；也可设置 ZHIN_OPEN=1' },
-  { flags: '-d, --daemon', description: '守护进程模式：写 pid 文件、日志重定向、崩溃自动重启' },
-  { flags: '--log-file <path>', description: 'daemon 日志文件，默认 <项目根>/.zhin/runtime.log' },
+  { flags: '-d, --daemon', description: '后台网关模式（zhin start 默认）：不回显实例输出、忽略 SIGHUP；实例日志写入 --log-file' },
+  { flags: '--log-file <path>', description: '实例日志文件，默认 <项目根>/.zhin/logs/instance.log（按大小轮转；zhin logs 读取）' },
+  { flags: '--standalone', description: '仅开发 / 测试：不经网关，实例在本进程内自带 HTTP 服务器（无受管重启）' },
 ]);
 
 /** Help section listing {@link START_OPTION_HELP}, aligned like Commander's own option list. */
@@ -42,7 +48,7 @@ export function formatStartOptionHelp(): string {
   return ['', 'Start options:', ...lines, '', 'Examples:',
     '  zhin runtime start --watch source config          同时监听源码和配置',
     '  zhin runtime start --watch config                 仅监听配置',
-    '  zhin runtime start --mode production              不监听，由 systemd / Docker 管理进程',
+    '  zhin runtime start --mode production              前台运行，由 systemd / Docker 管理进程（同 zhin start --foreground）',
     '  zhin runtime start --once --mode test            CI 中检查配置与装配'].join('\n');
 }
 
@@ -56,6 +62,7 @@ export function parseStartOptions(args: readonly string[]): StartOptions {
   let mode: RuntimeMode = 'development';
   let daemon = false;
   let logFile: string | undefined;
+  let standalone = false;
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
     if (argument === '--') continue;
@@ -73,6 +80,7 @@ export function parseStartOptions(args: readonly string[]): StartOptions {
     }
     else if (argument === '--open') openConsole = true;
     else if (argument === '--daemon' || argument === '-d') daemon = true;
+    else if (argument === '--standalone') standalone = true;
     else if (argument === '--log-file') {
       logFile = args[index + 1] ?? '';
       index += 1;
@@ -100,7 +108,7 @@ export function parseStartOptions(args: readonly string[]): StartOptions {
     throw new Error(`Invalid environment name: ${environment || '<empty>'}`);
   }
   return Object.freeze({ once, noWatch: watch.size === 0, watch: Object.freeze([...watch]),
-    open: openConsole, environment, mode, daemon, logFile });
+    open: openConsole, environment, mode, daemon, logFile, standalone });
 }
 
 function parseMode(value: string | undefined): RuntimeMode {

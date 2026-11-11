@@ -27,6 +27,7 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `http.port` | number \| string \| null | no | — | 监听端口。 |
 | `http.token` | string \| null | no | — | Bootstrap token: signs in to the setup wizard until the first Console owner exists, then stops working (ADR 0049). |
 | `http.corsOrigins` | array \| null | no | — | — |
+| `http.trustProxy` | boolean \| integer \| array&lt;string&gt; \| string | no | — | Reverse proxies whose X-Forwarded-For / Forwarded header names the client (login rate limit, audit IP, loopback-only sockets): false (default) uses the TCP peer; true trusts every hop; a number trusts that many hops; a list trusts peers matching IPs / CIDRs or loopback, private, linklocal. |
 | `http.base` | string \| null | no | — | API 路径前缀。 |
 | `http.tls` | `false` \| null \| object | no | — | — |
 | `http.listeners` | array&lt;object&gt; | no | — | — |
@@ -51,7 +52,8 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `console.terminal.ssh[].privateKeyEnv` | string | no | — | Environment variable holding the private key. |
 | `console.terminal.ssh[].passwordEnv` | string | no | — | Environment variable holding the password. |
 | `console.terminal.ssh[].passphraseEnv` | string | no | — | Environment variable holding the key passphrase. |
-| `console.terminal.ssh[].hostFingerprint` | string | no | — | Expected host key fingerprint (SHA256:…); verified strictly when set. |
+| `console.terminal.ssh[].hostFingerprint` | string | no | — | Required host key fingerprint (SHA256:…), verified strictly; get it with `ssh-keyscan -t ed25519 &lt;host&gt; \| ssh-keygen -lf -` on a trusted network. |
+| `console.terminal.ssh[].insecureAcceptAnyHostKey` | boolean | no | — | Accept any host key without verification (unsafe, open to man-in-the-middle); only instead of hostFingerprint. The Console marks the target unsafe. |
 | `database` | object | no | — | Database Host and dialect connection options. |
 | `database.dialect` | string | no | — | 数据库方言。 |
 | `database.filename` | string | no | — | SQLite 文件路径。 |

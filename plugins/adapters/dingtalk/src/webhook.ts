@@ -1,7 +1,6 @@
 /**
  * DingTalk webhook HTTP: signature → parse → admit.
  */
-import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { readTextBody } from '@zhin.js/host-http-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -26,17 +25,14 @@ export function registerDingTalkWebhookRoutes(
 ): HttpRouteRegistration[] {
   const path = handler.config.webhookPath;
   return [
-    http.route('POST', path, async (request, response) => {
-      await handleDingTalkWebhookRequest(request, response, handler);
-    }, { summary: 'DingTalk robot webhook', tags: ['dingtalk'] }),
+    http.route('POST', path, (request) => handleDingTalkWebhookRequest(request, handler), { summary: 'DingTalk robot webhook', tags: ['dingtalk'] }),
   ];
 }
 
 export async function handleDingTalkWebhookRequest(
-  request: IncomingMessage,
-  response: ServerResponse,
+  request: Request,
   handler: DingTalkWebhookHandler,
-): Promise<void> {
+): Promise<Response> {
   try {
     // DingTalk outgoing callbacks put timestamp/sign on the URL query;
     // headers are accepted as a fallback for legacy senders.
@@ -46,9 +42,7 @@ export async function handleDingTalkWebhookRequest(
     // Missing credentials must never be admitted: verify unconditionally.
     if (!timestamp || !sign || !verifySignature(handler.config.appSecret, timestamp, sign)) {
       logger.warn(formatCompact({ op: 'webhook', ok: false, error: 'invalid signature' }));
-      response.writeHead(403, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ code: -1, msg: 'Forbidden' }));
-      return;
+      return new Response(JSON.stringify({ code: -1, msg: 'Forbidden' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
     }
 
     const rawBody = await readTextBody(request);
@@ -56,20 +50,16 @@ export async function handleDingTalkWebhookRequest(
     try {
       event = JSON.parse(rawBody) as DingTalkEvent;
     } catch {
-      response.writeHead(200, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ code: 0, msg: 'success' }));
-      return;
+      return new Response(JSON.stringify({ code: 0, msg: 'success' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
 
     if (event.msgtype && handler.isOpen) {
       await handler.admit(event);
     }
 
-    response.writeHead(200, { 'Content-Type': 'application/json' });
-    response.end(JSON.stringify({ code: 0, msg: 'success' }));
+    return new Response(JSON.stringify({ code: 0, msg: 'success' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   } catch (error) {
     logger.error('Webhook error:', error);
-    response.writeHead(500, { 'Content-Type': 'application/json' });
-    response.end(JSON.stringify({ code: -1, msg: 'Internal Server Error' }));
+    return new Response(JSON.stringify({ code: -1, msg: 'Internal Server Error' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
 }

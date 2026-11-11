@@ -7,7 +7,16 @@ description: "Manage your bot in the browser: how to connect, what you can see, 
 
 Console is the bot's browser admin UI. Use it to **send test messages, read logs, edit config, manage plugins and accounts, and watch what the AI is doing**.
 
-There is nothing to deploy: open <https://console.zhin.dev> and enter the API address the bot prints at startup (new projects default to `http://127.0.0.1:8068`) and the `HTTP_TOKEN` from `.env`. You can also open the bot's own local `/console` and Sandbox pages.
+There is nothing to deploy: open <https://console.zhin.dev> and enter the API address `zhin start` prints (new projects default to `http://127.0.0.1:8068`). The first time, use the `HTTP_TOKEN` from `.env` (the bootstrap token) to complete [setup and onboarding](./onboarding.md); afterwards sign in with your account. You can also open the Host's own local `/console` and Sandbox pages.
+
+The Console talks to the **management gateway** ([ADR 0054](../../adr/0054-management-gateway.md)): the gateway owns sign-in, permissions, setup, instance start / stop, dependency installs and the terminal, and forwards everything else to the Zhin instance. While the instance crashes, stops or installs dependencies, the Console can still sign in and show instance state and logs; only pages served by the instance return `503` for a while.
+
+| Topic | Contents |
+| --- | --- |
+| [Setup and onboarding](./onboarding.md) | Database → owner → AI → adapters; credentials and permissions per step |
+| [Access control](./access-control.md) | Users, roles, API tokens, audit log; permission catalog and plugin permission levels |
+| [Feature matrix and layered configuration](./features.md) | On / off and overrides at the global, adapter and account levels |
+| [Operations](./operations.md) | Instance state and start / stop, dependency installs and rollback, database / config / files, terminal |
 
 ## What you can do once connected
 
@@ -25,18 +34,18 @@ There is nothing to deploy: open <https://console.zhin.dev> and enter the API ad
 
 ## Sidebar navigation
 
-Console is aimed at everyday users: the sidebar is grouped by what you want to do, and pages use plain names. Existing page links (routes) are unchanged.
+Navigation has six sections ([ADR 0052](../../adr/0052-console-information-architecture.md)): the first four are everyday work, the last two administration. Sections you have no permission for are hidden entirely.
 
-| Group | Pages |
-| --- | --- |
-| Everyday (常用) | Home, Chat accounts, Chat history, Reminders, Activity log |
-| Bot (机器人) | Bot status, Try a chat, Assistant jobs (shown when the assistant is enabled), Group chime-in, Skills assistant |
-| Features (功能) | Manage features, Feature store, Task center |
-| Advanced (高级, folded by default) | Config, Environment, Project files, Database, Runtime Capabilities, Message scenario lab, Collaboration graph |
+| Section | Question it answers | Pages | Permissions |
+| --- | --- | --- | --- |
+| Overview | How are things right now? | Dashboard, logs, Agent observability | `status.view` |
+| Conversations | Who are we talking to? | Account workspace (conversations, inbox, requests and notices), Sandbox | `endpoint.view` / `endpoint.operate` |
+| Features | What can the bot do, and where? | Feature matrix, global configuration, adapters, account configuration, AI and models | `feature.*`, `agent.*` |
+| Plugins | What is installed? | Installed, marketplace, plugin details (version, dependencies, logs) | `plugin.manage` |
+| Operations | How is the host doing? | Instance, database, configuration file, environment variables, scheduled tasks, files, terminal | `ops.*`, `status.view` |
+| Access control | Who can do what? | Users, roles, API tokens, audit log | `iam.*` |
 
-Old → new names: Dashboard → Home, Conversations & Channels → Chat accounts, Conversation branches → Chat history, Agent playground → Try a chat, Agent Overview / Agent workbench → Bot status, Scheduled tasks → Reminders, Logs → Activity log, Plugins → Manage features, Marketplace → Feature store.
-
-YAML editing of `zhin.config.yml` is still available under **Advanced → Config** for experienced users and CI.
+Plugin pages land in the section named by `metadata.section`, or in Features when undeclared. Old routes redirect: the plugin-detail configuration page → `/features/global/:plugin`, the old database / config / schedule pages → `/ops/*`.
 
 ::: details Why can Console connect while the bot is still logging in?
 The HTTP service, Console RPC and SSE are process control-plane services that start listening before all plugins have started (before the first generation is published). So while an adapter such as ICQQ is still waiting for a QR scan, slider or device confirmation, the browser can complete login through `login.list`, `login.submit` and `endpoint.login.pending`. Pages that depend on started plugins may be empty or show not-ready until every adapter finishes starting.
@@ -46,11 +55,13 @@ The HTTP service, Console RPC and SSE are process control-plane services that st
 flowchart LR
     B[Browser] -->|Remote UI| RC[console.zhin.dev]
     B -->|Local pages| H
-    RC -->|Bearer token + CORS| H[Http Host]
-    H --> R1[REST /api/*]
-    H --> R2[RPC /api/console/request]
-    H --> R3[SSE /api/events]
-    H --> R4[WS /sandbox]
+    RC -->|Bearer token + CORS| H[Management gateway]
+    H --> G1["/api/auth/*, iam.*, terminal, instance and dependencies"]
+    H -->|IPC forwarding| R0[Zhin instance]
+    R0 --> R1[REST /api/*]
+    R0 --> R2[RPC /api/console/request]
+    R0 --> R3[SSE /api/events]
+    R0 --> R4[WS /sandbox]
     R1 --> P[Plugin / Endpoint / Session / Collaboration projection]
 ```
 
@@ -70,7 +81,7 @@ http:
 
 `/api` requests need a Bearer credential (a sign-in session or an API token, see [Users and permissions](#users-and-permissions)). `/pub/*`, the Console shell, and page routes stay public. `corsOrigins` is merged with the Remote Console origin.
 
-A port conflict soft-degrades the HTTP Host: Adapters and Agents keep running, but Console is unavailable. A Console restart exits with code 51 and the CLI daemon relaunches the process.
+The management gateway listens on `http.port`; if the port is taken, `zhin start` fails to start. A restart from the Console restarts only the instance (over the control channel); the gateway and the Console connection stay up.
 
 Runtime falls back to 8086 when no config exists; the current scaffold writes 8068. Always trust project configuration and the startup log.
 
@@ -165,7 +176,7 @@ Page directory changes are pushed in real-time to connected UIs via SSE `sync` e
 
 ## Users and permissions
 
-Console users, roles, sessions and API tokens live in the project database (ADR 0049), not in the config file. Upgrading from an older version: see [Upgrading to Console access control](../migrations/console-access-control.md).
+Console users, roles, sessions and API tokens live in the project database (ADR 0049), not in the config file. Pages and permissions in detail: [Access control](./access-control.md). Upgrading from an older version: see [Upgrading to Console access control](../migrations/console-access-control.md) and [Upgrading to the management gateway](../migrations/management-gateway.md).
 
 - **Setup**: while the database has no owner, `http.token` is a bootstrap token that can only create the first owner (Console wizard, or `zhin console init`). After that it is refused everywhere. A local Host without `http.token` is open to everyone until setup.
 - **Sign-in**: users sign in with username and password and get a session token (12-hour sliding expiry, 30 days at most). Changing the password, disabling or deleting a user revokes all of that user's sessions at once.
@@ -173,14 +184,40 @@ Console users, roles, sessions and API tokens live in the project database (ADR 
 - **Roles**: built-in `owner` (everything), `admin` (everything except the terminal and user management), `operator` (messaging and feature configuration) and `viewer` (read-only). A role binds globally, to one adapter, or to one account.
 - **Permission checks**: every Console RPC and every `/api` route is listed in the permission map of `@zhin.js/console-protocol`; anything unlisted is denied. Every denied request and every write is written to the audit log.
 - **Offline rescue**: `zhin console user create|passwd|disable|enable|list` opens the project database directly, without a running Host.
+- **In the gateway** (ADR 0054 §3, §7): sign-in, the setup wizard, `/auth/me`, `iam.*`, `onboarding.update`, the terminal and the audit log are handled by the management gateway, which opens the project database itself (SQLite in WAL mode, sharing the file with the instance). While the instance is stopped, crashed or being updated the Console can still sign in, initialize and show the instance state and logs; only pages and APIs the instance provides answer `503`. Disabling or deleting a user, changing their password or their role bindings immediately closes that user's live connections to the instance (event stream, WebSockets).
+- **Onboarding state**: `GET {base}/auth/setup` and `/auth/me` (for callers holding `plugin.manage`) carry an `onboarding` field; the RPC `onboarding.update { step: 'ai' | 'adapters' | 'finish', status: 'done' | 'skipped' }` needs `plugin.manage`, plus `agent.configure` for step 3 (`ai`) and `endpoint.manage` for step 4 (`adapters`) (ADR 0053 §2). Dependency install progress arrives on the Console event stream as `gateway.packages.progress`, or alone from `GET {base}/gateway/packages/progress`.
 
-A page's `requiredPermissions` and `requiredRoles` decide who sees it: built-in permissions (such as `status.view`) come from roles; plugin-defined permission names (such as `ambient:read`, `decisions:read`, `control:read`, `ops:approve`) are currently satisfied only by a global owner. The page lists (`/entries`, `/console/api/pages` and `/console/api/topology`) are filtered per caller and never cached.
+A page's `requiredPermissions` and `requiredRoles` decide who sees it: built-in permissions (such as `status.view`) come from roles; plugin-defined permission names (`<plugin>:<action>`, such as `ambient:read`, `decisions:read`, `control:read`, `ops:approve`) are granted by **level**. The page lists (`/entries`, `/console/api/pages` and `/console/api/topology`) are filtered per caller and never cached.
+
+### Plugin permission levels
+
+Every plugin permission has a level: `read` (view), `operate` (day-to-day actions) or `manage` (manage, approve, change configuration). A plugin can declare the level in `definePluginConsoleRpc({ permissions })` (see [Plugin Console pages](../authoring/console-pages.md#plugin-permission-levels)); otherwise it is inferred from the suffix:
+
+| Suffix | Level |
+| --- | --- |
+| `:read`, `:view` | `read` |
+| `:approve`, `:manage`, `:admin`, `:write`, `:config` | `manage` |
+| anything else (such as `:resolve`, `:send`) | `operate` |
+
+Built-in roles grant plugin permissions by level through three catalog permissions, `plugin.perms.read`, `plugin.perms.operate` and `plugin.perms.manage`:
+
+| Role | Plugin permissions |
+| --- | --- |
+| `viewer` | `read` |
+| `operator` | `read`, `operate` |
+| `admin` | every level |
+| `owner` | everything (unchanged) |
+
+- **Custom roles** can include those level permissions, or list single plugin permissions (for example only `ops:approve`). The format must be `<plugin>:<action>`. A name no loaded plugin uses is still saved (the plugin may not be installed yet, or be disabled); the call returns `warnings`, and the name grants nothing until a plugin uses it.
+- **Scope**: page visibility uses global bindings only. Plugin Console RPC checks each method's declared permissions; for a plugin that owns an adapter (`root/<adapter>`), a role bound to that adapter (or to the account an account method names) also counts, one bound to another adapter never does.
+- **API tokens** can be narrowed to single plugin permissions (such as `onebot11:read`); they take effect only when the issuing user holds them (by name or by level), so a token never exceeds its user.
+- `iam.roles.list` returns each role's effective plugin permissions (`pluginPermissions`, with source `level` / `explicit`) and the loaded plugins' permission catalog (top-level `pluginPermissions: [{ permission, plugin, level, description? }]`), for the Console's role editor.
 
 Plugin routes such as reverse WebSockets and Webhooks do not use Console accounts; the plugin authenticates them with its own credential (for example OneBot's `access_token`).
 
 ## Terminal
 
-With `console.terminal.enabled: true` the Console offers a host shell and allow-listed SSH targets (ADR 0051). Only owners holding `ops.terminal` can use it, and session start and end are audited. It is off by default; when off, no terminal route is registered. See the [configuration reference](../configuration/generated.md) for the fields.
+With `console.terminal.enabled: true` the Console offers a host shell and allow-listed SSH targets (ADR 0051). Only owners holding `ops.terminal` can use it, and session start and end are audited. It is off by default; when off, no terminal route is registered. Read the [terminal safety notes and SSH fingerprint pinning](./operations.md#terminal) before enabling it; see the [configuration reference](../configuration/generated.md) for the fields.
 
 ## Related
 

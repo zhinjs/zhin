@@ -1,5 +1,5 @@
 import { adapterFeatureId, isAdapterIndex } from '@zhin.js/adapter';
-import { HttpBodyError, extractBearerToken, isUserPrincipal, readJsonBody, requestConsolePrincipal, type HttpHost } from '@zhin.js/host-http';
+import { HttpBodyError, extractBearerToken, isExplicitConsolePrincipal, jsonResponse, readJsonBody, type HttpHost, type RouteContext } from '@zhin.js/host-http';
 import {
   GenerationAdmissionGate, generationAdmissionSource, normalizeDeliveryTarget,
   PluginTaskError, pluginTaskProviderToken, createMessages, isLocale, resolveLocale, type Locale,
@@ -8,8 +8,7 @@ import {
   type RuntimeSnapshot, type SnapshotLease, type SnapshotReader,
 } from '@zhin.js/plugin-runtime';
 import type { ConsolePluginTask, ConsolePluginTaskProvider } from '@zhin.js/console-protocol';
-import type { IncomingMessage, ServerResponse } from 'node:http';
-import { writeJson } from '@zhin.js/gateway/http';
+import { noStore } from './no-store.js';
 import { listPluginUseCases } from '@zhin.js/gateway/plugin-management';
 
 const taskMessages = createMessages({
@@ -32,15 +31,19 @@ const states = new Set(['scheduled', 'paused', 'running', 'unknown', 'succeeded'
 /** Administrator task commands use the exact current owner service, never a parallel scheduler or transaction store. */
 export function registerPluginTaskRoutes(options: Readonly<{ http: HttpHost; base: string; snapshots?: SnapshotReader }>): void {
   const { http, base, snapshots } = options;
-  http.route('GET', `${base}/tasks/use-cases`, (request, response, url, authScope) => {
+  http.route('GET', `${base}/tasks/use-cases`, noStore((request, context) => {
+    const { url } = context;
     const displayLocale = resolveLocale(url.searchParams.get('locale'));
-    if (!authorize(request, response, http, authScope, displayLocale)) return;
-    try { send(response, listPluginUseCases(queryLocale(url))); }
-    catch (error) { failure(response, error, displayLocale); }
-  }, { summary: 'List practical plugin use cases', tags: ['tasks'], description: 'Static metadata only; no plugin execution, configuration changes or message delivery.' });
-  http.route('GET', `${base}/tasks/providers`, async (request, response, url, authScope) => {
+    const denied = authorize(request, context, http, displayLocale);
+    if (denied) return denied;
+    try { return send(listPluginUseCases(queryLocale(url))); }
+    catch (error) { return failure(error, displayLocale); }
+  }), { summary: 'List practical plugin use cases', tags: ['tasks'], description: 'Static metadata only; no plugin execution, configuration changes or message delivery.' });
+  http.route('GET', `${base}/tasks/providers`, noStore(async (request, context) => {
+    const { url } = context;
     const displayLocale = resolveLocale(url.searchParams.get('locale'));
-    if (!authorize(request, response, http, authScope, displayLocale)) return;
+    const denied = authorize(request, context, http, displayLocale);
+    if (denied) return denied;
     let lease: SnapshotLease | undefined;
     const releases: Array<() => void> = [];
     try {
@@ -56,14 +59,16 @@ export function registerPluginTaskRoutes(options: Readonly<{ http: HttpHost; bas
       for (const { provider } of providers) releases.push(...admit(provider));
       const rows: ConsolePluginTaskProvider[] = [];
       for (const { owner, provider } of providers) rows.push(projectProvider(snapshot, owner, provider, await callProvider(() => provider.read({ locale })), locale));
-      send(response, { generation: snapshot.generation, providers: rows });
-    } catch (error) { failure(response, error, displayLocale); }
+      return send({ generation: snapshot.generation, providers: rows });
+    } catch (error) { return failure(error, displayLocale); }
     finally { releases.reverse().forEach(release => release()); lease?.release(); }
-  }, { summary: 'List administrator task providers', tags: ['tasks'], description: 'Read-only task facts. This does not probe or confirm delivery to a platform.' });
+  }), { summary: 'List administrator task providers', tags: ['tasks'], description: 'Read-only task facts. This does not probe or confirm delivery to a platform.' });
 
-  for (const operation of ['create', 'change'] as const) http.route('POST', `${base}/tasks/${operation}`, async (request, response, url, authScope) => {
+  for (const operation of ['create', 'change'] as const) http.route('POST', `${base}/tasks/${operation}`, noStore(async (request, context) => {
+    const { url } = context;
     let displayLocale = resolveLocale(url.searchParams.get('locale'));
-    if (!authorize(request, response, http, authScope, displayLocale)) return;
+    const denied = authorize(request, context, http, displayLocale);
+    if (denied) return denied;
     let lease: SnapshotLease | undefined;
     const releases: Array<() => void> = [];
     try {
@@ -87,10 +92,10 @@ export function registerPluginTaskRoutes(options: Readonly<{ http: HttpHost; bas
         ? provider.create({ ...mutation, target: input.target!, parameters: input.parameters! })
         : provider.change({ ...mutation, id: input.id!, action: input.action!,
           ...(input.parameters === undefined ? {} : { parameters: input.parameters }) }));
-      send(response, { generation: snapshot.generation, provider: projectProvider(snapshot, owner, provider, result, input.locale) });
-    } catch (error) { failure(response, error, displayLocale); }
+      return send({ generation: snapshot.generation, provider: projectProvider(snapshot, owner, provider, result, input.locale) });
+    } catch (error) { return failure(error, displayLocale); }
     finally { releases.reverse().forEach(release => release()); lease?.release(); }
-  }, { summary: `${operation === 'create' ? 'Create' : 'Change'} an administrator task`, tags: ['tasks'],
+  }), { summary: `${operation === 'create' ? 'Create' : 'Change'} an administrator task`, tags: ['tasks'],
     description: 'Full-scope, generation-checked persistent task command. Request UUID and revision are reconciled by the provider. No test messages or blind retries.' });
 }
 
@@ -102,13 +107,12 @@ function queryLocale(url: URL): Locale {
   return resolveLocale(url.searchParams.get('locale'));
 }
 
-function authorize(request: IncomingMessage, response: ServerResponse, http: HttpHost, scope: string, locale: Locale): boolean {
-  response.setHeader('cache-control', 'no-store');
-  const token = extractBearerToken(request.headers.authorization, null);
-  const explicit = isUserPrincipal(requestConsolePrincipal(request)) || http.tokenRegistry.resolve(token) === 'full';
-  if (scope === 'full' && explicit) return true;
-  writeJson(response, 401, { success: false, code: 'forbidden', error: taskMessages(locale, 'auth') });
-  return false;
+/** Denial response, or undefined when the caller presented an explicit Console credential. */
+function authorize(request: Request, context: RouteContext, http: HttpHost, locale: Locale): Response | undefined {
+  const token = extractBearerToken(request.headers.get('authorization') ?? undefined, null);
+  const explicit = isExplicitConsolePrincipal(context.principal) || http.tokenRegistry.resolve(token) === 'full';
+  if (explicit) return undefined;
+  return jsonResponse(401, { success: false, code: 'forbidden', error: taskMessages(locale, 'auth') });
 }
 function acquire(snapshots?: SnapshotReader): SnapshotLease {
   if (!snapshots) throw new PluginTaskError('unavailable', 'runtime');
@@ -257,17 +261,16 @@ async function callProvider<T>(operation: () => Promise<T>): Promise<T> {
     throw error;
   }
 }
-function send(response: ServerResponse, data: unknown): void {
+function send(data: unknown): Response {
   if (Buffer.byteLength(JSON.stringify(data)) > OUTPUT_LIMIT) throw new PluginTaskError('unavailable', 'response bound');
-  writeJson(response, 200, { success: true, data });
+  return jsonResponse(200, { success: true, data });
 }
-function failure(response: ServerResponse, error: unknown, locale: Locale): void {
+function failure(error: unknown, locale: Locale): Response {
   if (error instanceof HttpBodyError) {
-    writeJson(response, error.statusCode, { success: false, code: 'invalid_input', error: taskMessages(locale, 'body') });
-    return;
+    return jsonResponse(error.statusCode, { success: false, code: 'invalid_input', error: taskMessages(locale, 'body') });
   }
   const code = error instanceof PluginTaskError ? error.code : 'internal_error';
   const statuses = { invalid_input: 400, conflict: 409, not_found: 404, unsupported: 400, unavailable: 503, internal_error: 500 };
-  writeJson(response, statuses[code], { success: false, code,
+  return jsonResponse(statuses[code], { success: false, code,
     error: error instanceof ProviderTaskError && error.message ? error.message : taskMessages(locale, code) });
 }

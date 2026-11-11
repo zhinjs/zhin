@@ -9,7 +9,7 @@ describe('start options', () => {
   it('parses process, runtime, and Remote Console options into one immutable value', () => {
     const options = parseStartOptions([
       '--open', '--once', '--no-watch', '--environment=test', '--mode', 'test',
-      '--daemon', '--log-file=.zhin/test.log',
+      '--daemon', '--log-file=.zhin/test.log', '--standalone',
     ]);
 
     expect(options).toEqual({
@@ -21,6 +21,7 @@ describe('start options', () => {
       mode: 'test',
       daemon: true,
       logFile: '.zhin/test.log',
+      standalone: true,
     });
     expect(Object.isFrozen(options)).toBe(true);
   });
@@ -34,6 +35,7 @@ describe('start options', () => {
   it('only watches explicitly selected sources', () => {
     expect(parseStartOptions([]).watch).toEqual([]);
     expect(parseStartOptions([]).noWatch).toBe(true);
+    expect(parseStartOptions([]).standalone).toBe(false);
     expect(parseStartOptions(['--watch', 'config']).watch).toEqual(['config']);
     expect(parseStartOptions(['--watch', 'source']).watch).toEqual(['source']);
     const both = parseStartOptions(['--watch', 'source', 'config', 'source', '--mode', 'production']);
@@ -75,7 +77,7 @@ describe('start options', () => {
 
   it('lists every parsed option in the help text', () => {
     const help = formatStartOptionHelp();
-    const parsedFlags = ['--mode', '--environment', '--watch', '--no-watch', '--once', '--open', '--daemon', '-d', '--log-file'];
+    const parsedFlags = ['--mode', '--environment', '--watch', '--no-watch', '--once', '--open', '--daemon', '-d', '--log-file', '--standalone'];
 
     for (const flag of parsedFlags) {
       expect(help).toContain(flag);

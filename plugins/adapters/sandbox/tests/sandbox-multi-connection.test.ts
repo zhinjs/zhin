@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import WebSocket from 'ws';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
-import { createHttpHost } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import type { EndpointEvent } from 'zhin.js/adapter';
 import { endpointRuntimeOf } from '../../../../packages/im/adapter/src/endpoint-specification.js';
 import type { ConversationRef } from '@zhin.js/im-contract';

@@ -3,7 +3,8 @@ import { AdapterIndex, adapterFeatureId, endpointEventGatewayToken } from '@zhin
 import { createCapabilitySlot, createSnapshotView, SnapshotStore, rootPluginId, projectLocaleToken, type SnapshotState } from 'zhin.js';
 import { ImRuntime, type CoreReplyStream, type ReplyStreamSnapshot } from '@zhin.js/core/runtime';
 import { MemoryConversationEventStore } from '@zhin.js/im-contract';
-import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
+import { httpHostToken } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import sandboxAdapter from '../adapters/sandbox/index.js';
 
 vi.mock('node:child_process', async importOriginal => ({

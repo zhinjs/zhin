@@ -43,6 +43,8 @@ export default definePlugin({
     const history: QrCodeHistoryItem[] = [];
 
     const rpc = definePluginConsoleRpc({
+      // Day-to-day edits belong to operators; `:write` would otherwise infer `manage` (ADR 0049).
+      permissions: [{ id: 'qrcode:write', level: 'operate', description: '生成二维码' }],
       status: {
         page: 'index',
         demo: true,

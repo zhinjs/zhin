@@ -3,15 +3,15 @@ import { withTestUsers } from '../utils/console-users.js';
 import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createHttpHost, type HttpHost } from '@zhin.js/host-http';
+import { type HttpHost } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import { registerAgentConsoleRoutes } from '../../../src/instance/console/agent-routes.js';
 
 const state = vi.hoisted(() => ({ events: [] as Record<string, unknown>[] }));
 vi.mock('../../../src/instance/console/agent-console.js', () => ({
-  withGenerationAgentConsole: async (_snapshots: unknown, visit: (value: unknown) => Promise<void>) => {
-    await visit({ trace: { list: () => ({ sessionKey: 'sandbox:bot:private:owner', events: state.events,
+  withGenerationAgentConsole: async (_snapshots: unknown, visit: (value: unknown) => Promise<unknown>) => {
+    return visit({ trace: { list: () => ({ sessionKey: 'sandbox:bot:private:owner', events: state.events,
       latestSequence: state.events.length, activeTurnIds: [] }) } });
-    return true;
   },
 }));
 

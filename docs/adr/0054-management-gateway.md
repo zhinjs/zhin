@@ -85,8 +85,10 @@ interface HttpHost {
 **请求流**（网关唯一的 HTTP 服务器，监听 `http.port`，`http.base` 默认 `/api`）：
 
 1. **网关自有路由**——网关直接处理：`{base}/auth/*`（含初始化，ADR 0049）、`{base}/gateway/*`（§4、§5）、`{base}/console/terminal*`（ADR 0051）、`/pub/health`、本地 Console 静态资源。
-2. **实例注册的 `{base}/*` 路由**（Console RPC、SSE、REST、MCP、A2A）——网关先认证（会话 / API 令牌 → 主体、权限、作用域绑定），未认证 401；实例离线 `503 { code: 'instance-offline', state }`；认证通过后连同主体一起转发给实例。
+2. **实例注册的 `{base}/*` 路由**（Console RPC、SSE、REST、MCP、A2A）——网关先认证（会话 / API 令牌 → 主体、权限、作用域绑定），未认证 401；实例离线 `503 { code: 'instance_unavailable', state }`（带 `Retry-After`）；实例在期限内没有响应 `504 { code: 'instance_timeout' }`；其他桥接失败（实例处理出错、流过多）`502 { code: 'instance_error' }`；认证通过后连同主体一起转发给实例。
 3. **实例注册的其他路由**（适配器 Webhook、反向 WS 等）——不认证，原样转发，鉴权由插件自己负责，与今天一致。
+
+**认证只在网关**（B1.4）：会话、API 令牌与初始化令牌都由网关在自己的数据库连接上解析；实例的令牌表是“关闭”的——不认开放 Host、不认初始化令牌、不解析任何 bearer，权限只来自随请求转发的主体（开放 Host 时网关转发 `{ kind: 'bootstrap', open: true }`，初始化令牌转发 `{ kind: 'bootstrap', open: false }`）。实例自己的协议面（MCP / A2A）按转发主体判断 `mcp.access` / `a2a.access`。早期的过渡消息 `auth.authenticate` / `auth.result` / `auth.state` / `auth.audit` 已删除（协议版本 3）。
 
 **授权在处理处完成**：实例的 Console RPC 分发点按 `CONSOLE_RPC_PERMISSIONS`（ADR 0049 §3）检查随请求转发的主体——只有分发点知道 RPC 类型与载荷里的作用域目标。网关自有路由由网关检查。两边用 `@zhin.js/host-http` 的同一个访问控制模块与同一份权限表。控制通道只存在于父子进程之间，主体随消息传递，不需要签名。
 
@@ -101,7 +103,9 @@ interface HttpHost {
 | 双向 | `ws.open` / `ws.message` / `ws.close` / `ws.drain` | WebSocket 连接与帧 |
 | 实例 → 网关 | `restart-request` | 需要整进程重启的变更（`restart-process` effect、`disable_plugins`、数据库切换、Agent 自我变更）。**取代退出码 75** |
 | 网关 → 实例 | `shutdown` | `{ reason, budgetMs }` |
-| 网关 → 实例 | `principal-revoked` | 实例断开该主体的 SSE / WS |
+| 网关 → 实例 | `principal-revoked` | `{ principalId, reason? }`：用户被禁用 / 删除、改密或绑定变化（ADR 0049 §6）后，实例关闭该用户（`userId`）经桥接打开的 SSE 与 WS（WS 关闭码 4401）。终端会话在网关本地，由网关直接结束 |
+| 实例 → 网关 | `catalog` | `{ pluginPermissions }`：当前世代的插件权限目录（ADR 0049 增补），监听时与每次变化（世代提交）时上报；网关缓存（实例重启期间沿用上一份），用于 `/auth/me` 的等级展开、`iam.roles.list` 与网关自己的授权 |
+| 实例 → 网关 | `audit` | `{ entry }`：实例侧写的审计条目（RPC 分发点的拒绝与写操作）；审计日志归网关所有，网关写入 |
 
 **日志**：网关采集实例 stdout / stderr，写入 `.zhin/logs/instance.log`（按大小轮转），并保留内存环形缓冲，供 `gateway.instance.logs` 与实例离线时查看。
 
@@ -113,11 +117,15 @@ interface HttpHost {
 
 1. 生成计划并校验白名单与 revision；备份 `package.json`、锁文件、配置文件；
 2. 向实例发送 `shutdown`，等待退出；
-3. 执行事务，输出以 SSE（`gateway.packages.progress`）推给 Console；
+3. 执行事务，输出以 SSE（`gateway.packages.progress`）推给 Console：网关接管 `GET {base}/events`，实例在线时转发实例的事件流并在帧边界插入网关帧（网关帧不带 `id:`，续传游标仍是实例的），实例离线时给只含网关事件的流（实例就绪后关闭，Console 重连回合并流），`{base}/events/history` 离线时返回保留调用方游标的空页；`GET {base}/gateway/packages/progress`（`plugin.manage`）只推进度；
 4. 启动实例，等待 `ready`（默认 60 秒，`gateway.readyTimeout`）；
 5. 失败：恢复备份、重新安装、启动旧版本；向 Console 报告失败阶段与日志尾部。
 
-插件配置的 Schema 校验发生在实例启动后（实例里才有插件 Schema），失败视为第 4 步失败。
+插件配置的最终校验发生在实例启动后，失败视为第 4 步失败。网关在事务内先用包自带的 `schema.json` 预检：
+
+- `install` 声明新插件前用 Schema 默认值补全空配置并校验；有无默认值的必填字段（或引用缺失的环境变量）时只安装依赖、不声明，事务成功，结果带 `needsConfiguration`（缺少的配置路径与环境变量），实例不会因缺配置而回滚整笔安装。
+- `gateway.plugins.declare { package, instanceKey?, config, startInstance? }`（`plugin.manage`；非所有者只能声明白名单内的包）是声明已安装插件并写入首份配置的唯一受支持入口：先在停实例前校验（包须是已安装的生产依赖、实例键未声明且非保留键、配置通过插件 Schema 且无缺失环境变量，否则 `invalid_input`），再作为事务执行（`snapshot → stop-instance → configure → start-instance`），一次原子写入 `plugins.<instanceKey>` 与实例块；启动失败时恢复配置文件（不重新安装依赖）并启动旧实例。进度同样经 `gateway.packages.progress` 推送，`operation` 为 `declare`。`config:patch-project` 仍拒绝修改声明。
+- 回滚报告的 `logTail` 只含本次事务期间实例输出的行。
 
 ### 5. 实例生命周期
 
@@ -131,17 +139,20 @@ interface HttpHost {
 
 | 命令 | 网关在运行 | 网关未运行 |
 |---|---|---|
-| `zhin start [--daemon]` | 提示已在运行 | 启动网关与实例 |
+| `zhin start [--foreground]` | 提示已在运行 | 启动网关与实例：默认后台运行（等网关就绪后返回，网关日志写 `.zhin/logs/gateway.log`）；`--foreground`（`-f`）前台运行，Ctrl+C 同时停止两者。`zhin runtime start` 是 `zhin start --foreground` 的别名；`--daemon` 仍接受（即默认行为） |
 | `zhin stop` / `restart` / `status` / `logs` | 经本地控制套接字请求网关 | `stop`/`restart` 无事可做；`status` 显示未运行；`logs` 读日志文件 |
 | `zhin install` / `uninstall` / `update` | 经网关执行（保证实例正确停启） | 直接执行同一事务 |
 | `zhin console init` / `zhin console user …` | 直接操作项目数据库（ADR 0049 §7） | 同左 |
+
+生产模板（systemd / Docker / PM2 服务文件）与脚手架的 `pnpm start` 使用 `zhin start --foreground`：进程管理器需要一个不退出的前台进程；后台模式面向在终端里直接操作的用户。`--standalone`（实例在本进程内自带 HTTP 服务器、无网关）只用于测试与开发。
 
 本地控制套接字：`.zhin/gateway.sock`（Windows：`\\.\pipe\zhin-gateway-<项目路径哈希>`），文件权限仅限当前用户，连接者视为本机 `owner`。
 
 ### 7. 数据
 
 - 网关自己打开项目数据库（与实例同一份 `database` 配置），读写 `console_*` 表（ADR 0049）；实例不访问这些表。
-- SQLite：两个进程同时连接，启用 `journal_mode=WAL` 与 `busy_timeout`。
+- SQLite：两个进程同时连接，启用 `journal_mode=WAL`（`@zhin.js/database` 对文件库总是开启）；两个连接都不设 `busy_timeout`——`node:sqlite` 的等待是同步的，会卡住整个事件循环（实例的长异步事务持锁时，网关的每个请求都会停顿）——而由 SQLite 方言对事务外语句与 `BEGIN IMMEDIATE` 遇到 `SQLITE_BUSY` 时做有界的异步退避重试（`busyRetryMs`，实例默认 5 秒，网关 5 秒）；网关的写入都是单语句自动提交（不开事务），持锁时间最短，预算用尽时网关返回 `503 { code: 'database_busy' }` 与 `Retry-After`，认证时的簿记写入（会话续期、令牌最近使用）遇忙则跳过。写事务以 `BEGIN IMMEDIATE` 开始，写锁在开头拿到，不会在事务中途遇到 `SQLITE_BUSY_SNAPSHOT`；声明为只读的事务（`transaction(cb, { readOnly: true })`）以 `BEGIN DEFERRED` 开始且 `query_only`，不拿写锁。插件运行时的 Database Host 事务接口无法声明只读，仍按写事务处理。
+- 配置解析：网关按实例 `resolveDatabaseConfig` 的同一规则解析 `database`（`@zhin.js/gateway/database`，不导入 IM 层），相对 SQLite 路径以项目根为准；数据库不可用时网关照常监听，`/auth/*` 返回 503，“是否已初始化”取初始化标记文件（失败即关闭），并定时重试。
 - 数据库切换（ADR 0049 §7）：网关写配置、关闭自己的连接、重新打开新库，再重启实例。
 
 ### 8. 多实例

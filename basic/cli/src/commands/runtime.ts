@@ -3,7 +3,8 @@ import { join, relative, resolve } from 'node:path';
 import { Command } from 'commander';
 import { FilePublishJournalStore } from '../plugin-runtime/publish-journal.js';
 import { NodeProcessRunner, ProjectCommands } from '../plugin-runtime/project-commands.js';
-import { NativeTypeScriptSupervisor } from '@zhin.js/gateway/supervisor';
+import { isSupervisedInstanceProcess } from '@zhin.js/gateway/supervisor';
+import { runGateway } from '@zhin.js/gateway/server';
 import { formatStartOptionHelp, generatePluginCapabilityCodegen, parseStartOptions } from '@zhin.js/runtime';
 import { importProjectInstance } from '../utils/project-instance.js';
 
@@ -37,7 +38,7 @@ runtimeCommand.command('codegen [dir]')
   });
 
 runtimeCommand.command('start')
-  .description('启动 Bot（pnpm dev 即本命令）；选项见下方 Start options')
+  .description('前台运行管理网关与实例（同 zhin start --foreground）；选项见下方 Start options')
   .usage('[options]')
   .addHelpText('after', formatStartOptionHelp())
   .allowUnknownOption(true)
@@ -46,12 +47,22 @@ runtimeCommand.command('start')
     // Process supervision belongs to the executable, not the reusable startup API.
     const root = resolve(process.cwd());
     const parsed = parseStartOptions(command.args);
-    if (await new NativeTypeScriptSupervisor(root, parsed).runIfRequired()) return;
-    // The instance composition root lives in the project's `zhin.js` (ADR 0054 §0).
+    if (!isSupervisedInstanceProcess() && !parsed.standalone) {
+      // Parent: the long-lived gateway (HTTP server on `http.port`, local control socket,
+      // supervisor) spawns this command again as the instance and forwards HTTP to it over the
+      // control channel (ADR 0054 §1 / §3). `--daemon` only marks a background run.
+      const instanceArgs = command.args.filter((argument: string) => argument !== '--daemon' && argument !== '-d');
+      process.exitCode = await runGateway({ root, options: parsed, args: ['runtime', 'start', ...instanceArgs] });
+      return;
+    }
+    // The instance composition root lives in the project's `zhin.js` (ADR 0054 §0). Under the
+    // gateway it serves HTTP over the control channel; `--standalone` (dev / test only) runs it
+    // here with its own Node HTTP server.
     const { runStartCommand } = await importProjectInstance(root);
     await runStartCommand({
       root,
       args: command.args,
+      standaloneHttp: parsed.standalone,
       writeOutput: (value) => process.stdout.write(value),
       writeError: (value) => process.stderr.write(value),
     });

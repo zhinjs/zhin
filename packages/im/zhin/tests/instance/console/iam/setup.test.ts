@@ -2,7 +2,8 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createDatabaseHost } from '@zhin.js/core/runtime';
-import { createConsoleEventHub, createHttpHost, type ProcessHttpHost } from '@zhin.js/host-http';
+import { createConsoleEventHub } from '@zhin.js/host-http';
+import { createHttpHost, type ProcessHttpHost } from '@zhin.js/host-http/node';
 import { createConfigDocument, createPluginLifecycleStore, resolvePluginLifecycleFile } from '@zhin.js/runtime';
 import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
 import { ConsoleConfigurationStore } from '../../../../../../host/gateway/src/config/configuration.js';
@@ -33,12 +34,12 @@ async function startHost(root: string, options: { token?: string } = {}) {
   const http: ProcessHttpHost = createHttpHost({ host: '127.0.0.1', port: 0, ...(options.token ? { token: options.token } : {}) });
   const configStore = new ConsoleConfigurationStore({ projectRoot: root, document: createConfigDocument(join(root, 'zhin.config.yml')) });
   const requestRestart = vi.fn();
-  const iam = installConsoleIam(http, { database, configStore, projectRoot: root, requestRestart });
+  const iam = installConsoleIam(http, { database: database.gatewayTableHost(), configStore, projectRoot: root, requestRestart });
   registerConsoleRpcRoute({ http, base: '/api', projectRoot: root, consoleRuntime: { runView: async () => ({ pages: [] }) } as unknown as ConsoleRuntime,
     hub: createConsoleEventHub(), pluginLifecycleFile: resolvePluginLifecycleFile(root), pluginLifecycleStore: createPluginLifecycleStore(root),
     configuration: configStore, consoleIam: () => iam.service,
   } as Parameters<typeof registerConsoleRpcRoute>[0]);
-  http.route('GET', '/api/system/status', (_request, response) => { response.end('{"ok":true}'); });
+  http.route('GET', '/api/system/status', () => new Response('{"ok":true}'));
   await database.start();
   await iam.activate();
   const { origin } = await http.listen();
@@ -143,6 +144,19 @@ describe('/auth and iam.* after setup', () => {
     expect((await host.call('GET', '/system/status', undefined, vera)).status).toBe(401);
   });
 
+  it('denies a delegated plugin RPC that no plugin dispatcher answers and audits it', async () => {
+    const { host, owner } = await initialised();
+    await host.rpc('iam.users.create', { username: 'olga', password: PASSWORD, bindings: [{ role: 'operator' }] }, owner);
+    const olga = (await host.call('POST', '/auth/login', { username: 'olga', password: PASSWORD })).body.data.token as string;
+    // The gate admits plugin RPC only for the plugin dispatcher; a type it cannot address
+    // (dotted method) must not fall through to the runtime handlers.
+    expect(await host.rpc('plugin.root/missing.deep.status', {}, olga)).toMatchObject({ status: 403, body: { success: false, code: 'forbidden' } });
+    const audit = await host.rpc('iam.audit.list', { limit: 100 }, owner);
+    expect(audit.body.data.entries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ action: 'rpc:plugin.root/missing.deep.status', outcome: 'denied' }),
+    ]));
+  });
+
   it('changes the password, revoking other sessions, and refuses to remove the last owner over RPC', async () => {
     const { host, owner } = await initialised();
     const other = (await host.call('POST', '/auth/login', { username: 'alice', password: PASSWORD })).body.data.token as string;
@@ -225,6 +239,8 @@ describe('one setup flow for web and CLI (ADR 0049 §7)', () => {
     expect(await runConsoleInit(root, { database: 'sqlite', connection: { filename: '.zhin/accounts.sqlite' }, owner: 'alice', passwordStdin: true, yes: true }, io)).toBe(0);
     expect(io.errors).toEqual([]);
     expect(await readFile(join(root, 'zhin.config.yml'), 'utf8')).toContain('accounts.sqlite');
+    // ADR 0053 §5: init records onboarding steps 1–2 on the same state file as the Console.
+    expect(JSON.parse(await readFile(join(root, '.zhin/onboarding.json'), 'utf8')).steps).toEqual({ database: 'done', owner: 'done', ai: 'pending', adapters: 'pending' });
     const status = cliIo();
     expect(await runConsoleInit(root, { status: true }, status)).toBe(0);
     expect(JSON.parse(status.logs[0]!)).toMatchObject({ setupRequired: false, database: { dialect: 'sqlite', source: 'config' } });
@@ -239,6 +255,7 @@ describe('one setup flow for web and CLI (ADR 0049 §7)', () => {
   it('CLI user commands manage users offline and keep the last owner', async () => {
     const root = await project();
     expect(await runConsoleInit(root, { owner: 'alice', passwordStdin: true, yes: true }, cliIo(`${PASSWORD}\n`))).toBe(0);
+    expect(JSON.parse(await readFile(join(root, '.zhin/onboarding.json'), 'utf8')).steps).toMatchObject({ owner: 'done' });
     expect(await consoleUserActions.create(root, 'vera', { role: 'viewer', passwordStdin: true }, cliIo(`${PASSWORD}\n`))).toBe(0);
     const list = cliIo();
     expect(await consoleUserActions.list(root, list)).toBe(0);
@@ -260,7 +277,7 @@ async function startHostOn(root: string, filename = '.zhin/data.sqlite') {
   const database = createDatabaseHost({ dialect: 'sqlite', filename: join(root, filename) } as never);
   const http = createHttpHost({ host: '127.0.0.1', port: 0 });
   const configStore = new ConsoleConfigurationStore({ projectRoot: root, document: createConfigDocument(join(root, 'zhin.config.yml')) });
-  const iam = installConsoleIam(http, { database, configStore, projectRoot: root });
+  const iam = installConsoleIam(http, { database: database.gatewayTableHost(), configStore, projectRoot: root });
   await database.start();
   await iam.activate();
   const { origin } = await http.listen();

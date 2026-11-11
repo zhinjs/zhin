@@ -113,7 +113,7 @@ Open the Console **OneBot 11** page (route `/onebot11`) to:
 
 An administrator must review and confirm the existing account list before its first migration; identity and history are retained. New or replaced accounts are saved disabled and must be started explicitly. A connection update reconnects only that account; replacement uses a new internal identity and does not inherit Sessions or settings. If a commit outcome is unknown, refresh to verify it before taking another action.
 
-Reading requires `onebot11:read`; writes require `onebot11:write`. A global owner is unrestricted (only owners currently hold these plugin permissions). "Add endpoint" is equivalent to the old `onebot11 endpoint add` command.
+Reading requires `onebot11:read`; writes require `onebot11:write`. A global owner is unrestricted. Plugin permissions are granted by level (see [Plugin permission levels](../console/index.md#plugin-permission-levels)): `:read` to `viewer` and above, `:write` (`operate` level for these account permissions) to `operator` and above; a role bound to this adapter counts too, and the first migration additionally needs an administrator. "Add endpoint" is equivalent to the old `onebot11 endpoint add` command.
 
 ## Troubleshooting
 

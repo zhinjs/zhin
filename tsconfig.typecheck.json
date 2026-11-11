@@ -236,11 +236,29 @@
       "@zhin.js/gateway/usage": [
         "./packages/host/gateway/src/usage.ts"
       ],
+      "@zhin.js/gateway/onboarding": [
+        "./packages/host/gateway/src/onboarding.ts"
+      ],
       "@zhin.js/gateway/http": [
         "./packages/host/gateway/src/http.ts"
       ],
+      "@zhin.js/gateway/packages": [
+        "./packages/host/gateway/src/packages.ts"
+      ],
+      "@zhin.js/gateway/server": [
+        "./packages/host/gateway/src/server.ts"
+      ],
+      "@zhin.js/gateway/database": [
+        "./packages/host/gateway/src/database.ts"
+      ],
       "@zhin.js/host-http": [
         "./packages/host/http/src/index.ts"
+      ],
+      "@zhin.js/host-http/node": [
+        "./packages/host/http/src/node/index.ts"
+      ],
+      "@zhin.js/host-http/bridge": [
+        "./packages/host/http/src/bridge/index.ts"
       ],
       "@zhin.js/host-http-contract": [
         "./packages/host/http-contract/src/index.ts"

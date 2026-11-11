@@ -2,16 +2,16 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { HttpHandler } from '@zhin.js/host-http';
+import { authorizeConsoleHttp } from '@zhin.js/host-http';
 import { FileScheduleHistoryRepository, ScheduleExecutionHistory, type ScheduleRunContext, type ScheduleHistoryResult } from '@zhin.js/agent/runtime';
 import { registerScheduleExecutionRoutes } from '../../../src/instance/console/schedule-execution-routes.js';
 import { createScheduleExecutionFixture, createFixtureFileWriter, scheduleFixtureJob } from '../../../../agent/tests/helpers/schedule-execution-fixture.js';
 
 const state = vi.hoisted(() => ({ port: undefined as unknown, enabled: true }));
 vi.mock('../../../src/instance/console/agent-console.js', () => ({
-  withGenerationAgentConsole: async (_snapshots: unknown, run: (value: unknown) => Promise<void>) => {
-    if (!state.enabled) return false;
-    await run({ assistant: null, scheduleExecutions: state.port });
-    return true;
+  withGenerationAgentConsole: async (_snapshots: unknown, run: (value: unknown) => Promise<unknown>) => {
+    if (!state.enabled) return undefined;
+    return run({ assistant: null, scheduleExecutions: state.port });
   },
 }));
 const NOW = Date.UTC(2026, 10, 2, 12);
@@ -29,18 +29,12 @@ beforeEach(async () => {
 });
 afterEach(async () => { await history.drain(); history.close(); await rm(directory, { recursive: true, force: true }); });
 
-async function request(method: string, path: string, auth: 'full' | 'demo' = 'full') {
+async function request(method: string, path: string) {
   const url = new URL(path, 'http://synthetic-host');
-  let status = 0;
-  let body = '';
-  const headers: Record<string, string> = {};
-  const response = { setHeader: (name: string, value: string) => { headers[name] = value; },
-    writeHead: (code: number, values: Record<string, string>) => { status = code; Object.assign(headers, values); },
-    end: (value: string) => { body = value; } };
   const handler = routes.get(`${method} ${url.pathname}`);
   if (!handler) throw new Error('No registered test route');
-  await handler({} as never, response as never, url, auth);
-  return { status, headers, body: JSON.parse(body) };
+  const response = await handler(new Request(url, { method }), { url, params: {} });
+  return { status: response.status, headers: Object.fromEntries(response.headers), body: JSON.parse(await response.text()) };
 }
 function context(id: string): ScheduleRunContext {
   return { runId: id, jobId: 'deleted-job', queuedAt: NOW, source: 'manual', job: { id: 'deleted-job', label: 'Captured job title', enabled: true,
@@ -63,11 +57,11 @@ async function seed() {
   await history.drain();
 }
 
-it('requires full scope before querying or cleaning, independently of assistant.enabled', async () => {
-  const page = vi.spyOn(history, 'page'), cleanup = vi.spyOn(history, 'cleanup');
-  expect((await request('GET', '/api/assistant/executions', 'demo')).status).toBe(403);
-  expect((await request('POST', '/api/assistant/executions/cleanup', 'demo')).status).toBe(403);
-  expect(page).not.toHaveBeenCalled(); expect(cleanup).not.toHaveBeenCalled();
+it('requires a Console permission before querying or cleaning, independently of assistant.enabled', async () => {
+  // The Host checks the permission map before dispatch; a signed-in user without grants is refused.
+  const nobody = { kind: 'user', userId: 'nobody', username: 'nobody', displayName: 'nobody', credentialId: 'nobody', grants: [], roles: [] } as const;
+  expect(authorizeConsoleHttp(nobody, 'GET', '/assistant/executions')).toMatchObject({ allowed: false, status: 403 });
+  expect(authorizeConsoleHttp(nobody, 'POST', '/assistant/executions/cleanup')).toMatchObject({ allowed: false, status: 403 });
   expect((await request('GET', '/api/assistant/executions')).status).toBe(200);
 });
 

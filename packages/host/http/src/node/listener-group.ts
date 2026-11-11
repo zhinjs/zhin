@@ -4,23 +4,16 @@ import {
   type GenerationAdmissionBindable,
   type GenerationAdmissionGate,
 } from '@zhin.js/plugin-runtime';
-import {
-  createHttpHost,
-  type HttpHost,
-  type HttpHostAddress,
-  type HttpHostOptions,
-  type HttpRouteRegistration,
-  type ProcessHttpHost,
-  type WsHandle,
-  type WsRouteOptions,
-} from './http-host.js';
-import { TokenRegistry } from './token-registry.js';
-
-const addressProvider = Symbol('HttpHostAddressProvider');
-
-interface AddressAwareHttpHost {
-  readonly [addressProvider]: () => readonly HttpHostAddress[];
-}
+import type {
+  HttpHost,
+  HttpRouteRegistration,
+  WsHandle,
+  WsRouteOptions,
+} from '../http-host.js';
+import type { HttpHostAddress, HttpHostOptions } from '../host-options.js';
+import { TokenRegistry } from '../token-registry.js';
+import { httpHostAddressProvider as addressProvider, type AddressAwareHttpHost } from '../addresses.js';
+import { createHttpHost, type ProcessHttpHost } from './server.js';
 
 type BoundHttpHost = HttpHost & GenerationAdmissionBindable<HttpHost> & AddressAwareHttpHost;
 
@@ -94,13 +87,6 @@ export function createHttpHostGroup(
     },
   };
   return Object.freeze(runtime);
-}
-
-/** Returns every bound listener, ordered primary/local first. */
-export function listHttpHostAddresses(host: HttpHost): readonly HttpHostAddress[] {
-  const provider = (host as Partial<AddressAwareHttpHost>)[addressProvider];
-  if (typeof provider === 'function') return Object.freeze([...provider.call(host)]);
-  return Object.freeze(host.address ? [host.address] : []);
 }
 
 async function closeListeners(listeners: readonly ProcessHttpHost[]): Promise<void> {

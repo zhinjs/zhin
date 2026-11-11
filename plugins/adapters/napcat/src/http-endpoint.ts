@@ -3,7 +3,6 @@ import { toCanonicalSegments } from '@zhin.js/core';
 /**
  * NapCat HTTP endpoint — POST inbound events + HTTP API outbound.
  */
-import type { IncomingMessage, ServerResponse } from 'node:http';
 import {
   createEndpointSpecification, endpointSpec, type Endpoint, type EndpointSpecification,
   createRecallEndpointControl,
@@ -211,41 +210,31 @@ export class NapCatHttpEndpoint extends NapcatClient implements Endpoint {
   #setupRoutes(): void {
     const path = this.#options.config.post_path;
     this.#routeReleases.push(
-      this.#options.http.route('POST', path, async (request, response) => {
-        await this.#handlePost(request, response);
-      }, { summary: 'NapCat HTTP event callback', tags: ['napcat'] }),
+      this.#options.http.route('POST', path, (request) => this.#handlePost(request), { summary: 'NapCat HTTP event callback', tags: ['napcat'] }),
     );
   }
 
-  async #handlePost(request: IncomingMessage, response: ServerResponse): Promise<void> {
+  async #handlePost(request: Request): Promise<Response> {
     try {
       if (!verifyNapCatAccessToken(this.#options.config.access_token, request)) {
-        response.writeHead(403, { 'Content-Type': 'application/json' });
-        response.end(JSON.stringify({ message: 'Unauthorized' }));
-        return;
+        return new Response(JSON.stringify({ message: 'Unauthorized' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
       }
       const raw = await readTextBody(request);
       let ev: NapCatEvent;
       try {
         ev = JSON.parse(raw) as NapCatEvent;
       } catch {
-        response.writeHead(400, { 'Content-Type': 'application/json' });
-        response.end(JSON.stringify({ message: 'Invalid JSON' }));
-        return;
+        return new Response(JSON.stringify({ message: 'Invalid JSON' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
       }
       if (this.#open) {
         void this[endpointSpec].events.run(() => this.ingest(ev)).catch((error: unknown) => {
           this.#logger.debug(formatCompact({ op: 'napcat_receive_failed', error: error instanceof Error ? error.message : String(error) }));
         });
       }
-      response.writeHead(200, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ status: 'ok' }));
+      return new Response(JSON.stringify({ status: 'ok' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     } catch (error) {
       this.#logger.error('NapCat HTTP webhook error:', error);
-      if (!response.headersSent) {
-        response.writeHead(500, { 'Content-Type': 'application/json' });
-        response.end(JSON.stringify({ message: 'Internal Server Error' }));
-      }
+      return new Response(JSON.stringify({ message: 'Internal Server Error' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
     }
   }
 }

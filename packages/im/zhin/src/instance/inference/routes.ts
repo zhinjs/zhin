@@ -1,5 +1,18 @@
-import type { IncomingMessage } from 'node:http';
-import { HttpBodyError, readJsonBody, type AuthScope, type HttpHost } from '@zhin.js/host-http';
+import {
+  HttpBodyError,
+  isUserPrincipal,
+  jsonResponse,
+  readJsonBody,
+  type AuthScope,
+  type ConsolePrincipal,
+  type HttpHost,
+} from '@zhin.js/host-http';
+import { withNoStore } from '../console/no-store.js';
+
+/** The authenticated Console user behind a request, as the management principal id. */
+function principalId(principal: ConsolePrincipal | undefined): { principalId?: string } {
+  return isUserPrincipal(principal) ? { principalId: `user:${principal.userId}` } : {};
+}
 import { ProviderError } from '@zhin.js/ai/provider';
 import {
   PersonalSessionAccessError,
@@ -7,7 +20,6 @@ import {
   PersonalSessionRevisionConflictError,
   type PersonalSessionOwner,
 } from '@zhin.js/agent/personal-session';
-import { writeJson } from '@zhin.js/gateway/http';
 import { HostAccountRuntime } from '@zhin.js/agent/runtime';
 import { InferenceAuthenticationError } from '@zhin.js/agent/runtime';
 import { InferenceStoreError } from '@zhin.js/agent/runtime';
@@ -115,21 +127,17 @@ export function registerInferenceRoutes(options: InferenceRouteOptions): void {
   options.http.route(
     'GET',
     `${base}/owners`,
-    (_request, response, _url, scope, authenticated) => {
-      response.setHeader('cache-control', 'no-store');
+    (_request, { principal }) => {
       try {
-        const data = options.owners({
-          scope,
-          ...(authenticated ? { principalId: authenticated.principalId } : {}),
-        });
-        writeJson(response, 200, { success: true, data });
+        const data = options.owners({ scope: 'full', ...principalId(principal) });
+        return withNoStore(jsonResponse(200, { success: true, data }));
       } catch (error) {
         const result = failure(error);
-        writeJson(response, result.status, {
+        return withNoStore(jsonResponse(result.status, {
           success: false,
           code: result.code,
           error: '未关联可管理的模型身份',
-        });
+        }));
       }
     },
     {
@@ -144,7 +152,7 @@ export function registerInferenceRoutes(options: InferenceRouteOptions): void {
       input: Readonly<{
         lease: InferenceManagementLease;
         principal: InferenceManagementPrincipal;
-        request: IncomingMessage;
+        request: Request;
         url: URL;
         signal: AbortSignal;
       }>
@@ -153,20 +161,19 @@ export function registerInferenceRoutes(options: InferenceRouteOptions): void {
     options.http.route(
       method,
       `${base}${path}`,
-      async (request, response, url, scope, authenticated) => {
-        response.setHeader('cache-control', 'no-store');
+      async (request, context) => {
+        const { url } = context;
         const controller = new AbortController();
-        const abort = () => {
-          if (!response.writableEnded) controller.abort();
-        };
-        request.once('aborted', abort);
-        response.once('close', abort);
+        // Client disconnect before the response finished.
+        const abort = () => controller.abort();
+        if (request.signal.aborted) abort();
+        else request.signal.addEventListener('abort', abort, { once: true });
         let lease: InferenceManagementLease | undefined;
         let operationEntered = false;
         try {
           const principal = options.principal({
-            scope,
-            ...(authenticated ? { principalId: authenticated.principalId } : {}),
+            scope: 'full',
+            ...principalId(context.principal),
             ...(url.searchParams.has('owner')
               ? { requestedOwner: url.searchParams.get('owner')! }
               : {}),
@@ -180,21 +187,20 @@ export function registerInferenceRoutes(options: InferenceRouteOptions): void {
             url,
             signal: controller.signal,
           });
-          writeJson(response, 200, { success: true, data });
+          return withNoStore(jsonResponse(200, { success: true, data }));
         } catch (error) {
           const rejected = error instanceof InferenceApplyRejectedError;
           const result = failure(rejected ? error.rejection : error);
           const notCommitted =
             path === '/apply' && (!operationEntered || rejected || error instanceof HttpBodyError);
-          writeJson(response, result.status, {
+          return withNoStore(jsonResponse(result.status, {
             success: false,
             code: result.code,
             ...(notCommitted ? { mutationOutcome: 'not-committed' } : {}),
             error: '模型服务操作未完成',
-          });
+          }));
         } finally {
-          request.off('aborted', abort);
-          response.off('close', abort);
+          request.signal.removeEventListener('abort', abort);
           await lease?.release();
         }
       },

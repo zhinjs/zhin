@@ -3,6 +3,15 @@ import inquirer from 'inquirer';
 import fs from 'fs-extra';
 import path from 'path';
 import { logger } from '../utils/logger.js';
+import { probeGateway, runPackageOperationViaGateway } from '../utils/gateway.js';
+
+/** ADR 0054 §6: with a running gateway, uninstall through it; false when no gateway runs. */
+async function uninstallViaGateway(cwd: string, name: string, removeDependency: boolean): Promise<boolean> {
+  if (!await probeGateway({ root: cwd })) return false;
+  const result = await runPackageOperationViaGateway({ root: cwd }, { operation: 'uninstall', packages: [name], removeDependency });
+  if (!result.ok) process.exit(1);
+  return true;
+}
 
 const pluginCommand = new Command('plugin')
   .description('卸载插件')
@@ -17,6 +26,7 @@ const pluginCommand = new Command('plugin')
       process.exit(1);
     }
 
+    if (await uninstallViaGateway(cwd, name, options.removePkg === true)) return;
     const { PluginManagementWorkflow } = await import('@zhin.js/gateway/plugin-management');
     await new PluginManagementWorkflow(cwd).uninstall(name, undefined, undefined, {removeDependency: options.removePkg === true});
     logger.success(`已移除插件实例 "${name}"${options.removePkg ? '（无其他引用时移除依赖）' : '（保留依赖）'}`);
@@ -57,6 +67,7 @@ const adapterCommand = new Command('adapter')
     const workflow = new PluginManagementWorkflow(cwd);
     const direct = await workflow.inspect(name);
     const target = direct.declared ? name : name.startsWith('@') ? name : `@zhin.js/adapter-${name.replace(/^adapter-/, '')}`;
+    if (await uninstallViaGateway(cwd, target, options.removePkg === true)) return;
     await workflow.uninstall(target, undefined, undefined, {removeDependency: options.removePkg === true});
     logger.success(`已移除适配器实例 "${name}"${options.removePkg ? '（无其他引用时移除依赖）' : '（保留依赖）'}`);
 

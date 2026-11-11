@@ -2,7 +2,7 @@
 
 import { readFileSync } from 'node:fs';
 import { Command } from 'commander';
-import { stopCommand } from './commands/stop.js';
+import { logsCommand, restartCommand, startCommand, statusCommand, stopCommand, updateCommand } from './commands/lifecycle.js';
 import { buildCommand } from './commands/build.js';
 import { newCommand } from './commands/new.js';
 import { pubCommand } from './commands/pub.js';
@@ -39,7 +39,12 @@ program
   .version(version);
 
 // 注册命令
+program.addCommand(startCommand);
 program.addCommand(stopCommand);
+program.addCommand(restartCommand);
+program.addCommand(statusCommand);
+program.addCommand(logsCommand);
+program.addCommand(updateCommand);
 program.addCommand(buildCommand);
 program.addCommand(newCommand);
 program.addCommand(pubCommand);
@@ -65,15 +70,6 @@ program.addCommand(needsAgentCommand
   ? (await import('./commands/agent.js')).agentCommand
   : new Command('agent').description('Inspect Agent capabilities'));
 program.addCommand(runtimeCommand);
-program
-  .command('start')
-  .description('启动 Bot（同 zhin runtime start）')
-  .usage('[options]')
-  .allowUnknownOption(true)
-  .allowExcessArguments(true)
-  .action(async (_options, command) => {
-    await runtimeCommand.parseAsync(['start', ...command.args], { from: 'user' });
-  });
 program.addCommand(traceCommand);
 program.addCommand(usageCommand);
 program.addCommand(devCommand);

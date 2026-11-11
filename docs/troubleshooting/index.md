@@ -138,7 +138,7 @@ Console 持续显示离线或重连中，页面数据不再更新。
 
 ### 验证
 
-- `npx zhin doctor` 应通过，随后 `npx zhin runtime start` 不再出现配置校验错误。
+- `npx zhin doctor` 应通过，随后 `npx zhin start --foreground` 不再出现配置校验错误。
 
 </section>
 
@@ -187,7 +187,7 @@ Console 持续显示离线或重连中，页面数据不再更新。
 
 ### 验证
 
-- 重新 `pnpm install` 后，每个 zhin 包只有一个实际解析路径，`zhin runtime start --once` 输出 `"started": true`。
+- 重新 `pnpm install` 后，每个 zhin 包只有一个实际解析路径，`zhin start --once` 输出 `"started": true`。
 
 </section>
 

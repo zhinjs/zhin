@@ -7,14 +7,14 @@ import {
   ConsoleRuntime,
   consoleRuntimeToken,
 } from '@zhin.js/pagemanager/plugin-runtime';
-import type { ConsoleAccess, HttpHost } from '@zhin.js/host-http';
+import { jsonResponse, type ConsoleAccess, type HttpHandler, type HttpHost } from '@zhin.js/host-http';
 import {
   NativeDevelopmentModuleRuntime,
   type ModuleRuntime,
   type RootResourceInstaller,
 } from '@zhin.js/runtime';
 import { serveCanonicalEsm, serveClientAsset } from './asset-server.js';
-import { writeHtml, writeJson } from '@zhin.js/gateway/http';
+import { htmlResponse } from '@zhin.js/gateway/http';
 import { renderConsoleIndex, renderPageShell } from '@zhin.js/pagemanager';
 import { createTsxModuleLoader } from '@zhin.js/gateway/project';
 import {
@@ -24,6 +24,7 @@ import {
   resolveLocalizedPageTitle,
   type ExtendedRuntimeConsolePage,
 } from './entry-projection.js';
+import { internalErrorResponse } from './internal-error.js';
 
 const clientPublicBase = '/assets/client';
 const noStore = Object.freeze({ 'cache-control': 'no-store' });
@@ -67,32 +68,28 @@ export function registerConsoleHttp(options: {
 }): void {
   const http = options.http;
   // Browser ESM 裸导入（react/jsx-runtime 等）由 TypeScriptClientBuilder 改写为 /esm/<enc>.mjs
-  http.route('GET', '/esm/*', async (_request, response, url) => {
-    await serveCanonicalEsm(options.projectRoot, url.pathname, response);
-  });
-  http.route('GET', `${clientPublicBase}/*`, async (_request, response, url) => {
-    await serveClientAsset(options.clientOutDir, clientPublicBase, url.pathname, response);
-  });
-  http.route('GET', '/entries', async (request, response, url) => {
+  http.route('GET', '/esm/*', (_request, { url }) => serveCanonicalEsm(options.projectRoot, url.pathname));
+  http.route('GET', `${clientPublicBase}/*`, (_request, { url }) => (
+    serveClientAsset(options.clientOutDir, clientPublicBase, url.pathname)
+  ));
+  http.route('GET', '/entries', async (request, context) => {
     try {
-      const locale = url.searchParams.get('locale') ?? undefined;
-      const pages = await listPages(options.console, requestConsoleAccess(http, request, url), { locale });
-      writeJson(response, 200, projectConsoleEntries(pages, { locale }), noStore);
+      const locale = context.url.searchParams.get('locale') ?? undefined;
+      const pages = await listPages(options.console, requestConsoleAccess(http, request, context), { locale });
+      return jsonResponse(200, projectConsoleEntries(pages, { locale }), noStore);
     } catch (error) {
-      writeJson(response, 503, {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      });
+      return internalErrorResponse(503, 'console_entries_failed', error);
     }
   });
-  http.route('GET', '/console/api/pages', async (request, response, url) => {
-    const locale = url.searchParams.get('locale') ?? undefined;
+  http.route('GET', '/console/api/pages', async (request, context) => {
+    const locale = context.url.searchParams.get('locale') ?? undefined;
     // The list depends on the caller's token, so it must never be cached or shared.
-    writeJson(response, 200, { pages: await readConsolePages(options.console, requestConsoleAccess(http, request, url), locale) }, noStore);
+    return jsonResponse(200, { pages: await readConsolePages(options.console, requestConsoleAccess(http, request, context), locale) }, noStore);
   });
-  http.route('GET', '/console/api/topology', async (request, response, url) => {
+  http.route('GET', '/console/api/topology', async (request, context) => {
+    const { url } = context;
     try {
-      const topology = await options.console.runView(requestConsoleAccess(http, request, url), (catalog) => {
+      const topology = await options.console.runView(requestConsoleAccess(http, request, context), (catalog) => {
         const topology = catalog.topology();
         const route = url.searchParams.get('route') ?? undefined;
         return Object.freeze({
@@ -102,51 +99,40 @@ export function registerConsoleHttp(options: {
           ...(route === undefined ? {} : { route, resolution: topology.resolve(route) }),
         });
       });
-      writeJson(response, 200, topology, noStore);
+      return jsonResponse(200, topology, noStore);
     } catch {
-      response.writeHead(503);
-      response.end('ConsoleRuntime is not ready');
+      return new Response('ConsoleRuntime is not ready', { status: 503 });
     }
   });
-  const serveConsoleIndex = async (request: Parameters<Parameters<HttpHost['route']>[2]>[0], response: Parameters<Parameters<HttpHost['route']>[2]>[1], url: URL) => {
-    const locale = url.searchParams.get('locale') ?? undefined;
-    writeHtml(response, renderConsoleIndex(await readConsolePages(options.console, requestConsoleAccess(http, request, url), locale)));
+  const serveConsoleIndex: HttpHandler = async (request, context) => {
+    const locale = context.url.searchParams.get('locale') ?? undefined;
+    return htmlResponse(renderConsoleIndex(await readConsolePages(options.console, requestConsoleAccess(http, request, context), locale)));
   };
   http.route('GET', '/console', serveConsoleIndex);
   http.route('GET', '/pages', serveConsoleIndex);
   // Catch-all page routes must be registered last among exact/prefix peers;
   // matchHttpRoute prefers longest prefix, exact page routes win over shorter prefixes.
-  http.route('GET', '/*', async (request, response, url) => {
+  http.route('GET', '/*', async (request, context) => {
+    const { url } = context;
     if (url.pathname === '/console' || url.pathname === '/pages' || url.pathname.startsWith('/console/')
       || url.pathname.startsWith(`${clientPublicBase}/`)
       || url.pathname.startsWith('/esm/')) {
-      response.writeHead(404);
-      response.end();
-      return;
+      return new Response(null, { status: 404 });
     }
     try {
       // Resolve inside the view: ConsoleTopology#resolve reads the catalog lease,
       // which ends as soon as runView's callback returns.
       const match = await options.console.runView(
-        requestConsoleAccess(http, request, url),
+        requestConsoleAccess(http, request, context),
         (catalog) => catalog.topology().resolve(url.pathname),
       );
-      if (match.status === 'missing') {
-        response.writeHead(404);
-        response.end();
-        return;
-      }
-      if (match.status === 'forbidden') {
-        response.writeHead(403);
-        response.end('Forbidden');
-        return;
-      }
-      writeHtml(response, renderPageShell(match.page, {
+      if (match.status === 'missing') return new Response(null, { status: 404 });
+      if (match.status === 'forbidden') return new Response('Forbidden', { status: 403 });
+      return htmlResponse(renderPageShell(match.page, {
         runtimeSandbox: options.isSandboxPage?.(match.page) === true,
       }));
     } catch {
-      response.writeHead(503);
-      response.end('ConsoleRuntime is not ready');
+      return new Response('ConsoleRuntime is not ready', { status: 503 });
     }
   });
 }

@@ -8,7 +8,8 @@ import adapterFeature, { Adapter, AdapterIndex, adapterFeatureId, createEndpoint
 import commandFeature from '@zhin.js/command';
 import type { ConsoleConfigApplyResult, ConsoleConfigPatchResult, ConsoleConfigSource } from '@zhin.js/console-protocol';
 import { ImRuntime } from '@zhin.js/core/runtime';
-import { createConsoleEventHub, createHttpHost } from '@zhin.js/host-http';
+import { createConsoleEventHub } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
 import { definePlugin, type RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
 import { createConfigDocument, RootRuntime, type ModuleRuntime } from '@zhin.js/runtime';

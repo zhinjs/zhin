@@ -1,7 +1,6 @@
 /**
  * MCP Bearer auth helpers — exported for unit tests (L4 mesh-auth contract).
  */
-import type { IncomingMessage } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 
 export interface McpAuthConfig {
@@ -16,8 +15,16 @@ export function timingSafeEqualString(a: string, b: string): boolean {
   return timingSafeEqual(bufA, bufB);
 }
 
-export function isLocalhost(req: IncomingMessage): boolean {
-  const addr = req.socket.remoteAddress ?? '';
+/** What the auth helpers read from a request: its headers and the peer address. */
+export interface McpAuthRequest {
+  readonly headers: Headers;
+  readonly remoteAddress?: string;
+}
+
+export function isLocalhost(req: McpAuthRequest): boolean {
+  const addr = req.remoteAddress ?? '';
+  // Proxied requests are never local, whatever the proxy's own address.
+  if (req.headers.has('x-forwarded-for') || req.headers.has('forwarded')) return false;
   return (
     addr === '127.0.0.1'
     || addr === '::1'
@@ -27,7 +34,7 @@ export function isLocalhost(req: IncomingMessage): boolean {
 
 export function mcpAuthRequired(
   _body: unknown,
-  req: IncomingMessage,
+  req: McpAuthRequest,
   mcpCfg: McpAuthConfig,
   isProduction: boolean,
 ): boolean {
@@ -38,11 +45,11 @@ export function mcpAuthRequired(
 }
 
 export function verifyMcpBearer(
-  req: IncomingMessage,
+  req: McpAuthRequest,
   expectedToken: string,
 ): boolean {
   if (!expectedToken) return false;
-  const auth = req.headers.authorization ?? '';
+  const auth = req.headers.get('authorization') ?? '';
   const reqToken = auth.startsWith('Bearer ') ? auth.slice(7) : '';
   return timingSafeEqualString(expectedToken, reqToken);
 }

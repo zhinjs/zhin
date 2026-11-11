@@ -1,5 +1,6 @@
 import { afterEach, expect, it } from 'vitest';
-import { createHttpHost, type HttpHost } from '@zhin.js/host-http';
+import { type HttpHost } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import { installTestConsoleUsers, testUser } from '../utils/console-users.js';
 import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
 import { registerConsoleEntryRoutes } from '../../../src/instance/console/entry-routes.js';

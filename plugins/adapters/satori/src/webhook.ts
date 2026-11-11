@@ -2,7 +2,6 @@
  * Satori webhook HTTP: token → opcode → parse → admit.
  */
 import { timingSafeEqual } from 'node:crypto';
-import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { getLogger } from '@zhin.js/logger';
 import {
@@ -15,7 +14,7 @@ const logger = getLogger('satori');
 export interface SatoriWebhookHandler {
   readonly config: ResolvedSatoriWebhookConfig;
   readonly isOpen: boolean;
-  acceptHttp(request: IncomingMessage, response: ServerResponse): Promise<void>;
+  acceptHttp(request: Request): Promise<Response>;
 }
 
 export function registerSatoriWebhookRoutes(
@@ -24,55 +23,40 @@ export function registerSatoriWebhookRoutes(
 ): HttpRouteRegistration[] {
   const path = handler.config.path;
   return [
-    http.route('POST', path, async (request, response) => {
-      await handleSatoriWebhookRequest(request, response, handler);
-    }, { summary: 'Satori webhook callback', tags: ['satori'] }),
+    http.route('POST', path, (request) => handleSatoriWebhookRequest(request, handler), { summary: 'Satori webhook callback', tags: ['satori'] }),
   ];
 }
 
 export async function handleSatoriWebhookRequest(
-  request: IncomingMessage,
-  response: ServerResponse,
+  request: Request,
   handler: SatoriWebhookHandler,
-): Promise<void> {
+): Promise<Response> {
   try {
     if (!verifySatoriToken(handler.config.token, request)) {
-      response.writeHead(403, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ message: 'Unauthorized' }));
-      return;
+      return new Response(JSON.stringify({ message: 'Unauthorized' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
     }
     const opcode = resolveSatoriOpcode(request);
     if (opcode !== SatoriOpcode.EVENT && opcode !== SatoriOpcode.META) {
-      response.writeHead(200, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ message: 'OK' }));
-      return;
+      return new Response(JSON.stringify({ message: 'OK' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
-    if (handler.isOpen) {
-      await handler.acceptHttp(request, response);
-    } else {
-      response.writeHead(200, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ status: 'ok' }));
-    }
+    if (handler.isOpen) return await handler.acceptHttp(request);
+    return new Response(JSON.stringify({ status: 'ok' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   } catch (error) {
     logger.error('Satori webhook error:', error);
-    if (!response.headersSent) {
-      response.writeHead(500, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ message: 'Internal Server Error' }));
-    }
+    return new Response(JSON.stringify({ message: 'Internal Server Error' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
 }
 
-export function resolveSatoriOpcode(request: IncomingMessage): number | undefined {
-  const raw = request.headers['satori-opcode'] ?? request.headers['Satori-Opcode'];
-  const value = Array.isArray(raw) ? raw[0] : raw;
+export function resolveSatoriOpcode(request: { readonly headers: Headers }): number | undefined {
+  const value = request.headers.get('satori-opcode');
   if (value == null || value === '') return undefined;
   const parsed = Number.parseInt(String(value), 10);
   return Number.isNaN(parsed) ? undefined : parsed;
 }
 
-export function verifySatoriToken(token: string | undefined, request: IncomingMessage): boolean {
+export function verifySatoriToken(token: string | undefined, request: { readonly headers: Headers }): boolean {
   if (!token) return true;
-  const auth = request.headers.authorization ?? '';
+  const auth = request.headers.get('authorization') ?? '';
   const expected = Buffer.from(`Bearer ${token}`, 'utf8');
   const actual = Buffer.from(auth, 'utf8');
   return actual.length === expected.length && timingSafeEqual(actual, expected);

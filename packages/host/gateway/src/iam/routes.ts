@@ -1,31 +1,45 @@
-import type { IncomingMessage, ServerResponse } from 'node:http';
 import { CONSOLE_AUTH_ROUTES } from '@zhin.js/console-protocol';
 import {
   HttpBodyError,
   globalPermissions,
   isUserPrincipal,
+  jsonResponse,
   readJsonBody,
-  requestConsolePrincipal,
   requestMeta,
   type ConsolePrincipal,
+  type ConsoleRequestMeta,
   type HttpHost,
+  type TokenRegistry,
 } from '@zhin.js/host-http';
-import { writeJson } from '../http-response.js';
+import { CONSOLE_PERMISSIONS } from '@zhin.js/console-protocol';
+import { DATABASE_BUSY_RETRY_AFTER_SECONDS, isDatabaseBusyError } from '../database/project-database.js';
 import { IamError, type ConsoleIamService } from './service.js';
 import type { ConsoleSetupService } from './setup-service.js';
 
+/** What `/auth/*` needs from a Host: the gateway's HTTP server or an in-process `HttpHost`. */
+export interface ConsoleAuthRouteHost {
+  route: HttpHost['route'];
+  readonly tokenRegistry: TokenRegistry;
+}
+
 export interface RegisterConsoleAuthRoutesOptions {
-  readonly http: HttpHost;
+  readonly http: ConsoleAuthRouteHost;
   readonly base: string;
   readonly iam: () => ConsoleIamService | undefined;
   readonly setup: ConsoleSetupService;
   /** Restarts the process after the database changed (injected; never exits directly). */
   readonly requestRestart?: () => void;
+  /**
+   * Onboarding state (ADR 0053 §4): added to `GET /auth/setup`, and to `/auth/me` for callers
+   * holding `plugin.manage`.
+   */
+  readonly onboarding?: () => Promise<unknown>;
 }
 
 type Handler = (input: Readonly<{
-  request: IncomingMessage;
-  response: ServerResponse;
+  request: Request;
+  /** Audit / session metadata (peer address, user agent). */
+  meta: ConsoleRequestMeta;
   principal: ConsolePrincipal | undefined;
   body: () => Promise<Record<string, unknown>>;
 }>) => Promise<{ status: number; body: unknown; headers?: Record<string, string> }>;
@@ -35,30 +49,32 @@ const BODY_LIMIT = 16 * 1024;
 /** `/auth/*` (ADR 0049 §5, §7). The HTTP Host has already authenticated the caller. */
 export function registerConsoleAuthRoutes(options: RegisterConsoleAuthRoutesOptions): Array<() => void> {
   const { http, base } = options;
-  const route = (method: string, path: string, handler: Handler, summary: string) => http.route(method, `${base}${path}`, async (request, response) => {
-    response.setHeader('cache-control', 'no-store');
+  const route = (method: string, path: string, handler: Handler, summary: string) => http.route(method, `${base}${path}`, async (request, { principal, remoteAddress }) => {
+    const noStore = { 'cache-control': 'no-store' };
     try {
       const result = await handler({
         request,
-        response,
-        principal: requestConsolePrincipal(request),
+        meta: requestMeta(request, remoteAddress),
+        principal,
         body: async () => {
           const value = await readJsonBody<Record<string, unknown>>(request, { limit: BODY_LIMIT });
           return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
         },
       });
-      writeJson(response, result.status, result.body, result.headers);
+      return jsonResponse(result.status, result.body, { ...noStore, ...result.headers });
     } catch (error) {
       if (error instanceof HttpBodyError) {
-        writeJson(response, error.statusCode, { success: false, error: error.message });
-        return;
+        return jsonResponse(error.statusCode, { success: false, error: error.message }, noStore);
       }
       if (error instanceof IamError) {
-        writeJson(response, error.status, { success: false, code: error.code, error: error.message },
-          error.retryAfterMs ? { 'retry-after': String(Math.ceil(error.retryAfterMs / 1000)) } : {});
-        return;
+        return jsonResponse(error.status, { success: false, code: error.code, error: error.message },
+          error.retryAfterMs ? { ...noStore, 'retry-after': String(Math.ceil(error.retryAfterMs / 1000)) } : noStore);
       }
-      writeJson(response, 500, { success: false, code: 'failed', error: '操作失败' });
+      if (isDatabaseBusyError(error)) {
+        return jsonResponse(503, { success: false, code: 'database_busy', error: '数据库正忙，请稍后重试' },
+          { ...noStore, 'retry-after': String(DATABASE_BUSY_RETRY_AFTER_SECONDS) });
+      }
+      return jsonResponse(500, { success: false, code: 'failed', error: '操作失败' }, noStore);
     }
   }, { summary, tags: ['auth'] });
 
@@ -77,11 +93,20 @@ export function registerConsoleAuthRoutes(options: RegisterConsoleAuthRoutesOpti
     if (principal?.kind !== 'bootstrap') throw new IamError('forbidden', '需要初始化令牌');
   };
   const ok = (data: unknown, status = 200) => ({ status, body: { success: true, data } });
+  const onboarding = async (): Promise<{ onboarding?: unknown }> => {
+    if (!options.onboarding) return {};
+    try {
+      return { onboarding: await options.onboarding() };
+    } catch {
+      return {};
+    }
+  };
+  const managesPlugins = (permissions: readonly string[]) => permissions.includes(CONSOLE_PERMISSIONS.PLUGIN_MANAGE);
 
   return [
-    route('POST', CONSOLE_AUTH_ROUTES.LOGIN, async ({ request, body }) => {
+    route('POST', CONSOLE_AUTH_ROUTES.LOGIN, async ({ meta, body }) => {
       const input = await body();
-      const result = await requireIam().login(input.username, input.password, requestMeta(request));
+      const result = await requireIam().login(input.username, input.password, meta);
       return ok(result);
     }, 'Console login'),
     route('POST', CONSOLE_AUTH_ROUTES.LOGOUT, async ({ principal }) => {
@@ -92,20 +117,27 @@ export function registerConsoleAuthRoutes(options: RegisterConsoleAuthRoutesOpti
       const setupRequired = options.setup.setupRequired();
       if (!principal) return ok({ kind: 'anonymous', permissions: [], bindings: [], setupRequired });
       if (principal.kind === 'bootstrap') {
-        return ok({ kind: 'bootstrap', open: principal.open, permissions: globalPermissions(principal), bindings: [], setupRequired });
+        const permissions = globalPermissions(principal);
+        return ok({
+          kind: 'bootstrap', open: principal.open, permissions, bindings: [], setupRequired,
+          ...(managesPlugins(permissions) ? await onboarding() : {}),
+        });
       }
       const user = await options.iam()?.getUser(principal.userId);
+      // Level grants expanded over the loaded plugins' permission catalog.
+      const permissions = globalPermissions(principal, options.http.tokenRegistry?.pluginPermissions?.() ?? []);
       return ok({
         kind: principal.kind,
         user: user ? { id: user.id, username: user.username, displayName: user.displayName } : { id: principal.userId, username: principal.username, displayName: principal.displayName },
-        permissions: globalPermissions(principal),
+        permissions,
         bindings: principal.grants.map(grant => ({ role: grant.role, scope: grant.scope, permissions: grant.permissions })),
         setupRequired,
+        ...(managesPlugins(permissions) ? await onboarding() : {}),
       });
     }, 'Current Console principal'),
-    route('POST', CONSOLE_AUTH_ROUTES.PASSWORD, async ({ request, principal, body }) => {
+    route('POST', CONSOLE_AUTH_ROUTES.PASSWORD, async ({ meta, principal, body }) => {
       const input = await body();
-      const issued = await requireIam().changePassword(requireUser(principal), input.currentPassword, input.newPassword, requestMeta(request));
+      const issued = await requireIam().changePassword(requireUser(principal), input.currentPassword, input.newPassword, meta);
       return ok({ changed: true, ...issued });
     }, 'Change own password'),
     route('GET', CONSOLE_AUTH_ROUTES.TOKENS, async ({ principal }) => {
@@ -128,14 +160,14 @@ export function registerConsoleAuthRoutes(options: RegisterConsoleAuthRoutesOpti
     // ---------------------------------------------------------------- setup (bootstrap only)
     route('GET', CONSOLE_AUTH_ROUTES.SETUP, async ({ principal }) => {
       requireSetup(principal);
-      return ok(await options.setup.status());
+      return ok({ ...await options.setup.status(), ...await onboarding() });
     }, 'Setup status'),
-    route('POST', CONSOLE_AUTH_ROUTES.SETUP, async ({ request, principal, body }) => {
+    route('POST', CONSOLE_AUTH_ROUTES.SETUP, async ({ meta, principal, body }) => {
       requireSetup(principal);
       const input = await body();
       const { user } = await options.setup.createOwner({ username: input.username, password: input.password, displayName: input.displayName });
       const iam = requireIam();
-      const session = await iam.issueSession(user.id, requestMeta(request));
+      const session = await iam.issueSession(user.id, meta);
       iam.audit({ actor: 'bootstrap', action: 'auth.setup', target: `user:${user.id}`, outcome: 'ok' });
       return ok({ ...session, user }, 201);
     }, 'Create the first owner'),

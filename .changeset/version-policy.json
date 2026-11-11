@@ -30,6 +30,11 @@
       "package": "@zhin.js/plugin-runtime",
       "type": "minor",
       "reason": "PluginSetupContext 新增必需成员 configFor / isEnabledFor（ADR 0050），自行实现该接口的代码需要补齐"
+    },
+    {
+      "package": "@zhin.js/host-http-contract",
+      "type": "minor",
+      "reason": "HTTP 路由契约改为 Web 标准 Request / Response 与 WsConnection（ADR 0054 §2）：路由处理函数签名与上下文字段变化，Node 专用类型移出契约；所有者已同意本次发布允许 minor，只要 zhin.js 不升 major"
     }
   ]
 }

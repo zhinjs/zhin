@@ -22,7 +22,8 @@ Inside a project that has `@zhin.js/cli` installed, `npx zhin` uses it directly.
 
 | I want to… | Command |
 | --- | --- |
-| Start the bot (dev mode, hot reload on save) | `pnpm dev` (i.e. `zhin runtime start --watch source config`) |
+| Start the bot (dev mode, hot reload on save) | `pnpm dev` (i.e. `zhin start --foreground --watch source config`) |
+| Run in the background on a server / inspect / stop | `npx zhin start` / `npx zhin status`, `npx zhin logs -f` / `npx zhin stop` |
 | Connect a platform, configure AI or a database | `npx zhin setup` (optionally `--adapters` / `--ai` / `--database`) |
 | Diagnose environment or config problems | `npx zhin doctor` |
 | Check the config file is valid | `npx zhin config check` |
@@ -38,11 +39,22 @@ All commands, grouped by purpose, follow.
 
 ## Running
 
-### runtime: Run and Manage Projects
+### start / stop / restart / status / logs: Gateway and Instance
 
 ```bash
-zhin runtime start [--mode production] [--watch source config | --no-watch] [--daemon]
-zhin start [...]            # same as zhin runtime start; arguments pass through unchanged
+zhin start [--foreground] [--mode production] [--watch source config | --no-watch] [--once]
+zhin stop [--timeout <ms>]
+zhin restart [--gateway]
+zhin status [--json]
+zhin logs [-f] [-n <1-1000>]
+```
+
+`zhin start` starts the management gateway (long-lived; serves HTTP and the Console), which launches the Zhin instance. It runs in the background by default; `--foreground` keeps it attached (development, systemd, containers). While the gateway runs, the other commands talk to it over the local control socket `.zhin/gateway.sock`: `stop` stops instance and gateway, `restart` restarts only the instance (`--gateway` restarts a background gateway), `status` shows both (exit code 3 when not running), `logs` reads the instance logs. Without a gateway, `stop` / `restart` have nothing to do and `logs` reads `.zhin/logs/instance.log`. See [zhin start](./runtime.md).
+
+### runtime: Project Tools
+
+```bash
+zhin runtime start [...]    # gateway in the foreground; same as zhin start --foreground
 zhin runtime inspect
 zhin runtime codegen [dir] [--write] [--json]
 zhin runtime build
@@ -54,30 +66,23 @@ zhin runtime migrate [extract|cutover|verify|status] [--check|--write]
 
 | Subcommand | Purpose |
 | --- | --- |
-| `start` | Start the bot, with dev hot reload, production and daemon modes; see [zhin runtime start](./runtime.md) |
+| `start` | Run gateway and instance in the foreground (alias of `zhin start --foreground`); see [zhin start](./runtime.md) |
 | `inspect` | Print the project structure as JSON (plugin list, build plan) |
 | `codegen` | Scan the convention directories and print static type declarations for the plugin's capabilities plus a `capabilityGraph` summary; `--write` writes `plugin.capabilities.d.ts` into the target directory and `--json` prints the scan result. `dir` defaults to the current directory |
 | `build` / `publish` | Build and publish according to the project structure. `publish` only prints the plan by default; `--execute` runs it, and `--resume` continues after an interruption |
 | `migrate` | Generate and apply a project-structure migration plan: `--check` previews, `--write` writes atomically, `status` prints a readiness report |
 
-Scaffolded projects already have two conventional scripts:
+Scaffolded projects already have these conventional scripts:
 
 ```json
 {
   "scripts": {
-    "dev": "zhin runtime start --watch source config",
-    "start": "zhin runtime start --mode production --no-watch"
+    "dev": "zhin start --foreground --watch source config",
+    "start": "zhin start --foreground --mode production --no-watch",
+    "stop": "zhin stop"
   }
 }
 ```
-
-### stop: Stop the Bot
-
-```bash
-zhin stop
-```
-
-Stops the process started with `--daemon` in this project (reads `.zhin.pid`). With nothing running it just says so; it isn't an error.
 
 ### service: System Service
 
@@ -224,7 +229,7 @@ zhin install <plugin name or git URL> [--no-enable] [--dry-run]
 zhin add ...          # alias of install
 ```
 
-By default it installs with pnpm and writes the package reference into `plugins.<instanceKey>` in `zhin.config.yml`. Business settings use the top-level alias block; `disable_plugins` controls activation. For adapters, follow the prompt to run `zhin setup --adapters` and add an account.
+By default it installs with pnpm and writes the package reference into `plugins.<instanceKey>` in `zhin.config.yml`. Business settings use the top-level alias block; `disable_plugins` controls activation. When the plugin schema has required fields without defaults (such as an adapter's `endpoints` accounts), only the dependency is installed, nothing is declared, and the missing fields are printed: fill them in the Console and declare the plugin there (`gateway.plugins.declare`), run `zhin setup --adapters`, or add `plugins.<instanceKey>` and the instance block to the config file yourself and restart.
 
 | Option | Description |
 | --- | --- |
@@ -233,6 +238,8 @@ By default it installs with pnpm and writes the package reference into `plugins.
 | `--no-enable` | Install dependencies only; don't change config |
 | `--dry-run` | Print the install and config changes without writing |
 
+While the gateway runs (`zhin start`), the install goes through the gateway's dependency transaction: the instance is stopped, the package manager runs, then the instance starts and must report ready; on failure `package.json`, the lockfile and the config are restored and the old version is started again. Progress is streamed to the terminal. Through the gateway only npm registry packages (`name` or `name@range`) can be installed; git URLs, local paths and `--save-dev` need `zhin stop` first. Without a gateway the install runs directly in the project.
+
 ### uninstall: Uninstall
 
 ```bash
@@ -240,7 +247,15 @@ zhin uninstall plugin <name> [--remove-pkg]
 zhin uninstall adapter <name> [--remove-pkg]
 ```
 
-`name` can be an npm package name or an instanceKey; `--remove-pkg` also removes the dependency from `package.json`. Remove the system service with `zhin service uninstall`.
+`name` can be an npm package name or an instanceKey; `--remove-pkg` also removes the dependency from `package.json`. While the gateway runs, the uninstall goes through it (instance stopped and started, rolled back on failure). Remove the system service with `zhin service uninstall`.
+
+### update: Update Dependencies
+
+```bash
+zhin update [package | package@exact-version ...]
+```
+
+Without package names every dependency is updated (`pnpm update`). While the gateway runs the same transaction goes through it (stop instance → update → start instance, rolled back on failure); otherwise it runs directly.
 
 ### search / info: Discover Plugins
 
@@ -370,7 +385,7 @@ States returned by `status`:
 
 ## Working with a running bot
 
-These commands talk to a running bot over HTTP, so start it with `zhin runtime start` with the HTTP service enabled first.
+These commands talk to a running bot over HTTP, so start it with `zhin start` with the HTTP service enabled first.
 
 ### send: Send a Message to a Running Bot
 
@@ -390,7 +405,7 @@ Refreshes a status panel in the terminal (stats, accounts, assistant jobs). `--o
 
 ### schedule: Persistent Scheduled Tasks
 
-Have the AI run a prompt at given times. The command talks to the running instance through the Host API and takes effect immediately; the bot must be started with `zhin runtime start` and have `assistant.enabled`.
+Have the AI run a prompt at given times. The command talks to the running instance through the Host API and takes effect immediately; the bot must be started with `zhin start` and have `assistant.enabled`.
 
 ```bash
 zhin schedule list
@@ -496,10 +511,11 @@ Per day: turns, model calls, calls per turn and per-call input tokens (p50 / p90
 
 | Code | Meaning |
 | --- | --- |
-| `51` | Console requested a restart (the daemon starts a new process) |
-| `75` | The runtime requires a restart (e.g. lockfile changed); the daemon restarts with storm protection |
+| `0` | Normal exit |
+| `130` | Interrupted by a signal |
+| other non-zero | The instance failed to start or crashed and was not restarted; restarts are requested from the supervisor over the control channel, not through exit codes |
 
-Process model and hot-reload behavior: [zhin runtime start](./runtime.md).
+Process model and hot-reload behavior: [zhin start](./runtime.md).
 
 ## Migrating app instance declarations {#migrate-instances}
 

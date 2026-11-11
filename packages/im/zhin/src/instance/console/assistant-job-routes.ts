@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { readJsonBody, type HttpHost } from '@zhin.js/host-http';
+import { readJsonBody, type HttpHost, jsonResponse } from '@zhin.js/host-http';
 import type { SnapshotReader } from '@zhin.js/plugin-runtime';
 import { parseCron } from '@zhin.js/schedule';
 import { withGenerationAgentConsole } from './agent-console.js';
-import { writeJson } from '@zhin.js/gateway/http';
+import { internalErrorResponse } from './internal-error.js';
 
 const CRON_KINDS = new Set(['solar', 'lunar', 'workday', 'freeDay']);
 const NOTIFY_CHANNELS = new Set(['im', 'silent', 'log']);
@@ -81,28 +81,20 @@ export function registerAssistantJobRoutes(options: Readonly<{
       },
       body: unknown,
     ) => Promise<{ status: number; body: unknown }>,
-  ): Parameters<HttpHost['route']>[2] => async (request, response, _url, authScope) => {
-    if (authScope !== 'full') {
-      writeJson(response, 403, { success: false, error: '需要登录 Console 才能修改调度任务' });
-      return;
-    }
+  ): Parameters<HttpHost['route']>[2] => async (request) => {
     const body = await readJsonBody(request);
     const handled = await withGenerationAgentConsole(snapshots, async ({ assistant }) => {
       if (!assistant) {
-        writeJson(response, 404, { success: false, error: DISABLED });
-        return;
+        return jsonResponse(404, { success: false, error: DISABLED });
       }
       try {
         const result = await operation(assistant.jobs, body);
-        writeJson(response, result.status, result.body);
+        return jsonResponse(result.status, result.body);
       } catch (error) {
-        writeJson(response, 500, {
-          success: false,
-          error: error instanceof Error ? error.message : String(error),
-        });
+        return internalErrorResponse(500, 'assistant_job_failed', error);
       }
     });
-    if (!handled) writeJson(response, 404, { success: false, error: DISABLED });
+    return handled ?? jsonResponse(404, { success: false, error: DISABLED });
   };
 
   http.route('POST', `${base}/assistant/jobs`, guarded(async (jobs, body) => {

@@ -23,7 +23,7 @@ Use `/pub/health` and `/pub/ready` for health checks; see [6. Monitoring and ale
 
 - Use Node `>=22.19.0` (projects and the compiled IM library) and commit the lockfile.
 - Run `zhin doctor`, `pnpm build`, and project tests.
-- Run `zhin runtime start --once --mode test` to prove assembly without a long-lived supervisor.
+- Run `zhin start --once --mode test` to prove assembly (one foreground run; the gateway exits with the instance).
 - Record the commit, lockfile hash, configuration version, and data restore point.
 
 The minimum production configuration is an executable fixture:
@@ -43,6 +43,16 @@ flowchart LR
 ```
 
 The proxy must preserve Authorization, raw Webhook bodies, SSE streaming, and WebSocket Upgrade. Never cache `/api/events` or rewrite a body that a platform signature covers.
+
+Behind a reverse proxy, set `http.trustProxy`; otherwise login rate limiting and audit IPs only see the proxy:
+
+```yaml
+http:
+  host: 127.0.0.1
+  trustProxy: [loopback]   # trust the same-host proxy only; also accepts IPs / CIDRs, a hop count, or true
+```
+
+It is off by default: the TCP peer is the client and any client-supplied `X-Forwarded-For` / `Forwarded` is ignored. When on, forwarding headers count only when sent by a trusted proxy, walked from the proxy towards the client up to the first untrusted hop. A proxied request (one carrying a forwarding header) never counts as local: adapter reverse WebSockets without `access_token` and the MCP / A2A localhost exemption refuse it, so endpoints exposed through a same-host proxy need credentials.
 
 `GET /pub/health` reports process liveness. `GET /pub/ready` reports runtime readiness, returning 503 before the first committed generation and 200 when required components are ready. The public response contains only `ready`.
 
@@ -127,17 +137,23 @@ The image keeps your project's own `zhin.config.yml`, while the Secret projects 
 ## 4. Process supervision
 
 ```bash
-# Container or external supervisor: foreground, logs on stdout
-zhin runtime start --mode production --no-watch
+# Container or external supervisor: foreground, logs on stdout (this is pnpm start)
+zhin start --foreground --mode production --no-watch
+
+# Bare metal without a process manager: background gateway
+zhin start --mode production --no-watch
+zhin status          # gateway and instance state; exit code 3 when not running
+zhin logs -f         # instance logs
+zhin stop
 
 # Linux: install a user-level systemd service
 zhin service install --user
 zhin service status --user
 ```
 
-On macOS, use the launchd service commands without `--user`. Keep one restart owner: with systemd, launchd, Kubernetes, or PM2, let the external supervisor own a foreground Runtime. Use `--daemon` only for a directly managed bare-metal process.
+On macOS, use the launchd service commands without `--user`. Keep one restart owner: with systemd, launchd, Kubernetes, or PM2, let the external supervisor own a foreground gateway (`--foreground`). Use the background `zhin start` only for a directly managed bare-metal process.
 
-Exit code 51 means Console requested a restart; 75 means Runtime requires one. An external supervisor should restart both while enforcing a storm limit.
+The gateway (ADR 0054) is long-lived and supervises the instance: Console restarts, dependency changes and instance crashes are handled by restarting the instance inside the gateway; after a crash storm the instance stays `crashed` while the gateway stays online (the Console shows the logs and can start it again). The gateway exits with code 0 on SIGTERM / `zhin stop` and non-zero when it fails to start; an external supervisor only needs to restart it after an abnormal exit. Exit codes and a systemd example: [zhin start](../cli/runtime.md#exit-codes).
 
 ## 5. Durable state and backup
 
@@ -155,7 +171,7 @@ Use a database snapshot or stop writes before copying SQLite. Use the native bac
 
 Monitor the HTTP probe, restart count, Endpoint health, SSE recovery gaps, error rate, database capacity, collaborations (Engagements) frozen and waiting for a human, and Agent failure/cancellation ratio.
 
-Logs go to stdout by default; daemon mode writes `.zhin/runtime.log`. Configure host-level rotation. Include Endpoint, Project, runtimeId, or runId in alerts instead of forwarding only an error string.
+In the foreground the instance logs go to stdout and `.zhin/logs/instance.log`; in the background the gateway's own output goes to `.zhin/logs/gateway.log` and the instance logs to `.zhin/logs/instance.log`, rotated past 10 MiB (5 files kept). Include Endpoint, Project, runtimeId, or runId in alerts instead of forwarding only an error string.
 
 ## 7. Release and rollback
 

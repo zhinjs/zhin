@@ -8,6 +8,7 @@ import {
   IAM_RPC,
   INBOX_RPC,
   LOGIN_RPC,
+  ONBOARDING_RPC,
   PLUGIN_RPC,
   SIDE_EVENT_RPC,
   bindingScopeCovers,
@@ -22,7 +23,7 @@ import {
 
 describe('Console permission catalog (ADR 0049 §3)', () => {
   it('maps every catalogued Console RPC to a known permission', () => {
-    const catalogs = [SIDE_EVENT_RPC, LOGIN_RPC, INBOX_RPC, ENDPOINT_RPC, CONFIG_RPC, PLUGIN_RPC, AGENT_COLLABORATION_RPC, IAM_RPC];
+    const catalogs = [SIDE_EVENT_RPC, LOGIN_RPC, INBOX_RPC, ENDPOINT_RPC, CONFIG_RPC, PLUGIN_RPC, AGENT_COLLABORATION_RPC, IAM_RPC, ONBOARDING_RPC];
     for (const catalog of catalogs) {
       for (const type of Object.values(catalog)) {
         expect(CONSOLE_RPC_PERMISSIONS[type], type).toBeDefined();
@@ -94,6 +95,7 @@ describe('Console permission catalog (ADR 0049 §3)', () => {
     expect(CONSOLE_BUILTIN_ROLES.viewer.permissions.every(p => p.endsWith('.view') || p.endsWith('.read'))).toBe(true);
     expect(CONSOLE_BUILTIN_ROLES.operator.permissions).toEqual([
       'status.view', 'endpoint.view', 'endpoint.operate', 'feature.view', 'feature.configure', 'feature.toggle', 'agent.view', 'ops.schedule.read',
+      'plugin.perms.read', 'plugin.perms.operate',
     ]);
   });
 
@@ -111,6 +113,9 @@ describe('Console permission catalog (ADR 0049 §3)', () => {
     expect(resolveConsoleHttpPermission('GET', '/introspectionx')).toBeNull();
     expect(resolveConsoleHttpPermission('GET', '/console/terminal/targets')?.permission).toBe('ops.terminal');
     expect(resolveConsoleHttpPermission('POST', '/console/terminal/tickets')?.permission).toBe('ops.terminal');
+    // Gateway-owned (ADR 0054 §4, ADR 0053 §4).
+    expect(resolveConsoleHttpPermission('GET', '/gateway/packages/progress')?.permission).toBe('plugin.manage');
+    expect(CONSOLE_RPC_PERMISSIONS[ONBOARDING_RPC.UPDATE]).toBe('plugin.manage');
   });
 
   it('maps only the Console WebSocket paths, including per-endpoint sandbox sockets', () => {

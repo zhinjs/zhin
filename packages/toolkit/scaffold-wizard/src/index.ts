@@ -20,6 +20,7 @@ export {
   ADAPTERS,
   findAdapterByPackage,
   configureAdapters,
+  buildDefaultAdapterSetup,
   buildFieldBasedInstanceConfig,
   generateAdapterEnvVars,
   collectAdapterPluginConfigs,

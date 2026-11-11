@@ -46,10 +46,35 @@
       "development": "./src/usage.ts",
       "import": "./lib/usage.js"
     },
+    "./onboarding": {
+      "types": "./lib/onboarding.d.ts",
+      "development": "./src/onboarding.ts",
+      "import": "./lib/onboarding.js"
+    },
     "./http": {
       "types": "./lib/http.d.ts",
       "development": "./src/http.ts",
       "import": "./lib/http.js"
+    },
+    "./packages": {
+      "types": "./lib/packages.d.ts",
+      "development": "./src/packages.ts",
+      "import": "./lib/packages.js"
+    },
+    "./server": {
+      "types": "./lib/server.d.ts",
+      "development": "./src/server.ts",
+      "import": "./lib/server.js"
+    },
+    "./database": {
+      "types": "./lib/database.d.ts",
+      "development": "./src/database.ts",
+      "import": "./lib/database.js"
+    },
+    "./local": {
+      "types": "./lib/local.d.ts",
+      "development": "./src/local.ts",
+      "import": "./lib/local.js"
     }
   },
   "files": [
@@ -130,9 +155,29 @@
         "types": "./lib/usage.d.ts",
         "import": "./lib/usage.js"
       },
+      "./onboarding": {
+        "types": "./lib/onboarding.d.ts",
+        "import": "./lib/onboarding.js"
+      },
       "./http": {
         "types": "./lib/http.d.ts",
         "import": "./lib/http.js"
+      },
+      "./packages": {
+        "types": "./lib/packages.d.ts",
+        "import": "./lib/packages.js"
+      },
+      "./server": {
+        "types": "./lib/server.d.ts",
+        "import": "./lib/server.js"
+      },
+      "./database": {
+        "types": "./lib/database.d.ts",
+        "import": "./lib/database.js"
+      },
+      "./local": {
+        "types": "./lib/local.d.ts",
+        "import": "./lib/local.js"
       }
     }
   },

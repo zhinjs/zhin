@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import type { IncomingMessage } from 'node:http';
 import {
   startLocalBackend,
   startSshBackend,
@@ -61,6 +60,8 @@ export interface TerminalTarget {
   readonly label: string;
   readonly available: boolean;
   readonly reason?: string;
+  /** SSH target configured with `insecureAcceptAnyHostKey`: the host key is not verified. */
+  readonly insecureHostKey?: true;
 }
 
 export interface TerminalSessionInfo {
@@ -71,14 +72,20 @@ export interface TerminalSessionInfo {
   readonly startedAt: number;
 }
 
-/** Structural subset of a `ws` WebSocket. */
+/** Structural subset of a `WsConnection` (`@zhin.js/host-http`). */
 export interface TerminalSocket {
-  readonly readyState: number;
-  send(data: string | Buffer, options?: { binary?: boolean }, callback?: (error?: Error) => void): void;
+  /** Text frames as strings, binary frames as bytes. */
+  send(data: string | Uint8Array): void;
   close(code?: number, reason?: string): void;
-  on(event: 'message', listener: (data: unknown, isBinary: boolean) => void): unknown;
-  on(event: 'close', listener: () => void): unknown;
-  on(event: 'error', listener: (error: Error) => void): unknown;
+  onMessage(listener: (data: string | Uint8Array) => void): () => void;
+  onClose(listener: (code: number, reason: string) => void): () => void;
+  readonly bufferedAmount: number;
+}
+
+/** The accepted upgrade a terminal session runs on. */
+export interface TerminalConnection extends TerminalSocket {
+  readonly url: URL;
+  readonly remoteAddress?: string;
 }
 
 export interface TerminalServiceOptions {
@@ -101,7 +108,6 @@ export class TerminalRequestError extends Error {
   }
 }
 
-const OPEN = 1;
 export const TERMINAL_CLOSE_CODES = Object.freeze({
   normal: 1000,
   startFailed: 1011,
@@ -113,13 +119,19 @@ export const TERMINAL_CLOSE_CODES = Object.freeze({
 const MAX_DIMENSION = 1000;
 const MAX_TEXT_FRAME = 4096;
 const MAX_INPUT_FRAME = 1 << 20;
-const PAUSE_PENDING = 64;
-const RESUME_PENDING = 16;
+// Output backpressure on the socket's send buffer.
+const PAUSE_BUFFERED = 256 * 1024;
+const RESUME_BUFFERED = 64 * 1024;
+const RESUME_POLL_MS = 25;
+/** Close code of a connection that dropped without a close frame. */
+const ABNORMAL_CLOSURE = 1006;
 
 interface Session {
   readonly info: TerminalSessionInfo;
   readonly principal: TerminalPrincipal;
   readonly socket: TerminalSocket;
+  /** False once the peer or the server closed the socket. */
+  readonly open: () => boolean;
   readonly ip?: string;
   backend?: TerminalBackend;
   ended: boolean;
@@ -184,9 +196,10 @@ export class TerminalService {
       targets.push({
         id: target.name,
         kind: 'ssh',
-        label: target.label ?? sshLabel(target),
+        label: `${target.label ?? sshLabel(target)}${target.insecureAcceptAnyHostKey ? '（不安全：未校验主机密钥）' : ''}`,
         available: problem === undefined,
         ...(problem === undefined ? {} : { reason: problem }),
+        ...(target.insecureAcceptAnyHostKey ? { insecureHostKey: true as const } : {}),
       });
     }
     return targets;
@@ -214,34 +227,25 @@ export class TerminalService {
    * also carried a bearer credential; it must then match the ticket's principal.
    */
   async handleConnection(
-    socket: TerminalSocket,
-    request: Pick<IncomingMessage, 'url' | 'socket'>,
+    socket: TerminalConnection,
     presentedPrincipal?: TerminalPrincipal | null,
   ): Promise<void> {
-    const ip = request.socket?.remoteAddress ?? undefined;
+    const ip = socket.remoteAddress;
     // Listen before any await: the peer may leave while authorization or startup is pending.
     const connection: { session?: Session; gone: boolean } = { gone: false };
-    socket.on('close', () => {
+    const open = () => !connection.gone;
+    socket.onClose((code) => {
       connection.gone = true;
-      connection.session?.end('disconnect');
+      connection.session?.end(code === ABNORMAL_CLOSURE ? 'error' : 'disconnect');
     });
-    socket.on('error', () => {
-      connection.gone = true;
-      connection.session?.end('error');
+    socket.onMessage((data) => {
+      if (connection.session) this.#onMessage(connection.session, data, typeof data !== 'string');
     });
-    socket.on('message', (data, isBinary) => {
-      if (connection.session) this.#onMessage(connection.session, data, isBinary);
-    });
-    let ticket: string | null = null;
-    try {
-      ticket = new URL(request.url ?? '/', 'http://localhost').searchParams.get('ticket');
-    } catch {
-      ticket = null;
-    }
+    const ticket = socket.url.searchParams.get('ticket');
     const consumed = this.#tickets.consume(ticket, presentedPrincipal?.id);
     if (!consumed.ok) {
       this.#audit({ action: 'terminal.denied', actor: presentedPrincipal?.id ?? 'anonymous', target: '', outcome: 'denied', ip, detail: { reason: `ticket-${consumed.reason}` } });
-      reject(socket, TERMINAL_CLOSE_CODES.invalidTicket, 'invalid-ticket', '终端票据无效或已过期');
+      reject(socket, TERMINAL_CLOSE_CODES.invalidTicket, 'invalid-ticket', '终端票据无效或已过期', open);
       return;
     }
     const { principal, target: targetId, cols, rows } = consumed.grant;
@@ -249,22 +253,22 @@ export class TerminalService {
       // Re-check: the principal may have been revoked since the ticket was issued.
       await this.requireAuthorized(principal, ip);
     } catch {
-      reject(socket, TERMINAL_CLOSE_CODES.forbidden, 'forbidden', '需要 ops.terminal 权限');
+      reject(socket, TERMINAL_CLOSE_CODES.forbidden, 'forbidden', '需要 ops.terminal 权限', open);
       return;
     }
     if (this.#closed) {
-      reject(socket, TERMINAL_CLOSE_CODES.forbidden, 'disabled', '终端未启用');
+      reject(socket, TERMINAL_CLOSE_CODES.forbidden, 'disabled', '终端未启用', open);
       return;
     }
     if (connection.gone) return;
     if (this.#sessions.size >= this.config.maxSessions) {
       this.#audit({ action: 'terminal.denied', actor: principal.id, target: targetId, outcome: 'denied', ip, detail: { reason: 'too-many-sessions' } });
-      reject(socket, TERMINAL_CLOSE_CODES.tooManySessions, 'too-many-sessions', `终端会话已达上限（${this.config.maxSessions}）`);
+      reject(socket, TERMINAL_CLOSE_CODES.tooManySessions, 'too-many-sessions', `终端会话已达上限（${this.config.maxSessions}）`, open);
       return;
     }
     const sshTarget = targetId === 'local' ? undefined : this.config.ssh.find((entry) => entry.name === targetId);
     if (targetId !== 'local' && !sshTarget) {
-      reject(socket, TERMINAL_CLOSE_CODES.badRequest, 'unknown-target', '未知的终端目标');
+      reject(socket, TERMINAL_CLOSE_CODES.badRequest, 'unknown-target', '未知的终端目标', open);
       return;
     }
     const kind = sshTarget ? 'ssh' : 'local';
@@ -275,26 +279,31 @@ export class TerminalService {
       kind,
       startedAt: this.#now(),
     });
-    const live = this.#createSession(info, principal, socket, ip);
+    const live = this.#createSession(info, principal, socket, open, ip);
     connection.session = live;
     this.#sessions.set(info.sessionId, live);
 
-    let pending = 0;
-    let paused = false;
+    let resumeTimer: ReturnType<typeof setInterval> | undefined;
+    const resumeWhenDrained = () => {
+      if (live.ended || !open()) {
+        clearInterval(resumeTimer);
+        resumeTimer = undefined;
+        return;
+      }
+      if (socket.bufferedAmount > RESUME_BUFFERED) return;
+      clearInterval(resumeTimer);
+      resumeTimer = undefined;
+      live.backend?.resume();
+    };
     const events = {
       onData: (chunk: Buffer | string) => {
-        if (live.ended || socket.readyState !== OPEN) return;
-        pending += 1;
-        socket.send(typeof chunk === 'string' ? Buffer.from(chunk, 'utf8') : chunk, { binary: true }, () => {
-          pending -= 1;
-          if (paused && pending <= RESUME_PENDING) {
-            paused = false;
-            live.backend?.resume();
-          }
-        });
-        if (!paused && pending >= PAUSE_PENDING) {
-          paused = true;
+        if (live.ended || !open()) return;
+        // Output is always a binary frame; control messages are text.
+        socket.send(typeof chunk === 'string' ? Buffer.from(chunk, 'utf8') : chunk);
+        if (!resumeTimer && socket.bufferedAmount >= PAUSE_BUFFERED) {
           live.backend?.pause();
+          resumeTimer = setInterval(resumeWhenDrained, RESUME_POLL_MS);
+          resumeTimer.unref?.();
         }
       },
       onExit: (exit: TerminalExit) => live.end('process-exit', exit),
@@ -307,12 +316,13 @@ export class TerminalService {
         : await this.#startLocal({ cols, rows }, events);
     } catch (error) {
       const code = error instanceof TerminalStartError ? error.code : 'start-failed';
-      const message = error instanceof Error ? error.message : String(error);
+      // Only our own start errors are described to the client; others stay in the log.
+      const message = error instanceof TerminalStartError ? error.message : '终端启动失败';
       this.#sessions.delete(info.sessionId);
       live.ended = true;
       this.#audit({ action: 'terminal.session.start', actor: principal.id, target: targetId, outcome: 'error', ip, detail: { sessionId: info.sessionId, kind, code } });
       this.#options.logger?.warn?.(`terminal start failed | target=${targetId} | code=${code}`);
-      reject(socket, TERMINAL_CLOSE_CODES.startFailed, code, message);
+      reject(socket, TERMINAL_CLOSE_CODES.startFailed, code, message, open);
       return;
     }
     if (live.ended) {
@@ -322,7 +332,7 @@ export class TerminalService {
     }
     live.backend = backend;
     this.#audit({ action: 'terminal.session.start', actor: principal.id, target: targetId, outcome: 'ok', ip, detail: { sessionId: info.sessionId, kind } });
-    sendControl(socket, { type: 'ready', sessionId: info.sessionId, target: targetId, kind, cols, rows });
+    sendControl(socket, { type: 'ready', sessionId: info.sessionId, target: targetId, kind, cols, rows }, open);
     this.#resetIdle(live);
   }
 
@@ -349,11 +359,12 @@ export class TerminalService {
     return [...this.#sessions.values()].map((session) => session.info);
   }
 
-  #createSession(info: TerminalSessionInfo, principal: TerminalPrincipal, socket: TerminalSocket, ip?: string): Session {
+  #createSession(info: TerminalSessionInfo, principal: TerminalPrincipal, socket: TerminalSocket, open: () => boolean, ip?: string): Session {
     const session: Session = {
       info,
       principal,
       socket,
+      open,
       ...(ip ? { ip } : {}),
       ended: false,
       end: (reason, exit) => {
@@ -362,13 +373,13 @@ export class TerminalService {
         if (session.idleTimer) clearTimeout(session.idleTimer);
         this.#sessions.delete(info.sessionId);
         session.backend?.kill();
-        if (socket.readyState === OPEN) {
+        if (open()) {
           sendControl(socket, {
             type: 'exit',
             reason,
             code: exit?.code ?? null,
             ...(exit?.signal !== undefined ? { signal: exit.signal } : {}),
-          });
+          }, open);
           try {
             socket.close(TERMINAL_CLOSE_CODES.normal, reason);
           } catch {
@@ -401,7 +412,7 @@ export class TerminalService {
     if (!buffer) return;
     if (isBinary) {
       if (buffer.length > MAX_INPUT_FRAME) {
-        sendControl(session.socket, { type: 'error', code: 'frame-too-large', message: '输入帧过大' });
+        sendControl(session.socket, { type: 'error', code: 'frame-too-large', message: '输入帧过大' }, session.open);
         return;
       }
       this.#resetIdle(session);
@@ -409,7 +420,7 @@ export class TerminalService {
       return;
     }
     if (buffer.length > MAX_TEXT_FRAME) {
-      sendControl(session.socket, { type: 'error', code: 'bad-message', message: '控制消息过大' });
+      sendControl(session.socket, { type: 'error', code: 'bad-message', message: '控制消息过大' }, session.open);
       return;
     }
     let message: Record<string, unknown>;
@@ -418,13 +429,13 @@ export class TerminalService {
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('not an object');
       message = parsed as Record<string, unknown>;
     } catch {
-      sendControl(session.socket, { type: 'error', code: 'bad-message', message: '控制消息不是 JSON 对象' });
+      sendControl(session.socket, { type: 'error', code: 'bad-message', message: '控制消息不是 JSON 对象' }, session.open);
       return;
     }
     if (message.type === 'resize') {
       const size = parseSize(message.cols, message.rows);
       if (!size) {
-        sendControl(session.socket, { type: 'error', code: 'bad-message', message: `cols / rows 必须是 1–${MAX_DIMENSION} 的整数` });
+        sendControl(session.socket, { type: 'error', code: 'bad-message', message: `cols / rows 必须是 1–${MAX_DIMENSION} 的整数` }, session.open);
         return;
       }
       session.backend.resize(size);
@@ -432,10 +443,10 @@ export class TerminalService {
     }
     if (message.type === 'ping') {
       // Keep-alive only: does not reset the idle timer (idle means no input).
-      sendControl(session.socket, { type: 'pong' });
+      sendControl(session.socket, { type: 'pong' }, session.open);
       return;
     }
-    sendControl(session.socket, { type: 'error', code: 'bad-message', message: '未知的控制消息' });
+    sendControl(session.socket, { type: 'error', code: 'bad-message', message: '未知的控制消息' }, session.open);
   }
 
   #resetIdle(session: Session): void {
@@ -471,8 +482,8 @@ export class TerminalService {
     }
     return startSshBackend(ssh.module, target, credentials, size, events, {
       onHostKey: (fingerprint) => {
-        if (!target.hostFingerprint) {
-          this.#options.logger?.info?.(`terminal ssh ${target.name} host key ${fingerprint} (not pinned; set hostFingerprint to enforce)`);
+        if (target.insecureAcceptAnyHostKey) {
+          this.#options.logger?.warn?.(`terminal ssh ${target.name} host key ${fingerprint} accepted WITHOUT verification (insecureAcceptAnyHostKey); pin it with hostFingerprint`);
         }
       },
     });
@@ -507,8 +518,8 @@ function toBuffer(data: unknown): Buffer | undefined {
   return undefined;
 }
 
-function sendControl(socket: TerminalSocket, message: Record<string, unknown>): void {
-  if (socket.readyState !== OPEN) return;
+function sendControl(socket: TerminalSocket, message: Record<string, unknown>, open: () => boolean): void {
+  if (!open()) return;
   try {
     socket.send(JSON.stringify(message));
   } catch {
@@ -516,8 +527,8 @@ function sendControl(socket: TerminalSocket, message: Record<string, unknown>): 
   }
 }
 
-function reject(socket: TerminalSocket, code: number, errorCode: string, message: string): void {
-  sendControl(socket, { type: 'error', code: errorCode, message });
+function reject(socket: TerminalSocket, code: number, errorCode: string, message: string, open: () => boolean): void {
+  sendControl(socket, { type: 'error', code: errorCode, message }, open);
   try {
     socket.close(code, errorCode);
   } catch {

@@ -3,10 +3,18 @@ import { dirname, join } from 'node:path';
 import {
   CONSOLE_BUILTIN_ROLE_NAMES,
   CONSOLE_BUILTIN_ROLES,
+  CONSOLE_PLUGIN_LEVEL_PERMISSIONS,
+  consolePluginPermissionLevel,
   isConsolePermission,
+  isConsolePluginPermission,
   parseConsoleBindingScope,
+  permissionListHoldsPluginPermission,
+  pluginPermissionLevelResolver,
   type ConsoleBindingScope,
   type ConsoleGrant,
+  type ConsolePluginPermissionInfo,
+  type ConsolePluginPermissionLevelResolver,
+  type ConsoleRolePluginPermission,
 } from '@zhin.js/console-protocol';
 import type {
   ConsoleAccessProvider,
@@ -24,6 +32,7 @@ import {
   verifyAgainstDummy,
   verifyPassword,
 } from './crypto.js';
+import { isDatabaseBusyError } from '../database/project-database.js';
 import { LoginRateLimiter } from './rate-limit.js';
 import { IAM_TABLES } from './tables.js';
 
@@ -75,6 +84,11 @@ export interface ConsoleRoleView {
   readonly description: string;
   readonly builtin: boolean;
   readonly permissions: readonly string[];
+  /**
+   * Plugin permissions this role holds right now: by level (`plugin.perms.<level>`, expanded
+   * over the loaded plugins' catalog) or listed explicitly. Only on `listRoles` / role writes.
+   */
+  readonly pluginPermissions?: readonly ConsoleRolePluginPermission[];
 }
 
 export interface ConsoleTokenView {
@@ -114,6 +128,11 @@ export interface ConsoleIamServiceOptions {
   readonly auditRetentionMs?: number;
   readonly rateLimiter?: LoginRateLimiter;
   readonly onError?: (error: unknown) => void;
+  /**
+   * Plugin permission catalog of the loaded plugins (ids and declared-or-inferred levels).
+   * Without it, levels are inferred from the permission suffix.
+   */
+  readonly pluginPermissions?: () => readonly ConsolePluginPermissionInfo[];
 }
 
 const USERNAME = /^[a-z0-9][a-z0-9._-]{1,63}$/u;
@@ -140,6 +159,7 @@ export class ConsoleIamService implements ConsoleAccessProvider {
   readonly #retention: number;
   readonly #limiter: LoginRateLimiter;
   readonly #onError: (error: unknown) => void;
+  readonly #pluginPermissions: () => readonly ConsolePluginPermissionInfo[];
   #ready = false;
   #initialized: boolean | undefined;
   #cleanupTimer: ReturnType<typeof setInterval> | undefined;
@@ -156,6 +176,7 @@ export class ConsoleIamService implements ConsoleAccessProvider {
     this.#retention = options.auditRetentionMs ?? 180 * DAY;
     this.#limiter = options.rateLimiter ?? new LoginRateLimiter({ now: this.#now });
     this.#onError = options.onError ?? (() => undefined);
+    this.#pluginPermissions = options.pluginPermissions ?? (() => []);
   }
 
   get ready(): boolean {
@@ -206,9 +227,22 @@ export class ConsoleIamService implements ConsoleAccessProvider {
   }
 
   initialized(): boolean {
-    if (this.#initialized !== undefined) return this.#initialized;
-    // Database not up yet: fail closed when a previous run completed setup.
-    return this.#marker !== undefined && existsSync(this.#marker);
+    if (this.#initialized === true) return true;
+    // Database not up yet, or another process (`zhin console init` beside a running gateway)
+    // completed setup since the last refresh: fail closed on the setup marker and re-read the
+    // owner state now instead of keeping the Host open until the next periodic refresh.
+    const marked = this.#marker !== undefined && existsSync(this.#marker);
+    if (this.#initialized === undefined) return marked;
+    if (marked && this.#ready) this.#refreshSoon();
+    return marked;
+  }
+
+  #pendingRefresh: Promise<unknown> | undefined;
+  #refreshSoon(): void {
+    if (this.#pendingRefresh !== undefined) return;
+    this.#pendingRefresh = this.refreshOwnerState()
+      .catch(this.#onError)
+      .finally(() => { this.#pendingRefresh = undefined; });
   }
 
   async refreshOwnerState(): Promise<boolean> {
@@ -236,14 +270,14 @@ export class ConsoleIamService implements ConsoleAccessProvider {
     const [session] = await this.#model('sessions').select('id', 'user_id', 'created_at', 'expires_at', 'last_seen_at').where({ id: hash });
     if (session) {
       if (Number(session.expires_at) <= now) {
-        await this.#model('sessions').delete().where({ id: hash });
+        await this.#touch(() => this.#model('sessions').delete().where({ id: hash }));
         return null;
       }
       const user = await this.#enabledUser(String(session.user_id));
       if (!user) return null;
       if (now - Number(session.last_seen_at) > 60_000) {
         const expiresAt = Math.min(Number(session.created_at) + this.#max, now + this.#idle);
-        await this.#model('sessions').update({ last_seen_at: now, expires_at: expiresAt }).where({ id: hash });
+        await this.#touch(() => this.#model('sessions').update({ last_seen_at: now, expires_at: expiresAt }).where({ id: hash }));
       }
       return this.#principal(user, 'user', hash, null);
     }
@@ -253,7 +287,7 @@ export class ConsoleIamService implements ConsoleAccessProvider {
     const user = await this.#enabledUser(String(apiToken.user_id));
     if (!user) return null;
     if (apiToken.last_used_at === null || apiToken.last_used_at === undefined || now - Number(apiToken.last_used_at) > 60_000) {
-      await this.#model('tokens').update({ last_used_at: now }).where({ id: apiToken.id });
+      await this.#touch(() => this.#model('tokens').update({ last_used_at: now }).where({ id: apiToken.id }));
     }
     void meta;
     return this.#principal(user, 'api-token', String(apiToken.id), parseList(apiToken.permissions));
@@ -456,6 +490,30 @@ export class ConsoleIamService implements ConsoleAccessProvider {
   // ------------------------------------------------------------------ roles & bindings
 
   async listRoles(): Promise<readonly ConsoleRoleView[]> {
+    const catalog = this.pluginPermissionCatalog();
+    return (await this.#rawRoles()).map(role => withPluginPermissions(role, catalog));
+  }
+
+  /** The loaded plugins' permission catalog (what the Console's role editor offers). */
+  pluginPermissionCatalog(): readonly ConsolePluginPermissionInfo[] {
+    try {
+      return this.#pluginPermissions();
+    } catch (error) {
+      this.#onError(error);
+      return [];
+    }
+  }
+
+  /**
+   * Plugin permission ids in `permissions` that no loaded plugin uses (accepted, but they grant
+   * nothing until a plugin uses them); for the warnings of role and token writes.
+   */
+  unknownPluginPermissions(permissions: readonly string[]): readonly string[] {
+    const known = new Set(this.pluginPermissionCatalog().map(entry => entry.id));
+    return Object.freeze(permissions.filter(permission => isConsolePluginPermission(permission) && !known.has(permission)));
+  }
+
+  async #rawRoles(): Promise<readonly ConsoleRoleView[]> {
     this.#requireReady();
     const rows = await this.#model('roles').select('id', 'name', 'description', 'builtin', 'permissions').orderBy('name', 'ASC');
     return rows.map(roleView);
@@ -470,7 +528,7 @@ export class ConsoleIamService implements ConsoleAccessProvider {
       if (existing) throw new IamError('conflict', '角色名已存在');
       const id = newId();
       await this.#model('roles').insert({ id, name, description: descriptionOf(input.description), builtin: 0, permissions: JSON.stringify(permissionList(input.permissions)) });
-      return (await this.#role(id))!;
+      return withPluginPermissions((await this.#role(id))!, this.pluginPermissionCatalog());
     });
   }
 
@@ -483,7 +541,7 @@ export class ConsoleIamService implements ConsoleAccessProvider {
       if (patch.description !== undefined) row.description = descriptionOf(patch.description);
       if (patch.permissions !== undefined) row.permissions = JSON.stringify(permissionList(patch.permissions));
       if (Object.keys(row).length) await this.#model('roles').update(row).where({ id });
-      return (await this.#role(id))!;
+      return withPluginPermissions((await this.#role(id))!, this.pluginPermissionCatalog());
     });
   }
 
@@ -515,7 +573,7 @@ export class ConsoleIamService implements ConsoleAccessProvider {
   }
 
   async #resolveBindings(inputs: readonly BindingInput[]): Promise<Array<{ role_id: string; scope_kind: string; scope_key: string | null }>> {
-    const roles = await this.listRoles();
+    const roles = await this.#rawRoles();
     const result: Array<{ role_id: string; scope_kind: string; scope_key: string | null }> = [];
     const seen = new Set<string>();
     for (const input of inputs) {
@@ -647,7 +705,7 @@ export class ConsoleIamService implements ConsoleAccessProvider {
   }
 
   async #allBindings(): Promise<Array<ConsoleBindingView & { userId: string }>> {
-    const roles = new Map((await this.listRoles()).map(role => [role.id, role]));
+    const roles = new Map((await this.#rawRoles()).map(role => [role.id, role]));
     const rows = await this.#model('bindings').select('id', 'user_id', 'role_id', 'scope_kind', 'scope_key');
     return rows.flatMap(row => {
       const scope = parseConsoleBindingScope(row.scope_kind, row.scope_key ?? null);
@@ -657,7 +715,8 @@ export class ConsoleIamService implements ConsoleAccessProvider {
   }
 
   async #principal(user: Record<string, unknown>, kind: 'user' | 'api-token', credentialId: string, narrow: readonly string[] | null): Promise<ConsoleUserPrincipal> {
-    const roles = new Map((await this.listRoles()).map(role => [role.id, role]));
+    const roles = new Map((await this.#rawRoles()).map(role => [role.id, role]));
+    const levelOf = narrow?.some(isConsolePluginPermission) ? pluginPermissionLevelResolver(this.pluginPermissionCatalog()) : undefined;
     const rows = await this.#model('bindings').select('role_id', 'scope_kind', 'scope_key').where({ user_id: user.id });
     const grants: ConsoleGrant[] = [];
     const names = new Set<string>();
@@ -667,7 +726,7 @@ export class ConsoleIamService implements ConsoleAccessProvider {
       if (!role || !scope) continue;
       names.add(role.name);
       // API tokens never exceed the issuing user: intersect at every request.
-      const permissions = narrow ? role.permissions.filter(permission => narrow.includes(permission)) : role.permissions;
+      const permissions = narrow ? narrowPermissions(role.permissions, narrow, levelOf) : role.permissions;
       grants.push(Object.freeze({ role: role.name, scope, permissions: Object.freeze([...permissions]) }));
     }
     return Object.freeze({
@@ -679,6 +738,19 @@ export class ConsoleIamService implements ConsoleAccessProvider {
       grants: Object.freeze(grants),
       roles: Object.freeze([...names].sort()),
     });
+  }
+
+  /**
+   * Bookkeeping writes of authentication (sliding expiry, last use, expired-row cleanup): a
+   * database that stays locked past the retry budget must not turn a valid credential into a 401.
+   */
+  async #touch(write: () => Promise<unknown>): Promise<void> {
+    try {
+      await write();
+    } catch (error) {
+      if (!isDatabaseBusyError(error)) throw error;
+      this.#onError(error);
+    }
   }
 
   #serialize<T>(operation: () => Promise<T>): Promise<T> {
@@ -702,9 +774,58 @@ function parseList(value: unknown): readonly string[] | null {
   }
 }
 
+/**
+ * Role permissions ∩ the token's list. A plugin permission the token lists by id survives when
+ * the role holds it by id or through its level (`levelOf`: declared levels, else inferred).
+ */
+function narrowPermissions(
+  rolePermissions: readonly string[],
+  narrow: readonly string[],
+  levelOf: ConsolePluginPermissionLevelResolver | undefined,
+): readonly string[] {
+  const out = new Set(rolePermissions.filter(permission => narrow.includes(permission)));
+  for (const permission of narrow) {
+    if (permissionListHoldsPluginPermission(rolePermissions, permission, levelOf)) out.add(permission);
+  }
+  return [...out];
+}
+
+/** Effective plugin permissions of a role over the loaded catalog (explicit ids first-class). */
+function withPluginPermissions(role: ConsoleRoleView, catalog: readonly ConsolePluginPermissionInfo[]): ConsoleRoleView {
+  const byId = new Map(catalog.map(entry => [entry.id, entry]));
+  const levelOf = pluginPermissionLevelResolver(catalog);
+  const out = new Map<string, ConsoleRolePluginPermission>();
+  for (const permission of role.permissions) {
+    if (!isConsolePluginPermission(permission)) continue;
+    const entry = byId.get(permission);
+    out.set(permission, Object.freeze({
+      id: permission,
+      level: consolePluginPermissionLevel(permission, levelOf),
+      source: 'explicit' as const,
+      known: entry !== undefined,
+      ...(entry?.description ? { description: entry.description } : {}),
+    }));
+  }
+  for (const entry of catalog) {
+    if (out.has(entry.id) || !role.permissions.includes(CONSOLE_PLUGIN_LEVEL_PERMISSIONS[entry.level])) continue;
+    out.set(entry.id, Object.freeze({
+      id: entry.id, level: entry.level, source: 'level' as const, known: true,
+      ...(entry.description ? { description: entry.description } : {}),
+    }));
+  }
+  const pluginPermissions = Object.freeze([...out.values()].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)));
+  return Object.freeze({ ...role, pluginPermissions });
+}
+
+/**
+ * Catalog permissions plus plugin permissions (`<plugin>:<action>`). A plugin id need not be
+ * loaded right now (plugins are installed, disabled and hot-reloaded independently of roles);
+ * callers report unloaded ones as warnings. It grants nothing until a plugin uses it.
+ */
 function permissionList(value: unknown): readonly string[] {
   if (!Array.isArray(value)) throw new IamError('invalid_input', 'permissions 必须是数组');
-  const unknown = value.filter(item => !isConsolePermission(item));
+  if (value.length > 512) throw new IamError('invalid_input', 'permissions 过多');
+  const unknown = value.filter(item => !isConsolePermission(item) && !isConsolePluginPermission(item));
   if (unknown.length) throw new IamError('invalid_input', `未知权限：${unknown.map(String).join(', ').slice(0, 200)}`);
   return Object.freeze([...new Set(value as string[])].sort());
 }

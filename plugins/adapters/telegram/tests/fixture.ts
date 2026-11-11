@@ -1,4 +1,4 @@
-import { createHttpHost } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import type { EndpointEventGateway } from 'zhin.js/adapter';
 import { createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
 import { TelegramEndpoint, type TelegramEndpointOptions } from '../src/endpoint.js';

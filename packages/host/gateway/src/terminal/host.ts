@@ -1,9 +1,14 @@
-import { globalPermissions, isUserPrincipal, requestMeta, type ConsoleUserPrincipal, type HttpHost } from '@zhin.js/host-http';
+import { globalPermissions, isUserPrincipal, requestMeta, type ConsoleUserPrincipal, type TokenRegistry } from '@zhin.js/host-http';
 import type { ConsoleIamService } from '../iam/service.js';
-import { installConsoleTerminal, type ConsoleTerminalHandle, type InstallConsoleTerminalOptions } from './index.js';
+import { installConsoleTerminal, type ConsoleTerminalHandle, type InstallConsoleTerminalOptions, type TerminalHttpHost } from './index.js';
 import type { TerminalPrincipal } from './service.js';
 
 const TERMINAL_PERMISSION = 'ops.terminal';
+
+/** The gateway's HTTP server, or an in-process `HttpHost`. */
+export interface ConsoleTerminalHost extends TerminalHttpHost {
+  readonly tokenRegistry: TokenRegistry;
+}
 
 export interface InstallHostConsoleTerminalOptions {
   /** Raw host config `console.terminal`. */
@@ -24,7 +29,7 @@ export interface InstallHostConsoleTerminalOptions {
  * token never), terminal events land in the IAM audit log, and revoking a user's
  * credentials ends their terminal sessions.
  */
-export function installHostConsoleTerminal(http: HttpHost, options: InstallHostConsoleTerminalOptions): ConsoleTerminalHandle {
+export function installHostConsoleTerminal(http: ConsoleTerminalHost, options: InstallHostConsoleTerminalOptions): ConsoleTerminalHandle {
   // The Console principal behind each terminal principal, for authorization decisions.
   const grantsOf = new WeakMap<TerminalPrincipal, ConsoleUserPrincipal>();
   const handle = installConsoleTerminal(http, {
@@ -33,7 +38,7 @@ export function installHostConsoleTerminal(http: HttpHost, options: InstallHostC
     ...(options.base ? { base: options.base } : {}),
     resolvePrincipal: async (token, context) => {
       if (!token) return null;
-      const principal = await http.tokenRegistry.authenticate(token, requestMeta(context.request)) ?? undefined;
+      const principal = await http.tokenRegistry.authenticate(token, requestMeta(context, context.remoteAddress)) ?? undefined;
       // Bootstrap (setup token or open Host) is not a person: terminal access needs a user.
       if (!isUserPrincipal(principal)) return null;
       const resolved: TerminalPrincipal = Object.freeze({ id: `user:${principal.userId}`, kind: principal.kind });

@@ -3,10 +3,12 @@
  * sessions → turns → one turn. Requires the `full` auth scope, like the live
  * trace route; every response goes through a redaction pass again.
  */
+import { jsonResponse } from '@zhin.js/host-http';
 import { conversationRefKey, type ConversationRef } from '@zhin.js/im-contract';
 import type { TurnTrace } from '@zhin.js/agent/trace';
 import type { HttpHost } from '@zhin.js/host-http';
-import { parseBoundedInteger, writeJson } from '@zhin.js/gateway/http';
+import { parseBoundedInteger } from '@zhin.js/gateway/http';
+import { noStore } from './no-store.js';
 
 export interface RegisterTraceArchiveRoutesOptions {
   readonly http: HttpHost;
@@ -41,23 +43,18 @@ export function registerTraceArchiveRoutes(options: RegisterTraceArchiveRoutesOp
   };
 
   const guarded = (
-    handler: (url: URL, response: Parameters<Parameters<HttpHost['route']>[2]>[1]) => Promise<void>,
-  ): Parameters<HttpHost['route']>[2] => async (_request, response, url, authScope) => {
-    response.setHeader('cache-control', 'no-store');
-    if (authScope !== 'full') {
-      writeJson(response, 403, { success: false, error: '需要登录 Console 才能读取 Agent Trace' });
-      return;
-    }
+    handler: (url: URL) => Promise<Response>,
+  ): Parameters<HttpHost['route']>[2] => noStore(async (_request, { url }) => {
     try {
-      await handler(url, response);
+      return await handler(url);
     } catch (error) {
       const missing = (error as NodeJS.ErrnoException)?.code === 'ERR_MODULE_NOT_FOUND';
-      writeJson(response, missing ? 503 : 500, {
+      return jsonResponse(missing ? 503 : 500, {
         success: false,
         error: missing ? '未安装 @zhin.js/agent，无法读取 trace' : 'trace 读取失败',
       });
     }
-  };
+  });
 
   const range = (url: URL) => {
     const since = optionalTime(url.searchParams.get('since'));
@@ -65,20 +62,20 @@ export function registerTraceArchiveRoutes(options: RegisterTraceArchiveRoutesOp
     return since === null || until === null ? null : { since, until };
   };
 
-  http.route('GET', `${base}/agent/trace-archive/sessions`, guarded(async (url, response) => {
+  http.route('GET', `${base}/agent/trace-archive/sessions`, guarded(async (url) => {
     const window = range(url);
-    if (!window) return writeJson(response, 400, { success: false, error: 'since / until 必须是 ISO 时间或毫秒时间戳' });
+    if (!window) return jsonResponse(400, { success: false, error: 'since / until 必须是 ISO 时间或毫秒时间戳' });
     const { archive: store, redact } = await open();
-    writeJson(response, 200, { success: true, data: redact(await store.sessions(window)) });
+    return jsonResponse(200, { success: true, data: redact(await store.sessions(window)) });
   }), { summary: 'List sessions with persisted Agent turn traces', tags: ['agent', 'trace'] });
 
-  http.route('GET', `${base}/agent/trace-archive/turns`, guarded(async (url, response) => {
+  http.route('GET', `${base}/agent/trace-archive/turns`, guarded(async (url) => {
     const window = range(url);
-    if (!window) return writeJson(response, 400, { success: false, error: 'since / until 必须是 ISO 时间或毫秒时间戳' });
+    if (!window) return jsonResponse(400, { success: false, error: 'since / until 必须是 ISO 时间或毫秒时间戳' });
     const sessionKey = url.searchParams.get('sessionKey')?.trim() || undefined;
-    if (sessionKey && sessionKey.length > 512) return writeJson(response, 400, { success: false, error: 'sessionKey 过长' });
+    if (sessionKey && sessionKey.length > 512) return jsonResponse(400, { success: false, error: 'sessionKey 过长' });
     const conversation = readConversation(url);
-    if (conversation === null) return writeJson(response, 400, { success: false, error: '会话地址无效' });
+    if (conversation === null) return jsonResponse(400, { success: false, error: '会话地址无效' });
     const limit = parseBoundedInteger(url.searchParams.get('limit'), 100, 1, 500);
     const { archive: store, redact } = await open();
     const traces = (await store.query({ sessionKey, ...window })).filter(trace => matchesConversation(trace, conversation)).slice(-limit);
@@ -98,7 +95,7 @@ export function registerTraceArchiveRoutes(options: RegisterTraceArchiveRoutesOp
       total_tokens: trace.usage.total_tokens,
       termination: trace.termination,
     }));
-    writeJson(response, 200, { success: true, data: redact(rows.reverse()) });
+    return jsonResponse(200, { success: true, data: redact(rows.reverse()) });
   }), { summary: 'List persisted Agent turn traces', tags: ['agent', 'trace'] });
 
   const readTurn = async (url: URL): Promise<TurnTrace | undefined | null> => {
@@ -111,28 +108,28 @@ export function registerTraceArchiveRoutes(options: RegisterTraceArchiveRoutesOp
     return (await store.query({ sessionKey })).find(trace => trace.turn_id === turnId && matchesConversation(trace, conversation));
   };
 
-  http.route('GET', `${base}/agent/trace-archive/turn`, guarded(async (url, response) => {
+  http.route('GET', `${base}/agent/trace-archive/turn`, guarded(async (url) => {
     const trace = await readTurn(url);
-    if (trace === null) return writeJson(response, 400, { success: false, error: '请提供有效的回合和会话地址' });
-    if (!trace) return writeJson(response, 404, { success: false, error: '找不到该会话的回合' });
+    if (trace === null) return jsonResponse(400, { success: false, error: '请提供有效的回合和会话地址' });
+    if (!trace) return jsonResponse(404, { success: false, error: '找不到该会话的回合' });
     const { redact } = await open();
-    writeJson(response, 200, { success: true, data: redact(withoutRequestBodies(trace)) });
+    return jsonResponse(200, { success: true, data: redact(withoutRequestBodies(trace)) });
   }), { summary: 'Read one persisted Agent turn trace', tags: ['agent', 'trace'] });
 
-  http.route('GET', `${base}/agent/trace-archive/request`, guarded(async (url, response) => {
+  http.route('GET', `${base}/agent/trace-archive/request`, guarded(async (url) => {
     const requestId = url.searchParams.get('requestId')?.trim();
     if (!requestId || requestId.length > 1024 || !url.searchParams.get('sessionKey')?.trim()) {
-      return writeJson(response, 400, { success: false, error: '请提供请求和会话标识' });
+      return jsonResponse(400, { success: false, error: '请提供请求和会话标识' });
     }
     const trace = await readTurn(url);
-    if (trace === null) return writeJson(response, 400, { success: false, error: '请提供有效的回合和会话地址' });
-    if (!trace) return writeJson(response, 404, { success: false, error: '找不到该会话的回合' });
+    if (trace === null) return jsonResponse(400, { success: false, error: '请提供有效的回合和会话地址' });
+    if (!trace) return jsonResponse(404, { success: false, error: '找不到该会话的回合' });
     const matches = traceTree(trace).flatMap(turn => (turn.requests ?? [])
       .filter(request => request.request_id === requestId).map(request => ({ turn, request })));
-    if (matches.length !== 1) return writeJson(response, 404, { success: false, error: '找不到该回合的请求' });
+    if (matches.length !== 1) return jsonResponse(404, { success: false, error: '找不到该回合的请求' });
     const { turn, request } = matches[0]!;
     const { redact } = await open();
-    writeJson(response, 200, { success: true, data: redact({ session_key: trace.session_key,
+    return jsonResponse(200, { success: true, data: redact({ session_key: trace.session_key,
       turn_id: trace.turn_id, request_turn_id: turn.turn_id, request,
       usage: turn.model_calls.find(call => call.request_id === requestId),
     }) });

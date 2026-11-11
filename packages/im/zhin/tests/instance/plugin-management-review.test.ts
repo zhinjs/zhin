@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createHttpHost } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import { PluginManagementWorkflow } from '../../../../host/gateway/src/plugin-management/workflow.js';
 import { installCommand } from '../../../../../basic/cli/src/commands/install.js';
 import { installNpmPlugin } from '../../../../../basic/cli/src/commands/packages.js';

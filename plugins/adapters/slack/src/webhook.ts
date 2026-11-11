@@ -1,7 +1,6 @@
 /**
  * Slack webhook HTTP: signature → parse → admit.
  */
-import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { readTextBody } from '@zhin.js/host-http-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -29,26 +28,21 @@ export function registerSlackWebhookRoutes(
 ): HttpRouteRegistration[] {
   const path = handler.config.webhookPath;
   return [
-    http.route('POST', path, async (request, response) => {
-      await handleSlackWebhookRequest(request, response, handler);
-    }, { summary: 'Slack Events API / Interactivity', tags: ['slack'] }),
+    http.route('POST', path, (request) => handleSlackWebhookRequest(request, handler), { summary: 'Slack Events API / Interactivity', tags: ['slack'] }),
   ];
 }
 
 export async function handleSlackWebhookRequest(
-  request: IncomingMessage,
-  response: ServerResponse,
+  request: Request,
   handler: SlackWebhookHandler,
-): Promise<void> {
+): Promise<Response> {
   try {
     const rawBody = await readTextBody(request);
     const timestamp = headerValue(request.headers, 'x-slack-request-timestamp');
     const signature = headerValue(request.headers, 'x-slack-signature');
 
     if (!verifySlackSignature(handler.config.signingSecret, rawBody, timestamp, signature)) {
-      response.writeHead(401, { 'Content-Type': 'text/plain' });
-      response.end('Invalid signature');
-      return;
+      return new Response('Invalid signature', { status: 401, headers: { 'Content-Type': 'text/plain' } });
     }
 
     const contentType = headerValue(request.headers, 'content-type');
@@ -57,17 +51,13 @@ export async function handleSlackWebhookRequest(
       const payloadStr = params.get('payload');
       if (payloadStr) {
         const payload = JSON.parse(payloadStr) as SlackInteractionPayload;
-        response.writeHead(200);
-        response.end('');
         handler.admitInteraction(payload);
-        return;
+        return new Response('', { status: 200 });
       }
       const body = Object.fromEntries(params) as unknown as SlackSlashCommand;
       if (body.command) {
-        response.writeHead(200);
-        response.end('');
         handler.admitSlashCommand(body);
-        return;
+        return new Response('', { status: 200 });
       }
     }
 
@@ -75,32 +65,22 @@ export async function handleSlackWebhookRequest(
     try {
       envelope = JSON.parse(rawBody) as Record<string, unknown>;
     } catch {
-      response.writeHead(200);
-      response.end('');
-      return;
+      return new Response('', { status: 200 });
     }
 
     if (envelope.type === 'url_verification') {
       const challenge = (envelope as unknown as SlackUrlVerification).challenge;
-      response.writeHead(200, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ challenge }));
-      return;
+      return new Response(JSON.stringify({ challenge }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
 
     if (envelope.type === 'event_callback' && envelope.event) {
-      response.writeHead(200);
-      response.end('');
       handler.handleEnvelope(envelope);
-      return;
+      return new Response('', { status: 200 });
     }
 
-    response.writeHead(200);
-    response.end('');
+    return new Response('', { status: 200 });
   } catch (error) {
     logger.error('Slack webhook error:', error);
-    if (!response.headersSent) {
-      response.writeHead(200);
-      response.end('');
-    }
+    return new Response('', { status: 200 });
   }
 }

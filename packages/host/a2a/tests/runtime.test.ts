@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createHttpHost } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import type { AgentHostPort } from '@zhin.js/agent/runtime';
 import { installRuntimeA2a } from '../src/runtime.js';
 
@@ -31,7 +31,7 @@ describe('Runtime A2A Host', () => {
   it('without a token only serves loopback callers', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
-    let handler!: (request: never, response: never, url: URL) => Promise<void>;
+    let handler!: (request: Request, context: { url: URL; params: Record<string, string>; remoteAddress?: string }) => Promise<Response>;
     const routeHost = {
       route: (_method: string, _path: string, registered: typeof handler) => {
         handler = registered;
@@ -44,18 +44,9 @@ describe('Runtime A2A Host', () => {
       fallbackPublicUrl: 'http://localhost',
     });
     const call = async (remoteAddress: string) => {
-      let status = 0;
-      const response = {
-        setHeader: () => undefined,
-        writeHead: (code: number) => { status = code; },
-        end: () => undefined,
-      };
-      await handler(
-        { method: 'GET', headers: {}, socket: { remoteAddress } } as never,
-        response as never,
-        new URL('http://bot.test/a2a/zhin/.well-known/agent-card.json'),
-      );
-      return status;
+      const url = new URL('http://bot.test/a2a/zhin/.well-known/agent-card.json');
+      const response = await handler(new Request(url), { url, params: {}, remoteAddress });
+      return response.status;
     };
 
     expect(await call('203.0.113.9')).toBe(401);

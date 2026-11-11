@@ -1,2 +1,4 @@
-/** `@zhin.js/gateway/supervisor` — instance process supervision (replaced by the IPC instance supervisor in B1.1). */
-export * from './supervisor/process-supervisor.js';
+/** `@zhin.js/gateway/supervisor` — instance process supervision over the IPC control channel (ADR 0054 §3 / §5). */
+export * from './supervisor/instance-supervisor.js';
+export * from './supervisor/instance-logs.js';
+export * from './supervisor/run-instance.js';

@@ -1,7 +1,6 @@
 /**
  * WeChat MP webhook HTTP: URL verification + inbound message handling.
  */
-import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Locale } from 'zhin.js/i18n';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { readTextBody } from '@zhin.js/host-http-contract';
@@ -49,21 +48,16 @@ export function registerWeChatMpWebhookRoutes(
 ): HttpRouteRegistration[] {
   const path = handler.config.path;
   return [
-    http.route('GET', path, (request, response, url) => {
-      handleWeChatMpVerification(request, response, url, handler.config);
-    }, { summary: 'WeChat MP URL verification', tags: ['wechat-mp'] }),
-    http.route('POST', path, async (request, response, url) => {
-      await handleWeChatMpMessage(request, response, url, handler);
-    }, { summary: 'WeChat MP inbound webhook', tags: ['wechat-mp'] }),
+    http.route('GET', path, (request, { url }) => handleWeChatMpVerification(request, url, handler.config), { summary: 'WeChat MP URL verification', tags: ['wechat-mp'] }),
+    http.route('POST', path, (request, { url }) => handleWeChatMpMessage(request, url, handler), { summary: 'WeChat MP inbound webhook', tags: ['wechat-mp'] }),
   ];
 }
 
 export function handleWeChatMpVerification(
-  _request: IncomingMessage,
-  response: ServerResponse,
+  _request: Request,
   url: URL,
   config: ResolvedWeChatMpConfig,
-): void {
+): Response {
   const signature = queryParam(url.searchParams.get('signature'));
   const msgSignature = queryParam(url.searchParams.get('msg_signature'));
   const timestamp = queryParam(url.searchParams.get('timestamp'));
@@ -76,9 +70,7 @@ export function handleWeChatMpVerification(
     : { signature, timestamp, nonce };
 
   if (!signToCheck || !timestamp || !nonce) {
-    response.writeHead(403, { 'Content-Type': 'text/plain' });
-    response.end('Forbidden');
-    return;
+    return new Response('Forbidden', { status: 403, headers: { 'Content-Type': 'text/plain' } });
   }
 
   if (!verifySignature(config.token, signPayload)) {
@@ -94,9 +86,7 @@ export function handleWeChatMpVerification(
       expectedPrefix: expected.slice(0, 8),
       gotPrefix: signToCheck.slice(0, 8),
     }));
-    response.writeHead(403, { 'Content-Type': 'text/plain' });
-    response.end('Forbidden');
-    return;
+    return new Response('Forbidden', { status: 403, headers: { 'Content-Type': 'text/plain' } });
   }
 
   let body = echostr;
@@ -110,22 +100,18 @@ export function handleWeChatMpVerification(
         ok: false,
         error: error instanceof Error ? error.message : String(error),
       }));
-      response.writeHead(403, { 'Content-Type': 'text/plain' });
-      response.end('Forbidden');
-      return;
+      return new Response('Forbidden', { status: 403, headers: { 'Content-Type': 'text/plain' } });
     }
   }
 
-  response.writeHead(200, { 'Content-Type': 'text/plain' });
-  response.end(body);
+  return new Response(body, { status: 200, headers: { 'Content-Type': 'text/plain' } });
 }
 
 export async function handleWeChatMpMessage(
-  request: IncomingMessage,
-  response: ServerResponse,
+  request: Request,
   url: URL,
   handler: WeChatMpWebhookHandler,
-): Promise<void> {
+): Promise<Response> {
   try {
     const config = handler.config;
     const signature = queryParam(url.searchParams.get('signature'));
@@ -136,9 +122,7 @@ export async function handleWeChatMpMessage(
 
     if (!verifySignature(config.token, { signature, timestamp, nonce })) {
       logger.error('Invalid signature');
-      response.writeHead(403, { 'Content-Type': 'text/plain' });
-      response.end('Forbidden');
-      return;
+      return new Response('Forbidden', { status: 403, headers: { 'Content-Type': 'text/plain' } });
     }
 
     let xmlString = await readTextBody(request);
@@ -157,9 +141,7 @@ export async function handleWeChatMpMessage(
 
     const wechatMessage = await parseXMLMessage(xmlString);
     if (!wechatMessage) {
-      response.writeHead(200, { 'Content-Type': 'text/plain' });
-      response.end('success');
-      return;
+      return new Response('success', { status: 200, headers: { 'Content-Type': 'text/plain' } });
     }
 
     // 微信 5s 重推去重：同一 MsgId 直接回放首次回复，避免二次 admit。
@@ -168,9 +150,7 @@ export async function handleWeChatMpMessage(
       const cached = handler.getCachedReply(msgId);
       if (cached !== undefined) {
         logger.debug(formatCompact({ op: 'wechat_mp_dedup_replay', msgId }));
-        response.writeHead(200, { 'Content-Type': cached ? 'text/xml' : 'text/plain' });
-        response.end(cached || 'success');
-        return;
+        return new Response(cached || 'success', { status: 200, headers: { 'Content-Type': cached ? 'text/xml' : 'text/plain' } });
       }
     }
 
@@ -207,12 +187,10 @@ export async function handleWeChatMpMessage(
       handler.cacheReply(msgId, replyXML || '');
     }
 
-    response.writeHead(200, { 'Content-Type': 'text/xml' });
-    response.end(replyXML || 'success');
+    return new Response(replyXML || 'success', { status: 200, headers: { 'Content-Type': 'text/xml' } });
   } catch (error) {
     logger.error('Error handling WeChat message:', error);
-    response.writeHead(200, { 'Content-Type': 'text/plain' });
-    response.end('success');
+    return new Response('success', { status: 200, headers: { 'Content-Type': 'text/plain' } });
   }
 }
 

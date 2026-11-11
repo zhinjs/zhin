@@ -1,9 +1,9 @@
 import { isLoopbackAddress, verifyProtocolAccessToken } from '../src/protocol-auth.js';
 
 const request = (input: { authorization?: string; url?: string; ip?: string }) => ({
-  headers: input.authorization ? { authorization: input.authorization } : {},
-  url: input.url ?? '/',
-  socket: { remoteAddress: input.ip ?? '203.0.113.7' },
+  headers: new Headers(input.authorization ? { authorization: input.authorization } : {}),
+  url: new URL(input.url ?? '/', 'http://localhost'),
+  remoteAddress: input.ip ?? '203.0.113.7',
 });
 
 describe('protocol socket access', () => {
@@ -26,5 +26,11 @@ describe('protocol socket access', () => {
     expect(verifyProtocolAccessToken(undefined, request({ ip: '::1' }))).toBe(true);
     expect(verifyProtocolAccessToken(undefined, request({ ip: '192.168.1.5', authorization: 'Bearer anything' }))).toBe(false);
     expect(verifyProtocolAccessToken('', request({}))).toBe(false);
+  });
+
+  it('accepts a string URL (relative to the request target)', () => {
+    expect(verifyProtocolAccessToken('secret', {
+      headers: new Headers(), url: '/ws?access_token=secret',
+    })).toBe(true);
   });
 });

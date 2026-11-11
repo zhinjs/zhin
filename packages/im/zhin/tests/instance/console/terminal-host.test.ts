@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WebSocket } from 'ws';
 import { createDatabaseHost } from '@zhin.js/core/runtime';
-import { createHttpHost, type ProcessHttpHost } from '@zhin.js/host-http';
+import { createHttpHost, type ProcessHttpHost } from '@zhin.js/host-http/node';
 import { installConsoleIam } from '../../../../../host/gateway/src/iam/install.js';
 import { installHostConsoleTerminal } from '../../../../../host/gateway/src/terminal/host.js';
 import type { PtyModule } from '../../../../../host/gateway/src/terminal/modules.js';
@@ -37,7 +37,7 @@ async function startHost(terminal: unknown, options: { token?: string } = {}) {
   const database = createDatabaseHost({ dialect: 'sqlite', filename: join(root, '.zhin', 'data.sqlite') } as never);
   const http: ProcessHttpHost = createHttpHost({ host: '127.0.0.1', port: 0, ...(options.token ? { token: options.token } : {}) });
   const configStore = { readDocument: async () => ({}), setKey: async () => undefined };
-  const iam = installConsoleIam(http, { database, configStore, projectRoot: root });
+  const iam = installConsoleIam(http, { database: database.gatewayTableHost(), configStore, projectRoot: root });
   const handle = installHostConsoleTerminal(http, {
     config: terminal,
     projectRoot: root,

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createHttpHost, type HttpHost } from '../src/http-host.js';
+import { createHttpHost, type ProcessHttpHost } from '../src/node/server.js';
 import { userPrincipal } from './fixtures/principals.js';
 import {
   registerConsoleRestPages,
@@ -10,7 +10,7 @@ import {
   type ConsoleRestCtx,
 } from '../src/console-rest-pages.js';
 
-const hosts: HttpHost[] = [];
+const hosts: ProcessHttpHost[] = [];
 const tempDirs: string[] = [];
 
 afterEach(async () => {
@@ -711,10 +711,10 @@ describe('console-rest-pages introspection', () => {
     }));
     const response = await fetch(`${base}/api/introspection/commands`);
     expect(response.status).toBe(503);
-    expect(await json(response)).toMatchObject({
-      success: false,
-      error: 'CommandIndex 不可用',
-    });
+    // The collector's own failure detail stays in the log.
+    const body = await json(response);
+    expect(body).toMatchObject({ success: false, error: 'Introspection unavailable' });
+    expect(JSON.stringify(body)).not.toContain('CommandIndex 不可用');
   });
 
   it('holds the generation lease until a catalog collector completes', async () => {

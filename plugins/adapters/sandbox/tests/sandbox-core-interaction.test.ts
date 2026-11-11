@@ -2,7 +2,8 @@ import WebSocket from 'ws';
 import { AdapterIndex, adapterFeatureId, endpointEventGatewayToken, type EndpointEvent, type EndpointEventGateway } from '@zhin.js/adapter';
 import { createCapabilitySlot, createSnapshotView, SnapshotStore, rootPluginId, projectLocaleToken, readOperationSession, type OperationSession, type SnapshotState } from 'zhin.js';
 import { ImRuntime, RuntimeMessage, type Message } from '@zhin.js/core/runtime';
-import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
+import { httpHostToken } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import sandboxAdapter from '../adapters/sandbox/index.js';
 import { SandboxClient } from '../src/client.js';
 

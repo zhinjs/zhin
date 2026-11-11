@@ -1,9 +1,8 @@
 import { endpointSpec } from 'zhin.js/adapter';
 import { createEndpointHarness, createTestEndpointEventGateway } from '../../test-utils/endpoint.js';
 import { DiscordInteractionsEndpoint } from '../src/endpoint.js';
-import { Readable } from 'node:stream';
 import { generateKeyPairSync, sign } from 'node:crypto';
-import type { IncomingMessage, ServerResponse } from 'node:http';
+import { recordResponse, webhookRequest } from '../../test-utils/http.js';
 import { handleDiscordInteractionRequest } from '../src/webhook.js';
 import { resolveDiscordConfig, type ResolvedDiscordInteractionsConfig } from '../src/protocol.js';
 
@@ -14,22 +13,21 @@ async function invoke(locale: 'en' | 'zh-CN' | undefined, valid = true, type = 2
   const resolveLocale = vi.fn(async () => locale);
   const admit = vi.fn();
   const admitPlatform = vi.fn();
-  const end = vi.fn();
-  const writeHead = vi.fn();
   const timestamp = String(Math.floor(Date.now() / 1000));
   // Platform-provided locale must not override Zhin's trusted operation preference.
   const body = JSON.stringify({ id: 'command', type, ...application, locale: 'zh-CN', channel_id: 'room', user: { id: 'sender', username: 'Alice' }, data: { name: '用户命令' } });
   const signature = sign(null, Buffer.from(timestamp + body), keys.privateKey).toString('hex');
-  const request = Object.assign(Readable.from([Buffer.from(body)]), { headers: { 'x-signature-ed25519': valid ? signature : '00'.repeat(64), 'x-signature-timestamp': timestamp } });
+  const request = webhookRequest(body, { 'x-signature-ed25519': valid ? signature : '00'.repeat(64), 'x-signature-timestamp': timestamp });
   const h = await createEndpointHarness(() => new DiscordInteractionsEndpoint({ id: 'discord-protocol' as never, config,
     http: { route: () => () => undefined } as never }), { capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEndpointEventGateway({ receive: async () => undefined, resolveLocale }) });
   vi.spyOn(h.endpoint, 'admit').mockImplementation(admit);
   vi.spyOn(h.endpoint, 'admitButton').mockImplementation(() => undefined);
   vi.spyOn(h.endpoint, 'admitPlatform').mockImplementation(admitPlatform);
   await h.start(); h.open();
-  try { await handleDiscordInteractionRequest(request as IncomingMessage, { end, writeHead } as unknown as ServerResponse, h.endpoint); }
+  let recorded: Awaited<ReturnType<typeof recordResponse>>;
+  try { recorded = await recordResponse(await handleDiscordInteractionRequest(request, h.endpoint)); }
   finally { await h.stop(); }
-  return { resolveLocale, identity: h.endpoint[endpointSpec].identity, admit, admitPlatform, end, writeHead };
+  return { resolveLocale, identity: h.endpoint[endpointSpec].identity, admit, admitPlatform, end: recorded.end, writeHead: recorded.writeHead };
 }
 
 it.each([['en', 'Processing command: 用户命令'], ['zh-CN', '处理命令: 用户命令'], [undefined, '处理命令: 用户命令']] as const)(

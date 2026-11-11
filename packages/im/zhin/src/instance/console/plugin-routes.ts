@@ -1,16 +1,13 @@
 import type { ImRuntime } from '@zhin.js/core/runtime';
-import { principalAllows, requestConsolePrincipal, type HttpHost, type PluginManagementPort } from '@zhin.js/host-http';
-import type { IncomingMessage } from 'node:http';
+import { jsonResponse, principalAllows, type ConsolePrincipal, type HttpHost, type PluginManagementPort } from '@zhin.js/host-http';
 
-/** Plugin management needs `plugin.manage`; a test host without a bound principal is open. */
-function canManagePlugins(http: HttpHost, request: IncomingMessage): boolean {
-  const principal = requestConsolePrincipal(request);
+/** Plugin management needs `plugin.manage`; a test host without a resolved principal is open. */
+function canManagePlugins(http: HttpHost, principal: ConsolePrincipal | undefined): boolean {
   if (!principal) return !(http.tokenRegistry?.hasAnyToken() ?? false);
   return principalAllows(principal, 'plugin.manage');
 }
 import type { RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { join } from 'node:path';
-import { writeJson } from '@zhin.js/gateway/http';
 import { displayConsolePath } from './display-path.js';
 import {
   buildManagedPluginList,
@@ -19,6 +16,7 @@ import {
   readPackageVersion,
 } from './plugin-projection.js';
 import { readRuntimeSnapshot } from './runtime-snapshot.js';
+import { internalErrorResponse } from './internal-error.js';
 
 export interface RegisterConsolePluginRoutesOptions {
   readonly http: HttpHost;
@@ -32,8 +30,8 @@ export interface RegisterConsolePluginRoutesOptions {
 
 export function registerConsolePluginRoutes(options: RegisterConsolePluginRoutesOptions): void {
   const { http, base, projectRoot, pluginLifecycleFile, im, snapshot, pluginManagement } = options;
-  http.route('GET', `${base}/plugins`, async (request, response) => {
-    const canManage = canManagePlugins(http, request);
+  http.route('GET', `${base}/plugins`, async (_request, { principal }) => {
+    const canManage = canManagePlugins(http, principal);
     try {
       const snap = readRuntimeSnapshot(snapshot);
       const plugins = await buildManagedPluginList(
@@ -47,32 +45,27 @@ export function registerConsolePluginRoutes(options: RegisterConsolePluginRoutes
         manageable: canManage && plugin.manageable,
         ...await inspectPlugin(pluginManagement, plugin.instanceKey, plugin.manageable),
       })));
-      writeJson(response, 200, { success: true, data, total: plugins.length });
+      return jsonResponse(200, { success: true, data, total: plugins.length });
     } catch (error) {
-      writeJson(response, 500, {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      });
+      return internalErrorResponse(500, 'console_plugins_failed', error);
     }
   }, {
     summary: 'List loaded plugins',
     tags: ['plugins'],
   });
 
-  http.route('GET', `${base}/plugins/*`, async (request, response, url) => {
-    const canManage = canManagePlugins(http, request);
+  http.route('GET', `${base}/plugins/*`, async (_request, { url, principal }) => {
+    const canManage = canManagePlugins(http, principal);
     const prefix = `${base}/plugins/`;
     const raw = url.pathname.startsWith(prefix) ? url.pathname.slice(prefix.length) : '';
     if (!raw || raw.includes('/')) {
-      writeJson(response, 404, { success: false, error: '插件不存在' });
-      return;
+      return jsonResponse(404, { success: false, error: '插件不存在' });
     }
     let name = '';
     try {
       name = decodeURIComponent(raw);
     } catch {
-      writeJson(response, 400, { success: false, error: 'Invalid plugin name' });
-      return;
+      return jsonResponse(400, { success: false, error: 'Invalid plugin name' });
     }
     try {
       const snap = readRuntimeSnapshot(snapshot);
@@ -84,12 +77,11 @@ export function registerConsolePluginRoutes(options: RegisterConsolePluginRoutes
       if (!node) {
         const managed = managedPlugins.find(item => item.instanceKey === name || item.packageName === name);
         if (!managed) {
-          writeJson(response, 404, { success: false, error: '插件不存在' });
-          return;
+          return jsonResponse(404, { success: false, error: '插件不存在' });
         }
         const packageDir = join(projectRoot, 'node_modules', managed.packageName);
         const version = await readPackageVersion(packageDir);
-        writeJson(response, 200, {
+        return jsonResponse(200, {
           success: true,
           data: {
             ...managed,
@@ -100,9 +92,8 @@ export function registerConsolePluginRoutes(options: RegisterConsolePluginRoutes
             ...(version ? { version } : {}),
           },
         });
-        return;
       }
-      writeJson(response, 200, {
+      return jsonResponse(200, {
         success: true,
         data: { ...buildPluginDetail(
           node,
@@ -116,10 +107,7 @@ export function registerConsolePluginRoutes(options: RegisterConsolePluginRoutes
         ...await inspectPlugin(pluginManagement, node.instanceKey, managedPlugins.some(item => item.instanceKey === node.instanceKey && item.packageName === node.packageName && item.manageable)) },
       });
     } catch (error) {
-      writeJson(response, 500, {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      });
+      return internalErrorResponse(500, 'console_plugins_failed', error);
     }
   }, {
     summary: 'Plugin detail',

@@ -1,8 +1,9 @@
 import type { RuntimeMessageDiagnosticsReader } from '@zhin.js/core/runtime';
 import type { ConversationRef } from '@zhin.js/im-contract';
-import { isUserPrincipal, requestConsolePrincipal, type HttpHost } from '@zhin.js/host-http';
+import { isExplicitConsolePrincipal, jsonResponse, type HttpHost } from '@zhin.js/host-http';
+import { withNoStore } from './no-store.js';
 import type { ConsoleMessageDiagnostic } from '@zhin.js/console-protocol';
-import { parseBoundedInteger, writeJson } from '@zhin.js/gateway/http';
+import { parseBoundedInteger } from '@zhin.js/gateway/http';
 
 /** Reads operational facts only; it never replays a message or runs plugin code. */
 export function registerMessageDiagnosticRoutes(options: Readonly<{
@@ -11,51 +12,45 @@ export function registerMessageDiagnosticRoutes(options: Readonly<{
   diagnostics?: RuntimeMessageDiagnosticsReader;
 }>): void {
   const { http, base, diagnostics } = options;
-  http.route('GET', `${base}/messages/diagnostics`, (request, response, url, authScope) => {
-    const authorization = request.headers.authorization;
+  http.route('GET', `${base}/messages/diagnostics`, (request, { url, principal }) => {
+    const authorization = request.headers.get('authorization');
     const bearer = authorization?.startsWith('Bearer ') ? authorization.slice(7).trim() : '';
-    const explicit = isUserPrincipal(requestConsolePrincipal(request)) || http.tokenRegistry.resolve(bearer) === 'full';
-    if (authScope !== 'full' || !explicit) {
-      writeJson(response, 403, { success: false, error: '需要以 Console 账号或 API 令牌登录才能读取消息诊断' });
-      return;
+    const explicit = isExplicitConsolePrincipal(principal) || http.tokenRegistry.resolve(bearer) === 'full';
+    if (!explicit) {
+      return jsonResponse(403, { success: false, error: '需要以 Console 账号或 API 令牌登录才能读取消息诊断' });
     }
     if (!diagnostics) {
-      writeJson(response, 503, { success: false, error: 'IM 消息诊断尚未就绪' });
-      return;
+      return jsonResponse(503, { success: false, error: 'IM 消息诊断尚未就绪' });
     }
-    response.setHeader('cache-control', 'no-store');
+    const reply = (status: number, body: unknown) => withNoStore(jsonResponse(status, body));
     const id = url.searchParams.get('id');
     if (id !== null) {
       if (!id || id.length > 128) {
-        writeJson(response, 400, { success: false, error: '诊断 ID 无效' });
-        return;
+        return reply(400, { success: false, error: '诊断 ID 无效' });
       }
       const record: ConsoleMessageDiagnostic | undefined = diagnostics.get(id);
-      writeJson(response, record ? 200 : 404, record
+      return reply(record ? 200 : 404, record
         ? { success: true, data: record }
         : { success: false, error: '记录不存在或已过期；诊断仅保留最近的进程内记录' });
-      return;
     }
     let conversation: ConversationRef | undefined;
     const encoded = url.searchParams.get('conversation');
     if (encoded !== null) {
       conversation = parseDiagnosticConversation(encoded);
       if (!conversation) {
-        writeJson(response, 400, { success: false, error: '请提供完整且有效的会话标识（含 Endpoint、父容器和话题）' });
-        return;
+        return reply(400, { success: false, error: '请提供完整且有效的会话标识（含 Endpoint、父容器和话题）' });
       }
     }
     const messageId = url.searchParams.get('messageId');
     if (messageId !== null && (!conversation || !messageId || messageId.length > 2048)) {
-      writeJson(response, 400, { success: false, error: '按消息查询需要完整会话及有效的 messageId' });
-      return;
+      return reply(400, { success: false, error: '按消息查询需要完整会话及有效的 messageId' });
     }
     const records: readonly ConsoleMessageDiagnostic[] = diagnostics.list({
       limit: parseBoundedInteger(url.searchParams.get('limit'), 50, 1, 100),
       ...(conversation ? { conversation } : {}),
       ...(messageId !== null ? { messageId } : {}),
     });
-    writeJson(response, 200, { success: true, data: records });
+    return reply(200, { success: true, data: records });
   }, {
     summary: 'Read bounded message processing diagnostics',
     tags: ['messages', 'diagnostics'],

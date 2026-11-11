@@ -3,12 +3,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
-import { TokenRegistry } from '@zhin.js/host-http';
+import { TokenRegistry, type HttpHandler } from '@zhin.js/host-http';
 import {
   createConsoleHostModules,
   registerConsoleHttp,
 } from '../../../src/instance/console/host.js';
 import { projectConsoleEntries } from '../../../src/instance/console/entry-projection.js';
+
+const call = (handler: HttpHandler, url: string) => {
+  const parsed = new URL(url);
+  return Promise.resolve(handler(new Request(parsed), { url: parsed, params: {} }));
+};
 
 describe('Console topology Host endpoint', () => {
   it('loads and reloads server TSX through the CLI fallback loader', async () => {
@@ -71,19 +76,12 @@ describe('Console topology Host endpoint', () => {
       projectRoot: '/tmp/project',
     });
 
-    const handler = route.mock.calls.find((call) => call[1] === '/console/api/topology')?.[2] as (
-      request: unknown,
-      response: { writeHead: (status: number, headers?: Record<string, string>) => void; end: (body?: string) => void },
-      url: URL,
-    ) => Promise<void>;
-    const writeHead = vi.fn();
-    const end = vi.fn();
-    await handler({}, { writeHead, end }, new URL('http://localhost/console/api/topology?route=/a/p-status'));
+    const handler = route.mock.calls.find((call) => call[1] === '/console/api/topology')?.[2] as HttpHandler;
+    const response = await call(handler, 'http://localhost/console/api/topology?route=/a/p-status');
 
-    expect(writeHead).toHaveBeenCalledWith(200, expect.objectContaining({
-      'content-type': 'application/json; charset=utf-8',
-    }));
-    expect(JSON.parse(end.mock.calls[0]?.[0] as string)).toEqual({
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('application/json; charset=utf-8');
+    expect(await response.json()).toEqual({
       generation: 12,
       pages: [{ id: 'status', route: '/a/p-status', title: 'Status' }],
       navigation: [{ type: 'page', label: 'Status', route: '/a/p-status' }],
@@ -134,20 +132,9 @@ describe('Console topology Host endpoint', () => {
       projectRoot: '/tmp/project',
     });
 
-    const handler = route.mock.calls.find((call) => call[1] === '/*')?.[2] as (
-      request: unknown,
-      response: { writeHead: (status: number, headers?: Record<string, string>) => void; end: (body?: string) => void; setHeader?: () => void },
-      url: URL,
-    ) => Promise<void>;
-    const writeHead = vi.fn();
-    const end = vi.fn();
-    await handler({}, { writeHead, end, setHeader: vi.fn() }, new URL('http://localhost/sandbox'));
-    expect(writeHead).not.toHaveBeenCalledWith(503);
-    expect(writeHead.mock.calls[0]?.[0]).toBe(200);
-
-    const missingHead = vi.fn();
-    await handler({}, { writeHead: missingHead, end: vi.fn(), setHeader: vi.fn() }, new URL('http://localhost/nope'));
-    expect(missingHead).toHaveBeenCalledWith(404);
+    const handler = route.mock.calls.find((call) => call[1] === '/*')?.[2] as HttpHandler;
+    expect((await call(handler, 'http://localhost/sandbox')).status).toBe(200);
+    expect((await call(handler, 'http://localhost/nope')).status).toBe(404);
   });
 
   it('projects Console entries with rich PageMetadata and locale title resolution across GET /entries and GET /pages', async () => {
@@ -212,18 +199,11 @@ describe('Console topology Host endpoint', () => {
       projectRoot: '/tmp/project',
     });
 
-    const entriesHandler = route.mock.calls.find((call) => call[1] === '/entries')?.[2] as (
-      request: unknown,
-      response: { writeHead: (status: number, headers?: Record<string, string>) => void; end: (body?: string) => void },
-      url: URL,
-    ) => Promise<void>;
-    const writeEntriesHead = vi.fn();
-    const writeEntriesEnd = vi.fn();
-    await entriesHandler({}, { writeHead: writeEntriesHead, end: writeEntriesEnd }, new URL('http://localhost/entries?locale=en'));
-    expect(writeEntriesHead).toHaveBeenCalledWith(200, expect.objectContaining({
-      'content-type': 'application/json; charset=utf-8',
-    }));
-    const entriesBody = JSON.parse(writeEntriesEnd.mock.calls[0]?.[0] as string);
+    const entriesHandler = route.mock.calls.find((call) => call[1] === '/entries')?.[2] as HttpHandler;
+    const entries = await call(entriesHandler, 'http://localhost/entries?locale=en');
+    expect(entries.status).toBe(200);
+    expect(entries.headers.get('content-type')).toBe('application/json; charset=utf-8');
+    const entriesBody = await entries.json();
     expect(entriesBody.entries[0]).toMatchObject({
       id: 'ambient',
       title: 'Ambient Insights',
@@ -233,17 +213,10 @@ describe('Console topology Host endpoint', () => {
       meta: expect.objectContaining({ section: 'conversations' }),
     });
 
-    const pagesHandler = route.mock.calls.find((call) => call[1] === '/pages')?.[2] as (
-      request: unknown,
-      response: { writeHead: (status: number, headers?: Record<string, string>) => void; end: (body?: string) => void },
-      url: URL,
-    ) => Promise<void>;
-    const writePagesHead = vi.fn();
-    const writePagesEnd = vi.fn();
-    await pagesHandler({}, { writeHead: writePagesHead, end: writePagesEnd }, new URL('http://localhost/pages'));
-    expect(writePagesHead).toHaveBeenCalledWith(200, expect.objectContaining({
-      'content-type': 'text/html; charset=utf-8',
-    }));
-    expect(writePagesEnd.mock.calls[0]?.[0]).toContain('Ambient group radar');
+    const pagesHandler = route.mock.calls.find((call) => call[1] === '/pages')?.[2] as HttpHandler;
+    const pagesResponse = await call(pagesHandler, 'http://localhost/pages');
+    expect(pagesResponse.status).toBe(200);
+    expect(pagesResponse.headers.get('content-type')).toBe('text/html; charset=utf-8');
+    expect(await pagesResponse.text()).toContain('Ambient group radar');
   });
 });

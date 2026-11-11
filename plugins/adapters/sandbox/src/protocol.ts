@@ -37,6 +37,37 @@ export interface SandboxWsSocket {
   ): void;
 }
 
+/** A Host {@link WsConnection} seen through the {@link SandboxWsSocket} surface. */
+export function sandboxSocketOf(connection: {
+  send(data: string): void;
+  close(code?: number, reason?: string): void;
+  onMessage(listener: (data: string | Uint8Array) => void): () => void;
+  onClose(listener: (code: number, reason: string) => void): () => void;
+}): SandboxWsSocket {
+  let open = true;
+  connection.onClose(() => { open = false; });
+  const subscriptions = new Map<(...args: unknown[]) => void, () => void>();
+  return {
+    get readyState() { return open ? WS_OPEN : 3; },
+    send: (data) => { if (open) connection.send(data); },
+    close: (code, reason) => connection.close(code, reason),
+    on(event, listener) {
+      if (event === 'message') {
+        subscriptions.set(listener, connection.onMessage((data) => {
+          listener(typeof data === 'string' ? data : new TextDecoder().decode(data));
+        }));
+      } else if (event === 'close') {
+        subscriptions.set(listener, connection.onClose(() => listener()));
+      }
+      // Transport errors surface as a close on a WsConnection.
+    },
+    off(_event, listener) {
+      subscriptions.get(listener)?.();
+      subscriptions.delete(listener);
+    },
+  };
+}
+
 export type ResolvedSandboxBot = {
   readonly context: 'sandbox';
   readonly id: string;

@@ -9,6 +9,9 @@ import * as config from '../src/config.js';
 import * as pluginManagement from '../src/plugin-management.js';
 import * as project from '../src/project.js';
 import * as supervisor from '../src/supervisor.js';
+import * as onboarding from '../src/onboarding.js';
+import * as server from '../src/server.js';
+import * as local from '../src/local.js';
 
 const packageRoot = fileURLToPath(new URL('..', import.meta.url));
 // ADR 0054 §0: the gateway never loads zhin.js or IM layers.
@@ -35,9 +38,26 @@ describe('@zhin.js/gateway package boundary', () => {
     expect(pluginManagement.PluginManagementWorkflow).toBeTypeOf('function');
     expect(project.findConfigFile).toBeTypeOf('function');
     expect(project.loadRuntimeEnvironmentLayers).toBeTypeOf('function');
-    expect(supervisor.NativeTypeScriptSupervisor).toBeTypeOf('function');
-    for (const area of [iam, terminal, config, pluginManagement, project, supervisor]) {
+    expect(supervisor.InstanceSupervisor).toBeTypeOf('function');
+    expect(supervisor.runSupervisedInstance).toBeTypeOf('function');
+    expect(onboarding.OnboardingService).toBeTypeOf('function');
+    expect(onboarding.authorizeInstall).toBeTypeOf('function');
+    expect(server.GatewayHttpServer).toBeTypeOf('function');
+    expect(server.startGateway).toBeTypeOf('function');
+    expect(server.runGateway).toBeTypeOf('function');
+    expect(local.LocalControlServer).toBeTypeOf('function');
+    expect(local.LocalGatewayClient).toBeTypeOf('function');
+    for (const area of [iam, terminal, config, pluginManagement, project, supervisor, onboarding, server, local]) {
       for (const [name, value] of Object.entries(area)) expect(gateway[name as keyof typeof gateway]).toBe(value);
+    }
+  });
+
+  it('keeps the Node HTTP stack out of the subpaths the instance imports', async () => {
+    // zhin.js/instance imports `/http` (response helpers); only `/server` may load the Node listener.
+    const http = await readFile(join(packageRoot, 'src', 'http.ts'), 'utf8');
+    expect(http).not.toMatch(/gateway-http-server|start-gateway|host-http\/node/u);
+    for (const file of [...await sources(join(packageRoot, 'src', 'supervisor')), ...await sources(join(packageRoot, 'src', 'local'))]) {
+      expect(await readFile(file, 'utf8'), file).not.toMatch(/host-http\/node|['"]ws['"]|node:http'/u);
     }
   });
 

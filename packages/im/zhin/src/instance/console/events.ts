@@ -1,7 +1,13 @@
 import type { RuntimeMessageEvent } from '@zhin.js/core/runtime';
-import type { ConsoleEventHub, HttpHost } from '@zhin.js/host-http';
+import {
+  createResponseStream,
+  jsonResponse,
+  SSE_HEADERS,
+  type ConsoleEventHub,
+  type HttpHost,
+} from '@zhin.js/host-http';
 import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
-import { writeJson, writeSse } from '@zhin.js/gateway/http';
+import { sseFrame } from '@zhin.js/gateway/http';
 import { listPages, requestConsoleAccess } from './entry-projection.js';
 
 export function publishMessageEvent(hub: ConsoleEventHub, event: RuntimeMessageEvent): void {
@@ -47,63 +53,51 @@ export interface RegisterConsoleEventRoutesOptions {
 export function registerConsoleEventRoutes(options: RegisterConsoleEventRoutesOptions): void {
   const { http, base, consoleRuntime, hub } = options;
 
-  http.route('GET', `${base}/events/history`, (_request, response, url) => {
+  http.route('GET', `${base}/events/history`, (_request, { url }) => {
     const page = hub.history({
       runtimeId: url.searchParams.get('runtimeId') ?? undefined,
       after: Number(url.searchParams.get('after') ?? 0),
       limit: Number(url.searchParams.get('limit') ?? 200),
     });
-    writeJson(response, 200, { success: true, data: page });
+    return jsonResponse(200, { success: true, data: page });
   }, {
     summary: 'Console event history',
     tags: ['console'],
     description: 'Bounded resumable history for the current Console event runtime.',
   });
 
-  http.route('GET', `${base}/events`, async (request, response, url) => {
+  http.route('GET', `${base}/events`, async (request, context) => {
+    const { url } = context;
     // The process control plane is available before the first generation.
     // Page discovery becomes ready after commit, while login events must flow
     // during Adapter activation.
-    const pages = await listPages(consoleRuntime, requestConsoleAccess(http, request, url)).catch(() => Object.freeze([]));
-    const headerLastEventId = Array.isArray(request.headers['last-event-id'])
-      ? request.headers['last-event-id'][0]
-      : request.headers['last-event-id'];
+    const pages = await listPages(consoleRuntime, requestConsoleAccess(http, request, context)).catch(() => Object.freeze([]));
     const after = Number(
       url.searchParams.get('after')
       ?? url.searchParams.get('lastEventId')
-      ?? headerLastEventId
+      ?? request.headers.get('last-event-id')
       ?? 0,
     );
     const eventRuntimeId = url.searchParams.get('runtimeId') ?? undefined;
-    response.writeHead(200, {
-      'content-type': 'text/event-stream; charset=utf-8',
-      'cache-control': 'no-cache, no-transform',
-      connection: 'keep-alive',
-      'x-accel-buffering': 'no',
-      'x-zhin-event-runtime-id': hub.runtimeId,
-    });
+    const stream = createResponseStream();
     // Snapshot frames have no event id. The resumable cursor belongs only to hub journal events.
-    writeSse(response, 'sync', { key: 'pages', value: pages });
-    writeSse(response, 'init-data', { timestamp: Date.now() });
-    const unsubscribe = hub.subscribe(response, {
+    stream.write(sseFrame('sync', { key: 'pages', value: pages }));
+    stream.write(sseFrame('init-data', { timestamp: Date.now() }));
+    const unsubscribe = hub.subscribe(stream, {
       runtimeId: eventRuntimeId,
       after: Number.isSafeInteger(after) && after >= 0 ? after : 0,
     });
     const timer = setInterval(() => {
-      try {
-        response.write(': keepalive\n\n');
-      } catch {
-        clearInterval(timer);
-      }
+      stream.write(': keepalive\n\n');
     }, 15_000);
-    request.once('close', () => {
+    timer.unref?.();
+    stream.onClose(() => {
       clearInterval(timer);
       unsubscribe();
-      try {
-        response.end();
-      } catch {
-        // The client may already have closed the stream.
-      }
+    });
+    return new Response(stream.stream, {
+      status: 200,
+      headers: { ...SSE_HEADERS, 'x-zhin-event-runtime-id': hub.runtimeId },
     });
   }, {
     summary: 'Console SSE stream',

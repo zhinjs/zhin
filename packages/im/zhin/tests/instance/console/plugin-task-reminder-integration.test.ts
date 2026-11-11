@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { AdapterIndex, Adapter, endpointSpec, createEndpointSpecification, type Endpoint, adapterFeatureId, defineAdapter, endpointEventGatewayToken } from '@zhin.js/adapter';
-import { createHttpHost } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import { createCapabilitySlot, createSnapshotView, SnapshotStore, PluginStateStore, rootPluginId, childPluginId,
   pluginTaskProviderToken, type PluginId, type TokenId, type SnapshotState } from '@zhin.js/plugin-runtime';
 import { ReminderService } from '../../../../../../plugins/utils/reminder/src/service.js';

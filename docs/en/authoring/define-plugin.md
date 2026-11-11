@@ -367,7 +367,7 @@ All come from `zhin.js` except `httpHostToken` (from `@zhin.js/host-http`). A to
 | `outboundHostToken` | An adapter is available | `send(input)` pushes a message and returns the platform message id or `null`; some platforms support `addReaction` / `removeReaction` / `recall` |
 | `htmlRendererToken` | `@zhin.js/html-renderer` is installed | `render(html, { width, format, backgroundColor })` outputs PNG; fall back to plain text when missing |
 | `runtimeEventPublisherToken` | Root plugin with Console enabled | `publish(type, data)` broadcasts to Console's live event stream |
-| `httpHostToken` | The HTTP service is enabled | `route(method, path, handler, meta?)` registers HTTP routes; `ws(path).onConnection(cb)` registers WebSockets |
+| `httpHostToken` | The HTTP service is enabled | `route(method, path, (request, context) => Response, meta?)` registers HTTP routes (Web standard `Request` / `Response`, see [HTTP route contract](./host-tokens.md#http-route-contract)); `ws(path).onConnection(connection => …)` registers WebSockets |
 
 Database and schedule tokens expose only this plugin's private table names and job IDs — no raw connection, no process-level control. Full list: [Host Token reference](./host-tokens.md).
 

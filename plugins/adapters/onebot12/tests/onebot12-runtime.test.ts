@@ -1,9 +1,11 @@
+import { wsConnectionFromMock } from '../../test-utils/http.js';
 import { createAdapterHarness, createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
 import { ProtocolError } from '@imhelper/onebot-v12';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import type { OutboundMessageService } from '@zhin.js/core/runtime';
-import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
+import { httpHostToken } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import defineOneBot12Adapter from '../adapters/onebot12/index.js';
 import { OneBot12WebhookEndpoint } from '../src/webhook.js';
 import { OneBot12WsEndpoint } from '../src/ws-endpoint.js';
@@ -959,15 +961,14 @@ describe('onebot12 reverse ws lifecycle', () => {
   }
 
   function reverseConnection(socket: OneBot12WsSocket) {
-    return {
+    return wsConnectionFromMock({
       socket,
       request: {
         headers: { authorization: 'Bearer secret' },
         url: '/',
         socket: { remoteAddress: '127.0.0.1' },
       },
-      authScope: 'full',
-    };
+    });
   }
 
   it('owns heartbeat requests and closes the accepted connection on stop', async () => {

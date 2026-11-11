@@ -103,7 +103,7 @@ With the Console installed, "Comment review" appears in the navigation (route is
 
 The page refreshes every 10 seconds (2 seconds while scanning), so new drafts appear automatically.
 
-Permissions (plugin-defined; currently only a global owner holds them):
+Permissions (plugin-defined, granted by level — see [Plugin permission levels](../console/index.md#plugin-permission-levels): `bilibili:read` is `read` level, held by `viewer` and above; `bilibili:review` and `bilibili:login` are `operate` level, held by `operator` and above; a global owner is unrestricted):
 
 | Permission | Allows |
 |---|---|

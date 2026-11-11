@@ -1,3 +1,5 @@
+import type { WsConnection } from '@zhin.js/host-http';
+
 /** Minimal WS surface used by the endpoint (real `ws` or test mock). */
 export interface NapCatWsSocket {
   readonly readyState: number;
@@ -13,3 +15,34 @@ export interface NapCatWsCreateOptions {
 }
 
 export const WS_OPEN = 1;
+
+/**
+ * A Host reverse-WebSocket connection seen through the NapCatWsSocket surface. Protocol
+ * keepalive (ping / pong) belongs to the Host transport, so `ping` is absent.
+ */
+export function socketOfConnection(connection: WsConnection): NapCatWsSocket {
+  let readyState = 1;
+  connection.onClose(() => { readyState = 3; });
+  const subscriptions = new Map<(...args: unknown[]) => void, () => void>();
+  const off = (_event: string, listener: (...args: unknown[]) => void): void => {
+    subscriptions.get(listener)?.();
+    subscriptions.delete(listener);
+  };
+  return {
+    get readyState() { return readyState; },
+    send: (data: string) => connection.send(data),
+    close: (code?: number, reason?: string) => connection.close(code, reason),
+    on(event: string, listener: (...args: unknown[]) => void) {
+      if (event === 'message') {
+        subscriptions.set(listener, connection.onMessage((data) => {
+          listener(typeof data === 'string' ? data : Buffer.from(data));
+        }));
+      } else if (event === 'close') {
+        subscriptions.set(listener, connection.onClose((code, reason) => listener(code, reason)));
+      }
+      // 'error' surfaces as a close on a WsConnection; 'open' already happened.
+    },
+    off,
+    removeListener: off,
+  } as NapCatWsSocket;
+}

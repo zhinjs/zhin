@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import { createHttpHost } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import { installRuntimeMcp, type RuntimeMcpTool } from '../src/runtime.js';
 
 const hosts: Array<ReturnType<typeof createHttpHost>> = [];
@@ -57,7 +57,8 @@ describe('Runtime MCP Host', () => {
     const baseUrl = `http://127.0.0.1:${port}/mcp`;
     expect((await mcpRequest(baseUrl, 'tools/list', {}, 'wrong')).status).toBe(401);
     expect((await mcpRequest(baseUrl, 'tools/list', {}, 'user-api-token')).status).toBe(200);
-    expect(authenticateBearer).toHaveBeenCalledWith('user-api-token', expect.anything());
+    // The 4th argument is the principal the Host resolved for the request (here: an open Host).
+    expect(authenticateBearer).toHaveBeenCalledWith('user-api-token', expect.any(Request), '127.0.0.1', { kind: 'bootstrap', open: true });
   });
 
   it('keeps the advertised tool protocol available for an empty generation', async () => {

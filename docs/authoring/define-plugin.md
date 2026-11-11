@@ -367,7 +367,7 @@ export default definePlugin({
 | `outboundHostToken` | 有可用的适配器 | `send(input)` 主动推送，返回平台消息 id 或 `null`；部分平台支持 `addReaction` / `removeReaction` / `recall` |
 | `htmlRendererToken` | 安装了 `@zhin.js/html-renderer` | `render(html, { width, format, backgroundColor })` 输出 PNG；未安装时应降级为纯文本 |
 | `runtimeEventPublisherToken` | Bot 根插件，启用 Console 时 | `publish(type, data)` 向 Console 实时事件流广播 |
-| `httpHostToken` | 启用了 HTTP 服务 | `route(method, path, handler, meta?)` 注册 HTTP 路由；`ws(path).onConnection(cb)` 注册 WebSocket |
+| `httpHostToken` | 启用了 HTTP 服务 | `route(method, path, (request, context) => Response, meta?)` 注册 HTTP 路由（Web 标准 `Request` / `Response`，见 [HTTP 路由契约](./host-tokens.md#http-路由契约)）；`ws(path).onConnection(connection => …)` 注册 WebSocket |
 
 数据库和定时任务只暴露本插件私有的表名和任务 ID，不提供原始数据库连接或进程级控制。全部 token 见 [Host Token 总览](./host-tokens.md)。
 

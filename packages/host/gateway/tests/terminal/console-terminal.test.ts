@@ -1,5 +1,4 @@
 import { EventEmitter } from 'node:events';
-import type { IncomingMessage } from 'node:http';
 import {
   hostKeyFingerprint,
   installConsoleTerminal,
@@ -15,26 +14,46 @@ import {
   type TerminalServiceOptions,
 } from '../../src/terminal/index.js';
 import type { PtyModule, SshModule } from '../../src/terminal/modules.js';
+import { startSshBackend } from '../../src/terminal/backends.js';
 
 const ROOT = '/srv/bot';
+const PIN = `SHA256:${'A'.repeat(43)}`;
 const owner: TerminalPrincipal = { id: 'user:owner', kind: 'user' };
 const other: TerminalPrincipal = { id: 'user:other', kind: 'user' };
 
 class FakeSocket extends EventEmitter {
-  readyState = 1;
-  readonly sent: Array<{ data: string | Buffer; binary: boolean }> = [];
+  open = true;
+  url = new URL('http://localhost/api/console/terminal');
+  readonly remoteAddress = '10.1.2.3';
+  bufferedAmount = 0;
+  readonly sent: Array<{ data: string | Uint8Array; binary: boolean }> = [];
   closed?: { code?: number; reason?: string };
 
-  send(data: string | Buffer, options?: { binary?: boolean }, callback?: (error?: Error) => void): void {
-    this.sent.push({ data, binary: options?.binary === true });
-    callback?.();
+  /** The upgrade URL this connection arrived on. */
+  at(url: string): this {
+    this.url = new URL(url, 'http://localhost');
+    return this;
+  }
+
+  send(data: string | Uint8Array): void {
+    this.sent.push({ data, binary: typeof data !== 'string' });
   }
 
   close(code?: number, reason?: string): void {
-    if (this.readyState !== 1) return;
-    this.readyState = 3;
+    if (!this.open) return;
+    this.open = false;
     this.closed = { code, reason };
-    this.emit('close');
+    this.emit('close', code ?? 1005, reason ?? '');
+  }
+
+  onMessage(listener: (data: string | Uint8Array) => void): () => void {
+    this.on('message', listener);
+    return () => { this.off('message', listener); };
+  }
+
+  onClose(listener: (code: number, reason: string) => void): () => void {
+    this.once('close', listener);
+    return () => { this.off('close', listener); };
   }
 
   controls(): Array<Record<string, unknown>> {
@@ -42,20 +61,20 @@ class FakeSocket extends EventEmitter {
   }
 
   output(): string {
-    return this.sent.filter((frame) => frame.binary).map((frame) => frame.data.toString()).join('');
+    return this.sent.filter((frame) => frame.binary).map((frame) => Buffer.from(frame.data as Uint8Array).toString()).join('');
   }
 
   input(text: string): void {
-    this.emit('message', Buffer.from(text), true);
+    this.emit('message', Buffer.from(text));
   }
 
   control(message: unknown): void {
-    this.emit('message', Buffer.from(JSON.stringify(message)), false);
+    this.emit('message', JSON.stringify(message));
   }
 
-  disconnect(): void {
-    this.readyState = 3;
-    this.emit('close');
+  disconnect(code = 1001): void {
+    this.open = false;
+    this.emit('close', code, '');
   }
 }
 
@@ -142,10 +161,6 @@ function fakeSsh(hostKey: Buffer): { module: SshModule; state: FakeSshState } {
   return { module: { Client: Client as unknown as SshModule['Client'] }, state };
 }
 
-function request(url: string): Pick<IncomingMessage, 'url' | 'socket'> {
-  return { url, socket: { remoteAddress: '10.1.2.3' } } as Pick<IncomingMessage, 'url' | 'socket'>;
-}
-
 function makeService(overrides: Partial<TerminalServiceOptions> & { raw?: Record<string, unknown> } = {}) {
   const pty = fakePty();
   const audits: TerminalAuditEvent[] = [];
@@ -165,7 +180,7 @@ function makeService(overrides: Partial<TerminalServiceOptions> & { raw?: Record
 async function connect(service: TerminalService, principal: TerminalPrincipal = owner, target = 'local') {
   const { ticket } = await service.issueTicket(principal, { target, cols: 100, rows: 30 });
   const socket = new FakeSocket();
-  await service.handleConnection(socket, request(`/api/console/terminal?ticket=${ticket}`));
+  await service.handleConnection(socket.at(`/api/console/terminal?ticket=${ticket}`));
   return socket;
 }
 
@@ -184,7 +199,7 @@ describe('console terminal config', () => {
   it('rejects unknown keys, bad targets, and missing credentials', () => {
     expect(() => parseTerminalConfig({ enabled: true, bogus: 1 }, { projectRoot: ROOT })).toThrow(TerminalConfigError);
     expect(() => parseTerminalConfig({ enabled: true, maxSessions: 0 }, { projectRoot: ROOT })).toThrow(/maxSessions/);
-    const base = { host: 'h', username: 'u', passwordEnv: 'PW' };
+    const base = { host: 'h', username: 'u', passwordEnv: 'PW', hostFingerprint: PIN };
     expect(() => parseTerminalConfig({ ssh: [{ ...base, name: 'local' }] }, { projectRoot: ROOT })).toThrow(/local/);
     expect(() => parseTerminalConfig({ ssh: [{ ...base, name: 'a' }, { ...base, name: 'a' }] }, { projectRoot: ROOT })).toThrow(/duplicate/);
     expect(() => parseTerminalConfig({ ssh: [{ name: 'a', host: 'h', username: 'u' }] }, { projectRoot: ROOT })).toThrow(/required/);
@@ -192,8 +207,23 @@ describe('console terminal config', () => {
     expect(() => parseTerminalConfig({ ssh: [{ ...base, name: 'a', hostFingerprint: 'MD5:aa' }] }, { projectRoot: ROOT })).toThrow(/hostFingerprint/);
   });
 
+  it('requires a host key pin unless the target explicitly opts out (ADR 0051)', () => {
+    const unpinned = { name: 'a', host: 'h', username: 'u', passwordEnv: 'PW' };
+    const parse = (target: Record<string, unknown>) => parseTerminalConfig({ ssh: [target] }, { projectRoot: ROOT });
+    expect(() => parse(unpinned)).toThrow(TerminalConfigError);
+    expect(() => parse(unpinned)).toThrow(/hostFingerprint: is required.*ssh-keyscan.*ssh-keygen -lf.*insecureAcceptAnyHostKey/u);
+    expect(() => parse({ ...unpinned, insecureAcceptAnyHostKey: false })).toThrow(/hostFingerprint: is required/);
+    expect(() => parse({ ...unpinned, insecureAcceptAnyHostKey: 'yes' })).toThrow(/insecureAcceptAnyHostKey/);
+    expect(() => parse({ ...unpinned, hostFingerprint: PIN, insecureAcceptAnyHostKey: true })).toThrow(/mutually exclusive/);
+    expect(parse({ ...unpinned, hostFingerprint: PIN }).ssh[0]).not.toHaveProperty('insecureAcceptAnyHostKey');
+    expect(parse({ ...unpinned, insecureAcceptAnyHostKey: true }).ssh[0]).toMatchObject({ insecureAcceptAnyHostKey: true });
+  });
+
   it('is idempotent so a parsed config can be passed again', () => {
-    const once = parseTerminalConfig({ enabled: true, ssh: [{ name: 'b', host: 'h', username: 'u', passwordEnv: 'PW' }] }, { projectRoot: ROOT });
+    const once = parseTerminalConfig({ enabled: true, ssh: [
+      { name: 'b', host: 'h', username: 'u', passwordEnv: 'PW', hostFingerprint: PIN },
+      { name: 'c', host: 'h', username: 'u', passwordEnv: 'PW', insecureAcceptAnyHostKey: true },
+    ] }, { projectRoot: ROOT });
     expect(parseTerminalConfig(once, { projectRoot: ROOT })).toEqual(once);
   });
 
@@ -207,7 +237,7 @@ describe('console terminal config', () => {
 
 describe('console terminal SSH credentials', () => {
   const target = parseTerminalConfig({
-    ssh: [{ name: 'box', host: 'h', username: 'u', privateKeyEnv: 'KEY', passphraseEnv: 'PASS', passwordEnv: 'PW' }],
+    ssh: [{ name: 'box', host: 'h', username: 'u', privateKeyEnv: 'KEY', passphraseEnv: 'PASS', passwordEnv: 'PW', hostFingerprint: PIN }],
   }, { projectRoot: ROOT }).ssh[0]!;
 
   it('reads key, passphrase and password from env', async () => {
@@ -220,7 +250,7 @@ describe('console terminal SSH credentials', () => {
   });
 
   it('expands ~ and project-relative key paths', async () => {
-    const fileTarget = parseTerminalConfig({ ssh: [{ name: 'f', host: 'h', username: 'u', privateKeyPath: '~/.ssh/id' }] }, { projectRoot: ROOT }).ssh[0]!;
+    const fileTarget = parseTerminalConfig({ ssh: [{ name: 'f', host: 'h', username: 'u', privateKeyPath: '~/.ssh/id', hostFingerprint: PIN }] }, { projectRoot: ROOT }).ssh[0]!;
     const readFile = vi.fn(async () => Buffer.from('pem'));
     const credentials = await resolveSshCredentials(fileTarget, { projectRoot: ROOT, env: {}, readFile, homedir: () => '/home/op' });
     expect(readFile).toHaveBeenCalledWith('/home/op/.ssh/id');
@@ -354,7 +384,7 @@ describe('TerminalService', () => {
     expect(socket.controls().at(-1)).toMatchObject({ type: 'error', code: 'bad-message' });
     socket.control({ type: 'ping' });
     expect(socket.controls().at(-1)).toEqual({ type: 'pong' });
-    socket.emit('message', Buffer.from('not json'), false);
+    socket.emit('message', 'not json');
     expect(socket.controls().at(-1)).toMatchObject({ type: 'error', code: 'bad-message' });
 
     proc.emitExit(3);
@@ -382,14 +412,14 @@ describe('TerminalService', () => {
   it('rejects invalid, reused and expired tickets on the WebSocket', async () => {
     const { service, pty } = makeService();
     const bad = new FakeSocket();
-    await service.handleConnection(bad, request('/api/console/terminal?ticket=nope'));
+    await service.handleConnection(bad.at('/api/console/terminal?ticket=nope'));
     expect(bad.controls()[0]).toMatchObject({ type: 'error', code: 'invalid-ticket' });
     expect(bad.closed?.code).toBe(4401);
 
     const { ticket } = await service.issueTicket(owner, { target: 'local' });
-    await service.handleConnection(new FakeSocket(), request(`/x?ticket=${ticket}`));
+    await service.handleConnection(new FakeSocket().at(`/x?ticket=${ticket}`));
     const reused = new FakeSocket();
-    await service.handleConnection(reused, request(`/x?ticket=${ticket}`));
+    await service.handleConnection(reused.at(`/x?ticket=${ticket}`));
     expect(reused.closed?.code).toBe(4401);
     expect(pty.procs).toHaveLength(1);
   });
@@ -398,7 +428,7 @@ describe('TerminalService', () => {
     const { service, pty } = makeService();
     const { ticket } = await service.issueTicket(owner, { target: 'local' });
     const socket = new FakeSocket();
-    await service.handleConnection(socket, request(`/x?ticket=${ticket}`), other);
+    await service.handleConnection(socket.at(`/x?ticket=${ticket}`), other);
     expect(socket.closed?.code).toBe(4401);
     expect(pty.procs).toHaveLength(0);
   });
@@ -409,7 +439,7 @@ describe('TerminalService', () => {
     const { ticket } = await service.issueTicket(owner, { target: 'local' });
     allowed = false;
     const socket = new FakeSocket();
-    await service.handleConnection(socket, request(`/x?ticket=${ticket}`));
+    await service.handleConnection(socket.at(`/x?ticket=${ticket}`));
     expect(socket.closed?.code).toBe(4403);
     expect(pty.procs).toHaveLength(0);
   });
@@ -420,7 +450,7 @@ describe('TerminalService', () => {
     await connect(service);
     await expect(service.issueTicket(owner, { target: 'local' })).rejects.toMatchObject({ status: 429, code: 'too-many-sessions' });
     const late = new FakeSocket();
-    await service.handleConnection(late, request(`/x?ticket=${pending.ticket}`));
+    await service.handleConnection(late.at(`/x?ticket=${pending.ticket}`));
     expect(late.closed?.code).toBe(4429);
   });
 
@@ -454,7 +484,7 @@ describe('TerminalService', () => {
     expect(pty.procs[0]!.killed).toBe(true);
     expect(theirs.closed).toBeUndefined();
     const late = new FakeSocket();
-    await service.handleConnection(late, request(`/x?ticket=${ticket}`));
+    await service.handleConnection(late.at(`/x?ticket=${ticket}`));
     expect(late.closed?.code).toBe(4401);
   });
 
@@ -468,7 +498,7 @@ describe('TerminalService', () => {
 
   it('reports a missing optional module as unavailable with a reason', async () => {
     const { service } = makeService({
-      raw: { ssh: [{ name: 'box', host: '10.0.0.12', username: 'deploy', passwordEnv: 'PW' }] },
+      raw: { ssh: [{ name: 'box', host: '10.0.0.12', username: 'deploy', passwordEnv: 'PW', hostFingerprint: PIN }] },
       modules: { loadPty: async () => { throw new Error('Cannot find module'); }, loadSsh: async () => { throw new Error('Cannot find module'); } },
       env: { PW: 'secret' },
     });
@@ -484,7 +514,7 @@ describe('TerminalService', () => {
     const hostKey = Buffer.from('ssh-ed25519 host key blob');
     const ssh = (extra: Record<string, unknown> = {}) => [{
       name: 'build-box', host: '10.0.0.12', port: 2222, username: 'deploy',
-      privateKeyEnv: 'BOX_KEY', passphraseEnv: 'BOX_PASS', ...extra,
+      privateKeyEnv: 'BOX_KEY', passphraseEnv: 'BOX_PASS', hostFingerprint: hostKeyFingerprint(hostKey), ...extra,
     }];
 
     it('connects with env credentials and never exposes them', async () => {
@@ -513,7 +543,7 @@ describe('TerminalService', () => {
       channel.emit('close');
       expect(socket.controls().at(-1)).toEqual({ type: 'exit', reason: 'process-exit', code: 0 });
       expect(fake.state.ended).toBeGreaterThan(0);
-      const dump = JSON.stringify([targets, audits, socket.sent.map((frame) => String(frame.data))]);
+      const dump = JSON.stringify([targets, audits, socket.sent.map((frame) => typeof frame.data === 'string' ? frame.data : Buffer.from(frame.data).toString())]);
       expect(dump).not.toMatch(/PRIVATE-KEY-PEM|top-secret|BOX_KEY/u);
     });
 
@@ -530,6 +560,33 @@ describe('TerminalService', () => {
       expect(fake.state.channels).toHaveLength(0);
       expect(service.sessions()).toEqual([]);
       expect(audits.at(-1)).toMatchObject({ action: 'terminal.session.start', outcome: 'error', detail: { code: 'host-fingerprint-mismatch' } });
+    });
+
+    it('accepts an unverified host key only with insecureAcceptAnyHostKey and marks the target unsafe', async () => {
+      const fake = fakeSsh(hostKey);
+      const warnings: string[] = [];
+      const { service } = makeService({
+        raw: { ssh: [{ name: 'build-box', host: '10.0.0.12', port: 2222, username: 'deploy',
+          privateKeyEnv: 'BOX_KEY', passphraseEnv: 'BOX_PASS', insecureAcceptAnyHostKey: true }] },
+        modules: { loadPty: async () => fakePty().module, loadSsh: async () => fake.module },
+        env: { BOX_KEY: 'k', BOX_PASS: 'p' },
+        logger: { warn: (message: string) => warnings.push(message) },
+      });
+      expect((await service.listTargets())[1]).toEqual({
+        id: 'build-box', kind: 'ssh', label: 'deploy@10.0.0.12:2222（不安全：未校验主机密钥）', available: true, insecureHostKey: true,
+      });
+      const socket = await connect(service, owner, 'build-box');
+      expect(socket.controls()[0]).toMatchObject({ type: 'ready', kind: 'ssh' });
+      expect(warnings.join('\n')).toContain(`${hostKeyFingerprint(hostKey)} accepted WITHOUT verification`);
+    });
+
+    it('refuses any host key when a target reaches the backend without a pin', async () => {
+      const fake = fakeSsh(hostKey);
+      const unpinned = { name: 'box', host: 'h', port: 22, username: 'u', passwordEnv: 'PW' };
+      const events = { onData: () => undefined, onExit: () => undefined };
+      await expect(startSshBackend(fake.module, unpinned, { password: 'x' }, { cols: 80, rows: 24 }, events as never))
+        .rejects.toMatchObject({ code: 'host-fingerprint-mismatch' });
+      expect(fake.state.channels).toHaveLength(0);
     });
 
     it('marks a target unavailable when its env credential is missing', async () => {
@@ -551,7 +608,7 @@ describe('TerminalService', () => {
       const { ticket } = await service.issueTicket(owner, { target: 'build-box' });
       const configsBefore = fake.state.configs.length;
       const socket = new FakeSocket();
-      const started = service.handleConnection(socket, request(`/x?ticket=${ticket}`));
+      const started = service.handleConnection(socket.at(`/x?ticket=${ticket}`));
       socket.disconnect();
       await started;
       expect(service.sessions()).toEqual([]);
@@ -574,7 +631,7 @@ describe('TerminalService', () => {
         resumeConnect = () => originalConnect.call(this, config);
       };
       const socket = new FakeSocket();
-      const started = service.handleConnection(socket, request(`/x?ticket=${ticket}`));
+      const started = service.handleConnection(socket.at(`/x?ticket=${ticket}`));
       await vi.waitFor(() => expect(service.sessions()).toHaveLength(1));
       socket.disconnect();
       expect(service.sessions()).toEqual([]);

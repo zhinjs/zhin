@@ -1,7 +1,6 @@
 /**
  * OAuth redirect endpoint mounted on zhin's shared HTTP host.
  */
-import type { IncomingMessage, ServerResponse } from "node:http";
 import type { CallbackResult } from "./chat-auth.js";
 
 export interface CalendarRouteHost {
@@ -9,10 +8,9 @@ export interface CalendarRouteHost {
     method: string,
     path: string,
     handler: (
-      request: IncomingMessage,
-      response: ServerResponse,
-      url: URL
-    ) => void | Promise<void>,
+      request: Request,
+      context: { readonly url: URL }
+    ) => Response | Promise<Response>,
     meta?: { readonly summary?: string; readonly tags?: readonly string[] }
   ): () => void;
 }
@@ -42,13 +40,12 @@ export function registerOAuthCallbackRoute(
   return http.route(
     "GET",
     callbackPath,
-    async (_request, response, url) => {
+    async (_request, { url }) => {
       const result = await handleCallback(url.searchParams);
-      response.writeHead(result.statusCode, {
+      return new Response(renderPage(result), { status: result.statusCode, headers: {
         "content-type": "text/html; charset=utf-8",
         "cache-control": "no-store",
-      });
-      response.end(renderPage(result));
+      } });
     },
     { summary: "Calendar OAuth callback", tags: ["calendar"] }
   );

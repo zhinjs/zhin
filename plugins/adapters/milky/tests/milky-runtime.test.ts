@@ -1,9 +1,11 @@
+import { wsConnectionFromMock } from '../../test-utils/http.js';
 import { createAdapterHarness, createEndpointHarness, createTestEventGateway, createTestEndpointEventGateway } from '../../test-utils/endpoint.js';
 import { MilkyV1Client, ProtocolError } from '@imhelper/milky-v1';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import type { OutboundMessageService } from '@zhin.js/core/runtime';
-import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
+import { httpHostToken } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import defineMilkyAdapter from '../adapters/milky/index.js';
 import {
   MilkySseEndpoint,
@@ -913,7 +915,7 @@ describe('milky ws lifecycle', () => {
 });
 
 describe('milky reverse ws lifecycle', () => {
-  it('owns the accepted connection heartbeat and closes it on stop', async () => {
+  it('leaves keepalive to the Host and closes the accepted connection on stop', async () => {
     let acceptConnection: ((connection: unknown) => void) | undefined;
     const releaseRoute = vi.fn();
     const http = {
@@ -941,17 +943,15 @@ describe('milky reverse ws lifecycle', () => {
 
     await endpoint.start();
     endpoint.open();
-    acceptConnection?.({
+    acceptConnection?.(wsConnectionFromMock({
       socket: ws,
       request: { headers: {}, url: '/', socket: { remoteAddress: '127.0.0.1' } },
-      authScope: 'full',
-    });
-    await vi.waitFor(() => expect((ws.ping as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(0));
+    }));
+    // Keepalive pings belong to the Host transport; the endpoint never pings itself.
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(ws.ping).not.toHaveBeenCalled();
 
     await endpoint.stop();
-    const pingsAfterStop = (ws.ping as ReturnType<typeof vi.fn>).mock.calls.length;
-    await new Promise((resolve) => setTimeout(resolve, 60));
-    expect((ws.ping as ReturnType<typeof vi.fn>).mock.calls.length).toBe(pingsAfterStop);
     expect(ws.close).toHaveBeenCalled();
     expect(releaseRoute).toHaveBeenCalledOnce();
   });
@@ -985,11 +985,10 @@ describe('milky reverse ws lifecycle', () => {
       .mockReturnValueOnce(releaseSecond);
     const first = createMockWs();
     const second = createMockWs();
-    const connection = (socket: MilkyWsSocket) => ({
+    const connection = (socket: MilkyWsSocket) => (wsConnectionFromMock({
       socket,
       request: { headers: {}, url: '/', socket: { remoteAddress: '127.0.0.1' } },
-      authScope: 'full',
-    });
+    }));
 
     await endpoint.start();
     acceptConnection?.(connection(first));

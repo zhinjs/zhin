@@ -60,7 +60,32 @@ flowchart BT
 `core` 负责组装 IM 链路。`kernel` 与 `ai` 不含 IM 概念。唯一跨层装配点是
 `packages/im/zhin/src/instance/`（`zhin.js/instance`，ADR 0054 §0），在这里组合 IM、Agent 与 Console Host。
 `@zhin.js/gateway`（`packages/host/gateway`：Console 账号与权限、终端、项目配置与依赖事务）与
-`@zhin.js/cli` 不依赖 `zhin.js` 与 IM 层；`zhin runtime start` 由 CLI 按项目根解析 `zhin.js/instance` 启动实例。
+`@zhin.js/cli` 不依赖 `zhin.js` 与 IM 层。
+
+## 四个包与两个进程
+
+| 包 | 目录 | 运行在哪里 |
+| --- | --- | --- |
+| `create-zhin-app` | `packages/toolkit/create-zhin` | 只在建项目时运行 |
+| `@zhin.js/cli`（`zhin`） | `basic/cli` | 用户的终端；`zhin start` 拉起网关后，`stop / status / logs / install` 经 `.zhin/gateway.sock` 请求网关 |
+| `@zhin.js/gateway` | `packages/host/gateway` | 网关进程：唯一的 HTTP 端口、认证、`console_*` 表、初始化与引导、终端、实例监管、依赖事务、日志 |
+| `zhin.js` | `packages/im/zhin`（实例装配根 `src/instance/`） | 实例进程：由网关以子进程拉起，IM Runtime、插件、适配器、Agent、大部分 Console API |
+
+两个进程之间是 Node IPC 控制通道，协议（路由表、分块请求 / 响应、WebSocket 帧、`restart-request`、`shutdown`、`catalog`、`audit`）在 `packages/host/http/src/bridge/`（`@zhin.js/host-http/bridge`），两边共用。改协议时同时改两边并提升协议版本；网关与实例的版本必须一起发布。进程模型与所有权见[分层架构](../concepts/architecture.md#gateway-and-instance)。
+
+| 改什么 | 在哪里 |
+| --- | --- |
+| 登录、用户、角色、API 令牌、审计 | `packages/host/gateway/src/iam/` |
+| 网关 HTTP 服务器、转发与 `gateway.*` RPC | `packages/host/gateway/src/http/` |
+| 实例监管、日志采集 | `packages/host/gateway/src/supervisor/` |
+| 本地控制套接字 | `packages/host/gateway/src/local/` |
+| 依赖事务 | `packages/host/gateway/src/packages/`、`plugin-management/` |
+| 初始化与引导 | `packages/host/gateway/src/onboarding/`、`iam/`（初始化服务） |
+| 终端 | `packages/host/gateway/src/terminal/` |
+| 网关自己的数据库连接 | `packages/host/gateway/src/database/` |
+| 权限表 | `packages/console/protocol/src/permissions.ts` |
+| 实例侧 Console RPC 与路由 | `packages/im/zhin/src/instance/console/` |
+| CLI 命令 | `basic/cli/src/commands/` |
 
 大型领域采用“一个 canonical 入口 + 单向内部协作”的深模块结构。当前收敛后的阅读入口是：
 

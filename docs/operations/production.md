@@ -23,7 +23,7 @@ description: "把 Bot 部署成可恢复的服务：发布前检查、反向代�
 
 - 使用 Node `>=22.19.0`（脚手架项目与编译后的 IM 库相同），依赖由 lockfile 固定。
 - 执行 `zhin doctor`、`pnpm build` 与项目测试。
-- 用 `zhin runtime start --once --mode test` 验证装配，不连接长期 supervisor。
+- 用 `zhin start --once --mode test` 验证装配（前台运行一次，网关随实例退出）。
 - 记录当前提交、lockfile hash、配置版本与数据备份点。
 
 最小生产配置来自可执行 fixture：
@@ -43,6 +43,16 @@ flowchart LR
 ```
 
 反向代理必须保留 Authorization、Webhook 原始请求体、SSE 流式响应与 WebSocket Upgrade。不要缓存 `/api/events`，也不要改写需要平台验签的 body。
+
+在反向代理后面运行时设置 `http.trustProxy`，否则登录限流、审计 IP 看到的都是代理地址：
+
+```yaml
+http:
+  host: 127.0.0.1
+  trustProxy: [loopback]   # 只信任同机代理；也可写 IP / CIDR 列表、跳数或 true
+```
+
+默认关闭：只用 TCP 对端地址，任何客户端自带的 `X-Forwarded-For` / `Forwarded` 都被忽略。开启后只有来自受信任代理的转发头才生效，从代理一侧向客户端逐跳回溯到第一个不受信任的地址。经代理转发的请求（带转发头）永远不算本机连接：未配置 `access_token` 的适配器反向 WebSocket、MCP / A2A 的本机免鉴权都会拒绝它，因此通过同机代理暴露这些端点时必须配置凭据。
 
 `GET /pub/health` 是存活探针，只证明 HTTP 进程可响应。`GET /pub/ready` 是运行时就绪探针：启动尚未提交 generation 时返回 503，就绪时返回 200；公开响应仅包含 `ready`，不暴露配置或账号信息。
 
@@ -127,17 +137,23 @@ kubectl port-forward service/zhin 8068:8068
 ## 4. 进程托管
 
 ```bash
-# 容器或外部 supervisor：前台运行，由平台收集 stdout
-zhin runtime start --mode production --no-watch
+# 容器或外部 supervisor：前台运行，由平台收集 stdout（pnpm start 即此命令）
+zhin start --foreground --mode production --no-watch
+
+# 裸机、没有进程管理器：后台运行网关
+zhin start --mode production --no-watch
+zhin status          # 网关与实例状态；未运行时退出码 3
+zhin logs -f         # 实例日志
+zhin stop
 
 # Linux：安装用户级 systemd 服务
 zhin service install --user
 zhin service status --user
 ```
 
-macOS 使用不带 `--user` 的 launchd 服务命令。只保留一层进程重启策略：使用 systemd、launchd、Kubernetes 或 PM2 时，让外部 supervisor 管理前台 Runtime；只有直接裸机运行时才使用 `--daemon`。
+macOS 使用不带 `--user` 的 launchd 服务命令。只保留一层进程重启策略：使用 systemd、launchd、Kubernetes 或 PM2 时，让外部 supervisor 管理前台网关（`--foreground`）；只有直接裸机运行时才用后台的 `zhin start`。
 
-退出码 51 表示 Console 请求重启，75 表示 Runtime 需要重启。若外部 supervisor 接管，需允许这两类退出重新拉起，同时配置重启风暴限制。
+网关（ADR 0054）常驻并监管实例：Console 重启、依赖变化、实例崩溃都由网关在进程内重启实例，崩溃风暴后实例停在 `crashed` 而网关保持在线（Console 可看日志、可重新启动）。网关只在 SIGTERM / `zhin stop` 时以退出码 0 结束，启动失败时非零；外部 supervisor 只需在网关异常退出时重新拉起。退出码与 systemd 示例见 [zhin start](../cli/runtime.md#退出码)。
 
 ## 5. 持久状态与备份
 
@@ -155,7 +171,7 @@ SQLite 备份应使用数据库快照或停写复制，不要在写入中直接�
 
 监控至少覆盖 HTTP 探针、进程重启次数、Endpoint 在线状态、SSE recovery gap、日志错误率、数据库容量、被冻结待人处理的协作（Engagement）和 Agent 失败/取消比例。
 
-日志默认进入 stdout；daemon 模式写 `.zhin/runtime.log`。设置宿主日志轮转，不要只依赖 Console 清理。告警应携带 Endpoint、Project、runtimeId 或 runId，避免只报一段错误文本。
+前台运行时实例日志同时进入 stdout 与 `.zhin/logs/instance.log`；后台运行时网关自身输出写 `.zhin/logs/gateway.log`，实例日志写 `.zhin/logs/instance.log`，超过 10 MiB 自动轮转（保留 5 份）。告警应携带 Endpoint、Project、runtimeId 或 runId，避免只报一段错误文本。
 
 Runtime Process Host 在启动和运行期间记录 `unhandledRejection`，避免未观察的后台 Promise 拒绝按 Node 默认策略直接结束整个进程；操作恢复仍由对应适配器负责，例如 ICQQ 心跳超时走网络断线与重连流程。启动、命令和消息发送中被调用方观察到的拒绝仍按原链路报错。停止 Runtime 时移除该监听器，不接管 `uncaughtException`；显式配置 Node `--unhandled-rejections=strict` 时仍遵循该严格退出策略。
 

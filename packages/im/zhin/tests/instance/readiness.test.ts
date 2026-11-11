@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { createHttpHost, type ProcessHttpHost } from '@zhin.js/host-http';
+import { createHttpHost, type ProcessHttpHost } from '@zhin.js/host-http/node';
 import { withTestUsers } from './utils/console-users.js';
 import { adapterFeatureId } from '@zhin.js/adapter';
 import { SnapshotStore, databaseHostToken, rootPluginId, type SnapshotState } from '@zhin.js/plugin-runtime';

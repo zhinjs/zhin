@@ -12,8 +12,10 @@ import {
   type GenerationAdmissionGate,
   type SnapshotState,
 } from '@zhin.js/plugin-runtime';
-import { createHttpHostGroup, listHttpHostAddresses } from '../src/listener-group.js';
-import type { HttpHost, ProcessHttpHost } from '../src/http-host.js';
+import { createHttpHostGroup } from '../src/node/listener-group.js';
+import { listHttpHostAddresses } from '../src/addresses.js';
+import type { HttpHost } from '../src/http-host.js';
+import type { ProcessHttpHost } from '../src/node/server.js';
 
 const hosts: ProcessHttpHost[] = [];
 
@@ -33,8 +35,8 @@ describe('HttpHost listener group', () => {
     const admission = createGenerationAdmissionGate();
     const store = new SnapshotStore(admissionState(admission));
     const bound = bindGenerationAdmission<HttpHost>(host, admission);
-    bound.route('GET', '/probe', (_request, response) => response.end('mirrored'));
-    bound.ws('/device', {auth: 'protocol'}).onConnection(({socket}) => socket.send('mirrored'));
+    bound.route('GET', '/probe', () => new Response('mirrored'));
+    bound.ws('/device', {auth: 'protocol'}).onConnection((connection) => connection.send('mirrored'));
     await host.listen();
 
     const [local, device] = listHttpHostAddresses(host);

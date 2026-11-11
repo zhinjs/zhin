@@ -20,11 +20,11 @@ async function openIam(options: Partial<ConstructorParameters<typeof ConsoleIamS
   const root = await mkdtemp(join(tmpdir(), 'zhin-iam-'));
   roots.push(root);
   const database = createDatabaseHost({ dialect: 'sqlite', filename: join(root, '.zhin', 'data.sqlite') } as never);
-  expect(defineConsoleIamTables(database)).toBe(true);
+  expect(defineConsoleIamTables(database.gatewayTableHost())).toBe(true);
   await database.start();
   let now = 1_700_000_000_000;
   const clock = { now: () => now, advance: (ms: number) => { now += ms; } };
-  const service = new ConsoleIamService({ database, projectRoot: root, now: clock.now, ...options });
+  const service = new ConsoleIamService({ database: database.gatewayTableHost(), projectRoot: root, now: clock.now, ...options });
   await service.start({ timers: false });
   closers.push(async () => { service.stop(); await database.stop(); });
   return { service, database, root, clock };

@@ -45,18 +45,21 @@
 不需要任何平台账号，也不需要模型 Key（要求 Node.js **≥22.19.0** 与 pnpm 9+）：
 
 ```bash
-npm create zhin-app my-bot -y
+npm create zhin-app my-bot -- -y --adapter sandbox
 cd my-bot
-pnpm dev
+pnpm dev          # zhin start --foreground：管理网关 + 你的 Bot，热重载
 ```
 
-1. **本地内置 Sandbox**：浏览器直接打开 `http://127.0.0.1:8068/sandbox`，发送 `/hello` 即可收到回复。
-2. **Remote Console 管理台**：打开 [console.zhin.dev](https://console.zhin.dev)，填入 `http://127.0.0.1:8068` 和 `.env` 里的 `HTTP_TOKEN`，查看日志、管理插件与实时会话。
+1. **在 Console 里完成初始化**：打开终端打印的 Console 链接（`https://console.zhin.dev/?apiBaseUrl=…#token=…`，`#` 之后的初始化令牌不会离开浏览器），保持默认 SQLite，创建所有者账号。
+2. **在沙盒里聊天**：打开 `http://127.0.0.1:8068/sandbox`（或 Console 的「会话 → 沙盒」），发送 `/hello`。
+3. **后台运行**：`npx zhin start`（之后用 `zhin status`、`zhin logs -f`、`zhin stop`）。
 
 完整步骤：[快速开始](./docs/getting-started/index.md) · 遇到环境问题先运行 `npx zhin doctor`。
 
 > [!IMPORTANT]
 > **从 1.1.13 及更早版本升级已有 Bot？** Runtime 现在只接受 `configVersion: 2`。先停止 Bot，把 `zhin.js` / `@zhin.js/cli` 升级到最新，再运行 `zhin migrate instances`（预览）和 `zhin migrate instances --apply`（自动备份）。完整步骤与恢复方式：[升级到 configVersion 2](./docs/operations/upgrades.md#configversion-2)。
+>
+> **从单进程 `zhin runtime start` 升级？** `zhin start` 现在启动常驻的管理网关并由它监管 Bot，Console 账号取代了 `http.tokens`。把 `@zhin.js/gateway` 与同批的 `zhin.js` / `@zhin.js/cli` 一起装上，按[升级到管理网关](./docs/migrations/management-gateway.md)操作。
 
 ## 为什么选择 Zhin.js？
 

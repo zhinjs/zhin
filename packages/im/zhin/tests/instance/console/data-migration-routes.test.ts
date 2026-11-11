@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { withTestUsers } from '../utils/console-users.js';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { createHttpHost } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import { GenerationAdmissionGate, SnapshotStore, generationAdmissionSource, pluginDataMigrationProviderToken,
   rootPluginId, type SnapshotState, type TokenId } from '@zhin.js/plugin-runtime';
 import { OwnerApprovalRuntime } from '@zhin.js/agent/security';

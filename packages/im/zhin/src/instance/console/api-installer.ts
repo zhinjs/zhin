@@ -23,6 +23,7 @@ import { ConsoleConfigurationStore } from '@zhin.js/gateway/config';
 import { normalizeBase } from '@zhin.js/gateway/http';
 import { ConsoleLoginAssistBindings } from './login-assist-binding.js';
 import { ConsoleMessageBindings } from './message-bindings.js';
+import { createPluginPermissionCatalogSource } from './plugin-permission-catalog.js';
 
 export interface ConsoleControlPlaneOptions {
   readonly pluginManagementActivity?: import('@zhin.js/gateway/plugin-management').PluginManagementActivity;
@@ -68,6 +69,13 @@ export function startConsoleControlPlane(options: StartConsoleControlPlaneOption
   const disposers: Array<() => void> = [];
 
   if (options.im) disposers.push(messageBindings.acquire(options.im));
+  // Plugin permission catalog for level grants (ADR 0049 amendment 2026-11-11).
+  if (options.snapshots && typeof options.http.tokenRegistry?.usePluginPermissions === 'function') {
+    disposers.push(options.http.tokenRegistry.usePluginPermissions(createPluginPermissionCatalogSource({
+      snapshots: options.snapshots,
+      ...(options.hostConsoleRpc ? { hostConsoleRpc: options.hostConsoleRpc } : {}),
+    })));
+  }
   const loginAssist = options.im?.loginAssist;
   if (loginAssist) disposers.push(loginAssistBindings.acquire(loginAssist, hub));
 

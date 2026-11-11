@@ -8,7 +8,7 @@ import WebSocket from 'ws';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { getProcessPeerRegistry } from 'zhin.js/adapter';
 import { endpointRuntimeOf } from '../../../../packages/im/adapter/src/endpoint-specification.js';
-import { createHttpHost } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import type { OutboundMessageService } from '@zhin.js/core/runtime';
 import type { ConversationRef } from '@zhin.js/im-contract';
 import { createSandboxReadinessGate, SandboxWsEndpoint } from '../src/endpoint.js';

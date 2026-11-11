@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { PluginTestKit, FakeClock, FakeScheduleRootHost } from '../../../packages/toolkit/testing/src/index.ts';
 import { PluginScheduleHost, rootPluginId, scheduleHostToken, scheduleRootHostToken } from '../../../packages/im/plugin-runtime/src/index.ts';
 import { createConfigDocument } from '../../../packages/im/runtime/src/config-file/index.ts';
-import { createHttpHost } from '../../../packages/host/http/src/index.ts';
+import { createHttpHost } from '../../../packages/host/http/src/node/index.ts';
 import { installSmokeConsoleUsers } from '../harness/smoke-console-users.mjs';
 import { applyInstanceDeclarationMigration, planInstanceDeclarationMigration } from '../../../packages/host/gateway/src/project/instance-declarations.ts';
 import { registerMessageDiagnosticRoutes } from '../../../packages/im/zhin/src/instance/console/message-diagnostic-routes.ts';

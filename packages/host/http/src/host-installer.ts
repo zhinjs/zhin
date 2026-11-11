@@ -2,17 +2,15 @@ import {
   bindGenerationAdmission,
   expandEnvironmentValue,
   type ConfigDocumentPort,
+  type GenerationAdmissionBindable,
   type RootResourceInstaller,
   type RuntimeConfigDocument,
 } from '@zhin.js/plugin-runtime';
 import { readFile } from 'node:fs/promises';
 import { isAbsolute, resolve } from 'node:path';
-import {
-  httpHostToken,
-  type HttpHost,
-  type HttpHostOptions,
-  type ProcessHttpHost,
-} from './http-host.js';
+import { httpHostToken, type HttpHost } from './http-host.js';
+import type { HttpHostOptions } from './host-options.js';
+import { parseTrustProxy } from './trust-proxy.js';
 
 export interface ResolvedHttpConfig extends HttpHostOptions {
   /** Additional listeners that mirror the primary Host route surface. */
@@ -40,6 +38,7 @@ export async function resolveHttpConfig(
     corsOrigins: injectDesktopWebviewOrigins(parseStringList(value.corsOrigins), envOverlay),
     apiBase: typeof value.base === 'string' ? value.base : undefined,
     tls: await parseTlsConfig(value.tls, projectRoot),
+    trustProxy: parseTrustProxy(value.trustProxy),
   });
   const configuredListeners = await parseAdditionalListeners(value.listeners, primary, projectRoot);
   const listeners = await injectDesktopDeviceListener(
@@ -189,7 +188,7 @@ function resolveTlsPath(projectRoot: string, value: string): string {
   return isAbsolute(value) ? value : resolve(projectRoot, value);
 }
 
-export function installHttpHost(host: ProcessHttpHost): RootResourceInstaller {
+export function installHttpHost(host: HttpHost & GenerationAdmissionBindable<HttpHost>): RootResourceInstaller {
   return ({ resources, admission }) => {
     const port: HttpHost = host;
     resources.provide(httpHostToken, bindGenerationAdmission(port, admission));

@@ -1,6 +1,6 @@
 import { createServer, type ServerResponse } from 'node:http';
 import { ProtocolError } from '@imhelper/milky-v1';
-import { createHttpHost } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { createEndpointHarness } from '../../test-utils/endpoint.js';
 import { MilkyWebhookEndpoint } from '../src/webhook-endpoint.js';
