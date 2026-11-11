@@ -316,6 +316,12 @@ definePluginConsoleRpc({
 
 `.zhin/` 不要提交到 Git，也不要放进容器镜像。网关被 `kill -9` 后留下的失效套接字会在下次 `zhin start` 时自动清理。
 
+## 14. 安全默认值的变化 {#security-defaults}
+
+- **SSH 终端必须固定主机指纹**：`console.terminal.ssh[]` 的每个目标都要配置 `hostFingerprint`，否则配置校验失败。获取方式：`ssh-keyscan -t ed25519 <主机> | ssh-keygen -lf -`。确实无法固定时，写 `insecureAcceptAnyHostKey: true`，Console 会把该目标标为「不安全：未校验主机密钥」。
+- **反向代理**：默认不信任 `X-Forwarded-For` / `Forwarded`。网关在反向代理之后时配置 `http.trustProxy`（`true`、跳数或代理 IP / CIDR 列表），登录限速与审计才会记录真实客户端地址。无论是否配置，带转发头的请求都不算本机连接：未配 `access_token` 的反向 WebSocket、MCP / A2A 的本机免鉴权对经代理的请求一律拒绝，请为它们配置凭据。
+- **数据库**：实例侧的数据库工具（Console 数据库页、原始 SQL、Agent 文件工具）不能访问网关的 `console_*` 表；Agent 文件工具把 SQLite 文件视为敏感文件。
+
 ## 回滚 {#rollback}
 
 保持 Bot 停止，恢复升级前的锁文件、`package.json`、配置与数据库快照，然后 `pnpm install --frozen-lockfile`。只降级 `@zhin.js/cli` 或只降级 `zhin.js` 不行——网关和实例的协议版本必须匹配。升级后已经在 Console 里创建的账号、角色与审计记录存在数据库里，恢复旧快照会丢掉它们。

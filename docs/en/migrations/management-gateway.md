@@ -316,6 +316,12 @@ To allow sign-in and setup while the instance is offline, the gateway opens the 
 
 Do not commit `.zhin/` to Git or bake it into container images. A stale socket left behind by `kill -9` is cleaned up on the next `zhin start`.
 
+## 14. Changed security defaults {#security-defaults}
+
+- **SSH terminal targets must pin the host key**: every `console.terminal.ssh[]` target needs `hostFingerprint`, otherwise config validation fails. Get it with `ssh-keyscan -t ed25519 <host> | ssh-keygen -lf -`. If you really cannot pin it, set `insecureAcceptAnyHostKey: true`; the Console marks that target as "insecure: host key not verified".
+- **Reverse proxies**: `X-Forwarded-For` / `Forwarded` are not trusted by default. Behind a reverse proxy, set `http.trustProxy` (`true`, a hop count, or a list of proxy IPs / CIDRs) so login rate limiting and audit see the real client address. Either way, a request carrying a forwarding header never counts as loopback: reverse WebSockets without `access_token` and the MCP / A2A localhost exemption refuse proxied requests — configure credentials for them.
+- **Database**: instance-side database tools (the Console database page, raw SQL, Agent file tools) cannot reach the gateway's `console_*` tables; Agent file tools treat SQLite files as sensitive.
+
 ## Rollback {#rollback}
 
 With the Bot stopped, restore the pre-upgrade lockfile, `package.json`, configuration and database snapshot, then run `pnpm install --frozen-lockfile`. Downgrading only `@zhin.js/cli` or only `zhin.js` does not work — gateway and instance protocol versions must match. Accounts, roles and audit entries created in the Console after the upgrade live in the database; restoring an older snapshot loses them.
