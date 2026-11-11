@@ -88,12 +88,30 @@ describe('Sandbox Escape Prevention (Proxy-based)', () => {
     expect(compiler("${sender.roles}", ctx)).toBe(JSON.stringify(['member'], null, 2))
   })
 
+  it('should proxy host objects handed to sandbox callbacks', () => {
+    const ctx = { each(cb: (value: unknown) => unknown) { return cb({ a: 1 }) } }
+    expect(evaluate('each(x => typeof x.constructor)', ctx)).toBe('undefined')
+    expect(evaluate('each(x => x.a)', ctx)).toBe(1)
+  })
+
+  it('should not expose host accessor functions through property descriptors', () => {
+    const ctx = { o: { get x() { return 1 }, set x(_value: number) { /* noop */ } } }
+    expect(evaluate("typeof Object.getOwnPropertyDescriptor(o, 'x').get.constructor", ctx)).toBe('undefined')
+    expect(evaluate("typeof Object.getOwnPropertyDescriptor(o, 'x').set", ctx)).toBe('undefined')
+    expect(evaluate("Object.getOwnPropertyDescriptor(o, 'x').get()", ctx)).toBe(1)
+    expect(evaluate('o.x', ctx)).toBe(1)
+  })
+
   it('should keep host objects read-only', () => {
     const o: Record<string, unknown> = { a: 1 }
     evaluate('delete o.a', { o })
     evaluate('o.a = 2', { o })
     evaluate('o.b = 3', { o })
+    evaluate('Object.preventExtensions(o)', { o })
+    evaluate('Object.freeze(o)', { o })
     expect(o).toEqual({ a: 1 })
+    expect(Object.isExtensible(o)).toBe(true)
+    expect(Object.isFrozen(o)).toBe(false)
   })
 
   it('should block string-concatenation bypass on host objects', () => {

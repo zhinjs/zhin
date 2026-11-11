@@ -31,7 +31,8 @@ export function buildOmitMap(draws: number[][], poolMin: number, poolMax: number
   for (let i = poolMin; i <= poolMax; i++) lastSeen.set(i, draws.length);
   draws.forEach((nums, idx) => {
     for (const n of nums) {
-      if (n >= poolMin && n <= poolMax) lastSeen.set(n, idx);
+      // Draws are newest-first: keep the first (most recent) hit.
+      if (n >= poolMin && n <= poolMax && lastSeen.get(n) === draws.length) lastSeen.set(n, idx);
     }
   });
   const maxOmit = Math.max(1, ...lastSeen.values());

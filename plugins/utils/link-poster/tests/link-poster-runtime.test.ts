@@ -83,3 +83,30 @@ describe('link host allow-list', () => {
     }
   });
 });
+
+describe('redirect and image host checks', () => {
+  it('does not follow a redirect from a supported host to an internal one', async () => {
+    const { detectAndParse } = await import('../src/platforms.js');
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(null, { status: 302, headers: { location: 'http://169.254.169.254/latest/meta-data' } }),
+    );
+    try {
+      await expect(detectAndParse('https://b23.tv/abc')).rejects.toThrow(/allow-list/);
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(String(fetchSpy.mock.calls[0]![0])).toBe('https://b23.tv/abc');
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('only fetches cover images from public https hosts', async () => {
+    const { isPublicImageUrl } = await import('../src/platforms.js');
+    expect(isPublicImageUrl('https://i0.hdslb.com/bfs/archive/x.jpg')).toBe(true);
+    expect(isPublicImageUrl('http://i0.hdslb.com/x.jpg')).toBe(false);
+    expect(isPublicImageUrl('https://10.0.0.5/x.png')).toBe(false);
+    expect(isPublicImageUrl('https://[::1]/x.png')).toBe(false);
+    expect(isPublicImageUrl('https://localhost/x.png')).toBe(false);
+    expect(isPublicImageUrl('https://metadata.google.internal/x.png')).toBe(false);
+    expect(isPublicImageUrl('https://intranet/x.png')).toBe(false);
+  });
+});

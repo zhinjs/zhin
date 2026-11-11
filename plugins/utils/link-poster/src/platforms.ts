@@ -6,12 +6,52 @@ import { messages as t } from './i18n.js'
 
 const FETCH_TIMEOUT = 10_000
 
-async function fetchWithTimeout(url: string, init?: RequestInit): Promise<Response> {
-  // AbortSignal.timeout also bounds the body read, not just the headers.
-  return await fetch(url, { ...init, signal: AbortSignal.timeout(FETCH_TIMEOUT) })
+const MAX_REDIRECTS = 5
+
+/**
+ * Fetch with redirects followed by hand so every hop is checked with `isAllowed`
+ * before it is requested. Automatic redirect following would let an allowed short link
+ * bounce the request to an arbitrary (possibly internal) host. One timeout bounds all
+ * hops and the body.
+ */
+async function fetchWithTimeout(
+  url: string,
+  init?: RequestInit,
+  isAllowed: (url: string) => boolean = isSupportedLinkHost,
+): Promise<Response> {
+  const signal = AbortSignal.timeout(FETCH_TIMEOUT)
+  let current = url
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    if (!isAllowed(current)) throw new Error('link-poster: refusing to fetch a host outside the allow-list')
+    const res = await fetch(current, { ...init, redirect: 'manual', signal })
+    const location = res.status >= 300 && res.status < 400 ? res.headers.get('location') : null
+    if (!location) return res
+    await res.body?.cancel()
+    current = new URL(location, current).toString()
+  }
+  throw new Error('link-poster: too many redirects')
 }
 
-/** 将远程图片下载并转为 data URI，避免 satori 渲染时遇到防盗链/CORS */
+/**
+ * Cover/avatar URLs come from third-party page metadata and live on CDN hosts that cannot be
+ * enumerated, so they are checked structurally: https only, a real DNS name (no IP literal,
+ * no single-label or internal-suffix host). This does not defend against a public name that
+ * resolves to a private address; that needs a resolver-level address policy.
+ */
+export function isPublicImageUrl(url: string): boolean {
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return false
+  }
+  if (parsed.protocol !== 'https:') return false
+  const hostname = parsed.hostname.toLowerCase().replace(/\.$/, '')
+  if (hostname.startsWith('[') || /^[\d.]+$/.test(hostname) || !hostname.includes('.')) return false
+  return !/(?:^|\.)(?:localhost|local|internal|lan|home|corp|intranet)$/.test(hostname)
+}
+
+/** 将远程图片下载并转为 data URI，避免渲染时遇到防盗链/CORS */
 async function imageToDataUri(url: string | undefined): Promise<string | undefined> {
   if (!url) return undefined
   try {
@@ -19,7 +59,7 @@ async function imageToDataUri(url: string | undefined): Promise<string | undefin
     if (url.startsWith('http:')) url = url.replace('http:', 'https:')
     const res = await fetchWithTimeout(url, {
       headers: { Referer: new URL(url).origin, 'User-Agent': 'Mozilla/5.0' },
-    })
+    }, isPublicImageUrl)
     if (!res.ok) return undefined
     const buf = Buffer.from(await res.arrayBuffer())
     const mime = (res.headers.get('content-type') || 'image/jpeg').split(';')[0]!.trim()
@@ -62,7 +102,7 @@ const BILIBILI_RE = /(?:bilibili\.com\/video\/|b23\.tv\/)/i
 async function parseBilibili(url: string, locale?: Locale): Promise<LinkMeta | null> {
   // 短链跳转
   if (url.includes('b23.tv')) {
-    const res = await fetchWithTimeout(url, { redirect: 'follow' })
+    const res = await fetchWithTimeout(url)
     url = res.url
   }
   const bvMatch = url.match(/BV[\w]+/)
@@ -158,7 +198,6 @@ async function parseDouyin(url: string, locale?: Locale): Promise<LinkMeta | nul
         'User-Agent':
           'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
       },
-      redirect: 'follow',
     })
     const html = await res.text()
     const title = extractMeta(html, 'og:title')
@@ -188,7 +227,6 @@ async function parseXiaohongshu(url: string, locale?: Locale): Promise<LinkMeta 
         'User-Agent':
           'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
       },
-      redirect: 'follow',
     })
     const html = await res.text()
     const title = extractMeta(html, 'og:title')

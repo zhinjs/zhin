@@ -64,6 +64,9 @@ function createSafeProxy<T>(value: T, proxies: WeakMap<object, object>): T {
     deleteProperty() {
       return false;
     },
+    preventExtensions() {
+      return false;
+    },
     has(target, prop) {
       if (BLOCKED_PROTO_PROPS.has(prop)) return false;
       return Reflect.has(target, prop);
@@ -81,15 +84,23 @@ function createSafeProxy<T>(value: T, proxies: WeakMap<object, object>): T {
         // Non-configurable own properties must still be reported (Proxy invariant),
         // but we neutralize their values to prevent escape.
         if ('value' in desc) desc.value = undefined;
-        if (desc.get) desc.get = () => undefined;
+        if (desc.get) desc.get = createSafeProxy(() => undefined, proxies);
+        if (desc.set) desc.set = undefined;
         return desc;
       }
       // Wrap descriptor values so leaked references are also proxied.
       if ('value' in desc) desc.value = createSafeProxy(desc.value, proxies);
       if (desc.get) {
         const originalGet = desc.get;
-        desc.get = function(this: any) { return createSafeProxy(originalGet.call(target), proxies); };
+        // The accessor handed to the sandbox is itself a host function: proxy it too, or
+        // `Object.getOwnPropertyDescriptor(o, k).get.constructor` is the host `Function`.
+        desc.get = createSafeProxy(
+          function() { return createSafeProxy(originalGet.call(target), proxies); },
+          proxies,
+        );
       }
+      // Read-only: never hand out a setter.
+      if (desc.set) desc.set = undefined;
       return desc;
     },
     ownKeys(target) {
@@ -106,8 +117,22 @@ function createSafeProxy<T>(value: T, proxies: WeakMap<object, object>): T {
   };
 
   if (type === 'function') {
-    handler.apply = (target, thisArg, args) => guard(() => Reflect.apply(target, thisArg, args));
-    handler.construct = (target, args) => guard(() => Reflect.construct(target, args));
+    // A sandbox callback passed to a host function is invoked by host code, possibly with
+    // raw host objects (`each(cb) { cb(hostObject) }`). Wrap callbacks so everything that
+    // crosses back into the sandbox — `this` and every argument — is proxied first.
+    const guardCallbacks = (args: unknown[]): unknown[] => args.map((arg) => {
+      if (typeof arg !== 'function') return arg;
+      const callback = arg as (...callbackArgs: unknown[]) => unknown;
+      return function(this: unknown, ...callbackArgs: unknown[]) {
+        return Reflect.apply(
+          callback,
+          createSafeProxy(this, proxies),
+          callbackArgs.map((value) => createSafeProxy(value, proxies)),
+        );
+      };
+    });
+    handler.apply = (target, thisArg, args) => guard(() => Reflect.apply(target, thisArg, guardCallbacks(args)));
+    handler.construct = (target, args) => guard(() => Reflect.construct(target, guardCallbacks(args)));
   }
 
   const proxy = new Proxy(obj, handler) as T;
