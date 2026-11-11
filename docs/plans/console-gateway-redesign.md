@@ -127,9 +127,9 @@ ADR 0049–0054 与本计划。
 | A5 create-zhin 精简 | done | 已提交；生成项目 README / 首页 / hello 模板（`scaffold-wizard/message-templates.ts`）里的首跑步骤留到 B1.6 随 `zhin start` 一起改 |
 | M2 集成批 1 | done | [zhinjs/zhin#1226](https://github.com/zhinjs/zhin/pull/1226) 已合并（含 B1.-1）。终端接线、Host 配置 Schema、适配器反向 WS 改为自鉴权、页面 `section`、文档与升级指南、发版门禁（6 minor / 0 major，`zhin.js` patch）、锁文件、changesets；`check:all` 全过。偏差：终端会话按用户（`user:<id>`）吊销，单独吊销 API 令牌或改角色定义不断开会话。未验证：`check:created-project*`、真实 OneBot/NapCat/Milky 客户端、Windows 原生模块、真实 SSH |
 | B1 管理网关 | doing | B1.-1 拆包已完成（`@zhin.js/gateway` 新包；装配根迁到 `zhin.js/instance`；CLI 无 IM 依赖；`check:all` 全过）。临时边：`zhin.js/instance` 依赖 `@zhin.js/gateway`（配置存储、插件管理事务、IAM、终端、TSX 加载器、supervisor 辅助）。决定：配置存储与插件管理事务归网关所有，B1.4 起实例的 Console 配置 / 插件 RPC 改由网关处理，届时删除这条边。下一步 B1.0 |
-| B2 引导后端 | doing | 服务核心（状态文件、安装白名单、`zhin setup`）在 worktree `wt/b2` 并行；HTTP / RPC 接线等 B1.4 |
+| B2 引导后端 | doing | 服务核心已完成（`wt/b2`，待 B1.0 后合并）；HTTP / RPC 接线等 B1.4，届时补 `agent.configure` / `endpoint.manage` 检查、`Retry-After` 跨域暴露、Windows 下 `pnpm.cmd` |
 | M4 集成批 2 | todo | |
-| C1–C4 | doing | C1（`console` 主 checkout）、C2（worktree `wt/console-c2`）、C3（`wt/console-c3`）并行，接口类型先在 console 仓库本地镜像；C4 等 B1.5/B1.6 |
+| C1–C4 | review | C1–C3：[zhinjs/console#93](https://github.com/zhinjs/console/pull/93)（tsc / 1049 测试 / 构建通过；接口类型本地镜像，发版后替换）。C4 等 B1.5/B1.6 |
 | M6 文档与迁移 | todo | |
 | M7 端到端验收 | todo | |
 
@@ -148,6 +148,11 @@ ADR 0049–0054 与本计划。
 2. 插件自定义权限：采用方案 A，内置角色按约定补上插件权限——`<plugin>:read` 类给 viewer 及以上，操作类给 operator 及以上，管理 / 审批类（如 `ops:approve`）给 admin。B1.0 完成后派发（与 IAM 路由同路径）。
 3. `zhin` 别名包随本次发布（保留 `.changeset/zhin-shim-follow-cli.md`）。
 4. 发版后由协调者清空 `.changeset/version-policy.json#approvedNonPatchReleases`（下一个 PR 里做）。
+
+## 已知待办
+
+- 插件 RPC 对已登录用户只检查 `feature.view` / `feature.configure`，不检查插件声明的权限（main 上已有）：worktree `wt/rpcperm` 修复中。
+- 现有插件补充权限级别声明（`:write` 默认推断为管理级）：同上。
 
 ## 待所有者决定
 
