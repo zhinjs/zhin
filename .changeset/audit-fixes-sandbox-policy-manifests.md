@@ -35,6 +35,8 @@
 "@zhin.js/plugin-repeater": patch
 "@zhin.js/plugin-rss": patch
 "@zhin.js/plugin-short-url": patch
+"@zhin.js/feature-kit": patch
+"@zhin.js/middleware": patch
 ---
 
 fix: 全仓审计修复
@@ -55,3 +57,4 @@ fix: 全仓审计修复
 - plugin-code-runner: 语言校验改用自有属性判断。
 - plugin-link-poster: 抓取前校验主机名白名单（修复 SSRF），超时覆盖响应体读取。
 - 其余包：从 `files` 中移除不存在的目录。
+- feature-kit / middleware: 修正 README 中层级错误的文档链接。
