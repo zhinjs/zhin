@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { PluginTestKit, FakeClock, FakeScheduleRootHost } from '../../../packages/toolkit/testing/src/index.ts';
-import { createHttpHost } from '../../../packages/host/http/src/index.ts';
+import { createHttpHost } from '../../../packages/host/http/src/node/index.ts';
 import { installSmokeConsoleUsers } from '../harness/smoke-console-users.mjs';
 import { registerPluginTaskRoutes } from '../../../packages/im/zhin/src/instance/console/plugin-task-routes.ts';
 import { createSmokeProject } from '../harness/smoke-project.mjs';
