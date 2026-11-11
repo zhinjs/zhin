@@ -1444,15 +1444,26 @@ export function DonutChart({
         <div className="zk-donut-chart__legend">
           {segments.map((seg, idx) => {
             const stroke = seg.color ?? (seg.tone ? TONE_COLOR_MAP[seg.tone] : undefined) ?? FALLBACK_PALETTE[idx % FALLBACK_PALETTE.length]!;
+            const val = Number.isFinite(seg.value) && seg.value > 0 ? seg.value : 0;
+            const share = total > 0 ? Math.min(100, Math.round((val / total) * 100)) : 0;
             return (
               <div key={idx} className="zk-donut-chart__item">
-                <span className="zk-donut-chart__item-label">
-                  <span className="zk-donut-chart__swatch" style={{ background: stroke }} aria-hidden="true" />
-                  {seg.image && <img src={seg.image} alt="" className="zk-donut-chart__item-img" />}
-                  {seg.icon}
-                  <span>{seg.label}</span>
-                </span>
-                <span className="zk-donut-chart__item-val">{seg.value}</span>
+                <div className="zk-donut-chart__item-row">
+                  <span className="zk-donut-chart__item-label">
+                    <span className="zk-donut-chart__swatch" style={{ background: stroke }} aria-hidden="true" />
+                    {seg.image && <img src={seg.image} alt="" className="zk-donut-chart__item-img" />}
+                    {seg.icon}
+                    <span>{seg.label}</span>
+                  </span>
+                  <span className="zk-donut-chart__item-val">
+                    {seg.value}{total > 0 ? ` (${share}%)` : ''}
+                  </span>
+                </div>
+                {total > 0 && (
+                  <div className="zk-donut-chart__item-bar" aria-hidden="true">
+                    <span style={{ width: `${share}%`, background: stroke }} />
+                  </div>
+                )}
               </div>
             );
           })}
