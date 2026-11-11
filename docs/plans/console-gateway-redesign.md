@@ -120,12 +120,12 @@ ADR 0049–0054 与本计划。
 | 项 | 状态 | 备注 |
 |---|---|---|
 | M0 契约 | done | ADR 0049–0054 已在 `feat/friendly-volta-ejc3wl` |
-| A1 RBAC 后端 | doing | 含初始化服务、数据库在线选择、移除 `http.tokens` / 演示模式 |
+| A1 RBAC 后端 | done | 已提交。偏差：无 `http.token` 且无所有者时 Host 保持开放（本地开发）；`/auth/me` 公开返回 `anonymous`；新增 `/auth/tokens` 自助令牌；登录限速返回 429；全局所有者对插件自定义页面权限视为不受限 |
 | A2 三级配置后端 | done | 已提交；`feature.*` 接线与 `export * from './feature.js'` 交给 A1（同文件）。偏差：解析器在 `plugin-runtime`（core/agent 不能依赖 runtime）；覆盖字段校验为第二遍校验；`null` 清空即删除字段；插件自身 `enabled`、`commandNamespace`、`disabledCommands` 不可覆盖。待办：`basic/schema` 的 `Schema#levels()` 构建器（可选）；Console 整块保存插件配置时不能丢 `overrides`（C3 核对） |
 | A3 终端后端 | done | 已提交，待 M2 接线 |
 | A4 Console 导航重构 | review | [zhinjs/console#92](https://github.com/zhinjs/console/pull/92)。待办：zhin 侧页面元数据加 `section` 字段，`packages/console/client` 的 `resolveEntryRegister` 透传 `meta.section`（M2）；`feature.matrix` 返回形状已与 A2 对齐 |
 | A5 create-zhin 精简 | done | 已提交；生成项目 README / 首页 / hello 模板（`scaffold-wizard/message-templates.ts`）里的首跑步骤留到 B1.6 随 `zhin start` 一起改 |
-| M2 集成批 1 | todo | |
+| M2 集成批 1 | doing | 终端接线、Host 配置 Schema、适配器反向 WS 改为自鉴权、页面 `section`、文档与升级指南、发版门禁、锁文件、changesets、全量检查 |
 | B1 管理网关 | todo | 依赖 M2；B1.0 可在 M2 后立即开始 |
 | B2 引导后端 | todo | 依赖 B1.4 |
 | M4 集成批 2 | todo | |
