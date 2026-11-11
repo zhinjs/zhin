@@ -124,7 +124,7 @@ interface HttpHost {
 插件配置的最终校验发生在实例启动后，失败视为第 4 步失败。网关在事务内先用包自带的 `schema.json` 预检：
 
 - `install` 声明新插件前用 Schema 默认值补全空配置并校验；有无默认值的必填字段（或引用缺失的环境变量）时只安装依赖、不声明，事务成功，结果带 `needsConfiguration`（缺少的配置路径与环境变量），实例不会因缺配置而回滚整笔安装。
-- `gateway.plugins.declare { package, instanceKey?, config, startInstance? }`（`plugin.manage`；非所有者只能声明白名单内的包）是声明已安装插件并写入首份配置的唯一受支持入口：先在停实例前校验（包须是已安装的生产依赖、实例键未声明且非保留键、配置通过插件 Schema 且无缺失环境变量，否则 `invalid_input`），再作为事务执行（`snapshot → stop-instance → configure → start-instance`），一次原子写入 `plugins.<instanceKey>` 与实例块；启动失败时恢复配置文件（不重新安装依赖）并启动旧实例。进度同样经 `gateway.packages.progress` 推送，`operation` 为 `declare`。`config:patch-project` 仍拒绝修改声明。
+- `gateway.plugins.declare { package, instanceKey?, config, startInstance? }`（`plugin.manage`；非所有者只能声明白名单内的包）是声明已安装插件并写入首份配置的唯一受支持入口：先在停实例前校验（包须是已安装的生产依赖、实例键未声明且非保留键、配置通过插件 Schema 且无缺失环境变量，否则 `invalid_input`；Schema 校验失败时回复除 `error` 文本外另带结构化 `errors: [{ path, message }]`（`path` 相对实例块，`$` 加 `.键/索引`，如 `$.endpoints.0.id`）与 `missingEnv: string[]`，仅非空时出现，类型见 `GatewayRpcErrorDetails`，本地 socket 的错误行同形），再作为事务执行（`snapshot → stop-instance → configure → start-instance`），一次原子写入 `plugins.<instanceKey>` 与实例块；启动失败时恢复配置文件（不重新安装依赖）并启动旧实例。进度同样经 `gateway.packages.progress` 推送，`operation` 为 `declare`。`config:patch-project` 仍拒绝修改声明。已安装但未声明的插件（`needsConfiguration`）可用 `schema:get { pluginName: <包名> }` 读取其 `schema.json` 表单（只读，须是生产依赖且为 Plugin 包），形状与已声明实例相同并带 `declared: false`。
 - 回滚报告的 `logTail` 只含本次事务期间实例输出的行。
 
 ### 5. 实例生命周期

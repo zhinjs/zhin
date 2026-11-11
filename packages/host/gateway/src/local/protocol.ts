@@ -4,7 +4,7 @@
  * `{ id, event }` lines before it (package transaction progress). `type` is a `gateway.*` RPC
  * type (answered with principal `'local'`) or one of the local-only {@link LOCAL_GATEWAY_RPC}.
  */
-import type { GatewayInstanceStatus, GatewayPackageEvent, GatewayRpcErrorCode } from '@zhin.js/console-protocol';
+import type { GatewayInstanceStatus, GatewayPackageEvent, GatewayRpcErrorCode, GatewayRpcErrorDetails } from '@zhin.js/console-protocol';
 
 /** Socket-only RPC: not reachable over HTTP. */
 export const LOCAL_GATEWAY_RPC = Object.freeze({
@@ -51,7 +51,8 @@ export type LocalGatewayErrorCode =
   | GatewayRpcErrorCode
   | 'not_found' | 'last_owner' | 'unauthorized' | 'rate_limited' | 'database_busy';
 
-export interface LocalGatewayError {
+/** `errors` / `missingEnv` as in the HTTP reply ({@link GatewayRpcErrorDetails}), only when non-empty. */
+export interface LocalGatewayError extends GatewayRpcErrorDetails {
   readonly code: LocalGatewayErrorCode;
   readonly message: string;
   readonly status: number;

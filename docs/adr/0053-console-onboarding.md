@@ -48,7 +48,7 @@ Host 启动后、引导完成前，Console 显示引导流程，可以随时跳�
 | 5. 完成 | — | 汇总，进入仪表盘 | — |
 
 - 初始化令牌只能做第 1、2 步。第 3 步起用所有者会话，走正常的 RBAC 权限检查。
-- 第 4 步的顺序是「先安装包，再填写第一个账号并声明」：`gateway.packages.install`（默认 `enable: true`）在插件 Schema 有无默认值的必填字段（适配器的 `endpoints`）时只装依赖、不写 `plugins.<instanceKey>`，事务照常成功、实例保持健康，结果带 `needsConfiguration: [{ name, instanceKey, missing, missingEnv }]`（引导 `installPackages` 报告、CLI 输出同此）；Console 随后用 `gateway.plugins.declare { package, instanceKey?, config }`（`plugin.manage`）按插件 Schema 校验第一个账号、原子写入声明与实例块并重启实例，失败回滚配置。默认值即可满足 Schema 的插件仍在安装时直接声明（实例块写 `{}`，默认值由插件 Schema 在加载时补全）。已声明插件的配置修改仍走 `config:patch-project`，它不改声明。
+- 第 4 步的顺序是「先安装包，再填写第一个账号并声明」：`gateway.packages.install`（默认 `enable: true`）在插件 Schema 有无默认值的必填字段（适配器的 `endpoints`）时只装依赖、不写 `plugins.<instanceKey>`，事务照常成功、实例保持健康，结果带 `needsConfiguration: [{ name, instanceKey, missing, missingEnv }]`（引导 `installPackages` 报告、CLI 输出同此）；Console 随后用 `gateway.plugins.declare { package, instanceKey?, config }`（`plugin.manage`）按插件 Schema 校验第一个账号、原子写入声明与实例块并重启实例，失败回滚配置（表单 Schema 由 `schema:get { pluginName: <包名> }` 提供，带 `declared: false`；校验失败的回复带结构化 `errors` / `missingEnv`，见 ADR 0054 §4）。默认值即可满足 Schema 的插件仍在安装时直接声明（实例块写 `{}`，默认值由插件 Schema 在加载时补全）。已声明插件的配置修改仍走 `config:patch-project`，它不改声明。
 - 第 3、4 步也可以在引导结束后，从「功能 → AI 与模型」「功能 → 适配器」随时进入，用的是同一组页面与接口，引导只是把它们串起来。
 
 ### 3. 在线安装依赖

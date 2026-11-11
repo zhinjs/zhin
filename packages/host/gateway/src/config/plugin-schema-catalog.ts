@@ -5,6 +5,7 @@ import {
   HOST_CONFIG_KEYS,
   readApplicationPluginDeclaration,
   HOST_CONFIG_SCHEMA,
+  ManifestValidationError,
   NodePackageResolver,
   PackageResolutionError,
   type ChildPluginReference,
@@ -58,6 +59,45 @@ export class PluginSchemaCatalog {
         return [key, error instanceof Error ? error : new Error(String(error))];
       }
     })));
+  }
+
+  /**
+   * Form schema of an installed plugin package that no instance declares yet (ADR 0053 §2 step 4):
+   * the package must be a production dependency (`dependencies` / `optionalDependencies`) of the
+   * project and a Plugin package. Returns the declared-instance form shape plus `declared: false`,
+   * `null` when such a package ships no `schema.json`, and `undefined` when `packageName` is not
+   * such a package (declared, not a dependency, not installed, not a Plugin, or not a package name).
+   */
+  async readUndeclared(packageName: string, currentDocument?: RuntimeConfigDocument): Promise<Readonly<Record<string, unknown>> | null | undefined> {
+    if (HOST_CONFIG_KEY_SET.has(packageName) || packageName === 'root'
+      || !/^(?:@[a-z0-9._-]+\/)?[a-z0-9][a-z0-9._-]*$/u.test(packageName)) return undefined;
+    let target: ResolvedPackage | undefined;
+    try {
+      const packages = await NodePackageResolver.create(this.#projectRoot);
+      const root = await packages.root(this.#projectRoot);
+      const file = findConfigFile(this.#projectRoot);
+      const document = currentDocument ?? (file ? (await createConfigDocument(join(this.#projectRoot, file)).read()).document : {});
+      const declaration = readApplicationPluginDeclaration(document);
+      if (declaration.version !== 2) return undefined;
+      if (declaration.instances.some(item => item.instanceKey === packageName || item.package === packageName)) return undefined;
+      const manifest = root.packageJson;
+      if (!Object.hasOwn(manifest.dependencies ?? {}, packageName)
+        && !Object.hasOwn(manifest.optionalDependencies ?? {}, packageName)) return undefined;
+      try { target = await resolveReference(packages, root, { package: packageName, instanceKey: packageName }); }
+      catch (error) {
+        // A dependency without a Zhin manifest is a plain library, not an undeclared plugin.
+        if (error instanceof ManifestValidationError) return undefined;
+        throw error;
+      }
+    } catch (error) {
+      throw new Error(`Cannot resolve schema for ${packageName}: invalid or unavailable Plugin manifest`, { cause: error });
+    }
+    if (!target) return undefined;
+    const schema = (await this.#declarations?.())?.get(target.root) ?? await readOwnSchema(target.root, packageName, true);
+    if (!schema) return null;
+    assertSchemaStructure(schema, `config declaration for ${packageName}`);
+    const form = jsonSchemaToConsoleSchema(schema);
+    return form ? Object.freeze({ ...form, declared: false }) : null;
   }
 
   async readAll(keys: Iterable<string>, document?: RuntimeConfigDocument): Promise<Record<string, unknown>> {

@@ -1,7 +1,7 @@
 /** CLI side of the local control socket (ADR 0054 §6). */
 import { lstat } from 'node:fs/promises';
 import { connect, type Socket } from 'node:net';
-import type { GatewayPackageEvent } from '@zhin.js/console-protocol';
+import type { GatewayPackageEvent, GatewayRpcErrorDetails } from '@zhin.js/console-protocol';
 import { gatewaySocketPath, isNamedPipe } from './paths.js';
 import {
   LineDecoder,
@@ -29,7 +29,7 @@ export class LocalGatewayClientError extends Error {
 
 /** The gateway answered `{ ok: false }`. */
 export class LocalGatewayRpcError extends Error {
-  constructor(readonly code: LocalGatewayErrorCode, message: string, readonly status: number) {
+  constructor(readonly code: LocalGatewayErrorCode, message: string, readonly status: number, readonly details: GatewayRpcErrorDetails = {}) {
     super(message);
     this.name = 'LocalGatewayRpcError';
   }
@@ -155,7 +155,13 @@ export class LocalGatewayClient {
     this.#pending.delete(line.id as number);
     clearTimeout(pending.timer);
     if (line.ok) pending.resolve(line.data);
-    else pending.reject(new LocalGatewayRpcError(line.error.code, line.error.message, line.error.status));
+    else {
+      const { errors, missingEnv } = line.error;
+      pending.reject(new LocalGatewayRpcError(line.error.code, line.error.message, line.error.status, {
+        ...(Array.isArray(errors) && errors.length ? { errors } : {}),
+        ...(Array.isArray(missingEnv) && missingEnv.length ? { missingEnv } : {}),
+      }));
+    }
   }
 
   #fail(error: Error): void {

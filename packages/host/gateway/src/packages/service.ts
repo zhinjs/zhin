@@ -490,7 +490,9 @@ function configurationNeed(result: unknown): GatewayPluginConfigurationNeed | un
 
 /** A refused declaration is the caller's input problem; anything else stays internal. */
 function declarationError(error: unknown): unknown {
-  return error instanceof PluginDeclarationError ? new GatewayError('invalid_input', error.message, { cause: error }) : error;
+  return error instanceof PluginDeclarationError
+    ? new GatewayError('invalid_input', error.message, { cause: error, details: { errors: error.errors, missingEnv: error.missingEnv } })
+    : error;
 }
 
 /** The workflow's own error says files were not rolled back; the gateway does roll back, so report the cause. */
