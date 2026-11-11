@@ -28,6 +28,11 @@ function portIsFree(port: number): Promise<boolean> {
   });
 }
 
+function withoutGatewayMarker(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const { ZHIN_RUNTIME_CHILD: _marker, ...rest } = env;
+  return rest;
+}
+
 interface GatewayRun { code: number | null; output: string; killed: boolean; messages: { type: string; payload: unknown }[] }
 
 /**
@@ -35,7 +40,7 @@ interface GatewayRun { code: number | null; output: string; killed: boolean; mes
  * requests a Console restart and answers the instance's `restart-request` with `shutdown`
  * (ADR 0054 §3), then waits for a natural exit.
  */
-function startAndRestart(root: string, port: number, mode: 'restart' | 'early-restart' | 'disconnect' = 'restart'): Promise<GatewayRun> {
+function startAndRestart(root: string, port: number, mode: 'restart' | 'early-restart' | 'disconnect' | 'foreign-ipc' = 'restart'): Promise<GatewayRun> {
   const script = `
     import { runStartCommand } from ${JSON.stringify(entry)};
     const request = async () => {
@@ -54,11 +59,19 @@ function startAndRestart(root: string, port: number, mode: 'restart' | 'early-re
     process.on('message', message => { if (message?.type === 'test:go') void request(); });
     if (process.env.TEST_REQUEST_EARLY) void request();
     await runStartCommand({ root: ${JSON.stringify(root)}, args: ['--no-watch'], writeOutput: () => {}, writeError: value => process.stderr.write(value) });
+    // The caller keeps its process after an unsupervised stop: nothing may force an exit.
+    if (process.env.TEST_FOREIGN_IPC) await new Promise(done => setTimeout(done, 600));
+    console.error('caller-still-alive');
+    // A foreign parent's IPC channel stays referenced (it is not ours to unref); let go of it.
+    if (process.env.TEST_FOREIGN_IPC) process.disconnect?.();
   `;
   return new Promise((done, reject) => {
     const child = spawn(process.execPath, ['--import', tsx, '--input-type=module', '-e', script], {
       cwd: root, stdio: ['ignore', 'pipe', 'pipe', 'ipc'], serialization: 'advanced',
-      env: { ...process.env, ZHIN_RUNTIME_CHILD: '1', ...(mode === 'early-restart' ? { TEST_REQUEST_EARLY: '1' } : {}) },
+      env: mode === 'foreign-ipc'
+        // Another parent's IPC channel (a test runner's fork worker, a process manager).
+        ? { ...withoutGatewayMarker(process.env), TEST_REQUEST_EARLY: '1', TEST_FOREIGN_IPC: '1' }
+        : { ...process.env, ZHIN_RUNTIME_CHILD: '1', ...(mode === 'early-restart' ? { TEST_REQUEST_EARLY: '1' } : {}) },
     });
     let output = '';
     let killed = false;
@@ -122,6 +135,21 @@ describe('process restart shutdown', () => {
     expect(result.output).toContain('restart-requested');
     expect(result.output).not.toContain('Root lifecycle is stopping');
     expect(result.messages.map(message => message.type)).toEqual(['restart-request']);
+    expect(result.code, result.output).toBe(0);
+    expect(await portIsFree(port)).toBe(true);
+  }, 60_000);
+
+  it('ignores an IPC channel the gateway did not open and stops without exiting the caller', async () => {
+    // Regression (CI fork-worker crash): under a test runner's fork worker the instance took the
+    // runner's IPC channel for the gateway; an unsupervised restart request then exited the worker.
+    const { root, port } = await project();
+    // Open local Host (no http.token, no owner) so the restart RPC needs no credential.
+    await writeFile(join(root, 'zhin.config.yml'), `configVersion: 2\nplugins: {}\nhttp:\n  host: 127.0.0.1\n  port: ${port}\n`);
+    const result = await startAndRestart(root, port, 'foreign-ipc');
+    expect(result.killed, result.output).toBe(false);
+    expect(result.messages).toEqual([]);
+    expect(result.output).toContain('restartUnavailable');
+    expect(result.output).toContain('caller-still-alive');
     expect(result.code, result.output).toBe(0);
     expect(await portIsFree(port)).toBe(true);
   }, 60_000);

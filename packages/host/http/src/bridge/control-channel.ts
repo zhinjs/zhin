@@ -6,6 +6,7 @@
  */
 import {
   INSTANCE_BRIDGE_PROTOCOL_VERSION,
+  INSTANCE_CHILD_ENV,
   parseGatewayMessage,
   type GatewayShutdownPayload,
   type InstanceToGatewayMessage,
@@ -39,13 +40,19 @@ export interface InstanceControlChannel {
 }
 
 /**
- * Opens the control channel when this process was started with an IPC channel; returns
- * `undefined` otherwise (not supervised).
+ * Opens the control channel when the gateway started this process: the IPC channel must be
+ * present and {@link INSTANCE_CHILD_ENV} set. Returns `undefined` otherwise (not supervised).
+ *
+ * The marker matters: other parents also open an IPC channel (test runners' fork workers,
+ * process managers). Treating their channel as the gateway would send control messages to
+ * them and exit the process on a restart request.
  */
 export function openInstanceControlChannel(
   port: InstanceIpcPort = process as unknown as InstanceIpcPort,
   pid: number = process.pid,
+  environment: Readonly<Record<string, string | undefined>> = process.env,
 ): InstanceControlChannel | undefined {
+  if (!environment[INSTANCE_CHILD_ENV]) return undefined;
   if (typeof port.send !== 'function' || port.connected === false) return undefined;
   port.channel?.unref?.();
   const shutdownListeners = new Set<(payload: GatewayShutdownPayload) => void>();

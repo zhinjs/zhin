@@ -106,6 +106,12 @@ export interface StartCommandOptions {
   readonly installTrustedResources?: RootResourceInstaller;
   writeOutput(value: string): void;
   writeError(value: string): void;
+  /**
+   * Ends the process after a gateway-requested stop (default `process.exit`). Only the
+   * supervised paths (gateway `shutdown` / disconnect) exit; an embedded or test caller
+   * keeps its process.
+   */
+  readonly exit?: (code: number) => void;
 }
 
 /** Host config `console.terminal` (raw; validated by the terminal installer). */
@@ -435,14 +441,23 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
       return Promise.resolve();
     }
     // Not supervised (or `--once`): nothing would bring the process back, so only stop it.
+    // Never force an exit here: the caller (an embedding, a test worker) owns its process.
     options.writeError(`${JSON.stringify({ restartUnavailable: reason, hint: 'start the instance with zhin runtime start' })}\n`);
-    return stopForShutdown(DEFAULT_SHUTDOWN_BUDGET_MS);
+    return control.stop().catch((error: unknown) => {
+      options.writeError(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
+      process.exitCode = 1;
+    });
   }
-  /** Full stop within `budgetMs`; a stop that hangs (third-party handles) is ended by force. */
+  const exitProcess = options.exit ?? ((code: number) => { process.exit(code); });
+  /**
+   * Gateway-requested stop (`shutdown`, gateway gone) within `budgetMs`; a stop that hangs
+   * (third-party handles) is ended by force, then the process exits so the gateway can start
+   * the next instance.
+   */
   function stopForShutdown(budgetMs: number): Promise<void> {
     const budgetTimer = setTimeout(() => {
       options.writeError(`${JSON.stringify({ forcedExit: 'budget', stillStopping: [...stoppingComponents] })}\n`);
-      process.exit(process.exitCode ?? 0);
+      exitProcess(Number(process.exitCode ?? 0));
     }, budgetMs);
     budgetTimer.unref?.();
     return control.stop()
@@ -453,7 +468,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
       .finally(() => {
         clearTimeout(budgetTimer);
         controlChannel?.close();
-        const drainTimer = setTimeout(() => { process.exit(process.exitCode ?? 0); }, 250);
+        const drainTimer = setTimeout(() => { exitProcess(Number(process.exitCode ?? 0)); }, 250);
         drainTimer.unref?.();
       });
   }

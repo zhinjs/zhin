@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events';
 import { describe, expect, it } from 'vitest';
 import {
   INSTANCE_BRIDGE_PROTOCOL_VERSION,
+  INSTANCE_CHILD_ENV,
   openInstanceControlChannel,
   parseGatewayMessage,
   parseInstanceMessage,
@@ -43,16 +44,28 @@ describe('bridge protocol', () => {
   });
 });
 
+/** Environment the gateway gives its instance child. */
+const CHILD_ENV = { [INSTANCE_CHILD_ENV]: '1' };
+
 describe('openInstanceControlChannel', () => {
   it('is absent without an IPC channel', () => {
     const port = new FakePort() as unknown as InstanceIpcPort & { send?: unknown };
     (port as { send?: unknown }).send = undefined;
-    expect(openInstanceControlChannel(port)).toBeUndefined();
+    expect(openInstanceControlChannel(port, 1, CHILD_ENV)).toBeUndefined();
+  });
+
+  it('is absent when another parent opened the IPC channel (no gateway marker)', () => {
+    // Regression: inside a test runner's fork worker the instance mistook the runner's IPC
+    // channel for the gateway, unref'd it, sent control messages to it and exited the worker.
+    const port = new FakePort();
+    expect(openInstanceControlChannel(port, 1, {})).toBeUndefined();
+    expect(port.unrefCalls).toBe(0);
+    expect(port.listenerCount('message')).toBe(0);
   });
 
   it('sends ready with the protocol version and restart-request, and unrefs the channel', () => {
     const port = new FakePort();
-    const channel = openInstanceControlChannel(port, 42)!;
+    const channel = openInstanceControlChannel(port, 42, CHILD_ENV)!;
     expect(port.unrefCalls).toBe(1);
     channel.ready({ generation: 7 });
     channel.requestRestart('console');
@@ -64,7 +77,7 @@ describe('openInstanceControlChannel', () => {
 
   it('delivers valid shutdown messages and ignores garbage', () => {
     const port = new FakePort();
-    const channel = openInstanceControlChannel(port, 1)!;
+    const channel = openInstanceControlChannel(port, 1, CHILD_ENV)!;
     const received: unknown[] = [];
     channel.onShutdown((payload) => { received.push(payload); });
     port.emit('message', { type: 'shutdown', payload: { reason: 'stop', budgetMs: 10 } });
@@ -75,7 +88,7 @@ describe('openInstanceControlChannel', () => {
 
   it('reports disconnect and stops sending afterwards; close detaches listeners', () => {
     const port = new FakePort();
-    const channel = openInstanceControlChannel(port, 1)!;
+    const channel = openInstanceControlChannel(port, 1, CHILD_ENV)!;
     let disconnected = 0;
     channel.onDisconnect(() => { disconnected += 1; });
     port.emit('disconnect');
