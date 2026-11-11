@@ -30,6 +30,16 @@
       "default": 15000,
       "minimum": 1000,
       "maximum": 60000
+    },
+    "allowPrivateNetwork": {
+      "type": "boolean",
+      "default": false,
+      "description": "允许订阅回环/内网地址上的 feed（如自建 RSSHub）。默认拒绝，因为订阅地址来自聊天用户。",
+      "x-i18n": {
+        "en": {
+          "description": "Allow feeds on loopback/LAN addresses (for example a self-hosted RSSHub). Refused by default because feed URLs come from chat users."
+        }
+      }
     }
   }
 }

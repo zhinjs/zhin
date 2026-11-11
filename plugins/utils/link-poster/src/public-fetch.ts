@@ -64,7 +64,11 @@ const systemLookup: HostLookup = async (hostname) =>
  * Parse `input` and refuse anything that is not an http(s) URL on a public host.
  * Fails closed: an unresolvable name, or a name with any non-public address, is refused.
  */
-export async function assertPublicUrl(input: string | URL, lookup: HostLookup = systemLookup): Promise<URL> {
+export async function assertPublicUrl(
+  input: string | URL,
+  lookup: HostLookup = systemLookup,
+  allowPrivateNetwork = false,
+): Promise<URL> {
   let url: URL;
   try {
     url = new URL(input);
@@ -73,6 +77,8 @@ export async function assertPublicUrl(input: string | URL, lookup: HostLookup = 
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new BlockedUrlError('only http and https are allowed');
   if (url.username || url.password) throw new BlockedUrlError('credentials in the URL are not allowed');
+  // Operator opt-in (never chat users): scheme and credential rules still apply, the address policy does not.
+  if (allowPrivateNetwork) return url;
   // The WHATWG parser already canonicalised odd IPv4 spellings (0x7f.1, 2130706433) to dotted quads.
   const host = url.hostname.replace(/^\[|\]$/g, '').replace(/\.$/, '').toLowerCase();
   if (isIP(host)) {
@@ -102,6 +108,8 @@ export interface PublicFetchOptions {
   /** Extra per-hop rule on top of the address policy (for example a host allow-list). */
   readonly allow?: (url: URL) => boolean;
   readonly lookup?: HostLookup;
+  /** Skip the public-address requirement. Only for an explicit operator setting; default false. */
+  readonly allowPrivateNetwork?: boolean;
 }
 
 export interface PublicResponse {
@@ -116,7 +124,7 @@ export async function fetchPublic(input: string, options: PublicFetchOptions = {
   const maxRedirects = options.maxRedirects ?? 5;
   let current = input;
   for (let hop = 0; hop <= maxRedirects; hop += 1) {
-    const url = await assertPublicUrl(current, options.lookup);
+    const url = await assertPublicUrl(current, options.lookup, options.allowPrivateNetwork);
     if (options.allow && !options.allow(url)) throw new BlockedUrlError(`${url.hostname} is outside the allow-list`);
     const response = await fetch(url.href, { ...options.init, redirect: 'manual', signal });
     const location = response.status >= 300 && response.status < 400 ? response.headers.get('location') : null;

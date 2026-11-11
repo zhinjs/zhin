@@ -29,6 +29,19 @@ describe('fetchFeed address policy', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('fetches a loopback feed only when the operator opted in, and still refuses non-http schemes', async () => {
+    const fetchMock = vi.fn(async () => new Response(FEED));
+    vi.stubGlobal('fetch', fetchMock);
+    const url = 'http://127.0.0.1:8080/feed';
+    await expect(fetchFeed(url, { timeout: 1000 })).rejects.toThrow(/refusing to fetch/);
+    await expect(fetchFeed(url, { timeout: 1000, allowPrivateNetwork: false })).rejects.toThrow(/refusing to fetch/);
+    expect(fetchMock).not.toHaveBeenCalled();
+    const feed = await fetchFeed(url, { timeout: 1000, allowPrivateNetwork: true });
+    expect(feed.title).toBe('Demo');
+    await expect(fetchFeed('file:///etc/passwd', { timeout: 1000, allowPrivateNetwork: true })).rejects.toThrow(/refusing to fetch/);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('refuses a public name that resolves to, or redirects to, an internal address', async () => {
     const fetchMock = vi.fn(async () => new Response(null, { status: 302, headers: { location: 'http://10.0.0.5/feed' } }));
     vi.stubGlobal('fetch', fetchMock);

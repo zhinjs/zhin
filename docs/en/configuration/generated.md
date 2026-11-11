@@ -2574,6 +2574,7 @@ _This Schema declares no fields._
 | `rss.maxPerGroup` | number | no | `30` | — |
 | `rss.maxItems` | number | no | `5` | — |
 | `rss.timeout` | number | no | `15000` | — |
+| `rss.allowPrivateNetwork` | boolean | no | `false` | Allow feeds on loopback/LAN addresses (for example a self-hosted RSSHub). Refused by default because feed URLs come from chat users. |
 
 ### short-url
 

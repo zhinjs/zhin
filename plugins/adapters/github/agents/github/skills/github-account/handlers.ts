@@ -87,11 +87,11 @@ export async function executeGithubBind(_args: Record<string, never>, client: Gi
         if (result.status === 'aborted') return;
         if (result.status !== 'authorized') {
           log.warn(formatCompact({ op: 'device_flow', ok: false, status: result.status, platform, sender: senderId }));
-          await reply(result.status === 'expired'
-            ? t(locale, 'bindExpired')
-            : result.status === 'denied'
-              ? t(locale, 'bindDenied')
-              : t(locale, 'bindFailed', { error: result.error }));
+          await reply(result.status === 'error'
+            ? t(locale, 'bindFailed', { error: result.error })
+            : result.status === 'expired'
+              ? t(locale, 'bindExpired')
+              : t(locale, 'bindDenied'));
           return;
         }
 

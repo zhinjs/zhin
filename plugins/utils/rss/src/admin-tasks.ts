@@ -169,7 +169,7 @@ export class AdministratorRssTasks implements PluginTaskProvider {
           if (this.#stopped) break;
           if (task.state !== 'scheduled' || flushed.has(task.id)) continue;
           let feed: Awaited<ReturnType<FeedLoader>>;
-          try { feed = await this.#load(task.url, this.#config.timeout); }
+          try { feed = await this.#load(task.url, this.#config); }
           catch { await this.#recordCheck(task, 'fetchFailed'); continue; }
           if (this.#stopped) break;
           // Keep only bounded identifiers, never arbitrary feed bodies, in durable state.

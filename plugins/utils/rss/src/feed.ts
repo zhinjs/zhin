@@ -24,6 +24,8 @@ export interface RssConfig {
   readonly timeout: number;
   readonly maxItemsPerPoll?: number;
   readonly fetchTimeoutMs?: number;
+  /** Let feeds live on loopback/LAN addresses (self-hosted RSSHub and the like). Default false. */
+  readonly allowPrivateNetwork?: boolean;
 }
 
 export const DEFAULT_RSS_CONFIG: RssConfig = {
@@ -90,12 +92,14 @@ export function stripHtml(html: string): string {
  */
 export async function fetchFeed(
   url: string,
-  timeout = DEFAULT_RSS_CONFIG.timeout,
+  options: number | Pick<RssConfig, 'timeout' | 'allowPrivateNetwork'> = DEFAULT_RSS_CONFIG,
   lookup?: HostLookup,
 ): Promise<{ title: string; items: FeedItem[] }> {
+  const { timeout, allowPrivateNetwork = false } = typeof options === 'number' ? { timeout: options } : options;
   const { response } = await fetchPublic(url, {
     timeoutMs: timeout,
     lookup,
+    allowPrivateNetwork,
     init: {
       headers: {
         'User-Agent': 'ZhinBot-RSS/1.0',

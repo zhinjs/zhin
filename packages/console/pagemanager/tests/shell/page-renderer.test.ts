@@ -35,7 +35,11 @@ describe('page shell importmap', () => {
   });
 
   it('does not let the CDN undercut the workspace security floor for react-router', () => {
-    const floor = /react-router@[^:]*:\s*'>=(\d+\.\d+\.\d+)'/u.exec(repoFile('pnpm-workspace.yaml'))?.[1];
+    // pnpm 9 reads overrides from the root package.json, not pnpm-workspace.yaml.
+    const overrides = (JSON.parse(repoFile('package.json')) as { pnpm: { overrides: Record<string, string> } }).pnpm.overrides;
+    const floor = Object.entries(overrides)
+      .find(([selector]) => selector.startsWith('react-router@'))?.[1]
+      .match(/^>=(\d+\.\d+\.\d+)$/u)?.[1];
     expect(floor).toBeDefined();
     expect(compareVersions(PAGE_SHELL_CDN_VERSIONS.reactRouter, floor!)).toBeGreaterThanOrEqual(0);
   });

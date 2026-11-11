@@ -21,6 +21,7 @@ rss:
   maxPerGroup: 30 # 每个会话最大订阅数（默认 30）
   maxItems: 5 # 单次推送最多展示条数（默认 5）
   timeout: 15000 # 拉取 feed 的超时时间 ms（默认 15s）
+  allowPrivateNetwork: false # 设为 true 才允许订阅回环/内网地址上的 feed（如自建 RSSHub）
 ```
 
 ## 命令

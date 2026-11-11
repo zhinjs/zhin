@@ -131,7 +131,7 @@ export async function checkSubscriptions(runtime: RssRuntime, options: {
 
   for (const url of options.urls) {
     try {
-      const { title, items } = await fetchFeed(url, runtime.config.timeout);
+      const { title, items } = await fetchFeed(url, runtime.config);
       const seenRows = await Seen.select().where({ feed_url: url });
       const seenAt = new Map(seenRows.map((r) => [String(r.item_guid ?? ''), String(r.seen_at ?? '')]));
       const seenGuids = new Set(seenAt.keys());

@@ -2574,6 +2574,7 @@ _该 Schema 没有声明字段。_
 | `rss.maxPerGroup` | number | 否 | `30` | — |
 | `rss.maxItems` | number | 否 | `5` | — |
 | `rss.timeout` | number | 否 | `15000` | — |
+| `rss.allowPrivateNetwork` | boolean | 否 | `false` | 允许订阅回环/内网地址上的 feed（如自建 RSSHub）。默认拒绝，因为订阅地址来自聊天用户。 |
 
 ### short-url
 
