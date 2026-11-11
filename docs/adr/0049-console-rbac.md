@@ -173,5 +173,5 @@ RPC（`iam.*`，需 `iam.view` / `iam.manage`）：`iam.users.list|create|update
 
 1. 权限表对插件 RPC（`plugin.<pluginId>.<method>`）只做准入（`delegated`），由插件 RPC 分发器逐个方法判定；分发器没有应答时拒绝。全局所有者仍不受限，初始化令牌的行为不变。
 2. 已登录主体必须满足方法自己的 `requiredPermissions` / `requiredRoles` / `anyOfPermissions` 与所绑定页面的要求（插件权限按级别）。都没声明时兜底：读方法需要 `feature.view`；动作自己没有声明要求时需要 `feature.configure`（页面要求照样叠加）。不满足返回 403 `forbidden`。
-3. 目标：适配器账号方法（`endpoint-*`）用权限表算出的适配器 / 账号目标；拥有适配器的插件（`root/<别名>`，当前代的适配器目录里确有它的适配器）的其他方法以该适配器为目标；其余为全局。绑定到目标适配器 / 账号的角色对目录权限（如 `endpoint.manage`、`feature.configure`）和插件权限都算数；绑定到别的适配器的不算。
+3. 目标：适配器账号方法（`endpoint-*`）的目标按处理函数选账号的同一规则从 `data` 求出（`consoleAccountTarget`：先 `instanceId`，否则 `id`；`add` / `replace` 只到适配器层）；`id` 与 `instanceId` 同时出现却指向不同账号，或 `data` 之外另带不一致的 `id` / `instanceId`，返回 400 `invalid_input`；拥有适配器的插件（`root/<别名>`，当前代的适配器目录里确有它的适配器）的其他方法以该适配器为目标；其余为全局。绑定到目标适配器 / 账号的角色对目录权限（如 `endpoint.manage`、`feature.configure`）和插件权限都算数；绑定到别的适配器的不算。
 4. 账号方法另外接受目标上的 `endpoint.manage`，原有只含 `endpoint.manage` 的适配器作用域角色可继续维护该适配器的账号。处理函数看到的 `runtime.operator`（首次迁移确认）为：适配器目标上持有 `endpoint.manage`，否则全局持有 `feature.configure`。

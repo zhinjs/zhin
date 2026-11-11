@@ -431,3 +431,48 @@ describe('adapter account RPC for signed-in principals (ADR 0049 amendment 2026-
     expect(f.repository.compareAndSet).not.toHaveBeenCalled();
   });
 });
+
+describe('adapter account RPC target follows the account the handler selects', () => {
+  async function endpointFixture() {
+    const f = await fixture();
+    const adapter = f.adapters.get(owner)!;
+    const seed = { expectedGeneration: 0, confirmMigration: true, values: { password: 'synthetic' } };
+    for (const id of ['acct-a', 'acct-b']) {
+      expect(await f.call('endpoint-add', { ...seed, expectedRevision: adapter.revision, id })).toMatchObject({ status: 200 });
+    }
+    const entry = (id: string) => adapter.list().find(item => item.endpointId === id)!;
+    const levelOf = pluginPermissionLevelResolver(collectPluginPermissionCatalog(f.store.current));
+    const grants: ConsoleGrant[] = [{ role: 'operator', scope: { kind: 'endpoint', key: 'first/acct-a' }, permissions: CONSOLE_BUILTIN_ROLES.operator.permissions }];
+    const as = (action: string, data: Record<string, unknown>, top: Record<string, unknown> = {}) => {
+      const message = { type: `plugin.${owner}.${action}`, ...top, data: { expectedGeneration: 0, expectedRevision: adapter.revision, ...data } };
+      return dispatchPluginConsoleRpcRequest(message, { snapshots: f.store, access: { unrestricted: false, permissions: [], roles: [] },
+        pagesOwnedBy: () => [{ localName: 'index', requiredPermissions: ['account:read'], requiredRoles: [] }] as never,
+        principal: { grants, roles: ['operator'], rule: resolveConsoleRpcPermission(message.type, message), levelOf } });
+    };
+    return { f, adapter, entry, as };
+  }
+  const extra = (action: string): Record<string, unknown> => (action === 'endpoint-update' ? { values: { label: 'after' } } : {});
+
+  it('rejects id / instanceId splits and authorizes against the instance the handler acts on', async () => {
+    const { f, entry, as } = await endpointFixture();
+    const a = entry('acct-a'), b = entry('acct-b');
+    const writes = f.repository.compareAndSet.mock.calls.length;
+    for (const action of ['endpoint-update', 'endpoint-start', 'endpoint-stop', 'endpoint-remove']) {
+      // Scoped to acct-a, naming acct-a by id while the handler would select acct-b by instanceId.
+      expect(await as(action, { ...extra(action), id: 'acct-a', instanceId: b.instanceId }), action)
+        .toMatchObject({ status: 400, body: { code: 'invalid_input' } });
+      // instanceId alone targets acct-b: outside the binding.
+      expect(await as(action, { ...extra(action), instanceId: b.instanceId }), action).toMatchObject({ status: 403, body: { code: 'forbidden' } });
+      // A top-level id the handler never reads cannot steer the target either.
+      expect(await as(action, { ...extra(action), instanceId: b.instanceId }, { id: 'acct-a' }), action)
+        .toMatchObject({ status: 400, body: { code: 'invalid_input' } });
+    }
+    expect(f.repository.compareAndSet.mock.calls.length).toBe(writes);
+    // Replace swaps the selected instance's identity: adapter-level, so an endpoint binding never suffices.
+    expect(await as('endpoint-replace', { instanceId: a.instanceId, id: 'acct-c', values: { password: 'synthetic' } }))
+      .toMatchObject({ status: 403 });
+    // The account the binding covers is manageable by instanceId or by id.
+    expect(await as('endpoint-update', { instanceId: a.instanceId, values: { label: 'after' } })).toMatchObject({ status: 200 });
+    expect(await as('endpoint-stop', { id: 'acct-a' })).toMatchObject({ status: 200 });
+  });
+});

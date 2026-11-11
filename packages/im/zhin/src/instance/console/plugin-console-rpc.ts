@@ -1,4 +1,4 @@
-import { adapterFeatureId, isAdapterIndex } from '@zhin.js/adapter';
+import { adapterFeatureId, consoleAccountTarget, isAdapterIndex, type AdapterConsoleMutation } from '@zhin.js/adapter';
 import type { ConsoleAccess } from '@zhin.js/host-http';
 import {
   CONSOLE_PERMISSIONS,
@@ -128,7 +128,8 @@ export async function dispatchPluginConsoleRpcRequest(
     const pagesOwnedBy = options.pagesOwnedBy ?? catalogPagesOwnedBy;
     let operator = options.access.unrestricted;
     if (options.principal && !options.access.unrestricted) {
-      operator = authorizePrincipal(snapshot, pluginId, method, options.principal, pagesOwnedBy);
+      const account = accountCall(address.method, message, input);
+      operator = authorizePrincipal(snapshot, pluginId, method, options.principal, pagesOwnedBy, account);
     } else {
       authorize(snapshot, pluginId, method, options.access, pagesOwnedBy);
     }
@@ -233,10 +234,11 @@ function authorizePrincipal(
   method: NormalizedPluginConsoleRpcMethod,
   principal: PluginConsoleRpcPrincipal,
   pagesOwnedBy: NonNullable<PluginConsoleRpcRequestOptions['pagesOwnedBy']>,
+  accountMethod: AccountCall | undefined,
 ): boolean {
   const rule = principal.rule ?? null;
-  const account = rule?.kind === 'exact' && rule.permission === P.ENDPOINT_MANAGE;
-  const target: ConsoleScopeTarget = account ? rule.target : adapterTarget(snapshot, pluginId);
+  const account = accountMethod !== undefined && rule?.kind === 'exact' && rule.permission === P.ENDPOINT_MANAGE;
+  const target: ConsoleScopeTarget = account ? accountTarget(snapshot, pluginId, accountMethod) : adapterTarget(snapshot, pluginId);
   const allows = (permission: string) => grantsAllow(principal.grants, permission, target, principal.levelOf);
   const operator = allows(target.kind === 'global' ? P.FEATURE_CONFIGURE : P.ENDPOINT_MANAGE);
   const permissions = new Set(method.requiredPermissions);
@@ -263,6 +265,45 @@ function authorizePrincipal(
   if (!own && (account || !allows(P.FEATURE_CONFIGURE))) throw new Failure('forbidden', '没有操作权限');
   if (!satisfied) throw new Failure('forbidden', '没有操作权限');
   return operator;
+}
+
+const ACCOUNT_ACTIONS: ReadonlySet<string> = new Set(['add', 'update', 'start', 'stop', 'remove', 'replace']);
+
+interface AccountCall { readonly action: AdapterConsoleMutation; readonly input: Readonly<Record<string, unknown>> }
+
+/**
+ * `endpoint-<action>` (adapter account methods). Handlers read only `data`, so an `id` /
+ * `instanceId` outside `data` that differs from the one inside is rejected rather than ignored.
+ */
+function accountCall(method: string, message: Readonly<Record<string, unknown>>, input: Readonly<Record<string, unknown>>): AccountCall | undefined {
+  const action = method.startsWith('endpoint-') ? method.slice('endpoint-'.length) : '';
+  if (!ACCOUNT_ACTIONS.has(action)) return undefined;
+  for (const key of ['id', 'instanceId']) {
+    if (Object.hasOwn(message, key) && message[key] !== input[key]) throw new Failure('invalid_input', `${key} 只能放在 data 里`);
+  }
+  return { action: action as AdapterConsoleMutation, input };
+}
+
+/**
+ * Account target, from exactly the fields the adapter handler selects the account by
+ * (`consoleAccountTarget`); adapter level when the call names no existing account.
+ */
+function accountTarget(snapshot: RuntimeSnapshot, pluginId: PluginId, call: AccountCall): ConsoleScopeTarget {
+  const parts = String(pluginId).split('/');
+  if (parts.length !== 2 || parts[0] !== 'root' || !parts[1]) return GLOBAL;
+  const adapter = parts[1];
+  const projection = snapshot.projections.get(adapterFeatureId);
+  let adapters: Parameters<typeof consoleAccountTarget>[0] = [];
+  if (isAdapterIndex(projection)) {
+    try { adapters = projection.forOwner(pluginId).adapters(); } catch { adapters = []; }
+  }
+  let endpoint: string | undefined;
+  try {
+    endpoint = consoleAccountTarget(adapters, call.action, call.input as never);
+  } catch (error) {
+    throw toFailure(error);
+  }
+  return endpoint ? Object.freeze({ kind: 'endpoint', adapter, endpoint }) : Object.freeze({ kind: 'adapter', adapter });
 }
 
 /** `adapter:<alias>` when the plugin `root/<alias>` owns an adapter in this generation, else global. */
