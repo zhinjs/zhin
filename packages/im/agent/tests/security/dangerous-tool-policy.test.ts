@@ -117,3 +117,14 @@ describe('checkBashSensitiveReadAccess', () => {
     expect(d.role).toBe('other');
   });
 });
+
+describe('tool allowlist pattern anchoring', () => {
+  it('anchors every alternative of a pattern', async () => {
+    const { isToolAllowlistedByConfig } = await import('../../src/security/dangerous-tool-policy.js');
+    const config = { execAllowlist: ['foo|etch'] } as unknown as Parameters<typeof isToolAllowlistedByConfig>[1];
+    expect(isToolAllowlistedByConfig('foo', config)).toBe(true);
+    expect(isToolAllowlistedByConfig('etch', config)).toBe(true);
+    // `^foo|etch$` used to match any name ending in `etch`.
+    expect(isToolAllowlistedByConfig('web_fetch', config)).toBe(false);
+  });
+});

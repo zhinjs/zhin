@@ -7,6 +7,32 @@ import { messages as t } from './i18n.js'
 const FETCH_TIMEOUT = 10_000
 
 const MAX_REDIRECTS = 5
+/** Upper bound for a cover/avatar image; larger bodies are dropped instead of buffered. */
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024
+
+/** Read a body with a byte cap, aborting the stream as soon as the cap is exceeded. */
+async function readCappedBody(res: Response, maxBytes: number): Promise<Buffer | undefined> {
+  const declared = Number(res.headers.get('content-length'))
+  if (Number.isFinite(declared) && declared > maxBytes) {
+    await res.body?.cancel()
+    return undefined
+  }
+  if (!res.body) return Buffer.alloc(0)
+  const chunks: Uint8Array[] = []
+  let total = 0
+  const reader = res.body.getReader()
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    total += value.byteLength
+    if (total > maxBytes) {
+      await reader.cancel()
+      return undefined
+    }
+    chunks.push(value)
+  }
+  return Buffer.concat(chunks)
+}
 
 /**
  * Fetch with redirects followed by hand so every hop is checked with `isAllowed`
@@ -61,10 +87,14 @@ async function imageToDataUri(url: string | undefined): Promise<string | undefin
       headers: { Referer: new URL(url).origin, 'User-Agent': 'Mozilla/5.0' },
     }, isPublicImageUrl)
     if (!res.ok) return undefined
-    const buf = Buffer.from(await res.arrayBuffer())
     const mime = (res.headers.get('content-type') || 'image/jpeg').split(';')[0]!.trim()
     // The value is interpolated into a data URI inside rendered HTML: accept plain image types only.
-    if (!/^image\/[\w.+-]+$/i.test(mime)) return undefined
+    if (!/^image\/[\w.+-]+$/i.test(mime)) {
+      await res.body?.cancel()
+      return undefined
+    }
+    const buf = await readCappedBody(res, MAX_IMAGE_BYTES)
+    if (!buf) return undefined
     return `data:${mime};base64,${buf.toString('base64')}`
   } catch {
     return undefined

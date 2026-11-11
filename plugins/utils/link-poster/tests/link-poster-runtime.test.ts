@@ -110,3 +110,27 @@ describe('redirect and image host checks', () => {
     expect(isPublicImageUrl('https://intranet/x.png')).toBe(false);
   });
 });
+
+describe('image size cap', () => {
+  it('drops a cover image larger than the cap instead of buffering it', async () => {
+    const { detectAndParse } = await import('../src/platforms.js');
+    const huge = new Uint8Array(6 * 1024 * 1024);
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.startsWith('https://api.github.com/')) {
+        return new Response(JSON.stringify({ full_name: 'zhinjs/zhin', owner: { avatar_url: 'https://avatars.example.com/a.png' } }), {
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      return new Response(huge, { headers: { 'content-type': 'image/png' } });
+    });
+    try {
+      const meta = await detectAndParse('https://github.com/zhinjs/zhin');
+      expect(meta).not.toBeNull();
+      expect(meta!.authorAvatar).toBeUndefined();
+      expect(meta!.cover).toBeUndefined();
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+});
