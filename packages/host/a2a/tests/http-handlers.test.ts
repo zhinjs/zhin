@@ -75,9 +75,11 @@ describe('A2A SSE streaming', () => {
   });
 
   it('REST: a failure before the first chunk is still a plain JSON error', async () => {
-    const { port, handled } = await serve('rest', fakeHandler(async function* () {
-      throw new Error('never started');
-    }));
+    const failing = {
+      [Symbol.asyncIterator]() { return this; },
+      next: async () => { throw new Error('never started'); },
+    } as unknown as AsyncGenerator<unknown, void, undefined>;
+    const { port, handled } = await serve('rest', fakeHandler(() => failing));
 
     const response = await fetch(`http://127.0.0.1:${port}/`, {
       method: 'POST', headers, body: JSON.stringify({ message }),

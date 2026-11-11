@@ -314,10 +314,7 @@ function pruneRemovedEntries(hostApi: PluginRegisterHostApi, entries: readonly C
   }
 }
 
-let lastLoadOptions: LoadConsoleEntriesOptions | null = null;
-
 export async function loadConsoleEntries(options: LoadConsoleEntriesOptions): Promise<void> {
-  lastLoadOptions = options;
   options.beforeLoad?.();
   let data: ConsoleEntriesResponse;
   try {
@@ -349,13 +346,11 @@ export async function loadConsoleEntries(options: LoadConsoleEntriesOptions): Pr
 
 /**
  * Fetch `/entries` again and reconcile. Pass the same `hostApi` object as the initial load
- * (or omit `options` to reuse it) so removed entries can be diffed away; the host API needs
- * `removeRoute` / `removeTool` for the removal to take effect.
+ * so removed entries can be diffed away; the host API needs `removeRoute` / `removeTool`
+ * for the removal to take effect.
  */
-export async function reloadConsoleEntries(options?: LoadConsoleEntriesOptions): Promise<void> {
-  const resolved = options ?? lastLoadOptions;
-  if (!resolved) return;
-  return loadConsoleEntries(resolved);
+export async function reloadConsoleEntries(options: LoadConsoleEntriesOptions): Promise<void> {
+  return loadConsoleEntries(options);
 }
 
 export const CONSOLE_ENTRY_LIFECYCLE_EVENTS = [
@@ -371,7 +366,7 @@ export function subscribeConsoleEntryReload(
   const unsubscribes = CONSOLE_ENTRY_LIFECYCLE_EVENTS.map((eventType) =>
     transport.onConsoleEvent(eventType, () => {
       const resolved = typeof options === 'function' ? options() : options;
-      void reloadConsoleEntries(resolved).catch(() => {});
+      if (resolved) void reloadConsoleEntries(resolved).catch(() => {});
     }),
   );
   return () => {

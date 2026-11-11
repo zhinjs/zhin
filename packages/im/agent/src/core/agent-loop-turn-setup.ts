@@ -3,9 +3,6 @@ import { z } from 'zod';
 import { formatCompact, truncatePreview, getLogger } from '@zhin.js/logger';
 import {
   createPromptContextBlock,
-  createLlmMessageProjection,
-  agentLoop,
-  agentContextFrom,
   assistantText,
   createUserMessage,
   agentToolsToLlmTools,
@@ -14,11 +11,9 @@ import {
   type Usage,
   type AgentMessage,
   type AssistantMessage,
-  type TokenUsage,
 } from '@zhin.js/ai';
 import { ReplyStreamRun } from './reply-stream-run.js';
 import { structuredReplyInstruction, structuredReplySchema } from '../outbound/structured-reply.js';
-import { tokenUsageToLegacy } from './agent-run-shared.js';
 import { applyExecPolicyToTools } from '../security/exec-policy.js';
 import { iterationSceneOf, resolveModelHarness, resolveTurnMaxIterations } from '../config/model-harness-runtime.js';
 import {
@@ -31,21 +26,12 @@ import {
 } from '../prompt/assembly.js';
 import { logPromptComposition } from '../internal/prompt-trace.js';
 import { planToolRun } from '../tool/runtime.js';
-import { sanitizeAssistantReply, unwrapJsonStringLayers } from './text-sanitize.js';
+import { unwrapJsonStringLayers } from './text-sanitize.js';
 import { chatFailureKindOf, chatFailureLine, type ChatFailureOptions } from '../outbound/chat-failure.js';
-import { logPhase, tokenUsageLogFields, logAgentLoopIterationEnd } from '../internal/phase-trace.js';
-import { buildAgentPromptCacheStreamOptions } from '../config/index.js';
-import type { HostPromptTurnHooks } from '../internal/host-types.js';
-import type { AgentCore } from './agent-core.js';
-import type { ZhinAgentPrivate, OnChunkCallback } from '../internal/agent-host.js';
 import { buildLlmToolsForProvider } from '../tool/deferred-resolution.js';
 import { DEFERRED_META_TOOL_NAMES, type ToolCatalogItem } from '../tool-catalog/types.js';
 import { resolveDeferredApiTools, residentToolNames } from '../tool-catalog/tool-catalog.js';
 import type { TurnEvent } from '../event/turn-event.js';
-import {
-  createTurnEventMapperState,
-  mapAgentEventToTurnEvents,
-} from './turn-event-mapper.js';
 import { scenePromptPartsForTurn } from '../context/turn-envelope.js';
 import { appendRuntimeContext } from '../context/turn-user-message.js';
 import { ExecutableToolRegistry } from '../tool/executable-tool-registry.js';
@@ -71,7 +57,6 @@ import type { PromptSectionDebugInfo } from '../prompt/system-prompt.js';
 import {
   traceTurnId,
   type AgentLoopTurnInput,
-  type AgentLoopTurnResult,
 } from './agent-core-ports.js';
 
 const logger = getLogger('ZhinAgent:AgentLoopTurn');

@@ -44,11 +44,10 @@ runner 或其他 generation。这是迁移完成后的唯一权威契约，不�
 `asPrivate` 取得内部状态。根入口也不再导出 classic `ToolRuntime`、builtin policy resolver、
 数据库激活或运行时内省函数，避免插件作者依赖生产 `TurnToolRuntime` 之外的第二套执行权威。
 
-`ask_user` 也是 generation-owned Tool capability：工具只拿当前 Turn 的 `QuestionPort`，
-Root-owned `InteractionRouter` 用 canonical session + authenticated subject 匹配后续回复。
-IM adapter 在 middleware/command/Agent fallback 前 claim 回复；Router 不保存 `Message`、
-Adapter 或过期回复句柄。HTTP/A2A 等入口若要支持交互，必须显式提供自己的 QuestionPort；
-Schedule 等 unattended Turn 缺省 fail-closed。
+`ask_user` 也是 generation-owned Tool capability：工具只拿当前 Turn 的 `QuestionPort`。
+IM 入口由 `createRuntimeQuestionPort` 把它接到 `@zhin.js/core` 的会话交互（`ImRuntime.createInteraction`），
+后续回复由 core 在 middleware/command/Agent fallback 前认领。HTTP/A2A 等入口若要支持交互，
+必须显式提供自己的 QuestionPort；Schedule 等 unattended Turn 缺省 fail-closed。
 
 ## Turn Isolation
 
@@ -109,7 +108,7 @@ turn 会跨代执行。
 
 ## 功能特性
 
-- 🤖 **agentLoop 统一路径**：ZhinAgent、Subagent、Deferred Worker、AIService 均经 `agentLoop`（legacy `Agent.run` 仅保留在 `@zhin.js/ai` 供单测）
+- 🤖 **agentLoop 统一路径**：主回合与受限 Actor 回合均经 `@zhin.js/ai` 的 `agentLoop`
 - 📝 **会话持久化**：`AgentSessionStore` + `ContextRepository`；IM 事实由 `ConversationEventStore` 独占
 - 🧠 **ZhinAgent**：与 Zhin 消息流集成的智能体（SOUL/TOOLS/AGENTS、工具收集、执行策略）
 - 🔍 **明确模型目录**：管理员确认协议与能力后写入 Service；刷新仅返回观察结果，不自动扩大可用模型
@@ -120,7 +119,7 @@ turn 会跨代执行。
 - 🧩 **代际提示词能力**：插件通过 `promptSegmentToken`（或 `@zhin.js/prompt-section`）向当前 Runtime generation 贡献文本段，随 generation 发布与释放，并在 `systemPromptMaxChars` 预算下明确保留或失败
 - 🔌 **框架挂载**：Plugin Runtime (basic/cli) 装配 Agent 服务，通过 Scope+Token 提供
 - 📦 **上下文与记忆**：`ContextRepository`（`agent_messages`）、`AgentSessionStore`；聊天事件从 `ConversationEventStore` 游标消费
-- ⏰ **跟进与定时**：`FollowUpManager`、`PersistentCronEngine`、cron 工具
+- ⏰ **定时任务**：`ScheduleManager` + `createScheduleTools`（`schedule_*` 工具）、`schedule-domain/` 执行记录
 - 🔧 **内置工具**：bash、read_file、write_file、ask_user、web_search、`inspect_conversation_reference` 等
 - 📐 **Compaction（ADR 0010）**：生产 `agentLoop` 接线 L1 micro + L2 LLM；IM `/compact`；yaml `ai.agent.compaction`
 - 🌳 **会话树**：`parent_id` + `active_leaf`；IM `/tree`、`/reset`；branch summarization；Console `GET/POST /api/agent/sessions/...`
@@ -193,7 +192,7 @@ permission、approval、generation lease 或 Journal。普通 npm 插件继续�
 Feature；Capability Seam 属于 Advanced Root Host 扩展口，详见
 [能力接缝](../../../docs/concepts/capability-seams.md)。
 
-**Agent Core**：`AgentCore.runText()` / `runVision()` 为 `AsyncGenerator<TurnEvent>` SSOT；`runTextTurn` 为 collector。组合层经 `composeZhinAgentRuntime` 注入 8 模块 + `createAgentCoreDepsForCompose`。
+**Agent Core**：`AgentCore.runText()` 为 `AsyncGenerator<TurnEvent>` SSOT；`runTextTurn` 为 collector（图片回合同样走 `runText`，以媒体块输入）。组合层经 `composeZhinAgentRuntime` 注入 8 模块 + `createAgentCoreDepsForCompose`。
 
 可选 subpath（`package.json` `exports`）：
 
@@ -201,7 +200,7 @@ Feature；Capability Seam 属于 Advanced Root Host 扩展口，详见
 import { AgentCore } from '@zhin.js/agent/core'
 import { ToolSystem } from '@zhin.js/agent/tool'
 import { SessionSystem } from '@zhin.js/agent/session'
-// …/event、/skill、/memory、/subagent、/context、/prompt、/turn、/config
+// …/event、/skill、/memory、/context、/prompt、/turn、/config、/security、/trace、/runtime
 ```
 
 词汇与边界见 [CONTEXT.md](./CONTEXT.md)。
@@ -223,38 +222,26 @@ CLI 装配 Agent Host；Service、Account、Profile 和用途在 Console 管理�
 
 普通命令／工具通过 `context.use(aiInferenceClientToken)` 使用本次受控执行作用域的 `list/generate/stream/evaluate/image`，不持有全局 Provider 或填写 owner。框架不会自动执行普通推理返回的工具调用。
 
-### 非 Zhin 宿主／独立 Agent
-
-`AIService.createAgent({ models, systemPrompt, tools })` 和 `runAgent(input, { models, ... })` 显式借用 `ModelExecutionScope`；由 Host 从真实 operation/generation lease 与可信身份创建。创建方负责释放 scope，Agent 不接收 Provider／模型别名，也不自建认证目录。未配置模型时可以构造服务；真正推理明确返回未配置。
-
-独立任务结果的 `terminal` 保留最后一次实际模型响应的 `stopReason`／`errorMessage`；有正文或可解析 JSON 不代表执行成功，调用方应先检查 `error`／`aborted`。`usage` 累计本次运行已观测的各次模型响应及识图用量，未返回的用量不作推算。取消仍以原始 `signal.reason` 拒绝；可通过 `onInterrupted(snapshot)` 同步取得当时已观测的正文、用量和工具结果。快照不会被晚到结果追加；`toolCalls` 只表示已观测的结算结果，缺少记录不表示工具未执行，不应据此自动重放。
-
-`SubagentRuntime`／`SubagentSystem.spawnSync()` 统一返回 `SubagentSyncResult`（`status`、`result`、`toolCalls`、可选 `terminal`），不再返回字符串；先判断 `status`，再读取 `result`。这个结果不包含 Origin、Message 或路由元数据。`spawn_task wait=true` 根据真实状态显示完成或失败，保留部分正文和错误原因。新调用方最低版本是本批计划中的 `@zhin.js/agent@1.1.47`，尚未发布；`1.1.46` 及以前仍是旧字符串合同，升级时应使用同批配套版本，不提供双入口兼容层。
-
-工具加载后的补全失败现在能被主回合现有错误 gate 识别并停止续段；不会新增重试，但此前错误被隐藏时继续执行的请求可能不再发生。共享 loop 在预算内原定的下一轮仍按原规则运行。
-
 ## 核心导出
 
 | 类别 | 导出 |
 |------|------|
 | 初始化 | Plugin Runtime composition root 自动装配 |
-| Agent | `ServiceAgent`、`CreateServiceAgentOptions`（`AIService.createAgent`）；底层循环使用 `@zhin.js/ai` 的 `agentLoop` |
+| Agent | `AgentCore`（`@zhin.js/agent/core`）；底层循环使用 `@zhin.js/ai` 的 `agentLoop` |
 | Model harness | `MODEL_HARNESS_DEFAULTS`, `resolveModelHarness`, `mergeModelHarnessValues` |
 | 服务与会话 | `AIService`；会话/context 类型见 `@zhin.js/ai`（`ContextRepository`、`AgentSessionStore`） |
 | ZhinAgent | `ZhinAgent`，以及 config / exec-policy / file-policy / `@zhin.js/agent/tool` / prompt 等 |
 | 安全策略 | `OwnerApprovalRuntime`；`checkExecPolicy`, `applyExecPolicyToTools`, `isDangerousCommand`, `stripEnvVarPrefix`, `stripSafeWrappers`, `splitCompoundCommand`, `extractCommandName`, `ExecPolicyResult`, `checkFileAccess`, `classifyBashCommand`, `isBlockedDevicePath` |
-| 提示词构建 | `buildRichSystemPrompt`, `buildEnhancedPersona`, `buildUserMessageWithHistory`, `buildContextHint` |
+| 提示词构建 | `buildRichSystemPrompt`, `buildRichSystemPromptParts`, `buildUserMessageWithHistory`, `PromptSegmentRegistry` |
 | 上下文与记忆 | `ContextRepository`, `AgentSessionStore`（`@zhin.js/ai`）；`ConversationEventStore`（`@zhin.js/im-contract`） |
-| 跟进与定时 | `FollowUpManager`, `PersistentCronEngine`, `createCronTools`, `setCronManager`, `getCronManager` |
-| 压缩与 Bootstrap | `compactSession`；`@zhin.js/agent/memory` 导出实例级 `AgentCompactionRuntime`；`estimateTokens`, `loadBootstrapFiles`, `loadSoulPersona`, `loadToolsGuide`, `loadAgentsMemory` |
+| 定时 | `ScheduleManager`, `createScheduleTools` |
+| 压缩与 Bootstrap | `@zhin.js/agent/memory` 导出实例级 `AgentCompactionRuntime`（IM `/compact` 经 `ZhinAgent.compactSession`）；`loadBootstrapFiles`, `loadSoulPersona`, `loadToolsGuide`, `loadAgentsMemory` |
 | Hook | `AgentResourceHub`、`HookRegistry`、`aiHookRuntimeBus` |
 | 内置工具 | generation-owned definitions 见 `src/plugin-runtime/native-*-tools.ts`；回合统一经 `ToolIndex` / `TurnToolRuntime` 执行 |
-| 输出与检测 | `parseOutput`, `renderToPlainText`, `renderToSatori`, `detectTone` |
-| 子代理 | `SubagentSystem` |
+| 输出与检测 | `parseOutput`, `renderToPlainText`, `detectTone`（`@zhin.js/ai`） |
 | 支持资源 | `AgentResourceHub`、`SkillRegistry`、`SubAgentRegistry`、`McpRegistry`、`HookRegistry` |
 | MCP 客户端 | `McpClientManager`、`McpClientConnection`、`mcpToolToAgentTool`、`ensureMcpConnections`（见下方「MCP」） |
-| 限流 | `RateLimiter` |
-| 存储抽象 | `StorageBackend`, `MemoryStorageBackend`, `DatabaseStorageBackend`, `createSwappableBackend` |
+| 限流 | `RateLimiter`（`@zhin.js/ai`）、`UsageQuota` |
 
 类型（如 `ZhinAgentConfig`、`ContextConfig`、`AgentState`、`McpServerEntry` 等）均从包入口导出或从 `@zhin.js/core` 再导出。
 
@@ -293,21 +280,13 @@ ai:
 - `src/collaboration/turn-collaboration.ts` — 回合级协作会话与 Venue 可见性投影
 - `packages/im/ai/src/llm/tiered-tool-buckets.ts` — tiered 并行工具 SSOT
 
-### 2. 独立任务
-
-独立 Agent 的工具只来自显式 `tools`，或明确的 `includeRegisteredTools: true`。真实 Host 为每个任务保留自己的 operation scope；不得把父 client 或最新 Provider 对象长期借给后台任务。子任务在入队前同步 retain 父 generation 与可信权限，角色选用 Host Profile 不会提升发起者权限。
-
-### 3. 单次推理
-
-无需工具循环时，优先用 operation-bound inference client 的 `generate`；需要 Agent 循环时，用 `AIService.runAgent(input, { models, systemPrompt, tools })`。两者都固定本次选择；显式模型失败不自动切换。摘要、审批和旁听的采样／输出参数由其所选 Profile 决定。
-
-### 4. 多 Bot 同场协作（Venue）
+### 2. 多 Bot 同场协作（Venue）
 
 通过 `ai.venues` 声明同群多 Bot 成员与可见性（`visible` / `summary` / `backstage`），由 `@zhin.js/core` 的 `VenueRegistry`、`routeVenueMessage`、`VenueFloorController` 与 `VenueProjector` 驱动同群点名协作与后台静默协作。详见 [多 Agent 协作与同场 Venue](../../../docs/ai/multi-agent-harness.md)。
 
 ## 工具命名策略
 
-- 保留/内置工具名（如 `bash`、`read_file`、`spawn_task`）不可被插件或文件化工具覆盖。
+- 保留/内置工具名（如 `bash`、`read_file`、`ask_user`）不可被插件或文件化工具覆盖。
 - 非保留工具同名时采用 **后注册覆盖前注册**。
 - 冲突统一以 warn 记录：包含 `name`、`source`、`action`（`ignored`/`overridden`）。
 
@@ -338,7 +317,7 @@ ai:
 
 ## IM 管理命令
 
-由 `register-management-tools.ts` / `register-introspection-commands.ts` 注册（master / 有权限用户）：
+由 `src/init/runtime-management-commands.ts`（`handleRuntimeManagementCommand`，在 ingress 管理阶段调用）处理（master / 有权限用户）：
 
 | 类别 | 命令 |
 |------|------|
@@ -354,57 +333,61 @@ zhin-package CLI：`zhin packages`（`basic/cli`）。详见 ADR 0010。
 
 ```
 src/
-├── index.ts                         # 包根导出：Orchestrator、ZhinAgent、init、builtin…
+├── index.ts                  # 包根导出（创作与领域 API）
+├── service.ts                # AIService
+├── zhin-agent/               # ZhinAgent 门面类
+├── plugin-runtime/           # `@zhin.js/agent/runtime`：AgentRuntime、回合引擎、原生工具（native-*-tools.ts）
+│   ├── host/                 #   Host 装配：runtime-foundation、publication/persistence coordinator
+│   ├── ingress/              #   IM 入站 → TurnRequest（unified-mailbox-spine、管理命令阶段、端口）
+│   └── inference/            #   operation-bound 推理客户端与模型运行时接线
+├── core/                     # Agent Core — agentLoop 薄适配、回合 setup/settlement、进度与探索预算
+├── turn/                     # Turn pipeline、准入、checkpoint、metrics
+├── collaboration/            # Actor 协作与 HostMailbox（ADR 0048）
+├── tool/                     # Tool System — Source/Filter、deferred 解析、TurnToolRuntime
+├── tool-catalog/             # 延迟加载工具目录与回合控制器
+├── session/                  # Agent session / history 投影
+├── context/                  # 回合信封、历史窗口、AGENTS 指令链
+├── prompt/                   # 系统提示词分段、assembly、workspace 模板、rules/
+├── memory/                   # Memory System 与 compaction runtime
+├── skill/                    # Skill 注册与渐进披露
+├── resource-hub/             # AgentResourceHub：Skill / SubAgent / MCP / Hook registry
+├── mcp-client/               # MCP 客户端连接与工具桥接
+├── seam/                     # Capability Seam（远程 Tool / Skill Provider 接缝）
+├── authoring/                # defineSkill / defineHook / defineEval（`/skills`、`/hooks`、`/evals`）
+├── discovery/                # agents/<name>/ 包发现与 `zhin agent` 信息报告
+├── config/                   # ZhinAgent 配置 SSOT、agent bindings、model harness
+├── model-runtime/            # 模型执行 scope 与 completion 服务
+├── decision/                 # 决策（审批判断、检索排序）配置与类型
+├── security/                 # exec/file/network 策略、shell-syntax、硬闸与审批、sandbox(-docker/-mounts)、用量配额
+├── self-change/              # 自我配置变更的草拟、预览、审批与应用
+├── assistant/                # 助理 home、定时 job 存储与投递
+├── schedule-domain/          # 定时任务执行域：历史、重试证据、输出校验
+├── journal/                  # 回合 journal 与投递记录
+├── trace/                    # 回合 trace、上下文预算报告、归档
+├── event/                    # Agent turn 域事件
+├── media/                    # 入站媒体归一化、感知、图片资产与发布
+├── outbound/                 # 结构化回复解析、渐进投递、主动发送
+├── activity-feedback/        # 活动反馈（typing / 进度）配置与投影
+├── typing-indicator/         # 输入中指示器适配
+├── personal-session/         # 个人 Session 选择服务
+├── migration/                # 旧 Provider 配置 → ai.plan 迁移
+├── web/                      # 网页抓取 / 搜索解析
+├── init/                     # Plugin Runtime 组合、数据库模型与激活、管理命令、dispose
+├── internal/                 # host 契约、asPrivate、turn-context、phase/prompt trace
+├── utils/                    # disposable、keyed-mutex
 │
-├── core/                            # Agent Core — agentLoop 薄适配
-├── tool/                            # Tool System — 运行时工具收集
-├── session/                         # Session System — IM/Agent 双 store、session-io
-├── event/                           # Event System — turn 域事件 + session 事件
-├── skill/                           # Skill System
-├── memory/                          # Memory System
-├── collaboration/                   # Actor Collaboration & HostMailbox (ADR 0048)
-├── context/                         # Context System — builder/injector、tail limit
-├── prompt/                          # 系统提示词、assembly、workspace 模板
-├── turn/                            # Turn pipeline、inbound 队列、auto-continue
-├── config/                          # ZhinAgent 配置 SSOT、model harness
-│
-├── resource-hub/                    # 能力资源 registry 内部模块
-│   ├── index.ts                     # AgentResourceHub class
-│   ├── types.ts                     # ResourceScope, Skill, SubAgentDef, AIHook…
-│   ├── resource-registry.ts
-│   ├── skill-registry.ts
-│   ├── subagent-registry.ts
-│   ├── mcp-registry.ts
-│   └── hook-registry.ts
-│
-├── mcp-client/                      # MCP 客户端
-│
-├── init/                            # Plugin Runtime 组合、数据库激活与 dispose 生命周期
-│
-├── service.ts                       # AIService
-│
-├── zhin-agent/                      # ZhinAgent 门面类（单文件）
-│   └── index.ts
-│
-├── internal/                        # host 契约、asPrivate、turn-context、phase/prompt trace
-├── discovery/                       # 文件化资源发现（tools / skills / agents）
-├── security/                        # exec-policy、file-policy
-├── builtin/                         # 尚未迁移的服务级 / turn meta 工具实现
-│
-├── defaults/                        # ★ 各注册表的默认资源
-│   ├── skills.ts                    # 默认 common skills
-│   ├── hooks.ts                     # 默认 common hooks
-│   └── subagents.ts                 # 默认 subagent 模板
-│
-├── common-adapter-tools.ts          # ← 从 core 迁移：群管工具工厂
-├── subagent.ts
-├── task-executor.ts
-├── cron-engine.ts
-├── bootstrap.ts
-└── user-profile.ts
+├── bootstrap.ts / bootstrap-scope.ts      # SOUL/TOOLS/AGENTS 引导文件加载与作用域
+├── schedule-manager.ts / schedule-cron.ts # ScheduleManager 契约与 schedule_* 工具、cron 解析
+├── task-executor.ts                       # 定时任务执行器（`@zhin.js/agent/task-executor`）
+├── common-adapter-tools.ts                # 群管工具工厂（适配器复用）
+├── group-rules.ts / announcements.ts      # 群管规则与公告存储
+├── scene-facts.ts / scene-events.ts       # 场景成员事实与场景事件
+├── user-profile.ts / user-relation*.ts / session-profile.ts
+├── session-ops.ts / session-events.ts / session-tree-runtime.ts
+├── decision-events.ts / decision-event-log.ts / control-plane.ts
+├── ai-event-*.ts / ai-hook-runtime-bus.ts / plugin-*-hook*.ts  # 事件与 Hook 总线
+├── memory-layers.ts / reserved-tools.ts / tool-bridge.ts
 ```
-
-`init/` 只保留由 Plugin Runtime composition root 直接调用的装配与数据库生命周期模块；旧 Plugin 注册器已删除。
 
 ### 构建
 

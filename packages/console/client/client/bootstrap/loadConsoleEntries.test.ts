@@ -161,25 +161,25 @@ describe("console entries reload", () => {
     };
     serveEntries([alpha, beta], [alpha, beta], [alpha], []);
     const app = new ConsoleApp();
-    const hostApi = hostApiFor(app);
     const onEmpty = vi.fn();
+    const options = { hostApi: hostApiFor(app), entriesUrl: "http://host.test/entries", onEmpty };
 
-    await loadConsoleEntries({ hostApi, entriesUrl: "http://host.test/entries", onEmpty });
+    await loadConsoleEntries(options);
     expect(routePaths(app).sort()).toEqual(["/alpha", "/beta"]);
     expect(toolIds(app).sort()).toEqual(["alpha:alpha-tool", "alpha:alpha-tool-2", "beta-tool"]);
 
     // Same entries: nothing is duplicated (a random id used to add one tool per reload).
-    await reloadConsoleEntries();
+    await reloadConsoleEntries(options);
     expect(routePaths(app).sort()).toEqual(["/alpha", "/beta"]);
     expect(toolIds(app).sort()).toEqual(["alpha:alpha-tool", "alpha:alpha-tool-2", "beta-tool"]);
 
     // beta was uninstalled.
-    await reloadConsoleEntries();
+    await reloadConsoleEntries(options);
     expect(routePaths(app)).toEqual(["/alpha"]);
     expect(toolIds(app).sort()).toEqual(["alpha:alpha-tool", "alpha:alpha-tool-2"]);
 
     // Everything is gone.
-    await reloadConsoleEntries();
+    await reloadConsoleEntries(options);
     expect(routePaths(app)).toEqual([]);
     expect(toolIds(app)).toEqual([]);
     expect(onEmpty).toHaveBeenCalledTimes(1);
@@ -224,8 +224,9 @@ describe("console entries reload", () => {
     const addTool = vi.fn((input: { id?: string }) => input.id ?? "generated");
     const hostApi: PluginRegisterHostApi = { React: {} as never, addRoute: vi.fn(), addTool };
 
-    await loadConsoleEntries({ hostApi, entriesUrl: "http://host.test/entries" });
-    await reloadConsoleEntries();
+    const options = { hostApi, entriesUrl: "http://host.test/entries" };
+    await loadConsoleEntries(options);
+    await reloadConsoleEntries(options);
 
     expect(addTool).toHaveBeenCalledTimes(1);
     expect(addTool).toHaveBeenCalledWith({ id: "delta:delta", name: "Delta" });

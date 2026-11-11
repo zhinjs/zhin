@@ -73,7 +73,7 @@ describe('@zhin.js/plugin-qrcode', () => {
   });
 
   it('scan validates the image URL before any request and bounds the request with a timeout', async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify([{ symbol: [{ data: 'decoded', error: null }] }])));
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify([{ symbol: [{ data: 'decoded', error: null }] }])));
     vi.stubGlobal('fetch', fetchMock);
     try {
       const run = (url: string) => scanCommand.execute({ params: { url }, locale: 'zh-CN' } as never);
@@ -89,10 +89,10 @@ describe('@zhin.js/plugin-qrcode', () => {
       expect(init.signal).toBeInstanceOf(AbortSignal);
 
       // A hanging decoder is cut off by the signal and reported as a failure.
-      fetchMock.mockImplementationOnce((_url: string, hanging: RequestInit) => new Promise((_resolve, reject) => {
-        expect(hanging.signal).toBeInstanceOf(AbortSignal);
+      fetchMock.mockImplementationOnce((_url, hanging) => new Promise<Response>((_resolve, reject) => {
+        expect(hanging?.signal).toBeInstanceOf(AbortSignal);
         reject(new DOMException('The operation timed out.', 'TimeoutError'));
-      }) as never);
+      }));
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
       expect(await run('https://example.org/qr.png')).toBe('二维码识别失败，请检查图片链接是否有效');
       warn.mockRestore();
