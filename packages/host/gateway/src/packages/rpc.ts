@@ -84,7 +84,9 @@ async function handle(type: GatewayRpcType, data: Readonly<Record<string, unknow
         principal, ...optionalBoolean(data, 'enable'), ...optionalBoolean(data, 'startInstance'),
       });
     case 'gateway.packages.uninstall':
-      return packagesOf(deps).uninstall(packageList(data, false) as readonly unknown[], { principal, ...optionalBoolean(data, 'startInstance') });
+      return packagesOf(deps).uninstall(packageList(data, false) as readonly unknown[], {
+        principal, ...optionalBoolean(data, 'startInstance'), ...optionalBoolean(data, 'removeDependency'),
+      });
     case 'gateway.packages.update':
       return packagesOf(deps).update(packageList(data, true), { principal, ...optionalBoolean(data, 'startInstance') });
     case 'gateway.instance.status': return instanceStatus(instanceOf(deps).status());

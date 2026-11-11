@@ -274,6 +274,7 @@
     "export * from './config.js';",
     "export * from './http.js';",
     "export * from './iam.js';",
+    "export * from './local.js';",
     "export * from './onboarding.js';",
     "export * from './packages.js';",
     "export * from './plugin-management.js';",

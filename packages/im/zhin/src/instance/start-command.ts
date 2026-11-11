@@ -125,7 +125,7 @@ export interface StartCommandOptions {
 export class InstanceGatewayRequiredError extends Error {
   readonly code = 'ZHIN_INSTANCE_GATEWAY_REQUIRED';
   constructor() {
-    super('zhin.js/instance 只能由网关拉起：请使用 zhin runtime start 启动（开发 / 测试可加 --standalone 在本进程内自带 HTTP 服务器）');
+    super('zhin.js/instance 只能由网关拉起：请使用 zhin start 启动（开发 / 测试可加 --standalone 在本进程内自带 HTTP 服务器）');
     this.name = 'InstanceGatewayRequiredError';
   }
 }
@@ -485,7 +485,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     }
     // Not supervised (or `--once`): nothing would bring the process back, so only stop it.
     // Never force an exit here: the caller (an embedding, a test worker) owns its process.
-    options.writeError(`${JSON.stringify({ restartUnavailable: reason, hint: 'start the instance with zhin runtime start' })}\n`);
+    options.writeError(`${JSON.stringify({ restartUnavailable: reason, hint: 'start the instance with zhin start' })}\n`);
     return control.stop().catch((error: unknown) => {
       options.writeError(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
       process.exitCode = 1;
@@ -607,7 +607,9 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     throw error;
   }
   // TTY 交互启动：统一走 logger；裸 JSON 留给 --once / 管道（stable-path、脚本）
-  if (process.stdout.isTTY && !parsed.once) {
+  // The gateway pipes the instance's output and echoes it to its terminal (ADR 0054 §3).
+  const interactiveOutput = process.stdout.isTTY || process.env.ZHIN_INSTANCE_INTERACTIVE === '1';
+  if (interactiveOutput && !parsed.once) {
     const endpoints = im.endpoints.list();
     const online = endpoints.filter((ep) => ep.status === 'online').map((ep) => ep.name);
     const offline = endpoints.filter((ep) => ep.status !== 'online').map((ep) => ep.name);

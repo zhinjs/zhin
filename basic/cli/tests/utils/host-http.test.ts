@@ -50,7 +50,7 @@ describe('hostGet', () => {
     expect(result).toEqual({
       ok: false,
       status: 0,
-      error: '无法连接 http://127.0.0.1:8086/api（请先 zhin runtime start）',
+      error: '无法连接 http://127.0.0.1:8086/api（请先 zhin start）',
     });
   });
 });

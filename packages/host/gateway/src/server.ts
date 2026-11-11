@@ -6,3 +6,4 @@
 export * from './http/gateway-http-server.js';
 export * from './http/console-rpc.js';
 export * from './http/start-gateway.js';
+export * from './http/run-gateway.js';

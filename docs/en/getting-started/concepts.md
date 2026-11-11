@@ -95,7 +95,7 @@ Here `ping-pong` is the `instanceKey` — it decides which top-level section of 
 
 ### Host
 
-The HTTP server the bot process exposes. Console, webhook-style platform callbacks and MCP all reach the bot through it. The CLI assembles it during `zhin runtime start`; the port is `http.port` in `zhin.config.yml`. More: [Deployment and recovery](../operations/production.md)
+The HTTP server the bot process exposes. Console, webhook-style platform callbacks and MCP all reach the bot through it. It is served by the management gateway `zhin start` launches (still up while the instance crashes); the port is `http.port` in `zhin.config.yml`. More: [Deployment and recovery](../operations/production.md)
 
 ### Message flow and outbound sending
 

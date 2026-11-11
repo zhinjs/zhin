@@ -14,9 +14,8 @@ import { createConfigDocument } from '@zhin.js/runtime';
 import { findConfigFile } from '../project/config-file.js';
 import { loadRuntimeEnvironmentLayers } from '../project/environment.js';
 import { InstanceSupervisor, type InstanceSupervisorOptions } from '../supervisor/instance-supervisor.js';
-import { runSupervisedInstance, type RunSupervisedInstanceOptions } from '../supervisor/run-instance.js';
 import { GatewayPackageService } from '../packages/service.js';
-import { createGatewayRpcDispatcher, type GatewayRpcInstance } from '../packages/rpc.js';
+import { createGatewayRpcDispatcher, type GatewayRpcDispatcher, type GatewayRpcInstance } from '../packages/rpc.js';
 import { createGatewayConsoleRpc } from './console-rpc.js';
 import { GatewayHttpServer } from './gateway-http-server.js';
 
@@ -63,6 +62,8 @@ export interface RunningGateway {
   readonly supervisor: InstanceSupervisor;
   readonly transport: GatewayInstanceTransport;
   readonly packages: GatewayPackageService | undefined;
+  /** The gateway RPC (`gateway.packages.*`, `gateway.instance.*`), shared with the local socket. */
+  readonly rpc: GatewayRpcDispatcher;
   /**
    * True while the gateway owns the instance's lifecycle: a dependency transaction runs, or the
    * Console stopped the instance (a run must not end because of it).
@@ -112,16 +113,17 @@ export async function startGateway(options: StartGatewayOptions): Promise<Runnin
     status: () => supervisor.status(),
     logs: supervisor.logs,
   };
+  const rpc = createGatewayRpcDispatcher({
+    ...(packages ? { packages } : {}),
+    instance: lifecycle,
+  });
   const server = new GatewayHttpServer({
     http,
     instance: { transport: () => transport, state: () => supervisor.state },
     ...(options.tokenRegistry ? { tokenRegistry: options.tokenRegistry } : {}),
     ...(options.retryAfterSeconds !== undefined ? { retryAfterSeconds: options.retryAfterSeconds } : {}),
     ...(options.maxRequestBodyBytes !== undefined ? { maxRequestBodyBytes: options.maxRequestBodyBytes } : {}),
-    consoleRpc: createGatewayConsoleRpc(createGatewayRpcDispatcher({
-      ...(packages ? { packages } : {}),
-      instance: lifecycle,
-    })),
+    consoleRpc: createGatewayConsoleRpc(rpc),
   });
   registry = server.tokenRegistry;
   // Interim until B1.4: Console accounts live in the instance, which resolves user / API-token
@@ -154,6 +156,7 @@ export async function startGateway(options: StartGatewayOptions): Promise<Runnin
     supervisor,
     transport,
     packages,
+    rpc,
     ownsInstanceLifecycle: () => consoleStopped || packages?.activeTransaction !== undefined,
     instanceStarted,
     close(): Promise<void> {
@@ -168,37 +171,6 @@ export async function startGateway(options: StartGatewayOptions): Promise<Runnin
         }
       })();
       return closeResult;
-    },
-  });
-}
-
-export interface RunGatewayOptions extends Omit<RunSupervisedInstanceOptions, 'attach'> {
-  /** Overrides the project's `http` block (tests). */
-  readonly http?: ResolvedHttpConfig;
-}
-
-/**
- * `zhin runtime start` / `pnpm dev` (ADR 0054 §1): the gateway HTTP server on the configured
- * `http` port in front of the supervised instance, bridged by `supervisor.transport`. Resolves
- * with the exit code, like {@link runSupervisedInstance}.
- */
-export function runGateway(input: RunGatewayOptions): Promise<number> {
-  return runSupervisedInstance({
-    ...input,
-    attach: async (supervisor) => {
-      const gateway = await startGateway({
-        projectRoot: input.root,
-        environment: input.options.environment,
-        ...(input.http ? { http: input.http } : {}),
-        supervisor,
-        transport: () => supervisor.transport,
-        // runSupervisedInstance starts the instance and owns its run.
-        startInstance: false,
-      });
-      return {
-        keepAlive: () => gateway.ownsInstanceLifecycle(),
-        close: () => gateway.close(),
-      };
     },
   });
 }

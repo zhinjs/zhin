@@ -29,7 +29,7 @@ describe('instance start without the gateway (ADR 0054 §3)', () => {
     }).catch((error: unknown) => error);
     expect(failure).toBeInstanceOf(InstanceGatewayRequiredError);
     expect((failure as InstanceGatewayRequiredError).code).toBe('ZHIN_INSTANCE_GATEWAY_REQUIRED');
-    expect((failure as Error).message).toContain('zhin runtime start');
+    expect((failure as Error).message).toContain('zhin start');
     expect((failure as Error).message).toContain('--standalone');
   });
 });

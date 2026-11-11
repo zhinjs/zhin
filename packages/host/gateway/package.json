@@ -65,6 +65,11 @@
       "types": "./lib/server.d.ts",
       "development": "./src/server.ts",
       "import": "./lib/server.js"
+    },
+    "./local": {
+      "types": "./lib/local.d.ts",
+      "development": "./src/local.ts",
+      "import": "./lib/local.js"
     }
   },
   "files": [
@@ -160,6 +165,10 @@
       "./server": {
         "types": "./lib/server.d.ts",
         "import": "./lib/server.js"
+      },
+      "./local": {
+        "types": "./lib/local.d.ts",
+        "import": "./lib/local.js"
       }
     }
   },

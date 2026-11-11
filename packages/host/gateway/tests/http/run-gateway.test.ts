@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { parseStartOptions } from '@zhin.js/runtime';
-import { runGateway } from '../../src/http/start-gateway.js';
+import { runGateway } from '../../src/http/run-gateway.js';
 
 const fixture = fileURLToPath(new URL('./fixtures/gateway-instance.ts', import.meta.url));
 const tsx = fileURLToPath(new URL('../../../../../node_modules/tsx/dist/esm/index.mjs', import.meta.url));

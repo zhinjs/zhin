@@ -51,7 +51,7 @@ plugins/ping-pong/
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "zhin runtime start"
+    "dev": "zhin start --foreground --watch source config"
   },
   "dependencies": {
     "zhin.js": "^1.1.0"
@@ -231,7 +231,7 @@ pnpm dev
 2. 在 Sandbox 里发送 `/ping`，Bot 回复 `pong!`。
 3. 把 `zhin.config.yml` 里的 `reply` 改成别的文字并保存，再发 `/ping` —— 不重启就能看到新回复。改 `commands/ping/index.ts` 也一样。
 
-只想检查插件能否正常装配、不想进入交互模式？运行 `zhin runtime start --once`。
+只想检查插件能否正常装配、不想进入交互模式？运行 `zhin start --once`。
 
 ::: tip 没有回复？
 - 命令前缀由每个平台连接的 `commandPrefix` 决定；脚手架生成的 Sandbox 设为 `/`，其他平台可能为空。

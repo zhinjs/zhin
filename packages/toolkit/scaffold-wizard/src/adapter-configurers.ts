@@ -74,7 +74,7 @@ export async function configureTelegramEndpoint(ctx: EndpointConfigureContext): 
     console.log('');
     console.log(chalk.yellow(wizardText(locale, "     Webhook 前置条件：")));
     console.log(chalk.gray(wizardText(locale, "     • Endpoint 进程需绑定可被 Telegram 访问的 HTTPS 域名（有效 TLS 证书）")));
-    console.log(chalk.gray(wizardText(locale, "     • Webhook 由内置 HTTP Host（zhin runtime start）承接，防火墙/反向代理需放行 http 端口")));
+    console.log(chalk.gray(wizardText(locale, "     • Webhook 由内置 HTTP Host（zhin start）承接，防火墙/反向代理需放行 http 端口")));
 
     const webhook = await inquirer.prompt([
       {
@@ -193,7 +193,7 @@ export async function configureGitHubEndpoint(ctx: EndpointConfigureContext): Pr
   if (eventsMode === 'webhook') {
     console.log('');
     console.log(chalk.yellow(wizardText(locale, "     Webhook 前置条件：")));
-    console.log(chalk.gray(wizardText(locale, "     • Webhook 由内置 HTTP Host（zhin runtime start 的 http 配置）承接")));
+    console.log(chalk.gray(wizardText(locale, "     • Webhook 由内置 HTTP Host（zhin start 的 http 配置）承接")));
     console.log(chalk.gray(wizardText(locale, "     • GitHub App Webhook URL 填 https://<你的域名>/github/webhook")));
 
     const webhook = await inquirer.prompt([

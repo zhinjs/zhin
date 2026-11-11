@@ -78,7 +78,7 @@
         { "zh": "使用[自动生成配置字段参考](/configuration/generated)核对当前源码与 Schema。", "en": "Check the current source and Schema in the [generated configuration fields](/en/configuration/generated)." }
       ],
       "verification": [
-        { "zh": "`npx zhin doctor` 应通过，随后 `npx zhin runtime start` 不再出现配置校验错误。", "en": "`npx zhin doctor` should pass, followed by `npx zhin runtime start` without validation errors." }
+        { "zh": "`npx zhin doctor` 应通过，随后 `npx zhin start --foreground` 不再出现配置校验错误。", "en": "`npx zhin doctor` should pass, followed by `npx zhin start --foreground` without validation errors." }
       ]
     },
     {
@@ -111,7 +111,7 @@
         { "zh": "用 `pnpm add <插件目录>` 接入独立插件导致的多份实例：先 `pnpm remove` 掉它，改用 `zhin dev link <插件目录>`（见[独立插件热重载联调](/authoring/local-dev#dev-link-plugin)）。", "en": "Duplicates from adding a standalone plugin with `pnpm add <plugin-dir>`: `pnpm remove` it and use `zhin dev link <plugin-dir>` instead (see [hot-reload a standalone plugin](/en/authoring/local-dev#dev-link-plugin))." }
       ],
       "verification": [
-        { "zh": "重新 `pnpm install` 后，每个 zhin 包只有一个实际解析路径，`zhin runtime start --once` 输出 `\"started\": true`。", "en": "After `pnpm install`, each zhin package has a single resolved path and `zhin runtime start --once` prints `\"started\": true`." }
+        { "zh": "重新 `pnpm install` 后，每个 zhin 包只有一个实际解析路径，`zhin start --once` 输出 `\"started\": true`。", "en": "After `pnpm install`, each zhin package has a single resolved path and `zhin start --once` prints `\"started\": true`." }
       ]
     },
     {

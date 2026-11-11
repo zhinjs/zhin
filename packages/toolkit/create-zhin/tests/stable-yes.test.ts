@@ -122,6 +122,6 @@ describe('create-zhin -y 默认值（ADR 0053：最小项目）', () => {
       { package: '@zhin.js/skill', api: '^1.0.0' },
     ]);
     expect(pkg.zhin.plugins).toEqual([]);
-    expect(pkg.scripts.dev).toBe('zhin runtime start --watch source config');
+    expect(pkg.scripts.dev).toBe('zhin start --foreground --watch source config');
   });
 });
