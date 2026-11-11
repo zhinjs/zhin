@@ -6,7 +6,7 @@ sidebar: false
 
 本目录收录 Zhin.js 的架构决策记录（Architecture Decision Records, ADR）。每份 ADR 记录一项关键架构边界、背景动机、演进取舍与代码落盘位置。
 
-## 现存 ADR 列表（0034–0048）
+## 现存 ADR 列表（0034–0052）
 
 ### 服务插件与平台适配器契约
 
@@ -42,6 +42,15 @@ sidebar: false
 | [ADR 0046](./0046-personal-session-model-policy.md) | Personal Session model policy | Partially Superseded（Personal Session 有效；Model Catalog/Policy 被 ADR 0047 取代） | `@zhin.js/agent/personal-session`（有效）；模型目录与策略已迁至 `@zhin.js/ai/provider` |
 | [ADR 0047](./0047-ai-provider-subscriptions-and-decision-models.md) | AI Provider 订阅接入与多决策模型 | Implemented（Accepted，S0–S4 已合入 main） | `@zhin.js/ai/src/provider/`、`@zhin.js/ai/src/providers/`、`@zhin.js/agent/src/decision/` |
 | [ADR 0048](./0048-agent-harness.md) | Agent Harness——从流程到协作 | Implemented（Accepted，H0–H5 已全部完成） | `@zhin.js/harness`、`@zhin.js/core`（`venue/`）、`@zhin.js/agent`、`@zhin.js/a2a` |
+
+### Console：访问控制、三级功能配置与运维
+
+| ADR | 标题 | 状态 | 核心落盘模块 |
+| --- | --- | --- | --- |
+| [ADR 0049](./0049-console-rbac.md) | Console 访问控制——数据库里的用户、角色与权限 | Accepted | `@zhin.js/console-protocol`、`@zhin.js/host-http`、`basic/cli`（`console/iam/`） |
+| [ADR 0050](./0050-layered-feature-config.md) | 功能配置三级覆盖——全局 < 适配器 < 账号 | Accepted | `@zhin.js/runtime`、`@zhin.js/plugin-runtime`、`@zhin.js/core`、`basic/cli` |
+| [ADR 0051](./0051-console-terminal.md) | Console 终端——宿主 Shell 与 SSH | Accepted | `basic/cli`（`console/terminal/`）、`@zhin.js/host-http` |
+| [ADR 0052](./0052-console-information-architecture.md) | Console 信息架构——状态、功能、运维、访问控制分区 | Accepted | Console 前端（`zhinjs/console`） |
 
 ---
 
