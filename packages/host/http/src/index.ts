@@ -1,6 +1,7 @@
 export {
   createHttpRouter,
   httpHostToken,
+  normalizePath,
   REMOTE_CONSOLE_ORIGIN,
   type HttpHandler,
   type HttpHost,
