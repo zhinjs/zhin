@@ -67,6 +67,7 @@ Zhin 总是有数据库（未配置时为 `.zhin/data.sqlite`），因此访问�
 | `ops.terminal` | 终端（ADR 0051） |
 | `iam.view` / `iam.manage` | 用户、角色、API 令牌、审计日志 |
 | `mcp.access` / `a2a.access` | MCP Server、A2A Server 的 Bearer 访问 |
+| `plugin.perms.read` / `plugin.perms.operate` / `plugin.perms.manage` | 插件自定义权限，按级别授予（见[修订 2026-11-11](#修订-2026-11-11插件权限按级别授予)） |
 
 规则：
 
@@ -81,7 +82,7 @@ Zhin 总是有数据库（未配置时为 `.zhin/data.sqlite`），因此访问�
 |---|---|
 | `owner` 所有者 | 全部 |
 | `admin` 管理员 | 除 `ops.terminal`、`iam.manage` 外全部 |
-| `operator` 运营 | `status.view`、`endpoint.view`、`endpoint.operate`、`feature.view`、`feature.configure`、`feature.toggle`、`agent.view`、`ops.schedule.read` |
+| `operator` 运营 | `status.view`、`endpoint.view`、`endpoint.operate`、`feature.view`、`feature.configure`、`feature.toggle`、`agent.view`、`ops.schedule.read`、`plugin.perms.read`、`plugin.perms.operate` |
 | `viewer` 只读 | 所有 `*.view` 与 `*.read`（不含 `ops.config.read`、`ops.env.read`，它们可能含机密） |
 
 ### 5. 接口
@@ -141,3 +142,27 @@ RPC（`iam.*`，需 `iam.view` / `iam.manage`）：`iam.users.list|create|update
 
 - 现有部署升级后需要初始化一次：用 `http.token` 登录 Console 创建所有者（或 `zhin console user create --role owner`），之后改用账号登录；自动化改用 API 令牌。使用 `http.tokens` 的配置需要迁移。
 - 所有 RPC 由「全权 / 演示白名单」变为逐项权限检查；新增 RPC 必须登记权限，`check:console-protocol-boundaries` 增加对应门禁。
+
+## 修订 2026-11-11：插件权限按级别授予
+
+状态：Accepted（所有者决定，方案 A）。
+
+### 背景
+
+插件用自己的权限名限制页面和 Console RPC（`onebot11:read`、`ambient:read`、`ops:approve` 等）。原方案里内置角色只含 §3 的目录权限，自定义角色也只能写目录权限，因此这些插件权限只有全局所有者满足（`TokenRegistry.accessFor` 对全局所有者直接返回不受限），admin / operator / viewer 看不到对应页面。
+
+### 决定
+
+1. **格式与级别**：插件权限写成 `<插件>:<动作>`（`/^[a-z][a-z0-9_-]{0,63}:[a-z][a-z0-9_.-]{0,63}$/`），属于 `read` / `operate` / `manage` 之一。插件在 `definePluginConsoleRpc({ permissions: [{ id, level, description? }] })` 里声明级别；页面元数据不新增字段。未声明的按动作最后一段推断：`read` / `view` → `read`；`approve` / `manage` / `admin` / `write` / `config` → `manage`；其余 → `operate`。同一权限名被多个插件声明为不同级别时取最严格者。
+2. **级别权限**：目录新增 `plugin.perms.read`、`plugin.perms.operate`、`plugin.perms.manage`，分别授予该级别的全部插件权限。它们不是作用域权限：只有全局绑定生效（§3 规则不变，插件权限本身也只认全局绑定）。
+3. **内置角色**：`viewer` 含 `plugin.perms.read`（随 `*.read` 规则自动纳入）；`operator` 增加 `plugin.perms.read`、`plugin.perms.operate`；`admin` 与 `owner` 含全部三项。`owner` 的全局会话仍然不受限。
+4. **自定义角色**可以写入级别权限，也可以按名列出插件权限。当前没有已加载插件使用的权限名**允许保存并返回警告**（`iam.roles.create|update` 的 `warnings`）：插件的安装、停用、热重载与角色编辑相互独立，拒绝会让管理员无法为即将安装的插件预先配置角色；而一个没有插件使用的权限名不放行任何东西，默认拒绝不受影响。格式不合法的仍然拒绝（`invalid_input`）。
+5. **API 令牌**的权限列表也可以写插件权限名。收窄时，令牌列出的插件权限只有在签发用户的角色按名或按级别持有它时才保留——令牌不会超过用户。收窄到目录之下的所有者令牌不再视为不受限。
+6. **权限目录**：运行时装配根从当前代收集所有页面与 RPC 方法用到的插件权限及其声明，按代缓存，经 `TokenRegistry.usePluginPermissions()` 提供给 Host；`accessFor`、`/auth/me` 据此把级别权限展开为具体的插件权限名，页面过滤与插件 RPC 的权限比较方式不变。
+7. **接口**：`iam.roles.list` 返回 `{ roles, pluginPermissions }`——每个角色带 `pluginPermissions: [{ id, level, source: 'level'|'explicit', known, description? }]`，顶层 `pluginPermissions` 是已加载插件的权限目录 `[{ permission, plugin, level, description? }]`（`plugin` 为权限名前缀）。类型 `ConsoleIamPluginPermission`、`ConsolePluginPermissionInfo`、`ConsoleRolePluginPermission` 与推断、展开函数位于 `@zhin.js/console-protocol`。
+
+### 后果
+
+- 升级后已有数据库在启动时重写内置角色，admin / operator / viewer 立即按级别看到插件页面。
+- 以 `:write` 结尾的插件权限（适配器账号写操作、`control:write` 等）默认归 `manage`，即只有 admin 及以上持有；需要交给运营的插件应把它声明为 `operate`。
+- 用户（会话 / API 令牌）调用插件 RPC 时，准入仍按 §3 的 `feature.view`（读）/ `feature.configure`（写）判定；插件权限目前决定页面可见性与 `/auth/me` 报告的权限。

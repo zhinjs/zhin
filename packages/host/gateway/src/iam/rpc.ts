@@ -1,4 +1,4 @@
-import { IAM_RPC } from '@zhin.js/console-protocol';
+import { IAM_RPC, toConsoleIamPluginPermissions } from '@zhin.js/console-protocol';
 import type { ConsolePrincipal } from '@zhin.js/host-http';
 import { IamError, type BindingInput, type ConsoleIamService } from './service.js';
 
@@ -45,7 +45,7 @@ export async function dispatchIamRpc(
       case IAM_RPC.USERS_DISABLE: return ok({ user: await service.setDisabled(id(), payload.disabled !== false) });
       case IAM_RPC.USERS_DELETE: await service.deleteUser(id()); return ok({ deleted: true });
       case IAM_RPC.USERS_RESET_PASSWORD: await service.resetPassword(id(), payload.password); return ok({ reset: true });
-      case IAM_RPC.ROLES_LIST: return ok({ roles: await service.listRoles(), pluginPermissions: service.pluginPermissionCatalog() });
+      case IAM_RPC.ROLES_LIST: return ok({ roles: await service.listRoles(), pluginPermissions: toConsoleIamPluginPermissions(service.pluginPermissionCatalog()) });
       case IAM_RPC.ROLES_CREATE: return ok(withWarnings(service, { role: await service.createRole({ name: payload.name, description: payload.description, permissions: payload.permissions }) }));
       case IAM_RPC.ROLES_UPDATE: return ok(withWarnings(service, { role: await service.updateRole(id(), { description: payload.description, permissions: payload.permissions }) }));
       case IAM_RPC.ROLES_DELETE: await service.deleteRole(id()); return ok({ deleted: true });

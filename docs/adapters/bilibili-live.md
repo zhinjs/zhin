@@ -122,7 +122,7 @@ ai:
 
 扫码登录仍复用 B 站评论适配器页面；这里只管理直播弹幕连接与 endpoint。
 
-读取需要 `bilibili-live:read`，写操作需要 `bilibili-live:write`；全局所有者不受限（这类插件权限目前只有所有者拥有）。
+读取需要 `bilibili-live:read`，写操作需要 `bilibili-live:write`；全局所有者不受限。插件权限按级别授予（见[插件权限的级别](../console/index.md#插件权限的级别)）：`:read` 给 `viewer` 及以上，`:write` 给 `admin` 及以上。
 
 ## 故障排查
 

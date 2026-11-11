@@ -36,6 +36,29 @@ export interface ConsolePluginPermissionInfo extends ConsolePluginPermissionDecl
   readonly owners: readonly string[];
 }
 
+/**
+ * One entry of the top-level `pluginPermissions` list in the `iam.roles.list` reply: the plugin
+ * permissions loaded plugins use, for the Console's role editor. `plugin` is the id's prefix.
+ */
+export interface ConsoleIamPluginPermission {
+  readonly permission: string;
+  readonly plugin: string;
+  readonly level: ConsolePluginPermissionLevel;
+  readonly description?: string;
+}
+
+/** Catalog → the `iam.roles.list` wire shape. */
+export function toConsoleIamPluginPermissions(
+  catalog: Iterable<Pick<ConsolePluginPermissionInfo, 'id' | 'level' | 'description'>>,
+): readonly ConsoleIamPluginPermission[] {
+  return Object.freeze([...catalog].map(entry => Object.freeze({
+    permission: entry.id,
+    plugin: entry.id.slice(0, entry.id.indexOf(':')),
+    level: entry.level,
+    ...(entry.description ? { description: entry.description } : {}),
+  })));
+}
+
 /** How one role holds one plugin permission (`iam.roles.list` → `role.pluginPermissions`). */
 export interface ConsoleRolePluginPermission {
   readonly id: string;

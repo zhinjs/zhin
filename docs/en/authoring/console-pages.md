@@ -107,7 +107,7 @@ Every `meta` field is optional; `definePage` throws on unknown keys:
 | `requiredRoles` | `[]` | Role names required to access (such as `operator`) |
 | `section` | — | Console navigation section: `overview` / `conversations` / `features` / `plugins` / `ops` / `access`; omitted → the Console decides (ADR 0052) |
 
-Navigation and the page list are filtered per caller. A global owner sees every page. Other users see only pages whose requirements their roles meet (plugin-defined permission names are currently satisfied only by owners). Signed-out callers see only pages with no requirements. For users and roles, see [Console users and permissions](../console/index.md#users-and-permissions).
+Navigation and the page list are filtered per caller. A global owner sees every page. Other users see only pages whose requirements their roles meet (plugin-defined permission names are granted by level, see [Plugin permission levels](#plugin-permission-levels)). Signed-out callers see only pages with no requirements. For users and roles, see [Console users and permissions](../console/index.md#users-and-permissions).
 
 Console selects `titleI18n` using its independent interface language. This only changes navigation and breadcrumb display, never routes, permissions or page content. Plugins localize their own components; third-party titles without translations remain unchanged.
 
@@ -253,6 +253,28 @@ Ordinary users see what you return, so:
 
 Plugin RPC doesn't change configuration. Use `config:patch` for that.
 
+### Plugin permission levels
+
+Plugin-defined permission names are written `<plugin>:<action>` (such as `rss:read`, `rss:write`, `ops:approve`). Each has a level, and built-in roles grant them by level (`viewer` → `read`, `operator` → `read` + `operate`, `admin` / `owner` → all; see [Plugin permission levels](../console/index.md#plugin-permission-levels) in the Console guide). Without a declaration the level comes from the suffix: `:read` / `:view` are `read`; `:approve` / `:manage` / `:admin` / `:write` / `:config` are `manage`; anything else is `operate`.
+
+When the inferred level is wrong for your plugin, declare it in the `permissions` of `definePluginConsoleRpc`:
+
+```ts
+definePluginConsoleRpc({
+  permissions: [
+    { id: 'rss:read', level: 'read', description: 'View feeds' },
+    // Operators add and remove feeds: undeclared, `:write` would infer manage (admins only)
+    { id: 'rss:write', level: 'operate', description: 'Edit feeds' },
+  ],
+  status: { page: 'index', requiredPermissions: ['rss:read'], handler: readStatus },
+  actions: { add: { page: 'index', requiredPermissions: ['rss:write'], handler: addFeed } },
+});
+```
+
+- Declare the names your plugin's pages and methods use. When several plugins declare one name with different levels, the strictest wins (`manage` > `operate` > `read`), so a later plugin cannot lower another plugin's gate.
+- Names that appear only in page metadata, with no RPC, use the inferred level.
+- `level` must be `read`, `operate` or `manage`; a malformed or duplicate `id` throws at setup time.
+
 ### Built-in status: ambient engagement and skills assistant
 
 Ambient engagement (群聊插话) and the skills assistant (技能助手) are provided by the Host itself, not by a plugin, so they sit under the root plugin:
@@ -262,7 +284,7 @@ Ambient engagement (群聊插话) and the skills assistant (技能助手) are pr
 | `plugin.root.ambient` | `pluginRpc('root', 'ambient')` | `ambient:read` |
 | `plugin.root.skills` | `pluginRpc('root', 'skills')` | `skills:read` |
 
-A global owner doesn't need these permissions; they are plugin-defined names that only owners currently satisfy (see [Users and permissions](../console/index.md#users-and-permissions)). Both queries are read-only and take no input.
+A global owner doesn't need these permissions; they are plugin-defined names granted by level: `*:read` goes to `viewer` and above (see [Plugin permission levels](../console/index.md#plugin-permission-levels)). Both queries are read-only and take no input.
 
 The data lives only in memory: the last 24 hours, at most 2000 entries, cleared on restart. It never includes chat text, prompts, judge reasons or secrets. All times are millisecond timestamps.
 

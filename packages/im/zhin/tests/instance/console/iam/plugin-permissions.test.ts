@@ -87,7 +87,12 @@ describe('Console IAM plugin permissions (ADR 0049 amendment 2026-11-11)', () =>
       warnings: [expect.stringContaining('future-plugin:read')],
     });
     const listed = await dispatchIamRpc({ type: 'iam.roles.list' }, service, owner);
-    expect((listed.body.data as { pluginPermissions: unknown }).pluginPermissions).toEqual(CATALOG);
+    expect((listed.body.data as { pluginPermissions: unknown }).pluginPermissions).toEqual([
+      { permission: 'onebot11:read', plugin: 'onebot11', level: 'read' },
+      { permission: 'onebot11:write', plugin: 'onebot11', level: 'manage' },
+      { permission: 'rss:write', plugin: 'rss', level: 'operate', description: '编辑订阅' },
+      { permission: 'ops:approve', plugin: 'ops', level: 'manage' },
+    ]);
     for (const bad of ['ops:', 'Ops:approve', 'ops.approve.everything', 'root.everything']) {
       await expect(service.createRole({ name: `bad-${bad.length}`, permissions: [bad] }))
         .rejects.toSatisfy((error: unknown) => error instanceof IamError && error.code === 'invalid_input');
@@ -95,6 +100,11 @@ describe('Console IAM plugin permissions (ADR 0049 amendment 2026-11-11)', () =>
     const approver = await signIn(service, 'apr', [{ role: 'approver' }]);
     expect(held(tokens, approver)).toEqual(['future-plugin:read', 'ops:approve', 'status.view']);
     expect(held(tokens, approver)).not.toContain('onebot11:read');
+    const updated = await dispatchIamRpc({ type: 'iam.roles.update', data: {
+      id: (created.body.data as { role: { id: string } }).role.id, permissions: ['onebot11:write'],
+    } }, service, owner);
+    expect(updated.body.data).toMatchObject({ role: { permissions: ['onebot11:write'] } });
+    expect((updated.body.data as Record<string, unknown>).warnings).toBeUndefined();
   });
 
   it('keeps plugin permissions to global bindings', async () => {

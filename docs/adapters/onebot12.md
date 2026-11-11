@@ -120,7 +120,7 @@ WS、反向 WS 和 Webhook 都在进入原生 SDK 前过滤其他 bot 的事件�
 - 经所属 Adapter 增删持久化账号、启停单个 Endpoint；凭据由 Host 加密仓储保存，不改启动 YAML 或 `.env`，不重启进程；
 - 如果适配器要求登录，页面会显示 LoginAssist 的扫码 / 滑块 / 设备确认待办；
 
-读取需要 `onebot12:read`，写操作需要 `onebot12:write`；全局所有者不受限（这类插件权限目前只有所有者拥有）。页面里的「添加 endpoint」等价于原来的 `onebot12 endpoint add`。
+读取需要 `onebot12:read`，写操作需要 `onebot12:write`；全局所有者不受限。插件权限按级别授予（见[插件权限的级别](../console/index.md#插件权限的级别)）：`:read` 给 `viewer` 及以上，`:write` 给 `admin` 及以上。页面里的「添加 endpoint」等价于原来的 `onebot12 endpoint add`。
 
 ## 故障排查
 

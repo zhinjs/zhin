@@ -143,6 +143,6 @@ ADR 0049–0054 与本计划。
 ## 待所有者决定
 
 1. 适配器反向 WebSocket（OneBot 11/12、NapCat、Milky）未配 `access_token` 时现在只接受本机回环连接（原来谁连都放行）。目前按 patch 发；若视为破坏性变更，改为 minor 并加入 `.changeset/version-policy.json` 批准列表。注意：Host 在本机反向代理之后时，所有对端都显示为回环地址。
-2. 插件自定义权限（如 `onebot11:read`、`ops:approve`）目前只有全局所有者能满足，admin / operator 看不到对应页面。是否给内置角色补上，或允许自定义角色写入插件权限？
+2. ~~插件自定义权限（如 `onebot11:read`、`ops:approve`）目前只有全局所有者能满足，admin / operator 看不到对应页面。是否给内置角色补上，或允许自定义角色写入插件权限？~~ 已决定（2026-11-11，方案 A）：按级别授予内置角色，自定义角色可写入插件权限，见 [ADR 0049 修订](../adr/0049-console-rbac.md#修订-2026-11-11插件权限按级别授予)。
 3. `zhin@4.0.1`（`packages/toolkit/zhin-shim`）此前未发布也无 tag，已加 patch changeset 让它随 cli 一起发布；如不想发布此别名包请告知。
 4. 发版后清空 `.changeset/version-policy.json#approvedNonPatchReleases`。

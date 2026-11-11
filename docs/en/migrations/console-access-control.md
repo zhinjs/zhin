@@ -40,7 +40,7 @@ Forgot the password or locked out the owner: stop the Host and use the offline c
 | `http.token` (full) | Bootstrap token; afterwards sign in as the owner |
 | `scope: user` members of `http.tokens[]` | Create a user for each in Console → Access, bound to a role (`viewer` read-only, `operator`, `admin`), optionally scoped to one adapter or account |
 | `scope: demo` tokens | Demo mode is removed. Give the demo site a `viewer` account |
-| Plugin permissions in `http.tokens[].permissions` (such as `onebot11:read`) | Only a global owner currently satisfies plugin-defined page permissions; other roles are granted from the built-in permission catalog |
+| Plugin permissions in `http.tokens[].permissions` (such as `onebot11:read`) | Granted to built-in roles by level: `*:read` to `viewer` and above, day-to-day actions to `operator` and above, `*:write` / `*:approve` / `*:manage` and similar to `admin`; custom roles and API tokens can also list them directly (see [Plugin permission levels](../console/index.md#plugin-permission-levels)) |
 
 Delete `http.tokens`, then start the Host.
 
