@@ -242,6 +242,9 @@
       "@zhin.js/host-http": [
         "./packages/host/http/src/index.ts"
       ],
+      "@zhin.js/host-http/node": [
+        "./packages/host/http/src/node/index.ts"
+      ],
       "@zhin.js/host-http-contract": [
         "./packages/host/http-contract/src/index.ts"
       ],
