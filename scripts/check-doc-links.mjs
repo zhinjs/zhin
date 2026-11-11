@@ -36,7 +36,8 @@ function* extractLinks(filePath) {
   const text = fs.readFileSync(filePath, 'utf8');
   const lines = text.split('\n');
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+    // Inline code spans are examples, not links.
+    const line = lines[i].replace(/`[^`\n]*`/g, '');
     let m;
     LINK_RE.lastIndex = 0;
     while ((m = LINK_RE.exec(line)) !== null) {

@@ -17,7 +17,6 @@ import type {
   EscalationNotice,
   Harness,
   Mail,
-  TrustLevel as HarnessTrust,
 } from '@zhin.js/harness';
 import { AsyncResource } from 'node:async_hooks';
 import { getLogger } from '@zhin.js/logger';
@@ -29,7 +28,6 @@ import type { ContextFile } from '../bootstrap.js';
 import type { PluginAILoopHookRegistry } from '../plugin-loop-hooks.js';
 import type { AgentCapabilities, ToolCapability } from '../plugin-runtime/capability-ingress.js';
 import type { TurnProvenance } from '../security/provenance.js';
-import type { InitiatorTrustLevel } from '../security/trust-level.js';
 import type { TurnIngress } from '../turn/turn-ingress.js';
 import { createActorTurnRunner } from './actor-turn.js';
 import { createCollaborationDirectory } from './directory.js';

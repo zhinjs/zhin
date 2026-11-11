@@ -935,6 +935,7 @@ export type {
   DiscoveredPluginAgentSurface,
 } from './authoring/index.js';
 export {
+  discoverWorkspaceAgents,
   type AgentMeta,
 } from './discovery/agents.js';
 export {

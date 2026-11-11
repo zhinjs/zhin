@@ -26,6 +26,7 @@
   ],
   "scripts": {
     "build": "tsc",
+    "clean": "rimraf lib",
     "check": "tsc -p tsconfig.check.json",
     "test": "vitest run --root ../../.. plugins/utils/ledger/tests",
     "prepublishOnly": "pnpm run build",

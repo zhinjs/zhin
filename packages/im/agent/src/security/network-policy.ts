@@ -254,6 +254,12 @@ export interface NetworkPolicyConfig {
   allowedDomains?: string[];
 }
 
+/** Per-tool-call network narrowing passed to the policy facade. */
+export interface ToolNetworkPolicy {
+  httpsOnly?: boolean;
+  allowedDomains?: readonly string[];
+}
+
 export interface UrlNetworkPolicyConfig {
   httpsOnly?: boolean;
   allowedDomains: string[];

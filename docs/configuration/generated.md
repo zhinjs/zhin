@@ -2456,7 +2456,7 @@ _该 Schema 没有声明字段。_
 | `group-suite.rankSize` | number | 否 | `10` | — |
 | `group-suite.teachMaxPerGroup` | number | 否 | `200` | — |
 | `group-suite.teachCooldownMs` | number | 否 | `3000` | — |
-| `group-suite.teachAllowRegex` | boolean | 否 | `true` | — |
+| `group-suite.teachAllowRegex` | boolean | 否 | `false` | Allow members to teach regular-expression rules. Off by default: patterns run against every inbound message. Only structurally safe patterns are accepted and they are tried on messages of at most 200 characters. |
 | `group-suite.teachPageSize` | number | 否 | `10` | — |
 | `group-suite.welcomeMessage` | string | 否 | `""` | Group welcome text. Empty disables; {name}/{id} refer to the joined member. |
 | `group-suite.welcomeConversations` | array&lt;object&gt; | 否 | — | Exact welcome conversations. Omitted welcomes all groups; [] welcomes none. Missing parent/thread requires their absence; no wildcards. |

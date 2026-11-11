@@ -1,6 +1,6 @@
 # full-bot（L4 全维度参考）
 
-在 [`minimal-bot`](../minimal-bot/)（Stable）之上叠加 L4 能力：**Workroom Kernel**、**语义记忆**、**MCP Agent Mesh**、**Sandbox + NapCat + KOOK** 三适配器。
+在 [`minimal-bot`](../minimal-bot/)（Stable）之上叠加 L4 能力：**Agent Harness 多 Agent 协作**、**语义记忆**、**MCP Agent Mesh**、**Sandbox + NapCat + KOOK** 三适配器。
 
 维护者厨房水槽仍见 [`../test-bot`](../test-bot/)。
 
@@ -44,7 +44,7 @@ pnpm dev
 
 ## L4 配置要点
 
-- Workroom Kernel 使用显式 Project-scoped command 与 append-only Journal
+- 多 Agent 协作走 Agent Harness（ADR 0048）：协作邮件与黑板写入记入 append-only 的 Engagement Journal
 - `ai.memory.semantic.enabled: true`（`autoConsolidate: false`，由 skill 触发）
 - Runtime Host 按配置动态加载 `@zhin.js/a2a` / `@zhin.js/mcp`，统一 Bearer 鉴权
 - `package.json#zhin` 声明三 Adapter 子插件及 Command/Component/Skill/Tool/Page Feature

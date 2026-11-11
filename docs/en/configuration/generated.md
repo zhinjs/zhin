@@ -2456,7 +2456,7 @@ _This Schema declares no fields._
 | `group-suite.rankSize` | number | no | `10` | — |
 | `group-suite.teachMaxPerGroup` | number | no | `200` | — |
 | `group-suite.teachCooldownMs` | number | no | `3000` | — |
-| `group-suite.teachAllowRegex` | boolean | no | `true` | — |
+| `group-suite.teachAllowRegex` | boolean | no | `false` | Allow members to teach regular-expression rules. Off by default: patterns run against every inbound message. Only structurally safe patterns are accepted and they are tried on messages of at most 200 characters. |
 | `group-suite.teachPageSize` | number | no | `10` | — |
 | `group-suite.welcomeMessage` | string | no | `""` | Group welcome text. Empty disables; {name}/{id} refer to the joined member. |
 | `group-suite.welcomeConversations` | array&lt;object&gt; | no | — | Exact welcome conversations. Omitted welcomes all groups; [] welcomes none. Missing parent/thread requires their absence; no wildcards. |

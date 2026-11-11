@@ -39,7 +39,14 @@ ai:
 package is inert and only exposes the Runtime API.
 
 Bearer `a2a.token` (or the fallback `http.token`) is required for inbound A2A
-calls. Production requires one of these tokens.
+calls. Production requires one of these tokens. Without any token (development
+only) the Host accepts loopback callers alone, the same rule as the MCP Host;
+remote callers get `401`.
+
+Tasks are kept in memory per agent with a hard cap (1,000) and finished tasks
+expire after one hour, so `GET /tasks/{id}` for an old task returns `404`.
+Streaming responses end with an SSE `event: error` frame if the agent fails
+after the first chunk, and stop producing when the client disconnects.
 
 ## Remote Mailbox Transport (ADR 0048)
 
@@ -51,12 +58,22 @@ a2a:
   mailbox:
     enabled: true
     path: /a2a/mailbox
-    sharedSecret: ${A2A_MAILBOX_SECRET}
+    secret: ${A2A_MAILBOX_SECRET}
     peers:
-      remote-reviewer:
+      - actor: remote-reviewer
         url: https://agents.example.com/a2a/mailbox
-        sharedSecret: ${A2A_MAILBOX_SECRET}
+        secret: ${A2A_MAILBOX_SECRET} # optional per-peer override
+        token: ${REMOTE_HTTP_TOKEN}   # optional Bearer for the peer's Host
 ```
+
+Credential resolution for an outbound envelope (empty strings count as unset):
+
+- signing secret: `peer.secret` → `mailbox.secret` → `peer.token` → Host token
+- Bearer: `peer.token` → Host token → the signing secret
+
+The receiving Host verifies the Bearer against its `http.token` (falling back to
+`mailbox.secret`) and the signature against `mailbox.secret`. In production the
+mailbox refuses to start without a secret unless `mailbox.enabled: false`.
 
 ## Related
 

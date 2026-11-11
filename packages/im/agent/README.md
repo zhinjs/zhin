@@ -2,7 +2,7 @@
 
 Zhin AI Agent 组合层：根入口提供 Agent 创作与领域 API；`@zhin.js/agent/runtime` 提供 CLI composition root 使用的 Host 装配和 generation-owned 执行机制。
 
-领域词汇见 [CONTEXT.md](./CONTEXT.md)。用户向文档：[AI 模块](https://zhin.js.org/ai/)、[消息如何流转](../../docs/essentials/message-flow.md)。
+领域词汇见 [CONTEXT.md](./CONTEXT.md)。用户向文档：[AI 模块](https://zhin.js.org/ai/)、[消息如何流转](../../../docs/concepts/message-flow.md)。
 
 ## Plugin Runtime 入口
 
@@ -191,7 +191,7 @@ Root Host 若要接入远程 Tool / Skill Provider，可在 generation Scope 提
 `AgentCapabilities`；Tool 仍只能由 `TurnToolRuntime` 执行，因此不会跳过 owner 可见性、
 permission、approval、generation lease 或 Journal。普通 npm 插件继续优先使用 Tool / Skill
 Feature；Capability Seam 属于 Advanced Root Host 扩展口，详见
-[能力接缝](../../docs/concepts/capability-seams.md)。
+[能力接缝](../../../docs/concepts/capability-seams.md)。
 
 **Agent Core**：`AgentCore.runText()` / `runVision()` 为 `AsyncGenerator<TurnEvent>` SSOT；`runTextTurn` 为 collector。组合层经 `composeZhinAgentRuntime` 注入 8 模块 + `createAgentCoreDepsForCompose`。
 
@@ -213,7 +213,7 @@ pnpm add @zhin.js/agent zod ai
 pnpm add @ai-sdk/openai   # 示例：按厂商安装 provider SDK
 ```
 
-仅 IM、不需要 Agent 时可只装 `zhin.js`（见 [ADR 0019](../../../docs/adr/0019-install-size-layering.md)）。
+仅 IM、不需要 Agent 时可只装 `zhin.js`（见 ADR 0019）。
 
 ## 使用
 
@@ -277,7 +277,7 @@ ai:
       args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp/zhin-mcp-test"]
 ```
 
-**限制**：已配置 server 未 ready 时候选 generation 激活失败，旧 generation 原样继续（fail-closed）；resources/prompts 暂不注入模型。与 **`packages/host/mcp`**（MCP **Server**）方向相反。验收见 [examples/test-bot/ACCEPTANCE.md](../../examples/test-bot/ACCEPTANCE.md)。
+**限制**：已配置 server 未 ready 时候选 generation 激活失败，旧 generation 原样继续（fail-closed）；resources/prompts 暂不注入模型。与 **`packages/host/mcp`**（MCP **Server**）方向相反。验收见 [examples/test-bot/ACCEPTANCE.md](../../../examples/test-bot/ACCEPTANCE.md)。
 
 ## 多 Agent 使用方式
 
@@ -303,7 +303,7 @@ ai:
 
 ### 4. 多 Bot 同场协作（Venue）
 
-通过 `ai.venues` 声明同群多 Bot 成员与可见性（`visible` / `summary` / `backstage`），由 `@zhin.js/core` 的 `VenueRegistry`、`routeVenueMessage`、`VenueFloorController` 与 `VenueProjector` 驱动同群点名协作与后台静默协作。详见 [多 Agent 协作与同场 Venue](../../../docs/ai/multi-agent-workroom.md)。
+通过 `ai.venues` 声明同群多 Bot 成员与可见性（`visible` / `summary` / `backstage`），由 `@zhin.js/core` 的 `VenueRegistry`、`routeVenueMessage`、`VenueFloorController` 与 `VenueProjector` 驱动同群点名协作与后台静默协作。详见 [多 Agent 协作与同场 Venue](../../../docs/ai/multi-agent-harness.md)。
 
 ## 工具命名策略
 
@@ -346,7 +346,7 @@ ai:
 | 运维 | `/models` · `/health` |
 | 内省 | `/cmd` · `/endpoints` · `/bindings` · `/tools` · `/mcp` |
 
-zhin-package CLI：`zhin packages`（`basic/cli`）。详见 [ADR 0010](../../../docs/adr/0010-pi-coding-agent-harness-alignment.md)。
+zhin-package CLI：`zhin packages`（`basic/cli`）。详见 ADR 0010。
 
 ## 开发
 

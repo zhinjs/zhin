@@ -1,4 +1,4 @@
-import type { Usage, TokenUsage } from '@zhin.js/ai';
+import type { TokenUsage } from '@zhin.js/ai';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 export type { HostPhaseTraceConfig as PhaseTraceConfig } from './host-types.js';

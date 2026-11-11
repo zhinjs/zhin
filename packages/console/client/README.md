@@ -140,7 +140,7 @@ const hostApi = client.createPluginRegisterHostApi(React);
 await loadConsoleEntries({
   hostApi,
   // Remote Console：Host 监听地址，用于解析 /@dev、/@assets 模块 URL
-  assetOrigin: "http://127.0.0.1:8086",
+  assetOrigin: "http://127.0.0.1:8068", // 与 Host 的 http.port 一致（create-zhin 项目为 8068）
   fetchInit: () => ({
     headers: { Authorization: `Bearer ${localStorage.getItem("zhin_api_token")}` },
   }),
@@ -186,7 +186,7 @@ const res = await apiFetch("/api/console/request", {
 });
 ```
 
-401 时清除 Token 并派发 `zhin:auth-required`。
+401 由 `handleUnauthorized()` 统一处理，`apiFetch` 与 `ConsoleTransport`（RPC、REST、SSE）走同一条路径：清除 runtime（`window.__ZHIN_API_TOKEN`）、`localStorage`、`sessionStorage` 中的 Token 并派发 `zhin:auth-required`。请求发出后 API Base 或 Token 已被替换的迟到 401 会被忽略。
 
 辅助：`resolveApiUrl`。
 
@@ -210,6 +210,9 @@ await loadConsoleEntries({ hostApi });
 - `fetchConsoleEntries(options?)` — 仅拉 JSON，不 import
 - `registerConsolePluginsFromEntries(entries, hostApi, ...)` — 已知 entries 列表时注册
 - `getRegisterFn(mod)` — 从动态模块解析 `register` 导出
+- `ConsoleTransport.sendRequest(message, { timeoutMs })` — 单次调用覆盖超时；`installPlugin` / `updatePlugin` / `uninstallPlugin` 默认使用 `packageOperationTimeout`（120 s，可在构造时配置），其余 RPC 使用 `requestTimeout`（10 s）
+
+重复调用 `loadConsoleEntries`（传入同一个 `hostApi` 对象）会对比上一次的结果：已消失的 entry 注册的路由与工具会被移除（需要宿主 API 提供 `removeRoute` / `removeTool`，`createPluginRegisterHostApi` 已提供），未显式指定 `id` 的工具使用 `<entryId>:<name>` 形式的稳定 id，不会在重载时重复。
 
 ## 构建
 

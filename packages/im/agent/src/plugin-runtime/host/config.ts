@@ -1,6 +1,5 @@
 import type {
   AIService,
-  AssistantConfig,
   McpServerEntry,
 } from '../../index.js';
 import { validateVenueDefinitions, type VenueDefinition } from '@zhin.js/core';

@@ -4,8 +4,7 @@
  */
 import type { Tool } from '@zhin.js/core';
 import { toolInputSchemaToParameters } from '@zhin.js/tool';
-import { stampToolGeneration } from '../tool/tool-system.js';
-import type { AgentCapabilities, ToolCapability } from './capability-ingress.js';
+import type { ToolCapability } from './capability-ingress.js';
 import type { ToolInvocationContext } from '@zhin.js/tool';
 import type { TurnIngress, TurnRequest } from '../turn/turn-ingress.js';
 import { isLocale } from '@zhin.js/plugin-runtime';

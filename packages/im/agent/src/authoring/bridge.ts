@@ -1,9 +1,5 @@
-import type { AIHook, Skill, Tool } from '../resource-hub/types.js';
-import {
-  type AuthoringSkillDefinition,
-  type AuthoringHookDefinition,
-  AUTHORING_KIND,
-} from './types.js';
+import type { AIHook } from '../resource-hub/types.js';
+import type { AuthoringHookDefinition } from './types.js';
 
 export function namespaceAuthoringName(pluginName: string, slotName: string, bare = false): string {
   if (bare) return slotName;

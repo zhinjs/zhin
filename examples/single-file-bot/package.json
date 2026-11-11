@@ -8,7 +8,7 @@
     "dev": "zhin runtime start --watch source config",
     "start": "zhin runtime start --mode production --no-watch",
     "build": "tsc --noEmit",
-    "test": "NODE_OPTIONS=--experimental-strip-types vitest run --root ../.. examples/single-file-bot/tests"
+    "test": "vitest run --root ../.. examples/single-file-bot/tests"
   },
   "dependencies": {
     "@zhin.js/adapter-sandbox": "workspace:*",

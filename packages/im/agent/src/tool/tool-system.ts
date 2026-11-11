@@ -1,7 +1,6 @@
 import type { AgentTool } from '@zhin.js/ai';
 import { type PreExecuteResult, runPreExecutableTools } from './pre-exec.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
-import type { Tool } from '../resource-hub/types.js';
 import type { ToolFilter, ToolSource, ToolSystemConfig } from './contracts.js';
 import {
   BuiltinToolSource,

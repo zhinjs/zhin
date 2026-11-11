@@ -142,3 +142,30 @@ async function discoverAgentPackages(agentsDir: string): Promise<AgentMeta[]> {
   }
   return agents;
 }
+
+/**
+ * Discover named sub-agents. Earlier roots take precedence.
+ */
+export async function discoverWorkspaceAgents(
+  projectRoot = workspaceRoot(),
+): Promise<AgentMeta[]> {
+  const agents: AgentMeta[] = [];
+  const seenNames = new Set<string>();
+  const roots = [
+    path.join(projectRoot, 'agents'),
+    path.join(os.homedir(), '.zhin', 'agents'),
+    path.join(projectRoot, 'data', 'agents'),
+  ];
+  for (const root of roots) {
+    for (const meta of await discoverAgentPackages(root)) {
+      if (seenNames.has(meta.name)) {
+        logger.debug(`Agent '${meta.name}' is already loaded; skipping ${meta.filePath}`);
+        continue;
+      }
+      seenNames.add(meta.name);
+      agents.push(meta);
+      logger.debug(`Agent discovered: ${meta.name}`);
+    }
+  }
+  return agents;
+}

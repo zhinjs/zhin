@@ -29,6 +29,7 @@
   ],
   "scripts": {
     "build": "tsc",
+    "clean": "rimraf lib",
     "check": "tsc -p tsconfig.check.json",
     "test": "vitest run --root ../../.. plugins/utils/calendar/tests",
     "prepublishOnly": "pnpm run build",

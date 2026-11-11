@@ -1,15 +1,12 @@
 import {
   buildRichSystemPromptParts,
   buildLiteSystemPrompt,
-  buildUserMessageWithHistory,
   describePromptSectionsForDebug,
   buildStableRuntimeLines,
   type PromptSectionDebugInfo,
   type RichSystemPromptContext,
 } from './system-prompt.js';
-import { resolveWorkspacePrompt } from './workspace-prompt.js';
 import type { AgentContextHost, ZhinAgentPrivate } from '../internal/agent-host.js';
-import { type AgentMessage } from '@zhin.js/ai';
 import { assembleSchedulePrompt } from '../schedule-domain/prompt-assembler.js';
 import type { AgentPromptProfile } from './turn-prompt-profile.js';
 import type { TurnContextView } from '../context/turn-envelope.js';

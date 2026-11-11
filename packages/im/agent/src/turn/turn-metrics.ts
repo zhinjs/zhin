@@ -1,7 +1,6 @@
 import { renderAgentOutput, type AgentOutputElement } from '../outbound/agent-output.js';
 import type { Usage } from '@zhin.js/ai';
 import {
-  formatCompact,
   formatCompactUsage,
   formatLogKvTable,
   truncatePreview,
