@@ -70,6 +70,11 @@
       "types": "./lib/database.d.ts",
       "development": "./src/database.ts",
       "import": "./lib/database.js"
+    },
+    "./local": {
+      "types": "./lib/local.d.ts",
+      "development": "./src/local.ts",
+      "import": "./lib/local.js"
     }
   },
   "files": [
@@ -169,6 +174,10 @@
       "./database": {
         "types": "./lib/database.d.ts",
         "import": "./lib/database.js"
+      },
+      "./local": {
+        "types": "./lib/local.d.ts",
+        "import": "./lib/local.js"
       }
     }
   },

@@ -22,7 +22,8 @@ npx zhin --help        # 查看全部命令
 
 | 我想…… | 命令 |
 | --- | --- |
-| 启动 Bot（开发模式，改代码自动热重载） | `pnpm dev`（即 `zhin runtime start --watch source config`） |
+| 启动 Bot（开发模式，改代码自动热重载） | `pnpm dev`（即 `zhin start --foreground --watch source config`） |
+| 在服务器上后台运行 / 查看 / 停止 | `npx zhin start` / `npx zhin status`、`npx zhin logs -f` / `npx zhin stop` |
 | 接入平台、配置 AI 或数据库 | `npx zhin setup`（可加 `--adapters` / `--ai` / `--database`） |
 | 环境或配置有问题 | `npx zhin doctor` |
 | 检查配置文件是否有效 | `npx zhin config check` |
@@ -38,11 +39,22 @@ npx zhin --help        # 查看全部命令
 
 ## 运行
 
-### runtime：运行与管理项目
+### start / stop / restart / status / logs：网关与实例
 
 ```bash
-zhin runtime start [--mode production] [--watch source config | --no-watch] [--daemon]
-zhin start [...]            # 等同于 zhin runtime start，参数原样透传
+zhin start [--foreground] [--mode production] [--watch source config | --no-watch] [--once]
+zhin stop [--timeout <ms>]
+zhin restart [--gateway]
+zhin status [--json]
+zhin logs [-f] [-n <1-1000>]
+```
+
+`zhin start` 启动管理网关（常驻，承载 HTTP 与 Console）并由它拉起 Zhin 实例；默认后台运行，`--foreground` 前台运行（开发、systemd、容器）。网关在运行时，其余命令经本地控制套接字 `.zhin/gateway.sock` 请求网关：`stop` 停止实例与网关，`restart` 只重启实例（`--gateway` 重启后台网关），`status` 显示两者状态（未运行时退出码 3），`logs` 读取实例日志。网关未运行时 `stop` / `restart` 无事可做，`logs` 读取 `.zhin/logs/instance.log`。详见 [zhin start](./runtime.md)。
+
+### runtime：项目工具
+
+```bash
+zhin runtime start [...]    # 前台运行网关，等同于 zhin start --foreground
 zhin runtime inspect
 zhin runtime codegen [dir] [--write] [--json]
 zhin runtime build
@@ -54,30 +66,23 @@ zhin runtime migrate [extract|cutover|verify|status] [--check|--write]
 
 | 子命令 | 作用 |
 | --- | --- |
-| `start` | 启动 Bot。支持开发热重载、生产模式和守护进程，详见 [zhin runtime start](./runtime.md) |
+| `start` | 前台运行网关与实例（`zhin start --foreground` 的别名），详见 [zhin start](./runtime.md) |
 | `inspect` | 输出项目结构 JSON（插件清单、构建计划） |
 | `codegen` | 扫描约定目录，输出插件能力的静态类型声明与 `capabilityGraph` 摘要；`--write` 写入目标目录的 `plugin.capabilities.d.ts`，`--json` 输出扫描结果。`dir` 默认当前目录 |
 | `build` / `publish` | 按项目结构构建、发布。`publish` 默认只打印计划，加 `--execute` 才执行，中断后可 `--resume` |
 | `migrate` | 生成并应用项目结构迁移计划：`--check` 只看计划，`--write` 原子写入，`status` 输出就绪报告 |
 
-脚手架生成的项目里已有两个惯例脚本：
+脚手架生成的项目里已有这些惯例脚本：
 
 ```json
 {
   "scripts": {
-    "dev": "zhin runtime start --watch source config",
-    "start": "zhin runtime start --mode production --no-watch"
+    "dev": "zhin start --foreground --watch source config",
+    "start": "zhin start --foreground --mode production --no-watch",
+    "stop": "zhin stop"
   }
 }
 ```
-
-### stop：停止 bot
-
-```bash
-zhin stop
-```
-
-停止当前项目下用 `--daemon` 启动的进程（读取 `.zhin.pid`）。没有运行中的进程时只提示，不报错。
 
 ### service：系统服务
 
@@ -233,6 +238,8 @@ zhin add ...          # install 的别名
 | `--no-enable` | 只装依赖，不改配置 |
 | `--dry-run` | 打印将执行的安装和配置改动，不实际写入 |
 
+网关在运行时（`zhin start`），安装经网关的依赖事务执行：先停止实例，运行包管理器，再启动实例并等待就绪；失败时恢复 `package.json`、锁文件与配置并重新启动旧版本。进度实时输出到终端。经网关只能安装 npm 注册表包（`name` 或 `name@范围`）；git 地址、本地路径与 `--save-dev` 需先 `zhin stop`。网关未运行时直接在项目里执行。
+
 ### uninstall：卸载
 
 ```bash
@@ -240,7 +247,15 @@ zhin uninstall plugin <name> [--remove-pkg]
 zhin uninstall adapter <name> [--remove-pkg]
 ```
 
-`name` 可以是 npm 包名或 instanceKey；`--remove-pkg` 同时从 `package.json` 移除依赖。系统服务用 `zhin service uninstall` 卸载。
+`name` 可以是 npm 包名或 instanceKey；`--remove-pkg` 同时从 `package.json` 移除依赖。网关在运行时经网关执行（停启实例、失败回滚）。系统服务用 `zhin service uninstall` 卸载。
+
+### update：更新依赖
+
+```bash
+zhin update [包名 | 包名@精确版本 ...]
+```
+
+不带包名时更新全部依赖（`pnpm update`）。网关在运行时经网关执行同一事务（停实例 → 更新 → 启实例，失败回滚），否则直接执行。
 
 ### search / info：发现插件
 
@@ -357,7 +372,7 @@ zhin packages verify <instanceKey> <check-id> --live http://127.0.0.1:8068 \
 
 ## 操作运行中的 Bot
 
-以下命令通过 HTTP 连接正在运行的 Bot，需要先用 `zhin runtime start` 启动并启用 HTTP 服务。
+以下命令通过 HTTP 连接正在运行的 Bot，需要先用 `zhin start` 启动并启用 HTTP 服务。
 
 ### send：向运行中的 bot 发消息
 
@@ -377,7 +392,7 @@ zhin watch [-i 3] [--once] [--json] [--no-clear]
 
 ### schedule：持久化调度任务
 
-让 AI 在指定时间执行一段提示词。命令通过 Host API 操作运行中的实例，立即生效；需要 Bot 已用 `zhin runtime start` 启动并启用 `assistant.enabled`。
+让 AI 在指定时间执行一段提示词。命令通过 Host API 操作运行中的实例，立即生效；需要 Bot 已用 `zhin start` 启动并启用 `assistant.enabled`。
 
 ```bash
 zhin schedule list
@@ -487,7 +502,7 @@ zhin usage report --session 'icqq:*:group:*' --json
 | `130` | 被信号中断 |
 | 其他非零 | 实例启动失败或崩溃且未被重新拉起；需要重启时实例经控制通道请求监管进程，不再通过退出码 |
 
-进程模型与热重载行为见 [zhin runtime start](./runtime.md)。
+进程模型与热重载行为见 [zhin start](./runtime.md)。
 
 ## 迁移应用实例声明
 

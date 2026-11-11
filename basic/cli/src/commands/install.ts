@@ -6,6 +6,7 @@ import path from 'path';
 import inquirer from 'inquirer';
 import { execFileSync } from 'node:child_process';
 import { PluginManagementWorkflow } from '@zhin.js/gateway/plugin-management';
+import { probeGateway, runPackageOperationViaGateway } from '../utils/gateway.js';
 import {
   applyProjectConfigPlan,
   createProjectConfigPlan,
@@ -98,6 +99,19 @@ async function installPluginAction(plugin: string, options: InstallOptions) {
       return;
     }
     if (!pluginName) throw new Error('无法确定包名，请使用 npm 包名或带 package.json 的本地目录');
+    // ADR 0054 §6: with a running gateway the transaction goes through it (instance stopped
+    // while the package manager runs, rolled back on failure).
+    if (await probeGateway({ root: process.cwd() })) {
+      const registrySpec = pluginType === 'npm' && !pluginToInstall.startsWith('.') && !pluginToInstall.startsWith('file:') && !path.isAbsolute(pluginToInstall);
+      if (!registrySpec || options.saveDev) {
+        throw new Error('网关正在运行：经网关只能安装 npm 注册表包（不支持 git / 本地路径 / --save-dev）；请先 zhin stop 再安装');
+      }
+      const result = await runPackageOperationViaGateway({ root: process.cwd() }, {
+        operation: 'install', packages: [pluginToInstall.replace(/^npm:/u, '')], enable: shouldEnable,
+      });
+      if (!result.ok) process.exit(1);
+      return;
+    }
     const result = await new PluginManagementWorkflow(process.cwd()).install(
       pluginType === 'npm' && !pluginToInstall.startsWith('.') && !pluginToInstall.startsWith('file:') && !path.isAbsolute(pluginToInstall)
         ? pluginToInstall : pluginName,

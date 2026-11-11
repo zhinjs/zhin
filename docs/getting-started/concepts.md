@@ -95,7 +95,7 @@ plugins:
 
 ### Host
 
-Bot 进程对外开放的 HTTP 服务。Console、Webhook 类平台回调、MCP 等都通过它访问 Bot。由 CLI 在 `zhin runtime start` 时自动装配，端口在 `zhin.config.yml` 的 `http.port`。深入：[部署与恢复](../operations/production.md)
+Bot 进程对外开放的 HTTP 服务。Console、Webhook 类平台回调、MCP 等都通过它访问 Bot。由 `zhin start` 启动的管理网关承载（实例崩溃时仍可用），端口在 `zhin.config.yml` 的 `http.port`。深入：[部署与恢复](../operations/production.md)
 
 ### 消息流与出站
 

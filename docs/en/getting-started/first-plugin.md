@@ -51,7 +51,7 @@ A plugin is an npm package. What makes Zhin recognize it is the `zhin` field in 
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "zhin runtime start"
+    "dev": "zhin start --foreground --watch source config"
   },
   "dependencies": {
     "zhin.js": "^1.1.0"
@@ -231,7 +231,7 @@ Check, in order:
 2. Send `/ping` in the Sandbox and the bot replies `pong!`.
 3. Change `reply` in `zhin.config.yml`, save, and send `/ping` again — the new reply appears without a restart. Editing `commands/ping/index.ts` works the same way.
 
-Just want to check that the plugin assembles, without the interactive mode? Run `zhin runtime start --once`.
+Just want to check that the plugin assembles, without the interactive mode? Run `zhin start --once`.
 
 ::: tip No reply?
 - The command prefix comes from each connection's `commandPrefix`; the scaffolded Sandbox uses `/`, other platforms may use none.

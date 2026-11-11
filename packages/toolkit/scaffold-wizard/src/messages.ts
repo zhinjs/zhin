@@ -691,9 +691,9 @@ export const WIZARD_MESSAGES = {
     "zh-CN": "     • Endpoint 进程需绑定可被 Telegram 访问的 HTTPS 域名（有效 TLS 证书）",
     "en": "     • The Endpoint process needs an HTTPS domain reachable by Telegram with a valid TLS certificate"
   },
-  "     • Webhook 由内置 HTTP Host（zhin runtime start）承接，防火墙/反向代理需放行 http 端口": {
-    "zh-CN": "     • Webhook 由内置 HTTP Host（zhin runtime start）承接，防火墙/反向代理需放行 http 端口",
-    "en": "     • The built-in HTTP Host (zhin runtime start) receives webhooks; allow the http port through your firewall/reverse proxy"
+  "     • Webhook 由内置 HTTP Host（zhin start）承接，防火墙/反向代理需放行 http 端口": {
+    "zh-CN": "     • Webhook 由内置 HTTP Host（zhin start）承接，防火墙/反向代理需放行 http 端口",
+    "en": "     • The built-in HTTP Host (zhin start) receives webhooks; allow the http port through your firewall/reverse proxy"
   },
   "  Webhook 公网 HTTPS 域名（如 https://bot.example.com）:": {
     "zh-CN": "  Webhook 公网 HTTPS 域名（如 https://bot.example.com）:",
@@ -755,9 +755,9 @@ export const WIZARD_MESSAGES = {
     "zh-CN": "轮询 polling（无需公网，默认 60s 间隔）",
     "en": "Polling (no public URL; default interval 60s)"
   },
-  "     • Webhook 由内置 HTTP Host（zhin runtime start 的 http 配置）承接": {
-    "zh-CN": "     • Webhook 由内置 HTTP Host（zhin runtime start 的 http 配置）承接",
-    "en": "     • The built-in HTTP Host receives webhooks (http configuration for zhin runtime start)"
+  "     • Webhook 由内置 HTTP Host（zhin start 的 http 配置）承接": {
+    "zh-CN": "     • Webhook 由内置 HTTP Host（zhin start 的 http 配置）承接",
+    "en": "     • The built-in HTTP Host receives webhooks (http configuration for zhin start)"
   },
   "     • GitHub App Webhook URL 填 https://<你的域名>/github/webhook": {
     "zh-CN": "     • GitHub App Webhook URL 填 https://<你的域名>/github/webhook",
@@ -1107,9 +1107,9 @@ export const WIZARD_MESSAGES = {
     "zh-CN": "终端 + Remote Console 沙盒页，本地开发首选",
     "en": "Terminal and Remote Console sandbox; recommended for local development"
   },
-  "无需额外凭据；pnpm dev（zhin runtime start）后可在 Console 沙盒页直接对话。": {
-    "zh-CN": "无需额外凭据；pnpm dev（zhin runtime start）后可在 Console 沙盒页直接对话。",
-    "en": "No additional credentials; after pnpm dev (zhin runtime start), chat directly on the Console sandbox page."
+  "无需额外凭据；pnpm dev（zhin start --foreground）后可在 Console 沙盒页直接对话。": {
+    "zh-CN": "无需额外凭据；pnpm dev（zhin start --foreground）后可在 Console 沙盒页直接对话。",
+    "en": "No additional credentials; after pnpm dev (zhin start --foreground), chat directly on the Console sandbox page."
   },
   "非官方 QQ 协议，直连 @icqqjs/icqq": {
     "zh-CN": "非官方 QQ 协议，直连 @icqqjs/icqq",
@@ -1603,9 +1603,9 @@ export const WIZARD_MESSAGES = {
     "zh-CN": "📝 下一步操作：",
     "en": "📝 Next steps:"
   },
-  "# zhin runtime start，然后打开 Console 的 Sandbox 页发送 /hello": {
-    "zh-CN": "# zhin runtime start，然后打开 Console 的 Sandbox 页发送 /hello",
-    "en": "# zhin runtime start, then send /hello on the Console Sandbox page"
+  "# zhin start，然后打开 Console 的 Sandbox 页发送 /hello": {
+    "zh-CN": "# zhin start，然后打开 Console 的 Sandbox 页发送 /hello",
+    "en": "# zhin start, then send /hello on the Console Sandbox page"
   },
   "下一步（任选）：": {
     "zh-CN": "下一步（任选）：",
@@ -1679,13 +1679,13 @@ export const WIZARD_MESSAGES = {
     "zh-CN": "💡 使用 pnpm 和 npx 运行命令：",
     "en": "💡 Run commands with pnpm and npx:"
   },
-  "# 或 npx zhin runtime start - 开发模式（自动监听，支持热重载）": {
-    "zh-CN": "# 或 npx zhin runtime start - 开发模式（自动监听，支持热重载）",
-    "en": "# Or npx zhin runtime start - development mode with file watching and hot reload"
+  "# 或 npx zhin start --foreground --watch source config - 开发模式（自动监听，支持热重载）": {
+    "zh-CN": "# 或 npx zhin start --foreground --watch source config - 开发模式（自动监听，支持热重载）",
+    "en": "# Or npx zhin start --foreground --watch source config - development mode with file watching and hot reload"
   },
-  "# 或 npx zhin runtime start --mode production --no-watch - 前台运行": {
-    "zh-CN": "# 或 npx zhin runtime start --mode production --no-watch - 前台运行",
-    "en": "# Or npx zhin runtime start --mode production --no-watch - foreground mode"
+  "# 或 npx zhin start --mode production --no-watch - 后台运行（zhin stop 停止）": {
+    "zh-CN": "# 或 npx zhin start --mode production --no-watch - 后台运行（zhin stop 停止）",
+    "en": "# Or npx zhin start --mode production --no-watch - background mode (stop with zhin stop)"
   },
   "💡 后续如需全局安装 CLI，可运行：": {
     "zh-CN": "💡 后续如需全局安装 CLI，可运行：",
@@ -1903,9 +1903,9 @@ export const WIZARD_MESSAGES = {
     "zh-CN": "正在安装全局实例依赖…",
     "en": "Installing global-instance dependencies…"
   },
-  "💡 提示: 任意目录运行 \"zhin runtime start\" 启动全局实例": {
-    "zh-CN": "💡 提示: 任意目录运行 \"zhin runtime start\" 启动全局实例",
-    "en": "💡 Tip: run \"zhin runtime start\" from any directory to start the global instance"
+  "💡 提示: 任意目录运行 \"zhin start\" 启动全局实例": {
+    "zh-CN": "💡 提示: 任意目录运行 \"zhin start\" 启动全局实例",
+    "en": "💡 Tip: run \"zhin start\" from any directory to start the global instance"
   },
   "💡 提示: 运行 \"zhin dev\" 启动开发服务器": {
     "zh-CN": "💡 提示: 运行 \"zhin dev\" 启动开发服务器",

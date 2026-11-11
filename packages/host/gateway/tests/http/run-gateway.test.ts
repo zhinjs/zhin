@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { parseStartOptions } from '@zhin.js/runtime';
-import { runGateway } from '../../src/http/start-gateway.js';
+import { runGateway } from '../../src/http/run-gateway.js';
 import { ProjectDatabase } from '../../src/database/project-database.js';
 import { ConsoleIamService } from '../../src/iam/service.js';
 import { defineConsoleIamTables } from '../../src/iam/tables.js';

@@ -246,6 +246,19 @@ describe('GatewayPackageService transactions', () => {
     expect(instance.calls.filter(call => call === 'start')).toHaveLength(5);
   });
 
+  it('passes removeDependency: false to the workflow on uninstall', async () => {
+    const seen: unknown[] = [];
+    const workflow: PackageWorkflowPort = {
+      inspect: async () => ({ declared: true }),
+      install: async () => undefined,
+      uninstall: async (...args) => { seen.push(args); },
+      update: async () => undefined,
+    };
+    await service({ workflow }).uninstall(['zod'], { principal: owner, removeDependency: false });
+    await service({ workflow }).uninstall(['zod'], { principal: owner });
+    expect(seen).toEqual([['zod', undefined, undefined, { removeDependency: false }], ['zod']]);
+  });
+
   it('rejects a concurrent transaction, in process and across processes', async () => {
     let release!: () => void;
     const gate = new Promise<void>(resolvePromise => { release = resolvePromise; });

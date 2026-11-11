@@ -72,6 +72,8 @@ export interface GatewayPackagesInstallRequest {
 
 export interface GatewayPackagesUninstallRequest {
   readonly packages: readonly string[];
+  /** Also remove the npm dependency when nothing else references it (default true). */
+  readonly removeDependency?: boolean;
   readonly startInstance?: boolean;
 }
 

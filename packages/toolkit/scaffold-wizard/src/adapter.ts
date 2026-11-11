@@ -76,7 +76,7 @@ export const ADAPTERS: AdapterDefinition[] = [
     plugin: '@zhin.js/adapter-sandbox',
     needsHttp: true,
     description: '终端 + Remote Console 沙盒页，本地开发首选',
-    setupHint: '无需额外凭据；pnpm dev（zhin runtime start）后可在 Console 沙盒页直接对话。',
+    setupHint: '无需额外凭据；pnpm dev（zhin start --foreground）后可在 Console 沙盒页直接对话。',
     fields: [],
   },
   {

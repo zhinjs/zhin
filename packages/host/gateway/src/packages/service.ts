@@ -44,7 +44,7 @@ export interface PackageTransactionInstance {
 export interface PackageWorkflowPort {
   inspect(request: string): Promise<{ readonly declared: boolean }>;
   install(spec: string, expectedRevision?: string, expectedProjectRevision?: string, options?: { readonly enable?: boolean }): Promise<unknown>;
-  uninstall(request: string): Promise<unknown>;
+  uninstall(request: string, expectedRevision?: string, expectedProjectRevision?: string, options?: { readonly removeDependency?: boolean }): Promise<unknown>;
   update(request: string, targetVersion: string): Promise<unknown>;
 }
 
@@ -83,6 +83,11 @@ export interface GatewayTransactionOptions {
   /** Start the instance afterwards even when it was not running before. */
   readonly startInstance?: boolean;
   readonly onEvent?: GatewayPackageListener;
+}
+
+export interface GatewayUninstallOptions extends GatewayTransactionOptions {
+  /** Also remove the npm dependency when nothing else references it (default true). */
+  readonly removeDependency?: boolean;
 }
 
 export interface GatewayInstallOptions extends GatewayTransactionOptions {
@@ -194,9 +199,12 @@ export class GatewayPackageService {
     });
   }
 
-  uninstall(packages: readonly unknown[], options: GatewayTransactionOptions): Promise<GatewayPackageTransactionResult> {
+  uninstall(packages: readonly unknown[], options: GatewayUninstallOptions): Promise<GatewayPackageTransactionResult> {
     return this.#transaction('uninstall', packages, options, async (ctx, authorized) => {
-      for (const item of authorized) await ctx.workflow.uninstall(item.name);
+      for (const item of authorized) {
+        if (options.removeDependency === false) await ctx.workflow.uninstall(item.name, undefined, undefined, { removeDependency: false });
+        else await ctx.workflow.uninstall(item.name);
+      }
     });
   }
 

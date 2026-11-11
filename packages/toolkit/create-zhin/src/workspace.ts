@@ -118,8 +118,10 @@ export async function createWorkspace(projectPath: string, projectName: string, 
     type: 'module',
     description: `${projectName} - Zhin.js Bot`,
     scripts: {
-      dev: 'zhin runtime start --watch source config',
-      start: 'zhin runtime start --mode production --no-watch',
+      dev: 'zhin start --foreground --watch source config',
+      // Foreground: the production templates (Dockerfile, systemd unit) run `pnpm start`.
+      start: 'zhin start --foreground --mode production --no-watch',
+      stop: 'zhin stop',
       preview: 'zhin preview',
       build: 'tsc --noEmit',
       'pm2:start': 'pm2 start ecosystem.config.cjs',
@@ -206,8 +208,8 @@ wizardText(locale, "templates.systemd", [projectName, path.resolve(projectPath),
         <string>/usr/bin/env</string>
         <string>npx</string>
         <string>zhin</string>
-        <string>runtime</string>
         <string>start</string>
+        <string>--foreground</string>
         <string>--mode</string>
         <string>production</string>
         <string>--no-watch</string>
@@ -291,7 +293,7 @@ wizardText(locale, "templates.windowsService", [projectName, path.resolve(projec
   <Actions Context="Author">
     <Exec>
       <Command>npx</Command>
-      <Arguments>zhin runtime start --mode production --no-watch</Arguments>
+      <Arguments>zhin start --foreground --mode production --no-watch</Arguments>
       <WorkingDirectory>${path.resolve(projectPath).replace(/\\/g, '\\\\')}</WorkingDirectory>
     </Exec>
   </Actions>
@@ -305,7 +307,7 @@ wizardText(locale, "templates.windowsService", [projectName, path.resolve(projec
     {
       name: '${projectName}',
       script: 'node_modules/.bin/zhin',
-      args: 'runtime start --mode production --no-watch',
+      args: 'start --foreground --mode production --no-watch',
       cwd: './',
       instances: 1,
       autorestart: true,

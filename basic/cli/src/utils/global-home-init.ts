@@ -13,8 +13,8 @@ const GLOBAL_PACKAGE_JSON = {
   description: 'Zhin.js 全局实例（~/.zhin）',
   type: 'module',
   scripts: {
-    dev: 'zhin runtime start',
-    start: 'zhin runtime start --mode production --no-watch',
+    dev: 'zhin start --foreground',
+    start: 'zhin start --foreground --mode production --no-watch',
   },
   // `latest` is only the fallback: written as the release ranges @zhin.js/scaffold-wizard shipped with (#857).
   dependencies: withScaffoldVersionRanges({

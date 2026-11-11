@@ -8,3 +8,4 @@ export * from './http/console-rpc.js';
 export * from './http/start-gateway.js';
 export * from './http/gateway-console.js';
 export * from './http/gateway-events.js';
+export * from './http/run-gateway.js';
