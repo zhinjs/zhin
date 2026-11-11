@@ -32,6 +32,7 @@ import {
   featureSetupAliases,
   mergeSetupCapabilities,
 } from './setup-capabilities.js';
+import { isWithin } from './topology-transaction.js';
 
 export class SubtreeTopologyChangedError extends Error {
   constructor(message: string) {
@@ -234,10 +235,6 @@ function featureRoots(node: PluginGraphNode): readonly string[] {
 
 function sameValues(left: readonly unknown[], right: readonly unknown[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
-}
-
-function isWithin(plugin: PluginId, root: PluginId): boolean {
-  return plugin === root || plugin.startsWith(`${root}/`);
 }
 
 async function rollback(

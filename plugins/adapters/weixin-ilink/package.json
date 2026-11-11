@@ -88,6 +88,7 @@
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
+    "@zhin.js/host-http": "workspace:*",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",
     "zhin.js": "workspace:*"

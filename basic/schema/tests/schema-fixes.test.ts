@@ -119,3 +119,39 @@ describe('Schema fixes', () => {
     });
   });
 });
+
+describe('tuple: callable schema and safeParse agree', () => {
+  const pair = Schema.tuple([Schema.string(), Schema.number()]);
+
+  it('both reject an empty array for a non-empty tuple, like the exported JSON Schema', () => {
+    expect(() => pair([] as any)).toThrow(/tuple length mismatch/);
+    expect(pair.safeParse([]).success).toBe(false);
+    expect(pair.toJsonSchema()).toMatchObject({ minItems: 2, maxItems: 2 });
+  });
+
+  it('both leave an absent optional tuple absent', () => {
+    expect(pair(undefined as any)).toBeUndefined();
+    expect(pair.safeParse(undefined)).toEqual({ success: true, data: undefined });
+  });
+
+  it('both accept the empty tuple schema with an empty array', () => {
+    const empty = Schema.tuple([]);
+    expect(empty([] as any)).toEqual([]);
+    expect(empty.safeParse([]).success).toBe(true);
+  });
+
+  it('applies a tuple default and still enforces required', () => {
+    expect(Schema.tuple([Schema.string(), Schema.number()]).default(['a', 1] as any)(undefined as any)).toEqual(['a', 1]);
+    expect(() => Schema.tuple([Schema.string()]).required()(undefined as any)).toThrow(/required/);
+  });
+});
+
+describe('range metadata is a JSON Schema constraint, not a structural one', () => {
+  it('min/max/step are exported but not enforced by the structural validators', () => {
+    const schema = Schema.number().min(1).max(10).step(1);
+    expect(schema.toJsonSchema()).toMatchObject({ minimum: 1, maximum: 10, multipleOf: 1 });
+    // toJsonSchema's secret-default check depends on structural matching staying broader.
+    expect(schema(99)).toBe(99);
+    expect(schema.safeParse(0.5).success).toBe(true);
+  });
+});

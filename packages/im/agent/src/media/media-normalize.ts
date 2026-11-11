@@ -240,10 +240,6 @@ export async function normalizeMediaRefsToPayloads(
 }
 
 
-export function payloadToDataUri(payload: MediaBinaryPayload): string {
-  return `data:${payload.mimeType};base64,${payload.base64}`;
-}
-
 
 
 export function payloadToVisionPart(payload: MediaBinaryPayload): MediaContentBlock | null {

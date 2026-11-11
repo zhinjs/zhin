@@ -1,6 +1,14 @@
-import { describe, expect, it, vi } from "vitest";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { PluginRegisterHostApi } from "@zhin.js/contract";
+import { ConsoleApp } from "../app.js";
 import {
   getRegisterFn,
+  loadConsoleEntries,
+  reloadConsoleEntries,
   resolveEntryRegister,
 } from "./loadConsoleEntries.js";
 
@@ -94,5 +102,132 @@ describe("console entries bootstrap", () => {
       expect.any(Function),
       { adapterKey: "telegram" },
     );
+  });
+});
+
+describe("console entries reload", () => {
+  const dirs: string[] = [];
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  });
+
+  function entryModule(source: string): string {
+    const dir = mkdtempSync(join(tmpdir(), "zhin-console-entry-"));
+    dirs.push(dir);
+    const file = join(dir, "entry.mjs");
+    writeFileSync(file, source);
+    return pathToFileURL(file).href;
+  }
+
+  function serveEntries(...responses: Array<Array<{ id: string; resolvedModule: string }>>) {
+    const queue = [...responses];
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ entries: queue.shift() ?? [], runtimeEnvHint: null }),
+    } as Response)));
+  }
+
+  function hostApiFor(app: ConsoleApp): PluginRegisterHostApi {
+    return {
+      React: {} as never,
+      addRoute: (input) => app.addRoute(input),
+      addTool: (input) => app.addTool(input),
+      removeRoute: (path) => app.removeRoute(path),
+      removeTool: (id) => app.removeTool(id),
+    };
+  }
+
+  const toolIds = (app: ConsoleApp) => app.getToolTree().map((tool) => tool.id);
+  const routePaths = (app: ConsoleApp) => app.getRoutes().map((route) => route.path);
+
+  it("removes routes and tools of entries that disappeared and keeps tool ids stable", async () => {
+    const alpha = {
+      id: "alpha",
+      resolvedModule: entryModule(`export function register(api) {
+        api.addRoute({ path: "/alpha", name: "Alpha", element: null });
+        api.addTool({ name: "Alpha Tool" });
+        api.addTool({ name: "Alpha Tool" });
+      }`),
+    };
+    const beta = {
+      id: "beta",
+      resolvedModule: entryModule(`export function register(api) {
+        api.addRoute({ path: "/beta", name: "Beta", element: null });
+        api.addTool({ id: "beta-tool", name: "Beta Tool" });
+      }`),
+    };
+    serveEntries([alpha, beta], [alpha, beta], [alpha], []);
+    const app = new ConsoleApp();
+    const hostApi = hostApiFor(app);
+    const onEmpty = vi.fn();
+
+    await loadConsoleEntries({ hostApi, entriesUrl: "http://host.test/entries", onEmpty });
+    expect(routePaths(app).sort()).toEqual(["/alpha", "/beta"]);
+    expect(toolIds(app).sort()).toEqual(["alpha:alpha-tool", "alpha:alpha-tool-2", "beta-tool"]);
+
+    // Same entries: nothing is duplicated (a random id used to add one tool per reload).
+    await reloadConsoleEntries();
+    expect(routePaths(app).sort()).toEqual(["/alpha", "/beta"]);
+    expect(toolIds(app).sort()).toEqual(["alpha:alpha-tool", "alpha:alpha-tool-2", "beta-tool"]);
+
+    // beta was uninstalled.
+    await reloadConsoleEntries();
+    expect(routePaths(app)).toEqual(["/alpha"]);
+    expect(toolIds(app).sort()).toEqual(["alpha:alpha-tool", "alpha:alpha-tool-2"]);
+
+    // Everything is gone.
+    await reloadConsoleEntries();
+    expect(routePaths(app)).toEqual([]);
+    expect(toolIds(app)).toEqual([]);
+    expect(onEmpty).toHaveBeenCalledTimes(1);
+  });
+
+  it("drops a route an entry stopped registering and keeps the old registration when a reload fails", async () => {
+    (globalThis as { __entryMode?: string }).__entryMode = "both";
+    const gamma = {
+      id: "gamma",
+      resolvedModule: entryModule(`export function register(api) {
+        const mode = globalThis.__entryMode;
+        if (mode === "broken") throw new Error("boom");
+        api.addRoute({ path: "/gamma", name: "Gamma", element: null });
+        if (mode === "both") api.addRoute({ path: "/gamma/extra", name: "Extra", element: null });
+      }`),
+    };
+    serveEntries([gamma], [gamma], [gamma]);
+    const app = new ConsoleApp();
+    const onEntryError = vi.fn();
+    const options = { hostApi: hostApiFor(app), entriesUrl: "http://host.test/entries", onEntryError };
+
+    await loadConsoleEntries(options);
+    expect(routePaths(app).sort()).toEqual(["/gamma", "/gamma/extra"]);
+
+    (globalThis as { __entryMode?: string }).__entryMode = "broken";
+    await reloadConsoleEntries(options);
+    expect(onEntryError).toHaveBeenCalledTimes(1);
+    expect(routePaths(app).sort()).toEqual(["/gamma", "/gamma/extra"]);
+
+    (globalThis as { __entryMode?: string }).__entryMode = "single";
+    await reloadConsoleEntries(options);
+    expect(routePaths(app)).toEqual(["/gamma"]);
+    delete (globalThis as { __entryMode?: string }).__entryMode;
+  });
+
+  it("does not re-add a known tool on a host API without removeTool", async () => {
+    const delta = {
+      id: "delta",
+      resolvedModule: entryModule(`export function register(api) { api.addTool({ name: "Delta" }); }`),
+    };
+    serveEntries([delta], [delta]);
+    const addTool = vi.fn((input: { id?: string }) => input.id ?? "generated");
+    const hostApi: PluginRegisterHostApi = { React: {} as never, addRoute: vi.fn(), addTool };
+
+    await loadConsoleEntries({ hostApi, entriesUrl: "http://host.test/entries" });
+    await reloadConsoleEntries();
+
+    expect(addTool).toHaveBeenCalledTimes(1);
+    expect(addTool).toHaveBeenCalledWith({ id: "delta:delta", name: "Delta" });
   });
 });

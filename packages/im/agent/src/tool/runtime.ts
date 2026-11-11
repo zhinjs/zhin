@@ -43,4 +43,4 @@ export async function collectRuntimeTools(options: CollectRuntimeToolsOptions): 
 }
 
 export type { ToolRunPlan };
-export { planToolRun, buildPreExecFastPathPrompt } from './tool-system.js';
+export { planToolRun } from './tool-system.js';

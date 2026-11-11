@@ -73,14 +73,6 @@ export interface TurnCollaboration {
 
 export type TurnCollaborationSession = TurnCollaboration;
 
-export function harnessTrust(level: InitiatorTrustLevel): HarnessTrust {
-  switch (level) {
-    case 'owner': return 'master';
-    case 'trusted_member': return 'trusted';
-    default: return 'group_member';
-  }
-}
-
 /**
  * Starts collaboration for `input.turn`. Returns `undefined` when the turn has
  * no other agent to collaborate with (or does not run inside a Mail turn), so

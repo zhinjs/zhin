@@ -16,9 +16,7 @@ function stableYesOptions(): InitOptions {
   const options: InitOptions = {
     yes: true,
     config: 'yaml',
-    runtime: 'node',
     httpToken: 'test-token',
-    installGlobalCli: false,
   };
   applyStableYesDefaults(options);
   return options;

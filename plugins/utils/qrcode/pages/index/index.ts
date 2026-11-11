@@ -43,7 +43,7 @@ export default definePageBlueprint<QrCodeConsoleStatus>({
       ],
     },
     {
-      name: 'clearHistory',
+      name: 'clear-history',
       label: { zh: '清空记录', en: 'Clear History' },
       variant: 'secondary',
     },

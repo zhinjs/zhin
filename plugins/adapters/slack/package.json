@@ -77,8 +77,10 @@
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
+    "@types/ws": "^8.18.1",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",
+    "ws": "^8.21.1",
     "zhin.js": "workspace:*",
     "zod": "^4.4.3"
   },

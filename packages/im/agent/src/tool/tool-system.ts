@@ -105,15 +105,6 @@ export async function planToolRun(
   };
 }
 
-export function buildPreExecFastPathPrompt(persona: string, preData: string): string {
-  return `${persona}
-
-Pre-fetched data (from user's question):
-${preData}
-
-Answer the user's question based on the data above. Be clear and concise; use emoji when appropriate.`;
-}
-
 /** Stamps the owning generation so ToolRuntime can reject retired-generation tools. */
 export function stampToolGeneration<T extends { generation?: number }>(
   tools: T[],

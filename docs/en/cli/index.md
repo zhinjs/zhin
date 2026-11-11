@@ -42,7 +42,9 @@ All commands, grouped by purpose, follow.
 
 ```bash
 zhin runtime start [--mode production] [--watch source config | --no-watch] [--daemon]
+zhin start [...]            # same as zhin runtime start; arguments pass through unchanged
 zhin runtime inspect
+zhin runtime codegen [dir] [--write] [--json]
 zhin runtime build
 zhin runtime publish [--execute|--resume] [--tag latest]
 zhin runtime migrate [extract|cutover|status] [--check|--write]
@@ -54,6 +56,7 @@ zhin runtime migrate [extract|cutover|status] [--check|--write]
 | --- | --- |
 | `start` | Start the bot, with dev hot reload, production and daemon modes; see [zhin runtime start](./runtime.md) |
 | `inspect` | Print the project structure as JSON (plugin list, build plan) |
+| `codegen` | Scan the convention directories and print static type declarations for the plugin's capabilities plus a `capabilityGraph` summary; `--write` writes `plugin.capabilities.d.ts` into the target directory and `--json` prints the scan result. `dir` defaults to the current directory |
 | `build` / `publish` | Build and publish according to the project structure. `publish` only prints the plan by default; `--execute` runs it, and `--resume` continues after an interruption |
 | `migrate` | Generate and apply a project-structure migration plan: `--check` previews, `--write` writes atomically, `status` prints a readiness report |
 
@@ -98,9 +101,12 @@ zhin setup --ai            # AI only
 zhin setup --decisions     # optional TypeSafe Jev decision service (needs existing AI config)
 zhin setup --bootstrap     # bootstrap files only (SOUL.md / TOOLS.md / AGENTS.md)
 zhin setup --global        # initialize a global instance in ~/.zhin
+zhin setup --locale en     # set the project language (zh-CN or en); combines with the other options
 ```
 
 The wizard edits the matching parts of [`zhin.config.yml`](../configuration/index.md) and writes secrets to `.env`.
+
+Without `--locale` the project's existing language is kept; language and time zone are independent. See [Language and Localization](../configuration/localization.md).
 
 For network databases, the CLI checks the port range, writes connection fields as environment references and puts the real values in `.env`. Afterwards run `npx zhin config check` to catch missing database variables before startup; if the values only live in `.env.production`, use `npx zhin config check --environment production`.
 
@@ -174,7 +180,18 @@ zhin migrate [--dry-run] [--no-install] [--include-pinned]
 
 Upgrades an older Zhin project to the latest: dependencies, scripts and folder structure. `--dry-run` only prints the plan and ends with "nothing was changed"; `--no-install` skips the final `pnpm install`. Dependencies you locked (exact versions such as `1.1.6`, `link:`, `file:`) are kept unless you pass `--include-pinned`. Full upgrade flow: [Compatibility and migration](../operations/upgrades.md).
 
-`zhin migrate` never edits config files. When startup reports `configVersion must be 2`, or `zhin doctor` / `zhin config check` flags a v1 config, stop the Bot and run `zhin migrate instances` (preview) and then `zhin migrate instances --apply`. The preview lists changes by key name without printing configuration values; `--apply` first copies the originals to `.zhin/backups/config-v2-<timestamp>/` (with a `manifest.json`) and prints that path. Restore with `zhin migrate instances --recover rollback`, or copy the files back as listed in the manifest. `zhin runtime migrate` migrates legacy plugin capability code and is unrelated to the config version.
+`zhin migrate` never edits config files. When startup reports `configVersion must be 2`, or `zhin doctor` / `zhin config check` flags a v1 config, use `zhin migrate instances`, described [below](#migrate-instances). `zhin runtime migrate` migrates legacy plugin capability code and is unrelated to the config version.
+
+#### migrate inference: Migrate legacy AI model configuration
+
+```bash
+zhin migrate inference [--mapping <file>] --output migration.json     # offline preview
+zhin migrate inference --apply migration.json --maintenance --backup-confirmed [--with-credentials]
+zhin migrate inference --finalize migration.json --maintenance --backup-confirmed
+zhin migrate inference --sessions-only --mapping <file> --output <file>   # only bind old Sessions to existing Profiles
+```
+
+Previews and migrates the legacy `ai.providers`-style model configuration and Sessions offline; it loads no `.env` and does not start the Bot. `--apply` and `--finalize` both require `--maintenance` (the Bot is stopped) and `--backup-confirmed` (the configuration, database, and encryption master key are backed up). For a non-SQLite database, `--state-snapshot <file>` supplies the old metadata and `--database-config <file>` an offline database connection. Full steps and recovery boundaries: [Provider interface upgrade](../ai/provider-upgrade.md).
 
 ## Plugins
 
@@ -249,6 +266,16 @@ zhin use-cases keyword-reply
 Find the required plugin, installation preview, steps and current limitations for reminders, welcome messages and keyword replies. This command only prints a guide: it does not install plugins, change configuration, start the bot or send messages. The existing installation, configuration and chat interfaces still own those operations.
 
 The Console [administrator task center](../paths/console.md#administrator-task-center) uses the same catalog. Its first creation flow manages administrator reminders. Welcome messages and keyword replies currently link to existing setup paths; Console does not impersonate a chat member.
+
+### preview: Preview Components and Pages
+
+```bash
+zhin preview [dir] [-p 4176] [-H 127.0.0.1] [--open]
+zhin preview --export preview.html     # export a single-file static HTML snapshot and exit
+zhin preview --json                    # print the scan and render result and exit
+```
+
+Starts a local preview workbench: it scans `components/*` and `pages/*` in the project or plugin directory (the current directory by default), hot-reloads, and lets you edit Props and adjust styles live. It listens on `127.0.0.1:4176` by default; `--open` opens the browser after startup.
 
 ### build: Build a Plugin
 
@@ -397,6 +424,55 @@ zhin agent info [--json]
 | --- | --- |
 | `info` | List discovered Agent capabilities and named Agents (Tools, Skills, Hooks…) |
 
+### trace: Inspect Agent Turns
+
+Requires the AI stack. After the bot finishes each AI conversation turn, it appends that turn's trace to `data/agent-traces/<UTC date>.jsonl` (one file per day). You no longer need to dig through `bot.db` and the journal to diagnose a problem:
+
+```bash
+zhin trace                       # same as zhin trace last: print the most recent turn
+zhin trace <turnId>              # a specific turn; an id prefix is enough
+zhin trace --list                # list recent turns (50 by default)
+zhin trace --sessions            # list sessions that have traces
+zhin trace --session qq:bot:private:12345 --since 2h   # one session's turns in the last 2 hours
+zhin trace --list --since 2026-10-14 --until 2026-10-15 -n 200
+zhin trace last --json
+zhin trace --engagements --list   # list recent multi-Agent collaborations (Engagements)
+zhin trace --engagements          # collaboration graph of the latest collaboration
+zhin trace <engagementId>         # a specific collaboration; an id prefix is enough
+```
+
+| Option | Purpose |
+| --- | --- |
+| `-l, --list` | One line per turn: time, end status, turn id, session, tool count, tokens |
+| `--sessions` | One line per session: turn count, last time and status, total tokens |
+| `--engagements` | Read multi-Agent collaboration records instead (the `engagement_events` database table; requires SQLite, MySQL, or PostgreSQL): with `--list`, list recent collaborations; otherwise show the participants, mail hops, Blackboard, and budget of the latest or the given collaboration. See [Multi-Agent Collaboration and Venues](../ai/multi-agent-harness.md) |
+| `-s, --session <key>` | Only this session (sessionKey); output switches to the list format |
+| `--since <time>` / `--until <time>` | Time range (`--until` exclusive): `30m`, `2h`, `7d` (how long ago), an ISO date/time, or epoch ms |
+| `-n, --limit <n>` | Show at most the latest n entries, default 50 |
+| `--json` | Raw JSON output (snake_case fields) |
+| `--no-timeline` | Do not print the step-by-step timeline |
+| `--cwd <dir>` | Project root, default current directory |
+| `--dir <dir>` | Read a trace directory directly (a failed eval report prints this argument) |
+
+A trace contains: the initiator and role, the session, tokens for each model call, each tool call (argument summary, duration, result size, error or refusing policy), budget extensions and automatic continuation, nested sub-agent turns, per-segment context cost, and the end reason. The output starts by calling out the **first failing step**.
+
+**Retention and redaction.** Traces are kept for 7 days with a 64 MB total cap by default: cleanup runs at startup and every hour after that, first deleting expired date files and then deleting from the oldest day until the total is under the cap (today's file is never deleted for size). Adjust with the `ZHIN_TRACE_RETENTION_DAYS` and `ZHIN_TRACE_MAX_MB` environment variables. A trace stores summaries only: tool results record only their length, not their content; tokens, passwords, `Authorization`, and similar fields in arguments and error messages are replaced with `[redacted]`, and before writing to disk inline credentials (`sk-…`, `Bearer …`, and so on) and secret values from environment variables are scanned once more. The legacy `data/agent-traces/recent.json` is still read.
+
+**Console page.** The "Agent Trace" page in Console (`/console/agent-trace`) reads the same data: session list → turn list → turn detail (model/tool call waterfall, timeline, and raw record), with time filtering, and `?turn=<turnId>` opens a turn directly. Add one page to your project to enable it:
+
+```tsx
+// pages/agent-trace/index.tsx
+import { TraceArchivePage } from '@zhin.js/client';
+import { definePage } from '@zhin.js/console-contract';
+
+export const meta = definePage({ title: 'Agent Trace', icon: 'Activity', order: 31 });
+export default TraceArchivePage;
+```
+
+Behind the page are the read-only endpoints `GET /api/agent/trace-archive/sessions`, `/turns?sessionKey=&since=&until=&limit=`, and `/turn?turnId=`. They require a token with `full` scope; a demo token gets 403.
+
+**Eval integration.** A failing case in `pnpm eval:agent` writes its turn trace to `ZHIN_EVAL_TRACE_DIR` (by default `zhin-eval-traces` under the system temp directory), and the report prints one `↪ zhin trace <turnId> --dir …` line per turn that you can copy and run.
+
 ### usage report: Real Usage Ledger
 
 Read-only. Reads `data/agent-traces/*.jsonl` and summarises real model usage per local day, so you can tell whether context optimisations actually saved tokens (ADR 0043 §6). Files are streamed line by line, nothing is written, and malformed lines are counted and reported at the end.
@@ -426,3 +502,16 @@ Per day: turns, model calls, calls per turn and per-call input tokens (p50 / p90
 | `75` | The runtime requires a restart (e.g. lockfile changed); the daemon restarts with storm protection |
 
 Process model and hot-reload behavior: [zhin runtime start](./runtime.md).
+
+## Migrating app instance declarations {#migrate-instances}
+
+An older project must stop the Bot first and then migrate to `configVersion: 2`. The command only previews by default and neither installs dependencies nor starts plugins:
+
+```bash
+zhin migrate instances
+zhin migrate instances --apply
+zhin migrate instances --recover continue
+zhin migrate instances --recover rollback
+```
+
+The preview lists changes by key name (the added `configVersion`, the `plugins` mapping, moved business blocks, `disable_plugins`, and the emptied `package.json#zhin.plugins`) without printing any configuration value, so it can be pasted into an issue; `--json` prints a machine-readable summary. Before writing, `--apply` copies the original files to `.zhin/backups/config-v2-<timestamp>/` (with a `manifest.json`) and prints the path. Prefer `zhin migrate instances --recover rollback` to restore; you can also copy the files back by hand following the manifest. Nesting, optional plugins, and alias collisions need manual handling. See the [migration guide](../migrations/plugin-instance-declarations.md).

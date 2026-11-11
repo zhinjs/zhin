@@ -20,6 +20,12 @@
 - 微信客户端需已灰度 **ClawBot** 入口（最新版微信 + 灰度资格）
 - Node.js >=22.19.0
 
+## 安装
+
+```bash
+pnpm add @zhin.js/adapter-weixin-ilink
+```
+
 ## 最小配置
 
 ```yaml

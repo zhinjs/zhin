@@ -565,6 +565,35 @@ export function renderConsoleIndex(pages: readonly ConsoleIndexPage[]): string {
 </html>`;
 }
 
+/**
+ * CDN versions for the standalone page shell. Keep them inside the repo's own floors:
+ * React matches the workspace `react` range, react-router stays at or above the
+ * `pnpm-workspace.yaml` security override (>= 7.12.0).
+ */
+export const PAGE_SHELL_CDN_VERSIONS = Object.freeze({
+  react: '19.2.8',
+  reactRouter: '7.12.0',
+});
+
+function pageShellImportMap(versions: { readonly react: string; readonly reactRouter: string }): string {
+  const react = `https://esm.sh/react@${versions.react}`;
+  const reactDom = `https://esm.sh/react-dom@${versions.react}`;
+  const deps = `?deps=react@${versions.react},react-dom@${versions.react}`;
+  return JSON.stringify({
+    imports: {
+      react,
+      'react/jsx-runtime': `${react}/jsx-runtime`,
+      'react/jsx-dev-runtime': `${react}/jsx-dev-runtime`,
+      'react-dom': reactDom,
+      'react-dom/client': `${reactDom}/client`,
+      'react-router': `https://esm.sh/react-router@${versions.reactRouter}${deps}`,
+      'react-router-dom': `https://esm.sh/react-router-dom@${versions.reactRouter}${deps}`,
+    },
+  });
+}
+
+const PAGE_SHELL_IMPORT_MAP = pageShellImportMap(PAGE_SHELL_CDN_VERSIONS);
+
 export function renderPageShell(
   page: PageShellDescriptor,
   options: {
@@ -580,19 +609,7 @@ export function renderPageShell(
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${escapeHtml(page.title)}</title>
   <style>${BASE_STYLE}</style>
-  <script type="importmap">
-  {
-    "imports": {
-      "react": "https://esm.sh/react@19.1.0",
-      "react/jsx-runtime": "https://esm.sh/react@19.1.0/jsx-runtime",
-      "react/jsx-dev-runtime": "https://esm.sh/react@19.1.0/jsx-dev-runtime",
-      "react-dom": "https://esm.sh/react-dom@19.1.0",
-      "react-dom/client": "https://esm.sh/react-dom@19.1.0/client",
-      "react-router": "https://esm.sh/react-router@7.6.0?deps=react@19.1.0,react-dom@19.1.0",
-      "react-router-dom": "https://esm.sh/react-router-dom@7.6.0?deps=react@19.1.0,react-dom@19.1.0"
-    }
-  }
-  </script>
+  <script type="importmap">${PAGE_SHELL_IMPORT_MAP}</script>
 </head>
 <body class="bg-background text-foreground">
   <header class="zhin-topbar">

@@ -91,16 +91,6 @@ export function buildAgentSessionCreateInput(
   return { session_key: sessionKey };
 }
 
-export async function buildHistoryMessagesFromContext(
-  deps: SessionIODeps,
-  sessionId: string,
-  currentUserContent: string,
-): Promise<AgentMessage[]> {
-  const loaded = await deps.contextRepository.loadContext(sessionId);
-  const timestamp = Date.now();
-  return [...loaded.messages, { role: 'user', content: [{ type: 'text', text: currentUserContent }], timestamp }];
-}
-
 /**
  * 在 `getOrCreateActive` 之前调用：是否视为新会话纪元（用于 ai.session.new）。
  */

@@ -1,6 +1,10 @@
 import { link, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
-import ts from 'typescript';
+import type ts from 'typescript';
+import { loadTypeScript } from './typescript-loader.js';
+
+/** Set by the async entry points before any synchronous analysis runs. */
+let tsApi!: typeof ts;
 
 export type MigrationSeverity = 'manual' | 'error';
 
@@ -40,6 +44,7 @@ const ignoredDirectories = new Set([
 /** Extracts only capabilities whose callbacks have no source-file closure dependencies. */
 export class LegacyCapabilityMigrator {
   async plan(projectRoot: string): Promise<LegacyMigrationPlan> {
+    tsApi = await loadTypeScript();
     const root = resolve(projectRoot);
     const files = await sourceFiles(root);
     const changes: MigrationChange[] = [];
@@ -113,16 +118,13 @@ export class LegacyCapabilityMigrator {
   }
 }
 
-/** @deprecated Use LegacyCapabilityMigrator for command, middleware, and component extraction. */
-export class LegacyCommandMigrator extends LegacyCapabilityMigrator {}
-
 interface SourceAnalysis {
   readonly changes: MigrationChange[];
   readonly diagnostics: MigrationDiagnostic[];
 }
 
 function analyzeSource(root: string, source: string, text: string): SourceAnalysis {
-  const file = ts.createSourceFile(source, text, ts.ScriptTarget.Latest, true, scriptKind(source));
+  const file = tsApi.createSourceFile(source, text, tsApi.ScriptTarget.Latest, true, scriptKind(source));
   const changes: MigrationChange[] = [];
   const diagnostics: MigrationDiagnostic[] = [];
   const registrations = collectRegistrations(file);
@@ -198,10 +200,10 @@ function collectRegistrations(file: ts.SourceFile): Registration[] {
     ['addComponent', 'component'],
   ]);
   const visit = (node: ts.Node): void => {
-    if (ts.isCallExpression(node)) {
-      const api = ts.isIdentifier(node.expression)
+    if (tsApi.isCallExpression(node)) {
+      const api = tsApi.isIdentifier(node.expression)
         ? node.expression.text
-        : ts.isPropertyAccessExpression(node.expression) ? node.expression.name.text : undefined;
+        : tsApi.isPropertyAccessExpression(node.expression) ? node.expression.name.text : undefined;
       const kind = api ? kinds.get(api) : undefined;
       if (kind && api) {
         const statement = node.parent;
@@ -211,13 +213,13 @@ function collectRegistrations(file: ts.SourceFile): Registration[] {
           kind,
           api: api as Registration['api'],
           call: node,
-          topLevel: ts.isExpressionStatement(statement)
+          topLevel: tsApi.isExpressionStatement(statement)
             && statement.expression === node
-            && ts.isSourceFile(statement.parent),
+            && tsApi.isSourceFile(statement.parent),
         });
       }
     }
-    ts.forEachChild(node, visit);
+    tsApi.forEachChild(node, visit);
   };
   visit(file);
   return result.sort((left, right) => left.call.getStart(file) - right.call.getStart(file));
@@ -236,7 +238,7 @@ function analyzeMiddleware(
     return { message: 'addMiddleware() must receive a callback and optional static name' };
   }
   const handler = registration.arguments[0];
-  if (!handler || (!ts.isArrowFunction(handler) && !ts.isFunctionExpression(handler))) {
+  if (!handler || (!tsApi.isArrowFunction(handler) && !tsApi.isFunctionExpression(handler))) {
     return { message: 'Middleware callback must be an inline function' };
   }
   const explicitName = staticString(registration.arguments[1]);
@@ -271,12 +273,12 @@ function analyzeComponent(
     return { message: 'addComponent() must receive exactly one Component function' };
   }
   const argument = registration.arguments[0];
-  const component = argument && ts.isIdentifier(argument)
+  const component = argument && tsApi.isIdentifier(argument)
     ? bindings.get(argument.text)
-    : argument && (ts.isArrowFunction(argument) || ts.isFunctionExpression(argument))
+    : argument && (tsApi.isArrowFunction(argument) || tsApi.isFunctionExpression(argument))
       ? argument
       : undefined;
-  const declaredName = argument && ts.isIdentifier(argument)
+  const declaredName = argument && tsApi.isIdentifier(argument)
     ? argument.text
     : component?.name?.text;
   if (!component || !declaredName) {
@@ -304,14 +306,14 @@ function analyzeComponent(
 function topLevelFunctions(file: ts.SourceFile): ReadonlyMap<string, MigratableFunction> {
   const result = new Map<string, MigratableFunction>();
   for (const statement of file.statements) {
-    if (ts.isFunctionDeclaration(statement) && statement.name && statement.body) {
+    if (tsApi.isFunctionDeclaration(statement) && statement.name && statement.body) {
       result.set(statement.name.text, statement);
       continue;
     }
-    if (!ts.isVariableStatement(statement)) continue;
+    if (!tsApi.isVariableStatement(statement)) continue;
     for (const declaration of statement.declarationList.declarations) {
-      if (!ts.isIdentifier(declaration.name) || !declaration.initializer) continue;
-      if (ts.isArrowFunction(declaration.initializer) || ts.isFunctionExpression(declaration.initializer)) {
+      if (!tsApi.isIdentifier(declaration.name) || !declaration.initializer) continue;
+      if (tsApi.isArrowFunction(declaration.initializer) || tsApi.isFunctionExpression(declaration.initializer)) {
         result.set(declaration.name.text, declaration.initializer);
       }
     }
@@ -374,15 +376,15 @@ function parseBuilder(file: ts.SourceFile, registration: ts.CallExpression): Par
   }
   let expression = registration.arguments[0];
   const methods = new Map<string, readonly ts.Expression[]>();
-  while (expression && ts.isCallExpression(expression)
-    && ts.isPropertyAccessExpression(expression.expression)) {
+  while (expression && tsApi.isCallExpression(expression)
+    && tsApi.isPropertyAccessExpression(expression.expression)) {
     const name = expression.expression.name.text;
     if (methods.has(name)) return { message: `MessageCommand.${name}() is repeated` };
     methods.set(name, expression.arguments);
     expression = expression.expression.expression;
   }
-  if (!expression || !ts.isNewExpression(expression)
-    || !ts.isIdentifier(expression.expression) || expression.expression.text !== 'MessageCommand') {
+  if (!expression || !tsApi.isNewExpression(expression)
+    || !tsApi.isIdentifier(expression.expression) || expression.expression.text !== 'MessageCommand') {
     return { message: 'addCommand() is not a static new MessageCommand(...) builder' };
   }
   if (expression.arguments?.length !== 1) {
@@ -397,7 +399,7 @@ function parseBuilder(file: ts.SourceFile, registration: ts.CallExpression): Par
   const actionArguments = methods.get('action');
   const action = actionArguments?.[0];
   if (!action || actionArguments.length !== 1
-    || (!ts.isArrowFunction(action) && !ts.isFunctionExpression(action))) {
+    || (!tsApi.isArrowFunction(action) && !tsApi.isFunctionExpression(action))) {
     return { message: 'MessageCommand requires one inline action function' };
   }
   const descriptions = methods.get('desc') ?? [];
@@ -483,45 +485,45 @@ function externalReferences(fn: MigratableFunction): string[] {
   if (fn.name) declared.add(fn.name.text);
   for (const parameter of fn.parameters) collectBinding(parameter.name, declared);
   const collect = (node: ts.Node): void => {
-    if (ts.isVariableDeclaration(node)) collectBinding(node.name, declared);
-    else if ((ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node)) && node.name) {
+    if (tsApi.isVariableDeclaration(node)) collectBinding(node.name, declared);
+    else if ((tsApi.isFunctionDeclaration(node) || tsApi.isClassDeclaration(node)) && node.name) {
       declared.add(node.name.text);
-    } else if (ts.isCatchClause(node) && node.variableDeclaration) {
+    } else if (tsApi.isCatchClause(node) && node.variableDeclaration) {
       collectBinding(node.variableDeclaration.name, declared);
     }
-    ts.forEachChild(node, collect);
+    tsApi.forEachChild(node, collect);
   };
   collect(fn.body);
 
   const references = new Set<string>();
   const visit = (node: ts.Node): void => {
-    if (ts.isIdentifier(node) && isReference(node)
+    if (tsApi.isIdentifier(node) && isReference(node)
       && !declared.has(node.text) && !allowedGlobals.has(node.text)) {
       references.add(node.text);
     }
-    ts.forEachChild(node, visit);
+    tsApi.forEachChild(node, visit);
   };
   visit(fn.body);
   return [...references].sort();
 }
 
 function collectBinding(name: ts.BindingName, result: Set<string>): void {
-  if (ts.isIdentifier(name)) result.add(name.text);
-  else for (const element of name.elements) if (!ts.isOmittedExpression(element)) {
+  if (tsApi.isIdentifier(name)) result.add(name.text);
+  else for (const element of name.elements) if (!tsApi.isOmittedExpression(element)) {
     collectBinding(element.name, result);
   }
 }
 
 function isReference(node: ts.Identifier): boolean {
   const parent = node.parent;
-  if (ts.isPropertyAccessExpression(parent) && parent.name === node) return false;
-  if ((ts.isPropertyAssignment(parent) || ts.isMethodDeclaration(parent)
-    || ts.isPropertyDeclaration(parent)) && parent.name === node) return false;
-  if (ts.isShorthandPropertyAssignment(parent)) return true;
-  if (ts.isBindingElement(parent) && parent.name === node) return false;
-  if (ts.isVariableDeclaration(parent) && parent.name === node) return false;
-  if (ts.isParameter(parent) && parent.name === node) return false;
-  if ((ts.isFunctionDeclaration(parent) || ts.isClassDeclaration(parent)) && parent.name === node) {
+  if (tsApi.isPropertyAccessExpression(parent) && parent.name === node) return false;
+  if ((tsApi.isPropertyAssignment(parent) || tsApi.isMethodDeclaration(parent)
+    || tsApi.isPropertyDeclaration(parent)) && parent.name === node) return false;
+  if (tsApi.isShorthandPropertyAssignment(parent)) return true;
+  if (tsApi.isBindingElement(parent) && parent.name === node) return false;
+  if (tsApi.isVariableDeclaration(parent) && parent.name === node) return false;
+  if (tsApi.isParameter(parent) && parent.name === node) return false;
+  if ((tsApi.isFunctionDeclaration(parent) || tsApi.isClassDeclaration(parent)) && parent.name === node) {
     return false;
   }
   return !isTypePosition(node);
@@ -530,8 +532,8 @@ function isReference(node: ts.Identifier): boolean {
 function isTypePosition(node: ts.Node): boolean {
   let current: ts.Node | undefined = node;
   while (current?.parent) {
-    if (ts.isTypeNode(current.parent)) return true;
-    if (ts.isExpression(current.parent) || ts.isStatement(current.parent)) return false;
+    if (tsApi.isTypeNode(current.parent)) return true;
+    if (tsApi.isExpression(current.parent) || tsApi.isStatement(current.parent)) return false;
     current = current.parent;
   }
   return false;
@@ -555,7 +557,7 @@ async function sourceFiles(root: string): Promise<string[]> {
 }
 
 function staticString(node: ts.Expression | undefined): string | undefined {
-  return node && (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))
+  return node && (tsApi.isStringLiteral(node) || tsApi.isNoSubstitutionTemplateLiteral(node))
     ? node.text
     : undefined;
 }
@@ -581,7 +583,7 @@ function diagnosticAt(
 }
 
 function scriptKind(file: string): ts.ScriptKind {
-  return file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
+  return file.endsWith('.tsx') ? tsApi.ScriptKind.TSX : tsApi.ScriptKind.TS;
 }
 
 async function exists(path: string): Promise<boolean> {

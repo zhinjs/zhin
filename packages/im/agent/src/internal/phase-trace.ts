@@ -22,15 +22,6 @@ export function logPhase(
   logger.info(formatCompact(flat));
 }
 
-export function usageLogFields(usage?: Usage): Record<string, number> {
-  if (!usage) return {};
-  return {
-    promptTokens: usage.prompt_tokens,
-    completionTokens: usage.completion_tokens,
-    totalTokens: usage.total_tokens,
-  };
-}
-
 export function tokenUsageLogFields(usage?: TokenUsage): Record<string, number> {
   if (!usage) return {};
   const fields: Record<string, number> = {

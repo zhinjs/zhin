@@ -186,12 +186,12 @@ http:
 
 - **full 令牌**（包括主 `token`）能看到全部页面，`permissions` 和 `roles` 对它不起作用。
 - **`scope: user` 令牌**是普通用户。`user` 和 `demo` 完全等价，新配置建议写 `user`；没写 `scope` 或写了其他值时也按普通用户处理，不会变成管理员。
-- 普通用户只能看到 `permissions` 和 `roles` 满足 `requiredPermissions` 和 `requiredRoles` 的页面。插件动作只有在动作自己声明了 `requiredPermissions` 或 `requiredRoles`、并且令牌全部满足时才能执行（见 [插件 RPC](../authoring/console-pages.md#页面数据插件-rpc)）。改配置、管理插件等内置管理操作仍然只给 full 令牌。
+- 普通用户只能看到 `permissions` 和 `roles` 满足 `requiredPermissions` 和 `requiredRoles` 的页面。插件动作只有在动作自己声明了 `requiredPermissions` 或 `requiredRoles`、并且令牌全部满足时才能执行（见 [插件 RPC](../authoring/console-pages.md#plugin-rpc)）。改配置、管理插件等内置管理操作仍然只给 full 令牌。
 - **不带令牌**只能看到没有任何要求的页面。
 - **没有配置任何令牌**时（本地开发），所有人都等同于管理员，和以前一样。
 - 页面清单（`/entries`、`/console/api/pages`、`/console/api/topology`）都按令牌过滤，且不会被缓存。
 
-权限名和角色名由页面自己约定，比如 `ambient:read`。内置的群聊插话和技能助手状态使用 `ambient:read` 和 `skills:read`（见 [内置状态](../authoring/console-pages.md#内置状态群聊插话和技能助手)），决策回放使用 `decisions:read`（见 [决策回放](../authoring/console-pages.md#内置查询决策回放)），控制面使用 `control:read` 和 `control:write`（见 [控制面](../authoring/console-pages.md#内置操作控制面)），审批人（危险工具审批卡、公告批准 / 驳回 / 重发）使用 `ops:approve`（见 [危险工具审批卡](../authoring/console-pages.md#内置操作危险工具审批卡)）。
+权限名和角色名由页面自己约定，比如 `ambient:read`。内置的群聊插话和技能助手状态使用 `ambient:read` 和 `skills:read`（见 [内置状态](../authoring/console-pages.md#builtin-status)），决策回放使用 `decisions:read`（见 [决策回放](../authoring/console-pages.md#builtin-decision-replay)），控制面使用 `control:read` 和 `control:write`（见 [控制面](../authoring/console-pages.md#builtin-control-plane)），审批人（危险工具审批卡、公告批准 / 驳回 / 重发）使用 `ops:approve`（见 [危险工具审批卡](../authoring/console-pages.md#builtin-tool-approval)）。
 
 ## Demo scope（只读部署）
 

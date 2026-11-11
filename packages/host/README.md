@@ -10,15 +10,15 @@ Zhin **Host 运行时**（与 `packages/im`、`packages/console` 并列的常驻
 
 > 原 legacy 插件包 `@zhin.js/host-router`（Koa 传输）与 `@zhin.js/host-api`（管理面 REST）已删除；Console/HTTP Host 现由 `@zhin.js/cli` 作为 composition root 自动装配，无需在 `plugins` 列表中启用任何 Host 插件。
 
-配置：`zhin.config` 中 **`http:`**（传输）、**`hostApi:`**（管理面）；Host 能力由 CLI 自动装配。
+配置：`zhin.config` 中 **`http:`**（监听地址、`port`、`token`、`base`、CORS）；MCP / A2A 分别读 **`mcp:`** 与 **`a2a:`**。管理面 REST 与 Console API 随 HTTP Host 自动装配，没有单独的开关键。
 
 ## Remote Console（快速路径）
 
 Host **不提供**内置管理页 UI，仅暴露 Console API。官方 UI 在独立仓库 **[zhin-console](https://github.com/zhinjs/console)**（如 [console.zhin.dev](https://console.zhin.dev)）。
 
-1. 启动应用（Console/HTTP Host 由 `@zhin.js/cli` 自动装配，默认 `hostApi.enabled: true`，无需安装任何插件）。
+1. 启动应用（Console/HTTP Host 由 `@zhin.js/cli` 自动装配，无需安装任何插件）。
 2. 浏览器打开 **https://console.zhin.dev**（或本地 `zhin-console/` 开发服）。
-3. 登录页填写 **API Base URL**（如 `http://127.0.0.1:8086`）与 **Bearer Token**（`.env` 中 `HTTP_TOKEN` / `http.token`）。
+3. 登录页填写 **API Base URL** 与 **Bearer Token**（`.env` 中 `HTTP_TOKEN` / `http.token`）。API Base 的端口即 `http.port`：`create-zhin` 生成的项目写入 `8068`（如 `http://127.0.0.1:8068`），未配置 `http.port` 时运行时回退 `8086`。
 
 协议：`POST /api/console/request` + SSE `GET /api/events`；插件扩展经 `GET /entries` 动态加载。完整说明见 **[docs/console/index.md](../../docs/console/index.md)**。
 

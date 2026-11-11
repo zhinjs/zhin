@@ -102,11 +102,3 @@ export function formatOutputElementsPreview(elements: AgentOutputElement[]): str
   }).join('\n').trim();
   return text || undefined;
 }
-
-export function formatAiHandlerFallbackLog(totalMs: number, path?: string): string {
-  return formatCompact({
-    op: 'turn_fallback',
-    ms: Math.round(totalMs),
-    ...(path ? { path } : {}),
-  });
-}

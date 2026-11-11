@@ -216,7 +216,7 @@ await notifier.send('ICQQ 10001 已掉线');
 
 验证：`pnpm --filter @zhin.js/adapter test && pnpm --filter @zhin.js/adapter build`。
 
-架构说明见 [Plugin Monorepo 与 Feature Provider](../../../docs/architecture/target-implementation/plugin-monorepo-and-features.md)。
+架构说明见 [插件模型](../../../docs/concepts/plugin-model.md)。
 
 
 ### Transport 创建上下文

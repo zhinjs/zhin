@@ -27,12 +27,16 @@ This plugin currently has no configuration fields. Its [`schema.json`](./schema.
 
 - `gen hello beautiful world`: generate a 300 × 300 QR image.
 - `gen hello --size 512` / `gen hello -s 512`: choose 64–1024 pixels.
-- `scan https://example.com/qr.png`: decode an existing QR image.
+- `scan https://example.com/qr.png`: decode an existing QR image. The image URL (http/https only) is sent to the public `api.qrserver.com` decoder; the request times out after 10 seconds.
 - `gen --help`: show parameters, constraints and defaults.
 
 The Endpoint determines any command prefix. An explicit `commandNamespace` adds a plugin
 namespace; neither is hardcoded in the command. Generation declares text length (1–2048)
 and image size in `defineCommand`; invalid values are rejected before creating the image.
+
+QR images are generated locally (`zhin.js/qrcode`) by the `gen` command, the `qrcode_generate`
+Agent tool and the Console page alike, and are sent as PNG data URLs; the content is never
+forwarded to a third-party service.
 
 ## Language / 语言
 

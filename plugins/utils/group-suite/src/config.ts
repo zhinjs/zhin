@@ -31,7 +31,7 @@ export const DEFAULT_GROUP_SUITE_CONFIG: GroupSuiteConfig = {
   rankSize: 10,
   teachMaxPerGroup: 200,
   teachCooldownMs: 3000,
-  teachAllowRegex: true,
+  teachAllowRegex: false,
   teachPageSize: 10,
 };
 

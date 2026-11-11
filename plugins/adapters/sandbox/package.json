@@ -61,14 +61,14 @@
     "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/logger": "workspace:*",
     "@zhin.js/page": "workspace:*",
-    "lucide-react": "^0.525.0",
-    "react": "^19.2.8"
+    "lucide-react": "^0.525.0"
   },
   "devDependencies": {
     "@types/react": "^19.2.18",
     "@types/ws": "^8.18.1",
     "@zhin.js/pagemanager": "workspace:*",
     "@zhin.js/runtime": "workspace:*",
+    "react": "^19.2.8",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",
     "ws": "^8.21.1",

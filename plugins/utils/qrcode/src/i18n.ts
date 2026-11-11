@@ -1,6 +1,10 @@
 import { createMessages } from 'zhin.js/i18n';
 
 export const messages = createMessages({
+  "invalidUrl": {
+    "zh-CN": "请提供有效的 HTTP/HTTPS 图片链接",
+    "en": "Provide a valid HTTP or HTTPS image URL."
+  },
   "requestFailed": {
     "zh-CN": "二维码识别服务请求失败",
     "en": "The QR code service request failed."

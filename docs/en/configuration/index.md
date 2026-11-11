@@ -334,9 +334,9 @@ a2a:
 
 Startup configuration no longer accepts `ai.providers`, `modelCatalog`, `modelPolicy`, `decisions`, or an Agent's `provider/model/preset` selectors. A Service describes its protocol, an Account owns authentication and private credential references, and a Profile selects a model and parameters. Chat, summary, ambient, image, perception and decision purposes select Profiles. Personal Sessions can select an authorized language Profile.
 
-`ai.plan.yml` is explicit review/apply/export input, not a startup seed or an `ai.plan` property in `zhin.config.yml`. See the [model interface upgrade](../../ai/provider-upgrade.md) for migration, backup and recovery boundaries.
+`ai.plan.yml` in the project root is imported automatically only once, when the model database is empty, as the initial configuration; after that it is explicit review/apply/export input that never overwrites existing settings, and it is not an `ai.plan` property in `zhin.config.yml`. See the [model interface upgrade](../ai/provider-upgrade.md) for migration, backup and recovery boundaries.
 
-### agents: Roles and tool permissions
+### agents: Roles and tool permissions {#ai-agents}
 
 ```yaml
 ai:

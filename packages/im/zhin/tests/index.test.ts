@@ -60,10 +60,9 @@ describe('Zhin Package Exports', () => {
   })
 
   it('should export utility functions', async () => {
-    const { segment, Time, compose } = await import('../src/index')
+    const { segment, Time } = await import('../src/index')
     expect(segment).toBeDefined()
     expect(Time).toBeDefined()
-    expect(compose).toBeDefined()
   })
 
   it('should export error classes', async () => {

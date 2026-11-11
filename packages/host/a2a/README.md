@@ -60,6 +60,4 @@ a2a:
 
 ## Related
 
-- [Agent Mesh](../../../docs/advanced/agent-mesh.md)
-- [ADR 0035](../../../docs/adr/0035-a2a-agent-mesh.md)
 - [ADR 0048](../../../docs/adr/0048-agent-harness.md)

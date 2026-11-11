@@ -327,9 +327,9 @@ a2a:
 
 启动文件不再接受 `ai.providers`、`modelCatalog`、`modelPolicy`、`decisions` 或 Agent 的 `provider/model/preset` 选择器。Service 描述服务协议，Account 保存认证方式与私有凭据引用，Profile 选择模型与参数；chat、summary、ambient、image、perception 和决策用途引用 Profile。个人 Session 可单独选择已授权的语言 Profile。
 
-`ai.plan.yml` 是显式 review/apply/export 的输入，不是启动种子，也不放在 `zhin.config.yml` 的 `ai.plan` 下。升级步骤、备份和恢复边界见[模型接口升级](../ai/provider-upgrade.md)。
+项目根目录的 `ai.plan.yml` 只在模型数据库为空时自动导入一次作为初始配置；之后它是显式 review/apply/export 的输入，不会覆盖已有设置，也不放在 `zhin.config.yml` 的 `ai.plan` 下。升级步骤、备份和恢复边界见[模型接口升级](../ai/provider-upgrade.md)。
 
-### agents：角色与工具权限
+### agents：角色与工具权限 {#ai-agents}
 
 ```yaml
 ai:

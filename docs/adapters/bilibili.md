@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/bilibili/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/bilibili/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=b67fe0b6bc509d45 -->
+<!-- sync-adapter-docs:sha256=023301f244b23bf9 -->
 
 # @zhin.js/adapter-bilibili
 
@@ -56,6 +56,12 @@ Zhin.js Bilibili 评论适配器（Plugin Runtime）：让 AI 辅助回复**你�
 4. Cookie 会过期；失效时页面显示「登录已失效」、日志出现 `bilibili_login_invalid`，重新扫码即可
 
 必填字段（`endpoints[i]`）：`id`。只读公开评论可不登录。
+
+## 安装
+
+```bash
+pnpm add @zhin.js/adapter-bilibili
+```
 
 ## 最小配置
 

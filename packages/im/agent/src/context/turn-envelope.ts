@@ -57,14 +57,6 @@ export function formatSessionContextLine(turn: TurnContextView): string {
   return `Session: origin:internal | source:${origin.source}`;
 }
 
-export function formatSenderContextLine(turn: TurnContextView): string {
-  const { principal } = turn;
-  const roles = principal.roles.length > 0 ? principal.roles.join(',') : 'user';
-  return principal.displayName?.trim()
-    ? `Sender: id=${principal.subjectId} name=${principal.displayName.trim()} roles=${roles}`
-    : `Sender: id=${principal.subjectId} roles=${roles}`;
-}
-
 function stableSet(values: readonly string[]): string[] {
   return [...new Set(values)].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 }

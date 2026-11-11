@@ -53,6 +53,7 @@
   "engines": {
     "node": ">=22.19.0"
   },
+  "license": "MIT",
   "dependencies": {
     "@zhin.js/logger": "workspace:*"
   },
@@ -60,7 +61,7 @@
     "mongodb": ">=3.1.13",
     "mysql2": ">=3.9.8",
     "pg": ">=2.11.2",
-    "redis": "latest"
+    "redis": ">=4.0.0"
   },
   "peerDependenciesMeta": {
     "mysql2": {

@@ -95,7 +95,7 @@ lark:
 
 ## Agent 工具
 
-`tools/` 目录提供 get_user、群聊、管理员、上传文件等 Tool。工具声明 `adapter: 'lark'` 后，通过惰性的 `context.$client` 自动取得当前操作的 `LarkClient`；无需把 Endpoint id 暴露给模型。
+`agents/lark/skills/lark/tools/`（3 个）与 `agents/lark/skills/lark-group-admin/tools/`（5 个）提供 get_user、群聊、管理员、上传文件等 Tool。工具声明 `adapter: 'lark'` 后，通过惰性的 `context.$client` 自动取得当前操作的 `LarkClient`；无需把 Endpoint id 暴露给模型。
 
 ## 平台权限（platform permit）
 

@@ -272,32 +272,6 @@ export function assertFileAccess(filePath: string): void {
  */
 const ENV_DUMP_COMMANDS = /^\s*(env|printenv|export|set)\b/;
 const ENV_ECHO_PATTERN = /\$\{?\w*(KEY|SECRET|TOKEN|PASSWORD|PASS|CREDENTIAL|AUTH|APIKEY|API_KEY)\w*\}?/i;
-/**
- * 构建 ripgrep/grep 排除敏感路径的 glob（防止从项目根搜索时泄漏 .env 等）。
- */
-export function buildSensitiveSearchExcludeGlobs(): string[] {
-  return [
-    '!**/.env',
-    '!**/.env.*',
-    '!**/*.pem',
-    '!**/*.key',
-    '!**/*.p12',
-    '!**/*.pfx',
-    '!**/.npmrc',
-    '!**/.netrc',
-    '!**/.pgpass',
-    '!**/.my.cnf',
-    '!**/.bash_history',
-    '!**/.zsh_history',
-    '!**/.ssh/**',
-    '!**/.gnupg/**',
-    '!**/.aws/**',
-    '!**/.kube/**',
-    '!**/.docker/**',
-    '!**/.gcloud/**',
-    '!**/.config/gcloud/**',
-  ];
-}
 
 function splitShellOperatorParts(command: string): string[] {
   const parts: string[] = [];
@@ -697,15 +671,6 @@ export function classifyBashCommand(command: string): BashCommandClassification 
 }
 
 // ── 文件 mtime 比对──────────────
-
-/**
- * 文件修改时间快照，用于检测编辑前是否被并发修改。
- */
-export async function getFileMtime(filePath: string): Promise<number> {
-  const { default: fsPromises } = await import('fs/promises');
-  const stat = await fsPromises.stat(filePath);
-  return stat.mtimeMs;
-}
 
 /**
  * 检查文件在读取后是否被修改。

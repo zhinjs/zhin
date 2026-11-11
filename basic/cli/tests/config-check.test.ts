@@ -2,10 +2,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
-import { readConfig } from '../src/utils/config-file.js';
+import { readConfig, saveConfig } from '../src/utils/config-file.js';
 import {
   applyConfigFixes,
-  inspectProjectConfig,
   runConfigCheck,
   summarizeIssues,
 } from '../src/utils/config-check.js';
@@ -20,6 +19,14 @@ describe('config check', () => {
   afterEach(async () => {
     await fs.remove(tmpDir);
   });
+
+  /** Mirrors `zhin config check --fix`: check, apply the safe fixes, write back, re-check. */
+  async function checkAndFix(env: Record<string, string | undefined> = process.env) {
+    const before = await runConfigCheck(tmpDir, env);
+    const { config: fixed, fixes } = applyConfigFixes(before.config, tmpDir);
+    if (fixes.length > 0) await saveConfig(path.join(tmpDir, before.configFile!), fixed, before.config);
+    return { fixesApplied: fixes, issues: (await runConfigCheck(tmpDir, env)).issues };
+  }
 
   function canonicalAi() {
     return { agent: { maxIterations: 8 } };
@@ -236,7 +243,7 @@ sandbox: {}
     expect(result.issues.some((i) => i.code.startsWith('endpoints.'))).toBe(false);
   });
 
-  it('inspectProjectConfig --fix 应写回配置', async () => {
+  it('config check --fix 应写回配置', async () => {
     await fs.writeFile(path.join(tmpDir, 'zhin.config.yml'), `
 configVersion: 2
 plugins: {sandbox: '@zhin.js/adapter-sandbox'}
@@ -246,10 +253,10 @@ database:
 log_level: 1
 `);
 
-    const before = await inspectProjectConfig(tmpDir);
+    const before = await runConfigCheck(tmpDir);
     expect(before.issues.length).toBeGreaterThan(0);
 
-    const after = await inspectProjectConfig(tmpDir, { fix: true });
+    const after = await checkAndFix();
     expect(after.fixesApplied.length).toBeGreaterThan(0);
     const raw = await readConfig(path.join(tmpDir, 'zhin.config.yml'));
     expect((raw.database as { dialect: string }).dialect).toBe('pg');
@@ -268,7 +275,7 @@ log_level: 1
     const before = await runConfigCheck(tmpDir, {});
     expect(before.issues).toContainEqual(expect.objectContaining({ code: 'ai.agent_maxSkills_deprecated', severity: 'warn', fixable: true }));
     expect(before.issues).toContainEqual(expect.objectContaining({ code: 'ai.allowedTools_deprecated', severity: 'warn', fixable: true }));
-    await inspectProjectConfig(tmpDir, { fix: true, env: {} });
+    await checkAndFix({});
     const after = await readConfig(path.join(tmpDir, 'zhin.config.json'));
     expect(after.ai).toEqual(canonicalAi());
     expect(after.ai).not.toHaveProperty('providers');
@@ -278,7 +285,7 @@ log_level: 1
     const ai = { agent: { chatModel: 'original-model', maxSkills: 3 },
       providers: { original: { sdk: 'openai', apiKey: 'synthetic-config-only-key' } } };
     await fs.writeJson(path.join(tmpDir, 'zhin.config.json'), { configVersion: 2, plugins: {}, ai });
-    const result = await inspectProjectConfig(tmpDir, { fix: true, env: {} });
+    const result = await checkAndFix({});
     const after = await readConfig(path.join(tmpDir, 'zhin.config.json'));
     expect(after.ai).toEqual({ ...ai, agent: { chatModel: 'original-model' } });
     expect(result.issues).toContainEqual(expect.objectContaining({ code: 'ai.inference_migration_required', severity: 'error' }));

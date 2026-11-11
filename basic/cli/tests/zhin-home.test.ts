@@ -97,11 +97,4 @@ describe('zhin-home', () => {
     expect(pkg.dependencies).not.toHaveProperty('@zhin.js/host-api');
     expect(pkg.dependencies).not.toHaveProperty('@zhin.js/host-router');
   });
-
-  it('buildSpawnEnv sets ZHIN_PROJECT_ROOT', async () => {
-    const { buildSpawnEnv, ZHIN_PROJECT_ROOT_ENV } = await import('../src/utils/zhin-home.js');
-    const env = buildSpawnEnv('/tmp/zhin-runtime', { NODE_ENV: 'test' });
-    expect(env[ZHIN_PROJECT_ROOT_ENV]).toBe('/tmp/zhin-runtime');
-    expect(env.NODE_ENV).toBe('test');
-  });
 });

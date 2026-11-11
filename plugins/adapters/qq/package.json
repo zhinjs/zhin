@@ -84,6 +84,7 @@
     "@zhin.js/host-http": "workspace:*",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",
+    "ws": "^8.21.1",
     "zhin.js": "workspace:*",
     "zod": "^4.4.3"
   },

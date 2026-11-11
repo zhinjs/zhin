@@ -1,6 +1,6 @@
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { buildQrImageUrl } from '../../../../src/qrcode-lib.js';
+import { qrImageSegment } from '../../../../src/qrcode-lib.js';
 
 export default defineAgentTool<{ text: string }>({
   description: '根据文本或 URL 生成二维码图片',
@@ -8,7 +8,6 @@ export default defineAgentTool<{ text: string }>({
   keywords: ['二维码', 'QR', 'qrcode'],
   tags: ['qrcode', 'image'],
   async execute({ text }) {
-    const qrUrl = buildQrImageUrl(text);
-    return JSON.stringify([{ type: 'image', data: { url: qrUrl } }]);
+    return JSON.stringify(await qrImageSegment(text));
   },
 });

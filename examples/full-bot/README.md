@@ -27,7 +27,7 @@ pnpm add @zhin.js/speech @zhin.js/html-renderer   # 按需
 zhin doctor --fix
 ```
 
-排查 stage 日志见 [AI 内容链可观测](../../docs/advanced/ai-content-chain.md)；消息段渲染与 Adapter 媒体能力见 [消息流](../../docs/concepts/message-flow.md)。
+排查回合日志见 [Agent 深入 · 每轮用量日志](../../docs/ai/agent.md)；消息段渲染与 Adapter 媒体能力见 [消息流](../../docs/concepts/message-flow.md)。
 
 ## 快速开始
 
@@ -60,5 +60,5 @@ pnpm dev
 
 ## 文档
 
-- [Agent Mesh](../../docs/advanced/agent-mesh.md)
-- [学习路径 — L4](../../docs/essentials/learning-paths.md)
+- [A2A Host（Agent Card 与跨进程 Mailbox）](../../packages/host/a2a/README.md)
+- [学习路径](../../docs/paths/index.md)

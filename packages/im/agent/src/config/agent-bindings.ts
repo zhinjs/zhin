@@ -11,9 +11,3 @@ export function resolveAgentBinding(
     nickname: raw.nickname,
   };
 }
-
-export function getZhinBinding(
-  agents: Record<string, AgentBindingConfig>,
-): ResolvedAgentBinding {
-  return resolveAgentBinding(DEFAULT_ZHIN_AGENT_NAME, agents)!;
-}

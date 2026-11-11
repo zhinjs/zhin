@@ -1,6 +1,6 @@
 # @zhin.js/html-renderer
 
-HTML → 图片，供 Zhin.js 出站富媒体段（`segment.html` / `segment.markdown`）与可选 `aiTextAsImage` 使用。
+HTML → 图片，供 Zhin.js 出站富媒体段（`segment.html` / `segment.markdown`）使用。
 
 现在只使用 **[@pixel.js/shotium](https://www.npmjs.com/package/@pixel.js/shotium)（裁剪版 Chromium）** 渲染，不再依赖 `satori + resvg`。
 
@@ -21,7 +21,6 @@ htmlRenderer:
     height: 600
   backgroundColor: "#ffffff"
   scale: 1
-  aiTextAsImage: false
 ```
 
 兼容旧字段 `defaultWidth` / `defaultBackgroundColor` / `defaultFonts`；新后端还支持 `viewport`、`scale`、`timeout`、`waitUntil`、`fontFamily`、`allowFileAccess`、`cacheDir`、`cacheMaxBytes`、`userAgent`、`idleTimeoutMs`、`logStats`、`mode: inprocess | daemon`。

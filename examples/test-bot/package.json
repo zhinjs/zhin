@@ -48,9 +48,7 @@
     "@zhin.js/agent": "workspace:*",
     "@zhin.js/agent-feature": "workspace:*",
     "@zhin.js/cli": "workspace:*",
-    "@zhin.js/client": "workspace:*",
     "@zhin.js/components": "workspace:*",
-    "@zhin.js/contract": "workspace:*",
     "@zhin.js/html-renderer": "workspace:*",
     "@zhin.js/jsx": "workspace:*",
     "@zhin.js/mcp": "workspace:*",
@@ -84,19 +82,14 @@
     "@zhin.js/tool": "workspace:*",
     "ai": "^7.0.44",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "sqlite3": "latest",
+    "sqlite3": "^6.0.1",
     "tsx": "^4.23.1",
     "zhin.js": "workspace:*",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
-    "@radix-ui/themes": "^3.3.0",
-    "@types/bun": "latest",
     "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.4",
-    "radix-ui": "^1.6.7",
     "typescript": "^6.0.3"
   },
   "engines": {
@@ -123,10 +116,6 @@
       },
       {
         "package": "@zhin.js/mcp-feature",
-        "api": "^1.0.0"
-      },
-      {
-        "package": "@zhin.js/page",
         "api": "^1.0.0"
       }
     ],

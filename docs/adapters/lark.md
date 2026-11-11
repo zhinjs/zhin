@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/lark/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/lark/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=3099bca2766dc469 -->
+<!-- sync-adapter-docs:sha256=133f9045697b3060 -->
 
 # @zhin.js/adapter-lark
 
@@ -16,7 +16,7 @@ Zhin.js 飞书 / Lark 适配器（Plugin Runtime），通过 Runtime Host HTTP W
 
 ## 功能
 
-- Webhook 事件接收（`httpHostToken` POST + 可选 verificationToken / encryptKey 签名）
+- Webhook 事件接收（`httpHostToken` POST + 可选 verificationToken / encryptKey 签名）；配置 `encryptKey` 后自动解密 `{"encrypt": ...}` 事件体（AES-256-CBC）
 - URL 验证挑战（`url_verification`）
 - Tenant Access Token 自动刷新
 - 支持飞书与 Lark 国际版 API 基址
@@ -107,7 +107,7 @@ lark:
 
 ## Agent 工具
 
-`tools/` 目录提供 get_user、群聊、管理员、上传文件等 Tool。工具声明 `adapter: 'lark'` 后，通过惰性的 `context.$client` 自动取得当前操作的 `LarkClient`；无需把 Endpoint id 暴露给模型。
+`agents/lark/skills/lark/tools/`（3 个）与 `agents/lark/skills/lark-group-admin/tools/`（5 个）提供 get_user、群聊、管理员、上传文件等 Tool。工具声明 `adapter: 'lark'` 后，通过惰性的 `context.$client` 自动取得当前操作的 `LarkClient`；无需把 Endpoint id 暴露给模型。
 
 ## 平台权限（platform permit）
 

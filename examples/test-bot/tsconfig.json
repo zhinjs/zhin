@@ -1,7 +1,7 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "types": ["@types/node", "@types/bun", "vitest/globals", "zhin.js", "@zhin.js/adapter-sandbox"],
+    "types": ["@types/node", "vitest/globals", "zhin.js", "@zhin.js/adapter-sandbox"],
     "noEmit": true,
     "rootDir": "../..",
     "jsx": "react-jsx",
@@ -14,7 +14,6 @@
     "components/**/*",
     "lib/**/*.ts",
     "lib/**/*.tsx",
-    "client/**/*",
     "agents/**/*.ts",
     "tests/**/*"
   ],

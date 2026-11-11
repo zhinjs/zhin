@@ -68,6 +68,9 @@ export type PluginRegisterHostApi = {
   React: typeof import("react");
   addRoute(input: PluginAddRouteInput): void;
   addTool(input: PluginAddToolInput): string;
+  /** Optional: lets the entry loader drop what a removed plugin entry registered. */
+  removeRoute?(path: string): void;
+  removeTool?(id: string): void;
 };
 
 export type ConsolePluginRegister = (api: PluginRegisterHostApi) => void | Promise<void>;

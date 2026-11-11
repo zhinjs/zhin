@@ -30,7 +30,7 @@ tools:
 → qrcode_generate(text="https://example.com")
 ```
 
-生成 300×300 像素的 PNG 图片，支持任意文本和 URL。
+在本机生成 300×300 像素的 PNG 图片（data URL），内容不会发送给第三方服务；支持任意文本和 URL。
 
 ## 注意
 

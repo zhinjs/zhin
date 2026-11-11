@@ -20,8 +20,15 @@
     "src"
   ],
   "dependencies": {
-    "@zhin.js/ai": "workspace:*",
     "@zhin.js/console-protocol": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/react": "^19.2.18",

@@ -5,7 +5,6 @@ import {
   diagnoseAIDependencies,
   formatAIDependencyFixCommand,
   isAiEnabledInConfig,
-  mergeDependenciesIntoPackageJson,
   packagesNeedingAiStackFix,
   diagnoseZhinStackDependencies,
   formatZhinStackFixCommand,
@@ -13,7 +12,7 @@ import {
   validateDatabaseConfig,
 } from '@zhin.js/scaffold-wizard';
 import { expandEnvironmentValue, readApplicationPluginDeclaration } from '@zhin.js/runtime';
-import { findConfigFile, readConfig, saveConfig } from './config-file.js';
+import { findConfigFile, readConfig } from './config-file.js';
 import { detectLegacyConfig, formatLegacyConfigHint } from './legacy-config.js';
 import { hostModelOwnerId } from '@zhin.js/plugin-runtime';
 import { loadAiConfigUtils, type AiConfigUtils } from './ai-config-loader.js';
@@ -366,57 +365,4 @@ export function summarizeIssues(
   const infos = issues.filter((i) => i.severity === 'info').length;
   const exitCode = errors > 0 || (strict && warnings > 0) ? 1 : 0;
   return { errors, warnings, infos, exitCode };
-}
-
-export async function ensurePackageJson(cwd: string): Promise<boolean> {
-  return fs.pathExists(path.join(cwd, 'package.json'));
-}
-
-/** 供 doctor 等命令复用：可选 --fix 写回配置后重新检查 */
-export async function inspectProjectConfig(
-  cwd: string,
-  options: { fix?: boolean; env?: Record<string, string | undefined> } = {},
-): Promise<{
-  configFile: string | null;
-  fixesApplied: string[];
-  issues: ConfigIssue[];
-}> {
-  const env = options.env ?? process.env;
-  let result = await runConfigCheck(cwd, env);
-
-  const fixesApplied: string[] = [];
-  if (options.fix && result.configFile && Object.keys(result.config).length > 0) {
-    const { config: fixed, fixes } = applyConfigFixes(result.config, cwd);
-    if (fixes.length > 0) {
-      await saveConfig(path.join(cwd, result.configFile), fixed, result.config);
-      fixesApplied.push(...fixes);
-      result = await runConfigCheck(cwd, env);
-    }
-
-    const zhinDiagnosis = diagnoseZhinStackDependencies(cwd, result.config);
-    const zhinFixPackages = packagesNeedingZhinStackFix(zhinDiagnosis);
-    if (zhinFixPackages.length > 0) {
-      const changed = await mergeDependenciesIntoPackageJson(cwd, zhinDiagnosis.required);
-      if (changed) {
-        fixesApplied.push(`updated Zhin stack: ${zhinFixPackages.join(', ')}`);
-        result = await runConfigCheck(cwd, env);
-      }
-    }
-
-    const aiDiagnosis = diagnoseAIDependencies(cwd, result.config);
-    const aiFixPackages = aiDiagnosis ? packagesNeedingAiStackFix(aiDiagnosis) : [];
-    if (aiDiagnosis && aiFixPackages.length > 0) {
-      const changed = await mergeDependenciesIntoPackageJson(cwd, aiDiagnosis.required);
-      if (changed) {
-        fixesApplied.push(`updated AI stack: ${aiFixPackages.join(', ')}`);
-        result = await runConfigCheck(cwd, env);
-      }
-    }
-  }
-
-  return {
-    configFile: result.configFile,
-    fixesApplied,
-    issues: result.issues,
-  };
 }

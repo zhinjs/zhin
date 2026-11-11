@@ -264,10 +264,14 @@ const enUseDocsSidebar: DefaultTheme.SidebarItem[] = [
     { text: 'Multi-Agent Collaboration & Venues', link: '/en/ai/multi-agent-harness' },
     { text: 'Default Behavior', link: '/en/ai/default-behavior' },
     { text: 'Letting the Bot Change Itself', link: '/en/ai/self-change' },
+    { text: 'Model Services & Subscription Accounts', link: '/en/ai/providers' },
     { text: 'Personal Sessions & Model Policy', link: '/en/ai/model-policy' },
+    { text: 'Provider Interface Upgrade', link: '/en/ai/provider-upgrade' },
     { text: 'Structured Replies', link: '/en/ai/structured-replies' },
+    { text: 'Structured Decisions', link: '/en/ai/structured-decisions' },
     { text: 'Activity Feedback', link: '/en/advanced/activity-feedback' },
     { text: 'Speech', link: '/en/ai/speech' },
+    { text: 'Smart Home (HA)', link: '/en/advanced/assistant-home-setup' },
   ]),
   sidebarGroup('Plugin Development', [
     { text: 'definePlugin Overview', link: '/en/authoring/define-plugin' },
@@ -333,9 +337,15 @@ const enUseDocsSidebar: DefaultTheme.SidebarItem[] = [
   ]),
 ]
 
+// Contributor-internal pages are maintained in Chinese only; the English sidebar links to them.
 const enDevDocsSidebar: DefaultTheme.SidebarItem[] = [
+  { text: 'Target Architecture (中文)', link: '/target-architecture' },
   { text: 'Repo Structure', link: '/en/contributing/repo-structure' },
   { text: 'Development Workflow', link: '/en/contributing/development' },
+  { text: 'User Experience Roadmap (中文)', link: '/contributing/user-experience-roadmap' },
+  { text: 'npm Publishing & Trusted Publishing (中文)', link: '/contributing/publishing' },
+  { text: 'Platform Stable Certification (中文)', link: '/contributing/platform-acceptance' },
+  { text: 'Platform Acceptance Runner (中文)', link: '/contributing/platform-acceptance-runner' },
   { text: 'Code Conventions', link: '/en/contributing/conventions' },
   { text: 'Docs Writing Guide', link: '/en/contributing/writing-docs' },
   { text: 'Public API Surface', link: '/en/contributing/public-api-surface' },
@@ -556,6 +566,8 @@ export default withMermaid(defineConfig({
             items: [
               { text: 'Overview & Enabling AI', link: '/en/ai/' },
               { text: 'Agent Deep Dive', link: '/en/ai/agent' },
+              { text: 'Model Services & Subscription Accounts', link: '/en/ai/providers' },
+              { text: 'Structured Decisions', link: '/en/ai/structured-decisions' },
               { text: 'Personal Sessions & Model Policy', link: '/en/ai/model-policy' },
               { text: 'Activity Feedback', link: '/en/advanced/activity-feedback' },
               { text: 'Speech', link: '/en/ai/speech' },

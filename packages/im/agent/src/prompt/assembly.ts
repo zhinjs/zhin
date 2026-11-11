@@ -272,10 +272,3 @@ export async function buildMultimodalVisionSystemPrompt(
     options.runtime,
   )).text;
 }
-
-export function buildAgentUserMessage(
-  historyMessages: AgentMessage[],
-  content: string,
-): string {
-  return buildUserMessageWithHistory(historyMessages, content);
-}

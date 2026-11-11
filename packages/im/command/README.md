@@ -173,7 +173,7 @@ pnpm --filter @zhin.js/command test
 ```
 
 完整用户契约见[命令创作指南](../../../docs/authoring/commands.md)，架构迁移背景见
-[Plugin Runtime 原位迁移](../../../docs/architecture/target-implementation/in-place-migration.md)。
+[Legacy 概念迁移](../../../docs/contributing/legacy-concepts.md)。
 
 
 命令可声明 `descriptionI18n: { en: 'Create a reminder' }` 翻译描述。若静态目录名是中文，可沿用 `alias` 提供英文入口，并用 `preferredAliasI18n` 显式选择英文展示：

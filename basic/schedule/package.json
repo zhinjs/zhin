@@ -52,6 +52,14 @@
   "engines": {
     "node": ">=22.19.0"
   },
+  "peerDependencies": {
+    "ioredis": ">=5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "ioredis": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@types/node": "^26.1.2",
     "typescript": "^6.0.3"

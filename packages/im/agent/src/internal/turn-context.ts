@@ -27,10 +27,6 @@ export function runInTurnContext<T>(
   }, fn);
 }
 
-export function getActiveTurnContext(): TurnContextStore | undefined {
-  return turnContextStorage.getStore();
-}
-
 export function getActiveTurnTracker(): TurnTracker | undefined {
   return turnContextStorage.getStore()?.tracker;
 }

@@ -155,5 +155,5 @@ pnpm --filter @zhin.js/game-kit build
 pnpm vitest run plugins/games/*/tests
 ```
 
-交互 profile 见 [ADR 0022](../../docs/adr/0022-interactive-button-modes.md)，Plugin Runtime
-迁移边界见 [ADR 0050](../../docs/adr/0050-plugin-runtime-migration-boundary.md)。
+交互 profile 见 ADR 0022，Plugin Runtime
+迁移边界见 ADR 0050。

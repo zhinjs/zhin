@@ -1,6 +1,6 @@
 # @zhin.js/pagemanager
 
-Remote Console **Node 侧运行时与页面外壳**：`ConsoleRuntime`（snapshot-coherent 页面/布局目录）、`renderConsoleShell`（Console 浏览器外壳与 Server-Driven Blueprints 挂载）以及按需静态客户端构建器 `TypeScriptClientBuilder`。契约在 `@zhin.js/console-protocol`（含 `@zhin.js/console-contract`），浏览器 SDK 在 `@zhin.js/client`。
+Remote Console **Node 侧运行时与页面外壳**：`ConsoleRuntime`（snapshot-coherent 页面/布局目录）、`renderPageShell` / `renderConsoleIndex`（独立页面 HTML 外壳与页面索引）以及按需静态客户端构建器 `TypeScriptClientBuilder`。页面与布局契约在零依赖的 `@zhin.js/console-contract`，wire 协议在 `@zhin.js/console-protocol`，浏览器 SDK 在 `@zhin.js/client`。
 
 ## 分层
 
@@ -22,9 +22,12 @@ pnpm add @zhin.js/pagemanager
 
 | 子路径 / 导出 | 用途 |
 |--------------|------|
-| `ConsoleRuntime`（`@zhin.js/pagemanager/plugin-runtime`） | Snapshot-coherent 页面与布局目录、路由守卫与权限过滤 |
-| `renderConsoleShell` / `renderConsoleIndex` / `renderConsoleForbidden`（`@zhin.js/pagemanager/shell`） | Console HTML 外壳、importmap 与 Server-Driven Blueprint 挂载脚本 |
-| `TypeScriptClientBuilder`（`@zhin.js/pagemanager/client-build`） | 纯 `.ts` Blueprint 零打包提取 + 重交互 `.tsx` 静态 bundle 构建 |
+| `ConsoleRuntime`、`consoleRuntimeToken`、`ConsoleCatalog`、`buildNavigation`（`@zhin.js/pagemanager/plugin-runtime`） | Snapshot-coherent 页面与布局目录、路由匹配、权限过滤与导航树 |
+| `renderPageShell` / `renderConsoleIndex` / `BASE_STYLE` / `PAGE_SHELL_CDN_VERSIONS`（`@zhin.js/pagemanager/shell`，根入口同样导出前三个） | 单页 HTML 外壳（含 importmap 与页面模块挂载脚本）与页面索引页 |
+| `TypeScriptClientBuilder`、`ManifestClientModuleLoader`、`ClientBuildModuleRuntime`（`@zhin.js/pagemanager/client-build`） | 纯 `.ts` Blueprint 零打包提取 + 重交互 `.tsx` 静态 bundle 构建；生产环境按 `pages.manifest.json` 加载 |
+| `rewriteBareImportsForBrowser`、`getOrBuildCanonicalEsmBundle` 等（根入口 / `@zhin.js/pagemanager/node`） | 浏览器 ESM 裸导入改写与 Host 共享依赖（Canonical ESM） |
+
+`renderPageShell` 的 importmap 版本统一来自 `PAGE_SHELL_CDN_VERSIONS`（React 与工作区 `react` 范围一致，react-router 不低于仓库安全下限）。
 
 ## Plugin Runtime
 
@@ -50,7 +53,7 @@ CLI 项目无需安装 TypeScript。实际解析 Page/Layout 元数据的构建 
 
 ## 插件编写页面
 
-插件在 `pages/<name>/index.ts` 中使用 `definePage` 与 `definePageBlueprint` 声明纯 TypeScript 蓝图（零 `.tsx`、零 `esbuild` 预打包），详见 [Console 页面与布局](../../../docs/authoring/console-pages.md)。
+插件在约定目录 `pages/<name>/index.ts`（或 `index.tsx`）中导出 `meta = definePage({...})` 与默认导出（`definePageBlueprint` 蓝图或组件），无需命令式注册；`pages/nav/index.tsx`、`pages/footer/index.tsx` 为布局。详见 [Console 页面与布局](../../../docs/authoring/console-pages.md)。
 
 ## 构建
 

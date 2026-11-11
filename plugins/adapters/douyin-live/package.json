@@ -72,7 +72,8 @@
     "schema.json",
     "src",
     "lib",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
   "publishConfig": {
     "access": "public",

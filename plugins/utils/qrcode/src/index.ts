@@ -1,1 +1,1 @@
-export { buildQrImageUrl, qrImageSegment } from './qrcode-lib.js';
+export { buildQrDataUrl, isScannableImageUrl, qrImageSegment } from './qrcode-lib.js';

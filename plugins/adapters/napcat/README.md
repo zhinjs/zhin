@@ -11,7 +11,7 @@ Zhin.js [NapCatQQ](https://github.com/NapNeko/NapCatQQ) 适配器（Plugin Runti
 - **正向 WebSocket**（`connection: ws`）：应用连 NapCat WS
 - `access_token` 鉴权（Bearer + query）
 - 入站经 `endpointSpec.events`（去重 + 自发过滤）；出站 `send({ conversation, payload })`
-- 41 个 AI 工具（`tools/`）
+- 34 个 AI 工具（`agents/napcat/skills/napcat-*/tools/`，随所属 Skill 激活后披露）
 
 ## 安装
 
@@ -76,13 +76,13 @@ endpoint 配置，不会从环境变量推断 endpoint id。
 | 类别 | 路径 |
 |------|------|
 | Permit 词汇 | `PERMITS.md` |
-| 平台工具 | `tools/<name>/index.ts` |
+| 平台工具（34 个） | `agents/napcat/skills/napcat-*/tools/<name>/index.ts` |
 | 技能说明 | `agents/napcat/skills/napcat-*/SKILL.md`（按消息、群内容、群设置、文件历史、媒体和账号拆分） |
 
 ## 迁移说明（Plugin Runtime）
 
 - **notice / request / meta 侧事件**：经统一 `endpointSpec.events` 归一后分发到 `handlers`（`notice.receive` / `request.receive` / `system.receive`），请求带 `$approve` / `$reject`。消息仍走 `outboundMessageToken`。
-- **群管工具暂未迁移**：旧 Adapter 经 `createSceneManagementTools` 注册踢人 / 禁言 / 群名片等成套 agent 工具；迁移后 `tools/` 仅覆盖 NapCat 扩展 API，其余群管能力可通过 `callApi`（如 `set_group_kick`、`set_group_ban`）作为逃生舱调用。
+- **群管工具暂未迁移**：旧 Adapter 经 `createSceneManagementTools` 注册踢人 / 禁言 / 群名片等成套 agent 工具；迁移后 `agents/napcat/skills/napcat-*/tools/` 仅覆盖 NapCat 扩展 API（含 `set_title`、`get_group_shut_list` 等），没有踢人 / 禁言 / 群名片工具，其余群管能力可通过 `callApi`（如 `set_group_kick`、`set_group_ban`）作为逃生舱调用。
 - **平台权限门禁**：`plugin.ts` setup 通过 generation-owned `permissionHostToken` 调用 `host.registerPlatform('napcat', createSceneRolePlatformChecker())`，`scene_admin` / `scene_owner` 依据入站 metadata 中的 sender `role`（owner / admin）判定。
 
 ## 文档链接

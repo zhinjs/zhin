@@ -43,17 +43,6 @@ export function capabilityToTool(
   };
 }
 
-/** Owner-visible capabilities → generation-stamped tools for the turn runner. */
-export function toolsFromCapabilities(
-  capabilities: AgentCapabilities,
-  turn: TurnIngress | TurnRequest,
-): GenerationStampedTool[] {
-  return stampToolGeneration(
-    capabilities.tools.map((tool) => capabilityToTool(tool, toolInvocationFromTurn(turn))),
-    capabilities.generation,
-  );
-}
-
 export function toolInvocationFromTurn(turn: TurnIngress | TurnRequest): ToolInvocationContext {
   const hostPaths = 'hostProtectedPaths' in turn ? turn.hostProtectedPaths : undefined;
   return Object.freeze({

@@ -67,6 +67,16 @@ runtimeCommand.command('migrate [phase]')
       process.exitCode = api.migrationStatusExitCode(report);
       return;
     }
+    if (phase === 'verify') {
+      // Builds (and for public packages packs) the cut-over project; needs neither --check nor --write.
+      const report = await new api.MigrationVerifier().verify(root);
+      process.stdout.write(`${JSON.stringify({
+        mode: report.mode,
+        commands: report.commands,
+        tarballEntries: report.tarballEntries,
+      }, null, 2)}\n`);
+      return;
+    }
     if (options.check === options.write) throw new Error('choose exactly one of --check or --write');
     if (phase === 'cutover') {
       const cutover = new api.PackageCutover();
@@ -80,7 +90,7 @@ runtimeCommand.command('migrate [phase]')
       if (options.write) await cutover.apply(plan);
       return;
     }
-    if (phase !== 'extract') throw new Error('migrate phase must be extract, cutover, or status');
+    if (phase !== 'extract') throw new Error('migrate phase must be extract, cutover, verify, or status');
     const migrator = new api.LegacyCapabilityMigrator();
     const plan = await migrator.plan(root);
     const summary = migrator.summarize(plan);

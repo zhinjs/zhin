@@ -1,6 +1,5 @@
 import type {
   FontConfig,
-  HtmlRendererAiTextAsImageConfig,
   HtmlRendererConfig,
   RasterFormat,
   WaitUntil,
@@ -31,7 +30,6 @@ export interface ResolvedHtmlRendererConfig {
   defaultWidth: number;
   defaultFonts: FontConfig[];
   defaultBackgroundColor: string;
-  aiTextAsImage?: boolean | HtmlRendererAiTextAsImageConfig;
   shotium: ShotiumConfig;
 }
 
@@ -39,7 +37,6 @@ const DEFAULT_CONFIG: ResolvedHtmlRendererConfig = {
   defaultWidth: 800,
   defaultFonts: [],
   defaultBackgroundColor: '#ffffff',
-  aiTextAsImage: undefined,
   shotium: {
     mode: 'inprocess',
     viewport: { width: 800, height: 600 },
@@ -116,7 +113,6 @@ export function resolveHtmlRendererConfig(raw: unknown): ResolvedHtmlRendererCon
     defaultWidth,
     defaultFonts: Array.isArray(input.defaultFonts) ? input.defaultFonts.filter(Boolean) : [],
     defaultBackgroundColor,
-    aiTextAsImage: input.aiTextAsImage,
     shotium: {
       mode: pickString(input.mode, DEFAULT_CONFIG.shotium.mode, ['inprocess', 'daemon']),
       viewport: {

@@ -61,16 +61,12 @@
     "zhin.js": "workspace:*"
   },
   "peerDependencies": {
-    "@zhin.js/adapter-icqq": "workspace:^",
     "@zhin.js/command": "workspace:^",
     "@zhin.js/component": "workspace:^",
     "@zhin.js/middleware": "workspace:^",
     "zhin.js": "workspace:^"
   },
   "peerDependenciesMeta": {
-    "@zhin.js/adapter-icqq": {
-      "optional": true
-    },
     "@zhin.js/command": {
       "optional": true
     },

@@ -20,7 +20,7 @@ basic/ (@zhin.js/logger, schema, database, schedule, cli)
 @zhin.js/agent           ScheduleJobEngine、schedule_* 工具
 ```
 
-用户向文档见 [docs/advanced/schedule.md](../../docs/advanced/schedule.md)；Breaking 变更见 [ADR 0028](../../docs/adr/0028-schedule-facility-replace-cron.md)。
+用户向文档见 [配置参考](../../docs/configuration/index.md)与 [CLI 命令](../../docs/cli/index.md)的 schedule 小节；Breaking 变更见 ADR 0028。
 
 ## 快速开始
 

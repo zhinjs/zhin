@@ -27,22 +27,6 @@ export interface RenderResult {
   mimeType: string;
 }
 
-export interface HtmlRendererAiTextAsImageConfig {
-  enabled?: boolean;
-  onlyAdapters?: string[];
-  minLength?: number;
-  maxLength?: number;
-  skipIfRich?: boolean;
-  width?: number;
-  height?: number;
-  backgroundColor?: string;
-  fontSize?: number;
-  color?: string;
-  padding?: number;
-  scale?: number;
-  fileName?: string;
-}
-
 export interface HtmlRendererViewport {
   width?: number;
   height?: number;
@@ -54,7 +38,6 @@ export interface HtmlRendererConfig {
   defaultFonts?: FontConfig[];
   defaultBackgroundColor?: string;
   backgroundColor?: string;
-  aiTextAsImage?: boolean | HtmlRendererAiTextAsImageConfig;
   viewport?: HtmlRendererViewport;
   scale?: number;
   type?: RasterFormat;

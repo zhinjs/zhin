@@ -81,6 +81,11 @@ export const doctorCommand = new Command('doctor')
 
     const results: CheckResult[] = [];
     const cwd = process.cwd();
+    // Several checks need the project manifest: parse it once per run.
+    const projectPackagePath = path.join(cwd, 'package.json');
+    let projectPackage: Promise<Record<string, any>> | undefined;
+    const readProjectPackage = (): Promise<Record<string, any>> =>
+      (projectPackage ??= fs.readJSON(projectPackagePath));
 
     if (options.upgradeL4) {
       const configPath = findConfigFile(cwd);
@@ -220,8 +225,7 @@ export const doctorCommand = new Command('doctor')
           : await readConfig(configPath) as Record<string, unknown>;
         if (loadedConfig.ai && typeof loadedConfig.ai === 'object' && 'decisions' in loadedConfig.ai) {
           try {
-            const decisionPackage = fs.existsSync(path.join(cwd, 'package.json'))
-              ? await fs.readJSON(path.join(cwd, 'package.json')) : {};
+            const decisionPackage = fs.existsSync(projectPackagePath) ? await readProjectPackage() : {};
             const decisionIssues = diagnoseDecisionConfig({ config: loadedConfig, packageJson: decisionPackage });
             if (decisionIssues.length) {
               results.push({ name: '结构化决策配置', status: 'error', message: decisionIssues.join('；'), fix: 'zhin setup --decisions' });
@@ -339,10 +343,9 @@ export const doctorCommand = new Command('doctor')
     }
 
     // 5. 检查 package.json
-    const pkgPath = path.join(cwd, 'package.json');
-    if (fs.existsSync(pkgPath)) {
+    if (fs.existsSync(projectPackagePath)) {
       try {
-        const pkg = await fs.readJSON(pkgPath);
+        const pkg = await readProjectPackage();
         const hasZhin = pkg.dependencies?.['zhin.js'] || pkg.devDependencies?.['zhin.js'];
         
         results.push({
@@ -371,8 +374,7 @@ export const doctorCommand = new Command('doctor')
     if (existingConfig && !configParseFailed) {
       try {
         const config = loadedConfig ?? await readConfig(path.join(cwd, existingConfig));
-        const pkgPath = path.join(cwd, 'package.json');
-        const pkg = fs.existsSync(pkgPath) ? await fs.readJSON(pkgPath) : {};
+        const pkg = fs.existsSync(projectPackagePath) ? await readProjectPackage() : {};
         const zhinDiagnosis = diagnoseZhinStackDependencies(cwd, config as Record<string, unknown>, pkg);
         const zhinFixPackages = packagesNeedingZhinStackFix(zhinDiagnosis);
         if (zhinFixPackages.length > 0) {

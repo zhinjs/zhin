@@ -48,8 +48,7 @@
   "license": "MIT",
   "dependencies": {
     "@zhin.js/core": "workspace:*",
-    "@zhin.js/html-renderer": "workspace:*",
-    "@zhin.js/skill": "workspace:*"
+    "@zhin.js/html-renderer": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^6.0.3",
@@ -84,10 +83,6 @@
     "features": [
       {
         "package": "@zhin.js/middleware",
-        "api": "^1.0.0"
-      },
-      {
-        "package": "@zhin.js/skill",
         "api": "^1.0.0"
       }
     ],

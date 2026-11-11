@@ -24,10 +24,6 @@ export type {
   AgentLoopVisionTurnResult,
 } from './agent-loop-turn.js';
 
-export {
-  runAgentLoopTextTurn,
-  runAgentLoopVisionTurn,
-} from './agent-loop-turn.js';
 
 export type { ToolCallRecord } from './tool-calls-user-format.js';
 export { formatToolCallsForUser, looksLikeInternalToolDump } from './tool-calls-user-format.js';

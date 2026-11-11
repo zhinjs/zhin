@@ -29,10 +29,14 @@ afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 describe('iLink poll loop pauses while input is closed', () => {
   it('stops re-fetching the unacknowledged batch after close and resumes on reopen', async () => {
     // The provider keeps returning the same batch until its cursor is acknowledged.
-    const updates = vi.fn(async () => ({ get_updates_buf: 'cursor-after-message', msgs: [message] }));
+    let acknowledged = false;
+    const updates = vi.fn((options: { abortSignal?: AbortSignal }) => acknowledged
+      ? idleIlinkUpdates(options)
+      : Promise.resolve({ get_updates_buf: 'cursor-after-message', msgs: [message] }));
     let release!: () => void;
     const receive = vi.fn(() => new Promise<void>((resolve) => { release = resolve; }));
     const f = await fixture(updates, receive);
+    f.save.mockImplementation(() => { acknowledged = true; });
     try {
       await f.start(); f.open();
       await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(1));

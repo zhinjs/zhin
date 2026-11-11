@@ -5,7 +5,7 @@ description: "Build a configurable /ping child plugin from scratch, mount it on 
 
 # Write your first plugin
 
-For everyday bot features — adding commands, JSX cards, or AI tools — you don't need a child plugin package at all: just drop files directly into `commands/` or `tools/` inside `my-bot` (your Root plugin), as shown in [Quick start · 1→2](./index.md#4-observe-hot-reload-add-features-directly-to-your-bot-1→2).
+For everyday bot features — adding commands, JSX cards, or AI tools — you don't need a child plugin package at all: just drop files directly into `commands/` or `tools/` inside `my-bot` (your Root plugin), as shown in [Quick start · 1→2](./index.md#hot-reload).
 
 **When do you need this guide?** When you want to **extract a reusable sub-plugin package (`plugins/ping-pong`) with its own config schema that can be shared across bots or published to npm**.
 

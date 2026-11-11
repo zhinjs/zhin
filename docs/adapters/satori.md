@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/satori/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/satori/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=03032076bdda0c01 -->
+<!-- sync-adapter-docs:sha256=071883c71b599103 -->
 
 # @zhin.js/adapter-satori
 
@@ -111,10 +111,6 @@ SDK 会向 `path` 发送 POST，请求头 `Satori-Opcode: 0` 表示事件；每�
 
 - 消息 id 格式为 `channelId:messageId`，便于发消息 / 撤回时解析。
 - 撤回时需 `channel_id` + `message_id`，适配器已按上述格式解析。
-
-## AI 工具
-
-技能说明见 `skills/satori/SKILL.md`。
 
 ## 协议文档
 

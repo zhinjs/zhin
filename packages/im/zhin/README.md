@@ -2,7 +2,7 @@
 
 Zhin.js **IM 核心**主入口（1.1.x）：多通道 **Endpoint**、Plugin、Adapter、命令与热重载。**production 安装预算 <10MB**。
 
-AI / Agent 能力在 **`@zhin.js/agent`**（及 `@zhin.js/ai`），须显式安装或通过 `npm create zhin-app` 向导写入依赖。详见 [ADR 0019](../../../docs/adr/0019-install-size-layering.md)。
+AI / Agent 能力在 **`@zhin.js/agent`**（及 `@zhin.js/ai`），须显式安装或通过 `npm create zhin-app` 向导写入依赖。详见 ADR 0019（安装体积分层）。
 
 ## Install tiers
 
