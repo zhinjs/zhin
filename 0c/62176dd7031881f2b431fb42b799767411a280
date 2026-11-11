@@ -1,0 +1,18 @@
+.changeset/console-visual-elevation-and-charts.md
+  h_6f5e45c41d0910 1-5
+packages/console/client/client/ui/components.tsx
+  h_6f5e45c41d0910 1447-1448,1451-1466
+packages/console/client/client/ui/styles.ts
+  h_6f5e45c41d0910 28-32,64-67,386-387,390-396,404-409,413-414,469-471,473,479-480,484,491,496,498-500,502
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0c62176dd7031881f2b431fb42b799767411a280",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
