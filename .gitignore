@@ -39,6 +39,7 @@ examples/**/zhin.config.*
 !examples/multi-agent-room/zhin.config.yml
 !examples/qq-games-bot/zhin.config.yml
 !examples/single-file-bot/zhin.config.yml
+!examples/test-bot/zhin.config.example.yml
 # full-bot L4 种子 MEMORY（其余 data/ 仍忽略）
 !examples/full-bot/data/
 examples/full-bot/data/*

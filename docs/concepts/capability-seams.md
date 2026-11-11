@@ -161,16 +161,6 @@ Root Capability Seam ─┘                         │
 - 可见 Provider 中 Tool / Skill 名重复会在 capability projection 时失败；
 - 每次注册都应保存并调用返回的 disposer，或把整个 Integration 交给 Scope disposer。
 
-::: details 现有适配器
-| 类 | 用途 |
-|---|---|
-| `BuiltinToolService` | 把 QuestionPort 的交互能力适配为 ToolService；仅用于自定义 Host 组合 |
-| `SkillRegistryAsService` | 显式桥接 generation-owned `SkillRegistry`，并读取 Skill 文档 |
-
-这些适配器不会自动注册。框架内置 Tool / Skill 仍走 Feature projection，避免形成第二套可见性和
-生命周期规则。
-:::
-
 ## 相关
 
 - [插件模型](./plugin-model.md)：Feature 与约定目录如何被发现

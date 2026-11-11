@@ -51,8 +51,8 @@ describe('jsonSchemaToConsoleSchema', () => {
   });
 
   it('keeps actual Host mixed branches and unconstrained outputSchema visible', () => {
-    expect(jsonSchemaToConsoleSchema(HOST_CONFIG_SCHEMA.properties.htmlRenderer)).toMatchObject({ object: {
-      aiTextAsImage: { type: 'union', mode: 'anyOf', list: expect.any(Array) },
+    expect(jsonSchemaToConsoleSchema(HOST_CONFIG_SCHEMA.properties.database)).toMatchObject({ object: {
+      ssl: { type: 'union', mode: 'anyOf', list: expect.any(Array) },
     } });
     expect(jsonSchemaToConsoleSchema(HOST_CONFIG_SCHEMA.properties.ai)).toMatchObject({ object: { agent: { object: { outputSchema: { type: 'union', list: [{ type: 'boolean' }, { type: 'string' }, { type: 'object' }] } } } } });
   });

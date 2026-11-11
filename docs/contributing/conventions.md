@@ -17,7 +17,7 @@ import { DisposeStack } from './dispose';           // ❌
 
 - Node 侧源码放 `src/`，构建产物放 `lib/`；浏览器侧源码放 `client/`，产物放 `dist/`。
 - 新增 workspace 包必须落在 `pnpm-workspace.yaml` 覆盖的目录内，并带独立 `package.json`。
-- `pnpm-workspace.yaml` 的 `overrides` 承担大量安全版本抬升（undici、hono、tar、js-yaml、nodemailer 等），不要随手删改；新增依赖注意 `pnpm check:dependency-policy` 的约束。
+- 根 `package.json` 的 `pnpm.overrides`（pnpm 9 不读取 `pnpm-workspace.yaml` 的 `overrides`）承担大量安全版本抬升（undici、hono、tar、js-yaml、nodemailer 等），不要随手删改；新增依赖注意 `pnpm check:dependency-policy` 的约束。
 
 ### 模块边界与源码布局
 

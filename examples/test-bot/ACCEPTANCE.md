@@ -29,7 +29,6 @@ pnpm vitest run packages/im/agent/tests/tool-catalog \
 ### IM
 
 - [x] **Sandbox**：`plugins/adapters/sandbox/tests/integration.test.ts`（含于 `pnpm check:stable`）
-- [x] **非 AI 不误触发**：`packages/im/agent/tests/ai/integration.test.ts` → `shouldTriggerAI`（含于 `pnpm check:stable`）
 
 ### Agent（minimal 配置：无 toolSearch、无 MCP）
 

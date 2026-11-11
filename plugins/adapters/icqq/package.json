@@ -36,7 +36,7 @@
   "scripts": {
     "build": "tsc",
     "clean": "rimraf lib",
-    "test": "pnpm run test:types && NODE_OPTIONS=--experimental-strip-types vitest run --root ../../.. plugins/adapters/icqq/tests",
+    "test": "pnpm run test:types && vitest run --root ../../.. plugins/adapters/icqq/tests",
     "test:types": "tsc -p tsconfig.type-tests.json",
     "prepublishOnly": "pnpm run build",
     "prepack": "pnpm run build && node ../../../scripts/build-plugin-runtime-entries.mjs",

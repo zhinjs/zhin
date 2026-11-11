@@ -1,6 +1,6 @@
 # Zhin Plugin-first Target Architecture (SSOT)
 
-> Status: normative target for Zhin 4.x. This document defines the intended
+> Status: normative target for the current Zhin line (published as 1.1.x; "4.x" was its number before the version reset). This document defines the intended
 > contracts and acceptance criteria; package READMEs explain their local APIs.
 
 ## Product Model
@@ -249,7 +249,7 @@ bundler into default IM installation.
 
 ## Migration and Quality Gates
 
-4.x is intentionally breaking. `zhin migrate` and the migration Skill must:
+This architecture is intentionally breaking relative to the legacy plugin API. `zhin migrate` and the migration Skill must:
 
 1. detect legacy `usePlugin`, `MessageCommand`, `add*` registrations and direct
    platform sends;

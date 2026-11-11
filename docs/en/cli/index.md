@@ -47,7 +47,7 @@ zhin runtime inspect
 zhin runtime codegen [dir] [--write] [--json]
 zhin runtime build
 zhin runtime publish [--execute|--resume] [--tag latest]
-zhin runtime migrate [extract|cutover|status] [--check|--write]
+zhin runtime migrate [extract|cutover|verify|status] [--check|--write]
 ```
 
 `--watch` and the compatibility flag `--no-watch` are mutually exclusive. Without either, no files are watched.
@@ -228,7 +228,6 @@ By default it installs with pnpm and writes the package reference into `plugins.
 
 | Option | Description |
 | --- | --- |
-| `-S, --save` | Write to `dependencies` (default) |
 | `-D, --save-dev` | Write to `devDependencies` |
 | `-g, --global` | Install globally (doesn't enable the plugin) |
 | `--no-enable` | Install dependencies only; don't change config |
@@ -239,10 +238,9 @@ By default it installs with pnpm and writes the package reference into `plugins.
 ```bash
 zhin uninstall plugin <name> [--remove-pkg]
 zhin uninstall adapter <name> [--remove-pkg]
-zhin uninstall service
 ```
 
-`name` can be an npm package name or an instanceKey; `--remove-pkg` also removes the dependency from `package.json`. `uninstall service` removes the system service.
+`name` can be an npm package name or an instanceKey; `--remove-pkg` also removes the dependency from `package.json`. Remove the system service with `zhin service uninstall`.
 
 ### search / info: Discover Plugins
 
@@ -280,7 +278,7 @@ Starts a local preview workbench: it scans `components/*` and `pages/*` in the p
 ### build: Build a Plugin
 
 ```bash
-zhin build [plugin] [--clean] [--production] [--analyze]
+zhin build [plugin] [--clean] [--no-production]
 ```
 
 `plugin` is a path relative to `plugins/` (e.g. `adapters/icqq`); when omitted it builds the current package from inside a plugin folder, or every `plugins/*` from the workspace root. `src/` is compiled with tsc and `client/` bundled with esbuild; `--clean` clears `lib/` and `dist/` first; `--production` (on by default) minifies client output.
@@ -380,7 +378,7 @@ These commands talk to a running bot over HTTP, so start it with `zhin runtime s
 zhin send <scene_id> [content...] [-s private|group|channel] [-a <adapter>] [-e <endpoint>]
 ```
 
-`scene_id` is a user ID for DMs or a group number for groups; without `content` it reads one line from stdin. `-a` defaults to `process`; `-e` picks an account ID, defaulting to the adapter's first online account.
+`scene_id` is a user ID for DMs or a group number for groups; without `content` it reads one line from stdin. `-a` may be omitted only when the instance has a single adapter; `-e` picks an account ID, defaulting to the adapter's first online account.
 
 ### watch: Monitor a Running Instance
 
@@ -392,7 +390,7 @@ Refreshes a status panel in the terminal (stats, accounts, assistant jobs). `--o
 
 ### schedule: Persistent Scheduled Tasks
 
-Have the AI run a prompt at given times. Jobs are stored in `data/schedule-jobs.json`; restart the bot for changes to take effect.
+Have the AI run a prompt at given times. The command talks to the running instance through the Host API and takes effect immediately; the bot must be started with `zhin runtime start` and have `assistant.enabled`.
 
 ```bash
 zhin schedule list

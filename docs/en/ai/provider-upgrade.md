@@ -105,7 +105,6 @@ A SQLite preview reads the database read-only and validates targets ahead of tim
 
 ## Author interfaces
 
-- The low-level `ContextManager` receives a caller-owned summary operation through `setSummaryCompletion({ system, prompt, signal } => Promise<string>)`; it no longer installs a Provider or hides sampling parameters.
 - `SdkProviderAdapter`, `createSdkProviderAdapter`, `sdkEntryFromProvider`, and `@zhin.js/ai/model-catalog` are removed. A Driver is a declaration / protocol implementation; the Host owns configuration, credentials, and the call lifecycle.
 - Ordinary commands and tools call through the official `context.use(aiInferenceClientToken)`; they do not keep a process-level client and do not fill in the principal / owner themselves.
 - `createCapabilityContext` takes a named options object. `ToolIndex.execute` takes `{ requester, name, input, invocation, snapshot?, operation? }`; the operation must come from the Host's real entry and can never be placed in user JSON metadata.

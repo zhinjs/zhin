@@ -19,7 +19,7 @@ pnpm lint               # ESLint (.ts,.tsx)
 pnpm type-check         # tsc --noEmit -p tsconfig.typecheck.json
 pnpm dev                # Start minimal-bot (examples/minimal-bot); use pnpm dev:test for test-bot
 pnpm clean              # Clean all lib/ dist/ directories
-pnpm eval:chat --workspace <dir> --judge <alias/model>  # Real-model chat quality eval (local, not CI)
+pnpm eval:chat --workspace <dir> --model <profile-id> --judge <profile-id>  # Real-model chat quality eval (local, not CI); takes runtime Profile IDs
 
 # Bootstrap (first-time or after clean)
 pnpm prepare:logger     # Build @zhin.js/logger + install CLI deps
@@ -74,8 +74,8 @@ packages/toolkit/{create-zhin,components,tailwind,html-renderer}         # 脚�
 
 | Package | Path | Role |
 |---------|------|------|
-| kernel | `packages/im/kernel/src/` | ScheduleEngine, Scheduler, identity, utilities, error hierarchy |
-| ai | `packages/im/ai/src/` | Provider abstraction, Agent, ModelRegistry, Memory, Compaction, CostTracker |
+| kernel | `packages/im/kernel/src/` | ScheduleEngine, outbound template path rendering, heartbeat helper, shared utilities |
+| ai | `packages/im/ai/src/` | Provider abstraction, agent loop, sessions, memory, compaction |
 | core | `packages/im/core/src/` | ImRuntime, messages, side events, rendering, interaction |
 | agent | `packages/im/agent/src/` | ZhinAgent orchestrator, security (ExecPolicy, FilePolicy), MCP client |
 | host-http | `packages/host/http/src/` | 极简 HTTP/WS Host（Bearer、CORS，无 Koa）；Console/管理面由 `basic/cli` 装配 |
@@ -196,7 +196,7 @@ Publish workflow (`publish.yml`): On push to `main`, auto-bumps versions via Cha
 
 ### Agent 安全策略
 
-Agent harness engineering 提供多层安全防护：执行策略（5 层防御）、文件策略（4 层防御）、网络策略（域名白名单、私有 IP 阻止）、预算限制、审计日志、沙箱环境。
+Agent harness engineering 提供多层安全防护：执行策略（5 层防御）、文件策略（4 层防御）、网络策略（域名白名单、私有 IP 阻止）、预算限制、沙箱环境。
 
 ### 架构层级检查
 
@@ -217,7 +217,7 @@ Agent harness engineering 提供多层安全防护：执行策略（5 层防御�
 | Agent ingress (mailbox spine) | `packages/im/agent/src/plugin-runtime/ingress/unified-mailbox-spine.ts` |
 | Security policies | `packages/im/agent/src/security/` |
 | Sandbox environment | `packages/im/agent/src/security/sandbox.ts` |
-| Prompt builder | `packages/im/agent/src/prompt/prompt-builder.ts` |
+| Prompt assembly | `packages/im/agent/src/prompt/system-prompt.ts`, `assembly.ts` |
 | AI providers | `packages/im/ai/src/providers/` |
 | Architecture docs index | `docs/concepts/architecture.md` |
 | Architecture overview | `docs/concepts/architecture.md` |

@@ -151,7 +151,7 @@ Sandbox 验收同时用已安装的 CLI 在工作区子包预演和执行 `migra
 | 检查 | 说明 |
 | --- | --- |
 | Stable Smoke（`pnpm check:stable`） | Sandbox + Agent 核心单测 + minimal-bot 契约 |
-| L4-CI（`pnpm check:l4-ci`） | L4 确定性子集（编排/记忆/full-bot 契约）；全量 `pnpm check:l4` 需本地手动运行（尚未接入 workflow） |
+| L4-CI（`pnpm check:l4-ci`） | L4 确定性子集（编排/记忆/full-bot 契约）；全量 `pnpm check:l4` 在 nightly 跑 |
 
 ## Agent 评测规则
 

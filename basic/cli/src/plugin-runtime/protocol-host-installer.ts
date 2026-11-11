@@ -162,6 +162,8 @@ export function installProtocolHosts(options: InstallProtocolHostsOptions): Root
           http,
           agentHost: resources.use(agentHostToken),
           config: mailbox,
+          // Without this the transport's production check (a mailbox must have a secret) never runs.
+          production: options.production,
         });
         resources.provide(a2aMailboxTransportToken, installed.transport);
         lifecycle.add(installed.dispose);

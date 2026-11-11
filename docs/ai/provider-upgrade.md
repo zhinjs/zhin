@@ -108,7 +108,6 @@ SQLite 预览只读数据库并提前验证目标；非 SQLite 使用已有 `--s
 
 ## 作者接口
 
-- 底层 `ContextManager` 通过 `setSummaryCompletion({ system, prompt, signal } => Promise<string>)` 注入调用者拥有的摘要操作，不再安装 Provider 或隐藏采样参数。
 - 删除 `SdkProviderAdapter`、`createSdkProviderAdapter`、`sdkEntryFromProvider` 和 `@zhin.js/ai/model-catalog`。Driver 是声明／协议实现；Host 统一拥有配置、凭据和调用生命周期。
 - 普通命令／工具经正式 `context.use(aiInferenceClientToken)` 调用；不保存进程级 client，不自行填 principal／owner。
 - `createCapabilityContext` 使用具名 options 对象。`ToolIndex.execute` 使用 `{ requester, name, input, invocation, snapshot?, operation? }`；operation 必须来自 Host 的真实入口，不能放在用户 JSON metadata 里。

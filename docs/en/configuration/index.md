@@ -291,7 +291,7 @@ assistant:
     notifyOnFailure: false         # Whether to notify on Job failure, default false
 ```
 
-The remaining sub-key is `queue` (Schedule execution concurrency/retry/timeout). Schedule facts are always persisted to `schedule-jobs.json`; manage them with [`zhin schedule`](../cli/index.md#schedule-persistent-scheduled-tasks).
+The remaining sub-key is `queue` (Schedule execution concurrency/retry/timeout). Schedule facts are persisted in the database (falling back to `schedule-jobs.json` when no relational database is configured); manage them on a running bot with [`zhin schedule`](../cli/index.md#schedule-persistent-scheduled-tasks).
 
 ## mcp / a2a {#mcp-a2a}
 

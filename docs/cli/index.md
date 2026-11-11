@@ -47,7 +47,7 @@ zhin runtime inspect
 zhin runtime codegen [dir] [--write] [--json]
 zhin runtime build
 zhin runtime publish [--execute|--resume] [--tag latest]
-zhin runtime migrate [extract|cutover|status] [--check|--write]
+zhin runtime migrate [extract|cutover|verify|status] [--check|--write]
 ```
 
 `--watch` 与兼容参数 `--no-watch` 互斥；都不传时不监听文件变化。
@@ -228,7 +228,6 @@ zhin add ...          # install 的别名
 
 | 选项 | 说明 |
 | --- | --- |
-| `-S, --save` | 写入 `dependencies`（默认） |
 | `-D, --save-dev` | 写入 `devDependencies` |
 | `-g, --global` | 全局安装（不启用插件） |
 | `--no-enable` | 只装依赖，不改配置 |
@@ -239,10 +238,9 @@ zhin add ...          # install 的别名
 ```bash
 zhin uninstall plugin <name> [--remove-pkg]
 zhin uninstall adapter <name> [--remove-pkg]
-zhin uninstall service
 ```
 
-`name` 可以是 npm 包名或 instanceKey；`--remove-pkg` 同时从 `package.json` 移除依赖。`uninstall service` 卸载系统服务。
+`name` 可以是 npm 包名或 instanceKey；`--remove-pkg` 同时从 `package.json` 移除依赖。系统服务用 `zhin service uninstall` 卸载。
 
 ### search / info：发现插件
 
@@ -280,7 +278,7 @@ zhin preview --json                    # 输出扫描与渲染结果后退出
 ### build：构建插件
 
 ```bash
-zhin build [plugin] [--clean] [--production] [--analyze]
+zhin build [plugin] [--clean] [--no-production]
 ```
 
 `plugin` 是相对于 `plugins/` 的路径（如 `adapters/icqq`）；省略时在插件目录内构建当前包，或在 workspace 根目录批量构建 `plugins/*`。`src/` 用 tsc 编译，`client/` 用 esbuild 打包；`--clean` 先清理 `lib/` 与 `dist/`；`--production`（默认开启）压缩 client 产物。
@@ -367,7 +365,7 @@ zhin packages verify <instanceKey> <check-id> --live http://127.0.0.1:8068 \
 zhin send <scene_id> [content...] [-s private|group|channel] [-a <adapter>] [-e <endpoint>]
 ```
 
-`scene_id` 私聊时是用户 ID，群聊时是群号；不传 `content` 时从标准输入读一行。`-a` 默认 `process`；`-e` 指定账号 ID，省略时用该适配器下第一个在线账号。
+`scene_id` 私聊时是用户 ID，群聊时是群号；不传 `content` 时从标准输入读一行。只有一个适配器时可省略 `-a`，否则必须指定；`-e` 指定账号 ID，省略时用该适配器下第一个在线账号。
 
 ### watch：监视运行实例
 
@@ -379,7 +377,7 @@ zhin watch [-i 3] [--once] [--json] [--no-clear]
 
 ### schedule：持久化调度任务
 
-让 AI 在指定时间执行一段提示词。任务保存在 `data/schedule-jobs.json`，修改后需要重启 Bot 才生效。
+让 AI 在指定时间执行一段提示词。命令通过 Host API 操作运行中的实例，立即生效；需要 Bot 已用 `zhin runtime start` 启动并启用 `assistant.enabled`。
 
 ```bash
 zhin schedule list
