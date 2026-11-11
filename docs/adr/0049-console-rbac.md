@@ -108,6 +108,24 @@ RPC（`iam.*`，需 `iam.view` / `iam.manage`）：`iam.users.list|create|update
 
 `zhin console user create <username> [--role owner] [--password-stdin]`、`zhin console user passwd <username>`、`zhin console user disable|enable <username>`、`zhin console user list`。CLI 直接打开项目数据库，不经过运行中的 Host，用于首次初始化与救援。
 
+### 8. 初始化向导（数据库 → 所有者）
+
+未初始化（`setupRequired: true`）时，Console 用初始化令牌进入两步向导，之后 `/auth/setup/*` 全部返回 409。
+
+**第一步：数据库。** 账号数据存在哪个库，由用户在线选择：
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/auth/setup/database` | 当前数据库 `{ dialect, source: 'default'|'config', summary }`（`summary` 不含密码）与可选驱动 `[{ dialect, label, available, missingPackage?, fields }]`。`fields` 是连接表单描述（名称、类型、必填、是否机密、默认值） |
+| POST | `/auth/setup/database/test` | `{ dialect, connection }`：临时连接、执行一次探测查询后断开，返回 `{ ok, latencyMs?, error? }`（错误信息去掉凭据） |
+| POST | `/auth/setup/database` | `{ dialect, connection }`：先测试，成功后写入配置文件顶层 `database` 块，机密字段写入项目 `.env`（如 `ZHIN_DATABASE_PASSWORD`），配置里只放 `${ZHIN_DATABASE_PASSWORD}` 引用；然后重启进程（数据库是进程级资源）。返回 `{ restarting: true }`，Console 轮询 `/auth/me` 直到 Host 回来 |
+
+- 可选驱动：`sqlite`（默认，`.zhin/data.sqlite`）、`mysql`、`pg`、`mongodb`。`redis` 与 `memory` 不能存账号，不出现在列表里。驱动包（`mysql2`、`pg`、`mongodb`）是 `@zhin.js/database` 的可选依赖，缺失时显示「需安装 `pnpm add <包>`」，不在线安装。
+- 「保持当前数据库」可直接跳过本步；配置文件里已显式写了 `database` 时默认跳过，但仍可修改。
+- 切换数据库不迁移旧库数据（初始化前旧库里没有账号；插件数据留在原库，向导提示这一点）。
+
+**第二步：所有者。** `POST /auth/setup`（§5）在新库里创建第一个所有者，返回会话，向导结束。
+
 ## 落盘位置
 
 - 权限常量与 RPC→权限映射：`packages/console/protocol/src/permissions.ts`
