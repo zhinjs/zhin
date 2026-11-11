@@ -83,7 +83,7 @@ export function registerAssistantJobRoutes(options: Readonly<{
     ) => Promise<{ status: number; body: unknown }>,
   ): Parameters<HttpHost['route']>[2] => async (request, response, _url, authScope) => {
     if (authScope !== 'full') {
-      writeJson(response, 403, { success: false, error: '需要 full scope 才能修改调度任务' });
+      writeJson(response, 403, { success: false, error: '需要登录 Console 才能修改调度任务' });
       return;
     }
     const body = await readJsonBody(request);

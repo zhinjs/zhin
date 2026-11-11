@@ -62,16 +62,13 @@ flowchart LR
 http:
   port: 8068                 # 脚手架默认；以项目配置为准
   host: 127.0.0.1            # 默认 127.0.0.1；远程访问需改 0.0.0.0
-  token: ${HTTP_TOKEN}       # 主 token（full scope）
-  tokens:                    # 附加作用域 token（可选）
-    - token: ${DEMO_TOKEN}
-      scope: demo            # full | demo
+  token: ${HTTP_TOKEN}       # 初始化令牌：只用于创建第一个所有者
   corsOrigins:               # CORS 白名单；https://console.zhin.dev 总是自动并入
     - "http://localhost:5173"
   base: /api                 # API 前缀，默认 /api
 ```
 
-配置 token 后，`/api` 请求需携带 Bearer token；`/pub/*`、Console shell 与页面路由保持公开。`corsOrigins` 会与 Remote Console 源合并。
+`/api` 请求需携带 Bearer 凭据（登录会话或 API 令牌，见[用户与权限](#用户与权限)）；`/pub/*`、Console shell 与页面路由保持公开。`corsOrigins` 会与 Remote Console 源合并。
 
 端口占用会让 HTTP Host 软降级：Adapter 与 Agent 继续启动，但 Console 不可用。Console 发起重启时，CLI daemon 会在进程以 code 51 退出后重新拉起。
 
@@ -105,19 +102,19 @@ Runtime 无配置时回退到 8086，当前脚手架默认写入 8068。连接�
 | 运行时能力 | `GET /api/introspection/{commands,middlewares,components,tools,prompt-sections,endpoints,bindings,mcp}`、`POST /api/introspection/components/render` | 当前 generation 的能力契约、owner、中间件顺序、组件渲染实验台与 Prompt Section 治理信息 |
 | Agent Sessions | `GET/POST /api/agent/sessions/*` | AI 会话树查看与分支切换；渠道会话尚未产生 AI 对话时，GET 返回 `state: not_started` 空树 |
 | 聊天记录 | `GET /api/conversations/history?sessionKey=...&beforeSequence=...` | 实际收发的 canonical 记录，与 Agent 内部会话树分开；不要求曾触发 AI |
-| 协作图谱 | `GET /api/agent/engagements[/*]`（需要 full scope）；RPC `agent.engagements.list` / `agent.engagements.get` / `agent.venues.list` | 只读投影：最近的 Engagement、单个 Engagement 的事件与黑板、已配置的 Venue；数据来自 `engagement_events` Journal，Console 不能改写 |
+| 协作图谱 | `GET /api/agent/engagements[/*]`（需要 `agent.view`）；RPC `agent.engagements.list` / `agent.engagements.get` / `agent.venues.list` | 只读投影：最近的 Engagement、单个 Engagement 的事件与黑板、已配置的 Venue；数据来自 `engagement_events` Journal，Console 不能改写 |
 | Marketplace | `GET /pub/marketplace/search`、`/pub/marketplace/detail/*`、`GET /api/marketplace/updates` | 插件市场（plugins.json + npmmirror）与更新检查 |
 | Sandbox | WS `/sandbox` | 内置沙箱聊天，免平台联调直接对话 |
 
-实时推送走 SSE：`GET /api/events`（页面目录同步、HMR 重载、消息/配置事件）。
+实时推送走 SSE：`GET /api/events`（页面目录同步、HMR 重载、消息/配置事件）。 事件流与历史（`/api/events`、`/api/events/history`）需要 `status.view`。
 
 ::: details HTTP / RPC 协议状态码与边界契约
 
 会话树的 `preview` 仍是短摘要。按需读取完整用户正文使用 `GET /api/agent/sessions/<encoded-sessionKey>/message?sessionId=<tree.sessionId>&messageId=<positive-safe-integer>`，沿用会话接口的 HTTP 鉴权，响应 `data: { messageId, text }`，不返回图片内容，也不切换分支。会话实例已变化返回 `409`，消息不存在或不是该会话的用户消息返回 `404`，旧 runtime 未提供读取能力返回 `501`；完整正文只限仍保留的消息。
 
-聊天记录接口仅允许 full scope，固定每页最近 50 条 canonical 事件，并按 sequence 升序返回。响应为 `data: { conversation, items, nextBeforeSequence, hasMore }`，加载更早记录时传入排他的 `beforeSequence`。消息事件含完整正文与安全媒体引用，撤回事件含 `messageRef`；其他事件仅返回类型、时间和 sequence，仍计入分页。不会返回本地图片路径、base64 或平台原始数据。未保存记录返回 `404 history_not_recorded`，同一 sessionKey 对应多个父频道／话题返回 `409 conversation_ambiguous`，当前账号地址或存储无法解析返回 `503 history_unavailable`，不以 Agent 内部历史代替。响应禁止缓存；客户端拼接分页前应核对完整 `conversation` 未变化。
+聊天记录接口需要 `endpoint.view`，固定每页最近 50 条 canonical 事件，并按 sequence 升序返回。响应为 `data: { conversation, items, nextBeforeSequence, hasMore }`，加载更早记录时传入排他的 `beforeSequence`。消息事件含完整正文与安全媒体引用，撤回事件含 `messageRef`；其他事件仅返回类型、时间和 sequence，仍计入分页。不会返回本地图片路径、base64 或平台原始数据。未保存记录返回 `404 history_not_recorded`，同一 sessionKey 对应多个父频道／话题返回 `409 conversation_ambiguous`，当前账号地址或存储无法解析返回 `503 history_unavailable`，不以 Agent 内部历史代替。响应禁止缓存；客户端拼接分页前应核对完整 `conversation` 未变化。
 
-聊天的“此轮用量”和“轨迹”读取现有 Agent 归档。`GET /api/agent/trace-archive/turns` 返回回合摘要、可信来源和包含子 Agent 的用量明细；`GET /api/agent/trace-archive/turn` 按需返回一次回合的执行详情，正文通过 `GET /api/agent/trace-archive/request?sessionKey=...&turnId=...&requestId=...` 单独读取。当前聊天需传完整 canonical `conversation` JSON，不能仅凭时间或粗粒度 sessionKey 关联消息；旧记录缺少来源时不作为该聊天的事实。接口均要求 full scope，并禁止 HTTP 缓存。
+聊天的“此轮用量”和“轨迹”读取现有 Agent 归档。`GET /api/agent/trace-archive/turns` 返回回合摘要、可信来源和包含子 Agent 的用量明细；`GET /api/agent/trace-archive/turn` 按需返回一次回合的执行详情，正文通过 `GET /api/agent/trace-archive/request?sessionKey=...&turnId=...&requestId=...` 单独读取。当前聊天需传完整 canonical `conversation` JSON，不能仅凭时间或粗粒度 sessionKey 关联消息；旧记录缺少来源时不作为该聊天的事实。接口均要求 `agent.view`，并禁止 HTTP 缓存。
 
 用量是供应商报告的输入、输出和缓存／推理分项，缺报不显示为零；分类 token 为估算，不能当作计费分摊。请求正文是在模型 SDK 调用边界捕获的输入，按系统提示、工具定义、消息序列和输出格式展示，不是 HTTP 抓包，也不证明上游已接收。框架发起的重试和降级分别记录；SDK 内部对相同输入的重试合并在同一次语义请求中，不作为逐次 HTTP 尝试记录。旧请求没有正文时不从当前配置重建。
 
@@ -171,37 +168,22 @@ Runtime 无配置时回退到 8086，当前脚手架默认写入 8068。连接�
 
 ## 用户与权限
 
-Console 用户就是 `zhin.config.yml` 里 `http.tokens` 的条目：每个附加令牌就是一个用户，没有单独的账号库，也没有登录和注册。加用户就加一条令牌，停用就删掉这条令牌。给它配上 `permissions` 和 `roles`，Console 就只给它看满足要求的页面，插件页面的状态接口也按同样的规则放行：
+Console 的用户、角色、会话和 API 令牌存在项目数据库里（ADR 0049），不写在配置文件中。从旧版本升级见[升级到 Console 访问控制](../migrations/console-access-control.md)。
 
-```yaml
-http:
-  token: ${HTTP_TOKEN}            # 管理员：full，能看和改全部内容
-  tokens:
-    - token: ${ALICE_TOKEN}
-      scope: user                 # 普通用户（与 demo 等价）：不能改配置
-      principalId: alice
-      permissions: [ambient:read, ambient:write] # 对应页面和插件操作的 requiredPermissions
-      roles: [member]             # 对应页面的 requiredRoles
-```
+- **初始化**：数据库里还没有所有者时，`http.token` 是初始化令牌，只能用来创建第一个所有者（Console 向导，或 `zhin console init`）。创建之后它在所有接口上失效。没有配置 `http.token` 的本地 Host 在初始化前对所有人开放。
+- **登录**：用户用用户名和密码登录，得到会话令牌（默认 12 小时滑动过期，最长 30 天）。改密码、禁用或删除用户会立即吊销该用户的全部会话。
+- **API 令牌**：用户可以为自动化签发长期令牌，权限不超过签发人，可单独吊销。命令行工具从 `ZHIN_CONSOLE_TOKEN` 读取。
+- **角色**：内置 `owner`（全部）、`admin`（除终端和用户管理外全部）、`operator`（运营：收发消息、功能配置）、`viewer`（只读）。角色可以绑定到全局、某个适配器或某个账号。
+- **权限检查**：每个 Console RPC 和每条 `/api` 路由都在 `@zhin.js/console-protocol` 的权限表里登记；没登记的一律拒绝。所有被拒绝的请求和写操作都记入审计日志。
+- **离线救援**：`zhin console user create|passwd|disable|enable|list` 直接打开项目数据库，不需要运行中的 Host。
 
-- **full 令牌**（包括主 `token`）能看到全部页面，`permissions` 和 `roles` 对它不起作用。
-- **`scope: user` 令牌**是普通用户。`user` 和 `demo` 完全等价，新配置建议写 `user`；没写 `scope` 或写了其他值时也按普通用户处理，不会变成管理员。
-- 普通用户只能看到 `permissions` 和 `roles` 满足 `requiredPermissions` 和 `requiredRoles` 的页面。插件动作只有在动作自己声明了 `requiredPermissions` 或 `requiredRoles`、并且令牌全部满足时才能执行（见 [插件 RPC](../authoring/console-pages.md#plugin-rpc)）。改配置、管理插件等内置管理操作仍然只给 full 令牌。
-- **不带令牌**只能看到没有任何要求的页面。
-- **没有配置任何令牌**时（本地开发），所有人都等同于管理员，和以前一样。
-- 页面清单（`/entries`、`/console/api/pages`、`/console/api/topology`）都按令牌过滤，且不会被缓存。
+页面的 `requiredPermissions` 与 `requiredRoles` 决定谁能看到它：内置权限（如 `status.view`）按角色授予；插件自己定义的权限名（如 `ambient:read`、`decisions:read`、`control:read`、`ops:approve`）目前只有全局所有者满足。页面清单（`/entries`、`/console/api/pages`、`/console/api/topology`）按调用者过滤，且不会被缓存。
 
-权限名和角色名由页面自己约定，比如 `ambient:read`。内置的群聊插话和技能助手状态使用 `ambient:read` 和 `skills:read`（见 [内置状态](../authoring/console-pages.md#builtin-status)），决策回放使用 `decisions:read`（见 [决策回放](../authoring/console-pages.md#builtin-decision-replay)），控制面使用 `control:read` 和 `control:write`（见 [控制面](../authoring/console-pages.md#builtin-control-plane)），审批人（危险工具审批卡、公告批准 / 驳回 / 重发）使用 `ops:approve`（见 [危险工具审批卡](../authoring/console-pages.md#builtin-tool-approval)）。
+插件的反向 WebSocket、Webhook 等路由不经过 Console 账号，由插件用自己的凭据鉴权（例如 OneBot 的 `access_token`）。
 
-## Demo scope（只读部署）
+## 终端
 
-给演示环境签发 `scope: demo` token，Console 会进入只读模式。Demo 只展示服务端允许的脱敏数据，不能把前端遮罩当成秘密边界。
-
-- 放行：事件流与历史、运行时能力目录、只读 Console RPC、系统状态、统计与插件目录；
-- WebSocket 仅 `/sandbox`；
-- 其余写操作（改配置、清日志、DB 写入等）一律 `403`。
-
-主 token 为 `full` scope，拥有全部权限。
+`console.terminal.enabled: true` 时 Console 提供宿主 Shell 与白名单 SSH 目标（ADR 0051），只有持有 `ops.terminal` 的所有者能用，会话开始与结束写入审计日志。默认关闭；关闭时不注册任何终端路由。字段见[配置参考](../configuration/generated.md)。
 
 ## 相关
 

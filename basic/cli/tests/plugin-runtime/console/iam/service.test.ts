@@ -196,4 +196,25 @@ describe('ConsoleIamService', () => {
     await service.cleanup();
     expect((await service.listAudit()).entries.map(entry => entry.action)).toEqual(['rpc:recent']);
   });
+
+  it('notifies credential revocations: password, bindings, disable, delete', async () => {
+    const { service } = await openIam();
+    await service.createOwner({ username: 'alice', password: PASSWORD });
+    const bob = await service.createUser({ username: 'bob', password: PASSWORD, bindings: [{ role: 'viewer' }] });
+    const events: unknown[] = [];
+    const stop = service.onCredentialsRevoked(event => events.push(event));
+    await service.resetPassword(bob.id, 'another-long-password');
+    await service.setBindings(bob.id, [{ role: 'operator' }]);
+    await service.setDisabled(bob.id, true);
+    await service.deleteUser(bob.id);
+    expect(events).toEqual([
+      { userId: bob.id, reason: 'password' },
+      { userId: bob.id, reason: 'bindings' },
+      { userId: bob.id, reason: 'disabled' },
+      { userId: bob.id, reason: 'deleted' },
+    ]);
+    stop();
+    await service.createUser({ username: 'carol', password: PASSWORD });
+    expect(events).toHaveLength(4);
+  });
 });

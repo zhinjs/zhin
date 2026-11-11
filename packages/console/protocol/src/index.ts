@@ -711,6 +711,7 @@ export interface ConsoleVenueDefinition {
 }
 
 export * from './permissions.js';
+export * from './navigation.js';
 export * from './feature.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {

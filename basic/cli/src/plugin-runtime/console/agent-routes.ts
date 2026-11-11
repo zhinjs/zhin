@@ -94,7 +94,7 @@ export function registerAgentConsoleRoutes(
   // Agent Trace REST — bounded, redacted live projection from the request generation.
   http.route('GET', `${base}/agent/traces`, async (_request, response, url, authScope) => {
     if (authScope !== 'full') {
-      writeJson(response, 403, { success: false, error: '需要 full scope 才能读取 Agent Trace' });
+      writeJson(response, 403, { success: false, error: '需要登录 Console 才能读取 Agent Trace' });
       return;
     }
     const sessionKey = url.searchParams.get('sessionKey')?.trim() ?? '';
@@ -124,7 +124,7 @@ export function registerAgentConsoleRoutes(
 
   http.route('POST', `${base}/agent/tasks/cancel`, async (request, response, _url, authScope) => {
     if (authScope !== 'full') {
-      writeJson(response, 403, { success: false, error: '需要 full scope 才能停止 Agent 任务' });
+      writeJson(response, 403, { success: false, error: '需要登录 Console 才能停止 Agent 任务' });
       return;
     }
     const body = (await readJsonBody<Record<string, unknown>>(request)) ?? {};
@@ -156,7 +156,7 @@ export function registerAgentConsoleRoutes(
   // Agent Collaboration Graph — read-only Engagement and Venue projections (ADR 0048).
   http.route('GET', `${base}/agent/engagements`, async (_request, response, url, authScope) => {
     if (authScope !== 'full') {
-      writeJson(response, 403, { success: false, error: '需要 full scope 才能读取 Engagement 列表' });
+      writeJson(response, 403, { success: false, error: '需要登录 Console 才能读取 Engagement 列表' });
       return;
     }
     const limit = parseBoundedInteger(url.searchParams.get('limit'), 50, 1, 200);
@@ -181,7 +181,7 @@ export function registerAgentConsoleRoutes(
 
   http.route('GET', `${base}/agent/engagements/*`, async (_request, response, url, authScope) => {
     if (authScope !== 'full') {
-      writeJson(response, 403, { success: false, error: '需要 full scope 才能读取 Engagement 详情' });
+      writeJson(response, 403, { success: false, error: '需要登录 Console 才能读取 Engagement 详情' });
       return;
     }
     const prefix = `${base}/agent/engagements/`;
@@ -226,7 +226,7 @@ export function registerAgentConsoleRoutes(
 
   http.route('GET', `${base}/agent/venues`, async (_request, response, _url, authScope) => {
     if (authScope !== 'full') {
-      writeJson(response, 403, { success: false, error: '需要 full scope 才能读取 Venue 列表' });
+      writeJson(response, 403, { success: false, error: '需要登录 Console 才能读取 Venue 列表' });
       return;
     }
     const handled = await withGenerationAgentConsole(snapshots, async ({ venues }) => {

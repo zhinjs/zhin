@@ -71,7 +71,7 @@ export default definePlugin({
 
 ### Console
 
-浏览器里的管理后台，地址固定为 [console.zhin.dev](https://console.zhin.dev)，**不需要你部署**。Bot 启动时会打印一个 API 地址（新项目默认 `http://127.0.0.1:8068`），在 Console 里填入这个地址和 `.env` 里的 `HTTP_TOKEN`，就能发测试消息、看日志、改配置、管理插件。深入：[Console](../console/index.md)
+浏览器里的管理后台，地址固定为 [console.zhin.dev](https://console.zhin.dev)，**不需要你部署**。Bot 启动时会打印一个 API 地址（新项目默认 `http://127.0.0.1:8068`），在 Console 里填入这个地址，第一次用 `.env` 里的 `HTTP_TOKEN` 创建所有者账号，之后用账号登录，就能发测试消息、看日志、改配置、管理插件。深入：[Console](../console/index.md)
 
 ## 开始写插件后会遇到的
 

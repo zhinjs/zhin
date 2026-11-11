@@ -19,7 +19,7 @@ export function registerScheduleExecutionRoutes({ http, base, snapshots }: Sched
   const guarded = (operation: (store: ScheduleExecutionHistoryPort, url: URL) => Promise<unknown>): Parameters<HttpHost['route']>[2] =>
     async (_request, response, url, authScope) => {
       response.setHeader('cache-control', 'no-store');
-      if (authScope !== 'full') return writeJson(response, 403, { success: false, error: '需要 full scope 才能访问执行记录' });
+      if (authScope !== 'full') return writeJson(response, 403, { success: false, error: '需要登录 Console 才能访问执行记录' });
       try {
         const handled = await withGenerationAgentConsole(snapshots, async ({ scheduleExecutions }) => {
           if (!scheduleExecutions) return writeJson(response, 503, { success: false, code: 'schedule_history_unavailable', error: '执行记录尚未就绪' });

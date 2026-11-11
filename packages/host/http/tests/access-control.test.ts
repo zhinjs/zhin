@@ -117,8 +117,16 @@ describe('access control decisions', () => {
     expect(authorizeConsoleHttp(VIEWER, 'GET', '/unregistered')).toMatchObject({ allowed: false, status: 403 });
     expect(authorizeConsoleWebSocket(VIEWER, '/sandbox')).toBe(false);
     expect(authorizeConsoleWebSocket(userPrincipal('operator'), '/sandbox')).toBe(true);
+    // Per-endpoint sandbox sockets inherit the `/sandbox` rule.
+    expect(authorizeConsoleWebSocket(userPrincipal('operator'), '/sandbox/bot%201')).toBe(true);
+    expect(authorizeConsoleWebSocket(VIEWER, '/sandbox/bot-2')).toBe(false);
+    expect(authorizeConsoleWebSocket(userPrincipal('operator'), '/sandboxed')).toBe(false);
+    // Non-Console sockets are never host-authenticated for users (adapters use `auth: 'protocol'`).
     expect(authorizeConsoleWebSocket(userPrincipal('operator'), '/onebot/v11')).toBe(false);
-    expect(authorizeConsoleWebSocket(userPrincipal('admin'), '/onebot/v11')).toBe(true);
+    expect(authorizeConsoleWebSocket(userPrincipal('owner'), '/onebot/v11')).toBe(false);
+    expect(authorizeConsoleWebSocket({ kind: 'bootstrap', open: false }, '/onebot/v11')).toBe(false);
+    expect(authorizeConsoleWebSocket({ kind: 'bootstrap', open: false }, '/sandbox')).toBe(false);
+    expect(authorizeConsoleWebSocket({ kind: 'bootstrap', open: true }, '/sandbox')).toBe(true);
   });
 
   it('audits only RPC type and key names, never values', () => {

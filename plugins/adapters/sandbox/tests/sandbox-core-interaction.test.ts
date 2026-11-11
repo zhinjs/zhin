@@ -27,7 +27,7 @@ it('settles the original Core confirm once through the real Sandbox wire, never 
     const session = readOperationSession(message); if (!session) throw new Error('Sandbox Core Session is missing'); sessions.push(session);
     ordinary(message.content); return true;
   } });
-  const http = createHttpHost({ host: '127.0.0.1', port: 0, token: 'local-full' });
+  const http = createHttpHost({ host: '127.0.0.1', port: 0 });
   const adapter = createCapabilitySlot({ owner: root, feature: adapterFeatureId, localName: 'sandbox',
     source: '/project/adapters/sandbox/index.ts', definition: sandboxAdapter });
   let processed = 0;
@@ -55,7 +55,7 @@ it('settles the original Core confirm once through the real Sandbox wire, never 
     await adapters.start(); adapters.open();
     const { port } = await http.listen();
     const connect = async () => {
-      const socket = new WebSocket(`ws://127.0.0.1:${port}/sandbox?token=local-full`);
+      const socket = new WebSocket(`ws://127.0.0.1:${port}/sandbox`);
       clients.push(socket);
       const frames: Record<string, any>[] = [];
       socket.on('message', raw => frames.push(JSON.parse(String(raw))));

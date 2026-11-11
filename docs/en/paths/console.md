@@ -11,17 +11,17 @@ When you're done you'll:
 
 - know which page to open for each task;
 - be able to trace a message to the AI's steps and logs;
-- tell a read-only Demo token from a Full token that can make changes.
+- know what owner, admin, operator and viewer accounts can do.
 
 ::: tip Console and the bot are separate
-Console is a standalone web app ([console.zhin.dev](https://console.zhin.dev)); your bot process (the Host) only exposes token-protected APIs. One Console can therefore connect to bots on different machines.
+Console is a standalone web app ([console.zhin.dev](https://console.zhin.dev)); your bot process (the Host) only exposes APIs that require signing in. One Console can therefore connect to bots on different machines.
 :::
 
 ## 1. Connect the Host
 
 1. Start the Bot and copy the API Base printed by the terminal.
 2. Open [console.zhin.dev](https://console.zhin.dev).
-3. Use `HTTP_TOKEN` from the project `.env` file.
+3. On the first connection, use `HTTP_TOKEN` from the project `.env` file (the bootstrap token) to open the setup wizard and create the owner account; sign in with that account afterwards. `zhin console init` does the same from the command line.
 
 Projects created by the scaffold default to port `8068`, but go by the terminal output or `http.port` in your config. If you can't connect, run `npx zhin doctor` first.
 
@@ -37,7 +37,7 @@ Projects created by the scaffold default to port `8068`, but go by the terminal 
 | Inspect multi-Agent collaboration | Collaboration graph (Advanced) | participants, mail hops, shared Blackboard, and budget of each collaboration |
 | Confirm a command or tool is actually loaded | Runtime Capabilities (Advanced) | commands, middleware, components, Tools, Prompt Sections, MCP |
 | Diagnose a failure | Activity log | level, source, timeline, details |
-| Change the system | Advanced → Config, Environment, Project files, Database | full-scope administration only |
+| Change the system | Advanced → Config, Environment, Project files, Database | needs the matching `ops.*` permission (owners, admins) |
 
 **Configured doesn't mean active.** To know whether something is available, go by what **Runtime Capabilities** shows as currently loaded.
 
@@ -70,15 +70,19 @@ Several Agents can ask, delegate, and share a Blackboard inside one collaboratio
 Venues live under `ai.venues` in `zhin.config.yml`, and each Agent's contacts live under `collaboration` in `agents/<name>/agent.json`; Console keeps no second copy. The collaboration graph is a read-only view of the `engagement_events` Journal, so Console can't rewrite collaboration state. `zhin trace --engagements` shows the same data on the command line.
 :::
 
-## 6. Full token vs Demo token
+## 6. Accounts and roles
 
-| | Full token | Demo token |
-| --- | --- | --- |
-| View status, capabilities, and runs | ✅ | ✅ |
-| Send messages; change config, environment, files, database | ✅ (per Host policy) | ❌ |
-| Read raw YAML config | ✅ | ❌ |
+| | Owner `owner` | Admin `admin` | Operator `operator` | Viewer `viewer` |
+| --- | --- | --- | --- | --- |
+| View status, capabilities, and runs | ✅ | ✅ | ✅ | ✅ |
+| Send messages, configure features | ✅ | ✅ | ✅ | ❌ |
+| Change config, environment, files, database; manage plugins | ✅ | ✅ | ❌ | ❌ |
+| Read raw YAML config | ✅ | ✅ | ❌ | ❌ |
+| Terminal, manage users and roles | ✅ | ❌ | ❌ | ❌ |
 
-A token is a password: keep it out of URLs, screenshots, and public frontend config.
+A role can be bound to just one adapter or account. See [Console users and permissions](../console/index.md#users-and-permissions).
+
+Keep passwords and API tokens out of URLs, screenshots, and public frontend config.
 
 ::: details Can't connect to a remote deployment?
 Set `http.corsOrigins` to allow Console's origin. Behind a reverse proxy, forward the API, SSE, WebSocket, and page assets together; proxying ordinary HTTP alone breaks live messages or page loading. See [Production](../operations/production.md).
@@ -104,7 +108,7 @@ This view does not expose final values without reliable redaction or infer an ol
 
 ### Read field origins and current-generation agreement
 
-On the plugin configuration page, choose **读取已保存版本解释** (read saved-version explanation). The action reads the file revision already loaded by the page, not an unsaved draft. It requires full scope and versions of both the Host and standalone Console that provide this feature.
+On the plugin configuration page, choose **读取已保存版本解释** (read saved-version explanation). The action reads the file revision already loaded by the page, not an unsaved draft. It requires `ops.config.read` and versions of both the Host and standalone Console that provide this feature.
 
 `file` means the static field is present in the file; `schema-default` means the declared default fills the saved candidate during this read; `unset` means it remains absent. `equal` proves only agreement with this instance's current generation at read time. It does not prove that an older generation came from the same file or default; historical generation origins remain unknown. Sensitive fields and environment references are hidden and not compared. Final values, default values and environment variable names are never displayed.
 
@@ -117,7 +121,7 @@ If the inbound message is visible in a conversation, open its **Diagnostics** ac
 - `completed` means inbound processing ended. Routing to an Agent does not prove the Agent turn finished.
 - Delivery `sent` means the Endpoint returned a message ID, not that a remote client displayed it. For `deliveryUnknown`, check the original conversation before any manual resend; no automatic retry is performed.
 - Each IM Runtime keeps at most 500 records in memory for 15 minutes. Restart, expiry and capacity eviction remove records; an absent record proves neither success nor absence of receipt.
-- Reading diagnostics requires an explicitly configured and validated full-scope token, including on an otherwise tokenless Host. Message bodies, sender profiles and raw exceptions are not copied into this store. Each record holds at most 32 steps and 32 deliveries; `truncated: true` marks an incomplete record when these limits are exceeded. Identity fields are limited to 2048 characters and conversation JSON to 8192; oversized identities are omitted instead of truncated into ambiguous addresses. This is not a complete audit log.
+- Reading diagnostics requires a signed-in account (`status.view`), including on a Host that has not been set up yet. Message bodies, sender profiles and raw exceptions are not copied into this store. Each record holds at most 32 steps and 32 deliveries; `truncated: true` marks an incomplete record when these limits are exceeded. Identity fields are limited to 2048 characters and conversation JSON to 8192; oversized identities are omitted instead of truncated into ambiguous addresses. This is not a complete audit log.
 
 The Host endpoint is `GET /api/messages/diagnostics`: use `id` for one record, or `conversation` (complete `ConversationRef` JSON) and `messageId` for an exact lookup; `limit` accepts 1–100. Follow the observed result in [message troubleshooting](../troubleshooting/messages.md); newer Console versions also link to the relevant topic from each diagnostic. When no record is available, continue below. Older Hosts do not expose this endpoint; update the Host and standalone Console separately.
 
@@ -133,7 +137,7 @@ The task center (`/tasks`) starts with practical use cases and reads the task se
 
 The first supported provider is persistent administrator reminders. Configure a Database Host, then select a loaded reminder instance, delivery account, conversation kind and ID, including parent and thread identities when present. Accounts come from actual Endpoints. Enter an exact target manually when the platform has no directory; a display name is not an identity. Review the target, absolute time with an explicit timezone offset, content and future delivery effects before creating. A successful creation means the task was saved, not that the platform is online or a message was delivered.
 
-Administrator tasks have separate storage and quotas from personal reminders created in chat. Chat tasks remain owned by the real sender; Console neither impersonates a platform user nor lists or cancels personal reminders. Task management requires an explicitly configured, verified full-scope Bearer Token. Tokenless and demo access are rejected.
+Administrator tasks have separate storage and quotas from personal reminders created in chat. Chat tasks remain owned by the real sender; Console neither impersonates a platform user nor lists or cancels personal reminders. Task management requires a signed-in account: `feature.view` to read, `feature.configure` to create or change tasks.
 
 Available actions come from the plugin. Pause a scheduled task before editing or resuming it; cancellation cannot retract a delivery already in progress. An `unknown` delivery only permits cancellation after checking the target, with no retry or resume. A fixed interval is a number of seconds, not a local-calendar schedule at the same hour each day. Administrator time fields still require ISO timestamps with an offset; the [reminder guide](../solutions/reminders.md) covers limited natural-time input and follow-up questions for personal chat reminders. RSS instances with durable state, exact outbound delivery and scheduling also expose independent administrator subscriptions. Initial and resumed checks only establish a baseline; see [feed updates](../solutions/rss-subscriptions.md). Other task sources require their own integrations.
 
@@ -149,7 +153,7 @@ On return, separately inspect current-generation configuration semantics, nonemp
 
 ## Command permission explanations
 
-Open `/permissions` or follow the permission explanation link in the command catalog. Use an explicit full-scope Token for the current Host. Search by command, description or plugin instance; the catalog is paginated.
+Open `/permissions` or follow the permission explanation link in the command catalog. Sign in with an account holding `status.view`. Search by command, description or plugin instance; the catalog is paginated.
 
 Selecting a command explains its actual `permit` declarations and its separate `adapter` constraint. Rule arrays use AND; comma-separated values within one rule use OR. Optionally supply a hypothetical conversation, sender and roles to check builtin conditions. Accounts come from the current Host's complete Endpoint catalog; no platform role lookup is performed.
 

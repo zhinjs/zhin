@@ -13,7 +13,7 @@ import { writeJson } from './http-response.js';
 import { listPluginUseCases } from '../../plugin-management/use-cases.js';
 
 const taskMessages = createMessages({
-  auth: { 'zh-CN': "请配置并使用有效的 full scope Bearer Token 管理管理员任务", en: "Configure and use a valid full-scope Bearer Token to manage administrator tasks." },
+  auth: { 'zh-CN': "请以 Console 账号或 API 令牌登录后管理管理员任务", en: "Sign in with a Console account or API token to manage administrator tasks." },
   body: { 'zh-CN': "请求正文无效或超过 64 KiB 上限", en: "The request body is invalid or exceeds 64 KiB." },
   invalid_input: { 'zh-CN': "任务参数无效，请核对字段与目标", en: "Invalid task parameters. Check the fields and destination." },
   conflict: { 'zh-CN': "运行代或任务版本已变化，请刷新后核对；不要盲目重试", en: "The generation or task revision changed. Refresh and reconcile before retrying." },

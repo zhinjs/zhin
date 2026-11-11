@@ -450,6 +450,9 @@ export const CONSOLE_HTTP_PERMISSIONS: readonly ConsoleHttpPermissionRule[] = Ob
   httpRule('GET', '/assistant/execution', P.OPS_SCHEDULE_READ),
   httpRule('GET', '/assistant/executions', P.OPS_SCHEDULE_READ),
   httpRule('POST', '/assistant/executions/cleanup', P.OPS_SCHEDULE_WRITE),
+  // ADR 0051: the WebSocket `/console/terminal` authenticates with a one-time ticket.
+  httpRule('GET', '/console/terminal/targets', P.OPS_TERMINAL),
+  httpRule('POST', '/console/terminal/tickets', P.OPS_TERMINAL),
 ]);
 
 /**
@@ -475,10 +478,23 @@ export function resolveConsoleHttpPermission(method: string, relativePath: strin
   return best;
 }
 
-/** WebSocket upgrade paths a non-root principal may open, and what they require. */
+/**
+ * Host-authenticated WebSocket paths the Console opens, and what they require. A key also
+ * covers its sub-paths (`/sandbox` → `/sandbox/<endpoint>`). Every other host-authenticated
+ * socket is denied to users; adapter reverse sockets authenticate themselves (`auth: 'protocol'`).
+ */
 export const CONSOLE_WS_PERMISSIONS: Readonly<Record<string, ConsolePermission>> = Object.freeze({
   '/sandbox': P.ENDPOINT_OPERATE,
 });
+
+/** Permission a host-authenticated WebSocket path requires; `null` = not a Console socket (deny). */
+export function resolveConsoleWsPermission(pathname: string): ConsolePermission | null {
+  let best: string | null = null;
+  for (const key of Object.keys(CONSOLE_WS_PERMISSIONS)) {
+    if ((pathname === key || pathname.startsWith(`${key}/`)) && (best === null || key.length > best.length)) best = key;
+  }
+  return best === null ? null : CONSOLE_WS_PERMISSIONS[best]!;
+}
 
 /** Whether a grant at `scope` covers `target` for `permission`. */
 export function bindingScopeCovers(

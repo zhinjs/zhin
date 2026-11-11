@@ -8,7 +8,7 @@ import {
 
 /**
  * Scope a Host handler runs with. Every admitted request is `full`: authorization happens
- * before dispatch against the request's {@link ConsolePrincipal} (ADR 0049).
+ * before dispatch against the request's `ConsolePrincipal` (ADR 0049).
  */
 export type AuthScope = 'full';
 

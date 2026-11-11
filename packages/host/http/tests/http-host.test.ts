@@ -374,28 +374,38 @@ describe('HttpHost', () => {
     expect(preflight.headers.get('access-control-allow-origin')).toBe('https://example.test');
   });
 
-  it('authorizes WS upgrades by principal: users by permission, the bootstrap token never on Console sockets', async () => {
+  it('authorizes WS upgrades by principal: only mapped Console sockets, never the bootstrap token', async () => {
     const host = createHttpHost({ host: '127.0.0.1', port: 0, token: 'secret-full-token' });
     hosts.push(host);
     const provider = fakeProvider({ initialized: false });
     host.tokenRegistry.useAccessProvider(provider);
     const opened: string[] = [];
     host.ws('/sandbox').onConnection((connection) => { opened.push(`sandbox:${connection.principal?.kind}`); connection.socket.close(); });
-    host.ws('/onebot').onConnection((connection) => { opened.push(`onebot:${connection.principal?.kind}`); connection.socket.close(); });
+    host.ws('/sandbox/bot-2').onConnection((connection) => { opened.push(`sandbox/bot-2:${connection.principal?.kind}`); connection.socket.close(); });
+    // A host-authenticated plugin socket is not a Console socket: nobody but an open Host may use it.
+    host.ws('/plugin-socket').onConnection((connection) => { opened.push(`plugin:${connection.principal?.kind}`); connection.socket.close(); });
     const { port } = await host.listen();
 
     expect(await wsOutcome(`ws://127.0.0.1:${port}/sandbox`)).toBe('rejected');
-    // Before setup the bootstrap token admits adapter reverse connections, not Console sockets.
     expect(await wsOutcome(`ws://127.0.0.1:${port}/sandbox?token=secret-full-token`)).toBe('rejected');
-    expect(await wsOutcome(`ws://127.0.0.1:${port}/onebot?token=secret-full-token`)).toBe('opened');
+    expect(await wsOutcome(`ws://127.0.0.1:${port}/plugin-socket?token=secret-full-token`)).toBe('rejected');
 
     provider.state.initialized = true;
-    expect(await wsOutcome(`ws://127.0.0.1:${port}/onebot?token=secret-full-token`)).toBe('rejected');
+    expect(await wsOutcome(`ws://127.0.0.1:${port}/sandbox?token=secret-full-token`)).toBe('rejected');
     expect(await wsOutcome(`ws://127.0.0.1:${port}/sandbox?token=operator-session`)).toBe('opened');
+    expect(await wsOutcome(`ws://127.0.0.1:${port}/sandbox/bot-2?token=operator-session`)).toBe('opened');
     expect(await wsOutcome(`ws://127.0.0.1:${port}/sandbox?token=viewer-session`)).toBe('rejected');
-    expect(await wsOutcome(`ws://127.0.0.1:${port}/onebot?token=operator-session`)).toBe('rejected');
-    expect(opened).toEqual(['onebot:bootstrap', 'sandbox:user']);
+    expect(await wsOutcome(`ws://127.0.0.1:${port}/plugin-socket?token=operator-session`)).toBe('rejected');
+    expect(opened).toEqual(['sandbox:user', 'sandbox/bot-2:user']);
     expect(provider.audits.filter(entry => entry.outcome === 'denied').map(entry => entry.action)).toContain('ws:/sandbox');
+  });
+
+  it('serves an open Host (no credential configured) on any host-authenticated socket', async () => {
+    const host = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(host);
+    host.ws('/plugin-socket').onConnection((connection) => { connection.socket.close(); });
+    const { port } = await host.listen();
+    expect(await wsOutcome(`ws://127.0.0.1:${port}/plugin-socket`)).toBe('opened');
   });
 
   it('allows a protocol-authenticated WS route to perform its own handshake', async () => {

@@ -103,10 +103,11 @@ const ansiPanel = projectBlueprintToCliPanel(blueprint, statusData, {
 | `icon` | 无 | lucide 风格的图标名，如 `'Box'`、`'Workflow'` |
 | `order` | `100` | 导航排序，越小越靠前 |
 | `hideInNav` | `false` | 不在导航中显示 |
-| `requiredPermissions` | `[]` | 访问所需权限，对应令牌的 `permissions` |
-| `requiredRoles` | `[]` | 访问所需角色，对应令牌的 `roles` |
+| `requiredPermissions` | `[]` | 访问所需权限：内置权限（如 `status.view`）或插件自定义的权限名 |
+| `requiredRoles` | `[]` | 访问所需角色名（如 `operator`） |
+| `section` | — | Console 导航分区：`overview` / `conversations` / `features` / `plugins` / `ops` / `access`；省略时由 Console 决定（ADR 0052） |
 
-导航和页面清单按调用者的令牌过滤：full 令牌能看到全部页面；其他令牌只能看到它的 `permissions` 和 `roles` 满足要求的页面；不带令牌只能看到没有要求的页面。令牌怎么配置见 [Console 的用户与权限](../console/index.md#用户与权限)。
+导航和页面清单按调用者过滤：全局所有者能看到全部页面；其他用户只能看到角色权限满足要求的页面（插件自定义的权限名目前只有所有者满足）；未登录只能看到没有要求的页面。用户与角色见 [Console 的用户与权限](../console/index.md#用户与权限)。
 
 Console 根据独立的界面语言选择 `titleI18n`，只改变导航和面包屑显示，不改路由、权限或页面正文。Page 正文本地化由插件自己的组件负责；未声明翻译的第三方标题保留原文。
 
@@ -227,9 +228,10 @@ definePluginConsoleRpc({
 访问规则：
 
 - **跟随页面**：写了 `page` 时，调用者必须满足这个页面的 `requiredPermissions` 和 `requiredRoles`，方法自己声明的要求会叠加上去。页面在当前代没有加载时直接拒绝。
-- **full 令牌**可以调用全部方法。
-- **其他令牌**（`scope: user` / `demo`）可以读取 `status`，前提是它持有全部要求的权限和角色。`status` 完全没有要求时，只有写了 `demo: true` 才对这些令牌开放。
-- **动作**：其他令牌只有在动作**自己**声明了 `requiredPermissions`、`requiredRoles` 或 `anyOfPermissions`，并且令牌满足全部要求（包括页面的要求）时才能执行，否则返回「没有操作权限」。动作自己没有声明任何要求时只允许 full 令牌调用，页面的要求不会单独放行动作。
+- 先过 Console 的权限表：读方法需要 `feature.view`，动作需要 `feature.configure`。
+- **全局所有者**可以调用全部方法。
+- **其他用户**可以读取 `status`，前提是持有全部要求的权限和角色。`status` 完全没有要求时，只有写了 `demo: true` 才对他们开放。
+- **动作**：其他用户只有在动作**自己**声明了 `requiredPermissions`、`requiredRoles` 或 `anyOfPermissions`，并且满足全部要求（包括页面的要求）时才能执行，否则返回「没有操作权限」。动作自己没有声明任何要求时只允许所有者调用，页面的要求不会单独放行动作。
 - **任选其一**：`anyOfPermissions` 列出的权限持有其中**一个**即可（和 `requiredPermissions` 叠加）。适合新权限点与旧权限点并存，例如审批卡结算接受 `ops:approve` 或旧的 `tool_approvals:resolve`。
 
 ```ts
@@ -260,7 +262,7 @@ actions: {
 | `plugin.root.ambient` | `pluginRpc('root', 'ambient')` | `ambient:read` |
 | `plugin.root.skills` | `pluginRpc('root', 'skills')` | `skills:read` |
 
-full 令牌不需要这些权限。页面在 `requiredPermissions` 里写同样的权限，令牌在 `http.tokens[].permissions` 里给出（见 [用户与权限](../console/index.md#用户与权限)）。两个查询都只读，不接收参数。
+全局所有者不需要这些权限；它们是插件自定义的权限名，目前只有所有者满足（见 [用户与权限](../console/index.md#用户与权限)）。两个查询都只读，不接收参数。
 
 数据只保存在内存里：最近 24 小时，最多 2000 条，重启后清空。不包含聊天内容、提示词、判断理由或密钥。时间都是毫秒时间戳。
 
@@ -350,7 +352,7 @@ interface SkillsStatus {
 | 方法 | 调用 | 需要的权限 |
 | --- | --- | --- |
 | `plugin.root.control` | `pluginRpc('root', 'control')` | `control:read` |
-| `plugin.root.control-set` | `pluginRpc('root', 'control-set', { expectedRevision, instance?, sessions? })` | `control:write`（动作；管理员令牌总可调用） |
+| `plugin.root.control-set` | `pluginRpc('root', 'control-set', { expectedRevision, instance?, sessions? })` | `control:write`（动作；所有者总可调用） |
 
 四个开关：
 
@@ -378,7 +380,7 @@ interface SkillsStatus {
 | --- | --- | --- |
 | `plugin.root.session-ops` | `pluginRpc('root', 'session-ops')` | `control:read` |
 | `plugin.root.session-ops-preview` | `pluginRpc('root', 'session-ops-preview', { platform, sceneId, template? })` | `control:read` |
-| `plugin.root.session-ops-set` | `pluginRpc('root', 'session-ops-set', { expectedRevision, defaults?, sessions? })` | `control:write`（动作；管理员令牌总可调用） |
+| `plugin.root.session-ops-set` | `pluginRpc('root', 'session-ops-set', { expectedRevision, defaults?, sessions? })` | `control:write`（动作；所有者总可调用） |
 
 配置按 `platform` + `sceneId`（形如 `group:123`，和会话画像同口径）存放，不写进会话画像：
 
@@ -479,7 +481,7 @@ interface SkillsStatus {
 | 方法 | 调用 | 需要的权限 |
 | --- | --- | --- |
 | `plugin.root.tool-approvals` | `pluginRpc('root', 'tool-approvals')` | `tool_approvals:read` 或 `ops:approve` |
-| `plugin.root.resolve-tool-approval` | `pluginRpc('root', 'resolve-tool-approval', { id, decision: 'approve' \| 'deny' })` | `ops:approve` 或 `tool_approvals:resolve`（动作；管理员令牌总可调用） |
+| `plugin.root.resolve-tool-approval` | `pluginRpc('root', 'resolve-tool-approval', { id, decision: 'approve' \| 'deny' })` | `ops:approve` 或 `tool_approvals:resolve`（动作；所有者总可调用） |
 
 ### 内置操作：自我变更审批（ADR 0040）
 
@@ -522,7 +524,7 @@ export default defineAdapterPage('telegram');
 - 显示 LoginAssist 的 `login.list` 待办，并用 `login.submit` / `login.cancel` 完成扫码、滑块、短信或设备确认；
 - 渲染适配器自定义动作（`status.actions`），例如 QQ 的扫码绑定、公域 / 私域选择。
 
-权限按适配器分开：页面读取需要 `<adapterKey>:read`，写操作（账号变更、自定义动作）需要 `<adapterKey>:write`；管理员 full token 不受限。首次修改启动账号需管理员核对清单并确认迁移；缺少持久化管理端口时，`runtime.canManage` 为 `false` 或请求明确不可用，不回退写配置文件。
+权限按适配器分开：页面读取需要 `<adapterKey>:read`，写操作（账号变更、自定义动作）需要 `<adapterKey>:write`；全局所有者不受限。首次修改启动账号需管理员核对清单并确认迁移；缺少持久化管理端口时，`runtime.canManage` 为 `false` 或请求明确不可用，不回退写配置文件。
 
 每次变更提交清单中的 `expectedGeneration` 与 `expectedRevision`，目标使用 `instanceId`；首次迁移经用户确认附 `confirmMigration: true`。新增与替换只保存为未启动状态；普通配置更新只重连目标账号。冲突或提交结果未知时先刷新核实，不自动重试；持久化保存成功与异步启动、关闭完成是不同状态。
 
@@ -576,7 +578,7 @@ if (result.status === 'invalid') showErrors(result.errors);
 - 写入前按 schema 校验每个被改动的顶层配置块，失败时返回 `status: 'invalid'` 和带完整路径的错误（如 `$.ai.trigger.ambient.mode`），不写入。
 - 成功时 `restartRequired` 表示是否改到了 Host 配置：为 `true` 时文件已保存，需要重启进程才能生效，`message` 为「配置已保存，需重启进程才能生效」。
 - 成功后发布 `config:updated` 事件，带 `paths`（实际写入的路径）和新 `revision`。
-- 只接受 full scope Token；Demo 部署不可用。一次最多 32 个 patch，每个路径最多 16 段。
+- 需要 `agent.configure`（带 `instanceKey` 写插件配置时需要 `feature.configure`）。一次最多 32 个 patch，每个路径最多 16 段。
 - 插件状态与动作走 plugin RPC（`plugin.<PluginId>.status` / `plugin.<PluginId>.<action>`），不要用它写配置。
 
 ## 它是怎么工作的

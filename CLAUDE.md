@@ -78,12 +78,18 @@ packages/toolkit/{create-zhin,components,tailwind,html-renderer}         # 脚�
 | ai | `packages/im/ai/src/` | Provider abstraction, agent loop, sessions, memory, compaction |
 | core | `packages/im/core/src/` | ImRuntime, messages, side events, rendering, interaction |
 | agent | `packages/im/agent/src/` | ZhinAgent orchestrator, security (ExecPolicy, FilePolicy), MCP client |
-| host-http | `packages/host/http/src/` | 极简 HTTP/WS Host（Bearer、CORS，无 Koa）；Console/管理面由 `basic/cli` 装配 |
+| host-http | `packages/host/http/src/` | 极简 HTTP/WS Host（Bearer、CORS，无 Koa）、Console 访问控制门禁；Console/管理面由 `basic/cli` 装配 |
 | mcp / a2a | `packages/host/{mcp,a2a}/src/` | MCP Server、A2A Server |
 
 ### Outbound send chain (do not bypass)
 
 `Message.$reply` / Runtime outbound port → `OutboundRenderer` → outbound middleware → platform `Endpoint`. No parallel send path.
+
+### Console access control (ADR 0049)
+
+- Users, roles, sessions, API tokens and the audit log live in the project database (`basic/cli/src/plugin-runtime/console/iam/`), not in config. `http.token` is only a **bootstrap token**: valid until the first owner exists (Console wizard or `zhin console init`), refused everywhere afterwards. `http.tokens` is removed (startup fails). Automation uses user-issued API tokens via `ZHIN_CONSOLE_TOKEN`.
+- Every `/api` route and every Console RPC must be listed in the permission map of `@zhin.js/console-protocol` (`CONSOLE_HTTP_PERMISSIONS`, `CONSOLE_RPC_PERMISSIONS`, `CONSOLE_WS_PERMISSIONS`); unlisted ones are denied to every signed-in principal (owners included). Register a permission whenever you add a route, RPC or host-authenticated socket.
+- Plugin routes outside the Console (Webhooks, adapter reverse WebSockets) authenticate themselves: `http.ws(path, { auth: 'protocol' })` plus the plugin's own credential (`verifyProtocolAccessToken`).
 
 ### Plugin system (Plugin Runtime — current)
 

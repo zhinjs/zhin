@@ -56,6 +56,7 @@ import {
   composeHostConsoleRpc,
   defineWorkspaceConversationTable,
   installConsoleIam,
+  installHostConsoleTerminal,
 } from './console/module.js';
 import { installHttpHost, resolveHttpConfig } from '@zhin.js/host-http';
 import { createDatabaseHost, installDatabaseHost, resolveDatabaseConfig } from '@zhin.js/core/runtime';
@@ -112,6 +113,14 @@ export interface StartCommandOptions {
   readonly installTrustedResources?: RootResourceInstaller;
   writeOutput(value: string): void;
   writeError(value: string): void;
+}
+
+/** Host config `console.terminal` (raw; validated by the terminal installer). */
+function readConsoleTerminalConfig(config: unknown): unknown {
+  if (!config || typeof config !== 'object') return undefined;
+  const consoleBlock = (config as Record<string, unknown>).console;
+  if (!consoleBlock || typeof consoleBlock !== 'object') return undefined;
+  return (consoleBlock as Record<string, unknown>).terminal;
 }
 
 function readableCapabilityId(value: string): string {
@@ -232,6 +241,14 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     apiBase: httpConfig.apiBase,
     logger: getLogger('console'),
     requestRestart: () => { void requestProcessRestart(); },
+  });
+  // Console terminal (ADR 0051): off unless `console.terminal.enabled`; owner-only via ops.terminal.
+  const consoleTerminal = installHostConsoleTerminal(httpHost, {
+    config: readConsoleTerminalConfig(hostConfig),
+    projectRoot: options.root,
+    base: httpConfig.apiBase ?? '/api',
+    iam: () => (consoleIam.supported ? consoleIam.service : undefined),
+    logger: getLogger('console'),
   });
   const authorizeConfigurationChat = createConfigurationChatAuthorizer(hostConfig, endpointRoles);
   const authorizeRestartChat = createRestartChatAuthorizer(hostConfig, endpointRoles);
@@ -460,6 +477,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     try {
       disposeReadiness();
       disposeConsoleControlPlane();
+      consoleTerminal.close();
       consoleIam.dispose();
       // Process ingress owns WebSocket operation leases. Close it before Root
       // drain so long-lived connections release those leases instead of

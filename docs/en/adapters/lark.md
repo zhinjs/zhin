@@ -116,7 +116,7 @@ Open the Console **Lark** page (route `/lark`) to:
 
 An administrator must review and confirm the existing account list before its first migration; identity and history are retained. New or replaced accounts are saved disabled and must be started explicitly. A connection update reconnects only that account; replacement uses a new internal identity and does not inherit Sessions or settings. If a commit outcome is unknown, refresh to verify it before taking another action.
 
-Reading requires `lark:read`; writes require `lark:write`. A full admin token is unrestricted. "Add endpoint" is equivalent to the old `lark endpoint add` command.
+Reading requires `lark:read`; writes require `lark:write`. A global owner is unrestricted (only owners currently hold these plugin permissions). "Add endpoint" is equivalent to the old `lark endpoint add` command.
 
 ## Troubleshooting
 

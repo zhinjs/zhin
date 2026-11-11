@@ -15,6 +15,10 @@ import {
   resolveDeclarativeText,
   projectBlueprintToImCard,
   projectBlueprintToCliPanel,
+  optionalPageSection,
+  CONSOLE_PAGE_SECTIONS,
+  isConsolePageSection,
+  type ConsolePageSection,
   type NormalizedPageMetadata,
   type PageManifest,
   type ClientModuleArtifact,
@@ -53,6 +57,8 @@ import {
 import type { ValidationContext } from '@zhin.js/feature-kit';
 
 export {
+  CONSOLE_PAGE_SECTIONS,
+  isConsolePageSection,
   normalizePageMetadata,
   normalizeClientModuleArtifact,
   isConsoleBlueprint,
@@ -68,6 +74,7 @@ export {
   resolveDeclarativeText,
   projectBlueprintToImCard,
   projectBlueprintToCliPanel,
+  type ConsolePageSection,
   type NormalizedPageMetadata,
   type PageManifest,
   type ClientModuleArtifact,
@@ -154,6 +161,7 @@ export interface PageDefinition extends NormalizedPageMetadata {
   readonly group?: string;
   readonly parent?: string;
   readonly fullWidth?: boolean;
+  readonly section?: ConsolePageSection;
   readonly module: string;
   readonly hash: string;
   readonly blueprint?: ConsolePageBlueprint | ConsoleAdapterPageBlueprint;
@@ -164,7 +172,8 @@ export function parsePageArtifact(value: unknown, context: ValidationContext): P
   const rawMeta = artifact.metadata && typeof artifact.metadata === 'object' && !Array.isArray(artifact.metadata)
     ? artifact.metadata as Record<string, unknown>
     : undefined;
-  const { description, group, parent, fullWidth, ...baseMeta } = rawMeta ?? {};
+  const { description, group, parent, fullWidth, section: rawSection, ...baseMeta } = rawMeta ?? {};
+  const section = optionalPageSection(rawSection);
   if (description !== undefined && (typeof description !== 'string' || !description.trim())) {
     throw new TypeError('Page description must be a non-empty string');
   }
@@ -183,6 +192,7 @@ export function parsePageArtifact(value: unknown, context: ValidationContext): P
     ...(typeof group === 'string' ? { group } : {}),
     ...(typeof parent === 'string' ? { parent } : {}),
     ...(typeof fullWidth === 'boolean' ? { fullWidth } : {}),
+    ...(section !== undefined ? { section } : {}),
     module: artifact.module,
     hash: artifact.hash,
     ...(artifact.blueprint !== undefined ? { blueprint: artifact.blueprint } : {}),

@@ -50,6 +50,7 @@ export {
   type ConsoleUserPrincipal,
 } from './access-control.js';
 export { timingSafeEqualString } from './timing-safe-equal.js';
+export { isLoopbackAddress, verifyProtocolAccessToken } from './protocol-auth.js';
 export {
   createConsoleEventHub,
   consoleEventHubToken,

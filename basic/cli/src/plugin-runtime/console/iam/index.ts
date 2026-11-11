@@ -5,6 +5,8 @@ export {
   type BindingInput,
   type ConsoleAuditView,
   type ConsoleBindingView,
+  type ConsoleCredentialRevocation,
+  type ConsoleCredentialRevocationReason,
   type ConsoleIamServiceOptions,
   type ConsoleRoleView,
   type ConsoleTokenView,

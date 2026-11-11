@@ -163,6 +163,7 @@ describe('Console topology Host endpoint', () => {
       order: 10,
       parent: 'overview',
       fullWidth: true,
+      section: 'conversations',
       hideInNav: false,
       module: '/assets/client/ambient.js',
       owner: 'root/ambient' as never,
@@ -183,6 +184,7 @@ describe('Console topology Host endpoint', () => {
       order: 10,
       parent: 'overview',
       fullWidth: true,
+      section: 'conversations',
       hideInNav: false,
       owner: 'root/ambient',
       requiredPermissions: ['ambient:read'],
@@ -227,6 +229,8 @@ describe('Console topology Host endpoint', () => {
       title: 'Ambient Insights',
       group: 'Agent',
       icon: 'Radar',
+      section: 'conversations',
+      meta: expect.objectContaining({ section: 'conversations' }),
     });
 
     const pagesHandler = route.mock.calls.find((call) => call[1] === '/pages')?.[2] as (

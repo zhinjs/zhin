@@ -70,12 +70,13 @@ For cross-platform outbound messages (sending from one platform to another), use
 
 ## Host Token Pattern
 
-The HTTP Host (`@zhin.js/host-http`) has no built-in session system; it uses Bearer token authentication uniformly:
+The HTTP Host (`@zhin.js/host-http`) authenticates every request with a Bearer credential:
 
-- Client requests include `Authorization: Bearer <token>`, where the token comes from the `http.token` config; the server validates using `TokenRegistry` (`packages/host/http/src/token-registry.ts`), with `extractBearerToken` parsing the header.
+- Client requests include `Authorization: Bearer <token>` (a session token, an API token, or `http.token` before setup); the server resolves it with `TokenRegistry` (`packages/host/http/src/token-registry.ts`), with `extractBearerToken` parsing the header.
 - Token comparison uses `timingSafeEqualString` (constant-time comparison) -- do not hand-write `===` comparisons.
-- Tokens are scoped by level (`ScopedTokenConfig` / `AuthScope`): write operations require full scope; demo tokens always get 403.
-- Remote Console login = API Base URL + Bearer Token; there is no username/password concept.
+- Access control lives in the database (ADR 0049): `http.token` is only a bootstrap token (valid until the first owner exists); users sign in for a session token and automation uses user-issued API tokens. `TokenRegistry.authenticate` resolves a credential to a principal (`ConsolePrincipal`).
+- Every `/api` route and every Console RPC must be listed in the permission map of `@zhin.js/console-protocol` (`CONSOLE_HTTP_PERMISSIONS` / `CONSOLE_RPC_PERMISSIONS`); unlisted ones are denied to every account, owners included. Register the permission whenever you add a route or RPC.
+- Plugin Webhooks and reverse WebSockets don't use Console accounts: mount them with `ws(path, { auth: 'protocol' })` and authenticate with the plugin's own credential (for example `verifyProtocolAccessToken`).
 
 ## Testing Conventions
 

@@ -77,6 +77,8 @@ describe('Console contract', () => {
     expect(() => definePage({ description: 1 } as never)).toThrow('Page description must be a non-empty string');
     expect(() => definePage({ parent: '' })).toThrow('Page parent must be a non-empty string');
     expect(() => definePage({ fullWidth: 'yes' } as never)).toThrow('Page fullWidth must be boolean');
+    expect(definePage({ title: 'Status', section: 'ops' })).toMatchObject({ section: 'ops' });
+    expect(() => definePage({ section: 'settings' } as never)).toThrow('Page section must be one of');
     // Manifest normalization stays strict: these keys are not route/navigation authority.
     expect(() => normalizePageMetadata('status', { group: 'ops' })).toThrow('Unknown Page metadata: group');
   });

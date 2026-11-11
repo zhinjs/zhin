@@ -122,6 +122,14 @@ const DAY = 24 * 60 * 60_000;
 const builtinRoleId = (name: string) => `builtin:${name}`;
 const OWNER_ROLE_ID = builtinRoleId('owner');
 
+/** Why a user's credentials were revoked (sessions always; API tokens on disable/delete). */
+export type ConsoleCredentialRevocationReason = 'password' | 'disabled' | 'deleted' | 'bindings';
+
+export interface ConsoleCredentialRevocation {
+  readonly userId: string;
+  readonly reason: ConsoleCredentialRevocationReason;
+}
+
 /** DB-backed users, roles, sessions, API tokens and audit (ADR 0049 §2, §5, §6). */
 export class ConsoleIamService implements ConsoleAccessProvider {
   readonly #db: IamDatabase;
@@ -137,6 +145,7 @@ export class ConsoleIamService implements ConsoleAccessProvider {
   #cleanupTimer: ReturnType<typeof setInterval> | undefined;
   #refreshTimer: ReturnType<typeof setInterval> | undefined;
   #mutation: Promise<unknown> = Promise.resolve();
+  readonly #revocationListeners = new Set<(event: ConsoleCredentialRevocation) => void>();
 
   constructor(options: ConsoleIamServiceOptions) {
     this.#db = options.database;
@@ -172,6 +181,22 @@ export class ConsoleIamService implements ConsoleAccessProvider {
       // Offline CLI edits (rescue) become visible without a restart.
       this.#refreshTimer = setInterval(() => void this.refreshOwnerState().catch(this.#onError), 30_000);
       this.#refreshTimer.unref?.();
+    }
+  }
+
+  /**
+   * Notified after a user's sessions were revoked or their grants changed, so long-lived
+   * connections (terminal, SSE) authenticated earlier can be closed. Returns an unsubscriber.
+   */
+  onCredentialsRevoked(listener: (event: ConsoleCredentialRevocation) => void): () => void {
+    this.#revocationListeners.add(listener);
+    return () => { this.#revocationListeners.delete(listener); };
+  }
+
+  #emitRevocation(userId: string, reason: ConsoleCredentialRevocationReason): void {
+    const event = Object.freeze({ userId, reason });
+    for (const listener of [...this.#revocationListeners]) {
+      try { listener(event); } catch (error) { this.#onError(error); }
     }
   }
 
@@ -385,7 +410,7 @@ export class ConsoleIamService implements ConsoleAccessProvider {
         row.disabled = patch.disabled ? 1 : 0;
       }
       await this.#model('users').update(row).where({ id });
-      if (patch.disabled === true) await this.#revokeCredentials(id, true);
+      if (patch.disabled === true) await this.#revokeCredentials(id, true, 'disabled');
       await this.refreshOwnerState();
       return (await this.getUser(id))!;
     });
@@ -399,7 +424,7 @@ export class ConsoleIamService implements ConsoleAccessProvider {
     return this.#serialize(async () => {
       await this.#requireUser(id);
       await this.#assertOwnersRemain({ disable: id });
-      await this.#revokeCredentials(id, true);
+      await this.#revokeCredentials(id, true, 'deleted');
       await this.#model('bindings').delete().where({ user_id: id });
       await this.#model('users').delete().where({ id });
       await this.refreshOwnerState();
@@ -418,13 +443,14 @@ export class ConsoleIamService implements ConsoleAccessProvider {
     if (problem) throw new IamError('invalid_input', problem);
     const now = this.#now();
     await this.#model('users').update({ password_hash: await hashPassword(password as string), password_changed_at: now, updated_at: now }).where({ id });
-    await this.#revokeCredentials(id, false);
+    await this.#revokeCredentials(id, false, 'password');
   }
 
   /** Sessions always; API tokens too when the user is disabled or deleted (ADR 0049 §2). */
-  async #revokeCredentials(userId: string, tokens: boolean): Promise<void> {
+  async #revokeCredentials(userId: string, tokens: boolean, reason: ConsoleCredentialRevocationReason): Promise<void> {
     await this.#model('sessions').delete().where({ user_id: userId });
     if (tokens) await this.#model('tokens').delete().where({ user_id: userId });
+    this.#emitRevocation(userId, reason);
   }
 
   // ------------------------------------------------------------------ roles & bindings
@@ -482,6 +508,8 @@ export class ConsoleIamService implements ConsoleAccessProvider {
       await this.#model('bindings').delete().where({ user_id: userId });
       for (const binding of bindings) await this.#model('bindings').insert({ id: newId(), user_id: userId, ...binding });
       await this.refreshOwnerState();
+      // Grants may have shrunk: long-lived connections re-authorize from scratch.
+      this.#emitRevocation(userId, 'bindings');
       return (await this.getUser(userId))!;
     });
   }

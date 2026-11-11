@@ -20,7 +20,7 @@ Client transport 直接消费 canonical dot-named push；需要持久化 Inbox �
 它与最终投递回执独立：拒绝说明本身仍可发送成功，也可能投递失败。
 
 
-`CONFIG_RPC.EXPLAIN` (`config:explain`) is a full-scope read of saved-field metadata.
+`CONFIG_RPC.EXPLAIN` (`config:explain`) is a read of saved-field metadata that requires `ops.config.read`.
 It requires an exact `instanceKey` and the saved source's `expectedRevision`.
 `ConsoleConfigExplanation` binds the response to that file/project revision and generation;
 its `ConsoleConfigFieldEvidence` paths are static Schema property arrays, with candidate

@@ -124,6 +124,6 @@ describe('runtime readiness', () => {
     });
     expect(await details.json()).toMatchObject({ success: true, data: { generation: 1, ready: true } });
     await expect(fetchReadiness(`${origin}/control`, 'full-secret')).resolves.toMatchObject({ ready: true });
-    await expect(fetchReadiness(`${origin}/control`, 'demo-secret')).rejects.toThrow('full-scope');
+    await expect(fetchReadiness(`${origin}/control`, 'demo-secret')).rejects.toThrow('ZHIN_CONSOLE_TOKEN');
   });
 });

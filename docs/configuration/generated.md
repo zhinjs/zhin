@@ -25,8 +25,7 @@ outline: [2, 3]
 | `http.readiness.agents` | array&lt;string&gt; | 否 | — | 必须存在的 Agent binding；不验证模型凭据或 Provider 网络可用性。 |
 | `http.host` | string \| null | 否 | — | 监听地址。 |
 | `http.port` | number \| string \| null | 否 | — | 监听端口。 |
-| `http.token` | string \| null | 否 | — | HTTP Host 访问令牌。 |
-| `http.tokens` | array \| null | 否 | — | — |
+| `http.token` | string \| null | 否 | — | 初始化令牌：创建第一个 Console 所有者之前用于登录初始化向导；之后失效（ADR 0049）。 |
 | `http.corsOrigins` | array \| null | 否 | — | — |
 | `http.base` | string \| null | 否 | — | API 路径前缀。 |
 | `http.tls` | `false` \| null \| object | 否 | — | — |
@@ -35,6 +34,24 @@ outline: [2, 3]
 | `http.listeners[].host` | string | 否 | — | 监听地址。 |
 | `http.listeners[].port` | number \| string | 否 | — | 监听端口。 |
 | `http.listeners[].tls` | `false` \| null \| object | 否 | — | — |
+| `console` | object | 否 | — | Console 宿主功能。 |
+| `console.terminal` | object | 否 | — | Console 终端（宿主 Shell / SSH），仅持有 ops.terminal 的所有者可用；默认关闭。 |
+| `console.terminal.enabled` | boolean | 否 | `false` | 注册终端路由。 |
+| `console.terminal.shell` | string | 否 | — | 本机 Shell；省略时用 $SHELL（Windows 为 powershell.exe）。 |
+| `console.terminal.cwd` | string | 否 | `"."` | 工作目录，相对项目根。 |
+| `console.terminal.idleTimeout` | integer | 否 | `900` | 无输入多少秒后断开（0 表示不限）。 |
+| `console.terminal.maxSessions` | integer | 否 | `4` | 所有用户合计的同时会话上限。 |
+| `console.terminal.ssh` | array&lt;object&gt; | 否 | — | Console 可连接的 SSH 目标。 |
+| `console.terminal.ssh[].name` | string | 是 | — | 目标 id，Console 按它选择（不能是 local）。 |
+| `console.terminal.ssh[].label` | string | 否 | — | 显示名称。 |
+| `console.terminal.ssh[].host` | string | 是 | — | SSH 主机。 |
+| `console.terminal.ssh[].port` | integer | 否 | `22` | SSH 端口。 |
+| `console.terminal.ssh[].username` | string | 是 | — | SSH 用户。 |
+| `console.terminal.ssh[].privateKeyPath` | string | 否 | — | 私钥文件（相对项目根，可用 ~）；与 privateKeyEnv 互斥。 |
+| `console.terminal.ssh[].privateKeyEnv` | string | 否 | — | 保存私钥的环境变量名。 |
+| `console.terminal.ssh[].passwordEnv` | string | 否 | — | 保存密码的环境变量名。 |
+| `console.terminal.ssh[].passphraseEnv` | string | 否 | — | 保存私钥口令的环境变量名。 |
+| `console.terminal.ssh[].hostFingerprint` | string | 否 | — | 主机密钥指纹（SHA256:…）；填写后严格校验。 |
 | `database` | object | 否 | — | Database Host 与方言连接参数。 |
 | `database.dialect` | string | 否 | — | 数据库方言。 |
 | `database.filename` | string | 否 | — | SQLite 文件路径。 |

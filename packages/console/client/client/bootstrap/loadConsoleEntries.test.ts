@@ -50,6 +50,22 @@ describe("console entries bootstrap", () => {
     expect(createElement).toHaveBeenCalledWith(Page);
   });
 
+  it("forwards the page section into route meta; module meta wins, unknown values are dropped", () => {
+    const Page = () => null;
+    const routeMeta = (mod: Record<string, unknown>, entry: Record<string, unknown>) => {
+      const addRoute = vi.fn();
+      resolveEntryRegister(mod, { id: "p", resolvedModule: "/p.js", route: "/p", ...entry } as any)!({
+        React: { createElement: vi.fn() } as any, addRoute, addTool: vi.fn(),
+      });
+      return addRoute.mock.calls[0]![0].meta as Record<string, unknown>;
+    };
+    expect(routeMeta({ default: Page }, { section: "ops" })).toMatchObject({ section: "ops" });
+    expect(routeMeta({ default: Page }, { meta: { section: "access" } })).toMatchObject({ section: "access" });
+    expect(routeMeta({ default: Page, meta: { section: "features" } }, { section: "ops" })).toMatchObject({ section: "features" });
+    expect(routeMeta({ default: Page }, { section: "nowhere" })).not.toHaveProperty("section");
+    expect(routeMeta({ default: Page }, {})).not.toHaveProperty("section");
+  });
+
   it("mounts DeclarativePageView for raw zhin.console.page-blueprint objects", () => {
     const blueprint = {
       kind: "zhin.console.page-blueprint",

@@ -103,7 +103,7 @@ With the Console installed, "Comment review" appears in the navigation (route is
 
 The page refreshes every 10 seconds (2 seconds while scanning), so new drafts appear automatically.
 
-Permissions (grant them to user tokens in `http.tokens[].permissions`; full tokens are unrestricted):
+Permissions (plugin-defined; currently only a global owner holds them):
 
 | Permission | Allows |
 |---|---|

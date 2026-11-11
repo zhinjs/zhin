@@ -2,10 +2,10 @@ import type { IncomingMessage } from 'node:http';
 import {
   CONSOLE_PERMISSION_LIST,
   CONSOLE_WRITE_PERMISSIONS,
-  CONSOLE_WS_PERMISSIONS,
   grantsAllow,
   resolveConsoleHttpPermission,
   resolveConsoleRpcPermission,
+  resolveConsoleWsPermission,
   type ConsoleGrant,
   type ConsolePermission,
   type ConsoleRpcPermissionRule,
@@ -188,12 +188,10 @@ export function authorizeConsoleHttp(
 
 /** WebSocket upgrade authorization for non-bootstrap principals. */
 export function authorizeConsoleWebSocket(principal: ConsolePrincipal, pathname: string): boolean {
-  if (principal.kind === 'bootstrap') {
-    // Before setup the bootstrap token still admits adapter reverse connections, never Console sockets.
-    return principal.open || !Object.hasOwn(CONSOLE_WS_PERMISSIONS, pathname);
-  }
-  const permission = CONSOLE_WS_PERMISSIONS[pathname] ?? 'endpoint.manage';
-  return grantsAllow(principal.grants, permission);
+  // Only the Console's own sockets are host-authenticated; plugin sockets use `auth: 'protocol'`.
+  const permission = resolveConsoleWsPermission(pathname);
+  if (principal.kind === 'bootstrap') return principal.open;
+  return permission !== null && grantsAllow(principal.grants, permission);
 }
 
 /** Audit detail for an RPC: type, target and parameter key names only. */

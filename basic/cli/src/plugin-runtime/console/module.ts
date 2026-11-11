@@ -33,3 +33,4 @@ export {
 export { HostSelfChanges, type SelfChangeCard } from './self-changes.js';
 export { defineWorkspaceConversationTable } from './workspace-conversations.js';
 export { installConsoleIam, type ConsoleIamInstallation, type InstallConsoleIamOptions } from './iam/install.js';
+export { installHostConsoleTerminal, type InstallHostConsoleTerminalOptions } from './terminal/host.js';

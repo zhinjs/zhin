@@ -78,12 +78,13 @@ flowchart LR
 
 ## Host token 模式
 
-HTTP Host（`@zhin.js/host-http`）不内置会话体系，统一用 Bearer token 鉴权：
+HTTP Host（`@zhin.js/host-http`）统一用 Bearer 凭据鉴权：
 
-- 客户端请求带 `Authorization: Bearer <token>`，token 来自 `http.token` 配置；服务端用 `TokenRegistry`（`packages/host/http/src/token-registry.ts`）校验，`extractBearerToken` 解析头。
+- 客户端请求带 `Authorization: Bearer <token>`（会话令牌、API 令牌，或初始化前的 `http.token`）；服务端用 `TokenRegistry`（`packages/host/http/src/token-registry.ts`）解析，`extractBearerToken` 解析头。
 - token 比对走 `timingSafeEqualString`（常数时间比较），不要手写 `===` 比对。
-- token 按 scope 分级（`ScopedTokenConfig` / `AuthScope`）：写操作要求 full scope，demo token 一律 403。
-- Remote Console 登录 = API Base URL + Bearer Token，没有账号密码概念。
+- 访问控制在数据库里（ADR 0049）：`http.token` 只是初始化令牌（创建第一个所有者之前有效）；用户登录得到会话令牌，自动化用用户签发的 API 令牌。`TokenRegistry.authenticate` 把凭据解析为主体（`ConsolePrincipal`）。
+- 每条 `/api` 路由和每个 Console RPC 都必须登记在 `@zhin.js/console-protocol` 的权限表（`CONSOLE_HTTP_PERMISSIONS` / `CONSOLE_RPC_PERMISSIONS`）里，未登记的对所有账号一律拒绝（所有者也不例外）；新增路由或 RPC 时同时登记权限。
+- 插件的 Webhook、反向 WebSocket 不走 Console 账号：用 `ws(path, { auth: 'protocol' })` 挂载，并用自己的凭据鉴权（如 `verifyProtocolAccessToken`）。
 
 ## 测试约定
 

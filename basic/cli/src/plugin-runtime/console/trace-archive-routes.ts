@@ -45,7 +45,7 @@ export function registerTraceArchiveRoutes(options: RegisterTraceArchiveRoutesOp
   ): Parameters<HttpHost['route']>[2] => async (_request, response, url, authScope) => {
     response.setHeader('cache-control', 'no-store');
     if (authScope !== 'full') {
-      writeJson(response, 403, { success: false, error: '需要 full scope 才能读取 Agent Trace' });
+      writeJson(response, 403, { success: false, error: '需要登录 Console 才能读取 Agent Trace' });
       return;
     }
     try {

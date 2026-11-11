@@ -21,7 +21,7 @@ calls share one operation; calling `listen()` after close rejects.
 - Path-scoped WebSocket upgrades (`ws(path)`)
 - HTTP `route(method, path, handler, meta?)` (exact + `/*` prefix)
 - Built-in `GET /pub/health` and `GET /pub/openapi.json`
-- CLI-composed runtimes additionally expose `GET /pub/ready` and full-scope `GET /api/system/readiness`; see [production probes](../../../docs/operations/production.md).
+- CLI-composed runtimes additionally expose `GET /pub/ready` and `GET /api/system/readiness` (requires `status.view`); see [production probes](../../../docs/operations/production.md).
 - CORS allowlist (always includes `https://console.zhin.dev`)
 - Bearer auth for `/api/*` (ADR 0049): `http.token` is a bootstrap token that only reaches
   `/auth/setup*` until the first owner exists; afterwards only Console user sessions and API tokens
@@ -74,7 +74,7 @@ not provide an OS sandbox against a local process concurrently replacing directo
 
 ### Saved configuration explanations
 
-The full-scope `config:explain` Console RPC reuses the composition root's
+The `config:explain` Console RPC (requires `ops.config.read`) reuses the composition root's
 `PluginManagementPort.explainConfiguration(instanceKey, expectedRevision)` authority.
 The route returns metadata only, rejects demo before reading configuration, and normalizes
 errors without forwarding validator details or causes. It does not apply/restart the Runtime,

@@ -103,10 +103,11 @@ Every `meta` field is optional; `definePage` throws on unknown keys:
 | `icon` | none | A lucide-style icon name, e.g. `'Box'`, `'Workflow'` |
 | `order` | `100` | Navigation order; lower comes first |
 | `hideInNav` | `false` | Hide from navigation |
-| `requiredPermissions` | `[]` | Permissions required to access, matched against the token's `permissions` |
-| `requiredRoles` | `[]` | Roles required to access, matched against the token's `roles` |
+| `requiredPermissions` | `[]` | Permissions required to access: built-in ones (such as `status.view`) or plugin-defined names |
+| `requiredRoles` | `[]` | Role names required to access (such as `operator`) |
+| `section` | — | Console navigation section: `overview` / `conversations` / `features` / `plugins` / `ops` / `access`; omitted → the Console decides (ADR 0052) |
 
-Navigation and the page list are filtered by the caller's token. The full token sees every page. Any other token sees only pages whose requirements its `permissions` and `roles` meet. Without a token, only pages with no requirements show. For token setup, see [Console users and permissions](../console/index.md#users-and-permissions).
+Navigation and the page list are filtered per caller. A global owner sees every page. Other users see only pages whose requirements their roles meet (plugin-defined permission names are currently satisfied only by owners). Signed-out callers see only pages with no requirements. For users and roles, see [Console users and permissions](../console/index.md#users-and-permissions).
 
 Console selects `titleI18n` using its independent interface language. This only changes navigation and breadcrumb display, never routes, permissions or page content. Plugins localize their own components; third-party titles without translations remain unchanged.
 
@@ -227,9 +228,10 @@ definePluginConsoleRpc({
 Access rules:
 
 - **Follows the page**: with `page` set, the caller must meet that page's `requiredPermissions` and `requiredRoles`, plus any the method declares itself. If the page isn't loaded in the current generation, the call is refused.
-- **The full token** can call every method.
-- **Any other token** (`scope: user` / `demo`) can read `status` if it holds every required permission and role. A `status` with no requirements at all is open to these tokens only when it sets `demo: true`.
-- **Actions**: other tokens can run an action only when the action **itself** declares `requiredPermissions`, `requiredRoles` or `anyOfPermissions` and the token meets all of them, including the page's. Otherwise the call is refused. An action with no requirements of its own needs the full token; a page's requirements never open an action on their own.
+- The Console permission map applies first: read methods need `feature.view`, actions need `feature.configure`.
+- **A global owner** can call every method.
+- **Other users** can read `status` if they hold every required permission and role. A `status` with no requirements at all is open to them only when it sets `demo: true`.
+- **Actions**: other users can run an action only when the action **itself** declares `requiredPermissions`, `requiredRoles` or `anyOfPermissions` and they meet all of them, including the page's. Otherwise the call is refused. An action with no requirements of its own needs an owner; a page's requirements never grant an action by themselves.
 - **Any one of**: holding **one** of the permissions in `anyOfPermissions` is enough (on top of `requiredPermissions`). Use it when a new permission sits beside an older one, for example approval cards accept `ops:approve` or the older `tool_approvals:resolve`.
 
 ```ts
@@ -260,7 +262,7 @@ Ambient engagement (群聊插话) and the skills assistant (技能助手) are pr
 | `plugin.root.ambient` | `pluginRpc('root', 'ambient')` | `ambient:read` |
 | `plugin.root.skills` | `pluginRpc('root', 'skills')` | `skills:read` |
 
-The full token doesn't need these permissions. Pages list the same permission in `requiredPermissions`, and tokens get it in `http.tokens[].permissions` (see [Users and permissions](../console/index.md#users-and-permissions)). Both queries are read-only and take no input.
+A global owner doesn't need these permissions; they are plugin-defined names that only owners currently satisfy (see [Users and permissions](../console/index.md#users-and-permissions)). Both queries are read-only and take no input.
 
 The data lives only in memory: the last 24 hours, at most 2000 entries, cleared on restart. It never includes chat text, prompts, judge reasons or secrets. All times are millisecond timestamps.
 
@@ -350,7 +352,7 @@ The control plane on the Bot status (机器人状态) page (ADR 0036 slice D) is
 | Method | Call | Permission needed |
 | --- | --- | --- |
 | `plugin.root.control` | `pluginRpc('root', 'control')` | `control:read` |
-| `plugin.root.control-set` | `pluginRpc('root', 'control-set', { expectedRevision, instance?, sessions? })` | `control:write` (an action; the admin token can always call it) |
+| `plugin.root.control-set` | `pluginRpc('root', 'control-set', { expectedRevision, instance?, sessions? })` | `control:write` (an action; owners can always call it) |
 
 Four switches:
 
@@ -378,7 +380,7 @@ The per-session ops config (ADR 0037 phase 1, slice A) is also served by the Hos
 | --- | --- | --- |
 | `plugin.root.session-ops` | `pluginRpc('root', 'session-ops')` | `control:read` |
 | `plugin.root.session-ops-preview` | `pluginRpc('root', 'session-ops-preview', { platform, sceneId, template? })` | `control:read` |
-| `plugin.root.session-ops-set` | `pluginRpc('root', 'session-ops-set', { expectedRevision, defaults?, sessions? })` | `control:write` (an action; the admin token can always call it) |
+| `plugin.root.session-ops-set` | `pluginRpc('root', 'session-ops-set', { expectedRevision, defaults?, sessions? })` | `control:write` (an action; owners can always call it) |
 
 The config is keyed by `platform` + `sceneId` (like `group:123`, the same key as the session profile) and is stored apart from the session profile:
 
@@ -479,7 +481,7 @@ Calls stopped by the hard gate (ADR 0036 §3) leave an approval card here. The a
 | Method | Call | Permission |
 | --- | --- | --- |
 | `plugin.root.tool-approvals` | `pluginRpc('root', 'tool-approvals')` | `tool_approvals:read` or `ops:approve` |
-| `plugin.root.resolve-tool-approval` | `pluginRpc('root', 'resolve-tool-approval', { id, decision: 'approve' \| 'deny' })` | `ops:approve` or `tool_approvals:resolve` (action; the admin token can always call it) |
+| `plugin.root.resolve-tool-approval` | `pluginRpc('root', 'resolve-tool-approval', { id, decision: 'approve' \| 'deny' })` | `ops:approve` or `tool_approvals:resolve` (action; owners can always call it) |
 
 ### Built-in actions: self-change approval (ADR 0040)
 
@@ -522,7 +524,7 @@ From the page you can:
 - consume LoginAssist tasks from `login.list` with `login.submit` / `login.cancel` (QR code, slider, SMS, device confirmation);
 - render adapter-specific actions from `status.actions` (for example QQ QR binding and public/private selection).
 
-Permissions are per adapter: page reads need `<adapterKey>:read`; writes (account changes and custom actions) need `<adapterKey>:write`. A full admin token is unrestricted. An administrator must review and confirm the existing account list before its first migration. Without a persistence management port, `runtime.canManage` is false or the request explicitly fails as unavailable; there is no configuration-file fallback.
+Permissions are per adapter: page reads need `<adapterKey>:read`; writes (account changes and custom actions) need `<adapterKey>:write`. A global owner is unrestricted. An administrator must review and confirm the existing account list before its first migration. Without a persistence management port, `runtime.canManage` is false or the request explicitly fails as unavailable; there is no configuration-file fallback.
 
 Each mutation supplies the directory’s `expectedGeneration` and `expectedRevision` and targets an `instanceId`; the first migration adds `confirmMigration: true` only after user confirmation. New and replacement accounts are saved disabled; connection updates reconnect only the target account. Refresh to verify conflicts or unknown commit outcomes rather than automatically retrying. Persistence acknowledgment and asynchronous startup or cleanup completion are separate states.
 
@@ -576,7 +578,7 @@ Declaring cross-scope ownership in a plugin (the TypeSafe decision provider, for
 - Every touched top-level section is validated against its schema before writing. Failures return `status: 'invalid'` with full paths (e.g. `$.ai.trigger.ambient.mode`) and nothing is written.
 - On success `restartRequired` says whether Host config changed: when `true` the file is saved but the process must restart for it to take effect, and `message` says so.
 - A successful write publishes `config:updated` with `paths` (the paths written) and the new `revision`.
-- Full-scope tokens only; not available on Demo deployments. At most 32 patches per call and 16 segments per path.
+- Requires `agent.configure` (`feature.configure` when `instanceKey` targets plugin configuration). At most 32 patches per call and 16 segments per path.
 - Plugin status and actions use plugin RPC (`plugin.<PluginId>.status` / `plugin.<PluginId>.<action>`); don't use it to write config.
 
 ## How it works

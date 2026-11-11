@@ -19,6 +19,8 @@ export type ExtendedRuntimeConsolePage = RuntimeConsolePage & {
   readonly group?: string;
   readonly parent?: string | null;
   readonly fullWidth?: boolean;
+  /** Console navigation section (ADR 0052). */
+  readonly section?: string;
   readonly hideInNav?: boolean;
   readonly titleI18n?: ConsolePageTitleI18n;
   readonly requiredPermissions?: readonly string[];
@@ -95,6 +97,7 @@ export async function listPages(
       ...(page.group !== undefined ? { group: page.group } : {}),
       ...(page.parent !== undefined ? { parent: page.parent } : {}),
       ...(page.fullWidth !== undefined ? { fullWidth: page.fullWidth } : {}),
+      ...(page.section !== undefined ? { section: page.section } : {}),
       ...(page.hideInNav !== undefined ? { hideInNav: page.hideInNav } : {}),
       ...(page.titleI18n !== undefined ? { titleI18n: page.titleI18n } : {}),
       ...(page.requiredPermissions !== undefined ? { requiredPermissions: page.requiredPermissions } : {}),
@@ -126,6 +129,7 @@ export type ConsoleEntryBody = {
     readonly order?: number;
     readonly parent?: string | null;
     readonly fullWidth?: boolean;
+    readonly section?: string;
     readonly hideInMenu?: boolean;
     readonly hideInNav?: boolean;
     readonly titleI18n?: ConsolePageTitleI18n;
@@ -139,6 +143,7 @@ export type ConsoleEntryBody = {
   readonly group?: string;
   readonly parent?: string | null;
   readonly fullWidth?: boolean;
+  readonly section?: string;
   readonly hideInNav?: boolean;
   readonly titleI18n?: ConsolePageTitleI18n;
   readonly requiredPermissions?: readonly string[];
@@ -185,6 +190,7 @@ export function projectConsoleEntries(
           ...(page.order !== undefined ? { order: page.order } : {}),
           ...(page.parent !== undefined ? { parent: page.parent } : {}),
           ...(page.fullWidth !== undefined ? { fullWidth: page.fullWidth } : {}),
+          ...(page.section !== undefined ? { section: page.section } : {}),
           ...(page.hideInNav !== undefined ? { hideInMenu: page.hideInNav, hideInNav: page.hideInNav } : {}),
           ...(page.titleI18n !== undefined ? { titleI18n: page.titleI18n } : {}),
         }),
@@ -197,6 +203,7 @@ export function projectConsoleEntries(
         ...(page.group !== undefined ? { group: page.group } : {}),
         ...(page.parent !== undefined ? { parent: page.parent } : {}),
         ...(page.fullWidth !== undefined ? { fullWidth: page.fullWidth } : {}),
+        ...(page.section !== undefined ? { section: page.section } : {}),
         ...(page.hideInNav !== undefined ? { hideInNav: page.hideInNav } : {}),
         ...(page.titleI18n !== undefined ? { titleI18n: page.titleI18n } : {}),
         ...(page.requiredPermissions !== undefined ? { requiredPermissions: page.requiredPermissions } : {}),

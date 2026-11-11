@@ -15,6 +15,7 @@ import {
   isConsolePermission,
   parseConsoleBindingScope,
   resolveConsoleHttpPermission,
+  resolveConsoleWsPermission,
   resolveConsoleRpcPermission,
   type ConsoleGrant,
 } from '../src/index.js';
@@ -108,5 +109,14 @@ describe('Console permission catalog (ADR 0049 §3)', () => {
     expect(resolveConsoleHttpPermission('POST', '/plugins')).toBeNull();
     expect(resolveConsoleHttpPermission('GET', '/config')).toBeNull();
     expect(resolveConsoleHttpPermission('GET', '/introspectionx')).toBeNull();
+    expect(resolveConsoleHttpPermission('GET', '/console/terminal/targets')?.permission).toBe('ops.terminal');
+    expect(resolveConsoleHttpPermission('POST', '/console/terminal/tickets')?.permission).toBe('ops.terminal');
+  });
+
+  it('maps only the Console WebSocket paths, including per-endpoint sandbox sockets', () => {
+    expect(resolveConsoleWsPermission('/sandbox')).toBe('endpoint.operate');
+    expect(resolveConsoleWsPermission('/sandbox/bot-1')).toBe('endpoint.operate');
+    expect(resolveConsoleWsPermission('/sandbox-x')).toBeNull();
+    expect(resolveConsoleWsPermission('/onebot/v11')).toBeNull();
   });
 });

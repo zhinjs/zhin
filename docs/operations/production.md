@@ -61,10 +61,10 @@ http:
 
 `owner` 是插件实例路径；`name` 是 capability ID 最后一段的稳定槽名。多账号展开使用 `适配器槽名~endpoints[].id`，未展开时使用适配器槽名。不要填平台昵称。未列出的 Endpoint 不阻止就绪；必需插件被禁用或对应槽不存在时返回 503。
 
-详细报告通过受 full-scope 保护的 `GET /api/system/readiness` 获取（自定义 `http.base` 同样生效），包含 generation、检查时间、逐项原因和修复建议。CLI 使用同一报告：
+详细报告通过需要 `status.view` 权限的 `GET /api/system/readiness` 获取（自定义 `http.base` 同样生效），包含 generation、检查时间、逐项原因和修复建议。CLI 使用同一报告：
 
 ```bash
-# ZHIN_HTTP_TOKEN 由环境注入，值为 Host 的 full-scope token
+# ZHIN_CONSOLE_TOKEN 由环境注入，值为带 status.view 的 Console API 令牌
 zhin doctor --live http://127.0.0.1:8068 --json
 # 自定义 http.base=/control
 zhin doctor --live http://127.0.0.1:8068/control --json
@@ -72,7 +72,7 @@ zhin doctor --live http://127.0.0.1:8068/control --json
 
 就绪时退出码为 0，未就绪、认证失败或请求失败时为 1。探针不执行外部网络请求：Database 的 `initialized` 不等于实时 SQL 查询成功；Endpoint 只有准入开放且本地 `transportState` 为 `open` 才就绪，断开/重连/状态未提供分别返回对应原因；Agent 的 `binding_configured` 不等于模型凭据有效。本地传输状态也不能证明真实收发，平台实机仍需单独验收。
 
-生产环境设置 full token。演示与只读观察使用独立 demo token；平台 Webhook 继续使用各自的签名密钥，不能拿 Console token 代替。
+生产环境先设置 `http.token` 再启动，并尽快完成初始化（创建第一个所有者，见[升级到 Console 访问控制](../migrations/console-access-control.md)）；之后用账号登录。只读观察给 `viewer` 账号，自动化用 API 令牌。平台 Webhook 和反向 WebSocket 继续使用各自的签名密钥或 `access_token`，不能拿 Console 凭据代替。
 
 ## 3. 可复制的部署模板
 

@@ -9,7 +9,7 @@ import { writeJson } from './http-response.js';
 const messages = createMessages({
   generation: { 'zh-CN': "运行代已变化，请刷新命令列表后重新模拟", en: "The generation changed. Refresh the command list before simulating again." },
   commandMissing: { 'zh-CN': "当前运行代中不存在此命令", en: "This command does not exist in the current generation." },
-  auth: { 'zh-CN': "请使用有效的 full scope Bearer Token 读取权限解释", en: "Use a valid full-scope Bearer Token to read permission explanations." },
+  auth: { 'zh-CN': "请以 Console 账号或 API 令牌登录后读取权限解释", en: "Sign in with a Console account or API token to read permission explanations." },
   runtime: { 'zh-CN': "命令运行时尚未就绪", en: "The command runtime is not ready." },
   index: { 'zh-CN': "命令索引尚未就绪", en: "The command index is not ready." },
   declaration: { 'zh-CN': "命令声明过大或无效，暂时无法解释", en: "The command declaration is too large or invalid to explain." },

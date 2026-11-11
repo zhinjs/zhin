@@ -129,6 +129,7 @@ Agent 与 Console Host；其他低层包不跨层取用上层实现。
 ## 安全注意事项
 
 - 密钥走环境变量并在 `zhin.config.yml` 中以 `${VAR}` 引用（如 `apiKey: ${AI_API_KEY}`），不要硬编码。
+- Console 访问控制（ADR 0049）：用户、角色、会话、API 令牌与审计在项目数据库里；`http.token` 只是初始化令牌（创建第一个所有者之前有效），`http.tokens` 已删除；自动化用 `ZHIN_CONSOLE_TOKEN` 里的 API 令牌。每条 `/api` 路由、每个 Console RPC 与需要 Host 鉴权的 WebSocket 都必须登记在 `@zhin.js/console-protocol` 的权限表里，未登记的对所有账号一律拒绝（所有者也不例外）。适配器 Webhook / 反向 WS 用 `ws(path, { auth: 'protocol' })` 与自己的凭据鉴权（`verifyProtocolAccessToken`）。
 - Agent 执行安全：builtin 工具默认 `execSecurity: allowlist`、`execApprovalMode: ask`；工具安全检查统一走 `packages/im/agent/src/security/policy-facade.ts` 的 `runToolPolicies`，新增策略只在声明式策略表注册，builtin 工具不再手写策略链。
 - 新增依赖时注意根 `package.json` 的 `pnpm.overrides` 中已有的安全抬升条目（undici / hono / tar / js-yaml / nodemailer 等）。
 

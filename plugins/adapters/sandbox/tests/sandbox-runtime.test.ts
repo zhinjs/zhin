@@ -306,46 +306,35 @@ describe('sandbox plugin runtime adapter', () => {
     expect(endpointRuntimeOf(endpoint).streaming).toBeUndefined();
   });
 
-  it('does not let a demo-scope websocket run Agent tasks', async () => {
-    const http = createHttpHost({
-      host: '127.0.0.1',
-      port: 0,
-      tokens: [{ token: 'demo-token', scope: 'demo' }],
-    });
+  it('only admits principals holding endpoint.operate to the sandbox socket', async () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
+    const user = (id: string, permissions: readonly string[]) => Object.freeze({
+      kind: 'user' as const, userId: id, username: id, displayName: id, credentialId: `${id}-session`,
+      grants: [{ role: id, scope: { kind: 'global' as const }, permissions }], roles: [id],
+    });
+    const sessions: Record<string, ReturnType<typeof user>> = {
+      'viewer-session': user('viewer', ['status.view', 'endpoint.view']),
+      'operator-session': user('operator', ['endpoint.view', 'endpoint.operate']),
+    };
+    http.tokenRegistry.useAccessProvider({ initialized: () => true, authenticate: async token => sessions[token] ?? null });
     const receive = vi.fn(async () => Object.freeze({ matched: true }));
     const endpoint = await createEndpointHarness(() => new SandboxWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'sandbox'),
       http,
-      defaults: resolveSandboxEndpoint({ id: 'demo-bot', owner: 'sandbox-user' }),
+      defaults: resolveSandboxEndpoint({ id: 'rbac-bot', owner: 'sandbox-user' }),
     }), { name: 'sandbox', capabilities: ['inbound', 'outbound'], gateway: createTestEventGateway({ receive, send: vi.fn(async () => 'sent') }, undefined) });
     await endpoint.start();
     endpoint.open();
     const { port } = await http.listen();
-
-    const errorText = await new Promise<string>((resolve, reject) => {
-      const client = new WebSocket(`ws://127.0.0.1:${port}/sandbox?token=demo-token`);
-      const timer = setTimeout(() => reject(new Error('timeout waiting for read-only error')), 3000);
-      // The permission gate is independent of the informational `ready` frame,
-      // whose shell-isolation probe may be delayed on a loaded CI runner.
-      client.once('open', () => {
-        client.send(JSON.stringify({ text: 'run outside workspace' }));
-      });
-      client.on('message', (raw) => {
-        const payload = JSON.parse(String(raw)) as { type?: string; content?: Array<{ data?: { text?: string } }> };
-        if (payload.type === 'error') {
-          clearTimeout(timer);
-          client.close();
-          resolve(payload.content?.[0]?.data?.text ?? '');
-        }
-      });
-      client.once('error', (error) => {
-        clearTimeout(timer);
-        reject(error);
-      });
+    const outcome = (query: string) => new Promise<'opened' | 'rejected'>((resolve) => {
+      const client = new WebSocket(`ws://127.0.0.1:${port}/sandbox${query}`);
+      client.once('open', () => { client.close(); resolve('opened'); });
+      client.once('error', () => resolve('rejected'));
     });
-
-    expect(errorText).toContain('只读演示权限');
+    expect(await outcome('')).toBe('rejected');
+    expect(await outcome('?token=viewer-session')).toBe('rejected');
+    expect(await outcome('?token=operator-session')).toBe('opened');
     expect(receive).not.toHaveBeenCalled();
   });
 

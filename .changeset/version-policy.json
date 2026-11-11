@@ -1,4 +1,35 @@
 {
   "defaultReleaseType": "patch",
-  "approvedNonPatchReleases": []
+  "approvedNonPatchReleases": [
+    {
+      "package": "@zhin.js/host-http",
+      "type": "minor",
+      "reason": "Console 访问控制（ADR 0049）：删除 http.tokens 与演示 scope，http.token 只作初始化令牌；/api 与 Host 鉴权的 WebSocket 按权限表放行，未登记的插件 WebSocket 不再接受 Console 凭据"
+    },
+    {
+      "package": "@zhin.js/console-protocol",
+      "type": "minor",
+      "reason": "新增权限目录与 RPC / HTTP / WS 权限表，删除演示模式白名单；feature.* RPC 返回形状按三级配置（ADR 0050）定义"
+    },
+    {
+      "package": "@zhin.js/cli",
+      "type": "minor",
+      "reason": "Console 账号、角色、API 令牌与审计存入数据库，现有部署需初始化一次（Console 向导或 zhin console init）；新增 Console 终端与 zhin console 命令"
+    },
+    {
+      "package": "create-zhin-app",
+      "type": "minor",
+      "reason": "交互只剩语言、项目名与初始化令牌，其余步骤改到 Console 完成（ADR 0053）"
+    },
+    {
+      "package": "@zhin.js/runtime",
+      "type": "minor",
+      "reason": "Host 配置 Schema 删除 http.tokens、新增 console 块；插件配置新增 overrides 三级覆盖（ADR 0050），overrides 成为保留键"
+    },
+    {
+      "package": "@zhin.js/plugin-runtime",
+      "type": "minor",
+      "reason": "PluginSetupContext 新增必需成员 configFor / isEnabledFor（ADR 0050），自行实现该接口的代码需要补齐"
+    }
+  ]
 }

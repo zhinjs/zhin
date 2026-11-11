@@ -15,7 +15,7 @@ import {
   type PendingRpcRequest,
   type EndpointTransportState,
 } from 'zhin.js/adapter';
-import type { HttpHost, WsConnection } from '@zhin.js/host-http';
+import { verifyProtocolAccessToken, type HttpHost, type WsConnection } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
 import { createOneBot11EndpointManagement } from './endpoint-management.js';
@@ -33,7 +33,6 @@ import {
 } from './protocol.js';
 import { receiveOneBot11SideEvent } from './side-event-dispatch.js';
 import { createOneBot11ContentPort } from './content-port.js';
-import { verifyOneBotAccessToken } from './wss-auth.js';
 import { createOneBot11Rpc, type OneBot11Rpc } from './ws-transport.js';
 import {
   type OneBot11WsSocket,
@@ -117,15 +116,16 @@ export class OneBot11WssEndpoint extends Onebot11Client implements Endpoint {
     if (this.#started) return;
     this.#stopped = false;
     if (!this.#options.config.access_token) {
-      // wss 模式未配 access_token 时任何连接都会被放行（verifyOneBotAccessToken 直接 return true）
+      // 未配 access_token 时只接受本机回环连接（verifyProtocolAccessToken）。
       this.#logger.warn(formatCompact({
         endpoint: this.#options.config.id,
         mode: 'wss',
         ok: false,
-        error: 'missing access_token',
+        error: 'missing access_token: only loopback peers are accepted',
       }));
     }
-    const handle = this.#options.http.ws(this.#options.config.path);
+    // The peer authenticates with this endpoint's own access_token, not a Console credential.
+    const handle = this.#options.http.ws(this.#options.config.path, { auth: 'protocol' });
     this.#wsRelease = handle.onConnection((connection) => {
       this.#connectionTask = this.#connectionTask
         .then(() => this.#acceptConnection(connection))
@@ -243,7 +243,7 @@ export class OneBot11WssEndpoint extends Onebot11Client implements Endpoint {
       connection.socket.close();
       return;
     }
-    if (!verifyOneBotAccessToken(this.#options.config.access_token, connection.request)) {
+    if (!verifyProtocolAccessToken(this.#options.config.access_token, connection.request)) {
       connection.socket.close(4003, 'Unauthorized');
       return;
     }

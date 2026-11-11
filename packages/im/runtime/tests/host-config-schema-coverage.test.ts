@@ -34,18 +34,40 @@ describe('Host configuration field coverage', () => {
 
   it('declares the actual HTTP installer inputs without inventing apiBase', () => {
     expect(Object.keys(field(['http']).properties as object)).toEqual(expect.arrayContaining([
-      'readiness', 'host', 'port', 'token', 'tokens', 'corsOrigins', 'base', 'tls', 'listeners',
+      'readiness', 'host', 'port', 'token', 'corsOrigins', 'base', 'tls', 'listeners',
     ]));
     expect(field(['http']).properties).not.toHaveProperty('apiBase');
-    expect(field(['http', 'tokens']).items).toMatchObject({ properties: {
-      token: { writeOnly: true }, scope: { type: ['string', 'null'] }, principalId: { type: ['string', 'null'] },
-    } });
+    // ADR 0049: Console users / API tokens live in the database, not in config.
+    expect(field(['http']).properties).not.toHaveProperty('tokens');
     check({ http: { host: '${BIND}', port: '${PORT}', base: '/api', token: '${ACCESS}',
-      tokens: [{ token: '${DEMO}', scope: 'demo', principalId: 'readonly' }],
       tls: false, listeners: [{ enabled: 'off', port: '8081', tls: null }],
       readiness: { endpoints: [{ owner: 'root/mock', name: 'main' }] },
     } });
     check({ http: { tls: { enabled: '${TLS_ENABLED}', keyFile: './key.pem', certFile: './cert.pem', passphrase: '${KEY_PASS}' } } });
+  });
+
+  it('declares console.terminal with the same rules as the terminal parser (ADR 0051)', () => {
+    expect(field(['console', 'terminal'])).toMatchObject({ 'x-zhin-config': { security: true } });
+    const terminal = {
+      enabled: true, shell: '/bin/bash', cwd: '.', idleTimeout: 900, maxSessions: 4,
+      ssh: [
+        { name: 'build-box', host: '10.0.0.12', port: 22, username: 'deploy', privateKeyPath: '~/.ssh/id_ed25519',
+          hostFingerprint: `SHA256:${'A'.repeat(43)}` },
+        { name: 'db', host: 'db.internal', port: 2222, username: 'ops', passwordEnv: 'DB_SSH_PASSWORD' },
+      ],
+    };
+    expect(check({ console: { terminal } })).toEqual({ console: { terminal } });
+    const errors = (value: unknown) => parsePluginConfigSchema(hostSchema, { console: { terminal: value } }).errors;
+    expect(errors({ enabled: true, idleTimeout: 604801 })).not.toEqual([]);
+    expect(errors({ enabled: true, maxSessions: 0 })).not.toEqual([]);
+    expect(errors({ enabled: true, unknown: 1 })).not.toEqual([]);
+    const ssh = (target: Record<string, unknown>) => errors({ ssh: [{ host: 'h', username: 'u', ...target }] });
+    expect(ssh({ name: 'local', passwordEnv: 'P' })).not.toEqual([]);
+    expect(ssh({ name: '-bad', passwordEnv: 'P' })).not.toEqual([]);
+    expect(ssh({ name: 'box' })).not.toEqual([]);
+    expect(ssh({ name: 'box', privateKeyPath: 'k', privateKeyEnv: 'K' })).not.toEqual([]);
+    expect(ssh({ name: 'box', passwordEnv: 'P', hostFingerprint: 'MD5:aa' })).not.toEqual([]);
+    expect(ssh({ name: 'box', privateKeyEnv: 'KEY' })).toEqual([]);
   });
 
   it.each([

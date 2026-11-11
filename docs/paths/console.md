@@ -11,17 +11,17 @@ Console 是 Zhin 的网页管理后台。不用登录服务器，你就能看 Bo
 
 - 知道每类任务该去哪个页面；
 - 能从一条消息追到 AI 的执行步骤和日志；
-- 分清只读的 Demo token 和可管理的 Full token。
+- 分清所有者、管理员、运营和只读账号能做什么。
 
 ::: tip Console 和 Bot 是分开的
-Console 是独立的网页应用（[console.zhin.dev](https://console.zhin.dev)），你的 Bot 进程（Host）只提供受 token 保护的接口。所以同一个 Console 可以连接不同机器上的 Bot。
+Console 是独立的网页应用（[console.zhin.dev](https://console.zhin.dev)），你的 Bot 进程（Host）只提供需要登录的接口。所以同一个 Console 可以连接不同机器上的 Bot。
 :::
 
 ## 1. 连接 Host
 
 1. 启动 Bot，并复制终端打印的 API Base。
 2. 打开 [console.zhin.dev](https://console.zhin.dev)。
-3. Token 使用项目 `.env` 中的 `HTTP_TOKEN`。
+3. 第一次连接时，用项目 `.env` 中的 `HTTP_TOKEN`（初始化令牌）进入初始化向导，创建所有者账号；之后用账号密码登录。也可以在命令行运行 `zhin console init`。
 
 用脚手架新建的项目默认端口是 `8068`，但请以终端输出或配置里的 `http.port` 为准。连不上时先运行 `npx zhin doctor`。
 
@@ -37,7 +37,7 @@ Console 是独立的网页应用（[console.zhin.dev](https://console.zhin.dev)�
 | 查看多 Agent 协作 | 协作图谱（高级） | 每次协作的参与者、消息跳数、共享黑板与预算 |
 | 确认某个命令或工具真的加载了 | 运行时能力（高级） | 命令、中间件、组件、Tool、Prompt Section 与 MCP |
 | 排查失败 | 运行记录 | 级别、来源、时间线和详情 |
-| 修改系统 | 高级 → 配置、环境变量、项目文件、数据库 | 仅 full scope 开放的管理面 |
+| 修改系统 | 高级 → 配置、环境变量、项目文件、数据库 | 需要对应的 `ops.*` 权限（所有者、管理员） |
 
 **配置里写了不等于已经生效。** 判断某个能力是否可用，以“运行时能力”页面显示的当前加载结果为准。
 
@@ -70,15 +70,19 @@ Console 是独立的网页应用（[console.zhin.dev](https://console.zhin.dev)�
 Venue 写在 `zhin.config.yml` 的 `ai.venues`，Agent 之间能联系谁写在 `agents/<name>/agent.json` 的 `collaboration`；Console 不保存另一份。协作图谱是 `engagement_events` Journal 的只读视图，Console 不能改写协作状态。命令行里用 `zhin trace --engagements` 可以看到同样的数据。
 :::
 
-## 6. Full token 与 Demo token
+## 6. 账号与角色
 
-| | Full token | Demo token |
-| --- | --- | --- |
-| 查看状态、能力列表、执行过程 | ✅ | ✅ |
-| 发送消息、修改配置/环境变量/文件/数据库 | ✅（按 Host 策略） | ❌ |
-| 读取原始 YAML 配置 | ✅ | ❌ |
+| | 所有者 `owner` | 管理员 `admin` | 运营 `operator` | 只读 `viewer` |
+| --- | --- | --- | --- | --- |
+| 查看状态、能力列表、执行过程 | ✅ | ✅ | ✅ | ✅ |
+| 收发消息、功能配置 | ✅ | ✅ | ✅ | ❌ |
+| 修改配置/环境变量/文件/数据库、管理插件 | ✅ | ✅ | ❌ | ❌ |
+| 读取原始 YAML 配置 | ✅ | ✅ | ❌ | ❌ |
+| 终端、管理用户与角色 | ✅ | ❌ | ❌ | ❌ |
 
-Token 就是密码：不要放进 URL、截图或公开的前端配置里。
+角色可以只绑定到某个适配器或账号。详见 [Console 的用户与权限](../console/index.md#用户与权限)。
+
+密码和 API 令牌都不要放进 URL、截图或公开的前端配置里。
 
 ::: details 远程部署时连不上？
 在配置中设置 `http.corsOrigins` 允许 Console 的域名；如果前面有反向代理，要同时转发 API、SSE、WebSocket 和页面资源，只转发普通 HTTP 请求会导致实时消息或页面加载失败。详见 [生产部署与运维](../operations/production.md)。
@@ -104,7 +108,7 @@ Token 就是密码：不要放进 URL、截图或公开的前端配置里。
 
 ### 查看字段来源与当前代是否一致
 
-在插件配置页点击“读取已保存版本解释”。它读取页面已载入的文件版本，不解释未保存草稿；需要 full scope，并分别升级提供此接口的 Host 与独立 Console。
+在插件配置页点击“读取已保存版本解释”。它读取页面已载入的文件版本，不解释未保存草稿；需要 `ops.config.read`，并分别升级提供此接口的 Host 与独立 Console。
 
 `file` 表示该静态字段写在文件中，`schema-default` 表示本次已保存候选由声明的默认值补齐，`unset` 表示仍未设置。`equal` 只证明读取时该字段与当前实例运行代一致，不证明旧运行代也来自同一文件或默认值；运行代历史来源始终为未知。敏感字段及环境引用隐藏且不比较，不展示最终值、默认值或环境变量名。
 
@@ -117,7 +121,7 @@ Token 就是密码：不要放进 URL、截图或公开的前端配置里。
 - `completed` 只表示本次入站处理已结束；交给 Agent 不等于 Agent 已完成。
 - 投递 `sent` 表示 Endpoint 返回了消息 ID，不保证远端客户端已经展示；`deliveryUnknown` 表示结果不确定，应先核实原会话，不自动重发。
 - 每个 IM Runtime 仅在内存保留最近 15 分钟、最多 500 条记录；重启、过期或容量淘汰后查不到，不代表处理成功或从未收到。
-- 诊断须显式配置并验证 full scope Token，未配置 Token 的 Host 也不能匿名读取；不另存正文、发送者资料或原始异常。单条记录最多保留 32 个步骤与 32 次投递；超出时 `truncated: true` 表示记录不完整，不替代完整审计日志。单个身份字段最多 2048 字符，完整会话 JSON 最多 8192 字符；超限不截断身份，不收录该诊断。
+- 诊断需要以账号登录（`status.view`），未初始化的 Host 也不能匿名读取；不另存正文、发送者资料或原始异常。单条记录最多保留 32 个步骤与 32 次投递；超出时 `truncated: true` 表示记录不完整，不替代完整审计日志。单个身份字段最多 2048 字符，完整会话 JSON 最多 8192 字符；超限不截断身份，不收录该诊断。
 
 Host 查询入口为 `GET /api/messages/diagnostics`：`id` 查询一条记录，或用 `conversation`（完整 `ConversationRef` JSON）、`messageId` 精确筛选，`limit` 为 1–100。按实际结果继续阅读[消息处理排查](../troubleshooting/messages.md)；新版 Console 也会在诊断内提供对应问题的链接。找不到记录时，再按下面的路径排查。旧版 Host 不提供此接口，需分别更新 Host 与独立 Console。
 
@@ -133,7 +137,7 @@ Host 查询入口为 `GET /api/messages/diagnostics`：`id` 查询一条记录�
 
 首版支持持久提醒插件的管理员任务。配置 Database Host 后，在页面选择已加载的提醒实例、投递账号、会话种类及 ID；有父容器或话题时也要完整填写。账号来自实际 Endpoint 列表；平台不提供会话目录时手动填写精确目标，不能用显示名替代身份。确认目标、含时区的绝对时间、内容及未来发送效果后再创建；创建成功表示任务已保存，不表示平台在线或消息已经发送。
 
-管理员任务与聊天个人任务分开存储和限额。聊天创建的提醒继续归真实发送者，任务中心不会冒充平台用户，也不展示或取消其个人提醒。管理任务必须使用显式配置且验证通过的 full scope Bearer Token，未配置 Token 和 demo Token 均不能使用。
+管理员任务与聊天个人任务分开存储和限额。聊天创建的提醒继续归真实发送者，任务中心不会冒充平台用户，也不展示或取消其个人提醒。管理任务需要以账号登录：查看需要 `feature.view`，创建与修改需要 `feature.configure`；未登录不能使用。
 
 任务可用操作由插件返回：待执行任务可暂停，暂停后才可编辑或恢复；取消不能撤回已经开始的发送。投递结果为 `unknown` 时只允许核实后取消，不提供重试或恢复。固定周期表示间隔秒数，不等于按本地日历“每天同一时间”。管理员时间字段仍要求带 offset 的 ISO 时间；聊天个人提醒的有限自然时间和补问见[提醒指南](../solutions/reminders.md)。RSS 实例满足持久状态、精确出站和调度条件时，也会提供独立管理员订阅；首次与恢复只建立基线，详见[订阅更新指南](../solutions/rss-subscriptions.md)。其他任务来源需逐项接入。
 
@@ -149,7 +153,7 @@ Host 接口为 `GET /api/tasks/use-cases`、`GET /api/tasks/providers`、`POST /
 
 ## 命令权限说明
 
-从运行时能力的命令目录进入“查看权限说明”，或打开 `/permissions`。使用当前 Host 有效的 full scope Token 读取命令目录，按命令名、说明或插件实例搜索；列表分页，不需要一次展开全部指令。
+从运行时能力的命令目录进入“查看权限说明”，或打开 `/permissions`。以持有 `status.view` 的账号登录后读取命令目录，按命令名、说明或插件实例搜索；列表分页，不需要一次展开全部指令。
 
 选择命令后，页面逐项解释真实声明的 `permit` 和单独的 `adapter` 约束。规则数组为 AND，单项括号内的逗号为 OR。可以选填假设会话、发送者与角色，检查内置条件；账号从当前 Host 的完整 Endpoint 列表选择，不会通过平台查询角色。
 

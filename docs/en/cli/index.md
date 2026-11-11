@@ -467,7 +467,7 @@ export const meta = definePage({ title: 'Agent Trace', icon: 'Activity', order: 
 export default TraceArchivePage;
 ```
 
-Behind the page are the read-only endpoints `GET /api/agent/trace-archive/sessions`, `/turns?sessionKey=&since=&until=&limit=`, and `/turn?turnId=`. They require a token with `full` scope; a demo token gets 403.
+Behind the page are the read-only endpoints `GET /api/agent/trace-archive/sessions`, `/turns?sessionKey=&since=&until=&limit=`, and `/turn?turnId=`. They require `agent.view`; an account or API token without it gets 403.
 
 **Eval integration.** A failing case in `pnpm eval:agent` writes its turn trace to `ZHIN_EVAL_TRACE_DIR` (by default `zhin-eval-traces` under the system temp directory), and the report prints one `↪ zhin trace <turnId> --dir …` line per turn that you can copy and run.
 

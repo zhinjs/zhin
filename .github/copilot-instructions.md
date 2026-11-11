@@ -86,6 +86,7 @@ pnpm release / pnpm bump / pnpm pub   # changesets
 ## Host / 资源
 
 - Host 由 CLI 装配；插件侧 `context.resources.has(token)` 再 `use(token)`。
+- Console 访问控制（ADR 0049）：账号与 API 令牌在数据库里，`http.token` 只是初始化令牌，`http.tokens` 已删除。新增 `/api` 路由或 Console RPC 时在 `@zhin.js/console-protocol` 权限表登记权限；插件自己的 Webhook / 反向 WS 用 `ws(path, { auth: 'protocol' })` 并自行校验凭据（`verifyProtocolAccessToken`）。
 - 定时：`scheduleHostToken.register` + `context.lifecycle.add(dispose)`（见 skill assets/cron-template）。
 - 配置：插件自有字段写 `schema.json`，`context.config.get()` 读取。
 - 代级状态通过 snapshot Resource / 当前 operation 的 Generation View 解析；禁止新增模块级单例或 `createGenerationStore`。

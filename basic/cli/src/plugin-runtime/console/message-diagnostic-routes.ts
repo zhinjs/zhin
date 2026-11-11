@@ -16,7 +16,7 @@ export function registerMessageDiagnosticRoutes(options: Readonly<{
     const bearer = authorization?.startsWith('Bearer ') ? authorization.slice(7).trim() : '';
     const explicit = isUserPrincipal(requestConsolePrincipal(request)) || http.tokenRegistry.resolve(bearer) === 'full';
     if (authScope !== 'full' || !explicit) {
-      writeJson(response, 403, { success: false, error: '需要显式配置并验证 full scope Token 才能读取消息诊断' });
+      writeJson(response, 403, { success: false, error: '需要以 Console 账号或 API 令牌登录才能读取消息诊断' });
       return;
     }
     if (!diagnostics) {
