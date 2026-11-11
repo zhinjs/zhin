@@ -55,6 +55,15 @@ export {
 export { timingSafeEqualString } from './timing-safe-equal.js';
 export { isLoopbackAddress, verifyProtocolAccessToken, type ProtocolAuthRequest } from './protocol-auth.js';
 export {
+  compileTrustProxy,
+  hasForwardingHeaders,
+  parseTrustProxy,
+  resolveClientAddress,
+  TrustProxyConfigError,
+  type TrustProxyPredicate,
+  type TrustProxySetting,
+} from './trust-proxy.js';
+export {
   createConsoleEventHub,
   consoleEventHubToken,
   type ConsoleEventHub,

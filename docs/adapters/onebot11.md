@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/onebot11/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/onebot11/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=a8f6a4c585fc39f6 -->
+<!-- sync-adapter-docs:sha256=1d848118cf6cd681 -->
 
 # @zhin.js/adapter-onebot11
 
@@ -120,7 +120,7 @@ onebot11:
 - 经所属 Adapter 增删持久化账号、启停单个 Endpoint；凭据由 Host 加密仓储保存，不改启动 YAML 或 `.env`，不重启进程；
 - 如果适配器要求登录，页面会显示 LoginAssist 的扫码 / 滑块 / 设备确认待办；
 
-读取需要 `onebot11:read`，写操作需要 `onebot11:write`；全局所有者不受限。插件权限按级别授予（见[插件权限的级别](../console/index.md#插件权限的级别)）：`:read` 给 `viewer` 及以上，`:write` 给 `admin` 及以上。页面里的「添加 endpoint」等价于原来的 `onebot11 endpoint add`。
+读取需要 `onebot11:read`（`read` 级别，内置角色 `viewer` 及以上都有）；增删改账号等写操作需要 `onebot11:write`（`operate` 级别，`operator` 及以上都有，绑定到本适配器的角色也算），首次迁移还需管理员身份；全局所有者不受限，见[插件权限的级别](https://zhin.js.org/console/#插件权限的级别)。页面里的「添加 endpoint」等价于原来的 `onebot11 endpoint add`。
 
 ## 故障排查
 

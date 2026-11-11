@@ -1,4 +1,5 @@
 import type { TokenRegistry } from './token-registry.js';
+import type { TrustProxySetting } from './trust-proxy.js';
 
 export interface HttpHostAddress {
   readonly host: string;
@@ -36,6 +37,11 @@ export interface HttpHostOptions {
   readonly authExemptPaths?: readonly string[];
   /** Enables HTTPS and WSS on this listener. Certificate lifecycle belongs to the process composition root. */
   readonly tls?: HttpHostTlsOptions;
+  /**
+   * `http.trustProxy`: which TCP peers are reverse proxies whose `X-Forwarded-For` / `Forwarded`
+   * names the client. Off by default (the peer address is the client address).
+   */
+  readonly trustProxy?: TrustProxySetting;
   /** @internal Shared registry for listener groups; `token` is ignored when set. */
   readonly tokenRegistry?: TokenRegistry;
 }

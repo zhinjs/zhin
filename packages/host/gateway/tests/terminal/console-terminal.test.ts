@@ -14,8 +14,10 @@ import {
   type TerminalServiceOptions,
 } from '../../src/terminal/index.js';
 import type { PtyModule, SshModule } from '../../src/terminal/modules.js';
+import { startSshBackend } from '../../src/terminal/backends.js';
 
 const ROOT = '/srv/bot';
+const PIN = `SHA256:${'A'.repeat(43)}`;
 const owner: TerminalPrincipal = { id: 'user:owner', kind: 'user' };
 const other: TerminalPrincipal = { id: 'user:other', kind: 'user' };
 
@@ -197,7 +199,7 @@ describe('console terminal config', () => {
   it('rejects unknown keys, bad targets, and missing credentials', () => {
     expect(() => parseTerminalConfig({ enabled: true, bogus: 1 }, { projectRoot: ROOT })).toThrow(TerminalConfigError);
     expect(() => parseTerminalConfig({ enabled: true, maxSessions: 0 }, { projectRoot: ROOT })).toThrow(/maxSessions/);
-    const base = { host: 'h', username: 'u', passwordEnv: 'PW' };
+    const base = { host: 'h', username: 'u', passwordEnv: 'PW', hostFingerprint: PIN };
     expect(() => parseTerminalConfig({ ssh: [{ ...base, name: 'local' }] }, { projectRoot: ROOT })).toThrow(/local/);
     expect(() => parseTerminalConfig({ ssh: [{ ...base, name: 'a' }, { ...base, name: 'a' }] }, { projectRoot: ROOT })).toThrow(/duplicate/);
     expect(() => parseTerminalConfig({ ssh: [{ name: 'a', host: 'h', username: 'u' }] }, { projectRoot: ROOT })).toThrow(/required/);
@@ -205,8 +207,23 @@ describe('console terminal config', () => {
     expect(() => parseTerminalConfig({ ssh: [{ ...base, name: 'a', hostFingerprint: 'MD5:aa' }] }, { projectRoot: ROOT })).toThrow(/hostFingerprint/);
   });
 
+  it('requires a host key pin unless the target explicitly opts out (ADR 0051)', () => {
+    const unpinned = { name: 'a', host: 'h', username: 'u', passwordEnv: 'PW' };
+    const parse = (target: Record<string, unknown>) => parseTerminalConfig({ ssh: [target] }, { projectRoot: ROOT });
+    expect(() => parse(unpinned)).toThrow(TerminalConfigError);
+    expect(() => parse(unpinned)).toThrow(/hostFingerprint: is required.*ssh-keyscan.*ssh-keygen -lf.*insecureAcceptAnyHostKey/u);
+    expect(() => parse({ ...unpinned, insecureAcceptAnyHostKey: false })).toThrow(/hostFingerprint: is required/);
+    expect(() => parse({ ...unpinned, insecureAcceptAnyHostKey: 'yes' })).toThrow(/insecureAcceptAnyHostKey/);
+    expect(() => parse({ ...unpinned, hostFingerprint: PIN, insecureAcceptAnyHostKey: true })).toThrow(/mutually exclusive/);
+    expect(parse({ ...unpinned, hostFingerprint: PIN }).ssh[0]).not.toHaveProperty('insecureAcceptAnyHostKey');
+    expect(parse({ ...unpinned, insecureAcceptAnyHostKey: true }).ssh[0]).toMatchObject({ insecureAcceptAnyHostKey: true });
+  });
+
   it('is idempotent so a parsed config can be passed again', () => {
-    const once = parseTerminalConfig({ enabled: true, ssh: [{ name: 'b', host: 'h', username: 'u', passwordEnv: 'PW' }] }, { projectRoot: ROOT });
+    const once = parseTerminalConfig({ enabled: true, ssh: [
+      { name: 'b', host: 'h', username: 'u', passwordEnv: 'PW', hostFingerprint: PIN },
+      { name: 'c', host: 'h', username: 'u', passwordEnv: 'PW', insecureAcceptAnyHostKey: true },
+    ] }, { projectRoot: ROOT });
     expect(parseTerminalConfig(once, { projectRoot: ROOT })).toEqual(once);
   });
 
@@ -220,7 +237,7 @@ describe('console terminal config', () => {
 
 describe('console terminal SSH credentials', () => {
   const target = parseTerminalConfig({
-    ssh: [{ name: 'box', host: 'h', username: 'u', privateKeyEnv: 'KEY', passphraseEnv: 'PASS', passwordEnv: 'PW' }],
+    ssh: [{ name: 'box', host: 'h', username: 'u', privateKeyEnv: 'KEY', passphraseEnv: 'PASS', passwordEnv: 'PW', hostFingerprint: PIN }],
   }, { projectRoot: ROOT }).ssh[0]!;
 
   it('reads key, passphrase and password from env', async () => {
@@ -233,7 +250,7 @@ describe('console terminal SSH credentials', () => {
   });
 
   it('expands ~ and project-relative key paths', async () => {
-    const fileTarget = parseTerminalConfig({ ssh: [{ name: 'f', host: 'h', username: 'u', privateKeyPath: '~/.ssh/id' }] }, { projectRoot: ROOT }).ssh[0]!;
+    const fileTarget = parseTerminalConfig({ ssh: [{ name: 'f', host: 'h', username: 'u', privateKeyPath: '~/.ssh/id', hostFingerprint: PIN }] }, { projectRoot: ROOT }).ssh[0]!;
     const readFile = vi.fn(async () => Buffer.from('pem'));
     const credentials = await resolveSshCredentials(fileTarget, { projectRoot: ROOT, env: {}, readFile, homedir: () => '/home/op' });
     expect(readFile).toHaveBeenCalledWith('/home/op/.ssh/id');
@@ -481,7 +498,7 @@ describe('TerminalService', () => {
 
   it('reports a missing optional module as unavailable with a reason', async () => {
     const { service } = makeService({
-      raw: { ssh: [{ name: 'box', host: '10.0.0.12', username: 'deploy', passwordEnv: 'PW' }] },
+      raw: { ssh: [{ name: 'box', host: '10.0.0.12', username: 'deploy', passwordEnv: 'PW', hostFingerprint: PIN }] },
       modules: { loadPty: async () => { throw new Error('Cannot find module'); }, loadSsh: async () => { throw new Error('Cannot find module'); } },
       env: { PW: 'secret' },
     });
@@ -497,7 +514,7 @@ describe('TerminalService', () => {
     const hostKey = Buffer.from('ssh-ed25519 host key blob');
     const ssh = (extra: Record<string, unknown> = {}) => [{
       name: 'build-box', host: '10.0.0.12', port: 2222, username: 'deploy',
-      privateKeyEnv: 'BOX_KEY', passphraseEnv: 'BOX_PASS', ...extra,
+      privateKeyEnv: 'BOX_KEY', passphraseEnv: 'BOX_PASS', hostFingerprint: hostKeyFingerprint(hostKey), ...extra,
     }];
 
     it('connects with env credentials and never exposes them', async () => {
@@ -543,6 +560,33 @@ describe('TerminalService', () => {
       expect(fake.state.channels).toHaveLength(0);
       expect(service.sessions()).toEqual([]);
       expect(audits.at(-1)).toMatchObject({ action: 'terminal.session.start', outcome: 'error', detail: { code: 'host-fingerprint-mismatch' } });
+    });
+
+    it('accepts an unverified host key only with insecureAcceptAnyHostKey and marks the target unsafe', async () => {
+      const fake = fakeSsh(hostKey);
+      const warnings: string[] = [];
+      const { service } = makeService({
+        raw: { ssh: [{ name: 'build-box', host: '10.0.0.12', port: 2222, username: 'deploy',
+          privateKeyEnv: 'BOX_KEY', passphraseEnv: 'BOX_PASS', insecureAcceptAnyHostKey: true }] },
+        modules: { loadPty: async () => fakePty().module, loadSsh: async () => fake.module },
+        env: { BOX_KEY: 'k', BOX_PASS: 'p' },
+        logger: { warn: (message: string) => warnings.push(message) },
+      });
+      expect((await service.listTargets())[1]).toEqual({
+        id: 'build-box', kind: 'ssh', label: 'deploy@10.0.0.12:2222（不安全：未校验主机密钥）', available: true, insecureHostKey: true,
+      });
+      const socket = await connect(service, owner, 'build-box');
+      expect(socket.controls()[0]).toMatchObject({ type: 'ready', kind: 'ssh' });
+      expect(warnings.join('\n')).toContain(`${hostKeyFingerprint(hostKey)} accepted WITHOUT verification`);
+    });
+
+    it('refuses any host key when a target reaches the backend without a pin', async () => {
+      const fake = fakeSsh(hostKey);
+      const unpinned = { name: 'box', host: 'h', port: 22, username: 'u', passwordEnv: 'PW' };
+      const events = { onData: () => undefined, onExit: () => undefined };
+      await expect(startSshBackend(fake.module, unpinned, { password: 'x' }, { cols: 80, rows: 24 }, events as never))
+        .rejects.toMatchObject({ code: 'host-fingerprint-mismatch' });
+      expect(fake.state.channels).toHaveLength(0);
     });
 
     it('marks a target unavailable when its env credential is missing', async () => {

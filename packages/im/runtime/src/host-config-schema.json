@@ -98,6 +98,33 @@
             ]
           }
         },
+        "trustProxy": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 32
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "description": "Reverse proxies whose X-Forwarded-For / Forwarded header names the client (login rate limit, audit IP, loopback-only sockets): false (default) uses the TCP peer; true trusts every hop; a number trusts that many hops; a list trusts peers matching IPs / CIDRs or loopback, private, linklocal.",
+          "x-descriptionZh": "受信任的反向代理，其 X-Forwarded-For / Forwarded 头给出真实客户端地址（登录限流、审计 IP、仅本机套接字）：false（默认）只用 TCP 对端地址；true 信任所有跳；数字表示信任离服务端最近的若干跳；列表表示只信任匹配的 IP / CIDR 或 loopback、private、linklocal。",
+          "x-zhin-config": {
+            "security": true
+          }
+        },
         "base": {
           "type": [
             "string",
@@ -356,11 +383,56 @@
                   "hostFingerprint": {
                     "type": "string",
                     "pattern": "^[Ss][Hh][Aa]256:[A-Za-z0-9+/]{43}=*$",
-                    "description": "Expected host key fingerprint (SHA256:…); verified strictly when set.",
-                    "x-descriptionZh": "主机密钥指纹（SHA256:…）；填写后严格校验。"
+                    "description": "Required host key fingerprint (SHA256:…), verified strictly; get it with `ssh-keyscan -t ed25519 <host> | ssh-keygen -lf -` on a trusted network.",
+                    "x-descriptionZh": "必填的主机密钥指纹（SHA256:…），严格校验；在可信网络中用 `ssh-keyscan -t ed25519 <host> | ssh-keygen -lf -` 获取。"
+                  },
+                  "insecureAcceptAnyHostKey": {
+                    "type": "boolean",
+                    "description": "Accept any host key without verification (unsafe, open to man-in-the-middle); only instead of hostFingerprint. The Console marks the target unsafe.",
+                    "x-descriptionZh": "不校验主机密钥、接受任意密钥（不安全，可被中间人攻击）；仅在不填 hostFingerprint 时使用，Console 会把该目标标为不安全。"
                   }
                 },
                 "allOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "properties": {
+                          "hostFingerprint": true
+                        },
+                        "required": [
+                          "hostFingerprint"
+                        ],
+                        "not": {
+                          "properties": {
+                            "insecureAcceptAnyHostKey": {
+                              "const": true
+                            }
+                          },
+                          "required": [
+                            "insecureAcceptAnyHostKey"
+                          ]
+                        }
+                      },
+                      {
+                        "properties": {
+                          "insecureAcceptAnyHostKey": {
+                            "const": true
+                          }
+                        },
+                        "required": [
+                          "insecureAcceptAnyHostKey"
+                        ],
+                        "not": {
+                          "properties": {
+                            "hostFingerprint": true
+                          },
+                          "required": [
+                            "hostFingerprint"
+                          ]
+                        }
+                      }
+                    ]
+                  },
                   {
                     "anyOf": [
                       {

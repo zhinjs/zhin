@@ -27,9 +27,9 @@ async function openIam() {
   const root = await mkdtemp(join(tmpdir(), 'zhin-iam-plugin-'));
   roots.push(root);
   const database = createDatabaseHost({ dialect: 'sqlite', filename: join(root, '.zhin', 'data.sqlite') } as never);
-  expect(defineConsoleIamTables(database)).toBe(true);
+  expect(defineConsoleIamTables(database.gatewayTableHost())).toBe(true);
   await database.start();
-  const service = new ConsoleIamService({ database, projectRoot: root, pluginPermissions: () => CATALOG });
+  const service = new ConsoleIamService({ database: database.gatewayTableHost(), projectRoot: root, pluginPermissions: () => CATALOG });
   await service.start({ timers: false });
   closers.push(async () => { service.stop(); await database.stop(); });
   const tokens = new TokenRegistry();

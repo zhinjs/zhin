@@ -14,8 +14,10 @@ export interface TerminalSshTargetConfig {
   readonly privateKeyEnv?: string;
   readonly passwordEnv?: string;
   readonly passphraseEnv?: string;
-  /** Normalized `SHA256:<base64 without padding>`. */
+  /** Normalized `SHA256:<base64 without padding>`; required unless {@link insecureAcceptAnyHostKey}. */
   readonly hostFingerprint?: string;
+  /** Explicit opt-out of host key verification (MITM-able); the Console marks the target unsafe. */
+  readonly insecureAcceptAnyHostKey?: true;
 }
 
 export interface TerminalConfig {
@@ -41,8 +43,10 @@ const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/u;
 const KNOWN_KEYS = new Set(['enabled', 'shell', 'cwd', 'idleTimeout', 'maxSessions', 'ssh']);
 const KNOWN_SSH_KEYS = new Set([
   'name', 'label', 'host', 'port', 'username', 'privateKeyPath', 'privateKeyEnv',
-  'passwordEnv', 'passphraseEnv', 'hostFingerprint',
+  'passwordEnv', 'passphraseEnv', 'hostFingerprint', 'insecureAcceptAnyHostKey',
 ]);
+
+const FINGERPRINT_HINT = 'run `ssh-keyscan -t ed25519 <host> | ssh-keygen -lf -` on a trusted network and copy the SHA256:… value';
 
 export interface ParseTerminalConfigOptions {
   readonly projectRoot: string;
@@ -125,7 +129,15 @@ function parseSshTarget(raw: unknown, path: string): TerminalSshTargetConfig {
   const fingerprintRaw = optionalString(value.hostFingerprint, `${path}.hostFingerprint`);
   const hostFingerprint = fingerprintRaw === undefined ? undefined : normalizeFingerprint(fingerprintRaw);
   if (fingerprintRaw !== undefined && !hostFingerprint) {
-    throw new TerminalConfigError(`${path}.hostFingerprint`, 'must be "SHA256:<base64>"');
+    throw new TerminalConfigError(`${path}.hostFingerprint`, `must be "SHA256:<base64>"; ${FINGERPRINT_HINT}`);
+  }
+  const insecure = optionalBoolean(value.insecureAcceptAnyHostKey, `${path}.insecureAcceptAnyHostKey`) ?? false;
+  if (insecure && hostFingerprint) {
+    throw new TerminalConfigError(path, 'hostFingerprint and insecureAcceptAnyHostKey are mutually exclusive');
+  }
+  if (!hostFingerprint && !insecure) {
+    throw new TerminalConfigError(`${path}.hostFingerprint`,
+      `is required to verify the SSH host key; ${FINGERPRINT_HINT} (or set insecureAcceptAnyHostKey: true to accept any key, unsafe)`);
   }
   return Object.freeze({
     name, host, port, username,
@@ -135,6 +147,7 @@ function parseSshTarget(raw: unknown, path: string): TerminalSshTargetConfig {
     ...(passwordEnv ? { passwordEnv } : {}),
     ...(passphraseEnv ? { passphraseEnv } : {}),
     ...(hostFingerprint ? { hostFingerprint } : {}),
+    ...(insecure ? { insecureAcceptAnyHostKey: true as const } : {}),
   });
 }
 

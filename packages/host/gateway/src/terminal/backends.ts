@@ -206,7 +206,8 @@ export function startSshBackend(
         hostVerifier: (key: Buffer) => {
           const observed = hostKeyFingerprint(key);
           options.onHostKey?.(observed);
-          if (target.hostFingerprint && observed !== target.hostFingerprint) {
+          // Deny by default: only an explicit opt-out skips the pin.
+          if (target.insecureAcceptAnyHostKey !== true && observed !== target.hostFingerprint) {
             fingerprintMismatch = true;
             return false;
           }

@@ -44,6 +44,16 @@ flowchart LR
 
 The proxy must preserve Authorization, raw Webhook bodies, SSE streaming, and WebSocket Upgrade. Never cache `/api/events` or rewrite a body that a platform signature covers.
 
+Behind a reverse proxy, set `http.trustProxy`; otherwise login rate limiting and audit IPs only see the proxy:
+
+```yaml
+http:
+  host: 127.0.0.1
+  trustProxy: [loopback]   # trust the same-host proxy only; also accepts IPs / CIDRs, a hop count, or true
+```
+
+It is off by default: the TCP peer is the client and any client-supplied `X-Forwarded-For` / `Forwarded` is ignored. When on, forwarding headers count only when sent by a trusted proxy, walked from the proxy towards the client up to the first untrusted hop. A proxied request (one carrying a forwarding header) never counts as local: adapter reverse WebSockets without `access_token` and the MCP / A2A localhost exemption refuse it, so endpoints exposed through a same-host proxy need credentials.
+
 `GET /pub/health` reports process liveness. `GET /pub/ready` reports runtime readiness, returning 503 before the first committed generation and 200 when required components are ready. The public response contains only `ready`.
 
 By default a committed generation and initialized Database Host are required. Configure additional requirements explicitly:

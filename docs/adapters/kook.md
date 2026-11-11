@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/kook/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/kook/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=adad9fc12b37b0cb -->
+<!-- sync-adapter-docs:sha256=6578d5a4d9c88e05 -->
 
 # @zhin.js/adapter-kook
 
@@ -126,7 +126,7 @@ canonical `share` 映射为含标题、描述/正文与“打开链接”按钮�
 - 在账号库保存、修改、启动、停止、替换或删除该 Adapter 的账号；新增仅保存，不创建 SDK Client，需手动启动；
 - 如果适配器要求登录，页面会显示 LoginAssist 的扫码 / 滑块 / 设备确认待办；
 
-读取需要 `kook:read`，写操作需要 `kook:write`；全局所有者不受限。插件权限按级别授予（见[插件权限的级别](../console/index.md#插件权限的级别)）：`:read` 给 `viewer` 及以上，`:write` 给 `admin` 及以上。页面里的「添加 endpoint」等价于原来的 `kook endpoint add`。
+读取需要 `kook:read`（`read` 级别，内置角色 `viewer` 及以上都有）；增删改账号等写操作需要 `kook:write`（`operate` 级别，`operator` 及以上都有，绑定到本适配器的角色也算），首次迁移还需管理员身份；全局所有者不受限，见[插件权限的级别](https://zhin.js.org/console/#插件权限的级别)。页面里的「添加 endpoint」等价于原来的 `kook endpoint add`。
 
 首次修改启动配置里的既有账号前，管理员必须核对清单并确认一次迁移。原 canonical 身份与历史保留，完整账号配置加密进入 Host 数据库；此后账号管理只写数据库，不修改启动文件或 `.env`，不重启进程。没有持久化账号端口的环境可使用静态配置连接，动态写操作明确不可用。
 

@@ -21,6 +21,7 @@ import { WebSocketServer } from 'ws';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { HttpRequestInfo, WsUpgradeDecision, WsUpgradeRequest } from '../http-host.js';
 import type { HttpHostAddress, HttpHostTlsOptions } from '../host-options.js';
+import { compileTrustProxy, resolveClientAddress, type TrustProxySetting } from '../trust-proxy.js';
 import { createNodeRequest, nodeRequestHeaders, writeNodeResponse, wrapNodeWebSocket } from './node-http.js';
 
 const logger = getLogger('http');
@@ -30,6 +31,8 @@ export interface NodeHttpListenerOptions {
   readonly port?: number;
   /** Enables HTTPS / WSS on this listener. */
   readonly tls?: HttpHostTlsOptions;
+  /** `http.trustProxy`: derive `remoteAddress` from forwarding headers sent by trusted peers. */
+  readonly trustProxy?: TrustProxySetting;
   handle(request: Request, info: HttpRequestInfo): Promise<Response>;
   upgrade(request: WsUpgradeRequest): Promise<WsUpgradeDecision>;
   /** Called once the listener is bound, before `listen()` resolves. */
@@ -55,6 +58,9 @@ export function createNodeHttpListener(options: NodeHttpListenerOptions): NodeHt
   let closed = false;
   let closeResult: Promise<void> | undefined;
   let listenResult: Promise<HttpHostAddress> | undefined;
+  const trust = compileTrustProxy(options.trustProxy);
+  const clientAddress = (request: IncomingMessage): string | undefined =>
+    resolveClientAddress(request.socket?.remoteAddress, request.headers, trust);
 
   const handleRequest = (request: IncomingMessage, response: ServerResponse): void => {
     void dispatch(request, response).catch((error: unknown) => {
@@ -112,8 +118,9 @@ export function createNodeHttpListener(options: NodeHttpListenerOptions): NodeHt
       response.end();
       return;
     }
+    const remoteAddress = clientAddress(request);
     const webResponse = await options.handle(webRequest, {
-      ...(request.socket?.remoteAddress ? { remoteAddress: request.socket.remoteAddress } : {}),
+      ...(remoteAddress ? { remoteAddress } : {}),
     });
     await writeNodeResponse(response, webResponse);
   }
@@ -130,7 +137,7 @@ export function createNodeHttpListener(options: NodeHttpListenerOptions): NodeHt
       socket.destroy();
       return;
     }
-    const remoteAddress = request.socket?.remoteAddress;
+    const remoteAddress = clientAddress(request);
     void options.upgrade({
       url,
       headers: nodeRequestHeaders(request),

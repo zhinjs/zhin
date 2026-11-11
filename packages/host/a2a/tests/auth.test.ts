@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   extractBearerToken,
+  isLocalhost,
   timingSafeEqualString,
   verifyA2aBearer,
   type A2aAuthRequest,
@@ -29,5 +30,13 @@ describe('A2A auth', () => {
     expect(verifyA2aBearer(mockReq('Bearer wrong'), token)).toBe(false);
     expect(verifyA2aBearer(mockReq(), token)).toBe(false);
     expect(verifyA2aBearer(mockReq(`Bearer ${token}`), '')).toBe(false);
+  });
+});
+
+describe('A2A localhost behind a proxy', () => {
+  it('never treats proxied requests as localhost', () => {
+    expect(isLocalhost({ headers: new Headers(), remoteAddress: '127.0.0.1' })).toBe(true);
+    expect(isLocalhost({ headers: new Headers({ 'x-forwarded-for': '203.0.113.9' }), remoteAddress: '127.0.0.1' })).toBe(false);
+    expect(isLocalhost({ headers: new Headers({ forwarded: 'for=203.0.113.9' }), remoteAddress: '::1' })).toBe(false);
   });
 });

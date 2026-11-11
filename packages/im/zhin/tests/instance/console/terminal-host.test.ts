@@ -37,7 +37,7 @@ async function startHost(terminal: unknown, options: { token?: string } = {}) {
   const database = createDatabaseHost({ dialect: 'sqlite', filename: join(root, '.zhin', 'data.sqlite') } as never);
   const http: ProcessHttpHost = createHttpHost({ host: '127.0.0.1', port: 0, ...(options.token ? { token: options.token } : {}) });
   const configStore = { readDocument: async () => ({}), setKey: async () => undefined };
-  const iam = installConsoleIam(http, { database, configStore, projectRoot: root });
+  const iam = installConsoleIam(http, { database: database.gatewayTableHost(), configStore, projectRoot: root });
   const handle = installHostConsoleTerminal(http, {
     config: terminal,
     projectRoot: root,

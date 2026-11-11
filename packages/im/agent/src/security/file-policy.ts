@@ -103,6 +103,8 @@ const SENSITIVE_BASENAME_PATTERNS: RegExp[] = [
   /^\.pgpass$/i,
   /^\.my\.cnf$/i,
   /^\.passwd$/i,
+  // SQLite project databases (shared with the gateway's console_* account tables, ADR 0054 §7)
+  /\.(sqlite3?|db3?)(-wal|-shm|-journal)?$/i,
   // 历史文件（可能含输入的密码等）
   /^\.bash_history$/i,
   /^\.zsh_history$/i,
@@ -430,7 +432,11 @@ const BASH_READ_COMMANDS: ReadonlySet<string> = new Set([
  * awk can run commands (`system()`, `| "cmd"`) and write files, so it is never read-only;
  * its file operands are still inspected for sensitive paths.
  */
-const BASH_PATH_OPERAND_ONLY_COMMANDS: ReadonlySet<string> = new Set(['awk', 'gawk', 'mawk']);
+const BASH_PATH_OPERAND_ONLY_COMMANDS: ReadonlySet<string> = new Set([
+  'awk', 'gawk', 'mawk',
+  // Database clients: their file operand (the project database) is a sensitive path.
+  'sqlite3', 'sqlite', 'litecli', 'sqlite-utils',
+]);
 
 /**
  * 从 bash 只读/搜索命令及输入重定向中提取可能的目标文件路径（不含 flag）。

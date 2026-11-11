@@ -281,7 +281,8 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   // only authorizes the forwarded principal. A standalone (dev / test) instance has no gateway,
   // so it still serves them itself.
   const consoleIam = bridgedHttpHost ? undefined : installConsoleIam(httpHost, {
-    database: databaseHost,
+    // Only the standalone path may reach the console_* tables; everything else is denied them.
+    database: databaseHost.gatewayTableHost(),
     configStore: consoleConfigurationStore,
     projectRoot: options.root,
     apiBase: httpConfig.apiBase,
