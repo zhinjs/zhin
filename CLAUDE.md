@@ -15,6 +15,7 @@ pnpm build              # Full build (Turborepo: basic/ → packages/ → plugin
 pnpm test               # Run all Vitest tests
 pnpm test:watch         # Watch mode
 pnpm test:coverage      # Coverage report
+pnpm test:e2e:gateway   # Slow process-level gateway suite (tests/e2e-gateway, after pnpm build); skipped by pnpm test, run once in full-validation.yml
 pnpm lint               # ESLint (.ts,.tsx)
 pnpm type-check         # tsc --noEmit -p tsconfig.typecheck.json
 pnpm dev                # Start minimal-bot (examples/minimal-bot); use pnpm dev:test for test-bot
