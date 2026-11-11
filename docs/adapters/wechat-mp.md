@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/wechat-mp/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/wechat-mp/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=5d4e235b7a917f87 -->
+<!-- sync-adapter-docs:sha256=86db2c6477c199a4 -->
 
 # @zhin.js/adapter-wechat-mp
 
@@ -115,7 +115,7 @@ Runtime Host（`http`）须已 listen，Webhook 才可达。
 ## 文档链接
 
 - [微信公众号适配器文档](https://zhin.js.org/adapters/wechat-mp)
-- [适配器概览](https://zhin.js.org/essentials/adapters)
+- [适配器概览](https://zhin.js.org/adapters/)
 - [微信公众平台](https://mp.weixin.qq.com/)
 
 ## 许可证

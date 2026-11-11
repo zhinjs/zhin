@@ -35,7 +35,6 @@
 - `packages/toolkit/`：create-zhin（`pnpm create zhin-app`）、scaffold-wizard（配置向导）、components（纯 JSX 样式组件）、tailwind（静态工具类）、html-renderer（Shotium）、speech。
 - `plugins/adapters/`：平台适配器（Sandbox / QQ / ICQQ / NapCat / OneBot11·12 / Discord / Telegram / Slack / KOOK / 钉钉 / 飞书 / GitHub / Email / 企微 / LINE / Satori 等）。
 - `examples/`：参考实现，见下方「示例分层」。
-- 可选 Remote UI submodule：`zhin-console/`。
 
 ### 分层架构（依赖方向单向，由 harness 强制）
 
@@ -97,7 +96,7 @@ Agent 与 Console Host；其他低层包不跨层取用上层实现。
 - `pnpm check:plugin-capability-publish`：插件 `package.json` 须发布实际存在的能力目录与文档，并用 `prepublishOnly` 先构建。
 - `pnpm --filter <pkg> build|test`：只验证单个包。
 - `pnpm check:l4-ci`：PR 门禁 L4 确定性子集（编排/记忆/full-bot 契约）。
-- `pnpm check:l4`：L4 全维度验收（编排 + 语义记忆 + full-bot 契约 + MCP 鉴权 + adapter L4；实机 IM 项 `L4_SKIP_PLATFORM=1` 跳过）；nightly workflow 跑全量。
+- `pnpm check:l4`：L4 全维度验收（编排 + 语义记忆 + full-bot 契约 + MCP 鉴权 + adapter L4；实机 IM 项 `L4_SKIP_PLATFORM=1` 跳过）；目前未接入任何 workflow，需本地手动运行。
 - 暂无官方 Docker 镜像；自建容器使用 [`docs/public/deploy/production/`](docs/public/deploy/production/) 中由 `pnpm check:deployment-templates` 校验的模板，并参考[生产部署与运维](docs/operations/production.md)。
 - `pnpm check:install-size`：zhin.js IM 核心 production `node_modules` ≤10MB（ADR 0019）。
 - `pnpm check:install-tiers-ssot`：根 `README` Install tiers 表与 `docs/snippets/install-tiers.md` 一致。

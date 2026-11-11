@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/telegram/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/telegram/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=c7763977929c218a -->
+<!-- sync-adapter-docs:sha256=88b0c3a60a55151e -->
 
 # @zhin.js/adapter-telegram
 
@@ -195,7 +195,7 @@ Telegram 的 token / apiBaseUrl 更新通过只读 `getMe` 核验真实 bot ID�
 ## Documentation
 
 - [Telegram adapter on zhin.js.org](https://zhin.js.org/adapters/telegram)
-- [Adapters overview](https://zhin.js.org/essentials/adapters)
+- [Adapters overview](https://zhin.js.org/adapters/)
 
 ## License
 

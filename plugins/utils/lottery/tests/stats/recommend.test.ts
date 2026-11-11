@@ -89,3 +89,15 @@ describe('recommendGame structures', () => {
     expect(pick.numbers.digits).toHaveLength(3);
   });
 });
+
+describe('omit score (draws are newest-first)', () => {
+  it('measures the distance to the most recent hit, not the oldest one', () => {
+    // 1 appears in the latest draw and again long ago; 2 appears only long ago.
+    const draws = [[1], [3], [3], [1, 2]];
+    const byValue = new Map(scorePool(draws, 1, 3, 'seed').map((s) => [s.value, s]));
+    expect(byValue.get(1)!.omit).toBe(0);
+    expect(byValue.get(2)!.omit).toBe(1);
+    expect(byValue.get(1)!.omit).toBeLessThan(byValue.get(3)!.omit);
+  });
+
+});

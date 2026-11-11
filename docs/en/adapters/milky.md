@@ -96,7 +96,7 @@ The root plugin the main configuration `plugins` map (or project graph) must ref
 
 - [Milky Quick Start](https://milky.ntqqrev.org/)
 - [Milky Communication](https://milky.ntqqrev.org/guide/communication)
-- [Adapters overview](https://zhin.js.org/essentials/adapters)
+- [Adapters overview](https://zhin.js.org/adapters/)
 
 ## Console page
 

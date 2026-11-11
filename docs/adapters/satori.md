@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/satori/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/satori/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=5406a74f22aa90b9 -->
+<!-- sync-adapter-docs:sha256=03032076bdda0c01 -->
 
 # @zhin.js/adapter-satori
 
@@ -41,7 +41,7 @@ pnpm add @zhin.js/adapter-satori
 
 入站：`endpoint[endpointSpec].events.emit('message.receive', { conversation, message, content, sender, metadata })`（`conversation` 为 ConversationRef：DIRECT 频道 → kind `private`，其余 → kind `group`、所属 guild 进 `parent`）
 
-出站：`send({ conversation, payload })` → Satori `message.create`（`channel_id = conversation.id`；payload 已由 gateway/core 渲染；无 segment-mapper）
+出站：`send({ conversation, payload })` → Satori `message.create`（`channel_id = conversation.id`）。同一次入站处理结束前的被动回复会原样带回 `referrer`。段里的 mention 编成 `<at>`，媒体编成 `<img>` / `<audio>` / `<video>` / `<file>`，`emoji` 和规范 `face` 编成 `<emoji>`。
 
 入站 `metadata.mentioned`：消息 content 中 `<at id="…"/>` 元素的 id 等于登录 selfId（配置的 `userId`）时置 `true`。
 

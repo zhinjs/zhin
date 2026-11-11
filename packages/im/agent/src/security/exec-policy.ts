@@ -540,7 +540,8 @@ function checkSingleCommand(
   // 4. 白名单匹配
   const allowed = allowlist.some(pattern => {
     try {
-      const re = new RegExp(`^${pattern}$`);
+      // Group the pattern: `^git|npm$` would otherwise match any command starting with `git`.
+      const re = new RegExp(`^(?:${pattern})$`);
       return re.test(cmdName);
     } catch {
       return cmdName === pattern;

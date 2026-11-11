@@ -28,7 +28,8 @@ const FILE_TOOL_OPERATION: Record<FileToolName, FileOperation> = {
 function isAllowlisted(allowlist: string[], item: string): boolean {
   return allowlist.some((pattern) => {
     try {
-      const re = new RegExp(`^${pattern}$`);
+      // Group the pattern so every alternative is anchored (`foo|etch` must not match `web_fetch`).
+      const re = new RegExp(`^(?:${pattern})$`);
       return re.test(item);
     } catch {
       return item === pattern;

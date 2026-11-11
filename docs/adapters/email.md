@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/email/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/email/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=ff73ab3879273ad8 -->
+<!-- sync-adapter-docs:sha256=e852de56c8044413 -->
 
 # @zhin.js/adapter-email
 
@@ -118,7 +118,7 @@ SMTP 与 IMAP 的主机、账号、密码和连接参数分项填写；两种协
 ## 文档链接
 
 - [Email 适配器文档](https://zhin.js.org/adapters/email)
-- [适配器概览](https://zhin.js.org/essentials/adapters)
+- [适配器概览](https://zhin.js.org/adapters/)
 
 ## 许可证
 

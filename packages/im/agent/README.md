@@ -2,7 +2,7 @@
 
 Zhin AI Agent 组合层：根入口提供 Agent 创作与领域 API；`@zhin.js/agent/runtime` 提供 CLI composition root 使用的 Host 装配和 generation-owned 执行机制。
 
-领域词汇见 [CONTEXT.md](./CONTEXT.md)。用户向文档：[AI 模块](https://zhin.js.org/advanced/ai)、[消息如何流转](../../docs/essentials/message-flow.md)。
+领域词汇见 [CONTEXT.md](./CONTEXT.md)。用户向文档：[AI 模块](https://zhin.js.org/ai/)、[消息如何流转](../../docs/essentials/message-flow.md)。
 
 ## Plugin Runtime 入口
 

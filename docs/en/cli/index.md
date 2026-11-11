@@ -385,24 +385,17 @@ zhin schedule resume <id>
 | `--notify-channel` | `im` / `silent` (default) / `log` |
 | cron expression, `--at`, `--every` | Pick one: a six-field cron (sec min hour day month weekday), a one-off ISO8601 time, or an interval (e.g. `30m`, `1h`, `1d`) |
 
-### agent: Agent Diagnostics and Workroom Observation
+### agent: Agent Diagnostics
 
 Requires the AI stack (`@zhin.js/agent` + `zod` + `ai`).
 
 ```bash
 zhin agent info [--json]
-zhin agent workroom runs --project <projectId> [--json]
-zhin agent workroom run <runId> --project <projectId> [--json]
-zhin agent workroom readiness <runId> --project <projectId> [--json]
-zhin agent workroom cancel <runId> --project <projectId> --expected-sequence <n> --reason-code <code> --control-deadline <timestamp> [--operation-id <id>] [--json]
-zhin agent workroom request-replan <runId> --project <projectId> --expected-sequence <n> --reason-code <code> [--operation-id <id>] [--json]
 ```
 
 | Command | Purpose |
 | --- | --- |
 | `info` | List discovered Agent capabilities and named Agents (Tools, Skills, Hooks…) |
-| `workroom runs` / `run` / `readiness` | Connect to the running bot and read Run, Task, Assignment and Blocker state (no content) using the token identity from config |
-| `workroom cancel` / `request-replan` | Require the current Project Sponsor permission and use `expected-sequence` to prevent concurrent conflicts. `request-replan` only records the replan request and pauses scheduling; it never pretends a new plan revision exists |
 
 ### usage report: Real Usage Ledger
 

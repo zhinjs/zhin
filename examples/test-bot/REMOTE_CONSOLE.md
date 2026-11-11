@@ -48,4 +48,4 @@ pnpm dev          # 或 preview，见该仓库 README
 
 **https://console.zhin.dev**（`zhin-console` GitHub Pages）。
 
-详见 [docs/console-remote.md](../../docs/console-remote.md).
+详见 [docs/console/index.md](../../docs/console/index.md).

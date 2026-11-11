@@ -63,7 +63,8 @@ export function scorePool(
     for (const n of nums) {
       if (n < poolMin || n > poolMax) continue;
       freq.set(n, (freq.get(n) ?? 0) + 1);
-      lastSeen.set(n, idx);
+      // Draws are newest-first: the omit count is the index of the most recent hit, so keep the first one.
+      if (lastSeen.get(n) === draws.length) lastSeen.set(n, idx);
     }
   });
   const trend = analyzePoolTrend(draws, poolMin, poolMax);
@@ -115,7 +116,7 @@ export function scoreDigits(
     }
     column.forEach((n, idx) => {
       freq.set(n, (freq.get(n) ?? 0) + 1);
-      lastSeen.set(n, idx);
+      if (lastSeen.get(n) === column.length) lastSeen.set(n, idx);
     });
     recent.forEach((n) => trend.set(n, (trend.get(n) ?? 0) + 1));
     const maxFreq = Math.max(1, ...freq.values());

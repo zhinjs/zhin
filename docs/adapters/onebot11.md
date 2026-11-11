@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/onebot11/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/onebot11/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=13cd6b512247ec9f -->
+<!-- sync-adapter-docs:sha256=612131f6b42da380 -->
 
 # @zhin.js/adapter-onebot11
 
@@ -110,7 +110,7 @@ onebot11:
 ## 文档链接
 
 - [OneBot 11 标准](https://github.com/botuniverse/onebot-11)
-- [适配器概览](https://zhin.js.org/essentials/adapters)
+- [适配器概览](https://zhin.js.org/adapters/)
 
 ## Console 页面
 

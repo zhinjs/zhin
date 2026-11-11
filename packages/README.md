@@ -32,18 +32,18 @@ packages/
   toolkit/      # 脚手架与独立库
     create-zhin/
     scaffold-wizard/   # 共享项目配置向导（create-zhin-app + zhin setup）
-    satori/
-  host/         # Host 运行时（router、api、mcp）
-    router/
-    api/
+  host/         # Host 运行时（http、http-contract、mcp、a2a）
+    http/
+    http-contract/
     mcp/
+    a2a/
 ```
 
-根目录 **`zhin-console/`** 为 Remote Console 静态 UI（git submodule），不在 `packages/console/` 内。
+Remote Console 静态 UI 在独立仓库 [zhinjs/console](https://github.com/zhinjs/console)，不在 `packages/console/` 内。
 
 ## 构建顺序（Host）
 
-`contract` → `pagemanager` → `client` → `packages/host/router` → `packages/host/api`
+`contract` → `pagemanager` → `client` → `packages/host/http`
 
 Plugin 主链：`plugin-runtime` → `feature-kit` → 领域 Feature → `core` → `agent` → `zhin`
 

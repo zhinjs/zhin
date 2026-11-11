@@ -17,4 +17,4 @@ description: "两个基于仓库示例的部署故事：为什么选 Zhin、怎�
 ## 下一步
 
 - [示例项目](../examples/index.md)：先在本地跑起一个示例
-- [学习路径](../paths/README.md)：按目标选一条上手路线
+- [学习路径](../paths/index.md)：按目标选一条上手路线

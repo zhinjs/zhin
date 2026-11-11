@@ -19,7 +19,6 @@
     "middlewares",
     "src",
     "lib",
-    "skills",
     "README.md"
   ],
   "scripts": {

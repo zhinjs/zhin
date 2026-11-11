@@ -32,7 +32,12 @@ export async function fetchConsoleEventHistory(
     error?: string;
   };
   if (!response.ok || body.success !== true || !body.data) {
-    throw new Error(body.error ?? `Console event history failed: HTTP ${response.status}`);
+    // Carry the status: the transport keys re-login (`zhin:auth-required`) off `error.status === 401`,
+    // and the Host's 401 body message does not contain the status code.
+    throw Object.assign(
+      new Error(body.error ?? `Console event history failed: HTTP ${response.status}`),
+      { status: response.status },
+    );
   }
   return body.data;
 }

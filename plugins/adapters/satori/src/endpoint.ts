@@ -7,7 +7,15 @@ import {
   createEndpointSpecification,
   endpointSpec,
   type Endpoint,
+  type EndpointApproveRequest,
+  type EndpointFriend,
+  type EndpointReactionRequest,
+  type EndpointRejectRequest,
+  type EndpointRemoveReactionRequest,
+  type EndpointEventSink,
+  type EndpointIdentity,
   type EndpointSpecification,
+  type EndpointUserRequest,
   createEndpointLifecycle,
   type EndpointChannel,
   type EndpointConnectHandle,
@@ -31,11 +39,20 @@ import {
   formatInboundContent,
   formatMessageId,
   formatSatoriOutbound,
+  inboundSatoriSegments,
   isMessageEvent,
+  mapSatoriFriendRequest,
+  readSatoriFriend,
+  satoriFriendApproveParams,
+  satoriReactionParams,
+  withSatoriGuildRoles,
   isSelfMentioned,
+  mapGuildEmojiNotice,
   parseMessageRef,
   resolveInboundSender,
   satoriInboundConversation,
+  satoriMessageCreateParams,
+  withSatoriReferrer,
   type ResolvedSatoriWebhookConfig,
   type ResolvedSatoriWsConfig,
   type SatoriEventBody,
@@ -74,6 +91,8 @@ export class SatoriWsEndpoint extends SatoriClient implements Endpoint {
   readonly #call: SatoriActionCaller;
   readonly #control: EndpointControl = Object.freeze<EndpointControl>({
     recall: request => this.#recall(request),
+    addReaction: request => this.#addReaction(request),
+    removeReaction: request => this.#removeReaction(request),
   });
 
   constructor(options: SatoriWsEndpointOptions) {
@@ -143,10 +162,7 @@ export class SatoriWsEndpoint extends SatoriClient implements Endpoint {
 
   async #send({ conversation, payload, signal }: EndpointSendRequest): Promise<string> {
     const content = formatSatoriOutbound(payload);
-    const result = await this.#call({ resource: 'message', method: 'create', signal, params: {
-      channel_id: conversation.id,
-      content,
-    } });
+    const result = await this.#call({ resource: 'message', method: 'create', signal, params: satoriMessageCreateParams(conversation.id, content) });
     const msgId = extractCreatedMessageId(result);
     this.#logger.debug(formatCompact({
       op: 'satori_send',
@@ -159,34 +175,33 @@ export class SatoriWsEndpoint extends SatoriClient implements Endpoint {
 
   #admitRaw(body: SatoriEventBody): void {
     if (!matchesSatoriLogin(this.#options.config, body.login)) return;
-    if (!isMessageEvent(body)) return;
-    const conversation = { ...satoriInboundConversation(String(this.#options.id), body), endpoint: this[endpointSpec].identity };
-    const content = formatInboundContent(body);
-    const sender = resolveInboundSender(body);
-    const selfId = this.#options.config.userId;
-    const mentioned = isSelfMentioned(body, selfId);
-    void this[endpointSpec].events.message({
-      event: body,
-      ...(typeof body.timestamp === 'number' ? { platformSentAt: body.timestamp } : {}),
-      conversation,
-      message: { conversation, id: body.message.id },
-      content,
-      sender,
+    if (emitSatoriFriendRequest(body, {
       endpointId: this.#options.config.id,
-      ...(mentioned ? { mentioned: true } : {}),
-      metadata: Object.freeze({
-        type: body.type,
-        channelType: isPrivateChannelType(body) ? 'private' : 'group',
-        sn: body.sn,
+      call: this.#call,
+      emit: request => {
+        void this[endpointSpec].events.emit('request.receive', request).catch(error => {
+          this.#warnPlatformEvent('request.receive', error);
+        });
+      },
+    })) return;
+    const deliver = () => deliverSatoriInbound(body, {
+        endpointId: this.#options.config.id,
+        endpointKey: String(this.#options.id),
+        identity: this[endpointSpec].identity,
+        selfId: this.#options.config.userId,
         platform: this.#options.config.platform,
-      }),
-    }).catch((err) => {
-      this.#logger.warn(formatCompact({
-        op: 'satori_gateway_receive_failed',
-        channel: conversation.id,
-        error: err instanceof Error ? err.message : String(err),
-      }));
+        events: this[endpointSpec].events,
+        warnReceive: (channel, error) => {
+          this.#logger.warn(formatCompact({
+            op: 'satori_gateway_receive_failed',
+            channel,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+        },
+        warnEvent: (event, error) => this.#warnPlatformEvent(event, error),
     });
+    if (body.referrer !== undefined) withSatoriReferrer(body.referrer, deliver);
+    else deliver();
   }
 
   async #recall({ message, signal }: EndpointRecallRequest): Promise<void> {
@@ -195,6 +210,14 @@ export class SatoriWsEndpoint extends SatoriClient implements Endpoint {
       channel_id: channelId || message.conversation.id,
       message_id: messageId,
     } });
+  }
+
+  #addReaction(request: EndpointReactionRequest): Promise<string | null> {
+    return addSatoriReaction(this.#call, request);
+  }
+
+  #removeReaction(request: EndpointRemoveReactionRequest): Promise<void> {
+    return removeSatoriReaction(this.#call, request);
   }
 
   #warnPlatformEvent(name: string, error: unknown): void {
@@ -359,6 +382,8 @@ export class SatoriWebhookEndpoint extends SatoriClient implements Endpoint {
   readonly #call: SatoriActionCaller;
   readonly #control: EndpointControl = Object.freeze<EndpointControl>({
     recall: request => this.#recall(request),
+    addReaction: request => this.#addReaction(request),
+    removeReaction: request => this.#removeReaction(request),
   });
 
   constructor(options: SatoriWebhookEndpointOptions) {
@@ -428,10 +453,7 @@ export class SatoriWebhookEndpoint extends SatoriClient implements Endpoint {
 
   async #send({ conversation, payload, signal }: EndpointSendRequest): Promise<string> {
     const content = formatSatoriOutbound(payload);
-    const result = await this.#call({ resource: 'message', method: 'create', signal, params: {
-      channel_id: conversation.id,
-      content,
-    } });
+    const result = await this.#call({ resource: 'message', method: 'create', signal, params: satoriMessageCreateParams(conversation.id, content) });
     const msgId = extractCreatedMessageId(result);
     this.#logger.debug(formatCompact({
       op: 'satori_send',
@@ -444,34 +466,33 @@ export class SatoriWebhookEndpoint extends SatoriClient implements Endpoint {
 
   #admitRaw(body: SatoriEventBody): void {
     if (!matchesSatoriLogin(this.#options.config, body.login)) return;
-    if (!isMessageEvent(body)) return;
-    const conversation = { ...satoriInboundConversation(String(this.#options.id), body), endpoint: this[endpointSpec].identity };
-    const content = formatInboundContent(body);
-    const sender = resolveInboundSender(body);
-    const selfId = this.#options.config.userId;
-    const mentioned = isSelfMentioned(body, selfId);
-    void this[endpointSpec].events.message({
-      event: body,
-      ...(typeof body.timestamp === 'number' ? { platformSentAt: body.timestamp } : {}),
-      conversation,
-      message: { conversation, id: body.message.id },
-      content,
-      sender,
+    if (emitSatoriFriendRequest(body, {
       endpointId: this.#options.config.id,
-      ...(mentioned ? { mentioned: true } : {}),
-      metadata: Object.freeze({
-        type: body.type,
-        channelType: isPrivateChannelType(body) ? 'private' : 'group',
-        sn: body.sn,
+      call: this.#call,
+      emit: request => {
+        void this[endpointSpec].events.emit('request.receive', request).catch(error => {
+          this.#warnPlatformEvent('request.receive', error);
+        });
+      },
+    })) return;
+    const deliver = () => deliverSatoriInbound(body, {
+        endpointId: this.#options.config.id,
+        endpointKey: String(this.#options.id),
+        identity: this[endpointSpec].identity,
+        selfId: this.#options.config.userId,
         platform: this.#options.config.platform,
-      }),
-    }).catch((err) => {
-      this.#logger.warn(formatCompact({
-        op: 'satori_gateway_receive_failed',
-        channel: conversation.id,
-        error: err instanceof Error ? err.message : String(err),
-      }));
+        events: this[endpointSpec].events,
+        warnReceive: (channel, error) => {
+          this.#logger.warn(formatCompact({
+            op: 'satori_gateway_receive_failed',
+            channel,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+        },
+        warnEvent: (event, error) => this.#warnPlatformEvent(event, error),
     });
+    if (body.referrer !== undefined) withSatoriReferrer(body.referrer, deliver);
+    else deliver();
   }
 
   async #recall({ message, signal }: EndpointRecallRequest): Promise<void> {
@@ -480,6 +501,14 @@ export class SatoriWebhookEndpoint extends SatoriClient implements Endpoint {
       channel_id: channelId || message.conversation.id,
       message_id: messageId,
     } });
+  }
+
+  #addReaction(request: EndpointReactionRequest): Promise<string | null> {
+    return addSatoriReaction(this.#call, request);
+  }
+
+  #removeReaction(request: EndpointRemoveReactionRequest): Promise<void> {
+    return removeSatoriReaction(this.#call, request);
   }
 
   #warnPlatformEvent(name: string, error: unknown): void {
@@ -496,6 +525,47 @@ export class SatoriWebhookEndpoint extends SatoriClient implements Endpoint {
     this.ingest(body as Parameters<SatoriClient['ingest']>[0]);
   }
 
+}
+
+function deliverSatoriInbound(body: SatoriEventBody, input: {
+  readonly endpointId: string;
+  readonly endpointKey: string;
+  readonly identity: EndpointIdentity;
+  readonly selfId: string;
+  readonly platform: string;
+  readonly events: EndpointEventSink;
+  readonly warnReceive: (channel: string, error: unknown) => void;
+  readonly warnEvent: (event: string, error: unknown) => void;
+}): Promise<unknown> {
+  const notice = mapGuildEmojiNotice(body, input.endpointId);
+  if (notice) {
+    return input.events.emit('notice.receive', notice).catch(error => input.warnEvent('notice.receive', error));
+  }
+  if (!isMessageEvent(body)) return Promise.resolve();
+  const conversation = { ...satoriInboundConversation(input.endpointKey, body), endpoint: input.identity };
+  const content = formatInboundContent(body);
+  const segments = typeof body.message.content === 'string'
+    ? inboundSatoriSegments(body.message.content)
+    : undefined;
+  const sender = resolveInboundSender(body);
+  const mentioned = isSelfMentioned(body, input.selfId);
+  return input.events.message({
+    event: body,
+    ...(typeof body.timestamp === 'number' ? { platformSentAt: body.timestamp } : {}),
+    conversation,
+    message: { conversation, id: body.message.id },
+    content,
+    ...(segments ? { segments } : {}),
+    sender,
+    endpointId: input.endpointId,
+    ...(mentioned ? { mentioned: true } : {}),
+    metadata: Object.freeze({
+      type: body.type,
+      channelType: isPrivateChannelType(body) ? 'private' : 'group',
+      sn: body.sn,
+      platform: input.platform,
+    }),
+  }).catch(error => input.warnReceive(conversation.id, error));
 }
 
 function isPrivateChannelType(body: SatoriEventBody): boolean {
@@ -545,7 +615,8 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 /**
  * Satori endpoint 的 EndpointManagement 语义端口（ws / webhook 共用），
- * 数据走协议 API：guild.list / channel.list / guild-member.list。
+ * 数据走协议 API：guild.list / channel.list / guild.member.list。
+ * @see https://satori.chat/zh-CN/resources/member.html
  */
 export function createSatoriEndpointManagement(api: SatoriManagementApi): EndpointManagement {
   return Object.freeze<EndpointManagement>({
@@ -583,13 +654,99 @@ export function createSatoriEndpointManagement(api: SatoriManagementApi): Endpoi
       return channels;
     },
     async listGroupMembers({ groupId, signal }: EndpointGroupRequest): Promise<readonly unknown[]> {
-      // 平台形状（GuildMember[]）原样返回
-      return listSatoriPages(api, { resource: 'guild-member', params: { guild_id: groupId }, signal });
+      // 平台形状（GuildMember[]）原样返回，再规范化 1.3 的 GuildRole 角色
+      const members = await listSatoriPages(api, { resource: 'guild.member', params: { guild_id: groupId }, signal });
+      return members.map(member => withSatoriGuildRoles(member));
+    },
+    async listFriends(request: EndpointManagementRequest = {}): Promise<readonly EndpointFriend[]> {
+      const friends: EndpointFriend[] = [];
+      for (const value of await listSatoriPages(api, { resource: 'friend', signal: request.signal })) {
+        const friend = readSatoriFriend(value);
+        if (!friend?.user?.id) continue;
+        const nick = friend.nick ?? '';
+        const name = friend.user.name ?? '';
+        friends.push({
+          user_id: friend.user.id,
+          nickname: name || nick || friend.user.id,
+          remark: nick,
+        });
+      }
+      return friends;
+    },
+    async deleteFriend({ userId, signal }: EndpointUserRequest): Promise<void> {
+      await api({ resource: 'friend', method: 'delete', params: { user_id: userId }, signal });
+    },
+    async approveRequest({ requestId, remark, signal }: EndpointApproveRequest): Promise<void> {
+      await api({
+        resource: 'friend',
+        method: 'approve',
+        signal,
+        params: satoriFriendApproveParams(requestId, true, remark),
+      });
+    },
+    async rejectRequest({ requestId, reason, signal }: EndpointRejectRequest): Promise<void> {
+      await api({
+        resource: 'friend',
+        method: 'approve',
+        signal,
+        params: satoriFriendApproveParams(requestId, false, reason),
+      });
     },
   });
 }
 
 export type { CreateSatoriWebSocket, SatoriWsSocket } from './ws.js';
+
+function emitSatoriFriendRequest(body: SatoriEventBody, input: {
+  readonly endpointId: string;
+  readonly call: SatoriActionCaller;
+  readonly emit: (request: ReturnType<typeof mapSatoriFriendRequest>) => void;
+}): boolean {
+  if (body.type !== 'friend-request') return false;
+  const request = mapSatoriFriendRequest(body, input.endpointId, {
+    approve: (messageId, comment) => input.call({
+      resource: 'friend',
+      method: 'approve',
+      params: satoriFriendApproveParams(messageId, true, comment),
+    }).then(() => undefined),
+    reject: (messageId, reason) => input.call({
+      resource: 'friend',
+      method: 'approve',
+      params: satoriFriendApproveParams(messageId, false, reason),
+    }).then(() => undefined),
+  });
+  if (request) input.emit(request);
+  return true;
+}
+
+async function addSatoriReaction(call: SatoriActionCaller, request: EndpointReactionRequest): Promise<string | null> {
+  const { channelId, messageId } = parseMessageRef(request.message.id);
+  await call({
+    resource: 'reaction',
+    method: 'create',
+    signal: request.signal,
+    params: satoriReactionParams('create', {
+      channelId: channelId || request.message.conversation.id,
+      messageId,
+      emojiId: request.emoji,
+    }),
+  });
+  return request.emoji;
+}
+
+async function removeSatoriReaction(call: SatoriActionCaller, request: EndpointRemoveReactionRequest): Promise<void> {
+  const { channelId, messageId } = parseMessageRef(request.message.id);
+  await call({
+    resource: 'reaction',
+    method: 'delete',
+    signal: request.signal,
+    params: satoriReactionParams('delete', {
+      channelId: channelId || request.message.conversation.id,
+      messageId,
+      emojiId: request.reactionId,
+    }),
+  });
+}
 
 /** A transport connection may multiplex logins; this Endpoint admits only its selected account. */
 function matchesSatoriLogin(config: { readonly platform: string; readonly userId: string }, login: SatoriLogin | undefined): boolean {

@@ -103,7 +103,7 @@ Runtime Host（`http`）须已 listen，Webhook 才可达。
 ## 文档链接
 
 - [微信公众号适配器文档](https://zhin.js.org/adapters/wechat-mp)
-- [适配器概览](https://zhin.js.org/essentials/adapters)
+- [适配器概览](https://zhin.js.org/adapters/)
 - [微信公众平台](https://mp.weixin.qq.com/)
 
 ## 许可证

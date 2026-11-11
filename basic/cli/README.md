@@ -25,9 +25,6 @@ zhin config check [--fix] # 校验/修复 zhin.config.yml
 zhin config set <key> <value> # 经运行中 Host 校验、保存并按需生效；--offline 显式离线
 zhin doctor               # 环境诊断
 zhin send <scene_id> ...  # 向运行中的实例发消息
-zhin agent workroom runs --project <id> # 查看在线 Workroom Run 状态
-zhin agent workroom readiness <runId> --project <id> # 诊断 content-free Blocker
-zhin agent workroom request-replan <runId> --project <id> --expected-sequence <n> --reason-code requirements_changed
 zhin --help               # 全部命令
 ```
 

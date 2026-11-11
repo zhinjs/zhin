@@ -29,7 +29,8 @@ interface RunResult {
 export async function runCode(language: string, code: string, timeoutSeconds = 30, locale?: Locale): Promise<RunResult> {
   const lang = language.toLowerCase().trim();
 
-  if (!SUPPORTED_LANGUAGES[lang]) {
+  // Own-property check: `constructor` / `toString` must not pass as languages.
+  if (!Object.hasOwn(SUPPORTED_LANGUAGES, lang)) {
     return {
       stdout: '',
       stderr: '',

@@ -140,6 +140,7 @@
     "@zhin.js/tool": "workspace:*",
     "ajv": "^8.18.0",
     "aws4fetch": "^1.0.20",
+    "chalk": "^5.6.2",
     "he": "^1.2.0",
     "js-yaml": "^5.4.1"
   },

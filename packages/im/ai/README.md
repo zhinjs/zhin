@@ -229,7 +229,7 @@ Provider 领域契约从 `@zhin.js/ai/provider` 导入；纯引擎配置保留�
 | `ContextConfig` | `ContextManager` 总结阈值与 token 预算 |
 | `AIPlan` | 声明服务、账号、Profiles 和用途选择；不包含 Host 凭据材料 |
 
-完整 AI 模块文档：[zhin.js.org/advanced/ai](https://zhin.js.org/advanced/ai)
+完整 AI 模块文档：[zhin.js.org/ai/](https://zhin.js.org/ai/)
 
 ## 主要导出
 

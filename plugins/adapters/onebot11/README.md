@@ -98,7 +98,7 @@ onebot11:
 ## 文档链接
 
 - [OneBot 11 标准](https://github.com/botuniverse/onebot-11)
-- [适配器概览](https://zhin.js.org/essentials/adapters)
+- [适配器概览](https://zhin.js.org/adapters/)
 
 ## Console 页面
 

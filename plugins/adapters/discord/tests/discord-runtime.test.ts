@@ -1,5 +1,6 @@
 import { discordFixture, managedDiscordFixture } from './fixture.js';
-import { Status } from 'discord.js';
+import { Collection } from '@discordjs/collection';
+import { Status, TextChannel } from 'discord.js';
 import { createAdapterHarness } from '../../test-utils/endpoint.js';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import {
@@ -728,6 +729,71 @@ config: baseConfig}), () => mock, { receive: vi.fn(), send: vi.fn(async () => 's
     await expect(endpoint.management.listChannels?.()).resolves.toEqual([
       {
         id: 'chan-text',
+        name: 'general',
+        parent: { type: 'guild', id: GUILD_ID, name: 'Guild' },
+      },
+    ]);
+    await endpoint.stop();
+  });
+
+  it('omits obfuscated channels the bot cannot view (CHANNEL_OBFUSCATED, 1 << 17)', async () => {
+    const mock = createMockClient();
+    const visible = { id: 'chan-visible', name: 'general', type: 0, flags: { bitfield: 0 } };
+    // 名字是占位符但没有 flag，必须保留：过滤只看 CHANNEL_OBFUSCATED，不看 name。
+    const namedHidden = { id: 'chan-named-hidden', name: '___hidden___', type: 0, flags: { bitfield: 0 } };
+    // 有 flag 就要过滤，即使名字不是 ___hidden___。
+    const hiddenBitField = { id: 'chan-hidden-a', name: 'secret-a', type: 0, flags: { bitfield: 1 << 17 } };
+    const hiddenRaw = { id: 'chan-hidden-b', name: 'secret-b', type: 0, flags: (1 << 17) | (1 << 4) };
+    const guild = {
+      id: GUILD_ID,
+      name: 'Guild',
+      channels: {
+        cache: { values: () => [visible, namedHidden, hiddenBitField, hiddenRaw][Symbol.iterator]() },
+      },
+    };
+    mock.guilds.cache = { values: () => [guild][Symbol.iterator]() };
+    const endpoint = await createManagementEndpoint(mock);
+    await endpoint.start();
+    await expect(endpoint.management.listChannels?.()).resolves.toEqual([
+      {
+        id: 'chan-visible',
+        name: 'general',
+        parent: { type: 'guild', id: GUILD_ID, name: 'Guild' },
+      },
+      {
+        id: 'chan-named-hidden',
+        name: '___hidden___',
+        parent: { type: 'guild', id: GUILD_ID, name: 'Guild' },
+      },
+    ]);
+    await endpoint.stop();
+  });
+
+  it('returns the channel after a direct _patch({ flags: 0 }) clears CHANNEL_OBFUSCATED', async () => {
+    const mock = createMockClient();
+    const channel = new TextChannel(
+      { id: GUILD_ID } as ConstructorParameters<typeof TextChannel>[0],
+      { id: '123456789012345678', type: 0, name: '___hidden___', flags: 1 << 17 },
+      { options: { makeCache: () => new Collection() } } as ConstructorParameters<typeof TextChannel>[2],
+    );
+    const guild = {
+      id: GUILD_ID,
+      name: 'Guild',
+      channels: { cache: { values: () => [channel][Symbol.iterator]() } },
+    };
+    mock.guilds.cache = { values: () => [guild][Symbol.iterator]() };
+    const endpoint = await createManagementEndpoint(mock);
+    await endpoint.start();
+    await expect(endpoint.management.listChannels?.()).resolves.toEqual([]);
+
+    // 已知限制（来自 discord.js 的行为：_patch 在更新里没有 flags 时保留旧值）。
+    channel._patch({ id: channel.id, name: 'renamed-without-flags' });
+    await expect(endpoint.management.listChannels?.()).resolves.toEqual([]);
+
+    channel._patch({ id: channel.id, name: 'general', flags: 0 });
+    await expect(endpoint.management.listChannels?.()).resolves.toEqual([
+      {
+        id: '123456789012345678',
         name: 'general',
         parent: { type: 'guild', id: GUILD_ID, name: 'Guild' },
       },

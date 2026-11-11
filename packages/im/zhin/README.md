@@ -98,7 +98,7 @@ ai:
       model: gpt-4o
 ```
 
-参考：[examples/full-bot](../../../examples/full-bot/)、[AI 模块文档](https://zhin.js.org/advanced/ai)。
+参考：[examples/full-bot](../../../examples/full-bot/)、[AI 模块文档](https://zhin.js.org/ai/)。
 
 ## 编写插件
 
@@ -134,7 +134,7 @@ export default defineCommand({
 
 ```typescript
 // tools/get_weather/index.ts — 须已安装 @zhin.js/agent 且挂载 tool Feature
-import { defineAgentTool } from 'zhin.js/tool';
+import { defineAgentTool } from '@zhin.js/tool';
 
 export default defineAgentTool({
   description: '查询天气',
@@ -165,7 +165,7 @@ export default defineAgentTool({
 
 ## 多 Agent 编排
 
-安装 agent 栈后，从 **`zhin.js/agent`** 使用 Agent 与 Workroom API（见 [AI 模块文档](https://zhin.js.org/advanced/ai)）。旧的执行型 `runPipeline` / `runParallel` / `route` 已删除；普通一次性调用使用 `AIService.runAgent`，Project 级协作进入 Workroom。
+安装 agent 栈后，从 **`zhin.js/agent`** 使用 Agent 与 Workroom API（见 [AI 模块文档](https://zhin.js.org/ai/)）。旧的执行型 `runPipeline` / `runParallel` / `route` 已删除；普通一次性调用使用 `AIService.runAgent`，Project 级协作进入 Workroom。
 
 ## 常用命令
 
@@ -181,7 +181,7 @@ npx zhin doctor   # 诊断（含 AI 依赖）
 - [zhin.js.org](https://zhin.js.org/)
 - [快速开始](https://zhin.js.org/getting-started/)
 - [Install tiers / ADR 0019](https://zhin.js.org/adr/0019-install-size-layering)
-- [AI 模块](https://zhin.js.org/advanced/ai)
+- [AI 模块](https://zhin.js.org/ai/)
 
 ## 许可证
 

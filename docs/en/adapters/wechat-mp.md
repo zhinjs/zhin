@@ -118,7 +118,7 @@ See `skills/wechat-mp/SKILL.md` for skill documentation.
 ## Documentation Links
 
 - [WeChat Official Account adapter docs](https://zhin.js.org/adapters/wechat-mp)
-- [Adapters overview](https://zhin.js.org/essentials/adapters)
+- [Adapters overview](https://zhin.js.org/adapters/)
 - [WeChat Official Account Platform](https://mp.weixin.qq.com/)
 
 ## License

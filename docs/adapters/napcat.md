@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/napcat/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/napcat/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=43a62e4fcf1435bb -->
+<!-- sync-adapter-docs:sha256=562fac1b5c250e59 -->
 
 # @zhin.js/adapter-napcat
 
@@ -100,7 +100,7 @@ endpoint 配置，不会从环境变量推断 endpoint id。
 ## 文档链接
 
 - [NapCatQQ](https://github.com/NapNeko/NapCatQQ)
-- [适配器概览](https://zhin.js.org/essentials/adapters)
+- [适配器概览](https://zhin.js.org/adapters/)
 
 ## Console 页面
 

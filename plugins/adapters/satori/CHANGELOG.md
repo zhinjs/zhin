@@ -1,5 +1,27 @@
 # @zhin.js/adapter-satori
 
+## 1.1.27
+
+### Patch Changes
+
+- 11306b0: 对齐 Satori 出站元素和被动回复的 `referrer`。
+
+  **破坏性变更：** `at` / `mention` 不再编成 `@name`，图片、音频、视频和文件不再编成 `[image:src]` 这类纯文本，改为标准元素 `<at>`、`<img>`、`<audio>`、`<video>`、`<file>`，并支持 `<emoji>`。入站 `content` 仍是协议原文，这些元素会另外解成段。
+
+  收到带 `referrer` 的事件时，同一次处理里的 `message.create` 会原样带回该对象；之后的主动发送不带。`guild-emoji-added` / `guild-emoji-updated` / `guild-emoji-deleted` 映射为 `notice.group.emoji_added` / `emoji_updated` / `emoji_deleted`。
+
+  `@imhelper/satori-v1` 还没有这些类型（上游 `feat/satori-1.3-alignment` 未发布）。适配器使用本地类型，上游发版后可以换成官方类型。
+
+- 54b034f: 对齐 Satori 的 Friend、reaction 和群成员角色。
+
+  **破坏性变更：** `listGroupMembers` 返回的 `roles` 改为 `GuildRole[]`（`{ id, name? }`）。旧 SDK 若仍下发 `string[]`，适配器会收成 `{ id }`。
+
+  新增 `friend.list` / `friend.delete` / `friend.approve`（管理端口的 `listFriends`、`deleteFriend`、`approveRequest`、`rejectRequest`）。`friend-request` 进入 `request.receive`，名称是 `request.friend.add`。表态改为 `reaction.create` / `reaction.delete`，参数名是 `emoji_id`。
+
+  `@imhelper/satori-v1` 1.0.10 仍把好友列表当成 User，reaction 参数仍叫 `emoji`。这些类型是本地声明。上游 `feat/satori-1.3-alignment` 发版后可以换成官方类型。
+
+- 79395bb: 群成员列表改为请求 `POST /v1/guild.member.list`。原先资源名写成 `guild-member`，实际打到 `/v1/guild-member.list`，与 Satori 文档不一致。
+
 ## 1.1.26
 
 ### Patch Changes

@@ -2507,7 +2507,7 @@ _This Schema declares no fields._
 | `lottery.games` | array&lt;string&gt; | no | `["kl8","ssq","dlt","fc3d","pl3","pl5"]` | — |
 | `lottery.pushTargets` | array&lt;object&gt; | no | `[]` | OutboundHost push destinations for cron/publish reports |
 | `lottery.pushTargets[].adapter` | string | yes | — | — |
-| `lottery.pushTargets[].endpointId` | string | no | — | — |
+| `lottery.pushTargets[].endpointKey` | string | no | — | — |
 | `lottery.pushTargets[].channelType` | string | no | `"private"` | — |
 | `lottery.pushTargets[].channelId` | string | yes | — | — |
 | `lottery.kl8` | object | no | — | — |

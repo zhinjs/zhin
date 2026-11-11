@@ -483,8 +483,18 @@ form.addEventListener('submit', (event) => {
 </script>`;
 }
 
+/**
+ * JSON for inlining into a `<script>` element. `JSON.stringify` leaves `<` as-is, so a
+ * `</script>` (or `<!--`) inside any string value — plugin title, blueprint text — would end
+ * the script element early and inject markup.
+ */
+function inlineScriptJson(value: unknown): string {
+  // `JSON.stringify(undefined)` is `undefined`, not a string.
+  return (JSON.stringify(value) ?? 'undefined').replace(/</g, '\\u003c');
+}
+
 export function pageModuleScript(moduleUrl: string, page: PageShellDescriptor): string {
-  const entryMeta = JSON.stringify({
+  const entryMeta = inlineScriptJson({
     pluginId: page.owner ?? '',
     owner: page.owner ?? '',
     localName: page.localName,
@@ -648,7 +658,7 @@ try {
       }),
     );
   }
-  const page = await import(${JSON.stringify(moduleUrl)});
+  const page = await import(${inlineScriptJson(moduleUrl)});
   let Component = page.default ?? page.SandboxPage ?? entry.blueprint ?? null;
   let registeredElement = null;
   if (typeof page.register === 'function') {

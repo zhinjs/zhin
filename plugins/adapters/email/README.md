@@ -106,7 +106,7 @@ SMTP 与 IMAP 的主机、账号、密码和连接参数分项填写；两种协
 ## 文档链接
 
 - [Email 适配器文档](https://zhin.js.org/adapters/email)
-- [适配器概览](https://zhin.js.org/essentials/adapters)
+- [适配器概览](https://zhin.js.org/adapters/)
 
 ## 许可证
 

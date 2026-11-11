@@ -1,7 +1,9 @@
 import type { EndpointProfileConfiguration } from 'zhin.js/adapter';
 /** Satori protocol helpers. Spec: https://satori.chat/zh-CN/protocol/overview.html */
 
-import { EndpointDeliveryError, isMediaRef, type ConversationKind, type ConversationRef } from '@zhin.js/im-contract';
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { buildNotice, buildRequest, composeSideEventName, senderFromId, sideEventConversation, type IncomingNotice, type IncomingRequest } from '@zhin.js/core';
+import { EndpointDeliveryError, isMediaRef, type ConversationKind, type ConversationRef, type Segment } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('satori');
@@ -25,6 +27,52 @@ export interface SatoriUser {
   readonly id: string;
   readonly name?: string;
   readonly avatar?: string;
+}
+
+/**
+ * Satori Emoji。字段对齐文档 https://satori.chat/zh-CN/resources/emoji.html （`id`、`name?`）。
+ * `@imhelper/satori-v1` 1.0.7 / 1.0.10 没有这个类型。上游 `feat/satori-1.3-alignment`
+ * 会补上，但这次不发布 npm，适配器先用本地声明。上游发版后可以换成 SDK 导出的官方类型。
+ */
+export interface SatoriEmoji {
+  readonly id: string;
+  readonly name?: string;
+}
+
+/**
+ * 群组角色。文档只声明 `id` 和 `name?`。
+ * 协议源码里还有 color、position 等字段，这里以文档为准，不建模它们。
+ * `@imhelper/satori-v1` 没有这个类型。上游 `feat/satori-1.3-alignment` 会补，但未发 npm。
+ * 上游发版后可以换成官方类型。
+ * @see https://satori.chat/zh-CN/resources/role.html
+ */
+export interface SatoriGuildRole {
+  readonly id: string;
+  readonly name?: string;
+}
+
+/**
+ * 好友。文档形状是 `{ user?, nick? }`，不是带顶层 `id` / `name` / `avatar` 的 User。
+ * 1.0.10 的 `directory-api.getFriendList` 仍按 User 读取 `friend.id`。本地按文档解析。
+ * 上游发版后可以换成官方类型。
+ * @see https://satori.chat/zh-CN/resources/friend.html
+ */
+export interface SatoriFriend {
+  readonly user?: SatoriUser;
+  readonly nick?: string;
+}
+
+/**
+ * 群组成员。`roles` 在 1.3 起是 `GuildRole[]`，不再是 `string[]`。
+ * 本地类型。上游发版后可以换成官方类型。
+ * @see https://satori.chat/zh-CN/resources/member.html
+ */
+export interface SatoriGuildMember {
+  readonly user?: SatoriUser;
+  readonly nick?: string;
+  readonly avatar?: string;
+  readonly joined_at?: number;
+  readonly roles?: readonly SatoriGuildRole[];
 }
 
 export interface SatoriChannel {
@@ -61,7 +109,26 @@ export interface SatoriEventBody {
   readonly channel?: SatoriChannel;
   readonly user?: SatoriUser;
   readonly guild?: { readonly id: string; readonly name?: string };
-  readonly member?: { readonly user?: SatoriUser; readonly nick?: string; readonly roles?: string[] };
+  readonly member?: SatoriGuildMember;
+  /**
+   * 事件里的好友。本地字段，原因见 {@link SatoriFriend}。
+   * @see https://satori.chat/zh-CN/protocol/events.html
+   */
+  readonly friend?: SatoriFriend;
+  readonly operator?: SatoriUser;
+  /**
+   * 事件表情。本地字段，原因见 {@link SatoriEmoji}。
+   * @see https://satori.chat/zh-CN/protocol/events.html
+   */
+  readonly emoji?: SatoriEmoji;
+  /**
+   * 被动请求的来源上下文。协议不约束内部结构，发送时必须原样回传。
+   * 资源页 `message.create` 表格目前没列出该字段，但被动请求页要求传入，
+   * 协议方法表也包含 `referrer`。这里以被动请求页为准。
+   * 本地字段：`SatoriV1Event` 尚未声明它。上游发版后可以换成官方类型。
+   * @see https://satori.chat/zh-CN/advanced/passive.html
+   */
+  readonly referrer?: unknown;
   readonly [key: string]: unknown;
 }
 
@@ -76,6 +143,7 @@ export interface SatoriApiOptions {
 export interface SatoriWireSegment {
   readonly type: string;
   readonly data?: Record<string, unknown>;
+  readonly platform?: Record<string, unknown>;
 }
 
 /** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
@@ -232,6 +300,128 @@ export function formatInboundContent(body: SatoriEventBody & { message: SatoriMe
   return typeof content === 'string' ? content : String(content);
 }
 
+/**
+ * 入站元素解码。`content` 仍保留协议原文，结构化元素另外放进 segments。
+ * 只识别标准元素 at / img / emoji / audio / video / file。
+ * @see https://satori.chat/zh-CN/protocol/elements.html
+ */
+const MAX_SATORI_ELEMENT_DEPTH = 8;
+
+export function decodeSatoriContent(content: string, depth = 0): Segment[] {
+  if (depth >= MAX_SATORI_ELEMENT_DEPTH) {
+    return [{ type: 'text', data: { text: unescapeXml(content) } }];
+  }
+  const segments: Segment[] = [];
+  let text = '';
+  const flush = () => {
+    if (!text) return;
+    segments.push({ type: 'text', data: { text: unescapeXml(text) } });
+    text = '';
+  };
+  for (let index = 0; index < content.length;) {
+    if (content[index] !== '<') {
+      text += content[index];
+      index += 1;
+      continue;
+    }
+    const scanned = readSatoriElement(content, index);
+    if (scanned.kind === 'incomplete') {
+      text += content.slice(index);
+      break;
+    }
+    if (scanned.kind === 'literal' || !DECODABLE_SATORI_TAGS.has(scanned.element.name)) {
+      text += content[index];
+      index += 1;
+      continue;
+    }
+    const parsed = scanned.element;
+    flush();
+    segments.push(segmentFromSatoriElement(parsed.name, parsed.attrs));
+    if (parsed.inner) segments.push(...decodeSatoriContent(parsed.inner, depth + 1));
+    index = parsed.end;
+  }
+  flush();
+  return segments;
+}
+
+/** 仅在出现非文本元素时把解码结果送进消息管道，纯文本保持原来的 content-only 形状。 */
+export function inboundSatoriSegments(content: string): readonly Segment[] | undefined {
+  const segments = decodeSatoriContent(content);
+  return segments.some(segment => segment.type !== 'text') ? segments : undefined;
+}
+
+const GUILD_EMOJI_NOTICE: Readonly<Record<string, string>> = {
+  'guild-emoji-added': 'emoji_added',
+  'guild-emoji-updated': 'emoji_updated',
+  'guild-emoji-deleted': 'emoji_deleted',
+};
+
+/**
+ * `guild-emoji-*` → `notice.group.emoji_*`。
+ * 文档只要求资源 `emoji`，没有可回复频道，因此不填 conversation。
+ * 上游 SDK 目前只把这些事件原样 emit("event")，映射放在适配器内。
+ * @see https://satori.chat/zh-CN/resources/emoji.html
+ */
+export function mapGuildEmojiNotice(body: SatoriEventBody, endpointId: string): IncomingNotice | undefined {
+  const subType = body.type ? GUILD_EMOJI_NOTICE[body.type] : undefined;
+  if (!subType) return undefined;
+  const emoji = normalizeSatoriEmoji(body.emoji);
+  if (!emoji) return undefined;
+  const label = noticeLabel(emoji.name ?? emoji.id);
+  return buildNotice(body, {
+    id: ['satori', body.type, body.guild?.id ?? '', emoji.id, String(body.sn ?? body.timestamp ?? 0)].join(':'),
+    clientAdapter: 'satori',
+    endpointId,
+    type: 'notice',
+    name: composeSideEventName('notice', 'group', subType),
+    ...(body.operator?.id ? { actor: senderFromId(body.operator.id, body.operator.name) } : {}),
+    timestamp: typeof body.timestamp === 'number' ? body.timestamp : Date.now(),
+    ...(label ? { value: label } : {}),
+  });
+}
+
+/**
+ * 被动回复的 referrer 只在这次入站处理结束前有效。
+ * 处理返回的 Promise 结算后，同一异步资源里更晚的发送不再附带它。
+ * @see https://satori.chat/zh-CN/advanced/passive.html
+ */
+interface SatoriReferrerFrame {
+  readonly value: unknown;
+  open: boolean;
+}
+
+const satoriReferrer = new AsyncLocalStorage<SatoriReferrerFrame>();
+
+export function withSatoriReferrer<T>(referrer: unknown, run: () => T): T {
+  const frame: SatoriReferrerFrame = { value: referrer, open: true };
+  const close = () => { frame.open = false; };
+  return satoriReferrer.run(frame, () => {
+    try {
+      const result = run();
+      if (isPromiseLike(result)) return result.finally(close) as T;
+      close();
+      return result;
+    } catch (error) {
+      close();
+      throw error;
+    }
+  });
+}
+
+function isPromiseLike(value: unknown): value is Promise<unknown> {
+  return typeof value === 'object' && value !== null && typeof (value as { then?: unknown }).then === 'function';
+}
+
+/** `message.create` 参数。处理尚未结束时原样附带 referrer，不挑字段、不改名。 */
+export function satoriMessageCreateParams(channelId: string, content: string): Record<string, unknown> {
+  const frame = satoriReferrer.getStore();
+  return {
+    channel_id: channelId,
+    content,
+    ...(frame?.open ? { referrer: frame.value } : {}),
+  };
+}
+
 
 /**
  * 入站归一化 → ConversationRef：Channel.type 1 (DIRECT) → kind 'private'；
@@ -318,8 +508,12 @@ function resolveMediaSrc(type: string, data: Record<string, unknown>): string | 
 }
 
 /**
- * Wire-encode an already-rendered outbound payload into Satori message content.
- * Segment canonicalization is intentionally not done here.
+ * 把已渲染的出站载荷编成 Satori 消息字符串。
+ * at / mention → `<at>`，image → `<img>`，其余媒体用同名标准元素，emoji → `<emoji>`。
+ * 整段字符串原样发送（调用方可能已经写好标记）；段数组里的文本会转义。
+ * 上游 message-codec 把段编成 `{type, attrs}` 对象，而且不会把 mention/image 改成 at/img。
+ * 这里在适配器内按文档元素编码。上游发版后如果 SDK 直接产出这些元素，可以改走 SDK。
+ * @see https://satori.chat/zh-CN/protocol/elements.html
  */
 export function formatSatoriOutbound(payload: unknown): string {
   if (typeof payload === 'string') return payload;
@@ -338,24 +532,29 @@ export function formatSatoriOutbound(payload: unknown): string {
   const parts: string[] = [];
   for (const item of segments) {
     if (typeof item === 'string') {
-      parts.push(item);
+      parts.push(escapeXmlText(item));
       continue;
     }
     const data = item.data ?? {};
+    const platform = item.platform;
     switch (item.type) {
       case 'text':
-        parts.push(String(data.text ?? data.content ?? ''));
+        parts.push(escapeXmlText(String(data.text ?? data.content ?? '')));
         break;
       case 'at':
       case 'mention':
-        parts.push(`@${String(data.name ?? data.id ?? data.target ?? '')}`);
+        parts.push(encodeAtElement(data, platform));
+        break;
+      case 'emoji':
+      case 'face':
+        parts.push(encodeEmojiElement(data));
         break;
       case 'image':
       case 'audio':
       case 'video':
       case 'file': {
         const src = resolveMediaSrc(item.type, data);
-        if (src) parts.push(`[${item.type}:${src}]`);
+        if (src) parts.push(encodeMediaElement(item.type, src, data, platform));
         break;
       }
       default:
@@ -365,10 +564,474 @@ export function formatSatoriOutbound(payload: unknown): string {
   return parts.join('');
 }
 
+const MEDIA_ELEMENT_NAMES = {
+  image: 'img',
+  audio: 'audio',
+  video: 'video',
+  file: 'file',
+} as const;
+
+const DECODABLE_SATORI_TAGS = new Set(['at', 'img', 'emoji', 'audio', 'video', 'file']);
+
+function encodeAtElement(data: Record<string, unknown>, platform?: Record<string, unknown>): string {
+  const explicitType = readString(data.type) ?? readString(platform?.type);
+  const rawId = readString(data.id) ?? readString(data.target);
+  const id = rawId === 'all' || rawId === 'here' ? undefined : rawId;
+  const type = explicitType ?? (rawId === 'all' || rawId === 'here' ? rawId : undefined);
+  return renderSatoriElement('at', [
+    ['id', id],
+    ['name', readString(data.name)],
+    ['role', readString(data.role) ?? readString(platform?.role)],
+    ['type', type],
+  ]);
+}
+
+function encodeEmojiElement(data: Record<string, unknown>): string {
+  return renderSatoriElement('emoji', [
+    ['id', readToken(data.id) ?? readToken(data.face_id) ?? readString(data.emoji)],
+    ['name', readString(data.name)],
+  ]);
+}
+
+function encodeMediaElement(
+  type: keyof typeof MEDIA_ELEMENT_NAMES,
+  src: string,
+  data: Record<string, unknown>,
+  platform?: Record<string, unknown>,
+): string {
+  const title = readString(data.title) ?? readString(data.name);
+  const fileName = isMediaRef(data.media) ? data.media.file_name : undefined;
+  const duration = typeof data.duration === 'number' ? String(data.duration) : undefined;
+  const poster = readString(data.poster) ?? readString(platform?.poster);
+  const timed = type === 'audio' || type === 'video';
+  return renderSatoriElement(MEDIA_ELEMENT_NAMES[type], [
+    ['src', src],
+    ['title', title ?? fileName],
+    ['duration', timed ? duration : undefined],
+    ['poster', timed || type === 'file' ? poster : undefined],
+  ]);
+}
+
+function renderSatoriElement(
+  name: string,
+  attrs: ReadonlyArray<readonly [string, string | undefined]>,
+): string {
+  const rendered = attrs
+    .filter((entry): entry is readonly [string, string] => typeof entry[1] === 'string' && entry[1] !== '')
+    .map(([key, value]) => ` ${key}="${escapeXmlAttr(value)}"`)
+    .join('');
+  return `<${name}${rendered}/>`;
+}
+
+function readString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
+
+function readToken(value: unknown): string | undefined {
+  if (typeof value === 'string' && value) return value;
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  return undefined;
+}
+
+function escapeXmlText(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function escapeXmlAttr(value: string): string {
+  return escapeXmlText(value).replace(/"/g, '&quot;');
+}
+
+function unescapeXml(value: string): string {
+  let out = '';
+  for (let index = 0; index < value.length;) {
+    if (value[index] !== '&') {
+      out += value[index];
+      index += 1;
+      continue;
+    }
+    const window = value.slice(index + 1, index + 13);
+    const semi = window.indexOf(';');
+    if (semi <= 0) {
+      out += '&';
+      index += 1;
+      continue;
+    }
+    const decoded = decodeXmlEntity(window.slice(0, semi));
+    if (decoded === undefined) {
+      out += '&';
+      index += 1;
+      continue;
+    }
+    out += decoded;
+    index += semi + 2;
+  }
+  return out;
+}
+
+function decodeXmlEntity(body: string): string | undefined {
+  switch (body) {
+    case 'quot': return '"';
+    case 'apos': return "'";
+    case 'lt': return '<';
+    case 'gt': return '>';
+    case 'amp': return '&';
+    default: break;
+  }
+  if (body.startsWith('#x') || body.startsWith('#X')) return xmlCodePoint(body.slice(2), 16);
+  if (body.startsWith('#')) return xmlCodePoint(body.slice(1), 10);
+  return undefined;
+}
+
+function xmlCodePoint(body: string, radix: 10 | 16): string | undefined {
+  if (!body || (radix === 16 ? !isHex(body) : !isDigits(body))) return undefined;
+  const code = Number.parseInt(body, radix);
+  if (!Number.isInteger(code) || code < 0 || code > 0x10ffff) return undefined;
+  if (code >= 0xd800 && code <= 0xdfff) return undefined;
+  return String.fromCodePoint(code);
+}
+
+function isDigits(body: string): boolean {
+  for (const char of body) {
+    if (char < '0' || char > '9') return false;
+  }
+  return true;
+}
+
+function isHex(body: string): boolean {
+  for (const char of body) {
+    const hex = (char >= '0' && char <= '9')
+      || (char >= 'a' && char <= 'f')
+      || (char >= 'A' && char <= 'F');
+    if (!hex) return false;
+  }
+  return true;
+}
+
+interface SatoriParsedElement {
+  readonly name: string;
+  readonly attrs: Readonly<Record<string, string>>;
+  readonly inner?: string;
+  readonly end: number;
+}
+
+type SatoriTagScan =
+  | { readonly kind: 'element'; readonly element: SatoriParsedElement }
+  | { readonly kind: 'incomplete' }
+  | { readonly kind: 'literal' };
+
+function readSatoriElement(content: string, start: number): SatoriTagScan {
+  if (content[start] !== '<') return { kind: 'literal' };
+  const next = content[start + 1];
+  if (!next || next === '/' || next === '!' || next === '?' || !isAsciiLetter(next)) return { kind: 'literal' };
+  let index = start + 2;
+  while (index < content.length && isTagNameChar(content[index] ?? '')) index += 1;
+  const name = content.slice(start + 1, index).toLowerCase();
+  const attrStart = index;
+  let quote = '';
+  while (index < content.length) {
+    const char = content[index] ?? '';
+    if (quote) {
+      if (char === quote) quote = '';
+      index += 1;
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      index += 1;
+      continue;
+    }
+    if (char === '>') break;
+    index += 1;
+  }
+  if (index >= content.length || content[index] !== '>') return { kind: 'incomplete' };
+  const rawAttrs = content.slice(attrStart, index);
+  const trimmed = rawAttrs.trimEnd();
+  const selfClosing = trimmed.endsWith('/');
+  const attrs = parseXmlAttributes(selfClosing ? trimmed.slice(0, -1) : rawAttrs);
+  const end = index + 1;
+  if (selfClosing) return { kind: 'element', element: { name, attrs, end } };
+  const close = findClosingTag(content, end, name);
+  if (!close) return { kind: 'element', element: { name, attrs, end } };
+  const inner = content.slice(end, close.start);
+  return { kind: 'element', element: { name, attrs, ...(inner ? { inner } : {}), end: close.end } };
+}
+
+function parseXmlAttributes(source: string): Readonly<Record<string, string>> {
+  const attrs: Record<string, string> = {};
+  let index = 0;
+  while (index < source.length) {
+    while (index < source.length && isXmlSpace(source[index] ?? '')) index += 1;
+    if (index >= source.length) break;
+    const first = source[index] ?? '';
+    if (!isAttrNameStart(first)) {
+      index += 1;
+      continue;
+    }
+    const keyStart = index;
+    index += 1;
+    while (index < source.length && isAttrNameChar(source[index] ?? '')) index += 1;
+    const key = source.slice(keyStart, index).toLowerCase();
+    while (index < source.length && isXmlSpace(source[index] ?? '')) index += 1;
+    if (source[index] !== '=') continue;
+    index += 1;
+    while (index < source.length && isXmlSpace(source[index] ?? '')) index += 1;
+    const quote = source[index];
+    if (quote !== '"' && quote !== "'") continue;
+    index += 1;
+    const valueStart = index;
+    while (index < source.length && source[index] !== quote) index += 1;
+    const value = source.slice(valueStart, index);
+    if (index < source.length) index += 1;
+    attrs[key] = unescapeXml(value);
+  }
+  return attrs;
+}
+
+function findClosingTag(content: string, from: number, name: string): { start: number; end: number } | undefined {
+  for (let index = from; index < content.length; index += 1) {
+    if (content[index] !== '<' || content[index + 1] !== '/') continue;
+    let cursor = index + 2;
+    let matched = true;
+    for (let offset = 0; offset < name.length; offset += 1) {
+      if ((content[cursor + offset] ?? '').toLowerCase() !== name[offset]) {
+        matched = false;
+        break;
+      }
+    }
+    if (!matched) continue;
+    cursor += name.length;
+    while (isXmlSpace(content[cursor] ?? '')) cursor += 1;
+    if (content[cursor] === '>') return { start: index, end: cursor + 1 };
+  }
+  return undefined;
+}
+
+function isAsciiLetter(char: string): boolean {
+  return (char >= 'A' && char <= 'Z') || (char >= 'a' && char <= 'z');
+}
+
+function isTagNameChar(char: string): boolean {
+  return isAsciiLetter(char) || isAsciiDigit(char) || char === '_' || char === ':' || char === '-';
+}
+
+function isAttrNameStart(char: string): boolean {
+  return isAsciiLetter(char) || char === '_' || char === ':';
+}
+
+function isAttrNameChar(char: string): boolean {
+  return isAttrNameStart(char) || isAsciiDigit(char) || char === '.' || char === '-';
+}
+
+function isAsciiDigit(char: string): boolean {
+  return char >= '0' && char <= '9';
+}
+
+function isXmlSpace(char: string): boolean {
+  return char === ' ' || char === '\t' || char === '\n' || char === '\r';
+}
+
+function segmentFromSatoriElement(name: string, attrs: Readonly<Record<string, string>>): Segment {
+  if (name === 'at') {
+    const type = attrs.type;
+    const target = attrs.id || (type === 'all' || type === 'here' ? type : attrs.role);
+    const platform: Record<string, string> = {};
+    if (attrs.role) platform.role = attrs.role;
+    if (type) platform.type = type;
+    return {
+      type: 'mention',
+      data: {
+        ...(target ? { target } : {}),
+        ...(attrs.name ? { name: attrs.name } : {}),
+      },
+      ...(Object.keys(platform).length > 0 ? { platform } : {}),
+    };
+  }
+  if (name === 'emoji') {
+    return {
+      type: 'emoji',
+      data: {
+        ...(attrs.id ? { id: attrs.id } : {}),
+        ...(attrs.name ? { name: attrs.name } : {}),
+      },
+    };
+  }
+  const type = name === 'img' ? 'image' : name;
+  const src = attrs.src ?? '';
+  const base64 = src.startsWith('base64://');
+  const duration = attrs.duration && Number.isFinite(Number(attrs.duration)) ? Number(attrs.duration) : undefined;
+  return {
+    type,
+    data: {
+      media: base64
+        ? { kind: 'base64', value: src.slice('base64://'.length) }
+        : { kind: 'url', value: src },
+      ...(attrs.title ? { name: attrs.title } : {}),
+      ...(duration !== undefined ? { duration } : {}),
+      ...(attrs.poster ? { poster: attrs.poster } : {}),
+    },
+    ...(attrs.poster ? { platform: { poster: attrs.poster } } : {}),
+  };
+}
+
+function normalizeSatoriEmoji(value: unknown): SatoriEmoji | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const record = value as { id?: unknown; name?: unknown };
+  if (typeof record.id !== 'string' || !record.id) return undefined;
+  return {
+    id: record.id,
+    ...(typeof record.name === 'string' ? { name: record.name } : {}),
+  };
+}
+
+function noticeLabel(value: string): string | undefined {
+  const flat = value.replace(/\s+/g, ' ').trim();
+  if (!flat) return undefined;
+  return flat.length > 40 ? `${flat.slice(0, 39)}…` : flat;
+}
+
 export function extractCreatedMessageId(result: unknown): string {
   const list = Array.isArray(result)
     ? result
     : (result as { data?: unknown[] } | null)?.data;
   const msg = list?.[0] as { id?: string } | undefined;
   return msg?.id ?? '';
+}
+
+/**
+ * 把 `guild-member.list` 的 `roles` 收成 `GuildRole[]`。
+ * 旧 SDK 可能仍下发 `string[]`，这里收成 `{ id }`。上游发版并保证对象数组后，字符串分支可以去掉。
+ */
+export function normalizeSatoriGuildRoles(value: unknown): readonly SatoriGuildRole[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const roles: SatoriGuildRole[] = [];
+  for (const role of value) {
+    if (typeof role === 'string' && role) {
+      roles.push({ id: role });
+      continue;
+    }
+    if (!role || typeof role !== 'object') continue;
+    const record = role as { id?: unknown; name?: unknown };
+    if (typeof record.id !== 'string' || !record.id) continue;
+    roles.push({
+      id: record.id,
+      ...(typeof record.name === 'string' ? { name: record.name } : {}),
+    });
+  }
+  return roles;
+}
+
+/** 成员列表原样保留其余字段，只把 roles 收成 GuildRole[]。 */
+export function withSatoriGuildRoles<T>(member: T): T {
+  if (!member || typeof member !== 'object' || !('roles' in member)) return member;
+  const roles = normalizeSatoriGuildRoles((member as { roles?: unknown }).roles);
+  if (!roles) return member;
+  return { ...member, roles };
+}
+
+/**
+ * 按 `{ user, nick }` 读取好友。顶层 `id` / `name` 是 1.0.10 误用的 User 形状，这里不认。
+ */
+export function readSatoriFriend(value: unknown): SatoriFriend | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const record = value as { user?: unknown; nick?: unknown };
+  if (!record.user || typeof record.user !== 'object') return undefined;
+  const user = record.user as { id?: unknown; name?: unknown; avatar?: unknown };
+  if (typeof user.id !== 'string' || !user.id) return undefined;
+  return {
+    user: {
+      id: user.id,
+      ...(typeof user.name === 'string' ? { name: user.name } : {}),
+      ...(typeof user.avatar === 'string' ? { avatar: user.avatar } : {}),
+    },
+    ...(typeof record.nick === 'string' ? { nick: record.nick } : {}),
+  };
+}
+
+export type SatoriReactionMethod = 'create' | 'delete' | 'clear' | 'list';
+
+/**
+ * reaction.* 的参数名是 `emoji_id`，不是 1.0.10 `addMessageReactionIn` 用的 `emoji`。
+ * clear 不传 emoji_id 表示清除全部表态。
+ * @see https://satori.chat/zh-CN/resources/reaction.html
+ */
+export function satoriReactionParams(
+  method: SatoriReactionMethod,
+  input: {
+    readonly channelId: string;
+    readonly messageId: string;
+    readonly emojiId?: string;
+    readonly userId?: string;
+    readonly next?: string;
+  },
+): Record<string, unknown> {
+  const params: Record<string, unknown> = {
+    channel_id: input.channelId,
+    message_id: input.messageId,
+  };
+  if (input.emojiId !== undefined && (method !== 'clear' || input.emojiId !== '')) {
+    params.emoji_id = input.emojiId;
+  }
+  if (method === 'delete' && input.userId !== undefined) params.user_id = input.userId;
+  if (method === 'list' && input.next !== undefined) params.next = input.next;
+  return params;
+}
+
+/** `friend.approve` 同时表达通过和拒绝。 */
+export function satoriFriendApproveParams(
+  messageId: string,
+  approve: boolean,
+  comment?: string,
+): Record<string, unknown> {
+  return {
+    message_id: messageId,
+    approve,
+    ...(comment !== undefined ? { comment } : {}),
+  };
+}
+
+export interface SatoriFriendRequestActions {
+  approve(messageId: string, comment?: string): Promise<void>;
+  reject(messageId: string, reason?: string): Promise<void>;
+}
+
+/**
+ * `friend-request` → `request.friend.add`，让它进入 request.receive 管道。
+ * 文档的必需资源是 `user`。`friend.approve` 的请求 ID 是 `message_id`；
+ * 事件没有 `message.id` 时仍然投递，但批准/拒绝会说明缺少该字段。
+ * @see https://satori.chat/zh-CN/resources/friend.html
+ */
+export function mapSatoriFriendRequest(
+  body: SatoriEventBody,
+  endpointId: string,
+  actions: SatoriFriendRequestActions,
+): IncomingRequest | undefined {
+  if (body.type !== 'friend-request') return undefined;
+  const user = body.user ?? body.friend?.user;
+  if (!user?.id) return undefined;
+  const actor = senderFromId(user.id, user.name ?? body.friend?.nick);
+  if (!actor) return undefined;
+  const messageId = typeof body.message?.id === 'string' && body.message.id ? body.message.id : undefined;
+  const requireMessageId = (kind: 'approve' | 'reject') => {
+    if (!messageId) {
+      throw new Error(`Satori friend.approve 需要事件 message.id 作为 message_id，无法${kind === 'approve' ? '通过' : '拒绝'}该好友申请`);
+    }
+    return messageId;
+  };
+  return buildRequest(body, {
+    id: messageId ?? `satori:friend-request:${user.id}:${String(body.sn ?? body.timestamp ?? 0)}`,
+    clientAdapter: 'satori',
+    endpointId,
+    type: 'request',
+    name: 'request.friend.add',
+    conversation: sideEventConversation('friend', user.id),
+    actor,
+    ...(typeof body.message?.content === 'string' ? { comment: body.message.content } : {}),
+    timestamp: typeof body.timestamp === 'number' ? body.timestamp : Date.now(),
+    async $approve(remark?: string) {
+      await actions.approve(requireMessageId('approve'), remark);
+    },
+    async $reject(reason?: string) {
+      await actions.reject(requireMessageId('reject'), reason);
+    },
+  });
 }

@@ -62,7 +62,7 @@ lottery:
   games: [ kl8, ssq, dlt, fc3d, pl3, pl5 ]
   pushTargets:
     - adapter: sandbox
-      endpointId: sandbox-bot
+      endpointKey: sandbox-bot
       channelType: private
       channelId: operator
 ```
