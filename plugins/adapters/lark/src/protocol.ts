@@ -7,7 +7,6 @@ import { validateLarkWebApiProxy } from './web-api-proxy.js';
  */
 
 import { createDecipheriv, createHash, timingSafeEqual } from 'node:crypto';
-import type { IncomingMessage } from 'node:http';
 import { EndpointDeliveryError, isMediaRef, type ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
@@ -457,11 +456,9 @@ export function formatOutboundBody(payload: unknown, locale?: Locale): LarkSendB
 }
 
 export function headerValue(
-  headers: IncomingMessage['headers'],
+  headers: Headers,
   name: string,
 ): string {
-  const value = headers[name] ?? headers[name.toLowerCase()];
-  if (Array.isArray(value)) return value[0] ?? '';
-  return value ?? '';
+  return headers.get(name) ?? '';
 }
 

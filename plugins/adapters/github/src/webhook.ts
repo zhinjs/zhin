@@ -71,11 +71,10 @@ export async function handleGithubWebhookRequest(
       return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
     }
 
-    return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-
     void dispatchGithubWebhookPayload(event, payload, handler).catch((e) => {
       logger.error(`Webhook 事件处理失败 (${event}):`, e);
     });
+    return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   } catch (error) {
     logger.error('Webhook error:', error);
     return new Response(JSON.stringify({ error: 'Internal Server Error' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
