@@ -1,3 +1,4 @@
+import { wsConnectionFromMock } from '../../test-utils/http.js';
 import { createAdapterHarness, createEndpointHarness, createTestEventGateway, createTestEndpointEventGateway } from '../../test-utils/endpoint.js';
 import { MilkyV1Client, ProtocolError } from '@imhelper/milky-v1';
 import { describe, expect, it, vi, afterEach } from 'vitest';
@@ -942,11 +943,10 @@ describe('milky reverse ws lifecycle', () => {
 
     await endpoint.start();
     endpoint.open();
-    acceptConnection?.({
+    acceptConnection?.(wsConnectionFromMock({
       socket: ws,
       request: { headers: {}, url: '/', socket: { remoteAddress: '127.0.0.1' } },
-      authScope: 'full',
-    });
+    }));
     await vi.waitFor(() => expect((ws.ping as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(0));
 
     await endpoint.stop();
@@ -986,11 +986,10 @@ describe('milky reverse ws lifecycle', () => {
       .mockReturnValueOnce(releaseSecond);
     const first = createMockWs();
     const second = createMockWs();
-    const connection = (socket: MilkyWsSocket) => ({
+    const connection = (socket: MilkyWsSocket) => (wsConnectionFromMock({
       socket,
       request: { headers: {}, url: '/', socket: { remoteAddress: '127.0.0.1' } },
-      authScope: 'full',
-    });
+    }));
 
     await endpoint.start();
     acceptConnection?.(connection(first));

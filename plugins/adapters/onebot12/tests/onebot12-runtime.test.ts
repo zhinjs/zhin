@@ -1,3 +1,4 @@
+import { wsConnectionFromMock } from '../../test-utils/http.js';
 import { createAdapterHarness, createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
 import { ProtocolError } from '@imhelper/onebot-v12';
 import { describe, expect, it, vi, afterEach } from 'vitest';
@@ -960,15 +961,14 @@ describe('onebot12 reverse ws lifecycle', () => {
   }
 
   function reverseConnection(socket: OneBot12WsSocket) {
-    return {
+    return wsConnectionFromMock({
       socket,
       request: {
         headers: { authorization: 'Bearer secret' },
         url: '/',
         socket: { remoteAddress: '127.0.0.1' },
       },
-      authScope: 'full',
-    };
+    });
   }
 
   it('owns heartbeat requests and closes the accepted connection on stop', async () => {

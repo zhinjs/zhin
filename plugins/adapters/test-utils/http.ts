@@ -52,3 +52,49 @@ export function respondInto(pending: Promise<Response> | Response): {
   });
   return { writeHead, end, done };
 }
+
+interface MockSocket {
+  send(data: string): void;
+  close(code?: number, reason?: string): void;
+  on(event: string, listener: (...args: unknown[]) => void): unknown;
+  off?(event: string, listener: (...args: unknown[]) => void): unknown;
+}
+
+/**
+ * A Host `WsConnection` over an event-emitter socket double (`on('message' | 'close')`,
+ * `send`, `close`) and the upgrade request it arrived with.
+ */
+export function wsConnectionFromMock(input: {
+  readonly socket: MockSocket;
+  readonly request: {
+    readonly headers: Readonly<Record<string, string | undefined>>;
+    readonly url?: string;
+    readonly socket?: { readonly remoteAddress?: string };
+  };
+}): {
+  readonly url: URL;
+  readonly headers: Headers;
+  readonly remoteAddress?: string;
+  send(data: string | Uint8Array): void;
+  close(code?: number, reason?: string): void;
+  onMessage(listener: (data: string | Uint8Array) => void): () => void;
+  onClose(listener: (code: number, reason: string) => void): () => void;
+  readonly bufferedAmount: number;
+} {
+  const { socket, request } = input;
+  const subscribe = (event: string, listener: (...args: unknown[]) => void) => {
+    socket.on(event, listener);
+    return () => { socket.off?.(event, listener); };
+  };
+  return {
+    url: new URL(request.url ?? '/', 'http://localhost'),
+    headers: new Headers(Object.fromEntries(Object.entries(request.headers)
+      .filter((entry): entry is [string, string] => entry[1] !== undefined))),
+    ...(request.socket?.remoteAddress ? { remoteAddress: request.socket.remoteAddress } : {}),
+    send: (data) => socket.send(typeof data === 'string' ? data : Buffer.from(data).toString('utf8')),
+    close: (code, reason) => socket.close(code, reason),
+    onMessage: (listener) => subscribe('message', (data) => listener(data as string)),
+    onClose: (listener) => subscribe('close', (code, reason) => listener(Number(code ?? 1005), String(reason ?? ''))),
+    bufferedAmount: 0,
+  };
+}

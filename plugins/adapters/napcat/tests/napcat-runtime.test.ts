@@ -1,3 +1,4 @@
+import { wsConnectionFromMock } from '../../test-utils/http.js';
 import { createAdapterHarness, createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
@@ -735,11 +736,10 @@ describe('napcat reverse ws lifecycle', () => {
 
     await endpoint.start();
     endpoint.open();
-    acceptConnection?.({
+    acceptConnection?.(wsConnectionFromMock({
       socket: ws,
       request: { headers: {}, url: '/', socket: { remoteAddress: '127.0.0.1' } },
-      authScope: 'full',
-    });
+    }));
     await vi.waitFor(() => expect((ws.ping as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(0));
 
     await endpoint.stop();

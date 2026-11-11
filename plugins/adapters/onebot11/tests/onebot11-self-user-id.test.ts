@@ -1,3 +1,4 @@
+import { wsConnectionFromMock } from '../../test-utils/http.js';
 import { createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
 import { describe, expect, it, vi } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
@@ -201,10 +202,10 @@ describe('OneBot11WssEndpoint selfUserId', () => {
       }) as never,
       probeLoginInfo,
     } as never), { name: 'onebot11', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway(gateway, undefined) });
-    const connect = (ws: ReturnType<typeof createMockWs>) => accept({
+    const connect = (ws: ReturnType<typeof createMockWs>) => accept(wsConnectionFromMock({
       socket: ws,
       request: { headers: { authorization: 'Bearer test' }, url: '/', socket: { remoteAddress: '127.0.0.1' } },
-    });
+    }));
     return { endpoint, connect };
   }
 
