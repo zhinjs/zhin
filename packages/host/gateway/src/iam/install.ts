@@ -42,6 +42,8 @@ export function installConsoleIam(http: HttpHost, options: InstallConsoleIamOpti
     database: options.database,
     projectRoot: options.projectRoot,
     onError: error => options.logger?.warn(`console iam: ${error instanceof Error ? error.message : String(error)}`),
+    // Installed on the token registry by the runtime composition root; empty until then.
+    pluginPermissions: () => http.tokenRegistry.pluginPermissions(),
   });
   const setup = new ConsoleSetupService({
     projectRoot: options.projectRoot,

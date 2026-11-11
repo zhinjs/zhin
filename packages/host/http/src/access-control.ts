@@ -2,12 +2,15 @@ import type { IncomingMessage } from 'node:http';
 import {
   CONSOLE_PERMISSION_LIST,
   CONSOLE_WRITE_PERMISSIONS,
+  expandPluginPermissions,
   grantsAllow,
   resolveConsoleHttpPermission,
   resolveConsoleRpcPermission,
   resolveConsoleWsPermission,
   type ConsoleGrant,
   type ConsolePermission,
+  type ConsolePluginPermissionInfo,
+  type ConsolePluginPermissionLevelResolver,
   type ConsoleRpcPermissionRule,
   type ConsoleScopeTarget,
 } from '@zhin.js/console-protocol';
@@ -95,26 +98,36 @@ export function requestMeta(request: IncomingMessage): ConsoleRequestMeta {
   });
 }
 
-/** Whether the principal holds `permission` at `target` (bootstrap: only an open Host). */
+/**
+ * Whether the principal holds `permission` at `target` (bootstrap: only an open Host). Plugin
+ * permissions also match by level; `levelOf` supplies declared levels (default: inferred).
+ */
 export function principalAllows(
   principal: ConsolePrincipal | undefined,
   permission: string,
   target?: ConsoleScopeTarget,
+  levelOf?: ConsolePluginPermissionLevelResolver,
 ): boolean {
   if (!principal) return false;
   if (principal.kind === 'bootstrap') return principal.open;
-  return grantsAllow(principal.grants, permission, target);
+  return grantsAllow(principal.grants, permission, target, levelOf);
 }
 
-/** Permissions held through global bindings, sorted (what `/auth/me` and page gating use). */
-export function globalPermissions(principal: ConsolePrincipal | undefined): readonly string[] {
+/**
+ * Permissions held through global bindings, sorted (what `/auth/me` and page gating use).
+ * With a plugin permission catalog, `plugin.perms.<level>` expands to the catalog ids of that level.
+ */
+export function globalPermissions(
+  principal: ConsolePrincipal | undefined,
+  pluginPermissions: Iterable<Pick<ConsolePluginPermissionInfo, 'id' | 'level'>> = [],
+): readonly string[] {
   if (!principal) return Object.freeze([]);
   if (principal.kind === 'bootstrap') return principal.open ? CONSOLE_PERMISSION_LIST : Object.freeze([]);
   const held = new Set<string>();
   for (const grant of principal.grants) {
     if (grant.scope.kind === 'global') for (const permission of grant.permissions) held.add(permission);
   }
-  return Object.freeze([...held].sort());
+  return expandPluginPermissions([...held], pluginPermissions);
 }
 
 export type ConsoleRpcDecision =

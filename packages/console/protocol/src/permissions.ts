@@ -6,6 +6,11 @@
  * are spelled as literals; protocol tests assert every catalog entry is mapped.
  */
 import { FEATURE_RPC_PERMISSIONS } from './feature.js';
+import {
+  isConsolePluginPermission,
+  permissionListHoldsPluginPermission,
+  type ConsolePluginPermissionLevelResolver,
+} from './plugin-permissions.js';
 
 export const CONSOLE_PERMISSIONS = Object.freeze({
   STATUS_VIEW: 'status.view',
@@ -16,6 +21,10 @@ export const CONSOLE_PERMISSIONS = Object.freeze({
   FEATURE_CONFIGURE: 'feature.configure',
   FEATURE_TOGGLE: 'feature.toggle',
   PLUGIN_MANAGE: 'plugin.manage',
+  /** Plugin-declared permissions by level (ADR 0049 amendment 2026-11-11); global bindings only. */
+  PLUGIN_PERMS_READ: 'plugin.perms.read',
+  PLUGIN_PERMS_OPERATE: 'plugin.perms.operate',
+  PLUGIN_PERMS_MANAGE: 'plugin.perms.manage',
   AGENT_VIEW: 'agent.view',
   AGENT_CONFIGURE: 'agent.configure',
   OPS_CONFIG_READ: 'ops.config.read',
@@ -94,7 +103,7 @@ export const CONSOLE_BUILTIN_ROLES: Readonly<Record<ConsoleBuiltinRoleName, Read
     description: '运营：账号与功能日常操作',
     permissions: Object.freeze<ConsolePermission[]>([
       'status.view', 'endpoint.view', 'endpoint.operate', 'feature.view', 'feature.configure',
-      'feature.toggle', 'agent.view', 'ops.schedule.read',
+      'feature.toggle', 'agent.view', 'ops.schedule.read', 'plugin.perms.read', 'plugin.perms.operate',
     ]),
   }),
   viewer: Object.freeze({
@@ -510,13 +519,20 @@ export function bindingScopeCovers(
   return target.kind === 'endpoint' && scope.key === `${target.adapter}/${target.endpoint}`;
 }
 
-/** Whether any grant holds `permission` for `target`. */
+/**
+ * Whether any grant holds `permission` for `target`. A plugin permission (`<plugin>:<action>`)
+ * is also held through `plugin.perms.<level>`; `levelOf` supplies declared levels (default:
+ * inferred from the suffix). Plugin permissions are never scoped, so only global bindings count.
+ */
 export function grantsAllow(
   grants: readonly ConsoleGrant[],
   permission: string,
   target: ConsoleScopeTarget = GLOBAL_TARGET,
+  levelOf?: ConsolePluginPermissionLevelResolver,
 ): boolean {
-  return grants.some(grant => grant.permissions.includes(permission)
+  const plugin = isConsolePluginPermission(permission);
+  return grants.some(grant => (grant.permissions.includes(permission)
+    || (plugin && permissionListHoldsPluginPermission(grant.permissions, permission, levelOf)))
     && bindingScopeCovers(grant.scope, permission, target));
 }
 

@@ -45,9 +45,9 @@ export async function dispatchIamRpc(
       case IAM_RPC.USERS_DISABLE: return ok({ user: await service.setDisabled(id(), payload.disabled !== false) });
       case IAM_RPC.USERS_DELETE: await service.deleteUser(id()); return ok({ deleted: true });
       case IAM_RPC.USERS_RESET_PASSWORD: await service.resetPassword(id(), payload.password); return ok({ reset: true });
-      case IAM_RPC.ROLES_LIST: return ok({ roles: await service.listRoles() });
-      case IAM_RPC.ROLES_CREATE: return ok({ role: await service.createRole({ name: payload.name, description: payload.description, permissions: payload.permissions }) });
-      case IAM_RPC.ROLES_UPDATE: return ok({ role: await service.updateRole(id(), { description: payload.description, permissions: payload.permissions }) });
+      case IAM_RPC.ROLES_LIST: return ok({ roles: await service.listRoles(), pluginPermissions: service.pluginPermissionCatalog() });
+      case IAM_RPC.ROLES_CREATE: return ok(withWarnings(service, { role: await service.createRole({ name: payload.name, description: payload.description, permissions: payload.permissions }) }));
+      case IAM_RPC.ROLES_UPDATE: return ok(withWarnings(service, { role: await service.updateRole(id(), { description: payload.description, permissions: payload.permissions }) }));
       case IAM_RPC.ROLES_DELETE: await service.deleteRole(id()); return ok({ deleted: true });
       case IAM_RPC.BINDINGS_SET: return ok({ user: await service.setBindings(id('userId'), bindingsOf(payload.bindings)) });
       case IAM_RPC.TOKENS_LIST: return ok({ tokens: await service.listTokens(typeof payload.userId === 'string' ? payload.userId : undefined) });
@@ -56,7 +56,7 @@ export async function dispatchIamRpc(
           ? payload.userId
           : principal.kind === 'bootstrap' ? id('userId') : principal.userId;
         const created = await service.createToken(userId, { name: payload.name, permissions: payload.permissions, expiresAt: payload.expiresAt });
-        return ok({ token: created.token, record: created.record });
+        return ok({ token: created.token, record: created.record, ...pluginWarnings(service, created.record.permissions ?? []) });
       }
       case IAM_RPC.TOKENS_REVOKE: await service.revokeToken(id()); return ok({ revoked: true });
       case IAM_RPC.AUDIT_LIST: return ok(await service.listAudit({
@@ -71,6 +71,16 @@ export async function dispatchIamRpc(
     }
     return { status: 500, body: { success: false, code: 'failed', error: '访问控制操作失败', requestId } };
   }
+}
+
+/** `warnings` for plugin permissions no loaded plugin uses yet (accepted; they grant nothing until one does). */
+function pluginWarnings(service: ConsoleIamService, permissions: readonly string[]): { warnings?: readonly string[] } {
+  const unknown = service.unknownPluginPermissions(permissions);
+  return unknown.length ? { warnings: unknown.map(permission => `插件权限 ${permission} 当前没有已加载的插件使用`) } : {};
+}
+
+function withWarnings<T extends { role: { permissions: readonly string[] } }>(service: ConsoleIamService, data: T): T & { warnings?: readonly string[] } {
+  return { ...data, ...pluginWarnings(service, data.role.permissions) };
 }
 
 export function bindingsOf(value: unknown): readonly BindingInput[] {

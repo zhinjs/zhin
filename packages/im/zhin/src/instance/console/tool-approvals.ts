@@ -119,8 +119,10 @@ export function composeHostConsoleRpc(...surfaces: readonly PluginConsoleRpc[]):
     }
   }
   const gates = Object.freeze(surfaces.flatMap((surface) => [...surface[generationAdmissionSource]]));
+  const permissions = Object.freeze(surfaces.flatMap((surface) => surface.permissions ?? []));
   return Object.freeze({
     methods,
+    ...(permissions.length ? { permissions } : {}),
     get [generationAdmissionSource]() { return gates; },
   });
 }

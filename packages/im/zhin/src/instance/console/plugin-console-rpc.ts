@@ -196,8 +196,8 @@ function acquire(snapshots?: SnapshotReader): SnapshotLease {
   try { return snapshots.acquire(); } catch { throw new Failure('unavailable', '运行时未就绪'); }
 }
 
-/** Scope snapshots flatten inherited bindings; only the declaring owner answers. */
-function ownProvider(snapshot: RuntimeSnapshot, owner: PluginId): PluginConsoleRpc | undefined {
+/** Scope snapshots flatten inherited bindings; only the declaring owner answers. @internal */
+export function ownProvider(snapshot: RuntimeSnapshot, owner: PluginId): PluginConsoleRpc | undefined {
   const value = snapshot.resources.get(owner)?.get(pluginConsoleRpcToken.id);
   if (value === undefined) return undefined;
   let parent = snapshot.tree.get(owner)?.parent;

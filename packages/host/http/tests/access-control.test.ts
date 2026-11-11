@@ -157,3 +157,58 @@ describe('RPC permission coverage', () => {
     expect(missing).toEqual([]);
   });
 });
+
+describe('plugin permissions by level (ADR 0049 amendment 2026-11-11)', () => {
+  const catalog = [
+    { id: 'onebot11:read', level: 'read', declared: false, owners: ['root/onebot11'] },
+    { id: 'rss:write', level: 'operate', declared: true, owners: ['root/rss'] },
+    { id: 'ops:approve', level: 'manage', declared: false, owners: ['root'] },
+  ] as const;
+  const registry = () => {
+    const value = new TokenRegistry();
+    value.usePluginPermissions(() => catalog);
+    return value;
+  };
+
+  it('expands built-in role grants over the catalog for page gating', () => {
+    const tokens = registry();
+    expect(tokens.accessFor(VIEWER).permissions).toEqual(expect.arrayContaining(['onebot11:read']));
+    expect(tokens.accessFor(VIEWER).permissions).not.toContain('rss:write');
+    const operator = tokens.accessFor(userPrincipal('operator')).permissions;
+    expect(operator).toEqual(expect.arrayContaining(['onebot11:read', 'rss:write']));
+    expect(operator).not.toContain('ops:approve');
+    expect(tokens.accessFor(userPrincipal('admin')).permissions).toEqual(expect.arrayContaining(['onebot11:read', 'rss:write', 'ops:approve']));
+    expect(globalPermissions(userPrincipal('operator'), catalog)).toEqual(operator);
+    expect(tokens.pluginPermissionLevels()('rss:write')).toBe('operate');
+  });
+
+  it('keeps the global owner unrestricted, but not an owner token narrowed below the catalog', () => {
+    const tokens = registry();
+    expect(tokens.accessFor(userPrincipal('owner')).unrestricted).toBe(true);
+    const narrowed = {
+      ...userPrincipal('owner'),
+      kind: 'api-token' as const,
+      grants: [{ role: 'owner', scope: { kind: 'global' as const }, permissions: ['status.view', 'onebot11:read'] }],
+    };
+    const access = tokens.accessFor(narrowed);
+    expect(access.unrestricted).toBe(false);
+    expect(access.permissions).toEqual(['onebot11:read', 'status.view']);
+  });
+
+  it('ignores plugin permissions held through adapter or endpoint bindings', () => {
+    const tokens = registry();
+    const scoped = userPrincipal('admin', { kind: 'adapter', key: 'onebot11' });
+    expect(tokens.accessFor(scoped).permissions).not.toContain('onebot11:read');
+  });
+
+  it('falls back to an empty catalog and refuses a second source', () => {
+    const tokens = new TokenRegistry();
+    expect(tokens.pluginPermissions()).toEqual([]);
+    expect(tokens.accessFor(VIEWER).permissions).not.toContain('onebot11:read');
+    const dispose = tokens.usePluginPermissions(() => catalog);
+    expect(() => tokens.usePluginPermissions(() => [])).toThrow(/already installed/u);
+    dispose();
+    tokens.usePluginPermissions(() => { throw new Error('snapshot gone'); });
+    expect(tokens.pluginPermissions()).toEqual([]);
+  });
+});

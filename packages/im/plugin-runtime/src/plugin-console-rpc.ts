@@ -79,7 +79,28 @@ export interface PluginConsoleRpcStatus<TConfig = Record<string, unknown>>
   readonly demo?: boolean;
 }
 
+/**
+ * Level of a plugin-defined permission (ADR 0049 amendment 2026-11-11). Built-in roles grant by
+ * level: viewer → read; operator → read + operate; admin and owner → all.
+ */
+export type PluginConsolePermissionLevel = 'read' | 'operate' | 'manage';
+
+/** Metadata for a permission string used in this plugin's pages or Console RPC. */
+export interface PluginConsolePermission {
+  /** `<plugin>:<action>`, e.g. `rss:read`, `ops:approve`. */
+  readonly id: string;
+  readonly level: PluginConsolePermissionLevel;
+  /** Short label for the Console's role editor. */
+  readonly description?: string;
+}
+
 export interface PluginConsoleRpcDefinition<TConfig = Record<string, unknown>> {
+  /**
+   * Levels of the permissions this plugin uses (its pages' and methods' requirements). An
+   * undeclared permission takes its level from the suffix: `:read` / `:view` → read;
+   * `:approve` / `:manage` / `:admin` / `:write` / `:config` → manage; anything else → operate.
+   */
+  readonly permissions?: readonly PluginConsolePermission[];
   /** Read-only status for the plugin's Console page(s): `plugin.<pluginId>.status`. */
   readonly status?: PluginConsoleRpcStatus<TConfig>;
   /**
@@ -114,6 +135,8 @@ export interface NormalizedPluginConsoleRpcMethod {
 /** Value published under {@link pluginConsoleRpcToken}; create it with {@link definePluginConsoleRpc}. */
 export interface PluginConsoleRpc extends GenerationAdmissionSource {
   readonly methods: ReadonlyMap<string, NormalizedPluginConsoleRpcMethod>;
+  /** Declared permission levels; absent or empty when the plugin declared none. */
+  readonly permissions?: readonly PluginConsolePermission[];
 }
 
 /** Safe, user-facing failure. `message` is shown in the Console; never put raw errors in it. */
@@ -165,10 +188,12 @@ export function definePluginConsoleRpc<TConfig = Record<string, unknown>>(
     }
   }
   if (methods.size === 0) throw new TypeError('Plugin Console RPC must declare status or at least one action');
+  const permissions = permissionDeclarations(definition.permissions);
   const gate: GenerationAdmissionGate = createGenerationAdmissionGate();
   const gates = Object.freeze([gate]);
   return Object.freeze({
     methods: methods as ReadonlyMap<string, NormalizedPluginConsoleRpcMethod>,
+    ...(permissions.length ? { permissions } : {}),
     get [generationAdmissionSource]() { return gates; },
   });
 }
@@ -204,6 +229,32 @@ function normalizeMethod(
     readOnly,
     handler: method.handler as PluginConsoleRpcMethod['handler'],
   });
+}
+
+// Same shape as `CONSOLE_PLUGIN_PERMISSION_PATTERN` in @zhin.js/console-protocol (this package has no deps).
+const permissionIdPattern = /^[a-z][a-z0-9_-]{0,63}:[a-z][a-z0-9_.-]{0,63}$/u;
+const permissionLevels: ReadonlySet<string> = new Set(['read', 'operate', 'manage']);
+
+function permissionDeclarations(value: unknown): readonly PluginConsolePermission[] {
+  if (value === undefined) return Object.freeze([]);
+  if (!Array.isArray(value)) throw new TypeError('Plugin Console RPC permissions must be an array');
+  const seen = new Set<string>();
+  return Object.freeze(value.map((item: unknown) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) throw new TypeError('Plugin Console RPC permission must be an object');
+    const { id, level, description, ...rest } = item as Record<string, unknown>;
+    if (Object.keys(rest).length) throw new TypeError(`Plugin Console RPC permission has unknown keys: ${Object.keys(rest).sort().join(', ')}`);
+    if (typeof id !== 'string' || !permissionIdPattern.test(id)) throw new TypeError('Plugin Console RPC permission id must look like <plugin>:<action>');
+    if (seen.has(id)) throw new TypeError(`Duplicate plugin Console RPC permission: ${id}`);
+    seen.add(id);
+    if (typeof level !== 'string' || !permissionLevels.has(level)) throw new TypeError(`Plugin Console RPC permission ${id} level must be read, operate or manage`);
+    if (description !== undefined && (typeof description !== 'string' || !description.trim() || description.length > 256)) {
+      throw new TypeError(`Plugin Console RPC permission ${id} description must be a non-empty string (at most 256 characters)`);
+    }
+    return Object.freeze({
+      id, level: level as PluginConsolePermissionLevel,
+      ...(description === undefined ? {} : { description: (description as string).trim() }),
+    });
+  }));
 }
 
 function stringList(value: unknown, label: string): readonly string[] {

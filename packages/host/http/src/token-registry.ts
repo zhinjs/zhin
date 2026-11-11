@@ -1,3 +1,9 @@
+import {
+  CONSOLE_PERMISSION_LIST,
+  pluginPermissionLevelResolver,
+  type ConsolePluginPermissionInfo,
+  type ConsolePluginPermissionLevelResolver,
+} from '@zhin.js/console-protocol';
 import { timingSafeEqualString } from './timing-safe-equal.js';
 import {
   globalPermissions,
@@ -56,6 +62,7 @@ const tokenBootstrap: ConsolePrincipal = Object.freeze({ kind: 'bootstrap', open
 export class TokenRegistry {
   readonly #primaryToken: string | undefined;
   #provider: ConsoleAccessProvider | undefined;
+  #pluginPermissions: (() => readonly ConsolePluginPermissionInfo[]) | undefined;
 
   constructor(config: TokenRegistryConfig = {}) {
     this.#primaryToken = config.primaryToken || undefined;
@@ -72,6 +79,32 @@ export class TokenRegistry {
 
   get accessProvider(): ConsoleAccessProvider | undefined {
     return this.#provider;
+  }
+
+  /**
+   * Installs the plugin permission catalog source (the runtime composition root reads it from
+   * the current generation); returns an idempotent uninstaller.
+   */
+  usePluginPermissions(source: () => readonly ConsolePluginPermissionInfo[]): () => void {
+    if (this.#pluginPermissions && this.#pluginPermissions !== source) throw new Error('Plugin permission catalog is already installed');
+    this.#pluginPermissions = source;
+    return () => {
+      if (this.#pluginPermissions === source) this.#pluginPermissions = undefined;
+    };
+  }
+
+  /** Plugin permissions the loaded plugins use or declare, with their levels (empty when none). */
+  pluginPermissions(): readonly ConsolePluginPermissionInfo[] {
+    try {
+      return this.#pluginPermissions?.() ?? [];
+    } catch {
+      return [];
+    }
+  }
+
+  /** Declared-or-inferred level lookup over {@link pluginPermissions}. */
+  pluginPermissionLevels(): ConsolePluginPermissionLevelResolver {
+    return pluginPermissionLevelResolver(this.pluginPermissions());
   }
 
   /** An enabled global owner exists. */
@@ -128,11 +161,13 @@ export class TokenRegistry {
   accessFor(principal: ConsolePrincipal | null | undefined): ConsoleAccess {
     if (!principal) return publicConsoleAccess;
     if (principal.kind === 'bootstrap') return principal.open ? unrestrictedConsoleAccess : publicConsoleAccess;
-    // A global owner sees every page, including plugin pages gated by plugin-defined permissions.
-    if (principal.grants.some(grant => grant.role === 'owner' && grant.scope.kind === 'global')) return unrestrictedConsoleAccess;
+    // A global owner sees every page, including plugin pages whose permissions no plugin reports.
+    // An owner API token narrowed below the full catalog is not unrestricted.
+    if (principal.grants.some(grant => grant.role === 'owner' && grant.scope.kind === 'global'
+      && CONSOLE_PERMISSION_LIST.every(permission => grant.permissions.includes(permission)))) return unrestrictedConsoleAccess;
     return Object.freeze({
       unrestricted: false,
-      permissions: globalPermissions(principal),
+      permissions: globalPermissions(principal, this.pluginPermissions()),
       roles: Object.freeze([...principal.roles].sort()),
     });
   }
