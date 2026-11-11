@@ -183,7 +183,7 @@ ICQQ Agent 可按需加载 `icqq-conversation` 查询当前群／频道和 Bot �
 
 ICQQ 首次登录的二维码、滑块、设备确认会出现在「登录待办」里，不需要再回到终端确认。
 
-读取需要 `icqq:read`，写操作需要 `icqq:write`；全局所有者不受限（这类插件权限目前只有所有者拥有）。页面里的「添加 endpoint」等价于原来的 `icqq endpoint add`。
+读取需要 `icqq:read`（`read` 级别，内置角色 `viewer` 及以上都有）；增删改账号等写操作需要 `icqq:write`（`operate` 级别，`operator` 及以上都有，绑定到本适配器的角色也算），首次迁移还需管理员身份；全局所有者不受限，见[插件权限的级别](https://zhin.js.org/console/#插件权限的级别)。页面里的「添加 endpoint」等价于原来的 `icqq endpoint add`。
 
 首次修改启动配置里的既有账号前，管理员必须核对清单并确认一次迁移。原 canonical 身份与历史保留，完整账号配置加密进入 Host 数据库；此后账号管理只写数据库，不修改启动文件或 `.env`，不重启进程。没有持久化账号端口的环境可使用静态配置连接，动态写操作明确不可用。
 
