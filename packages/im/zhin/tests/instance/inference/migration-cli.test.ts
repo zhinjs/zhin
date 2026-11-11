@@ -209,7 +209,7 @@ it('executes the actual offline CLI, then boots its finalized Root with authenti
       })();
       await runStartCommand({ root: ${JSON.stringify(
         root
-      )}, args: ['--no-watch'], writeOutput: value => process.stdout.write(value), writeError: value => process.stderr.write(value) });
+      )}, args: ['--no-watch'], standaloneHttp: true, writeOutput: value => process.stdout.write(value), writeError: value => process.stderr.write(value) });
     `;
     const started = await child(root, ['--input-type=module', '-e', script]);
     expect(started.code, started.output).toBe(0);

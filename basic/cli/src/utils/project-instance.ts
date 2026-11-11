@@ -62,6 +62,8 @@ export async function importProjectModule<T>(projectRoot: string, specifier: str
 export interface InstanceStartOptions {
   readonly root: string;
   readonly args: readonly string[];
+  /** Run with the in-process Node HTTP server instead of the gateway bridge (dev / test only). */
+  readonly standaloneHttp?: boolean;
   writeOutput(value: string): void;
   writeError(value: string): void;
 }

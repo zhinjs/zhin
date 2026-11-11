@@ -13,7 +13,8 @@ class FakePort extends EventEmitter {
   readonly sent: unknown[] = [];
   connected = true;
   unrefCalls = 0;
-  readonly channel = { unref: () => { this.unrefCalls += 1; } };
+  refCalls = 0;
+  readonly channel = { unref: () => { this.unrefCalls += 1; }, ref: () => { this.refCalls += 1; } };
   send(message: unknown, callback?: (error: Error | null) => void): boolean {
     this.sent.push(message);
     callback?.(null);
@@ -45,7 +46,7 @@ describe('bridge protocol', () => {
 });
 
 /** Environment the gateway gives its instance child. */
-const CHILD_ENV = { [INSTANCE_CHILD_ENV]: '1' };
+const CHILD_ENV = { [INSTANCE_CHILD_ENV]: String(INSTANCE_BRIDGE_PROTOCOL_VERSION) };
 
 describe('openInstanceControlChannel', () => {
   it('is absent without an IPC channel', () => {
@@ -99,5 +100,22 @@ describe('openInstanceControlChannel', () => {
     channel.close();
     expect(port.listenerCount('message')).toBe(0);
     expect(port.listenerCount('disconnect')).toBe(0);
+  });
+
+  it('holds the process alive while a hold is open and unrefs again at zero', () => {
+    const port = new FakePort();
+    const channel = openInstanceControlChannel(port, 1, CHILD_ENV)!;
+    expect(port.unrefCalls).toBe(1);
+    const first = channel.hold();
+    const second = channel.hold();
+    expect(port.refCalls).toBe(1);
+    first();
+    first();
+    expect(port.unrefCalls).toBe(1);
+    second();
+    expect(port.unrefCalls).toBe(2);
+    channel.hold();
+    channel.close();
+    expect(port.unrefCalls).toBe(3);
   });
 });

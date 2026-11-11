@@ -13,6 +13,14 @@ loads `node:http` or `ws`. The in-process Node listener (`createHttpHost`, `crea
 and the Node ↔ Web conversion (`createNodeRequest`, `writeNodeResponse`, `wrapNodeWebSocket`) live
 in `@zhin.js/host-http/node`.
 
+`@zhin.js/host-http/bridge` carries the same contract across the gateway ↔ instance IPC channel
+(ADR 0054 §3): `createBridgedHttpHost` is the instance's `HttpHost` (it announces a route table,
+serves forwarded requests with chunked, credit-based streaming bodies and bridged WebSocket
+frames, and never loads `node:http` / `ws`); `IpcInstanceTransport` implements the gateway-facing
+`InstanceTransport` (`routes()`, `onRoutes()`, `fetch(request, { principal })`,
+`openWebSocket(info, peer)`). The gateway authenticates; the bridged router runs in `forwarded`
+authentication mode and still authorizes every `{apiBase}` route against the Console permission map.
+
 The composition root owns the process listener through `ProcessHttpHost`. Generation scopes receive
 only the `HttpHost` routing port: they may register HTTP/WS routes but cannot listen or close the
 shared server. Registrations are bound to generation admission, so candidate routes stay invisible

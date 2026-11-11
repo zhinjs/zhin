@@ -241,11 +241,12 @@ async function stopBot() {
 async function startBot(mode) {
   output = '';
   const bin = path.join(project, 'node_modules', '@zhin.js', 'cli', 'bin', 'zhin.js');
-  child = spawn(process.execPath, ['--experimental-strip-types', bin, 'runtime', 'start', '--mode', mode,
+  // `--standalone`: no gateway subprocess, so cleanup always owns the actual Host process, and the
+  // instance serves HTTP itself (ADR 0054 §3: the gateway otherwise owns the only listener).
+  child = spawn(process.execPath, ['--experimental-strip-types', bin, 'runtime', 'start', '--standalone', '--mode', mode,
     ...(mode === 'production' ? ['--no-watch'] : ['--watch', 'source', 'config'])], {
     cwd: project,
-    // Avoid a supervisor subprocess so cleanup always owns the actual Host process.
-    env: { ...env, ZHIN_RUNTIME_CHILD: '1' },
+    env,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   child.on('error', (error) => { output += error.message; });

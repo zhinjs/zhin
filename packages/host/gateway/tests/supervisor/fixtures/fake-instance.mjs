@@ -29,7 +29,7 @@ if (crashAfter !== undefined) setTimeout(() => { console.error('crashing'); proc
 
 if (!env.FAKE_NO_READY) {
   setTimeout(() => {
-    send('ready', { version: number('FAKE_VERSION') ?? 1, pid: process.pid, generation: 1 });
+    send('ready', { version: number('FAKE_VERSION') ?? Number(env.ZHIN_RUNTIME_CHILD), pid: process.pid, generation: 1 });
     const restartAfter = number('FAKE_RESTART_AFTER_MS');
     const starts = env.FAKE_COUNTER_FILE ? readFileSync(env.FAKE_COUNTER_FILE, 'utf8').trim().split('\n').length : 1;
     const restartLimit = number('FAKE_RESTART_TIMES') ?? 1;

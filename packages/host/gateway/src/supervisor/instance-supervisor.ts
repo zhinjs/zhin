@@ -9,7 +9,9 @@ import { EventEmitter } from 'node:events';
 import {
   INSTANCE_BRIDGE_PROTOCOL_VERSION,
   INSTANCE_CHILD_ENV,
+  IpcInstanceTransport,
   parseInstanceMessage,
+  type IpcInstanceTransportOptions,
   type GatewayShutdownMessage,
   type InstanceReadyPayload,
   type InstanceRestartRequestPayload,
@@ -86,6 +88,8 @@ export interface InstanceSupervisorOptions {
   readonly restart?: InstanceRestartPolicy;
   /** Protocol versions this supervisor accepts. Default: only {@link INSTANCE_BRIDGE_PROTOCOL_VERSION}. */
   readonly acceptedProtocolVersions?: readonly number[];
+  /** HTTP bridge settings of {@link InstanceSupervisor.transport}. */
+  readonly transport?: IpcInstanceTransportOptions;
 }
 
 export interface InstanceStopOptions {
@@ -155,6 +159,12 @@ interface ChildRecord {
 
 export class InstanceSupervisor extends EventEmitter<InstanceSupervisorEvents> {
   readonly logs: InstanceLogCollector;
+  /**
+   * HTTP / WebSocket bridge to the current instance child (ADR 0054 §2). Stable across
+   * restarts: the gateway's HTTP server forwards through it; it is `ready` while a child that
+   * announced its route table runs.
+   */
+  readonly transport: IpcInstanceTransport;
   readonly #options: InstanceSupervisorOptions;
   readonly #accepted: readonly number[];
   #state: InstanceState = 'stopped';
@@ -175,6 +185,7 @@ export class InstanceSupervisor extends EventEmitter<InstanceSupervisorEvents> {
     this.#options = options;
     this.#accepted = Object.freeze([...(options.acceptedProtocolVersions ?? [INSTANCE_BRIDGE_PROTOCOL_VERSION])]);
     this.logs = new InstanceLogCollector(options.logs);
+    this.transport = new IpcInstanceTransport(options.transport);
     this.logs.subscribe((line) => { this.emit('log', line); });
   }
 
@@ -238,6 +249,7 @@ export class InstanceSupervisor extends EventEmitter<InstanceSupervisorEvents> {
   dispose(): void {
     this.#clearBackoff();
     try { this.#child?.process.kill('SIGKILL'); } catch { /* already gone */ }
+    this.transport.detach('Supervisor disposed');
     this.logs.close();
     this.removeAllListeners();
   }
@@ -254,7 +266,8 @@ export class InstanceSupervisor extends EventEmitter<InstanceSupervisorEvents> {
     try {
       processHandle = spawn(spec.command, [...spec.args], {
         cwd: spec.cwd,
-        env: { ...(spec.env ?? process.env), [INSTANCE_CHILD_ENV]: '1' },
+        // The marker carries the protocol version: the instance refuses an incompatible gateway.
+        env: { ...(spec.env ?? process.env), [INSTANCE_CHILD_ENV]: String(INSTANCE_BRIDGE_PROTOCOL_VERSION) },
         stdio: ['ignore', output, output, 'ipc'],
         serialization: 'advanced',
         windowsHide: true,
@@ -294,6 +307,8 @@ export class InstanceSupervisor extends EventEmitter<InstanceSupervisorEvents> {
     }, readyTimeoutMs);
 
     processHandle.on('message', (raw) => { this.#onMessage(child, raw); });
+    // Bridge streams (routes, HTTP, WebSocket) of this child go to the transport.
+    this.transport.attachChildProcess(processHandle);
     processHandle.once('error', (error) => {
       // Spawn failures (ENOENT, EACCES) emit `error` and no `exit`.
       if (processHandle.pid !== undefined && processHandle.exitCode === null && processHandle.signalCode === null) return;
@@ -340,7 +355,7 @@ export class InstanceSupervisor extends EventEmitter<InstanceSupervisorEvents> {
       child.settleStart?.();
       return;
     }
-    // restart-request
+    if (message.type !== 'restart-request') return;
     this.emit('restart-request', message.payload);
     if (this.#options.restart?.onRequest === false) return;
     if (!child.ready || child.terminating || this.#state !== 'running') return;

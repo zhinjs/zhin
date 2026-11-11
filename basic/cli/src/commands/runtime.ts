@@ -46,16 +46,19 @@ runtimeCommand.command('start')
     // Process supervision belongs to the executable, not the reusable startup API.
     const root = resolve(process.cwd());
     const parsed = parseStartOptions(command.args);
-    if (!isSupervisedInstanceProcess()) {
+    if (!isSupervisedInstanceProcess() && !parsed.standalone) {
       // Parent: the gateway supervisor spawns this command again as the instance (ADR 0054 §3).
       process.exitCode = await runSupervisedInstance({ root, options: parsed });
       return;
     }
-    // The instance composition root lives in the project's `zhin.js` (ADR 0054 §0).
+    // The instance composition root lives in the project's `zhin.js` (ADR 0054 §0). Under the
+    // gateway it serves HTTP over the control channel; `--standalone` (dev / test only) runs it
+    // here with its own Node HTTP server.
     const { runStartCommand } = await importProjectInstance(root);
     await runStartCommand({
       root,
       args: command.args,
+      standaloneHttp: parsed.standalone,
       writeOutput: (value) => process.stdout.write(value),
       writeError: (value) => process.stderr.write(value),
     });
