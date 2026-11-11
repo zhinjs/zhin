@@ -126,8 +126,9 @@ ADR 0049–0054 与本计划。
 | A4 Console 导航重构 | done | [zhinjs/console#92](https://github.com/zhinjs/console/pull/92) 已合并。待办：zhin 侧页面元数据加 `section` 字段，`packages/console/client` 的 `resolveEntryRegister` 透传 `meta.section`（M2）；`feature.matrix` 返回形状已与 A2 对齐 |
 | A5 create-zhin 精简 | done | 已提交；生成项目 README / 首页 / hello 模板（`scaffold-wizard/message-templates.ts`）里的首跑步骤留到 B1.6 随 `zhin start` 一起改 |
 | M2 集成批 1 | done | [zhinjs/zhin#1226](https://github.com/zhinjs/zhin/pull/1226) 已合并（含 B1.-1）。终端接线、Host 配置 Schema、适配器反向 WS 改为自鉴权、页面 `section`、文档与升级指南、发版门禁（6 minor / 0 major，`zhin.js` patch）、锁文件、changesets；`check:all` 全过。偏差：终端会话按用户（`user:<id>`）吊销，单独吊销 API 令牌或改角色定义不断开会话。未验证：`check:created-project*`、真实 OneBot/NapCat/Milky 客户端、Windows 原生模块、真实 SSH |
-| B1 管理网关 | doing | B1.-1 拆包已完成（`@zhin.js/gateway` 新包；装配根迁到 `zhin.js/instance`；CLI 无 IM 依赖；`check:all` 全过）。临时边：`zhin.js/instance` 依赖 `@zhin.js/gateway`（配置存储、插件管理事务、IAM、终端、TSX 加载器、supervisor 辅助）。决定：配置存储与插件管理事务归网关所有，B1.4 起实例的 Console 配置 / 插件 RPC 改由网关处理，届时删除这条边。下一步 B1.0 |
-| B2 引导后端 | doing | 服务核心已完成（`wt/b2`，待 B1.0 后合并）；HTTP / RPC 接线等 B1.4，届时补 `agent.configure` / `endpoint.manage` 检查、`Retry-After` 跨域暴露、Windows 下 `pnpm.cmd` |
+| B1 管理网关 | doing | B1.-1 拆包 done（`@zhin.js/gateway` 新包；装配根迁到 `zhin.js/instance`；CLI 无 IM 依赖）。B1.0 done（在 `feat/friendly-volta-ejc3wl`）：路由契约改为 Web 标准 `Request` / `Response` + `WsConnection`，Node 服务器在 `@zhin.js/host-http/node`，主体经 `context.principal` 传入，未预期错误只返回通用信息；`@zhin.js/host-http-contract` 按 minor 发布（已加入批准列表）。B1.1 done（在分支，已合并 `wt/b11`）：`InstanceSupervisor` + IPC 控制通道（`@zhin.js/host-http/bridge`），退出码 75 路径删除。临时边：`zhin.js/instance` 依赖 `@zhin.js/gateway`（配置存储、插件管理事务、IAM、终端、TSX 加载器、supervisor 辅助）。决定：配置存储与插件管理事务归网关所有，B1.4 起实例的 Console 配置 / 插件 RPC 改由网关处理，届时删除这条边。下一步 B1.2 |
+| B2 引导后端 | doing | 服务核心已合并（`wt/b2`）：引导状态、安装白名单、`authorizeInstall`、经依赖事务安装、`zhin setup` 非交互参数、`zhin console init` 记录步骤。HTTP / RPC 接线等 B1.4（见「已知待办」） |
+| 插件权限级别 + 插件 RPC 鉴权 | done | 已合并（`wt/perm` + `wt/rpcperm`，在分支）：插件权限按 read / operate / manage 授予内置角色，自定义角色与 API 令牌可写入插件权限；插件 RPC 对已登录用户按方法 / 页面 / 兜底权限逐一检查；适配器账号方法的授权目标与处理函数一致；rss / reminder / ledger / calendar / qrcode / short-url 补充级别声明 |
 | M4 集成批 2 | todo | |
 | C1–C4 | review | C1–C3：[zhinjs/console#93](https://github.com/zhinjs/console/pull/93)（tsc / 1049 测试 / 构建通过；接口类型本地镜像，发版后替换）。C4 等 B1.5/B1.6 |
 | M6 文档与迁移 | todo | |
@@ -135,7 +136,7 @@ ADR 0049–0054 与本计划。
 
 ## 推进方式
 
-- 2026-11-11 起并行：B1.0 在主 checkout；B1.1（`wt/b11`）、B2 核心（`wt/b2`）、插件权限默认授予（`wt/perm`）在独立 worktree，由协调者合并到 `feat/friendly-volta-ejc3wl`。
+- 2026-11-11 起并行：B1.0 在主 checkout；B1.1（`wt/b11`）、B2 核心（`wt/b2`）、插件权限默认授予（`wt/perm`）与插件 RPC 鉴权（`wt/rpcperm`）在独立 worktree。2026-11-11 已按 B1.1 → B2 → 插件权限的顺序合并到 `feat/friendly-volta-ejc3wl`（合并提交，移植到 B1.0 契约）。
 
 - 定时检查（每小时）唤醒本会话：读本节进度与后台任务结果 → 集成已完成的工作并跑检查 → 派发依赖已满足的下一项 → 更新本节并提交。
 - 并行工作者只改各自路径，不做 git 写操作；集成、锁文件、Changesets、提交与 PR 由协调者完成。
@@ -151,8 +152,11 @@ ADR 0049–0054 与本计划。
 
 ## 已知待办
 
-- 插件 RPC 对已登录用户只检查 `feature.view` / `feature.configure`，不检查插件声明的权限（main 上已有）：worktree `wt/rpcperm` 修复中。
-- 现有插件补充权限级别声明（`:write` 默认推断为管理级）：同上。
+- 只绑定适配器 / 账号作用域的用户在导航里看不到插件页面，即使其作用域已满足页面权限（页面目录可见性需要按作用域判断）。
+- 登录限速的 `Retry-After` 响应头未加入 CORS `Access-Control-Expose-Headers`，跨域 Console 读不到等待时长。
+- Windows 下引导安装直接 spawn `pnpm` 会失败（需要 `pnpm.cmd` 或经 shell 解析），B2 安装服务待处理。
+- 引导服务的 HTTP / RPC 接线（Console 向导调用 `status` / `markStep` / 安装）等 B1.4 认证迁到网关后再接。
+- 引导第 3–4 步（AI、适配器）的标记与安装需要补 `agent.configure` / `endpoint.manage` 权限检查（随上一条接线一起做）。
 
 ## 待所有者决定
 
