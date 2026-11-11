@@ -82,12 +82,24 @@ const CMD_META = /([()\][%!^"`<>&|;, *?])/gu;
 
 /** Quotes one argument for `CommandLineToArgvW`, then escapes cmd metacharacters. */
 export function quoteWindowsCmdArgument(argument: string, doubleEscape: boolean): string {
-  let quoted = argument
-    // Backslashes before a quote are doubled and the quote is escaped.
-    .replace(/(\\*)"/gu, '$1$1\\"')
-    // Trailing backslashes are doubled (they precede the closing quote).
-    .replace(/(\\+)$/u, '$1$1');
-  quoted = `"${quoted}"`.replace(CMD_META, '^$1');
+  // Single linear pass (no backtracking regex): backslashes before a quote and trailing
+  // backslashes (they precede the closing quote) are doubled; quotes are escaped.
+  let body = '';
+  let backslashes = 0;
+  for (const char of argument) {
+    if (char === '\\') {
+      backslashes += 1;
+      continue;
+    }
+    if (char === '"') {
+      body += '\\'.repeat(backslashes * 2) + '\\"';
+    } else {
+      body += '\\'.repeat(backslashes) + char;
+    }
+    backslashes = 0;
+  }
+  body += '\\'.repeat(backslashes * 2);
+  const quoted = `"${body}"`.replace(CMD_META, '^$1');
   // Package-manager shims (`pnpm.cmd`) re-expand `%*`, so metacharacters are parsed twice.
   return doubleEscape ? quoted.replace(CMD_META, '^$1') : quoted;
 }

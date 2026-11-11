@@ -75,3 +75,13 @@ describe('package-manager command resolution', () => {
     expect(() => translatePackageManagerArgs('pnpm', ['update', '-D', 'pg'])).toThrow();
   });
 });
+
+describe('quoteWindowsCmdArgument performance', () => {
+  it('stays linear on long runs of backslashes (no backtracking regex)', () => {
+    const value = `${'\\'.repeat(200_000)}x${'\\'.repeat(200_000)}"`;
+    const started = performance.now();
+    const quoted = quoteWindowsCmdArgument(value, true);
+    expect(quoted.length).toBeGreaterThan(value.length);
+    expect(performance.now() - started).toBeLessThan(500);
+  });
+});
