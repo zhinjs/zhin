@@ -1,10 +1,12 @@
 import { IAM_RPC, toConsoleIamPluginPermissions } from '@zhin.js/console-protocol';
 import type { ConsolePrincipal } from '@zhin.js/host-http';
+import { DATABASE_BUSY_RETRY_AFTER_SECONDS, isDatabaseBusyError } from '../database/project-database.js';
 import { IamError, type BindingInput, type ConsoleIamService } from './service.js';
 
 export interface IamRpcReply {
   readonly status: number;
   readonly body: Record<string, unknown>;
+  readonly headers?: Readonly<Record<string, string>>;
 }
 
 const IAM_TYPES: ReadonlySet<string> = new Set(Object.values(IAM_RPC));
@@ -68,6 +70,9 @@ export async function dispatchIamRpc(
   } catch (error) {
     if (error instanceof IamError) {
       return { status: error.status, body: { success: false, code: error.code, error: error.message, requestId } };
+    }
+    if (isDatabaseBusyError(error)) {
+      return { status: 503, body: { success: false, code: 'database_busy', error: '数据库正忙，请稍后重试', requestId }, headers: { 'retry-after': String(DATABASE_BUSY_RETRY_AFTER_SECONDS) } };
     }
     return { status: 500, body: { success: false, code: 'failed', error: '访问控制操作失败', requestId } };
   }

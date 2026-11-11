@@ -32,6 +32,7 @@ import { readEnvFile, writeEnvFile } from '../config/environment-files.js';
 import { loadExpandedProjectConfig, resolveProjectDatabaseConfig, type ProjectDatabaseConfig } from '../database/config.js';
 import { ProjectDatabase } from '../database/project-database.js';
 import { projectEnvironment } from '../iam/install.js';
+import { createLocalConsoleAdmin, type LocalConsoleAdmin } from '../iam/local-admin.js';
 import { registerConsoleAuthRoutes } from '../iam/routes.js';
 import { dispatchIamRpc, isIamRpc } from '../iam/rpc.js';
 import { ConsoleIamService, type IamDatabase } from '../iam/service.js';
@@ -87,6 +88,8 @@ export interface GatewayConsole {
   readonly terminal: ConsoleTerminalHandle;
   /** Closes the gateway's connection and opens the configured database again (setup wizard). */
   reopenDatabase(): Promise<void>;
+  /** Socket-only `gateway.console.*` (`zhin console init` / `zhin console user` beside the gateway). */
+  readonly localAdmin: LocalConsoleAdmin;
   close(): Promise<void>;
 }
 
@@ -236,6 +239,22 @@ export async function startGatewayConsole(options: GatewayConsoleOptions): Promi
     hasOwner: () => connection.service?.initialized() ?? false,
   });
 
+  const restartInstance = (): void => {
+    void options.restartInstance?.().catch((error: unknown) => {
+      logger.warn(formatCompact({ op: 'gateway_database_switch_failed', error: errorText(error) }));
+    });
+  };
+  const localAdmin = createLocalConsoleAdmin({
+    setup,
+    iam,
+    // ADR 0054 §7, as for the web wizard: the gateway uses the new database before it answers.
+    switchDatabase: async () => {
+      await reopen();
+      restartInstance();
+      return { restarting: options.restartInstance !== undefined };
+    },
+  });
+
   disposers.push(...registerConsoleAuthRoutes({
     http: server,
     base: server.apiBase,
@@ -265,6 +284,7 @@ export async function startGatewayConsole(options: GatewayConsoleOptions): Promi
     onboarding,
     terminal,
     reopenDatabase: reopen,
+    localAdmin,
     close(): Promise<void> {
       closeResult ??= (async () => {
         closed = true;
@@ -331,7 +351,7 @@ export function createGatewayAccountRpc(options: GatewayAccountRpcOptions): Gate
         : await updateOnboarding(options.onboarding, message, principal);
       if (decision.write) audit(result.status < 400 && result.body.success !== false ? 'ok' : 'error');
       else if (result.status === 403) audit('denied');
-      return jsonResponse(result.status, result.body, noStore);
+      return jsonResponse(result.status, result.body, { ...noStore, ...result.headers });
     },
   });
 }
@@ -340,7 +360,7 @@ async function updateOnboarding(
   onboarding: OnboardingService,
   message: Readonly<Record<string, unknown>>,
   principal: ConsolePrincipal,
-): Promise<{ status: number; body: Record<string, unknown> }> {
+): Promise<{ status: number; body: Record<string, unknown>; headers?: Record<string, string> }> {
   const type = String(message.type ?? '');
   const requestId = message.requestId;
   // The Console sends `{ type, step, status }`; `data` is accepted as well.

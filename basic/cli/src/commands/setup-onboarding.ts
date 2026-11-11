@@ -1,8 +1,12 @@
 /**
  * `zhin setup` / `zhin console init` side of ADR 0053 §5: both record onboarding steps and install
- * dependencies through the same `OnboardingService` the Console uses.
+ * dependencies through the same `OnboardingService` the Console uses. With a gateway running, the
+ * install is a gateway dependency transaction (`gateway.packages.install` over the local socket:
+ * stop instance, install, start, roll back on failure) instead of touching `node_modules` under it.
  */
+import type { GatewayPackageTransactionResult } from '@zhin.js/console-protocol';
 import { OnboardingService, type InstallEvent, type InstallReport, type OnboardingStepStatus } from '@zhin.js/gateway/onboarding';
+import { describeGatewayError, probeGateway, runPackageOperationViaGateway, type GatewayTarget } from '../utils/gateway.js';
 
 export interface SetupOnboardingIo {
   log(message: string): void;
@@ -43,13 +47,16 @@ export async function recordOnboardingSteps(service: OnboardingService, outcomes
 
 /**
  * Installs wizard dependencies that are on the onboarding allowlist (others stay in package.json
- * for the next `pnpm install`). Returns undefined when nothing was eligible.
+ * for the next `pnpm install`). Returns undefined when nothing was eligible. With `gateway` set and
+ * a gateway running for that project, the install goes through the gateway (progress streamed);
+ * otherwise it runs here as before.
  */
 export async function installSetupDependencies(
   service: OnboardingService,
   dependencies: Readonly<Record<string, string>>,
   io: SetupOnboardingIo,
-): Promise<InstallReport | undefined> {
+  gateway?: GatewayTarget,
+): Promise<InstallReport | GatewayPackageTransactionResult | Readonly<{ ok: false }> | undefined> {
   const allowlist = await service.allowlist();
   const specs: string[] = [];
   const skipped: string[] = [];
@@ -59,6 +66,29 @@ export async function installSetupDependencies(
   }
   if (skipped.length) io.log(`以下依赖不在在线安装目录中，请运行 pnpm install：${skipped.join(', ')}`);
   if (!specs.length) return undefined;
+  if (gateway) {
+    let running: boolean;
+    try {
+      running = (await probeGateway(gateway)) !== undefined;
+    } catch (error) {
+      // A gateway exists but cannot be used: installing behind its back would race its instance.
+      io.error(describeGatewayError(error));
+      return Object.freeze({ ok: false as const });
+    }
+    if (running) {
+      io.log('检测到网关正在运行：依赖经由网关安装（会停止并重新启动实例，失败时回滚）。');
+      try {
+        // The wizard already wrote `plugins`; the gateway must not enable anything again.
+        return await runPackageOperationViaGateway(gateway, { operation: 'install', packages: specs, enable: false }, {
+          out: chunk => io.write(chunk),
+          err: chunk => io.write(chunk),
+        });
+      } catch (error) {
+        io.error(describeGatewayError(error));
+        return Object.freeze({ ok: false as const });
+      }
+    }
+  }
   const report = await service.installPackages(specs, 'local', (event: InstallEvent) => {
     switch (event.type) {
       case 'package-start': io.log(`安装 ${event.spec} …`); break;

@@ -32,6 +32,7 @@ import {
   verifyAgainstDummy,
   verifyPassword,
 } from './crypto.js';
+import { isDatabaseBusyError } from '../database/project-database.js';
 import { LoginRateLimiter } from './rate-limit.js';
 import { IAM_TABLES } from './tables.js';
 
@@ -269,14 +270,14 @@ export class ConsoleIamService implements ConsoleAccessProvider {
     const [session] = await this.#model('sessions').select('id', 'user_id', 'created_at', 'expires_at', 'last_seen_at').where({ id: hash });
     if (session) {
       if (Number(session.expires_at) <= now) {
-        await this.#model('sessions').delete().where({ id: hash });
+        await this.#touch(() => this.#model('sessions').delete().where({ id: hash }));
         return null;
       }
       const user = await this.#enabledUser(String(session.user_id));
       if (!user) return null;
       if (now - Number(session.last_seen_at) > 60_000) {
         const expiresAt = Math.min(Number(session.created_at) + this.#max, now + this.#idle);
-        await this.#model('sessions').update({ last_seen_at: now, expires_at: expiresAt }).where({ id: hash });
+        await this.#touch(() => this.#model('sessions').update({ last_seen_at: now, expires_at: expiresAt }).where({ id: hash }));
       }
       return this.#principal(user, 'user', hash, null);
     }
@@ -286,7 +287,7 @@ export class ConsoleIamService implements ConsoleAccessProvider {
     const user = await this.#enabledUser(String(apiToken.user_id));
     if (!user) return null;
     if (apiToken.last_used_at === null || apiToken.last_used_at === undefined || now - Number(apiToken.last_used_at) > 60_000) {
-      await this.#model('tokens').update({ last_used_at: now }).where({ id: apiToken.id });
+      await this.#touch(() => this.#model('tokens').update({ last_used_at: now }).where({ id: apiToken.id }));
     }
     void meta;
     return this.#principal(user, 'api-token', String(apiToken.id), parseList(apiToken.permissions));
@@ -737,6 +738,19 @@ export class ConsoleIamService implements ConsoleAccessProvider {
       grants: Object.freeze(grants),
       roles: Object.freeze([...names].sort()),
     });
+  }
+
+  /**
+   * Bookkeeping writes of authentication (sliding expiry, last use, expired-row cleanup): a
+   * database that stays locked past the retry budget must not turn a valid credential into a 401.
+   */
+  async #touch(write: () => Promise<unknown>): Promise<void> {
+    try {
+      await write();
+    } catch (error) {
+      if (!isDatabaseBusyError(error)) throw error;
+      this.#onError(error);
+    }
   }
 
   #serialize<T>(operation: () => Promise<T>): Promise<T> {

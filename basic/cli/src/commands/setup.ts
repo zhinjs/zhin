@@ -246,7 +246,7 @@ export const setupCommand = new Command('setup')
       await recordOnboardingSteps(onboarding, outcomes, setupOnboardingDeps.io);
       if (options.install && !options.global && Object.keys(deps).length) {
         console.log('');
-        const report = await installSetupDependencies(onboarding, deps, setupOnboardingDeps.io);
+        const report = await installSetupDependencies(onboarding, deps, setupOnboardingDeps.io, { root: cwd });
         if (report && !report.ok) process.exitCode = 1;
       }
 

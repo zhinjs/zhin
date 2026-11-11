@@ -435,6 +435,11 @@ export type IsolationLevel = 'READ_UNCOMMITTED' | 'READ_COMMITTED' | 'REPEATABLE
 export interface TransactionOptions {
   isolationLevel?: IsolationLevel;
   timeout?: number;
+  /**
+   * The transaction only reads. SQLite then opens it with `BEGIN DEFERRED` (no write lock, so it
+   * never waits for another connection's writer) and refuses writes inside it (`query_only`).
+   */
+  readOnly?: boolean;
 }
 
 export interface Transaction {

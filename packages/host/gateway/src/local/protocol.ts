@@ -12,6 +12,27 @@ export const LOCAL_GATEWAY_RPC = Object.freeze({
   INFO: 'gateway.info',
   /** Stops the instance, then the gateway. */
   SHUTDOWN: 'gateway.shutdown',
+  /**
+   * `zhin console init` beside a running gateway (ADR 0049 §7): the gateway's own
+   * `ConsoleSetupService` answers, so a database switch is applied live (reconnect + instance
+   * restart) and the owner state changes at once.
+   */
+  CONSOLE_SETUP_STATUS: 'gateway.console.setup.status',
+  CONSOLE_SETUP_DRIVERS: 'gateway.console.setup.drivers',
+  /** `{ dialect, connection }` → the probe result. */
+  CONSOLE_SETUP_DATABASE_TEST: 'gateway.console.setup.database.test',
+  /** `{ dialect, connection }`: writes the config, reconnects the gateway, restarts the instance. */
+  CONSOLE_SETUP_DATABASE: 'gateway.console.setup.database',
+  /** `{ username, password, displayName? }`: the first owner. */
+  CONSOLE_SETUP_OWNER: 'gateway.console.setup.owner',
+  /** `zhin console user …` beside a running gateway: the gateway's `ConsoleIamService` answers. */
+  CONSOLE_USER_LIST: 'gateway.console.user.list',
+  /** `{ username, password, displayName?, role }`. */
+  CONSOLE_USER_CREATE: 'gateway.console.user.create',
+  /** `{ username, password }`: resets the password (revokes the user's sessions). */
+  CONSOLE_USER_PASSWD: 'gateway.console.user.passwd',
+  /** `{ username, disabled }`. */
+  CONSOLE_USER_DISABLE: 'gateway.console.user.disable',
 } as const);
 
 export type LocalGatewayRpcType = (typeof LOCAL_GATEWAY_RPC)[keyof typeof LOCAL_GATEWAY_RPC];
@@ -25,8 +46,13 @@ export interface LocalGatewayRequest {
   readonly data?: unknown;
 }
 
+/** Gateway RPC codes, plus the Console account codes of the `gateway.console.*` RPC. */
+export type LocalGatewayErrorCode =
+  | GatewayRpcErrorCode
+  | 'not_found' | 'last_owner' | 'unauthorized' | 'rate_limited' | 'database_busy';
+
 export interface LocalGatewayError {
-  readonly code: GatewayRpcErrorCode;
+  readonly code: LocalGatewayErrorCode;
   readonly message: string;
   readonly status: number;
 }

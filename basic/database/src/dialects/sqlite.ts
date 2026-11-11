@@ -335,26 +335,42 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
    */
   async beginTransaction(options?: TransactionOptions): Promise<Transaction> {
     const dialect = this;
+    const readOnly = options?.readOnly === true;
 
-    // IMMEDIATE takes the write lock at BEGIN: contention with the gateway's connection surfaces
-    // there (retried by query()), never as SQLITE_BUSY_SNAPSHOT halfway through the transaction.
-    await this.query('BEGIN IMMEDIATE');
+    // Write transactions: IMMEDIATE takes the write lock at BEGIN, so contention with the
+    // gateway's connection surfaces there (retried by query()), never as SQLITE_BUSY_SNAPSHOT
+    // halfway through. A declared read-only transaction takes no write lock (DEFERRED: WAL
+    // readers never wait for a writer) and query_only makes an accidental write fail loudly.
+    // Callers that cannot declare intent (the plugin-runtime Database Host) stay IMMEDIATE.
+    await this.query(readOnly ? 'BEGIN DEFERRED' : 'BEGIN IMMEDIATE');
     this.transactionOpen = true;
+    if (readOnly) {
+      try {
+        await this.query('PRAGMA query_only = ON');
+      } catch (error) {
+        await this.query('ROLLBACK').catch(() => undefined);
+        this.transactionOpen = false;
+        throw error;
+      }
+    }
+    const close = async (): Promise<void> => {
+      dialect.transactionOpen = false;
+      if (readOnly) await dialect.query('PRAGMA query_only = OFF').catch(() => undefined);
+    };
+    const finish = async (sql: 'COMMIT' | 'ROLLBACK'): Promise<void> => {
+      try {
+        await dialect.query(sql);
+      } catch (error) {
+        // A failed COMMIT (e.g. busy past the budget) leaves the transaction to the caller's rollback.
+        if (sql === 'ROLLBACK') await close();
+        throw error;
+      }
+      await close();
+    };
 
     return {
-      async commit(): Promise<void> {
-        await dialect.query('COMMIT');
-        dialect.transactionOpen = false;
-      },
-
-      async rollback(): Promise<void> {
-        try {
-          await dialect.query('ROLLBACK');
-        } finally {
-          dialect.transactionOpen = false;
-        }
-      },
-      
+      commit: () => finish('COMMIT'),
+      rollback: () => finish('ROLLBACK'),
       async query<T = any>(sql: string, params?: any[]): Promise<T> {
         return dialect.query<T>(sql, params);
       }

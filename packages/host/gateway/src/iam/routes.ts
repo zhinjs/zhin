@@ -12,6 +12,7 @@ import {
   type TokenRegistry,
 } from '@zhin.js/host-http';
 import { CONSOLE_PERMISSIONS } from '@zhin.js/console-protocol';
+import { DATABASE_BUSY_RETRY_AFTER_SECONDS, isDatabaseBusyError } from '../database/project-database.js';
 import { IamError, type ConsoleIamService } from './service.js';
 import type { ConsoleSetupService } from './setup-service.js';
 
@@ -68,6 +69,10 @@ export function registerConsoleAuthRoutes(options: RegisterConsoleAuthRoutesOpti
       if (error instanceof IamError) {
         return jsonResponse(error.status, { success: false, code: error.code, error: error.message },
           error.retryAfterMs ? { ...noStore, 'retry-after': String(Math.ceil(error.retryAfterMs / 1000)) } : noStore);
+      }
+      if (isDatabaseBusyError(error)) {
+        return jsonResponse(503, { success: false, code: 'database_busy', error: '数据库正忙，请稍后重试' },
+          { ...noStore, 'retry-after': String(DATABASE_BUSY_RETRY_AFTER_SECONDS) });
       }
       return jsonResponse(500, { success: false, code: 'failed', error: '操作失败' }, noStore);
     }
