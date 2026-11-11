@@ -39,7 +39,7 @@ async function startHost(root: string, options: { token?: string } = {}) {
     hub: createConsoleEventHub(), pluginLifecycleFile: resolvePluginLifecycleFile(root), pluginLifecycleStore: createPluginLifecycleStore(root),
     configuration: configStore, consoleIam: () => iam.service,
   } as Parameters<typeof registerConsoleRpcRoute>[0]);
-  http.route('GET', '/api/system/status', (_request, response) => { response.end('{"ok":true}'); });
+  http.route('GET', '/api/system/status', () => new Response('{"ok":true}'));
   await database.start();
   await iam.activate();
   const { origin } = await http.listen();
