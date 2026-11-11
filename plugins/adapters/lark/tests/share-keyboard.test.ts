@@ -42,7 +42,7 @@ it('correlates actual card action to original full conversation, source and acto
 });
 
 it('routes v2 card actions over authenticated HTTP and immediately acknowledges', async () => {
-  const { Readable } = await import('node:stream');
+  const { webhookRequest } = await import('../../test-utils/http.js');
   const { handleLarkWebhookRequest } = await import('../src/webhook.js');
   const { verifySignature } = await import('../src/protocol.js');
   const { createHash } = await import('node:crypto');
@@ -52,17 +52,14 @@ it('routes v2 card actions over authenticated HTTP and immediately acknowledges'
   const timestamp = String(Math.floor(Date.now() / 1000)); const nonce = 'nonce';
   const signature = createHash('sha256').update(`${timestamp}${nonce}${config.encryptKey}${body}`).digest('hex');
   expect(verifySignature(config.encryptKey!, timestamp, nonce, body, signature)).toBe(true);
-  const request = Object.assign(Readable.from([body]), { headers: { 'x-lark-request-token': config.verificationToken, 'x-lark-request-timestamp': timestamp, 'x-lark-request-nonce': nonce, 'x-lark-signature': signature } });
-  const response = { writeHead: vi.fn(), end: vi.fn() };
+  const headers = { 'x-lark-request-token': config.verificationToken, 'x-lark-request-timestamp': timestamp, 'x-lark-request-nonce': nonce, 'x-lark-signature': signature };
   const handler = { config, isOpen: true, admit: vi.fn(), admitPlatform: vi.fn(), admitCardAction: vi.fn() };
-  await handleLarkWebhookRequest(request as unknown as import('node:http').IncomingMessage, response as unknown as import('node:http').ServerResponse, handler);
+  const accepted = await handleLarkWebhookRequest(webhookRequest(body, headers), handler);
   expect(handler.admitCardAction).toHaveBeenCalledWith(event);
-  expect(response.writeHead).toHaveBeenCalledWith(200, expect.any(Object));
-  request.headers['x-lark-signature'] = 'invalid';
-  const invalid = Object.assign(Readable.from([body]), { headers: request.headers });
-  await handleLarkWebhookRequest(invalid as unknown as import('node:http').IncomingMessage, response as unknown as import('node:http').ServerResponse, handler);
+  expect(accepted.status).toBe(200);
+  const invalid = await handleLarkWebhookRequest(webhookRequest(body, { ...headers, 'x-lark-signature': 'invalid' }), handler);
   expect(handler.admitCardAction).toHaveBeenCalledTimes(1);
-  expect(response.writeHead).toHaveBeenLastCalledWith(403, expect.any(Object));
+  expect(invalid.status).toBe(403);
 });
 
 it('uses JSON 2.0 native markdown for inline code rather than v1 lark_md', () => {
