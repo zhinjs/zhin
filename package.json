@@ -105,6 +105,7 @@
     "eval:agent": "turbo run eval --filter=@zhin.js/agent",
     "eval:nightly": "pnpm -F @zhin.js/agent eval:nightly",
     "test:watch": "vitest",
+    "test:e2e:gateway": "ZHIN_TEST_GATEWAY_E2E=1 vitest run tests/e2e-gateway",
     "test:coverage": "vitest run --coverage",
     "create": "node packages/toolkit/create-zhin/lib/index.js",
     "docs:dev": "pnpm --filter @zhin.js/docs dev",

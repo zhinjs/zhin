@@ -186,6 +186,48 @@ jobs:
           ZHIN_TEST_MYSQL_PORT: '3306'
           ZHIN_TEST_PG_PORT: '5432'
 
+  # Process-level gateway suite (ADR 0054, plan B1.7 / M7): `zhin start` on a copy of
+  # examples/minimal-bot, restart, crash supervision, rolled-back installs, Console walk.
+  # Slow (a few minutes), so `pnpm test` skips it; it runs once here. Credential-free.
+  gateway-e2e:
+    if: github.event_name != 'merge_group'
+    permissions:
+      contents: read
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    steps:
+      - name: setup pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v4
+        with:
+          version: 9.0.2
+
+      - name: checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: setup node.js
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        with:
+          node-version: 24
+
+      - name: restore pnpm store
+        uses: ./.github/actions/restore-pnpm-store
+
+      - name: install dependencies
+        run: >-
+          pnpm --filter minimal-bot... --filter @zhin.js/adapter-sandbox... --filter @zhin.js/plugin-repeater...
+          install --frozen-lockfile --ignore-scripts --ignore-pnpmfile --config.dedupe-peer-dependents=false
+
+      - name: run dependency lifecycle scripts without registry credentials
+        run: pnpm --filter minimal-bot... --filter @zhin.js/adapter-sandbox... --filter @zhin.js/plugin-repeater... rebuild
+
+      - name: build the gateway suite dependencies
+        run: pnpm --filter minimal-bot... --filter @zhin.js/adapter-sandbox... --filter @zhin.js/plugin-repeater... build
+
+      - name: run the gateway end-to-end suite
+        run: pnpm test:e2e:gateway
+
   test:
     permissions:
       contents: read

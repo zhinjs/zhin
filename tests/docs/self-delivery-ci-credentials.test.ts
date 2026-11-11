@@ -92,11 +92,15 @@ describe('untrusted candidate CI credential isolation', () => {
 
   it('preserves the protected matrix identities and isolated live-database gate', () => {
     const { config } = read('full-validation');
-    expect(Object.keys(config.jobs)).toEqual(['platform-installed', 'database-live', 'test', ...PREPARED_JOBS]);
+    expect(Object.keys(config.jobs)).toEqual(['platform-installed', 'database-live', 'gateway-e2e', 'test', ...PREPARED_JOBS]);
     expect(config.jobs['platform-installed'].strategy.matrix.platform).toEqual(['onebot11', 'napcat', 'telegram', 'qq']);
     expect(config.jobs['platform-installed'].strategy['fail-fast']).toBe(true);
     expect(config.jobs['database-live'].permissions).toEqual({ contents: 'read' });
     expect(JSON.stringify(config.jobs['database-live'])).not.toMatch(/secrets\.|github\.token|gh run cancel/);
+    // The slow gateway suite runs once, credential-free, outside the OS × Node matrix.
+    expect(config.jobs['gateway-e2e'].permissions).toEqual({ contents: 'read' });
+    expect(JSON.stringify(config.jobs['gateway-e2e'])).not.toMatch(/secrets\.|github\.token|gh run cancel|strategy/);
+    expect(config.jobs['gateway-e2e'].steps.at(-1).run).toBe('pnpm test:e2e:gateway');
     expect(config.jobs['database-live'].services).toMatchObject({
       mysql: { image: 'mysql:8.4' },
       postgres: { image: 'postgres:17' },
