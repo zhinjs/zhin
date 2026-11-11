@@ -16,11 +16,25 @@ sidebar: false
 
 ## 决策
 
+### 0. 四个包
+
+| 包 | 职责 | 依赖边界 |
+|---|---|---|
+| `create-zhin-app` | 初始化 Zhin 项目（ADR 0053 §1） | 只依赖 `@zhin.js/scaffold-wizard` |
+| `@zhin.js/cli`（`zhin` 命令） | 管理项目：`start / stop / restart / status / logs`、`install / uninstall / update`、`console init / user`、`setup`、插件开发工具（`new`、`build`、`pub`、`doctor` 等）。网关在运行时经本地套接字调用网关；不在运行时直接操作项目文件与数据库 | 依赖 `@zhin.js/gateway`（拉起网关、复用其服务），**不依赖 IM 层** |
+| `@zhin.js/gateway`（新，`packages/host/gateway`） | 管理网关进程：HTTP 服务器、认证与 RBAC、初始化与引导、实例监管、依赖事务、终端、日志、本地套接字 | 依赖 `host-http`、`database`、`console-protocol`、`runtime`（仅配置与项目文件工具）、`scaffold-wizard`（驱动 / 适配器 / AI 定义）；**不依赖 `zhin.js` 与 IM 层**，按项目解析实例入口后以子进程拉起 |
+| `zhin.js` | Zhin 实例：IM Runtime、插件、适配器、Agent，以及实例的装配根（原 `basic/cli/src/plugin-runtime/` 的启动装配与运行时侧 Console 后端迁入）。入口 `zhin.js/instance`，只能由网关拉起 | 现有 IM 层；HTTP 只通过 `BridgedHttpHost`（`@zhin.js/host-http/bridge`） |
+
+- 网关与实例之间的 IPC 协议（消息类型、版本号）定义在 `@zhin.js/host-http/bridge`，两边共用；`ready` 消息携带协议版本，不兼容时网关拒绝并在 Console 提示升级。
+- 网关和实例可以独立升级：网关解析项目 `node_modules` 里的 `zhin.js/instance`，不打包实例代码。
+- 新项目依赖：`zhin.js`、`@zhin.js/gateway`、`@zhin.js/cli`。
+- CLAUDE.md 中「`basic/cli` 是装配根、可导入 IM 层」的例外改为「`zhin.js` 的实例装配根」；`@zhin.js/cli` 与 `@zhin.js/gateway` 不得导入 IM 层（`check:architecture` 增加规则）。
+
 ### 1. 两个进程
 
 | | 网关（Gateway） | 实例（Instance） |
 |---|---|---|
-| 启动 | `zhin start` / `zhin dev`（CLI 的常驻进程，取代现有 supervisor） | 只能由网关拉起；入口 `zhin runtime start` 变为内部命令 |
+| 启动 | `zhin start` / `zhin dev` 拉起 `@zhin.js/gateway` 常驻进程（取代现有 supervisor） | 只能由网关拉起；入口 `zhin.js/instance` |
 | 职责 | 唯一对外端口；**认证**（会话、API 令牌、初始化令牌）；初始化与引导；实例起停、崩溃重启、日志采集；依赖安装 / 卸载 / 升级；原始配置文件与 `.env` 读写（实例离线时）；终端；审计；本地 Console 静态资源 | IM Runtime、插件、适配器、Agent、定时任务；**绝大部分 Console API**（依赖运行时快照）；插件自己的 HTTP / WS 路由 |
 | 加载插件 | 否。可以使用 `@zhin.js/runtime`、`@zhin.js/database`、`@zhin.js/host-http` 等库做配置解析与项目文件操作，但不创建 Runtime、不执行插件代码 | 是 |
 | 挂了怎么办 | 由系统服务（`zhin install-service`）或容器重启 | 网关按策略重启；Console 照常可用，显示实例状态与日志 |
@@ -91,7 +105,7 @@ interface HttpHost {
 
 **日志**：网关采集实例 stdout / stderr，写入 `.zhin/logs/instance.log`（按大小轮转），并保留内存环形缓冲，供 `gateway.instance.logs` 与实例离线时查看。
 
-**只有受管模式**：实例入口（`zhin runtime start`，内部命令）在没有控制通道时拒绝启动并提示使用 `zhin start`。不保留独立模式与退出码 75 重启。
+**只有受管模式**：实例入口 `zhin.js/instance` 在没有控制通道时拒绝启动并提示使用 `zhin start`。`zhin runtime start` 删除；不保留独立模式与退出码 75 重启。
 
 ### 4. 依赖管理（网关）
 
@@ -146,10 +160,10 @@ interface HttpHost {
 
 ## 落盘位置
 
-- 网关：`basic/cli/src/gateway/`（`gateway.ts` 装配、`instance-supervisor.ts`、`control-channel.ts`、`proxy.ts`、`local-socket.ts`、`packages-service.ts`、`instance-logs.ts`）
-- 实例侧：`basic/cli/src/plugin-runtime/start/instance-channel.ts`（IPC、`BridgedHttpHost`、`restart-request`）
-- 传输无关的路由契约与网关侧 Node 适配：`@zhin.js/host-http`
-- CLI：`basic/cli/src/commands/`（`start`、`stop`、`restart`、`status`、`logs`）
+- 网关：`packages/host/gateway/src/`（`gateway.ts` 装配、`instance-supervisor.ts`、`http-server.ts`、`local-socket.ts`、`packages-service.ts`、`instance-logs.ts`；ADR 0049 的 `iam/`、ADR 0051 的 `terminal/`、ADR 0053 的 `onboarding/` 从 `basic/cli` 迁入）
+- 桥接与 IPC 协议、传输无关的路由契约：`@zhin.js/host-http`（`./bridge` 子路径）
+- 实例：`packages/im/zhin/src/instance/`（装配根、`BridgedHttpHost` 接入、`restart-request`；运行时侧 Console 后端从 `basic/cli/src/plugin-runtime/console/` 迁入）
+- CLI：`basic/cli/src/commands/`（`start`、`stop`、`restart`、`status`、`logs`、`install`、`uninstall`、`update`、`console`、`setup`）
 
 ## 后果
 

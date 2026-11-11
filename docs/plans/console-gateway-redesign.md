@@ -12,7 +12,7 @@ sidebar: false
 2. **运维体系独立**：实例、依赖、数据库、配置文件、环境变量、定时任务、文件、终端（本机 Shell / SSH）。
 3. **正规 RBAC**：用户、角色、权限、会话、API 令牌、审计存在数据库；`http.token` 只用于首次初始化；`http.tokens` 与演示模式移除。
 4. **初始化统一**：CLI（`zhin console init`）与 Console Web 执行同一套动作；`create-zhin` 只建项目，数据库 / AI / 适配器在 Console 引导中完成。
-5. **网关与实例分离**：`zhin start` 启动管理网关，网关管理 Zhin 实例（起停、依赖、日志），实例崩溃时 Console 仍可用。
+5. **四个包、两个进程**：`create-zhin-app` 初始化项目；`@zhin.js/cli` 管理项目；`@zhin.js/gateway` 是管理网关进程（HTTP、鉴权、实例监管、依赖、终端）；`zhin.js` 是实例（不含 HTTP 服务器）。实例崩溃时 Console 仍可用。
 
 ## 契约
 
@@ -75,6 +75,7 @@ ADR 0049–0054 与本计划。
 
 | 步骤 | 内容 | 验收 |
 |---|---|---|
+| B1.-1 | 拆包：新建 `@zhin.js/gateway`（`packages/host/gateway`）；实例装配根与运行时侧 Console 后端从 `basic/cli/src/plugin-runtime/` 迁到 `zhin.js`（`src/instance/`）；`iam/`、`terminal/`、`onboarding/` 迁到网关；`@zhin.js/cli` 去掉 IM 层依赖；`check:architecture` 加规则；CLAUDE.md 更新 | 纯搬迁、行为不变；全量检查绿 |
 | B1.0 | HTTP 路由契约改为 Web 标准 `Request`/`Response` + `WsConnection`（ADR 0054 §2）；迁移全部使用者（basic/cli Console 路由、host/http·mcp·a2a、im/core·runtime、console/pagemanager、20 个适配器、calendar 等插件）；先由现有进程内 Node 服务器承载，行为不变 | 全部适配器 / Console 路由测试通过；`check:all` 绿 |
 | B1.1 | `instance-supervisor`：替换 `NativeTypeScriptSupervisor`，IPC 通道（advanced 序列化）、`ready`、`shutdown`、`restart-request`、风暴保护、日志采集与轮转；删除退出码 75 路径 | 单测（假子进程） |
 | B1.2 | 实例侧 `BridgedHttpHost`：路由表上报、请求 / 响应体流式分块与背压、WS 帧、主体随请求传递；实例删除 Node HTTP 服务器，无控制通道时拒绝启动 | 桥接单测（流式、中断、背压、WS）；实例进程不加载 `node:http` |
