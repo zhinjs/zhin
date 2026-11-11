@@ -43,6 +43,7 @@ zhin runtime start --once --mode test
 | `--open` | 在终端（TTY）启动成功后用浏览器打开 Remote Console；也可设置 `ZHIN_OPEN=1` |
 | `-d, --daemon` | 守护进程模式：写 pid 文件、日志重定向、崩溃自动重启 |
 | `--log-file <path>` | daemon 日志文件，默认 `<项目根>/.zhin/logs/instance.log`（按大小轮转） |
+| `--standalone` | 仅开发 / 测试：不经监管进程，实例在本进程内自带 Node HTTP 服务器；没有受管重启 |
 
 `zhin runtime start --help` 会列出以上选项和常用示例。未知选项会在启动前直接报错（fail fast），不会进入重启循环。
 
@@ -63,7 +64,7 @@ zhin runtime start --once --mode test
 ```mermaid
 flowchart TD
     A[解析选项] --> B[监管进程 InstanceSupervisor]
-    B --> C[spawn 实例子进程<br/>IPC 控制通道 + ZHIN_RUNTIME_CHILD=1]
+    B --> C[spawn 实例子进程<br/>IPC 控制通道 + ZHIN_RUNTIME_CHILD=协议版本]
     C --> D[加载 .env / .env.&lt;environment&gt;]
     D --> E[读取 zhin.config.yml<br/>并校验 schema]
     E --> F[装配 Host<br/>HTTP / database / schedule<br/>speech / console]
@@ -114,8 +115,15 @@ zhin stop                              # 停止（读取 .zhin.pid）
 | 实例 → 监管 | `ready` | 启动完成，携带协议版本与 generation；版本不兼容时监管进程拒绝该实例并停止它，不再重启 |
 | 实例 → 监管 | `restart-request` | Console 重启、依赖变化、数据库切换、受控自我变更等需要整进程重启的场景（取代旧的退出码 `75`） |
 | 监管 → 实例 | `shutdown` | `{ reason, budgetMs }`：实例在预算内完整停止；超时后监管进程依次发送 SIGTERM、SIGKILL |
+| 实例 → 监管 | `routes` | 路由表（HTTP 路由、WebSocket 路径及其认证方式、`apiBase`、generation），插件热重载与世代切换后更新 |
+| 监管 → 实例 | `http.request` / `http.request.body` / `http.request.end` / `http.request.abort` | 请求头（含网关认证后的主体）与分块请求体 |
+| 实例 → 监管 | `http.response.head` / `http.response.body` / `http.response.end` / `http.response.error` | 响应头与分块响应体（SSE、大文件） |
+| 双向 | `http.request.credit` / `http.response.credit` | 按信用额度的背压：每个方向最多 256 KiB 在途，单块 ≤ 64 KiB |
+| 双向 | `ws.open` / `ws.accepted` / `ws.rejected` / `ws.message` / `ws.close` / `ws.drain` | WebSocket 连接与帧（文本 / 二进制），`ws.drain` 驱动 `bufferedAmount` |
 
-实例就绪超时（默认 60 秒）按启动失败处理。`--once` 不处理重启请求。没有控制通道时（例如直接以 `ZHIN_RUNTIME_CHILD=1` 运行）实例无法自动重启，重启请求只会停止进程。
+**实例不含 HTTP 服务器**（ADR 0054 §2）：在监管进程下，实例用 `BridgedHttpHost` 经控制通道承载自己的路由，不监听端口，也不导入 `node:http` / `ws`；HTTP 由网关唯一的服务器接收后转发。网关认证调用方并随请求传递主体，实例只做授权（按 Console 权限表），不再自行解析凭据。
+
+实例就绪超时（默认 60 秒）按启动失败处理。`--once` 不处理重启请求。`ZHIN_RUNTIME_CHILD` 的值是网关的协议版本，版本不兼容时实例拒绝启动。`zhin.js/instance` 没有控制通道时拒绝启动；开发与测试可用 `zhin runtime start --standalone`（编程方式：`runStartCommand({ standaloneHttp: true })`）在本进程内自带 HTTP 服务器，此时没有受管重启，重启请求只会停止进程。
 
 ### 退出码
 

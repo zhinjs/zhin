@@ -263,6 +263,8 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
     await runStartCommand({
       root: botRoot,
       args: ['--once', '--no-watch', '--mode=test'],
+      // In-process Node HTTP server: no gateway in this test (ADR 0054 §3).
+      standaloneHttp: true,
       writeOutput: (value) => output.push(value),
       writeError: (value) => errors.push(value),
     });

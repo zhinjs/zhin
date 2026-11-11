@@ -37,7 +37,7 @@ it('manages and restores accounts through the built CLI without restarting its p
   }
   async function start() {
     output = '';
-    child = spawn(process.execPath, [join(repoRoot, 'basic/cli/bin/zhin.js'), 'runtime', 'start'], { cwd: project, stdio: ['ignore', 'pipe', 'pipe'] });
+    child = spawn(process.execPath, [join(repoRoot, 'basic/cli/bin/zhin.js'), 'runtime', 'start', '--standalone'], { cwd: project, stdio: ['ignore', 'pipe', 'pipe'] });
     child.stdout!.on('data', data => { output += String(data); }); child.stderr!.on('data', data => { output += String(data); });
     const host = await new Promise<string>((done, reject) => {
       const timeout = setTimeout(() => reject(new Error(`Synthetic account Host did not activate: ${output}`)), 20000);

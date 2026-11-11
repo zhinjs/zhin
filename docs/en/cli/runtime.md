@@ -43,6 +43,7 @@ zhin runtime start --once --mode test
 | `--open` | Open Remote Console in the browser after a successful start in a terminal (TTY); `ZHIN_OPEN=1` does the same |
 | `-d, --daemon` | Daemon mode: writes a pid file, redirects logs, auto-restarts on crash |
 | `--log-file <path>` | Daemon log file, default `<project-root>/.zhin/logs/instance.log` (size-rotated) |
+| `--standalone` | Development / test only: no supervisor, the instance runs its own Node HTTP server in this process; no managed restarts |
 
 `zhin runtime start --help` lists these options with common examples. Unknown options cause an immediate error before startup (fail fast), and will not enter a restart loop.
 
@@ -63,7 +64,7 @@ Server convention entries also support `.tsx`. The CLI first delegates to the pr
 ```mermaid
 flowchart TD
     A[Parse options] --> B[Supervisor process InstanceSupervisor]
-    B --> C[Spawn instance child<br/>IPC control channel + ZHIN_RUNTIME_CHILD=1]
+    B --> C[Spawn instance child<br/>IPC control channel + ZHIN_RUNTIME_CHILD=protocol version]
     C --> D[Load .env / .env.&lt;environment&gt;]
     D --> E[Read zhin.config.yml<br/>and validate schema]
     E --> F[Assemble Hosts<br/>HTTP / database / schedule<br/>speech / console]
@@ -114,8 +115,15 @@ The supervisor spawns the instance over Node IPC (`serialization: 'advanced'`, A
 | instance → supervisor | `ready` | Startup finished; carries the protocol version and generation. An incompatible version is rejected: the supervisor stops that instance and does not restart it |
 | instance → supervisor | `restart-request` | Anything that needs a whole-process restart: Console restart, dependency changes, database switch, controlled self-change (replaces the former exit code `75`) |
 | supervisor → instance | `shutdown` | `{ reason, budgetMs }`: the instance stops completely within the budget; after it the supervisor sends SIGTERM, then SIGKILL |
+| instance → supervisor | `routes` | Route table (HTTP routes, WebSocket paths and how they authenticate, `apiBase`, generation); updated after plugin hot reloads and generation switches |
+| supervisor → instance | `http.request` / `http.request.body` / `http.request.end` / `http.request.abort` | Request head (with the principal the gateway authenticated) and chunked request body |
+| instance → supervisor | `http.response.head` / `http.response.body` / `http.response.end` / `http.response.error` | Response head and chunked response body (SSE, large files) |
+| both | `http.request.credit` / `http.response.credit` | Credit-based backpressure: at most 256 KiB in flight per direction, chunks ≤ 64 KiB |
+| both | `ws.open` / `ws.accepted` / `ws.rejected` / `ws.message` / `ws.close` / `ws.drain` | WebSocket connections and frames (text / binary); `ws.drain` drives `bufferedAmount` |
 
-A missing `ready` (60 seconds by default) counts as a failed start. `--once` ignores restart requests. Without a control channel (e.g. running directly with `ZHIN_RUNTIME_CHILD=1`) the instance cannot restart itself; a restart request only stops the process.
+**The instance has no HTTP server** (ADR 0054 §2): under the supervisor it serves its routes over the control channel with `BridgedHttpHost`, listens on no port and imports neither `node:http` nor `ws`; the gateway's single server receives HTTP and forwards it. The gateway authenticates the caller and forwards the principal with the request; the instance only authorizes (against the Console permission map) and no longer parses credentials itself.
+
+A missing `ready` (60 seconds by default) counts as a failed start. `--once` ignores restart requests. `ZHIN_RUNTIME_CHILD` carries the gateway's protocol version; the instance refuses an incompatible one. `zhin.js/instance` refuses to start without a control channel; for development and tests, `zhin runtime start --standalone` (programmatically `runStartCommand({ standaloneHttp: true })`) runs its own HTTP server in this process, without managed restarts — a restart request then only stops the process.
 
 ### Exit Codes
 

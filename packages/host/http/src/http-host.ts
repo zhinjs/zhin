@@ -124,16 +124,37 @@ export interface HttpRouterOptions {
   readonly secure?: boolean;
   /** Bound listener address as reported by the transport. */
   readonly address?: () => HttpHostAddress | undefined;
+  /**
+   * Who authenticates requests (ADR 0054 §3):
+   * - `credentials` (default): the router resolves the Bearer / `?token=` credential through
+   *   {@link TokenRegistry}. A `principal` passed by the transport is ignored.
+   * - `forwarded`: the carrying transport already authenticated the request (the gateway, over
+   *   the bridge) and passes the principal in {@link HttpRequestInfo.principal} /
+   *   {@link WsUpgradeRequest.principal}. The router never parses credentials itself but still
+   *   authorizes every `{apiBase}` route and host-authenticated socket against the Console
+   *   permission map, exactly as in `credentials` mode. A missing principal is anonymous.
+   */
+  readonly authentication?: 'credentials' | 'forwarded';
 }
 
 export interface HttpRequestInfo {
   readonly remoteAddress?: string;
+  /** Pre-authenticated principal; honoured only by a `forwarded` router. */
+  readonly principal?: ConsolePrincipal;
 }
 
 export interface WsUpgradeRequest {
   readonly url: URL;
   readonly headers: Headers;
   readonly remoteAddress?: string;
+  /** Pre-authenticated principal; honoured only by a `forwarded` router. */
+  readonly principal?: ConsolePrincipal;
+}
+
+/** A registered WebSocket path and how it authenticates (admission-active only). */
+export interface ListedWsRoute {
+  readonly path: string;
+  readonly auth: 'host' | 'protocol';
 }
 
 /** The transport half of a {@link WsConnection}. */
@@ -161,6 +182,11 @@ export interface HttpRouter extends HttpHost, GenerationAdmissionBindable<HttpHo
   upgrade(request: WsUpgradeRequest): Promise<WsUpgradeDecision>;
   readonly routeCount: number;
   readonly wsPaths: readonly string[];
+  /** Admission-active WebSocket routes (`protocol` only when every listener uses it). */
+  listWsRoutes(): readonly ListedWsRoute[];
+  /** Called after any route or socket registration changes (not on admission changes). */
+  onRoutesChanged(listener: () => void): () => void;
+  readonly apiBase: string;
   readonly corsOrigins: readonly string[];
   /** Terminal: routes are dropped and every later request gets 503. */
   close(): void;
@@ -199,9 +225,16 @@ export function createHttpRouter(options: HttpRouterOptions = {}): HttpRouter {
   } satisfies TokenRegistryConfig);
   const secure = options.secure === true;
   const readAddress = options.address ?? (() => undefined);
+  const forwarded = options.authentication === 'forwarded';
   const wsRoutes = new Map<string, Set<WsRoute>>();
   const httpRoutes: HttpRoute[] = [];
+  const changeListeners = new Set<() => void>();
   let closed = false;
+  const routesChanged = (): void => {
+    for (const listener of [...changeListeners]) {
+      try { listener(); } catch { /* observers never break registration */ }
+    }
+  };
 
   // Built-in public health probe (parity with host-router `/pub/health`).
   httpRoutes.push(Object.freeze({
@@ -236,16 +269,16 @@ export function createHttpRouter(options: HttpRouterOptions = {}): HttpRouter {
   }));
 
   async function authenticateUpgrade(
-    url: URL,
-    headers: Headers,
+    request: WsUpgradeRequest,
     pathname: string,
-    remoteAddress: string | undefined,
   ): Promise<ConsolePrincipal | undefined> {
-    const token = extractBearerToken(
-      headers.get('authorization') ?? undefined,
-      url.searchParams.get('token'),
-    );
-    const principal = await tokenRegistry.authenticate(token, requestMeta({ headers }, remoteAddress));
+    const { url, headers, remoteAddress } = request;
+    const principal = forwarded
+      ? request.principal
+      : await tokenRegistry.authenticate(
+        extractBearerToken(headers.get('authorization') ?? undefined, url.searchParams.get('token')),
+        requestMeta({ headers }, remoteAddress),
+      );
     if (!principal) return undefined;
     if (!authorizeConsoleWebSocket(principal, pathname)) {
       audit(principal, remoteAddress, `ws:${pathname}`, 'denied');
@@ -294,8 +327,7 @@ export function createHttpRouter(options: HttpRouterOptions = {}): HttpRouter {
     const protocolAuthenticated = admitted.every(({ entry }) => entry.options.auth === 'protocol');
     let principal: ConsolePrincipal | undefined;
     if (!protocolAuthenticated) {
-      principal = await authenticateUpgrade(request.url, request.headers, pathname, request.remoteAddress)
-        .catch(() => undefined);
+      principal = await authenticateUpgrade(request, pathname).catch(() => undefined);
       if (!principal || closed) {
         releaseAll();
         return Object.freeze({ accepted: false, status: 401 });
@@ -369,7 +401,7 @@ export function createHttpRouter(options: HttpRouterOptions = {}): HttpRouter {
 
     if (method === 'OPTIONS') return withHeaders(new Response(null, { status: 204 }), cors);
 
-    const auth = await authenticateHttp(request, url, pathname, method, info.remoteAddress);
+    const auth = await authenticateHttp(request, url, pathname, method, info);
     if (!auth.ok) {
       return withHeaders(jsonResponse(auth.status, {
         success: false,
@@ -418,11 +450,18 @@ export function createHttpRouter(options: HttpRouterOptions = {}): HttpRouter {
     url: URL,
     pathname: string,
     method: string,
-    remoteAddress: string | undefined,
+    info: HttpRequestInfo,
   ): Promise<
     | { ok: true; principal?: ConsolePrincipal }
     | { ok: false; status: 401 | 403; code: string; error: string }
   > {
+    const remoteAddress = info.remoteAddress;
+    if (forwarded) {
+      // The gateway authenticated; authorization still happens here (ADR 0054 §3).
+      const principal = info.principal;
+      if (!requiresHttpAuth(pathname, apiBase, authExempt)) return { ok: true, ...(principal ? { principal } : {}) };
+      return authorizeApi(principal, method, pathname, remoteAddress);
+    }
     const token = extractBearerToken(
       request.headers.get('authorization') ?? undefined,
       url.searchParams.get('token'),
@@ -437,6 +476,15 @@ export function createHttpRouter(options: HttpRouterOptions = {}): HttpRouter {
       return { ok: true };
     }
     const principal = await tokenRegistry.authenticate(token, meta) ?? undefined;
+    return authorizeApi(principal, method, pathname, remoteAddress);
+  }
+
+  function authorizeApi(
+    principal: ConsolePrincipal | undefined,
+    method: string,
+    pathname: string,
+    remoteAddress: string | undefined,
+  ): { ok: true; principal?: ConsolePrincipal } | { ok: false; status: 401 | 403; code: string; error: string } {
     const relative = pathname === apiBase ? '/' : pathname.slice(apiBase.length);
     const decision = authorizeConsoleHttp(principal, method, relative);
     if (!decision.allowed) {
@@ -473,14 +521,18 @@ export function createHttpRouter(options: HttpRouterOptions = {}): HttpRouter {
         const entry = Object.freeze({ listener, admission, options: Object.freeze({ ...wsOptions }) });
         listeners!.add(entry);
         owned.add(entry);
+        routesChanged();
         return () => {
+          if (!owned.delete(entry)) return;
           listeners!.delete(entry);
-          owned.delete(entry);
+          routesChanged();
         };
       },
       close() {
+        if (owned.size === 0) return;
         for (const entry of owned) listeners!.delete(entry);
         owned.clear();
+        routesChanged();
       },
     };
   }
@@ -506,9 +558,12 @@ export function createHttpRouter(options: HttpRouterOptions = {}): HttpRouter {
       admission,
     });
     httpRoutes.push(entry);
+    routesChanged();
     return () => {
       const index = httpRoutes.indexOf(entry);
-      if (index >= 0) httpRoutes.splice(index, 1);
+      if (index < 0) return;
+      httpRoutes.splice(index, 1);
+      routesChanged();
     };
   }
 
@@ -535,11 +590,27 @@ export function createHttpRouter(options: HttpRouterOptions = {}): HttpRouter {
     upgrade,
     get routeCount() { return httpRoutes.length; },
     get wsPaths() { return Object.freeze([...wsRoutes.keys()]); },
+    listWsRoutes() {
+      const listed: ListedWsRoute[] = [];
+      for (const [path, entries] of wsRoutes) {
+        const active = [...entries].filter((entry) => !entry.admission || entry.admission.active);
+        if (active.length === 0) continue;
+        const auth = active.every((entry) => entry.options.auth === 'protocol') ? 'protocol' : 'host';
+        listed.push(Object.freeze({ path, auth }));
+      }
+      return Object.freeze(listed);
+    },
+    onRoutesChanged(listener) {
+      changeListeners.add(listener);
+      return () => { changeListeners.delete(listener); };
+    },
+    apiBase,
     corsOrigins,
     close() {
       closed = true;
       wsRoutes.clear();
       httpRoutes.length = 0;
+      changeListeners.clear();
     },
   };
 }

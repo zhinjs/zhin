@@ -18,8 +18,7 @@ import {
   DatabaseConversationEventStore,
   type ConversationDbModel,
 } from '@zhin.js/im-contract';
-import { createConsoleEventHub } from '@zhin.js/host-http';
-import { createHttpHostGroup } from '@zhin.js/host-http/node';
+import { createConsoleEventHub, type HttpHost, type HttpHostAddress, type HttpHostOptions } from '@zhin.js/host-http';
 import {
   defineInboxTables,
   DEFAULT_ROOT_CONFIG_FILE_NAME,
@@ -30,6 +29,7 @@ import {
   type ConfigDocumentPort,
   type RuntimeConfigDocument,
   type RuntimeSnapshot,
+  type GenerationAdmissionBindable,
 } from '@zhin.js/plugin-runtime';
 import { setLevel, getLogger, formatCompact, type LogLevelInput } from '@zhin.js/logger';
 import {
@@ -85,7 +85,7 @@ import {
 } from '@zhin.js/runtime';
 import { DEFAULT_SHUTDOWN_BUDGET_MS, installProcessLifecycle, nodeProcessLifecycleAdapter } from './process-lifecycle.js';
 import { installProcessRejectionHandler } from './process-rejections.js';
-import { openInstanceControlChannel } from '@zhin.js/host-http/bridge';
+import { createBridgedHttpHost, openInstanceControlChannel, type BridgedHttpHost } from '@zhin.js/host-http/bridge';
 import {
   ProjectEnvironmentFileSource,
   parseStartOptions,
@@ -112,6 +112,34 @@ export interface StartCommandOptions {
    * keeps its process.
    */
   readonly exit?: (code: number) => void;
+  /**
+   * Development / test only (also `--standalone`): without a gateway control channel, serve HTTP
+   * from an in-process Node server (`@zhin.js/host-http/node`, loaded on demand). Without it the
+   * instance refuses to start unsupervised (ADR 0054 §3). Ignored under the gateway, which owns
+   * the only HTTP server: the instance then serves its routes through `BridgedHttpHost`.
+   */
+  readonly standaloneHttp?: boolean;
+}
+
+/** Thrown when `zhin.js/instance` starts without a gateway and without `standaloneHttp`. */
+export class InstanceGatewayRequiredError extends Error {
+  readonly code = 'ZHIN_INSTANCE_GATEWAY_REQUIRED';
+  constructor() {
+    super('zhin.js/instance 只能由网关拉起：请使用 zhin runtime start 启动（开发 / 测试可加 --standalone 在本进程内自带 HTTP 服务器）');
+    this.name = 'InstanceGatewayRequiredError';
+  }
+}
+
+/** The instance's HTTP surface: bridged under the gateway, a Node listener group standalone. */
+type InstanceHttpHost = HttpHost & GenerationAdmissionBindable<HttpHost> & {
+  listen(): Promise<HttpHostAddress | undefined>;
+  close(): Promise<void>;
+};
+
+/** Loads the Node transport only in standalone mode: the bridged instance never loads `node:http` / `ws`. */
+async function createStandaloneHttpHost(listeners: readonly HttpHostOptions[]): Promise<InstanceHttpHost> {
+  const { createHttpHostGroup } = await import('@zhin.js/host-http/node');
+  return createHttpHostGroup(listeners);
 }
 
 /** Host config `console.terminal` (raw; validated by the terminal installer). */
@@ -149,6 +177,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   const parsed = parseStartOptions(options.args);
   // Gateway control channel (ADR 0054 §3): present when the supervisor spawned this instance.
   const controlChannel = openInstanceControlChannel();
+  if (!controlChannel && options.standaloneHttp !== true && !parsed.standalone) throw new InstanceGatewayRequiredError();
   const restartSupported = controlChannel !== undefined && !parsed.once;
   ensureTypeScriptSpecifierRemap();
   const packageManifest = JSON.parse(await readFile(join(options.root, 'package.json'), 'utf8'));
@@ -172,7 +201,19 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   const envOverlay = environmentVariables.environments?.[parsed.environment];
   const httpConfig = await resolveHttpConfig(hostConfig, envOverlay, options.root);
   const {listeners: additionalHttpListeners = [], ...primaryHttpListener} = httpConfig;
-  const httpHost = createHttpHostGroup([primaryHttpListener, ...additionalHttpListeners]);
+  // ADR 0054 §2: under the gateway, routes are served over the control channel (additional
+  // listeners are opened by the gateway); standalone (dev / test) runs the Node server here.
+  const bridgedHttpHost: BridgedHttpHost | undefined = controlChannel
+    ? createBridgedHttpHost({
+      channel: controlChannel,
+      token: primaryHttpListener.token,
+      corsOrigins: primaryHttpListener.corsOrigins,
+      apiBase: primaryHttpListener.apiBase,
+      authExemptPaths: primaryHttpListener.authExemptPaths,
+    })
+    : undefined;
+  const httpHost: InstanceHttpHost = bridgedHttpHost
+    ?? await createStandaloneHttpHost([primaryHttpListener, ...additionalHttpListeners]);
   const databaseConfig = await resolveDatabaseConfig(options.root, hostConfig);
   const databaseHost = createDatabaseHost(databaseConfig);
   // Agent is an optional install tier. Do not resolve its module from the
@@ -272,6 +313,8 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     watch: parsed.once ? [] : parsed.watch,
     pluginConfigurationSelection: createEndpointRoleConfigurationSelection(hostConfig, endpointRoles),
     onGenerationCommit: (generation) => {
+      // Route table follows hot reloads (ADR 0054 §3 `routes`).
+      bridgedHttpHost?.publishRoutes(generation);
       consoleEventHub.publish('hmr:reload', { generation });
     },
     environment: runtimeEnvironment,
@@ -529,8 +572,9 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   let httpOrigin = `http://${primaryHttpListener.host ?? '127.0.0.1'}:${primaryHttpListener.port ?? 8086}`;
   try {
     const address = await httpHost.listen();
-    httpOrigin = address.origin;
-    if (process.stdout.isTTY && !parsed.once) {
+    if (address) httpOrigin = address.origin;
+    // Under the gateway, the gateway owns the listener and prints its own guidance.
+    if (!bridgedHttpHost && process.stdout.isTTY && !parsed.once) {
       const startup = getLogger('setup');
       startup.success(`zhin control plane listening at ${httpOrigin}`);
       printFirstRunGuidance(httpOrigin, Boolean(httpConfig.token));
@@ -582,7 +626,11 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   } else {
     options.writeOutput(`${JSON.stringify({ started: true, ...snapshot }, null, 2)}\n`);
   }
-  controlChannel?.ready({ generation: snapshot.generation });
+  bridgedHttpHost?.publishRoutes(snapshot.generation);
+  controlChannel?.ready({
+    generation: snapshot.generation,
+    ...(bridgedHttpHost ? { routes: bridgedHttpHost.routeTable() } : {}),
+  });
   if (parsed.once) {
     await control.stop();
     controlChannel?.close();

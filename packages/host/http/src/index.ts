@@ -15,6 +15,7 @@ export {
   type WsTransport,
   type WsUpgradeDecision,
   type WsUpgradeRequest,
+  type ListedWsRoute,
 } from './http-host.js';
 export type { HttpHostAddress, HttpHostOptions, HttpHostTlsOptions } from './host-options.js';
 export { listHttpHostAddresses } from './addresses.js';

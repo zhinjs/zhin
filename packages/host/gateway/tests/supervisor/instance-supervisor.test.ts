@@ -82,7 +82,7 @@ describe('InstanceSupervisor', () => {
     expect(status.startedAt).toBeTypeOf('number');
     expect(states).toEqual(['starting', 'running']);
     // The child is marked as a supervised instance.
-    await waitFor(() => supervisor.logs.tail().some((line) => line.line === 'marker=1') || undefined);
+    await waitFor(() => supervisor.logs.tail().some((line) => line.line === `marker=${INSTANCE_BRIDGE_PROTOCOL_VERSION}`) || undefined);
   });
 
   it('rejects an instance that reports an incompatible protocol version and does not restart it', async () => {
@@ -269,4 +269,65 @@ describe('InstanceSupervisor', () => {
     expect((error as InstanceStartError).failure.reason).toBe('spawn-error');
     expect(supervisor.state).toBe('crashed');
   });
+});
+
+describe('InstanceSupervisor HTTP bridge', () => {
+  const bridged = fileURLToPath(new URL('./fixtures/bridged-instance.ts', import.meta.url));
+  const tsx = fileURLToPath(new URL('../../../../../node_modules/tsx/dist/esm/index.mjs', import.meta.url));
+
+  function superviseBridged(): InstanceSupervisor {
+    const supervisor = new InstanceSupervisor({
+      spawn: { command: process.execPath, args: ['--conditions', 'development', '--import', tsx, bridged], cwd: process.cwd() },
+      readyTimeoutMs: 15_000,
+      shutdownBudgetMs: 2_000,
+      killGraceMs: 500,
+      restart: { delayMs: 50 },
+    });
+    supervisors.push(supervisor);
+    return supervisor;
+  }
+
+  it('forwards HTTP and WebSocket traffic to the current child and follows restarts', async () => {
+    const supervisor = superviseBridged();
+    expect(supervisor.transport.ready).toBe(false);
+    await supervisor.start();
+    await waitFor(() => supervisor.transport.ready || undefined);
+    expect(supervisor.transport.routes().http.map((route) => route.pattern)).toEqual(expect.arrayContaining(['/hello', '/upload']));
+    expect(supervisor.transport.routes().ws).toEqual([{ path: '/echo', auth: 'protocol' }]);
+    const pid = supervisor.status().pid;
+    const hello = await supervisor.transport.fetch(new Request('http://gateway/hello'));
+    expect(await hello.text()).toBe(`hello v1 from ${pid}`);
+    // A body larger than one window travels in chunks with credit (structured clone over real IPC).
+    const upload = await supervisor.transport.fetch(new Request('http://gateway/upload', { method: 'POST', body: new Uint8Array(1_500_000) }));
+    expect(await upload.text()).toBe('1500000');
+    // Route table follows registrations in the instance.
+    const tables: string[][] = [];
+    supervisor.transport.onRoutes((table) => tables.push(table.http.map((route) => route.pattern)));
+    await supervisor.transport.fetch(new Request('http://gateway/reload', { method: 'POST' }));
+    await waitFor(() => tables.some((patterns) => patterns.includes('/v2')) || undefined);
+    // WebSocket frames.
+    const received: (string | Uint8Array)[] = [];
+    const listeners = new Set<(data: string | Uint8Array) => void>();
+    const peer = {
+      url: new URL('http://gateway/echo'), headers: new Headers(), bufferedAmount: 0,
+      send: (data: string | Uint8Array) => { received.push(data); },
+      close: () => undefined,
+      onMessage: (listener: (data: string | Uint8Array) => void) => { listeners.add(listener); return () => listeners.delete(listener); },
+      onClose: () => () => undefined,
+    };
+    expect(await supervisor.transport.openWebSocket({ url: peer.url, headers: peer.headers }, peer)).toBe(true);
+    for (const listener of listeners) listener(new Uint8Array([9, 8, 7]));
+    await waitFor(() => received.length > 0 || undefined);
+    expect(received[0]).toEqual(new Uint8Array([9, 8, 7]));
+
+    // Restart: the transport follows the new child.
+    await supervisor.restart();
+    await waitFor(() => supervisor.transport.ready || undefined);
+    const next = supervisor.status().pid;
+    expect(next).not.toBe(pid);
+    expect(await (await supervisor.transport.fetch(new Request('http://gateway/hello'))).text()).toBe(`hello v1 from ${next}`);
+    await supervisor.stop();
+    expect(supervisor.transport.ready).toBe(false);
+    await expect(supervisor.transport.fetch(new Request('http://gateway/hello'))).rejects.toMatchObject({ code: 'instance-offline' });
+  }, 60_000);
 });
