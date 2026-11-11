@@ -23,6 +23,8 @@ export interface McpAuthRequest {
 
 export function isLocalhost(req: McpAuthRequest): boolean {
   const addr = req.remoteAddress ?? '';
+  // Proxied requests are never local, whatever the proxy's own address.
+  if (req.headers.has('x-forwarded-for') || req.headers.has('forwarded')) return false;
   return (
     addr === '127.0.0.1'
     || addr === '::1'

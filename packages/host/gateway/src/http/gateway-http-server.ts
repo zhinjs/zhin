@@ -138,6 +138,7 @@ export class GatewayHttpServer {
       host: entry.host,
       port: entry.port,
       tls: entry.tls,
+      trustProxy: entry.trustProxy,
       handle: (request, info) => this.#router.handle(request, info),
       upgrade: (request) => this.#upgrade(request),
       onListening: (address) => {

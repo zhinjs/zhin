@@ -10,6 +10,7 @@ import { readFile } from 'node:fs/promises';
 import { isAbsolute, resolve } from 'node:path';
 import { httpHostToken, type HttpHost } from './http-host.js';
 import type { HttpHostOptions } from './host-options.js';
+import { parseTrustProxy } from './trust-proxy.js';
 
 export interface ResolvedHttpConfig extends HttpHostOptions {
   /** Additional listeners that mirror the primary Host route surface. */
@@ -37,6 +38,7 @@ export async function resolveHttpConfig(
     corsOrigins: injectDesktopWebviewOrigins(parseStringList(value.corsOrigins), envOverlay),
     apiBase: typeof value.base === 'string' ? value.base : undefined,
     tls: await parseTlsConfig(value.tls, projectRoot),
+    trustProxy: parseTrustProxy(value.trustProxy),
   });
   const configuredListeners = await parseAdditionalListeners(value.listeners, primary, projectRoot);
   const listeners = await injectDesktopDeviceListener(

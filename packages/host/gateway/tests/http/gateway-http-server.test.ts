@@ -61,7 +61,7 @@ afterEach(async () => {
 
 async function startServer(
   transport: FakeTransport | undefined,
-  options: { state?: () => string; extra?: boolean; tls?: boolean; maxBody?: number; rpc?: boolean } = {},
+  options: { state?: () => string; extra?: boolean; tls?: boolean; maxBody?: number; rpc?: boolean; trustProxy?: readonly string[] } = {},
 ): Promise<{ server: GatewayHttpServer; origin: string }> {
   const key = readFileSync(new URL('../../../http/tests/fixtures/localhost-key.pem', import.meta.url));
   const cert = readFileSync(new URL('../../../http/tests/fixtures/localhost-cert.pem', import.meta.url));
@@ -70,6 +70,7 @@ async function startServer(
       host: '127.0.0.1',
       port: 0,
       corsOrigins: ['http://console.local'],
+      ...(options.trustProxy ? { trustProxy: options.trustProxy } : {}),
       ...(options.extra ? { listeners: [{ host: '127.0.0.1', port: 0, ...(options.tls ? { tls: { key, cert } } : {}) }] } : {}),
     },
     instance: { transport: () => transport, state: options.state ?? (() => (transport?.ready ? 'running' : 'stopped')) },
@@ -470,5 +471,35 @@ describe('GatewayHttpServer listeners', () => {
     await server.close();
     expect(server.addresses).toHaveLength(0);
     await expect(fetch(`${extra!.origin}/pub/health`)).rejects.toThrow();
+  });
+});
+
+describe('GatewayHttpServer http.trustProxy', () => {
+  const reverseSocket = (origin: string, headers: Record<string, string>) => new Promise<void>((resolve, reject) => {
+    const socket = new WebSocket(`${origin.replace('http', 'ws')}/adapter/reverse`, { headers });
+    socket.once('open', () => { socket.close(); resolve(); });
+    socket.once('error', reject);
+  });
+
+  it('ignores a spoofed X-Forwarded-For when trustProxy is off', async () => {
+    const transport = new FakeTransport();
+    const { server, origin } = await startServer(transport);
+    server.route('GET', '/gw/ip', (_request, context) => new Response(context.remoteAddress ?? ''));
+    expect(await (await fetch(`${origin}/gw/ip`, { headers: { 'x-forwarded-for': '198.51.100.7' } })).text()).toMatch(/127\.0\.0\.1$/u);
+    await fetch(`${origin}/plugin/x`, { headers: { 'x-forwarded-for': '198.51.100.7' } });
+    expect(transport.requests[0]!.context.remoteAddress).toMatch(/127\.0\.0\.1$/u);
+    // The forwarding header still reaches the instance, so its loopback-only sockets refuse it.
+    expect(transport.requests[0]!.request.headers.get('x-forwarded-for')).toBe('198.51.100.7');
+  });
+
+  it('derives the client address from a trusted proxy for gateway routes, forwarded requests and reverse sockets', async () => {
+    const transport = new FakeTransport();
+    const { server, origin } = await startServer(transport, { trustProxy: ['loopback'] });
+    server.route('GET', '/gw/ip', (_request, context) => new Response(context.remoteAddress ?? ''));
+    expect(await (await fetch(`${origin}/gw/ip`, { headers: { 'x-forwarded-for': '203.0.113.5' } })).text()).toBe('203.0.113.5');
+    await fetch(`${origin}/plugin/x`, { headers: { 'x-forwarded-for': '6.6.6.6, 203.0.113.6' } });
+    expect(transport.requests[0]!.context.remoteAddress).toBe('203.0.113.6');
+    await reverseSocket(origin, { 'x-forwarded-for': '203.0.113.7' });
+    expect((await waitFor(() => transport.sockets[0])).info.remoteAddress).toBe('203.0.113.7');
   });
 });

@@ -43,3 +43,12 @@ describe('MCP auth', () => {
     expect(verifyMcpBearer(req, 'my-token')).toBe(true);
   });
 });
+
+describe('MCP localhost exemption behind a proxy', () => {
+  it('never treats proxied requests as localhost', () => {
+    const proxied = (name: string) => ({ headers: new Headers({ [name]: name === 'forwarded' ? 'for=203.0.113.9' : '203.0.113.9' }), remoteAddress: '127.0.0.1' });
+    expect(mcpAuthRequired({}, { headers: new Headers(), remoteAddress: '127.0.0.1' }, {}, false)).toBe(false);
+    expect(mcpAuthRequired({}, proxied('x-forwarded-for'), {}, false)).toBe(true);
+    expect(mcpAuthRequired({}, proxied('forwarded'), {}, false)).toBe(true);
+  });
+});

@@ -44,6 +44,16 @@ flowchart LR
 
 反向代理必须保留 Authorization、Webhook 原始请求体、SSE 流式响应与 WebSocket Upgrade。不要缓存 `/api/events`，也不要改写需要平台验签的 body。
 
+在反向代理后面运行时设置 `http.trustProxy`，否则登录限流、审计 IP 看到的都是代理地址：
+
+```yaml
+http:
+  host: 127.0.0.1
+  trustProxy: [loopback]   # 只信任同机代理；也可写 IP / CIDR 列表、跳数或 true
+```
+
+默认关闭：只用 TCP 对端地址，任何客户端自带的 `X-Forwarded-For` / `Forwarded` 都被忽略。开启后只有来自受信任代理的转发头才生效，从代理一侧向客户端逐跳回溯到第一个不受信任的地址。经代理转发的请求（带转发头）永远不算本机连接：未配置 `access_token` 的适配器反向 WebSocket、MCP / A2A 的本机免鉴权都会拒绝它，因此通过同机代理暴露这些端点时必须配置凭据。
+
 `GET /pub/health` 是存活探针，只证明 HTTP 进程可响应。`GET /pub/ready` 是运行时就绪探针：启动尚未提交 generation 时返回 503，就绪时返回 200；公开响应仅包含 `ready`，不暴露配置或账号信息。
 
 默认就绪条件是已提交 generation 且 Database Host 已初始化。可在项目配置中声明必需组件：

@@ -27,6 +27,7 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `http.port` | number \| string \| null | no | — | 监听端口。 |
 | `http.token` | string \| null | no | — | Bootstrap token: signs in to the setup wizard until the first Console owner exists, then stops working (ADR 0049). |
 | `http.corsOrigins` | array \| null | no | — | — |
+| `http.trustProxy` | boolean \| integer \| array&lt;string&gt; \| string | no | — | Reverse proxies whose X-Forwarded-For / Forwarded header names the client (login rate limit, audit IP, loopback-only sockets): false (default) uses the TCP peer; true trusts every hop; a number trusts that many hops; a list trusts peers matching IPs / CIDRs or loopback, private, linklocal. |
 | `http.base` | string \| null | no | — | API 路径前缀。 |
 | `http.tls` | `false` \| null \| object | no | — | — |
 | `http.listeners` | array&lt;object&gt; | no | — | — |

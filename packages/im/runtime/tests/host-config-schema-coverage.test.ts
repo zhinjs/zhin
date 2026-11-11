@@ -44,6 +44,8 @@ describe('Host configuration field coverage', () => {
       readiness: { endpoints: [{ owner: 'root/mock', name: 'main' }] },
     } });
     check({ http: { tls: { enabled: '${TLS_ENABLED}', keyFile: './key.pem', certFile: './cert.pem', passphrase: '${KEY_PASS}' } } });
+    for (const trustProxy of [false, true, 2, ['loopback', '10.0.0.0/8'], '${TRUST_PROXY}']) check({ http: { trustProxy } });
+    expect(parsePluginConfigSchema(hostSchema, { http: { trustProxy: { hops: 1 } } }).errors).not.toEqual([]);
   });
 
   it('declares console.terminal with the same rules as the terminal parser (ADR 0051)', () => {

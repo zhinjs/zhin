@@ -38,6 +38,7 @@ export function createHttpHost(options: HttpHostOptions = {}): ProcessHttpHost {
     host: options.host,
     port: options.port,
     tls: options.tls,
+    trustProxy: options.trustProxy,
     handle: (request, info) => router.handle(request, info),
     upgrade: (request) => router.upgrade(request),
     onListening(address) {

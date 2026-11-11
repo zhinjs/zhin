@@ -1,4 +1,5 @@
 import { timingSafeEqualString } from './timing-safe-equal.js';
+import { hasForwardingHeaders } from './trust-proxy.js';
 
 /** What a protocol credential check needs from an HTTP request or a {@link WsConnection}. */
 export interface ProtocolAuthRequest {
@@ -20,11 +21,12 @@ export function isLoopbackAddress(address: string | undefined): boolean {
  * reverse WebSockets: OneBot, NapCat, Milky…) or a protocol webhook. With an access token the
  * peer must present it as `Authorization: Bearer <token>` or `?access_token=<token>`
  * (constant-time compare); without one only loopback peers are admitted, so an unconfigured
- * socket is never public. A {@link WsConnection} can be passed directly; for an HTTP route pass
+ * socket is never public. Proxied traffic (`X-Forwarded-For` / `Forwarded` present) never counts
+ * as loopback: a same-host reverse proxy would otherwise make every client local. A {@link WsConnection} can be passed directly; for an HTTP route pass
  * `{ headers: request.headers, url: context.url, remoteAddress: context.remoteAddress }`.
  */
 export function verifyProtocolAccessToken(accessToken: string | undefined, request: ProtocolAuthRequest): boolean {
-  if (!accessToken) return isLoopbackAddress(request.remoteAddress);
+  if (!accessToken) return isLoopbackAddress(request.remoteAddress) && !hasForwardingHeaders(request.headers);
   const header = request.headers.get('authorization');
   if (typeof header === 'string' && header.startsWith('Bearer ')
     && timingSafeEqualString(header.slice(7).trim(), accessToken)) return true;

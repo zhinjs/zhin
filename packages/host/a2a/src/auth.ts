@@ -25,6 +25,8 @@ export function extractBearerToken(req: A2aAuthRequest): string {
 /** Same loopback test as the MCP Host (duplicated: Hosts do not import each other). */
 export function isLocalhost(req: A2aAuthRequest): boolean {
   const addr = req.remoteAddress ?? '';
+  // Proxied requests are never local, whatever the proxy's own address.
+  if (req.headers.has('x-forwarded-for') || req.headers.has('forwarded')) return false;
   return addr === '127.0.0.1' || addr === '::1' || addr === '::ffff:127.0.0.1';
 }
 

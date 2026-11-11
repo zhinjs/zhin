@@ -98,6 +98,33 @@
             ]
           }
         },
+        "trustProxy": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 32
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "description": "Reverse proxies whose X-Forwarded-For / Forwarded header names the client (login rate limit, audit IP, loopback-only sockets): false (default) uses the TCP peer; true trusts every hop; a number trusts that many hops; a list trusts peers matching IPs / CIDRs or loopback, private, linklocal.",
+          "x-descriptionZh": "受信任的反向代理，其 X-Forwarded-For / Forwarded 头给出真实客户端地址（登录限流、审计 IP、仅本机套接字）：false（默认）只用 TCP 对端地址；true 信任所有跳；数字表示信任离服务端最近的若干跳；列表表示只信任匹配的 IP / CIDR 或 loopback、private、linklocal。",
+          "x-zhin-config": {
+            "security": true
+          }
+        },
         "base": {
           "type": [
             "string",
