@@ -69,9 +69,10 @@ function sendText(
   statusCode: number,
   text: string
 ): void {
-  return new Response(text, { status: statusCode, headers: {
+  response.writeHead(statusCode, {
     "content-type": "text/plain; charset=utf-8",
-  } });
+  });
+  response.end(text);
 }
 
 function waitForAuthorizationCode(
@@ -122,9 +123,12 @@ function waitForAuthorizationCode(
             return;
           }
 
-          return new Response('<!doctype html><meta charset="utf-8"><title>OK</title><p>授权成功，可以关闭此页回到终端。</p>', { status: 200, headers: {
+          response.writeHead(200, {
             "content-type": "text/html; charset=utf-8",
-          } });
+          });
+          response.end(
+            '<!doctype html><meta charset="utf-8"><title>OK</title><p>授权成功，可以关闭此页回到终端。</p>'
+          );
           server.close();
           resolve(code);
         } catch (error) {
