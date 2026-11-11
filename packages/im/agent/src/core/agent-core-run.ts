@@ -34,12 +34,9 @@ import {
   resolveAssistantReplyText,
   logAssistantIterationFailure,
   turnEndFromLegacyUsage,
-  runAgentLoopVisionTurnRun,
   collectAgentLoopTurnRun,
   prepareAgentLoopTurnSetup,
-  type AgentLoopVisionTurnInput,
-  type AgentLoopVisionTurnResult,
-} from './agent-core-vision.js';
+} from './agent-loop-turn-setup.js';
 import {
   createTurnCompletionRuntime,
   createTurnToolLoopHandlers,
@@ -63,12 +60,9 @@ import {
 } from '../turn/turn-checkpoint-store.js';
 
 export {
-  runAgentLoopVisionTurnRun,
   collectAgentLoopTurnRun,
   type AgentLoopTurnInput,
   type AgentLoopTurnResult,
-  type AgentLoopVisionTurnInput,
-  type AgentLoopVisionTurnResult,
 };
 
 export async function* runAgentLoopTextTurnRun(

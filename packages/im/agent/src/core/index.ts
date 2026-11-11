@@ -20,8 +20,6 @@ export { AgentCore, defaultAgentCore } from './agent-core.js';
 export type {
   AgentLoopTurnInput,
   AgentLoopTurnResult,
-  AgentLoopVisionTurnInput,
-  AgentLoopVisionTurnResult,
 } from './agent-loop-turn.js';
 
 

@@ -21,11 +21,6 @@
       "development": "./src/agent-stream-consumer.ts",
       "import": "./lib/agent-stream-consumer.js"
     },
-    "./agent-step-checkpoint": {
-      "types": "./lib/agent-step-checkpoint.d.ts",
-      "development": "./src/agent-step-checkpoint.ts",
-      "import": "./lib/agent-step-checkpoint.js"
-    },
     "./tool-policy": {
       "types": "./lib/tool-policy.d.ts",
       "development": "./src/tool-policy.ts",
@@ -136,10 +131,6 @@
       "./agent-stream-consumer": {
         "types": "./lib/agent-stream-consumer.d.ts",
         "import": "./lib/agent-stream-consumer.js"
-      },
-      "./agent-step-checkpoint": {
-        "types": "./lib/agent-step-checkpoint.d.ts",
-        "import": "./lib/agent-step-checkpoint.js"
       },
       "./tool-policy": {
         "types": "./lib/tool-policy.d.ts",

@@ -148,18 +148,9 @@ export type {
 } from './types.js';
 
 // ── Providers ──
-export {
-  ZHIPU_DEFAULT_IMAGE_MODEL,
-  CLOUDFLARE_DEFAULT_IMAGE_MODEL,
-  OPENAI_DEFAULT_IMAGE_MODEL,
-  GOOGLE_DEFAULT_IMAGE_MODEL,
-  MINIMAX_DEFAULT_IMAGE_MODEL,
-  hasGenerateImage,
-} from './image-generation.js';
 export type {
   ImageGenerateRequest,
   ImageGenerateResult,
-  ImageGenerationCapable,
   ImageGenerationDefaults,
 } from './image-generation.js';
 
@@ -202,29 +193,10 @@ export type { AgentMemoryScope } from './memory/agent-scoped-session.js';
 // ── Context & Compaction ──
 export {
   DEFAULT_CONTEXT_TOKENS,
-  CONTEXT_WINDOW_HARD_MIN_TOKENS,
-  CONTEXT_WINDOW_WARN_BELOW_TOKENS,
-  BASE_CHUNK_RATIO,
-  MIN_CHUNK_RATIO,
-  SAFETY_MARGIN,
   estimateTokens,
   estimateMessagesTokens,
-  splitMessagesByTokenShare,
-  chunkMessagesByMaxTokens,
-  computeAdaptiveChunkRatio,
-  resolveContextWindowTokens,
-  evaluateContextWindowGuard,
-  summarizeWithFallback,
-  summarizeInStages,
-  pruneHistoryForContext,
-  compactSession,
-  // ── 三级压缩管线 ──
   AUTOCOMPACT_BUFFER_TOKENS,
-  POST_COMPACT_TOKEN_BUDGET,
   MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES,
-  createAutoCompactTracking,
-  shouldAutoCompact,
-  autoCompactIfNeeded,
   // ── AgentMessage compaction (ADR 0010) ──
   estimateContextFixedTokens,
   estimateAgentMessageTokens,
@@ -240,12 +212,6 @@ export {
   shouldAutoCompactAgentMessages,
 } from './compaction/index.js';
 export type {
-  ContextWindowSource,
-  ContextWindowInfo,
-  ContextWindowGuardResult,
-  PruneResult,
-  AutoCompactTrackingState,
-  AutoCompactResult,
   AgentCompactionConfig,
   AgentCompactionExecution,
   AgentMessageCompactionConfig,
@@ -267,37 +233,12 @@ export type {
   MicroCompactResult,
 } from './compaction/index.js';
 
-// ── Cost Tracker ──
-export { CostTracker } from './agent/cost-tracker.js';
-export type {
-  ModelUsage,
-  ModelPricing,
-  CostSnapshot,
-  CostUpdateEvent,
-} from './agent/cost-tracker.js';
-
 // ── Tool Search Cache ──
 export { CachedToolFilter, computeToolSetHash } from './agent/tool-filter.js';
 
-// ── File State Cache ──
-export { FileStateCache, DEFAULT_MAX_ENTRIES, DEFAULT_MAX_SIZE_BYTES } from './file-state-cache.js';
-export type { FileState } from './file-state-cache.js';
-
-// ── Context Manager ──
-export {
-  ContextManager,
-  type ContextSummaryCompletion,
-  createContextManager,
-  CHAT_MESSAGE_MODEL,
-  CONTEXT_SUMMARY_MODEL,
-} from './memory/context-manager.js';
-export type {
-  MessageRecord,
-  SummaryRecord,
-  ContextConfig,
-  SceneContext,
-  ChatMessageDirection,
-} from './memory/context-manager.js';
+// ── Chat-history models & context config ──
+export { CHAT_MESSAGE_MODEL, CONTEXT_SUMMARY_MODEL } from './memory/context-manager.js';
+export type { ContextConfig } from './memory/context-manager.js';
 
 // ── Agent session persistence ──
 export {
@@ -430,17 +371,6 @@ export type { RateLimitConfig, RateLimitResult } from './rate-limiter.js';
 export { detectTone } from './tone-detector.js';
 export type { Tone } from './tone-detector.js';
 
-// ── Storage Abstraction ──
-export {
-  MemoryStorageBackend,
-  DatabaseStorageBackend,
-  createSwappableBackend,
-} from './storage.js';
-export type { StorageBackend, DbModel } from './storage.js';
-
-// ── Model Registry ──
-export { extractModelRoot, computeTierScore } from './model-name-utils.js';
-
 // ── Agent stream wire format (ADR 0039 P0) ──
 export {
   ZHIN_SESSION_ID_HEADER,
@@ -476,16 +406,6 @@ export type {
   AgentStreamNdjsonParserState,
   FoldAgentStreamOptions,
 } from './agent-stream-consumer.js';
-
-export {
-  AgentStepStatus,
-  createStepId,
-} from './agent-step-checkpoint.js';
-export type {
-  AgentStepCheckpoint,
-  AgentStepStatusName,
-  AgentStepInterruptKind,
-} from './agent-step-checkpoint.js';
 
 // ── Tool policy (ADR 0039 P1) ──
 export {

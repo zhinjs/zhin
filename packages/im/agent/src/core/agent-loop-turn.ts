@@ -5,6 +5,4 @@
 export type {
   AgentLoopTurnInput,
   AgentLoopTurnResult,
-  AgentLoopVisionTurnInput,
-  AgentLoopVisionTurnResult,
 } from './agent-core-run.js';
