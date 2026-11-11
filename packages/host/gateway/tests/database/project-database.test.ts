@@ -75,7 +75,7 @@ describe('SQLite shared by the gateway and the instance (ADR 0054 §7)', () => {
     closers.push(() => instance.stop());
 
     expect(await instance.query('PRAGMA journal_mode')).toEqual([{ journal_mode: 'wal' }]);
-    // The instance fails fast on a held lock (its stores retry); only the gateway waits.
+    // The instance never waits synchronously (its SQLite dialect retries BUSY asynchronously); only the gateway does.
     expect(await instance.query('PRAGMA busy_timeout')).toEqual([{ timeout: 0 }]);
 
     // Interleaved writes from both connections.
@@ -90,5 +90,34 @@ describe('SQLite shared by the gateway and the instance (ADR 0054 §7)', () => {
     expect(await instance.query(`SELECT count(*) AS total FROM ${IAM_TABLES.users}`)).toEqual([{ total: 1 }]);
     expect(gateway.models.get('conversation_events')).toBeUndefined();
     expect(gateway.tables()).not.toContain('conversation_events');
+  });
+
+  it('closes the open Host as soon as `zhin console init` creates the owner beside a running gateway', async () => {
+    const root = await project();
+    const filename = join(root, '.zhin', 'data.sqlite');
+    const gateway = new ProjectDatabase({ dialect: 'sqlite', filename });
+    defineConsoleIamTables(gateway);
+    await gateway.start();
+    closers.push(() => gateway.stop());
+    // The running gateway: periodic refresh only every 30 s (timers off here).
+    const running = new ConsoleIamService({ database: gateway, projectRoot: root });
+    await running.start({ timers: false });
+    closers.push(async () => { running.stop(); });
+    expect(running.initialized()).toBe(false);
+
+    // `zhin console init`: another connection (another process in production).
+    const cli = new ProjectDatabase({ dialect: 'sqlite', filename });
+    defineConsoleIamTables(cli);
+    await cli.start();
+    closers.push(() => cli.stop());
+    const init = new ConsoleIamService({ database: cli, projectRoot: root });
+    await init.start({ timers: false });
+    await init.createOwner({ username: 'owner', password: 'correct-horse-battery' });
+    init.stop();
+
+    // Fails closed on the setup marker right away, then confirms from the database.
+    expect(running.initialized()).toBe(true);
+    await expect.poll(() => running.refreshOwnerState()).toBe(true);
+    expect(running.initialized()).toBe(true);
   });
 });

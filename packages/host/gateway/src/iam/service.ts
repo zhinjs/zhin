@@ -226,9 +226,22 @@ export class ConsoleIamService implements ConsoleAccessProvider {
   }
 
   initialized(): boolean {
-    if (this.#initialized !== undefined) return this.#initialized;
-    // Database not up yet: fail closed when a previous run completed setup.
-    return this.#marker !== undefined && existsSync(this.#marker);
+    if (this.#initialized === true) return true;
+    // Database not up yet, or another process (`zhin console init` beside a running gateway)
+    // completed setup since the last refresh: fail closed on the setup marker and re-read the
+    // owner state now instead of keeping the Host open until the next periodic refresh.
+    const marked = this.#marker !== undefined && existsSync(this.#marker);
+    if (this.#initialized === undefined) return marked;
+    if (marked && this.#ready) this.#refreshSoon();
+    return marked;
+  }
+
+  #pendingRefresh: Promise<unknown> | undefined;
+  #refreshSoon(): void {
+    if (this.#pendingRefresh !== undefined) return;
+    this.#pendingRefresh = this.refreshOwnerState()
+      .catch(this.#onError)
+      .finally(() => { this.#pendingRefresh = undefined; });
   }
 
   async refreshOwnerState(): Promise<boolean> {

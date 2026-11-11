@@ -99,7 +99,7 @@ packages/toolkit/{create-zhin,components,tailwind,html-renderer}         # 脚�
 
 ### Plugin system (Plugin Runtime — current)
 
-`zhin runtime start` is the only start path. Plugins are **packages**: `package.json#zhin` declares the manifest (`entry`, `engine`, `runtime`, `features`, `plugins`), and `plugin.ts` must **default-export a `definePlugin()` definition** — `PluginScopeAssembler` throws `does not default-export a Plugin definition` otherwise.
+Start a project with **`zhin start`** (ADR 0054): it runs the management gateway (`@zhin.js/gateway`) and the gateway supervises the Zhin instance (`zhin.js/instance`). `zhin start` runs in the background by default (`zhin status` / `logs` / `stop` / `restart` reach it over `.zhin/gateway.sock`); `--foreground` attaches (production templates and `pnpm start` use it); `zhin runtime start` is an alias for `zhin start --foreground`; `--standalone` (instance with its own HTTP server, no gateway) is for tests and development only. The gateway owns the HTTP port, the project database's `console_*` tables and Console authentication (`/auth/*`, `iam.*`, terminal, audit); the instance never authenticates — it only authorizes the principal the gateway forwards. Plugins are **packages**: `package.json#zhin` declares the manifest (`entry`, `engine`, `runtime`, `features`, `plugins`), and `plugin.ts` must **default-export a `definePlugin()` definition** — `PluginScopeAssembler` throws `does not default-export a Plugin definition` otherwise.
 
 ```ts
 // plugin.ts — thin wiring only
@@ -136,7 +136,7 @@ DI is **Scope + Token** based (`context.resources`), generation-scoped rather th
 
 ### Removed legacy APIs (`usePlugin()` / `getPlugin()` / `bootstrapNode`)
 
-`zhin.js/node` and `bootstrapNode` have been **deleted and are no longer exported**. The **sole entry path** is `definePlugin()` + `zhin runtime start` (Plugin Runtime). Do not author or call legacy plugin APIs.
+`zhin.js/node` and `bootstrapNode` have been **deleted and are no longer exported**. The **sole entry path** is `definePlugin()` + `zhin start` (Plugin Runtime under the gateway). Do not author or call legacy plugin APIs.
 
 ### Build output
 
@@ -248,7 +248,7 @@ These rules are non-negotiable — violating them will break the project:
 1. **Never bypass the send chain** — All outbound messages must flow through `Message.$reply` or `Adapter.sendMessage` → `renderSendMessage` → `before.sendMessage` → platform Endpoint.
 2. **Respect the dependency direction** — `basic → kernel → ai → core → agent → zhin`. Lower layers must never import from higher layers. Exception: the Zhin instance composition root `packages/im/zhin/src/instance/` (`zhin.js/instance`, ADR 0054 §0) assembles IM/Agent/Console hosts and may import every `packages/im` layer, the protocol Hosts and the Console stack; this exception is scoped to that directory only. `@zhin.js/cli` and `@zhin.js/gateway` must not import `zhin.js` or IM layers (only `@zhin.js/plugin-runtime` contracts and `@zhin.js/runtime` config / project-file tools); the CLI resolves `zhin.js/instance` from the project at run time (`check:architecture` enforces both).
 3. **`plugin.ts` must default-export `definePlugin()`** — The Plugin Runtime loader requires it; capabilities belong in convention directories (`commands/`, `middlewares/`, `tools/`, …), not in imperative top-level registration.
-4. **Legacy startup is removed** — `zhin.js/node` / `bootstrapNode` and Plugin lookup APIs no longer exist; use `definePlugin()` + `zhin runtime start` only. `check:no-removed-plugin-api` prevents their reintroduction.
+4. **Legacy startup is removed** — `zhin.js/node` / `bootstrapNode` and Plugin lookup APIs no longer exist; use `definePlugin()` + `zhin start` (gateway + supervised instance; `zhin runtime start` is its foreground alias) only. `check:no-removed-plugin-api` prevents their reintroduction.
 5. **Use `.js` extensions in imports** — TypeScript local imports require `.js` suffix (`import { x } from './y.js'`).
 6. **Build order matters** — When building incrementally, follow: logger/schema/database → kernel → ai → core → agent → zhin.
 7. **No git submodules** — This is a pnpm workspace monorepo; all packages live under `basic/`, `packages/`, `plugins/`, or `examples/`.

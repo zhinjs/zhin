@@ -135,17 +135,19 @@ interface HttpHost {
 
 | 命令 | 网关在运行 | 网关未运行 |
 |---|---|---|
-| `zhin start [--daemon]` | 提示已在运行 | 启动网关与实例 |
+| `zhin start [--foreground]` | 提示已在运行 | 启动网关与实例：默认后台运行（等网关就绪后返回，网关日志写 `.zhin/logs/gateway.log`）；`--foreground`（`-f`）前台运行，Ctrl+C 同时停止两者。`zhin runtime start` 是 `zhin start --foreground` 的别名；`--daemon` 仍接受（即默认行为） |
 | `zhin stop` / `restart` / `status` / `logs` | 经本地控制套接字请求网关 | `stop`/`restart` 无事可做；`status` 显示未运行；`logs` 读日志文件 |
 | `zhin install` / `uninstall` / `update` | 经网关执行（保证实例正确停启） | 直接执行同一事务 |
 | `zhin console init` / `zhin console user …` | 直接操作项目数据库（ADR 0049 §7） | 同左 |
+
+生产模板（systemd / Docker / PM2 服务文件）与脚手架的 `pnpm start` 使用 `zhin start --foreground`：进程管理器需要一个不退出的前台进程；后台模式面向在终端里直接操作的用户。`--standalone`（实例在本进程内自带 HTTP 服务器、无网关）只用于测试与开发。
 
 本地控制套接字：`.zhin/gateway.sock`（Windows：`\\.\pipe\zhin-gateway-<项目路径哈希>`），文件权限仅限当前用户，连接者视为本机 `owner`。
 
 ### 7. 数据
 
 - 网关自己打开项目数据库（与实例同一份 `database` 配置），读写 `console_*` 表（ADR 0049）；实例不访问这些表。
-- SQLite：两个进程同时连接，启用 `journal_mode=WAL`（`@zhin.js/database` 对文件库总是开启）；网关的连接设 `busy_timeout`（2 秒，网关只有单语句写入），实例保持立即返回 `SQLITE_BUSY` 由其存储重试——`node:sqlite` 的等待是同步的，同一进程内两个带异步事务的连接互等会卡住事件循环。
+- SQLite：两个进程同时连接，启用 `journal_mode=WAL`（`@zhin.js/database` 对文件库总是开启）；网关的连接设 `busy_timeout`（2 秒，网关只有单语句写入），网关的写入都是单语句自动提交（不开事务），持锁时间最短；实例的连接不设 `busy_timeout`——`node:sqlite` 的等待是同步的，同一进程内两个带异步事务的连接互等会卡住事件循环——而由 SQLite 方言对事务外语句与 `BEGIN IMMEDIATE` 遇到 `SQLITE_BUSY` 时做有界的异步退避重试（默认 5 秒，`busyRetryMs`）；事务以 `BEGIN IMMEDIATE` 开始，写锁在开头拿到，不会在事务中途遇到 `SQLITE_BUSY_SNAPSHOT`。
 - 配置解析：网关按实例 `resolveDatabaseConfig` 的同一规则解析 `database`（`@zhin.js/gateway/database`，不导入 IM 层），相对 SQLite 路径以项目根为准；数据库不可用时网关照常监听，`/auth/*` 返回 503，“是否已初始化”取初始化标记文件（失败即关闭），并定时重试。
 - 数据库切换（ADR 0049 §7）：网关写配置、关闭自己的连接、重新打开新库，再重启实例。
 

@@ -15,6 +15,7 @@
 - 新插件：`plugin.ts` default-export `definePlugin()`；能力按目录发现。
 - IM 出站：`Message.$reply` / `Adapter.sendMessage` → `renderSendMessage` → `before.sendMessage` → Endpoint；禁止旁路。
 - 分层：`basic → kernel → ai → core → agent → zhin`（实例装配根 `packages/im/zhin/src/instance/` 可跨层装配；`@zhin.js/cli` 与 `@zhin.js/gateway` 不得导入 IM 层，ADR 0054）。
+- 启动：`zhin start`（ADR 0054）启动管理网关 `@zhin.js/gateway`，由网关监管 Zhin 实例；默认后台运行，`--foreground` 前台运行（生产模板、`pnpm start`）；`zhin runtime start` 是前台别名；`--standalone` 只用于测试与开发。Console 认证与项目数据库的 `console_*` 表归网关，实例只接收网关转发的主体并做授权。
 - 改架构前读 `docs/concepts/architecture.md`、`docs/contributing/repo-structure.md`。
 
 ## 最小创作面示例
@@ -120,7 +121,7 @@ http.ws('/my-plugin/ws', { auth: 'protocol' }).onConnection((connection) => {
 | API | 替代 |
 |-----|------|
 | `usePlugin` / `getPlugin` / `MessageCommand` | `definePlugin` / `defineCommand` |
-| `bootstrapNode` / `zhin.js/node` | `zhin runtime start` |
+| `bootstrapNode` / `zhin.js/node` | `zhin start`（网关 + 受监管实例；`zhin runtime start` = 前台别名） |
 | `addCron(new Cron)` / 经典 `useContext` | `scheduleHostToken` / `context.resources` |
 | `examples/test-bot` 当作用户模板 | `minimal-bot` → `full-bot` |
 

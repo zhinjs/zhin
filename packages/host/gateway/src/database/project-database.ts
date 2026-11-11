@@ -10,7 +10,9 @@ import type { ProjectDatabaseConfig } from './config.js';
 
 /**
  * How long the gateway's SQLite connection waits for the instance's write lock. The gateway's
- * writes are single statements, so a wait never deadlocks it; the instance keeps fail-fast + retry.
+ * writes are single autocommit statements (no transactions), so its lock time stays minimal and a
+ * wait never deadlocks it; the instance's connection retries `SQLITE_BUSY` asynchronously instead
+ * (`busyRetryMs` in `@zhin.js/database`).
  */
 export const GATEWAY_SQLITE_BUSY_TIMEOUT_MS = 2_000;
 
