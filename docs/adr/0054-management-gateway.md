@@ -20,47 +20,78 @@ sidebar: false
 
 | | 网关（Gateway） | 实例（Instance） |
 |---|---|---|
-| 启动 | `zhin start`（CLI 的常驻进程，取代现有 supervisor） | 网关拉起的子进程，入口仍是 `zhin runtime start` |
+| 启动 | `zhin start` / `zhin dev`（CLI 的常驻进程，取代现有 supervisor） | 只能由网关拉起；入口 `zhin runtime start` 变为内部命令 |
 | 职责 | 唯一对外端口；**认证**（会话、API 令牌、初始化令牌）；初始化与引导；实例起停、崩溃重启、日志采集；依赖安装 / 卸载 / 升级；原始配置文件与 `.env` 读写（实例离线时）；终端；审计；本地 Console 静态资源 | IM Runtime、插件、适配器、Agent、定时任务；**绝大部分 Console API**（依赖运行时快照）；插件自己的 HTTP / WS 路由 |
 | 加载插件 | 否。可以使用 `@zhin.js/runtime`、`@zhin.js/database`、`@zhin.js/host-http` 等库做配置解析与项目文件操作，但不创建 Runtime、不执行插件代码 | 是 |
 | 挂了怎么办 | 由系统服务（`zhin install-service`）或容器重启 | 网关按策略重启；Console 照常可用，显示实例状态与日志 |
 
-### 2. 请求流：网关认证，处理者授权
+### 2. 实例不含 HTTP 服务器：路由在实例声明，由网关承载
 
-网关监听 `http.port`（以及 `http.base`，默认 `/api`）。每个请求：
+实例进程不再监听任何端口，也不依赖 `node:http` / `ws`。插件、适配器、Console 后端仍然注册 HTTP 与 WebSocket 路由，但路由表通过控制通道交给网关，由网关唯一的 HTTP 服务器接收请求、转发给实例处理。
 
-1. **网关自有路由**——直接处理：
-   - `{base}/auth/*`、`{base}/auth/setup*`（ADR 0049 §5、§7）
-   - `{base}/gateway/*`（本 ADR §4、§5）
-   - `{base}/console/terminal*`（ADR 0051）
-   - `/pub/health`（网关自身健康；附带实例状态）
-   - 本地 Console 静态资源（若配置了 `clientOutDir`）
-2. **其余 `{base}/*`**（Console RPC `POST {base}/console/request`、SSE、REST）——网关先认证，再反向代理到实例：
-   - 网关解析 Bearer → 主体（用户 / API 令牌），查出其权限与作用域绑定；
-   - 去掉原 `Authorization` 头，加上 `x-zhin-gateway-principal`（JSON：`{ id, kind, permissions, bindings }`，base64url）与 `x-zhin-gateway-signature`（以本次启动的随机密钥对 principal 头做 HMAC-SHA256）；
-   - 未认证请求直接 401，不转发；实例离线时返回 `503 { code: 'instance-offline', state }`。
-3. **其他所有路径**（插件 / 适配器的 Webhook、反向 WS 等）——透明反向代理（HTTP 与 WebSocket upgrade），不做认证，与今天一致：这些路由的鉴权由插件自己负责。
+为此，`@zhin.js/host-http` 的路由契约改为**与传输无关**的 Web 标准形式（不再暴露 Node 的 `IncomingMessage` / `ServerResponse` / 原始 `WebSocket`）：
 
-**授权在处理处完成**：实例的 Console RPC 分发点（`dispatchRuntimeConsoleRpc`、扩展分发器、`rpc-route.ts`）按 `CONSOLE_RPC_PERMISSIONS`（ADR 0049 §3）检查网关转发来的主体，因为只有分发点知道 RPC 类型与载荷里的作用域目标。网关自有路由由网关检查。两边使用同一个 `@zhin.js/host-http` 访问控制模块与同一份权限表。
+```ts
+type HttpHandler = (request: Request, context: RouteContext) => Response | Promise<Response>;
 
-实例只信任带有效签名的主体头；密钥经环境变量 `ZHIN_GATEWAY_SECRET` 在拉起时传入，实例只监听 `127.0.0.1` 的随机端口（`ZHIN_INSTANCE_PORT`，由网关分配）。
+interface RouteContext {
+  readonly url: URL;
+  readonly params: Readonly<Record<string, string>>;
+  readonly principal?: ConsolePrincipal;    // 网关认证后的主体（{base} 下的路由）
+  readonly remoteAddress?: string;
+}
 
-额外监听端口（`createHttpHostGroup` 的 additional listeners，供需要独立端口的适配器使用）保留在实例，直接对外，不经网关。
+interface WsConnection {
+  readonly url: URL;
+  readonly headers: Headers;
+  readonly principal?: ConsolePrincipal;
+  readonly remoteAddress?: string;
+  send(data: string | Uint8Array): void;
+  close(code?: number, reason?: string): void;
+  onMessage(listener: (data: string | Uint8Array) => void): () => void;
+  onClose(listener: (code: number, reason: string) => void): () => void;
+  readonly bufferedAmount: number;          // 背压
+}
 
-### 3. 控制通道
+interface HttpHost {
+  route(method: string, path: string, handler: HttpHandler, meta?: RouteMeta): HttpRouteRegistration;
+  ws(path: string, options?: WsRouteOptions): WsHandle;   // onConnection(conn: WsConnection)
+  listRoutes(): readonly ListedRoute[];
+}
+```
 
-网关与实例之间用 Node 子进程 IPC（`spawn(..., { stdio: ['ignore', 'pipe', 'pipe', 'ipc'] })`）。消息均为 `{ type, id?, payload }`：
+- `Request` / `Response` / `Headers` / `ReadableStream` 是 Node 22 内置的 Web 标准对象；SSE 与大文件用流式 `Response` 体。
+- 网关侧：Node `http` 请求 ↔ `Request` / `Response` 的转换，以及 `ws` ↔ `WsConnection` 的转换，集中在网关。
+- 实例侧：`BridgedHttpHost` 实现同一个 `HttpHost` 接口；请求、响应体、WebSocket 帧都作为控制通道消息传输（流式分块，带背压）。
+- 所有现有使用者一次性迁移到新契约：`basic/cli` 的 Console 路由、`packages/host/{http,mcp,a2a}`、`packages/im/{core,runtime}`、`packages/console/pagemanager`、全部适配器与插件。不保留旧签名。
+- 额外监听端口（`createHttpHostGroup` 的 additional listeners，供要求独立端口的适配器）也由网关打开，路由同样转发给实例。
+
+### 3. 请求流与控制通道
+
+**请求流**（网关唯一的 HTTP 服务器，监听 `http.port`，`http.base` 默认 `/api`）：
+
+1. **网关自有路由**——网关直接处理：`{base}/auth/*`（含初始化，ADR 0049）、`{base}/gateway/*`（§4、§5）、`{base}/console/terminal*`（ADR 0051）、`/pub/health`、本地 Console 静态资源。
+2. **实例注册的 `{base}/*` 路由**（Console RPC、SSE、REST、MCP、A2A）——网关先认证（会话 / API 令牌 → 主体、权限、作用域绑定），未认证 401；实例离线 `503 { code: 'instance-offline', state }`；认证通过后连同主体一起转发给实例。
+3. **实例注册的其他路由**（适配器 Webhook、反向 WS 等）——不认证，原样转发，鉴权由插件自己负责，与今天一致。
+
+**授权在处理处完成**：实例的 Console RPC 分发点按 `CONSOLE_RPC_PERMISSIONS`（ADR 0049 §3）检查随请求转发的主体——只有分发点知道 RPC 类型与载荷里的作用域目标。网关自有路由由网关检查。两边用 `@zhin.js/host-http` 的同一个访问控制模块与同一份权限表。控制通道只存在于父子进程之间，主体随消息传递，不需要签名。
+
+**控制通道**：Node 子进程 IPC（`spawn(..., { stdio: ['ignore', 'pipe', 'pipe', 'ipc'], serialization: 'advanced' })`，可直接传 `Uint8Array`）。消息为 `{ type, id?, payload }`：
 
 | 方向 | 类型 | 说明 |
 |---|---|---|
-| 实例 → 网关 | `ready` | 监听完成：`{ port, version, plugins, generation }` |
-| 实例 → 网关 | `restart-request` | 需要整进程重启的变更（`restart-process` effect、`disable_plugins`、数据库切换、Agent 自我变更）：`{ reason }`。**取代退出码 75** |
-| 网关 → 实例 | `shutdown` | 优雅关闭：`{ reason, budgetMs }` |
-| 网关 → 实例 | `principal-revoked` | 某主体被吊销：实例断开该主体的 SSE |
+| 实例 → 网关 | `ready` | `{ version, generation, routes, wsRoutes }` |
+| 实例 → 网关 | `routes` | 路由表变化（插件重载、世代切换） |
+| 网关 → 实例 | `http.request` / `http.body` / `http.abort` | 请求头与流式请求体 |
+| 实例 → 网关 | `http.response` / `http.body` / `http.end` | 响应头与流式响应体 |
+| 双向 | `ws.open` / `ws.message` / `ws.close` / `ws.drain` | WebSocket 连接与帧 |
+| 实例 → 网关 | `restart-request` | 需要整进程重启的变更（`restart-process` effect、`disable_plugins`、数据库切换、Agent 自我变更）。**取代退出码 75** |
+| 网关 → 实例 | `shutdown` | `{ reason, budgetMs }` |
+| 网关 → 实例 | `principal-revoked` | 实例断开该主体的 SSE / WS |
 
-日志：网关采集实例 stdout / stderr，写入 `.zhin/logs/instance.log`（按大小轮转）并保留内存环形缓冲，供 `gateway.instance.logs` 与实例离线时查看。
+**日志**：网关采集实例 stdout / stderr，写入 `.zhin/logs/instance.log`（按大小轮转），并保留内存环形缓冲，供 `gateway.instance.logs` 与实例离线时查看。
 
-**独立模式**：没有 IPC 通道时（直接 `zhin runtime start`，开发调试、自定义容器入口、现有部署），实例按今天的方式自己监听对外端口、自己认证（ADR 0049 的数据库鉴权在实例内运行）。同一套代码，两种装配。
+**只有受管模式**：实例入口（`zhin runtime start`，内部命令）在没有控制通道时拒绝启动并提示使用 `zhin start`。不保留独立模式与退出码 75 重启。
 
 ### 4. 依赖管理（网关）
 
@@ -95,7 +126,7 @@ sidebar: false
 
 ### 7. 数据
 
-- 网关自己打开项目数据库（与实例同一份 `database` 配置），读写 `console_*` 表（ADR 0049）。实例在独立模式下才访问这些表。
+- 网关自己打开项目数据库（与实例同一份 `database` 配置），读写 `console_*` 表（ADR 0049）；实例不访问这些表。
 - SQLite：两个进程同时连接，启用 `journal_mode=WAL` 与 `busy_timeout`。
 - 数据库切换（ADR 0049 §7）：网关写配置、关闭自己的连接、重新打开新库，再重启实例。
 
@@ -107,7 +138,7 @@ sidebar: false
 
 | ADR | 落在哪个进程 | 说明 |
 |---|---|---|
-| 0049 RBAC | 网关（认证、`/auth/*`、`iam.*`、审计写入）；实例（RPC 授权） | 独立模式下全部在实例 |
+| 0049 RBAC | 网关（认证、`/auth/*`、`iam.*`、初始化、审计写入）；实例（RPC 授权） | — |
 | 0050 三级功能配置 | 实例 | `feature.*` RPC 经网关代理 |
 | 0051 终端 | 网关 | 实例崩溃时仍可用 |
 | 0052 Console 导航 | — | 运维区新增「实例」页：状态、起停、日志、依赖 |
@@ -116,13 +147,14 @@ sidebar: false
 ## 落盘位置
 
 - 网关：`basic/cli/src/gateway/`（`gateway.ts` 装配、`instance-supervisor.ts`、`control-channel.ts`、`proxy.ts`、`local-socket.ts`、`packages-service.ts`、`instance-logs.ts`）
-- 实例侧：`basic/cli/src/plugin-runtime/start/instance-channel.ts`（IPC、`restart-request`、受管模式下的回环监听与主体头校验）
-- 主体头签名与校验：`@zhin.js/host-http`（`gateway-principal.ts`）
+- 实例侧：`basic/cli/src/plugin-runtime/start/instance-channel.ts`（IPC、`BridgedHttpHost`、`restart-request`）
+- 传输无关的路由契约与网关侧 Node 适配：`@zhin.js/host-http`
 - CLI：`basic/cli/src/commands/`（`start`、`stop`、`restart`、`status`、`logs`）
 
 ## 后果
 
 - Console 在实例崩溃、启动失败、依赖安装期间都可用，能看日志、能回滚。
 - 依赖安装在实例停止时进行，原生模块不再被占用，装坏自动回滚。
-- 多一个常驻进程（不运行插件）与一跳本机反向代理。
-- `zhin runtime start` 保留为实例入口与独立模式；现有容器部署不受影响。CLAUDE.md 中「`zhin runtime start` 是唯一启动路径」更新为「实例入口唯一；`zhin start` 是受管启动」。
+- 多一个常驻进程（不运行插件）与一跳进程间转发。
+- 实例没有 HTTP 服务器，不依赖 `node:http` / `ws`；HTTP 能力全部集中在网关。
+- **破坏性变更**：HTTP 路由契约改为 Web 标准 `Request` / `Response` 与 `WsConnection`，所有插件与适配器同步迁移；`zhin runtime start` 不能再单独运行，部署改用 `zhin start`（容器入口同样）。CLAUDE.md 中「`zhin runtime start` 是唯一启动路径」更新为「`zhin start` 是唯一启动路径」。

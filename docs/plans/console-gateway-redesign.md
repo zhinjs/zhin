@@ -30,7 +30,7 @@ sidebar: false
 ## 工作流与依赖
 
 ```text
-M0 契约 ──┬─ A1 RBAC 后端（独立模式）────────┐
+M0 契约 ──┬─ A1 RBAC 后端 ───────────────────┐
           ├─ A2 三级配置后端 ────────────────┤
           ├─ A3 终端后端 ────────────────────┼─ M2 集成批 1（zhin PR-1 / console PR-1）
           ├─ A4 Console 导航重构 ────────────┤        │
@@ -53,7 +53,7 @@ ADR 0049–0054 与本计划。
 
 | 编号 | 内容 | 范围 | 验收 |
 |---|---|---|---|
-| A1 | RBAC 后端，独立模式可用 | `console-protocol/permissions.ts`、`host-http` 访问控制、`basic/cli/.../console/iam/`、`basic/database` 探测、`zhin console init/user` | 权限表覆盖全部 RPC（门禁测试）；登录、限速、吊销、最后所有者、初始化 409；`http.tokens` / 演示代码删除；CLI 与 Web 初始化走同一服务的测试 |
+| A1 | RBAC 后端（先在实例进程内装配，B1.4 迁到网关） | `console-protocol/permissions.ts`、`host-http` 访问控制、`basic/cli/.../console/iam/`、`basic/database` 探测、`zhin console init/user` | 权限表覆盖全部 RPC（门禁测试）；登录、限速、吊销、最后所有者、初始化 409；`http.tokens` / 演示代码删除；CLI 与 Web 初始化走同一服务的测试 |
 | A2 | 三级配置后端 | `runtime`（解析器、`levels`、`overrides`）、`plugin-runtime`（`configFor`/`isEnabledFor`）、`core` 分发门禁、`agent` 工具门禁、`feature.*` RPC | 解析语义测试（上级禁用锁定、`null` 清空、数组替换）；四条分发路径门禁测试；只改覆盖原地生效 |
 | A3 | 终端后端 | `basic/cli/.../console/terminal/` | 已完成：35 项测试；待接线 |
 | A4 | Console 导航重构（现有接口） | `zhinjs/console` | 六分区、旧路由重定向、演示模式删除；`tsc`、`npm test`、`farm build` 通过；截图自检 |
@@ -63,8 +63,11 @@ ADR 0049–0054 与本计划。
 
 - 接线：权限表补齐 A2 / A3 的 RPC 与路由；`feature.*` 授权钩子接 RBAC 作用域；终端接 `installConsoleTerminal`；`host-config-schema.json` 加 `console.terminal`，删除 `http.tokens`。
 - 依赖：重建锁文件（`node-pty`、`ssh2` 可选依赖等）。
-- Changesets：每个改动的发布包一条；涉及破坏性变更（`http.tokens` 删除、演示模式删除、`http.token` 变为初始化令牌、create-zhin 交互变化）的包标 **minor**，并在说明中写迁移步骤。
+- Changesets：每个改动的发布包一条。破坏性变更（`http.tokens` 与演示模式删除、`http.token` 变为初始化令牌、HTTP 路由契约、create-zhin 交互、`zhin start`）所在的包用 **minor**，说明里写迁移步骤；**任何包都不允许出现 major**，`zhin.js` 主包不能因子包 minor 被连带升大版本。
+  - 现状：`.changeset/config.json` 已开 `onlyUpdatePeerDependentsWhenOutOfRange`，`zhin.js` 对子包的 peer 是 `workspace:^`。2026-11-11 实测：10 个子包标 minor 时计划内 0 个 major，`zhin.js` 只升 patch。
+  - 要改的门禁：`scripts/check-release-plan.mjs` 目前禁止一切 minor。改为：`.changeset/version-policy.json` 的 `approvedNonPatchReleases` 列出允许 minor 的包（`[{ "package": "...", "type": "minor", "reason": "..." }]`），计划里出现未批准的 minor、或**任何** major（含连带升级）都失败；补测试。发版后清空批准列表。
 - 文档：CLAUDE.md、`docs/console/`、配置参考、升级指南。
+- 不考虑兼容：所有破坏性变更直接落地，迁移说明写进 changeset 与升级指南。
 - 检查：`pnpm build`、`pnpm test`、`HARNESS_SEQUENTIAL=1 NODE_OPTIONS=--max-old-space-size=10240 pnpm check:all`。
 - PR：zhin PR-1（后端 + create-zhin），console PR-1（导航重构）。console PR-1 不依赖新接口，可先合。
 
@@ -72,9 +75,10 @@ ADR 0049–0054 与本计划。
 
 | 步骤 | 内容 | 验收 |
 |---|---|---|
-| B1.1 | `instance-supervisor`：从 `NativeTypeScriptSupervisor` 演进，IPC 通道、`ready`、`shutdown`、`restart-request`、风暴保护、日志采集与轮转 | 单测（假子进程）；退出码 75 兼容路径保留到独立模式 |
-| B1.2 | 实例受管模式：回环随机端口、主体头 HMAC 校验、授权读取转发主体 | 无签名 / 篡改签名被拒；独立模式不受影响 |
-| B1.3 | 网关代理：自有路由分流、`{base}` 认证后代理（含 SSE）、其他路径透明代理（含 WS upgrade）、实例离线 503 | 集成测试：真实网关 + 假实例 HTTP 服务 |
+| B1.0 | HTTP 路由契约改为 Web 标准 `Request`/`Response` + `WsConnection`（ADR 0054 §2）；迁移全部使用者（basic/cli Console 路由、host/http·mcp·a2a、im/core·runtime、console/pagemanager、20 个适配器、calendar 等插件）；先由现有进程内 Node 服务器承载，行为不变 | 全部适配器 / Console 路由测试通过；`check:all` 绿 |
+| B1.1 | `instance-supervisor`：替换 `NativeTypeScriptSupervisor`，IPC 通道（advanced 序列化）、`ready`、`shutdown`、`restart-request`、风暴保护、日志采集与轮转；删除退出码 75 路径 | 单测（假子进程） |
+| B1.2 | 实例侧 `BridgedHttpHost`：路由表上报、请求 / 响应体流式分块与背压、WS 帧、主体随请求传递；实例删除 Node HTTP 服务器，无控制通道时拒绝启动 | 桥接单测（流式、中断、背压、WS）；实例进程不加载 `node:http` |
+| B1.3 | 网关 HTTP：Node 请求 ↔ `Request`/`Response`、`ws` ↔ `WsConnection`；自有路由分流、`{base}` 认证后转发（含 SSE）、其他路由原样转发、额外监听端口、实例离线 503 | 集成测试：真实网关 + 假实例 |
 | B1.4 | 认证迁移：`/auth/*`、`iam.*`、初始化服务、终端、审计在网关装配；网关打开项目数据库（SQLite WAL） | 网关单进程起、无实例时 Console 能登录 / 初始化 |
 | B1.5 | 依赖事务：`gateway.packages.*` 复用 `PluginManagementPort`，停实例 → 执行 → 起实例 → 失败回滚 | 失败回滚测试（假包管理器 + 起不来的实例） |
 | B1.6 | 生命周期 RPC 与 CLI：`gateway.instance.*`；`zhin start/stop/restart/status/logs` 经本地套接字；`zhin install/uninstall/update` 网关在时走网关 | CLI 测试（套接字权限、无网关回退） |
@@ -121,7 +125,7 @@ ADR 0049–0054 与本计划。
 | A4 Console 导航重构 | doing | |
 | A5 create-zhin 精简 | doing | |
 | M2 集成批 1 | todo | |
-| B1 管理网关 | todo | 依赖 M2 |
+| B1 管理网关 | todo | 依赖 M2；B1.0 可在 M2 后立即开始 |
 | B2 引导后端 | todo | 依赖 B1.4 |
 | M4 集成批 2 | todo | |
 | C1–C4 | todo | 依赖发版 |
