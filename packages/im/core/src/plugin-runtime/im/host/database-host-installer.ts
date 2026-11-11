@@ -1,7 +1,14 @@
 import { mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
-import { Registry, ensureDatabaseColumns, type Column, type StructuredDatabase, type TransactionContext } from '@zhin.js/database';
+import {
+  Registry,
+  assertInstanceTable,
+  ensureDatabaseColumns,
+  GatewayOwnedTableError,
+  isGatewayOwnedTable,
+  referencesGatewayOwnedTable,
+  type Column, type StructuredDatabase, type TransactionContext } from '@zhin.js/database';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
   guardTransactionModel,
@@ -146,6 +153,7 @@ export function createDatabaseHost(config: DatabaseHostConfig): DatabaseHost & {
   const definedTables = new Set<string>();
   const definitions = new Map<string, Record<string, unknown>>();
   const additions = new Map<string, Record<string, Column>>();
+  let rawGuard: RawDatabase | undefined;
   const consolePort = createDatabaseConsole(
     db,
     config.dialect,
@@ -164,6 +172,7 @@ export function createDatabaseHost(config: DatabaseHostConfig): DatabaseHost & {
       return started;
     },
     define(name, definition, options) {
+      assertInstanceTable(name);
       const migration = Object.fromEntries((options?.addColumns ?? []).map(field => {
         const column = Object.hasOwn(definition, field) ? definition[field] : undefined;
         if (!column || typeof column !== 'object' || Array.isArray(column)
@@ -202,7 +211,7 @@ export function createDatabaseHost(config: DatabaseHostConfig): DatabaseHost & {
     },
     models: {
       get(name) {
-        if (!started) return undefined;
+        if (!started || isGatewayOwnedTable(name)) return undefined;
         const cached = wrapped.get(name);
         if (cached) return cached;
         const raw = db.models.get(name) as RawModel | undefined;
@@ -220,6 +229,7 @@ export function createDatabaseHost(config: DatabaseHostConfig): DatabaseHost & {
         try {
           return await callback({ model(name) {
             if (!active) throw new Error('Database transaction is already closed');
+            assertInstanceTable(name);
             if (!definedTables.has(name)) throw new Error(`Table '${name}' is not registered`);
             return guardTransactionModel({
               select: (...fields) => {
@@ -255,7 +265,7 @@ export function createDatabaseHost(config: DatabaseHostConfig): DatabaseHost & {
     console: consolePort,
     getRawDatabase() {
       if (!started) return undefined;
-      return db;
+      return rawGuard ??= guardRawDatabase(db);
     },
     async start() {
       if (started) return;
@@ -290,6 +300,8 @@ function createDatabaseConsole(
 ): DatabaseHostConsole {
   const type = databaseType(configuredDialect);
   const requireModel = (table: string): RawConsoleModel => {
+    // Gateway tables (console_users, sessions, tokens, audit) are never reachable from here.
+    assertInstanceTable(table);
     if (!isStarted()) throw new Error('Database is not connected');
     const model = db.models.get(table);
     if (!model) throw new Error(`Table '${table}' not found`);
@@ -299,10 +311,10 @@ function createDatabaseConsole(
     info: () => ({
       dialect: configuredDialect,
       type,
-      tables: [...tableNames],
+      tables: [...tableNames].filter(name => !isGatewayOwnedTable(name)),
       connected: isStarted(),
     }),
-    tables: () => [...tableNames].map((name) => ({
+    tables: () => [...tableNames].filter(name => !isGatewayOwnedTable(name)).map((name) => ({
       name,
       columns: definitions.get(name),
     })),
@@ -402,6 +414,32 @@ function createDatabaseConsole(
     },
   };
   return Object.freeze(port);
+}
+
+/**
+ * Root-only raw registry with the gateway's tables cut off: raw SQL naming them and table-name
+ * arguments (`model`, `define`, `select`, …) are refused. Methods run on the real registry.
+ */
+function guardRawDatabase(db: RawDatabase): RawDatabase {
+  const wrapped = new Map<PropertyKey, unknown>();
+  return new Proxy(db, {
+    get(target, property, receiver) {
+      const value = Reflect.get(target, property, receiver);
+      if (typeof value !== 'function') return value;
+      const cached = wrapped.get(property);
+      if (cached) return cached;
+      const guarded = function (this: unknown, ...args: unknown[]) {
+        const [first] = args;
+        if (property === 'query' && typeof first === 'string' && referencesGatewayOwnedTable(first)) {
+          throw new GatewayOwnedTableError();
+        }
+        if (typeof first === 'string') assertInstanceTable(first);
+        return (value as (...values: unknown[]) => unknown).apply(target, args);
+      };
+      wrapped.set(property, guarded);
+      return guarded;
+    },
+  });
 }
 
 function databaseType(dialect: string): 'related' | 'document' | 'keyvalue' {
