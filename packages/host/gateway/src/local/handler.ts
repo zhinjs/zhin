@@ -19,7 +19,7 @@ export interface LocalRpcHandlerOptions {
   };
 }
 
-const STREAMED: ReadonlySet<string> = new Set([GATEWAY_RPC.INSTALL, GATEWAY_RPC.UNINSTALL, GATEWAY_RPC.UPDATE]);
+const STREAMED: ReadonlySet<string> = new Set([GATEWAY_RPC.INSTALL, GATEWAY_RPC.UNINSTALL, GATEWAY_RPC.UPDATE, GATEWAY_RPC.DECLARE]);
 
 export function createLocalRpcHandler(options: LocalRpcHandlerOptions): LocalRequestHandler {
   return async (request, emit) => {

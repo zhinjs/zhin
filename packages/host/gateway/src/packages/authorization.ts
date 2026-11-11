@@ -3,7 +3,7 @@ import {
   CONSOLE_PERMISSIONS,
   grantsAllow,
   type GatewayAuthorizedPackage,
-  type GatewayPackageOperation,
+  type GatewayTransactionOperation,
 } from '@zhin.js/console-protocol';
 import { authorizeInstall, parseInstallRequest, type InstallAllowlist } from '../onboarding/allowlist.js';
 import { OnboardingError } from '../onboarding/errors.js';
@@ -12,7 +12,7 @@ import { GatewayError } from './errors.js';
 /** A Console principal, or `'local'` for the CLI on the local control socket (owner, ADR 0054 §6). */
 export type GatewayPrincipal = ConsolePrincipal | 'local';
 
-export type GatewayPackageAction = 'list' | 'plan' | GatewayPackageOperation;
+export type GatewayPackageAction = 'list' | 'plan' | GatewayTransactionOperation;
 
 export interface AuthorizePackagesOptions {
   readonly allowlist: InstallAllowlist;
@@ -48,11 +48,11 @@ function rethrow(error: unknown): never {
  * - bootstrap token: `install` of allowlisted database drivers only, before the first owner (ADR 0053 §3);
  * - `plugin.manage` without a global owner binding: allowlisted packages only (ADR 0053 §3);
  * - owners and the local socket: any npm package by name, with the same strict spec rules.
- * `'all'` (update every dependency) is owner-only.
+ * `'all'` (update every dependency) is owner-only. `declare` takes bare names, like `uninstall`.
  */
 export function authorizePackages(
   principal: GatewayPrincipal | undefined,
-  operation: GatewayPackageOperation,
+  operation: GatewayTransactionOperation,
   requests: readonly unknown[] | 'all',
   options: AuthorizePackagesOptions,
 ): readonly GatewayAuthorizedPackage[] {
@@ -94,6 +94,7 @@ export function authorizePackages(
     if (!owner && !entry) throw new GatewayError('forbidden', `${name} 不在可管理目录中；只有所有者可以管理任意 npm 包`);
     let version = parsed.version;
     if (operation === 'uninstall' && version !== undefined) throw new GatewayError('invalid_input', `卸载 ${name} 时不能指定版本`);
+    if (operation === 'declare' && version !== undefined) throw new GatewayError('invalid_input', `声明 ${name} 时不能指定版本`);
     if (operation === 'update' && version !== undefined && !EXACT_VERSION.test(version)) {
       throw new GatewayError('invalid_input', `${name} 的更新版本必须是精确 semver 版本`);
     }

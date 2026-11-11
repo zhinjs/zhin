@@ -94,6 +94,28 @@ describe('dispatchGatewayRpc', () => {
     expect(await dispatch({ type: GATEWAY_RPC.UNINSTALL, data: { packages: ['pg'] } }, testUser('operator'))).toMatchObject({ ok: false, error: { code: 'forbidden' } });
   });
 
+  it('dispatches gateway.plugins.declare with plugin.manage and validates its payload', async () => {
+    const calls: unknown[][] = [];
+    const instance = new FakeSupervisor();
+    const packages = new GatewayPackageService({ projectRoot: root, hasOwner: () => true, instance, stableMs: 0, packageManager: async () => undefined,
+      workflow: { inspect: async () => ({ declared: false }), install: async () => undefined, uninstall: async () => undefined, update: async () => undefined,
+        planDeclaration: async (...args) => { calls.push(['plan', ...args]); }, declare: async (...args) => { calls.push(['declare', ...args]); } } });
+    const dispatch = createGatewayRpcDispatcher({ instance, packages });
+    const data = { package: '@zhin.js/adapter-sandbox', config: { endpoints: [{ id: 'bot' }] } };
+    expect(await dispatch({ type: GATEWAY_RPC.DECLARE, data }, testUser('operator'))).toMatchObject({ ok: false, error: { code: 'forbidden' } });
+    expect(await dispatch({ type: GATEWAY_RPC.DECLARE, data }, { kind: 'bootstrap', open: false })).toMatchObject({ ok: false, error: { code: 'forbidden' } });
+    expect(await dispatch({ type: GATEWAY_RPC.DECLARE, data: { ...data, config: [] } }, testUser('owner'))).toMatchObject({ ok: false, error: { code: 'invalid_input' } });
+    expect(await dispatch({ type: GATEWAY_RPC.DECLARE, data: { config: {} } }, testUser('owner'))).toMatchObject({ ok: false, error: { code: 'invalid_input' } });
+    expect(calls).toEqual([]);
+    expect(await dispatch({ type: GATEWAY_RPC.DECLARE, data: { ...data, instanceKey: 'sandbox' } }, testUser('admin')))
+      .toMatchObject({ ok: true, data: { ok: true, operation: 'declare', packages: [{ name: '@zhin.js/adapter-sandbox', source: 'adapter' }] } });
+    expect(calls).toEqual([
+      ['plan', '@zhin.js/adapter-sandbox', data.config, { instanceKey: 'sandbox' }],
+      ['declare', '@zhin.js/adapter-sandbox', data.config, { instanceKey: 'sandbox' }],
+    ]);
+    expect(instance.calls).toEqual(['stop', 'start']);
+  });
+
   it('lets the bootstrap token plan database drivers only', async () => {
     const packages = new GatewayPackageService({ projectRoot: root, hasOwner: () => false, packageManager: async () => undefined });
     const bootstrap: ConsolePrincipal = { kind: 'bootstrap', open: false };

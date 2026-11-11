@@ -17,12 +17,14 @@ import type {
   GatewayPackagePlan,
   GatewayPackageTransactionResult,
   GatewayPackageTransactionStatus,
+  GatewayPluginConfigurationNeed,
+  GatewayTransactionOperation,
 } from '@zhin.js/console-protocol';
 import { CONSOLE_PERMISSIONS } from '@zhin.js/console-protocol';
 import { createInstallAllowlist, type InstallAllowlist, type MarketCatalogEntry } from '../onboarding/allowlist.js';
 import { InstallOutputRelay, streamEvents } from '../onboarding/install.js';
 import { createStreamingPackageManager, detectPackageManager, type PackageManagerOutput } from '../onboarding/package-manager.js';
-import { PluginManagementOperationError, PluginManagementWorkflow, type PluginManagementOptions } from '../plugin-management/workflow.js';
+import { PluginDeclarationError, PluginManagementOperationError, PluginManagementWorkflow, type PluginManagementOptions } from '../plugin-management/workflow.js';
 import { InstanceStartError, type InstanceFailure, type InstanceState, type InstanceStatus, type InstanceStopOptions } from '../supervisor/instance-supervisor.js';
 import type { InstanceLogLine } from '../supervisor/instance-logs.js';
 import { authorizePackages, gatewayPrincipalAllows, type GatewayPackageAction, type GatewayPrincipal } from './authorization.js';
@@ -46,6 +48,9 @@ export interface PackageWorkflowPort {
   install(spec: string, expectedRevision?: string, expectedProjectRevision?: string, options?: { readonly enable?: boolean }): Promise<unknown>;
   uninstall(request: string, expectedRevision?: string, expectedProjectRevision?: string, options?: { readonly removeDependency?: boolean }): Promise<unknown>;
   update(request: string, targetVersion: string): Promise<unknown>;
+  /** Validates a declaration without writing (throws `PluginDeclarationError`). */
+  planDeclaration?(request: string, config?: unknown, options?: { readonly instanceKey?: string }): Promise<unknown>;
+  declare?(request: string, config?: unknown, options?: { readonly instanceKey?: string }): Promise<unknown>;
 }
 
 /**
@@ -95,11 +100,24 @@ export interface GatewayInstallOptions extends GatewayTransactionOptions {
   readonly enable?: boolean;
 }
 
+export interface GatewayDeclareRequest {
+  readonly package: unknown;
+  readonly instanceKey?: unknown;
+  readonly config?: unknown;
+}
+
 export const DEFAULT_PACKAGE_READY_TIMEOUT_MS = 60_000;
 export const DEFAULT_PACKAGE_STABLE_MS = 5_000;
 const LOCK_FILE = 'gateway-packages.lock';
 const LOG_TAIL_LINES = 50;
 const RUNNING_STATES: ReadonlySet<InstanceState> = new Set(['running', 'starting', 'backoff']);
+
+/** Fields a successful transaction adds to its result. */
+interface TransactionExtras {
+  readonly needsConfiguration?: readonly GatewayPluginConfigurationNeed[];
+}
+
+type TransactionBody = (ctx: TransactionContext, authorized: readonly GatewayAuthorizedPackage[]) => Promise<TransactionExtras | void>;
 
 interface TransactionContext {
   readonly workflow: PackageWorkflowPort;
@@ -195,7 +213,33 @@ export class GatewayPackageService {
 
   install(packages: readonly unknown[], options: GatewayInstallOptions): Promise<GatewayPackageTransactionResult> {
     return this.#transaction('install', packages, options, async (ctx, authorized) => {
-      for (const item of authorized) await ctx.workflow.install(item.spec, undefined, undefined, { enable: options.enable !== false });
+      const needs: GatewayPluginConfigurationNeed[] = [];
+      for (const item of authorized) {
+        const need = configurationNeed(await ctx.workflow.install(item.spec, undefined, undefined, { enable: options.enable !== false }));
+        if (need) needs.push(need);
+      }
+      return needs.length ? { needsConfiguration: Object.freeze(needs) } : undefined;
+    });
+  }
+
+  /**
+   * `gateway.plugins.declare`: declares an installed plugin with its first configuration (schema
+   * validated before the instance is touched), then restarts the instance; a failed start rolls
+   * the configuration file back and starts the previous instance again.
+   */
+  async declare(request: GatewayDeclareRequest, options: GatewayTransactionOptions): Promise<GatewayPackageTransactionResult> {
+    const workflow = this.#workflow;
+    if (!workflow.planDeclaration || !workflow.declare) throw new GatewayError('unavailable', '插件声明不可用');
+    if (typeof request.package !== 'string') throw new GatewayError('invalid_input', 'package 必须是包名');
+    if (request.instanceKey !== undefined && typeof request.instanceKey !== 'string') throw new GatewayError('invalid_input', 'instanceKey 必须是字符串');
+    const config = request.config ?? {};
+    const declareOptions = request.instanceKey === undefined ? {} : { instanceKey: request.instanceKey };
+    // Authorization first, then validation: nothing is stopped for a request that cannot succeed.
+    await this.authorize(options.principal, 'declare', [request.package]);
+    try { await workflow.planDeclaration(request.package, config, declareOptions); }
+    catch (error) { throw declarationError(error); }
+    return this.#transaction('declare', [request.package], options, async (ctx, authorized) => {
+      await ctx.workflow.declare!(authorized[0]!.name, config, declareOptions);
     });
   }
 
@@ -234,10 +278,10 @@ export class GatewayPackageService {
   }
 
   async #transaction(
-    operation: GatewayPackageOperation,
+    operation: GatewayTransactionOperation,
     packages: readonly unknown[] | 'all',
     options: GatewayTransactionOptions,
-    execute: (ctx: TransactionContext, authorized: readonly GatewayAuthorizedPackage[]) => Promise<void>,
+    execute: TransactionBody,
   ): Promise<GatewayPackageTransactionResult> {
     if (this.#active) throw new GatewayError('conflict', '另一个依赖事务正在进行，请等待它结束');
     const id = randomUUID();
@@ -257,10 +301,10 @@ export class GatewayPackageService {
 
   async #run(
     id: string,
-    operation: GatewayPackageOperation,
+    operation: GatewayTransactionOperation,
     authorized: readonly GatewayAuthorizedPackage[],
     options: GatewayTransactionOptions,
-    execute: (ctx: TransactionContext, authorized: readonly GatewayAuthorizedPackage[]) => Promise<void>,
+    execute: TransactionBody,
   ): Promise<GatewayPackageTransactionResult> {
     const now = this.#options.now ?? Date.now;
     const startedAt = now();
@@ -277,6 +321,11 @@ export class GatewayPackageService {
     const wasRunning = instance !== undefined && RUNNING_STATES.has(instance.state);
     const startAfter = instance !== undefined && (options.startInstance ?? wasRunning);
     const run = (args: readonly string[]) => this.#packageManager(args, this.#root, this.#relay.output);
+    // Rollback log tails only show what this transaction's instances printed.
+    const logMark = instance?.logs?.tail(1).at(-1)?.seq ?? -1;
+    // A declaration only writes the configuration file: no package manager, no reinstall on rollback.
+    const configOnly = operation === 'declare';
+    let extras: TransactionExtras | void = undefined;
     let snapshot: ProjectFileSnapshot | undefined;
     let mutated = false;
     let status: GatewayPackageTransactionStatus = 'succeeded';
@@ -293,12 +342,12 @@ export class GatewayPackageService {
           enter('stop-instance');
           await instance.stop({ reason: `packages:${operation}` });
         }
-        enter('package-manager');
+        enter(configOnly ? 'configure' : 'package-manager');
         mutated = true;
-        await execute({ workflow: this.#workflow, run }, authorized);
+        extras = await execute({ workflow: this.#workflow, run }, authorized);
         if (startAfter) {
           enter('start-instance');
-          await this.#startInstance(instance!);
+          await this.#startInstance(instance!, logMark);
         }
       } catch (error) {
         failure = error;
@@ -312,12 +361,14 @@ export class GatewayPackageService {
           if (mutated && snapshot) {
             enter('restore-files');
             await snapshot.restore();
-            enter('reinstall');
-            await run(snapshot.hasLockfile ? ['install', '--frozen-lockfile'] : ['install']);
+            if (!configOnly) {
+              enter('reinstall');
+              await run(snapshot.hasLockfile ? ['install', '--frozen-lockfile'] : ['install']);
+            }
           }
           if (wasRunning) {
             enter('restart-instance');
-            await this.#startInstance(instance!);
+            await this.#startInstance(instance!, logMark);
           }
         } catch (error) {
           status = 'rollbackFailed';
@@ -335,6 +386,7 @@ export class GatewayPackageService {
         ...(failure === undefined ? {} : { error: failureMessage(failure) }),
         ...(rollbackFailure === undefined ? {} : { rollbackError: failureMessage(rollbackFailure) }),
         ...(logTail?.length ? { logTail } : {}),
+        ...(status === 'succeeded' && extras?.needsConfiguration?.length ? { needsConfiguration: extras.needsConfiguration } : {}),
         instance: Object.freeze({ before, after: this.#instanceState() }),
         startedAt,
         finishedAt: now(),
@@ -347,13 +399,17 @@ export class GatewayPackageService {
   }
 
   /** Starts the instance, waits for `ready` within the timeout, then for the stability window. */
-  async #startInstance(instance: PackageTransactionInstance): Promise<void> {
+  async #startInstance(instance: PackageTransactionInstance, logMark: number): Promise<void> {
     const readyTimeoutMs = this.#options.readyTimeoutMs ?? DEFAULT_PACKAGE_READY_TIMEOUT_MS;
     const stableMs = this.#options.stableMs ?? DEFAULT_PACKAGE_STABLE_MS;
-    const tail = (): readonly string[] => {
-      const failureTail = instance.status().lastFailure?.logTail;
-      if (failureTail?.length) return failureTail;
-      return Object.freeze((instance.logs?.tail(LOG_TAIL_LINES) ?? []).map(line => line.line));
+    // With the log collector, only lines captured since the transaction started (the supervisor's
+    // failure tail also holds earlier runs); without it, the failure's own tail.
+    const tail = (fallback?: readonly string[]): readonly string[] => {
+      if (instance.logs) {
+        return Object.freeze(instance.logs.tail().filter(line => line.seq > logMark).slice(-LOG_TAIL_LINES).map(line => line.line));
+      }
+      const failureTail = fallback?.length ? fallback : instance.status().lastFailure?.logTail;
+      return Object.freeze([...(failureTail ?? [])]);
     };
     let timer: ReturnType<typeof setTimeout> | undefined;
     const starting = instance.start();
@@ -366,8 +422,7 @@ export class GatewayPackageService {
         }),
       ]);
     } catch (error) {
-      const failureTail = error instanceof InstanceStartError ? error.failure.logTail : [];
-      throw new InstanceStartFailure(failureMessage(error), failureTail.length ? failureTail : tail());
+      throw new InstanceStartFailure(failureMessage(error), tail(error instanceof InstanceStartError ? error.failure.logTail : undefined));
     } finally {
       clearTimeout(timer);
     }
@@ -375,7 +430,7 @@ export class GatewayPackageService {
     await new Promise<void>((resolvePromise, reject) => {
       const onFailure = (failure: InstanceFailure): void => {
         cleanup();
-        reject(new InstanceStartFailure(`Instance failed after ready: ${failure.message}`, failure.logTail.length ? failure.logTail : tail()));
+        reject(new InstanceStartFailure(`Instance failed after ready: ${failure.message}`, tail(failure.logTail)));
       };
       const cleanup = (): void => { clearTimeout(stable); instance.off('failure', onFailure); };
       const stable = setTimeout(() => {
@@ -423,6 +478,19 @@ export class GatewayPackageService {
       if (await readFile(file, 'utf8').catch(() => '') === marker) await rm(file, { force: true });
     };
   }
+}
+
+/** Reads the configuration need a workflow `install` result reports, if any. */
+function configurationNeed(result: unknown): GatewayPluginConfigurationNeed | undefined {
+  const need = (result as { needsConfiguration?: unknown } | undefined)?.needsConfiguration as Partial<GatewayPluginConfigurationNeed> | undefined;
+  if (!need || typeof need.name !== 'string' || typeof need.instanceKey !== 'string') return undefined;
+  const strings = (value: unknown) => Object.freeze(Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []);
+  return Object.freeze({ name: need.name, instanceKey: need.instanceKey, missing: strings(need.missing), missingEnv: strings(need.missingEnv) });
+}
+
+/** A refused declaration is the caller's input problem; anything else stays internal. */
+function declarationError(error: unknown): unknown {
+  return error instanceof PluginDeclarationError ? new GatewayError('invalid_input', error.message, { cause: error }) : error;
 }
 
 /** The workflow's own error says files were not rolled back; the gateway does roll back, so report the cause. */

@@ -1,10 +1,15 @@
+import type { GatewayPluginConfigurationNeed } from '@zhin.js/console-protocol';
 import type { AuthorizedPackage, InstallPackageKind } from './allowlist.js';
 import type { PackageManagerOutput } from './package-manager.js';
 
 /** The part of `PluginManagementWorkflow` / `PluginManagementPort` installation uses. */
 export interface PackageInstallPort {
   inspect?(packageName: string): Promise<{ readonly installed: boolean }>;
-  install(spec: string, expectedRevision?: string, expectedProjectRevision?: string, options?: { readonly enable?: boolean }): Promise<{ readonly restartRequired: boolean }>;
+  install(spec: string, expectedRevision?: string, expectedProjectRevision?: string, options?: { readonly enable?: boolean }): Promise<{
+    readonly restartRequired: boolean;
+    /** Installed but left undeclared: the schema requires fields without defaults. */
+    readonly needsConfiguration?: GatewayPluginConfigurationNeed;
+  }>;
   uninstall?(packageName: string): Promise<unknown>;
 }
 
@@ -12,7 +17,7 @@ export type InstallEvent =
   | { readonly type: 'start'; readonly packages: readonly { readonly name: string; readonly spec: string; readonly kind: InstallPackageKind }[] }
   | { readonly type: 'package-start'; readonly name: string; readonly spec: string }
   | { readonly type: 'output'; readonly name: string; readonly stream: 'stdout' | 'stderr'; readonly chunk: string }
-  | { readonly type: 'package-done'; readonly name: string; readonly restartRequired: boolean }
+  | { readonly type: 'package-done'; readonly name: string; readonly restartRequired: boolean; readonly needsConfiguration?: GatewayPluginConfigurationNeed }
   | { readonly type: 'package-failed'; readonly name: string; readonly error: string; readonly completedStages: readonly string[] }
   | { readonly type: 'rollback'; readonly name: string; readonly ok: boolean; readonly error?: string }
   | { readonly type: 'done'; readonly report: InstallReport };
@@ -28,6 +33,11 @@ export interface InstallReport {
   /** Packages that were already installed and therefore never rolled back. */
   readonly preexisting: readonly string[];
   readonly restartRequired: boolean;
+  /**
+   * Plugins installed but not declared because their configuration is incomplete (e.g. an
+   * adapter's first account): configure and declare them next (`gateway.plugins.declare`).
+   */
+  readonly needsConfiguration?: readonly GatewayPluginConfigurationNeed[];
 }
 
 export type InstallListener = (event: InstallEvent) => void;
@@ -70,6 +80,7 @@ export async function installPackages(packages: readonly AuthorizedPackage[], op
   const added: string[] = [];
   const preexisting: string[] = [];
   let restartRequired = false;
+  const needsConfiguration: GatewayPluginConfigurationNeed[] = [];
   let failed: InstallReport['failed'];
   for (const item of packages) {
     let existed: boolean | undefined;
@@ -86,7 +97,9 @@ export async function installPackages(packages: readonly AuthorizedPackage[], op
       installed.push(item.name);
       // Only packages proven absent beforehand are ours to remove.
       if (existed === false) added.push(item.name);
-      emit({ type: 'package-done', name: item.name, restartRequired: result.restartRequired });
+      if (result.needsConfiguration) needsConfiguration.push(result.needsConfiguration);
+      emit({ type: 'package-done', name: item.name, restartRequired: result.restartRequired,
+        ...(result.needsConfiguration ? { needsConfiguration: result.needsConfiguration } : {}) });
     } catch (error) {
       const stages = completedStages(error);
       failed = Object.freeze({ name: item.name, error: message(error), completedStages: stages });
@@ -124,6 +137,10 @@ export async function installPackages(packages: readonly AuthorizedPackage[], op
     rollbackFailed: Object.freeze(rollbackFailed.map(entry => Object.freeze(entry))),
     preexisting: Object.freeze(preexisting),
     restartRequired: restartRequired && installed.some(name => !rolledBack.includes(name)),
+    ...(() => {
+      const pending = needsConfiguration.filter(need => installed.includes(need.name) && !rolledBack.includes(need.name));
+      return pending.length ? { needsConfiguration: Object.freeze(pending) } : {};
+    })(),
   });
   emit({ type: 'done', report });
   return report;

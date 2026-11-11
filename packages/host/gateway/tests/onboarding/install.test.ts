@@ -97,6 +97,22 @@ describe('installPackages through PluginManagementWorkflow', () => {
     expect(report).toMatchObject({ ok: false, rolledBack: [], rollbackFailed: [{ name: 'pg', error: 'locked' }], installed: ['pg'], restartRequired: true });
   });
 
+  it('reports adapters installed but awaiting their first account', async () => {
+    const need = { name: '@zhin.js/adapter-sandbox', instanceKey: 'sandbox', missing: ['endpoints'], missingEnv: [] };
+    const port: PackageInstallPort = {
+      inspect: async () => ({ installed: false }),
+      install: async spec => (spec.startsWith('@zhin.js/adapter-sandbox') ? { restartRequired: false, needsConfiguration: need } : { restartRequired: true }),
+    };
+    const events: InstallEvent[] = [];
+    const report = await installPackages([
+      { name: '@zhin.js/adapter-sandbox', kind: 'adapter', spec: '@zhin.js/adapter-sandbox' }, { name: 'pg', kind: 'database-driver', spec: 'pg' },
+    ], { port, onEvent: event => events.push(event) });
+    expect(report).toMatchObject({ ok: true, installed: ['@zhin.js/adapter-sandbox', 'pg'], needsConfiguration: [need] });
+    expect(events).toContainEqual({ type: 'package-done', name: '@zhin.js/adapter-sandbox', restartRequired: false, needsConfiguration: need });
+    const plain = await installPackages([{ name: 'pg', kind: 'database-driver', spec: 'pg' }], { port });
+    expect(plain.needsConfiguration).toBeUndefined();
+  });
+
   it('authorizes before any work: bootstrap may only install drivers', async () => {
     const calls: string[][] = [];
     let ownerExists = false;

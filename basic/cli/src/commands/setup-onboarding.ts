@@ -6,7 +6,7 @@
  */
 import type { GatewayPackageTransactionResult } from '@zhin.js/console-protocol';
 import { OnboardingService, type InstallEvent, type InstallReport, type OnboardingStepStatus } from '@zhin.js/gateway/onboarding';
-import { describeGatewayError, probeGateway, runPackageOperationViaGateway, type GatewayTarget } from '../utils/gateway.js';
+import { configurationHints, describeGatewayError, probeGateway, runPackageOperationViaGateway, type GatewayTarget } from '../utils/gateway.js';
 
 export interface SetupOnboardingIo {
   log(message: string): void;
@@ -104,5 +104,6 @@ export async function installSetupDependencies(
   } else if (report.restartRequired) {
     io.log('依赖已安装：如 Host 正在运行，请重启它。');
   }
+  for (const line of configurationHints(report.needsConfiguration ?? [])) io.log(line);
   return report;
 }

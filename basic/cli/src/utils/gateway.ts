@@ -10,6 +10,7 @@ import type {
   GatewayPackageEvent,
   GatewayPackageOperation,
   GatewayPackageTransactionResult,
+  GatewayPluginConfigurationNeed,
 } from '@zhin.js/console-protocol';
 import { GATEWAY_RPC } from '@zhin.js/console-protocol';
 import {
@@ -104,6 +105,7 @@ const PHASE_LABELS: Readonly<Record<string, string>> = {
   snapshot: '备份项目文件',
   'stop-instance': '停止实例',
   'package-manager': '执行包管理器',
+  configure: '写入插件声明与配置',
   'start-instance': '启动实例',
   rollback: '回滚',
   'restore-files': '恢复项目文件',
@@ -123,7 +125,8 @@ export function packageEventPrinter(output: Output = processOutput): (event: Gat
 
 export function renderTransactionResult(result: GatewayPackageTransactionResult): string[] {
   const names = result.packages.map((item) => item.spec).join(' ') || '(全部依赖)';
-  if (result.ok) return [`✓ ${result.operation} 完成：${names}（实例 ${result.instance.before} → ${result.instance.after}）`];
+  if (result.ok) return [`✓ ${result.operation} 完成：${names}（实例 ${result.instance.before} → ${result.instance.after}）`,
+    ...configurationHints(result.needsConfiguration ?? [])];
   const lines = [
     result.status === 'rolledBack'
       ? `✗ ${result.operation} 失败（阶段 ${result.failedPhase ?? '?'}），已回滚：${result.error ?? ''}`
@@ -134,6 +137,15 @@ export function renderTransactionResult(result: GatewayPackageTransactionResult)
     for (const line of result.logTail.slice(-20)) lines.push(`  ${line}`);
   }
   return lines;
+}
+
+/** Hints for plugins installed but left undeclared until their configuration is complete. */
+export function configurationHints(needs: readonly GatewayPluginConfigurationNeed[]): string[] {
+  return needs.map((need) => {
+    const missing = [...need.missing, ...need.missingEnv.map((name) => `环境变量 ${name}`)].join('、') || '必填配置';
+    return `! ${need.name} 已安装但未启用：需要先配置 ${missing}。请在 Console 的插件配置中填写后声明（gateway.plugins.declare），`
+      + `或在配置文件中添加 plugins.${need.instanceKey}: ${need.name} 与 ${need.instanceKey} 配置段，再运行 zhin restart`;
+  });
 }
 
 export interface PackageOperationRequest {

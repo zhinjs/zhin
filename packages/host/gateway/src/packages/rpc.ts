@@ -89,6 +89,14 @@ async function handle(type: GatewayRpcType, data: Readonly<Record<string, unknow
       });
     case 'gateway.packages.update':
       return packagesOf(deps).update(packageList(data, true), { principal, ...optionalBoolean(data, 'startInstance') });
+    case 'gateway.plugins.declare': {
+      if (data.config !== undefined && (!data.config || typeof data.config !== 'object' || Array.isArray(data.config))) {
+        throw new GatewayError('invalid_input', 'config 必须是对象');
+      }
+      return packagesOf(deps).declare({ package: data.package, instanceKey: data.instanceKey, config: data.config }, {
+        principal, ...optionalBoolean(data, 'startInstance'),
+      });
+    }
     case 'gateway.instance.status': return instanceStatus(instanceOf(deps).status());
     case 'gateway.instance.logs': {
       const lines = data.lines === undefined ? DEFAULT_LOG_LINES : data.lines;
