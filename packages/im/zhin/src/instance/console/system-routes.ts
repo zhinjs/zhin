@@ -9,6 +9,7 @@ import {
 } from './plugin-projection.js';
 import { readRuntimeSnapshot } from './runtime-snapshot.js';
 import { buildConsoleStats, getSystemStatusData } from './system-projection.js';
+import { internalErrorResponse } from './internal-error.js';
 
 export interface RegisterConsoleSystemRoutesOptions {
   readonly http: HttpHost;
@@ -43,10 +44,7 @@ export function registerConsoleSystemRoutes(options: RegisterConsoleSystemRoutes
         },
       });
     } catch (error) {
-      return jsonResponse(500, {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      });
+      return internalErrorResponse(500, 'console_stats_failed', error);
     }
   }, {
     summary: 'Dashboard statistics',

@@ -3,6 +3,7 @@ import { readJsonBody, type HttpHost, jsonResponse } from '@zhin.js/host-http';
 import type { SnapshotReader } from '@zhin.js/plugin-runtime';
 import { parseCron } from '@zhin.js/schedule';
 import { withGenerationAgentConsole } from './agent-console.js';
+import { internalErrorResponse } from './internal-error.js';
 
 const CRON_KINDS = new Set(['solar', 'lunar', 'workday', 'freeDay']);
 const NOTIFY_CHANNELS = new Set(['im', 'silent', 'log']);
@@ -90,10 +91,7 @@ export function registerAssistantJobRoutes(options: Readonly<{
         const result = await operation(assistant.jobs, body);
         return jsonResponse(result.status, result.body);
       } catch (error) {
-        return jsonResponse(500, {
-          success: false,
-          error: error instanceof Error ? error.message : String(error),
-        });
+        return internalErrorResponse(500, 'assistant_job_failed', error);
       }
     });
     return handled ?? jsonResponse(404, { success: false, error: DISABLED });

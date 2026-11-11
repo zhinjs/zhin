@@ -20,6 +20,7 @@ import type { ConsoleMessageEventData } from '@zhin.js/console-protocol';
 import {
   clampPositiveInt,
   decodePathParam,
+  logInternalError,
   normalizeBase,
   parsePositiveInt,
   registerAgentSessionRoutes,
@@ -466,9 +467,10 @@ function registerMarketplaceRoutes(
         size: pageSize,
       });
     } catch (err) {
+      logInternalError('marketplace_search_failed', err);
       return jsonResponse(502, {
         success: false,
-        error: err instanceof Error ? err.message : 'Search failed',
+        error: 'Search failed',
       });
     }
   }, { summary: 'Search plugin marketplace', tags: ['pub', 'marketplace'] });
@@ -506,9 +508,10 @@ function registerMarketplaceRoutes(
         data: { ...detail, downloads: cachedDownloads },
       });
     } catch (err) {
+      logInternalError('marketplace_detail_failed', err);
       return jsonResponse(502, {
         success: false,
-        error: err instanceof Error ? err.message : 'Detail fetch failed',
+        error: 'Detail fetch failed',
       });
     }
   }, { summary: 'Plugin marketplace detail', tags: ['pub', 'marketplace'] });
@@ -542,9 +545,10 @@ function registerMarketplaceRoutes(
       );
       return jsonResponse(200, { success: true, data: updates.filter(Boolean) });
     } catch (err) {
+      logInternalError('marketplace_updates_failed', err);
       return jsonResponse(500, {
         success: false,
-        error: err instanceof Error ? err.message : 'Update check failed',
+        error: 'Update check failed',
       });
     }
   }, { summary: 'Check installed plugin updates', tags: ['console', 'marketplace'] });

@@ -74,7 +74,9 @@ describe('A2A SSE streaming', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toBe('text/event-stream');
     expect(text).toContain('"text":"one"');
-    expect(text).toContain('event: error\ndata: {"error":"executor exploded"}\n\n');
+    // An executor's own failure detail never reaches the client.
+    expect(text).toContain('event: error\ndata: {"error":"Internal error"}\n\n');
+    expect(text).not.toContain('executor exploded');
     await expect(handled).resolves.toBeUndefined();
   });
 
@@ -90,7 +92,7 @@ describe('A2A SSE streaming', () => {
     });
 
     expect(response.status).toBe(500);
-    expect(await response.json()).toEqual({ error: 'never started' });
+    expect(await response.json()).toEqual({ error: 'Internal error' });
     await expect(handled).resolves.toBeUndefined();
   });
 

@@ -24,6 +24,7 @@ import {
   resolveLocalizedPageTitle,
   type ExtendedRuntimeConsolePage,
 } from './entry-projection.js';
+import { internalErrorResponse } from './internal-error.js';
 
 const clientPublicBase = '/assets/client';
 const noStore = Object.freeze({ 'cache-control': 'no-store' });
@@ -77,10 +78,7 @@ export function registerConsoleHttp(options: {
       const pages = await listPages(options.console, requestConsoleAccess(http, request, context), { locale });
       return jsonResponse(200, projectConsoleEntries(pages, { locale }), noStore);
     } catch (error) {
-      return jsonResponse(503, {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      });
+      return internalErrorResponse(503, 'console_entries_failed', error);
     }
   });
   http.route('GET', '/console/api/pages', async (request, context) => {

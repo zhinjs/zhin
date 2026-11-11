@@ -711,10 +711,10 @@ describe('console-rest-pages introspection', () => {
     }));
     const response = await fetch(`${base}/api/introspection/commands`);
     expect(response.status).toBe(503);
-    expect(await json(response)).toMatchObject({
-      success: false,
-      error: 'CommandIndex 不可用',
-    });
+    // The collector's own failure detail stays in the log.
+    const body = await json(response);
+    expect(body).toMatchObject({ success: false, error: 'Introspection unavailable' });
+    expect(JSON.stringify(body)).not.toContain('CommandIndex 不可用');
   });
 
   it('holds the generation lease until a catalog collector completes', async () => {

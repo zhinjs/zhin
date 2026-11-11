@@ -7,6 +7,7 @@ import {
   decodeSpecifierSegment,
   getOrBuildCanonicalEsmBundle,
 } from '@zhin.js/pagemanager/node';
+import { logInternalError } from './internal-error.js';
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), {
   status,
@@ -42,9 +43,8 @@ export async function serveCanonicalEsm(
       },
     });
   } catch (error) {
-    return json(500, {
-      message: error instanceof Error ? error.message : 'Failed to build ESM',
-    });
+    logInternalError('console_esm_build_failed', error);
+    return json(500, { message: 'Failed to build ESM' });
   }
 }
 

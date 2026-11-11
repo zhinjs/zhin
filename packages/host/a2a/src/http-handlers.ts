@@ -128,8 +128,9 @@ export async function handleAgentCard(
       return new Response(null, { status: 304, headers: cacheHeaders });
     }
     return sendJson(200, AgentCard.toJSON(agentCard), cacheHeaders);
-  } catch (err) {
-    return sendJson(500, { error: err instanceof Error ? err.message : String(err) });
+  } catch {
+    // Agent card failures are internal; no detail leaves the server.
+    return sendJson(500, { error: 'Internal error' });
   }
 }
 
@@ -222,7 +223,7 @@ export async function handleRest(
       return await sseResponse(
         stream[Symbol.asyncIterator](),
         (event) => StreamResponse.toJSON(event),
-        (err) => ({ error: err instanceof Error ? err.message : String(err) }),
+        (err) => ({ error: restErrorMessage(err) }),
         new Headers(),
       );
     }
@@ -257,8 +258,22 @@ export async function handleRest(
 
     return sendJson(404, { error: 'Not found' });
   } catch (err) {
-    return sendJson(restErrorStatus(err), { error: err instanceof Error ? err.message : String(err) });
+    return sendJson(restErrorStatus(err), { error: restErrorMessage(err) });
   }
+}
+
+/** Protocol and request errors carry client-facing messages; anything else stays opaque. */
+function restErrorMessage(error: unknown): string {
+  if (
+    error instanceof HttpBodyError
+    || error instanceof TaskNotFoundError
+    || error instanceof RequestMalformedError
+    || error instanceof UnsupportedOperationError
+    || error instanceof VersionNotSupportedError
+  ) {
+    return error.message;
+  }
+  return 'Internal error';
 }
 
 /**

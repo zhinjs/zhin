@@ -1,5 +1,6 @@
 import type { ImRuntime } from '@zhin.js/core/runtime';
 import { readJsonBody, type HttpHost, jsonResponse } from '@zhin.js/host-http';
+import { internalErrorResponse } from './internal-error.js';
 
 type EndpointSender = Pick<ImRuntime['endpoints'], 'send'>;
 
@@ -54,8 +55,10 @@ export function registerMessageSendRoutes(options: Readonly<{
       });
       return jsonResponse(200, { success: true, data: { messageId: result.messageId } });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      return jsonResponse(message === 'endpoint not found' ? 404 : 502, { success: false, error: message });
+      if (error instanceof Error && error.message === 'endpoint not found') {
+        return jsonResponse(404, { success: false, error: 'endpoint not found' });
+      }
+      return internalErrorResponse(502, 'console_message_send_failed', error);
     }
   }, {
     summary: 'Send a message through an Endpoint',

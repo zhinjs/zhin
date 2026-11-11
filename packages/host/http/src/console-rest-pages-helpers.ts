@@ -1,6 +1,14 @@
 import type { HttpHost } from './http-host.js';
 import { HttpBodyError, readJsonBody } from './json-body.js';
 import { jsonResponse } from '@zhin.js/host-http-contract';
+import { formatCompact, getLogger } from '@zhin.js/logger';
+
+const logger = getLogger('console');
+
+/** Logs an unexpected failure server-side; clients only get a generic message. */
+export function logInternalError(op: string, error: unknown): void {
+  logger.warn(formatCompact({ op, error: error instanceof Error ? error.message : String(error) }));
+}
 import type {
   ConsoleAgentIntrospection,
   ConsoleAgentSessionTree,
@@ -150,10 +158,11 @@ export function registerIntrospectionRoutes(
           data: { ...slice, filter, note: degradedNote },
         });
       } catch (err) {
+        logInternalError(`introspection_${kind}_failed`, err);
         return jsonResponse(503, {
           success: false,
           data: { items: [], page: 1, pageSize: 0, total: 0, totalPages: 0 },
-          error: err instanceof Error ? err.message : String(err),
+          error: 'Introspection unavailable',
         });
       } finally {
         lease?.release();
@@ -216,9 +225,12 @@ export function registerIntrospectionRoutes(
       const status = error instanceof ComponentPreviewTimeoutError
         ? 408
         : error instanceof ComponentPreviewLimitError ? 413 : 422;
+      // Timeout / size limit messages are ours; a component's own failure detail stays in the log.
+      const known = error instanceof ComponentPreviewTimeoutError || error instanceof ComponentPreviewLimitError;
+      if (!known) logInternalError('component_preview_failed', error);
       return jsonResponse(status, {
         success: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: known ? (error as Error).message : 'Component preview failed',
       });
     } finally {
       clearTimeout(timeout);

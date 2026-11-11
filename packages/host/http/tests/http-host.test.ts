@@ -530,6 +530,18 @@ describe('HttpHost', () => {
     expect(await ok.json()).toEqual({ body: { a: 1 } });
   });
 
+  it('never sends an unexpected handler error message or stack to the client', async () => {
+    const host = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(host);
+    host.route('GET', '/boom', () => { throw new Error('secret detail from the handler'); });
+    const { port } = await host.listen();
+    const response = await fetch(`http://127.0.0.1:${port}/boom`);
+    expect(response.status).toBe(500);
+    const body = await response.text();
+    expect(body).toBe('');
+    expect(body).not.toContain('secret detail');
+  });
+
   it('after setup checks every /api route against the permission map and rejects the bootstrap token', async () => {
     const host = createHttpHost({ host: '127.0.0.1', port: 0, token: 'full-token' });
     hosts.push(host);

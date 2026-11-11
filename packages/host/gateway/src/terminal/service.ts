@@ -313,7 +313,8 @@ export class TerminalService {
         : await this.#startLocal({ cols, rows }, events);
     } catch (error) {
       const code = error instanceof TerminalStartError ? error.code : 'start-failed';
-      const message = error instanceof Error ? error.message : String(error);
+      // Only our own start errors are described to the client; others stay in the log.
+      const message = error instanceof TerminalStartError ? error.message : '终端启动失败';
       this.#sessions.delete(info.sessionId);
       live.ended = true;
       this.#audit({ action: 'terminal.session.start', actor: principal.id, target: targetId, outcome: 'error', ip, detail: { sessionId: info.sessionId, kind, code } });

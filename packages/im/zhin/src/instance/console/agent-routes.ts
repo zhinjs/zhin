@@ -1,4 +1,4 @@
-import { readJsonBody, isProjectPathAllowed, type HttpHost, jsonResponse } from '@zhin.js/host-http';
+import { HttpBodyError, readJsonBody, isProjectPathAllowed, type HttpHost, jsonResponse } from '@zhin.js/host-http';
 import { realpath } from 'node:fs/promises';
 import * as path from 'node:path';
 import type { SnapshotReader } from '@zhin.js/plugin-runtime';
@@ -7,6 +7,7 @@ import { parseBoundedInteger } from '@zhin.js/gateway/http';
 import { registerTraceArchiveRoutes } from './trace-archive-routes.js';
 import { registerScheduleExecutionRoutes } from './schedule-execution-routes.js';
 import { registerAssistantJobRoutes } from './assistant-job-routes.js';
+import { internalErrorResponse } from './internal-error.js';
 
 export interface RegisterAgentConsoleRoutesOptions {
   readonly http: HttpHost;
@@ -28,9 +29,9 @@ export function registerAgentConsoleRoutes(
     try {
       body = await readJsonBody(request);
     } catch (error) {
-      return jsonResponse(400, {
+      return jsonResponse(error instanceof HttpBodyError ? error.statusCode : 400, {
         success: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: error instanceof HttpBodyError ? error.message : 'Invalid request body',
       });
     }
     const handled = await withGenerationAgentConsole(snapshots, async ({ assistant: runtime }) => {
@@ -47,10 +48,7 @@ export function registerAgentConsoleRoutes(
         }
         return jsonResponse(result.deduped ? 200 : 202, { success: true, data: result });
       } catch (error) {
-        return jsonResponse(500, {
-          success: false,
-          error: error instanceof Error ? error.message : String(error),
-        });
+        return internalErrorResponse(500, 'assistant_event_failed', error);
       }
     });
     if (!handled) {
@@ -74,10 +72,7 @@ export function registerAgentConsoleRoutes(
           data: { jobs, eventsActive: runtime.events.isEnabled() },
         });
       } catch (error) {
-        return jsonResponse(500, {
-          success: false,
-          error: error instanceof Error ? error.message : String(error),
-        });
+        return internalErrorResponse(500, 'assistant_jobs_failed', error);
       }
     });
     if (!handled) {

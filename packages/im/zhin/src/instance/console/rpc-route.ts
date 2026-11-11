@@ -9,6 +9,7 @@ import { dispatchIamRpc, isIamRpc } from '@zhin.js/gateway/iam';
 import { createFeatureRpcContext, dispatchFeatureConsoleRpc } from './console-feature-rpc.js';
 import type { ConsoleScopeTarget } from '@zhin.js/console-protocol';
 import type { ConsoleIamService } from '@zhin.js/gateway/iam';
+import { internalErrorResponse } from './internal-error.js';
 
 export interface RegisterConsoleRpcRouteOptions extends ConsoleRpcComposition {
   readonly http: HttpHost;
@@ -124,10 +125,8 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
       if (error instanceof HttpBodyError) {
         return jsonResponse(error.statusCode, { success: false, error: error.message });
       }
-      return reply(500, {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      });
+      if (decision?.allowed && decision.write) audit('error');
+      return internalErrorResponse(500, 'console_rpc_failed', error);
     }
   }, {
     summary: 'Console RPC',

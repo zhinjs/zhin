@@ -69,7 +69,8 @@ it('reports an unknown endpoint as 404 and a delivery failure as 502', async () 
   const failed = await start(vi.fn(async () => { throw new Error('platform rejected'); }));
   const response = await failed.post(valid);
   expect(response.status).toBe(502);
-  expect(await response.json()).toEqual({ success: false, error: 'platform rejected' });
+  // The platform's failure detail is logged, not returned.
+  expect(await response.json()).toEqual({ success: false, code: 'internal_error', error: 'Internal error' });
 });
 
 it('answers 503 when no IM runtime is attached', async () => {

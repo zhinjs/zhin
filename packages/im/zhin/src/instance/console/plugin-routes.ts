@@ -16,6 +16,7 @@ import {
   readPackageVersion,
 } from './plugin-projection.js';
 import { readRuntimeSnapshot } from './runtime-snapshot.js';
+import { internalErrorResponse } from './internal-error.js';
 
 export interface RegisterConsolePluginRoutesOptions {
   readonly http: HttpHost;
@@ -46,10 +47,7 @@ export function registerConsolePluginRoutes(options: RegisterConsolePluginRoutes
       })));
       return jsonResponse(200, { success: true, data, total: plugins.length });
     } catch (error) {
-      return jsonResponse(500, {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      });
+      return internalErrorResponse(500, 'console_plugins_failed', error);
     }
   }, {
     summary: 'List loaded plugins',
@@ -109,10 +107,7 @@ export function registerConsolePluginRoutes(options: RegisterConsolePluginRoutes
         ...await inspectPlugin(pluginManagement, node.instanceKey, managedPlugins.some(item => item.instanceKey === node.instanceKey && item.packageName === node.packageName && item.manageable)) },
       });
     } catch (error) {
-      return jsonResponse(500, {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      });
+      return internalErrorResponse(500, 'console_plugins_failed', error);
     }
   }, {
     summary: 'Plugin detail',

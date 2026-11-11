@@ -57,7 +57,7 @@ describe('Runtime MCP Host', () => {
     const baseUrl = `http://127.0.0.1:${port}/mcp`;
     expect((await mcpRequest(baseUrl, 'tools/list', {}, 'wrong')).status).toBe(401);
     expect((await mcpRequest(baseUrl, 'tools/list', {}, 'user-api-token')).status).toBe(200);
-    expect(authenticateBearer).toHaveBeenCalledWith('user-api-token', expect.anything());
+    expect(authenticateBearer).toHaveBeenCalledWith('user-api-token', expect.any(Request), '127.0.0.1');
   });
 
   it('keeps the advertised tool protocol available for an empty generation', async () => {
