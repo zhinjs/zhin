@@ -28,6 +28,7 @@ export const NETWORK_COMMAND_PATTERNS: ReadonlyArray<RegExp> = [
 
 // ── SSRF 防护 ─────────────────────────────────────────────────────────
 
+import { lookup as dnsLookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 import { scanShellSegment } from './shell-syntax.js';
 
@@ -99,6 +100,26 @@ export function isBlockedIpAddress(address: string): boolean {
       || /^ff/i.test(canonical);
   }
   return true;
+}
+
+/**
+ * True when `hostname` resolves to at least one private/loopback/metadata address.
+ * For callers that cannot use the DNS-pinned `TurnNetworkClient`: it closes the
+ * "public name, private A record" hole of string-only URL checks, but the later
+ * connection re-resolves, so it is weaker than pinning. An unresolvable name is
+ * reported as not blocked — the request itself will fail.
+ */
+export async function hostnameResolvesToBlockedAddress(
+  hostname: string,
+  resolve: (host: string) => Promise<ReadonlyArray<{ address: string }>> = host => dnsLookup(host, { all: true, verbatim: true }),
+): Promise<boolean> {
+  const host = hostname.replace(/^\[|\]$/g, '');
+  if (isIP(host)) return isBlockedIpAddress(host);
+  try {
+    return (await resolve(host)).some(entry => isBlockedIpAddress(entry.address));
+  } catch {
+    return false;
+  }
 }
 
 export class NetworkAccessDeniedError extends Error {

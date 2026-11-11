@@ -38,7 +38,7 @@ it.each([['en', 'Views', '12K'], ['zh-CN', '播放', '1.2万']] as const)(
     vi.stubGlobal('fetch', vi.fn(async () => {
       // An in-flight operation must not change language with a later preference.
       input.locale = locale === 'en' ? 'zh-CN' : 'en';
-      return { json: async () => ({ code: 0, data: { title: '用户标题', desc: '第三方简介', owner: { name: '原作者' }, stat: { view: 12000, danmaku: 100000000, like: 7 } } }) };
+      return new Response(JSON.stringify({ code: 0, data: { title: '用户标题', desc: '第三方简介', owner: { name: '原作者' }, stat: { view: 12000, danmaku: 100000000, like: 7 } } }));
     }));
     const render = vi.fn(async (_html: string) => ({ format: 'png', data: Buffer.from('fixture'), mimeType: 'image/png' }));
     const downstream = Symbol('downstream');
@@ -152,6 +152,20 @@ describe('redirect and image host checks', () => {
     expect(isPublicImageUrl('https://localhost/x.png')).toBe(false);
     expect(isPublicImageUrl('https://metadata.google.internal/x.png')).toBe(false);
     expect(isPublicImageUrl('https://intranet/x.png')).toBe(false);
+  });
+});
+
+describe('page size cap', () => {
+  it('refuses an oversized API or page body instead of buffering it', async () => {
+    const { detectAndParse } = await import('../src/platforms.js');
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response(new Uint8Array(3 * 1024 * 1024)));
+    try {
+      await expect(detectAndParse('https://github.com/zhinjs/zhin')).rejects.toThrow(/too large/);
+      // Douyin/Xiaohongshu parsers treat any fetch failure as "no poster".
+      expect(await detectAndParse('https://v.douyin.com/abc/')).toBeNull();
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 });
 

@@ -10,6 +10,16 @@ const FETCH_TIMEOUT = 10_000
 /** Upper bound for a cover/avatar image; larger bodies are dropped instead of buffered. */
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 
+/** Upper bound for a platform page or API response. */
+const MAX_PAGE_BYTES = 2 * 1024 * 1024
+
+/** Read a text body under the page cap; an oversized body is cancelled and reported as an error. */
+async function readText(res: Response): Promise<string> {
+  const body = await readCappedBody(res, MAX_PAGE_BYTES)
+  if (!body) throw new Error('link-poster: response body is too large')
+  return body.toString('utf8')
+}
+
 /**
  * Fetch with redirects followed by hand. Every hop must pass `isAllowed` (the platform host
  * allow-list, or the structural image rule) AND resolve to public addresses only, so neither an
@@ -113,7 +123,7 @@ async function parseBilibili(url: string, locale?: Locale): Promise<LinkMeta | n
   const res = await fetchWithTimeout(api, {
     headers: { 'User-Agent': 'Mozilla/5.0', Referer: 'https://www.bilibili.com/' },
   })
-  const json = await res.json() as any
+  const json = JSON.parse(await readText(res)) as any
   if (json.code !== 0) return null
 
   const d = json.data
@@ -153,7 +163,7 @@ async function parseGithub(url: string, locale?: Locale): Promise<LinkMeta | nul
       { headers },
     )
     if (!res.ok) return null
-    const d = await res.json() as any
+    const d = JSON.parse(await readText(res)) as any
     return {
       platform: 'github',
       title: `${type === 'pull' ? 'PR' : 'Issue'} #${num}: ${d.title}`,
@@ -171,7 +181,7 @@ async function parseGithub(url: string, locale?: Locale): Promise<LinkMeta | nul
   // 仓库
   const res = await fetchWithTimeout(`https://api.github.com/repos/${owner}/${repo}`, { headers })
   if (!res.ok) return null
-  const d = await res.json() as any
+  const d = JSON.parse(await readText(res)) as any
   return {
     platform: 'github',
     title: d.full_name || `${owner}/${repo}`,
@@ -200,7 +210,7 @@ async function parseDouyin(url: string, locale?: Locale): Promise<LinkMeta | nul
           'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
       },
     })
-    const html = await res.text()
+    const html = await readText(res)
     const title = extractMeta(html, 'og:title')
     if (!title) return null
 
@@ -229,7 +239,7 @@ async function parseXiaohongshu(url: string, locale?: Locale): Promise<LinkMeta 
           'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
       },
     })
-    const html = await res.text()
+    const html = await readText(res)
     const title = extractMeta(html, 'og:title')
     if (!title) return null
 
