@@ -156,7 +156,8 @@ export async function appendWizardEnvVars(
   database?: DatabaseConfig,
   locale: 'zh-CN' | 'en' = 'zh-CN'
 ): Promise<void> {
-  if (ai?.enabled) await saveAIPlanProposal(projectDir, materializeAIPlan(ai));
+  // AI may start without a model (added later in Console); only a chosen provider yields a plan.
+  if (ai?.enabled && Object.keys(ai.providers ?? {}).length) await saveAIPlanProposal(projectDir, materializeAIPlan(ai));
   const extra =
     (database ? generateDatabaseEnvVars(database, locale) : '') +
     (adapters ? generateAdapterEnvVars(adapters, locale) : '') +

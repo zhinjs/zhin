@@ -19,6 +19,7 @@ import { defineConsoleIamTables } from '@zhin.js/gateway/iam';
 import { findConfigFile } from '@zhin.js/gateway/project';
 import { loadHostHttpConfig } from '../utils/host-http.js';
 import { importProjectInstanceCli, type ProjectDatabaseHost } from '../utils/project-instance.js';
+import { recordOnboardingSteps, setupOnboardingDeps } from './setup-onboarding.js';
 
 export interface ConsoleCliIo {
   log(message: string): void;
@@ -135,6 +136,8 @@ export async function runConsoleInit(
       return 1;
     }
     const interactive = !options.yes && !options.database && !options.owner;
+    // Onboarding steps 1–2 (ADR 0053 §5); the owner step follows IAM.
+    const onboarding = setupOnboardingDeps.createService(projectRoot, () => !project.setup.setupRequired());
     // ---- step 1: database
     let databaseInput: { dialect: string; connection: Record<string, unknown> } | undefined;
     if (options.database) {
@@ -167,6 +170,9 @@ export async function runConsoleInit(
         return 1;
       }
     }
+    await recordOnboardingSteps(onboarding, {
+      database: databaseInput || status.database.source === 'config' ? 'done' : 'skipped',
+    }, setupOnboardingDeps.io);
     // ---- step 2: owner
     let username = options.owner;
     let displayName = options.displayName;
@@ -201,6 +207,7 @@ export async function runConsoleInit(
     }
     const { user } = await project.setup.createOwner({ username, password, displayName });
     io.log(`已创建所有者 ${user.username}。现在可以用它登录 Console。`);
+    await recordOnboardingSteps(onboarding, {}, setupOnboardingDeps.io);
     if (databaseInput && await io.hostRunning(projectRoot)) {
       io.log('检测到 Host 正在运行：请重启它以使用新的数据库。');
     }

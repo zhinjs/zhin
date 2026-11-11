@@ -10,10 +10,12 @@ import { ensureGlobalHome, installGlobalHomeDeps } from '../utils/global-home-in
 import { globalZhinHome } from '../utils/zhin-home.js';
 import { logger } from '../utils/logger.js';
 import { findConfigFile, prepareConfigSave, readConfig } from '@zhin.js/gateway/project';
+import { installSetupDependencies, recordOnboardingSteps, setupOnboardingDeps, type SetupStepOutcomes } from './setup-onboarding.js';
 import {
   wizardText,
   configureDatabaseOptions,
   configureAdapters,
+  buildDefaultAdapterSetup,
   configureAI,
   configureTypeSafeDecisions,
   applyTypeSafeDecisionsToConfig,
@@ -27,11 +29,16 @@ import {
   mergeFeaturesIntoPackageJson,
   finalizeWizardOptions,
   formatAIDependencyHint,
+  RECOMMENDED_AI_DEFAULTS,
   validateProjectLocale,
   type InitOptions,
 } from '@zhin.js/scaffold-wizard';
 
-async function setupBootstrapFiles(cwd: string, locale: 'zh-CN' | 'en' = 'zh-CN'): Promise<void> {
+function collectValues(value: string, previous: string[] = []): string[] {
+  return previous.includes(value) ? previous : [...previous, value];
+}
+
+async function setupBootstrapFiles(cwd: string, locale: 'zh-CN' | 'en' = 'zh-CN', yes = false): Promise<void> {
   console.log('');
   console.log(chalk.blue(wizardText(locale, "📝 设置引导文件")));
   console.log('');
@@ -46,6 +53,10 @@ async function setupBootstrapFiles(cwd: string, locale: 'zh-CN' | 'en' = 'zh-CN'
     const filePath = path.join(cwd, file.name);
     const exists = fs.existsSync(filePath);
 
+    if (exists && yes) {
+      console.log(chalk.gray(wizardText(locale, "  跳过 {v0}", [file.name])));
+      continue;
+    }
     if (exists) {
       const { overwrite } = await inquirer.prompt([
         {
@@ -76,6 +87,12 @@ export const setupCommand = new Command('setup')
   .option('--adapters', '仅配置适配器 / Configure adapters only')
   .option('--ai', '仅配置 AI / Configure AI only')
   .option('--decisions', '配置可选 TypeSafe Jev 决策服务（需要已有 AI 配置） / Configure optional TypeSafe Jev decisions (requires AI)')
+  .option('--adapter <name>', '非交互添加适配器（可重复） / Add an adapter non-interactively (repeatable)', collectValues)
+  .option('--enable-ai', '非交互启用 AI（模型 Provider 之后在 Console 添加） / Enable AI non-interactively')
+  .option('--skip-ai', '跳过 AI 引导步骤 / Skip the AI onboarding step')
+  .option('--skip-adapters', '跳过适配器引导步骤 / Skip the adapters onboarding step')
+  .option('--install', '立即在线安装所需依赖（与 Console 相同的白名单） / Install the dependencies now (Console allowlist)')
+  .option('-y, --yes', '非交互：不提问，只执行参数指定的步骤 / Non-interactive: only the steps given by flags')
   .action(async (options) => {
     let locale = resolveLocale(options.locale);
     const cwd = options.global
@@ -124,26 +141,52 @@ export const setupCommand = new Command('setup')
 
     console.log(chalk.bold.cyan(wizardText(locale, "\n🚀 Zhin 配置向导\n")));
 
+    const adapterValues: string[] = options.adapter ?? [];
+    const nonInteractiveSteps = adapterValues.length > 0 || options.enableAi || options.skipAi || options.skipAdapters;
+    if (adapterValues.length && options.skipAdapters || options.enableAi && options.skipAi) {
+      logger.error(wizardText(locale, "--adapter/--enable-ai 不能与对应的 --skip-* 同时使用"));
+      process.exit(1);
+    }
+    if (options.yes && (options.database || options.adapters || options.ai || options.decisions)) {
+      logger.error(wizardText(locale, "--yes 不能与交互步骤（--database / --adapters / --ai / --decisions）同时使用"));
+      process.exit(1);
+    }
+    const explicitSteps = options.bootstrap || options.database || options.adapters || options.ai || options.decisions || nonInteractiveSteps;
+    // Without flags the full interactive wizard runs; `-y` alone runs nothing interactive.
+    const all = !explicitSteps && !options.yes;
+    const outcomes: SetupStepOutcomes = {};
+
     try {
       readPluginConfigurationMap(config, configFile ?? 'zhin.config.yml');
       const wizardOptions: InitOptions = { ...(options.locale === undefined ? {} : { locale: options.locale }) };
       const configBefore = JSON.stringify(config);
 
-      if (options.bootstrap || (!options.database && !options.adapters && !options.ai && !options.decisions)) {
-        await setupBootstrapFiles(cwd, locale);
+      if (options.bootstrap || all) {
+        await setupBootstrapFiles(cwd, locale, options.yes === true);
       }
 
-      if (options.database || (!options.bootstrap && !options.adapters && !options.ai && !options.decisions)) {
+      if (options.database || all) {
         wizardOptions.database = await configureDatabaseOptions(locale);
+        outcomes.database = 'done';
       }
 
-      if (options.adapters || (!options.bootstrap && !options.database && !options.ai && !options.decisions)) {
+      if (adapterValues.length) {
+        wizardOptions.adapters = await buildDefaultAdapterSetup(adapterValues, locale);
+      } else if (options.adapters || all) {
         wizardOptions.adapters = await configureAdapters(locale);
       }
+      if (wizardOptions.adapters) outcomes.adapters = wizardOptions.adapters.instances.length ? 'done' : 'skipped';
+      else if (options.skipAdapters) outcomes.adapters = 'skipped';
 
-      if (options.ai || (!options.bootstrap && !options.database && !options.adapters && !options.decisions)) {
+      if (options.enableAi) {
+        // Providers are added later in Console (AI can start empty).
+        const { sessions, context, agent } = RECOMMENDED_AI_DEFAULTS;
+        wizardOptions.ai = { enabled: true, sessions, context, agent: { ...agent, execAllowlist: [...agent.execAllowlist] } };
+      } else if (options.ai || all) {
         wizardOptions.ai = await configureAI(locale);
       }
+      if (wizardOptions.ai) outcomes.ai = wizardOptions.ai.enabled ? 'done' : 'skipped';
+      else if (options.skipAi) outcomes.ai = 'skipped';
 
       finalizeWizardOptions(wizardOptions);
       applyWizardOptionsToConfig(config, wizardOptions, locale);
@@ -197,6 +240,14 @@ export const setupCommand = new Command('setup')
         console.log('');
         console.log(chalk.bold.green(wizardText(locale, "✅ 配置已保存")));
         console.log(chalk.gray(wizardText(locale, "配置文件: {v0}", [formatDisplayPath(configPath)])));
+      }
+
+      const onboarding = setupOnboardingDeps.createService(cwd);
+      await recordOnboardingSteps(onboarding, outcomes, setupOnboardingDeps.io);
+      if (options.install && !options.global && Object.keys(deps).length) {
+        console.log('');
+        const report = await installSetupDependencies(onboarding, deps, setupOnboardingDeps.io);
+        if (report && !report.ok) process.exitCode = 1;
       }
 
       if (wizardOptions.database && !['sqlite', 'memory'].includes(wizardOptions.database.dialect)) {

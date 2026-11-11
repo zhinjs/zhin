@@ -226,6 +226,8 @@ describe('one setup flow for web and CLI (ADR 0049 §7)', () => {
     expect(await runConsoleInit(root, { database: 'sqlite', connection: { filename: '.zhin/accounts.sqlite' }, owner: 'alice', passwordStdin: true, yes: true }, io)).toBe(0);
     expect(io.errors).toEqual([]);
     expect(await readFile(join(root, 'zhin.config.yml'), 'utf8')).toContain('accounts.sqlite');
+    // ADR 0053 §5: init records onboarding steps 1–2 on the same state file as the Console.
+    expect(JSON.parse(await readFile(join(root, '.zhin/onboarding.json'), 'utf8')).steps).toEqual({ database: 'done', owner: 'done', ai: 'pending', adapters: 'pending' });
     const status = cliIo();
     expect(await runConsoleInit(root, { status: true }, status)).toBe(0);
     expect(JSON.parse(status.logs[0]!)).toMatchObject({ setupRequired: false, database: { dialect: 'sqlite', source: 'config' } });
@@ -240,6 +242,7 @@ describe('one setup flow for web and CLI (ADR 0049 §7)', () => {
   it('CLI user commands manage users offline and keep the last owner', async () => {
     const root = await project();
     expect(await runConsoleInit(root, { owner: 'alice', passwordStdin: true, yes: true }, cliIo(`${PASSWORD}\n`))).toBe(0);
+    expect(JSON.parse(await readFile(join(root, '.zhin/onboarding.json'), 'utf8')).steps).toMatchObject({ owner: 'done' });
     expect(await consoleUserActions.create(root, 'vera', { role: 'viewer', passwordStdin: true }, cliIo(`${PASSWORD}\n`))).toBe(0);
     const list = cliIo();
     expect(await consoleUserActions.list(root, list)).toBe(0);

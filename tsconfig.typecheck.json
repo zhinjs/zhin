@@ -236,6 +236,9 @@
       "@zhin.js/gateway/usage": [
         "./packages/host/gateway/src/usage.ts"
       ],
+      "@zhin.js/gateway/onboarding": [
+        "./packages/host/gateway/src/onboarding.ts"
+      ],
       "@zhin.js/gateway/http": [
         "./packages/host/gateway/src/http.ts"
       ],

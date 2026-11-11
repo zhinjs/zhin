@@ -46,6 +46,11 @@
       "development": "./src/usage.ts",
       "import": "./lib/usage.js"
     },
+    "./onboarding": {
+      "types": "./lib/onboarding.d.ts",
+      "development": "./src/onboarding.ts",
+      "import": "./lib/onboarding.js"
+    },
     "./http": {
       "types": "./lib/http.d.ts",
       "development": "./src/http.ts",
@@ -129,6 +134,10 @@
       "./usage": {
         "types": "./lib/usage.d.ts",
         "import": "./lib/usage.js"
+      },
+      "./onboarding": {
+        "types": "./lib/onboarding.d.ts",
+        "import": "./lib/onboarding.js"
       },
       "./http": {
         "types": "./lib/http.d.ts",
