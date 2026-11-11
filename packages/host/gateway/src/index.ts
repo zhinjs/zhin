@@ -16,3 +16,4 @@ export * from './supervisor.js';
 export * from './usage.js';
 export * from './onboarding.js';
 export * from './http.js';
+export * from './packages.js';

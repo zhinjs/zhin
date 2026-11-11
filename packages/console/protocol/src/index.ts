@@ -714,6 +714,7 @@ export * from './permissions.js';
 export * from './plugin-permissions.js';
 export * from './navigation.js';
 export * from './feature.js';
+export * from './gateway.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);

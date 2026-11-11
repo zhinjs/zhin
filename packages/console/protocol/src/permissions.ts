@@ -6,6 +6,7 @@
  * are spelled as literals; protocol tests assert every catalog entry is mapped.
  */
 import { FEATURE_RPC_PERMISSIONS } from './feature.js';
+import { GATEWAY_RPC_PERMISSIONS } from './gateway.js';
 import {
   isConsolePluginPermission,
   permissionListHoldsPluginPermission,
@@ -314,6 +315,8 @@ export const CONSOLE_RPC_PERMISSIONS: Readonly<Record<string, ConsolePermission>
   'iam.tokens.revoke': P.IAM_MANAGE,
   // Terminal (ADR 0051): session open is a WebSocket; listed so the Console can gate the page.
   'terminal.open': P.OPS_TERMINAL,
+  // Management gateway (ADR 0054 §4 / §5), handled by the gateway process.
+  ...GATEWAY_RPC_PERMISSIONS,
 });
 
 /** Adapter account mutations contributed by `defineAdapterConsoleRpc` (`plugin.<id>.endpoint-*`). */
