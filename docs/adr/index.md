@@ -6,7 +6,7 @@ sidebar: false
 
 本目录收录 Zhin.js 的架构决策记录（Architecture Decision Records, ADR）。每份 ADR 记录一项关键架构边界、背景动机、演进取舍与代码落盘位置。
 
-## 现存 ADR 列表（0034–0054）
+## 现存 ADR 列表（0034–0055）
 
 ### 服务插件与平台适配器契约
 
@@ -53,6 +53,7 @@ sidebar: false
 | [ADR 0052](./0052-console-information-architecture.md) | Console 信息架构——状态、功能、运维、访问控制分区 | Accepted | Console 前端（`zhinjs/console`） |
 | [ADR 0053](./0053-console-onboarding.md) | Console 引导——create-zhin 只建项目，其余在 Console 完成 | Accepted | `create-zhin`、`basic/cli`（`console/onboarding/`）、Console 前端 |
 | [ADR 0054](./0054-management-gateway.md) | 管理网关——CLI 启动网关，网关管理 Zhin 实例 | Accepted | `basic/cli`（`gateway/`、`plugin-runtime/start/`） |
+| [ADR 0055](./0055-conversation-feature-config.md) | 会话级功能配置——在账号之下按群 / 私聊覆盖，存数据库，可群内自助 | Accepted | `packages/im/plugin-runtime`、`packages/im/zhin/src/instance/console/` |
 
 ---
 
