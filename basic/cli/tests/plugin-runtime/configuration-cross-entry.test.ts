@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events';
+import { withTestUsers } from '../utils/console-users.js';
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -109,7 +110,7 @@ async function fixture(options: { store?: (real: ConsoleConfigurationStore) => S
   im.attach(runtime.snapshots);
   offline.declarations = () => runtime.configurationSchemas;
 
-  const http = createHttpHost({ host: '127.0.0.1', port: 0, token });
+  const http = withTestUsers(createHttpHost({ host: '127.0.0.1', port: 0 }), { [token]: 'owner' });
   registerConsoleRpcRoute({ http, base: '/api', projectRoot: project, consoleRuntime: { runView: async () => ({ pages: [] }) } as unknown as ConsoleRuntime,
     hub: createConsoleEventHub(), pluginLifecycleFile: resolvePluginLifecycleFile(project), pluginLifecycleStore: createPluginLifecycleStore(project),
     configuration: store } as Parameters<typeof registerConsoleRpcRoute>[0]);

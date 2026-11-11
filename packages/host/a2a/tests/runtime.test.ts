@@ -25,7 +25,7 @@ describe('Runtime A2A Host', () => {
       config: { path: '/mesh' },
       fallbackPublicUrl: 'https://bot.example.test',
       production: true,
-    })).toThrow('requires a2a.token or http.token');
+    })).toThrow('requires a2a.token or Host API tokens');
   });
 
   it('without a token only serves loopback callers', async () => {
@@ -62,6 +62,24 @@ describe('Runtime A2A Host', () => {
     expect(await call('::ffff:10.0.0.4')).toBe(401);
     expect(await call('127.0.0.1')).toBe(200);
     expect(await call('::1')).toBe(200);
+  });
+
+  it('accepts Host user API tokens through the shared authenticator, also in production (ADR 0049)', async () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    installRuntimeA2a({
+      http,
+      agentHost: testAgentHost(),
+      config: { path: '/mesh' },
+      authenticateBearer: async token => token === 'user-api-token',
+      fallbackPublicUrl: 'https://bot.example.test',
+      production: true,
+    });
+    const { port } = await http.listen();
+    const url = `http://127.0.0.1:${port}/mesh/zhin/.well-known/agent-card.json`;
+    expect((await fetch(url)).status).toBe(401);
+    expect((await fetch(url, { headers: { authorization: 'Bearer wrong' } })).status).toBe(401);
+    expect((await fetch(url, { headers: { authorization: 'Bearer user-api-token' } })).status).toBe(200);
   });
 
   it('serves authenticated Agent Cards from the active binding registry', async () => {

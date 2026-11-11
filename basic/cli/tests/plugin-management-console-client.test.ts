@@ -1,4 +1,5 @@
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { withTestUsers } from './utils/console-users.js';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -45,7 +46,7 @@ describe('CLI uses the running Console control plane', () => {
     ]);
     const modules: ModuleRuntime = { async load<T>(file: string) { return files.get(file) as T; }, async close() {} };
     const runtime = new RootRuntime({ projectRoot: root, modules, environment: { name: 'test', mode: 'test', platform: 'node' }, config: {configVersion: 2, plugins: {reminder: 'reminder'}, reminder: {}} });
-    const http = createHttpHost({ host: '127.0.0.1', port: 0, token: 'fixture-full-token', tokens: [{ token: 'fixture-demo-token', scope: 'demo' }] });
+    const http = withTestUsers(createHttpHost({ host: '127.0.0.1', port: 0 }), { 'fixture-full-token': 'owner', 'fixture-demo-token': 'none' });
     try {
       await runtime.start();
       const restart = vi.fn();

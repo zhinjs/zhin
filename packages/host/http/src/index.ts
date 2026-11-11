@@ -20,16 +20,35 @@ export {
 export {
   TokenRegistry,
   extractBearerToken,
-  isDemoWebSocketPath,
   publicConsoleAccess,
   unrestrictedConsoleAccess,
   type AuthenticatedTokenPrincipal,
   type ConsoleAccess,
   type AuthScope,
-  type DynamicTokenConfig,
-  type ScopedTokenConfig,
   type TokenRegistryConfig,
 } from './token-registry.js';
+export {
+  auditActor,
+  authorizeConsoleHttp,
+  authorizeConsoleRpc,
+  authorizeConsoleWebSocket,
+  globalPermissions,
+  isUserPrincipal,
+  pluginRpcWriteAllowed,
+  principalAllows,
+  requestConsolePrincipal,
+  requestMeta,
+  rpcAuditDetail,
+  rpcAuditTarget,
+  type ConsoleAccessProvider,
+  type ConsoleAuditEntry,
+  type ConsoleBootstrapPrincipal,
+  type ConsoleHttpDecision,
+  type ConsolePrincipal,
+  type ConsoleRequestMeta,
+  type ConsoleRpcDecision,
+  type ConsoleUserPrincipal,
+} from './access-control.js';
 export { timingSafeEqualString } from './timing-safe-equal.js';
 export {
   createConsoleEventHub,
@@ -51,7 +70,6 @@ export {
 } from './json-body.js';
 export {
   dispatchRuntimeConsoleRpc,
-  isDemoHttpAllowed,
   pickRpcReply,
   type RuntimeConsolePage,
   type RuntimeConsoleRpcContext,

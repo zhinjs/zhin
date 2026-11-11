@@ -1,4 +1,5 @@
 import { mkdtemp, rm, writeFile, readdir } from 'node:fs/promises';
+import { withTestUsers } from '../../utils/console-users.js';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHttpHost } from '@zhin.js/host-http';
@@ -18,7 +19,7 @@ async function fixture(target = 'bot', sceneId = 'room') {
   const state: SnapshotState = { root, tree: new Map([[root, { id: root, instanceKey: 'root', packageName: 'test', packageRoot: directory, children: [] }]]),
     config: new Map(), resources: new Map(), capabilities: new Map(), projections: new Map([[adapterFeatureId, index]]) };
   const snapshots = new SnapshotStore(state);
-  const http = createHttpHost({ host: '127.0.0.1', port: 0, token: 'full', tokens: [{ token: 'demo', scope: 'demo' }] });
+  const http = withTestUsers(createHttpHost({ host: '127.0.0.1', port: 0 }), { full: 'owner', demo: 'none' });
   cleanups.push(() => snapshots.close(), () => http.close());
   registerConversationResultRoutes({ http, base: '/api', projectRoot: directory, snapshots });
   const { port } = await http.listen();

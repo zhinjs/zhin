@@ -1,6 +1,7 @@
 import {
   extractBearerToken,
   publicConsoleAccess,
+  requestConsolePrincipal,
   type ConsoleAccess,
   type HttpHost,
   type RuntimeConsolePage,
@@ -35,6 +36,9 @@ export interface ProjectConsoleEntriesOptions {
  * navigations). Routes outside the API base are public, so a missing token means public access.
  */
 export function requestConsoleAccess(http: HttpHost, request: IncomingMessage, url?: URL): ConsoleAccess {
+  // The Host binds the authenticated principal (also on public routes when a token is sent).
+  const principal = requestConsolePrincipal(request);
+  if (principal) return http.tokenRegistry.accessFor(principal);
   const header = request.headers?.authorization;
   const token = extractBearerToken(Array.isArray(header) ? header[0] : header, url?.searchParams.get('token') ?? null);
   return http.tokenRegistry.resolveAccess(token);

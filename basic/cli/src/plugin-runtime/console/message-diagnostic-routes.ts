@@ -1,6 +1,6 @@
 import type { RuntimeMessageDiagnosticsReader } from '@zhin.js/core/runtime';
 import type { ConversationRef } from '@zhin.js/im-contract';
-import type { HttpHost } from '@zhin.js/host-http';
+import { isUserPrincipal, requestConsolePrincipal, type HttpHost } from '@zhin.js/host-http';
 import type { ConsoleMessageDiagnostic } from '@zhin.js/console-protocol';
 import { parseBoundedInteger, writeJson } from './http-response.js';
 
@@ -14,7 +14,8 @@ export function registerMessageDiagnosticRoutes(options: Readonly<{
   http.route('GET', `${base}/messages/diagnostics`, (request, response, url, authScope) => {
     const authorization = request.headers.authorization;
     const bearer = authorization?.startsWith('Bearer ') ? authorization.slice(7).trim() : '';
-    if (authScope !== 'full' || http.tokenRegistry.resolve(bearer) !== 'full') {
+    const explicit = isUserPrincipal(requestConsolePrincipal(request)) || http.tokenRegistry.resolve(bearer) === 'full';
+    if (authScope !== 'full' || !explicit) {
       writeJson(response, 403, { success: false, error: '需要显式配置并验证 full scope Token 才能读取消息诊断' });
       return;
     }

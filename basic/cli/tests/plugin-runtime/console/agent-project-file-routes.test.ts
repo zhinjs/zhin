@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { withTestUsers } from '../../utils/console-users.js';
 import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -31,7 +32,7 @@ const event = (path: string, overrides: Record<string, unknown> = {}) => ({
 });
 
 async function start(projectRoot: string | undefined) {
-  const http = createHttpHost({ host: '127.0.0.1', port: 0, token: 'operator', tokens: [{ token: 'demo', scope: 'demo' }] });
+  const http = withTestUsers(createHttpHost({ host: '127.0.0.1', port: 0 }), { operator: 'owner', demo: 'none' });
   hosts.push(http);
   registerAgentConsoleRoutes({ http, base: '/api', projectRoot });
   const { port } = await http.listen();

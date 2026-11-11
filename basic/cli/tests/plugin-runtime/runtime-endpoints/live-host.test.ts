@@ -28,7 +28,8 @@ async function localRequest(url: string, options: { method?: string; headers?: R
 it('manages and restores accounts through the built CLI without restarting its process or rewriting startup files', async () => {
   const project = await realpath(await mkdtemp(join(tmpdir(), 'zhin-account-built-host-')));
   let child: ReturnType<typeof spawn> | undefined, output = '';
-  const source = JSON.stringify({ configVersion: 2, http: { host: '127.0.0.1', port: 0, token: 'synthetic-admin' } });
+  // No http.token and no owner: the local Host is open before setup (ADR 0049).
+  const source = JSON.stringify({ configVersion: 2, http: { host: '127.0.0.1', port: 0 } });
   const environment = 'SYNTHETIC_ACCOUNT_FIXTURE=unchanged\n';
   const headers = { authorization: 'Bearer synthetic-admin', 'content-type': 'application/json' };
   async function stop() {

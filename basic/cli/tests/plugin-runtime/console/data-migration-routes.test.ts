@@ -1,4 +1,5 @@
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { withTestUsers } from '../../utils/console-users.js';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createHttpHost } from '@zhin.js/host-http';
@@ -24,7 +25,7 @@ async function fixture() {
     config: new Map(), capabilities: new Map(), projections: new Map(),
     resources: new Map([[root, new Map<TokenId, unknown>([[pluginDataMigrationProviderToken.id, provider]])]]) };
   const snapshots = new SnapshotStore(state);
-  const http = createHttpHost({ host: '127.0.0.1', port: 0, token: 'operator', tokens: [{ token: 'demo', scope: 'demo' }] });
+  const http = withTestUsers(createHttpHost({ host: '127.0.0.1', port: 0 }), { operator: 'owner', demo: 'none' });
   registerDataMigrationRoutes({ http, base: '/api', projectRoot, snapshots });
   const { port } = await http.listen();
   cleanups.push(async () => { await snapshots.close(); await http.close(); await rm(projectRoot, { recursive: true, force: true }); });

@@ -37,6 +37,11 @@ export interface PluginConsoleRpcRequestOptions {
   readonly snapshots?: SnapshotReader;
   /** Caller access from its bearer token (`TokenRegistry.resolveAccess`). */
   readonly access: ConsoleAccess;
+  /**
+   * Console user / API token (ADR 0049): it already holds the read permission for this RPC;
+   * `write` says whether it may call methods that are not read-only. Replaces Page checks.
+   */
+  readonly principalGrant?: Readonly<{ write: boolean }>;
   readonly timeoutMs?: number;
   /**
    * Host-owned methods answered as `plugin.root.<name>`, resolved once from this request's lease.
@@ -101,10 +106,15 @@ export async function dispatchPluginConsoleRpcRequest(
       provider?.methods.get(address.method) ??
       (rawMethodName ? provider?.methods.get(rawMethodName) : undefined);
     if (!method) throw new Failure('not_found', '插件未提供该操作');
-    authorize(snapshot, pluginId, method, options.access, options.pagesOwnedBy ?? catalogPagesOwnedBy);
+    if (options.principalGrant) {
+      if (!method.readOnly && !options.principalGrant.write) throw new Failure('forbidden', '没有操作权限');
+    } else {
+      authorize(snapshot, pluginId, method, options.access, options.pagesOwnedBy ?? catalogPagesOwnedBy);
+    }
     if (provider) releases.push(...admit(provider));
     const runtime: NonNullable<PluginConsoleRpcCall['runtime']> = Object.freeze({
-      owner: pluginId, generation: snapshot.generation, operator: options.access.unrestricted,
+      owner: pluginId, generation: snapshot.generation,
+      operator: options.access.unrestricted || options.principalGrant?.write === true,
       project(feature) {
         if (feature === adapterFeatureId) {
           const projection = snapshot.projections.get(adapterFeatureId);

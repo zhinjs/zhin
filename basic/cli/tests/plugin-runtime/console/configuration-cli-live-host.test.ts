@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createConfigDocument } from '@zhin.js/runtime';
 import { createConsoleEventHub, createHttpHost } from '@zhin.js/host-http';
+import { withTestUsers } from '../../utils/console-users.js';
 import type { ConsoleConfigApplication } from '@zhin.js/console-protocol';
 import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
 import { registerConsoleRpcRoute } from '../../../src/plugin-runtime/console/rpc-route.js';
@@ -55,7 +56,7 @@ beforeEach(async () => {
       applicationRevision: generation, groups: [{ id: 'main', paths, dependsOn: [],
         effect: restart ? 'restart-process' : 'in-place', status: restart ? 'restart-pending' : 'applied' }] };
   });
-  http = createHttpHost({ host: '127.0.0.1', port: 0, token });
+  http = withTestUsers(createHttpHost({ host: '127.0.0.1', port: 0 }), { [token]: 'owner' });
   registerConsoleRpcRoute({ http, base: '/api', projectRoot: root, consoleRuntime: { runView: async () => ({ pages: [] }) } as unknown as ConsoleRuntime,
     hub: createConsoleEventHub(), pluginLifecycleFile: resolvePluginLifecycleFile(root), pluginLifecycleStore: createPluginLifecycleStore(root),
     configuration: new ConsoleConfigurationStore({ projectRoot: root, document: createConfigDocument(file), applyConfiguration }),

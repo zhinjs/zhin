@@ -45,7 +45,7 @@ export interface InstallProtocolHostsOptions {
 export function installProtocolHosts(options: InstallProtocolHostsOptions): RootResourceInstaller {
   return async ({ resources, lifecycle }) => {
     const resolved = await resolveProtocolConfig(options.config, options.http);
-    const { httpHostToken } = await import('@zhin.js/host-http');
+    const { httpHostToken, requestMeta } = await import('@zhin.js/host-http');
     const http = resources.use(httpHostToken);
 
     if (resolved.mcp && resolved.mcp.enabled !== false) {
@@ -78,7 +78,8 @@ export function installProtocolHosts(options: InstallProtocolHostsOptions): Root
       lifecycle.add(installRuntimeMcp({
         http,
         config: resolved.mcp,
-        fallbackToken: resolved.httpToken,
+        // http.token is only a bootstrap credential now (ADR 0049): it goes through the registry.
+        authenticateBearer: (token, request) => http.tokenRegistry.authorizeBearer(token, 'mcp.access', requestMeta(request)),
         production: options.production,
         tools: {
           withTools: (invocation, operation) => runtime.withTools(rootPluginId(), {
@@ -148,7 +149,7 @@ export function installProtocolHosts(options: InstallProtocolHostsOptions): Root
           http,
           agentHost: resources.use(agentHostToken),
           config: resolved.a2a,
-          fallbackToken: resolved.httpToken,
+          authenticateBearer: (token, request) => http.tokenRegistry.authorizeBearer(token, 'a2a.access', requestMeta(request)),
           fallbackPublicUrl: resolved.publicBaseUrl,
           production: options.production,
         }));

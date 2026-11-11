@@ -37,6 +37,11 @@ export interface InstallRuntimeMcpOptions {
   readonly http: HttpRouteHost;
   readonly config: RuntimeMcpConfig;
   readonly fallbackToken?: string;
+  /**
+   * Shared Host credential check (ADR 0049): user API tokens with `mcp.access`, or the
+   * bootstrap token before setup. Tried when the bearer does not match `config.token`.
+   */
+  readonly authenticateBearer?: (token: string, request: IncomingMessage) => Promise<boolean>;
   readonly production?: boolean;
   readonly tools: RuntimeMcpToolProvider;
 }
@@ -80,7 +85,10 @@ export async function handleRuntimeMcpRequest(
   }
 
   const expectedToken = options.config.token ?? options.fallbackToken ?? '';
-  const bearerAuthenticated = verifyMcpBearer(request, expectedToken);
+  const bearer = bearerOf(request);
+  const bearerAuthenticated = verifyMcpBearer(request, expectedToken)
+    || (bearer !== '' && options.authenticateBearer !== undefined
+      && await options.authenticateBearer(bearer, request).catch(() => false));
   if (mcpAuthRequired(body, request, options.config, options.production ?? false)
     && !bearerAuthenticated) {
     writeJson(response, 401, {
@@ -262,6 +270,11 @@ function writeJson(
     ...headers,
   });
   response.end(payload);
+}
+
+function bearerOf(request: IncomingMessage): string {
+  const auth = request.headers.authorization ?? '';
+  return auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
 }
 
 function trimTrailingSlashes(s: string): string {

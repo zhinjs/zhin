@@ -1,5 +1,5 @@
 import { adapterFeatureId, isAdapterIndex } from '@zhin.js/adapter';
-import { HttpBodyError, extractBearerToken, readJsonBody, type HttpHost } from '@zhin.js/host-http';
+import { HttpBodyError, extractBearerToken, isUserPrincipal, readJsonBody, requestConsolePrincipal, type HttpHost } from '@zhin.js/host-http';
 import {
   GenerationAdmissionGate, generationAdmissionSource, normalizeDeliveryTarget,
   PluginTaskError, pluginTaskProviderToken, createMessages, isLocale, resolveLocale, type Locale,
@@ -105,9 +105,9 @@ function queryLocale(url: URL): Locale {
 function authorize(request: IncomingMessage, response: ServerResponse, http: HttpHost, scope: string, locale: Locale): boolean {
   response.setHeader('cache-control', 'no-store');
   const token = extractBearerToken(request.headers.authorization, null);
-  const explicit = http.tokenRegistry.resolve(token);
-  if (scope === 'full' && explicit === 'full') return true;
-  writeJson(response, explicit === 'demo' ? 403 : 401, { success: false, code: 'forbidden', error: taskMessages(locale, 'auth') });
+  const explicit = isUserPrincipal(requestConsolePrincipal(request)) || http.tokenRegistry.resolve(token) === 'full';
+  if (scope === 'full' && explicit) return true;
+  writeJson(response, 401, { success: false, code: 'forbidden', error: taskMessages(locale, 'auth') });
   return false;
 }
 function acquire(snapshots?: SnapshotReader): SnapshotLease {

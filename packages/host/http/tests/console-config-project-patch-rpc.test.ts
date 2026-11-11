@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { DEMO_RPC_WRITE_BLOCKLIST } from '@zhin.js/console-protocol';
+import { consoleRpcPermission } from '@zhin.js/console-protocol';
+import { VIEWER, userPrincipal } from './fixtures/principals.js';
 import { dispatchRuntimeConsoleRpc, pickRpcReply } from '../src/console-rpc.js';
 
 const method = 'config:patch-project';
@@ -25,10 +26,10 @@ describe('trusted project configuration patch RPC', () => {
     });
   });
 
-  it('rejects demo, missing revision, malformed patch operations and scoped-field ambiguity before a write', async () => {
+  it('rejects viewers and admins without ops.config.write, missing revision, malformed patch operations and scoped-field ambiguity before a write', async () => {
     const patchProjectConfig = vi.fn(async () => saved);
     for (const [extra, authScope] of [
-      [{}, 'demo'], [{ expectedRevision: 'stale' }, 'full'], [{ patches: null }, 'full'],
+      [{}, 'viewer'], [{}, 'operator'], [{ expectedRevision: 'stale' }, 'full'], [{ patches: null }, 'full'],
       [{ instanceKey: 'bot' }, 'full'], [{ patches: [] }, 'full'], [{ patches: [null] }, 'full'],
       [{ patches: [{ op: 'set' }] }, 'full'], [{ patches: [{ op: 'set', path: ['ai'] }] }, 'full'],
       [{ patches: [{ op: 'move', path: ['ai'] }] }, 'full'], [{ patches: [{ op: 'remove', path: ['__proto__'] }] }, 'full'],
@@ -37,13 +38,14 @@ describe('trusted project configuration patch RPC', () => {
       [{ patches: [{ op: 'remove', path: Array.from({ length: 17 }, () => 'a') }] }, 'full'],
     ] as const) {
       const request = message(extra);
+      const principal = authScope === 'viewer' ? VIEWER : authScope === 'operator' ? userPrincipal('operator') : undefined;
       const reply = pickRpcReply(request, await dispatchRuntimeConsoleRpc(request, {
-        authScope, listPages: async () => [], patchProjectConfig,
+        authScope: 'full', ...(principal ? { principal } : {}), listPages: async () => [], patchProjectConfig,
       }));
       expect(reply?.error).toBeTruthy();
     }
     expect(patchProjectConfig).not.toHaveBeenCalled();
-    expect(DEMO_RPC_WRITE_BLOCKLIST.has(method)).toBe(true);
+    expect(consoleRpcPermission(method)).toBe('ops.config.write');
   });
 
   it('returns conflicts unchanged without publishing or falling back to ordinary patches', async () => {

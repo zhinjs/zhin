@@ -1,4 +1,5 @@
 import { createHttpHost } from '@zhin.js/host-http';
+import { withTestUsers } from '../../utils/console-users.js';
 import { MemoryPersonalSessionRepository, PersonalSessionService } from '@zhin.js/agent/personal-session';
 import { registerInferenceRoutes } from '../../../src/plugin-runtime/inference/routes.js';
 import { resolveInferenceManagementPrincipal } from '@zhin.js/agent/runtime';
@@ -10,9 +11,8 @@ import { setupInferenceManagement } from './fixtures.js';
 
 async function setup(method: 'api-key' | 'oauth' = 'oauth') {
   const fixture = await setupInferenceManagement({ method });
-  const http = createHttpHost({ host: '127.0.0.1', port: 0, token: 'operator-fixture', tokens: [
-    { token: 'member-fixture', scope: 'user', principalId: 'member' },
-  ] });
+  // The removed `scope: user` member token is now a signed-in user without agent permissions.
+  const http = withTestUsers(createHttpHost({ host: '127.0.0.1', port: 0 }), { 'operator-fixture': 'owner', 'member-fixture': 'none' });
   const release = vi.fn();
   const sessions = new InferenceSessionManagement({ rootId: '/root', hostOwnerId: 'host', owners: [],
     sessions: new PersonalSessionService(new MemoryPersonalSessionRepository()), repository: fixture.repository,
@@ -111,7 +111,9 @@ it('marks only proven pre-persistence apply rejections as not committed', async 
     expect(rejected.payload).toMatchObject({ success: false, code: 'invalid-input', mutationOutcome: 'not-committed' });
     expect(await fixture.repository.readMutation({ rootId: '/root', mutationId: 'rejected' })).toBeUndefined();
     const denied = await fixture.call('/apply?owner=host', {}, 'member-fixture');
-    expect(denied.payload).toMatchObject({ code: 'forbidden', mutationOutcome: 'not-committed' });
+    // The ADR 0049 permission gate rejects it before the route runs.
+    expect(denied.status).toBe(403);
+    expect(denied.payload).toMatchObject({ code: 'forbidden', requestOutcome: 'not-dispatched' });
     const prepared = await fixture.management.review({ ownerId: 'host', hostAdministrator: true }, { plan: { version: 1 } });
     vi.spyOn(fixture.repository, 'readMutation').mockRejectedValueOnce(new Error('synthetic lookup failure'));
     const unknown = await fixture.call('/apply', { prepared: prepared.prepared, mutationId: 'unknown' });

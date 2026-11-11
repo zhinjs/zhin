@@ -1,4 +1,5 @@
 import { mkdtemp, rm } from 'node:fs/promises';
+import { withTestUsers } from '../../utils/console-users.js';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AdapterIndex, Adapter, endpointSpec, createEndpointSpecification, type Endpoint, adapterFeatureId, defineAdapter, endpointEventGatewayToken } from '@zhin.js/adapter';
@@ -40,7 +41,7 @@ it('reads the connected endpoint canonical history even when display names canno
     await events.append({ type: 'message.created', eventId: id, conversation: scene, timestamp: 1,
       message: { ref: { conversation: scene, id }, timestamp: 1, segments: [{ type: 'text', data: { text: id } }] } });
   }
-  const http = createHttpHost({ host: '127.0.0.1', port: 0, token: 'operator', tokens: [{ token: 'demo', scope: 'demo' }] });
+  const http = withTestUsers(createHttpHost({ host: '127.0.0.1', port: 0 }), { operator: 'owner', demo: 'none' });
   const resolveDisplayName = vi.fn(() => null);
   const im = { endpoints: { get: resolveDisplayName }, conversationEventReader: events,
     runWithSnapshotView: async (operation: () => Promise<unknown>) => operation() };

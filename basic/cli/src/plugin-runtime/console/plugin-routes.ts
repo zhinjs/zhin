@@ -1,5 +1,13 @@
 import type { ImRuntime } from '@zhin.js/core/runtime';
-import type { HttpHost, PluginManagementPort } from '@zhin.js/host-http';
+import { principalAllows, requestConsolePrincipal, type HttpHost, type PluginManagementPort } from '@zhin.js/host-http';
+import type { IncomingMessage } from 'node:http';
+
+/** Plugin management needs `plugin.manage`; a test host without a bound principal is open. */
+function canManagePlugins(http: HttpHost, request: IncomingMessage): boolean {
+  const principal = requestConsolePrincipal(request);
+  if (!principal) return !(http.tokenRegistry?.hasAnyToken() ?? false);
+  return principalAllows(principal, 'plugin.manage');
+}
 import type { RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { join } from 'node:path';
 import { writeJson } from './http-response.js';
@@ -24,7 +32,8 @@ export interface RegisterConsolePluginRoutesOptions {
 
 export function registerConsolePluginRoutes(options: RegisterConsolePluginRoutesOptions): void {
   const { http, base, projectRoot, pluginLifecycleFile, im, snapshot, pluginManagement } = options;
-  http.route('GET', `${base}/plugins`, async (_request, response, _url, authScope) => {
+  http.route('GET', `${base}/plugins`, async (request, response) => {
+    const canManage = canManagePlugins(http, request);
     try {
       const snap = readRuntimeSnapshot(snapshot);
       const plugins = await buildManagedPluginList(
@@ -35,7 +44,7 @@ export function registerConsolePluginRoutes(options: RegisterConsolePluginRoutes
       );
       const data = await Promise.all(plugins.map(async plugin => ({
         ...plugin,
-        manageable: authScope !== 'demo' && plugin.manageable,
+        manageable: canManage && plugin.manageable,
         ...await inspectPlugin(pluginManagement, plugin.instanceKey, plugin.manageable),
       })));
       writeJson(response, 200, { success: true, data, total: plugins.length });
@@ -50,7 +59,8 @@ export function registerConsolePluginRoutes(options: RegisterConsolePluginRoutes
     tags: ['plugins'],
   });
 
-  http.route('GET', `${base}/plugins/*`, async (_request, response, url, authScope) => {
+  http.route('GET', `${base}/plugins/*`, async (request, response, url) => {
+    const canManage = canManagePlugins(http, request);
     const prefix = `${base}/plugins/`;
     const raw = url.pathname.startsWith(prefix) ? url.pathname.slice(prefix.length) : '';
     if (!raw || raw.includes('/')) {
@@ -84,8 +94,8 @@ export function registerConsolePluginRoutes(options: RegisterConsolePluginRoutes
           data: {
             ...managed,
             ...await inspectPlugin(pluginManagement, managed.instanceKey, managed.manageable),
-            manageable: authScope !== 'demo' && managed.manageable,
-            readOnly: authScope === 'demo',
+            manageable: canManage && managed.manageable,
+            readOnly: !canManage,
             packageRoot: displayConsolePath(packageDir, projectRoot),
             ...(version ? { version } : {}),
           },
@@ -100,9 +110,9 @@ export function registerConsolePluginRoutes(options: RegisterConsolePluginRoutes
           snap,
           im?.endpoints.list(),
           projectRoot,
-        ), manageable: authScope !== 'demo' && managedPlugins.some(item =>
+        ), manageable: canManage && managedPlugins.some(item =>
           item.instanceKey === node.instanceKey && item.packageName === node.packageName && item.manageable,
-        ), readOnly: authScope === 'demo',
+        ), readOnly: !canManage,
         ...await inspectPlugin(pluginManagement, node.instanceKey, managedPlugins.some(item => item.instanceKey === node.instanceKey && item.packageName === node.packageName && item.manageable)) },
       });
     } catch (error) {

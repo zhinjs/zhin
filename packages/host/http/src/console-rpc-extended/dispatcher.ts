@@ -1,4 +1,3 @@
-import { assertDemoConsoleRpcAllowed } from '@zhin.js/console-protocol';
 import type { ConsoleRpcExtendedCtx, ExtendedRpcResult } from './contracts.js';
 import { addCron, listSchedule, mutateCron, validateCron } from './schedule-rpc.js';
 import {
@@ -16,12 +15,8 @@ export async function dispatchExtendedConsoleRpc(
   data: Record<string, unknown> | undefined,
   ctx: ConsoleRpcExtendedCtx,
 ): Promise<ExtendedRpcResult | undefined> {
+  // Callers authorize every message against the ADR 0049 permission map before dispatch.
   const d = data ?? {};
-
-  if (!ctx.fullScope) {
-    const denied = assertDemoConsoleRpcAllowed(type);
-    if (denied) return { error: denied };
-  }
 
   switch (type) {
     case 'schedule:list':

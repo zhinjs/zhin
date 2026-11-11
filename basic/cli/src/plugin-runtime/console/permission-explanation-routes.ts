@@ -1,6 +1,6 @@
 import { adapterFeatureId, isAdapterIndex } from '@zhin.js/adapter';
 import { commandFeatureId, explainCommandPermissions, isCommandIndex, type CommandDescriptor } from '@zhin.js/command';
-import { extractBearerToken, HttpBodyError, readJsonBody, type HttpHost } from '@zhin.js/host-http';
+import { extractBearerToken, HttpBodyError, isUserPrincipal, readJsonBody, requestConsolePrincipal, type HttpHost } from '@zhin.js/host-http';
 import { PermissionHost, permissionHostToken } from '@zhin.js/permission';
 import { createMessages, isLocale, resolveLocale, type Locale, normalizeDeliveryTarget, type CapabilityId, type DeliveryTarget, type RuntimeSnapshot, type SnapshotLease, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -88,9 +88,10 @@ export function registerPermissionExplanationRoutes(options: Readonly<{ http: Ht
 
 function authorize(request: IncomingMessage, response: ServerResponse, http: HttpHost, scope: string, locale: Locale): boolean {
   response.setHeader('cache-control', 'no-store');
-  const explicit = http.tokenRegistry.resolve(extractBearerToken(request.headers.authorization, null));
-  if (scope === 'full' && explicit === 'full') return true;
-  writeJson(response, explicit === 'demo' ? 403 : 401, { success: false, error: messages(locale, 'auth') });
+  const explicit = isUserPrincipal(requestConsolePrincipal(request))
+    || http.tokenRegistry.resolve(extractBearerToken(request.headers.authorization, null)) === 'full';
+  if (scope === 'full' && explicit) return true;
+  writeJson(response, 401, { success: false, error: messages(locale, 'auth') });
   return false;
 }
 function acquire(snapshots?: SnapshotReader): SnapshotLease {

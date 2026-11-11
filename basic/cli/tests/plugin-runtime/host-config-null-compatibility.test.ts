@@ -79,8 +79,9 @@ describe('Host schema null compatibility with actual configuration consumers', (
     expect(parsePluginConfigSchema(HOST_CONFIG_SCHEMA, input).errors).toEqual([]);
     const resolved = await resolveHttpConfig(input, {}, '/unused-fixture');
     expect(resolved).toEqual({ host: undefined, port: undefined, token: undefined, tokens: undefined, corsOrigins: undefined, apiBase: undefined, tls: undefined });
-    const partial = { http: { tokens: [null, { token: null }, { token: 'fixture', scope: null, principalId: null }], corsOrigins: [null, 'https://fixture.invalid'] } };
-    expect(parsePluginConfigSchema(HOST_CONFIG_SCHEMA, partial).errors).toEqual([]);
-    expect(await resolveHttpConfig(partial, {}, '/unused-fixture')).toMatchObject({ tokens: [{ token: 'fixture', scope: 'demo' }], corsOrigins: ['https://fixture.invalid'] });
+    const partial = { http: { corsOrigins: [null, 'https://fixture.invalid'] } };
+    expect(await resolveHttpConfig(partial, {}, '/unused-fixture')).toMatchObject({ corsOrigins: ['https://fixture.invalid'] });
+    // http.tokens was removed (ADR 0049): a configured list fails startup with a migration hint.
+    await expect(resolveHttpConfig({ http: { tokens: [{ token: 'fixture' }] } }, {}, '/unused-fixture')).rejects.toThrow(/http\.tokens/u);
   });
 });

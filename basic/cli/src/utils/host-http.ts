@@ -45,7 +45,8 @@ export async function loadHostHttpConfig(
   const base = (http.apiBase ?? '/api').replace(/^\/+|\/+$/g, '') || 'api';
   return {
     baseUrl: `${scheme}://${host}:${http.port ?? 8086}/${base}`,
-    token: http.token ?? '',
+    // After Console setup http.token is rejected (ADR 0049): use a user API token instead.
+    token: process.env.ZHIN_CONSOLE_TOKEN?.trim() || layers.environments?.[environment]?.ZHIN_CONSOLE_TOKEN?.trim() || http.token || '',
   };
 }
 

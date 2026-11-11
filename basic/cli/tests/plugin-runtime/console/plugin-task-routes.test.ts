@@ -1,4 +1,5 @@
 import { createHttpHost, type HttpHost } from '@zhin.js/host-http';
+import { withTestUsers } from '../../utils/console-users.js';
 import { adapterFeatureId } from '@zhin.js/adapter';
 import {
   SnapshotStore, createGenerationAdmissionGate, generationAdmissionSource, pluginTaskProviderToken,
@@ -46,7 +47,7 @@ function setup(options: { missingProvider?: boolean; outbound?: boolean; read?: 
   return { state, store, gate, provider, send, probe };
 }
 async function start(fixture?: ReturnType<typeof setup>) {
-  const http = createHttpHost({ host: '127.0.0.1', port: 0, token: 'operator', tokens: [{ token: 'demo', scope: 'demo' }] });
+  const http = withTestUsers(createHttpHost({ host: '127.0.0.1', port: 0 }), { operator: 'owner', demo: 'none' });
   hosts.push(http); registerPluginTaskRoutes({ http, base: '/api', snapshots: fixture?.store });
   const { port } = await http.listen();
   return (path = '/providers', body?: unknown, token = 'operator') => fetch(`http://127.0.0.1:${port}/api/tasks${path}`, {

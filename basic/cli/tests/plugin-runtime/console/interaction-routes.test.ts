@@ -1,4 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
+import { withTestUsers } from '../../utils/console-users.js';
 import { createHttpHost, type HttpHost } from '@zhin.js/host-http';
 import { adapterFeatureId } from '@zhin.js/adapter';
 import { SnapshotStore, rootPluginId, type SnapshotState } from '@zhin.js/plugin-runtime';
@@ -18,7 +19,7 @@ async function start(target = 'bot', sceneId = 'room') {
     config: new Map(), resources: new Map(), capabilities: new Map(), projections: new Map([[adapterFeatureId, index]]) };
   const snapshots = new SnapshotStore(state), im = new ImRuntime();
   im.attach(snapshots);
-  const http = createHttpHost({ host: '127.0.0.1', port: 0, token: 'operator', tokens: [{ token: 'demo', scope: 'demo' }] });
+  const http = withTestUsers(createHttpHost({ host: '127.0.0.1', port: 0 }), { operator: 'owner', demo: 'none' });
   cleanups.push(() => snapshots.close(), () => http.close());
   registerInteractionRoutes({ http, base: '/api', im, snapshots });
   const { port } = await http.listen();

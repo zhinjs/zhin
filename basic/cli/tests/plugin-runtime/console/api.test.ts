@@ -1,4 +1,5 @@
 import { mkdtemp, rm, writeFile, mkdir, readFile } from 'node:fs/promises';
+import { installTestConsoleUsers } from '../../utils/console-users.js';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -190,17 +191,9 @@ async function startHost(options: {
   snapshot?: () => RuntimeSnapshot;
   snapshots?: SnapshotReader;
 }): Promise<{ port: number }> {
-  const host = createHttpHost({
-    host: '127.0.0.1',
-    port: 0,
-    ...(options.withTokens
-      ? { token: 'full-token', tokens: [
-          { token: 'demo-token', scope: 'demo' as const },
-          { token: 'sponsor-token', scope: 'full' as const, principalId: 'human:alice' },
-          { token: 'other-token', scope: 'full' as const, principalId: 'human:bob' },
-        ] }
-      : {}),
-  });
+  const host = createHttpHost({ host: '127.0.0.1', port: 0 });
+  // The removed demo token is now the built-in read-only `viewer` user (ADR 0049).
+  if (options.withTokens) installTestConsoleUsers(host, { 'full-token': 'owner', 'demo-token': 'viewer', 'nobody-token': 'none' });
   hosts.push(host);
   registerConsoleRoutes({
     http: host,
@@ -563,7 +556,7 @@ describe('console REST routes', () => {
 
     const demoResponse = await fetch(
       `http://127.0.0.1:${port}/api/agent/traces?sessionKey=discord%3Abot%3Agroup%3Aroom`,
-      { headers: { authorization: 'Bearer demo-token' } },
+      { headers: { authorization: 'Bearer nobody-token' } },
     );
     expect(demoResponse.status).toBe(403);
   });
@@ -591,8 +584,8 @@ describe('console REST routes', () => {
     expect(JSON.stringify(await detail.json())).not.toContain('sk-abcdefghijklmnopqrstu');
     expect((await get('turn?turnId=missing')).status).toBe(404);
     expect((await get('turns?since=not-a-time')).status).toBe(400);
-    expect((await get('sessions', 'demo-token')).status).toBe(403);
-    expect((await get('turn?turnId=turn-a', 'demo-token')).status).toBe(403);
+    expect((await get('sessions', 'nobody-token')).status).toBe(403);
+    expect((await get('turn?turnId=turn-a', 'nobody-token')).status).toBe(403);
   });
 
   it('serves Engagement Collaboration Graph REST and RPC endpoints', async () => {
@@ -870,7 +863,7 @@ describe('console REST routes', () => {
     });
   });
 
-  it('applies the demo scope HTTP matrix', async () => {
+  it('applies the viewer permission HTTP matrix', async () => {
     const { port } = await startHost({
       projectRoot,
       withTokens: true,
@@ -888,9 +881,9 @@ describe('console REST routes', () => {
       expect(res.status, `demo GET ${path}`).toBe(200);
     }
 
-    // 只读放行之外的路径仍拒绝 demo。
-    const jobs = await fetch(`http://127.0.0.1:${port}/api/assistant/jobs`, { headers: demo });
-    expect(jobs.status).toBe(403);
+    // 写权限路径拒绝只读用户。
+    const send = await fetch(`http://127.0.0.1:${port}/api/message/send`, { method: 'POST', headers: demo });
+    expect(send.status).toBe(403);
 
     // 无 token 访问受保护路径 401；/entries 公开。
     const denied = await fetch(`http://127.0.0.1:${port}/api/system/status`);

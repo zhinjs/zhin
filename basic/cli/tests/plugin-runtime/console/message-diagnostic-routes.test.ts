@@ -1,4 +1,5 @@
 import { createHttpHost, type HttpHost } from '@zhin.js/host-http';
+import { withTestUsers } from '../../utils/console-users.js';
 import type { RuntimeMessageDiagnostic, RuntimeMessageDiagnosticsReader } from '@zhin.js/core/runtime';
 import { registerMessageDiagnosticRoutes } from '../../../src/plugin-runtime/console/message-diagnostic-routes.js';
 
@@ -13,7 +14,7 @@ const diagnostic: RuntimeMessageDiagnostic = {
 };
 
 async function start(reader?: RuntimeMessageDiagnosticsReader) {
-  const http = createHttpHost({ host: '127.0.0.1', port: 0, token: 'operator', tokens: [{ token: 'demo', scope: 'demo' }] });
+  const http = withTestUsers(createHttpHost({ host: '127.0.0.1', port: 0 }), { operator: 'owner', demo: 'none' });
   hosts.push(http);
   registerMessageDiagnosticRoutes({ http, base: '/api', diagnostics: reader });
   const { port } = await http.listen();

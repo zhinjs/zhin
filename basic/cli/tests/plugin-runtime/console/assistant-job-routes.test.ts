@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { withTestUsers } from '../../utils/console-users.js';
 import { createHttpHost } from '@zhin.js/host-http';
 import {
   parseAssistantJobInput,
@@ -25,7 +26,7 @@ beforeEach(() => { state.assistant = { jobs }; state.generation = true; vi.clear
 afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) await cleanup(); });
 
 async function start() {
-  const http = createHttpHost({ host: '127.0.0.1', port: 0, token: 'operator', tokens: [{ token: 'demo', scope: 'demo' }] });
+  const http = withTestUsers(createHttpHost({ host: '127.0.0.1', port: 0 }), { operator: 'owner', demo: 'none' });
   cleanups.push(() => http.close());
   registerAssistantJobRoutes({ http, base: '/api' });
   const { port } = await http.listen();

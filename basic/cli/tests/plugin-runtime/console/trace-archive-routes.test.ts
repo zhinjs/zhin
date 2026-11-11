@@ -1,4 +1,5 @@
 import { createHttpHost, type HttpHost } from '@zhin.js/host-http';
+import { withTestUsers } from '../../utils/console-users.js';
 import { createTurnTraceArchive, type TurnTrace } from '@zhin.js/agent/trace';
 import type { ConversationRef } from '@zhin.js/im-contract';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -24,7 +25,7 @@ function trace(turnId = 'root-turn', extra: Partial<TurnTrace> = {}): TurnTrace 
 async function start(rows: TurnTrace[] = [trace()]) {
   const archive = createTurnTraceArchive(directory, { secrets: [] });
   for (const row of rows) await archive.save(row);
-  const http = createHttpHost({ host: '127.0.0.1', port: 0, token: 'operator', tokens: [{ token: 'demo', scope: 'demo' }] });
+  const http = withTestUsers(createHttpHost({ host: '127.0.0.1', port: 0 }), { operator: 'owner', demo: 'none' });
   hosts.push(http);
   registerTraceArchiveRoutes({ http, base: '/api', projectRoot: directory, dir: directory });
   const { port } = await http.listen();

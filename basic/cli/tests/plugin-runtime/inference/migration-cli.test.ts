@@ -185,9 +185,18 @@ it('executes the actual offline CLI, then boots its finalized Root with authenti
         return nativeFetch(input, init);
       };
       void (async () => {
+        // ADR 0049: http.token is the bootstrap credential; create the first owner, then use its session.
+        let session = '';
         for (;;) {
           try {
-            const response = await fetch('http://127.0.0.1:${port}/api/agent/inference', { headers: { authorization: 'Bearer synthetic-migration-operator' } });
+            if (!session) {
+              const setup = await fetch('http://127.0.0.1:${port}/api/auth/setup', { method: 'POST',
+                headers: { authorization: 'Bearer synthetic-migration-operator', 'content-type': 'application/json' },
+                body: JSON.stringify({ username: 'operator', password: 'synthetic-owner-password' }) });
+              if (setup.status !== 201) throw new Error('setup pending');
+              session = (await setup.json()).data.token;
+            }
+            const response = await fetch('http://127.0.0.1:${port}/api/agent/inference', { headers: { authorization: 'Bearer ' + session } });
             if (response.ok) {
               const result = await response.json();
               const anonymous = await fetch('http://127.0.0.1:${port}/api/agent/inference');

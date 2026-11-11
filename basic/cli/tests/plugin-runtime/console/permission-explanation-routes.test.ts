@@ -1,5 +1,6 @@
 import { AdapterIndex, Adapter, endpointSpec, createEndpointSpecification, type Endpoint, adapterFeatureId, defineAdapter, endpointEventGatewayToken } from '@zhin.js/adapter';
 import { CommandIndex, commandFeatureId, defineCommand } from '@zhin.js/command';
+import { withTestUsers } from '../../utils/console-users.js';
 import { ImRuntime } from '@zhin.js/core/runtime';
 import { createHttpHost } from '@zhin.js/host-http';
 import { PermissionHost, permissionHostToken } from '@zhin.js/permission';
@@ -61,7 +62,7 @@ async function fixture(options: { host?: 'missing' | 'unverified'; empty?: boole
   const actualEndpoint = im.endpoints.list()[0]!.endpoint;
   const target = { endpoint: actualEndpoint, kind: 'channel' as const, id: 'room', parent: { kind: 'channel' as const, id: 'workspace' }, threadId: 'topic' };
   const group = { ...target, kind: 'group' as const };
-  const http = createHttpHost({ host: '127.0.0.1', port: 0, token: 'operator', tokens: [{ token: 'demo', scope: 'demo' }] });
+  const http = withTestUsers(createHttpHost({ host: '127.0.0.1', port: 0 }), { operator: 'owner', demo: 'none' });
   registerPermissionExplanationRoutes({ http, base: '/api', snapshots: store }); const { port } = await http.listen();
   cleanups.push(async () => { await http.close(); await store.close(); await adapters.stop(); });
   const request = (path = '', input?: unknown, token = 'operator') => fetch(`http://127.0.0.1:${port}/api/commands/permissions${path}`, {
@@ -154,7 +155,7 @@ it('rejects stale generation, absent command, endpoint aliases and false adapter
 
 it('distinguishes ready empty command catalog from unavailable runtime/index', async () => {
   const f = await fixture({ empty: true }); expect((await (await f.request()).json()).data).toMatchObject({ commands: [], total: 0 });
-  const http = createHttpHost({ host: '127.0.0.1', port: 0, token: 'operator' }); registerPermissionExplanationRoutes({ http, base: '/api' });
+  const http = withTestUsers(createHttpHost({ host: '127.0.0.1', port: 0 }), { operator: 'owner' }); registerPermissionExplanationRoutes({ http, base: '/api' });
   const { port } = await http.listen(); cleanups.push(() => http.close());
   expect((await fetch(`http://127.0.0.1:${port}/api/commands/permissions`, { headers: { authorization: 'Bearer operator' } })).status).toBe(503);
   f.store.commit(0, { snapshot: { ...f.base, projections: new Map() }, dispose: () => undefined });

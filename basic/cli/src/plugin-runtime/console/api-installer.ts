@@ -41,6 +41,8 @@ export interface ConsoleControlPlaneOptions {
   readonly configuration: ConsoleConfigurationStore;
   /** Host-owned Console methods resolved from each request's captured Root lease. */
   readonly hostConsoleRpc?: HostConsoleRpcFactory;
+  /** Console access control (ADR 0049). */
+  readonly consoleIam?: () => import('./iam/service.js').ConsoleIamService | undefined;
 }
 
 export interface StartConsoleControlPlaneOptions extends ConsoleControlPlaneOptions {
@@ -88,6 +90,7 @@ export function startConsoleControlPlane(options: StartConsoleControlPlaneOption
       pluginLifecycleStore: options.pluginLifecycleStore,
       configuration,
       ...(options.hostConsoleRpc ? { hostConsoleRpc: options.hostConsoleRpc } : {}),
+      ...(options.consoleIam ? { consoleIam: options.consoleIam } : {}),
     });
   } catch (error) {
     for (const dispose of disposers.reverse()) dispose();

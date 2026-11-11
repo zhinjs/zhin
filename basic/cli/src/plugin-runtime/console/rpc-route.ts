@@ -1,77 +1,140 @@
 import {
+  auditActor,
+  authorizeConsoleRpc,
   dispatchRuntimeConsoleRpc,
   HttpBodyError,
+  isUserPrincipal,
   pickRpcReply,
+  pluginRpcWriteAllowed,
+  principalAllows,
   readJsonBody,
+  requestConsolePrincipal,
+  rpcAuditDetail,
+  rpcAuditTarget,
   unrestrictedConsoleAccess,
+  type ConsolePrincipal,
+  type ConsoleRpcDecision,
   type HttpHost,
 } from '@zhin.js/host-http';
+import type { IncomingMessage } from 'node:http';
 import { writeJson } from './http-response.js';
 import {
   ConsoleRpcRequestScope,
 } from './rpc-context.js';
 import type { AgentConsolePort } from './agent-console.js';
 import type { ConsoleRpcComposition } from './rpc-composition.js';
-import { assertDemoConsoleRpcAllowed } from '@zhin.js/console-protocol';
 import { dispatchPluginConsoleRpcRequest } from './plugin-console-rpc.js';
-import { requestConsoleAccess } from './entry-projection.js';
+import { dispatchIamRpc, isIamRpc } from './iam/rpc.js';
+import { createFeatureRpcContext, dispatchFeatureConsoleRpc } from './console-feature-rpc.js';
+import type { ConsoleScopeTarget } from '@zhin.js/console-protocol';
+import type { ConsoleIamService } from './iam/service.js';
 
 export interface RegisterConsoleRpcRouteOptions extends ConsoleRpcComposition {
   readonly http: HttpHost;
   readonly base: string;
+  /** Console access control (ADR 0049); `iam.*` answers 503 without it. */
+  readonly consoleIam?: () => ConsoleIamService | undefined;
+}
+
+const OPEN_HOST: ConsolePrincipal = Object.freeze({ kind: 'bootstrap', open: true });
+
+/** The Host binds a principal to every `/api` request; a bare test host without credentials is open. */
+function rpcPrincipal(http: HttpHost, request: IncomingMessage): ConsolePrincipal | undefined {
+  return requestConsolePrincipal(request) ?? (http.tokenRegistry?.hasAnyToken() ? undefined : OPEN_HOST);
 }
 
 export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions): void {
   const { http, base } = options;
 
   http.route('POST', `${base}/console/request`, async (
-    request, response, url, authScope, authenticatedPrincipal,
+    request, response, _url, authScope, authenticatedPrincipal,
   ) => {
+    let principal: ConsolePrincipal | undefined;
+    let message: Record<string, unknown> = {};
+    let decision: ConsoleRpcDecision | undefined;
+    const audit = (outcome: 'ok' | 'denied' | 'error') => {
+      if (!decision) return;
+      if (outcome !== 'denied' && !(decision.allowed && decision.write)) return;
+      try {
+        http.tokenRegistry?.accessProvider?.audit?.({
+          actor: auditActor(principal),
+          action: `rpc:${String(message.type ?? '')}`.slice(0, 256),
+          ...(decision.allowed && rpcAuditTarget(decision.rule) ? { target: rpcAuditTarget(decision.rule)! } : {}),
+          outcome,
+          detail: rpcAuditDetail(message),
+          ...(request.socket?.remoteAddress ? { ip: request.socket.remoteAddress } : {}),
+        });
+      } catch { /* audit never breaks a request */ }
+    };
+    const reply = (status: number, body: Record<string, unknown>) => {
+      if (decision?.allowed && decision.write) audit(status < 400 && body.success !== false ? 'ok' : 'error');
+      writeJson(response, status, body);
+    };
     try {
-      const message = (await readJsonBody<Record<string, unknown>>(request)) ?? {};
-      // A full-scope caller is the operator even when the Host has no tokens configured.
-      const access = authScope === 'full' ? undefined : requestConsoleAccess(http, request, url);
-      // `plugin.<pluginId>.<method>` is plugin-registered and authorizes itself against its Page.
+      message = (await readJsonBody<Record<string, unknown>>(request)) ?? {};
+      principal = rpcPrincipal(http, request);
+      if (!principal) {
+        writeJson(response, 401, { success: false, code: 'unauthorized', error: 'Invalid or missing token', requestId: message.requestId });
+        return;
+      }
+      decision = authorizeConsoleRpc(principal, message);
+      if (!decision.allowed) {
+        audit('denied');
+        writeJson(response, 403, { success: false, code: decision.code, error: decision.error, requestId: message.requestId });
+        return;
+      }
+      const access = http.tokenRegistry?.accessFor(principal) ?? unrestrictedConsoleAccess;
+      if (isIamRpc(message.type)) {
+        const result = await dispatchIamRpc(message, options.consoleIam?.(), principal);
+        response.setHeader('cache-control', 'no-store');
+        reply(result.status, result.body);
+        return;
+      }
+      const authorizedPrincipal = principal;
+      const featureReply = await dispatchFeatureConsoleRpc(message, createFeatureRpcContext(options, authScope,
+        request => principalAllows(authorizedPrincipal, request.permission, featureTarget(request.level, request.key))));
+      if (featureReply) {
+        response.setHeader('cache-control', 'no-store');
+        reply(featureReply.status, featureReply.body);
+        return;
+      }
+      // `plugin.<pluginId>.<method>`: the gate admitted the read permission; writes need the write one.
       const pluginReply = await dispatchPluginConsoleRpcRequest(message, {
         snapshots: options.snapshots,
-        access: access ?? unrestrictedConsoleAccess,
+        access,
+        ...(principal.kind === 'bootstrap' ? {} : {
+          principalGrant: Object.freeze({ write: pluginRpcWriteAllowed(principal, decision.rule) }),
+        }),
         ...(options.hostConsoleRpc ? { hostRpc: options.hostConsoleRpc } : {}),
       });
       if (pluginReply) {
         response.setHeader('cache-control', 'no-store');
-        writeJson(response, pluginReply.status, pluginReply.body);
+        reply(pluginReply.status, pluginReply.body as Record<string, unknown>);
         return;
-      }
-      if (authScope === 'demo') {
-        const denied = assertDemoConsoleRpcAllowed(String(message.type ?? ''));
-        if (denied) {
-          writeJson(response, 403, { success: false, error: denied, requestId: message.requestId });
-          return;
-        }
       }
       const requestScope = new ConsoleRpcRequestScope(options, {
         authScope,
         authenticatedPrincipal,
-        access: access ?? unrestrictedConsoleAccess,
+        access,
       });
       let payloads: Awaited<ReturnType<typeof dispatchRuntimeConsoleRpc>>;
       try {
         const collaborationReply = await dispatchAgentCollaborationRpc(message, requestScope.agent);
         if (collaborationReply) {
-          writeJson(response, collaborationReply.status, collaborationReply.body);
+          reply(collaborationReply.status, collaborationReply.body);
           return;
         }
-        payloads = await dispatchRuntimeConsoleRpc(message, requestScope.context);
+        payloads = await dispatchRuntimeConsoleRpc(message, { ...requestScope.context, principal });
       } finally {
         requestScope.close();
       }
       const match = pickRpcReply(message, payloads);
       if (!match) {
-        writeJson(response, 500, { success: false, error: 'No response' });
+        reply(500, { success: false, error: 'No response' });
         return;
       }
       if (match.error) {
-        writeJson(response, 400, {
+        reply(400, {
           success: false,
           error: match.error,
           ...(match.data !== undefined ? { data: match.data } : {}),
@@ -79,9 +142,9 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
         });
         return;
       }
-      writeJson(response, 200, {
+      reply(200, {
         success: true,
-        data: match.data,
+        data: scopedEndpointList(principal, message.type, match.data),
         type: match.type,
         requestId: match.requestId,
       });
@@ -90,7 +153,7 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
         writeJson(response, error.statusCode, { success: false, error: error.message });
         return;
       }
-      writeJson(response, 500, {
+      reply(500, {
         success: false,
         error: error instanceof Error ? error.message : String(error),
       });
@@ -100,6 +163,35 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
     tags: ['console'],
     description: 'Plugin Runtime Console request envelope: `{ type, data?, requestId? }`.',
   });
+}
+
+/**
+ * Scope target of a `feature.*` operation (ADR 0049 §3): `adapter` key `<alias>`, `endpoint` key
+ * `<alias>/<endpointId>`. Calls without a level (list / matrix, global writes) need a global binding.
+ */
+function featureTarget(level: string | undefined, key: string | undefined): ConsoleScopeTarget {
+  if (level === 'adapter' && key && !key.includes('/')) return { kind: 'adapter', adapter: key };
+  if (level === 'endpoint' && key) {
+    const slash = key.indexOf('/');
+    if (slash > 0 && slash < key.length - 1) return { kind: 'endpoint', adapter: key.slice(0, slash), endpoint: key.slice(slash + 1) };
+  }
+  return { kind: 'global' };
+}
+
+/** `endpoint.list` for an adapter/endpoint-scoped user only shows the accounts it covers. */
+function scopedEndpointList(principal: ConsolePrincipal, type: unknown, data: unknown): unknown {
+  if (type !== 'endpoint.list' || !isUserPrincipal(principal) || principalAllows(principal, 'endpoint.view')) return data;
+  const record = data && typeof data === 'object' ? data as { endpoints?: unknown } : undefined;
+  if (!record || !Array.isArray(record.endpoints)) return data;
+  return {
+    ...record,
+    endpoints: record.endpoints.filter((entry) => {
+      const item = entry as { adapter?: unknown; name?: unknown; endpoint?: { id?: unknown; adapter?: unknown } };
+      const adapter = String(item.endpoint?.adapter ?? item.adapter ?? '');
+      const endpoint = String(item.endpoint?.id ?? item.name ?? '');
+      return principalAllows(principal, 'endpoint.view', { kind: 'endpoint', adapter, endpoint });
+    }),
+  };
 }
 
 async function dispatchAgentCollaborationRpc(

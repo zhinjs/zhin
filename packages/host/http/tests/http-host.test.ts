@@ -14,6 +14,14 @@ import {
   type SnapshotState,
 } from '@zhin.js/plugin-runtime';
 import { createHttpHost, type HttpHost, type HttpHandler } from '../src/http-host.js';
+import { createHttpHostGroup, listHttpHostAddresses } from '../src/listener-group.js';
+import {
+  requestConsolePrincipal,
+  type ConsoleAccessProvider,
+  type ConsoleAuditEntry,
+  type ConsoleUserPrincipal,
+} from '../src/access-control.js';
+import { CONSOLE_BUILTIN_ROLES } from '@zhin.js/console-protocol';
 
 const hosts: Array<ReturnType<typeof createHttpHost>> = [];
 
@@ -321,7 +329,7 @@ describe('HttpHost', () => {
     expect(response.status).toBe(404);
   });
 
-  it('serves /pub/health without auth and protects /api when token is configured', async () => {
+  it('serves /pub/health without auth and limits the bootstrap token to setup before an owner exists', async () => {
     const host = createHttpHost({
       host: '127.0.0.1',
       port: 0,
@@ -329,9 +337,13 @@ describe('HttpHost', () => {
       corsOrigins: ['https://example.test'],
     });
     hosts.push(host);
-    host.route('GET', '/api/secure', (_request, response, _url, scope) => {
+    host.route('GET', '/api/system/status', (_request, response, _url, scope) => {
       response.writeHead(200, { 'content-type': 'application/json' });
       response.end(JSON.stringify({ scope }));
+    });
+    host.route('GET', '/api/auth/setup', (request, response) => {
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end(JSON.stringify({ principal: requestConsolePrincipal(request) }));
     });
     const { port } = await host.listen();
 
@@ -339,16 +351,22 @@ describe('HttpHost', () => {
     expect(health.status).toBe(200);
     expect(await health.json()).toMatchObject({ success: true, status: 'ok' });
 
-    const denied = await fetch(`http://127.0.0.1:${port}/api/secure`);
+    const denied = await fetch(`http://127.0.0.1:${port}/api/system/status`);
     expect(denied.status).toBe(401);
 
-    const allowed = await fetch(`http://127.0.0.1:${port}/api/secure`, {
+    const setupOnly = await fetch(`http://127.0.0.1:${port}/api/system/status`, {
+      headers: { Authorization: 'Bearer secret-full-token' },
+    });
+    expect(setupOnly.status).toBe(403);
+    expect(await setupOnly.json()).toMatchObject({ code: 'setup_required', requestOutcome: 'not-dispatched' });
+
+    const allowed = await fetch(`http://127.0.0.1:${port}/api/auth/setup`, {
       headers: { Authorization: 'Bearer secret-full-token' },
     });
     expect(allowed.status).toBe(200);
-    expect(await allowed.json()).toEqual({ scope: 'full' });
+    expect(await allowed.json()).toEqual({ principal: { kind: 'bootstrap', open: false } });
 
-    const preflight = await fetch(`http://127.0.0.1:${port}/api/secure`, {
+    const preflight = await fetch(`http://127.0.0.1:${port}/api/system/status`, {
       method: 'OPTIONS',
       headers: { Origin: 'https://example.test' },
     });
@@ -356,44 +374,28 @@ describe('HttpHost', () => {
     expect(preflight.headers.get('access-control-allow-origin')).toBe('https://example.test');
   });
 
-  it('requires WS token when registry is configured and accepts query token for sandbox', async () => {
-    const host = createHttpHost({
-      host: '127.0.0.1',
-      port: 0,
-      token: 'secret-full-token',
-      tokens: [{ token: 'demo-token', scope: 'demo' }],
-    });
+  it('authorizes WS upgrades by principal: users by permission, the bootstrap token never on Console sockets', async () => {
+    const host = createHttpHost({ host: '127.0.0.1', port: 0, token: 'secret-full-token' });
     hosts.push(host);
-    const sandbox = host.ws('/sandbox');
-    const other = host.ws('/other');
-    const scopes: string[] = [];
-    sandbox.onConnection((connection) => { scopes.push(`sandbox:${connection.authScope}`); });
-    other.onConnection((connection) => { scopes.push(`other:${connection.authScope}`); });
+    const provider = fakeProvider({ initialized: false });
+    host.tokenRegistry.useAccessProvider(provider);
+    const opened: string[] = [];
+    host.ws('/sandbox').onConnection((connection) => { opened.push(`sandbox:${connection.principal?.kind}`); connection.socket.close(); });
+    host.ws('/onebot').onConnection((connection) => { opened.push(`onebot:${connection.principal?.kind}`); connection.socket.close(); });
     const { port } = await host.listen();
 
-    await expect(new Promise<void>((resolve, reject) => {
-      const client = new WebSocket(`ws://127.0.0.1:${port}/sandbox`);
-      client.once('open', () => reject(new Error('unexpected open without token')));
-      client.once('error', () => resolve());
-      setTimeout(() => reject(new Error('timeout')), 1000);
-    })).resolves.toBeUndefined();
+    expect(await wsOutcome(`ws://127.0.0.1:${port}/sandbox`)).toBe('rejected');
+    // Before setup the bootstrap token admits adapter reverse connections, not Console sockets.
+    expect(await wsOutcome(`ws://127.0.0.1:${port}/sandbox?token=secret-full-token`)).toBe('rejected');
+    expect(await wsOutcome(`ws://127.0.0.1:${port}/onebot?token=secret-full-token`)).toBe('opened');
 
-    await new Promise<void>((resolve, reject) => {
-      const client = new WebSocket(`ws://127.0.0.1:${port}/sandbox?token=demo-token`);
-      client.once('open', () => {
-        client.close();
-      });
-      client.once('close', () => resolve());
-      client.once('error', reject);
-    });
-    expect(scopes).toContain('sandbox:demo');
-
-    await expect(new Promise<void>((resolve, reject) => {
-      const client = new WebSocket(`ws://127.0.0.1:${port}/other?token=demo-token`);
-      client.once('open', () => reject(new Error('demo must not open non-sandbox')));
-      client.once('error', () => resolve());
-      setTimeout(() => reject(new Error('timeout')), 1000);
-    })).resolves.toBeUndefined();
+    provider.state.initialized = true;
+    expect(await wsOutcome(`ws://127.0.0.1:${port}/onebot?token=secret-full-token`)).toBe('rejected');
+    expect(await wsOutcome(`ws://127.0.0.1:${port}/sandbox?token=operator-session`)).toBe('opened');
+    expect(await wsOutcome(`ws://127.0.0.1:${port}/sandbox?token=viewer-session`)).toBe('rejected');
+    expect(await wsOutcome(`ws://127.0.0.1:${port}/onebot?token=operator-session`)).toBe('rejected');
+    expect(opened).toEqual(['onebot:bootstrap', 'sandbox:user']);
+    expect(provider.audits.filter(entry => entry.outcome === 'denied').map(entry => entry.action)).toContain('ws:/sandbox');
   });
 
   it('allows a protocol-authenticated WS route to perform its own handshake', async () => {
@@ -450,7 +452,8 @@ describe('HttpHost', () => {
   });
 
   it('serves OpenAPI catalog and parses JSON bodies', async () => {
-    const host = createHttpHost({ host: '127.0.0.1', port: 0, token: 'secret' });
+    // No credential configured: the Host is open before setup, so the unmapped route is reachable.
+    const host = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(host);
     const { readJsonBody } = await import('../src/json-body.js');
     host.route('POST', '/api/echo', async (request, response, _url, scope) => {
@@ -527,45 +530,58 @@ describe('HttpHost', () => {
     expect(await ok.json()).toEqual({ body: { a: 1 } });
   });
 
-  it('allows demo scope on console RPC path and rejects other /api routes', async () => {
-    const host = createHttpHost({
-      host: '127.0.0.1',
-      port: 0,
-      token: 'full-token',
-      tokens: [{ token: 'demo-token', scope: 'demo' }],
-    });
+  it('after setup checks every /api route against the permission map and rejects the bootstrap token', async () => {
+    const host = createHttpHost({ host: '127.0.0.1', port: 0, token: 'full-token' });
     hosts.push(host);
-    host.route('POST', '/api/console/request', (_request, response, _url, scope) => {
-      response.writeHead(200, { 'content-type': 'application/json' });
-      response.end(JSON.stringify({ scope }));
-    });
-    host.route('GET', '/api/secret', (_request, response) => {
-      response.writeHead(200);
-      response.end('nope');
-    });
+    const provider = fakeProvider({ initialized: true });
+    host.tokenRegistry.useAccessProvider(provider);
+    const seen: unknown[] = [];
+    for (const [method, path] of [['POST', '/api/console/request'], ['GET', '/api/system/status'], ['GET', '/api/secret'], ['POST', '/api/message/send'], ['GET', '/api/auth/me']] as const) {
+      host.route(method, path, (request, response, _url, scope) => {
+        seen.push(path);
+        response.writeHead(200, { 'content-type': 'application/json' });
+        response.end(JSON.stringify({ scope, kind: requestConsolePrincipal(request)?.kind ?? null }));
+      });
+    }
     const { port } = await host.listen();
+    const call = (path: string, token?: string, method = 'GET') => fetch(`http://127.0.0.1:${port}${path}`, {
+      method, headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
 
-    const ok = await fetch(`http://127.0.0.1:${port}/api/console/request`, {
-      method: 'POST',
-      headers: {
-        Authorization: 'Bearer demo-token',
-        'content-type': 'application/json',
-      },
-      body: '{}',
-    });
-    expect(ok.status).toBe(200);
-    expect(await ok.json()).toEqual({ scope: 'demo' });
-
-    const denied = await fetch(`http://127.0.0.1:${port}/api/secret`, {
-      headers: { Authorization: 'Bearer demo-token' },
-    });
-    expect(denied.status).toBe(403);
-    expect(await denied.json()).toEqual({ success: false, code: 'forbidden', requestOutcome: 'not-dispatched', error: 'Token scope does not allow this route' });
-    const invalid = await fetch(`http://127.0.0.1:${port}/api/secret`, {
-      headers: { Authorization: 'Bearer invalid-token' },
-    });
+    expect((await call('/api/system/status', 'full-token')).status).toBe(401);
+    expect((await call('/api/console/request', 'full-token', 'POST')).status).toBe(401);
+    expect(await (await call('/api/system/status', 'viewer-session')).json()).toEqual({ scope: 'full', kind: 'user' });
+    expect((await call('/api/console/request', 'viewer-session', 'POST')).status).toBe(200);
+    const unmapped = await call('/api/secret', 'operator-session');
+    expect(unmapped.status).toBe(403);
+    expect(await unmapped.json()).toMatchObject({ code: 'forbidden', requestOutcome: 'not-dispatched' });
+    expect((await call('/api/message/send', 'viewer-session', 'POST')).status).toBe(403);
+    // Adapter-scoped endpoint.operate is not enough for a route without a knowable target.
+    expect((await call('/api/message/send', 'scoped-session', 'POST')).status).toBe(403);
+    expect((await call('/api/message/send', 'operator-session', 'POST')).status).toBe(200);
+    expect(await (await call('/api/auth/me')).json()).toEqual({ scope: 'full', kind: null });
+    const invalid = await call('/api/system/status', 'invalid-token');
     expect(invalid.status).toBe(401);
     expect(await invalid.json()).toMatchObject({ requestOutcome: 'not-dispatched', code: 'unauthorized' });
+    expect(seen).not.toContain('/api/secret');
+    expect(provider.audits.filter(entry => entry.outcome === 'denied')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ actor: 'user:operator', action: 'http:GET /secret' }),
+      expect.objectContaining({ actor: 'user:viewer', action: 'http:POST /message/send' }),
+    ]));
+  });
+
+  it('keeps a Host without any credential open before setup', async () => {
+    const host = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(host);
+    host.tokenRegistry.useAccessProvider(fakeProvider({ initialized: false }));
+    host.route('GET', '/api/anything', (request, response) => {
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end(JSON.stringify(requestConsolePrincipal(request)));
+    });
+    const { port } = await host.listen();
+    const response = await fetch(`http://127.0.0.1:${port}/api/anything`);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ kind: 'bootstrap', open: true });
   });
 
   it('proves only a matched admission rejection was not dispatched and preserves the 503 status', async () => {
@@ -584,13 +600,10 @@ describe('HttpHost', () => {
   });
 
   it('injects the token-bound principal into handlers without accepting it from the body', async () => {
-    const host = createHttpHost({
-      host: '127.0.0.1',
-      port: 0,
-      tokens: [{ token: 'sponsor-token', scope: 'full', principalId: 'human:alice' }],
-    });
+    const host = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(host);
-    host.route('POST', '/api/sponsor', async (request, response, _url, _scope, principal) => {
+    host.tokenRegistry.useAccessProvider(fakeProvider({ initialized: true }));
+    host.route('POST', '/api/message/send', async (request, response, _url, _scope, principal) => {
       const chunks: Buffer[] = [];
       for await (const chunk of request) chunks.push(Buffer.from(chunk));
       response.writeHead(200, { 'content-type': 'application/json' });
@@ -598,17 +611,61 @@ describe('HttpHost', () => {
     });
     const { port } = await host.listen();
 
-    const result = await fetch(`http://127.0.0.1:${port}/api/sponsor`, {
+    const result = await fetch(`http://127.0.0.1:${port}/api/message/send`, {
       method: 'POST',
-      headers: { Authorization: 'Bearer sponsor-token', 'content-type': 'application/json' },
+      headers: { Authorization: 'Bearer operator-session', 'content-type': 'application/json' },
       body: JSON.stringify({ principalId: 'human:mallory' }),
     });
     expect(await result.json()).toEqual({
-      principal: { principalId: 'human:alice', scope: 'full' },
+      principal: { principalId: 'user:operator', scope: 'full' },
       body: { principalId: 'human:mallory' },
     });
   });
+
+  it('shares one authentication state across a listener group', async () => {
+    const group = createHttpHostGroup([{ host: '127.0.0.1', port: 0, token: 't' }, { host: '127.0.0.1', port: 0, token: 't' }]);
+    hosts.push(group as never);
+    group.tokenRegistry.useAccessProvider(fakeProvider({ initialized: true }));
+    group.route('GET', '/api/system/status', (_request, response) => { response.end('ok'); });
+    await group.listen();
+    for (const address of listHttpHostAddresses(group)) {
+      const response = await fetch(`${address.origin}/api/system/status`, { headers: { Authorization: 'Bearer viewer-session' } });
+      expect(response.status).toBe(200);
+    }
+  });
 });
+
+type FakeProvider = ConsoleAccessProvider & { state: { initialized: boolean }; audits: ConsoleAuditEntry[] };
+
+/** Sessions: viewer (global viewer), operator (global operator), scoped (operator on adapter qq). */
+function fakeProvider(state: { initialized: boolean }): FakeProvider {
+  const audits: ConsoleAuditEntry[] = [];
+  const user = (id: string, permissions: readonly string[], scope: ConsoleUserPrincipal['grants'][number]['scope'] = { kind: 'global' }): ConsoleUserPrincipal => ({
+    kind: 'user', userId: id, username: id, displayName: id, credentialId: `${id}-session`,
+    grants: [{ role: id, scope, permissions }], roles: [id],
+  });
+  const sessions: Record<string, ConsoleUserPrincipal> = {
+    'viewer-session': user('viewer', CONSOLE_BUILTIN_ROLES.viewer.permissions),
+    'operator-session': user('operator', CONSOLE_BUILTIN_ROLES.operator.permissions),
+    'scoped-session': user('scoped', CONSOLE_BUILTIN_ROLES.operator.permissions, { kind: 'adapter', key: 'qq' }),
+  };
+  return {
+    state,
+    audits,
+    initialized: () => state.initialized,
+    authenticate: async token => sessions[token] ?? null,
+    audit: entry => { audits.push(entry); },
+  };
+}
+
+function wsOutcome(url: string): Promise<'opened' | 'rejected'> {
+  return new Promise((resolve) => {
+    const client = new WebSocket(url);
+    client.once('open', () => { client.close(); resolve('opened'); });
+    client.once('error', () => resolve('rejected'));
+    setTimeout(() => resolve('rejected'), 1000);
+  });
+}
 
 function httpsText(port: number, path: string, ca: Buffer): Promise<string> {
   return new Promise((resolve, reject) => {

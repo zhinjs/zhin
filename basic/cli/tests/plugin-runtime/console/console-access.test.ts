@@ -1,5 +1,6 @@
 import { afterEach, expect, it } from 'vitest';
 import { createHttpHost, type HttpHost } from '@zhin.js/host-http';
+import { installTestConsoleUsers, testUser } from '../../utils/console-users.js';
 import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
 import { registerConsoleEntryRoutes } from '../../../src/plugin-runtime/console/entry-routes.js';
 import { registerConsoleHttp } from '../../../src/plugin-runtime/console/host.js';
@@ -23,13 +24,13 @@ const consoleRuntime = {
 } as unknown as ConsoleRuntime;
 
 async function start(tokens = true) {
-  const http = createHttpHost({
-    host: '127.0.0.1', port: 0,
-    ...(tokens ? {
-      token: 'admin-secret',
-      tokens: [{ token: 'alice-secret', scope: 'user' as const, permissions: ['ambient:read'] }],
-    } : {}),
-  });
+  const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+  if (tokens) {
+    installTestConsoleUsers(http, {
+      'admin-secret': 'owner',
+      'alice-secret': { ...testUser('viewer', { kind: 'global' }, 'alice'), grants: [{ scope: { kind: 'global' }, permissions: ['ambient:read'] }], roles: [] },
+    });
+  }
   hosts.push(http);
   registerConsoleEntryRoutes({ http, consoleRuntime });
   registerConsoleHttp({ http, console: consoleRuntime, clientOutDir: '/tmp/zhin-access-client', projectRoot: '/tmp/zhin-access' });

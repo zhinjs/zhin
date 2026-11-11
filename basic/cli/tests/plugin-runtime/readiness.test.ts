@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createHttpHost, type ProcessHttpHost } from '@zhin.js/host-http';
+import { withTestUsers } from '../utils/console-users.js';
 import { adapterFeatureId } from '@zhin.js/adapter';
 import { SnapshotStore, databaseHostToken, rootPluginId, type SnapshotState } from '@zhin.js/plugin-runtime';
 import { createPrimaryConfig, createEnvStore, primaryConfigToken } from '@zhin.js/runtime';
@@ -99,8 +100,8 @@ describe('runtime readiness', () => {
 
   it('serves public 503/200 and protects detailed reports on a custom API base', async () => {
     const snapshots = store();
-    const host = createHttpHost({ host: '127.0.0.1', port: 0, token: 'full-secret',
-      tokens: [{ token: 'demo-secret', scope: 'demo' }], apiBase: '/control' });
+    const host = withTestUsers(createHttpHost({ host: '127.0.0.1', port: 0, apiBase: '/control' }),
+      { 'full-secret': 'owner', 'demo-secret': 'none' });
     hosts.push(host);
     registerReadinessRoutes(host, { snapshots }, '/control/');
     const { origin } = await host.listen();

@@ -1,4 +1,5 @@
 import { mkdtemp, rm } from 'node:fs/promises';
+import { withTestUsers } from '../../utils/console-users.js';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AdapterIndex, Adapter, endpointSpec, createEndpointSpecification, type Endpoint, adapterFeatureId, defineAdapter, endpointEventGatewayToken } from '@zhin.js/adapter';
@@ -50,7 +51,7 @@ async function fixture(options: { filename?: string; unavailable?: boolean } = {
   const adapters = await AdapterIndex.create(slots, createSnapshotView(0, base), new AbortController().signal);
   await adapters.activate(new AbortController().signal);
   const snapshots = new SnapshotStore({ ...base, projections: new Map([[adapterFeatureId, adapters]]) });
-  const http = createHttpHost({ host: '127.0.0.1', port: 0, token: 'operator', tokens: [{ token: 'demo', scope: 'demo' }] });
+  const http = withTestUsers(createHttpHost({ host: '127.0.0.1', port: 0 }), { operator: 'owner', demo: 'none' });
   registerWorkspaceConversationRoutes({ http, base: '/api', snapshots, databaseHost: options.unavailable ? undefined : db });
   const { port } = await http.listen();
   cleanups.push(async () => { await http.close(); await snapshots.close(); await adapters.stop(); await db.stop(); });

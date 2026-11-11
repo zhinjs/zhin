@@ -55,7 +55,7 @@ function harness(document: RuntimeConfigDocument, options: Partial<FeatureRpcCon
   };
   const snap = snapshot();
   const context: FeatureRpcContext = {
-    authScope: 'full', configuration, snapshots: { acquire: () => ({ value: snap, release() {} }) as never }, ...options,
+    authScope: 'full', authorize: () => true, configuration, snapshots: { acquire: () => ({ value: snap, release() {} }) as never }, ...options,
   };
   const call = async (type: string, data: Record<string, unknown> = {}) => dispatchFeatureConsoleRpc({ type, data, requestId: 7 }, context);
   return { state, patches, call, context };
@@ -69,17 +69,17 @@ const base = {
 };
 
 describe('feature.* Console RPC', () => {
-  it('ignores other RPC types and denies non-full callers by default', async () => {
+  it('ignores other RPC types and denies every caller without an authorize hook', async () => {
     const { call, context } = harness(base);
     expect(await dispatchFeatureConsoleRpc({ type: 'plugin:set-enabled' }, context)).toBeNull();
-    const denied = harness(base, { authScope: 'demo' });
+    const denied = harness(base, { authorize: undefined });
     expect(await denied.call('feature.list')).toMatchObject({ status: 403, body: { success: false } });
     expect((await call('feature.list')).status).toBe(200);
   });
 
   it('passes level and key to the authorize hook', async () => {
     const authorize = vi.fn(async (request: { level?: string }) => request.level !== 'endpoint');
-    const { call } = harness(base, { authScope: 'demo', authorize });
+    const { call } = harness(base, { authorize });
     expect((await call('feature.get', { plugin: 'rss', level: 'adapter', key: 'qq' })).status).toBe(200);
     expect((await call('feature.get', { plugin: 'rss', level: 'endpoint', key: 'qq/bot-1' })).status).toBe(403);
     expect(authorize).toHaveBeenCalledWith({ type: 'feature.get', permission: 'feature.view', plugin: 'rss', level: 'endpoint', key: 'qq/bot-1' });

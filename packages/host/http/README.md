@@ -23,8 +23,11 @@ calls share one operation; calling `listen()` after close rejects.
 - Built-in `GET /pub/health` and `GET /pub/openapi.json`
 - CLI-composed runtimes additionally expose `GET /pub/ready` and full-scope `GET /api/system/readiness`; see [production probes](../../../docs/operations/production.md).
 - CORS allowlist (always includes `https://console.zhin.dev`)
-- Optional Bearer auth for `/api/*` when `http.token` / `http.tokens` are set (ADR 0016 scopes)
-- WebSocket upgrade auth (Authorization or `?token=`); demo scope limited to `/sandbox`
+- Bearer auth for `/api/*` (ADR 0049): `http.token` is a bootstrap token that only reaches
+  `/auth/setup*` until the first owner exists; afterwards only Console user sessions and API tokens
+  (supplied by a pluggable `ConsoleAccessProvider` on `tokenRegistry`) are accepted, and every
+  route / RPC is checked against the permission map in `@zhin.js/console-protocol`
+- WebSocket upgrade auth (Authorization or `?token=`), checked per path permission
 - `readJsonBody()` helper for JSON POST/PUT bodies (no Koa)
 
 ```ts
@@ -46,10 +49,7 @@ http.route('GET', '/api/secure', (_req, res, _url, scope) => {
 http:
   host: 127.0.0.1
   port: 8086
-  token: ${HTTP_TOKEN}          # full scope
-  tokens:
-    - token: ${DEMO_TOKEN}
-      scope: demo
+  token: ${HTTP_TOKEN}          # bootstrap: creates the first owner, rejected afterwards
   corsOrigins:
     - https://example.test
   base: /api                    # auth prefix

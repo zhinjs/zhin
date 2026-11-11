@@ -1,6 +1,6 @@
 import path from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { extractBearerToken, HttpBodyError, readJsonBody, type HttpHost } from '@zhin.js/host-http';
+import { extractBearerToken, HttpBodyError, isUserPrincipal, readJsonBody, requestConsolePrincipal, type HttpHost } from '@zhin.js/host-http';
 import { DataMigrationError, normalizeDeliveryTarget, type PluginId, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import { DataMigrationController, DataMigrationPlanStore } from '@zhin.js/runtime';
 import { writeJson } from './http-response.js';
@@ -27,9 +27,10 @@ export function registerDataMigrationRoutes(options: DataMigrationRouteOptions):
   }) : undefined;
   const serve = async ({ request, response, scope, run }: MigrationHttpOperation) => {
     response.setHeader('cache-control', 'no-store');
-    const tokenScope = http.tokenRegistry.resolve(extractBearerToken(request.headers.authorization, null));
-    if (scope !== 'full' || tokenScope !== 'full') {
-      writeJson(response, tokenScope === 'demo' ? 403 : 401, { success: false, code: 'forbidden', error: '需要管理员凭据' });
+    const explicit = isUserPrincipal(requestConsolePrincipal(request))
+      || http.tokenRegistry.resolve(extractBearerToken(request.headers.authorization, null)) === 'full';
+    if (scope !== 'full' || !explicit) {
+      writeJson(response, 401, { success: false, code: 'forbidden', error: '需要管理员凭据' });
       return;
     }
     if (!controller) {

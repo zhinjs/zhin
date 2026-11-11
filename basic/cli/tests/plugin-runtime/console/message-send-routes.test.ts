@@ -1,4 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
+import { withTestUsers } from '../../utils/console-users.js';
 import { createHttpHost } from '@zhin.js/host-http';
 import { registerMessageSendRoutes } from '../../../src/plugin-runtime/console/message-send-routes.js';
 
@@ -6,7 +7,7 @@ const cleanups: (() => Promise<unknown>)[] = [];
 afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) await cleanup(); });
 
 async function start(send = vi.fn(async () => ({ messageId: 'm-1', receipt: {} as never })), withIm = true) {
-  const http = createHttpHost({ host: '127.0.0.1', port: 0, token: 'operator', tokens: [{ token: 'demo', scope: 'demo' }] });
+  const http = withTestUsers(createHttpHost({ host: '127.0.0.1', port: 0 }), { operator: 'owner', demo: 'none' });
   cleanups.push(() => http.close());
   registerMessageSendRoutes({ http, base: '/api', im: withIm ? { endpoints: { send } } : undefined });
   const { port } = await http.listen();

@@ -3,8 +3,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createConfigDocument, RootRuntime, NodePackageResolver, primaryConfigToken, type ModuleRuntime } from '@zhin.js/runtime';
 import { definePlugin, rootPluginId, childPluginId } from '@zhin.js/plugin-runtime';
-import { dispatchRuntimeConsoleRpc, pickRpcReply, createHttpHost, readJsonBody } from '@zhin.js/host-http';
-import { CONFIG_RPC, DEMO_RPC_ALLOWLIST, type ConsoleConfigExplanation } from '@zhin.js/console-protocol';
+import { dispatchRuntimeConsoleRpc, pickRpcReply, createHttpHost, readJsonBody, requestConsolePrincipal } from '@zhin.js/host-http';
+import { CONFIG_RPC, consoleRpcPermission, type ConsoleConfigExplanation } from '@zhin.js/console-protocol';
+import { withTestUsers } from './utils/console-users.js';
 import { PluginManagementWorkflow } from '../src/plugin-management/workflow.js';
 
 const fixtures: Awaited<ReturnType<typeof fixture>>[] = [];
@@ -171,21 +172,22 @@ describe('metadata-only config explanations through the actual Runtime and file 
     await expect(f.workflow.explainConfiguration('demo', revision)).rejects.toThrow('重新读取文件版本');
   });
 
-  it('uses the real authenticated HTTP/RPC scope and never enters the authority for demo or invalid credentials', async () => {
+  it('uses the real authenticated HTTP/RPC principal and never enters the authority for viewers or invalid credentials', async () => {
     const f = await fixture(simple), explain = vi.spyOn(f.workflow, 'explainConfiguration');
-    const host = createHttpHost({ host: '127.0.0.1', port: 0, token: 'synthetic-full-token', tokens: [{ token: 'synthetic-demo-token', scope: 'demo' }] });
+    const host = withTestUsers(createHttpHost({ host: '127.0.0.1', port: 0 }), { 'synthetic-full-token': 'owner', 'synthetic-demo-token': 'viewer' });
     host.route('POST', '/api/console/request', async (request, response, _url, scope) => {
       const message = await readJsonBody<Record<string, unknown>>(request) ?? {};
-      const replies = await dispatchRuntimeConsoleRpc(message, { authScope: scope, listPages: async () => [], pluginManagement: f.workflow });
+      const principal = requestConsolePrincipal(request);
+      const replies = await dispatchRuntimeConsoleRpc(message, { authScope: scope, ...(principal ? { principal } : {}), listPages: async () => [], pluginManagement: f.workflow });
       response.writeHead(200, { 'content-type': 'application/json' }); response.end(JSON.stringify(pickRpcReply(message, replies)));
     });
     const { port } = await host.listen();
     const message = { type: CONFIG_RPC.EXPLAIN, instanceKey: 'demo', expectedRevision: (await f.document.read()).revision, requestId: 7 };
     const request = (token?: string, body = message) => fetch(`http://127.0.0.1:${port}/api/console/request`, { method: 'POST', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), 'content-type': 'application/json' }, body: JSON.stringify(body) });
     try {
-      expect(DEMO_RPC_ALLOWLIST.has(CONFIG_RPC.EXPLAIN)).toBe(false);
+      expect(consoleRpcPermission(CONFIG_RPC.EXPLAIN)).toBe('ops.config.read');
       expect((await request()).status).toBe(401); expect((await request('wrong')).status).toBe(401);
-      expect(await (await request('synthetic-demo-token')).json()).toMatchObject({ error: expect.stringMatching(/Demo scope/) }); expect(explain).not.toHaveBeenCalled();
+      expect(await (await request('synthetic-demo-token')).json()).toMatchObject({ error: expect.stringMatching(/ops\.config\.read/) }); expect(explain).not.toHaveBeenCalled();
       const valid = await (await request('synthetic-full-token')).json() as { data: ConsoleConfigExplanation };
       expect(valid.data).toMatchObject({ projection: 'supported', instanceKey: 'demo' }); expect(explain).toHaveBeenCalledTimes(1);
       expect(valid.data.projectRevision).toMatch(/^[a-f0-9]{64}$/u);

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { DEMO_RPC_ALLOWLIST } from '@zhin.js/console-protocol';
+import { consoleRpcPermission } from '@zhin.js/console-protocol';
+import { VIEWER } from './fixtures/principals.js';
 import { dispatchRuntimeConsoleRpc, pickRpcReply } from '../src/console-rpc.js';
 
 const method = 'config:get-project';
@@ -20,15 +21,17 @@ describe('trusted project configuration read RPC', () => {
     }
   });
 
-  it('is full-scope only, not demo-readable, and validates the request shape before reading', async () => {
-    expect(DEMO_RPC_ALLOWLIST.has(method)).toBe(false);
+  it('needs ops.config.read (not held by viewers) and validates the request shape before reading', async () => {
+    expect(consoleRpcPermission(method)).toBe('ops.config.read');
     const readProjectConfig = vi.fn(async () => result);
     for (const [extra, authScope] of [
-      [{}, 'demo'], [{ path: 'http.token' }, 'full'], [{ path: [''] }, 'full'], [{ path: [1] }, 'full'],
+      [{}, 'viewer'], [{ path: 'http.token' }, 'full'], [{ path: [''] }, 'full'], [{ path: [1] }, 'full'],
       [{ path: Array.from({ length: 17 }, () => 'a') }, 'full'], [{ reveal: 'yes' }, 'full'],
     ] as const) {
       const request = { type: method, requestId: 1, ...extra };
-      const reply = pickRpcReply(request, await dispatchRuntimeConsoleRpc(request, { authScope, listPages: async () => [], readProjectConfig }));
+      const reply = pickRpcReply(request, await dispatchRuntimeConsoleRpc(request, {
+        authScope: 'full', ...(authScope === 'viewer' ? { principal: VIEWER } : {}), listPages: async () => [], readProjectConfig,
+      }));
       expect(reply?.error).toEqual(expect.any(String));
     }
     expect(readProjectConfig).not.toHaveBeenCalled();

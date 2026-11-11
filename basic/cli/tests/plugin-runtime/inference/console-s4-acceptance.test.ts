@@ -5,6 +5,7 @@
  * - save (plan + apply) and page / status loads make zero Provider network requests.
  */
 import { createHttpHost } from '@zhin.js/host-http';
+import { withTestUsers } from '../../utils/console-users.js';
 import { MemoryPersonalSessionRepository, PersonalSessionService } from '@zhin.js/agent/personal-session';
 import { registerInferenceRoutes } from '../../../src/plugin-runtime/inference/routes.js';
 import { resolveInferenceManagementPrincipal } from '@zhin.js/agent/runtime';
@@ -28,7 +29,7 @@ async function setup() {
       logs.push(String(chunk)); return (write as (...a: unknown[]) => boolean)(chunk, ...rest);
     }) as typeof stream.write);
   }
-  const http = createHttpHost({ host: '127.0.0.1', port: 0, token: 'operator-fixture' });
+  const http = withTestUsers(createHttpHost({ host: '127.0.0.1', port: 0 }), { 'operator-fixture': 'owner' });
   const sessions = new InferenceSessionManagement({ rootId: '/root', hostOwnerId: 'host', owners: [],
     sessions: new PersonalSessionService(new MemoryPersonalSessionRepository()), repository: fixture.repository,
     directory: async () => ({ rows: [], hasMore: false }) });

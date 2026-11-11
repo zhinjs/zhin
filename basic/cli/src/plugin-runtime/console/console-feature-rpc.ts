@@ -40,7 +40,7 @@ export interface FeatureRpcAuthorization {
   readonly level?: ConsoleFeatureLevel;
   readonly key?: string;
 }
-/** Return false (or throw) to deny. Without it, only full-scope callers are admitted (deny by default). */
+/** Return false (or throw) to deny. Without it every call is denied (deny by default). */
 export type FeatureRpcAuthorizer = (request: FeatureRpcAuthorization) => boolean | Promise<boolean>;
 
 export interface FeatureRpcConfigurationPort {
@@ -116,7 +116,8 @@ async function authorize(context: FeatureRpcContext, request: Omit<FeatureRpcAut
   const full: FeatureRpcAuthorization = { ...request, permission: FEATURE_RPC_TYPES[request.type] };
   let allowed: boolean;
   try {
-    allowed = context.authorize ? await context.authorize(full) === true : context.authScope === 'full';
+    // Deny by default: the ADR 0049 permission hook is the only authority (scopes were removed).
+    allowed = context.authorize ? await context.authorize(full) === true : false;
   } catch {
     allowed = false;
   }

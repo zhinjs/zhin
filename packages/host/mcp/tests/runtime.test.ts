@@ -43,6 +43,23 @@ describe('Runtime MCP Host', () => {
     }));
   });
 
+  it('accepts Host user API tokens through the shared authenticator (ADR 0049)', async () => {
+    const host = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(host);
+    const authenticateBearer = vi.fn(async (token: string) => token === 'user-api-token');
+    installRuntimeMcp({
+      http: host,
+      config: { allowUnauthenticatedLocalhost: false },
+      authenticateBearer,
+      tools: { withTools: (_context, operation) => operation([]) },
+    });
+    const { port } = await host.listen();
+    const baseUrl = `http://127.0.0.1:${port}/mcp`;
+    expect((await mcpRequest(baseUrl, 'tools/list', {}, 'wrong')).status).toBe(401);
+    expect((await mcpRequest(baseUrl, 'tools/list', {}, 'user-api-token')).status).toBe(200);
+    expect(authenticateBearer).toHaveBeenCalledWith('user-api-token', expect.anything());
+  });
+
   it('keeps the advertised tool protocol available for an empty generation', async () => {
     const { baseUrl } = await start([]);
     expect((await mcpRequest(baseUrl, 'tools/list')).status).toBe(401);

@@ -55,6 +55,7 @@ import {
   HostSelfChanges,
   composeHostConsoleRpc,
   defineWorkspaceConversationTable,
+  installConsoleIam,
 } from './console/module.js';
 import { installHttpHost, resolveHttpConfig } from '@zhin.js/host-http';
 import { createDatabaseHost, installDatabaseHost, resolveDatabaseConfig } from '@zhin.js/core/runtime';
@@ -223,6 +224,15 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
       return host.runtime.configurationSchemas;
     },
   });
+  // Console access control (ADR 0049): tables before the database starts, activated after it.
+  const consoleIam = installConsoleIam(httpHost, {
+    database: databaseHost,
+    configStore: consoleConfigurationStore,
+    projectRoot: options.root,
+    apiBase: httpConfig.apiBase,
+    logger: getLogger('console'),
+    requestRestart: () => { void requestProcessRestart(); },
+  });
   const authorizeConfigurationChat = createConfigurationChatAuthorizer(hostConfig, endpointRoles);
   const authorizeRestartChat = createRestartChatAuthorizer(hostConfig, endpointRoles);
   // 受控自我进化生效（ADR 0040 §5 / §6）：进程持有热重载 / exit 75 / 健康检查 / 配置补丁；最新 generation 绑定生效器。
@@ -254,6 +264,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
       im.install(context.resources);
       installHttpHost(httpHost)(context);
       installDatabaseHost(databaseHost)(context);
+      context.handoff.add({ activateNext: async () => { await consoleIam.activate(); } });
       // Match DatabaseHost's atomic-state capability. Unsupported dialects keep
       // static accounts; a failed read on a supported database still fails startup.
       if (['sqlite', 'mysql', 'pg'].includes(databaseHost.dialect)) {
@@ -401,6 +412,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     snapshot: () => host.runtime.snapshot,
     snapshots: host.runtime.snapshots,
     onRestart: () => requestProcessRestart(),
+    consoleIam: () => (consoleIam.supported ? consoleIam.service : undefined),
   });
   function requestProcessRestart(): Promise<void> {
     // The native TypeScript supervisor treats this code as an intentional
@@ -448,6 +460,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     try {
       disposeReadiness();
       disposeConsoleControlPlane();
+      consoleIam.dispose();
       // Process ingress owns WebSocket operation leases. Close it before Root
       // drain so long-lived connections release those leases instead of
       // deadlocking SnapshotStore.close().
