@@ -44,7 +44,9 @@ export interface EsmCacheEvictor {
 
 /** Temporary global slot used to move values between the inspector and this realm. */
 const probeKey = '__zhinEsmCacheEvictorProbe';
-const probeExpression = `globalThis[${JSON.stringify(probeKey)}]`;
+// Fixed source text sent to the inspector; nothing is interpolated into it.
+const probeExpression = 'globalThis.__zhinEsmCacheEvictorProbe';
+const probeAssignment = 'function () { globalThis.__zhinEsmCacheEvictorProbe = this }';
 
 let cached: EsmCacheEvictor | null | undefined;
 
@@ -98,7 +100,7 @@ function captureLoadCache(): LoadCacheLike | undefined {
   const pull = (objectId: string): unknown => {
     post('Runtime.callFunctionOn', {
       objectId,
-      functionDeclaration: `function () { ${probeExpression} = this }`,
+      functionDeclaration: probeAssignment,
     });
     return scope[probeKey];
   };
