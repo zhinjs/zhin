@@ -232,6 +232,28 @@ describe('conversation level declarations (ADR 0055)', () => {
     expect(validateConversationOverride(repeaterSchema, block, 'qq/a/group:1', { style: { color: 'x' } })).toEqual([]);
   });
 
+  it('rejects explicit clears (null) of fields outside the allowed set, top-level or nested', () => {
+    const block = { threshold: 3, apiKey: 'k' };
+    // Global-only / non-conversation fields cannot be cleared from the conversation level.
+    expect(validateConversationOverride(repeaterSchema, block, 'qq/a/group:1', { apiKey: null }))
+      .toMatchObject([{ message: expect.stringContaining('additionalProperty: apiKey') }]);
+    // Self-service narrowing applies to clears as well.
+    expect(validateConversationOverride(repeaterSchema, block, 'qq/a/group:1', { style: null }, ['threshold'])).toHaveLength(1);
+    expect(validateConversationOverride(repeaterSchema, block, 'qq/a/group:1', { style: { nope: null } })).toMatchObject([{ path: '/style/nope' }]);
+    // Allowed clears still pass.
+    expect(validateConversationOverride(repeaterSchema, block, 'qq/a/group:1', { style: { color: null } })).toEqual([]);
+    expect(validateConversationOverride(repeaterSchema, block, 'qq/a/group:1', { style: null })).toEqual([]);
+  });
+
+  it('rejects explicit clears of global-only fields in file overrides', () => {
+    const issues = validateFeatureOverrides(rssSchema, { apiKey: 'k', region: 'cn', style: { title: 'x' }, overrides: {
+      adapters: { qq: { apiKey: null } },
+      endpoints: { 'qq/a': { region: null }, 'qq/b': { style: { bogus: null } }, 'qq/c': { feeds: null, enabled: null } },
+    } });
+    expect(issues.map(issue => issue.path)).toEqual(['/overrides/adapters/qq', '/overrides/endpoints/qq~1a', '/overrides/endpoints/qq~1b/style/bogus']);
+    expect(issues[0]!.message).toContain('additionalProperty: apiKey');
+  });
+
   it('configFor / isEnabledFor read conversation overrides in place and are never env-expanded', () => {
     const owner = childPluginId(rootPluginId(), 'repeater');
     const rows = new Map<string, FeatureConversationOverride>();

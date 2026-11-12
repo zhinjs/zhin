@@ -35,6 +35,6 @@ export { defineWorkspaceConversationTable } from './workspace-conversations.js';
 export { installConsoleIam, type ConsoleIamInstallation, type InstallConsoleIamOptions } from '@zhin.js/gateway/iam';
 export { installHostConsoleTerminal, type InstallHostConsoleTerminalOptions } from '@zhin.js/gateway/terminal';
 export {
-  dispatchFeatureConsoleRpc, type FeatureRecentConversation, type FeatureRpcContext, type FeatureRpcReply, type FeatureStores,
+  containsEnvironmentReference, dispatchFeatureConsoleRpc, type FeatureRecentConversation, type FeatureRpcContext, type FeatureRpcReply, type FeatureStores,
 } from './console-feature-rpc.js';
 export { defineFeatureConversationTable, FeatureConversationOverrideStore } from './feature-conversation-store.js';

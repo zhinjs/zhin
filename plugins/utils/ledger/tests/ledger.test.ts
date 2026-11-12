@@ -257,6 +257,15 @@ describe('group privacy', () => {
     expect(reply).not.toMatch(/18\.5|¥\d/u);
   });
 
+  it('does not push to a private conversation where ledger is switched off (ADR 0055)', async () => {
+    const created = await fixture({ feature: { isEnabledFor: target => !(typeof target === 'object' && 'conversation' in target && target.conversation?.kind === 'private') } });
+    await created.run('记 午饭 18.5', groupMessage('alice'));
+    const reply = await created.run('分类统计', groupMessage('alice'));
+    expect(reply).toContain('私聊我可查看完整金额');
+    expect(reply).not.toMatch(/18\.5|¥\d/u);
+    expect(created.privateMessagesTo('alice')).toEqual([]);
+  });
+
   it('masks amounts when the platform has no proactive outbound at all', async () => {
     const created = await fixture({ outbound: false });
     await created.run('记 午饭 18.5', groupMessage('alice'));

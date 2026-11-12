@@ -31,4 +31,20 @@ describe('activity-feedback layered feature switch (ADR 0050 / 0055)', () => {
       { conversation: { endpoint: { id: 'discord\0im\0bot' }, kind: 'group', id: 'g-on' } },
     ]);
   });
+
+  it('gates on the payload conversation ref (CapabilityId + raw conversation id), not the configured endpoint id', async () => {
+    const executor = {
+      kindCapabilities: vi.fn(() => undefined), start: vi.fn(), stop: vi.fn(), updateText: vi.fn(), updateThinkingText: vi.fn(),
+      dispose: vi.fn(async () => undefined),
+    } satisfies ActivityFeedbackExecution;
+    const checked: unknown[] = [];
+    const orchestrator = new ActivityFeedbackOrchestrator(new ActivityFeedbackPolicy(loadActivityFeedbackServiceConfig({})), executor,
+      { debug: vi.fn(), error: vi.fn() }, 'zh-CN', target => { checked.push(target); return false; });
+    // Configured endpointId as endpointKey; private conversation id differs from the sender id.
+    await orchestrator.startPhase({ platform: 'qq', endpointKey: 'bot-1', sessionId: 'qq:bot-1:private:u', scope: 'private', sceneId: 'dm-42',
+      userId: 'u', conversationRef: { endpointId: 'root/qq\0zhin.adapter\0main~1', kind: 'private', id: 'dm-42' },
+      hookContext: { activityFeedbackEligible: true } } as AIEventPayload, 'active', 'test');
+    expect(executor.start).not.toHaveBeenCalled();
+    expect(checked).toEqual([{ conversation: { endpoint: { id: 'root/qq\0zhin.adapter\0main~1' }, kind: 'private', id: 'dm-42' } }]);
+  });
 });

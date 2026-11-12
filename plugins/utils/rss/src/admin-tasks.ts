@@ -70,15 +70,22 @@ export class AdministratorRssTasks implements PluginTaskProvider {
   readonly #outbound: OutboundHost;
   readonly #config: Readonly<RssConfig>;
   readonly #load: FeedLoader;
+  readonly #enabledFor: (target: DeliveryTarget) => boolean;
   readonly projectLocale: Locale;
   readonly #admission = createGenerationAdmissionGate();
   #stopped = false;
   #working = false;
   get [generationAdmissionSource]() { return [this.#admission]; }
 
-  constructor(state: PluginStateStore, outbound: OutboundHost, config: Readonly<RssConfig>, load: FeedLoader = fetchFeed, projectLocale: Locale = 'zh-CN') {
+  /**
+   * `enabledFor` is the ADR 0050 / 0055 feature switch of the target conversation (pushes are not
+   * messages, so dispatch gating never sees them); a switched-off target is skipped, not sent.
+   */
+  constructor(state: PluginStateStore, outbound: OutboundHost, config: Readonly<RssConfig>, load: FeedLoader = fetchFeed, projectLocale: Locale = 'zh-CN',
+    enabledFor: (target: DeliveryTarget) => boolean = () => true) {
     if (!outbound.sendTarget) throw unavailable('exactTarget');
     this.projectLocale = projectLocale; this.#state = state; this.#outbound = outbound; this.#config = config; this.#load = load;
+    this.#enabledFor = enabledFor;
   }
   stop(): void { this.#stopped = true; }
 
@@ -211,7 +218,10 @@ export class AdministratorRssTasks implements PluginTaskProvider {
   async #deliver(claimed: Task, content: string): Promise<void> {
     if (this.#stopped) return;
     let state: Task['state'] = 'unknown', detail = taskDetail('unknown');
-    try {
+    let enabled: boolean;
+    try { enabled = this.#enabledFor(claimed.target); } catch { enabled = true; }
+    if (!enabled) { state = 'scheduled'; detail = taskDetail('featureDisabled'); }
+    else try {
       const id = await this.#outbound.sendTarget!(claimed.target, content, { locale: resolveLocale(claimed.locale) });
       if (id) { state = 'scheduled'; detail = taskDetail('delivered'); }
     } catch (error) {

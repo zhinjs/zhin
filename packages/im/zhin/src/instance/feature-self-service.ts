@@ -17,7 +17,7 @@ import {
   type FeatureConfigLevel, type Locale, type PluginId, type RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
 import { readFeatureConversationDeclaration, type JsonSchema, type RootResourceInstaller } from '@zhin.js/runtime';
-import { dispatchFeatureConsoleRpc, type FeatureRpcContext, type FeatureRpcReply } from './console/module.js';
+import { containsEnvironmentReference, dispatchFeatureConsoleRpc, type FeatureRpcContext, type FeatureRpcReply } from './console/module.js';
 import {
   chatRoleIncludes, chatRoleMessageContext, chatScopeChain, isChatIdentity, isChatRole,
   type ChatIdentity, type ChatRole, type ChatRoleContext, type ChatRoleEntry,
@@ -98,9 +98,11 @@ const messages = createMessages({
   },
   locked: { 'zh-CN': '{plugin} 已在{level}层停用，下级不能开启或修改开关。', en: '{plugin} is disabled at the {level} level; levels below it cannot enable or change it.' },
   saved: { 'zh-CN': '已保存（{level}层），立即生效。', en: 'Saved ({level} level), effective now.' },
+  notPersistent: { 'zh-CN': '（当前数据库不支持持久化，重启后丢失）', en: ' (the current database cannot persist this; it is lost on restart)' },
   unchanged: { 'zh-CN': '没有变化。', en: 'Nothing changed.' },
   conflict: { 'zh-CN': '配置已被其他地方修改，未保存，请重试。', en: 'Changed elsewhere; not saved. Try again.' },
   invalid: { 'zh-CN': '校验失败，未保存：{errors}', en: 'Validation failed, not saved: {errors}' },
+  environmentReference: { 'zh-CN': '聊天中不能写入环境变量引用（$ 加花括号的占位符或 env://），未保存。', en: 'Environment references (dollar-brace placeholders or env://) cannot be written from chat; not saved.' },
   fieldDenied: { 'zh-CN': '字段 {field} 不允许在聊天中修改。', en: 'Field {field} cannot be changed in chat.' },
   notFound: { 'zh-CN': '未找到插件 {plugin}。', en: 'Plugin {plugin} was not found.' },
   failed: { 'zh-CN': '操作失败：{error}', en: 'Failed: {error}' },
@@ -226,8 +228,9 @@ export async function executeFeatureChat(
   const words = input.tokens.map(token => typeof token === 'string' ? token : undefined);
   const sub = SUBCOMMANDS[(words[0] ?? '').toLowerCase()];
   if (!sub) return messages(locale, 'usage');
+  const { mayReferenceEnvironment: _never, ...base } = deps.context;
   const context: FeatureRpcContext = {
-    ...deps.context,
+    ...base,
     authScope: 'chat',
     actor: actorName(actor),
     authorize: request => request.type === 'feature.list' || administers(request.key ?? ''),
@@ -241,6 +244,7 @@ export async function executeFeatureChat(
     const body = reply.body as Record<string, any>;
     if (!body.success) {
       if (body.code === 'locked') return messages(locale, 'locked', { plugin, level: levelName(locale, body.lockedBy) });
+      if (body.code === 'environment-reference') return messages(locale, 'environmentReference');
       if (body.code === 'field-not-allowed') return messages(locale, 'fieldDenied', { field: String(body.field) });
       if (reply.status === 403) return messages(locale, 'denied');
       if (reply.status === 404) return messages(locale, 'notFound', { plugin });
@@ -248,7 +252,10 @@ export async function executeFeatureChat(
       return messages(locale, 'failed', { error: String(body.error ?? '') });
     }
     const data = body.data as Record<string, any>;
-    if (data?.status === 'saved') return messages(locale, 'saved', { level: levelName(locale, level) });
+    if (data?.status === 'saved') {
+      const saved = messages(locale, 'saved', { level: levelName(locale, level) });
+      return data.persistent === false ? `${saved}${messages(locale, 'notPersistent')}` : saved;
+    }
     if (data?.status === 'unchanged') return messages(locale, 'unchanged');
     if (data?.status === 'conflict') return messages(locale, 'conflict');
     if (data?.status === 'invalid') {
@@ -320,6 +327,11 @@ export async function executeFeatureChat(
       if (!plugin || !field || raw === undefined || level === null || words.length > 5) return messages(locale, 'usage');
       const parsed = parseValue(raw);
       if (!parsed) return messages(locale, 'value');
+      // Configuration files are environment-expanded: chat never plants `${…}` / `env://` at any level.
+      if (containsEnvironmentReference(parsed.value)) {
+        audit('set', level, scopeAt(actor, level), 'denied', { plugin, field, reason: 'environment-reference' });
+        return messages(locale, 'environmentReference');
+      }
       const scope = target(level);
       if ('error' in scope) { audit('set', level, scopeAt(actor, level), 'denied', { plugin, field }); return scope.error; }
       if (!chatAllowedFields(schemaOf(deps, plugin), level).includes(field)) {
@@ -352,6 +364,9 @@ export async function executeFeatureChat(
 /** Global field write through the configuration store (whole-document validation and application). */
 async function setGlobalField(deps: FeatureSelfServiceDeps, plugin: string, field: string, value: unknown): Promise<FeatureRpcReply> {
   const configuration = deps.context.configuration;
+  if (containsEnvironmentReference(value)) {
+    return { status: 400, body: { success: false, code: 'environment-reference', error: '值不能包含环境变量引用（${…} / env://）' } };
+  }
   if (!configuration.readProject) return { status: 503, body: { success: false, error: 'configuration unavailable' } };
   const read = await configuration.readProject({});
   const segments = plugin.split('/');

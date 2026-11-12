@@ -123,7 +123,8 @@ export default definePlugin<RssConfig>({
       let state;
       try { state = database.state; } catch { /* No persistent state port: no administrator provider. */ }
       if (state) {
-        administrator = new AdministratorRssTasks(createAdministratorRssState(database), outbound, config, undefined, runtime.locale);
+        administrator = new AdministratorRssTasks(createAdministratorRssState(database), outbound, config, undefined, runtime.locale,
+          target => context.isEnabledFor({ conversation: target }));
         context.lifecycle.add(() => administrator?.stop());
       }
     }

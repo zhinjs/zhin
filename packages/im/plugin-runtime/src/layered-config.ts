@@ -79,7 +79,13 @@ export const featureConversationOverridesToken = createToken<FeatureConversation
 export type FeatureTarget =
   | string
   | Readonly<{ adapter: string; endpointId?: string; conversation?: FeatureConversationTarget }>
-  | Readonly<{ conversation: Readonly<{ endpoint: Readonly<{ id: string }>; kind?: string; id?: string }>; endpointId?: string }>;
+  | Readonly<{ conversation: Readonly<{ endpoint: Readonly<{ id: string }>; kind?: string; id?: string }>; endpointId?: string }>
+  /**
+   * An outbound selector (`outbound.send({ adapter, endpointKey })`): resolved to the Endpoint's
+   * CapabilityId through the same `AdapterIndex.resolve` path as the send, so platform names,
+   * online names and omitted keys address the same account the send reaches.
+   */
+  | Readonly<{ endpoint: Readonly<{ adapter: string; endpointKey: string }>; conversation?: Readonly<{ kind?: string; id?: string }> }>;
 
 export interface FeatureEnabledResolution {
   readonly enabled: boolean;
@@ -394,6 +400,8 @@ export function readPrimaryConfig(snapshot: Pick<RuntimeSnapshot, 'root' | 'reso
 interface EndpointResolutionIndex {
   owner(id: string): PluginId;
   endpointEntry(id: string): { readonly desired?: { readonly endpointId?: unknown } } | undefined;
+  /** `AdapterIndex.resolve`: outbound selector → CapabilityId. */
+  resolve?(adapter: string, endpointKey: string): string | undefined;
 }
 
 const adapterProjectionId = featureId('zhin.adapter');
@@ -441,6 +449,17 @@ export function resolveFeatureTargetKey(
 ): string | undefined {
   if (typeof target === 'string') return formatFeatureResolutionKey(target);
   if (!target || typeof target !== 'object') throw new TypeError('Feature target must be a resolution key, { adapter, endpointId } or a message');
+  const selector = (target as { endpoint?: unknown }).endpoint;
+  if (selector && typeof selector === 'object' && !('id' in selector)) {
+    const { adapter, endpointKey } = selector as { adapter?: unknown; endpointKey?: unknown };
+    if (typeof adapter !== 'string' || typeof endpointKey !== 'string' || !snapshot) return undefined;
+    const index = endpointIndex(snapshot);
+    let id: string | undefined;
+    try { id = index?.resolve?.(adapter, endpointKey); } catch { id = undefined; }
+    if (!id) return undefined;
+    const conversation = (target as { conversation?: Readonly<{ kind?: unknown; id?: unknown }> }).conversation;
+    return resolveEndpointFeatureKey(snapshot, String(id), undefined, conversation);
+  }
   const conversation = (target as { conversation?: unknown }).conversation;
   if (conversation && typeof conversation === 'object' && 'endpoint' in conversation) {
     const message = target as Readonly<{ conversation: Readonly<{ endpoint: Readonly<{ id: string }>; kind?: string; id?: string }>; endpointId?: string }>;

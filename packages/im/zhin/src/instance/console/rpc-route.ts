@@ -24,7 +24,7 @@ import { dispatchPluginConsoleRpcRequest } from './plugin-console-rpc.js';
 import { dispatchIamRpc, isIamRpc } from '@zhin.js/gateway/iam';
 import { createFeatureRpcContext, dispatchFeatureConsoleRpc } from './console-feature-rpc.js';
 import { dispatchChatRolesConsoleRpc } from './chat-roles-rpc.js';
-import { featureScopeTarget } from '@zhin.js/console-protocol';
+import { CONSOLE_PERMISSIONS, featureScopeTarget } from '@zhin.js/console-protocol';
 import type { ConsoleIamService } from '@zhin.js/gateway/iam';
 import { internalErrorResponse } from './internal-error.js';
 
@@ -89,7 +89,10 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
       // Scoped bindings count for every scope under them (a conversation counts for its endpoint).
       const featureReply = await dispatchFeatureConsoleRpc(message, createFeatureRpcContext(options, authScope,
         request => principalAllows(authorizedPrincipal, request.permission, featureScopeTarget(request.level, request.key)),
-        auditActor(principal)));
+        auditActor(principal),
+        // Overrides are environment-expanded: only principals that may edit `.env` themselves
+        // (owners, `ops.env.write`) may plant `${…}` / `env://` references through feature.*.
+        () => principalAllows(authorizedPrincipal, CONSOLE_PERMISSIONS.OPS_ENV_WRITE)));
       if (featureReply) {
         return reply(featureReply.status, featureReply.body, noStore);
       }

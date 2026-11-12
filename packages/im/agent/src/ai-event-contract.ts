@@ -39,7 +39,14 @@ export interface AIEventPayload extends ActivityFeedbackSourceCarrier {
   path?: AIEventPath;
   userId?: string;
   platform?: string;
+  /** Configured endpoint id when known, else the Endpoint CapabilityId (display / policy key). */
   endpointKey?: string;
+  /**
+   * The originating message's conversation as the Runtime addresses it: `endpointId` is always the
+   * Endpoint CapabilityId (`conversation.endpoint.id`), `kind` / `id` are the raw conversation ref.
+   * Feature switches (ADR 0050 / 0055) resolve their key from this, never from `endpointKey`.
+   */
+  conversationRef?: Readonly<{ endpointId: string; kind?: string; id?: string }>;
   sceneId?: string;
   messageId?: string;
   scope?: string;

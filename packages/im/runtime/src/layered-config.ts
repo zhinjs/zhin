@@ -187,6 +187,71 @@ export function featureOverrideEntrySchema(schema: JsonSchema, level: FeatureOve
   });
 }
 
+function resolveLocalRef(root: JsonSchema, schema: unknown): unknown {
+  let current = schema;
+  for (let hops = 0; record(current) && typeof current.$ref === 'string' && hops < 16; hops += 1) {
+    const ref = current.$ref;
+    if (!ref.startsWith('#/')) return current;
+    let target: unknown = root;
+    for (const segment of ref.slice(2).split('/')) {
+      const name = segment.replace(/~1/g, '/').replace(/~0/g, '~');
+      target = record(target) ? target[name] : undefined;
+    }
+    current = target;
+  }
+  return current;
+}
+
+/** Whether `schema` names (or otherwise admits) the object member `name`. */
+function memberSchema(root: JsonSchema, schema: unknown, name: string): { readonly known: boolean; readonly child?: unknown } {
+  const resolved = resolveLocalRef(root, schema);
+  if (!record(resolved)) return { known: false };
+  if (record(resolved.properties) && Object.hasOwn(resolved.properties, name)) return { known: true, child: resolved.properties[name] };
+  if (record(resolved.patternProperties)) {
+    for (const [pattern, child] of Object.entries(resolved.patternProperties)) {
+      try { if (new RegExp(pattern, 'u').test(name)) return { known: true, child }; } catch { /* invalid pattern: ignore */ }
+    }
+  }
+  if (record(resolved.additionalProperties)) return { known: true, child: resolved.additionalProperties };
+  if (resolved.additionalProperties === true) return { known: true };
+  // Composite / untyped schemas cannot be walked statically; accept only when they are not closed object shapes.
+  const composite = ['anyOf', 'oneOf', 'allOf'].some(keyword => Array.isArray(resolved[keyword]));
+  return { known: composite };
+}
+
+/**
+ * `withoutNulls` hides explicit clears from the shape validator, so every key of the raw
+ * entry and every path that leads to a `null` is checked here first: top-level keys must be
+ * allowed at this level (plus `enabled`), and nested clears must name a member of that
+ * field's schema. Otherwise a `null` could clear a global-only field from a lower level.
+ */
+function clearIssues(schema: JsonSchema, entry: SchemaRecord, allowed: readonly string[], prefix: string): FeatureOverrideIssue[] {
+  const result: FeatureOverrideIssue[] = [];
+  const properties = record(schema.properties) ? schema.properties : {};
+  const walk = (value: unknown, fieldSchema: unknown, path: string): void => {
+    if (!record(value)) return;
+    for (const [name, child] of Object.entries(value)) {
+      const childPath = `${path}/${escapeJsonPointerSegment(name)}`;
+      const member = memberSchema(schema, fieldSchema, name);
+      if (!member.known) {
+        if (child === null) result.push({ path: childPath, message: 'cannot clear a field the schema does not declare' });
+        continue;
+      }
+      if (member.child !== undefined) walk(child, member.child, childPath);
+    }
+  };
+  for (const [field, value] of Object.entries(entry)) {
+    const path = `${prefix}/${escapeJsonPointerSegment(field)}`;
+    if (field === FEATURE_ENABLED_KEY) continue;
+    if (!allowed.includes(field)) {
+      if (value === null) result.push({ path: prefix, message: `must NOT have additional properties (additionalProperty: ${field})` });
+      continue;
+    }
+    walk(value, properties[field], path);
+  }
+  return result;
+}
+
 /** Drop explicit clears before shape validation; the merged view is validated separately. */
 function withoutNulls(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(withoutNulls);
@@ -243,6 +308,8 @@ export function validateFeatureOverrides(schema: JsonSchema, block: unknown): re
       const path = `${groupPath}/${escapeJsonPointerSegment(key)}`;
       if (!pattern.test(key)) { result.push({ path, message: level === 'adapter' ? 'key must be an adapter instance alias' : 'key must be <adapter alias>/<endpointId>' }); continue; }
       if (!record(value)) { result.push({ path, message: 'must be object' }); continue; }
+      const cleared = clearIssues(schema, value, overridableFields(schema, level), path);
+      if (cleared.length) { result.push(...cleared); continue; }
       if (!entry(structuredClone(withoutNulls(value)))) { result.push(...issues(entry, path)); continue; }
       const merged = resolveLayeredConfig({ global: globalFields, overrides: raw, key }).value;
       if (!effective(structuredClone(merged))) {
@@ -277,6 +344,9 @@ export function validateConversationOverride(
   if (!record(entry)) return Object.freeze([{ path: '', message: 'must be object' }]);
   const narrowed = fields ? `conversation:${[...fields].sort().join(',')}` : 'conversation';
   const shape = compiled(schema, narrowed, () => featureOverrideEntrySchema(schema, 'conversation', fields));
+  const allowed = overridableFields(schema, 'conversation').filter(field => !fields || fields.includes(field));
+  const cleared = clearIssues(schema, entry, allowed, '');
+  if (cleared.length) return Object.freeze(cleared);
   if (!shape(structuredClone(withoutNulls(entry)))) return Object.freeze(issues(shape, ''));
   const own = record(block) ? block : {};
   const { [FEATURE_OVERRIDES_KEY]: overrides, ...globalFields } = own;

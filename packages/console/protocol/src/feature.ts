@@ -186,6 +186,11 @@ export interface ConsoleFeatureGetResult {
   /** `conversation` level only: when / by whom the stored override was last written. */
   readonly updatedAt?: number;
   readonly updatedBy?: string;
+  /**
+   * Whether conversation overrides survive a restart: false when the project database cannot
+   * store them (MongoDB, Redis, memory). Present whenever the conversation store is available.
+   */
+  readonly persistent?: boolean;
 }
 
 export interface ConsoleFeatureWarning {
@@ -232,6 +237,8 @@ export type ConsoleFeatureWriteResult =
     restartRequired: boolean;
     warnings: readonly ConsoleFeatureWarning[];
     message: string;
+    /** Conversation level only: false when the write is kept in memory and lost on restart. */
+    persistent?: boolean;
   }>
   | Readonly<{ status: 'unchanged'; revision: string; warnings: readonly ConsoleFeatureWarning[] }>
   | Readonly<{ status: 'conflict'; revision: string; message: string }>
@@ -292,4 +299,6 @@ export interface ConsoleFeatureConversationsResult {
   readonly nextCursor?: string;
   /** False when the instance has no conversation event store; only overridden conversations are listed. */
   readonly recentAvailable: boolean;
+  /** False when conversation overrides are kept in memory only and are lost on restart. */
+  readonly persistent?: boolean;
 }
