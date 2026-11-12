@@ -45,7 +45,7 @@ function authoredScenario(overrides) {
       parent: { kind: 'channel', id: 'ops-workspace' },
       threadId: 'ops-thread',
     },
-    sender: { id: 'operator', name: '值班', roles: ['admin'] },
+    sender: { id: 'operator', name: '值班', platform: { standing: 'admin' } },
     input: 'status',
     preview: [{ type: 'text', data: { text: '状态：ready' } }],
     profile: 'text',
@@ -77,7 +77,7 @@ try {
     await writeScenarioCase('executed', authoredScenario({ name: 'smoke bot status in a threaded channel' })),
     await writeScenarioCase('denied', authoredScenario({
       name: 'smoke bot denial in a threaded channel',
-      sender: { id: 'visitor', name: '访客', roles: [] },
+      sender: { id: 'visitor', name: '访客', platform: { standing: 'member' } },
       assertions: { dispatchStatus: 'denied', deliveries: ['没有权限执行此指令。'] },
     })),
     await writeScenarioCase('wrong', authoredScenario({

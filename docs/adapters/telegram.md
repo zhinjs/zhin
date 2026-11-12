@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/telegram/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/telegram/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=81dfe7bbb2a883bb -->
+<!-- sync-adapter-docs:sha256=591148d7a15e2112 -->
 
 # @zhin.js/adapter-telegram
 
@@ -55,7 +55,7 @@ pnpm add @zhin.js/adapter-telegram
 
 ### 平台权限（platform permit）
 
-- 成员身份：群消息入站时经 `getChatMember`（60s 缓存）解析，写入 `sender.platform`（`creator` → `owner`、`administrator` → `admin` 且 `can_*` 权限进 `permissions`、`left` / `kicked` → `guest`，ADR 0056 §1）。
+- 成员身份：群消息入站时经 `getChatMember`（60s 缓存）解析，写入 `sender.platform`（见下文「成员身份」）；不再写 `metadata.senderRole` / `metadata.senderPermissions`。
 - `plugin.ts` 在 generation setup 注册 checker，并在 dispose 注销；Plugin Runtime CapabilityIngress 与 ToolSystem 统一经 Core `canAccessTool()` 消费 `permissions`。
 
 ## 前置条件
@@ -212,3 +212,7 @@ canonical keyboard 的 `disabled: true` 按钮映射为 Telegram Bot API 10.3 �
 `setMyProfilePhoto` 通过 multipart 附件上传已解析的 JPEG 字节，不把 URL 冒充上传文件，也不向模型暴露含 Bot Token 的 Telegram 下载地址。资料端口不返回需凭据访问的文件接口 URL，亦不声明 Bot 的年龄、性别、生日及兴趣可写。
 
 `nickname` / `profile` 配置只补足缺失字段；Endpoint 字段优先于适配器默认值，不会修改 Telegram 账号。接口依据 [Bot API 官方文档](https://core.telegram.org/bots/api#getmyname)及[头像设置方法](https://core.telegram.org/bots/api#setmyprofilephoto)。
+
+## 成员身份
+
+群消息经 `getChatMember` 归一为 `sender.platform`：`creator` → `owner`（带全部管理员权限）；`administrator` → `admin`，其 `can_*` 权限去掉前缀进 `permissions`（如 `restrict_members`、`pin_messages`）；`member` 与仍在群内的 `restricted` → `member`（`restricted` 的 `can_*` 同样上报）；`left` / `kicked` → `guest`。Telegram 没有身份组，`roles` 不上报；私聊不查询、不上报；查询失败时不上报。能力画像：`group.scene.platformStanding = { standing: true, permissions: true }`。详见 [ADR 0056 §1](https://github.com/zhinjs/zhin/blob/main/docs/adr/0056-chat-roles.md)。

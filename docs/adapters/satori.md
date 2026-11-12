@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/satori/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/satori/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=0e49442baa0ba133 -->
+<!-- sync-adapter-docs:sha256=16a17074247acba9 -->
 
 # @zhin.js/adapter-satori
 
@@ -136,3 +136,7 @@ SDK 会向 `path` 发送 POST，请求头 `Satori-Opcode: 0` 表示事件；每�
 | Webhook 无事件 | 确认路径、`Satori-Opcode: 0` 与 HTTP Host |
 | 401 | 检查 API、WS IDENTIFY 与 Webhook 使用的 token 是否一致 |
 | 发送目标错误 | 核对 `channel_id` 与 Conversation kind；DIRECT 才映射为 private |
+
+## 成员身份
+
+Satori 事件不带可靠的群主 / 管理员信息，不上报 `sender.platform`，能力画像也不声明 `scene.platformStanding`。详见 [ADR 0056 §1](https://github.com/zhinjs/zhin/blob/main/docs/adr/0056-chat-roles.md)。

@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/onebot12/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/onebot12/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=c206d79e06bc2caf -->
+<!-- sync-adapter-docs:sha256=a5dafad74cbbff7a -->
 
 # @zhin.js/adapter-onebot12
 
@@ -134,3 +134,7 @@ WS、反向 WS 和 Webhook 都在进入原生 SDK 前过滤其他 bot 的事件�
 ## 许可证
 
 MIT License
+
+## 成员身份
+
+OneBot v12 消息事件不带发送者群角色，不上报 `sender.platform`，能力画像也不声明 `scene.platformStanding`。详见 [ADR 0056 §1](https://github.com/zhinjs/zhin/blob/main/docs/adr/0056-chat-roles.md)。
