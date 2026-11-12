@@ -1,0 +1,14 @@
+.changeset/qq-official-v2-apis.md
+  h_6f5e45c41d0910 2-3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "acbbb9a95d034d98052193fb7999ffc673658ec3",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
