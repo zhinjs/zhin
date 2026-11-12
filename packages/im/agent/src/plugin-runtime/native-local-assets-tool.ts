@@ -6,7 +6,7 @@ export function createNativeLocalAssetsToolFeature(store: LocalImageAssetStore) 
     feature: toolFeatureId,
     name: 'get_local_assets',
     definition: defineAgentTool<Record<string, unknown>, unknown>({
-      description: 'Inspect a private MCP image by its asset_id from this conversation. Loads the image for the next model request, without publishing it. Original expires after 7 days. Never pass a filesystem path or base64.',
+      description: 'Inspect a private tool image (from any tool result: MCP, plugin, seam or builtin) by its asset_id from this conversation. Loads the image for the next model request, without publishing it. Original expires after 7 days. Never pass a filesystem path or base64.',
       inputSchema: { type: 'object', properties: { asset_id: { type: 'string' } }, required: ['asset_id'] },
       requiresApproval: 'never',
       async execute(input, context) {

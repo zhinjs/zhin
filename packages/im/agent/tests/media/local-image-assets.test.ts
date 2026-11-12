@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { LocalImageAssetStore, type LocalImageScope } from '../../src/media/local-image-assets.js';
-import { captureMcpImages } from '../../src/media/mcp-image-results.js';
+import { captureToolImages } from '../../src/media/tool-image-results.js';
 import { authorizeTurnFileInput } from '../../src/security/turn-file-authority.js';
 
 const image = 'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
@@ -133,6 +133,16 @@ it('does not publish references on cancellation or storage failure, and leaves n
   expect(await readFile(directory, 'utf8')).toBe('not a directory');
 });
 
+it('keeps class instances beside a captured image unchanged', async () => {
+  const store = new LocalImageAssetStore(directory);
+  const createdAt = new Date('2026-11-12T00:00:00Z');
+  const raw = Buffer.from('metadata');
+  const output = await captureToolImages({ createdAt, raw, content: [{ type: 'image', data: image, mimeType: 'image/gif' }] }, store, scope, 'plugin:test') as Record<string, unknown>;
+  expect(JSON.stringify(output)).not.toContain(image);
+  expect(output.createdAt).toBe(createdAt);
+  expect(output.raw).toBe(raw);
+});
+
 it('captures protocol images, image resources and mirrored binary copies without publishing or losing tool text', async () => {
   const store = new LocalImageAssetStore(directory);
   const result = { content: [
@@ -143,7 +153,7 @@ it('captures protocol images, image resources and mirrored binary copies without
   ], structuredContent: { original: image }, isError: false };
   const fetchSpy = vi.spyOn(globalThis, 'fetch');
   try {
-    const output = await captureMcpImages(result, store, scope, 'mcp:test');
+    const output = await captureToolImages(result, store, scope, 'mcp:test');
     expect(JSON.stringify(output)).not.toContain(image);
     expect(JSON.stringify(output)).toContain('The operation completed.');
     expect(JSON.stringify(output)).toContain('asset_id');
@@ -151,7 +161,7 @@ it('captures protocol images, image resources and mirrored binary copies without
     expect(await readdir(directory)).toHaveLength(1);
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(result.content[1]).toHaveProperty('data', image);
-    const unavailable = await captureMcpImages(result, undefined, undefined, 'unconfigured');
+    const unavailable = await captureToolImages(result, undefined, undefined, 'unconfigured');
     expect(JSON.stringify(unavailable)).not.toContain(image);
     expect(JSON.stringify(unavailable)).toContain('unavailable');
   } finally { fetchSpy.mockRestore(); }

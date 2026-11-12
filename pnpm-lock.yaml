@@ -1240,6 +1240,9 @@ importers:
       '@zhin.js/agent-feature':
         specifier: workspace:*
         version: link:../agent-feature
+      '@zhin.js/agent-media':
+        specifier: ^0.2.0
+        version: 0.2.0(zod@4.6.7)
       '@zhin.js/ai':
         specifier: workspace:*
         version: link:../ai
@@ -1285,9 +1288,6 @@ importers:
       ajv:
         specifier: ^8.18.0
         version: 8.18.0
-      aws4fetch:
-        specifier: ^1.0.20
-        version: 1.0.20
       chalk:
         specifier: ^5.6.2
         version: 5.6.2
@@ -6225,6 +6225,11 @@ packages:
   '@workflow/serde@4.1.0':
     resolution: {integrity: sha512-pav4F2BoirECWR7Nf1TKt+2eETcBj7jj4cBefQ8VXQCA6NPkaKeLfj/zMgi+3zYV5ZIBT4GuUiphsj0/b9hPQQ==}
 
+  '@zhin.js/agent-media@0.2.0':
+    resolution: {integrity: sha512-Tu7Kk8udAzMbldeP+LDzR1v9rHbwvZiS9hwmH6S1/KpJM21t8cfgLFXBr6H4d9FX2yRrwBKH71ys1HTyYPTB3Q==}
+    engines: {node: '>=20'}
+    hasBin: true
+
   '@zone-eu/mailsplit@5.4.14':
     resolution: {integrity: sha512-rz0FQOhN3Vq1XrSeSSa9+dPcaFbBxmQPjiZm6zS9oxdVHV7rOWIAYX3yP2YAUf0qBncY8CI+NogzPCmMVrMXcw==}
 
@@ -10680,6 +10685,15 @@ snapshots:
       - typescript
 
   '@workflow/serde@4.1.0': {}
+
+  '@zhin.js/agent-media@0.2.0(zod@4.6.7)':
+    dependencies:
+      '@modelcontextprotocol/sdk': 1.32.2(zod@4.6.7)
+      aws4fetch: 1.0.20
+    transitivePeerDependencies:
+      - '@cfworker/json-schema'
+      - supports-color
+      - zod
 
   '@zone-eu/mailsplit@5.4.14':
     dependencies:

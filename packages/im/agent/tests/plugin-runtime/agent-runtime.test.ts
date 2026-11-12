@@ -285,6 +285,39 @@ describe('Agent CapabilityIngress', () => {
       expect(JSON.stringify(events)).not.toContain(image);
     } finally { await fixture.mcp.stop(); await rm(directory, { recursive: true, force: true }); }
   });
+  it('captures images returned by plugin tools, not only MCP tools, and keeps ordinary results untouched', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'zhin-plugin-tool-ingress-'));
+    const localAssets = new LocalImageAssetStore(directory);
+    const image = 'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+    const fixture = await createFixture({ localAssets, toolResult: { content: [
+      { type: 'text', text: 'rendered' },
+      { type: 'image', data: image, mimeType: 'image/gif' },
+    ] } });
+    try {
+      const capabilities = await new CapabilityIngress().read({ snapshot: fixture.snapshot, owner: fixture.child });
+      const events: unknown[] = [];
+      const turn = createTurnIngress({ ...accessTurn('icqq'), capabilities: { tools: capabilities.tools.map(tool => tool.name), skills: [] }, ports: { journal: { append: event => { events.push(event); } } } });
+      const runtime = new TurnToolRuntime(turn, capabilities.tools);
+      const lookup = capabilities.tools.find(tool => tool.name.endsWith('lookup'))!;
+      const outcome = await runtime.execute(lookup.name, { value: 'x' }, 'render');
+      expect(outcome.status, JSON.stringify(outcome)).toBe('completed');
+      expect(JSON.stringify(outcome)).not.toContain(image);
+      expect(JSON.stringify(outcome)).toContain('rendered');
+      expect(JSON.stringify(events)).not.toContain(image);
+      const assetId = JSON.stringify(outcome).match(/asset_id[^a-f0-9]+([a-f0-9-]{36})/u)?.[1];
+      expect(assetId).toBeTruthy();
+      const inspected = await runtime.execute('get_local_assets', { asset_id: assetId }, 'inspect');
+      expect(inspected.status).toBe('completed');
+      if (inspected.status === 'completed') expect(localAssets.isInspection(inspected.output)).toBe(true);
+    } finally { await fixture.mcp.stop(); await rm(directory, { recursive: true, force: true }); }
+
+    const plain = await createFixture({});
+    try {
+      const capabilities = await new CapabilityIngress().read({ snapshot: plain.snapshot, owner: plain.child });
+      const lookup = capabilities.tools.find(tool => tool.name.endsWith('lookup'))!;
+      expect(await lookup.execute({ value: 'ok' }, invocation() as never)).toBe('old:ok');
+    } finally { await plain.mcp.stop(); }
+  });
   it('exposes one scoped reference tool and rejects references outside the current turn', async () => {
     const calls: string[] = [];
     const request = {
@@ -1127,9 +1160,15 @@ permissions: [role(trusted)]
   });
 });
 
+function omitFixtureOnly<T extends { readonly toolResult?: unknown; readonly mcpResult?: unknown; readonly localAssets?: unknown }>(access: T) {
+  const { toolResult: _toolResult, ...rest } = access;
+  return rest;
+}
+
 async function createFixture(access: {
   readonly localAssets?: LocalImageAssetStore;
   readonly mcpResult?: unknown;
+  readonly toolResult?: unknown;
   readonly platforms?: readonly string[];
   readonly scopes?: readonly ('private' | 'group' | 'channel')[];
   readonly currentConversationBotRoles?: readonly string[];
@@ -1156,9 +1195,9 @@ async function createFixture(access: {
     source: '/plugins/child/tools/lookup.ts',
     definition: defineAgentTool<{ value: string }>({
       description: 'Lookup',
-      ...access,
+      ...omitFixtureOnly(access),
       requiresApproval: access.requiresApproval ?? 'never',
-      execute(input) { return `old:${input.value}`; },
+      execute(input) { return (access.toolResult ?? `old:${input.value}`) as string; },
     }),
   });
   const skill = createCapabilitySlot({
