@@ -2,7 +2,7 @@
  * Gateway composition (ADR 0054 §1): the HTTP server and the instance supervisor, joined by a
  * pluggable instance transport (the bridge supplies the IPC one). CLI wiring lives elsewhere.
  */
-import { resolveHttpConfig, type ResolvedHttpConfig, type TokenRegistry } from '@zhin.js/host-http';
+import { isLoopbackHost, resolveHttpConfig, type ResolvedHttpConfig, type TokenRegistry } from '@zhin.js/host-http';
 import type { InstanceTransport } from '@zhin.js/host-http/bridge';
 import { join } from 'node:path';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -190,6 +190,7 @@ export async function startGateway(options: StartGatewayOptions): Promise<Runnin
       });
       await settleWithin(gatewayConsole.ready, options.databaseWaitMs ?? 10_000);
     }
+    assertNotOpenOnNetwork(http, server.tokenRegistry);
     await server.listen();
   } catch (error) {
     disposeEvents();
@@ -233,6 +234,27 @@ export async function startGateway(options: StartGatewayOptions): Promise<Runnin
       return closeResult;
     },
   });
+}
+
+/** Thrown when the gateway would serve an open Host on a network address. */
+export class OpenHostOnNetworkError extends Error {
+  readonly code = 'ZHIN_OPEN_HOST_ON_NETWORK';
+  constructor(readonly host: string) {
+    super(`http.host 为 ${host}（可从网络访问），但既没有初始化令牌（http.token），Console 也还没有所有者：`
+      + '开放模式拥有全部权限，只允许监听本机地址。请运行 zhin doctor --fix 在 .env 生成 HTTP_TOKEN 并在配置里用 '
+      + 'http.token: ${HTTP_TOKEN} 引用，或先运行 zhin console init 创建所有者；也可以把 http.host 改为 127.0.0.1。');
+    this.name = 'OpenHostOnNetworkError';
+  }
+}
+
+/**
+ * An open Host (no bootstrap token, no owner yet) holds every permission and is only meant for
+ * this machine. The per-request loopback check cannot see through a same-host reverse proxy that
+ * adds no forwarding header, so a network-facing `http.host` must not start open (ADR 0049 §1).
+ */
+export function assertNotOpenOnNetwork(http: ResolvedHttpConfig, registry: TokenRegistry): void {
+  if (registry.hasAnyToken() || isLoopbackHost(http.host)) return;
+  throw new OpenHostOnNetworkError(http.host ?? '');
 }
 
 /** Waits for `promise` at most `ms` (the gateway listens anyway; the work continues). */

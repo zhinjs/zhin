@@ -19,6 +19,8 @@ The roles here are **Console account** roles: they decide who can do what in the
 | Session token | Username + password sign-in (`POST {base}/auth/login`) | The Console in the browser. 12-hour sliding expiry by default, 30 days at most |
 | API token | Issued by a user (below) | CI, monitoring, `zhin doctor --live`, MCP / A2A clients; command-line tools read `ZHIN_CONSOLE_TOKEN` |
 
+With neither `http.token` nor an owner, the Host is **open**: it holds every permission and only accepts loopback peers without `X-Forwarded-For` / `Forwarded` (a request with an unknown peer address is not local). The gateway refuses to start open when `http.host` is not a loopback address (e.g. `0.0.0.0` in a container): first run `zhin doctor --fix` to generate `HTTP_TOKEN` in `.env` and set `http.token: ${HTTP_TOKEN}`, or create the owner with `zhin console init`. A same-host reverse proxy that adds no forwarding header makes every proxied request look local to an open Host, so always set a bootstrap token behind a reverse proxy.
+
 Every credential is sent as `Authorization: Bearer …`; no cookies are used. Failed sign-ins always return 401; after 5 failures per IP and username within 15 minutes the gateway backs off exponentially (`429`).
 
 ## Users {#users}

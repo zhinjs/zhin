@@ -53,7 +53,7 @@ export {
   type ConsoleUserPrincipal,
 } from './access-control.js';
 export { timingSafeEqualString } from './timing-safe-equal.js';
-export { isLoopbackAddress, verifyProtocolAccessToken, type ProtocolAuthRequest } from './protocol-auth.js';
+export { isLoopbackAddress, isLoopbackHost, verifyProtocolAccessToken, type ProtocolAuthRequest } from './protocol-auth.js';
 export {
   compileTrustProxy,
   hasForwardingHeaders,

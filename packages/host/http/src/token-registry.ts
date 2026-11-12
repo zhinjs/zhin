@@ -127,8 +127,8 @@ export class TokenRegistry {
   /** Resolves a bearer to a principal; null when it is not (or no longer) valid. */
   async authenticate(token: string, meta: ConsoleRequestMeta = {}): Promise<ConsolePrincipal | null> {
     // An open Host (no bootstrap token, no owner) holds every permission, so it is only open to
-    // loopback peers that did not come through a proxy. In-process calls without a peer address
-    // (tests, embedding) stay open.
+    // loopback peers that did not come through a proxy, and to callers that explicitly mark
+    // themselves in-process (tests, embedding). An unknown peer address is not local.
     if (!this.hasAnyToken()) return isOpenHostPeer(meta) ? openBootstrap : null;
     if (this.isBootstrapToken(token)) return tokenBootstrap;
     if (!token || !this.#provider) return null;
@@ -203,8 +203,9 @@ export function extractBearerToken(
   return queryToken?.trim() ?? '';
 }
 
-/** Who may use an open Host: no proxy hop, and a loopback peer when the address is known. */
+/** Who may use an open Host: no proxy hop, and a loopback peer or an explicit in-process caller. */
 function isOpenHostPeer(meta: ConsoleRequestMeta): boolean {
   if (meta.forwarded) return false;
-  return meta.ip === undefined || isLoopbackAddress(meta.ip);
+  if (meta.ip === undefined) return meta.inProcess === true;
+  return isLoopbackAddress(meta.ip);
 }

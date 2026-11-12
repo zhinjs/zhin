@@ -50,6 +50,12 @@ export interface ConsoleRequestMeta {
    * request never counts as local: an open Host (no bootstrap token, no owner) refuses it.
    */
   readonly forwarded?: boolean;
+  /**
+   * An in-process caller with no network peer (tests, embedding), set explicitly by the caller.
+   * An open Host admits it like a loopback peer; a request without `ip` and without this marker
+   * is never local.
+   */
+  readonly inProcess?: boolean;
 }
 
 export interface ConsoleAuditEntry {
@@ -96,10 +102,12 @@ export function auditActor(principal: ConsolePrincipal | undefined): string {
 export function requestMeta(
   request: { readonly headers: Headers },
   remoteAddress?: string,
+  options: { readonly inProcess?: boolean } = {},
 ): ConsoleRequestMeta {
   const agent = request.headers.get('user-agent');
   return Object.freeze({
     ...(remoteAddress ? { ip: remoteAddress } : {}),
+    ...(options.inProcess === true && !remoteAddress ? { inProcess: true } : {}),
     ...(typeof agent === 'string' ? { userAgent: agent.slice(0, 256) } : {}),
     ...(hasForwardingHeaders(request.headers) ? { forwarded: true } : {}),
   });
