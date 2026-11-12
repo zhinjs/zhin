@@ -51,7 +51,13 @@ const on: FeatureSelfServiceConfig = { ...DEFAULT_FEATURE_SELF_SERVICE, enabled:
 
 let current = snapshot();
 
-async function harness(config: FeatureSelfServiceConfig = on, owners: Record<string, string> = { 'qq/bot-1': 'boss' }, globalOwners: string[] = []) {
+/** Behaves like a database-backed store (the default deployment); memory-only replies are tested separately. */
+class PersistentStore extends FeatureConversationOverrideStore {
+  override get persistent(): boolean { return true; }
+}
+
+async function harness(config: FeatureSelfServiceConfig = on, owners: Record<string, string> = { 'qq/bot-1': 'boss' }, globalOwners: string[] = [],
+  conversations: FeatureConversationOverrideStore = new PersistentStore()) {
   const state = { document: structuredClone(base), revision: 1 };
   const patches: ConsoleConfigPatchRequest[] = [];
   const configuration = {
@@ -63,7 +69,6 @@ async function harness(config: FeatureSelfServiceConfig = on, owners: Record<str
       return { status: 'saved', revision: `r${state.revision}`, restartRequired: false, paths: [], missingEnv: [], message: 'ok' };
     },
   };
-  const conversations = new FeatureConversationOverrideStore();
   const roles: InstanceChatRoleService = new ChatRoleService({ store: new ChatRoleStore() });
   for (const [key, userId] of Object.entries(owners)) await roles.store.grant({ level: 'endpoint', key, adapter: key.split('/')[0]!, userId, role: 'owner' });
   for (const userId of globalOwners) await roles.store.grant({ level: 'global', key: '', adapter: 'qq', userId, role: 'owner' });
@@ -149,6 +154,29 @@ describe('in-chat feature self-service (ADR 0055 §7, roles per ADR 0056)', () =
     expect(await run(admin, '设置 rss maxItems 1')).toBe('字段 maxItems 不允许在聊天中修改。');
     expect(await run(admin, '重置 repeater')).toBe('已保存（会话层），立即生效。');
     expect(conversations.get('repeater', 'qq/bot-1/group:100')).toBeUndefined();
+  });
+
+  it('tells the admin when the conversation store cannot persist (memory, MongoDB, Redis)', async () => {
+    const { run, roles } = await harness(on, { 'qq/bot-1': 'boss' }, [], new FeatureConversationOverrideStore());
+    await promote(roles);
+    expect(await run(actor(), '关闭 rss')).toBe('已保存（会话层），立即生效。（当前数据库不支持持久化，重启后丢失）');
+    expect(await run(actor(), '开启 rss', 'en')).toBe('Saved (conversation level), effective now. (the current database cannot persist this; it is lost on restart)');
+    // File levels are persistent regardless of the database.
+    expect(await run(actor({ user: 'boss' }), '关闭 rss 账号')).toBe('已保存（账号层），立即生效。');
+  });
+
+  it('never plants environment references from chat, at any level', async () => {
+    const { run, conversations, roles, patches, deps } = await harness(on, { 'qq/bot-1': 'boss' }, ['root']);
+    await promote(roles);
+    const refused = '聊天中不能写入环境变量引用（$ 加花括号的占位符或 env://），未保存。';
+    // Even a Console-side allowance on the shared context is never inherited by chat.
+    (deps.context as Record<string, unknown>).mayReferenceEnvironment = () => true;
+    expect(await run(actor(), '设置 repeater threshold ${SECRET}')).toBe(refused);
+    expect(await run(actor({ user: 'boss' }), '设置 repeater threshold ${SECRET} 账号')).toBe(refused);
+    expect(await run(actor({ user: 'root' }), '设置 repeater threshold env://SECRET 全局')).toBe(refused);
+    expect(await run(actor({ user: 'root' }), '设置 repeater threshold ["${A:-x}"] 适配器')).toBe(refused);
+    expect(conversations.list()).toEqual([]);
+    expect(patches).toEqual([]);
   });
 
   it('refuses to enable or change a plugin locked above and names the level', async () => {

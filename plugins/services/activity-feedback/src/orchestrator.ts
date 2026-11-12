@@ -21,8 +21,18 @@ export type ActivityFeedbackConversationGate = (target: Readonly<{
   conversation: Readonly<{ endpoint: Readonly<{ id: string }>; kind: string; id: string }>;
 }>) => boolean;
 
-/** The event's conversation in the `isEnabledFor` target shape; undefined when it has no id. */
-export function activityFeedbackGateTarget(ctx: EventContext): Parameters<ActivityFeedbackConversationGate>[0] | undefined {
+/**
+ * The event's conversation in the `isEnabledFor` target shape; undefined when it has no id.
+ * Uses the payload's `conversationRef` (Endpoint CapabilityId + raw conversation kind / id), the
+ * same key the dispatch gate uses; `ctx.endpointKey` may be the configured endpoint id, which the
+ * AdapterIndex cannot resolve (the gate would silently fall back to the global switch).
+ */
+export function activityFeedbackGateTarget(ctx: EventContext, payload?: Pick<AIEventPayload, 'conversationRef'>): Parameters<ActivityFeedbackConversationGate>[0] | undefined {
+  const ref = payload?.conversationRef;
+  if (ref?.endpointId) {
+    const kind = ref.kind ?? ctx.sceneType;
+    return ref.id ? { conversation: { endpoint: { id: ref.endpointId }, kind, id: ref.id } } : undefined;
+  }
   const id = ctx.sceneType === 'private' ? ctx.userId : ctx.groupId;
   return id ? { conversation: { endpoint: { id: ctx.endpointKey }, kind: ctx.sceneType, id } } : undefined;
 }
@@ -64,7 +74,7 @@ export class ActivityFeedbackOrchestrator {
       );
       return;
     }
-    const target = activityFeedbackGateTarget(ctx);
+    const target = activityFeedbackGateTarget(ctx, payload);
     if (target && !this.enabledFor(target)) {
       this.log.debug(`[ActivityFeedback] skip ${phase} (${reason}): switched off for this conversation`);
       return;

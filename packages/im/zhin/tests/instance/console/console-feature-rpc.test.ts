@@ -144,6 +144,20 @@ describe('feature.* Console RPC', () => {
     expect((await call('feature.set-override', { plugin: 'rss', level: 'global', patch: { maxItems: 1 } }))!.status).toBe(400);
   });
 
+  it('refuses environment references unless the caller may edit the environment', async () => {
+    const denied = harness(base);
+    for (const patch of [{ style: { title: '${RSS_KEY}' } }, { style: { title: 'env://RSS_KEY' } }, { style: { ['${X}']: 'a' } }]) {
+      const reply = await denied.call('feature.set-override', { plugin: 'rss', level: 'endpoint', key: 'qq/bot-1', patch });
+      expect(reply).toMatchObject({ status: 400, body: { success: false, code: 'environment-reference' } });
+    }
+    expect(denied.patches).toEqual([]);
+    const throwing = harness(base, { mayReferenceEnvironment: () => { throw new Error('boom'); } });
+    expect((await throwing.call('feature.set-override', { plugin: 'rss', level: 'endpoint', key: 'qq/bot-1', patch: { style: { title: '${RSS_KEY}' } } }))!.status).toBe(400);
+    const allowed = harness(base, { mayReferenceEnvironment: () => true });
+    const saved = await allowed.call('feature.set-override', { plugin: 'rss', level: 'endpoint', key: 'qq/bot-1', patch: { style: { title: '${RSS_KEY}' } } });
+    expect(saved!.body.data).toMatchObject({ status: 'saved' });
+  });
+
   it('removes a whole level entry or selected fields and cleans empty containers', async () => {
     const { call, state } = harness({ ...base, rss: { ...base.rss, overrides: { endpoints: { 'tg/news': { maxItems: 1, style: { title: 'x' } } } } } });
     await call('feature.remove-override', { plugin: 'rss', level: 'endpoint', key: 'tg/news', paths: [['style', 'title']] });

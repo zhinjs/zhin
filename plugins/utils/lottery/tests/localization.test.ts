@@ -120,10 +120,32 @@ describe('lottery localization', () => {
     const fetch = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('offline fixture'));
     try { await tick!(); } finally { fetch.mockRestore(); }
     expect(checked).toEqual([
-      { adapter: 'sandbox', endpointId: 'bot', conversation: { kind: 'group', id: 'off' } },
-      { adapter: 'sandbox', endpointId: 'bot', conversation: { kind: 'group', id: 'on' } },
+      { endpoint: { adapter: 'sandbox', endpointKey: 'bot' }, conversation: { kind: 'group', id: 'off' } },
+      { endpoint: { adapter: 'sandbox', endpointKey: 'bot' }, conversation: { kind: 'group', id: 'on' } },
     ]);
     expect(send).toHaveBeenCalledTimes(1);
     expect(send.mock.calls[0]?.[0]).toMatchObject({ conversation: { kind: 'group', id: 'on' } });
+  });
+
+  it('still delivers when the switch cannot be evaluated (unresolvable or unusual selector)', async () => {
+    let runtime: LotteryRuntime | undefined;
+    let tick: (() => Promise<void>) | undefined;
+    const send = vi.fn(async () => undefined);
+    const schedule = { register: vi.fn((task: { execute: () => Promise<void> }) => { tick = task.execute; return () => undefined; }) };
+    await (plugin.setup as (context: unknown) => Promise<void>)({
+      config: { get: () => ({ games: ['ssq'], scheduleEnabled: true, backtestEnabled: false, weightPersistEnabled: false,
+        pushTargets: [{ adapter: 'OneBot', endpointKey: 'a/b', channelType: 'group', channelId: '1' }] }) },
+      resources: {
+        has: (token: unknown) => token === scheduleHostToken || token === outboundHostToken,
+        use: (token: unknown) => token === projectLocaleToken ? 'zh-CN' : token === scheduleHostToken ? schedule : { send },
+        provide: (token: unknown, value: LotteryRuntime) => { if (token === lotteryRuntimeToken) runtime = value; },
+      }, lifecycle: { add: vi.fn() },
+      isEnabledFor: () => { throw new TypeError('Feature target adapter must be an instance alias'); },
+    });
+    await upsertDraws(runtime!.db, [draw]);
+    const fetch = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('offline fixture'));
+    try { await tick!(); } finally { fetch.mockRestore(); }
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send.mock.calls[0]?.[0]).toMatchObject({ adapter: 'OneBot', endpointKey: 'a/b' });
   });
 });
