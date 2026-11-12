@@ -270,7 +270,7 @@ Console 按对象分四级：**全局 → 适配器 → 账号 → 会话**，�
 |--------|----------------|
 | 概览 | 这一级的在线状态与统计 |
 | 功能 | 在这一级开关插件、覆盖配置；上级关掉后下级锁定，每个字段标明继承自哪一级（[分层配置](./docs/console/features.md)） |
-| 角色 | 谁在这一级是聊天中的 `owner` / `admin` / `trusted`，以及群主、管理员的自动映射（[聊天角色](./docs/console/features.md#chat-roles)） |
+| 角色 | 谁在这一级是聊天中的 `owner` / `admin` / `trusted`（向下继承，在 Console 或聊天里授予）；平台群主、管理员是另一条维度，不会自动变成 zhin 角色（[聊天角色](./docs/concepts/chat-roles.md)） |
 | 记录 | 这一级的聊天记录、日志与操作记录 |
 
 账号页另有「接入」：登录、扫码、连接诊断；会话页另有「聊天」：回看记录、直接发消息。
@@ -279,7 +279,9 @@ Console 按对象分四级：**全局 → 适配器 → 账号 → 会话**，�
 
 - **账号与权限**：Console 用户、内置角色（`owner` / `admin` / `operator` / `viewer`）与自定义角色，角色可绑定到全局、某个适配器或某个账号；自动化用 API 令牌。所有登录、被拒绝的请求和写操作都进审计日志。见[访问控制](./docs/console/access-control.md)。
 - **实例与运维**：实例页查看状态、重启、看日志，依赖安装与更新失败自动回滚；还有数据库、配置文件、环境变量、定时任务、文件，以及只给所有者的终端（默认关闭）。见[运维](./docs/console/operations.md)。
-- **群内自助**：开启 `features.selfService` 后，群主和管理员可以在聊天里用「功能」「角色」命令管理本群。
+- **群内自助**：开启 `features.selfService` 后，拥有本群 zhin `admin`（或更高）角色的人可以在聊天里用「功能」「角色」命令管理本群。
+- **三维度鉴权**：命令、Agent 工具与技能、中间件、按钮按「发言者的 zhin 角色 + 发言者的平台身份 + 机器人自己在群里的身份」判断是否可用，例如禁言工具要求 `platform:admin` 且 `bot:admin`；Agent 每轮只拿到当前可用的工具。见[聊天角色](./docs/concepts/chat-roles.md)。
+- **升级提示**：`master` 已改名 `owner`；配置里的 `master` / `trusted` / `ai.trigger.masters` 在首次启动时自动迁入数据库，之后再出现会启动报错；权限写法 `role(master)`、`scene_admin` 等已删除。见[聊天角色升级指南](./docs/migrations/chat-roles.md)。
 - **带护栏的群管与一键止损**：AI 起草公告或踢人等高风险动作须经人工审批；随时通过决策回放查原因，或一键切换静音 / 只读 / 紧急停止。
 
 👉 完整指南：[运营与群管指南](./docs/customer/index.md) · [Console 管理路径](./docs/paths/console.md) · [按问题选方案](./docs/solutions/index.md)

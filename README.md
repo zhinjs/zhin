@@ -266,7 +266,7 @@ The Console is organized in four levels of objects — **global → adapter → 
 |---------|---------------------|
 | Overview | Online state and statistics for this level |
 | Features | Turn plugins on or off and override their settings at this level; a level switched off above is locked below, and every field shows which level it is inherited from ([layered config](./docs/en/console/features.md)) |
-| Roles | Who is a chat `owner` / `admin` / `trusted` at this level, granted in the Console or in chat; platform standing is a separate dimension ([chat roles](./docs/en/console/features.md#chat-roles)) |
+| Roles | Who is a chat `owner` / `admin` / `trusted` at this level (inherited downward, granted in the Console or in chat); platform owners and admins are a separate dimension and never become zhin roles ([chat roles](./docs/en/concepts/chat-roles.md)) |
 | Records | Chat history, logs and change records for this level |
 
 Account pages add **Connection** (sign-in, QR codes, connection checks); conversation pages add **Chat** (read history and send messages).
@@ -275,7 +275,9 @@ Administration:
 
 - **Accounts and permissions**: Console users, built-in roles (`owner` / `admin` / `operator` / `viewer`) and custom roles, bound globally or to one adapter or account; API tokens for automation. Sign-ins, denied requests and every write go to the audit log. See [Access control](./docs/en/console/access-control.md).
 - **Instance and operations**: the instance page shows status, restarts the bot and streams its logs; dependency installs and updates roll back on failure. Also the database, config file, environment variables, schedules, files, and an owner-only terminal (off by default). See [Operations](./docs/en/console/operations.md).
-- **In-chat self-service**: with `features.selfService` on, group owners and admins manage their own group with the `feature` and `role` chat commands.
+- **In-chat self-service**: with `features.selfService` on, people holding the zhin `admin` role (or higher) in a group manage it with the `feature` and `role` chat commands.
+- **Three-dimension permissions**: commands, Agent tools and skills, middlewares and buttons are available based on the sender's zhin role, the sender's platform standing and the bot's own standing in the group — a mute tool, for example, needs `platform:admin` and `bot:admin`; each Agent turn only sees the tools that pass. See [chat roles](./docs/en/concepts/chat-roles.md).
+- **Upgrading**: `master` is now `owner`; `master` / `trusted` / `ai.trigger.masters` in the config move into the database on first start and fail startup afterwards; permits such as `role(master)` and `scene_admin` are removed. See the [chat roles upgrade guide](./docs/en/migrations/chat-roles.md).
 - **Guardrails & emergency stop**: approve AI-drafted announcements or risky moderation actions before they run, replay AI decisions, or mute/stop the bot with one click.
 
 👉 Full guide: [Operator & Group Admin Guide](./docs/en/customer/index.md) · [Console path](./docs/en/paths/console.md) · [Solutions by outcome](./docs/en/solutions/index.md)
