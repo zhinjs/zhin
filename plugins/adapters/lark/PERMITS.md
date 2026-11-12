@@ -18,3 +18,5 @@
 | `bot:owner` / `bot:admin` | 同上，判定机器人应用自身 |
 
 平台身份与机器人身份都按**当前会话**判定，因此群管理工具只作用于当前群（不接受 `chat_id` 入参）。
+
+`lark_upload_file` 读取宿主机本地文件（`file_path`），要求全局层 zhin `owner`（`owner@global`）。

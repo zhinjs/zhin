@@ -4,19 +4,18 @@ import managers from '../../lark/agents/lark/skills/lark-group-admin/tools/set_m
 import mute from '../agents/icqq/skills/icqq-group-admin/tools/set_mute/index.js';
 
 it('localizes tool validation and preserves the provider input and single-call behavior', async () => {
-  const sendPoll = vi.fn().mockResolvedValue({ message_id: 42 });
-  const context = { locale: 'en', $client: { sendPoll },
+  const send = vi.fn().mockResolvedValue({ status: 'sent', message: { id: '42' } });
+  const context = { locale: 'en', owner: { id: 'telegram-plugin' }, use: () => ({ send }),
     origin: { kind: 'im', platform: 'telegram', conversation: { endpoint: { adapter: 'telegram', id: 'bot' }, kind: 'group', id: '123' } } };
   expect(await poll.execute({ question: '原文', options: 'not-json' }, context as never))
     .toEqual({ success: false, message: 'options must be a JSON array' });
-  expect(sendPoll).not.toHaveBeenCalled();
+  expect(send).not.toHaveBeenCalled();
   expect(await poll.execute({ question: '原文', options: '["中文","English"]' }, context as never))
-    .toMatchObject({ message: 'Poll sent', message_id: 42 });
-  expect(sendPoll).toHaveBeenCalledOnce();
-  expect(sendPoll).toHaveBeenCalledWith({
-    chatId: 123, question: '原文', options: ['中文', 'English'],
-    isAnonymous: true, allowsMultipleAnswers: false,
-  });
+    .toMatchObject({ message: 'Poll sent', message_id: '42' });
+  expect(send).toHaveBeenCalledOnce();
+  expect(send).toHaveBeenCalledWith(expect.objectContaining({
+    content: { type: 'telegram:poll', data: { question: '原文', options: ['中文', 'English'], is_anonymous: true, allows_multiple_answers: false } },
+  }));
 });
 
 it('keeps trusted operation locale independent of platform administration results', async () => {

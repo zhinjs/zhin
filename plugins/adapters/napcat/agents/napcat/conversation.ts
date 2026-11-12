@@ -1,3 +1,4 @@
+import { outboundMessageToken, type SendContent } from '@zhin.js/core/runtime';
 import type { ToolExecutionContext } from '@zhin.js/tool';
 import { messages as t } from './messages.js';
 
@@ -55,4 +56,16 @@ export async function requireMessageInConversation(context: NapcatToolContext, m
   if (message?.message_type !== 'private' || !peers.includes(target.id)) {
     throw new Error(t(context.locale, 'messageOutsideConversation'));
   }
+}
+
+/**
+ * Deliver through the IM outbound chain (renderer → outbound middleware → Endpoint) to the current
+ * conversation (CLAUDE.md Guardrail #1); tools never call the OneBot send actions themselves.
+ */
+export async function sendToCurrentConversation(context: NapcatToolContext, content: SendContent) {
+  currentTarget(context);
+  const conversation = context.origin.kind === 'im' ? context.origin.conversation : undefined;
+  if (!conversation) throw new Error(t(context.locale, 'conversationRequired'));
+  const receipt = await context.use(outboundMessageToken).send({ requester: context.owner.id, conversation, content });
+  return { success: receipt.status === 'sent', ...(receipt.message?.id ? { message_id: receipt.message.id } : {}), receipt };
 }

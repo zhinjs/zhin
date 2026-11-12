@@ -1,3 +1,4 @@
+import { outboundMessageToken, type SendContent } from '@zhin.js/core/runtime';
 import type { ToolExecutionContext } from '@zhin.js/tool';
 import { messages as t } from './messages.js';
 
@@ -17,4 +18,16 @@ export function currentChat(context: TelegramToolContext, options: { readonly al
   }
   context.signal?.throwIfAborted();
   return id;
+}
+
+/**
+ * Deliver through the IM outbound chain (renderer → outbound middleware → Endpoint) to the current
+ * chat (CLAUDE.md Guardrail #1); tools never call the Telegram send API themselves.
+ */
+export async function sendToCurrentChat(context: TelegramToolContext, content: SendContent) {
+  currentChat(context, { allowPrivate: true });
+  const conversation = context.origin.kind === 'im' ? context.origin.conversation : undefined;
+  if (!conversation) throw new Error(t(context.locale, 'conversationRequired'));
+  const receipt = await context.use(outboundMessageToken).send({ requester: context.owner.id, conversation, content });
+  return { success: receipt.status === 'sent', ...(receipt.message?.id ? { message_id: receipt.message.id } : {}), receipt };
 }

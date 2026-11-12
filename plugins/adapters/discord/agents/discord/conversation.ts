@@ -1,3 +1,4 @@
+import { outboundMessageToken, type SendContent } from '@zhin.js/core/runtime';
 import type { ToolExecutionContext } from '@zhin.js/tool';
 import { messages as t } from './messages.js';
 
@@ -29,6 +30,19 @@ export function currentChannel(context: DiscordToolContext): { channelId: string
   context.signal?.throwIfAborted();
   const guildId = conversation.kind === 'channel' && conversation.parent?.kind === 'channel' ? conversation.parent.id : undefined;
   return { channelId: conversation.threadId ?? conversation.id, conversationChannelId: conversation.id, ...(guildId ? { guildId } : {}) };
+}
+
+/**
+ * Deliver through the IM outbound chain (renderer → outbound middleware → Endpoint) to the current
+ * conversation (CLAUDE.md Guardrail #1); tools never call the Discord SDK's `send` themselves.
+ */
+export async function sendToCurrentConversation(context: DiscordToolContext, content: SendContent) {
+  const { origin } = context;
+  const conversation = origin?.kind === 'im' && origin.platform === 'discord' ? origin.conversation : undefined;
+  if (!conversation?.id) throw new Error(t(context.locale, 'conversationRequired'));
+  context.signal?.throwIfAborted();
+  const receipt = await context.use(outboundMessageToken).send({ requester: context.owner.id, conversation, content });
+  return { success: receipt.status === 'sent', ...(receipt.message?.id ? { message_id: receipt.message.id } : {}), receipt };
 }
 
 interface RoleLike { readonly id: string; readonly position: number; readonly managed?: boolean }
