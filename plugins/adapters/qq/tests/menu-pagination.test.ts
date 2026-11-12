@@ -58,14 +58,13 @@ describe('text + inline markdown without buttons on QQ official', () => {
     expect(body.markdown?.content).toBe('正文第一段\n\n**标题**\n\n结尾');
   });
 
-  it('keeps one markdown when an @ splits the text', () => {
-    const out = formatOutbound([
+  it('keeps one markdown when an @ splits the text, with the official at tag inside it', () => {
+    expect(formatOutbound([
       { type: 'text', data: { text: 'a' } },
       { type: 'at', data: { user_id: 'u1' } },
       { type: 'text', data: { text: 'b' } },
       { type: 'markdown', data: { content: 'c' } },
-    ]) as Array<{ type: string; data: Record<string, unknown> }>;
-    expect(out.filter(part => part.type === 'markdown')).toEqual([{ type: 'markdown', data: { content: 'ab\n\nc' } }]);
+    ])).toEqual({ type: 'markdown', data: { content: 'a<qqbot-at-user id="u1" />b\n\nc' } });
   });
 
   it('leaves template markdown and plain text unchanged', () => {

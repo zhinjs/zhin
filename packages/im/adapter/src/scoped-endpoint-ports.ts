@@ -37,7 +37,9 @@ export function scopeEndpointControl({ port, invoke }: ScopedPortOptions<Endpoin
 export function scopeEndpointManagement({ port, invoke }: ScopedPortOptions<EndpointManagement>): Readonly<EndpointManagement> {
   const { inspectGroupMember, inspectGroupScene, inspectGroupMemberProfile, inspectSelfStanding, moderateGroupMember,
     listFriends, listGroups, listChannels, listGroupMembers, listRequests, approveRequest, rejectRequest,
-    kickGroupMember, muteGroupMember, setGroupAdmin, deleteFriend, sendGroupNotice } = port;
+    kickGroupMember, muteGroupMember, setGroupAdmin, deleteFriend, sendGroupNotice,
+    listGroupJoinRequests, approveGroupJoinRequest, declineGroupJoinRequest,
+    listGroupBlacklist, addGroupBlacklist, removeGroupBlacklist } = port;
   return Object.freeze<EndpointManagement>({
     ...(inspectGroupMember ? { inspectGroupMember: request => invoke({ signal: request.signal,
       run: signal => inspectGroupMember.call(port, { ...request, signal }) }) } : {}),
@@ -73,5 +75,17 @@ export function scopeEndpointManagement({ port, invoke }: ScopedPortOptions<Endp
       run: signal => deleteFriend.call(port, { ...request, signal }) }) } : {}),
     ...(sendGroupNotice ? { sendGroupNotice: request => invoke({ signal: request.signal,
       run: signal => sendGroupNotice.call(port, { ...request, signal }) }) } : {}),
+    ...(listGroupJoinRequests ? { listGroupJoinRequests: request => invoke({ signal: request.signal,
+      run: signal => listGroupJoinRequests.call(port, { ...request, signal }) }) } : {}),
+    ...(approveGroupJoinRequest ? { approveGroupJoinRequest: request => invoke({ signal: request.signal,
+      run: signal => approveGroupJoinRequest.call(port, { ...request, signal }) }) } : {}),
+    ...(declineGroupJoinRequest ? { declineGroupJoinRequest: request => invoke({ signal: request.signal,
+      run: signal => declineGroupJoinRequest.call(port, { ...request, signal }) }) } : {}),
+    ...(listGroupBlacklist ? { listGroupBlacklist: request => invoke({ signal: request.signal,
+      run: signal => listGroupBlacklist.call(port, { ...request, signal }) }) } : {}),
+    ...(addGroupBlacklist ? { addGroupBlacklist: request => invoke({ signal: request.signal,
+      run: signal => addGroupBlacklist.call(port, { ...request, signal }) }) } : {}),
+    ...(removeGroupBlacklist ? { removeGroupBlacklist: request => invoke({ signal: request.signal,
+      run: signal => removeGroupBlacklist.call(port, { ...request, signal }) }) } : {}),
   });
 }

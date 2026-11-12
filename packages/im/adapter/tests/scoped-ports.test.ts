@@ -16,6 +16,18 @@ class NativeManagement implements EndpointManagement {
     this.seenSignals.push(signal);
     return { canModerate: true };
   }
+  async listGroupJoinRequests(request: { readonly groupId: string; readonly signal?: AbortSignal }) {
+    if (request.signal) this.seenSignals.push(request.signal);
+    if (request.groupId === 'block') {
+      await new Promise<void>((resolve, reject) => {
+        const signal = request.signal;
+        if (!signal) { resolve(); return; }
+        if (signal.aborted) { reject(signal.reason); return; }
+        signal.addEventListener('abort', () => reject(signal.reason ?? new Error('aborted')), { once: true });
+      });
+    }
+    return { requests: [], nextCursor: '' };
+  }
 }
 class NativeControl implements EndpointControl {
   readonly #messages: string[] = [];
@@ -73,7 +85,12 @@ it('passes the explicitly declared signal slot and rejects retired prototype por
     const captured = h.index.management(h.canonicalId)!;
     const caller = new AbortController();
     await captured.inspectGroupMember!({ groupId: 'room', userId: 'member', signal: caller.signal });
+    const pending = captured.listGroupJoinRequests!({ groupId: 'block', signal: caller.signal });
+    await vi.waitFor(() => expect(h.created[0]!.management.seenSignals).toHaveLength(2));
+    caller.abort();
+    await expect(pending).rejects.toThrow('aborted');
     expect(h.created[0]!.management.seenSignals[0]).toBeInstanceOf(AbortSignal);
+    expect(h.created[0]!.management.seenSignals[1]?.aborted).toBe(true);
     const account = h.account.list()[0]!;
     await h.account.stop(account.instanceId, h.account.revision);
     await h.account.start(account.instanceId, h.account.revision);

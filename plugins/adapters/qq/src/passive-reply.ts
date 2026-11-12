@@ -60,7 +60,9 @@ export class QqPassiveReplyLedger {
   /** A user message or event in `conversation` that later replies may answer. */
   record(kind: QqOutboundKind, conversationId: string, source: QqReplySource, receivedAt = this.now()): void {
     const key = `${kind}:${conversationId}`;
-    const entries = (this.#conversations.get(key) ?? []).filter(entry => sourceKey(entry.source) !== sourceKey(source));
+    const entries = [...(this.#conversations.get(key) ?? [])];
+    // 同一 msg_id / event_id 再次入站时保留已用序号和原接收时间。重置后会再次发出 msg_seq=1，平台会拒重。
+    if (entries.some(entry => sourceKey(entry.source) === sourceKey(source))) return;
     entries.push({ source, receivedAt, replies: 0, exhausted: false });
     entries.sort((a, b) => a.receivedAt - b.receivedAt);
     this.#conversations.set(key, entries.slice(-MAX_SOURCES_PER_CONVERSATION));

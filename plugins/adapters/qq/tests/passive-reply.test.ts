@@ -57,6 +57,15 @@ describe('QqPassiveReplyLedger', () => {
     expect(h.calls[0]!.source).toBeUndefined();
   });
 
+  it('keeps the reply count when the same source is recorded again', () => {
+    const h = harness();
+    h.ledger.record('group', 'g1', { id: 'u-msg' });
+    expect(h.ledger.acquire('group', 'g1')?.msgSeq).toBe(1);
+    h.advance(1_000);
+    h.ledger.record('group', 'g1', { id: 'u-msg' });
+    expect(h.ledger.acquire('group', 'g1')).toEqual({ source: { id: 'u-msg' }, msgSeq: 2 });
+  });
+
   it('uses the newest usable source and prefers an explicit reply segment', async () => {
     const h = harness();
     h.ledger.record('group', 'g1', { id: 'first' });
