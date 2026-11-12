@@ -1,6 +1,6 @@
 import { resolveHostCredentialSource } from '@zhin.js/plugin-runtime';
 import { createConfigurationChatAuthorizer, createSenderEnricher } from '@zhin.js/core/runtime';
-import { prepareChatRoleMigration } from './chat-role-migration.js';
+import { chatRoleMigrationAdapterKinds, prepareChatRoleMigration } from './chat-role-migration.js';
 import { migrateConversationColumns, migrateInboxColumns } from '@zhin.js/core/runtime';
 import type { StructuredDatabase } from '@zhin.js/database';
 import { assertNoPendingInstanceMigration } from '@zhin.js/gateway/project';
@@ -238,7 +238,10 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   // ADR 0055 / 0056: conversation-level feature overrides and chat roles (tables defined before start).
   const featureHost = createFeatureHost({
     database: databaseHost, hostConfig, snapshots: () => host.runtime.snapshots,
-    afterLoad: roles => chatRoleMigration.complete(roles, { persistent: ['sqlite', 'mysql', 'pg'].includes(databaseHost.dialect) }),
+    afterLoad: (roles, candidate) => chatRoleMigration.complete(roles, {
+      persistent: ['sqlite', 'mysql', 'pg'].includes(databaseHost.dialect),
+      adapterKind: chatRoleMigrationAdapterKinds(candidate),
+    }),
   });
   const senderEnricher = createSenderEnricher({ roles: () => featureHost.roles });
   const im = new ImRuntime({ enrichSender: senderEnricher });

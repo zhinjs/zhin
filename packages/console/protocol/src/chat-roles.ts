@@ -14,7 +14,11 @@ export const CHAT_ROLES_RPC = Object.freeze({
 
 export type ConsoleChatRolesRpcType = typeof CHAT_ROLES_RPC[keyof typeof CHAT_ROLES_RPC];
 
-/** Every `chat-roles.*` RPC needs `iam.manage`; adapter / endpoint bindings count for scopes under them. */
+/**
+ * Every `chat-roles.*` RPC needs `iam.manage`; adapter / endpoint bindings count for scopes under
+ * them. Granting / revoking `owner` (or replacing / removing an existing owner grant) needs a
+ * **global** `iam.manage` binding whatever the target level (ADR 0056 §3).
+ */
 export const CHAT_ROLES_RPC_PERMISSIONS: Readonly<Record<ConsoleChatRolesRpcType, 'iam.manage'>> = Object.freeze({
   [CHAT_ROLES_RPC.LIST]: 'iam.manage',
   [CHAT_ROLES_RPC.GRANT]: 'iam.manage',
@@ -39,8 +43,15 @@ export interface ConsoleChatRoleEntry {
   readonly level: ConsoleFeatureLevel;
   /** `''` (global), `<alias>`, `<alias>/<endpointId>` or a conversation key. */
   readonly key: string;
-  readonly adapter: string;
-  readonly userId: string;
+  /** Absent on a `redacted` entry. */
+  readonly adapter?: string;
+  /** Absent on a `redacted` entry. */
+  readonly userId?: string;
+  /**
+   * `chat-roles.list` only: the entry is at a scope the caller does not manage (inherited from
+   * above), so only its role and level are shown, not who holds it.
+   */
+  readonly redacted?: true;
   readonly role: ConsoleChatRole;
   readonly source: ConsoleChatRoleSource;
   readonly grantedBy?: string;
@@ -59,7 +70,10 @@ export interface ConsoleChatRolesListResult {
   readonly roles: readonly ConsoleChatRoleEntry[];
 }
 
-/** `chat-roles.grant`: sets the identity's role at the scope (replaces a different stored role). */
+/**
+ * `chat-roles.grant`: sets the identity's role at the scope (replaces a different stored role).
+ * Refused with 503 `chat-roles-unpersisted` without a relational project database.
+ */
 export interface ConsoleChatRoleGrantRequest {
   readonly level: ConsoleFeatureLevel;
   /** Omitted for `global`. */

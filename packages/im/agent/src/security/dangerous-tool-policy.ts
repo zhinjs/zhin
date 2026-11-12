@@ -1,4 +1,4 @@
-import { chatRoleIncludes, type Message } from '@zhin.js/core';
+import { chatRoleIncludes, hostChatRole, type Message } from '@zhin.js/core';
 import { getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('DangerousToolPolicy');
@@ -66,8 +66,9 @@ function resolveRoleFromMessage(commMessage?: Message): {
 
 /** host root 不可用时，从 Message.sender 快照或重算角色（测试/降级路径） */
 function resolveRoleFromMessageFallback(commMessage: Message): ToolRequesterRole {
-  // ADR 0056: the Runtime-set chat role of this conversation (admin includes trusted).
-  const role = commMessage.sender?.chatRole;
+  // ADR 0056: the Runtime-set chat role (admin includes trusted); host-wide `owner` needs a
+  // global owner — a conversation / account / adapter owner is treated as admin here.
+  const role = hostChatRole(commMessage.sender);
   if (role === 'owner') return 'owner';
   if (chatRoleIncludes(role, 'trusted')) return 'trusted';
   return 'other';

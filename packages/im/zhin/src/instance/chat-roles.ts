@@ -52,6 +52,18 @@ function modelOf(database: DatabaseHost | undefined, table: string): DatabaseHos
   return database.models.get(table);
 }
 
+/**
+ * ADR 0056 §3: chat role grants must survive a restart. Without a relational project database the
+ * store refuses grants and revocations instead of keeping them in memory and reporting success.
+ */
+export class ChatRoleStorageUnavailableError extends Error {
+  readonly code = 'chat-roles-unpersisted';
+  constructor() {
+    super('聊天角色需要关系型项目数据库（sqlite / mysql / pg）才能保存；当前数据库不支持，未保存。');
+    this.name = 'ChatRoleStorageUnavailableError';
+  }
+}
+
 class SerialQueue {
   #queue: Promise<unknown> = Promise.resolve();
   run<T>(work: () => Promise<T>): Promise<T> {
@@ -61,13 +73,50 @@ class SerialQueue {
   }
 }
 
-/** Stored grants (`chat_roles`), one role per identity and scope. */
+/**
+ * Stored grants (`chat_roles`), one role per identity and scope. With a `database` the store
+ * writes through to `chat_roles` and refuses writes it cannot persist
+ * ({@link ChatRoleStorageUnavailableError}); without one it is an explicit in-memory store (tests).
+ */
 export class ChatRoleStore implements ChatRoleGrantStore {
   readonly #database?: DatabaseHost;
   readonly #grants = new Map<string, ChatRoleEntry>();
   readonly #queue = new SerialQueue();
 
   constructor(options: Readonly<{ database?: DatabaseHost }> = {}) { this.#database = options.database; }
+
+  /** Whether grants and revocations are saved (always for the in-memory store without a database). */
+  get persistent(): boolean {
+    return !this.#database || modelOf(this.#database, CHAT_ROLE_TABLE) !== undefined;
+  }
+
+  /** The `chat_roles` model, or undefined for the in-memory store; throws when a database cannot persist. */
+  #writableModel(): DatabaseHostModel | undefined {
+    if (!this.#database) return undefined;
+    const model = modelOf(this.#database, CHAT_ROLE_TABLE);
+    if (!model) throw new ChatRoleStorageUnavailableError();
+    return model;
+  }
+
+  /**
+   * Memory-only grants (the configuration migration on a non-relational database): effective
+   * until the process exits, never written, existing grants at the same scope kept.
+   */
+  seed(entries: readonly (Readonly<{ level: FeatureConfigLevel; key: string; role: ChatRole; grantedBy?: string }> & ChatIdentity)[]): number {
+    let added = 0;
+    for (const input of entries) {
+      let key: string;
+      try { key = normalizeChatRoleScope(input.level, input.key); } catch { continue; }
+      const identity = { adapter: input.adapter, userId: input.userId };
+      if (!isChatIdentity(identity) || !isChatRole(input.role)) continue;
+      const id = rowId(input.level, key, identity);
+      if (this.#grants.has(id)) continue;
+      this.#grants.set(id, Object.freeze({ ...identity, level: input.level, key, role: input.role, source: 'grant' as const,
+        ...(input.grantedBy ? { grantedBy: input.grantedBy.slice(0, 256) } : {}), grantedAt: Date.now() }));
+      added += 1;
+    }
+    return added;
+  }
 
   async load(): Promise<void> {
     const model = modelOf(this.#database, CHAT_ROLE_TABLE);
@@ -98,13 +147,13 @@ export class ChatRoleStore implements ChatRoleGrantStore {
       const identity = { adapter: input.adapter, userId: input.userId };
       if (!isChatIdentity(identity) || !isChatRole(input.role)) throw new TypeError('invalid chat role grant');
       const id = rowId(input.level, key, identity);
+      const model = this.#writableModel();
       const current = this.#grants.get(id);
       if (current?.role === input.role) return 'unchanged' as const;
       const value: ChatRoleEntry = Object.freeze({ ...identity, level: input.level, key, role: input.role, source: 'grant' as const,
         ...(input.grantedBy ? { grantedBy: input.grantedBy.slice(0, 256) } : {}), grantedAt: Date.now() });
       const row = { level: value.level, scope_key: key, adapter: value.adapter, user_id: value.userId, role: value.role,
         granted_by: value.grantedBy ?? null, granted_at: value.grantedAt };
-      const model = modelOf(this.#database, CHAT_ROLE_TABLE);
       if (model) {
         if (current) await model.update(row).where({ id });
         else await model.insert({ id, ...row });
@@ -118,8 +167,9 @@ export class ChatRoleStore implements ChatRoleGrantStore {
     return this.#queue.run(async () => {
       const key = normalizeChatRoleScope(input.level, input.key);
       const id = rowId(input.level, key, input);
+      const model = this.#writableModel();
       if (!this.#grants.has(id)) return 'unchanged' as const;
-      await modelOf(this.#database, CHAT_ROLE_TABLE)?.delete().where({ id });
+      await model?.delete().where({ id });
       this.#grants.delete(id);
       return 'saved' as const;
     });

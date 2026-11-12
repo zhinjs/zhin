@@ -43,6 +43,7 @@ import {
   type DiscordClientTransport,
 } from './gateway.js';
 import {
+  discordChannelOf,
   discordInboundConversation,
   formatButtonContent,
   formatButtonSegments,
@@ -204,11 +205,11 @@ export class DiscordGatewayEndpoint extends Client implements Endpoint {
 
   async #sendFramework({ conversation, payload, signal }: EndpointSendRequest): Promise<string> {
     const body = formatOutboundBody(payload);
-    const snowflake = await this.#sendBody({ channelId: conversation.id, body, signal });
+    const snowflake = await this.#sendBody({ channelId: discordChannelOf(conversation), body, signal });
     this.#logger.debug(formatCompact({
       op: 'discord_send',
       endpoint: this.#options.config.id,
-      target: conversation.id,
+      target: discordChannelOf(conversation),
       messageId: snowflake,
     }));
     return snowflake;
@@ -217,7 +218,7 @@ export class DiscordGatewayEndpoint extends Client implements Endpoint {
   async #recallMessage({ message, signal }: EndpointRecallRequest): Promise<void> {
     if (!message.id) return;
     const operation = createEndpointOperation({ signal });
-    const channel = await operation.prepare(() => this.#requireClient().channels.fetch(message.conversation.id));
+    const channel = await operation.prepare(() => this.#requireClient().channels.fetch(discordChannelOf(message.conversation)));
     if (!channel?.isTextBased() || !channel.messages) return;
     const msg = await operation.prepare(() => channel.messages.fetch(message.id));
     await operation.run(() => msg.delete());
@@ -288,7 +289,7 @@ export class DiscordGatewayEndpoint extends Client implements Endpoint {
   }
 
   async #addReaction({ message, emoji, hint, signal }: EndpointReactionRequest): Promise<string | null> {
-    const channelId = hint?.channelId ?? message.conversation.id;
+    const channelId = hint?.channelId ?? discordChannelOf(message.conversation);
     if (!channelId || !message.id) return null;
     const operation = createEndpointOperation({ signal });
     const channel = await operation.prepare(() => this.#requireClient().channels.fetch(channelId));
@@ -479,13 +480,13 @@ export class DiscordInteractionsEndpoint extends DiscordRestClient implements En
 
   async #sendFramework({ conversation, payload, signal }: EndpointSendRequest): Promise<string> {
     const body = formatOutboundBody(payload);
-    const data = await this.createMessage({ channelId: conversation.id, body, signal });
+    const data = await this.createMessage({ channelId: discordChannelOf(conversation), body, signal });
     return data.id ?? '';
   }
 
   async #recallMessage({ message, signal }: EndpointRecallRequest): Promise<void> {
     if (!message.id) return;
-    await this.deleteMessage({ channelId: message.conversation.id, messageId: message.id, signal });
+    await this.deleteMessage({ channelId: discordChannelOf(message.conversation), messageId: message.id, signal });
   }
 
   admit(msg: DiscordInboundMessage): void {
@@ -577,7 +578,7 @@ async function resolveDiscordContent(
   try {
     context.signal.throwIfAborted();
     const response = await fetch(
-      `${DISCORD_API}/channels/${reference.message.conversation.id}/messages/${reference.message.id}`,
+      `${DISCORD_API}/channels/${discordChannelOf(reference.message.conversation)}/messages/${reference.message.id}`,
       { headers: { Authorization: `Bot ${token}` }, signal: context.signal },
     );
     if (response.status === 404) return Object.freeze({ status: 'not_found', code: 'discord_message_not_found' });

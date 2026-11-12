@@ -16,6 +16,7 @@ import {
   type FeatureId,
   type PluginConsoleRpcCall,
 } from '@zhin.js/plugin-runtime';
+import { chatRoleHeldAt } from '@zhin.js/im-contract';
 import { isAdapterIndex } from './adapter-index.js';
 import { adapterFeatureId } from './provider.js';
 import { mutateConsoleAdapter, ownedConsoleAdapter } from './adapter-runtime-console.js';
@@ -27,12 +28,14 @@ import type { ConfiguredEndpointEntry } from './endpoint-configuration.js';
 // ---------------------------------------------------------------------------
 
 /**
- * endpoint 管理命令的操作者校验：发送者在本会话层级链上拥有聊天角色 `owner`
- * （Runtime 写入的 `sender.chatRole`）。`config` 保留在签名中以兼容调用方，不再读取。
+ * endpoint 管理命令的操作者校验：增删账号影响整个适配器，发送者须在**适配器层或以上**（适配器 / 全局）
+ * 持有聊天角色 `owner`（Runtime 写入的 `sender.chatRole` + `sender.chatRoleLevels`，ADR 0056 §2）；
+ * 账号层、会话层的 owner 不够。`config` 保留在签名中以兼容调用方，不再读取。
  */
 export function isEndpointOperator(_config: unknown, input: unknown): boolean {
-  const sender = (input as { sender?: { id?: unknown; chatRole?: unknown } | null } | null | undefined)?.sender;
-  return !!sender && typeof sender.id === 'string' && sender.id.trim() !== '' && sender.chatRole === 'owner';
+  const sender = (input as { sender?: { id?: unknown; chatRole?: unknown; chatRoleLevels?: unknown } | null } | null | undefined)?.sender;
+  return !!sender && typeof sender.id === 'string' && sender.id.trim() !== ''
+    && chatRoleHeldAt(sender as { chatRole?: unknown; chatRoleLevels?: unknown }, 'owner', 'adapter');
 }
 
 /** add/remove 的拒绝文案（list 只读，不校验）。 */

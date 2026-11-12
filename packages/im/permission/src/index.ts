@@ -3,6 +3,8 @@ export {
   type PermissionChecker,
   type BotStandingResolver,
   type PermissionCheckOptions,
+  type PermissionSenderRoles,
+  type SenderRoleResolver,
 } from './host.js';
 
 export { permissionHostToken } from './token.js';
@@ -12,13 +14,17 @@ export {
   type PermissionScene,
   type PermissionSender,
   type PermissionPlatformStanding,
+  type PermissionChatRoleLevel,
+  type PermissionChatRoleLevels,
   toPermissionSubject,
   normalizePermissionStanding,
+  normalizePermissionChatRoleLevels,
 } from './subject.js';
 
 export {
   type PermitKind,
   type PermitChatRole,
+  type PermitChatRoleLevel,
   type ParsedPermit,
   parsePermitName,
   isBuiltinPermit,

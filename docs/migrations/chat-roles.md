@@ -20,16 +20,16 @@ description: 从 master / trusted 配置名单迁移到 ADR 0056 聊天角色：
 1. 读取配置中的人员名单：
    | 旧字段 | 迁移为 |
    | --- | --- |
-   | 适配器块 `<别名>.master` | 适配器层 `owner`（对该适配器所有账号） |
+   | 适配器块 `<别名>.master` | **没有自己 `master` 的账号**各自的账号层 `owner`（与旧语义一致：账号自己的 master 取代适配器的）；不建适配器层 owner |
    | 适配器块 `<别名>.trusted` | 适配器层 `trusted` |
    | `<别名>.endpoints[i].master` | 账号层 `owner`（键 `<别名>/<账号 id>`，没有 id 时用 name） |
    | `<别名>.endpoints[i].trusted` | 账号层 `trusted` |
-   | `ai.trigger.masters` | 全局 `owner`，为每个已配置的适配器各登记一个身份 |
+   | `ai.trigger.masters` | 全局 `owner`，为每个已配置的适配器各登记一个身份；跳过本地模拟适配器（能力画像声明 `runtime.sandbox`，其客户端可自选发送者 id）与未能加载的适配器，并写日志 |
    | `ai.trigger.trusted` | 全局 `trusted`，同上 |
 2. 先把这些授予记入 `.zhin/chat-roles-migration.json`（状态 `pending`），再从配置文件中删除这些字段，并在日志中列出被移走的字段；
 3. 数据库就绪后写入 `chat_roles`（同一身份同一作用范围已有授予时保留原值），记录改为 `done`。
 
-迁移中途进程退出时，下次启动会从 `pending` 记录继续，不会丢失。没有关系型数据库（sqlite / mysql / pg）时，授予只在内存中生效，记录保持 `pending`，每次启动都会重放。
+迁移中途进程退出时，下次启动会从 `pending` 记录继续，不会丢失。没有关系型数据库（sqlite / mysql / pg）时，迁移来的授予只在内存中生效，记录保持 `pending`（标记 `memoryOnlyAt`），直到配置了关系型数据库再写表；此时授予 / 撤销都会被拒绝（Console 503 `chat-roles-unpersisted`，聊天回复「未保存」），因此不会出现「撤销后下次启动复活」。
 
 迁移完成后，如果配置文件中**再次出现**这些字段，实例启动会报错（`LEGACY_CHAT_ROLE_CONFIG`）并指向本文。请改用：
 
@@ -77,7 +77,7 @@ description: 从 master / trusted 配置名单迁移到 ADR 0056 聊天角色：
 
 | 以前 | 现在 | 说明 |
 | --- | --- | --- |
-| `role(master)` | `owner` | 本会话层级链上的 zhin 角色 |
+| `role(master)` | `owner`；宿主全局能力用 `owner@global` | 本会话层级链上的 zhin 角色；`<角色>@<层级>` 要求来自该层级或更高层级 |
 | `role(trusted)` | `trusted`（或 `role(trusted)`） | `admin` / `owner` 也满足 |
 | `role(admin)`（平台管理员） | `platform:admin`，或 zhin `admin` | 管平台功能用 `platform:admin`；管 zhin 功能用 `admin`（需要授予） |
 | `role(owner,admin,master)` | `admin` 或 `platform:admin` | 同上，按功能归属选择 |
@@ -101,13 +101,16 @@ Console 页面与插件 RPC 的 `requiredRoles` 仍是 **Console 账号的角色
 
 ## 5. 其他行为变化
 
-- **Agent 安全策略**：危险工具、文件 / exec 策略、主人审批只看 `sender.chatRole`；`owner` 等于以前的 `master`，`admin` 与 `trusted` 同为受信任档位。平台群主 / 管理员不再因群内地位获得受信任档位。审批私信发给账号（或其适配器 / 全局）上存储的 `owner`。
+- **Agent 安全策略**：危险工具、文件 / exec 策略、主人审批只看 zhin 角色；**全局层** `owner` 等于以前的 `master`；适配器 / 账号 / 会话层的 owner、`admin`、`trusted` 同为受信任档位。平台群主 / 管理员不再因群内地位获得受信任档位。审批私信发给在该适配器上有身份的全局 `owner`。
+- **角色的作用范围**（安全审查）：`sender.chatRoleLevels` 记录每个角色来自哪一层。宿主全局能力（exec、文件、重启、全局 / 平台记忆、高信任的定时任务、聊天改配置）需要全局层 owner；增删账号需要适配器层或以上的 owner。提供宿主全局能力的插件应要求 `owner@global`（新增 permit 写法 `<角色>@<层级>`）。Discord 线程上报为「父频道 + `threadId`」，频道上的角色与功能配置在线程中同样生效。
+- **聊天中改角色**：低角色的授予不能再覆盖同一范围内同级或更高的角色；`角色 列表` 需要 `admin`，上级授予的条目不显示身份。Console 中凡涉及 `owner` 的改动都需要全局 `iam.manage`，`chat-roles.list` 对调用者作用域之外的条目脱敏（`redacted: true`，不含 `adapter` / `userId`）。
+- **定时任务**到期运行时按创建者**当前**角色重新判断（在 IM 中创建的任务会记录创建者所在会话）；普通用户创建的任务以普通成员信任运行。
 - **Agent 回合前过滤**：本回合可用的工具 / 技能按三条维度过滤后才披露；机器人身份在回合开始时读取（缓存），查询失败时 `bot:*` 一律不满足；执行工具时再校验一次。
 - **命令**：分发前按同一评估器判断；`platform:*` / `bot:*` 不满足时回复会说明缺哪一项（如「无法执行此指令：机器人不是本群管理员（或无法确认其身份）。」）；菜单只列出当前发言者可用的命令。
 - **群规**：「群主和管理员豁免」（`exempt.ownerAndAdmins`）豁免平台群主 / 管理员（`platform:admin`）与 zhin `owner`；zhin `admin` 不再自动豁免。群规审批仍看 zhin `admin`。
 - **内容审核**：`masters` 与 `inbound.bypassMasters` 删除，改为 `inbound.bypass`——permit 表达式列表，任一满足即跳过入站审查，默认 `[owner, "platform:admin"]`（内容审核是平台功能：默认豁免 zhin 主人与平台群主 / 管理员），`[]` 表示都审。
-- **账号管理命令**（`<适配器> endpoint add|remove`）与聊天重启、聊天改配置：需要 zhin 角色 `owner`。以前「没有配置 master 时所有人都能执行」的放行已取消。
-- **全局 owner**：从 `ai.trigger.masters` 迁来的全局 owner 已按适配器登记身份，因此也可以在私聊中使用聊天改配置。
+- **账号管理命令**（`<适配器> endpoint add|remove`）需要适配器层或以上的 `owner`；聊天重启、聊天改配置需要**全局层** `owner`。以前「没有配置 master 时所有人都能执行」的放行已取消。
+- **全局 owner**：从 `ai.trigger.masters` 迁来的全局 owner 已按适配器登记身份，因此可以在私聊中使用聊天改配置；账号层 owner（如从适配器 `master` 迁来的）不行。
 - **脚手架**：ICQQ 向导不再询问「主人 QQ 号」、不再写 `master`；完成后提示在 Console 账号的「角色」页签，或由已有 owner 在聊天中 `角色 授予 <QQ 号> owner 账号` 设置主人。
 - **测试工具** `@zhin.js/testing`：`createFakeMessage({ sender: { id, chatRole } })`；`PluginTestKit.receive` 信任测试声明的 `sender.chatRole` / `platform`。
 

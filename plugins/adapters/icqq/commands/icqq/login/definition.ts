@@ -10,16 +10,20 @@ import { icqqLoginControls, type IcqqLoginControl } from '../../../src/icqq-logi
 
 export { icqqLoginControls };
 
-/** Operator = the chat role `owner` in this conversation (ADR 0056), or the configured outage-notify conversation id(s). */
+/**
+ * Operator = a **global** chat-role `owner` (ADR 0056 §2: the command reaches an ICQQ account from
+ * any adapter, so a conversation / account owner elsewhere does not qualify), or the configured
+ * outage-notify conversation id(s).
+ */
 export function isIcqqLoginOperator(config: unknown, input: unknown): boolean {
   const cfg = (config ?? {}) as {
     notify?: { id?: unknown };
     endpoints?: readonly { notify?: { id?: unknown } }[];
   };
-  const sender = (input as { sender?: { id?: unknown; chatRole?: unknown } } | null | undefined)?.sender;
+  const sender = (input as { sender?: { id?: unknown; chatRole?: unknown; chatRoleLevels?: { owner?: unknown } } } | null | undefined)?.sender;
   const senderId = (typeof sender === 'object' && sender?.id) ? String(sender.id).trim() : '';
   if (!senderId) return false;
-  if (sender?.chatRole === 'owner') return true;
+  if (sender?.chatRole === 'owner' && sender.chatRoleLevels?.owner === 'global') return true;
   const targets = new Set<string>();
   const collect = (value: unknown) => {
     if (value === undefined || value === null) return;

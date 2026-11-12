@@ -8,19 +8,29 @@ import { runInMailTurn } from '../collaboration/mail-turn-context.js';
 import type { TaskExecutionResult, TaskExecutor } from '../task-executor.js';
 import { failedScheduleResult } from '../schedule-domain/execution-result.js';
 import { jobPrompt, type TimerDueHandler } from './timer-scheduler.js';
+import { currentScheduleCreator, type ScheduleCreatorRoleLookup } from './job-creator.js';
 
 export interface TimerMailDueHandlerOptions {
   readonly mailbox: () => HostMailbox;
   readonly executor: TaskExecutor;
+  /**
+   * The creator's current chat role (`PermissionHost.currentSenderRoles`, ADR 0056 §5): a due run
+   * uses it instead of the role captured at creation.
+   */
+  readonly creatorRoles?: ScheduleCreatorRoleLookup;
 }
 
 export function createTimerMailDueHandler(options: TimerMailDueHandlerOptions): TimerDueHandler {
   return {
-    async run(job, runOptions): Promise<TaskExecutionResult> {
+    async run(scheduled, runOptions): Promise<TaskExecutionResult> {
+      const createdBy = currentScheduleCreator(scheduled.createdBy, options.creatorRoles);
+      const job = createdBy === scheduled.createdBy ? scheduled : { ...scheduled, createdBy };
       const content = jobPrompt(job) || job.label || job.id;
       const ownerId = job.createdBy?.userId ?? 'schedule';
       const roles = job.createdBy?.roles ?? [];
       const isMaster = roles.includes('owner');
+      // Mail trust follows the creator's role: a plain user's job runs as a group member, not trusted.
+      const trust = isMaster ? 'master' : roles.includes('trusted') ? 'trusted' : 'group_member';
       const mailbox = options.mailbox();
       const admission = await mailbox.admit({
         sessionKey: `timer:${job.id}`,
@@ -30,7 +40,7 @@ export function createTimerMailDueHandler(options: TimerMailDueHandlerOptions): 
         kind: 'timer',
         timerId: job.id,
         isMaster,
-        trust: isMaster ? 'master' : 'trusted',
+        trust,
         ...(job.createdBy?.name ? { senderName: job.createdBy.name } : {}),
       });
       if (admission.kind !== 'run') {

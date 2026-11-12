@@ -144,6 +144,29 @@ describe('checkBuiltinPermit', () => {
     expect(checkBuiltinPermit('admin', trusted)).toBe(false);
   });
 
+  it('role@level — the role must come from that level or a higher one (owner@global …)', () => {
+    expect(isBuiltinPermit('owner@global')).toBe(true);
+    expect(isBuiltinPermit('role(owner@adapter,admin)')).toBe(true);
+    expect(isBuiltinPermit('owner@everywhere')).toBe(false);
+    expect(isBuiltinPermit('master@global')).toBe(false);
+    expect(parsePermitName('admin@endpoint')).toEqual({ kind: 'role', values: ['admin@endpoint'] });
+    const conversationOwner = makeSubject({ sender: { id: 'u1', chatRole: 'owner', chatRoleLevels: { owner: 'conversation', admin: 'endpoint', trusted: 'global' } } });
+    expect(checkBuiltinPermit('owner', conversationOwner)).toBe(true);
+    expect(checkBuiltinPermit('owner@conversation', conversationOwner)).toBe(true);
+    expect(checkBuiltinPermit('owner@endpoint', conversationOwner)).toBe(false);
+    expect(checkBuiltinPermit('owner@global', conversationOwner)).toBe(false);
+    expect(checkBuiltinPermit('admin@endpoint', conversationOwner)).toBe(true);
+    expect(checkBuiltinPermit('admin@adapter', conversationOwner)).toBe(false);
+    expect(checkBuiltinPermit('trusted@global', conversationOwner)).toBe(true);
+    expect(checkBuiltinPermit('role(owner@global,admin@endpoint)', conversationOwner)).toBe(true);
+    const globalOwner = makeSubject({ sender: { id: 'u1', chatRole: 'owner', chatRoleLevels: { owner: 'global', admin: 'global', trusted: 'global' } } });
+    expect(checkBuiltinPermit('owner@global', globalOwner)).toBe(true);
+    expect(checkBuiltinPermit('owner@adapter', globalOwner)).toBe(true);
+    // Without levels a role counts at the conversation level only.
+    expect(checkBuiltinPermit('owner@adapter', makeSubject({ sender: { id: 'u1', chatRole: 'owner' } }))).toBe(false);
+    expect(() => assertPermitSyntax(['owner@nowhere'])).toThrow(/Unknown permit/);
+  });
+
   it('role — no chat role holds nothing, platform standing is not a chat role', () => {
     expect(checkBuiltinPermit('role(admin)', makeSubject())).toBe(false);
     expect(checkBuiltinPermit('admin', makeSubject({ sender: { id: 'u1', platform: { standing: 'owner' } } }))).toBe(false);

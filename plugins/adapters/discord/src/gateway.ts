@@ -52,6 +52,12 @@ export function resolveSenderRole(msg: DiscordInboundMessage): string | undefine
   return discordSenderStanding(msg)?.standing;
 }
 
+/** A discord.js thread channel's parent channel id (threads share their parent's conversation key, ADR 0056 §2). */
+function threadParentOf(channel: unknown): string | undefined {
+  const thread = channel as { isThread?: () => boolean; parentId?: string | null } | null | undefined;
+  return thread && typeof thread.isThread === 'function' && thread.isThread() && thread.parentId ? thread.parentId : undefined;
+}
+
 export function normalizeDiscordMessage(raw: unknown): DiscordInboundMessage | null {
   if (!raw || typeof raw !== 'object') return null;
   const msg = raw as DiscordMessage;
@@ -94,6 +100,7 @@ export function normalizeDiscordMessage(raw: unknown): DiscordInboundMessage | n
     content: msg.content ?? '',
     channelId: msg.channel.id,
     channelKind: resolveChannelKind(msg.channel.type),
+    ...(threadParentOf(msg.channel) ? { threadParentId: threadParentOf(msg.channel)! } : {}),
     authorId: msg.author.id,
     authorName: member?.displayName || msg.author.displayName || msg.author.username,
     authorBot: msg.author.bot,
@@ -301,6 +308,7 @@ export async function connectDiscordGatewayClient(
           customId: interaction.customId,
           channelId,
           channelKind: interaction.channel ? resolveChannelKind(interaction.channel.type) : interaction.guildId ? 'channel' : 'private',
+          ...(threadParentOf(interaction.channel) ? { threadParentId: threadParentOf(interaction.channel)! } : {}),
           ...(interaction.guildId ? { guildId: interaction.guildId } : {}),
           userId: interaction.user.id,
           userName: interaction.user.username || interaction.user.displayName || interaction.user.id,

@@ -23,8 +23,27 @@ export interface PermissionSender {
   readonly name?: string;
   /** Highest zhin chat role effective in the conversation. */
   readonly chatRole?: 'owner' | 'admin' | 'trusted';
+  /**
+   * Per role, the topmost level it is held at on the conversation's chain (`owner@global` …).
+   * Absent: a held role counts at the conversation level only.
+   */
+  readonly chatRoleLevels?: PermissionChatRoleLevels;
   /** Normalized platform standing; absent in private chats. */
   readonly platform?: PermissionPlatformStanding;
+}
+
+export type PermissionChatRoleLevel = 'global' | 'adapter' | 'endpoint' | 'conversation';
+export type PermissionChatRoleLevels = Readonly<Partial<Record<'owner' | 'admin' | 'trusted', PermissionChatRoleLevel>>>;
+
+const LEVELS = new Set(['global', 'adapter', 'endpoint', 'conversation']);
+
+export function normalizePermissionChatRoleLevels(value: unknown): PermissionChatRoleLevels | undefined {
+  if (!record(value)) return undefined;
+  const levels: Partial<Record<'owner' | 'admin' | 'trusted', PermissionChatRoleLevel>> = {};
+  for (const role of ['owner', 'admin', 'trusted'] as const) {
+    if (LEVELS.has(String(value[role]))) levels[role] = value[role] as PermissionChatRoleLevel;
+  }
+  return Object.keys(levels).length ? Object.freeze(levels) : undefined;
 }
 
 export interface PermissionSubject {
@@ -64,11 +83,13 @@ export function normalizePermissionStanding(value: unknown): PermissionPlatformS
 function senderOf(value: unknown): PermissionSender | undefined {
   if (!record(value)) return undefined;
   const chatRole = chatRoleOf(value.chatRole);
+  const chatRoleLevels = chatRole ? normalizePermissionChatRoleLevels(value.chatRoleLevels) : undefined;
   const platform = normalizePermissionStanding(value.platform);
   return Object.freeze({
     id: String(value.id ?? ''),
     ...(value.name ? { name: String(value.name) } : {}),
     ...(chatRole ? { chatRole } : {}),
+    ...(chatRoleLevels ? { chatRoleLevels } : {}),
     ...(platform ? { platform } : {}),
   });
 }

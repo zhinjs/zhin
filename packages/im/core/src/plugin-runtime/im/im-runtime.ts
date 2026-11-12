@@ -198,7 +198,27 @@ export class ImRuntime implements OutboundMessageService {
     // ADR 0056 §1: `bot:*` permits read the Bot's own standing through the Adapter index cache;
     // the Bot's role events drop the cached answer of that conversation.
     this.permissionHost.setBotStandingResolver((source, lookup) => this.#botStanding(source, lookup));
+    // ADR 0056 §5: execution-time re-checks and due timers read the sender's *current* chat role
+    // through the same enricher as inbound messages (the role store is in memory).
+    const enrichSender = options.enrichSender ?? createChatRoleSenderEnricher({ roles: () => undefined });
+    this.permissionHost.setSenderRoleResolver(source => this.#currentSenderRoles(enrichSender, source));
     this.#sceneEventStream.subscribe(signal => this.#invalidateBotStanding(signal));
+  }
+
+  #currentSenderRoles(enrich: NonNullable<ImRuntimeOptions['enrichSender']>, source: unknown) {
+    const value = source && typeof source === 'object' ? source as { conversation?: unknown; sender?: { id?: unknown } } : undefined;
+    const conversation = value?.conversation as ConversationRef | undefined;
+    const id = value?.sender?.id;
+    if (!conversation || typeof conversation !== 'object' || typeof conversation.endpoint?.id !== 'string' || typeof id !== 'string' || !id) return undefined;
+    let lease: SnapshotLease;
+    try { lease = this.#acquire(); } catch { return undefined; }
+    try {
+      const sender = enrich({ id }, conversation, lease.value);
+      return Object.freeze({ ...(sender?.chatRole ? { chatRole: sender.chatRole } : {}),
+        ...(sender?.chatRole && sender.chatRoleLevels ? { chatRoleLevels: sender.chatRoleLevels } : {}) });
+    } finally {
+      this.#release(lease);
+    }
   }
 
   async #botStanding(source: unknown, lookup: Readonly<{ cachedOnly?: boolean; signal?: AbortSignal }>) {

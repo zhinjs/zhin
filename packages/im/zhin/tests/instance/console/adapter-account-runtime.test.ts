@@ -179,7 +179,7 @@ describe('authenticated owner-scoped Adapter account RPC', () => {
     const projections = new Map(f.store.current.projections);
     const snapshot = { ...f.store.current, projections, capabilities: new Map([...f.store.current.capabilities, ...slots.map(slot => [slot.id, slot] as const)]) };
     const commands = new CommandIndex(slots, snapshot); projections.set(commandFeatureId, commands);
-    const source = { sender: { id: 'deployment-only', chatRole: 'owner' as const } };
+    const source = { sender: { id: 'deployment-only', chatRole: 'owner' as const, chatRoleLevels: { owner: 'adapter' as const } } };
     const before = await commands.dispatch({ input: 'account endpoint add fresh password=secret', source: source });
     expect(before).toMatchObject({ status: 'executed', value: expect.stringContaining('Console') });
     expect(f.repository.compareAndSet).not.toHaveBeenCalled();

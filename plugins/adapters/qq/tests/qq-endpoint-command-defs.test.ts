@@ -33,7 +33,7 @@ async function fixture(config: Record<string, unknown> = {}) {
   const commands = new CommandIndex(slots, snapshot), knownCommand = (path: string) => commands.formatCommand(owner, path, '!', 'zh-CN');
   const use = vi.fn((token: unknown) => { if (token === qqRuntimeStateToken) return state; throw new Error('No file/env writer is available'); });
   const context = (knownEnvironment = true, overrides: Record<string, unknown> = {}) => ({ owner: { id: owner }, generation: 1, config, locale: 'zh-CN', project: () => runtime.index,
-    formatCommand: knownEnvironment ? knownCommand : () => undefined, use, params: {}, args: [], input: { sender: { id: 'owner-user', chatRole: 'owner' } }, ...overrides }) as never;
+    formatCommand: knownEnvironment ? knownCommand : () => undefined, use, params: {}, args: [], input: { sender: { id: 'owner-user', chatRole: 'owner', chatRoleLevels: { owner: 'adapter' } } }, ...overrides }) as never;
   return { runtime, repository, state, commands, knownCommand, context, use };
 }
 
@@ -58,7 +58,7 @@ describe('QQ actual convention command definitions and runtime authority', () =>
   });
   it('dispatches actual add, captures one CAS save port, and saves only after kind confirmation', async () => {
     const f = await fixture();
-    expect(await f.commands.dispatch({ input: 'account qq endpoint add named', source: { sender: { id: 'alice', chatRole: 'owner' }, conversation: { endpoint: { id: 'source', adapter: 'sandbox' }, kind: 'private', id: 'alice' } } })).toMatchObject({ status: 'executed', value: expect.stringContaining('synthetic-qr') });
+    expect(await f.commands.dispatch({ input: 'account qq endpoint add named', source: { sender: { id: 'alice', chatRole: 'owner', chatRoleLevels: { owner: 'adapter' } }, conversation: { endpoint: { id: 'source', adapter: 'sandbox' }, kind: 'private', id: 'alice' } } })).toMatchObject({ status: 'executed', value: expect.stringContaining('synthetic-qr') });
     expect(f.repository.writes).toHaveLength(0); expect(startFlow).toHaveBeenCalledOnce();
     await (startFlow.mock.calls[0]![0] as QqBindCallbacks).onSuccess([{ appId: 'synthetic-app', appSecret: 'synthetic-secret' }]);
     expect(f.state.pendingBotKind?.endpointId).toBe('named'); expect(f.repository.writes).toHaveLength(0);
@@ -73,11 +73,11 @@ describe('QQ actual convention command definitions and runtime authority', () =>
   });
   it('removes a saved account through the actual command route without requesting a restart or file writer', async () => {
     const f = await fixture(); await f.runtime.adapter.add(f.runtime.adapter.revision, { endpointId: 'bot', config: { id: 'bot', appid: 'synthetic-app', secret: 'synthetic-secret' } });
-    expect(await f.commands.dispatch({ input: 'account qq endpoint remove bot', source: { sender: { id: 'alice', chatRole: 'owner' } } })).toMatchObject({ status: 'executed', value: expect.stringContaining('删除配置已保存') });
+    expect(await f.commands.dispatch({ input: 'account qq endpoint remove bot', source: { sender: { id: 'alice', chatRole: 'owner', chatRoleLevels: { owner: 'adapter' } } } })).toMatchObject({ status: 'executed', value: expect.stringContaining('删除配置已保存') });
     expect(f.runtime.adapter.list()).toEqual([]); expect(f.repository.writes).toHaveLength(2);
   });
   it('does not replace the QR command’s captured CAS revision with the latest account document', async () => {
-    const f = await fixture(), input = { sender: { id: 'alice', chatRole: 'owner' }, conversation: { endpoint: { id: 'source', adapter: 'sandbox' }, kind: 'private', id: 'alice' } };
+    const f = await fixture(), input = { sender: { id: 'alice', chatRole: 'owner', chatRoleLevels: { owner: 'adapter' } }, conversation: { endpoint: { id: 'source', adapter: 'sandbox' }, kind: 'private', id: 'alice' } };
     await f.commands.dispatch({ input: 'account qq endpoint add named', source: input });
     await (startFlow.mock.calls[0]![0] as QqBindCallbacks).onSuccess([{ appId: 'synthetic-app', appSecret: 'synthetic-secret' }]);
     await f.runtime.adapter.add(f.runtime.adapter.revision, { endpointId: 'other', config: { id: 'other', appid: 'other-app', secret: 'synthetic-other' } });
@@ -86,7 +86,7 @@ describe('QQ actual convention command definitions and runtime authority', () =>
   });
   it('cannot save a QR command’s pending choice through a retired Adapter generation', async () => {
     const f = await fixture();
-    await f.commands.dispatch({ input: 'account qq endpoint add named', source: { sender: { id: 'alice', chatRole: 'owner' }, conversation: { endpoint: { id: 'source', adapter: 'sandbox' }, kind: 'private', id: 'alice' } } });
+    await f.commands.dispatch({ input: 'account qq endpoint add named', source: { sender: { id: 'alice', chatRole: 'owner', chatRoleLevels: { owner: 'adapter' } }, conversation: { endpoint: { id: 'source', adapter: 'sandbox' }, kind: 'private', id: 'alice' } } });
     await (startFlow.mock.calls[0]![0] as QqBindCallbacks).onSuccess([{ appId: 'synthetic-app', appSecret: 'synthetic-secret' }]);
     await f.runtime.stop();
     await expect(completeQqPendingBotKind(f.state.pendingBotKind!, 'private')).rejects.toMatchObject({ code: 'closed' }); expect(f.repository.writes).toHaveLength(0);

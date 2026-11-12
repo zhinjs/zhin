@@ -13,7 +13,7 @@ import { randomInt } from 'node:crypto';
 import { commandFeatureId, defineCommand, type CommandContext } from '@zhin.js/command';
 import type { ConsoleAuditEntry } from '@zhin.js/host-http';
 import {
-  createMessages, parseFeatureResolutionKey,
+  createMessages, parseFeatureConversationKey, parseFeatureResolutionKey,
   type FeatureConfigLevel, type Locale, type PluginId, type RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
 import { readFeatureConversationDeclaration, type JsonSchema, type RootResourceInstaller } from '@zhin.js/runtime';
@@ -22,7 +22,7 @@ import {
   chatRoleIncludes, chatRoleMessageContext, chatScopeChain, isChatIdentity, isChatRole,
   type ChatIdentity, type ChatRole, type ChatRoleContext, type ChatRoleEntry,
 } from '@zhin.js/core';
-import type { InstanceChatRoleService } from './chat-roles.js';
+import { ChatRoleStorageUnavailableError, type InstanceChatRoleService } from './chat-roles.js';
 
 export interface FeatureSelfServiceConfig {
   readonly enabled: boolean;
@@ -53,7 +53,8 @@ export interface FeatureChatActor {
 /** Resolves who sent the command and where; undefined outside a keyed conversation. */
 export function featureChatActor(snapshot: Pick<RuntimeSnapshot, 'config' | 'projections' | 'tree'>, message: unknown): FeatureChatActor | undefined {
   const subject = chatRoleMessageContext(snapshot, message);
-  if (!subject) return undefined;
+  // Chat commands act on a conversation; an unkeyable conversation (endpoint-level fallback) has none.
+  if (!subject || !parseFeatureConversationKey(subject.context.conversationKey)) return undefined;
   const parsed = parseFeatureResolutionKey(subject.context.conversationKey);
   return Object.freeze({
     identity: subject.identity,
@@ -86,6 +87,16 @@ const messages = createMessages({
   denied: { 'zh-CN': '你在该范围没有 admin 角色。', en: 'You do not hold the admin role at that scope.' },
   roleDenied: { 'zh-CN': '你在该范围的角色不足以授予或撤销 {role}。', en: 'Your role at that scope cannot grant or revoke {role}.' },
   ownerDenied: { 'zh-CN': 'owner 只能由更高层的 owner 授予或撤销。', en: 'Only an owner at a higher level can grant or revoke owner.' },
+  peerDenied: {
+    'zh-CN': '对方在该范围已是 {role}，与你同级；只有更高的角色或更高层的 {role} 才能修改或撤销。',
+    en: 'That user already holds {role} at that scope, the same as you; only a higher role, or {role} held at a higher level, can change or revoke it.',
+  },
+  listDenied: { 'zh-CN': '查看角色列表需要本会话的 admin 角色。', en: 'Listing chat roles needs the admin role in this conversation.' },
+  hiddenIdentity: { 'zh-CN': '（上级授予，身份不显示）', en: '(granted above you; identity hidden)' },
+  unpersisted: {
+    'zh-CN': '未保存：聊天角色需要关系型项目数据库（sqlite / mysql / pg），当前数据库不支持持久化。',
+    en: 'Not saved: chat roles need a relational project database (sqlite / mysql / pg); the current database cannot persist them.',
+  },
   unknownConversation: { 'zh-CN': '无法识别当前会话。', en: 'This conversation cannot be identified.' },
   privateConversation: { 'zh-CN': '私聊的会话级覆盖只能在 Console 修改；可指定层级（账号 / 适配器 / 全局）。', en: 'Private conversation overrides are Console-only; pass a level (endpoint / adapter / global).' },
   usage: {
@@ -363,6 +374,42 @@ async function setGlobalField(deps: FeatureSelfServiceDeps, plugin: string, fiel
 }
 
 
+/** Why a role change is refused: the role is above the actor's, owner needs an owner above, or a peer's grant. */
+export interface ChatRoleChangeDenial {
+  readonly role: ChatRole;
+  readonly reason: 'role' | 'owner' | 'peer';
+}
+
+/**
+ * ADR 0056 §3 rules for changing the grant of one identity at `scope` (the grant / revoke chat
+ * command; the Console applies its own rules). `granting` is the role being granted (undefined
+ * for a revoke), `existing` the identity's stored role at that scope.
+ *
+ * - Every role touched — the granted one and the one it replaces or removes — must be within the
+ *   actor's own role at the scope (`owner` ⊃ `admin` ⊃ `trusted`).
+ * - `owner` is only handled by an `owner` at a higher level.
+ * - An existing grant equal to the actor's role is a peer's: only a higher role, or the same role
+ *   held at a higher level, changes or removes it (so a granted low role never overwrites a peer's
+ *   or a higher role at the same scope).
+ */
+export function chatRoleChangeDenial(
+  roles: Pick<InstanceChatRoleService, 'roleAt' | 'roleAbove'>,
+  identity: ChatIdentity,
+  scope: string,
+  granting: ChatRole | undefined,
+  existing: ChatRole | undefined,
+): ChatRoleChangeDenial | undefined {
+  const held = roles.roleAt(identity, scope);
+  const above = roles.roleAbove(identity, scope);
+  const touched = [granting, existing].filter((role): role is ChatRole => role !== undefined);
+  for (const role of touched) {
+    if (!chatRoleIncludes(held, role)) return { role, reason: 'role' };
+    if (role === 'owner' && above !== 'owner') return { role, reason: 'owner' };
+  }
+  if (existing && existing !== granting && held === existing && !chatRoleIncludes(above, existing)) return { role: existing, reason: 'peer' };
+  return undefined;
+}
+
 /** Runs one `角色` / `role` invocation (ADR 0056 §3 grant rules) and returns the reply text. */
 export async function executeRoleChat(
   input: Readonly<{ tokens: readonly FeatureChatToken[]; actor: FeatureChatActor | undefined; locale: Locale }>,
@@ -375,10 +422,14 @@ export async function executeRoleChat(
   const sub = ROLE_SUBCOMMANDS[(words[0] ?? '').toLowerCase()];
   if (!sub) return messages(locale, 'roleUsage');
   if (sub === 'list') {
+    // Who holds roles is not public: listing needs admin here, and identities granted above the
+    // scopes the actor administers (e.g. global owners) are not shown.
+    if (!deps.roles.hasRole(actor.identity, actor.conversationKey, 'admin')) return messages(locale, 'listDenied');
     const lines = [messages(locale, 'rolesHeader')];
     for (const entry of deps.roles.list(actor.conversationKey)) {
+      const visible = deps.roles.hasRole(actor.identity, entry.key, 'admin');
       lines.push(messages(locale, 'roleLine', { role: entry.role, level: levelName(locale, entry.level), scope: entry.key || '*',
-        user: `${entry.adapter}:${entry.userId}`, source: entry.source }));
+        user: visible ? `${entry.adapter}:${entry.userId}` : messages(locale, 'hiddenIdentity'), source: entry.source }));
     }
     lines.push(messages(locale, 'yourRoles', { roles: describeEntries(deps.roles.entriesFor(actor.identity, actor.conversationKey), locale) }));
     return lines.join('\n');
@@ -394,17 +445,15 @@ export async function executeRoleChat(
   const scope = scopeAt(actor, level);
   const target = { adapter: actor.identity.adapter, userId: String(userId) };
   if (!isChatIdentity(target)) return messages(locale, 'userMissing');
-  // Grantor needs at least the role at the target scope; owner only from an owner above it.
-  const held = deps.roles.roleAt(actor.identity, scope);
   const current = deps.roles.store.get(level, scope, target);
-  const touched: ChatRole = sub === 'revoke' && current && chatRoleIncludes(current.role, role) ? current.role : role;
-  if (!chatRoleIncludes(held, touched)) {
-    audit(sub, level, scope, 'denied', { role: touched });
-    return messages(locale, 'roleDenied', { role: touched });
-  }
-  if (touched === 'owner' && deps.roles.roleAbove(actor.identity, scope) !== 'owner') {
-    audit(sub, level, scope, 'denied', { role: touched });
-    return messages(locale, 'ownerDenied');
+  // A revoke with nothing stored is checked like handling the named role (no silent "unchanged" for outsiders).
+  const denial = sub === 'revoke' && !current
+    ? chatRoleChangeDenial(deps.roles, actor.identity, scope, role, undefined)
+    : chatRoleChangeDenial(deps.roles, actor.identity, scope, sub === 'grant' ? role : undefined, current?.role);
+  if (denial) {
+    audit(sub, level, scope, 'denied', { role: denial.role, reason: denial.reason });
+    return denial.reason === 'owner' ? messages(locale, 'ownerDenied')
+      : messages(locale, denial.reason === 'peer' ? 'peerDenied' : 'roleDenied', { role: denial.role });
   }
   let status: 'saved' | 'unchanged';
   try {
@@ -413,6 +462,7 @@ export async function executeRoleChat(
       : current && current.role === role ? await deps.roles.store.revoke({ level, key: scope, ...target }) : 'unchanged';
   } catch (error) {
     audit(sub, level, scope, 'error', { role });
+    if (error instanceof ChatRoleStorageUnavailableError) return messages(locale, 'unpersisted');
     return messages(locale, 'failed', { error: (error as Error).message });
   }
   audit(sub, level, scope, 'ok', { role });

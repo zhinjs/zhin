@@ -69,6 +69,12 @@ describe('checkFileToolAccess', () => {
     expect(checkFileToolAccess('write_file', ctx).allowed).toBe(true);
   });
 
+  it('a non-global owner is trusted, not the host owner, for files and dangerous tools (ADR 0056 §2)', () => {
+    const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'b1', senderId: 'c-owner', chatRole: 'owner', chatRoleLevel: 'conversation' });
+    expect(checkFileToolAccess('read_file', ctx).role).toBe('trusted');
+    expect(checkDangerousToolAccess('write_file', ctx)).toMatchObject({ allowed: false, needsOwnerApproval: true });
+  });
+
   it('有身份但角色未知时拒绝写操作', () => {
     const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'b1', senderId: 'x' });
     const d = checkFileToolAccess('write_file', ctx);

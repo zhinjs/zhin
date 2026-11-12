@@ -35,8 +35,10 @@ describe('usageSubjectFromMessage (#877)', () => {
       .toBe('onebot11:bot-2:g100');
   });
 
-  it('marks senders with the chat role owner (ADR 0056)', () => {
-    expect(usageSubjectFromMessage(message({ sender: { id: 'u1', chatRole: 'owner' } }))?.owner).toBe(true);
+  it('marks global chat-role owners only, like Agent turns (ADR 0056 §2)', () => {
+    expect(usageSubjectFromMessage(message({ sender: { id: 'u1', chatRole: 'owner', chatRoleLevels: { owner: 'global' } } }))?.owner).toBe(true);
+    expect(usageSubjectFromMessage(message({ sender: { id: 'u1', chatRole: 'owner', chatRoleLevels: { owner: 'conversation' } } }))?.owner).toBe(false);
+    expect(usageSubjectFromMessage(message({ sender: { id: 'u1', chatRole: 'owner' } }))?.owner).toBe(false);
     expect(usageSubjectFromMessage(message({ sender: { id: 'u1', chatRole: 'admin', roles: ['owner'] } }))?.owner).toBe(false);
   });
 

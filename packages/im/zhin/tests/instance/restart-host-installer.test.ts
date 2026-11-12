@@ -71,8 +71,10 @@ async function createRestartFixture(options: {
     configVersion: 2,
     locale: options.locale ?? 'zh-CN',
     plugins: { bot: '@test/bot' },
+    // Restarting the instance is host-wide: alice is a global owner (ADR 0056 §2); carol only owns the account.
+    ai: { trigger: { masters: ['alice'] } },
     bot: {
-      master: 'alice',
+      master: 'carol',
       commandPrefix: '!!',
       endpoints: [{ id: 'main' }],
     },
@@ -200,7 +202,10 @@ describe('installRestartHost & deliverPendingRestartReceipt', () => {
     const f = await createRestartFixture({ locale: 'zh-CN', restartSupported: true });
     try {
       await f.receive('!!重启', { sender: 'stranger', kind: 'group', conversationId: 'group-99' });
-      expect(lastReplyText(f.client)).toContain('仅允许 Bot 主人（owner）执行重启指令');
+      expect(lastReplyText(f.client)).toContain('仅允许全局层 Bot 主人（owner）执行重启指令');
+      // The account owner (migrated from the adapter master) is not the host owner.
+      await f.receive('!!重启', { sender: 'carol', kind: 'private', conversationId: 'carol' });
+      expect(lastReplyText(f.client)).toContain('仅允许全局层 Bot 主人（owner）执行重启指令');
       expect(f.requestRestart).not.toHaveBeenCalled();
       expect(await consumePendingRestartReceipt(f.project)).toBeNull();
     } finally {

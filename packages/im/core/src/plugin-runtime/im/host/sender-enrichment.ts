@@ -53,11 +53,36 @@ export function senderOwnsReceivingAdapter(
   return adapter.list().some(entry => !entry.removed && !entry.retiring && owns(`${alias}/${entry.endpointId}`));
 }
 
-/** In-chat configuration authority (C2): private chats only, sender owns the receiving Adapter. */
+/**
+ * Whether the operation's sender (identity on the receiving Adapter) is a **global** `owner`
+ * (ADR 0056 §2): host-wide operations — restarting the instance, editing the project
+ * configuration — need it; owners of an adapter, account or conversation do not qualify.
+ */
+export function senderIsGlobalOwner(
+  session: OperationSession<string>,
+  adapters: AdapterIndex,
+  roles: ChatRoleService | undefined,
+  snapshot: Pick<RuntimeSnapshot, 'tree'> | undefined,
+): boolean {
+  if (!session.sender?.id || !isAdapterIndex(adapters) || session.signal.aborted || !roles) return false;
+  const id = session.scene.endpoint.id as CapabilityId;
+  const adapter = adapters.adapterForEndpoint(id);
+  const child = adapter?.find(id);
+  if (!adapter || !child || session.adapter !== adapter || session.endpoint !== adapter.getEndpoint(child.desired.instanceId)) return false;
+  if (!child.started) return false;
+  const alias = instanceAlias(snapshot, adapter.descriptor.owner);
+  if (!alias) return false;
+  try { return roles.hasRole({ adapter: alias, userId: session.sender.id }, '', 'owner'); } catch { return false; }
+}
+
+/**
+ * In-chat configuration authority (C2): private chats only, and the sender is a global owner —
+ * `config set` edits the project configuration, a host-wide capability (ADR 0056 §2).
+ */
 export function createConfigurationChatAuthorizer(
   roles: () => ChatRoleService | undefined,
   snapshot: () => Pick<RuntimeSnapshot, 'tree'> | undefined = () => undefined,
 ): ConfigurationChatAuthorizer {
   return (session, adapters) => session.scene.kind === 'private'
-    && senderOwnsReceivingAdapter(session, adapters, roles(), snapshot());
+    && senderIsGlobalOwner(session, adapters, roles(), snapshot());
 }

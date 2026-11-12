@@ -1,15 +1,25 @@
 /**
- * ADR 0056 §3: one-time migration of configured people lists into `chat_roles`.
+ * ADR 0056 §3: one-time migration of configured people lists into `chat_roles`, keeping the old
+ * semantics:
  *
- * - Adapter block `master` → adapter-level `owner`, `trusted` → adapter-level `trusted`;
- *   `endpoints[i].master` / `endpoints[i].trusted` → the same at the account (endpoint) level.
+ * - An adapter block's `master` applied to every account that had no `master` of its own (an
+ *   account's own `master` replaced it): it becomes an account-level `owner` on each such account —
+ *   never an adapter-level owner, which would also cover accounts with their own master.
+ *   `endpoints[i].master` → account-level `owner`.
+ * - `trusted` lists were merged (adapter ∪ account): adapter block `trusted` → adapter-level
+ *   `trusted`, `endpoints[i].trusted` → account-level `trusted`.
  * - `ai.trigger.masters` / `ai.trigger.trusted` → global `owner` / `trusted`, one identity per
- *   configured adapter (those lists named user ids without a platform).
+ *   configured adapter (those lists named user ids without a platform) — except adapters whose
+ *   capability profile marks them as a local simulation (`runtime.sandbox`), where a client picks
+ *   its own sender id; those are skipped and logged when the grants are written.
  *
  * The first start records the grants in `.zhin/chat-roles-migration.json` (status `pending`),
  * removes the fields from the configuration file and logs what moved; once the project database
  * is loaded the grants are written to `chat_roles` and the record turns `done`. A crash in between
- * replays the pending record on the next start. After that, configuration that names these fields
+ * replays the pending record on the next start. Without a relational database the grants only take
+ * effect in memory (grants and revocations are refused there, so nothing revoked comes back) and
+ * the record stays `pending` — marked `memoryOnly` — until a relational database is configured.
+ * After that, configuration that names these fields
  * again stops startup with {@link LegacyChatRoleConfigError}, pointing at the upgrade guide.
  * The interim `features.selfService.platformAdmins | roles | allowUsers` switches and the removed
  * `roles` (mapping rule) blocks of adapters / accounts always stop startup.
@@ -19,7 +29,10 @@ import { dirname, join } from 'node:path';
 import {
   CHAT_ROLES, higherChatRole, isChatIdentity, normalizeChatRoleScope, type ChatRole,
 } from '@zhin.js/core';
-import { readPluginConfigurationMap, type ConfigDocumentPort, type FeatureConfigLevel } from '@zhin.js/plugin-runtime';
+import { adapterFeatureId, isAdapterIndex, resolveStaticCapabilities } from '@zhin.js/adapter';
+import {
+  readPluginConfigurationMap, type CapabilityId, type ConfigDocumentPort, type FeatureConfigLevel, type RuntimeSnapshot,
+} from '@zhin.js/plugin-runtime';
 import type { InstanceChatRoleService } from './chat-roles.js';
 
 export const CHAT_ROLE_UPGRADE_GUIDE = 'docs/migrations/chat-roles.md';
@@ -87,10 +100,22 @@ export function readLegacyChatRoleConfig(document: Readonly<Record<string, unkno
     adapters.push(alias);
     // ADR 0056 §4 (revised 2026-11-12): platform → zhin role mapping rules were removed, no compatibility.
     if (block.roles !== undefined) unsupported.push(`${alias}.roles`);
-    for (const [field, role] of [['master', 'owner'], ['trusted', 'trusted']] as const) {
-      if (block[field] === undefined) continue;
-      add('adapter', alias, alias, role, block[field], `${alias}.${field}`);
-      paths.push([alias, field]);
+    if (block.trusted !== undefined) {
+      add('adapter', alias, alias, 'trusted', block.trusted, `${alias}.trusted`);
+      paths.push([alias, 'trusted']);
+    }
+    if (block.master !== undefined) {
+      // The adapter master applied only to accounts without their own master (leaf ?? base).
+      let applied = 0;
+      block.endpoints.forEach((entry, index) => {
+        if (!record(entry) || entry.master !== undefined) return;
+        const endpointId = entry.id !== undefined && String(entry.id).trim() ? String(entry.id) : entry.name !== undefined ? String(entry.name) : undefined;
+        if (!endpointId) { skipped.push(`${alias}.master for ${alias}.endpoints[${index}]: account without id`); return; }
+        add('endpoint', `${alias}/${endpointId}`, alias, 'owner', block.master, `${alias}.master`);
+        applied += 1;
+      });
+      if (!applied && ids(block.master).length) skipped.push(`${alias}.master: every account has its own master (or none is configured)`);
+      paths.push([alias, 'master']);
     }
     block.endpoints.forEach((entry, index) => {
       if (!record(entry)) return;
@@ -137,6 +162,8 @@ interface MigrationRecord {
   readonly grants: readonly LegacyChatRoleGrant[];
   readonly startedAt: number;
   readonly completedAt?: number;
+  /** Last start that could only apply the grants in memory (no relational database). */
+  readonly memoryOnlyAt?: number;
 }
 
 async function readRecord(file: string): Promise<MigrationRecord | undefined> {
@@ -150,7 +177,8 @@ async function readRecord(file: string): Promise<MigrationRecord | undefined> {
     && (grant.level === 'global' || grant.level === 'adapter' || grant.level === 'endpoint')
     && typeof grant.key === 'string' && isChatIdentity(grant) && (CHAT_ROLES as readonly string[]).includes(String(grant.role)));
   return { version: 1, status: value.status, grants, startedAt: Number(value.startedAt) || 0,
-    ...(value.completedAt ? { completedAt: Number(value.completedAt) } : {}) };
+    ...(value.completedAt ? { completedAt: Number(value.completedAt) } : {}),
+    ...(value.memoryOnlyAt ? { memoryOnlyAt: Number(value.memoryOnlyAt) } : {}) };
 }
 
 async function writeRecord(file: string, value: MigrationRecord): Promise<void> {
@@ -165,12 +193,48 @@ export interface ChatRoleMigrationLogger {
   warn(message: string): void;
 }
 
+/** How an adapter instance alias is classified for global grants: a local simulation, a real platform, or unknown. */
+export type ChatRoleMigrationAdapterKind = 'simulated' | 'platform' | undefined;
+
+/**
+ * Classifies the adapter instances of a snapshot by their capability profile (ADR 0044: no
+ * platform names): `runtime.sandbox` marks a local simulation whose clients choose their sender id.
+ */
+export function chatRoleMigrationAdapterKinds(snapshot: Pick<RuntimeSnapshot, 'projections' | 'tree'> | undefined): (alias: string) => ChatRoleMigrationAdapterKind {
+  const kinds = new Map<string, Exclude<ChatRoleMigrationAdapterKind, undefined>>();
+  try {
+    const index = snapshot?.projections.get(adapterFeatureId);
+    if (snapshot && isAdapterIndex(index)) {
+      for (const row of index.describe()) {
+        const alias = snapshot.tree.get(row.owner)?.instanceKey;
+        const profile = index.capabilityProfile(row.id as CapabilityId);
+        if (!alias || !profile) continue;
+        const simulated = resolveStaticCapabilities(profile, []).runtime?.sandbox === true;
+        if (simulated || !kinds.has(alias)) kinds.set(alias, simulated ? 'simulated' : 'platform');
+      }
+    }
+  } catch { /* unknown: every alias stays unclassified */ }
+  return alias => kinds.get(alias);
+}
+
+export interface ChatRoleMigrationCompleteOptions {
+  /** False without a relational database: grants are applied in memory only. */
+  readonly persistent?: boolean;
+  /**
+   * Classifies adapter aliases for the global grants of `ai.trigger.*` ({@link chatRoleMigrationAdapterKinds}).
+   * Simulated and unknown adapters get no global grant (fail closed; both are logged).
+   */
+  readonly adapterKind?: (alias: string) => ChatRoleMigrationAdapterKind;
+}
+
 export interface ChatRoleMigration {
   /** Grants still to be written once the database is loaded. */
   readonly pending: readonly LegacyChatRoleGrant[];
   /** Writes pending grants (existing stored roles at the same scope are kept) and completes the record. */
-  complete(roles: InstanceChatRoleService, options?: Readonly<{ persistent?: boolean }>): Promise<void>;
+  complete(roles: InstanceChatRoleService, options?: ChatRoleMigrationCompleteOptions): Promise<void>;
 }
+
+const isTriggerGrant = (grant: LegacyChatRoleGrant) => grant.level === 'global' && grant.source.startsWith('ai.trigger.');
 
 /**
  * Before the Runtime reads the configuration: migrate legacy fields out of it (first start) or
@@ -206,22 +270,41 @@ export async function prepareChatRoleMigration(options: Readonly<{
   const record_ = current;
   return Object.freeze({
     pending,
-    async complete(roles: InstanceChatRoleService, completeOptions: Readonly<{ persistent?: boolean }> = {}) {
+    async complete(roles: InstanceChatRoleService, completeOptions: ChatRoleMigrationCompleteOptions = {}) {
       if (!record_ || record_.status !== 'pending') return;
+      const kind = completeOptions.adapterKind ?? (() => undefined);
+      const grants = record_.grants.filter(grant => {
+        if (!isTriggerGrant(grant)) return true;
+        const classified = kind(grant.adapter);
+        if (classified === 'platform') return true;
+        if (classified === 'simulated') {
+          options.logger.info(`Chat roles migration: ${grant.source} ${grant.userId} is not granted on ${grant.adapter} `
+            + '(local simulation adapter: its clients choose their own sender id).');
+        } else {
+          options.logger.warn(`Chat roles migration: ${grant.source} ${grant.userId} is not granted on ${grant.adapter} `
+            + `(adapter not loaded, its kind is unknown); grant it in the Console if needed. See ${CHAT_ROLE_UPGRADE_GUIDE}.`);
+        }
+        return false;
+      });
+      const persistent = completeOptions.persistent !== false && roles.store.persistent;
+      if (!persistent) {
+        // No relational database: effective in memory only. Grants / revocations are refused on such
+        // a store, so a revoked migrated role can never come back; the record waits for a database.
+        const added = roles.store.seed(grants.map(grant => ({ ...grant, grantedBy: `migration:${grant.source}` })));
+        await writeRecord(file, { ...record_, memoryOnlyAt: now() });
+        options.logger.warn(`Chat roles: ${added} migrated grant(s) are held in memory only (no relational database); `
+          + `${CHAT_ROLE_MIGRATION_FILE} stays pending until a relational database (sqlite / mysql / pg) is configured.`);
+        return;
+      }
       let written = 0;
-      for (const grant of record_.grants) {
+      for (const grant of grants) {
         const existing = roles.store.get(grant.level, grant.key, grant);
         if (existing) continue;
         await roles.store.grant({ ...grant, grantedBy: `migration:${grant.source}` });
         written += 1;
       }
-      if (completeOptions.persistent === false) {
-        // No relational database: keep the record pending so every start replays it into memory.
-        options.logger.warn(`Chat roles: ${written} migrated grant(s) are held in memory only (no relational database); `
-          + `${CHAT_ROLE_MIGRATION_FILE} stays pending.`);
-        return;
-      }
-      await writeRecord(file, { ...record_, status: 'done', completedAt: now() });
+      const { memoryOnlyAt: _memoryOnly, ...done } = record_;
+      await writeRecord(file, { ...done, status: 'done', completedAt: now() });
       options.logger.info(`Chat roles: wrote ${written} migrated grant(s) to chat_roles.`);
     },
   });

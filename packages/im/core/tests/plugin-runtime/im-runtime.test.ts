@@ -107,11 +107,20 @@ const ignoredEndpointEvents = Object.freeze({
 
 const fixtureStores = new WeakMap<ImRuntime, SnapshotStore>();
 
+/** Chat roles tests declare on the inbound sender; the Runtime drops payload roles, the fixture enricher restores these. */
+const declaredChatRoles = new Map<string, 'owner' | 'admin' | 'trusted'>();
+
 function receive(
   im: ImRuntime,
   payload: Parameters<ImRuntime['endpointEvents']['receive']>[0]['payload'],
+  declareRoles = true,
 ) {
   const input = payload as { conversation?: { endpoint?: { id?: string; adapter?: string } } };
+  const sender = (payload as { sender?: { id?: unknown; chatRole?: 'owner' | 'admin' | 'trusted' } }).sender;
+  if (declareRoles && typeof sender?.id === 'string') {
+    if (sender.chatRole) declaredChatRoles.set(sender.id, sender.chatRole);
+    else declaredChatRoles.delete(sender.id);
+  }
   return im.endpointEvents.receive(Object.freeze({
     name: 'message.receive',
     payload,
@@ -2591,6 +2600,26 @@ describe('IM Runtime', () => {
     await fixture.store.close();
   });
 
+  it('drops payload chat roles and publishes the enriched sender; re-reads current roles on demand (ADR 0056)', async () => {
+    const fixture = await createFixture([], []);
+    const events: RuntimeMessageEvent[] = [];
+    fixture.im.messageEvents.subscribe(event => events.push(event));
+    const conversation = { endpoint: { id: String(fixture.adapter.id), adapter: 'memory' }, kind: 'group' as const, id: 'room-roles' };
+    try {
+      // An adapter-supplied role never survives (the fixture enricher only restores roles a test declares).
+      declaredChatRoles.delete('mallory');
+      await receive(fixture.im, { conversation, content: 'hi', sender: { id: 'mallory', chatRole: 'owner', chatRoleLevels: { owner: 'global' } } as never }, false);
+      expect(events.at(-1)?.sender).toEqual({ id: 'mallory' });
+      // The event stream carries the enriched sender (the role the Runtime resolved).
+      await receive(fixture.im, { conversation, content: 'hi', sender: { id: 'carol', chatRole: 'trusted' } });
+      expect(events.at(-1)?.sender).toMatchObject({ id: 'carol', chatRole: 'trusted' });
+      expect(fixture.im.permissionHost.currentSenderRoles({ conversation, sender: { id: 'carol' } })).toEqual({ chatRole: 'trusted' });
+      declaredChatRoles.delete('carol');
+      expect(fixture.im.permissionHost.currentSenderRoles({ conversation, sender: { id: 'carol' } })).toEqual({});
+      expect(fixture.im.permissionHost.currentSenderRoles({ sender: { id: 'carol' } })).toBeUndefined();
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
   it('timestamps incoming observations before a slow command replies so history keeps causal order', async () => {
     const clock = vi.spyOn(Date, 'now').mockReturnValue(1000);
     const fixture = await createFixture([], [], undefined, undefined, undefined, {
@@ -3354,7 +3383,10 @@ async function createFixture(
     ...(options?.peerRegistry ? { peerRegistry: options.peerRegistry } : {}),
     ...(options?.inboundDeduper ? { inboundDeduper: options.inboundDeduper as never } : {}),
     // Test transports declare the sender's chat role directly (production resolves it from chat_roles).
-    enrichSender: sender => sender,
+    enrichSender: sender => {
+      const chatRole = sender?.id ? declaredChatRoles.get(sender.id) : undefined;
+      return sender && chatRole ? { ...sender, chatRole } : sender;
+    },
     conversationEvents,
   });
   let base = baseState(slots);

@@ -2,7 +2,7 @@ import type { Locale } from '@zhin.js/plugin-runtime';
 import { managementCommandText, managementCommandReference, type AgentCommandPresentation } from '../init/command-presentation.js';
 import { ownerApprovalMessages as t } from './owner-approval-messages.js';
 import * as path from 'node:path';
-import { chatRoleIncludes, type Message } from '@zhin.js/core';
+import { chatRoleIncludes, hostChatRole, type Message } from '@zhin.js/core';
 import { workspaceRoot } from '../discovery/utils.js';
 import type { OwnerApprovalAddress } from './owner-approval-contracts.js';
 import { OwnerApprovalStore } from './owner-approval-store.js';
@@ -120,8 +120,12 @@ export function ownerApprovalAddressFromMessage(message: Message): OwnerApproval
     : undefined;
 }
 
+/**
+ * Host-wide requester role (exec / file / dangerous tools): `owner` only for a global owner
+ * (ADR 0056 §2); a lower-level owner counts as trusted here.
+ */
 export function resolveToolRequesterRole(message: Message): ToolRequesterRole {
-  const role = message.sender?.chatRole;
+  const role = hostChatRole(message.sender);
   if (role === 'owner') return 'owner';
   if (chatRoleIncludes(role, 'trusted')) return 'trusted';
   if (!message.sender?.id) return 'unknown';

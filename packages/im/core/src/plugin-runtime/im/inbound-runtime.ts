@@ -308,6 +308,7 @@ export class InboundRuntime {
                       ...(enrichedSender.name !== undefined ? { name: enrichedSender.name } : {}),
                       ...(enrichedSender.platform ? { platform: enrichedSender.platform } : {}),
                       ...(enrichedSender.chatRole ? { chatRole: enrichedSender.chatRole } : {}),
+                      ...(enrichedSender.chatRoleLevels ? { chatRoleLevels: enrichedSender.chatRoleLevels } : {}),
                     }),
                   }
                 : {}),
@@ -353,7 +354,7 @@ export class InboundRuntime {
           this.context.publish({
             direction: 'inbound',
             conversation,
-            ...(input.sender !== undefined ? { sender: input.sender } : {}),
+            ...(enrichedSender !== undefined ? { sender: enrichedSender } : {}),
             contentPreview: previewMessageContent(input.content),
             ...(input.message?.id ? { messageId: input.message.id } : {}),
             timestamp: receivedAt,
@@ -371,7 +372,7 @@ export class InboundRuntime {
           this.context.publish({
             direction: 'inbound',
             conversation,
-            ...(input.sender !== undefined ? { sender: input.sender } : {}),
+            ...(enrichedSender !== undefined ? { sender: enrichedSender } : {}),
             contentPreview: previewMessageContent(input.content),
             ...(input.message?.id ? { messageId: input.message.id } : {}),
             timestamp: receivedAt,
@@ -440,7 +441,7 @@ export class InboundRuntime {
         this.context.publish({
           direction: 'inbound',
           conversation,
-          ...(input.sender !== undefined ? { sender: input.sender } : {}),
+          ...(enrichedSender !== undefined ? { sender: enrichedSender } : {}),
           contentPreview: previewMessageContent(input.content),
           ...(input.message?.id ? { messageId: input.message.id } : {}),
           timestamp: receivedAt,
@@ -549,9 +550,8 @@ export class InboundRuntime {
 }
 
 /**
- * ADR 0056 §1: an Adapter reports `id`, `name` and the normalized `platform` standing only.
- * A payload `chatRole` is passed on only to be dropped by the sender enricher (production and the
- * default both drop it; test kits that declare roles keep it).
+ * ADR 0056 §1: an Adapter reports `id`, `name` and the normalized `platform` standing only. Any
+ * payload `chatRole` / `chatRoleLevels` is dropped here; only the sender enricher sets them.
  */
 function adapterSender(sender: MessageSenderRef | undefined): MessageSenderRef | undefined {
   if (!sender || typeof sender !== 'object' || typeof sender.id !== 'string') return sender;
@@ -560,6 +560,5 @@ function adapterSender(sender: MessageSenderRef | undefined): MessageSenderRef |
     id: sender.id,
     ...(sender.name !== undefined ? { name: sender.name } : {}),
     ...(platform ? { platform } : {}),
-    ...((sender as { chatRole?: MessageSenderRef['chatRole'] }).chatRole ? { chatRole: (sender as { chatRole?: MessageSenderRef['chatRole'] }).chatRole } : {}),
   });
 }

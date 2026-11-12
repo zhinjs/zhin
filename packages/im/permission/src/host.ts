@@ -5,8 +5,8 @@
  * → 自定义 register → deny。命令、中间件、Agent 工具 / 技能与按钮回调共用这一个评估器。
  */
 
-import type { PermissionPlatformStanding, PermissionSubject } from './subject.js';
-import { normalizePermissionStanding } from './subject.js';
+import type { PermissionChatRoleLevels, PermissionPlatformStanding, PermissionSubject } from './subject.js';
+import { normalizePermissionChatRoleLevels, normalizePermissionStanding } from './subject.js';
 import { checkBuiltinPermit, isBuiltinPermit, permitsNeedBotStanding } from './builtin.js';
 
 /**
@@ -18,6 +18,19 @@ export type BotStandingResolver = (
   source: unknown,
   options: Readonly<{ cachedOnly?: boolean; signal?: AbortSignal }>,
 ) => PermissionPlatformStanding | undefined | Promise<PermissionPlatformStanding | undefined>;
+
+/** The sender's current zhin chat role facts (`{}` = no role). */
+export interface PermissionSenderRoles {
+  readonly chatRole?: 'owner' | 'admin' | 'trusted';
+  readonly chatRoleLevels?: PermissionChatRoleLevels;
+}
+
+/**
+ * Re-reads the sender's chat role for a message-like `source` (`{ conversation, endpointId?,
+ * sender: { id } }`) from the role store (ADR 0056 §5: execution-time re-checks). Undefined /
+ * throwing = the source cannot be resolved.
+ */
+export type SenderRoleResolver = (source: unknown) => PermissionSenderRoles | undefined;
 
 export interface PermissionCheckOptions {
   /** Original message-like input; lets the host resolve `subject.bot` for `bot:*` permits. */
@@ -34,6 +47,27 @@ export type PermissionChecker = (
 export class PermissionHost {
   readonly #customEntries: CustomEntry[] = [];
   #botStanding: BotStandingResolver | undefined;
+  #senderRoles: SenderRoleResolver | undefined;
+
+  /** Installs the resolver of the sender's current chat role (the IM Runtime does, over the role store). */
+  setSenderRoleResolver(resolver: SenderRoleResolver): () => void {
+    this.#senderRoles = resolver;
+    return () => { if (this.#senderRoles === resolver) this.#senderRoles = undefined; };
+  }
+
+  /**
+   * The sender's current chat role for `source`; undefined when no resolver is installed or the
+   * source cannot be resolved (callers then keep the facts they already have).
+   */
+  currentSenderRoles(source: unknown): PermissionSenderRoles | undefined {
+    if (!this.#senderRoles) return undefined;
+    let facts: PermissionSenderRoles | undefined;
+    try { facts = this.#senderRoles(source); } catch { return undefined; }
+    if (!facts) return undefined;
+    const role = facts.chatRole === 'owner' || facts.chatRole === 'admin' || facts.chatRole === 'trusted' ? facts.chatRole : undefined;
+    const levels = role ? normalizePermissionChatRoleLevels(facts.chatRoleLevels) : undefined;
+    return Object.freeze({ ...(role ? { chatRole: role } : {}), ...(levels ? { chatRoleLevels: levels } : {}) });
+  }
 
   /** Installs the resolver of `subject.bot` (the IM Runtime does, over the Adapter index cache). */
   setBotStandingResolver(resolver: BotStandingResolver): () => void {

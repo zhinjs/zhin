@@ -39,7 +39,12 @@ async function fixture(type: 'qrcode' | 'slider' = 'qrcode') {
 
 describe('ICQQ login recovery commands resolve actual owned incarnations', () => {
   it('accepts the configured notify target as operator', () => {
-    expect(isIcqqLoginOperator({}, { sender: { id: '1', chatRole: 'owner' } })).toBe(true);
+    expect(isIcqqLoginOperator({}, { sender: { id: '1', chatRole: 'owner', chatRoleLevels: { owner: 'global' } } })).toBe(true);
+    // Reachable from any adapter: an owner of one conversation / account / adapter does not qualify.
+    for (const level of ['adapter', 'endpoint', 'conversation']) {
+      expect(isIcqqLoginOperator({}, { sender: { id: '1', chatRole: 'owner', chatRoleLevels: { owner: level } } })).toBe(false);
+    }
+    expect(isIcqqLoginOperator({}, { sender: { id: '1', chatRole: 'owner' } })).toBe(false);
     expect(isIcqqLoginOperator({ master: '1' }, { sender: { id: '1' } })).toBe(false);
     expect(isIcqqLoginOperator({ notify: { id: 'openid-1' } }, { sender: { id: 'openid-1' } })).toBe(true);
     expect(isIcqqLoginOperator({ notify: { id: 'openid-1' } }, { sender: { id: 'other' } })).toBe(false);

@@ -150,6 +150,7 @@ export default defineCommand({
 | 规则 | 含义 |
 | --- | --- |
 | `owner` / `admin` / `trusted` / `role(admin,trusted)` | 发送者在本会话层级链上的聊天角色（`owner` ⊃ `admin` ⊃ `trusted`） |
+| `owner@global` / `owner@adapter` / `admin@endpoint` / `role(owner@global,admin)` | 层级限定：该角色须来自该层级或更高层级（`sender.chatRoleLevels`）。影响整个宿主的命令（重启、改项目配置、执行命令……）写 `owner@global`；会话层 owner 只是该会话的主人 |
 | `platform:owner` / `platform:admin` / `platform-role:<id>` / `platform-permission:<name>` | 发送者的平台身份（适配器上报的 `sender.platform`） |
 | `bot:owner` / `bot:admin` / `bot-role:<id>` / `bot-permission:<name>` | 机器人账号自身在本会话的平台身份（按会话缓存；未知时不满足） |
 | `adapter(icqq)` | 只在某个平台上可用 |
@@ -591,7 +592,7 @@ it('parses positional args and fills option defaults', async () => {
 | 字段 | 行为 |
 |---|---|
 | `alias` | 替换命令名的全部静态部分；目录参数接在后面 |
-| `permit` | 内置规则：`adapter\|group\|private\|channel\|user(...)`、`owner\|admin\|trusted` / `role(...)`、`platform:…` / `platform-role:…` / `platform-permission:…`、`bot:…` / `bot-role:…` / `bot-permission:…`。失败返回 `denied`（`denial` 给出第一条不满足的规则与原因）；没有鉴权主体时同样拒绝，程序化的 `CommandIndex.execute` 也不能绕过 |
+| `permit` | 内置规则：`adapter\|group\|private\|channel\|user(...)`、`owner\|admin\|trusted[@层级]` / `role(...)`、`platform:…` / `platform-role:…` / `platform-permission:…`、`bot:…` / `bot-role:…` / `bot-permission:…`。失败返回 `denied`（`denial` 给出第一条不满足的规则与原因）；没有鉴权主体时同样拒绝，程序化的 `CommandIndex.execute` 也不能绕过 |
 | `shortcut` | `{ 触发文本: 预填的 params }`，去掉首尾空白后完全相同才触发 |
 
 冲突按完整的词序列判断：`b` 和 `b list` 可以共存。
@@ -639,7 +640,7 @@ flowchart LR
 - `remove <id>` 取消目标 incarnation 并关闭连接，历史保留；同名重建也获得新身份。
 - 首次修改前由管理员在 Console 核对已有账号清单并确认迁移，聊天命令不能代替确认。
 - 后续变更加密持久化，不写启动配置或 `.env`，不重启 Root。没有运行目录或数据库能力时拒绝写入，不回退文件。
-- `add/remove` 需要聊天角色 `owner`；revision 冲突需刷新，提交结果未知需先读取权威状态核实，不能自动重试。
+- `add/remove` 需要适配器层或以上的聊天角色 `owner`（`owner@adapter`）；revision 冲突需刷新，提交结果未知需先读取权威状态核实，不能自动重试。
 
 ```ts
 // src/telegram-endpoint-commands.ts

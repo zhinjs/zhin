@@ -4,7 +4,7 @@ import { commandFeatureId, isCommandIndex, type CommandMenuPage } from '@zhin.js
 import { createRootPrivateToken, resolveLocale, type PluginId, type RuntimeSnapshot, type SnapshotLease, type SnapshotReader, type Locale } from '@zhin.js/plugin-runtime';
 import { operationInputBinding, operationInputSignal, operationInputResources, operationSession, type OperationSession, type OperationResourceView, type CapabilityOperationFactory } from '@zhin.js/feature-kit';
 import type { ConversationRef, DeliveryReceipt, MessageRef, PlatformStanding, SelfProfilePort } from '@zhin.js/im-contract';
-import type { ChatRole } from '../../built/roles.js';
+import type { ChatRole, ChatRoleLevels } from '../../built/roles.js';
 import type { MessageOrigin } from './inbound-origin.js';
 import type { CoreReplyStream, OpenReplyStreamOptions } from './progressive-reply.js';
 import type { MediaRef, Segment } from '../../built/segment-contract/types.js';
@@ -136,6 +136,8 @@ export interface MessageSenderRef {
   readonly platform?: PlatformStanding;
   /** Highest zhin chat role effective in this conversation (ADR 0056 §2). Set by the Runtime only. */
   readonly chatRole?: ChatRole;
+  /** Per role, the topmost level it is held at on this conversation's chain. Set by the Runtime only. */
+  readonly chatRoleLevels?: ChatRoleLevels;
 }
 
 export interface IncomingMessage {

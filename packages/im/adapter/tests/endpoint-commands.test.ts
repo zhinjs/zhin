@@ -11,8 +11,14 @@ const demoSpec: EndpointCommandsSpec = { adapterKey: 'demo', adapterDisplayName:
   describeEntry: entry => `token: ${String(entry.token)}` };
 
 describe('isEndpointOperator', () => {
-  it('requires the Runtime-set chat role owner (ADR 0056)', () => {
-    expect(isEndpointOperator({}, { sender: { id: 'alice', chatRole: 'owner' } })).toBe(true);
+  it('requires the Runtime-set chat role owner at the adapter level or above (ADR 0056 §2)', () => {
+    expect(isEndpointOperator({}, { sender: { id: 'alice', chatRole: 'owner', chatRoleLevels: { owner: 'global' } } })).toBe(true);
+    expect(isEndpointOperator({}, { sender: { id: 'alice', chatRole: 'owner', chatRoleLevels: { owner: 'adapter' } } })).toBe(true);
+    // Owners of one account or one conversation cannot add / remove the adapter's accounts.
+    for (const level of ['endpoint', 'conversation']) {
+      expect(isEndpointOperator({}, { sender: { id: 'alice', chatRole: 'owner', chatRoleLevels: { owner: level } } })).toBe(false);
+    }
+    expect(isEndpointOperator({}, { sender: { id: 'alice', chatRole: 'owner' } })).toBe(false);
     for (const chatRole of ['admin', 'trusted', undefined]) {
       expect(isEndpointOperator({}, { sender: { id: 'alice', ...(chatRole ? { chatRole } : {}) } })).toBe(false);
     }
@@ -133,7 +139,7 @@ describe('createEndpointCommands uses actual owned Adapter persistence', () => {
       definition: { ...commands.add, $parameter: { name: 'id', type: 'string' } as const } });
     const snapshot = { ...f.store.current, capabilities: new Map([...f.store.current.capabilities, [slot.id, slot]]) };
     const commandIndex = new CommandIndex([slot], snapshot);
-    expect(await commandIndex.dispatch({ input: 'demo endpoint add bot token=a=b=c baseUrl=https://fixture.invalid', source: { sender: { id: 'alice', chatRole: 'owner' } } })).toMatchObject({ status: 'executed', value: expect.stringContaining('尚未启动') });
+    expect(await commandIndex.dispatch({ input: 'demo endpoint add bot token=a=b=c baseUrl=https://fixture.invalid', source: { sender: { id: 'alice', chatRole: 'owner', chatRoleLevels: { owner: 'global' } } } })).toMatchObject({ status: 'executed', value: expect.stringContaining('尚未启动') });
     expect(f.repository.compareAndSet).toHaveBeenCalledTimes(1);
     expect(f.repository.state.get(f.adapter.descriptor.id)!.endpoints[0]).toMatchObject({ endpointId: 'bot', desiredEnabled: false, config: { id: 'bot', token: 'a=b=c', baseUrl: 'https://fixture.invalid' } });
     expect(f.adapter.created).toHaveLength(0); expect(f.source).toEqual({ endpoints: [] }); expect(f.use).not.toHaveBeenCalled(); expect(f.store.current.generation).toBe(0); expect(process.pid).toBe(pid);
@@ -149,7 +155,7 @@ describe('createEndpointCommands uses actual owned Adapter persistence', () => {
     const f = await accountRuntimeFixture(), commands = createEndpointCommands(demoSpec, defineCommand);
     const denied = f.commandContext({ input: { sender: { id: 'bob', chatRole: 'admin' } }, params: { id: 'bot' }, args: ['token=synthetic'] });
     expect(await commands.add.execute(denied)).toBe(endpointCommandForbidden('Demo')); expect(await commands.remove.execute(denied)).toBe(endpointCommandForbidden('Demo')); expect(f.repository.compareAndSet).not.toHaveBeenCalled();
-    const allowed = f.commandContext({ input: { sender: { id: 'alice', chatRole: 'owner' } }, params: { id: 'bot' }, args: ['token=synthetic'] });
+    const allowed = f.commandContext({ input: { sender: { id: 'alice', chatRole: 'owner', chatRoleLevels: { owner: 'global' } } }, params: { id: 'bot' }, args: ['token=synthetic'] });
     expect(await commands.add.execute(allowed)).toContain('尚未启动'); expect(f.adapter.list().map(row => row.endpointId)).toEqual(['bot']);
   });
   it('rejects missing/empty/undeclared/malformed fields without writing and keeps duplicate CAS conflicts separate', async () => {
@@ -195,7 +201,7 @@ describe('createEndpointCommands uses actual owned Adapter persistence', () => {
     const writer = { list: vi.fn(), add: vi.fn(), remove: vi.fn() }, bindFlow = vi.fn();
     const commands: ReturnType<typeof createEndpointCommands<ReturnType<typeof defineCommand>>> = Reflect.apply(createEndpointCommands, undefined, [{ ...demoSpec, bindFlow }, defineCommand]);
     const context = { use: () => writer, params: { id: 'bot' }, args: ['token=synthetic'], config: undefined,
-      input: { sender: { id: 'owner-user', chatRole: 'owner' } } } as never;
+      input: { sender: { id: 'owner-user', chatRole: 'owner', chatRoleLevels: { owner: 'adapter' } } } } as never;
     for (const command of [commands.list, commands.add, commands.remove]) await expect(command.execute(context)).rejects.toMatchObject({ code: 'unsupported' });
     expect(writer.list).not.toHaveBeenCalled(); expect(writer.add).not.toHaveBeenCalled(); expect(writer.remove).not.toHaveBeenCalled(); expect(bindFlow).not.toHaveBeenCalled();
   });

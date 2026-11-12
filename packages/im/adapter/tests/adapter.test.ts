@@ -1331,6 +1331,10 @@ describe('Adapter capability profile assembly (ADR 0044)', () => {
     expect(await index.selfStanding(slot.id, { ...group, id: 'g2' })).toBeUndefined();
     expect(await index.selfStanding(slot.id, { ...group, id: 'g2' })).toBeUndefined();
     expect(inspect).toHaveBeenCalledTimes(3);
+    // An expired entry is unknown for cachedOnly (never a stale standing) and is refreshed in the background.
+    const later = Date.now() + 61_000;
+    expect(await index.selfStanding(slot.id, group, { cachedOnly: true, now: later })).toBeUndefined();
+    await vi.waitFor(() => expect(inspect).toHaveBeenCalledTimes(4));
     await index.stop();
   });
 

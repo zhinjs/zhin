@@ -80,7 +80,7 @@ export async function handleDiscordInteractionRequest(
         if (data?.component_type === 2 && typeof data.custom_id === 'string') {
           if (!handler.isOpen) { return new Response('Unavailable', { status: 503 }); }
           const message = interactionToInboundMessage(interaction);
-          handler.admitButton({ event: interaction, id: message.id, customId: data.custom_id, channelId: message.channelId, channelKind: message.channelKind, userId: message.authorId, userName: message.authorName, ...(message.guildId ? { guildId: message.guildId } : {}), sourceMessageId: (interaction.message as { id?: string } | undefined)?.id });
+          handler.admitButton({ event: interaction, id: message.id, customId: data.custom_id, channelId: message.channelId, channelKind: message.channelKind, userId: message.authorId, userName: message.authorName, ...(message.guildId ? { guildId: message.guildId } : {}), ...(message.threadParentId ? { threadParentId: message.threadParentId } : {}), sourceMessageId: (interaction.message as { id?: string } | undefined)?.id });
           return writeJson(200, { type: 6 });
         }
       }

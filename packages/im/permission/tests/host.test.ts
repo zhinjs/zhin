@@ -13,6 +13,22 @@ function makeSubject(overrides: Partial<PermissionSubject> = {}): PermissionSubj
 }
 
 describe('PermissionHost', () => {
+  describe('currentSenderRoles', () => {
+    it('re-reads the sender role through the installed resolver, validated; undefined without one', () => {
+      const host = new PermissionHost();
+      expect(host.currentSenderRoles({ sender: { id: 'u1' } })).toBeUndefined();
+      const dispose = host.setSenderRoleResolver(source => (source as { sender: { id: string } }).sender.id === 'u1'
+        ? { chatRole: 'owner', chatRoleLevels: { owner: 'conversation', bogus: 'x' } as never }
+        : { chatRole: 'master' as never });
+      expect(host.currentSenderRoles({ sender: { id: 'u1' } })).toEqual({ chatRole: 'owner', chatRoleLevels: { owner: 'conversation' } });
+      expect(host.currentSenderRoles({ sender: { id: 'u2' } })).toEqual({});
+      dispose();
+      expect(host.currentSenderRoles({ sender: { id: 'u1' } })).toBeUndefined();
+      host.setSenderRoleResolver(() => { throw new Error('boom'); });
+      expect(host.currentSenderRoles({ sender: { id: 'u1' } })).toBeUndefined();
+    });
+  });
+
   describe('check — builtin', () => {
     it('resolves builtin permits without extra registration', async () => {
       const host = new PermissionHost();

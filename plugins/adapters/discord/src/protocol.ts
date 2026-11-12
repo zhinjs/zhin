@@ -85,6 +85,8 @@ export interface DiscordInboundMessage {
   readonly authorBot?: boolean;
   readonly createdTimestamp: number;
   readonly guildId?: string;
+  /** The message was sent in a thread: its parent channel (the thread itself is `channelId`). */
+  readonly threadParentId?: string;
   readonly isGuildOwner?: boolean;
   readonly permissionTokens?: readonly string[];
   /** ADR 0056 §1: guild permission flags as snake_case names (`ban_members`, …). */
@@ -107,6 +109,8 @@ export interface DiscordButtonInbound {
   readonly customId: string;
   readonly channelId: string;
   readonly channelKind: 'private' | 'group' | 'channel';
+  /** Pressed inside a thread: its parent channel. */
+  readonly threadParentId?: string;
   readonly userId: string;
   readonly userName: string;
   readonly sourceMessageId?: string;
@@ -200,6 +204,8 @@ export function resolveChannelKind(channelType: number | string | undefined): 'p
 /**
  * 入站归一化 → ConversationRef：DM → 'private'；GroupDM → 'group'；
  * guild 频道 → 'channel' + guild 容器进 parent（guild 是频道容器，kind 'channel'）。
+ * 线程（thread）：会话 id 是父频道、`threadId` 是线程频道（ConversationRef 的子话题约定），
+ * 所以父频道上的角色 / 功能配置在线程里同样生效（ADR 0056 §2）；出站用 {@link discordChannelOf}。
  * endpoint.adapter = owner PluginId（CapabilityId 以 \0 分隔）。
  */
 export function discordInboundConversation(
@@ -208,16 +214,24 @@ export function discordInboundConversation(
     readonly channelId: string;
     readonly channelKind: 'private' | 'group' | 'channel';
     readonly guildId?: string;
+    readonly threadParentId?: string;
   },
 ): ConversationRef {
+  const thread = msg.channelKind === 'channel' && msg.threadParentId && msg.threadParentId !== msg.channelId;
   return {
     endpoint: { id: endpointKey, adapter: endpointKey.split('\0')[0] ?? endpointKey },
     kind: msg.channelKind,
-    id: msg.channelId,
+    id: thread ? msg.threadParentId! : msg.channelId,
+    ...(thread ? { threadId: msg.channelId } : {}),
     ...(msg.guildId && msg.channelKind === 'channel'
       ? { parent: { kind: 'channel' as const, id: msg.guildId } }
       : {}),
   };
+}
+
+/** The Discord channel a conversation's messages live in: the thread when there is one. */
+export function discordChannelOf(conversation: Pick<ConversationRef, 'id' | 'threadId'>): string {
+  return conversation.threadId ?? conversation.id;
 }
 
 export function senderDisplayName(msg: DiscordInboundMessage): string {
@@ -511,6 +525,16 @@ export function formatSlashCommandContent(interaction: Record<string, unknown>):
   return parts.join(' ');
 }
 
+/** Thread channel types (announcement / public / private thread) carry `parent_id`, the channel they belong to. */
+const THREAD_CHANNEL_TYPES = new Set([10, 11, 12]);
+
+/** Parent channel of a raw API channel object when it is a thread. */
+export function discordThreadParentOf(channel: unknown): string | undefined {
+  if (!channel || typeof channel !== 'object') return undefined;
+  const raw = channel as { type?: unknown; parent_id?: unknown };
+  return THREAD_CHANNEL_TYPES.has(Number(raw.type)) && typeof raw.parent_id === 'string' && raw.parent_id ? raw.parent_id : undefined;
+}
+
 export function interactionToInboundMessage(interaction: Record<string, unknown>): DiscordInboundMessage {
   const member = interaction.member as { user?: Record<string, unknown>; permissions?: unknown; roles?: unknown } | undefined;
   const user = member?.user
@@ -526,6 +550,7 @@ export function interactionToInboundMessage(interaction: Record<string, unknown>
     content: formatSlashCommandContent(interaction),
     channelId: String(interaction.channel_id ?? ''),
     channelKind: interaction.guild_id ? 'channel' : 'private',
+    ...(discordThreadParentOf(interaction.channel) ? { threadParentId: discordThreadParentOf(interaction.channel)! } : {}),
     authorId: String(user?.id ?? ''),
     authorName: String(user?.username ?? user?.id ?? ''),
     createdTimestamp: Date.now(),

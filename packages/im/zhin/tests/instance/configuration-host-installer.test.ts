@@ -35,7 +35,8 @@ async function fixture(options: { locale?: 'zh-CN' | 'en'; commands?: boolean; g
   const setups = { root: 0 };
   const put = async (file: string, data: unknown) => { await mkdir(dirname(file), { recursive: true }); await writeFile(file, JSON.stringify(data)); };
   const document: RuntimeConfigDocument = { configVersion: 2, locale: options.locale ?? 'en',
-    ...(options.globalMasters ? { ai: { trigger: { masters: options.globalMasters } } } : {}),
+    // ADR 0056 §2: chat configuration is host-wide and needs a global owner; alice is one.
+    ai: { trigger: { masters: ['alice', ...(options.globalMasters ?? [])] } },
     plugins: { bot: '@test/bot', other: '@test/bot' },
     bot: { ...options.extraFields, ...(options.objectTuple ? { entries: ['name', { master: 'before' }] } : {}),
       master: 'alice', commandPrefix: '!!', nickname: 'Before', count: 1, tags: ['a'], token: 'DO_NOT_DISCLOSE',
@@ -228,15 +229,17 @@ it('limits Host chat writes to HOST_CONFIG_PATCH_PATHS through the real message 
   } finally { await f.close(); }
 });
 
-it('requires the owner of the actual source Bot in private chat, including same-named accounts', async () => {
+it('requires a global owner in private chat; account owners and metadata roles do not count', async () => {
   const f = await fixture(); const read = vi.spyOn(f.realStore, 'readChat');
   try {
     for (const input of [ { sender: 'stranger' }, { sender: 'alice', kind: 'group' as const }, { sender: 'alice', kind: 'channel' as const },
-      { sender: 'alice', other: true, metadata: { endpoint: 'same', roles: ['master'] } } ]) {
+      { sender: 'stranger', other: true, metadata: { endpoint: 'same', roles: ['master'] } },
+      // bob owns the `other` account (migrated from its adapter master), not the host.
+      { sender: 'bob', other: true } ]) {
       await f.receive(input.other ? '#config get bot.nickname' : '!!config get bot.nickname', input);
     }
     expect(read).not.toHaveBeenCalled();
-    await f.receive('#config get bot.nickname', { sender: 'bob', other: true });
+    await f.receive('#config get bot.nickname', { sender: 'alice', other: true });
     expect(read).toHaveBeenCalledOnce();
     expect(lastReply(f.otherClient)).toContain('Before');
     const commands = f.runtime.snapshot.projections.get(commandFeatureId) as CommandIndex;
@@ -259,7 +262,7 @@ it('uses actual prefixes and both locales without inventing a command invocation
     expect(lastReply(f.client)).toContain('Before');
     await f.receive('!!配置');
     expect(lastReply(f.client)).toContain('!!config fields');
-    await f.receive('#config', { sender: 'bob', other: true });
+    await f.receive('#config', { sender: 'alice', other: true });
     expect(lastReply(f.otherClient)).toContain('#config get');
   } finally { await f.close(); }
 });
@@ -281,21 +284,23 @@ it('accepts global owners (migrated from ai.trigger.masters, bound per adapter) 
   } finally { await f.close(); }
 });
 
-it('accepts the master of any configured endpoint on the same Adapter in private chat (C2 widen)', async () => {
+it('does not accept account owners on the same Adapter: chat configuration is host-wide (ADR 0056 §2)', async () => {
   const f = await fixture({ secondEndpoint: true });
   const read = vi.spyOn(f.realStore, 'readChat');
   try {
-    // carol is the leaf master of bot/second only; she may manage via bot/same.
+    const denied = 'Configuration management requires a real Bot owner in a private chat.';
+    // carol owns bot/second only — neither via bot/same nor via her own account.
     await f.receive('!!config get bot.nickname', { sender: 'carol' });
-    expect(lastReply(f.client)).toContain('Before');
-    // alice is bot/same's inherited Plugin-level master; she may manage via bot/second.
+    expect(lastReply(f.client)).toBe(denied);
+    await f.receive('!!config get bot.nickname', { sender: 'carol', second: true });
+    expect(lastReply(f.secondClient!)).toBe(denied);
+    expect(read).not.toHaveBeenCalled();
+    // The global owner may use either account, still in private chat only.
     await f.receive('!!config get bot.nickname', { sender: 'alice', second: true });
     expect(lastReply(f.secondClient!)).toContain('Before');
-    expect(read).toHaveBeenCalledTimes(2);
-    // Still private chat only, even for a same-Adapter master.
-    await f.receive('!!config get bot.nickname', { sender: 'carol', kind: 'group' });
+    await f.receive('!!config get bot.nickname', { sender: 'alice', kind: 'group' });
     expect(lastReply(f.client)).not.toContain('Before');
-    expect(read).toHaveBeenCalledTimes(2);
+    expect(read).toHaveBeenCalledTimes(1);
   } finally { await f.close(); }
 });
 
@@ -304,8 +309,8 @@ it('denies owners of a different Adapter even with several endpoints (C2 widen)'
   const read = vi.spyOn(f.realStore, 'readChat');
   try {
     const denied = 'Configuration management requires a real Bot owner in a private chat.';
-    // Cross-Adapter: bot's masters (base and leaf) on other's endpoint, and other's master on bot's endpoints.
-    for (const sender of ['alice', 'carol']) {
+    // Cross-Adapter: bot's account owner on other's endpoint, and other's account owner on bot's endpoints.
+    for (const sender of ['carol']) {
       await f.receive('#config get other.nickname', { sender, other: true });
       expect(lastReply(f.otherClient)).toBe(denied);
     }

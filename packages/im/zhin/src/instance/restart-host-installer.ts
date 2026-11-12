@@ -12,7 +12,7 @@ import {
   type RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
-import { senderOwnsReceivingAdapter, type ImRuntime } from '@zhin.js/core/runtime';
+import { senderIsGlobalOwner, type ImRuntime } from '@zhin.js/core/runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 const RESTART_RECEIPT_RELATIVE_PATH = join('.zhin', 'restart-receipt.json');
@@ -28,8 +28,8 @@ const messages = createMessages({
     en: 'Safely restart the Bot process and report the outcome in this conversation (Bot owner only)',
   },
   denied: {
-    'zh-CN': '仅允许 Bot 主人（owner）执行重启指令。',
-    en: 'Only the Bot owner (chat role owner) is allowed to restart the bot.',
+    'zh-CN': '仅允许全局层 Bot 主人（owner）执行重启指令。',
+    en: 'Only a global Bot owner (chat role owner at the global level) is allowed to restart the bot.',
   },
   unsupported: {
     'zh-CN': '当前进程未受 Supervisor 守护（如使用了 --once 或裸 node 启动），无法在聊天中自动重启；请在宿主机重启服务。',
@@ -58,8 +58,8 @@ export type RestartChatAuthorizer = (session: OperationSession<string>, adapters
 
 /**
  * Authorizes a chat-initiated restart in private, group, or channel conversations when the sender
- * holds the chat role `owner` (ADR 0056) in this conversation, or on the receiving Adapter / any of
- * its endpoints.
+ * is a **global** chat-role `owner` (ADR 0056 §2): restarting the instance is host-wide, so owners
+ * of a conversation, account or adapter do not qualify.
  */
 export function createRestartChatAuthorizer(
   roles: () => ChatRoleService | undefined,
@@ -67,8 +67,7 @@ export function createRestartChatAuthorizer(
 ): RestartChatAuthorizer {
   return (session, adapters) => {
     if (!session.sender?.id || !isAdapterIndex(adapters) || session.signal.aborted) return false;
-    if (session.sender.chatRole === 'owner') return true;
-    return senderOwnsReceivingAdapter(session, adapters, roles(), snapshot());
+    return senderIsGlobalOwner(session, adapters, roles(), snapshot());
   };
 }
 

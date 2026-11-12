@@ -20,16 +20,16 @@ On the first start with this version the instance:
 1. reads the people lists from the configuration:
    | Old field | Becomes |
    | --- | --- |
-   | adapter block `<alias>.master` | adapter-level `owner` (every account of that adapter) |
+   | adapter block `<alias>.master` | account-level `owner` on every account **without its own `master`** (as before: an account's own master replaced the adapter one); never an adapter-level owner |
    | adapter block `<alias>.trusted` | adapter-level `trusted` |
    | `<alias>.endpoints[i].master` | account-level `owner` (key `<alias>/<account id>`, the name when there is no id) |
    | `<alias>.endpoints[i].trusted` | account-level `trusted` |
-   | `ai.trigger.masters` | global `owner`, one identity per configured adapter |
+   | `ai.trigger.masters` | global `owner`, one identity per configured adapter — except local simulation adapters (capability profile `runtime.sandbox`, whose clients choose their sender id) and adapters that failed to load; both are logged |
    | `ai.trigger.trusted` | global `trusted`, likewise |
 2. records the grants in `.zhin/chat-roles-migration.json` (status `pending`), removes the fields from the configuration file and logs which fields moved;
 3. once the database is ready, writes them to `chat_roles` (an existing grant for the same identity and scope is kept) and marks the record `done`.
 
-If the process exits half-way, the next start resumes from the `pending` record. Without a relational database (sqlite / mysql / pg) grants live in memory only; the record stays `pending` and is replayed on every start.
+If the process exits half-way, the next start resumes from the `pending` record. Without a relational database (sqlite / mysql / pg) the migrated grants take effect in memory only and the record stays `pending` (marked `memoryOnlyAt`) until a relational database is configured; grants and revocations are refused on such a database (Console 503 `chat-roles-unpersisted`, chat replies "Not saved"), so a revoked migrated role cannot come back on the next start.
 
 After the migration, configuration that names these fields **again** stops startup (`LEGACY_CHAT_ROLE_CONFIG`) and points here. Use instead:
 
@@ -77,7 +77,7 @@ Command `permit`, Agent tool / skill `permissions`, and middleware and button `p
 
 | Before | Now | Notes |
 | --- | --- | --- |
-| `role(master)` | `owner` | zhin role along this conversation's scope chain |
+| `role(master)` | `owner`; `owner@global` for host-wide capabilities | zhin role along this conversation's scope chain; `<role>@<level>` requires that level or a higher one |
 | `role(trusted)` | `trusted` (or `role(trusted)`) | `admin` / `owner` also qualify |
 | `role(admin)` (platform admin) | `platform:admin`, or zhin `admin` | platform functions use `platform:admin`; zhin functions use `admin` (granted) |
 | `role(owner,admin,master)` | `admin` or `platform:admin` | as above, by what the function governs |
@@ -101,13 +101,16 @@ Removed spellings fail when the command, middleware or Agent tool is defined, an
 
 ## 5. Other behavior changes
 
-- **Agent security policies**: dangerous tools, file / exec policy and owner approval read `sender.chatRole` only; `owner` equals the old `master`, `admin` and `trusted` share the trusted tier. A platform group owner / admin no longer gets the trusted tier from their standing. Approval DMs go to the `owner` stored on the account (or its adapter / global).
+- **Agent security policies**: dangerous tools, file / exec policy and owner approval read the zhin role only; a **global** `owner` equals the old `master`; an owner at the adapter / account / conversation level, `admin` and `trusted` share the trusted tier. A platform group owner / admin no longer gets the trusted tier from their standing. Approval DMs go to a global `owner` with an identity on that adapter.
+- **Role scope** (security review): `sender.chatRoleLevels` records where each role comes from. Host-wide capabilities (exec, files, restart, global / platform memory, scheduled runs with high trust, configuration from chat) need a global owner; adding / removing accounts needs an owner at the adapter level or above. Plugins that provide host-wide capabilities should require `owner@global` (new permit form `<role>@<level>`). Discord threads are reported as the parent channel plus `threadId`, so roles and feature settings of the channel hold in its threads.
+- **Role changes in chat**: a lower grant can no longer overwrite a peer's or a higher role at the same scope; `role list` needs `admin` and hides identities granted above you. In the Console, anything touching `owner` needs a global `iam.manage`, and `chat-roles.list` redacts entries outside the caller's scope (`redacted: true`, no `adapter` / `userId`).
+- **Scheduled jobs** re-read their creator's current role when they run (jobs created in IM record where the creator spoke); a plain user's job runs with group-member trust.
 - **Agent pre-turn filtering**: tools / skills are disclosed for a turn only after the three-dimension check; the Bot standing is read at the start of the turn (cached), a failed lookup leaves every `bot:*` unmet; tools are checked again when executed.
 - **Commands**: checked before dispatch by the same evaluator; unmet `platform:*` / `bot:*` conditions are named in the reply (e.g. 「无法执行此指令：机器人不是本群管理员（或无法确认其身份）。」); the menu lists only commands the sender can run here.
 - **Group rules**: the owner / admin exemption (`exempt.ownerAndAdmins`) exempts platform owners / admins (`platform:admin`) and the zhin `owner`; a zhin `admin` is no longer exempt automatically. Rule approval still needs zhin `admin`.
 - **Content moderation**: `masters` and `inbound.bypassMasters` are removed in favor of `inbound.bypass` — a list of permit expressions, any of which skips inbound review; the default is `[owner, "platform:admin"]` (moderation is a platform function: the zhin owner and platform owners / admins are exempt), `[]` reviews everyone.
-- **Account management commands** (`<adapter> endpoint add|remove`), restart from chat and configuration from chat need the zhin role `owner`. The old "everyone may run it while no master is configured" fallback is gone.
-- **Global owners**: global owners migrated from `ai.trigger.masters` have one identity per adapter, so they can also use configuration from chat in private chats.
+- **Account management commands** (`<adapter> endpoint add|remove`) need an `owner` at the adapter level or above; restart from chat and configuration from chat need a **global** `owner`. The old "everyone may run it while no master is configured" fallback is gone.
+- **Global owners**: global owners migrated from `ai.trigger.masters` have one identity per adapter, so they can use configuration from chat in private chats; an account owner (e.g. migrated from an adapter `master`) cannot.
 - **Scaffolding**: the ICQQ wizard no longer asks for an owner QQ account or writes `master`; afterwards it points to the account's **Roles** tab in the Console, or `role grant <QQ> owner endpoint` sent in chat by an existing owner.
 - **Testing** `@zhin.js/testing`: `createFakeMessage({ sender: { id, chatRole } })`; `PluginTestKit.receive` trusts the `sender.chatRole` / `platform` a test declares.
 

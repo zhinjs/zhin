@@ -784,7 +784,7 @@ function conversationFromTarget(target: string) {
 function makeMessage(input: {
   content: string;
   target?: string;
-  sender?: string | { id: string; name?: string; roles?: readonly string[] } | null;
+  sender?: string | { id: string; name?: string; roles?: readonly string[]; chatRole?: 'owner' | 'admin' | 'trusted'; chatRoleLevels?: Record<string, string> } | null;
   metadata?: Record<string, unknown>;
   segments?: Message['segments'];
   replyTo?: { readonly id: string };
@@ -887,12 +887,16 @@ describe('缺口 3：ai.trigger timeout / errorTemplate', () => {
 });
 
 describe('缺口 3：chat role → runtime sender roles (ADR 0056)', () => {
-  const withRole = (chatRole?: 'owner' | 'admin' | 'trusted', userId: string | null = 'user-1') => makeMessage({
-    content: 'hi', target: 'group:100', sender: userId === null ? null : { id: userId, ...(chatRole ? { chatRole } : {}) }, metadata: { endpoint: '10001' },
+  const withRole = (chatRole?: 'owner' | 'admin' | 'trusted', userId: string | null = 'user-1', ownerLevel: 'global' | 'conversation' = 'global') => makeMessage({
+    content: 'hi', target: 'group:100', sender: userId === null ? null : { id: userId, ...(chatRole ? { chatRole, chatRoleLevels: { [chatRole]: ownerLevel } } : {}) }, metadata: { endpoint: '10001' },
   });
 
-  it('owner → isMaster; admin / trusted → isTrusted; none → nothing', () => {
+  it('global owner → isMaster; a lower-level owner, admin, trusted → isTrusted; none → nothing', () => {
     expect(resolveRuntimeSenderRoles(withRole('owner'))).toEqual({ isMaster: true, isTrusted: false });
+    // ADR 0056 §2: a conversation owner is not the host's owner.
+    expect(resolveRuntimeSenderRoles(withRole('owner', 'user-1', 'conversation'))).toEqual({ isMaster: false, isTrusted: true });
+    expect(resolveRuntimeSenderRoles(makeMessage({ content: 'hi', target: 'group:100', sender: { id: 'u', chatRole: 'owner' }, metadata: { endpoint: '10001' } })))
+      .toEqual({ isMaster: false, isTrusted: true });
     expect(resolveRuntimeSenderRoles(withRole('admin'))).toEqual({ isMaster: false, isTrusted: true });
     expect(resolveRuntimeSenderRoles(withRole('trusted'))).toEqual({ isMaster: false, isTrusted: true });
     expect(resolveRuntimeSenderRoles(withRole())).toEqual({ isMaster: false, isTrusted: false });
@@ -904,9 +908,16 @@ describe('缺口 3：chat role → runtime sender roles (ADR 0056)', () => {
   });
 
   it('principal roles are the expanded chat roles, never platform role strings', () => {
-    const message = makeMessage({ content: 'edit please', target: 'private:owner-x', sender: { id: 'owner-x', chatRole: 'owner', roles: ['member'] }, metadata: { endpoint: '知音' } });
+    const message = makeMessage({ content: 'edit please', target: 'private:owner-x', sender: { id: 'owner-x', chatRole: 'owner', chatRoleLevels: { owner: 'global' }, roles: ['member'] }, metadata: { endpoint: '知音' } });
     const roles = resolveRuntimeSenderRoles(message);
     expect(createRuntimeTurnAccess(message, roles).principal.roles).toEqual(['owner', 'admin', 'trusted']);
+  });
+
+  it('a conversation owner gets admin host trust; its chain role stays on principal.chatRole for permits', () => {
+    const message = makeMessage({ content: 'hi', target: 'group:100', sender: { id: 'c-owner', chatRole: 'owner', chatRoleLevels: { owner: 'conversation', admin: 'conversation', trusted: 'conversation' } }, metadata: { endpoint: '知音' } });
+    const access = createRuntimeTurnAccess(message, resolveRuntimeSenderRoles(message));
+    expect(access.principal.roles).toEqual(['admin', 'trusted']);
+    expect(access.principal).toMatchObject({ chatRole: 'owner', chatRoleLevels: { owner: 'conversation' } });
   });
 });
 
@@ -925,14 +936,29 @@ describe('缺口 3：configured Endpoint keys and legacy people lists (ADR 0056 
       }) as never)).resolves.toEqual(new Set(['sandbox:sandbox', 'icqq:icqq']));
   });
 
-  it('reads adapter-level master + trusted lists (arrays or strings) as adapter-level grants', () => {
+  it('reads adapter-level trusted lists (arrays or strings) as adapter-level grants', () => {
     const legacy = readLegacyChatRoleConfig(roleApplication({ icqq: { master: 'u-owner', name: 'bot1', trusted: 't1, t2', endpoints: [] } }));
     expect(legacy.grants).toEqual([
-      { level: 'adapter', key: 'icqq', adapter: 'icqq', userId: 'u-owner', role: 'owner', source: 'icqq.master' },
       { level: 'adapter', key: 'icqq', adapter: 'icqq', userId: 't1', role: 'trusted', source: 'icqq.trusted' },
       { level: 'adapter', key: 'icqq', adapter: 'icqq', userId: 't2', role: 'trusted', source: 'icqq.trusted' },
     ]);
-    expect(legacy.paths).toEqual([['icqq', 'master'], ['icqq', 'trusted']]);
+    // No account to apply the adapter master to: nothing is granted, and that is logged.
+    expect(legacy.skipped).toEqual(['icqq.master: every account has its own master (or none is configured)']);
+    expect(legacy.paths).toEqual([['icqq', 'trusted'], ['icqq', 'master']]);
+  });
+
+  it('keeps the old master semantics: the adapter master owns only the accounts without their own master', () => {
+    const legacy = readLegacyChatRoleConfig(roleApplication({ qq: { master: 'base', trusted: 'shared',
+      endpoints: [{ id: 'a', master: 'leaf' }, { id: 'b' }, { name: 'c' }, { token: 'no-id' }] } }));
+    expect(legacy.grants.map(grant => `${grant.level}:${grant.key}:${grant.userId}:${grant.role}:${grant.source}`)).toEqual([
+      'adapter:qq:shared:trusted:qq.trusted',
+      'endpoint:qq/b:base:owner:qq.master',
+      'endpoint:qq/c:base:owner:qq.master',
+      'endpoint:qq/a:leaf:owner:qq.endpoints[0].master',
+    ]);
+    // Never an adapter-level owner (it would also cover account a, whose own master replaced it).
+    expect(legacy.grants.some(grant => grant.level === 'adapter' && grant.role === 'owner')).toBe(false);
+    expect(legacy.skipped).toEqual(['qq.master for qq.endpoints[3]: account without id']);
   });
 
   it('reads endpoints[].master / trusted as account-level grants, keyed by id (else name)', () => {

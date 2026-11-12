@@ -420,7 +420,7 @@ function localizedIngress(options: { prefix?: string; locale?: 'zh-CN' | 'en'; t
       conversation: conversation,
       content: options.text,
       // The bot owner (ADR 0056: Runtime-set chat role).
-      sender: { id: 'user', chatRole: 'owner' },
+      sender: { id: 'user', chatRole: 'owner', chatRoleLevels: { owner: 'global' } },
       metadata: {},
       segments: [],
       endpointId: 'bot',
@@ -588,7 +588,7 @@ describe('personal Session IM ingress', () => {
       const message = {
         ...extra,
         conversation: target, content: text, endpointId: account,
-        sender: { id: subjectId, ...(options.masters?.includes(subjectId) ? { chatRole: 'owner' as const } : {}) },
+        sender: { id: subjectId, ...(options.masters?.includes(subjectId) ? { chatRole: 'owner' as const, chatRoleLevels: { owner: 'global' as const } } : {}) },
         message: { conversation: target, id: `message-${subjectId}` },
         $reply: vi.fn(async () => ({ status: 'sent' })),
       } as unknown as Message;

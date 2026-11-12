@@ -76,7 +76,7 @@ When the conditions don't hold, the model doesn't see the tool at all, and the s
 
 | Dimension | Spelling | Use it for |
 | --- | --- | --- |
-| The requester's zhin role | `owner` / `admin` / `trusted` | zhin functions and Agent trust tiers (configuration, memory, dangerous operations) |
+| The requester's zhin role | `owner` / `admin` / `trusted`, level-qualified `owner@global` … | zhin functions and Agent trust tiers (configuration, memory, dangerous operations); host-wide or cross-conversation / cross-group operations use `owner@global` (a conversation owner owns that conversation only) |
 | The requester's platform standing | `platform:owner\|admin`, `platform-role:<id>`, `platform-permission:<name>` | platform functions: who may have the bot mute, kick, change roles |
 | The bot's own platform standing | `bot:owner\|admin`, `bot-role:<id>`, `bot-permission:<name>` | operations the platform only allows a privileged bot: mute, recall others' messages, kick, change cards, set admins… |
 

@@ -74,7 +74,7 @@ async function fixture(options: { store?: (real: ConsoleConfigurationStore) => S
   cleanups.push(() => rm(project, { recursive: true, force: true }));
   const modules = new Modules();
   const put = async (file: string, data: unknown) => { await mkdir(dirname(file), { recursive: true }); await writeFile(file, JSON.stringify(data)); };
-  const document: RuntimeConfigDocument = { configVersion: 2, locale: 'en', plugins: { bot: '@test/bot' },
+  const document: RuntimeConfigDocument = { configVersion: 2, locale: 'en', plugins: { bot: '@test/bot' }, ai: { trigger: { masters: ['alice'] } },
     bot: { master: 'alice', commandPrefix: '!!', nickname: 'Before', token: 'DO_NOT_DISCLOSE', endpoints: [{ id: 'same' }] } };
   await put(join(project, 'package.json'), { name: '@test/root', dependencies: { '@test/command': 'workspace:*', '@test/bot': 'workspace:*' },
     zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts', features: [{ package: '@test/command' }] } });

@@ -76,7 +76,7 @@ export default defineAgentTool({
 
 | 维度 | 写法 | 何时用 |
 | --- | --- | --- |
-| 发起人的 zhin 角色 | `owner` / `admin` / `trusted` | zhin 功能与 Agent 信任档位（读配置、改记忆、危险操作） |
+| 发起人的 zhin 角色 | `owner` / `admin` / `trusted`，层级限定 `owner@global` 等 | zhin 功能与 Agent 信任档位（读配置、改记忆、危险操作）；宿主全局能力或跨会话 / 跨群的操作写 `owner@global`（会话层 owner 只管该会话） |
 | 发起人的平台身份 | `platform:owner\|admin`、`platform-role:<id>`、`platform-permission:<name>` | 平台功能：谁可以让机器人禁言、踢人、改身份组 |
 | 机器人自身的平台身份 | `bot:owner\|admin`、`bot-role:<id>`、`bot-permission:<name>` | 平台要求机器人有权限的操作：禁言、撤回他人消息、踢人、改群名片、设管理员…… |
 

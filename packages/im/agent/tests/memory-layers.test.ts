@@ -127,6 +127,11 @@ describe('memory-layers', () => {
     }), tmpDir);
     expect(ok.allowed).toBe(true);
 
+    // Global memory is host-wide: a conversation owner may not write it (ADR 0056 §2).
+    expect(checkMemoryWritePath(globalPath, mockCommMessage({
+      adapter: 'icqq', endpoint: 'b', senderId: 'c-owner', chatRole: 'owner', chatRoleLevel: 'conversation',
+    }), tmpDir).allowed).toBe(false);
+
     const sessionOk = checkMemoryWritePath(sessionPath, mockCommMessage({
       senderId: 'user1',
       sender_roles: ['user'],

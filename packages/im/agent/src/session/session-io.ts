@@ -1,5 +1,5 @@
 import { type AgentSessionRepository, type ContextRepository, type CreateAgentSessionInput, type ConversationActor, createUserMessage, renderUserMessageForLlm, type UserMessage } from '@zhin.js/ai';
-import { type AgentTurnMessage, type ChatRole, type Message, stripUserSpoofedSenderPrefix } from '@zhin.js/core';
+import { type AgentTurnMessage, type ChatRole, hostChatRole, type Message, stripUserSpoofedSenderPrefix } from '@zhin.js/core';
 import { stampUserHeader } from './participant-header-stamp.js';
 export interface SessionIODeps {
   agentSessionStore: AgentSessionRepository;
@@ -38,7 +38,8 @@ function resolveSenderRoleLabels(commMessage: Message): string[] {
   const labels: string[] = [];
   const platform = mapPlatformRoleForLabel(commMessage.sender?.platform?.standing);
   if (platform) labels.push(platform);
-  const chat = chatRoleHeaderLabel(commMessage.sender?.chatRole);
+  // `bot_owner` only for a global owner: the label must not suggest host trust a lower-level owner lacks.
+  const chat = chatRoleHeaderLabel(hostChatRole(commMessage.sender));
   if (chat) labels.push(chat);
   return labels.length > 0 ? labels : ['user'];
 }
@@ -72,7 +73,7 @@ export function resolveTurnUserMessage(
 ): { content: string; llmMessage: UserMessage } {
   const { content, actor } = prepareUserContentForSession(commMessage, rawContent);
   const user = createUserMessage(content, undefined, Date.now(), {
-    ...actor, authorizationRoles: [chatRoleHeaderLabel(commMessage.sender?.chatRole) ?? 'user'],
+    ...actor, authorizationRoles: [chatRoleHeaderLabel(hostChatRole(commMessage.sender)) ?? 'user'],
   });
   const llmMessage = renderUserMessageForLlm(stampUserHeader({
     ...user,

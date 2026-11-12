@@ -22,6 +22,8 @@ export interface OperationSender {
   }>;
   /** Highest zhin chat role effective in this conversation (ADR 0056 §2). */
   readonly chatRole?: 'owner' | 'admin' | 'trusted';
+  /** Per role, the topmost level it is held at on this conversation's chain (ADR 0056 §2). */
+  readonly chatRoleLevels?: Readonly<Partial<Record<'owner' | 'admin' | 'trusted', 'global' | 'adapter' | 'endpoint' | 'conversation'>>>;
 }
 export interface OperationMessageRef {
   readonly conversation: OperationScene;

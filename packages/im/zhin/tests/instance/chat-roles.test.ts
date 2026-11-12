@@ -101,6 +101,47 @@ describe('chat-roles.* Console RPC', () => {
     expect((await dispatchChatRolesConsoleRpc({ type: 'chat-roles.list', data: { level: 'global' } }, {}))!.status).toBe(403);
   });
 
+  it('needs global iam.manage for anything touching owner; scoped callers see inherited entries redacted', async () => {
+    const { roles } = await service();
+    await roles.store.grant({ level: 'global', key: '', adapter: 'qq', userId: 'root', role: 'owner' });
+    await roles.store.grant({ level: 'conversation', key: 'qq/bot-1/group:1', adapter: 'qq', userId: 'king', role: 'owner' });
+    const endpointScoped: ConsolePrincipal = { kind: 'user', userId: 'e', username: 'e', roles: ['ops'],
+      grants: [{ scope: { kind: 'endpoint', key: 'qq/bot-1' }, permissions: ['iam.manage'] }] } as never;
+    const globalAdmin: ConsolePrincipal = { kind: 'user', userId: 'g', username: 'g', roles: ['ops'],
+      grants: [{ scope: { kind: 'global' }, permissions: ['iam.manage'] }] } as never;
+    const as = (principal: ConsolePrincipal) => (type: string, data: Record<string, unknown>) => dispatchChatRolesConsoleRpc({ type, data }, {
+      roles, authorize: request => principalAllows(principal, 'iam.manage', featureScopeTarget(request.level, request.key)) });
+    const scopedCall = as(endpointScoped);
+    const conversation = { level: 'conversation', key: 'qq/bot-1/group:1', adapter: 'qq' };
+    // An endpoint-bound account cannot make itself (or anyone) an owner, even in its own conversation.
+    expect(await scopedCall('chat-roles.grant', { ...conversation, userId: 'e', role: 'owner' })).toMatchObject({ status: 403, body: { error: '授予或撤销 owner 需要全局 iam.manage 权限' } });
+    // Nor replace or remove an existing owner grant with a lower role.
+    expect((await scopedCall('chat-roles.grant', { ...conversation, userId: 'king', role: 'trusted' }))!.status).toBe(403);
+    expect((await scopedCall('chat-roles.revoke', { ...conversation, userId: 'king' }))!.status).toBe(403);
+    expect(roles.store.get('conversation', 'qq/bot-1/group:1', { adapter: 'qq', userId: 'king' })?.role).toBe('owner');
+    // admin / trusted stay scoped.
+    expect((await scopedCall('chat-roles.grant', { ...conversation, userId: 'mod', role: 'admin' }))!.status).toBe(200);
+    // Inherited from above the binding: role and level only.
+    const listed = (await scopedCall('chat-roles.list', { level: 'conversation', key: 'qq/bot-1/group:1' }))!.body.data as { roles: Record<string, unknown>[] };
+    expect(listed.roles.find(entry => entry.level === 'global')).toEqual({ level: 'global', key: '', role: 'owner', source: 'grant', redacted: true });
+    expect(listed.roles.find(entry => entry.userId === 'boss')).toMatchObject({ level: 'endpoint', role: 'owner' });
+    expect(JSON.stringify(listed)).not.toContain('root');
+    // A global iam.manage account handles owner anywhere and sees every identity.
+    const globalCall = as(globalAdmin);
+    expect((await globalCall('chat-roles.grant', { ...conversation, userId: 'king', role: 'admin' }))!.status).toBe(200);
+    expect((await globalCall('chat-roles.grant', { level: 'global', adapter: 'qq', userId: 'root2', role: 'owner' }))!.status).toBe(200);
+    expect(JSON.stringify((await globalCall('chat-roles.list', { level: 'conversation', key: 'qq/bot-1/group:1' }))!.body)).toContain('root');
+  });
+
+  it('answers 503 instead of saved when the database cannot persist grants', async () => {
+    const database = { dialect: 'memory', started: true, models: new Map() } as never;
+    const roles: InstanceChatRoleService = new ChatRoleService({ store: new ChatRoleStore({ database }) });
+    const reply = await dispatchChatRolesConsoleRpc({ type: 'chat-roles.grant', data: { level: 'endpoint', key: 'qq/bot-1', adapter: 'qq', userId: 'x', role: 'admin' } },
+      { roles, authorize: () => true });
+    expect(reply).toMatchObject({ status: 503, body: { success: false, code: 'chat-roles-unpersisted' } });
+    expect(roles.store.list()).toEqual([]);
+  });
+
   it('has no mapping RPC: chat-roles.mappings / set-mappings were removed', async () => {
     const { roles } = await service();
     expect(Object.values(CHAT_ROLES_RPC).sort()).toEqual(['chat-roles.grant', 'chat-roles.list', 'chat-roles.revoke']);
@@ -108,5 +149,21 @@ describe('chat-roles.* Console RPC', () => {
       expect(await dispatchChatRolesConsoleRpc({ type, data: { level: 'conversation', key: 'qq/bot-1/group:1' } }, { roles, authorize: () => true })).toBeNull();
       expect(authorizeConsoleRpc(scoped, { type, data: { level: 'conversation', key: 'qq/bot-1/group:1' } }).allowed).toBe(false);
     }
+  });
+});
+
+describe('owner approval address (ADR 0056 §2)', () => {
+  it('asks only a global owner with an identity on the adapter, never an account owner', async () => {
+    const { createFeatureHost } = await import('../../src/instance/feature-host-installer.js');
+    const database = { dialect: 'memory', started: false, models: new Map(), define: () => undefined } as never;
+    const host = createFeatureHost({ database, hostConfig: {}, snapshots: () => ({ acquire: () => { throw new Error('unused'); } }) as never });
+    // `new ChatRoleStore({ database })` refuses writes it cannot persist: seed like the in-memory migration does.
+    host.roles.store.seed([
+      { level: 'endpoint', key: 'qq/bot-1', adapter: 'qq', userId: 'account-owner', role: 'owner' },
+      { level: 'global', key: '', adapter: 'tg', userId: 'tg-root', role: 'owner' },
+    ]);
+    expect(host.resolveEndpointOwner('qq', 'bot-1')).toBeUndefined();
+    host.roles.store.seed([{ level: 'global', key: '', adapter: 'qq', userId: 'root', role: 'owner' }]);
+    expect(host.resolveEndpointOwner('qq', 'bot-1')).toBe('root');
   });
 });

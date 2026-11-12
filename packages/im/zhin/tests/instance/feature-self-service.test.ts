@@ -234,16 +234,69 @@ describe('in-chat role management (ADR 0056 §3)', () => {
     const tokens = featureChatTokens({ segments: [{ type: 'text', data: { text: '撤销 ' } }, { type: 'at', data: { user_id: 'dave' } }, { type: 'text', data: { text: ' admin' } }], args: [] });
     expect(tokens).toEqual(['撤销', { user: 'dave' }, 'admin']);
     expect(await executeRoleChat({ tokens, actor: actor({ user: 'dave' }), locale: 'zh-CN' }, (await harness()).deps)).toBe('你在该范围的角色不足以授予或撤销 admin。');
-    expect(await executeRoleChat({ tokens, actor: groupAdmin, locale: 'zh-CN' }, { ...(await harness()).deps, roles })).toBe('已保存（会话层），立即生效。');
+    // dave is now a peer admin of the grantor: only a higher role or an admin above may revoke it.
+    expect(await executeRoleChat({ tokens, actor: groupAdmin, locale: 'zh-CN' }, { ...(await harness()).deps, roles }))
+      .toBe('对方在该范围已是 admin，与你同级；只有更高的角色或更高层的 admin 才能修改或撤销。');
+    expect(await executeRoleChat({ tokens, actor: owner, locale: 'zh-CN' }, { ...(await harness()).deps, roles })).toBe('已保存（会话层），立即生效。');
     expect(roles.store.list().map(entry => entry.userId)).toEqual(['boss', 'u1', 'frank', 'gina']);
     // Revoking an owner needs an owner above.
     expect(await role(groupAdmin, '撤销 frank owner')).toBe('你在该范围的角色不足以授予或撤销 owner。');
     expect(await role(owner, '撤销 frank owner')).toBe('已保存（会话层），立即生效。');
     const listed = await role(groupAdmin, '列表');
     expect(listed).toContain('admin @ 会话 qq/bot-1/group:100：qq:gina（grant）');
-    expect(listed).toContain('owner @ 账号 qq/bot-1：qq:boss（grant）');
+    // Granted above the scopes the actor administers: role and level only, no identity.
+    expect(listed).toContain('owner @ 账号 qq/bot-1：（上级授予，身份不显示）（grant）');
+    expect(listed).not.toContain('qq:boss');
     expect(listed).not.toContain('standing=');
     expect(listed).toContain('你的角色：admin@会话 qq/bot-1/group:100');
+  });
+
+  it('never lets a lower grant overwrite a higher or peer role at the same scope (review: demote)', async () => {
+    const { role, roles, audits } = await harness();
+    const key = 'qq/bot-1/group:100';
+    await roles.store.grant({ level: 'conversation', key, adapter: 'qq', userId: 'victim', role: 'owner' });
+    await promote(roles, 'attacker');
+    await promote(roles, 'peer');
+    const attacker = actor({ user: 'attacker' });
+    expect(await role(attacker, 'revoke victim owner')).toBe('你在该范围的角色不足以授予或撤销 owner。');
+    expect(await role(attacker, 'grant victim trusted')).toBe('你在该范围的角色不足以授予或撤销 owner。');
+    expect(roles.store.get('conversation', key, { adapter: 'qq', userId: 'victim' })?.role).toBe('owner');
+    expect(await role(attacker, 'grant peer trusted')).toBe('对方在该范围已是 admin，与你同级；只有更高的角色或更高层的 admin 才能修改或撤销。');
+    expect(await role(attacker, 'revoke peer admin')).toBe('对方在该范围已是 admin，与你同级；只有更高的角色或更高层的 admin 才能修改或撤销。');
+    expect(roles.store.get('conversation', key, { adapter: 'qq', userId: 'peer' })?.role).toBe('admin');
+    expect(audits.at(-1)).toMatchObject({ outcome: 'denied', detail: { role: 'admin', reason: 'peer' } });
+    // Granting a new admin next to oneself is still fine, and so is re-granting the same role.
+    expect(await role(attacker, 'grant newbie admin')).toBe('已保存（会话层），立即生效。');
+    expect(await role(attacker, 'grant peer admin')).toBe('没有变化。');
+    // The same role held at a higher level, or a higher role, may change a peer's grant.
+    await roles.store.grant({ level: 'endpoint', key: 'qq/bot-1', adapter: 'qq', userId: 'boss2', role: 'admin' });
+    expect(await role(actor({ user: 'boss2' }), 'grant peer trusted')).toBe('已保存（会话层），立即生效。');
+    expect(await role(actor({ user: 'boss' }), 'grant victim admin')).toBe('已保存（会话层），立即生效。');
+    expect(roles.store.get('conversation', key, { adapter: 'qq', userId: 'victim' })?.role).toBe('admin');
+  });
+
+  it('lists roles only for admins and hides identities granted above them', async () => {
+    const { role, roles } = await harness({ ...on }, { 'qq/bot-1': 'boss' }, ['root']);
+    await promote(roles);
+    expect(await role(actor({ user: 'nobody' }), '列表')).toBe('查看角色列表需要本会话的 admin 角色。');
+    const listed = await role(actor(), '列表');
+    expect(listed).toContain('admin @ 会话 qq/bot-1/group:100：qq:u1（grant）');
+    expect(listed).toContain('owner @ 全局 *：（上级授予，身份不显示）（grant）');
+    expect(listed).not.toContain('qq:root');
+    // A global owner sees everyone.
+    expect(await role(actor({ user: 'root' }), '列表')).toContain('qq:boss');
+  });
+
+  it('refuses grants and revocations it cannot persist instead of answering saved', async () => {
+    const { deps } = await harness();
+    const database = { dialect: 'memory', started: true, models: new Map() } as never;
+    const roles: InstanceChatRoleService = new ChatRoleService({ store: new ChatRoleStore({ database }) });
+    roles.store.seed([{ level: 'endpoint', key: 'qq/bot-1', adapter: 'qq', userId: 'boss', role: 'owner' }]);
+    expect(roles.store.persistent).toBe(false);
+    const reply = await executeRoleChat({ tokens: ['grant', 'dave', 'admin'], actor: actor({ user: 'boss' }), locale: 'zh-CN' }, { ...deps, roles });
+    expect(reply).toBe('未保存：聊天角色需要关系型项目数据库（sqlite / mysql / pg），当前数据库不支持持久化。');
+    await expect(roles.store.revoke({ level: 'endpoint', key: 'qq/bot-1', adapter: 'qq', userId: 'boss' })).rejects.toMatchObject({ code: 'chat-roles-unpersisted' });
+    expect(roles.store.list()).toHaveLength(1);
   });
 
   it('resolves the actor from a message', () => {

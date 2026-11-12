@@ -20,6 +20,12 @@ describe('toPermissionSubject', () => {
     expect(result.sender).toEqual({ id: 'u1', chatRole: 'admin' });
   });
 
+  it('keeps valid chat role levels only when a chat role is set', () => {
+    expect(toPermissionSubject({ sender: { id: 'u1', chatRole: 'owner', chatRoleLevels: { owner: 'global', admin: 'nowhere' } } }).sender)
+      .toEqual({ id: 'u1', chatRole: 'owner', chatRoleLevels: { owner: 'global' } });
+    expect(toPermissionSubject({ sender: { id: 'u1', chatRoleLevels: { owner: 'global' } } }).sender).toEqual({ id: 'u1' });
+  });
+
   it('projects canonical Runtime Message fields: chat role and normalized platform standing only', () => {
     const result = toPermissionSubject({
       clientAdapter: 'discord',

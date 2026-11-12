@@ -1,7 +1,7 @@
 import type { CapabilityOperationFactory } from '@zhin.js/feature-kit';
 import { adapterFeatureId, isAdapterIndex } from '@zhin.js/core';
 import { isFeatureOwnerEnabled, resolveEndpointFeatureKey, type CapabilityId, type FeatureId, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
-import { permissionHostToken, type PermissionHost } from '@zhin.js/permission';
+import { permissionHostToken, type PermissionHost, type PermissionSubject } from '@zhin.js/permission';
 import { turnPermissionSubject, type TurnAccessContext } from '../turn/turn-ingress.js';
 import {
   type AgentIndex,
@@ -381,6 +381,8 @@ async function canAccessDescriptor(
   },
   turn: TurnAccessContext | undefined,
   host?: PermissionHost,
+  /** Execution time: re-read the sender's role and the Bot's standing instead of the turn-start facts. */
+  current = false,
 ): Promise<boolean> {
   if (descriptor.platforms?.length) {
     if (turn?.origin.kind !== 'im' || !descriptor.platforms.includes(turn.origin.platform)) {
@@ -406,7 +408,35 @@ async function canAccessDescriptor(
   }
   if (!descriptor.permissions?.length) return true;
   if (!turn || !host) return false;
+  if (current) return host.checkAll(descriptor.permissions, await currentPermissionSubject(descriptor.permissions, turn, host));
   return host.checkAll(descriptor.permissions, turnPermissionSubject(turn));
+}
+
+/**
+ * ADR 0056 §5 execution-time facts: the sender's chat role re-read from the role store (a role
+ * revoked mid-turn no longer counts) and the Bot's own standing looked up again (cached for a
+ * minute, so this rarely reaches the platform). Without resolvers the turn-start facts stay.
+ */
+async function currentPermissionSubject(
+  permits: readonly string[],
+  turn: TurnAccessContext,
+  host: PermissionHost,
+): Promise<PermissionSubject> {
+  const subject = turnPermissionSubject(turn);
+  const im = turn.origin.kind === 'im' ? turn.origin : undefined;
+  if (!im?.conversation) return subject;
+  const source = Object.freeze({ conversation: im.conversation, endpointId: im.endpoint, sender: Object.freeze({ id: turn.principal.subjectId }) });
+  const roles = host.currentSenderRoles(source);
+  let sender = subject.sender;
+  if (sender && roles) {
+    const { chatRole: _turnRole, chatRoleLevels: _turnLevels, ...identity } = sender;
+    sender = Object.freeze({ ...identity, ...roles });
+  }
+  const { bot: turnBot, ...rest } = subject;
+  const refreshed = await host.withBotStanding(permits, Object.freeze({ ...rest, ...(sender ? { sender } : {}) }), { source });
+  // Adapters without a self-standing lookup only have the turn's member-role fact.
+  const fallback = !refreshed.bot && !turn.input?.contextState?.bot?.platform ? turnBot : undefined;
+  return fallback ? Object.freeze({ ...refreshed, bot: fallback }) : refreshed;
 }
 
 /** Execution-time re-check of {@link canAccessDescriptor}; throws when the gate no longer holds. */
@@ -416,7 +446,7 @@ async function assertStillAllowed(
   host: PermissionHost | undefined,
 ): Promise<void> {
   if (!turn) return;
-  if (!(await canAccessDescriptor(descriptor, turn, host))) {
+  if (!(await canAccessDescriptor(descriptor, turn, host, true))) {
     throw new Error(`Agent Tool is not available in this conversation: ${descriptor.qualifiedName ?? descriptor.name ?? 'tool'}`);
   }
 }

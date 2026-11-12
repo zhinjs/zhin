@@ -37,7 +37,7 @@ let f: Awaited<ReturnType<typeof fixture>>;
 beforeEach(async () => { f = await fixture(); startQqBindFlowMock.mockReset(); });
 afterEach(async () => { await f.harness.stop(); });
 function commandContext(state: ReturnType<typeof createQqRuntimeState>, id?: string) {
-  return { owner: rootPluginId(), generation: 1, project: () => f.harness.index, config: {}, input: { sender: { id: 'owner-user', chatRole: 'owner' } }, params: id ? { id } : {}, args: [],
+  return { owner: rootPluginId(), generation: 1, project: () => f.harness.index, config: {}, input: { sender: { id: 'owner-user', chatRole: 'owner', chatRoleLevels: { owner: 'adapter' } } }, params: id ? { id } : {}, args: [],
     use: (token: unknown) => { if (token === qqRuntimeStateToken) return state; throw new Error('No file/env account writer'); } } as never;
 }
 
@@ -70,7 +70,7 @@ describe('extractQqCommandReply', () => {
 });
 
 describe('isQqEndpointOperator', () => {
-  const message = (sender: string, chatRole?: 'owner' | 'admin') => ({ sender: { id: sender, ...(chatRole ? { chatRole } : {}) } });
+  const message = (sender: string, chatRole?: 'owner' | 'admin') => ({ sender: { id: sender, ...(chatRole ? { chatRole, chatRoleLevels: { [chatRole]: 'adapter' } } : {}) } });
 
   it('requires the chat role owner (ADR 0056); configured master lists no longer count', () => {
     expect(isQqEndpointOperator({}, message('alice', 'owner'))).toBe(true);

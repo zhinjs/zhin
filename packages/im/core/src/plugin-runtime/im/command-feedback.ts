@@ -107,7 +107,8 @@ export async function renderCommandFeedback(
         ...(message.sender.platform ? { platform: Object.freeze({ standing: message.sender.platform.standing,
           ...(message.sender.platform.roles ? { roles: Object.freeze(message.sender.platform.roles.map(role => Object.freeze({ ...role }))) } : {}),
           ...(message.sender.platform.permissions ? { permissions: Object.freeze([...message.sender.platform.permissions]) } : {}) }) } : {}),
-        ...(message.sender.chatRole ? { chatRole: message.sender.chatRole } : {}) }) } : {}),
+        ...(message.sender.chatRole ? { chatRole: message.sender.chatRole } : {}),
+        ...(message.sender.chatRoleLevels ? { chatRoleLevels: message.sender.chatRoleLevels } : {}) }) } : {}),
       ...(message.clientAdapter !== undefined ? { clientAdapter: message.clientAdapter } : {}),
       generation: snapshot.generation });
     try {

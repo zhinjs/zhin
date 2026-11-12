@@ -150,6 +150,7 @@ export default defineCommand({
 | Rule | Meaning |
 | --- | --- |
 | `owner` / `admin` / `trusted` / `role(admin,trusted)` | The sender's chat role along this conversation's scope chain (`owner` ⊃ `admin` ⊃ `trusted`) |
+| `owner@global` / `owner@adapter` / `admin@endpoint` / `role(owner@global,admin)` | Level-qualified: the role must come from that level or a higher one (`sender.chatRoleLevels`). Commands that affect the whole host (restart, project configuration, running commands…) use `owner@global`; a conversation-level owner owns that conversation only |
 | `platform:owner` / `platform:admin` / `platform-role:<id>` / `platform-permission:<name>` | The sender's platform standing (`sender.platform`, reported by the adapter) |
 | `bot:owner` / `bot:admin` / `bot-role:<id>` / `bot-permission:<name>` | The bot account's own standing in this conversation (cached per conversation; unknown means unmet) |
 | `adapter(icqq)` | Only on one platform |
@@ -589,7 +590,7 @@ See [Testing Plugins](./testing.md) for the full guide.
 | Field | Behavior |
 |---|---|
 | `alias` | Replaces all static parts of the command name; folder params follow |
-| `permit` | Built-in rules: `adapter\|group\|private\|channel\|user(...)`, `owner\|admin\|trusted` / `role(...)`, `platform:…` / `platform-role:…` / `platform-permission:…`, `bot:…` / `bot-role:…` / `bot-permission:…`. Failure returns `denied` (`denial` names the first unmet rule and the reason); no auth subject also means denied, and programmatic `CommandIndex.execute` can't bypass it |
+| `permit` | Built-in rules: `adapter\|group\|private\|channel\|user(...)`, `owner\|admin\|trusted[@level]` / `role(...)`, `platform:…` / `platform-role:…` / `platform-permission:…`, `bot:…` / `bot-role:…` / `bot-permission:…`. Failure returns `denied` (`denial` names the first unmet rule and the reason); no auth subject also means denied, and programmatic `CommandIndex.execute` can't bypass it |
 | `shortcut` | `{ trigger text: prefilled params }`, fires on an exact match after trimming |
 
 Conflicts are judged on the full word sequence: `b` and `b list` can coexist.

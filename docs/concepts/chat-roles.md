@@ -63,13 +63,27 @@ interface PlatformStanding {
 | 会话 | `<别名>/<账号 id>/<kind>:<id>` | `qq/bot-1/group:123` |
 
 - 角色授予给身份 `(适配器别名, 用户 id)`，在其作用范围及以下全部有效；同一人可以在不同范围担任不同角色。
-- 处理每条消息时，Runtime 沿「会话 → 账号 → 适配器 → 全局」计算发送者的最高角色，写入 `sender.chatRole`。适配器或插件自带的 `chatRole` 一律丢弃。
+- 处理每条消息时，Runtime 沿「会话 → 账号 → 适配器 → 全局」计算发送者的最高角色，写入 `sender.chatRole`，并在 `sender.chatRoleLevels` 记录每个角色最高来自哪一层。适配器或插件自带的 `chatRole` / `chatRoleLevels` 一律丢弃。
+- 线程 / 子话题（`conversation.threadId`）沿用父会话的会话键：频道上授予的角色在其线程中同样有效；guild 等平台容器（`conversation.parent`）不增加层级。会话无法生成会话键时按账号层链解析。
+
+### 角色的作用范围 {#scope}
+
+会话层 `owner` 只是这个会话的主人，不是宿主的主人：
+
+| 能力 | 要求 |
+| --- | --- |
+| Agent 危险工具 / exec / 文件写与敏感读、主人审批的接收人、重启实例、写全局 / 平台记忆、定时任务的高信任运行、聊天改项目配置、跨适配器的账号恢复 | **全局层** `owner` |
+| 增删适配器账号（`<适配器> endpoint add|remove`） | **适配器层或以上** `owner` |
+| 功能自助、角色管理、订阅等其余 zhin 功能 | 按目标作用范围判断 |
+
+更低层的 owner 在 Agent 信任档位上按 `admin` 计。
 - 存储：项目数据库的 `chat_roles` 表，启动时加载、写入即时生效。zhin 角色只来自这里的授予（含从旧配置迁移来的授予）。
 
 管理入口：
 
-- Console：全局 / 适配器 / 账号 / 会话对象页的「角色」页签（`chat-roles.list|grant|revoke`，需要 `iam.manage`；绑定到适配器 / 账号的权限对其下的作用范围也有效）；
-- 聊天：`角色 列表|授予|撤销 <用户> <角色> [层级]` / `role list|grant|revoke …`（需开启 `features.selfService.enabled`）。授予者必须在目标作用范围拥有不低于被授予角色的角色；`owner` 只能由更高层的 `owner` 授予或撤销。
+- Console：全局 / 适配器 / 账号 / 会话对象页的「角色」页签（`chat-roles.list|grant|revoke`，需要 `iam.manage`；绑定到适配器 / 账号的权限对其下的作用范围也有效）。授予 / 撤销 `owner`（或改动已有的 owner 授予）需要**全局** `iam.manage`；列表中调用者不管理的上级条目只显示角色与层级（`redacted: true`）。
+- 聊天：`角色 列表|授予|撤销 <用户> <角色> [层级]` / `role list|grant|revoke …`（需开启 `features.selfService.enabled`）。规则：被触及的角色（要授予的、以及对方在该范围已有而将被替换或撤销的）都不能高于你在该范围的角色；触及 `owner` 只能由更高层的 `owner` 进行；对方已有与你同级的角色时，只有更高的角色或在更高层持有同一角色的人才能改动。`角色 列表` 需要本会话的 `admin`，上级授予的条目不显示身份。
+- 授予只保存在关系型项目数据库（sqlite / mysql / pg）中；数据库不支持时授予 / 撤销被拒绝（Console 503 `chat-roles-unpersisted`，聊天回复「未保存」）。
 
 ::: tip 群主想管理功能怎么办
 功能开关、订阅等是 zhin 的功能，平台群主 / 管理员需要被授予 zhin 角色才能使用：由 owner 在聊天中发送 `角色 授予 @群主 admin`，或在 Console 会话页的「角色」页签授予。
@@ -90,6 +104,7 @@ export default defineCommand({
 | 写法 | 含义 |
 | --- | --- |
 | `owner` / `admin` / `trusted`、`role(admin,trusted)` | 发言者在本会话层级链上的 zhin 角色 |
+| `owner@global` / `owner@adapter` / `admin@endpoint` / `trusted@conversation`、`role(owner@global,admin)` | 该角色须来自该层级或更高层级（提供宿主全局能力的工具 / 命令用 `owner@global`） |
 | `platform:owner` / `platform:admin` | 发言者的归一平台地位（`platform:admin` 也接受群主） |
 | `platform-role:<id>` / `platform-permission:<name>` | 发言者的平台原生角色 / 权限 |
 | `bot:owner` / `bot:admin` | 机器人自身的归一平台地位 |
@@ -98,8 +113,8 @@ export default defineCommand({
 列表各项 AND，单项括号内逗号 OR。不满足时：
 
 - 命令走现有拒绝回复；`platform:*` / `bot:*` 条件会说明缺哪一项（如「无法执行此指令：机器人不是本群管理员（或无法确认其身份）。」），zhin 角色与会话条件保持通用提示；命令菜单只列出当前发言者可用的命令。
-- Agent 工具 / 技能在回合开始前就不披露，执行时再校验一次。
-- 中间件跳过这条消息、继续后续链路（机器人身份只读缓存）。
+- Agent 工具 / 技能在回合开始前就不披露，执行时再校验一次（重新读取发言者当前角色与机器人身份）。
+- 中间件跳过这条消息、继续后续链路（机器人身份只读缓存，缺失或过期视为未知）。因此 permit 不适合必须对每条消息生效的执法型中间件（审核、限流等）。
 - 按钮回调不执行，点击者收到原因。
 
-运行时读取：`message.sender.chatRole`、`message.sender.platform`；`@zhin.js/core` 提供 `chatRoleIncludes(held, required)`、`expandChatRole(role)`、`chatRolesFromMessage(message)`；机器人身份由 `AdapterIndex.selfStanding(endpointId, conversation)` 读取。从旧写法升级见[升级到聊天角色](../migrations/chat-roles.md)。
+运行时读取：`message.sender.chatRole`、`message.sender.chatRoleLevels`、`message.sender.platform`；`@zhin.js/core` 提供 `chatRoleIncludes(held, required)`、`chatRoleHeldAt(sender, role, level)`、`hostChatRole(sender)`、`expandChatRole(role)`、`chatRolesFromMessage(message)`；机器人身份由 `AdapterIndex.selfStanding(endpointId, conversation)` 读取。从旧写法升级见[升级到聊天角色](../migrations/chat-roles.md)。

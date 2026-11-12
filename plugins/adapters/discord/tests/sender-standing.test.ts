@@ -28,6 +28,12 @@ describe('Discord sender.platform (ADR 0056 §1)', () => {
     expect(discordPermissionName('UseVAD')).toBe('use_vad');
   });
 
+  it('records the parent channel of a thread message (ADR 0056 §2: threads share the parent key)', () => {
+    const inThread = { ...guildMessage({}), channel: { id: 'thread-9', type: 11, parentId: 'c1', isThread: () => true } };
+    expect(normalizeDiscordMessage(inThread)).toMatchObject({ channelId: 'thread-9', threadParentId: 'c1' });
+    expect(normalizeDiscordMessage({ ...guildMessage({}), channel: { id: 'c1', type: 0, isThread: () => false } })?.threadParentId).toBeUndefined();
+  });
+
   it('reports guild roles (without @everyone) and permission flags for a moderator', () => {
     const msg = normalizeDiscordMessage(guildMessage({
       granted: [PermissionFlagsBits.ModerateMembers, PermissionFlagsBits.BanMembers],

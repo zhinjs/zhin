@@ -1,5 +1,6 @@
 import {
   adapterFeatureId,
+  hostChatRole,
   isAdapterIndex,
   type AdapterCapabilityProfile,
   type AITriggerConfig,
@@ -490,12 +491,13 @@ async function resolveTurnFacts(
 }
 
 /**
- * Sender roles derive only from the Runtime-set `sender.chatRole` (ADR 0056: stored grants and
- * along the conversation's scope chain; platform standing never counts). `isMaster` means the chat role `owner`;
- * `isTrusted` means `trusted` or `admin` (admin includes trusted) without owner.
+ * Sender roles derive only from the Runtime-set `sender.chatRole` / `sender.chatRoleLevels` (ADR 0056:
+ * stored grants along the conversation's scope chain; platform standing never counts). `isMaster`
+ * means a **global** `owner` (host-wide trust); a lower-level owner counts as `admin`.
+ * `isTrusted` means `trusted` or `admin` (admin includes trusted) without host owner.
  */
 export function resolveRuntimeSenderRoles(message: Pick<Message, 'sender'>): RuntimeSenderRoles {
-  const role = message.sender?.id ? message.sender.chatRole : undefined;
+  const role = message.sender?.id ? hostChatRole(message.sender) : undefined;
   const isMaster = role === 'owner';
   return { isMaster, isTrusted: !isMaster && (role === 'admin' || role === 'trusted') };
 }

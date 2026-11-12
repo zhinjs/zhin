@@ -17,7 +17,7 @@ async function fixture(config: Record<string, unknown> = {}) {
   const use = vi.fn(() => { throw new Error('No file/env port belongs to account management'); });
   function context(overrides: Record<string, unknown> = {}) {
     return { owner: rootPluginId(), generation: 1, project: () => runtime.index,
-      use, config, input: { sender: { id: 'owner-user', chatRole: 'owner' } }, params: {}, args: [], ...overrides } as never;
+      use, config, input: { sender: { id: 'owner-user', chatRole: 'owner', chatRoleLevels: { owner: 'adapter' } } }, params: {}, args: [], ...overrides } as never;
   }
   return { adapter: runtime.adapter, index: runtime.index, repository, use, context };
 }

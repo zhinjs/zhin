@@ -28,7 +28,7 @@ async function fixture() {
   const adapter = index.adapter(slot.id)!;
   const use = vi.fn(() => { throw new Error('startup config/.env store must not be used'); });
   const context = (overrides: Record<string, unknown> = {}) => ({ owner, generation: 1, project: () => index, use,
-    params: { id: 'bot1' }, args, input: { sender: { id: 'owner-user', chatRole: 'owner' } }, config: source, signal: new AbortController().signal, ...overrides }) as never;
+    params: { id: 'bot1' }, args, input: { sender: { id: 'owner-user', chatRole: 'owner', chatRoleLevels: { owner: 'adapter' } } }, config: source, signal: new AbortController().signal, ...overrides }) as never;
   return { index, adapter, source, context, write, use, saved: () => saved };
 }
 

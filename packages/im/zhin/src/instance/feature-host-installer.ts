@@ -10,7 +10,7 @@ import type { ConsoleAuditEntry } from '@zhin.js/host-http';
 import { getLogger } from '@zhin.js/logger';
 import {
   decodeStorageIdentity, featureConversationOverridesToken, resolveEndpointFeatureKey,
-  type DatabaseHost, type SnapshotReader,
+  type DatabaseHost, type RuntimeSnapshot, type SnapshotReader,
 } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 import { ChatRoleStore, defineChatRoleTable, type InstanceChatRoleService } from './chat-roles.js';
@@ -24,14 +24,17 @@ export interface FeatureHostOptions {
   readonly database: DatabaseHost;
   readonly hostConfig: unknown;
   readonly snapshots: () => SnapshotReader;
-  /** Runs once after the stores loaded (configuration migration, ADR 0056 §3). */
-  readonly afterLoad?: (roles: InstanceChatRoleService) => Promise<void>;
+  /**
+   * Runs once after the stores loaded (configuration migration, ADR 0056 §3); `candidate` is the
+   * generation being activated (its adapter capability profiles classify the migration targets).
+   */
+  readonly afterLoad?: (roles: InstanceChatRoleService, candidate: RuntimeSnapshot | undefined) => Promise<void>;
 }
 
 export interface FeatureHost {
   readonly stores: FeatureStores;
   readonly roles: InstanceChatRoleService;
-  /** Stored owners of an account, closest scope first (owner approval address). */
+  /** A global owner with an identity on the account's adapter (owner approval address). */
   resolveEndpointOwner(alias: string, endpointId: string): string | undefined;
   readonly selfService: FeatureSelfServiceConfig;
   /** Root resources: the conversation reader, the load step and (when enabled) the chat commands. */
@@ -48,8 +51,10 @@ export function createFeatureHost(options: FeatureHostOptions): FeatureHost {
   const selfService = readFeatureSelfServiceConfig(options.hostConfig);
   const conversations = new FeatureConversationOverrideStore({ database: options.database });
   const roles: InstanceChatRoleService = new ChatRoleService({ store: new ChatRoleStore({ database: options.database }) });
-  const resolveEndpointOwner = (alias: string, endpointId: string): string | undefined => {
-    try { return roles.ownersOf(`${alias}/${endpointId}`, alias)[0]; } catch { return undefined; }
+  // Owner approvals (tool hard gate, self-changes) grant host-wide authority, so only a global
+  // owner with an identity on this adapter is asked (ADR 0056 §2); account-level owners are not.
+  const resolveEndpointOwner = (alias: string, _endpointId: string): string | undefined => {
+    try { return roles.ownersOf('', alias)[0]; } catch { return undefined; }
   };
   const recentConversations = async (limit: number): Promise<readonly FeatureRecentConversation[]> => {
     const raw = options.database.started ? options.database.getRawDatabase() as { models?: Map<string, unknown> } | undefined : undefined;
@@ -83,7 +88,9 @@ export function createFeatureHost(options: FeatureHostOptions): FeatureHost {
         if (loaded) return;
         await conversations.load(id => getLogger('feature').warn(`Skipped malformed conversation override ${id}`));
         await roles.store.load();
-        await options.afterLoad?.(roles);
+        let candidate: RuntimeSnapshot | undefined;
+        try { candidate = context.readCandidateSnapshot?.(); } catch { candidate = undefined; }
+        await options.afterLoad?.(roles, candidate);
         loaded = true;
       },
     });

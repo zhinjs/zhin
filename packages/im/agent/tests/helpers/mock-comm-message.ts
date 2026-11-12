@@ -8,6 +8,8 @@ export function mockCommMessage(overrides: {
   sceneId?: string;
   /** Highest chat role in the conversation (ADR 0056). */
   chatRole?: ChatRole;
+  /** Level the chat role is held at (`sender.chatRoleLevels`); default `global` (host-wide). */
+  chatRoleLevel?: 'global' | 'adapter' | 'endpoint' | 'conversation';
   /** Legacy alias: the highest of these chat roles is used. */
   sender_roles?: readonly (ChatRole | 'user')[];
   isMaster?: boolean;
@@ -34,7 +36,11 @@ export function mockCommMessage(overrides: {
     content: '',
     generation: 1,
     metadata: {},
-    sender: { id: senderId, ...(chatRole ? { chatRole } : {}), ...(overrides.platform ? { platform: overrides.platform } : {}) },
+    sender: { id: senderId,
+      ...(chatRole ? { chatRole, chatRoleLevels: Object.fromEntries((['owner', 'admin', 'trusted'] as const)
+        .filter(role => ['trusted', 'admin', 'owner'].indexOf(role) <= ['trusted', 'admin', 'owner'].indexOf(chatRole))
+        .map(role => [role, overrides.chatRoleLevel ?? 'global'])) } : {}),
+      ...(overrides.platform ? { platform: overrides.platform } : {}) },
     endpointId: endpoint,
     clientAdapter: adapter,
     extra: overrides.extra,

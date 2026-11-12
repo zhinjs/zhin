@@ -515,7 +515,8 @@ export class AdapterIndex {
    * are cached per conversation for {@link SELF_STANDING_TTL_MS} (unknown ones shorter) within this
    * generation, concurrent lookups share one platform call, and {@link invalidateSelfStanding}
    * drops entries when the Bot's role changes. `cachedOnly` never waits for the platform: it
-   * answers from the cache and refreshes a missing / expired entry in the background.
+   * answers from a fresh cache entry and refreshes a missing / expired one in the background — an
+   * expired entry answers *unknown* (a stale standing never satisfies a `bot:*` permit).
    */
   async selfStanding(id: CapabilityId, conversation: SelfStandingConversation, options: SelfStandingLookupOptions = {}): Promise<PlatformStanding | undefined> {
     if (conversation.kind === 'private') return undefined;
@@ -529,7 +530,7 @@ export class AdapterIndex {
     if (options.cachedOnly) {
       // Warm the cache in the background (one lookup per TTL, shared); answer with what is known now.
       if (!inflight) void this.selfStanding(id, conversation, { ...(options.now !== undefined ? { now: options.now } : {}) }).catch(() => undefined);
-      return cached?.value;
+      return undefined;
     }
     if (inflight) return inflight;
     const management = this.management(id);

@@ -73,7 +73,9 @@ describe('createChatRoleSenderEnricher', () => {
   it('drops spoofed chat roles, normalizes the platform standing and resolves the conversation role', () => {
     const service = new ChatRoleService({ store: { list: () => [grant({ level: 'endpoint', key: 'qq/bot-1', adapter: 'qq', userId: 'boss', role: 'owner' })] } });
     const enrich = createChatRoleSenderEnricher({ roles: () => service });
-    expect(enrich({ id: 'boss', chatRole: 'trusted' } as never, conversation('group'), snapshot())).toEqual({ id: 'boss', chatRole: 'owner' });
+    expect(enrich({ id: 'boss', chatRole: 'trusted', chatRoleLevels: { owner: 'global' } } as never, conversation('group'), snapshot()))
+      .toEqual({ id: 'boss', chatRole: 'owner', chatRoleLevels: { owner: 'endpoint', admin: 'endpoint', trusted: 'endpoint' } });
+    expect(enrich({ id: 'eve', chatRoleLevels: { owner: 'global' } } as never, conversation('group'), snapshot())).toEqual({ id: 'eve' });
     // Platform admins keep their standing but get no zhin role from it.
     expect(enrich({ id: 'mod', platform: { standing: 'admin' } } as never, conversation('group'), snapshot()))
       .toEqual({ id: 'mod', platform: { standing: 'admin' } });
@@ -84,6 +86,50 @@ describe('createChatRoleSenderEnricher', () => {
     // Without a role service only the normalization runs.
     expect(createChatRoleSenderEnricher({ roles: () => undefined })({ id: 'x', chatRole: 'owner' } as never, conversation('group'), snapshot()))
       .toEqual({ id: 'x' });
+  });
+});
+
+describe('role levels and host-wide trust (ADR 0056 §2, security review)', () => {
+  const conversation = { endpoint: { id: 'ep', adapter: 'qq' }, kind: 'group', id: '1' } as const;
+
+  it('records the topmost level each role is held at', () => {
+    const service = new ChatRoleService({ store: { list: () => [
+      grant({ level: 'conversation', key: 'qq/bot-1/group:1', adapter: 'qq', userId: 'c', role: 'owner' }),
+      grant({ level: 'adapter', key: 'qq', adapter: 'qq', userId: 'c', role: 'trusted' }),
+      grant({ level: 'global', key: '', adapter: 'qq', userId: 'g', role: 'owner' }),
+    ] } });
+    const enrich = createChatRoleSenderEnricher({ roles: () => service });
+    const c = enrich({ id: 'c' } as never, conversation, snapshot());
+    expect(c).toEqual({ id: 'c', chatRole: 'owner', chatRoleLevels: { owner: 'conversation', admin: 'conversation', trusted: 'adapter' } });
+    expect(roles.hostChatRole(c)).toBe('admin');
+    expect(roles.chatRoleHeldAt(c, 'owner', 'conversation')).toBe(true);
+    expect(roles.chatRoleHeldAt(c, 'owner', 'endpoint')).toBe(false);
+    expect(roles.chatRoleHeldAt(c, 'trusted', 'adapter')).toBe(true);
+    const g = enrich({ id: 'g' } as never, conversation, snapshot());
+    expect(roles.hostChatRole(g)).toBe('owner');
+    expect(roles.chatRoleHeldAt(g, 'owner', 'global')).toBe(true);
+    // Without levels a role counts at the conversation level only (fail closed).
+    expect(roles.hostChatRole({ chatRole: 'owner' })).toBe('admin');
+    expect(roles.chatRoleHeldAt({ chatRole: 'owner', chatRoleLevels: { owner: 'bogus' } }, 'owner', 'adapter')).toBe(false);
+    expect(roles.hostChatRole({ chatRole: 'trusted' })).toBe('trusted');
+    expect(roles.hostChatRole(undefined)).toBeUndefined();
+  });
+
+  it('threads and topics share their parent conversation key; a guild parent adds no level', () => {
+    const service = new ChatRoleService({ store: { list: () => [grant({ level: 'conversation', key: 'qq/bot-1/channel:general', adapter: 'qq', userId: 'mod', role: 'admin' })] } });
+    const enrich = createChatRoleSenderEnricher({ roles: () => service });
+    const thread = { endpoint: { id: 'ep', adapter: 'qq' }, kind: 'channel', id: 'general', threadId: 'thread-9', parent: { kind: 'channel', id: 'guild-1' } } as const;
+    expect(enrich({ id: 'mod' } as never, thread, snapshot())).toMatchObject({ chatRole: 'admin' });
+    expect(roles.chatRoleMessageContext(snapshot(), { conversation: thread, sender: { id: 'mod' } })?.context.conversationKey).toBe('qq/bot-1/channel:general');
+  });
+
+  it('falls back to the endpoint chain when the conversation cannot be keyed', () => {
+    const service = new ChatRoleService({ store: { list: () => [grant({ level: 'global', key: '', adapter: 'qq', userId: 'g', role: 'owner' })] } });
+    const enrich = createChatRoleSenderEnricher({ roles: () => service });
+    // A conversation id with control characters cannot be part of a key.
+    const odd = { endpoint: { id: 'ep', adapter: 'qq' }, kind: 'group', id: 'bad\u0000id' } as const;
+    expect(roles.chatRoleMessageContext(snapshot(), { conversation: odd, sender: { id: 'g' } })?.context.conversationKey).toBe('qq/bot-1');
+    expect(enrich({ id: 'g' } as never, odd, snapshot())).toEqual({ id: 'g', chatRole: 'owner', chatRoleLevels: { owner: 'global', admin: 'global', trusted: 'global' } });
   });
 });
 

@@ -14,7 +14,7 @@
  */
 import {
   normalizePlatformStanding,
-  type ConversationRef, type PlatformStanding, type PlatformStandingLevel,
+  type ChatRoleLevels, type ConversationRef, type PlatformStanding, type PlatformStandingLevel,
 } from '@zhin.js/im-contract';
 import {
   featureKeyLevel, formatFeatureResolutionKey, parseFeatureConversationKey, parseFeatureResolutionKey,
@@ -23,6 +23,10 @@ import {
 } from '@zhin.js/plugin-runtime';
 
 export type { PlatformStanding, PlatformStandingLevel } from '@zhin.js/im-contract';
+export {
+  CHAT_ROLE_LEVELS, chatRoleHeldAt, hostChatRole, isChatRoleLevel, normalizeChatRoleLevels,
+  type ChatRoleLevel, type ChatRoleLevels,
+} from '@zhin.js/im-contract';
 
 // ============================================================================
 // Roles
@@ -153,6 +157,16 @@ export interface ChatRoleResolution {
   readonly entries: readonly ChatRoleEntry[];
 }
 
+/** Per role, the level of the topmost entry holding it (entries sorted global first). */
+function chatRoleLevelsOf(entries: readonly ChatRoleEntry[]): ChatRoleLevels {
+  const levels: Partial<Record<ChatRole, FeatureConfigLevel>> = {};
+  for (const role of CHAT_ROLES) {
+    const top = entries.find(entry => chatRoleIncludes(entry.role, role));
+    if (top) levels[role] = top.level;
+  }
+  return Object.freeze(levels);
+}
+
 function highest(entries: readonly ChatRoleEntry[]): ChatRole | undefined {
   let best: ChatRole | undefined;
   for (const entry of entries) best = higherChatRole(best, entry.role);
@@ -184,6 +198,14 @@ export class ChatRoleService<TStore extends ChatRoleGrantStore = ChatRoleGrantSt
 
   hasRole(identity: ChatIdentity, scopeKey: string, role: ChatRole): boolean {
     return chatRoleIncludes(this.roleAt(identity, scopeKey), role);
+  }
+
+  /**
+   * Per role, the topmost level at which `identity` holds that role (or a higher one) on the chain
+   * of `scopeKey` (`sender.chatRoleLevels`).
+   */
+  levelsFor(identity: ChatIdentity, scopeKey: string): ChatRoleLevels {
+    return chatRoleLevelsOf(this.entriesFor(identity, scopeKey));
   }
 
   /** Highest role held at a scope strictly above `scopeKey`. */
@@ -235,7 +257,14 @@ export function platformStandingIncludes(held: PlatformStandingLevel | undefined
   return required === 'owner' ? held === 'owner' : held === 'owner' || held === 'admin';
 }
 
-/** Identity + context of a message's sender; undefined outside a keyed conversation. */
+/**
+ * Identity + context of a message's sender. `context.conversationKey` is the conversation key, or —
+ * when the conversation cannot be keyed (unknown kind, an id that cannot be part of a key) — the
+ * receiving endpoint's key, so roles granted at the endpoint level and above still resolve.
+ * Threads / topics (`conversation.threadId`) share their parent conversation's key, and a platform
+ * container (`conversation.parent`, e.g. a guild) adds no level (ADR 0056 §2).
+ * Undefined when not even the endpoint can be addressed.
+ */
 export function chatRoleMessageContext(
   snapshot: ChatRoleSnapshot,
   message: unknown,
@@ -244,12 +273,16 @@ export function chatRoleMessageContext(
   const conversation = message.conversation as { endpoint: { id: unknown }; kind?: unknown; id?: unknown };
   if (typeof conversation.endpoint.id !== 'string') return undefined;
   const key = resolveEndpointFeatureKey(snapshot, conversation.endpoint.id, typeof message.endpointId === 'string' ? message.endpointId : undefined, conversation);
-  const parsed = key ? parseFeatureConversationKey(key) : undefined;
-  if (!key || !parsed) return undefined;
+  if (!key) return undefined;
+  let adapter: string | undefined;
+  try { adapter = parseFeatureResolutionKey(key).adapter; } catch { return undefined; }
+  if (!adapter) return undefined;
+  const parsed = parseFeatureConversationKey(key);
   const sender = record(message.sender) ? message.sender : undefined;
-  const identity = { adapter: parsed.adapter, userId: typeof sender?.id === 'string' ? sender.id : '' };
+  const identity = { adapter, userId: typeof sender?.id === 'string' ? sender.id : '' };
   if (!isChatIdentity(identity)) return undefined;
-  const platform = parsed.conversation.kind === 'private' ? undefined : platformStandingOf(sender);
+  const kind = parsed?.conversation.kind ?? conversation.kind;
+  const platform = kind === 'private' ? undefined : platformStandingOf(sender);
   return { identity, context: { conversationKey: key, ...(platform ? { platform } : {}) } };
 }
 
@@ -261,11 +294,13 @@ export interface ChatRoleSenderFields {
   readonly id: string;
   readonly platform?: PlatformStanding;
   readonly chatRole?: ChatRole;
+  readonly chatRoleLevels?: ChatRoleLevels;
 }
 
 /**
- * Inbound sender enricher: drops any adapter-supplied `chatRole`, normalizes `platform` (not in
- * private chats) and sets `chatRole` to the highest role effective in the conversation.
+ * Inbound sender enricher: drops any adapter-supplied `chatRole` / `chatRoleLevels`, normalizes
+ * `platform` (not in private chats) and sets `chatRole` to the highest role effective in the
+ * conversation and `chatRoleLevels` to where each role comes from.
  */
 export function createChatRoleSenderEnricher(options: Readonly<{
   roles: () => ChatRoleService | undefined;
@@ -274,18 +309,19 @@ export function createChatRoleSenderEnricher(options: Readonly<{
     sender: TSender | undefined, conversation: ConversationRef, snapshot?: RuntimeSnapshot,
   ): TSender | undefined => {
     if (!sender?.id) return sender;
-    const { chatRole: _spoofed, platform: _reported, ...rest } = sender as TSender & Record<string, unknown>;
+    const { chatRole: _spoofed, chatRoleLevels: _spoofedLevels, platform: _reported, ...rest } = sender as TSender & Record<string, unknown>;
     const platform = conversation.kind === 'private' ? undefined : platformStandingOf(sender);
     const base = { ...rest, ...(platform ? { platform } : {}) } as unknown as TSender;
     const service = options.roles();
     if (!service || !snapshot) return Object.freeze(base);
     const subject = chatRoleMessageContext(snapshot, { conversation, sender: base });
     if (!subject) return Object.freeze(base);
-    let role: ChatRole | undefined;
+    let entries: readonly ChatRoleEntry[];
     try {
-      role = service.roleAt(subject.identity, subject.context.conversationKey);
-    } catch { role = undefined; }
-    return Object.freeze({ ...base, ...(role ? { chatRole: role } : {}) });
+      entries = service.entriesFor(subject.identity, subject.context.conversationKey);
+    } catch { entries = []; }
+    const role = highest(entries);
+    return Object.freeze({ ...base, ...(role ? { chatRole: role, chatRoleLevels: chatRoleLevelsOf(entries) } : {}) });
   };
 }
 

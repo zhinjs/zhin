@@ -39,8 +39,15 @@ export type TurnPrincipalOrigin = 'self' | 'member' | 'peer_bot' | 'human';
 export interface TurnPrincipal {
   readonly subjectId: string;
   readonly displayName?: string;
-  /** Expanded zhin chat roles (`owner` / `admin` / `trusted`, ADR 0056) or `['user']`. */
+  /**
+   * Expanded zhin chat roles (`owner` / `admin` / `trusted`, ADR 0056) or `['user']`, for host-wide
+   * trust: `owner` only for a global owner (a lower-level owner is `admin` here).
+   */
   readonly roles: readonly string[];
+  /** Highest chat role on the conversation's chain (permits such as `owner`); defaults to `roles`. */
+  readonly chatRole?: 'owner' | 'admin' | 'trusted';
+  /** Per role, the topmost level it is held at on the conversation's chain (`owner@global` permits). */
+  readonly chatRoleLevels?: Readonly<Partial<Record<'owner' | 'admin' | 'trusted', 'global' | 'adapter' | 'endpoint' | 'conversation'>>>;
   /** Normalized platform standing of the sender in this conversation (ADR 0056 §1); absent in private chats. */
   readonly platform?: Readonly<{
     standing: 'owner' | 'admin' | 'member' | 'guest';
@@ -485,6 +492,23 @@ function principalChatRole(roles: readonly string[]): 'owner' | 'admin' | 'trust
   return roles.includes('owner') ? 'owner' : roles.includes('admin') ? 'admin' : roles.includes('trusted') ? 'trusted' : undefined;
 }
 
+/** The chain role (permits) when the ingress recorded it, else the highest host-trust role. */
+function chatRoleOfPrincipal(principal: TurnPrincipal): 'owner' | 'admin' | 'trusted' | undefined {
+  return principal.chatRole ?? principalChatRole(principal.roles);
+}
+
+/**
+ * Levels of the chain role. A principal without recorded levels (synthetic / older turns) holds
+ * its `owner` host role globally — `roles` only contains `owner` for a global owner.
+ */
+function chatRoleLevelsOfPrincipal(principal: TurnPrincipal): TurnPrincipal['chatRoleLevels'] {
+  if (principal.chatRoleLevels) return principal.chatRoleLevels;
+  if (principal.chatRole) return undefined;
+  const role = principalChatRole(principal.roles);
+  return role ? Object.freeze({ [role]: 'global' as const, ...(role === 'owner' ? { admin: 'global' as const } : {}),
+    trusted: 'global' as const }) : undefined;
+}
+
 /** The Bot's standing fact: the self-standing lookup, else the member-role fact (`owner` / `admin` / `member`). */
 function botStandingOf(bot: NonNullable<TurnContextState['bot']> | undefined): import('@zhin.js/im-contract').PlatformStanding | undefined {
   if (!bot) return undefined;
@@ -501,7 +525,8 @@ export function turnPermissionSubject(turn: TurnAccessContext): PermissionSubjec
     sender: Object.freeze({
       id: turn.principal.subjectId,
       ...(turn.principal.displayName ? { name: turn.principal.displayName } : {}),
-      ...(principalChatRole(turn.principal.roles) ? { chatRole: principalChatRole(turn.principal.roles) } : {}),
+      ...(chatRoleOfPrincipal(turn.principal) ? { chatRole: chatRoleOfPrincipal(turn.principal) } : {}),
+      ...(chatRoleLevelsOfPrincipal(turn.principal) ? { chatRoleLevels: chatRoleLevelsOfPrincipal(turn.principal) } : {}),
       ...(turn.principal.platform ? { platform: turn.principal.platform } : {}),
     }),
     // ADR 0056 §5 third dimension: the receiving Bot account's own standing in this conversation.
