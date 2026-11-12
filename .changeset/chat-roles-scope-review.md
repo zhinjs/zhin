@@ -11,6 +11,9 @@
 "@zhin.js/testing": patch
 "@zhin.js/adapter-discord": patch
 "@zhin.js/adapter-icqq": patch
+"@zhin.js/adapter-dingtalk": patch
+"@zhin.js/adapter-slack": patch
+"@zhin.js/adapter-napcat": patch
 ---
 
 聊天角色安全审查修复（ADR 0056 修订）：
@@ -24,3 +27,4 @@
 - 线程 / 子话题沿用父会话键：Discord 线程上报为父频道 + `threadId`（出站仍发到线程）；会话无法生成会话键时退回账号层链解析，全局 owner 不再丢失角色。
 - 执行时复检重新读取发言者当前角色与机器人身份（`PermissionHost.setSenderRoleResolver` / `currentSenderRoles`）；定时任务记录创建者所在会话，到期按创建者当前角色运行，普通用户的任务以普通成员信任运行。
 - `AdapterIndex.selfStanding` 的 `cachedOnly` 读到过期缓存视为未知；入站时丢弃适配器上报的 `chatRole`，事件流发布增强后的 sender。`@zhin.js/testing` 的 `PluginTestKit` 声明的角色按全局层处理。
+- 跨群 / 账号级 Agent 工具改用层级限定：钉钉 `add_chat_members` / `update_chat`、Slack `unarchive` 要求 `owner@global`；NapCat `delete_friend` 要求 `owner@endpoint`。

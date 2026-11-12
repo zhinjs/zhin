@@ -9,7 +9,7 @@ export default defineAgentTool<{ user_id: number }>({
   adapter: 'napcat',
   tags: ['napcat', 'qq'],
   keywords: ['删除好友', 'delete friend', '删好友'],
-  permissions: ['owner'],
+  permissions: ['owner@endpoint'],
   async execute({ user_id }: { user_id: number }, context) {
     const endpoint = context.$client;
       await endpoint.deleteFriend(user_id);

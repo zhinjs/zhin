@@ -21,7 +21,8 @@ describe('Slack channel tools (M5: zhin roles, current channel)', () => {
   it('use zhin roles instead of never-reported Slack platform permissions', () => {
     for (const tool of [invite, setPurpose, setTopic, pin, unpin]) expect(tool.permissions).toEqual(['admin']);
     expect(archive.permissions).toEqual(['owner']);
-    expect(unarchive.permissions).toEqual(['owner']);
+    // unarchive names another channel: host-wide, a global owner only (archive acts on the current channel).
+    expect(unarchive.permissions).toEqual(['owner@global']);
   });
 
   it('act on the current channel, ignoring a model-supplied channel', async () => {
