@@ -12,6 +12,12 @@ import leave from '../agents/icqq/skills/icqq-group-admin/tools/group_leave/inde
 import mute from '../agents/icqq/skills/icqq-group-admin/tools/set_mute/index.js';
 import invite from '../agents/icqq/skills/icqq-group-admin/tools/group_invite/index.js';
 import memberInfo from '../agents/icqq/skills/icqq-group-directory/tools/group_member_info/index.js';
+import kick from '../agents/icqq/skills/icqq-group-admin/tools/group_kick/index.js';
+import setAdmin from '../agents/icqq/skills/icqq-group-admin/tools/set_group_admin/index.js';
+import setTitle from '../agents/icqq/skills/icqq-group-admin/tools/set_title/index.js';
+import announce from '../agents/icqq/skills/icqq-group-admin/tools/announce/index.js';
+import anonymous from '../agents/icqq/skills/icqq-group-admin/tools/set_anonymous/index.js';
+import essence from '../agents/icqq/skills/icqq-group-admin/tools/essence/index.js';
 import type { IcqqToolContext } from '../agents/icqq/conversation.js';
 
 function fixture(kind: 'private' | 'group' | 'channel' = 'group') {
@@ -243,7 +249,7 @@ describe('group admin tools read fresh membership', () => {
     f.self.role = 'admin';
     const setGroupBan = vi.fn(async () => true);
     Object.assign(f.client, { setGroupBan });
-    expect(await mute.execute({ group_id: 100, user_id: 5, duration: 60 }, f.ctx)).toMatchObject({ success: true });
+    expect(await mute.execute({ user_id: 5, duration: 60 }, f.ctx)).toMatchObject({ success: true });
     expect(f.client.getGroupMemberInfo).toHaveBeenCalledWith(100, 7, true);
     expect(setGroupBan).toHaveBeenCalledWith(100, 5, 60);
   });
@@ -263,5 +269,47 @@ describe('group admin tools read fresh membership', () => {
     Object.assign(f.client, { inviteFriend });
     expect(await invite.execute({ group_id: 100, user_id: 5 }, f.ctx)).toMatchObject({ success: false });
     expect(inviteFriend).not.toHaveBeenCalled();
+  });
+});
+
+describe('platform-permit group admin tools target only the current group', () => {
+  // Platform / Bot permits are judged in the current conversation; a model-supplied group_id would
+  // let an admin of group A act in group B where the Bot is also an admin.
+  it.each([
+    ['group_kick', kick], ['set_mute', mute], ['set_group_admin', setAdmin], ['set_title', setTitle],
+    ['announce', announce], ['set_anonymous', anonymous],
+  ] as const)('%s has no group_id input', (_name, tool) => {
+    const shape = (tool.inputSchema as unknown as { shape: Record<string, unknown> }).shape;
+    expect(shape).not.toHaveProperty('group_id');
+  });
+
+  it('ignores a model-supplied group_id and acts in the current group', async () => {
+    const f = fixture(); f.self.role = 'admin';
+    const setGroupBan = vi.fn(async () => true);
+    const sendGroupNotice = vi.fn(async () => true);
+    Object.assign(f.client, { setGroupBan, sendGroupNotice });
+    await mute.execute({ group_id: 999, user_id: 5, duration: 60 } as never, f.ctx);
+    expect(setGroupBan).toHaveBeenCalledWith(100, 5, 60);
+    await announce.execute({ group_id: 999, content: 'hi' } as never, f.ctx);
+    expect(sendGroupNotice).toHaveBeenCalledWith(100, 'hi');
+  });
+
+  it('refuses outside a group conversation', async () => {
+    const f = fixture('private');
+    const setGroupBan = vi.fn(async () => true);
+    Object.assign(f.client, { setGroupBan });
+    await expect(mute.execute({ user_id: 5, duration: 60 }, f.ctx)).rejects.toThrow();
+    expect(setGroupBan).not.toHaveBeenCalled();
+  });
+
+  it('essence refuses a message from another group', async () => {
+    const f = fixture();
+    const setEssenceMessage = vi.fn(async () => true);
+    Object.assign(f.client, { setEssenceMessage });
+    const other = genGroupMessageId(999, 7, 1, 2, 1700000000, 1);
+    await expect(essence.execute({ message_id: other, action: 'add' }, f.ctx)).rejects.toThrow();
+    expect(setEssenceMessage).not.toHaveBeenCalled();
+    expect(await essence.execute({ message_id: f.id, action: 'add' }, f.ctx)).toMatchObject({ success: true });
+    expect(setEssenceMessage).toHaveBeenCalledWith(f.id);
   });
 });

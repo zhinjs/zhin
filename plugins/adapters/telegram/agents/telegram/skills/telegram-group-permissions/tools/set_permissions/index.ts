@@ -1,11 +1,11 @@
 import { messages as t } from "../../../../messages.js";
+import { currentChat } from "../../../../conversation.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 
-export default defineAgentTool<{ chat_id: string; can_send_messages?: boolean; can_send_photos?: boolean; can_send_videos?: boolean; can_send_polls?: boolean; can_send_other_messages?: boolean; can_add_web_page_previews?: boolean; can_change_info?: boolean; can_invite_users?: boolean; can_pin_messages?: boolean }>({
-  description: '设置 Telegram 群组的默认成员权限',
+export default defineAgentTool<{ can_send_messages?: boolean; can_send_photos?: boolean; can_send_videos?: boolean; can_send_polls?: boolean; can_send_other_messages?: boolean; can_add_web_page_previews?: boolean; can_change_info?: boolean; can_invite_users?: boolean; can_pin_messages?: boolean }>({
+  description: '设置当前 Telegram 群组的默认成员权限',
   inputSchema: z.object({
-    chat_id: z.string().describe('聊天 ID'),
     can_send_messages: z.boolean().optional().describe('是否可以发消息'),
     can_send_photos: z.boolean().optional().describe('是否可以发图片'),
     can_send_videos: z.boolean().optional().describe('是否可以发视频'),
@@ -19,14 +19,14 @@ export default defineAgentTool<{ chat_id: string; can_send_messages?: boolean; c
   adapter: 'telegram',
   scopes: ["group"],
   tags: ['telegram'],
-  permissions: ['platform-permission:manage_chat', 'bot-permission:restrict_members'],
-  async execute({ chat_id, ...perms  }: { chat_id: string; can_send_messages?: boolean; can_send_photos?: boolean; can_send_videos?: boolean; can_send_polls?: boolean; can_send_other_messages?: boolean; can_add_web_page_previews?: boolean; can_change_info?: boolean; can_invite_users?: boolean; can_pin_messages?: boolean }, context) {
+  permissions: ['platform-permission:restrict_members', 'bot-permission:restrict_members'],
+  async execute(perms: { can_send_messages?: boolean; can_send_photos?: boolean; can_send_videos?: boolean; can_send_polls?: boolean; can_send_other_messages?: boolean; can_add_web_page_previews?: boolean; can_change_info?: boolean; can_invite_users?: boolean; can_pin_messages?: boolean }, context) {
     const endpoint = context.$client;
     const permissions: Record<string, boolean> = {};
     for (const [k, v] of Object.entries(perms)) {
       if (typeof v === 'boolean') permissions[k] = v;
     }
-    const success = await endpoint.setChatPermissionsAll(Number(chat_id), permissions);
+    const success = await endpoint.setChatPermissionsAll(currentChat(context), permissions);
     return { success, message: success ? t(context.locale, 'permissionsUpdated') : t(context.locale, 'operationFailed') };
   },
 });

@@ -1,4 +1,5 @@
 import { kookFixture } from './fixture.js';
+import { KOOK_ROLE_PERMISSIONS } from '../src/sender-roles.js';
 import { createAdapterHarness } from '../../test-utils/endpoint.js';
 import { platformStandingOf } from '@zhin.js/core';
 import { checkBuiltinPermit, toPermissionSubject } from '@zhin.js/permission';
@@ -376,7 +377,7 @@ describe('kook plugin runtime adapter', () => {
     expect(results).toEqual(cases.map(([, , expected]) => expected));
     const adminPayload = receive.mock.calls[1]![0] as { sender: { roles?: string[]; platform: unknown } };
     expect(adminPayload.sender.roles).toBeUndefined();
-    expect(adminPayload.sender.platform).toEqual({ standing: 'admin', roles: [{ id: '11', name: 'Admin' }], permissions: ['administrator'] });
+    expect(adminPayload.sender.platform).toEqual({ standing: 'admin', roles: [{ id: '11', name: 'Admin' }], permissions: [...KOOK_ROLE_PERMISSIONS] });
     const memberPayload = receive.mock.calls[2]![0] as { sender: { platform: unknown } };
     expect(memberPayload.sender.platform).toEqual({ standing: 'member', roles: [{ id: '12', name: 'Cosmetic' }] });
     expect(mock.getGuildInfo).toHaveBeenCalledTimes(1);

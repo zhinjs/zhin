@@ -40,12 +40,7 @@ export {
   type SlackUserInfo,
 } from './client.js';
 
-export {
-  checkSlackPlatformPermit,
-  normalizeSlackSenderForPermit,
-  platformPermit,
-  slackGroupPermitResolver,
-} from './platform-permit.js';
+export { platformPermit } from './platform-permit.js';
 
 export { normalizeSlackReactionName } from './slack-reaction.js';
 export { markdownToMrkdwn, mrkdwnToPlainFallback, splitMrkdwnText } from './markdown-to-mrkdwn.js';

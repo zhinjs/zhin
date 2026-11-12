@@ -1,25 +1,14 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { canAccessTool } from '@zhin.js/core';
 import { PermissionHost } from '@zhin.js/permission';
-import {
-  checkLarkPlatformPermit,
-  normalizeLarkSenderForPermit,
-  platformPermit,
-} from '../src/platform-permit.js';
-
-function mockSubject(sender: { role?: string; permissions?: string[] }) {
-  return {
-    adapter: 'lark',
-    sender: { id: 'u1', platform: { standing: (sender.role ?? 'member') as never, ...(sender.permissions ? { permissions: sender.permissions } : {}) } },
-    scene: { type: 'group', id: 'oc1' },
-  };
-}
+import { platformPermit } from '../src/platform-permit.js';
+import * as adapter from '../src/index.js';
 
 function mockMsg(platformPermissions: string[]) {
   return {
     clientAdapter: 'lark',
     endpointId: 'bot1',
-    conversation: { endpoint: { adapter: 'lark', id: 'bot1' }, kind: 'group', id: 'oc1' },
+    conversation: { endpoint: { adapter: 'lark', id: 'bot1' }, kind: 'group', id: 'g1' },
     sender: { id: 'u1', platform: { standing: 'member' as const, permissions: platformPermissions } },
   } as any;
 }
@@ -31,14 +20,10 @@ describe('lark platform-permit', () => {
     host = new PermissionHost();
   });
 
-  it('normalizeLarkSenderForPermit', () => {
-    expect(normalizeLarkSenderForPermit({ isOwner: true }).permissions).toContain('manage_managers');
-    expect(normalizeLarkSenderForPermit({ isAdmin: true }).role).toBe('admin');
-  });
-
-  it('checkLarkPlatformPermit manage_managers', () => {
-    expect(checkLarkPlatformPermit('manage_managers', mockSubject({ role: 'owner', permissions: ['chat_owner'] }))).toBe(true);
-    expect(checkLarkPlatformPermit('manage_managers', mockSubject({ role: 'admin', permissions: ['chat_admin'] }))).toBe(false);
+  it('no longer exports the legacy permit resolver / checker (ADR 0056 §5 builtin evaluator only)', () => {
+    expect(adapter).not.toHaveProperty('checkLarkPlatformPermit');
+    expect(adapter).not.toHaveProperty('larkGroupPermitResolver');
+    expect(adapter).not.toHaveProperty('normalizeLarkSenderForPermit');
   });
 
   it('canAccessTool', async () => {

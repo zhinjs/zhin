@@ -28,6 +28,7 @@ import {
 } from 'zhin.js/adapter';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import {
+  type ConversationRef,
   type ConversationReference,
   type ConversationResolution,
   type PlatformStanding,
@@ -58,7 +59,9 @@ import {
 } from './protocol.js';
 import { registerDiscordInteractionRoutes } from './webhook.js';
 import { receiveDiscordGuildMemberSideEvent } from './side-event-dispatch.js';
-import { discordPermissionNames, discordSenderStanding } from './sender-standing.js';
+import {
+  discordGuildPermissionNamesFromChannelBitfield, discordPermissionNames, discordSenderStanding, discordStandingFromPermissions,
+} from './sender-standing.js';
 
 const DISCORD_API = 'https://discord.com/api/v10';
 /** 出站 HTTP 调用统一 30s 超时。 */
@@ -409,6 +412,9 @@ export class DiscordRestClient {
   }
 }
 
+const APP_PERMISSIONS_TTL_MS = 10 * 60_000;
+const APP_PERMISSIONS_MAX = 1_000;
+
 export class DiscordInteractionsEndpoint extends DiscordRestClient implements Endpoint {
   readonly [endpointSpec]: EndpointSpecification;
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
@@ -418,6 +424,8 @@ export class DiscordInteractionsEndpoint extends DiscordRestClient implements En
   #routeReleases: HttpRouteRegistration[] = [];
   #open = false;
   #started = false;
+  /** Latest interaction `app_permissions` per guild (guild-level names), for the Bot's own standing. */
+  readonly #appPermissions = new Map<string, { readonly names: readonly string[]; readonly at: number }>();
   readonly #control: EndpointControl = Object.freeze<EndpointControl>({
     recall: request => this.#recallMessage(request),
   });
@@ -435,8 +443,11 @@ export class DiscordInteractionsEndpoint extends DiscordRestClient implements En
       start: () => this.#startFramework(), open: () => this.#openFramework(), close: () => this.#closeFramework(),
       stop: () => this.#stopFramework(), send: request => this.#sendFramework(request), name: options.config.id,
       // Interactions mode has no gateway session to read the bot's guild member: its own standing
-      // stays unknown, so `bot:*` permits fail closed here (ADR 0056 §1).
-      management: Object.freeze<EndpointManagement>({ inspectSelfStanding: async () => undefined }),
+      // comes from the latest interaction's `app_permissions` in that guild (ADR 0056 §1), reduced
+      // to guild-level names like senders; without a recent interaction it stays unknown.
+      management: Object.freeze<EndpointManagement>({
+        inspectSelfStanding: async ({ conversation }) => this.#selfStandingFromInteractions(conversation),
+      }),
       control: this.#control, content: this.#content,
       profile: createDiscordRestSelfProfile(this, id => this[endpointSpec].reportSelfUserId(id)),
     });
@@ -488,8 +499,29 @@ export class DiscordInteractionsEndpoint extends DiscordRestClient implements En
     await this.deleteMessage({ channelId: message.conversation.id, messageId: message.id, signal });
   }
 
+  #selfStandingFromInteractions(conversation: Pick<ConversationRef, 'kind' | 'parent'>): PlatformStanding | undefined {
+    const guildId = conversation.kind === 'channel' && conversation.parent?.kind === 'channel' ? conversation.parent.id : undefined;
+    const entry = guildId ? this.#appPermissions.get(guildId) : undefined;
+    if (!entry || Date.now() - entry.at > APP_PERMISSIONS_TTL_MS) return undefined;
+    // The guild owner is not visible to an interaction; `administrator` still reads as `admin`.
+    return { standing: discordStandingFromPermissions(entry.names), ...(entry.names.length ? { permissions: entry.names } : {}) };
+  }
+
+  #recordAppPermissions(msg: DiscordInboundMessage): void {
+    const appPermissions = (msg.event as { app_permissions?: unknown } | undefined)?.app_permissions;
+    if (!msg.guildId || appPermissions === undefined) return;
+    this.#appPermissions.delete(msg.guildId);
+    this.#appPermissions.set(msg.guildId, { names: discordGuildPermissionNamesFromChannelBitfield(appPermissions), at: Date.now() });
+    while (this.#appPermissions.size > APP_PERMISSIONS_MAX) {
+      const oldest = this.#appPermissions.keys().next().value;
+      if (oldest === undefined) break;
+      this.#appPermissions.delete(oldest);
+    }
+  }
+
   admit(msg: DiscordInboundMessage): void {
     if (!this.#open) return;
+    this.#recordAppPermissions(msg);
     const conversation = discordInboundConversation(String(this.#options.id), msg);
     const platform = discordSenderStanding(msg);
     void this[endpointSpec].events.emit('message.receive', {
@@ -621,9 +653,10 @@ export function createDiscordEndpointManagement(
 ): EndpointManagement {
   return Object.freeze<EndpointManagement>({
     /**
-     * ADR 0056 §1: the Bot's own guild member in the conversation's channel — guild owner → `owner`;
-     * `administrator` / `moderate_members` (channel permissions) → `admin`; roles and channel
-     * permission names reported as for senders.
+     * ADR 0056 §1: the Bot's own guild member in the conversation's guild — guild owner → `owner`;
+     * `administrator` / `moderate_members` → `admin`; roles and **guild-level** permission names
+     * (`GuildMember.permissions`, as for senders) so `bot-permission:*` and `platform-permission:*`
+     * read the same scope. Channel overwrites are left to the platform at execution time.
      */
     async inspectSelfStanding({ conversation, signal }: SelfStandingRequest): Promise<PlatformStanding | undefined> {
       if (conversation.kind === 'private') return undefined;
@@ -633,14 +666,12 @@ export function createDiscordEndpointManagement(
       if (!channel || !('guild' in channel) || !client.user) return undefined;
       const guild = channel.guild;
       const me = guild.members.me ?? await operation.run(() => guild.members.fetchMe());
-      const permissions = 'permissionsFor' in channel && typeof channel.permissionsFor === 'function'
-        ? channel.permissionsFor(me) : me.permissions;
+      const permissions = me.permissions;
       const names = permissions ? discordPermissionNames(bit => permissions.has(bit)) : [];
       const roles = [...me.roles.cache.values()]
         .filter(role => role.id !== guild.id)
         .map(role => (role.name ? { id: String(role.id), name: String(role.name) } : { id: String(role.id) }));
-      const standing = guild.ownerId === client.user.id ? 'owner'
-        : names.includes('administrator') || names.includes('moderate_members') ? 'admin' : 'member';
+      const standing = discordStandingFromPermissions(names, guild.ownerId === client.user.id);
       return { standing, ...(roles.length ? { roles } : {}), ...(names.length ? { permissions: names } : {}) };
     },
     async listGroups(request: EndpointManagementRequest = {}): Promise<readonly EndpointGroup[]> {

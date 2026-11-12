@@ -1,6 +1,14 @@
 import { createMessages } from 'zhin.js/i18n';
 
 export const messages = createMessages({
+  "messageOutsideGroup": {
+    "zh-CN": "该消息不在当前群中",
+    "en": "The message is not in the current group"
+  },
+  "groupRequired": {
+    "zh-CN": "此操作仅支持当前 QQ 群",
+    "en": "This operation requires the current QQ group"
+  },
   "likesSent": {
     "zh-CN": "已给 {p0} 点赞 {p1} 次",
     "en": "Sent {p1} likes to {p0}"

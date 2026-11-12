@@ -1,25 +1,23 @@
 # KOOK Platform Permits
 
-## 入站字段
+## 入站字段（ADR 0056 §1）
 
-| 字段 | 来源 | 取值 |
-|------|------|------|
-| `$sender.role` | `permission` / `isAdmin` / `isGuildOwner` | `owner` · `admin` · `channel_admin` · `member` |
-| `$sender.permissions` | 归一化 + `roles[]` | `guild_owner` · `guild_admin` · `channel_admin` · `manage_roles` · `role:{id}` |
+按服务器缓存 `guild/view`（服务器主）与 `guild-role/list`（角色名与权限位，TTL 60s）：
 
-KOOK `permission`：1=成员，2=管理员，4=频道主，5=频道管理员（子频道场景为 `channel_admin`）。
+| 字段 | 取值 |
+|------|------|
+| `sender.platform.standing` | `owner`（服务器主）· `admin`（持有「管理员」位的角色）· `member`；无法判断时不上报 |
+| `sender.platform.roles` | 发送者持有的服务器角色（id + 名称） |
+| `sender.platform.permissions` | 「全体成员」（role_id 0）与所持角色权限位的并集（snake_case，如 `kick_members`、`manage_roles`）；服务器主与管理员展开为全部权限 |
+
+机器人自身身份（`/v3/user/view` self 的角色）按同一规则计算。
 
 ## Permit 词汇表
 
-| `platform-permission:…` | 含义 |
-|--------------------|------|
-| `guild_owner` | 服务器主 |
-| `guild_admin` | 服务器/频道管理员 |
-| `channel_admin` | 子频道管理员 |
-| `manage_roles` | 可管理身份组 |
+| Permit | 含义 |
+|--------|------|
+| `platform:owner` / `platform:admin` | 服务器主 / 管理员（含服务器主） |
+| `platform-permission:<name>` | KOOK 权限名，如 `manage_roles`、`ban_members`、`kick_members` |
+| `bot:*` / `bot-permission:<name>` | 同上，判定机器人账号自身 |
 
-## 工厂映射
-
-场景治理工具默认要求 `platform:admin` / `platform:owner`（归一地位，ADR 0056 §5）；本适配器把它们映射为下列平台权限：
-
-`platform:admin` → `guild_admin` · `platform:owner` → `guild_owner`
+平台身份与机器人身份都按**当前会话**判定，因此服务器管理工具只作用于当前服务器（不接受 `guild_id` 入参）。

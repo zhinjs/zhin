@@ -1,11 +1,11 @@
 import { messages as t } from "../../../../messages.js";
+import { currentGuild } from "../../../../conversation.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 
-export default defineAgentTool<{ guild_id: string; action: 'add' | 'remove'; user_id: string; remark?: string }>({
-  description: 'KOOK 服务器黑名单管理：添加/移除',
+export default defineAgentTool<{ action: 'add' | 'remove'; user_id: string; remark?: string }>({
+  description: '当前 KOOK 服务器的黑名单管理：添加/移除',
   inputSchema: z.object({
-    guild_id: z.string().describe('服务器 ID'),
     action: z.enum(['add', 'remove']).describe('add|remove'),
     user_id: z.string().describe('用户 ID'),
     remark: z.string().optional().describe('备注（add 可选）'),
@@ -14,8 +14,8 @@ export default defineAgentTool<{ guild_id: string; action: 'add' | 'remove'; use
   scopes: ["channel"],
   tags: ['kook'],
   permissions: ['platform:admin', 'bot-permission:ban_members'],
-  async execute({ guild_id, action, user_id, remark }: { guild_id: string; action: 'add' | 'remove'; user_id: string; remark?: string }, context) {
-    const member = context.$client.pickGuildMember(guild_id, user_id);
+  async execute({ action, user_id, remark }, context) {
+    const member = context.$client.pickGuildMember(currentGuild(context), user_id);
     switch (action) {
       case 'add': {
         const success = await member.addToBlackList(remark);

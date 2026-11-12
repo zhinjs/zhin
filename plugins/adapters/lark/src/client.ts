@@ -43,7 +43,6 @@ import {
   type LarkMessage,
   type ResolvedLarkConfig,
 } from './protocol.js';
-import { normalizeLarkSenderForPermit } from './platform-permit.js';
 import { registerLarkWebhookRoutes } from './webhook.js';
 import { createLarkLongConnection, type LarkLongConnectionFactory } from './long-connection.js';
 import { openLarkReplyStream, supportsLarkReplyStream } from './reply-stream.js';
@@ -93,6 +92,7 @@ export interface LarkClientApi {
 /** Feishu/Lark OpenAPI client surface carried by every Endpoint event. */
 
 const LARK_CHAT_MANAGER_CACHE_TTL_MS = 60_000;
+const LARK_CHAT_MANAGER_FAILURE_TTL_MS = 10_000;
 
 export class LarkClient extends SdkClient {
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
@@ -127,7 +127,7 @@ export class LarkClient extends SdkClient {
     ),
     /**
      * ADR 0056 §1：机器人自身在群里的地位（chat.get：群主为本应用 → owner；在 bot_manager_id_list →
-     * admin；否则 member）。查询失败为未知。
+     * admin；有 owner_id 且都不是 → member）。查询失败或缺 owner_id 为未知。
      */
     inspectSelfStanding: async ({ conversation, signal }: SelfStandingRequest): Promise<PlatformStanding | undefined> => {
       if (conversation.kind !== 'group') return undefined;
@@ -137,7 +137,10 @@ export class LarkClient extends SdkClient {
       if (!info || !appId) return undefined;
       if (info.owner_id_type === 'app_id' && info.owner_id === appId) return { standing: 'owner' };
       const managers = Array.isArray(info.bot_manager_id_list) ? info.bot_manager_id_list.map(String) : [];
-      return { standing: managers.includes(appId) ? 'admin' : 'member' };
+      if (managers.includes(appId)) return { standing: 'admin' };
+      // chat.get may omit owner_id (e.g. when this app owns the group): without it the Bot is not
+      // provably a plain member, so the standing stays unknown.
+      return typeof info.owner_id === 'string' && info.owner_id ? { standing: 'member' } : undefined;
     },
   });
   protected readonly endpointControl: EndpointControl = createRecallEndpointControl((id, signal) => this.recallMessage(id, { signal }));
@@ -155,9 +158,11 @@ export class LarkClient extends SdkClient {
   readonly #lifecycle: EndpointLifecycle;
   readonly #cardSources = new Map<string, { conversation: ConversationRef; time: number }>();
   readonly #seen = new InboundDeduper({ ttlMs: 300_000, maxEntries: 10_000 });
-  readonly #chatManagers = new TtlLookupCache<string, { owner?: string; admins: ReadonlySet<string> }>({
+  readonly #chatManagers = new TtlLookupCache<string, { owner?: string; admins: ReadonlySet<string> } | undefined>({
     ttlMs: LARK_CHAT_MANAGER_CACHE_TTL_MS,
   });
+  /** chat.get failures: the standing stays unknown for a short while instead of retrying every message. */
+  readonly #chatManagerFailures = new TtlLookupCache<string, true>({ ttlMs: LARK_CHAT_MANAGER_FAILURE_TTL_MS });
   #startupGeneration = 0;
   readonly #pendingInbound: { message: LarkMessage; event: unknown }[] = [];
 
@@ -384,11 +389,10 @@ export class LarkClient extends SdkClient {
   async #emitInbound(msg: LarkMessage, conversation: ConversationRef, nativeEvent: unknown): Promise<void> {
     const chatType = resolveChatType(msg.chat_id, msg.chat_type);
     const senderId = resolveSender(msg);
-    const permit = senderId && chatType === 'group' && msg.chat_id
-      ? normalizeLarkSenderForPermit(await this.#resolveChatRole(msg.chat_id, senderId))
+    // ADR 0056 §1：群主 / 群管理员 / 成员 → sender.platform.standing（飞书群无原生角色与权限位）；未知不上报。
+    const role = senderId && chatType === 'group' && msg.chat_id
+      ? await this.#resolveChatRole(msg.chat_id, senderId)
       : undefined;
-    // ADR 0056 §1：群主 / 群管理员 / 成员 → sender.platform.standing（飞书群无原生角色与权限位）。
-    const role = permit?.role === 'owner' || permit?.role === 'admin' || permit?.role === 'member' ? permit.role : undefined;
     const mentioned = isLarkBotMentioned(msg);
     const replyToId = msg.parent_id || msg.root_id;
     await this.publishEvent('message.receive', {
@@ -407,23 +411,32 @@ export class LarkClient extends SdkClient {
     });
   }
 
-  /** 群主 / 群管理员来自 chat.get（owner_id + 管理员列表），按群缓存；失败时保守地视为普通成员。 */
-  async #resolveChatRole(chatId: string, senderId: string): Promise<{ isOwner: boolean; isAdmin: boolean }> {
+  /**
+   * 群主 / 群管理员来自 chat.get（owner_id + 管理员列表），按群缓存 60 秒。chat.get 失败时地位未知
+   * （负缓存 10 秒，不报确定的 member）；未返回 owner_id（如群主是机器人应用）时只能确认管理员，
+   * 其余发送者地位未知。
+   */
+  async #resolveChatRole(chatId: string, senderId: string): Promise<'owner' | 'admin' | 'member' | undefined> {
+    if (this.#chatManagerFailures.get(chatId)) return undefined;
     const entry = await this.#chatManagers.getOrLoad(chatId, async () => {
       const info = await this.getChatInfo(chatId) as {
         owner_id?: unknown;
         user_manager_id_list?: unknown;
       } | null;
-      const admins = Array.isArray(info?.user_manager_id_list) ? info.user_manager_id_list.map(String) : [];
+      if (!info) {
+        this.#chatManagerFailures.set(chatId, true);
+        return undefined;
+      }
+      const admins = Array.isArray(info.user_manager_id_list) ? info.user_manager_id_list.map(String) : [];
       return {
-        ...(typeof info?.owner_id === 'string' && info.owner_id ? { owner: info.owner_id } : {}),
+        ...(typeof info.owner_id === 'string' && info.owner_id ? { owner: info.owner_id } : {}),
         admins: new Set(admins) as ReadonlySet<string>,
       };
-    });
-    return {
-      isOwner: entry.owner !== undefined && entry.owner === senderId,
-      isAdmin: entry.admins.has(senderId),
-    };
+    }, { cacheWhen: entry => entry !== undefined });
+    if (!entry) return undefined;
+    if (entry.owner !== undefined && entry.owner === senderId) return 'owner';
+    if (entry.admins.has(senderId)) return 'admin';
+    return entry.owner !== undefined ? 'member' : undefined;
   }
 
   /** Only correlate callbacks to a card actually sent by this endpoint. */

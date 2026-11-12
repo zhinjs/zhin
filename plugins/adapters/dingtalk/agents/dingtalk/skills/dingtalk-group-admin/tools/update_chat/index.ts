@@ -2,7 +2,7 @@ import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 export default defineAgentTool<{ chat_id: string; name?: string; owner?: string; add_members?: string; remove_members?: string }>({
-  description: '更新钉钉群聊设置（改名、换群主、增减成员）',
+  description: '更新指定钉钉群聊设置（改名、换群主、增减成员；chatid 由钉钉旧版建群接口返回；仅 zhin owner）',
   inputSchema: z.object({
     chat_id: z.string().describe('群聊 ID'),
     name: z.string().optional().describe('新群名（可选）'),
@@ -13,6 +13,8 @@ export default defineAgentTool<{ chat_id: string; name?: string; owner?: string;
   adapter: 'dingtalk',
   scopes: ["group"],
   tags: ['dingtalk'],
+  // Cross-group by nature (legacy `chatid`) and able to transfer ownership / remove members: zhin owner only.
+  permissions: ['owner'],
   async execute({ chat_id, name, owner, add_members, remove_members    }: { chat_id: string; name?: string; owner?: string; add_members?: string; remove_members?: string }, context) {
     const endpoint = context.$client;
     const options: Record<string, unknown> = {};

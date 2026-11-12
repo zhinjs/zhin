@@ -22,12 +22,7 @@ export {
 
 export { type LarkClientEventMap } from './client.js';
 
-export {
-  checkLarkPlatformPermit,
-  larkGroupPermitResolver,
-  normalizeLarkSenderForPermit,
-  platformPermit,
-} from './platform-permit.js';
+export { platformPermit } from './platform-permit.js';
 
 export {
   LarkEndpoint,

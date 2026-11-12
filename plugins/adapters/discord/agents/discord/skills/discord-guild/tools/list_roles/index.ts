@@ -1,19 +1,19 @@
+import { currentGuildChannel } from '../../../../conversation.js';
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import { requireDiscordGatewayClient } from '@zhin.js/adapter-discord';
 
-export default defineAgentTool<{ guild_id: string }>({
-  description: '获取 Discord 服务器角色列表',
-  inputSchema: z.object({
-    guild_id: z.string().describe('服务器 ID'),
-  }),
+export default defineAgentTool<Record<string, never>>({
+  description: '获取当前 Discord 服务器的身份组列表',
+  inputSchema: z.object({}),
   adapter: 'discord',
   scopes: ["channel"],
   tags: ['discord'],
   permissions: ['platform-permission:manage_roles'],
-  async execute({ guild_id  }: { guild_id: string }, context) {
+  async execute(_args, context) {
+    const { guildId } = currentGuildChannel(context);
     const client = requireDiscordGatewayClient(context.$client);
-    const guild = await client.guilds.fetch(guild_id);
+    const guild = await client.guilds.fetch(guildId);
     await guild.roles.fetch();
     const cache = guild.roles.cache as Map<string, {
       id: string;
