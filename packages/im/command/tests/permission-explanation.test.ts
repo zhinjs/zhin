@@ -2,26 +2,28 @@ import { createCapabilitySlot, rootPluginId, type RuntimeSnapshot } from '@zhin.
 import { CommandIndex, canManageConversation, commandFeatureId, defineCommand, explainCommandPermissions, toCommandPermissionSubject } from '../src/index.js';
 
 const target = { endpoint: { id: 'endpoint-1', adapter: 'qq' }, kind: 'group', id: 'g1', parent: { kind: 'channel', id: 'parent' }, threadId: 'topic' };
-const source = { conversation: target, content: '', clientAdapter: 'qq', sender: { id: 'u1', roles: ['master'] }, metadata: { roles: ['admin'], senderPermissions: ['manage'] } };
+const source = { conversation: target, content: '', clientAdapter: 'qq',
+  sender: { id: 'u1', chatRole: 'admin', platform: { standing: 'member', permissions: ['manage'] } }, metadata: { roles: ['owner'], senderPermissions: ['ban'] } };
 
 it('shares real command role precedence and the separate exact adapter gate', () => {
   expect(toCommandPermissionSubject(source)).toEqual({ adapter: 'qq', endpoint: 'endpoint-1', scene: { type: 'group', id: 'g1' },
-    sender: { id: 'u1', role: ['master'], permissions: ['manage'] } });
-  const result = explainCommandPermissions({ adapter: 'qq', permit: ['adapter(qq)', 'role(trusted)', 'role(admin)'] }, { source, rolesKnown: true, permissionHost: 'present' });
-  expect(result.adapter.outcome).toBe('match'); expect(result.rules.map(item => item.outcome)).toEqual(['match', 'match', 'mismatch']);
+    sender: { id: 'u1', chatRole: 'admin', platform: { standing: 'member', permissions: ['manage'] } } });
+  const result = explainCommandPermissions({ adapter: 'qq', permit: ['adapter(qq)', 'role(trusted)', 'owner', 'platform-permission:manage', 'platform:admin'] },
+    { source, rolesKnown: true, permissionHost: 'present' });
+  expect(result.adapter.outcome).toBe('match'); expect(result.rules.map(item => item.outcome)).toEqual(['match', 'match', 'mismatch', 'match', 'mismatch']);
   expect(result.summary.outcome).toBe('mismatch');
   expect(explainCommandPermissions({ adapter: 'root/qq' }, { source, permissionHost: 'present' }).adapter.outcome).toBe('mismatch');
 });
 
-it('keeps absent roles unknown and explicit canonical empty roles on the real default user path', () => {
+it('keeps absent roles unknown and an ordinary sender (no chat role) on the real default path', () => {
   for (const conversation of [target, undefined]) {
-    const input = { ...(conversation ? { conversation, content: '' } : {}), sender: { id: 'u1', roles: [] } };
-    const command = { permit: ['user(u1)', 'role(user)'] };
+    const input = { ...(conversation ? { conversation, content: '' } : {}), sender: { id: 'u1' } };
+    const command = { permit: ['user(u1)', 'trusted'] };
     const unknown = explainCommandPermissions(command, { source: input, permissionHost: 'present' });
     expect(unknown.rules.map(item => item.outcome)).toEqual(['match', 'unknown']);
     const empty = explainCommandPermissions(command, { source: input, rolesKnown: true, permissionHost: 'present' });
-    expect(empty.rules.map(item => item.outcome)).toEqual(['match', 'match']);
-    expect(empty.assumptions.some(item => item.includes('默认 user'))).toBe(true);
+    expect(empty.rules.map(item => item.outcome)).toEqual(['match', 'mismatch']);
+    expect(empty.assumptions.some(item => item.includes('普通用户'))).toBe(true);
     expect(toCommandPermissionSubject(input).scene).toEqual(conversation ? { type: 'group', id: 'g1' } : undefined);
   }
 });
@@ -32,11 +34,12 @@ it('never represents an empty permit list, absent host or unevaluated platform c
     const result = explainCommandPermissions({ permit: ['group()'] }, { source, permissionHost });
     expect(result.rules[0]?.outcome).toBe('match'); expect(result.summary.outcome).toBe('unknown');
   }
-  expect(explainCommandPermissions({ permit: ['platform(qq,admin)'] }, { source, permissionHost: 'present' }).summary.outcome).toBe('not_evaluated');
+  expect(explainCommandPermissions({ permit: ['platform:admin'] }, { source, permissionHost: 'present' }).summary.outcome).toBe('unknown');
+  expect(explainCommandPermissions({ permit: ['custom-rule'] }, { source, rolesKnown: true, permissionHost: 'present' }).summary.outcome).toBe('not_evaluated');
 });
 
 it('preserves structured CommandSession roles without interpreting them as canonical missing roles', () => {
-  const session = { adapter: 'qq', scene: { id: 'g1', type: 'group' }, sender: { id: 'u1', role: ['admin'] } };
+  const session = { adapter: 'qq', scene: { id: 'g1', type: 'group' }, sender: { id: 'u1', chatRole: 'admin' } };
   const result = explainCommandPermissions({ permit: ['role(admin)'] }, { source: session, rolesKnown: true, permissionHost: 'present' });
   expect(result.rules[0]?.outcome).toBe('match'); expect(result.summary.outcome).toBe('match');
 });
@@ -54,14 +57,15 @@ it('adds authority ids and owners without running command defaults, validation o
 
 describe('canManageConversation', () => {
   const scene = (type: string) => ({ id: 's1', type });
-  it('allows private chat and owner / admin / master only', () => {
-    expect(canManageConversation({ scene: scene('private'), sender: { id: 'u', role: [] } })).toBe(true);
-    for (const role of ['owner', 'admin', 'master']) {
-      expect(canManageConversation({ scene: scene('group'), sender: { id: 'u', role: [role] } })).toBe(true);
+  it('allows private chat and the chat role admin (or owner) only', () => {
+    expect(canManageConversation({ scene: scene('private'), sender: { id: 'u' } })).toBe(true);
+    for (const chatRole of ['owner', 'admin'] as const) {
+      expect(canManageConversation({ scene: scene('group'), sender: { id: 'u', chatRole } })).toBe(true);
     }
-    for (const roles of [[], ['member'], ['trusted'], ['creator'], ['administrator'], ['12345']]) {
-      expect(canManageConversation({ scene: scene('channel'), sender: { id: 'u', role: roles } })).toBe(false);
-    }
+    expect(canManageConversation({ scene: scene('channel'), sender: { id: 'u', chatRole: 'trusted' } })).toBe(false);
+    expect(canManageConversation({ scene: scene('channel'), sender: { id: 'u' } })).toBe(false);
+    // The platform standing alone is not a chat role (the default mapping turns it into one at runtime).
+    expect(canManageConversation({ scene: scene('channel'), sender: { id: 'u', platform: { standing: 'owner' } } })).toBe(false);
     expect(canManageConversation({ scene: scene('group') })).toBe(false);
   });
 });

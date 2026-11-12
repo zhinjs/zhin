@@ -8,8 +8,8 @@ export default defineEvalCase({
   tags: ['multimodal', 'memory'],
   modelInput: ['text', 'image'],
   inbound: [
-    { text: '@bot 记住这张图', scope: 'group', sender: { id: 'bob', roles: ['user'] }, images: [RED_CIRCLE_PNG] },
-    { text: '@bot 刚才那张图里是什么形状？', scope: 'group', sender: { id: 'bob', roles: ['user'] } },
+    { text: '@bot 记住这张图', scope: 'group', sender: { id: 'bob' }, images: [RED_CIRCLE_PNG] },
+    { text: '@bot 刚才那张图里是什么形状？', scope: 'group', sender: { id: 'bob' } },
   ],
   script: [
     { text: '记住了：白底上一个红色圆形。' },

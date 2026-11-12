@@ -1,7 +1,6 @@
 import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { platformPermission } from '@zhin.js/permission';
 
 export default defineAgentTool<{ chat_id: string; name?: string; description?: string }>({
   description: '更新飞书群聊信息（群名、描述）',
@@ -13,7 +12,7 @@ export default defineAgentTool<{ chat_id: string; name?: string; description?: s
   adapter: 'lark',
   scopes: ["group"],
   tags: ['lark'],
-  permissions: [platformPermission('lark', 'chat_admin')],
+  permissions: ['platform-permission:chat_admin'],
   async execute({ chat_id, name, description   }: { chat_id: string; name?: string; description?: string }, context) {
     const endpoint = context.$client;
     const success = await endpoint.updateChatInfo(chat_id, { name, description });

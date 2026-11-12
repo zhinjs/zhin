@@ -53,7 +53,7 @@ interface PlatformStanding {
 - 管理入口：
   - Console RPC `chat-roles.list|grant|revoke`（权限 `iam.manage` 管全局 / 适配器 / 账号层；作用域绑定在其适配器 / 账号下也算数），四个层级的页面都有「角色」区块，显示直接授予、继承与映射得到的角色及来源。
   - 聊天命令 `角色 列表|授予|撤销 <用户> <角色> [层级]` / `role list|grant|revoke …`：授予者必须在目标作用范围拥有不低于被授予角色的角色，且不能授予高于自己的角色；`owner` 只能由更高层的 `owner` 授予。
-- 迁移：首次启动时把配置中的账号 `owner` / `trusted` 与 `ai.trigger.masters` / `trusted` 写入 `chat_roles`（账号层 / 全局层），写入后从配置中移除并记录日志；之后配置文件不再接受这些字段（启动时报错并指向升级指南）。
+- 迁移：首次启动时把配置中的人员名单写入 `chat_roles`——适配器块 `master` / `trusted` → 适配器层，`endpoints[i].master` / `trusted` → 账号层，`ai.trigger.masters` / `trusted` → 全局层（为每个已配置的适配器各登记一个身份）——并从配置中移除、记录日志（先记入 `.zhin/chat-roles-migration.json` 再改配置，数据库就绪后写表，可断点续做）；之后配置文件不再接受这些字段（启动时报错并指向升级指南）。
 
 ### 4. 映射规则：平台身份 → zhin 角色
 
@@ -64,7 +64,8 @@ roles:
       grant: admin
 ```
 
-- 可写在适配器层（对其所有账号）、账号层、会话层（数据库，Console / 聊天管理）；下级规则追加或覆盖上级同 `match` 的规则。
+- 可写在适配器层（适配器块 `roles`，对其所有账号）、账号层（`endpoints[i].roles`）、会话层（数据库表 `chat_role_mappings`，Console `chat-roles.mappings` / `chat-roles.set-mappings` 管理）；下级规则追加或覆盖上级同 `match` 的规则，`grant: none` 取消上级同 `match` 的规则，`inherit: false` 丢弃上级（含默认规则）的全部规则。
+- `match` 中给出的条件都要满足，每个条件内任一值即可。
 - 映射结果只作用于**消息所在会话**（会话层），每条消息按当前平台身份实时计算，不落库；平台上撤销管理员，zhin 中对应角色随即消失。
 - 安全默认：
   - 默认规则只有「`standing` 为 `owner` / `admin` → 会话层 `admin`」，可关闭或收紧为只限 `owner`；
@@ -72,9 +73,10 @@ roles:
 
 ### 5. 权限声明
 
-- 命令、工具、页面、插件 RPC 的 `requiredRoles` 可写：
-  - zhin 角色：`owner` / `admin` / `trusted`（按当前会话的层级链判断）；
-  - 平台条件：`platform:owner` / `platform:admin`（归一地位）、`platform-role:<id>`、`platform-permission:<name>`。
+- 命令的 `permit`、Agent 工具的 `permissions`（同一套内置 DSL）可写：
+  - zhin 角色：`owner` / `admin` / `trusted`，或 `role(…)`（按当前会话的层级链判断）；
+  - 平台条件：`platform:owner` / `platform:admin`（归一地位；`platform:admin` 也接受群主）、`platform-role:<id>`、`platform-permission:<name>`。
+- Console 页面与插件 RPC 的 `requiredRoles` 仍是 Console 账号的角色名（ADR 0049），与聊天角色无关（2026-11-12 实施时澄清）。
 - 移除：`master`、`scene_admin`、`scene_owner`、`platform(adapter,perm)`（不保留兼容，升级指南给出对照）。
 - Agent 安全策略（危险工具策略、主人审批）、群规豁免、内容审核豁免改为读新模型。
 
@@ -84,11 +86,12 @@ ADR 0055 的「功能管理员」即本 ADR 的 `admin` 角色：功能管理命
 
 ## 落盘位置
 
-- 角色模型与解析：`packages/im/core`（替换 `built/roles.ts`、`host/sender-enrichment.ts`）
-- 存储、RPC、聊天命令、迁移：实例 `packages/im/zhin/src/instance/`
-- 平台身份上报：各适配器 + `@zhin.js/im-contract`
-- 权限检查：`packages/im/permission`；Agent：`packages/im/agent/src/security/`
-- 协议：`@zhin.js/console-protocol`
+- 角色模型、解析与映射规则：`packages/im/core/src/built/roles.ts`（`ChatRoleService`、`createMappingChatRoleSource`、`createChatRoleSenderEnricher`）；Runtime 接线：`packages/im/core/src/plugin-runtime/im/host/sender-enrichment.ts`（`createSenderEnricher`、`senderOwnsReceivingAdapter`）
+- 存储：实例 `packages/im/zhin/src/instance/chat-roles.ts`（`chat_roles`、`chat_role_mappings`）；迁移：`chat-role-migration.ts`；RPC：`console/chat-roles-rpc.ts`；聊天命令：`feature-self-service.ts`
+- 平台身份类型：`@zhin.js/im-contract` 的 `PlatformStanding`（`sender.platform`）；上报：各适配器
+- 权限检查：`packages/im/permission`（`builtin.ts`）；Agent：`packages/im/agent/src/security/`、`plugin-runtime/ingress/`
+- 协议：`@zhin.js/console-protocol` 的 `chat-roles.ts`
+- 升级指南：`docs/migrations/chat-roles.md`；概念：`docs/concepts/chat-roles.md`
 
 ## 后果
 

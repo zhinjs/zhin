@@ -37,7 +37,6 @@ import {
   connectDiscordGatewayClient,
   discordClientOptions,
   DEFAULT_INTENTS,
-  resolveSenderRole,
   toMessageCreateOptions,
   type DiscordClientTransport,
 } from './gateway.js';
@@ -57,6 +56,7 @@ import {
 } from './protocol.js';
 import { registerDiscordInteractionRoutes } from './webhook.js';
 import { receiveDiscordGuildMemberSideEvent } from './side-event-dispatch.js';
+import { discordSenderStanding } from './sender-standing.js';
 
 const DISCORD_API = 'https://discord.com/api/v10';
 /** 出站 HTTP 调用统一 30s 超时。 */
@@ -226,6 +226,7 @@ export class DiscordGatewayEndpoint extends Client implements Endpoint {
     if (!this.#open) return;
     if (msg.authorBot) return;
     const conversation = discordInboundConversation(String(this.#options.id), msg);
+    const platform = discordSenderStanding(msg);
     void this[endpointSpec].events.emit('message.receive', {
       conversation,
       event: msg.event,
@@ -236,7 +237,7 @@ export class DiscordGatewayEndpoint extends Client implements Endpoint {
       sender: {
         id: msg.authorId,
         name: senderDisplayName(msg) || undefined,
-        ...(resolveSenderRole(msg) ? { roles: [resolveSenderRole(msg)!] } : {}),
+        ...(platform ? { platform } : {}),
       },
       endpointId: this.#options.config.id,
       ...(msg.mentionedBot ? { mentioned: true } : {}),
@@ -246,7 +247,7 @@ export class DiscordGatewayEndpoint extends Client implements Endpoint {
         userId: msg.authorId,
         guildId: msg.guildId,
         permissions: msg.permissionTokens,
-        role: resolveSenderRole(msg),
+        role: platform?.standing,
       }),
     }).catch((err) => {
       this.#logger.warn(formatCompact({
@@ -485,6 +486,7 @@ export class DiscordInteractionsEndpoint extends DiscordRestClient implements En
   admit(msg: DiscordInboundMessage): void {
     if (!this.#open) return;
     const conversation = discordInboundConversation(String(this.#options.id), msg);
+    const platform = discordSenderStanding(msg);
     void this[endpointSpec].events.emit('message.receive', {
       conversation,
       event: msg.event,
@@ -495,7 +497,7 @@ export class DiscordInteractionsEndpoint extends DiscordRestClient implements En
       sender: {
         id: msg.authorId,
         name: senderDisplayName(msg) || undefined,
-        ...(resolveSenderRole(msg) ? { roles: [resolveSenderRole(msg)!] } : {}),
+        ...(platform ? { platform } : {}),
       },
       endpointId: this.#options.config.id,
       metadata: Object.freeze({

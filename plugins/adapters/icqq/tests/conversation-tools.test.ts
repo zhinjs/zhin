@@ -53,9 +53,9 @@ function fixture(kind: 'private' | 'group' | 'channel' = 'group') {
 
 describe('ICQQ current conversation tools', () => {
   it.each(['member', 'admin', 'owner'])('reports the bot role %s independently of requester roles', async role => {
-    const f = fixture(); f.self.role = role; f.context.principal.roles = ['master'];
+    const f = fixture(); f.self.role = role; f.context.principal.roles = ['owner', 'admin', 'trusted'];
     expect(await info.execute({}, f.ctx)).toMatchObject({
-      bot: { id: 7, role }, requester: { roles: ['master'], canRequestLeave: true },
+      bot: { id: 7, role }, requester: { roles: ['owner', 'admin', 'trusted'], canRequestLeave: true },
       group: { id: 100, name: 'Group', memberCount: 42 },
     });
     expect(f.client.getGroupInfo).toHaveBeenCalledWith(100, true);
@@ -106,7 +106,7 @@ describe('ICQQ current conversation tools', () => {
   ])('checks live recall authority for %s over %s', async (self, target, allowed) => {
     const f = fixture(); f.original.sender.user_id = 2; f.self.role = String(self); f.member.role = String(target);
     expect(memberRecall.requiresApproval).toBe('never');
-    expect(memberRecall.permissions).toEqual(['role(master,admin,trusted,owner)']);
+    expect(memberRecall.permissions).toEqual(['trusted']);
     expect(await memberRecall.execute({ message_id: f.id, reason: 'Confirmed advertising' }, f.ctx)).toMatchObject({ success: allowed });
     expect(f.client.getGroupMemberInfo).toHaveBeenCalledWith(100, 2, true);
     expect(f.client.deleteMsg).toHaveBeenCalledTimes(allowed ? 1 : 0);
@@ -167,7 +167,7 @@ describe('ICQQ current conversation tools', () => {
 
   it('leaves only the current group, with master and fresh-human requirements', async () => {
     const f = fixture();
-    expect(leave.permissions).toEqual(['role(master)']); expect(leave.requiresApproval).toBe('human'); expect(leave.risk).toBe('dangerous');
+    expect(leave.permissions).toEqual(['owner']); expect(leave.requiresApproval).toBe('human'); expect(leave.risk).toBe('dangerous');
     expect(await leave.execute({ group_id: 101, reason: 'Requested' }, f.ctx)).toMatchObject({ success: false });
     expect(f.client.getGroupInfo).not.toHaveBeenCalled();
     expect(await leave.execute({ group_id: 100, reason: 'Requested' }, f.ctx)).toMatchObject({ success: true });

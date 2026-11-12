@@ -7,7 +7,7 @@ describe('assembleSchedulePrompt', () => {
     const result = assembleSchedulePrompt({
       jobId: 'sched_weather',
       prompt: '发布天气预报',
-      createdBy: { userId: 'u1', name: 'Alice', roles: ['master'] },
+      createdBy: { userId: 'u1', name: 'Alice', roles: ['owner'] },
       now: new Date('2026-08-12T01:00:00.000Z'),
       timeZone: 'Asia/Shanghai',
       bootstrapContext: 'Workspace rule',

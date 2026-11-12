@@ -35,9 +35,9 @@ describe('usageSubjectFromMessage (#877)', () => {
       .toBe('onebot11:bot-2:g100');
   });
 
-  it('marks master senders as owner', () => {
-    expect(usageSubjectFromMessage(message({ sender: { id: 'u1', roles: ['admin', 'master'] } }))?.owner).toBe(true);
-    expect(usageSubjectFromMessage(message({ sender: { id: 'u1', roles: ['admin'] } }))?.owner).toBe(false);
+  it('marks senders with the chat role owner (ADR 0056)', () => {
+    expect(usageSubjectFromMessage(message({ sender: { id: 'u1', chatRole: 'owner' } }))?.owner).toBe(true);
+    expect(usageSubjectFromMessage(message({ sender: { id: 'u1', chatRole: 'admin', roles: ['owner'] } }))?.owner).toBe(false);
   });
 
   it('returns undefined instead of throwing when there is no sender', () => {

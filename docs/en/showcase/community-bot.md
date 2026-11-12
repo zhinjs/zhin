@@ -45,7 +45,6 @@ in the config means one `icqq` plugin + 5 endpoints, not one plugin duplicated f
 ```yaml
 plugins:
   icqq:
-    master: "${ICQQ_MASTER}"
     endpoints:                        # One instance, five accounts
       - name: "${ICQQ_ACCOUNT}"
       - name: "${ICQQ_ACCOUNT_2}"

@@ -13,7 +13,7 @@ Guild 频道消息从 `msg.member.permissions` bitfield 解析：
 
 ## Permit 词汇表
 
-| `platform(discord,…)` | 含义 |
+| `platform-permission:…` | 含义 |
 |-----------------------|------|
 | `guild_owner` | 服务器主 |
 | `moderate_members` | 踢人/禁言 |
@@ -22,4 +22,6 @@ Guild 频道消息从 `msg.member.permissions` bitfield 解析：
 
 ## 工厂映射
 
-`scene_admin` → `moderate_members` · `scene_owner` → `guild_owner`
+场景治理工具默认要求 `platform:admin` / `platform:owner`（归一地位，ADR 0056 §5）；本适配器把它们映射为下列平台权限：
+
+`platform:admin` → `moderate_members` · `platform:owner` → `guild_owner`

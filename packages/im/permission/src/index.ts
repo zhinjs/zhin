@@ -1,7 +1,6 @@
 export {
   PermissionHost,
   type PermissionChecker,
-  type PlatformPermitChecker,
 } from './host.js';
 
 export { permissionHostToken } from './token.js';
@@ -10,17 +9,17 @@ export {
   type PermissionSubject,
   type PermissionScene,
   type PermissionSender,
+  type PermissionPlatformStanding,
   toPermissionSubject,
 } from './subject.js';
 
 export {
   type PermitKind,
+  type PermitChatRole,
   type ParsedPermit,
-  type ParsedPlatformPermit,
   parsePermitName,
-  parsePlatformPermitName,
   isBuiltinPermit,
-  isPlatformPermit,
+  removedPermitReplacement,
   assertPermitSyntax,
   checkBuiltinPermit,
   checkBuiltinPermitList,
@@ -28,11 +27,8 @@ export {
 
 export {
   type PermissionDefinition,
-  type PlatformPermissionDefinition,
   definePermission,
-  definePlatformPermission,
 } from './define.js';
 
-export { createSceneRolePlatformChecker, platformPermission } from './helpers.js';
 export * from './check-permissions.js';
 export * from './explain.js';

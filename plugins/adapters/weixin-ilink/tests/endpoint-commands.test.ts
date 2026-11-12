@@ -28,7 +28,7 @@ async function fixture() {
   const adapter = index.adapter(slot.id)!;
   const use = vi.fn(() => { throw new Error('startup config/.env store must not be used'); });
   const context = (overrides: Record<string, unknown> = {}) => ({ owner, generation: 1, project: () => index, use,
-    params: { id: 'bot1' }, args, input: undefined, config: source, signal: new AbortController().signal, ...overrides }) as never;
+    params: { id: 'bot1' }, args, input: { sender: { id: 'owner-user', chatRole: 'owner' } }, config: source, signal: new AbortController().signal, ...overrides }) as never;
   return { index, adapter, source, context, write, use, saved: () => saved };
 }
 
@@ -63,7 +63,7 @@ describe('weixin-ilink actual convention Adapter account commands', () => {
   });
   it('retains the configured master guard before either add/remove can reach persistence', async () => {
     const f = await fixture(), denied = f.context({ config: { master: 'alice' }, input: { sender: { id: 'bob' } } });
-    expect(await addCommand.execute(denied)).toBe('仅 master 可执行 Weixin iLink endpoint 管理命令');
-    expect(await removeCommand.execute(denied)).toBe('仅 master 可执行 Weixin iLink endpoint 管理命令'); expect(f.write).not.toHaveBeenCalled();
+    expect(await addCommand.execute(denied)).toBe('仅聊天角色 owner 可执行 Weixin iLink endpoint 管理命令');
+    expect(await removeCommand.execute(denied)).toBe('仅聊天角色 owner 可执行 Weixin iLink endpoint 管理命令'); expect(f.write).not.toHaveBeenCalled();
   });
 });

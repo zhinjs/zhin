@@ -310,3 +310,7 @@ QQ 当前未实现 canonical `share` 的标题/描述/URL 消息卡片。适配�
 Endpoint 管理命令和工具反馈使用当前操作语言。扫码绑定在开始时固定语言，后续二维码刷新、公域/私域选择和结果回复保持一致；`public` / `private` 是稳定的配置值，两种语言都可使用，中文别名只在中文流程中接受。
 
 取消指引使用发起命令时的真实前缀及插件命名空间，不猜测调用方式。确认回复仅接受发起者所在的完整会话（Endpoint、会话、父容器、线程和发送者）；其他成员或线程不会完成该绑定。
+
+## 成员身份
+
+频道（guild）消息的 `member.roles` 归一为 `sender.platform`：身份组 `4`（频道主）→ `owner`，`2`（超级管理员）→ `admin`，其余为 `member`（`5` 子频道管理员不视为 admin）；原始身份组进 `roles`（内置身份带名称）。QQ 群、单聊事件不带身份组，不上报；官方事件没有权限位，`permissions` 不上报。能力画像：`channel.scene.platformStanding = { standing: true, roles: true }`。详见 [ADR 0056 §1](https://github.com/zhinjs/zhin/blob/main/docs/adr/0056-chat-roles.md)。

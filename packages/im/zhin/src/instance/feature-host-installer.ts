@@ -1,40 +1,41 @@
 /**
  * ADR 0055 / 0056: conversation-level feature overrides and chat roles for the instance.
  * Defines the instance-owned tables, loads them once the DatabaseHost started, provides the
- * conversation read side to the Runtime (dispatch gates, `configFor` / `isEnabledFor`) and
- * installs the in-chat `feature` / `role` commands when `features.selfService.enabled` is true.
+ * conversation read side to the Runtime (dispatch gates, `configFor` / `isEnabledFor`), the chat
+ * role resolution behind `sender.chatRole`, and installs the in-chat `feature` / `role` commands
+ * when `features.selfService.enabled` is true.
  */
-import type { EndpointRoleResolver } from '@zhin.js/core/runtime';
+import { ChatRoleService, createMappingChatRoleSource, type MappingChatRoleSource } from '@zhin.js/core';
 import type { ConsoleAuditEntry } from '@zhin.js/host-http';
 import { getLogger } from '@zhin.js/logger';
 import {
   decodeStorageIdentity, featureConversationOverridesToken, resolveEndpointFeatureKey,
-  type DatabaseHost, type RuntimeConfigDocument, type SnapshotReader,
+  type DatabaseHost, type SnapshotReader,
 } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
-import {
-  ChatRoleService, ChatRoleStore, createConfigChatRoleSource, createPlatformChatRoleSource, defineChatRoleTable,
-} from './chat-roles.js';
+import { ChatRoleMappingStore, ChatRoleStore, defineChatRoleTable, type InstanceChatRoleService } from './chat-roles.js';
 import {
   defineFeatureConversationTable, FeatureConversationOverrideStore,
   type FeatureRecentConversation, type FeatureRpcContext, type FeatureStores,
 } from './console/module.js';
-import {
-  installFeatureSelfService, platformMappingOf, readFeatureSelfServiceConfig, type FeatureSelfServiceConfig,
-} from './feature-self-service.js';
+import { installFeatureSelfService, readFeatureSelfServiceConfig, type FeatureSelfServiceConfig } from './feature-self-service.js';
 
 export interface FeatureHostOptions {
   readonly database: DatabaseHost;
   readonly hostConfig: unknown;
-  /** Startup configuration document (endpoint lists for configured owners). */
-  readonly config: unknown;
-  readonly endpointRoles: Pick<EndpointRoleResolver, 'resolveOwner' | 'resolveTrusted'>;
   readonly snapshots: () => SnapshotReader;
+  /** Runs once after the stores loaded (configuration migration, ADR 0056 §3). */
+  readonly afterLoad?: (roles: InstanceChatRoleService) => Promise<void>;
 }
 
 export interface FeatureHost {
   readonly stores: FeatureStores;
-  readonly roles: ChatRoleService;
+  readonly roles: InstanceChatRoleService;
+  readonly mappings: ChatRoleMappingStore;
+  /** Live mapping source (also remembers mapped senders for listings). */
+  readonly mappingSource: MappingChatRoleSource;
+  /** Stored owners of an account, closest scope first (owner approval address). */
+  resolveEndpointOwner(alias: string, endpointId: string): string | undefined;
   readonly selfService: FeatureSelfServiceConfig;
   /** Root resources: the conversation reader, the load step and (when enabled) the chat commands. */
   install(deps: Readonly<{
@@ -43,45 +44,18 @@ export interface FeatureHost {
   }>): RootResourceInstaller;
 }
 
-const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
-
-function configuredEndpoints(config: RuntimeConfigDocument | undefined): readonly (readonly [string, string])[] {
-  if (!config) return [];
-  const plugins = record(config.plugins) ? Object.keys(config.plugins) : [];
-  return plugins.flatMap(alias => {
-    const block = (config as Record<string, unknown>)[alias] as { endpoints?: unknown } | undefined;
-    return Array.isArray(block?.endpoints)
-      ? block.endpoints.flatMap(item => record(item) && typeof item.id === 'string' ? [[alias, item.id] as const] : [])
-      : [];
-  });
-}
-
-function idList(value: unknown): readonly string[] {
-  if (Array.isArray(value)) return value.map(item => String(item).trim()).filter(Boolean);
-  return typeof value === 'string' ? value.split(/[\s,]+/u).filter(Boolean) : [];
-}
-
 /** Must be created before the DatabaseHost starts (tables are defined here). */
 export function createFeatureHost(options: FeatureHostOptions): FeatureHost {
   defineFeatureConversationTable(options.database);
   defineChatRoleTable(options.database);
   const selfService = readFeatureSelfServiceConfig(options.hostConfig);
   const conversations = new FeatureConversationOverrideStore({ database: options.database });
-  const trigger = record(options.hostConfig) && record(options.hostConfig.ai) && record(options.hostConfig.ai.trigger) ? options.hostConfig.ai.trigger : {};
-  const platform = createPlatformChatRoleSource(() => platformMappingOf(selfService));
-  const roles = new ChatRoleService({
-    store: new ChatRoleStore({ database: options.database }),
-    sources: [
-      createConfigChatRoleSource({
-        resolveOwner: (alias, endpointId) => options.endpointRoles.resolveOwner(alias, endpointId),
-        resolveTrusted: (alias, endpointId) => options.endpointRoles.resolveTrusted(alias, endpointId),
-        endpoints: () => configuredEndpoints(options.config as RuntimeConfigDocument | undefined),
-        globalOwners: () => idList(trigger.masters),
-        globalTrusted: () => idList(trigger.trusted),
-      }),
-      platform,
-    ],
-  });
+  const mappings = new ChatRoleMappingStore({ database: options.database });
+  const mappingSource = createMappingChatRoleSource({ conversationLayer: key => mappings.layer(key) });
+  const roles: InstanceChatRoleService = new ChatRoleService({ store: new ChatRoleStore({ database: options.database }), sources: [mappingSource] });
+  const resolveEndpointOwner = (alias: string, endpointId: string): string | undefined => {
+    try { return roles.ownersOf(`${alias}/${endpointId}`, alias)[0]; } catch { return undefined; }
+  };
   const recentConversations = async (limit: number): Promise<readonly FeatureRecentConversation[]> => {
     const raw = options.database.started ? options.database.getRawDatabase() as { models?: Map<string, unknown> } | undefined : undefined;
     const model = raw?.models?.get('conversation_events') as {
@@ -104,7 +78,7 @@ export function createFeatureHost(options: FeatureHostOptions): FeatureHost {
       });
     } finally { lease.release(); }
   };
-  const stores: FeatureStores = Object.freeze({ conversations, roles, recentConversations });
+  const stores: FeatureStores = Object.freeze({ conversations, roles, mappings, recentConversations });
   let loaded = false;
   const install: FeatureHost['install'] = deps => context => {
     context.resources.provide(featureConversationOverridesToken, conversations.reader);
@@ -114,16 +88,18 @@ export function createFeatureHost(options: FeatureHostOptions): FeatureHost {
         if (loaded) return;
         await conversations.load(id => getLogger('feature').warn(`Skipped malformed conversation override ${id}`));
         await roles.store.load();
+        await mappings.load();
+        await options.afterLoad?.(roles);
         loaded = true;
       },
     });
     installFeatureSelfService({
       config: selfService, roles, snapshots: options.snapshots(),
       context: { ...deps.context, stores },
-      onActor: actor => platform.record(actor.identity, actor.context),
+      mappingLayer: key => mappings.layer(key),
       ...(deps.context.publishEvent ? { publishEvent: deps.context.publishEvent } : {}),
       ...(deps.audit ? { audit: deps.audit } : {}),
     })(context);
   };
-  return Object.freeze({ stores, roles, selfService, install });
+  return Object.freeze({ stores, roles, mappings, mappingSource, resolveEndpointOwner, selfService, install });
 }

@@ -35,6 +35,7 @@ import {
   napcatInboundConversation,
   napcatOutboundTarget,
   senderNickname,
+  napcatSenderStanding,
   senderUserId,
   type NapCatEvent,
   type NapCatWsConfig,
@@ -194,6 +195,7 @@ export class NapCatWsEndpoint extends NapcatClient implements Endpoint {
     const mentioned = isNapCatBotMentioned(ev);
     const quoteId = extractQuoteId(ev);
     const segments = Array.isArray(ev.message) ? toCanonicalSegments(ev.message) : undefined;
+    const platform = napcatSenderStanding(ev);
     void this[endpointSpec].events.message({
       event: nativeEvent,
       ...(typeof nativeEvent.time === 'number' ? { platformSentAt: nativeEvent.time * 1000 } : {}),
@@ -204,7 +206,7 @@ export class NapCatWsEndpoint extends NapcatClient implements Endpoint {
       sender: {
         id: senderUserId(ev),
         name: nickname,
-        ...(ev.sender?.role ? { roles: [ev.sender.role] } : {}),
+        ...(platform ? { platform } : {}),
       },
       endpointId: this.#options.config.id,
       ...(mentioned ? { mentioned: true } : {}),

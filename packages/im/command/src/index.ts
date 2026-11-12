@@ -14,7 +14,7 @@ export {
   checkBuiltinPermit,
   checkBuiltinPermitList,
   isBuiltinPermit,
-  isPlatformPermit,
+  removedPermitReplacement,
   parsePermitName,
   type ParsedPermit,
   type PermitKind,

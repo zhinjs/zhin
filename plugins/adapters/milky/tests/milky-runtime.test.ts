@@ -617,13 +617,13 @@ describe('milky plugin runtime adapter', () => {
           { type: 'mention', data: { user_id: 10001 } },
           { type: 'text', data: { text: ' 在吗' } },
         ],
-        group_member: { user_id: 9, nickname: 'bob' },
+        group_member: { user_id: 9, nickname: 'bob', role: 'admin' },
       },
     });
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
       conversation: milkyConversation('group', '200'),
-      sender: expect.objectContaining({ id: '9' }),
+      sender: expect.objectContaining({ id: '9', platform: { standing: 'admin' } }),
       mentioned: true, metadata: expect.objectContaining({ nickname: 'bob' }),
     }));
     await endpoint.stop();

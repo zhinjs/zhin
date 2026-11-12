@@ -1,6 +1,9 @@
 /**
  * PermissionSubject — duck-typed 鉴权主体（与 CommandSession 同构）。
  * 不依赖 `@zhin.js/core`；任何带有 adapter/endpoint/scene/sender 的对象都可投影。
+ *
+ * 角色只读 Runtime 设置的 `sender.chatRole` 与归一的 `sender.platform`（ADR 0056），
+ * 不读 metadata 或适配器自报的字符串角色。
  */
 
 export interface PermissionScene {
@@ -9,11 +12,19 @@ export interface PermissionScene {
   readonly name?: string;
 }
 
+export interface PermissionPlatformStanding {
+  readonly standing: 'owner' | 'admin' | 'member' | 'guest';
+  readonly roles?: readonly Readonly<{ id: string; name?: string }>[];
+  readonly permissions?: readonly string[];
+}
+
 export interface PermissionSender {
   readonly id: string;
   readonly name?: string;
-  readonly role: readonly string[];
-  readonly permissions?: readonly string[];
+  /** Highest zhin chat role effective in the conversation. */
+  readonly chatRole?: 'owner' | 'admin' | 'trusted';
+  /** Normalized platform standing; absent in private chats. */
+  readonly platform?: PermissionPlatformStanding;
 }
 
 export interface PermissionSubject {
@@ -23,29 +34,60 @@ export interface PermissionSubject {
   readonly sender?: PermissionSender;
 }
 
+const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
+const STANDINGS = new Set(['owner', 'admin', 'member', 'guest']);
+
+function chatRoleOf(value: unknown): PermissionSender['chatRole'] {
+  return value === 'owner' || value === 'admin' || value === 'trusted' ? value : undefined;
+}
+
+function platformOf(value: unknown): PermissionPlatformStanding | undefined {
+  if (!record(value) || typeof value.standing !== 'string' || !STANDINGS.has(value.standing)) return undefined;
+  const roles = Array.isArray(value.roles)
+    ? value.roles.filter((role): role is { id: string; name?: string } => record(role) && typeof role.id === 'string' && role.id.length > 0)
+    : undefined;
+  const permissions = Array.isArray(value.permissions)
+    ? value.permissions.filter((permission): permission is string => typeof permission === 'string' && permission.length > 0)
+    : undefined;
+  return Object.freeze({
+    standing: value.standing as PermissionPlatformStanding['standing'],
+    ...(roles?.length ? { roles: Object.freeze(roles) } : {}),
+    ...(permissions?.length ? { permissions: Object.freeze(permissions) } : {}),
+  });
+}
+
+function senderOf(value: unknown): PermissionSender | undefined {
+  if (!record(value)) return undefined;
+  const chatRole = chatRoleOf(value.chatRole);
+  const platform = platformOf(value.platform);
+  return Object.freeze({
+    id: String(value.id ?? ''),
+    ...(value.name ? { name: String(value.name) } : {}),
+    ...(chatRole ? { chatRole } : {}),
+    ...(platform ? { platform } : {}),
+  });
+}
+
 /**
  * 从 message-like 对象投影为 PermissionSubject（鸭式）。
  * 接受 canonical Runtime `Message` / `CommandSession` / 任意含同名字段的对象。
  */
 export function toPermissionSubject(source: unknown): PermissionSubject {
-  if (!source || typeof source !== 'object') return {};
-  const obj = source as Record<string, unknown>;
+  if (!record(source)) return {};
+  const obj = source;
   const result: Record<string, unknown> = {};
 
   // CommandSession 风格
   if (typeof obj.adapter === 'string') result.adapter = obj.adapter;
   if (typeof obj.endpoint === 'string') result.endpoint = obj.endpoint;
-  if (obj.scene && typeof obj.scene === 'object') result.scene = obj.scene;
-  if (obj.sender && typeof obj.sender === 'object' && Array.isArray((obj.sender as { role?: unknown }).role)) {
-    result.sender = obj.sender;
-  }
+  if (record(obj.scene)) result.scene = obj.scene;
 
   // canonical Runtime Message
   if (typeof obj.clientAdapter === 'string' && !result.adapter) result.adapter = obj.clientAdapter;
   if (typeof obj.endpointId === 'string' && !result.endpoint) result.endpoint = obj.endpointId;
-  if (obj.conversation && typeof obj.conversation === 'object' && !result.scene) {
-    const ch = obj.conversation as Record<string, unknown>;
-    const endpoint = ch.endpoint as Record<string, unknown> | undefined;
+  if (record(obj.conversation) && !result.scene) {
+    const ch = obj.conversation;
+    const endpoint = record(ch.endpoint) ? ch.endpoint : undefined;
     if (!result.adapter && typeof endpoint?.adapter === 'string') result.adapter = endpoint.adapter;
     if (!result.endpoint && typeof endpoint?.id === 'string') result.endpoint = endpoint.id;
     result.scene = {
@@ -54,29 +96,8 @@ export function toPermissionSubject(source: unknown): PermissionSubject {
       ...(ch.name ? { name: String(ch.name) } : {}),
     };
   }
-  if (obj.sender && typeof obj.sender === 'object' && !result.sender) {
-    const s = obj.sender as Record<string, unknown>;
-    const metadata = obj.metadata as Record<string, unknown> | undefined;
-    const roles = new Set(Array.isArray(s.roles) ? s.roles.map(String) : []);
-    if (typeof metadata?.senderRole === 'string') roles.add(metadata.senderRole);
-    if (typeof metadata?.role === 'string') roles.add(metadata.role);
-    if (Array.isArray(metadata?.roles)) {
-      for (const role of metadata.roles) roles.add(String(role));
-    }
-    const permissions = new Set(Array.isArray(s.permissions) ? s.permissions.map(String) : []);
-    if (Array.isArray(metadata?.senderPermissions)) {
-      for (const permission of metadata.senderPermissions) permissions.add(String(permission));
-    }
-    if (Array.isArray(metadata?.permissions)) {
-      for (const permission of metadata.permissions) permissions.add(String(permission));
-    }
-    result.sender = {
-      id: String(s.id ?? ''),
-      ...(s.name ? { name: String(s.name) } : {}),
-      role: [...roles],
-      ...(permissions.size > 0 ? { permissions: [...permissions] } : {}),
-    };
-  }
+  const sender = senderOf(obj.sender);
+  if (sender) result.sender = sender;
 
   return result as PermissionSubject;
 }

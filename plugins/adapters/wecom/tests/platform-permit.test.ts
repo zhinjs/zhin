@@ -10,18 +10,17 @@ import {
 function mockSubject(sender: { role?: string; permissions?: string[] }) {
   return {
     adapter: 'wecom',
-    sender: { id: 'u1', role: sender.role ? [sender.role] : [], permissions: sender.permissions },
+    sender: { id: 'u1', platform: { standing: (sender.role ?? 'member') as never, ...(sender.permissions ? { permissions: sender.permissions } : {}) } },
     scene: { type: 'group', id: 'c1' },
   };
 }
 
-function mockMsg() {
+function mockMsg(platformPermissions: string[]) {
   return {
     clientAdapter: 'wecom',
     endpointId: 'bot1',
     conversation: { endpoint: { adapter: 'wecom', id: 'bot1' }, kind: 'group', id: 'c1' },
-    sender: { id: 'u1', roles: [] },
-    metadata: {},
+    sender: { id: 'u1', platform: { standing: 'member' as const, permissions: platformPermissions } },
   } as any;
 }
 
@@ -30,7 +29,6 @@ describe('wecom platform-permit', () => {
 
   beforeEach(() => {
     host = new PermissionHost();
-    host.registerPlatform('wecom', (perm, subject) => checkWecomPlatformPermit(perm, subject));
   });
 
   it('normalizeWecomSenderForPermit', () => {
@@ -52,6 +50,7 @@ describe('wecom platform-permit', () => {
       permissions: [platformPermit('chat_admin')],
       execute: async () => '',
     };
-    expect(await canAccessTool(tool, mockMsg(), host)).toBe(false);
+    expect(await canAccessTool(tool, mockMsg([]), host)).toBe(false);
+    expect(await canAccessTool(tool, mockMsg(['chat_admin']), host)).toBe(true);
   });
 });

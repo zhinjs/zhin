@@ -35,12 +35,10 @@ export default defineMiddleware<Message, ModerationConfig>({
     const locale = resolveLocale(message.locale);
     const sender = message.sender?.id;
     const conversationId = message.conversation.id;
-    const endpointMasters = resolveEndpointMasters(message, config);
-
     const bypass = shouldBypassInbound(config, {
       sender,
       conversationId,
-      endpointMasters,
+      ...(message.sender?.chatRole ? { chatRole: message.sender.chatRole } : {}),
     });
     const review = await enqueueGroupModeration(context, config, bypass);
     if (bypass) {
@@ -196,7 +194,7 @@ async function enqueueGroupModeration(
               conversation, memberId: message.sender!.id, trigger: hit.category, newcomer: hit.newcomer,
               sentAt: Number(message.metadata?.platformSentAt), evidence: hit.evidence,
               ...(message.sender?.name ? { memberName: message.sender.name } : {}),
-              ...(message.sender?.roles ? { memberRoles: message.sender.roles } : {}),
+              ...(message.sender?.chatRole ? { memberChatRole: message.sender.chatRole } : {}),
               ...(messageId ? { messageId } : {}),
               ...(hit.recall ? { recall: hit.recall } : {}),
             });
@@ -225,20 +223,4 @@ async function enqueueGroupModeration(
   } catch (error) {
     logger.warn('Automatic group moderation unavailable', error instanceof Error ? error.message : String(error));
   }
-}
-
-/**
- * Masters from plugin config + optional metadata.endpointMaster / metadata.master.
- */
-function resolveEndpointMasters(
-  message: Message,
-  config: ModerationConfig,
-): readonly string[] {
-  const out: string[] = [...config.masters];
-  const meta = message.metadata ?? {};
-  for (const key of ['master', 'endpointMaster', 'owner'] as const) {
-    const value = meta[key];
-    if (typeof value === 'string' && value.trim()) out.push(value.trim());
-  }
-  return Object.freeze(out);
 }

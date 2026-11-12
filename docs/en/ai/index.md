@@ -159,8 +159,6 @@ ai:
     timeout: 60000             # per-turn timeout (ms)
     thinkingMessage: Thinking… # optional placeholder reply before processing
     # errorTemplate: "Error: {error}"  # optional; unset, the bot says it lagged in a chat voice and the owner also sees the cause
-    masters: ["10001"]         # users with approval rights
-    trusted: []                # trusted users (below master)
 ```
 
 Mention triggering relies on the adapter flagging the message as mentioning the bot (CQ codes, Slack `app_mention`, etc.).

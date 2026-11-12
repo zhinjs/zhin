@@ -11,7 +11,7 @@ export default defineEvalCase({
     kind: 'timer',
     timerId: 'daily-cert-renew',
     content: '每日例行：续订即将过期的证书',
-    owner: { id: 'master', roles: ['master'] },
+    owner: { id: 'master', roles: ['owner'] },
   },
   // A peer must be present so the turn gets collaboration tools (including escalate).
   agents: [{ name: 'ops', description: 'Ops peer; unused in this case.', tools: [] }],

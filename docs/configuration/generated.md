@@ -467,11 +467,8 @@ outline: [2, 3]
 | `plugin` | object | 否 | — | Root Plugin 配置；组合时由项目 Schema 替换。 |
 | `locale` | string: `"zh-CN"`, `"en"` | 否 | — | 未设置个人偏好时使用的语言；未配置时使用简体中文，语言与时区独立。 |
 | `features` | object | 否 | — | 插件配置块之外的功能配置（ADR 0055）：群内自助。修改后需重启。 |
-| `features.selfService` | object | 否 | — | 功能管理员在聊天中使用的 `功能` / `feature` 命令，默认关闭。 |
-| `features.selfService.enabled` | boolean | 否 | `false` | 注册群内功能自助命令。 |
-| `features.selfService.platformAdmins` | boolean | 否 | `true` | 平台群主 / 管理员（适配器报告、且列在 roles 中的角色）是该群的会话层管理员。 |
-| `features.selfService.roles` | array&lt;string&gt; | 否 | `["owner","admin"]` | platformAdmins 认可的平台角色；设为 ["owner"] 只认群主。 |
-| `features.selfService.allowUsers` | array&lt;string&gt; | 否 | `[]` | 全局功能管理员，格式 &lt;适配器别名&gt;:&lt;用户 id&gt;。 |
+| `features.selfService` | object | 否 | — | 聊天角色 admin 在聊天中使用的 `功能` / `feature` 与 `角色` / `role` 命令（ADR 0055 / 0056），默认关闭。平台群主 / 管理员经 roles.mappings（默认规则）成为会话 admin。 |
+| `features.selfService.enabled` | boolean | 否 | `false` | 注册群内功能自助与角色命令。 |
 
 ## 独立 AI 导入提案
 
@@ -552,8 +549,14 @@ outline: [2, 3]
 | `bilibili.videos` | array&lt;string \| number&gt; | 否 | — | 白名单视频：BV 号或 av 号。只轮询这些视频的评论，不做全站搜索 |
 | `bilibili.dynamics` | array&lt;string&gt; | 否 | — | 白名单动态：动态 id（t.bilibili.com/&lt;id&gt; 或 bilibili.com/opus/&lt;id&gt; 里的数字，请写成字符串）。启动时经动态详情解析出评论区（图文动态 type=11 / 文字动态 type=17），无法解析的动态会跳过。不做全站搜索 |
 | `bilibili.articles` | array&lt;string \| number&gt; | 否 | — | 白名单专栏：cv 号（cv123 或 123），评论区 type=12。不做全站搜索 |
-| `bilibili.master` | string \| number | 否 | — | 框架 master（B 站 uid）。endpoints[i].master 可逐项覆盖 |
-| `bilibili.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（B 站 uid） |
+| `bilibili.roles` | object | 否 | — | 平台身份 → zhin 聊天角色的映射规则（ADR 0056 §4）。结果只作用于消息所在会话、按平台身份实时计算；适配器层规则对其所有账号有效，账号层（endpoints[i].roles）追加或覆盖同 match 的规则。默认规则：standing 为 owner / admin → 会话 admin。 |
+| `bilibili.roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `bilibili.roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `bilibili.roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `bilibili.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `bilibili.roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `bilibili.roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `bilibili.roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `bilibili.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 | `bilibili.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
 | `bilibili.endpoints[].id` | string | 是 | — | Endpoint 名称（本地标识，不是 B 站账号） |
@@ -574,8 +577,14 @@ outline: [2, 3]
 | `bilibili.endpoints[].notify.kind` | string: `"private"`, `"group"`, `"channel"` | 否 | `"private"` | 会话类型 |
 | `bilibili.endpoints[].notify.id` | string \| number | 是 | — | 会话 id：私聊填你的账号，群聊填群号 |
 | `bilibili.endpoints[].apiBaseUrl` | string | 否 | `"https://api.bilibili.com"` | — |
-| `bilibili.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（B 站 uid） |
-| `bilibili.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `bilibili.endpoints[].roles` | object | 否 | — | 本账号的映射规则；追加或覆盖适配器层同 match 的规则（ADR 0056 §4） |
+| `bilibili.endpoints[].roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `bilibili.endpoints[].roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `bilibili.endpoints[].roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `bilibili.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `bilibili.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `bilibili.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `bilibili.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `bilibili.endpoints[].commandPrefix` | string | 否 | — | — |
 | `bilibili.endpoints[].nickname` | string \| null | 否 | — | 账号昵称兜底 |
 | `bilibili.endpoints[].profile` | object | 否 | — | 账号资料兜底 |
@@ -609,8 +618,14 @@ outline: [2, 3]
 | `bilibili-live.minSendIntervalSec` | number | 否 | `5` | 两次回复的最小间隔（秒），最小 2；不足时拒绝发送，不排队 |
 | `bilibili-live.apiBaseUrl` | string | 否 | `"https://api.bilibili.com"` | — |
 | `bilibili-live.liveApiBaseUrl` | string | 否 | `"https://api.live.bilibili.com"` | — |
-| `bilibili-live.master` | string \| number | 否 | — | 框架 master（B 站 uid）。endpoints[i].master 可逐项覆盖 |
-| `bilibili-live.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（B 站 uid） |
+| `bilibili-live.roles` | object | 否 | — | 平台身份 → zhin 聊天角色的映射规则（ADR 0056 §4）。结果只作用于消息所在会话、按平台身份实时计算；适配器层规则对其所有账号有效，账号层（endpoints[i].roles）追加或覆盖同 match 的规则。默认规则：standing 为 owner / admin → 会话 admin。 |
+| `bilibili-live.roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `bilibili-live.roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `bilibili-live.roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `bilibili-live.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `bilibili-live.roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `bilibili-live.roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `bilibili-live.roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `bilibili-live.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 | `bilibili-live.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
 | `bilibili-live.endpoints[].id` | string | 是 | — | Endpoint 名称（本地标识，不是 B 站账号） |
@@ -624,8 +639,14 @@ outline: [2, 3]
 | `bilibili-live.endpoints[].minSendIntervalSec` | number | 否 | `5` | 两次回复的最小间隔（秒），最小 2；不足时拒绝发送，不排队 |
 | `bilibili-live.endpoints[].apiBaseUrl` | string | 否 | `"https://api.bilibili.com"` | — |
 | `bilibili-live.endpoints[].liveApiBaseUrl` | string | 否 | `"https://api.live.bilibili.com"` | — |
-| `bilibili-live.endpoints[].master` | string \| number | 否 | — | 框架 master（B 站 uid）。endpoints[i].master 可逐项覆盖 |
-| `bilibili-live.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（B 站 uid） |
+| `bilibili-live.endpoints[].roles` | object | 否 | — | 本账号的映射规则；追加或覆盖适配器层同 match 的规则（ADR 0056 §4） |
+| `bilibili-live.endpoints[].roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `bilibili-live.endpoints[].roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `bilibili-live.endpoints[].roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `bilibili-live.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `bilibili-live.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `bilibili-live.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `bilibili-live.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `bilibili-live.endpoints[].commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 | `bilibili-live.endpoints[].nickname` | string \| null | 否 | — | 账号昵称兜底 |
 | `bilibili-live.endpoints[].profile` | object | 否 | — | 账号资料兜底 |
@@ -653,11 +674,23 @@ outline: [2, 3]
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
 | `dingtalk.apiBaseUrl` | string | 否 | `"https://oapi.dingtalk.com"` | — |
-| `dingtalk.master` | string \| number | 否 | — | 框架 master（DingTalk userid；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `dingtalk.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `dingtalk.roles` | object | 否 | — | 平台身份 → zhin 聊天角色的映射规则（ADR 0056 §4）。结果只作用于消息所在会话、按平台身份实时计算；适配器层规则对其所有账号有效，账号层（endpoints[i].roles）追加或覆盖同 match 的规则。默认规则：standing 为 owner / admin → 会话 admin。 |
+| `dingtalk.roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `dingtalk.roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `dingtalk.roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `dingtalk.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `dingtalk.roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `dingtalk.roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `dingtalk.roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `dingtalk.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `dingtalk.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（DingTalk userid）；覆盖顶层 master |
-| `dingtalk.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `dingtalk.endpoints[].roles` | object | 否 | — | 本账号的映射规则；追加或覆盖适配器层同 match 的规则（ADR 0056 §4） |
+| `dingtalk.endpoints[].roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `dingtalk.endpoints[].roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `dingtalk.endpoints[].roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `dingtalk.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `dingtalk.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `dingtalk.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `dingtalk.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `dingtalk.endpoints[].appKey` | string | 是 | — | Dingtalk app key |
 | `dingtalk.endpoints[].appSecret` | string | 是 | — | Dingtalk app secret |
 | `dingtalk.endpoints[].webhookPath` | string | 否 | — | Dingtalk webhook path |
@@ -712,11 +745,23 @@ outline: [2, 3]
 | `discord.applicationId` | string | 否 | — | Required when connection is interactions. |
 | `discord.publicKey` | string | 否 | — | Required when connection is interactions (hex Ed25519 public key). |
 | `discord.interactionsPath` | string | 否 | `"/discord/interactions"` | POST path on httpHostToken when connection is interactions. |
-| `discord.master` | string \| number | 否 | — | 框架 master（Discord user snowflake；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `discord.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `discord.roles` | object | 否 | — | 平台身份 → zhin 聊天角色的映射规则（ADR 0056 §4）。结果只作用于消息所在会话、按平台身份实时计算；适配器层规则对其所有账号有效，账号层（endpoints[i].roles）追加或覆盖同 match 的规则。默认规则：standing 为 owner / admin → 会话 admin。 |
+| `discord.roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `discord.roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `discord.roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `discord.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `discord.roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `discord.roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `discord.roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `discord.endpoints` | array&lt;object&gt; | 是 | — | 多账号：每项定义一个 endpoint，id/token 必填，其余字段覆盖实例默认值 |
-| `discord.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（Discord user snowflake）；覆盖顶层 master |
-| `discord.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `discord.endpoints[].roles` | object | 否 | — | 本账号的映射规则；追加或覆盖适配器层同 match 的规则（ADR 0056 §4） |
+| `discord.endpoints[].roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `discord.endpoints[].roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `discord.endpoints[].roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `discord.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `discord.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `discord.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `discord.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `discord.endpoints[].token` | string | 是 | — | Discord bot token |
 | `discord.endpoints[].connection` | string: `"gateway"`, `"interactions"` | 否 | — | — |
 | `discord.endpoints[].intents` | array&lt;number&gt; | 否 | — | — |
@@ -767,8 +812,14 @@ outline: [2, 3]
 | `douyin-live.maxChunks` | number | 否 | `2` | 一次回复最多拆成几条弹幕（默认 2） |
 | `douyin-live.minSendIntervalSec` | number | 否 | `5` | 两次回复的最小间隔（秒），最小 2 |
 | `douyin-live.signerUrl` | string | 否 | — | 可选：外部签名服务（GET ?stub=&lt;X-MS-STUB&gt; 返回 signature）。本包不内置平台签名脚本；不填时不带签名连接，平台可能拒绝 |
-| `douyin-live.master` | string \| number | 否 | — | 框架 master（抖音 user id）。endpoints[i].master 可逐项覆盖 |
-| `douyin-live.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（抖音 user id） |
+| `douyin-live.roles` | object | 否 | — | 平台身份 → zhin 聊天角色的映射规则（ADR 0056 §4）。结果只作用于消息所在会话、按平台身份实时计算；适配器层规则对其所有账号有效，账号层（endpoints[i].roles）追加或覆盖同 match 的规则。默认规则：standing 为 owner / admin → 会话 admin。 |
+| `douyin-live.roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `douyin-live.roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `douyin-live.roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `douyin-live.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `douyin-live.roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `douyin-live.roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `douyin-live.roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `douyin-live.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 | `douyin-live.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
 | `douyin-live.endpoints[].id` | string | 是 | — | Endpoint 名称（本地标识，不是抖音账号） |
@@ -779,8 +830,14 @@ outline: [2, 3]
 | `douyin-live.endpoints[].maxChunks` | number | 否 | `2` | 一次回复最多拆成几条弹幕（默认 2） |
 | `douyin-live.endpoints[].minSendIntervalSec` | number | 否 | `5` | 两次回复的最小间隔（秒），最小 2 |
 | `douyin-live.endpoints[].signerUrl` | string | 否 | — | 可选：外部签名服务（GET ?stub=&lt;X-MS-STUB&gt; 返回 signature）。本包不内置平台签名脚本；不填时不带签名连接，平台可能拒绝 |
-| `douyin-live.endpoints[].master` | string \| number | 否 | — | 框架 master（抖音 user id）。endpoints[i].master 可逐项覆盖 |
-| `douyin-live.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（抖音 user id） |
+| `douyin-live.endpoints[].roles` | object | 否 | — | 本账号的映射规则；追加或覆盖适配器层同 match 的规则（ADR 0056 §4） |
+| `douyin-live.endpoints[].roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `douyin-live.endpoints[].roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `douyin-live.endpoints[].roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `douyin-live.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `douyin-live.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `douyin-live.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `douyin-live.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `douyin-live.endpoints[].commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 | `douyin-live.endpoints[].nickname` | string \| null | 否 | — | 账号昵称兜底 |
 | `douyin-live.endpoints[].profile` | object | 否 | — | 账号资料兜底 |
@@ -807,11 +864,23 @@ outline: [2, 3]
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `email.master` | string \| number | 否 | — | 框架 master（email address；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `email.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `email.roles` | object | 否 | — | 平台身份 → zhin 聊天角色的映射规则（ADR 0056 §4）。结果只作用于消息所在会话、按平台身份实时计算；适配器层规则对其所有账号有效，账号层（endpoints[i].roles）追加或覆盖同 match 的规则。默认规则：standing 为 owner / admin → 会话 admin。 |
+| `email.roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `email.roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `email.roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `email.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `email.roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `email.roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `email.roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `email.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `email.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（email address）；覆盖顶层 master |
-| `email.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `email.endpoints[].roles` | object | 否 | — | 本账号的映射规则；追加或覆盖适配器层同 match 的规则（ADR 0056 §4） |
+| `email.endpoints[].roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `email.endpoints[].roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `email.endpoints[].roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `email.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `email.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `email.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `email.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `email.endpoints[].smtp` | object | 是 | — | — |
 | `email.endpoints[].smtp.host` | string | 是 | — | — |
 | `email.endpoints[].smtp.port` | number | 是 | — | — |
@@ -869,11 +938,23 @@ outline: [2, 3]
 | `github.auto_reply_repos` | array&lt;string&gt; | 否 | — | Repos whose Issue/PR comments auto-trigger AI without @bot |
 | `github.bot_login` | string | 否 | — | Override App bot login (default {slug}[bot]) |
 | `github.workspace_root` | string | 否 | — | Managed git workspace root |
-| `github.master` | string \| number | 否 | — | 框架 master（GitHub user login or id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `github.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `github.roles` | object | 否 | — | 平台身份 → zhin 聊天角色的映射规则（ADR 0056 §4）。结果只作用于消息所在会话、按平台身份实时计算；适配器层规则对其所有账号有效，账号层（endpoints[i].roles）追加或覆盖同 match 的规则。默认规则：standing 为 owner / admin → 会话 admin。 |
+| `github.roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `github.roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `github.roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `github.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `github.roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `github.roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `github.roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `github.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint |
-| `github.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（GitHub user login or id）；覆盖顶层 master |
-| `github.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `github.endpoints[].roles` | object | 否 | — | 本账号的映射规则；追加或覆盖适配器层同 match 的规则（ADR 0056 §4） |
+| `github.endpoints[].roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `github.endpoints[].roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `github.endpoints[].roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `github.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `github.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `github.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `github.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `github.endpoints[].app_id` | string \| number | 是 | — | GitHub App ID |
 | `github.endpoints[].private_key` | string | 是 | — | GitHub App private key (PEM content or file path) |
 | `github.endpoints[].webhook_secret` | string | 否 | — | Webhook HMAC secret; enables httpHostToken POST route |
@@ -910,8 +991,14 @@ outline: [2, 3]
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `icqq.master` | string \| number | 是 | — | 框架 master QQ uin（/approve、AI/工具权限）；endpoints[i].master 可逐项覆盖 |
-| `icqq.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted QQ uin 列表（弱于 master） |
+| `icqq.roles` | object | 否 | — | 平台身份 → zhin 聊天角色的映射规则（ADR 0056 §4）。结果只作用于消息所在会话、按平台身份实时计算；适配器层规则对其所有账号有效，账号层（endpoints[i].roles）追加或覆盖同 match 的规则。默认规则：standing 为 owner / admin → 会话 admin。 |
+| `icqq.roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `icqq.roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `icqq.roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `icqq.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `icqq.roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `icqq.roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `icqq.roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `icqq.password` | string | 否 | — | QQ 密码（可选，不填则扫码登录） |
 | `icqq.platform` | number: `1`, `2`, `3`, `4`, `5`, `6`, `7` | 否 | `1` | 登录设备平台：1=Android, 2=aPad, 3=Watch, 4=iMac, 5=iPad, 6=Tim, 7=Custom |
 | `icqq.ver` | string | 否 | — | 协议版本号，仅在对应 platform 有多个版本时有效，不填则使用最新版本 |
@@ -927,8 +1014,14 @@ outline: [2, 3]
 | `icqq.ntLogin` | boolean | 否 | — | 是否使用 NT 登录方式 |
 | `icqq.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
 | `icqq.endpoints[].id` | string | 是 | — | QQ uin |
-| `icqq.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的 master QQ uin；覆盖顶层 master |
-| `icqq.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `icqq.endpoints[].roles` | object | 否 | — | 本账号的映射规则；追加或覆盖适配器层同 match 的规则（ADR 0056 §4） |
+| `icqq.endpoints[].roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `icqq.endpoints[].roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `icqq.endpoints[].roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `icqq.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `icqq.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `icqq.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `icqq.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `icqq.endpoints[].password` | string | 否 | — | 本 endpoint 的 QQ 密码 |
 | `icqq.endpoints[].platform` | number: `1`, `2`, `3`, `4`, `5`, `6`, `7` | 否 | — | 登录设备平台：1=Android, 2=aPad, 3=Watch, 4=iMac, 5=iPad, 6=Tim, 7=Custom |
 | `icqq.endpoints[].ver` | string | 否 | — | 协议版本号 |
@@ -996,8 +1089,14 @@ outline: [2, 3]
 | `juejin.notify.kind` | string: `"private"`, `"group"`, `"channel"` | 否 | `"private"` | 会话类型 |
 | `juejin.notify.id` | string \| number | 是 | — | 会话 id：私聊填你的账号，群聊填群号 |
 | `juejin.articles` | array&lt;string&gt; | 否 | — | 白名单文章：文章 id（请写成带引号的字符串）或 https://juejin.cn/post/&lt;id&gt; 链接。只轮询这些文章的评论，不做全站搜索；留空 = 不轮询 |
-| `juejin.master` | string \| number | 否 | — | 框架 master（掘金 uid）。endpoints[i].master 可逐项覆盖 |
-| `juejin.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（掘金 uid） |
+| `juejin.roles` | object | 否 | — | 平台身份 → zhin 聊天角色的映射规则（ADR 0056 §4）。结果只作用于消息所在会话、按平台身份实时计算；适配器层规则对其所有账号有效，账号层（endpoints[i].roles）追加或覆盖同 match 的规则。默认规则：standing 为 owner / admin → 会话 admin。 |
+| `juejin.roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `juejin.roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `juejin.roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `juejin.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `juejin.roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `juejin.roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `juejin.roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `juejin.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 | `juejin.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
 | `juejin.endpoints[].id` | string | 是 | — | Endpoint 名称（本地标识，不是掘金账号） |
@@ -1013,8 +1112,14 @@ outline: [2, 3]
 | `juejin.endpoints[].notify.kind` | string: `"private"`, `"group"`, `"channel"` | 否 | `"private"` | 会话类型 |
 | `juejin.endpoints[].notify.id` | string \| number | 是 | — | 会话 id：私聊填你的账号，群聊填群号 |
 | `juejin.endpoints[].apiBaseUrl` | string | 否 | `"https://api.juejin.cn"` | — |
-| `juejin.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（掘金 uid） |
-| `juejin.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `juejin.endpoints[].roles` | object | 否 | — | 本账号的映射规则；追加或覆盖适配器层同 match 的规则（ADR 0056 §4） |
+| `juejin.endpoints[].roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `juejin.endpoints[].roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `juejin.endpoints[].roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `juejin.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `juejin.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `juejin.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `juejin.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `juejin.endpoints[].commandPrefix` | string | 否 | — | — |
 | `juejin.endpoints[].nickname` | string \| null | 否 | — | 账号昵称兜底 |
 | `juejin.endpoints[].profile` | object | 否 | — | 账号资料兜底 |
@@ -1048,11 +1153,23 @@ outline: [2, 3]
 | `kook.max_retry` | number | 否 | `3` | — |
 | `kook.ignore` | string: `"bot"`, `"self"` | 否 | `"bot"` | — |
 | `kook.logLevel` | string: `"trace"`, `"debug"`, `"info"`, `"warn"`, `"error"`, `"fatal"`, `"mark"`, `"off"` | 否 | `"info"` | — |
-| `kook.master` | string \| number | 否 | — | 框架 master（KOOK user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `kook.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `kook.roles` | object | 否 | — | 平台身份 → zhin 聊天角色的映射规则（ADR 0056 §4）。结果只作用于消息所在会话、按平台身份实时计算；适配器层规则对其所有账号有效，账号层（endpoints[i].roles）追加或覆盖同 match 的规则。默认规则：standing 为 owner / admin → 会话 admin。 |
+| `kook.roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `kook.roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `kook.roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `kook.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `kook.roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `kook.roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `kook.roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `kook.endpoints` | array&lt;object&gt; | 是 | — | 多账号：每项定义一个 endpoint，id/token 必填，其余字段覆盖实例默认值 |
-| `kook.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（KOOK user id）；覆盖顶层 master |
-| `kook.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `kook.endpoints[].roles` | object | 否 | — | 本账号的映射规则；追加或覆盖适配器层同 match 的规则（ADR 0056 §4） |
+| `kook.endpoints[].roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `kook.endpoints[].roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `kook.endpoints[].roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `kook.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `kook.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `kook.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `kook.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `kook.endpoints[].token` | string | 是 | — | KOOK bot token |
 | `kook.endpoints[].connection` | string: `"websocket"`, `"webhook"` | 否 | — | — |
 | `kook.endpoints[].webhookPath` | string | 否 | — | — |
@@ -1099,11 +1216,23 @@ outline: [2, 3]
 | `lark.webhookPath` | string | 否 | `"/lark/webhook"` | — |
 | `lark.apiBaseUrl` | string | 否 | — | — |
 | `lark.isFeishu` | boolean | 否 | `true` | — |
-| `lark.master` | string \| number | 否 | — | 框架 master（Lark/Feishu open_id or user_id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `lark.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `lark.roles` | object | 否 | — | 平台身份 → zhin 聊天角色的映射规则（ADR 0056 §4）。结果只作用于消息所在会话、按平台身份实时计算；适配器层规则对其所有账号有效，账号层（endpoints[i].roles）追加或覆盖同 match 的规则。默认规则：standing 为 owner / admin → 会话 admin。 |
+| `lark.roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `lark.roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `lark.roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `lark.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `lark.roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `lark.roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `lark.roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `lark.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `lark.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（Lark/Feishu open_id or user_id）；覆盖顶层 master |
-| `lark.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `lark.endpoints[].roles` | object | 否 | — | 本账号的映射规则；追加或覆盖适配器层同 match 的规则（ADR 0056 §4） |
+| `lark.endpoints[].roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `lark.endpoints[].roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `lark.endpoints[].roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `lark.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `lark.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `lark.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `lark.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `lark.endpoints[].appId` | string | 是 | — | Lark app ID |
 | `lark.endpoints[].appSecret` | string | 是 | — | Lark app secret |
 | `lark.endpoints[].encryptKey` | string | 否 | — | Lark encrypt key |
@@ -1154,11 +1283,23 @@ outline: [2, 3]
 | --- | --- | --- | --- | --- |
 | `line.webhookPath` | string | 否 | `"/line/webhook"` | — |
 | `line.apiBaseUrl` | string | 否 | `"https://api.line.me"` | — |
-| `line.master` | string \| number | 否 | — | 框架 master（LINE user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `line.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `line.roles` | object | 否 | — | 平台身份 → zhin 聊天角色的映射规则（ADR 0056 §4）。结果只作用于消息所在会话、按平台身份实时计算；适配器层规则对其所有账号有效，账号层（endpoints[i].roles）追加或覆盖同 match 的规则。默认规则：standing 为 owner / admin → 会话 admin。 |
+| `line.roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `line.roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `line.roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `line.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `line.roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `line.roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `line.roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `line.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `line.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（LINE user id）；覆盖顶层 master |
-| `line.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `line.endpoints[].roles` | object | 否 | — | 本账号的映射规则；追加或覆盖适配器层同 match 的规则（ADR 0056 §4） |
+| `line.endpoints[].roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `line.endpoints[].roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `line.endpoints[].roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `line.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `line.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `line.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `line.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `line.endpoints[].channelSecret` | string | 是 | — | LINE channel secret |
 | `line.endpoints[].channelAccessToken` | string | 是 | — | LINE channel access token |
 | `line.endpoints[].webhookPath` | string | 否 | — | — |
@@ -1194,11 +1335,23 @@ outline: [2, 3]
 | `milky.connection` | string: `"ws"`, `"sse"`, `"webhook"`, `"wss"` | 否 | `"ws"` | ws (default), sse (EventSource client), webhook or wss (webhook/wss via httpHostToken) |
 | `milky.reconnect_interval` | number | 否 | `5000` | — |
 | `milky.heartbeat_interval` | number | 否 | `30000` | — |
-| `milky.master` | string \| number | 否 | — | 框架 master（QQ uin；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `milky.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `milky.roles` | object | 否 | — | 平台身份 → zhin 聊天角色的映射规则（ADR 0056 §4）。结果只作用于消息所在会话、按平台身份实时计算；适配器层规则对其所有账号有效，账号层（endpoints[i].roles）追加或覆盖同 match 的规则。默认规则：standing 为 owner / admin → 会话 admin。 |
+| `milky.roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `milky.roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `milky.roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `milky.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `milky.roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `milky.roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `milky.roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `milky.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `milky.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（QQ uin）；覆盖顶层 master |
-| `milky.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `milky.endpoints[].roles` | object | 否 | — | 本账号的映射规则；追加或覆盖适配器层同 match 的规则（ADR 0056 §4） |
+| `milky.endpoints[].roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `milky.endpoints[].roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `milky.endpoints[].roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `milky.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `milky.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `milky.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `milky.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `milky.endpoints[].connection` | string: `"ws"`, `"sse"`, `"webhook"`, `"wss"` | 否 | — | — |
 | `milky.endpoints[].baseUrl` | string | 是 | — | Milky HTTP API base URL (required); WS event path is derived as ws(s)://host/event |
 | `milky.endpoints[].path` | string | 否 | — | Path for webhook / reverse-wss |
@@ -1237,11 +1390,23 @@ outline: [2, 3]
 | `napcat.reconnect_interval` | number | 否 | `5000` | — |
 | `napcat.heartbeat_interval` | number | 否 | `30000` | — |
 | `napcat.poll_interval` | number | 否 | `30000` | — |
-| `napcat.master` | string \| number | 否 | — | 框架 master（QQ uin；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `napcat.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `napcat.roles` | object | 否 | — | 平台身份 → zhin 聊天角色的映射规则（ADR 0056 §4）。结果只作用于消息所在会话、按平台身份实时计算；适配器层规则对其所有账号有效，账号层（endpoints[i].roles）追加或覆盖同 match 的规则。默认规则：standing 为 owner / admin → 会话 admin。 |
+| `napcat.roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `napcat.roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `napcat.roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `napcat.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `napcat.roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `napcat.roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `napcat.roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `napcat.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `napcat.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（QQ uin）；覆盖顶层 master |
-| `napcat.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `napcat.endpoints[].roles` | object | 否 | — | 本账号的映射规则；追加或覆盖适配器层同 match 的规则（ADR 0056 §4） |
+| `napcat.endpoints[].roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `napcat.endpoints[].roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `napcat.endpoints[].roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `napcat.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `napcat.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `napcat.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `napcat.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `napcat.endpoints[].connection` | string: `"ws"`, `"wss"`, `"http"` | 否 | — | — |
 | `napcat.endpoints[].url` | string | 否 | — | NapCat WebSocket URL (required for connection: ws) |
 | `napcat.endpoints[].path` | string | 否 | — | WS path for reverse-wss |
@@ -1282,11 +1447,23 @@ outline: [2, 3]
 | `onebot11.connection` | string: `"ws"`, `"wss"` | 否 | `"ws"` | connection: ws (forward WS client, default) or wss (reverse WS via httpHostToken) |
 | `onebot11.reconnect_interval` | number | 否 | `5000` | — |
 | `onebot11.heartbeat_interval` | number | 否 | `30000` | — |
-| `onebot11.master` | string \| number | 否 | — | 框架 master（platform user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `onebot11.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `onebot11.roles` | object | 否 | — | 平台身份 → zhin 聊天角色的映射规则（ADR 0056 §4）。结果只作用于消息所在会话、按平台身份实时计算；适配器层规则对其所有账号有效，账号层（endpoints[i].roles）追加或覆盖同 match 的规则。默认规则：standing 为 owner / admin → 会话 admin。 |
+| `onebot11.roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `onebot11.roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `onebot11.roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `onebot11.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `onebot11.roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `onebot11.roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `onebot11.roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `onebot11.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `onebot11.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（platform user id）；覆盖顶层 master |
-| `onebot11.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `onebot11.endpoints[].roles` | object | 否 | — | 本账号的映射规则；追加或覆盖适配器层同 match 的规则（ADR 0056 §4） |
+| `onebot11.endpoints[].roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `onebot11.endpoints[].roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `onebot11.endpoints[].roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `onebot11.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `onebot11.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `onebot11.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `onebot11.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `onebot11.endpoints[].connection` | string: `"ws"`, `"wss"` | 否 | — | — |
 | `onebot11.endpoints[].url` | string | 否 | — | OneBot implementation WebSocket URL (required for connection: ws) |
 | `onebot11.endpoints[].path` | string | 否 | — | WS path for reverse-wss (connection: wss) |
@@ -1324,11 +1501,23 @@ outline: [2, 3]
 | `onebot12.connection` | string: `"ws"`, `"webhook"`, `"wss"` | 否 | `"ws"` | ws (default), webhook (httpHostToken POST), or wss (reverse WS via httpHostToken) |
 | `onebot12.reconnect_interval` | number | 否 | `5000` | — |
 | `onebot12.heartbeat_interval` | number | 否 | `30000` | — |
-| `onebot12.master` | string \| number | 否 | — | 框架 master（platform user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `onebot12.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `onebot12.roles` | object | 否 | — | 平台身份 → zhin 聊天角色的映射规则（ADR 0056 §4）。结果只作用于消息所在会话、按平台身份实时计算；适配器层规则对其所有账号有效，账号层（endpoints[i].roles）追加或覆盖同 match 的规则。默认规则：standing 为 owner / admin → 会话 admin。 |
+| `onebot12.roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `onebot12.roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `onebot12.roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `onebot12.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `onebot12.roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `onebot12.roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `onebot12.roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `onebot12.endpoints` | array&lt;object&gt; | 是 | — | 多账号：每项明确选择 platform/userId，id 为本地账号名称，其余连接字段覆盖实例默认值 |
-| `onebot12.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（platform user id）；覆盖顶层 master |
-| `onebot12.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `onebot12.endpoints[].roles` | object | 否 | — | 本账号的映射规则；追加或覆盖适配器层同 match 的规则（ADR 0056 §4） |
+| `onebot12.endpoints[].roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `onebot12.endpoints[].roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `onebot12.endpoints[].roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `onebot12.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `onebot12.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `onebot12.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `onebot12.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `onebot12.endpoints[].connection` | string: `"ws"`, `"webhook"`, `"wss"` | 否 | — | — |
 | `onebot12.endpoints[].url` | string | 否 | — | OneBot implementation WebSocket URL (required for connection: ws) |
 | `onebot12.endpoints[].path` | string | 否 | — | HTTP/WS path for webhook or reverse-wss |
@@ -1369,8 +1558,14 @@ outline: [2, 3]
 | `qq.mode` | string: `"websocket"`, `"webhook"`, `"middleware"` | 否 | `"websocket"` | WebSocket gateway (default). webhook/middleware use httpHostToken POST. |
 | `qq.sandbox` | boolean | 否 | `false` | — |
 | `qq.botKind` | string: `"public"`, `"private"` | 否 | `"public"` | 公域/私域：均含 GROUP_AND_C2C_EVENT；频道消息分别为 PUBLIC_GUILD_MESSAGES / GUILD_MESSAGES。未显式配置 intents 时按此展开 |
-| `qq.master` | string \| number | 否 | — | 框架 master（endpoint 管理命令、AI/工具权限）；openid。endpoints[i].master 可逐项覆盖 |
-| `qq.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `qq.roles` | object | 否 | — | 平台身份 → zhin 聊天角色的映射规则（ADR 0056 §4）。结果只作用于消息所在会话、按平台身份实时计算；适配器层规则对其所有账号有效，账号层（endpoints[i].roles）追加或覆盖同 match 的规则。默认规则：standing 为 owner / admin → 会话 admin。 |
+| `qq.roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `qq.roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `qq.roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `qq.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `qq.roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `qq.roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `qq.roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `qq.intents` | array&lt;string&gt; | 否 | — | WebSocket Identify intents；省略时按 botKind 自动生成（public→含 PUBLIC_GUILD_MESSAGES） |
 | `qq.accessTokenUrl` | string | 否 | — | — |
 | `qq.gatewayUrl` | string | 否 | — | — |
@@ -1380,8 +1575,14 @@ outline: [2, 3]
 | `qq.endpoints[].secret` | string | 是 | — | QQ official bot secret |
 | `qq.endpoints[].mode` | string: `"websocket"`, `"webhook"`, `"middleware"` | 否 | — | — |
 | `qq.endpoints[].sandbox` | boolean | 否 | — | — |
-| `qq.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（openid）；覆盖顶层 master |
-| `qq.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `qq.endpoints[].roles` | object | 否 | — | 本账号的映射规则；追加或覆盖适配器层同 match 的规则（ADR 0056 §4） |
+| `qq.endpoints[].roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `qq.endpoints[].roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `qq.endpoints[].roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `qq.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `qq.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `qq.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `qq.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `qq.endpoints[].botKind` | string: `"public"`, `"private"` | 否 | — | 覆盖顶层 botKind（公域/私域），用于按 endpoint 生成 intents |
 | `qq.endpoints[].intents` | array&lt;string&gt; | 否 | — | 覆盖顶层 intents |
 | `qq.endpoints[].accessTokenUrl` | string | 否 | — | — |
@@ -1443,11 +1644,23 @@ outline: [2, 3]
 | --- | --- | --- | --- | --- |
 | `sandbox.streaming` | boolean | 否 | `true` | Publish supported replies while generating. Set false to send only complete replies. |
 | `sandbox.streamingIntervalMs` | number | 否 | `500` | Minimum delay in milliseconds between reply updates; the first update is immediate. |
-| `sandbox.master` | string \| number | 否 | — | 框架 master（sandbox client id (distinct from endpoints[].owner)；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `sandbox.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `sandbox.roles` | object | 否 | — | 平台身份 → zhin 聊天角色的映射规则（ADR 0056 §4）。结果只作用于消息所在会话、按平台身份实时计算；适配器层规则对其所有账号有效，账号层（endpoints[i].roles）追加或覆盖同 match 的规则。默认规则：standing 为 owner / admin → 会话 admin。 |
+| `sandbox.roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `sandbox.roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `sandbox.roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `sandbox.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `sandbox.roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `sandbox.roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `sandbox.roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `sandbox.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `sandbox.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（sandbox client id (distinct from endpoints[].owner)）；覆盖顶层 master |
-| `sandbox.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `sandbox.endpoints[].roles` | object | 否 | — | 本账号的映射规则；追加或覆盖适配器层同 match 的规则（ADR 0056 §4） |
+| `sandbox.endpoints[].roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `sandbox.endpoints[].roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `sandbox.endpoints[].roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `sandbox.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `sandbox.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `sandbox.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `sandbox.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `sandbox.endpoints[].owner` | string | 否 | — | Sandbox owner user ID |
 | `sandbox.endpoints[].streaming` | boolean | 否 | — | Publish supported replies while generating. Set false to send only complete replies. |
 | `sandbox.endpoints[].streamingIntervalMs` | number | 否 | — | Minimum delay in milliseconds between reply updates; the first update is immediate. |
@@ -1481,11 +1694,23 @@ outline: [2, 3]
 | --- | --- | --- | --- | --- |
 | `satori.connection` | string: `"ws"`, `"webhook"` | 否 | `"ws"` | ws (default) or webhook (httpHostToken POST route) |
 | `satori.heartbeat_interval` | number | 否 | `10000` | WS PING interval in milliseconds |
-| `satori.master` | string \| number | 否 | — | 框架 master（platform user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `satori.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `satori.roles` | object | 否 | — | 平台身份 → zhin 聊天角色的映射规则（ADR 0056 §4）。结果只作用于消息所在会话、按平台身份实时计算；适配器层规则对其所有账号有效，账号层（endpoints[i].roles）追加或覆盖同 match 的规则。默认规则：standing 为 owner / admin → 会话 admin。 |
+| `satori.roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `satori.roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `satori.roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `satori.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `satori.roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `satori.roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `satori.roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `satori.endpoints` | array&lt;object&gt; | 是 | — | 多账号：每项明确选择 platform/userId，id/baseUrl 必填，其余字段覆盖实例默认值 |
-| `satori.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（platform user id）；覆盖顶层 master |
-| `satori.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `satori.endpoints[].roles` | object | 否 | — | 本账号的映射规则；追加或覆盖适配器层同 match 的规则（ADR 0056 §4） |
+| `satori.endpoints[].roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `satori.endpoints[].roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `satori.endpoints[].roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `satori.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `satori.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `satori.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `satori.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `satori.endpoints[].baseUrl` | string | 是 | — | Satori SDK HTTP/WS base URL (e.g. http://127.0.0.1:5140) |
 | `satori.endpoints[].connection` | string: `"ws"`, `"webhook"` | 否 | — | — |
 | `satori.endpoints[].token` | string | 否 | — | Bearer token for API and WS IDENTIFY |
@@ -1524,11 +1749,23 @@ outline: [2, 3]
 | `slack.socketMode` | boolean | 否 | `true` | Prefer Socket Mode (default). Set false for HTTP Events via httpHostToken. |
 | `slack.webhookPath` | string | 否 | `"/slack/events"` | — |
 | `slack.clientPingTimeout` | number | 否 | `15000` | Socket Mode client ping timeout (ms) |
-| `slack.master` | string \| number | 否 | — | 框架 master（Slack user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `slack.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `slack.roles` | object | 否 | — | 平台身份 → zhin 聊天角色的映射规则（ADR 0056 §4）。结果只作用于消息所在会话、按平台身份实时计算；适配器层规则对其所有账号有效，账号层（endpoints[i].roles）追加或覆盖同 match 的规则。默认规则：standing 为 owner / admin → 会话 admin。 |
+| `slack.roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `slack.roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `slack.roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `slack.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `slack.roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `slack.roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `slack.roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `slack.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `slack.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（Slack user id）；覆盖顶层 master |
-| `slack.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `slack.endpoints[].roles` | object | 否 | — | 本账号的映射规则；追加或覆盖适配器层同 match 的规则（ADR 0056 §4） |
+| `slack.endpoints[].roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `slack.endpoints[].roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `slack.endpoints[].roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `slack.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `slack.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `slack.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `slack.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `slack.endpoints[].token` | string | 是 | — | Bot User OAuth Token (xoxb-...) |
 | `slack.endpoints[].signingSecret` | string | 否 | — | Required for HTTP Events API (socketMode: false) |
 | `slack.endpoints[].appToken` | string | 否 | — | App-Level Token (xapp-...) for Socket Mode |
@@ -1579,11 +1816,23 @@ outline: [2, 3]
 | `telegram.webhook.secretToken` | string | 否 | — | Verified via X-Telegram-Bot-Api-Secret-Token. |
 | `telegram.allowedUpdates` | array&lt;string&gt; | 否 | `["message","callback_query"]` | — |
 | `telegram.apiBaseUrl` | string | 否 | `"https://api.telegram.org"` | — |
-| `telegram.master` | string \| number | 否 | — | 框架 master（Telegram user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `telegram.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `telegram.roles` | object | 否 | — | 平台身份 → zhin 聊天角色的映射规则（ADR 0056 §4）。结果只作用于消息所在会话、按平台身份实时计算；适配器层规则对其所有账号有效，账号层（endpoints[i].roles）追加或覆盖同 match 的规则。默认规则：standing 为 owner / admin → 会话 admin。 |
+| `telegram.roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `telegram.roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `telegram.roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `telegram.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `telegram.roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `telegram.roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `telegram.roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `telegram.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `telegram.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（Telegram user id）；覆盖顶层 master |
-| `telegram.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `telegram.endpoints[].roles` | object | 否 | — | 本账号的映射规则；追加或覆盖适配器层同 match 的规则（ADR 0056 §4） |
+| `telegram.endpoints[].roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `telegram.endpoints[].roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `telegram.endpoints[].roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `telegram.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `telegram.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `telegram.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `telegram.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `telegram.endpoints[].token` | string | 是 | — | Telegram bot token |
 | `telegram.endpoints[].polling` | boolean | 否 | — | — |
 | `telegram.endpoints[].webhook` | object | 否 | — | — |
@@ -1629,11 +1878,23 @@ outline: [2, 3]
 | `wechat-mp.encryptMode` | string: `"plain"`, `"compatible"`, `"secure"` | 否 | — | Default follows encrypt: 'plain' when encrypt=false, 'compatible' when encrypt=true |
 | `wechat-mp.replyMode` | string: `"passive"`, `"customer_service"` | 否 | `"passive"` | — |
 | `wechat-mp.passiveReplyTimeoutMs` | number | 否 | `4500` | — |
-| `wechat-mp.master` | string \| number | 否 | — | 框架 master（WeChat OpenID；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `wechat-mp.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `wechat-mp.roles` | object | 否 | — | 平台身份 → zhin 聊天角色的映射规则（ADR 0056 §4）。结果只作用于消息所在会话、按平台身份实时计算；适配器层规则对其所有账号有效，账号层（endpoints[i].roles）追加或覆盖同 match 的规则。默认规则：standing 为 owner / admin → 会话 admin。 |
+| `wechat-mp.roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `wechat-mp.roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `wechat-mp.roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `wechat-mp.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `wechat-mp.roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `wechat-mp.roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `wechat-mp.roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `wechat-mp.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `wechat-mp.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（WeChat OpenID）；覆盖顶层 master |
-| `wechat-mp.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `wechat-mp.endpoints[].roles` | object | 否 | — | 本账号的映射规则；追加或覆盖适配器层同 match 的规则（ADR 0056 §4） |
+| `wechat-mp.endpoints[].roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `wechat-mp.endpoints[].roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `wechat-mp.endpoints[].roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `wechat-mp.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `wechat-mp.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `wechat-mp.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `wechat-mp.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `wechat-mp.endpoints[].appId` | string | 是 | — | WeChat MP app ID |
 | `wechat-mp.endpoints[].appSecret` | string | 是 | — | WeChat MP app secret |
 | `wechat-mp.endpoints[].token` | string | 是 | — | WeChat MP callback token |
@@ -1673,11 +1934,23 @@ outline: [2, 3]
 | --- | --- | --- | --- | --- |
 | `wecom.webhookPath` | string | 否 | `"/wecom/callback"` | — |
 | `wecom.apiBaseUrl` | string | 否 | `"https://qyapi.weixin.qq.com"` | — |
-| `wecom.master` | string \| number | 否 | — | 框架 master（WeCom userid；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `wecom.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `wecom.roles` | object | 否 | — | 平台身份 → zhin 聊天角色的映射规则（ADR 0056 §4）。结果只作用于消息所在会话、按平台身份实时计算；适配器层规则对其所有账号有效，账号层（endpoints[i].roles）追加或覆盖同 match 的规则。默认规则：standing 为 owner / admin → 会话 admin。 |
+| `wecom.roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `wecom.roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `wecom.roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `wecom.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `wecom.roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `wecom.roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `wecom.roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `wecom.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `wecom.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（WeCom userid）；覆盖顶层 master |
-| `wecom.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `wecom.endpoints[].roles` | object | 否 | — | 本账号的映射规则；追加或覆盖适配器层同 match 的规则（ADR 0056 §4） |
+| `wecom.endpoints[].roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `wecom.endpoints[].roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `wecom.endpoints[].roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `wecom.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `wecom.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `wecom.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `wecom.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `wecom.endpoints[].corpId` | string | 是 | — | WeCom corp ID |
 | `wecom.endpoints[].agentSecret` | string | 是 | — | WeCom agent secret |
 | `wecom.endpoints[].token` | string | 是 | — | WeCom callback token |
@@ -1718,11 +1991,23 @@ outline: [2, 3]
 | `weixin-ilink.cdnBaseUrl` | string | 否 | `"https://novac2c.cdn.weixin.qq.com/c2c"` | — |
 | `weixin-ilink.longPollTimeoutMs` | number | 否 | `35000` | — |
 | `weixin-ilink.dataDir` | string | 否 | `"data/weixin-ilink"` | Endpoint state root for credentials, cursors, context tokens, and media |
-| `weixin-ilink.master` | string \| number | 否 | — | 框架 master（Weixin user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `weixin-ilink.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `weixin-ilink.roles` | object | 否 | — | 平台身份 → zhin 聊天角色的映射规则（ADR 0056 §4）。结果只作用于消息所在会话、按平台身份实时计算；适配器层规则对其所有账号有效，账号层（endpoints[i].roles）追加或覆盖同 match 的规则。默认规则：standing 为 owner / admin → 会话 admin。 |
+| `weixin-ilink.roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `weixin-ilink.roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `weixin-ilink.roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `weixin-ilink.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `weixin-ilink.roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `weixin-ilink.roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `weixin-ilink.roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `weixin-ilink.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `weixin-ilink.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（Weixin user id）；覆盖顶层 master |
-| `weixin-ilink.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `weixin-ilink.endpoints[].roles` | object | 否 | — | 本账号的映射规则；追加或覆盖适配器层同 match 的规则（ADR 0056 §4） |
+| `weixin-ilink.endpoints[].roles.inherit` | boolean | 否 | `true` | false 时丢弃上级（含默认规则）的映射规则 |
+| `weixin-ilink.endpoints[].roles.mappings` | array&lt;object&gt; | 否 | `[]` | 映射规则列表；配置文件中只能授予 admin（或 none 取消上级同 match 规则），trusted / owner 只能在会话层（Console 或聊天）显式设置 |
+| `weixin-ilink.endpoints[].roles.mappings[].match` | object | 是 | — | 给出的条件全部满足；每个条件内任一值满足即可 |
+| `weixin-ilink.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | 否 | — | 平台归一地位 |
+| `weixin-ilink.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | 否 | — | 平台角色 id |
+| `weixin-ilink.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | 否 | — | 平台权限名 |
+| `weixin-ilink.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | 是 | — | 授予的会话角色；none 取消上级同 match 的规则 |
 | `weixin-ilink.endpoints[].botToken` | string | 否 | — | iLink bot token; omit to load endpoint state or start QR login |
 | `weixin-ilink.endpoints[].id` | string | 是 | — | Weixin iLink bot name |
 | `weixin-ilink.endpoints[].botAgent` | string | 否 | — | — |
@@ -2429,10 +2714,9 @@ _该 Schema 没有声明字段。_
 | `content-moderation.onError` | string: `"open"`, `"closed"` | 否 | `"open"` | 审查源失败时的全局默认策略：open=视为通过，closed=视为 critical |
 | `content-moderation.maskChar` | string | 否 | `"*"` | 文本打码字符 |
 | `content-moderation.replyTemplate` | string | 否 | — | reply 动作时的提示文案；省略时按本次消息语言选择默认文案，显式文本保持原样 |
-| `content-moderation.masters` | array&lt;string&gt; | 否 | `[]` | 额外视为 master 的 userId（兜底，与 endpoint master 合并） |
 | `content-moderation.inbound` | object | 否 | — | — |
 | `content-moderation.inbound.enabled` | boolean | 否 | `true` | — |
-| `content-moderation.inbound.bypassMasters` | boolean | 否 | `true` | master 跳过入站审查 |
+| `content-moderation.inbound.bypassRole` | string: `"owner"`, `"admin"`, `"trusted"`, `"none"` | 否 | `"owner"` | 本会话聊天角色不低于该值的发送者跳过入站审查（ADR 0056；none 表示都审） |
 | `content-moderation.inbound.whitelist` | object | 否 | — | — |
 | `content-moderation.inbound.whitelist.userIds` | array&lt;string&gt; | 否 | `[]` | — |
 | `content-moderation.inbound.whitelist.conversationIds` | array&lt;string&gt; | 否 | `[]` | — |

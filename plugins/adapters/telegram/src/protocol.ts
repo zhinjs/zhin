@@ -152,6 +152,8 @@ export interface TelegramChatMember {
   readonly can_pin_messages?: boolean;
   readonly can_delete_messages?: boolean;
   readonly can_manage_chat?: boolean;
+  /** `restricted` only: whether the user is still a member of the chat. */
+  readonly is_member?: boolean;
 }
 
 export interface TelegramWireSegment {

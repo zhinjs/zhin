@@ -4,7 +4,7 @@ import type { EndpointProfileConfiguration } from 'zhin.js/adapter';
  * Canonicalization is owned by gateway/core before endpoint.send.
  * Spec: https://github.com/botuniverse/onebot-11
  */
-import { EndpointDeliveryError, isMediaRef, type MediaRef, type ConversationRef } from '@zhin.js/im-contract';
+import { EndpointDeliveryError, isMediaRef, type MediaRef, type ConversationRef, type PlatformStanding } from '@zhin.js/im-contract';
 import { toCanonicalSegments, type Segment } from '@zhin.js/core';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
@@ -216,6 +216,16 @@ export function senderDisplayName(ev: OneBot11Event): string {
  */
 export function senderUserId(ev: OneBot11Event): string {
   return ev.user_id != null ? String(ev.user_id) : '';
+}
+
+/**
+ * ADR 0056 §1：群消息 `sender.role`（owner / admin / member）→ `sender.platform.standing`。
+ * 私聊不上报；未知角色词不上报。OneBot v11 没有平台原生角色与权限位。
+ */
+export function onebot11SenderStanding(ev: OneBot11Event): PlatformStanding | undefined {
+  if (ev.message_type !== 'group') return undefined;
+  const role = ev.sender?.role;
+  return role === 'owner' || role === 'admin' || role === 'member' ? { standing: role } : undefined;
 }
 
 /** 显示名（群名片优先）放 metadata.nickname；没有则返回 undefined，不写该字段。 */

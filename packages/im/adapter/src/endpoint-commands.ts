@@ -23,31 +23,16 @@ import { endpointCommandMessages } from './endpoint-command-messages.js';
 import type { ConfiguredEndpointEntry } from './endpoint-configuration.js';
 
 // ---------------------------------------------------------------------------
-// 权限：master 判定
+// 权限：owner 判定（ADR 0056）
 // ---------------------------------------------------------------------------
 
 /**
- * endpoint 管理命令的操作者校验：实例配置声明了 master（顶层或任一端点项）时
- * 仅 master 可执行管理命令；未配置则放行。
+ * endpoint 管理命令的操作者校验：发送者在本会话层级链上拥有聊天角色 `owner`
+ * （Runtime 写入的 `sender.chatRole`）。`config` 保留在签名中以兼容调用方，不再读取。
  */
-export function isEndpointOperator(config: unknown, input: unknown): boolean {
-  const cfg = (config ?? {}) as { master?: unknown; endpoints?: unknown };
-  const masters = new Set<string>();
-  const collect = (value: unknown) => {
-    if (value === undefined || value === null) return;
-    const text = String(value).trim();
-    if (text) masters.add(text);
-  };
-  collect(cfg.master);
-  if (Array.isArray(cfg.endpoints)) {
-    for (const entry of cfg.endpoints) {
-      collect((entry as { master?: unknown } | null | undefined)?.master);
-    }
-  }
-  if (masters.size === 0) return true;
-  const senderRaw = (input as { sender?: { id?: string } | null } | null | undefined)?.sender;
-  const senderId = (typeof senderRaw === 'object' && senderRaw?.id) ? senderRaw.id.trim() : '';
-  return !!senderId && masters.has(senderId);
+export function isEndpointOperator(_config: unknown, input: unknown): boolean {
+  const sender = (input as { sender?: { id?: unknown; chatRole?: unknown } | null } | null | undefined)?.sender;
+  return !!sender && typeof sender.id === 'string' && sender.id.trim() !== '' && sender.chatRole === 'owner';
 }
 
 /** add/remove 的拒绝文案（list 只读，不校验）。 */

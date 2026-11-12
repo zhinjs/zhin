@@ -85,7 +85,7 @@ it('discovers the published plugin entry and protects localized review commands 
   }));
   const input = (locale: 'zh-CN' | 'en', master = true) => ({ locale,
     conversation: { endpoint: { adapter: 'chat', id: 'chat-bot' }, kind: 'private' as const, id: 'reviewer' },
-    sender: { id: 'reviewer', roles: master ? ['master'] : [] } });
+    sender: { id: 'reviewer', ...(master ? { chatRole: 'owner' as const } : {}) } });
   try {
     await runtime.start();
     const commands = runtime.snapshot.projections.get(commandFeatureId);

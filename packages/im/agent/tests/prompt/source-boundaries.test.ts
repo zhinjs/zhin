@@ -52,7 +52,7 @@ describe.each(['rich', 'lite', 'vision'] as const)('scene-visible persona at the
     const bootstrap = buildBootstrapContextSection(files);
     const turn = createTurnIngress({ identity: { rootId: 'root', generation: 1, traceId: 'trace', turnId: 'turn' }, intent: { kind: 'new' },
       origin: { kind: 'im', platform: 'sandbox', endpoint: 'account', scope, sceneId: 'scene' },
-      principal: { subjectId: 'caller', roles: master ? ['master'] : ['user'] }, input: { text: 'Hello' }, session: { key: `scene-${scope}` },
+      principal: { subjectId: 'caller', roles: master ? ['owner'] : ['user'] }, input: { text: 'Hello' }, session: { key: `scene-${scope}` },
       policy: { permissions: [], unattended: false }, capabilities: { tools: [], skills: [] }, signal: new AbortController().signal,
       ports: { journal: { append: async () => {} } } });
     const image = entry === 'vision' ? [{ type: 'image' as const, data: { media: { kind: 'url' as const, value: 'https://example.test/synthetic.png' } } }] : undefined;
@@ -97,8 +97,8 @@ it.each([true, false])('retains sourced search-to-fetch URLs while runtime netwo
     qualifiedName: feature.name, source: 'builtin:web', execute: (input, context) => feature.definition.execute(input as Record<string, unknown>, context as ToolExecutionContext) }));
   const events: Array<{ type: string; policy?: string }> = [];
   const turn = createTurnIngress({ identity: { rootId: 'root', generation: 1, traceId: 'trace', turnId: 'source-links' }, intent: { kind: 'new' },
-    origin: { kind: 'http', sessionId: 'source-links' }, principal: { subjectId: 'caller', roles: ['master'] }, input: { text: 'Find and inspect the guide.' },
-    session: { key: 'source-links' }, policy: { permissions: ['master'], unattended: false,
+    origin: { kind: 'http', sessionId: 'source-links' }, principal: { subjectId: 'caller', roles: ['owner'] }, input: { text: 'Find and inspect the guide.' },
+    session: { key: 'source-links' }, policy: { permissions: ['owner'], unattended: false,
       network: { enabled: true, httpsOnly: true, allowedDomains: ['www.bing.com', ...(allowed ? ['docs.example.test'] : [])] } },
     capabilities: { tools: capabilities.map(tool => tool.name), skills: [] }, signal: new AbortController().signal,
     ports: { journal: { append: event => { events.push(event); } } } });

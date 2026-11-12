@@ -6,7 +6,7 @@ export default defineEvalCase({
   description: 'A five-note edit runs past maxIterations=3 because every step makes new progress.',
   source: '#718 progress-aware budget (long edits stopped at maxIterations)',
   tags: ['long-task', 'tool-use'],
-  inbound: { text: '把 n0 到 n4 五条笔记都写上 x', sender: { id: 'master', roles: ['master'] } },
+  inbound: { text: '把 n0 到 n4 五条笔记都写上 x', sender: { id: 'master', chatRole: 'owner' } },
   agentConfig: {
     maxIterations: 3,
     toolBudget: { extendBy: 3, autoContinue: 'off', progressMaxUpdates: 0 },

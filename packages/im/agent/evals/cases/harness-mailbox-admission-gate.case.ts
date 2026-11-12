@@ -12,7 +12,7 @@ export default defineEvalCase({
   inbound: {
     text: '今天食堂有什么菜？',
     scope: 'group',
-    sender: { id: 'member-1', name: 'Member', roles: ['user'] },
+    sender: { id: 'member-1', name: 'Member' },
     addressed: false,
   },
   // Trap step: an admitted turn would consume it. The admission policy must reject the Mail first.

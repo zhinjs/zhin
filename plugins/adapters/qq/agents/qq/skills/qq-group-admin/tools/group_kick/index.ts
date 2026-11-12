@@ -7,7 +7,7 @@ export default defineAgentTool({
   description: '把当前 QQ 群中的普通成员移出群，可选同时拉黑；每次人工审批，官方白名单能力',
   adapter: 'qq',
   scopes: ['group'],
-  permissions: ['role(master,admin,trusted,owner)'],
+  permissions: ['trusted'],
   requiresApproval: 'human',
   risk: 'dangerous',
   riskCategory: 'member',

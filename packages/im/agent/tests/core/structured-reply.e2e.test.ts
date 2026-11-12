@@ -47,7 +47,7 @@ it('carries a mixed default-schema reply through the full engine, terminal, publ
   ];
   const result = await runEvalCase({
     id: 'structured-mixed', description: 'Default IM harness rich reply',
-    inbound: { text: '请发 Markdown 说明、图片并 @ 我', sender: { id: 'owner', roles: ['user'] } },
+    inbound: { text: '请发 Markdown 说明、图片并 @ 我', sender: { id: 'owner' } },
     script: [{ segments }], expect: {},
   });
   const preview = '**结果**\n@owner，请查收[image]';

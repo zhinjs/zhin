@@ -32,12 +32,14 @@ export function resolveRouletteFlow(context: RouletteCapabilityContext): Roulett
   };
 }
 
-/** Framework roles (master / trusted / user) of whoever sent the message. */
+const CHAT_ROLE_CHAIN = ['owner', 'admin', 'trusted'] as const;
+
+/** Chat roles (ADR 0056, expanded: owner → owner / admin / trusted) of whoever sent the message. */
 export function senderRolesOf(input: unknown): readonly string[] {
   if (!input || typeof input !== 'object') return [];
   const sender = (input as { readonly sender?: unknown }).sender;
   if (!sender || typeof sender !== 'object') return [];
-  const roles = (sender as { readonly roles?: unknown }).roles;
-  if (!Array.isArray(roles)) return [];
-  return roles.filter((role): role is string => typeof role === 'string');
+  const role = (sender as { readonly chatRole?: unknown }).chatRole;
+  const index = CHAT_ROLE_CHAIN.indexOf(role as typeof CHAT_ROLE_CHAIN[number]);
+  return index < 0 ? [] : CHAT_ROLE_CHAIN.slice(index);
 }

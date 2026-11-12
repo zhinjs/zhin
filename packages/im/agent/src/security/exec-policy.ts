@@ -204,7 +204,7 @@ function checkSingleCommand(
     if (tryExecBypassForSensitiveCommand(norm)) {
       return { allowed: true };
     }
-    if (requesterRole === 'master') {
+    if (requesterRole === 'owner') {
       return { allowed: true };
     }
     if (requesterRole === 'trusted') {
@@ -261,7 +261,7 @@ function checkSingleCommand(
     return { allowed: true };
   }
 
-  if (requesterRole === 'master') {
+  if (requesterRole === 'owner') {
     return { allowed: true };
   }
 

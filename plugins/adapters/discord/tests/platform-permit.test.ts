@@ -10,18 +10,17 @@ import {
 function mockSubject(sender: { role?: string; permissions?: string[] }) {
   return {
     adapter: 'discord',
-    sender: { id: 'u1', role: sender.role ? [sender.role] : [], permissions: sender.permissions },
+    sender: { id: 'u1', platform: { standing: (sender.role ?? 'member') as never, ...(sender.permissions ? { permissions: sender.permissions } : {}) } },
     scene: { type: 'group', id: 'g1' },
   };
 }
 
-function mockMsg(sender: { role?: string; permissions?: string[] }) {
+function mockMsg(platformPermissions: string[]) {
   return {
     clientAdapter: 'discord',
     endpointId: 'bot1',
     conversation: { endpoint: { adapter: 'discord', id: 'bot1' }, kind: 'group', id: 'g1' },
-    sender: { id: 'u1', roles: sender.role ? [sender.role] : [] },
-    metadata: { role: sender.role, permissions: sender.permissions },
+    sender: { id: 'u1', platform: { standing: 'member' as const, permissions: platformPermissions } },
   } as any;
 }
 
@@ -30,7 +29,6 @@ describe('discord platform-permit', () => {
 
   beforeEach(() => {
     host = new PermissionHost();
-    host.registerPlatform('discord', (perm, subject) => checkDiscordPlatformPermit(perm, subject));
   });
 
   it('normalizeDiscordSenderForPermit', () => {
@@ -59,7 +57,7 @@ describe('discord platform-permit', () => {
       permissions: [platformPermit('manage_channels')],
       execute: async () => '',
     };
-    expect(await canAccessTool(tool, mockMsg({ role: 'member', permissions: [] }), host)).toBe(false);
-    expect(await canAccessTool(tool, mockMsg({ role: 'member', permissions: ['MANAGE_CHANNELS'] }), host)).toBe(true);
+    expect(await canAccessTool(tool, mockMsg([]), host)).toBe(false);
+    expect(await canAccessTool(tool, mockMsg(['manage_channels']), host)).toBe(true);
   });
 });

@@ -115,10 +115,10 @@ async function setUpRoulette(options: { readonly schedule?: boolean; readonly ad
 
 function message(
   senderId: string,
-  options: { readonly group?: string; readonly roles?: readonly string[]; readonly kind?: 'group' | 'private' } = {},
+  options: { readonly group?: string; readonly chatRole?: 'owner' | 'admin' | 'trusted'; readonly kind?: 'group' | 'private' } = {},
 ): FakeMessage {
   return createFakeMessage({
-    sender: { id: senderId, name: senderId.toUpperCase(), roles: options.roles ?? [] },
+    sender: { id: senderId, name: senderId.toUpperCase(), ...(options.chatRole ? { chatRole: options.chatRole } : {}) },
     conversation: { kind: options.kind ?? 'group', id: options.group ?? 'g1' },
   });
 }
@@ -261,15 +261,15 @@ describe('roulette gameplay', () => {
     await seatThreeAndStart();
 
     expect(await say('bob', '取消')).toBe('只有开局的人、群主、群管理员或机器人管理员可以取消本局。');
-    expect(await say('dave', '取消', { roles: ['master'] })).toContain('已取消');
+    expect(await say('dave', '取消', { chatRole: 'owner' })).toContain('已取消');
     expect(fake.rows('game_records')).toHaveLength(0);
   });
 
-  it.each([['owner'], ['admin']])('lets the platform group %s cancel the game', async (role) => {
+  it.each([['owner'], ['admin']])('lets the platform group %s (mapped to the chat role admin) cancel the game', async () => {
     await seatThreeAndStart();
 
-    expect(await say('bob', '取消', { roles: ['member'] })).toBe('只有开局的人、群主、群管理员或机器人管理员可以取消本局。');
-    expect(await say('dave', '取消', { roles: [role] })).toContain('已取消');
+    expect(await say('bob', '取消', {})).toBe('只有开局的人、群主、群管理员或机器人管理员可以取消本局。');
+    expect(await say('dave', '取消', { chatRole: 'admin' })).toContain('已取消');
   });
 
   it('leaving a running round is a forfeit', async () => {
@@ -292,16 +292,16 @@ describe('mute penalty', () => {
 
   it('only a bot manager may switch it, and a platform without muting refuses to enable it', async () => {
     expect(await say('bob', '开启禁言')).toBe('只有群主、群管理员、机器人主人或受信任用户可以修改禁言惩罚。');
-    expect(await say('bob', '开启禁言', { roles: ['member'] })).toBe('只有群主、群管理员、机器人主人或受信任用户可以修改禁言惩罚。');
-    expect(await say('owner', '开启禁言', { roles: ['master'] })).toContain('当前平台不支持禁言');
-    expect(await say('carol', '开启禁言', { roles: ['admin'] })).toContain('当前平台不支持禁言');
-    expect(await say('dave', '开启禁言', { roles: ['owner'] })).toContain('当前平台不支持禁言');
+    expect(await say('bob', '开启禁言', {})).toBe('只有群主、群管理员、机器人主人或受信任用户可以修改禁言惩罚。');
+    expect(await say('owner', '开启禁言', { chatRole: 'owner' })).toContain('当前平台不支持禁言');
+    expect(await say('carol', '开启禁言', { chatRole: 'admin' })).toContain('当前平台不支持禁言');
+    expect(await say('dave', '开启禁言', { chatRole: 'admin' })).toContain('当前平台不支持禁言');
     expect(await say('bob', '禁言')).toContain('本群禁言惩罚：关闭。当前平台不支持禁言');
   });
 
   it('mutes the loser where the Endpoint can mute and the group opted in, and nowhere else', async () => {
     adapters.canMute = true;
-    expect(await say('owner', '开启禁言', { roles: ['trusted'] })).toContain('禁言 90 秒');
+    expect(await say('owner', '开启禁言', { chatRole: 'trusted' })).toContain('禁言 90 秒');
 
     await seatThreeAndStart('g1');
     const replies = await playUntilShot('g1');
@@ -323,7 +323,7 @@ describe('mute penalty', () => {
 
   it('falls back to scoring when the platform stops supporting mute after it was enabled', async () => {
     adapters.canMute = true;
-    await say('owner', '开启禁言', { roles: ['master'] });
+    await say('owner', '开启禁言', { chatRole: 'owner' });
     adapters.canMute = false;
 
     await seatThreeAndStart();
@@ -336,7 +336,7 @@ describe('mute penalty', () => {
 
   it('a mute the platform refuses (bot is not an admin) still ends the round with scores', async () => {
     adapters.canMute = true;
-    await say('owner', '开启禁言', { roles: ['master'] });
+    await say('owner', '开启禁言', { chatRole: 'owner' });
     await seatThreeAndStart();
     for (const shooter of ['alice', 'bob', 'carol', 'alice', 'bob']) await say(shooter, '开枪');
 
@@ -357,7 +357,7 @@ describe('mute penalty', () => {
     await fake.dispose();
     fake = await setUpRoulette({ adapterFeature: false });
 
-    expect(await say('owner', '开启禁言', { roles: ['master'] })).toContain('当前平台不支持禁言');
+    expect(await say('owner', '开启禁言', { chatRole: 'owner' })).toContain('当前平台不支持禁言');
     await seatThreeAndStart();
     await playUntilShot();
     expect(fake.rows('game_records')).toHaveLength(3);
@@ -365,8 +365,8 @@ describe('mute penalty', () => {
 
   it('turning it off stops muting', async () => {
     adapters.canMute = true;
-    await say('owner', '开启禁言', { roles: ['master'] });
-    expect(await say('owner', '关闭禁言', { roles: ['master'] })).toContain('已关闭');
+    await say('owner', '开启禁言', { chatRole: 'owner' });
+    expect(await say('owner', '关闭禁言', { chatRole: 'owner' })).toContain('已关闭');
 
     await seatThreeAndStart();
     await playUntilShot();
@@ -377,7 +377,7 @@ describe('mute penalty', () => {
 describe('timeouts (FakeClock)', () => {
   it('the player on turn loses when they do not fire in time, and the group is told', async () => {
     adapters.canMute = true;
-    await say('owner', '开启禁言', { roles: ['master'] });
+    await say('owner', '开启禁言', { chatRole: 'owner' });
     await seatThreeAndStart();
     expect(await say('alice', '开枪')).toContain('👉 轮到 BOB');
 
@@ -474,7 +474,7 @@ describe('chat entry points', () => {
   it('the 轮盘 alias runs actions and lets unknown words through', async () => {
     const open = await runMiddleware(fake, aliasMiddleware, middlewareMessage(createFakeMessage({
       content: '轮盘 开局',
-      sender: { id: 'alice', name: 'ALICE', roles: [] },
+      sender: { id: 'alice', name: 'ALICE' },
       conversation: { kind: 'group', id: 'g1' },
     })));
     const chat = await runMiddleware(fake, aliasMiddleware, middlewareMessage(createFakeMessage({ content: '轮盘 好玩吗' })));

@@ -1,7 +1,6 @@
 import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { platformPermission } from '@zhin.js/permission';
 
 export default defineAgentTool<{
   channel: string;
@@ -15,7 +14,7 @@ export default defineAgentTool<{
   adapter: 'slack',
   scopes: ["group"],
   tags: ['slack'],
-  permissions: [platformPermission('slack', 'channel_manager')],
+  permissions: ['platform-permission:channel_manager'],
   async execute({ channel, topic }, context) {
     const client = context.$client;
     await client.conversations.setTopic({ channel, topic });

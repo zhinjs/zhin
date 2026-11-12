@@ -147,7 +147,7 @@ Zhin.js 团队和社区非常重视安全问题。我们感谢您帮助我们保
 
    export default defineCommand({
      description: '管理员操作',
-     permit: ['role(master,admin)'],
+     permit: ['admin'],
      async execute() {
        // 管理员操作
        return '已执行'
@@ -374,7 +374,7 @@ We currently do not have a formal bug bounty program, but we will:
 
    export default defineCommand({
      description: 'Admin operation',
-     permit: ['role(master,admin)'],
+     permit: ['admin'],
      async execute() {
        // Admin operations
        return 'Done'

@@ -129,7 +129,7 @@ describe('structured Agent final replies', () => {
     const member = await run([failed()]);
     expect(member.result.reply).not.toMatch(/模型|API|密钥|重试/);
     expect(member.result.reply).not.toContain(cause);
-    const owner = await run([failed()], { roles: ['master'] });
+    const owner = await run([failed()], { roles: ['owner'] });
     expect(owner.result.reply).toContain(`（${cause}）`);
   });
 
@@ -465,7 +465,7 @@ it('keeps the deferred catalog available when a prebuilt continuation has no use
 
 
 it('uses captured turn locale for a model format failure through the engine', async () => {
-  const { result } = await run([assistantTextReply('{"segments": invalid'), assistantTextReply('{"segments": invalid')], { locale: 'en', roles: ['master'] });
+  const { result } = await run([assistantTextReply('{"segments": invalid'), assistantTextReply('{"segments": invalid')], { locale: 'en', roles: ['owner'] });
   const rendered = renderAgentOutput(result.output);
   expect(rendered).toContain('(Invalid reply format)');
   expect(rendered).not.toMatch(/[\u3400-\u9fff]/u);

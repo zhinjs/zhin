@@ -13,7 +13,7 @@ export default defineEvalCase({
   inbound: {
     text: '路人甲: 主播今天播什么游戏？\n弹幕侠: 666\n666\nv3: 第一次来，关注了',
     scope: 'group',
-    sender: { id: 'v1', name: '路人甲', roles: ['user'] },
+    sender: { id: 'v1', name: '路人甲' },
     liveDanmaku: { mode: 'pick-one', candidates: 30, senders },
   },
   script: [{ segments: [

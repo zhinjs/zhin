@@ -690,8 +690,7 @@ describe('sandbox plugin runtime adapter', () => {
       sender: {
         id: 'sim-master',
         name: 'Master User',
-        role: 'master',
-        permissions: ['master', 'admin'],
+        platform: { standing: 'owner' },
       },
     });
     expect(receivedPayloads[1]).toMatchObject({
@@ -699,8 +698,7 @@ describe('sandbox plugin runtime adapter', () => {
       sender: {
         id: 'sim-admin',
         name: 'Admin User',
-        role: 'admin',
-        permissions: ['admin'],
+        platform: { standing: 'admin' },
       },
     });
     expect(receivedPayloads[2]).toMatchObject({
@@ -708,9 +706,9 @@ describe('sandbox plugin runtime adapter', () => {
       sender: {
         id: 'sim-member',
         name: 'sim-member',
-        role: 'member',
-        permissions: [],
+        platform: { standing: 'member' },
       },
     });
+    for (const payload of receivedPayloads) expect(payload).not.toHaveProperty('sender.roles');
   });
 });

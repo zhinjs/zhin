@@ -418,6 +418,11 @@ describe('icqq plugin runtime adapter', () => {
 
     endpoint.open();
     await vi.waitFor(() => expect(receive).toHaveBeenCalledOnce());
+    // ADR 0056 §1: the group sender role is reported as the normalized platform standing.
+    expect(receive).toHaveBeenCalledWith(expect.objectContaining({
+      sender: expect.objectContaining({ id: '2', platform: { standing: 'member' } }),
+    }));
+    expect((receive.mock.calls[0] as unknown[])[0]).not.toHaveProperty('sender.roles');
     let stopSettled = false;
     const stopping = endpoint.stop().then(() => { stopSettled = true; });
     await new Promise<void>((resolve) => setTimeout(resolve, 0));

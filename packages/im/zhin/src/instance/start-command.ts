@@ -1,6 +1,6 @@
 import { resolveHostCredentialSource } from '@zhin.js/plugin-runtime';
-import { createConfigurationChatAuthorizer, createEndpointRoleConfigurationSelection, createEndpointRoleResolver, createSenderEnricher } from '@zhin.js/core/runtime';
-export { createEndpointRoleResolver } from '@zhin.js/core/runtime';
+import { createConfigurationChatAuthorizer, createSenderEnricher } from '@zhin.js/core/runtime';
+import { prepareChatRoleMigration } from './chat-role-migration.js';
 import { migrateConversationColumns, migrateInboxColumns } from '@zhin.js/core/runtime';
 import type { StructuredDatabase } from '@zhin.js/database';
 import { assertNoPendingInstanceMigration } from '@zhin.js/gateway/project';
@@ -193,6 +193,11 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     platform: 'node',
   } as const);
   const hostEnvironment = createEnvStore(rootPluginId(), runtimeEnvironment, environmentVariables);
+  // ADR 0056 §3: people lists move out of the configuration into chat_roles (first start), or stop startup.
+  const chatRoleMigration = await prepareChatRoleMigration({
+    projectRoot: options.root, config, logger: getLogger('chat-roles'),
+    expand: document => hostEnvironment.expandMissingAsEmpty(document) as Readonly<Record<string, unknown>>,
+  });
   const rawConfigDocument = (await config.read()).document;
   warnUnsetConfigEnvPlaceholders(rawConfigDocument, name => hostEnvironment.get(name), configFile);
   const hostConfig = hostEnvironment.expandMissingAsEmpty(rawConfigDocument);
@@ -223,7 +228,6 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   const agentHost = await loadConfiguredAgentHost({ config: hostConfig, projectRoot: options.root, database: databaseHost,
     resolveSource: reference => resolveHostCredentialSource(reference, name => hostEnvironment.get(name)),
   });
-  const endpointRoles = await createEndpointRoleResolver(hostConfig);
   const speechHandle = await prepareSpeechHost(await resolveSpeechConfig(hostConfig));
   const htmlRendererHost = await prepareHtmlRendererHost(hostConfig);
   let complete!: () => void;
@@ -231,9 +235,15 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   const control: { stop(): Promise<void> } = {
     stop: async () => { throw new Error('RootHost stop is not bound'); },
   };
-  const senderEnricher = await createSenderEnricher(hostConfig, endpointRoles);
-  // ADR 0055: conversation-level feature overrides + in-chat feature admins (tables defined before start).
-  const featureHost = createFeatureHost({ database: databaseHost, hostConfig, config, endpointRoles, snapshots: () => host.runtime.snapshots });
+  // ADR 0055 / 0056: conversation-level feature overrides and chat roles (tables defined before start).
+  const featureHost = createFeatureHost({
+    database: databaseHost, hostConfig, snapshots: () => host.runtime.snapshots,
+    afterLoad: roles => chatRoleMigration.complete(roles, { persistent: ['sqlite', 'mysql', 'pg'].includes(databaseHost.dialect) }),
+  });
+  const senderEnricher = createSenderEnricher({
+    roles: () => featureHost.roles,
+    onResolved: (identity, context) => featureHost.mappingSource.record(identity, context),
+  });
   const im = new ImRuntime({ enrichSender: senderEnricher });
   const endpointRepository = new PersistentEndpointRepository({ rootId: resolve(options.root),
     directory: join(options.root, '.zhin', 'endpoint-credentials'), state: () => databaseHost.state });
@@ -301,8 +311,12 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     logger: getLogger('console'),
   });
   const consoleIamService = () => (consoleIam?.supported ? consoleIam.service : undefined);
-  const authorizeConfigurationChat = createConfigurationChatAuthorizer(hostConfig, endpointRoles);
-  const authorizeRestartChat = createRestartChatAuthorizer(hostConfig, endpointRoles);
+  const currentSnapshot = () => {
+    const lease = host.runtime.snapshots.acquire();
+    try { return lease.value; } finally { lease.release(); }
+  };
+  const authorizeConfigurationChat = createConfigurationChatAuthorizer(() => featureHost.roles, currentSnapshot);
+  const authorizeRestartChat = createRestartChatAuthorizer(() => featureHost.roles, currentSnapshot);
   // 受控自我进化生效（ADR 0040 §5 / §6）：进程持有热重载 / 受控重启 / 健康检查 / 配置补丁；最新 generation 绑定生效器。
   const selfChangeApply = new HostSelfChangeApply({
     projectRoot: options.root,
@@ -319,7 +333,6 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     config,
     modules: consoleHost.modules,
     watch: parsed.once ? [] : parsed.watch,
-    pluginConfigurationSelection: createEndpointRoleConfigurationSelection(hostConfig, endpointRoles),
     onGenerationCommit: (generation) => {
       // Route table follows hot reloads (ADR 0054 §3 `routes`).
       bridgedHttpHost?.publishRoutes(generation);
@@ -394,8 +407,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
           selfChanges,
           selfChangeApply,
           projectRoot: options.root,
-          resolveEndpointOwner: endpointRoles.resolveOwner,
-          resolveEndpointTrusted: endpointRoles.resolveTrusted,
+          resolveEndpointOwner: featureHost.resolveEndpointOwner,
           resolveConfiguredEndpointKeys: () => {
             const candidate = context.readCandidateSnapshot?.();
             if (candidate && candidate.generation !== context.generation) throw new Error('Endpoint validation targets another candidate generation');
@@ -704,7 +716,6 @@ interface ConfiguredAgentHost {
     readonly im: ImRuntime;
     readonly projectRoot: string;
     readonly resolveEndpointOwner: (adapter: string, endpoint: string) => string | undefined;
-    readonly resolveEndpointTrusted: (adapter: string, endpoint: string) => readonly string[];
     readonly resolveConfiguredEndpointKeys: () => Promise<ReadonlySet<string>>;
     readonly extraTools?: readonly unknown[];
     readonly audioTranscriber?: import('@zhin.js/agent').AudioTranscriptionPort;

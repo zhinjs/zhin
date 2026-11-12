@@ -123,7 +123,7 @@ describe('memory-layers', () => {
       adapter: 'icqq',
       endpoint: 'b',
       senderId: 'owner1',
-      sender_roles: ['master'],
+      sender_roles: ['owner'],
     }), tmpDir);
     expect(ok.allowed).toBe(true);
 

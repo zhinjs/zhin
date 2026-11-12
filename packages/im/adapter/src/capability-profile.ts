@@ -121,6 +121,11 @@ export interface SceneCapabilities {
   readonly memberProfile?: boolean;
   /** Platform role word -> `owner | admin | member`. Canonical words map to themselves. */
   readonly roles?: Readonly<Record<string, ProfileRole>>;
+  /**
+   * ADR 0056 §1: which parts of `sender.platform` the adapter reports on inbound messages in this
+   * conversation kind. Undeclared = not reported (consumers treat the standing as unknown).
+   */
+  readonly platformStanding?: Readonly<{ standing?: boolean; roles?: boolean; permissions?: boolean }> | false;
   /** Mute semantics: allowed duration range and whether the whole conversation can be muted. */
   readonly mute?: Readonly<{ durationSeconds?: NumberRange; all?: boolean }> | false;
   readonly maxMembers?: number;
@@ -342,6 +347,7 @@ const SECTION_NODE: Node = obj({
     groupInfo: FLAG,
     memberProfile: FLAG,
     roles: { t: 'fixed', check: validateRoleMap },
+    platformStanding: obj({ standing: FLAG, roles: FLAG, permissions: FLAG }, { toggle: true }),
     mute: obj({ durationSeconds: RANGE, all: FLAG }, { toggle: true }),
     maxMembers: MAX,
     card: FLAG,

@@ -1,6 +1,6 @@
 # ICQQ Agent 权限与会话信息
 
-调用者的角色与 Bot 的平台角色相互独立。`role(master,admin,trusted,owner)` 由框架校验调用者；它不代表 Bot 是群管理员。群管操作还需检查 Bot 与目标成员的实时平台身份。
+调用者的角色与 Bot 的平台角色相互独立。`trusted` 由框架校验调用者；它不代表 Bot 是群管理员。群管操作还需检查 Bot 与目标成员的实时平台身份。
 
 选择 ICQQ Agent 后，先从目录加载对应 Skill，其私有工具才会暴露。`icqq-conversation` 的 `conversation_info` 按当前 endpoint 查询 Bot 自己的身份及群／频道信息，不把共享会话画像当作权限依据，也不在每条聊天消息前增加一次角色查询。
 

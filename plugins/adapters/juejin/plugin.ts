@@ -5,7 +5,7 @@ import { createJuejinConsoleRpc } from './src/console.js';
 /**
  * Plugin Runtime:
  * - Adapter: `adapters/juejin` 轮询白名单文章评论，出站只进草稿队列（落盘，重启不丢）。
- * - Commands: `juejin-draft list|show|edit|send|drop`、`juejin-login status`（仅 master）。
+ * - Commands: `juejin-draft list|show|edit|send|drop`、`juejin-login status`（仅聊天角色 owner）。
  * - Page: `pages/index` →「掘金评论审批」：登录态、白名单文章、待审草稿的发送 / 改写 / 丢弃。
  */
 export default definePlugin({

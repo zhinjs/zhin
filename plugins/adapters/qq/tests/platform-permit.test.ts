@@ -10,22 +10,17 @@ import {
 function mockSubject(sender: { role?: string; permissions?: string[] }) {
   return {
     adapter: 'qq',
-    sender: {
-      id: 'u1',
-      role: sender.role ? [sender.role] : [],
-      permissions: sender.permissions,
-    },
+    sender: { id: 'u1', platform: { standing: (sender.role ?? 'member') as never, ...(sender.permissions ? { permissions: sender.permissions } : {}) } },
     scene: { type: 'channel', id: 'c1' },
   };
 }
 
-function mockMsg(sender: { role?: string; permissions?: string[] }) {
+function mockMsg(platformPermissions: string[]) {
   return {
     clientAdapter: 'qq',
     endpointId: 'bot1',
     conversation: { endpoint: { adapter: 'qq', id: 'bot1' }, kind: 'channel', id: 'c1' },
-    sender: { id: 'u1', roles: sender.role ? [sender.role] : [] },
-    metadata: sender.role ? { roles: [sender.role] } : {},
+    sender: { id: 'u1', platform: { standing: 'member' as const, permissions: platformPermissions } },
   } as any;
 }
 
@@ -34,7 +29,6 @@ describe('qq official guild platform-permit', () => {
 
   beforeEach(() => {
     host = new PermissionHost();
-    host.registerPlatform('qq', (perm, subject) => checkQqPlatformPermit(perm, subject));
   });
 
   it('normalizeQqGuildSenderForPermit', () => {
@@ -56,7 +50,7 @@ describe('qq official guild platform-permit', () => {
       permissions: [platformPermit('guild_owner')],
       execute: async () => '',
     };
-    expect(await canAccessTool(tool, mockMsg({ role: 'admin' }), host)).toBe(false);
-    expect(await canAccessTool(tool, mockMsg({ role: 'owner' }), host)).toBe(true);
+    expect(await canAccessTool(tool, mockMsg([]), host)).toBe(false);
+    expect(await canAccessTool(tool, mockMsg(['guild_owner']), host)).toBe(true);
   });
 });

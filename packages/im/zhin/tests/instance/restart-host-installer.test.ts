@@ -14,10 +14,10 @@ import adapterFeature, {
 } from '@zhin.js/adapter';
 import commandFeature from '@zhin.js/command';
 import {
-  createEndpointRoleResolver,
   createSenderEnricher,
   ImRuntime,
 } from '@zhin.js/core/runtime';
+import { chatRolesFromDocument } from './chat-role-fixture.js';
 import { definePlugin, type RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
 import { createConfigDocument, RootRuntime, type ModuleRuntime } from '@zhin.js/runtime';
 import {
@@ -139,8 +139,8 @@ async function createRestartFixture(options: {
   const file = join(project, 'zhin.config.json');
   await put(file, document);
   const config = createConfigDocument(file);
-  const roles = await createEndpointRoleResolver(document);
-  const im = new ImRuntime({ enrichSender: await createSenderEnricher(document, roles) });
+  const roles = await chatRolesFromDocument(document);
+  const im = new ImRuntime({ enrichSender: createSenderEnricher({ roles: () => roles }) });
   const requestRestart = vi.fn();
   const runtime = new RootRuntime({
     projectRoot: project,
@@ -151,7 +151,7 @@ async function createRestartFixture(options: {
       im.install(context.resources);
       installRestartHost({
         projectRoot: project,
-        authorize: createRestartChatAuthorizer(document, roles),
+        authorize: createRestartChatAuthorizer(() => roles, () => runtime.snapshot),
         restartSupported: () => options.restartSupported ?? true,
         requestRestart,
         restartDelayMs: 10,
@@ -200,7 +200,7 @@ describe('installRestartHost & deliverPendingRestartReceipt', () => {
     const f = await createRestartFixture({ locale: 'zh-CN', restartSupported: true });
     try {
       await f.receive('!!重启', { sender: 'stranger', kind: 'group', conversationId: 'group-99' });
-      expect(lastReplyText(f.client)).toContain('仅允许 Bot 主人（master）执行重启指令');
+      expect(lastReplyText(f.client)).toContain('仅允许 Bot 主人（owner）执行重启指令');
       expect(f.requestRestart).not.toHaveBeenCalled();
       expect(await consumePendingRestartReceipt(f.project)).toBeNull();
     } finally {

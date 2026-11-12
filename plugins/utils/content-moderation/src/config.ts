@@ -22,10 +22,9 @@ export const DEFAULT_MODERATION_CONFIG: ModerationConfig = Object.freeze({
   enabled: true,
   onError: 'open',
   maskChar: '*',
-  masters: Object.freeze([] as string[]),
   inbound: Object.freeze({
     enabled: true,
-    bypassMasters: true,
+    bypassRole: 'owner',
     whitelist: Object.freeze({
       userIds: Object.freeze([] as string[]),
       conversationIds: Object.freeze([] as string[]),
@@ -38,6 +37,10 @@ export const DEFAULT_MODERATION_CONFIG: ModerationConfig = Object.freeze({
   actions: DEFAULT_ACTIONS,
   sources: Object.freeze([] as SourceConfig[]),
 });
+
+function parseBypassRole(value: unknown): ModerationConfig['inbound']['bypassRole'] {
+  return value === 'owner' || value === 'admin' || value === 'trusted' || value === 'none' ? value : 'owner';
+}
 
 export function resolveModerationConfig(raw: unknown): ModerationConfig {
   const input = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
@@ -66,10 +69,9 @@ export function resolveModerationConfig(raw: unknown): ModerationConfig {
     onError,
     maskChar,
     ...(replyTemplate === undefined ? {} : { replyTemplate }),
-    masters: freezeStrings(input.masters),
     inbound: Object.freeze({
       enabled: inboundRaw.enabled !== false,
-      bypassMasters: inboundRaw.bypassMasters !== false,
+      bypassRole: parseBypassRole(inboundRaw.bypassRole),
       whitelist: Object.freeze({
         userIds: freezeStrings(whitelistRaw.userIds),
         conversationIds: freezeStrings(whitelistRaw.conversationIds),

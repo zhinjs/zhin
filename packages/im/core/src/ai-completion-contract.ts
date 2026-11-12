@@ -124,7 +124,7 @@ export interface UsageSubjectSource {
     kind: string;
     id: string;
   }>;
-  readonly sender?: Readonly<{ id?: string; roles?: readonly string[] }>;
+  readonly sender?: Readonly<{ id?: string; chatRole?: 'owner' | 'admin' | 'trusted' }>;
   readonly clientAdapter?: string;
   readonly endpointId?: string;
 }
@@ -155,7 +155,7 @@ export function usageSubjectFromMessage(message: UsageSubjectSource): UsageSubje
   return Object.freeze({
     userId,
     ...(kind === 'private' ? {} : { groupId: usageGroupId(platform, endpoint, sceneId) }),
-    owner: message.sender?.roles?.includes('master') ?? false,
+    owner: message.sender?.chatRole === 'owner',
   });
 }
 

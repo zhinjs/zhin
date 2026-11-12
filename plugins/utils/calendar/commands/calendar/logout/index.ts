@@ -8,7 +8,7 @@ export default defineCommand({
   params: {
     provider: { type: "string", description: "google 或 microsoft（outlook）", descriptionI18n: { en: "google or microsoft (outlook)" } },
   },
-  permit: ["role(master)"],
+  permit: ["owner"],
   async execute({ params, use, locale, formatCommand }) {
     const provider = parseOAuthProvider(params.provider);
     if (!provider) {

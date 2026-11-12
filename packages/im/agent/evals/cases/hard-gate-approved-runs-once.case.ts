@@ -5,7 +5,7 @@ export default defineEvalCase({
   description: 'A plugin tool declared risk: dangerous asks for one human approval even with requiresApproval: never, then runs.',
   source: 'ADR 0036 §3: dangerous tools check the approval queue before execution',
   tags: ['approval'],
-  inbound: { text: '发布本周群公告', sender: { id: 'owner', roles: ['master'] } },
+  inbound: { text: '发布本周群公告', sender: { id: 'owner', chatRole: 'owner' } },
   tools: [{ name: 'post_weekly_digest', risk: 'dangerous', requiresApproval: 'never', result: 'posted' }],
   approval: 'approve',
   script: [

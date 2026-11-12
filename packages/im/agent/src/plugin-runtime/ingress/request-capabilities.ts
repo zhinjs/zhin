@@ -18,7 +18,6 @@ import type { SceneFactRefresher } from './scene-fact-refresher.js';
 import type { ConversationRef, SelfProfilePort } from '@zhin.js/im-contract';
 
 export type EndpointOwnerResolver = (adapterLocalName: string, endpointKey: string) => string | undefined;
-export type EndpointTrustedResolver = (adapterLocalName: string, endpointKey: string) => readonly string[];
 const logger = getLogger('agent');
 
 interface GroupSceneFacts {
@@ -93,6 +92,7 @@ function resolveEndpointRoleTarget(
 }
 
 export interface RuntimeSenderRoles {
+  /** Chat role `owner` (ADR 0056; formerly `master`). */
   readonly isMaster: boolean;
   readonly isTrusted: boolean;
 }
@@ -459,30 +459,15 @@ export async function resolveRuntimeTurnContextState(
   });
 }
 
-/** Trusted endpoint bindings and trigger policy, kept apart from authenticated message facts. */
-export interface RuntimeSenderRoleBindings {
-  readonly endpointMaster?: string;
-  readonly endpointTrusted: readonly string[];
-  readonly trigger?: AITriggerConfig;
-}
-
 /**
- * Sender roles derive only from the authenticated Message sender reference.
- * trigger.masters and endpoint master grant master; trusted remains weaker.
+ * Sender roles derive only from the Runtime-set `sender.chatRole` (ADR 0056: stored grants and
+ * mapping rules along the conversation's scope chain). `isMaster` means the chat role `owner`;
+ * `isTrusted` means `trusted` or `admin` (admin includes trusted) without owner.
  */
-export function resolveRuntimeSenderRoles(
-  message: Message,
-  { endpointMaster, endpointTrusted, trigger }: RuntimeSenderRoleBindings,
-): RuntimeSenderRoles {
-  const senderId = message.sender?.id;
-  const triggerMasters = (trigger?.masters ?? []).map(String);
-  const triggerTrusted = (trigger?.trusted ?? []).map(String);
-  const isMaster = senderId != null
-    && ((endpointMaster != null && senderId === String(endpointMaster))
-      || triggerMasters.includes(senderId));
-  const isTrusted = !isMaster && senderId != null
-    && (triggerTrusted.includes(senderId) || endpointTrusted.map(String).includes(senderId));
-  return { isMaster, isTrusted };
+export function resolveRuntimeSenderRoles(message: Pick<Message, 'sender'>): RuntimeSenderRoles {
+  const role = message.sender?.id ? message.sender.chatRole : undefined;
+  const isMaster = role === 'owner';
+  return { isMaster, isTrusted: !isMaster && (role === 'admin' || role === 'trusted') };
 }
 
 export function resolveOwnerForRuntimeMessage(
@@ -493,16 +478,6 @@ export function resolveOwnerForRuntimeMessage(
   if (!resolve) return undefined;
   const target = resolveEndpointRoleTarget(message.conversation, snapshot, message.endpointId);
   return target ? resolve(target.pluginKey, target.endpointId) : undefined;
-}
-
-export function resolveTrustedForRuntimeMessage(
-  message: Message,
-  resolve?: EndpointTrustedResolver,
-  snapshot?: RuntimeSnapshot,
-): readonly string[] {
-  if (!resolve) return [];
-  const target = resolveEndpointRoleTarget(message.conversation, snapshot, message.endpointId);
-  return target ? [...new Set(resolve(target.pluginKey, target.endpointId).map(id => String(id).trim()).filter(Boolean))] : [];
 }
 
 export function capabilityLocalName(id: string): string {

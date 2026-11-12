@@ -11,10 +11,10 @@ describe('schedule job creator', () => {
     expect(scheduleJobCreatorFromPrincipal({
       subjectId: '1659488338',
       displayName: 'Owner',
-      roles: ['master'],
+      roles: ['owner'],
     })).toEqual({
       userId: '1659488338',
-      roles: ['master'],
+      roles: ['owner'],
       name: 'Owner',
     });
   });
@@ -58,7 +58,7 @@ describe('task executor schedule creator', () => {
     const result = await executor.preview('daily weather', {
       sessionKey: 'im:qq:bot:private:u1',
       origin: { kind: 'im', platform: 'qq', endpoint: 'bot', scope: 'private', sceneId: 'u1' },
-      principal: { subjectId: 'u1', roles: ['master'] },
+      principal: { subjectId: 'u1', roles: ['owner'] },
     });
 
     expect(result.success).toBe(true);

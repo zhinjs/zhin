@@ -106,8 +106,8 @@ function turn(platform: string, scope: 'private' | 'group' | 'channel', botPlatf
   const caps = platform === 'icqq' ? platformCapabilities(scope, botPlatformRole) : undefined;
   return {
     origin: { kind: 'im', platform, endpoint: 'bot', scope, sceneId: 'scene' },
-    principal: { subjectId: 'sender', roles: ['master'] },
-    policy: { permissions: ['master'], unattended: false },
+    principal: { subjectId: 'sender', roles: ['owner'] },
+    policy: { permissions: ['owner'], unattended: false },
     ...(botPlatformRole || caps ? { input: {
       ...(botPlatformRole ? { contextState: { bot: { platformRole: botPlatformRole } } } : {}),
       ...(caps ? { platformCapabilities: caps } : {}),

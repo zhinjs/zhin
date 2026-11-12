@@ -75,10 +75,10 @@ describe('scene iteration limits (ADR 0042 §7)', () => {
     });
     it('classifies turns by origin scope and master role', () => {
         const turn = (scope: string, roles: string[], kind = 'im') => ({ origin: { kind, scope }, principal: { roles } });
-        expect(iterationSceneOf(turn('group', ['master']))).toBe('group');
+        expect(iterationSceneOf(turn('group', ['owner']))).toBe('group');
         expect(iterationSceneOf(turn('private', ['user']))).toBe('private');
-        expect(iterationSceneOf(turn('private', ['master']))).toBe('master-private');
-        expect(iterationSceneOf(turn('private', ['master'], 'http'))).toBeUndefined();
+        expect(iterationSceneOf(turn('private', ['owner']))).toBe('master-private');
+        expect(iterationSceneOf(turn('private', ['owner'], 'http'))).toBeUndefined();
     });
     it('modelHarness overrides win, then a customised ai.agent.maxIterations', () => {
         expect(resolveTurnMaxIterations({ ...base, scene: 'group', modelHarness: { services: { "test-service": { models: { "my-model": { maxIterations: 12 } } } } } })).toBe(12);

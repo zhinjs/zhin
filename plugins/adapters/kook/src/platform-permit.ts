@@ -4,15 +4,14 @@
 import type { PermissionSubject } from '@zhin.js/permission';
 import { KookPermission } from './protocol.js';
 
-const ADAPTER = 'kook';
 
 export function platformPermit(perm: string): string {
-  return `platform(${ADAPTER},${perm})`;
+  return `platform-permission:${perm}`;
 }
 
 const FACTORY_PERM_MAP: Record<string, string> = {
-  scene_admin: 'guild_admin',
-  scene_owner: 'guild_owner',
+  admin: 'guild_admin',
+  owner: 'guild_owner',
 };
 
 export function kookGroupPermitResolver(logicalPerm: string): string {
@@ -55,9 +54,12 @@ export function normalizeKookSenderForPermit(
 }
 
 export function checkKookPlatformPermit(perm: string, subject: PermissionSubject): boolean {
-  const role = subject.sender?.role?.[0];
-  const permissions = subject.sender?.permissions ?? [];
-  const has = (t: string) => permissions.includes(t);
+  // Native role names (e.g. Telegram `creator`) may still arrive until every adapter reports
+  // the normalized standing (ADR 0056 §1); compare as plain strings.
+  const role = subject.sender?.platform?.standing as string | undefined;
+  const permissions = subject.sender?.platform?.permissions ?? [];
+  // Accepts legacy UPPER_SNAKE tokens and ADR 0056 §1 snake_case platform permission names.
+  const has = (t: string) => permissions.includes(t) || permissions.includes(t.toLowerCase());
 
   switch (perm) {
     case 'guild_owner':

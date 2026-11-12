@@ -145,10 +145,10 @@ function turnWith(approval: ApprovalOutcomePort | undefined) {
     intent: { kind: 'new' },
     identity: { rootId: 'root', generation: 1, traceId: 'trace', turnId: 'turn' },
     origin: { kind: 'http', sessionId: 'http-session' },
-    principal: { subjectId: 'owner', roles: ['master'] },
+    principal: { subjectId: 'owner', roles: ['owner'] },
     input: { text: 'run' },
     session: { key: 'http:http-session' },
-    policy: { permissions: ['master'], unattended: false },
+    policy: { permissions: ['owner'], unattended: false },
     capabilities: { tools: [], skills: [] },
     signal: new AbortController().signal,
     ports: {

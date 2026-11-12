@@ -838,7 +838,7 @@ describe('telegram permission lookup isolation', () => {
         finish(); await closing;
         expect(receive).toHaveBeenCalledTimes(1);
         expect(receive).toHaveBeenCalledWith(expect.objectContaining({ message: expect.objectContaining({ id: String(message.message_id) }),
-          metadata: expect.objectContaining({ senderRole: 'admin' }) }));
+          sender: expect.objectContaining({ platform: { standing: 'admin' } }) }));
         if (transition === 'reopen') endpoint.open();
       }
       const accepted = transition === 'restart' ? 0 : 1;
@@ -846,7 +846,7 @@ describe('telegram permission lookup isolation', () => {
       await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(accepted + 1));
       expect(lookups).toBe(2);
       expect(receive).toHaveBeenLastCalledWith(expect.objectContaining({ message: expect.objectContaining({ id: '43' }),
-        metadata: expect.objectContaining({ senderRole: 'member' }) }));
+        sender: expect.objectContaining({ platform: { standing: 'member' } }) }));
     } finally { finish(); await closing; await endpoint.stop(); }
   });
 
@@ -855,7 +855,7 @@ describe('telegram permission lookup isolation', () => {
     try {
       for (const [account, status, role] of [['admin-bot', 'administrator', 'admin'], ['member-bot', 'member', 'member']]) {
         const receive = vi.fn(async () => Object.freeze({ matched: false }));
-        const fetch = mockApiFetch({ getChatMember: { status } });
+        const fetch = mockApiFetch({ getChatMember: { status, ...(status === 'administrator' ? { can_restrict_members: true, can_pin_messages: false } : {}) } });
         const endpoint = await telegramFixture({
           id: capabilityId(rootPluginId(), adapterFeature, account!),
           config: { ...baseConfig, id: account!, token: `test-${account}` }, fetch,
@@ -870,8 +870,7 @@ describe('telegram permission lookup isolation', () => {
         await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(2));
         expect(fetch.calls.filter((call) => call.method === 'getChatMember')).toHaveLength(1);
         expect(receive).toHaveBeenLastCalledWith(expect.objectContaining({
-          metadata: expect.objectContaining({ senderRole: role }),
-          sender: expect.objectContaining({ roles: [role] }),
+          sender: expect.objectContaining({ platform: role === 'admin' ? { standing: 'admin', permissions: ['restrict_members'] } : { standing: role } }),
         }));
       }
     } finally {

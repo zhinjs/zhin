@@ -9,7 +9,7 @@ export default defineAgentTool<{ group_id: number }>({
   adapter: 'icqq',
   requiresApproval: 'once',
   scopes:['group'],
-  permissions: ['role(master,admin,trusted,owner)'],
+  permissions: ['trusted'],
   async execute({ group_id }, context) {
     const files = await context.$client.acquireGfs(group_id).ls('/');
     if (!files.length) return { files: [], message: t(context.locale, 'filesEmpty') };

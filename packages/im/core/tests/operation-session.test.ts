@@ -62,7 +62,7 @@ function fixture() {
         sender: Object.freeze({
           id: 'sender',
           name: 'Alice',
-          platformRoles: ['admin'],
+          platform: { standing: 'admin' },
           authorizationRoles: ['master'],
         }),
         signal: new AbortController().signal,
@@ -84,7 +84,7 @@ it('binds one read-only Session view to real adapter/client/native references wi
   expect(Object.isFrozen(f.endpoint)).toBe(false);
   expect(Object.isFrozen(f.event)).toBe(false);
   expect(session?.scene).toMatchObject({ kind: 'group', id: 'room', parent: { id: 'parent' }, threadId: 'thread' });
-  expect(session?.sender).toEqual({ id: 'sender', name: 'Alice', platformRoles: ['admin'], authorizationRoles: ['master'] });
+  expect(session?.sender).toEqual({ id: 'sender', name: 'Alice', platform: { standing: 'admin' }, authorizationRoles: ['master'] });
   expect(session?.message).toMatchObject({ text: 'hello', receivedAt: 200, platformSentAt: 100, mentioned: true });
   expect(session?.message.id).toBeUndefined();
   expect(Object.isFrozen(session)).toBe(true);

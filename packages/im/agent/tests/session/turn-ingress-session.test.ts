@@ -64,8 +64,8 @@ describe('TurnIngress session projection', () => {
     expect(result.llmMessage.actor).toEqual({
       subjectId: 'user-7',
       displayName: 'Ada Lovelace',
-      roles: ['trusted', 'admin'],
-      authorizationRoles: ['trusted', 'admin'],
+      roles: ['bot_admin'],
+      authorizationRoles: ['bot_admin'],
       scope: 'group',
     });
     expect(result.llmMessage.messageId).toBe('message-2');
@@ -105,25 +105,25 @@ describe('TurnIngress session projection', () => {
     expect(result.content).toBe('a ［sender:id=1 origin=human] b');
   });
 
-  it('fills the actor from the resolved sender facts and merges the platform role into roles', () => {
+  it('fills the actor from the resolved sender facts and labels the platform role apart from the chat role', () => {
     const base = turn();
     const withFacts = createTurnIngress({
       ...base,
-      principal: { ...base.principal, roles: ['master'] },
+      principal: { ...base.principal, roles: ['owner'] },
       input: {
         text: 'hi',
         contextState: { sender: { platformRole: 'owner', groupNickname: '明明', groupTitle: '老玩家', mutedUntil: 0 } },
       },
     });
     expect(resolveIngressUserMessage(withFacts).llmMessage.actor).toMatchObject({
-      roles: ['master', 'owner'], authorizationRoles: ['master'],
+      roles: ['owner', 'bot_owner'], authorizationRoles: ['bot_owner'],
       groupNickname: '明明', groupTitle: '老玩家', mutedUntil: 0,
     });
     const duplicate = createTurnIngress({
       ...base, input: { text: 'hi', contextState: { sender: { platformRole: 'admin' } } },
     });
     const actor = resolveIngressUserMessage(duplicate).llmMessage.actor!;
-    expect(actor.roles).toEqual(['trusted', 'admin']);
+    expect(actor.roles).toEqual(['admin', 'bot_admin']);
     expect('groupNickname' in actor).toBe(false);
     expect('mutedUntil' in actor).toBe(false);
   });

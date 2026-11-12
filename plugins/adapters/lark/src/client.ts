@@ -373,8 +373,8 @@ export class LarkClient extends SdkClient {
     const permit = senderId && chatType === 'group' && msg.chat_id
       ? normalizeLarkSenderForPermit(await this.#resolveChatRole(msg.chat_id, senderId))
       : undefined;
-    // 规范角色 owner / admin 进 roles；细粒度能力放 senderPermissions
-    const role = permit?.role === 'owner' || permit?.role === 'admin' ? permit.role : undefined;
+    // ADR 0056 §1：群主 / 群管理员 / 成员 → sender.platform.standing（飞书群无原生角色与权限位）。
+    const role = permit?.role === 'owner' || permit?.role === 'admin' || permit?.role === 'member' ? permit.role : undefined;
     const mentioned = isLarkBotMentioned(msg);
     const replyToId = msg.parent_id || msg.root_id;
     await this.publishEvent('message.receive', {
@@ -382,15 +382,13 @@ export class LarkClient extends SdkClient {
       conversation,
       message: { conversation, id: generateMessageId(msg) },
       content: formatInboundContent(msg),
-      ...(senderId ? { sender: { id: senderId, ...(role ? { roles: [role] } : {}) } } : {}),
+      ...(senderId ? { sender: { id: senderId, ...(role ? { platform: { standing: role } } : {}) } } : {}),
       endpointId: this.#options.config.id,
       ...(mentioned ? { mentioned: true } : {}),
       ...(replyToId ? { replyTo: { id: replyToId } } : {}),
       metadata: Object.freeze({
         messageType: msg.message_type,
         chatType,
-        ...(role ? { senderRole: role } : {}),
-        ...(role && permit?.permissions?.length ? { senderPermissions: [...permit.permissions] } : {}),
       }),
     });
   }

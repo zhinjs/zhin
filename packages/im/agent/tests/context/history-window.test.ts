@@ -59,10 +59,10 @@ describe('history token budget config (ADR 0043 §2)', () => {
   });
   it('scene comes from the turn view', () => {
     const turn = (scope: string, roles: string[], kind = 'im') => ({ origin: { kind, scope }, principal: { roles } });
-    expect(historySceneFromTurn(turn('group', ['master']))).toBe('group');
+    expect(historySceneFromTurn(turn('group', ['owner']))).toBe('group');
     expect(historySceneFromTurn(turn('channel', []))).toBe('group');
     expect(historySceneFromTurn(turn('private', []))).toBe('private');
-    expect(historySceneFromTurn(turn('private', ['master']))).toBe('masterPrivate');
+    expect(historySceneFromTurn(turn('private', ['owner']))).toBe('masterPrivate');
     expect(historySceneFromTurn(undefined)).toBe('private');
   });
 });

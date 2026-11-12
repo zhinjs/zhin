@@ -40,7 +40,8 @@ export interface ExpiredSessionNotice {
 }
 
 const DEADLINE_ACTOR = 'deadline';
-const MANAGER_ROLES: readonly string[] = ['master', 'trusted', 'owner', 'admin'];
+/** Chat role `trusted` or higher (group owners / admins map to `admin` by default, ADR 0056). */
+const MANAGER_ROLES: readonly string[] = ['trusted'];
 function noGame(message: GamePlayer): string { return messages(message.locale, 'noGame') + gameCommandHint(message, 'roulette', 'open'); }
 
 export async function runRouletteAction(

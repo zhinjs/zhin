@@ -11,7 +11,7 @@
 
 ## Permit 词汇表
 
-| `platform(telegram,…)` | 含义 |
+| `platform-permission:…` | 含义 |
 |------------------------|------|
 | `chat_creator` | 群主 |
 | `chat_administrator` | 管理员 |
@@ -21,4 +21,6 @@
 
 ## 工厂映射
 
-`scene_admin` → `chat_administrator` · `scene_owner` → `chat_creator`
+场景治理工具默认要求 `platform:admin` / `platform:owner`（归一地位，ADR 0056 §5）；本适配器把它们映射为下列平台权限：
+
+`platform:admin` → `chat_administrator` · `platform:owner` → `chat_creator`

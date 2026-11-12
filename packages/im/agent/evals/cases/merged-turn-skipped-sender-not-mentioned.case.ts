@@ -7,7 +7,7 @@ export default defineEvalCase({
   inbound: {
     text: 'Alice: 明天几点集合？\nBob: 哈哈哈',
     scope: 'group',
-    sender: { id: 'alice', name: 'Alice', roles: ['user'] },
+    sender: { id: 'alice', name: 'Alice' },
     mergedSenders: [
       { subjectId: 'alice', displayName: 'Alice', texts: ['明天几点集合？'] },
       { subjectId: 'bob', displayName: 'Bob', texts: ['哈哈哈'] },

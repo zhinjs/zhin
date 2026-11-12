@@ -181,7 +181,7 @@
     "export * from './definition.js';",
     "export * from './permission-explanation.js';",
     "export type{CommandValidationIssue,CommandValidationIssueCode}from './arguments.js';",
-    "export{CONVERSATION_MANAGER_PERMIT,canManageConversation,assertBuiltinPermits,checkBuiltinPermit,checkBuiltinPermitList,isBuiltinPermit,isPlatformPermit,parsePermitName,type ParsedPermit,type PermitKind,}from './permit.js';",
+    "export{CONVERSATION_MANAGER_PERMIT,canManageConversation,assertBuiltinPermits,checkBuiltinPermit,checkBuiltinPermitList,isBuiltinPermit,removedPermitReplacement,parsePermitName,type ParsedPermit,type PermitKind,}from './permit.js';",
     "export{bindCommandSource,CommandPathSyntaxError,commandFeatureId,type BoundCommandSource,default as commandFeature,}from './provider.js';",
     "export{default}from './provider.js';"
   ],
@@ -372,12 +372,11 @@
   "permission": [
     "export * from './check-permissions.js';",
     "export * from './explain.js';",
-    "export{PermissionHost,type PermissionChecker,type PlatformPermitChecker,}from './host.js';",
-    "export{createSceneRolePlatformChecker,platformPermission}from './helpers.js';",
+    "export{PermissionHost,type PermissionChecker,}from './host.js';",
     "export{permissionHostToken}from './token.js';",
-    "export{type PermissionDefinition,type PlatformPermissionDefinition,definePermission,definePlatformPermission,}from './define.js';",
-    "export{type PermissionSubject,type PermissionScene,type PermissionSender,toPermissionSubject,}from './subject.js';",
-    "export{type PermitKind,type ParsedPermit,type ParsedPlatformPermit,parsePermitName,parsePlatformPermitName,isBuiltinPermit,isPlatformPermit,assertPermitSyntax,checkBuiltinPermit,checkBuiltinPermitList,}from './builtin.js';"
+    "export{type PermissionDefinition,definePermission,}from './define.js';",
+    "export{type PermissionSubject,type PermissionScene,type PermissionSender,type PermissionPlatformStanding,toPermissionSubject,}from './subject.js';",
+    "export{type PermitKind,type PermitChatRole,type ParsedPermit,parsePermitName,isBuiltinPermit,removedPermitReplacement,assertPermitSyntax,checkBuiltinPermit,checkBuiltinPermitList,}from './builtin.js';"
   ],
   "plugin-runtime": [
     "export * from './capability.js';",

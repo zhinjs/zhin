@@ -24,7 +24,7 @@ describe('typing 反馈事件链探针', () => {
 
     const commMessage = createSyntheticMessage({
       conversation: { endpoint: { adapter: 'icqq', id: '8596238' }, kind: 'group', id: '1001' },
-      endpointId: '8596238', clientAdapter: 'icqq', messageId: 'm-1', sender: { id: 'u1', roles: ['user'] },
+      endpointId: '8596238', clientAdapter: 'icqq', messageId: 'm-1', sender: { id: 'u1' },
     });
     await agent.processTurn({
       content: '你好',
@@ -51,7 +51,7 @@ describe('typing 反馈事件链探针', () => {
     events.on('ai.typing.stop', onStop);
     const commMessage = createSyntheticMessage({
       conversation: { endpoint: { adapter: 'sandbox', id: 'bot' }, kind: 'private', id: '' },
-      endpointId: 'bot', clientAdapter: 'sandbox', messageId: 'm-error', sender: { id: 'u1', roles: ['user'] },
+      endpointId: 'bot', clientAdapter: 'sandbox', messageId: 'm-error', sender: { id: 'u1' },
     });
 
     await expect(agent.processTurn({
@@ -86,7 +86,7 @@ describe('typing 反馈事件链探针', () => {
     };
     const commMessage = createSyntheticMessage({
       conversation: { endpoint: { adapter: 'sandbox', id: 'bot' }, kind: 'private', id: 'u1' },
-      endpointId: 'bot', clientAdapter: 'sandbox', messageId: 'm-tool', sender: { id: 'u1', roles: ['user'] },
+      endpointId: 'bot', clientAdapter: 'sandbox', messageId: 'm-tool', sender: { id: 'u1' },
     });
 
     await agent.processTurn({

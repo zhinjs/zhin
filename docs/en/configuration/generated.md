@@ -467,11 +467,8 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `plugin` | object | no | — | Root Plugin configuration; replaced by its project schema during composition. |
 | `locale` | string: `"zh-CN"`, `"en"` | no | — | Language used when no personal preference is set; Simplified Chinese when omitted. Language and time zone are independent. |
 | `features` | object | no | — | Feature configuration beyond the plugin blocks (ADR 0055): in-chat self-service. Restart to apply. |
-| `features.selfService` | object | no | — | In-chat `feature` / `功能` command for feature admins. Off by default. |
-| `features.selfService.enabled` | boolean | no | `false` | Register the in-chat feature command. |
-| `features.selfService.platformAdmins` | boolean | no | `true` | Platform group owners / admins (adapter-reported roles listed in roles) are conversation admins of that group. |
-| `features.selfService.roles` | array&lt;string&gt; | no | `["owner","admin"]` | Platform roles counted by platformAdmins; ["owner"] limits it to group owners. |
-| `features.selfService.allowUsers` | array&lt;string&gt; | no | `[]` | Global feature admins as &lt;adapter alias&gt;:&lt;userId&gt;. |
+| `features.selfService` | object | no | — | In-chat `feature` / `功能` and `role` / `角色` commands for chat role admins (ADR 0055 / 0056). Off by default. Platform group owners / admins become conversation admins through roles.mappings (default rule). |
+| `features.selfService.enabled` | boolean | no | `false` | Register the in-chat feature and role commands. |
 
 ## Standalone AI import proposal
 
@@ -552,8 +549,14 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `bilibili.videos` | array&lt;string \| number&gt; | no | — | Allowed videos, using BV or av IDs. Only comments on these videos are polled; no site-wide search. |
 | `bilibili.dynamics` | array&lt;string&gt; | no | — | Allowed dynamics (posts), as dynamic IDs quoted as strings (the number in t.bilibili.com/&lt;id&gt; or bilibili.com/opus/&lt;id&gt;). Each is resolved to its comment area at startup (image post type=11 / text post type=17); dynamics that cannot be resolved are skipped. No site-wide search. |
 | `bilibili.articles` | array&lt;string \| number&gt; | no | — | Allowed articles, as cv IDs (cv123 or 123); comment area type=12. No site-wide search. |
-| `bilibili.master` | string \| number | no | — | Framework masters (Bilibili uid). endpoints[i].master can override this value. |
-| `bilibili.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users (Bilibili uid). |
+| `bilibili.roles` | object | no | — | Platform identity → zhin chat role mapping rules (ADR 0056 §4). Results apply only to the conversation of the message and are computed live from the platform identity; adapter-level rules cover every account, account-level rules (endpoints[i].roles) add to or override rules with the same match. Default rule: standing owner / admin → conversation admin. |
+| `bilibili.roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `bilibili.roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `bilibili.roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `bilibili.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `bilibili.roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `bilibili.roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `bilibili.roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `bilibili.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
 | `bilibili.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
 | `bilibili.endpoints[].id` | string | yes | — | Local endpoint name, not a Bilibili account ID. |
@@ -574,8 +577,14 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `bilibili.endpoints[].notify.kind` | string: `"private"`, `"group"`, `"channel"` | no | `"private"` | Conversation type. |
 | `bilibili.endpoints[].notify.id` | string \| number | yes | — | Conversation id: your account for a private chat, or the group id. |
 | `bilibili.endpoints[].apiBaseUrl` | string | no | `"https://api.bilibili.com"` | — |
-| `bilibili.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (Bilibili uid). |
-| `bilibili.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
+| `bilibili.endpoints[].roles` | object | no | — | Mapping rules of this account; add to or override adapter-level rules with the same match (ADR 0056 §4). |
+| `bilibili.endpoints[].roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `bilibili.endpoints[].roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `bilibili.endpoints[].roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `bilibili.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `bilibili.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `bilibili.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `bilibili.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `bilibili.endpoints[].commandPrefix` | string | no | — | — |
 | `bilibili.endpoints[].nickname` | string \| null | no | — | Fallback account nickname |
 | `bilibili.endpoints[].profile` | object | no | — | Fallback account profile |
@@ -609,8 +618,14 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `bilibili-live.minSendIntervalSec` | number | no | `5` | Minimum seconds between two replies, at least 2; a reply sent sooner is rejected, not queued. |
 | `bilibili-live.apiBaseUrl` | string | no | `"https://api.bilibili.com"` | — |
 | `bilibili-live.liveApiBaseUrl` | string | no | `"https://api.live.bilibili.com"` | — |
-| `bilibili-live.master` | string \| number | no | — | Framework masters (Bilibili uid). endpoints[i].master can override this value. |
-| `bilibili-live.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users (Bilibili uid). |
+| `bilibili-live.roles` | object | no | — | Platform identity → zhin chat role mapping rules (ADR 0056 §4). Results apply only to the conversation of the message and are computed live from the platform identity; adapter-level rules cover every account, account-level rules (endpoints[i].roles) add to or override rules with the same match. Default rule: standing owner / admin → conversation admin. |
+| `bilibili-live.roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `bilibili-live.roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `bilibili-live.roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `bilibili-live.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `bilibili-live.roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `bilibili-live.roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `bilibili-live.roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `bilibili-live.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
 | `bilibili-live.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
 | `bilibili-live.endpoints[].id` | string | yes | — | Local endpoint name, not a Bilibili account ID. |
@@ -624,8 +639,14 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `bilibili-live.endpoints[].minSendIntervalSec` | number | no | `5` | Minimum seconds between two replies, at least 2; a reply sent sooner is rejected, not queued. |
 | `bilibili-live.endpoints[].apiBaseUrl` | string | no | `"https://api.bilibili.com"` | — |
 | `bilibili-live.endpoints[].liveApiBaseUrl` | string | no | `"https://api.live.bilibili.com"` | — |
-| `bilibili-live.endpoints[].master` | string \| number | no | — | Framework masters (Bilibili uid). endpoints[i].master can override this value. |
-| `bilibili-live.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users (Bilibili uid). |
+| `bilibili-live.endpoints[].roles` | object | no | — | Mapping rules of this account; add to or override adapter-level rules with the same match (ADR 0056 §4). |
+| `bilibili-live.endpoints[].roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `bilibili-live.endpoints[].roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `bilibili-live.endpoints[].roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `bilibili-live.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `bilibili-live.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `bilibili-live.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `bilibili-live.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `bilibili-live.endpoints[].commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
 | `bilibili-live.endpoints[].nickname` | string \| null | no | — | Fallback account nickname |
 | `bilibili-live.endpoints[].profile` | object | no | — | Fallback account profile |
@@ -653,11 +674,23 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
 | `dingtalk.apiBaseUrl` | string | no | `"https://oapi.dingtalk.com"` | — |
-| `dingtalk.master` | string \| number | no | — | Framework masters (DingTalk userid; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
-| `dingtalk.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
+| `dingtalk.roles` | object | no | — | Platform identity → zhin chat role mapping rules (ADR 0056 §4). Results apply only to the conversation of the message and are computed live from the platform identity; adapter-level rules cover every account, account-level rules (endpoints[i].roles) add to or override rules with the same match. Default rule: standing owner / admin → conversation admin. |
+| `dingtalk.roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `dingtalk.roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `dingtalk.roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `dingtalk.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `dingtalk.roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `dingtalk.roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `dingtalk.roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `dingtalk.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
-| `dingtalk.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (DingTalk userid), overriding the top-level master list. |
-| `dingtalk.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
+| `dingtalk.endpoints[].roles` | object | no | — | Mapping rules of this account; add to or override adapter-level rules with the same match (ADR 0056 §4). |
+| `dingtalk.endpoints[].roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `dingtalk.endpoints[].roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `dingtalk.endpoints[].roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `dingtalk.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `dingtalk.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `dingtalk.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `dingtalk.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `dingtalk.endpoints[].appKey` | string | yes | — | Dingtalk app key |
 | `dingtalk.endpoints[].appSecret` | string | yes | — | Dingtalk app secret |
 | `dingtalk.endpoints[].webhookPath` | string | no | — | Dingtalk webhook path |
@@ -712,11 +745,23 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `discord.applicationId` | string | no | — | Required when connection is interactions. |
 | `discord.publicKey` | string | no | — | Required when connection is interactions (hex Ed25519 public key). |
 | `discord.interactionsPath` | string | no | `"/discord/interactions"` | POST path on httpHostToken when connection is interactions. |
-| `discord.master` | string \| number | no | — | Framework masters (Discord user snowflake; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
-| `discord.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
+| `discord.roles` | object | no | — | Platform identity → zhin chat role mapping rules (ADR 0056 §4). Results apply only to the conversation of the message and are computed live from the platform identity; adapter-level rules cover every account, account-level rules (endpoints[i].roles) add to or override rules with the same match. Default rule: standing owner / admin → conversation admin. |
+| `discord.roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `discord.roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `discord.roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `discord.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `discord.roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `discord.roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `discord.roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `discord.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: each entry defines an endpoint. id and token are required; other fields override instance defaults. |
-| `discord.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (Discord user snowflake), overriding the top-level master list. |
-| `discord.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
+| `discord.endpoints[].roles` | object | no | — | Mapping rules of this account; add to or override adapter-level rules with the same match (ADR 0056 §4). |
+| `discord.endpoints[].roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `discord.endpoints[].roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `discord.endpoints[].roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `discord.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `discord.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `discord.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `discord.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `discord.endpoints[].token` | string | yes | — | Discord bot token |
 | `discord.endpoints[].connection` | string: `"gateway"`, `"interactions"` | no | — | — |
 | `discord.endpoints[].intents` | array&lt;number&gt; | no | — | — |
@@ -767,8 +812,14 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `douyin-live.maxChunks` | number | no | `2` | Maximum danmaku per reply (default 2). |
 | `douyin-live.minSendIntervalSec` | number | no | `5` | Minimum seconds between two replies, at least 2. |
 | `douyin-live.signerUrl` | string | no | — | Optional external signer (GET ?stub=&lt;X-MS-STUB&gt; returns the signature). The package ships no platform signing script; without it the socket connects unsigned and the platform may refuse. |
-| `douyin-live.master` | string \| number | no | — | Framework masters (Douyin user id). endpoints[i].master can override this value. |
-| `douyin-live.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users (Douyin user id). |
+| `douyin-live.roles` | object | no | — | Platform identity → zhin chat role mapping rules (ADR 0056 §4). Results apply only to the conversation of the message and are computed live from the platform identity; adapter-level rules cover every account, account-level rules (endpoints[i].roles) add to or override rules with the same match. Default rule: standing owner / admin → conversation admin. |
+| `douyin-live.roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `douyin-live.roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `douyin-live.roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `douyin-live.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `douyin-live.roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `douyin-live.roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `douyin-live.roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `douyin-live.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
 | `douyin-live.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
 | `douyin-live.endpoints[].id` | string | yes | — | Local endpoint name, not a Douyin account ID. |
@@ -779,8 +830,14 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `douyin-live.endpoints[].maxChunks` | number | no | `2` | Maximum danmaku per reply (default 2). |
 | `douyin-live.endpoints[].minSendIntervalSec` | number | no | `5` | Minimum seconds between two replies, at least 2. |
 | `douyin-live.endpoints[].signerUrl` | string | no | — | Optional external signer (GET ?stub=&lt;X-MS-STUB&gt; returns the signature). The package ships no platform signing script; without it the socket connects unsigned and the platform may refuse. |
-| `douyin-live.endpoints[].master` | string \| number | no | — | Framework masters (Douyin user id). endpoints[i].master can override this value. |
-| `douyin-live.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users (Douyin user id). |
+| `douyin-live.endpoints[].roles` | object | no | — | Mapping rules of this account; add to or override adapter-level rules with the same match (ADR 0056 §4). |
+| `douyin-live.endpoints[].roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `douyin-live.endpoints[].roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `douyin-live.endpoints[].roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `douyin-live.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `douyin-live.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `douyin-live.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `douyin-live.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `douyin-live.endpoints[].commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
 | `douyin-live.endpoints[].nickname` | string \| null | no | — | Fallback account nickname |
 | `douyin-live.endpoints[].profile` | object | no | — | Fallback account profile |
@@ -807,11 +864,23 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `email.master` | string \| number | no | — | Framework masters (email address; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
-| `email.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
+| `email.roles` | object | no | — | Platform identity → zhin chat role mapping rules (ADR 0056 §4). Results apply only to the conversation of the message and are computed live from the platform identity; adapter-level rules cover every account, account-level rules (endpoints[i].roles) add to or override rules with the same match. Default rule: standing owner / admin → conversation admin. |
+| `email.roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `email.roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `email.roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `email.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `email.roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `email.roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `email.roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `email.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
-| `email.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (email address), overriding the top-level master list. |
-| `email.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
+| `email.endpoints[].roles` | object | no | — | Mapping rules of this account; add to or override adapter-level rules with the same match (ADR 0056 §4). |
+| `email.endpoints[].roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `email.endpoints[].roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `email.endpoints[].roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `email.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `email.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `email.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `email.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `email.endpoints[].smtp` | object | yes | — | — |
 | `email.endpoints[].smtp.host` | string | yes | — | — |
 | `email.endpoints[].smtp.port` | number | yes | — | — |
@@ -869,11 +938,23 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `github.auto_reply_repos` | array&lt;string&gt; | no | — | Repos whose Issue/PR comments auto-trigger AI without @bot |
 | `github.bot_login` | string | no | — | Override App bot login (default {slug}[bot]) |
 | `github.workspace_root` | string | no | — | Managed git workspace root |
-| `github.master` | string \| number | no | — | Framework masters (GitHub user login or id; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
-| `github.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
+| `github.roles` | object | no | — | Platform identity → zhin chat role mapping rules (ADR 0056 §4). Results apply only to the conversation of the message and are computed live from the platform identity; adapter-level rules cover every account, account-level rules (endpoints[i].roles) add to or override rules with the same match. Default rule: standing owner / admin → conversation admin. |
+| `github.roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `github.roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `github.roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `github.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `github.roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `github.roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `github.roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `github.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. |
-| `github.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (GitHub user login or id), overriding the top-level master list. |
-| `github.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
+| `github.endpoints[].roles` | object | no | — | Mapping rules of this account; add to or override adapter-level rules with the same match (ADR 0056 §4). |
+| `github.endpoints[].roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `github.endpoints[].roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `github.endpoints[].roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `github.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `github.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `github.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `github.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `github.endpoints[].app_id` | string \| number | yes | — | GitHub App ID |
 | `github.endpoints[].private_key` | string | yes | — | GitHub App private key (PEM content or file path) |
 | `github.endpoints[].webhook_secret` | string | no | — | Webhook HMAC secret; enables httpHostToken POST route |
@@ -910,8 +991,14 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `icqq.master` | string \| number | yes | — | Framework master QQ uin list for approval and AI/tool permissions. endpoints[i].master can override this value. |
-| `icqq.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted QQ uin list, below master authority. |
+| `icqq.roles` | object | no | — | Platform identity → zhin chat role mapping rules (ADR 0056 §4). Results apply only to the conversation of the message and are computed live from the platform identity; adapter-level rules cover every account, account-level rules (endpoints[i].roles) add to or override rules with the same match. Default rule: standing owner / admin → conversation admin. |
+| `icqq.roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `icqq.roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `icqq.roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `icqq.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `icqq.roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `icqq.roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `icqq.roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `icqq.password` | string | no | — | QQ password (optional); scan a QR code to log in when omitted. |
 | `icqq.platform` | number: `1`, `2`, `3`, `4`, `5`, `6`, `7` | no | `1` | Login device platform: 1=Android, 2=aPad, 3=Watch, 4=iMac, 5=iPad, 6=Tim, 7=Custom. |
 | `icqq.ver` | string | no | — | Protocol version, only applicable when the selected platform has multiple versions. Uses the latest when omitted. |
@@ -927,8 +1014,14 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `icqq.ntLogin` | boolean | no | — | Use the NT login method. |
 | `icqq.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
 | `icqq.endpoints[].id` | string | yes | — | QQ uin |
-| `icqq.endpoints[].master` | string \| number | no | — | Master QQ uin list for this endpoint, overriding the top-level master list. |
-| `icqq.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
+| `icqq.endpoints[].roles` | object | no | — | Mapping rules of this account; add to or override adapter-level rules with the same match (ADR 0056 §4). |
+| `icqq.endpoints[].roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `icqq.endpoints[].roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `icqq.endpoints[].roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `icqq.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `icqq.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `icqq.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `icqq.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `icqq.endpoints[].password` | string | no | — | QQ password for this endpoint. |
 | `icqq.endpoints[].platform` | number: `1`, `2`, `3`, `4`, `5`, `6`, `7` | no | — | Login device platform: 1=Android, 2=aPad, 3=Watch, 4=iMac, 5=iPad, 6=Tim, 7=Custom. |
 | `icqq.endpoints[].ver` | string | no | — | Protocol version. |
@@ -996,8 +1089,14 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `juejin.notify.kind` | string: `"private"`, `"group"`, `"channel"` | no | `"private"` | Conversation type. |
 | `juejin.notify.id` | string \| number | yes | — | Conversation id: your account for a private chat, or the group id. |
 | `juejin.articles` | array&lt;string&gt; | no | — | Allowed articles: article IDs (quoted strings) or https://juejin.cn/post/&lt;id&gt; links. Only these articles are polled; there is no site-wide search. Empty means nothing is polled. |
-| `juejin.master` | string \| number | no | — | Framework masters (Juejin uid). endpoints[i].master can override this value. |
-| `juejin.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users (Juejin uid). |
+| `juejin.roles` | object | no | — | Platform identity → zhin chat role mapping rules (ADR 0056 §4). Results apply only to the conversation of the message and are computed live from the platform identity; adapter-level rules cover every account, account-level rules (endpoints[i].roles) add to or override rules with the same match. Default rule: standing owner / admin → conversation admin. |
+| `juejin.roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `juejin.roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `juejin.roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `juejin.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `juejin.roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `juejin.roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `juejin.roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `juejin.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
 | `juejin.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
 | `juejin.endpoints[].id` | string | yes | — | Local endpoint name, not a Juejin account ID. |
@@ -1013,8 +1112,14 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `juejin.endpoints[].notify.kind` | string: `"private"`, `"group"`, `"channel"` | no | `"private"` | Conversation type. |
 | `juejin.endpoints[].notify.id` | string \| number | yes | — | Conversation id: your account for a private chat, or the group id. |
 | `juejin.endpoints[].apiBaseUrl` | string | no | `"https://api.juejin.cn"` | — |
-| `juejin.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (Juejin uid). |
-| `juejin.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
+| `juejin.endpoints[].roles` | object | no | — | Mapping rules of this account; add to or override adapter-level rules with the same match (ADR 0056 §4). |
+| `juejin.endpoints[].roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `juejin.endpoints[].roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `juejin.endpoints[].roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `juejin.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `juejin.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `juejin.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `juejin.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `juejin.endpoints[].commandPrefix` | string | no | — | — |
 | `juejin.endpoints[].nickname` | string \| null | no | — | Fallback account nickname |
 | `juejin.endpoints[].profile` | object | no | — | Fallback account profile |
@@ -1048,11 +1153,23 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `kook.max_retry` | number | no | `3` | — |
 | `kook.ignore` | string: `"bot"`, `"self"` | no | `"bot"` | — |
 | `kook.logLevel` | string: `"trace"`, `"debug"`, `"info"`, `"warn"`, `"error"`, `"fatal"`, `"mark"`, `"off"` | no | `"info"` | — |
-| `kook.master` | string \| number | no | — | Framework masters (KOOK user id; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
-| `kook.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
+| `kook.roles` | object | no | — | Platform identity → zhin chat role mapping rules (ADR 0056 §4). Results apply only to the conversation of the message and are computed live from the platform identity; adapter-level rules cover every account, account-level rules (endpoints[i].roles) add to or override rules with the same match. Default rule: standing owner / admin → conversation admin. |
+| `kook.roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `kook.roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `kook.roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `kook.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `kook.roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `kook.roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `kook.roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `kook.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: each entry defines an endpoint. id and token are required; other fields override instance defaults. |
-| `kook.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (KOOK user id), overriding the top-level master list. |
-| `kook.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
+| `kook.endpoints[].roles` | object | no | — | Mapping rules of this account; add to or override adapter-level rules with the same match (ADR 0056 §4). |
+| `kook.endpoints[].roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `kook.endpoints[].roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `kook.endpoints[].roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `kook.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `kook.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `kook.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `kook.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `kook.endpoints[].token` | string | yes | — | KOOK bot token |
 | `kook.endpoints[].connection` | string: `"websocket"`, `"webhook"` | no | — | — |
 | `kook.endpoints[].webhookPath` | string | no | — | — |
@@ -1099,11 +1216,23 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `lark.webhookPath` | string | no | `"/lark/webhook"` | — |
 | `lark.apiBaseUrl` | string | no | — | — |
 | `lark.isFeishu` | boolean | no | `true` | — |
-| `lark.master` | string \| number | no | — | Framework masters (Lark/Feishu open_id or user_id; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
-| `lark.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
+| `lark.roles` | object | no | — | Platform identity → zhin chat role mapping rules (ADR 0056 §4). Results apply only to the conversation of the message and are computed live from the platform identity; adapter-level rules cover every account, account-level rules (endpoints[i].roles) add to or override rules with the same match. Default rule: standing owner / admin → conversation admin. |
+| `lark.roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `lark.roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `lark.roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `lark.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `lark.roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `lark.roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `lark.roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `lark.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
-| `lark.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (Lark/Feishu open_id or user_id), overriding the top-level master list. |
-| `lark.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
+| `lark.endpoints[].roles` | object | no | — | Mapping rules of this account; add to or override adapter-level rules with the same match (ADR 0056 §4). |
+| `lark.endpoints[].roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `lark.endpoints[].roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `lark.endpoints[].roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `lark.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `lark.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `lark.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `lark.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `lark.endpoints[].appId` | string | yes | — | Lark app ID |
 | `lark.endpoints[].appSecret` | string | yes | — | Lark app secret |
 | `lark.endpoints[].encryptKey` | string | no | — | Lark encrypt key |
@@ -1154,11 +1283,23 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | --- | --- | --- | --- | --- |
 | `line.webhookPath` | string | no | `"/line/webhook"` | — |
 | `line.apiBaseUrl` | string | no | `"https://api.line.me"` | — |
-| `line.master` | string \| number | no | — | Framework masters (LINE user id; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
-| `line.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
+| `line.roles` | object | no | — | Platform identity → zhin chat role mapping rules (ADR 0056 §4). Results apply only to the conversation of the message and are computed live from the platform identity; adapter-level rules cover every account, account-level rules (endpoints[i].roles) add to or override rules with the same match. Default rule: standing owner / admin → conversation admin. |
+| `line.roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `line.roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `line.roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `line.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `line.roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `line.roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `line.roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `line.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
-| `line.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (LINE user id), overriding the top-level master list. |
-| `line.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
+| `line.endpoints[].roles` | object | no | — | Mapping rules of this account; add to or override adapter-level rules with the same match (ADR 0056 §4). |
+| `line.endpoints[].roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `line.endpoints[].roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `line.endpoints[].roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `line.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `line.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `line.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `line.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `line.endpoints[].channelSecret` | string | yes | — | LINE channel secret |
 | `line.endpoints[].channelAccessToken` | string | yes | — | LINE channel access token |
 | `line.endpoints[].webhookPath` | string | no | — | — |
@@ -1194,11 +1335,23 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `milky.connection` | string: `"ws"`, `"sse"`, `"webhook"`, `"wss"` | no | `"ws"` | ws (default), sse (EventSource client), webhook or wss (webhook/wss via httpHostToken) |
 | `milky.reconnect_interval` | number | no | `5000` | — |
 | `milky.heartbeat_interval` | number | no | `30000` | — |
-| `milky.master` | string \| number | no | — | Framework masters (QQ uin; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
-| `milky.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
+| `milky.roles` | object | no | — | Platform identity → zhin chat role mapping rules (ADR 0056 §4). Results apply only to the conversation of the message and are computed live from the platform identity; adapter-level rules cover every account, account-level rules (endpoints[i].roles) add to or override rules with the same match. Default rule: standing owner / admin → conversation admin. |
+| `milky.roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `milky.roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `milky.roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `milky.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `milky.roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `milky.roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `milky.roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `milky.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
-| `milky.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (QQ uin), overriding the top-level master list. |
-| `milky.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
+| `milky.endpoints[].roles` | object | no | — | Mapping rules of this account; add to or override adapter-level rules with the same match (ADR 0056 §4). |
+| `milky.endpoints[].roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `milky.endpoints[].roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `milky.endpoints[].roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `milky.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `milky.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `milky.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `milky.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `milky.endpoints[].connection` | string: `"ws"`, `"sse"`, `"webhook"`, `"wss"` | no | — | — |
 | `milky.endpoints[].baseUrl` | string | yes | — | Milky HTTP API base URL (required); WS event path is derived as ws(s)://host/event |
 | `milky.endpoints[].path` | string | no | — | Path for webhook / reverse-wss |
@@ -1237,11 +1390,23 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `napcat.reconnect_interval` | number | no | `5000` | — |
 | `napcat.heartbeat_interval` | number | no | `30000` | — |
 | `napcat.poll_interval` | number | no | `30000` | — |
-| `napcat.master` | string \| number | no | — | Framework masters (QQ uin; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
-| `napcat.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
+| `napcat.roles` | object | no | — | Platform identity → zhin chat role mapping rules (ADR 0056 §4). Results apply only to the conversation of the message and are computed live from the platform identity; adapter-level rules cover every account, account-level rules (endpoints[i].roles) add to or override rules with the same match. Default rule: standing owner / admin → conversation admin. |
+| `napcat.roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `napcat.roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `napcat.roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `napcat.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `napcat.roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `napcat.roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `napcat.roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `napcat.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
-| `napcat.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (QQ uin), overriding the top-level master list. |
-| `napcat.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
+| `napcat.endpoints[].roles` | object | no | — | Mapping rules of this account; add to or override adapter-level rules with the same match (ADR 0056 §4). |
+| `napcat.endpoints[].roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `napcat.endpoints[].roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `napcat.endpoints[].roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `napcat.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `napcat.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `napcat.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `napcat.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `napcat.endpoints[].connection` | string: `"ws"`, `"wss"`, `"http"` | no | — | — |
 | `napcat.endpoints[].url` | string | no | — | NapCat WebSocket URL (required for connection: ws) |
 | `napcat.endpoints[].path` | string | no | — | WS path for reverse-wss |
@@ -1282,11 +1447,23 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `onebot11.connection` | string: `"ws"`, `"wss"` | no | `"ws"` | connection: ws (forward WS client, default) or wss (reverse WS via httpHostToken) |
 | `onebot11.reconnect_interval` | number | no | `5000` | — |
 | `onebot11.heartbeat_interval` | number | no | `30000` | — |
-| `onebot11.master` | string \| number | no | — | Framework masters (platform user id; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
-| `onebot11.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
+| `onebot11.roles` | object | no | — | Platform identity → zhin chat role mapping rules (ADR 0056 §4). Results apply only to the conversation of the message and are computed live from the platform identity; adapter-level rules cover every account, account-level rules (endpoints[i].roles) add to or override rules with the same match. Default rule: standing owner / admin → conversation admin. |
+| `onebot11.roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `onebot11.roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `onebot11.roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `onebot11.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `onebot11.roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `onebot11.roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `onebot11.roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `onebot11.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
-| `onebot11.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (platform user id), overriding the top-level master list. |
-| `onebot11.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
+| `onebot11.endpoints[].roles` | object | no | — | Mapping rules of this account; add to or override adapter-level rules with the same match (ADR 0056 §4). |
+| `onebot11.endpoints[].roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `onebot11.endpoints[].roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `onebot11.endpoints[].roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `onebot11.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `onebot11.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `onebot11.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `onebot11.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `onebot11.endpoints[].connection` | string: `"ws"`, `"wss"` | no | — | — |
 | `onebot11.endpoints[].url` | string | no | — | OneBot implementation WebSocket URL (required for connection: ws) |
 | `onebot11.endpoints[].path` | string | no | — | WS path for reverse-wss (connection: wss) |
@@ -1324,11 +1501,23 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `onebot12.connection` | string: `"ws"`, `"webhook"`, `"wss"` | no | `"ws"` | ws (default), webhook (httpHostToken POST), or wss (reverse WS via httpHostToken) |
 | `onebot12.reconnect_interval` | number | no | `5000` | — |
 | `onebot12.heartbeat_interval` | number | no | `30000` | — |
-| `onebot12.master` | string \| number | no | — | Framework masters (platform user id; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
-| `onebot12.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
+| `onebot12.roles` | object | no | — | Platform identity → zhin chat role mapping rules (ADR 0056 §4). Results apply only to the conversation of the message and are computed live from the platform identity; adapter-level rules cover every account, account-level rules (endpoints[i].roles) add to or override rules with the same match. Default rule: standing owner / admin → conversation admin. |
+| `onebot12.roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `onebot12.roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `onebot12.roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `onebot12.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `onebot12.roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `onebot12.roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `onebot12.roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `onebot12.endpoints` | array&lt;object&gt; | yes | — | Each endpoint explicitly selects platform and userId. id is the local account name; other connection fields override instance defaults. |
-| `onebot12.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (platform user id), overriding the top-level master list. |
-| `onebot12.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
+| `onebot12.endpoints[].roles` | object | no | — | Mapping rules of this account; add to or override adapter-level rules with the same match (ADR 0056 §4). |
+| `onebot12.endpoints[].roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `onebot12.endpoints[].roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `onebot12.endpoints[].roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `onebot12.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `onebot12.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `onebot12.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `onebot12.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `onebot12.endpoints[].connection` | string: `"ws"`, `"webhook"`, `"wss"` | no | — | — |
 | `onebot12.endpoints[].url` | string | no | — | OneBot implementation WebSocket URL (required for connection: ws) |
 | `onebot12.endpoints[].path` | string | no | — | HTTP/WS path for webhook or reverse-wss |
@@ -1369,8 +1558,14 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `qq.mode` | string: `"websocket"`, `"webhook"`, `"middleware"` | no | `"websocket"` | WebSocket gateway (default). webhook/middleware use httpHostToken POST. |
 | `qq.sandbox` | boolean | no | `false` | — |
 | `qq.botKind` | string: `"public"`, `"private"` | no | `"public"` | Public/private bot type. Both include GROUP_AND_C2C_EVENT; channel messages use PUBLIC_GUILD_MESSAGES or GUILD_MESSAGES respectively. Used to derive intents when they are not explicitly configured. |
-| `qq.master` | string \| number | no | — | Framework masters (openid) for endpoint management and AI/tool permissions. endpoints[i].master can override this value. |
-| `qq.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
+| `qq.roles` | object | no | — | Platform identity → zhin chat role mapping rules (ADR 0056 §4). Results apply only to the conversation of the message and are computed live from the platform identity; adapter-level rules cover every account, account-level rules (endpoints[i].roles) add to or override rules with the same match. Default rule: standing owner / admin → conversation admin. |
+| `qq.roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `qq.roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `qq.roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `qq.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `qq.roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `qq.roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `qq.roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `qq.intents` | array&lt;string&gt; | no | — | WebSocket Identify intents. When omitted, derived from botKind; public includes PUBLIC_GUILD_MESSAGES. |
 | `qq.accessTokenUrl` | string | no | — | — |
 | `qq.gatewayUrl` | string | no | — | — |
@@ -1380,8 +1575,14 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `qq.endpoints[].secret` | string | yes | — | QQ official bot secret |
 | `qq.endpoints[].mode` | string: `"websocket"`, `"webhook"`, `"middleware"` | no | — | — |
 | `qq.endpoints[].sandbox` | boolean | no | — | — |
-| `qq.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (openid), overriding the top-level master list. |
-| `qq.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
+| `qq.endpoints[].roles` | object | no | — | Mapping rules of this account; add to or override adapter-level rules with the same match (ADR 0056 §4). |
+| `qq.endpoints[].roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `qq.endpoints[].roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `qq.endpoints[].roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `qq.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `qq.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `qq.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `qq.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `qq.endpoints[].botKind` | string: `"public"`, `"private"` | no | — | Override top-level botKind (public/private) when deriving this endpoint's intents. |
 | `qq.endpoints[].intents` | array&lt;string&gt; | no | — | Override top-level intents. |
 | `qq.endpoints[].accessTokenUrl` | string | no | — | — |
@@ -1443,11 +1644,23 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | --- | --- | --- | --- | --- |
 | `sandbox.streaming` | boolean | no | `true` | Publish supported replies while generating. Set false to send only complete replies. |
 | `sandbox.streamingIntervalMs` | number | no | `500` | Minimum delay in milliseconds between reply updates; the first update is immediate. |
-| `sandbox.master` | string \| number | no | — | Framework masters (sandbox client id, distinct from endpoints[].owner; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
-| `sandbox.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
+| `sandbox.roles` | object | no | — | Platform identity → zhin chat role mapping rules (ADR 0056 §4). Results apply only to the conversation of the message and are computed live from the platform identity; adapter-level rules cover every account, account-level rules (endpoints[i].roles) add to or override rules with the same match. Default rule: standing owner / admin → conversation admin. |
+| `sandbox.roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `sandbox.roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `sandbox.roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `sandbox.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `sandbox.roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `sandbox.roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `sandbox.roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `sandbox.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
-| `sandbox.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (sandbox client id, distinct from endpoints[].owner), overriding the top-level master list. |
-| `sandbox.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
+| `sandbox.endpoints[].roles` | object | no | — | Mapping rules of this account; add to or override adapter-level rules with the same match (ADR 0056 §4). |
+| `sandbox.endpoints[].roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `sandbox.endpoints[].roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `sandbox.endpoints[].roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `sandbox.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `sandbox.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `sandbox.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `sandbox.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `sandbox.endpoints[].owner` | string | no | — | Sandbox owner user ID |
 | `sandbox.endpoints[].streaming` | boolean | no | — | Publish supported replies while generating. Set false to send only complete replies. |
 | `sandbox.endpoints[].streamingIntervalMs` | number | no | — | Minimum delay in milliseconds between reply updates; the first update is immediate. |
@@ -1481,11 +1694,23 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | --- | --- | --- | --- | --- |
 | `satori.connection` | string: `"ws"`, `"webhook"` | no | `"ws"` | ws (default) or webhook (httpHostToken POST route) |
 | `satori.heartbeat_interval` | number | no | `10000` | WS PING interval in milliseconds |
-| `satori.master` | string \| number | no | — | Framework masters (platform user id; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
-| `satori.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
+| `satori.roles` | object | no | — | Platform identity → zhin chat role mapping rules (ADR 0056 §4). Results apply only to the conversation of the message and are computed live from the platform identity; adapter-level rules cover every account, account-level rules (endpoints[i].roles) add to or override rules with the same match. Default rule: standing owner / admin → conversation admin. |
+| `satori.roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `satori.roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `satori.roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `satori.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `satori.roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `satori.roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `satori.roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `satori.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: each entry selects an explicit platform and userId. id and baseUrl are required; remaining fields override instance defaults. |
-| `satori.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (platform user id), overriding the top-level master list. |
-| `satori.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
+| `satori.endpoints[].roles` | object | no | — | Mapping rules of this account; add to or override adapter-level rules with the same match (ADR 0056 §4). |
+| `satori.endpoints[].roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `satori.endpoints[].roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `satori.endpoints[].roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `satori.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `satori.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `satori.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `satori.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `satori.endpoints[].baseUrl` | string | yes | — | Satori SDK HTTP/WS base URL (e.g. http://127.0.0.1:5140) |
 | `satori.endpoints[].connection` | string: `"ws"`, `"webhook"` | no | — | — |
 | `satori.endpoints[].token` | string | no | — | Bearer token for API and WS IDENTIFY |
@@ -1524,11 +1749,23 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `slack.socketMode` | boolean | no | `true` | Prefer Socket Mode (default). Set false for HTTP Events via httpHostToken. |
 | `slack.webhookPath` | string | no | `"/slack/events"` | — |
 | `slack.clientPingTimeout` | number | no | `15000` | Socket Mode client ping timeout (ms) |
-| `slack.master` | string \| number | no | — | Framework masters (Slack user id; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
-| `slack.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
+| `slack.roles` | object | no | — | Platform identity → zhin chat role mapping rules (ADR 0056 §4). Results apply only to the conversation of the message and are computed live from the platform identity; adapter-level rules cover every account, account-level rules (endpoints[i].roles) add to or override rules with the same match. Default rule: standing owner / admin → conversation admin. |
+| `slack.roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `slack.roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `slack.roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `slack.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `slack.roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `slack.roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `slack.roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `slack.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
-| `slack.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (Slack user id), overriding the top-level master list. |
-| `slack.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
+| `slack.endpoints[].roles` | object | no | — | Mapping rules of this account; add to or override adapter-level rules with the same match (ADR 0056 §4). |
+| `slack.endpoints[].roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `slack.endpoints[].roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `slack.endpoints[].roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `slack.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `slack.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `slack.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `slack.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `slack.endpoints[].token` | string | yes | — | Bot User OAuth Token (xoxb-...) |
 | `slack.endpoints[].signingSecret` | string | no | — | Required for HTTP Events API (socketMode: false) |
 | `slack.endpoints[].appToken` | string | no | — | App-Level Token (xapp-...) for Socket Mode |
@@ -1579,11 +1816,23 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `telegram.webhook.secretToken` | string | no | — | Verified via X-Telegram-Bot-Api-Secret-Token. |
 | `telegram.allowedUpdates` | array&lt;string&gt; | no | `["message","callback_query"]` | — |
 | `telegram.apiBaseUrl` | string | no | `"https://api.telegram.org"` | — |
-| `telegram.master` | string \| number | no | — | Framework masters (Telegram user id; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
-| `telegram.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
+| `telegram.roles` | object | no | — | Platform identity → zhin chat role mapping rules (ADR 0056 §4). Results apply only to the conversation of the message and are computed live from the platform identity; adapter-level rules cover every account, account-level rules (endpoints[i].roles) add to or override rules with the same match. Default rule: standing owner / admin → conversation admin. |
+| `telegram.roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `telegram.roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `telegram.roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `telegram.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `telegram.roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `telegram.roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `telegram.roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `telegram.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
-| `telegram.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (Telegram user id), overriding the top-level master list. |
-| `telegram.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
+| `telegram.endpoints[].roles` | object | no | — | Mapping rules of this account; add to or override adapter-level rules with the same match (ADR 0056 §4). |
+| `telegram.endpoints[].roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `telegram.endpoints[].roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `telegram.endpoints[].roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `telegram.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `telegram.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `telegram.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `telegram.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `telegram.endpoints[].token` | string | yes | — | Telegram bot token |
 | `telegram.endpoints[].polling` | boolean | no | — | — |
 | `telegram.endpoints[].webhook` | object | no | — | — |
@@ -1629,11 +1878,23 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `wechat-mp.encryptMode` | string: `"plain"`, `"compatible"`, `"secure"` | no | — | Default follows encrypt: 'plain' when encrypt=false, 'compatible' when encrypt=true |
 | `wechat-mp.replyMode` | string: `"passive"`, `"customer_service"` | no | `"passive"` | — |
 | `wechat-mp.passiveReplyTimeoutMs` | number | no | `4500` | — |
-| `wechat-mp.master` | string \| number | no | — | Framework masters (WeChat OpenID; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
-| `wechat-mp.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
+| `wechat-mp.roles` | object | no | — | Platform identity → zhin chat role mapping rules (ADR 0056 §4). Results apply only to the conversation of the message and are computed live from the platform identity; adapter-level rules cover every account, account-level rules (endpoints[i].roles) add to or override rules with the same match. Default rule: standing owner / admin → conversation admin. |
+| `wechat-mp.roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `wechat-mp.roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `wechat-mp.roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `wechat-mp.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `wechat-mp.roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `wechat-mp.roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `wechat-mp.roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `wechat-mp.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
-| `wechat-mp.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (WeChat OpenID), overriding the top-level master list. |
-| `wechat-mp.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
+| `wechat-mp.endpoints[].roles` | object | no | — | Mapping rules of this account; add to or override adapter-level rules with the same match (ADR 0056 §4). |
+| `wechat-mp.endpoints[].roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `wechat-mp.endpoints[].roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `wechat-mp.endpoints[].roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `wechat-mp.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `wechat-mp.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `wechat-mp.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `wechat-mp.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `wechat-mp.endpoints[].appId` | string | yes | — | WeChat MP app ID |
 | `wechat-mp.endpoints[].appSecret` | string | yes | — | WeChat MP app secret |
 | `wechat-mp.endpoints[].token` | string | yes | — | WeChat MP callback token |
@@ -1673,11 +1934,23 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | --- | --- | --- | --- | --- |
 | `wecom.webhookPath` | string | no | `"/wecom/callback"` | — |
 | `wecom.apiBaseUrl` | string | no | `"https://qyapi.weixin.qq.com"` | — |
-| `wecom.master` | string \| number | no | — | Framework masters (WeCom userid; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
-| `wecom.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
+| `wecom.roles` | object | no | — | Platform identity → zhin chat role mapping rules (ADR 0056 §4). Results apply only to the conversation of the message and are computed live from the platform identity; adapter-level rules cover every account, account-level rules (endpoints[i].roles) add to or override rules with the same match. Default rule: standing owner / admin → conversation admin. |
+| `wecom.roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `wecom.roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `wecom.roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `wecom.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `wecom.roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `wecom.roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `wecom.roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `wecom.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
-| `wecom.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (WeCom userid), overriding the top-level master list. |
-| `wecom.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
+| `wecom.endpoints[].roles` | object | no | — | Mapping rules of this account; add to or override adapter-level rules with the same match (ADR 0056 §4). |
+| `wecom.endpoints[].roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `wecom.endpoints[].roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `wecom.endpoints[].roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `wecom.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `wecom.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `wecom.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `wecom.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `wecom.endpoints[].corpId` | string | yes | — | WeCom corp ID |
 | `wecom.endpoints[].agentSecret` | string | yes | — | WeCom agent secret |
 | `wecom.endpoints[].token` | string | yes | — | WeCom callback token |
@@ -1718,11 +1991,23 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `weixin-ilink.cdnBaseUrl` | string | no | `"https://novac2c.cdn.weixin.qq.com/c2c"` | — |
 | `weixin-ilink.longPollTimeoutMs` | number | no | `35000` | — |
 | `weixin-ilink.dataDir` | string | no | `"data/weixin-ilink"` | Endpoint state root for credentials, cursors, context tokens, and media |
-| `weixin-ilink.master` | string \| number | no | — | Framework masters (Weixin user id; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
-| `weixin-ilink.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
+| `weixin-ilink.roles` | object | no | — | Platform identity → zhin chat role mapping rules (ADR 0056 §4). Results apply only to the conversation of the message and are computed live from the platform identity; adapter-level rules cover every account, account-level rules (endpoints[i].roles) add to or override rules with the same match. Default rule: standing owner / admin → conversation admin. |
+| `weixin-ilink.roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `weixin-ilink.roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `weixin-ilink.roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `weixin-ilink.roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `weixin-ilink.roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `weixin-ilink.roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `weixin-ilink.roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `weixin-ilink.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
-| `weixin-ilink.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (Weixin user id), overriding the top-level master list. |
-| `weixin-ilink.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
+| `weixin-ilink.endpoints[].roles` | object | no | — | Mapping rules of this account; add to or override adapter-level rules with the same match (ADR 0056 §4). |
+| `weixin-ilink.endpoints[].roles.inherit` | boolean | no | `true` | false drops the rules from the levels above, the default rule included. |
+| `weixin-ilink.endpoints[].roles.mappings` | array&lt;object&gt; | no | `[]` | Mapping rules. The configuration file can grant only admin (or none, which removes an inherited rule with the same match); trusted / owner mappings exist only at the conversation level (Console or chat). |
+| `weixin-ilink.endpoints[].roles.mappings[].match` | object | yes | — | Every given criterion must hold; any value within one criterion matches. |
+| `weixin-ilink.endpoints[].roles.mappings[].match.standing` | array&lt;string: `"owner"`, `"admin"`, `"member"`, `"guest"`&gt; | no | — | Normalized platform standing. |
+| `weixin-ilink.endpoints[].roles.mappings[].match.role` | array&lt;string&gt; | no | — | Platform role ids. |
+| `weixin-ilink.endpoints[].roles.mappings[].match.permission` | array&lt;string&gt; | no | — | Platform permission names. |
+| `weixin-ilink.endpoints[].roles.mappings[].grant` | string: `"admin"`, `"none"` | yes | — | Conversation role granted; none removes an inherited rule with the same match. |
 | `weixin-ilink.endpoints[].botToken` | string | no | — | iLink bot token; omit to load endpoint state or start QR login |
 | `weixin-ilink.endpoints[].id` | string | yes | — | Weixin iLink bot name |
 | `weixin-ilink.endpoints[].botAgent` | string | no | — | — |
@@ -2429,10 +2714,9 @@ _This Schema declares no fields._
 | `content-moderation.onError` | string: `"open"`, `"closed"` | no | `"open"` | Default policy when a review source fails: open treats it as passed; closed treats it as critical. |
 | `content-moderation.maskChar` | string | no | `"*"` | Text masking character. |
 | `content-moderation.replyTemplate` | string | no | — | Reply text for the reply action. When omitted, use the message language; explicit text is preserved. |
-| `content-moderation.masters` | array&lt;string&gt; | no | `[]` | Additional user IDs treated as masters, merged with endpoint masters as a fallback. |
 | `content-moderation.inbound` | object | no | — | — |
 | `content-moderation.inbound.enabled` | boolean | no | `true` | — |
-| `content-moderation.inbound.bypassMasters` | boolean | no | `true` | Skip inbound review for masters. |
+| `content-moderation.inbound.bypassRole` | string: `"owner"`, `"admin"`, `"trusted"`, `"none"` | no | `"owner"` | Senders whose chat role in the conversation is at least this skip inbound review (ADR 0056); none reviews everyone. |
 | `content-moderation.inbound.whitelist` | object | no | — | — |
 | `content-moderation.inbound.whitelist.userIds` | array&lt;string&gt; | no | `[]` | — |
 | `content-moderation.inbound.whitelist.conversationIds` | array&lt;string&gt; | no | `[]` | — |

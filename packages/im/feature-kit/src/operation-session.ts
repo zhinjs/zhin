@@ -14,8 +14,14 @@ export type OperationScene =
 export interface OperationSender {
   readonly id: string;
   readonly name?: string;
-  readonly platformRoles?: readonly string[];
-  readonly authorizationRoles?: readonly string[];
+  /** Normalized platform standing (ADR 0056 §1); absent in private chats. */
+  readonly platform?: Readonly<{
+    standing: 'owner' | 'admin' | 'member' | 'guest';
+    roles?: readonly Readonly<{ id: string; name?: string }>[];
+    permissions?: readonly string[];
+  }>;
+  /** Highest zhin chat role effective in this conversation (ADR 0056 §2). */
+  readonly chatRole?: 'owner' | 'admin' | 'trusted';
 }
 export interface OperationMessageRef {
   readonly conversation: OperationScene;

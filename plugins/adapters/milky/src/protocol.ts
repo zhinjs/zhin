@@ -5,7 +5,7 @@ import type { EndpointProfileConfiguration } from 'zhin.js/adapter';
  * Spec: https://milky.ntqqrev.org/
  */
 
-import { EndpointDeliveryError, isMediaRef, type ConversationRef } from '@zhin.js/im-contract';
+import { EndpointDeliveryError, isMediaRef, type ConversationRef, type PlatformStanding } from '@zhin.js/im-contract';
 import type { Segment } from '@zhin.js/core/runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
@@ -405,6 +405,16 @@ export function extractInboundAudioUrl(data: MilkyIncomingMessage): string | und
 }
 
 /** 发送者显示名（群名片/群昵称/好友昵称）；没有可靠的显示名时返回 undefined。 */
+/**
+ * ADR 0056 §1：群消息 `group_member.role`（owner / admin / member）→ `sender.platform.standing`。
+ * 私聊 / 临时会话与未知角色词不上报；Milky 没有平台原生角色与权限位。
+ */
+export function milkySenderStanding(data: MilkyIncomingMessage): PlatformStanding | undefined {
+  if (data.message_scene !== 'group') return undefined;
+  const role = data.group_member?.role;
+  return role === 'owner' || role === 'admin' || role === 'member' ? { standing: role } : undefined;
+}
+
 export function senderNickname(data: MilkyIncomingMessage): string | undefined {
   const isGroup = data.message_scene === 'group';
   const name = isGroup

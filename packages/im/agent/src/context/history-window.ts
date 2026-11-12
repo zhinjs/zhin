@@ -51,7 +51,7 @@ export function historySceneFromTurn(
 ): HistoryScene {
   const scope = turn?.origin.kind === 'im' ? turn.origin.scope : undefined;
   if (scope === 'group' || scope === 'channel') return 'group';
-  return turn?.principal.roles.includes('master') === true && scope === 'private' ? 'masterPrivate' : 'private';
+  return turn?.principal.roles.includes('owner') === true && scope === 'private' ? 'masterPrivate' : 'private';
 }
 
 function isSummaryHead(message: AgentMessage | undefined): boolean {

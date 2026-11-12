@@ -8,9 +8,9 @@ export default defineEvalCase({
   tags: ['quota'],
   agentConfig: { usageQuota: { perGroupRequestsPerMinute: 1 } },
   inbound: [
-    { text: '@bot 早', scope: 'group', sender: { id: 'alice', roles: ['user'] } },
-    { text: '@bot 早啊', scope: 'group', sender: { id: 'bob', roles: ['user'] } },
-    { text: '私聊问一下', sender: { id: 'bob', roles: ['user'] } },
+    { text: '@bot 早', scope: 'group', sender: { id: 'alice' } },
+    { text: '@bot 早啊', scope: 'group', sender: { id: 'bob' } },
+    { text: '私聊问一下', sender: { id: 'bob' } },
   ],
   script: [
     { text: '早上好！' },

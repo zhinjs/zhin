@@ -23,7 +23,7 @@ describe('schedule turn e2e (TaskExecutor → ScheduleExecutionDomain)', () => {
     const job: ScheduleJob = {
       id: 'sched-daily', enabled: true, schedule: { kind: 'every', everyMs: 60_000 },
       action: { kind: 'agent', prompt: 'daily report' }, notify: { channel: 'silent' },
-      createdAt: 1, updatedAt: 1, state: {}, createdBy: { userId: 'owner', roles: ['master'] },
+      createdAt: 1, updatedAt: 1, state: {}, createdBy: { userId: 'owner', roles: ['owner'] },
     };
 
     const signal = new AbortController().signal;

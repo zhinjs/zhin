@@ -1,4 +1,4 @@
-import type { Message, SenderRole } from '@zhin.js/core';
+import type { ChatRole, Message, PlatformStanding } from '@zhin.js/core';
 
 export function mockCommMessage(overrides: {
   adapter?: string;
@@ -6,23 +6,24 @@ export function mockCommMessage(overrides: {
   senderId?: string;
   scope?: 'private' | 'group' | 'channel';
   sceneId?: string;
-  sender_roles?: readonly SenderRole[];
+  /** Highest chat role in the conversation (ADR 0056). */
+  chatRole?: ChatRole;
+  /** Legacy alias: the highest of these chat roles is used. */
+  sender_roles?: readonly (ChatRole | 'user')[];
   isMaster?: boolean;
   isTrusted?: boolean;
-  role?: string;
+  /** Normalized platform standing (ADR 0056 §1). */
+  platform?: PlatformStanding;
   extra?: Record<string, unknown>;
 } = {}): Message<{ extra?: Record<string, unknown> }> {
   const scope = overrides.scope ?? 'private';
   const adapter = overrides.adapter ?? 'qq';
   const endpoint = overrides.endpoint ?? 'endpoint1';
   const senderId = overrides.senderId ?? 'user1';
-  const roles: SenderRole[] = overrides.sender_roles
-    ? [...overrides.sender_roles]
-    : overrides.isMaster
-      ? ['master']
-      : overrides.isTrusted
-        ? ['trusted']
-        : ['user'];
+  const listed = overrides.sender_roles ?? [];
+  const chatRole: ChatRole | undefined = overrides.chatRole
+    ?? (listed.includes('owner') ? 'owner' : listed.includes('admin') ? 'admin' : listed.includes('trusted') ? 'trusted' : undefined)
+    ?? (overrides.isMaster ? 'owner' : overrides.isTrusted ? 'trusted' : undefined);
   const conversation = {
     endpoint: { adapter, id: endpoint },
     kind: scope,
@@ -32,8 +33,8 @@ export function mockCommMessage(overrides: {
     conversation,
     content: '',
     generation: 1,
-    metadata: overrides.role ? { senderRole: overrides.role } : {},
-    sender: { id: senderId, roles },
+    metadata: {},
+    sender: { id: senderId, ...(chatRole ? { chatRole } : {}), ...(overrides.platform ? { platform: overrides.platform } : {}) },
     endpointId: endpoint,
     clientAdapter: adapter,
     extra: overrides.extra,

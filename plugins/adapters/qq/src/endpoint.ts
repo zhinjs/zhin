@@ -1,7 +1,7 @@
 import { createQqSelfProfile } from './self-profile.js';
 import { Bot, ReceiverMode } from 'qq-official-bot';
 import { installQqUploadDiagnostics } from './upload-diagnostics.js';
-import { projectQqGuildSenderRoles } from './platform-permit.js';
+import { projectQqGuildSenderStanding } from './platform-permit.js';
 import { qqDeliveryFailure } from './delivery-error.js';
 import { normalizeQqInteraction } from './interaction.js';
 import { awaitQqStartup } from './start-deadline.js';
@@ -260,7 +260,7 @@ export class QqWebsocketEndpoint extends Bot<ReceiverMode.WEBSOCKET> implements 
       + (msg.mentioned ? ' (mentioned)' : '')
       + ` | ${truncatePreview(content, 80)}`,
     );
-    const roleProjection = projectQqGuildSenderRoles(msg.authorRoles);
+    const platform = projectQqGuildSenderStanding(msg.authorRoles);
     if (msg.id) this.#passiveReplies.record(qqOutboundKind(conversation), conversation.id, { id: msg.id });
     void this[endpointSpec].events.emit('message.receive', {
       conversation,
@@ -272,8 +272,7 @@ export class QqWebsocketEndpoint extends Bot<ReceiverMode.WEBSOCKET> implements 
       sender: {
         id: msg.authorId,
         name: senderDisplayName(msg) || undefined,
-        ...(roleProjection.role ? { roles: [roleProjection.role] } : {}),
-        ...(roleProjection.permissions.length ? { permissions: roleProjection.permissions } : {}),
+        ...(platform ? { platform } : {}),
       },
       endpointId: this.#options.config.id,
       ...(msg.mentioned ? { mentioned: true } : {}),
@@ -282,7 +281,6 @@ export class QqWebsocketEndpoint extends Bot<ReceiverMode.WEBSOCKET> implements 
         userId: msg.authorId,
         guildId: msg.guildId,
         authorRoleIds: msg.authorRoles,
-        ...(roleProjection.role ? { senderRole: roleProjection.role } : {}),
       }),
     }).catch((err) => {
       this.#logger.warn(formatCompact({
@@ -558,7 +556,7 @@ export class QqHttpEndpoint extends Bot<ReceiverMode.MIDDLEWARE, 'koa'> implemen
       + (msg.mentioned ? ' (mentioned)' : '')
       + ` | ${truncatePreview(content, 80)}`,
     );
-    const roleProjection = projectQqGuildSenderRoles(msg.authorRoles);
+    const platform = projectQqGuildSenderStanding(msg.authorRoles);
     if (msg.id) this.#passiveReplies.record(qqOutboundKind(conversation), conversation.id, { id: msg.id });
     void this[endpointSpec].events.emit('message.receive', {
       conversation,
@@ -570,8 +568,7 @@ export class QqHttpEndpoint extends Bot<ReceiverMode.MIDDLEWARE, 'koa'> implemen
       sender: {
         id: msg.authorId,
         name: senderDisplayName(msg) || undefined,
-        ...(roleProjection.role ? { roles: [roleProjection.role] } : {}),
-        ...(roleProjection.permissions.length ? { permissions: roleProjection.permissions } : {}),
+        ...(platform ? { platform } : {}),
       },
       endpointId: this.#options.config.id,
       ...(msg.mentioned ? { mentioned: true } : {}),
@@ -580,7 +577,6 @@ export class QqHttpEndpoint extends Bot<ReceiverMode.MIDDLEWARE, 'koa'> implemen
         userId: msg.authorId,
         guildId: msg.guildId,
         authorRoleIds: msg.authorRoles,
-        ...(roleProjection.role ? { senderRole: roleProjection.role } : {}),
       }),
     }).catch((err) => {
       this.#logger.warn(formatCompact({

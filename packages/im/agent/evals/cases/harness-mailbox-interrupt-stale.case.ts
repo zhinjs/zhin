@@ -12,8 +12,8 @@ export default defineEvalCase({
   source: 'ADR 0048 §3.1 / §8 H3 (Mailbox absorbs interrupt and stale checks)',
   tags: ['collaboration', 'long-task'],
   inbound: [
-    { text: '帮我订明天上午的会议室', sender: { id: 'master', roles: ['master'] } },
-    { text: '不对，改成明天下午', sender: { id: 'master', roles: ['master'] }, deliver: { duringStep: 1 } },
+    { text: '帮我订明天上午的会议室', sender: { id: 'master', chatRole: 'owner' } },
+    { text: '不对，改成明天下午', sender: { id: 'master', chatRole: 'owner' }, deliver: { duringStep: 1 } },
   ],
   script: [
     { text: '好的，已为你记下明天上午的会议室。' },

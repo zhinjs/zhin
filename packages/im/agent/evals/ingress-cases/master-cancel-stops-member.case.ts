@@ -7,7 +7,7 @@ export default defineIngressEvalCase({
   turnMs: 1000,
   messages: [
     { at: 0, sender: { id: 'mallory' }, text: '一直循环输出' },
-    { at: 100, sender: { id: 'owner', roles: ['master'] }, text: '/cancel' },
+    { at: 100, sender: { id: 'owner', chatRole: 'owner' }, text: '/cancel' },
   ],
   expect: {
     stops: ['owner:stopped'],

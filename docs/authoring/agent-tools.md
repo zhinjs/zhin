@@ -67,7 +67,7 @@ export default defineAgentTool({
   description: '踢出群成员',
   platforms: ['icqq'],          // 只在 QQ 上提供
   scopes: ['group'],            // 只在群聊中提供
-  permissions: ['role(master)'], // 只有 master 发起的对话才提供
+  permissions: ['owner'], // 只有 master 发起的对话才提供
   // ...
 });
 ```
@@ -435,7 +435,7 @@ my-plugin/
 
 ### 权限规则
 
-`permissions` 由 `@zhin.js/permission` 统一解析：`adapter(name)`、`group(id,...)`、`private(id,...)`、`channel(id,...)`、`user(id,...)`、`role(master|trusted|user)`，以及由适配器判断的平台身份 `platform(adapter,perm)`（例如群主 / 管理员）。列表中的规则全部满足才通过；一条规则括号内的逗号表示满足其一。**无法识别的规则一律拒绝。**
+`permissions` 由 `@zhin.js/permission` 统一解析：`adapter(name)`、`group(id,...)`、`private(id,...)`、`channel(id,...)`、`user(id,...)`、聊天角色 `owner` / `admin` / `trusted`（或 `role(...)`，按本会话层级链判断，见[聊天角色](../concepts/chat-roles.md)），以及平台身份 `platform:owner|admin`、`platform-role:<id>`、`platform-permission:<name>`（读取适配器上报的 `sender.platform`）。列表中的规则全部满足才通过；一条规则括号内的逗号表示满足其一。**无法识别的规则一律拒绝。**
 
 ### Prompt Section 字段
 

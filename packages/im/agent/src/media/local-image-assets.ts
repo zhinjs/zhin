@@ -3,7 +3,7 @@ import { constants } from 'node:fs';
 import { mkdir, open, readdir, rename, rm, lstat } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { ToolInvocationContext } from '@zhin.js/tool';
-import type { Message } from '@zhin.js/core';
+import { chatRolesFromMessage, type Message } from '@zhin.js/core';
 import { createToken } from '@zhin.js/plugin-runtime';
 import { decodeBase64, inspectMediaBytes } from './media-normalize.js';
 import { DEFAULT_MULTIMODAL_CONFIG } from './media-types.js';
@@ -31,7 +31,7 @@ export function localImageScopeFromMessage(message: Message | undefined, session
   const conversation = message.conversation;
   return { sessionKey, origin: { kind: 'im', platform: conversation.endpoint.adapter, endpoint: message.endpointId ?? conversation.endpoint.id,
     scope: conversation.kind, sceneId: conversation.id, threadId: conversation.threadId, conversation },
-  principal: { subjectId: message.sender.id, roles: message.sender.roles ?? [] } };
+  principal: { subjectId: message.sender.id, roles: chatRolesFromMessage(message).length ? [...chatRolesFromMessage(message)] : ['user'] } };
 }
 
 /** The directory is owned by one Host; identities survive generation changes and restarts. */

@@ -6,7 +6,7 @@ export default defineAgentTool({
   description: '分页列出当前 QQ 群待处理的入群申请（含验证信息、风险提示）；官方白名单能力',
   adapter: 'qq',
   scopes: ['group'],
-  permissions: ['role(master,admin,trusted,owner)'],
+  permissions: ['trusted'],
   requiresApproval: 'never',
   readOnly: true,
   inputSchema: z.object({

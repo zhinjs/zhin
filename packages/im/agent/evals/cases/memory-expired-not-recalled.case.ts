@@ -6,7 +6,7 @@ export default defineEvalCase({
   description: 'Recall injects a live fact but not expired task state or another user\'s memory.',
   source: '#734 memory retrieval — expired entries are not recalled',
   tags: ['memory'],
-  inbound: { text: '我的部署任务进度怎么样了？', sender: { id: 'alice', roles: ['user'] } },
+  inbound: { text: '我的部署任务进度怎么样了？', sender: { id: 'alice' } },
   memory: [
     { scope: 'user', scope_key: 'alice', key: 'deploy:target', content: '部署目标是 Fly.io 新加坡区域' },
     {

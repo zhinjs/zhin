@@ -2,8 +2,6 @@ import type { MessageChannel } from './message.js';
 import type { Message } from './plugin-runtime/im/contracts.js';
 import { SystemLog } from './models/system-log.js';
 import { User } from './models/user.js';
-import type { SenderRole } from './built/roles.js';
-export type { SenderRole } from "./built/roles.js";
 
 export interface Models extends Record<string,object>{
   SystemLog: SystemLog

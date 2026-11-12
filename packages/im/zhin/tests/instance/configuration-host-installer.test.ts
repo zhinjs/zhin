@@ -10,7 +10,8 @@ import { definePlugin, type RuntimeConfigDocument } from '@zhin.js/plugin-runtim
 import { createConfigDocument, RootRuntime, type ModuleRuntime } from '@zhin.js/runtime';
 import { ConsoleConfigurationStore } from '../../src/instance/console/module.js';
 import { installConfigurationHost } from '../../src/instance/configuration-host-installer.js';
-import { createConfigurationChatAuthorizer, createEndpointRoleResolver, createSenderEnricher } from '@zhin.js/core/runtime';
+import { createConfigurationChatAuthorizer, createSenderEnricher } from '@zhin.js/core/runtime';
+import { chatRolesFromDocument } from './chat-role-fixture.js';
 
 class Client extends EventEmitter {
   readonly sendNative = vi.fn(async (_request: EndpointSendRequest) => 'sent');
@@ -63,15 +64,15 @@ async function fixture(options: { locale?: 'zh-CN' | 'en'; commands?: boolean; g
   }
   const file = join(project, 'zhin.config.json'); await put(file, document);
   const config = createConfigDocument(file);
-  const roles = await createEndpointRoleResolver(document);
-  const im = new ImRuntime({ enrichSender: await createSenderEnricher(document, roles) });
+  const roles = await chatRolesFromDocument(document);
+  const im = new ImRuntime({ enrichSender: createSenderEnricher({ roles: () => roles }) });
   const realStore = new ConsoleConfigurationStore({ projectRoot: project, document: config,
     configDeclarations: () => runtime.configurationSchemas,
     validateConfiguration: next => runtime.validateConfiguration(next),
     applyConfiguration: revision => runtime.applyConfiguration(revision), readApplication: () => runtime.configurationApplication });
   const store = options.store?.(realStore) ?? realStore;
   const runtime = new RootRuntime({ projectRoot: project, config, modules, environment: { name: 'test', mode: 'test', platform: 'node' },
-    installResources(context) { im.install(context.resources); installConfigurationHost({ store, authorize: createConfigurationChatAuthorizer(document, roles) })(context); } });
+    installResources(context) { im.install(context.resources); installConfigurationHost({ store, authorize: createConfigurationChatAuthorizer(() => roles, () => runtime.snapshot) })(context); } });
   try { await runtime.start(); im.attach(runtime.snapshots); }
   catch (error) { await runtime.stop(); await rm(project, { recursive: true, force: true }); throw error; }
   const index = runtime.snapshot.projections.get(adapterFeatureId) as AdapterIndex;
@@ -263,17 +264,20 @@ it('uses actual prefixes and both locales without inventing a command invocation
   } finally { await f.close(); }
 });
 
-it('does not accept ai.trigger.masters as chat configuration authority in v1 (C2)', async () => {
+it('accepts global owners (migrated from ai.trigger.masters, bound per adapter) as chat configuration authority (ADR 0056)', async () => {
   const f = await fixture({ globalMasters: ['global'] });
   const read = vi.spyOn(f.realStore, 'readChat');
   try {
+    // The migration binds the platformless list to each configured adapter, so the identity is never borrowed across platforms.
     await f.receive('!!config get other.nickname', { sender: 'global' });
-    expect(lastReply(f.client)).toBe('Configuration management requires a real Bot owner in a private chat.');
+    expect(lastReply(f.client)).toContain('Other');
     await f.receive('#config get bot.nickname', { sender: 'global', other: true });
-    expect(lastReply(f.otherClient)).toBe('Configuration management requires a real Bot owner in a private chat.');
-    expect(read).not.toHaveBeenCalled();
+    expect(lastReply(f.otherClient)).toContain('Before');
+    expect(read).toHaveBeenCalledTimes(2);
     await f.receive('!!config get other.nickname', { sender: 'alice' });
     expect(lastReply(f.client)).toContain('Other');
+    await f.receive('!!config get other.nickname', { sender: 'stranger' });
+    expect(lastReply(f.client)).toBe('Configuration management requires a real Bot owner in a private chat.');
   } finally { await f.close(); }
 });
 
@@ -295,7 +299,7 @@ it('accepts the master of any configured endpoint on the same Adapter in private
   } finally { await f.close(); }
 });
 
-it('denies masters of a different Adapter and ai.trigger.masters even with several endpoints (C2 widen)', async () => {
+it('denies owners of a different Adapter even with several endpoints (C2 widen)', async () => {
   const f = await fixture({ secondEndpoint: true, globalMasters: ['global'] });
   const read = vi.spyOn(f.realStore, 'readChat');
   try {
@@ -309,12 +313,10 @@ it('denies masters of a different Adapter and ai.trigger.masters even with sever
     expect(lastReply(f.client)).toBe(denied);
     await f.receive('!!config get bot.nickname', { sender: 'bob', second: true });
     expect(lastReply(f.secondClient!)).toBe(denied);
-    // Global masters are never consulted.
-    await f.receive('!!config get bot.nickname', { sender: 'global' });
-    expect(lastReply(f.client)).toBe(denied);
-    await f.receive('!!config get bot.nickname', { sender: 'global', second: true });
-    expect(lastReply(f.secondClient!)).toBe(denied);
     expect(read).not.toHaveBeenCalled();
+    // Global owners are bound per adapter by the migration and qualify on every adapter.
+    await f.receive('!!config get bot.nickname', { sender: 'global', second: true });
+    expect(lastReply(f.secondClient!)).toContain('Before');
   } finally { await f.close(); }
 });
 

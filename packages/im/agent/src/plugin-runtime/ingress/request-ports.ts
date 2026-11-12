@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import * as path from 'node:path';
 import { resolve } from 'node:path';
 import { personalSessionIdentity, type PersonalSessionAddress } from '../../personal-session/index.js';
-import type { TurnCapabilities, UserInteraction } from '@zhin.js/core';
+import { expandChatRole, type TurnCapabilities, type UserInteraction } from '@zhin.js/core';
 import type { ImRuntime, Message } from '@zhin.js/core/runtime';
 import {
   approvalOutcomeToDecision,
@@ -408,8 +408,11 @@ export function createRuntimeTurnAccess(
     throw new TypeError(`Runtime IM ingress rejects non-human origin: ${String(messageOrigin)}`);
   }
   const scope = message.conversation.kind;
-  const trustRole = roles.isMaster ? 'master' : roles.isTrusted ? 'trusted' : 'user';
-  const principalRoles = [...new Set([...(message.sender?.roles ?? []), trustRole])];
+  // ADR 0056: zhin chat roles only (expanded, owner → owner/admin/trusted); platform standing
+  // stays on `sender.platform` and never becomes an authorization role.
+  const chatRoles = roles.isMaster ? expandChatRole('owner')
+    : message.sender?.chatRole ? expandChatRole(message.sender.chatRole) : roles.isTrusted ? expandChatRole('trusted') : [];
+  const principalRoles: string[] = chatRoles.length ? [...chatRoles] : ['user'];
   const hasValidConversationSequence = typeof conversationSequence === 'number' && Number.isFinite(conversationSequence);
   return Object.freeze({
     ...(contextState || platformCapabilities
@@ -433,6 +436,7 @@ export function createRuntimeTurnAccess(
       subjectId,
       ...(message.sender?.name ? { displayName: message.sender.name } : {}),
       roles: Object.freeze(principalRoles),
+      ...(message.sender?.platform ? { platform: message.sender.platform } : {}),
       ...(messageOrigin ? { origin: messageOrigin } : {}),
     }),
     policy: Object.freeze({

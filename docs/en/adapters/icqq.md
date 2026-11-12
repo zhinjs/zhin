@@ -44,7 +44,6 @@ configVersion: 2
 plugins:
   icqq: "@zhin.js/adapter-icqq"
 icqq:
-  master: "1659488338" # Required, shared at top level (/approve and master role)
   autoReconnect: true
   endpoints:
     - id: "${ICQQ_ACCOUNT}" # QQ number
@@ -58,7 +57,6 @@ configVersion: 2
 plugins:
   icqq: "@zhin.js/adapter-icqq"
 icqq:
-  master: "1659488338" # Top-level fields are shared by all endpoints
   endpoints:
     - id: "${ICQQ_ACCOUNT}"
     - id: "${ICQQ_ACCOUNT_2}"
@@ -119,7 +117,6 @@ With `notify` configured, ICQQ sends an out-of-band notice through another adapt
 qq:
   # ... a configured QQ official bot
 icqq:
-  master: 123456
   autoReconnect: true   # default true: retry login after a kickoff
   notify:
     adapter: qq
@@ -138,7 +135,7 @@ With `autoReconnect: true`, the endpoint retries login automatically. When a QR 
 | `icqq login status` | show online state and pending login tasks |
 | `icqq login retry` | trigger another login attempt |
 
-Only the master (top-level or `endpoints[i].master`) or the `notify.id` account may run these commands; when neither is configured, use the Console ICQQ page. Without `notify`, outages are only logged and shown as pending logins on the Console ICQQ page.
+Only the chat role `owner` or the `notify.id` account may run these commands; when neither is configured, use the Console ICQQ page. Without `notify`, outages are only logged and shown as pending logins on the Console ICQQ page.
 
 ## Troubleshooting
 

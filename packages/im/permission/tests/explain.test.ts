@@ -1,11 +1,13 @@
 import { checkBuiltinPermit, explainPermitRules, type PermissionSubject } from '../src/index.js';
 
-const subject: PermissionSubject = { adapter: 'root/qq-work', scene: { type: 'group', id: 'g1' }, sender: { id: 'u1', role: ['master'] } };
+const subject: PermissionSubject = { adapter: 'root/qq-work', scene: { type: 'group', id: 'g1' },
+  sender: { id: 'u1', chatRole: 'owner', platform: { standing: 'admin', permissions: ['kick'] } } };
 
 it.each([
   'adapter(qq)', 'adapter(root/qq-work)', 'adapter(*)', 'adapter(slack)',
   'group()', 'group(*)', 'group(g1,g2)', 'group(g2)', 'private()', 'channel(g1)',
-  'user(u1,u2)', 'user()', 'user(u2)', 'role(master)', 'role(trusted)', 'role(admin)', 'role(owner,master)',
+  'user(u1,u2)', 'user()', 'user(u2)', 'owner', 'role(trusted)', 'role(admin)', 'role(owner,admin)',
+  'platform:admin', 'platform:owner', 'platform-permission:kick', 'platform-role:r1',
 ])('uses the actual builtin checker for %s', rule => {
   const [row] = explainPermitRules([rule], subject, { rolesKnown: true });
   expect(row?.outcome).toBe(checkBuiltinPermit(rule, subject) ? 'match' : 'mismatch');
@@ -13,15 +15,17 @@ it.each([
 });
 
 it('preserves unknown identity and roles rather than manufacturing a denial or verified role', () => {
-  expect(explainPermitRules(['group()', 'user(u1)', 'role(user)', 'adapter(qq)']).map(item => item.outcome)).toEqual(Array(4).fill('unknown'));
-  expect(explainPermitRules(['role(master)'], subject)[0]?.outcome).toBe('unknown');
+  expect(explainPermitRules(['group()', 'user(u1)', 'trusted', 'adapter(qq)', 'platform:admin']).map(item => item.outcome)).toEqual(Array(5).fill('unknown'));
+  expect(explainPermitRules(['owner'], subject)[0]?.outcome).toBe('unknown');
   expect(explainPermitRules(['user(u1)'], subject)[0]?.outcome).toBe('match');
-  expect(explainPermitRules(['role(user)'], { sender: { id: 'u1', role: [] } }, { rolesKnown: true })[0]?.outcome).toBe('mismatch');
+  expect(explainPermitRules(['trusted'], { sender: { id: 'u1' } }, { rolesKnown: true })[0]?.outcome).toBe('mismatch');
 });
 
-it('does not execute or guess platform or custom rules and identifies malformed platform syntax', () => {
-  expect(explainPermitRules(['platform(qq,admin)', 'arbitrary', 'platform(qq,)'], subject)).toMatchObject([
-    { kind: 'platform', outcome: 'not_evaluated' }, { kind: 'unknown', outcome: 'not_evaluated' }, { kind: 'platform', outcome: 'mismatch' },
+it('does not execute custom rules and names the replacement of removed spellings', () => {
+  expect(explainPermitRules(['platform(qq,admin)', 'arbitrary', 'role(master)'], subject)).toMatchObject([
+    { kind: 'unknown', outcome: 'mismatch', reason: 'platform(qq,admin) → platform-permission:admin' },
+    { kind: 'unknown', outcome: 'not_evaluated' },
+    { kind: 'unknown', outcome: 'mismatch', reason: 'role(master) → role(owner)' },
   ]);
 });
 
@@ -32,7 +36,7 @@ it('returns frozen rule rows and preserves parsed wildcard semantics', () => {
 });
 
 it('localizes explanations without changing rule outcomes or evaluating custom rules', () => {
-  const rules = ['group(g1)', 'role(master)', 'user(u2)', 'private()', 'platform(qq,admin)', 'custom'];
+  const rules = ['group(g1)', 'owner', 'user(u2)', 'private()', 'platform:admin', 'custom'];
   const chinese = explainPermitRules(rules, subject, { rolesKnown: true });
   const english = explainPermitRules(rules, subject, { rolesKnown: true, locale: 'en' });
   expect(english.map(({ reason: _reason, ...row }) => row))

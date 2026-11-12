@@ -11,18 +11,17 @@ import {
 function mockSubject(sender: { role?: string; permissions?: string[] }) {
   return {
     adapter: 'kook',
-    sender: { id: 'u1', role: sender.role ? [sender.role] : [], permissions: sender.permissions },
+    sender: { id: 'u1', platform: { standing: (sender.role ?? 'member') as never, ...(sender.permissions ? { permissions: sender.permissions } : {}) } },
     scene: { type: 'group', id: 'g1' },
   };
 }
 
-function mockMsg(roleIds: string[]) {
+function mockMsg(platformPermissions: string[]) {
   return {
     clientAdapter: 'kook',
     endpointId: 'bot1',
     conversation: { endpoint: { adapter: 'kook', id: 'bot1' }, kind: 'group', id: 'g1' },
-    sender: { id: 'u1', roles: roleIds },
-    metadata: { authorRoleIds: roleIds.map(Number) },
+    sender: { id: 'u1', platform: { standing: 'member' as const, permissions: platformPermissions } },
   } as any;
 }
 
@@ -31,7 +30,6 @@ describe('kook platform-permit', () => {
 
   beforeEach(() => {
     host = new PermissionHost();
-    host.registerPlatform('kook', (perm, subject) => checkKookPlatformPermit(perm, subject));
   });
 
   it('normalizeKookSenderForPermit 映射 permission 1/2/4/5', () => {
@@ -55,5 +53,6 @@ describe('kook platform-permit', () => {
       execute: async () => '',
     };
     expect(await canAccessTool(tool, mockMsg(['42']), host)).toBe(false);
+    expect(await canAccessTool(tool, mockMsg(['guild_owner']), host)).toBe(true);
   });
 });

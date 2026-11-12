@@ -1,69 +1,108 @@
 /**
- * 内置 permit DSL：adapter / group / private / channel / user / role。
- * 数组 AND；单项括号内逗号 OR。
- * SSOT：command / core 中的 permit-parse + permit-check 已由本模块替代。
+ * 内置 permit DSL（ADR 0056 §5）。数组 AND；单项括号内逗号 OR。
+ *
+ * - 会话：`adapter(…)` / `group(…)` / `private(…)` / `channel(…)` / `user(…)`
+ * - zhin 聊天角色（按当前会话的层级链计算，`owner` ⊃ `admin` ⊃ `trusted`）：
+ *   `owner` / `admin` / `trusted`，或 `role(owner,admin,…)`
+ * - 平台身份：`platform:owner` / `platform:admin`（归一地位；`admin` 也接受群主）、
+ *   `platform-role:<id>`、`platform-permission:<name>`
+ *
+ * 已移除（构建期报错并给出替代）：`role(master)`、`role(user)`、`scene_admin`、`scene_owner`、
+ * `platform(adapter,perm)`。
  */
 
 import type { PermissionSubject } from './subject.js';
 
-export type PermitKind = 'adapter' | 'group' | 'private' | 'channel' | 'user' | 'role';
+export type PermitKind =
+  | 'adapter' | 'group' | 'private' | 'channel' | 'user' | 'role'
+  | 'platform' | 'platform-role' | 'platform-permission';
 
 export interface ParsedPermit {
   readonly kind: PermitKind;
   readonly values: readonly string[];
 }
 
-export interface ParsedPlatformPermit {
-  readonly adapter: string;
-  readonly perm: string;
+export type PermitChatRole = 'owner' | 'admin' | 'trusted';
+const CHAT_ROLE_RANK: Readonly<Record<PermitChatRole, number>> = Object.freeze({ trusted: 1, admin: 2, owner: 3 });
+const isPermitChatRole = (value: string): value is PermitChatRole => value === 'owner' || value === 'admin' || value === 'trusted';
+
+const CALL_RE = /^(adapter|group|private|channel|user|role)\(([^)]*)\)$/u;
+const PLATFORM_RE = /^(platform|platform-role|platform-permission):(.+)$/u;
+const LEGACY_PLATFORM_RE = /^platform\(([^)]*)\)$/u;
+
+function splitValues(inner: string): readonly string[] {
+  const values = inner.split(',').map((v) => v.trim()).filter((v) => v.length > 0);
+  return values.length > 0 ? values : [''];
 }
 
-const BUILTIN_RE = /^(adapter|group|private|channel|user|role)\(([^)]*)\)$/;
-const PLATFORM_RE = /^platform\(([^,)]+),([^)]*)\)$/;
-
 export function parsePermitName(name: string): ParsedPermit | null {
-  const m = name.match(BUILTIN_RE);
-  if (!m) return null;
-  const kind = m[1] as PermitKind;
-  const inner = m[2]!.trim();
-  if (!inner) return { kind, values: [''] };
-  const values = inner.split(',').map((v) => v.trim()).filter((v) => v.length > 0);
-  return { kind, values: values.length > 0 ? values : [''] };
+  if (typeof name !== 'string') return null;
+  if (isPermitChatRole(name)) return { kind: 'role', values: [name] };
+  const call = name.match(CALL_RE);
+  if (call) {
+    const kind = call[1] as PermitKind;
+    const inner = call[2]!.trim();
+    const values = inner ? splitValues(inner) : [''];
+    if (kind === 'role' && !values.every(isPermitChatRole)) return null;
+    return { kind, values };
+  }
+  const platform = name.match(PLATFORM_RE);
+  if (platform) {
+    const kind = platform[1] as PermitKind;
+    const value = platform[2]!.trim();
+    if (!value) return null;
+    if (kind === 'platform' && value !== 'owner' && value !== 'admin') return null;
+    return { kind, values: [value] };
+  }
+  return null;
 }
 
 export function isBuiltinPermit(name: string): boolean {
-  return BUILTIN_RE.test(name);
+  return parsePermitName(name) !== null;
 }
 
-export function parsePlatformPermitName(name: string): ParsedPlatformPermit | null {
-  const m = name.match(PLATFORM_RE);
-  if (!m) return null;
-  const adapter = m[1]!.trim();
-  const perm = m[2]!.trim();
-  if (!adapter || !perm) return null;
-  return { adapter, perm };
+/** Replacement hint for a removed permit spelling; undefined when the name is not a removed form. */
+export function removedPermitReplacement(name: string): string | undefined {
+  if (name === 'scene_admin') return 'platform:admin';
+  if (name === 'scene_owner') return 'platform:owner';
+  if (name === 'master') return 'owner';
+  const legacy = name.match(LEGACY_PLATFORM_RE);
+  if (legacy) {
+    const perm = legacy[1]!.split(',').slice(1).join(',').trim();
+    if (perm === 'scene_admin') return 'platform:admin';
+    if (perm === 'scene_owner') return 'platform:owner';
+    return `platform-permission:${perm || '<name>'}`;
+  }
+  const call = name.match(CALL_RE);
+  if (call && call[1] === 'role') {
+    const values = splitValues(call[2]!).map((value) => value === 'master' ? 'owner' : value).filter(isPermitChatRole);
+    return values.length ? `role(${[...new Set(values)].join(',')})` : 'remove the rule (every sender qualifies)';
+  }
+  return undefined;
 }
 
-export function isPlatformPermit(name: string): boolean {
-  return PLATFORM_RE.test(name);
-}
-
-/** 构建期语法校验：仅允许 builtin DSL 或 `platform(adapter,perm)` 形态。 */
+/** 构建期语法校验：只接受内置 DSL；已移除的写法给出替代。 */
 export function assertPermitSyntax(permits: readonly string[], source?: string): void {
   for (const [index, name] of permits.entries()) {
-    if (typeof name !== 'string' || (!isBuiltinPermit(name) && !isPlatformPermit(name))) {
-      const where = source ? ` for ${source}` : '';
-      throw new TypeError(
-        `Unknown permit[${index}]${where}: ${JSON.stringify(name)} `
-        + '(expected adapter|group|private|channel|user|role(...) or platform(adapter,perm))',
-      );
+    if (typeof name === 'string' && isBuiltinPermit(name)) continue;
+    const where = source ? ` for ${source}` : '';
+    const replacement = typeof name === 'string' ? removedPermitReplacement(name) : undefined;
+    if (replacement) {
+      throw new TypeError(`Permit[${index}]${where} ${JSON.stringify(name)} was removed (ADR 0056); use ${replacement}`);
     }
+    throw new TypeError(
+      `Unknown permit[${index}]${where}: ${JSON.stringify(name)} `
+      + '(expected adapter|group|private|channel|user(...), owner|admin|trusted, role(owner|admin|trusted), '
+      + 'platform:owner|admin, platform-role:<id> or platform-permission:<name>)',
+    );
   }
 }
 
 export function checkBuiltinPermit(name: string, subject: PermissionSubject): boolean {
   const parsed = parsePermitName(name);
   if (!parsed) return false;
+  const sender = subject.sender;
+  const platform = sender?.platform;
 
   switch (parsed.kind) {
     case 'adapter':
@@ -75,11 +114,17 @@ export function checkBuiltinPermit(name: string, subject: PermissionSubject): bo
     case 'channel':
       return sceneMatches(subject, 'channel', parsed.values);
     case 'user':
-      return !!subject.sender
-        && parsed.values.some((id) => subject.sender!.id === id);
+      return !!sender && parsed.values.some((id) => sender.id === id);
     case 'role':
-      return !!subject.sender
-        && parsed.values.some((req) => roleSatisfies(subject.sender!.role, req));
+      return !!sender?.chatRole && parsed.values.some((req) => chatRoleSatisfies(sender.chatRole, req));
+    case 'platform': {
+      const standing = platform?.standing;
+      return parsed.values[0] === 'owner' ? standing === 'owner' : standing === 'owner' || standing === 'admin';
+    }
+    case 'platform-role':
+      return (platform?.roles ?? []).some((role) => role.id === parsed.values[0]);
+    case 'platform-permission':
+      return (platform?.permissions ?? []).includes(parsed.values[0]!);
     default:
       return false;
   }
@@ -111,9 +156,8 @@ function sceneMatches(
   return values.some((id) => id === '' || id === '*' || scene.id === id);
 }
 
-/** master 隐含 trusted（与 core roles 对齐的轻量副本）。 */
-function roleSatisfies(callerRoles: readonly string[], required: string): boolean {
-  const expanded = new Set(callerRoles);
-  if (expanded.has('master')) expanded.add('trusted');
-  return expanded.has(required);
+/** `owner` ⊃ `admin` ⊃ `trusted`（与 core 聊天角色一致的轻量副本）。 */
+function chatRoleSatisfies(held: string | undefined, required: string): boolean {
+  if (!held || !isPermitChatRole(held) || !isPermitChatRole(required)) return false;
+  return CHAT_ROLE_RANK[held] >= CHAT_ROLE_RANK[required];
 }

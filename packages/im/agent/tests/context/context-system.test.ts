@@ -99,7 +99,7 @@ describe('ContextSystem', () => {
       turnUser: {
         rawContent: 'publish report',
         promptMessages: [createUserMessage('old conversation'),
-          { ...createUserMessage('publish report', undefined, 1, { subjectId: 'old-human', authorizationRoles: ['master'] }), messageId: 'old-native' }],
+          { ...createUserMessage('publish report', undefined, 1, { subjectId: 'old-human', authorizationRoles: ['owner'] }), messageId: 'old-native' }],
       },
     });
 
@@ -127,7 +127,7 @@ describe('ContextSystem', () => {
     const cause = { turnId: 'schedule-exec', intent: 'new' as const };
     const current = { ...createUserMessage('previously rendered task', [{ type: 'image', data: { media: { kind: 'url', value: 'https://example.test/old.png' } } }], 123, actor, cause), messageId: 'not-a-native-input' };
     const result = await new ContextSystem().buildTextTurnContext({ host,
-      turn: { origin: { kind: 'schedule', jobId: 'job' }, principal: { subjectId: 'executor', roles: ['master'] }, session: { key: 'job' } },
+      turn: { origin: { kind: 'schedule', jobId: 'job' }, principal: { subjectId: 'executor', roles: ['owner'] }, session: { key: 'job' } },
       content: 'current task', turnUser: { rawContent: 'current task', promptMessages: [current] },
       prebuiltMessages: [createUserMessage('prebuilt conversation history')],
     });

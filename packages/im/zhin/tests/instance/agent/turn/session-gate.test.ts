@@ -5,11 +5,11 @@ import { observeSessionAndCheckSpeak } from '@zhin.js/agent/runtime';
 const conversation = { kind: 'group', id: 'g1', endpoint: { id: 'qq-bot', adapter: 'qq' } } as const;
 
 function message(extra: Record<string, unknown> = {}) {
-  return { conversation, sender: { id: 'u1', name: '小明', roles: ['admin'] }, metadata: {}, content: 'hi', ...extra } as any;
+  return { conversation, sender: { id: 'u1', name: '小明', platform: { standing: 'admin' } }, metadata: {}, content: 'hi', ...extra } as any;
 }
 
 describe('observeSessionAndCheckSpeak', () => {
-  it('blocks while the bot is muted and folds sender roles', async () => {
+  it('blocks while the bot is muted and folds the sender platform standing', async () => {
     const sessions = new SessionProfileStore();
     const events = {
       listBetween: vi.fn(async () => [

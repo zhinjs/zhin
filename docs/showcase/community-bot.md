@@ -44,7 +44,6 @@ GitHub 仓库通知。以前是每个平台一个进程一套代码，现在要�
 ```yaml
 plugins:
   icqq:
-    master: "${ICQQ_MASTER}"
     endpoints:                        # 一个实例，五个账号
       - name: "${ICQQ_ACCOUNT}"
       - name: "${ICQQ_ACCOUNT_2}"

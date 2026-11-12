@@ -22,10 +22,10 @@ content-moderation:
   maskChar: "*"
   # 省略 replyTemplate 时跟随本次消息语言；填写后原样使用，不自动翻译。
   # replyTemplate: "消息含不当内容，已拦截。"
-  masters: [] # 额外 master userId（兜底）
   inbound:
     enabled: true
-    bypassMasters: true
+    # 本会话聊天角色不低于该值的发送者跳过入站审查（ADR 0056）：owner | admin | trusted | none
+    bypassRole: owner
     whitelist:
       userIds: []
       conversationIds: []

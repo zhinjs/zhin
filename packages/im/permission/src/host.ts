@@ -1,52 +1,27 @@
 /**
  * PermissionHost — 统一鉴权面。
  *
- * 解析顺序：builtin → platform(adapter,perm) → 自定义 register → deny。
+ * 解析顺序：builtin（会话、聊天角色、平台身份，ADR 0056 §5）→ 自定义 register → deny。
  */
 
 import type { PermissionSubject } from './subject.js';
-import {
-  checkBuiltinPermit,
-  isBuiltinPermit,
-  isPlatformPermit,
-  parsePlatformPermitName,
-} from './builtin.js';
+import { checkBuiltinPermit, isBuiltinPermit } from './builtin.js';
 
 export type PermissionChecker = (
   name: string,
   subject: PermissionSubject,
 ) => boolean | Promise<boolean>;
 
-export type PlatformPermitChecker = (
-  perm: string,
-  subject: PermissionSubject,
-) => boolean | Promise<boolean>;
-
 export class PermissionHost {
   readonly #customEntries: CustomEntry[] = [];
-  readonly #platformCheckers = new Map<string, PlatformPermitChecker[]>();
 
   /**
    * 检查单条 permit 是否通过。
-   * 解析顺序：builtin → platform → custom → deny。
+   * 解析顺序：builtin → custom → deny。
    */
   async check(name: string, subject: PermissionSubject): Promise<boolean> {
     if (isBuiltinPermit(name)) {
       return checkBuiltinPermit(name, subject);
-    }
-
-    if (isPlatformPermit(name)) {
-      const parsed = parsePlatformPermitName(name);
-      if (!parsed) return false;
-      if (subject.adapter !== undefined && subject.adapter !== parsed.adapter) {
-        const last = subject.adapter.includes('/')
-          ? subject.adapter.slice(subject.adapter.lastIndexOf('/') + 1)
-          : subject.adapter;
-        if (last !== parsed.adapter && !last.startsWith(`${parsed.adapter}-`)) return false;
-      }
-      const checkers = this.#platformCheckers.get(parsed.adapter);
-      if (!checkers || checkers.length === 0) return false;
-      return checkers[checkers.length - 1]!(parsed.perm, subject);
     }
 
     for (const entry of this.#customEntries) {
@@ -82,27 +57,6 @@ export class PermissionHost {
     return () => {
       const index = this.#customEntries.indexOf(entry);
       if (index >= 0) this.#customEntries.splice(index, 1);
-    };
-  }
-
-  /**
-   * 注册平台级 checker。
-   * 当 permit 为 `platform(adapter, perm)` 且 adapter 匹配时调用。
-   */
-  registerPlatform(
-    adapter: string,
-    checker: PlatformPermitChecker,
-  ): () => void {
-    const key = String(adapter);
-    const list = this.#platformCheckers.get(key) ?? [];
-    list.push(checker);
-    this.#platformCheckers.set(key, list);
-    return () => {
-      const current = this.#platformCheckers.get(key);
-      if (!current) return;
-      const index = current.lastIndexOf(checker);
-      if (index >= 0) current.splice(index, 1);
-      if (current.length === 0) this.#platformCheckers.delete(key);
     };
   }
 }

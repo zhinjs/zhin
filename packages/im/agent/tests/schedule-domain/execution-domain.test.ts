@@ -12,7 +12,7 @@ const job: ScheduleJob = {
   createdAt: 1,
   updatedAt: 1,
   state: {},
-  createdBy: { userId: 'u1', roles: ['master'] },
+  createdBy: { userId: 'u1', roles: ['owner'] },
 };
 
 describe('ScheduleExecutionDomain', () => {

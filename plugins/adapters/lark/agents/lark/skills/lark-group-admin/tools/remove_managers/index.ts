@@ -1,7 +1,6 @@
 import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { platformPermission } from '@zhin.js/permission';
 
 export default defineAgentTool<{ chat_id: string; user_ids: string }>({
   description: '移除飞书群管理员',
@@ -12,7 +11,7 @@ export default defineAgentTool<{ chat_id: string; user_ids: string }>({
   adapter: 'lark',
   scopes: ["group"],
   tags: ['lark'],
-  permissions: [platformPermission('lark', 'manage_managers')],
+  permissions: ['platform-permission:manage_managers'],
   async execute({ chat_id, user_ids   }: { chat_id: string; user_ids: string }, context) {
     const endpoint = context.$client;
     const success = await endpoint.removeChatManagers(chat_id, user_ids.split(','));

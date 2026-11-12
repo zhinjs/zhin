@@ -7,13 +7,13 @@ const policy = {
 };
 
 describe('checkHomeToolAccess', () => {
-  const masterCtx = { subjectId: '100', roles: ['master'] } as const;
+  const masterCtx = { subjectId: '100', roles: ['owner'] } as const;
   const otherCtx = { subjectId: '999', roles: ['user'] } as const;
 
   it('非 master 读操作被拒绝', () => {
     const d = checkHomeToolAccess('read', 'light.x', otherCtx, policy);
     expect(d.allowed).toBe(false);
-    expect(d.reason).toContain('master');
+    expect(d.reason).toContain('owner');
   });
 
   it('master 读 light 允许', () => {

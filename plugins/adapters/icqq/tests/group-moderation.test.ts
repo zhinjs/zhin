@@ -37,7 +37,7 @@ describe('ICQQ checked moderation port', () => {
 
     it('is owner-only and human-approved', () => {
       expect(setAdminTool).toMatchObject({ requiresApproval: 'human', currentConversationBotRoles: ['owner'],
-        permissions: ['role(master,admin,trusted,owner)'], scopes: ['group'] });
+        permissions: ['trusted'], scopes: ['group'] });
     });
 
     it.each([[true, 'member', 'Member 123 is now an administrator'], [false, 'admin', 'Administrator role removed from 123']] as const)(

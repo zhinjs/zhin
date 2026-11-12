@@ -1,15 +1,28 @@
-import { isFrameworkSenderRole, type SenderRole } from '@zhin.js/core';
+import { isChatRole, type ChatRole } from '@zhin.js/core';
 import type { ToolInvocationContext } from '@zhin.js/tool';
 import type { ScheduleJobCreator } from './types.js';
+
+type CreatorRole = ChatRole | 'user';
+
+/** Chat roles and `user`; persisted jobs from before ADR 0056 stored `master`, read as `owner`. */
+function creatorRole(value: unknown): CreatorRole | undefined {
+  const role = value === 'master' ? 'owner' : value;
+  return isChatRole(role) || role === 'user' ? role : undefined;
+}
+
+function creatorRoles(values: readonly unknown[]): readonly CreatorRole[] {
+  const roles = [...new Set(values.map(creatorRole).filter((role): role is CreatorRole => role !== undefined))];
+  const chat = roles.filter((role) => role !== 'user');
+  return chat.length > 0 ? chat : ['user'];
+}
 
 /** Capture a persisted creator only from the authenticated invocation principal. */
 export function scheduleJobCreatorFromPrincipal(
   principal: ToolInvocationContext['principal'],
 ): ScheduleJobCreator {
-  const roles = principal.roles.filter(isFrameworkSenderRole);
   return {
     userId: principal.subjectId,
-    roles: roles.length > 0 ? roles : (['user'] as SenderRole[]),
+    roles: creatorRoles(principal.roles),
     name: principal.displayName,
   };
 }
@@ -20,12 +33,9 @@ export function parseScheduleJobCreator(raw: unknown): ScheduleJobCreator | unde
   const record = raw as Record<string, unknown>;
   const userId = record.userId != null ? String(record.userId) : '';
   if (!userId) return undefined;
-  const roles = Array.isArray(record.roles)
-    ? record.roles.map((r) => String(r)).filter(isFrameworkSenderRole)
-    : [];
   return {
     userId,
-    roles: (roles.length > 0 ? roles : ['user']) as SenderRole[],
+    roles: creatorRoles(Array.isArray(record.roles) ? record.roles : []),
     name: record.name != null ? String(record.name) : undefined,
   };
 }

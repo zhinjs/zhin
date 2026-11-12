@@ -104,15 +104,11 @@ export interface InstallAgentHostOptions {
   readonly projectRoot: string;
   readonly inference: HostInference;
   /**
-   * Resolve Endpoint Owner id for `/approve` + bashAlways key.
-   * Key: `localName` (e.g. icqq) or live endpoint name (uin).
+   * Resolve the Endpoint Owner id for `/approve` + bashAlways key: the stored chat role `owner`
+   * of the account (or its adapter / global, on the same adapter), ADR 0056.
+   * Key: adapter instance alias and the account's endpoint id.
    */
   readonly resolveEndpointOwner?: (adapterLocalName: string, endpointKey: string) => string | undefined;
-  /**
-   * Resolve Endpoint trusted id 列表（plugins.<key>.trusted / endpoints[].trusted）。
-   * trusted 角色弱于 master，不参与 Owner 审批放行。
-   */
-  readonly resolveEndpointTrusted?: (adapterLocalName: string, endpointKey: string) => readonly string[];
   /** Candidate config Endpoint identities; never read from the old live ImRuntime projection. */
   readonly resolveConfiguredEndpointKeys?: () => Promise<ReadonlySet<string>>;
   /** Extra Host tools (e.g. Speech Host voice_stt / voice_tts). */
@@ -374,7 +370,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       approvalPort: options.approvalPort,
       resolveTurnIntent: options.resolveTurnIntent,
       resolveEndpointOwner: options.resolveEndpointOwner,
-      resolveEndpointTrusted: options.resolveEndpointTrusted,
       ingress,
       agent: agentFoundation,
       ...(options.assistantStatus ? { assistantStatus: options.assistantStatus } : {}),

@@ -33,7 +33,7 @@ export class ProfileContextBuilder implements ContextBuilder {
     const relations = this.host.userProfiles.relations;
     if (!relations) return '';
     try {
-      const isMaster = principal.roles.includes('master');
+      const isMaster = principal.roles.includes('owner');
       const record = await relations.get(origin.platform, principal.subjectId);
       const ambient = isAmbientTurn(context.turn as Parameters<typeof isAmbientTurn>[0]);
       const others = ambient && origin.scope !== 'private'

@@ -1,9 +1,11 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { AdapterIndex, Adapter, endpointSpec, createEndpointSpecification, type Endpoint, adapterFeatureId, defineAdapter, endpointEventGatewayToken } from '@zhin.js/adapter';
 import { childPluginId, createCapabilitySlot, rootPluginId, type PluginId, type PluginNodeSnapshot, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { Message } from '@zhin.js/core/runtime';
-import { createEndpointRoleResolver, createSenderEnricher } from '@zhin.js/core/runtime';
-import { resolveOwnerForRuntimeMessage, resolveTrustedForRuntimeMessage } from '@zhin.js/agent/runtime';
+import { createSenderEnricher } from '@zhin.js/core/runtime';
+import { ChatRoleService, createMappingChatRoleSource } from '@zhin.js/core';
+import { resolveOwnerForRuntimeMessage } from '@zhin.js/agent/runtime';
+import { ChatRoleStore, type InstanceChatRoleService } from '../../src/instance/chat-roles.js';
 
 const document = (configs: Record<string, unknown>) => ({ configVersion: 2 as const,
   plugins: Object.fromEntries(Object.keys(configs).map(key => [key, '@fixture/adapter'])), ...configs });
@@ -34,97 +36,65 @@ async function runtime(configs: Record<string, unknown>) {
     } };
 }
 
-describe('trusted Endpoint role identity', () => {
-  it('keeps same-named accounts isolated by the owning Plugin and supports canonical id', async () => {
-    const resolver = await createEndpointRoleResolver(document({
-      one: { endpoints: [{ id: 'same', name: 'same', master: 'owner-one', trusted: ['trusted-one'] }] },
-      two: { endpoints: [{ id: 'same', name: 'same', master: 'owner-two', trusted: ['trusted-two'] }] },
-    }));
-    expect(resolver.resolveOwner('one', 'same')).toBe('owner-one');
-    expect(resolver.resolveOwner('two', 'same')).toBe('owner-two');
-    expect(resolver.resolveTrusted('one', 'same')).toEqual(['trusted-one']);
-    expect(resolver.resolveTrusted('two', 'same')).toEqual(['trusted-two']);
-    expect(resolver.resolveOwner('same', 'same')).toBeUndefined();
-  });
-  it('does not select another account from a nickname, capability local name or metadata', async () => {
-    const configs = { one: { endpoints: [{ id: 'a', name: 'a', master: 'owner-a', trusted: ['trust-a'] },
-      { id: 'b', name: 'b', master: 'attacker', trusted: ['trust-b'] }] },
-      two: { endpoints: [{ id: 'a', name: 'a', master: 'owner-two', trusted: ['trust-two'] }] } };
+async function grants(entries: readonly (readonly [level: 'global' | 'adapter' | 'endpoint', key: string, adapter: string, userId: string, role: 'owner' | 'admin' | 'trusted'])[]) {
+  const roles: InstanceChatRoleService = new ChatRoleService({ store: new ChatRoleStore(), sources: [createMappingChatRoleSource()] });
+  for (const [level, key, adapter, userId, role] of entries) await roles.store.grant({ level, key, adapter, userId, role });
+  return roles;
+}
+
+describe('chat role sender identity (ADR 0056)', () => {
+  it('keeps same-named accounts isolated by the owning Plugin instance alias', async () => {
+    const configs = { one: { endpoints: [{ id: 'same' }] }, two: { endpoints: [{ id: 'same' }] } };
     const state = await runtime(configs);
-    const resolver = await createEndpointRoleResolver(document(configs));
-    const enrich = (await createSenderEnricher(document(configs), resolver))!;
-    const conversation = state.conversation('one', 'a');
-    expect(enrich({ id: 'attacker', name: 'b', roles: ['member'] }, conversation, state.snapshot)?.roles).toEqual(['member']);
-    expect(enrich({ id: 'owner-a', name: 'b' }, conversation, state.snapshot)?.roles).toEqual(['master']);
-    expect(enrich({ id: 'trust-a', name: 'b' }, conversation, state.snapshot)?.roles).toEqual(['trusted']);
-    expect(enrich({ id: 'owner-two', name: 'a' }, conversation, state.snapshot)?.roles).toBeUndefined();
+    const roles = await grants([['endpoint', 'one/same', 'one', 'owner-one', 'owner'], ['endpoint', 'two/same', 'two', 'owner-two', 'owner'],
+      ['endpoint', 'one/same', 'one', 'trusted-one', 'trusted']]);
+    const enrich = createSenderEnricher({ roles: () => roles })!;
+    expect(enrich({ id: 'owner-one' }, state.conversation('one', 'same'), state.snapshot)?.chatRole).toBe('owner');
+    expect(enrich({ id: 'owner-two' }, state.conversation('one', 'same'), state.snapshot)?.chatRole).toBeUndefined();
+    expect(enrich({ id: 'owner-two' }, state.conversation('two', 'same'), state.snapshot)?.chatRole).toBe('owner');
+    expect(enrich({ id: 'trusted-one' }, state.conversation('one', 'same'), state.snapshot)?.chatRole).toBe('trusted');
   });
-  it('resolves IM Agent owner and trusted from the same captured account, ignoring metadata', async () => {
-    const configs = { one: { endpoints: [{ id: 'a', name: 'a', master: 'owner-a', trusted: ['trust-a'] },
-      { id: 'b', name: 'b', master: 'attacker', trusted: ['trust-b'] }] },
-      two: { endpoints: [{ id: 'a', name: 'a', master: 'owner-two', trusted: ['trust-two'] }] } };
+
+  it('does not select another account from a nickname, metadata or a spoofed chat role', async () => {
+    const configs = { one: { endpoints: [{ id: 'a', name: 'a' }, { id: 'b', name: 'b' }] }, two: { endpoints: [{ id: 'a', name: 'a' }] } };
     const state = await runtime(configs);
-    const resolver = await createEndpointRoleResolver(document(configs));
+    const roles = await grants([['endpoint', 'one/a', 'one', 'owner-a', 'owner'], ['endpoint', 'one/b', 'one', 'attacker', 'owner']]);
+    const enrich = createSenderEnricher({ roles: () => roles })!;
     const conversation = state.conversation('one', 'a');
-    const enrich = (await createSenderEnricher(document(configs), resolver))!;
-    const message = new Message(
-      {
-        conversation: conversation,
-        content: 'hi',
-        sender: { id: 'attacker', name: 'b' },
-        metadata: { endpoint: 'b', endpointKey: 'b' },
-        endpointId: 'b',
-      },
-      { generation: 7, reply: async () => ({ status: 'sent' }) },
-    );
-    expect(resolveOwnerForRuntimeMessage(message, resolver.resolveOwner, state.snapshot)).toBe('owner-a');
-    expect(resolveTrustedForRuntimeMessage(message, resolver.resolveTrusted, state.snapshot)).toEqual(['trust-a']);
+    expect(enrich({ id: 'attacker', name: 'b', platform: { standing: 'member' } }, conversation, state.snapshot))
+      .toEqual({ id: 'attacker', name: 'b', platform: { standing: 'member' } });
+    expect(enrich({ id: 'attacker', chatRole: 'owner' }, conversation, state.snapshot)?.chatRole).toBeUndefined();
+    expect(enrich({ id: 'owner-a', name: 'b' }, conversation, state.snapshot)?.chatRole).toBe('owner');
     const unknown = { ...conversation, endpoint: { ...conversation.endpoint, id: 'not-a-real-endpoint' } };
-    expect(enrich({ id: 'attacker', name: 'b' }, unknown, state.snapshot)?.roles).toBeUndefined();
-    const staleMessage = new Message(
-      {
-        conversation: unknown,
-        content: 'hi',
-        sender: { id: 'attacker' },
-        metadata: {},
-        endpointId: 'b',
-      },
-      { generation: 7, reply: async () => ({ status: 'sent' }) },
-    );
-    expect(resolveOwnerForRuntimeMessage(staleMessage, resolver.resolveOwner, state.snapshot)).toBeUndefined();
-    expect(resolveTrustedForRuntimeMessage(staleMessage, resolver.resolveTrusted, state.snapshot)).toEqual([]);
+    expect(enrich({ id: 'owner-a' }, unknown, state.snapshot)?.chatRole).toBeUndefined();
   });
-  it('retains explicit global roles, unique single-account aliases and exact Plugin keys', async () => {
-    const config = { ...document({ one: { name: 'alias', master: 'base', trusted: 't1,t2', endpoints: [{ name: 'account', master: 'leaf', trusted: ['t3'] }] },
-      account: { master: 'exact' } }), ai: { trigger: { masters: ['global'], trusted: ['global-trusted'] } } };
-    const resolver = await createEndpointRoleResolver(config);
-    expect(resolver.resolveOwner('alias', 'account')).toBe('leaf');
-    expect(resolver.resolveOwner('account', 'account')).toBe('exact');
-    expect(resolver.resolveTrusted('one', 'account')).toEqual(['t1', 't2', 't3']);
-    const enrich = (await createSenderEnricher(config, resolver))!;
-    const snapshot: RuntimeSnapshot = { generation: 1, root: rootPluginId(), tree: new Map(), config: new Map(), resources: new Map(), capabilities: new Map(), projections: new Map() };
-    const conversation = { endpoint: { id: 'opaque', adapter: 'unknown' }, kind: 'private' as const, id: 'u' };
-    expect(enrich({ id: 'global' }, conversation, snapshot)?.roles).toEqual(['master']);
-    expect(enrich({ id: 'global-trusted' }, conversation, snapshot)?.roles).toEqual(['trusted']);
-    const resolve = vi.fn(() => 'owner');
-    const message = new Message(
-      { conversation: conversation, content: 'hi', metadata: { endpoint: 'account' } },
-      { generation: 1, reply: async () => ({ status: 'sent' }) },
-    );
-    expect(resolveOwnerForRuntimeMessage(message, resolve)).toBeUndefined();
-    expect(resolve).not.toHaveBeenCalled();
+
+  it('resolves the owner approval address from stored owners of the captured account, ignoring metadata', async () => {
+    const configs = { one: { endpoints: [{ id: 'a', name: 'a' }, { id: 'b', name: 'b' }] } };
+    const state = await runtime(configs);
+    const roles = await grants([['endpoint', 'one/a', 'one', 'owner-a', 'owner'], ['endpoint', 'one/b', 'one', 'attacker', 'owner'],
+      ['global', '', 'one', 'global-owner', 'owner']]);
+    const resolve = (alias: string, endpointId: string) => roles.ownersOf(`${alias}/${endpointId}`, alias)[0];
+    const conversation = state.conversation('one', 'a');
+    const message = new Message({ conversation, content: 'hi', sender: { id: 'attacker', name: 'b' }, metadata: { endpoint: 'b', endpointKey: 'b' }, endpointId: 'b' },
+      { generation: 7, reply: async () => ({ status: 'sent' }) });
+    expect(resolveOwnerForRuntimeMessage(message, resolve, state.snapshot)).toBe('owner-a');
+    expect(roles.ownersOf('one/b', 'one')).toEqual(['attacker', 'global-owner']);
+    const stale = new Message({ conversation: { ...conversation, endpoint: { ...conversation.endpoint, id: 'not-a-real-endpoint' } },
+      content: 'hi', sender: { id: 'attacker' }, metadata: {}, endpointId: 'b' }, { generation: 7, reply: async () => ({ status: 'sent' }) });
+    expect(resolveOwnerForRuntimeMessage(stale, resolve, state.snapshot)).toBeUndefined();
   });
-  it('uses canonical endpoint ids while retaining display-name lookup compatibility', async () => {
-    const resolver = await createEndpointRoleResolver(document({ one: {
-      endpoints: [{ id: 'canonical', name: 'display', master: 'owner', trusted: ['trusted'] }],
-    } }));
-    expect(resolver.resolveOwner('one', 'canonical')).toBe('owner');
-    expect(resolver.resolveTrusted('one', 'canonical')).toEqual(['trusted']);
-    expect(resolver.resolveOwner('one', 'display')).toBe('owner');
-  });
-  it('propagates config read failures rather than treating them as an empty roles document', async () => {
-    const failure = new Error('read failed');
-    const config = { read: async () => { throw failure; } };
-    await expect(createEndpointRoleResolver(config as never)).rejects.toBe(failure);
+
+  it('applies global and adapter grants on their own adapter only', async () => {
+    const configs = { one: { endpoints: [{ id: 'a' }] }, two: { endpoints: [{ id: 'a' }] } };
+    const state = await runtime(configs);
+    const roles = await grants([['global', '', 'one', 'g', 'owner'], ['adapter', 'two', 'two', 'm', 'admin']]);
+    const enrich = createSenderEnricher({ roles: () => roles })!;
+    expect(enrich({ id: 'g' }, state.conversation('one', 'a'), state.snapshot)?.chatRole).toBe('owner');
+    expect(enrich({ id: 'g' }, state.conversation('two', 'a'), state.snapshot)?.chatRole).toBeUndefined();
+    expect(enrich({ id: 'm' }, state.conversation('two', 'a'), state.snapshot)?.chatRole).toBe('admin');
+    // Private chats carry no platform standing and so no mapped role.
+    const privateChat = { ...state.conversation('one', 'a'), kind: 'private' as const, id: 'p' };
+    expect(enrich({ id: 'p', platform: { standing: 'owner' } }, privateChat, state.snapshot)).toEqual({ id: 'p' });
   });
 });

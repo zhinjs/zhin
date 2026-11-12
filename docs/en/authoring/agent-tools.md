@@ -67,7 +67,7 @@ export default defineAgentTool({
   description: 'Kick a group member',
   platforms: ['icqq'],           // QQ only
   scopes: ['group'],             // group chats only
-  permissions: ['role(master)'], // only in conversations started by a master
+  permissions: ['owner'], // only in conversations started by a master
   // ...
 });
 ```
@@ -394,7 +394,7 @@ my-plugin/
 
 ### Permission rules
 
-`permissions` is parsed by `@zhin.js/permission`: `adapter(name)`, `group(id,...)`, `private(id,...)`, `channel(id,...)`, `user(id,...)`, `role(master|trusted|user)`, plus adapter-checked platform identity `platform(adapter,perm)` (e.g. group owner / admin). All rules in the list must pass; commas inside one rule mean any-of. **Unrecognized rules are always denied.**
+`permissions` is parsed by `@zhin.js/permission`: `adapter(name)`, `group(id,...)`, `private(id,...)`, `channel(id,...)`, `user(id,...)`, the chat roles `owner` / `admin` / `trusted` (or `role(...)`, along this conversation's scope chain; see [Chat roles](../concepts/chat-roles.md)), plus the platform identity `platform:owner|admin`, `platform-role:<id>` and `platform-permission:<name>` (read from the adapter-reported `sender.platform`). All rules in the list must pass; commas inside one rule mean any-of. **Unrecognized rules are always denied.**
 
 ### Prompt Section fields
 

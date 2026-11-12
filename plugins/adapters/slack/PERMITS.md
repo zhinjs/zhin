@@ -13,7 +13,7 @@
 
 ## Permit 词汇表
 
-| `platform(slack,…)` | 含义 |
+| `platform-permission:…` | 含义 |
 |---------------------|------|
 | `workspace_owner` | Workspace 主 |
 | `workspace_admin` | Workspace 管理员 |
@@ -21,4 +21,6 @@
 
 ## 工厂映射
 
-`scene_admin` → `channel_manager` · `scene_owner` → `workspace_owner`
+场景治理工具默认要求 `platform:admin` / `platform:owner`（归一地位，ADR 0056 §5）；本适配器把它们映射为下列平台权限：
+
+`platform:admin` → `channel_manager` · `platform:owner` → `workspace_owner`

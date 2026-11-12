@@ -15,7 +15,7 @@ export interface HomeToolDecision {
 export type HomePrincipal = ToolInvocationContext['principal'];
 
 function resolveRole(principal: HomePrincipal): ToolRequesterRole {
-  if (principal.roles.includes('master')) return 'master';
+  if (principal.roles.includes('owner')) return 'owner';
   if (principal.roles.includes('trusted')) return 'trusted';
   return 'other';
 }
@@ -29,11 +29,11 @@ export function checkHomeToolAccess(
   const role = resolveRole(principal);
   const domain = parseEntityDomain(entityId);
 
-  if (policy.requireMaster && role !== 'master') {
+  if (policy.requireMaster && role !== 'owner') {
     return {
       allowed: false,
       role,
-      reason: '智能家居操作仅允许 Endpoint Owner（master）调用。',
+      reason: '智能家居操作仅允许主人（聊天角色 owner）调用。',
     };
   }
 

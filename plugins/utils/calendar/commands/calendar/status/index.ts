@@ -4,7 +4,7 @@ import { calendarRuntimeToken } from "../../../src/runtime.js";
 
 export default defineCommand({
   description: "查看日历授权状态（master 专用）", descriptionI18n: { en: "View calendar authorization status (bot master only)" },
-  permit: ["role(master)"],
+  permit: ["owner"],
   async execute({ use, locale, formatCommand }) {
     return use(calendarRuntimeToken).auth.describeStatus(locale, formatCommand('calendar auth'));
   },

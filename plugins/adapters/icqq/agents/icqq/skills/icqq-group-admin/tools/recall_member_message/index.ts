@@ -10,7 +10,7 @@ export default defineAgentTool({
   requiresCapabilities: ['actions.recall.others'],
   scopes: ['group'],
   currentConversationBotRoles: ['owner', 'admin'],
-  permissions: ['role(master,admin,trusted,owner)'],
+  permissions: ['trusted'],
   requiresApproval: 'never',
   inputSchema: z.object({
     message_id: z.string().min(1).describe('当前群中要撤回的真实消息 ID，或消息头里的 m<n> 别名'),

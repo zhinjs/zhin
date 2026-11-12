@@ -159,3 +159,7 @@ HTTP 408 与所有 5xx 保持 unknown，即使正文包含拒绝码也不认定�
 可选 `apiProxy: { port: 18580 }` 使用 SDK Axios 实例正式 `httpsAgent` 扩展，仅将 `www.kookapp.cn:443` 的 TCP 路由到 `127.0.0.1`；原 Host、SNI、证书链及域名验证保留，拒绝其他目标和重定向，无自动直连回退。默认关闭。它与 `streamProxy` 独立，覆盖 SDK JSON API（含网关查询、初始化、消息发送/撤回），不覆盖适配器的 fetch 图片上传及外部媒体下载。Axios 正式 agent 配置见 https://axios-http.com/docs/req_config 。
 
 启动固定上游代理：`node scripts/platform-acceptance/tcp-fault-proxy.mjs --upstream-host www.kookapp.cn --upstream-port 443 --port 18580 --control-port 18581`。验收项目可用 `KOOK_API_PROXY_PORT=18580 pnpm --filter platform-acceptance-bot dev:kook` 临时覆盖；不改 `.env`。POST 已提交后断线只能记 unknown，不自动重发；恢复后使用新探针样本。
+
+## 成员身份
+
+服务器频道消息按服务器缓存（`guild.view` 群主 id、`guild-role.list` 角色名与权限位）归一为 `sender.platform`：服务器主 → `owner`；持有带「管理员」权限位的角色 → `admin`；否则 `member`。`roles` 为发送者持有的角色（id + 名称），`permissions` 为这些角色权限位的并集（`administrator`、`kick_members`、`manage_roles` …）。私聊不上报；查询失败、无法判断地位时不上报。能力画像：`channel.scene.platformStanding = { standing: true, roles: true, permissions: true }`。详见 [ADR 0056 §1](https://github.com/zhinjs/zhin/blob/main/docs/adr/0056-chat-roles.md)。

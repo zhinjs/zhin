@@ -9,7 +9,7 @@ describe('Endpoint profile configuration through real adapter schemas', () => {
   it('accepts fallback values at both levels and rejects misspelled or invalid profile fields', () => {
     const schema = JSON.parse(readFileSync(new URL('icqq/schema.json', adapters), 'utf8'));
     const config = {
-      master: '1', nickname: 'Default name', profile: { age: 21, interests: ['music'], signature: '' },
+      nickname: 'Default name', profile: { age: 21, interests: ['music'], signature: '' },
       endpoints: [{ id: '123', nickname: 'Account name', profile: { gender: 'female', bio: 'Account biography' } }],
     };
     expect(validatePluginConfigSchema(schema, config)).toEqual([]);

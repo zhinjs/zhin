@@ -15,7 +15,7 @@ export default defineAgentTool<GroupMemberInfoInput>({
   }),
   adapter: 'icqq',
   scopes:['group'],
-  permissions: ['role(master,admin,trusted,owner)'],
+  permissions: ['trusted'],
   requiresApproval: 'never',
   async execute({ group_id, user_id }, context) {
     // pickMember 返回的是实体对象，序列化后只剩 `{}`：模型会据此以为成员不在群里。按 group_kick 的口径实时查询。

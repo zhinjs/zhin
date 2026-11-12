@@ -24,7 +24,7 @@ export function createScheduleSecurityContext(
 }
 
 export function demoteScheduleCreator(creator: ScheduleJobCreator): ScheduleJobCreator {
-  const roles = creator.roles.includes('master')
+  const roles = creator.roles.includes('owner')
     ? ['trusted'] as const
     : creator.roles.includes('trusted')
       ? ['user'] as const

@@ -4,12 +4,15 @@
  */
 import { checkBuiltinPermit, type PermissionSubject } from '@zhin.js/permission';
 
-/** 会话管理者：群主 / 群管理员 / 机器人主人（适配器投影的规范角色名）。 */
-export const CONVERSATION_MANAGER_PERMIT = 'role(owner,admin,master)';
+/**
+ * 会话管理者：本会话层级链上的聊天角色 `admin`（含 `owner`）。平台群主 / 管理员经默认映射规则
+ * 即为本会话 `admin`（ADR 0056 §4）。
+ */
+export const CONVERSATION_MANAGER_PERMIT = 'admin';
 
 /**
- * 「私聊，或 owner / admin / master」。`permit` 列表只支持 AND，
- * 订阅类命令需要这个 OR 规则时用它，并以命令会话的 `scene` / `sender.role` 为输入。
+ * 「私聊，或本会话 admin」。`permit` 列表只支持 AND，
+ * 订阅类命令需要这个 OR 规则时用它，并以命令会话的 `scene` / `sender.chatRole` 为输入。
  */
 export function canManageConversation(subject: PermissionSubject): boolean {
   return checkBuiltinPermit('private()', subject)
@@ -21,7 +24,7 @@ export {
   type ParsedPermit,
   parsePermitName,
   isBuiltinPermit,
-  isPlatformPermit,
+  removedPermitReplacement,
   assertPermitSyntax as assertBuiltinPermits,
   checkBuiltinPermit,
   checkBuiltinPermitList,

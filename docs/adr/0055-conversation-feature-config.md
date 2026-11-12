@@ -75,7 +75,7 @@ ADR 0050 让功能配置有三级：全局 < 适配器 < 账号。运营中更�
   - `功能 设置 <插件> <字段> <值> [层级]` / `feature set …`；
   - `功能 重置 <插件> [层级]` / `feature reset …`：删除该层（本会话或其上级）的覆盖；
   - 层级取 `会话|账号|适配器|全局` / `conversation|endpoint|adapter|global`，目标作用范围是当前会话在该层级的祖先。
-- 谁能用：发送者必须在目标作用范围（或其上级）拥有 ADR 0056 的 `admin`（或 `owner`）角色。角色向下继承（全局 → 适配器 → 账号 → 会话），同一人可在不同范围担任不同角色。来源：`chat_roles` 表中的授予；配置中的账号 `owner` → 账号层 `owner`、`trusted` → 账号层 `trusted`，`ai.trigger.masters|trusted` → 全局；平台群主 / 管理员 → 当前会话 `admin`（`features.selfService.platformAdmins`，默认开启，可用 `roles: ['owner']` 收紧为只认群主）。
+- 谁能用：发送者必须在目标作用范围（或其上级）拥有 ADR 0056 的 `admin`（或 `owner`）角色。角色向下继承（全局 → 适配器 → 账号 → 会话），同一人可在不同范围担任不同角色。来源：`chat_roles` 表中的授予；平台群主 / 管理员按 ADR 0056 §4 的映射规则成为当前会话 `admin`（默认开启，可在适配器 / 账号的 `roles.mappings` 中关闭或收紧）。原配置名单在首次启动时迁入 `chat_roles`。
 - 写入去向：会话层写项目数据库；账号层 / 适配器层写配置文件 `overrides`（走 `feature.set-override` / `feature.set-enabled`，原地生效、不重启）；全局层的开启 / 关闭写 `disable_plugins` 并重启实例，聊天中必须再发确认码（`功能 确认 <码>`，2 分钟有效）。
 - 字段：会话层只能改 `selfServiceFields`；账号 / 适配器 / 全局层经聊天也只能改 `selfServiceFields`，除非插件声明更宽的 `chatAdminFields`（各层仍按字段自身的 `levels` 过滤）。
 - 锁定：不能开启或改动被上级停用的插件，回复是哪一层锁定的。

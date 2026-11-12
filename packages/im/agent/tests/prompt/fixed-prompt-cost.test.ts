@@ -27,7 +27,7 @@ describe('built-in IM prompt cost (#949)', () => {
     // This is a regression budget, not a runtime truncation limit or provider billing.
     expect(estimatePromptTokens(prompt)).toBeLessThanOrEqual(900);
     for (const rule of ['<critical_rules>', '# Workspace tasks in chat', '# Chat style', '# Security',
-      'SOUL.md', 'delegate', 'ask_user', 'master', 'trusted', 'user', 'ZHIN_NEEDS_OWNER:',
+      'SOUL.md', 'delegate', 'ask_user', 'owner', 'trusted', 'user', 'ZHIN_NEEDS_OWNER:',
       '/approve', 'policyBlocked', 'sensitive', 'tool output']) {
       expect(prompt).toContain(rule);
     }

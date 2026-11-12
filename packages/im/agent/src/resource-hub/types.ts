@@ -23,9 +23,11 @@ export interface ResourceEntry<T> {
 // Skill
 // ============================================================================
 
-import type { SenderRole, Message } from '@zhin.js/core';
+import type { ChatRole, Message } from '@zhin.js/core';
 import type { TurnContextView } from '../context/turn-envelope.js';
-export type { SenderRole, Message };
+export type { Message };
+/** Turn principal role: a zhin chat role (ADR 0056, expanded) or `user` for everyone else. */
+export type PrincipalRole = ChatRole | 'user';
 
 /**
  * 文件操作角色 — 在 IM 场景中对文件操作的权限分级

@@ -68,12 +68,6 @@ export interface AITriggerConfig {
   /** 入口层错误提示模板（可选；不配置时用聊天口吻，主人额外看到原因） */
   errorTemplate?: string;
   
-  /** 全局 master（trigger 级，赋予 master 角色） */
-  masters?: string[];
-
-  /** 全局 trusted（trigger 级） */
-  trusted?: string[];
-
   /** 群聊旁听：没人叫机器人时，由判断模型决定是否接话 */
   ambient?: AmbientEngagementConfig;
 
