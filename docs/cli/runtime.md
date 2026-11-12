@@ -71,11 +71,15 @@ zhin start --once --mode test
 
 CLI 通过本地控制套接字与网关通信：
 
-- 位置：`<项目根>/.zhin/gateway.sock`（路径超过 Unix 套接字长度上限时改用 `<tmp>/zhin-gateway-<项目路径哈希>.sock`）；Windows 为命名管道 `\\.\pipe\zhin-gateway-<项目路径哈希>`。
+- 位置：`<项目根>/.zhin/gateway.sock`（路径超过 Unix 套接字长度上限时改用 `<tmp>/zhin-gateway-<项目路径哈希>.sock`）；Windows 为命名管道 `\\.\pipe\zhin-gateway-<项目路径哈希>-<随机串>`（每次启动重新生成，实际名称记录在 `.zhin/gateway.json`）。
 - 权限：套接字以 `0600` 创建，所在目录必须属于当前用户且不能被其他用户写入；能连上的就是本机所有者（主体 `local`），因此 `zhin` 必须以启动网关的同一用户运行，否则报「属于其他用户」。
-- 协议：每行一个 JSON。请求 `{ id, type, data? }`，`type` 为 `gateway.*` RPC（`gateway.instance.*`、`gateway.packages.*`）或仅本地可用的 `gateway.info` / `gateway.shutdown`；应答 `{ id, ok, data | error }`，依赖事务的进度以 `{ id, event }` 行先行推送。
+- 握手：每次启动网关生成一个握手密钥，只写入 `0600` 的 `.zhin/gateway.json`；CLI 连接后先发 `gateway.hello { nonce }`，网关必须回以该密钥的 HMAC，否则 CLI 拒绝继续（防止连到别人抢先创建的同名端点）。
+- Windows 限制：Node 无法为命名管道设置属主或 DACL，管道沿用系统默认安全描述符。随机管道名与握手校验能防止其他账户抢占管道冒充网关，但前提是其他账户读不到项目目录下的 `.zhin/gateway.json`；多用户 Windows 主机请把项目放在仅当前用户可读的目录（如用户目录）里。
+- Agent：网关把实际端点路径（含上面的 `<tmp>` 回退路径）通过 `ZHIN_GATEWAY_SOCKET` 告诉实例，实例的 Agent 文件工具拒绝访问它，`bash` 中出现网关端点名（`gateway.sock`、`zhin-gateway-<哈希>…`）或该路径的命令一律拒绝。这是按命令文本的拦截：与网关同一系统用户运行、且不受沙箱约束的插件代码仍能连接，套接字本身不区分同一用户下的进程。
+- 协议：每行一个 JSON（上限 1 MiB，按 UTF-8 字节计）。请求 `{ id, type, data? }`，`type` 为 `gateway.*` RPC（`gateway.instance.*`、`gateway.packages.*`）或仅本地可用的 `gateway.info` / `gateway.shutdown` / `gateway.http.request`；应答 `{ id, ok, data | error }`，依赖事务的进度以 `{ id, event }` 行先行推送。
+- `gateway.http.request`：`zhin config` / `schedule` / `send` / `watch` 等在网关运行时经它访问 `{base}/…`，走与 HTTP 相同的路由表（网关自有路由优先，然后是实例）。默认以本机所有者执行；设置了 `ZHIN_CONSOLE_TOKEN`（或 `--token-env`）时，网关按该 API 令牌认证并以令牌的主体执行与审计（`http.token` / `HTTP_TOKEN` 不会经套接字发送）。请求或响应体超过约 1 MiB、或响应是事件流（SSE）时返回「改用 HTTP」的错误；路径不能含 `\\`，`GET` 不能带请求体。
 - 唯一性：同一项目只能有一个网关。已有网关在应答时，第二个网关启动即失败；网关被 `kill -9` 留下的失效套接字会在下次启动时自动清理。
-- 状态文件：`.zhin/gateway.json`（`0600`）记录 `{ pid, ports, origins, socket, startedAt, version, mode, args, logFile }`，网关退出时删除；`.zhin.pid` 记录网关 pid（迁移命令据此判断 Bot 是否在运行）。
+- 状态文件：`.zhin/gateway.json`（`0600`）记录 `{ pid, ports, origins, socket, startedAt, version, mode, args, logFile, handshakeKey }`，网关退出时删除；`.zhin.pid` 记录网关 pid（迁移命令据此判断 Bot 是否在运行）。
 
 ## 原生 TypeScript（strip-types）
 

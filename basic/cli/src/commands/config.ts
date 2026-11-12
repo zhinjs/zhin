@@ -77,8 +77,13 @@ async function connection(options: Options): Promise<Connection> {
       message: `未找到 Host 地址；请用 --host <url> 指定运行中的 Host。${NOT_CONNECTED_MESSAGE}` }, CONFIG_EXIT_CODES.notConnected);
   }
   // ZHIN_CONSOLE_TOKEN / HTTP_TOKEN (or --token-env) wins over the project's http.token.
-  // A running gateway answers over its local socket as the local owner (no token needed).
-  return { host: discovered.baseUrl, token: envToken || discovered.token || undefined, tokenEnvironment, ...(discovered.fetch ? { fetch: discovered.fetch } : {}) };
+  if (!discovered.fetch) return { host: discovered.baseUrl, token: envToken || discovered.token || undefined, tokenEnvironment };
+  // A running gateway answers over its local socket: as the local owner, or — with an explicit
+  // Console API token (ZHIN_CONSOLE_TOKEN / --token-env) — as that token's principal. The
+  // bootstrap HTTP_TOKEN is not a user credential and is not sent.
+  const userToken = (tokenEnvironment === 'ZHIN_CONSOLE_TOKEN' ? process.env.ZHIN_CONSOLE_TOKEN : process.env[tokenEnvironment])?.trim()
+    || discovered.token || undefined;
+  return { host: discovered.baseUrl, token: userToken, tokenEnvironment, fetch: discovered.fetch };
 }
 
 /** Pre-mutation requests: a lost reply means nothing was written, so it is not `unknown`. */

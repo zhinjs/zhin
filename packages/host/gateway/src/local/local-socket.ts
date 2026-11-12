@@ -10,7 +10,10 @@ import { dirname } from 'node:path';
 import type { GatewayPackageEvent } from '@zhin.js/console-protocol';
 import { isNamedPipe } from './paths.js';
 import {
+  handshakeProof,
   LineDecoder,
+  LOCAL_GATEWAY_RPC,
+  MAX_LOCAL_LINE_BYTES,
   type LocalGatewayError,
   type LocalGatewayRequest,
   type LocalGatewayServerLine,
@@ -44,6 +47,13 @@ export interface LocalControlServerOptions extends LocalSocketSecurityOptions {
   /** Requests before {@link LocalControlServer.setHandler} get `unavailable`. */
   readonly handler?: LocalRequestHandler;
   readonly maxConnections?: number;
+  /** Key of the {@link LOCAL_GATEWAY_RPC.HELLO} handshake; without it `gateway.hello` proves nothing. */
+  readonly handshakeKey?: string;
+  /**
+   * Runs once the path is known to be free (no live gateway) and before the bind: the gateway
+   * drops a stale `.zhin/gateway.json`, so no client checks this run against an old handshake key.
+   */
+  readonly beforeListen?: () => Promise<void>;
 }
 
 const DEFAULT_MAX_CONNECTIONS = 32;
@@ -107,21 +117,24 @@ export class LocalControlServer {
   readonly #server: Server;
   readonly #sockets = new Set<Socket>();
   #handler: LocalRequestHandler | undefined;
+  readonly #handshakeKey: string | undefined;
   #inode: number | undefined;
   #closed: Promise<void> | undefined;
 
-  private constructor(path: string, server: Server, handler: LocalRequestHandler | undefined) {
+  private constructor(path: string, server: Server, handler: LocalRequestHandler | undefined, handshakeKey: string | undefined) {
     this.path = path;
     this.#server = server;
     this.#handler = handler;
+    this.#handshakeKey = handshakeKey;
   }
 
   /** Validates the path, removes a stale socket, then listens with mode 0600. */
   static async open(options: LocalControlServerOptions): Promise<LocalControlServer> {
     await prepareLocalSocketPath(options.path, options);
+    await options.beforeListen?.();
     const server = createServer();
     server.maxConnections = options.maxConnections ?? DEFAULT_MAX_CONNECTIONS;
-    const control = new LocalControlServer(options.path, server, options.handler);
+    const control = new LocalControlServer(options.path, server, options.handler, options.handshakeKey);
     server.on('connection', (socket) => { control.#accept(socket); });
     await control.#listen(options);
     return control;
@@ -176,7 +189,14 @@ export class LocalControlServer {
     socket.setEncoding('utf8');
     const decoder = new LineDecoder();
     const write = (line: LocalGatewayServerLine): void => {
-      if (!socket.destroyed && socket.writable) socket.write(`${JSON.stringify(line)}\n`);
+      if (socket.destroyed || !socket.writable) return;
+      let text = JSON.stringify(line);
+      // The peer refuses longer lines (UTF-8 bytes): answer with an error instead of breaking the connection.
+      if (Buffer.byteLength(text) > MAX_LOCAL_LINE_BYTES) {
+        if ('event' in line) return;
+        text = JSON.stringify({ id: line.id, ok: false, error: { code: 'unavailable', message: '回复超过本地套接字上限（1 MiB）；改用 HTTP 请求', status: 502 } });
+      }
+      socket.write(`${text}\n`);
     };
     socket.on('data', (chunk: string) => {
       let lines: string[];
@@ -200,6 +220,15 @@ export class LocalControlServer {
       request = parsed as LocalGatewayRequest;
     } catch {
       write({ id: 0, ok: false, error: { code: 'invalid_input', message: '请求不是有效的 JSON 行', status: 400 } });
+      return;
+    }
+    if (request.type === LOCAL_GATEWAY_RPC.HELLO) {
+      const nonce = (request.data as { nonce?: unknown } | undefined)?.nonce;
+      if (typeof nonce !== 'string' || nonce.length === 0 || nonce.length > 256) {
+        write({ id: request.id, ok: false, error: { code: 'invalid_input', message: 'nonce 必须是非空字符串', status: 400 } });
+        return;
+      }
+      write({ id: request.id, ok: true, data: { proof: this.#handshakeKey ? handshakeProof(this.#handshakeKey, nonce) : null } });
       return;
     }
     const handler = this.#handler;

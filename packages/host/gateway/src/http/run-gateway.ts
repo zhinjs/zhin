@@ -4,17 +4,19 @@
  * from the Console / CLI does not end it. It ends on SIGINT / SIGTERM (both processes stop) or
  * `gateway.shutdown` on the local control socket. Only `--once` (CI) still ends with the instance.
  */
+import { randomBytes } from 'node:crypto';
 import { readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { REMOTE_CONSOLE_ORIGIN, type ResolvedHttpConfig } from '@zhin.js/host-http';
+import { GATEWAY_SOCKET_ENV } from '@zhin.js/host-http/bridge';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { instanceStatus } from '../packages/rpc.js';
 import { createLocalRpcHandler } from '../local/handler.js';
-import { LocalControlServer } from '../local/local-socket.js';
-import { gatewaySocketPath } from '../local/paths.js';
+import { LocalControlServer, LocalSocketError, probeLocalSocket } from '../local/local-socket.js';
+import { gatewayInfoFile, gatewaySocketPath, isNamedPipe } from '../local/paths.js';
 import type { LocalGatewayInfo, LocalGatewayInfoResult } from '../local/protocol.js';
-import { removeGatewayInfo, writeGatewayInfo } from '../local/state-file.js';
+import { readGatewayInfo, removeGatewayInfo, writeGatewayInfo } from '../local/state-file.js';
 import { isNodeVersionSupported, NODE_ENGINES_HINT } from '../project/node-requirements.js';
 import { InstanceSupervisor, type InstanceRestartPolicy, type InstanceStatus } from '../supervisor/instance-supervisor.js';
 import { defaultInstanceLogFile, supervisedNodeArguments, type RunSupervisedInstanceOptions } from '../supervisor/run-instance.js';
@@ -67,6 +69,20 @@ export function foregroundStdin(daemon: boolean, stdin: { readonly isTTY?: boole
   return !daemon && stdin.isTTY === true;
 }
 
+/**
+ * The local control endpoint of this run. Windows named pipes get a fresh random name component
+ * (Node cannot set a DACL on them; see `windowsPipeName`), so a second gateway on the project is
+ * detected through the pipe the state file records instead of a name clash.
+ */
+async function localEndpoint(root: string, platform: NodeJS.Platform = process.platform): Promise<string> {
+  if (platform !== 'win32') return gatewaySocketPath(root, { platform });
+  const recorded = await readGatewayInfo(root);
+  if (recorded && isNamedPipe(recorded.socket) && await probeLocalSocket(recorded.socket).catch(() => 'live' as const) === 'live') {
+    throw new LocalSocketError('in_use', `另一个网关正在使用 ${recorded.socket}`);
+  }
+  return gatewaySocketPath(root, { platform, nonce: randomBytes(8).toString('hex') });
+}
+
 /** Strips the `zhin runtime start` / `zhin start` prefix of the instance arguments. */
 function startArguments(args: readonly string[]): readonly string[] {
   if (args[0] === 'runtime' && args[1] === 'start') return args.slice(2);
@@ -90,6 +106,9 @@ export async function runGateway(input: RunGatewayOptions): Promise<number> {
   const logFile = options.logFile ?? defaultInstanceLogFile(root);
   await mkdir(dirname(logFile), { recursive: true });
   const settings = await loadGatewaySettings(root);
+  const socketPath = input.localSocket === false ? undefined : input.localSocket?.path ?? await localEndpoint(root);
+  // Keyed proof the CLI checks before it talks to the endpoint (only in the 0600 state file).
+  const handshakeKey = randomBytes(32).toString('hex');
 
   const supervisor = new InstanceSupervisor({
     ...(settings.readyTimeoutMs !== undefined ? { readyTimeoutMs: settings.readyTimeoutMs } : {}),
@@ -99,6 +118,8 @@ export async function runGateway(input: RunGatewayOptions): Promise<number> {
       cwd: root,
       env: {
         ...process.env,
+        // The instance keeps the Agent's file / shell tools away from the owner endpoint.
+        ...(socketPath ? { [GATEWAY_SOCKET_ENV]: socketPath } : {}),
         ...(interactive ? { [INSTANCE_INTERACTIVE_ENV]: '1', FORCE_COLOR: process.env.FORCE_COLOR ?? '1' } : {}),
       },
     },
@@ -124,10 +145,12 @@ export async function runGateway(input: RunGatewayOptions): Promise<number> {
     logger.info(formatCompact({ op: 'instance_restart_request', reason: request.reason }));
   });
 
-  const socketPath = input.localSocket === false ? undefined : input.localSocket?.path ?? gatewaySocketPath(root);
   const control = socketPath
     ? await LocalControlServer.open({
       path: socketPath,
+      handshakeKey,
+      // No other gateway serves the project: a state file left by a dead one is stale.
+      beforeListen: () => rm(gatewayInfoFile(root), { force: true }),
       ...(input.localSocket && input.localSocket.uid ? { uid: input.localSocket.uid } : {}),
     }).catch((error: unknown) => { supervisor.dispose(); throw error; })
     : undefined;
@@ -187,7 +210,7 @@ export async function runGateway(input: RunGatewayOptions): Promise<number> {
   const pidFile = join(root, '.zhin.pid');
   try { writeFileSync(pidFile, String(process.pid)); } catch { /* informational */ }
   if (socketPath) {
-    await writeGatewayInfo(root, info).catch((error: unknown) => {
+    await writeGatewayInfo(root, { ...info, handshakeKey }).catch((error: unknown) => {
       logger.warn(formatCompact({ op: 'gateway_info_write_failed', error: error instanceof Error ? error.message : String(error) }));
     });
   }

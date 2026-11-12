@@ -50,6 +50,14 @@ export function isBridgeProtocolCompatible(version: number): boolean {
  */
 export const INSTANCE_CHILD_ENV = 'ZHIN_RUNTIME_CHILD';
 
+/**
+ * Set by the gateway on the instance child process: the gateway's local control endpoint (socket
+ * path — including the `os.tmpdir()` fallback for deep project roots — or named pipe). Whoever
+ * connects to it is the local owner (ADR 0054 §6), so the instance keeps the Agent's file and
+ * shell tools away from it. Absent when the gateway runs without a local socket.
+ */
+export const GATEWAY_SOCKET_ENV = 'ZHIN_GATEWAY_SOCKET';
+
 export class BridgeProtocolMismatchError extends Error {
   readonly code = 'ZHIN_BRIDGE_PROTOCOL_MISMATCH';
   constructor(readonly peerVersion: number, readonly side: 'gateway' | 'instance') {

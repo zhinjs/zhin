@@ -103,6 +103,12 @@ export class GatewayHttpServer {
   readonly tokenRegistry: TokenRegistry;
   readonly apiBase: string;
   readonly #router: HttpRouter;
+  /**
+   * The same surface for `gateway.http.request` without a credential: a `forwarded` router that
+   * takes {@link LOCAL_OWNER_PRINCIPAL} as authenticated and still authorizes every route against
+   * the Console permission map, like the HTTP router does.
+   */
+  readonly #localRouter: HttpRouter;
   readonly #listeners: readonly NodeHttpListener[];
   readonly #instance: GatewayInstanceSource;
   readonly #retryAfter: string;
@@ -121,7 +127,7 @@ export class GatewayHttpServer {
     this.#consoleRpc = options.consoleRpc;
     this.tokenRegistry = options.tokenRegistry ?? new TokenRegistry({ primaryToken: primary.token });
     this.apiBase = normalizePath(primary.apiBase ?? '/api');
-    this.#router = createHttpRouter({
+    const routerOptions = {
       corsOrigins: primary.corsOrigins,
       apiBase: this.apiBase,
       authExemptPaths: primary.authExemptPaths,
@@ -129,14 +135,18 @@ export class GatewayHttpServer {
       secure: primary.tls !== undefined,
       address: () => this.address,
       builtinRoutes: false,
-    });
-    this.#router.route('GET', '/pub/health', () => this.#health(), { summary: 'Gateway health probe', tags: ['pub'] });
-    this.#router.route('POST', `${this.apiBase}/console/request`, (request, context) => this.#consoleRequest(request, context), {
-      summary: 'Console RPC (gateway-owned types answered by the gateway, the rest forwarded)',
-      tags: ['console'],
-    });
-    // Lowest precedence: every path no gateway route claims goes to the instance.
-    this.#router.route('ALL', '/*', (request, context) => this.#forward(request, context));
+    } as const;
+    this.#router = createHttpRouter(routerOptions);
+    this.#localRouter = createHttpRouter({ ...routerOptions, authentication: 'forwarded' });
+    for (const router of [this.#router, this.#localRouter]) {
+      router.route('GET', '/pub/health', () => this.#health(), { summary: 'Gateway health probe', tags: ['pub'] });
+      router.route('POST', `${this.apiBase}/console/request`, (request, context) => this.#consoleRequest(request, context), {
+        summary: 'Console RPC (gateway-owned types answered by the gateway, the rest forwarded)',
+        tags: ['console'],
+      });
+      // Lowest precedence: every path no gateway route claims goes to the instance.
+      router.route('ALL', '/*', (request, context) => this.#forward(request, context));
+    }
     this.#listeners = listenerOptions.map((entry) => createNodeHttpListener({
       host: entry.host,
       port: entry.port,
@@ -152,7 +162,9 @@ export class GatewayHttpServer {
 
   /** Registers a gateway-owned route; it takes precedence over the instance's routes. */
   route(method: string, path: string, handler: HttpHandler, meta?: RouteMeta): HttpRouteRegistration {
-    return this.#router.route(method, path, withDatabaseBusy(handler), meta);
+    const wrapped = withDatabaseBusy(handler);
+    const unregister = [this.#router.route(method, path, wrapped, meta), this.#localRouter.route(method, path, wrapped, meta)];
+    return () => { for (const release of unregister) release(); };
   }
 
   /** Registers a gateway-owned WebSocket route. */
@@ -212,6 +224,7 @@ export class GatewayHttpServer {
     this.#closeResult ??= (async () => {
       this.#closed = true;
       this.#router.close();
+      this.#localRouter.close();
       const results = await Promise.allSettled([...this.#listeners].reverse().map((listener) => listener.close()));
       const errors = results.flatMap((result) => result.status === 'rejected' ? [result.reason] : []);
       if (errors.length === 1) throw errors[0];
@@ -344,25 +357,37 @@ export class GatewayHttpServer {
   }
 
   /**
-   * A `{base}/…` request from the local control socket (`gateway.http.request`, ADR 0054 §6):
-   * the socket's owner check is the authentication, so it runs as {@link LOCAL_OWNER_PRINCIPAL}.
-   * `POST {base}/console/request` keeps its split between gateway-owned and instance RPC; every
-   * other path is forwarded to the instance. Paths outside `{base}` are refused.
+   * A `{base}/…` request from the local control socket (`gateway.http.request`, ADR 0054 §6).
+   * Without `token` the socket's owner check is the authentication: the request runs as
+   * {@link LOCAL_OWNER_PRINCIPAL}. With `token` (an explicit `ZHIN_CONSOLE_TOKEN`) it is
+   * authenticated like an HTTP request with that Bearer credential and runs — and is audited — as
+   * its principal. Either way the request takes the HTTP route table: gateway-owned routes (e.g.
+   * `{base}/auth/me`), the `POST {base}/console/request` split, then the instance. Event streams
+   * cannot be carried in one socket reply; the socket handler refuses them. Only the path and query
+   * of `path` are used; paths outside `{base}` are refused.
    */
-  async localRequest(input: { readonly method: string; readonly path: string; readonly body?: string }): Promise<Response> {
-    const url = new URL(input.path, 'http://gateway.local');
-    const pathname = normalizePath(url.pathname);
-    if (pathname !== this.apiBase && !pathname.startsWith(`${this.apiBase}/`)) {
-      return jsonResponse(404, { success: false, code: 'not_found', error: `Only ${this.apiBase}/… is reachable over the local socket` });
+  async localRequest(input: { readonly method: string; readonly path: string; readonly body?: string; readonly token?: string }): Promise<Response> {
+    const method = input.method.toUpperCase();
+    // `\` is a path separator to the URL parser: `/\evil.com/x` would name another host.
+    if (!input.path.startsWith('/') || input.path.startsWith('//') || input.path.includes('\\')) {
+      return jsonResponse(400, { success: false, code: 'invalid_input', error: 'path must be an absolute path without a host' });
     }
-    const request = new Request(url, {
-      method: input.method,
-      headers: input.body === undefined ? {} : { 'content-type': 'application/json' },
-      ...(input.body === undefined ? {} : { body: input.body }),
-    });
-    const context = { url, params: {}, principal: LOCAL_OWNER_PRINCIPAL } as RouteContext;
-    if (input.method === 'POST' && pathname === `${this.apiBase}/console/request`) return this.#consoleRequest(request, context);
-    return this.#forward(request, context);
+    if (input.body !== undefined && (method === 'GET' || method === 'HEAD')) {
+      return jsonResponse(400, { success: false, code: 'invalid_input', error: `${method} requests cannot have a body` });
+    }
+    const parsed = new URL(input.path, LOCAL_REQUEST_ORIGIN);
+    const url = new URL(`${parsed.pathname}${parsed.search}`, LOCAL_REQUEST_ORIGIN);
+    const pathname = normalizePath(url.pathname);
+    if (!isUnderBase(pathname, this.apiBase)) {
+      return jsonResponse(404, { success: false, code: 'not_found', error: `Only ${this.apiBase === '/' ? '/' : `${this.apiBase}/`}… is reachable over the local socket` });
+    }
+    const headers = new Headers();
+    if (input.body !== undefined) headers.set('content-type', 'application/json');
+    if (input.token !== undefined) headers.set('authorization', `Bearer ${input.token}`);
+    const request = new Request(url, { method, headers, ...(input.body === undefined ? {} : { body: input.body }) });
+    return input.token !== undefined
+      ? this.#router.handle(request)
+      : this.#localRouter.handle(request, { principal: LOCAL_OWNER_PRINCIPAL });
   }
 
   async #upgrade(request: WsUpgradeRequest): Promise<WsUpgradeDecision> {
@@ -424,6 +449,15 @@ export class GatewayHttpServer {
 }
 
 /** A gateway route whose database stayed locked past the retry budget answers 503 `database_busy`. */
+/** Origin of the URLs `localRequest` builds (never contacted). */
+const LOCAL_REQUEST_ORIGIN = 'http://gateway.local';
+
+/** `pathname` is `base` or below it (`base` may be `/`). */
+function isUnderBase(pathname: string, base: string): boolean {
+  if (base === '/') return pathname.startsWith('/');
+  return pathname === base || pathname.startsWith(`${base}/`);
+}
+
 function withDatabaseBusy(handler: HttpHandler): HttpHandler {
   return async (request, context) => {
     try {

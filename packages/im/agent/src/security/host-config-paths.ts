@@ -27,7 +27,7 @@ import { realpath } from 'node:fs/promises';
 import * as path from 'node:path';
 import { ROOT_CONFIG_FILE_NAMES, createToken } from '@zhin.js/plugin-runtime';
 import type { ToolProtectedPathData } from '@zhin.js/tool';
-import { checkFileAccess } from './file-policy.js';
+import { checkFileAccess, commandNamesGatewayEndpoint } from './file-policy.js';
 import { classifyBashFileOperation } from './file-role-policy.js';
 
 export type HostPathClass = 'deny' | 'self';
@@ -66,6 +66,12 @@ export interface HostProtectedPathsInput {
   readonly selfDirs?: readonly string[];
   /** Extra list-A files, absolute (e.g. the file `ZHIN_PLUGIN_LIFECYCLE_FILE` points at). */
   readonly denyFiles?: readonly string[];
+  /**
+   * The management gateway's actual local control endpoints (socket path, including the
+   * `os.tmpdir()` fallback, or named pipe; ADR 0054 §6). Whoever connects to one acts as the
+   * local owner: file tools may not touch them (list A) and a shell command naming one is denied.
+   */
+  readonly controlEndpoints?: readonly string[];
 }
 
 /** Resolved, case-folded, canonical form of {@link HostProtectedPathsInput}. */
@@ -80,6 +86,8 @@ export interface HostProtectedPaths {
   readonly selfDirs: readonly string[];
   /** Absolute list-A files. */
   readonly denyFiles: ReadonlySet<string>;
+  /** Gateway control endpoints, as injected (see {@link HostProtectedPathsInput.controlEndpoints}). */
+  readonly controlEndpoints?: readonly string[];
 }
 
 function fold(value: string): string {
@@ -148,7 +156,8 @@ export async function createHostProtectedPaths(input: HostProtectedPathsInput): 
     return stripTrailingSlash(fold(path.normalize(entry))).replace(/^\.\//u, '');
   };
   const deny = new Set<string>();
-  for (const file of input.denyFiles ?? []) {
+  const endpoints = (input.controlEndpoints ?? []).filter((entry) => entry.trim());
+  for (const file of [...(input.denyFiles ?? []), ...endpoints.filter((entry) => path.isAbsolute(entry))]) {
     deny.add(stripTrailingSlash(fold(path.resolve(file))));
     deny.add(stripTrailingSlash(fold(await canonicalize(file))));
   }
@@ -158,6 +167,7 @@ export async function createHostProtectedPaths(input: HostProtectedPathsInput): 
     selfFiles: new Set([...DEFAULT_SELF_FILES, ...(input.selfFiles ?? [])].map(relativeToRoot)),
     selfDirs: Object.freeze([...DEFAULT_SELF_DIRS, ...(input.selfDirs ?? [])].map(relativeToRoot)),
     denyFiles: deny,
+    ...(endpoints.length ? { controlEndpoints: Object.freeze([...endpoints]) } : {}),
   });
 }
 
@@ -320,6 +330,9 @@ export function hostWriteImpact(
   if (localName !== 'bash') return undefined;
   const command = stringArg(input, 'command');
   if (!command) return undefined;
+  // Connecting to the gateway's control endpoint is acting as the local Console owner (ADR 0054 §6).
+  const endpoint = commandNamesGatewayEndpoint(command, paths?.controlEndpoints ?? []);
+  if (endpoint) return { level: 'deny', target: endpoint };
   const cwd = stringArg(input, 'cwd');
   const base = cwd && path.isAbsolute(cwd) ? cwd : undefined;
   const named: string[] = [];

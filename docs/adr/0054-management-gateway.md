@@ -146,7 +146,7 @@ interface HttpHost {
 
 生产模板（systemd / Docker / PM2 服务文件）与脚手架的 `pnpm start` 使用 `zhin start --foreground`：进程管理器需要一个不退出的前台进程；后台模式面向在终端里直接操作的用户。`--standalone`（实例在本进程内自带 HTTP 服务器、无网关）只用于测试与开发。
 
-本地控制套接字：`.zhin/gateway.sock`（Windows：`\\.\pipe\zhin-gateway-<项目路径哈希>`），文件权限仅限当前用户，连接者视为本机 `owner`。
+本地控制套接字：`.zhin/gateway.sock`（Windows：`\\.\pipe\zhin-gateway-<项目路径哈希>-<每次启动的随机串>`），文件权限仅限当前用户，连接者视为本机 `owner`。Node 不能给命名管道设 DACL：随机管道名与 `.zhin/gateway.json`（`0600`）里的握手密钥（`gateway.hello`，CLI 校验 HMAC）防止端点被抢占冒充。网关把实际端点（含 `os.tmpdir()` 回退路径）以 `ZHIN_GATEWAY_SOCKET` 传给实例，实例的 Agent 文件 / `bash` 工具拒绝触及它（按命令文本拦截，不约束同一系统用户下不受沙箱约束的插件代码）。`gateway.http.request` 走与 HTTP 相同的路由表；带显式 `ZHIN_CONSOLE_TOKEN` 时按该令牌认证并以其主体执行与审计。
 
 ### 7. 数据
 
