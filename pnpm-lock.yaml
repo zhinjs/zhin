@@ -3872,6 +3872,9 @@ importers:
         specifier: workspace:^
         version: link:../../../packages/im/middleware
     devDependencies:
+      '@zhin.js/testing':
+        specifier: workspace:*
+        version: link:../../../packages/toolkit/testing
       typescript:
         specifier: ^6.0.3
         version: 6.0.3

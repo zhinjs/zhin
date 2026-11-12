@@ -1755,6 +1755,8 @@ outline: [2, 3]
 
 [`plugins/features/process-monitor/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/features/process-monitor/schema.json)
 
+> 分层配置（ADR 0050 / 0055） — 层级: `global`、`adapter`、`endpoint`、`conversation`；字段仅全局；会话层字段: 仅开关
+
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
 | `process-monitor.enabled` | boolean | 否 | `true` | 是否启用进程监控 |
@@ -1805,6 +1807,8 @@ _该 Schema 没有声明字段。_
 
 [`plugins/games/roulette/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/games/roulette/schema.json)
 
+> 分层配置（ADR 0050 / 0055） — 层级: `global`、`adapter`、`endpoint`、`conversation`；字段仅全局；会话层字段: 仅开关
+
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
 | `roulette.chambers` | integer | 否 | `6` | 弹巢数量，其中一发是实弹 |
@@ -1840,6 +1844,8 @@ _该 Schema 没有声明字段。_
 ### activity-feedback
 
 [`plugins/services/activity-feedback/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/services/activity-feedback/schema.json)
+
+> 分层配置（ADR 0050 / 0055） — 层级: `global`、`adapter`、`endpoint`、`conversation`；字段仅全局；会话层字段: 仅开关
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
@@ -2328,6 +2334,8 @@ _该 Schema 没有声明字段。_
 
 [`plugins/utils/60s/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/60s/schema.json)
 
+> 分层配置（ADR 0050 / 0055） — 层级: `global`、`adapter`、`endpoint`、`conversation`；字段仅全局；会话层字段: 仅开关
+
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
 | `60s.apiBase` | string | 否 | `"https://60s.viki.moe"` | 60s API base URL |
@@ -2335,6 +2343,8 @@ _该 Schema 没有声明字段。_
 ### answers
 
 [`plugins/utils/answers/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/answers/schema.json)
+
+> 分层配置（ADR 0050 / 0055） — 层级: `global`、`adapter`、`endpoint`、`conversation`；全部字段可在适配器 / 账号层覆盖；会话层字段: `dailyStable`、`quizTimeoutSeconds`、`enableDrivingQuiz`；群内自助: `quizTimeoutSeconds`、`enableDrivingQuiz`
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
@@ -2346,6 +2356,8 @@ _该 Schema 没有声明字段。_
 ### bilibili
 
 [`plugins/utils/bilibili/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/bilibili/schema.json)
+
+> 分层配置（ADR 0050 / 0055） — 层级: `global`、`adapter`、`endpoint`、`conversation`；字段仅全局；会话层字段: 仅开关
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
@@ -2362,6 +2374,8 @@ _该 Schema 没有声明字段。_
 ### calendar
 
 [`plugins/utils/calendar/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/calendar/schema.json)
+
+> 分层配置（ADR 0050 / 0055） — 层级: `global`、`adapter`、`endpoint`、`conversation`；字段仅全局；会话层字段: 仅开关
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
@@ -2401,6 +2415,8 @@ _该 Schema 没有声明字段。_
 ### content-moderation
 
 [`plugins/utils/content-moderation/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/content-moderation/schema.json)
+
+> 分层配置（ADR 0050 / 0055） — 层级: `global`、`adapter`、`endpoint`、`conversation`；字段仅全局；会话层字段: 仅开关
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
@@ -2448,6 +2464,8 @@ _该 Schema 没有声明字段。_
 
 [`plugins/utils/earthquake/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/earthquake/schema.json)
 
+> 分层配置（ADR 0050 / 0055） — 层级: `global`、`adapter`、`endpoint`、`conversation`；字段仅全局；会话层字段: 仅开关
+
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
 | `earthquake.sources` | array&lt;string: `"cenc"`, `"usgs"`&gt; | 否 | `["cenc","usgs"]` | 启用的数据源及优先顺序；合并同一地震时排在前面的数据源提供地点文字，某个数据源失败时由其余数据源兜底 |
@@ -2471,6 +2489,8 @@ _该 Schema 没有声明字段。_
 ### group-suite
 
 [`plugins/utils/group-suite/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/group-suite/schema.json)
+
+> 分层配置（ADR 0050 / 0055） — 层级: `global`、`adapter`、`endpoint`、`conversation`；仅全局（其余字段可在适配器 / 账号层覆盖）: `keywordReply`、`teachAllowRegex`、`welcomeConversations`、`ephemeralKeywords`；会话层字段: `welcomeMessage`、`basePointsMin`、`basePointsMax`、`streakBonus`、`streakCap`、`rankSize`、`teachMaxPerGroup`、`teachCooldownMs`、`teachPageSize`；群内自助: `welcomeMessage`、`rankSize`、`teachCooldownMs`、`teachPageSize`
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
@@ -2501,6 +2521,8 @@ _该 Schema 没有声明字段。_
 
 [`plugins/utils/ledger/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/ledger/schema.json)
 
+> 分层配置（ADR 0050 / 0055） — 层级: `global`、`adapter`、`endpoint`、`conversation`；仅全局（其余字段可在适配器 / 账号层覆盖）: `timezone`、`reportTime`；会话层字段: `reportWhenEmpty`
+
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
 | `ledger.timezone` | string | 否 | `"Asia/Shanghai"` | 计算今日、本周（周一开始）、本月与日报日期所用的 IANA 时区 |
@@ -2516,6 +2538,8 @@ _该 Schema 没有声明字段。_
 ### lottery
 
 [`plugins/utils/lottery/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/lottery/schema.json)
+
+> 分层配置（ADR 0050 / 0055） — 层级: `global`、`adapter`、`endpoint`、`conversation`；字段仅全局；会话层字段: 仅开关
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
@@ -2551,6 +2575,8 @@ _该 Schema 没有声明字段。_
 
 [`plugins/utils/nettools/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/nettools/schema.json)
 
+> 分层配置（ADR 0050 / 0055） — 层级: `global`、`adapter`、`endpoint`、`conversation`；字段仅全局；会话层字段: 仅开关
+
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
 | `nettools.cooldownSeconds` | integer | 否 | `10` | Per-user cooldown in seconds, shared by all nettools commands and tools (0 disables) |
@@ -2572,6 +2598,8 @@ _该 Schema 没有声明字段。_
 
 [`plugins/utils/reminder/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/reminder/schema.json)
 
+> 分层配置（ADR 0050 / 0055） — 层级: `global`、`adapter`、`endpoint`、`conversation`；字段仅全局；会话层字段: 仅开关
+
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
 | `reminder.timezone` | string | 否 | `"UTC"` | 解释 create 自然时间并显示提醒的 IANA 时区；ISO 绝对时间仍须显式 offset |
@@ -2585,6 +2613,8 @@ _该 Schema 没有声明字段。_
 
 [`plugins/utils/repeater/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/repeater/schema.json)
 
+> 分层配置（ADR 0050 / 0055） — 层级: `global`、`adapter`、`endpoint`、`conversation`；全部字段可在适配器 / 账号层覆盖；会话层字段: `threshold`、`cooldown`；群内自助: `threshold`
+
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
 | `repeater.threshold` | number | 否 | `3` | 触发复读的最少人数 |
@@ -2594,6 +2624,8 @@ _该 Schema 没有声明字段。_
 ### rss
 
 [`plugins/utils/rss/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/rss/schema.json)
+
+> 分层配置（ADR 0050 / 0055） — 层级: `global`、`adapter`、`endpoint`、`conversation`；字段仅全局；会话层字段: 仅开关
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |

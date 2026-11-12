@@ -50,11 +50,14 @@ export class AdministratorReminderTasks implements PluginTaskProvider {
   private readonly outbound: OutboundHost;
   private readonly config: ReminderConfig;
   private readonly projectLocale: Locale;
-  constructor(state: PluginStateStore, outbound: OutboundHost, config: ReminderConfig, projectLocale: Locale = 'zh-CN') {
+  private readonly enabledFor: (target: DeliveryTarget) => boolean;
+  constructor(state: PluginStateStore, outbound: OutboundHost, config: ReminderConfig, projectLocale: Locale = 'zh-CN',
+    enabledFor: (target: DeliveryTarget) => boolean = () => true) {
     this.state = state;
     this.outbound = outbound;
     this.config = config;
     this.projectLocale = projectLocale;
+    this.enabledFor = enabledFor;
   }
   stop(): void { this.#stopped = true; }
 
@@ -154,7 +157,10 @@ export class AdministratorReminderTasks implements PluginTaskProvider {
   async deliver(task: AdminTask): Promise<void> {
     if (this.#stopped) return;
     let state: AdminTask['state'] = 'unknown'; let detail = taskDetail('unknown');
-    try {
+    if (!this.enabledFor(task.target)) {
+      // ADR 0050 / 0055: switched off for the target account / conversation, so nothing is sent.
+      state = task.intervalMs === null ? 'failed' : 'scheduled'; detail = taskDetail('featureDisabled');
+    } else try {
       const id = await this.outbound.sendTarget!(task.target, t(resolveLocale(task.locale), 'notification', { text: task.text }), { locale: resolveLocale(task.locale) });
       if (id) { state = task.intervalMs === null ? 'succeeded' : 'scheduled'; detail = taskDetail('delivered'); }
     } catch (error) {

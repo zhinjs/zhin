@@ -1,14 +1,14 @@
 import { defineHandler } from 'zhin.js/handler';
 import { hasResource } from 'zhin.js';
 import { memberWelcomeOwnerToken, outboundMessageToken } from '@zhin.js/core/runtime';
-import { resolveGroupSuiteConfig, type GroupSuiteConfig } from '../../src/config.js';
+import { groupSuiteConfigFor } from '../../src/config.js';
 import { welcomeConversationAllowed } from '../../src/welcome-scope.js';
 
 /** Canonical notice input only; no SDK-specific callbacks or direct platform sends. */
 export default defineHandler({
   event: 'notice.receive',
   async handle({ payload: notice }) {
-    const config = resolveGroupSuiteConfig(this.config as Partial<GroupSuiteConfig>);
+    const config = groupSuiteConfigFor(this as Parameters<typeof groupSuiteConfigFor>[0], notice);
     const text = config.welcomeMessage;
     if (!text || notice.name !== 'notice.group.member_increase'
       || notice.conversation?.kind !== 'group' || !notice.target?.id) return;

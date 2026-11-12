@@ -11,6 +11,21 @@ import type { Locale } from 'zhin.js/i18n';
 import { conversationRefKey } from 'zhin.js';
 
 type Logger = { debug: (msg: string, ...args: unknown[]) => void; error: (msg: string, ...args: unknown[]) => void };
+type EventContext = NonNullable<ReturnType<typeof toActivityFeedbackEventContext>>;
+
+/**
+ * Whether activity feedback is on for one event's conversation (ADR 0050 / 0055). Agent events are
+ * not messages, so the dispatch gate does not see them; the orchestrator asks before starting a phase.
+ */
+export type ActivityFeedbackConversationGate = (target: Readonly<{
+  conversation: Readonly<{ endpoint: Readonly<{ id: string }>; kind: string; id: string }>;
+}>) => boolean;
+
+/** The event's conversation in the `isEnabledFor` target shape; undefined when it has no id. */
+export function activityFeedbackGateTarget(ctx: EventContext): Parameters<ActivityFeedbackConversationGate>[0] | undefined {
+  const id = ctx.sceneType === 'private' ? ctx.userId : ctx.groupId;
+  return id ? { conversation: { endpoint: { id: ctx.endpointKey }, kind: ctx.sceneType, id } } : undefined;
+}
 
 export class ActivityFeedbackOrchestrator {
   private readonly active = new Map<string, {
@@ -29,6 +44,7 @@ export class ActivityFeedbackOrchestrator {
     private readonly executor: ActivityFeedbackExecution,
     private readonly log: Logger,
     private readonly defaultLocale: Locale = 'zh-CN',
+    private readonly enabledFor: ActivityFeedbackConversationGate = () => true,
   ) {}
 
   async startPhase(payload: AIEventPayload, phase: ActivityFeedbackPhase, reason: string): Promise<void> {
@@ -46,6 +62,11 @@ export class ActivityFeedbackOrchestrator {
         `[ActivityFeedback] skip ${phase} (${reason}): unresolvable context`
         + ` (platform=${String(payload.platform)} endpoint=${String(payload.endpointKey)})`,
       );
+      return;
+    }
+    const target = activityFeedbackGateTarget(ctx);
+    if (target && !this.enabledFor(target)) {
+      this.log.debug(`[ActivityFeedback] skip ${phase} (${reason}): switched off for this conversation`);
       return;
     }
 

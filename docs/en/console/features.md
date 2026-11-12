@@ -68,7 +68,7 @@ effectively enabled = not in disable_plugins
 
 Every field shows its source badge: "inherited from global", "inherited from adapter", "overridden here". Editing an inherited field creates an override; an overridden field has "Remove override" to return to inheritance.
 
-- A plugin that does not declare the adapter / account levels (omitting `x-zhin-config.levels` at the schema root means global only) does not appear on adapter and account pages.
+- A plugin that does not declare the adapter / account levels (omitting `x-zhin-config.levels` at the schema root means global only) does not appear on adapter and account pages. Every official plugin (adapters aside) declares all four levels, so its switch is available on every page; fields that only make sense globally narrow themselves with `levels: ["global"]` (enforced by `tests/contracts/plugin-feature-levels.test.ts`).
 - At the conversation level only the fields listed in the plugin's `x-zhin-config.conversationFields` can be changed; without them the conversation level is a switch only.
 - Global-only fields (database connections, API keys) are shown read-only on lower-level forms.
 - Plugins without a configuration schema get only the three-level on / off switch, no field overrides.

@@ -1,4 +1,4 @@
-import type { DeliveryTarget } from 'zhin.js';
+import { definePluginStore, type DeliveryTarget } from 'zhin.js';
 import { normalizeWelcomeConversations } from './welcome-scope.js';
 
 export interface GroupSuiteConfig {
@@ -45,4 +45,24 @@ export function resolveGroupSuiteConfig(
       welcomeConversations: normalizeWelcomeConversations(raw.welcomeConversations),
     }),
   };
+}
+
+/** Effective configuration per message / notice (ADR 0050 / 0055): global < adapter < endpoint < conversation. */
+export interface GroupSuiteConfigResolver {
+  configFor(target: unknown): Readonly<Partial<GroupSuiteConfig>>;
+}
+export const groupSuiteConfigStore = definePluginStore<GroupSuiteConfigResolver>(
+  'zhin.group-suite.config', 'Layered group-suite configuration for one conversation');
+
+/**
+ * Settings for one capability call: the conversation's effective config when the resolver is
+ * provided (Plugin setup), else the global view. `target` is the message or notice being handled.
+ */
+export function groupSuiteConfigFor(context: {
+  readonly config?: Partial<GroupSuiteConfig>;
+  readonly has?: (token: typeof groupSuiteConfigStore) => boolean;
+  readonly use: (token: typeof groupSuiteConfigStore) => GroupSuiteConfigResolver;
+}, target: unknown): GroupSuiteConfig {
+  const resolver = target !== undefined && context.has?.(groupSuiteConfigStore) ? context.use(groupSuiteConfigStore) : undefined;
+  return resolveGroupSuiteConfig({ ...(context.config ?? {}), ...(resolver?.configFor(target) ?? {}) });
 }

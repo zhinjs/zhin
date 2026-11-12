@@ -24,6 +24,10 @@ plugins:
 
 每个插件实例拥有独立的 API Client。配置更新由当前 generation 的 Client 即时读取，多个实例不会共享或覆盖运行时地址。
 
+## 分层配置（ADR 0050 / 0055）
+
+`apiBase` 只能在全局层修改；启停开关支持适配器、账号与会话四级，可在 Console「功能」区或群内 `功能 关闭 60s`（需开启 `features.selfService.enabled` 且有 `admin` 角色）按群关闭。插件没有主动推送。
+
 ## 功能列表
 
 | 命令 | 别名 | 说明 |

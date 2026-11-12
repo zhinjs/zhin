@@ -1,13 +1,27 @@
 {
   "type": "object",
   "additionalProperties": false,
+  "x-zhin-config": {
+    "levels": [
+      "global",
+      "adapter",
+      "endpoint",
+      "conversation"
+    ],
+    "conversationFields": [
+      "reportWhenEmpty"
+    ]
+  },
   "properties": {
     "timezone": {
       "type": "string",
       "description": "计算今日、本周（周一开始）、本月与日报日期所用的 IANA 时区",
       "default": "Asia/Shanghai",
       "x-zhin-config": {
-        "effect": "reload"
+        "effect": "reload",
+        "levels": [
+          "global"
+        ]
       },
       "x-i18n": {
         "en": {
@@ -21,7 +35,10 @@
       "default": "22:00",
       "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$",
       "x-zhin-config": {
-        "effect": "reload"
+        "effect": "reload",
+        "levels": [
+          "global"
+        ]
       },
       "x-i18n": {
         "en": {

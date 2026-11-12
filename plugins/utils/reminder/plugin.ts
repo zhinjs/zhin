@@ -60,7 +60,8 @@ export default definePlugin<ReminderConfig>({
     } catch {
       locale = undefined;
     }
-    const service = new ReminderService(taskState, outbound, config, locale);
+    // ADR 0050 / 0055: deliveries are not messages, so check the switch of each target conversation.
+    const service = new ReminderService(taskState, outbound, config, locale, target => context.isEnabledFor({ conversation: target }));
     reminderServiceToken.provide(context, service);
     return {
       consoleRpc: createReminderConsoleRpc(service),

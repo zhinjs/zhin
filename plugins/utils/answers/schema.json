@@ -57,5 +57,22 @@
         "effect": "reload"
       }
     }
+  },
+  "x-zhin-config": {
+    "levels": [
+      "global",
+      "adapter",
+      "endpoint",
+      "conversation"
+    ],
+    "conversationFields": [
+      "dailyStable",
+      "quizTimeoutSeconds",
+      "enableDrivingQuiz"
+    ],
+    "selfServiceFields": [
+      "quizTimeoutSeconds",
+      "enableDrivingQuiz"
+    ]
   }
 }

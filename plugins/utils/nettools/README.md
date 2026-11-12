@@ -53,6 +53,12 @@ nettools:
   pingMaxNodes: 6
 ```
 
+## 分层配置（ADR 0050 / 0055）
+
+冷却、超时、重试等都是服务级设置，只能在全局层修改；启停开关支持适配器、账号与会话四级。在 Console「功能」区可以按适配器、账号或会话（群 / 私聊）单独停用；开启 `features.selfService.enabled` 后，群里有 `admin` 角色（默认含群主 / 管理员）的人也可以用 `功能 关闭 nettools` 关闭本群。上级停用后下级锁定，不能再开启。
+
+Layered configuration: all fields are global-only; the enable switch works per adapter, account and conversation.
+
 ## Security: target policy (SSRF guard)
 
 User input is canonicalised with the WHATWG URL host parser (the parser `fetch` uses), so odd spellings such as `2130706433`, `0x7f.1`, `017700000001`, `127.1` or `[::ffff:127.0.0.1]` are checked in their real form. URLs, ports, paths, user-info, zone ids and percent-encoding are refused outright.

@@ -2,6 +2,14 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
+  "x-zhin-config": {
+    "levels": [
+      "global",
+      "adapter",
+      "endpoint",
+      "conversation"
+    ]
+  },
   "properties": {
     "groupModeration": {
       "type": "array",
@@ -39,6 +47,11 @@
         "en": {
           "description": "Exact scope for automatic advertising/abuse moderation. Disabled when unconfigured. Requires AI, atomic persistent state and adapter group-management support."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "enabled": {
@@ -49,6 +62,11 @@
         "en": {
           "description": "Enable moderation."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "onError": {
@@ -63,6 +81,11 @@
         "en": {
           "description": "Default policy when a review source fails: open treats it as passed; closed treats it as critical."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "maskChar": {
@@ -75,6 +98,11 @@
         "en": {
           "description": "Text masking character."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "replyTemplate": {
@@ -84,6 +112,11 @@
         "en": {
           "description": "Reply text for the reply action. When omitted, use the message language; explicit text is preserved."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "masters": {
@@ -97,6 +130,11 @@
         "en": {
           "description": "Additional user IDs treated as masters, merged with endpoint masters as a fallback."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "inbound": {
@@ -137,6 +175,11 @@
             }
           }
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "outbound": {
@@ -157,6 +200,11 @@
             }
           }
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "actions": {
@@ -319,6 +367,11 @@
         "en": {
           "description": "Severity-to-action mapping (string or array); uses the stricter default mapping when omitted."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "sources": {
@@ -479,6 +532,11 @@
             }
           }
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     }
   }

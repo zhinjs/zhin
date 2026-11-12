@@ -2,10 +2,40 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
+  "x-zhin-config": {
+    "levels": [
+      "global",
+      "adapter",
+      "endpoint",
+      "conversation"
+    ],
+    "conversationFields": [
+      "welcomeMessage",
+      "basePointsMin",
+      "basePointsMax",
+      "streakBonus",
+      "streakCap",
+      "rankSize",
+      "teachMaxPerGroup",
+      "teachCooldownMs",
+      "teachPageSize"
+    ],
+    "selfServiceFields": [
+      "welcomeMessage",
+      "rankSize",
+      "teachCooldownMs",
+      "teachPageSize"
+    ]
+  },
   "properties": {
     "keywordReply": {
       "type": "boolean",
-      "default": false
+      "default": false,
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
+      }
     },
     "basePointsMin": {
       "type": "number",
@@ -38,7 +68,12 @@
     "teachAllowRegex": {
       "type": "boolean",
       "default": false,
-      "description": "Allow members to teach regular-expression rules. Off by default: patterns run against every inbound message. Only structurally safe patterns are accepted and they are tried on messages of at most 200 characters."
+      "description": "Allow members to teach regular-expression rules. Off by default: patterns run against every inbound message. Only structurally safe patterns are accepted and they are tried on messages of at most 200 characters.",
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
+      }
     },
     "teachPageSize": {
       "type": "number",
@@ -54,40 +89,87 @@
       "type": "array",
       "maxItems": 100,
       "description": "Exact welcome conversations. Omitted welcomes all groups; [] welcomes none. Missing parent/thread requires their absence; no wildcards.",
-      "x-zhin-config": { "component": "conversation-scope" },
+      "x-zhin-config": {
+        "component": "conversation-scope",
+        "levels": [
+          "global"
+        ]
+      },
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["endpoint", "kind", "id"],
+        "required": [
+          "endpoint",
+          "kind",
+          "id"
+        ],
         "properties": {
           "endpoint": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["adapter", "id"],
+            "required": [
+              "adapter",
+              "id"
+            ],
             "properties": {
-              "adapter": { "type": "string", "minLength": 1 },
-              "id": { "type": "string", "minLength": 1 }
+              "adapter": {
+                "type": "string",
+                "minLength": 1
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1
+              }
             }
           },
-          "kind": { "type": "string", "enum": ["group"] },
-          "id": { "type": "string", "minLength": 1 },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "group"
+            ]
+          },
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
           "parent": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["kind", "id"],
+            "required": [
+              "kind",
+              "id"
+            ],
             "properties": {
-              "kind": { "type": "string", "enum": ["private", "group", "channel"] },
-              "id": { "type": "string", "minLength": 1 }
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "private",
+                  "group",
+                  "channel"
+                ]
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1
+              }
             }
           },
-          "threadId": { "type": "string", "minLength": 1 }
+          "threadId": {
+            "type": "string",
+            "minLength": 1
+          }
         }
       }
     },
     "ephemeralKeywords": {
       "type": "boolean",
       "default": false,
-      "description": "Explicit volatile keywords. With false, automatic replies require Database Host at startup and keyword management requires its persistent state service when invoked."
+      "description": "Explicit volatile keywords. With false, automatic replies require Database Host at startup and keyword management requires its persistent state service when invoked.",
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
+      }
     }
   }
 }

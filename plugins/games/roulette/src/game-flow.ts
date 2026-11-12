@@ -74,12 +74,19 @@ export async function expireOverdueSessions(
   flow: RouletteFlow,
   now: number,
   onNotice?: (notice: ExpiredSessionNotice) => Promise<void> | void,
+  isEnabled?: (session: RouletteSessionRow) => boolean,
 ): Promise<readonly ExpiredSessionNotice[]> {
   const overdue = await flow.services.sessions.listOverdue(now);
   const notices: ExpiredSessionNotice[] = [];
   for (const session of overdue) {
     try {
       await flow.services.sessions.runInScope({ scope: session.channel_key, run: async () => {
+        // Switched off for this conversation (ADR 0050 / 0055): end the game silently, without a
+        // result, records, mute penalty or announcement.
+        if (isEnabled && !isEnabled(session)) {
+          await abortSilently(flow, session);
+          return;
+        }
         const text = await expireSession(flow, session);
         if (!text) return;
         const notice = { session, text };
@@ -166,6 +173,15 @@ async function describeResult(
     return messages(locale, 'text5', { p0: playerFromMessage(message).name, p1: describeLobby(state, flow.config, presentation) });
   }
   return describeLobby(state, flow.config, presentation);
+}
+
+async function abortSilently(flow: RouletteFlow, session: RouletteSessionRow): Promise<void> {
+  try {
+    await flow.services.sessions.applyAction(session, DEADLINE_ACTOR, { type: 'cancel' }, flow.config);
+  } catch (error) {
+    if (error instanceof SessionRevisionConflictError) return;
+    throw error;
+  }
 }
 
 async function expireSession(flow: RouletteFlow, session: RouletteSessionRow): Promise<string> {

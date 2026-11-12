@@ -74,6 +74,10 @@ activity-feedback:
 [自动生成配置参考](../../../docs/configuration/generated.md#activity-feedback)；设计边界见
 [ADR 0034](../../../docs/adr/0034-activity-feedback-service-plugin.md)。
 
+## 分层配置（ADR 0050 / 0055）
+
+`enabled` / `defaults` / `platforms` / `endpoints` / `schedule` 只能在全局层修改（按平台 / 账号的差异继续用插件自己的 `platforms`、`endpoints`）；启停开关支持适配器、账号与会话四级。在会话层停用后，该会话不再显示“正在处理”等状态提示。
+
 ## 提示语言
 
 内置处理状态、工具进度和子任务提示跟随发起操作时的语言，同一次处理过程中不随个人偏好变化。

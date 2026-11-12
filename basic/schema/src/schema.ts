@@ -114,6 +114,16 @@ export class Schema<S = any, T = S> {
         this.meta.feature = structuredClone({ levels, ...fields });
         return this;
     }
+    /**
+     * Plugin property only: narrow the feature levels that may override this field (ADR 0050 §2),
+     * e.g. `.fieldLevels(['global'])` for secrets and process-wide resources. It can never widen
+     * the root `featureLevels` declaration; the Runtime rejects a wider list at startup.
+     */
+    fieldLevels(levels: ConfigFeatureLevels['levels']): this {
+        if (!levels.length || !levels.includes('global')) throw new TypeError('fieldLevels must include global');
+        this.meta.fieldLevels = [...levels];
+        return this;
+    }
     /** Export the standard JSON Schema consumed by Runtime and Console. */
     toJsonSchema(): Readonly<Record<string, unknown>> {
         return toJsonSchema(this);
@@ -275,6 +285,7 @@ export namespace Schema {
         secret?: boolean;
         effect?: ConfigFieldMetadata['effect'];
         feature?: ConfigFeatureLevels;
+        fieldLevels?: ConfigFeatureLevels['levels'];
     }
     export interface Options {
         object?: Record<string, Schema>;

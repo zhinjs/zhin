@@ -13,6 +13,10 @@ export const answersConfig = Schema.object({
   timezone: Schema.string().default(DEFAULT_ANSWERS_CONFIG.timezone).description('dailyStable 判断「同一天」所用的 IANA 时区').i18n({"en": {"description": "IANA timezone used by dailyStable to determine the day."}}).effect('reload'),
   quizTimeoutSeconds: Schema.number().min(15).max(600).step(1).default(DEFAULT_ANSWERS_CONFIG.quizTimeoutSeconds).description('出题后等待作答的秒数，超时题目作废').i18n({"en": {"description": "Seconds to wait for a quiz answer; the question expires afterward."}}).effect('reload'),
   enableDrivingQuiz: Schema.boolean().default(DEFAULT_ANSWERS_CONFIG.enableDrivingQuiz).description('启用「科目一」交规小测（原创题面，仅供娱乐参考）').i18n({"en": {"description": "Enable the original driving-theory quiz, for entertainment and reference only."}}).effect('reload'),
+}).featureLevels(['global', 'adapter', 'endpoint', 'conversation'], {
+  // ADR 0055: quiz fields can differ per group in the Console (timezone per adapter / account only); group admins may tune the quiz in chat.
+  conversationFields: ['dailyStable', 'quizTimeoutSeconds', 'enableDrivingQuiz'],
+  selfServiceFields: ['quizTimeoutSeconds', 'enableDrivingQuiz'],
 });
 
 export type AnswersConfig = Schema.Output<typeof answersConfig>;

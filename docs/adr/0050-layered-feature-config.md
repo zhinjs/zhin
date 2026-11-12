@@ -33,6 +33,7 @@ sidebar: false
 - 省略 `levels` 等同 `["global"]`：只支持全局配置，`overrides` 不可写，Console 不显示适配器 / 账号层。
 - 单个属性可用 `"x-zhin-config": { "levels": ["global"] }` 收窄为仅全局（如数据库连接、API 密钥）；属性不能放宽插件根声明。
 - 没有配置 Schema 的插件：只支持启用 / 禁用的三级开关（见下），没有字段覆盖。
+- 有配置 Schema 但省略 `levels` 的插件只有全局层：Console 的适配器 / 账号（及会话）页面不列出它（2026-11-12 修订，见「后果」）。
 
 ### 3. 存储
 
@@ -125,6 +126,6 @@ effective = deepMerge(global, overrides.adapters[alias], overrides.endpoints[ali
 
 ## 后果
 
-- 插件作者零改动即可获得三级启停；声明 `levels` 后获得字段级覆盖。
+- 没有配置 Schema 的插件零改动即可获得各层启停开关；有配置 Schema 的插件要用 `x-zhin-config.levels`（`Schema.object({...}).featureLevels(levels, …)`）声明支持的层级后，才会出现在下级层并获得开关，再按字段用 `levels` / `.fieldLevels()` 决定哪些字段可覆盖。官方插件（适配器除外）已全部声明全部四级，由 `tests/contracts/plugin-feature-levels.test.ts` 保证。（2026-11-12 修订：原表述「插件作者零改动即可获得三级启停」与 Console 只列出声明了该层级或无 Schema 的插件的行为矛盾。）
 - 启停语义统一为「上级禁用，下级不能开」。
 - 配置文件里的 `overrides` 是普通 YAML，手改与 Console 改等价。

@@ -88,6 +88,12 @@ bilibili:
 
 ---
 
+## 分层配置（ADR 0050 / 0055）
+
+所有字段（轮询频率、限速、退避、Cookie 等）只能在全局层修改；启停开关支持适配器、账号与会话四级。在 Console「功能」区可以按适配器、账号或会话（群 / 私聊）单独停用；开启 `features.selfService.enabled` 后，群里有 `admin` 角色（默认含群主 / 管理员）的人也可以用 `功能 关闭 bilibili` 关闭本群。上级停用后下级锁定，不能再开启。
+
+开播与动态推送前按订阅所在会话检查开关：已停用的会话收不到推送，订阅保留。推荐用会话层开关代替按群的自定义黑名单。
+
 ## English
 
 ### Install
@@ -127,6 +133,10 @@ Live status is polled in one batched, unauthenticated request; a push happens on
 ### Caveats
 
 These are undocumented Bilibili web endpoints and may change. The dynamic feed is aggressively risk-controlled for anonymous and datacenter clients: it may answer 412 / -352 or silently return an empty list. Empty answers are never used as a baseline, and dynamics older than 6 hours are marked seen without being pushed. Configure a logged-in `cookie`, or enable `live` only, if dynamics keep failing.
+
+### Layered configuration
+
+All fields are global-only; the enable switch works at the adapter, account and conversation levels. Live and dynamic pushes skip conversations where bilibili is switched off; the subscriptions are kept.
 
 ## AI tools
 

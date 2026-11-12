@@ -8,6 +8,7 @@ import {
   type DeliveryTarget,
 } from "zhin.js";
 import { httpHostToken } from "@zhin.js/host-http";
+import { createCalendarNotifier } from "./src/notify.js";
 import {
   assertCalendarTimezone,
   type CalendarConfig,
@@ -21,7 +22,6 @@ import {
   CalendarAuthService,
   DEFAULT_OAUTH_CALLBACK_PATH,
   localOriginFromAddress,
-  type CalendarNotifier,
 } from "./src/chat-auth.js";
 import {
   CalendarCredentialStore,
@@ -67,12 +67,7 @@ export default definePlugin<CalendarConfig>({
       ? resources.use(httpHostToken)
       : undefined;
 
-    const notify: CalendarNotifier<DeliveryTarget> | undefined =
-      outbound?.sendTarget
-        ? async (target, text, locale) => {
-            await outbound.sendTarget!(target, text, { locale });
-          }
-        : undefined;
+    const notify = createCalendarNotifier(outbound, (target) => context.isEnabledFor(target));
 
     const callbackPath =
       config.oauth_callback_path?.trim() || DEFAULT_OAUTH_CALLBACK_PATH;

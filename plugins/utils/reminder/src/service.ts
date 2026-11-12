@@ -11,8 +11,8 @@ export { MAX_DELAY_SECONDS, parseReminderInstant } from './timing.js';
 export const REMINDER_STATE_KEY = 'reminders/v1';
 export class ReminderInputError extends Error {}
 
-type ReminderDetailKey = 'userCancelled' | 'skipped' | 'unknown' | 'unconfirmed' | 'delivered' | 'deliveryFailed' | 'checkUnconfirmed';
-const detailKeys: readonly ReminderDetailKey[] = ['userCancelled', 'skipped', 'unknown', 'unconfirmed', 'delivered', 'deliveryFailed', 'checkUnconfirmed'];
+type ReminderDetailKey = 'userCancelled' | 'skipped' | 'unknown' | 'unconfirmed' | 'delivered' | 'deliveryFailed' | 'checkUnconfirmed' | 'featureDisabled';
+const detailKeys: readonly ReminderDetailKey[] = ['userCancelled', 'skipped', 'unknown', 'unconfirmed', 'delivered', 'deliveryFailed', 'checkUnconfirmed', 'featureDisabled'];
 function taskDetail(locale: Locale | undefined, detailKey: ReminderDetailKey, failureCode?: string) {
   return { detailKey, detail: t(locale, detailKey, { code: failureCode ?? '' }), failureCode: failureCode ?? null };
 }
@@ -40,21 +40,31 @@ export type ReminderConsoleSnapshot = {
   readonly reminders: readonly ReminderConsoleItem[];
 };
 
+/**
+ * Whether the plugin is enabled for one target conversation (ADR 0050 / 0055). Reminders are
+ * not messages, so the dispatch gate does not see them; the worker asks before every delivery.
+ */
+export type ReminderDeliveryGate = (target: DeliveryTarget) => boolean;
+const alwaysEnabled: ReminderDeliveryGate = () => true;
+
 /** Generation-owned worker; saved state contains plain identities, never live objects. */
 export class ReminderService {
   readonly administratorTasks: AdministratorReminderTasks;
   readonly #state: PluginStateStore;
   readonly #outbound: OutboundHost;
   readonly #config: ReminderConfig;
+  readonly #enabledFor: ReminderDeliveryGate;
   #working = false;
   #stopped = false;
   #administratorFirst = false;
 
-  constructor(state: PluginStateStore, outbound: OutboundHost, config: ReminderConfig, projectLocale: Locale = 'zh-CN') {
+  constructor(state: PluginStateStore, outbound: OutboundHost, config: ReminderConfig, projectLocale: Locale = 'zh-CN',
+    enabledFor: ReminderDeliveryGate = alwaysEnabled) {
     this.#state = state;
     this.#outbound = outbound;
     this.#config = config;
-    this.administratorTasks = new AdministratorReminderTasks(state, outbound, config, projectLocale);
+    this.#enabledFor = enabledFor;
+    this.administratorTasks = new AdministratorReminderTasks(state, outbound, config, projectLocale, enabledFor);
   }
 
   stop(): void { this.#stopped = true; this.administratorTasks.stop(); }
@@ -139,7 +149,11 @@ export class ReminderService {
         }
         let status: TaskStatus = 'unknown';
         let detail = taskDetail(task.locale, 'unconfirmed');
-        try {
+        if (!this.#enabledFor(task.target)) {
+          // Switched off for this account / conversation: nothing is sent. One-shot tasks end,
+          // recurring ones skip this run and keep their schedule for when the switch is back on.
+          status = task.intervalMs === null ? 'failed' : 'pending'; detail = taskDetail(task.locale, 'featureDisabled');
+        } else try {
           const id = await this.#outbound.sendTarget!(task.target, t(resolveLocale(task.locale), 'notification', { text: task.text }), { locale: resolveLocale(task.locale) });
           if (id) { status = task.intervalMs === null ? 'delivered' : 'pending'; detail = taskDetail(task.locale, 'delivered'); }
         } catch (error) {

@@ -151,7 +151,7 @@ export default definePlugin({
 }
 ```
 
-用内联 `config` 时，在 `toJsonSchema()` 的结果根上加同样的 `x-zhin-config.levels`；用 `Schema.object({...})` 声明时调用 `.featureLevels(levels, { conversationFields, selfServiceFields, chatAdminFields })`。
+用内联 `config` 时，在 `toJsonSchema()` 的结果根上加同样的 `x-zhin-config.levels`；用 `Schema.object({...})` 声明时调用 `.featureLevels(levels, { conversationFields, selfServiceFields, chatAdminFields })`，单个属性用 `.fieldLevels(['global'])` 收窄（例如 `Schema.string().secret().fieldLevels(['global'])`）。
 
 **会话层（ADR 0055）。** `levels` 可以包含 `"conversation"`，但必须同时包含 `"endpoint"`。会话层默认只能开关；要允许在会话层改字段，在根上列出 `conversationFields`；要允许群管理员在聊天里改（`功能 设置 …`），再列出 `selfServiceFields`（必须是 `conversationFields` 的子集）；聊天里在账号层及以上改字段默认也只允许 `selfServiceFields`，可用 `chatAdminFields` 放宽：
 
