@@ -8,6 +8,7 @@ import type { ChatRole, ChatRoleLevels } from '../../built/roles.js';
 import type { MessageOrigin } from './inbound-origin.js';
 import type { CoreReplyStream, OpenReplyStreamOptions } from './progressive-reply.js';
 import type { MediaRef, Segment } from '../../built/segment-contract/types.js';
+import type { OutboundMediaTrust } from '../../built/outbound-media-trust.js';
 // 入站段统一使用 canonical Segment SSOT（built/segment-contract）；
 // 经 plugin-runtime/im/index.ts re-export，供 runtime 消费者直接引用。
 export type { MediaRef, Segment };
@@ -74,6 +75,7 @@ export const imOperationResourcesToken = createRootPrivateToken<ImOperationResou
 
 const componentCallBrand = 'zhin.component-call/1' as const;
 const rawContentBrand = 'zhin.raw-content/1' as const;
+const untrustedContentBrand = 'zhin.untrusted-content/1' as const;
 
 
 export interface ComponentCall<TProps = unknown> {
@@ -88,10 +90,41 @@ export interface RawContent<TPayload = unknown> {
 }
 
 /**
- * 出站内容：纯文本 / canonical Segment（一等公民，媒体与富文本的统一表达）/
- * 惰性 JSXElement / ComponentCall / RawContent，可任意嵌套数组。
+ * Content whose media does not come from plugin code: Agent model output, or values a user controls.
+ * The renderer holds its media to the untrusted-source policy (`built/outbound-media-trust.ts`) before
+ * outbound middleware and the Endpoint see it; its text is never template-compiled.
  */
-export type SendContent = string | Segment | JSXElement | ComponentCall | RawContent | readonly SendContent[];
+export interface UntrustedContent {
+  readonly $content: typeof untrustedContentBrand;
+  readonly content: SendContent;
+  readonly trust: OutboundMediaTrust;
+}
+
+/**
+ * 出站内容：纯文本 / canonical Segment（一等公民，媒体与富文本的统一表达）/
+ * 惰性 JSXElement / ComponentCall / RawContent / UntrustedContent，可任意嵌套数组。
+ */
+export type SendContent = string | Segment | JSXElement | ComponentCall | RawContent | UntrustedContent | readonly SendContent[];
+
+/**
+ * Mark content as coming from an untrusted source (ADR 0056 §2): its media may only be http(s) URLs,
+ * bounded inline data, platform file tokens, or local paths that `trust.authorizePath` admits (or that
+ * trusted code built with {@link trustedMediaRef}). Anything else is replaced by a visible notice and logged.
+ */
+export function untrustedContent(content: SendContent, trust: OutboundMediaTrust): UntrustedContent {
+  if (!trust || typeof trust !== 'object' || typeof trust.source !== 'string' || !trust.source.trim()) {
+    throw new TypeError('untrustedContent requires a trust policy with a source label');
+  }
+  return Object.freeze({ $content: untrustedContentBrand, content, trust: Object.freeze({ ...trust }) });
+}
+
+export function isUntrustedContent(value: unknown): value is UntrustedContent {
+  return !Array.isArray(value)
+    && typeof value === 'object'
+    && value !== null
+    && '$content' in value
+    && value.$content === untrustedContentBrand;
+}
 
 export function component<TProps>(name: string, props: TProps): ComponentCall<TProps> {
   if (!name.trim()) throw new TypeError('Component name cannot be empty');

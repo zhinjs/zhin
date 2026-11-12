@@ -16,6 +16,7 @@ import memberRecall from '../agents/qq/skills/qq-group-admin/tools/recall_member
 import joinRequest from '../agents/qq/skills/qq-group-admin/tools/handle_join_request/index.js';
 import listMuted from '../agents/qq/skills/qq-group-state/tools/list_muted/index.js';
 import type { QqToolContext } from '../agents/qq/conversation.js';
+import { expectUntrustedSend } from '../../test-utils/untrusted-outbound.js';
 
 const GROUP = 'GROUP_OPENID';
 const JOINED_AT = new Date(Date.now() - 60_000).toISOString();
@@ -54,7 +55,7 @@ function fixture(kind: 'group' | 'private' | 'channel' = 'group') {
     locale: 'en', $client: client, signal: new AbortController().signal, owner: { id: rootPluginId() },
     origin: { kind: 'im', platform: 'qq', endpoint: 'bot', scope: kind, sceneId: conversation.id, conversation },
     principal: { subjectId: 'U', roles: ['admin'] as string[] },
-    use: (token: unknown) => { expect(token).toBe(outboundMessageToken); return { send }; },
+    use: (token: unknown) => { expect(token).toBe(outboundMessageToken); return { send: expectUntrustedSend(send, 'qq:agent-tool') }; },
   };
   return { groups, client, send, reactionService, ctx: context as unknown as QqToolContext };
 }

@@ -6,6 +6,7 @@ import { assertCanonicalSegments, toCanonicalSegments } from '@zhin.js/core';
 import react from '../agents/discord/skills/discord/tools/react/index.js';
 import sendEmbed from '../agents/discord/skills/discord/tools/send_embed/index.js';
 import forumPost from '../agents/discord/skills/discord-guild/tools/forum_post/index.js';
+import { expectUntrustedSend } from '../../test-utils/untrusted-outbound.js';
 
 type Conversation = { kind: 'channel' | 'private'; id: string; threadId?: string; parent?: { kind: 'channel'; id: string } };
 
@@ -26,7 +27,7 @@ function fixture(conversation: Conversation, channelType: number = ChannelType.G
   const outbound = vi.fn(async (_request: unknown) => ({ status: 'sent', message: { id: 'm3' } }));
   const context = {
     locale: 'en', signal: new AbortController().signal, owner: { id: 'discord-plugin' },
-    use: (token: unknown) => { expect(token).toBe(outboundMessageToken); return { send: outbound }; },
+    use: (token: unknown) => { expect(token).toBe(outboundMessageToken); return { send: expectUntrustedSend(outbound, 'discord:agent-tool') }; },
     $client: { channels, guilds: { fetch: vi.fn() } },
     origin: { kind: 'im', platform: 'discord', conversation: { endpoint: { adapter: 'discord', id: 'bot' }, ...conversation } },
     principal: { subjectId: 'requester', roles: [] },

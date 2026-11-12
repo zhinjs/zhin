@@ -1,6 +1,6 @@
 import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
-import { outboundMessageToken } from '@zhin.js/core/runtime';
+import { outboundMessageToken, untrustedContent } from '@zhin.js/core/runtime';
 import { resolveChatType } from '@zhin.js/adapter-wecom';
 import { z } from 'zod';
 
@@ -24,7 +24,8 @@ export default defineAgentTool<{ user_id: string; content: string }>({
     const receipt = await context.use(outboundMessageToken).send({
       requester: context.owner.id,
       conversation: { endpoint, kind: resolveChatType(id), id },
-      content,
+      // Model-authored text: literal (no template paths), never media from the host.
+      content: untrustedContent(content, { source: 'wecom:agent-tool', locale: context.locale }),
     });
     const success = receipt.status === 'sent';
     return { success, message: success ? t(context.locale, 'messageSent') : t(context.locale, 'sendFailed') };

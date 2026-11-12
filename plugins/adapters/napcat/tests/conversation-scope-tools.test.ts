@@ -22,6 +22,7 @@ import downloadFile from '../agents/napcat/skills/napcat-files-history/tools/dow
 import { isRemoteMediaSource } from '../agents/napcat/media.js';
 import { formatOutboundSegments } from '../src/protocol.js';
 import { assertCanonicalSegments, toCanonicalSegments } from '@zhin.js/core';
+import { expectUntrustedSend } from '../../test-utils/untrusted-outbound.js';
 
 type Tool = { inputSchema: unknown; permissions?: readonly string[]; execute(input: unknown, context: never): Promise<unknown> };
 
@@ -35,7 +36,7 @@ function fixture(kind: 'group' | 'private' = 'group', id = kind === 'group' ? '1
   } as Record<string, ReturnType<typeof vi.fn>>, { get: (target, key: string) => target[key] ?? (target[key] = vi.fn(api)) });
   const conversation = { endpoint: { adapter: 'napcat', id: 'bot' }, kind, id };
   const send = vi.fn(async (_request: unknown) => ({ status: 'sent', message: { id: '77' } }));
-  const context = { locale: 'en', signal: new AbortController().signal, $client: client, owner: { id: 'napcat-plugin' }, use: () => ({ send }),
+  const context = { locale: 'en', signal: new AbortController().signal, $client: client, owner: { id: 'napcat-plugin' }, use: () => ({ send: expectUntrustedSend(send, 'napcat:agent-tool') }),
     origin: { kind: 'im', platform: 'napcat', conversation } } as never;
   return { client, send, context };
 }

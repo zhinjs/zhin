@@ -2,10 +2,11 @@ import poll from '../../telegram/agents/telegram/skills/telegram-messages/tools/
 import archive from '../../slack/agents/slack/skills/slack-channels/tools/archive_channel/index.js';
 import managers from '../../lark/agents/lark/skills/lark-group-admin/tools/set_managers/index.js';
 import mute from '../agents/icqq/skills/icqq-group-admin/tools/set_mute/index.js';
+import { expectUntrustedSend } from '../../test-utils/untrusted-outbound.js';
 
 it('localizes tool validation and preserves the provider input and single-call behavior', async () => {
   const send = vi.fn().mockResolvedValue({ status: 'sent', message: { id: '42' } });
-  const context = { locale: 'en', owner: { id: 'telegram-plugin' }, use: () => ({ send }),
+  const context = { locale: 'en', owner: { id: 'telegram-plugin' }, use: () => ({ send: expectUntrustedSend(send) }),
     origin: { kind: 'im', platform: 'telegram', conversation: { endpoint: { adapter: 'telegram', id: 'bot' }, kind: 'group', id: '123' } } };
   expect(await poll.execute({ question: '原文', options: 'not-json' }, context as never))
     .toEqual({ success: false, message: 'options must be a JSON array' });

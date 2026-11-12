@@ -329,6 +329,7 @@ describe('CLI progressive reply ingress', () => {
       expect(options.source!.event).toBe(flow.event);
       expect((options.source!.event as typeof flow.event).nativeMethod()).toBe('sdk');
       expect(options.beforeSubmit).not.toThrow();
+      expect(options.mediaTrust?.source).toBe('agent:reply');
       const owned = { type: 'image' as const, data: { media: { kind: 'url' as const, value: 'https://assets.fixture.test/owned.png' } } };
       expect(await options.prepare!([owned], request.signal)).toEqual([owned]);
       const denied = await options.prepare!([{ type: 'image', data: { media: { kind: 'url', value: 'https://private.fixture.test/secret.png' } } },
@@ -395,7 +396,12 @@ describe('CLI progressive reply ingress', () => {
       return { status: 'completed', output: [] };
     } });
     await f.run();
-    expect(f.reply).toHaveBeenCalledExactlyOnceWith([{ type: 'text', data: { text: 'ordinary answer' } }]);
+    // Model output is delivered as untrusted content: Core holds its media to the untrusted-source policy.
+    expect(f.reply).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      $content: 'zhin.untrusted-content/1',
+      content: [{ type: 'text', data: { text: 'ordinary answer' } }],
+      trust: expect.objectContaining({ source: 'agent:reply' }),
+    }));
     expect(f.native.finish).not.toHaveBeenCalled();
     expect(f.release).toHaveBeenCalledOnce();
   });

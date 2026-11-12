@@ -14,6 +14,7 @@ import memberCount from '../agents/telegram/skills/telegram-chat-admin/tools/mem
 import react from '../agents/telegram/skills/telegram-messages/tools/react/index.js';
 import sendPoll from '../agents/telegram/skills/telegram-messages/tools/send_poll/index.js';
 import sendSticker from '../agents/telegram/skills/telegram-messages/tools/send_sticker/index.js';
+import { expectUntrustedSend } from '../../test-utils/untrusted-outbound.js';
 
 function mockMsg(platformPermissions: string[]) {
   return {
@@ -26,7 +27,7 @@ function mockMsg(platformPermissions: string[]) {
 
 function toolContext(client: Record<string, unknown>, kind: 'group' | 'private' = 'group', send = vi.fn(async (_request: unknown) => ({ status: 'sent', message: { id: '7' } }))) {
   const conversation = { endpoint: { adapter: 'telegram', id: 'bot1' }, kind, id: kind === 'private' ? '42' : '-1001' };
-  return { locale: 'en', $client: client, signal: new AbortController().signal, owner: { id: 'telegram-plugin' }, use: () => ({ send }),
+  return { locale: 'en', $client: client, signal: new AbortController().signal, owner: { id: 'telegram-plugin' }, use: () => ({ send: expectUntrustedSend(send, 'telegram:agent-tool') }),
     origin: { kind: 'im', platform: 'telegram', conversation } } as never;
 }
 

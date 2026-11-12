@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { checkBuiltinPermit, toPermissionSubject } from '@zhin.js/permission';
 import sendText from '../agents/wecom/skills/wecom/tools/send_text/index.js';
+import { expectUntrustedSend } from '../../test-utils/untrusted-outbound.js';
 
 function subject(level: 'global' | 'conversation') {
   return toPermissionSubject({
@@ -23,7 +24,7 @@ describe('wecom_send_text delivery', () => {
     const send = vi.fn(async (_request: unknown) => ({ status: 'sent' }));
     const sendTextMessage = vi.fn();
     return { send, sendTextMessage, context: { locale: 'en', signal: new AbortController().signal, owner: { id: 'wecom-plugin' },
-      use: () => ({ send }), $client: { sendTextMessage }, origin } as never };
+      use: () => ({ send: expectUntrustedSend(send, 'wecom:agent-tool') }), $client: { sendTextMessage }, origin } as never };
   }
 
   it('goes through the outbound chain from the current account', async () => {

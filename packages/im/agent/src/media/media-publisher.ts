@@ -5,6 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { type OutputElement, renderToPlainText } from '@zhin.js/ai';
 import type { Segment, MediaRef } from '@zhin.js/im-contract';
+import { trustedMediaRef } from '@zhin.js/core';
 import type { OutboundMediaCapabilities, MediaBinaryPayload, MediaKind } from './media-types.js';
 import { resolveOutboundCapabilities } from './media-capabilities.js';
 import {
@@ -153,7 +154,10 @@ async function payloadToCanonicalSegment(
     return { type: 'text', data: { text: `[附件过大 (${(bytes / 1024 / 1024).toFixed(1)} MB)，无法发送]` } };
   }
 
-  /** `delivery.spool`: only Endpoints whose peer can read local paths declare it; others keep inline base64. */
+  /**
+   * `delivery.spool`: only Endpoints whose peer can read local paths declare it; others keep inline base64.
+   * The spooled file is ours, so its MediaRef is a trusted construction (it passes Core's untrusted-source policy).
+   */
   const spool = payload.base64.length > OUTBOUND_SPOOL_B64_CHARS && caps.spool === true;
   const filePath = spool
     ? await spoolBase64ToTempFile(payload.base64, payload.mimeType, payload.kind)
@@ -168,7 +172,7 @@ async function payloadToCanonicalSegment(
         return {
           type: 'image',
           data: {
-            media: { kind: 'path', value: filePath, mime_type: payload.mimeType },
+            media: trustedMediaRef({ kind: 'path', value: filePath, mime_type: payload.mimeType }),
             ...(payload.meta?.alt ? { alt: payload.meta.alt } : {}),
           },
         };
@@ -188,7 +192,7 @@ async function payloadToCanonicalSegment(
         return {
           type: 'audio',
           data: {
-            media: { kind: 'path', value: filePath, mime_type: payload.mimeType },
+            media: trustedMediaRef({ kind: 'path', value: filePath, mime_type: payload.mimeType }),
           },
         };
       }
@@ -205,7 +209,7 @@ async function payloadToCanonicalSegment(
       if (filePath) {
         return {
           type: 'video',
-          data: { media: { kind: 'path', value: filePath, mime_type: payload.mimeType } },
+          data: { media: trustedMediaRef({ kind: 'path', value: filePath, mime_type: payload.mimeType }) },
         };
       }
       return {
@@ -222,7 +226,7 @@ async function payloadToCanonicalSegment(
         return {
           type: 'file',
           data: {
-            media: { kind: 'path', value: filePath, mime_type: payload.mimeType },
+            media: trustedMediaRef({ kind: 'path', value: filePath, mime_type: payload.mimeType }),
             name: payload.fileName || 'file',
           },
         };

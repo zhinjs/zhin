@@ -4,7 +4,7 @@ sidebar: false
 
 # ADR 0056：聊天角色——zhin 角色分四级，平台身份与机器人自身身份是独立维度
 
-状态：Accepted（2026-11-12）；修订：2026-11-12（§1 补机器人自身身份；§4 改为「平台身份不映射为 zhin 角色，能力可用性按三条维度过滤」；§5 补 `bot:*` 与共用评估器）；修订：2026-11-12 安全审查（§2 角色来源层级与宿主全局能力、线程沿用父会话键；§3 授予 / 撤销规则、Console RPC 的 owner 门槛与列表脱敏、无持久化时拒绝写入、迁移语义；§5 `<角色>@<层级>` 写法、执行时重新读取）
+状态：Accepted（2026-11-12）；修订：2026-11-12（§1 补机器人自身身份；§4 改为「平台身份不映射为 zhin 角色，能力可用性按三条维度过滤」；§5 补 `bot:*` 与共用评估器）；修订：2026-11-12 安全审查（§2 角色来源层级与宿主全局能力、线程沿用父会话键；§3 授予 / 撤销规则、Console RPC 的 owner 门槛与列表脱敏、无持久化时拒绝写入、迁移语义；§5 `<角色>@<层级>` 写法、执行时重新读取）；修订：2026-11-12 出站媒体（§2 不可信来源的出站媒体不能读宿主文件）
 
 取代框架层 `SenderRole`（`user` / `trusted` / `master`）与 ADR 0055 中单独的「功能管理员」；与 ADR 0050 / 0055 的四级层级一致。
 
@@ -67,6 +67,14 @@ interface PlatformStanding {
 - Agent 回合主体 `principal.roles` 承载宿主信任档位：只有全局 owner 展开为 `owner, admin, trusted`；更低层的 owner 在这里按 `admin` 计（`hostChatRole`）。链上角色保留在 `principal.chatRole` / `principal.chatRoleLevels`，供 permit 判断。
 - 运行时读取：`@zhin.js/core` / `@zhin.js/im-contract` 的 `chatRoleHeldAt(sender, role, level)`（在该层级或更高层级持有）、`hostChatRole(sender)`；`sender.chatRoleLevels` 缺失时一律按会话层处理（fail closed）。
 
+#### 出站媒体（2026-11-12 修订）
+
+适配器会读取并上传 `MediaRef kind: 'path'`，部分适配器还把 `file` 引用、`file://` 地址交给平台端从宿主读取。若模型输出能产生这类媒体段，就绕过了文件策略与「读宿主文件需全局 owner」。因此：
+
+- 出站内容分可信与不可信来源。插件代码自己构造的内容（`$reply`、命令、组件、中间件）可信；Agent 模型输出（回复、流式回复、场景事件回复、主动发送）与适配器 Agent 工具用模型参数拼出的内容不可信，以 `untrustedContent(content, trust)` 交给出站链（流式回复用 `OpenReplyStreamOptions.mediaTrust`）。
+- Core 的 `OutboundRenderer` 在出站中间件与 Endpoint 之前统一处理不可信内容（`built/outbound-media-trust.ts`），出站链仍唯一：媒体只允许 `http(s)`、有上限的内联数据（默认 25 MiB）、裸平台文件标识；本地路径（含 `file://`）只在 `trust.authorizePath` 认可（Agent：本回合工作区授权 + 文件策略 + 按发起人文件角色的 `read_file` 读取判定，需确认的敏感读取直接拒绝）或可信代码以 `trustedMediaRef()` 构造时放行；嵌套的本地来源拒绝、`html` 只保留文字、不做模板替换。
+- 被拒的段替换为可见提示并记录 `op=outbound_media_refused`（不记录路径本身）。
+
 ### 3. 存储与管理
 
 - 实例拥有的表 `chat_roles`：`(level, scope_key, adapter, user_id, role, granted_by, granted_at)`，主键 `(level, scope_key, adapter, user_id)`；启动时加载到内存，写入即时生效。zhin 角色**只**来自这里的授予（含迁移来的授予）。
@@ -123,6 +131,7 @@ ADR 0055 的「功能管理员」即本 ADR 的 `admin` 角色：功能管理命
 - 权限评估：`packages/im/permission`（`builtin.ts`、`host.ts` 的 `setBotStandingResolver` / `firstDenied`）；命令：`packages/im/command`；中间件：`packages/im/middleware`；按钮：`packages/im/core/src/plugin-runtime/im/interactive-router.ts`；Agent：`packages/im/agent/src/plugin-runtime/capability-ingress.ts`、`ingress/request-capabilities.ts`、`turn/turn-ingress.ts`（`turnPermissionSubject`）
 - 协议：`@zhin.js/console-protocol` 的 `chat-roles.ts`
 - 升级指南：`docs/migrations/chat-roles.md`；概念：`docs/concepts/chat-roles.md`
+- 出站媒体策略：`packages/im/core/src/built/outbound-media-trust.ts`（`untrustedContent` 在 `plugin-runtime/im/contracts.ts`，执行于 `outbound-renderer.ts`）；Agent 侧：`packages/im/agent/src/media/media-normalize.ts`（`modelMediaTrust`、`authorizeOutboundMediaPath`）
 
 ## 后果
 

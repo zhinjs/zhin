@@ -23,6 +23,7 @@ import announce from '../agents/icqq/skills/icqq-group-admin/tools/announce/inde
 import anonymous from '../agents/icqq/skills/icqq-group-admin/tools/set_anonymous/index.js';
 import essence from '../agents/icqq/skills/icqq-group-admin/tools/essence/index.js';
 import type { IcqqToolContext } from '../agents/icqq/conversation.js';
+import { expectUntrustedSend } from '../../test-utils/untrusted-outbound.js';
 
 function fixture(kind: 'private' | 'group' | 'channel' = 'group') {
   const abort = new AbortController();
@@ -56,7 +57,7 @@ function fixture(kind: 'private' | 'group' | 'channel' = 'group') {
     locale: 'en', $client: client, signal: abort.signal, owner: { id: rootPluginId() },
     origin: { kind: 'im', platform: 'icqq', endpoint: 'bot-7', scope: kind, sceneId: conversation.id, conversation },
     principal: { subjectId: '2', roles: [] as string[] },
-    use: (token: unknown) => { expect(token).toBe(outboundMessageToken); return { send }; },
+    use: (token: unknown) => { expect(token).toBe(outboundMessageToken); return { send: expectUntrustedSend(send, 'icqq:agent-tool') }; },
   };
   return { id, original, self, member, group, client, abort, makeForwardMsg, send, context, ctx: context as unknown as IcqqToolContext };
 }

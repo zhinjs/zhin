@@ -11,7 +11,7 @@ import { collectSegmentMedia } from '../../built/segment-contract/media.js';
 import { isStrictCanonicalSegment } from '../../built/segment-contract/validate.js';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { isJsxElement, type JSXElement } from '@zhin.js/jsx';
-import { createOutboundEnvelope, isComponentCall, isRawContent, operationEndpoint, type OutboundEnvelope, type SendContent, type SendRequest } from './contracts.js';
+import { createOutboundEnvelope, isComponentCall, isRawContent, isUntrustedContent, operationEndpoint, type OutboundEnvelope, type SendContent, type SendRequest } from './contracts.js';
 import { OutboundRenderer, projectOutboundPayload, resolveOutboundPresentation, type OutboundProjection } from './outbound-renderer.js';
 import { flattenOutboundArray } from '../../built/outbound-content-arrays.js';
 import { requireAdapters } from './endpoint-runtime.js';
@@ -338,7 +338,7 @@ function isEmptyOutboundPayload(payload: unknown): boolean {
 }
 
 function needsAuthoringRender(value: unknown): boolean {
-  const isAuthoring = (item: unknown) => isJsxElement(item) || isComponentCall(item) || isRawContent(item);
+  const isAuthoring = (item: unknown) => isJsxElement(item) || isComponentCall(item) || isRawContent(item) || isUntrustedContent(item);
   return Array.isArray(value) ? flattenOutboundArray(value).some(isAuthoring) : isAuthoring(value);
 }
 

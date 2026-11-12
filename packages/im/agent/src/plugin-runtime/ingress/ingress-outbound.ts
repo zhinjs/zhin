@@ -6,14 +6,18 @@ import {
   type ImRuntime,
   type Message,
   type SendContent,
+  untrustedContent,
 } from '@zhin.js/core/runtime';
 import { EndpointDeliveryError, type TextSegment } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { CapabilityId, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import {
+  modelMediaTrust,
   publishOutboundElements,
   resolveOutboundCapabilities,
+  type OutboundMediaAuthority,
 } from '../../media/index.js';
+import { toolRequesterRoleToFileRole } from '../../security/file-role-policy.js';
 import type {
   ReplyPort,
   TurnAccessContext,
@@ -45,6 +49,7 @@ import type { AgentIngressFoundationPort } from './ports.js';
 import { deliverReaction, type ReactionPacer } from './reaction-pacer.js';
 import {
   deliveryOutcomeFromReceipt,
+  resolveRuntimeSenderRoles,
   resolveRuntimeTurnCapabilities,
   type resolveSandboxTurnPolicy,
   type RuntimeSenderRoles,
@@ -121,6 +126,19 @@ export function createIngressReplyPort(input: CreateIngressReplyPortInput): {
   );
   let replyOperation: CapturedEndpointOperation | undefined;
   let danmakuAudited = false;
+  // Model-authored media gets the initiator's file decision (only a global owner is `owner`, ADR 0056 §2),
+  // and Core holds the delivered content to the untrusted-source policy (no host files via `file` / `path`).
+  const senderRoles = resolveRuntimeSenderRoles(message);
+  const mediaAuthority: OutboundMediaAuthority = Object.freeze({
+    filesystem: turnPolicy.filesystem,
+    imageAssets: service.imageAssets,
+    ...(turnPolicy.network ? { network: turnPolicy.network } : {}),
+    fileRole: toolRequesterRoleToFileRole(senderRoles.isMaster ? 'owner' : senderRoles.isTrusted ? 'trusted' : 'other'),
+  });
+  const mediaTrust = modelMediaTrust('agent:reply', mediaAuthority, {
+    locale: message.locale,
+    maxInlineBytes: resolveOutboundCapabilities(effectiveAdapter, platformCapabilities).maxAttachmentBytes,
+  });
 
   const port: ReplyPort = {
     segments: !message.message
@@ -146,12 +164,9 @@ export function createIngressReplyPort(input: CreateIngressReplyPortInput): {
           [{ type: 'message', segments: [...segments] }],
           effectiveAdapter || undefined,
           undefined,
-          {
-            filesystem: turnPolicy.filesystem,
-            imageAssets: service.imageAssets,
-            ...(turnPolicy.network ? { network: turnPolicy.network } : {}),
-          },
+          mediaAuthority,
         ),
+        mediaTrust,
       });
       if (!stream) return undefined;
       let settlement: Promise<CoreReplyStream['receipt']> | undefined;
@@ -217,11 +232,7 @@ export function createIngressReplyPort(input: CreateIngressReplyPortInput): {
             [...messageOutput],
             effectiveAdapter || undefined,
             resolveOutboundCapabilities(effectiveAdapter, platformCapabilities),
-            {
-              filesystem: turnPolicy.filesystem,
-              imageAssets: service.imageAssets,
-              ...(turnPolicy.network ? { network: turnPolicy.network } : {}),
-            },
+            mediaAuthority,
           );
           logger.debug(formatCompact({
             op: 'replychain_publish_outbound',
@@ -236,7 +247,7 @@ export function createIngressReplyPort(input: CreateIngressReplyPortInput): {
             const plannedText = content.length && content.every((segment): segment is TextSegment => segment.type === 'text')
               ? content.map(segment => String(segment.data.text)).join('')
               : undefined;
-            sent = deliveryOutcomeFromReceipt(await reply(content), plannedText);
+            sent = deliveryOutcomeFromReceipt(await reply(untrustedContent(content, mediaTrust)), plannedText);
           } catch (error) {
             auditOutbound(audit, { status: 'failed', code: error instanceof Error ? error.message : String(error), retryable: false });
             throw error;

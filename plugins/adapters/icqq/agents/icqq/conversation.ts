@@ -1,5 +1,5 @@
 import { parseDmMessageId, parseGroupMessageId, type GroupMessage, type PrivateMessage } from '@icqqjs/icqq';
-import { outboundMessageToken, type SendContent } from '@zhin.js/core/runtime';
+import { outboundMessageToken, untrustedContent, type SendContent } from '@zhin.js/core/runtime';
 import type { ToolExecutionContext } from '@zhin.js/tool';
 import { messages as t } from './messages.js';
 
@@ -55,7 +55,8 @@ export async function sendToConversation(context: IcqqToolContext, content: Send
   const receipt = await context.use(outboundMessageToken).send({
     requester: context.owner.id,
     conversation,
-    content,
+    // Built from model input: Core admits only remote / inline media and platform tokens (ADR 0056 §2).
+    content: untrustedContent(content, { source: 'icqq:agent-tool', locale: context.locale }),
   });
   return { success: receipt.status === 'sent', receipt };
 }

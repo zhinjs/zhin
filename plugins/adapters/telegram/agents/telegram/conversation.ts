@@ -1,4 +1,4 @@
-import { outboundMessageToken, type SendContent } from '@zhin.js/core/runtime';
+import { outboundMessageToken, untrustedContent, type SendContent } from '@zhin.js/core/runtime';
 import type { ToolExecutionContext } from '@zhin.js/tool';
 import { messages as t } from './messages.js';
 
@@ -28,6 +28,11 @@ export async function sendToCurrentChat(context: TelegramToolContext, content: S
   currentChat(context, { allowPrivate: true });
   const conversation = context.origin.kind === 'im' ? context.origin.conversation : undefined;
   if (!conversation) throw new Error(t(context.locale, 'conversationRequired'));
-  const receipt = await context.use(outboundMessageToken).send({ requester: context.owner.id, conversation, content });
+  // Built from model input: Core admits only remote / inline media and platform tokens (ADR 0056 §2).
+  const receipt = await context.use(outboundMessageToken).send({
+    requester: context.owner.id,
+    conversation,
+    content: untrustedContent(content, { source: 'telegram:agent-tool', locale: context.locale }),
+  });
   return { success: receipt.status === 'sent', ...(receipt.message?.id ? { message_id: receipt.message.id } : {}), receipt };
 }
