@@ -17,7 +17,7 @@ This is the complete reference for `zhin.config.yml`. When configuring for the f
 | Connect a database | [database](#database) |
 | Configure a plugin or adapter, add platform credentials | [plugin and plugins](#plugin-and-plugins) |
 | Log one adapter into several accounts | [endpoints array](#endpoints-array-one-instance-with-multiple-accounts) |
-| Set masters or the command prefix | [Adapter instances](#adapter-instances-master-trusted-commandprefix) |
+| Set role mappings or the command prefix | [Adapter instances](#adapter-instances-roles-commandprefix) |
 | Configure AI models | [ai](#ai), or the [AI overview](../ai/index.md) |
 | Reference secrets from `.env` | [Environment variable expansion](#environment-variable-expansion) |
 | Apply configuration changes selectively | [Applying configuration changes](#applying-configuration-changes) |
@@ -445,15 +445,16 @@ sandbox:
 
 `zhin install` writes the package reference under `plugins.<instanceKey>` and business settings under the top-level alias. It no longer writes manifest mounts.
 
-### Adapter Instances: master / trusted / commandPrefix
+### Adapter Instances: roles / commandPrefix
 
-Platform adapter plugin instance configurations support three common keys:
+Platform adapter plugin instance configurations support two common keys:
 
 | Key | Location | Description |
 | --- | --- | --- |
-| `master` | Instance top-level | Stable Endpoint Owner ID used for authorization and explicit `/approve` management commands |
-| `trusted` | Instance top-level / per-endpoint | Trusted user ID list; array or whitespace/comma-separated string |
+| `roles` | Instance top-level / per-endpoint | Platform identity → chat role mapping rules (`mappings`, `inherit`); see [Chat roles](../concepts/chat-roles.md#mappings) |
 | `commandPrefix` | Instance top-level / per-endpoint | Command prefix, default `''`; per-endpoint values override top-level |
+
+The owner and trusted users are no longer configured here: manage them in the Console **Roles** block or with `role grant` in chat; old `master` / `trusted` fields move into the database on the first start, see [Upgrading to chat roles](../migrations/chat-roles.md).
 
 ### endpoints Array: One Instance with Multiple Accounts
 

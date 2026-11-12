@@ -144,7 +144,8 @@ qq:
 | `qq endpoint list` | 列出运行中与配置中的 endpoints |
 | `qq endpoint remove <name>` | 删除账号配置，取消目标在途并关闭，保留历史 |
 
-add/cancel/remove 需要聊天角色 `owner`（[聊天角色](../concepts/chat-roles.md)）；没有 owner 时请在 Console 管理账号。二维码当前以链接文本下发
+add/cancel/remove 受 `master` 限制：实例配置声明了 `master`（顶层或 `endpoints[i].master`）时仅
+master 可执行；未配置则放行（首个扫码绑定者会写入该 endpoint 的 `master`）。二维码当前以链接文本下发
 （出站富媒体待迁移），用手机 QQ 打开链接即可扫码。
 
 ## 环境变量
@@ -258,12 +259,13 @@ QQ 开放平台按有没有带上用户消息的 `msg_id`（或事件的 `event_
 
 ## 掉线通知
 
-QQ 官方机器人掉线 / 启动失败时，可以配置 `notify` 让另一个适配器实例通知主人：
+QQ 官方机器人掉线 / 启动失败时，可以配置 `notify` 让另一个适配器实例通知 master：
 
 ```yaml
 icqq:
   # ... 已配置好的 ICQQ 实例
 qq:
+  master: "${QQ_MASTER_OPENID}"
   notify:
     adapter: icqq
     endpoint: "123456"

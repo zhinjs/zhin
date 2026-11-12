@@ -105,7 +105,7 @@ onebot11:
 
 - **notice / request / meta 侧事件**：经统一 `endpointSpec.events` 归一后分发到 `handlers`；消息仍走 `outboundMessageToken`。
 - **群管工具暂未迁移**：旧 Adapter 经 `createSceneManagementTools` 注册踢人 / 禁言 / 群名片等成套 agent 工具；迁移后仅保留 `onebot11_set_title`，其余群管能力可通过 `$client.call()`（如 `set_group_kick`、`set_group_ban`）作为逃生舱调用。
-- **平台权限门禁**：群主 / 管理员归一为入站 `sender.platform.standing`（owner / admin，见下文「成员身份」），工具与命令用 `platform:admin` / `platform:owner` 判断（ADR 0056，见[聊天角色](../concepts/chat-roles.md)）。
+- **平台权限门禁**：`plugin.ts` setup 通过 generation-owned `permissionHostToken` 调用 `host.registerPlatform('onebot11', createSceneRolePlatformChecker())`，`scene_admin` / `scene_owner` 依据入站 `sender.platform.standing`（owner / admin，见下文「成员身份」）判定。
 
 ## 文档链接
 

@@ -91,7 +91,7 @@ juejin:
 | `juejin:review` | 发送 / 改写 / 丢弃草稿 |
 | `juejin:login` | 重新检查登录 |
 
-审批命令只认聊天角色 `owner`（在你平时和机器人聊天的适配器上授予，见[聊天角色](../concepts/chat-roles.md)）。
+审批命令只认 master 角色（在你平时和机器人聊天的适配器配置里设置 `master`）。
 
 ## 会话与消息
 

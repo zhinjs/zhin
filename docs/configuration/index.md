@@ -17,7 +17,7 @@ description: "zhin.config.yml 的结构与每个顶层键：HTTP、数据库、A
 | 接入数据库 | [database](#database) |
 | 给插件或适配器填配置、填平台凭据 | [plugin 与 plugins](#plugin-与-plugins) |
 | 一个适配器登录多个账号 | [endpoints 数组](#endpoints-数组-一个实例挂多个账号) |
-| 设置 master、命令前缀 | [适配器实例](#适配器实例-master-trusted-commandprefix) |
+| 设置角色映射、命令前缀 | [适配器实例](#适配器实例-roles-commandprefix) |
 | 配置 AI 模型 | [ai](#ai)，或直接看 [AI 总览](../ai/index.md) |
 | 引用 `.env` 里的密钥 | [环境变量展开](#环境变量展开) |
 | 修改配置后按需生效 | [修改后如何生效](#修改后如何生效) |
@@ -438,15 +438,16 @@ sandbox:
 
 `zhin install` 将包引用写入 `plugins.<instanceKey>`，业务参数写入顶层 `<instanceKey>`；不再写入包清单的旧挂载数组。
 
-### 适配器实例：master / trusted / commandPrefix
+### 适配器实例：roles / commandPrefix
 
-平台适配器插件的实例配置支持三个通用键：
+平台适配器插件的实例配置支持两个通用键：
 
 | 键 | 位置 | 说明 |
 | --- | --- | --- |
-| `master` | 实例顶层 | Endpoint Owner：用于权限判定与显式 `/approve` 管理命令的稳定用户 id |
-| `trusted` | 实例顶层 / endpoints 逐项 | 受信任用户 id 列表；数组或空白/逗号分隔字符串 |
+| `roles` | 实例顶层 / endpoints 逐项 | 平台身份 → 聊天角色的映射规则（`mappings`、`inherit`），见[聊天角色](../concepts/chat-roles.md#mappings) |
 | `commandPrefix` | 实例顶层 / endpoints 逐项 | 命令前缀，默认 `''`；endpoints 逐项的值覆盖顶层 |
+
+主人（`owner`）与受信任用户（`trusted`）不再写在配置里：用 Console「角色」或聊天 `角色 授予` 管理；旧的 `master` / `trusted` 首次启动时自动迁入数据库，见[升级到聊天角色](../migrations/chat-roles.md)。
 
 ### endpoints 数组：一个实例挂多个账号
 

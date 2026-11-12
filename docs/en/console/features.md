@@ -61,7 +61,7 @@ effectively enabled = not in disable_plugins
 ```
 
 - A level may only disable while every level above it is enabled.
-- Once an upper level (global / adapter / account) disables the plugin, every level below it is locked: it can neither enable nor change its own switch, and shows "disabled by <level>". The RPC answers HTTP 409 `{ success: false, code: 'locked', lockedBy, error: '已被{全局|适配器|账号}层停用，下级开关已锁定' }` (the message text is stable).
+- Once an upper level (global / adapter / account) disables the plugin, every level below it is locked: it can neither enable nor change its own switch, and shows `disabled by <level>`. The RPC answers HTTP 409 `{ success: false, code: 'locked', lockedBy, error: '已被{全局|适配器|账号}层停用，下级开关已锁定' }` (the message text is stable).
 - A lower level never stores "enabled": enabling there removes its switch. A lower "disabled" stored before the upper level was disabled is kept ("Remove override" keeps it too).
 
 **Other fields: the lower level wins.** Effective configuration = global → adapter override → account override → conversation override, deep-merged in order: plain objects merge key by key, arrays and scalars replace, and `null` means "explicitly cleared", not "inherit".
