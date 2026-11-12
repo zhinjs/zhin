@@ -251,7 +251,7 @@ async function bindSeamTools(
       assertActive(isActive);
       const result = await entry.execute(input, invocation);
       if (!result.success) throw new Error(result.error ?? `Seam Tool failed: ${entry.schema.function.name}`);
-      return await captureToolImages(result.output, localAssets, invocation, entry.schema.function.name, invocation.signal) as TResult;
+      return await captureToolImages(result.output, localAssets, invocation, entry.schema.function.name) as TResult;
     },
   } satisfies ToolCapability));
   const access = await Promise.all(projected.map(async (descriptor) => ({
@@ -361,7 +361,7 @@ async function bindTools(input: BindToolsInput): Promise<readonly ToolCapability
       execute: async <TInput, TResult>(input: TInput, invocation: ToolInvocationContext): Promise<TResult> => {
         assertActive(isActive);
         const result = await index.execute<TInput, TResult>({ requester: r.descriptor.owner, name: r.descriptor.name, input, invocation, snapshot: operationSnapshot, operation });
-        return await captureToolImages(result, localAssets, invocation, r.descriptor.qualifiedName, invocation.signal) as TResult;
+        return await captureToolImages(result, localAssets, invocation, r.descriptor.qualifiedName) as TResult;
       },
     })));
 }
@@ -441,7 +441,7 @@ function bindMcp(
     callTool: async <TResult>(tool: string, input: unknown, invocation?: ToolInvocationContext) => {
       assertActive(isActive);
       const result = await index.callTool(owner, descriptor.name, tool, input);
-      return await captureToolImages(result, localAssets, invocation, `${descriptor.qualifiedName}/${tool}`, invocation?.signal) as TResult;
+      return await captureToolImages(result, localAssets, invocation, `${descriptor.qualifiedName}/${tool}`) as TResult;
     },
   })));
 }

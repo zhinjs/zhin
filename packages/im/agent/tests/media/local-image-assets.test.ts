@@ -133,6 +133,16 @@ it('does not publish references on cancellation or storage failure, and leaves n
   expect(await readFile(directory, 'utf8')).toBe('not a directory');
 });
 
+it('keeps class instances beside a captured image unchanged', async () => {
+  const store = new LocalImageAssetStore(directory);
+  const createdAt = new Date('2026-11-12T00:00:00Z');
+  const raw = Buffer.from('metadata');
+  const output = await captureToolImages({ createdAt, raw, content: [{ type: 'image', data: image, mimeType: 'image/gif' }] }, store, scope, 'plugin:test') as Record<string, unknown>;
+  expect(JSON.stringify(output)).not.toContain(image);
+  expect(output.createdAt).toBe(createdAt);
+  expect(output.raw).toBe(raw);
+});
+
 it('captures protocol images, image resources and mirrored binary copies without publishing or losing tool text', async () => {
   const store = new LocalImageAssetStore(directory);
   const result = { content: [

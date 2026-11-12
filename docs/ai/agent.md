@@ -531,7 +531,7 @@ ai:
 | 任务 | `todo_read`、`todo_write` |
 | 协作 | `agents`、`ask`、`delegate`、`tell`、`cancel_delegation`、`escalate`（有其他可联系的 Agent 时才提供） |
 | 记忆 / 检索 | `memory_search`、`memory_upsert`、`knowledge_search`、`inspect_conversation_reference` |
-| 媒体 | `generate_image`；配置 R2 后可审批调用 `upload_image(file_path)`；工具结果里的私有图片（MCP 与插件工具）通过 `get_local_assets(asset_id)` 按需查看，见[图片存储](./index.md#ai-imagestorage) |
+| 媒体 | `generate_image`；配置 R2 后可审批调用 `upload_image(file_path)`；工具结果里的私有图片（MCP、插件、Seam 与内置工具）通过 `get_local_assets(asset_id)` 按需查看，见[图片存储](./index.md#ai-imagestorage) |
 | 元工具 | `discover`、`load_tool`、`load_skill` |
 | 定时 | `schedule_list`、`schedule_add`、`schedule_remove`、`schedule_pause`、`schedule_resume`、`schedule_preview` |
 

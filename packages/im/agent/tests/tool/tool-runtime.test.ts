@@ -62,6 +62,27 @@ describe('ToolRuntime', () => {
     } finally { await rm(directory, { recursive: true, force: true }); }
   });
 
+  it('journals the real result when cancellation arrives while a completed tool image is being saved', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'zhin-tool-runtime-cancel-'));
+    const image = 'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+    const controller = new AbortController();
+    const store = new LocalImageAssetStore(directory);
+    const capture = store.capture.bind(store);
+    store.capture = (async (...args: Parameters<typeof store.capture>) => { controller.abort(); return capture(...args); }) as typeof store.capture;
+    const journaled: Array<{ type: string }> = [];
+    try {
+      const rt = new ToolRuntime(makeCtx({
+        signal: controller.signal, localAssets: store,
+        localAssetScope: { sessionKey: 's1', origin: { kind: 'internal', source: 'test' } as never, principal: { subjectId: 'u1', roles: [] } },
+        journal: { append: event => { journaled.push(event as { type: string }); } },
+      }));
+      const tool = makeTool({ execute: async () => ({ content: [{ type: 'image', data: image, mimeType: 'image/gif' }] }) });
+      const result = await rt.execute(tool, {}, { toolCallId: 'tc-cancel' });
+      expect(JSON.stringify(result.output)).toContain('asset_id');
+      expect(journaled.map(event => event.type)).toContain('tool_result');
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+
   it('does not fabricate IM authority for standalone execution', async () => {
     const rt = new ToolRuntime(makeCtx({ commMessage: undefined }));
     const tool = makeTool({

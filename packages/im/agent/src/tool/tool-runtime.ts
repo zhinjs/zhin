@@ -166,7 +166,7 @@ export class ToolRuntime {
 
     // Every tool kind, not only MCP: image bytes must never reach the journal or model context.
     output = await captureToolImages(output, ctx.localAssets,
-      ctx.localAssetScope ?? localImageScopeFromMessage(ctx.commMessage, ctx.sessionId), toolName, ctx.signal);
+      ctx.localAssetScope ?? localImageScopeFromMessage(ctx.commMessage, ctx.sessionId), toolName);
 
     // 7. Journal: tool_result
     await emitToolResult(ctx, toolName, output, call.toolCallId, durationMs);
