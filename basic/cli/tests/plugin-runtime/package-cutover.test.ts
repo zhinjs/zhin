@@ -60,6 +60,16 @@ describe('package cutover', () => {
     await expect(cutover.plan(root)).resolves.toMatchObject({ changed: false });
   });
 
+  it('rewrites a bare zhin start (background by default now) to the foreground start script', async () => {
+    const root = await fixture({ private: true, scripts: { start: 'zhin start', daemon: 'zhin start --daemon', dev: 'zhin start --watch' } });
+    const plan = await new PackageCutover().plan(root);
+    expect(JSON.parse(plan.candidatePackage).scripts).toMatchObject({
+      start: 'zhin start --foreground --mode production --no-watch',
+      daemon: 'zhin start --daemon',
+      dev: 'zhin start --watch',
+    });
+  });
+
   it('emits a publishable JavaScript package golden manifest for a public plugin', async () => {
     const root = await fixture({ private: false, scripts: { dev: 'zhin dev', build: 'zhin build' } });
     await writeFile(join(root, 'commands/status/index.ts'), legacyCommandDefinition());

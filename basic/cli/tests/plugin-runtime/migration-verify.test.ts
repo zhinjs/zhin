@@ -1,4 +1,4 @@
-import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -23,6 +23,22 @@ describe('MigrationVerifier', () => {
       commands: [{ command: 'pnpm', arguments: ['run', 'build'] }],
     });
 
+  });
+
+  it('rejects a start script that backgrounds (zhin start without --foreground)', async () => {
+    const root = await fixture(true);
+    await cutover(root);
+    await fakeTypeScript(root, 'exit 0');
+    const file = join(root, 'package.json');
+    const pkg = JSON.parse(await readFile(file, 'utf8')) as { scripts: Record<string, string> };
+    pkg.scripts.start = 'zhin start --mode production';
+    await writeFile(file, `${JSON.stringify(pkg, null, 2)}\n`);
+
+    await expect(new MigrationVerifier().verify(root)).rejects.toThrow('must run "start" in the foreground');
+
+    pkg.scripts.start = 'zhin runtime start --mode production';
+    await writeFile(file, `${JSON.stringify(pkg, null, 2)}\n`);
+    await expect(new MigrationVerifier().verify(root)).resolves.toMatchObject({ mode: 'development' });
   });
 
   it('builds and packs a publish cutover without installing dependencies', async () => {

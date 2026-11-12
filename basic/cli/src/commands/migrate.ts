@@ -20,7 +20,7 @@ import { NODE_ENGINES_HINT } from '@zhin.js/gateway/project';
 import { applyInstanceDeclarationMigration, formatInstanceMigrationPreview, planInstanceDeclarationMigration, recoverInstanceDeclarationMigration } from '@zhin.js/gateway/project';
 import { CONFIG_V2_MIGRATION_DOCS_URL, detectLegacyConfig } from '@zhin.js/gateway/project';
 import { importProjectInstanceCli } from '../utils/project-instance.js';
-import { LEGACY_START_SCRIPTS, RECOMMENDED_START_SCRIPTS } from '../plugin-runtime/migrate/start-scripts.js';
+import { isLegacyScript, LEGACY_START_SCRIPTS, RECOMMENDED_START_SCRIPTS } from '../plugin-runtime/migrate/start-scripts.js';
 import { gatewayRangeFor, isBotProjectDirectory, withStartStackDependencies } from '../plugin-runtime/migrate/start-stack-dependencies.js';
 
 const cwd = process.cwd();
@@ -29,6 +29,7 @@ const ZHIN_PACKAGE_PREFIX = '@zhin.js/';
 const CORE_PACKAGE = 'zhin.js';
 
 // `zhin start` is the entry (ADR 0054 §6); `zhin runtime start` is an accepted alias, never rewritten.
+// A bare `zhin start` in `start` / `dev` is rewritten: it runs in the background by default now.
 const RECOMMENDED_SCRIPTS: Record<string, string> = {
   ...RECOMMENDED_START_SCRIPTS,
   stop: 'zhin stop',
@@ -151,8 +152,7 @@ export function upgradePackageJson(pkgPath: string, options: { toLatest: boolean
   if (!pkg.scripts) pkg.scripts = {};
   for (const [name, cmd] of Object.entries(RECOMMENDED_SCRIPTS)) {
     const current = pkg.scripts[name];
-    const isLegacy = typeof current === 'string'
-      && (LEGACY_SCRIPTS[name] ?? []).includes(current.trim());
+    const isLegacy = isLegacyScript(LEGACY_SCRIPTS, name, current);
     if (!current || isLegacy) {
       if (options.dryRun) {
         console.log(chalk.cyan(`  [dry-run] scripts.${name}: ${current ?? '(missing)'} → "${cmd}"`));
