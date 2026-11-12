@@ -23,6 +23,7 @@ import {
   PLUGIN_RPC,
   ENDPOINT_RPC,
   CONSOLE_EVENT_RECOVERY_GAP_EVENT,
+  GATEWAY_PACKAGES_PROGRESS,
   SIDE_EVENT_PUSH,
   parseConsoleSseFrame,
   type ConsoleEventData,
@@ -53,6 +54,14 @@ export interface ConsoleEventRecoveryGap {
   readonly page: ConsoleEventHistoryPage;
 }
 export type ConsoleEventRecoveryGapListener = (gap: ConsoleEventRecoveryGap) => void;
+
+/** Longest the gateway waits for an instance to become ready (`gateway.readyTimeout`, 1–3600 s). */
+const MAX_INSTANCE_READY_WAIT_MS = 3_600_000;
+/** Transaction phases that wait for the instance to become ready. */
+const READY_WAIT_PHASES: ReadonlySet<string> = new Set(['start-instance', 'restart-instance']);
+
+/** A package transaction outlived the client's wait: it may still run, or have finished. */
+export const PACKAGE_RESULT_UNKNOWN_MESSAGE = '结果未知：等待依赖事务超时，事务可能仍在进行或已经完成。请在「实例」页与依赖列表核对后再决定是否重试。';
 
 export class ConsoleTransport {
   private config: Required<ConsoleTransportConfig>;
@@ -333,6 +342,8 @@ export class ConsoleTransport {
     const token = auth.token;
     const requestId = ++this.requestId;
     const body = { ...(message as Record<string, unknown>), requestId };
+    const timeoutMs = options.timeoutMs ?? this.config.requestTimeout;
+    const deadline = options.renewOn ? this.renewableDeadline(timeoutMs, options.renewOn) : undefined;
     try {
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
@@ -342,7 +353,7 @@ export class ConsoleTransport {
         method: "POST",
         headers,
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(options.timeoutMs ?? this.config.requestTimeout),
+        signal: deadline?.signal ?? AbortSignal.timeout(timeoutMs),
       });
       const json = (await res.json()) as {
         success?: boolean;
@@ -357,8 +368,44 @@ export class ConsoleTransport {
       return json.data as T;
     } catch (error) {
       if (error instanceof ConsoleTransportError) throw error;
+      if (deadline?.expired) throw new ConsoleTransportError(PACKAGE_RESULT_UNKNOWN_MESSAGE, "RESULT_UNKNOWN", error as Error);
       throw new MessageError("REST request failed", error as Error);
+    } finally {
+      deadline?.dispose();
     }
+  }
+
+  /**
+   * An idle deadline: every `renewOn` event restarts it. While a package transaction waits for the
+   * instance to become ready (phases `start-instance` / `restart-instance`, up to
+   * `gateway.readyTimeout`), the window covers the longest ready wait.
+   */
+  private renewableDeadline(idleMs: number, renewOn: string) {
+    const controller = new AbortController();
+    const state = { expired: false };
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const arm = (ms: number): void => {
+      if (timer !== undefined) clearTimeout(timer);
+      timer = setTimeout(() => {
+        state.expired = true;
+        controller.abort(new DOMException('The operation timed out.', 'TimeoutError'));
+      }, ms);
+    };
+    arm(idleMs);
+    const unsubscribe = this.onConsoleEvent(renewOn, (event) => {
+      const phase = (event.data as { type?: unknown; phase?: unknown } | undefined);
+      const waitsForReady = renewOn === GATEWAY_PACKAGES_PROGRESS && phase?.type === 'phase'
+        && typeof phase.phase === 'string' && READY_WAIT_PHASES.has(phase.phase);
+      arm(waitsForReady ? Math.max(idleMs, MAX_INSTANCE_READY_WAIT_MS + 60_000) : idleMs);
+    });
+    return {
+      signal: controller.signal,
+      get expired() { return state.expired; },
+      dispose: () => {
+        if (timer !== undefined) clearTimeout(timer);
+        unsubscribe();
+      },
+    };
   }
 
   isConnected(): boolean {
@@ -622,9 +669,13 @@ export class ConsoleTransport {
     return this.sendRequest<{ entries: import("./types.js").KvEntry[] }>({ type: "db:kv:entries", table });
   }
 
-  /** These RPCs run the package manager on the Host and routinely outlast the default timeout. */
+  /**
+   * These RPCs run the package manager on the Host and routinely outlast the default timeout: the
+   * timeout is an idle one, renewed by every transaction progress event (and stretched while the
+   * instance is starting). When it still expires, the result is unknown, not a failure.
+   */
   private packageOperation(options?: ConsoleRequestOptions): ConsoleRequestOptions {
-    return { timeoutMs: options?.timeoutMs ?? this.config.packageOperationTimeout };
+    return { timeoutMs: options?.timeoutMs ?? this.config.packageOperationTimeout, renewOn: options?.renewOn ?? GATEWAY_PACKAGES_PROGRESS };
   }
 
   private async getRest<T>(path: string): Promise<T> {
