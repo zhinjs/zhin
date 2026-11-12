@@ -2199,6 +2199,9 @@ importers:
       ws:
         specifier: '>=8.21.0'
         version: 8.21.3
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
@@ -2215,9 +2218,6 @@ importers:
       zhin.js:
         specifier: workspace:*
         version: link:../../../packages/im/zhin
-      zod:
-        specifier: ^4.6.7
-        version: 4.6.7
 
   plugins/adapters/discord:
     dependencies:
@@ -2272,6 +2272,9 @@ importers:
       undici:
         specifier: 6.29.1
         version: 6.29.1
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
@@ -2291,9 +2294,6 @@ importers:
       zhin.js:
         specifier: workspace:*
         version: link:../../../packages/im/zhin
-      zod:
-        specifier: ^4.6.7
-        version: 4.6.7
 
   plugins/adapters/douyin-live:
     dependencies:
@@ -2428,6 +2428,9 @@ importers:
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
@@ -2447,9 +2450,6 @@ importers:
       zhin.js:
         specifier: workspace:*
         version: link:../../../packages/im/zhin
-      zod:
-        specifier: ^4.6.7
-        version: 4.6.7
 
   plugins/adapters/icqq:
     dependencies:
@@ -2492,6 +2492,9 @@ importers:
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
     devDependencies:
       '@icqqjs/icqq':
         specifier: ^1.12.2
@@ -2514,9 +2517,6 @@ importers:
       zhin.js:
         specifier: workspace:*
         version: link:../../../packages/im/zhin
-      zod:
-        specifier: ^4.6.7
-        version: 4.6.7
 
   plugins/adapters/juejin:
     dependencies:
@@ -2608,6 +2608,9 @@ importers:
       ws:
         specifier: ^8.21.1
         version: 8.22.0
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
@@ -2624,9 +2627,6 @@ importers:
       zhin.js:
         specifier: workspace:*
         version: link:../../../packages/im/zhin
-      zod:
-        specifier: ^4.6.7
-        version: 4.6.7
 
   plugins/adapters/lark:
     dependencies:
@@ -2678,6 +2678,9 @@ importers:
       undici:
         specifier: 6.29.1
         version: 6.29.1
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
@@ -2700,9 +2703,6 @@ importers:
       zhin.js:
         specifier: workspace:*
         version: link:../../../packages/im/zhin
-      zod:
-        specifier: ^4.6.7
-        version: 4.6.7
 
   plugins/adapters/line:
     dependencies:
@@ -2745,6 +2745,9 @@ importers:
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
@@ -2758,9 +2761,6 @@ importers:
       zhin.js:
         specifier: workspace:*
         version: link:../../../packages/im/zhin
-      zod:
-        specifier: ^4.6.7
-        version: 4.6.7
 
   plugins/adapters/milky:
     dependencies:
@@ -2867,6 +2867,9 @@ importers:
       ws:
         specifier: ^8.21.1
         version: 8.21.1
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
@@ -2883,9 +2886,6 @@ importers:
       zhin.js:
         specifier: workspace:*
         version: link:../../../packages/im/zhin
-      zod:
-        specifier: ^4.6.7
-        version: 4.6.7
 
   plugins/adapters/onebot11:
     dependencies:
@@ -2940,6 +2940,9 @@ importers:
       ws:
         specifier: ^8.21.1
         version: 8.21.1
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
@@ -2956,9 +2959,6 @@ importers:
       zhin.js:
         specifier: workspace:*
         version: link:../../../packages/im/zhin
-      zod:
-        specifier: ^4.6.7
-        version: 4.6.7
 
   plugins/adapters/onebot12:
     dependencies:
@@ -3068,6 +3068,9 @@ importers:
       qq-official-bot:
         specifier: ^1.3.3
         version: 1.3.3
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
@@ -3084,9 +3087,6 @@ importers:
       zhin.js:
         specifier: workspace:*
         version: link:../../../packages/im/zhin
-      zod:
-        specifier: ^4.6.7
-        version: 4.6.7
 
   plugins/adapters/sandbox:
     dependencies:
@@ -3254,6 +3254,9 @@ importers:
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
@@ -3273,9 +3276,6 @@ importers:
       zhin.js:
         specifier: workspace:*
         version: link:../../../packages/im/zhin
-      zod:
-        specifier: ^4.6.7
-        version: 4.6.7
 
   plugins/adapters/telegram:
     dependencies:
@@ -3321,6 +3321,9 @@ importers:
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
@@ -3340,9 +3343,6 @@ importers:
       zhin.js:
         specifier: workspace:*
         version: link:../../../packages/im/zhin
-      zod:
-        specifier: ^4.6.7
-        version: 4.6.7
 
   plugins/adapters/wechat-mp:
     dependencies:
@@ -3443,6 +3443,9 @@ importers:
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
@@ -3456,9 +3459,6 @@ importers:
       zhin.js:
         specifier: workspace:*
         version: link:../../../packages/im/zhin
-      zod:
-        specifier: ^4.6.7
-        version: 4.6.7
 
   plugins/adapters/weixin-ilink:
     dependencies:
@@ -3654,6 +3654,9 @@ importers:
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
     devDependencies:
       typescript:
         specifier: ^6.0.3
@@ -3664,9 +3667,6 @@ importers:
       zhin.js:
         specifier: workspace:*
         version: link:../../../packages/im/zhin
-      zod:
-        specifier: ^4.6.7
-        version: 4.6.7
 
   plugins/games/idiom-chain:
     dependencies:
@@ -3888,6 +3888,9 @@ importers:
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
     devDependencies:
       typescript:
         specifier: ^6.0.3
@@ -3898,9 +3901,6 @@ importers:
       zhin.js:
         specifier: workspace:*
         version: link:../../../packages/im/zhin
-      zod:
-        specifier: ^4.6.7
-        version: 4.6.7
 
   plugins/utils/answers:
     dependencies:
@@ -3935,6 +3935,9 @@ importers:
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
     devDependencies:
       '@zhin.js/command':
         specifier: workspace:*
@@ -3948,9 +3951,6 @@ importers:
       zhin.js:
         specifier: workspace:*
         version: link:../../../packages/im/zhin
-      zod:
-        specifier: ^4.6.7
-        version: 4.6.7
 
   plugins/utils/calendar:
     dependencies:
@@ -3969,6 +3969,9 @@ importers:
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
     devDependencies:
       '@zhin.js/command':
         specifier: workspace:*
@@ -3982,9 +3985,6 @@ importers:
       zhin.js:
         specifier: workspace:*
         version: link:../../../packages/im/zhin
-      zod:
-        specifier: ^4.6.7
-        version: 4.6.7
 
   plugins/utils/code-runner:
     dependencies:
@@ -3997,6 +3997,9 @@ importers:
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
     devDependencies:
       typescript:
         specifier: ^6.0.3
@@ -4007,9 +4010,6 @@ importers:
       zhin.js:
         specifier: workspace:*
         version: link:../../../packages/im/zhin
-      zod:
-        specifier: ^4.6.7
-        version: 4.6.7
 
   plugins/utils/content-moderation:
     dependencies:
@@ -4037,6 +4037,9 @@ importers:
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
     devDependencies:
       typescript:
         specifier: ^6.0.3
@@ -4047,9 +4050,6 @@ importers:
       zhin.js:
         specifier: workspace:*
         version: link:../../../packages/im/zhin
-      zod:
-        specifier: ^4.6.7
-        version: 4.6.7
 
   plugins/utils/earthquake:
     dependencies:
@@ -4059,6 +4059,9 @@ importers:
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
     devDependencies:
       '@zhin.js/command':
         specifier: workspace:*
@@ -4075,9 +4078,6 @@ importers:
       zhin.js:
         specifier: workspace:*
         version: link:../../../packages/im/zhin
-      zod:
-        specifier: ^4.6.7
-        version: 4.6.7
 
   plugins/utils/group-suite:
     dependencies:
@@ -4142,6 +4142,9 @@ importers:
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
     devDependencies:
       '@zhin.js/schedule-feature':
         specifier: workspace:*
@@ -4158,9 +4161,6 @@ importers:
       zhin.js:
         specifier: workspace:*
         version: link:../../../packages/im/zhin
-      zod:
-        specifier: ^4.6.7
-        version: 4.6.7
 
   plugins/utils/link-poster:
     dependencies:
@@ -4260,6 +4260,9 @@ importers:
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
     devDependencies:
       '@zhin.js/command':
         specifier: workspace:*
@@ -4273,9 +4276,6 @@ importers:
       zhin.js:
         specifier: workspace:*
         version: link:../../../packages/im/zhin
-      zod:
-        specifier: ^4.6.7
-        version: 4.6.7
 
   plugins/utils/qrcode:
     dependencies:
@@ -4297,6 +4297,9 @@ importers:
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
     devDependencies:
       typescript:
         specifier: ^6.0.3
@@ -4307,9 +4310,6 @@ importers:
       zhin.js:
         specifier: workspace:*
         version: link:../../../packages/im/zhin
-      zod:
-        specifier: ^4.6.7
-        version: 4.6.7
 
   plugins/utils/reminder:
     dependencies:
@@ -4331,6 +4331,9 @@ importers:
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
     devDependencies:
       '@zhin.js/schedule-feature':
         specifier: workspace:*
@@ -4344,9 +4347,6 @@ importers:
       zhin.js:
         specifier: workspace:*
         version: link:../../../packages/im/zhin
-      zod:
-        specifier: ^4.6.7
-        version: 4.6.7
 
   plugins/utils/repeater:
     dependencies:
@@ -4393,6 +4393,9 @@ importers:
       rss-parser:
         specifier: ^3.13.0
         version: 3.13.0
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
     devDependencies:
       typescript:
         specifier: ^6.0.3
@@ -4403,9 +4406,6 @@ importers:
       zhin.js:
         specifier: workspace:*
         version: link:../../../packages/im/zhin
-      zod:
-        specifier: ^4.6.7
-        version: 4.6.7
 
   plugins/utils/short-url:
     dependencies:
@@ -4424,6 +4424,9 @@ importers:
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
     devDependencies:
       typescript:
         specifier: ^6.0.3
@@ -4434,9 +4437,6 @@ importers:
       zhin.js:
         specifier: workspace:*
         version: link:../../../packages/im/zhin
-      zod:
-        specifier: ^4.6.7
-        version: 4.6.7
 
 packages:
 

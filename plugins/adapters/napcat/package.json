@@ -52,8 +52,8 @@
     "directory": "plugins/adapters/napcat"
   },
   "dependencies": {
-    "@zhin.js/adapter-onebot-events": "workspace:*",
     "@zhin.js/adapter": "workspace:*",
+    "@zhin.js/adapter-onebot-events": "workspace:*",
     "@zhin.js/agent-feature": "workspace:*",
     "@zhin.js/console-contract": "workspace:*",
     "@zhin.js/core": "workspace:*",
@@ -66,7 +66,8 @@
     "@zhin.js/permission": "workspace:*",
     "@zhin.js/skill": "workspace:*",
     "@zhin.js/tool": "workspace:*",
-    "ws": "^8.21.1"
+    "ws": "^8.21.1",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
@@ -74,24 +75,19 @@
     "@zhin.js/host-http": "workspace:*",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",
-    "zhin.js": "workspace:*",
-    "zod": "^4.4.3"
+    "zhin.js": "workspace:*"
   },
   "peerDependencies": {
     "@zhin.js/adapter": "workspace:^",
     "@zhin.js/command": "workspace:^",
     "@zhin.js/core": "workspace:^",
-    "zhin.js": "workspace:^",
-    "zod": "^4.0.0"
+    "zhin.js": "workspace:^"
   },
   "peerDependenciesMeta": {
     "@zhin.js/command": {
       "optional": true
     },
     "zhin.js": {
-      "optional": true
-    },
-    "zod": {
       "optional": true
     }
   },

@@ -54,13 +54,13 @@
     "@zhin.js/page": "workspace:*",
     "@zhin.js/permission": "workspace:*",
     "@zhin.js/skill": "workspace:*",
-    "@zhin.js/tool": "workspace:*"
+    "@zhin.js/tool": "workspace:*",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",
-    "zhin.js": "workspace:*",
-    "zod": "^4.4.3"
+    "zhin.js": "workspace:*"
   },
   "repository": {
     "type": "git",
@@ -112,8 +112,7 @@
     "@zhin.js/page": "workspace:^",
     "@zhin.js/skill": "workspace:^",
     "@zhin.js/tool": "workspace:^",
-    "zhin.js": "workspace:^",
-    "zod": "^4.0.0"
+    "zhin.js": "workspace:^"
   },
   "peerDependenciesMeta": {
     "@zhin.js/middleware": {
@@ -126,9 +125,6 @@
       "optional": true
     },
     "@zhin.js/tool": {
-      "optional": true
-    },
-    "zod": {
       "optional": true
     }
   }
