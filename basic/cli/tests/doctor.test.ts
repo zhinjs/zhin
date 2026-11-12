@@ -107,6 +107,53 @@ describe('doctor console diagnostics', () => {
     expect(tokens[0]).not.toBe(tokens[1]);
   });
 
+  it('reads HTTP_TOKEN per line only, flags weak values, and --fix replaces them with mode 0600', async () => {
+    const { isWeakBootstrapToken, readEnvValue } = await import('../src/commands/doctor.js');
+    // An empty value never borrows the next line.
+    expect(readEnvValue('HTTP_TOKEN=\nOTHER=x\n', 'HTTP_TOKEN')).toBeUndefined();
+    expect(readEnvValue('HTTP_TOKEN=   \nOTHER=x', 'HTTP_TOKEN')).toBeUndefined();
+    expect(readEnvValue('export HTTP_TOKEN="abc def"', 'HTTP_TOKEN')).toBe('abc def');
+    expect(readEnvValue('HTTP_TOKEN=abc # note', 'HTTP_TOKEN')).toBe('abc');
+    for (const value of ['change-me', 'change-me-please-now-1234', 'zhin-local-token', 'zhin-demo', 'short']) {
+      expect(isWeakBootstrapToken(value), value).toBe(true);
+    }
+    expect(isWeakBootstrapToken('Hk3m9x_QwZr7Lp2V5tYb8NcA')).toBe(false);
+
+    for (const existingEnv of ['HTTP_TOKEN=\nOTHER=1\n', '# keep\nHTTP_TOKEN=change-me\nOTHER=1\n', 'HTTP_TOKEN=zhin-local-token\n']) {
+      const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'doctor-weak-token-'));
+      const cwd = vi.spyOn(process, 'cwd').mockReturnValue(directory);
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const exit = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('doctor exited'); });
+      const previous = process.env.HTTP_TOKEN;
+      delete process.env.HTTP_TOKEN;
+      try {
+        fs.writeFileSync(path.join(directory, 'package.json'), JSON.stringify({ name: 'doctor-weak-token', private: true, dependencies: { 'zhin.js': '^1.0.0' } }));
+        fs.writeFileSync(path.join(directory, '.env'), existingEnv, { mode: 0o644 });
+        const { doctorCommand } = await import('../src/commands/doctor.js');
+        // Without --fix: warned, nothing written.
+        await doctorCommand.parseAsync(['node', 'zhin']).catch(() => {});
+        expect(fs.readFileSync(path.join(directory, '.env'), 'utf8')).toBe(existingEnv);
+        if (existingEnv.includes('change-me') || existingEnv.includes('zhin-local')) {
+          expect(log.mock.calls.map(args => args.join(' ')).join('\n')).toContain('弱值');
+        }
+        await doctorCommand.parseAsync(['node', 'zhin', '--fix']).catch(() => {});
+        const env = fs.readFileSync(path.join(directory, '.env'), 'utf8');
+        const token = readEnvValue(env, 'HTTP_TOKEN');
+        expect(token, existingEnv).toMatch(/^[\w-]{43}$/u);
+        expect(env).toContain('OTHER=1'.repeat(existingEnv.includes('OTHER') ? 1 : 0));
+        expect(env).not.toMatch(/change-me|zhin-local-token/u);
+        if (process.platform !== 'win32') expect(fs.statSync(path.join(directory, '.env')).mode & 0o777).toBe(0o600);
+      } finally {
+        if (previous === undefined) delete process.env.HTTP_TOKEN;
+        else process.env.HTTP_TOKEN = previous;
+        cwd.mockRestore();
+        log.mockRestore();
+        exit.mockRestore();
+        fs.rmSync(directory, { recursive: true, force: true });
+      }
+    }
+  });
+
   it('detects missing Sandbox, CORS, and token config', () => {
     const diagnosis = diagnoseConsoleConfig({ configVersion: 2, plugins: {example: 'example'}, example: {}, http: {} });
 
