@@ -7,7 +7,7 @@ export default defineEvalCase({
   description: 'Addressing @coder routes the entry turn to coder with its own tool ceiling and peer contacts.',
   source: 'ADR 0048 §2 / H4 (specialist entry routing & ceiling)',
   tags: ['collaboration', 'tool-use'],
-  inbound: { text: '@coder 查一下配置规范并更新端口', sender: { id: 'master', chatRole: 'owner' } },
+  inbound: { text: '@coder 查一下配置规范并更新端口', sender: { id: 'master', chatRole: 'owner', chatRoleLevels: { owner: 'global' } } },
   tools: [
     { name: 'edit_code', result: 'updated port to 8080' },
     { name: 'lookup_docs', result: 'Standard port is 8080.' },

@@ -5,7 +5,7 @@ export default defineEvalCase({
   description: 'With no approval channel the gated tool is denied with an explicit "unavailable" reason, not a fake user denial.',
   source: '#716 typed approval outcomes (no channel ≠ user said no)',
   tags: ['approval'],
-  inbound: { text: '重启一下机器人', sender: { id: 'owner', chatRole: 'owner' } },
+  inbound: { text: '重启一下机器人', sender: { id: 'owner', chatRole: 'owner', chatRoleLevels: { owner: 'global' } } },
   tools: [{ name: 'restart_bot', requiresApproval: 'once', result: 'restarting' }],
   approval: 'unavailable',
   script: [

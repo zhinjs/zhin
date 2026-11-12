@@ -9,7 +9,7 @@ import type { TurnPolicyContext } from '../../src/turn/turn-ingress.js';
 import type { TurnMergedSender } from '../../src/turn/merged-turn-context.js';
 import type { TurnLiveDanmaku } from '../../src/turn/live-turn-context.js';
 import type { ScriptStep } from './scripted-model.js';
-import type { EvalRunRecord } from './driver.js';
+import type { EvalRunRecord, EvalSender } from './driver.js';
 import type { EvalLiveCheck } from './live-checks.js';
 import type { MemoryEntryUpsertInput } from '@zhin.js/ai';
 import type { ToolInputJsonObjectSchema } from '@zhin.js/tool';
@@ -26,7 +26,7 @@ export interface EvalInboundMessage {
   readonly scope?: 'private' | 'group';
   /** Defaults to `{ id: 'eval-user', roles: ['user'] }`. */
   /** `chatRole` (ADR 0056) expands to the principal roles; `roles` sets them directly. */
-  readonly sender?: Readonly<{ id: string; name?: string; roles?: readonly string[]; chatRole?: 'owner' | 'admin' | 'trusted' }>;
+  readonly sender?: EvalSender;
   /** Background conversation events rendered as untrusted data before the message. */
   readonly backgroundEvents?: readonly string[];
   /**
@@ -91,7 +91,7 @@ export interface EvalTimerInbound {
   /** Actor that receives the timer Mail; defaults to the entry agent. */
   readonly target?: string;
   /** Reminder owner: the principal and the Venue reply target. Required. */
-  readonly owner: Readonly<{ id: string; roles?: readonly string[]; chatRole?: 'owner' | 'admin' | 'trusted' }>;
+  readonly owner: EvalSender;
   /**
    * Engagement budget grant carried by the timer Mail (ADR 0048 §3.4 invariant 2).
    * Omitted keys fall back to the host mailbox default for that key.

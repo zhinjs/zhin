@@ -6,7 +6,7 @@ export default defineEvalCase({
   source: '#1102: deduplicate discover results while preserving ADR 0042 discover -> call -> reply (3 model calls)',
   tags: ['tool-use'],
   workspace: {},
-  inbound: { text: '发一条群公告：周五放假', scope: 'group', sender: { id: 'owner', chatRole: 'owner' } },
+  inbound: { text: '发一条群公告：周五放假', scope: 'group', sender: { id: 'owner', chatRole: 'owner', chatRoleLevels: { owner: 'global' } } },
   tools: [{
     name: 'group_announcement',
     description: 'Publish a group announcement.',

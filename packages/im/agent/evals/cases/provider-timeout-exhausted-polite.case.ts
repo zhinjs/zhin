@@ -5,7 +5,7 @@ export default defineEvalCase({
   description: 'When every attempt hangs past the request timeout, the owner gets a chat-voice line saying the model timed out.',
   source: '#724 provider resilience (timeouts exhausted → friendly feedback)',
   tags: ['long-task'],
-  inbound: { text: '帮我写一句早安问候', sender: { id: 'owner', chatRole: 'owner' } },
+  inbound: { text: '帮我写一句早安问候', sender: { id: 'owner', chatRole: 'owner', chatRoleLevels: { owner: 'global' } } },
   agentConfig: { providerResilience: { requestTimeoutMs: 30_000, maxRetries: 1, baseDelayMs: 1, maxDelayMs: 1 } },
   script: [
     { fault: { kind: 'hang' } },

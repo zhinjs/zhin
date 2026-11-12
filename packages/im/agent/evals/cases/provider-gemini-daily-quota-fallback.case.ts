@@ -28,7 +28,7 @@ export default defineEvalCase({
   description: 'A Gemini per-day quota 429 fails on the fixed primary without retrying or calling a registered alternative.',
   source: '2026-10-30 approved fixed chat model policy (including legacy config); #724/#770 daily quota remains non-retryable',
   tags: ['long-task'],
-  inbound: { text: '帮我写一句早安问候', sender: { id: 'owner', chatRole: 'owner' } },
+  inbound: { text: '帮我写一句早安问候', sender: { id: 'owner', chatRole: 'owner', chatRoleLevels: { owner: 'global' } } },
   // Registered alternatives must never receive a chat request under the fixed-model policy.
   models: ['scripted-fallback'],
   script: [

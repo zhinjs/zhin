@@ -49,7 +49,7 @@ const SKILLS = ['group-admin', 'scheduling', 'weather', 'music', 'image-creation
 const BASE = { tools: [...RESIDENT, ...DEFERRED], skills: SKILLS, hostBootstrap: true } as const;
 
 const GROUP = { scope: 'group', sender: { id: 'alice', name: 'Alice' } } as const;
-const MASTER = { scope: 'private', sender: { id: 'master', name: 'Fin', chatRole: 'owner' } } as const;
+const MASTER = { scope: 'private', sender: { id: 'master', name: 'Fin', chatRole: 'owner', chatRoleLevels: { owner: 'global' } } } as const;
 
 export const BUDGET_SCENES: readonly BudgetScene[] = [
   {

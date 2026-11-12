@@ -13,7 +13,7 @@
  * Time is virtual: message arrival (`at`) and turn duration (`turnMs`) are
  * milliseconds on a deterministic clock that also drives the mailbox queue TTL.
  */
-import { evalSenderRoles } from './driver.js';
+import { evalSenderRoles, runEvalCase, type EvalSender } from './driver.js';
 import { isCancelIntent } from '../../src/turn/cancel-intent.js';
 import { HostMailbox } from '../../src/collaboration/host-mailbox.js';
 import { DEFAULT_MAILBOX_CONFIG } from '../../src/turn/mailbox-config.js';
@@ -23,12 +23,11 @@ import {
   type TurnAdmissionFacts,
   type TurnStopResult,
 } from '../../src/turn/turn-admission.js';
-import { runEvalCase } from './driver.js';
 
 export interface IngressEvalMessage {
   /** Arrival time on the virtual clock (ms). */
   readonly at: number;
-  readonly sender: Readonly<{ id: string; roles?: readonly string[]; chatRole?: 'owner' | 'admin' | 'trusted' }>;
+  readonly sender: EvalSender;
   readonly text: string;
   /** Media/quote/forward messages are never merged. Default true. */
   readonly plainText?: boolean;

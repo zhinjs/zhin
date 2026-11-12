@@ -7,7 +7,7 @@ export default defineEvalCase({
   description: 'A delegatee granted one model call is stopped after it, and the delegator still answers the human.',
   source: 'ADR 0048 §3.4 invariant 2 (budget conservation)',
   tags: ['collaboration', 'long-task', 'quota'],
-  inbound: { text: '让 researcher 把所有版本的发布日期都查一遍', sender: { id: 'master', chatRole: 'owner' } },
+  inbound: { text: '让 researcher 把所有版本的发布日期都查一遍', sender: { id: 'master', chatRole: 'owner', chatRoleLevels: { owner: 'global' } } },
   tools: [{ name: 'lookup_docs', result: 'v1: 2024-01' }],
   agents: [{ name: 'researcher', description: 'Looks things up; read-only.', tools: ['lookup_docs'] }],
   // The entry agent blocks on `ask`. researcher is granted one model call, which its first request spends; the

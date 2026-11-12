@@ -15,7 +15,7 @@ export default defineEvalCase({
   description: 'An OpenAI 429 insufficient_quota is not retried like a rate limit; the owner is told the account is out of credit.',
   source: '#724 provider audit S19: OpenAI insufficient_quota retried uselessly',
   tags: ['long-task'],
-  inbound: { text: '帮我写一句早安问候', sender: { id: 'owner', chatRole: 'owner' } },
+  inbound: { text: '帮我写一句早安问候', sender: { id: 'owner', chatRole: 'owner', chatRoleLevels: { owner: 'global' } } },
   script: [
     { model: 'scripted-model', fault: { kind: 'error', message: INSUFFICIENT_QUOTA.error.message, status: 429, body: INSUFFICIENT_QUOTA } },
   ],

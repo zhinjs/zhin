@@ -16,7 +16,7 @@ export default defineEvalCase({
   description: 'A draft that FAILS its trial is re-drafted as a new change without reusing the failed change_id; only the new one waits for approval.',
   source: '#1051 F5 (ADR 0040 §3): trial_failed is terminal; the model must start a new change rather than revise the failed one',
   tags: ['tool-use'],
-  inbound: { text: '加一个 /ping 指令，回复 pong', sender: { id: 'owner', chatRole: 'owner' } },
+  inbound: { text: '加一个 /ping 指令，回复 pong', sender: { id: 'owner', chatRole: 'owner', chatRoleLevels: { owner: 'global' } } },
   workspace: { 'package.json': '{"name":"eval-bot","private":true}\n' },
   nativeTools: ['change_draft'],
   script: [
