@@ -20,6 +20,7 @@ import { readGatewayInfo, removeGatewayInfo, writeGatewayInfo } from '../local/s
 import { isNodeVersionSupported, NODE_ENGINES_HINT } from '../project/node-requirements.js';
 import { InstanceSupervisor, type InstanceRestartPolicy, type InstanceStatus } from '../supervisor/instance-supervisor.js';
 import { defaultInstanceLogFile, supervisedNodeArguments, type RunSupervisedInstanceOptions } from '../supervisor/run-instance.js';
+import { captureTerminalState, isForegroundProcessGroup } from '../supervisor/terminal-state.js';
 import { loadGatewaySettings, startGateway, type RunningGateway } from './start-gateway.js';
 
 /** Set on the instance when its output is echoed to an interactive terminal (TTY-style logging). */
@@ -64,9 +65,16 @@ export function consoleLink(origin: string, token?: string): string {
   return token ? `${url}#token=${encodeURIComponent(token)}` : url;
 }
 
-/** Whether the instance gets the gateway's stdin: a foreground gateway whose stdin is a TTY. */
-export function foregroundStdin(daemon: boolean, stdin: { readonly isTTY?: boolean } = process.stdin): boolean {
-  return !daemon && stdin.isTTY === true;
+/**
+ * Whether the instance gets the gateway's stdin: a foreground gateway whose stdin is a TTY and
+ * that is the terminal's foreground job (a background job's child reading the TTY gets SIGTTIN).
+ */
+export function foregroundStdin(
+  daemon: boolean,
+  stdin: { readonly isTTY?: boolean } = process.stdin,
+  foregroundGroup: () => boolean = isForegroundProcessGroup,
+): boolean {
+  return !daemon && stdin.isTTY === true && foregroundGroup();
 }
 
 /**
@@ -110,6 +118,9 @@ export async function runGateway(input: RunGatewayOptions): Promise<number> {
   // Keyed proof the CLI checks before it talks to the endpoint (only in the 0600 state file).
   const handshakeKey = randomBytes(32).toString('hex');
 
+  const shareTerminal = foregroundStdin(daemon);
+  // The instance may leave the shared terminal raw / without echo when it exits or crashes.
+  const terminal = shareTerminal ? captureTerminalState() : undefined;
   const supervisor = new InstanceSupervisor({
     ...(settings.readyTimeoutMs !== undefined ? { readyTimeoutMs: settings.readyTimeoutMs } : {}),
     spawn: {
@@ -125,7 +136,7 @@ export async function runGateway(input: RunGatewayOptions): Promise<number> {
     },
     output: 'pipe',
     // Foreground on a TTY: the instance reads the terminal (terminal adapters); never in the background.
-    input: foregroundStdin(daemon) ? 'inherit' : 'ignore',
+    input: shareTerminal ? 'inherit' : 'ignore',
     logs: { ...input.logs, file: logFile },
     // The gateway outlives the instance (ADR 0054 §5); `--once` is a single check run.
     restart: { onCrash: !options.once, onRequest: !options.once, ...input.restart },
@@ -136,6 +147,7 @@ export async function runGateway(input: RunGatewayOptions): Promise<number> {
     });
   }
   supervisor.on('state', (status) => {
+    if (terminal && (status.state === 'stopped' || status.state === 'crashed' || status.state === 'backoff')) terminal.restore();
     logger.info(formatCompact({ op: 'instance_state', state: status.state, ...(status.pid ? { pid: status.pid } : {}) }));
   });
   supervisor.on('failure', (failure) => {
@@ -231,6 +243,7 @@ export async function runGateway(input: RunGatewayOptions): Promise<number> {
   const onSighup = (): void => { if (!daemon) onSignal('SIGHUP'); };
   const onExit = (): void => {
     supervisor.dispose();
+    terminal?.restore();
     removePidFile();
   };
   const removePidFile = (): void => {

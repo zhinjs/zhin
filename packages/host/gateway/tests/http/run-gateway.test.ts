@@ -188,9 +188,11 @@ describe('runGateway (zhin runtime start, supervised)', () => {
 
 describe('foregroundStdin', () => {
   it('forwards stdin to the instance only for a foreground gateway on a TTY', () => {
-    expect(foregroundStdin(false, { isTTY: true })).toBe(true);
-    expect(foregroundStdin(true, { isTTY: true })).toBe(false);
-    expect(foregroundStdin(false, { isTTY: false })).toBe(false);
-    expect(foregroundStdin(false, {})).toBe(false);
+    expect(foregroundStdin(false, { isTTY: true }, () => true)).toBe(true);
+    expect(foregroundStdin(true, { isTTY: true }, () => true)).toBe(false);
+    expect(foregroundStdin(false, { isTTY: false }, () => true)).toBe(false);
+    expect(foregroundStdin(false, {}, () => true)).toBe(false);
+    // A background job (`zhin start --foreground &`) keeps its TTY away from the instance.
+    expect(foregroundStdin(false, { isTTY: true }, () => false)).toBe(false);
   });
 });

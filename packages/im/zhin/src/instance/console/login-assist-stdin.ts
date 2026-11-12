@@ -84,9 +84,10 @@ function promptTask(task: PendingLoginTask): void {
     ...(url ? { url } : {}),
     ...(task.payload.image ? { image: '[qrcode]' } : {}),
   }));
-  if (url) {
-    process.stderr.write(`${message}\n${url}\n> `);
-  } else {
-    process.stderr.write(`${message}\n> `);
-  }
+  // Whole lines only: the gateway forwards instance output line by line, so a bare `> ` prompt
+  // would only show up after the answer was typed.
+  process.stderr.write(`${message}\n${url ? `${url}\n` : ''}${LOGIN_ASSIST_PROMPT}\n`);
 }
+
+/** Line printed under a login-assist request (ends with a newline, see `promptTask`). */
+export const LOGIN_ASSIST_PROMPT = '> 请在下方输入后回车（或在 Console 中提交）';

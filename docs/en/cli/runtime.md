@@ -40,7 +40,7 @@ zhin start --once --mode test
 
 | Option | Description |
 | --- | --- |
-| `-f, --foreground` | Run the gateway in the foreground (development, systemd, containers, PM2) and echo the instance output. `--once` and `--standalone` always run in the foreground |
+| `-f, --foreground` | Run the gateway in the foreground (development, systemd, containers, PM2) and echo the instance output. When stdin is a terminal and the gateway is the terminal's foreground job, the instance shares that input (terminal adapters, login assist); a gateway started as a background job (`… &`) keeps it from the instance, also after a later `fg`. When the instance exits or crashes, the gateway restores the terminal settings it started with (`stty`; not on Windows). `--once` and `--standalone` always run in the foreground |
 | `-d, --daemon` | Run in the background (what `zhin start` does by default). The background gateway's own output goes to `.zhin/logs/gateway.log` |
 | `--mode <mode>` | Runtime mode: `development` (default) / `test` / `production` |
 | `--environment <name>` | Environment name, defaults to `--mode`; selects `.env.<name>` and must match `/^[a-z0-9][a-z0-9-]*$/` |

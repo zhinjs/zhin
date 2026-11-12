@@ -40,7 +40,7 @@ zhin start --once --mode test
 
 | 选项 | 说明 |
 | --- | --- |
-| `-f, --foreground` | 前台运行网关（开发、systemd、容器、PM2）；实例输出回显到终端。`--once`、`--standalone` 总是前台 |
+| `-f, --foreground` | 前台运行网关（开发、systemd、容器、PM2）；实例输出回显到终端。标准输入是终端、且网关是终端的前台作业时，实例共用该终端输入（终端适配器、登录辅助）；作为后台作业（`… &`）启动时不交给实例，之后 `fg` 也不会再接上。实例退出或崩溃后网关恢复启动时的终端设置（`stty`，Windows 除外）。`--once`、`--standalone` 总是前台 |
 | `-d, --daemon` | 后台运行（`zhin start` 的默认行为，可省略）。后台网关自身的输出写入 `.zhin/logs/gateway.log` |
 | `--mode <mode>` | 运行模式：`development`（默认）/ `test` / `production` |
 | `--environment <name>` | 环境名，默认与 `--mode` 相同；决定加载 `.env.<name>`，须匹配 `/^[a-z0-9][a-z0-9-]*$/` |
