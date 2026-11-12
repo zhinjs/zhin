@@ -197,7 +197,11 @@ function resolveSpecPermit(
 ): string[] | undefined {
   if (!specPerm) return undefined;
   const resolved = permitResolver(specPerm);
-  return resolved ? [resolved] : undefined;
+  // ADR 0056 §5: the sender's platform standing and the Bot's own standing are both required — the
+  // Bot performs the action, so it must hold the same standing in the conversation.
+  const bot = specPerm === 'owner' || specPerm === 'admin' ? `bot:${specPerm}` : undefined;
+  const permits = [...(resolved ? [resolved] : []), ...(bot ? [bot] : [])];
+  return permits.length ? permits : undefined;
 }
 
 export function createSceneManagementTools(

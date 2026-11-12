@@ -175,6 +175,7 @@ export function observeFloodMessage(input: Readonly<{
       memberId,
       ...(message.sender?.name ? { memberName: message.sender.name } : {}),
       ...(message.sender?.chatRole ? { memberChatRole: message.sender.chatRole } : {}),
+      ...(message.sender?.platform ? { memberPlatform: message.sender.platform } : {}),
       trigger: 'flood',
       sentAt: at,
       ...(message.message?.id ? { messageId: message.message.id } : {}),

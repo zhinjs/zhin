@@ -14,6 +14,7 @@ export default defineAgentTool<{ group_id: number; user_id: number; title: strin
   // ADR 0044: offered only while the Bot can actually do this here (e.g. it is a group admin).
   requiresCapabilities: ['actions.setTitle'],
   scopes:['group'],
+  permissions: ['platform:admin', 'bot:owner'],
   requiresApproval: 'always',
   async execute({ group_id, user_id, title, duration }, context) {
     const client = context.$client;

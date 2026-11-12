@@ -28,7 +28,7 @@ describe('earthquake layered feature switch (ADR 0050 / 0055)', () => {
     const checked: unknown[] = [];
     const fake = await runPluginSetup(plugin, { config: {}, feature: { isEnabledFor: target => { checked.push(target); return enabled; } } });
     try {
-      const message = createFakeMessage({ sender: { id: 'admin-1', name: 'Admin', roles: ['admin'] } });
+      const message = createFakeMessage({ sender: { id: 'admin-1', name: 'Admin', chatRole: 'admin' } });
       await runCommand(fake, subscribeCommand, { input: message, params: { filters: ['5'] } });
       await fake.clock.advance(2 * 60_000); // baseline tick
       enabled = false;

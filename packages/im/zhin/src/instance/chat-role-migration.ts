@@ -11,8 +11,8 @@
  * is loaded the grants are written to `chat_roles` and the record turns `done`. A crash in between
  * replays the pending record on the next start. After that, configuration that names these fields
  * again stops startup with {@link LegacyChatRoleConfigError}, pointing at the upgrade guide.
- * The interim `features.selfService.platformAdmins | roles | allowUsers` switches are replaced by
- * mapping rules and always stop startup.
+ * The interim `features.selfService.platformAdmins | roles | allowUsers` switches and the removed
+ * `roles` (mapping rule) blocks of adapters / accounts always stop startup.
  */
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
@@ -50,7 +50,8 @@ export class LegacyChatRoleConfigError extends Error {
   constructor(readonly fields: readonly string[]) {
     super(`Configuration still names removed chat role fields: ${fields.join(', ')}. `
       + `People lists live in the project database now (chat_roles; Console or the in-chat \`role\` command), `
-      + `and platform roles map through roles.mappings. See ${CHAT_ROLE_UPGRADE_GUIDE}.`);
+      + `and platform standing is never mapped into zhin roles (roles.mappings was removed; use platform:* / bot:* permits). `
+      + `See ${CHAT_ROLE_UPGRADE_GUIDE}.`);
     this.name = 'LegacyChatRoleConfigError';
   }
 }
@@ -84,6 +85,8 @@ export function readLegacyChatRoleConfig(document: Readonly<Record<string, unkno
     // Only adapter blocks (with an account list) carried people lists; other plugins' fields stay.
     if (!record(block) || !Array.isArray(block.endpoints)) continue;
     adapters.push(alias);
+    // ADR 0056 §4 (revised 2026-11-12): platform → zhin role mapping rules were removed, no compatibility.
+    if (block.roles !== undefined) unsupported.push(`${alias}.roles`);
     for (const [field, role] of [['master', 'owner'], ['trusted', 'trusted']] as const) {
       if (block[field] === undefined) continue;
       add('adapter', alias, alias, role, block[field], `${alias}.${field}`);
@@ -91,6 +94,7 @@ export function readLegacyChatRoleConfig(document: Readonly<Record<string, unkno
     }
     block.endpoints.forEach((entry, index) => {
       if (!record(entry)) return;
+      if (entry.roles !== undefined) unsupported.push(`${alias}.endpoints[${index}].roles`);
       const endpointId = entry.id !== undefined && String(entry.id).trim() ? String(entry.id) : entry.name !== undefined ? String(entry.name) : undefined;
       for (const [field, role] of [['master', 'owner'], ['trusted', 'trusted']] as const) {
         if (entry[field] === undefined) continue;

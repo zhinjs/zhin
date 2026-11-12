@@ -24,8 +24,9 @@ content-moderation:
   # replyTemplate: "消息含不当内容，已拦截。"
   inbound:
     enabled: true
-    # 本会话聊天角色不低于该值的发送者跳过入站审查（ADR 0056）：owner | admin | trusted | none
-    bypassRole: owner
+    # 满足任一 permit 的发送者跳过入站审查（ADR 0056 §5，与命令 / 工具同一评估器）。
+    # 内容审核是平台功能：默认 zhin owner 或平台群主 / 管理员；[] 表示都审。
+    bypass: [owner, "platform:admin"]
     whitelist:
       userIds: []
       conversationIds: []

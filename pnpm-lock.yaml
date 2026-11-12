@@ -1584,6 +1584,9 @@ importers:
       '@zhin.js/feature-kit':
         specifier: workspace:*
         version: link:../feature-kit
+      '@zhin.js/permission':
+        specifier: workspace:*
+        version: link:../permission
       '@zhin.js/plugin-runtime':
         specifier: workspace:*
         version: link:../plugin-runtime
@@ -1746,6 +1749,9 @@ importers:
       '@zhin.js/im-contract':
         specifier: workspace:*
         version: link:../im-contract
+      '@zhin.js/permission':
+        specifier: workspace:*
+        version: link:../permission
       '@zhin.js/plugin-runtime':
         specifier: workspace:*
         version: link:../plugin-runtime
@@ -4013,6 +4019,9 @@ importers:
       '@zhin.js/page':
         specifier: workspace:*
         version: link:../../../packages/console/page
+      '@zhin.js/permission':
+        specifier: workspace:*
+        version: link:../../../packages/im/permission
       '@zhin.js/skill':
         specifier: workspace:*
         version: link:../../../packages/im/skill

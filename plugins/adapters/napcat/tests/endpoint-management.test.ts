@@ -183,3 +183,19 @@ describe('napcat reverse WebSocket access (ADR 0054 §3)', () => {
     await endpoint.stop();
   });
 });
+
+describe('inspectSelfStanding (ADR 0056 §1)', () => {
+  it('reads the bot\'s own group role once logged in and reports nothing outside groups', async () => {
+    const calls: { action: string; params?: unknown }[] = [];
+    const management = createNapCatEndpointManagement({ requestApi: async (request: { action: string; params?: unknown }) => {
+      calls.push({ action: request.action, params: request.params });
+      return request.action === 'get_login_info' ? { user_id: 42 } : { role: 'admin' };
+    } } as never);
+    const signal = new AbortController().signal;
+    expect(await management.inspectSelfStanding!({ conversation: { kind: 'group', id: '20001' }, signal })).toEqual({ standing: 'admin' });
+    expect(await management.inspectSelfStanding!({ conversation: { kind: 'group', id: '20002' }, signal })).toEqual({ standing: 'admin' });
+    expect(await management.inspectSelfStanding!({ conversation: { kind: 'private', id: '1' }, signal })).toBeUndefined();
+    expect(calls.map(call => call.action)).toEqual(['get_login_info', 'get_group_member_info', 'get_group_member_info']);
+    expect(calls[1]!.params).toEqual({ group_id: 20001, user_id: 42, no_cache: true });
+  });
+});

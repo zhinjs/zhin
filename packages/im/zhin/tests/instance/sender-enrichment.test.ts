@@ -3,7 +3,7 @@ import { AdapterIndex, Adapter, endpointSpec, createEndpointSpecification, type 
 import { childPluginId, createCapabilitySlot, rootPluginId, type PluginId, type PluginNodeSnapshot, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { Message } from '@zhin.js/core/runtime';
 import { createSenderEnricher } from '@zhin.js/core/runtime';
-import { ChatRoleService, createMappingChatRoleSource } from '@zhin.js/core';
+import { ChatRoleService } from '@zhin.js/core';
 import { resolveOwnerForRuntimeMessage } from '@zhin.js/agent/runtime';
 import { ChatRoleStore, type InstanceChatRoleService } from '../../src/instance/chat-roles.js';
 
@@ -37,7 +37,7 @@ async function runtime(configs: Record<string, unknown>) {
 }
 
 async function grants(entries: readonly (readonly [level: 'global' | 'adapter' | 'endpoint', key: string, adapter: string, userId: string, role: 'owner' | 'admin' | 'trusted'])[]) {
-  const roles: InstanceChatRoleService = new ChatRoleService({ store: new ChatRoleStore(), sources: [createMappingChatRoleSource()] });
+  const roles: InstanceChatRoleService = new ChatRoleService({ store: new ChatRoleStore() });
   for (const [level, key, adapter, userId, role] of entries) await roles.store.grant({ level, key, adapter, userId, role });
   return roles;
 }

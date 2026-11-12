@@ -65,6 +65,8 @@ it('discovers real ICQQ skills, gates member tools by requester, and loads own r
   expect(plan.controller.loadedToolNames()).toContain(own.name);
 
   turn.principal.roles = ['admin'];
+  // Group admin tools need the requester's platform standing (ADR 0056 §5), here the group owner.
+  Object.assign(turn.principal, { platform: { standing: 'owner' } });
   const unknown = await ingress.read({ snapshot: snapshot, owner: root, isActive: () => true, turn: turn, selectedAgent: 'icqq' });
   expect(unknown.tools.some(tool => tool.name.endsWith('__recall_member_message'))).toBe(false);
   expect(unknown.tools.some(tool => tool.name.endsWith('__recall_own_message'))).toBe(true);
@@ -84,7 +86,7 @@ it('discovers real ICQQ skills, gates member tools by requester, and loads own r
   expect(ownerBot.tools.some(tool => tool.name.endsWith('__group_leave'))).toBe(false);
   expect(ownerBot.tools.some(tool => tool.name.endsWith('__recall_member_message'))).toBe(true);
   expect(ownerBot.tools.find(tool => tool.name.endsWith('__set_group_admin'))).toMatchObject({
-    requiresApproval: 'human', permissions: ['trusted'], currentConversationBotRoles: ['owner'],
+    requiresApproval: 'human', permissions: ['platform:owner', 'bot:owner'], currentConversationBotRoles: undefined,
     placement: { kind: 'agent-skill', agent: 'icqq', skill: 'icqq-group-admin' },
   });
   turn.input.contextState.bot.platformRole = 'member';

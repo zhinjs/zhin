@@ -11,7 +11,7 @@ export default defineAgentTool<{ group_id: number; user_id: number; title: strin
   adapter: 'onebot11',
   scopes: ["group"],
   tags: ['onebot11'],
-  permissions: ['platform(onebot11,scene_owner)'],
+  permissions: ['platform:owner', 'bot:owner'],
   async execute({ group_id, user_id, title }: { group_id: number; user_id: number; title: string }, context) {
     const client = context.$client;
     const response = await client.call('set_group_special_title', {

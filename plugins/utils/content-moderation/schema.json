@@ -127,19 +127,20 @@
           "type": "boolean",
           "default": true
         },
-        "bypassRole": {
-          "type": "string",
-          "enum": [
+        "bypass": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "default": [
             "owner",
-            "admin",
-            "trusted",
-            "none"
+            "platform:admin"
           ],
-          "default": "owner",
-          "description": "本会话聊天角色不低于该值的发送者跳过入站审查（ADR 0056；none 表示都审）",
+          "description": "满足任一 permit 表达式的发送者跳过入站审查（ADR 0056 §5 内置 DSL，与命令 / 工具同一评估器）。内容审核是平台功能，默认 zhin owner 或平台群主 / 管理员（platform:admin）；[] 表示都审",
           "x-i18n": {
             "en": {
-              "description": "Senders whose chat role in the conversation is at least this skip inbound review (ADR 0056); none reviews everyone."
+              "description": "Senders matching any of these permit expressions skip inbound review (ADR 0056 §5 built-in DSL, the same evaluator as commands and tools). Moderation is a platform function: the default exempts the zhin owner and platform group owners / admins (platform:admin); [] reviews everyone."
             }
           }
         },

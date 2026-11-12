@@ -13,7 +13,7 @@ export default defineAgentTool<{ guild_id: string; user_id: string; role_id: str
   adapter: 'discord',
   scopes: ["channel"],
   tags: ['discord'],
-  permissions: ['platform-permission:manage_roles'],
+  permissions: ['platform-permission:manage_roles', 'bot-permission:manage_roles'],
   async execute({ guild_id, user_id, role_id  }: { guild_id: string; user_id: string; role_id: string }, context) {
     const client = requireDiscordGatewayClient(context.$client);
     const guild = await client.guilds.fetch(guild_id);

@@ -10,7 +10,7 @@ export default defineAgentTool<{ group_id: number; file: string }>({
   adapter: 'napcat',
   tags: ['napcat', 'qq'],
   keywords: ['群头像', 'group portrait', '设置群头像'],
-  permissions: ['platform(napcat,scene_admin)'],
+  permissions: ['platform:admin', 'bot:admin'],
   scopes: ['group'],
   async execute({ group_id, file }: { group_id: number; file: string }, context) {
     const endpoint = context.$client;

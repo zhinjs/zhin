@@ -4,8 +4,13 @@
  * - 会话：`adapter(…)` / `group(…)` / `private(…)` / `channel(…)` / `user(…)`
  * - zhin 聊天角色（按当前会话的层级链计算，`owner` ⊃ `admin` ⊃ `trusted`）：
  *   `owner` / `admin` / `trusted`，或 `role(owner,admin,…)`
- * - 平台身份：`platform:owner` / `platform:admin`（归一地位；`admin` 也接受群主）、
+ * - 发言者的平台身份（管平台功能）：`platform:owner` / `platform:admin`（归一地位；`admin` 也接受群主）、
  *   `platform-role:<id>`、`platform-permission:<name>`
+ * - 机器人账号自身在本会话的平台身份（平台操作需要机器人有权限时）：`bot:owner` / `bot:admin`、
+ *   `bot-role:<id>`、`bot-permission:<name>`；机器人身份未知（未声明 `scene.selfStanding` 或查询失败）时不满足
+ *
+ * 三条维度互不换算（平台群主不是 zhin `admin`），命令的 `permit` 与 Agent 工具 / 技能的 `permissions`
+ * 共用本评估器。
  *
  * 已移除（构建期报错并给出替代）：`role(master)`、`role(user)`、`scene_admin`、`scene_owner`、
  * `platform(adapter,perm)`。
@@ -15,7 +20,11 @@ import type { PermissionSubject } from './subject.js';
 
 export type PermitKind =
   | 'adapter' | 'group' | 'private' | 'channel' | 'user' | 'role'
-  | 'platform' | 'platform-role' | 'platform-permission';
+  | 'platform' | 'platform-role' | 'platform-permission'
+  | 'bot' | 'bot-role' | 'bot-permission';
+
+/** Permit kinds that read the receiving account's own standing (`subject.bot`). */
+export const BOT_PERMIT_KINDS: ReadonlySet<PermitKind> = new Set<PermitKind>(['bot', 'bot-role', 'bot-permission']);
 
 export interface ParsedPermit {
   readonly kind: PermitKind;
@@ -27,7 +36,7 @@ const CHAT_ROLE_RANK: Readonly<Record<PermitChatRole, number>> = Object.freeze({
 const isPermitChatRole = (value: string): value is PermitChatRole => value === 'owner' || value === 'admin' || value === 'trusted';
 
 const CALL_RE = /^(adapter|group|private|channel|user|role)\(([^)]*)\)$/u;
-const PLATFORM_RE = /^(platform|platform-role|platform-permission):(.+)$/u;
+const PLATFORM_RE = /^(platform|platform-role|platform-permission|bot|bot-role|bot-permission):(.+)$/u;
 const LEGACY_PLATFORM_RE = /^platform\(([^)]*)\)$/u;
 
 function splitValues(inner: string): readonly string[] {
@@ -51,7 +60,7 @@ export function parsePermitName(name: string): ParsedPermit | null {
     const kind = platform[1] as PermitKind;
     const value = platform[2]!.trim();
     if (!value) return null;
-    if (kind === 'platform' && value !== 'owner' && value !== 'admin') return null;
+    if ((kind === 'platform' || kind === 'bot') && value !== 'owner' && value !== 'admin') return null;
     return { kind, values: [value] };
   }
   return null;
@@ -61,8 +70,17 @@ export function isBuiltinPermit(name: string): boolean {
   return parsePermitName(name) !== null;
 }
 
+/** Whether any permit needs the receiving account's own standing (`bot:*`). */
+export function permitsNeedBotStanding(permits: readonly string[] | undefined): boolean {
+  return (permits ?? []).some((name) => {
+    const parsed = parsePermitName(name);
+    return !!parsed && BOT_PERMIT_KINDS.has(parsed.kind);
+  });
+}
+
 /** Replacement hint for a removed permit spelling; undefined when the name is not a removed form. */
 export function removedPermitReplacement(name: string): string | undefined {
+  if (isBuiltinPermit(name)) return undefined;
   if (name === 'scene_admin') return 'platform:admin';
   if (name === 'scene_owner') return 'platform:owner';
   if (name === 'master') return 'owner';
@@ -93,7 +111,8 @@ export function assertPermitSyntax(permits: readonly string[], source?: string):
     throw new TypeError(
       `Unknown permit[${index}]${where}: ${JSON.stringify(name)} `
       + '(expected adapter|group|private|channel|user(...), owner|admin|trusted, role(owner|admin|trusted), '
-      + 'platform:owner|admin, platform-role:<id> or platform-permission:<name>)',
+      + 'platform:owner|admin, platform-role:<id>, platform-permission:<name>, '
+        + 'bot:owner|admin, bot-role:<id> or bot-permission:<name>)',
     );
   }
 }
@@ -103,6 +122,7 @@ export function checkBuiltinPermit(name: string, subject: PermissionSubject): bo
   if (!parsed) return false;
   const sender = subject.sender;
   const platform = sender?.platform;
+  const bot = subject.bot;
 
   switch (parsed.kind) {
     case 'adapter':
@@ -117,14 +137,15 @@ export function checkBuiltinPermit(name: string, subject: PermissionSubject): bo
       return !!sender && parsed.values.some((id) => sender.id === id);
     case 'role':
       return !!sender?.chatRole && parsed.values.some((req) => chatRoleSatisfies(sender.chatRole, req));
-    case 'platform': {
-      const standing = platform?.standing;
-      return parsed.values[0] === 'owner' ? standing === 'owner' : standing === 'owner' || standing === 'admin';
-    }
+    case 'platform':
+    case 'bot':
+      return standingIncludes((parsed.kind === 'bot' ? bot : platform)?.standing, parsed.values[0]!);
     case 'platform-role':
-      return (platform?.roles ?? []).some((role) => role.id === parsed.values[0]);
+    case 'bot-role':
+      return ((parsed.kind === 'bot-role' ? bot : platform)?.roles ?? []).some((role) => role.id === parsed.values[0]);
     case 'platform-permission':
-      return (platform?.permissions ?? []).includes(parsed.values[0]!);
+    case 'bot-permission':
+      return ((parsed.kind === 'bot-permission' ? bot : platform)?.permissions ?? []).includes(parsed.values[0]!);
     default:
       return false;
   }
@@ -135,6 +156,11 @@ export function checkBuiltinPermitList(
   subject: PermissionSubject,
 ): boolean {
   return permits.every((name) => checkBuiltinPermit(name, subject));
+}
+
+/** `owner` 只认群主；`admin` 也接受群主。 */
+function standingIncludes(standing: string | undefined, required: string): boolean {
+  return required === 'owner' ? standing === 'owner' : standing === 'owner' || standing === 'admin';
 }
 
 function adapterMatches(sessionAdapter: string | undefined, value: string): boolean {

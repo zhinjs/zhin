@@ -6,6 +6,10 @@
  * permission names, reported as far as the platform exposes them. Private chats report `member`
  * or nothing. Which of the three fields an Adapter reports is declared in its capability profile
  * (`scene.platformStanding`), never inferred from the platform name.
+ *
+ * The same shape describes the receiving Bot account's own standing in a conversation
+ * ({@link SelfStandingRequest}; capability `scene.selfStanding`), read by `bot:*` permits.
+ * Platform standing is never converted into a zhin chat role (ADR 0056 §4, revised 2026-11-12).
  */
 export type PlatformStandingLevel = 'owner' | 'admin' | 'member' | 'guest';
 
@@ -80,4 +84,25 @@ export function isPlatformStanding(value: unknown): value is PlatformStanding {
   if (candidate.permissions !== undefined && !(Array.isArray(candidate.permissions)
     && candidate.permissions.every(permission => typeof permission === 'string' && permission.length > 0))) return false;
   return true;
+}
+
+/**
+ * ADR 0056 §1: ask the platform for the receiving Bot account's own standing in one conversation.
+ * Adapters implement it as `EndpointManagement.inspectSelfStanding` and declare
+ * `scene.selfStanding` in their capability profile; the framework caches the answer per
+ * conversation and drops it on the Bot's own role-change events.
+ */
+export interface SelfStandingRequest {
+  readonly conversation: Readonly<{
+    readonly kind: 'private' | 'group' | 'channel';
+    readonly id: string;
+    readonly parent?: Readonly<{ readonly kind: 'private' | 'group' | 'channel'; readonly id: string }>;
+    readonly threadId?: string;
+  }>;
+  readonly signal: AbortSignal;
+}
+
+/** Map a member-role word reported by a platform (`owner` / `admin` / `member`) to a standing. */
+export function standingFromMemberRole(role: unknown): PlatformStanding | undefined {
+  return role === 'owner' || role === 'admin' || role === 'member' ? Object.freeze({ standing: role }) : undefined;
 }

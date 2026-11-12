@@ -85,7 +85,7 @@ describe('@zhin.js/plugin-bilibili commands', () => {
     expect(h.watcher.backoffStatus()).toEqual([]);
   });
 
-  it('group sub/unsub are limited to the chat role admin (group owners / admins by default mapping) and the bot owner', async () => {
+  it('group sub/unsub are limited to the zhin chat role admin and the bot owner (platform standing does not count)', async () => {
     const h = harness();
     const asRole = (role: 'owner' | 'admin' | 'trusted' | null, kind: 'group' | 'channel' = 'group') =>
       commandContext(h.runtime, {}, biliMessage(kind, '10001', role));

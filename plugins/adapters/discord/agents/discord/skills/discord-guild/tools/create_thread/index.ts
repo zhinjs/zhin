@@ -15,7 +15,7 @@ export default defineAgentTool<{ channel_id: string; name: string; message_id?: 
   adapter: 'discord',
   scopes: ["channel"],
   tags: ['discord'],
-  permissions: ['platform-permission:manage_channels'],
+  permissions: ['platform-permission:manage_channels', 'bot-permission:create_public_threads'],
   async execute({ channel_id, name, message_id, auto_archive_duration  }: { channel_id: string; name: string; message_id?: string; auto_archive_duration?: number }, context) {
     const client = requireDiscordGatewayClient(context.$client);
     const channel = await client.channels.fetch(channel_id);

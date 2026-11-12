@@ -96,11 +96,6 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
       // ADR 0056 §3: chat roles; adapter / endpoint-scoped `iam.manage` counts under its scope.
       const chatRolesReply = await dispatchChatRolesConsoleRpc(message, {
         ...(options.featureStores?.roles ? { roles: options.featureStores.roles } : {}),
-        ...(options.featureStores?.mappings ? { mappings: options.featureStores.mappings } : {}),
-        snapshot: () => {
-          const lease = options.snapshots?.acquire();
-          try { return lease?.value; } finally { lease?.release(); }
-        },
         authorize: request => principalAllows(authorizedPrincipal, request.permission, featureScopeTarget(request.level, request.key)),
         actor: auditActor(principal),
         publishEvent: (type, data) => options.hub.publish(type, data),

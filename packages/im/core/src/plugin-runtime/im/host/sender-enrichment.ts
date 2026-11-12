@@ -1,12 +1,12 @@
 /**
- * ADR 0056: inbound sender roles come from {@link ChatRoleService} (stored grants + mapping rules),
- * never from configuration lists. This module wires that model into the IM Runtime hosts.
+ * ADR 0056: inbound sender roles come from {@link ChatRoleService} (stored grants only), never from
+ * configuration lists or platform standing. This module wires that model into the IM Runtime hosts.
  */
 import { isAdapterIndex, type AdapterIndex } from '@zhin.js/adapter';
 import type { OperationSession } from '@zhin.js/feature-kit';
 import type { CapabilityId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import {
-  createChatRoleSenderEnricher, type ChatIdentity, type ChatRoleContext, type ChatRoleService,
+  createChatRoleSenderEnricher, type ChatRoleService,
 } from '../../../built/roles.js';
 import type { ImRuntime } from '../im-runtime.js';
 
@@ -15,8 +15,6 @@ export type ConfigurationChatAuthorizer = (session: OperationSession<string>, ad
 export interface SenderEnricherOptions {
   /** Chat role resolution of the instance; undefined while it is not available. */
   readonly roles: () => ChatRoleService | undefined;
-  /** Called with each resolved sender (e.g. to list mapped senders in the Console). */
-  readonly onResolved?: (identity: ChatIdentity, context: ChatRoleContext) => void;
 }
 
 /** `ImRuntime` `enrichSender` option over the chat role model. */

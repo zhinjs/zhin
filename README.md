@@ -266,7 +266,7 @@ The Console is organized in four levels of objects — **global → adapter → 
 |---------|---------------------|
 | Overview | Online state and statistics for this level |
 | Features | Turn plugins on or off and override their settings at this level; a level switched off above is locked below, and every field shows which level it is inherited from ([layered config](./docs/en/console/features.md)) |
-| Roles | Who is a chat `owner` / `admin` / `trusted` at this level, plus the automatic mapping of group owners and admins ([chat roles](./docs/en/console/features.md#chat-roles)) |
+| Roles | Who is a chat `owner` / `admin` / `trusted` at this level, granted in the Console or in chat; platform standing is a separate dimension ([chat roles](./docs/en/console/features.md#chat-roles)) |
 | Records | Chat history, logs and change records for this level |
 
 Account pages add **Connection** (sign-in, QR codes, connection checks); conversation pages add **Chat** (read history and send messages).

@@ -204,7 +204,7 @@ describe('@zhin.js/plugin-earthquake subscription permissions', () => {
     }
   });
 
-  // Group owners / admins reach the chat role admin through the default mapping rule (ADR 0056).
+  // Only granted zhin roles count; platform standing is a separate dimension (ADR 0056 §4, revised).
   it.each([['owner'], ['admin']] as const)('allows the chat role %s to subscribe and unsubscribe', async (role) => {
     stubFeeds({ cenc: () => [], usgs: () => [] });
     const fake = await runPluginSetup(plugin, { config: {} });
@@ -245,7 +245,7 @@ describe('@zhin.js/plugin-earthquake subscription permissions', () => {
     expect(canManageConversation({ scene: { id: 'u', type: 'private' }, sender: { id: 'u' } })).toBe(true);
     expect(canManageConversation({ scene: { id: 'c', type: 'channel' }, sender: { id: 'u', chatRole: 'trusted' } })).toBe(false);
     expect(canManageConversation({ scene: { id: 'c', type: 'channel' }, sender: { id: 'u', chatRole: 'admin' } })).toBe(true);
-    // Platform standing alone is not a chat role: only the mapping turns it into one.
+    // Platform standing is never a zhin role.
     expect(canManageConversation({ scene: { id: 'c', type: 'channel' }, sender: { id: 'u', platform: { standing: 'admin' } } })).toBe(false);
     expect(canManageConversation({ scene: { id: 'g', type: 'group' } })).toBe(false);
   });

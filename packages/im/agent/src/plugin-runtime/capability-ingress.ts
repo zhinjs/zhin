@@ -249,6 +249,8 @@ async function bindSeamTools(
       invocation: ToolInvocationContext,
     ): Promise<TResult> => {
       assertActive(isActive);
+      await assertStillAllowed({ platforms: entry.schema.platforms, scopes: entry.schema.scopes, permissions: entry.schema.permissions,
+        currentConversationBotRoles: entry.schema.currentConversationBotRoles, qualifiedName: entry.schema.function.name }, turn, host);
       const result = await entry.execute(input, invocation);
       if (!result.success) throw new Error(result.error ?? `Seam Tool failed: ${entry.schema.function.name}`);
       return result.output as TResult;
@@ -356,8 +358,10 @@ async function bindTools(input: BindToolsInput): Promise<readonly ToolCapability
         ? false
         : r.descriptor.hidden,
       name: r.descriptor.qualifiedName,
-      execute: <TInput, TResult>(input: TInput, invocation: ToolInvocationContext) => {
+      execute: async <TInput, TResult>(input: TInput, invocation: ToolInvocationContext) => {
         assertActive(isActive);
+        // ADR 0056 §5: re-check the same three-dimension gate at execution (no call outside disclosure).
+        await assertStillAllowed(r.descriptor, turn, host);
         return index.execute<TInput, TResult>({ requester: r.descriptor.owner, name: r.descriptor.name, input, invocation, snapshot: operationSnapshot, operation });
       },
     })));
@@ -403,6 +407,18 @@ async function canAccessDescriptor(
   if (!descriptor.permissions?.length) return true;
   if (!turn || !host) return false;
   return host.checkAll(descriptor.permissions, turnPermissionSubject(turn));
+}
+
+/** Execution-time re-check of {@link canAccessDescriptor}; throws when the gate no longer holds. */
+async function assertStillAllowed(
+  descriptor: Parameters<typeof canAccessDescriptor>[0] & { readonly qualifiedName?: string; readonly name?: string },
+  turn: TurnAccessContext | undefined,
+  host: PermissionHost | undefined,
+): Promise<void> {
+  if (!turn) return;
+  if (!(await canAccessDescriptor(descriptor, turn, host))) {
+    throw new Error(`Agent Tool is not available in this conversation: ${descriptor.qualifiedName ?? descriptor.name ?? 'tool'}`);
+  }
 }
 
 /** Root resources 上的 PermissionHost（command-index 同款解析；未安装时 fail-closed）。 */

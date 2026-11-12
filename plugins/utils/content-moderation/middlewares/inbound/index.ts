@@ -1,3 +1,4 @@
+import { toPermissionSubject } from '@zhin.js/permission';
 import { defineMiddleware, type MiddlewareContext } from 'zhin.js/middleware';
 import type { Message } from '@zhin.js/core/runtime';
 import { aiCompletionToken, createDeliveryTarget, databaseHostToken, getLogger, hasResource,
@@ -38,7 +39,7 @@ export default defineMiddleware<Message, ModerationConfig>({
     const bypass = shouldBypassInbound(config, {
       sender,
       conversationId,
-      ...(message.sender?.chatRole ? { chatRole: message.sender.chatRole } : {}),
+      subject: toPermissionSubject(message),
     });
     const review = await enqueueGroupModeration(context, config, bypass);
     if (bypass) {
@@ -195,6 +196,7 @@ async function enqueueGroupModeration(
               sentAt: Number(message.metadata?.platformSentAt), evidence: hit.evidence,
               ...(message.sender?.name ? { memberName: message.sender.name } : {}),
               ...(message.sender?.chatRole ? { memberChatRole: message.sender.chatRole } : {}),
+              ...(message.sender?.platform ? { memberPlatform: message.sender.platform } : {}),
               ...(messageId ? { messageId } : {}),
               ...(hit.recall ? { recall: hit.recall } : {}),
             });

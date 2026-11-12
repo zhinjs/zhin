@@ -7,7 +7,7 @@ export default defineAgentTool({
   description: '禁言 / 解除禁言当前 QQ 群中的普通成员（最长 30 天）；需你为群管理员',
   adapter: 'qq',
   scopes: ['group'],
-  permissions: ['trusted'],
+  permissions: ['trusted', 'bot:admin'],
   requiresApproval: 'always',
   risk: 'dangerous',
   riskCategory: 'member',

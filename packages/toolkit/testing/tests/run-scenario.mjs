@@ -57,13 +57,13 @@ try {
     })()],
     ['case-3-denied-member-standing', (() => {
       const s = structuredClone(baseScene);
-      s.assertions = { dispatchStatus: 'denied', deliveries: ['没有权限执行此指令。'] };
+      s.assertions = { dispatchStatus: 'denied', deliveries: ['无法执行此指令：需要你是本群群主或管理员。'] };
       s.sender.platform = { standing: 'member' };
       return s;
     })()],
     ['case-4-denied-omitted-standing', (() => {
       const s = structuredClone(baseScene);
-      s.assertions = { dispatchStatus: 'denied', deliveries: ['没有权限执行此指令。'] };
+      s.assertions = { dispatchStatus: 'denied', deliveries: ['无法执行此指令：需要你是本群群主或管理员。'] };
       delete s.sender.platform;
       return s;
     })()],

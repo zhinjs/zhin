@@ -32,6 +32,11 @@ export interface PermissionSubject {
   readonly endpoint?: string;
   readonly scene?: PermissionScene;
   readonly sender?: PermissionSender;
+  /**
+   * The receiving Bot account's own platform standing in this conversation (ADR 0056 §1; `bot:*`
+   * permits). Absent = unknown: every `bot:*` permit fails.
+   */
+  readonly bot?: PermissionPlatformStanding;
 }
 
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
@@ -41,7 +46,7 @@ function chatRoleOf(value: unknown): PermissionSender['chatRole'] {
   return value === 'owner' || value === 'admin' || value === 'trusted' ? value : undefined;
 }
 
-function platformOf(value: unknown): PermissionPlatformStanding | undefined {
+export function normalizePermissionStanding(value: unknown): PermissionPlatformStanding | undefined {
   if (!record(value) || typeof value.standing !== 'string' || !STANDINGS.has(value.standing)) return undefined;
   const roles = Array.isArray(value.roles)
     ? value.roles.filter((role): role is { id: string; name?: string } => record(role) && typeof role.id === 'string' && role.id.length > 0)
@@ -59,7 +64,7 @@ function platformOf(value: unknown): PermissionPlatformStanding | undefined {
 function senderOf(value: unknown): PermissionSender | undefined {
   if (!record(value)) return undefined;
   const chatRole = chatRoleOf(value.chatRole);
-  const platform = platformOf(value.platform);
+  const platform = normalizePermissionStanding(value.platform);
   return Object.freeze({
     id: String(value.id ?? ''),
     ...(value.name ? { name: String(value.name) } : {}),

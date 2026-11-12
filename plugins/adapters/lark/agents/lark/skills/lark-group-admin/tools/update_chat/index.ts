@@ -12,7 +12,7 @@ export default defineAgentTool<{ chat_id: string; name?: string; description?: s
   adapter: 'lark',
   scopes: ["group"],
   tags: ['lark'],
-  permissions: ['platform-permission:chat_admin'],
+  permissions: ['platform:admin', 'bot:admin'],
   async execute({ chat_id, name, description   }: { chat_id: string; name?: string; description?: string }, context) {
     const endpoint = context.$client;
     const success = await endpoint.updateChatInfo(chat_id, { name, description });

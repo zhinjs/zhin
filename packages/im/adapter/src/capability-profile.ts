@@ -126,6 +126,12 @@ export interface SceneCapabilities {
    * conversation kind. Undeclared = not reported (consumers treat the standing as unknown).
    */
   readonly platformStanding?: Readonly<{ standing?: boolean; roles?: boolean; permissions?: boolean }> | false;
+  /**
+   * ADR 0056 §1: the Adapter can report the Bot account's *own* standing in this conversation kind
+   * (`EndpointManagement.inspectSelfStanding`), read by `bot:*` permits. Undeclared = unknown, so
+   * every `bot:*` permit fails here.
+   */
+  readonly selfStanding?: Readonly<{ standing?: boolean; roles?: boolean; permissions?: boolean }> | false;
   /** Mute semantics: allowed duration range and whether the whole conversation can be muted. */
   readonly mute?: Readonly<{ durationSeconds?: NumberRange; all?: boolean }> | false;
   readonly maxMembers?: number;
@@ -348,6 +354,7 @@ const SECTION_NODE: Node = obj({
     memberProfile: FLAG,
     roles: { t: 'fixed', check: validateRoleMap },
     platformStanding: obj({ standing: FLAG, roles: FLAG, permissions: FLAG }, { toggle: true }),
+    selfStanding: obj({ standing: FLAG, roles: FLAG, permissions: FLAG }, { toggle: true }),
     mute: obj({ durationSeconds: RANGE, all: FLAG }, { toggle: true }),
     maxMembers: MAX,
     card: FLAG,
@@ -573,6 +580,20 @@ export function activeCapabilityKinds(
     ...(conversation.threadId ? ['thread'] : []),
     ...extraKinds,
   ]);
+}
+
+/**
+ * ADR 0056 §1: whether the profile declares the Bot's own standing (`scene.selfStanding`) for this
+ * conversation (merged `default` + active kind sections).
+ */
+export function selfStandingDeclared(
+  profile: AdapterCapabilityProfile | undefined,
+  conversation: Pick<ConversationRef, 'kind' | 'threadId'>,
+): boolean {
+  if (!profile) return false;
+  const scene = resolveStaticCapabilities(profile, activeCapabilityKinds(conversation)).scene;
+  const declared = scene?.selfStanding;
+  return !!declared && typeof declared === 'object' && Object.values(declared).some((flag) => flag === true);
 }
 
 /** Merge `default` with the active kind sections (later wins per field) and prune. */
@@ -1027,5 +1048,13 @@ export function assertDeclaredProfileActions(
         );
       }
     }
+  }
+  const sections = [profile.default, profile.private, profile.group, profile.channel, profile.thread, ...Object.values(profile.kinds ?? {})];
+  const declaresSelf = sections.some((section) => {
+    const flag = section?.scene && typeof section.scene === 'object' ? section.scene.selfStanding : undefined;
+    return !!flag && typeof flag === 'object' && Object.values(flag).some((value) => value === true);
+  });
+  if (declaresSelf && typeof holder.management?.inspectSelfStanding !== 'function') {
+    throw new TypeError(`Adapter Endpoint ${id} profile declares scene.selfStanding but management.inspectSelfStanding is missing`);
   }
 }

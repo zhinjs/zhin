@@ -11,7 +11,7 @@ export default defineAgentTool<{ chat_id: string; user_ids: string }>({
   adapter: 'dingtalk',
   scopes: ["group"],
   tags: ['dingtalk'],
-  permissions: ['platform-permission:chat_admin'],
+  permissions: ['platform:admin'],
   async execute({ chat_id, user_ids    }: { chat_id: string; user_ids: string }, context) {
     const endpoint = context.$client;
     const success = await endpoint.updateChat(chat_id, { add_useridlist: user_ids.split(',') });

@@ -11,7 +11,7 @@ export default defineAgentTool<{ chat_id: string; user_ids: string }>({
   adapter: 'lark',
   scopes: ["group"],
   tags: ['lark'],
-  permissions: ['platform-permission:manage_managers'],
+  permissions: ['platform:owner', 'bot:owner'],
   async execute({ chat_id, user_ids   }: { chat_id: string; user_ids: string }, context) {
     const endpoint = context.$client;
     const success = await endpoint.removeChatManagers(chat_id, user_ids.split(','));

@@ -9,7 +9,7 @@ export default defineAgentTool<{ message_id: number }>({
   adapter: 'napcat',
   tags: ['napcat', 'qq'],
   keywords: ['取消精华', '移除精华', 'delete essence'],
-  permissions: ['platform(napcat,scene_admin)'],
+  permissions: ['platform:admin', 'bot:admin'],
   scopes: ['group'],
   async execute({ message_id }: { message_id: number }, context) {
     const endpoint = context.$client;

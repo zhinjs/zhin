@@ -12,7 +12,7 @@ export default defineAgentTool<{ guild_id: string; name: string; color?: number 
   adapter: 'qq',
   scopes: ["channel"],
   tags: ['qq'],
-  permissions: ['platform-permission:guild_owner'],
+  permissions: ['platform:owner', 'bot:admin'],
   async execute({ guild_id, name, color  }: { guild_id: string; name: string; color?: number }, context) {
     const client = context.$client;
     const role = await client.guildService.createRole(guild_id, { name, color: color || 0, hoist: 0 });

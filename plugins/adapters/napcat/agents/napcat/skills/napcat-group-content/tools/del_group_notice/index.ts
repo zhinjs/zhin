@@ -10,7 +10,7 @@ export default defineAgentTool<{ group_id: number; notice_id: string }>({
   adapter: 'napcat',
   tags: ['napcat', 'qq'],
   keywords: ['删除公告', 'delete notice'],
-  permissions: ['platform(napcat,scene_admin)'],
+  permissions: ['platform:admin', 'bot:admin'],
   scopes: ['group'],
   async execute({ group_id, notice_id }: { group_id: number; notice_id: string }, context) {
     const endpoint = context.$client;

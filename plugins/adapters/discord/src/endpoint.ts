@@ -30,6 +30,8 @@ import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import {
   type ConversationReference,
   type ConversationResolution,
+  type PlatformStanding,
+  type SelfStandingRequest,
 } from '@zhin.js/im-contract';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
@@ -56,7 +58,7 @@ import {
 } from './protocol.js';
 import { registerDiscordInteractionRoutes } from './webhook.js';
 import { receiveDiscordGuildMemberSideEvent } from './side-event-dispatch.js';
-import { discordSenderStanding } from './sender-standing.js';
+import { discordPermissionNames, discordSenderStanding } from './sender-standing.js';
 
 const DISCORD_API = 'https://discord.com/api/v10';
 /** 出站 HTTP 调用统一 30s 超时。 */
@@ -432,6 +434,9 @@ export class DiscordInteractionsEndpoint extends DiscordRestClient implements En
     this[endpointSpec] = createEndpointSpecification(this, {
       start: () => this.#startFramework(), open: () => this.#openFramework(), close: () => this.#closeFramework(),
       stop: () => this.#stopFramework(), send: request => this.#sendFramework(request), name: options.config.id,
+      // Interactions mode has no gateway session to read the bot's guild member: its own standing
+      // stays unknown, so `bot:*` permits fail closed here (ADR 0056 §1).
+      management: Object.freeze<EndpointManagement>({ inspectSelfStanding: async () => undefined }),
       control: this.#control, content: this.#content,
       profile: createDiscordRestSelfProfile(this, id => this[endpointSpec].reportSelfUserId(id)),
     });
@@ -615,6 +620,29 @@ export function createDiscordEndpointManagement(
   requireClient: () => DiscordClientTransport,
 ): EndpointManagement {
   return Object.freeze<EndpointManagement>({
+    /**
+     * ADR 0056 §1: the Bot's own guild member in the conversation's channel — guild owner → `owner`;
+     * `administrator` / `moderate_members` (channel permissions) → `admin`; roles and channel
+     * permission names reported as for senders.
+     */
+    async inspectSelfStanding({ conversation, signal }: SelfStandingRequest): Promise<PlatformStanding | undefined> {
+      if (conversation.kind === 'private') return undefined;
+      const operation = createEndpointOperation({ signal });
+      const client = requireClient();
+      const channel = await operation.run(() => client.channels.fetch(conversation.threadId ?? conversation.id));
+      if (!channel || !('guild' in channel) || !client.user) return undefined;
+      const guild = channel.guild;
+      const me = guild.members.me ?? await operation.run(() => guild.members.fetchMe());
+      const permissions = 'permissionsFor' in channel && typeof channel.permissionsFor === 'function'
+        ? channel.permissionsFor(me) : me.permissions;
+      const names = permissions ? discordPermissionNames(bit => permissions.has(bit)) : [];
+      const roles = [...me.roles.cache.values()]
+        .filter(role => role.id !== guild.id)
+        .map(role => (role.name ? { id: String(role.id), name: String(role.name) } : { id: String(role.id) }));
+      const standing = guild.ownerId === client.user.id ? 'owner'
+        : names.includes('administrator') || names.includes('moderate_members') ? 'admin' : 'member';
+      return { standing, ...(roles.length ? { roles } : {}), ...(names.length ? { permissions: names } : {}) };
+    },
     async listGroups(request: EndpointManagementRequest = {}): Promise<readonly EndpointGroup[]> {
       return createEndpointOperation(request).run(() => {
         const groups: EndpointGroup[] = [];

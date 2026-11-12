@@ -102,7 +102,12 @@ export interface ModerationConfig {
   readonly inbound: {
     readonly enabled: boolean;
     /** Lowest chat role (ADR 0056) whose senders skip inbound review; `none` reviews everyone. */
-    readonly bypassRole: 'owner' | 'admin' | 'trusted' | 'none';
+    /**
+     * Permit expressions (ADR 0056 §5 built-in DSL); a sender matching **any** of them skips inbound
+     * review. Content moderation is a platform function, so the default is `owner` (zhin owner) or
+     * `platform:admin` (group owner / admin). `[]` reviews everyone.
+     */
+    readonly bypass: readonly string[];
     readonly whitelist: {
       readonly userIds: readonly string[];
       readonly conversationIds: readonly string[];

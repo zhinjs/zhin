@@ -970,6 +970,11 @@ describe('缺口 3：configured Endpoint keys and legacy people lists (ADR 0056 
     expect(createRuntimeTurnAccess(make(), roles).principal.origin).toBeUndefined();
   });
 
+  it('rejects the removed roles.mappings blocks (adapter and account level) without compatibility', () => {
+    const legacy = readLegacyChatRoleConfig(roleApplication({ qq: { roles: { mappings: [] }, endpoints: [{ id: 'bot-1', roles: { inherit: false } }] } }));
+    expect(legacy.unsupported).toEqual(['qq.roles', 'qq.endpoints[0].roles']);
+  });
+
   it('无 plugins 配置时没有可迁移的名单', () => {
     expect(readLegacyChatRoleConfig({ configVersion: 2 })).toEqual({ grants: [], paths: [], unsupported: [], skipped: [] });
   });

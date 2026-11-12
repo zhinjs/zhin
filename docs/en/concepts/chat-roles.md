@@ -1,13 +1,21 @@
 ---
 title: Chat Roles
-description: How zhin decides who may do what in chat — normalized platform identity, the owner / admin / trusted roles, four levels and mapping rules (ADR 0056)
+description: How zhin decides who may do what in chat — zhin roles owner / admin / trusted at four levels, with the sender's platform standing and the Bot's own standing as separate dimensions (ADR 0056)
 ---
 
 # Chat roles
 
-Permissions in chat follow one model ([ADR 0056](../../adr/0056-chat-roles.md)): the sender's effective chat role in **this conversation**, plus the **platform identity** the adapter reports. Command `permit`, Agent tool `permissions`, Agent security policies, group rules, content moderation and in-chat self-service all read these two things.
+Permissions in chat consist of three **independent** dimensions ([ADR 0056](../../adr/0056-chat-roles.md)):
 
-## Platform identity
+| Dimension | Source | Governs | Permit spelling |
+| --- | --- | --- | --- |
+| The sender's zhin role | grants in the `chat_roles` table (Console / chat `role grant`) | zhin functions: feature switches and settings, role management, configuration from chat, Agent trust tiers | `owner` / `admin` / `trusted`, `role(…)` |
+| The sender's platform standing | `sender.platform` reported by the adapter | platform functions: who may have the bot mute, kick, change roles… | `platform:owner\|admin`, `platform-role:<id>`, `platform-permission:<name>` |
+| The Bot's own platform standing | the adapter's self-standing lookup (cached per conversation) | whether a platform action can run at all: is the bot an admin here, does it hold a permission | `bot:owner\|admin`, `bot-role:<id>`, `bot-permission:<name>` |
+
+The dimensions never convert into each other: a group owner does **not** become a zhin `admin`, and a zhin `owner` gains no platform rights. Command `permit`, Agent tool / skill / Agent package `permissions`, and middleware and button `permit` are all decided by the same evaluator.
+
+## Platform standing
 
 Adapters normalize the sender's standing in the group and put it on `sender.platform` of the inbound message:
 
@@ -19,17 +27,31 @@ interface PlatformStanding {
 }
 ```
 
-Private chats carry no platform identity. A platform identity is **not** a chat role by itself: a group owner cannot use `owner` commands for being a group owner; it only counts once a mapping rule turns it into a role.
+Private chats carry no platform standing.
 
-## Three roles
+### The Bot's own standing
+
+The same shape describes **the bot account itself** in the current conversation. When an adapter implements `management.inspectSelfStanding` and declares `scene.selfStanding` in its capability profile, the framework looks it up when needed (`bot:*` permits, the start of an Agent turn) and caches it per conversation: 60 seconds for a known answer, 10 seconds for an unknown one; the bot's role-change events drop the cache. Undeclared, private chats and failed lookups count as unknown, and every `bot:*` condition fails.
+
+| Adapter | Support | Source |
+| --- | --- | --- |
+| ICQQ, OneBot 11, NapCat, Milky | groups: `standing` | `get_group_member_info` (the bot itself) |
+| QQ official | groups: `standing`; channels: `standing`, `roles` | group `getBotState.member_role`; channel member roles (4 = owner, 2 = super admin) |
+| Discord | channels: `standing`, `roles`, `permissions` | `guild.members.me` roles and channel permissions |
+| Telegram | groups: `standing`, `permissions` | `getChatMember(bot)` |
+| KOOK | channels: `standing`, `roles`, `permissions` | guild roles and permission bits from `/v3/user/view` (the bot) |
+| Lark | groups: `standing` | group owner and `bot_manager_id_list` from `chat.get` |
+| DingTalk and the other adapters | not supported | the platform has no lookup for the bot's own group standing |
+
+## Three zhin roles
 
 | Role | Meaning | Typical use |
 | --- | --- | --- |
 | `owner` | the bot's owner (formerly `master`) | Agent dangerous tools, owner approval, configuration from chat, restart, account management |
-| `admin` | administrator | in-chat feature self-service, group rule approval, conversation management commands |
+| `admin` | zhin administrator | in-chat feature self-service, role management, group rule approval, subscription commands |
 | `trusted` | trusted user | Agent medium-risk tools |
 
-They include each other: `owner` ⊃ `admin` ⊃ `trusted` — wherever `trusted` is required, `admin` and `owner` qualify.
+Roles include each other: `owner` ⊃ `admin` ⊃ `trusted` — wherever `trusted` is required, `admin` and `owner` qualify too.
 
 ## Four levels
 
@@ -40,41 +62,17 @@ They include each other: `owner` ⊃ `admin` ⊃ `trusted` — wherever `trusted
 | account | `<alias>/<account id>` | `qq/bot-1` |
 | conversation | `<alias>/<account id>/<kind>:<id>` | `qq/bot-1/group:123` |
 
-- A role is granted to an identity `(adapter alias, user id)` and holds at its scope and every scope under it; one person may hold different roles in different scopes.
-- For every message the Runtime walks conversation → account → adapter → global, takes the highest role and writes it to `sender.chatRole`. Any `chatRole` an adapter or plugin supplied is dropped.
-- Storage: the project database table `chat_roles`, loaded at start, effective immediately on write.
+- A role is granted to an identity `(adapter alias, user id)` and holds in its scope and every scope below it; one person may hold different roles in different scopes.
+- For every message the Runtime walks conversation → account → adapter → global, takes the highest role and writes it to `sender.chatRole`. A `chatRole` supplied by the adapter or a plugin is always dropped.
+- Storage: the `chat_roles` table in the project database, loaded at startup, writes take effect immediately. zhin roles come only from these grants (including grants migrated from the old configuration).
 
-Where to manage them:
+Management:
 
-- Console: the **Roles** block on adapter / account / conversation pages (`chat-roles.list|grant|revoke`, permission `iam.manage`; bindings scoped to an adapter / account count for the scopes under it);
-- chat: `role list|grant|revoke <user> <role> [level]` / `角色 列表|授予|撤销 …` (with `features.selfService.enabled`). The grantor needs at least the granted role at the target scope; `owner` can only be granted or revoked by an `owner` at a higher level.
+- Console: the **Roles** section of the adapter / account / conversation pages (`chat-roles.list|grant|revoke`, needs `iam.manage`; a permission bound to an adapter / account also counts for scopes below it);
+- Chat: `role list|grant|revoke <user> <role> [level]` / `角色 列表|授予|撤销 …` (with `features.selfService.enabled`). The grantor needs at least the granted role at the target scope; `owner` is granted or revoked only by an `owner` at a higher level.
 
-## Mapping rules {#mappings}
-
-Mapping rules turn a platform identity into a role of **the message's conversation**, computed live for every message and never stored — revoke someone's admin on the platform and the zhin role disappears with it.
-
-```yaml
-qq:
-  roles:
-    mappings:
-      - match: { standing: [owner] }        # or { role: ['<platform role id>'] } / { permission: [ban_members] }
-        grant: admin
-```
-
-| Level | Where | May grant |
-| --- | --- | --- |
-| default | built in | `standing: [owner, admin]` → `admin` |
-| adapter | adapter block `roles` | `admin` / `none` |
-| account | `endpoints[i].roles` | `admin` / `none` |
-| conversation | database (Console conversation page, `chat-roles.set-mappings`) | `owner` / `admin` / `trusted` / `none` |
-
-- Lower levels add rules or override a rule with the same `match` from above; `grant: none` removes an inherited rule with the same `match`; `inherit: false` drops every rule from above, the default included.
-- Every criterion given in `match` must hold; any value within one criterion matches.
-- Mapping to `trusted` / `owner` needs an explicit conversation-level rule; mappings never yield a role at the account level or above.
-- `chat-roles.mappings` returns the rules of every level and the merged result; `source: 'mapping'` entries of `chat-roles.list` (recently seen senders) carry a `detail` naming the rule.
-
-::: tip Default mapping and Agent permissions
-The default rule makes group owners / admins `admin` of their conversation, and `admin` includes `trusted`, so they can use the Agent's medium-risk tools in that group. Turn the default off (`roles: { inherit: false }` in the adapter block) or tighten it if you do not want that.
+::: tip A group owner who wants to manage features
+Feature switches and subscriptions are zhin functions, so a platform group owner / admin needs a granted zhin role: an owner sends `role grant @owner admin` in chat, or grants it in the conversation page's **Roles** section in the Console.
 :::
 
 ## In code
@@ -83,16 +81,25 @@ The default rule makes group owners / admins `admin` of their conversation, and 
 import { defineCommand } from 'zhin.js/command';
 
 export default defineCommand({
-  permit: ['group()', 'admin'],        // admin of this conversation (owner included)
+  // The sender is a group admin, and so is the bot itself
+  permit: ['group()', 'platform:admin', 'bot:admin'],
   execute: () => '…',
 });
 ```
 
 | Spelling | Meaning |
 | --- | --- |
-| `owner` / `admin` / `trusted`, `role(admin,trusted)` | chat role along this conversation's scope chain |
-| `platform:owner` / `platform:admin` | normalized platform standing (`platform:admin` also accepts the owner) |
-| `platform-role:<id>` | platform-native role id |
-| `platform-permission:<name>` | platform-native permission |
+| `owner` / `admin` / `trusted`, `role(admin,trusted)` | the sender's zhin role along this conversation's scope chain |
+| `platform:owner` / `platform:admin` | the sender's normalized platform standing (`platform:admin` also accepts the owner) |
+| `platform-role:<id>` / `platform-permission:<name>` | the sender's platform-native role / permission |
+| `bot:owner` / `bot:admin` | the Bot's own normalized standing |
+| `bot-role:<id>` / `bot-permission:<name>` | the Bot's own platform-native role / permission (e.g. `bot-permission:ban_members`) |
 
-At run time read `message.sender.chatRole` and `message.sender.platform`; `@zhin.js/core` provides `chatRoleIncludes(held, required)`, `expandChatRole(role)` and `chatRolesFromMessage(message)`. To upgrade from the old spellings see [Upgrading to chat roles](../migrations/chat-roles.md).
+List entries are ANDed; comma-separated values inside one entry are ORed. When unmet:
+
+- A command takes the existing denial path; `platform:*` / `bot:*` conditions say what is missing (e.g. 「无法执行此指令：机器人不是本群管理员（或无法确认其身份）。」), zhin role and conversation conditions keep the generic sentence; the command menu lists only commands the sender can run here.
+- Agent tools / skills are never disclosed for the turn and are checked again at execution.
+- Middleware is skipped for that message and the chain continues (the Bot standing is read from the cache only).
+- A button callback does not run and the clicker gets the reason.
+
+At runtime read `message.sender.chatRole` and `message.sender.platform`; `@zhin.js/core` provides `chatRoleIncludes(held, required)`, `expandChatRole(role)` and `chatRolesFromMessage(message)`; the Bot's standing comes from `AdapterIndex.selfStanding(endpointId, conversation)`. To upgrade from the old spelling see [Upgrading to chat roles](../migrations/chat-roles.md).

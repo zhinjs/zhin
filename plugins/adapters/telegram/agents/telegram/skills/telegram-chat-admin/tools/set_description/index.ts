@@ -10,6 +10,7 @@ export default defineAgentTool<{ chat_id: string; description: string }>({
   }),
   adapter: 'telegram',
   scopes: ["group","channel"],
+  permissions: ['platform:admin', 'bot-permission:change_info'],
   tags: ['telegram'],
   async execute({ chat_id, description  }: { chat_id: string; description: string }, context) {
     const endpoint = context.$client;

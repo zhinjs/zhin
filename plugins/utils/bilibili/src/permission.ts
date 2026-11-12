@@ -8,4 +8,4 @@
  * the canonical `owner` / `admin` role names that it checks.
  */
 export const SUBSCRIPTION_PERMISSION_DENIED_MESSAGE =
-  '只有群主、群管理员或机器人主人可以在群聊中修改 B 站订阅；私聊中可以直接订阅本会话。';
+  '只有本会话的 zhin 管理员（admin）或机器人主人（owner）可以在群聊中修改 B 站订阅；私聊中可以直接订阅本会话。';

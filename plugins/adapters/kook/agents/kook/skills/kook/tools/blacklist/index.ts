@@ -13,7 +13,7 @@ export default defineAgentTool<{ guild_id: string; action: 'add' | 'remove'; use
   adapter: 'kook',
   scopes: ["channel"],
   tags: ['kook'],
-  permissions: ['platform-permission:guild_admin'],
+  permissions: ['platform:admin', 'bot-permission:ban_members'],
   async execute({ guild_id, action, user_id, remark }: { guild_id: string; action: 'add' | 'remove'; user_id: string; remark?: string }, context) {
     const member = context.$client.pickGuildMember(guild_id, user_id);
     switch (action) {
