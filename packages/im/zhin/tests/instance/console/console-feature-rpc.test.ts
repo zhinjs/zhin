@@ -155,19 +155,36 @@ describe('feature.* Console RPC', () => {
   });
 
   it('stores enabled: false and deletes the key for enabled: true at adapter / endpoint levels', async () => {
-    const { call, state } = harness(base);
-    const off = await call('feature.set-enabled', { plugin: 'rss', level: 'endpoint', key: 'qq/bot-1', enabled: true });
-    expect(off!.body.data).toMatchObject({ status: 'unchanged' });
+    const { call, state, patches } = harness(base);
     await call('feature.set-enabled', { plugin: 'rss', level: 'adapter', key: 'qq', enabled: true });
     expect((state.document.rss as Record<string, any>).overrides.adapters.qq).toEqual({ maxItems: 3 });
     await call('feature.set-enabled', { plugin: 'rss', level: 'endpoint', key: 'tg/news', enabled: false });
     expect((state.document.rss as Record<string, any>).overrides.endpoints['tg/news']).toEqual({ maxItems: 1, enabled: false });
-    await call('feature.set-enabled', { plugin: 'rss', level: 'adapter', key: 'tg', enabled: false });
-    const warned = await call('feature.set-enabled', { plugin: 'rss', level: 'endpoint', key: 'tg/other', enabled: false });
-    expect(warned!.body.data).toMatchObject({ status: 'saved' });
-    // Schema-less Plugins still get the three-level switch.
-    await call('feature.set-enabled', { plugin: 'plain', level: 'endpoint', key: 'qq/bot-1', enabled: false });
-    expect((state.document.plain as Record<string, any>).overrides).toEqual({ endpoints: { 'qq/bot-1': { enabled: false } } });
+    expect((await call('feature.set-enabled', { plugin: 'rss', level: 'endpoint', key: 'tg/news', enabled: true }))!.body.data).toMatchObject({ status: 'saved' });
+    expect((state.document.rss as Record<string, any>).overrides.endpoints['tg/news']).toEqual({ maxItems: 1 });
+    expect(patches).toHaveLength(3);
+  });
+
+  it('locks every level below a disabled level in both directions (ADR 0050 §4)', async () => {
+    const { call, state, patches } = harness(base);
+    // rss is disabled at adapter qq: the endpoint switch below it can neither enable nor disable.
+    for (const enabled of [true, false]) {
+      const reply = await call('feature.set-enabled', { plugin: 'rss', level: 'endpoint', key: 'qq/bot-1', enabled });
+      expect(reply).toMatchObject({ status: 409, body: { success: false, code: 'locked', lockedBy: 'adapter', error: '已被适配器层停用，下级开关已锁定' } });
+    }
+    // plain is disabled globally: adapter and endpoint switches are locked by global.
+    expect(await call('feature.set-enabled', { plugin: 'plain', level: 'adapter', key: 'qq', enabled: false }))
+      .toMatchObject({ status: 409, body: { code: 'locked', lockedBy: 'global', error: '已被全局层停用，下级开关已锁定' } });
+    expect(patches).toEqual([]);
+    void state;
+    // A lower `enabled: false` stored before the upper disable is kept by remove-override.
+    const document = structuredClone(base) as Record<string, any>;
+    document.rss.overrides.endpoints['qq/bot-1'] = { enabled: false, maxItems: 2 };
+    const kept = harness(document);
+    await kept.call('feature.remove-override', { plugin: 'rss', level: 'endpoint', key: 'qq/bot-1' });
+    expect((kept.state.document.rss as Record<string, any>).overrides.endpoints['qq/bot-1']).toEqual({ enabled: false });
+    expect(await kept.call('feature.remove-override', { plugin: 'rss', level: 'endpoint', key: 'qq/bot-1', paths: [['enabled']] }))
+      .toMatchObject({ status: 409, body: { code: 'locked' } });
   });
 
   it('keeps the global switch on disable_plugins with a restart', async () => {

@@ -150,10 +150,12 @@ export function isTrustedOfficialAdapterPackage(packageName: string | undefined)
   return typeof packageName === 'string' && packageName.startsWith(TRUSTED_ADAPTER_SCOPE);
 }
 
-/** Owner predicate for the turn's endpoint; non-IM turns and unknown endpoints see every owner. */
+/** Owner predicate for the turn's conversation / endpoint; non-IM turns and unknown endpoints see every owner. */
 export function featureGate(snapshot: RuntimeSnapshot, turn?: TurnAccessContext): (owner: PluginId) => boolean {
-  const endpoint = turn?.origin.kind === 'im' ? turn.origin.conversation?.endpoint.id : undefined;
-  const key = endpoint ? resolveEndpointFeatureKey(snapshot, endpoint) : undefined;
+  const conversation = turn?.origin.kind === 'im' ? turn.origin.conversation : undefined;
+  const endpoint = conversation?.endpoint.id;
+  // ADR 0055: with a conversation the gate evaluates down to the conversation level.
+  const key = endpoint ? resolveEndpointFeatureKey(snapshot, endpoint, undefined, conversation) : undefined;
   if (!key) return () => true;
   return owner => isFeatureOwnerEnabled(snapshot, owner, key);
 }

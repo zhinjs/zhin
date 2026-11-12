@@ -5,7 +5,8 @@
  * This module must not import from `./index.js` (the barrel re-exports it), so RPC names
  * are spelled as literals; protocol tests assert every catalog entry is mapped.
  */
-import { FEATURE_RPC_PERMISSIONS } from './feature.js';
+import { FEATURE_RPC_PERMISSIONS, parseFeatureConversationKey } from './feature.js';
+import { CHAT_ROLES_RPC_PERMISSIONS } from './chat-roles.js';
 import { GATEWAY_RPC_PERMISSIONS } from './gateway.js';
 import {
   isConsolePluginPermission,
@@ -65,6 +66,8 @@ export const CONSOLE_SCOPED_PERMISSIONS: ReadonlySet<ConsolePermission> = new Se
   'endpoint.manage',
   'feature.configure',
   'feature.toggle',
+  // ADR 0056 §3: chat roles of scopes under an adapter / endpoint binding (`chat-roles.*` only).
+  'iam.manage',
 ]);
 
 /** Permissions that change state; every RPC mapped to one is audited. */
@@ -188,6 +191,26 @@ export type ConsoleScopeTarget =
 const GLOBAL_TARGET: ConsoleScopeTarget = Object.freeze({ kind: 'global' });
 const ANY_TARGET: ConsoleScopeTarget = Object.freeze({ kind: 'any' });
 
+/**
+ * Scope target of one `feature.*` operation (ADR 0049 §3 / 0055 §6): `adapter` key `<alias>`,
+ * `endpoint` key `<alias>/<endpointId>`; a `conversation` key counts for its endpoint, so an
+ * adapter- or endpoint-scoped grant covers every conversation under it. Anything else is global.
+ */
+export function featureScopeTarget(level: string | undefined, key: string | undefined): ConsoleScopeTarget {
+  if (level === 'adapter' && key && /^[a-z0-9][a-z0-9-]*$/u.test(key)) return Object.freeze({ kind: 'adapter', adapter: key });
+  if (level === 'endpoint' && key) {
+    const slash = key.indexOf('/');
+    if (slash > 0 && slash < key.length - 1 && !key.includes('/', slash + 1)) {
+      return Object.freeze({ kind: 'endpoint', adapter: key.slice(0, slash), endpoint: key.slice(slash + 1) });
+    }
+  }
+  if (level === 'conversation' && key) {
+    const ref = parseFeatureConversationKey(key);
+    if (ref) return Object.freeze({ kind: 'endpoint', adapter: ref.adapter, endpoint: ref.endpointId });
+  }
+  return GLOBAL_TARGET;
+}
+
 const P = CONSOLE_PERMISSIONS;
 
 /**
@@ -231,6 +254,7 @@ export const CONSOLE_RPC_PERMISSIONS: Readonly<Record<string, ConsolePermission>
   'plugin:set-enabled': P.FEATURE_TOGGLE,
   // Layered feature configuration (ADR 0050 §8)
   ...FEATURE_RPC_PERMISSIONS,
+  ...CHAT_ROLES_RPC_PERMISSIONS,
   // Project files / environment / database / process
   'files:tree': P.OPS_FILES_READ,
   'files:read': P.OPS_FILES_READ,
@@ -607,18 +631,13 @@ const listAllTypes: ReadonlySet<string> = new Set(['endpoint.list']);
 
 function rpcTarget(type: string, permission: ConsolePermission, payloads: readonly Record<string, unknown>[]): ConsoleScopeTarget {
   if (!CONSOLE_SCOPED_PERMISSIONS.has(permission)) return GLOBAL_TARGET;
-  if (type.startsWith('feature.')) {
+  // Console accounts and bindings (`iam.*`) are global objects: never scoped.
+  if (type.startsWith('iam.')) return GLOBAL_TARGET;
+  if (type.startsWith('feature.') || type.startsWith('chat-roles.')) {
     const level = firstString(payloads, 'level');
     const key = firstString(payloads, 'key');
     if (hasConflict(payloads, 'level') || hasConflict(payloads, 'key')) return GLOBAL_TARGET;
-    if (level === 'adapter' && key && !key.includes('/')) return Object.freeze({ kind: 'adapter', adapter: key });
-    if (level === 'endpoint' && key) {
-      const slash = key.indexOf('/');
-      if (slash > 0 && slash < key.length - 1) {
-        return Object.freeze({ kind: 'endpoint', adapter: key.slice(0, slash), endpoint: key.slice(slash + 1) });
-      }
-    }
-    return GLOBAL_TARGET;
+    return featureScopeTarget(level ?? undefined, key ?? undefined);
   }
   if (type.startsWith('plugin:')) return GLOBAL_TARGET;
   if (listAllTypes.has(type)) return ANY_TARGET;

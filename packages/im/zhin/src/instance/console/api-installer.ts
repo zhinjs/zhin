@@ -44,6 +44,8 @@ export interface ConsoleControlPlaneOptions {
   readonly hostConsoleRpc?: HostConsoleRpcFactory;
   /** Console access control (ADR 0049). */
   readonly consoleIam?: () => import('@zhin.js/gateway/iam').ConsoleIamService | undefined;
+  /** Conversation-level feature overrides and in-chat feature admins (ADR 0055). */
+  readonly featureStores?: import('./console-feature-rpc.js').FeatureStores;
 }
 
 export interface StartConsoleControlPlaneOptions extends ConsoleControlPlaneOptions {
@@ -99,6 +101,7 @@ export function startConsoleControlPlane(options: StartConsoleControlPlaneOption
       configuration,
       ...(options.hostConsoleRpc ? { hostConsoleRpc: options.hostConsoleRpc } : {}),
       ...(options.consoleIam ? { consoleIam: options.consoleIam } : {}),
+      ...(options.featureStores ? { featureStores: options.featureStores } : {}),
     });
   } catch (error) {
     for (const dispose of disposers.reverse()) dispose();

@@ -63,6 +63,8 @@ import { installHttpHost, resolveHttpConfig } from '@zhin.js/host-http';
 import { createDatabaseHost, installDatabaseHost, resolveDatabaseConfig } from '@zhin.js/core/runtime';
 import { installLocaleHost } from '@zhin.js/core/runtime';
 import { installConfigurationHost } from './configuration-host-installer.js';
+import { createFeatureHost } from './feature-host-installer.js';
+import { setProjectPluginEnabled } from '@zhin.js/runtime';
 import {
   createRestartChatAuthorizer,
   deliverPendingRestartReceipt,
@@ -230,6 +232,8 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     stop: async () => { throw new Error('RootHost stop is not bound'); },
   };
   const senderEnricher = await createSenderEnricher(hostConfig, endpointRoles);
+  // ADR 0055: conversation-level feature overrides + in-chat feature admins (tables defined before start).
+  const featureHost = createFeatureHost({ database: databaseHost, hostConfig, config, endpointRoles, snapshots: () => host.runtime.snapshots });
   const im = new ImRuntime({ enrichSender: senderEnricher });
   const endpointRepository = new PersistentEndpointRepository({ rootId: resolve(options.root),
     directory: join(options.root, '.zhin', 'endpoint-credentials'), state: () => databaseHost.state });
@@ -330,6 +334,16 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
       im.install(context.resources);
       installHttpHost(httpHost)(context);
       installDatabaseHost(databaseHost)(context);
+      featureHost.install({
+        context: {
+          configuration: consoleConfigurationStore,
+          snapshots: host.runtime.snapshots,
+          setGlobalEnabled: (instanceKey, enabled) => setProjectPluginEnabled(options.root, instanceKey, enabled),
+          requestRestart: () => { void requestProcessRestart('chat'); },
+          publishEvent: (type, data) => consoleEventHub.publish(type, data),
+        },
+        audit: entry => { httpHost.tokenRegistry?.accessProvider?.audit?.(entry); },
+      })(context);
       if (consoleIam) context.handoff.add({ activateNext: async () => { await consoleIam.activate(); } });
       // Match DatabaseHost's atomic-state capability. Unsupported dialects keep
       // static accounts; a failed read on a supported database still fails startup.
@@ -479,6 +493,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     snapshots: host.runtime.snapshots,
     onRestart: () => requestProcessRestart('console'),
     consoleIam: consoleIamService,
+    featureStores: featureHost.stores,
   });
   function requestProcessRestart(reason: string): Promise<void> {
     // ADR 0054 §3: restarts belong to the gateway. It answers `restart-request` with `shutdown`

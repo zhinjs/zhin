@@ -3,14 +3,18 @@ import {
   childPluginId, disabledFeatureOwners, featureConfigSource, featureId, formatFeatureResolutionKey, isFeatureOwnerEnabled,
   parseFeatureResolutionKey, primaryConfigToken, readFeatureOverrides, resolveEndpointFeatureKey, resolveFeatureEnabled,
   resolveFeatureTargetKey, resolveLayeredConfig, rootPluginId,
-  type PluginId, type PrimaryConfig, type RuntimeSnapshot,
+  escapeFeatureConversationId, featureConversationEntry, featureConversationOverridesToken, featureEndpointKeyOf, featureInstancePath,
+  featureKeyLevel, formatFeatureConversationKey, parseFeatureConversationKey, readFeatureConversationOverrides, unescapeFeatureConversationId,
+  type FeatureConversationOverride, type PluginId, type PrimaryConfig, type RuntimeSnapshot,
 } from '../src/index.js';
 
 describe('resolution keys', () => {
   it('parses and formats global, adapter and endpoint keys', () => {
     expect(parseFeatureResolutionKey('')).toEqual({});
     expect(parseFeatureResolutionKey('qq')).toEqual({ adapter: 'qq' });
-    expect(parseFeatureResolutionKey('tg-main/news/x')).toEqual({ adapter: 'tg-main', endpointId: 'news/x' });
+    // Endpoint ids never contain `/`: a second slash starts the conversation level (ADR 0055).
+    expect(() => parseFeatureResolutionKey('tg-main/news/x')).toThrow(TypeError);
+    expect(parseFeatureResolutionKey('tg-main/news/group:x')).toEqual({ adapter: 'tg-main', endpointId: 'news', conversation: { kind: 'group', id: 'x' } });
     expect(formatFeatureResolutionKey({ adapter: 'qq', endpointId: 'bot-1' })).toBe('qq/bot-1');
     expect(() => parseFeatureResolutionKey({ endpointId: 'x' })).toThrow(TypeError);
   });
@@ -119,5 +123,81 @@ describe('dispatch gate helpers', () => {
     expect(isFeatureOwnerEnabled(value, rootPluginId(), 'qq/bot-a')).toBe(true);
     expect([...disabledFeatureOwners(value, [owner, nested, adapterOwner] as PluginId[], 'qq/bot-a')]).toEqual([owner, nested]);
     expect(disabledFeatureOwners(value, [owner], undefined).size).toBe(0);
+  });
+});
+
+describe('conversation level (ADR 0055)', () => {
+  it('formats, escapes and parses conversation keys without slash ambiguity', () => {
+    expect(escapeFeatureConversationId('a/b%c')).toBe('a%2Fb%25c');
+    expect(unescapeFeatureConversationId('a%2Fb%25c')).toBe('a/b%c');
+    expect(unescapeFeatureConversationId('a%2fb')).toBe('a/b');
+    expect(unescapeFeatureConversationId('a%20b')).toBeUndefined();
+    expect(unescapeFeatureConversationId('a/b')).toBeUndefined();
+    const key = formatFeatureConversationKey('qq', 'bot-1', { kind: 'private', id: 'u/1:x' });
+    expect(key).toBe('qq/bot-1/private:u%2F1:x');
+    expect(parseFeatureConversationKey(key)).toEqual({ adapter: 'qq', endpointId: 'bot-1', conversation: { kind: 'private', id: 'u/1:x' } });
+    expect(formatFeatureResolutionKey(key)).toBe(key);
+    expect(featureKeyLevel(key)).toBe('conversation');
+    expect(featureEndpointKeyOf(key)).toBe('qq/bot-1');
+    for (const bad of ['qq/bot-1/room:1', 'qq/bot-1/group:', 'qq/bot-1/group', 'Q/bot/group:1', 'qq/bot-1/group:a%2', 'qq/bot-1/group:a%2fb']) {
+      expect(parseFeatureConversationKey(bad)).toBeUndefined();
+    }
+    expect(() => formatFeatureConversationKey('qq', 'bot', { kind: 'group', id: 'x'.repeat(257) })).toThrow(TypeError);
+    expect(() => formatFeatureConversationKey('qq', 'bot', { kind: 'group', id: 'a\nb' })).toThrow(TypeError);
+  });
+
+  it('locks the conversation below any disabled upper level and records conversation sources', () => {
+    const overrides = { adapters: { tg: { enabled: false } }, endpoints: { 'qq/off': { enabled: false }, 'qq/a': { maxItems: 2, style: { color: 'blue' } } } };
+    expect(resolveFeatureEnabled({ overrides, key: 'qq/off/group:1', conversation: { enabled: false } }))
+      .toEqual({ enabled: false, disabledAt: 'endpoint', lockedBy: 'endpoint' });
+    expect(resolveFeatureEnabled({ overrides, key: 'tg/a/group:1' })).toEqual({ enabled: false, disabledAt: 'adapter', lockedBy: 'adapter' });
+    expect(resolveFeatureEnabled({ overrides, globalEnabled: false, key: 'qq/a/group:1' })).toMatchObject({ lockedBy: 'global' });
+    expect(resolveFeatureEnabled({ overrides, key: 'qq/a/group:1', conversation: { enabled: false } })).toEqual({ enabled: false, disabledAt: 'conversation' });
+    // A conversation-level `enabled: true` never re-enables.
+    expect(resolveFeatureEnabled({ overrides, key: 'qq/off/group:1', conversation: { enabled: true } }).enabled).toBe(false);
+    const result = resolveLayeredConfig({ global: { maxItems: 5, style: { color: 'red', size: 1 } }, overrides, key: 'qq/a/group:1',
+      conversation: { maxItems: 9, style: { size: 3 } } });
+    expect(result.value).toEqual({ maxItems: 9, style: { color: 'blue', size: 3 } });
+    expect(result.sources).toEqual({ '/maxItems': 'conversation', '/style/color': 'endpoint', '/style/size': 'conversation' });
+    // The conversation entry only applies to conversation keys.
+    expect(resolveLayeredConfig({ global: { maxItems: 5 }, overrides, key: 'qq/a', conversation: { maxItems: 9 } }).value).toEqual({ maxItems: 2, style: { color: 'blue' } });
+  });
+
+  it('resolves messages with a conversation to the conversation key', () => {
+    const adapterOwner = childPluginId(rootPluginId(), 'qq');
+    const value = {
+      tree: new Map([[adapterOwner, { instanceKey: 'qq' } as never]]),
+      projections: new Map([[featureId('zhin.adapter'), { owner: () => adapterOwner, endpointEntry: () => ({ desired: { endpointId: 'bot-a' } }) }]]),
+    } as unknown as RuntimeSnapshot;
+    expect(resolveFeatureTargetKey(value, { conversation: { endpoint: { id: 'ep:a' }, kind: 'group', id: 'g/1' } })).toBe('qq/bot-a/group:g%2F1');
+    // Unkeyable ids stay at the endpoint level.
+    expect(resolveEndpointFeatureKey(value, 'ep:a', undefined, { kind: 'group', id: '' })).toBe('qq/bot-a');
+    expect(resolveEndpointFeatureKey(value, 'ep:a', undefined, { kind: 'room', id: '1' })).toBe('qq/bot-a');
+    expect(resolveFeatureTargetKey(undefined, { adapter: 'qq', endpointId: 'x', conversation: { kind: 'channel', id: 'c' } })).toBe('qq/x/channel:c');
+  });
+
+  it('gates owners per conversation from the Root reader and invalidates on writes', () => {
+    const owner = childPluginId(rootPluginId(), 'rss');
+    const nested = childPluginId(owner, 'child');
+    const rows = new Map<string, FeatureConversationOverride>();
+    const reader = { version: 0, get: (plugin: string, key: string) => rows.get(`${plugin}|${key}`) };
+    const document = { configVersion: 2, plugins: { rss: '@x/rss' }, rss: { child: {} } };
+    const value = {
+      generation: 1, root: rootPluginId(), config: new Map(), capabilities: new Map(), tree: new Map(), projections: new Map(),
+      resources: new Map([[rootPluginId(), new Map<string, unknown>([[primaryConfigToken.id, { document, expanded: document, get: () => undefined }],
+        [featureConversationOverridesToken.id, reader]])]]),
+    } as unknown as RuntimeSnapshot;
+    expect(readFeatureConversationOverrides(value)).toBe(reader);
+    expect(isFeatureOwnerEnabled(value, owner, 'qq/a/group:1')).toBe(true);
+    rows.set('rss|qq/a/group:1', { enabled: false, patch: {}, revision: 1, updatedAt: 1 });
+    // Same version: cached.
+    expect(isFeatureOwnerEnabled(value, owner, 'qq/a/group:1')).toBe(true);
+    reader.version = 1;
+    expect(isFeatureOwnerEnabled(value, owner, 'qq/a/group:1')).toBe(false);
+    expect(isFeatureOwnerEnabled(value, nested, 'qq/a/group:1')).toBe(false);
+    expect(isFeatureOwnerEnabled(value, owner, 'qq/a/group:2')).toBe(true);
+    expect(isFeatureOwnerEnabled(value, owner, 'qq/a')).toBe(true);
+    expect(featureInstancePath(nested)).toBe('rss/child');
+    expect(featureConversationEntry({ enabled: false, patch: { a: 1 }, revision: 1, updatedAt: 1 })).toEqual({ a: 1, enabled: false });
   });
 });

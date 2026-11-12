@@ -1,6 +1,6 @@
 /**
- * ADR 0050 §6 dispatch gate: a Plugin switched off for one adapter / endpoint does not
- * exist there. Indexes are projected once per generation; when an endpoint disables some
+ * ADR 0050 §6 / 0055 §5 dispatch gate: a Plugin switched off for one adapter / endpoint /
+ * conversation does not exist there. Indexes are projected once per generation; when an endpoint disables some
  * owners, an equivalent index over the remaining slots is derived and cached per
  * (projection, disabled owner set), so the hot path without overrides stays unchanged.
  */
@@ -16,20 +16,33 @@ function record(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object';
 }
 
-function endpointOf(value: unknown): { id: string; endpointId?: string } | undefined {
+interface FeatureInputEndpoint {
+  readonly id: string;
+  readonly endpointId?: string;
+  readonly conversation?: Readonly<{ kind?: unknown; id?: unknown }>;
+}
+
+function endpointOf(value: unknown): FeatureInputEndpoint | undefined {
   if (!record(value)) return undefined;
   const conversation = record(value.conversation) ? value.conversation : undefined;
   const fromConversation = conversation && record(conversation.endpoint) ? conversation.endpoint.id : undefined;
   const fromEvent = record(value.endpoint) ? value.endpoint.id : undefined;
   const id = typeof fromConversation === 'string' ? fromConversation : typeof fromEvent === 'string' ? fromEvent : undefined;
-  if (id !== undefined) return { id, ...(typeof value.endpointId === 'string' ? { endpointId: value.endpointId } : {}) };
+  if (id !== undefined) {
+    return { id, ...(typeof value.endpointId === 'string' ? { endpointId: value.endpointId } : {}),
+      // ADR 0055: inputs with a conversation resolve down to the conversation level.
+      ...(typeof fromConversation === 'string' && conversation ? { conversation: { kind: conversation.kind, id: conversation.id } } : {}) };
+  }
   return 'payload' in value ? endpointOf(value.payload) : undefined;
 }
 
-/** Resolution key (`<alias>/<endpointId>`) of a message, side event or endpoint event; undefined when unknown. */
+/**
+ * Resolution key of a message, side event or endpoint event: `<alias>/<endpointId>/<kind>:<id>`
+ * with a conversation, `<alias>/<endpointId>` without one; undefined when unknown.
+ */
 export function featureKeyOf(value: unknown, snapshot: RuntimeSnapshot): string | undefined {
   const endpoint = endpointOf(value);
-  return endpoint ? resolveEndpointFeatureKey(snapshot, endpoint.id, endpoint.endpointId) : undefined;
+  return endpoint ? resolveEndpointFeatureKey(snapshot, endpoint.id, endpoint.endpointId, endpoint.conversation) : undefined;
 }
 
 /** Plugin owners switched off for this input's endpoint in `snapshot`. */
