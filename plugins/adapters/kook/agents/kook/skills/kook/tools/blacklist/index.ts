@@ -1,7 +1,6 @@
 import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { platformPermission } from '@zhin.js/permission';
 
 export default defineAgentTool<{ guild_id: string; action: 'add' | 'remove'; user_id: string; remark?: string }>({
   description: 'KOOK 服务器黑名单管理：添加/移除',
@@ -14,7 +13,7 @@ export default defineAgentTool<{ guild_id: string; action: 'add' | 'remove'; use
   adapter: 'kook',
   scopes: ["channel"],
   tags: ['kook'],
-  permissions: [platformPermission('kook', 'guild_admin')],
+  permissions: ['platform-permission:guild_admin'],
   async execute({ guild_id, action, user_id, remark }: { guild_id: string; action: 'add' | 'remove'; user_id: string; remark?: string }, context) {
     const member = context.$client.pickGuildMember(guild_id, user_id);
     switch (action) {

@@ -1,13 +1,20 @@
 /**
- * ADR 0056 §3: `chat-roles.list|grant|revoke` Console RPC (permission `iam.manage`; adapter /
- * endpoint-scoped bindings count for every scope under them, see `featureScopeTarget`).
+ * ADR 0056 §3–§4: `chat-roles.list|grant|revoke|mappings|set-mappings` Console RPC (permission
+ * `iam.manage`; adapter / endpoint-scoped bindings count for every scope under them, see
+ * `featureScopeTarget`).
  */
 import {
   CHAT_ROLES_RPC_PERMISSIONS, isConsoleChatRolesRpcType,
-  type ConsoleChatRoleEntry, type ConsoleChatRolesRpcType, type ConsoleFeatureLevel,
+  type ConsoleChatRoleEntry, type ConsoleChatRoleMappingLayer, type ConsoleChatRolesRpcType, type ConsoleFeatureLevel,
 } from '@zhin.js/console-protocol';
 import {
-  chatScopeChain, isChatIdentity, isChatRole, normalizeChatRoleScope, type ChatRoleEntry, type ChatRoleService,
+  configChatRoleMappingLayers, mergeChatRoleMappings, DEFAULT_CHAT_ROLE_MAPPINGS,
+  type ChatRoleMappingLayer, type ChatRoleSnapshot,
+} from '@zhin.js/core';
+import { parseFeatureResolutionKey } from '@zhin.js/plugin-runtime';
+import {
+  chatScopeChain, isChatIdentity, isChatRole, normalizeChatRoleScope,
+  type ChatRoleEntry, type ChatRoleMappingStore, type InstanceChatRoleService, type StoredChatRoleMappings,
 } from '../chat-roles.js';
 import { FeatureRpcError, readScope, type FeatureRpcReply } from './console-feature-rpc.js';
 
@@ -19,7 +26,11 @@ export interface ChatRolesRpcAuthorization {
 }
 
 export interface ChatRolesRpcContext {
-  readonly roles?: ChatRoleService;
+  readonly roles?: InstanceChatRoleService;
+  /** Conversation-level mapping rules. */
+  readonly mappings?: ChatRoleMappingStore;
+  /** Current runtime snapshot (adapter / account mapping rules from the live configuration). */
+  readonly snapshot?: () => ChatRoleSnapshot | undefined;
   /** Deny by default: without it every call is refused. */
   readonly authorize?: (request: ChatRolesRpcAuthorization) => boolean | Promise<boolean>;
   readonly actor?: string;
@@ -44,6 +55,26 @@ function readIdentity(input: Record_, scope: string): { adapter: string; userId:
   return identity as { adapter: string; userId: string };
 }
 
+function layerView(layer: ChatRoleMappingLayer, stored?: StoredChatRoleMappings): ConsoleChatRoleMappingLayer {
+  return Object.freeze({ level: layer.level, rules: layer.rules, inherit: layer.inherit !== false,
+    ...(stored ? { revision: stored.revision, updatedAt: stored.updatedAt, ...(stored.updatedBy ? { updatedBy: stored.updatedBy } : {}) } : {}) });
+}
+
+function mappingsView(scope: string, context: ChatRolesRpcContext) {
+  const parsed = parseFeatureResolutionKey(scope);
+  const layers: ChatRoleMappingLayer[] = [...configChatRoleMappingLayers(context.snapshot?.(), parsed.adapter!, parsed.endpointId)];
+  const stored = parsed.conversation ? context.mappings?.get(scope) : undefined;
+  const storedLayer = parsed.conversation ? context.mappings?.layer(scope) : undefined;
+  if (storedLayer) layers.push(storedLayer);
+  return Object.freeze({
+    layers: Object.freeze([
+      layerView({ level: 'default', rules: DEFAULT_CHAT_ROLE_MAPPINGS }),
+      ...layers.map(layer => layerView(layer, layer.level === 'conversation' ? stored : undefined)),
+    ]),
+    effective: mergeChatRoleMappings(layers),
+  });
+}
+
 /** Dispatches `chat-roles.*`; null means the type belongs elsewhere. */
 export async function dispatchChatRolesConsoleRpc(message: Record_, context: ChatRolesRpcContext): Promise<FeatureRpcReply | null> {
   const type = message.type;
@@ -61,7 +92,29 @@ export async function dispatchChatRolesConsoleRpc(message: Record_, context: Cha
     const roles = context.roles;
     if (!roles) throw new FeatureRpcError(503, '聊天角色不可用');
     let data: unknown;
-    if (type === 'chat-roles.list') {
+    if (type === 'chat-roles.mappings' || type === 'chat-roles.set-mappings') {
+      if (level === 'global') throw new FeatureRpcError(400, '映射规则只在适配器、账号与会话层');
+      if (type === 'chat-roles.mappings') {
+        data = mappingsView(scope, context);
+      } else {
+        if (level !== 'conversation') throw new FeatureRpcError(400, '适配器与账号层的映射规则写在配置文件中，Console 只能修改会话层');
+        if (!context.mappings) throw new FeatureRpcError(503, '映射规则不可用');
+        const expected = input.expectedRevision;
+        if (expected !== undefined && (typeof expected !== 'number' || !Number.isInteger(expected) || expected < 0)) {
+          throw new FeatureRpcError(400, 'expectedRevision 必须是非负整数');
+        }
+        try {
+          const result = await context.mappings.set({ key: scope, mappings: input.mappings, inherit: input.inherit,
+            ...(context.actor ? { updatedBy: context.actor } : {}), ...(expected !== undefined ? { expectedRevision: expected } : {}) });
+          const layer = context.mappings.layer(scope);
+          data = Object.freeze({ status: result.status, ...(layer ? { layer: layerView(layer, context.mappings.get(scope)) } : {}) });
+          if (result.status === 'saved') context.publishEvent?.('chat-roles:updated', { level, key: scope });
+        } catch (error) {
+          if (!(error instanceof TypeError)) throw error;
+          data = Object.freeze({ status: 'invalid', error: error.message });
+        }
+      }
+    } else if (type === 'chat-roles.list') {
       data = Object.freeze({ roles: Object.freeze(roles.list(scope, input.descendants === true).map(chatRoleView)) });
     } else {
       const identity = readIdentity(input, scope);

@@ -142,34 +142,22 @@ export default defineCommand({
 ```ts
 export default defineCommand({
   description: '清空数据',
-  permit: ['role(master)'],              // 仅 master 可用
+  permit: ['owner'],              // 仅主人（聊天角色 owner）可用
   execute: () => '已清空',
 });
 ```
 
 | 规则 | 含义 |
 | --- | --- |
-| `role(master)` / `role(trusted)` | 发送者角色 |
+| `owner` / `admin` / `trusted` / `role(admin,trusted)` | 发送者在本会话层级链上的聊天角色（`owner` ⊃ `admin` ⊃ `trusted`） |
+| `platform:owner` / `platform:admin` / `platform-role:<id>` / `platform-permission:<name>` | 适配器上报的平台身份 |
 | `adapter(icqq)` | 只在某个平台上可用 |
 | `group()` / `private()` / `channel()` | 限制会话类型，空值或 `*` 不限该类型的会话 ID |
 | `group(123)` / `private(…)` / `channel(…)` / `user(…)` | 比较相应会话或发送者 ID；不限制完整账号、父容器或话题 |
 
 数组中的多条规则**同时满足**才通过；一条规则内用逗号分隔表示**满足其一**即可。没有权限的用户也看不到这个命令的帮助。
 
-内置角色判断只让 `master` 隐含 `trusted`，不会额外推导 `user`、`admin` 或 `owner`。角色来自当前真实消息；适配器配置可以指定谁是 master：
-
-```yaml
-configVersion: 2
-# zhin.config.yml
-plugins:
-  qq: "@zhin.js/adapter-qq"
-qq:
-  master: '10001' # 整个适配器的 master
-  endpoints:
-    - name: main
-      appid: ${QQ_APPID}
-      master: '10001' # 也可以给单个账号单独设置
-```
+角色来自当前真实消息（Runtime 写入的 `sender.chatRole`），授予记录存在项目数据库：在 Console 的「角色」区块或聊天命令 `角色 授予` 中管理，平台群主 / 管理员按映射规则获得本会话 `admin`。详见[聊天角色](../concepts/chat-roles.md)；旧写法 `role(master)`、`scene_admin`、`platform(adapter,perm)` 的对照见[升级到聊天角色](../migrations/chat-roles.md#permits)。
 
 需要逐项理解规则时，可在[Console 命令权限说明](../paths/console.md#命令权限说明)中查看内置条件或填写假设身份。它不执行平台 checker，也不授予权限；`adapter(...)` 与会话 ID 规则不能当作完整会话白名单。
 
@@ -590,7 +578,7 @@ it('parses positional args and fills option defaults', async () => {
 | 字段 | 行为 |
 |---|---|
 | `alias` | 替换命令名的全部静态部分；目录参数接在后面 |
-| `permit` | 内置规则：`adapter\|group\|private\|channel\|user\|role(...)`。失败返回 `denied`；没有鉴权主体时同样拒绝，程序化的 `CommandIndex.execute` 也不能绕过 |
+| `permit` | 内置规则：`adapter\|group\|private\|channel\|user(...)`、`owner\|admin\|trusted` / `role(...)`、`platform:…` / `platform-role:…` / `platform-permission:…`。失败返回 `denied`；没有鉴权主体时同样拒绝，程序化的 `CommandIndex.execute` 也不能绕过 |
 | `shortcut` | `{ 触发文本: 预填的 params }`，去掉首尾空白后完全相同才触发 |
 
 冲突按完整的词序列判断：`b` 和 `b list` 可以共存。
@@ -638,7 +626,7 @@ flowchart LR
 - `remove <id>` 取消目标 incarnation 并关闭连接，历史保留；同名重建也获得新身份。
 - 首次修改前由管理员在 Console 核对已有账号清单并确认迁移，聊天命令不能代替确认。
 - 后续变更加密持久化，不写启动配置或 `.env`，不重启 Root。没有运行目录或数据库能力时拒绝写入，不回退文件。
-- `add/remove` 保留 master 权限规则；revision 冲突需刷新，提交结果未知需先读取权威状态核实，不能自动重试。
+- `add/remove` 需要聊天角色 `owner`；revision 冲突需刷新，提交结果未知需先读取权威状态核实，不能自动重试。
 
 ```ts
 // src/telegram-endpoint-commands.ts

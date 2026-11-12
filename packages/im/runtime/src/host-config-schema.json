@@ -3888,43 +3888,14 @@
         "selfService": {
           "type": "object",
           "additionalProperties": false,
-          "description": "In-chat `feature` / `功能` command for feature admins. Off by default.",
-          "x-descriptionZh": "功能管理员在聊天中使用的 `功能` / `feature` 命令，默认关闭。",
+          "description": "In-chat `feature` / `功能` and `role` / `角色` commands for chat role admins (ADR 0055 / 0056). Off by default. Platform group owners / admins become conversation admins through roles.mappings (default rule).",
+          "x-descriptionZh": "聊天角色 admin 在聊天中使用的 `功能` / `feature` 与 `角色` / `role` 命令（ADR 0055 / 0056），默认关闭。平台群主 / 管理员经 roles.mappings（默认规则）成为会话 admin。",
           "properties": {
             "enabled": {
               "type": "boolean",
               "default": false,
-              "description": "Register the in-chat feature command.",
-              "x-descriptionZh": "注册群内功能自助命令。"
-            },
-            "platformAdmins": {
-              "type": "boolean",
-              "default": true,
-              "description": "Platform group owners / admins (adapter-reported roles listed in roles) are conversation admins of that group.",
-              "x-descriptionZh": "平台群主 / 管理员（适配器报告、且列在 roles 中的角色）是该群的会话层管理员。"
-            },
-            "roles": {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "minLength": 1
-              },
-              "default": [
-                "owner",
-                "admin"
-              ],
-              "description": "Platform roles counted by platformAdmins; [\"owner\"] limits it to group owners.",
-              "x-descriptionZh": "platformAdmins 认可的平台角色；设为 [\"owner\"] 只认群主。"
-            },
-            "allowUsers": {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "pattern": "^[a-z0-9][a-z0-9-]*:.+$"
-              },
-              "default": [],
-              "description": "Global feature admins as <adapter alias>:<userId>.",
-              "x-descriptionZh": "全局功能管理员，格式 <适配器别名>:<用户 id>。"
+              "description": "Register the in-chat feature and role commands.",
+              "x-descriptionZh": "注册群内功能自助与角色命令。"
             }
           }
         }

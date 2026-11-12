@@ -4,7 +4,7 @@ export default defineEvalCase({
   id: 'structured-mixed-reply',
   description: 'Default IM reply preserves ordered Markdown, member mention and image segments after a lookup.',
   source: 'Agent structured reply contract — rich messages through the full runtime',
-  inbound: { text: '请把图和说明发出来，并 @ Alice', sender: { id: 'owner', roles: ['user'] } },
+  inbound: { text: '请把图和说明发出来，并 @ Alice', sender: { id: 'owner' } },
   tools: [{ name: 'lookup_member', description: 'Find Alice in the current conversation.', result: { id: '123', name: 'Alice' } }],
   script: [
     { toolCalls: [{ name: 'lookup_member', args: {} }] },

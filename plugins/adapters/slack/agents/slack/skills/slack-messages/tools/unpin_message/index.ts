@@ -1,7 +1,6 @@
 import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { platformPermission } from '@zhin.js/permission';
 
 export default defineAgentTool<{
   channel_id: string;
@@ -14,7 +13,7 @@ export default defineAgentTool<{
   }),
   adapter: 'slack',
   tags: ['slack'],
-  permissions: [platformPermission('slack', 'channel_manager')],
+  permissions: ['platform-permission:channel_manager'],
   async execute({ channel_id, timestamp }, context) {
     const client = context.$client;
     await client.pins.remove({ channel: channel_id, timestamp });

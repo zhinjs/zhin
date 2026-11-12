@@ -20,7 +20,7 @@ export function createTimerMailDueHandler(options: TimerMailDueHandlerOptions): 
       const content = jobPrompt(job) || job.label || job.id;
       const ownerId = job.createdBy?.userId ?? 'schedule';
       const roles = job.createdBy?.roles ?? [];
-      const isMaster = roles.includes('master');
+      const isMaster = roles.includes('owner');
       const mailbox = options.mailbox();
       const admission = await mailbox.admit({
         sessionKey: `timer:${job.id}`,

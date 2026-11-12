@@ -129,7 +129,7 @@ describe('isDangerousFileOperation', () => {
 
 describe('inferFileRole', () => {
   it('master → owner', () => {
-    expect(inferFileRole({ roles: ['master'] })).toBe('owner');
+    expect(inferFileRole({ roles: ['owner'] })).toBe('owner');
   });
 
   it('trusted → admin', () => {

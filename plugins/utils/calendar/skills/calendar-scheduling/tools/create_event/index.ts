@@ -9,7 +9,7 @@ export default defineAgentTool({
   description:
     "Create a calendar event. Always confirm title, start, end and timezone with the user first.",
   requiresApproval: "always",
-  permissions: ["role(master)"],
+  permissions: ["owner"],
   tags: ["calendar"],
   keywords: ["创建日程", "约时间", "create event"],
   inputSchema: z.object({

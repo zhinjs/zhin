@@ -5,7 +5,7 @@ export default defineEvalCase({
   description: 'A Gemini prompt block (promptFeedback.blockReason, no candidates) is not resent to a fallback model; the owner gets a short refusal saying the model blocked it.',
   source: '#724 provider resilience, Gemini primary (#770): blocked prompt → no retry, no fallback',
   tags: ['long-task'],
-  inbound: { text: '帮我写一句早安问候', sender: { id: 'owner', roles: ['master'] } },
+  inbound: { text: '帮我写一句早安问候', sender: { id: 'owner', chatRole: 'owner' } },
   models: ['scripted-fallback'],
   script: [
     { model: 'scripted-model', fault: { kind: 'finish', finishReason: 'other', blockReason: 'PROHIBITED_CONTENT' } },

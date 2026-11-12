@@ -142,34 +142,22 @@ Declare rules with `permit`; the bot refuses when they aren't met:
 ```ts
 export default defineCommand({
   description: 'Wipe data',
-  permit: ['role(master)'],              // master only
+  permit: ['owner'],              // the bot owner (chat role owner) only
   execute: () => 'Wiped',
 });
 ```
 
 | Rule | Meaning |
 | --- | --- |
-| `role(master)` / `role(trusted)` | Sender role |
+| `owner` / `admin` / `trusted` / `role(admin,trusted)` | The sender's chat role along this conversation's scope chain (`owner` ⊃ `admin` ⊃ `trusted`) |
+| `platform:owner` / `platform:admin` / `platform-role:<id>` / `platform-permission:<name>` | The adapter-reported platform identity |
 | `adapter(icqq)` | Only on one platform |
 | `group()` / `private()` / `channel()` | Restrict conversation kind; an empty value or `*` matches any ID of that kind |
 | `group(123)` / `private(…)` / `channel(…)` / `user(…)` | Compare the corresponding conversation or sender ID, without restricting the complete account, parent or thread |
 
 All rules in the array must pass (**AND**); commas inside one rule mean **any of** (OR). Users without permission don't see the command's help either.
 
-The builtin role check only makes `master` imply `trusted`; it does not infer `user`, `admin` or `owner`. Roles come from the actual message. Name the master in the adapter config:
-
-```yaml
-configVersion: 2
-# zhin.config.yml
-plugins:
-  qq: "@zhin.js/adapter-qq"
-qq:
-  master: '10001' # master for the whole adapter
-  endpoints:
-    - name: main
-      appid: ${QQ_APPID}
-      master: '10001' # or per account
-```
+Roles come from the actual message (`sender.chatRole`, set by the Runtime) and grants live in the project database: manage them in the Console **Roles** block or with the `role grant` chat command; platform group owners / admins get `admin` of their conversation from the mapping rules. See [Chat roles](../concepts/chat-roles.md); the old `role(master)`, `scene_admin` and `platform(adapter,perm)` spellings map as listed in [Upgrading to chat roles](../migrations/chat-roles.md#permits).
 
 For the same check in middleware or event handlers, use `checkPermissions`:
 
@@ -588,7 +576,7 @@ See [Testing Plugins](./testing.md) for the full guide.
 | Field | Behavior |
 |---|---|
 | `alias` | Replaces all static parts of the command name; folder params follow |
-| `permit` | Built-in rules: `adapter\|group\|private\|channel\|user\|role(...)`. Failure returns `denied`; no auth subject also means denied, and programmatic `CommandIndex.execute` can't bypass it |
+| `permit` | Built-in rules: `adapter\|group\|private\|channel\|user(...)`, `owner\|admin\|trusted` / `role(...)`, `platform:…` / `platform-role:…` / `platform-permission:…`. Failure returns `denied`; no auth subject also means denied, and programmatic `CommandIndex.execute` can't bypass it |
 | `shortcut` | `{ trigger text: prefilled params }`, fires on an exact match after trimming |
 
 Conflicts are judged on the full word sequence: `b` and `b list` can coexist.
@@ -636,7 +624,7 @@ Programmatic `CommandIndex.dispatch({ input, source, snapshot })` returns `statu
 - `remove <id>` cancels the target incarnation and closes its connection. History remains; recreating the same name gets a new identity.
 - Before the first change, an administrator must review existing accounts and confirm migration in Console. Chat commands cannot confirm it.
 - Later changes use encrypted persistence without modifying startup files or `.env`, or restarting Root. Missing runtime or database support rejects writes without a file fallback.
-- Existing master permissions apply. Refresh on revision conflict; verify an unknown commit through authoritative state before any further action, without automatically retrying it.
+- They need the chat role `owner`. Refresh on revision conflict; verify an unknown commit through authoritative state before any further action, without automatically retrying it.
 
 ```ts
 // src/telegram-endpoint-commands.ts
@@ -659,7 +647,7 @@ export default telegramEndpointCommands.list;
 
 `fields` is a closed list matching the platform schema. Nested fields use explicitly declared dotpaths such as `smtp.port`; `type` accepts `string | number | boolean`, defaulting to string. Arbitrary object merging is not supported. `env: true` or `secret: true` marks sensitive fields for masked responses and Host-private persistence; it does not enable `.env` writes. `add` reads `key=value` arguments and splits at the first `=`.
 
-The real entry uses the common `isEndpointOperator` master check. Additional platform permissions must not replace or widen that gate.
+The real entry uses the common `isEndpointOperator` owner check (chat role `owner`). Additional platform permissions must not replace or widen that gate.
 :::
 
 

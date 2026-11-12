@@ -1,6 +1,5 @@
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { platformPermission } from '@zhin.js/permission';
 
 export default defineAgentTool<{ guild_id: string; user_id: string }>({
   description: '获取 QQ 频道中指定成员的详细信息',
@@ -11,7 +10,7 @@ export default defineAgentTool<{ guild_id: string; user_id: string }>({
   adapter: 'qq',
   scopes: ["channel"],
   tags: ['qq'],
-  permissions: [platformPermission('qq', 'guild_admin')],
+  permissions: ['platform-permission:guild_admin'],
   async execute({ guild_id, user_id  }: { guild_id: string; user_id: string }, context) {
     const client = context.$client;
     return client.memberService.getGuildMemberInfo(guild_id, user_id);

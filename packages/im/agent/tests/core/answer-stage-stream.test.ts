@@ -60,7 +60,7 @@ async function run(steps: Step[], options: { tools?: AgentTool[]; stream?: CoreR
   const execute = (initialMessages?: AgentMessage[], promptHooks?: import('../../src/turn/prompt-controller.js').PromptTurnHooks, signal = options.signal) => runAgentLoopTextTurnRun({
     host: host as never, sessionId: 'session', rawContent: 'hello', promptProfile: { kind: 'interactive' },
     turnContext: { input: { text: 'hello', ...(options.bot ? { contextState: { bot: { id: 'bot', name: 'Bot' } } } : {}) }, origin: { kind: 'im', platform: 'sandbox', endpoint: 'bot', scope: 'private', sceneId: 'person' },
-      principal: { subjectId: 'person', roles: ['master'] }, session: { key: 'session' } },
+      principal: { subjectId: 'person', roles: ['owner'] }, session: { key: 'session' } },
     replyStream: options.stream, replyPhases: options.replyPhases, replySegments: options.replySegments, allTools: tools, resolvedTools: tools, toolExecution: { execute: executeTool } as never,
     interactiveRun: options.interactiveRun,
     personaEnhanced: '', modelId: 'm', modelCandidates: ['m'], toolLoading: 'direct', signal, initialMessages, promptHooks,

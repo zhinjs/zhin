@@ -10,18 +10,17 @@ import {
 function mockSubject(sender: { role?: string; permissions?: string[] }) {
   return {
     adapter: 'lark',
-    sender: { id: 'u1', role: sender.role ? [sender.role] : [], permissions: sender.permissions },
+    sender: { id: 'u1', platform: { standing: (sender.role ?? 'member') as never, ...(sender.permissions ? { permissions: sender.permissions } : {}) } },
     scene: { type: 'group', id: 'oc1' },
   };
 }
 
-function mockMsg(sender: { role?: string; permissions?: string[] }) {
+function mockMsg(platformPermissions: string[]) {
   return {
     clientAdapter: 'lark',
     endpointId: 'bot1',
     conversation: { endpoint: { adapter: 'lark', id: 'bot1' }, kind: 'group', id: 'oc1' },
-    sender: { id: 'u1', roles: [], permissions: sender.permissions },
-    metadata: sender.role ? { senderRole: sender.role } : {},
+    sender: { id: 'u1', platform: { standing: 'member' as const, permissions: platformPermissions } },
   } as any;
 }
 
@@ -30,7 +29,6 @@ describe('lark platform-permit', () => {
 
   beforeEach(() => {
     host = new PermissionHost();
-    host.registerPlatform('lark', (perm, subject) => checkLarkPlatformPermit(perm, subject));
   });
 
   it('normalizeLarkSenderForPermit', () => {
@@ -51,7 +49,7 @@ describe('lark platform-permit', () => {
       permissions: [platformPermit('chat_admin')],
       execute: async () => '',
     };
-    expect(await canAccessTool(tool, mockMsg({ role: 'member', permissions: [] }), host)).toBe(false);
-    expect(await canAccessTool(tool, mockMsg({ role: 'admin', permissions: ['chat_admin'] }), host)).toBe(true);
+    expect(await canAccessTool(tool, mockMsg([]), host)).toBe(false);
+    expect(await canAccessTool(tool, mockMsg(['chat_admin']), host)).toBe(true);
   });
 });

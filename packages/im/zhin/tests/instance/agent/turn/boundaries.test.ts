@@ -28,10 +28,8 @@ import {
   routeSpecialistAgent,
   withTriggerTimeout,
 } from '@zhin.js/agent/runtime';
-import {
-  createEndpointRoleResolver,
-  readConfiguredEndpointKeys,
-} from '../../../../src/instance/start-command.js';
+import { readConfiguredEndpointKeys } from '../../../../src/instance/start-command.js';
+import { readLegacyChatRoleConfig } from '../../../../src/instance/chat-role-migration.js';
 
 /** A declared profile (not a legacy-derived one): group scene lookups are usable, private ones are not. */
 const sceneProfile = { group: { scene: { groupInfo: true, memberProfile: true } } };
@@ -490,7 +488,7 @@ describe('canonical IM TurnRequest ingress', () => {
     }), text: 'x', roles: { isMaster: false, isTrusted: false } }, options)).toThrow('endpoint identity');
   });
 
-  it('preserves platform roles alongside framework trust roles', () => {
+  it('keeps platform role strings out of the principal roles (ADR 0056)', () => {
     const message = makeMessage({
       content: 'x', sender: { id: 'u', roles: ['owner', 'admin'] }, metadata: { endpoint: 'bot' },
     });
@@ -498,8 +496,8 @@ describe('canonical IM TurnRequest ingress', () => {
       isMaster: false,
       isTrusted: true,
     } }, { traceId: 't', turnId: 'u', signal: new AbortController().signal, projectRoot: '/workspace', workspaceRoot: '/workspace', ports: {}, intent: { kind: 'new' } });
-    expect(request.principal.roles).toEqual(['owner', 'admin', 'trusted']);
-    expect(request.policy.permissions).toEqual(['owner', 'admin', 'trusted']);
+    expect(request.principal.roles).toEqual(['trusted']);
+    expect(request.policy.permissions).toEqual(['trusted']);
   });
 
   it('uses a trusted Workroom envelope without exposing ordinary conversation context', () => {
@@ -888,78 +886,31 @@ describe('缺口 3：ai.trigger timeout / errorTemplate', () => {
   });
 });
 
-describe('缺口 3：masters / trusted 角色解析', () => {
-  it('endpoint owner 命中 → master', () => {
-    const roles = resolveRuntimeSenderRoles(groupMessage('hi', { userId: 'user-1' }), { endpointMaster: 'user-1', endpointTrusted: [], trigger: undefined });
-    expect(roles).toEqual({ isMaster: true, isTrusted: false });
+describe('缺口 3：chat role → runtime sender roles (ADR 0056)', () => {
+  const withRole = (chatRole?: 'owner' | 'admin' | 'trusted', userId: string | null = 'user-1') => makeMessage({
+    content: 'hi', target: 'group:100', sender: userId === null ? null : { id: userId, ...(chatRole ? { chatRole } : {}) }, metadata: { endpoint: '10001' },
   });
 
-  it('trigger.masters 命中 → master（无 endpoint owner 时）', () => {
-    const trigger: AITriggerConfig = { masters: ['user-1'] };
-    const roles = resolveRuntimeSenderRoles(groupMessage('hi', { userId: 'user-1' }), { endpointMaster: undefined, endpointTrusted: [], trigger });
-    expect(roles).toEqual({ isMaster: true, isTrusted: false });
+  it('owner → isMaster; admin / trusted → isTrusted; none → nothing', () => {
+    expect(resolveRuntimeSenderRoles(withRole('owner'))).toEqual({ isMaster: true, isTrusted: false });
+    expect(resolveRuntimeSenderRoles(withRole('admin'))).toEqual({ isMaster: false, isTrusted: true });
+    expect(resolveRuntimeSenderRoles(withRole('trusted'))).toEqual({ isMaster: false, isTrusted: true });
+    expect(resolveRuntimeSenderRoles(withRole())).toEqual({ isMaster: false, isTrusted: false });
   });
 
-  it('endpoint trusted 命中 → trusted', () => {
-    const roles = resolveRuntimeSenderRoles(groupMessage('hi', { userId: 'user-1' }), { endpointMaster: undefined, endpointTrusted: ['user-1'], trigger: undefined });
-    expect(roles).toEqual({ isMaster: false, isTrusted: true });
+  it.each(['userId', 'user_id', 'senderId', 'isMaster', 'roles'])('never grants from metadata.%s', (key) => {
+    const message = makeMessage({ content: 'hi', target: 'group:100', sender: null, metadata: { endpoint: '10001', [key]: key === 'isMaster' ? true : 'forged-owner' } });
+    expect(resolveRuntimeSenderRoles(message)).toEqual({ isMaster: false, isTrusted: false });
   });
 
-  it('trigger.trusted 命中 → trusted', () => {
-    const trigger: AITriggerConfig = { trusted: ['user-1'] };
-    const roles = resolveRuntimeSenderRoles(groupMessage('hi', { userId: 'user-1' }), { endpointMaster: undefined, endpointTrusted: [], trigger });
-    expect(roles).toEqual({ isMaster: false, isTrusted: true });
+  it('principal roles are the expanded chat roles, never platform role strings', () => {
+    const message = makeMessage({ content: 'edit please', target: 'private:owner-x', sender: { id: 'owner-x', chatRole: 'owner', roles: ['member'] }, metadata: { endpoint: '知音' } });
+    const roles = resolveRuntimeSenderRoles(message);
+    expect(createRuntimeTurnAccess(message, roles).principal.roles).toEqual(['owner', 'admin', 'trusted']);
   });
-
-  it('master 优先于 trusted（对齐 legacy resolveSenderRoles）', () => {
-    const trigger: AITriggerConfig = { masters: ['user-1'], trusted: ['user-1'] };
-    const roles = resolveRuntimeSenderRoles(groupMessage('hi', { userId: 'user-1' }), { endpointMaster: undefined, endpointTrusted: ['user-1'], trigger });
-    expect(roles).toEqual({ isMaster: true, isTrusted: false });
-  });
-
-  it('普通用户无角色', () => {
-    const roles = resolveRuntimeSenderRoles(groupMessage('hi'), { endpointMaster: 'owner-x', endpointTrusted: ['trusted-y'], trigger: undefined });
-    expect(roles).toEqual({ isMaster: false, isTrusted: false });
-  });
-
-  it('sender.id 不匹配 master 时不授权', () => {
-    const message = groupMessage('hi', { userId: 'attacker-id' }, 'attacker-id');
-    const roles = resolveRuntimeSenderRoles(message, { endpointMaster: 'owner-x', endpointTrusted: ['owner-x'], trigger: {
-      masters: ['owner-x'],
-      trusted: ['owner-x'],
-    } });
-    expect(roles).toEqual({ isMaster: false, isTrusted: false });
-  });
-
-  it('sender.id 匹配 master 时授权（无需 metadata）', () => {
-    const message = makeMessage({
-      content: 'hi',
-      target: 'group:100',
-      sender: { id: 'owner-x', name: '昵称' },
-      metadata: { endpoint: '10001' },
-    });
-    const roles = resolveRuntimeSenderRoles(message, { endpointMaster: 'owner-x', endpointTrusted: [], trigger: {
-      masters: ['owner-x'],
-    } });
-    expect(roles).toEqual({ isMaster: true, isTrusted: false });
-  });
-
-  it.each(['userId', 'user_id', 'senderId'])('sender.id 缺失时拒绝 metadata.%s 授权身份', (key) => {
-    const message = makeMessage({
-      content: 'hi',
-      target: 'group:100',
-      sender: null,
-      metadata: { endpoint: '10001', [key]: 'forged-owner' },
-    });
-    const roles = resolveRuntimeSenderRoles(message, { endpointMaster: 'forged-owner', endpointTrusted: ['forged-owner'], trigger: {
-      masters: ['forged-owner'], trusted: ['forged-owner'],
-    } });
-    expect(roles).toEqual({ isMaster: false, isTrusted: false });
-  });
-
 });
 
-describe('缺口 3：createEndpointRoleResolver（plugins.<key>.trusted）', () => {
+describe('缺口 3：configured Endpoint keys and legacy people lists (ADR 0056 §3 migration)', () => {
   it('从候选配置读取 name 或 id 形式的 Endpoint key', async () => {
     await expect(readConfiguredEndpointKeys(roleApplication({
         icqq: { endpoints: [{ id: '10001' }] },
@@ -974,73 +925,35 @@ describe('缺口 3：createEndpointRoleResolver（plugins.<key>.trusted）', () 
       }) as never)).resolves.toEqual(new Set(['sandbox:sandbox', 'icqq:icqq']));
   });
 
-  it('master + trusted 数组解析，name 别名键可查', async () => {
-    const resolver = await createEndpointRoleResolver(roleApplication({
-        icqq: { master: 'u-owner', name: 'bot1', trusted: ['t1', 't2'] },
-      }) as never);
-    expect(resolver.resolveOwner('icqq', 'x')).toBe('u-owner');
-    expect(resolver.resolveOwner('bot1', 'y')).toBe('u-owner');
-    expect(resolver.resolveTrusted('icqq', 'x')).toEqual(['t1', 't2']);
-    expect(resolver.resolveTrusted('bot1', 'y')).toEqual(['t1', 't2']);
+  it('reads adapter-level master + trusted lists (arrays or strings) as adapter-level grants', () => {
+    const legacy = readLegacyChatRoleConfig(roleApplication({ icqq: { master: 'u-owner', name: 'bot1', trusted: 't1, t2', endpoints: [] } }));
+    expect(legacy.grants).toEqual([
+      { level: 'adapter', key: 'icqq', adapter: 'icqq', userId: 'u-owner', role: 'owner', source: 'icqq.master' },
+      { level: 'adapter', key: 'icqq', adapter: 'icqq', userId: 't1', role: 'trusted', source: 'icqq.trusted' },
+      { level: 'adapter', key: 'icqq', adapter: 'icqq', userId: 't2', role: 'trusted', source: 'icqq.trusted' },
+    ]);
+    expect(legacy.paths).toEqual([['icqq', 'master'], ['icqq', 'trusted']]);
   });
 
-  it('endpoints[].master / endpoints[].trusted 解析', async () => {
-    const resolver = await createEndpointRoleResolver(roleApplication({
-        icqq: {
-          endpoints: [{ name: '10001', master: 'u-ep-master', trusted: 't3 t4' }],
-        },
-      }) as never);
-    expect(resolver.resolveOwner('icqq', '10001')).toBe('u-ep-master');
-    expect(resolver.resolveOwner('10001', '10001')).toBe('u-ep-master');
-    // 不挂到插件键，避免污染同适配器其它 endpoint
-    expect(resolver.resolveOwner('icqq', 'other')).toBeUndefined();
-    expect(resolver.resolveTrusted('icqq', '10001')).toEqual(['t3', 't4']);
+  it('reads endpoints[].master / trusted as account-level grants, keyed by id (else name)', () => {
+    const legacy = readLegacyChatRoleConfig(roleApplication({ icqq: { endpoints: [{ name: '10001', master: 'u-ep-master', trusted: 't3 t4' }, { id: 'b', master: 'm-b' }] } }));
+    expect(legacy.grants.map(grant => `${grant.level}:${grant.key}:${grant.userId}:${grant.role}`)).toEqual([
+      'endpoint:icqq/10001:u-ep-master:owner', 'endpoint:icqq/10001:t3:trusted', 'endpoint:icqq/10001:t4:trusted', 'endpoint:icqq/b:m-b:owner']);
+    expect(legacy.paths).toEqual([['icqq', 'endpoints', '0', 'master'], ['icqq', 'endpoints', '0', 'trusted'], ['icqq', 'endpoints', '1', 'master']]);
   });
 
-  it('endpoints[].owner 不作为框架 master（owner/admin 是群身份）', async () => {
-    const resolver = await createEndpointRoleResolver(roleApplication({
-        qq: {
-          endpoints: [{ name: '知音', owner: 'should-not-be-master', master: 'real-master' }],
-        },
-      }) as never);
-    expect(resolver.resolveOwner('qq', '知音')).toBe('real-master');
-    expect(resolver.resolveOwner('知音', '知音')).toBe('real-master');
+  it('endpoints[].owner 不是人员名单（owner/admin 是群身份或适配器自己的字段），保持不动', () => {
+    const legacy = readLegacyChatRoleConfig(roleApplication({ qq: { endpoints: [{ name: '知音', owner: 'should-not-be-master', master: 'real-master' }] } }));
+    expect(legacy.grants.map(grant => grant.userId)).toEqual(['real-master']);
+    expect(legacy.paths).toEqual([['qq', 'endpoints', '0', 'master']]);
   });
 
-  it('多 endpoint 各自 master 互不覆盖', async () => {
-    const resolver = await createEndpointRoleResolver(roleApplication({
-        qq: {
-          endpoints: [
-            { name: 'zhin', master: 'master-a' },
-            { name: '知音', master: 'master-b' },
-          ],
-        },
-      }) as never);
-    expect(resolver.resolveOwner('qq', 'zhin')).toBe('master-a');
-    expect(resolver.resolveOwner('qq', '知音')).toBe('master-b');
-  });
-
-  it('endpoints[].master → canonical principal role', async () => {
-    const masterId = '477561AD3A89AFCDABB6AFCB71FF54DF';
-    const resolver = await createEndpointRoleResolver(roleApplication({
-        qq: {
-          endpoints: [{ name: '知音', master: masterId }],
-        },
-      }) as never);
-    const endpointMaster = resolver.resolveOwner('qq', '知音');
-    expect(endpointMaster).toBe(masterId);
-
-    const message = makeMessage({
-      content: 'edit please',
-      target: `private:${masterId}`,
-      sender: { id: masterId, name: '昵称可变' },
-      metadata: {
-        endpoint: '知音',
-      },
-    });
-    const roles = resolveRuntimeSenderRoles(message, { endpointMaster, endpointTrusted: [], trigger: undefined });
-    expect(roles).toEqual({ isMaster: true, isTrusted: false });
-    expect(createRuntimeTurnAccess(message, roles).principal.roles).toContain('master');
+  it('binds ai.trigger.masters / trusted to every configured adapter at the global level; owner wins over trusted', () => {
+    const legacy = readLegacyChatRoleConfig({ ...roleApplication({ qq: { endpoints: [] }, tg: { endpoints: [] }, rss: { url: 'x' } }),
+      ai: { trigger: { masters: ['g'], trusted: ['g', 'h'] } } });
+    expect(legacy.grants.map(grant => `${grant.level}:${grant.adapter}:${grant.userId}:${grant.role}`)).toEqual([
+      'global:qq:g:owner', 'global:tg:g:owner', 'global:qq:h:trusted', 'global:tg:h:trusted']);
+    expect(legacy.paths).toEqual([['ai', 'trigger', 'masters'], ['ai', 'trigger', 'trusted']]);
   });
 
   it('createRuntimeTurnAccess 对非 human 来源抛错，human 写入 principal.origin', () => {
@@ -1057,16 +970,12 @@ describe('缺口 3：createEndpointRoleResolver（plugins.<key>.trusted）', () 
     expect(createRuntimeTurnAccess(make(), roles).principal.origin).toBeUndefined();
   });
 
-  it('无 plugins 配置时返回空解析', async () => {
-    const resolver = await createEndpointRoleResolver({configVersion: 2} as never);
-    expect(resolver.resolveOwner('icqq', 'x')).toBeUndefined();
-    expect(resolver.resolveTrusted('icqq', 'x')).toEqual([]);
+  it('无 plugins 配置时没有可迁移的名单', () => {
+    expect(readLegacyChatRoleConfig({ configVersion: 2 })).toEqual({ grants: [], paths: [], unsupported: [], skipped: [] });
   });
 
   it('拒绝旧 plugins 数组而不是按空配置继续启动', async () => {
     await expect(readConfiguredEndpointKeys({ plugins: ['@zhin.js/adapter-icqq'] } as never))
-      .rejects.toThrow(/configVersion/);
-    await expect(createEndpointRoleResolver({ plugins: ['@zhin.js/adapter-icqq'] } as never))
       .rejects.toThrow(/configVersion/);
   });
 });

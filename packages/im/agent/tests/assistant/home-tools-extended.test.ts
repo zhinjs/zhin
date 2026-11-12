@@ -17,7 +17,7 @@ const masterCtx = {
   turnId: 'turn-home',
   sessionKey: 'im:process:1:private:100',
   origin: { kind: 'im', platform: 'process', endpoint: '1', scope: 'private', sceneId: '100' },
-  principal: { subjectId: '100', roles: ['master'] },
+  principal: { subjectId: '100', roles: ['owner'] },
 } as ToolExecutionContext;
 
 function makeTools(aliases: Record<string, string>) {

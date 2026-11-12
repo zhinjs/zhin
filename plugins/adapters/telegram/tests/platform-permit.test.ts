@@ -10,18 +10,17 @@ import {
 function mockSubject(sender: { role?: string; permissions?: string[] }) {
   return {
     adapter: 'telegram',
-    sender: { id: 'u1', role: sender.role ? [sender.role] : [], permissions: sender.permissions },
+    sender: { id: 'u1', platform: { standing: (sender.role ?? 'member') as never, ...(sender.permissions ? { permissions: sender.permissions } : {}) } },
     scene: { type: 'group', id: 'g1' },
   };
 }
 
-function mockMsg(sender: { role?: string; permissions?: string[] }) {
+function mockMsg(platformPermissions: string[]) {
   return {
     clientAdapter: 'telegram',
     endpointId: 'bot1',
     conversation: { endpoint: { adapter: 'telegram', id: 'bot1' }, kind: 'group', id: 'g1' },
-    sender: { id: 'u1', roles: sender.role ? [sender.role] : [] },
-    metadata: { senderRole: sender.role, senderPermissions: sender.permissions },
+    sender: { id: 'u1', platform: { standing: 'member' as const, permissions: platformPermissions } },
   } as any;
 }
 
@@ -30,7 +29,6 @@ describe('telegram platform-permit', () => {
 
   beforeEach(() => {
     host = new PermissionHost();
-    host.registerPlatform('telegram', (perm, subject) => checkTelegramPlatformPermit(perm, subject));
   });
 
   it('normalizeTelegramChatMember 映射 creator/administrator 为规范角色 owner/admin', () => {
@@ -59,20 +57,19 @@ describe('telegram platform-permit', () => {
       permissions: [platformPermit('pin_messages')],
       execute: async () => '',
     };
-    expect(await canAccessTool(tool, mockMsg({ role: 'member', permissions: [] }), host)).toBe(false);
-    expect(await canAccessTool(tool, mockMsg({ role: 'creator', permissions: ['chat_creator'] }), host)).toBe(true);
+    expect(await canAccessTool(tool, mockMsg([]), host)).toBe(false);
+    expect(await canAccessTool(tool, mockMsg(['pin_messages']), host)).toBe(true);
   });
 
-  it('投影后的 creator / administrator 满足 role(owner,admin,master)，普通成员不满足', () => {
+  it('投影后的 creator / administrator 满足 platform:admin，普通成员不满足', () => {
     for (const [status, expected] of [['creator', true], ['administrator', true], ['member', false]] as const) {
       const member = normalizeTelegramChatMember({ status });
       const subject = toPermissionSubject({
         clientAdapter: 'telegram',
         conversation: { endpoint: { adapter: 'telegram', id: 'bot1' }, kind: 'group', id: 'g1' },
-        sender: { id: 'u1', roles: member.role ? [member.role] : [] },
-        metadata: { senderRole: member.role, senderPermissions: member.permissions },
+        sender: { id: 'u1', platform: { standing: member.role ?? 'member', ...(member.permissions ? { permissions: member.permissions } : {}) } },
       });
-      expect(checkBuiltinPermit('role(owner,admin,master)', subject)).toBe(expected);
+      expect(checkBuiltinPermit('platform:admin', subject)).toBe(expected);
     }
   });
 });

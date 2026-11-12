@@ -1,6 +1,6 @@
 import {
   resolveIMSessionIdFromMessage,
-  senderRolesFromMessage,
+  chatRolesFromMessage,
   type Message,
 } from '@zhin.js/core';
 import type { TurnContextView } from './turn-envelope.js';
@@ -36,7 +36,7 @@ export function turnContextViewFromMessage(message: Message): TurnContextView {
     principal: Object.freeze({
       subjectId,
       ...(message.sender?.name ? { displayName: message.sender.name } : {}),
-      roles: Object.freeze([...senderRolesFromMessage(message)]),
+      roles: Object.freeze(chatRolesFromMessage(message).length ? [...chatRolesFromMessage(message)] : ['user']),
     }),
     session: Object.freeze({ key: resolveIMSessionIdFromMessage(message) }),
   });

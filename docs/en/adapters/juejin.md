@@ -85,7 +85,7 @@ With the Console installed, the navigation shows "Juejin comment review": login 
 | `juejin:review` | Send / edit / discard drafts |
 | `juejin:login` | Re-check login |
 
-Approval commands only accept the master role.
+Approval commands only accept the chat role `owner` (granted on the chat adapter you use, see [Chat roles](../concepts/chat-roles.md)).
 
 ## Conversations and messages
 

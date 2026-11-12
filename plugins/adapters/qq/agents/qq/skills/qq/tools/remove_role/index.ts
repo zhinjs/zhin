@@ -1,7 +1,6 @@
 import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { platformPermission } from '@zhin.js/permission';
 
 export default defineAgentTool<{ guild_id: string; channel_id: string; user_id: string; role_id: string }>({
   description: '移除成员的 QQ 频道角色',
@@ -14,7 +13,7 @@ export default defineAgentTool<{ guild_id: string; channel_id: string; user_id: 
   adapter: 'qq',
   scopes: ["channel"],
   tags: ['qq'],
-  permissions: [platformPermission('qq', 'manage_roles')],
+  permissions: ['platform-permission:manage_roles'],
   async execute({ guild_id, channel_id, user_id, role_id  }: { guild_id: string; channel_id: string; user_id: string; role_id: string }, context) {
     const client = context.$client;
     await client.memberService.removeMemberRole(guild_id, channel_id, user_id, role_id);

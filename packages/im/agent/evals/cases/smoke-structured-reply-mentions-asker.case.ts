@@ -4,7 +4,7 @@ export default defineEvalCase({
   id: 'smoke-structured-reply-mentions-asker',
   description: 'A group member asks the bot to @ them with a confirmation; the structured reply carries a real mention of the sender id and the fact, never raw JSON.',
   source: '#850 smoke suite for the #829 loop: structured replies (#817/#819) in a real group conversation',
-  inbound: { text: '@bot 会议改到下午三点了，请 @ 我确认一下', scope: 'group', sender: { id: 'bob', roles: ['user'] } },
+  inbound: { text: '@bot 会议改到下午三点了，请 @ 我确认一下', scope: 'group', sender: { id: 'bob' } },
   script: [{ segments: [
     { type: 'mention', data: { target: 'bob' } },
     { type: 'text', data: { text: ' 收到：会议改到下午三点。' } },

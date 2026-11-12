@@ -29,16 +29,16 @@ afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) awai
 async function fixture(options: { host?: 'missing' | 'unverified'; empty?: boolean; count?: number } = {}) {
   const root = rootPluginId(), owner = childPluginId(root, 'adapter-owner');
   const execute = vi.fn(), factory = vi.fn(() => 'private-value'), validate = vi.fn(() => true), checker = vi.fn(() => { throw new Error('CHECKER-SECRET'); });
-  const host = new PermissionHost(); host.registerPlatform('permission-test', checker); host.register(/^custom\./, checker);
+  const host = new PermissionHost(); host.register(/^custom\./, checker);
   const send = vi.fn(() => 'platform-id'), connect = vi.fn();
   const adapter = createCapabilitySlot({ owner, feature: adapterFeatureId, localName: 'permission-test', source: '/private/adapter.ts',
     definition: defineAdapter({ capabilities: ['inbound', 'outbound'], createAdapter: () => new PermissionTestAdapter(send, connect) }) });
   const definitions = [
     ['admin', defineCommand({ adapter: 'permission-test', description: '仅群聊管理员', descriptionI18n: { en: 'Group administrators only' }, permit: ['group()', 'role(admin)'],
       params: { text: { type: 'string', default: factory, validate } }, execute })],
-    ['platform', defineCommand({ permit: ['platform(permission-test,admin)'], execute })],
+    ['platform', defineCommand({ permit: ['platform:admin'], execute })],
     ['open', defineCommand({ execute })],
-    ['user', defineCommand({ permit: ['user(alice)', 'role(user)'], execute })],
+    ['user', defineCommand({ permit: ['user(alice)', 'trusted'], execute })],
     ...Array.from({ length: options.count ?? 0 }, (_, i) => [`extra-${i}`, defineCommand({ execute })] as const),
   ] as const;
   const commands = options.empty ? [] : definitions.map(([localName, definition]) => createCapabilitySlot({ owner: root,
@@ -70,7 +70,7 @@ async function fixture(options: { host?: 'missing' | 'unverified'; empty?: boole
     ...(input === undefined ? {} : { body: typeof input === 'string' ? input : JSON.stringify(input) }),
   });
   const commandId = (name: string) => commands.find(slot => slot.localName === name)!.id;
-  const explain = (extra: Record<string, unknown> = {}) => request('/explain', { generation: 0, commandId: commandId('admin'), target: group, sender: { id: 'alice', roles: ['admin'] }, ...extra });
+  const explain = (extra: Record<string, unknown> = {}) => request('/explain', { generation: 0, commandId: commandId('admin'), target: group, sender: { id: 'alice', chatRole: 'admin' }, ...extra });
   return { store, base, projections, adapters, adapterId: adapter.id, target, group, request, explain, commandId, execute, factory, validate, checker, send, connect, clientGetter };
 }
 
@@ -95,7 +95,7 @@ it('roundtrips actual EndpointRuntime canonical identity and compares the separa
   expect(f.target.endpoint.id).toBe(f.adapterId);
   expect(f.target.endpoint.adapter).not.toBe(f.adapters.owner(f.adapterId));
   const response = await f.explain(); expect(response.status).toBe(200); const envelope = await response.json();
-  expect(envelope.data).toMatchObject({ generation: 0, simulation: true, permissionHost: 'present', target: f.group, sender: { id: 'alice', roles: ['admin'] },
+  expect(envelope.data).toMatchObject({ generation: 0, simulation: true, permissionHost: 'present', target: f.group, sender: { id: 'alice', chatRole: 'admin' },
     adapter: { outcome: 'match' }, rules: [{ kind: 'group', outcome: 'match' }, { kind: 'role', outcome: 'match' }], summary: { outcome: 'match' } });
   expect(envelope.data.unconstrained[0]).toContain('parent 或 thread');
   const differentTopic = { ...f.group, threadId: 'other-topic' };
@@ -103,24 +103,28 @@ it('roundtrips actual EndpointRuntime canonical identity and compares the separa
   expectNoExecution(f);
 });
 
-it('distinguishes omitted roles, explicit empty roles, sender-only assumptions and no input', async () => {
+it('distinguishes an omitted chat role, an explicit ordinary user (null), sender-only assumptions and no input', async () => {
   const f = await fixture();
   const unknown = (await (await f.explain({ sender: { id: 'alice' } })).json()).data;
   expect(unknown.rules[1].outcome).toBe('unknown'); expect(unknown.summary.outcome).toBe('unknown');
-  const empty = (await (await f.explain({ commandId: f.commandId('user'), sender: { id: 'alice', roles: [] } })).json()).data;
-  expect(empty.rules.map((row: { outcome: string }) => row.outcome)).toEqual(['match', 'match']);
-  expect(empty.assumptions.join()).toContain('默认 user');
-  const senderOnly = (await (await f.explain({ commandId: f.commandId('user'), target: undefined, sender: { id: 'alice', roles: [] } })).json()).data;
-  expect(senderOnly.rules.map((row: { outcome: string }) => row.outcome)).toEqual(['match', 'match']); expect(senderOnly.target).toBeUndefined();
+  const empty = (await (await f.explain({ commandId: f.commandId('user'), sender: { id: 'alice', chatRole: null } })).json()).data;
+  expect(empty.rules.map((row: { outcome: string }) => row.outcome)).toEqual(['match', 'mismatch']);
+  expect(empty.assumptions.join()).toContain('普通用户');
+  const trusted = (await (await f.explain({ commandId: f.commandId('user'), target: undefined, sender: { id: 'alice', chatRole: 'trusted' } })).json()).data;
+  expect(trusted.rules.map((row: { outcome: string }) => row.outcome)).toEqual(['match', 'match']); expect(trusted.target).toBeUndefined();
   const none = (await (await f.explain({ target: undefined, sender: undefined })).json()).data;
   expect(none.adapter.outcome).toBe('unknown'); expect(none.rules.every((row: { outcome: string }) => row.outcome === 'unknown')).toBe(true);
   expectNoExecution(f);
 });
 
-it('keeps platform conditions unevaluated, empty permits non-authorizing and host state visible', async () => {
+it('evaluates platform conditions only from an assumed standing, keeps empty permits non-authorizing and host state visible', async () => {
   const f = await fixture();
-  const platform = (await (await f.explain({ commandId: f.commandId('platform') })).json()).data;
-  expect(platform.rules[0]).toMatchObject({ kind: 'platform', outcome: 'not_evaluated' }); expect(platform.summary.outcome).toBe('not_evaluated');
+  const platform = (await (await f.explain({ commandId: f.commandId('platform'), sender: { id: 'alice' } })).json()).data;
+  expect(platform.rules[0]).toMatchObject({ kind: 'platform', outcome: 'unknown' }); expect(platform.summary.outcome).toBe('unknown');
+  const member = (await (await f.explain({ commandId: f.commandId('platform') })).json()).data;
+  expect(member.rules[0]).toMatchObject({ kind: 'platform', outcome: 'mismatch' });
+  const admin = (await (await f.explain({ commandId: f.commandId('platform'), sender: { id: 'alice', platform: { standing: 'admin' } } })).json()).data;
+  expect(admin.rules[0]).toMatchObject({ kind: 'platform', outcome: 'match' }); expect(admin.summary.outcome).toBe('match');
   expect((await (await f.explain({ commandId: f.commandId('open') })).json()).data.summary.outcome).toBe('not_evaluated');
   for (const host of ['missing', 'unverified'] as const) {
     const absent = await fixture({ host }); const data = (await (await absent.explain()).json()).data;
@@ -137,7 +141,8 @@ it.each([
 
 it.each([
   { generation: -1 }, { generation: 0.5 }, { commandId: '' }, { extra: true }, { rolesKnown: true },
-  { sender: { id: 'alice', role: ['admin'] } }, { sender: { id: 'alice', roles: 'admin' } }, { sender: { id: 'alice', roles: Array(101).fill('admin') } },
+  { sender: { id: 'alice', roles: ['admin'] } }, { sender: { id: 'alice', chatRole: 'master' } }, { sender: { id: 'alice', platform: { standing: 'boss' } } },
+  { sender: { id: 'alice', platform: { standing: 'admin', permissions: Array(101).fill('ban') } } },
   { target: { kind: 'group', id: 'room' } }, { target: { endpoint: { adapter: 'permission-test', id: 'bot', accountId: 'unsafe' }, kind: 'group', id: 'room' } },
 ])('rejects malformed explanation input %j', async extra => {
   const f = await fixture(); expect((await f.explain(extra)).status).toBe(400); expectNoExecution(f);
@@ -188,7 +193,7 @@ it('localizes authority explanations without changing identity or invoking check
   const f = await fixture();
   const listing = await (await f.request('?locale=en')).json();
   expect(listing.data.commands.find((item: { id: string }) => item.id === f.commandId('admin')).description).toBe('Group administrators only');
-  const result = await f.request('/explain?locale=en', { generation: 0, commandId: f.commandId('admin'), target: f.group, sender: { id: 'alice', roles: ['admin'] } });
+  const result = await f.request('/explain?locale=en', { generation: 0, commandId: f.commandId('admin'), target: f.group, sender: { id: 'alice', chatRole: 'admin' } });
   const body = await result.json();
   expect(body.data.target).toEqual(f.group);
   expect(body.data.summary.outcome).toBe('match');

@@ -9,7 +9,7 @@ export default defineCommand({
   description: '查看音乐平台凭证（脱敏）', descriptionI18n: { en: "View music platform credentials with sensitive values masked" },
   alias: ['查看'],
   params: { source: { type: 'string', description: '音乐源（qq/netease/kuwo/kugou）', descriptionI18n: { en: "Music source (qq / netease / kuwo / kugou)" } } },
-  permit: ['role(master)'],
+  permit: ['owner'],
   async execute({ params, args, use, locale, formatCommand }) {
     const source = String(params.source ?? '').trim();
     const key = String(args[0] ?? '').trim();

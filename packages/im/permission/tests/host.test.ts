@@ -7,7 +7,7 @@ function makeSubject(overrides: Partial<PermissionSubject> = {}): PermissionSubj
     adapter: 'qq',
     endpoint: 'e1',
     scene: { id: 'g1', type: 'group' },
-    sender: { id: 'u1', role: ['user'] },
+    sender: { id: 'u1' },
     ...overrides,
   };
 }
@@ -22,33 +22,16 @@ describe('PermissionHost', () => {
   });
 
   describe('check — platform', () => {
-    it('delegates to registered platform checker', async () => {
+    it('reads the normalized platform standing without any registration (ADR 0056)', async () => {
       const host = new PermissionHost();
-      host.registerPlatform('qq', (perm) => perm === 'scene_admin');
-      expect(await host.check('platform(qq,scene_admin)', makeSubject())).toBe(true);
-      expect(await host.check('platform(qq,scene_owner)', makeSubject())).toBe(false);
+      expect(await host.check('platform:admin', makeSubject({ sender: { id: 'u1', platform: { standing: 'admin' } } }))).toBe(true);
+      expect(await host.check('platform:owner', makeSubject({ sender: { id: 'u1', platform: { standing: 'admin' } } }))).toBe(false);
+      expect(await host.check('platform:admin', makeSubject())).toBe(false);
     });
 
-    it('returns false when no platform checker registered', async () => {
+    it('denies the removed platform(adapter,perm) form', async () => {
       const host = new PermissionHost();
-      expect(await host.check('platform(qq,scene_admin)', makeSubject())).toBe(false);
-    });
-
-    it('disposes platform checker', async () => {
-      const host = new PermissionHost();
-      const dispose = host.registerPlatform('qq', () => true);
-      expect(await host.check('platform(qq,x)', makeSubject())).toBe(true);
-      dispose();
-      expect(await host.check('platform(qq,x)', makeSubject())).toBe(false);
-    });
-
-    it('isolates registrations between runtime owners', async () => {
-      const first = new PermissionHost();
-      const second = new PermissionHost();
-      first.registerPlatform('qq', () => true);
-
-      expect(await first.check('platform(qq,x)', makeSubject())).toBe(true);
-      expect(await second.check('platform(qq,x)', makeSubject())).toBe(false);
+      expect(await host.check('platform(qq,scene_admin)', makeSubject({ sender: { id: 'u1', platform: { standing: 'owner' } } }))).toBe(false);
     });
   });
 

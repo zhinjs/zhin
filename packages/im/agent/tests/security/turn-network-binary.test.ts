@@ -6,7 +6,7 @@ const mocked = vi.hoisted(() => ({ lookup: vi.fn(), request: vi.fn() }));
 vi.mock('node:dns/promises', () => ({ lookup: mocked.lookup }));
 vi.mock('node:https', () => ({ request: mocked.request }));
 
-const policy: ToolInvocationPolicy = { permissions: ['master'], unattended: false,
+const policy: ToolInvocationPolicy = { permissions: ['owner'], unattended: false,
   network: { enabled: true, httpsOnly: true, allowedDomains: ['images.example.test'] } };
 
 beforeEach(() => {

@@ -419,7 +419,8 @@ function localizedIngress(options: { prefix?: string; locale?: 'zh-CN' | 'en'; t
     {
       conversation: conversation,
       content: options.text,
-      sender: { id: 'user' },
+      // The bot owner (ADR 0056: Runtime-set chat role).
+      sender: { id: 'user', chatRole: 'owner' },
       metadata: {},
       segments: [],
       endpointId: 'bot',
@@ -447,7 +448,7 @@ function localizedIngress(options: { prefix?: string; locale?: 'zh-CN' | 'en'; t
     ingress: { read: async () => ({ agents: [], tools: [] }) } as never,
     agent: { service: {
       getBindingRegistry: () => ({ requireZhinBinding: () => ({ name: 'zhin', mcpServers: [] }) }),
-      getTriggerConfig: () => ({ enabled: options.enabled ?? false, masters: ['user'], errorTemplate: options.errorTemplate }),
+      getTriggerConfig: () => ({ enabled: options.enabled ?? false, errorTemplate: options.errorTemplate }),
       getAgentConfig: () => ({ execApprovalMode: 'ask' }),
     }, agent: {} } as never,
   });
@@ -574,7 +575,6 @@ describe('personal Session IM ingress', () => {
         service: {
           getBindingRegistry: () => ({ requireZhinBinding: () => ({ name: 'zhin', mcpServers: [] }) }),
           getTriggerConfig: () => ({ enabled: true,
-            ...(options.masters ? { masters: options.masters } : {}),
             ...(options.events ? { sceneEvents: { conversations: ['*'] } } : {}),
             ...(options.ambient ? { ambient: { conversations: ['*'], quietMs: 0, cooldownMs: 0, judgeIntervalMs: 0 } } : {}),
           }),
@@ -587,7 +587,8 @@ describe('personal Session IM ingress', () => {
     const run = async (subjectId: string, text = '#hello', target = conversation, account = 'account-a', extra: Partial<Message> = {}) => {
       const message = {
         ...extra,
-        conversation: target, content: text, endpointId: account, sender: { id: subjectId },
+        conversation: target, content: text, endpointId: account,
+        sender: { id: subjectId, ...(options.masters?.includes(subjectId) ? { chatRole: 'owner' as const } : {}) },
         message: { conversation: target, id: `message-${subjectId}` },
         $reply: vi.fn(async () => ({ status: 'sent' })),
       } as unknown as Message;

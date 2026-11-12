@@ -6,7 +6,7 @@ import type { MusicSource } from '../../../src/types.js';
 export default defineCommand({
   description: '查看各平台凭证配置状态', descriptionI18n: { en: "View configured music credentials by platform" },
   alias: ['状态'],
-  permit: ['role(master)'],
+  permit: ['owner'],
   async execute({ use, locale }) {
     const allCreds = await use(musicRuntimeToken).credentials.list();
     const lines: string[] = [t(locale, 'credentials')];

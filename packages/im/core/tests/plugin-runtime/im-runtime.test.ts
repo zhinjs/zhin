@@ -3271,7 +3271,7 @@ async function createFixture(
     definition: defineCommand<{}, SendContent | void, Message>({
       ...(options?.execution ? { execution: options.execution, alias: ['limited-alias'] } : {}),
       ...(options?.validateCommand ? { params: { count: { type: 'integer' as const, min: 1 } } } : {}),
-      ...(options?.restrictCommand ? { permit: ['role(master)'] } : {}),
+      ...(options?.restrictCommand ? { permit: ['owner'] } : {}),
       ...(options?.commandShortcut ? { shortcut: { 'author shortcut': {} } } : {}),
       async execute({ args, input, signal }) {
         if (!input) throw new Error('Fixture command requires a Message');
@@ -3353,6 +3353,8 @@ async function createFixture(
     ...(options?.inboundClaimPending ? { inboundClaimPending: options.inboundClaimPending } : {}),
     ...(options?.peerRegistry ? { peerRegistry: options.peerRegistry } : {}),
     ...(options?.inboundDeduper ? { inboundDeduper: options.inboundDeduper as never } : {}),
+    // Test transports declare the sender's chat role directly (production resolves it from chat_roles).
+    enrichSender: sender => sender,
     conversationEvents,
   });
   let base = baseState(slots);
@@ -3503,7 +3505,7 @@ describe('Root command feedback presentation', () => {
     const renderer = vi.fn<CommandFeedbackRenderer>(() => 'custom');
     bindFeedback(fixture, renderer);
     const extra = { nested: 'original' };
-    const sender = { id: 'alice', name: 'Alice', roles: ['user'], content: 'PRIVATE_BODY', extra };
+    const sender = { id: 'alice', name: 'Alice', chatRole: 'trusted' as const, platform: { standing: 'member' as const }, content: 'PRIVATE_BODY', extra };
     const input = fixtureInput(fixture, '/gh issue list open');
     const conversation = { ...input.conversation, kind: 'channel', content: 'PRIVATE_ROOM_BODY', extra,
       parent: { kind: 'group', id: 'workspace', content: 'PRIVATE_PARENT_BODY', extra }, threadId: 'thread' } as const;
@@ -3512,13 +3514,14 @@ describe('Root command feedback presentation', () => {
       expect(renderer).toHaveBeenCalledTimes(1);
       const context = renderer.mock.calls[0][1];
       expect(context).toEqual({ generation: 1, clientAdapter: 'memory', locale: 'zh-CN',
-        sender: { id: 'alice', name: 'Alice', roles: ['user'] },
+        sender: { id: 'alice', name: 'Alice', platform: { standing: 'member' }, chatRole: 'trusted' },
         conversation: { endpoint: input.conversation.endpoint, kind: 'channel', id: input.conversation.id,
           parent: { kind: 'group', id: 'workspace' }, threadId: 'thread' } });
-      expect(context.sender?.roles).not.toBe(sender.roles);
+      expect(context.sender).not.toBe(sender);
       expect(context.conversation.parent).not.toBe(conversation.parent);
       expect(JSON.stringify(renderer.mock.calls)).not.toMatch(/PRIVATE_|nested/);
-      expect(Object.isFrozen(sender.roles)).toBe(false);
+      expect(context.sender?.platform).not.toBe(sender.platform);
+      expect(Object.isFrozen(sender.platform)).toBe(false);
       expect(Object.isFrozen(conversation.parent)).toBe(false);
       expect(Object.isFrozen(extra)).toBe(false);
       expect(sent).toHaveLength(1);
@@ -3759,7 +3762,7 @@ describe('full-operation command admission', () => {
       commandResult: () => 'ok',
     });
     try {
-      const input = { ...fixtureInput(f, '/gh issue list nope'), sender: { id: 'alice', roles: ['master'] } };
+      const input = { ...fixtureInput(f, '/gh issue list nope'), sender: { id: 'alice', chatRole: 'owner' as const } };
       expect((await receive(f.im, input)).status).toBe('invalid');
       expect((await receive(f.im, { ...input, content: '/gh issue list --help' })).status).toBe('executed');
       expect((await receive(f.im, { ...input, content: '/gh issue list 1', sender: { id: 'alice' } })).status).toBe('denied');

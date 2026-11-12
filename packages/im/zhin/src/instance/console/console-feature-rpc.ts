@@ -39,7 +39,9 @@ const FEATURE_RPC_TYPES: Readonly<Record<ConsoleFeatureRpcType, ConsoleFeaturePe
 export interface FeatureStores {
   readonly conversations: FeatureConversationOverrideStore;
   /** Chat roles (ADR 0056), served by `chat-roles.*`. */
-  readonly roles?: import('../chat-roles.js').ChatRoleService;
+  readonly roles?: import('../chat-roles.js').InstanceChatRoleService;
+  /** Conversation-level chat role mapping rules (ADR 0056 §4), served by `chat-roles.mappings|set-mappings`. */
+  readonly mappings?: import('../chat-roles.js').ChatRoleMappingStore;
   /** Known recent conversations (keys), newest first; best effort. */
   readonly recentConversations?: (limit: number) => Promise<readonly FeatureRecentConversation[]>;
 }

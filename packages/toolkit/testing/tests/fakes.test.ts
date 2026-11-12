@@ -120,7 +120,7 @@ describe('testing fakes', () => {
         return text;
       },
     });
-    const message = createFakeMessage({ sender: { id: 'u', name: 'Ann', roles: ['admin'] } });
+    const message = createFakeMessage({ sender: { id: 'u', name: 'Ann', chatRole: 'admin' } });
     expect(await runCommand(fake, command, { input: message })).toBe('hi Ann');
     expect(message.replies).toEqual(['hi Ann']);
 

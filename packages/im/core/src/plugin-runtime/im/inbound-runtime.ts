@@ -268,8 +268,6 @@ export class InboundRuntime {
       });
       const execute = async (): Promise<MessageDispatchResult> => {
         const segments = input.segments ? Object.freeze([...input.segments]) : undefined;
-        const platformRoles = input.sender?.roles?.filter(role => role !== 'master' && role !== 'trusted' && role !== 'user');
-        const authorizationRoles = enrichedSender?.roles?.filter(role => role === 'master' || role === 'trusted' || role === 'user');
         const message = new RuntimeMessage(
           {
             conversation,
@@ -305,10 +303,8 @@ export class InboundRuntime {
                     sender: Object.freeze({
                       id: enrichedSender.id,
                       ...(enrichedSender.name !== undefined ? { name: enrichedSender.name } : {}),
-                      ...(platformRoles ? { platformRoles: Object.freeze(platformRoles) } : {}),
-                      ...(authorizationRoles
-                        ? { authorizationRoles: Object.freeze(authorizationRoles) }
-                        : {}),
+                      ...(enrichedSender.platform ? { platform: enrichedSender.platform } : {}),
+                      ...(enrichedSender.chatRole ? { chatRole: enrichedSender.chatRole } : {}),
                     }),
                   }
                 : {}),

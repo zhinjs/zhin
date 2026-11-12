@@ -20,7 +20,7 @@ function fixture(restricted = false) {
     source: '/tools/ordinary/index.ts', definition: defineAgentTool({ description: 'ordinary', execute: () => 'ok' }) });
   const inaccessible = restricted ? [
     { localName: 'wrong-platform', platforms: ['telegram'] },
-    { localName: 'permission-denied', permissions: ['role(master)'] },
+    { localName: 'permission-denied', permissions: ['owner'] },
   ].map(({ localName, ...access }) => createCapabilitySlot({ owner, feature: toolFeatureId,
     localName, source: `/tools/${localName}/index.ts`, definition: defineAgentTool({
       description: 'Restricted sticker', ...access,
@@ -76,7 +76,7 @@ describe('Tool availability projection', () => {
       (await ingress.read({ snapshot: snapshot, owner: owner, isActive: () => true, turn: turn('current', principal) })).tools.map(tool => tool.name);
     expect(await names({ subjectId: 'member', roles: ['user', 'admin'] })).toEqual([]);
     expect(await names({ subjectId: 'friend', roles: ['trusted'] })).toEqual([]);
-    expect(await names({ subjectId: 'owner', roles: ['master'] })).toEqual(['change_draft']);
+    expect(await names({ subjectId: 'owner', roles: ['owner'] })).toEqual(['change_draft']);
     expect(await names({ subjectId: 'approver', roles: ['user'] })).toEqual(['change_draft']);
   });
 

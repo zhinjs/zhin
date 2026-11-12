@@ -11,7 +11,7 @@ KOOK `permission`：1=成员，2=管理员，4=频道主，5=频道管理员（�
 
 ## Permit 词汇表
 
-| `platform(kook,…)` | 含义 |
+| `platform-permission:…` | 含义 |
 |--------------------|------|
 | `guild_owner` | 服务器主 |
 | `guild_admin` | 服务器/频道管理员 |
@@ -20,4 +20,6 @@ KOOK `permission`：1=成员，2=管理员，4=频道主，5=频道管理员（�
 
 ## 工厂映射
 
-`scene_admin` → `guild_admin` · `scene_owner` → `guild_owner`
+场景治理工具默认要求 `platform:admin` / `platform:owner`（归一地位，ADR 0056 §5）；本适配器把它们映射为下列平台权限：
+
+`platform:admin` → `guild_admin` · `platform:owner` → `guild_owner`

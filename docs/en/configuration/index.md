@@ -106,7 +106,7 @@ With the root Command Feature installed, a Bot owner can send `config` (Chinese 
 
 Hints use the account's actual command prefix and namespace. AI Agent is not required.
 
-**Who can use it**: only the `master` of any configured account (endpoint) on the same adapter that received the private message (the account-level `master`, otherwise the inherited plugin-level `master`), so owner identity always stays on the same adapter/platform. Masters of other adapters (including another plugin instance of the same adapter package) cannot use it. `ai.trigger.masters` has no platform dimension and is not accepted for chat configuration in v1. Groups, channels and forged metadata never reach the save path.
+**Who can use it**: only someone holding the chat role `owner` on the same adapter that received the private message — globally, at the adapter level or on any account of that adapter ([Chat roles](../concepts/chat-roles.md)); identities are registered per adapter, so owners of other adapters (including another plugin instance of the same adapter package) cannot use it. Groups, channels and forged metadata never reach the save path.
 
 **Entry is per adapter; field scope is project-wide**: authorization (entry) only considers masters on the same Adapter instance that received the message. Once authorized, the manageable field scope is **every chat-safe leaf in the project** plus the Host allowlist `HOST_CONFIG_PATCH_PATHS`; it is not limited to the authorizing adapter's own plugin, so any legitimate owner can manage chat-safe fields globally (including other plugins' fields). If an owner should not change other plugins, do not grant them master, or manage those settings with the CLI/Console.
 
@@ -114,7 +114,7 @@ Hints use the account's actual command prefix and namespace. AI Agent is not req
 
 - Host config is limited to the same allowlist as ordinary Console pages (`HOST_CONFIG_PATCH_PATHS`, currently fields under `ai.trigger.ambient`). Use the CLI or Console for `locale`, `http`, `database` and other Host settings.
 - Plugin config must be proven safe by its schema. Secrets, tokens, passwords, missing schemas and uncertain scopes are rejected.
-- Permission fields such as owners, trust lists, approvals and tool gates (`master`, `trusted`, `endpoints[*].master`, `ai.trigger.masters`, `toolHardGate.*`) cannot be read or changed in chat. Matching is by contains/prefix/suffix, so compound names are refused too, e.g. `adminIds`, `ownerId`, `masterId`, `trustedUsers`, `superUsers`, `whitelist`/`allowlist`/`blacklist` and `bypassMasters` (such as content-moderation's `inbound.whitelist.userIds` and `inbound.bypassMasters`). The rule is deliberately conservative: ordinary fields whose names contain these words (e.g. `masterVolume`) must be changed with the CLI.
+- Permission fields such as owners, trust lists, approvals and tool gates (`master`, `trusted`, `roles`, `endpoints[*].roles`, `toolHardGate.*`; the people lists themselves moved into the database, see [Upgrading to chat roles](../migrations/chat-roles.md)) cannot be read or changed in chat. Matching is by contains/prefix/suffix, so compound names are refused too, e.g. `adminIds`, `ownerId`, `masterId`, `trustedUsers`, `superUsers`, `whitelist`/`allowlist`/`blacklist` and `bypassRole` (such as content-moderation's `inbound.whitelist.userIds` and `inbound.bypassRole`). The rule is deliberately conservative: ordinary fields whose names contain these words (e.g. `masterVolume`) must be changed with the CLI.
 - `endpoints[*].id` / `endpoints[*].name` bind account-level masters and trust lists, so remapping them is an indirect permission change and is refused in chat; `set`/`unset` only target fields listed by `config fields <root>`.
 - A `set` value cannot contain a `${…}` or `env://` environment reference (regardless of whether the name looks like a secret), so a later read or echo cannot leak an environment value; existing references are not affected by other operations.
 - Chat reads and writes a **single leaf field** (a scalar or scalar array) only; whole objects cannot be overwritten or removed, and required fields cannot be unset. `configVersion`, `plugins`, `disable_plugins`, root `plugin` and undeclared instances cannot be changed either.
@@ -464,7 +464,6 @@ configVersion: 2
 plugins:
   icqq: "@zhin.js/adapter-icqq"
 icqq:
-  master: "${ICQQ_MASTER}" # Top-level shared: applies to all endpoints
   endpoints:
     # Per-entry: id is required, other fields merge with top-level (per-entry takes priority)
     - id: "${ICQQ_ACCOUNT_1}"
@@ -535,7 +534,6 @@ internal task agents keep their role identities.
 
 ```yaml
 icqq:
-  master: "your QQ ID"
   nickname: Zhin
   profile:
     gender: unknown

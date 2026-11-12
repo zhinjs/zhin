@@ -1,7 +1,6 @@
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import { requireDiscordGatewayClient } from '@zhin.js/adapter-discord';
-import { platformPermission } from '@zhin.js/permission';
 
 export default defineAgentTool<{ guild_id: string }>({
   description: '获取 Discord 服务器角色列表',
@@ -11,7 +10,7 @@ export default defineAgentTool<{ guild_id: string }>({
   adapter: 'discord',
   scopes: ["channel"],
   tags: ['discord'],
-  permissions: [platformPermission('discord', 'manage_roles')],
+  permissions: ['platform-permission:manage_roles'],
   async execute({ guild_id  }: { guild_id: string }, context) {
     const client = requireDiscordGatewayClient(context.$client);
     const guild = await client.guilds.fetch(guild_id);

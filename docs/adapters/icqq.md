@@ -57,7 +57,6 @@ configVersion: 2
 plugins:
   icqq: "@zhin.js/adapter-icqq"
 icqq:
-  master: "1659488338" # 必填，顶层共享（/approve 与 master 角色）
   autoReconnect: true
   endpoints:
     - id: "${ICQQ_ACCOUNT}" # QQ 号
@@ -71,7 +70,6 @@ configVersion: 2
 plugins:
   icqq: "@zhin.js/adapter-icqq"
 icqq:
-  master: "1659488338"
   endpoints:
     - id: "${ICQQ_ACCOUNT}"
     - id: "${ICQQ_ACCOUNT_2}"
@@ -203,13 +201,12 @@ ICQQ 首次登录的二维码、滑块、设备确认会出现在「登录待办
 
 ## 掉线通知与重新登录
 
-配置 `notify` 后，ICQQ 被踢下线、登录失败或启动失败时，会通过另一个适配器实例给 master 发通知。例如用 QQ 官方机器人实例通知：
+配置 `notify` 后，ICQQ 被踢下线、登录失败或启动失败时，会通过另一个适配器实例给主人发通知。例如用 QQ 官方机器人实例通知：
 
 ```yaml
 qq:
   # ... 已配置好的 QQ 官方机器人
 icqq:
-  master: 123456
   autoReconnect: true   # 默认 true：被踢下线后自动重新登录
   notify:
     adapter: qq
@@ -228,7 +225,7 @@ icqq:
 | `icqq login status` | 查看在线状态与登录待办 |
 | `icqq login retry` | 强制重新触发登录 |
 
-命令只接受 master（顶层或 `endpoints[i].master`）或 `notify.id` 对应账号；两者都没配置时请用 Console 的 ICQQ 页面。没有配置 `notify` 时，掉线只写日志并在 Console 显示登录待办。
+命令只接受聊天角色 `owner` 或 `notify.id` 对应账号；两者都没配置时请用 Console 的 ICQQ 页面。没有配置 `notify` 时，掉线只写日志并在 Console 显示登录待办。
 
 ## 故障排查
 

@@ -23,7 +23,7 @@ describe('juejin-draft commands', () => {
   it('are branded and master-only', () => {
     for (const command of commands) {
       expect(parseCommandDefinition(command)).toBe(command);
-      expect(command.permit).toEqual(['role(master)']);
+      expect(command.permit).toEqual(['owner']);
     }
   });
 

@@ -2,7 +2,6 @@ import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import { requireDiscordGatewayClient } from '@zhin.js/adapter-discord';
-import { platformPermission } from '@zhin.js/permission';
 import { ThreadAutoArchiveDuration } from 'discord.js';
 
 export default defineAgentTool<{ channel_id: string; name: string; message_id?: string; auto_archive_duration?: number }>({
@@ -16,7 +15,7 @@ export default defineAgentTool<{ channel_id: string; name: string; message_id?: 
   adapter: 'discord',
   scopes: ["channel"],
   tags: ['discord'],
-  permissions: [platformPermission('discord', 'manage_channels')],
+  permissions: ['platform-permission:manage_channels'],
   async execute({ channel_id, name, message_id, auto_archive_duration  }: { channel_id: string; name: string; message_id?: string; auto_archive_duration?: number }, context) {
     const client = requireDiscordGatewayClient(context.$client);
     const channel = await client.channels.fetch(channel_id);

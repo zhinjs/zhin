@@ -39,7 +39,14 @@ export type TurnPrincipalOrigin = 'self' | 'member' | 'peer_bot' | 'human';
 export interface TurnPrincipal {
   readonly subjectId: string;
   readonly displayName?: string;
+  /** Expanded zhin chat roles (`owner` / `admin` / `trusted`, ADR 0056) or `['user']`. */
   readonly roles: readonly string[];
+  /** Normalized platform standing of the sender in this conversation (ADR 0056 §1); absent in private chats. */
+  readonly platform?: Readonly<{
+    standing: 'owner' | 'admin' | 'member' | 'guest';
+    roles?: readonly Readonly<{ id: string; name?: string }>[];
+    permissions?: readonly string[];
+  }>;
   /** IM Runtime 可信判定的入站来源；仅 `human` 能构造 turn。缺省表示合成入口。 */
   readonly origin?: TurnPrincipalOrigin;
 }
@@ -469,6 +476,10 @@ function validateExecutionAuthority(
   }
 }
 
+function principalChatRole(roles: readonly string[]): 'owner' | 'admin' | 'trusted' | undefined {
+  return roles.includes('owner') ? 'owner' : roles.includes('admin') ? 'admin' : roles.includes('trusted') ? 'trusted' : undefined;
+}
+
 export function turnPermissionSubject(turn: TurnAccessContext): PermissionSubject {
   const im = turn.origin.kind === 'im' ? turn.origin : undefined;
   return Object.freeze({
@@ -477,8 +488,8 @@ export function turnPermissionSubject(turn: TurnAccessContext): PermissionSubjec
     sender: Object.freeze({
       id: turn.principal.subjectId,
       ...(turn.principal.displayName ? { name: turn.principal.displayName } : {}),
-      role: turn.principal.roles,
-      permissions: turn.policy.permissions,
+      ...(principalChatRole(turn.principal.roles) ? { chatRole: principalChatRole(turn.principal.roles) } : {}),
+      ...(turn.principal.platform ? { platform: turn.principal.platform } : {}),
     }),
   });
 }

@@ -5,7 +5,7 @@ export default defineEvalCase({
   description: 'A master DM with the isolated shell policy is offered bash and it runs (canned output, no real shell).',
   source: '#716 ai.agent.masterShell: isolated (baseline for the no-shell cases)',
   tags: ['tool-use'],
-  inbound: { text: '跑一下 ls', sender: { id: 'master', roles: ['master'] }, shell: true },
+  inbound: { text: '跑一下 ls', sender: { id: 'master', chatRole: 'owner' }, shell: true },
   workspace: { 'README.md': '# demo\n' },
   nativeTools: ['bash'],
   bashOutput: 'README.md\npackage.json',

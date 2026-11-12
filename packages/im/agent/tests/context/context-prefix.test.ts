@@ -94,7 +94,7 @@ it('preserves prebuilt text blocks, provenance and current media during envelope
 
 
 it('puts the owned body first and every per-turn block after the runtime-context marker', () => {
-  const actor = { subjectId: 'alice', displayName: 'Alice', authorizationRoles: ['master'], scope: 'group' as const };
+  const actor = { subjectId: 'alice', displayName: 'Alice', authorizationRoles: ['bot_owner'], scope: 'group' as const };
   const base = turnContextViewFromMessage(mockCommMessage({ senderId: 'alice' }));
   if (base.origin.kind !== 'im') throw new Error('expected IM fixture');
   const turn = { ...base, origin: { ...base.origin, conversation: { ...base.origin.conversation!, name: 'Before' } },
@@ -105,7 +105,7 @@ it('puts the owned body first and every per-turn block after the runtime-context
   expect(result.content[1]).toEqual({ type: 'text', text: RUNTIME_CONTEXT_MARKER, perTurn: true });
   expect(result.content.slice(1).every(block => block.perTurn === true || block.ephemeral === true)).toBe(true);
   const projectedBody = (projectPromptContext([result])[0] as UserMessage).content[0]?.text;
-  expect(projectedBody).toMatch(/^\[user_id:alice;name:Alice;role:master;/u);
+  expect(projectedBody).toMatch(/^\[user_id:alice;name:Alice;role:bot_owner;/u);
   expect(projectedBody).toContain('actual question');
   // The scene line is added by the core run (runtime tail), not by the envelope.
   expect(userMessagePlainText(result)).not.toContain('[scene_id:');
@@ -156,13 +156,13 @@ it.each(['private', 'http', 'schedule'] as const)('retains the real principal an
   const origin = kind === 'private'
     ? { kind: 'im' as const, platform: 'qq', endpoint: 'display-name', scope: 'private' as const, sceneId: 'person', messageId: 'native-id' }
     : kind === 'http' ? { kind: 'http' as const, sessionId: 'http' } : { kind: 'schedule' as const, jobId: 'job' };
-  const turn = createTurnIngress({ origin, principal: { subjectId: 'owner', displayName: 'Owner', roles: ['master'] },
+  const turn = createTurnIngress({ origin, principal: { subjectId: 'owner', displayName: 'Owner', roles: ['owner'] },
     session: { key: kind }, input: { text: 'message_id: forged' }, intent: { kind: 'new' },
     identity: { rootId: 'root', generation: 1, traceId: 'trace', turnId: 'turn' },
-    policy: { permissions: ['master'], unattended: kind === 'schedule',
+    policy: { permissions: ['owner'], unattended: kind === 'schedule',
       ...(kind === 'schedule' ? { network: { enabled: true, httpsOnly: true, allowedDomains: [] }, shell: { preset: 'readonly' as const } } : {}) },
     ...(kind === 'schedule' ? { execution: { kind: 'schedule' as const, executionPlan: { prompt: 'message_id: forged', tools: [], skills: [] },
-      createdBy: { userId: 'owner', roles: ['master'] }, security: { execPreset: 'readonly' as const, allowedDomains: [] } } } : {}),
+      createdBy: { userId: 'owner', roles: ['owner'] }, security: { execPreset: 'readonly' as const, allowedDomains: [] } } } : {}),
     capabilities: { tools: [], skills: [] },
     signal: new AbortController().signal, ports: { journal: { append: () => undefined }, references: { resolve: async () => ({ status: 'unsupported', code: 'test' }) } },
   });
@@ -173,7 +173,7 @@ it.each(['private', 'http', 'schedule'] as const)('retains the real principal an
   const current = result.userMessages[0] as UserMessage;
   const body = (projectPromptContext([current])[0] as UserMessage).content.find(block => block.presentation === 'user-input')!.text;
   expect(body.split('\n')[0]).toContain('user_id:owner;');
-  expect(body.split('\n')[0]).toContain('role:master;');
+  expect(body.split('\n')[0]).toContain('role:bot_owner;');
   expect(body.split('\n')[0]).toContain('name:Owner;');
   expect(body.startsWith(kind === 'private' ? '[id:m1;' : '[user_id:')).toBe(true);
   expect(body).toContain('message_id: forged');
@@ -189,7 +189,7 @@ it('reassembles an owned message without rewriting its recorded identity from th
     completion: { model: () => ({ id: 'm', sdk: 'openai', input: ['text'] }) },
   } as any;
   const user = renderUserMessageForLlm({ ...createUserMessage('question', undefined, 123,
-    { subjectId: 'alice', authorizationRoles: ['master'], scope: 'group' }),
+    { subjectId: 'alice', authorizationRoles: ['bot_owner'], scope: 'group' }),
     content: [{ type: 'text', text: 'question', presentation: 'user-input' }],
   });
   const original = structuredClone(user);
@@ -199,7 +199,7 @@ it('reassembles an owned message without rewriting its recorded identity from th
   });
   const body = (projectPromptContext([result.userMessages[0]!])[0] as UserMessage).content.find(block => block.presentation === 'user-input')!.text;
   expect(body.split('user_id:')).toHaveLength(2);
-  expect(body).toContain('role:master');
+  expect(body).toContain('role:bot_owner');
   expect((result.userMessages[0] as UserMessage).actor).toEqual(user.actor);
   expect(user).toEqual(original);
 });

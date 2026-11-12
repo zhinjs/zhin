@@ -11,7 +11,7 @@ export default defineEvalCase({
   models: ['scripted-fallback', 'scripted-vision-fallback'],
   modelInputs: { 'scripted-fallback': ['text'] },
   agentConfig: { providerResilience: { maxRetries: 1, baseDelayMs: 1, maxDelayMs: 1 } },
-  inbound: { text: '@bot 图里是什么？', scope: 'group', sender: { id: 'bob', roles: ['master'] }, images: [RED_CIRCLE_PNG] },
+  inbound: { text: '@bot 图里是什么？', scope: 'group', sender: { id: 'bob', chatRole: 'owner' }, images: [RED_CIRCLE_PNG] },
   script: [
     { model: 'scripted-model', fault: { kind: 'error', message: 'Service Unavailable', status: 503 } },
     { model: 'scripted-model', fault: { kind: 'error', message: 'Service Unavailable', status: 503 } },

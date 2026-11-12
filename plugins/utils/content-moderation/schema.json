@@ -86,19 +86,6 @@
         }
       }
     },
-    "masters": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      },
-      "default": [],
-      "description": "额外视为 master 的 userId（兜底，与 endpoint master 合并）",
-      "x-i18n": {
-        "en": {
-          "description": "Additional user IDs treated as masters, merged with endpoint masters as a fallback."
-        }
-      }
-    },
     "inbound": {
       "type": "object",
       "additionalProperties": false,
@@ -107,13 +94,19 @@
           "type": "boolean",
           "default": true
         },
-        "bypassMasters": {
-          "type": "boolean",
-          "default": true,
-          "description": "master 跳过入站审查",
+        "bypassRole": {
+          "type": "string",
+          "enum": [
+            "owner",
+            "admin",
+            "trusted",
+            "none"
+          ],
+          "default": "owner",
+          "description": "本会话聊天角色不低于该值的发送者跳过入站审查（ADR 0056；none 表示都审）",
           "x-i18n": {
             "en": {
-              "description": "Skip inbound review for masters."
+              "description": "Senders whose chat role in the conversation is at least this skip inbound review (ADR 0056); none reviews everyone."
             }
           }
         },

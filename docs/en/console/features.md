@@ -97,6 +97,7 @@ When a feature is disabled for an account or a conversation, the Runtime skips i
 | `feature.set-enabled` | `feature.toggle` | Global writes `disable_plugins`; adapter / account write `overrides.*.enabled`; conversation writes the database; 409 when locked |
 | `feature.conversations` | `feature.view` | `{ plugin?, adapter?, endpoint?, query?, cursor?, limit? }`: conversations with overrides (paginated) plus conversations the instance saw recently (`hasOverrides: false`) |
 | `chat-roles.list` / `grant` / `revoke` | `iam.manage` | Chat roles (below) |
+| `chat-roles.mappings` / `set-mappings` | `iam.manage` | Platform identity → chat role mapping rules: read the adapter / account / conversation layers and the merged result; only the conversation layer is writable |
 
 `feature.configure`, `feature.toggle` and `iam.manage` (for `chat-roles.*` only) are checked against scope: an operator bound to adapter `qq` can change overrides and roles on `qq`, its accounts and their conversations only, not global or other adapters; a conversation key counts for its account. File-level writes carry the configuration revision and conversation writes that override's revision, so concurrent edits are rejected rather than overwriting each other.
 
@@ -108,9 +109,9 @@ Off by default. Turn it on in the configuration:
 features:
   selfService:
     enabled: true          # registers the `feature` / `role` chat commands
-    platformAdmins: true   # group owners / admins are admin of their group (default)
-    roles: [owner, admin]  # [owner] accepts group owners only
 ```
+
+Whether group owners / admins are `admin` of their group follows the mapping rules (yes by default; see [Chat roles](../concepts/chat-roles.md#mappings)).
 
 | Command | Purpose |
 | --- | --- |
@@ -127,14 +128,15 @@ features:
 
 ## Chat roles {#chat-roles}
 
-Who may do what in chat follows the roles of [ADR 0056](../../adr/0056-chat-roles.md): `owner` ⊃ `admin` ⊃ `trusted`, inherited downward along conversation → account → adapter → global, held by the identity `(adapter alias, user id)`. Sources:
+Who may do what in chat follows the roles of [ADR 0056](../../adr/0056-chat-roles.md): `owner` ⊃ `admin` ⊃ `trusted`, inherited downward along conversation → account → adapter → global, held by the identity `(adapter alias, user id)`. See [Chat roles](../concepts/chat-roles.md) for the full model. Sources:
 
 | Source | Meaning |
 | --- | --- |
-| Grant (`chat_roles` table) | The Console **Roles** block, or `role grant\|revoke <user> <role> [level]` / `角色 授予\|撤销 …` in chat |
-| Configuration | An adapter account's `owner` → account-level `owner`, `trusted` → account-level `trusted`; `ai.trigger.masters` / `trusted` → global (the same user id on every platform) |
-| Mapping | Platform group owner / admin → `admin` of that conversation (computed live per message; can be narrowed or turned off) |
+| Grant (`chat_roles` table, `source: 'grant'`) | The Console **Roles** block, or `role grant\|revoke <user> <role> [level]` / `角色 授予\|撤销 …` in chat |
+| Mapping (`source: 'mapping'`) | The conversation role a mapping rule derives from the platform identity (computed live per message, never stored; default rule: group owner / admin → conversation `admin`); `detail` names the rule |
 
-When granting in chat, the grantor needs at least the granted role at the target scope; `owner` can only be granted or revoked by an `owner` at a higher level. `role list` shows the roles effective in this conversation and their sources.
+The configuration file no longer holds people lists: the old account `master` / `trusted` and `ai.trigger.masters` / `trusted` move into `chat_roles` on the first start; see [Upgrading to chat roles](../migrations/chat-roles.md).
+
+When granting in chat, the grantor needs at least the granted role at the target scope; `owner` can only be granted or revoked by an `owner` at a higher level. `role list` shows the roles effective in this conversation, their sources and the mapping rules.
 
 For plugin authors — declaring levels, conversation fields and reading effective configuration (`context.configFor` / `context.isEnabledFor`) — see [definePlugin](../authoring/define-plugin.md#layered-config), [ADR 0050](../../adr/0050-layered-feature-config.md) and [ADR 0055](../../adr/0055-conversation-feature-config.md).

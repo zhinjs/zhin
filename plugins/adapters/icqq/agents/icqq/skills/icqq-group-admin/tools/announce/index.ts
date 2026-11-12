@@ -12,7 +12,7 @@ export default defineAgentTool<{ group_id: number; content: string }>({
   requiresCapabilities: ['actions.announce'],
   requiresApproval: 'once',
   scopes:['group'],
-  permissions: ['role(master,admin,trusted,owner)'],
+  permissions: ['trusted'],
   async execute({ group_id, content }, context) {
     await context.$client.sendGroupNotice(group_id, content);
     return { success: true, message: t(context.locale, 'announcementSent') };

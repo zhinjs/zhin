@@ -70,7 +70,7 @@ it('keeps original bytes private, survives restart and permits only the originat
   expect((await restarted.read(reference.asset_id, scope)).bytes).toEqual(Buffer.from(image, 'base64'));
   expect(await restarted.inspect(reference.asset_id, { ...scope, sessionKey: 'group1#subagent:1' })).toEqual(reference);
   for (const other of [
-    { ...scope, principal: { subjectId: 'bob', roles: ['master'] } },
+    { ...scope, principal: { subjectId: 'bob', roles: ['owner'] } },
     { ...scope, origin: { ...scope.origin, kind: 'im' as const, platform: 'icqq', endpoint: 'bot2', scope: 'group' as const, sceneId: 'group1' } },
     { ...scope, origin: { kind: 'im' as const, platform: 'icqq', endpoint: 'bot1', scope: 'group' as const, sceneId: 'group2' } },
   ]) await expect(restarted.read(reference.asset_id, other)).rejects.toThrow('unavailable');

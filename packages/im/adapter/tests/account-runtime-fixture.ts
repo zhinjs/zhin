@@ -49,7 +49,8 @@ export async function accountRuntimeFixture(options: { config?: Record<string, u
   const adapter = adapters.get(owner)!, otherAdapter = adapters.get(otherOwner)!;
   const use = vi.fn(() => { throw new Error('Account management must not read a file/env writer'); });
   const commandContext = (overrides: Record<string, unknown> = {}) => ({ owner, generation: 0, project: () => index, use, params: {}, args: [], config: source,
-    input: undefined, signal: new AbortController().signal, ...overrides }) as never;
+    // Account management needs the chat role owner (ADR 0056); tests act as an owner unless they override `input`.
+    input: { sender: { id: 'owner-user', chatRole: 'owner' } }, signal: new AbortController().signal, ...overrides }) as never;
   const call = (overrides: Partial<PluginConsoleRpcCall> = {}): PluginConsoleRpcCall => ({ signal: new AbortController().signal,
     runtime: { owner, generation: 0, operator: true, project: () => index.forOwner(owner) }, ...overrides });
   const request = (extra: Record<string, unknown> = {}) => ({ expectedGeneration: 0, expectedRevision: adapter.revision, ...extra });

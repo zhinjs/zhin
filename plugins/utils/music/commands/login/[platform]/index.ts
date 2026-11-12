@@ -18,7 +18,7 @@ export default defineCommand<unknown, string, Message>({
   params: {
     platform: { type: 'string', description: '音乐平台（qq / netease / 取消）', descriptionI18n: { en: "Music platform (qq / netease) or cancel" } },
   },
-  permit: ['role(master)'],
+  permit: ['owner'],
   async execute({ params, input, use, locale, formatCommand }) {
     const platform = String(params.platform ?? '').trim();
 

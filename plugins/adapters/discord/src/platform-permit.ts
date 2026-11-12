@@ -3,15 +3,14 @@
  */
 import type { PermissionSubject } from '@zhin.js/permission';
 
-const ADAPTER = 'discord';
 
 export function platformPermit(perm: string): string {
-  return `platform(${ADAPTER},${perm})`;
+  return `platform-permission:${perm}`;
 }
 
 const FACTORY_PERM_MAP: Record<string, string> = {
-  scene_admin: 'moderate_members',
-  scene_owner: 'guild_owner',
+  admin: 'moderate_members',
+  owner: 'guild_owner',
 };
 
 export function discordGroupPermitResolver(logicalPerm: string): string {
@@ -37,8 +36,10 @@ export function normalizeDiscordSenderForPermit(input: {
 }
 
 export function checkDiscordPlatformPermit(perm: string, subject: PermissionSubject): boolean {
-  const role = subject.sender?.role?.[0];
-  const permissions = subject.sender?.permissions ?? [];
+  // Native role names (e.g. Telegram `creator`) may still arrive until every adapter reports
+  // the normalized standing (ADR 0056 §1); compare as plain strings.
+  const role = subject.sender?.platform?.standing as string | undefined;
+  const permissions = subject.sender?.platform?.permissions ?? [];
   const has = (t: string) => permissions.includes(t);
 
   switch (perm) {

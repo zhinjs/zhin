@@ -99,10 +99,10 @@ export interface ModerationConfig {
   readonly maskChar: string;
   /** Omitted templates use the inbound operation's language. Explicit text is never translated. */
   readonly replyTemplate?: string;
-  readonly masters: readonly string[];
   readonly inbound: {
     readonly enabled: boolean;
-    readonly bypassMasters: boolean;
+    /** Lowest chat role (ADR 0056) whose senders skip inbound review; `none` reviews everyone. */
+    readonly bypassRole: 'owner' | 'admin' | 'trusted' | 'none';
     readonly whitelist: {
       readonly userIds: readonly string[];
       readonly conversationIds: readonly string[];

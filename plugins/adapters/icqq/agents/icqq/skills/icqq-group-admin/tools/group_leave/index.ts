@@ -8,7 +8,7 @@ export default defineAgentTool({
   adapter: 'icqq',
   scopes: ['group'],
   currentConversationBotRoles: ['admin', 'member'],
-  permissions: ['role(master)'],
+  permissions: ['owner'],
   requiresApproval: 'human',
   risk: 'dangerous',
   riskCategory: 'member',

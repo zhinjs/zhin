@@ -14,7 +14,7 @@ describe('checkDangerousToolAccess', () => {
   it('无 IM 身份时放行（直连 Agent / 无 context）', () => {
     const d = checkDangerousToolAccess('web_fetch');
     expect(d.allowed).toBe(true);
-    expect(d.role).toBe('master');  // 无身份 = 直接调用 = 全权
+    expect(d.role).toBe('owner');  // 无身份 = 直接调用 = 全权
   });
 
   it('有身份但无法解析 host root 时 fail-closed', () => {
@@ -64,7 +64,7 @@ describe('checkDangerousToolAccess', () => {
 
 describe('checkFileToolAccess', () => {
   it('master 读写均放行', () => {
-    const ctx = mockCommMessage({ sender_roles: ['master'] });
+    const ctx = mockCommMessage({ sender_roles: ['owner'] });
     expect(checkFileToolAccess('read_file', ctx).allowed).toBe(true);
     expect(checkFileToolAccess('write_file', ctx).allowed).toBe(true);
   });
@@ -96,11 +96,11 @@ describe('checkSensitiveFilePathAccess', () => {
   });
 
   it('master 读取 .env 需确认', () => {
-    const ctx = mockCommMessage({ sender_roles: ['master'] });
+    const ctx = mockCommMessage({ sender_roles: ['owner'] });
     const d = checkSensitiveFilePathAccess('read_file', '/app/.env', ctx);
     expect(d.allowed).toBe(false);
     expect(d.needsOwnerApproval).toBe(true);
-    expect(d.role).toBe('master');
+    expect(d.role).toBe('owner');
   });
 });
 

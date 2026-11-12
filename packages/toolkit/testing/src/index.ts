@@ -47,7 +47,14 @@ export interface TestDelivery {
   readonly id: string;
 }
 
-export type TestReceiveInput = EndpointIncomingMessage & { readonly endpoint?: string };
+/**
+ * A synthetic inbound message. Test transports are trusted, so `sender.chatRole` declares the
+ * sender's chat role in the conversation (ADR 0056) instead of storing grants.
+ */
+export type TestReceiveInput = Omit<EndpointIncomingMessage, 'sender'> & {
+  readonly endpoint?: string;
+  readonly sender?: NonNullable<EndpointIncomingMessage['sender']> & Readonly<{ chatRole?: 'owner' | 'admin' | 'trusted' }>;
+};
 
 export type TestReloadResult =
   | Readonly<{ status: 'reloaded' | 'unchanged'; generation: number }>
@@ -75,7 +82,9 @@ export class PluginTestKit {
   #closeResult?: Promise<void>;
 
   private constructor(options: PluginTestKitOptions, projectRoot: string, rootEntry: string) {
-    this.#im = new ImRuntime({ commandPrefix: options.commandPrefix });
+    // Test transports are trusted: a test declares the sender's chat role / platform standing
+    // (`sender: { id, chatRole: 'admin' }`) instead of storing grants (ADR 0056).
+    this.#im = new ImRuntime({ commandPrefix: options.commandPrefix, enrichSender: sender => sender });
     const names = options.endpoints ?? ['test'];
     if (!names.length || new Set(names).size !== names.length
       || names.some(name => !/^[a-z][a-z0-9-]*$/.test(name))) {

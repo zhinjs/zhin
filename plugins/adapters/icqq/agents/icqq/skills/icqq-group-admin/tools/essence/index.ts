@@ -12,7 +12,7 @@ export default defineAgentTool<{ message_id: string; action: 'add' | 'remove' }>
   requiresCapabilities: ['actions.essence'],
   requiresApproval: 'once',
   scopes:['group'],
-  permissions: ['role(master,admin,trusted,owner)'],
+  permissions: ['trusted'],
   async execute({ message_id, action }, context) {
     const client = context.$client;
     if (action === 'add') {

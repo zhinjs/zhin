@@ -119,7 +119,7 @@ bilibili:
 | `bilibili:review` | 发送 / 改写 / 丢弃草稿 |
 | `bilibili:login` | 扫码登录 / 退出登录 |
 
-审批命令只认 master 角色：在你平时和机器人聊天的那个适配器（QQ / Telegram 等）配置里把自己设为 `master`（`bilibili.master` 则是 B 站 uid，可在评论区里用命令）。没配置 master 时谁都不能用命令发送。
+审批命令只认聊天角色 `owner`：在你平时和机器人聊天的那个适配器（QQ / Telegram 等）上给自己授予 `owner`（Console「角色」或聊天 `角色 授予`，见[聊天角色](../concepts/chat-roles.md)）；B 站评论区里同样需要你的 B 站身份持有 `owner`。没有 owner 时谁都不能用命令发送。
 
 ## 会话与消息
 
@@ -158,7 +158,7 @@ bilibili:
 
 ### 审批草稿
 
-在 Console「评论审批」页处理最方便；也可以用命令（只有 master 能用，可以在任意已接入的聊天平台里发）：
+在 Console「评论审批」页处理最方便；也可以用命令（只有聊天角色 owner 能用，可以在任意已接入的聊天平台里发）：
 
 | 命令 | 作用 |
 |---|---|
@@ -211,7 +211,7 @@ bilibili:
 | Console 里没有「评论审批」 | 确认装了 Console（`@zhin.js/page`），并且令牌有 `bilibili:read` 权限 |
 | 页面按钮提示「没有操作权限」 | 令牌缺少 `bilibili:review` / `bilibili:login` |
 | `bili-draft send` 说「发得太快了」 | 未到 `minSendIntervalSec`，稍后再发；草稿保留 |
-| `bili-draft` 提示没有权限 | 当前账号不是 master；在聊天平台适配器配置里设置 `master` |
+| `bili-draft` 提示没有权限 | 当前账号没有聊天角色 `owner`；在 Console「角色」区块授予 |
 | 日志 `bilibili_notifications_disabled` | 开了 `notifications` 但未登录，通知不会轮询 |
 | 日志 `bilibili_notify_failed` | `notify` 指向的会话发不出去：检查 adapter / endpoint / id 是否正确、该适配器是否在线 |
 | 日志 `bilibili_draft_persist_failed` | 数据目录不可写；检查 `dataDir` 权限。草稿仍在内存里 |

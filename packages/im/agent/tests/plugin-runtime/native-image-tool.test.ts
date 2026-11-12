@@ -5,8 +5,8 @@ import { createNativeImageToolFeature } from '../../src/plugin-runtime/native-im
 
 const context = Object.freeze({
   signal: new AbortController().signal, traceId: 'trace', turnId: 'turn', sessionKey: 'session',
-  origin: { kind: 'http', sessionId: 'session' }, principal: { subjectId: 'owner', roles: ['master'] },
-  policy: { permissions: ['master'], unattended: false, network: { enabled: false } },
+  origin: { kind: 'http', sessionId: 'session' }, principal: { subjectId: 'owner', roles: ['owner'] },
+  policy: { permissions: ['owner'], unattended: false, network: { enabled: false } },
 }) as unknown as ToolExecutionContext;
 async function setup() {
   const generateImage = vi.fn(async () => ({ base64: 'aW1hZ2U=', mimeType: 'image/png', model: 'image-model', revisedPrompt: 'revised' }));

@@ -189,7 +189,7 @@ npx zhin-calendar-auth microsoft
 | ---------------- | ------------------------------------- |
 | `list_events`    | 列出时间范围内事件                    |
 | `find_free_time` | 工作时段内找空档                      |
-| `create_event`   | 创建事件（`role(master)` + 始终批准） |
+| `create_event`   | 创建事件（`owner` + 始终批准） |
 
 创建前应向用户确认标题、时间与时区。
 

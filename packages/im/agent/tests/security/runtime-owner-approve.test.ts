@@ -26,7 +26,7 @@ describe('OwnerApprovalRuntime commands', () => {
     return createSyntheticMessage({
       conversation: { endpoint: { adapter: 'icqq', id: '8596238' }, kind: 'private', id: '1659488338' },
       endpointId: '8596238', clientAdapter: 'icqq',
-      sender: { id: '1659488338', name: 'owner', roles: ['master'] },
+      sender: { id: '1659488338', name: 'owner', chatRole: 'owner' },
       extra: { endpointMaster: '1659488338' },
     });
   }
@@ -48,7 +48,7 @@ describe('OwnerApprovalRuntime commands', () => {
   it('resolves owner approval identity from the canonical conversation endpoint', () => {
     const message = createSyntheticMessage({
       conversation: { endpoint: { adapter: 'icqq', id: '8596238' }, kind: 'private', id: '1659488338' },
-      sender: { id: '1659488338', name: 'owner', roles: ['master'] },
+      sender: { id: '1659488338', name: 'owner', chatRole: 'owner' },
       extra: { endpointMaster: '1659488338' },
     });
     expect(ownerApprovalAddressFromMessage(message)).toEqual({

@@ -1,7 +1,6 @@
 import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { platformPermission } from '@zhin.js/permission';
 
 export default defineAgentTool<{ chat_id: string; user_ids: string }>({
   description: '向钉钉群聊添加成员',
@@ -12,7 +11,7 @@ export default defineAgentTool<{ chat_id: string; user_ids: string }>({
   adapter: 'dingtalk',
   scopes: ["group"],
   tags: ['dingtalk'],
-  permissions: [platformPermission('dingtalk', 'chat_admin')],
+  permissions: ['platform-permission:chat_admin'],
   async execute({ chat_id, user_ids    }: { chat_id: string; user_ids: string }, context) {
     const endpoint = context.$client;
     const success = await endpoint.updateChat(chat_id, { add_useridlist: user_ids.split(',') });

@@ -69,6 +69,7 @@ import { messageLocale } from './inbound-spine.js';
 import { InboundDeduper } from './inbound-dedup.js';
 import { createInboundOriginClassifier, OutboundLedger, ledgerScopeOf } from './inbound-origin.js';
 import { RuntimeMessageDiagnostics, type RuntimeMessageDiagnosticsReader } from './message-diagnostics.js';
+import { createChatRoleSenderEnricher } from '../../built/roles.js';
 
 /**
  * Plugin Runtime login-assist port（与出站消息服务并列）。
@@ -100,10 +101,10 @@ export interface ImRuntimeOptions {
   /** @internal 覆盖入站去重器（测试用）；去重仅作用于 Room 会话。 */
   readonly inboundDeduper?: Pick<InboundDeduper, 'claim'> & Partial<Pick<InboundDeduper, 'arbitrate'>>;
   /**
-   * 入站 sender 增强：在构造 Message 前，将框架级角色（master / trusted）
-   * 合并到 sender.roles，使整个下游链路（命令分发、agent ingress 等）都能读到完整角色。
+   * 入站 sender 增强（ADR 0056）：在构造 Message 前设置 `sender.chatRole`（会话链上的最高聊天角色）
+   * 并归一 `sender.platform`，使整个下游链路（命令分发、agent ingress 等）读到同一份角色。
    *
-   * 返回增强后的 sender（可原样返回）。缺省时 sender 保留适配器给出的平台角色。
+   * 通常为 {@link createChatRoleSenderEnricher} 的结果。缺省时只归一平台身份并丢弃适配器自带的 `chatRole`。
    */
   readonly enrichSender?: (
     sender: MessageSenderRef | undefined,
@@ -178,7 +179,7 @@ export class ImRuntime implements OutboundMessageService {
       registry,
       inboundClaimPending: options.inboundClaimPending,
       resolveReplyTarget: (conversation, id) => ledger.matchById(ledgerScopeOf(conversation), id)?.endpointId,
-      enrichSender: options.enrichSender,
+      enrichSender: options.enrichSender ?? createChatRoleSenderEnricher({ roles: () => undefined }),
       acquire: () => this.#acquire(),
       release: (lease) => this.#release(lease),
       deliver: (request, snapshot) => this.#deliver(request, snapshot),

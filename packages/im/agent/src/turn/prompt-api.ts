@@ -15,7 +15,7 @@ export function assertMasterForPromptControl(
 ): void {
   try {
     const role = resolveToolRequesterRole(commMessage);
-    if (role !== 'master') {
+    if (role !== 'owner') {
       throw new PromptAccessDeniedError('steer/followUp 仅 master 可用');
     }
   } catch (error) {

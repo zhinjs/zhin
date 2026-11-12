@@ -9,17 +9,18 @@ import type {
   Segment,
   SendContent,
 } from '../plugin-runtime/im/contracts.js';
-import type { SenderRole } from './roles.js';
+import { expandChatRole, type ChatRole } from './roles.js';
 import { segmentsToPlainText } from './segment-contract/text.js';
 
 /** Agent turns may attach host-owned metadata to the canonical runtime message. */
 export type AgentTurnMessage = Message<{ extra?: Record<string, unknown> }>;
 
-export function senderRolesFromMessage(message: Message): readonly SenderRole[] {
-  const roles = message.sender?.roles?.filter(
-    (role): role is SenderRole => role === 'master' || role === 'trusted' || role === 'user',
-  );
-  return roles?.length ? roles : ['user'];
+/**
+ * zhin chat roles of the sender in this conversation, expanded (`owner` → owner, admin, trusted);
+ * empty for ordinary users. Only the Runtime-set `sender.chatRole` counts (ADR 0056).
+ */
+export function chatRolesFromMessage(message: Pick<Message, 'sender'>): readonly ChatRole[] {
+  return expandChatRole(message.sender?.chatRole);
 }
 
 export interface SyntheticMessageInput {

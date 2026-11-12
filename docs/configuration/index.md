@@ -106,7 +106,7 @@ Agent 安装、角色权限和其他未声明可替换的启动依赖保留待�
 
 提示会自动带上当前账号的实际命令前缀和 namespace，无需 AI Agent。
 
-**谁能用**：只有接收这条私聊的同一适配器（同一平台实例）下，任一已配置账号（端点）的 `master`（账号级 `master`，未设置时继承插件级 `master`）才能使用；这样主人身份与消息始终来自同一适配器/平台。其他适配器（包括同一适配器包的另一个插件实例）的主人不能使用。`ai.trigger.masters` 不带平台信息，首版不作为聊天配置的授权依据。群聊、频道和伪造的 metadata 都不能进入保存流程。
+**谁能用**：只有在接收这条私聊的同一适配器（同一平台实例）上拥有聊天角色 `owner` 的人——全局、适配器层或该适配器任一账号上的 `owner`（[聊天角色](../concepts/chat-roles.md)）；身份按适配器登记，其他适配器（包括同一适配器包的另一个插件实例）的主人不能使用。群聊、频道和伪造的 metadata 都不能进入保存流程。
 
 **入口按适配器，字段范围按项目**：授权（入口）只看接收消息的同一适配器实例上的主人；一旦通过，可管理的字段范围是**整个项目**中所有聊天安全的叶子字段加上 Host 白名单 `HOST_CONFIG_PATCH_PATHS`，并不局限于授权适配器所属的插件——即任一合法主人可管理全局的聊天安全字段（包括其他插件的字段）。若不希望某个主人改动其他插件，请勿在聊天中授予其主人身份，或改用 CLI/Console 管理。
 
@@ -114,7 +114,7 @@ Agent 安装、角色权限和其他未声明可替换的启动依赖保留待�
 
 - Host 段只开放与 Console 普通页面相同的白名单（`HOST_CONFIG_PATCH_PATHS`，目前只有 `ai.trigger.ambient` 下的字段）；`locale`、`http`、`database` 等其余 Host 配置请用 CLI 或 Console。
 - 插件段需要 Schema 能证明安全：密钥、token、密码等敏感字段、缺少 Schema 或无法判断范围的字段一律拒绝。
-- 主人、信任名单、审批与工具门槛等权限字段（如 `master`、`trusted`、`endpoints[*].master`、`ai.trigger.masters`、`toolHardGate.*`）不能通过聊天读写。按包含/前后缀匹配，复合名同样拒绝，例如 `adminIds`、`ownerId`、`masterId`、`trustedUsers`、`superUsers`、`whitelist`/`allowlist`/`blacklist`、`bypassMasters`（如 content-moderation 的 `inbound.whitelist.userIds`、`inbound.bypassMasters`）；该规则偏保守，名称中含这些词的普通字段（如 `masterVolume`）也请用 CLI 修改。
+- 主人、信任名单、审批与工具门槛等权限字段（如 `master`、`trusted`、`roles`、`endpoints[*].roles`、`toolHardGate.*`；人员名单本身已移入数据库，见[升级到聊天角色](../migrations/chat-roles.md)）不能通过聊天读写。按包含/前后缀匹配，复合名同样拒绝，例如 `adminIds`、`ownerId`、`masterId`、`trustedUsers`、`superUsers`、`whitelist`/`allowlist`/`blacklist`、`bypassRole`（如 content-moderation 的 `inbound.whitelist.userIds`、`inbound.bypassRole`）；该规则偏保守，名称中含这些词的普通字段（如 `masterVolume`）也请用 CLI 修改。
 - `endpoints[*].id` / `endpoints[*].name` 用于绑定账号级主人与信任名单，属于间接的权限变更，不能通过聊天修改；`set`/`unset` 只能作用于 `config fields <根>` 列出的字段。
 - `set` 的新值不能包含 `${…}` 或 `env://` 环境变量引用（无论变量名是否像密钥），以免之后读取或回显时泄露环境值；已有引用不受其他操作影响。
 - 只能读写**单个叶子字段**（标量或标量数组），不能整体覆盖或删除对象；必填字段不能 `unset`。`configVersion`、`plugins`、`disable_plugins`、根 `plugin` 和未声明实例同样不能修改。
@@ -457,7 +457,6 @@ configVersion: 2
 plugins:
   icqq: "@zhin.js/adapter-icqq"
 icqq:
-  master: "${ICQQ_MASTER}" # 顶层共享：所有 endpoint 生效
   endpoints:
     # 逐项：id 必填，其余字段与顶层合并（逐项优先）
     - id: "${ICQQ_ACCOUNT_1}"
@@ -525,7 +524,6 @@ Agent 优先使用当前 Endpoint 的平台资料。适配器顶层的 `nickname
 
 ```yaml
 icqq:
-  master: "你的 QQ 号"
   nickname: 小知
   profile:
     gender: unknown

@@ -43,18 +43,29 @@ describe('@zhin.js/plugin-content-moderation', () => {
     expect(config.outbound.bypass).toBe(false);
   });
 
-  it('bypasses inbound for masters and whitelist', () => {
+  it('bypasses inbound for chat role owners and whitelist', () => {
     const config = resolveModerationConfig({
-      masters: ['m1'],
       inbound: {
-        bypassMasters: true,
         whitelist: { userIds: ['u2'], conversationIds: ['g9'] },
       },
     });
+    expect(config.inbound.bypassRole).toBe('owner');
     expect(shouldBypassInbound(config, {
       sender: 'm1',
       conversationId: 'g1',
+      chatRole: 'owner',
     })).toBe(true);
+    expect(shouldBypassInbound(config, {
+      sender: 'a1',
+      conversationId: 'g1',
+      chatRole: 'admin',
+    })).toBe(false);
+    expect(shouldBypassInbound(resolveModerationConfig({ inbound: { bypassRole: 'admin' } }), {
+      sender: 'a1', conversationId: 'g1', chatRole: 'admin',
+    })).toBe(true);
+    expect(shouldBypassInbound(resolveModerationConfig({ inbound: { bypassRole: 'none' } }), {
+      sender: 'm1', conversationId: 'g1', chatRole: 'owner',
+    })).toBe(false);
     expect(shouldBypassInbound(config, {
       sender: 'u2',
       conversationId: 'g1',

@@ -84,7 +84,7 @@ it('discovers real ICQQ skills, gates member tools by requester, and loads own r
   expect(ownerBot.tools.some(tool => tool.name.endsWith('__group_leave'))).toBe(false);
   expect(ownerBot.tools.some(tool => tool.name.endsWith('__recall_member_message'))).toBe(true);
   expect(ownerBot.tools.find(tool => tool.name.endsWith('__set_group_admin'))).toMatchObject({
-    requiresApproval: 'human', permissions: ['role(master,admin,trusted,owner)'], currentConversationBotRoles: ['owner'],
+    requiresApproval: 'human', permissions: ['trusted'], currentConversationBotRoles: ['owner'],
     placement: { kind: 'agent-skill', agent: 'icqq', skill: 'icqq-group-admin' },
   });
   turn.input.contextState.bot.platformRole = 'member';

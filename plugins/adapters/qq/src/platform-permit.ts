@@ -3,16 +3,15 @@
  */
 import type { PermissionSubject } from '@zhin.js/permission';
 
-const ADAPTER = 'qq';
 
 export function platformPermit(perm: string): string {
-  return `platform(${ADAPTER},${perm})`;
+  return `platform-permission:${perm}`;
 }
 
 /** 官方频道工厂工具：映射到 guild 语义，不用 group_* */
 const FACTORY_PERM_MAP: Record<string, string> = {
-  scene_admin: 'guild_admin',
-  scene_owner: 'guild_owner',
+  admin: 'guild_admin',
+  owner: 'guild_owner',
 };
 
 export function qqGuildPermitResolver(logicalPerm: string): string {
@@ -59,8 +58,10 @@ export function projectQqGuildSenderRoles(authorRoles: readonly string[] | undef
 }
 
 export function checkQqPlatformPermit(perm: string, subject: PermissionSubject): boolean {
-  const role = subject.sender?.role?.[0];
-  const permissions = subject.sender?.permissions ?? [];
+  // Native role names (e.g. Telegram `creator`) may still arrive until every adapter reports
+  // the normalized standing (ADR 0056 §1); compare as plain strings.
+  const role = subject.sender?.platform?.standing as string | undefined;
+  const permissions = subject.sender?.platform?.permissions ?? [];
   const has = (t: string) => permissions.includes(t);
 
   switch (perm) {

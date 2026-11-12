@@ -24,9 +24,9 @@ function fixture(approved = true) {
   const events: TurnEvent[] = [];
   const turn = createTurnIngress({
     intent: { kind: 'new' }, identity: { rootId: 'root', generation: 1, traceId: 'trace', turnId: 'turn' },
-    origin: { kind: 'http', sessionId: 'upload' }, principal: { subjectId: 'owner', roles: ['master'] },
+    origin: { kind: 'http', sessionId: 'upload' }, principal: { subjectId: 'owner', roles: ['owner'] },
     input: { text: 'upload' }, session: { key: 'upload' },
-    policy: { permissions: ['master'], unattended: false, filesystem: { workspaceRoot: root } },
+    policy: { permissions: ['owner'], unattended: false, filesystem: { workspaceRoot: root } },
     capabilities: { tools: ['upload_image'], skills: [] }, signal: new AbortController().signal,
     ports: { journal: { append: event => { events.push(event); } }, approval: { requestApproval: approval } },
   });

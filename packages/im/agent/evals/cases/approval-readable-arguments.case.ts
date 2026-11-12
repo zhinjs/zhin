@@ -5,7 +5,7 @@ export default defineEvalCase({
   description: 'A plugin approval shows its readable action and exact arguments, then executes once approved.',
   source: 'ICQQ operation-confirmation report: internal tool names and policy boilerplate obscured the actual operation',
   tags: ['approval'],
-  inbound: { text: '把周报发到运营群', sender: { id: 'owner', roles: ['master'] } },
+  inbound: { text: '把周报发到运营群', sender: { id: 'owner', chatRole: 'owner' } },
   tools: [{ name: 'reports__publish_report', description: '发送周报；目标由参数指定', requiresApproval: 'always', result: 'published' }],
   approval: 'approve',
   script: [

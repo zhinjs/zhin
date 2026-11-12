@@ -3,40 +3,36 @@
  *
  * They are registered by the ICQQ plugin but can be invoked from any connected
  * adapter (typically the QQ instance that delivered the outage notice), so the
- * master can fetch the QR image and confirm/send verification codes without the
+ * owner can fetch the QR image and confirm/send verification codes without the
  * Console or terminal.
  */
 import { icqqLoginControls, type IcqqLoginControl } from '../../../src/icqq-login-control.js';
 
 export { icqqLoginControls };
 
-/** Master = framework master(s), or the configured outage-notify conversation id(s). */
+/** Operator = the chat role `owner` in this conversation (ADR 0056), or the configured outage-notify conversation id(s). */
 export function isIcqqLoginOperator(config: unknown, input: unknown): boolean {
   const cfg = (config ?? {}) as {
-    master?: unknown;
     notify?: { id?: unknown };
-    endpoints?: readonly { master?: unknown; notify?: { id?: unknown } }[];
+    endpoints?: readonly { notify?: { id?: unknown } }[];
   };
-  const masters = new Set<string>();
+  const sender = (input as { sender?: { id?: unknown; chatRole?: unknown } } | null | undefined)?.sender;
+  const senderId = (typeof sender === 'object' && sender?.id) ? String(sender.id).trim() : '';
+  if (!senderId) return false;
+  if (sender?.chatRole === 'owner') return true;
+  const targets = new Set<string>();
   const collect = (value: unknown) => {
     if (value === undefined || value === null) return;
     const text = String(value).trim();
-    if (text) masters.add(text);
+    if (text) targets.add(text);
   };
-  collect(cfg.master);
   collect(cfg.notify?.id);
   if (Array.isArray(cfg.endpoints)) {
-    for (const endpoint of cfg.endpoints) {
-      collect(endpoint.master);
-      collect(endpoint.notify?.id);
-    }
+    for (const endpoint of cfg.endpoints) collect(endpoint.notify?.id);
   }
-  // Login control is account-sensitive: without an explicit master/notify target,
-  // refuse chat recovery and leave it to the authenticated Console page.
-  if (masters.size === 0) return false;
-  const senderRaw = (input as { sender?: { id?: unknown } } | null | undefined)?.sender;
-  const senderId = (typeof senderRaw === 'object' && senderRaw?.id) ? String(senderRaw.id).trim() : '';
-  return senderId !== '' && masters.has(senderId);
+  // Login control is account-sensitive: without an owner or a notify target, chat recovery is
+  // refused and left to the authenticated Console page.
+  return targets.has(senderId);
 }
 
 export function pickIcqqLoginControl(
@@ -57,7 +53,7 @@ export function pickIcqqLoginControl(
 }
 
 export function icqqLoginForbidden(): string {
-  return '仅 master 或 notify 目标账号可以操作 ICQQ 登录';
+  return '仅 owner（聊天角色）或 notify 目标账号可以操作 ICQQ 登录';
 }
 
 export function pendingTaskLabel(type: string): string {

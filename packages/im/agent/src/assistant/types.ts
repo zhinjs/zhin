@@ -2,7 +2,7 @@
  * Schedule Runtime — 统一 Job 模型
  */
 import type { FestivalName, HolidayInput, ScatterInput } from '@zhin.js/kernel';
-import type { IMDeliveryTarget, SenderRole } from '@zhin.js/core';
+import type { ChatRole, IMDeliveryTarget } from '@zhin.js/core';
 import type { ScheduleBudgetConfig } from '../config/zhin-agent-config.js';
 
 export const SCHEDULE_JOBS_VERSION = 1;
@@ -40,7 +40,8 @@ export interface ScheduleJobState {
 /** 调度任务创建者（对话内 schedule_add 等场景持久化，执行时还原 harness 角色） */
 export interface ScheduleJobCreator {
   userId: string;
-  roles: readonly SenderRole[];
+  /** Expanded chat roles at creation (ADR 0056), or `['user']`. */
+  roles: readonly (ChatRole | 'user')[];
   name?: string;
 }
 

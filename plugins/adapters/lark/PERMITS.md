@@ -11,7 +11,7 @@
 
 ## Permit 词汇表
 
-| `platform(lark,…)` | 含义 |
+| `platform-permission:…` | 含义 |
 |--------------------|------|
 | `chat_owner` | 群主 |
 | `chat_admin` | 群管理员 |
@@ -19,4 +19,6 @@
 
 ## 工厂映射
 
-`scene_admin` → `chat_admin` · `scene_owner` → `chat_owner`
+场景治理工具默认要求 `platform:admin` / `platform:owner`（归一地位，ADR 0056 §5）；本适配器把它们映射为下列平台权限：
+
+`platform:admin` → `chat_admin` · `platform:owner` → `chat_owner`

@@ -19,21 +19,16 @@ import {
 import { readFeatureConversationDeclaration, type JsonSchema, type RootResourceInstaller } from '@zhin.js/runtime';
 import { dispatchFeatureConsoleRpc, type FeatureRpcContext, type FeatureRpcReply } from './console/module.js';
 import {
-  chatRoleIncludes, chatRoleMessageContext, chatScopeChain, isChatIdentity, isChatRole,
-  type ChatIdentity, type ChatRole, type ChatRoleContext, type ChatRoleEntry, type ChatRoleService, type PlatformChatRoleMapping,
-} from './chat-roles.js';
+  chatRoleIncludes, chatRoleMessageContext, chatScopeChain, effectiveChatRoleMappings, isChatIdentity, isChatRole,
+  type ChatIdentity, type ChatRole, type ChatRoleContext, type ChatRoleEntry, type ChatRoleMappingLayer,
+} from '@zhin.js/core';
+import type { InstanceChatRoleService } from './chat-roles.js';
 
 export interface FeatureSelfServiceConfig {
   readonly enabled: boolean;
-  /** ADR 0056 §4 default mapping: platform group owner / admin → `admin` of that conversation. */
-  readonly platformAdmins: boolean;
-  /** Platform standings the default mapping accepts; `['owner']` limits it to group owners. */
-  readonly roles: readonly string[];
 }
 
-export const DEFAULT_FEATURE_SELF_SERVICE: FeatureSelfServiceConfig = Object.freeze({
-  enabled: false, platformAdmins: true, roles: Object.freeze(['owner', 'admin']),
-});
+export const DEFAULT_FEATURE_SELF_SERVICE: FeatureSelfServiceConfig = Object.freeze({ enabled: false });
 
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 
@@ -42,13 +37,7 @@ export function readFeatureSelfServiceConfig(hostConfig: unknown): FeatureSelfSe
   const features = record(hostConfig) && record(hostConfig.features) ? hostConfig.features : undefined;
   const raw = features && record(features.selfService) ? features.selfService : undefined;
   if (!raw) return DEFAULT_FEATURE_SELF_SERVICE;
-  const roles = Array.isArray(raw.roles) ? raw.roles.filter((role): role is string => role === 'owner' || role === 'admin') : DEFAULT_FEATURE_SELF_SERVICE.roles;
-  return Object.freeze({ enabled: raw.enabled === true, platformAdmins: raw.platformAdmins !== false, roles: Object.freeze(roles) });
-}
-
-/** The default platform mapping this configuration selects. */
-export function platformMappingOf(config: FeatureSelfServiceConfig): PlatformChatRoleMapping {
-  return Object.freeze({ enabled: config.platformAdmins, standings: config.roles });
+  return Object.freeze({ enabled: raw.enabled === true });
 }
 
 /** The sender and where they spoke, resolved once per command. */
@@ -62,7 +51,7 @@ export interface FeatureChatActor {
 }
 
 /** Resolves who sent the command and where; undefined outside a keyed conversation. */
-export function featureChatActor(snapshot: Pick<RuntimeSnapshot, 'projections' | 'tree'>, message: unknown): FeatureChatActor | undefined {
+export function featureChatActor(snapshot: Pick<RuntimeSnapshot, 'config' | 'projections' | 'tree'>, message: unknown): FeatureChatActor | undefined {
   const subject = chatRoleMessageContext(snapshot, message);
   if (!subject) return undefined;
   const parsed = parseFeatureResolutionKey(subject.context.conversationKey);
@@ -135,7 +124,9 @@ const messages = createMessages({
   none: { 'zh-CN': '无', en: 'none' },
   rolesHeader: { 'zh-CN': '本会话生效的聊天角色：', en: 'Chat roles effective in this conversation:' },
   roleLine: { 'zh-CN': '{role} @ {level} {scope}：{user}（{source}）', en: '{role} @ {level} {scope}: {user} ({source})' },
-  roleMapping: { 'zh-CN': '另：群主 / 管理员按平台身份实时映射为本会话 admin。', en: 'Also: group owners / admins map to admin of this conversation, live from the platform.' },
+  roleMapping: { 'zh-CN': '映射规则（按平台身份实时计算，只作用于本会话）：', en: 'Mapping rules (live from the platform, this conversation only):' },
+  mappingLine: { 'zh-CN': '{match} → {grant}（{level}）', en: '{match} → {grant} ({level})' },
+  mappingNone: { 'zh-CN': '（无）', en: '(none)' },
   userMissing: { 'zh-CN': '请 @ 用户或给出用户 id。', en: 'Mention a user or give a user id.' },
   levelConversation: { 'zh-CN': '会话', en: 'conversation' },
   levelEndpoint: { 'zh-CN': '账号', en: 'endpoint' },
@@ -165,7 +156,9 @@ interface PendingGlobal {
 
 export interface FeatureSelfServiceDeps {
   readonly config: FeatureSelfServiceConfig;
-  readonly roles: ChatRoleService;
+  readonly roles: InstanceChatRoleService;
+  /** Conversation-level mapping rules (listing only). */
+  readonly mappingLayer?: (conversationKey: string) => ChatRoleMappingLayer | undefined;
   /** RPC context without the per-actor parts (authorize / actor / allowedFields). */
   readonly context: Omit<FeatureRpcContext, 'authorize' | 'actor' | 'allowedFields' | 'authScope'>;
   readonly audit?: (entry: ConsoleAuditEntry) => void;
@@ -393,7 +386,17 @@ export async function executeRoleChat(
         user: `${entry.adapter}:${entry.userId}`, source: entry.source }));
     }
     lines.push(messages(locale, 'yourRoles', { roles: describeEntries(deps.roles.entriesFor(actor.identity, actor.conversationKey, actor.context), locale) }));
-    if (deps.config.platformAdmins) lines.push(messages(locale, 'roleMapping'));
+    lines.push(messages(locale, 'roleMapping'));
+    const rules = effectiveChatRoleMappings(actor.conversationKey, actor.context.snapshot, deps.mappingLayer);
+    if (!rules.length) lines.push(messages(locale, 'mappingNone'));
+    for (const rule of rules) {
+      const match = [
+        ...(rule.match.standing ? [`standing=${rule.match.standing.join('|')}`] : []),
+        ...(rule.match.role ? [`role=${rule.match.role.join('|')}`] : []),
+        ...(rule.match.permission ? [`permission=${rule.match.permission.join('|')}`] : []),
+      ].join(', ');
+      lines.push(messages(locale, 'mappingLine', { match, grant: rule.grant, level: rule.level }));
+    }
     return lines.join('\n');
   }
   const user = input.tokens[1];

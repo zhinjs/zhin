@@ -95,7 +95,7 @@ try {
     await incoming('beta keyword-add bye goodbye',['owner']);
     kit.clearDeliveries();await incoming('bye');assert.equal(kit.deliveries.at(-1).payload,'goodbye');
     // Concurrent different senders mutate the same persistent state through real CAS retries.
-    await Promise.all(Array.from({length:8},(_,i)=>kit.receive({content:`alpha keyword-add k${i} r${i}`,conversation:{kind:'group',id:'g1'},sender:{id:`s${i}`,roles:['admin']}})));
+    await Promise.all(Array.from({length:8},(_,i)=>kit.receive({content:`alpha keyword-add k${i} r${i}`,conversation:{kind:'group',id:'g1'},sender:{id:`s${i}`,chatRole:'admin'}})));
     await incoming('alpha keyword-list');for(let i=0;i<8;i++)assert.match(kit.deliveries.at(-1).payload,new RegExp(`k${i}`));
     // Identical group ids on two endpoint identities have separate check-in and teaching records.
     await incoming('alpha checkin');assert.match(kit.deliveries.at(-1).payload,/签到成功/);

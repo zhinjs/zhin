@@ -246,8 +246,8 @@ describe('Agent CapabilityIngress', () => {
     const selection = { binding: agent.activeBinding, mcpServers: ['memory'] };
     try {
       for (const id of ['first', 'second']) {
-        const outcome = await runtime.execute(fixture.child, { ...externalRequest(id), policy: { permissions: ['master'], unattended: false },
-          principal: { subjectId: 'owner', roles: ['master'] }, ports: { approval: { requestApproval: async () => true } } }, selection);
+        const outcome = await runtime.execute(fixture.child, { ...externalRequest(id), policy: { permissions: ['owner'], unattended: false },
+          principal: { subjectId: 'owner', roles: ['owner'] }, ports: { approval: { requestApproval: async () => true } } }, selection);
         expect(outcome.status, JSON.stringify(outcome)).toBe('completed');
       }
       expect(requests).toHaveLength(5);
@@ -671,7 +671,7 @@ describe('Agent CapabilityIngress', () => {
     });
 
     await runtime.execute(fixture.child, request(['user'], 'member'), selection());
-    await runtime.execute(fixture.child, request(['user', 'master'], 'owner'), selection());
+    await runtime.execute(fixture.child, request(['user', 'owner'], 'owner'), selection());
 
     expect(seen[0]?.policy.shell).toBeUndefined();
     expect(seen[0]?.policy.filesystem?.access).toBe('read-only');

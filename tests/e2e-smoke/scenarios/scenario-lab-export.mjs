@@ -45,7 +45,7 @@ function authoredScenario(overrides) {
       parent: { kind: 'channel', id: 'ops-workspace' },
       threadId: 'ops-thread',
     },
-    sender: { id: 'operator', name: '值班', roles: ['admin'] },
+    sender: { id: 'operator', name: '值班', chatRole: 'admin' },
     input: 'status',
     preview: [{ type: 'text', data: { text: '状态：ready' } }],
     profile: 'text',

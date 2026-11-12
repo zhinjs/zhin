@@ -14,7 +14,7 @@ export default defineAgentTool<{ group_id: number; user_id: number; enabled: boo
   scopes: ['group'],
   requiresCapabilities: ['actions.setAdmin'],
   currentConversationBotRoles: ['owner'],
-  permissions: ['role(master,admin,trusted,owner)'],
+  permissions: ['trusted'],
   requiresApproval: 'human',
   async execute({ group_id, user_id, enabled }, context) {
     const client = context.$client;

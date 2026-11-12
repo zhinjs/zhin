@@ -552,7 +552,7 @@ export {
   type SelfChangeTrialResult,
 } from './self-change/trial.js';
 export {
-  SELF_CHANGE_MASTER_ROLE,
+  SELF_CHANGE_OWNER_ROLE,
   SelfChangeDraftForbiddenError,
   canDraftSelfChange,
   type SelfChangeDrafter,
@@ -907,7 +907,7 @@ export {
 export type {
   McpConnection,
   ResourceScope, ResourceEntry,
-  Tool, Message, SenderRole, ToolScope, FileRole,
+  Tool, Message, PrincipalRole, ToolScope, FileRole,
   ToolParametersSchema, PropertySchema, ToolJsonSchema,
   Skill, SkillMetadata,
   SubAgentDef, AgentPreset,

@@ -6,7 +6,7 @@ import { createTurnIngress, type TurnPolicyContext } from '../../src/turn/turn-i
 import type { ToolCapability } from '../../src/plugin-runtime/capability-ingress.js';
 
 const POLICY: TurnPolicyContext = {
-  permissions: ['master'],
+  permissions: ['owner'],
   unattended: false,
   shell: { security: 'allowlist', execPreset: 'development', approvalMode: 'auto', isolation: 'required' },
   filesystem: { workspaceRoot: '/ws', workingDirectory: '/ws', access: 'workspace-write' },
@@ -24,7 +24,7 @@ function turn(tools: string[]) {
     intent: { kind: 'new' },
     identity: { rootId: 'root', generation: 1, traceId: 't', turnId: 'turn' },
     origin: { kind: 'im', platform: 'icqq', endpoint: 'bot', scope: 'group', sceneId: 'g1', messageId: 'native-3' },
-    principal: { subjectId: 'owner', roles: ['master'] },
+    principal: { subjectId: 'owner', roles: ['owner'] },
     input: { text: 'hi' },
     session: { key: 'im:icqq:bot:group:g1' },
     policy: POLICY,

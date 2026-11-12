@@ -5,6 +5,7 @@ import { describe, expect, it, vi, afterEach } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { createHttpHost } from '@zhin.js/host-http/node';
 import type { OutboundMessageService } from '@zhin.js/core/runtime';
+import { platformStandingOf } from '@zhin.js/core';
 import { LarkEndpoint } from '../src/endpoint.js';
 import {
   formatInboundContent,
@@ -440,7 +441,7 @@ describe('lark plugin runtime adapter', () => {
     await endpoint.stop();
   });
 
-  it('projects group owner / admin as canonical roles satisfying role(owner,admin,master)', async () => {
+  it('projects group owner / admin as platform standing satisfying platform:admin', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
@@ -473,7 +474,8 @@ describe('lark plugin runtime adapter', () => {
       endpoint.endpoint.admit(textMessage({ message_id: `om_${index}`, sender: { sender_id: { open_id: openId } } }));
       await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(index + 1));
       const inbound = receive.mock.calls[index]![0] as unknown;
-      results[openId] = checkBuiltinPermit('role(owner,admin,master)', toPermissionSubject(inbound));
+      const sender = (inbound as { sender?: unknown }).sender;
+      results[openId] = checkBuiltinPermit('platform:admin', toPermissionSubject({ ...(inbound as object), sender: { ...(sender as object), platform: platformStandingOf(sender) } }));
     }
     expect(results).toEqual({ ou_owner: true, ou_admin: true, ou_member: false });
     expect(receive.mock.calls[0]![0]).toEqual(expect.objectContaining({ sender: expect.objectContaining({ roles: ['owner'] }) }));

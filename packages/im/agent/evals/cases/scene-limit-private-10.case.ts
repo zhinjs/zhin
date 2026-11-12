@@ -5,7 +5,7 @@ export default defineEvalCase({
   description: 'An interactive private task completes all 16 lookups beyond its old scene cap.',
   source: 'ADR 0042 §7: scene-based iteration limits (group 6, private 10, master private 15)',
   tags: ['long-task', 'tool-use'],
-  inbound: { text: '把 r0 到 r15 都查一遍', sender: { id: 'carol', roles: ['user'] } },
+  inbound: { text: '把 r0 到 r15 都查一遍', sender: { id: 'carol' } },
   // The old scene and configured caps must not terminate an admitted interactive task.
   agentConfig: { maxIterations: 15, toolBudget: { extendBy: 0, autoContinue: 'off', progressMaxUpdates: 0 } },
   tools: [{ name: 'lookup', description: 'Look up one record.', parameters: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] }, result: (args: Record<string, unknown>) => `record ${String(args.id)}` }],
