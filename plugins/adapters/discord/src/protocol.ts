@@ -420,6 +420,7 @@ export function formatOutboundBody(payload: unknown): DiscordOutboundBody {
         embeds.push({ title: String(data.title ?? ''), url: String(data.url ?? ''), description: String(data.description ?? data.content ?? ''), ...(data.image ? { image: { url: String(data.image) } } : {}) });
         break;
       case 'embed':
+      case 'discord:embed':
         embeds.push({ ...data });
         break;
       case 'keyboard': {

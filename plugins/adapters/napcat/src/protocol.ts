@@ -389,6 +389,9 @@ function canonicalToOneBotSegment(segment: NapCatWireSegment): MessageSegment | 
       return oneBotMediaSegment(segment.type, data);
     case 'audio':
       return oneBotMediaSegment('record', data);
+    case 'napcat:node':
+      // Agent-authored merged-forward node (napcat_send_forward_msg); NapCat sends `node` arrays as a forward.
+      return { type: 'node', data };
     default:
       return { type: segment.type, data };
   }

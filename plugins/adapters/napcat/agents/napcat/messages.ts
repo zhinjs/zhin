@@ -17,6 +17,14 @@ export const messages = createMessages({
     "zh-CN": "该消息不在当前会话中",
     "en": "The message is not in the current conversation"
   },
+  "hostMediaRefused": {
+    "zh-CN": "{p0} 只能是 http(s) 链接、base64:// 数据或平台文件标识，不能是本机路径",
+    "en": "{p0} must be an http(s) URL, base64:// data or a platform file token, not a local path"
+  },
+  "forwardTooDeep": {
+    "zh-CN": "合并转发嵌套过深",
+    "en": "The merged forward is nested too deeply"
+  },
   "groupRequired": {
     "zh-CN": "此操作仅支持当前 QQ 群",
     "en": "This operation requires the current QQ group"

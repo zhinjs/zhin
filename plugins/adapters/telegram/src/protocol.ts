@@ -258,6 +258,17 @@ export type TelegramOutboundAction =
       readonly longitude: number;
       readonly reply_parameters?: { readonly message_id: number };
     };
+  }
+  | {
+    readonly method: 'sendPoll';
+    readonly params: {
+      readonly chat_id: number | string;
+      readonly question: string;
+      readonly options: readonly string[];
+      readonly is_anonymous: boolean;
+      readonly allows_multiple_answers: boolean;
+      readonly reply_parameters?: { readonly message_id: number };
+    };
   };
 
 export function resolveTelegramConfig(config: TelegramEndpointConfig): ResolvedTelegramConfig {
@@ -740,6 +751,31 @@ function buildOutboundActions(
             params: { chat_id: chatId, sticker, ...replyParams() },
           });
         }
+        break;
+      }
+      case 'telegram:sticker': {
+        // Agent-authored sticker: an existing Telegram file_id or an http(s) URL only, never a host path.
+        const sticker = typeof data.sticker === 'string' ? data.sticker.trim() : '';
+        if (!sticker || /^(?:file:|base64:|attach:)/i.test(sticker) || (/[\\/]/.test(sticker) && !/^https?:\/\//i.test(sticker))) {
+          throw new EndpointDeliveryError('invalid_payload', 'telegram:sticker requires a Telegram file_id or an http(s) URL', 'not_sent');
+        }
+        flushText();
+        actions.push({ method: 'sendSticker', params: { chat_id: chatId, sticker, ...replyParams() } });
+        break;
+      }
+      case 'telegram:poll': {
+        const question = typeof data.question === 'string' ? data.question.trim() : '';
+        const options = Array.isArray(data.options) ? data.options.map(String).filter(Boolean) : [];
+        if (!question || options.length < 2) {
+          throw new EndpointDeliveryError('invalid_payload', 'telegram:poll requires a question and at least two options', 'not_sent');
+        }
+        flushText();
+        actions.push({ method: 'sendPoll', params: {
+          chat_id: chatId, question, options,
+          is_anonymous: data.is_anonymous !== false,
+          allows_multiple_answers: data.allows_multiple_answers === true,
+          ...replyParams(),
+        } });
         break;
       }
       case 'location': {

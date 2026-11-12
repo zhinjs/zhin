@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { canAccessTool } from '@zhin.js/core';
+import { assertCanonicalSegments, canAccessTool, toCanonicalSegments } from '@zhin.js/core';
 import { PermissionHost, checkBuiltinPermit, toPermissionSubject } from '@zhin.js/permission';
 import { platformPermit, telegramChatMemberStanding } from '../src/platform-permit.js';
+import { formatOutboundActions } from '../src/protocol.js';
 import * as telegram from '../src/index.js';
 import setPermissions from '../agents/telegram/skills/telegram-group-permissions/tools/set_permissions/index.js';
 import setDescription from '../agents/telegram/skills/telegram-chat-admin/tools/set_description/index.js';
@@ -23,9 +24,9 @@ function mockMsg(platformPermissions: string[]) {
   } as any;
 }
 
-function toolContext(client: Record<string, unknown>, kind: 'group' | 'private' = 'group') {
+function toolContext(client: Record<string, unknown>, kind: 'group' | 'private' = 'group', send = vi.fn(async (_request: unknown) => ({ status: 'sent', message: { id: '7' } }))) {
   const conversation = { endpoint: { adapter: 'telegram', id: 'bot1' }, kind, id: kind === 'private' ? '42' : '-1001' };
-  return { locale: 'en', $client: client, signal: new AbortController().signal,
+  return { locale: 'en', $client: client, signal: new AbortController().signal, owner: { id: 'telegram-plugin' }, use: () => ({ send }),
     origin: { kind: 'im', platform: 'telegram', conversation } } as never;
 }
 
@@ -120,28 +121,56 @@ describe('telegram chat / message tools without a cross-chat permit', () => {
   it('act on the current chat even when the model names another one', async () => {
     const client = {
       getChatAdmins: vi.fn(async () => []), getChatMemberCount: vi.fn(async () => 3),
-      setMessageReaction: vi.fn(async () => true), sendPoll: vi.fn(async () => ({ message_id: 1 })),
-      sendStickerMessage: vi.fn(async () => ({ message_id: 2 })),
+      setMessageReaction: vi.fn(async () => true), sendPoll: vi.fn(), sendStickerMessage: vi.fn(),
     };
+    const send = vi.fn(async (_request: unknown) => ({ status: 'sent', message: { id: '7' } }));
     await listAdmins.execute({ chat_id: '-2002' } as never, toolContext(client));
     expect(client.getChatAdmins).toHaveBeenCalledWith(-1001);
     await memberCount.execute({ chat_id: '-2002' } as never, toolContext(client));
     expect(client.getChatMemberCount).toHaveBeenCalledWith(-1001);
     await react.execute({ chat_id: '-2002', message_id: '5', reaction: '👍' } as never, toolContext(client));
     expect(client.setMessageReaction).toHaveBeenCalledWith(-1001, 5, '👍');
-    await sendPoll.execute({ chat_id: '-2002', question: 'q', options: '["a","b"]' } as never, toolContext(client));
-    expect(client.sendPoll).toHaveBeenCalledWith(expect.objectContaining({ chatId: -1001 }));
-    await sendSticker.execute({ chat_id: '-2002', sticker: 's' } as never, toolContext(client));
-    expect(client.sendStickerMessage).toHaveBeenCalledWith(-1001, 's');
+    await sendPoll.execute({ chat_id: '-2002', question: 'q', options: '["a","b"]' } as never, toolContext(client, 'group', send));
+    await sendSticker.execute({ chat_id: '-2002', sticker: 's' } as never, toolContext(client, 'group', send));
+    // Polls and stickers go through the IM outbound chain to the current chat, never the client directly.
+    expect(client.sendPoll).not.toHaveBeenCalled();
+    expect(client.sendStickerMessage).not.toHaveBeenCalled();
+    expect(send.mock.calls.map(([request]) => request)).toEqual([
+      expect.objectContaining({ conversation: expect.objectContaining({ id: '-1001' }), content: { type: 'telegram:poll', data: { question: 'q', options: ['a', 'b'], is_anonymous: true, allows_multiple_answers: false } } }),
+      expect.objectContaining({ conversation: expect.objectContaining({ id: '-1001' }), content: { type: 'telegram:sticker', data: { sticker: 's' } } }),
+    ]);
   });
 
   it('message tools also work in the current private chat; directory tools need a group', async () => {
-    const client = { setMessageReaction: vi.fn(async () => true), sendStickerMessage: vi.fn(async () => ({ message_id: 2 })), getChatAdmins: vi.fn() };
+    const client = { setMessageReaction: vi.fn(async () => true), getChatAdmins: vi.fn() };
+    const send = vi.fn(async (_request: unknown) => ({ status: 'sent', message: { id: '7' } }));
     await react.execute({ message_id: '5', reaction: '👍' }, toolContext(client, 'private'));
     expect(client.setMessageReaction).toHaveBeenCalledWith(42, 5, '👍');
-    await sendSticker.execute({ sticker: 's' }, toolContext(client, 'private'));
-    expect(client.sendStickerMessage).toHaveBeenCalledWith(42, 's');
+    await sendSticker.execute({ sticker: 's' }, toolContext(client, 'private', send));
+    expect(send).toHaveBeenCalledWith(expect.objectContaining({ conversation: expect.objectContaining({ kind: 'private', id: '42' }) }));
     await expect(listAdmins.execute({}, toolContext(client, 'private'))).rejects.toThrow('Telegram group');
     expect(client.getChatAdmins).not.toHaveBeenCalled();
+  });
+});
+
+describe('telegram namespaced outbound segments', () => {
+  it('survive core normalization and encode to sendSticker / sendPoll', () => {
+    const segments = toCanonicalSegments([
+      { type: 'telegram:sticker', data: { sticker: 'CAACAgIAAxk' } },
+      { type: 'telegram:poll', data: { question: 'q', options: ['a', 'b'], is_anonymous: false, allows_multiple_answers: true } },
+    ]);
+    expect(() => assertCanonicalSegments(segments)).not.toThrow();
+    expect(formatOutboundActions('-1001', segments)).toEqual([
+      { method: 'sendSticker', params: { chat_id: -1001, sticker: 'CAACAgIAAxk' } },
+      { method: 'sendPoll', params: { chat_id: -1001, question: 'q', options: ['a', 'b'], is_anonymous: false, allows_multiple_answers: true } },
+    ]);
+  });
+
+  it('refuse host paths for stickers and polls without options', () => {
+    for (const sticker of ['/etc/passwd', 'file:///etc/passwd', '..\\secret', 'base64://AAAA']) {
+      expect(() => formatOutboundActions('1', [{ type: 'telegram:sticker', data: { sticker } }])).toThrow('file_id');
+    }
+    expect(formatOutboundActions('1', [{ type: 'telegram:sticker', data: { sticker: 'https://example.com/s.webp' } }])[0]!.method).toBe('sendSticker');
+    expect(() => formatOutboundActions('1', [{ type: 'telegram:poll', data: { question: 'q', options: ['a'] } }])).toThrow('two options');
   });
 });
