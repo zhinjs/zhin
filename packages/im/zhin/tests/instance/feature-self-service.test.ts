@@ -7,7 +7,7 @@ import type { ConsoleConfigPatchRequest, ConsoleConfigPatchResult } from '@zhin.
 import type { ConsoleAuditEntry } from '@zhin.js/host-http';
 import { FeatureConversationOverrideStore } from '../../src/instance/console/feature-conversation-store.js';
 import {
-  ChatRoleService, ChatRoleStore, createMappingChatRoleSource, type InstanceChatRoleService,
+  ChatRoleService, ChatRoleStore, type InstanceChatRoleService,
 } from '../../src/instance/chat-roles.js';
 import {
   DEFAULT_FEATURE_SELF_SERVICE, executeFeatureChat, executeRoleChat, featureChatActor, featureChatTokens,
@@ -51,8 +51,7 @@ const on: FeatureSelfServiceConfig = { ...DEFAULT_FEATURE_SELF_SERVICE, enabled:
 
 let current = snapshot();
 
-/** `qqRoles`: the `roles` block of the qq adapter configuration (ADR 0056 §4 mapping rules). */
-async function harness(config: FeatureSelfServiceConfig = on, owners: Record<string, string> = { 'qq/bot-1': 'boss' }, globalOwners: string[] = [], qqRoles?: unknown) {
+async function harness(config: FeatureSelfServiceConfig = on, owners: Record<string, string> = { 'qq/bot-1': 'boss' }, globalOwners: string[] = []) {
   const state = { document: structuredClone(base), revision: 1 };
   const patches: ConsoleConfigPatchRequest[] = [];
   const configuration = {
@@ -65,10 +64,10 @@ async function harness(config: FeatureSelfServiceConfig = on, owners: Record<str
     },
   };
   const conversations = new FeatureConversationOverrideStore();
-  const roles: InstanceChatRoleService = new ChatRoleService({ store: new ChatRoleStore(), sources: [createMappingChatRoleSource()] });
+  const roles: InstanceChatRoleService = new ChatRoleService({ store: new ChatRoleStore() });
   for (const [key, userId] of Object.entries(owners)) await roles.store.grant({ level: 'endpoint', key, adapter: key.split('/')[0]!, userId, role: 'owner' });
   for (const userId of globalOwners) await roles.store.grant({ level: 'global', key: '', adapter: 'qq', userId, role: 'owner' });
-  const snap = snapshot(qqRoles === undefined ? {} : { roles: qqRoles });
+  const snap = snapshot();
   current = snap;
   const audits: ConsoleAuditEntry[] = [];
   const setGlobalEnabled = vi.fn(async () => undefined);
@@ -89,11 +88,16 @@ function actor(options: { user?: string; key?: string; standing?: 'owner' | 'adm
   return {
     identity: { adapter: alias, userId: options.user ?? 'u1' }, conversationKey: key, endpointKey: `${alias}/${endpointId}`,
     kind: key.includes('/private:') ? 'private' : 'group',
-    context: { conversationKey: key, snapshot: current, ...(options.standing ? { platform: { standing: options.standing } } : {}) },
+    context: { conversationKey: key, ...(options.standing ? { platform: { standing: options.standing } } : {}) },
   };
 }
 
 const DENIED = '你在该范围没有 admin 角色。';
+
+/** zhin roles come only from grants: make `user` a conversation admin (ADR 0056 §4, revised 2026-11-12). */
+async function promote(roles: InstanceChatRoleService, user = 'u1', key = 'qq/bot-1/group:100') {
+  await roles.store.grant({ level: 'conversation', key, adapter: key.split('/')[0]!, userId: user, role: 'admin' });
+}
 
 describe('in-chat feature self-service (ADR 0055 §7, roles per ADR 0056)', () => {
   it('is off by default and reads features.selfService', async () => {
@@ -105,23 +109,22 @@ describe('in-chat feature self-service (ADR 0055 §7, roles per ADR 0056)', () =
     expect(await role(actor({ standing: 'owner' }), '列表')).toContain('未开启');
   });
 
-  it('refuses senders without admin at the scope (mapping rules can tighten or turn off the default)', async () => {
+  it('refuses senders without zhin admin at the scope; platform group owners / admins get nothing', async () => {
     const { run, conversations } = await harness();
     expect(await run(actor({ standing: 'member' }), '关闭 rss')).toBe(DENIED);
+    // Platform standing is a separate dimension and never becomes a zhin role.
+    expect(await run(actor({ standing: 'admin' }), '关闭 rss')).toBe(DENIED);
+    expect(await run(actor({ standing: 'owner' }), '关闭 rss')).toBe(DENIED);
     expect(conversations.list()).toEqual([]);
-    const ownersOnly = await harness(on, {}, [], { mappings: [{ match: { standing: ['admin', 'owner'] }, grant: 'none' }, { match: { standing: ['owner'] }, grant: 'admin' }] });
-    expect(await ownersOnly.run(actor({ standing: 'admin' }), '关闭 rss')).toBe(DENIED);
-    expect(await ownersOnly.run(actor({ standing: 'owner' }), '关闭 rss')).toBe('已保存（会话层），立即生效。');
-    const off = await harness(on, {}, [], { inherit: false });
-    expect(await off.run(actor({ standing: 'owner' }), '关闭 rss')).toBe(DENIED);
     // trusted is not enough.
     const trusted = await harness();
     await trusted.roles.store.grant({ level: 'endpoint', key: 'qq/bot-1', adapter: 'qq', userId: 't', role: 'trusted' });
     expect(await trusted.run(actor({ user: 't' }), '关闭 rss')).toBe(DENIED);
   });
 
-  it('lets a platform group admin manage only the current conversation, audited', async () => {
-    const { run, conversations, audits } = await harness();
+  it('lets a conversation admin manage only the current conversation, audited', async () => {
+    const { run, conversations, audits, roles } = await harness();
+    await promote(roles);
     const admin = actor({ standing: 'admin' });
     expect(await run(admin, '关闭 rss')).toBe('已保存（会话层），立即生效。');
     expect(conversations.get('rss', 'qq/bot-1/group:100')).toMatchObject({ enabled: false, updatedBy: 'chat:qq:u1' });
@@ -136,7 +139,8 @@ describe('in-chat feature self-service (ADR 0055 §7, roles per ADR 0056)', () =
   });
 
   it('limits field writes to selfServiceFields and validates values', async () => {
-    const { run, conversations } = await harness();
+    const { run, conversations, roles } = await harness();
+    await promote(roles);
     const admin = actor({ standing: 'owner' });
     expect(await run(admin, '设置 repeater threshold 5')).toBe('已保存（会话层），立即生效。');
     expect(conversations.get('repeater', 'qq/bot-1/group:100')?.patch).toEqual({ threshold: 5 });
@@ -148,7 +152,8 @@ describe('in-chat feature self-service (ADR 0055 §7, roles per ADR 0056)', () =
   });
 
   it('refuses to enable or change a plugin locked above and names the level', async () => {
-    const { run, conversations } = await harness();
+    const { run, conversations, roles } = await harness();
+    await promote(roles, 'u1', 'qq/bot-2/group:5');
     const admin = actor({ key: 'qq/bot-2/group:5', standing: 'owner' });
     expect(await run(admin, '开启 repeater')).toBe('repeater 已在账号层停用，下级不能开启或修改开关。');
     expect(await run(admin, '关闭 repeater')).toBe('repeater 已在账号层停用，下级不能开启或修改开关。');
@@ -194,7 +199,8 @@ describe('in-chat feature self-service (ADR 0055 §7, roles per ADR 0056)', () =
   });
 
   it('requires an explicit confirmation for global switches and restarts', async () => {
-    const { run, setGlobalEnabled, audits } = await harness(on, {}, ['root']);
+    const { run, setGlobalEnabled, audits, roles } = await harness(on, {}, ['root']);
+    await promote(roles, 'other');
     const admin = actor({ user: 'root' });
     expect(await run(admin, '关闭 rss 全局')).toBe('全局停用 rss 会重启实例。确认请在 2 分钟内发送：功能 确认 123456');
     expect(setGlobalEnabled).not.toHaveBeenCalled();
@@ -210,6 +216,7 @@ describe('in-chat feature self-service (ADR 0055 §7, roles per ADR 0056)', () =
 describe('in-chat role management (ADR 0056 §3)', () => {
   it('grants at or below the grantor role; owner only from an owner above', async () => {
     const { role, roles, audits } = await harness();
+    await promote(roles);
     const groupAdmin = actor({ standing: 'owner' });
     expect(await role(groupAdmin, '授予 dave trusted')).toBe('已保存（会话层），立即生效。');
     expect(await role(groupAdmin, '授予 dave admin')).toBe('已保存（会话层），立即生效。');
@@ -228,14 +235,14 @@ describe('in-chat role management (ADR 0056 §3)', () => {
     expect(tokens).toEqual(['撤销', { user: 'dave' }, 'admin']);
     expect(await executeRoleChat({ tokens, actor: actor({ user: 'dave' }), locale: 'zh-CN' }, (await harness()).deps)).toBe('你在该范围的角色不足以授予或撤销 admin。');
     expect(await executeRoleChat({ tokens, actor: groupAdmin, locale: 'zh-CN' }, { ...(await harness()).deps, roles })).toBe('已保存（会话层），立即生效。');
-    expect(roles.store.list().map(entry => entry.userId)).toEqual(['boss', 'frank', 'gina']);
+    expect(roles.store.list().map(entry => entry.userId)).toEqual(['boss', 'u1', 'frank', 'gina']);
     // Revoking an owner needs an owner above.
     expect(await role(groupAdmin, '撤销 frank owner')).toBe('你在该范围的角色不足以授予或撤销 owner。');
     expect(await role(owner, '撤销 frank owner')).toBe('已保存（会话层），立即生效。');
     const listed = await role(groupAdmin, '列表');
     expect(listed).toContain('admin @ 会话 qq/bot-1/group:100：qq:gina（grant）');
     expect(listed).toContain('owner @ 账号 qq/bot-1：qq:boss（grant）');
-    expect(listed).toContain('standing=admin|owner → admin（default）');
+    expect(listed).not.toContain('standing=');
     expect(listed).toContain('你的角色：admin@会话 qq/bot-1/group:100');
   });
 
@@ -243,7 +250,7 @@ describe('in-chat role management (ADR 0056 §3)', () => {
     const resolved = featureChatActor(snapshot(), { conversation: { kind: 'group', id: '100', endpoint: { id: 'qq:bot-1', adapter: 'qq' } },
       sender: { id: 'u1', platform: { standing: 'owner' } } });
     expect(resolved).toEqual({ identity: { adapter: 'qq', userId: 'u1' }, conversationKey: 'qq/bot-1/group:100', endpointKey: 'qq/bot-1',
-      kind: 'group', context: { conversationKey: 'qq/bot-1/group:100', snapshot: expect.anything(), platform: { standing: 'owner' } } });
+      kind: 'group', context: { conversationKey: 'qq/bot-1/group:100', platform: { standing: 'owner' } } });
     expect(featureChatActor(snapshot(), { conversation: { endpoint: { id: 'qq:bot-1' } }, sender: { id: 'u1' } })).toBeUndefined();
   });
 });

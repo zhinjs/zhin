@@ -12,7 +12,7 @@ export default defineAgentTool<{ group_id: number; user_id: number; reason: stri
   // ADR 0044: offered only while the Bot can actually do this here (e.g. it is a group admin).
   requiresCapabilities: ['actions.kick'],
   scopes:['group'],
-  permissions: ['trusted'],
+  permissions: ['platform:admin', 'bot:admin'],
   requiresApproval: 'human',
   async execute({ group_id, user_id }, context) {
     const client = context.$client;

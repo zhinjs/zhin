@@ -97,7 +97,6 @@ rss:
 | `feature.set-enabled` | `feature.toggle` | 全局层写 `disable_plugins`；适配器 / 账号层写 `overrides.*.enabled`；会话层写数据库；被锁定时 409 |
 | `feature.conversations` | `feature.view` | `{ plugin?, adapter?, endpoint?, query?, cursor?, limit? }`：有覆盖的会话（分页），以及实例近期见过的会话（`hasOverrides: false`） |
 | `chat-roles.list` / `grant` / `revoke` | `iam.manage` | 聊天角色（见下） |
-| `chat-roles.mappings` / `set-mappings` | `iam.manage` | 平台身份 → 聊天角色的映射规则：读取适配器 / 账号 / 会话层规则与合并结果；只能写会话层 |
 
 `feature.configure`、`feature.toggle` 与 `iam.manage`（仅 `chat-roles.*`）按作用域检查：绑定到适配器 `qq` 的运营只能改 `qq` 及其账号、会话上的覆盖与角色，不能改全局或别的适配器；会话键按它所属的账号计。配置文件层的写入带配置修订号，会话层带该条覆盖的修订号，并发修改会被拒绝而不是互相覆盖。
 
@@ -111,7 +110,7 @@ features:
     enabled: true          # 注册「功能」「角色」聊天命令
 ```
 
-群主 / 管理员是否是本群的 `admin` 由映射规则决定（默认是，见[聊天角色](../concepts/chat-roles.md#mappings)）。
+功能开关是 zhin 的功能：平台群主 / 管理员不会自动成为本群的 `admin`，需要被授予（见[聊天角色](../concepts/chat-roles.md)）。
 
 | 命令 | 说明 |
 | --- | --- |
@@ -132,11 +131,12 @@ features:
 
 | 来源 | 说明 |
 | --- | --- |
-| 授予（`chat_roles` 表，`source: 'grant'`） | Console「角色」区块或聊天命令 `角色 授予\|撤销 <用户> <角色> [层级]` / `role grant\|revoke …` |
-| 映射（`source: 'mapping'`） | 平台身份按映射规则得到的当前会话角色（每条消息实时计算、不落库；默认规则：群主 / 管理员 → 会话 `admin`）；列表里的 `detail` 指出来自哪条规则 |
+| 授予（`chat_roles` 表，`source: 'grant'`） | Console「角色」区块或聊天命令 `角色 授予\|撤销 <用户> <角色> [层级]` / `role grant\|revoke …`；这是 zhin 角色的唯一来源 |
+
+平台身份（发送者的群主 / 管理员 / 身份组 / 权限，以及机器人自身在群里的身份）不换算为 zhin 角色，只在 permit 的 `platform:*` / `bot:*` 条件中使用。
 
 配置文件不再保存人员名单：旧的账号 `master` / `trusted` 与 `ai.trigger.masters` / `trusted` 在首次启动时迁入 `chat_roles`，见[升级到聊天角色](../migrations/chat-roles.md)。
 
-聊天中授予角色时，授予者必须在目标作用范围拥有不低于被授予角色的角色；`owner` 只能由更高层的 `owner` 授予或撤销。`角色 列表` 显示本会话生效的角色、来源与映射规则。
+聊天中授予角色时，授予者必须在目标作用范围拥有不低于被授予角色的角色；`owner` 只能由更高层的 `owner` 授予或撤销。`角色 列表` 显示本会话生效的角色与来源。
 
 插件作者如何声明层级与会话层字段、读取有效配置（`context.configFor` / `context.isEnabledFor`）见 [definePlugin](../authoring/define-plugin.md#layered-config)、[ADR 0050](../adr/0050-layered-feature-config.md) 与 [ADR 0055](../adr/0055-conversation-feature-config.md)。

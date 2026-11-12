@@ -110,6 +110,11 @@ export interface TurnContextState {
     profile?: import('@zhin.js/im-contract').SelfProfileSnapshot;
     profileError?: 'lookup_failed';
     platformRole?: string;
+    /**
+     * ADR 0056 §1: the Bot account's own normalized standing here (`bot:*` permits), from the
+     * Adapter's `scene.selfStanding` lookup or, without one, the member-role fact. Absent = unknown.
+     */
+    platform?: import('@zhin.js/im-contract').PlatformStanding;
     /** Stable lookup outcome code; role remains unknown when the platform read fails. */
     platformRoleError?: string;
     /** Missing/null is unknown; 0 means confirmed unmuted; positive values are expiry timestamps. */
@@ -480,6 +485,14 @@ function principalChatRole(roles: readonly string[]): 'owner' | 'admin' | 'trust
   return roles.includes('owner') ? 'owner' : roles.includes('admin') ? 'admin' : roles.includes('trusted') ? 'trusted' : undefined;
 }
 
+/** The Bot's standing fact: the self-standing lookup, else the member-role fact (`owner` / `admin` / `member`). */
+function botStandingOf(bot: NonNullable<TurnContextState['bot']> | undefined): import('@zhin.js/im-contract').PlatformStanding | undefined {
+  if (!bot) return undefined;
+  if (bot.platform) return bot.platform;
+  const role = bot.platformRole;
+  return role === 'owner' || role === 'admin' || role === 'member' ? { standing: role } : undefined;
+}
+
 export function turnPermissionSubject(turn: TurnAccessContext): PermissionSubject {
   const im = turn.origin.kind === 'im' ? turn.origin : undefined;
   return Object.freeze({
@@ -491,6 +504,8 @@ export function turnPermissionSubject(turn: TurnAccessContext): PermissionSubjec
       ...(principalChatRole(turn.principal.roles) ? { chatRole: principalChatRole(turn.principal.roles) } : {}),
       ...(turn.principal.platform ? { platform: turn.principal.platform } : {}),
     }),
+    // ADR 0056 §5 third dimension: the receiving Bot account's own standing in this conversation.
+    ...(im && botStandingOf(turn.input?.contextState?.bot) ? { bot: botStandingOf(turn.input?.contextState?.bot)! } : {}),
   });
 }
 

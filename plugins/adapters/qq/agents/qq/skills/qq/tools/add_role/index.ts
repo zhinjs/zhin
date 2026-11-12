@@ -13,7 +13,7 @@ export default defineAgentTool<{ guild_id: string; channel_id: string; user_id: 
   adapter: 'qq',
   scopes: ["channel"],
   tags: ['qq'],
-  permissions: ['platform-permission:manage_roles'],
+  permissions: ['platform:admin', 'bot:admin'],
   async execute({ guild_id, channel_id, user_id, role_id  }: { guild_id: string; channel_id: string; user_id: string; role_id: string }, context) {
     const client = context.$client;
     await client.memberService.addMemberRole(guild_id, channel_id, user_id, role_id);

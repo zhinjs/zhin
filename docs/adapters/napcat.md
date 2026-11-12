@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/napcat/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/napcat/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=9f5e37399efdb27d -->
+<!-- sync-adapter-docs:sha256=ed14c625e24b7d72 -->
 
 # @zhin.js/adapter-napcat
 
@@ -95,7 +95,7 @@ endpoint 配置，不会从环境变量推断 endpoint id。
 
 - **notice / request / meta 侧事件**：经统一 `endpointSpec.events` 归一后分发到 `handlers`（`notice.receive` / `request.receive` / `system.receive`），请求带 `$approve` / `$reject`。消息仍走 `outboundMessageToken`。
 - **群管工具暂未迁移**：旧 Adapter 经 `createSceneManagementTools` 注册踢人 / 禁言 / 群名片等成套 agent 工具；迁移后 `agents/napcat/skills/napcat-*/tools/` 仅覆盖 NapCat 扩展 API（含 `set_title`、`get_group_shut_list` 等），没有踢人 / 禁言 / 群名片工具，其余群管能力可通过 `callApi`（如 `set_group_kick`、`set_group_ban`）作为逃生舱调用。
-- **平台权限门禁**：`plugin.ts` setup 通过 generation-owned `permissionHostToken` 调用 `host.registerPlatform('napcat', createSceneRolePlatformChecker())`，`scene_admin` / `scene_owner` 依据入站 `sender.platform.standing`（owner / admin，见下文「成员身份」）判定。
+- **平台权限门禁**：工具 / 命令用内置 permit（ADR 0056 §5）：发言者平台身份 `platform:admin` / `platform:owner` 依据入站 `sender.platform.standing`（owner / admin，见下文「成员身份」）；机器人自身群内身份 `bot:admin` / `bot:owner` 依据 `get_group_member_info`（self）的 `role`（能力画像 `scene.selfStanding`，框架按会话缓存）。群管理类工具同时要求两者。
 
 ## 文档链接
 

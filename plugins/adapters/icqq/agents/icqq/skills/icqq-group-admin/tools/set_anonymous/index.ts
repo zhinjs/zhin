@@ -11,7 +11,7 @@ export default defineAgentTool<{ group_id: number; enable?: boolean }>({
   adapter: 'icqq',
   requiresApproval: 'once',
   scopes:['group'],
-  permissions: ['trusted'],
+  permissions: ['platform:admin', 'bot:admin'],
   async execute({ group_id, enable }, context) {
     const client = context.$client;
     const on = enable ?? true;

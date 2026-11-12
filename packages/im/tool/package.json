@@ -23,6 +23,7 @@
   "dependencies": {
     "@zhin.js/feature-kit": "workspace:*",
     "@zhin.js/im-contract": "workspace:*",
+    "@zhin.js/permission": "workspace:*",
     "@zhin.js/plugin-runtime": "workspace:*"
   },
   "devDependencies": {

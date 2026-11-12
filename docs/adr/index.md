@@ -54,7 +54,7 @@ sidebar: false
 | [ADR 0053](./0053-console-onboarding.md) | Console 引导——create-zhin 只建项目，其余在 Console 完成 | Accepted | `create-zhin`、`@zhin.js/gateway`（`packages/host/gateway/src/onboarding/`）、Console 前端 |
 | [ADR 0054](./0054-management-gateway.md) | 管理网关——CLI 启动网关，网关管理 Zhin 实例 | Accepted | `@zhin.js/gateway`（`packages/host/gateway/src/`）、`zhin.js/instance`（`packages/im/zhin/src/instance/`）、`basic/cli`（`commands/`） |
 | [ADR 0055](./0055-conversation-feature-config.md) | 会话级功能配置——在账号之下按群 / 私聊覆盖，存数据库，可群内自助 | Accepted | `packages/im/plugin-runtime`、`packages/im/zhin/src/instance/console/` |
-| [ADR 0056](./0056-chat-roles.md) | 聊天角色——平台身份归一、zhin 角色分四级、映射规则可分层配置 | Accepted | `packages/im/zhin/src/instance/`（`chat-roles.ts`、`feature-self-service.ts`）、`packages/im/core` |
+| [ADR 0056](./0056-chat-roles.md) | 聊天角色——zhin 角色分四级；发言者平台身份与机器人自身身份是独立维度，三维度过滤能力（2026-11-12 修订） | Accepted | `packages/im/zhin/src/instance/`（`chat-roles.ts`、`feature-self-service.ts`）、`packages/im/core` |
 
 ---
 

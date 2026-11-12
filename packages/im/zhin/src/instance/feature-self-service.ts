@@ -4,8 +4,8 @@
  *
  * Feature commands need the chat role `admin` (or `owner`) at the target scope (ADR 0056 §6):
  * the chosen level's ancestor of the current conversation. Roles are effective downward
- * (global → adapter → endpoint → conversation), from stored grants, configuration and the
- * platform mapping. Every write runs through the `feature.*` RPC handlers with an authorizer that
+ * (global → adapter → endpoint → conversation), from stored grants only: a platform group owner /
+ * admin gets nothing here unless granted a zhin role (ADR 0056 §4, revised 2026-11-12). Every write runs through the `feature.*` RPC handlers with an authorizer that
  * checks those roles, so locks, schema validation and revision checks are the Console's.
  * Replies are the command's return value (normal send chain); writes are audited.
  */
@@ -19,8 +19,8 @@ import {
 import { readFeatureConversationDeclaration, type JsonSchema, type RootResourceInstaller } from '@zhin.js/runtime';
 import { dispatchFeatureConsoleRpc, type FeatureRpcContext, type FeatureRpcReply } from './console/module.js';
 import {
-  chatRoleIncludes, chatRoleMessageContext, chatScopeChain, effectiveChatRoleMappings, isChatIdentity, isChatRole,
-  type ChatIdentity, type ChatRole, type ChatRoleContext, type ChatRoleEntry, type ChatRoleMappingLayer,
+  chatRoleIncludes, chatRoleMessageContext, chatScopeChain, isChatIdentity, isChatRole,
+  type ChatIdentity, type ChatRole, type ChatRoleContext, type ChatRoleEntry,
 } from '@zhin.js/core';
 import type { InstanceChatRoleService } from './chat-roles.js';
 
@@ -46,7 +46,7 @@ export interface FeatureChatActor {
   readonly conversationKey: string;
   readonly endpointKey: string;
   readonly kind: 'group' | 'private' | 'channel';
-  /** Live role context (platform standing) of this message. */
+  /** The sender's platform standing in this message (informational; never a zhin role). */
   readonly context: ChatRoleContext;
 }
 
@@ -124,9 +124,6 @@ const messages = createMessages({
   none: { 'zh-CN': '无', en: 'none' },
   rolesHeader: { 'zh-CN': '本会话生效的聊天角色：', en: 'Chat roles effective in this conversation:' },
   roleLine: { 'zh-CN': '{role} @ {level} {scope}：{user}（{source}）', en: '{role} @ {level} {scope}: {user} ({source})' },
-  roleMapping: { 'zh-CN': '映射规则（按平台身份实时计算，只作用于本会话）：', en: 'Mapping rules (live from the platform, this conversation only):' },
-  mappingLine: { 'zh-CN': '{match} → {grant}（{level}）', en: '{match} → {grant} ({level})' },
-  mappingNone: { 'zh-CN': '（无）', en: '(none)' },
   userMissing: { 'zh-CN': '请 @ 用户或给出用户 id。', en: 'Mention a user or give a user id.' },
   levelConversation: { 'zh-CN': '会话', en: 'conversation' },
   levelEndpoint: { 'zh-CN': '账号', en: 'endpoint' },
@@ -157,8 +154,6 @@ interface PendingGlobal {
 export interface FeatureSelfServiceDeps {
   readonly config: FeatureSelfServiceConfig;
   readonly roles: InstanceChatRoleService;
-  /** Conversation-level mapping rules (listing only). */
-  readonly mappingLayer?: (conversationKey: string) => ChatRoleMappingLayer | undefined;
   /** RPC context without the per-actor parts (authorize / actor / allowedFields). */
   readonly context: Omit<FeatureRpcContext, 'authorize' | 'actor' | 'allowedFields' | 'authScope'>;
   readonly audit?: (entry: ConsoleAuditEntry) => void;
@@ -223,8 +218,8 @@ export async function executeFeatureChat(
   const { locale, actor } = input;
   if (!deps.config.enabled) return messages(locale, 'disabled');
   if (!actor) return messages(locale, 'unknownConversation');
-  const administers = (key: string) => deps.roles.hasRole(actor.identity, key, 'admin', actor.context);
-  if (!deps.roles.entriesFor(actor.identity, actor.conversationKey, actor.context).some(entry => chatRoleIncludes(entry.role, 'admin'))
+  const administers = (key: string) => deps.roles.hasRole(actor.identity, key, 'admin');
+  if (!deps.roles.entriesFor(actor.identity, actor.conversationKey).some(entry => chatRoleIncludes(entry.role, 'admin'))
     && !deps.roles.store.list().some(entry => entry.adapter === actor.identity.adapter && entry.userId === actor.identity.userId && chatRoleIncludes(entry.role, 'admin'))) {
     return messages(locale, 'denied');
   }
@@ -282,7 +277,7 @@ export async function executeFeatureChat(
             : Object.keys(data.values ?? {}).length ? messages(locale, 'overridden') : '';
         lines.push(messages(locale, 'listLine', { plugin: feature.plugin, state: messages(locale, data.enabled ? 'enabledWord' : 'disabledWord'), source }));
       }
-      lines.push(messages(locale, 'yourRoles', { roles: describeEntries(deps.roles.entriesFor(actor.identity, actor.conversationKey, actor.context), locale) }));
+      lines.push(messages(locale, 'yourRoles', { roles: describeEntries(deps.roles.entriesFor(actor.identity, actor.conversationKey), locale) }));
       return lines.join('\n');
     }
     case 'enable':
@@ -385,18 +380,7 @@ export async function executeRoleChat(
       lines.push(messages(locale, 'roleLine', { role: entry.role, level: levelName(locale, entry.level), scope: entry.key || '*',
         user: `${entry.adapter}:${entry.userId}`, source: entry.source }));
     }
-    lines.push(messages(locale, 'yourRoles', { roles: describeEntries(deps.roles.entriesFor(actor.identity, actor.conversationKey, actor.context), locale) }));
-    lines.push(messages(locale, 'roleMapping'));
-    const rules = effectiveChatRoleMappings(actor.conversationKey, actor.context.snapshot, deps.mappingLayer);
-    if (!rules.length) lines.push(messages(locale, 'mappingNone'));
-    for (const rule of rules) {
-      const match = [
-        ...(rule.match.standing ? [`standing=${rule.match.standing.join('|')}`] : []),
-        ...(rule.match.role ? [`role=${rule.match.role.join('|')}`] : []),
-        ...(rule.match.permission ? [`permission=${rule.match.permission.join('|')}`] : []),
-      ].join(', ');
-      lines.push(messages(locale, 'mappingLine', { match, grant: rule.grant, level: rule.level }));
-    }
+    lines.push(messages(locale, 'yourRoles', { roles: describeEntries(deps.roles.entriesFor(actor.identity, actor.conversationKey), locale) }));
     return lines.join('\n');
   }
   const user = input.tokens[1];
@@ -411,14 +395,14 @@ export async function executeRoleChat(
   const target = { adapter: actor.identity.adapter, userId: String(userId) };
   if (!isChatIdentity(target)) return messages(locale, 'userMissing');
   // Grantor needs at least the role at the target scope; owner only from an owner above it.
-  const held = deps.roles.roleAt(actor.identity, scope, actor.context);
+  const held = deps.roles.roleAt(actor.identity, scope);
   const current = deps.roles.store.get(level, scope, target);
   const touched: ChatRole = sub === 'revoke' && current && chatRoleIncludes(current.role, role) ? current.role : role;
   if (!chatRoleIncludes(held, touched)) {
     audit(sub, level, scope, 'denied', { role: touched });
     return messages(locale, 'roleDenied', { role: touched });
   }
-  if (touched === 'owner' && deps.roles.roleAbove(actor.identity, scope, actor.context) !== 'owner') {
+  if (touched === 'owner' && deps.roles.roleAbove(actor.identity, scope) !== 'owner') {
     audit(sub, level, scope, 'denied', { role: touched });
     return messages(locale, 'ownerDenied');
   }
@@ -453,7 +437,7 @@ export function featureChatTokens(command: Pick<CommandContext, 'segments' | 'ar
 
 export interface InstallFeatureSelfServiceOptions extends Omit<FeatureSelfServiceDeps, 'pending'> {
   readonly snapshots: NonNullable<FeatureRpcContext['snapshots']>;
-  /** Called with each resolved actor (e.g. to remember platform admins for listings). */
+  /** Called with each resolved actor. */
   readonly onActor?: (actor: FeatureChatActor) => void;
 }
 

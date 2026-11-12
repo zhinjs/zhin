@@ -64,7 +64,7 @@ describe('canManageConversation', () => {
     }
     expect(canManageConversation({ scene: scene('channel'), sender: { id: 'u', chatRole: 'trusted' } })).toBe(false);
     expect(canManageConversation({ scene: scene('channel'), sender: { id: 'u' } })).toBe(false);
-    // The platform standing alone is not a chat role (the default mapping turns it into one at runtime).
+    // Platform standing is never a zhin role (ADR 0056 §4, revised 2026-11-12).
     expect(canManageConversation({ scene: scene('channel'), sender: { id: 'u', platform: { standing: 'owner' } } })).toBe(false);
     expect(canManageConversation({ scene: scene('group') })).toBe(false);
   });

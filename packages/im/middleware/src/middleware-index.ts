@@ -15,6 +15,7 @@ import type {
   OutboundMiddlewareNext,
 } from './definition.js';
 import { continuationBrand, type MiddlewareContinuation } from './continuation.js';
+import { permissionHostToken, toPermissionSubject, type PermissionHost } from '@zhin.js/permission';
 
 /** @internal Terminal control passed to inbound terminal callbacks to publish dispatch summary before after-dispatch unwinds. */
 export interface InboundTerminalControl {
@@ -44,6 +45,8 @@ export interface MiddlewareDescriptor {
   readonly order: number;
   readonly adapter?: string;
   readonly incremental?: true;
+  /** Inbound permit (ADR 0056 §5); unmet = skipped for that message. */
+  readonly permit?: readonly string[];
 }
 
 interface MiddlewareRecord extends MiddlewareDescriptor {
@@ -69,6 +72,7 @@ export class MiddlewareIndex {
       order: slot.definition.order,
       ...(slot.definition.adapter ? { adapter: slot.definition.adapter } : {}),
       ...(slot.definition.target === 'outbound' && slot.definition.incremental === true ? { incremental: true as const } : {}),
+      ...(slot.definition.target === 'inbound' && slot.definition.permit?.length ? { permit: slot.definition.permit } : {}),
       slot,
     })).sort((left, right) => compareMiddleware(left, right, topology)));
   }
@@ -156,6 +160,7 @@ export class MiddlewareIndex {
       }
       const definition = record.slot.definition;
       if (definition.target !== 'inbound') throw new Error('Invalid inbound Middleware');
+      if (record.permit && !(await permitAllows(record.permit, input, operationSnapshot))) return dispatch(index + 1);
       const authorInput = bindOperationInput(input, record.owner, operationSnapshot);
       const context = {
         ...createCapabilityContext({ snapshot: operationSnapshot, ownerId: record.owner, admission: undefined, signal: readOperationSession(authorInput, record.adapter)?.signal }), input: authorInput,
@@ -215,6 +220,21 @@ export class MiddlewareIndex {
     };
     return dispatch(0);
   }
+}
+
+/**
+ * ADR 0056 §5: the shared evaluator; the Bot's own standing comes from the cache only, so a gate
+ * never adds a platform request to a message. No Permission host = unmet (fail closed).
+ */
+async function permitAllows(permits: readonly string[], input: unknown, snapshot: RuntimeSnapshot): Promise<boolean> {
+  let host: PermissionHost | undefined;
+  try {
+    const value = snapshot.resources.get(snapshot.root)?.get(permissionHostToken.id) as PermissionHost | undefined;
+    host = value && typeof value.checkAll === 'function' ? value : undefined;
+  } catch { host = undefined; }
+  if (!host) return false;
+  try { return await host.checkAll(permits, toPermissionSubject(input), { source: input, cachedOnly: true }); }
+  catch { return false; }
 }
 
 /** @internal Runtime projection guard. */

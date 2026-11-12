@@ -10,7 +10,7 @@ export default defineAgentTool<{ chat_id: string }>({
   adapter: 'telegram',
   scopes: ["group","channel"],
   tags: ['telegram'],
-  permissions: ['platform-permission:chat_administrator'],
+  permissions: ['platform:admin', 'bot-permission:invite_users'],
   async execute({ chat_id  }: { chat_id: string }, context) {
     const endpoint = context.$client;
     const link = await endpoint.createInviteLink(Number(chat_id));

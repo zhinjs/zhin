@@ -13,8 +13,7 @@ export default defineAgentTool<{ group_id: number; user_id: number; enabled: boo
   adapter: 'icqq',
   scopes: ['group'],
   requiresCapabilities: ['actions.setAdmin'],
-  currentConversationBotRoles: ['owner'],
-  permissions: ['trusted'],
+  permissions: ['platform:owner', 'bot:owner'],
   requiresApproval: 'human',
   async execute({ group_id, user_id, enabled }, context) {
     const client = context.$client;

@@ -1,23 +1,24 @@
 /**
- * ADR 0056: chat roles — normalized platform standing, zhin roles at four levels and the
- * platform → zhin mapping rules.
+ * ADR 0056: chat roles — zhin roles at four levels, next to (never derived from) the normalized
+ * platform standing.
  *
  * - zhin roles: `owner` ⊃ `admin` ⊃ `trusted`, held by a platform identity `(adapter alias, userId)`
  *   at one scope (`''`, `<alias>`, `<alias>/<endpointId>` or a conversation key) and effective at
- *   that scope and every scope under it.
- * - Resolution lives here; storage (the `chat_roles` table, conversation mapping rules) is the
- *   instance's and is plugged in through {@link ChatRoleGrantStore} / {@link ChatRoleSource}.
+ *   that scope and every scope under it. They come only from stored grants (the instance's
+ *   `chat_roles` table, including grants migrated from the old configuration lists).
+ * - Platform standing (group owner / admin, platform roles and permissions) is *not* converted into
+ *   a zhin role (ADR 0056 §4, revised 2026-11-12); it is a separate dimension read by `platform:*`
+ *   permits, and the Bot account's own standing by `bot:*` permits.
  * - Every inbound message gets `sender.chatRole` (highest role effective in its conversation) and a
- *   normalized `sender.platform` from {@link createChatRoleSenderEnricher}; downstream code
- *   (permits, Agent policies, group rules, moderation) reads only those two fields.
+ *   normalized `sender.platform` from {@link createChatRoleSenderEnricher}.
  */
 import {
-  isPlatformStandingLevel, normalizePlatformStanding,
+  normalizePlatformStanding,
   type ConversationRef, type PlatformStanding, type PlatformStandingLevel,
 } from '@zhin.js/im-contract';
 import {
-  childPluginId, featureKeyLevel, formatFeatureResolutionKey, parseFeatureConversationKey, parseFeatureResolutionKey,
-  resolveEndpointFeatureKey, rootPluginId,
+  featureKeyLevel, formatFeatureResolutionKey, parseFeatureConversationKey, parseFeatureResolutionKey,
+  resolveEndpointFeatureKey,
   type FeatureConfigLevel, type RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
 
@@ -115,7 +116,8 @@ export function chatScopeLevel(key: string): FeatureConfigLevel {
 // Entries, sources and resolution
 // ============================================================================
 
-export type ChatRoleSourceKind = 'grant' | 'mapping';
+/** Where an entry comes from: `grant` (the `chat_roles` table). */
+export type ChatRoleSourceKind = 'grant';
 
 export interface ChatRoleEntry extends ChatIdentity {
   readonly level: FeatureConfigLevel;
@@ -125,29 +127,15 @@ export interface ChatRoleEntry extends ChatIdentity {
   readonly source: ChatRoleSourceKind;
   readonly grantedBy?: string;
   readonly grantedAt?: number;
-  /** Origin hint, e.g. the mapping rule that produced the entry. */
-  readonly detail?: string;
 }
 
-/** Snapshot parts a live source may read (adapter / account configuration). */
+/** Snapshot parts needed to address a message's conversation. */
 export type ChatRoleSnapshot = Pick<RuntimeSnapshot, 'config' | 'projections' | 'tree'>;
 
-/** Per-message context for live sources (mapping rules). */
+/** The conversation a message was sent in, and the sender's platform standing there (informational). */
 export interface ChatRoleContext {
-  /** The conversation the message was sent in (mapping results apply only there). */
   readonly conversationKey?: string;
   readonly platform?: PlatformStanding;
-  readonly snapshot?: ChatRoleSnapshot;
-}
-
-/**
- * Implicit role provider. `entries` answers for one identity along a scope chain; `list` (optional)
- * enumerates what it can for Console listings.
- */
-export interface ChatRoleSource {
-  readonly name: string;
-  entries(identity: ChatIdentity, chain: readonly string[], context: ChatRoleContext): readonly ChatRoleEntry[];
-  list?(scopeKey: string, descendants: boolean): readonly ChatRoleEntry[];
 }
 
 /** Stored grants (the instance's `chat_roles` table, held in memory). */
@@ -161,7 +149,7 @@ export interface ChatRoleResolution {
   readonly conversationKey: string;
   /** Highest role effective in the conversation. */
   readonly role?: ChatRole;
-  /** Every entry on the conversation's chain (stored and mapped). */
+  /** Every stored entry on the conversation's chain. */
   readonly entries: readonly ChatRoleEntry[];
 }
 
@@ -172,63 +160,50 @@ function highest(entries: readonly ChatRoleEntry[]): ChatRole | undefined {
 }
 
 /**
- * Resolution over stored grants plus implicit sources (ADR 0056 §2): for a message the chain is
+ * Resolution over stored grants (ADR 0056 §2): for a message the chain is
  * conversation → endpoint → adapter → global and the highest role wins.
  */
 export class ChatRoleService<TStore extends ChatRoleGrantStore = ChatRoleGrantStore> {
   readonly store: TStore;
-  readonly #sources: ChatRoleSource[];
 
-  constructor(options: Readonly<{ store: TStore; sources?: readonly ChatRoleSource[] }>) {
+  constructor(options: Readonly<{ store: TStore }>) {
     this.store = options.store;
-    this.#sources = [...(options.sources ?? [])];
-  }
-
-  addSource(source: ChatRoleSource): () => void {
-    this.#sources.push(source);
-    return () => { const index = this.#sources.indexOf(source); if (index >= 0) this.#sources.splice(index, 1); };
   }
 
   /** Entries of `identity` effective at `scopeKey` (own scope and every ancestor). */
-  entriesFor(identity: ChatIdentity, scopeKey: string, context: ChatRoleContext = {}): readonly ChatRoleEntry[] {
+  entriesFor(identity: ChatIdentity, scopeKey: string): readonly ChatRoleEntry[] {
     const chain = chatScopeChain(scopeKey);
     const stored = this.store.list().filter(entry => entry.adapter === identity.adapter && entry.userId === identity.userId && chain.includes(entry.key));
-    const implicit = this.#sources.flatMap(source => {
-      try { return source.entries(identity, chain, context); } catch { return []; }
-    }).filter(entry => chain.includes(entry.key));
-    return Object.freeze([...stored, ...implicit].sort((left, right) => chain.indexOf(left.key) - chain.indexOf(right.key)));
+    return Object.freeze([...stored].sort((left, right) => chain.indexOf(left.key) - chain.indexOf(right.key)));
   }
 
   /** Highest role of `identity` effective at `scopeKey`. */
-  roleAt(identity: ChatIdentity, scopeKey: string, context: ChatRoleContext = {}): ChatRole | undefined {
-    return highest(this.entriesFor(identity, scopeKey, context));
+  roleAt(identity: ChatIdentity, scopeKey: string): ChatRole | undefined {
+    return highest(this.entriesFor(identity, scopeKey));
   }
 
-  hasRole(identity: ChatIdentity, scopeKey: string, role: ChatRole, context: ChatRoleContext = {}): boolean {
-    return chatRoleIncludes(this.roleAt(identity, scopeKey, context), role);
+  hasRole(identity: ChatIdentity, scopeKey: string, role: ChatRole): boolean {
+    return chatRoleIncludes(this.roleAt(identity, scopeKey), role);
   }
 
   /** Highest role held at a scope strictly above `scopeKey`. */
-  roleAbove(identity: ChatIdentity, scopeKey: string, context: ChatRoleContext = {}): ChatRole | undefined {
-    return highest(this.entriesFor(identity, scopeKey, context).filter(entry => entry.key !== scopeKey));
+  roleAbove(identity: ChatIdentity, scopeKey: string): ChatRole | undefined {
+    return highest(this.entriesFor(identity, scopeKey).filter(entry => entry.key !== scopeKey));
   }
 
   /** Sender roles for a message (`undefined` outside a keyed conversation). */
   effectiveRoles(snapshot: ChatRoleSnapshot, message: unknown): ChatRoleResolution | undefined {
     const subject = chatRoleMessageContext(snapshot, message);
     if (!subject) return undefined;
-    const entries = this.entriesFor(subject.identity, subject.context.conversationKey, subject.context);
+    const entries = this.entriesFor(subject.identity, subject.context.conversationKey);
     const role = highest(entries);
     return Object.freeze({ identity: subject.identity, conversationKey: subject.context.conversationKey, ...(role ? { role } : {}), entries });
   }
 
-  /** Stored and listable implicit entries covering `scopeKey` (and below it with `descendants`). */
+  /** Stored entries covering `scopeKey` (and below it with `descendants`). */
   list(scopeKey: string, descendants = false): readonly ChatRoleEntry[] {
     const relevant = (key: string) => chatScopeCovers(key, scopeKey) || (descendants && chatScopeCovers(scopeKey, key));
-    const implicit = this.#sources.flatMap(source => {
-      try { return source.list?.(scopeKey, descendants) ?? []; } catch { return []; }
-    });
-    return Object.freeze([...this.store.list(), ...implicit].filter(entry => relevant(entry.key)));
+    return Object.freeze(this.store.list().filter(entry => relevant(entry.key)));
   }
 
   /**
@@ -275,254 +250,7 @@ export function chatRoleMessageContext(
   const identity = { adapter: parsed.adapter, userId: typeof sender?.id === 'string' ? sender.id : '' };
   if (!isChatIdentity(identity)) return undefined;
   const platform = parsed.conversation.kind === 'private' ? undefined : platformStandingOf(sender);
-  return { identity, context: { conversationKey: key, snapshot, ...(platform ? { platform } : {}) } };
-}
-
-// ============================================================================
-// Mapping rules (ADR 0056 §4)
-// ============================================================================
-
-export interface ChatRoleMappingMatch {
-  /** Normalized standings (any of). */
-  readonly standing?: readonly PlatformStandingLevel[];
-  /** Platform role ids (any of). */
-  readonly role?: readonly string[];
-  /** Platform permissions (any of). */
-  readonly permission?: readonly string[];
-}
-
-/** `grant: 'none'` removes an inherited rule with the same `match`. */
-export type ChatRoleMappingGrant = ChatRole | 'none';
-
-export interface ChatRoleMappingRule {
-  /** Every given criterion must hold. */
-  readonly match: ChatRoleMappingMatch;
-  readonly grant: ChatRoleMappingGrant;
-}
-
-export type ChatRoleMappingLevel = 'default' | 'adapter' | 'endpoint' | 'conversation';
-
-/** Rules declared at one level. `inherit: false` drops every rule from the levels above (the default rule included). */
-export interface ChatRoleMappingLayer {
-  readonly level: ChatRoleMappingLevel;
-  readonly rules: readonly ChatRoleMappingRule[];
-  readonly inherit?: boolean;
-}
-
-export interface EffectiveChatRoleMappingRule extends ChatRoleMappingRule {
-  readonly level: ChatRoleMappingLevel;
-}
-
-/** Built-in default: group owners / admins are `admin` of that conversation. */
-export const DEFAULT_CHAT_ROLE_MAPPINGS: readonly ChatRoleMappingRule[] = Object.freeze([
-  Object.freeze({ match: Object.freeze({ standing: Object.freeze(['admin', 'owner'] as PlatformStandingLevel[]) }), grant: 'admin' as const }),
-]);
-
-const MAX_RULES = 64;
-const MAX_VALUES = 64;
-
-function stringList(value: unknown, field: string): readonly string[] | undefined {
-  if (value === undefined) return undefined;
-  const list = typeof value === 'string' ? [value] : Array.isArray(value) ? value : undefined;
-  if (!list || list.length === 0 || list.length > MAX_VALUES) throw new TypeError(`match.${field} must be a non-empty string or list (at most ${MAX_VALUES})`);
-  const out = list.map(item => {
-    if (typeof item !== 'string' && typeof item !== 'number') throw new TypeError(`match.${field} entries must be strings`);
-    const text = String(item).trim();
-    if (!text || text.length > 256 || CONTROL.test(text)) throw new TypeError(`match.${field} entries must be 1–256 printable characters`);
-    return text;
-  });
-  return Object.freeze([...new Set(out)].sort());
-}
-
-/** Validates one rule; `level` limits grants (`trusted` / `owner` only at the conversation level). */
-export function parseChatRoleMappingRule(value: unknown, level: ChatRoleMappingLevel): ChatRoleMappingRule {
-  if (!record(value)) throw new TypeError('mapping rule must be an object { match, grant }');
-  const unknown = Object.keys(value).filter(key => key !== 'match' && key !== 'grant');
-  if (unknown.length) throw new TypeError(`mapping rule has unknown fields: ${unknown.join(', ')}`);
-  if (!record(value.match)) throw new TypeError('mapping rule match must be an object');
-  const extra = Object.keys(value.match).filter(key => key !== 'standing' && key !== 'role' && key !== 'permission');
-  if (extra.length) throw new TypeError(`mapping rule match has unknown fields: ${extra.join(', ')} (expected standing, role, permission)`);
-  const standing = stringList(value.match.standing, 'standing');
-  if (standing && !standing.every(isPlatformStandingLevel)) throw new TypeError('match.standing must be owner, admin, member or guest');
-  const role = stringList(value.match.role, 'role');
-  const permission = stringList(value.match.permission, 'permission');
-  if (!standing && !role && !permission) throw new TypeError('mapping rule match needs standing, role or permission');
-  const grant = value.grant;
-  if (grant !== 'none' && !isChatRole(grant)) throw new TypeError('mapping rule grant must be owner, admin, trusted or none');
-  if ((grant === 'owner' || grant === 'trusted') && level !== 'conversation') {
-    throw new TypeError(`mapping to ${grant} is only allowed in conversation-level rules`);
-  }
-  return Object.freeze({
-    match: Object.freeze({
-      ...(standing ? { standing: standing as readonly PlatformStandingLevel[] } : {}),
-      ...(role ? { role } : {}),
-      ...(permission ? { permission } : {}),
-    }),
-    grant,
-  });
-}
-
-/** Parses `roles` (`{ mappings?, inherit? }`) of one level; undefined when absent. Throws TypeError. */
-export function parseChatRoleMappingLayer(value: unknown, level: Exclude<ChatRoleMappingLevel, 'default'>): ChatRoleMappingLayer | undefined {
-  if (value === undefined || value === null) return undefined;
-  if (!record(value)) throw new TypeError('roles must be an object { mappings, inherit }');
-  const unknown = Object.keys(value).filter(key => key !== 'mappings' && key !== 'inherit');
-  if (unknown.length) throw new TypeError(`roles has unknown fields: ${unknown.join(', ')}`);
-  if (value.inherit !== undefined && typeof value.inherit !== 'boolean') throw new TypeError('roles.inherit must be a boolean');
-  const raw = value.mappings ?? [];
-  if (!Array.isArray(raw) || raw.length > MAX_RULES) throw new TypeError(`roles.mappings must be a list of at most ${MAX_RULES} rules`);
-  const rules = raw.map((rule, index) => {
-    try { return parseChatRoleMappingRule(rule, level); } catch (error) { throw new TypeError(`roles.mappings[${index}]: ${(error as Error).message}`); }
-  });
-  return Object.freeze({ level, rules: Object.freeze(rules), ...(value.inherit === false ? { inherit: false } : {}) });
-}
-
-/** Identity of a rule's `match` (rules with the same identity override each other). */
-export function chatRoleMappingMatchKey(match: ChatRoleMappingMatch): string {
-  return JSON.stringify([match.standing ?? null, match.role ?? null, match.permission ?? null]);
-}
-
-/** Default rule, then each layer appends or overrides same-`match` rules from above; `none` grants drop out. */
-export function mergeChatRoleMappings(layers: readonly ChatRoleMappingLayer[]): readonly EffectiveChatRoleMappingRule[] {
-  const merged = new Map<string, EffectiveChatRoleMappingRule>();
-  for (const layer of [{ level: 'default' as const, rules: DEFAULT_CHAT_ROLE_MAPPINGS }, ...layers]) {
-    if (layer.level !== 'default' && 'inherit' in layer && layer.inherit === false) merged.clear();
-    for (const rule of layer.rules) {
-      // Above the conversation level only `admin` (or `none`) can be granted, whatever the caller passed.
-      if ((rule.grant === 'owner' || rule.grant === 'trusted') && layer.level !== 'conversation') continue;
-      const key = chatRoleMappingMatchKey(rule.match);
-      merged.delete(key);
-      merged.set(key, Object.freeze({ ...rule, level: layer.level }));
-    }
-  }
-  return Object.freeze([...merged.values()].filter(rule => rule.grant !== 'none'));
-}
-
-export function chatRoleMappingMatches(match: ChatRoleMappingMatch, platform: PlatformStanding | undefined): boolean {
-  if (!platform) return false;
-  if (match.standing && !match.standing.includes(platform.standing)) return false;
-  if (match.role && !(platform.roles ?? []).some(role => match.role!.includes(role.id))) return false;
-  if (match.permission && !(platform.permissions ?? []).some(permission => match.permission!.includes(permission))) return false;
-  return true;
-}
-
-function describeMatch(match: ChatRoleMappingMatch): string {
-  return [
-    ...(match.standing ? [`standing=${match.standing.join('|')}`] : []),
-    ...(match.role ? [`role=${match.role.join('|')}`] : []),
-    ...(match.permission ? [`permission=${match.permission.join('|')}`] : []),
-  ].join(',');
-}
-
-/** Highest grant of the rules matching `platform`, with the rule that produced it. */
-export function evaluateChatRoleMappings(
-  rules: readonly EffectiveChatRoleMappingRule[],
-  platform: PlatformStanding | undefined,
-): { role: ChatRole; rule: EffectiveChatRoleMappingRule } | undefined {
-  let best: { role: ChatRole; rule: EffectiveChatRoleMappingRule } | undefined;
-  for (const rule of rules) {
-    if (rule.grant === 'none' || !chatRoleMappingMatches(rule.match, platform)) continue;
-    if (!best || RANK[rule.grant] > RANK[best.role]) best = { role: rule.grant, rule };
-  }
-  return best;
-}
-
-/** `mapping:<level> <match>` hint used in listings. */
-export function chatRoleMappingDetail(rule: EffectiveChatRoleMappingRule): string {
-  return `mapping:${rule.level} ${describeMatch(rule.match)}`;
-}
-
-/** Plugin id of an adapter instance alias (the top-level config block). */
-function adapterConfig(snapshot: ChatRoleSnapshot | undefined, alias: string): Record<string, unknown> | undefined {
-  if (!snapshot) return undefined;
-  let value: unknown;
-  try { value = snapshot.config.get(childPluginId(rootPluginId(), alias)); } catch { return undefined; }
-  return record(value) ? value : undefined;
-}
-
-/**
- * Adapter and account layers from the live configuration: `<alias>.roles` and
- * `<alias>.endpoints[i].roles` (endpoint matched by `id`, else `name`). Malformed blocks are
- * skipped here; the configuration schema rejects them on load.
- */
-export function configChatRoleMappingLayers(snapshot: ChatRoleSnapshot | undefined, alias: string, endpointId: string | undefined): readonly ChatRoleMappingLayer[] {
-  const block = adapterConfig(snapshot, alias);
-  if (!block) return [];
-  const layers: ChatRoleMappingLayer[] = [];
-  try { const layer = parseChatRoleMappingLayer(block.roles, 'adapter'); if (layer) layers.push(layer); } catch { /* rejected by the schema */ }
-  if (endpointId !== undefined && Array.isArray(block.endpoints)) {
-    const entries = block.endpoints.filter(record);
-    const entry = entries.find(item => item.id !== undefined && String(item.id) === endpointId)
-      ?? entries.find(item => item.name !== undefined && String(item.name) === endpointId);
-    try { const layer = entry ? parseChatRoleMappingLayer(entry.roles, 'endpoint') : undefined; if (layer) layers.push(layer); } catch { /* rejected by the schema */ }
-  }
-  return layers;
-}
-
-export interface MappingChatRoleSourceOptions {
-  /** Conversation-level layer (stored by the instance); undefined when none. */
-  readonly conversationLayer?: (conversationKey: string) => ChatRoleMappingLayer | undefined;
-  /** Remembered recent mapped senders for listings (default 2000 conversations). */
-  readonly listLimit?: number;
-}
-
-/** Effective rules of a conversation: default → adapter → endpoint (configuration) → conversation (stored). */
-export function effectiveChatRoleMappings(
-  conversationKey: string,
-  snapshot: ChatRoleSnapshot | undefined,
-  conversationLayer?: (conversationKey: string) => ChatRoleMappingLayer | undefined,
-): readonly EffectiveChatRoleMappingRule[] {
-  const parsed = parseFeatureResolutionKey(conversationKey);
-  const layers = [...configChatRoleMappingLayers(snapshot, parsed.adapter!, parsed.endpointId)];
-  const stored = conversationLayer?.(conversationKey);
-  if (stored) layers.push(stored);
-  return mergeChatRoleMappings(layers);
-}
-
-export type MappingChatRoleSource = ChatRoleSource & {
-  /** Remembers a mapped sender of a message for Console listings (results are never stored). */
-  record(identity: ChatIdentity, context: ChatRoleContext, now?: number): void;
-};
-
-/**
- * ADR 0056 §4: platform standing → zhin role of the message's conversation only, evaluated live
- * from the current message. Listings show recently seen mapped senders (`source: 'mapping'`).
- */
-export function createMappingChatRoleSource(options: MappingChatRoleSourceOptions = {}): MappingChatRoleSource {
-  const limit = options.listLimit ?? 2000;
-  const seen = new Map<string, Map<string, ChatRoleEntry>>();
-  const mapped = (identity: ChatIdentity, context: ChatRoleContext): ChatRoleEntry | undefined => {
-    const key = context.conversationKey;
-    if (!key || chatScopeLevel(key) !== 'conversation' || !context.platform) return undefined;
-    if (parseFeatureResolutionKey(key).adapter !== identity.adapter) return undefined;
-    const result = evaluateChatRoleMappings(effectiveChatRoleMappings(key, context.snapshot, options.conversationLayer), context.platform);
-    if (!result) return undefined;
-    return Object.freeze({ level: 'conversation' as const, key, adapter: identity.adapter, userId: identity.userId, role: result.role,
-      source: 'mapping' as const, detail: chatRoleMappingDetail(result.rule) });
-  };
-  return Object.freeze({
-    name: 'mapping',
-    entries(identity: ChatIdentity, chain: readonly string[], context: ChatRoleContext) {
-      if (!context.conversationKey || !chain.includes(context.conversationKey)) return [];
-      const entry = mapped(identity, context);
-      return entry ? [entry] : [];
-    },
-    list(scopeKey: string, descendants: boolean) {
-      return [...seen].flatMap(([key, users]) => (chatScopeCovers(key, scopeKey) || (descendants && chatScopeCovers(scopeKey, key)))
-        ? [...users.values()] : []);
-    },
-    record(identity: ChatIdentity, context: ChatRoleContext, now = Date.now()) {
-      const key = context.conversationKey;
-      if (!key) return;
-      const entry = mapped(identity, context);
-      const users = seen.get(key) ?? new Map<string, ChatRoleEntry>();
-      if (entry) users.set(identity.userId, Object.freeze({ ...entry, grantedAt: now }));
-      else users.delete(identity.userId);
-      seen.delete(key);
-      if (users.size) seen.set(key, users);
-      while (seen.size > limit) seen.delete(seen.keys().next().value!);
-    },
-  });
+  return { identity, context: { conversationKey: key, ...(platform ? { platform } : {}) } };
 }
 
 // ============================================================================
@@ -541,8 +269,6 @@ export interface ChatRoleSenderFields {
  */
 export function createChatRoleSenderEnricher(options: Readonly<{
   roles: () => ChatRoleService | undefined;
-  /** Called with each resolved sender (listing of mapped senders). */
-  onResolved?: (identity: ChatIdentity, context: ChatRoleContext) => void;
 }>) {
   return <TSender extends ChatRoleSenderFields>(
     sender: TSender | undefined, conversation: ConversationRef, snapshot?: RuntimeSnapshot,
@@ -557,8 +283,7 @@ export function createChatRoleSenderEnricher(options: Readonly<{
     if (!subject) return Object.freeze(base);
     let role: ChatRole | undefined;
     try {
-      role = service.roleAt(subject.identity, subject.context.conversationKey, subject.context);
-      options.onResolved?.(subject.identity, subject.context);
+      role = service.roleAt(subject.identity, subject.context.conversationKey);
     } catch { role = undefined; }
     return Object.freeze({ ...base, ...(role ? { chatRole: role } : {}) });
   };

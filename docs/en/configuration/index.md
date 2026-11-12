@@ -17,7 +17,7 @@ This is the complete reference for `zhin.config.yml`. When configuring for the f
 | Connect a database | [database](#database) |
 | Configure a plugin or adapter, add platform credentials | [plugin and plugins](#plugin-and-plugins) |
 | Log one adapter into several accounts | [endpoints array](#endpoints-array-one-instance-with-multiple-accounts) |
-| Set role mappings or the command prefix | [Adapter instances](#adapter-instances-roles-commandprefix) |
+| Set the command prefix | [Adapter instances](#adapter-instances-commandprefix) |
 | Configure AI models | [ai](#ai), or the [AI overview](../ai/index.md) |
 | Reference secrets from `.env` | [Environment variable expansion](#environment-variable-expansion) |
 | Apply configuration changes selectively | [Applying configuration changes](#applying-configuration-changes) |
@@ -114,7 +114,7 @@ Hints use the account's actual command prefix and namespace. AI Agent is not req
 
 - Host config is limited to the same allowlist as ordinary Console pages (`HOST_CONFIG_PATCH_PATHS`, currently fields under `ai.trigger.ambient`). Use the CLI or Console for `locale`, `http`, `database` and other Host settings.
 - Plugin config must be proven safe by its schema. Secrets, tokens, passwords, missing schemas and uncertain scopes are rejected.
-- Permission fields such as owners, trust lists, approvals and tool gates (`master`, `trusted`, `roles`, `endpoints[*].roles`, `toolHardGate.*`; the people lists themselves moved into the database, see [Upgrading to chat roles](../migrations/chat-roles.md)) cannot be read or changed in chat. Matching is by contains/prefix/suffix, so compound names are refused too, e.g. `adminIds`, `ownerId`, `masterId`, `trustedUsers`, `superUsers`, `whitelist`/`allowlist`/`blacklist` and `bypassRole` (such as content-moderation's `inbound.whitelist.userIds` and `inbound.bypassRole`). The rule is deliberately conservative: ordinary fields whose names contain these words (e.g. `masterVolume`) must be changed with the CLI.
+- Permission fields such as owners, trust lists, approvals and tool gates (`master`, `trusted`, `roles`, `endpoints[*].roles`, `toolHardGate.*`; the people lists themselves moved into the database, see [Upgrading to chat roles](../migrations/chat-roles.md)) cannot be read or changed in chat. Matching is by contains/prefix/suffix, so compound names are refused too, e.g. `adminIds`, `ownerId`, `masterId`, `trustedUsers`, `superUsers`, `whitelist`/`allowlist`/`blacklist` and `bypass` (such as content-moderation's `inbound.whitelist.userIds` and `inbound.bypass`). The rule is deliberately conservative: ordinary fields whose names contain these words (e.g. `masterVolume`) must be changed with the CLI.
 - `endpoints[*].id` / `endpoints[*].name` bind account-level masters and trust lists, so remapping them is an indirect permission change and is refused in chat; `set`/`unset` only target fields listed by `config fields <root>`.
 - A `set` value cannot contain a `${…}` or `env://` environment reference (regardless of whether the name looks like a secret), so a later read or echo cannot leak an environment value; existing references are not affected by other operations.
 - Chat reads and writes a **single leaf field** (a scalar or scalar array) only; whole objects cannot be overwritten or removed, and required fields cannot be unset. `configVersion`, `plugins`, `disable_plugins`, root `plugin` and undeclared instances cannot be changed either.
@@ -453,16 +453,15 @@ sandbox:
 
 `zhin install` writes the package reference under `plugins.<instanceKey>` and business settings under the top-level alias. It no longer writes manifest mounts.
 
-### Adapter Instances: roles / commandPrefix
+### Adapter Instances: commandPrefix
 
-Platform adapter plugin instance configurations support two common keys:
+Platform adapter plugin instance configurations support a common key:
 
 | Key | Location | Description |
 | --- | --- | --- |
-| `roles` | Instance top-level / per-endpoint | Platform identity → chat role mapping rules (`mappings`, `inherit`); see [Chat roles](../concepts/chat-roles.md#mappings) |
 | `commandPrefix` | Instance top-level / per-endpoint | Command prefix, default `''`; per-endpoint values override top-level |
 
-The owner and trusted users are no longer configured here: manage them in the Console **Roles** block or with `role grant` in chat; old `master` / `trusted` fields move into the database on the first start, see [Upgrading to chat roles](../migrations/chat-roles.md).
+The owner and trusted users are no longer configured here: manage them in the Console **Roles** block or with `role grant` in chat; old `master` / `trusted` fields move into the database on the first start, see [Upgrading to chat roles](../migrations/chat-roles.md). Platform standing is not mapped into zhin roles: `roles` (mapping rules) was removed and stops startup (see [Upgrading to chat roles](../migrations/chat-roles.md#mappings)).
 
 ### endpoints Array: One Instance with Multiple Accounts
 

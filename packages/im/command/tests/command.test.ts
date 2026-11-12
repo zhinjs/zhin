@@ -1651,6 +1651,32 @@ describe('内置菜单命令', () => {
     expect(text).not.toContain('qq.status');
   });
 
+  it('只列出当前发言者在本会话可用的指令（ADR 0056 §5，同一评估器）', async () => {
+    const { root, slots, snapshot } = menuSnapshot();
+    const guarded = createCapabilitySlot({
+      owner: root, feature: commandFeatureId, localName: 'mute', source: '/commands/mute/index.ts',
+      definition: defineCommand({ description: '禁言', permit: ['platform:admin', 'bot:admin'], execute: () => 'muted' }),
+    });
+    const all = [...slots, guarded];
+    const withHost = { ...snapshot, capabilities: new Map(all.map(slot => [slot.id, slot])) } as RuntimeSnapshot;
+    const host = new PermissionHost();
+    let bot: 'admin' | 'member' = 'member';
+    host.setBotStandingResolver(async () => ({ standing: bot }));
+    withHost.resources.get(root)!.set(permissionHostToken.id, host);
+    const index = new CommandIndex(all, withHost, { keyword: '菜单' });
+    const source = { conversation: { endpoint: { id: 'ep', adapter: 'test' }, kind: 'group', id: 'g' }, sender: { id: 'm', platform: { standing: 'admin' } } };
+    expect((await index.dispatch({ input: '菜单', source })).value as string).not.toContain('mute');
+    // Denied with the missing condition named for the reply.
+    expect(await index.dispatch({ input: 'mute', source })).toMatchObject({ status: 'denied',
+      denial: { permit: 'bot:admin', reason: '机器人不是本群管理员（或无法确认其身份）。' } });
+    bot = 'admin';
+    expect((await index.dispatch({ input: '菜单', source })).value as string).toContain('mute');
+    expect(await index.dispatch({ input: 'mute', source })).toMatchObject({ status: 'executed', value: 'muted' });
+    // A member sender: the platform condition fails first.
+    expect(await index.dispatch({ input: 'mute', source: { ...source, sender: { id: 'm' } } }))
+      .toMatchObject({ status: 'denied', denial: { permit: 'platform:admin' } });
+  });
+
   it('菜单列表自动加上 commandPrefix', async () => {
     const { slots, snapshot } = menuSnapshot();
     const index = new CommandIndex(slots, snapshot, { keyword: '菜单' });

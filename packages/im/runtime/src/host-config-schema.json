@@ -3904,8 +3904,8 @@
         "selfService": {
           "type": "object",
           "additionalProperties": false,
-          "description": "In-chat `feature` / `功能` and `role` / `角色` commands for chat role admins (ADR 0055 / 0056). Off by default. Platform group owners / admins become conversation admins through roles.mappings (default rule).",
-          "x-descriptionZh": "聊天角色 admin 在聊天中使用的 `功能` / `feature` 与 `角色` / `role` 命令（ADR 0055 / 0056），默认关闭。平台群主 / 管理员经 roles.mappings（默认规则）成为会话 admin。",
+          "description": "In-chat `feature` / `功能` and `role` / `角色` commands for chat role admins (ADR 0055 / 0056). Off by default. Platform group owners / admins are not zhin roles: grant them admin explicitly.",
+          "x-descriptionZh": "聊天角色 admin 在聊天中使用的 `功能` / `feature` 与 `角色` / `role` 命令（ADR 0055 / 0056），默认关闭。平台群主 / 管理员不是 zhin 角色，需要显式授予 admin。",
           "properties": {
             "enabled": {
               "type": "boolean",

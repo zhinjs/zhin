@@ -11,7 +11,7 @@ export default defineAgentTool<{ chat_id: string; message_id: string }>({
   adapter: 'telegram',
   scopes: ["group","channel"],
   tags: ['telegram'],
-  permissions: ['platform-permission:pin_messages'],
+  permissions: ['platform-permission:pin_messages', 'bot-permission:pin_messages'],
   async execute({ chat_id, message_id  }: { chat_id: string; message_id: string }, context) {
     const endpoint = context.$client;
     const success = await endpoint.pinMessage(Number(chat_id), Number(message_id));

@@ -56,13 +56,7 @@ sandbox:
 
 # icqq:
 #   # 主人 / 受信任用户不写在配置里（ADR 0056）：用 Console「角色」或聊天 `角色 授予` 授予 owner / trusted。
-#   # 平台群主 / 管理员默认映射为本群 admin；可用 roles.mappings 收紧或关闭：
-#   # roles:
-#   #   mappings:
-#   #     - match: { standing: [admin, owner] }
-#   #       grant: none
-#   #     - match: { standing: [owner] }
-#   #       grant: admin
+#   # 平台群主 / 管理员不是 zhin 角色：需要管理功能时同样显式授予 admin；平台操作用 platform:* / bot:* permit。
 #   endpoints:
 #     - id: ${ICQQ_ACCOUNT}
 #     - id: ${ICQQ_ACCOUNT_2}

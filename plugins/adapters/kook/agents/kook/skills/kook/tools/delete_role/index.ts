@@ -11,7 +11,7 @@ export default defineAgentTool<{ guild_id: string; role_id: string }>({
   adapter: 'kook',
   scopes: ["channel"],
   tags: ['kook'],
-  permissions: ['platform-permission:guild_owner'],
+  permissions: ['platform:owner', 'bot-permission:manage_roles'],
   async execute({ guild_id, role_id  }: { guild_id: string; role_id: string }, context) {
     const client = context.$client;
     const success = await client.pickGuild(guild_id).deleteRole(role_id);

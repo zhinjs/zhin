@@ -80,7 +80,7 @@ import type { SystemMessage as IcqqSystemMessage } from './types.js';
 import { ManagedIcqqClient, type IcqqBackgroundOperation } from './managed-client.js';
 import { createIcqqActionPorts } from './group-actions.js';
 import { inspectGroupMember, moderateGroupMember } from './group-moderation.js';
-import { inspectGroupMemberProfile, inspectGroupScene } from './group-scene.js';
+import { inspectGroupMemberProfile, inspectGroupScene, inspectSelfStanding } from './group-scene.js';
 import { createIcqqSelfProfile } from './self-profile.js';
 
 export interface IcqqEndpointOptions {
@@ -147,6 +147,7 @@ export class IcqqEndpoint extends ManagedIcqqClient implements Endpoint {
     inspectGroupMember: request => inspectGroupMember(this, request),
     inspectGroupScene: request => inspectGroupScene(this, request),
     inspectGroupMemberProfile: request => inspectGroupMemberProfile(this, request),
+    inspectSelfStanding: request => inspectSelfStanding(this, request),
     moderateGroupMember: request => moderateGroupMember({ client: this, isActive: () => this.#open && !this.#retiring && !this.#stopped }, request),
     listFriends: async (request: EndpointManagementRequest = {}) =>
       createEndpointOperation(request).run(() => Array.from(this.fl.values()).map((f) => ({

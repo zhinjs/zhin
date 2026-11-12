@@ -106,7 +106,7 @@ describe('ICQQ current conversation tools', () => {
   ])('checks live recall authority for %s over %s', async (self, target, allowed) => {
     const f = fixture(); f.original.sender.user_id = 2; f.self.role = String(self); f.member.role = String(target);
     expect(memberRecall.requiresApproval).toBe('never');
-    expect(memberRecall.permissions).toEqual(['trusted']);
+    expect(memberRecall.permissions).toEqual(['platform:admin', 'bot:admin']);
     expect(await memberRecall.execute({ message_id: f.id, reason: 'Confirmed advertising' }, f.ctx)).toMatchObject({ success: allowed });
     expect(f.client.getGroupMemberInfo).toHaveBeenCalledWith(100, 2, true);
     expect(f.client.deleteMsg).toHaveBeenCalledTimes(allowed ? 1 : 0);

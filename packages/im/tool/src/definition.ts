@@ -2,6 +2,7 @@
  * Agent Tool authoring API consumed from `@zhin.js/tool`.
  * @module @zhin.js/tool
  */
+import { removedPermitReplacement } from '@zhin.js/permission';
 import type {
   AdapterClient,
   CapabilityContext,
@@ -323,6 +324,10 @@ export function defineAgentTool<
   validateStringList('requiresCapabilities', definition.requiresCapabilities);
   validateStringList('currentConversationBotRoles', definition.currentConversationBotRoles);
   validateStringList('permissions', definition.permissions);
+  for (const [index, permit] of (definition.permissions ?? []).entries()) {
+    const replacement = removedPermitReplacement(permit);
+    if (replacement) throw new TypeError(`Agent Tool permissions[${index}] ${JSON.stringify(permit)} was removed (ADR 0056); use ${replacement}`);
+  }
   validateStringList('tags', definition.tags);
   validateStringList('keywords', definition.keywords);
   if (definition.scopes !== undefined && !Array.isArray(definition.scopes)) {

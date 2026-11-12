@@ -167,7 +167,7 @@ SDK 的 `emit/on/off` 与原生方法保持原合同。通过 `AdapterRegistry` 
 | 组 | 内容 |
 |---|---|
 | `messaging` | `segments`（即原 `AdapterDefinition.segments`，二者是同一份声明，写一处即可）、`maxLength`、`mention`、`quote`、`reaction`、`recall`、`edit`、`forward`、`maxMessagesPerTurn` |
-| `scene` | `groupInfo`、`memberProfile`、`roles`（平台角色词到 `owner / admin / member`）、`platformStanding`（入站 `sender.platform` 上报 `standing` / `roles` / `permissions` 中的哪些，ADR 0056 §1）、`mute`、`maxMembers`、`card`、`title` |
+| `scene` | `groupInfo`、`memberProfile`、`roles`（平台角色词到 `owner / admin / member`）、`platformStanding`（入站 `sender.platform` 上报 `standing` / `roles` / `permissions` 中的哪些，ADR 0056 §1）、`selfStanding`（机器人自身在会话中的身份，由 `management.inspectSelfStanding` 查询、框架按会话缓存，供 `bot:*` permit；声明了就必须实现该方法）、`mute`、`maxMembers`、`card`、`title` |
 | `actions` | Bot 能主动做的事：`reaction`、`poke`、`mute`、`unmute`、`muteAll`、`kick`、`setCard`、`setTitle`、`recall`、`essence`、`announce`、`invite`、`quoteReply`、`forward`；每项 `{ scopes, requiresRole?, params? }`，未列出即不支持 |
 | `events` | `emit`（会发出的标准事件名）、`liveDanmaku`（即原 `capabilities: ['liveDanmaku']`） |
 | `feedback` | 「正在输入」方式：`typing` / `reaction` / `status-message` / `none` |

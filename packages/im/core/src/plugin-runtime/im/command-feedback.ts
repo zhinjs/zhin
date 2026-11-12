@@ -16,7 +16,7 @@ interface CommandFeedbackIdentity {
 /** Execution facts are read-only; formatting cannot change admission or permission decisions. */
 export type CommandFeedback = CommandFeedbackIdentity & (
   | { readonly status: 'invalid'; readonly issues: readonly CommandValidationIssue[]; readonly help?: string }
-  | { readonly status: 'denied' }
+  | { readonly status: 'denied'; readonly permit?: string; readonly reason?: string }
   | { readonly status: 'limited'; readonly limit?: CommandExecutionLimit }
 );
 
@@ -44,7 +44,8 @@ function feedbackFrom(result: CommandDispatchResult): CommandFeedback | undefine
   const identity = { command: result.command, owner: result.owner };
   if (result.status === 'invalid') return Object.freeze({ ...identity, status: 'invalid',
     issues: Object.freeze((result.issues ?? []).map(issue => Object.freeze({ ...issue }))), help: result.help });
-  if (result.status === 'denied') return Object.freeze({ ...identity, status: 'denied' });
+  if (result.status === 'denied') return Object.freeze({ ...identity, status: 'denied',
+    ...(result.denial ? { permit: result.denial.permit, reason: result.denial.reason } : {}) });
   if (result.status === 'limited') return Object.freeze({ ...identity, status: 'limited',
     ...(result.limit ? { limit: Object.freeze({ ...result.limit }) } : {}) });
   return undefined;
@@ -52,6 +53,7 @@ function feedbackFrom(result: CommandDispatchResult): CommandFeedback | undefine
 
 const feedbackMessages = createMessages({
   denied: { 'zh-CN': '没有权限执行此指令。', en: 'You do not have permission to run this command.' },
+  deniedBecause: { 'zh-CN': '无法执行此指令：{reason}', en: 'This command cannot run here: {reason}' },
   cooldown: { 'zh-CN': '此指令仍在冷却，请稍后再试。', en: 'This command is on cooldown. Try again later.' },
   wait: { 'zh-CN': '此指令仍在冷却，约 {seconds} 秒后再试。', en: 'This command is on cooldown. Try again in about {seconds} seconds.' },
   busy: { 'zh-CN': '你的上一条同类指令仍在处理中，请等待执行完成，避免重复触发。', en: 'Your previous command is still running. Wait for it to finish before trying again.' },
@@ -59,11 +61,18 @@ const feedbackMessages = createMessages({
   identity: { 'zh-CN': '当前缺少可信身份或有效执行上下文，本次指令未被接纳。请管理员检查适配器及当前运行状态。', en: 'This command was not accepted because a trusted identity or valid execution context is missing. Ask an administrator to check the adapter and runtime.' },
 });
 
+function explainsDenial(permit: string | undefined): boolean {
+  return typeof permit === 'string' && /^(platform|platform-role|platform-permission|bot|bot-role|bot-permission):/u.test(permit);
+}
+
 function defaultFeedback(feedback: CommandFeedback, locale: Locale): string {
   if (feedback.status === 'invalid') {
     return [...feedback.issues.map(issue => issue.message), feedback.help].filter(Boolean).join('\n');
   }
-  if (feedback.status === 'denied') return feedbackMessages(locale, 'denied');
+  // Platform / Bot conditions say what is missing (e.g. 「机器人不是本群管理员」); zhin role and
+  // conversation conditions keep the generic sentence.
+  if (feedback.status === 'denied') return feedback.reason && explainsDenial(feedback.permit)
+    ? feedbackMessages(locale, 'deniedBecause', { reason: feedback.reason }) : feedbackMessages(locale, 'denied');
   const reason = feedback.limit?.reason;
   const waitMs = feedback.limit?.retryAfterMs;
   return reason === 'cooldown'

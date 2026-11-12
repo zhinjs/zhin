@@ -8,7 +8,7 @@ export default defineAgentTool({
   adapter: 'qq',
   scopes: ['channel'],
   tags: ['qq'],
-  permissions: ['platform-permission:guild_admin'],
+  permissions: ['platform:admin', 'bot:admin'],
   requiresApproval: 'always',
   risk: 'dangerous',
   riskCategory: 'member',

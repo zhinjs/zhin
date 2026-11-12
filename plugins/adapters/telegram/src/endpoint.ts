@@ -3,7 +3,7 @@ import { createTelegramStreaming } from './streaming.js';
 import {
   createEndpointSpecification, endpointSpec, type Endpoint, type EndpointSpecification, createEndpointLifecycle,
   type EndpointLifecycle, type EndpointContentPort, type EndpointContentResolveContext,
-  type EndpointControl, type EndpointSendRequest, type EndpointTransportState,
+  type EndpointControl, type EndpointManagement, type EndpointSendRequest, type EndpointTransportState,
   InboundDeduper, TtlLookupCache,
 } from 'zhin.js/adapter';
 /**
@@ -75,7 +75,8 @@ export { TelegramClient, type TelegramClientApi, type TelegramFetch } from './te
 /**
  * Telegram Bot API 无列表类接口（无 getMyChats/getChatMembers），
  * 仅 getChat/getChatMember 按已知 id 单查，不构成列表能力；
- * 因此本 endpoint 不暴露 EndpointManagement（Console 社交面 RPC 对该平台保持未接线）。
+ * 因此本 endpoint 的 EndpointManagement 只有 `inspectSelfStanding`（ADR 0056 §1：getChatMember bot），
+ * Console 社交面 RPC 对该平台保持未接线。
  */
 export class TelegramEndpoint extends TelegramClient implements Endpoint {
   readonly [endpointSpec]: EndpointSpecification;
@@ -99,6 +100,16 @@ export class TelegramEndpoint extends TelegramClient implements Endpoint {
     ttlMs: CHAT_MEMBER_CACHE_TTL_MS,
     maxEntries: CHAT_MEMBER_CACHE_MAX,
   });
+  readonly #management: EndpointManagement = Object.freeze<EndpointManagement>({
+    // ADR 0056 §1: the Bot's own standing (`bot:*` permits); the framework caches per conversation.
+    inspectSelfStanding: async ({ conversation, signal }) => {
+      if (conversation.kind === 'private' || !this.#botUserId) return undefined;
+      const member = await this.callApi<TelegramChatMember>('getChatMember', {
+        chat_id: Number(conversation.id), user_id: this.#botUserId,
+      }, signal);
+      return telegramChatMemberStanding(member);
+    },
+  });
   readonly #control: EndpointControl = Object.freeze<EndpointControl>({
     recall: ({ message, signal }) => this.recallMessage(message, signal),
   });
@@ -116,7 +127,7 @@ export class TelegramEndpoint extends TelegramClient implements Endpoint {
       start: signal => this.#startFramework(signal), open: () => this.#openFramework(), close: () => this.#closeFramework(),
       stop: () => this.#stopFramework(), send: request => this.#sendFramework(request),
       get name() { return options.config.id; }, get transportState() { return endpoint.#transportState; },
-      control: this.#control, content: this.#content,
+      control: this.#control, content: this.#content, management: this.#management,
       streaming: options.config.streaming !== false ? createTelegramStreaming(() => this, options.config.streamingIntervalMs) : undefined,
       profile: createTelegramSelfProfile({ client: this,
         current: () => this.#botName === undefined ? {} : { nickname: this.#botName },

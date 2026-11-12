@@ -43,29 +43,25 @@ describe('@zhin.js/plugin-content-moderation', () => {
     expect(config.outbound.bypass).toBe(false);
   });
 
-  it('bypasses inbound for chat role owners and whitelist', () => {
+  it('bypasses inbound by permit expressions (zhin owner or platform admin by default) and whitelist', () => {
     const config = resolveModerationConfig({
       inbound: {
         whitelist: { userIds: ['u2'], conversationIds: ['g9'] },
       },
     });
-    expect(config.inbound.bypassRole).toBe('owner');
-    expect(shouldBypassInbound(config, {
-      sender: 'm1',
-      conversationId: 'g1',
-      chatRole: 'owner',
+    expect(config.inbound.bypass).toEqual(['owner', 'platform:admin']);
+    const subject = (sender: Record<string, unknown>) => ({ scene: { id: 'g1', type: 'group' }, sender: { id: String(sender.id), ...sender } });
+    expect(shouldBypassInbound(config, { sender: 'm1', conversationId: 'g1', subject: subject({ id: 'm1', chatRole: 'owner' }) })).toBe(true);
+    expect(shouldBypassInbound(config, { sender: 'a1', conversationId: 'g1', subject: subject({ id: 'a1', chatRole: 'admin' }) })).toBe(false);
+    expect(shouldBypassInbound(config, { sender: 'p1', conversationId: 'g1', subject: subject({ id: 'p1', platform: { standing: 'admin' } }) })).toBe(true);
+    expect(shouldBypassInbound(resolveModerationConfig({ inbound: { bypass: ['admin'] } }), {
+      sender: 'a1', conversationId: 'g1', subject: subject({ id: 'a1', chatRole: 'admin' }),
     })).toBe(true);
-    expect(shouldBypassInbound(config, {
-      sender: 'a1',
-      conversationId: 'g1',
-      chatRole: 'admin',
+    expect(shouldBypassInbound(resolveModerationConfig({ inbound: { bypass: [] } }), {
+      sender: 'm1', conversationId: 'g1', subject: subject({ id: 'm1', chatRole: 'owner' }),
     })).toBe(false);
-    expect(shouldBypassInbound(resolveModerationConfig({ inbound: { bypassRole: 'admin' } }), {
-      sender: 'a1', conversationId: 'g1', chatRole: 'admin',
-    })).toBe(true);
-    expect(shouldBypassInbound(resolveModerationConfig({ inbound: { bypassRole: 'none' } }), {
-      sender: 'm1', conversationId: 'g1', chatRole: 'owner',
-    })).toBe(false);
+    // Removed spellings never exempt anyone.
+    expect(resolveModerationConfig({ inbound: { bypass: ['scene_admin', 'owner'] } }).inbound.bypass).toEqual(['owner']);
     expect(shouldBypassInbound(config, {
       sender: 'u2',
       conversationId: 'g1',

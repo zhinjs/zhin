@@ -17,6 +17,7 @@ import {
   type EndpointGroupRequest,
   type PendingRpcRequest,
 } from 'zhin.js/adapter';
+import { standingFromMemberRole, type PlatformStanding, type SelfStandingRequest } from '@zhin.js/im-contract';
 
 /** 管理面只依赖 endpoint 的 callApi（ws/wss/sse/webhook 四种传输各自实现）。 */
 export interface MilkyManagementCaller {
@@ -26,7 +27,22 @@ export interface MilkyManagementCaller {
 export function createMilkyEndpointManagement(
   endpoint: MilkyManagementCaller,
 ): EndpointManagement {
+  let selfId: string | undefined;
   return Object.freeze<EndpointManagement>({
+    /** ADR 0056 §1: the Bot's own group role (`get_login_info` once, then `get_group_member_info` self). */
+    async inspectSelfStanding({ conversation, signal }: SelfStandingRequest): Promise<PlatformStanding | undefined> {
+      if (conversation.kind !== 'group') return undefined;
+      if (!selfId) {
+        const login = asRecord(await endpoint.callApi({ action: 'get_login_info', signal }));
+        const id = login.uin ?? login.user_id;
+        selfId = (typeof id === 'number' && id > 0) || (typeof id === 'string' && id.trim() !== '' && id !== '0') ? String(id) : undefined;
+      }
+      if (!selfId) return undefined;
+      const data = asRecord(await endpoint.callApi({ action: 'get_group_member_info', signal, params: {
+        group_id: toNumberId(conversation.id, 'group_id'), user_id: toNumberId(selfId, 'user_id'), no_cache: true,
+      } }));
+      return standingFromMemberRole(asRecord(data.member).role ?? data.role);
+    },
     async listFriends(request: EndpointManagementRequest = {}): Promise<readonly EndpointFriend[]> {
       const data = asRecord(await endpoint.callApi({ action: 'get_friend_list', signal: request.signal }));
       return toArray(data.friends).map((value) => {

@@ -1,6 +1,6 @@
 ---
 title: 升级到聊天角色
-description: 从 master / trusted 配置名单迁移到 ADR 0056 聊天角色：自动迁移、master → owner、permit 写法对照、映射规则与插件改写
+description: 从 master / trusted 配置名单迁移到 ADR 0056 聊天角色：自动迁移、master → owner、permit 写法对照、平台身份与机器人自身身份（bot:*）、插件改写
 ---
 
 # 升级到聊天角色（ADR 0056）
@@ -9,7 +9,7 @@ description: 从 master / trusted 配置名单迁移到 ADR 0056 聊天角色：
 
 - zhin 角色只有三个：`owner` ⊃ `admin` ⊃ `trusted`，`master` 改名为 `owner`。
 - 角色挂在四个层级上（全局 / 适配器 / 账号 / 会话），向下继承；人员名单存在项目数据库的 `chat_roles` 表，不再写在配置文件里。
-- 平台群主 / 管理员不再直接等于框架角色，而是按**映射规则**实时换算成当前会话的角色；默认规则是「群主 / 管理员 → 本会话 `admin`」。
+- 平台群主 / 管理员**不是** zhin 角色，也不会被换算成 zhin 角色：zhin 角色管 zhin 的功能，平台身份管平台的功能。命令与工具的可用性按「发言者的 zhin 角色 + 发言者的平台身份 + 机器人自身的平台身份」三条维度判断。
 
 概念说明见[聊天角色](../concepts/chat-roles.md)。
 
@@ -36,39 +36,24 @@ description: 从 master / trusted 配置名单迁移到 ADR 0056 聊天角色：
 - Console：适配器 / 账号 / 会话页的「角色」区块（`chat-roles.grant` / `revoke`，需要 `iam.manage`）；
 - 聊天：开启 `features.selfService.enabled` 后发送 `角色 授予 <用户> <owner|admin|trusted> [层级]` / `role grant …`。
 
-::: warning 临时开关已移除
-`features.selfService.platformAdmins`、`features.selfService.roles` 与 `features.selfService.allowUsers` 已删除，配置中出现会直接报错（没有兼容）。群主 / 管理员如何映射改由 [`roles.mappings`](#mappings) 决定：
+::: warning 已删除、没有兼容
+以下字段出现在配置中会直接报错（`LEGACY_CHAT_ROLE_CONFIG`）：
 
-| 旧写法 | 新写法 |
-| --- | --- |
-| `platformAdmins: true`（默认） | 什么都不写：默认规则就是群主 / 管理员 → 会话 `admin` |
-| `platformAdmins: false` | 适配器块 `roles: { inherit: false }`（不带任何规则） |
-| `roles: [owner]` | 见下文「只认群主」示例 |
+- `features.selfService.platformAdmins`、`features.selfService.roles`、`features.selfService.allowUsers`；
+- 适配器块的 `roles`（`roles.mappings` / `roles.inherit`）与账号项的 `endpoints[i].roles`——平台身份 → zhin 角色的映射规则已删除（见第 2 节）。
 :::
 
-## 2. 映射规则 `roles.mappings` {#mappings}
+## 2. 平台身份不再映射为 zhin 角色 {#mappings}
 
-写在适配器块（对其所有账号有效）或账号项（`endpoints[i].roles`）里；会话层的规则存在数据库，在 Console 会话页或经 `chat-roles.set-mappings` 管理。
+此前版本的预览实现里，`roles.mappings` 把平台群主 / 管理员实时换算成本会话的 `admin`。这套映射已删除，Console 的 `chat-roles.mappings` / `chat-roles.set-mappings` RPC 与会话层映射表 `chat_role_mappings` 一并移除，`chat-roles.list` 不再返回 `source: 'mapping'` 的条目。
 
-```yaml
-qq:
-  roles:
-    mappings:
-      # 只认群主：先取消默认规则，再给群主 admin
-      - match: { standing: [admin, owner] }
-        grant: none
-      - match: { standing: [owner] }
-        grant: admin
-  endpoints:
-    - id: bot-1
-      roles:
-        inherit: false   # 这个账号不做任何映射（默认规则也不要）
-```
-
-- `match` 可写 `standing`（`owner` / `admin` / `member` / `guest`）、`role`（平台角色 id）、`permission`（平台权限名），给出的条件都要满足，每个条件内任一值即可。
-- 下级规则追加，或覆盖上级 `match` 相同的规则；`grant: none` 取消上级同 `match` 的规则；`inherit: false` 丢弃上级（含默认规则）的全部规则。
-- 映射结果只作用于消息所在会话，每条消息按当前平台身份实时计算，不落库。
-- 配置文件里只能授予 `admin`；映射到 `trusted` / `owner` 只能写在会话层，而且永远不会得到账号层及以上的角色。
+| 以前依赖映射的地方 | 现在 |
+| --- | --- |
+| 群主 / 管理员在群内用 `功能` / `角色` 命令 | 需要被授予 zhin `admin`（`角色 授予 @群主 admin`，或 Console 会话页「角色」区块） |
+| 群主 / 管理员管理订阅（B 站、地震等 `canManageConversation` 类命令） | 同上：订阅是 zhin 功能 |
+| 群主 / 管理员获得 Agent 受信任档位（`admin` ⊃ `trusted`） | 不再获得；Agent 信任档位只看 zhin 角色 |
+| 工具 / 命令要求「发言者是群管」 | 写 `platform:admin`（或 `platform:owner`、`platform-permission:<名>`） |
+| 群规「群主和管理员豁免」 | 豁免平台群主 / 管理员（`platform:admin`）与 zhin `owner`，见第 5 节 |
 
 ## 3. `master` → `owner`
 
@@ -88,36 +73,46 @@ qq:
 
 ## 4. permit / 工具 `permissions` 对照 {#permits}
 
-命令的 `permit`、Agent 工具的 `permissions` 使用同一套内置 DSL（列表 AND，单项括号内逗号 OR）：
+命令的 `permit`、Agent 工具 / 技能的 `permissions`、中间件与按钮的 `permit` 使用同一套内置 DSL、同一个评估器（列表 AND，单项括号内逗号 OR）：
 
 | 以前 | 现在 | 说明 |
 | --- | --- | --- |
-| `role(master)` | `owner` | 本会话层级链上的聊天角色 |
+| `role(master)` | `owner` | 本会话层级链上的 zhin 角色 |
 | `role(trusted)` | `trusted`（或 `role(trusted)`） | `admin` / `owner` 也满足 |
-| `role(admin)`（平台管理员） | `admin` 或 `platform:admin` | `admin` 是聊天角色（默认映射已让群管理员获得它）；只看平台身份用 `platform:admin` |
-| `role(owner,admin,master)` | `admin` | |
+| `role(admin)`（平台管理员） | `platform:admin`，或 zhin `admin` | 管平台功能用 `platform:admin`；管 zhin 功能用 `admin`（需要授予） |
+| `role(owner,admin,master)` | `admin` 或 `platform:admin` | 同上，按功能归属选择 |
 | `role(owner,admin,master,trusted)` | `trusted` | |
 | `role(user)` | 删除该规则 | 所有人都满足 |
 | `scene_admin` / `platform(<适配器>,scene_admin)` | `platform:admin` | 归一地位；`platform:admin` 也接受群主 |
 | `scene_owner` / `platform(<适配器>,scene_owner)` | `platform:owner` | |
 | `platform(<适配器>,<权限>)` | `platform-permission:<权限>` | 读取 `sender.platform.permissions` |
 | —— | `platform-role:<id>` | 平台原生角色 id（如 Discord 身份组） |
+| `currentConversationBotRoles: ['owner', 'admin']` | `bot:admin` | 机器人自身的归一地位（新增） |
+| `currentConversationBotRoles: ['owner']` | `bot:owner` | |
+| —— | `bot-role:<id>` / `bot-permission:<名>` | 机器人自身的平台角色 / 权限（如 `bot-permission:ban_members`） |
 
-被移除的写法在定义命令 / 工具时直接报错，错误信息给出替代写法。`@zhin.js/permission` 删除了 `platform(adapter,perm)` 相关 API：`PermissionHost.registerPlatform`、`PlatformPermitChecker`、`definePlatformPermission`、`createSceneRolePlatformChecker`、`platformPermission()`、`isPlatformPermit`、`parsePlatformPermitName`；`PermissionSubject.sender` 改为 `{ id, name?, chatRole?, platform? }`。
+需要机器人执行的平台操作通常同时写发言者与机器人两个条件，例如禁言工具：`permissions: ['platform:admin', 'bot:admin']`。`currentConversationBotRoles` 仍可用于 permit 表达不了的精确集合（如「机器人不是群主时才能退群」：`['admin', 'member']`）。
 
-`@zhin.js/command` 的 `CONVERSATION_MANAGER_PERMIT` 改为 `admin`（`canManageConversation` = 私聊，或本会话 `admin`）。
+被移除的写法在定义命令、中间件、Agent 工具时直接报错，错误信息给出替代写法。`@zhin.js/permission` 删除了 `platform(adapter,perm)` 相关 API：`PermissionHost.registerPlatform`、`PlatformPermitChecker`、`definePlatformPermission`、`createSceneRolePlatformChecker`、`platformPermission()`、`isPlatformPermit`、`parsePlatformPermitName`；`PermissionSubject.sender` 改为 `{ id, name?, chatRole?, platform? }`，新增 `PermissionSubject.bot`（机器人自身身份）。
+
+`@zhin.js/command` 的 `CONVERSATION_MANAGER_PERMIT` 改为 `admin`（`canManageConversation` = 私聊，或本会话 zhin `admin`）。
 
 Console 页面与插件 RPC 的 `requiredRoles` 仍是 **Console 账号的角色名**（ADR 0049），不受本变更影响。
 
 ## 5. 其他行为变化
 
-- **Agent 安全策略**：危险工具、文件策略、主人审批按 `sender.chatRole` 判断；`owner` 等于以前的 `master`，`admin` 与 `trusted` 同为受信任档位。默认映射让群主 / 管理员成为本会话 `admin`，因此也获得受信任档位的工具权限；如不希望，在适配器块用 `roles.mappings` 关闭或收紧默认规则。审批私信发给账号（或其适配器 / 全局）上存储的 `owner`。
-- **群规**：「群主和管理员豁免」与群规审批改为看本会话的聊天角色 `admin`。
-- **内容审核**：`masters` 与 `inbound.bypassMasters` 删除，改为 `inbound.bypassRole`（`owner` / `admin` / `trusted` / `none`，默认 `owner`）。
-- **账号管理命令**（`<适配器> endpoint add|remove`）与聊天重启、聊天改配置：需要聊天角色 `owner`。以前「没有配置 master 时所有人都能执行」的放行已取消。
+- **Agent 安全策略**：危险工具、文件 / exec 策略、主人审批只看 `sender.chatRole`；`owner` 等于以前的 `master`，`admin` 与 `trusted` 同为受信任档位。平台群主 / 管理员不再因群内地位获得受信任档位。审批私信发给账号（或其适配器 / 全局）上存储的 `owner`。
+- **Agent 回合前过滤**：本回合可用的工具 / 技能按三条维度过滤后才披露；机器人身份在回合开始时读取（缓存），查询失败时 `bot:*` 一律不满足；执行工具时再校验一次。
+- **命令**：分发前按同一评估器判断；`platform:*` / `bot:*` 不满足时回复会说明缺哪一项（如「无法执行此指令：机器人不是本群管理员（或无法确认其身份）。」）；菜单只列出当前发言者可用的命令。
+- **群规**：「群主和管理员豁免」（`exempt.ownerAndAdmins`）豁免平台群主 / 管理员（`platform:admin`）与 zhin `owner`；zhin `admin` 不再自动豁免。群规审批仍看 zhin `admin`。
+- **内容审核**：`masters` 与 `inbound.bypassMasters` 删除，改为 `inbound.bypass`——permit 表达式列表，任一满足即跳过入站审查，默认 `[owner, "platform:admin"]`（内容审核是平台功能：默认豁免 zhin 主人与平台群主 / 管理员），`[]` 表示都审。
+- **账号管理命令**（`<适配器> endpoint add|remove`）与聊天重启、聊天改配置：需要 zhin 角色 `owner`。以前「没有配置 master 时所有人都能执行」的放行已取消。
 - **全局 owner**：从 `ai.trigger.masters` 迁来的全局 owner 已按适配器登记身份，因此也可以在私聊中使用聊天改配置。
+- **脚手架**：ICQQ 向导不再询问「主人 QQ 号」、不再写 `master`；完成后提示在 Console 账号的「角色」页签，或由已有 owner 在聊天中 `角色 授予 <QQ 号> owner 账号` 设置主人。
 - **测试工具** `@zhin.js/testing`：`createFakeMessage({ sender: { id, chatRole } })`；`PluginTestKit.receive` 信任测试声明的 `sender.chatRole` / `platform`。
 
 ## 6. 适配器作者
 
-适配器在入站消息的 `sender.platform` 上报归一的平台身份（`@zhin.js/im-contract` 的 `PlatformStanding`），在能力画像中声明能报告 `standing` / `roles` / `permissions` 中的哪些。在过渡期，Runtime 仍会从旧的 `sender.roles`（`owner` / `admin`）与 `sender.permissions` 推出 `platform`。工具若用 `platform-permission:<名>`，适配器需要把这些权限名放进 `sender.platform.permissions`。
+- 在入站消息的 `sender.platform` 上报归一的发言者平台身份（`@zhin.js/im-contract` 的 `PlatformStanding`），在能力画像 `scene.platformStanding` 中声明能报告 `standing` / `roles` / `permissions` 中的哪些。在过渡期，Runtime 仍会从旧的 `sender.roles`（`owner` / `admin`）与 `sender.permissions` 推出 `platform`。
+- 平台能查询机器人自身在会话中的身份时，实现 `management.inspectSelfStanding({ conversation, signal })`（返回 `PlatformStanding` 或 `undefined`），并在能力画像中声明 `scene.selfStanding`。不要自己缓存或按消息调用：框架经 `AdapterIndex.selfStanding` 按会话缓存，并在机器人角色变化事件（`member.role_changed`、机器人自身的 `member.joined` / `member.left`）时失效。声明了 `scene.selfStanding` 却没有实现该方法会在装配时报错。
+- 工具若用 `platform-permission:<名>` / `bot-permission:<名>`，适配器需要把这些权限名放进对应身份的 `permissions`。

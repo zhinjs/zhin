@@ -5,7 +5,7 @@
  * role resolution behind `sender.chatRole`, and installs the in-chat `feature` / `role` commands
  * when `features.selfService.enabled` is true.
  */
-import { ChatRoleService, createMappingChatRoleSource, type MappingChatRoleSource } from '@zhin.js/core';
+import { ChatRoleService } from '@zhin.js/core';
 import type { ConsoleAuditEntry } from '@zhin.js/host-http';
 import { getLogger } from '@zhin.js/logger';
 import {
@@ -13,7 +13,7 @@ import {
   type DatabaseHost, type SnapshotReader,
 } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
-import { ChatRoleMappingStore, ChatRoleStore, defineChatRoleTable, type InstanceChatRoleService } from './chat-roles.js';
+import { ChatRoleStore, defineChatRoleTable, type InstanceChatRoleService } from './chat-roles.js';
 import {
   defineFeatureConversationTable, FeatureConversationOverrideStore,
   type FeatureRecentConversation, type FeatureRpcContext, type FeatureStores,
@@ -31,9 +31,6 @@ export interface FeatureHostOptions {
 export interface FeatureHost {
   readonly stores: FeatureStores;
   readonly roles: InstanceChatRoleService;
-  readonly mappings: ChatRoleMappingStore;
-  /** Live mapping source (also remembers mapped senders for listings). */
-  readonly mappingSource: MappingChatRoleSource;
   /** Stored owners of an account, closest scope first (owner approval address). */
   resolveEndpointOwner(alias: string, endpointId: string): string | undefined;
   readonly selfService: FeatureSelfServiceConfig;
@@ -50,9 +47,7 @@ export function createFeatureHost(options: FeatureHostOptions): FeatureHost {
   defineChatRoleTable(options.database);
   const selfService = readFeatureSelfServiceConfig(options.hostConfig);
   const conversations = new FeatureConversationOverrideStore({ database: options.database });
-  const mappings = new ChatRoleMappingStore({ database: options.database });
-  const mappingSource = createMappingChatRoleSource({ conversationLayer: key => mappings.layer(key) });
-  const roles: InstanceChatRoleService = new ChatRoleService({ store: new ChatRoleStore({ database: options.database }), sources: [mappingSource] });
+  const roles: InstanceChatRoleService = new ChatRoleService({ store: new ChatRoleStore({ database: options.database }) });
   const resolveEndpointOwner = (alias: string, endpointId: string): string | undefined => {
     try { return roles.ownersOf(`${alias}/${endpointId}`, alias)[0]; } catch { return undefined; }
   };
@@ -78,7 +73,7 @@ export function createFeatureHost(options: FeatureHostOptions): FeatureHost {
       });
     } finally { lease.release(); }
   };
-  const stores: FeatureStores = Object.freeze({ conversations, roles, mappings, recentConversations });
+  const stores: FeatureStores = Object.freeze({ conversations, roles, recentConversations });
   let loaded = false;
   const install: FeatureHost['install'] = deps => context => {
     context.resources.provide(featureConversationOverridesToken, conversations.reader);
@@ -88,7 +83,6 @@ export function createFeatureHost(options: FeatureHostOptions): FeatureHost {
         if (loaded) return;
         await conversations.load(id => getLogger('feature').warn(`Skipped malformed conversation override ${id}`));
         await roles.store.load();
-        await mappings.load();
         await options.afterLoad?.(roles);
         loaded = true;
       },
@@ -96,10 +90,9 @@ export function createFeatureHost(options: FeatureHostOptions): FeatureHost {
     installFeatureSelfService({
       config: selfService, roles, snapshots: options.snapshots(),
       context: { ...deps.context, stores },
-      mappingLayer: key => mappings.layer(key),
       ...(deps.context.publishEvent ? { publishEvent: deps.context.publishEvent } : {}),
       ...(deps.audit ? { audit: deps.audit } : {}),
     })(context);
   };
-  return Object.freeze({ stores, roles, mappings, mappingSource, resolveEndpointOwner, selfService, install });
+  return Object.freeze({ stores, roles, resolveEndpointOwner, selfService, install });
 }

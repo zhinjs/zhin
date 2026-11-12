@@ -5,8 +5,8 @@
 import { checkBuiltinPermit, type PermissionSubject } from '@zhin.js/permission';
 
 /**
- * 会话管理者：本会话层级链上的聊天角色 `admin`（含 `owner`）。平台群主 / 管理员经默认映射规则
- * 即为本会话 `admin`（ADR 0056 §4）。
+ * 会话管理者：本会话层级链上的 zhin 聊天角色 `admin`（含 `owner`）。平台群主 / 管理员不自动具备
+ * （ADR 0056 §4，2026-11-12 修订）：订阅等 zhin 功能需要被授予的角色。
  */
 export const CONVERSATION_MANAGER_PERMIT = 'admin';
 

@@ -8,6 +8,7 @@ export default defineAgentTool<{ chat_id: string }>({
   }),
   adapter: 'lark',
   scopes: ["group"],
+  permissions: ['platform:owner', 'bot:owner'],
   tags: ['lark'],
   async execute({ chat_id   }: { chat_id: string }, context) {
     const endpoint = context.$client;

@@ -11,7 +11,7 @@ export default defineAgentTool<{ guild_id: string; name: string }>({
   adapter: 'kook',
   scopes: ["channel"],
   tags: ['kook'],
-  permissions: ['platform-permission:guild_owner'],
+  permissions: ['platform:owner', 'bot-permission:manage_roles'],
   async execute({ guild_id, name  }: { guild_id: string; name: string }, context) {
     const client = context.$client;
     const role = await client.pickGuild(guild_id).createRole(name);

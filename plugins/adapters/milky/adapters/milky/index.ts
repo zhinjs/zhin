@@ -43,7 +43,8 @@ export default defineAdapter<MilkyEndpointConfig>({
       delivery: { send: true, proactive: true, spool: true },
     },
     // ADR 0056 §1：群消息 group_member.role → sender.platform.standing。
-    group: { scene: { platformStanding: { standing: true } } },
+    // ADR 0056 §1：发言者与机器人自身的群内地位（get_group_member_info self，供 bot:* permit）。
+    group: { scene: { platformStanding: { standing: true }, selfStanding: { standing: true } } },
   },
   createAdapter: context => new MilkyAdapter(context),
 });

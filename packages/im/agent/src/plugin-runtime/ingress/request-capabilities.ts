@@ -15,7 +15,7 @@ import type { TurnContextState } from '../../turn/turn-ingress.js';
 import type { ToolCapability } from '../capability-ingress.js';
 import type { CapabilityId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import type { SceneFactRefresher } from './scene-fact-refresher.js';
-import type { ConversationRef, SelfProfilePort } from '@zhin.js/im-contract';
+import type { ConversationRef, PlatformStanding, SelfProfilePort } from '@zhin.js/im-contract';
 
 export type EndpointOwnerResolver = (adapterLocalName: string, endpointKey: string) => string | undefined;
 const logger = getLogger('agent');
@@ -320,7 +320,37 @@ export function resolveRuntimeTurnCapabilities(
  * card, sender role/card/title/mute) before tool discovery. Bot, group and sender facts all use the
  * two-level cache (memory 60 s → database → platform). Failed lookups omit their fields.
  */
-export async function resolveRuntimeTurnContextState(
+export async function resolveRuntimeTurnContextState(request: RuntimeTurnContextRequest): Promise<TurnContextState | undefined> {
+  const { snapshot, conversation, signal } = request;
+  const adapters = snapshot.projections?.get(adapterFeatureId);
+  // ADR 0056 §1: the Bot's own standing (`bot:*` permits), from the Adapter index cache, in parallel.
+  const selfStanding = conversation.kind !== 'private' && isAdapterIndex(adapters) && typeof adapters.selfStanding === 'function'
+    ? adapters.selfStanding(conversation.endpoint.id as CapabilityId, conversation, { signal }).catch(() => undefined)
+    : Promise.resolve(undefined);
+  const [state, standing] = await Promise.all([resolveTurnFacts(request), selfStanding]);
+  signal.throwIfAborted();
+  return withBotStanding(state, standing, conversation.kind);
+}
+
+/**
+ * Adds `bot.platform` from the declared self-standing lookup (the permit subject falls back to the
+ * member-role fact when there is none) and fills a missing `platformRole` from it.
+ */
+function withBotStanding(
+  state: TurnContextState | undefined,
+  standing: PlatformStanding | undefined,
+  kind: ConversationRef['kind'],
+): TurnContextState | undefined {
+  if (kind === 'private' || !standing) return state;
+  const bot = state?.bot ?? {};
+  const platform = standing;
+  const platformRole = bot.platformRole ?? (platform.standing === 'guest' ? undefined : platform.standing);
+  const { platformRoleError, ...rest } = bot;
+  return Object.freeze({ ...(state ?? {}), bot: Object.freeze({ ...rest, platform,
+    ...(platformRole ? { platformRole } : platformRoleError ? { platformRoleError } : {}) }) });
+}
+
+async function resolveTurnFacts(
   { snapshot, conversation, signal, senderId, selfProfile, factServices: deps = {} }: RuntimeTurnContextRequest,
 ): Promise<TurnContextState | undefined> {
   signal.throwIfAborted();
@@ -461,7 +491,7 @@ export async function resolveRuntimeTurnContextState(
 
 /**
  * Sender roles derive only from the Runtime-set `sender.chatRole` (ADR 0056: stored grants and
- * mapping rules along the conversation's scope chain). `isMaster` means the chat role `owner`;
+ * along the conversation's scope chain; platform standing never counts). `isMaster` means the chat role `owner`;
  * `isTrusted` means `trusted` or `admin` (admin includes trusted) without owner.
  */
 export function resolveRuntimeSenderRoles(message: Pick<Message, 'sender'>): RuntimeSenderRoles {

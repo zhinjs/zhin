@@ -44,7 +44,7 @@ database:
 
 ## 禁言惩罚
 
-- 按群开关，默认关闭。只有群主、群管理员、机器人主人或受信任用户可以切换；判断的是适配器投影到消息上的规范角色（`owner` / `admin` / `master` / `trusted`），不额外请求平台。
+- 按群开关，默认关闭。只有本会话 zhin 聊天角色 `trusted` 及以上（`owner` / `admin` / `trusted`，ADR 0056）可以切换；平台群主 / 管理员身份不算，需要先被授予 zhin 角色。实际禁言还要求机器人在群里有禁言权限。
 - 插件不判断平台名称。每次需要时，用消息自带的 `conversation.endpoint`（适配器插件和 Endpoint 能力 id）走 `project(adapterFeatureId).connection(adapter, endpointId)`，再看 `resolveEndpointManagement(endpoint)?.muteGroupMember` 是否存在。存在就能禁言，不存在（或运行时没有 Adapter Feature）就只计分。
 - 超时判负由 `schedules/deadlines` 每 5 秒检查一次，它拿到的也是同样的能力上下文，所以超时的输家同样会按上面的规则处理。
 - 平台不支持禁言时无法开启；开启后平台失去这项能力，或禁言被拒绝（例如机器人不是群管理员），这一局照常结算，只是不禁言。

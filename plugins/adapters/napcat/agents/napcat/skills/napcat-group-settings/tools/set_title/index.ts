@@ -12,7 +12,7 @@ export default defineAgentTool<{ group_id: number; user_id: number; title: strin
   adapter: 'napcat',
   tags: ['napcat', 'qq'],
   keywords: ['头衔', 'title', '专属头衔', '设置头衔'],
-  permissions: ['platform(napcat,scene_owner)'],
+  permissions: ['platform:owner', 'bot:owner'],
   scopes: ['group'],
   async execute({ group_id, user_id, title }: { group_id: number; user_id: number; title: string }, context) {
     const endpoint = context.$client;

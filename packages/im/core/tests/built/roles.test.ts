@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
-  ChatRoleService, chatRoleIncludes, chatScopeChain, chatScopeCovers, createChatRoleSenderEnricher, createMappingChatRoleSource,
-  effectiveChatRoleMappings, evaluateChatRoleMappings, expandChatRole, mergeChatRoleMappings, parseChatRoleMappingLayer,
-  parseChatRoleMappingRule, platformStandingOf, stripUserSpoofedSenderPrefix,
-  type ChatRoleEntry, type ChatRoleMappingLayer,
+  ChatRoleService, chatRoleIncludes, chatScopeChain, chatScopeCovers, createChatRoleSenderEnricher,
+  expandChatRole, platformStandingOf, stripUserSpoofedSenderPrefix,
+  type ChatRoleEntry,
 } from '../../src/built/roles.js';
+import * as roles from '../../src/built/roles.js';
 
 const grant = (entry: Omit<ChatRoleEntry, 'source'>): ChatRoleEntry => ({ ...entry, source: 'grant' });
 
@@ -56,76 +56,14 @@ describe('chat roles (ADR 0056)', () => {
   });
 });
 
-describe('mapping rules (ADR 0056 §4)', () => {
-  it('validates rules; trusted / owner grants only at the conversation level', () => {
-    expect(parseChatRoleMappingRule({ match: { standing: 'owner' }, grant: 'admin' }, 'adapter')).toEqual({ match: { standing: ['owner'] }, grant: 'admin' });
-    expect(() => parseChatRoleMappingRule({ match: { standing: ['owner'] }, grant: 'owner' }, 'endpoint')).toThrow(/only allowed in conversation/);
-    expect(() => parseChatRoleMappingRule({ match: { role: '1' }, grant: 'trusted' }, 'adapter')).toThrow(/only allowed in conversation/);
-    expect(parseChatRoleMappingRule({ match: { role: ['b', 'a'] }, grant: 'trusted' }, 'conversation').match).toEqual({ role: ['a', 'b'] });
-    expect(() => parseChatRoleMappingRule({ match: {}, grant: 'admin' }, 'adapter')).toThrow(/needs standing, role or permission/);
-    expect(() => parseChatRoleMappingRule({ match: { standing: ['boss'] }, grant: 'admin' }, 'adapter')).toThrow(/standing/);
-    expect(() => parseChatRoleMappingRule({ match: { level: 1 }, grant: 'admin' }, 'adapter')).toThrow(/unknown fields/);
-    expect(() => parseChatRoleMappingRule({ match: { standing: ['owner'] }, grant: 'master' }, 'adapter')).toThrow(/grant/);
-    expect(parseChatRoleMappingLayer(undefined, 'adapter')).toBeUndefined();
-    expect(parseChatRoleMappingLayer({ inherit: false }, 'adapter')).toEqual({ level: 'adapter', rules: [], inherit: false });
-    expect(() => parseChatRoleMappingLayer({ mappings: [{ match: {}, grant: 'admin' }] }, 'adapter')).toThrow(/roles\.mappings\[0\]/);
-  });
-
-  it('starts from the default rule; lower levels append or override the same match; inherit:false drops everything above', () => {
-    expect(mergeChatRoleMappings([])).toEqual([{ match: { standing: ['admin', 'owner'] }, grant: 'admin', level: 'default' }]);
-    const tightened: ChatRoleMappingLayer[] = [
-      { level: 'adapter', rules: [{ match: { standing: ['admin', 'owner'] }, grant: 'none' }, { match: { standing: ['owner'] }, grant: 'admin' }] },
-      { level: 'conversation', rules: [{ match: { role: ['42'] }, grant: 'trusted' }] },
-    ];
-    expect(mergeChatRoleMappings(tightened)).toEqual([
-      { match: { standing: ['owner'] }, grant: 'admin', level: 'adapter' },
-      { match: { role: ['42'] }, grant: 'trusted', level: 'conversation' },
-    ]);
-    expect(mergeChatRoleMappings([{ level: 'endpoint', rules: [], inherit: false }])).toEqual([]);
-    // A configuration layer can never smuggle owner / trusted grants in.
-    expect(mergeChatRoleMappings([{ level: 'adapter', rules: [{ match: { standing: ['owner'] }, grant: 'owner' }] }]))
-      .toEqual([{ match: { standing: ['admin', 'owner'] }, grant: 'admin', level: 'default' }]);
-  });
-
-  it('evaluates every criterion of a rule and picks the highest grant', () => {
-    const rules = mergeChatRoleMappings([{ level: 'conversation', rules: [
-      { match: { standing: ['member'], permission: ['ban_members'] }, grant: 'trusted' },
-      { match: { role: ['mods'] }, grant: 'owner' },
-    ] }]);
-    expect(evaluateChatRoleMappings(rules, { standing: 'admin' })?.role).toBe('admin');
-    expect(evaluateChatRoleMappings(rules, { standing: 'member' })).toBeUndefined();
-    expect(evaluateChatRoleMappings(rules, { standing: 'member', permissions: ['ban_members'] })?.role).toBe('trusted');
-    expect(evaluateChatRoleMappings(rules, { standing: 'guest', roles: [{ id: 'mods' }] })?.role).toBe('owner');
-    expect(evaluateChatRoleMappings(rules, undefined)).toBeUndefined();
-  });
-
-  it('reads adapter and account rules from the live configuration and the stored conversation layer', () => {
-    const live = snapshot({
-      roles: { mappings: [{ match: { standing: ['admin', 'owner'] }, grant: 'none' }] },
-      endpoints: [{ id: 'bot-1', roles: { mappings: [{ match: { standing: ['owner'] }, grant: 'admin' }] } }, { id: 'bot-2' }],
-    });
-    expect(effectiveChatRoleMappings('qq/bot-1/group:1', live)).toEqual([{ match: { standing: ['owner'] }, grant: 'admin', level: 'endpoint' }]);
-    expect(effectiveChatRoleMappings('qq/bot-2/group:1', live)).toEqual([]);
-    const stored = (key: string): ChatRoleMappingLayer | undefined => key === 'qq/bot-2/group:1'
-      ? { level: 'conversation', rules: [{ match: { standing: ['admin'] }, grant: 'trusted' }] } : undefined;
-    expect(effectiveChatRoleMappings('qq/bot-2/group:1', live, stored)).toEqual([{ match: { standing: ['admin'] }, grant: 'trusted', level: 'conversation' }]);
-  });
-
-  it('maps only into the message conversation, live, and lists recently seen mapped senders', () => {
-    const source = createMappingChatRoleSource();
-    const roles = new ChatRoleService({ store: { list: () => [] }, sources: [source] });
-    const live = snapshot();
-    const context = { conversationKey: 'qq/bot-1/group:1', platform: { standing: 'admin' as const }, snapshot: live };
-    expect(roles.roleAt({ adapter: 'qq', userId: 'mod' }, 'qq/bot-1/group:1', context)).toBe('admin');
-    expect(roles.roleAt({ adapter: 'qq', userId: 'mod' }, 'qq/bot-1', context)).toBeUndefined();
-    expect(roles.roleAt({ adapter: 'qq', userId: 'mod' }, 'qq/bot-1/group:2', context)).toBeUndefined();
-    expect(roles.roleAt({ adapter: 'qq', userId: 'mod' }, 'qq/bot-1/group:1', { ...context, platform: { standing: 'member' } })).toBeUndefined();
-    source.record({ adapter: 'qq', userId: 'mod' }, context, 5);
-    expect(roles.list('qq/bot-1/group:1')).toEqual([expect.objectContaining({ source: 'mapping', role: 'admin', userId: 'mod', grantedAt: 5,
-      detail: 'mapping:default standing=admin|owner' })]);
-    // Losing the platform standing removes the mapped role from listings too.
-    source.record({ adapter: 'qq', userId: 'mod' }, { ...context, platform: { standing: 'member' } }, 6);
-    expect(roles.list('qq/bot-1/group:1')).toEqual([]);
+describe('no platform → zhin role mapping (ADR 0056 §4, revised 2026-11-12)', () => {
+  it('exports no mapping API; zhin roles come only from stored grants', () => {
+    for (const name of ['createMappingChatRoleSource', 'DEFAULT_CHAT_ROLE_MAPPINGS', 'mergeChatRoleMappings', 'parseChatRoleMappingLayer']) {
+      expect(name in roles).toBe(false);
+    }
+    const service = new ChatRoleService({ store: { list: () => [] } });
+    // A platform group admin holds no zhin role.
+    expect(service.roleAt({ adapter: 'qq', userId: 'mod' }, 'qq/bot-1/group:1')).toBeUndefined();
   });
 });
 
@@ -133,18 +71,16 @@ describe('createChatRoleSenderEnricher', () => {
   const conversation = (kind: 'group' | 'private') => ({ endpoint: { id: 'ep', adapter: 'qq' }, kind, id: kind === 'group' ? '1' : 'mod' }) as const;
 
   it('drops spoofed chat roles, normalizes the platform standing and resolves the conversation role', () => {
-    const roles = new ChatRoleService({ store: { list: () => [grant({ level: 'endpoint', key: 'qq/bot-1', adapter: 'qq', userId: 'boss', role: 'owner' })] },
-      sources: [createMappingChatRoleSource()] });
-    const resolved: string[] = [];
-    const enrich = createChatRoleSenderEnricher({ roles: () => roles, onResolved: identity => resolved.push(identity.userId) });
+    const service = new ChatRoleService({ store: { list: () => [grant({ level: 'endpoint', key: 'qq/bot-1', adapter: 'qq', userId: 'boss', role: 'owner' })] } });
+    const enrich = createChatRoleSenderEnricher({ roles: () => service });
     expect(enrich({ id: 'boss', chatRole: 'trusted' } as never, conversation('group'), snapshot())).toEqual({ id: 'boss', chatRole: 'owner' });
+    // Platform admins keep their standing but get no zhin role from it.
     expect(enrich({ id: 'mod', platform: { standing: 'admin' } } as never, conversation('group'), snapshot()))
-      .toEqual({ id: 'mod', platform: { standing: 'admin' }, chatRole: 'admin' });
+      .toEqual({ id: 'mod', platform: { standing: 'admin' } });
     // Private chats: no platform standing, no mapped role.
     expect(enrich({ id: 'mod', platform: { standing: 'owner' } } as never, conversation('private'), snapshot()))
       .toEqual({ id: 'mod' });
     expect(enrich({ id: 'eve', chatRole: 'owner' } as never, conversation('group'), snapshot())).toEqual({ id: 'eve' });
-    expect(resolved).toEqual(['boss', 'mod', 'mod', 'eve']);
     // Without a role service only the normalization runs.
     expect(createChatRoleSenderEnricher({ roles: () => undefined })({ id: 'x', chatRole: 'owner' } as never, conversation('group'), snapshot()))
       .toEqual({ id: 'x' });

@@ -9,7 +9,7 @@ export default defineAgentTool<{ channel_id: string }>({
   adapter: 'qq',
   scopes: ["channel"],
   tags: ['qq'],
-  permissions: ['platform-permission:guild_admin'],
+  permissions: ['platform:admin'],
   async execute({ channel_id  }: { channel_id: string }, context) {
     const client = context.$client;
     return client.channelService.getInfo(channel_id);

@@ -98,8 +98,10 @@ export interface GroupRuleViolationReport {
   readonly conversation: ConversationRef;
   readonly memberId: string;
   readonly memberName?: string;
-  /** 违规者在本会话的聊天角色（ADR 0056；`admin` 及以上按群规豁免）。 */
+  /** 违规者在本会话的 zhin 聊天角色（ADR 0056；`owner` 按群规豁免）。 */
   readonly memberChatRole?: 'owner' | 'admin' | 'trusted';
+  /** 违规者的平台身份（ADR 0056 §1；群主 / 管理员按群规豁免）。 */
+  readonly memberPlatform?: import('@zhin.js/im-contract').PlatformStanding;
   readonly trigger: GroupRuleViolationTrigger;
   /** 原消息发出时间（毫秒）。 */
   readonly sentAt: number;

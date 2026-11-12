@@ -1,4 +1,4 @@
-import { EndpointDeliveryError, type ConversationRef, type PlatformStanding } from '@zhin.js/im-contract';
+import { EndpointDeliveryError, type ConversationRef, type PlatformStanding, type SelfStandingRequest } from '@zhin.js/im-contract';
 /**
  * KookEndpoint — lifecycle, outbound, admit, OpenAPI helpers for agent tools.
  */
@@ -89,7 +89,7 @@ export class KookWebsocketEndpoint extends RuntimeKookClient implements Endpoint
   #open = false;
   #executionSignal?: AbortSignal;
   #started = false;
-  readonly #management: EndpointManagement = createKookEndpointManagement(() => this.#requireClient());
+  readonly #management: EndpointManagement = createKookEndpointManagement(() => this.#requireClient(), this.#roles);
   readonly #control: EndpointControl = Object.freeze<EndpointControl>({
     recall: request => recallKookMessage(this.#requireClient(), request),
   });
@@ -253,7 +253,7 @@ export class KookWebhookEndpoint extends RuntimeKookClient implements Endpoint {
   #open = false;
   #executionSignal?: AbortSignal;
   #started = false;
-  readonly #management: EndpointManagement = createKookEndpointManagement(() => this.#requireClient());
+  readonly #management: EndpointManagement = createKookEndpointManagement(() => this.#requireClient(), this.#roles);
   readonly #control: EndpointControl = Object.freeze<EndpointControl>({
     recall: request => recallKookMessage(this.#requireClient(), request),
   });
@@ -436,8 +436,24 @@ function isKookTextChannelType(type: string | number | undefined): boolean {
  */
 export function createKookEndpointManagement(
   requireClient: () => KookClientTransport,
+  roles: KookSenderRoleResolver = new KookSenderRoleResolver(requireClient),
 ): EndpointManagement {
   return Object.freeze<EndpointManagement>({
+    /**
+     * ADR 0056 §1: the Bot's own standing in the channel's guild (`/v3/user/view` self → its role
+     * ids, then the same guild owner / role-permission resolution as senders).
+     */
+    async inspectSelfStanding({ conversation, signal }: SelfStandingRequest): Promise<PlatformStanding | undefined> {
+      const guildId = conversation.kind === 'channel' ? conversation.parent?.id : undefined;
+      if (!guildId) return undefined;
+      const operation = createEndpointOperation({ signal });
+      const client = requireClient();
+      const selfId = client.self_id != null ? String(client.self_id) : undefined;
+      if (!selfId) return undefined;
+      const { data } = await operation.run(() => client.request.get('/v3/user/view', { params: { user_id: selfId, guild_id: guildId } }));
+      const held = Array.isArray((data as { roles?: unknown })?.roles) ? (data as { roles: unknown[] }).roles.map(Number).filter(Number.isFinite) : [];
+      return roles.resolve({ guildId, authorId: selfId, authorRoles: held });
+    },
     async listGroups(request: EndpointManagementRequest = {}): Promise<readonly EndpointGroup[]> {
       const operation = createEndpointOperation(request);
       const guilds = await operation.run(() => requireClient().getGuildList());

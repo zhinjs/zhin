@@ -291,8 +291,8 @@ describe('mute penalty', () => {
   });
 
   it('only a bot manager may switch it, and a platform without muting refuses to enable it', async () => {
-    expect(await say('bob', '开启禁言')).toBe('只有群主、群管理员、机器人主人或受信任用户可以修改禁言惩罚。');
-    expect(await say('bob', '开启禁言', {})).toBe('只有群主、群管理员、机器人主人或受信任用户可以修改禁言惩罚。');
+    expect(await say('bob', '开启禁言')).toBe('只有本会话 zhin 角色 trusted 及以上（owner / admin / trusted）的用户可以修改禁言惩罚。');
+    expect(await say('bob', '开启禁言', {})).toBe('只有本会话 zhin 角色 trusted 及以上（owner / admin / trusted）的用户可以修改禁言惩罚。');
     expect(await say('owner', '开启禁言', { chatRole: 'owner' })).toContain('当前平台不支持禁言');
     expect(await say('carol', '开启禁言', { chatRole: 'admin' })).toContain('当前平台不支持禁言');
     expect(await say('dave', '开启禁言', { chatRole: 'admin' })).toContain('当前平台不支持禁言');

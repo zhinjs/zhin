@@ -13,6 +13,7 @@ export default defineAgentTool<{ group_id: number; user_id: number; duration?: n
   // ADR 0044: offered only while the Bot can actually do this here (e.g. it is a group admin).
   requiresCapabilities: ['actions.mute'],
   scopes:['group'],
+  permissions: ['platform:admin', 'bot:admin'],
   requiresApproval: 'always',
   async execute({ group_id, user_id, duration }, context) {
     const client = context.$client;

@@ -53,6 +53,12 @@ export type ButtonClickResult = SendContent | number | boolean | null | void;
 export type ButtonClickHandler = (message: Message) => ButtonClickResult | Promise<ButtonClickResult>;
 export type ButtonProps = Omit<ButtonData, 'id' | 'label' | 'payload'> & {
   readonly id?: string;
+  /**
+   * `onClick` buttons only (ADR 0056 §5): built-in permit expressions the *clicker* must satisfy
+   * (zhin role, platform standing, `bot:*`), checked by the same evaluator as commands and Agent
+   * tools. Unmet = the callback does not run and the clicker gets the reason. Never sent to the platform.
+   */
+  readonly permit?: readonly string[];
 } & (
   | { readonly label: string; readonly children?: never }
   | { readonly children: string; readonly label?: never }

@@ -1,13 +1,15 @@
+import { checkBuiltinPermit, type PermissionSubject } from '@zhin.js/permission';
 import type { ModerationConfig } from './types.js';
 
 export interface BypassInput {
   readonly sender?: string;
   readonly conversationId: string;
-  /** The sender's chat role in this conversation (ADR 0056, Runtime-set `sender.chatRole`). */
-  readonly chatRole?: 'owner' | 'admin' | 'trusted';
+  /**
+   * The message projected for the shared permit evaluator (`toPermissionSubject(message)`): zhin
+   * chat role (`sender.chatRole`) and platform standing (`sender.platform`), ADR 0056 §5.
+   */
+  readonly subject?: PermissionSubject;
 }
-
-const RANK = { trusted: 1, admin: 2, owner: 3 } as const;
 
 export function shouldBypassInbound(
   config: ModerationConfig,
@@ -18,8 +20,8 @@ export function shouldBypassInbound(
   const sender = input.sender?.trim();
   if (sender) {
     if (config.inbound.whitelist.userIds.includes(sender)) return true;
-    const bypass = config.inbound.bypassRole;
-    if (bypass !== 'none' && input.chatRole && RANK[input.chatRole] >= RANK[bypass]) return true;
+    const subject = input.subject;
+    if (subject && config.inbound.bypass.some(permit => checkBuiltinPermit(permit, subject))) return true;
   }
 
   if (config.inbound.whitelist.conversationIds.includes(input.conversationId)) {

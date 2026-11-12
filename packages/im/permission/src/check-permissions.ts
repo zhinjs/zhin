@@ -23,5 +23,5 @@ export async function checkPermissions(
   try { host = context.use(permissionHostToken); }
   catch { return false; }
   if (!host || typeof host.checkAll !== 'function') return false;
-  return host.checkAll(permits, subject);
+  return host.checkAll(permits, subject, { source });
 }

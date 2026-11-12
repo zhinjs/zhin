@@ -46,11 +46,13 @@ export default defineAdapter<QqEndpointConfig>({
     },
     group: {
       delivery: { passiveWindow: { seconds: 300, maxMessages: 5 } },
+      // ADR 0056 §1：机器人自身群内角色（getBotState.member_role），供 bot:* permit。
+      scene: { selfStanding: { standing: true } },
     },
     channel: {
       delivery: { passiveWindow: { seconds: 300, maxMessages: 5 } },
       // ADR 0056 §1：频道消息的 member.roles → standing（频道主 / 超级管理员）+ 原始身份组 roles。
-      scene: { platformStanding: { standing: true, roles: true } },
+      scene: { platformStanding: { standing: true, roles: true }, selfStanding: { standing: true, roles: true } },
     },
   },
   createAdapter: context => new QqAdapter(context),

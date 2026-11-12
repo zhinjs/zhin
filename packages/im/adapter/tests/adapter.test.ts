@@ -1299,6 +1299,50 @@ describe('Adapter capability profile assembly (ADR 0044)', () => {
     await index.stop();
   });
 
+  it('reports the Bot\'s own standing only where declared, cached per conversation and dropped on invalidation (ADR 0056 §1)', async () => {
+    const inspect = vi.fn(async ({ conversation }: { conversation: { id: string } }) =>
+      conversation.id === 'g1' ? { standing: 'admin' as const, permissions: ['ban_members'] } : undefined);
+    const selfProfile = { ...profile, group: { ...profile.group, scene: { selfStanding: { standing: true, permissions: true } } } };
+    const slot = createCapabilitySlot({
+      owner: rootPluginId(), feature: adapterFeatureId, localName: 'icqq-like', source: '/adapters/x/index.ts',
+      definition: defineFixtureAdapter({
+        capabilities: ['outbound'], profile: selfProfile,
+        createEndpoint: () => new TestEndpoint({ send: async () => 'id', management: { muteGroupMember: async () => undefined, inspectSelfStanding: inspect } }),
+      }),
+    });
+    const index = await createAdapterIndex([slot], snapshot([slot]));
+    await index.activate(new AbortController().signal);
+    const [first, second] = await Promise.all([index.selfStanding(slot.id, group), index.selfStanding(slot.id, group)]);
+    expect(first).toEqual({ standing: 'admin', permissions: ['ban_members'] });
+    expect(second).toEqual(first);
+    expect(inspect).toHaveBeenCalledTimes(1);
+    expect(await index.selfStanding(slot.id, group)).toEqual(first);
+    expect(inspect).toHaveBeenCalledTimes(1);
+    // Private chats and undeclared kinds never ask the platform.
+    expect(await index.selfStanding(slot.id, { ...group, kind: 'private' })).toBeUndefined();
+    expect(await index.selfStanding(slot.id, { ...group, kind: 'channel' })).toBeUndefined();
+    expect(inspect).toHaveBeenCalledTimes(1);
+    // A role event drops the cached answer; cachedOnly answers from the cache and refreshes in the background.
+    index.invalidateSelfStanding(slot.id, group);
+    expect(await index.selfStanding(slot.id, group, { cachedOnly: true })).toBeUndefined();
+    await vi.waitFor(() => expect(inspect).toHaveBeenCalledTimes(2));
+    await vi.waitFor(async () => expect(await index.selfStanding(slot.id, group, { cachedOnly: true })).toEqual(first));
+    // Unknown answers are cached briefly too (no lookup per message).
+    expect(await index.selfStanding(slot.id, { ...group, id: 'g2' })).toBeUndefined();
+    expect(await index.selfStanding(slot.id, { ...group, id: 'g2' })).toBeUndefined();
+    expect(inspect).toHaveBeenCalledTimes(3);
+    await index.stop();
+  });
+
+  it('rejects scene.selfStanding without management.inspectSelfStanding', async () => {
+    const slot = createCapabilitySlot({
+      owner: rootPluginId(), feature: adapterFeatureId, localName: 'icqq-like', source: '/adapters/x/index.ts',
+      definition: defineFixtureAdapter({ capabilities: ['outbound'], profile: { default: { delivery: { send: true } }, group: { scene: { selfStanding: { standing: true } } } },
+        createEndpoint: () => new TestEndpoint({ send: async () => 'id' }) }),
+    });
+    await expect(createAdapterIndex([slot], snapshot([slot]))).rejects.toThrow('declares scene.selfStanding but management.inspectSelfStanding is missing');
+  });
+
   it('derives a conservative profile from legacy declarations when none is declared', async () => {
     const slot = createCapabilitySlot({
       owner: rootPluginId(), feature: adapterFeatureId, localName: 'legacy', source: '/adapters/legacy/index.ts',

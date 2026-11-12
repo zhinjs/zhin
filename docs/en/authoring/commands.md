@@ -150,14 +150,27 @@ export default defineCommand({
 | Rule | Meaning |
 | --- | --- |
 | `owner` / `admin` / `trusted` / `role(admin,trusted)` | The sender's chat role along this conversation's scope chain (`owner` ⊃ `admin` ⊃ `trusted`) |
-| `platform:owner` / `platform:admin` / `platform-role:<id>` / `platform-permission:<name>` | The adapter-reported platform identity |
+| `platform:owner` / `platform:admin` / `platform-role:<id>` / `platform-permission:<name>` | The sender's platform standing (`sender.platform`, reported by the adapter) |
+| `bot:owner` / `bot:admin` / `bot-role:<id>` / `bot-permission:<name>` | The bot account's own standing in this conversation (cached per conversation; unknown means unmet) |
 | `adapter(icqq)` | Only on one platform |
 | `group()` / `private()` / `channel()` | Restrict conversation kind; an empty value or `*` matches any ID of that kind |
 | `group(123)` / `private(…)` / `channel(…)` / `user(…)` | Compare the corresponding conversation or sender ID, without restricting the complete account, parent or thread |
 
-All rules in the array must pass (**AND**); commas inside one rule mean **any of** (OR). Users without permission don't see the command's help either.
+All rules in the array must pass (**AND**); commas inside one rule mean **any of** (OR). Users without permission don't see the command's help either, and the command menu lists only commands the sender can run in this conversation.
 
-Roles come from the actual message (`sender.chatRole`, set by the Runtime) and grants live in the project database: manage them in the Console **Roles** block or with the `role grant` chat command; platform group owners / admins get `admin` of their conversation from the mapping rules. See [Chat roles](../concepts/chat-roles.md); the old `role(master)`, `scene_admin` and `platform(adapter,perm)` spellings map as listed in [Upgrading to chat roles](../migrations/chat-roles.md#permits).
+Commands share the rules and the evaluator with Agent tools / skills (three dimensions: the sender's zhin role, the sender's platform standing and the bot's own platform standing). A platform action the bot performs usually names both:
+
+```ts
+export default defineCommand({
+  description: 'Mute a member',
+  permit: ['group()', 'platform:admin', 'bot:admin'],  // the sender is a group admin, and so is the bot
+  execute: async () => { /* … */ },
+});
+```
+
+When unmet the command takes its denial reply: `platform:*` / `bot:*` conditions say what is missing (e.g. 「无法执行此指令：机器人不是本群管理员（或无法确认其身份）。」), zhin role and conversation conditions keep the generic 「没有权限执行此指令。」.
+
+Roles come from the actual message (`sender.chatRole`, set by the Runtime) and grants live in the project database: manage them in the Console **Roles** block or with the `role grant` chat command. A platform group owner / admin is **not** a zhin role — commands for zhin functions use `admin` / `owner`, commands for platform functions use `platform:*`. See [Chat roles](../concepts/chat-roles.md); the old `role(master)`, `scene_admin` and `platform(adapter,perm)` spellings map as listed in [Upgrading to chat roles](../migrations/chat-roles.md#permits).
 
 For the same check in middleware or event handlers, use `checkPermissions`:
 
@@ -576,7 +589,7 @@ See [Testing Plugins](./testing.md) for the full guide.
 | Field | Behavior |
 |---|---|
 | `alias` | Replaces all static parts of the command name; folder params follow |
-| `permit` | Built-in rules: `adapter\|group\|private\|channel\|user(...)`, `owner\|admin\|trusted` / `role(...)`, `platform:…` / `platform-role:…` / `platform-permission:…`. Failure returns `denied`; no auth subject also means denied, and programmatic `CommandIndex.execute` can't bypass it |
+| `permit` | Built-in rules: `adapter\|group\|private\|channel\|user(...)`, `owner\|admin\|trusted` / `role(...)`, `platform:…` / `platform-role:…` / `platform-permission:…`, `bot:…` / `bot-role:…` / `bot-permission:…`. Failure returns `denied` (`denial` names the first unmet rule and the reason); no auth subject also means denied, and programmatic `CommandIndex.execute` can't bypass it |
 | `shortcut` | `{ trigger text: prefilled params }`, fires on an exact match after trimming |
 
 Conflicts are judged on the full word sequence: `b` and `b list` can coexist.

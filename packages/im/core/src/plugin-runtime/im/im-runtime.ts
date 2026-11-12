@@ -195,6 +195,38 @@ export class ImRuntime implements OutboundMessageService {
       release: (lease) => this.#release(lease),
       send: (request, snapshot, execution) => this.#deliver(request, snapshot, execution),
     });
+    // ADR 0056 §1: `bot:*` permits read the Bot's own standing through the Adapter index cache;
+    // the Bot's role events drop the cached answer of that conversation.
+    this.permissionHost.setBotStandingResolver((source, lookup) => this.#botStanding(source, lookup));
+    this.#sceneEventStream.subscribe(signal => this.#invalidateBotStanding(signal));
+  }
+
+  async #botStanding(source: unknown, lookup: Readonly<{ cachedOnly?: boolean; signal?: AbortSignal }>) {
+    const conversation = source && typeof source === 'object' ? (source as { conversation?: unknown }).conversation as ConversationRef | undefined : undefined;
+    if (!conversation || typeof conversation !== 'object' || typeof conversation.endpoint?.id !== 'string' || typeof conversation.id !== 'string') return undefined;
+    const lease = this.#acquire();
+    try {
+      const adapters = requireAdapters(lease.value);
+      if (typeof adapters.selfStanding !== 'function') return undefined;
+      return await adapters.selfStanding(conversation.endpoint.id as CapabilityId, conversation, lookup);
+    } catch {
+      return undefined;
+    } finally {
+      this.#release(lease);
+    }
+  }
+
+  #invalidateBotStanding(signal: Parameters<Parameters<RuntimeSceneEventSource['subscribe']>[0]>[0]): void {
+    const event = signal.event as { type?: string; member?: { id?: unknown }; conversation?: ConversationRef };
+    const conversation = event.conversation;
+    if (!conversation || (event.type !== 'member.role_changed' && event.type !== 'member.left' && event.type !== 'member.joined')) return;
+    const self = event.member?.id !== undefined && signal.selfIds.includes(String(event.member.id));
+    if (event.type !== 'member.role_changed' && !self) return;
+    try {
+      const lease = this.#acquire();
+      try { requireAdapters(lease.value).invalidateSelfStanding?.(conversation.endpoint.id as CapabilityId, conversation); }
+      finally { this.#release(lease); }
+    } catch { /* no attached generation: nothing cached */ }
   }
 
   /** Process composition replaces the bootstrap memory store after required DB activation. */

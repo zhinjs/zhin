@@ -57,6 +57,19 @@ export default defineMiddleware<Message>({
 
 Sorting compares `phase` → `order` → plugin mount order → capability id.
 
+### Only for some messages (`permit`)
+
+Inbound middleware can declare `permit`, with the same rules and evaluator as commands and Agent tools (the sender's zhin role, the sender's platform standing `platform:*`, the bot's own standing `bot:*`; see [Chat roles](../concepts/chat-roles.md)):
+
+```ts
+export default defineMiddleware<Message>({
+  permit: ['group()', 'bot:admin'],   // only in groups where the bot is an admin
+  async handle({ input }, next) { /* recall offending messages… */ await next(); },
+});
+```
+
+When unmet, the message **skips** that middleware and the chain continues; no reply is sent. The check is light: the bot's own standing is read from the cache only (a missing entry is refreshed in the background), so no platform request is added per message, and an unknown standing leaves `bot:*` unmet. Outbound middleware does not accept `permit`.
+
 The middleware argument also has `config` (plugin config), `has(token)`, `use(token)` (plugin services), `session`, `signal`, `onAfterDispatch`, `owner` and `generation`. Declare `adapter` and `$client` gets that platform SDK's type.
 
 To give `config` a strong TypeScript type, use `defineMiddleware.withConfig<MyConfig>()`:
@@ -149,7 +162,8 @@ When the user clicks, `onClick` runs in the original conversation and its return
 ::: details More button rules
 - Returning a string, segment or JSX from `onClick` replies once; `null`, `undefined` or booleans send nothing; the number `0` replies `0`. You can also call `message.$reply()` inside the callback.
 - Callbacks are valid only for the original conversation and current version: they expire after an hour, a plugin hot reload, or a process restart.
-- To restrict who may click, check `message.sender` in the callback.
+- To restrict who may click, give the button a `permit` (the same rules and evaluator as commands, applied to the **clicker**): `<button permit={['platform:admin']} onClick={…}>`. When unmet the callback does not run and the clicker gets the reason. You can still check `message.sender` in the callback yourself.
+- Components (`defineComponent`) are pure renderers and take no `permit`; the chat-triggered entry is the callback button, gated as above.
 - Fallback numbers increase over the process lifetime and are never reused; interleaved conversations may skip numbers but stay isolated. Adjacent `<button>`s are numbered as one group.
 - The callback function never goes to the platform; the framework binds a random token, and native-button platforms report it back via callback.
 :::

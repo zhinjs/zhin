@@ -155,10 +155,11 @@ describe('GroupRuleEnforcer (ADR 0039 slice C)', () => {
     expect(mute).toHaveBeenCalledTimes(2);
   });
 
-  it('skips owners / admins and whitelisted members', async () => {
+  it('skips platform owners / admins, the zhin owner and whitelisted members (not a zhin admin)', async () => {
     const { store, hit, send, codes } = harness();
     await activate(store, { ...remindThenMute, exempt: { ownerAndAdmins: true, userIds: ['vip'] } });
-    await expect(hit({ memberChatRole: 'admin' })).resolves.toMatchObject({ kind: 'skipped', reasonCode: 'rule_hit_exempt' });
+    await expect(hit({ memberPlatform: { standing: 'admin' } })).resolves.toMatchObject({ kind: 'skipped', reasonCode: 'rule_hit_exempt' });
+    await expect(hit({ memberChatRole: 'owner' })).resolves.toMatchObject({ kind: 'skipped', reasonCode: 'rule_hit_exempt' });
     await expect(hit({ memberId: 'vip' })).resolves.toMatchObject({ kind: 'skipped', reasonCode: 'rule_hit_exempt' });
     expect(send).not.toHaveBeenCalled();
     expect(await codes()).toEqual(expect.arrayContaining(['rule_enforcement:skip:rule_hit_exempt']));
@@ -343,7 +344,7 @@ describe('GroupRuleEnforcer newcomer ads (ADR 0039 slice E)', () => {
   it('still exempts owners / admins from newcomer kick cards', async () => {
     const { store, hit, queue } = harness();
     await submitDefault(store);
-    await expect(hit({ newcomer: true, memberChatRole: 'admin' })).resolves.toMatchObject({ kind: 'skipped', reasonCode: 'rule_hit_exempt' });
+    await expect(hit({ newcomer: true, memberPlatform: { standing: 'owner' } })).resolves.toMatchObject({ kind: 'skipped', reasonCode: 'rule_hit_exempt' });
     expect(queue.list({ status: 'pending' })).toHaveLength(0);
   });
 });

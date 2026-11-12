@@ -2,7 +2,7 @@ import { Client as SdkClient, LoggerLevel, DefaultCache } from '@larksuiteoapi/n
 import { createLarkSdkHttpInstance } from './sdk-http.js';
 import { createLarkWebApiTransport } from './web-api-proxy.js';
 import type { LarkCardAction } from './cards.js';
-import { EndpointDeliveryError, type ConversationRef } from '@zhin.js/im-contract';
+import { EndpointDeliveryError, type ConversationRef, type PlatformStanding, type SelfStandingRequest } from '@zhin.js/im-contract';
 /**
  * LarkEndpoint — lifecycle, outbound, admit, OpenAPI helpers for agent tools.
  */
@@ -125,6 +125,20 @@ export class LarkClient extends SdkClient {
       `/im/v1/chats/${encodeURIComponent(groupId)}/members`,
       { params: { member_id_type: 'open_id' }, signal },
     ),
+    /**
+     * ADR 0056 §1：机器人自身在群里的地位（chat.get：群主为本应用 → owner；在 bot_manager_id_list →
+     * admin；否则 member）。查询失败为未知。
+     */
+    inspectSelfStanding: async ({ conversation, signal }: SelfStandingRequest): Promise<PlatformStanding | undefined> => {
+      if (conversation.kind !== 'group') return undefined;
+      const appId = this.#options.config.appId;
+      const data = await createEndpointOperation({ signal }).run(() => this.#request(`/im/v1/chats/${encodeURIComponent(conversation.id)}`, { method: 'GET' }));
+      const info = data?.data as { owner_id?: unknown; owner_id_type?: unknown; bot_manager_id_list?: unknown } | undefined;
+      if (!info || !appId) return undefined;
+      if (info.owner_id_type === 'app_id' && info.owner_id === appId) return { standing: 'owner' };
+      const managers = Array.isArray(info.bot_manager_id_list) ? info.bot_manager_id_list.map(String) : [];
+      return { standing: managers.includes(appId) ? 'admin' : 'member' };
+    },
   });
   protected readonly endpointControl: EndpointControl = createRecallEndpointControl((id, signal) => this.recallMessage(id, { signal }));
   protected get endpointStreaming(): import('zhin.js/adapter').EndpointStreaming | undefined {

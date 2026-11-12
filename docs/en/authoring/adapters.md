@@ -168,7 +168,7 @@ A profile has sections per conversation kind: `default`, `private`, `group`, `ch
 | Group | Content |
 |---|---|
 | `messaging` | `segments` (the former `AdapterDefinition.segments`; both name the same declaration, write it once), `maxLength`, `mention`, `quote`, `reaction`, `recall`, `edit`, `forward`, `maxMessagesPerTurn` |
-| `scene` | `groupInfo`, `memberProfile`, `roles` (platform role words to `owner / admin / member`), `platformStanding` (which of `standing` / `roles` / `permissions` the inbound `sender.platform` reports, ADR 0056 §1), `mute`, `maxMembers`, `card`, `title` |
+| `scene` | `groupInfo`, `memberProfile`, `roles` (platform role words to `owner / admin / member`), `platformStanding` (which of `standing` / `roles` / `permissions` the inbound `sender.platform` reports, ADR 0056 §1), `selfStanding` (the bot's own standing in the conversation, looked up through `management.inspectSelfStanding` and cached per conversation by the framework for `bot:*` permits; declaring it requires the method), `mute`, `maxMembers`, `card`, `title` |
 | `actions` | What the Bot can do: `reaction`, `poke`, `mute`, `unmute`, `muteAll`, `kick`, `setCard`, `setTitle`, `recall`, `essence`, `announce`, `invite`, `quoteReply`, `forward`; each `{ scopes, requiresRole?, params? }`, absent means unsupported |
 | `events` | `emit` (standard event names), `liveDanmaku` (the former `capabilities: ['liveDanmaku']`) |
 | `feedback` | How "typing" is shown: `typing` / `reaction` / `status-message` / `none` |

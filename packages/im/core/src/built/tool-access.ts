@@ -18,5 +18,5 @@ export async function canAccessTool(
   if (!tool.permissions?.length) return true;
   if (!host) return false;
 
-  return host.checkAll(tool.permissions, toPermissionSubject(message));
+  return host.checkAll(tool.permissions, toPermissionSubject(message), { source: message });
 }

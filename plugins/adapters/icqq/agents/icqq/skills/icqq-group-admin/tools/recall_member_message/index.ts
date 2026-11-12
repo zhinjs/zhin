@@ -9,8 +9,7 @@ export default defineAgentTool({
   // ADR 0044: offered only while the Bot can actually do this here (e.g. it is a group admin).
   requiresCapabilities: ['actions.recall.others'],
   scopes: ['group'],
-  currentConversationBotRoles: ['owner', 'admin'],
-  permissions: ['trusted'],
+  permissions: ['platform:admin', 'bot:admin'],
   requiresApproval: 'never',
   inputSchema: z.object({
     message_id: z.string().min(1).describe('当前群中要撤回的真实消息 ID，或消息头里的 m<n> 别名'),

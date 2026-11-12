@@ -25,6 +25,7 @@ export const interactionMessages = createMessages({
   multiple: { 'zh-CN': '回复序号或选项名称，多项用“{separator}”分隔。', en: 'Reply with option numbers or names, separated by "{separator}".' },
   list: { 'zh-CN': '多项用“{separator}”分隔。', en: 'Separate items with "{separator}".' },
   ended: { 'zh-CN': '交互已结束', en: 'Interaction ended' },
+  denied: { 'zh-CN': '你不能使用这个按钮：{reason}', en: 'You cannot use this button: {reason}' },
   expired: { 'zh-CN': '交互已过期或不可用，请重新发起。', en: 'This interaction has expired or is unavailable. Start a new one.' },
   timeout: { 'zh-CN': '输入超时', en: 'Input timed out' },
 });

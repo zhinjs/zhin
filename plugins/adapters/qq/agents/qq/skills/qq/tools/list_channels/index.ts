@@ -9,7 +9,7 @@ export default defineAgentTool<{ guild_id: string }>({
   adapter: 'qq',
   scopes: ["channel"],
   tags: ['qq'],
-  permissions: ['platform-permission:manage_channels'],
+  permissions: ['platform:admin'],
   async execute({ guild_id  }: { guild_id: string }, context) {
     const client = context.$client;
     const channels = await client.channelService.getList(guild_id);

@@ -240,10 +240,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     database: databaseHost, hostConfig, snapshots: () => host.runtime.snapshots,
     afterLoad: roles => chatRoleMigration.complete(roles, { persistent: ['sqlite', 'mysql', 'pg'].includes(databaseHost.dialect) }),
   });
-  const senderEnricher = createSenderEnricher({
-    roles: () => featureHost.roles,
-    onResolved: (identity, context) => featureHost.mappingSource.record(identity, context),
-  });
+  const senderEnricher = createSenderEnricher({ roles: () => featureHost.roles });
   const im = new ImRuntime({ enrichSender: senderEnricher });
   const endpointRepository = new PersistentEndpointRepository({ rootId: resolve(options.root),
     directory: join(options.root, '.zhin', 'endpoint-credentials'), state: () => databaseHost.state });
