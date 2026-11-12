@@ -51,7 +51,7 @@ ADR 0050 让功能配置有三级：全局 < 适配器 < 账号。运营中更�
 
 在 ADR 0050 之上追加一层，规则不变：
 
-- 启用状态自上而下，任一上级禁用即锁定下级（会话层不能重新打开被账号层关掉的插件）。
+- 启用状态自上而下，规则与 ADR 0050 §4（2026-11-12 修订）相同：只有上面所有层级都启用时某一层才可以停用；任一上级（全局 / 适配器 / 账号）停用即锁定其下所有层级——不能启用，也不能改自己的开关（409 `locked`，`lockedBy` 为锁定的层级）；先前存下的会话层 `enabled: false` 在上级之后停用时保留；会话层从不存「启用」，启用 = 删除会话层开关。
 - 其余配置自下而上：`effective = deepMerge(global, adapter, endpoint, conversation)`。
 - 每个字段的来源可以查询到 `conversation`。
 
@@ -62,18 +62,26 @@ ADR 0050 让功能配置有三级：全局 < 适配器 < 账号。运营中更�
 ### 6. Console
 
 - `feature.get` / `feature.set-override` / `feature.remove-override` / `feature.set-enabled` 接受 `level: 'conversation'`，键为 `<别名>/<endpointId>/<kind>:<id>`；`feature.conversations { plugin?, adapter?, endpoint?, query?, cursor? }` 列出有覆盖的会话（分页）。
-- 权限：`feature.view` / `feature.configure` / `feature.toggle`，作用域绑定在调用目标属于该适配器 / 账号时也算数（ADR 0049 修订）。
+- 权限：`feature.view` / `feature.configure` / `feature.toggle`，作用域绑定在调用目标属于该适配器 / 账号时也算数（ADR 0049 修订；会话键按其账号计）。
+- `feature.list` / `feature.get` 返回 `conversationFields` / `selfServiceFields`；`feature.matrix` 可带 `conversationOverrides`（适配器别名 → 账号 → 有覆盖的会话数）。
+- 会话 id 转义：键中 `%` → `%25`、`/` → `%2F`，其余字符原样；因此键里恰好两个 `/`，`kind:` 之后首个 `:` 起即为 id（id 可以含 `:`）。id 1–256 个字符，不含控制字符。
 - 账号页增加「会话」标签：搜索会话、查看各插件在该会话的状态与来源、开关与改字段。
 
-### 7. 群内自助
+### 7. 群内自助（2026-11-12 修订：管理员即 ADR 0056 的聊天角色）
 
-- 内置命令（默认关闭；配置 `features.selfService.enabled: true` 开启）：
-  - `功能 列表` / `feature list`：本会话各插件的状态与来源；
-  - `功能 开启|关闭 <插件>` / `feature enable|disable <plugin>`；
-  - `功能 设置 <插件> <字段> <值>` / `feature set …`，只能改 `selfServiceFields`；
-  - `功能 重置 <插件>` / `feature reset …`：删除本会话的覆盖。
-- 谁能用：群里由适配器报告为群主 / 管理员的成员（`senderRolesFromMessage`），可在配置里收紧为只限群主，或附加允许的用户列表；私聊只有 Console 能改。
-- 只能改当前会话；不能打开被上级锁定的插件；每次修改写入实例审计（`audit` 桥接消息），`updated_by` 记录平台用户。
+- 内置命令（默认关闭；配置 `features.selfService.enabled: true` 开启），每个写命令都可带层级参数，默认 `会话`：
+  - `功能 列表` / `feature list`：本会话各插件的有效状态、来源层级与锁定信息，以及发送者在本会话链上的角色；
+  - `功能 开启|关闭 <插件> [层级]` / `feature enable|disable <plugin> [level]`；
+  - `功能 设置 <插件> <字段> <值> [层级]` / `feature set …`；
+  - `功能 重置 <插件> [层级]` / `feature reset …`：删除该层（本会话或其上级）的覆盖；
+  - 层级取 `会话|账号|适配器|全局` / `conversation|endpoint|adapter|global`，目标作用范围是当前会话在该层级的祖先。
+- 谁能用：发送者必须在目标作用范围（或其上级）拥有 ADR 0056 的 `admin`（或 `owner`）角色。角色向下继承（全局 → 适配器 → 账号 → 会话），同一人可在不同范围担任不同角色。来源：`chat_roles` 表中的授予；配置中的账号 `owner` → 账号层 `owner`、`trusted` → 账号层 `trusted`，`ai.trigger.masters|trusted` → 全局；平台群主 / 管理员 → 当前会话 `admin`（`features.selfService.platformAdmins`，默认开启，可用 `roles: ['owner']` 收紧为只认群主）。
+- 写入去向：会话层写项目数据库；账号层 / 适配器层写配置文件 `overrides`（走 `feature.set-override` / `feature.set-enabled`，原地生效、不重启）；全局层的开启 / 关闭写 `disable_plugins` 并重启实例，聊天中必须再发确认码（`功能 确认 <码>`，2 分钟有效）。
+- 字段：会话层只能改 `selfServiceFields`；账号 / 适配器 / 全局层经聊天也只能改 `selfServiceFields`，除非插件声明更宽的 `chatAdminFields`（各层仍按字段自身的 `levels` 过滤）。
+- 锁定：不能开启或改动被上级停用的插件，回复是哪一层锁定的。
+- 私聊：会话层只能在 Console 修改；私聊中可指定账号层及以上（需相应角色）。
+- 每次修改写入实例审计（`audit` 桥接消息），actor 为 `chat:<适配器别名>:<用户 id>`，带层级与作用范围；`updated_by` 记录同一身份。
+- 角色管理命令见 ADR 0056 §3（`角色 列表|授予|撤销`）。
 
 ### 8. 与现有黑白名单的关系
 

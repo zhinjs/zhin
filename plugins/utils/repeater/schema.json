@@ -49,5 +49,20 @@
         "effect": "reload"
       }
     }
+  },
+  "x-zhin-config": {
+    "levels": [
+      "global",
+      "adapter",
+      "endpoint",
+      "conversation"
+    ],
+    "conversationFields": [
+      "threshold",
+      "cooldown"
+    ],
+    "selfServiceFields": [
+      "threshold"
+    ]
   }
 }

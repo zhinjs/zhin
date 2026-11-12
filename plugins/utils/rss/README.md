@@ -24,6 +24,12 @@ rss:
   allowPrivateNetwork: false # 设为 true 才允许订阅回环/内网地址上的 feed（如自建 RSSHub）
 ```
 
+### 按群关闭（ADR 0055）
+
+RSS 的所有字段只支持全局配置；启停开关支持适配器、账号与会话（群 / 私聊）四级。在 Console「功能」区或群内 `功能 关闭 rss`（需开启 `features.selfService.enabled` 且有 `admin` 角色）关闭某个群后，该群收不到推送，RSS 命令也不再响应。推荐用它代替按群的自定义黑名单。
+
+Per-conversation switch: RSS fields are global-only, but the enable switch works at the adapter, account and conversation levels. A group where RSS is switched off receives no pushes and its RSS commands do not respond.
+
 ## 命令
 
 | 命令 | 说明 | 示例 |

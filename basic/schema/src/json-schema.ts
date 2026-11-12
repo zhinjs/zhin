@@ -16,6 +16,14 @@ export interface ConfigFieldMetadata {
   readonly effect?: 'reload';
 }
 
+/** Root `x-zhin-config` of a Plugin schema: layered levels (ADR 0050 / 0055). */
+export interface ConfigFeatureLevels {
+  readonly levels: readonly ('global' | 'adapter' | 'endpoint' | 'conversation')[];
+  readonly conversationFields?: readonly string[];
+  readonly selfServiceFields?: readonly string[];
+  readonly chatAdminFields?: readonly string[];
+}
+
 export type ConfigJsonSchema = Readonly<Record<string, unknown>>;
 
 /** Export serializable configuration declarations; non-JSON business types are explicit errors. */
@@ -105,6 +113,7 @@ export function toJsonSchema(schema: Schema): ConfigJsonSchema {
     ...(meta.component !== undefined ? { component: meta.component } : {}),
     ...(meta.options !== undefined ? { options: structuredClone(meta.options) } : {}),
     ...(meta.effect !== undefined ? { effect: meta.effect } : {}),
+    ...(meta.feature !== undefined ? structuredClone(meta.feature) : {}),
   };
   if (Object.keys(annotations).length) result['x-zhin-config'] = annotations;
   return result;

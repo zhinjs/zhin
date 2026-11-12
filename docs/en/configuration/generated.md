@@ -464,6 +464,12 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `log_level` | string \| number | no | — | Runtime log level. |
 | `plugin` | object | no | — | Root Plugin configuration; replaced by its project schema during composition. |
 | `locale` | string: `"zh-CN"`, `"en"` | no | — | Language used when no personal preference is set; Simplified Chinese when omitted. Language and time zone are independent. |
+| `features` | object | no | — | Feature configuration beyond the plugin blocks (ADR 0055): in-chat self-service. Restart to apply. |
+| `features.selfService` | object | no | — | In-chat `feature` / `功能` command for feature admins. Off by default. |
+| `features.selfService.enabled` | boolean | no | `false` | Register the in-chat feature command. |
+| `features.selfService.platformAdmins` | boolean | no | `true` | Platform group owners / admins (adapter-reported roles listed in roles) are conversation admins of that group. |
+| `features.selfService.roles` | array&lt;string&gt; | no | `["owner","admin"]` | Platform roles counted by platformAdmins; ["owner"] limits it to group owners. |
+| `features.selfService.allowUsers` | array&lt;string&gt; | no | `[]` | Global feature admins as &lt;adapter alias&gt;:&lt;userId&gt;. |
 
 ## Standalone AI import proposal
 

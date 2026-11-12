@@ -464,6 +464,12 @@ outline: [2, 3]
 | `log_level` | string \| number | 否 | — | Runtime 日志级别。 |
 | `plugin` | object | 否 | — | Root Plugin 配置；组合时由项目 Schema 替换。 |
 | `locale` | string: `"zh-CN"`, `"en"` | 否 | — | 未设置个人偏好时使用的语言；未配置时使用简体中文，语言与时区独立。 |
+| `features` | object | 否 | — | 插件配置块之外的功能配置（ADR 0055）：群内自助。修改后需重启。 |
+| `features.selfService` | object | 否 | — | 功能管理员在聊天中使用的 `功能` / `feature` 命令，默认关闭。 |
+| `features.selfService.enabled` | boolean | 否 | `false` | 注册群内功能自助命令。 |
+| `features.selfService.platformAdmins` | boolean | 否 | `true` | 平台群主 / 管理员（适配器报告、且列在 roles 中的角色）是该群的会话层管理员。 |
+| `features.selfService.roles` | array&lt;string&gt; | 否 | `["owner","admin"]` | platformAdmins 认可的平台角色；设为 ["owner"] 只认群主。 |
+| `features.selfService.allowUsers` | array&lt;string&gt; | 否 | `[]` | 全局功能管理员，格式 &lt;适配器别名&gt;:&lt;用户 id&gt;。 |
 
 ## 独立 AI 导入提案
 

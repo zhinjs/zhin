@@ -194,4 +194,11 @@ describe('configuration declaration export', () => {
     expect(schema.toJSON()).toMatchObject({ type: 'object', object: { limit: { type: 'number', default: 10 } } });
     expect(schema.toJsonSchema()).toMatchObject({ type: 'object', properties: { limit: { type: 'number', default: 10 } } });
   });
+  it('declares layered feature levels on the plugin root (ADR 0055)', () => {
+    const schema = Schema.object({ threshold: Schema.number().default(3) })
+      .featureLevels(['global', 'adapter', 'endpoint', 'conversation'], { conversationFields: ['threshold'], selfServiceFields: ['threshold'] });
+    expect(schema.toJsonSchema()).toMatchObject({ 'x-zhin-config': {
+      levels: ['global', 'adapter', 'endpoint', 'conversation'], conversationFields: ['threshold'], selfServiceFields: ['threshold'] } });
+    expect(() => Schema.number().featureLevels(['global'])).toThrow(TypeError);
+  });
 });

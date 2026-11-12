@@ -62,7 +62,11 @@ effectiveEnabled = !disable_plugins.includes(plugin)
                 && overrides.endpoints[alias/id]?.enabled !== false
 ```
 
-下级的 `enabled: true` 不能重新打开被上级禁用的功能；写入时校验器给出警告，Console 把下级开关显示为「被上级禁用」并锁定。
+启停是逐级的单向选择（2026-11-12 修订，适用于全部层级，含 ADR 0055 的会话层）：
+
+- 只有当上面所有层级都启用时，某一层才可以**停用**；任一上级（全局 / 适配器 / 账号）停用了插件，其下所有层级即被锁定：不能启用，自己的开关显示为「已被〈层级〉停用」并锁定。
+- 被锁定的层级不能修改自己的 `enabled`（启用与停用都拒绝），`feature.set-enabled` 返回 HTTP 409 `{ success: false, code: 'locked', lockedBy: 'global'|'adapter'|'endpoint', error }`，`error` 固定为「已被{全局|适配器|账号}层停用，下级开关已锁定」；群内命令回复是哪一层锁定的。上级之后才停用时，下级先前存下的 `enabled: false` 保留不动（整层删除覆盖时也保留该开关）。
+- 下级永远不存「启用」：在下级启用 = 删除该层的开关（仅在未锁定时允许）。手写的下级 `enabled: true` 不起作用，校验器给出警告。
 
 **其他字段（自下而上，下级优先）：**
 

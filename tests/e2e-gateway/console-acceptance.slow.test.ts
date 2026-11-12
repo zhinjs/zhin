@@ -224,6 +224,16 @@ describe.skipIf(!enabled)('Console acceptance walk through the gateway (M7)', ()
       const removed = await project.rpcMessage(token, { type: 'feature.remove-override', plugin: 'repeater', level: 'adapter', key: 'sandbox' });
       expect(removed.body.data, JSON.stringify(removed.body)).toMatchObject({ status: 'saved' });
       await echo('g-restored', true);
+
+      // ADR 0055: off for one sandbox conversation only, stored in the project database, in place.
+      const conversationKey = `sandbox/${SANDBOX_ENDPOINT}/group:g-conv-off`;
+      const conversationOff = await project.rpcMessage(token, { type: 'feature.set-enabled', plugin: 'repeater', level: 'conversation', key: conversationKey, enabled: false });
+      expect(conversationOff.body.data, JSON.stringify(conversationOff.body)).toMatchObject({ status: 'saved', restartRequired: false });
+      const listed = await project.rpcMessage(token, { type: 'feature.conversations', plugin: 'repeater' });
+      expect(listed.body.data.conversations, JSON.stringify(listed.body)).toMatchObject([{ key: conversationKey, hasOverrides: true,
+        overrides: [{ plugin: 'repeater', enabled: false }] }]);
+      await echo('g-conv-off', false);
+      await echo('g-conv-on', true);
     } finally { chat.close(); }
   }, 180_000);
 
