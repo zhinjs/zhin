@@ -167,7 +167,7 @@ Dotenv loads `.env` then `.env.<environment>`. `--environment` selects the name 
 http:
   port: 8086                 # Runtime fallback when no config exists
   host: 127.0.0.1            # Default 127.0.0.1
-  token: ${HTTP_TOKEN}       # API Bearer token
+  token: ${HTTP_TOKEN}       # bootstrap token: only creates the first Console owner, refused afterwards
   corsOrigins:               # Allowed cross-origin sources
     - "https://console.zhin.dev"
   base: /api                 # API mount path
@@ -523,7 +523,7 @@ plugin:
 plugins: {}
 ```
 
-After starting, use the `zhin setup` wizard to progressively add database / adapters / AI (see [CLI Reference](../cli/index.md)); for how to run, see [zhin runtime start in Detail](../cli/runtime.md).
+After starting, use the `zhin setup` wizard to progressively add database / adapters / AI (see [CLI Reference](../cli/index.md)); for how to run, see [zhin start in Detail](../cli/runtime.md).
 
 ## Account self profile
 

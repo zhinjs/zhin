@@ -39,10 +39,10 @@ zhin runtime migrate status        # 输出 JSON；state 为 ready 时退出码 
 4. **清诊断**：每条 `manual` 都要人工处理，见 [人工诊断处理](./references/manual-diagnostics.md)。
    最常见的是 action 捕获了模块级变量 —— 把它提升为 owner Resource，能力文件再从执行上下文读。
 5. **装配**：`zhin runtime migrate cutover --write` 生成 `package.json#zhin` 与 `plugin.ts`，
-   并补齐 `zhin.js`、`@zhin.js/runtime`；Stable Features 可由 Root 继承，不必再装 `@zhin.js/command|middleware|component`（cutover 仍可能按约定目录写入 features 挂载）。启动脚本统一是
-   `zhin runtime start`，不要再写失效的 `zhin dev` / `zhin start` / `zhin build`。
+   并补齐 `zhin.js`、`@zhin.js/runtime`；Stable Features 可由 Root 继承，不必再装 `@zhin.js/command|middleware|component`（cutover 仍可能按约定目录写入 features 挂载）。cutover 写入的启动脚本是
+   `zhin runtime start`（`zhin start --foreground` 的前台别名，ADR 0054）；不要再写失效的旧 `zhin dev`（现在是 link 工具）/ `zhin build` 启动方式。新项目与脚手架用 `zhin start --foreground --watch source config`（dev）与 `zhin start --foreground --mode production --no-watch`（start）。
    - `package.json#private: true` 的本地 TS root 使用 `entry: "./plugin.ts"`，直接执行
-     `pnpm dev` 或 `zhin runtime start`。
+     `pnpm dev` 或 `zhin start --foreground`。
    - 非 private 的发布包使用 `entry: "./plugin.js"`；cutover 生成独立的
      `tsconfig.zhin.json`、`zhin:build` 与 `prepack` / `prepublishOnly`，以便 `pnpm pack`
      和 npm publish 前把 `plugin.ts`、约定目录和 `src/` 编译成可发布 JS。不要把

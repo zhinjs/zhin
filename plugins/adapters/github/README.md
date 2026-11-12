@@ -16,7 +16,7 @@ GitHub Plugin Runtime 适配器 — Issue/PR 评论区即聊天通道，GitHub A
 pnpm add @zhin.js/adapter-github
 ```
 
-Webhook 需要 Root 提供 `@zhin.js/host-http`（`zhin runtime start` 默认装配）。
+Webhook 需要 Root 提供 `@zhin.js/host-http`（`zhin start` 拉起的实例默认装配，HTTP 由管理网关承载）。
 
 ## 前置条件
 

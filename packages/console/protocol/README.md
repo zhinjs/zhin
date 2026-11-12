@@ -1,6 +1,30 @@
 # @zhin.js/console-protocol
 
-Zhin Console 的零依赖 wire contract：规范 RPC 名称、payload 字段和 demo scope 策略。
+Zhin Console 的零依赖 wire contract：规范 RPC 名称、payload 字段，以及 Console 访问控制（[ADR 0049](../../../docs/adr/0049-console-rbac.md)）的权限目录与权限表。
+
+## 权限
+
+每个 Console RPC、每条 `{base}` 下的 HTTP 路由、每个由 Host 认证的 WebSocket 都必须在本包的权限表里登记；没登记的对所有已登录主体（包括所有者）一律拒绝。新增路由、RPC 或 Socket 时在这里加一行。
+
+| 导出 | 内容 |
+| --- | --- |
+| `CONSOLE_PERMISSIONS` / `CONSOLE_PERMISSION_LIST` | 内置权限目录（`status.view`、`endpoint.*`、`feature.*`、`agent.*`、`plugin.manage`、`ops.*`、`iam.*` 等） |
+| `CONSOLE_BUILTIN_ROLES` / `CONSOLE_BUILTIN_ROLE_NAMES` | 内置角色 `owner` / `admin` / `operator` / `viewer` 及其权限 |
+| `CONSOLE_SCOPED_PERMISSIONS`、`CONSOLE_WRITE_PERMISSIONS` | 可绑定到适配器 / 账号作用域的权限；写类权限（写操作记入审计） |
+| `CONSOLE_RPC_PERMISSIONS`、`resolveConsoleRpcPermission()` | RPC 类型 → 权限；插件 RPC（`plugin.<id>.*`）按插件声明的权限逐方法检查 |
+| `CONSOLE_HTTP_PERMISSIONS`、`resolveConsoleHttpPermission()` | `{base}` 相对路径与方法 → 权限 |
+| `CONSOLE_WS_PERMISSIONS`、`resolveConsoleWsPermission()` | 由 Host 认证的 WebSocket 路径 → 权限（如 `/sandbox` 需要 `endpoint.operate`） |
+| `bindingScopeCovers()`、`grantsAllow()`、`featureScopeTarget()` | 全局 / 适配器 / 账号绑定的作用域判断；会话键按所属账号计 |
+| `CONSOLE_PLUGIN_PERMISSION_LEVELS`、`inferConsolePluginPermissionLevel()` 等 | 插件权限（`<插件>:<动作>`）的级别 `read` / `operate` / `manage`，内置角色经 `plugin.perms.*` 按级别授予 |
+| `IAM_RPC`、`ONBOARDING_RPC`、`CONSOLE_AUTH_ROUTES` | 账号、角色、令牌、审计 RPC，引导 RPC，`/auth/*` 路由 |
+| `GATEWAY_RPC`（`GATEWAY_PACKAGES_RPC`、`GATEWAY_INSTANCE_RPC`、`GATEWAY_PLUGINS_RPC`）、`GATEWAY_RPC_PERMISSIONS` | 管理网关自己处理的 `gateway.*` RPC：依赖事务、实例起停与日志、插件声明 |
+| `FEATURE_RPC`、`FEATURE_RPC_PERMISSIONS` | 分层功能配置 `feature.*`（全局 / 适配器 / 账号 / 会话，ADR 0050 / 0055） |
+| `CHAT_ROLES_RPC`、`CONSOLE_CHAT_ROLES` | 聊天角色 `chat-roles.list` / `grant` / `revoke`（`iam.manage`，ADR 0056） |
+| `CONSOLE_PAGE_SECTIONS` | Console 导航分区（ADR 0052） |
+
+完整的页面与权限说明见 [访问控制](../../../docs/console/access-control.md)。
+
+## Wire 约定
 
 Host 只接受常量表声明的 canonical RPC 名称和顶层 camelCase payload。Inbox 响应也只暴露 camelCase DTO；数据库 snake_case 行只存在于 Host 内部。平台与运行时差异不应进入本包。
 
@@ -26,7 +50,7 @@ It requires an exact `instanceKey` and the saved source's `expectedRevision`.
 its `ConsoleConfigFieldEvidence` paths are static Schema property arrays, with candidate
 origins and current-generation agreement only. It never contains values, defaults,
 environment variable names/expanded values, or historical generation origins. Unsupported
-instances/schemas return a bounded reason and no partial fields. Demo scope is denied.
+instances/schemas return a bounded reason and no partial fields.
 
 首版仅解释静态对象中的标量字段；固定字符串常量联合（Console 表单作为选项编辑的 `anyOf` + `const`）按字符串标量解释，元素为标量的列表（如框架注入的 `disabledCommands`）整体作为一个字段解释。除此之外，Schema 任一处含对象数组、元组、字典、组合分支或引用时，
 整份解释返回 `complex-schema`，不返回部分标量证据。这不影响已有配置读取、校验或源码编辑，

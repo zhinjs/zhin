@@ -34,10 +34,10 @@ sidebar: false
 
 | | 网关（Gateway） | 实例（Instance） |
 |---|---|---|
-| 启动 | `zhin start` / `zhin dev` 拉起 `@zhin.js/gateway` 常驻进程（取代现有 supervisor） | 只能由网关拉起；入口 `zhin.js/instance` |
+| 启动 | `zhin start`（开发时 `pnpm dev` = `zhin start --foreground --watch source config`）拉起 `@zhin.js/gateway` 常驻进程（取代现有 supervisor） | 只能由网关拉起；入口 `zhin.js/instance` |
 | 职责 | 唯一对外端口；**认证**（会话、API 令牌、初始化令牌）；初始化与引导；实例起停、崩溃重启、日志采集；依赖安装 / 卸载 / 升级；原始配置文件与 `.env` 读写（实例离线时）；终端；审计；本地 Console 静态资源 | IM Runtime、插件、适配器、Agent、定时任务；**绝大部分 Console API**（依赖运行时快照）；插件自己的 HTTP / WS 路由 |
 | 加载插件 | 否。可以使用 `@zhin.js/runtime`、`@zhin.js/database`、`@zhin.js/host-http` 等库做配置解析与项目文件操作，但不创建 Runtime、不执行插件代码 | 是 |
-| 挂了怎么办 | 由系统服务（`zhin install-service`）或容器重启 | 网关按策略重启；Console 照常可用，显示实例状态与日志 |
+| 挂了怎么办 | 由系统服务（`zhin service install`）或容器重启 | 网关按策略重启；Console 照常可用，显示实例状态与日志 |
 
 ### 2. 实例不含 HTTP 服务器：路由在实例声明，由网关承载
 
@@ -109,11 +109,11 @@ interface HttpHost {
 
 **日志**：网关采集实例 stdout / stderr，写入 `.zhin/logs/instance.log`（按大小轮转），并保留内存环形缓冲，供 `gateway.instance.logs` 与实例离线时查看。
 
-**只有受管模式**：实例入口 `zhin.js/instance` 在没有控制通道时拒绝启动并提示使用 `zhin start`。`zhin runtime start` 删除；不保留独立模式与退出码 75 重启。
+**只有受管模式**：实例入口 `zhin.js/instance` 在没有控制通道时拒绝启动并提示使用 `zhin start`。不保留退出码 75 重启。（实现修订：`zhin runtime start` 保留为 `zhin start --foreground` 的别名，见 §6；仅供开发 / 测试的 `zhin start --standalone` 在进程内自带 HTTP 服务器、没有受管重启。）
 
 ### 4. 依赖管理（网关）
 
-`gateway.packages.plan | install | uninstall | update`（`plugin.manage`；初始化阶段用初始化令牌仅允许数据库驱动，见 ADR 0053 §3）复用现有项目级事务 `PluginManagementPort`（`basic/cli/src/plugin-management/workflow.ts`：revision 校验、包管理器执行、清单 / 配置写入、失败回滚），网关额外负责实例的停启：
+`gateway.packages.plan | install | uninstall | update`（`plugin.manage`；初始化阶段用初始化令牌仅允许数据库驱动，见 ADR 0053 §3）复用现有项目级事务 `PluginManagementPort`（`packages/host/gateway/src/plugin-management/workflow.ts`：revision 校验、包管理器执行、清单 / 配置写入、失败回滚），网关额外负责实例的停启：
 
 1. 生成计划并校验白名单与 revision；备份 `package.json`、锁文件、配置文件；
 2. 向实例发送 `shutdown`，等待退出；
@@ -133,7 +133,7 @@ interface HttpHost {
 
 - 状态：`stopped | starting | running | stopping | backoff | crashed`；附 pid、启动时间、`generation`、最近退出码、最近一次失败的日志尾部。
 - 崩溃重启沿用现有风暴保护（每分钟 10 次、间隔 3 秒）；超限进入 `crashed`，等人处理。
-- 开发模式（`zhin dev` / `pnpm dev`）：网关以开发参数拉起实例，实例内的 HMR 不变。
+- 开发模式（`pnpm dev`，即 `zhin start --foreground --watch source config`）：网关以开发参数拉起实例，实例内的 HMR 不变。（`zhin dev` 是 link / unlink 联调工具，不是启动命令。）
 
 ### 6. CLI
 

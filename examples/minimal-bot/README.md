@@ -10,8 +10,13 @@ Requires Node.js 22.19 or newer, which runs TypeScript directly.
 
 ```bash
 pnpm install
-pnpm --filter minimal-bot dev
+pnpm --filter minimal-bot dev   # zhin start --foreground --standalone --watch source config
 ```
+
+`dev` uses `--standalone` (development only): the instance runs in the CLI process instead of under
+the management gateway, because the gateway starts the instance without a terminal on stdin and the
+terminal adapter needs one. Other projects run `zhin start` (gateway plus supervised instance);
+`pnpm start` is `zhin start --foreground --mode production --no-watch`.
 
 Wait for the `zhin> ` prompt, then type `/hello` or `/card` in the same terminal. Do not use the
 `--once` validation command for interactive sessions. `Ctrl+C` drains the active generation and
@@ -23,7 +28,7 @@ On Windows, `pnpm`/`.cmd` wrappers may additionally ask `Terminate batch job (Y/
 without that batch wrapper, open a shell in `examples/minimal-bot` and run:
 
 ```bash
-node ../../basic/cli/bin/zhin.js runtime start
+node ../../basic/cli/bin/zhin.js start --foreground --standalone
 ```
 
 Server capabilities are loaded by Node's native TypeScript loader. Keep them erasable:

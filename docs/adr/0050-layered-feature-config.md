@@ -120,7 +120,7 @@ effective = deepMerge(global, overrides.adapters[alias], overrides.endpoints[ali
 - 解析器（纯函数，带来源追踪）：`packages/im/runtime/src/layered-config.ts`
 - `configFor` / `isEnabledFor`：`packages/im/plugin-runtime`（插件上下文）
 - 分发门禁：`packages/im/core/src/plugin-runtime/im/`（命令、中间件、处理器索引）与 `packages/im/agent`（工具披露）
-- `feature.*` RPC：`basic/cli/src/plugin-runtime/console/`
+- `feature.*` RPC：`packages/im/zhin/src/instance/console/console-feature-rpc.ts`
 - 现有 activity-feedback 的 `platforms / endpoints` 保持兼容，文档标注推荐迁移到 `overrides`
 
 ## 后果

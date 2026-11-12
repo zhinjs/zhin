@@ -21,6 +21,12 @@ We suggest reading them in the order **single-file-bot → minimal-bot → capab
 No need to clone the repo: run `npm create zhin-app my-bot -y`. See [Quick start](../getting-started/index.md).
 :::
 
+::: info How the examples start and how to sign in to the Console
+Except for minimal-bot, an example's `pnpm dev` is `zhin start --foreground --watch source config`: the management gateway runs in the foreground and launches and hot-reloads the bot instance; `pnpm start` is the production `zhin start --foreground --mode production --no-watch`.
+
+The first time the Console connects to an example, its database has no owner yet: use the example's bootstrap token (`http.token`, given below) to finish the setup wizard and create the owner account, then sign in with that account; the bootstrap token stops working at once. You can also run `pnpm exec zhin console init` in the example directory. See [Console setup and onboarding](../console/onboarding.md).
+:::
+
 ## single-file-bot: One bot.ts Is a Bot
 
 No `commands/` or other directories: register commands directly in the plugin entry's `setup({ addCommand })`. Good for demos, one-off scripts, or showing someone how short startup can be.
@@ -29,7 +35,7 @@ No `commands/` or other directories: register commands directly in the plugin en
 pnpm --filter single-file-bot dev
 ```
 
-Open [Console](https://console.zhin.dev), set API Base to `http://127.0.0.1:8086`, and send **`/hello`** in Sandbox.
+Open [Console](https://console.zhin.dev) and set API Base to `http://127.0.0.1:8086`. This example sets no `http.token` and the Host listens on loopback only, so the Console goes straight to the setup wizard; create the owner account, then send **`/hello`** in Sandbox.
 
 ```text
 single-file-bot/
@@ -50,7 +56,7 @@ pnpm install
 pnpm dev            # = pnpm --filter minimal-bot dev
 ```
 
-When the `zhin> ` prompt appears, type `/hello`, or `/card` to see a rendered status card image, in the same terminal. Editing files in those directories hot-reloads them; `Ctrl+C` exits.
+Its `dev` is `zhin start --foreground --standalone --watch source config`: the terminal adapter reads stdin and an instance launched by the gateway has no terminal input, so this example runs the instance inside the CLI process (`--standalone`, development only). When the `zhin> ` prompt appears, type `/hello`, or `/card` to see a rendered status card image, in the same terminal. Editing files in those directories hot-reloads them; `Ctrl+C` exits.
 
 ```text
 minimal-bot/
@@ -73,12 +79,12 @@ Requires Node.js >=22.19, which runs TypeScript natively.
 
 ```bash
 cd examples/capabilities-bot
-pnpm dev            # zhin runtime start
+pnpm dev            # zhin start --foreground --watch source config
 ```
 
 After startup:
 
-- Console is at `http://127.0.0.1:18099` with token `capabilities-dev-token`; the plugins page shows a `Capabilities Bot` card;
+- connect the Console to `http://127.0.0.1:18099`; the first time, create the owner account with the bootstrap token `capabilities-dev-token`, then sign in with the account; the plugins page shows a `Capabilities Bot` card;
 - the `whoami` and `stats` commands are available (the latter demonstrates a database counter);
 - a heartbeat job logs a line every 5 minutes.
 
@@ -91,11 +97,11 @@ Adds the full AI stack on top of convention directories: `@zhin.js/agent`, seman
 ```bash
 # First run pnpm install && pnpm build at the repo root
 cd examples/full-bot
-cp .env.example .env    # fill in your model service key and HTTP_TOKEN
+cp .env.example .env    # fill in your model service key and HTTP_TOKEN (the Console bootstrap token)
 pnpm dev                # or pnpm dev:full at the repo root
 ```
 
-- The Host defaults to `http://127.0.0.1:8069`; use `HTTP_TOKEN` from `.env` as the Console token;
+- The Host defaults to `http://127.0.0.1:8069`; the first time you connect the Console, create the owner account with `HTTP_TOKEN` from `.env`, then sign in with the account;
 - the acceptance checklist and NapCat / KOOK live steps are in that directory's `ACCEPTANCE.md`.
 
 ## test-bot: for maintainer regression
@@ -112,8 +118,8 @@ pnpm dev:test                # or cd examples/test-bot && pnpm dev
 ```
 
 - Requires Node.js >=22.19; credentials come from that directory's `.env` (template in `.env.example`);
-- in Console, set API Base to `http://127.0.0.1:8086` and Token to `test-bot-dev-token`;
-- to run in the background: `pnpm daemon` (that is, `zhin runtime start --daemon`); `pnpm stop` stops it.
+- in Console, set API Base to `http://127.0.0.1:8086`; the first time, create the owner account with the bootstrap token `test-bot-dev-token`, then sign in with the account;
+- to run in the background: `pnpm daemon` (that is, `zhin start --mode production --no-watch`, the gateway in the background); check it with `zhin status` / `zhin logs -f` and stop it with `pnpm stop`.
 
 ## Next steps
 

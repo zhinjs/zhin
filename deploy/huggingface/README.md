@@ -12,7 +12,7 @@ short_description: Zhin.js Plugin Runtime Sandbox playground
 
 # Zhin.js Playground
 
-在线体验 [Zhin.js](https://github.com/zhinjs/zhin) **Plugin Runtime**（`zhin runtime start`）。
+在线体验 [Zhin.js](https://github.com/zhinjs/zhin) **Plugin Runtime**（`zhin start`：管理网关 + 受监管实例）。
 
 - Space：https://huggingface.co/spaces/zhinjs/demo （旧名 `zhinjs/zhin-playground` 会 307 到这里）
 - App：https://zhinjs-demo.hf.space
@@ -39,4 +39,4 @@ short_description: Zhin.js Plugin Runtime Sandbox playground
 - 栈：Plugin Runtime + Sandbox + `@zhin.js/agent`（OpenRouter free）
 - Secret：`OPENROUTER_API_KEY`
 - 模型声明在 `ai.plan.yml`（首次启动、数据库为空时自动导入）；启动策略在 `zhin.config.yml`（`configVersion: 2`）
-- Host 由 CLI 装配；仓库镜像：[`deploy/huggingface`](https://github.com/zhinjs/zhin/tree/main/deploy/huggingface)
+- Host 由 `zhin start` 拉起的实例装配（HTTP 由管理网关承载）；仓库镜像：[`deploy/huggingface`](https://github.com/zhinjs/zhin/tree/main/deploy/huggingface)

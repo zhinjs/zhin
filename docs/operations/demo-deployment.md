@@ -61,7 +61,7 @@ curl --fail http://127.0.0.1:8068/pub/ready
 
 ## 3. 创建所有者与演示账号
 
-所有者只给维护者自己用。在服务器上离线创建（不需要经过浏览器，也不暴露初始化令牌）：
+所有者只给维护者自己用。在服务器上、以运行服务的同一个系统用户创建（不需要经过浏览器，也不暴露初始化令牌）。网关在运行时这些命令经本地控制套接字交给网关，未运行时直接写项目数据库；**在反向代理或公网入口开放之前完成这一步**——所有者创建前，初始化令牌对能连上 Host 的任何人都是全权凭据：
 
 ```bash
 # 所有者：初始化（第一次运行时）
@@ -112,9 +112,9 @@ https://console.zhin.dev/?apiBaseUrl=https%3A%2F%2Fdemo-api.example.org
 - [ ] **只开只读账号**：演示账号绑定 `viewer` 或更窄的自定义角色；不给 `operator` 及以上，不给任何 `*.write` / `*.manage` / `ops.restart` / `iam.*` / `plugin.manage`。
 - [ ] **不开终端**：`console.terminal.enabled` 保持 `false`。终端只对持有 `ops.terminal` 的所有者开放，但演示机上没有理由打开它。
 - [ ] **专用项目、无真实数据**：不配置真实平台凭据、模型 Key；`.env` 只有 `HTTP_TOKEN`。
-- [ ] **初始化之后再公开**：先创建所有者再开放端口；初始化完成后 `http.token` 在所有接口上失效。
+- [ ] **初始化之后再公开**：先创建所有者再开放端口；初始化完成后 `http.token` 在所有接口上失效。初始化令牌用随机值，不要写进公开的 README、镜像或演示页面。
 - [ ] **反向代理**：Host 绑定 `127.0.0.1`，由 nginx / Caddy / Cloudflare Tunnel 提供 HTTPS；保留 `Authorization` 头、SSE 流式响应（不要缓存 `/api/events`）与 WebSocket Upgrade。
-- [ ] **限速**：网关自带登录限速（同一 IP 与用户名 15 分钟内 5 次失败后指数退避，返回 `429`）。网关不读取 `X-Forwarded-For`，经代理进来的请求共用代理的地址——所以登录限速会对所有访客一起生效，审计里的 IP 也是代理地址。在反向代理上按客户端 IP 给 `/api/auth/login` 与 `/api/*` 加限速，日志里保留真实 IP。
+- [ ] **限速**：网关自带登录限速（同一 IP 与用户名 15 分钟内 5 次失败后指数退避，返回 `429`）。默认不读取 `X-Forwarded-For`，经代理进来的请求共用代理的地址——登录限速会对所有访客一起生效，审计里的 IP 也是代理地址。设置 `http.trustProxy`（如 `[loopback]`，见[生产部署](./production.md#_2-网络与鉴权)）后网关按受信任代理的转发头取客户端地址；同时仍在反向代理上按客户端 IP 给 `/api/auth/login` 与 `/api/*` 加限速，日志里保留真实 IP。
 - [ ] **反向 WebSocket 配 `access_token`**：演示里用到 OneBot / NapCat / Milky 的反向 WebSocket 时必须配 `access_token`。没配时网关只接受回环连接，而经同机反向代理进来的连接看起来正是回环。
 - [ ] **CORS 只列需要的源**：`http.corsOrigins` 只写演示 Console 的域名（`console.zhin.dev` 自动并入）。
 - [ ] **只暴露需要的路由**：在反向代理上只转发 `/api/*`、`/pub/*` 与演示需要的页面 / WebSocket，其余返回 404。

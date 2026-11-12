@@ -113,7 +113,7 @@ export default definePlugin({
 ```bash
 pnpm --filter <plugin-package> build   # 若包有 build
 pnpm --filter <plugin-package> test
-# 手测：zhin runtime start / pnpm dev + Sandbox 发命令原文
+# 手测：pnpm dev（zhin start --foreground）+ Sandbox 发命令原文
 ```
 
 ### 第 4 步：输出格式

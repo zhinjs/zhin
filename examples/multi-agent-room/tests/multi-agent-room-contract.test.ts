@@ -54,7 +54,7 @@ describe('examples/multi-agent-room contract (ADR 0048 ai.venues + collaboration
     });
     expect(parsed.zhin && 'features' in parsed.zhin ? parsed.zhin.features.map(feature => feature.package) : [])
       .toEqual(['@zhin.js/agent-feature']);
-    expect(parsed.scripts?.dev).toBe('zhin runtime start --watch source config');
+    expect(parsed.scripts?.dev).toBe('zhin start --foreground --watch source config');
   });
 
   it('ships valid agent packages for planner, builder, and reviewer with collaboration rules', () => {

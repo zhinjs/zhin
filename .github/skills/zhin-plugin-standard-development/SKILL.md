@@ -9,7 +9,7 @@ user-invocable: true
 
 把需求落成符合仓库约定的可运行插件。**唯一创作面是 Plugin Runtime**。
 
-`zhin runtime start` 是唯一启动路径。插件即 package：`package.json#zhin` 声明 manifest，
+`zhin start` 是唯一启动路径（ADR 0054：管理网关监管 Zhin 实例；开发 / 容器用 `zhin start --foreground`）。插件即 package：`package.json#zhin` 声明 manifest，
 `plugin.ts` **必须** default-export `definePlugin()`，否则装配抛
 `does not default-export a Plugin definition`。
 

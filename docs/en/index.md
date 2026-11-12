@@ -68,7 +68,7 @@ cd my-bot && pnpm dev
 ```
 
 1. **Instant local Sandbox**: Open `http://127.0.0.1:8068/sandbox` and send `/hello`
-2. **Remote Console**: Or open [console.zhin.dev](https://console.zhin.dev) with `http://127.0.0.1:8068` and `HTTP_TOKEN` from `.env`
+2. **Remote Console**: Or open [console.zhin.dev](https://console.zhin.dev) with `http://127.0.0.1:8068`; the first time, create the owner account with `HTTP_TOKEN` from `.env` (the bootstrap token), then sign in with that account
 3. **Hot-reload on save**: Edit any file under `commands/` and test immediately without restarting
 
 **Where to go next**

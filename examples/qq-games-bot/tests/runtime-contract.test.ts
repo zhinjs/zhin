@@ -11,7 +11,7 @@ const config = parse(configText);
 
 describe('qq-games-bot Plugin Runtime contract', () => {
   it('declares the adapter and complete game topology', () => {
-    expect(manifest.scripts.dev).toBe('zhin runtime start --watch source config');
+    expect(manifest.scripts.dev).toBe('zhin start --foreground --watch source config');
     expect(manifest.zhin.entry).toBe('./plugin.ts');
     expect(manifest.zhin.plugins ?? []).toEqual([]);
     expect(config.configVersion).toBe(2);

@@ -21,6 +21,12 @@ description: "仓库自带的可运行示例：从一个文件的 Bot 到带 AI 
 不用 clone 仓库，直接 `npm create zhin-app my-bot -y`，见 [快速开始](../getting-started/index.md)。
 :::
 
+::: info 示例怎么启动、Console 怎么登录
+除 minimal-bot 外，示例的 `pnpm dev` 都是 `zhin start --foreground --watch source config`：前台运行管理网关，由网关拉起并热重载 Bot 实例；`pnpm start` 是生产用的 `zhin start --foreground --mode production --no-watch`。
+
+第一次用 Console 连接某个示例时，数据库里还没有所有者：用该示例的初始化令牌（`http.token`，下文分别注明）完成初始化向导、创建所有者账号，之后用账号登录，初始化令牌随即失效。也可以在示例目录运行 `pnpm exec zhin console init` 创建所有者。见 [Console 初始化与引导](../console/onboarding.md)。
+:::
+
 ## single-file-bot：一个 bot.ts 就是机器人
 
 不建 `commands/` 等目录，直接在插件入口的 `setup({ addCommand })` 里注册命令。适合 demo、一次性脚本，或者向别人展示"启动有多短"。
@@ -29,7 +35,7 @@ description: "仓库自带的可运行示例：从一个文件的 Bot 到带 AI 
 pnpm --filter single-file-bot dev
 ```
 
-打开 [Console](https://console.zhin.dev)，API Base 填 `http://127.0.0.1:8086`，在 Sandbox 里发送 **`/hello`**。
+打开 [Console](https://console.zhin.dev)，API Base 填 `http://127.0.0.1:8086`。本示例没有配置 `http.token`，Host 只监听本机，Console 直接进入初始化向导；创建所有者账号后在 Sandbox 里发送 **`/hello`**。
 
 ```text
 single-file-bot/
@@ -50,7 +56,7 @@ pnpm install
 pnpm dev            # = pnpm --filter minimal-bot dev
 ```
 
-出现 `zhin> ` 提示符后，在同一终端输入 `/hello`，或 `/card` 看一张渲染出的状态卡片图。修改目录里的文件会自动热重载，`Ctrl+C` 退出。
+它的 `dev` 是 `zhin start --foreground --standalone --watch source config`：终端适配器要读标准输入，而网关拉起的实例没有终端输入，所以这个示例在 CLI 进程内直接运行实例（`--standalone`，仅限开发）。出现 `zhin> ` 提示符后，在同一终端输入 `/hello`，或 `/card` 看一张渲染出的状态卡片图。修改目录里的文件会自动热重载，`Ctrl+C` 退出。
 
 ```text
 minimal-bot/
@@ -73,12 +79,12 @@ minimal-bot/
 
 ```bash
 cd examples/capabilities-bot
-pnpm dev            # zhin runtime start
+pnpm dev            # zhin start --foreground --watch source config
 ```
 
 启动后：
 
-- Console 地址 `http://127.0.0.1:18099`，token 是 `capabilities-dev-token`，插件页能看到 `Capabilities Bot` 卡片；
+- Console 连接 `http://127.0.0.1:18099`，第一次用初始化令牌 `capabilities-dev-token` 创建所有者账号，之后用账号登录；插件页能看到 `Capabilities Bot` 卡片；
 - 可用命令 `whoami` 和 `stats`（后者演示数据库计数）；
 - 心跳任务每 5 分钟打一行日志。
 
@@ -91,11 +97,11 @@ pnpm dev            # zhin runtime start
 ```bash
 # 先在仓库根完成 pnpm install && pnpm build
 cd examples/full-bot
-cp .env.example .env    # 填入模型服务的 Key 和 HTTP_TOKEN
+cp .env.example .env    # 填入模型服务的 Key 和 HTTP_TOKEN（Console 初始化令牌）
 pnpm dev                # 或在仓库根 pnpm dev:full
 ```
 
-- Host 默认地址 `http://127.0.0.1:8069`，Console 的 Token 填 `.env` 中的 `HTTP_TOKEN`；
+- Host 默认地址 `http://127.0.0.1:8069`；第一次连接 Console 时用 `.env` 中的 `HTTP_TOKEN` 创建所有者账号，之后用账号登录；
 - 验收清单和 NapCat / KOOK 实机步骤见该目录的 `ACCEPTANCE.md`。
 
 ## test-bot：维护者回归用
@@ -112,8 +118,8 @@ pnpm dev:test                # 或 cd examples/test-bot && pnpm dev
 ```
 
 - 要求 Node.js ≥22.19，凭据读该目录的 `.env`（模板见 `.env.example`）；
-- Console 的 API Base 填 `http://127.0.0.1:8086`，Token 填 `test-bot-dev-token`；
-- 后台运行：`pnpm daemon`（即 `zhin runtime start --daemon`），`pnpm stop` 停止。
+- Console 的 API Base 填 `http://127.0.0.1:8086`，第一次用初始化令牌 `test-bot-dev-token` 创建所有者账号，之后用账号登录；
+- 后台运行：`pnpm daemon`（即 `zhin start --mode production --no-watch`，网关在后台运行），`zhin status` / `zhin logs -f` 查看，`pnpm stop` 停止。
 
 ## 下一步
 

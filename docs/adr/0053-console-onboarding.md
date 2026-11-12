@@ -78,7 +78,7 @@ Host 启动后、引导完成前，Console 显示引导流程，可以随时跳�
 ## 落盘位置
 
 - create-zhin：`packages/toolkit/create-zhin/src/`
-- 引导服务、安装白名单：`basic/cli/src/plugin-runtime/console/onboarding/`
+- 引导服务、安装白名单：`packages/host/gateway/src/onboarding/`（ADR 0054 起由管理网关持有）
 - Console：引导流程页面（`/onboarding`）与入口横幅
 
 ## 后果

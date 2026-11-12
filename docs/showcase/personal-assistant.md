@@ -94,8 +94,8 @@ defaults:
    不用自己写；把 `knowledge/` 里大文档拆小，检索命中率明显更好。
 2. **提醒任务想"别烦我"**：assistant 的定时任务默认失败也通知。
    `assistant.defaults.notifyOnFailure: false` 关掉。
-3. **Console 连不上**：token 就是 `.env` 里的 `HTTP_TOKEN`，
-   Console 里填 `http://127.0.0.1:8068` + 该 token（或直接打开 `http://127.0.0.1:8068/sandbox`）即可，不用配任何账号系统。
+3. **Console 连不上**：Console 里填 `http://127.0.0.1:8068`。第一次连接时用 `.env` 里的 `HTTP_TOKEN`（初始化令牌）创建所有者账号，
+   之后用账号登录（或先运行 `npx zhin console init`）；只想聊天可以直接打开 `http://127.0.0.1:8068/sandbox`。
 
 ## 后续扩展方向
 
