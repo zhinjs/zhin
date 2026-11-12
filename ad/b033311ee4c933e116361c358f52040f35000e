@@ -1,0 +1,3492 @@
+.changeset/adapter-console-embedded.md
+  h_6f5e45c41d0910 1-5
+.changeset/adapter-install-declare.md
+  h_6f5e45c41d0910 1-7
+.changeset/adapter-platform-standing.md
+  h_6f5e45c41d0910 1-22
+.changeset/adapter-standing-review-fixes.md
+  h_6f5e45c41d0910 1-31
+.changeset/adapter-tool-targets-followup.md
+  h_6f5e45c41d0910 1-24
+.changeset/adapter-tools-host-files-outbound-chain.md
+  h_6f5e45c41d0910 1-13
+.changeset/bridge-http-ws.md
+  h_6f5e45c41d0910 1-14
+.changeset/capture-all-tool-images.md
+  h_6f5e45c41d0910 1-5
+.changeset/chat-roles-scope-review.md
+  h_6f5e45c41d0910 1-30
+.changeset/chat-roles.md
+  h_6f5e45c41d0910 1-68
+.changeset/cli-local-socket-and-doctor.md
+  h_6f5e45c41d0910 1-12
+.changeset/console-access-control.md
+  h_6f5e45c41d0910 1-45
+.changeset/console-page-section.md
+  h_6f5e45c41d0910 1-11
+.changeset/console-terminal.md
+  h_6f5e45c41d0910 1-7
+.changeset/conversation-feature-config.md
+  h_6f5e45c41d0910 1-23
+.changeset/create-zhin-onboarding.md
+  h_6f5e45c41d0910 1-7
+.changeset/declare-schema-errors.md
+  h_6f5e45c41d0910 1-7
+.changeset/dependency-security-updates.md
+  h_6f5e45c41d0910 1-11
+.changeset/feature-review-fixes.md
+  h_6f5e45c41d0910 1-19
+.changeset/gateway-cli-wiring.md
+  h_6f5e45c41d0910 1-11
+.changeset/gateway-console-access.md
+  h_6f5e45c41d0910 1-20
+.changeset/gateway-db-cli-followups.md
+  h_6f5e45c41d0910 1-7
+.changeset/gateway-http-server.md
+  h_6f5e45c41d0910 1-9
+.changeset/gateway-lifecycle-start.md
+  h_6f5e45c41d0910 1-17
+.changeset/gateway-only-package-mutations.md
+  h_6f5e45c41d0910 1-11
+.changeset/gateway-package-split.md
+  h_6f5e45c41d0910 1-7
+.changeset/gateway-package-transactions.md
+  h_6f5e45c41d0910 1-9
+.changeset/gateway-review-hardening.md
+  h_6f5e45c41d0910 1-20
+.changeset/host-http-web-contract.md
+  h_6f5e45c41d0910 1-33
+.changeset/instance-supervisor-ipc.md
+  h_6f5e45c41d0910 1-15
+.changeset/isolate-start-timeout.md
+  h_6f5e45c41d0910 1-5
+.changeset/layered-feature-config.md
+  h_6f5e45c41d0910 1-21
+.changeset/m6-docs-readmes.md
+  h_6f5e45c41d0910 1-8
+.changeset/official-plugin-feature-levels.md
+  h_6f5e45c41d0910 1-20
+.changeset/onboarding-service-core.md
+  h_6f5e45c41d0910 1-12
+.changeset/open-host-loopback.md
+  h_6f5e45c41d0910 1-6
+.changeset/outbound-media-untrusted-sources.md
+  h_6f5e45c41d0910 1-17
+.changeset/platform-standing.md
+  h_6f5e45c41d0910 1-15
+.changeset/plugin-permission-levels.md
+  h_6f5e45c41d0910 1-23
+.changeset/r2-via-agent-media.md
+  h_6f5e45c41d0910 1-5
+.changeset/release-gate-followups.md
+  h_6f5e45c41d0910 1-12
+.changeset/scaffold-gateway-dependency.md
+  h_6f5e45c41d0910 1-6
+.changeset/security-followups.md
+  h_6f5e45c41d0910 1-13
+.changeset/terminal-early-input.md
+  h_6f5e45c41d0910 1-5
+.changeset/version-policy.json
+  h_6f5e45c41d0910 3-59
+.changeset/zhin-shim-follow-cli.md
+  h_6f5e45c41d0910 1-5
+.github/copilot-instructions.md
+  h_6f5e45c41d0910 17-18,89-102,124
+.github/skills/migrate-zhin-plugin-runtime/SKILL.md
+  h_6f5e45c41d0910 42-43,45
+.github/skills/zhin-plugin-standard-development/SKILL.md
+  h_6f5e45c41d0910 12
+.github/workflows/full-validation.yml
+  h_6f5e45c41d0910 146,150,153,159-161,182-183,189-230
+AGENTS.md
+  h_6f5e45c41d0910 32,62,64-66,112,117,133,159,164
+CLAUDE.md
+  h_6f5e45c41d0910 18,38,67-70,86-88,95-100,103,140,235-236,250,252
+DOCKER.md
+  h_6f5e45c41d0910 14-28
+README.md
+  h_6f5e45c41d0910 48,50,53-55,61-62,162,168,248,259,261-281,302-310,327
+README.zh-CN.md
+  h_6f5e45c41d0910 48,50,53-55,61-62,162,168,252,263,265-284,306-314,331
+SECURITY.md
+  h_6f5e45c41d0910 70-71,95,150,193,210,297-298,322,377,438
+basic/cli/README.md
+  h_6f5e45c41d0910 5-6,14,19-28,40,44-46,51,55
+basic/cli/package.json
+  h_6f5e45c41d0910 32,44,55
+basic/cli/src/cli.ts
+  h_6f5e45c41d0910 5,29,42,44-47,78
+basic/cli/src/commands/agent.ts
+  h_6f5e45c41d0910 2,12,14,28
+basic/cli/src/commands/config-check.ts
+  h_6f5e45c41d0910 10,12
+basic/cli/src/commands/config.ts
+  h_6f5e45c41d0910 12,33,80-86,92,227,277
+basic/cli/src/commands/console.ts
+  h_6f5e45c41d0910 1-533
+basic/cli/src/commands/doctor.ts
+  h_6f5e45c41d0910 6,32-35,686,688,690-691,696-718,721-731,734-758,831-893
+basic/cli/src/commands/install.ts
+  h_6f5e45c41d0910 8-9,93-99,106-118,128
+basic/cli/src/commands/lifecycle.ts
+  h_6f5e45c41d0910 1-261
+basic/cli/src/commands/migrate.ts
+  h_6f5e45c41d0910 19-24,31-32,34,40,94-123,141,145-152,157,630,644,650,684,708,724
+basic/cli/src/commands/new-plugin-manifest.ts
+  h_6f5e45c41d0910 5,29
+basic/cli/src/commands/new.ts
+  h_6f5e45c41d0910 161,512
+basic/cli/src/commands/onboard.ts
+  h_6f5e45c41d0910 18,27
+basic/cli/src/commands/packages.ts
+  h_6f5e45c41d0910 20
+basic/cli/src/commands/preview.ts
+  h_6f5e45c41d0910 13-15,94,115,135,178-179,210,244
+basic/cli/src/commands/runtime.ts
+  h_6f5e45c41d0910 6-9,41,50-61,65
+basic/cli/src/commands/setup-onboarding.ts
+  h_6f5e45c41d0910 1-109
+basic/cli/src/commands/setup.ts
+  h_6f5e45c41d0910 12-13,18,32,37-41,56-59,90-95,144-158,164-165,168,170,173-175,178-179,181-185,188-189,245-252,269
+basic/cli/src/commands/trace.ts
+  h_6f5e45c41d0910 7,56-63,66,76,81,91-92,95,108-109,112,120,122-123,162,170-171,174
+basic/cli/src/commands/uninstall.ts
+  h_6f5e45c41d0910 6-14,29-30,66,70
+basic/cli/src/commands/usage.ts
+  h_6f5e45c41d0910 9
+basic/cli/src/commands/use-cases.ts
+  h_6f5e45c41d0910 2
+basic/cli/src/commands/watch-format.ts
+  h_6f5e45c41d0910 206
+basic/cli/src/plugin-management/console-client.ts
+  h_6f5e45c41d0910 2,67,83
+basic/cli/src/plugin-runtime/migrate/index.ts
+  h_6f5e45c41d0910 4,6-18
+basic/cli/src/plugin-runtime/migrate/package-cutover.ts
+  h_6f5e45c41d0910 3-4,84-88,90,94-97,308-311,313,319,369-371,392
+basic/cli/src/plugin-runtime/migrate/start-scripts.ts
+  h_6f5e45c41d0910 1-54
+basic/cli/src/plugin-runtime/migrate/start-stack-dependencies.ts
+  h_6f5e45c41d0910 1-142
+basic/cli/src/plugin-runtime/migrate/verify.ts
+  h_6f5e45c41d0910 7,116-117,119-123
+basic/cli/src/utils/config-check.ts
+  h_6f5e45c41d0910 15-16,18
+basic/cli/src/utils/config-offline.ts
+  h_6f5e45c41d0910 7-9,11
+basic/cli/src/utils/dev-link-plugin.ts
+  h_6f5e45c41d0910 23
+basic/cli/src/utils/dev-link.ts
+  h_6f5e45c41d0910 24
+basic/cli/src/utils/gateway.ts
+  h_6f5e45c41d0910 1-302
+basic/cli/src/utils/global-home-init.ts
+  h_6f5e45c41d0910 7,16-17
+basic/cli/src/utils/host-http.ts
+  h_6f5e45c41d0910 7-9,14-18,52-53,56-60,64-72,104,123-125,136
+basic/cli/src/utils/process.ts
+  h_6f5e45c41d0910 7
+basic/cli/src/utils/project-instance.ts
+  h_6f5e45c41d0910 1-141
+basic/cli/tests/cli-write-side.test.ts
+  h_6f5e45c41d0910 15,134-242,295,303,311-316,322-346
+basic/cli/tests/config-check.test.ts
+  h_6f5e45c41d0910 5
+basic/cli/tests/config-offline-no-agent.test.ts
+  h_6f5e45c41d0910 10,14-16,18,20-21
+basic/cli/tests/console-init-database-password.test.ts
+  h_6f5e45c41d0910 1-173
+basic/cli/tests/console-via-gateway.test.ts
+  h_6f5e45c41d0910 1-179
+basic/cli/tests/doctor.test.ts
+  h_6f5e45c41d0910 8-9,75-156
+basic/cli/tests/gateway-lifecycle.test.ts
+  h_6f5e45c41d0910 1-155
+basic/cli/tests/gateway-packages.test.ts
+  h_6f5e45c41d0910 1-138
+basic/cli/tests/plugin-management/use-cases.test.ts
+  h_6f5e45c41d0910 1
+basic/cli/tests/plugin-runtime/http-host-installer.test.ts
+  h_6f5e45c41d0910 28,30-32
+basic/cli/tests/plugin-runtime/instance-declarations-migration.test.ts
+  h_6f5e45c41d0910 6,235
+basic/cli/tests/plugin-runtime/migration-readiness.test.ts
+  h_6f5e45c41d0910 120,124-125,131,133-134
+basic/cli/tests/plugin-runtime/migration-verify.test.ts
+  h_6f5e45c41d0910 1,28-43
+basic/cli/tests/plugin-runtime/package-cutover.test.ts
+  h_6f5e45c41d0910 63-72,113-114,117,210-281
+basic/cli/tests/plugin-runtime/start-scripts.test.ts
+  h_6f5e45c41d0910 1-46
+basic/cli/tests/plugin-runtime/start/options.test.ts
+  h_6f5e45c41d0910 12,24,38,80,87-97
+basic/cli/tests/setup-onboarding.test.ts
+  h_6f5e45c41d0910 1-173
+basic/cli/tests/utils/host-http.test.ts
+  h_6f5e45c41d0910 6,54,100-103,129-179
+basic/cli/tests/utils/project-instance.test.ts
+  h_6f5e45c41d0910 1-64
+basic/cli/tests/watch.test.ts
+  h_6f5e45c41d0910 92
+basic/database/src/dialects/sqlite.ts
+  h_6f5e45c41d0910 4,13-42,47-49,68-79,113-146,338-370,372-373
+basic/database/src/index.ts
+  h_6f5e45c41d0910 17-18
+basic/database/src/probe.ts
+  h_6f5e45c41d0910 1-119
+basic/database/src/reserved-tables.ts
+  h_6f5e45c41d0910 1-44
+basic/database/src/types.ts
+  h_6f5e45c41d0910 438-442
+basic/database/tests/probe.test.ts
+  h_6f5e45c41d0910 1-48
+basic/database/tests/reserved-tables.test.ts
+  h_6f5e45c41d0910 1-37
+basic/database/tests/sqlite-busy-retry.test.ts
+  h_6f5e45c41d0910 1-111
+basic/schema/src/json-schema.ts
+  h_6f5e45c41d0910 17-26,118-119
+basic/schema/src/schema.ts
+  h_6f5e45c41d0910 3,108-126,287-288
+basic/schema/tests/config-declaration.test.ts
+  h_6f5e45c41d0910 197-215
+deploy/huggingface/Dockerfile
+  h_6f5e45c41d0910 17,27,32-34
+deploy/huggingface/README.md
+  h_6f5e45c41d0910 15,23,40-46,48
+deploy/huggingface/commands/playground/index.ts
+  h_6f5e45c41d0910 21
+deploy/huggingface/package.json
+  h_6f5e45c41d0910 8-9,17
+deploy/huggingface/start.sh
+  h_6f5e45c41d0910 1-64
+deploy/huggingface/tests/config-contract.test.ts
+  h_6f5e45c41d0910 1,3,59-142
+deploy/huggingface/zhin.config.yml
+  h_6f5e45c41d0910 6-8
+docs/.vitepress/config.ts
+  h_6f5e45c41d0910 35,60-63,134-137,172,212,237-240,311-314,349
+docs/adapters/bilibili-live.md
+  h_6f5e45c41d0910 11,125
+docs/adapters/bilibili.md
+  h_6f5e45c41d0910 11,114
+docs/adapters/dingtalk.md
+  h_6f5e45c41d0910 11,122,160-163
+docs/adapters/discord.md
+  h_6f5e45c41d0910 11,47,112,167-170
+docs/adapters/email.md
+  h_6f5e45c41d0910 11,99
+docs/adapters/github.md
+  h_6f5e45c41d0910 11,31,118
+docs/adapters/icqq.md
+  h_6f5e45c41d0910 11,198,240,274-277
+docs/adapters/kook.md
+  h_6f5e45c41d0910 11,129,174-177
+docs/adapters/lark.md
+  h_6f5e45c41d0910 11,129,195-198
+docs/adapters/line.md
+  h_6f5e45c41d0910 11,123,142-145
+docs/adapters/milky.md
+  h_6f5e45c41d0910 11,115,129-132
+docs/adapters/napcat.md
+  h_6f5e45c41d0910 11,98,113,142-145
+docs/adapters/onebot11.md
+  h_6f5e45c41d0910 11,108,123,141-144
+docs/adapters/onebot12.md
+  h_6f5e45c41d0910 11,123,137-140
+docs/adapters/qq.md
+  h_6f5e45c41d0910 11,255,326-329
+docs/adapters/sandbox.md
+  h_6f5e45c41d0910 11,35,39,46-47,99-100,112,125,127,197,219,255-258
+docs/adapters/satori.md
+  h_6f5e45c41d0910 11,129,139-142
+docs/adapters/slack.md
+  h_6f5e45c41d0910 11,167,221-224
+docs/adapters/telegram.md
+  h_6f5e45c41d0910 11,58,178,215-218
+docs/adapters/wechat-mp.md
+  h_6f5e45c41d0910 11,99
+docs/adapters/wecom.md
+  h_6f5e45c41d0910 11,127,158-161
+docs/adapters/weixin-ilink.md
+  h_6f5e45c41d0910 11,93
+docs/adr/0040-controlled-self-change.md
+  h_6f5e45c41d0910 56,188
+docs/adr/0049-console-rbac.md
+  h_6f5e45c41d0910 1-178
+docs/adr/0050-layered-feature-config.md
+  h_6f5e45c41d0910 1-131
+docs/adr/0051-console-terminal.md
+  h_6f5e45c41d0910 1-77
+docs/adr/0052-console-information-architecture.md
+  h_6f5e45c41d0910 1-52
+docs/adr/0053-console-onboarding.md
+  h_6f5e45c41d0910 1-88
+docs/adr/0054-management-gateway.md
+  h_6f5e45c41d0910 1-185
+docs/adr/0055-conversation-feature-config.md
+  h_6f5e45c41d0910 1-106
+docs/adr/0056-chat-roles.md
+  h_6f5e45c41d0910 1-140
+docs/adr/index.md
+  h_6f5e45c41d0910 9,46-58
+docs/ai/agent.md
+  h_6f5e45c41d0910 150,180,345-356,546,720
+docs/ai/default-behavior.md
+  h_6f5e45c41d0910 64,66,68,74
+docs/ai/index.md
+  h_6f5e45c41d0910 29,142,144,148,193
+docs/ai/multi-agent-harness.md
+  h_6f5e45c41d0910 102
+docs/ai/self-change.md
+  h_6f5e45c41d0910 68
+docs/ai/speech.md
+  h_6f5e45c41d0910 29
+docs/authoring/adapters.md
+  h_6f5e45c41d0910 97,170
+docs/authoring/agent-tools.md
+  h_6f5e45c41d0910 70,75-83,345,437-438,446
+docs/authoring/commands.md
+  h_6f5e45c41d0910 145,152-155,160,162,164-169,172-175,439,441,443,595,643
+docs/authoring/console-pages.md
+  h_6f5e45c41d0910 106-108,110,231-234,256-277,287,377,405,506,549,603
+docs/authoring/define-plugin.md
+  h_6f5e45c41d0910 137-219,349,394
+docs/authoring/host-tokens.md
+  h_6f5e45c41d0910 92-128
+docs/authoring/local-dev.md
+  h_6f5e45c41d0910 78,81,195,202
+docs/authoring/middleware-components.md
+  h_6f5e45c41d0910 60-72,175-176
+docs/authoring/testing.md
+  h_6f5e45c41d0910 93
+docs/cli/index.md
+  h_6f5e45c41d0910 25-29,38,46,49-64,76,82,87-89,94,97-99,102,104,107-115,118-139,150,157,200,203,234-235,280,289-290,298-306,329,423,443,520,549-552,554
+docs/cli/runtime.md
+  h_6f5e45c41d0910 2-3,6,8-10,15-16,18-23,25-26,28-29,34-36,43-44,49,51-68,70-82,88,93,100-102,110-111,127,133,135,137-161,165-186,188,190
+docs/concepts/architecture.md
+  h_6f5e45c41d0910 59-61,75-77,112-113,118,120,122-188,191-195,197,203-205,219,225
+docs/concepts/chat-roles.md
+  h_6f5e45c41d0910 1-120
+docs/concepts/plugin-model.md
+  h_6f5e45c41d0910 129,132
+docs/configuration/generated.md
+  h_6f5e45c41d0910 15,28,30,38-58,469-471,1659-1660,1711-1712,1749-1750,2238-2239,2248-2249,2261-2262,2279-2280,2320-2321,2335,2367-2368,2393-2394,2424-2425,2442-2443,2478-2479,2501-2502,2516-2517,2528-2529
+docs/configuration/index.md
+  h_6f5e45c41d0910 20,28,70,74,77-80,109,117,170,191,295,301,306-312,321,449,451,457-458,526
+docs/console/access-control.md
+  h_6f5e45c41d0910 1-152
+docs/console/features.md
+  h_6f5e45c41d0910 1-155
+docs/console/index.md
+  h_6f5e45c41d0910 3,8,10,12,14,16-19,21,23,25-81,83-128,130,132-184,194-200,212,218,220,228-237,243-254,256-258,260,266,268,275-278,289,291,300,304-306,308,320,324,326-333,335,337-354,356-359,361,363,365,370-371
+docs/console/onboarding.md
+  h_6f5e45c41d0910 1-75
+docs/console/operations.md
+  h_6f5e45c41d0910 1-107
+docs/contributing/conventions.md
+  h_6f5e45c41d0910 34,44,79-80,83,85,87-89
+docs/contributing/legacy-concepts.md
+  h_6f5e45c41d0910 22,77
+docs/contributing/platform-acceptance-runner.md
+  h_6f5e45c41d0910 81
+docs/contributing/public-api-surface.md
+  h_6f5e45c41d0910 77,79,103,131,150
+docs/contributing/publishing.md
+  h_6f5e45c41d0910 138,162,165
+docs/contributing/repo-structure.md
+  h_6f5e45c41d0910 16,51-54,61-88,107,109,111-113
+docs/customer/index.md
+  h_6f5e45c41d0910 19,21,34-35,38-39,49-50,54-60,68,70,99,116-120,133,135
+docs/en/adapters/bilibili-live.md
+  h_6f5e45c41d0910 98
+docs/en/adapters/bilibili.md
+  h_6f5e45c41d0910 106,114,153,206
+docs/en/adapters/dingtalk.md
+  h_6f5e45c41d0910 116
+docs/en/adapters/discord.md
+  h_6f5e45c41d0910 116
+docs/en/adapters/github.md
+  h_6f5e45c41d0910 31,120
+docs/en/adapters/icqq.md
+  h_6f5e45c41d0910 108,138
+docs/en/adapters/juejin.md
+  h_6f5e45c41d0910 88
+docs/en/adapters/kook.md
+  h_6f5e45c41d0910 129
+docs/en/adapters/lark.md
+  h_6f5e45c41d0910 119
+docs/en/adapters/line.md
+  h_6f5e45c41d0910 126
+docs/en/adapters/milky.md
+  h_6f5e45c41d0910 111
+docs/en/adapters/napcat.md
+  h_6f5e45c41d0910 97,114
+docs/en/adapters/onebot11.md
+  h_6f5e45c41d0910 99,116
+docs/en/adapters/onebot12.md
+  h_6f5e45c41d0910 114
+docs/en/adapters/qq.md
+  h_6f5e45c41d0910 139
+docs/en/adapters/sandbox.md
+  h_6f5e45c41d0910 33,37,44,84-85,98,100,170
+docs/en/adapters/satori.md
+  h_6f5e45c41d0910 133
+docs/en/adapters/slack.md
+  h_6f5e45c41d0910 159
+docs/en/adapters/telegram.md
+  h_6f5e45c41d0910 47,122
+docs/en/adapters/wechat-mp.md
+  h_6f5e45c41d0910 102
+docs/en/adapters/wecom.md
+  h_6f5e45c41d0910 131
+docs/en/adapters/weixin-ilink.md
+  h_6f5e45c41d0910 87
+docs/en/ai/agent.md
+  h_6f5e45c41d0910 154,184,448-459,616
+docs/en/ai/default-behavior.md
+  h_6f5e45c41d0910 64,66,68,74,87
+docs/en/ai/index.md
+  h_6f5e45c41d0910 29
+docs/en/ai/multi-agent-harness.md
+  h_6f5e45c41d0910 98
+docs/en/ai/self-change.md
+  h_6f5e45c41d0910 69
+docs/en/ai/speech.md
+  h_6f5e45c41d0910 29
+docs/en/authoring/adapters.md
+  h_6f5e45c41d0910 98,171
+docs/en/authoring/agent-tools.md
+  h_6f5e45c41d0910 70,75-83,405
+docs/en/authoring/commands.md
+  h_6f5e45c41d0910 145,152-155,160,162,164-169,172-175,437,593,641,664
+docs/en/authoring/console-pages.md
+  h_6f5e45c41d0910 106-108,110,231-234,256-277,287,377,405,506,549,603
+docs/en/authoring/define-plugin.md
+  h_6f5e45c41d0910 137-219,349,394
+docs/en/authoring/host-tokens.md
+  h_6f5e45c41d0910 92-128
+docs/en/authoring/local-dev.md
+  h_6f5e45c41d0910 78,81,195,202
+docs/en/authoring/middleware-components.md
+  h_6f5e45c41d0910 60-72,165-166
+docs/en/authoring/testing.md
+  h_6f5e45c41d0910 93
+docs/en/cli/index.md
+  h_6f5e45c41d0910 25-29,38,46,49-64,76,82,87-89,94,97-99,102,104,107-115,118-139,150,157,200,203,234-235,280,289-290,298-306,329,436,456,533,562-565,567
+docs/en/cli/runtime.md
+  h_6f5e45c41d0910 2-3,6,8-10,15-16,18-23,25-26,28-29,34-36,43-82,88,93,100-102,110-111,127,133,135-141,143-161,165-186,188,190
+docs/en/concepts/architecture.md
+  h_6f5e45c41d0910 56-58,71-72,97-98,100,102,104-109,111,113-179,185-187,201,205
+docs/en/concepts/chat-roles.md
+  h_6f5e45c41d0910 1-120
+docs/en/concepts/plugin-model.md
+  h_6f5e45c41d0910 127,130
+docs/en/configuration/generated.md
+  h_6f5e45c41d0910 15,28,30,38-58,469-471,1659-1660,1711-1712,1749-1750,2238-2239,2248-2249,2261-2262,2279-2280,2320-2321,2335,2367-2368,2393-2394,2424-2425,2442-2443,2478-2479,2501-2502,2516-2517,2528-2529
+docs/en/configuration/index.md
+  h_6f5e45c41d0910 20,28,70,74,77-80,109,117,170,192,302,308,313-319,328,456,458,464-465,533
+docs/en/console/access-control.md
+  h_6f5e45c41d0910 1-152
+docs/en/console/features.md
+  h_6f5e45c41d0910 1-155
+docs/en/console/index.md
+  h_6f5e45c41d0910 3,8,10,12,14,16-19,21,23,25-81,83-128,130,132-184,194-200,212,218,220,228-237,243-251,253-254,256-258,260,266,268,284,286,295,299-301,303,315,319,321-328,330,332-349,351-354,356,358,360,365-366
+docs/en/console/onboarding.md
+  h_6f5e45c41d0910 1-75
+docs/en/console/operations.md
+  h_6f5e45c41d0910 1-107
+docs/en/contributing/conventions.md
+  h_6f5e45c41d0910 24,34,71-72,75,77,79-81
+docs/en/contributing/legacy-concepts.md
+  h_6f5e45c41d0910 22,77
+docs/en/contributing/public-api-surface.md
+  h_6f5e45c41d0910 72,74,98,124,134
+docs/en/contributing/repo-structure.md
+  h_6f5e45c41d0910 16,51-54,57-82
+docs/en/customer/index.md
+  h_6f5e45c41d0910 19,21,34-35,38-39,49-50,52,54-60,68,70,99,116-120,133,135
+docs/en/examples/index.md
+  h_6f5e45c41d0910 24-29,38,59,82,87,100,104,121-122
+docs/en/getting-started/concepts.md
+  h_6f5e45c41d0910 74,98
+docs/en/getting-started/first-plugin.md
+  h_6f5e45c41d0910 15,54,234
+docs/en/getting-started/index.md
+  h_6f5e45c41d0910 15,20,22-49,51,53,55-56,60,82
+docs/en/index.md
+  h_6f5e45c41d0910 71
+docs/en/migrations/chat-roles.md
+  h_6f5e45c41d0910 1-121
+docs/en/migrations/console-access-control.md
+  h_6f5e45c41d0910 1-91
+docs/en/migrations/management-gateway.md
+  h_6f5e45c41d0910 1-339
+docs/en/operations/demo-deployment.md
+  h_6f5e45c41d0910 1-121
+docs/en/operations/production.md
+  h_6f5e45c41d0910 10,16-17,27,48-57,75,78,86,98,103-104,107,123-130,145-164,169-176,183,185,203,218
+docs/en/operations/upgrades.md
+  h_6f5e45c41d0910 16,21-34,160
+docs/en/paths/ai-agent.md
+  h_6f5e45c41d0910 141
+docs/en/paths/console.md
+  h_6f5e45c41d0910 12,14,17,24,30-32,34-40,42-47,53,73-74,77,80,82-92,94,102,106,120,128,133,137-142,144,146,150,160,166,168,178
+docs/en/paths/im-bot.md
+  h_6f5e45c41d0910 19,24,88,110
+docs/en/showcase/community-bot.md
+  h_6f5e45c41d0910 80-81
+docs/en/showcase/personal-assistant.md
+  h_6f5e45c41d0910 96-97
+docs/en/solutions/governed-agent.md
+  h_6f5e45c41d0910 27
+docs/en/solutions/group-welcome.md
+  h_6f5e45c41d0910 12,14
+docs/en/solutions/multi-endpoint-operations.md
+  h_6f5e45c41d0910 22,24
+docs/en/solutions/reminders.md
+  h_6f5e45c41d0910 60
+docs/en/solutions/rss-subscriptions.md
+  h_6f5e45c41d0910 8,25,65
+docs/en/troubleshooting/index.md
+  h_6f5e45c41d0910 59-60,64-65,69,88,141,190,200,233
+docs/en/troubleshooting/messages.md
+  h_6f5e45c41d0910 8
+docs/en/wiki/notes/first-run.md
+  h_6f5e45c41d0910 14,19,21
+docs/en/wiki/notes/production-ready.md
+  h_6f5e45c41d0910 22
+docs/examples/index.md
+  h_6f5e45c41d0910 24-29,38,59,82,87,100,104,121-122
+docs/getting-started/concepts.md
+  h_6f5e45c41d0910 74,98
+docs/getting-started/first-plugin.md
+  h_6f5e45c41d0910 15,54,234
+docs/getting-started/index.md
+  h_6f5e45c41d0910 15,20,22-49,51,53,55-56,60,82
+docs/index.md
+  h_6f5e45c41d0910 64
+docs/migrations/chat-roles.md
+  h_6f5e45c41d0910 1-121
+docs/migrations/console-access-control.md
+  h_6f5e45c41d0910 1-91
+docs/migrations/management-gateway.md
+  h_6f5e45c41d0910 1-339
+docs/operations/demo-deployment.md
+  h_6f5e45c41d0910 1-121
+docs/operations/production.md
+  h_6f5e45c41d0910 10,16-17,27,48-57,75,78,86,98,103-104,107,123-130,145-164,169-176,183,185,203,220
+docs/operations/upgrades.md
+  h_6f5e45c41d0910 16,21-34,155
+docs/paths/ai-agent.md
+  h_6f5e45c41d0910 141
+docs/paths/console.md
+  h_6f5e45c41d0910 12,14,17,24,30-32,34-39,42-47,53,73-74,77,80,82-92,94,102,106,120,128,133,137-142,144,146,150,160,166,168,178
+docs/paths/im-bot.md
+  h_6f5e45c41d0910 19,24,88,110
+docs/plans/adapter-operation-data-migration.md
+  h_6f5e45c41d0910 48
+docs/plans/adapter-session-runtime-refactor.md
+  h_6f5e45c41d0910 297
+docs/plans/configuration-live-update.md
+  h_6f5e45c41d0910 11,43,427
+docs/plans/console-gateway-redesign.md
+  h_6f5e45c41d0910 1-167
+docs/plans/console-plugin-management.md
+  h_6f5e45c41d0910 24,28-29,54
+docs/plans/plugin-package-and-instance-declarations.md
+  h_6f5e45c41d0910 274
+docs/plans/schedule-outcome-retry-safety.md
+  h_6f5e45c41d0910 295-296
+docs/showcase/community-bot.md
+  h_6f5e45c41d0910 79-80
+docs/showcase/personal-assistant.md
+  h_6f5e45c41d0910 97-98
+docs/snippets/install-tiers.md
+  h_6f5e45c41d0910 14,25,36,75,81
+docs/solutions/governed-agent.md
+  h_6f5e45c41d0910 27
+docs/solutions/group-welcome.md
+  h_6f5e45c41d0910 12
+docs/solutions/multi-endpoint-operations.md
+  h_6f5e45c41d0910 22,24
+docs/solutions/reminders.md
+  h_6f5e45c41d0910 60
+docs/solutions/rss-subscriptions.md
+  h_6f5e45c41d0910 3,8,21,25,65
+docs/troubleshooting/catalog.json
+  h_6f5e45c41d0910 25-26,29-30,33,45,81,114,120,142
+docs/troubleshooting/index.md
+  h_6f5e45c41d0910 59-60,64-65,69,88,141,190,200,233
+docs/troubleshooting/messages.md
+  h_6f5e45c41d0910 8
+docs/wiki/notes/first-run.md
+  h_6f5e45c41d0910 14,19
+docs/wiki/notes/production-ready.md
+  h_6f5e45c41d0910 20
+examples/capabilities-bot/README.md
+  h_6f5e45c41d0910 9,14
+examples/capabilities-bot/package.json
+  h_6f5e45c41d0910 8-9,16-18
+examples/capabilities-bot/tests/boot.test.ts
+  h_6f5e45c41d0910 2,18-19
+examples/full-bot/.env.example
+  h_6f5e45c41d0910 1,4-7
+examples/full-bot/ACCEPTANCE.md
+  h_6f5e45c41d0910 32,41,57-63,69,73-75,81,84-86
+examples/full-bot/README.md
+  h_6f5e45c41d0910 42
+examples/full-bot/package.json
+  h_6f5e45c41d0910 8-9,31-33
+examples/full-bot/skills/memory-consolidate/SKILL.md
+  h_6f5e45c41d0910 3
+examples/full-bot/tests/full-bot-l4-contract.test.ts
+  h_6f5e45c41d0910 27-28
+examples/full-bot/zhin.config.yml
+  h_6f5e45c41d0910 12-13,17,23
+examples/life-assistant-bot/README.md
+  h_6f5e45c41d0910 27,30,34-35
+examples/life-assistant-bot/package.json
+  h_6f5e45c41d0910 8-9,20-22
+examples/life-assistant-bot/tests/config-contract.test.ts
+  h_6f5e45c41d0910 29
+examples/minimal-bot/README.md
+  h_6f5e45c41d0910 13,16-20,31
+examples/minimal-bot/package.json
+  h_6f5e45c41d0910 8-11,22-24
+examples/minimal-bot/tests/stable-path.test.ts
+  h_6f5e45c41d0910 19-20,31,33,268-269,287-298
+examples/multi-agent-room/package.json
+  h_6f5e45c41d0910 7-8,33-35
+examples/multi-agent-room/tests/multi-agent-room-contract.test.ts
+  h_6f5e45c41d0910 57
+examples/platform-acceptance-bot/package.json
+  h_6f5e45c41d0910 66-68
+examples/qq-games-bot/README.md
+  h_6f5e45c41d0910 10,28-29,51
+examples/qq-games-bot/package.json
+  h_6f5e45c41d0910 8-9,27-29
+examples/qq-games-bot/tests/runtime-contract.test.ts
+  h_6f5e45c41d0910 14
+examples/self-delivery-bot/package.json
+  h_6f5e45c41d0910 7-8
+examples/single-file-bot/README.md
+  h_6f5e45c41d0910 40,46,55
+examples/single-file-bot/package.json
+  h_6f5e45c41d0910 8-9,15-17
+examples/single-file-bot/tests/single-file-bot.test.ts
+  h_6f5e45c41d0910 4,95-96
+examples/test-bot/README.md
+  h_6f5e45c41d0910 19,42,65
+examples/test-bot/REMOTE_CONSOLE.md
+  h_6f5e45c41d0910 10,34,36-37
+examples/test-bot/package.json
+  h_6f5e45c41d0910 8-10,88-89
+examples/test-bot/zhin.config.example.yml
+  h_6f5e45c41d0910 58-59
+package.json
+  h_6f5e45c41d0910 108,149,169,219-226
+packages/console/client/README.md
+  h_6f5e45c41d0910 60-78,232
+packages/console/client/client/adapter-console/AdapterConsolePage.test.ts
+  h_6f5e45c41d0910 22,37,75-76,629-690
+packages/console/client/client/adapter-console/AdapterConsolePage.tsx
+  h_6f5e45c41d0910 176-193,197-212,215-217,225,245,247,251,315-322,702-710,713,715,720,722,724-727
+packages/console/client/client/app.ts
+  h_6f5e45c41d0910 24
+packages/console/client/client/bootstrap/loadConsoleEntries.test.ts
+  h_6f5e45c41d0910 53-68
+packages/console/client/client/bootstrap/loadConsoleEntries.ts
+  h_6f5e45c41d0910 1,35,154-156,199
+packages/console/client/client/index.ts
+  h_6f5e45c41d0910 146,150
+packages/console/client/client/transport/console-transport.test.ts
+  h_6f5e45c41d0910 253,256-264,266-298
+packages/console/client/client/transport/console-transport.ts
+  h_6f5e45c41d0910 5,22,26,30-35,58-65,89,345-346,356,366,371,373-374,378-410,442-458,470-478,493-496,500,503-513,672-676,678,693,792-795
+packages/console/client/client/transport/hooks.test.ts
+  h_6f5e45c41d0910 3,22-34
+packages/console/client/client/transport/hooks.ts
+  h_6f5e45c41d0910 4,187-204,226-227,231-233,320-321,325-327,354-355,358-362
+packages/console/client/client/transport/types.test.ts
+  h_6f5e45c41d0910 1-30
+packages/console/client/client/transport/types.ts
+  h_6f5e45c41d0910 20,28-32,54-61,67,74-94
+packages/console/client/client/ui/styles.ts
+  h_6f5e45c41d0910 101-103,575-576
+packages/console/client/package.json
+  h_6f5e45c41d0910 42
+packages/console/contract/package.json
+  h_6f5e45c41d0910 35
+packages/console/contract/src/index.ts
+  h_6f5e45c41d0910 11-12,56-57
+packages/console/page/src/definition.ts
+  h_6f5e45c41d0910 18-21,60-61,77,164,175-176,195
+packages/console/page/src/page-index.ts
+  h_6f5e45c41d0910 43
+packages/console/page/tests/page.test.ts
+  h_6f5e45c41d0910 28,32,48,52-55
+packages/console/pagemanager/package.json
+  h_6f5e45c41d0910 53
+packages/console/pagemanager/src/client-build/typescript-builder.ts
+  h_6f5e45c41d0910 345,483,585,659,686,701,834,886
+packages/console/pagemanager/tests/client-build/client-build.test.ts
+  h_6f5e45c41d0910 93,111
+packages/console/plugin-contract/src/page.ts
+  h_6f5e45c41d0910 1-24,39-40,98-99,114
+packages/console/plugin-contract/tests/contract.test.ts
+  h_6f5e45c41d0910 80-81
+packages/console/protocol/README.md
+  h_6f5e45c41d0910 3-27,47,53
+packages/console/protocol/src/chat-roles.ts
+  h_6f5e45c41d0910 1-95
+packages/console/protocol/src/feature.ts
+  h_6f5e45c41d0910 1-304
+packages/console/protocol/src/gateway.ts
+  h_6f5e45c41d0910 1-341
+packages/console/protocol/src/index.ts
+  h_6f5e45c41d0910 597-601,714-719
+packages/console/protocol/src/navigation.ts
+  h_6f5e45c41d0910 1-10
+packages/console/protocol/src/permissions.ts
+  h_6f5e45c41d0910 1-669
+packages/console/protocol/src/plugin-permissions.ts
+  h_6f5e45c41d0910 1-195
+packages/console/protocol/tests/gateway.test.ts
+  h_6f5e45c41d0910 1-49
+packages/console/protocol/tests/permissions.test.ts
+  h_6f5e45c41d0910 1-159
+packages/console/protocol/tests/plugin-permissions.test.ts
+  h_6f5e45c41d0910 1-122
+packages/console/protocol/tests/protocol.test.ts
+  h_6f5e45c41d0910 3,32-37
+packages/host/README.md
+  h_6f5e45c41d0910 10,12
+packages/host/a2a/package.json
+  h_6f5e45c41d0910 53
+packages/host/a2a/src/auth.ts
+  h_6f5e45c41d0910 14-21,26-29,33
+packages/host/a2a/src/card-builder.ts
+  h_6f5e45c41d0910 86
+packages/host/a2a/src/http-handlers.ts
+  h_6f5e45c41d0910 2,47,49,51-52,54,58-87,90,94,97,100,104-107,116,118,120,126-128,130-133,138,141,143,145,160,166,170,173,176,180,187,192,196,199-200,209,215,223,226-227,235,237,239,246,249,256,259,261-274,276
+packages/host/a2a/src/mailbox-remote-transport.ts
+  h_6f5e45c41d0910 19,555,557,565,568,570,572
+packages/host/a2a/src/runtime.ts
+  h_6f5e45c41d0910 3,8,25-30,46-47,64,67-72,74,78,82,84-86
+packages/host/a2a/tests/a2a.test.ts
+  h_6f5e45c41d0910 2
+packages/host/a2a/tests/auth.test.ts
+  h_6f5e45c41d0910 4,7,10-11,35-42
+packages/host/a2a/tests/http-handlers.test.ts
+  h_6f5e45c41d0910 2,47-52,77-79,95
+packages/host/a2a/tests/runtime.test.ts
+  h_6f5e45c41d0910 2,28,34,47-49,58-75
+packages/host/gateway/README.md
+  h_6f5e45c41d0910 1-61
+packages/host/gateway/package.json
+  h_6f5e45c41d0910 1-191
+packages/host/gateway/src/config.ts
+  h_6f5e45c41d0910 1-12
+packages/host/gateway/src/config/ai-config-loader.ts
+  h_6f5e45c41d0910 25,99
+packages/host/gateway/src/config/configuration.ts
+  h_6f5e45c41d0910 13,549-562,577,664,666
+packages/host/gateway/src/config/plugin-package-map.ts
+  h_6f5e45c41d0910 3
+packages/host/gateway/src/config/plugin-schema-catalog.ts
+  h_6f5e45c41d0910 8,15,64-108
+packages/host/gateway/src/database.ts
+  h_6f5e45c41d0910 1-2
+packages/host/gateway/src/database/config.ts
+  h_6f5e45c41d0910 1-161
+packages/host/gateway/src/database/index.ts
+  h_6f5e45c41d0910 1-2
+packages/host/gateway/src/database/project-database.ts
+  h_6f5e45c41d0910 1-156
+packages/host/gateway/src/http-response.ts
+  h_6f5e45c41d0910 13-15,18-20,25-28
+packages/host/gateway/src/http.ts
+  h_6f5e45c41d0910 1-6
+packages/host/gateway/src/http/console-rpc.ts
+  h_6f5e45c41d0910 1-68
+packages/host/gateway/src/http/gateway-console.ts
+  h_6f5e45c41d0910 1-385
+packages/host/gateway/src/http/gateway-events.ts
+  h_6f5e45c41d0910 1-193
+packages/host/gateway/src/http/gateway-http-server.ts
+  h_6f5e45c41d0910 1-560
+packages/host/gateway/src/http/local-principal.ts
+  h_6f5e45c41d0910 1-18
+packages/host/gateway/src/http/run-gateway.ts
+  h_6f5e45c41d0910 1-290
+packages/host/gateway/src/http/start-gateway.ts
+  h_6f5e45c41d0910 1-298
+packages/host/gateway/src/iam.ts
+  h_6f5e45c41d0910 1-2
+packages/host/gateway/src/iam/crypto.ts
+  h_6f5e45c41d0910 1-62
+packages/host/gateway/src/iam/index.ts
+  h_6f5e45c41d0910 1-35
+packages/host/gateway/src/iam/install.ts
+  h_6f5e45c41d0910 1-96
+packages/host/gateway/src/iam/local-admin.ts
+  h_6f5e45c41d0910 1-124
+packages/host/gateway/src/iam/rate-limit.ts
+  h_6f5e45c41d0910 1-67
+packages/host/gateway/src/iam/routes.ts
+  h_6f5e45c41d0910 1-194
+packages/host/gateway/src/iam/rpc.ts
+  h_6f5e45c41d0910 1-103
+packages/host/gateway/src/iam/service.ts
+  h_6f5e45c41d0910 1-899
+packages/host/gateway/src/iam/setup-service.ts
+  h_6f5e45c41d0910 1-276
+packages/host/gateway/src/iam/tables.ts
+  h_6f5e45c41d0910 1-91
+packages/host/gateway/src/index.ts
+  h_6f5e45c41d0910 1-22
+packages/host/gateway/src/local.ts
+  h_6f5e45c41d0910 1-10
+packages/host/gateway/src/local/client.ts
+  h_6f5e45c41d0910 1-309
+packages/host/gateway/src/local/handler.ts
+  h_6f5e45c41d0910 1-101
+packages/host/gateway/src/local/local-socket.ts
+  h_6f5e45c41d0910 1-246
+packages/host/gateway/src/local/paths.ts
+  h_6f5e45c41d0910 1-73
+packages/host/gateway/src/local/protocol.ts
+  h_6f5e45c41d0910 1-181
+packages/host/gateway/src/local/state-file.ts
+  h_6f5e45c41d0910 1-39
+packages/host/gateway/src/onboarding.ts
+  h_6f5e45c41d0910 1-2
+packages/host/gateway/src/onboarding/allowlist.ts
+  h_6f5e45c41d0910 1-153
+packages/host/gateway/src/onboarding/errors.ts
+  h_6f5e45c41d0910 1-18
+packages/host/gateway/src/onboarding/index.ts
+  h_6f5e45c41d0910 1-6
+packages/host/gateway/src/onboarding/install.ts
+  h_6f5e45c41d0910 1-172
+packages/host/gateway/src/onboarding/package-manager.ts
+  h_6f5e45c41d0910 1-197
+packages/host/gateway/src/onboarding/service.ts
+  h_6f5e45c41d0910 1-206
+packages/host/gateway/src/onboarding/state-store.ts
+  h_6f5e45c41d0910 1-101
+packages/host/gateway/src/packages.ts
+  h_6f5e45c41d0910 1-2
+packages/host/gateway/src/packages/authorization.ts
+  h_6f5e45c41d0910 1-110
+packages/host/gateway/src/packages/errors.ts
+  h_6f5e45c41d0910 1-26
+packages/host/gateway/src/packages/index.ts
+  h_6f5e45c41d0910 1-5
+packages/host/gateway/src/packages/rpc.ts
+  h_6f5e45c41d0910 1-182
+packages/host/gateway/src/packages/service.ts
+  h_6f5e45c41d0910 1-519
+packages/host/gateway/src/packages/snapshot.ts
+  h_6f5e45c41d0910 1-79
+packages/host/gateway/src/plugin-management.ts
+  h_6f5e45c41d0910 1-5
+packages/host/gateway/src/plugin-management/config-explanation.ts
+  h_6f5e45c41d0910 4
+packages/host/gateway/src/plugin-management/workflow.ts
+  h_6f5e45c41d0910 7,9,16,18,20,24-38,55-73,387-392,417,430-450,454-455,459-516,688-689
+packages/host/gateway/src/project.ts
+  h_6f5e45c41d0910 1-7
+packages/host/gateway/src/server.ts
+  h_6f5e45c41d0910 1-11
+packages/host/gateway/src/supervisor.ts
+  h_6f5e45c41d0910 1-4
+packages/host/gateway/src/supervisor/instance-logs.ts
+  h_6f5e45c41d0910 1-172
+packages/host/gateway/src/supervisor/instance-supervisor.ts
+  h_6f5e45c41d0910 1-515
+packages/host/gateway/src/supervisor/run-instance.ts
+  h_6f5e45c41d0910 1-5,8,11-13,26-28,31-32,35,63-77,79-83,85,87-94,96-120,125-137,139-142,144-145,147,149-155,157-185
+packages/host/gateway/src/supervisor/terminal-state.ts
+  h_6f5e45c41d0910 1-71
+packages/host/gateway/src/terminal.ts
+  h_6f5e45c41d0910 1-3
+packages/host/gateway/src/terminal/backends.ts
+  h_6f5e45c41d0910 1-221
+packages/host/gateway/src/terminal/config.ts
+  h_6f5e45c41d0910 1-283
+packages/host/gateway/src/terminal/host.ts
+  h_6f5e45c41d0910 1-92
+packages/host/gateway/src/terminal/index.ts
+  h_6f5e45c41d0910 1-207
+packages/host/gateway/src/terminal/modules.ts
+  h_6f5e45c41d0910 1-125
+packages/host/gateway/src/terminal/service.ts
+  h_6f5e45c41d0910 1-556
+packages/host/gateway/src/terminal/tickets.ts
+  h_6f5e45c41d0910 1-104
+packages/host/gateway/src/usage.ts
+  h_6f5e45c41d0910 1-2
+packages/host/gateway/tests/config/configuration-adapter-credentials.test.ts
+  h_6f5e45c41d0910 5-6
+packages/host/gateway/tests/config/configuration-application.test.ts
+  h_6f5e45c41d0910 7
+packages/host/gateway/tests/config/configuration-chat-field-policy.test.ts
+  h_6f5e45c41d0910 6,9
+packages/host/gateway/tests/config/configuration-chat-shape.test.ts
+  h_6f5e45c41d0910 5
+packages/host/gateway/tests/config/configuration-chat-tuple.test.ts
+  h_6f5e45c41d0910 5-6
+packages/host/gateway/tests/config/configuration-chat.test.ts
+  h_6f5e45c41d0910 6-9
+packages/host/gateway/tests/config/configuration-patch.test.ts
+  h_6f5e45c41d0910 7-8
+packages/host/gateway/tests/config/configuration-project-patch.test.ts
+  h_6f5e45c41d0910 6-7
+packages/host/gateway/tests/config/configuration.test.ts
+  h_6f5e45c41d0910 10,14
+packages/host/gateway/tests/config/console-schema-coverage.test.ts
+  h_6f5e45c41d0910 6-8,51-70
+packages/host/gateway/tests/config/console-schema.test.ts
+  h_6f5e45c41d0910 2
+packages/host/gateway/tests/config/disabled-plugin-schema.test.ts
+  h_6f5e45c41d0910 5
+packages/host/gateway/tests/config/endpoint-profile-schema.test.ts
+  h_6f5e45c41d0910 4,12
+packages/host/gateway/tests/config/environment-files.test.ts
+  h_6f5e45c41d0910 4
+packages/host/gateway/tests/config/plugin-schema-catalog.test.ts
+  h_6f5e45c41d0910 1,5,208-244
+packages/host/gateway/tests/database/busy-wait.test.ts
+  h_6f5e45c41d0910 1-123
+packages/host/gateway/tests/database/project-database.test.ts
+  h_6f5e45c41d0910 1-123
+packages/host/gateway/tests/http-response.test.ts
+  h_6f5e45c41d0910 1-17
+packages/host/gateway/tests/http/console-rpc-errors.test.ts
+  h_6f5e45c41d0910 1-27
+packages/host/gateway/tests/http/fixtures/gateway-instance.ts
+  h_6f5e45c41d0910 1-40
+packages/host/gateway/tests/http/fixtures/lifecycle-instance.ts
+  h_6f5e45c41d0910 1-23
+packages/host/gateway/tests/http/gateway-console.test.ts
+  h_6f5e45c41d0910 1-323
+packages/host/gateway/tests/http/gateway-http-server.test.ts
+  h_6f5e45c41d0910 1-648
+packages/host/gateway/tests/http/gateway-lifecycle.test.ts
+  h_6f5e45c41d0910 1-134
+packages/host/gateway/tests/http/run-gateway.test.ts
+  h_6f5e45c41d0910 1-198
+packages/host/gateway/tests/http/start-gateway.test.ts
+  h_6f5e45c41d0910 1-174
+packages/host/gateway/tests/local/local-socket.test.ts
+  h_6f5e45c41d0910 1-180
+packages/host/gateway/tests/local/paths.test.ts
+  h_6f5e45c41d0910 1-26
+packages/host/gateway/tests/onboarding/allowlist.test.ts
+  h_6f5e45c41d0910 1-81
+packages/host/gateway/tests/onboarding/install.test.ts
+  h_6f5e45c41d0910 1-172
+packages/host/gateway/tests/onboarding/state.test.ts
+  h_6f5e45c41d0910 1-107
+packages/host/gateway/tests/package-boundary.test.ts
+  h_6f5e45c41d0910 1-87
+packages/host/gateway/tests/packages/command-resolution.test.ts
+  h_6f5e45c41d0910 1-87
+packages/host/gateway/tests/packages/fixtures/project-instance.mjs
+  h_6f5e45c41d0910 1-16
+packages/host/gateway/tests/packages/rpc.test.ts
+  h_6f5e45c41d0910 3-15,17-43,45-50,53-74,77-84,87-95,98-165
+packages/host/gateway/tests/packages/service.test.ts
+  h_6f5e45c41d0910 1-519
+packages/host/gateway/tests/plugin-management/config-explanation.test.ts
+  h_6f5e45c41d0910 6-10,176,178-179,181-182,188,190
+packages/host/gateway/tests/plugin-management/workflow-declaration.test.ts
+  h_6f5e45c41d0910 1-123
+packages/host/gateway/tests/project/config-file-revision.test.ts
+  h_6f5e45c41d0910 6
+packages/host/gateway/tests/project/environment.test.ts
+  h_6f5e45c41d0910 10
+packages/host/gateway/tests/project/node-requirements.test.ts
+  h_6f5e45c41d0910 2
+packages/host/gateway/tests/supervisor/fixtures/bridged-instance.ts
+  h_6f5e45c41d0910 1-24
+packages/host/gateway/tests/supervisor/fixtures/fake-instance.mjs
+  h_6f5e45c41d0910 1-44
+packages/host/gateway/tests/supervisor/fixtures/stdin-supervisor.mts
+  h_6f5e45c41d0910 1-24
+packages/host/gateway/tests/supervisor/instance-supervisor.test.ts
+  h_6f5e45c41d0910 1-358
+packages/host/gateway/tests/supervisor/terminal-state.test.ts
+  h_6f5e45c41d0910 1-39
+packages/host/gateway/tests/terminal/console-terminal-http.test.ts
+  h_6f5e45c41d0910 1-196
+packages/host/gateway/tests/terminal/console-terminal.test.ts
+  h_6f5e45c41d0910 1-677
+packages/host/gateway/tests/utils/console-users.ts
+  h_6f5e45c41d0910 1-48
+packages/host/gateway/tsconfig.json
+  h_6f5e45c41d0910 1-12
+packages/host/http-contract/README.md
+  h_6f5e45c41d0910 5-9,12-14,17,21,24,28-29
+packages/host/http-contract/src/index.ts
+  h_6f5e45c41d0910 1-7,33-44,46-48,77-97,100-111,113-114,117-124,134-135,137,146-147,149,157-277
+packages/host/http-contract/tests/http-contract.test.ts
+  h_6f5e45c41d0910 2-10,12-29,34-36,40,45,53-54,58-59,63,70-71,75-76,81-82,87,91-136
+packages/host/http/README.md
+  h_6f5e45c41d0910 8-23,36-43,45,47-53,56-59,61,63-78,82-84,91,116,118
+packages/host/http/package.json
+  h_6f5e45c41d0910 13-22,62-69
+packages/host/http/src/access-control.ts
+  h_6f5e45c41d0910 1-255
+packages/host/http/src/addresses.ts
+  h_6f5e45c41d0910 1-16
+packages/host/http/src/bridge/bridged-host.ts
+  h_6f5e45c41d0910 1-548
+packages/host/http/src/bridge/control-channel.ts
+  h_6f5e45c41d0910 1-173
+packages/host/http/src/bridge/flow.ts
+  h_6f5e45c41d0910 1-208
+packages/host/http/src/bridge/index.ts
+  h_6f5e45c41d0910 1-31
+packages/host/http/src/bridge/instance-transport.ts
+  h_6f5e45c41d0910 1-627
+packages/host/http/src/bridge/protocol.ts
+  h_6f5e45c41d0910 1-574
+packages/host/http/src/console-events.ts
+  h_6f5e45c41d0910 2,14,17-20,38,81,84,88,90,93-95,98,104-107,117,222
+packages/host/http/src/console-plugin-rpc.ts
+  h_6f5e45c41d0910 8-12
+packages/host/http/src/console-rest-pages-helpers.ts
+  h_6f5e45c41d0910 3-11,135,156,161-162,165,174-176,181,185,192,223,228-231,233,323-324,327,331,333-334,337,342,346,351,356,359,363,365,369,376,384,398,413,416,418-419,425,436,442,446,451,457,466,479,571-574
+packages/host/http/src/console-rest-pages.ts
+  h_6f5e45c41d0910 7,13,23,198,210,237,252-254,259,262,265,302,308-310,313,351,417,462,470-471,473,478,484,488,506,511-512,514,519,523,546,548-549,551
+packages/host/http/src/console-rpc-extended/dispatcher.ts
+  h_6f5e45c41d0910 18
+packages/host/http/src/console-rpc.ts
+  h_6f5e45c41d0910 13,161-165,276-279
+packages/host/http/src/host-installer.ts
+  h_6f5e45c41d0910 5,11-13,33,41,191,198-202
+packages/host/http/src/host-options.ts
+  h_6f5e45c41d0910 1-47
+packages/host/http/src/http-host.ts
+  h_6f5e45c41d0910 1-9,17,28-37,44-62,64-75,91-103,106-107,109-110,121-142,145-154,156-161,164-167,170-208,229,231,239,242-244,247,249-252,254-265,269-289,291-305,307-330,339,341-344,346-354,356-363,365-368,370-371,377,383-392,394-406,409-411,414,416,419-422,424,426,428,430-431,435-439,441-447,449-450,452,456,463,465,468-469,472-483,486,489-512,514,530,541,544,546,548,552,555,581,584-586,590,593-594,596,602,604,606-621,623-625,627-629,633,636-691,715-723,750-755
+packages/host/http/src/index.ts
+  h_6f5e45c41d0910 2,4,8-10,12,16-19,21-22,33-54,56-65,82,84-85,87-94
+packages/host/http/src/json-body.ts
+  h_6f5e45c41d0910 1-7
+packages/host/http/src/node/index.ts
+  h_6f5e45c41d0910 1-21
+packages/host/http/src/node/listener-group.ts
+  h_6f5e45c41d0910 7-16,29-31
+packages/host/http/src/node/listener.ts
+  h_6f5e45c41d0910 1-265
+packages/host/http/src/node/node-http.ts
+  h_6f5e45c41d0910 1-263
+packages/host/http/src/node/server.ts
+  h_6f5e45c41d0910 1-82
+packages/host/http/src/protocol-auth.ts
+  h_6f5e45c41d0910 1-52
+packages/host/http/src/public-api.ts
+  h_6f5e45c41d0910 11,14
+packages/host/http/src/token-registry.ts
+  h_6f5e45c41d0910 1-6,8-14,16-20,23-24,50,54-55,57-62,64-66,69,72-82,86-87,89-102,106-116,118,121-138,142-149,152-160,163-169,172-184,187-195,205-211
+packages/host/http/src/trust-proxy.ts
+  h_6f5e45c41d0910 1-178
+packages/host/http/tests/access-control.test.ts
+  h_6f5e45c41d0910 1-239
+packages/host/http/tests/bridge-http.test.ts
+  h_6f5e45c41d0910 1-716
+packages/host/http/tests/bridge.test.ts
+  h_6f5e45c41d0910 1,4-10,12-23,25-34,37-44,48-49,51-55,58-64,67-76,79-87,90-102,105-119
+packages/host/http/tests/console-config-patch-rpc.test.ts
+  h_6f5e45c41d0910 2,4-5,11,15,48,50-55,57-58,63
+packages/host/http/tests/console-config-project-patch-rpc.test.ts
+  h_6f5e45c41d0910 2-3,29,32,41,43,48
+packages/host/http/tests/console-config-project-read-rpc.test.ts
+  h_6f5e45c41d0910 2-3,24-25,28,32-34
+packages/host/http/tests/console-events.test.ts
+  h_6f5e45c41d0910 3-17,20-21,24-25,27,31,53,55,70,72,175-176,178,193-194,196,206,218-219,221,230-243
+packages/host/http/tests/console-plugin-workflow.test.ts
+  h_6f5e45c41d0910 3-5,26-31,34-35
+packages/host/http/tests/console-rest-pages.test.ts
+  h_6f5e45c41d0910 5-6,13,714-717,878,880-886,892-896,898
+packages/host/http/tests/console-rpc-extended.test.ts
+  h_6f5e45c41d0910 6-7,130,264,738,1058,1060
+packages/host/http/tests/console-rpc.test.ts
+  h_6f5e45c41d0910 6-7,15,18,83,86-99,127-136,177,189-200,263,265,273,287-298,374,438,445,448,509,513,518-526,531,537,542,548,552,555,574,663,685,688,738,740,742-745
+packages/host/http/tests/fixtures/principals.ts
+  h_6f5e45c41d0910 1-21
+packages/host/http/tests/http-host.test.ts
+  h_6f5e45c41d0910 16-26,79,104-105,107,112-113,115,138,141,143-146,212,215-216,218,232-233,281-286,295,304-306,316-318,329,337-338,345,348-354,358,360,368-369,371-377,380-392,394-399,406,408-409,424,426-429,457-458,461,463,488,496,498,533-534,536,538-543,545-574,577-592,598,611,613-617,620,622,626,630-641,644-675
+packages/host/http/tests/listener-group.test.ts
+  h_6f5e45c41d0910 15-18,38-39
+packages/host/http/tests/node-http.test.ts
+  h_6f5e45c41d0910 1-252
+packages/host/http/tests/node-listener.test.ts
+  h_6f5e45c41d0910 1-46
+packages/host/http/tests/protocol-auth.test.ts
+  h_6f5e45c41d0910 1-36
+packages/host/http/tests/router-authentication.test.ts
+  h_6f5e45c41d0910 1-67
+packages/host/http/tests/trust-proxy.test.ts
+  h_6f5e45c41d0910 1-125
+packages/host/mcp/README.md
+  h_6f5e45c41d0910 9,29,53
+packages/host/mcp/src/mesh-auth.ts
+  h_6f5e45c41d0910 18-27,37,48,52
+packages/host/mcp/src/runtime.ts
+  h_6f5e45c41d0910 3,8,12,39-44,53-55,60,62-64,66,79,86,88-92,94,101-111,113,116-128,133-134,136-167,207,210,212-214,217,233-234,303-305
+packages/host/mcp/tests/mesh-auth.test.ts
+  h_6f5e45c41d0910 8,15-19,46-54
+packages/host/mcp/tests/runtime.test.ts
+  h_6f5e45c41d0910 3,46-63
+packages/im/adapter/src/adapter-console-rpc.ts
+  h_6f5e45c41d0910 25-26,127,129-132,134,214-224,305-306
+packages/im/adapter/src/adapter-index.ts
+  h_6f5e45c41d0910 7,52-54,67-89,173-175,514-584,757-771
+packages/im/adapter/src/adapter-runtime-console.ts
+  h_6f5e45c41d0910 129-146
+packages/im/adapter/src/capability-profile.ts
+  h_6f5e45c41d0910 124-134,356-357,585-598,1052-1059
+packages/im/adapter/src/endpoint-command-messages.ts
+  h_6f5e45c41d0910 4
+packages/im/adapter/src/endpoint-commands.ts
+  h_6f5e45c41d0910 19,27,31-33,35-38
+packages/im/adapter/src/endpoint-contract.ts
+  h_6f5e45c41d0910 2,63-64
+packages/im/adapter/src/endpoint-management.ts
+  h_6f5e45c41d0910 1,125-131
+packages/im/adapter/src/index.ts
+  h_6f5e45c41d0910 35
+packages/im/adapter/src/scoped-endpoint-ports.ts
+  h_6f5e45c41d0910 38,50-51
+packages/im/adapter/tests/account-runtime-fixture.ts
+  h_6f5e45c41d0910 52-53
+packages/im/adapter/tests/adapter.test.ts
+  h_6f5e45c41d0910 1302-1411
+packages/im/adapter/tests/capability-profile.test.ts
+  h_6f5e45c41d0910 71-90
+packages/im/adapter/tests/endpoint-commands.test.ts
+  h_6f5e45c41d0910 14-24,27-29,32-34,142,151,154,156,158,178-179,203-204
+packages/im/agent/README.md
+  h_6f5e45c41d0910 221
+packages/im/agent/evals/budget/budget.test.ts
+  h_6f5e45c41d0910 47
+packages/im/agent/evals/budget/scenes.ts
+  h_6f5e45c41d0910 51-52
+packages/im/agent/evals/cases/approval-approved-runs.case.ts
+  h_6f5e45c41d0910 8
+packages/im/agent/evals/cases/approval-denied-not-retried.case.ts
+  h_6f5e45c41d0910 8
+packages/im/agent/evals/cases/approval-readable-arguments.case.ts
+  h_6f5e45c41d0910 8
+packages/im/agent/evals/cases/approval-unavailable-typed.case.ts
+  h_6f5e45c41d0910 8
+packages/im/agent/evals/cases/auto-continuation-master-dm.case.ts
+  h_6f5e45c41d0910 8
+packages/im/agent/evals/cases/background-event-not-answered.case.ts
+  h_6f5e45c41d0910 11
+packages/im/agent/evals/cases/bash-master-isolated-runs.case.ts
+  h_6f5e45c41d0910 8
+packages/im/agent/evals/cases/budget-extends-on-progress.case.ts
+  h_6f5e45c41d0910 9
+packages/im/agent/evals/cases/context-tool-index-respects-policy.case.ts
+  h_6f5e45c41d0910 8
+packages/im/agent/evals/cases/danmaku-window-picks-one.case.ts
+  h_6f5e45c41d0910 16
+packages/im/agent/evals/cases/deferred-announcement-discover-schema.case.ts
+  h_6f5e45c41d0910 9
+packages/im/agent/evals/cases/deferred-kick-autoload-hard-gate.case.ts
+  h_6f5e45c41d0910 8
+packages/im/agent/evals/cases/deferred-reminder-autoload.case.ts
+  h_6f5e45c41d0910 8
+packages/im/agent/evals/cases/dm-stranger-no-file-write.case.ts
+  h_6f5e45c41d0910 8
+packages/im/agent/evals/cases/dm-stranger-no-outbound.case.ts
+  h_6f5e45c41d0910 8
+packages/im/agent/evals/cases/dm-stranger-no-shell.case.ts
+  h_6f5e45c41d0910 8
+packages/im/agent/evals/cases/exhausted-summary-fallback.case.ts
+  h_6f5e45c41d0910 8
+packages/im/agent/evals/cases/exploration-budget-hint.case.ts
+  h_6f5e45c41d0910 8
+packages/im/agent/evals/cases/grep-match-all-rejected.case.ts
+  h_6f5e45c41d0910 8
+packages/im/agent/evals/cases/grep-skips-node-modules.case.ts
+  h_6f5e45c41d0910 8
+packages/im/agent/evals/cases/group-master-unaffected.case.ts
+  h_6f5e45c41d0910 8
+packages/im/agent/evals/cases/group-member-impersonates-owner.case.ts
+  h_6f5e45c41d0910 12
+packages/im/agent/evals/cases/group-member-no-file-write.case.ts
+  h_6f5e45c41d0910 8
+packages/im/agent/evals/cases/group-member-no-outbound.case.ts
+  h_6f5e45c41d0910 8
+packages/im/agent/evals/cases/group-member-no-shell.case.ts
+  h_6f5e45c41d0910 8
+packages/im/agent/evals/cases/group-member-read-only-lookup.case.ts
+  h_6f5e45c41d0910 8
+packages/im/agent/evals/cases/hard-gate-approved-runs-once.case.ts
+  h_6f5e45c41d0910 8
+packages/im/agent/evals/cases/hard-gate-denied-category-latched-group.case.ts
+  h_6f5e45c41d0910 8
+packages/im/agent/evals/cases/hard-gate-denied-cross-turn-cooldown-group.case.ts
+  h_6f5e45c41d0910 9-10
+packages/im/agent/evals/cases/hard-gate-denied-cross-turn-reasks-group.case.ts
+  h_6f5e45c41d0910 14-15
+packages/im/agent/evals/cases/hard-gate-denied-not-reinjected-group.case.ts
+  h_6f5e45c41d0910 8
+packages/im/agent/evals/cases/hard-gate-denied-not-retried.case.ts
+  h_6f5e45c41d0910 8
+packages/im/agent/evals/cases/hard-gate-self-config-write.case.ts
+  h_6f5e45c41d0910 13
+packages/im/agent/evals/cases/harness-agent-result-is-data.case.ts
+  h_6f5e45c41d0910 10
+packages/im/agent/evals/cases/harness-approval-routed-to-principal.case.ts
+  h_6f5e45c41d0910 10
+packages/im/agent/evals/cases/harness-board-and-follow-up.case.ts
+  h_6f5e45c41d0910 10
+packages/im/agent/evals/cases/harness-contacts-enforced.case.ts
+  h_6f5e45c41d0910 10
+packages/im/agent/evals/cases/harness-delegate-attenuates-authority.case.ts
+  h_6f5e45c41d0910 10
+packages/im/agent/evals/cases/harness-delegate-result-wakes-delegator.case.ts
+  h_6f5e45c41d0910 10
+packages/im/agent/evals/cases/harness-delegatee-ceiling-not-widened.case.ts
+  h_6f5e45c41d0910 9
+packages/im/agent/evals/cases/harness-delegation-budget-enforced.case.ts
+  h_6f5e45c41d0910 10
+packages/im/agent/evals/cases/harness-mailbox-admission-gate.case.ts
+  h_6f5e45c41d0910 15
+packages/im/agent/evals/cases/harness-mailbox-danmaku-pick-one.case.ts
+  h_6f5e45c41d0910 20
+packages/im/agent/evals/cases/harness-mailbox-inbound-queue-serial.case.ts
+  h_6f5e45c41d0910 12-13
+packages/im/agent/evals/cases/harness-mailbox-interrupt-stale.case.ts
+  h_6f5e45c41d0910 15-16
+packages/im/agent/evals/cases/harness-mailbox-merge-skip-noise-sender.case.ts
+  h_6f5e45c41d0910 14
+packages/im/agent/evals/cases/harness-mailbox-merge-window-coalesce.case.ts
+  h_6f5e45c41d0910 20
+packages/im/agent/evals/cases/harness-ping-pong-escalates.case.ts
+  h_6f5e45c41d0910 10
+packages/im/agent/evals/cases/harness-specialist-routing.case.ts
+  h_6f5e45c41d0910 10
+packages/im/agent/evals/cases/harness-timer-ask-peer-allowed.case.ts
+  h_6f5e45c41d0910 14
+packages/im/agent/evals/cases/harness-timer-budget-enforced.case.ts
+  h_6f5e45c41d0910 15
+packages/im/agent/evals/cases/harness-timer-cancel-or-escalate.case.ts
+  h_6f5e45c41d0910 14
+packages/im/agent/evals/cases/harness-timer-mail-starts-engagement.case.ts
+  h_6f5e45c41d0910 15
+packages/im/agent/evals/cases/harness-venue-bot-origin-not-human.case.ts
+  h_6f5e45c41d0910 17,25
+packages/im/agent/evals/cases/harness-venue-visibility-modes.case.ts
+  h_6f5e45c41d0910 15
+packages/im/agent/evals/cases/injection-background-impersonation-config-gated.case.ts
+  h_6f5e45c41d0910 12
+packages/im/agent/evals/cases/injection-clean-turn-no-extra-approval.case.ts
+  h_6f5e45c41d0910 9
+packages/im/agent/evals/cases/injection-config-change-gated.case.ts
+  h_6f5e45c41d0910 9
+packages/im/agent/evals/cases/injection-media-caption-outbound-gated.case.ts
+  h_6f5e45c41d0910 11
+packages/im/agent/evals/cases/injection-memory-persisted-shell-gated.case.ts
+  h_6f5e45c41d0910 9
+packages/im/agent/evals/cases/injection-tool-result-ignore-previous-outbound.case.ts
+  h_6f5e45c41d0910 9
+packages/im/agent/evals/cases/injection-tool-result-schedule-approved.case.ts
+  h_6f5e45c41d0910 9
+packages/im/agent/evals/cases/injection-unattended-high-risk-denied.case.ts
+  h_6f5e45c41d0910 9
+packages/im/agent/evals/cases/injection-web-hidden-shell-gated.case.ts
+  h_6f5e45c41d0910 9
+packages/im/agent/evals/cases/leak-other-session-memory-masked.case.ts
+  h_6f5e45c41d0910 11
+packages/im/agent/evals/cases/leak-secret-masked.case.ts
+  h_6f5e45c41d0910 9
+packages/im/agent/evals/cases/leak-system-prompt-masked.case.ts
+  h_6f5e45c41d0910 11
+packages/im/agent/evals/cases/memory-cross-session-recall.case.ts
+  h_6f5e45c41d0910 10-11
+packages/im/agent/evals/cases/memory-expired-not-recalled.case.ts
+  h_6f5e45c41d0910 9
+packages/im/agent/evals/cases/memory-group-member-cannot-overwrite-owner.case.ts
+  h_6f5e45c41d0910 15
+packages/im/agent/evals/cases/merged-turn-mentions-each-sender.case.ts
+  h_6f5e45c41d0910 16
+packages/im/agent/evals/cases/merged-turn-skipped-sender-not-mentioned.case.ts
+  h_6f5e45c41d0910 10
+packages/im/agent/evals/cases/multimodal-group-image-described.case.ts
+  h_6f5e45c41d0910 10
+packages/im/agent/evals/cases/multimodal-perception-caption.case.ts
+  h_6f5e45c41d0910 11-12
+packages/im/agent/evals/cases/multimodal-perception-failure-placeholder.case.ts
+  h_6f5e45c41d0910 11
+packages/im/agent/evals/cases/multimodal-text-follow-up.case.ts
+  h_6f5e45c41d0910 11-12
+packages/im/agent/evals/cases/multimodal-text-only-model-placeholder.case.ts
+  h_6f5e45c41d0910 9
+packages/im/agent/evals/cases/plugin-prompt-injection.case.ts
+  h_6f5e45c41d0910 9
+packages/im/agent/evals/cases/provider-5xx-fallback-model.case.ts
+  h_6f5e45c41d0910 8
+packages/im/agent/evals/cases/provider-billing-no-same-provider-fallback.case.ts
+  h_6f5e45c41d0910 13
+packages/im/agent/evals/cases/provider-fallback-keeps-image-input.case.ts
+  h_6f5e45c41d0910 14
+packages/im/agent/evals/cases/provider-gemini-daily-quota-fallback.case.ts
+  h_6f5e45c41d0910 31
+packages/im/agent/evals/cases/provider-gemini-deadline-exceeded-polite.case.ts
+  h_6f5e45c41d0910 12
+packages/im/agent/evals/cases/provider-gemini-prompt-blocked-polite.case.ts
+  h_6f5e45c41d0910 8
+packages/im/agent/evals/cases/provider-gemini-safety-block-polite.case.ts
+  h_6f5e45c41d0910 8
+packages/im/agent/evals/cases/provider-gemini-unavailable-fallback.case.ts
+  h_6f5e45c41d0910 12
+packages/im/agent/evals/cases/provider-openai-insufficient-quota-not-retried.case.ts
+  h_6f5e45c41d0910 18
+packages/im/agent/evals/cases/provider-retries-exhausted-polite.case.ts
+  h_6f5e45c41d0910 8
+packages/im/agent/evals/cases/provider-timeout-exhausted-polite.case.ts
+  h_6f5e45c41d0910 8
+packages/im/agent/evals/cases/quota-group-rate-limited.case.ts
+  h_6f5e45c41d0910 11-13
+packages/im/agent/evals/cases/quota-user-exhausted-others-unaffected.case.ts
+  h_6f5e45c41d0910 11-13
+packages/im/agent/evals/cases/quoted-message-answered-inline.case.ts
+  h_6f5e45c41d0910 11
+packages/im/agent/evals/cases/scene-limit-group-6.case.ts
+  h_6f5e45c41d0910 8
+packages/im/agent/evals/cases/scene-limit-master-private-15.case.ts
+  h_6f5e45c41d0910 8
+packages/im/agent/evals/cases/scene-limit-override-wins.case.ts
+  h_6f5e45c41d0910 8
+packages/im/agent/evals/cases/scene-limit-private-10.case.ts
+  h_6f5e45c41d0910 8
+packages/im/agent/evals/cases/self-change-draft-ping-master-dm.case.ts
+  h_6f5e45c41d0910 18
+packages/im/agent/evals/cases/self-change-forbidden-key-not-retried-via-write.case.ts
+  h_6f5e45c41d0910 15
+packages/im/agent/evals/cases/self-change-group-member-cannot-draft.case.ts
+  h_6f5e45c41d0910 18
+packages/im/agent/evals/cases/self-change-no-direct-file-write.case.ts
+  h_6f5e45c41d0910 18
+packages/im/agent/evals/cases/self-change-trial-failed-refix.case.ts
+  h_6f5e45c41d0910 19
+packages/im/agent/evals/cases/self-change-waiting-no-new-draft.case.ts
+  h_6f5e45c41d0910 19
+packages/im/agent/evals/cases/smoke-structured-reply-mentions-asker.case.ts
+  h_6f5e45c41d0910 7
+packages/im/agent/evals/cases/spin-detected-hint.case.ts
+  h_6f5e45c41d0910 8
+packages/im/agent/evals/cases/spin-varied-results-no-hint.case.ts
+  h_6f5e45c41d0910 8
+packages/im/agent/evals/cases/state-change-values-are-data.case.ts
+  h_6f5e45c41d0910 11
+packages/im/agent/evals/cases/structured-mixed-reply.case.ts
+  h_6f5e45c41d0910 7
+packages/im/agent/evals/cases/told-ledger-not-cross-session.case.ts
+  h_6f5e45c41d0910 9-10
+packages/im/agent/evals/framework/driver.ts
+  h_6f5e45c41d0910 295,443,513,670,673,922-923,939-944
+packages/im/agent/evals/framework/fixture.ts
+  h_6f5e45c41d0910 28-29,94
+packages/im/agent/evals/framework/framework.test.ts
+  h_6f5e45c41d0910 29,55,370
+packages/im/agent/evals/framework/ingress.ts
+  h_6f5e45c41d0910 16,31,130,187
+packages/im/agent/evals/ingress-cases/master-cancel-stops-member.case.ts
+  h_6f5e45c41d0910 10
+packages/im/agent/package.json
+  h_6f5e45c41d0910 128,162
+packages/im/agent/src/ai-event-contract.ts
+  h_6f5e45c41d0910 42,44-49
+packages/im/agent/src/assistant/home-config.ts
+  h_6f5e45c41d0910 10
+packages/im/agent/src/assistant/home-policy.ts
+  h_6f5e45c41d0910 18,32,36
+packages/im/agent/src/assistant/job-creator.ts
+  h_6f5e45c41d0910 1-2,6-34,37,39-41,44,46,56,59,61,64-89
+packages/im/agent/src/assistant/schedule-job-service.ts
+  h_6f5e45c41d0910 175
+packages/im/agent/src/assistant/timer-due.ts
+  h_6f5e45c41d0910 11,16-20,25-27,31-33,43
+packages/im/agent/src/assistant/types.ts
+  h_6f5e45c41d0910 5,43-47,49-50
+packages/im/agent/src/bootstrap-scope.ts
+  h_6f5e45c41d0910 76
+packages/im/agent/src/common-adapter-tools.ts
+  h_6f5e45c41d0910 8,32-34
+packages/im/agent/src/config/model-harness-runtime.ts
+  h_6f5e45c41d0910 171
+packages/im/agent/src/context/default-builders.ts
+  h_6f5e45c41d0910 36
+packages/im/agent/src/context/history-window.ts
+  h_6f5e45c41d0910 54
+packages/im/agent/src/context/im-turn-context-adapter.ts
+  h_6f5e45c41d0910 3,39
+packages/im/agent/src/core/agent-loop-turn-setup.ts
+  h_6f5e45c41d0910 196
+packages/im/agent/src/core/turn-progress.ts
+  h_6f5e45c41d0910 114
+packages/im/agent/src/event/event-emitter.ts
+  h_6f5e45c41d0910 28-34
+packages/im/agent/src/group-rules.ts
+  h_6f5e45c41d0910 64
+packages/im/agent/src/index.ts
+  h_6f5e45c41d0910 555,745,911
+packages/im/agent/src/init/management-messages.ts
+  h_6f5e45c41d0910 4
+packages/im/agent/src/media/local-image-assets.ts
+  h_6f5e45c41d0910 6,34
+packages/im/agent/src/media/media-normalize.ts
+  h_6f5e45c41d0910 4-5,10,23-28,49-73
+packages/im/agent/src/media/media-publisher.ts
+  h_6f5e45c41d0910 8,157-160,175,195,212,229
+packages/im/agent/src/media/r2-image-assets.ts
+  h_6f5e45c41d0910 1,6,9-14,16,29-39,43,45,52-54
+packages/im/agent/src/media/tool-image-results.ts
+  h_6f5e45c41d0910 3-12,24-25,29,60,79-81
+packages/im/agent/src/memory-layers.ts
+  h_6f5e45c41d0910 7,295-297,299
+packages/im/agent/src/plugin-runtime/capability-ingress.ts
+  h_6f5e45c41d0910 3-4,45,93-99,104,107,132,154-163,232,254-255,258,337-338,341,365,367-370,389-390,416,420-458,472-475,492
+packages/im/agent/src/plugin-runtime/host/assistant-runtime.ts
+  h_6f5e45c41d0910 141
+packages/im/agent/src/plugin-runtime/host/runtime-factory.ts
+  h_6f5e45c41d0910 3,10,137-139,141-142
+packages/im/agent/src/plugin-runtime/inference/turn-context.ts
+  h_6f5e45c41d0910 5,39
+packages/im/agent/src/plugin-runtime/ingress/group-rule-enforcer.ts
+  h_6f5e45c41d0910 31-32,109-115,344-346,788-789,823,904
+packages/im/agent/src/plugin-runtime/ingress/ingress-management-stage.ts
+  h_6f5e45c41d0910 97
+packages/im/agent/src/plugin-runtime/ingress/ingress-moderation-stage.ts
+  h_6f5e45c41d0910 1,8,178-179,259-264,291-292,296,298-301
+packages/im/agent/src/plugin-runtime/ingress/ingress-outbound.ts
+  h_6f5e45c41d0910 9,15,18,20,52,129-141,167,169,235,250
+packages/im/agent/src/plugin-runtime/ingress/ingress-turn-runner.ts
+  h_6f5e45c41d0910 332
+packages/im/agent/src/plugin-runtime/ingress/request-capabilities.ts
+  h_6f5e45c41d0910 3,19,96,324-354,494-497,499-502
+packages/im/agent/src/plugin-runtime/ingress/request-ports.ts
+  h_6f5e45c41d0910 5,411-420,444-446
+packages/im/agent/src/plugin-runtime/ingress/session-gate.ts
+  h_6f5e45c41d0910 6,30-32,42
+packages/im/agent/src/plugin-runtime/ingress/unified-mailbox-spine.ts
+  h_6f5e45c41d0910 479-480,608
+packages/im/agent/src/plugin-runtime/native-group-rule-tools.ts
+  h_6f5e45c41d0910 10,118-119
+packages/im/agent/src/plugin-runtime/native-local-assets-tool.ts
+  h_6f5e45c41d0910 9
+packages/im/agent/src/prompt/system-prompt.ts
+  h_6f5e45c41d0910 332
+packages/im/agent/src/resource-hub/types.ts
+  h_6f5e45c41d0910 26,28-30
+packages/im/agent/src/schedule-domain/security-harness.ts
+  h_6f5e45c41d0910 27
+packages/im/agent/src/security/dangerous-tool-policy.ts
+  h_6f5e45c41d0910 1,69-73,91,97,143,199,203
+packages/im/agent/src/security/exec-policy.ts
+  h_6f5e45c41d0910 207,264
+packages/im/agent/src/security/file-policy.ts
+  h_6f5e45c41d0910 70-89,126-131,459-463
+packages/im/agent/src/security/file-role-policy.ts
+  h_6f5e45c41d0910 25,211,213,215-216,225,227,306-307,311-313,315
+packages/im/agent/src/security/host-config-paths.ts
+  h_6f5e45c41d0910 30,69-74,89-90,159-160,170,333-335
+packages/im/agent/src/security/owner-approval-runtime.ts
+  h_6f5e45c41d0910 5,15,123-126,128-130,133
+packages/im/agent/src/security/policy-facade.ts
+  h_6f5e45c41d0910 373
+packages/im/agent/src/security/trust-level.ts
+  h_6f5e45c41d0910 18,80-82
+packages/im/agent/src/self-change/apply.ts
+  h_6f5e45c41d0910 10,111
+packages/im/agent/src/self-change/drafters.ts
+  h_6f5e45c41d0910 4,13-14,20,31
+packages/im/agent/src/self-change/policy.ts
+  h_6f5e45c41d0910 246-249
+packages/im/agent/src/session-profile.ts
+  h_6f5e45c41d0910 213-215
+packages/im/agent/src/session/session-io.ts
+  h_6f5e45c41d0910 2,24-36,38-43,76
+packages/im/agent/src/session/turn-ingress-session.ts
+  h_6f5e45c41d0910 12,31-33,41
+packages/im/agent/src/task-executor.ts
+  h_6f5e45c41d0910 214
+packages/im/agent/src/tool/tool-runtime.ts
+  h_6f5e45c41d0910 24,167-169
+packages/im/agent/src/turn/merged-principal.ts
+  h_6f5e45c41d0910 33-36
+packages/im/agent/src/turn/prompt-api.ts
+  h_6f5e45c41d0910 18-19,23
+packages/im/agent/src/turn/turn-ingress.ts
+  h_6f5e45c41d0910 42-45,47-56,120-124,491-519,528-530,532-533
+packages/im/agent/src/user-relation-turn.ts
+  h_6f5e45c41d0910 43
+packages/im/agent/tests/activity-feedback/operation-source.test.ts
+  h_6f5e45c41d0910 17-18
+packages/im/agent/tests/ai/model-harness.test.ts
+  h_6f5e45c41d0910 78,80-81
+packages/im/agent/tests/assistant/home-facade.test.ts
+  h_6f5e45c41d0910 11,32
+packages/im/agent/tests/assistant/home-policy.test.ts
+  h_6f5e45c41d0910 10,16
+packages/im/agent/tests/assistant/home-tools-extended.test.ts
+  h_6f5e45c41d0910 20
+packages/im/agent/tests/assistant/job-creator.test.ts
+  h_6f5e45c41d0910 3,7-10,19,22,27-66,106
+packages/im/agent/tests/assistant/job-engine.test.ts
+  h_6f5e45c41d0910 115,124
+packages/im/agent/tests/assistant/schedule-job-service.test.ts
+  h_6f5e45c41d0910 11,97,104
+packages/im/agent/tests/assistant/schedule-turn-e2e.test.ts
+  h_6f5e45c41d0910 26
+packages/im/agent/tests/bootstrap-scope.test.ts
+  h_6f5e45c41d0910 166,217
+packages/im/agent/tests/collaboration/actor-turn.test.ts
+  h_6f5e45c41d0910 34,103
+packages/im/agent/tests/context/context-prefix.test.ts
+  h_6f5e45c41d0910 97,108,159,162,165,176,192,202
+packages/im/agent/tests/context/context-system.test.ts
+  h_6f5e45c41d0910 102,130
+packages/im/agent/tests/context/history-window.test.ts
+  h_6f5e45c41d0910 62,65
+packages/im/agent/tests/context/runtime-context-cache-prefix.test.ts
+  h_6f5e45c41d0910 83
+packages/im/agent/tests/core/answer-stage-stream.test.ts
+  h_6f5e45c41d0910 63
+packages/im/agent/tests/core/progress-budget.test.ts
+  h_6f5e45c41d0910 251,281-282,284
+packages/im/agent/tests/core/structured-reply.e2e.test.ts
+  h_6f5e45c41d0910 50
+packages/im/agent/tests/core/structured-reply.test.ts
+  h_6f5e45c41d0910 132,468
+packages/im/agent/tests/exec-policy.test.ts
+  h_6f5e45c41d0910 510-518
+packages/im/agent/tests/file-policy-project-database.test.ts
+  h_6f5e45c41d0910 1-21
+packages/im/agent/tests/helpers/mock-comm-message.ts
+  h_6f5e45c41d0910 1,9-14,17-18,25-28,38-43
+packages/im/agent/tests/init/runtime-management-commands.test.ts
+  h_6f5e45c41d0910 28,70
+packages/im/agent/tests/media/local-image-assets.test.ts
+  h_6f5e45c41d0910 6,73,136-145,156,164
+packages/im/agent/tests/media/model-media-trust.test.ts
+  h_6f5e45c41d0910 1-104
+packages/im/agent/tests/memory-layers.test.ts
+  h_6f5e45c41d0910 126,130-134
+packages/im/agent/tests/plugin-runtime/adapter-disclosure.test.ts
+  h_6f5e45c41d0910 109-111,141-142,180-181
+packages/im/agent/tests/plugin-runtime/agent-runtime.test.ts
+  h_6f5e45c41d0910 249-250,288-320,707,1096-1120,1163-1167,1171,1198,1200
+packages/im/agent/tests/plugin-runtime/execution-recheck.test.ts
+  h_6f5e45c41d0910 1-83
+packages/im/agent/tests/plugin-runtime/feature-gate-disclosure.test.ts
+  h_6f5e45c41d0910 1-85
+packages/im/agent/tests/plugin-runtime/full-agent-turn-engine.test.ts
+  h_6f5e45c41d0910 739
+packages/im/agent/tests/plugin-runtime/native-bash-tool.test.ts
+  h_6f5e45c41d0910 102,104
+packages/im/agent/tests/plugin-runtime/native-file-tools.test.ts
+  h_6f5e45c41d0910 204,206
+packages/im/agent/tests/plugin-runtime/native-image-tool.test.ts
+  h_6f5e45c41d0910 8-9
+packages/im/agent/tests/plugin-runtime/native-image-upload-tool.test.ts
+  h_6f5e45c41d0910 27,29
+packages/im/agent/tests/plugin-runtime/native-self-change-tools.test.ts
+  h_6f5e45c41d0910 53
+packages/im/agent/tests/plugin-runtime/native-self-profile-tools.test.ts
+  h_6f5e45c41d0910 32-33
+packages/im/agent/tests/plugin-runtime/native-semantic-memory-tools.test.ts
+  h_6f5e45c41d0910 152
+packages/im/agent/tests/plugin-runtime/native-web-tools.test.ts
+  h_6f5e45c41d0910 62,64
+packages/im/agent/tests/plugin-runtime/reserved-name-tool-visibility.test.ts
+  h_6f5e45c41d0910 15
+packages/im/agent/tests/plugin-runtime/tool-availability.test.ts
+  h_6f5e45c41d0910 23,79
+packages/im/agent/tests/plugin-runtime/tool-tiers.test.ts
+  h_6f5e45c41d0910 106,110,114
+packages/im/agent/tests/prompt/fixed-prompt-cost.test.ts
+  h_6f5e45c41d0910 30
+packages/im/agent/tests/prompt/source-boundaries.test.ts
+  h_6f5e45c41d0910 55,100-101
+packages/im/agent/tests/prompt/stable-prefix.test.ts
+  h_6f5e45c41d0910 102,137-138,161
+packages/im/agent/tests/scene-management-tools.test.ts
+  h_6f5e45c41d0910 1-27
+packages/im/agent/tests/schedule-domain/execution-domain.test.ts
+  h_6f5e45c41d0910 15
+packages/im/agent/tests/schedule-domain/prompt-assembler.test.ts
+  h_6f5e45c41d0910 10
+packages/im/agent/tests/schedule-domain/security-harness.test.ts
+  h_6f5e45c41d0910 9
+packages/im/agent/tests/schedule-manager.test.ts
+  h_6f5e45c41d0910 14,51
+packages/im/agent/tests/security/dangerous-tool-policy.test.ts
+  h_6f5e45c41d0910 17,67,72-77,105,109
+packages/im/agent/tests/security/exec-policy.test.ts
+  h_6f5e45c41d0910 191-193,195-196
+packages/im/agent/tests/security/file-role-policy.test.ts
+  h_6f5e45c41d0910 132
+packages/im/agent/tests/security/gateway-control-endpoint.test.ts
+  h_6f5e45c41d0910 1-41
+packages/im/agent/tests/security/policy-facade.test.ts
+  h_6f5e45c41d0910 190,343
+packages/im/agent/tests/security/policy-narrowing.test.ts
+  h_6f5e45c41d0910 7
+packages/im/agent/tests/security/provenance.test.ts
+  h_6f5e45c41d0910 148,151
+packages/im/agent/tests/security/runtime-owner-approve.test.ts
+  h_6f5e45c41d0910 29,51
+packages/im/agent/tests/security/tool-hard-gate.test.ts
+  h_6f5e45c41d0910 175,266,270
+packages/im/agent/tests/security/trust-level.test.ts
+  h_6f5e45c41d0910 57-58,61-63,100,146
+packages/im/agent/tests/security/turn-network-binary.test.ts
+  h_6f5e45c41d0910 9
+packages/im/agent/tests/security/turn-network-client.test.ts
+  h_6f5e45c41d0910 83
+packages/im/agent/tests/self-change/policy.test.ts
+  h_6f5e45c41d0910 146
+packages/im/agent/tests/session-io.test.ts
+  h_6f5e45c41d0910 32,38,46,49-50,54,59
+packages/im/agent/tests/session-profile.test.ts
+  h_6f5e45c41d0910 49-53
+packages/im/agent/tests/session/turn-ingress-session.test.ts
+  h_6f5e45c41d0910 67-68,108,112,119,126
+packages/im/agent/tests/tool-selection.test.ts
+  h_6f5e45c41d0910 19,50,52
+packages/im/agent/tests/tool/message-alias-arguments.test.ts
+  h_6f5e45c41d0910 9,27
+packages/im/agent/tests/tool/tool-runtime.test.ts
+  h_6f5e45c41d0910 9-12,44-85
+packages/im/agent/tests/tool/tool-system.test.ts
+  h_6f5e45c41d0910 83,87,107,111
+packages/im/agent/tests/tool/turn-tool-runtime.test.ts
+  h_6f5e45c41d0910 228,310,323,333,346,360,486,505,522,553,581,597,741,756,768-769,819,834,844,862,871,875,879,894
+packages/im/agent/tests/typing-feedback-probe.test.ts
+  h_6f5e45c41d0910 27,54,89
+packages/im/agent/tests/user-relation.test.ts
+  h_6f5e45c41d0910 276
+packages/im/agent/tests/zhin-agent/turn-context-envelope.test.ts
+  h_6f5e45c41d0910 80
+packages/im/ai/src/types.ts
+  h_6f5e45c41d0910 121
+packages/im/command/README.md
+  h_6f5e45c41d0910 19
+packages/im/command/src/command-index.ts
+  h_6f5e45c41d0910 18,78-79,93-97,346,370,389-390,398-399,426-428,444-450,452-453,455,457-468,555,587,596-598,604-606
+packages/im/command/src/definition.ts
+  h_6f5e45c41d0910 170-179,213,344,667,747-748,765-781,784-787,791-793
+packages/im/command/src/index.ts
+  h_6f5e45c41d0910 17
+packages/im/command/src/messages.ts
+  h_6f5e45c41d0910 63
+packages/im/command/src/permission-explanation.ts
+  h_6f5e45c41d0910 32,38
+packages/im/command/src/permit.ts
+  h_6f5e45c41d0910 7-11,14-15,27
+packages/im/command/tests/command.test.ts
+  h_6f5e45c41d0910 199,213,266,277,673,683,702,705,714,727,730,741,756,766,768-772,1654-1679,1905,1911
+packages/im/command/tests/permission-explanation.test.ts
+  h_6f5e45c41d0910 5-6,10-13,18,20-21,25-26,37-38,42,60-63,65-68
+packages/im/core/README.md
+  h_6f5e45c41d0910 55
+packages/im/core/src/ai-completion-contract.ts
+  h_6f5e45c41d0910 9,128,137,159
+packages/im/core/src/built/common-adapter-tools.ts
+  h_6f5e45c41d0910 48-49,61,72,84,96,116,128,139,150,179-187,189-194,197-199,203,214-218,262-269
+packages/im/core/src/built/interaction-messages.ts
+  h_6f5e45c41d0910 28
+packages/im/core/src/built/message-enrich.ts
+  h_6f5e45c41d0910 12,18-23
+packages/im/core/src/built/outbound-media-trust.ts
+  h_6f5e45c41d0910 1-263
+packages/im/core/src/built/roles.ts
+  h_6f5e45c41d0910 2-13,15-23,25-29,31-147,150-158,160-165,167,170-173,176-240,244-252,255-286,289-331,347
+packages/im/core/src/built/tool-access.ts
+  h_6f5e45c41d0910 21
+packages/im/core/src/index.ts
+  h_6f5e45c41d0910 6-16
+packages/im/core/src/jsx/message-tags.ts
+  h_6f5e45c41d0910 56-61
+packages/im/core/src/plugin-runtime/im/command-feedback.ts
+  h_6f5e45c41d0910 19,47-48,56,64-67,72-75,107-111
+packages/im/core/src/plugin-runtime/im/contracts.ts
+  h_6f5e45c41d0910 6-7,11,78,92-102,105-112,114-127,168-173
+packages/im/core/src/plugin-runtime/im/feature-gate.ts
+  h_6f5e45c41d0910 1-101
+packages/im/core/src/plugin-runtime/im/host/database-host-installer.ts
+  h_6f5e45c41d0910 4-11,24,143-155,158-159,172-173,181-224,236-237,240,244,247-258,267,303,338-339,349,352,454-479
+packages/im/core/src/plugin-runtime/im/host/sender-enrichment.ts
+  h_6f5e45c41d0910 1-5,7,9-11,15-17,20-23,26-27,30-34,36-53,56-75,78-87
+packages/im/core/src/plugin-runtime/im/im-runtime.ts
+  h_6f5e45c41d0910 72,104-105,107,182,198-249
+packages/im/core/src/plugin-runtime/im/inbound-runtime.ts
+  h_6f5e45c41d0910 4,165-168,309-311,357,375,444,551-564
+packages/im/core/src/plugin-runtime/im/inbound-spine.ts
+  h_6f5e45c41d0910 25,101-104,168,453,488-489
+packages/im/core/src/plugin-runtime/im/interactive-router.ts
+  h_6f5e45c41d0910 12,66,87-91,98,139-149
+packages/im/core/src/plugin-runtime/im/message-dispatcher.ts
+  h_6f5e45c41d0910 12,80-81,115-117
+packages/im/core/src/plugin-runtime/im/outbound-delivery-runtime.ts
+  h_6f5e45c41d0910 14,341
+packages/im/core/src/plugin-runtime/im/outbound-renderer.ts
+  h_6f5e45c41d0910 13,18,182,221,271-284
+packages/im/core/src/plugin-runtime/im/progressive-reply.ts
+  h_6f5e45c41d0910 5-6,31-35,115,117-121
+packages/im/core/src/side-event/base.ts
+  h_6f5e45c41d0910 2,93,95-101
+packages/im/core/tests/ai-completion-contract.test.ts
+  h_6f5e45c41d0910 38-42
+packages/im/core/tests/ai/tool.test.ts
+  h_6f5e45c41d0910 9-10,24,31-32,36-38,43-44,49-51,54-55,87-91,104,106
+packages/im/core/tests/built/roles.test.ts
+  h_6f5e45c41d0910 3-5,7,9-47,50-55,57,59-66,68,70-88,92-115,118-132,140,153-154,165
+packages/im/core/tests/operation-session-runtime.test.ts
+  h_6f5e45c41d0910 47,113
+packages/im/core/tests/operation-session.test.ts
+  h_6f5e45c41d0910 65,87
+packages/im/core/tests/plugin-runtime/behavior-customization.test.ts
+  h_6f5e45c41d0910 61-62,79,92
+packages/im/core/tests/plugin-runtime/bot-standing-resolver.test.ts
+  h_6f5e45c41d0910 1-24
+packages/im/core/tests/plugin-runtime/button-permit.test.ts
+  h_6f5e45c41d0910 1-58
+packages/im/core/tests/plugin-runtime/captured-endpoint-operation.test.ts
+  h_6f5e45c41d0910 769-787
+packages/im/core/tests/plugin-runtime/feature-gate.test.ts
+  h_6f5e45c41d0910 1-156
+packages/im/core/tests/plugin-runtime/im-runtime.test.ts
+  h_6f5e45c41d0910 110-112,116,119-123,2603-2622,3303,3385-3389,3493,3496,3540,3549,3552,3555-3556,3797
+packages/im/core/tests/plugin-runtime/outbound-media-trust.test.ts
+  h_6f5e45c41d0910 1-144
+packages/im/core/tests/scene-management-tools.test.ts
+  h_6f5e45c41d0910 1-27
+packages/im/feature-kit/src/operation-session.ts
+  h_6f5e45c41d0910 17-26
+packages/im/im-contract/src/chat-role-level.ts
+  h_6f5e45c41d0910 1-61
+packages/im/im-contract/src/index.ts
+  h_6f5e45c41d0910 13-14
+packages/im/im-contract/src/platform-standing.ts
+  h_6f5e45c41d0910 1-108
+packages/im/im-contract/tests/platform-standing.test.ts
+  h_6f5e45c41d0910 1-36
+packages/im/middleware/package.json
+  h_6f5e45c41d0910 25
+packages/im/middleware/src/definition.ts
+  h_6f5e45c41d0910 11,52-59,156-163
+packages/im/middleware/src/middleware-index.ts
+  h_6f5e45c41d0910 18,48-49,75,163,225-239
+packages/im/middleware/tests/middleware.test.ts
+  h_6f5e45c41d0910 18,58-86
+packages/im/permission/src/builtin.ts
+  h_6f5e45c41d0910 2-18,23-29,36-48,51-53,55,57-79,83,86-91,94-112,115,118-122,124-129,136-138,150,152-161,174-178,198-209
+packages/im/permission/src/check-permissions.ts
+  h_6f5e45c41d0910 26
+packages/im/permission/src/define.ts
+  h_6f5e45c41d0910 5
+packages/im/permission/src/explain.ts
+  h_6f5e45c41d0910 1,15,29-31,34-35,38-39,41,47-68
+packages/im/permission/src/host.ts
+  h_6f5e45c41d0910 4-5,8-40,49-100,104,124-125
+packages/im/permission/src/index.ts
+  h_6f5e45c41d0910 4-7,16-18,20-21,26-27,31-33
+packages/im/permission/src/messages.ts
+  h_6f5e45c41d0910 4,10-29,31
+packages/im/permission/src/subject.ts
+  h_6f5e45c41d0910 4-6,15-20,24-46,54-94,102-103,109,114-116,125-126
+packages/im/permission/tests/bot-standing.test.ts
+  h_6f5e45c41d0910 1-82
+packages/im/permission/tests/builtin.test.ts
+  h_6f5e45c41d0910 5,17,24,28,32,35-39,42-46,49-50,52-56,60,65-66,69,74-83,88-90,97-100,103-104,134-170,172-188
+packages/im/permission/tests/check-permissions.test.ts
+  h_6f5e45c41d0910 5,9,12-13,17,19-20,22,24-25,34,38-39,43,45,47-48,50
+packages/im/permission/tests/explain.test.ts
+  h_6f5e45c41d0910 3-4,9-10,18-19,21,24-28,39
+packages/im/permission/tests/host.test.ts
+  h_6f5e45c41d0910 10,16-31,41,43-45,48,50
+packages/im/permission/tests/subject.test.ts
+  h_6f5e45c41d0910 15,20,23-29,34-36,41-42,45,47-49,51-52,67-68
+packages/im/plugin-runtime/src/index.ts
+  h_6f5e45c41d0910 65-66
+packages/im/plugin-runtime/src/layered-config.ts
+  h_6f5e45c41d0910 1-528
+packages/im/plugin-runtime/src/plugin-console-rpc.ts
+  h_6f5e45c41d0910 82-96,98-103,138-139,191,196,234-259
+packages/im/plugin-runtime/src/plugin.ts
+  h_6f5e45c41d0910 9,66-74
+packages/im/plugin-runtime/tests/layered-config.test.ts
+  h_6f5e45c41d0910 1-216
+packages/im/plugin-runtime/tests/plugin-console-rpc.test.ts
+  h_6f5e45c41d0910 70-85
+packages/im/runtime/src/config-composer.ts
+  h_6f5e45c41d0910 1-8,44-45,128-146,169,174-177,285,288,309-310,340-341,346,352,401-402
+packages/im/runtime/src/host-config-schema.json
+  h_6f5e45c41d0910 81-82,89,96,98-115,117-119,121-123,266-503,3897-3918
+packages/im/runtime/src/host/readiness-client.ts
+  h_6f5e45c41d0910 3-11,24
+packages/im/runtime/src/host/readiness.ts
+  h_6f5e45c41d0910 32,127-128,130,132,134
+packages/im/runtime/src/host/start-options.ts
+  h_6f5e45c41d0910 14-18,39-41,44-77,90,108,136
+packages/im/runtime/src/index.ts
+  h_6f5e45c41d0910 2
+packages/im/runtime/src/isolate/runtime.ts
+  h_6f5e45c41d0910 42-47,56,62,89,192,198,204,218,239
+packages/im/runtime/src/layered-config.ts
+  h_6f5e45c41d0910 1-509
+packages/im/runtime/src/plugin-scope-assembler.ts
+  h_6f5e45c41d0910 27,65,74-75,249-258,264-265
+packages/im/runtime/src/root-runtime-config.ts
+  h_6f5e45c41d0910 3,126-127,153,173-174,177,408-411,417-418,424-430
+packages/im/runtime/src/root-runtime.ts
+  h_6f5e45c41d0910 478
+packages/im/runtime/tests/host-config-schema-coverage.test.ts
+  h_6f5e45c41d0910 37,40-41,47-78
+packages/im/runtime/tests/isolate/isolate-runtime.test.ts
+  h_6f5e45c41d0910 182-202
+packages/im/runtime/tests/layered-config.test.ts
+  h_6f5e45c41d0910 1-350
+packages/im/tool/package.json
+  h_6f5e45c41d0910 26
+packages/im/tool/src/definition.ts
+  h_6f5e45c41d0910 5,327-330
+packages/im/tool/tests/tool.test.ts
+  h_6f5e45c41d0910 249,270
+packages/im/zhin/README.md
+  h_6f5e45c41d0910 16,27-28,56,59,61,64,107,158,175-182
+packages/im/zhin/package.json
+  h_6f5e45c41d0910 93-102,113-116,118-122,124,127-132,135,138-143,146-148,155-163,166-171,176-177,180-181,183-187,265-272
+packages/im/zhin/src/instance/agent/host-installer.ts
+  h_6f5e45c41d0910 107-109,254
+packages/im/zhin/src/instance/agent/host-protected-paths.ts
+  h_6f5e45c41d0910 4,11-13,33-39
+packages/im/zhin/src/instance/agent/self-change-sandbox-runner.ts
+  h_6f5e45c41d0910 14
+packages/im/zhin/src/instance/chat-role-migration.ts
+  h_6f5e45c41d0910 1-311
+packages/im/zhin/src/instance/chat-roles.ts
+  h_6f5e45c41d0910 1-177
+packages/im/zhin/src/instance/cli/index.ts
+  h_6f5e45c41d0910 1-39
+packages/im/zhin/src/instance/cli/trace.ts
+  h_6f5e45c41d0910 1-150
+packages/im/zhin/src/instance/console/agent-console.ts
+  h_6f5e45c41d0910 149-150,152-153,160,163
+packages/im/zhin/src/instance/console/agent-routes.ts
+  h_6f5e45c41d0910 1,6,10,27,32,34,39,47,49,51,55,57,63,66,70,75,79,81,88,91,97,103,108,114,118,122,125,132,134,141,145,148,151,156,162,166,172,175,179,183,185,188,193,199,201,207,212
+packages/im/zhin/src/instance/console/api-installer.ts
+  h_6f5e45c41d0910 22-23,26,29,45-48,74-80,103-104
+packages/im/zhin/src/instance/console/api-routes.ts
+  h_6f5e45c41d0910 16,25,27,41,57-60,142-143
+packages/im/zhin/src/instance/console/asset-server.ts
+  h_6f5e45c41d0910 2,4,10-15,24,26,31,34,38-43,46-47,55,57,61-62,65-74,77
+packages/im/zhin/src/instance/console/assistant-job-routes.ts
+  h_6f5e45c41d0910 2,6,84,88,92,94,97
+packages/im/zhin/src/instance/console/assistant-status.ts
+  h_6f5e45c41d0910 6,156-158
+packages/im/zhin/src/instance/console/chat-roles-rpc.ts
+  h_6f5e45c41d0910 1-114
+packages/im/zhin/src/instance/console/console-feature-rpc.ts
+  h_6f5e45c41d0910 1-819
+packages/im/zhin/src/instance/console/conversation-history-routes.ts
+  h_6f5e45c41d0910 1,8,21,29,33,95-96,98,102
+packages/im/zhin/src/instance/console/conversation-result-routes.ts
+  h_6f5e45c41d0910 1,6,15,26,30,33,36,39,54,57,61
+packages/im/zhin/src/instance/console/data-migration-routes.ts
+  h_6f5e45c41d0910 2-3,15-16,26-31,34,37-39,42,47-48,50-51,60
+packages/im/zhin/src/instance/console/entry-projection.ts
+  h_6f5e45c41d0910 6,21-22,39-46,101,133,147,194,207
+packages/im/zhin/src/instance/console/entry-routes.ts
+  h_6f5e45c41d0910 1,5,14,16,18,20,22
+packages/im/zhin/src/instance/console/events.ts
+  h_6f5e45c41d0910 2-8,10,56,62,69-70,74,78,82,84-86,91,93-94,97-100
+packages/im/zhin/src/instance/console/feature-conversation-store.ts
+  h_6f5e45c41d0910 1-301
+packages/im/zhin/src/instance/console/host.ts
+  h_6f5e45c41d0910 10,17,19,27,71-75,77-79,81,84-85,87,89-90,92,102,104,107-109,115-116,120,126,129-131,135
+packages/im/zhin/src/instance/console/interaction-routes.ts
+  h_6f5e45c41d0910 1,6,16,20,23,26,29,32,36,40,42,45
+packages/im/zhin/src/instance/console/internal-error.ts
+  h_6f5e45c41d0910 1-26
+packages/im/zhin/src/instance/console/login-assist-stdin.ts
+  h_6f5e45c41d0910 87-89,91-93
+packages/im/zhin/src/instance/console/message-diagnostic-routes.ts
+  h_6f5e45c41d0910 3-4,6,15-16,18-20,23,25,29,32,41,46,53
+packages/im/zhin/src/instance/console/message-send-routes.ts
+  h_6f5e45c41d0910 2-3,28,30,44,56,58-61
+packages/im/zhin/src/instance/console/module.ts
+  h_6f5e45c41d0910 5-9,35-40
+packages/im/zhin/src/instance/console/no-store.ts
+  h_6f5e45c41d0910 1,3-13,15,17-20,22-23
+packages/im/zhin/src/instance/console/permission-explanation-routes.ts
+  h_6f5e45c41d0910 3,6,11,35-36,38-39,53,55,57,59-60,62-63,78-79,81-82,85,87,89,91,94-99,138-140,142,144-159,190,192,194-197
+packages/im/zhin/src/instance/console/plugin-console-rpc.ts
+  h_6f5e45c41d0910 1,3-11,48-52,66-76,128-135,138-139,216-323,329-330
+packages/im/zhin/src/instance/console/plugin-permission-catalog.ts
+  h_6f5e45c41d0910 1-74
+packages/im/zhin/src/instance/console/plugin-routes.ts
+  h_6f5e45c41d0910 2-8,19,33-34,45,48,50,57-58,62,68,80,84,89-90,96,104,106,110
+packages/im/zhin/src/instance/console/plugin-task-routes.ts
+  h_6f5e45c41d0910 2,11-12,15,34-35,37-43,45-46,62-63,65,67-68,70-71,95-96,98,110-115,264,266,268,270,274
+packages/im/zhin/src/instance/console/rpc-composition.ts
+  h_6f5e45c41d0910 28-29
+packages/im/zhin/src/instance/console/rpc-route.ts
+  h_6f5e45c41d0910 2-3,6-7,9,11-12,14-15,24-29,34-42,48-71,73-110,113-121,125-126,128-133,137-140,146,148,154,157,164,166,172,174-175,184-199
+packages/im/zhin/src/instance/console/schedule-execution-routes.ts
+  h_6f5e45c41d0910 1,6-7,22,25,31,35,37,39-40,42
+packages/im/zhin/src/instance/console/self-changes.ts
+  h_6f5e45c41d0910 19,21,111
+packages/im/zhin/src/instance/console/system-routes.ts
+  h_6f5e45c41d0910 1,12,23-24,30,38,47
+packages/im/zhin/src/instance/console/tool-approvals.ts
+  h_6f5e45c41d0910 37-45,82,132,135
+packages/im/zhin/src/instance/console/trace-archive-routes.ts
+  h_6f5e45c41d0910 6,10-11,46-47,49,52,57,65,67,69,72,74,76,78,98,111,113-114,116,119,122,125-126,129,132
+packages/im/zhin/src/instance/console/usage-stats-rpc.ts
+  h_6f5e45c41d0910 2
+packages/im/zhin/src/instance/console/workspace-conversation-routes.ts
+  h_6f5e45c41d0910 1,11,21,24,30-32,34,40,45-47,50,52,54,56,59
+packages/im/zhin/src/instance/feature-host-installer.ts
+  h_6f5e45c41d0910 1-119
+packages/im/zhin/src/instance/feature-self-service.ts
+  h_6f5e45c41d0910 1-535
+packages/im/zhin/src/instance/index.ts
+  h_6f5e45c41d0910 1-10
+packages/im/zhin/src/instance/inference/migration-apply.ts
+  h_6f5e45c41d0910 19
+packages/im/zhin/src/instance/inference/migration-session-bindings.ts
+  h_6f5e45c41d0910 10
+packages/im/zhin/src/instance/inference/routes.ts
+  h_6f5e45c41d0910 1-15,130,132-133,136,140,155,164-165,167-170,175-176,190,196,201,203
+packages/im/zhin/src/instance/protocol-host-installer.ts
+  h_6f5e45c41d0910 10,17-49,80,84,90,113-114,184,247-261
+packages/im/zhin/src/instance/restart-host-installer.ts
+  h_6f5e45c41d0910 4,12,15,31-32,60-62,65-66,70
+packages/im/zhin/src/instance/self-change-apply.ts
+  h_6f5e45c41d0910 19,37,46,80
+packages/im/zhin/src/instance/start-command.ts
+  h_6f5e45c41d0910 2-3,6-7,9,21,32,59-60,66-67,90,111-152,180-183,196-200,211-223,238-246,293-320,324,329,337-338,350-360,371-372,410,450,453,506-508,510-536,543-546,562-568,573-574,606-608,626,641-643,662-666,669,694
+packages/im/zhin/src/instance/start/module.ts
+  h_6f5e45c41d0910 1,3
+packages/im/zhin/tests/instance/agent/configuration-update.test.ts
+  h_6f5e45c41d0910 5,8-9
+packages/im/zhin/tests/instance/agent/host-installer.test.ts
+  h_6f5e45c41d0910 14-16,64
+packages/im/zhin/tests/instance/agent/host-protected-paths.test.ts
+  h_6f5e45c41d0910 6,39-45
+packages/im/zhin/tests/instance/agent/module-boundary.test.ts
+  h_6f5e45c41d0910 5,14
+packages/im/zhin/tests/instance/agent/schedule-history.test.ts
+  h_6f5e45c41d0910 8
+packages/im/zhin/tests/instance/agent/self-change-apply.test.ts
+  h_6f5e45c41d0910 18
+packages/im/zhin/tests/instance/agent/self-change-configuration-application.test.ts
+  h_6f5e45c41d0910 7-8
+packages/im/zhin/tests/instance/agent/self-change-impact.test.ts
+  h_6f5e45c41d0910 5
+packages/im/zhin/tests/instance/agent/self-change-plugin-tests.test.ts
+  h_6f5e45c41d0910 13-14
+packages/im/zhin/tests/instance/agent/self-change-sandbox.test.ts
+  h_6f5e45c41d0910 11,13,161
+packages/im/zhin/tests/instance/agent/self-change-trial.test.ts
+  h_6f5e45c41d0910 2
+packages/im/zhin/tests/instance/agent/tool-approval-im-channel.test.ts
+  h_6f5e45c41d0910 16
+packages/im/zhin/tests/instance/agent/tool-feature-publisher.test.ts
+  h_6f5e45c41d0910 4
+packages/im/zhin/tests/instance/agent/turn/ambient-profile-model.test.ts
+  h_6f5e45c41d0910 2-5
+packages/im/zhin/tests/instance/agent/turn/approval-localization.test.ts
+  h_6f5e45c41d0910 1,4-5
+packages/im/zhin/tests/instance/agent/turn/boundaries.test.ts
+  h_6f5e45c41d0910 31-32,491,499-500,787,889-891,894-902,905-907,910-913,916-920,924,939-947,950-961,964-968,971-974,977-982,999-1005
+packages/im/zhin/tests/instance/agent/turn/control-gate.test.ts
+  h_6f5e45c41d0910 4,258-259,264
+packages/im/zhin/tests/instance/agent/turn/group-rule-enforcer.test.ts
+  h_6f5e45c41d0910 158,161-162,347
+packages/im/zhin/tests/instance/agent/turn/group-rule-im.test.ts
+  h_6f5e45c41d0910 21,61,63,91-93
+packages/im/zhin/tests/instance/agent/turn/group-rule-operation-lifetime.test.ts
+  h_6f5e45c41d0910 5-6
+packages/im/zhin/tests/instance/agent/turn/inference-fixture.ts
+  h_6f5e45c41d0910 3
+packages/im/zhin/tests/instance/agent/turn/ingress-route.test.ts
+  h_6f5e45c41d0910 1,3-5,13,332,399-404,428-429,457,596-597
+packages/im/zhin/tests/instance/agent/turn/multi-message-delivery.test.ts
+  h_6f5e45c41d0910 1-2,8,14-19
+packages/im/zhin/tests/instance/agent/turn/scene-facts-connection.test.ts
+  h_6f5e45c41d0910 5-6
+packages/im/zhin/tests/instance/agent/turn/self-profile-ambient.test.ts
+  h_6f5e45c41d0910 2
+packages/im/zhin/tests/instance/agent/turn/session-gate.test.ts
+  h_6f5e45c41d0910 8,12
+packages/im/zhin/tests/instance/agent/turn/tool-approval-im-ingress.test.ts
+  h_6f5e45c41d0910 1
+packages/im/zhin/tests/instance/chat-role-fixture.ts
+  h_6f5e45c41d0910 1-13
+packages/im/zhin/tests/instance/chat-role-migration.test.ts
+  h_6f5e45c41d0910 1-135
+packages/im/zhin/tests/instance/chat-roles.test.ts
+  h_6f5e45c41d0910 1-169
+packages/im/zhin/tests/instance/cli/trace-format.test.ts
+  h_6f5e45c41d0910 1-121
+packages/im/zhin/tests/instance/configuration-cross-entry.test.ts
+  h_6f5e45c41d0910 2,11-12,16-20,22-23,37-38,77,99-100,109,115
+packages/im/zhin/tests/instance/configuration-host-installer.test.ts
+  h_6f5e45c41d0910 11-14,38-39,68-69,76,232,236-238,242,265,270,274,276,278-279,282-283,287,291-292,294-298,301,303,307,312-313,322-324
+packages/im/zhin/tests/instance/console/adapter-account-runtime.test.ts
+  h_6f5e45c41d0910 10-13,19,182,368-478
+packages/im/zhin/tests/instance/console/agent-config-projection.test.ts
+  h_6f5e45c41d0910 5
+packages/im/zhin/tests/instance/console/agent-console-load.test.ts
+  h_6f5e45c41d0910 2
+packages/im/zhin/tests/instance/console/agent-feature-projection.test.ts
+  h_6f5e45c41d0910 26
+packages/im/zhin/tests/instance/console/agent-project-file-routes.test.ts
+  h_6f5e45c41d0910 2,6-8,11-13,35
+packages/im/zhin/tests/instance/console/ai-config-validation.test.ts
+  h_6f5e45c41d0910 7,10
+packages/im/zhin/tests/instance/console/announcements-rpc.test.ts
+  h_6f5e45c41d0910 5,10-11
+packages/im/zhin/tests/instance/console/api.test.ts
+  h_6f5e45c41d0910 2,9-10,21-24,28,31-32,38,42,195-197,560,588-589,867,885-887
+packages/im/zhin/tests/instance/console/asset-server.test.ts
+  h_6f5e45c41d0910 6,24,36,40,47-49,56,61
+packages/im/zhin/tests/instance/console/assistant-job-routes.test.ts
+  h_6f5e45c41d0910 2-3,7,10-13,28
+packages/im/zhin/tests/instance/console/assistant-status.test.ts
+  h_6f5e45c41d0910 4-5
+packages/im/zhin/tests/instance/console/configuration-cli-live-host.test.ts
+  h_6f5e45c41d0910 8-10,13-14,16-17,60
+packages/im/zhin/tests/instance/console/console-access.test.ts
+  h_6f5e45c41d0910 2-4,6-7,28-34
+packages/im/zhin/tests/instance/console/console-feature-conversation.test.ts
+  h_6f5e45c41d0910 1-209
+packages/im/zhin/tests/instance/console/console-feature-rpc.test.ts
+  h_6f5e45c41d0910 1-220
+packages/im/zhin/tests/instance/console/control-plane-rpc.test.ts
+  h_6f5e45c41d0910 4,9
+packages/im/zhin/tests/instance/console/control-plane.test.ts
+  h_6f5e45c41d0910 6-7,10-11
+packages/im/zhin/tests/instance/console/conversation-history-routes.test.ts
+  h_6f5e45c41d0910 1-3,11,53
+packages/im/zhin/tests/instance/console/conversation-result-routes.test.ts
+  h_6f5e45c41d0910 2,5,9,22
+packages/im/zhin/tests/instance/console/data-migration-routes.test.ts
+  h_6f5e45c41d0910 2,5,10,28
+packages/im/zhin/tests/instance/console/decision-replay.test.ts
+  h_6f5e45c41d0910 5-6,14
+packages/im/zhin/tests/instance/console/feature-conversation-store.test.ts
+  h_6f5e45c41d0910 1-178
+packages/im/zhin/tests/instance/console/group-rules-rpc.test.ts
+  h_6f5e45c41d0910 3,8
+packages/im/zhin/tests/instance/console/host.test.ts
+  h_6f5e45c41d0910 6,10-16,79-80,82-84,135-137,153,174,202-206,212-213,216-220
+packages/im/zhin/tests/instance/console/iam/plugin-permissions.test.ts
+  h_6f5e45c41d0910 1-136
+packages/im/zhin/tests/instance/console/iam/service.test.ts
+  h_6f5e45c41d0910 1-220
+packages/im/zhin/tests/instance/console/iam/setup.test.ts
+  h_6f5e45c41d0910 1-291
+packages/im/zhin/tests/instance/console/inbox.test.ts
+  h_6f5e45c41d0910 15,316
+packages/im/zhin/tests/instance/console/interaction-routes.test.ts
+  h_6f5e45c41d0910 2-4,8,23
+packages/im/zhin/tests/instance/console/internal-error.test.ts
+  h_6f5e45c41d0910 1-32
+packages/im/zhin/tests/instance/console/login-assist-binding.test.ts
+  h_6f5e45c41d0910 3
+packages/im/zhin/tests/instance/console/login-assist-stdin.test.ts
+  h_6f5e45c41d0910 1-37
+packages/im/zhin/tests/instance/console/message-bindings.test.ts
+  h_6f5e45c41d0910 7
+packages/im/zhin/tests/instance/console/message-diagnostic-routes.test.ts
+  h_6f5e45c41d0910 1-3,5,18
+packages/im/zhin/tests/instance/console/message-send-routes.test.ts
+  h_6f5e45c41d0910 2-4,10,72-73
+packages/im/zhin/tests/instance/console/module-boundary.test.ts
+  h_6f5e45c41d0910 5-6,15,36,67
+packages/im/zhin/tests/instance/console/permission-explanation-routes.test.ts
+  h_6f5e45c41d0910 3,5,8,32,39,41,65,73,98,106,110-114,120,122-127,144-145,163,196
+packages/im/zhin/tests/instance/console/plugin-console-rpc.test.ts
+  h_6f5e45c41d0910 7
+packages/im/zhin/tests/instance/console/plugin-diagnostics.test.ts
+  h_6f5e45c41d0910 1
+packages/im/zhin/tests/instance/console/plugin-management-list.test.ts
+  h_6f5e45c41d0910 4
+packages/im/zhin/tests/instance/console/plugin-metadata.test.ts
+  h_6f5e45c41d0910 6
+packages/im/zhin/tests/instance/console/plugin-permission-catalog.test.ts
+  h_6f5e45c41d0910 1-77
+packages/im/zhin/tests/instance/console/plugin-rpc-principal.test.ts
+  h_6f5e45c41d0910 1-153
+packages/im/zhin/tests/instance/console/plugin-task-reminder-integration.test.ts
+  h_6f5e45c41d0910 2,7,10-11,13,50
+packages/im/zhin/tests/instance/console/plugin-task-routes.test.ts
+  h_6f5e45c41d0910 1-3,10,51
+packages/im/zhin/tests/instance/console/schedule-execution-routes.test.ts
+  h_6f5e45c41d0910 5,7-8,11-14,32,36-37,60-64
+packages/im/zhin/tests/instance/console/self-changes.test.ts
+  h_6f5e45c41d0910 9-11
+packages/im/zhin/tests/instance/console/session-events-rpc.test.ts
+  h_6f5e45c41d0910 3,7
+packages/im/zhin/tests/instance/console/session-ops-rpc.test.ts
+  h_6f5e45c41d0910 4,8
+packages/im/zhin/tests/instance/console/system-log.test.ts
+  h_6f5e45c41d0910 9
+packages/im/zhin/tests/instance/console/terminal-host.test.ts
+  h_6f5e45c41d0910 1-142
+packages/im/zhin/tests/instance/console/tool-approvals.test.ts
+  h_6f5e45c41d0910 5-6,13-14
+packages/im/zhin/tests/instance/console/trace-archive-routes.test.ts
+  h_6f5e45c41d0910 1-3,9,29
+packages/im/zhin/tests/instance/console/usage-stats-rpc.test.ts
+  h_6f5e45c41d0910 6-8
+packages/im/zhin/tests/instance/console/workspace-conversation-routes.test.ts
+  h_6f5e45c41d0910 2,6,9-10,54
+packages/im/zhin/tests/instance/console/workspace-history.test.ts
+  h_6f5e45c41d0910 2,6,10,44
+packages/im/zhin/tests/instance/data-migration/controller.test.ts
+  h_6f5e45c41d0910 1
+packages/im/zhin/tests/instance/database-gateway-tables.test.ts
+  h_6f5e45c41d0910 1-123
+packages/im/zhin/tests/instance/feature-host-installer.test.ts
+  h_6f5e45c41d0910 1-58
+packages/im/zhin/tests/instance/feature-self-service.test.ts
+  h_6f5e45c41d0910 1-337
+packages/im/zhin/tests/instance/fixtures/inference-console-host.ts
+  h_6f5e45c41d0910 6,9,12,155,157,159,161
+packages/im/zhin/tests/instance/fixtures/inference-native-lifetime.mjs
+  h_6f5e45c41d0910 13-14
+packages/im/zhin/tests/instance/host-config-null-compatibility.test.ts
+  h_6f5e45c41d0910 2-10,82-85
+packages/im/zhin/tests/instance/inference/configuration-fixture.ts
+  h_6f5e45c41d0910 8,11
+packages/im/zhin/tests/instance/inference/console-s4-acceptance.test.ts
+  h_6f5e45c41d0910 7-8,10,32
+packages/im/zhin/tests/instance/inference/migration-apply.test.ts
+  h_6f5e45c41d0910 7-8,13,231
+packages/im/zhin/tests/instance/inference/migration-cli.test.ts
+  h_6f5e45c41d0910 7,178,188-189,192-199,212
+packages/im/zhin/tests/instance/inference/migration-preview.test.ts
+  h_6f5e45c41d0910 10-11
+packages/im/zhin/tests/instance/inference/migration-session-bindings.test.ts
+  h_6f5e45c41d0910 29,214,571,741,771
+packages/im/zhin/tests/instance/inference/native-lifetime.test.ts
+  h_6f5e45c41d0910 13
+packages/im/zhin/tests/instance/inference/oauth-refresh-policy.test.ts
+  h_6f5e45c41d0910 5
+packages/im/zhin/tests/instance/inference/operation-resources.test.ts
+  h_6f5e45c41d0910 17-19
+packages/im/zhin/tests/instance/inference/personal-network.test.ts
+  h_6f5e45c41d0910 5
+packages/im/zhin/tests/instance/inference/routes.test.ts
+  h_6f5e45c41d0910 1-2,4,14-15,114-116
+packages/im/zhin/tests/instance/inference/sdk-network.test.ts
+  h_6f5e45c41d0910 1-3
+packages/im/zhin/tests/instance/legacy-config.test.ts
+  h_6f5e45c41d0910 11-12,66,85
+packages/im/zhin/tests/instance/plugin-management-console-client.test.ts
+  h_6f5e45c41d0910 2,8-9,11-12,14-16,50
+packages/im/zhin/tests/instance/plugin-management-review.test.ts
+  h_6f5e45c41d0910 5-11
+packages/im/zhin/tests/instance/plugin-management.test.ts
+  h_6f5e45c41d0910 7,9-11,305
+packages/im/zhin/tests/instance/process-lifecycle.test.ts
+  h_6f5e45c41d0910 6
+packages/im/zhin/tests/instance/process-rejections.test.ts
+  h_6f5e45c41d0910 5,38
+packages/im/zhin/tests/instance/protocol-host-installer.test.ts
+  h_6f5e45c41d0910 15
+packages/im/zhin/tests/instance/readiness.test.ts
+  h_6f5e45c41d0910 2-3,103-104,127
+packages/im/zhin/tests/instance/relational-state.test.ts
+  h_6f5e45c41d0910 1-5
+packages/im/zhin/tests/instance/restart-host-installer.test.ts
+  h_6f5e45c41d0910 20,28,74-75,77,144-145,156,205-208
+packages/im/zhin/tests/instance/root-host-watch.test.ts
+  h_6f5e45c41d0910 7
+packages/im/zhin/tests/instance/root-host.test.ts
+  h_6f5e45c41d0910 38,85
+packages/im/zhin/tests/instance/runtime-endpoints/live-host.test.ts
+  h_6f5e45c41d0910 8,31-32,40
+packages/im/zhin/tests/instance/runtime-endpoints/runtime.test.ts
+  h_6f5e45c41d0910 10
+packages/im/zhin/tests/instance/runtime-endpoints/state.test.ts
+  h_6f5e45c41d0910 7
+packages/im/zhin/tests/instance/runtime-log-level.test.ts
+  h_6f5e45c41d0910 3
+packages/im/zhin/tests/instance/sandbox-owners.test.ts
+  h_6f5e45c41d0910 3
+packages/im/zhin/tests/instance/schedule-host.test.ts
+  h_6f5e45c41d0910 15
+packages/im/zhin/tests/instance/schedule-publication-runtime.test.ts
+  h_6f5e45c41d0910 9-10
+packages/im/zhin/tests/instance/self-change-e2e.test.ts
+  h_6f5e45c41d0910 4-5,24,63,65-66,78-87,92,102,104-105,165-166,172,180,188,192,198,207,215,228
+packages/im/zhin/tests/instance/sender-enrichment.test.ts
+  h_6f5e45c41d0910 1,5-8,39-47,49-55,57-59,61-62,64-67,69,71-85,87-98
+packages/im/zhin/tests/instance/speech-voice-reply.test.ts
+  h_6f5e45c41d0910 1-4
+packages/im/zhin/tests/instance/start-command.test.ts
+  h_6f5e45c41d0910 2
+packages/im/zhin/tests/instance/start/gateway-required.test.ts
+  h_6f5e45c41d0910 1-35
+packages/im/zhin/tests/instance/start/module-boundary.test.ts
+  h_6f5e45c41d0910 5,14
+packages/im/zhin/tests/instance/start/restart-shutdown.test.ts
+  h_6f5e45c41d0910 7,12-13,32-57,59-72,85-104,108-112,116-164,166,168-172,177,184-186,193-203,208,217-218,222-251,298,302
+packages/im/zhin/tests/instance/utils/console-users.ts
+  h_6f5e45c41d0910 1-48
+packages/im/zhin/tests/instance/workroom-candidate-endpoints.test.ts
+  h_6f5e45c41d0910 3
+packages/toolkit/create-zhin/README.md
+  h_6f5e45c41d0910 14-18,55,61-65,79,81-95,100,106-107,112-113,116-124,127-132,135,164,175,178-179,228-229,256,259,277-279,281-284,286,288
+packages/toolkit/create-zhin/src/args.ts
+  h_6f5e45c41d0910 1-123
+packages/toolkit/create-zhin/src/flow.ts
+  h_6f5e45c41d0910 1-187
+packages/toolkit/create-zhin/src/index.ts
+  h_6f5e45c41d0910 20-21,26,28-33,35-36,38-39,41-42,68,151,153-161
+packages/toolkit/create-zhin/src/messages.ts
+  h_6f5e45c41d0910 1-61
+packages/toolkit/create-zhin/src/stable-yes-defaults.ts
+  h_6f5e45c41d0910 4,6-7,9-12
+packages/toolkit/create-zhin/src/workspace.ts
+  h_6f5e45c41d0910 64,69-70,91,121-124,170,211,295,309
+packages/toolkit/create-zhin/template/skills/plugin-develop/SKILL.md
+  h_6f5e45c41d0910 116
+packages/toolkit/create-zhin/template/skills/plugin-init/SKILL.md
+  h_6f5e45c41d0910 21,184,196
+packages/toolkit/create-zhin/template/skills/plugin-test/SKILL.md
+  h_6f5e45c41d0910 19
+packages/toolkit/create-zhin/tests/bootstrap-npm.test.ts
+  h_6f5e45c41d0910 7,21
+packages/toolkit/create-zhin/tests/onboarding-flow.test.ts
+  h_6f5e45c41d0910 1-256
+packages/toolkit/create-zhin/tests/stable-yes.test.ts
+  h_6f5e45c41d0910 7-8,22,30-39,43,61,69-72,107-108,125
+packages/toolkit/create-zhin/tests/workspace.test.ts
+  h_6f5e45c41d0910 125-126,150-154,208
+packages/toolkit/scaffold-wizard/src/adapter-configurers.ts
+  h_6f5e45c41d0910 77,196,1025-1028
+packages/toolkit/scaffold-wizard/src/adapter.ts
+  h_6f5e45c41d0910 79,633-675
+packages/toolkit/scaffold-wizard/src/apply.ts
+  h_6f5e45c41d0910 159-160
+packages/toolkit/scaffold-wizard/src/index.ts
+  h_6f5e45c41d0910 23
+packages/toolkit/scaffold-wizard/src/message-templates.ts
+  h_6f5e45c41d0910 16-17,20-21,24-25,28-29,40-41
+packages/toolkit/scaffold-wizard/src/messages.ts
+  h_6f5e45c41d0910 694-696,758-760,998-1000,1002-1004,1110-1112,1606-1608,1682-1684,1686-1688,1906-1908
+packages/toolkit/scaffold-wizard/src/zhin-stack-deps.ts
+  h_6f5e45c41d0910 18,143-146
+packages/toolkit/scaffold-wizard/tests/adapter.test.ts
+  h_6f5e45c41d0910 138,142,144,148
+packages/toolkit/scaffold-wizard/tests/apply.test.ts
+  h_6f5e45c41d0910 93-102
+packages/toolkit/scaffold-wizard/tests/localized-prompts.test.ts
+  h_6f5e45c41d0910 58-71
+packages/toolkit/scaffold-wizard/tests/zhin-stack-deps.test.ts
+  h_6f5e45c41d0910 16-17
+packages/toolkit/testing/README.md
+  h_6f5e45c41d0910 32,86
+packages/toolkit/testing/src/fake-plugin.ts
+  h_6f5e45c41d0910 5,34-45,83,90,167-168
+packages/toolkit/testing/src/fake-runners.ts
+  h_6f5e45c41d0910 54-56,69,251-252,282-283,451-453
+packages/toolkit/testing/src/index.ts
+  h_6f5e45c41d0910 17,50-57,72-73,87-93,198-201
+packages/toolkit/testing/tests/fakes.test.ts
+  h_6f5e45c41d0910 34-47,137
+packages/toolkit/testing/tests/fixtures/console-scenario/scenario.json
+  h_6f5e45c41d0910 20-22
+packages/toolkit/testing/tests/run-kit.mjs
+  h_6f5e45c41d0910 47-48,99
+packages/toolkit/testing/tests/run-scenario.mjs
+  h_6f5e45c41d0910 29,58,60-61,64,66-67,72,81,89,117-118
+packages/toolkit/testing/tests/scenario-export.test.ts
+  h_6f5e45c41d0910 5
+packages/toolkit/testing/tests/tool-config.test.ts
+  h_6f5e45c41d0910 71,110
+packages/toolkit/testing/tests/types/public.ts
+  h_6f5e45c41d0910 5
+patches/typedoc@0.28.20.patch
+  h_6f5e45c41d0910 1-19
+plugins/adapters/bilibili-live/README.md
+  h_6f5e45c41d0910 113
+plugins/adapters/bilibili/README.md
+  h_6f5e45c41d0910 102
+plugins/adapters/bilibili/commands/bili-draft/drop/[id]/index.ts
+  h_6f5e45c41d0910 6
+plugins/adapters/bilibili/commands/bili-draft/edit/[id]/index.ts
+  h_6f5e45c41d0910 6
+plugins/adapters/bilibili/commands/bili-draft/list/index.ts
+  h_6f5e45c41d0910 6
+plugins/adapters/bilibili/commands/bili-draft/send/[id]/index.ts
+  h_6f5e45c41d0910 6
+plugins/adapters/bilibili/commands/bili-draft/show/[id]/index.ts
+  h_6f5e45c41d0910 6
+plugins/adapters/bilibili/commands/bili-login/start/index.ts
+  h_6f5e45c41d0910 7
+plugins/adapters/bilibili/commands/bili-login/status/index.ts
+  h_6f5e45c41d0910 6
+plugins/adapters/bilibili/plugin.ts
+  h_6f5e45c41d0910 11
+plugins/adapters/bilibili/tests/bilibili-commands.test.ts
+  h_6f5e45c41d0910 36
+plugins/adapters/bilibili/tests/bilibili-runtime-localization.test.ts
+  h_6f5e45c41d0910 88
+plugins/adapters/dingtalk/PERMITS.md
+  h_6f5e45c41d0910 3,5,7-9,13-15,17,19-23
+plugins/adapters/dingtalk/README.md
+  h_6f5e45c41d0910 110,148-151
+plugins/adapters/dingtalk/adapters/dingtalk/index.ts
+  h_6f5e45c41d0910 28-29
+plugins/adapters/dingtalk/agents/dingtalk/skills/dingtalk-group-admin/tools/add_chat_members/index.ts
+  h_6f5e45c41d0910 6,14-16
+plugins/adapters/dingtalk/agents/dingtalk/skills/dingtalk-group-admin/tools/update_chat/index.ts
+  h_6f5e45c41d0910 5,16-17
+plugins/adapters/dingtalk/agents/dingtalk/skills/dingtalk/tools/create_chat/index.ts
+  h_6f5e45c41d0910 14-16
+plugins/adapters/dingtalk/agents/dingtalk/skills/dingtalk/tools/send_work_notice/index.ts
+  h_6f5e45c41d0910 5,12-13
+plugins/adapters/dingtalk/src/client.ts
+  h_6f5e45c41d0910 294-295,303-304
+plugins/adapters/dingtalk/src/index.ts
+  h_6f5e45c41d0910 36
+plugins/adapters/dingtalk/src/platform-permit.ts
+  h_6f5e45c41d0910 2-5,9
+plugins/adapters/dingtalk/src/protocol.ts
+  h_6f5e45c41d0910 371,374
+plugins/adapters/dingtalk/src/webhook.ts
+  h_6f5e45c41d0910 28,33,35,45,53,60,63
+plugins/adapters/dingtalk/tests/chat-tools.test.ts
+  h_6f5e45c41d0910 1-6,8-15,17-22,25-32
+plugins/adapters/dingtalk/tests/dingtalk-runtime.test.ts
+  h_6f5e45c41d0910 5
+plugins/adapters/dingtalk/tests/endpoint-commands.test.ts
+  h_6f5e45c41d0910 31,66-67
+plugins/adapters/dingtalk/tests/outbound-receipt.test.ts
+  h_6f5e45c41d0910 4
+plugins/adapters/dingtalk/tests/platform-permit.test.ts
+  h_6f5e45c41d0910 4-5,7,11-12,23-26,37-38
+plugins/adapters/dingtalk/tests/platform-standing.test.ts
+  h_6f5e45c41d0910 1-9
+plugins/adapters/dingtalk/tests/sender-identity.test.ts
+  h_6f5e45c41d0910 2,22-28
+plugins/adapters/dingtalk/tests/target-session.test.ts
+  h_6f5e45c41d0910 9-10
+plugins/adapters/discord/PERMITS.md
+  h_6f5e45c41d0910 3,7-11,13-14,18-22,24,26
+plugins/adapters/discord/README.md
+  h_6f5e45c41d0910 35,100,155-158
+plugins/adapters/discord/adapters/discord/index.ts
+  h_6f5e45c41d0910 46-48
+plugins/adapters/discord/agents/discord/conversation.ts
+  h_6f5e45c41d0910 1-77
+plugins/adapters/discord/agents/discord/messages.ts
+  h_6f5e45c41d0910 4-19,57-58
+plugins/adapters/discord/agents/discord/skills/discord-guild/tools/add_role/index.ts
+  h_6f5e45c41d0910 2,7-8,11,16-18,20-22,27
+plugins/adapters/discord/agents/discord/skills/discord-guild/tools/create_thread/index.ts
+  h_6f5e45c41d0910 2,8-9,18-20
+plugins/adapters/discord/agents/discord/skills/discord-guild/tools/forum_post/index.ts
+  h_6f5e45c41d0910 2,8-9,18-21
+plugins/adapters/discord/agents/discord/skills/discord-guild/tools/list_roles/index.ts
+  h_6f5e45c41d0910 1,6-8,12-14,16
+plugins/adapters/discord/agents/discord/skills/discord-guild/tools/remove_role/index.ts
+  h_6f5e45c41d0910 2,7-8,11,16-18,20-22,27
+plugins/adapters/discord/agents/discord/skills/discord/SKILL.md
+  h_6f5e45c41d0910 19
+plugins/adapters/discord/agents/discord/skills/discord/tools/react/index.ts
+  h_6f5e45c41d0910 2,7-8,10,15-16,18,20
+plugins/adapters/discord/agents/discord/skills/discord/tools/send_embed/index.ts
+  h_6f5e45c41d0910 2,6-7,17,30-32
+plugins/adapters/discord/src/endpoint.ts
+  h_6f5e45c41d0910 31,34-35,47,63-65,211,215,224,235,246,256,295,416-418,428-429,446-451,494,500-520,525,527,538,613,656-677
+plugins/adapters/discord/src/gateway.ts
+  h_6f5e45c41d0910 31,50,52-58,67-68,83-89,103,111-112,311
+plugins/adapters/discord/src/index.ts
+  h_6f5e45c41d0910 27
+plugins/adapters/discord/src/platform-permit.ts
+  h_6f5e45c41d0910 2-5,9
+plugins/adapters/discord/src/protocol.ts
+  h_6f5e45c41d0910 7,88-89,92-95,112-113,207-208,217,220,224-225,232-236,423,529-538,540-541,543-548,555,559-561
+plugins/adapters/discord/src/sender-standing.ts
+  h_6f5e45c41d0910 1-91
+plugins/adapters/discord/src/webhook.ts
+  h_6f5e45c41d0910 6,42,47,49,51-54,56,64,68,74,76,81,83-84,97,105,109,113-114
+plugins/adapters/discord/tests/channel-scope-tools.test.ts
+  h_6f5e45c41d0910 1-98
+plugins/adapters/discord/tests/discord-runtime.test.ts
+  h_6f5e45c41d0910 11-12,22,24,30,232-249,485,492-493
+plugins/adapters/discord/tests/endpoint-commands.test.ts
+  h_6f5e45c41d0910 20,56-57
+plugins/adapters/discord/tests/guild-scope.test.ts
+  h_6f5e45c41d0910 1-127
+plugins/adapters/discord/tests/operation-cancellation.test.ts
+  h_6f5e45c41d0910 6
+plugins/adapters/discord/tests/platform-permit.test.ts
+  h_6f5e45c41d0910 4-5,7,12,23-26,37-38
+plugins/adapters/discord/tests/sender-standing.test.ts
+  h_6f5e45c41d0910 1-7,9-22,24-28,31-34,37-45,49-52,55-56,59-70,73-77
+plugins/adapters/discord/tests/webhook-localization.test.ts
+  h_6f5e45c41d0910 5,20,27-28,30
+plugins/adapters/email/README.md
+  h_6f5e45c41d0910 87
+plugins/adapters/github/README.md
+  h_6f5e45c41d0910 19,106
+plugins/adapters/github/src/protocol.ts
+  h_6f5e45c41d0910 244,247
+plugins/adapters/github/src/webhook.ts
+  h_6f5e45c41d0910 34,39,41,44,52,64,71,77,80
+plugins/adapters/github/tests/endpoint-commands.test.ts
+  h_6f5e45c41d0910 31,66-67
+plugins/adapters/github/tests/github-runtime.test.ts
+  h_6f5e45c41d0910 5
+plugins/adapters/icqq/PERMITS.md
+  h_6f5e45c41d0910 3,22-25
+plugins/adapters/icqq/README.md
+  h_6f5e45c41d0910 186,228,262-265
+plugins/adapters/icqq/adapters/icqq/index.ts
+  h_6f5e45c41d0910 67-70
+plugins/adapters/icqq/agents/icqq/conversation.ts
+  h_6f5e45c41d0910 2,58-59
+plugins/adapters/icqq/agents/icqq/skills/icqq-conversation/tools/conversation_info/index.ts
+  h_6f5e45c41d0910 18-19
+plugins/adapters/icqq/agents/icqq/skills/icqq-directory/tools/friend_list/index.ts
+  h_6f5e45c41d0910 9
+plugins/adapters/icqq/agents/icqq/skills/icqq-directory/tools/group_list/index.ts
+  h_6f5e45c41d0910 9
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/announce/index.ts
+  h_6f5e45c41d0910 2,5-6,15-18
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/essence/index.ts
+  h_6f5e45c41d0910 2,6,8,16,18-20
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/group_invite/index.ts
+  h_6f5e45c41d0910 3,6-7,14-15
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/group_kick/index.ts
+  h_6f5e45c41d0910 2,5-6,9,15,17-18
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/group_leave/index.ts
+  h_6f5e45c41d0910 11
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/recall_member_message/index.ts
+  h_6f5e45c41d0910 12
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/set_anonymous/index.ts
+  h_6f5e45c41d0910 2,6-7,14-16
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/set_group_admin/index.ts
+  h_6f5e45c41d0910 2,6-7,11,16,18-19
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/set_mute/index.ts
+  h_6f5e45c41d0910 2,6-7,16,18-19
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/set_title/index.ts
+  h_6f5e45c41d0910 2,6-7,17,19-20
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-directory/tools/group_member_info/index.ts
+  h_6f5e45c41d0910 3,11,17,19-20
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-interaction/tools/group_sign/index.ts
+  h_6f5e45c41d0910 2,5-7,11-12
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-interaction/tools/poke/index.ts
+  h_6f5e45c41d0910 2,5-6,13-14
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-state/SKILL.md
+  h_6f5e45c41d0910 18
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-state/tools/group_files/index.ts
+  h_6f5e45c41d0910 2,5-7,11-13
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-state/tools/list_muted/index.ts
+  h_6f5e45c41d0910 1,4-6,10-11
+plugins/adapters/icqq/commands/icqq/login/definition.ts
+  h_6f5e45c41d0910 6,13-17,21,23-27,31,35,37-39,60
+plugins/adapters/icqq/src/endpoint.ts
+  h_6f5e45c41d0910 83,150,1058
+plugins/adapters/icqq/src/group-scene.ts
+  h_6f5e45c41d0910 2,78-88
+plugins/adapters/icqq/src/protocol.ts
+  h_6f5e45c41d0910 3,292-293
+plugins/adapters/icqq/tests/agent-discovery.test.ts
+  h_6f5e45c41d0910 68-69,80,89
+plugins/adapters/icqq/tests/conversation-tools.test.ts
+  h_6f5e45c41d0910 15-24,26,60,67,69,120,181,239,247,257,267,275,279-362
+plugins/adapters/icqq/tests/endpoint-commands.test.ts
+  h_6f5e45c41d0910 20,56-57
+plugins/adapters/icqq/tests/group-moderation.test.ts
+  h_6f5e45c41d0910 22-27,34,40,43-44
+plugins/adapters/icqq/tests/icqq-login-command.test.ts
+  h_6f5e45c41d0910 34,42-50
+plugins/adapters/icqq/tests/icqq-runtime.test.ts
+  h_6f5e45c41d0910 421-425
+plugins/adapters/icqq/tests/index.test.ts
+  h_6f5e45c41d0910 91
+plugins/adapters/icqq/tests/localized-tool-feedback.test.ts
+  h_6f5e45c41d0910 5,8-11,13-19,23-24,26,28,30,32,38-39,41,44
+plugins/adapters/juejin/commands/juejin-draft/drop/[id]/index.ts
+  h_6f5e45c41d0910 6
+plugins/adapters/juejin/commands/juejin-draft/edit/[id]/index.ts
+  h_6f5e45c41d0910 6
+plugins/adapters/juejin/commands/juejin-draft/list/index.ts
+  h_6f5e45c41d0910 6
+plugins/adapters/juejin/commands/juejin-draft/send/[id]/index.ts
+  h_6f5e45c41d0910 6
+plugins/adapters/juejin/commands/juejin-draft/show/[id]/index.ts
+  h_6f5e45c41d0910 6
+plugins/adapters/juejin/commands/juejin-login/status/index.ts
+  h_6f5e45c41d0910 6
+plugins/adapters/juejin/plugin.ts
+  h_6f5e45c41d0910 8
+plugins/adapters/juejin/tests/juejin-commands.test.ts
+  h_6f5e45c41d0910 26
+plugins/adapters/kook/PERMITS.md
+  h_6f5e45c41d0910 3,5,7-13,17-23,25,27-29
+plugins/adapters/kook/README.md
+  h_6f5e45c41d0910 117,162-165
+plugins/adapters/kook/adapters/kook/index.ts
+  h_6f5e45c41d0910 42-44
+plugins/adapters/kook/agents/kook/conversation.ts
+  h_6f5e45c41d0910 1-99
+plugins/adapters/kook/agents/kook/messages.ts
+  h_6f5e45c41d0910 4-19
+plugins/adapters/kook/agents/kook/skills/kook/tools/blacklist/index.ts
+  h_6f5e45c41d0910 2,6-7,16-19,22-23
+plugins/adapters/kook/agents/kook/skills/kook/tools/create_role/index.ts
+  h_6f5e45c41d0910 2,6-7,14-15,17
+plugins/adapters/kook/agents/kook/skills/kook/tools/delete_role/index.ts
+  h_6f5e45c41d0910 2,6-7,14-15,17
+plugins/adapters/kook/agents/kook/skills/kook/tools/grant_role/index.ts
+  h_6f5e45c41d0910 2,6-7,15-20
+plugins/adapters/kook/agents/kook/skills/kook/tools/list_roles/index.ts
+  h_6f5e45c41d0910 1,5-7,11-12
+plugins/adapters/kook/agents/kook/skills/kook/tools/revoke_role/index.ts
+  h_6f5e45c41d0910 2,6-7,15-20
+plugins/adapters/kook/src/endpoint.ts
+  h_6f5e45c41d0910 1,43,52,57,69,92,173,176,256,375,378,439,442-456
+plugins/adapters/kook/src/index.ts
+  h_6f5e45c41d0910 39
+plugins/adapters/kook/src/platform-permit.ts
+  h_6f5e45c41d0910 2-5,9
+plugins/adapters/kook/src/protocol.ts
+  h_6f5e45c41d0910 6,334,337-338
+plugins/adapters/kook/src/sender-roles.ts
+  h_6f5e45c41d0910 2,5-12,15,19-20,22-39,44-45,57-59,61-78,91,97,99-100,102-103
+plugins/adapters/kook/src/webhook.ts
+  h_6f5e45c41d0910 36,41,43,55,60,65,67,71,75,77,80,88,91,95
+plugins/adapters/kook/tests/endpoint-commands.test.ts
+  h_6f5e45c41d0910 20,56-57
+plugins/adapters/kook/tests/guild-tools.test.ts
+  h_6f5e45c41d0910 1-118
+plugins/adapters/kook/tests/kook-runtime.test.ts
+  h_6f5e45c41d0910 2,4,9-10,345,376,378-382
+plugins/adapters/kook/tests/platform-permit.test.ts
+  h_6f5e45c41d0910 4-5,7,12,23-26,34,37-38
+plugins/adapters/kook/tests/sender-roles.test.ts
+  h_6f5e45c41d0910 2-4,11,27-29,32-49,56-80
+plugins/adapters/lark/PERMITS.md
+  h_6f5e45c41d0910 3,5,9-11,15-18,20,22
+plugins/adapters/lark/README.md
+  h_6f5e45c41d0910 117,183-186
+plugins/adapters/lark/adapters/lark/index.ts
+  h_6f5e45c41d0910 36-38
+plugins/adapters/lark/agents/lark/conversation.ts
+  h_6f5e45c41d0910 1-17
+plugins/adapters/lark/agents/lark/messages.ts
+  h_6f5e45c41d0910 4-7
+plugins/adapters/lark/agents/lark/skills/lark-group-admin/tools/add_members/index.ts
+  h_6f5e45c41d0910 2,6-7,14-15,17
+plugins/adapters/lark/agents/lark/skills/lark-group-admin/tools/dissolve_chat/index.ts
+  h_6f5e45c41d0910 2,5-7,10,12,14
+plugins/adapters/lark/agents/lark/skills/lark-group-admin/tools/remove_managers/index.ts
+  h_6f5e45c41d0910 2,6-7,14-15,17
+plugins/adapters/lark/agents/lark/skills/lark-group-admin/tools/set_managers/index.ts
+  h_6f5e45c41d0910 2,6-7,14-15,17
+plugins/adapters/lark/agents/lark/skills/lark-group-admin/tools/update_chat/index.ts
+  h_6f5e45c41d0910 2,6-7,15-16,18
+plugins/adapters/lark/agents/lark/skills/lark/tools/upload_file/index.ts
+  h_6f5e45c41d0910 9,16-17
+plugins/adapters/lark/src/client.ts
+  h_6f5e45c41d0910 5,95,128-144,161,164-165,392-394,403,414-420,426-430,432,435-439
+plugins/adapters/lark/src/index.ts
+  h_6f5e45c41d0910 25
+plugins/adapters/lark/src/platform-permit.ts
+  h_6f5e45c41d0910 2-5,9
+plugins/adapters/lark/src/protocol.ts
+  h_6f5e45c41d0910 459,462
+plugins/adapters/lark/src/webhook.ts
+  h_6f5e45c41d0910 34,39,41,49,64,71,77,82,91,103,117,120
+plugins/adapters/lark/tests/endpoint-commands.test.ts
+  h_6f5e45c41d0910 31,66-67
+plugins/adapters/lark/tests/endpoint-management.test.ts
+  h_6f5e45c41d0910 1-2
+plugins/adapters/lark/tests/group-admin-tools.test.ts
+  h_6f5e45c41d0910 1-43
+plugins/adapters/lark/tests/lark-runtime.test.ts
+  h_6f5e45c41d0910 6,8,444,477-478,481-484,522,527-559
+plugins/adapters/lark/tests/localized-presentation.test.ts
+  h_6f5e45c41d0910 3
+plugins/adapters/lark/tests/outbound-http.test.ts
+  h_6f5e45c41d0910 5
+plugins/adapters/lark/tests/outbound-receipt.test.ts
+  h_6f5e45c41d0910 4
+plugins/adapters/lark/tests/platform-permit.test.ts
+  h_6f5e45c41d0910 4-5,7,11-12,23-26,37-38
+plugins/adapters/lark/tests/platform-standing.test.ts
+  h_6f5e45c41d0910 1-9
+plugins/adapters/lark/tests/receipt-lifecycle.test.ts
+  h_6f5e45c41d0910 2
+plugins/adapters/lark/tests/reply-stream.test.ts
+  h_6f5e45c41d0910 3
+plugins/adapters/lark/tests/sender-identity.test.ts
+  h_6f5e45c41d0910 2
+plugins/adapters/lark/tests/share-keyboard.test.ts
+  h_6f5e45c41d0910 45,55,57,59-60,62
+plugins/adapters/lark/tests/upload-file-tool.test.ts
+  h_6f5e45c41d0910 1-19
+plugins/adapters/lark/tests/web-api-proxy-tls.test.ts
+  h_6f5e45c41d0910 2
+plugins/adapters/lark/tests/webhook-encrypt.test.ts
+  h_6f5e45c41d0910 2,41-43
+plugins/adapters/line/PERMITS.md
+  h_6f5e45c41d0910 18-21
+plugins/adapters/line/README.md
+  h_6f5e45c41d0910 111,130-133
+plugins/adapters/line/agents/line/skills/line-group-directory/tools/get_group_members/index.ts
+  h_6f5e45c41d0910 4-5,8-15
+plugins/adapters/line/src/webhook.ts
+  h_6f5e45c41d0910 29,34,36,38,40,46,53,57,60,66,69
+plugins/adapters/line/tests/endpoint-commands.test.ts
+  h_6f5e45c41d0910 31,66-67
+plugins/adapters/line/tests/endpoint-management.test.ts
+  h_6f5e45c41d0910 6
+plugins/adapters/line/tests/event-dedup.test.ts
+  h_6f5e45c41d0910 4
+plugins/adapters/line/tests/group-members-tool.test.ts
+  h_6f5e45c41d0910 1-23
+plugins/adapters/line/tests/line-runtime.test.ts
+  h_6f5e45c41d0910 5
+plugins/adapters/line/tests/outbound-receipt.test.ts
+  h_6f5e45c41d0910 4
+plugins/adapters/line/tests/sender-identity.test.ts
+  h_6f5e45c41d0910 2
+plugins/adapters/line/tests/webhook-admission.test.ts
+  h_6f5e45c41d0910 2,9,17,21,23-24,31
+plugins/adapters/milky/PERMITS.md
+  h_6f5e45c41d0910 9,11-12
+plugins/adapters/milky/README.md
+  h_6f5e45c41d0910 103,117-120
+plugins/adapters/milky/adapters/milky/index.ts
+  h_6f5e45c41d0910 45-47
+plugins/adapters/milky/src/endpoint-management.ts
+  h_6f5e45c41d0910 20,27-29,33-45,47-62
+plugins/adapters/milky/src/milky-auth.ts
+  h_6f5e45c41d0910 1,3-4,6
+plugins/adapters/milky/src/protocol.ts
+  h_6f5e45c41d0910 8,408-417
+plugins/adapters/milky/src/sse-endpoint.ts
+  h_6f5e45c41d0910 31,174,183
+plugins/adapters/milky/src/webhook-endpoint.ts
+  h_6f5e45c41d0910 30,153,162,186,190,193,196,198,202,205
+plugins/adapters/milky/src/ws-endpoint.ts
+  h_6f5e45c41d0910 37,187,196
+plugins/adapters/milky/src/ws-types.ts
+  h_6f5e45c41d0910 1-2,15-45
+plugins/adapters/milky/src/wss-endpoint.ts
+  h_6f5e45c41d0910 14,30,38,102-112,190,199,221-222,225,243,259
+plugins/adapters/milky/tests/configuration-identity.test.ts
+  h_6f5e45c41d0910 1-2
+plugins/adapters/milky/tests/endpoint-commands.test.ts
+  h_6f5e45c41d0910 54-55
+plugins/adapters/milky/tests/endpoint-management.test.ts
+  h_6f5e45c41d0910 1,151-231
+plugins/adapters/milky/tests/http-operation-cancellation.test.ts
+  h_6f5e45c41d0910 2-3
+plugins/adapters/milky/tests/milky-runtime.test.ts
+  h_6f5e45c41d0910 1,7-8,620,626,918,946,949-952,988,991
+plugins/adapters/milky/tests/platform-standing.test.ts
+  h_6f5e45c41d0910 1-28
+plugins/adapters/milky/tests/response-evidence.test.ts
+  h_6f5e45c41d0910 3
+plugins/adapters/napcat/PERMITS.md
+  h_6f5e45c41d0910 14,16-17,20-33
+plugins/adapters/napcat/README.md
+  h_6f5e45c41d0910 86,101,130-133
+plugins/adapters/napcat/adapters/napcat/index.ts
+  h_6f5e45c41d0910 43-45
+plugins/adapters/napcat/agents/napcat/conversation.ts
+  h_6f5e45c41d0910 1-76
+plugins/adapters/napcat/agents/napcat/media.ts
+  h_6f5e45c41d0910 1-44
+plugins/adapters/napcat/agents/napcat/messages.ts
+  h_6f5e45c41d0910 4-31,40-43
+plugins/adapters/napcat/agents/napcat/skills/napcat-account/tools/delete_friend/index.ts
+  h_6f5e45c41d0910 12
+plugins/adapters/napcat/agents/napcat/skills/napcat-account/tools/set_avatar/index.ts
+  h_6f5e45c41d0910 5,12-13
+plugins/adapters/napcat/agents/napcat/skills/napcat-files-history/tools/download_file/index.ts
+  h_6f5e45c41d0910 5,13-14
+plugins/adapters/napcat/agents/napcat/skills/napcat-group-content/tools/del_group_notice/index.ts
+  h_6f5e45c41d0910 1,5-6,13,15,17
+plugins/adapters/napcat/agents/napcat/skills/napcat-group-content/tools/delete_essence_msg/index.ts
+  h_6f5e45c41d0910 1,6,8,13,15,17
+plugins/adapters/napcat/agents/napcat/skills/napcat-group-content/tools/get_essence_list/index.ts
+  h_6f5e45c41d0910 1,5-7,12-13
+plugins/adapters/napcat/agents/napcat/skills/napcat-group-content/tools/get_group_notice/index.ts
+  h_6f5e45c41d0910 1,5-7,12-13
+plugins/adapters/napcat/agents/napcat/skills/napcat-group-content/tools/send_group_notice/index.ts
+  h_6f5e45c41d0910 1-2,6-7,10,15,17-20
+plugins/adapters/napcat/agents/napcat/skills/napcat-group-content/tools/set_essence_msg/index.ts
+  h_6f5e45c41d0910 1,6,8,13,15,17
+plugins/adapters/napcat/agents/napcat/skills/napcat-group-files-history/tools/get_group_file_url/index.ts
+  h_6f5e45c41d0910 1,5-6,15-16
+plugins/adapters/napcat/agents/napcat/skills/napcat-group-files-history/tools/get_group_msg_history/index.ts
+  h_6f5e45c41d0910 1,5-6,15-16
+plugins/adapters/napcat/agents/napcat/skills/napcat-group-files-history/tools/get_group_root_files/index.ts
+  h_6f5e45c41d0910 1,5-7,12-13
+plugins/adapters/napcat/agents/napcat/skills/napcat-group-files-history/tools/upload_group_file/index.ts
+  h_6f5e45c41d0910 1,5-6,16-20
+plugins/adapters/napcat/agents/napcat/skills/napcat-group-media/tools/ai_tts/index.ts
+  h_6f5e45c41d0910 1,5-6,15-16
+plugins/adapters/napcat/agents/napcat/skills/napcat-group-media/tools/get_ai_characters/index.ts
+  h_6f5e45c41d0910 1,5-7,12-13
+plugins/adapters/napcat/agents/napcat/skills/napcat-group-settings/tools/get_group_info_ex/index.ts
+  h_6f5e45c41d0910 1,5-7,12-13
+plugins/adapters/napcat/agents/napcat/skills/napcat-group-settings/tools/get_group_shut_list/index.ts
+  h_6f5e45c41d0910 1,5-7,12-13
+plugins/adapters/napcat/agents/napcat/skills/napcat-group-settings/tools/group_sign/index.ts
+  h_6f5e45c41d0910 1,5-7,12-14
+plugins/adapters/napcat/agents/napcat/skills/napcat-group-settings/tools/set_group_portrait/index.ts
+  h_6f5e45c41d0910 1,5-6,13-14,16,18
+plugins/adapters/napcat/agents/napcat/skills/napcat-group-settings/tools/set_title/index.ts
+  h_6f5e45c41d0910 2,6-7,15,17,19
+plugins/adapters/napcat/agents/napcat/skills/napcat-media/tools/ocr_image/index.ts
+  h_6f5e45c41d0910 1,8,13-15
+plugins/adapters/napcat/agents/napcat/skills/napcat-messaging/tools/forward_single_msg/index.ts
+  h_6f5e45c41d0910 9,18-19
+plugins/adapters/napcat/agents/napcat/skills/napcat-messaging/tools/send_forward_msg/index.ts
+  h_6f5e45c41d0910 1-2,6-7,14-22
+plugins/adapters/napcat/agents/napcat/skills/napcat-messaging/tools/send_poke/index.ts
+  h_6f5e45c41d0910 2,6-7,9,14-19
+plugins/adapters/napcat/agents/napcat/skills/napcat-private-history/tools/get_friend_msg_history/index.ts
+  h_6f5e45c41d0910 1,5-6,15-16
+plugins/adapters/napcat/src/endpoint-management.ts
+  h_6f5e45c41d0910 19,26-28,32-44,46-61
+plugins/adapters/napcat/src/http-endpoint.ts
+  h_6f5e45c41d0910 35,178,189,215,219,222,229,236,239
+plugins/adapters/napcat/src/protocol.ts
+  h_6f5e45c41d0910 7,276-285,392-394
+plugins/adapters/napcat/src/ws-endpoint.ts
+  h_6f5e45c41d0910 38,198,209
+plugins/adapters/napcat/src/ws-types.ts
+  h_6f5e45c41d0910 1-2,18-48
+plugins/adapters/napcat/src/wss-auth.ts
+  h_6f5e45c41d0910 1,5,7,9
+plugins/adapters/napcat/src/wss-endpoint.ts
+  h_6f5e45c41d0910 16,36,44,111-121,210,221,246,249-250,253,269,289
+plugins/adapters/napcat/tests/conversation-scope-tools.test.ts
+  h_6f5e45c41d0910 1-164
+plugins/adapters/napcat/tests/endpoint-commands.test.ts
+  h_6f5e45c41d0910 54-55
+plugins/adapters/napcat/tests/endpoint-management.test.ts
+  h_6f5e45c41d0910 1,147-227
+plugins/adapters/napcat/tests/group-tools.test.ts
+  h_6f5e45c41d0910 1-54
+plugins/adapters/napcat/tests/napcat-runtime.test.ts
+  h_6f5e45c41d0910 1,6-7,419,713,739,742-745
+plugins/adapters/napcat/tests/native-receipt-lifecycle.test.ts
+  h_6f5e45c41d0910 5
+plugins/adapters/napcat/tests/platform-standing.test.ts
+  h_6f5e45c41d0910 1-27
+plugins/adapters/napcat/tests/runtime-command-fixture.ts
+  h_6f5e45c41d0910 19
+plugins/adapters/napcat/tests/transport-faults.test.ts
+  h_6f5e45c41d0910 1,106,155
+plugins/adapters/onebot11/PERMITS.md
+  h_6f5e45c41d0910 9,11-12,14
+plugins/adapters/onebot11/README.md
+  h_6f5e45c41d0910 96,111,129-132
+plugins/adapters/onebot11/adapters/onebot11/index.ts
+  h_6f5e45c41d0910 35-37
+plugins/adapters/onebot11/agents/onebot11/conversation.ts
+  h_6f5e45c41d0910 1-17
+plugins/adapters/onebot11/agents/onebot11/messages.ts
+  h_6f5e45c41d0910 4-7
+plugins/adapters/onebot11/agents/onebot11/skills/onebot11/tools/set_title/index.ts
+  h_6f5e45c41d0910 2,5-6,14-16
+plugins/adapters/onebot11/src/endpoint-management.ts
+  h_6f5e45c41d0910 18,25-27,31-43,45-60
+plugins/adapters/onebot11/src/protocol.ts
+  h_6f5e45c41d0910 7,221-230
+plugins/adapters/onebot11/src/ws-endpoint.ts
+  h_6f5e45c41d0910 32,196,206
+plugins/adapters/onebot11/src/ws-types.ts
+  h_6f5e45c41d0910 1-2,18-48
+plugins/adapters/onebot11/src/wss-auth.ts
+  h_6f5e45c41d0910 1,5,7,9
+plugins/adapters/onebot11/src/wss-endpoint.ts
+  h_6f5e45c41d0910 18,30,38,118,123,126-127,196,206,243,246-247,250,267,290
+plugins/adapters/onebot11/tests/endpoint-commands.test.ts
+  h_6f5e45c41d0910 54-55
+plugins/adapters/onebot11/tests/endpoint-management.test.ts
+  h_6f5e45c41d0910 1,25,142-222
+plugins/adapters/onebot11/tests/group-tools.test.ts
+  h_6f5e45c41d0910 1-23
+plugins/adapters/onebot11/tests/onebot11-factory-defaults.test.ts
+  h_6f5e45c41d0910 3-4
+plugins/adapters/onebot11/tests/onebot11-runtime.test.ts
+  h_6f5e45c41d0910 1,5-6,369,738,745,748,755-757,779
+plugins/adapters/onebot11/tests/onebot11-self-user-id.test.ts
+  h_6f5e45c41d0910 1,205,208
+plugins/adapters/onebot11/tests/operation-cancellation.test.ts
+  h_6f5e45c41d0910 2-3
+plugins/adapters/onebot11/tests/platform-standing.test.ts
+  h_6f5e45c41d0910 1-27
+plugins/adapters/onebot11/tests/transport-faults.test.ts
+  h_6f5e45c41d0910 1,106,155
+plugins/adapters/onebot12/README.md
+  h_6f5e45c41d0910 111,125-128
+plugins/adapters/onebot12/src/webhook.ts
+  h_6f5e45c41d0910 210,214,217,220,222,227,230
+plugins/adapters/onebot12/src/ws-types.ts
+  h_6f5e45c41d0910 1-2,18-48
+plugins/adapters/onebot12/src/wss-auth.ts
+  h_6f5e45c41d0910 1,5,7,9
+plugins/adapters/onebot12/src/wss-endpoint.ts
+  h_6f5e45c41d0910 17,39,104,109,112-113,224-225,228,266
+plugins/adapters/onebot12/tests/endpoint-commands.test.ts
+  h_6f5e45c41d0910 54-55
+plugins/adapters/onebot12/tests/endpoint-management.test.ts
+  h_6f5e45c41d0910 1,27,176-214
+plugins/adapters/onebot12/tests/http-operation-cancellation.test.ts
+  h_6f5e45c41d0910 2-3
+plugins/adapters/onebot12/tests/onebot12-runtime.test.ts
+  h_6f5e45c41d0910 1,7-8,964,971
+plugins/adapters/onebot12/tests/onebot12-selected-self.test.ts
+  h_6f5e45c41d0910 3-4
+plugins/adapters/onebot12/tests/operation-cancellation.test.ts
+  h_6f5e45c41d0910 2-3
+plugins/adapters/qq/PERMITS.md
+  h_6f5e45c41d0910 1,3,5,9-10,12,14,16-20,22
+plugins/adapters/qq/README.md
+  h_6f5e45c41d0910 243,314-317
+plugins/adapters/qq/adapters/qq/index.ts
+  h_6f5e45c41d0910 61-62,79-80
+plugins/adapters/qq/agents/qq/conversation.ts
+  h_6f5e45c41d0910 1,89-90
+plugins/adapters/qq/agents/qq/skills/qq-conversation/tools/conversation_info/index.ts
+  h_6f5e45c41d0910 27
+plugins/adapters/qq/agents/qq/skills/qq-group-admin/tools/group_kick/index.ts
+  h_6f5e45c41d0910 10
+plugins/adapters/qq/agents/qq/skills/qq-group-admin/tools/handle_join_request/index.ts
+  h_6f5e45c41d0910 10
+plugins/adapters/qq/agents/qq/skills/qq-group-admin/tools/recall_member_message/index.ts
+  h_6f5e45c41d0910 10
+plugins/adapters/qq/agents/qq/skills/qq-group-admin/tools/set_mute/index.ts
+  h_6f5e45c41d0910 10
+plugins/adapters/qq/agents/qq/skills/qq-group-directory/tools/group_member_info/index.ts
+  h_6f5e45c41d0910 9
+plugins/adapters/qq/agents/qq/skills/qq-group-directory/tools/group_members/index.ts
+  h_6f5e45c41d0910 9
+plugins/adapters/qq/agents/qq/skills/qq-group-state/tools/group_blacklist/index.ts
+  h_6f5e45c41d0910 9
+plugins/adapters/qq/agents/qq/skills/qq-group-state/tools/list_join_requests/index.ts
+  h_6f5e45c41d0910 9
+plugins/adapters/qq/agents/qq/skills/qq/tools/add_role/index.ts
+  h_6f5e45c41d0910 2,6-7,15-17
+plugins/adapters/qq/agents/qq/skills/qq/tools/channel_info/index.ts
+  h_6f5e45c41d0910 1-2,6-7,9,14-22
+plugins/adapters/qq/agents/qq/skills/qq/tools/create_role/index.ts
+  h_6f5e45c41d0910 2,6-7,15-17
+plugins/adapters/qq/agents/qq/skills/qq/tools/guild_kick_member/index.ts
+  h_6f5e45c41d0910 11
+plugins/adapters/qq/agents/qq/skills/qq/tools/guild_mute_member/index.ts
+  h_6f5e45c41d0910 11
+plugins/adapters/qq/agents/qq/skills/qq/tools/list_channels/index.ts
+  h_6f5e45c41d0910 1,5-7,11-13
+plugins/adapters/qq/agents/qq/skills/qq/tools/list_roles/index.ts
+  h_6f5e45c41d0910 1,5-7,11-13
+plugins/adapters/qq/agents/qq/skills/qq/tools/member_detail/index.ts
+  h_6f5e45c41d0910 1,5-6,13-15
+plugins/adapters/qq/agents/qq/skills/qq/tools/remove_role/index.ts
+  h_6f5e45c41d0910 2,6-7,15-17
+plugins/adapters/qq/commands/qq/endpoint/definition.ts
+  h_6f5e45c41d0910 28
+plugins/adapters/qq/plugin.ts
+  h_6f5e45c41d0910 16
+plugins/adapters/qq/src/endpoint.ts
+  h_6f5e45c41d0910 4,9,22,270,282,566,578,690,692-708
+plugins/adapters/qq/src/index.ts
+  h_6f5e45c41d0910 63
+plugins/adapters/qq/src/platform-permit.ts
+  h_6f5e45c41d0910 4,8,12-13,17-22,24-40
+plugins/adapters/qq/src/webhook.ts
+  h_6f5e45c41d0910 6-7,27,32,34,37,40-51,54-78
+plugins/adapters/qq/tests/guild-tools.test.ts
+  h_6f5e45c41d0910 1-65
+plugins/adapters/qq/tests/platform-permit.test.ts
+  h_6f5e45c41d0910 4-5,7,11-12,16,23-26,37-38
+plugins/adapters/qq/tests/qq-endpoint-command-defs.test.ts
+  h_6f5e45c41d0910 36,61,68-69,71,76,80,89
+plugins/adapters/qq/tests/qq-endpoint-commands.test.ts
+  h_6f5e45c41d0910 40,73,75-79,83,86,89-91
+plugins/adapters/qq/tests/qq-group-admin.test.ts
+  h_6f5e45c41d0910 19,58
+plugins/adapters/qq/tests/qq-runtime.test.ts
+  h_6f5e45c41d0910 3,6-7,286,299,301-304
+plugins/adapters/qq/tests/qq-webhook.test.ts
+  h_6f5e45c41d0910 3-4
+plugins/adapters/sandbox/README.md
+  h_6f5e45c41d0910 23,27,34-35,87-88,100,113,115,185,207,243-246
+plugins/adapters/sandbox/adapters/sandbox/index.ts
+  h_6f5e45c41d0910 31-33
+plugins/adapters/sandbox/src/endpoint.ts
+  h_6f5e45c41d0910 12,15,324-326,392-394,398
+plugins/adapters/sandbox/src/protocol.ts
+  h_6f5e45c41d0910 40-70
+plugins/adapters/sandbox/tests/sandbox-console.test.ts
+  h_6f5e45c41d0910 15,104,110
+plugins/adapters/sandbox/tests/sandbox-core-interaction.test.ts
+  h_6f5e45c41d0910 5-6,31,59
+plugins/adapters/sandbox/tests/sandbox-core-streaming.test.ts
+  h_6f5e45c41d0910 6-7,19,42
+plugins/adapters/sandbox/tests/sandbox-multi-connection.test.ts
+  h_6f5e45c41d0910 4,35-36,161-164,175,185-186
+plugins/adapters/sandbox/tests/sandbox-readiness-deadline.test.ts
+  h_6f5e45c41d0910 4
+plugins/adapters/sandbox/tests/sandbox-runtime.test.ts
+  h_6f5e45c41d0910 11,309-310,312-320,325,330-333,335-337,693,701,709,712
+plugins/adapters/satori/README.md
+  h_6f5e45c41d0910 117,127-130
+plugins/adapters/satori/src/endpoint.ts
+  h_6f5e45c41d0910 430-431,435
+plugins/adapters/satori/src/webhook.ts
+  h_6f5e45c41d0910 17,26,31,33,36,40,42-43,46,50-51,57,59
+plugins/adapters/satori/tests/endpoint-commands.test.ts
+  h_6f5e45c41d0910 54-55
+plugins/adapters/satori/tests/http-operation-cancellation.test.ts
+  h_6f5e45c41d0910 2-3
+plugins/adapters/satori/tests/satori-runtime.test.ts
+  h_6f5e45c41d0910 7-8,653-654
+plugins/adapters/slack/PERMITS.md
+  h_6f5e45c41d0910 3,5,7,9,11-15,17
+plugins/adapters/slack/README.md
+  h_6f5e45c41d0910 155,209-212
+plugins/adapters/slack/agents/slack/conversation.ts
+  h_6f5e45c41d0910 1-17
+plugins/adapters/slack/agents/slack/messages.ts
+  h_6f5e45c41d0910 4-7
+plugins/adapters/slack/agents/slack/skills/slack-channels/tools/archive_channel/index.ts
+  h_6f5e45c41d0910 2,6-8,12-14
+plugins/adapters/slack/agents/slack/skills/slack-channels/tools/invite_to_channel/index.ts
+  h_6f5e45c41d0910 2,9,16-18
+plugins/adapters/slack/agents/slack/skills/slack-channels/tools/set_purpose/index.ts
+  h_6f5e45c41d0910 2,9,16-18
+plugins/adapters/slack/agents/slack/skills/slack-channels/tools/set_topic/index.ts
+  h_6f5e45c41d0910 2,9,16-18
+plugins/adapters/slack/agents/slack/skills/slack-channels/tools/unarchive/index.ts
+  h_6f5e45c41d0910 8,15
+plugins/adapters/slack/agents/slack/skills/slack-messages/tools/add_reaction/index.ts
+  h_6f5e45c41d0910 2,11,13,18-19
+plugins/adapters/slack/agents/slack/skills/slack-messages/tools/edit_message/index.ts
+  h_6f5e45c41d0910 2,11,13,18-19,21
+plugins/adapters/slack/agents/slack/skills/slack-messages/tools/pin_message/index.ts
+  h_6f5e45c41d0910 2,9,15-17
+plugins/adapters/slack/agents/slack/skills/slack-messages/tools/remove_reaction/index.ts
+  h_6f5e45c41d0910 2,11,13,18-19
+plugins/adapters/slack/agents/slack/skills/slack-messages/tools/unpin_message/index.ts
+  h_6f5e45c41d0910 2,9,15-17
+plugins/adapters/slack/src/index.ts
+  h_6f5e45c41d0910 43
+plugins/adapters/slack/src/platform-permit.ts
+  h_6f5e45c41d0910 2-5,9
+plugins/adapters/slack/src/protocol.ts
+  h_6f5e45c41d0910 421,424
+plugins/adapters/slack/src/webhook.ts
+  h_6f5e45c41d0910 31,36,38,45,55,60,68,73,78,81,84
+plugins/adapters/slack/tests/channel-tools.test.ts
+  h_6f5e45c41d0910 1-54
+plugins/adapters/slack/tests/endpoint-commands.test.ts
+  h_6f5e45c41d0910 20,56-57
+plugins/adapters/slack/tests/message-tools.test.ts
+  h_6f5e45c41d0910 1-34
+plugins/adapters/slack/tests/platform-permit.test.ts
+  h_6f5e45c41d0910 4-5,7,11-12,23-26,37-38
+plugins/adapters/slack/tests/reply-stream.test.ts
+  h_6f5e45c41d0910 13
+plugins/adapters/slack/tests/slack-runtime.test.ts
+  h_6f5e45c41d0910 5
+plugins/adapters/slack/tests/slack-webhook.test.ts
+  h_6f5e45c41d0910 2,29-30,47,51,53,67,69,77,80,82
+plugins/adapters/telegram/PERMITS.md
+  h_6f5e45c41d0910 3,5,9-12,16-24,26,28
+plugins/adapters/telegram/README.md
+  h_6f5e45c41d0910 46,166,203-206
+plugins/adapters/telegram/adapters/telegram/index.ts
+  h_6f5e45c41d0910 37-39
+plugins/adapters/telegram/agents/telegram/conversation.ts
+  h_6f5e45c41d0910 1-38
+plugins/adapters/telegram/agents/telegram/messages.ts
+  h_6f5e45c41d0910 4-11
+plugins/adapters/telegram/agents/telegram/skills/telegram-chat-admin/tools/create_invite/index.ts
+  h_6f5e45c41d0910 2,6-8,12-13,15
+plugins/adapters/telegram/agents/telegram/skills/telegram-chat-admin/tools/list_admins/index.ts
+  h_6f5e45c41d0910 1,5-7,11-12
+plugins/adapters/telegram/agents/telegram/skills/telegram-chat-admin/tools/member_count/index.ts
+  h_6f5e45c41d0910 2,6-8,12-13
+plugins/adapters/telegram/agents/telegram/skills/telegram-chat-admin/tools/pin_message/index.ts
+  h_6f5e45c41d0910 2,6-7,14-15,17
+plugins/adapters/telegram/agents/telegram/skills/telegram-chat-admin/tools/set_description/index.ts
+  h_6f5e45c41d0910 2,6-7,13,15,17
+plugins/adapters/telegram/agents/telegram/skills/telegram-chat-admin/tools/unpin_message/index.ts
+  h_6f5e45c41d0910 2,6-7,14-15,17
+plugins/adapters/telegram/agents/telegram/skills/telegram-group-permissions/tools/set_permissions/index.ts
+  h_6f5e45c41d0910 2,6-7,22-23,29
+plugins/adapters/telegram/agents/telegram/skills/telegram-messages/tools/react/index.ts
+  h_6f5e45c41d0910 2,6-7,9,14-15
+plugins/adapters/telegram/agents/telegram/skills/telegram-messages/tools/send_poll/index.ts
+  h_6f5e45c41d0910 2,6-7,16,26-30
+plugins/adapters/telegram/agents/telegram/skills/telegram-messages/tools/send_sticker/index.ts
+  h_6f5e45c41d0910 2,6-7,9,13-16
+plugins/adapters/telegram/src/endpoint.ts
+  h_6f5e45c41d0910 6,20,27,41,51-52,56-57,81-82,106-122,140,432,467-470,478-503,505-516,593-594
+plugins/adapters/telegram/src/index.ts
+  h_6f5e45c41d0910 36
+plugins/adapters/telegram/src/platform-permit.ts
+  h_6f5e45c41d0910 2,4,6,9,12-17,19-28,30,32-35,37-38
+plugins/adapters/telegram/src/protocol.ts
+  h_6f5e45c41d0910 146-157,167-168,261-271,283-284,756-780
+plugins/adapters/telegram/src/webhook.ts
+  h_6f5e45c41d0910 31,36,38,42,44,53,56,61,64
+plugins/adapters/telegram/tests/endpoint-commands.test.ts
+  h_6f5e45c41d0910 20,56-57
+plugins/adapters/telegram/tests/fixture.ts
+  h_6f5e45c41d0910 1
+plugins/adapters/telegram/tests/platform-permit.test.ts
+  h_6f5e45c41d0910 2,4-17,19,24,28-33,41-44,55-56,59,64,66-172,174-175
+plugins/adapters/telegram/tests/telegram-delivery.test.ts
+  h_6f5e45c41d0910 1,43-44
+plugins/adapters/telegram/tests/telegram-runtime.test.ts
+  h_6f5e45c41d0910 8-9,841,849,858,873,882-957
+plugins/adapters/test-utils/http.ts
+  h_6f5e45c41d0910 1-100
+plugins/adapters/test-utils/untrusted-outbound.ts
+  h_6f5e45c41d0910 1-15
+plugins/adapters/wechat-mp/README.md
+  h_6f5e45c41d0910 87
+plugins/adapters/wechat-mp/deploy.md
+  h_6f5e45c41d0910 52
+plugins/adapters/wechat-mp/src/webhook.ts
+  h_6f5e45c41d0910 51-52,57,60,73,89,103,107,111,114,125,144,153,190,193
+plugins/adapters/wechat-mp/tests/endpoint-commands.test.ts
+  h_6f5e45c41d0910 31,66-67
+plugins/adapters/wechat-mp/tests/endpoint-management.test.ts
+  h_6f5e45c41d0910 6
+plugins/adapters/wechat-mp/tests/native-webhook.test.ts
+  h_6f5e45c41d0910 2
+plugins/adapters/wechat-mp/tests/webhook-localization.test.ts
+  h_6f5e45c41d0910 1,15-16
+plugins/adapters/wechat-mp/tests/wechat-mp-runtime.test.ts
+  h_6f5e45c41d0910 5
+plugins/adapters/wecom/PERMITS.md
+  h_6f5e45c41d0910 3,5,7
+plugins/adapters/wecom/README.md
+  h_6f5e45c41d0910 115,146-149
+plugins/adapters/wecom/agents/wecom/skills/wecom/tools/send_text/index.ts
+  h_6f5e45c41d0910 3-4,6,8,15-30
+plugins/adapters/wecom/src/index.ts
+  h_6f5e45c41d0910 26
+plugins/adapters/wecom/src/platform-permit.ts
+  h_6f5e45c41d0910 2-5,9
+plugins/adapters/wecom/src/webhook.ts
+  h_6f5e45c41d0910 32-35,40,43,52,57,62,64,67,72,75,86,91,96,104,107
+plugins/adapters/wecom/tests/endpoint-commands.test.ts
+  h_6f5e45c41d0910 31,66-67
+plugins/adapters/wecom/tests/platform-permit.test.ts
+  h_6f5e45c41d0910 4-5,7,11-12,23-26,37-38
+plugins/adapters/wecom/tests/send-text-tool.test.ts
+  h_6f5e45c41d0910 1-43
+plugins/adapters/wecom/tests/wecom-runtime.test.ts
+  h_6f5e45c41d0910 5
+plugins/adapters/weixin-ilink/README.md
+  h_6f5e45c41d0910 81
+plugins/adapters/weixin-ilink/tests/endpoint-commands.test.ts
+  h_6f5e45c41d0910 31,66-67
+plugins/adapters/weixin-ilink/tests/endpoint-management.test.ts
+  h_6f5e45c41d0910 1
+plugins/features/process-monitor/README.md
+  h_6f5e45c41d0910 56-59
+plugins/features/process-monitor/schema.json
+  h_6f5e45c41d0910 5-12,22-26,37-41,52-56,67-71,101-105
+plugins/games/roulette/README.md
+  h_6f5e45c41d0910 47,64-67
+plugins/games/roulette/plugin.ts
+  h_6f5e45c41d0910 4,49-52
+plugins/games/roulette/schema.json
+  h_6f5e45c41d0910 5-12,19-24,31-36,43-48,55-60,67-72
+plugins/games/roulette/src/deadline-job.ts
+  h_6f5e45c41d0910 2,4,17,20-31
+plugins/games/roulette/src/game-flow.ts
+  h_6f5e45c41d0910 43-44,78,85-90,179-187,331
+plugins/games/roulette/src/runtime.ts
+  h_6f5e45c41d0910 2,12-18,35-37,42-44
+plugins/games/roulette/tests/roulette-runtime.test.ts
+  h_6f5e45c41d0910 13,95,104,118,121,264,268,271-272,294-298,304,326,339,360,368-369,380,431-449,477
+plugins/services/activity-feedback/README.md
+  h_6f5e45c41d0910 77-80
+plugins/services/activity-feedback/plugin.ts
+  h_6f5e45c41d0910 69-70
+plugins/services/activity-feedback/schema.json
+  h_6f5e45c41d0910 5-12,18-23,28-33,38-40,42-47,52-54,56-61,66-71,91-108,117-125,134-139,180-188
+plugins/services/activity-feedback/src/ai-event-binder.ts
+  h_6f5e45c41d0910 15,212-213,221,230,237
+plugins/services/activity-feedback/src/orchestrator.ts
+  h_6f5e45c41d0910 14-38,57,77-81
+plugins/services/activity-feedback/tests/feature-levels.test.ts
+  h_6f5e45c41d0910 1-50
+plugins/utils/60s/README.md
+  h_6f5e45c41d0910 27-30
+plugins/utils/60s/schema.json
+  h_6f5e45c41d0910 5-12,17-22
+plugins/utils/answers/README.md
+  h_6f5e45c41d0910 56-64,69-70
+plugins/utils/answers/commands/好无聊/index.ts
+  h_6f5e45c41d0910 3,6,12-13,16
+plugins/utils/answers/commands/科目一/index.ts
+  h_6f5e45c41d0910 3,6,12-14
+plugins/utils/answers/commands/答案之书/index.ts
+  h_6f5e45c41d0910 3-4,11-12,15
+plugins/utils/answers/package.json
+  h_6f5e45c41d0910 52
+plugins/utils/answers/plugin.ts
+  h_6f5e45c41d0910 4,19-22
+plugins/utils/answers/schema.json
+  h_6f5e45c41d0910 60-76
+plugins/utils/answers/src/config.ts
+  h_6f5e45c41d0910 16-19
+plugins/utils/answers/src/runtime.ts
+  h_6f5e45c41d0910 3,8-24
+plugins/utils/answers/tests/feature-levels.test.ts
+  h_6f5e45c41d0910 1-29
+plugins/utils/bilibili/README.md
+  h_6f5e45c41d0910 53,91-96,123,137-140
+plugins/utils/bilibili/commands/bili/sub/index.ts
+  h_6f5e45c41d0910 12
+plugins/utils/bilibili/commands/bili/unsub/index.ts
+  h_6f5e45c41d0910 11
+plugins/utils/bilibili/plugin.ts
+  h_6f5e45c41d0910 48-49
+plugins/utils/bilibili/schema.json
+  h_6f5e45c41d0910 5-12,22-26,39-43,56-60,73-77,90-94,107-111,122-126,137-141,152-156
+plugins/utils/bilibili/src/i18n.ts
+  h_6f5e45c41d0910 23
+plugins/utils/bilibili/src/permission.ts
+  h_6f5e45c41d0910 11
+plugins/utils/bilibili/tests/commands.test.ts
+  h_6f5e45c41d0910 88,90-91,93,95,97,99-101,104,106,113,119,124
+plugins/utils/bilibili/tests/feature-levels.test.ts
+  h_6f5e45c41d0910 1-33
+plugins/utils/bilibili/tests/fixtures.ts
+  h_6f5e45c41d0910 9,14
+plugins/utils/calendar/README.md
+  h_6f5e45c41d0910 111-116,198
+plugins/utils/calendar/commands/calendar/auth/index.ts
+  h_6f5e45c41d0910 12
+plugins/utils/calendar/commands/calendar/logout/index.ts
+  h_6f5e45c41d0910 11
+plugins/utils/calendar/commands/calendar/status/index.ts
+  h_6f5e45c41d0910 7
+plugins/utils/calendar/plugin.ts
+  h_6f5e45c41d0910 11,70
+plugins/utils/calendar/schema.json
+  h_6f5e45c41d0910 32-35,48-51,58-61,68-71,79-82,90-93,131-135,196-200,279-283,286-293
+plugins/utils/calendar/skills/calendar-scheduling/tools/create_event/index.ts
+  h_6f5e45c41d0910 12
+plugins/utils/calendar/src/config.ts
+  h_6f5e45c41d0910 12-13,17-20,26-27,33-34,43,68,97-99
+plugins/utils/calendar/src/console.ts
+  h_6f5e45c41d0910 45-46
+plugins/utils/calendar/src/http-callback.ts
+  h_6f5e45c41d0910 11-13,43,45,48
+plugins/utils/calendar/src/notify.ts
+  h_6f5e45c41d0910 1-19
+plugins/utils/calendar/tests/calendar-feature-levels.test.ts
+  h_6f5e45c41d0910 1-20
+plugins/utils/calendar/tests/chat-auth.test.ts
+  h_6f5e45c41d0910 274
+plugins/utils/content-moderation/README.md
+  h_6f5e45c41d0910 27-29,67-70
+plugins/utils/content-moderation/middlewares/inbound/index.ts
+  h_6f5e45c41d0910 1,42,198-199
+plugins/utils/content-moderation/package.json
+  h_6f5e45c41d0910 55
+plugins/utils/content-moderation/schema.json
+  h_6f5e45c41d0910 5-12,50-54,65-69,84-88,101-105,116-119,130-140,143,167-171,192-196,359-363,524-528
+plugins/utils/content-moderation/src/bypass.ts
+  h_6f5e45c41d0910 1,7-11,23-24
+plugins/utils/content-moderation/src/config.ts
+  h_6f5e45c41d0910 1,28,42-47,77
+plugins/utils/content-moderation/src/types.ts
+  h_6f5e45c41d0910 104-110
+plugins/utils/content-moderation/tests/content-moderation.test.ts
+  h_6f5e45c41d0910 46,52-58,60-64
+plugins/utils/earthquake/README.md
+  h_6f5e45c41d0910 33,37,49-54
+plugins/utils/earthquake/commands/地震/订阅/index.ts
+  h_6f5e45c41d0910 11
+plugins/utils/earthquake/commands/地震/退订/index.ts
+  h_6f5e45c41d0910 10
+plugins/utils/earthquake/plugin.ts
+  h_6f5e45c41d0910 69-70
+plugins/utils/earthquake/schema.json
+  h_6f5e45c41d0910 5-12,34-38,59-63,84-88,99-103,114-118,131-135,149-153,166-170,183-187,200-204,217-221,235-239,252-256,270-274,287-291,305-309,323-327
+plugins/utils/earthquake/src/i18n.ts
+  h_6f5e45c41d0910 20
+plugins/utils/earthquake/src/permission.ts
+  h_6f5e45c41d0910 5-6,8,11
+plugins/utils/earthquake/tests/feature-levels.test.ts
+  h_6f5e45c41d0910 1-45
+plugins/utils/earthquake/tests/plugin.test.ts
+  h_6f5e45c41d0910 57,102,126,188-189,196,199,207-208,212,224,236,245-249
+plugins/utils/group-suite/README.md
+  h_6f5e45c41d0910 68-76
+plugins/utils/group-suite/commands/checkin/index.ts
+  h_6f5e45c41d0910 3,10-11
+plugins/utils/group-suite/commands/forget/index.ts
+  h_6f5e45c41d0910 8
+plugins/utils/group-suite/commands/keyword-add/[keyword]/index.ts
+  h_6f5e45c41d0910 8
+plugins/utils/group-suite/commands/keyword-remove/[keyword]/index.ts
+  h_6f5e45c41d0910 8
+plugins/utils/group-suite/commands/rank/index.ts
+  h_6f5e45c41d0910 3,10-11
+plugins/utils/group-suite/commands/stats-card/index.ts
+  h_6f5e45c41d0910 5,21
+plugins/utils/group-suite/commands/stats-rank/index.ts
+  h_6f5e45c41d0910 4,10,15
+plugins/utils/group-suite/commands/stats-week/index.ts
+  h_6f5e45c41d0910 4,10,15
+plugins/utils/group-suite/commands/stats/index.ts
+  h_6f5e45c41d0910 4,11,16
+plugins/utils/group-suite/commands/teach-list/[[page]]/index.ts
+  h_6f5e45c41d0910 3,10,12
+plugins/utils/group-suite/commands/teach-regex/index.ts
+  h_6f5e45c41d0910 3,8,10-11
+plugins/utils/group-suite/commands/teach/index.ts
+  h_6f5e45c41d0910 3,8,10-11
+plugins/utils/group-suite/handlers/welcome/index.ts
+  h_6f5e45c41d0910 4,11
+plugins/utils/group-suite/middlewares/keyword-reply/index.ts
+  h_6f5e45c41d0910 3,14
+plugins/utils/group-suite/middlewares/teach-reply/index.ts
+  h_6f5e45c41d0910 3,14
+plugins/utils/group-suite/plugin.ts
+  h_6f5e45c41d0910 8,77-80
+plugins/utils/group-suite/schema.json
+  h_6f5e45c41d0910 5-29,33-38,71-76,92-97,101-105,110-113,115-122,125-134,138-141,143-154,157-160,167-172
+plugins/utils/group-suite/src/config.ts
+  h_6f5e45c41d0910 1,49-68
+plugins/utils/group-suite/tests/feature-levels.test.ts
+  h_6f5e45c41d0910 1-48
+plugins/utils/ledger/README.md
+  h_6f5e45c41d0910 41-48
+plugins/utils/ledger/plugin.ts
+  h_6f5e45c41d0910 48-52
+plugins/utils/ledger/schema.json
+  h_6f5e45c41d0910 4-14,21-24,38-41
+plugins/utils/ledger/src/config.ts
+  h_6f5e45c41d0910 7-9,11
+plugins/utils/ledger/src/console.ts
+  h_6f5e45c41d0910 23-24
+plugins/utils/ledger/src/service.ts
+  h_6f5e45c41d0910 39-44,59-60,71-72,181-185,236,238
+plugins/utils/ledger/tests/ledger.test.ts
+  h_6f5e45c41d0910 1,58,66,260-268,400-420
+plugins/utils/ledger/tests/locale-storage.test.ts
+  h_6f5e45c41d0910 5
+plugins/utils/lottery/README.md
+  h_6f5e45c41d0910 70-75
+plugins/utils/lottery/plugin.ts
+  h_6f5e45c41d0910 90-99,103-104,108
+plugins/utils/lottery/schema.json
+  h_6f5e45c41d0910 5-12,14-116,119-134,142-145,147-159,162-167,173-180,183-190,192-196
+plugins/utils/lottery/tests/localization.test.ts
+  h_6f5e45c41d0910 88,99-150
+plugins/utils/music/commands/cookie/delete/[source]/index.ts
+  h_6f5e45c41d0910 12
+plugins/utils/music/commands/cookie/get/[source]/index.ts
+  h_6f5e45c41d0910 12
+plugins/utils/music/commands/cookie/set/[source]/index.ts
+  h_6f5e45c41d0910 12
+plugins/utils/music/commands/cookie/status/index.ts
+  h_6f5e45c41d0910 9
+plugins/utils/music/commands/login/[platform]/index.ts
+  h_6f5e45c41d0910 21
+plugins/utils/nettools/README.md
+  h_6f5e45c41d0910 56-61
+plugins/utils/nettools/schema.json
+  h_6f5e45c41d0910 5-12,19-24,31-36,43-48,55-60,67-72,79-84,88-106,113-118
+plugins/utils/qrcode/plugin.ts
+  h_6f5e45c41d0910 46-47
+plugins/utils/reminder/README.md
+  h_6f5e45c41d0910 93-99
+plugins/utils/reminder/plugin.ts
+  h_6f5e45c41d0910 63-64
+plugins/utils/reminder/schema.json
+  h_6f5e45c41d0910 15-18,34-37,53-56,72-75,91-94,110-113,116-123
+plugins/utils/reminder/src/admin-i18n.ts
+  h_6f5e45c41d0910 129-132
+plugins/utils/reminder/src/admin-tasks.ts
+  h_6f5e45c41d0910 53-55,60,160-163
+plugins/utils/reminder/src/config.ts
+  h_6f5e45c41d0910 4-11
+plugins/utils/reminder/src/console.ts
+  h_6f5e45c41d0910 26-27
+plugins/utils/reminder/src/i18n.ts
+  h_6f5e45c41d0910 72-75
+plugins/utils/reminder/src/service.ts
+  h_6f5e45c41d0910 14-15,43-49,56,61-62,66-67,152-156
+plugins/utils/reminder/tests/reminder-create-runtime.test.ts
+  h_6f5e45c41d0910 13
+plugins/utils/reminder/tests/reminder-feature-gate.test.ts
+  h_6f5e45c41d0910 1-60
+plugins/utils/reminder/tests/reminder-runtime.test.ts
+  h_6f5e45c41d0910 13
+plugins/utils/repeater/README.md
+  h_6f5e45c41d0910 27-37
+plugins/utils/repeater/middlewares/repeater/index.ts
+  h_6f5e45c41d0910 6,17-19
+plugins/utils/repeater/plugin.ts
+  h_6f5e45c41d0910 3-4,13-16
+plugins/utils/repeater/schema.json
+  h_6f5e45c41d0910 52-66
+plugins/utils/repeater/src/config.ts
+  h_6f5e45c41d0910 14-17
+plugins/utils/repeater/src/runtime.ts
+  h_6f5e45c41d0910 2,8-17
+plugins/utils/repeater/tests/repeater-runtime.test.ts
+  h_6f5e45c41d0910 15,119,165-184
+plugins/utils/rss/README.md
+  h_6f5e45c41d0910 27-32,57,59,62
+plugins/utils/rss/plugin.ts
+  h_6f5e45c41d0910 96-97,126-127
+plugins/utils/rss/schema.json
+  h_6f5e45c41d0910 5-12,22-26,33-38,44-49,55-60,70-74
+plugins/utils/rss/src/admin-i18n.ts
+  h_6f5e45c41d0910 149-152
+plugins/utils/rss/src/admin-tasks.ts
+  h_6f5e45c41d0910 73,80-85,88,221-224
+plugins/utils/rss/src/console.ts
+  h_6f5e45c41d0910 42-43
+plugins/utils/rss/tests/admin-feature-gate.test.ts
+  h_6f5e45c41d0910 1-57
+plugins/utils/rss/tests/admin-task-host.test.ts
+  h_6f5e45c41d0910 7,10,12-13,50
+plugins/utils/rss/tests/admin-tasks.test.ts
+  h_6f5e45c41d0910 7
+plugins/utils/rss/tests/message-fixture.ts
+  h_6f5e45c41d0910 15
+plugins/utils/rss/tests/quiet-runtime.test.ts
+  h_6f5e45c41d0910 4
+plugins/utils/rss/tests/rss-channel.test.ts
+  h_6f5e45c41d0910 185,219,242-263
+plugins/utils/short-url/plugin.ts
+  h_6f5e45c41d0910 44-45
+pnpm-lock.yaml
+  h_6f5e45c41d0910 14,65-73,107-108,117,145,147,181-183,302-307,315-316,329,332,348-350,357-359,380,388-389,402,409-414,423,428-429,440-442,452-454,465-466,479,489-494,497,502-503,544-549,566-571,640-645,661,664,667,670,673,749-751,847,861-862,866,902-903,921-922,996-997,1061-1062,1067-1128,1173,1181-1182,1243-1245,1303,1314-1315,1323-1324,1356,1359,1362,1365,1368,1371,1380,1388-1389,1596-1598,1761-1763,1775-1776,1780-1791,1795-1809,1813-1818,1825-1830,1834-1842,1847-1852,1859-1864,1868-1873,1877-1882,2219-2220,2295-2296,2451-2452,2518-2519,2628-2629,2704-2705,2762-2763,2887-2888,2960-2961,3088-3089,3277-3278,3344-3345,3460-3461,3668-3669,3902-3903,3917-3919,3952-3953,3986-3987,4011-4012,4031-4033,4051-4052,4079-4080,4162-4163,4205-4206,4277-4278,4311-4312,4348-4349,4407-4408,4438-4439,4462,4468,4474,4480,4486,4492,4498,4504,4510,4516,4522,4528,5128-5129,5343-5345,5376,5950-5952,5982-5984,6228-6232,6262,6308-6310,6338-6340,6373-6376,6515-6518,7161-7162,7633-7635,7716-7718,7748-7750,7764-7766,7883-7884,8076-8077,8167-8168,8333-8336,8500-8502,8533-8535,8835,8837-8838,8852,8855-8856,8858,8861-8862,8864,8867-8868,8870,8873,8875,8877,8880-8881,8883,8885,8887-8888,8890,8893-8894,8896,8899-8900,8902,8905-8906,8908,8915,8917,8924,8926,8932,9485,9516,9736-9737,9754,9793,9795,9810-9811,10339-10342,10379-10382,10477,10689-10697,10724,10726,10728-10729,10782-10786,10815-10819,10844,10865-10867,10971-10976,11452,11535,11707,11709,11711,12206,12208,12263-12265,12288-12290,12311-12315,12427,12615,12709,12711,12929-12937,13102-13104,13115,13120,13139-13140,13405,13407,13409
+scripts/agent-send-bypass-allowlist.json
+  h_6f5e45c41d0910 1-32
+scripts/check-agent-tool-authoring-boundaries.mjs
+  h_6f5e45c41d0910 209-210
+scripts/check-api-docs-surface.mjs
+  h_6f5e45c41d0910 15
+scripts/check-architecture-layers.mjs
+  h_6f5e45c41d0910 21-26,33-47,60,81-82,92-95,125-128,317-346,365-366,417-427
+scripts/check-architecture-layers.test.ts
+  h_6f5e45c41d0910 13,359-385
+scripts/check-console-protocol-boundaries.mjs
+  h_6f5e45c41d0910 16
+scripts/check-created-project.mjs
+  h_6f5e45c41d0910 98-121,244-246,249,323,388-389,401,419-421,424,469
+scripts/check-dependency-policy.mjs
+  h_6f5e45c41d0910 26-27
+scripts/check-im-send-bypass.mjs
+  h_6f5e45c41d0910 5-9,68-108,118
+scripts/check-no-platform-branches.mjs
+  h_6f5e45c41d0910 21-22
+scripts/check-plugin-runtime-api.mjs
+  h_6f5e45c41d0910 32-34
+scripts/check-release-plan.mjs
+  h_6f5e45c41d0910 127,159,213-246,249-256,282-285,287-289,295,309,311
+scripts/check-release-plan.test.ts
+  h_6f5e45c41d0910 248-333,335
+scripts/check-runtime-config-boundaries.mjs
+  h_6f5e45c41d0910 12-14
+scripts/check-speech-runtime-boundaries.mjs
+  h_6f5e45c41d0910 48,53
+scripts/generate-config-reference.mjs
+  h_6f5e45c41d0910 18,136-173,202,261
+scripts/platform-acceptance/FRAMEWORK-ACCEPTANCE.zh-CN.md
+  h_6f5e45c41d0910 120
+scripts/platform-acceptance/README.md
+  h_6f5e45c41d0910 66
+scripts/release-version-coverage.mjs
+  h_6f5e45c41d0910 7-8,31-34,40-41,52-53,63-64,77,79,81,83-85
+scripts/run-l4-check.mjs
+  h_6f5e45c41d0910 24
+scripts/run-l4-ci-check.mjs
+  h_6f5e45c41d0910 24
+tests/contracts/console-page-sections.test.ts
+  h_6f5e45c41d0910 1-9
+tests/contracts/plugin-feature-levels.test.ts
+  h_6f5e45c41d0910 1-53
+tests/docs/markdown-table-code.test.ts
+  h_6f5e45c41d0910 1-3,5,7-18,20-22,24-25,27-41
+tests/docs/operability-docs.test.ts
+  h_6f5e45c41d0910 78
+tests/docs/self-delivery-ci-credentials.test.ts
+  h_6f5e45c41d0910 95,100-103
+tests/e2e-gateway/console-acceptance.slow.test.ts
+  h_6f5e45c41d0910 1-279
+tests/e2e-gateway/gateway-lifecycle.slow.test.ts
+  h_6f5e45c41d0910 1-265
+tests/e2e-gateway/harness/fake-pnpm.mjs
+  h_6f5e45c41d0910 1-67
+tests/e2e-gateway/harness/gateway-project.ts
+  h_6f5e45c41d0910 1-219
+tests/e2e-smoke/harness/smoke-console-users.mjs
+  h_6f5e45c41d0910 1-24
+tests/e2e-smoke/scenarios/config-explain-and-enum.mjs
+  h_6f5e45c41d0910 10-11
+tests/e2e-smoke/scenarios/install-migrate-boot-diagnose.mjs
+  h_6f5e45c41d0910 8-11,134-135
+tests/e2e-smoke/scenarios/reminders-task-center.mjs
+  h_6f5e45c41d0910 7-9,107
+tests/e2e-smoke/scenarios/rss-quiet-hours.mjs
+  h_6f5e45c41d0910 7-9,57
+tests/e2e-smoke/scenarios/scenario-lab-export.mjs
+  h_6f5e45c41d0910 48
+tests/e2e-smoke/smoke-loop.test.ts
+  h_6f5e45c41d0910 14
+tests/snapshots/api-surface.json
+  h_6f5e45c41d0910 42,99,145,198-199
+tests/snapshots/plugin-runtime-api.json
+  h_6f5e45c41d0910 27,170,176-178,185,274-328,376,378-380,397,442,504-517
+tsconfig.typecheck.json
+  h_6f5e45c41d0910 215-253,257-262,389-394,439-440
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "adb033311ee4c933e116361c358f52040f35000e",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
