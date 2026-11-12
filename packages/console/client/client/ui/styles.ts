@@ -98,6 +98,9 @@ html.dark .zk-root, .dark .zk-root, html.dark .zhin-console-surface, .dark .zhin
 
 /* ── Page & Layout Primitives ── */
 .zk-page { max-width: 1180px; margin: 0 auto; padding: 28px 28px 48px; display: grid; gap: 24px; }
+/* Embedded in a host page (AdapterConsolePage \`embedded\`): the host owns width, padding, title and refresh. */
+.zk-page.zk-page--embedded { max-width: none; margin: 0; padding: 0; gap: 18px; }
+.zk-embedded-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
 .zk-page-header {
   display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
   padding-bottom: 18px; border-bottom: 1px solid var(--zk-line);
@@ -569,6 +572,8 @@ html.dark .zk-cell-fixed-right-first, .dark .zk-cell-fixed-right-first { box-sha
 }
 @media (max-width: 767px) {
   .zk-page { padding: 18px 14px 32px; gap: 18px; }
+  .zk-page.zk-page--embedded { padding: 0; gap: 14px; }
+  .zk-embedded-toolbar > * { flex: 1 1 auto; }
   .zk-page-header { gap: 12px; padding-bottom: 14px; }
   .zk-btn--icon { min-width: 40px; min-height: 40px; }
   .zk-dl { grid-template-columns: minmax(80px, 1fr) minmax(0, 2fr); }

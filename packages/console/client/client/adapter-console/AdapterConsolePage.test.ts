@@ -19,7 +19,7 @@ function harness() {
   const buttonNodes = () => nodes().filter(node => isComponent(node, 'Button'));
   return {
     exports: { ...page, resolveAdapterConsolePluginId: owner.resolveAdapterConsolePluginId },
-    mount: env.mount, settle: env.settle, unmount: env.unmount, nodes,
+    mount: env.mount, rerender: env.rerender, settle: env.settle, unmount: env.unmount, nodes,
     button(label: string) { const node = buttonNodes().find(node => text(node.props?.children) === label); if (!node) throw new Error(`missing button ${label}: ${text(env.tree())}`); return node.props as Handlers; },
     confirm(label: string) { const node = nodes().find(node => isComponent(node, 'ConfirmButton') && text(node.props?.children) === label); if (!node) throw new Error(`missing confirm button ${label}`); return node.props as unknown as Confirm; },
     hasControl(labels: string[]) { return nodes().some(node => (isComponent(node, 'Button') || isComponent(node, 'ConfirmButton')) && labels.includes(text(node.props?.children))); },
@@ -34,7 +34,7 @@ function status(): AdapterConsoleStatus {
     configured: [{ id: '10001', instanceId: 'instance-old', values: { password: '••••••', server: 'old-server' } }],
     runtime: { adapterId: 'capability', generation: 4, revision: 2, needsMigration: false, canManage: true, canMigrate: false, canUpdate: true, canReplace: true, mutableFields: ['password', 'server'], identityFields: ['id'], endpoints: [{ instanceId: 'instance-old', canonicalId: 'canonical-old', endpointId: '10001', revision: 2, desiredEnabled: false, epoch: 5, incarnationId: 'incarnation-current', started: false, admitted: false }] } };
 }
-function fixture(initial = status(), tasks: AdapterConsoleLoginTask[] = [], startMode = '') {
+function fixture(initial = status(), tasks: AdapterConsoleLoginTask[] = [], startMode = '', props: Record<string, unknown> = {}) {
   vi.useFakeTimers();
   vi.stubGlobal('localStorage', storage()); vi.stubGlobal('sessionStorage', storage());
   vi.stubGlobal('location', { pathname: '/icqq', origin: 'https://host-a.test' });
@@ -72,8 +72,8 @@ function fixture(initial = status(), tasks: AdapterConsoleLoginTask[] = [], star
     return reply({});
   }));
   const h = harness(); const current = h.exports.captureAdapterConsoleContext!() as () => boolean;
-  h.mount(() => h.exports.AdapterConsoleSession!({ adapterKey: 'icqq', isCurrent: current }));
-  return { h, calls, setMode(value: string) { mode = value; }, releaseStatus: () => releaseStatus?.(), failStatus(value: boolean) { statusFails = value; }, failEndpoints(value: boolean) { endpointsFail = value; }, setHostEndpoints(value: unknown[]) { hostEndpoints = value; }, finish: () => finish?.(), finishLogin: () => finishLogin?.(), replaceView(value: AdapterConsoleStatus) { view = value; }, writes: () => calls.filter(call => String(call.body.type).includes('.endpoint-')) };
+  h.mount(() => h.exports.AdapterConsoleSession!({ adapterKey: 'icqq', isCurrent: current, ...props }));
+  return { h, calls, props, setMode(value: string) { mode = value; }, releaseStatus: () => releaseStatus?.(), failStatus(value: boolean) { statusFails = value; }, failEndpoints(value: boolean) { endpointsFail = value; }, setHostEndpoints(value: unknown[]) { hostEndpoints = value; }, finish: () => finish?.(), finishLogin: () => finishLogin?.(), replaceView(value: AdapterConsoleStatus) { view = value; }, writes: () => calls.filter(call => String(call.body.type).includes('.endpoint-')) };
 }
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
@@ -624,5 +624,67 @@ describe('platform-tailored onboarding wizards & interactive login workbench', (
       expectedRevision: 2,
     });
     f.h.unmount();
+  });
+});
+
+describe('embedded in a host page', () => {
+  const header = (f: ReturnType<typeof fixture>) => f.h.nodes().find(node => isComponent(node, 'PageHeader'));
+  const statusReads = (f: ReturnType<typeof fixture>) => f.calls.filter(call => call.body.type === 'plugin.plugin-a.status').length;
+
+  it('keeps the stand-alone page header with its own refresh by default', async () => {
+    const f = fixture(); await f.h.settle();
+    expect(header(f)).toBeDefined();
+    expect(f.h.nodes().some(node => node.type === 'div' && node.props?.className === 'zk-embedded-toolbar zk-row')).toBe(false);
+    f.h.unmount();
+  });
+
+  it('drops the SDK header and refresh, keeping docs and add in a toolbar row', async () => {
+    const s = { ...status(), docsUrl: 'https://docs.test/icqq' };
+    const f = fixture(s, [], '', { embedded: true }); await f.h.settle();
+    expect(header(f)).toBeUndefined();
+    expect(f.h.hasControl(['刷新', '刷新中…'])).toBe(false);
+    const row = f.h.nodes().find(node => node.type === 'div' && node.props?.className === 'zk-embedded-toolbar zk-row');
+    expect(text(row?.props?.children)).toContain('文档');
+    expect(text(row?.props?.children)).toContain('添加');
+    const page = f.h.nodes().find(node => isComponent(node, 'PluginPage'));
+    expect(page?.props?.className).toBe('zk-page--embedded');
+    await f.h.button('添加').onClick(); await f.h.settle();
+    expect(f.h.text()).toContain('取消');
+    f.h.unmount();
+  });
+
+  it('hands the page actions to the host toolbar, and the host refresh key re-reads everything', async () => {
+    const seen: Array<Record<string, any>> = [];
+    const toolbar = (controls: Record<string, any>) => { seen.push(controls); return controls.add ? { type: 'host-button', props: { onClick: controls.add.toggle, children: controls.add.open ? 'host-cancel' : 'host-add' } } : null; };
+    const f = fixture(status(), [], '', { embedded: true, toolbar, refreshKey: 0 }); await f.h.settle();
+    expect(header(f)).toBeUndefined();
+    expect(f.h.hasControl(['添加', '刷新'])).toBe(false);
+    const last = seen.at(-1)!;
+    expect(last.add).toMatchObject({ open: false, disabled: false, controls: 'adapter-add-account' });
+    expect(last.docsUrl).toBeUndefined();
+    expect(typeof last.refresh).toBe('function');
+    (f.h.nodes().find(node => node.type === 'host-button')!.props!.onClick as () => void)(); await f.h.settle();
+    expect(seen.at(-1)!.add.open).toBe(true);
+    expect(f.h.text()).toContain('host-cancel');
+
+    const before = statusReads(f);
+    f.h.rerender(); await f.h.settle();
+    expect(statusReads(f)).toBe(before);
+    f.props.refreshKey = 1; f.h.rerender(); await f.h.settle();
+    expect(statusReads(f)).toBe(before + 1);
+    expect(f.calls.filter(call => call.body.type === 'endpoint.list').length).toBeGreaterThan(1);
+    f.h.unmount();
+  });
+
+  it('a toolbar that returns null renders no toolbar row', async () => {
+    const f = fixture(status(), [], '', { embedded: true, toolbar: () => null }); await f.h.settle();
+    expect(f.h.nodes().some(node => node.type === 'div' && String(node.props?.className ?? '').startsWith('zk-embedded-toolbar'))).toBe(false);
+    f.h.unmount();
+  });
+
+  it('advertises the embedded API for hosts that also run against older SDKs', async () => {
+    const page = await import('./AdapterConsolePage.js');
+    expect(page.ADAPTER_CONSOLE_PAGE_CAPABILITIES).toEqual({ embedded: true, toolbar: true, refreshKey: true });
+    expect((page.AdapterConsolePage as unknown as { capabilities: unknown }).capabilities).toBe(page.ADAPTER_CONSOLE_PAGE_CAPABILITIES);
   });
 });

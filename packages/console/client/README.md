@@ -57,6 +57,25 @@ export default createAdapterConsolePage('telegram');
 
 页面会读取 `endpoint.list` / `endpoint.test` / `login.list`，并调用适配器自己的 `plugin.<pluginId>.*` RPC；凭据永远不会展示，只显示 `${ENV}` 引用或遮蔽值。
 
+宿主页面（例如 Console 的适配器概览）要把它嵌进自己的页面时，用嵌入模式：标题与「刷新」由宿主渲染，SDK 不再画页头，页面动作（文档 / 添加）交给宿主用自己的按钮渲染：
+
+```tsx
+import { AdapterConsolePage } from '@zhin.js/client';
+
+<AdapterConsolePage
+  adapterKey="telegram"
+  embedded
+  refreshKey={refreshCount}            // 宿主「刷新」每点一次 +1，SDK 随之重读
+  toolbar={({ docsUrl, add }) => add ? (
+    <HostButton aria-expanded={add.open} aria-controls={add.controls} disabled={add.disabled} onClick={add.toggle}>
+      {add.open ? '取消' : '添加账号'}
+    </HostButton>
+  ) : null}
+/>
+```
+
+`embedded` 不传 `toolbar` 时显示 SDK 自带的「文档」「添加」（没有「刷新」）。需要兼容旧版 SDK 的宿主可读 `AdapterConsolePage.capabilities`（或导出的 `ADAPTER_CONSOLE_PAGE_CAPABILITIES`）判断是否支持；旧版会忽略这些属性。
+
 ## 插件页 UI 套件
 
 `@zhin.js/client/ui` 是给插件 Console 页面用的小套件：与 Console 共用同一套主题变量（亮暗色、字号、圆角、焦点环自动跟随），**不依赖 Tailwind**（远程页面不会被 Console 的 Tailwind 扫描），所有样式是 `zk-` 前缀的自带类。
