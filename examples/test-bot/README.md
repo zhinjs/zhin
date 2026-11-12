@@ -16,7 +16,7 @@
 
 ## Host 能力
 
-- **Agent Host**：`ai: …` → **`ZhinAgent.process`**（入站队列 + IM session；CapabilityIngress tools + `ai.mcpServers` + speech tools + SOUL/AGENTS/TOOLS）。`ai: clear` 归档会话。含**协作工具**（`agents` / `ask` / `delegate` / `tell` / `cancel_delegation` / `escalate`，有可联系的 Agent 时提供）与 deferred meta（`discover` / `load_tool` / `load_skill`）。另含：`schedule_*`、assistant profile/events、`bash` + Owner `/approve`（需 `plugins.*.master` / sandbox `owner`）。
+- **Agent Host**：`ai: …` → **`ZhinAgent.process`**（入站队列 + IM session；CapabilityIngress tools + `ai.mcpServers` + speech tools + SOUL/AGENTS/TOOLS）。`ai: clear` 归档会话。含**协作工具**（`agents` / `ask` / `delegate` / `tell` / `cancel_delegation` / `escalate`，有可联系的 Agent 时提供）与 deferred meta（`discover` / `load_tool` / `load_skill`）。另含：`schedule_*`、assistant profile/events、`bash` + Owner `/approve`（需聊天角色 `owner`：Console「角色」或聊天 `角色 授予`，见 docs/migrations/chat-roles.md）。
 - **Speech Host**：顶层 `speech:` → `voice_stt` / `voice_tts`（TTS 需 edge-tts；STT 需本机 Ollama whisper）；入站可 STT 后再进 ZhinAgent。
 - **渐进 Tool**：通用、Skill、Agent、Agent-Skill 四种目录都在本示例覆盖；仅 `minimal-bot` 保留根 Tool 黄金路径，本厨房水槽按任务归属延迟披露。
 
@@ -39,7 +39,7 @@ cp .env.example .env                         # 按需填入平台凭据后，取
 
 模板由 `tests/config-template.test.ts` 用真实解析器校验（`configVersion: 2`、`plugins` 映射、各插件 `schema.json`）。
 
-Node `>=22.19.0`（Plugin Runtime 依赖 Node 原生 TypeScript）。依赖本目录 `.env`（与 legacy 相同变量）。Console：https://console.zhin.dev → `http://127.0.0.1:8086`，Token `test-bot-dev-token`。
+Node `>=22.19.0`（Plugin Runtime 依赖 Node 原生 TypeScript）。依赖本目录 `.env`（与 legacy 相同变量）。Console：https://console.zhin.dev → `http://127.0.0.1:8086`。第一次连接时用初始化令牌 `test-bot-dev-token`（`http.token`）完成初始化向导、创建所有者账号，之后用账号登录（或先运行 `pnpm exec zhin console init`）。后台运行用 `pnpm daemon`（`zhin start --mode production --no-watch`），`pnpm stop` 停止。
 
 **ICQQ 协议库**：`@icqqjs/icqq` 是 `@zhin.js/adapter-icqq` 的可选对等依赖。启用 `icqq` endpoint 时在本目录安装：
 
@@ -62,7 +62,7 @@ pnpm add @icqqjs/icqq @icqqjs/qqsign
 | tool `system_info` | 进程与主机事实 |
 | `/gh help` / `gh repo` / `gh bind` / … | GitHub 子命令；`bind` 写入 DatabaseHost `github_oauth_users` |
 | `ai: 你好` / `ai: @name …` / `ai: clear` | ZhinAgent 多轮；`@name` 注入 specialist 指令；可用协作工具找其他 Agent 帮忙 |
-| `/approve always bash`（Owner 私聊） | 永久放行 bash Owner 硬确认（需 `plugins.*.master`） |
+| `/approve always bash`（Owner 私聊） | 永久放行 bash Owner 硬确认（需聊天角色 `owner`） |
 | 语音入站 + `speech:` | metadata `audio_url` / `[audio:url]` → STT 再跑 ZhinAgent |
 | `/games` `/猜数` | 游戏插件 |
 | Sandbox `/sandbox` | 无平台也能聊 |

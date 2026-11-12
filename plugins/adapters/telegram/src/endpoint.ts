@@ -3,7 +3,7 @@ import { createTelegramStreaming } from './streaming.js';
 import {
   createEndpointSpecification, endpointSpec, type Endpoint, type EndpointSpecification, createEndpointLifecycle,
   type EndpointLifecycle, type EndpointContentPort, type EndpointContentResolveContext,
-  type EndpointControl, type EndpointSendRequest, type EndpointTransportState,
+  type EndpointControl, type EndpointManagement, type EndpointSendRequest, type EndpointTransportState,
   InboundDeduper, TtlLookupCache,
 } from 'zhin.js/adapter';
 /**
@@ -17,13 +17,14 @@ import {
   type ConversationReference,
   type ConversationResolution,
   type MessageRef,
+  type PlatformStanding,
 } from '@zhin.js/im-contract';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
 import { runTelegramPollLoop } from './polling.js';
 import { TelegramApiError } from './api-error.js';
 export { TelegramApiError } from './api-error.js';
-import { normalizeTelegramChatMember } from './platform-permit.js';
+import { telegramChatMemberStanding } from './platform-permit.js';
 import {
   buildWebhookUrl,
   formatCallbackContent,
@@ -37,6 +38,7 @@ import {
   type ResolvedTelegramConfig,
   type TelegramCallbackQuery,
   type TelegramChatMember,
+  type TelegramChatMemberUpdated,
   type TelegramMessage,
   type TelegramOutboundUpload,
   type TelegramUpdate,
@@ -46,13 +48,13 @@ import { createTelegramSelfProfile } from './self-profile.js';
 
 const CHAT_MEMBER_CACHE_TTL_MS = 60_000;
 const CHAT_MEMBER_CACHE_MAX = 2_000;
+/** A failed `getChatMember` is not retried for every message of a busy chat (unknown standing meanwhile). */
+const CHAT_MEMBER_FAILURE_TTL_MS = 10_000;
 const ADMITTED_UPDATE_LIMIT = 2_048;
 const INFLIGHT_UPDATE_LIMIT = 256;
 
-interface ChatMemberPermit {
-  readonly role?: string;
-  readonly permissions: string[];
-}
+/** ADR 0056 §1 normalized standing of one chat member (cached per chat + user). */
+type ChatMemberPermit = PlatformStanding;
 
 /** One admitted platform message and its original framework lifetime. */
 interface TelegramMessageAdmission {
@@ -76,7 +78,8 @@ export { TelegramClient, type TelegramClientApi, type TelegramFetch } from './te
 /**
  * Telegram Bot API 无列表类接口（无 getMyChats/getChatMembers），
  * 仅 getChat/getChatMember 按已知 id 单查，不构成列表能力；
- * 因此本 endpoint 不暴露 EndpointManagement（Console 社交面 RPC 对该平台保持未接线）。
+ * 因此本 endpoint 的 EndpointManagement 只有 `inspectSelfStanding`（ADR 0056 §1：getChatMember bot），
+ * Console 社交面 RPC 对该平台保持未接线。
  */
 export class TelegramEndpoint extends TelegramClient implements Endpoint {
   readonly [endpointSpec]: EndpointSpecification;
@@ -100,6 +103,23 @@ export class TelegramEndpoint extends TelegramClient implements Endpoint {
     ttlMs: CHAT_MEMBER_CACHE_TTL_MS,
     maxEntries: CHAT_MEMBER_CACHE_MAX,
   });
+  /** Recently failed lookups (negative cache): the standing stays unknown until it expires. */
+  readonly #chatMemberFailures = new TtlLookupCache<string, true>({
+    ttlMs: CHAT_MEMBER_FAILURE_TTL_MS,
+    maxEntries: CHAT_MEMBER_CACHE_MAX,
+  });
+  /** Concurrent messages from one sender share one `getChatMember` call. */
+  readonly #chatMemberInflight = new Map<string, { promise?: Promise<ChatMemberPermit | undefined> }>();
+  readonly #management: EndpointManagement = Object.freeze<EndpointManagement>({
+    // ADR 0056 §1: the Bot's own standing (`bot:*` permits); the framework caches per conversation.
+    inspectSelfStanding: async ({ conversation, signal }) => {
+      if (conversation.kind === 'private' || !this.#botUserId) return undefined;
+      const member = await this.callApi<TelegramChatMember>('getChatMember', {
+        chat_id: Number(conversation.id), user_id: this.#botUserId,
+      }, signal);
+      return telegramChatMemberStanding(member);
+    },
+  });
   readonly #control: EndpointControl = Object.freeze<EndpointControl>({
     recall: ({ message, signal }) => this.recallMessage(message, signal),
   });
@@ -117,7 +137,7 @@ export class TelegramEndpoint extends TelegramClient implements Endpoint {
       start: signal => this.#startFramework(signal), open: () => this.#openFramework(), close: () => this.#closeFramework(),
       stop: () => this.#stopFramework(), send: request => this.#sendFramework(request),
       get name() { return options.config.id; }, get transportState() { return endpoint.#transportState; },
-      control: this.#control, content: this.#content,
+      control: this.#control, content: this.#content, management: this.#management,
       streaming: options.config.streaming !== false ? createTelegramStreaming(() => this, options.config.streamingIntervalMs) : undefined,
       profile: createTelegramSelfProfile({ client: this,
         current: () => this.#botName === undefined ? {} : { nickname: this.#botName },
@@ -409,7 +429,7 @@ export class TelegramEndpoint extends TelegramClient implements Endpoint {
       sender: {
         id: String(msg.from?.id ?? ''),
         name: senderDisplayName(msg.from) || undefined,
-        ...(permit?.role ? { roles: [permit.role] } : {}),
+        ...(permit ? { platform: permit } : {}),
       },
       endpointId: this.#options.config.id,
       ...(mentioned ? { mentioned: true } : {}),
@@ -419,8 +439,6 @@ export class TelegramEndpoint extends TelegramClient implements Endpoint {
         chatType: msg.chat.type,
         userId: msg.from?.id,
         date: msg.date,
-        ...(permit?.role ? { senderRole: permit.role } : {}),
-        ...(permit?.permissions.length ? { senderPermissions: [...permit.permissions] } : {}),
       }),
     });
   }
@@ -446,7 +464,10 @@ export class TelegramEndpoint extends TelegramClient implements Endpoint {
     return false;
   }
 
-  /** 群消息 sender role 解析：getChatMember + 60s 缓存（对齐旧 enrichGroupSender）。 */
+  /**
+   * 群消息 sender role 解析：getChatMember + 60s 缓存；并发查询合并为一次调用，失败负缓存 10s，
+   * `chat_member` / `my_chat_member` 更新时以新状态覆盖缓存。
+   */
   async #resolveGroupSenderPermit(msg: TelegramMessage, signal: AbortSignal): Promise<ChatMemberPermit | undefined> {
     if (msg.chat.type === 'private' || !msg.from?.id) return undefined;
     const chatId = Number(msg.chat.id);
@@ -454,20 +475,45 @@ export class TelegramEndpoint extends TelegramClient implements Endpoint {
     const key = `${chatId}:${userId}`;
     const cached = this.#chatMemberCache.get(key);
     if (cached) return cached;
-    try {
-      const member = await this.callApi<TelegramChatMember>('getChatMember', {
-        chat_id: chatId,
-        user_id: userId,
-      }, signal);
-      if (signal.aborted) return undefined;
-      const normalized = normalizeTelegramChatMember(member);
-      const entry: ChatMemberPermit = { ...normalized };
-      this.#chatMemberCache.set(key, entry);
-      return entry;
-    } catch {
-      // 保守拒绝：无角色快照
-      return undefined;
+    if (this.#chatMemberFailures.get(key)) return undefined;
+    let task = this.#chatMemberInflight.get(key)?.promise;
+    if (!task) {
+      const lookup: { promise?: Promise<ChatMemberPermit | undefined> } = {};
+      task = (async () => {
+        await undefined; // registered in #chatMemberInflight before the body runs
+        try {
+          const member = await this.callApi<TelegramChatMember>('getChatMember', {
+            chat_id: chatId,
+            user_id: userId,
+          }, signal);
+          if (signal.aborted) return undefined;
+          const entry: ChatMemberPermit = telegramChatMemberStanding(member);
+          // Invalidated (chat_member update) while in flight: do not store the older answer.
+          if (this.#chatMemberInflight.get(key) === lookup) this.#chatMemberCache.set(key, entry);
+          return entry;
+        } catch {
+          // 保守拒绝：无角色快照；取消不算失败
+          if (!signal.aborted && this.#chatMemberInflight.get(key) === lookup) this.#chatMemberFailures.set(key, true);
+          return undefined;
+        } finally {
+          if (this.#chatMemberInflight.get(key) === lookup) this.#chatMemberInflight.delete(key);
+        }
+      })();
+      lookup.promise = task;
+      this.#chatMemberInflight.set(key, lookup);
     }
+    const entry = await task;
+    return signal.aborted ? undefined : entry;
+  }
+
+  /** `chat_member` / `my_chat_member`: the update carries the new status, so it replaces the cached one. */
+  #applyChatMemberUpdate(update: TelegramChatMemberUpdated | undefined): void {
+    const userId = update?.new_chat_member?.user?.id;
+    if (!update?.chat || userId == null) return;
+    const key = `${Number(update.chat.id)}:${userId}`;
+    this.#chatMemberInflight.delete(key);
+    this.#chatMemberFailures.delete(key);
+    this.#chatMemberCache.set(key, telegramChatMemberStanding(update.new_chat_member));
   }
 
   /** Test / internal: admit a callback query when open. */
@@ -544,6 +590,8 @@ export class TelegramEndpoint extends TelegramClient implements Endpoint {
     if (update.message || update.callback_query) {
       await this[endpointSpec].events.platform(eventName, update);
     } else {
+      this.#applyChatMemberUpdate(update.chat_member);
+      this.#applyChatMemberUpdate(update.my_chat_member);
       await this[endpointSpec].events.emitAccepted('platform.receive', Object.freeze({ name: eventName, event: update }));
       return;
     }

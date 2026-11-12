@@ -4,7 +4,7 @@ import type { EndpointProfileConfiguration } from 'zhin.js/adapter';
  * No legacy Adapter/Endpoint / segment-mapper.
  * Canonicalization is owned by gateway/core before endpoint.send.
  */
-import { EndpointDeliveryError, isMediaRef, type MediaRef, type ConversationRef } from '@zhin.js/im-contract';
+import { EndpointDeliveryError, isMediaRef, type MediaRef, type ConversationRef, type PlatformStanding } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('napcat');
@@ -273,6 +273,16 @@ function stripCqCodes(input: string): string {
  * 入站 sender 语义：必须是用户 ID（Runtime Message contract）。
  * 显示名走 metadata.nickname，见 senderNickname。
  */
+/**
+ * ADR 0056 §1：群消息 `sender.role`（owner / admin / member）→ `sender.platform.standing`。
+ * 私聊与未知角色词不上报；OneBot / NapCat 没有平台原生角色与权限位。
+ */
+export function napcatSenderStanding(ev: NapCatEvent): PlatformStanding | undefined {
+  if (ev.message_type !== 'group') return undefined;
+  const role = ev.sender?.role;
+  return role === 'owner' || role === 'admin' || role === 'member' ? { standing: role } : undefined;
+}
+
 export function senderUserId(ev: NapCatEvent): string {
   return ev.user_id != null ? String(ev.user_id) : '';
 }
@@ -379,6 +389,9 @@ function canonicalToOneBotSegment(segment: NapCatWireSegment): MessageSegment | 
       return oneBotMediaSegment(segment.type, data);
     case 'audio':
       return oneBotMediaSegment('record', data);
+    case 'napcat:node':
+      // Agent-authored merged-forward node (napcat_send_forward_msg); NapCat sends `node` arrays as a forward.
+      return { type: 'node', data };
     default:
       return { type: segment.type, data };
   }

@@ -274,7 +274,7 @@ cd my-awesome-bot
 pnpm dev
 ```
 
-打开创建结束时打印的 Console 链接（API Base 为 `http://127.0.0.1:8068`，初始化令牌在 `#token=` 之后）。链接丢了也没关系：打开 `https://console.zhin.dev`，API Base 填 `http://127.0.0.1:8068`，令牌填 `.env` 的 `HTTP_TOKEN`。
+打开创建结束时打印的 Console 链接（API Base 为 `http://127.0.0.1:8068`，初始化令牌在 `#token=` 之后）。链接丢了也没关系：打开 `https://console.zhin.dev`，API Base 填 `http://127.0.0.1:8068`，令牌填 `.env` 的 `HTTP_TOKEN`（只在创建所有者之前有效）。也可以不经浏览器，在项目目录运行 `npx zhin console init` 创建所有者。
 
 Console 引导依次完成：
 

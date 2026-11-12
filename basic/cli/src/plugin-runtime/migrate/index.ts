@@ -1,6 +1,7 @@
 export * from './legacy-command-migrator.js';
 export * from './package-cutover.js';
 export * from './readiness.js';
+export * from './start-stack-dependencies.js';
 export * from './verify.js';
 export {
   applyInstanceDeclarationMigration,

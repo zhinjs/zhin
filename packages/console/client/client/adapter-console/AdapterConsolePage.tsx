@@ -173,10 +173,47 @@ function isLink(value: string): boolean {
   return /^https?:\/\//u.test(value);
 }
 
+/** Page actions handed to a host that renders them with its own buttons (`toolbar`). */
+export interface AdapterConsoleToolbarControls {
+  /** The adapter's documentation link, when it has one. */
+  readonly docsUrl?: string;
+  /** Adding an account; absent when this adapter cannot add accounts from the Console. */
+  readonly add?: {
+    /** The add form is open (the action reads 「取消」 then). */
+    readonly open: boolean;
+    readonly disabled: boolean;
+    readonly toggle: () => void;
+    /** `id` of the add form, for `aria-controls`. */
+    readonly controls: string;
+  };
+  /** Re-read status, connections and login tasks (the same as the SDK's own 「刷新」). */
+  readonly refresh: () => Promise<void>;
+  readonly refreshing: boolean;
+}
+
 export interface AdapterConsolePageProps {
   /** Adapter type key (e.g. `telegram`, `wechat-mp`). */
   readonly adapterKey: string;
+  /**
+   * Render inside a host page that already shows the title and a refresh button: no SDK page header,
+   * no page padding or width limit. Page actions (docs, add) move to a toolbar row — the SDK's own,
+   * or the host's via `toolbar`. Default `false` (stand-alone plugin page, unchanged).
+   */
+  readonly embedded?: boolean;
+  /**
+   * Embedded only: render the page actions with the host's own buttons. Return `null` to show none.
+   * Without it, an embedded page shows the SDK's 「文档」/「添加」 buttons (no 「刷新」).
+   */
+  readonly toolbar?: (controls: AdapterConsoleToolbarControls) => React.ReactNode;
+  /**
+   * Changing this value re-reads everything, as the SDK's 「刷新」 does — wire the host's refresh
+   * button to it. The first value does not trigger a read.
+   */
+  readonly refreshKey?: string | number;
 }
+
+/** What this `AdapterConsolePage` supports, for hosts that must also run against older SDKs. */
+export const ADAPTER_CONSOLE_PAGE_CAPABILITIES = Object.freeze({ embedded: true, toolbar: true, refreshKey: true } as const);
 
 /**
  * Shared React page body for adapter Console pages.
@@ -185,7 +222,7 @@ export interface AdapterConsolePageProps {
  * `endpoint.test`, and LoginAssist's `login.list` / `login.submit` / `login.cancel`.
  * Adapter-specific controls come from `status.actions` (for example QQ QR binding).
  */
-export function AdapterConsolePage({ adapterKey }: AdapterConsolePageProps) {
+export function AdapterConsolePage({ adapterKey, embedded, toolbar, refreshKey }: AdapterConsolePageProps) {
   const [connection, setConnection] = useState(0);
   const context = useRef(captureAdapterConsoleContext());
   useEffect(() => {
@@ -205,12 +242,13 @@ export function AdapterConsolePage({ adapterKey }: AdapterConsolePageProps) {
       clearInterval(timer);
     };
   }, []);
-  return <AdapterConsoleSession key={`${adapterKey}:${connection}`} adapterKey={adapterKey} isCurrent={context.current} />;
+  return <AdapterConsoleSession key={`${adapterKey}:${connection}`} adapterKey={adapterKey} embedded={embedded} toolbar={toolbar} refreshKey={refreshKey} isCurrent={context.current} />;
 }
+AdapterConsolePage.capabilities = ADAPTER_CONSOLE_PAGE_CAPABILITIES;
 
 type EditorState = { instanceId: string; id: string; originalId: string; values: Record<string, string>; originalValues: Readonly<Record<string, string>>; generation: number; revision: number | null };
 
-function AdapterConsoleSession({ adapterKey, isCurrent }: AdapterConsolePageProps & { readonly isCurrent: () => boolean }) {
+function AdapterConsoleSession({ adapterKey, embedded = false, toolbar, refreshKey, isCurrent }: AdapterConsolePageProps & { readonly isCurrent: () => boolean }) {
   const alive = useRef(true);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   const current = useCallback(() => alive.current && isCurrent(), [isCurrent]);
@@ -273,6 +311,14 @@ function AdapterConsoleSession({ adapterKey, isCurrent }: AdapterConsolePageProp
   const reread = async () => {
     if (await refreshAll()) { setRuntimeBlocked(false); setMigration(undefined); setNotice(undefined); }
   };
+
+  // The host's refresh button: every new `refreshKey` after the first re-reads, like the SDK's 「刷新」.
+  const seenRefreshKey = useRef(refreshKey);
+  useEffect(() => {
+    if (Object.is(seenRefreshKey.current, refreshKey)) return;
+    seenRefreshKey.current = refreshKey;
+    void run('refresh', t(locale, '刷新'), reread);
+  }, [refreshKey]);
 
   const rememberTrigger = () => { returnFocus.current = typeof document === 'undefined' ? null : document.activeElement as HTMLElement | null; };
   const restoreTrigger = () => {
@@ -653,20 +699,32 @@ function AdapterConsoleSession({ adapterKey, isCurrent }: AdapterConsolePageProp
   );
   const hasSidebar = !!status && (sidebarActions.length > 0 || sidebarExtraEntries.length > 0);
   const statusError = statusRead.error;
+  const canAdd = !!runtime && !!status?.canAdd;
+  const docsLink = docsUrl ? <a href={docsUrl} target="_blank" rel="noreferrer" className="zk-btn zk-btn--secondary">{t(locale, '文档')}</a> : null;
+  const addButton = canAdd ? <Button variant="primary" disabled={addDisabled} aria-expanded={addOpen} aria-controls="adapter-add-account" onClick={toggleAdd}>{addOpen ? t(locale, '取消') : t(locale, '添加')}</Button> : null;
+  const toolbarControls: AdapterConsoleToolbarControls = {
+    ...(docsUrl ? { docsUrl } : {}),
+    ...(canAdd ? { add: { open: addOpen, disabled: addDisabled, toggle: toggleAdd, controls: 'adapter-add-account' } } : {}),
+    refresh: () => run('refresh', t(locale, '刷新'), reread),
+    refreshing: isBusy('refresh'),
+  };
 
   return (
-    <PluginPage>
+    <PluginPage className={embedded ? 'zk-page--embedded' : undefined} data-embedded={embedded || undefined}>
       <style>{adapterConsoleStyles}</style>
-      <PageHeader
+      {!embedded && <PageHeader
         title={title}
         mark={status ? title.slice(0, 2) : undefined}
         description={status ? t(locale, runtime ? '管理 {0} 的账号与登录。' : '查看 {0} 的连接与账号配置。', title) : undefined}
         actions={<>
-          {docsUrl && <a href={docsUrl} target="_blank" rel="noreferrer" className="zk-btn zk-btn--secondary">{t(locale, '文档')}</a>}
+          {docsLink}
           <Button busy={isBusy('refresh')} onClick={() => run('refresh', t(locale, '刷新'), reread)}>{isBusy('refresh') ? t(locale, '刷新中…') : t(locale, '刷新')}</Button>
-          {runtime && status?.canAdd && <Button variant="primary" disabled={addDisabled} aria-expanded={addOpen} aria-controls="adapter-add-account" onClick={toggleAdd}>{addOpen ? t(locale, '取消') : t(locale, '添加')}</Button>}
+          {addButton}
         </>}
-      />
+      />}
+      {embedded && (toolbar
+        ? (() => { const node = toolbar(toolbarControls); return node == null || node === false ? null : <div className="zk-embedded-toolbar">{node}</div>; })()
+        : (docsLink || addButton) && <div className="zk-embedded-toolbar zk-row">{docsLink}{addButton}</div>)}
 
       {status && <nav className="zk-nav" aria-label={t(locale, '页面导航')}>
         <a href="#adapter-accounts" onClick={(e) => { if (addOpen || editor) { e.preventDefault(); if (addOpen) toggleAdd(); if (editor) closeEdit(); } }}>{t(locale, '账号')}<span className="zk-count">{runtime?.endpoints.length ?? status.configured.length}</span></a>

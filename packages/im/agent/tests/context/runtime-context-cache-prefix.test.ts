@@ -80,7 +80,7 @@ describe('current-message runtime context keeps the history prefix cacheable', (
     expect(partsN[1]!.startsWith('\n')).toBe(true);
 
     const history = [stored(firstUser), reply('hello alice', 2_000)];
-    const secondUser = currentMessage('what about tomorrow?', 3_000, actor('bob', ['master']), 2);
+    const secondUser = currentMessage('what about tomorrow?', 3_000, actor('bob', ['owner']), 2);
     const requestN1 = request(model, [...history, secondUser]);
     expect(userParts(requestN1[0])).toEqual([partsN[0]]);
     expect(JSON.stringify(requestN1)).not.toContain('rule 1');

@@ -594,18 +594,19 @@ export type ConsoleConfigPatchResult =
     message: string;
   }>;
 
-/** Console plugin management RPC names. Mutations remain full-scope only. */
+/**
+ * Console plugin management RPC names. Mutations remain full-scope only. Package installs,
+ * updates and uninstalls are gateway dependency transactions (`gateway.packages.*`, ADR 0054 §4);
+ * the instance only plans them read-only here.
+ */
 export const PLUGIN_RPC = Object.freeze({
   INSPECT: 'plugin:inspect',
   APPLY: 'plugin:apply',
   PLAN_VERIFICATION: 'plugin:plan-verification',
   VERIFY: 'plugin:verify',
   PLAN_INSTALL: 'plugin:plan-install',
-  INSTALL: 'plugin:install',
   PLAN_UNINSTALL: 'plugin:plan-uninstall',
-  UNINSTALL: 'plugin:uninstall',
   PLAN_UPDATE: 'plugin:plan-update',
-  UPDATE: 'plugin:update',
   VALIDATE_CONFIG: 'plugin:validate-config',
   DIAGNOSE: 'plugin:diagnose',
   SET_ENABLED: 'plugin:set-enabled',
@@ -714,6 +715,7 @@ export * from './permissions.js';
 export * from './plugin-permissions.js';
 export * from './navigation.js';
 export * from './feature.js';
+export * from './chat-roles.js';
 export * from './gateway.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {

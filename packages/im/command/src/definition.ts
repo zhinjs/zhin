@@ -167,7 +167,16 @@ export interface CommandScene {
 export interface CommandSender {
   readonly id: string;
   readonly name?: string;
-  readonly role: readonly string[];
+  /** Highest zhin chat role effective in this conversation (ADR 0056), set by the Runtime. */
+  readonly chatRole?: 'owner' | 'admin' | 'trusted';
+  /** Per role, the topmost level it is held at on this conversation's chain, set by the Runtime. */
+  readonly chatRoleLevels?: Readonly<Partial<Record<'owner' | 'admin' | 'trusted', 'global' | 'adapter' | 'endpoint' | 'conversation'>>>;
+  /** Normalized platform standing; absent in private chats. */
+  readonly platform?: Readonly<{
+    standing: 'owner' | 'admin' | 'member' | 'guest';
+    roles?: readonly Readonly<{ id: string; name?: string }>[];
+    permissions?: readonly string[];
+  }>;
 }
 
 /**
@@ -201,7 +210,7 @@ export interface CommandMessage {
   /** Display preference resolved by the IM runtime, when this is an IM operation. */
   readonly locale?: Locale;
   /** 发送者（结构化视图见 CommandContext.sender）。 */
-  readonly sender?: { readonly id: string; readonly name?: string; readonly roles?: readonly string[] };
+  readonly sender?: { readonly id: string; readonly name?: string; readonly chatRole?: CommandSender['chatRole']; readonly chatRoleLevels?: CommandSender['chatRoleLevels']; readonly platform?: CommandSender['platform'] };
   readonly id?: string;
   readonly metadata?: Readonly<Record<string, unknown>>;
   readonly clientAdapter?: string;
@@ -332,7 +341,7 @@ export interface CommandDefinition<
   readonly preferredAliasI18n?: Readonly<Partial<Record<Locale, string>>>;
   /**
    * 内置 permit DSL（AND）。单项内逗号为 OR。
-   * 例：`adapter(icqq)`、`role(master)`、`group(123,456)`。
+   * 例：`adapter(icqq)`、`owner`、`trusted`、`platform:admin`、`group(123,456)`。
    */
   readonly permit?: readonly string[];
   /** Optional full-operation cooldown, concurrency and one-shot progress feedback. */
@@ -650,14 +659,12 @@ export function resolveCommandSession(input: unknown): CommandSession {
   if (operation) {
     const endpoint = input && typeof input === 'object' ? (input as { readonly endpointId?: unknown }).endpointId : undefined;
     const sender = operation.sender;
-    const roles = [...new Set([...sender?.authorizationRoles ?? [], ...sender?.platformRoles ?? []])];
     return Object.freeze({
       adapter: operation.scene.endpoint.adapter,
       ...(typeof endpoint === 'string' && endpoint ? { endpoint } : {}),
       scene: Object.freeze({ id: operation.scene.id, type: operation.scene.kind,
         ...(operation.scene.name !== undefined ? { name: operation.scene.name } : {}) }),
-      ...(sender ? { sender: Object.freeze({ id: sender.id, ...(sender.name !== undefined ? { name: sender.name } : {}),
-        role: Object.freeze(roles.length ? roles : ['user']) }) } : {}),
+      ...(sender ? { sender: freezeSender(sender) } : {}),
     });
   }
   if (!isCommandMessageLike(input)) return Object.freeze({});
@@ -737,38 +744,8 @@ export function resolveCommandSender(
   if (!id) return undefined;
 
   const name = input.sender?.name || firstString(metadata?.nickname, metadata?.senderName, metadata?.name);
-  const role = resolveRoles(input, metadata);
-
-  return Object.freeze({
-    id,
-    ...(name !== undefined ? { name } : {}),
-    role,
-  });
-}
-
-function resolveRoles(
-  input: Pick<CommandMessage, 'sender'>,
-  metadata: Readonly<Record<string, unknown>> | undefined,
-): readonly string[] {
-  if (input.sender?.roles?.length) {
-    return Object.freeze([...input.sender.roles]);
-  }
-  const roles: string[] = [];
-  const push = (value: unknown) => {
-    if (typeof value !== 'string') return;
-    const trimmed = value.trim();
-    if (trimmed && !roles.includes(trimmed)) roles.push(trimmed);
-  };
-
-  if (Array.isArray(metadata?.roles)) {
-    for (const item of metadata.roles) push(item);
-  }
-  push(metadata?.senderRole);
-  push(metadata?.role);
-  if (metadata?.isMaster === true) push('master');
-  if (metadata?.isTrusted === true) push('trusted');
-  if (roles.length === 0) roles.push('user');
-  return Object.freeze(roles);
+  // Roles come only from the Runtime-set sender fields, never from metadata (ADR 0056).
+  return freezeSender({ ...(input.sender ?? {}), id, ...(name !== undefined ? { name } : {}) } as CommandSender);
 }
 
 function isCommandScene(value: unknown): value is CommandScene {
@@ -785,15 +762,35 @@ function isCommandSender(value: unknown): value is CommandSender {
   const sender = value as Partial<CommandSender>;
   return typeof sender.id === 'string'
     && sender.id.length > 0
-    && Array.isArray(sender.role)
-    && sender.role.every((item) => typeof item === 'string');
+    && (sender.chatRole === undefined || isChatRoleName(sender.chatRole));
 }
 
-function freezeSender(sender: CommandSender): CommandSender {
+function isChatRoleName(value: unknown): value is NonNullable<CommandSender['chatRole']> {
+  return value === 'owner' || value === 'admin' || value === 'trusted';
+}
+
+const STANDINGS = new Set(['owner', 'admin', 'member', 'guest']);
+
+const LEVELS = new Set(['global', 'adapter', 'endpoint', 'conversation']);
+
+function chatRoleLevelsOf(value: unknown): CommandSender['chatRoleLevels'] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const levels = Object.fromEntries((['owner', 'admin', 'trusted'] as const)
+    .filter(role => LEVELS.has(String((value as Record<string, unknown>)[role])))
+    .map(role => [role, (value as Record<string, unknown>)[role]]));
+  return Object.keys(levels).length ? Object.freeze(levels) as CommandSender['chatRoleLevels'] : undefined;
+}
+
+function freezeSender(sender: Readonly<{ id: string; name?: string; chatRole?: unknown; chatRoleLevels?: unknown; platform?: unknown }>): CommandSender {
+  const platform = sender.platform && typeof sender.platform === 'object'
+    && STANDINGS.has(String((sender.platform as { standing?: unknown }).standing))
+    ? sender.platform as CommandSender['platform'] : undefined;
   return Object.freeze({
     id: sender.id,
     ...(sender.name !== undefined ? { name: sender.name } : {}),
-    role: Object.freeze([...sender.role]),
+    ...(isChatRoleName(sender.chatRole) ? { chatRole: sender.chatRole } : {}),
+    ...(isChatRoleName(sender.chatRole) && chatRoleLevelsOf(sender.chatRoleLevels) ? { chatRoleLevels: chatRoleLevelsOf(sender.chatRoleLevels) } : {}),
+    ...(platform ? { platform } : {}),
   });
 }
 

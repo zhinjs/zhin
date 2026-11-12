@@ -135,17 +135,17 @@ describe('buildFieldBasedInstanceConfig', () => {
     });
   });
 
-  it('keeps icqq master at top level and id in endpoints', () => {
+  it('keeps icqq shared fields at top level and id in endpoints (no master: owners are chat roles, ADR 0056)', () => {
     const config = buildFieldBasedInstanceConfig(
       def('icqq', [
         { key: 'id', message: 'QQ 号:' },
-        { key: 'master', message: '主人 QQ 号:', scope: 'shared' },
+        { key: 'signApiAddr', message: '签名服务器:', scope: 'shared' },
       ]),
-      { id: '${ICQQ_ACCOUNT}', master: '1659488338' },
+      { id: '${ICQQ_ACCOUNT}', signApiAddr: 'http://sign.local' },
     );
 
     expect(config).toEqual({
-      master: '1659488338',
+      signApiAddr: 'http://sign.local',
       endpoints: [{ id: '${ICQQ_ACCOUNT}' }],
     });
   });

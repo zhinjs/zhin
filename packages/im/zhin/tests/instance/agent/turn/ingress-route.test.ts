@@ -329,6 +329,7 @@ describe('CLI progressive reply ingress', () => {
       expect(options.source!.event).toBe(flow.event);
       expect((options.source!.event as typeof flow.event).nativeMethod()).toBe('sdk');
       expect(options.beforeSubmit).not.toThrow();
+      expect(options.mediaTrust?.source).toBe('agent:reply');
       const owned = { type: 'image' as const, data: { media: { kind: 'url' as const, value: 'https://assets.fixture.test/owned.png' } } };
       expect(await options.prepare!([owned], request.signal)).toEqual([owned]);
       const denied = await options.prepare!([{ type: 'image', data: { media: { kind: 'url', value: 'https://private.fixture.test/secret.png' } } },
@@ -395,7 +396,12 @@ describe('CLI progressive reply ingress', () => {
       return { status: 'completed', output: [] };
     } });
     await f.run();
-    expect(f.reply).toHaveBeenCalledExactlyOnceWith([{ type: 'text', data: { text: 'ordinary answer' } }]);
+    // Model output is delivered as untrusted content: Core holds its media to the untrusted-source policy.
+    expect(f.reply).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      $content: 'zhin.untrusted-content/1',
+      content: [{ type: 'text', data: { text: 'ordinary answer' } }],
+      trust: expect.objectContaining({ source: 'agent:reply' }),
+    }));
     expect(f.native.finish).not.toHaveBeenCalled();
     expect(f.release).toHaveBeenCalledOnce();
   });
@@ -419,7 +425,8 @@ function localizedIngress(options: { prefix?: string; locale?: 'zh-CN' | 'en'; t
     {
       conversation: conversation,
       content: options.text,
-      sender: { id: 'user' },
+      // The bot owner (ADR 0056: Runtime-set chat role).
+      sender: { id: 'user', chatRole: 'owner', chatRoleLevels: { owner: 'global' } },
       metadata: {},
       segments: [],
       endpointId: 'bot',
@@ -447,7 +454,7 @@ function localizedIngress(options: { prefix?: string; locale?: 'zh-CN' | 'en'; t
     ingress: { read: async () => ({ agents: [], tools: [] }) } as never,
     agent: { service: {
       getBindingRegistry: () => ({ requireZhinBinding: () => ({ name: 'zhin', mcpServers: [] }) }),
-      getTriggerConfig: () => ({ enabled: options.enabled ?? false, masters: ['user'], errorTemplate: options.errorTemplate }),
+      getTriggerConfig: () => ({ enabled: options.enabled ?? false, errorTemplate: options.errorTemplate }),
       getAgentConfig: () => ({ execApprovalMode: 'ask' }),
     }, agent: {} } as never,
   });
@@ -574,7 +581,6 @@ describe('personal Session IM ingress', () => {
         service: {
           getBindingRegistry: () => ({ requireZhinBinding: () => ({ name: 'zhin', mcpServers: [] }) }),
           getTriggerConfig: () => ({ enabled: true,
-            ...(options.masters ? { masters: options.masters } : {}),
             ...(options.events ? { sceneEvents: { conversations: ['*'] } } : {}),
             ...(options.ambient ? { ambient: { conversations: ['*'], quietMs: 0, cooldownMs: 0, judgeIntervalMs: 0 } } : {}),
           }),
@@ -587,7 +593,8 @@ describe('personal Session IM ingress', () => {
     const run = async (subjectId: string, text = '#hello', target = conversation, account = 'account-a', extra: Partial<Message> = {}) => {
       const message = {
         ...extra,
-        conversation: target, content: text, endpointId: account, sender: { id: subjectId },
+        conversation: target, content: text, endpointId: account,
+        sender: { id: subjectId, ...(options.masters?.includes(subjectId) ? { chatRole: 'owner' as const, chatRoleLevels: { owner: 'global' as const } } : {}) },
         message: { conversation: target, id: `message-${subjectId}` },
         $reply: vi.fn(async () => ({ status: 'sent' })),
       } as unknown as Message;

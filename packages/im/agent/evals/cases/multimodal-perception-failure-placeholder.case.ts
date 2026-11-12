@@ -8,7 +8,7 @@ export default defineEvalCase({
   tags: ['multimodal'],
   perception: {},
   agentConfig: { providerResilience: { maxRetries: 0, baseDelayMs: 1, maxDelayMs: 1 } },
-  inbound: { text: '@bot 看看这个', scope: 'group', sender: { id: 'bob', roles: ['user'] }, images: [RED_CIRCLE_PNG] },
+  inbound: { text: '@bot 看看这个', scope: 'group', sender: { id: 'bob' }, images: [RED_CIRCLE_PNG] },
   script: [
     { model: 'scripted-perception', fault: { kind: 'error', message: 'Service Unavailable', status: 503 } },
     { model: 'scripted-model', text: '我看不到图片内容。' },

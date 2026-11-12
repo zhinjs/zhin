@@ -40,7 +40,8 @@ export interface ExpiredSessionNotice {
 }
 
 const DEADLINE_ACTOR = 'deadline';
-const MANAGER_ROLES: readonly string[] = ['master', 'trusted', 'owner', 'admin'];
+/** zhin chat role `trusted` or higher (ADR 0056; platform standing does not count). */
+const MANAGER_ROLES: readonly string[] = ['trusted'];
 function noGame(message: GamePlayer): string { return messages(message.locale, 'noGame') + gameCommandHint(message, 'roulette', 'open'); }
 
 export async function runRouletteAction(
@@ -74,12 +75,19 @@ export async function expireOverdueSessions(
   flow: RouletteFlow,
   now: number,
   onNotice?: (notice: ExpiredSessionNotice) => Promise<void> | void,
+  isEnabled?: (session: RouletteSessionRow) => boolean,
 ): Promise<readonly ExpiredSessionNotice[]> {
   const overdue = await flow.services.sessions.listOverdue(now);
   const notices: ExpiredSessionNotice[] = [];
   for (const session of overdue) {
     try {
       await flow.services.sessions.runInScope({ scope: session.channel_key, run: async () => {
+        // Switched off for this conversation (ADR 0050 / 0055): end the game silently, without a
+        // result, records, mute penalty or announcement.
+        if (isEnabled && !isEnabled(session)) {
+          await abortSilently(flow, session);
+          return;
+        }
         const text = await expireSession(flow, session);
         if (!text) return;
         const notice = { session, text };
@@ -166,6 +174,15 @@ async function describeResult(
     return messages(locale, 'text5', { p0: playerFromMessage(message).name, p1: describeLobby(state, flow.config, presentation) });
   }
   return describeLobby(state, flow.config, presentation);
+}
+
+async function abortSilently(flow: RouletteFlow, session: RouletteSessionRow): Promise<void> {
+  try {
+    await flow.services.sessions.applyAction(session, DEADLINE_ACTOR, { type: 'cancel' }, flow.config);
+  } catch (error) {
+    if (error instanceof SessionRevisionConflictError) return;
+    throw error;
+  }
 }
 
 async function expireSession(flow: RouletteFlow, session: RouletteSessionRow): Promise<string> {
@@ -311,7 +328,7 @@ const messages = createMessages({
   text7: { 'zh-CN': "🔇 {p0} 被禁言 {p1} 秒。", en: "🔇 {p0} was muted for {p1} seconds." },
   text8: { 'zh-CN': "（禁言没有成功，可能是机器人没有群管理权限；本局只计分。）", en: "(Muting failed, possibly because the bot lacks group management permission. Only scores were recorded.)" },
   text9: { 'zh-CN': "禁言惩罚只能在群聊里设置。", en: "Mute penalties can only be configured in a group chat." },
-  text10: { 'zh-CN': "只有群主、群管理员、机器人主人或受信任用户可以修改禁言惩罚。", en: "Only the group owner, group admin, bot owner or a trusted user may change mute penalties." },
+  text10: { 'zh-CN': "只有本会话 zhin 角色 trusted 及以上（owner / admin / trusted）的用户可以修改禁言惩罚。", en: "Only users with the zhin role trusted or higher (owner / admin / trusted) in this conversation may change mute penalties." },
   text11: { 'zh-CN': "已关闭禁言惩罚，本群轮盘只计分。", en: "Mute penalties are disabled. This group now records scores only." },
   text12: { 'zh-CN': "当前平台不支持禁言，禁言惩罚没有开启；本群轮盘只计分。", en: "This platform does not support muting. Mute penalties remain disabled; only scores are recorded." },
   text13: { 'zh-CN': "已开启禁言惩罚：每局输家会被禁言 {p0} 秒（需要机器人有群管理权限）。", en: "Mute penalties enabled: each loser is muted for {p0} seconds (the bot needs group management permission)." },

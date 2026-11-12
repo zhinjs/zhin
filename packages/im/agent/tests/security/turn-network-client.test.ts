@@ -80,7 +80,7 @@ describe('TurnNetworkClient', () => {
 
 function policy(allowedDomains: readonly string[]): ToolInvocationPolicy {
   return {
-    permissions: ['master'],
+    permissions: ['owner'],
     unattended: false,
     network: { enabled: true, httpsOnly: true, allowedDomains },
   };

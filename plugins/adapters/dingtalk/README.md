@@ -145,3 +145,7 @@ canonical `share` 编码为原生 `link` 卡片，映射 `url/title/description/
 先通过临时启动配置加 `streamProxy`，若未知网关域名，可先填写占位域名；拒绝日志只显示实际 hostname。使用该域名启动 `scripts/platform-acceptance/tcp-fault-proxy.mjs --upstream-host 实际网关域名 --upstream-port 443 --port 18443 --control-port 18444`，将 serverName 同步设为此域名。不要覆盖用户已有 `.env`。恢复正常验收后移除临时配置并停止代理。
 
 正常收发后 `POST http://127.0.0.1:18444/cut`；现有 WSS 立即关闭，Endpoint 的 `transportState` 经统一 lifecycle 进入重连，期间健康记录不能认定在线。`POST /recover` 后仅允许新建连接；需观察重新 `open`，再发送新的唯一 probe，验证入站及可见回包。Stream 入站恢复与 sessionWebhook 出站恢复是不同链路：该代理仅切断 WSS，HTTP 发送未被切断；不能把这次试验记为所有平台网络故障、发送重试或离线消息无损验收。网关域名变化需停止验收并更新固定上游，不能绕代理继续取通过证据。
+
+## 成员身份
+
+群聊回调的 `isAdmin` 归一为 `sender.platform.standing`（`admin` / `member`；回调不区分群主）；单聊不上报。能力画像：`group.scene.platformStanding = { standing: true }`。详见 [ADR 0056 §1](https://github.com/zhinjs/zhin/blob/main/docs/adr/0056-chat-roles.md)。

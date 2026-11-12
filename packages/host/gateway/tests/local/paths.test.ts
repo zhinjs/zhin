@@ -10,6 +10,10 @@ describe('gateway local endpoint paths', () => {
     expect(windowsPipeName('C:\\Users\\me\\other')).not.toBe(name);
     expect(gatewaySocketPath('C:\\Users\\me\\bot', { platform: 'win32' })).toBe(name);
     expect(isNamedPipe(name)).toBe(true);
+    // A running gateway adds a random component per start (Node cannot set a pipe DACL).
+    const running = gatewaySocketPath('C:\\Users\\me\\bot', { platform: 'win32', nonce: 'a1b2c3d4' });
+    expect(running).toBe(`${name}-a1b2c3d4`);
+    expect(isNamedPipe(running)).toBe(true);
   });
 
   it('uses .zhin/gateway.sock on Unix, and a hashed temp path when that is too long', () => {

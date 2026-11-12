@@ -28,7 +28,9 @@ const botRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const packageJson = JSON.parse(
   fs.readFileSync(path.join(botRoot, 'package.json'), 'utf8'),
 ) as {
+  scripts: Record<string, string>;
   dependencies: Record<string, string>;
+  devDependencies?: Record<string, string>;
   zhin: {
     entry: string;
     features: Array<{ package: string }>;
@@ -281,6 +283,18 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
       projections: 7,
     });
     expect((await new MigrationReadiness().inspect(botRoot)).state).toBe('ready');
+  });
+
+  it('starts through the management gateway in the foreground, with the start stack in dependencies', () => {
+    // The gateway's foreground mode hands the TTY's stdin to the instance, so the terminal
+    // adapter keeps working without --standalone (ADR 0054).
+    expect(packageJson.scripts.dev).toBe('zhin start --foreground --watch source config');
+    expect(packageJson.scripts.start).toBe('zhin start --foreground --mode production --no-watch');
+    expect(Object.values(packageJson.scripts).join('\n')).not.toContain('--standalone');
+    for (const name of ['zhin.js', '@zhin.js/cli', '@zhin.js/gateway']) {
+      expect(packageJson.dependencies[name], name).toBe('workspace:*');
+      expect(packageJson.devDependencies?.[name], name).toBeUndefined();
+    }
   });
 });
 

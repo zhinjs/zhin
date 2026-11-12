@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/milky/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/milky/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=b1d34f641188f485 -->
+<!-- sync-adapter-docs:sha256=d68d291a916d0f51 -->
 
 # @zhin.js/adapter-milky
 
@@ -126,3 +126,7 @@ milky:
 ## 许可证
 
 MIT License
+
+## 成员身份
+
+群消息的 `group_member.role`（`owner` / `admin` / `member`）归一为 `sender.platform.standing`；私聊、临时会话不上报。Milky 没有平台原生角色与权限位。能力画像：`group.scene.platformStanding = { standing: true }`。详见 [ADR 0056 §1](https://github.com/zhinjs/zhin/blob/main/docs/adr/0056-chat-roles.md)。

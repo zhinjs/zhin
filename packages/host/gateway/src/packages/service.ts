@@ -76,8 +76,13 @@ export interface GatewayPackageServiceOptions {
   readonly marketCatalog?: () => readonly MarketCatalogEntry[] | Promise<readonly MarketCatalogEntry[]>;
   /** Extra policy after the built-in rules; throw to deny. */
   readonly authorize?: (principal: GatewayPrincipal, action: GatewayPackageAction, packages: readonly GatewayAuthorizedPackage[]) => void | Promise<void>;
-  /** Time the instance gets to report `ready` after a transaction. Default 60 s (`gateway.readyTimeout`). */
-  readonly readyTimeoutMs?: number;
+  /**
+   * Time the instance gets to report `ready` after a transaction. Default 60 s
+   * (`gateway.readyTimeout`). A function is read at each start, after {@link beforeTransaction}.
+   */
+  readonly readyTimeoutMs?: number | (() => number | undefined);
+  /** Runs at the start of every transaction (the gateway re-reads `gateway.readyTimeout`). */
+  readonly beforeTransaction?: () => Promise<void>;
   /** After `ready`, a failure within this window (crash, crash storm) fails the transaction. Default 5 s. */
   readonly stableMs?: number;
   readonly now?: () => number;
@@ -290,6 +295,7 @@ export class GatewayPackageService {
       const authorized = await this.authorize(options.principal, operation, packages);
       const release = await this.#lock();
       try {
+        await this.#options.beforeTransaction?.().catch(() => undefined);
         return await this.#run(id, operation, authorized, options, execute);
       } finally {
         await release();
@@ -400,7 +406,8 @@ export class GatewayPackageService {
 
   /** Starts the instance, waits for `ready` within the timeout, then for the stability window. */
   async #startInstance(instance: PackageTransactionInstance, logMark: number): Promise<void> {
-    const readyTimeoutMs = this.#options.readyTimeoutMs ?? DEFAULT_PACKAGE_READY_TIMEOUT_MS;
+    const configured = this.#options.readyTimeoutMs;
+    const readyTimeoutMs = (typeof configured === 'function' ? configured() : configured) ?? DEFAULT_PACKAGE_READY_TIMEOUT_MS;
     const stableMs = this.#options.stableMs ?? DEFAULT_PACKAGE_STABLE_MS;
     // With the log collector, only lines captured since the transaction started (the supervisor's
     // failure tail also holds earlier runs); without it, the failure's own tail.

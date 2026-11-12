@@ -3,33 +3,6 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "master": {
-      "type": [
-        "string",
-        "number"
-      ],
-      "description": "框架 master QQ uin（/approve、AI/工具权限）；endpoints[i].master 可逐项覆盖",
-      "x-i18n": {
-        "en": {
-          "description": "Framework master QQ uin list for approval and AI/tool permissions. endpoints[i].master can override this value."
-        }
-      }
-    },
-    "trusted": {
-      "type": "array",
-      "items": {
-        "type": [
-          "string",
-          "number"
-        ]
-      },
-      "description": "框架 trusted QQ uin 列表（弱于 master）",
-      "x-i18n": {
-        "en": {
-          "description": "Framework trusted QQ uin list, below master authority."
-        }
-      }
-    },
     "password": {
       "type": "string",
       "description": "QQ 密码（可选，不填则扫码登录）",
@@ -180,33 +153,6 @@
             "type": "string",
             "pattern": "^[0-9]+$",
             "description": "QQ uin"
-          },
-          "master": {
-            "type": [
-              "string",
-              "number"
-            ],
-            "description": "本 endpoint 的 master QQ uin；覆盖顶层 master",
-            "x-i18n": {
-              "en": {
-                "description": "Master QQ uin list for this endpoint, overriding the top-level master list."
-              }
-            }
-          },
-          "trusted": {
-            "type": "array",
-            "items": {
-              "type": [
-                "string",
-                "number"
-              ]
-            },
-            "description": "本 endpoint 的 trusted 列表",
-            "x-i18n": {
-              "en": {
-                "description": "Trusted users for this endpoint."
-              }
-            }
           },
           "password": {
             "type": "string",
@@ -586,7 +532,6 @@
     }
   },
   "required": [
-    "master",
     "endpoints"
   ],
   "$defs": {

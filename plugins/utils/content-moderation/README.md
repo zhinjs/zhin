@@ -22,10 +22,11 @@ content-moderation:
   maskChar: "*"
   # 省略 replyTemplate 时跟随本次消息语言；填写后原样使用，不自动翻译。
   # replyTemplate: "消息含不当内容，已拦截。"
-  masters: [] # 额外 master userId（兜底）
   inbound:
     enabled: true
-    bypassMasters: true
+    # 满足任一 permit 的发送者跳过入站审查（ADR 0056 §5，与命令 / 工具同一评估器）。
+    # 内容审核是平台功能：默认 zhin owner 或平台群主 / 管理员；[] 表示都审。
+    bypass: [owner, "platform:admin"]
     whitelist:
       userIds: []
       conversationIds: []
@@ -62,6 +63,10 @@ content-moderation:
 ```
 
 
+
+## 分层配置（ADR 0050 / 0055）
+
+审查引擎每代配置一次，所有字段（审查源、动作、词库、群管理范围等）只能在全局层修改；启停开关支持适配器、账号与会话四级，停用后该会话的入站 / 出站审查中间件都不运行。注意：开启群内自助后，群 `admin` 也能用 `功能 关闭 content-moderation` 关闭本群审查；需要强制审查的部署不要开启群内自助，或在 Console 收紧角色。
 
 ## 可选的自动群管理
 

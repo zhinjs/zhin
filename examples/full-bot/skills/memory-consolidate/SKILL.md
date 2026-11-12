@@ -1,6 +1,6 @@
 ---
 name: memory-consolidate
-description: 回合末或 master 说「记住」时，将 1–3 条可检索事实写入 memory_entries（memory_upsert），文件 MEMORY.md 仅保留纲领。
+description: 回合末或主人（聊天角色 owner）说「记住」时，将 1–3 条可检索事实写入 memory_entries（memory_upsert），文件 MEMORY.md 仅保留纲领。
 tools:
   - memory_upsert
   - memory_search

@@ -5,7 +5,7 @@ export default defineEvalCase({
   description: 'A match-everything grep pattern is refused with a hint to use read_file / glob instead of dumping every line.',
   source: '#716 agent-file-tool-hygiene (grep ".*" flooded the context)',
   tags: ['context', 'tool-use'],
-  inbound: { text: '把 src 里的内容都给我看看', sender: { id: 'master', roles: ['master'] } },
+  inbound: { text: '把 src 里的内容都给我看看', sender: { id: 'master', chatRole: 'owner' } },
   workspace: { 'src/a.ts': 'export const a = 1;\n', 'src/b.ts': 'export const b = 2;\n' },
   nativeTools: ['grep', 'glob'],
   script: [

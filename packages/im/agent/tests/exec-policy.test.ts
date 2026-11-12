@@ -507,6 +507,15 @@ describe('checkExecPolicy', () => {
     expect(r.needsApproval).toBeUndefined();
   });
 
+  it('a conversation / account / adapter owner is not the host owner for exec (ADR 0056 §2)', () => {
+    const config = makeConfig({ execAllowlist: ['ls'], execApprovalMode: 'ask' });
+    for (const level of ['conversation', 'endpoint', 'adapter'] as const) {
+      const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'c-owner', chatRole: 'owner', chatRoleLevel: level });
+      const r = runWithCommMessage(ctx, () => checkExecPolicy(config, 'npm install'));
+      expect(r.allowed).toBe(false);
+    }
+  });
+
   it('trusted per-turn policy can require approval even for an owner', () => {
     const config = makeConfig({ execAllowlist: ['ls'], execApprovalMode: 'ask' });
     const ctx = mockCommMessage({ adapter: 'sandbox', endpoint: 'bot1', senderId: 'owner99', isMaster: true });

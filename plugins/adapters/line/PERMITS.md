@@ -15,3 +15,7 @@ LINE 的权限模型通过 LINE Official Account Manager 管理，不在 bot 层
 | `profile` | 获取用户资料 |
 
 如需额外权限，请在 LINE Developers Console 的 Messaging API 设置中启用。
+
+## 目标来源
+
+`line_get_group_members` 只读取当前群（不接受 `groupId`）。

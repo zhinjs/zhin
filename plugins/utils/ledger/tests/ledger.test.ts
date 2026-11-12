@@ -1,4 +1,4 @@
-import { createFakePlugin, FakeClock, type FakePlugin } from '@zhin.js/testing';
+import { createFakePlugin, FakeClock, type FakeFeatureView, type FakePlugin } from '@zhin.js/testing';
 import { createCapabilitySlot, outboundHostToken, rootPluginId, type RuntimeSnapshot } from 'zhin.js';
 import { CommandIndex, commandFeatureId, parseCommandDefinition, type CommandDefinition, type CommandMessage } from 'zhin.js/command';
 import plugin from '../plugin.js';
@@ -55,7 +55,7 @@ interface Fixture {
   privateMessagesTo(userId: string): string[];
 }
 
-async function createFixture(options: { config?: Partial<LedgerConfig>; outbound?: boolean } = {}): Promise<Fixture> {
+async function createFixture(options: { config?: Partial<LedgerConfig>; outbound?: boolean; feature?: FakeFeatureView<Partial<LedgerConfig>> } = {}): Promise<Fixture> {
   const clock = new FakeClock(WEDNESDAY_10_00_SHANGHAI);
   vi.spyOn(Date, 'now').mockImplementation(() => clock.now());
   const fake = createFakePlugin<Partial<LedgerConfig>>({
@@ -63,6 +63,7 @@ async function createFixture(options: { config?: Partial<LedgerConfig>; outbound
     clock,
     config: options.config ?? { timezone: 'Asia/Shanghai', reportTime: '22:00' },
     hosts: { outbound: options.outbound ?? true },
+    ...(options.feature ? { feature: options.feature } : {}),
   });
   await fake.setup(plugin);
   const owner = rootPluginId();
@@ -256,6 +257,15 @@ describe('group privacy', () => {
     expect(reply).not.toMatch(/18\.5|¥\d/u);
   });
 
+  it('does not push to a private conversation where ledger is switched off (ADR 0055)', async () => {
+    const created = await fixture({ feature: { isEnabledFor: target => !(typeof target === 'object' && 'conversation' in target && target.conversation?.kind === 'private') } });
+    await created.run('记 午饭 18.5', groupMessage('alice'));
+    const reply = await created.run('分类统计', groupMessage('alice'));
+    expect(reply).toContain('私聊我可查看完整金额');
+    expect(reply).not.toMatch(/18\.5|¥\d/u);
+    expect(created.privateMessagesTo('alice')).toEqual([]);
+  });
+
   it('masks amounts when the platform has no proactive outbound at all', async () => {
     const created = await fixture({ outbound: false });
     await created.run('记 午饭 18.5', groupMessage('alice'));
@@ -385,6 +395,27 @@ describe('opt-in daily report (FakeClock)', () => {
     await created.clock.advance(22 * 3_600_000);
     expect(created.privateMessagesTo('alice')).toHaveLength(1);
     expect(await created.run('记账日报', privateMessage('alice'))).toContain('未开启');
+  });
+
+  it('skips subscribers whose private conversation switched ledger off (ADR 0055)', async () => {
+    const created = await fixture({ feature: { isEnabledFor: target => !(typeof target === 'object' && 'conversation' in target && target.conversation?.id === 'bob') } });
+    await created.run('记账日报 开启', privateMessage('alice'));
+    await created.run('记账日报 开启', privateMessage('bob'));
+    await created.run('记 午饭 20', privateMessage('alice'));
+    await created.run('记 午饭 20', privateMessage('bob'));
+    await created.clock.advance(12 * 3_600_000);
+    expect(created.privateMessagesTo('alice')).toHaveLength(1);
+    expect(created.privateMessagesTo('bob').filter(text => text.includes('🌙'))).toEqual([]);
+  });
+
+  it('reads reportWhenEmpty per subscriber conversation (ADR 0055)', async () => {
+    const created = await fixture({ feature: { configFor: target =>
+      typeof target === 'object' && 'conversation' in target && target.conversation?.id === 'alice' ? { reportWhenEmpty: true } : undefined } });
+    await created.run('记账日报 开启', privateMessage('alice'));
+    await created.run('记账日报 开启', privateMessage('bob'));
+    await created.clock.advance(12 * 3_600_000);
+    expect(created.privateMessagesTo('alice').filter(text => text.includes('🌙'))).toHaveLength(1);
+    expect(created.privateMessagesTo('bob').filter(text => text.includes('🌙'))).toEqual([]);
   });
 
   it('sends an empty-day report when configured', async () => {

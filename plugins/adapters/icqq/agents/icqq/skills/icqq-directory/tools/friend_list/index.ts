@@ -6,7 +6,7 @@ export default defineAgentTool<Record<string, never>>({
   inputSchema: z.object({}),
   adapter: 'icqq',
   requiresApproval: 'on-risk',
-  permissions: ['role(master,admin,trusted,owner)'],
+  permissions: ['trusted'],
   async execute(_input, context) {
     const client = context.$client;
     const friends = Array.from(client.fl.values()).map((friend) => ({

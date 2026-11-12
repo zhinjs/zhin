@@ -32,10 +32,12 @@ https://console.zhin.dev/?apiBaseUrl=http%3A%2F%2F127.0.0.1%3A8068#token=<bootst
 | 1. Database | Bootstrap token | Pick a driver (SQLite / MySQL / PostgreSQL / MongoDB), install the driver package online if needed, fill in the connection, test, save | — |
 | 2. Owner | Bootstrap token | Create the first owner and sign in; the bootstrap token is refused everywhere afterwards | — |
 | 3. AI | Owner session | Enable AI or not; install AI dependencies; add and test the first model provider | `plugin.manage` + `agent.configure` |
-| 4. Adapters | Owner session | Pick platforms (several allowed), install adapter packages, fill in and test the first account of each | `plugin.manage` + `endpoint.manage` |
-| 5. Finish | — | Summary, then the dashboard | `plugin.manage` |
+| 4. Chat platforms | Owner session | Pick platforms (several allowed), install adapter packages, add and test the first account of each | `plugin.manage` + `endpoint.manage` |
+| 5. Finish | — | Summary, then Home | `plugin.manage` |
 
-- Every step can be skipped and revisited. Steps 3 and 4 are also available after onboarding under **Features → AI and models** and **Features → Adapters**, using the same pages and APIs.
+- Steps 3–5 are on the Console's **Get started** page (`/onboarding`); while onboarding is unfinished, every page shows a banner to continue it.
+- Every step can be skipped and revisited. After onboarding, set up AI under **AI & models** in the sidebar (`/features/ai`); for chat platforms, install the adapter from the **Plugin store**, then use **Connect platform account** in **Accounts and conversations** (`/scope`) to open the adapter page and add an account (see [Connect an account](./index.md#connect-account)). The same APIs are used.
+- If you are not connecting a platform yet, talk to the bot in **Try a conversation** in the sidebar.
 - **Database**: keeping the default SQLite (`.zhin/data.sqlite`) is enough to continue. When the configuration already declares `database`, the step is skipped by default. The connection is always tested before saving; secret fields go to `.env` and the configuration keeps only `${…}` references. After a switch the gateway reconnects to the new database and restarts the instance; plugin data in the old database is not migrated.
 - **Online installs** are limited to packages in the official catalog: database drivers (`mysql2`, `pg`, `mongodb`), adapter packages, AI dependencies and marketplace entries. The bootstrap token can only install database drivers; every other install goes through the gateway's dependency transaction (stop instance → install → start instance, rollback on failure), see [Dependency installs and rollback](./operations.md#packages).
 - A local Host without `http.token` is open to everyone until setup (fine for local development only); always configure `http.token` before exposing a Host.

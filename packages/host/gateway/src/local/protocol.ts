@@ -4,10 +4,18 @@
  * `{ id, event }` lines before it (package transaction progress). `type` is a `gateway.*` RPC
  * type (answered with principal `'local'`) or one of the local-only {@link LOCAL_GATEWAY_RPC}.
  */
+import { createHmac } from 'node:crypto';
 import type { GatewayInstanceStatus, GatewayPackageEvent, GatewayRpcErrorCode, GatewayRpcErrorDetails } from '@zhin.js/console-protocol';
 
 /** Socket-only RPC: not reachable over HTTP. */
 export const LOCAL_GATEWAY_RPC = Object.freeze({
+  /**
+   * `{ nonce }` → `{ proof }`: HMAC-SHA256 of `nonce` under the run's handshake key (recorded only
+   * in the 0600 `.zhin/gateway.json`). The CLI sends it first and refuses an endpoint that cannot
+   * prove it is this project's gateway (a squatted Windows named pipe). Answered before any other
+   * request, also while the gateway is still starting.
+   */
+  HELLO: 'gateway.hello',
   /** Gateway process info and instance status. */
   INFO: 'gateway.info',
   /** Stops the instance, then the gateway. */
@@ -33,12 +41,49 @@ export const LOCAL_GATEWAY_RPC = Object.freeze({
   CONSOLE_USER_PASSWD: 'gateway.console.user.passwd',
   /** `{ username, disabled }`. */
   CONSOLE_USER_DISABLE: 'gateway.console.user.disable',
+  /**
+   * `{base}/…` request on behalf of the local owner ({@link LocalGatewayHttpRequest}): what
+   * `zhin config` / `schedule` / `send` / `watch` use while a gateway runs, so they need no
+   * Console token (ADR 0054 §6). Answered like the HTTP route ({@link LocalGatewayHttpResponse}).
+   */
+  HTTP_REQUEST: 'gateway.http.request',
 } as const);
+
+export type LocalGatewayHttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+
+export interface LocalGatewayHttpRequest {
+  readonly method: LocalGatewayHttpMethod;
+  /** Path and query under the API base, e.g. `/api/assistant/jobs` (the gateway's `http.base`). */
+  readonly path: string;
+  /** Request body (JSON text); sent as `application/json`. Not allowed with `GET`. */
+  readonly body?: string;
+  /**
+   * An explicit Console credential (`ZHIN_CONSOLE_TOKEN`): the gateway authenticates it like the
+   * HTTP route does and runs the request as that principal (permissions, audit). Without it the
+   * request runs as the local owner.
+   */
+  readonly token?: string;
+}
+
+export interface LocalGatewayHttpResponse {
+  readonly status: number;
+  /** `content-type` and `retry-after` when present. */
+  readonly headers: Readonly<Record<string, string>>;
+  /** Response body as text. */
+  readonly body: string;
+}
 
 export type LocalGatewayRpcType = (typeof LOCAL_GATEWAY_RPC)[keyof typeof LOCAL_GATEWAY_RPC];
 
-/** Longest accepted line in either direction. */
+/** Longest accepted line in either direction (UTF-8 bytes). */
 export const MAX_LOCAL_LINE_BYTES = 1024 * 1024;
+
+/**
+ * Largest `gateway.http.request` body / response body, in UTF-8 bytes of its JSON-encoded form:
+ * the line limit minus room for the envelope (`id`, `type`, path, headers…). Larger ones get an
+ * error telling the caller to use HTTP instead.
+ */
+export const MAX_LOCAL_HTTP_BODY_BYTES = MAX_LOCAL_LINE_BYTES - 16 * 1024;
 
 export interface LocalGatewayRequest {
   readonly id: number | string;
@@ -88,6 +133,11 @@ export interface LocalGatewayInfo {
   readonly args: readonly string[];
   /** Instance log file. */
   readonly logFile?: string;
+  /**
+   * Key of the {@link LOCAL_GATEWAY_RPC.HELLO} handshake (hex). Only in the state file (mode
+   * 0600), never in the `gateway.info` answer.
+   */
+  readonly handshakeKey?: string;
 }
 
 export interface LocalGatewayInfoResult {
@@ -97,7 +147,12 @@ export interface LocalGatewayInfoResult {
   readonly consoleInitialized: boolean;
 }
 
-/** Splits a stream into lines, refusing lines longer than {@link MAX_LOCAL_LINE_BYTES}. */
+/** The {@link LOCAL_GATEWAY_RPC.HELLO} proof for `nonce` under a hex `key`. */
+export function handshakeProof(key: string, nonce: string): string {
+  return createHmac('sha256', Buffer.from(key, 'hex')).update(nonce).digest('hex');
+}
+
+/** Splits a stream into lines, refusing lines longer than {@link MAX_LOCAL_LINE_BYTES} (UTF-8). */
 export class LineDecoder {
   #buffer = '';
   constructor(readonly maxBytes = MAX_LOCAL_LINE_BYTES) {}
@@ -109,8 +164,13 @@ export class LineDecoder {
     for (;;) {
       const newline = this.#buffer.indexOf('\n');
       if (newline < 0) break;
-      lines.push(this.#buffer.slice(0, newline));
+      const line = this.#buffer.slice(0, newline);
       this.#buffer = this.#buffer.slice(newline + 1);
+      if (Buffer.byteLength(line) > this.maxBytes) {
+        this.#buffer = '';
+        throw new Error('line too long');
+      }
+      lines.push(line);
     }
     if (Buffer.byteLength(this.#buffer) > this.maxBytes) {
       this.#buffer = '';

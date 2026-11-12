@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { connectableHost, hostGet, listHostEndpoints, loadHostHttpConfig } from '../../src/utils/host-http.js';
+import { LOCAL_GATEWAY_RPC, LocalControlServer } from '@zhin.js/gateway/local';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -96,8 +97,10 @@ describe('listHostEndpoints', () => {
     vi.stubGlobal('fetch', vi.fn(async () => ({
       ok: false, status: 401, json: async () => ({ success: false, error: 'Unauthorized' }),
     } as Response)));
-    expect(await listHostEndpoints({ baseUrl: 'http://127.0.0.1:8086/api', token: '' }))
-      .toEqual({ ok: false, status: 401, error: 'Unauthorized' });
+    const failed = await listHostEndpoints({ baseUrl: 'http://127.0.0.1:8086/api', token: '' });
+    expect(failed).toMatchObject({ ok: false, status: 401 });
+    // A 401 over HTTP explains the ADR 0049 token rules.
+    expect(failed.error).toMatch(/^Unauthorized（.*ZHIN_CONSOLE_TOKEN.*zhin start/u);
   });
 });
 
@@ -121,6 +124,57 @@ describe('loadHostHttpConfig', () => {
     fs.writeFileSync(path.join(dir, '.env.production'), 'ZHIN_TEST_HOST_HTTP_TOKEN=prod-token\n');
     expect((await loadHostHttpConfig(dir, 'production'))?.token).toBe('prod-token');
     expect((await loadHostHttpConfig(dir, 'development'))?.token).toBe('base-token');
+  });
+
+  it.runIf(process.platform !== 'win32')('uses the local control socket while a gateway runs (no token needed)', async () => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'zhh-'));
+    fs.writeFileSync(path.join(dir, 'zhin.config.yml'), 'http:\n  port: 9100\n');
+    const control = await LocalControlServer.open({ path: path.join(dir, '.zhin', 'gateway.sock') });
+    const seen: unknown[] = [];
+    control.setHandler(async (request) => {
+      if (request.type === LOCAL_GATEWAY_RPC.INFO) return { ok: true, data: { gateway: {}, instance: {}, consoleInitialized: true } };
+      seen.push(request);
+      return { ok: true, data: { status: 200, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ success: true, data: { jobs: [] } }) } };
+    });
+    try {
+      const http = await loadHostHttpConfig(dir);
+      expect(http?.fetch).toBeTypeOf('function');
+      const fetchSpy = vi.fn();
+      vi.stubGlobal('fetch', fetchSpy);
+      expect(await hostGet(http!, '/assistant/jobs')).toEqual({ ok: true, status: 200, data: { jobs: [] } });
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(seen).toEqual([expect.objectContaining({ type: LOCAL_GATEWAY_RPC.HTTP_REQUEST, data: { method: 'GET', path: '/api/assistant/jobs' } })]);
+    } finally {
+      await control.close();
+    }
+  });
+
+  it.runIf(process.platform !== 'win32')('sends only an explicit ZHIN_CONSOLE_TOKEN over the local socket, never http.token', async () => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'zhh-'));
+    fs.writeFileSync(path.join(dir, 'zhin.config.yml'), 'http:\n  port: 9100\n  token: bootstrap-token\n');
+    const control = await LocalControlServer.open({ path: path.join(dir, '.zhin', 'gateway.sock') });
+    const seen: Array<{ data?: unknown }> = [];
+    control.setHandler(async (request) => {
+      if (request.type === LOCAL_GATEWAY_RPC.INFO) return { ok: true, data: { gateway: {}, instance: {}, consoleInitialized: true } };
+      seen.push(request);
+      return { ok: true, data: { status: 200, headers: { 'content-type': 'application/json' }, body: '{"success":true,"data":1}' } };
+    });
+    const previous = process.env.ZHIN_CONSOLE_TOKEN;
+    try {
+      delete process.env.ZHIN_CONSOLE_TOKEN;
+      const owner = await loadHostHttpConfig(dir);
+      expect(owner?.token).toBe('');
+      await hostGet(owner!, '/stats');
+      expect(seen.at(-1)!.data).not.toHaveProperty('token');
+      process.env.ZHIN_CONSOLE_TOKEN = 'user-api-token';
+      const user = await loadHostHttpConfig(dir);
+      await hostGet(user!, '/stats');
+      expect(seen.at(-1)!.data).toMatchObject({ token: 'user-api-token' });
+    } finally {
+      if (previous === undefined) delete process.env.ZHIN_CONSOLE_TOKEN;
+      else process.env.ZHIN_CONSOLE_TOKEN = previous;
+      await control.close();
+    }
   });
 
   it('falls back to the default listener', async () => {

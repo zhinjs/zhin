@@ -1,21 +1,20 @@
 import { messages as t } from "../../../../messages.js";
+import { currentGuild } from "../../../../conversation.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { platformPermission } from '@zhin.js/permission';
 
-export default defineAgentTool<{ guild_id: string; role_id: string }>({
-  description: '删除 KOOK 服务器中的角色',
+export default defineAgentTool<{ role_id: string }>({
+  description: '删除当前 KOOK 服务器中的角色',
   inputSchema: z.object({
-    guild_id: z.string().describe('服务器 ID'),
     role_id: z.string().describe('角色 ID'),
   }),
   adapter: 'kook',
   scopes: ["channel"],
   tags: ['kook'],
-  permissions: [platformPermission('kook', 'guild_owner')],
-  async execute({ guild_id, role_id  }: { guild_id: string; role_id: string }, context) {
+  permissions: ['platform:owner', 'bot-permission:manage_roles'],
+  async execute({ role_id }, context) {
     const client = context.$client;
-    const success = await client.pickGuild(guild_id).deleteRole(role_id);
+    const success = await client.pickGuild(currentGuild(context)).deleteRole(role_id);
     return { success, message: success ? t(context.locale, 'roleDeleted', { p0: role_id }) : t(context.locale, 'roleDeleteFailed') };
   },
 });

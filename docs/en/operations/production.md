@@ -7,13 +7,14 @@ description: "Run the bot as a recoverable service: release checks, reverse prox
 
 Use this for a single Bot, a multi-Bot collaboration venue, or Remote Console. The goal is explicit ownership for process, ingress, secrets, state, monitoring, backup, and recovery.
 
-## Five things to have before going live
+## Six things to have before going live
 
 | Item | How | Details |
 | --- | --- | --- |
 | Pinned dependencies | Commit the lockfile; never run production on drifting `latest` | [1. Release baseline](#_1-release-baseline) |
 | Host not exposed directly | Bind the Host to `127.0.0.1` and terminate HTTPS at a reverse proxy | [2. Network and authentication](#_2-network-and-authentication) |
-| Secrets only via environment | `HTTP_TOKEN`, platform credentials and model keys live in `.env` or a secret manager | [2. Network and authentication](#_2-network-and-authentication) |
+| Secrets only via environment | `HTTP_TOKEN` (the bootstrap token), platform credentials and model keys live in `.env` or a secret manager | [2. Network and authentication](#_2-network-and-authentication) |
+| Create the Console owner before opening the port | `zhin console init`, or the Console wizard while the Host is reachable only locally; the bootstrap token stops working afterwards | [Creating the first owner](#first-owner) |
 | Automatic restart on crash | Supervise with Docker, systemd or Kubernetes | [3. Templates](#_3-copy-ready-deployment-templates) · [4. Supervision](#_4-process-supervision) |
 | Recoverable data | Back up the database, `.zhin/` and `data/schedule-jobs.json` regularly, and rehearse restores | [5. Durable state and backup](#_5-durable-state-and-backup) |
 
@@ -82,7 +83,7 @@ zhin doctor --live http://127.0.0.1:8068/control --json
 
 Exit status is 0 when ready and 1 for non-readiness, authentication or request failures. These checks make no external network calls: database `initialized` is not a live SQL test, endpoint readiness requires admission and a locally observed `transportState` of `open`; disconnecting, reconnecting and unobserved transports are not ready, and agent `binding_configured` is not provider credential validation. Real platform delivery still requires separate acceptance evidence. Upgrade the CLI to a version exposing `/pub/ready` before using the updated Kubernetes readiness probe.
 
-In production, set `http.token` before the first start and finish setup right away (create the first owner, see [Upgrading to Console access control](../migrations/console-access-control.md)); then sign in with accounts. Give read-only observers a `viewer` account and automation an API token. Platform Webhooks and reverse WebSockets keep their own signing secrets or `access_token`; a Console credential cannot replace them.
+`http.token` is a **bootstrap token**, not a long-lived credential: while the database has no owner, anyone holding it can create the first owner; once an owner exists it is refused on every endpoint. In production set it to a random value and [create the first owner](#first-owner) before opening the port; then sign in with accounts. Give read-only observers a `viewer` account and automation an API token. Platform Webhooks and reverse WebSockets keep their own signing secrets or `access_token`; a Console credential cannot replace them.
 
 ## 3. Copy-ready deployment templates
 
@@ -94,14 +95,16 @@ Download the <a href="/deploy/production/Dockerfile" download>Dockerfile</a>, <a
 
 ```bash
 cp .env.example .env
-# Edit .env and replace at least HTTP_TOKEN.
+# Edit .env and replace at least HTTP_TOKEN (a random value, e.g. openssl rand -hex 32).
 docker compose config
 docker compose up -d --build
 docker compose ps
 curl --fail http://127.0.0.1:8068/pub/health
+# First deployment: create the Console owner (the port is bound to 127.0.0.1, so nobody else can reach it yet)
+printf '%s\n' "$OWNER_PASSWORD" | docker compose exec -T zhin ./node_modules/.bin/zhin console init -y --owner admin --password-stdin
 ```
 
-Compose injects Provider, Adapter, and other secrets from `.env`, while requiring `HTTP_TOKEN`. It runs as non-root with a read-only root filesystem. Only `data/`, `.zhin/`, and the temporary directory are writable, and both state directories use named volumes. Database-consistent backups are still required.
+The image's `CMD` is `pnpm start`, the foreground `zhin start --foreground --mode production --no-watch`: the container's main process is the management gateway, which supervises and restarts the instance. Compose injects Provider, Adapter, and other secrets from `.env`, while requiring `HTTP_TOKEN`. It runs as non-root with a read-only root filesystem. Only `data/`, `.zhin/`, and the temporary directory are writable, and both state directories use named volumes. Database-consistent backups are still required.
 
 ### systemd
 
@@ -117,7 +120,14 @@ sudo systemctl status zhin@zhin
 journalctl -u zhin@zhin -f
 ```
 
-Place the project in `/srv/zhin/zhin`, prepare a local `.env` containing `HTTP_TOKEN`, and ensure `pnpm` is in the unit's PATH. The unit requires that secret file, allows writes only to `.zhin/` and `data/`, and limits restart storms to five attempts in 120 seconds.
+Place the project in `/srv/zhin/zhin`, prepare a local `.env` containing `HTTP_TOKEN`, and ensure `pnpm` is in the unit's PATH. The unit's `ExecStart` is `pnpm start`, so the project's `start` script must run in the foreground (scaffolded projects use `zhin start --foreground --mode production --no-watch`); a bare `zhin start` detaches and systemd treats the service as exited. After the first start, create the owner as the same system user as the gateway (over the local control socket):
+
+```bash
+cd /srv/zhin/zhin
+printf '%s\n' "$OWNER_PASSWORD" | sudo -u zhin ./node_modules/.bin/zhin console init -y --owner admin --password-stdin
+```
+
+ The unit requires that secret file, allows writes only to `.zhin/` and `data/`, and limits restart storms to five attempts in 120 seconds.
 
 ### Kubernetes
 
@@ -132,7 +142,26 @@ kubectl rollout status deployment/zhin
 kubectl port-forward service/zhin 8068:8068
 ```
 
-The image keeps your project's own `zhin.config.yml`, while the Secret projects the complete `.env`, so the template does not drop Provider or Adapter keys. Recreate the Secret and roll the Deployment after changing secrets. The template deliberately uses one replica and `Recreate`: default SQLite, file-backed state under `.zhin/`, and `ReadWriteOnce` volumes are not multi-writer systems. Before scaling horizontally, move to a shared database and make sure each file-backed state has a single writer. `/pub/health` is only a process probe; use Console acceptance for business readiness.
+The image keeps your project's own `zhin.config.yml`, while the Secret projects the complete `.env`, so the template does not drop Provider or Adapter keys. Recreate the Secret and roll the Deployment after changing secrets. The template deliberately uses one replica and `Recreate`: default SQLite, file-backed state under `.zhin/`, and `ReadWriteOnce` volumes are not multi-writer systems. Before scaling horizontally, move to a shared database and make sure each file-backed state has a single writer. `/pub/health` is only a process probe; use Console acceptance for business readiness. After the first deployment, create the owner before exposing the Service:
+
+```bash
+printf '%s\n' "$OWNER_PASSWORD" | kubectl exec -i deploy/zhin -- ./node_modules/.bin/zhin console init -y --owner admin --password-stdin
+```
+
+### Creating the first owner {#first-owner}
+
+A new deployment's project database has no Console owner yet. Until it has one, `http.token` (`HTTP_TOKEN` in `.env`) is a **bootstrap token**: anyone who holds it and can reach the Host can create the first owner and, through it, read and write the configuration, `.env`, the database and project files. So:
+
+- **Create the owner before opening the port, the reverse proxy or a public ingress.** Once an owner exists the bootstrap token is refused on every endpoint and everyone signs in with an account; automation uses API tokens issued by an account (`ZHIN_CONSOLE_TOKEN`).
+- Use a random bootstrap token, never a fixed value from an example or a document, and never publish it.
+- A Host without `http.token` is open to anyone who can reach it until setup; production must set one.
+
+Pick one of two ways:
+
+1. **Command line** (recommended on servers and in containers): run `zhin console init` in the project directory as the same system user as the service (the commands with each template above). While the gateway runs, the command goes to it over the local control socket `.zhin/gateway.sock`; without one it writes the project database directly, so it can also run before the first start. All flags: [CLI reference](../cli/index.md#console).
+2. **Console wizard**: only while the Host is reachable locally, for example through `ssh -L 8068:127.0.0.1:8068 <server>` or `kubectl port-forward`; open the Console with the setup link `zhin start` prints or with `HTTP_TOKEN`. See [Setup and onboarding](../console/onboarding.md).
+
+Afterwards `zhin console init --status` reports setup as done. Add other people with `zhin console user create <username> --role viewer|operator|admin` or in the Console's Access pages; reset a forgotten password with `zhin console user passwd <username>`.
 
 ## 4. Process supervision
 
@@ -186,7 +215,7 @@ Rollback restores code, lockfile, configuration, and data from one checkpoint. I
 ## Incident order
 
 1. Is `/pub/health` reachable?
-2. Does Dashboard show the expected Host and version?
+2. Does Home show the expected Host and version?
 3. Is the Endpoint online and receiving inbox events?
 4. Did the current generation publish the required capability?
 5. Did the Database (including `engagement_events`) and SSE history recover from one authority?

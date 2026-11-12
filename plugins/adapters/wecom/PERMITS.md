@@ -1,19 +1,7 @@
 # 企业微信 WeCom Platform Permits
 
-## 入站字段
+## 入站字段（ADR 0056 §1）
 
-| 字段 | 来源 |
-|------|------|
-| `$sender.role` | 默认 `member`；需业务侧扩展企业微信可见性/管理权限 |
-| `$sender.permissions` | `chat_owner` · `chat_admin` |
+企业微信回调不提供群内地位、角色或权限位：本适配器不上报 `sender.platform`，也不声明 `scene.platformStanding` / `scene.selfStanding`，因此 `platform:*` 与 `bot:*` permit 在企业微信会话中都不满足。需要门禁的工具请使用 zhin 角色（`owner` / `admin` / `trusted`）。
 
-## Permit 词汇表
-
-| `platform(wecom,…)` | 含义 |
-|---------------------|------|
-| `chat_owner` | 群主 |
-| `chat_admin` | 群管理员 |
-
-## 工厂映射
-
-`scene_admin` → `chat_admin` · `scene_owner` → `chat_owner`
+`wecom_send_text` 可向任意用户发消息（不在当前会话），要求全局层 zhin `owner`（`owner@global`）。

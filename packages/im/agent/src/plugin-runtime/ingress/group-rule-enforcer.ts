@@ -28,13 +28,14 @@
  */
 import { randomUUID } from 'node:crypto';
 import type { GroupRuleDefaultOutcome, GroupRuleViolationTrigger } from '@zhin.js/core/runtime';
+import { chatRoleIncludes, type ChatRole } from '@zhin.js/core';
+import { isPlatformManager, type PlatformStanding } from '@zhin.js/im-contract';
 import {
   DEFAULT_GROUP_RULE_WINDOW_MS,
   GROUP_RULE_TRIGGERS,
   groupRuleContentHash,
   groupRuleHashShort,
   normalizeGroupRuleSpec,
-  sceneRoleOf,
   speakBlock,
   speakBlockReasonCode,
   type AiControlPlane,
@@ -105,8 +106,13 @@ export interface GroupRuleViolation {
   readonly groupId: string;
   readonly memberId: string;
   readonly memberName?: string;
-  /** 入站消息上的平台角色（群主 / 管理员实时判定）。 */
-  readonly memberRoles?: readonly unknown[];
+  /** 违规者在本会话的 zhin 聊天角色（ADR 0056）；`owner` 按 `exempt.ownerAndAdmins` 豁免。 */
+  readonly memberChatRole?: ChatRole;
+  /**
+   * 违规者的平台身份（ADR 0056 §1）。群规是平台功能：`exempt.ownerAndAdmins` 豁免的是平台群主 /
+   * 管理员（`platform:admin`），不是 zhin `admin`。
+   */
+  readonly memberPlatform?: PlatformStanding;
   readonly trigger: GroupRuleTrigger;
   /** 原消息发出时间（毫秒）；早于上次提醒送达的消息不推进阶梯。 */
   readonly sentAt: number;
@@ -335,7 +341,9 @@ export class GroupRuleEnforcer {
     }
 
     // 2. 豁免。
-    if ((rule.exempt.ownerAndAdmins && sceneRoleOf(violation.memberRoles)) || rule.exempt.userIds.includes(violation.memberId)) {
+    // 默认豁免 = permit `platform:admin`（平台群主 / 管理员）或 `owner`（zhin 主人）。
+    if ((rule.exempt.ownerAndAdmins && (isPlatformManager(violation.memberPlatform) || chatRoleIncludes(violation.memberChatRole, 'owner')))
+      || rule.exempt.userIds.includes(violation.memberId)) {
       return skip('rule_hit_exempt');
     }
 
@@ -777,8 +785,8 @@ export interface GroupRuleCommandInput {
   /** 平台原生会话 id。 */
   readonly sceneId: string;
   readonly senderId: string;
-  /** 入站消息上的平台角色（群主 / 管理员实时判定）。 */
-  readonly senderRoles: readonly unknown[] | undefined;
+  /** 发送者在本会话的 zhin 聊天角色（ADR 0056；平台身份不换算为 zhin 角色）。 */
+  readonly senderChatRole: ChatRole | undefined;
   readonly endpoint?: string;
   /** 已去掉命令前缀的文本；不是命令时为 undefined。 */
   readonly commandText: string | undefined;
@@ -812,7 +820,7 @@ export function formatGroupRuleCard(rule: GroupRuleRecord, approvalTtlMs: number
   const code = groupRuleHashShort(rule.contentHash);
   const extraExempt = rule.exempt.userIds.length;
   const exempt = [
-    rule.exempt.ownerAndAdmins ? '群主 / 管理员' : undefined,
+    rule.exempt.ownerAndAdmins ? '平台群主 / 管理员与 zhin owner' : undefined,
     extraExempt ? `另加 ${extraExempt} 人` : undefined,
   ].filter(Boolean).join('，') || '无';
   return [
@@ -893,7 +901,7 @@ export class GroupRuleImChannel {
   }
 
   #isApprover(input: GroupRuleCommandInput): boolean {
-    if (sceneRoleOf(input.senderRoles)) return true;
+    if (chatRoleIncludes(input.senderChatRole, 'admin')) return true;
     const settings = this.#deps.imApproval?.();
     return settings ? imApproversFor(settings, input.platform).includes(input.senderId.trim()) : false;
   }

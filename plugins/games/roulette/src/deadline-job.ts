@@ -1,7 +1,7 @@
 import { outboundHostToken, type OutboundHost } from 'zhin.js';
-import { sendGameSessionMessage } from '@zhin.js/game-kit';
+import { gameTargetFromKey, sendGameSessionMessage } from '@zhin.js/game-kit';
 import { expireOverdueSessions, type ExpiredSessionNotice } from './game-flow.js';
-import { resolveRouletteFlow, type RouletteCapabilityContext } from './runtime.js';
+import { resolveRouletteFlow, rouletteFeatureGateStore, type RouletteCapabilityContext, type RouletteFeatureGate } from './runtime.js';
 
 /** Turn and lobby deadlines are checked every five seconds. */
 export const DEADLINE_CRON = '*/5 * * * * *';
@@ -14,9 +14,21 @@ export const DEADLINE_CRON = '*/5 * * * * *';
 export async function runDeadlineSweep(context: RouletteCapabilityContext, now: number): Promise<void> {
   const flow = resolveRouletteFlow(context);
   const outbound = readOutbound(context);
+  const enabledFor = readFeatureGate(context);
   await expireOverdueSessions(flow, now, (notice) => {
     if (outbound) return announce(outbound, notice);
-  });
+  }, enabledFor && ((session) => {
+    const target = gameTargetFromKey(session.channel_key);
+    return !target || enabledFor.isEnabledFor(target);
+  }));
+}
+
+function readFeatureGate(context: RouletteCapabilityContext): RouletteFeatureGate | undefined {
+  try {
+    return context.use(rouletteFeatureGateStore);
+  } catch {
+    return undefined;
+  }
 }
 
 function readOutbound(context: RouletteCapabilityContext): OutboundHost | undefined {

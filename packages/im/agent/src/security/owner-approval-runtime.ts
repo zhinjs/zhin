@@ -2,7 +2,7 @@ import type { Locale } from '@zhin.js/plugin-runtime';
 import { managementCommandText, managementCommandReference, type AgentCommandPresentation } from '../init/command-presentation.js';
 import { ownerApprovalMessages as t } from './owner-approval-messages.js';
 import * as path from 'node:path';
-import { hasSenderRole, senderRolesFromMessage, type Message } from '@zhin.js/core';
+import { chatRoleIncludes, hostChatRole, type Message } from '@zhin.js/core';
 import { workspaceRoot } from '../discovery/utils.js';
 import type { OwnerApprovalAddress } from './owner-approval-contracts.js';
 import { OwnerApprovalStore } from './owner-approval-store.js';
@@ -12,7 +12,7 @@ export type { OwnerApprovalAddress } from './owner-approval-contracts.js';
 export const OWNER_APPROVE_ALWAYS_TOOL = 'bash' as const;
 const STORE_FILE = 'owner-approve-always.json';
 
-export type ToolRequesterRole = 'master' | 'trusted' | 'other' | 'unknown';
+export type ToolRequesterRole = 'owner' | 'trusted' | 'other' | 'unknown';
 
 export interface OwnerApprovalCommandContext extends AgentCommandPresentation {
   readonly endpoint: OwnerApprovalAddress['endpoint'];
@@ -120,13 +120,17 @@ export function ownerApprovalAddressFromMessage(message: Message): OwnerApproval
     : undefined;
 }
 
+/**
+ * Host-wide requester role (exec / file / dangerous tools): `owner` only for a global owner
+ * (ADR 0056 §2); a lower-level owner counts as trusted here.
+ */
 export function resolveToolRequesterRole(message: Message): ToolRequesterRole {
-  const roles = senderRolesFromMessage(message);
-  if (hasSenderRole(roles, 'master')) return 'master';
-  if (hasSenderRole(roles, 'trusted')) return 'trusted';
+  const role = hostChatRole(message.sender);
+  if (role === 'owner') return 'owner';
+  if (chatRoleIncludes(role, 'trusted')) return 'trusted';
   if (!message.sender?.id) return 'unknown';
   const address = ownerApprovalAddressFromMessage(message);
-  return address && String(message.sender.id) === address.ownerId ? 'master' : 'other';
+  return address && String(message.sender.id) === address.ownerId ? 'owner' : 'other';
 }
 
 function ownerCommandAddress(context: OwnerApprovalCommandContext): OwnerApprovalAddress | undefined {

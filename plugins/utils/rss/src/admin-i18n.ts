@@ -146,6 +146,10 @@ const catalog = {
     "zh-CN": "平台未确认投递，请核实目标会话后取消并另建订阅；不会自动重试",
     "en": "The platform did not confirm delivery. Check the target conversation, then cancel and create another subscription; no automatic retry."
   },
+  "featureDisabled": {
+    "zh-CN": "RSS 已在目标会话停用（功能开关），本轮未投递；重新启用后从后续新文章开始推送",
+    "en": "RSS is switched off for the target conversation (feature switch); nothing was delivered this poll. Future articles are delivered once it is re-enabled."
+  },
   "delivered": {
     "zh-CN": "已确认投递；等待后续新文章",
     "en": "Delivery confirmed; waiting for future articles."

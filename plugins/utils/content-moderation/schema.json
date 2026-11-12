@@ -2,6 +2,14 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
+  "x-zhin-config": {
+    "levels": [
+      "global",
+      "adapter",
+      "endpoint",
+      "conversation"
+    ]
+  },
   "properties": {
     "groupModeration": {
       "type": "array",
@@ -39,6 +47,11 @@
         "en": {
           "description": "Exact scope for automatic advertising/abuse moderation. Disabled when unconfigured. Requires AI, atomic persistent state and adapter group-management support."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "enabled": {
@@ -49,6 +62,11 @@
         "en": {
           "description": "Enable moderation."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "onError": {
@@ -63,6 +81,11 @@
         "en": {
           "description": "Default policy when a review source fails: open treats it as passed; closed treats it as critical."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "maskChar": {
@@ -75,6 +98,11 @@
         "en": {
           "description": "Text masking character."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "replyTemplate": {
@@ -84,19 +112,11 @@
         "en": {
           "description": "Reply text for the reply action. When omitted, use the message language; explicit text is preserved."
         }
-      }
-    },
-    "masters": {
-      "type": "array",
-      "items": {
-        "type": "string"
       },
-      "default": [],
-      "description": "额外视为 master 的 userId（兜底，与 endpoint master 合并）",
-      "x-i18n": {
-        "en": {
-          "description": "Additional user IDs treated as masters, merged with endpoint masters as a fallback."
-        }
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "inbound": {
@@ -107,13 +127,20 @@
           "type": "boolean",
           "default": true
         },
-        "bypassMasters": {
-          "type": "boolean",
-          "default": true,
-          "description": "master 跳过入站审查",
+        "bypass": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "default": [
+            "owner",
+            "platform:admin"
+          ],
+          "description": "满足任一 permit 表达式的发送者跳过入站审查（ADR 0056 §5 内置 DSL，与命令 / 工具同一评估器）。内容审核是平台功能，默认 zhin owner 或平台群主 / 管理员（platform:admin）；[] 表示都审",
           "x-i18n": {
             "en": {
-              "description": "Skip inbound review for masters."
+              "description": "Senders matching any of these permit expressions skip inbound review (ADR 0056 §5 built-in DSL, the same evaluator as commands and tools). Moderation is a platform function: the default exempts the zhin owner and platform group owners / admins (platform:admin); [] reviews everyone."
             }
           }
         },
@@ -137,6 +164,11 @@
             }
           }
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "outbound": {
@@ -157,6 +189,11 @@
             }
           }
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "actions": {
@@ -319,6 +356,11 @@
         "en": {
           "description": "Severity-to-action mapping (string or array); uses the stricter default mapping when omitted."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "sources": {
@@ -479,6 +521,11 @@
             }
           }
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     }
   }

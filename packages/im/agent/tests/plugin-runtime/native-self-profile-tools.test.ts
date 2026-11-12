@@ -29,8 +29,8 @@ function fixture(options: NativeSelfProfileToolOptions = {}, approved = true, sc
   const turn = createTurnIngress({
     identity: { rootId: 'root', generation: 1, traceId: 'trace', turnId: 'turn' }, intent: { kind: 'new' },
     origin: scope?.origin ?? { kind: 'im', platform: 'icqq', endpoint: 'source-account', scope: 'private', sceneId: 'member' },
-    principal: { subjectId: 'member', roles: ['master'] }, input: { text: 'profile' }, session: { key: scope?.sessionKey ?? 'session' },
-    policy: { permissions: ['master'], unattended: false, filesystem: { workspaceRoot: directory }, network: { enabled: false } },
+    principal: { subjectId: 'member', roles: ['owner'] }, input: { text: 'profile' }, session: { key: scope?.sessionKey ?? 'session' },
+    policy: { permissions: ['owner'], unattended: false, filesystem: { workspaceRoot: directory }, network: { enabled: false } },
     capabilities: { tools: ['get_self_profile', 'set_self_profile'], skills: [] }, signal: new AbortController().signal,
     ports: { operationEvidence: evidence, selfProfile: profile, journal: { append: event => { events.push(event); } }, approval: { requestApproval: approval } },
   });

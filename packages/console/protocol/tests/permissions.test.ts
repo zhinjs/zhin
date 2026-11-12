@@ -125,3 +125,35 @@ describe('Console permission catalog (ADR 0049 §3)', () => {
     expect(resolveConsoleWsPermission('/onebot/v11')).toBeNull();
   });
 });
+
+describe('conversation level and chat roles (ADR 0055 / 0056)', () => {
+  it('registers feature.conversations and chat-roles.* and scopes conversation keys to their endpoint', async () => {
+    const protocol = await import('../src/index.js');
+    expect(protocol.CONSOLE_RPC_PERMISSIONS['feature.conversations']).toBe('feature.view');
+    for (const type of Object.values(protocol.CHAT_ROLES_RPC)) expect(protocol.CONSOLE_RPC_PERMISSIONS[type], type).toBe('iam.manage');
+    expect(protocol.featureScopeTarget('conversation', 'qq/bot-1/group:1')).toEqual({ kind: 'endpoint', adapter: 'qq', endpoint: 'bot-1' });
+    expect(protocol.featureScopeTarget('conversation', 'qq/bot-1/room:1')).toEqual({ kind: 'global' });
+    expect(protocol.featureScopeTarget('endpoint', 'qq/bot-1/group:1')).toEqual({ kind: 'global' });
+    expect(protocol.featureScopeTarget('adapter', 'qq')).toEqual({ kind: 'adapter', adapter: 'qq' });
+    const scoped = [{ scope: { kind: 'endpoint' as const, key: 'qq/bot-1' }, permissions: ['feature.toggle', 'iam.manage'] }];
+    const rule = (type: string, data: Record<string, unknown>) => protocol.resolveConsoleRpcPermission(type, data);
+    const allowed = (type: string, data: Record<string, unknown>) => {
+      const resolved = rule(type, data);
+      return resolved?.kind === 'exact' && protocol.grantsAllow(scoped, resolved.permission, resolved.target);
+    };
+    expect(allowed('feature.set-enabled', { level: 'conversation', key: 'qq/bot-1/group:1' })).toBe(true);
+    expect(allowed('feature.set-enabled', { level: 'conversation', key: 'qq/bot-2/group:1' })).toBe(false);
+    expect(allowed('chat-roles.grant', { level: 'conversation', key: 'qq/bot-1/private:x' })).toBe(true);
+    expect(allowed('chat-roles.grant', { level: 'adapter', key: 'qq' })).toBe(false);
+    expect(allowed('iam.users.create', { adapter: 'qq', endpointKey: 'bot-1' })).toBe(false);
+  });
+
+  it('round-trips escaped conversation keys', async () => {
+    const { formatFeatureConversationKey, parseFeatureConversationKey } = await import('../src/index.js');
+    const key = formatFeatureConversationKey({ adapter: 'qq', endpointId: 'bot', kind: 'channel', id: 'a/b%:c' });
+    expect(key).toBe('qq/bot/channel:a%2Fb%25:c');
+    expect(parseFeatureConversationKey(key)).toEqual({ adapter: 'qq', endpointId: 'bot', kind: 'channel', id: 'a/b%:c' });
+    expect(parseFeatureConversationKey('qq/bot/channel:a%2fb')).toBeUndefined();
+    expect(() => formatFeatureConversationKey({ adapter: 'qq', endpointId: 'b/c', kind: 'group', id: '1' })).toThrow(TypeError);
+  });
+});

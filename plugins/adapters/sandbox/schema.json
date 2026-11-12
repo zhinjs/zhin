@@ -14,34 +14,6 @@
       "default": 500,
       "description": "Minimum delay in milliseconds between reply updates; the first update is immediate."
     },
-    "master": {
-      "type": [
-        "string",
-        "number"
-      ],
-      "description": "框架 master（sandbox client id (distinct from endpoints[].owner)；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖",
-      "x-i18n": {
-        "en": {
-          "description": "Framework masters (sandbox client id, distinct from endpoints[].owner; AI/tool permissions and endpoint management). endpoints[i].master can override this value."
-        }
-      }
-    },
-    "trusted": {
-      "type": "array",
-      "items": {
-        "type": [
-          "string",
-          "number"
-        ],
-        "description": "Trusted sandbox client id (distinct from endpoints[].owner)"
-      },
-      "description": "框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加",
-      "x-i18n": {
-        "en": {
-          "description": "Framework trusted users, below master authority. endpoints[i].trusted can add users."
-        }
-      }
-    },
     "endpoints": {
       "type": "array",
       "description": "多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层）",
@@ -49,34 +21,6 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "master": {
-            "type": [
-              "string",
-              "number"
-            ],
-            "description": "本 endpoint 的框架 master（sandbox client id (distinct from endpoints[].owner)）；覆盖顶层 master",
-            "x-i18n": {
-              "en": {
-                "description": "Framework masters for this endpoint (sandbox client id, distinct from endpoints[].owner), overriding the top-level master list."
-              }
-            }
-          },
-          "trusted": {
-            "type": "array",
-            "items": {
-              "type": [
-                "string",
-                "number"
-              ],
-              "description": "Trusted sandbox client id (distinct from endpoints[].owner)"
-            },
-            "description": "本 endpoint 的 trusted 列表",
-            "x-i18n": {
-              "en": {
-                "description": "Trusted users for this endpoint."
-              }
-            }
-          },
           "owner": {
             "type": "string",
             "description": "Sandbox owner user ID"

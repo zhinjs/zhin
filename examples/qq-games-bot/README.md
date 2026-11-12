@@ -7,7 +7,7 @@
 
 主配置 `plugins` 映射声明 QQ Adapter、Group Suite、Game Hub 与全部游戏子插件；
 `zhin.config.yml` 用顶层同名实例块提供各自业务配置。运行入口统一为
-`zhin runtime start`，不依赖 legacy host-router/host-api。
+`zhin start`（管理网关监管实例；`pnpm dev` / `pnpm start` 为前台运行），不依赖 legacy host-router/host-api。
 
 ## 快速开始
 
@@ -24,6 +24,8 @@ cp ../test-bot/.env .env   # 或只复制 HTTP_TOKEN / QQ_APPID / QQ_SECRET；�
 pnpm install
 pnpm dev
 ```
+
+第一次连接 Console 时用 `.env` 中的 `HTTP_TOKEN`（初始化令牌）完成初始化向导、创建所有者账号，之后用账号登录；也可以先运行 `pnpm exec zhin console init`。
 
 ## 命令
 
@@ -46,7 +48,7 @@ pnpm dev
 ## 本地 7×24 守护
 
 ```bash
-pnpm start
+pnpm start        # zhin start --foreground --mode production --no-watch
 # 或
 pm2 start ecosystem.config.cjs
 ```

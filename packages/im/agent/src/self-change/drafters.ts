@@ -1,7 +1,7 @@
 /**
  * 受控自我进化：谁能起草（#1051 F4，Q3=B）。
  *
- * 只有**主人**（本条消息的发送者带框架角色 `master`：`endpoints.<id>.master` / `trigger.masters`）
+ * 只有**主人**（本条消息的发送者在本会话链上有聊天角色 `owner`，ADR 0056）
  * 与 **IM 审批人**（`ai.agent.toolHardGate.imApproval` 开启时，`approverIds` 里该平台的人）可以起草；
  * 群成员、私聊陌生人、`trusted` 都不行。审批人范围本身不变（审批仍由主人私聊 / 审批人 / Console 结算）。
  *
@@ -10,14 +10,14 @@
  */
 import { isImApprover, type ToolHardGateImApprovalSettings } from '../security/tool-hard-gate.js';
 
-/** 框架给主人打的角色（见 CLI 的 sender roles 解析）。 */
-export const SELF_CHANGE_MASTER_ROLE = 'master';
+/** 主人的聊天角色（ADR 0056；原 `master`）。 */
+export const SELF_CHANGE_OWNER_ROLE = 'owner';
 
 export interface SelfChangeDrafter {
   readonly platform: string;
   /** 已认证的发送者 id。 */
   readonly subjectId: string;
-  /** 框架角色（`master` / `trusted` / `user`）与平台角色。 */
+  /** 展开的聊天角色（`owner` / `admin` / `trusted`）或 `user`。 */
   readonly roles: readonly string[];
 }
 
@@ -28,7 +28,7 @@ export function canDraftSelfChange(
 ): boolean {
   const subjectId = drafter.subjectId.trim();
   if (!subjectId) return false;
-  if (drafter.roles.includes(SELF_CHANGE_MASTER_ROLE)) return true;
+  if (drafter.roles.includes(SELF_CHANGE_OWNER_ROLE)) return true;
   return imApproval ? isImApprover(imApproval, drafter.platform, subjectId) : false;
 }
 

@@ -173,6 +173,7 @@
     "export * from './legacy-command-migrator.js';",
     "export * from './package-cutover.js';",
     "export * from './readiness.js';",
+    "export * from './start-stack-dependencies.js';",
     "export * from './verify.js';",
     "export{applyInstanceDeclarationMigration,assertNoPendingInstanceMigration,assertStopped,formatInstanceMigrationPreview,planInstanceDeclarationMigration,recoverInstanceDeclarationMigration,withProjectLock,type InstanceDeclarationMigrationPlan,type InstanceMigrationApplyOptions,type InstanceMigrationApplyResult,type InstanceMigrationFile,}from '@zhin.js/gateway/project';"
   ],
@@ -181,7 +182,7 @@
     "export * from './definition.js';",
     "export * from './permission-explanation.js';",
     "export type{CommandValidationIssue,CommandValidationIssueCode}from './arguments.js';",
-    "export{CONVERSATION_MANAGER_PERMIT,canManageConversation,assertBuiltinPermits,checkBuiltinPermit,checkBuiltinPermitList,isBuiltinPermit,isPlatformPermit,parsePermitName,type ParsedPermit,type PermitKind,}from './permit.js';",
+    "export{CONVERSATION_MANAGER_PERMIT,canManageConversation,assertBuiltinPermits,checkBuiltinPermit,checkBuiltinPermitList,isBuiltinPermit,removedPermitReplacement,parsePermitName,type ParsedPermit,type PermitKind,}from './permit.js';",
     "export{bindCommandSource,CommandPathSyntaxError,commandFeatureId,type BoundCommandSource,default as commandFeature,}from './provider.js';",
     "export{default}from './provider.js';"
   ],
@@ -290,9 +291,9 @@
     "export * from './project-database.js';"
   ],
   "gateway/iam": [
-    "export{ConsoleIamService,IamError,type BindingInput,type ConsoleAuditView,type ConsoleBindingView,type ConsoleCredentialRevocation,type ConsoleCredentialRevocationReason,type ConsoleIamServiceOptions,type ConsoleRoleView,type ConsoleTokenView,type ConsoleUserView,type IamDatabase,type IamErrorCode,}from './service.js';",
     "export{ConsoleSetupService,SETUP_NO_MIGRATION_NOTICE,upsertDotenv,type ConsoleSetupServiceOptions,type SetupConfigPort,type SetupDatabaseField,type SetupDatabaseInput,type SetupDatabaseSummary,type SetupDriver,type SetupEnvFilePort,type SetupStatus,}from './setup-service.js';",
     "export{LoginRateLimiter}from './rate-limit.js';",
+    "export{accountInputProblem,ConsoleIamService,IamError,type BindingInput,type ConsoleAuditView,type ConsoleBindingView,type ConsoleCredentialRevocation,type ConsoleCredentialRevocationReason,type ConsoleIamServiceOptions,type ConsoleRoleView,type ConsoleTokenView,type ConsoleUserView,type IamDatabase,type IamErrorCode,}from './service.js';",
     "export{createLocalConsoleAdmin,type LocalConsoleAdmin,type LocalConsoleAdminOptions,type LocalConsoleAdminResult}from './local-admin.js';",
     "export{defineConsoleIamTables,IAM_DIALECTS,IAM_TABLE_DEFINITIONS,IAM_TABLES}from './tables.js';",
     "export{dispatchIamRpc,isIamRpc}from './rpc.js';",
@@ -372,12 +373,11 @@
   "permission": [
     "export * from './check-permissions.js';",
     "export * from './explain.js';",
-    "export{PermissionHost,type PermissionChecker,type PlatformPermitChecker,}from './host.js';",
-    "export{createSceneRolePlatformChecker,platformPermission}from './helpers.js';",
+    "export{PermissionHost,type PermissionChecker,type BotStandingResolver,type PermissionCheckOptions,type PermissionSenderRoles,type SenderRoleResolver,}from './host.js';",
     "export{permissionHostToken}from './token.js';",
-    "export{type PermissionDefinition,type PlatformPermissionDefinition,definePermission,definePlatformPermission,}from './define.js';",
-    "export{type PermissionSubject,type PermissionScene,type PermissionSender,toPermissionSubject,}from './subject.js';",
-    "export{type PermitKind,type ParsedPermit,type ParsedPlatformPermit,parsePermitName,parsePlatformPermitName,isBuiltinPermit,isPlatformPermit,assertPermitSyntax,checkBuiltinPermit,checkBuiltinPermitList,}from './builtin.js';"
+    "export{type PermissionDefinition,definePermission,}from './define.js';",
+    "export{type PermissionSubject,type PermissionScene,type PermissionSender,type PermissionPlatformStanding,type PermissionChatRoleLevel,type PermissionChatRoleLevels,toPermissionSubject,normalizePermissionStanding,normalizePermissionChatRoleLevels,}from './subject.js';",
+    "export{type PermitKind,type PermitChatRole,type PermitChatRoleLevel,type ParsedPermit,parsePermitName,isBuiltinPermit,permitsNeedBotStanding,BOT_PERMIT_KINDS,removedPermitReplacement,assertPermitSyntax,checkBuiltinPermit,checkBuiltinPermitList,}from './builtin.js';"
   ],
   "plugin-runtime": [
     "export * from './capability.js';",

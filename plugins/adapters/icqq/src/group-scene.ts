@@ -1,4 +1,5 @@
 import type { Client } from '@icqqjs/icqq';
+import { standingFromMemberRole, type PlatformStanding, type SelfStandingRequest } from '@zhin.js/im-contract';
 import { createEndpointOperation, type EndpointGroupInspectionRequest, type EndpointMemberInspectionRequest, type GroupMemberProfile, type GroupSceneFacts } from 'zhin.js/adapter';
 
 /** Listing a very large roster only to find admins is not worth the packet; adminIds stay unknown. */
@@ -73,4 +74,15 @@ export async function inspectGroupMemberProfile(
     ...(typeof shutupSeconds === 'number' && Number.isFinite(shutupSeconds)
       ? { mutedUntil: shutupSeconds * 1000 > Date.now() ? shutupSeconds * 1000 : 0 } : {}),
   };
+}
+
+/** ADR 0056 §1: the Bot's own standing in a group (`scene.selfStanding`); undefined outside groups. */
+export async function inspectSelfStanding(
+  client: Client, { conversation, signal }: SelfStandingRequest,
+): Promise<PlatformStanding | undefined> {
+  if (conversation.kind !== 'group') return undefined;
+  const self = client.uin;
+  if (!self) return undefined;
+  const profile = await inspectGroupMemberProfile(client, { groupId: conversation.id, userId: String(self), signal });
+  return standingFromMemberRole(profile.platformRole);
 }

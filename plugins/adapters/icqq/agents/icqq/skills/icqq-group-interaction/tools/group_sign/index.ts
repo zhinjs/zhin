@@ -1,15 +1,15 @@
 import { messages as t } from "../../../../messages.js";
+import { currentGroup } from "../../../../conversation.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-export default defineAgentTool<{ group_id: number }>({
-  description: 'QQ 群签到/打卡',
-  inputSchema: z.object({
-    group_id: z.number().describe('目标群号'),
-  }),
+export default defineAgentTool<Record<string, never>>({
+  description: '在当前 QQ 群签到/打卡',
+  inputSchema: z.object({}),
   adapter: 'icqq',
   scopes:['group'],
   requiresApproval: 'never',
-  async execute({ group_id }, context) {
+  async execute(_input, context) {
+    const group_id = currentGroup(context);
     const client = context.$client;
     const groupInfo= client.pickGroup(group_id);
     if(!groupInfo) return { success: false, message: t(context.locale, 'groupMissing') };

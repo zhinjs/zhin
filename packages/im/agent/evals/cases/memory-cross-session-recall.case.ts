@@ -7,8 +7,8 @@ export default defineEvalCase({
   source: '#734 memory retrieval — cross-session recall',
   tags: ['memory'],
   inbound: [
-    { text: '记住：我喜欢喝乌龙茶，不加糖', sender: { id: 'alice', roles: ['user'] } },
-    { text: '@bot 帮我点一杯我喜欢的茶', scope: 'group', sender: { id: 'alice', roles: ['user'] } },
+    { text: '记住：我喜欢喝乌龙茶，不加糖', sender: { id: 'alice' } },
+    { text: '@bot 帮我点一杯我喜欢的茶', scope: 'group', sender: { id: 'alice' } },
   ],
   nativeTools: ['memory_upsert'],
   script: [

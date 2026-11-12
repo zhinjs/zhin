@@ -45,9 +45,11 @@ import {
   type InstanceWsOpenInfo,
 } from '@zhin.js/host-http/bridge';
 import { createNodeHttpListener, type NodeHttpListener } from '@zhin.js/host-http/node';
+import type { GatewayHealth, GatewayInstanceErrorCode, GatewayInstanceErrorReply, GatewayInstanceState } from '@zhin.js/console-protocol';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { databaseBusyResponse, isDatabaseBusyError } from '../database/project-database.js';
 import { GATEWAY_RPC_PREFIX, type GatewayConsoleRpc, type GatewayRpcHandler } from './console-rpc.js';
+import { LOCAL_OWNER_PRINCIPAL } from './local-principal.js';
 
 const logger = getLogger('gateway');
 
@@ -101,6 +103,12 @@ export class GatewayHttpServer {
   readonly tokenRegistry: TokenRegistry;
   readonly apiBase: string;
   readonly #router: HttpRouter;
+  /**
+   * The same surface for `gateway.http.request` without a credential: a `forwarded` router that
+   * takes {@link LOCAL_OWNER_PRINCIPAL} as authenticated and still authorizes every route against
+   * the Console permission map, like the HTTP router does.
+   */
+  readonly #localRouter: HttpRouter;
   readonly #listeners: readonly NodeHttpListener[];
   readonly #instance: GatewayInstanceSource;
   readonly #retryAfter: string;
@@ -119,7 +127,7 @@ export class GatewayHttpServer {
     this.#consoleRpc = options.consoleRpc;
     this.tokenRegistry = options.tokenRegistry ?? new TokenRegistry({ primaryToken: primary.token });
     this.apiBase = normalizePath(primary.apiBase ?? '/api');
-    this.#router = createHttpRouter({
+    const routerOptions = {
       corsOrigins: primary.corsOrigins,
       apiBase: this.apiBase,
       authExemptPaths: primary.authExemptPaths,
@@ -127,14 +135,18 @@ export class GatewayHttpServer {
       secure: primary.tls !== undefined,
       address: () => this.address,
       builtinRoutes: false,
-    });
-    this.#router.route('GET', '/pub/health', () => this.#health(), { summary: 'Gateway health probe', tags: ['pub'] });
-    this.#router.route('POST', `${this.apiBase}/console/request`, (request, context) => this.#consoleRequest(request, context), {
-      summary: 'Console RPC (gateway-owned types answered by the gateway, the rest forwarded)',
-      tags: ['console'],
-    });
-    // Lowest precedence: every path no gateway route claims goes to the instance.
-    this.#router.route('ALL', '/*', (request, context) => this.#forward(request, context));
+    } as const;
+    this.#router = createHttpRouter(routerOptions);
+    this.#localRouter = createHttpRouter({ ...routerOptions, authentication: 'forwarded' });
+    for (const router of [this.#router, this.#localRouter]) {
+      router.route('GET', '/pub/health', () => this.#health(), { summary: 'Gateway health probe', tags: ['pub'] });
+      router.route('POST', `${this.apiBase}/console/request`, (request, context) => this.#consoleRequest(request, context), {
+        summary: 'Console RPC (gateway-owned types answered by the gateway, the rest forwarded)',
+        tags: ['console'],
+      });
+      // Lowest precedence: every path no gateway route claims goes to the instance.
+      router.route('ALL', '/*', (request, context) => this.#forward(request, context));
+    }
     this.#listeners = listenerOptions.map((entry) => createNodeHttpListener({
       host: entry.host,
       port: entry.port,
@@ -150,7 +162,9 @@ export class GatewayHttpServer {
 
   /** Registers a gateway-owned route; it takes precedence over the instance's routes. */
   route(method: string, path: string, handler: HttpHandler, meta?: RouteMeta): HttpRouteRegistration {
-    return this.#router.route(method, path, withDatabaseBusy(handler), meta);
+    const wrapped = withDatabaseBusy(handler);
+    const unregister = [this.#router.route(method, path, wrapped, meta), this.#localRouter.route(method, path, wrapped, meta)];
+    return () => { for (const release of unregister) release(); };
   }
 
   /** Registers a gateway-owned WebSocket route. */
@@ -210,6 +224,7 @@ export class GatewayHttpServer {
     this.#closeResult ??= (async () => {
       this.#closed = true;
       this.#router.close();
+      this.#localRouter.close();
       const results = await Promise.allSettled([...this.#listeners].reverse().map((listener) => listener.close()));
       const errors = results.flatMap((result) => result.status === 'rejected' ? [result.reason] : []);
       if (errors.length === 1) throw errors[0];
@@ -224,22 +239,24 @@ export class GatewayHttpServer {
   }
 
   #health(): Response {
-    return jsonResponse(200, {
+    const body: GatewayHealth = {
       success: true,
       status: 'ok',
       timestamp: new Date().toISOString(),
-      instance: { state: this.#instance.state(), ready: this.#readyTransport() !== undefined },
-    });
+      instance: { state: this.#instance.state() as GatewayInstanceState, ready: this.#readyTransport() !== undefined },
+    };
+    // Polled by the Console's instance banner: never cached.
+    return jsonResponse(200, body, { 'cache-control': 'no-store' });
   }
 
   #unavailable(): Response {
-    return jsonResponse(503, {
-      success: false,
-      code: 'instance_unavailable',
-      requestOutcome: 'not-dispatched',
-      state: this.#instance.state(),
-      error: 'The Zhin instance is not running',
-    }, { 'retry-after': this.#retryAfter, 'cache-control': 'no-store' });
+    return this.#instanceError(503, 'instance_unavailable', 'not-dispatched', 'The Zhin instance is not running', true);
+  }
+
+  /** One body shape for every forward failure (`GatewayInstanceErrorReply`, ADR 0054 §3). */
+  #instanceError(status: 502 | 503 | 504, code: GatewayInstanceErrorCode, requestOutcome: GatewayInstanceErrorReply['requestOutcome'], error: string, retry: boolean): Response {
+    const body: GatewayInstanceErrorReply = { success: false, code, requestOutcome, state: this.#instance.state() as GatewayInstanceState, error };
+    return jsonResponse(status, body, { ...(retry ? { 'retry-after': this.#retryAfter } : {}), 'cache-control': 'no-store' });
   }
 
   async #forward(request: Request, context: RouteContext): Promise<Response> {
@@ -276,10 +293,10 @@ export class GatewayHttpServer {
     // A transport that is no longer ready failed because the instance went away.
     if (code === 'instance-offline' || (code === undefined && !transport.ready)) return this.#unavailable();
     if (code === 'timeout') {
-      return jsonResponse(504, { success: false, code: 'instance_timeout', error: 'The instance did not answer in time' }, { 'cache-control': 'no-store' });
+      return this.#instanceError(504, 'instance_timeout', 'unknown', 'The instance did not answer in time', false);
     }
     if (code === 'overloaded') {
-      return jsonResponse(502, { success: false, code: 'instance_error', error: 'The instance is overloaded' }, { 'retry-after': this.#retryAfter, 'cache-control': 'no-store' });
+      return this.#instanceError(502, 'instance_error', 'not-dispatched', 'The instance is overloaded', true);
     }
     logger.warn(formatCompact({
       op: 'gateway_forward_failed',
@@ -287,7 +304,7 @@ export class GatewayHttpServer {
       ...(code ? { code } : {}),
       error: error instanceof Error ? error.message : String(error),
     }));
-    return jsonResponse(502, { success: false, code: 'instance_error', error: 'The instance failed to answer' }, { 'cache-control': 'no-store' });
+    return this.#instanceError(502, 'instance_error', 'unknown', 'The instance failed to answer', false);
   }
 
   /**
@@ -337,6 +354,40 @@ export class GatewayHttpServer {
       signal: request.signal,
       body: bytes,
     }), context);
+  }
+
+  /**
+   * A `{base}/…` request from the local control socket (`gateway.http.request`, ADR 0054 §6).
+   * Without `token` the socket's owner check is the authentication: the request runs as
+   * {@link LOCAL_OWNER_PRINCIPAL}. With `token` (an explicit `ZHIN_CONSOLE_TOKEN`) it is
+   * authenticated like an HTTP request with that Bearer credential and runs — and is audited — as
+   * its principal. Either way the request takes the HTTP route table: gateway-owned routes (e.g.
+   * `{base}/auth/me`), the `POST {base}/console/request` split, then the instance. Event streams
+   * cannot be carried in one socket reply; the socket handler refuses them. Only the path and query
+   * of `path` are used; paths outside `{base}` are refused.
+   */
+  async localRequest(input: { readonly method: string; readonly path: string; readonly body?: string; readonly token?: string }): Promise<Response> {
+    const method = input.method.toUpperCase();
+    // `\` is a path separator to the URL parser: `/\evil.com/x` would name another host.
+    if (!input.path.startsWith('/') || input.path.startsWith('//') || input.path.includes('\\')) {
+      return jsonResponse(400, { success: false, code: 'invalid_input', error: 'path must be an absolute path without a host' });
+    }
+    if (input.body !== undefined && (method === 'GET' || method === 'HEAD')) {
+      return jsonResponse(400, { success: false, code: 'invalid_input', error: `${method} requests cannot have a body` });
+    }
+    const parsed = new URL(input.path, LOCAL_REQUEST_ORIGIN);
+    const url = new URL(`${parsed.pathname}${parsed.search}`, LOCAL_REQUEST_ORIGIN);
+    const pathname = normalizePath(url.pathname);
+    if (!isUnderBase(pathname, this.apiBase)) {
+      return jsonResponse(404, { success: false, code: 'not_found', error: `Only ${this.apiBase === '/' ? '/' : `${this.apiBase}/`}… is reachable over the local socket` });
+    }
+    const headers = new Headers();
+    if (input.body !== undefined) headers.set('content-type', 'application/json');
+    if (input.token !== undefined) headers.set('authorization', `Bearer ${input.token}`);
+    const request = new Request(url, { method, headers, ...(input.body === undefined ? {} : { body: input.body }) });
+    return input.token !== undefined
+      ? this.#router.handle(request)
+      : this.#localRouter.handle(request, { principal: LOCAL_OWNER_PRINCIPAL });
   }
 
   async #upgrade(request: WsUpgradeRequest): Promise<WsUpgradeDecision> {
@@ -398,6 +449,15 @@ export class GatewayHttpServer {
 }
 
 /** A gateway route whose database stayed locked past the retry budget answers 503 `database_busy`. */
+/** Origin of the URLs `localRequest` builds (never contacted). */
+const LOCAL_REQUEST_ORIGIN = 'http://gateway.local';
+
+/** `pathname` is `base` or below it (`base` may be `/`). */
+function isUnderBase(pathname: string, base: string): boolean {
+  if (base === '/') return pathname.startsWith('/');
+  return pathname === base || pathname.startsWith(`${base}/`);
+}
+
 function withDatabaseBusy(handler: HttpHandler): HttpHandler {
   return async (request, context) => {
     try {

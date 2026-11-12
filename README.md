@@ -159,13 +159,13 @@ sandbox:
 | **Middleware** | Sees every message — keyword replies, rate limits, filters | `middlewares/<name>/index.ts` |
 | **Adapter** | Connects one platform; one adapter can host many account `endpoints` | `@zhin.js/adapter-*`, configured in `zhin.config.yml` |
 | **AI Agent** *(optional)* | Answers messages no command matched and calls your tools | `tools/<name>/index.ts`, enabled via `npx zhin setup --ai` |
-| **Console** | Browser admin UI for logs, config, and test messages | Local `/sandbox` or [console.zhin.dev](https://console.zhin.dev) |
+| **Console** | Browser admin UI: toggle features per global → adapter → account → conversation, manage chat roles, send messages; plus accounts and permissions, the instance and its logs, terminal, audit log | [console.zhin.dev](https://console.zhin.dev), backed by the management gateway; local `/sandbox` for test chats |
 
 ```text
 my-bot/
 ├── package.json      # "zhin" field: entry ("./plugin.ts") and capability features
 ├── zhin.config.yml   # configVersion: 2 — mounted plugins, platform endpoints, HTTP port
-├── .env              # secrets: HTTP_TOKEN, platform tokens, API keys
+├── .env              # secrets: HTTP_TOKEN (bootstrap token), platform tokens, API keys
 ├── plugin.ts         # Root plugin entry: definePlugin()
 ├── commands/         # /commands — folder path = command name
 ├── middlewares/      # runs on every message
@@ -245,7 +245,7 @@ Next: [AI overview](./docs/en/ai/index.md) · [Agent tools, Skills and Prompt Se
 
 | Tier | Install | Adds |
 |------|---------|------|
-| **IM** (default) | `zhin.js` + an adapter; `@zhin.js/cli` for dev | Built-in commands, components, middleware, schedules, hot reload — **<10MB** |
+| **IM** (default) | `zhin.js` + `@zhin.js/cli` + an adapter; the CLI provides `zhin start` and the management gateway `@zhin.js/gateway`, needed in development and in production | Built-in commands, components, middleware, schedules, hot reload — **<10MB** |
 | **AI** | `npx zhin setup --ai` (installs `@zhin.js/agent` and features) | Agent, sessions, memory, tools, compaction |
 | **Provider** | `@ai-sdk/openai` etc. | Calls to a specific LLM vendor |
 | **MCP** | `@modelcontextprotocol/sdk` | Use tools from external MCP servers |
@@ -256,11 +256,29 @@ Detailed table and sizes: [Install tiers](./docs/en/getting-started/index.md#ins
 
 ## For Operators and Group Owners (No Code)
 
-Once a bot is deployed, day-to-day operations happen in [console.zhin.dev](https://console.zhin.dev):
+Once a bot is deployed, day-to-day operations happen in the browser Console ([console.zhin.dev](https://console.zhin.dev)). The Console talks to the project's **management gateway**: sign-in, permissions, starting and stopping the instance, dependency installs and the terminal are handled there, so the Console keeps working — sign-in, status, logs — while the bot instance is crashed or being upgraded.
 
-- **Monitor & chat**: Check online status across accounts, read group history, and send messages.
-- **No-code configuration**: Enable plugins, edit schema-validated config forms, and configure group welcomes or scheduled reminders in the Task Center.
-- **Guardrails & emergency stop**: Approve AI-drafted announcements or risky moderation actions before they run, replay AI decisions, or mute/stop the bot with one click.
+**First visit**: use the setup link `zhin start` prints (or `HTTP_TOKEN` from `.env`) to create the first owner account. The bootstrap token stops working after that and everyone signs in with an account. On a server you can run `zhin console init` instead.
+
+The Console is organized in four levels of objects — **global → adapter → account → conversation** — and every level has the same page layout:
+
+| Section | What you see and do |
+|---------|---------------------|
+| Overview | Online state and statistics for this level |
+| Features | Turn plugins on or off and override their settings at this level; a level switched off above is locked below, and every field shows which level it is inherited from ([layered config](./docs/en/console/features.md)) |
+| Roles | Who is a chat `owner` / `admin` / `trusted` at this level (inherited downward, granted in the Console or in chat); platform owners and admins are a separate dimension and never become zhin roles ([chat roles](./docs/en/concepts/chat-roles.md)) |
+| Records | Chat history, logs and change records for this level |
+
+Account pages add **Connection** (sign-in, QR codes, connection checks); conversation pages add **Chat** (read history and send messages).
+
+Administration:
+
+- **Accounts and permissions**: Console users, built-in roles (`owner` / `admin` / `operator` / `viewer`) and custom roles, bound globally or to one adapter or account; API tokens for automation. Sign-ins, denied requests and every write go to the audit log. See [Access control](./docs/en/console/access-control.md).
+- **Instance and operations**: the instance page shows status, restarts the bot and streams its logs; dependency installs and updates roll back on failure. Also the database, config file, environment variables, schedules, files, and an owner-only terminal (off by default). See [Operations](./docs/en/console/operations.md).
+- **In-chat self-service**: with `features.selfService` on, people holding the zhin `admin` role (or higher) in a group manage it with the `feature` and `role` chat commands.
+- **Three-dimension permissions**: commands, Agent tools and skills, middlewares and buttons are available based on the sender's zhin role, the sender's platform standing and the bot's own standing in the group — a mute tool, for example, needs `platform:admin` and `bot:admin`; each Agent turn only sees the tools that pass. See [chat roles](./docs/en/concepts/chat-roles.md).
+- **Upgrading**: `master` is now `owner`; `master` / `trusted` / `ai.trigger.masters` in the config move into the database on first start and fail startup afterwards; permits such as `role(master)` and `scene_admin` are removed. See the [chat roles upgrade guide](./docs/en/migrations/chat-roles.md).
+- **Guardrails & emergency stop**: approve AI-drafted announcements or risky moderation actions before they run, replay AI decisions, or mute/stop the bot with one click.
 
 👉 Full guide: [Operator & Group Admin Guide](./docs/en/customer/index.md) · [Console path](./docs/en/paths/console.md) · [Solutions by outcome](./docs/en/solutions/index.md)
 
@@ -281,6 +299,15 @@ Full site: [zhin.js.org](https://zhin.js.org) (Chinese by default; switch langua
 ## CLI Cheat Sheet
 
 ```bash
+npx zhin start            # start the management gateway and the bot in the background (--foreground for dev, systemd, containers)
+npx zhin status           # gateway and instance status (exit code 3 when not running)
+npx zhin logs -f          # instance logs
+npx zhin restart          # restart only the bot instance; the gateway and the Console stay up
+npx zhin stop             # stop the gateway and the instance
+npx zhin update           # update dependencies: stop instance → install → start, rolled back on failure
+npx zhin console init     # create the first Console owner (same as the setup wizard in the browser)
+npx zhin console user create alice --role viewer   # manage Console accounts; passwd / disable / enable / list
+npx zhin service install  # install as a system service that starts on boot
 npx zhin setup            # add platforms, AI, database to an existing project
 npx zhin doctor           # diagnose Node, ports, tokens, manifest
 npx @zhin.js/cli new my-plugin --standalone  # scaffold a publishable plugin package
@@ -297,6 +324,7 @@ All commands: [CLI reference](./docs/en/cli/index.md).
 | [`zhin.js`](./packages/im/zhin) | The main package — re-exports everything plugin authors need |
 | [`create-zhin-app`](./packages/toolkit/create-zhin) | Project scaffolder (`npm create zhin-app`) |
 | [`@zhin.js/cli`](./basic/cli) | The `zhin` command: run, set up, diagnose, migrate, publish |
+| [`@zhin.js/gateway`](./packages/host/gateway) | Management gateway: HTTP, Console accounts and permissions, terminal, dependency transactions, instance supervision (comes with the CLI; list it in the project's dependencies so the lockfile pins one release) |
 | [`@zhin.js/agent`](./packages/im/agent) | Optional AI Agent runtime with security policies |
 | [`@zhin.js/adapter-*`](./plugins/adapters) | Platform adapters |
 | [`plugins/`](./plugins) | Official plugins: games, reminders, RSS, calendar, moderation… |

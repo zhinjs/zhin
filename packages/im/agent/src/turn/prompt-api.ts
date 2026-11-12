@@ -15,12 +15,12 @@ export function assertMasterForPromptControl(
 ): void {
   try {
     const role = resolveToolRequesterRole(commMessage);
-    if (role !== 'master') {
-      throw new PromptAccessDeniedError('steer/followUp 仅 master 可用');
+    if (role !== 'owner') {
+      throw new PromptAccessDeniedError('steer/followUp 仅主人（聊天角色 owner）可用');
     }
   } catch (error) {
     if (error instanceof PromptAccessDeniedError) throw error;
-    throw new PromptAccessDeniedError('steer/followUp 需要有效的 master 上下文');
+    throw new PromptAccessDeniedError('steer/followUp 需要有效的 owner 上下文');
   }
 }
 

@@ -85,7 +85,7 @@ The adapter is installed, but its Endpoint is offline and cannot receive or send
 
 ### Action
 
-- Inspect the latest error in Endpoint details, then compare it with the [generated configuration fields](/en/configuration/generated).
+- Inspect the connection state and latest error in the account page's Access and Overview tabs, then compare it with the [generated configuration fields](/en/configuration/generated).
 - Revalidate credentials, callback URLs, and network egress against the platform guide.
 
 ### Verification
@@ -197,7 +197,7 @@ Startup fails with `Multiple package locations for @zhin.js/... are not supporte
 
 ### Symptom
 
-Agent Studio cannot start a turn and reports an unavailable provider, model, or API key.
+An Agent session in **Try a conversation** cannot start a turn and reports an unavailable provider, model, or API key.
 
 ### Cause
 
@@ -230,7 +230,7 @@ An Agent turn stops at a tool step marked pending approval, denied, or cancelled
 
 ### Action
 
-- Inspect cwd, security policy, and approval details in Agent Studio; approve only understood side effects.
+- Inspect cwd, security policy, and approval details in the **Try a conversation** Agent session and **Bot status**; approve only understood side effects.
 - After cancellation, start a new turn rather than replaying a tool call that may have produced side effects.
 
 ### Verification

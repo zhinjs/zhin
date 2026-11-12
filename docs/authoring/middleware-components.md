@@ -57,6 +57,19 @@ export default defineMiddleware<Message>({
 
 排序依次比较：`phase` → `order` → 插件挂载顺序 → 能力 id。
 
+### 只对部分消息生效（`permit`）
+
+入站中间件可以声明 `permit`，规则与命令、Agent 工具相同、由同一个评估器判断（发送者的 zhin 角色、发送者的平台身份 `platform:*`、机器人自身的平台身份 `bot:*`，见[聊天角色](../concepts/chat-roles.md)）：
+
+```ts
+export default defineMiddleware<Message>({
+  permit: ['group()', 'bot:admin'],   // 只在机器人是群管理员的群里处理
+  async handle({ input }, next) { /* 撤回违规消息… */ await next(); },
+});
+```
+
+不满足时这条消息**跳过**该中间件、继续后续链路，不回复拒绝。评估是轻量的：机器人自身身份只读缓存（缓存缺失时在后台刷新），不会为每条消息增加平台请求，未知时 `bot:*` 不满足。出站中间件不接受 `permit`。
+
 中间件的参数还包括 `config`（本插件配置）、`has(token)`、`use(token)`（取用插件服务）、`session`、`signal`、`onAfterDispatch`、`owner`、`generation`。声明 `adapter` 后，`$client` 会带上该平台 SDK 的类型。
 
 需要给 `config` 加上强类型时，使用 `defineMiddleware.withConfig<MyConfig>()`：
@@ -159,7 +172,8 @@ export default defineCommand({
 ::: details 按钮的更多规则
 - `onClick` 返回字符串、消息段或 JSX 时自动回复一次；返回 `null`、`undefined` 或布尔值不发送；数字 `0` 会回复 `0`。也可以在回调中调用 `message.$reply()`。
 - 回调只对原会话和当前版本有效：一小时后、插件热重载或进程重启后失效。
-- 要限制谁能点，在回调里判断 `message.sender`。
+- 要限制谁能点，给按钮加 `permit`（与命令同一套规则、同一个评估器，判断的是**点击者**）：`<button permit={['platform:admin']} onClick={…}>`。不满足时回调不执行，点击者收到原因（如「你不能使用这个按钮：需要你是本群群主或管理员。」）。也可以在回调里自行判断 `message.sender`。
+- 组件（`defineComponent`）本身是纯渲染，不接受 `permit`；可被聊天触发的入口是回调按钮，按上一条鉴权。
 - 降级编号在运行期间递增，不会复用旧编号；多个会话交错时可能跳号，但各会话互不干扰。相邻的 `<button>` 会合并为一组编号。
 - 回调函数不会发送到平台；框架会绑定一个随机标识，支持原生按钮的平台通过 callback 回传。
 :::

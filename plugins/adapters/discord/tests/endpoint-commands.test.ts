@@ -17,7 +17,7 @@ async function fixture(config: Record<string, unknown> = {}) {
   const use = vi.fn(() => { throw new Error('No file/env port belongs to account management'); });
   function context(overrides: Record<string, unknown> = {}) {
     return { owner: rootPluginId(), generation: 1, project: () => runtime.index,
-      use, config, input: undefined, params: {}, args: [], ...overrides } as never;
+      use, config, input: { sender: { id: 'owner-user', chatRole: 'owner', chatRoleLevels: { owner: 'adapter' } } }, params: {}, args: [], ...overrides } as never;
   }
   return { adapter: runtime.adapter, index: runtime.index, repository, use, context };
 }
@@ -53,8 +53,8 @@ describe('Discord commands use the owning runtime account authority', () => {
   it('preserves the existing master authorization before account admission', async () => {
     const runtime = await fixture({ master: 'alice' });
     const denied = runtime.context({ input: { sender: { id: 'bob' } }, params: { id: 'bot1' }, args: ['token=t'] });
-    expect(await addCommand.execute(denied)).toBe('仅 master 可执行 Discord endpoint 管理命令');
-    expect(await removeCommand.execute(denied)).toBe('仅 master 可执行 Discord endpoint 管理命令');
+    expect(await addCommand.execute(denied)).toBe('仅聊天角色 owner 可执行 Discord endpoint 管理命令');
+    expect(await removeCommand.execute(denied)).toBe('仅聊天角色 owner 可执行 Discord endpoint 管理命令');
     expect(runtime.repository.writes).toHaveLength(0);
   });
 });

@@ -16,7 +16,7 @@ import {
   normalizeTool,
 } from '../src/resource-hub/tool-selection.js';
 import { planToolRun } from '../src/tool/runtime.js';
-import { PermissionHost, createSceneRolePlatformChecker } from '@zhin.js/permission';
+import { PermissionHost } from '@zhin.js/permission';
 import { mockCommMessage } from './helpers/mock-comm-message.js';
 import type { Tool } from '../src/resource-hub/types.js';
 
@@ -41,19 +41,15 @@ describe('tool-selection permissions', () => {
 
   beforeEach(() => {
     host = new PermissionHost();
-    host.registerPlatform('qq', createSceneRolePlatformChecker());
   });
 
   it('checks platform, scope and platform permit in one place', async () => {
     const tool = makeTool({
       platforms: ['qq'],
       scopes: ['group'],
-      permissions: ['platform(qq,scene_admin)'],
+      permissions: ['platform:admin'],
     });
-    const msg = {
-      ...mockCommMessage({ adapter: 'qq', endpoint: 'b1', senderId: 'u1', scope: 'group', sceneId: 'g1' }),
-      metadata: { senderRole: 'admin' },
-    } as any;
+    const msg = mockCommMessage({ adapter: 'qq', endpoint: 'b1', senderId: 'u1', scope: 'group', sceneId: 'g1', platform: { standing: 'admin' } }) as any;
 
     expect(await canAccessTool(tool, msg, host)).toBe(true);
     expect(await canAccessTool(tool, {

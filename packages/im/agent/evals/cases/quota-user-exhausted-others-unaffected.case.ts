@@ -8,9 +8,9 @@ export default defineEvalCase({
   tags: ['quota'],
   agentConfig: { usageQuota: { perUserTokens: 100 } },
   inbound: [
-    { text: '写一首长诗', sender: { id: 'alice', roles: ['user'] } },
-    { text: '再写一首', sender: { id: 'alice', roles: ['user'] } },
-    { text: '你好', sender: { id: 'bob', roles: ['user'] } },
+    { text: '写一首长诗', sender: { id: 'alice' } },
+    { text: '再写一首', sender: { id: 'alice' } },
+    { text: '你好', sender: { id: 'bob' } },
   ],
   script: [
     { text: '这是一首长诗。', tokens: 150 },

@@ -182,7 +182,7 @@ describe('RSS canonical conversation addresses', () => {
       has: (token: unknown) => token === outboundHostToken,
       use: (token: unknown) => token === projectLocaleToken ? 'zh-CN' : ({ send, sendTarget }),
       provide: (token: unknown, value: RssRuntime) => { if (token === rssRuntimeToken) runtime = value; },
-    }, lifecycle: { add: () => undefined } } as never);
+    }, lifecycle: { add: () => undefined }, isEnabledFor: () => true } as never);
     const scene = rssMessage('same-alias').conversation;
     const first = { ...scene, endpoint: { ...scene.endpoint, id: 'canonical\0first' } };
     const second = { ...scene, endpoint: { ...scene.endpoint, id: 'canonical\0second' } };
@@ -216,6 +216,7 @@ describe('RSS canonical conversation addresses', () => {
         },
       },
       lifecycle: { add: () => undefined },
+      isEnabledFor: () => true,
     } as never);
     expect(runtime).toBeDefined();
     const Subs = getRssSubs(runtime!.db)!;
@@ -237,5 +238,27 @@ describe('RSS canonical conversation addresses', () => {
       rssMessage('bot-b', 'channel', 'channel').conversation,
     ]);
     expect(sendTarget.mock.calls.map(call => call[2])).toEqual([{ locale: 'zh-CN' }, { locale: 'en' }, { locale: 'zh-CN' }]);
+  });
+
+  it('skips pushes to conversations where rss is switched off (ADR 0055)', async () => {
+    mockFeed('conversation-switch');
+    const sendTarget = vi.fn(async () => null);
+    const checked: unknown[] = [];
+    let runtime: RssRuntime | undefined;
+    await plugin.setup!({
+      config: { get: () => ({}) },
+      resources: {
+        has: (token: unknown) => token === outboundHostToken,
+        use: (token: unknown) => token === projectLocaleToken ? 'zh-CN' : ({ send: vi.fn(), sendTarget }),
+        provide: (token: unknown, value: RssRuntime) => { if (token === rssRuntimeToken) runtime = value; },
+      },
+      lifecycle: { add: () => undefined },
+      isEnabledFor: (target: { conversation: { id: string } }) => { checked.push(target); return target.conversation.id !== 'off'; },
+    } as never);
+    const Subs = getRssSubs(runtime!.db)!;
+    for (const id of ['off', 'on']) await Subs.insert({ url, ...subscriptionScope(extractChannelInfo(rssMessage('bot-b', 'group', id))!) });
+    await checkSubscriptions(runtime!, { urls: [url] });
+    expect(sendTarget.mock.calls.map(([target]) => (target as { id: string }).id)).toEqual(['on']);
+    expect(checked).toHaveLength(2);
   });
 });

@@ -8,6 +8,7 @@ import type {
   CapabilityContext,
   RegisteredAdapterName,
 } from '@zhin.js/feature-kit';
+import { assertPermitSyntax } from '@zhin.js/permission';
 import type { MiddlewareContinuation } from './continuation.js';
 export type { MiddlewareContinuation } from './continuation.js';
 
@@ -48,6 +49,14 @@ export interface MiddlewareDefinitionBase<
   readonly phase: MiddlewarePhase;
   readonly order: number;
   readonly adapter?: TAdapter;
+  /**
+   * Inbound only (ADR 0056 §5): built-in permit expressions, the same evaluator as commands and
+   * Agent tools (sender zhin role, sender platform standing, `bot:*` Bot standing). When the
+   * message does not satisfy them the middleware is skipped for that message and the chain
+   * continues; no reply is sent. The Bot's own standing is read from the cache only (no platform
+   * lookup per message): unknown means `bot:*` is unmet.
+   */
+  readonly permit?: readonly string[];
 }
 
 export type MiddlewareDefinition<
@@ -144,7 +153,14 @@ export function defineMiddleware<TInput = unknown, TConfig = unknown>(
   }
   const order = definition.order ?? 0;
   if (!Number.isSafeInteger(order)) throw new TypeError('Middleware order must be a safe integer');
-  return Object.freeze({ ...definition, $feature: middlewareBrand, phase, target, order }) as Readonly<
+  const permit = (definition as { readonly permit?: unknown }).permit;
+  if (permit !== undefined) {
+    if (!Array.isArray(permit) || !permit.every(item => typeof item === 'string')) throw new TypeError('Middleware permit must be a string array');
+    if (target !== 'inbound' && permit.length) throw new TypeError('Middleware permit applies to inbound middleware only');
+    assertPermitSyntax(permit, 'Middleware');
+  }
+  return Object.freeze({ ...definition, ...(permit !== undefined ? { permit: Object.freeze([...permit as string[]]) } : {}),
+    $feature: middlewareBrand, phase, target, order }) as Readonly<
     MiddlewareDefinition<TInput, TConfig, string | undefined>
   >;
 }

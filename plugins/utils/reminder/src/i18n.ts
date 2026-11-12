@@ -69,6 +69,10 @@ export const reminderMessages = createMessages({
     "zh-CN": "已确认投递",
     "en": "Delivery confirmed"
   },
+  "featureDisabled": {
+    "zh-CN": "提醒已在目标账号或会话停用，本次未发送",
+    "en": "Reminders are switched off for the target account or conversation; this run was not sent"
+  },
   "deliveryFailed": {
     "zh-CN": "投递失败：{code}；任务已停止",
     "en": "Delivery failed: {code}; the task has stopped"

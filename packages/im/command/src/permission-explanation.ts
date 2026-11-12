@@ -29,14 +29,13 @@ export function explainCommandPermissions(
   const inputSender = options.source && typeof options.source === 'object'
     ? (options.source as Pick<CommandMessage, 'sender'>).sender : undefined;
   const structuredRoles = inputSender && typeof inputSender === 'object'
-    && Array.isArray((inputSender as { readonly role?: unknown }).role);
+    && 'chatRole' in (inputSender as object);
   // A sender-only assumption has no synthetic conversation. Apply the real canonical
   // sender defaults without inventing an Endpoint or treating unknown roles as known.
   const senderOnly = options.source && typeof options.source === 'object' && !('conversation' in options.source) && !structuredRoles
     ? resolveCommandSender(options.source as Pick<CommandMessage, 'sender'>, undefined) : undefined;
   const subject = senderOnly ? { ...projected, sender: senderOnly } : projected;
-  const defaultedRoles = options.rolesKnown && Array.isArray(inputSender?.roles) && inputSender.roles.length === 0
-    && subject.sender?.role.length === 1 && subject.sender.role[0] === 'user';
+  const defaultedRoles = options.rolesKnown === true && !!subject.sender && subject.sender.chatRole === undefined;
   const actualAdapter = operationClientAdapter(options.source);
   const adapter: PermissionConditionExplanation = !command.adapter
     ? { outcome: 'not_evaluated', reason: commandMessages(locale, 'noAdapter') }

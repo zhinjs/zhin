@@ -6,12 +6,12 @@
 
 ```bash
 cd examples/capabilities-bot
-pnpm dev        # zhin runtime start
+pnpm dev        # zhin start --foreground --watch source config
 ```
 
 启动后（`--once` 冒烟可直接看装配输出）：
 
-- Console: `http://127.0.0.1:18099`（token `capabilities-dev-token`），plugins 页可见 `Capabilities Bot` 卡片（metadata 生效）
+- Console：在 [console.zhin.dev](https://console.zhin.dev) 连接 `http://127.0.0.1:18099`。第一次连接时用初始化令牌 `capabilities-dev-token`（`http.token`）完成初始化向导、创建所有者账号，之后用账号登录（或先在本目录运行 `pnpm exec zhin console init` 创建所有者）；初始化令牌在所有者创建后失效。插件页可见 `Capabilities Bot` 卡片（metadata 生效）
 - `stats` / `whoami` 命令已注册（introspection → commands）
 - 心跳每 5 分钟打一行日志
 

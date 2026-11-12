@@ -24,6 +24,9 @@ npx zhin --help        # 查看全部命令
 | --- | --- |
 | 启动 Bot（开发模式，改代码自动热重载） | `pnpm dev`（即 `zhin start --foreground --watch source config`） |
 | 在服务器上后台运行 / 查看 / 停止 | `npx zhin start` / `npx zhin status`、`npx zhin logs -f` / `npx zhin stop` |
+| 由 systemd / Docker / PM2 托管（前台） | `pnpm start`（即 `zhin start --foreground --mode production --no-watch`） |
+| 首次创建 Console 所有者 | `npx zhin console init`（或用启动时打印的链接在 Console 里完成） |
+| 增加 Console 账号、重置密码 | `npx zhin console user create <用户名> --role viewer` / `npx zhin console user passwd <用户名>` |
 | 接入平台、配置 AI 或数据库 | `npx zhin setup`（可加 `--adapters` / `--ai` / `--database`） |
 | 环境或配置有问题 | `npx zhin doctor` |
 | 检查配置文件是否有效 | `npx zhin config check` |
@@ -32,6 +35,7 @@ npx zhin --help        # 查看全部命令
 | 创建一个可独立发布的新插件 | `npx @zhin.js/cli new my-plugin --standalone` |
 | 发布前检查插件 | `npx @zhin.js/cli plugin check` |
 | 在已有 Bot 项目里加一个本地插件 | `npx zhin new my-plugin` |
+| 更新依赖（停实例 → 安装 → 启实例，失败回滚） | `npx zhin update` |
 | 升级 Zhin | `npx zhin migrate --dry-run`，确认后去掉 `--dry-run` |
 | 安装为开机自启的系统服务 | `npx zhin service install` |
 
@@ -42,14 +46,17 @@ npx zhin --help        # 查看全部命令
 ### start / stop / restart / status / logs：网关与实例
 
 ```bash
-zhin start [--foreground] [--mode production] [--watch source config | --no-watch] [--once]
+zhin start [--foreground] [--mode development|test|production] [--environment <name>]
+           [--watch source config | --no-watch] [--once] [--open] [--log-file <path>] [--standalone]
 zhin stop [--timeout <ms>]
 zhin restart [--gateway]
 zhin status [--json]
-zhin logs [-f] [-n <1-1000>]
+zhin logs [-f] [-n <1-1000>] [--interval <ms>]
 ```
 
-`zhin start` 启动管理网关（常驻，承载 HTTP 与 Console）并由它拉起 Zhin 实例；默认后台运行，`--foreground` 前台运行（开发、systemd、容器）。网关在运行时，其余命令经本地控制套接字 `.zhin/gateway.sock` 请求网关：`stop` 停止实例与网关，`restart` 只重启实例（`--gateway` 重启后台网关），`status` 显示两者状态（未运行时退出码 3），`logs` 读取实例日志。网关未运行时 `stop` / `restart` 无事可做，`logs` 读取 `.zhin/logs/instance.log`。详见 [zhin start](./runtime.md)。
+`zhin start` 启动管理网关（常驻，承载 HTTP 与 Console）并由它拉起 Zhin 实例；默认后台运行，`--foreground`（`-f`）前台运行（开发、systemd、容器、PM2）。只有 `--foreground`、`--once`、`--standalone` 会前台运行：单写 `--mode production` 仍在后台，进程管理器里必须带 `--foreground`。网关在运行时，其余命令经本地控制套接字 `.zhin/gateway.sock` 请求网关：`stop` 停止实例与网关，`restart` 只重启实例（`--gateway` 重启后台网关），`status` 显示两者状态（未运行时退出码 3），`logs` 读取实例日志。网关未运行时 `stop` / `restart` 无事可做，`logs` 读取 `.zhin/logs/instance.log`。管理命令必须以启动网关的同一个系统用户运行。选项、退出码与 systemd 示例见 [zhin start](./runtime.md)。
+
+`zhin update` 见下文[更新依赖](#update-更新依赖)。
 
 ### runtime：项目工具
 
@@ -92,7 +99,44 @@ zhin service uninstall [--user]
 zhin service status [--user]
 ```
 
-安装开机自启 / 守护服务。`--user` 在 Linux 下使用用户级 systemd；`status` 仅支持 Linux 和 macOS。
+安装开机自启 / 守护服务。`--user` 在 Linux 下使用用户级 systemd；`status` 仅支持 Linux 和 macOS。服务文件以前台方式运行网关（`zhin start --foreground --mode production --no-watch`），实例由网关监管重启。
+
+### console：初始化与用户管理 {#console}
+
+```bash
+zhin console init [--status]
+zhin console init [--database sqlite|mysql|pg|mongodb] [--database-<字段> <值> ...]
+                  [--database-password-env <VAR> | --database-password-stdin]
+                  [--owner <用户名>] [--display-name <显示名>] [--password-stdin] [-y]
+zhin console user create <用户名> [--role viewer] [--display-name <显示名>] [--password-stdin]
+zhin console user passwd <用户名> [--password-stdin]
+zhin console user disable <用户名>
+zhin console user enable <用户名>
+zhin console user list
+```
+
+Console 的用户、角色与 API 令牌存在项目数据库里（[ADR 0049](../adr/0049-console-rbac.md)）。这组命令与 Console 网页上的初始化向导、「访问控制」页做同一件事，适合在服务器上、容器构建里或忘记密码时使用。
+
+- **经由谁执行**：项目的网关在运行时，命令经本地控制套接字 `.zhin/gateway.sock` 交给网关处理（连上即视为本机所有者），切换数据库、创建所有者立即生效；网关未运行时直接打开项目数据库（离线初始化与救援）。套接字存在但属于其他系统用户或无响应时报错，不会绕过网关改文件。
+- **`init`**：两步——选择数据库（默认保留当前配置，通常是 SQLite），再创建第一个所有者。不带参数时交互提问；`--status` 只输出初始化状态（JSON）。已经有所有者时报错退出，请改用 `zhin console user`。
+  - `--database <dialect>` 换数据库，连接字段用 `--database-filename`、`--database-host`、`--database-port`、`--database-user`、`--database-database`、`--database-url`、`--database-db-name`、`--database-mode` 等传入；CLI 先测试连接，成功后写入配置，机密字段写进 `.env`。
+  - 数据库密码有两种推荐方式（三种来源只能选一个）：`--database-password-env <VAR>` 引用已有环境变量（配置里写入 `${VAR}`）；`--database-password-stdin` 从标准输入第一行读取，写进 `.env`，配置里写 `${VAR}`。同时用 `--password-stdin` 时，第一行是数据库密码、第二行是所有者密码。
+  - `--database-password <值>` 仍可用但**不推荐**：机密会留在 shell 历史与进程列表（`ps`）里，命令执行时会打印警告。
+  - `--owner` 加 `--password-stdin` 可非交互创建所有者（密码取标准输入第一行，与 `--database-password-stdin` 同用时取第二行；至少 10 位）；加 `-y` 时缺少参数直接失败而不提问，适合脚本。
+- **`user`**：`create` 默认绑定全局 `viewer`，`--role` 可指定 `owner` / `admin` / `operator` / `viewer` 或自定义角色；`passwd` 重置密码并吊销该用户的全部会话；`disable` / `enable` 禁用与恢复；`list` 列出用户、状态和角色绑定。适配器 / 账号作用域的绑定在 Console「访问控制」里设置。
+- `http.token` 只是**初始化令牌**：所有者创建之前有效，之后在所有接口上失效。
+
+```bash
+# 容器或服务器上的非交互初始化：先创建所有者，再开放端口
+printf '%s\n' "$OWNER_PASSWORD" | zhin console init -y --owner admin --password-stdin
+printf '%s\n' "$VIEWER_PASSWORD" | zhin console user create alice --role viewer --password-stdin
+# 换 PostgreSQL：数据库密码在第一行、所有者密码在第二行，都不出现在命令行上
+printf '%s\n%s\n' "$PG_PASSWORD" "$OWNER_PASSWORD" | zhin console init -y --database pg \
+  --database-host db --database-user zhin --database-database zhin \
+  --database-password-stdin --owner admin --password-stdin
+```
+
+成功时退出码为 `0`，失败（已初始化、用户不存在、数据库连接失败、参数缺失等）为 `1`。
 
 ## 配置与诊断
 
@@ -103,13 +147,14 @@ zhin setup                 # 完整向导
 zhin setup --database      # 仅配置数据库
 zhin setup --adapters      # 仅配置适配器（添加账号）
 zhin setup --ai            # 仅配置 AI
+zhin setup -y --adapter sandbox --enable-ai --install   # 非交互：只执行参数指定的步骤
 zhin setup --decisions     # 可选的 TypeSafe Jev 决策服务（需要已有 AI 配置）
 zhin setup --bootstrap     # 仅生成引导文件（SOUL.md / TOOLS.md / AGENTS.md）
 zhin setup --global        # 在 ~/.zhin 初始化全局实例
 zhin setup --locale en     # 设置项目语言（zh-CN 或 en），可与其他选项组合
 ```
 
-向导修改的就是 [`zhin.config.yml`](../configuration/index.md) 中对应的部分，密钥写入 `.env`。
+向导修改的就是 [`zhin.config.yml`](../configuration/index.md) 中对应的部分，密钥写入 `.env`。非交互参数：`--adapter <name>`（可重复）添加适配器，`--enable-ai` 启用 AI（模型服务之后在 Console 添加），`--skip-ai` / `--skip-adapters` 跳过对应引导步骤，`--install` 立即安装所需依赖（与 Console 相同的白名单），`-y` 不提问、只执行参数指定的步骤。
 
 不传 `--locale` 时保留项目已有的语言；语言与时区相互独立，详见[语言与本地化](../configuration/localization.md)。
 
@@ -152,9 +197,10 @@ zhin config check [--fix] [--json] [--strict]
 
 ```bash
 zhin doctor [--fix] [--upgrade-l4]
+zhin doctor --live <host-url> [--json]
 ```
 
-检查 Node、端口、Token、配置等环境问题；`--fix` 自动修复能修复的项；`--upgrade-l4` 诊断从最小项目升级到完整 AI 栈需要补什么。`--fix` 补写依赖时使用与 CLI 同一次发布的真实版本范围（如 `^1.1.11`），不写 `latest`；写入后运行 `pnpm install`。
+检查 Node、端口、Token、配置等环境问题；`--fix` 自动修复能修复的项；`--upgrade-l4` 诊断从最小项目升级到完整 AI 栈需要补什么。`--live` 读取运行中 Host 的就绪报告（需要 `ZHIN_CONSOLE_TOKEN` 里带 `status.view` 的 API 令牌，自定义 `http.base` 写进 URL 路径），`--json` 输出 JSON；就绪时退出码 `0`，否则 `1`，见[生产部署与运维](../operations/production.md#_2-网络与鉴权)。`--fix` 补写依赖时使用与 CLI 同一次发布的真实版本范围（如 `^1.1.11`），不写 `latest`；写入后运行 `pnpm install`。
 
 ### dev：联调本地 zhin 源码与独立插件
 
@@ -184,6 +230,8 @@ zhin migrate [--dry-run] [--no-install] [--include-pinned]
 ```
 
 把旧版本 Zhin 项目升级到最新：依赖、scripts 与目录结构。`--dry-run` 只打印计划，结束时提示“nothing was changed”；`--no-install` 跳过最后的 `pnpm install`。精确版本（如 `1.1.6`）、`link:`、`file:` 等用户锁定的依赖默认保留，`--include-pinned` 才会一并改为 `latest`。完整升级流程见 [版本兼容与迁移](../operations/upgrades.md)。
+
+项目目录（有 `zhin.config.*`）里，`zhin start` 在生产环境也要用 CLI 和管理网关，所以 `zhin migrate` 把 `zhin.js`、`@zhin.js/cli`、`@zhin.js/gateway` 一起放进 `dependencies`：只写在 `devDependencies` 的连同版本挪过去，两处都有时删掉 `devDependencies` 里的重复项，缺 `@zhin.js/gateway` 就补上（CLI 是 `latest` 等标签时用同一标签，否则用与当前 CLI 同批发布的版本范围）。`--prod` 安装因此不会丢掉启动所需的包。插件包（没有项目配置）的 CLI 仍留在 `devDependencies`。`zhin runtime migrate` 的 cutover 对私有（项目）包做同样的调整。
 
 `zhin migrate` 不改配置文件。启动报 `configVersion must be 2` 或 `zhin doctor` / `zhin config check` 提示 v1 配置时，使用下文的 `zhin migrate instances`。`zhin runtime migrate` 是旧插件能力代码迁移，与配置版本无关。
 
@@ -278,7 +326,7 @@ zhin use-cases keyword-reply
 
 查看提醒、群欢迎和关键词回复所需的插件、安装预览、操作步骤与当前限制。本命令只输出指南，不安装插件、不写配置、不启动 Bot，也不发送消息；具体操作仍使用现有安装、配置和聊天入口。
 
-Console 的[任务中心](../paths/console.md#管理员任务中心)使用同一份用途目录。首版可在网页创建和管理管理员提醒；群欢迎和关键词回复目前提供现有入口指南，不能在网页伪造群成员执行命令。
+Console「运维 → 定时任务」的[管理员任务](../paths/console.md#管理员任务中心)页签使用同一份用途目录。首版可在网页创建和管理管理员提醒；群欢迎和关键词回复目前提供现有入口指南，不能在网页伪造群成员执行命令。
 
 ### preview：预览组件与页面
 
@@ -372,7 +420,7 @@ zhin packages verify <instanceKey> <check-id> --live http://127.0.0.1:8068 \
 
 ## 操作运行中的 Bot
 
-以下命令通过 HTTP 连接正在运行的 Bot，需要先用 `zhin start` 启动并启用 HTTP 服务。
+以下命令通过 HTTP 连接正在运行的 Bot，需要先用 `zhin start` 启动并启用 HTTP 服务。请求携带 `ZHIN_CONSOLE_TOKEN` 里的 Console API 令牌（在 Console 个人设置里签发，权限不超过签发人）；Console 初始化之后 `http.token` 一律被拒绝，没有设置 API 令牌时这些命令返回 401。
 
 ### send：向运行中的 bot 发消息
 
@@ -499,10 +547,11 @@ zhin usage report --session 'icqq:*:group:*' --json
 | 退出码 | 含义 |
 | --- | --- |
 | `0` | 正常退出 |
+| `3` | `zhin status`：网关未运行 |
 | `130` | 被信号中断 |
-| 其他非零 | 实例启动失败或崩溃且未被重新拉起；需要重启时实例经控制通道请求监管进程，不再通过退出码 |
+| 其他非零 | 网关启动失败（端口被占用、同一项目已有网关、Node 版本不满足、配置读取失败），或管理命令失败（套接字属于其他用户、网关无响应、事务失败已回滚）。实例崩溃不会结束网关：实例由网关重启，需要重启时经控制通道请求网关，不通过退出码 |
 
-进程模型与热重载行为见 [zhin start](./runtime.md)。
+`zhin config` 与 `zhin doctor --live` 有各自的退出码（见上文）。进程模型、各启动方式的退出码与热重载行为见 [zhin start](./runtime.md#退出码)。
 
 ## 迁移应用实例声明
 

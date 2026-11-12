@@ -2,11 +2,24 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
+  "x-zhin-config": {
+    "levels": [
+      "global",
+      "adapter",
+      "endpoint",
+      "conversation"
+    ]
+  },
   "properties": {
     "apiBase": {
       "type": "string",
       "default": "https://60s.viki.moe",
-      "description": "60s API base URL"
+      "description": "60s API base URL",
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
+      }
     }
   }
 }

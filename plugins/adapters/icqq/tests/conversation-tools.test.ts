@@ -12,7 +12,18 @@ import leave from '../agents/icqq/skills/icqq-group-admin/tools/group_leave/inde
 import mute from '../agents/icqq/skills/icqq-group-admin/tools/set_mute/index.js';
 import invite from '../agents/icqq/skills/icqq-group-admin/tools/group_invite/index.js';
 import memberInfo from '../agents/icqq/skills/icqq-group-directory/tools/group_member_info/index.js';
+import groupSign from '../agents/icqq/skills/icqq-group-interaction/tools/group_sign/index.js';
+import poke from '../agents/icqq/skills/icqq-group-interaction/tools/poke/index.js';
+import groupFiles from '../agents/icqq/skills/icqq-group-state/tools/group_files/index.js';
+import listMuted from '../agents/icqq/skills/icqq-group-state/tools/list_muted/index.js';
+import kick from '../agents/icqq/skills/icqq-group-admin/tools/group_kick/index.js';
+import setAdmin from '../agents/icqq/skills/icqq-group-admin/tools/set_group_admin/index.js';
+import setTitle from '../agents/icqq/skills/icqq-group-admin/tools/set_title/index.js';
+import announce from '../agents/icqq/skills/icqq-group-admin/tools/announce/index.js';
+import anonymous from '../agents/icqq/skills/icqq-group-admin/tools/set_anonymous/index.js';
+import essence from '../agents/icqq/skills/icqq-group-admin/tools/essence/index.js';
 import type { IcqqToolContext } from '../agents/icqq/conversation.js';
+import { expectUntrustedSend } from '../../test-utils/untrusted-outbound.js';
 
 function fixture(kind: 'private' | 'group' | 'channel' = 'group') {
   const abort = new AbortController();
@@ -46,16 +57,16 @@ function fixture(kind: 'private' | 'group' | 'channel' = 'group') {
     locale: 'en', $client: client, signal: abort.signal, owner: { id: rootPluginId() },
     origin: { kind: 'im', platform: 'icqq', endpoint: 'bot-7', scope: kind, sceneId: conversation.id, conversation },
     principal: { subjectId: '2', roles: [] as string[] },
-    use: (token: unknown) => { expect(token).toBe(outboundMessageToken); return { send }; },
+    use: (token: unknown) => { expect(token).toBe(outboundMessageToken); return { send: expectUntrustedSend(send, 'icqq:agent-tool') }; },
   };
   return { id, original, self, member, group, client, abort, makeForwardMsg, send, context, ctx: context as unknown as IcqqToolContext };
 }
 
 describe('ICQQ current conversation tools', () => {
   it.each(['member', 'admin', 'owner'])('reports the bot role %s independently of requester roles', async role => {
-    const f = fixture(); f.self.role = role; f.context.principal.roles = ['master'];
+    const f = fixture(); f.self.role = role; f.context.principal.roles = ['owner', 'admin', 'trusted'];
     expect(await info.execute({}, f.ctx)).toMatchObject({
-      bot: { id: 7, role }, requester: { roles: ['master'], canRequestLeave: true },
+      bot: { id: 7, role }, requester: { roles: ['owner', 'admin', 'trusted'], canRequestLeave: true },
       group: { id: 100, name: 'Group', memberCount: 42 },
     });
     expect(f.client.getGroupInfo).toHaveBeenCalledWith(100, true);
@@ -106,7 +117,7 @@ describe('ICQQ current conversation tools', () => {
   ])('checks live recall authority for %s over %s', async (self, target, allowed) => {
     const f = fixture(); f.original.sender.user_id = 2; f.self.role = String(self); f.member.role = String(target);
     expect(memberRecall.requiresApproval).toBe('never');
-    expect(memberRecall.permissions).toEqual(['role(master,admin,trusted,owner)']);
+    expect(memberRecall.permissions).toEqual(['platform:admin', 'bot:admin']);
     expect(await memberRecall.execute({ message_id: f.id, reason: 'Confirmed advertising' }, f.ctx)).toMatchObject({ success: allowed });
     expect(f.client.getGroupMemberInfo).toHaveBeenCalledWith(100, 2, true);
     expect(f.client.deleteMsg).toHaveBeenCalledTimes(allowed ? 1 : 0);
@@ -167,7 +178,7 @@ describe('ICQQ current conversation tools', () => {
 
   it('leaves only the current group, with master and fresh-human requirements', async () => {
     const f = fixture();
-    expect(leave.permissions).toEqual(['role(master)']); expect(leave.requiresApproval).toBe('human'); expect(leave.risk).toBe('dangerous');
+    expect(leave.permissions).toEqual(['owner']); expect(leave.requiresApproval).toBe('human'); expect(leave.risk).toBe('dangerous');
     expect(await leave.execute({ group_id: 101, reason: 'Requested' }, f.ctx)).toMatchObject({ success: false });
     expect(f.client.getGroupInfo).not.toHaveBeenCalled();
     expect(await leave.execute({ group_id: 100, reason: 'Requested' }, f.ctx)).toMatchObject({ success: true });
@@ -225,7 +236,7 @@ describe('group_member_info', () => {
   it('returns a fresh, serializable member record', async () => {
     const f = fixture();
     f.client.getGroupMemberInfo.mockResolvedValue({ group_id: 100, user_id: 5, nickname: 'n', card: 'c', role: 'member' } as never);
-    const result = await memberInfo.execute({ group_id: 100, user_id: 5 }, f.ctx);
+    const result = await memberInfo.execute({ user_id: 5 }, f.ctx);
     expect(f.client.getGroupMemberInfo).toHaveBeenCalledWith(100, 5, true);
     expect(JSON.parse(JSON.stringify(result))).toMatchObject({ success: true, member: { user_id: 5, nickname: 'n', card: 'c', role: 'member' } });
   });
@@ -233,7 +244,7 @@ describe('group_member_info', () => {
   it('reports a missing member when the lookup fails', async () => {
     const f = fixture();
     f.client.getGroupMemberInfo.mockRejectedValue(new Error('not a member'));
-    expect(await memberInfo.execute({ group_id: 100, user_id: 5 }, f.ctx)).toMatchObject({ success: false });
+    expect(await memberInfo.execute({ user_id: 5 }, f.ctx)).toMatchObject({ success: false });
   });
 });
 
@@ -243,7 +254,7 @@ describe('group admin tools read fresh membership', () => {
     f.self.role = 'admin';
     const setGroupBan = vi.fn(async () => true);
     Object.assign(f.client, { setGroupBan });
-    expect(await mute.execute({ group_id: 100, user_id: 5, duration: 60 }, f.ctx)).toMatchObject({ success: true });
+    expect(await mute.execute({ user_id: 5, duration: 60 }, f.ctx)).toMatchObject({ success: true });
     expect(f.client.getGroupMemberInfo).toHaveBeenCalledWith(100, 7, true);
     expect(setGroupBan).toHaveBeenCalledWith(100, 5, 60);
   });
@@ -253,7 +264,7 @@ describe('group admin tools read fresh membership', () => {
     f.client.getGroupMemberInfo.mockRejectedValue(new Error('not a member'));
     const inviteFriend = vi.fn(async () => true);
     Object.assign(f.client, { inviteFriend });
-    expect(await invite.execute({ group_id: 100, user_id: 5 }, f.ctx)).toMatchObject({ success: true });
+    expect(await invite.execute({ user_id: 5 }, f.ctx)).toMatchObject({ success: true });
     expect(inviteFriend).toHaveBeenCalledWith(100, 5);
   });
 
@@ -261,7 +272,91 @@ describe('group admin tools read fresh membership', () => {
     const f = fixture();
     const inviteFriend = vi.fn(async () => true);
     Object.assign(f.client, { inviteFriend });
-    expect(await invite.execute({ group_id: 100, user_id: 5 }, f.ctx)).toMatchObject({ success: false });
+    expect(await invite.execute({ user_id: 5 }, f.ctx)).toMatchObject({ success: false });
     expect(inviteFriend).not.toHaveBeenCalled();
+  });
+});
+
+describe('group tools without a cross-group permit target only the current group', () => {
+  // These tools carry no level-qualified zhin owner permit, so a model-supplied group_id would let
+  // a member of group A read or act in any group B the Bot account is in.
+  const tools = [
+    ['group_invite', invite], ['group_member_info', memberInfo], ['group_sign', groupSign],
+    ['poke', poke], ['group_files', groupFiles], ['list_muted', listMuted],
+  ] as const;
+  it.each(tools)('%s has no group_id input', (_name, tool) => {
+    expect((tool.inputSchema as unknown as { shape: Record<string, unknown> }).shape).not.toHaveProperty('group_id');
+  });
+
+  it('ignore a model-supplied group_id and act in the current group', async () => {
+    const f = fixture();
+    const inviteFriend = vi.fn(async () => true);
+    const sendGroupSign = vi.fn(async () => ({ result: 0 }));
+    const sendGroupPoke = vi.fn(async () => true);
+    const ls = vi.fn(async () => []);
+    const acquireGfs = vi.fn(() => ({ ls }));
+    const getGroupMemberList = vi.fn(async () => new Map());
+    f.client.getGroupMemberInfo.mockRejectedValueOnce(new Error('not a member'));
+    Object.assign(f.client, { inviteFriend, sendGroupSign, sendGroupPoke, acquireGfs, getGroupMemberList });
+    const other = { group_id: 999 } as never;
+    await invite.execute({ ...other, user_id: 5 }, f.ctx);
+    await memberInfo.execute({ ...other, user_id: 5 }, f.ctx);
+    await groupSign.execute(other, f.ctx);
+    await poke.execute({ ...other, user_id: 5 }, f.ctx);
+    await groupFiles.execute(other, f.ctx);
+    await listMuted.execute(other, f.ctx);
+    expect(inviteFriend).toHaveBeenCalledWith(100, 5);
+    expect(f.client.getGroupMemberInfo.mock.calls.every(([group]) => group === 100)).toBe(true);
+    expect(sendGroupSign).toHaveBeenCalledWith(100);
+    expect(sendGroupPoke).toHaveBeenCalledWith(100, 5);
+    expect(acquireGfs).toHaveBeenCalledWith(100);
+    expect(getGroupMemberList).toHaveBeenCalledWith(100);
+  });
+
+  it.each(tools)('%s refuses outside a group', async (_name, tool) => {
+    const f = fixture('private');
+    await expect((tool.execute as (input: unknown, context: unknown) => Promise<unknown>)({ user_id: 5 }, f.ctx)).rejects.toThrow();
+  });
+});
+
+describe('platform-permit group admin tools target only the current group', () => {
+  // Platform / Bot permits are judged in the current conversation; a model-supplied group_id would
+  // let an admin of group A act in group B where the Bot is also an admin.
+  it.each([
+    ['group_kick', kick], ['set_mute', mute], ['set_group_admin', setAdmin], ['set_title', setTitle],
+    ['announce', announce], ['set_anonymous', anonymous],
+  ] as const)('%s has no group_id input', (_name, tool) => {
+    const shape = (tool.inputSchema as unknown as { shape: Record<string, unknown> }).shape;
+    expect(shape).not.toHaveProperty('group_id');
+  });
+
+  it('ignores a model-supplied group_id and acts in the current group', async () => {
+    const f = fixture(); f.self.role = 'admin';
+    const setGroupBan = vi.fn(async () => true);
+    const sendGroupNotice = vi.fn(async () => true);
+    Object.assign(f.client, { setGroupBan, sendGroupNotice });
+    await mute.execute({ group_id: 999, user_id: 5, duration: 60 } as never, f.ctx);
+    expect(setGroupBan).toHaveBeenCalledWith(100, 5, 60);
+    await announce.execute({ group_id: 999, content: 'hi' } as never, f.ctx);
+    expect(sendGroupNotice).toHaveBeenCalledWith(100, 'hi');
+  });
+
+  it('refuses outside a group conversation', async () => {
+    const f = fixture('private');
+    const setGroupBan = vi.fn(async () => true);
+    Object.assign(f.client, { setGroupBan });
+    await expect(mute.execute({ user_id: 5, duration: 60 }, f.ctx)).rejects.toThrow();
+    expect(setGroupBan).not.toHaveBeenCalled();
+  });
+
+  it('essence refuses a message from another group', async () => {
+    const f = fixture();
+    const setEssenceMessage = vi.fn(async () => true);
+    Object.assign(f.client, { setEssenceMessage });
+    const other = genGroupMessageId(999, 7, 1, 2, 1700000000, 1);
+    await expect(essence.execute({ message_id: other, action: 'add' }, f.ctx)).rejects.toThrow();
+    expect(setEssenceMessage).not.toHaveBeenCalled();
+    expect(await essence.execute({ message_id: f.id, action: 'add' }, f.ctx)).toMatchObject({ success: true });
+    expect(setEssenceMessage).toHaveBeenCalledWith(f.id);
   });
 });

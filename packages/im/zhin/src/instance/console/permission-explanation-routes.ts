@@ -75,12 +75,14 @@ export function registerPermissionExplanationRoutes(options: Readonly<{ http: Ht
       const clientAdapter = input.target ? validateEndpoint(snapshot, input.target) : undefined;
       // Canonical IM-shaped data deliberately carries no metadata, content or lazy Client.
       // resolveCommandSession must remain the authority for defaults and role precedence.
+      const simulated = input.sender ? { id: input.sender.id, ...(input.sender.chatRole ? { chatRole: input.sender.chatRole } : {}),
+        ...(input.sender.platform ? { platform: input.sender.platform } : {}) } : undefined;
       const source = input.target ? { conversation: input.target, content: '', clientAdapter,
-        ...(input.sender ? { sender: input.sender } : {}) }
-        : input.sender ? { sender: input.sender } : undefined;
+        ...(simulated ? { sender: simulated } : {}) }
+        : simulated ? { sender: simulated } : undefined;
       const host = snapshot.resources.get(snapshot.root)?.get(permissionHostToken.id);
       const explanation = explainCommandPermissions(command, { source, locale,
-        rolesKnown: input.sender?.roles !== undefined,
+        rolesKnown: input.sender?.chatRole !== undefined || input.sender?.platform !== undefined,
         permissionHost: host instanceof PermissionHost ? 'present' : host === undefined || host === null ? 'missing' : 'unverified' });
       return send({ generation: snapshot.generation, simulation: true, command: commandData,
         ...(input.target ? { target: input.target } : {}), ...(input.sender ? { sender: input.sender } : {}), ...explanation });
@@ -133,13 +135,28 @@ function parseInput(value: unknown) {
   if (!Number.isSafeInteger(input.generation) || (input.generation as number) < 0) invalid();
   if (!validString(input.commandId, 8192)) invalid();
   const target = input.target === undefined ? undefined : parseTarget(input.target);
-  let sender: Readonly<{ id: string; roles?: readonly string[] }> | undefined;
+  // Hypothetical sender (ADR 0056): `chatRole` (null = ordinary user) and the normalized platform standing.
+  let sender: Readonly<{ id: string; chatRole?: 'owner' | 'admin' | 'trusted' | null;
+    platform?: Readonly<{ standing: 'owner' | 'admin' | 'member' | 'guest'; roles?: readonly { id: string }[]; permissions?: readonly string[] }> }> | undefined;
   if (input.sender !== undefined) {
-    const candidate = record(input.sender); fields(candidate, ['id', 'roles']);
+    const candidate = record(input.sender); fields(candidate, ['id', 'chatRole', 'platform']);
     if (!validString(candidate.id, 2048)) invalid();
-    if (candidate.roles !== undefined && (!Array.isArray(candidate.roles) || candidate.roles.length > 100
-      || candidate.roles.some(item => !validString(item, 200)))) invalid();
-    sender = { id: candidate.id as string, ...(candidate.roles === undefined ? {} : { roles: [...candidate.roles as string[]] }) };
+    if (candidate.chatRole !== undefined && candidate.chatRole !== null
+      && candidate.chatRole !== 'owner' && candidate.chatRole !== 'admin' && candidate.chatRole !== 'trusted') invalid();
+    let platform: NonNullable<typeof sender>['platform'];
+    if (candidate.platform !== undefined) {
+      const raw = record(candidate.platform); fields(raw, ['standing', 'roles', 'permissions']);
+      if (raw.standing !== 'owner' && raw.standing !== 'admin' && raw.standing !== 'member' && raw.standing !== 'guest') invalid();
+      const list = (value: unknown) => value === undefined ? undefined
+        : Array.isArray(value) && value.length <= 100 && value.every(item => validString(item, 200)) ? [...value as string[]] : invalid();
+      const roles = list(raw.roles);
+      const permissions = list(raw.permissions);
+      platform = { standing: raw.standing as 'owner' | 'admin' | 'member' | 'guest',
+        ...(roles ? { roles: roles.map(id => ({ id })) } : {}), ...(permissions ? { permissions } : {}) };
+    }
+    sender = { id: candidate.id as string,
+      ...(candidate.chatRole === undefined ? {} : { chatRole: candidate.chatRole as 'owner' | 'admin' | 'trusted' | null }),
+      ...(platform ? { platform } : {}) };
   }
   return { generation: input.generation as number, commandId: input.commandId as string, target, sender };
 }

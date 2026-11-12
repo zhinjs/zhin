@@ -61,7 +61,7 @@ cd my-bot && pnpm dev
 ```
 
 1. **直接开聊**：打开 `http://127.0.0.1:8068/sandbox` 发送 `/hello`
-2. **完整后台**：或打开 [console.zhin.dev](https://console.zhin.dev)，填入 `http://127.0.0.1:8068` 与 `.env` 中的 `HTTP_TOKEN`
+2. **完整后台**：或打开 [console.zhin.dev](https://console.zhin.dev)，填入 `http://127.0.0.1:8068`，第一次用 `.env` 中的 `HTTP_TOKEN`（初始化令牌）创建所有者账号，之后用账号登录
 3. **热重载扩展**：修改 `commands/` 下的文件并保存，无需重启即刻生效
 
 **接下来读哪里**

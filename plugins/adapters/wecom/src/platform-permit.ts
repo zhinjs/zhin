@@ -1,48 +1,10 @@
 /**
- * 企业微信 WeCom platform permit
+ * 企业微信 WeCom platform permit helper（ADR 0056 §5）。
+ *
+ * 平台身份由适配器上报到 `sender.platform`，permit 由内置评估器（`@zhin.js/permission`）判断；
+ * 适配器不再导出自有的 permit 解析器或检查函数。
  */
-import type { PermissionSubject } from '@zhin.js/permission';
-
-const ADAPTER = 'wecom';
 
 export function platformPermit(perm: string): string {
-  return `platform(${ADAPTER},${perm})`;
+  return `platform-permission:${perm}`;
 }
-
-const FACTORY_PERM_MAP: Record<string, string> = {
-  scene_admin: 'chat_admin',
-  scene_owner: 'chat_owner',
-};
-
-export function wecomGroupPermitResolver(logicalPerm: string): string {
-  return platformPermit(FACTORY_PERM_MAP[logicalPerm] ?? logicalPerm);
-}
-
-export function normalizeWecomSenderForPermit(input: {
-  isOwner?: boolean;
-  isAdmin?: boolean;
-}): { role?: string; permissions?: string[] } {
-  if (input.isOwner) {
-    return { role: 'owner', permissions: ['chat_owner', 'chat_admin'] };
-  }
-  if (input.isAdmin) {
-    return { role: 'admin', permissions: ['chat_admin'] };
-  }
-  return { role: 'member', permissions: [] };
-}
-
-export function checkWecomPlatformPermit(perm: string, subject: PermissionSubject): boolean {
-  const role = subject.sender?.role?.[0];
-  const permissions = subject.sender?.permissions ?? [];
-  const has = (t: string) => permissions.includes(t);
-
-  switch (perm) {
-    case 'chat_owner':
-      return role === 'owner' || has('chat_owner');
-    case 'chat_admin':
-      return role === 'owner' || role === 'admin' || has('chat_admin') || has('chat_owner');
-    default:
-      return false;
-  }
-}
-

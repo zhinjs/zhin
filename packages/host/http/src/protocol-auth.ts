@@ -17,6 +17,17 @@ export function isLoopbackAddress(address: string | undefined): boolean {
 }
 
 /**
+ * Whether a listen address (`http.host`) only accepts connections from this machine:
+ * `localhost`, `127.0.0.0/8`, `::1` (bracketed or not). `0.0.0.0`, `::` and any other address are
+ * reachable from the network.
+ */
+export function isLoopbackHost(host: string | undefined): boolean {
+  if (host === undefined || host === '') return true; // the listener default is 127.0.0.1
+  const bare = host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host;
+  return bare.toLowerCase() === 'localhost' || isLoopbackAddress(bare);
+}
+
+/**
  * Access check for a plugin socket mounted with `ws(path, { auth: 'protocol' })` (adapter
  * reverse WebSockets: OneBot, NapCat, Milky…) or a protocol webhook. With an access token the
  * peer must present it as `Authorization: Bearer <token>` or `?access_token=<token>`

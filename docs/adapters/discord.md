@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/discord/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/discord/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=43fc900a7bc17ee6 -->
+<!-- sync-adapter-docs:sha256=d7d3d87b97dde031 -->
 
 # @zhin.js/adapter-discord
 
@@ -44,7 +44,7 @@ pnpm add @zhin.js/adapter-discord discord.js
 
 ### 平台权限（platform permit）
 
-- sender role 已恢复：Gateway 入站 `metadata.role` / `metadata.permissions`（来自 member 权限位与 guild owner 判定，见 `src/gateway.ts` `resolveSenderRole`）。
+- 成员身份：服务器频道消息上报 `sender.platform`（见下文「成员身份」）；`metadata.role` / `metadata.permissions` 仅为兼容保留。
 - `plugin.ts` 在 generation setup 注册 checker，并在 dispose 注销；Plugin Runtime CapabilityIngress 与 ToolSystem 统一经 Core `canAccessTool()` 消费 `permissions`。
 
 ## 前置条件
@@ -164,3 +164,7 @@ Gateway 和 Interactions 模式均通过资料端口暴露当前认证账号的�
 支持修改昵称和头像；其他资料字段没有对应适配器操作时不声明可写。平台响应提供有效头像资料时返回其 CDN URL；若仅确认修改成功，则不返回未确认的资料。图片字节只在请求内部使用，不返回模型；Agent 解析图片沿用现有本地图片和网络权限。
 
 `nickname` / `profile` 配置仅补足平台缺失字段，Endpoint 配置优先于适配器默认值。接口依据 [discord.js ClientUser](https://discord.js.org/docs/packages/discord.js/main/ClientUser:Class)。
+
+## 成员身份
+
+服务器频道消息上报 `sender.platform`：服务器所有者 → `owner`；拥有 `Administrator` 或 `ModerateMembers` → `admin`；其余 → `member`。`roles` 为成员持有的身份组（不含 `@everyone`，Gateway 消息带名称、斜杠命令只有 id）；`permissions` 为成员的服务器权限位，按 snake_case 命名（`ban_members`、`manage_roles` …）。私信不上报。能力画像：`channel.scene.platformStanding = { standing: true, roles: true, permissions: true }`。详见 [ADR 0056 §1](https://github.com/zhinjs/zhin/blob/main/docs/adr/0056-chat-roles.md)。

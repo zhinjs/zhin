@@ -64,6 +64,10 @@ export default defineAdapter<IcqqEndpointConfig>({
       scene: {
         groupInfo: true,
         memberProfile: true,
+        // ADR 0056 §1：群消息 sender.role → sender.platform.standing；QQ 群无原生角色 / 权限位。
+        platformStanding: { standing: true },
+        // ADR 0056 §1：机器人自身在群内的地位（get_group_member_info self），供 bot:* permit。
+        selfStanding: { standing: true },
         card: true,
         title: true,
         mute: { durationSeconds: ICQQ_MUTE_SECONDS, all: true },

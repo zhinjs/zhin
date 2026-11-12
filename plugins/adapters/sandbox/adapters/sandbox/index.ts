@@ -28,6 +28,9 @@ export default defineAdapter<SandboxEndpointConfig>({
       // The authenticated local ingress: its configured owner may turn wire metadata into agent-run authority.
       runtime: { sandbox: true },
     },
+    // ADR 0056 §1：模拟器的发送者角色（master = 群主 / admin / member）作为平台身份上报。
+    group: { scene: { platformStanding: { standing: true } } },
+    channel: { scene: { platformStanding: { standing: true } } },
   },
   createAdapter: context => new SandboxAdapter(context),
 });

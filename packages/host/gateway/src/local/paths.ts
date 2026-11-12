@@ -36,13 +36,21 @@ export function projectRootHash(root: string, platform: NodeJS.Platform = proces
   return createHash('sha256').update(normalized).digest('hex').slice(0, 16);
 }
 
-/** `\\.\pipe\zhin-gateway-<hash of the project root>`. */
-export function windowsPipeName(root: string): string {
-  return `\\\\.\\pipe\\zhin-gateway-${projectRootHash(root, 'win32')}`;
+/**
+ * `\\.\pipe\zhin-gateway-<hash of the project root>[-<nonce>]`. A running gateway adds a fresh
+ * random `nonce` per start: Node cannot set an owner or DACL on a named pipe, so the name keeps
+ * another local account from creating the pipe ahead of the gateway; only the gateway's state
+ * file (`.zhin/gateway.json`) records it, and clients also check the handshake proof keyed by
+ * that file ({@link LocalGatewayInfo.handshakeKey}).
+ */
+export function windowsPipeName(root: string, nonce?: string): string {
+  return `\\\\.\\pipe\\zhin-gateway-${projectRootHash(root, 'win32')}${nonce ? `-${nonce}` : ''}`;
 }
 
 export interface GatewaySocketPathOptions {
   readonly platform?: NodeJS.Platform;
+  /** Windows: random pipe-name component of a running gateway (see {@link windowsPipeName}). */
+  readonly nonce?: string;
   /** Fallback directory for roots too deep for a Unix socket path. Default `os.tmpdir()`. */
   readonly tmpdir?: string;
 }
@@ -53,7 +61,7 @@ export interface GatewaySocketPathOptions {
  */
 export function gatewaySocketPath(root: string, options: GatewaySocketPathOptions = {}): string {
   const platform = options.platform ?? process.platform;
-  if (platform === 'win32') return windowsPipeName(root);
+  if (platform === 'win32') return windowsPipeName(root, options.nonce);
   const preferred = join(gatewayStateDir(root), GATEWAY_SOCKET_FILE);
   if (Buffer.byteLength(preferred) <= MAX_UNIX_SOCKET_PATH_BYTES) return preferred;
   return join(options.tmpdir ?? tmpdir(), `zhin-gateway-${projectRootHash(root, platform)}.sock`);

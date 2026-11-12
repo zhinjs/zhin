@@ -99,7 +99,7 @@ describe('stable system prompt prefix (ADR 0042 §1)', () => {
     }) as never;
     const skills = [
       ...(neutral ? [skill('weather')] : []),
-      ...(gated ? [skill('deploy', ['master'])] : []),
+      ...(gated ? [skill('deploy', ['owner'])] : []),
     ];
     const context = buildCapabilityContext([], skills);
     const request = `${context.stable}\n${context.tail}`;
@@ -134,8 +134,8 @@ describe('stable system prompt prefix (ADR 0042 §1)', () => {
       displayName: name, version: '1', triggerRules: {}, entryPoints: [], workflows: [], knowledge: [], ...extra,
     }) as never;
     // What CapabilityIngress hands each sender: the member's projection lacks the gated entries.
-    const master = buildCapabilityContext([agent('helper'), agent('ops', { permissions: ['master'] })],
-      [skill('weather'), skill('deploy', { permissions: ['master'] })]);
+    const master = buildCapabilityContext([agent('helper'), agent('ops', { permissions: ['owner'] })],
+      [skill('weather'), skill('deploy', { permissions: ['owner'] })]);
     const member = buildCapabilityContext([agent('helper')], [skill('weather')]);
     expect(master.stable).toBe(member.stable);
     expect(master.stable).toContain('weather');
@@ -158,7 +158,7 @@ describe('stable system prompt prefix (ADR 0042 §1)', () => {
         modelSdk: 'openai-compatible', timeZone: 'UTC', turn, registry,
       })).text;
     };
-    const masterTurn = imTurn('group', 'group-a', 'icqq:group:a', ['master'], '1');
+    const masterTurn = imTurn('group', 'group-a', 'icqq:group:a', ['owner'], '1');
     const memberTurn = imTurn('group', 'group-a', 'icqq:group:a', ['user'], '2');
     expect(systemFor(masterTurn, master.stable)).toBe(systemFor(memberTurn, member.stable));
     expect(systemFor(masterTurn, master.stable)).toContain('weather');

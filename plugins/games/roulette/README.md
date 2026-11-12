@@ -44,7 +44,7 @@ database:
 
 ## 禁言惩罚
 
-- 按群开关，默认关闭。只有群主、群管理员、机器人主人或受信任用户可以切换；判断的是适配器投影到消息上的规范角色（`owner` / `admin` / `master` / `trusted`），不额外请求平台。
+- 按群开关，默认关闭。只有本会话 zhin 聊天角色 `trusted` 及以上（`owner` / `admin` / `trusted`，ADR 0056）可以切换；平台群主 / 管理员身份不算，需要先被授予 zhin 角色。实际禁言还要求机器人在群里有禁言权限。
 - 插件不判断平台名称。每次需要时，用消息自带的 `conversation.endpoint`（适配器插件和 Endpoint 能力 id）走 `project(adapterFeatureId).connection(adapter, endpointId)`，再看 `resolveEndpointManagement(endpoint)?.muteGroupMember` 是否存在。存在就能禁言，不存在（或运行时没有 Adapter Feature）就只计分。
 - 超时判负由 `schedules/deadlines` 每 5 秒检查一次，它拿到的也是同样的能力上下文，所以超时的输家同样会按上面的规则处理。
 - 平台不支持禁言时无法开启；开启后平台失去这项能力，或禁言被拒绝（例如机器人不是群管理员），这一局照常结算，只是不禁言。
@@ -60,6 +60,10 @@ roulette:
   lobbyTimeoutSeconds: 300 # 开局后多久不开始自动解散，30-3600
   muteSeconds: 60          # 开启禁言惩罚的群里输家禁言秒数，10-3600
 ```
+
+## 分层配置（ADR 0050 / 0055）
+
+所有字段只能在全局层修改；启停开关支持适配器、账号与会话四级。在 Console「功能」区可以按适配器、账号或会话（群 / 私聊）单独停用；开启 `features.selfService.enabled` 后，群里有 `admin` 角色（默认含群主 / 管理员）的人也可以用 `功能 关闭 roulette` 关闭本群。上级停用后下级锁定，不能再开启。停用后该群的命令和「开枪」都不再响应；进行中的对局到时由超时扫描静默结束（记为取消，不结算、不禁言、不发消息）。
 
 ## 开发
 

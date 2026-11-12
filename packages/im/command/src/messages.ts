@@ -60,5 +60,5 @@ export const commandMessages = createMessages({
   unconstrained: { 'zh-CN': '已解释的 builtin 规则不检查具体 Endpoint、parent 或 thread；保留完整目标不等于这些维度受规则限制', en: 'The explained builtin rules do not constrain a specific Endpoint, parent or thread; retaining the full target does not add such restrictions' },
   simulatedIdentity: { 'zh-CN': '身份与角色仅用于模拟，未向平台核实', en: 'Identity and roles are hypothetical and have not been verified with the platform' },
   unevaluatedCode: { 'zh-CN': '未执行命令、动态默认值、平台或自定义 checker', en: 'Commands, dynamic defaults, platform checks and custom checkers have not been executed' },
-  defaultedRole: { 'zh-CN': 'canonical 输入未附角色时按命令运行时默认 user 解释；这不是已核验的平台角色', en: 'Canonical input without roles uses the command runtime’s default user role; this is not a verified platform role' },
+  defaultedRole: { 'zh-CN': '输入未附聊天角色时按普通用户（无 owner / admin / trusted）解释；这不是已核验的角色', en: 'Input without a chat role is treated as an ordinary user (no owner / admin / trusted); this is not a verified role' },
 });

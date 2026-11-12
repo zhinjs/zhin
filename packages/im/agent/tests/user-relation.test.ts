@@ -273,7 +273,7 @@ describe('review fixes', () => {
     const profiles = new UserProfileStore(new UserRelationStore(() => T0));
     const builder = new ProfileContextBuilder({ userProfiles: profiles } as any);
     const envelope: Record<string, string> = {};
-    await builder.build({ turn: imTurn({ roles: ['master'], userId: 'owner' }), envelope });
+    await builder.build({ turn: imTurn({ roles: ['owner'], userId: 'owner' }), envelope });
     expect(envelope.profileSummary).toContain('Sender: 小明: close (owner)');
   });
 

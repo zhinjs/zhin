@@ -53,7 +53,7 @@ Fin 2026-10-27 拍板（#1030 / #1051）：
 - **永远不能改**：P0 A 名单（`node_modules`、lockfile、`.zhin/**`、`.env*` 等）；`ai.agent.toolHardGate`、`ai.agent.execApprovalMode`、`ai.agent.masterShell`、`ai.agent.toolHardGate.imApproval` 等**放松安全**的配置键——补丁里出现这些键直接拒绝，不进审批（「模型不能自解禁」）。#1051 F2 起，这份名单由宿主 schema 的 `x-zhin-config.security` 标记与集中常量 `SELF_CHANGE_SECURITY_CONFIG_KEYS` 维护（含执行安全 / 执行审批 / 注入防护 / 配额豁免 / 定时安全、`ai.decisions.approval`、`http.token(s)`、`a2a.mailbox` 等，完整名单见[默认行为规范](../ai/default-behavior.md)），守卫单测保证 schema 标记的键都在拒绝集里；生效前按当前名单再复核一次。
 - **本地插件根**（#1051 F1）：「已安装的本地插件根」取当前 generation 源码归属中位于项目内、且真实路径不含 `node_modules` 的插件根；`node_modules` 里的插件不可写。
 - **`configPatch`**：沿用 Console `config:patch` 的白名单路径与 `expectedRevision` 语义（字段级，#1030 MVP「字段级配置补丁」在此落地）。
-- 依赖安装（`npm` 装插件）不在本期；需要新依赖的变更在预览里标为「需要人工安装」，不自动执行（后置，复用 Console `plugin:install` 事务）。
+- 依赖安装（`npm` 装插件）不在本期；需要新依赖的变更在预览里标为「需要人工安装」，不自动执行（后置，复用管理网关 `gateway.packages.install` 事务，ADR 0054 §4）。
 
 ### 2. 起草与预览
 
@@ -185,7 +185,7 @@ A → B → C → D → E 依次依赖（当时按切片顺序合入，均已完
 ## 非目标
 
 - 无人批的生产根目录热改；Agent 拿到 `danger-full-access` 或沙箱外写盘。
-- 自动安装 npm 依赖（后置，复用 Console `plugin:install` 事务）。
+- 自动安装 npm 依赖（后置，复用管理网关 `gateway.packages.install` 事务，ADR 0054 §4）。
 - 修改 zhin 框架自身（`node_modules` 里的包、`packages/**` 源码）。
 - 多个变更的批量 / 事务合并；跨实例下发。
 - 变更的可视化编辑器。

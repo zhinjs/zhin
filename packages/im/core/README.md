@@ -52,7 +52,7 @@ export default defineCommand({
 })
 ```
 
-运行时入口是 `zhin runtime start`。Core 的 `@zhin.js/core/runtime` 子路径供 CLI composition root 装配 IM Host，不是插件侧 service locator。
+运行时入口是 `zhin start`（管理网关拉起 `zhin.js/instance`）。Core 的 `@zhin.js/core/runtime` 子路径供实例装配根（`zhin.js/instance`）装配 IM Host，不是插件侧 service locator。
 
 ## Adapter 与 Endpoint
 

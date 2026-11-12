@@ -246,8 +246,8 @@ describe('Agent CapabilityIngress', () => {
     const selection = { binding: agent.activeBinding, mcpServers: ['memory'] };
     try {
       for (const id of ['first', 'second']) {
-        const outcome = await runtime.execute(fixture.child, { ...externalRequest(id), policy: { permissions: ['master'], unattended: false },
-          principal: { subjectId: 'owner', roles: ['master'] }, ports: { approval: { requestApproval: async () => true } } }, selection);
+        const outcome = await runtime.execute(fixture.child, { ...externalRequest(id), policy: { permissions: ['owner'], unattended: false },
+          principal: { subjectId: 'owner', roles: ['owner'] }, ports: { approval: { requestApproval: async () => true } } }, selection);
         expect(outcome.status, JSON.stringify(outcome)).toBe('completed');
       }
       expect(requests).toHaveLength(5);
@@ -704,7 +704,7 @@ describe('Agent CapabilityIngress', () => {
     });
 
     await runtime.execute(fixture.child, request(['user'], 'member'), selection());
-    await runtime.execute(fixture.child, request(['user', 'master'], 'owner'), selection());
+    await runtime.execute(fixture.child, request(['user', 'owner'], 'owner'), selection());
 
     expect(seen[0]?.policy.shell).toBeUndefined();
     expect(seen[0]?.policy.filesystem?.access).toBe('read-only');
@@ -1091,6 +1091,31 @@ permissions: [role(trusted)]
     expect(unknown.tools).toEqual([]);
     expect(unknown.skills.map(skill => skill.name)).toEqual(['research']);
     await guidance.mcp.stop();
+  });
+
+  it('filters by the Bot\'s own standing (bot:*) before disclosure and re-checks at execution (ADR 0056 §5)', async () => {
+    const fixture = await createFixture({ scopes: ['group'], permissions: ['platform:admin', 'bot:admin', 'bot-permission:ban_members'] });
+    const ingress = new CapabilityIngress();
+    const turnWith = (bot: TurnContextState['bot'], senderStanding?: 'admin' | 'member') => {
+      const turn = accessTurn('qq', ['user'], 'group', bot);
+      return senderStanding ? { ...turn, principal: { ...turn.principal, platform: { standing: senderStanding } } } : turn;
+    };
+    const names = async (turn: ReturnType<typeof turnWith>) =>
+      (await ingress.read({ snapshot: fixture.snapshot, owner: fixture.child, isActive: () => true, turn })).tools.map(tool => tool.name);
+    const botAdmin = { platform: { standing: 'admin' as const, permissions: ['ban_members'] } };
+    expect(await names(turnWith(botAdmin, 'admin'))).toEqual(['child__lookup']);
+    // Sender is not a group admin; the bot lacks the permission; the member-role fact alone has no permissions; unknown fails closed.
+    expect(await names(turnWith(botAdmin, 'member'))).toEqual([]);
+    expect(await names(turnWith({ platform: { standing: 'admin' } }, 'admin'))).toEqual([]);
+    expect(await names(turnWith({ platformRole: 'admin' }, 'admin'))).toEqual([]);
+    expect(await names(turnWith({ platformRoleError: 'lookup_failed' }, 'admin'))).toEqual([]);
+    // A zhin owner is not a platform admin.
+    expect(await names({ ...turnWith(botAdmin), principal: { ...turnWith(botAdmin).principal, roles: ['owner', 'admin', 'trusted'] } })).toEqual([]);
+    // Execution re-checks the gate with the turn facts: a capability bound for one turn cannot run under another.
+    const allowed = await ingress.read({ snapshot: fixture.snapshot, owner: fixture.child, isActive: () => true, turn: turnWith(botAdmin, 'admin') });
+    const tool = allowed.tools.find(entry => entry.name === 'child__lookup')!;
+    await expect(tool.execute({ value: 'ok' }, invocation())).resolves.toBeDefined();
+    await fixture.mcp.stop();
   });
 
   it('projects an Agent-private Skill only when that Agent is selected', async () => {

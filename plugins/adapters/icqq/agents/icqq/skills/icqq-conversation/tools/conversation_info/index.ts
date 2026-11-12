@@ -15,8 +15,8 @@ export default defineAgentTool({
       conversation,
       requester: {
         roles,
-        canRequestGroupModeration: roles.some(role => ['master', 'admin', 'trusted', 'owner'].includes(role)),
-        canRequestLeave: roles.includes('master'),
+        canRequestGroupModeration: roles.includes('trusted'),
+        canRequestLeave: roles.includes('owner'),
       },
       operations: {
         quoteReply: conversation.kind !== 'channel',

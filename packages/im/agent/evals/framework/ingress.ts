@@ -13,6 +13,7 @@
  * Time is virtual: message arrival (`at`) and turn duration (`turnMs`) are
  * milliseconds on a deterministic clock that also drives the mailbox queue TTL.
  */
+import { evalSenderRoles } from './driver.js';
 import { isCancelIntent } from '../../src/turn/cancel-intent.js';
 import { HostMailbox } from '../../src/collaboration/host-mailbox.js';
 import { DEFAULT_MAILBOX_CONFIG } from '../../src/turn/mailbox-config.js';
@@ -27,7 +28,7 @@ import { runEvalCase } from './driver.js';
 export interface IngressEvalMessage {
   /** Arrival time on the virtual clock (ms). */
   readonly at: number;
-  readonly sender: Readonly<{ id: string; roles?: readonly string[] }>;
+  readonly sender: Readonly<{ id: string; roles?: readonly string[]; chatRole?: 'owner' | 'admin' | 'trusted' }>;
   readonly text: string;
   /** Media/quote/forward messages are never merged. Default true. */
   readonly plainText?: boolean;
@@ -126,7 +127,7 @@ export async function runIngressEvalCase(definition: IngressEvalCase): Promise<I
   const rejected: string[] = [];
   const stops: string[] = [];
   const notices: string[] = [];
-  const roles = new Map(definition.messages.map((message) => [message.sender.id, message.sender.roles ?? ['user']]));
+  const roles = new Map(definition.messages.map((message) => [message.sender.id, evalSenderRoles(message.sender)]));
   let running: Running | undefined;
   let turnIndex = 0;
 
@@ -183,7 +184,7 @@ export async function runIngressEvalCase(definition: IngressEvalCase): Promise<I
     now = arrival.at;
     next += 1;
     const sender = arrival.sender.id;
-    const isMaster = (arrival.sender.roles ?? []).includes('master');
+    const isMaster = evalSenderRoles(arrival.sender).includes('owner');
     if (isCancelIntent(arrival.text)) {
       await flush();
       const result: TurnStopResult = await gate.stop(sessionKey, sender, isMaster);

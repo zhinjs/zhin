@@ -1,7 +1,7 @@
 import type { CapabilityOperationFactory } from '@zhin.js/feature-kit';
 import { adapterFeatureId, isAdapterIndex } from '@zhin.js/core';
 import { isFeatureOwnerEnabled, resolveEndpointFeatureKey, type CapabilityId, type FeatureId, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
-import { permissionHostToken, type PermissionHost } from '@zhin.js/permission';
+import { permissionHostToken, type PermissionHost, type PermissionSubject } from '@zhin.js/permission';
 import { turnPermissionSubject, type TurnAccessContext } from '../turn/turn-ingress.js';
 import {
   type AgentIndex,
@@ -151,10 +151,12 @@ export function isTrustedOfficialAdapterPackage(packageName: string | undefined)
   return typeof packageName === 'string' && packageName.startsWith(TRUSTED_ADAPTER_SCOPE);
 }
 
-/** Owner predicate for the turn's endpoint; non-IM turns and unknown endpoints see every owner. */
+/** Owner predicate for the turn's conversation / endpoint; non-IM turns and unknown endpoints see every owner. */
 export function featureGate(snapshot: RuntimeSnapshot, turn?: TurnAccessContext): (owner: PluginId) => boolean {
-  const endpoint = turn?.origin.kind === 'im' ? turn.origin.conversation?.endpoint.id : undefined;
-  const key = endpoint ? resolveEndpointFeatureKey(snapshot, endpoint) : undefined;
+  const conversation = turn?.origin.kind === 'im' ? turn.origin.conversation : undefined;
+  const endpoint = conversation?.endpoint.id;
+  // ADR 0055: with a conversation the gate evaluates down to the conversation level.
+  const key = endpoint ? resolveEndpointFeatureKey(snapshot, endpoint, undefined, conversation) : undefined;
   if (!key) return () => true;
   return owner => isFeatureOwnerEnabled(snapshot, owner, key);
 }
@@ -249,6 +251,8 @@ async function bindSeamTools(
       invocation: ToolInvocationContext,
     ): Promise<TResult> => {
       assertActive(isActive);
+      await assertStillAllowed({ platforms: entry.schema.platforms, scopes: entry.schema.scopes, permissions: entry.schema.permissions,
+        currentConversationBotRoles: entry.schema.currentConversationBotRoles, qualifiedName: entry.schema.function.name }, turn, host);
       const result = await entry.execute(input, invocation);
       if (!result.success) throw new Error(result.error ?? `Seam Tool failed: ${entry.schema.function.name}`);
       return await captureToolImages(result.output, localAssets, invocation, entry.schema.function.name) as TResult;
@@ -360,6 +364,8 @@ async function bindTools(input: BindToolsInput): Promise<readonly ToolCapability
       name: r.descriptor.qualifiedName,
       execute: async <TInput, TResult>(input: TInput, invocation: ToolInvocationContext): Promise<TResult> => {
         assertActive(isActive);
+        // ADR 0056 §5: re-check the same three-dimension gate at execution (no call outside disclosure).
+        await assertStillAllowed(r.descriptor, turn, host);
         const result = await index.execute<TInput, TResult>({ requester: r.descriptor.owner, name: r.descriptor.name, input, invocation, snapshot: operationSnapshot, operation });
         return await captureToolImages(result, localAssets, invocation, r.descriptor.qualifiedName) as TResult;
       },
@@ -380,6 +386,8 @@ async function canAccessDescriptor(
   },
   turn: TurnAccessContext | undefined,
   host?: PermissionHost,
+  /** Execution time: re-read the sender's role and the Bot's standing instead of the turn-start facts. */
+  current = false,
 ): Promise<boolean> {
   if (descriptor.platforms?.length) {
     if (turn?.origin.kind !== 'im' || !descriptor.platforms.includes(turn.origin.platform)) {
@@ -405,7 +413,47 @@ async function canAccessDescriptor(
   }
   if (!descriptor.permissions?.length) return true;
   if (!turn || !host) return false;
+  if (current) return host.checkAll(descriptor.permissions, await currentPermissionSubject(descriptor.permissions, turn, host));
   return host.checkAll(descriptor.permissions, turnPermissionSubject(turn));
+}
+
+/**
+ * ADR 0056 §5 execution-time facts: the sender's chat role re-read from the role store (a role
+ * revoked mid-turn no longer counts) and the Bot's own standing looked up again (cached for a
+ * minute, so this rarely reaches the platform). Without resolvers the turn-start facts stay.
+ */
+async function currentPermissionSubject(
+  permits: readonly string[],
+  turn: TurnAccessContext,
+  host: PermissionHost,
+): Promise<PermissionSubject> {
+  const subject = turnPermissionSubject(turn);
+  const im = turn.origin.kind === 'im' ? turn.origin : undefined;
+  if (!im?.conversation) return subject;
+  const source = Object.freeze({ conversation: im.conversation, endpointId: im.endpoint, sender: Object.freeze({ id: turn.principal.subjectId }) });
+  const roles = host.currentSenderRoles(source);
+  let sender = subject.sender;
+  if (sender && roles) {
+    const { chatRole: _turnRole, chatRoleLevels: _turnLevels, ...identity } = sender;
+    sender = Object.freeze({ ...identity, ...roles });
+  }
+  const { bot: turnBot, ...rest } = subject;
+  const refreshed = await host.withBotStanding(permits, Object.freeze({ ...rest, ...(sender ? { sender } : {}) }), { source });
+  // Adapters without a self-standing lookup only have the turn's member-role fact.
+  const fallback = !refreshed.bot && !turn.input?.contextState?.bot?.platform ? turnBot : undefined;
+  return fallback ? Object.freeze({ ...refreshed, bot: fallback }) : refreshed;
+}
+
+/** Execution-time re-check of {@link canAccessDescriptor}; throws when the gate no longer holds. */
+async function assertStillAllowed(
+  descriptor: Parameters<typeof canAccessDescriptor>[0] & { readonly qualifiedName?: string; readonly name?: string },
+  turn: TurnAccessContext | undefined,
+  host: PermissionHost | undefined,
+): Promise<void> {
+  if (!turn) return;
+  if (!(await canAccessDescriptor(descriptor, turn, host, true))) {
+    throw new Error(`Agent Tool is not available in this conversation: ${descriptor.qualifiedName ?? descriptor.name ?? 'tool'}`);
+  }
 }
 
 /** Root resources 上的 PermissionHost（command-index 同款解析；未安装时 fail-closed）。 */

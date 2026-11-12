@@ -131,6 +131,115 @@ describe('migrate', () => {
     expect(output).not.toContain('zhin.js: workspace:');
   });
 
+  it('moves the CLI of a bot project into dependencies with zhin.js and adds the gateway', () => {
+    fs.writeFileSync(path.join(tmp, 'zhin.config.yml'), 'configVersion: 2\nplugins: {}\n');
+    const pkgPath = path.join(tmp, 'package.json');
+    fs.writeFileSync(pkgPath, JSON.stringify({
+      name: 'bot',
+      private: true,
+      engines: { node: '>=22.19.0' },
+      dependencies: { 'zhin.js': '^1.1.0' },
+      devDependencies: { '@zhin.js/cli': '^1.1.20', typescript: '^5.0.0' },
+    }, null, 2));
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    expect(upgradePackageJson(pkgPath, { toLatest: true, dryRun: true })).toBe(true);
+    const preview = log.mock.calls.flat().join('\n');
+    expect(preview).toContain('@zhin.js/cli: devDependencies → dependencies (^1.1.20)');
+    expect(preview).toContain('@zhin.js/gateway: + dependencies (latest)');
+    expect(JSON.parse(fs.readFileSync(pkgPath, 'utf8')).devDependencies['@zhin.js/cli']).toBe('^1.1.20');
+
+    upgradePackageJson(pkgPath, { toLatest: true, dryRun: false });
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+    expect(pkg.dependencies).toEqual({ 'zhin.js': 'latest', '@zhin.js/cli': 'latest', '@zhin.js/gateway': 'latest' });
+    expect(pkg.devDependencies).toEqual({ typescript: '^5.0.0' });
+  });
+
+  it('keeps a pinned CLI and gives the added gateway the range released with this CLI', () => {
+    fs.writeFileSync(path.join(tmp, 'zhin.config.yml'), 'configVersion: 2\nplugins: {}\n');
+    const pkgPath = path.join(tmp, 'package.json');
+    fs.writeFileSync(pkgPath, JSON.stringify({
+      name: 'bot',
+      engines: { node: '>=22.19.0' },
+      dependencies: { 'zhin.js': '1.1.25' },
+      devDependencies: { '@zhin.js/cli': '1.1.32', 'zhin.js': '1.1.25' },
+    }, null, 2));
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const gatewayVersion = (JSON.parse(fs.readFileSync(
+      path.join(import.meta.dirname, '../../../packages/host/gateway/package.json'),
+      'utf8',
+    )) as { version: string }).version;
+
+    upgradePackageJson(pkgPath, { toLatest: true, dryRun: false });
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+    expect(pkg.dependencies).toEqual({
+      'zhin.js': '1.1.25',
+      '@zhin.js/cli': '1.1.32',
+      '@zhin.js/gateway': `^${gatewayVersion}`,
+    });
+    expect(pkg.devDependencies).toBeUndefined();
+  });
+
+  it('derives the gateway range from the project CLI release line, not the migrating CLI', async () => {
+    const { gatewayRangeFor } = await import('../src/plugin-runtime/migrate/start-stack-dependencies.js');
+    const scaffold = gatewayRangeFor('1.2.0', '1.2.9');
+    // A CLI kept on an older line gets that line's gateway.
+    expect(gatewayRangeFor('1.3.4', '1.4.0')).toBe('~1.3.0');
+    expect(gatewayRangeFor('^1.3.0', '1.4.0')).toBe('~1.3.0');
+    expect(gatewayRangeFor('~2.0.1', '1.4.0')).toBe('~2.0.0');
+    // Same line as the migrating CLI: the range released with it; pre-gateway lines and placeholders too.
+    expect(gatewayRangeFor('1.4.2', '1.4.0')).toBe(scaffold);
+    expect(gatewayRangeFor('1.0.9', '1.4.0')).toBe(scaffold);
+    expect(gatewayRangeFor('^0.0.0', '1.4.0')).toBe(scaffold);
+    // Dist-tags and workspace protocols follow the CLI as is.
+    expect(gatewayRangeFor('next', '1.4.0')).toBe('next');
+    expect(gatewayRangeFor('workspace:*', '1.4.0')).toBe('workspace:*');
+    // `>=` ranges and a first number without a minor before the real version.
+    expect(gatewayRangeFor('>=1.3.0 <2', '1.4.0')).toBe('~1.3.0');
+    expect(gatewayRangeFor('v1 || 1.3.2', '1.4.0')).toBe('~1.3.0');
+  });
+
+  it('parses a pathological version specifier in linear time', async () => {
+    const { gatewayRangeFor } = await import('../src/plugin-runtime/migrate/start-stack-dependencies.js');
+    const started = performance.now();
+    gatewayRangeFor('0'.repeat(200_000), '1.4.0');
+    gatewayRangeFor(`${'0'.repeat(100_000)}.`, '1.4.0');
+    expect(performance.now() - started).toBeLessThan(500);
+  });
+
+  it('says a placeholder ^0.0.0 CLI is replaced, not that dependencies already declare it', () => {
+    fs.writeFileSync(path.join(tmp, 'zhin.config.yml'), 'configVersion: 2\nplugins: {}\n');
+    const pkgPath = path.join(tmp, 'package.json');
+    fs.writeFileSync(pkgPath, JSON.stringify({
+      name: 'bot',
+      engines: { node: '>=22.19.0' },
+      dependencies: { 'zhin.js': '^1.1.0' },
+      devDependencies: { '@zhin.js/cli': '^0.0.0' },
+    }, null, 2));
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    upgradePackageJson(pkgPath, { toLatest: true, dryRun: true });
+    const preview = log.mock.calls.flat().join('\n');
+    expect(preview).toContain('@zhin.js/cli: devDependencies 中的占位版本 ^0.0.0 已移除');
+    expect(preview).not.toContain('@zhin.js/cli: devDependencies 中的重复项已移除');
+    expect(preview).toContain('@zhin.js/cli: + dependencies (latest)');
+  });
+
+  it('leaves the CLI of a Plugin package (no project config) in devDependencies', () => {
+    const pkgPath = path.join(tmp, 'package.json');
+    fs.writeFileSync(pkgPath, JSON.stringify({
+      name: 'plugin',
+      engines: { node: '>=22.19.0' },
+      dependencies: { 'zhin.js': '^1.1.0' },
+      devDependencies: { '@zhin.js/cli': '^1.1.20' },
+    }, null, 2));
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    upgradePackageJson(pkgPath, { toLatest: true, dryRun: false });
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+    expect(pkg.dependencies).toEqual({ 'zhin.js': 'latest' });
+    expect(pkg.devDependencies).toEqual({ '@zhin.js/cli': 'latest' });
+  });
+
   it('engines.node 写 >=22.19.0', () => {
     const pkgPath = path.join(tmp, 'package.json');
     fs.writeFileSync(pkgPath, JSON.stringify({
@@ -183,7 +292,7 @@ describe('migrate', () => {
     }
   });
 
-  it('将失效的 zhin dev/start/build scripts 替换为 Plugin Runtime 入口', () => {
+  it('将失效的 zhin dev/build 与旧的前台 zhin start 改写为推荐入口，保留 zhin runtime start 与自定义 zhin start', () => {
     const pkgPath = path.join(tmp, 'package.json');
     fs.writeFileSync(pkgPath, JSON.stringify({
       name: 'demo',
@@ -191,7 +300,7 @@ describe('migrate', () => {
       scripts: {
         dev: 'zhin dev',
         start: 'zhin start',
-        daemon: 'zhin start --daemon',
+        daemon: 'zhin runtime start --daemon',
         build: 'zhin build',
       },
     }, null, 2));
@@ -199,10 +308,39 @@ describe('migrate', () => {
     upgradePackageJson(pkgPath, { toLatest: true, dryRun: false, includePinned: true });
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
     expect(pkg.scripts).toMatchObject({
-      dev: 'zhin runtime start',
-      start: 'zhin runtime start',
+      // `zhin dev` is the link / unlink tool now.
+      dev: 'zhin start --foreground --watch source config',
+      // A bare `zhin start` used to stay attached; it backgrounds now, so `start` is rewritten
+      // to the foreground form process managers need (ADR 0054 §6).
+      start: 'zhin start --foreground --mode production --no-watch',
+      // `zhin runtime start` is an accepted alias and is never rewritten.
       daemon: 'zhin runtime start --daemon',
       build: 'tsc --noEmit',
+    });
+  });
+
+  it('保留带参数的自定义 zhin start 脚本', () => {
+    const pkgPath = path.join(tmp, 'package.json');
+    fs.writeFileSync(pkgPath, JSON.stringify({
+      name: 'demo',
+      dependencies: { 'zhin.js': '1.0.0' },
+      scripts: { start: 'zhin start --foreground --mode production', daemon: 'zhin start --daemon' },
+    }, null, 2));
+    upgradePackageJson(pkgPath, { toLatest: true, dryRun: false, includePinned: true });
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+    expect(pkg.scripts.start).toBe('zhin start --foreground --mode production');
+    expect(pkg.scripts.daemon).toBe('zhin start --daemon');
+  });
+
+  it('补齐缺失的启动 scripts（zhin start）', () => {
+    const pkgPath = path.join(tmp, 'package.json');
+    fs.writeFileSync(pkgPath, JSON.stringify({ name: 'demo', dependencies: { 'zhin.js': '1.0.0' } }, null, 2));
+    upgradePackageJson(pkgPath, { toLatest: true, dryRun: false, includePinned: true });
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+    expect(pkg.scripts).toMatchObject({
+      dev: 'zhin start --foreground --watch source config',
+      start: 'zhin start --foreground --mode production --no-watch',
+      daemon: 'zhin start --mode production --no-watch',
     });
   });
 

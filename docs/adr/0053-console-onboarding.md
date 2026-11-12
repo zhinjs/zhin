@@ -53,9 +53,9 @@ Host 启动后、引导完成前，Console 显示引导流程，可以随时跳�
 
 ### 3. 在线安装依赖
 
-引导与插件市场共用一条安装路径（现有 `plugin:install`）：
+引导与插件市场共用一条安装路径：管理网关的 `gateway.packages.plan | install | update | uninstall`（ADR 0054 §4；实例内的 `plugin:install | update | uninstall` 已删除，实例只保留只读的 `plugin:plan-*`）：
 
-- 在项目根目录用项目的包管理器执行安装，输出以流的方式推给 Console，完成后按需重启 Host。
+- 网关在项目根目录用项目的包管理器执行安装，进度以 `gateway.packages.progress` 推给 Console；事务前停止实例、完成后启动并等待就绪，失败回滚。
 - 白名单：只能安装官方目录里列出的包——数据库驱动（`mysql2`、`pg`、`mongodb`，来自 `DATABASE_DIALECT_DEFINITIONS`）、适配器包与 AI 依赖（来自 `@zhin.js/scaffold-wizard` 的适配器 / AI 定义）、以及插件市场条目。
 - 用初始化令牌只能安装数据库驱动；其他安装需要 `plugin.manage`。
 - 这取代 ADR 0049 §8「驱动缺失时提示手动安装，不在线安装」：现在在线安装，手动安装仍然可以。
@@ -78,7 +78,7 @@ Host 启动后、引导完成前，Console 显示引导流程，可以随时跳�
 ## 落盘位置
 
 - create-zhin：`packages/toolkit/create-zhin/src/`
-- 引导服务、安装白名单：`basic/cli/src/plugin-runtime/console/onboarding/`
+- 引导服务、安装白名单：`packages/host/gateway/src/onboarding/`（ADR 0054 起由管理网关持有）
 - Console：引导流程页面（`/onboarding`）与入口横幅
 
 ## 后果

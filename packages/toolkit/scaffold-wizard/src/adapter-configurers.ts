@@ -916,12 +916,6 @@ export async function configureIcqqBot(ctx: EndpointConfigureContext): Promise<R
       message: wizardText(locale, "  QQ 号（uin）:"),
       validate: (v: string) => /^\d+$/.test(v.trim()) ? true : wizardText(locale, "QQ 号必须为纯数字"),
     },
-    {
-      type: 'input',
-      name: 'master',
-      message: wizardText(locale, "  主人 QQ 号（master，/approve 等管理命令）:"),
-      validate: (v: string) => /^\d+$/.test(v.trim()) ? true : wizardText(locale, "主人 QQ 号必须为纯数字"),
-    },
   ]);
 
   const { loginMethod } = await inquirer.prompt([
@@ -1028,8 +1022,11 @@ export async function configureIcqqBot(ctx: EndpointConfigureContext): Promise<R
     ...advanced,
   };
 
+  // ADR 0056: people lists no longer live in the configuration file. The owner is a chat role in
+  // the project database, granted after the first start (Console or the in-chat role command).
+  console.log(chalk.gray(wizardText(locale, "     主人（owner）不再写进配置：首次启动后在 Console 该账号的「角色」页签授予 owner，")));
+  console.log(chalk.gray(wizardText(locale, "     或开启 features.selfService.enabled 后由已有 owner 在聊天中发送：角色 授予 <QQ 号> owner 账号")));
   const sharedConfig: Record<string, unknown> = {
-    master: basic.master.trim(),
     ...(platform !== 1 ? { platform } : {}),
     ...(signApiAddr?.trim() ? { signApiAddr: signApiAddr.trim() } : {}),
   };

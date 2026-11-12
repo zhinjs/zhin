@@ -7,12 +7,28 @@ function makeSubject(overrides: Partial<PermissionSubject> = {}): PermissionSubj
     adapter: 'qq',
     endpoint: 'e1',
     scene: { id: 'g1', type: 'group' },
-    sender: { id: 'u1', role: ['user'] },
+    sender: { id: 'u1' },
     ...overrides,
   };
 }
 
 describe('PermissionHost', () => {
+  describe('currentSenderRoles', () => {
+    it('re-reads the sender role through the installed resolver, validated; undefined without one', () => {
+      const host = new PermissionHost();
+      expect(host.currentSenderRoles({ sender: { id: 'u1' } })).toBeUndefined();
+      const dispose = host.setSenderRoleResolver(source => (source as { sender: { id: string } }).sender.id === 'u1'
+        ? { chatRole: 'owner', chatRoleLevels: { owner: 'conversation', bogus: 'x' } as never }
+        : { chatRole: 'master' as never });
+      expect(host.currentSenderRoles({ sender: { id: 'u1' } })).toEqual({ chatRole: 'owner', chatRoleLevels: { owner: 'conversation' } });
+      expect(host.currentSenderRoles({ sender: { id: 'u2' } })).toEqual({});
+      dispose();
+      expect(host.currentSenderRoles({ sender: { id: 'u1' } })).toBeUndefined();
+      host.setSenderRoleResolver(() => { throw new Error('boom'); });
+      expect(host.currentSenderRoles({ sender: { id: 'u1' } })).toBeUndefined();
+    });
+  });
+
   describe('check — builtin', () => {
     it('resolves builtin permits without extra registration', async () => {
       const host = new PermissionHost();
@@ -22,33 +38,16 @@ describe('PermissionHost', () => {
   });
 
   describe('check — platform', () => {
-    it('delegates to registered platform checker', async () => {
+    it('reads the normalized platform standing without any registration (ADR 0056)', async () => {
       const host = new PermissionHost();
-      host.registerPlatform('qq', (perm) => perm === 'scene_admin');
-      expect(await host.check('platform(qq,scene_admin)', makeSubject())).toBe(true);
-      expect(await host.check('platform(qq,scene_owner)', makeSubject())).toBe(false);
+      expect(await host.check('platform:admin', makeSubject({ sender: { id: 'u1', platform: { standing: 'admin' } } }))).toBe(true);
+      expect(await host.check('platform:owner', makeSubject({ sender: { id: 'u1', platform: { standing: 'admin' } } }))).toBe(false);
+      expect(await host.check('platform:admin', makeSubject())).toBe(false);
     });
 
-    it('returns false when no platform checker registered', async () => {
+    it('denies the removed platform(adapter,perm) form', async () => {
       const host = new PermissionHost();
-      expect(await host.check('platform(qq,scene_admin)', makeSubject())).toBe(false);
-    });
-
-    it('disposes platform checker', async () => {
-      const host = new PermissionHost();
-      const dispose = host.registerPlatform('qq', () => true);
-      expect(await host.check('platform(qq,x)', makeSubject())).toBe(true);
-      dispose();
-      expect(await host.check('platform(qq,x)', makeSubject())).toBe(false);
-    });
-
-    it('isolates registrations between runtime owners', async () => {
-      const first = new PermissionHost();
-      const second = new PermissionHost();
-      first.registerPlatform('qq', () => true);
-
-      expect(await first.check('platform(qq,x)', makeSubject())).toBe(true);
-      expect(await second.check('platform(qq,x)', makeSubject())).toBe(false);
+      expect(await host.check('platform(qq,scene_admin)', makeSubject({ sender: { id: 'u1', platform: { standing: 'owner' } } }))).toBe(false);
     });
   });
 

@@ -400,6 +400,37 @@ describe('TerminalService', () => {
     expect(JSON.stringify(audits)).not.toMatch(/ls -la|total 0/u);
   });
 
+  it('replays input sent before the shell is ready, in order and bounded', async () => {
+    const { service, pty } = makeService();
+    const { ticket } = await service.issueTicket(owner, { target: 'local', cols: 100, rows: 30 });
+    const socket = new FakeSocket();
+    // The client types right after the socket opens, while the ticket check and PTY start are pending.
+    const connecting = service.handleConnection(socket.at(`/api/console/terminal?ticket=${ticket}`));
+    socket.input('echo one\r');
+    socket.control({ type: 'resize', cols: 120, rows: 40 });
+    socket.input('echo two\r');
+    socket.input('x'.repeat((1 << 20) + 1));
+    expect(pty.procs).toHaveLength(0);
+    await connecting;
+    const proc = pty.procs[0]!;
+    expect(proc.written).toEqual(['echo one\r', 'echo two\r']);
+    expect(proc.resizes).toEqual([[120, 40]]);
+    expect(socket.controls()[0]).toMatchObject({ type: 'ready' });
+    socket.input('echo three\r');
+    expect(proc.written.at(-1)).toBe('echo three\r');
+  });
+
+  it('drops queued input when the peer leaves before the shell starts', async () => {
+    const { service, pty } = makeService();
+    const { ticket } = await service.issueTicket(owner, { target: 'local', cols: 100, rows: 30 });
+    const socket = new FakeSocket();
+    const connecting = service.handleConnection(socket.at(`/api/console/terminal?ticket=${ticket}`));
+    socket.input('rm -rf ./tmp\r');
+    socket.disconnect();
+    await connecting;
+    expect(pty.procs.every((proc) => proc.written.length === 0)).toBe(true);
+  });
+
   it('kills the process when the socket disconnects', async () => {
     const { service, pty, audits } = makeService();
     const socket = await connect(service);

@@ -66,6 +66,8 @@ export default definePlugin<EarthquakeConfig>({
       push = async (subscription, content) => {
         const target = subscription.target;
         if (!target) throw new DataMigrationError('unavailable', 'Historical earthquake subscription awaits exact-target binding');
+        // ADR 0050 / 0055: pushes are not messages; skip accounts / conversations where earthquake is switched off.
+        if (!context.isEnabledFor({ conversation: target })) return;
         const send = outbound.sendTarget;
         if (!send) throw new Error('Canonical subscription delivery requires an exact-target Outbound Host');
         const run = async () => { await send(target, content, { locale: resolveLocale(subscription.locale) }); };

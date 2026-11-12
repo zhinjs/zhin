@@ -67,7 +67,7 @@ Console「运维 → 终端」：目标选择 + xterm.js（含 fit 插件）；�
 ## 落盘位置
 
 - 配置 Schema：`packages/im/runtime/src/host-config-schema.json`（顶层 `console`）
-- 后端：`basic/cli/src/plugin-runtime/console/terminal/`（票据、本地 PTY、SSH 会话、WebSocket 路由）
+- 后端：`packages/host/gateway/src/terminal/`（ADR 0054 起由管理网关持有）（票据、本地 PTY、SSH 会话、WebSocket 路由）
 - WebSocket：`HttpHost.ws()`
 - 前端：Console `src/pages/ops/Terminal.tsx`
 

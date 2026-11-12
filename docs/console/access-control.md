@@ -7,7 +7,9 @@ description: Console「访问控制」区的四个页面：谁能登录、能做
 
 Console 的账号存在项目数据库里（[ADR 0049](../adr/0049-console-rbac.md)），由管理网关负责登录与鉴权（[ADR 0054](../adr/0054-management-gateway.md)）。实例停止或崩溃时这些页面照常可用。
 
-「访问控制」区包含四个页面：**用户**、**角色**、**API 令牌**、**审计日志**。查看需要 `iam.view`，修改需要 `iam.manage`——内置角色里只有 `owner` 持有 `iam.manage`，`admin` 只有 `iam.view`。没有 `iam.view` 的账号看不到这个区。
+侧栏「访问控制」分组有四个页面：**用户**（`/access/users`）、**角色**（`/access/roles`）、**API 令牌**（`/access/tokens`）、**审计日志**（`/access/audit`）。查看需要 `iam.view`，修改需要 `iam.manage`——内置角色里只有 `owner` 持有 `iam.manage`，`admin` 只有 `iam.view`；没有 `iam.manage` 时页面只读。没有 `iam.view` 的账号看不到这个分组。删除、禁用、吊销会先确认，删除用户或角色要输入名称。
+
+这里的「角色」是 **Console 账号**的角色，决定谁能在 Console 里做什么；对象页「角色」页签管理的是**聊天角色**（所有者 / 管理员 / 受信任），决定谁能在聊天里使用机器人的功能，两者互不影响（见[聊天角色](../concepts/chat-roles.md)）。每个人改自己的密码、签发自己的 API 令牌在个人设置（`/account`，顶栏用户名进入）。
 
 ## 凭据 {#credentials}
 
@@ -17,17 +19,19 @@ Console 的账号存在项目数据库里（[ADR 0049](../adr/0049-console-rbac.
 | 会话令牌 | 用户名 + 密码登录（`POST {base}/auth/login`） | 浏览器里的 Console。默认 12 小时滑动过期、最长 30 天 |
 | API 令牌 | 用户签发（见下文） | CI、监控、`zhin doctor --live`、MCP / A2A 客户端；命令行从 `ZHIN_CONSOLE_TOKEN` 读取 |
 
+既没有 `http.token` 也还没有所有者时，Host 处于**开放模式**，拥有全部权限，只接受回环地址、且不带 `X-Forwarded-For` / `Forwarded` 的请求（地址未知的请求不算本机）。`http.host` 是非回环地址（如容器里的 `0.0.0.0`）时网关拒绝以开放模式启动：先用 `zhin doctor --fix` 在 `.env` 生成 `HTTP_TOKEN` 并在配置里写 `http.token: ${HTTP_TOKEN}`，或先 `zhin console init` 创建所有者。同机反向代理若不加转发头，开放模式下所有经代理的请求都会被当作本机——放在反向代理后面时务必设置初始化令牌。
+
 所有凭据都以 `Authorization: Bearer …` 发送，不使用 Cookie。登录失败统一返回 401，同一 IP 与用户名 15 分钟内失败 5 次后指数退避（`429`）。
 
 ## 用户 {#users}
 
-列出全部用户：用户名、显示名、是否禁用与角色绑定。
+列出全部用户：用户名、显示名、角色、状态与密码修改时间。每行的「管理」菜单里有「修改显示名」「角色绑定」「重置密码」「禁用 / 启用」「删除」。
 
 | 操作 | RPC | 权限 |
 | --- | --- | --- |
 | 查看列表 | `iam.users.list` | `iam.view` |
 | 新建用户（用户名小写唯一，密码至少 10 位） | `iam.users.create` | `iam.manage` |
-| 改显示名 | `iam.users.update` | `iam.manage` |
+| 修改显示名（用户名用于登录，创建后不能修改） | `iam.users.update` | `iam.manage` |
 | 禁用 / 启用 | `iam.users.disable` | `iam.manage` |
 | 删除 | `iam.users.delete` | `iam.manage` |
 | 重置密码 | `iam.users.reset-password` | `iam.manage` |
@@ -70,7 +74,7 @@ Console 的账号存在项目数据库里（[ADR 0049](../adr/0049-console-rbac.
 
 | 权限 | 覆盖 |
 | --- | --- |
-| `status.view` | 仪表盘、系统状态、日志、能力浏览、事件流、实例状态与日志 |
+| `status.view` | 首页、系统状态、日志、能力浏览、命令权限说明、对象页「记录」页签、事件流、实例状态与日志 |
 | `endpoint.view` / `endpoint.operate` / `endpoint.manage` | 账号与会话读取 / 发消息、处理请求、登录辅助 / 增删改启停账号连接 |
 | `feature.view` / `feature.configure` / `feature.toggle` | 读取功能配置 / 写配置与覆盖 / 启用禁用（见[功能与三级配置](./features.md)） |
 | `plugin.manage` | 安装、更新、卸载插件与依赖；引导第 3–5 步 |
@@ -82,7 +86,7 @@ Console 的账号存在项目数据库里（[ADR 0049](../adr/0049-console-rbac.
 | `ops.files.read` / `ops.files.write` | 项目文件（读写 `.env` 与配置文件仍需要对应的 `ops.env.*` / `ops.config.*`） |
 | `ops.restart` | 实例起停与重启 |
 | `ops.terminal` | 终端（见[运维](./operations.md#terminal)） |
-| `iam.view` / `iam.manage` | 本区 |
+| `iam.view` / `iam.manage` | 本分组；`iam.manage` 还管对象页「角色」页签（`chat-roles.*`，按作用域检查） |
 | `mcp.access` / `a2a.access` | MCP Server、A2A Server 的 Bearer 访问 |
 | `plugin.perms.read` / `plugin.perms.operate` / `plugin.perms.manage` | 按级别授予全部插件权限 |
 
@@ -101,15 +105,16 @@ Console 的账号存在项目数据库里（[ADR 0049](../adr/0049-console-rbac.
 
 | 操作 | 接口 | 权限 |
 | --- | --- | --- |
-| 我的令牌（个人设置） | `GET` / `POST {base}/auth/tokens`、`POST {base}/auth/tokens/revoke` | 已登录即可 |
-| 全部令牌 | `iam.tokens.list` | `iam.view` |
-| 为用户签发 / 吊销 | `iam.tokens.create` / `iam.tokens.revoke` | `iam.manage` |
+| 我的令牌（个人设置 `/account`） | `GET` / `POST {base}/auth/tokens`、`POST {base}/auth/tokens/revoke` | 已登录即可 |
+| 全部令牌（可按用户筛选） | `iam.tokens.list` | `iam.view` |
+| 「为用户签发」/ 吊销 | `iam.tokens.create` / `iam.tokens.revoke` | `iam.manage` |
 
-签发时填名称、过期时间，可以只勾选需要的权限（例如就绪探测只要 `status.view`，MCP 客户端只要 `mcp.access`）。
+在 API 令牌页点「为用户签发」，选用户、填名称与有效期；在个人设置里签发自己的令牌也一样。Console 界面签发的令牌拥有该用户的全部权限；通过接口签发时可以只列出需要的权限（例如就绪探测只要 `status.view`，MCP 客户端只要 `mcp.access`），列表里显示为「收窄为 N 项」。
 
 - 明文**只在签发时显示一次**，库里只存 SHA-256。
 - 令牌的权限不超过签发用户：列出的插件权限只有用户自己（按名或按级别）持有时才生效；用户被禁用、删除时令牌一起失效；也可以单独吊销。
 - 命令行工具读 `ZHIN_CONSOLE_TOKEN`：`ZHIN_CONSOLE_TOKEN=<令牌> zhin doctor --live https://bot.example.com/api --json`。
+- MCP / A2A 客户端把令牌作为 `Authorization: Bearer` 发送；签发账号必须**全局**持有 `mcp.access` / `a2a.access`（只在某个作用域内持有不算）。也可以改用协议自己的 `mcp.token` / `a2a.token`，见[配置 · mcp / a2a](../configuration/index.md#mcp-a2a)。初始化令牌在首个所有者创建后失效，不能用于 MCP / A2A。
 
 ## 审计日志 {#audit}
 

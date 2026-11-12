@@ -9,6 +9,7 @@ import { isKeyboardSegment } from '../../built/interactive-segments/types.js';
 import type { Segment } from '../../built/segment-contract/types.js';
 import type { ButtonClickHandler, ButtonProps } from '../../jsx/message-tags.js';
 import { operationEndpoint, type Message, type SendRequest } from './contracts.js';
+import { assertPermitSyntax, describeDeniedPermit, permissionHostToken, toPermissionSubject, type PermissionHost } from '@zhin.js/permission';
 
 const JSX_BUTTON_PREFIX = 'zhin:jsx:';
 const JSX_BUTTON_TTL_MS = 60 * 60 * 1000;
@@ -62,6 +63,7 @@ export function isPluginIncarnationAlive(
 
 interface ButtonBinding extends PluginIncarnationRef {
   readonly onClick: ButtonClickHandler;
+  readonly permit?: readonly string[];
   readonly conversationKey: string;
   readonly expiresAt: number;
 }
@@ -82,13 +84,18 @@ export class JsxButtonRegistry {
     const signal = request[operationEndpoint]?.signal;
     return {
       bind: (props) => {
-        const { onClick, payload: manualPayload, children, label, id, ...options } = props;
+        const { onClick, payload: manualPayload, children, label, id, permit, ...options } = props;
+        if (permit !== undefined) {
+          if (!Array.isArray(permit) || !onClick) throw new TypeError('Button permit applies to onClick buttons and must be a string array');
+          assertPermitSyntax(permit, 'Button');
+        }
         if (onClick !== undefined && typeof onClick !== 'function') throw new TypeError('Button onClick must be a function');
         if (onClick && manualPayload !== undefined) throw new TypeError('Button accepts onClick or payload, not both');
         if (!onClick && typeof manualPayload !== 'string') throw new TypeError('Button requires onClick or payload');
         const payload = onClick ? `${JSX_BUTTON_PREFIX}${randomUUID()}` : manualPayload!;
         if (onClick && !props.disabled) pending.set(payload, {
           onClick,
+          ...(permit?.length ? { permit: Object.freeze([...permit]) } : {}),
           requester: request.requester,
           snapshot,
           node,
@@ -129,6 +136,17 @@ export class JsxButtonRegistry {
       return true;
     }
     if (binding.conversationKey !== conversationRefKey(message.conversation)) return true;
+    if (binding.permit) {
+      // ADR 0056 §5: the clicker, not the sender of the original message, must meet the permit.
+      const host = snapshot.resources.get(snapshot.root)?.get(permissionHostToken.id) as PermissionHost | undefined;
+      const denied = host && typeof host.firstDenied === 'function'
+        ? await host.firstDenied(binding.permit, toPermissionSubject(message), { source: message }).catch(() => binding.permit![0])
+        : binding.permit[0];
+      if (denied !== undefined) {
+        await message.$reply(t(message.locale, 'denied', { reason: describeDeniedPermit(denied!, message.locale) }));
+        return true;
+      }
+    }
     const bound = bindOperationInput(message, binding.requester, snapshot);
     const content = await binding.onClick(bound);
     if (typeof content === 'number') await bound.$reply(jsx('text', { text: String(content) }));

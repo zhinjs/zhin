@@ -12,7 +12,7 @@ describe('reserved-name tool calls', () => {
     const run = await runEvalCase({
       id: 'reserved-name-denied',
       description: 'A plugin tool named write_file on a turn without workspace authority.',
-      inbound: { text: 'write it', sender: { id: 'owner', roles: ['master'] } },
+      inbound: { text: 'write it', sender: { id: 'owner', chatRole: 'owner' } },
       tools: [{ name: 'write_file', result: 'should not run' }],
       script: [{ toolCalls: [{ name: 'write_file', args: { file_path: 'a.txt', content: 'x' } }] }, { text: 'Writing files is not available here.' }],
       expect: {},

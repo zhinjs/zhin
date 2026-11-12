@@ -19,12 +19,15 @@ import {
   type DiscordClientTransport,
 } from '../src/endpoint.js';
 import {
+  discordChannelOf,
   discordInboundConversation,
+  discordThreadParentOf,
   formatButtonContent,
   formatButtonSegments,
   formatInboundContent,
   formatInboundSegments,
   formatOutboundBody,
+  interactionToInboundMessage,
   resolveDiscordConfig,
   verifyDiscordInteractionSignature,
   type DiscordInboundMessage,
@@ -224,6 +227,24 @@ describe('discord protocol helpers', () => {
     if (resolved.connection === 'interactions') {
       expect(resolved.interactionsPath).toBe('/discord/interactions');
     }
+  });
+
+  it('keys a thread by its parent channel with the thread as threadId (roles / features of the channel apply)', () => {
+    expect(discordInboundConversation('test-endpoint', {
+      channelId: 'thread-9', channelKind: 'channel', guildId: 'guild-1', threadParentId: 'chan-1',
+    })).toEqual({
+      endpoint: { id: 'test-endpoint', adapter: 'test-endpoint' },
+      kind: 'channel', id: 'chan-1', threadId: 'thread-9', parent: { kind: 'channel', id: 'guild-1' },
+    });
+    // Outbound goes back to the thread channel.
+    expect(discordChannelOf({ id: 'chan-1', threadId: 'thread-9' })).toBe('thread-9');
+    expect(discordChannelOf({ id: 'chan-1' })).toBe('chan-1');
+    // Raw API interactions inside a thread carry the parent channel.
+    expect(discordThreadParentOf({ type: 11, parent_id: 'chan-1' })).toBe('chan-1');
+    expect(discordThreadParentOf({ type: 0, parent_id: 'category-1' })).toBeUndefined();
+    expect(interactionToInboundMessage({ id: 'i1', type: 2, guild_id: 'guild-1', channel_id: 'thread-9',
+      channel: { type: 12, parent_id: 'chan-1' }, member: { user: { id: 'u1', username: 'u' } }, data: { name: 'ping' } }))
+      .toMatchObject({ channelId: 'thread-9', threadParentId: 'chan-1' });
   });
 
   it('maps inbound channel kinds to ConversationRef with guild container as parent', () => {
@@ -461,14 +482,15 @@ config: baseConfig}), createClient, gateway, undefined);
     expect(endpoint.transportState).toBe('reconnecting');
     endpoint.endpoint.ws.status = Status.Ready;
     expect(endpoint.transportState).toBe('open');
-    endpoint.endpoint.admit(textMessage());
+    endpoint.endpoint.admit(textMessage({ guildId: 'guild-1', authorRoles: [{ id: 'r1', name: 'Mods' }], platformPermissions: ['moderate_members'] }));
 
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
       conversation: expect.objectContaining({ kind: 'channel', id: 'chan-1' }),
       message: expect.objectContaining({ id: 'msg-1' }),
       content: 'hello',
-      sender: expect.objectContaining({ id: 'user-1', name: 'alice' }),
+      sender: expect.objectContaining({ id: 'user-1', name: 'alice',
+        platform: { standing: 'admin', roles: [{ id: 'r1', name: 'Mods' }], permissions: ['moderate_members'] } }),
     }));
 
     await endpoint.stop();

@@ -25,6 +25,13 @@ export class ZhinAgentEventEmitter {
       userId: commMessage.sender?.id,
       platform: String(commMessage.clientAdapter ?? commMessage.conversation.endpoint.adapter),
       endpointKey: commMessage.endpointId ?? commMessage.conversation.endpoint.id,
+      ...(typeof commMessage.conversation?.endpoint?.id === 'string' && commMessage.conversation.endpoint.id ? {
+        conversationRef: Object.freeze({
+          endpointId: commMessage.conversation.endpoint.id,
+          ...(commMessage.conversation.kind ? { kind: commMessage.conversation.kind } : {}),
+          ...(commMessage.conversation.id !== undefined && commMessage.conversation.id !== null ? { id: String(commMessage.conversation.id) } : {}),
+        }),
+      } : {}),
       sceneId: commMessage.conversation.id,
       messageId: commMessage.id,
       scope: commMessage.conversation.kind ?? 'private',

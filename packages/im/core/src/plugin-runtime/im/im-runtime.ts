@@ -69,6 +69,7 @@ import { messageLocale } from './inbound-spine.js';
 import { InboundDeduper } from './inbound-dedup.js';
 import { createInboundOriginClassifier, OutboundLedger, ledgerScopeOf } from './inbound-origin.js';
 import { RuntimeMessageDiagnostics, type RuntimeMessageDiagnosticsReader } from './message-diagnostics.js';
+import { createChatRoleSenderEnricher } from '../../built/roles.js';
 
 /**
  * Plugin Runtime login-assist port（与出站消息服务并列）。
@@ -100,10 +101,10 @@ export interface ImRuntimeOptions {
   /** @internal 覆盖入站去重器（测试用）；去重仅作用于 Room 会话。 */
   readonly inboundDeduper?: Pick<InboundDeduper, 'claim'> & Partial<Pick<InboundDeduper, 'arbitrate'>>;
   /**
-   * 入站 sender 增强：在构造 Message 前，将框架级角色（master / trusted）
-   * 合并到 sender.roles，使整个下游链路（命令分发、agent ingress 等）都能读到完整角色。
+   * 入站 sender 增强（ADR 0056）：在构造 Message 前设置 `sender.chatRole`（会话链上的最高聊天角色）
+   * 并归一 `sender.platform`，使整个下游链路（命令分发、agent ingress 等）读到同一份角色。
    *
-   * 返回增强后的 sender（可原样返回）。缺省时 sender 保留适配器给出的平台角色。
+   * 通常为 {@link createChatRoleSenderEnricher} 的结果。缺省时只归一平台身份并丢弃适配器自带的 `chatRole`。
    */
   readonly enrichSender?: (
     sender: MessageSenderRef | undefined,
@@ -178,7 +179,7 @@ export class ImRuntime implements OutboundMessageService {
       registry,
       inboundClaimPending: options.inboundClaimPending,
       resolveReplyTarget: (conversation, id) => ledger.matchById(ledgerScopeOf(conversation), id)?.endpointId,
-      enrichSender: options.enrichSender,
+      enrichSender: options.enrichSender ?? createChatRoleSenderEnricher({ roles: () => undefined }),
       acquire: () => this.#acquire(),
       release: (lease) => this.#release(lease),
       deliver: (request, snapshot) => this.#deliver(request, snapshot),
@@ -194,6 +195,58 @@ export class ImRuntime implements OutboundMessageService {
       release: (lease) => this.#release(lease),
       send: (request, snapshot, execution) => this.#deliver(request, snapshot, execution),
     });
+    // ADR 0056 §1: `bot:*` permits read the Bot's own standing through the Adapter index cache;
+    // the Bot's role events drop the cached answer of that conversation.
+    this.permissionHost.setBotStandingResolver((source, lookup) => this.#botStanding(source, lookup));
+    // ADR 0056 §5: execution-time re-checks and due timers read the sender's *current* chat role
+    // through the same enricher as inbound messages (the role store is in memory).
+    const enrichSender = options.enrichSender ?? createChatRoleSenderEnricher({ roles: () => undefined });
+    this.permissionHost.setSenderRoleResolver(source => this.#currentSenderRoles(enrichSender, source));
+    this.#sceneEventStream.subscribe(signal => this.#invalidateBotStanding(signal));
+  }
+
+  #currentSenderRoles(enrich: NonNullable<ImRuntimeOptions['enrichSender']>, source: unknown) {
+    const value = source && typeof source === 'object' ? source as { conversation?: unknown; sender?: { id?: unknown } } : undefined;
+    const conversation = value?.conversation as ConversationRef | undefined;
+    const id = value?.sender?.id;
+    if (!conversation || typeof conversation !== 'object' || typeof conversation.endpoint?.id !== 'string' || typeof id !== 'string' || !id) return undefined;
+    let lease: SnapshotLease;
+    try { lease = this.#acquire(); } catch { return undefined; }
+    try {
+      const sender = enrich({ id }, conversation, lease.value);
+      return Object.freeze({ ...(sender?.chatRole ? { chatRole: sender.chatRole } : {}),
+        ...(sender?.chatRole && sender.chatRoleLevels ? { chatRoleLevels: sender.chatRoleLevels } : {}) });
+    } finally {
+      this.#release(lease);
+    }
+  }
+
+  async #botStanding(source: unknown, lookup: Readonly<{ cachedOnly?: boolean; signal?: AbortSignal }>) {
+    const conversation = source && typeof source === 'object' ? (source as { conversation?: unknown }).conversation as ConversationRef | undefined : undefined;
+    if (!conversation || typeof conversation !== 'object' || typeof conversation.endpoint?.id !== 'string' || typeof conversation.id !== 'string') return undefined;
+    const lease = this.#acquire();
+    try {
+      const adapters = requireAdapters(lease.value);
+      if (typeof adapters.selfStanding !== 'function') return undefined;
+      return await adapters.selfStanding(conversation.endpoint.id as CapabilityId, conversation, lookup);
+    } catch {
+      return undefined;
+    } finally {
+      this.#release(lease);
+    }
+  }
+
+  #invalidateBotStanding(signal: Parameters<Parameters<RuntimeSceneEventSource['subscribe']>[0]>[0]): void {
+    const event = signal.event as { type?: string; member?: { id?: unknown }; conversation?: ConversationRef };
+    const conversation = event.conversation;
+    if (!conversation || (event.type !== 'member.role_changed' && event.type !== 'member.left' && event.type !== 'member.joined')) return;
+    const self = event.member?.id !== undefined && signal.selfIds.includes(String(event.member.id));
+    if (event.type !== 'member.role_changed' && !self) return;
+    try {
+      const lease = this.#acquire();
+      try { requireAdapters(lease.value).invalidateSelfStanding?.(conversation.endpoint.id as CapabilityId, conversation); }
+      finally { this.#release(lease); }
+    } catch { /* no attached generation: nothing cached */ }
   }
 
   /** Process composition replaces the bootstrap memory store after required DB activation. */

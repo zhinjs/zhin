@@ -136,6 +136,17 @@ export interface ConsoleIamServiceOptions {
 }
 
 const USERNAME = /^[a-z0-9][a-z0-9._-]{1,63}$/u;
+
+/**
+ * What is wrong with a new account's username / password, or null — the rules
+ * {@link ConsoleIamService.createUser} / `createOwner` enforce, for callers that must check before
+ * changing anything else (`zhin console init` switches the database first).
+ */
+export function accountInputProblem(input: Readonly<{ username: unknown; password: unknown }>): string | null {
+  const username = typeof input.username === 'string' ? input.username.trim().toLowerCase() : '';
+  if (!USERNAME.test(username)) return '用户名需为 2-64 位小写字母、数字或 . _ -';
+  return passwordProblem(input.password);
+}
 const ROLE_NAME = /^[a-z][a-z0-9_-]{1,63}$/u;
 const DAY = 24 * 60 * 60_000;
 const builtinRoleId = (name: string) => `builtin:${name}`;

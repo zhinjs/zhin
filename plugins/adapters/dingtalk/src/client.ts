@@ -9,7 +9,6 @@ import { createEndpointOperation, Endpoint, type EndpointSendRequest } from 'zhi
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
-import { normalizeDingtalkSenderForPermit } from './platform-permit.js';
 import {
   dingtalkInboundConversation,
   formatInboundContent,
@@ -283,7 +282,6 @@ export class DingTalkClient extends EventEmitter {
     const conversation = dingtalkInboundConversation(String(this.#options.id), event);
     this.#cards.remember(conversation, event);
     const chatType = resolveChatType(event.conversationType);
-    const permit = normalizeDingtalkSenderForPermit({ isAdmin: event.isAdmin === true });
     const senderId = resolveSender(event);
     await this.publishAccepted('message.receive', {
       event,
@@ -293,7 +291,8 @@ export class DingTalkClient extends EventEmitter {
       ...(senderId ? { sender: {
         id: senderId,
         name: event.senderNick || undefined,
-        ...(permit.role ? { roles: [permit.role] } : {}),
+        // ADR 0056 §1：群聊回调的 isAdmin → standing（admin / member）；单聊不上报。
+        ...(chatType === 'group' ? { platform: { standing: event.isAdmin === true ? 'admin' as const : 'member' as const } } : {}),
       } } : {}),
       endpointId: this.#options.config.id,
       ...(isDingtalkBotMentioned(event, this.#options.config.robotCode) ? { mentioned: true } : {}),
@@ -301,8 +300,8 @@ export class DingTalkClient extends EventEmitter {
         msgtype: event.msgtype,
         chatType,
         senderNick: event.senderNick,
-        role: permit.role,
-        permissions: permit.permissions,
+        role: event.isAdmin === true ? 'admin' : 'member',
+        permissions: event.isAdmin === true ? ['chat_admin'] : [],
         conversationType: event.conversationType,
       }),
     }).catch((err) => {

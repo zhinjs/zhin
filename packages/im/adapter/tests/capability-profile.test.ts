@@ -68,6 +68,26 @@ describe('profile validation', () => {
   });
 });
 
+describe('scene.platformStanding (ADR 0056 §1)', () => {
+  it('declares which sender.platform fields are reported, per conversation kind', () => {
+    const declared: AdapterCapabilityProfile = {
+      group: { scene: { platformStanding: { standing: true, roles: true } } },
+      channel: { scene: { platformStanding: { standing: true, permissions: true } } },
+    };
+    expect(normalizeCapabilityProfile(declared)).toBeTruthy();
+    const grp = resolveTurnCapabilities({ profile: declared, conversation: conv('group') });
+    expect(grp.get('scene.platformStanding.standing')).toBe(true);
+    expect(grp.get('scene.platformStanding.roles')).toBe(true);
+    expect(grp.has('scene.platformStanding.permissions')).toBe(false);
+    expect(resolveTurnCapabilities({ profile: declared, conversation: conv('private') }).has('scene.platformStanding')).toBe(false);
+  });
+
+  it('rejects non-boolean flags', () => {
+    expect(() => normalizeCapabilityProfile({ default: { scene: { platformStanding: { roles: 'yes' } } } } as never))
+      .toThrow('scene.platformStanding.roles');
+  });
+});
+
 describe('inheritance', () => {
   it('kind sections override default per field; false switches an inherited toggle off', () => {
     const priv = resolveTurnCapabilities({ profile, conversation: conv('private') });

@@ -143,6 +143,18 @@ export interface TelegramUpdate {
   readonly message?: TelegramMessage;
   readonly edited_message?: TelegramMessage;
   readonly callback_query?: TelegramCallbackQuery;
+  /** A member's status changed (only delivered when `allowed_updates` lists it and the Bot is an admin). */
+  readonly chat_member?: TelegramChatMemberUpdated;
+  /** The Bot's own member status changed. */
+  readonly my_chat_member?: TelegramChatMemberUpdated;
+}
+
+export interface TelegramChatMemberUpdated {
+  readonly chat: TelegramChat;
+  readonly from?: TelegramUser;
+  readonly date?: number;
+  readonly old_chat_member?: TelegramChatMember;
+  readonly new_chat_member: TelegramChatMember;
 }
 
 export interface TelegramChatMember {
@@ -152,6 +164,8 @@ export interface TelegramChatMember {
   readonly can_pin_messages?: boolean;
   readonly can_delete_messages?: boolean;
   readonly can_manage_chat?: boolean;
+  /** `restricted` only: whether the user is still a member of the chat. */
+  readonly is_member?: boolean;
 }
 
 export interface TelegramWireSegment {
@@ -244,6 +258,17 @@ export type TelegramOutboundAction =
       readonly longitude: number;
       readonly reply_parameters?: { readonly message_id: number };
     };
+  }
+  | {
+    readonly method: 'sendPoll';
+    readonly params: {
+      readonly chat_id: number | string;
+      readonly question: string;
+      readonly options: readonly string[];
+      readonly is_anonymous: boolean;
+      readonly allows_multiple_answers: boolean;
+      readonly reply_parameters?: { readonly message_id: number };
+    };
   };
 
 export function resolveTelegramConfig(config: TelegramEndpointConfig): ResolvedTelegramConfig {
@@ -255,7 +280,8 @@ export function resolveTelegramConfig(config: TelegramEndpointConfig): ResolvedT
   const webhookSource = config.webhook;
   const mode: 'polling' | 'webhook' = polling === false ? 'webhook' : 'polling';
   const apiBaseUrl = (config.apiBaseUrl ?? 'https://api.telegram.org').replace(/\/$/, '');
-  const allowedUpdates = config.allowedUpdates ?? ['message', 'callback_query'];
+  // chat_member / my_chat_member keep the cached sender standing fresh (ADR 0056 §1).
+  const allowedUpdates = config.allowedUpdates ?? ['message', 'callback_query', 'chat_member', 'my_chat_member'];
   const webhook = mode === 'webhook'
     ? {
       domain: webhookSource?.domain ?? '',
@@ -725,6 +751,31 @@ function buildOutboundActions(
             params: { chat_id: chatId, sticker, ...replyParams() },
           });
         }
+        break;
+      }
+      case 'telegram:sticker': {
+        // Agent-authored sticker: an existing Telegram file_id or an http(s) URL only, never a host path.
+        const sticker = typeof data.sticker === 'string' ? data.sticker.trim() : '';
+        if (!sticker || /^(?:file:|base64:|attach:)/i.test(sticker) || (/[\\/]/.test(sticker) && !/^https?:\/\//i.test(sticker))) {
+          throw new EndpointDeliveryError('invalid_payload', 'telegram:sticker requires a Telegram file_id or an http(s) URL', 'not_sent');
+        }
+        flushText();
+        actions.push({ method: 'sendSticker', params: { chat_id: chatId, sticker, ...replyParams() } });
+        break;
+      }
+      case 'telegram:poll': {
+        const question = typeof data.question === 'string' ? data.question.trim() : '';
+        const options = Array.isArray(data.options) ? data.options.map(String).filter(Boolean) : [];
+        if (!question || options.length < 2) {
+          throw new EndpointDeliveryError('invalid_payload', 'telegram:poll requires a question and at least two options', 'not_sent');
+        }
+        flushText();
+        actions.push({ method: 'sendPoll', params: {
+          chat_id: chatId, question, options,
+          is_anonymous: data.is_anonymous !== false,
+          allows_multiple_answers: data.allows_multiple_answers === true,
+          ...replyParams(),
+        } });
         break;
       }
       case 'location': {

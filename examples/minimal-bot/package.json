@@ -5,9 +5,10 @@
   "description": "Zhin.js Plugin Runtime Stable golden path",
   "type": "module",
   "scripts": {
-    "dev": "zhin runtime start --watch source config",
-    "start": "zhin runtime start --mode production --no-watch",
-    "daemon": "zhin runtime start --daemon",
+    "dev": "zhin start --foreground --watch source config",
+    "start": "zhin start --foreground --mode production --no-watch",
+    "daemon": "zhin start --mode production --no-watch",
+    "stop": "zhin stop",
     "build": "tsc --noEmit",
     "test": "vitest run --root ../.. examples/minimal-bot/tests"
   },
@@ -18,10 +19,11 @@
     "zhin.js": "workspace:*",
     "zod": "^4.4.3",
     "@zhin.js/components": "workspace:*",
-    "@zhin.js/middleware": "workspace:*"
+    "@zhin.js/middleware": "workspace:*",
+    "@zhin.js/cli": "workspace:*",
+    "@zhin.js/gateway": "workspace:*"
   },
   "devDependencies": {
-    "@zhin.js/cli": "workspace:*",
     "@zhin.js/runtime": "workspace:*",
     "typescript": "^6.0.3"
   },

@@ -163,7 +163,7 @@ describe('scope parsing', () => {
   });
 
   it('derives scene facts from a turn', () => {
-    const im = { origin: { kind: 'im', scope: 'group' }, principal: { roles: ['master'] } };
+    const im = { origin: { kind: 'im', scope: 'group' }, principal: { roles: ['owner'] } };
     expect(bootstrapSceneFromTurn(im)).toEqual({ kind: 'group', master: true });
     expect(bootstrapSceneFromTurn({ origin: { kind: 'http' }, principal: { roles: [] } })).toEqual({ kind: 'other', master: false });
     expect(bootstrapSceneFromTurn(undefined)).toEqual({ kind: 'other', master: false });
@@ -214,7 +214,7 @@ describe('injection', () => {
     const group = buildRichSystemPrompt({ ...base, turn: turn('group', []) });
     expect(group).not.toContain('ssh prod');
     expect(group).toContain('## Group etiquette\nbe brief');
-    const masterPrivate = buildRichSystemPrompt({ ...base, turn: turn('private', ['master']) });
+    const masterPrivate = buildRichSystemPrompt({ ...base, turn: turn('private', ['owner']) });
     expect(masterPrivate).toContain('ssh prod');
     expect(masterPrivate).not.toContain('## Group etiquette\nbe brief');
     expect(buildRichSystemPrompt({ ...base, turn: turn('group', [], 'other', '99') })).toBe(group);

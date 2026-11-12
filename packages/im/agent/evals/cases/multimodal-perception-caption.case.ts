@@ -8,8 +8,8 @@ export default defineEvalCase({
   tags: ['multimodal', 'memory'],
   perception: {},
   inbound: [
-    { text: '@bot 看看这个', scope: 'group', sender: { id: 'bob', roles: ['user'] }, images: [RED_CIRCLE_PNG] },
-    { text: '@bot 刚才那张图是什么颜色？', scope: 'group', sender: { id: 'bob', roles: ['user'] } },
+    { text: '@bot 看看这个', scope: 'group', sender: { id: 'bob' }, images: [RED_CIRCLE_PNG] },
+    { text: '@bot 刚才那张图是什么颜色？', scope: 'group', sender: { id: 'bob' } },
   ],
   script: [
     { model: 'scripted-perception', text: '白底上一个红色圆形。' },

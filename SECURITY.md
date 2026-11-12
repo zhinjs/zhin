@@ -67,7 +67,8 @@ Zhin.js 团队和社区非常重视安全问题。我们感谢您帮助我们保
 
 2. **保护凭证**
    - 永远不要将 `.env` 文件提交到版本控制
-   - 使用强 `HTTP_TOKEN`；勿将 Token 写入 URL 或提交到版本库
+   - `HTTP_TOKEN` 是 Console 初始化令牌：用随机值，在开放端口前用它（或 `zhin console init`）创建第一个所有者，之后它在所有接口上失效；勿将 Token 写入 URL 或提交到版本库
+   - Console 账号用强密码；自动化用账号签发的 API 令牌（`ZHIN_CONSOLE_TOKEN`），权限不超过签发人
    - 定期轮换 API 密钥和令牌
 
 3. **访问控制**
@@ -91,7 +92,7 @@ Zhin.js 团队和社区非常重视安全问题。我们感谢您帮助我们保
    - 生产环境关闭文件监听与热重载，使用环境变量区分开发和生产配置
    ```bash
    # 生产环境启动（脚手架项目的 pnpm start 即此命令）
-   zhin runtime start --mode production --no-watch
+   zhin start --foreground --mode production --no-watch
    ```
    - 只在 `zhin.config.yml` 的 `plugins` 中声明实际需要的插件；未声明的包不会被加载
    ```yaml
@@ -146,7 +147,7 @@ Zhin.js 团队和社区非常重视安全问题。我们感谢您帮助我们保
 
    export default defineCommand({
      description: '管理员操作',
-     permit: ['role(master,admin)'],
+     permit: ['admin'],
      async execute() {
        // 管理员操作
        return '已执行'
@@ -189,7 +190,7 @@ Zhin.js 团队和社区非常重视安全问题。我们感谢您帮助我们保
 
 1. **Remote Console / Host API**
    - Host HTTP 默认 `127.0.0.1:8086`（仅 API）；管理界面在 Remote Console，勿把该端口当作公网 Web UI 暴露
-   - 生产环境限制 API 来源、使用强 `HTTP_TOKEN`；Remote Console 登录见 [docs/console/index.md](docs/console/index.md)
+   - 生产环境限制 API 来源；先创建所有者再暴露端口（所有者创建前，初始化令牌 `HTTP_TOKEN` 等于全权凭据）；Remote Console 登录与权限见 [docs/console/access-control.md](docs/console/access-control.md)
 
 2. **插件系统**
    - 插件在同一进程中运行，具有完整的系统访问权限
@@ -206,7 +207,7 @@ Zhin.js 团队和社区非常重视安全问题。我们感谢您帮助我们保
 
 5. **文件监听性能**
    - 避免监听 `node_modules` 等大型目录
-   - 在生产环境中禁用文件监听（`zhin runtime start --mode production --no-watch`）
+   - 在生产环境中禁用文件监听（`zhin start --foreground --mode production --no-watch`）
    - 监听大量文件可能导致服务器资源耗尽（inotify 限制）
    - 开发时用 `--watch source config` 只监听项目源码与配置
 
@@ -293,7 +294,8 @@ We currently do not have a formal bug bounty program, but we will:
 
 2. **Protect Credentials**
    - Never commit `.env` files to version control
-   - Use strong passwords for Web console
+   - Use strong passwords for Console accounts; `HTTP_TOKEN` is only a bootstrap token — use a random value, create the first owner with it (or `zhin console init`) before exposing the port, after which it is refused everywhere
+   - Give automation an API token issued by an account (`ZHIN_CONSOLE_TOKEN`), never more than that account's permissions
    - Regularly rotate API keys and tokens
 
 3. **Access Control**
@@ -317,7 +319,7 @@ We currently do not have a formal bug bounty program, but we will:
    - Turn off file watching and hot reload in production; use environment variables to distinguish dev and production configs
    ```bash
    # Production startup (this is what `pnpm start` runs in a scaffolded project)
-   zhin runtime start --mode production --no-watch
+   zhin start --foreground --mode production --no-watch
    ```
    - Declare only the plugins you need under `plugins` in `zhin.config.yml`; undeclared packages are not loaded
    ```yaml
@@ -372,7 +374,7 @@ We currently do not have a formal bug bounty program, but we will:
 
    export default defineCommand({
      description: 'Admin operation',
-     permit: ['role(master,admin)'],
+     permit: ['admin'],
      async execute() {
        // Admin operations
        return 'Done'
@@ -433,7 +435,7 @@ We currently do not have a formal bug bounty program, but we will:
 
 5. **File Watching Performance**
    - Avoid watching large directories like `node_modules`
-   - Disable file watching in production (`zhin runtime start --mode production --no-watch`)
+   - Disable file watching in production (`zhin start --foreground --mode production --no-watch`)
    - Watching too many files can exhaust server resources (inotify limits)
    - In development, `--watch source config` watches only project sources and configuration
 

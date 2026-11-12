@@ -16,7 +16,7 @@ import { defineCommand } from 'zhin.js/command';
 export default defineCommand({
   description: 'List GitHub issues',
   alias: ['issues'],                 // 可多词；owner 不参与用户路由
-  permit: ['adapter(icqq)', 'role(master)'], // 数组 AND；失败返回 denied
+  permit: ['adapter(icqq)', 'owner'], // 数组 AND；失败返回 denied
   // shortcut: { '列 issue': {} },   // 全局整句
   execute: ({ args }) => `issues:${args.join(',')}`,
 });

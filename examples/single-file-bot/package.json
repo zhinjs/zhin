@@ -5,18 +5,19 @@
   "description": "Zhin.js single-file bot: one bot.ts is the whole bot",
   "type": "module",
   "scripts": {
-    "dev": "zhin runtime start --watch source config",
-    "start": "zhin runtime start --mode production --no-watch",
+    "dev": "zhin start --foreground --watch source config",
+    "start": "zhin start --foreground --mode production --no-watch",
     "build": "tsc --noEmit",
     "test": "vitest run --root ../.. examples/single-file-bot/tests"
   },
   "dependencies": {
     "@zhin.js/adapter-sandbox": "workspace:*",
-    "zhin.js": "workspace:*"
+    "zhin.js": "workspace:*",
+    "@zhin.js/cli": "workspace:*",
+    "@zhin.js/gateway": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^25.9.5",
-    "@zhin.js/cli": "workspace:*",
     "typescript": "^6.0.3"
   },
   "engines": {

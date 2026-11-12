@@ -99,9 +99,9 @@ function executionContext(): ToolExecutionContext {
     turnId: 'turn',
     sessionKey: 'session',
     origin: { kind: 'internal', source: 'test' },
-    principal: { subjectId: 'owner', roles: ['master'] },
+    principal: { subjectId: 'owner', roles: ['owner'] },
     policy: {
-      permissions: ['master'],
+      permissions: ['owner'],
       unattended: false,
       network: { enabled: false },
       shell: { security: 'full', approvalMode: 'bypass', isolation: 'required' },

@@ -117,18 +117,21 @@ async function project(extra: Record<string, unknown> = {}): Promise<string> {
 async function completedProject(source: string): Promise<string> {
   const root = await project({
     private: true,
+    // A bot project keeps zhin.js, the CLI and the gateway together in dependencies.
     dependencies: {
       '@zhin.js/runtime': 'latest',
       'zhin.js': 'latest',
+      '@zhin.js/cli': 'latest',
+      '@zhin.js/gateway': 'latest',
     },
     devDependencies: {
-      '@zhin.js/cli': 'latest',
       typescript: 'latest',
     },
     scripts: {
+      // `zhin runtime start` stays an accepted alias of `zhin start --foreground`.
       dev: 'zhin runtime start',
-      start: 'zhin runtime start',
-      daemon: 'zhin runtime start --daemon',
+      start: 'zhin start --foreground --mode production --no-watch',
+      daemon: 'zhin start --mode production --no-watch',
       build: 'tsc --noEmit',
     },
     zhin: {

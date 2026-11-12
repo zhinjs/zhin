@@ -14,6 +14,12 @@ import {
   type InstanceWsOpenInfo,
 } from '@zhin.js/host-http/bridge';
 import { installTestConsoleUsers } from '../utils/console-users.js';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createLocalGatewayFetch } from '../../src/local/client.js';
+import { createLocalRpcHandler } from '../../src/local/handler.js';
+import { LocalControlServer } from '../../src/local/local-socket.js';
 
 /** In-memory stand-in for the bridge transport: records requests, echoes WebSocket frames. */
 class FakeTransport implements InstanceTransport {
@@ -385,7 +391,9 @@ describe('GatewayHttpServer instance availability', () => {
 
     // Gateway-owned routes keep working.
     expect((await fetch(`${origin}/api/gateway/ping`)).status).toBe(200);
-    expect(await (await fetch(`${origin}/pub/health`)).json()).toMatchObject({ instance: { state: 'backoff', ready: false } });
+    const health = await fetch(`${origin}/pub/health`);
+    expect(health.headers.get('cache-control')).toBe('no-store');
+    expect(await health.json()).toMatchObject({ success: true, status: 'ok', instance: { state: 'backoff', ready: false } });
 
     await expect(new Promise((resolve, reject) => {
       const socket = new WebSocket(`${origin.replace('http', 'ws')}/adapter/reverse`);
@@ -426,19 +434,21 @@ describe('GatewayHttpServer instance availability', () => {
     const offline = await fetch(`${origin}/webhook/x`);
     expect(offline.status).toBe(503);
     expect(offline.headers.get('retry-after')).toBe('7');
-    expect(await offline.json()).toMatchObject({ code: 'instance_unavailable', state: 'stopping' });
+    expect(await offline.json()).toEqual({ success: false, code: 'instance_unavailable', requestOutcome: 'not-dispatched', state: 'stopping', error: expect.any(String) });
     transport.handler = async () => { throw new InstanceTransportError('timeout', 'slow'); };
     const timeout = await fetch(`${origin}/webhook/x`);
     expect(timeout.status).toBe(504);
-    expect(await timeout.json()).toMatchObject({ code: 'instance_timeout' });
+    expect(timeout.headers.get('retry-after')).toBeNull();
+    expect(await timeout.json()).toEqual({ success: false, code: 'instance_timeout', requestOutcome: 'unknown', state: 'stopping', error: expect.any(String) });
     transport.handler = async () => { throw new InstanceTransportError('instance-error', 'handler failed'); };
     const failed = await fetch(`${origin}/webhook/x`);
     expect(failed.status).toBe(502);
-    expect(await failed.json()).toMatchObject({ code: 'instance_error' });
+    expect(await failed.json()).toEqual({ success: false, code: 'instance_error', requestOutcome: 'unknown', state: 'stopping', error: expect.any(String) });
     transport.handler = async () => { throw new InstanceTransportError('overloaded', 'busy'); };
     const busy = await fetch(`${origin}/webhook/x`);
     expect(busy.status).toBe(502);
     expect(busy.headers.get('retry-after')).toBe('7');
+    expect(await busy.json()).toMatchObject({ code: 'instance_error', requestOutcome: 'not-dispatched' });
   });
 });
 
@@ -501,5 +511,138 @@ describe('GatewayHttpServer http.trustProxy', () => {
     expect(transport.requests[0]!.context.remoteAddress).toBe('203.0.113.6');
     await reverseSocket(origin, { 'x-forwarded-for': '203.0.113.7' });
     expect((await waitFor(() => transport.sockets[0])).info.remoteAddress).toBe('203.0.113.7');
+  });
+});
+
+describe.runIf(process.platform !== 'win32')('GatewayHttpServer local requests (gateway.http.request)', () => {
+  it('runs {base} requests from the local socket as the local owner, without a token', async () => {
+    const transport = new FakeTransport();
+    const { server } = await startServer(transport, { rpc: true });
+    withUsers(server);
+    const root = await mkdtemp(join(tmpdir(), 'zgw-'));
+    const control = await LocalControlServer.open({ path: join(root, '.zhin', 'gateway.sock') });
+    try {
+      control.setHandler(createLocalRpcHandler({
+        dispatch: async () => ({ ok: false, error: { code: 'unmapped', message: 'n/a', status: 403 } }),
+        info: () => { throw new Error('unused'); },
+        shutdown: () => undefined,
+        http: (request) => server.localRequest(request),
+      }));
+      const local = createLocalGatewayFetch({ root });
+      // Forwarded to the instance with the owner principal (the instance authorizes it).
+      const jobs = await local('http://127.0.0.1:1/api/assistant/jobs?limit=2');
+      expect(jobs.status).toBe(200);
+      expect(await jobs.json()).toMatchObject({ from: 'instance', path: '/api/assistant/jobs' });
+      expect(transport.requests.at(-1)!.context.principal).toMatchObject({ kind: 'user', userId: 'local', roles: ['owner'] });
+      expect(new URL(transport.requests.at(-1)!.request.url).search).toBe('?limit=2');
+      // Console RPC keeps its split: gateway.* answered by the gateway, the rest forwarded.
+      const status = await local('http://x/api/console/request', { method: 'POST', body: JSON.stringify({ type: 'gateway.instance.status', requestId: 1 }) });
+      expect(await status.json()).toMatchObject({ success: true, data: { state: 'running' } });
+      const config = await local('http://x/api/console/request', { method: 'POST', body: JSON.stringify({ type: 'config:get-project', requestId: 2 }) });
+      expect(config.status).toBe(200);
+      expect(transport.requests.at(-1)!.body).toContain('config:get-project');
+      // Only {base}/… is reachable; the instance being offline keeps the documented reply.
+      expect((await local('http://x/webhook/x')).status).toBe(404);
+      transport.ready = false;
+      const offline = await local('http://x/api/system/status');
+      expect(offline.status).toBe(503);
+      expect(offline.headers.get('retry-after')).toBe('7');
+      expect(await offline.json()).toMatchObject({ code: 'instance_unavailable' });
+    } finally {
+      await control.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('runs a request with an explicit token as that principal, not as the local owner', async () => {
+    const transport = new FakeTransport();
+    const { server } = await startServer(transport, { rpc: true });
+    withUsers(server);
+    const root = await mkdtemp(join(tmpdir(), 'zgw-'));
+    const control = await LocalControlServer.open({ path: join(root, '.zhin', 'gateway.sock') });
+    try {
+      control.setHandler(createLocalRpcHandler({
+        dispatch: async () => ({ ok: false, error: { code: 'unmapped', message: 'n/a', status: 403 } }),
+        info: () => { throw new Error('unused'); },
+        shutdown: () => undefined,
+        http: (request) => server.localRequest(request),
+      }));
+      const local = createLocalGatewayFetch({ root });
+      const post = (token: string, body: unknown) => local('http://x/api/console/request', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      // viewer lacks ops.restart: the token's own permissions apply.
+      const denied = await post('viewer-token', { type: 'gateway.instance.restart', requestId: 'r1' });
+      expect(denied.status).toBe(403);
+      const forwarded = await local('http://x/api/assistant/jobs', { headers: new Headers({ Authorization: 'Bearer viewer-token' }) });
+      expect(forwarded.status).toBe(200);
+      expect(transport.requests.at(-1)!.context.principal).toMatchObject({ kind: 'user', roles: ['viewer'] });
+      expect(transport.requests.at(-1)!.context.principal).not.toMatchObject({ userId: 'local' });
+      // An invalid token is refused, never upgraded to the local owner.
+      expect((await local('http://x/api/assistant/jobs', { headers: { authorization: 'Bearer wrong' } })).status).toBe(401);
+    } finally {
+      await control.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('validates the path and body, and reaches gateway-owned routes', async () => {
+    const transport = new FakeTransport();
+    const { server } = await startServer(transport, { rpc: true });
+    server.route('GET', '/api/auth/me', (_request, context) => jsonResponse(200, { gateway: true, user: context.principal && 'userId' in context.principal ? context.principal.userId : null }));
+    // `\` would rewrite the host; GET bodies are refused before a Request is built.
+    expect((await server.localRequest({ method: 'GET', path: '/\\evil.com/api/x' })).status).toBe(400);
+    expect((await server.localRequest({ method: 'GET', path: '/api/x', body: '{}' })).status).toBe(400);
+    expect(transport.requests).toHaveLength(0);
+    // Gateway-owned routes take precedence over the instance, as over HTTP.
+    const own = await server.localRequest({ method: 'GET', path: '/api/auth/me' });
+    expect(await own.json()).toEqual({ gateway: true, user: 'local' });
+    expect(transport.requests).toHaveLength(0);
+  });
+
+  it('honours http.apiBase "/"', async () => {
+    const transport = new FakeTransport();
+    const server = new GatewayHttpServer({
+      http: { host: '127.0.0.1', port: 0, apiBase: '/' },
+      instance: { transport: () => transport, state: () => 'running' },
+    });
+    servers.push(server);
+    const response = await server.localRequest({ method: 'POST', path: '/console/request', body: JSON.stringify({ type: 'config:get', requestId: 1 }) });
+    expect(response.status).toBe(200);
+    expect(transport.requests.at(-1)!.context.principal).toMatchObject({ userId: 'local' });
+  });
+
+  it('refuses event streams and oversized UTF-8 replies with a "use HTTP" hint', async () => {
+    const stream = new ReadableStream<Uint8Array>({ start: () => undefined });
+    const handler = createLocalRpcHandler({
+      dispatch: async () => ({ ok: true, data: null }),
+      info: () => { throw new Error('unused'); },
+      shutdown: () => undefined,
+      http: async (request) => request.path === '/api/events'
+        ? new Response(stream, { headers: { 'content-type': 'text/event-stream' } })
+        // 400 000 CJK characters: under 512 Ki UTF-16 units, ~1.2 MB as UTF-8.
+        : new Response('中'.repeat(400_000), { headers: { 'content-type': 'text/plain' } }),
+    });
+    const sse = await handler({ id: 1, type: 'gateway.http.request', data: { method: 'GET', path: '/api/events' } }, () => undefined);
+    expect(sse).toMatchObject({ ok: false, error: { code: 'unavailable', message: expect.stringContaining('HTTP') } });
+    const big = await handler({ id: 2, type: 'gateway.http.request', data: { method: 'GET', path: '/api/big' } }, () => undefined);
+    expect(big).toMatchObject({ ok: false, error: { status: 502, message: expect.stringContaining('HTTP') } });
+    const bodyTooBig = await handler({ id: 3, type: 'gateway.http.request', data: { method: 'POST', path: '/api/x', body: '中'.repeat(400_000) } }, () => undefined);
+    expect(bodyTooBig).toMatchObject({ ok: false, error: { status: 413 } });
+    const getBody = await handler({ id: 4, type: 'gateway.http.request', data: { method: 'GET', path: '/api/x', body: '{}' } }, () => undefined);
+    expect(getBody).toMatchObject({ ok: false, error: { status: 400 } });
+    const backslash = await handler({ id: 5, type: 'gateway.http.request', data: { method: 'GET', path: '/\\evil.com/api' } }, () => undefined);
+    expect(backslash).toMatchObject({ ok: false, error: { status: 400 } });
+  });
+
+  it('rejects like a refused connection when no gateway runs', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zgw-'));
+    try {
+      await expect(createLocalGatewayFetch({ root })('http://x/api/stats')).rejects.toMatchObject({ cause: { code: 'ECONNREFUSED' } });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });

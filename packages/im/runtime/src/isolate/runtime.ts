@@ -39,6 +39,12 @@ export type IsolatedHostMethod = (
 export interface NodeIsolatedPluginRuntimeOptions {
   readonly mode?: IsolateMode;
   readonly requestTimeoutMs?: number;
+  /**
+   * Budget for `prepare`, which also starts the Worker / process and imports the entry.
+   * Defaults to the larger of `requestTimeoutMs` and 10 s, so a short per-call timeout
+   * does not fail a slow (loaded) host while the isolate is still starting.
+   */
+  readonly startTimeoutMs?: number;
   readonly hostMethods?: Readonly<Record<string, IsolatedHostMethod>>;
   readonly onCrash?: (owner: PluginId, error: Error) => void;
 }
@@ -47,11 +53,13 @@ export interface NodeIsolatedPluginRuntimeOptions {
 export class NodeIsolatedPluginRuntime implements IsolatedPluginRuntimePort {
   readonly #mode: IsolateMode;
   readonly #requestTimeoutMs: number;
+  readonly #startTimeoutMs: number;
   readonly #hostMethods: Readonly<Record<string, IsolatedHostMethod>>;
   readonly #onCrash?: (owner: PluginId, error: Error) => void;
   constructor(options: NodeIsolatedPluginRuntimeOptions = {}) {
     this.#mode = options.mode ?? 'worker';
     this.#requestTimeoutMs = options.requestTimeoutMs ?? 10_000;
+    this.#startTimeoutMs = options.startTimeoutMs ?? Math.max(this.#requestTimeoutMs, 10_000);
     this.#hostMethods = Object.freeze({ ...options.hostMethods });
     this.#onCrash = options.onCrash;
   }
@@ -78,7 +86,7 @@ export class NodeIsolatedPluginRuntime implements IsolatedPluginRuntimePort {
       }>('prepare', {
         ...request,
         entry: pathToFileURL(request.entry).href,
-      }, signal);
+      }, signal, this.#startTimeoutMs);
       return {
         descriptor,
         controlEvent: (name, event) => instance.controlEvent(name, event),
@@ -181,19 +189,19 @@ class IsolatedInstance implements IsolatedPluginHandle {
     finally { event.signal.removeEventListener('abort', abort); }
   }
 
-  request<TResult = unknown>(method: RequestMessage['method'], payload?: unknown): Promise<TResult> {
+  request<TResult = unknown>(method: RequestMessage['method'], payload?: unknown, timeoutMs: number = this.timeoutMs): Promise<TResult> {
     if (this.#closed) return Promise.reject(new Error(`Isolated Plugin ${this.owner} is closed`));
     const id = this.#nextRequest++;
     return new Promise<TResult>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.#pending.delete(id);
-        const error = new Error(`Isolated request timed out after ${this.timeoutMs}ms: ${method}`);
+        const error = new Error(`Isolated request timed out after ${timeoutMs}ms: ${method}`);
         reject(error);
         // A timed-out remote call may still mutate state. Retiring the whole
         // instance preserves the generation boundary instead of faking drain.
         this.#fail(error);
         void this.transport.close();
-      }, this.timeoutMs);
+      }, timeoutMs);
       this.#pending.set(id, {
         resolve: (value) => resolve(value as TResult),
         reject,
@@ -207,6 +215,7 @@ class IsolatedInstance implements IsolatedPluginHandle {
     method: RequestMessage['method'],
     payload: unknown,
     signal: AbortSignal,
+    timeoutMs?: number,
   ): Promise<TResult> {
     signal.throwIfAborted();
     let abort!: () => void;
@@ -227,7 +236,7 @@ class IsolatedInstance implements IsolatedPluginHandle {
     });
     signal.addEventListener('abort', abort, { once: true });
     try {
-      return await Promise.race([this.request<TResult>(method, payload), aborted]);
+      return await Promise.race([this.request<TResult>(method, payload, timeoutMs), aborted]);
     } finally {
       signal.removeEventListener('abort', abort);
     }

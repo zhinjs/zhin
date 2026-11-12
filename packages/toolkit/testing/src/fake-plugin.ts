@@ -2,7 +2,7 @@ import {
   DisposeStack, GenerationHandoffStack, PluginDatabaseHost, PluginOutboundHost, PluginScheduleHost, createPluginEventChannel,
   Scope, databaseHostToken, outboundHostToken, qualifyPluginResourceName, rootPluginId, scheduleHostToken,
   type Dispose, type FeatureId, type PluginDefinition, type PluginId, type PluginNodeSnapshot,
-  type PluginSetupContext, type Token, type PluginLifecycleEventMap,
+  type PluginSetupContext, type Token, type PluginLifecycleEventMap, type FeatureTarget,
 } from 'zhin.js/plugin-runtime';
 import type { CapabilityContext } from 'zhin.js';
 import { parsePluginConfigSchema } from '@zhin.js/runtime';
@@ -31,6 +31,18 @@ export interface FakePluginOptions<TConfig = unknown> {
   /** Feature projections returned by `capabilityContext().project()`. */
   readonly projections?: ReadonlyMap<FeatureId, unknown>;
   readonly generation?: number;
+  /**
+   * Layered feature view behind `context.isEnabledFor` / `context.configFor` (ADR 0050 / 0055).
+   * Defaults: enabled everywhere, and `configFor` returns the global config. The callbacks are read
+   * on every call, so a test can switch a conversation off after setup.
+   */
+  readonly feature?: FakeFeatureView<TConfig>;
+}
+
+/** Test double of the layered feature resolution; `configFor` returns a patch merged over the global config. */
+export interface FakeFeatureView<TConfig = unknown> {
+  readonly isEnabledFor?: (target: FeatureTarget) => boolean;
+  readonly configFor?: (target: FeatureTarget) => Partial<TConfig> | undefined;
 }
 
 /** A capability registered through `context.addFeature` / `context.addCommand` / `context.addXxx`. */
@@ -68,12 +80,14 @@ export class FakePlugin<TConfig = unknown> {
   readonly #abort = new AbortController();
   readonly #events = createPluginEventChannel();
   readonly #context: PluginSetupContext<TConfig>;
+  readonly #feature: FakeFeatureView<TConfig>;
 
   constructor(options: FakePluginOptions<TConfig> = {}) {
     this.name = options.name ?? 'test-plugin';
     this.config = (options.config ?? {}) as TConfig;
     this.generation = options.generation ?? 1;
     this.projections = options.projections ?? new Map();
+    this.#feature = options.feature ?? {};
     this.clock = options.clock instanceof FakeClock ? options.clock : new FakeClock(options.clock);
     this.scheduleHost = new FakeScheduleRootHost(this.clock);
     this.resources = new Scope(this.id, undefined, this.lifecycle);
@@ -150,6 +164,8 @@ export class FakePlugin<TConfig = unknown> {
       resources: this.resources,
       lifecycle: this.lifecycle,
       handoff: this.handoff,
+      isEnabledFor: (target: FeatureTarget) => this.#feature.isEnabledFor?.(target) ?? true,
+      configFor: (target: FeatureTarget) => Object.freeze({ ...this.config, ...(this.#feature.configFor?.(target) ?? {}) }) as Readonly<TConfig>,
       addFeature: (feature: FeatureId | string, localName: string, definition: unknown) => {
         this.features.push({ kind: String(feature), localName, definition });
       },

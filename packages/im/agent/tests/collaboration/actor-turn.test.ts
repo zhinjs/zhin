@@ -31,7 +31,7 @@ import { PromptController } from '../../src/turn/prompt-controller.js';
 import { executionBundle } from '../helpers/execution-bundle.js';
 
 const SHELL_POLICY: TurnPolicyContext = Object.freeze({
-  permissions: ['master'],
+  permissions: ['owner'],
   unattended: false,
   shell: { security: 'allowlist', execPreset: 'development', approvalMode: 'auto', isolation: 'required' },
   filesystem: { workspaceRoot: '/ws', workingDirectory: '/ws', access: 'workspace-write' },
@@ -100,7 +100,7 @@ function setup(options: {
     intent: { kind: 'new' },
     identity: { rootId: 'root', generation: 3, traceId: 'trace', turnId: 'turn-1' },
     origin: { kind: 'im', platform: 'icqq', endpoint: 'bot', scope: 'private', sceneId: 'owner', messageId: 'm-1' },
-    principal: { subjectId: 'owner', roles: ['master'] },
+    principal: { subjectId: 'owner', roles: ['owner'] },
     input: { text: 'hi', locale: 'en', commandPrefix: '!!', commandMenu: '!!menu' },
     session: { key: 'im:icqq:bot:private:owner' },
     policy: SHELL_POLICY,

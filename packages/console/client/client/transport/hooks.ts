@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useConsoleClient } from "../console-client-context.js";
 import type { UseConsoleTransportOptions } from "./types.js";
+import type { GatewayPackageTransactionResult } from "@zhin.js/console-protocol";
 
 /**
  * 每次连接会话只对同一 key 自动加载一次：失败后不再零退避死循环
@@ -183,7 +184,24 @@ export function useConfigSource() {
   );
 }
 
-/** Shared Console flow for previewing and committing a plugin installation. */
+/**
+ * A rolled-back (or not fully rolled-back) gateway transaction resolves with `ok: false`; the
+ * hook reports it as its `error` like a rejected request.
+ */
+export function transactionFailure(result: GatewayPackageTransactionResult): string | null {
+  if (result.ok) return null;
+  const reason = result.error ?? '依赖事务失败';
+  return result.status === 'rolledBack'
+    ? `${reason}（已回滚${result.failedPhase ? `，失败阶段 ${result.failedPhase}` : ''}）`
+    : `${reason}（回滚未完成${result.rollbackError ? `：${result.rollbackError}` : ''}）`;
+}
+
+/**
+ * Shared Console flow for previewing and committing a plugin installation. The preview is the
+ * instance's read-only plan; the gateway transaction does not take its revision (it has no
+ * `expectedRevision`): it re-reads the project files after stopping the instance and refuses a
+ * root config that changes during the transaction, so the preview is informational.
+ */
 export function usePluginInstall() {
   const wsManager = useConsoleClient().transport;
   const [loading, setLoading] = useState(false);
@@ -205,11 +223,14 @@ export function usePluginInstall() {
     }
   }, [wsManager]);
 
-  const install = useCallback(async (packageName: string, expectedRevision?: string) => {
+  /** Gateway dependency transaction (`gateway.packages.install`); check `ok` / `needsConfiguration`. */
+  const install = useCallback(async (packageName: string) => {
     setLoading(true);
     setError(null);
     try {
-      return await wsManager.installPlugin(packageName, expectedRevision);
+      const result = await wsManager.installPlugin(packageName);
+      setError(transactionFailure(result));
+      return result;
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unknown error');
       throw e;
@@ -296,11 +317,14 @@ export function usePluginUninstall() {
       setLoading(false);
     }
   }, [wsManager]);
-  const uninstall = useCallback(async (packageName: string, expectedRevision?: string) => {
+  /** Gateway dependency transaction (`gateway.packages.uninstall`). */
+  const uninstall = useCallback(async (packageName: string) => {
     setLoading(true);
     setError(null);
     try {
-      return await wsManager.uninstallPlugin(packageName, expectedRevision);
+      const result = await wsManager.uninstallPlugin(packageName);
+      setError(transactionFailure(result));
+      return result;
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unknown error');
       throw e;
@@ -327,10 +351,15 @@ export function usePluginUpdate() {
       })
       .finally(() => setLoading(false));
   }, [wsManager]);
-  const update = useCallback((packageName: string, targetVersion: string, expectedRevision?: string) => {
+  /** Gateway dependency transaction (`gateway.packages.update` with `name@version`). */
+  const update = useCallback((packageName: string, targetVersion: string) => {
     setLoading(true);
     setError(null);
-    return wsManager.updatePlugin(packageName, targetVersion, expectedRevision)
+    return wsManager.updatePlugin(packageName, targetVersion)
+      .then((result) => {
+        setError(transactionFailure(result));
+        return result;
+      })
       .catch((e) => {
         setError(e instanceof Error ? e.message : 'Unknown error');
         throw e;

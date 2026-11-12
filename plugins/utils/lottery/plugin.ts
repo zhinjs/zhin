@@ -87,18 +87,25 @@ export default definePlugin<LotteryConfig>({
       const outbound = context.resources.use(outboundHostToken);
       outboundPush = async (text) => {
         for (const target of config.pushTargets) {
+          const endpointKey = target.endpointKey || target.adapter;
+          const kind = (target.channelType || 'private') as 'private' | 'group' | 'channel';
+          // ADR 0050 / 0055: scheduled reports are not messages; skip accounts / conversations where lottery is off.
+          // The selector resolves through the same AdapterIndex path as the send below; an unresolvable
+          // target falls back to the global switch and is delivered (or rejected) as before.
+          let enabled = true;
+          try {
+            enabled = context.isEnabledFor({ endpoint: { adapter: target.adapter, endpointKey }, conversation: { kind, id: target.channelId } });
+          } catch { enabled = true; }
+          if (!enabled) continue;
           try {
             await outbound.send({
               adapter: target.adapter,
-              endpointKey: target.endpointKey || target.adapter,
-              conversation: {
-                kind: (target.channelType || 'private') as 'private' | 'group' | 'channel',
-                id: target.channelId,
-              },
+              endpointKey,
+              conversation: { kind, id: target.channelId },
               content: text,
             });
           } catch {
-            // OutboundHost logs; continue remaining targets.
+            // OutboundHost logs; an unresolvable target is skipped. Continue remaining targets.
           }
         }
       };

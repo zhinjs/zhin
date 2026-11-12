@@ -12,7 +12,7 @@ export default defineEvalCase({
     scope: 'group',
     mentions: ['architect'],
     endpointId: 'bot-arch',
-    sender: { id: 'master', roles: ['master'] },
+    sender: { id: 'master', chatRole: 'owner' },
   },
   tools: [{ name: 'draft_migration', result: 'ALTER TABLE users ADD COLUMN tenant_id TEXT;' }],
   agents: [

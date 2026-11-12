@@ -56,6 +56,8 @@ export interface RegisterConsoleRoutesOptions {
   readonly hostConsoleRpc?: import('./plugin-console-rpc.js').HostConsoleRpcFactory;
   /** Console access control (ADR 0049), installed by `installConsoleIam`. */
   readonly consoleIam?: () => import('@zhin.js/gateway/iam').ConsoleIamService | undefined;
+  /** Conversation-level feature overrides and in-chat feature admins (ADR 0055). */
+  readonly featureStores?: import('./console-feature-rpc.js').FeatureStores;
 }
 
 /** Registers the Console HTTP surface without installing process-level subscriptions. */
@@ -138,6 +140,7 @@ export function registerConsoleRoutes(options: RegisterConsoleRoutesOptions): vo
     snapshots,
     ...(options.hostConsoleRpc ? { hostConsoleRpc: options.hostConsoleRpc } : {}),
     ...(options.consoleIam ? { consoleIam: options.consoleIam } : {}),
+    ...(options.featureStores ? { featureStores: options.featureStores } : {}),
   });
   registerConsoleEventRoutes({ http, base, consoleRuntime, hub: eventHub });
   registerAgentConsoleRoutes({ http, base, snapshots, projectRoot });

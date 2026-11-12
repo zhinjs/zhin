@@ -6,9 +6,10 @@
 import type { ValidateFunction } from 'ajv/dist/2020.js';
 import {
   FEATURE_ADAPTER_KEY_PATTERN, FEATURE_CONFIG_LEVELS, FEATURE_ENABLED_KEY, FEATURE_ENDPOINT_KEY_PATTERN,
-  FEATURE_OVERRIDES_KEY, escapeJsonPointerSegment, readFeatureOverrides, readPluginConfigBlock, readPrimaryConfig,
+  FEATURE_OVERRIDES_KEY, escapeJsonPointerSegment, featureConversationEntry, featureInstancePath,
+  parseFeatureResolutionKey, readFeatureConversationOverrides, readFeatureOverrides, readPluginConfigBlock, readPrimaryConfig,
   resolveFeatureEnabled, resolveFeatureTargetKey, resolveLayeredConfig,
-  type FeatureConfigLevel, type FeatureTarget, type LayeredConfigResolution, type PluginId, type PrimaryConfig,
+  type FeatureConfigLevel, type FeatureOverrideEntry, type FeatureTarget, type LayeredConfigResolution, type PluginId, type PrimaryConfig,
   type RuntimeConfigDocument, type RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
 import { configurationValidator, type JsonSchema } from './config-composer.js';
@@ -17,8 +18,11 @@ export type { FeatureConfigLevel } from '@zhin.js/plugin-runtime';
 
 type SchemaRecord = Record<string, unknown>;
 const record = (value: unknown): value is SchemaRecord => !!value && typeof value === 'object' && !Array.isArray(value);
+/** Override levels stored in the configuration file (`overrides.adapters` / `overrides.endpoints`). */
 const OVERRIDE_LEVELS = ['adapter', 'endpoint'] as const;
-export type FeatureOverrideLevel = typeof OVERRIDE_LEVELS[number];
+export type FeatureFileOverrideLevel = typeof OVERRIDE_LEVELS[number];
+/** Every override level; `conversation` is stored in the project database (ADR 0055). */
+export type FeatureOverrideLevel = FeatureFileOverrideLevel | 'conversation';
 /** Framework-injected fields that never take part in per-endpoint overrides. */
 const NON_OVERRIDABLE_FIELDS: ReadonlySet<string> = new Set(['commandNamespace', 'disabledCommands', FEATURE_OVERRIDES_KEY, FEATURE_ENABLED_KEY]);
 
@@ -28,9 +32,10 @@ function readLevels(metadata: unknown, label: string): readonly FeatureConfigLev
   if (!Array.isArray(levels) || levels.length === 0
     || levels.some(level => typeof level !== 'string' || !FEATURE_CONFIG_LEVELS.includes(level as FeatureConfigLevel))
     || new Set(levels).size !== levels.length) {
-    throw new TypeError(`${label} x-zhin-config.levels must be a non-empty, duplicate-free subset of global, adapter, endpoint`);
+    throw new TypeError(`${label} x-zhin-config.levels must be a non-empty, duplicate-free subset of global, adapter, endpoint, conversation`);
   }
   if (!levels.includes('global')) throw new TypeError(`${label} x-zhin-config.levels must include global`);
+  if (levels.includes('conversation') && !levels.includes('endpoint')) throw new TypeError(`${label} x-zhin-config.levels with conversation must include endpoint`);
   return Object.freeze(FEATURE_CONFIG_LEVELS.filter(level => levels.includes(level)));
 }
 
@@ -48,7 +53,71 @@ export function readFieldLevels(rootLevels: readonly FeatureConfigLevel[], field
   return own;
 }
 
-/** Throws when the root or any property declares invalid or widening levels. */
+function readFieldList(metadata: SchemaRecord, name: 'conversationFields' | 'selfServiceFields' | 'chatAdminFields'): readonly string[] | undefined {
+  const value = metadata[name];
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.some(field => typeof field !== 'string' || !field) || new Set(value).size !== value.length) {
+    throw new TypeError(`Plugin config schema x-zhin-config.${name} must be a duplicate-free array of field names`);
+  }
+  return Object.freeze([...value] as string[]);
+}
+
+export interface FeatureConversationDeclaration {
+  /** Fields editable at the conversation level (Console); empty: enable switch only. */
+  readonly conversationFields: readonly string[];
+  /** Fields group admins may change in chat; always a subset of `conversationFields`. */
+  readonly selfServiceFields: readonly string[];
+  /**
+   * Fields feature admins may change in chat above the conversation level (endpoint / adapter /
+   * global); defaults to `selfServiceFields`. Each level still applies its own `levels` filter.
+   */
+  readonly chatAdminFields: readonly string[];
+}
+
+/**
+ * Root `x-zhin-config.conversationFields` / `selfServiceFields` (ADR 0055 §2). Both require
+ * `levels` to include `conversation`; each field must be an own property that allows the
+ * conversation level, and self-service fields must also be conversation fields.
+ */
+export function readFeatureConversationDeclaration(schema: JsonSchema | null | undefined): FeatureConversationDeclaration {
+  const empty = Object.freeze({ conversationFields: Object.freeze([] as string[]), selfServiceFields: Object.freeze([] as string[]),
+    chatAdminFields: Object.freeze([] as string[]) });
+  const metadata = schema && record(schema['x-zhin-config']) ? schema['x-zhin-config'] : undefined;
+  if (!schema || !metadata) return empty;
+  const conversationFields = readFieldList(metadata, 'conversationFields');
+  const selfServiceFields = readFieldList(metadata, 'selfServiceFields');
+  const chatAdminFields = readFieldList(metadata, 'chatAdminFields');
+  const properties = record(schema.properties) ? schema.properties : {};
+  for (const field of chatAdminFields ?? []) {
+    if (NON_OVERRIDABLE_FIELDS.has(field) || !Object.hasOwn(properties, field)) {
+      throw new TypeError(`Plugin config schema x-zhin-config.chatAdminFields names unknown field ${field}`);
+    }
+  }
+  if (!conversationFields && !selfServiceFields) {
+    return chatAdminFields ? Object.freeze({ ...empty, chatAdminFields }) : empty;
+  }
+  const root = readFeatureLevels(schema);
+  if (!root.includes('conversation')) {
+    throw new TypeError('Plugin config schema x-zhin-config.conversationFields / selfServiceFields require levels to include conversation');
+  }
+  for (const field of conversationFields ?? []) {
+    if (NON_OVERRIDABLE_FIELDS.has(field) || !Object.hasOwn(properties, field)) {
+      throw new TypeError(`Plugin config schema x-zhin-config.conversationFields names unknown field ${field}`);
+    }
+    if (!readFieldLevels(root, field, properties[field]).includes('conversation')) {
+      throw new TypeError(`Plugin config schema x-zhin-config.conversationFields: field ${field} does not allow the conversation level`);
+    }
+  }
+  for (const field of selfServiceFields ?? []) {
+    if (!conversationFields?.includes(field)) {
+      throw new TypeError(`Plugin config schema x-zhin-config.selfServiceFields: field ${field} must also be listed in conversationFields`);
+    }
+  }
+  return Object.freeze({ conversationFields: conversationFields ?? Object.freeze([]), selfServiceFields: selfServiceFields ?? Object.freeze([]),
+    chatAdminFields: chatAdminFields ?? selfServiceFields ?? Object.freeze([]) });
+}
+
+/** Throws when the root or any property declares invalid or widening levels, or invalid conversation fields. */
 export function assertFeatureLevelDeclarations(schema: JsonSchema, label = 'Plugin config schema'): void {
   let root: readonly FeatureConfigLevel[];
   try { root = readFeatureLevels(schema); } catch (error) { throw new TypeError(`${label}: ${(error as Error).message}`); }
@@ -56,12 +125,14 @@ export function assertFeatureLevelDeclarations(schema: JsonSchema, label = 'Plug
   for (const [field, child] of Object.entries(properties)) {
     try { readFieldLevels(root, field, child); } catch (error) { throw new TypeError(`${label}: ${(error as Error).message}`); }
   }
+  try { readFeatureConversationDeclaration(schema); } catch (error) { throw new TypeError(`${label}: ${(error as Error).message}`); }
 }
 
-/** Own fields that may be overridden at `level`. */
+/** Own fields that may be overridden at `level` (conversation: the declared `conversationFields`). */
 export function overridableFields(schema: JsonSchema, level: FeatureOverrideLevel): readonly string[] {
   const root = readFeatureLevels(schema);
   if (!root.includes(level)) return Object.freeze([]);
+  if (level === 'conversation') return readFeatureConversationDeclaration(schema).conversationFields;
   const properties = record(schema.properties) ? schema.properties : {};
   return Object.freeze(Object.entries(properties)
     .filter(([field, child]) => !NON_OVERRIDABLE_FIELDS.has(field) && readFieldLevels(root, field, child).includes(level))
@@ -98,18 +169,87 @@ function partialize(schema: unknown): unknown {
   return { ...rest, properties: Object.fromEntries(Object.entries(rest.properties).map(([key, child]) => [key, partialize(child)])) };
 }
 
-/** Partial schema of one override entry at `level`: allowed fields plus the reserved `enabled`. */
-export function featureOverrideEntrySchema(schema: JsonSchema, level: FeatureOverrideLevel): JsonSchema {
+/**
+ * Partial schema of one override entry at `level`: allowed fields plus the reserved `enabled`.
+ * `fields` narrows the allowed fields further (in-chat self-service).
+ */
+export function featureOverrideEntrySchema(schema: JsonSchema, level: FeatureOverrideLevel, fields?: readonly string[]): JsonSchema {
   const properties = record(schema.properties) ? schema.properties : {};
+  const allowed = overridableFields(schema, level).filter(field => !fields || fields.includes(field));
   return deepFreeze({
     type: 'object',
     additionalProperties: false,
     ...(schema.$defs ? { $defs: schema.$defs } : {}),
     properties: {
       [FEATURE_ENABLED_KEY]: { type: 'boolean' },
-      ...Object.fromEntries(overridableFields(schema, level).map(field => [field, partialize(properties[field])])),
+      ...Object.fromEntries(allowed.map(field => [field, partialize(properties[field])])),
     },
   });
+}
+
+function resolveLocalRef(root: JsonSchema, schema: unknown): unknown {
+  let current = schema;
+  for (let hops = 0; record(current) && typeof current.$ref === 'string' && hops < 16; hops += 1) {
+    const ref = current.$ref;
+    if (!ref.startsWith('#/')) return current;
+    let target: unknown = root;
+    for (const segment of ref.slice(2).split('/')) {
+      const name = segment.replace(/~1/g, '/').replace(/~0/g, '~');
+      target = record(target) ? target[name] : undefined;
+    }
+    current = target;
+  }
+  return current;
+}
+
+/** Whether `schema` names (or otherwise admits) the object member `name`. */
+function memberSchema(root: JsonSchema, schema: unknown, name: string): { readonly known: boolean; readonly child?: unknown } {
+  const resolved = resolveLocalRef(root, schema);
+  if (!record(resolved)) return { known: false };
+  if (record(resolved.properties) && Object.hasOwn(resolved.properties, name)) return { known: true, child: resolved.properties[name] };
+  if (record(resolved.patternProperties)) {
+    for (const [pattern, child] of Object.entries(resolved.patternProperties)) {
+      try { if (new RegExp(pattern, 'u').test(name)) return { known: true, child }; } catch { /* invalid pattern: ignore */ }
+    }
+  }
+  if (record(resolved.additionalProperties)) return { known: true, child: resolved.additionalProperties };
+  if (resolved.additionalProperties === true) return { known: true };
+  // Composite / untyped schemas cannot be walked statically; accept only when they are not closed object shapes.
+  const composite = ['anyOf', 'oneOf', 'allOf'].some(keyword => Array.isArray(resolved[keyword]));
+  return { known: composite };
+}
+
+/**
+ * `withoutNulls` hides explicit clears from the shape validator, so every key of the raw
+ * entry and every path that leads to a `null` is checked here first: top-level keys must be
+ * allowed at this level (plus `enabled`), and nested clears must name a member of that
+ * field's schema. Otherwise a `null` could clear a global-only field from a lower level.
+ */
+function clearIssues(schema: JsonSchema, entry: SchemaRecord, allowed: readonly string[], prefix: string): FeatureOverrideIssue[] {
+  const result: FeatureOverrideIssue[] = [];
+  const properties = record(schema.properties) ? schema.properties : {};
+  const walk = (value: unknown, fieldSchema: unknown, path: string): void => {
+    if (!record(value)) return;
+    for (const [name, child] of Object.entries(value)) {
+      const childPath = `${path}/${escapeJsonPointerSegment(name)}`;
+      const member = memberSchema(schema, fieldSchema, name);
+      if (!member.known) {
+        if (child === null) result.push({ path: childPath, message: 'cannot clear a field the schema does not declare' });
+        continue;
+      }
+      if (member.child !== undefined) walk(child, member.child, childPath);
+    }
+  };
+  for (const [field, value] of Object.entries(entry)) {
+    const path = `${prefix}/${escapeJsonPointerSegment(field)}`;
+    if (field === FEATURE_ENABLED_KEY) continue;
+    if (!allowed.includes(field)) {
+      if (value === null) result.push({ path: prefix, message: `must NOT have additional properties (additionalProperty: ${field})` });
+      continue;
+    }
+    walk(value, properties[field], path);
+  }
+  return result;
 }
 
 /** Drop explicit clears before shape validation; the merged view is validated separately. */
@@ -155,12 +295,7 @@ export function validateFeatureOverrides(schema: JsonSchema, block: unknown): re
   for (const key of Object.keys(raw)) {
     if (key !== 'adapters' && key !== 'endpoints') result.push({ path: `/${FEATURE_OVERRIDES_KEY}`, message: `must NOT have additional properties (additionalProperty: ${key})` });
   }
-  const effective = compiled(schema, 'effective', () => {
-    const { $id: _id, ...rest } = schema;
-    const properties = record(rest.properties) ? rest.properties : {};
-    const { [FEATURE_OVERRIDES_KEY]: _overrides, ...fields } = properties;
-    return { ...rest, properties: fields };
-  });
+  const effective = effectiveValidator(schema);
   const { [FEATURE_OVERRIDES_KEY]: _ignored, ...globalFields } = own;
   for (const level of OVERRIDE_LEVELS) {
     const group = raw[`${level}s`];
@@ -173,6 +308,8 @@ export function validateFeatureOverrides(schema: JsonSchema, block: unknown): re
       const path = `${groupPath}/${escapeJsonPointerSegment(key)}`;
       if (!pattern.test(key)) { result.push({ path, message: level === 'adapter' ? 'key must be an adapter instance alias' : 'key must be <adapter alias>/<endpointId>' }); continue; }
       if (!record(value)) { result.push({ path, message: 'must be object' }); continue; }
+      const cleared = clearIssues(schema, value, overridableFields(schema, level), path);
+      if (cleared.length) { result.push(...cleared); continue; }
       if (!entry(structuredClone(withoutNulls(value)))) { result.push(...issues(entry, path)); continue; }
       const merged = resolveLayeredConfig({ global: globalFields, overrides: raw, key }).value;
       if (!effective(structuredClone(merged))) {
@@ -181,6 +318,44 @@ export function validateFeatureOverrides(schema: JsonSchema, block: unknown): re
     }
   }
   return Object.freeze(result);
+}
+
+function effectiveValidator(schema: JsonSchema): ValidateFunction {
+  return compiled(schema, 'effective', () => {
+    const { $id: _id, ...rest } = schema;
+    const properties = record(rest.properties) ? rest.properties : {};
+    const { [FEATURE_OVERRIDES_KEY]: _overrides, ...fields } = properties;
+    return { ...rest, properties: fields };
+  });
+}
+
+/**
+ * Validates one conversation-level entry (`{ enabled?, ...patch }`) for `key`: shape against
+ * the conversation fields (narrowed to `fields` when given, e.g. `selfServiceFields`), then the
+ * effective merged configuration against the whole own schema. Paths are relative to the entry.
+ */
+export function validateConversationOverride(
+  schema: JsonSchema,
+  block: unknown,
+  key: string,
+  entry: unknown,
+  fields?: readonly string[],
+): readonly FeatureOverrideIssue[] {
+  if (!record(entry)) return Object.freeze([{ path: '', message: 'must be object' }]);
+  const narrowed = fields ? `conversation:${[...fields].sort().join(',')}` : 'conversation';
+  const shape = compiled(schema, narrowed, () => featureOverrideEntrySchema(schema, 'conversation', fields));
+  const allowed = overridableFields(schema, 'conversation').filter(field => !fields || fields.includes(field));
+  const cleared = clearIssues(schema, entry, allowed, '');
+  if (cleared.length) return Object.freeze(cleared);
+  if (!shape(structuredClone(withoutNulls(entry)))) return Object.freeze(issues(shape, ''));
+  const own = record(block) ? block : {};
+  const { [FEATURE_OVERRIDES_KEY]: overrides, ...globalFields } = own;
+  const merged = resolveLayeredConfig({ global: globalFields, overrides, key, conversation: entry as FeatureOverrideEntry }).value;
+  const effective = effectiveValidator(schema);
+  if (!effective(structuredClone(merged))) {
+    return Object.freeze(issues(effective, '').map(issue => ({ ...issue, message: `effective configuration ${issue.message}` })));
+  }
+  return Object.freeze([]);
 }
 
 export interface FeatureOverrideWarning {
@@ -273,7 +448,7 @@ export interface LayeredConfigAccessor {
 
 /** Live `configFor` / `isEnabledFor`: always the latest committed configuration, cached per generation and key. */
 export function createLayeredConfigAccessor(options: LayeredConfigAccessorOptions): LayeredConfigAccessor {
-  const cache = new WeakMap<PrimaryConfig, Map<string, LayeredConfigResolution>>();
+  const cache = new WeakMap<PrimaryConfig, { version: number; entries: Map<string, LayeredConfigResolution> }>();
   const instancePath = String(options.owner).split('/').slice(1);
   const properties = options.schema && record(options.schema.properties) ? Object.keys(options.schema.properties) : undefined;
   const current = (): { primary: PrimaryConfig; snapshot?: RuntimeSnapshot } => {
@@ -287,10 +462,17 @@ export function createLayeredConfigAccessor(options: LayeredConfigAccessorOption
   const resolve = (target: FeatureTarget): LayeredConfigResolution => {
     const { primary, snapshot } = current();
     const key = resolveFeatureTargetKey(snapshot, target) ?? '';
+    const conversationKey = key !== '' && parseFeatureResolutionKey(key).conversation !== undefined;
+    const reader = conversationKey ? readFeatureConversationOverrides(snapshot) : undefined;
     let byKey = cache.get(primary);
-    if (!byKey) { byKey = new Map(); cache.set(primary, byKey); }
-    const cached = byKey.get(key);
+    if (!byKey || (reader && byKey.version !== reader.version)) {
+      // A conversation store write invalidates this generation's resolutions.
+      byKey = { version: reader?.version ?? byKey?.version ?? -1, entries: new Map() };
+      cache.set(primary, byKey);
+    }
+    const cached = byKey.entries.get(key);
     if (cached) return cached;
+    const conversation = reader ? featureConversationEntry(reader.get(featureInstancePath(options.owner), key)) : undefined;
     const block = readPluginConfigBlock(primary.document, options.owner);
     const global = block
       ? options.expand(Object.fromEntries(Object.entries(block).filter(([field]) =>
@@ -301,17 +483,22 @@ export function createLayeredConfigAccessor(options: LayeredConfigAccessorOption
       overrides: block ? options.expand(block[FEATURE_OVERRIDES_KEY]) : undefined,
       globalEnabled: isGloballyEnabled(primary.document, instancePath),
       key,
+      // Never environment-expanded: conversation patches come from the database and from chat.
+      ...(conversation ? { conversation } : {}),
     });
     // A nested Plugin is hidden wherever one of its ancestors is switched off (same rule as dispatch).
     for (let depth = 1; resolution.enabled && depth < instancePath.length; depth += 1) {
       const ancestor = `root/${instancePath.slice(0, depth).join('/')}` as PluginId;
-      const upper = resolveFeatureEnabled({ overrides: readPluginConfigBlock(primary.document, ancestor)?.[FEATURE_OVERRIDES_KEY], key });
+      const ancestorConversation = reader ? featureConversationEntry(reader.get(featureInstancePath(ancestor), key)) : undefined;
+      const upper = resolveFeatureEnabled({ overrides: readPluginConfigBlock(primary.document, ancestor)?.[FEATURE_OVERRIDES_KEY], key,
+        ...(ancestorConversation ? { conversation: ancestorConversation } : {}) });
       if (!upper.enabled) {
         resolution = deepFreeze({ ...resolution, enabled: false, disabledAt: upper.disabledAt,
           ...(upper.lockedBy ? { lockedBy: upper.lockedBy } : {}) });
       }
     }
-    byKey.set(key, resolution);
+    if (byKey.entries.size >= 20_000) byKey.entries.clear();
+    byKey.entries.set(key, resolution);
     return resolution;
   };
   return Object.freeze({

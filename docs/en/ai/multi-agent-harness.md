@@ -95,6 +95,6 @@ zhin trace --engagements
 zhin trace <engagementId>
 ```
 
-Collaboration events are stored in the `engagement_events` database table, which requires SQLite, MySQL, or PostgreSQL. The Collaboration graph page in Console shows the same data.
+Collaboration events are stored in the `engagement_events` database table, which requires SQLite, MySQL, or PostgreSQL. The Workroom page in Console (`/features/ai/workrooms`) shows the same data.
 
 See [Agent and Tool Calling](./agent.md#multi-agent-collaboration) for full details.

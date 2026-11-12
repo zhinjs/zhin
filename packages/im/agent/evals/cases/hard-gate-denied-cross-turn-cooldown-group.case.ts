@@ -6,8 +6,8 @@ export default defineEvalCase({
   source: 'ADR 0037 slice E (#1031): one card per platform + scene + action per ops.cooldownMs, denied cards included',
   tags: ['approval'],
   inbound: [
-    { text: '@bot 把 10086 踢出群', scope: 'group', sender: { id: 'owner', roles: ['master'] } },
-    { text: '@bot 我再申请一次，把 10086 踢出群', scope: 'group', sender: { id: 'owner', roles: ['master'] } },
+    { text: '@bot 把 10086 踢出群', scope: 'group', sender: { id: 'owner', chatRole: 'owner' } },
+    { text: '@bot 我再申请一次，把 10086 踢出群', scope: 'group', sender: { id: 'owner', chatRole: 'owner' } },
   ],
   tools: [{ name: 'group_kick', result: 'kicked' }],
   approval: 'deny',

@@ -1,6 +1,6 @@
 import { resolveHostCredentialSource } from '@zhin.js/plugin-runtime';
-import { createConfigurationChatAuthorizer, createEndpointRoleConfigurationSelection, createEndpointRoleResolver, createSenderEnricher } from '@zhin.js/core/runtime';
-export { createEndpointRoleResolver } from '@zhin.js/core/runtime';
+import { createConfigurationChatAuthorizer, createSenderEnricher } from '@zhin.js/core/runtime';
+import { chatRoleMigrationAdapterKinds, prepareChatRoleMigration } from './chat-role-migration.js';
 import { migrateConversationColumns, migrateInboxColumns } from '@zhin.js/core/runtime';
 import type { StructuredDatabase } from '@zhin.js/database';
 import { assertNoPendingInstanceMigration } from '@zhin.js/gateway/project';
@@ -63,6 +63,8 @@ import { installHttpHost, resolveHttpConfig } from '@zhin.js/host-http';
 import { createDatabaseHost, installDatabaseHost, resolveDatabaseConfig } from '@zhin.js/core/runtime';
 import { installLocaleHost } from '@zhin.js/core/runtime';
 import { installConfigurationHost } from './configuration-host-installer.js';
+import { createFeatureHost } from './feature-host-installer.js';
+import { setProjectPluginEnabled } from '@zhin.js/runtime';
 import {
   createRestartChatAuthorizer,
   deliverPendingRestartReceipt,
@@ -191,6 +193,11 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     platform: 'node',
   } as const);
   const hostEnvironment = createEnvStore(rootPluginId(), runtimeEnvironment, environmentVariables);
+  // ADR 0056 §3: people lists move out of the configuration into chat_roles (first start), or stop startup.
+  const chatRoleMigration = await prepareChatRoleMigration({
+    projectRoot: options.root, config, logger: getLogger('chat-roles'),
+    expand: document => hostEnvironment.expandMissingAsEmpty(document) as Readonly<Record<string, unknown>>,
+  });
   const rawConfigDocument = (await config.read()).document;
   warnUnsetConfigEnvPlaceholders(rawConfigDocument, name => hostEnvironment.get(name), configFile);
   const hostConfig = hostEnvironment.expandMissingAsEmpty(rawConfigDocument);
@@ -221,7 +228,6 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   const agentHost = await loadConfiguredAgentHost({ config: hostConfig, projectRoot: options.root, database: databaseHost,
     resolveSource: reference => resolveHostCredentialSource(reference, name => hostEnvironment.get(name)),
   });
-  const endpointRoles = await createEndpointRoleResolver(hostConfig);
   const speechHandle = await prepareSpeechHost(await resolveSpeechConfig(hostConfig));
   const htmlRendererHost = await prepareHtmlRendererHost(hostConfig);
   let complete!: () => void;
@@ -229,7 +235,15 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   const control: { stop(): Promise<void> } = {
     stop: async () => { throw new Error('RootHost stop is not bound'); },
   };
-  const senderEnricher = await createSenderEnricher(hostConfig, endpointRoles);
+  // ADR 0055 / 0056: conversation-level feature overrides and chat roles (tables defined before start).
+  const featureHost = createFeatureHost({
+    database: databaseHost, hostConfig, snapshots: () => host.runtime.snapshots,
+    afterLoad: (roles, candidate) => chatRoleMigration.complete(roles, {
+      persistent: ['sqlite', 'mysql', 'pg'].includes(databaseHost.dialect),
+      adapterKind: chatRoleMigrationAdapterKinds(candidate),
+    }),
+  });
+  const senderEnricher = createSenderEnricher({ roles: () => featureHost.roles });
   const im = new ImRuntime({ enrichSender: senderEnricher });
   const endpointRepository = new PersistentEndpointRepository({ rootId: resolve(options.root),
     directory: join(options.root, '.zhin', 'endpoint-credentials'), state: () => databaseHost.state });
@@ -297,8 +311,12 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     logger: getLogger('console'),
   });
   const consoleIamService = () => (consoleIam?.supported ? consoleIam.service : undefined);
-  const authorizeConfigurationChat = createConfigurationChatAuthorizer(hostConfig, endpointRoles);
-  const authorizeRestartChat = createRestartChatAuthorizer(hostConfig, endpointRoles);
+  const currentSnapshot = () => {
+    const lease = host.runtime.snapshots.acquire();
+    try { return lease.value; } finally { lease.release(); }
+  };
+  const authorizeConfigurationChat = createConfigurationChatAuthorizer(() => featureHost.roles, currentSnapshot);
+  const authorizeRestartChat = createRestartChatAuthorizer(() => featureHost.roles, currentSnapshot);
   // 受控自我进化生效（ADR 0040 §5 / §6）：进程持有热重载 / 受控重启 / 健康检查 / 配置补丁；最新 generation 绑定生效器。
   const selfChangeApply = new HostSelfChangeApply({
     projectRoot: options.root,
@@ -315,7 +333,6 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     config,
     modules: consoleHost.modules,
     watch: parsed.once ? [] : parsed.watch,
-    pluginConfigurationSelection: createEndpointRoleConfigurationSelection(hostConfig, endpointRoles),
     onGenerationCommit: (generation) => {
       // Route table follows hot reloads (ADR 0054 §3 `routes`).
       bridgedHttpHost?.publishRoutes(generation);
@@ -330,6 +347,16 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
       im.install(context.resources);
       installHttpHost(httpHost)(context);
       installDatabaseHost(databaseHost)(context);
+      featureHost.install({
+        context: {
+          configuration: consoleConfigurationStore,
+          snapshots: host.runtime.snapshots,
+          setGlobalEnabled: (instanceKey, enabled) => setProjectPluginEnabled(options.root, instanceKey, enabled),
+          requestRestart: () => { void requestProcessRestart('chat'); },
+          publishEvent: (type, data) => consoleEventHub.publish(type, data),
+        },
+        audit: entry => { httpHost.tokenRegistry?.accessProvider?.audit?.(entry); },
+      })(context);
       if (consoleIam) context.handoff.add({ activateNext: async () => { await consoleIam.activate(); } });
       // Match DatabaseHost's atomic-state capability. Unsupported dialects keep
       // static accounts; a failed read on a supported database still fails startup.
@@ -380,8 +407,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
           selfChanges,
           selfChangeApply,
           projectRoot: options.root,
-          resolveEndpointOwner: endpointRoles.resolveOwner,
-          resolveEndpointTrusted: endpointRoles.resolveTrusted,
+          resolveEndpointOwner: featureHost.resolveEndpointOwner,
           resolveConfiguredEndpointKeys: () => {
             const candidate = context.readCandidateSnapshot?.();
             if (candidate && candidate.generation !== context.generation) throw new Error('Endpoint validation targets another candidate generation');
@@ -479,6 +505,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     snapshots: host.runtime.snapshots,
     onRestart: () => requestProcessRestart('console'),
     consoleIam: consoleIamService,
+    featureStores: featureHost.stores,
   });
   function requestProcessRestart(reason: string): Promise<void> {
     // ADR 0054 §3: restarts belong to the gateway. It answers `restart-request` with `shutdown`
@@ -689,7 +716,6 @@ interface ConfiguredAgentHost {
     readonly im: ImRuntime;
     readonly projectRoot: string;
     readonly resolveEndpointOwner: (adapter: string, endpoint: string) => string | undefined;
-    readonly resolveEndpointTrusted: (adapter: string, endpoint: string) => readonly string[];
     readonly resolveConfiguredEndpointKeys: () => Promise<ReadonlySet<string>>;
     readonly extraTools?: readonly unknown[];
     readonly audioTranscriber?: import('@zhin.js/agent').AudioTranscriptionPort;

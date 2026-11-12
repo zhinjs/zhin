@@ -9,25 +9,29 @@ export const calendarConfig = Schema.object({
   ])
     .default("none")
     .description("日历后端；none 时工具返回未启用提示").i18n({"en": {"description": "Calendar backend. Tools report that the calendar is disabled when set to none."}})
-    .effect("reload"),
+    .effect("reload")
+    .fieldLevels(["global"]),
   timezone: Schema.string()
     .default("Asia/Manila")
     .description("解释无偏移时间与展示用的 IANA 时区").i18n({"en": {"description": "IANA timezone for interpreting times without offsets and for display."}})
-    .effect("reload"),
-  work_day_start: Schema.string().default("09:00").effect("reload"),
-  work_day_end: Schema.string().default("18:00").effect("reload"),
+    .effect("reload")
+    .fieldLevels(["global"]),
+  work_day_start: Schema.string().default("09:00").effect("reload").fieldLevels(["global"]),
+  work_day_end: Schema.string().default("18:00").effect("reload").fieldLevels(["global"]),
   oauth_redirect_base_url: Schema.string()
     .default("")
     .description(
       "聊天授权回调的外部基础地址（如 https://bot.example.com）；留空时使用 zhin HTTP Host 的本机地址"
     )
-    .effect("reload"),
+    .effect("reload")
+    .fieldLevels(["global"]),
   oauth_callback_path: Schema.string()
     .default("/calendar/oauth/callback")
     .description(
       "聊天授权回调路由，挂在 zhin HTTP Host 上；反向代理/隧道只转发部分路径时可调整"
     )
-    .effect("reload"),
+    .effect("reload")
+    .fieldLevels(["global"]),
   caldav: Schema.object({
     enabled: Schema.boolean().default(false),
     calendar_url: Schema.string()
@@ -36,7 +40,7 @@ export const calendarConfig = Schema.object({
       .effect("reload"),
     username: Schema.string().default("").effect("reload"),
     password: Schema.string().default("").effect("reload"),
-  }),
+  }).fieldLevels(["global"]),
   google: Schema.object({
     enabled: Schema.boolean().default(false),
     client_id: Schema.string()
@@ -61,7 +65,7 @@ export const calendarConfig = Schema.object({
         "可选：持久化轮换后的 refresh_token 的 JSON 路径（如 data/calendar-google-token.json）"
       )
       .effect("reload"),
-  }),
+  }).fieldLevels(["global"]),
   microsoft: Schema.object({
     enabled: Schema.boolean().default(false),
     client_id: Schema.string()
@@ -90,8 +94,9 @@ export const calendarConfig = Schema.object({
         "可选：持久化轮换后的 refresh_token 的 JSON 路径（如 data/calendar-ms-token.json）"
       )
       .effect("reload"),
-  }),
-});
+  }).fieldLevels(["global"]),
+  // ADR 0050 / 0055: one shared calendar backend, so every field stays global; the switch works at every level.
+}).featureLevels(["global", "adapter", "endpoint", "conversation"]);
 
 export type CalendarConfig = Schema.Output<typeof calendarConfig>;
 

@@ -9,9 +9,9 @@ The group suite's `welcomeConversations` restricts welcomes to exact Bot account
 
 ## Select an instance and a group
 
-In Console, open **Task center → Start by use case → Configure member welcomes** (`/use-cases/group-welcome`) with a management connection. Demo does not read or modify this flow. Update Console and the Host separately; older UIs can still use plugin configuration and details directly.
+In Console, open **Operations → Scheduled tasks → Administrator tasks**, choose **Configure member welcomes** under **Start by use case** and start the group welcome setup (`/use-cases/group-welcome`) with a management connection. Demo does not read or modify this flow. Update Console and the Host separately; older UIs can still use plugin configuration and details directly.
 
-The flow reads the [group suite](https://github.com/zhinjs/zhin/tree/main/plugins/utils/group-suite) package identity from the Host use-case catalog and lists its manageable instances. Select one explicitly; it never defaults to the first instance. If none is installed, open the package in Marketplace and review the exact version and existing installation plan. Merely opening Marketplace does not install it. Reconcile uncertain installation results before submitting anything again; continue with the actual instance identity returned by the Host.
+The flow reads the [group suite](https://github.com/zhinjs/zhin/tree/main/plugins/utils/group-suite) package identity from the Host use-case catalog and lists its manageable instances. Select one explicitly; it never defaults to the first instance. If none is installed, open the package in the Plugin store and review the exact version and existing installation plan. Merely opening the Plugin store does not install it. Reconcile uncertain installation results before submitting anything again; continue with the actual instance identity returned by the Host.
 
 1. Set `welcomeMessage`, for example `Welcome {name} ({id})`. An empty message still disables welcomes.
 2. Restrict `welcomeConversations` to selected conversations. This first creates an empty scope.

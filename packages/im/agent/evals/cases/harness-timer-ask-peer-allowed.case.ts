@@ -11,7 +11,7 @@ export default defineEvalCase({
     kind: 'timer',
     timerId: 'daily-ci-summary',
     content: '每日例行：汇总今天的构建状态',
-    owner: { id: 'master', roles: ['master'] },
+    owner: { id: 'master', roles: ['owner'] },
   },
   tools: [{ name: 'lookup_ci', result: 'main: green' }],
   agents: [{ name: 'ops', description: 'Reads CI status; read-only.', tools: ['lookup_ci'] }],

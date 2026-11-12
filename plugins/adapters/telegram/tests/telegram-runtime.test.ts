@@ -838,7 +838,7 @@ describe('telegram permission lookup isolation', () => {
         finish(); await closing;
         expect(receive).toHaveBeenCalledTimes(1);
         expect(receive).toHaveBeenCalledWith(expect.objectContaining({ message: expect.objectContaining({ id: String(message.message_id) }),
-          metadata: expect.objectContaining({ senderRole: 'admin' }) }));
+          sender: expect.objectContaining({ platform: { standing: 'admin' } }) }));
         if (transition === 'reopen') endpoint.open();
       }
       const accepted = transition === 'restart' ? 0 : 1;
@@ -846,7 +846,7 @@ describe('telegram permission lookup isolation', () => {
       await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(accepted + 1));
       expect(lookups).toBe(2);
       expect(receive).toHaveBeenLastCalledWith(expect.objectContaining({ message: expect.objectContaining({ id: '43' }),
-        metadata: expect.objectContaining({ senderRole: 'member' }) }));
+        sender: expect.objectContaining({ platform: { standing: 'member' } }) }));
     } finally { finish(); await closing; await endpoint.stop(); }
   });
 
@@ -855,7 +855,7 @@ describe('telegram permission lookup isolation', () => {
     try {
       for (const [account, status, role] of [['admin-bot', 'administrator', 'admin'], ['member-bot', 'member', 'member']]) {
         const receive = vi.fn(async () => Object.freeze({ matched: false }));
-        const fetch = mockApiFetch({ getChatMember: { status } });
+        const fetch = mockApiFetch({ getChatMember: { status, ...(status === 'administrator' ? { can_restrict_members: true, can_pin_messages: false } : {}) } });
         const endpoint = await telegramFixture({
           id: capabilityId(rootPluginId(), adapterFeature, account!),
           config: { ...baseConfig, id: account!, token: `test-${account}` }, fetch,
@@ -870,13 +870,88 @@ describe('telegram permission lookup isolation', () => {
         await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(2));
         expect(fetch.calls.filter((call) => call.method === 'getChatMember')).toHaveLength(1);
         expect(receive).toHaveBeenLastCalledWith(expect.objectContaining({
-          metadata: expect.objectContaining({ senderRole: role }),
-          sender: expect.objectContaining({ roles: [role] }),
+          sender: expect.objectContaining({ platform: role === 'admin' ? { standing: 'admin', permissions: ['restrict_members'] } : { standing: role } }),
         }));
       }
     } finally {
       await Promise.all(endpoints.map((endpoint) => endpoint.stop()));
     }
+  });
+});
+
+describe('telegram sender standing cache', () => {
+  const group = { id: -1001, type: 'supergroup' as const };
+  async function standingFixture(fetch: TelegramFetch) {
+    const receive = vi.fn(async () => Object.freeze({ matched: false }));
+    const endpoint = await telegramFixture({
+      id: capabilityId(rootPluginId(), adapterFeature, 'telegram'), config: baseConfig, fetch,
+    }, { receive, send: vi.fn(async () => 'sent') }, undefined);
+    await endpoint.start(); endpoint.open();
+    return { endpoint, receive };
+  }
+
+  it('shares one getChatMember call between concurrent messages of the same sender', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const fallback = mockApiFetch({ getChatMember: { status: 'administrator', can_pin_messages: true } });
+    let lookups = 0;
+    const fetch: TelegramFetch = async (url, init) => {
+      if (url.endsWith('/getChatMember')) { lookups++; await gate; }
+      return fallback(url, init);
+    };
+    const { endpoint, receive } = await standingFixture(fetch);
+    try {
+      endpoint.endpoint.admit(textMessage({ chat: group }));
+      endpoint.endpoint.admit(textMessage({ chat: group, message_id: 43 }));
+      await vi.waitFor(() => expect(lookups).toBe(1));
+      release();
+      await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(2));
+      expect(lookups).toBe(1);
+      for (const call of receive.mock.calls as unknown as [{ sender: unknown }][]) {
+        expect(call[0].sender).toMatchObject({ platform: { standing: 'admin', permissions: ['pin_messages'] } });
+      }
+    } finally { release(); await endpoint.stop(); }
+  });
+
+  it('negatively caches a failed lookup instead of retrying every message', async () => {
+    const fallback = mockApiFetch();
+    let lookups = 0;
+    const fetch: TelegramFetch = async (url, init) => {
+      if (url.endsWith('/getChatMember')) { lookups++; throw new Error('network down'); }
+      return fallback(url, init);
+    };
+    const { endpoint, receive } = await standingFixture(fetch);
+    try {
+      endpoint.endpoint.admit(textMessage({ chat: group }));
+      await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(1));
+      endpoint.endpoint.admit(textMessage({ chat: group, message_id: 43 }));
+      await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(2));
+      expect(lookups).toBe(1);
+      for (const call of receive.mock.calls as unknown as [{ sender: Record<string, unknown> }][]) {
+        expect(call[0].sender).not.toHaveProperty('platform');
+      }
+    } finally { await endpoint.stop(); }
+  });
+
+  it('replaces the cached standing on a chat_member update', async () => {
+    const fetch = mockApiFetch({ getChatMember: { status: 'administrator', can_pin_messages: true } });
+    const { endpoint, receive } = await standingFixture(fetch);
+    try {
+      endpoint.endpoint.admit(textMessage({ chat: group }));
+      await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(1));
+      await endpoint.endpoint.handleUpdate({
+        update_id: 900,
+        chat_member: { chat: group, new_chat_member: { status: 'member', user: { id: 7, first_name: 'Alice' } } },
+      } as never);
+      endpoint.endpoint.admit(textMessage({ chat: group, message_id: 44 }));
+      await vi.waitFor(() => expect(receive.mock.calls.filter((c) => (c as unknown as [{ message?: { id: string } }])[0].message?.id === '44')).toHaveLength(1));
+      expect(fetch.calls.filter((call) => call.method === 'getChatMember')).toHaveLength(1);
+      expect(receive).toHaveBeenLastCalledWith(expect.objectContaining({ sender: expect.objectContaining({ platform: { standing: 'member' } }) }));
+    } finally { await endpoint.stop(); }
+  });
+
+  it('subscribes to chat_member updates by default', () => {
+    expect(resolveTelegramConfig({ id: 'x', token: 't' }).allowedUpdates).toEqual(['message', 'callback_query', 'chat_member', 'my_chat_member']);
   });
 });
 

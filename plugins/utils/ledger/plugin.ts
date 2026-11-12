@@ -45,7 +45,11 @@ export default definePlugin<LedgerConfig>({
     const database = context.resources.use(databaseHostToken);
     defineLedgerTables(database);
     const outbound = context.resources.has(outboundHostToken) ? context.resources.use(outboundHostToken) : undefined;
-    const service = ledgerServiceStore.provide(context, new LedgerService(database, outbound, config));
+    const service = ledgerServiceStore.provide(context, new LedgerService(database, outbound, config, {
+      // ADR 0050 / 0055: switch and `reportWhenEmpty` resolved for each subscriber's private conversation.
+      isEnabledFor: target => context.isEnabledFor({ conversation: target }),
+      reportWhenEmptyFor: target => context.configFor({ conversation: target }).reportWhenEmpty ?? config.reportWhenEmpty,
+    }));
     return {
       consoleRpc: createLedgerConsoleRpc(service),
     };

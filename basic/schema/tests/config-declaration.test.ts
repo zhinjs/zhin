@@ -194,4 +194,23 @@ describe('configuration declaration export', () => {
     expect(schema.toJSON()).toMatchObject({ type: 'object', object: { limit: { type: 'number', default: 10 } } });
     expect(schema.toJsonSchema()).toMatchObject({ type: 'object', properties: { limit: { type: 'number', default: 10 } } });
   });
+  it('declares layered feature levels on the plugin root (ADR 0055)', () => {
+    const schema = Schema.object({ threshold: Schema.number().default(3) })
+      .featureLevels(['global', 'adapter', 'endpoint', 'conversation'], { conversationFields: ['threshold'], selfServiceFields: ['threshold'] });
+    expect(schema.toJsonSchema()).toMatchObject({ 'x-zhin-config': {
+      levels: ['global', 'adapter', 'endpoint', 'conversation'], conversationFields: ['threshold'], selfServiceFields: ['threshold'] } });
+    expect(() => Schema.number().featureLevels(['global'])).toThrow(TypeError);
+  });
+  it('narrows the levels of one property (ADR 0050 §2)', () => {
+    const schema = Schema.object({
+      apiKey: Schema.string().secret().fieldLevels(['global']),
+      limit: Schema.number().default(3),
+    }).featureLevels(['global', 'adapter', 'endpoint', 'conversation']);
+    expect(schema.toJsonSchema()).toMatchObject({ properties: {
+      apiKey: { 'x-zhin-config': { secret: true, levels: ['global'] } },
+      limit: { type: 'number' },
+    } });
+    expect((schema.toJsonSchema().properties as Record<string, Record<string, unknown>>).limit['x-zhin-config']).toBeUndefined();
+    expect(() => Schema.number().fieldLevels(['adapter'])).toThrow(TypeError);
+  });
 });

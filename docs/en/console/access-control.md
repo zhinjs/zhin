@@ -7,7 +7,9 @@ description: The four pages of the Console Access control section - who can sign
 
 Console accounts live in the project database ([ADR 0049](../../adr/0049-console-rbac.md)); the management gateway handles sign-in and authentication ([ADR 0054](../../adr/0054-management-gateway.md)). These pages keep working while the instance is stopped or crashed.
 
-The **Access control** section has four pages: **Users**, **Roles**, **API tokens** and **Audit log**. Reading needs `iam.view`, changes need `iam.manage` — among the built-in roles only `owner` holds `iam.manage`; `admin` has `iam.view`. Accounts without `iam.view` do not see the section.
+The **Access control** group in the sidebar has four pages: **Users** (`/access/users`), **Roles** (`/access/roles`), **API tokens** (`/access/tokens`) and **Audit log** (`/access/audit`). Reading needs `iam.view`, changes need `iam.manage` — among the built-in roles only `owner` holds `iam.manage`; `admin` has `iam.view`; without `iam.manage` the pages are read-only. Accounts without `iam.view` do not see the group. Deleting, disabling and revoking ask for confirmation, and deleting a user or role asks you to type its name.
+
+The roles here are **Console account** roles: they decide who can do what in the Console. The **Roles** tab of the object pages manages **chat roles** (Owner / Administrator / Trusted), which decide who can use the bot's features in chat; the two never affect each other (see [chat roles](../concepts/chat-roles.md)). Everyone changes their own password and issues their own API tokens in Personal settings (`/account`, from the user name in the top bar).
 
 ## Credentials {#credentials}
 
@@ -17,17 +19,19 @@ The **Access control** section has four pages: **Users**, **Roles**, **API token
 | Session token | Username + password sign-in (`POST {base}/auth/login`) | The Console in the browser. 12-hour sliding expiry by default, 30 days at most |
 | API token | Issued by a user (below) | CI, monitoring, `zhin doctor --live`, MCP / A2A clients; command-line tools read `ZHIN_CONSOLE_TOKEN` |
 
+With neither `http.token` nor an owner, the Host is **open**: it holds every permission and only accepts loopback peers without `X-Forwarded-For` / `Forwarded` (a request with an unknown peer address is not local). The gateway refuses to start open when `http.host` is not a loopback address (e.g. `0.0.0.0` in a container): first run `zhin doctor --fix` to generate `HTTP_TOKEN` in `.env` and set `http.token: ${HTTP_TOKEN}`, or create the owner with `zhin console init`. A same-host reverse proxy that adds no forwarding header makes every proxied request look local to an open Host, so always set a bootstrap token behind a reverse proxy.
+
 Every credential is sent as `Authorization: Bearer …`; no cookies are used. Failed sign-ins always return 401; after 5 failures per IP and username within 15 minutes the gateway backs off exponentially (`429`).
 
 ## Users {#users}
 
-Lists every user: username, display name, disabled flag and role bindings.
+Lists every user: username, display name, roles, status and when the password last changed. Each row's manage menu has **Change display name**, role bindings, reset password, disable / enable and delete.
 
 | Action | RPC | Permission |
 | --- | --- | --- |
 | List | `iam.users.list` | `iam.view` |
 | Create (lowercase unique username, password of at least 10 characters) | `iam.users.create` | `iam.manage` |
-| Change display name | `iam.users.update` | `iam.manage` |
+| Change display name (the username is for sign-in and cannot change after creation) | `iam.users.update` | `iam.manage` |
 | Disable / enable | `iam.users.disable` | `iam.manage` |
 | Delete | `iam.users.delete` | `iam.manage` |
 | Reset password | `iam.users.reset-password` | `iam.manage` |
@@ -70,7 +74,7 @@ Built-in roles cannot be changed or deleted, but can be copied:
 
 | Permission | Covers |
 | --- | --- |
-| `status.view` | Dashboard, system status, logs, capability browser, event stream, instance status and logs |
+| `status.view` | Home, system status, logs, capability browser, command permissions, the Records tab of object pages, event stream, instance status and logs |
 | `endpoint.view` / `endpoint.operate` / `endpoint.manage` | Reading accounts and conversations / sending messages, handling requests, login assist / adding, changing, starting and stopping account connections |
 | `feature.view` / `feature.configure` / `feature.toggle` | Reading feature configuration / writing configuration and overrides / enabling and disabling (see [Feature matrix and layered configuration](./features.md)) |
 | `plugin.manage` | Installing, updating and uninstalling plugins and dependencies; onboarding steps 3–5 |
@@ -82,7 +86,7 @@ Built-in roles cannot be changed or deleted, but can be copied:
 | `ops.files.read` / `ops.files.write` | Project files (reading or writing `.env` and the configuration file still needs `ops.env.*` / `ops.config.*`) |
 | `ops.restart` | Starting, stopping and restarting the instance |
 | `ops.terminal` | Terminal (see [Operations](./operations.md#terminal)) |
-| `iam.view` / `iam.manage` | This section |
+| `iam.view` / `iam.manage` | This group; `iam.manage` also covers the Roles tab of object pages (`chat-roles.*`, checked by scope) |
 | `mcp.access` / `a2a.access` | Bearer access to the MCP Server and A2A Server |
 | `plugin.perms.read` / `plugin.perms.operate` / `plugin.perms.manage` | Every plugin permission of that level |
 
@@ -101,15 +105,16 @@ Plugin permissions are named `<plugin>:<action>` (`onebot11:read`, `ambient:read
 
 | Action | Endpoint | Permission |
 | --- | --- | --- |
-| My tokens (personal settings) | `GET` / `POST {base}/auth/tokens`, `POST {base}/auth/tokens/revoke` | Any signed-in user |
-| All tokens | `iam.tokens.list` | `iam.view` |
-| Issue / revoke for a user | `iam.tokens.create` / `iam.tokens.revoke` | `iam.manage` |
+| My tokens (Personal settings `/account`) | `GET` / `POST {base}/auth/tokens`, `POST {base}/auth/tokens/revoke` | Any signed-in user |
+| All tokens (filter by user) | `iam.tokens.list` | `iam.view` |
+| **Issue for a user** / revoke | `iam.tokens.create` / `iam.tokens.revoke` | `iam.manage` |
 
-When issuing, set a name and an expiry, and optionally tick only the permissions needed (a readiness probe needs only `status.view`, an MCP client only `mcp.access`).
+On the API tokens page, click **Issue for a user**, pick the user and set a name and a validity period; issuing your own token in Personal settings works the same way. A token issued from the Console UI carries all of the user's permissions; when issuing through the API you can list only the permissions needed (a readiness probe needs only `status.view`, an MCP client only `mcp.access`), and the list shows it as narrowed to N items.
 
 - The plaintext is **shown once, at issue time**; the database stores only its SHA-256.
 - A token never exceeds its user: listed plugin permissions take effect only if the user holds them (by name or level); disabling or deleting the user invalidates the token; tokens can also be revoked individually.
 - Command-line tools read `ZHIN_CONSOLE_TOKEN`: `ZHIN_CONSOLE_TOKEN=<token> zhin doctor --live https://bot.example.com/api --json`.
+- MCP / A2A clients send the token as `Authorization: Bearer`; the issuing account must hold `mcp.access` / `a2a.access` **globally** (a grant limited to one scope does not count). The protocols' own `mcp.token` / `a2a.token` work as well; see [Configuration · mcp / a2a](../configuration/index.md#mcp-a2a). The bootstrap token stops working once the first owner exists and cannot be used for MCP / A2A.
 
 ## Audit log {#audit}
 

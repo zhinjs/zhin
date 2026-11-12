@@ -1,21 +1,18 @@
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { adapterFeatureId, isAdapterIndex, type AdapterIndex } from '@zhin.js/adapter';
+import type { ChatRoleService } from '@zhin.js/core';
 import { commandFeatureId, defineCommand, type CommandContext } from '@zhin.js/command';
 import { readOperationSession, type OperationSession } from '@zhin.js/feature-kit';
 import {
-  childPluginId,
   createMessages,
   normalizeDeliveryTarget,
-  readPluginConfigurationMap,
-  rootPluginId,
-  type CapabilityId,
   type DeliveryTarget,
   type Locale,
-  type RuntimeConfigDocument,
+  type RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
-import type { EndpointRoleResolver, ImRuntime } from '@zhin.js/core/runtime';
+import { senderIsGlobalOwner, type ImRuntime } from '@zhin.js/core/runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 const RESTART_RECEIPT_RELATIVE_PATH = join('.zhin', 'restart-receipt.json');
@@ -31,8 +28,8 @@ const messages = createMessages({
     en: 'Safely restart the Bot process and report the outcome in this conversation (Bot owner only)',
   },
   denied: {
-    'zh-CN': '仅允许 Bot 主人（master）执行重启指令。',
-    en: 'Only the Bot owner (master) is allowed to restart the bot.',
+    'zh-CN': '仅允许全局层 Bot 主人（owner）执行重启指令。',
+    en: 'Only a global Bot owner (chat role owner at the global level) is allowed to restart the bot.',
   },
   unsupported: {
     'zh-CN': '当前进程未受 Supervisor 守护（如使用了 --once 或裸 node 启动），无法在聊天中自动重启；请在宿主机重启服务。',
@@ -60,34 +57,17 @@ export interface PendingRestartReceipt {
 export type RestartChatAuthorizer = (session: OperationSession<string>, adapters: AdapterIndex) => boolean;
 
 /**
- * Authorizes a chat-initiated restart in private, group, or channel conversations
- * when the sender is a configured `master` (either via enriched `authorizationRoles`
- * or via `endpointRoles` on the receiving Adapter).
+ * Authorizes a chat-initiated restart in private, group, or channel conversations when the sender
+ * is a **global** chat-role `owner` (ADR 0056 §2): restarting the instance is host-wide, so owners
+ * of a conversation, account or adapter do not qualify.
  */
 export function createRestartChatAuthorizer(
-  startup: RuntimeConfigDocument,
-  endpointRoles: EndpointRoleResolver,
+  roles: () => ChatRoleService | undefined,
+  snapshot: () => Pick<RuntimeSnapshot, 'tree'> | undefined = () => undefined,
 ): RestartChatAuthorizer {
-  const owners = new Map(
-    Object.keys(readPluginConfigurationMap(startup)).map((key) => [childPluginId(rootPluginId(), key), key]),
-  );
   return (session, adapters) => {
     if (!session.sender?.id || !isAdapterIndex(adapters) || session.signal.aborted) return false;
-    if (session.sender.authorizationRoles?.includes('master')) return true;
-    const id = session.scene.endpoint.id as CapabilityId;
-    const adapter = adapters.adapterForEndpoint(id);
-    const child = adapter?.find(id);
-    if (!adapter || !child || session.adapter !== adapter || session.endpoint !== adapter.getEndpoint(child.desired.instanceId)) {
-      return false;
-    }
-    if (!child.started) return false;
-    const key = owners.get(adapter.descriptor.owner);
-    if (key === undefined) return false;
-    const sender = session.sender.id;
-    return (
-      endpointRoles.resolveOwner(key, child.desired.endpointId) === sender ||
-      adapter.list().some((entry) => !entry.removed && !entry.retiring && endpointRoles.resolveOwner(key, entry.endpointId) === sender)
-    );
+    return senderIsGlobalOwner(session, adapters, roles(), snapshot());
   };
 }
 

@@ -7,7 +7,7 @@ export default defineAgentTool({
   description: '撤回当前 QQ 群或频道子频道内他人的真实消息；需调用方具备群管发起权限，你须为管理员，官方只允许 2 分钟内',
   adapter: 'qq',
   scopes: ['group', 'channel'],
-  permissions: ['role(master,admin,trusted,owner)'],
+  permissions: ['trusted', 'bot:admin'],
   requiresApproval: 'never',
   inputSchema: z.object({
     message_id: z.string().min(1).describe('当前会话中要撤回的真实消息 ID，或消息头里的 m<n> 别名'),

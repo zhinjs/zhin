@@ -103,15 +103,15 @@ describe('resolveToolTier', () => {
     expect(resolveToolTier(imTurn('channel', ['user']))).toBe('chat');
     expect(resolveToolTier(imTurn('private', ['user']))).toBe('chat');
     expect(resolveToolTier(imTurn('private', ['user', 'trusted']))).toBe('chat');
-    expect(resolveToolTier(imTurn('private', ['master']))).toBe('master');
+    expect(resolveToolTier(imTurn('private', ['owner']))).toBe('master');
   });
 
   it('keeps the dev tier out of group chats even for a master', () => {
-    expect(resolveToolTier(imTurn('group', ['master']))).toBe('chat');
+    expect(resolveToolTier(imTurn('group', ['owner']))).toBe('chat');
   });
 
   it('leaves non-IM origins on the full default set', () => {
-    expect(resolveToolTier({ origin: { kind: 'schedule' }, principal: { roles: ['master'] } })).toBe('full');
+    expect(resolveToolTier({ origin: { kind: 'schedule' }, principal: { roles: ['owner'] } })).toBe('full');
   });
 });
 

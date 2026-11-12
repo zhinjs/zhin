@@ -30,7 +30,10 @@ export function narrowMergedAccess(
   const permissions = intersect(carrier.policy.permissions, others.map((member) => member.policy.permissions));
   return Object.freeze({
     ...carrier,
-    principal: Object.freeze({ ...carrier.principal, roles: Object.freeze(roles) }),
+    principal: Object.freeze({ ...carrier.principal, roles: Object.freeze(roles),
+      // Platform standing is per sender; a merged turn keeps none unless every member shares it.
+      platform: others.every((member) => JSON.stringify(member.principal.platform) === JSON.stringify(carrier.principal.platform))
+        ? carrier.principal.platform : undefined }),
     policy: Object.freeze({
       ...carrier.policy,
       permissions: Object.freeze(permissions),

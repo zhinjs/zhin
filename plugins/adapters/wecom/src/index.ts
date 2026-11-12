@@ -23,12 +23,7 @@ export {
 
 export { type WecomClientEventMap } from './client.js';
 
-export {
-  checkWecomPlatformPermit,
-  normalizeWecomSenderForPermit,
-  platformPermit,
-  wecomGroupPermitResolver,
-} from './platform-permit.js';
+export { platformPermit } from './platform-permit.js';
 
 export {
   WecomEndpoint,

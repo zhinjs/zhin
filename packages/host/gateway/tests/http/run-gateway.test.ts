@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { parseStartOptions } from '@zhin.js/runtime';
-import { runGateway } from '../../src/http/run-gateway.js';
+import { foregroundStdin, runGateway } from '../../src/http/run-gateway.js';
 import { ProjectDatabase } from '../../src/database/project-database.js';
 import { ConsoleIamService } from '../../src/iam/service.js';
 import { defineConsoleIamTables } from '../../src/iam/tables.js';
@@ -184,4 +184,15 @@ describe('runGateway (zhin runtime start, supervised)', () => {
     expect((await fetch(`${origin}/exit`, { method: 'POST' })).status).toBe(202);
     expect(await exit).toBe(0);
   }, 60_000);
+});
+
+describe('foregroundStdin', () => {
+  it('forwards stdin to the instance only for a foreground gateway on a TTY', () => {
+    expect(foregroundStdin(false, { isTTY: true }, () => true)).toBe(true);
+    expect(foregroundStdin(true, { isTTY: true }, () => true)).toBe(false);
+    expect(foregroundStdin(false, { isTTY: false }, () => true)).toBe(false);
+    expect(foregroundStdin(false, {}, () => true)).toBe(false);
+    // A background job (`zhin start --foreground &`) keeps its TTY away from the instance.
+    expect(foregroundStdin(false, { isTTY: true }, () => false)).toBe(false);
+  });
 });

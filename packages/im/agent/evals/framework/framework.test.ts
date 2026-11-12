@@ -26,7 +26,7 @@ const approvalCase = (approval: EvalCase['approval']) => defineEvalCase({
   id: 'approval-gate',
   description: 'An approval-gated tool asks the approval channel first.',
   source: 'framework self-test',
-  inbound: { text: '把这条消息转发到运营群', sender: { id: 'owner', roles: ['master'] } },
+  inbound: { text: '把这条消息转发到运营群', sender: { id: 'owner', chatRole: 'owner' } },
   tools: [{ name: 'forward_message', requiresApproval: 'once', result: 'forwarded' }],
   approval,
   script: [
@@ -52,7 +52,7 @@ describe('eval framework', () => {
     const [trace] = run.traces;
     expect(trace).toMatchObject({
       turn_id: 'approval-gate:turn-1',
-      principal: { subject_id: 'owner', roles: ['master'] },
+      principal: { subject_id: 'owner', roles: ['owner'] },
       termination: { status: 'completed' },
     });
     expect(trace!.model_calls.length).toBeGreaterThanOrEqual(1);
@@ -367,7 +367,7 @@ describe('eval framework: timer inbound (ADR 0048 H3 Gap A)', () => {
     script: [{ text: '提醒：开会' }],
     expect: {},
   });
-  const wellFormedTimer = { kind: 'timer', timerId: 'standup', content: '开会', owner: { id: 'owner', roles: ['master'] } } as const;
+  const wellFormedTimer = { kind: 'timer', timerId: 'standup', content: '开会', owner: { id: 'owner', roles: ['owner'] } } as const;
 
   it('accepts a well-formed timer inbound', () => {
     expect(validateEvalCase(timerCase(wellFormedTimer))).toEqual([]);

@@ -1,0 +1,32 @@
+[
+  {
+    "file": "plugins/adapters/dingtalk/agents/dingtalk/skills/dingtalk/tools/send_work_notice/index.ts",
+    "call": "sendWorkNotice",
+    "reason": "DingTalk work notices use the corp notification API (asyncsend_v2) addressed to user ids; they are not a conversation message the Endpoint can send. Gated by owner@global."
+  },
+  {
+    "file": "plugins/adapters/napcat/agents/napcat/skills/napcat-messaging/tools/forward_single_msg/index.ts",
+    "call": "forwardFriendSingleMsg",
+    "reason": "Native OneBot single-message forward of an existing message id to another friend / group; no outbound element expresses forwarding an existing message natively. Gated by owner@global."
+  },
+  {
+    "file": "plugins/adapters/napcat/agents/napcat/skills/napcat-messaging/tools/forward_single_msg/index.ts",
+    "call": "forwardGroupSingleMsg",
+    "reason": "Same as forwardFriendSingleMsg (group target)."
+  },
+  {
+    "file": "plugins/adapters/napcat/agents/napcat/skills/napcat-group-media/tools/ai_tts/index.ts",
+    "call": "sendGroupAiRecord",
+    "reason": "The platform synthesizes and sends the voice itself (send_group_ai_record); there is no audio payload for the outbound chain to carry. Current group only."
+  },
+  {
+    "file": "plugins/adapters/discord/agents/discord/skills/discord-guild/tools/forum_post/index.ts",
+    "call": "threads.create",
+    "reason": "Creating a forum post creates a new thread channel with its starter message; the outbound chain sends into existing conversations only. Current forum only."
+  },
+  {
+    "file": "plugins/adapters/discord/agents/discord/skills/discord-guild/tools/create_thread/index.ts",
+    "call": "threads.create",
+    "reason": "Creates a thread channel (no message content). Current channel only."
+  }
+]

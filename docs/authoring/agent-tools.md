@@ -67,12 +67,20 @@ export default defineAgentTool({
   description: '踢出群成员',
   platforms: ['icqq'],          // 只在 QQ 上提供
   scopes: ['group'],            // 只在群聊中提供
-  permissions: ['role(master)'], // 只有 master 发起的对话才提供
+  permissions: ['platform:admin', 'bot:admin'], // 发起人是群管理员，且机器人自己也是管理员
   // ...
 });
 ```
 
-不满足条件时，模型根本看不到这个工具。`permissions` 与命令的 [`permit`](./commands.md) 使用同一套规则。`hidden: true` 表示注册但不提供给模型，只能按名字调用。
+不满足条件时，模型根本看不到这个工具；执行时还会用同一份事实再校验一次。`permissions` 与命令的 [`permit`](./commands.md) 使用同一套规则、同一个评估器，按三条维度判断：
+
+| 维度 | 写法 | 何时用 |
+| --- | --- | --- |
+| 发起人的 zhin 角色 | `owner` / `admin` / `trusted`，层级限定 `owner@global` 等 | zhin 功能与 Agent 信任档位（读配置、改记忆、危险操作）；宿主全局能力或跨会话 / 跨群的操作写 `owner@global`（会话层 owner 只管该会话） |
+| 发起人的平台身份 | `platform:owner\|admin`、`platform-role:<id>`、`platform-permission:<name>` | 平台功能：谁可以让机器人禁言、踢人、改身份组 |
+| 机器人自身的平台身份 | `bot:owner\|admin`、`bot-role:<id>`、`bot-permission:<name>` | 平台要求机器人有权限的操作：禁言、撤回他人消息、踢人、改群名片、设管理员…… |
+
+机器人身份由适配器的自身身份查询提供（能力画像 `scene.selfStanding`，按会话缓存）；适配器不支持或查询失败时，所有 `bot:*` 条件都不满足，工具不披露。平台群主 / 管理员不是 zhin 角色：只写 `admin` 的工具不会对群主开放。`hidden: true` 表示注册但不提供给模型，只能按名字调用。
 
 会话冷却等动态状态可以用 `isAvailable({ sessionKey, origin })` 在回合开始时判断。按平台会话
 限流时，使用 `origin.conversation` 的完整身份（含 endpoint、parent、thread），因为子任务的
@@ -334,7 +342,7 @@ tools:
 
 例如 ICQQ 的点赞放在通用 `icqq-interaction`，戳一戳和签到放在 `icqq-group-interaction`；后者的 SKILL.md frontmatter 和每个私有 Tool 都声明 `scopes: ['group']`。私聊不会获得这个 Skill 的目录、正文或工具，之前加载过也不会绕过本轮筛选。未声明 `scopes` 表示所有场景，不代表拥有所有权限。
 
-绑定当前会话的工具还可声明 `currentConversationBotRoles: ['owner', 'admin']`，由可信入站提供 Bot 平台角色。它与发起人的 `permissions` 同时满足才披露，角色未知时该工具不可发现或加载。角色条件只适用于当前会话：如果工具参数可以选择其他群，须在执行时检查目标群角色，不能用当前群角色代替。入站筛选也不能替代执行前的实时平台检查。
+需要机器人在当前会话具备平台地位时，优先在 `permissions` 中写 `bot:admin` / `bot:owner` / `bot-permission:<name>`（与命令共用）。`currentConversationBotRoles: ['admin', 'member']` 仍可用于 permit 表达不了的精确集合（如「机器人不是群主时才能退群」），由可信入站提供 Bot 平台角色。两者都与发起人的条件同时满足才披露，角色未知时该工具不可发现或加载。角色条件只适用于当前会话：如果工具参数可以选择其他群，须在执行时检查目标群角色，不能用当前群角色代替。入站筛选也不能替代执行前的实时平台检查。
 
 群管理只在群聊披露，服务器/频道管理使用适配器实际归一化后的场景：Slack 的频道是 `group`，Discord、KOOK、QQ 频道是 `channel`。创建新群、账号查询、用户资料等通用能力独立保留；混合场景的 Skill 应拆分。
 :::
@@ -426,8 +434,8 @@ my-plugin/
 | `riskCategory` | 否 | `'member' \| 'publish' \| 'funds' \| 'identity'`，显示在审批卡片上；`funds` 默认禁用 |
 | `platforms` | 否 | 限定平台，如 `['icqq']`；为空表示全部 |
 | `scopes` | 否 | 限定场景 `'private' \| 'group' \| 'channel'`；为空表示全部 |
-| `currentConversationBotRoles` | 否 | Bot 在当前会话必须具备的平台角色；未知或不匹配时不提供工具 |
-| `permissions` | 否 | 发起人的权限规则列表，全部满足才提供 |
+| `currentConversationBotRoles` | 否 | Bot 在当前会话必须属于的平台角色精确集合；未知或不匹配时不提供工具（一般用 `bot:*` permit） |
+| `permissions` | 否 | 权限规则列表（发起人 zhin 角色、发起人平台身份、机器人自身平台身份），全部满足才提供 |
 | `hidden` | 否 | 注册但不提供给模型，仍可按名字调用 |
 | `alwaysLoaded` | 否 | 设为 `true` 时参数定义每轮常驻给模型；默认 `false`（延迟加载），见[让工具常驻](#让工具常驻) |
 | `readOnly` | 否 | 设为 `true` 表示工具只读（不改平台、存储，也不影响别人）；受限回合（如直播弹幕回合，ADR 0038 §5）只开放声明了 `readOnly: true` 的工具。不声明视为会写 |
@@ -435,7 +443,7 @@ my-plugin/
 
 ### 权限规则
 
-`permissions` 由 `@zhin.js/permission` 统一解析：`adapter(name)`、`group(id,...)`、`private(id,...)`、`channel(id,...)`、`user(id,...)`、`role(master|trusted|user)`，以及由适配器判断的平台身份 `platform(adapter,perm)`（例如群主 / 管理员）。列表中的规则全部满足才通过；一条规则括号内的逗号表示满足其一。**无法识别的规则一律拒绝。**
+`permissions` 由 `@zhin.js/permission` 统一解析：`adapter(name)`、`group(id,...)`、`private(id,...)`、`channel(id,...)`、`user(id,...)`、聊天角色 `owner` / `admin` / `trusted`（或 `role(...)`，按本会话层级链判断，见[聊天角色](../concepts/chat-roles.md)），发起人的平台身份 `platform:owner|admin`、`platform-role:<id>`、`platform-permission:<name>`（读取适配器上报的 `sender.platform`），以及机器人自身的平台身份 `bot:owner|admin`、`bot-role:<id>`、`bot-permission:<name>`。已移除的写法（`scene_admin`、`platform(adapter,perm)`、`role(master)`）在定义工具时报错。列表中的规则全部满足才通过；一条规则括号内的逗号表示满足其一。**无法识别的规则一律拒绝。**
 
 ### Prompt Section 字段
 

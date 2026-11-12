@@ -2,7 +2,7 @@ import { PluginTestKit, type TestDelivery, type TestReloadResult } from '../../s
 
 declare const kit: PluginTestKit;
 const received = kit.receive({ endpoint: 'test', content: 'checkin',
-  conversation: { kind: 'group', id: 'g1' }, sender: { id: 'u1', roles: ['admin'] } });
+  conversation: { kind: 'group', id: 'g1' }, sender: { id: 'u1', chatRole: 'admin' } });
 void received;
 void kit.send({ conversation: { kind: 'private', id: 'u1' }, content: 'hello' });
 void kit.patchConfig([{ op: 'set', path: ['plugin', 'enabled'], value: true }]);

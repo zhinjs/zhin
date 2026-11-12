@@ -3,7 +3,7 @@
  * 折叠新的 conversation_events 与发送者角色进会话画像，并判定 Bot 当前能否在此会话发言。
  * 任何错误都按「可以发言」处理（fail-open），不阻断正常消息。
  */
-import { sceneRoleOf, type SessionProfileStore, type SpeakBlockReason } from '../../index.js';
+import { type SessionProfileStore, type SpeakBlockReason } from '../../index.js';
 import type { Message } from '@zhin.js/core/runtime';
 import type { ConversationEventReader } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -27,10 +27,9 @@ export async function observeSessionAndCheckSpeak(input: SessionGateInput): Prom
   if (!sessions || !input.platform || !input.sceneId) return null;
   try {
     const metadata = (message.metadata ?? {}) as Record<string, unknown>;
-    const roles = [
-      ...((message.sender as { roles?: readonly unknown[] } | undefined)?.roles ?? []),
-      ...(Array.isArray(metadata.roles) ? metadata.roles : []),
-    ];
+    // Platform facts only (ADR 0056 §1): the normalized standing, never zhin chat roles.
+    const standing = message.sender?.platform?.standing;
+    const sceneRole = standing === 'owner' || standing === 'admin' ? standing : undefined;
     const selfIds = [input.endpointId, metadata.selfId, metadata.self_id]
       .filter((value): value is string | number => typeof value === 'string' || typeof value === 'number')
       .map(String);
@@ -40,7 +39,7 @@ export async function observeSessionAndCheckSpeak(input: SessionGateInput): Prom
       scope: input.scope,
       sceneId: input.sceneId,
       ...(typeof conversationName === 'string' ? { title: conversationName } : {}),
-      sender: { id: input.senderId, ...(message.sender?.name ? { name: message.sender.name } : {}), sceneRole: sceneRoleOf(roles) },
+      sender: { id: input.senderId, ...(message.sender?.name ? { name: message.sender.name } : {}), ...(sceneRole ? { sceneRole } : {}) },
       selfIds,
       throughSequence: input.conversationSequence,
       ...(input.events ? {

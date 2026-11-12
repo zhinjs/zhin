@@ -63,7 +63,7 @@ unsolicited messages, change membership, or alter Webhooks.
 ```sh
 node scripts/platform-acceptance/run.mjs --project /absolute/test-project --policy /absolute/policy.json --prepare
 # In the test project, launch the existing real Zhin CLI with this environment:
-ZHIN_ACCEPTANCE_POLICY=/absolute/policy.json pnpm exec zhin runtime start
+ZHIN_ACCEPTANCE_POLICY=/absolute/policy.json pnpm exec zhin start --foreground
 # In a separate terminal, observe actual probe results:
 node scripts/platform-acceptance/run.mjs --project /absolute/test-project --policy /absolute/policy.json --report /absolute/new-report.json --duration 30s
 ```

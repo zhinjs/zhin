@@ -1,10 +1,13 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import type { MediaRef } from '@zhin.js/im-contract';
+import type { OutboundMediaTrust } from '@zhin.js/core';
+import type { Locale } from '@zhin.js/plugin-runtime';
 import type { MediaContentBlock } from '@zhin.js/ai';
 import type { MediaBinaryPayload, MediaKind } from './media-types.js';
 import { checkUrlNetworkAccess, hostnameResolvesToBlockedAddress } from '../security/network-policy.js';
 import { authorizeTurnFileInput } from '../security/turn-file-authority.js';
+import { checkFilePermission, type FileRole } from '../security/file-role-policy.js';
 import type { ImageAssetPublisher } from './image-assets.js';
 
 /**
@@ -17,6 +20,12 @@ export interface OutboundMediaAuthority {
   readonly imageAssets?: ImageAssetPublisher;
   readonly filesystem?: Readonly<{ workspaceRoot: string; workingDirectory?: string }>;
   readonly network?: Readonly<{ enabled: boolean; httpsOnly?: boolean; allowedDomains?: readonly string[] }>;
+  /**
+   * File role of the Turn's initiator (ADR 0056 §2: only a global owner is `owner`). Model-referenced
+   * paths get the same read decision as `read_file`; a read that would need confirmation is refused,
+   * because a reply attachment has no approval step. Absent: `user` (fail closed).
+   */
+  readonly fileRole?: FileRole;
 }
 
 /**
@@ -37,7 +46,31 @@ export async function authorizeOutboundMediaPath(
   const decision = await authorizeTurnFileInput(
     'read_file', { file_path: rawPath }, filesystem.workspaceRoot, filesystem.workingDirectory,
   );
-  return decision.allowed ? String(decision.input.file_path) : null;
+  if (!decision.allowed) return null;
+  const canonical = String(decision.input.file_path);
+  const permission = checkFilePermission(authority.fileRole ?? 'user', 'read', canonical);
+  if (!permission.allowed || permission.needsConfirmation || permission.needsOwnerConfirmation) return null;
+  return canonical;
+}
+
+/**
+ * Core's untrusted-source media policy for content the model authored (ADR 0056 §2). Delivered
+ * content is wrapped with `untrustedContent(content, trust)`: local paths pass only when the Turn's
+ * file authority admits them (or the Agent built the MediaRef itself, see `trustedMediaRef`), and
+ * `file` refs must be bare platform tokens, so a reply can never make an adapter read a host file.
+ */
+export function modelMediaTrust(
+  source: string,
+  authority: OutboundMediaAuthority,
+  options: Readonly<{ locale?: Locale; maxInlineBytes?: number }> = {},
+): OutboundMediaTrust {
+  return Object.freeze({
+    source,
+    authorizePath: async (rawPath: string) => (await authorizeOutboundMediaPath(rawPath, authority)) ?? undefined,
+    ...(options.locale ? { locale: options.locale } : {}),
+    // The Endpoint's declared attachment limit already bounded what the publisher kept inline.
+    ...(options.maxInlineBytes !== undefined ? { maxInlineBytes: options.maxInlineBytes } : {}),
+  });
 }
 
 /** Network options for fetching model-referenced media, or null when the Turn has no network authority. */

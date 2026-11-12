@@ -60,6 +60,16 @@ describe('package cutover', () => {
     await expect(cutover.plan(root)).resolves.toMatchObject({ changed: false });
   });
 
+  it('rewrites a bare zhin start (background by default now) to the foreground start script', async () => {
+    const root = await fixture({ private: true, scripts: { start: 'zhin start', daemon: 'zhin start --daemon', dev: 'zhin start --watch' } });
+    const plan = await new PackageCutover().plan(root);
+    expect(JSON.parse(plan.candidatePackage).scripts).toMatchObject({
+      start: 'zhin start --foreground --mode production --no-watch',
+      daemon: 'zhin start --daemon',
+      dev: 'zhin start --watch',
+    });
+  });
+
   it('emits a publishable JavaScript package golden manifest for a public plugin', async () => {
     const root = await fixture({ private: false, scripts: { dev: 'zhin dev', build: 'zhin build' } });
     await writeFile(join(root, 'commands/status/index.ts'), legacyCommandDefinition());
@@ -100,11 +110,11 @@ describe('package cutover', () => {
           "private": false,
           "scripts": {
             "build": "pnpm run zhin:build",
-            "daemon": "zhin runtime start --daemon",
-            "dev": "zhin runtime start",
+            "daemon": "zhin start --mode production --no-watch",
+            "dev": "zhin start --foreground --watch source config",
             "prepack": "pnpm run zhin:build",
             "prepublishOnly": "pnpm run zhin:build",
-            "start": "zhin runtime start",
+            "start": "zhin start --foreground --mode production --no-watch",
             "zhin:build": "tsc -p tsconfig.zhin.json",
           },
           "type": "module",
@@ -195,6 +205,78 @@ describe('package cutover', () => {
     await cutover.apply(plan);
     await expect(readFile(join(root, 'plugin.ts'), 'utf8')).resolves.toBe(entryBefore);
     await expect(cutover.plan(root)).resolves.toMatchObject({ changed: false });
+  });
+
+  it('moves the CLI of an old bot project into dependencies next to zhin.js and adds the gateway', async () => {
+    const root = await fixture({
+      dependencies: { existing: '^1.0.0', 'zhin.js': '^1.1.0' },
+      devDependencies: { '@zhin.js/cli': '^1.1.20', typescript: '^5.0.0', '@types/node': '^22.0.0' },
+    });
+    const plan = await new PackageCutover().plan(root);
+    const candidate = JSON.parse(plan.candidatePackage) as {
+      dependencies: Record<string, string>;
+      devDependencies: Record<string, string>;
+    };
+    const gatewayVersion = (JSON.parse(await readFile(
+      join(import.meta.dirname, '../../../../packages/host/gateway/package.json'),
+      'utf8',
+    )) as { version: string }).version;
+
+    expect(plan.mode).toBe('development');
+    expect(candidate.dependencies).toMatchObject({
+      existing: '^1.0.0',
+      'zhin.js': '^1.1.0',
+      '@zhin.js/cli': '^1.1.20',
+      '@zhin.js/gateway': `^${gatewayVersion}`,
+    });
+    expect(plan.dependencies['@zhin.js/gateway']).toBe(`^${gatewayVersion}`);
+    expect(candidate.devDependencies).toEqual({ typescript: '^5.0.0', '@types/node': '^22.0.0' });
+
+    await new PackageCutover().apply(plan);
+    await expect(new PackageCutover().plan(root)).resolves.toMatchObject({ changed: false });
+  });
+
+  it('keeps declared stack versions, reuses the CLI dist-tag for the gateway and dedupes devDependencies', async () => {
+    const tagged = await fixture({
+      devDependencies: { '@zhin.js/cli': 'next', 'zhin.js': '^1.1.0' },
+    });
+    const taggedPlan = JSON.parse((await new PackageCutover().plan(tagged)).candidatePackage) as {
+      dependencies: Record<string, string>;
+      devDependencies: Record<string, string>;
+    };
+    expect(taggedPlan.dependencies).toMatchObject({
+      'zhin.js': '^1.1.0',
+      '@zhin.js/cli': 'next',
+      '@zhin.js/gateway': 'next',
+    });
+    expect(taggedPlan.devDependencies).toEqual({ typescript: 'latest' });
+
+    const declared = await fixture({
+      dependencies: { '@zhin.js/cli': 'workspace:*', '@zhin.js/gateway': '^1.0.5' },
+      devDependencies: { '@zhin.js/gateway': '^9.9.9', '@zhin.js/cli': '^9.9.9' },
+    });
+    const declaredPlan = JSON.parse((await new PackageCutover().plan(declared)).candidatePackage) as {
+      dependencies: Record<string, string>;
+      devDependencies: Record<string, string>;
+    };
+    expect(declaredPlan.dependencies).toMatchObject({
+      'zhin.js': 'latest',
+      '@zhin.js/cli': 'workspace:*',
+      '@zhin.js/gateway': '^1.0.5',
+    });
+    expect(declaredPlan.devDependencies).toEqual({ typescript: 'latest' });
+
+    const fresh = await fixture();
+    const freshPlan = JSON.parse((await new PackageCutover().plan(fresh)).candidatePackage) as {
+      dependencies: Record<string, string>;
+      devDependencies: Record<string, string>;
+    };
+    expect(freshPlan.dependencies).toMatchObject({
+      'zhin.js': 'latest',
+      '@zhin.js/cli': 'latest',
+      '@zhin.js/gateway': 'latest',
+    });
+    expect(freshPlan.devDependencies['@zhin.js/cli']).toBeUndefined();
   });
 
   it('rejects a forged plan outside the project transaction files', async () => {

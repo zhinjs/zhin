@@ -485,6 +485,22 @@
         }
       }
     },
+    "gateway": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Management gateway (zhin start): instance supervision and dependency transactions.",
+      "x-descriptionZh": "管理网关（zhin start）：实例监管与依赖事务。",
+      "properties": {
+        "readyTimeout": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3600,
+          "default": 60,
+          "description": "Seconds the instance has to report ready after a start, a restart or a dependency transaction before the start counts as failed (the transaction then rolls back). Read again before every start, restart and transaction; no gateway restart needed.",
+          "x-descriptionZh": "实例启动、重启或依赖事务后报告就绪的最长秒数；超时视为启动失败（依赖事务随之回滚）。每次启动、重启与事务前重新读取，修改后无需重启网关。"
+        }
+      }
+    },
     "database": {
       "type": "object",
       "additionalProperties": true,
@@ -3876,6 +3892,28 @@
             "Simplified Chinese",
             "English"
           ]
+        }
+      }
+    },
+    "features": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Feature configuration beyond the plugin blocks (ADR 0055): in-chat self-service. Restart to apply.",
+      "x-descriptionZh": "插件配置块之外的功能配置（ADR 0055）：群内自助。修改后需重启。",
+      "properties": {
+        "selfService": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "In-chat `feature` / `功能` and `role` / `角色` commands for chat role admins (ADR 0055 / 0056). Off by default. Platform group owners / admins are not zhin roles: grant them admin explicitly.",
+          "x-descriptionZh": "聊天角色 admin 在聊天中使用的 `功能` / `feature` 与 `角色` / `role` 命令（ADR 0055 / 0056），默认关闭。平台群主 / 管理员不是 zhin 角色，需要显式授予 admin。",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": false,
+              "description": "Register the in-chat feature and role commands.",
+              "x-descriptionZh": "注册群内功能自助与角色命令。"
+            }
+          }
         }
       }
     }

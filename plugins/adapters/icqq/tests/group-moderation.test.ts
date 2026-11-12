@@ -19,25 +19,29 @@ function fixture() {
   return { self, member, native, client, abort, joinedAt: member.join_time * 1000 };
 }
 
+function toolContext(f: ReturnType<typeof fixture>) {
+  const conversation = { endpoint: { adapter: 'icqq', id: '8596238' }, kind: 'group' as const, id: '129043431' };
+  return { $client: f.client, signal: f.abort.signal, locale: 'en',
+    origin: { kind: 'im', platform: 'icqq', conversation } } as never;
+}
+
 afterEach(() => vi.useRealTimers());
 
 describe('ICQQ checked moderation port', () => {
   it('keeps the ordinary kick tool behind human approval and checks the SDK result', async () => {
     const f = fixture(); f.native.setGroupKick.mockResolvedValue(false);
     expect(kickTool.requiresApproval).toBe('human');
-    await expect(kickTool.execute({ group_id: 129043431, user_id: 123, reason: '经人工确认' },
-      { $client: f.client, signal: f.abort.signal, locale: 'en' } as never)).resolves.toMatchObject({ success: false, message: 'The platform did not confirm removal; do not retry automatically' });
+    await expect(kickTool.execute({ user_id: 123, reason: '经人工确认' }, toolContext(f))).resolves.toMatchObject({ success: false, message: 'The platform did not confirm removal; do not retry automatically' });
     expect(f.native.getGroupMemberInfo).toHaveBeenCalledWith(129043431, 123, true);
     expect(f.native.setGroupKick).toHaveBeenCalledTimes(1);
   });
   describe('set_group_admin', () => {
     const run = (f: ReturnType<typeof fixture>, enabled: boolean, user_id = 123) => setAdminTool.execute(
-      { group_id: 129043431, user_id, enabled, reason: '经人工确认' },
-      { $client: f.client, signal: f.abort.signal, locale: 'en' } as never);
+      { user_id, enabled, reason: '经人工确认' }, toolContext(f));
 
     it('is owner-only and human-approved', () => {
-      expect(setAdminTool).toMatchObject({ requiresApproval: 'human', currentConversationBotRoles: ['owner'],
-        permissions: ['role(master,admin,trusted,owner)'], scopes: ['group'] });
+      expect(setAdminTool).toMatchObject({ requiresApproval: 'human', permissions: ['platform:owner', 'bot:owner'], scopes: ['group'] });
+      expect(setAdminTool.currentConversationBotRoles).toBeUndefined();
     });
 
     it.each([[true, 'member', 'Member 123 is now an administrator'], [false, 'admin', 'Administrator role removed from 123']] as const)(

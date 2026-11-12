@@ -33,6 +33,9 @@ export default defineAdapter<LarkEndpointConfig>({
       },
       delivery: { send: true, proactive: true, spool: true },
     },
+    // ADR 0056 §1：群消息按 chat.get 的群主 / 群管理员归一 standing。
+    // 机器人自身：chat.get 的群主 / bot_manager_id_list（bot:admin）。
+    group: { scene: { platformStanding: { standing: true }, selfStanding: { standing: true } } },
   },
   createAdapter: context => new LarkAdapter(context),
 });

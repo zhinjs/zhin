@@ -49,7 +49,7 @@ AdapterIndex 合并进每个 endpoint；每个 endpoint 也可以显式覆盖这
 ```bash
 pnpm install --frozen-lockfile
 pnpm build
-pnpm exec zhin runtime start --mode production --no-watch
+pnpm exec zhin start --foreground --mode production --no-watch
 ```
 
 运行时 HTTP Host 监听 `3000` 端口后，适配器会注册 `/wechat/webhook` 的 GET 和

@@ -99,6 +99,6 @@ zhin trace --engagements
 zhin trace <engagementId>
 ```
 
-协作事件保存在数据库的 `engagement_events` 表中，需要 SQLite、MySQL 或 PostgreSQL。Console 的协作图谱页面展示同一份数据。
+协作事件保存在数据库的 `engagement_events` 表中，需要 SQLite、MySQL 或 PostgreSQL。Console 的 Workroom 页面（`/features/ai/workrooms`）展示同一份数据。
 
 更多说明见 [Agent 与工具调用](./agent.md#多-agent-协作)。

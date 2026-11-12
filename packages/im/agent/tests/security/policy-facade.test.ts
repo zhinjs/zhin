@@ -187,7 +187,7 @@ describe('policy-facade', () => {
     });
 
     it('master 访问敏感路径在 sensitive-path 产生 gate（list_dir，无权限矩阵层）', () => {
-      const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'owner1', sender_roles: ['master'] });
+      const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'owner1', sender_roles: ['owner'] });
       const fp = path.join(tmpDir, '.env');
       const result = runToolPolicies({ toolName: 'list_dir', filePath: fp, commMessage: ctx });
       expect(result.allowed).toBe(false);
@@ -340,7 +340,7 @@ describe('policy-facade', () => {
     });
 
     it('master 搜索敏感目录在 sensitive-path gate（门面侧验证）', async () => {
-      const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'owner1', sender_roles: ['master'] });
+      const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'owner1', sender_roles: ['owner'] });
       const fp = path.join(tmpDir, '.ssh');
 
       const facadeMsg = toolPolicyResultToMessage(

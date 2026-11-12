@@ -3,13 +3,14 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
-  childPluginId, definePlugin, primaryConfigToken, rootPluginId,
-  type PluginSetupContext, type RuntimeSnapshot,
+  childPluginId, definePlugin, featureConversationOverridesToken, primaryConfigToken, rootPluginId,
+  type FeatureConversationOverride, type PluginSetupContext, type RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
 import {
   ConfigComposer, ConfigSchemaCollisionError, ConfigValidationError, NodePackageResolver, ProjectGraphService, RootRuntime,
   assertFeatureLevelDeclarations, collectFeatureOverrideWarnings, createLayeredConfigAccessor, createPrimaryConfig,
-  featureOverrideEntrySchema, overridableFields, readFeatureLevels, readFieldLevels, validateFeatureOverrides,
+  featureOverrideEntrySchema, overridableFields, readFeatureConversationDeclaration, readFeatureLevels, readFieldLevels,
+  validateConversationOverride, validateFeatureOverrides,
   type ModuleRuntime,
 } from '../src/index.js';
 
@@ -190,6 +191,91 @@ describe('layered config accessor', () => {
     const accessor = createLayeredConfigAccessor({ owner: nested, generation: 1, candidate: config, expand: value => value, view: {} });
     expect(accessor.isEnabledFor('qq/a')).toBe(false);
     expect(accessor.isEnabledFor('qq/b')).toBe(true);
+  });
+});
+
+const repeaterSchema = {
+  type: 'object', additionalProperties: false,
+  'x-zhin-config': { levels: ['global', 'adapter', 'endpoint', 'conversation'], conversationFields: ['threshold', 'style'], selfServiceFields: ['threshold'] },
+  properties: {
+    threshold: { type: 'integer', minimum: 2, default: 3 },
+    style: { type: 'object', additionalProperties: false, properties: { color: { type: 'string' } } },
+    apiKey: { type: 'string', 'x-zhin-config': { levels: ['global'] } },
+  },
+} as const;
+
+describe('conversation level declarations (ADR 0055)', () => {
+  it('requires endpoint with conversation and validates conversation / self-service / chat admin fields', () => {
+    expect(readFeatureLevels(repeaterSchema)).toEqual(['global', 'adapter', 'endpoint', 'conversation']);
+    expect(() => readFeatureLevels({ 'x-zhin-config': { levels: ['global', 'conversation'] } })).toThrow(/must include endpoint/);
+    expect(readFeatureConversationDeclaration(repeaterSchema)).toEqual({ conversationFields: ['threshold', 'style'], selfServiceFields: ['threshold'], chatAdminFields: ['threshold'] });
+    expect(readFeatureConversationDeclaration({ type: 'object' })).toEqual({ conversationFields: [], selfServiceFields: [], chatAdminFields: [] });
+    expect(overridableFields(repeaterSchema, 'conversation')).toEqual(['threshold', 'style']);
+    expect(overridableFields({ ...repeaterSchema, 'x-zhin-config': { levels: ['global', 'adapter', 'endpoint', 'conversation'] } }, 'conversation')).toEqual([]);
+    const bad = (metadata: Record<string, unknown>) => () => assertFeatureLevelDeclarations({ ...repeaterSchema, 'x-zhin-config': metadata });
+    expect(bad({ levels: ['global', 'endpoint'], conversationFields: ['threshold'] })).toThrow(/require levels to include conversation/);
+    expect(bad({ levels: ['global', 'endpoint', 'conversation'], conversationFields: ['missing'] })).toThrow(/unknown field/);
+    expect(bad({ levels: ['global', 'endpoint', 'conversation'], conversationFields: ['apiKey'] })).toThrow(/does not allow the conversation level/);
+    expect(bad({ levels: ['global', 'endpoint', 'conversation'], conversationFields: ['threshold'], selfServiceFields: ['style'] })).toThrow(/must also be listed/);
+    expect(bad({ levels: ['global', 'endpoint', 'conversation'], conversationFields: 'threshold' })).toThrow(/duplicate-free array/);
+    expect(bad({ levels: ['global'], chatAdminFields: ['nope'] })).toThrow(/chatAdminFields names unknown field/);
+    expect(readFeatureConversationDeclaration({ ...repeaterSchema, 'x-zhin-config': { ...repeaterSchema['x-zhin-config'], chatAdminFields: ['apiKey'] } }).chatAdminFields).toEqual(['apiKey']);
+  });
+
+  it('validates conversation entries against the allowed fields and the effective configuration', () => {
+    const block = { threshold: 3 };
+    expect(validateConversationOverride(repeaterSchema, block, 'qq/a/group:1', { threshold: 5, enabled: false })).toEqual([]);
+    expect(validateConversationOverride(repeaterSchema, block, 'qq/a/group:1', { apiKey: 'x' })).toMatchObject([{ message: expect.stringContaining('additionalProperty: apiKey') }]);
+    expect(validateConversationOverride(repeaterSchema, block, 'qq/a/group:1', { threshold: 1 })[0]!.path).toBe('/threshold');
+    // Self-service narrows further.
+    expect(validateConversationOverride(repeaterSchema, block, 'qq/a/group:1', { style: { color: 'x' } }, ['threshold'])).toHaveLength(1);
+    expect(validateConversationOverride(repeaterSchema, block, 'qq/a/group:1', { style: { color: 'x' } })).toEqual([]);
+  });
+
+  it('rejects explicit clears (null) of fields outside the allowed set, top-level or nested', () => {
+    const block = { threshold: 3, apiKey: 'k' };
+    // Global-only / non-conversation fields cannot be cleared from the conversation level.
+    expect(validateConversationOverride(repeaterSchema, block, 'qq/a/group:1', { apiKey: null }))
+      .toMatchObject([{ message: expect.stringContaining('additionalProperty: apiKey') }]);
+    // Self-service narrowing applies to clears as well.
+    expect(validateConversationOverride(repeaterSchema, block, 'qq/a/group:1', { style: null }, ['threshold'])).toHaveLength(1);
+    expect(validateConversationOverride(repeaterSchema, block, 'qq/a/group:1', { style: { nope: null } })).toMatchObject([{ path: '/style/nope' }]);
+    // Allowed clears still pass.
+    expect(validateConversationOverride(repeaterSchema, block, 'qq/a/group:1', { style: { color: null } })).toEqual([]);
+    expect(validateConversationOverride(repeaterSchema, block, 'qq/a/group:1', { style: null })).toEqual([]);
+  });
+
+  it('rejects explicit clears of global-only fields in file overrides', () => {
+    const issues = validateFeatureOverrides(rssSchema, { apiKey: 'k', region: 'cn', style: { title: 'x' }, overrides: {
+      adapters: { qq: { apiKey: null } },
+      endpoints: { 'qq/a': { region: null }, 'qq/b': { style: { bogus: null } }, 'qq/c': { feeds: null, enabled: null } },
+    } });
+    expect(issues.map(issue => issue.path)).toEqual(['/overrides/adapters/qq', '/overrides/endpoints/qq~1a', '/overrides/endpoints/qq~1b/style/bogus']);
+    expect(issues[0]!.message).toContain('additionalProperty: apiKey');
+  });
+
+  it('configFor / isEnabledFor read conversation overrides in place and are never env-expanded', () => {
+    const owner = childPluginId(rootPluginId(), 'repeater');
+    const rows = new Map<string, FeatureConversationOverride>();
+    const reader = { version: 0, get: (plugin: string, key: string) => rows.get(`${plugin}|${key}`) };
+    const document = { configVersion: 2, plugins: { repeater: '@x/repeater' }, repeater: { threshold: 3 } };
+    const primary = createPrimaryConfig(document, { expandMissingAsEmpty: <T>(value: T) => value } as never);
+    const committed: RuntimeSnapshot = {
+      generation: 1, root: rootPluginId(), tree: new Map(), config: new Map(), capabilities: new Map(), projections: new Map(),
+      resources: new Map([[rootPluginId(), new Map<string, unknown>([[primaryConfigToken.id, primary], [featureConversationOverridesToken.id, reader]])]]) as never,
+    };
+    const expand = <T>(value: T): T => value === undefined ? value : JSON.parse(JSON.stringify(value).replaceAll('${SECRET}', 'leaked')) as T;
+    const accessor = createLayeredConfigAccessor({ owner, generation: 1, schema: { ...repeaterSchema }, candidate: primary,
+      readCommitted: () => committed, expand, view: {} });
+    const key = { adapter: 'qq', endpointId: 'a', conversation: { kind: 'group' as const, id: '1' } };
+    expect(accessor.configFor(key)).toEqual({ threshold: 3 });
+    rows.set('repeater|qq/a/group:1', { enabled: false, patch: { threshold: 8, style: { color: '${SECRET}' } }, revision: 1, updatedAt: 1 });
+    reader.version = 1;
+    expect(accessor.configFor(key)).toEqual({ threshold: 8, style: { color: '${SECRET}' } });
+    expect(accessor.resolve(key).sources['/threshold']).toBe('conversation');
+    expect(accessor.isEnabledFor('qq/a/group:1')).toBe(false);
+    expect(accessor.isEnabledFor('qq/a/group:2')).toBe(true);
+    expect(accessor.isEnabledFor('qq/a')).toBe(true);
   });
 });
 

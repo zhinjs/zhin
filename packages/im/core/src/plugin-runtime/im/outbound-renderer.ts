@@ -10,10 +10,12 @@ import {
   componentFeatureId,
   isComponentIndex,
 } from '@zhin.js/component';
+import { enforceUntrustedOutbound } from '../../built/outbound-media-trust.js';
 import {
   isComponentCall,
   isRawContent,
   isSegmentContent,
+  isUntrustedContent,
   type IncomingContext,
   type SendContent,
 } from './contracts.js';
@@ -177,7 +179,7 @@ export interface OutboundPreviewContext extends Pick<OutboundRenderContext, 'req
 }
 
 /** Shared dependencies are immutable references; only the request-local cache changes. */
-interface RenderOperation extends Pick<OutboundRenderContext, 'requester' | 'snapshot' | 'signal' | 'bindButton'> {
+interface RenderOperation extends Pick<OutboundRenderContext, 'requester' | 'snapshot' | 'signal' | 'bindButton' | 'conversation'> {
   readonly host?: ComponentHost;
   readonly template?: TemplateContext;
   readonly jsxCache: WeakMap<JSXElement, Promise<unknown>>;
@@ -216,7 +218,7 @@ export class OutboundRenderer {
     const host = resolveComponentHost(snapshot);
     const ctx = conversation ? buildTemplateContext(conversation, incoming) : undefined;
     const operation: RenderOperation = { requester, snapshot, host, template: ctx,
-      jsxCache: context.jsxCache ?? new WeakMap(), signal, bindButton };
+      jsxCache: context.jsxCache ?? new WeakMap(), signal, bindButton, ...(conversation ? { conversation } : {}) };
     const rendered = await this.#render(content, { operation, depth: 0,
       arrayAncestors: new Set(), jsxAncestors: new Set() });
     signal?.throwIfAborted();
@@ -266,6 +268,20 @@ export class OutboundRenderer {
       return rendered;
     }
     if (isRawContent(content)) return content.payload;
+    if (isUntrustedContent(content)) {
+      // Untrusted text is literal (no template paths) and its media is held to the untrusted-source
+      // policy here, before outbound middleware and the Endpoint can see it.
+      const inner = await this.#render(content.content, {
+        ...traversal,
+        depth: depth + 1,
+        operation: { ...operation, template: undefined },
+      });
+      signal?.throwIfAborted();
+      return enforceUntrustedOutbound(Array.isArray(inner) ? flattenOutboundArray(inner) : inner, content.trust, {
+        requester,
+        ...(operation.conversation ? { conversation: operation.conversation } : {}),
+      });
+    }
     if (isSegmentContent(content)) {
       if (content.type === 'text') {
         const text = (content.data as Record<string, unknown> | undefined)?.text;

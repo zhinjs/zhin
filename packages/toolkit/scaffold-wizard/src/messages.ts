@@ -995,13 +995,13 @@ export const WIZARD_MESSAGES = {
     "zh-CN": "QQ 号必须为纯数字",
     "en": "QQ account must contain digits only"
   },
-  "  主人 QQ 号（master，/approve 等管理命令）:": {
-    "zh-CN": "  主人 QQ 号（master，/approve 等管理命令）:",
-    "en": "  Owner QQ account (master; approval and other management commands):"
+  "     主人（owner）不再写进配置：首次启动后在 Console 该账号的「角色」页签授予 owner，": {
+    "zh-CN": "     主人（owner）不再写进配置：首次启动后在 Console 该账号的「角色」页签授予 owner，",
+    "en": "     The owner is no longer written to the configuration: after the first start, grant owner in the account's Roles tab in the Console,"
   },
-  "主人 QQ 号必须为纯数字": {
-    "zh-CN": "主人 QQ 号必须为纯数字",
-    "en": "Owner QQ account must contain digits only"
+  "     或开启 features.selfService.enabled 后由已有 owner 在聊天中发送：角色 授予 <QQ 号> owner 账号": {
+    "zh-CN": "     或开启 features.selfService.enabled 后由已有 owner 在聊天中发送：角色 授予 <QQ 号> owner 账号",
+    "en": "     or, with features.selfService.enabled, have an existing owner send in chat: role grant <QQ account> owner endpoint"
   },
   "  登录方式:": {
     "zh-CN": "  登录方式:",

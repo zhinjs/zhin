@@ -8,7 +8,7 @@ import { SubscriptionLimitError } from '../../../src/subscriptions.js';
 export default defineCommand({
   alias: ['earthquake subscribe'],
   preferredAliasI18n: { en: 'earthquake subscribe' },
-  description: '在当前会话订阅地震速报：地震 订阅 [最小震级] [地区...]（群聊限群主、管理员或机器人主人）', descriptionI18n: { en: "Subscribe this conversation to earthquake alerts (group owner, administrator or bot master required in groups)" },
+  description: '在当前会话订阅地震速报：地震 订阅 [最小震级] [地区...]（群聊限本会话 zhin admin 或 owner）', descriptionI18n: { en: "Subscribe this conversation to earthquake alerts (zhin admin or owner of the conversation required in groups)" },
   params: {
     filters: { type: 'word', rest: true, description: '可选：最小震级与地区关键词，如 5 四川 云南', descriptionI18n: { en: "Optional minimum magnitude and region keywords, such as 5 Sichuan Yunnan" } },
   },

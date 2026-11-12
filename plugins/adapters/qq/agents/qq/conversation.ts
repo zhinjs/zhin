@@ -1,4 +1,4 @@
-import { outboundMessageToken, type SendContent } from '@zhin.js/core/runtime';
+import { outboundMessageToken, untrustedContent, type SendContent } from '@zhin.js/core/runtime';
 import type { ToolExecutionContext } from '@zhin.js/tool';
 import { parseCompoundMessageId, qqOutboundKind, type QqChannelKind } from '../../src/protocol.js';
 // Shared with EndpointManagement so Console, auto-moderation and Agent tools enforce the same official limits.
@@ -86,7 +86,8 @@ export async function sendToConversation(context: QqToolContext, content: SendCo
   const receipt = await context.use(outboundMessageToken).send({
     requester: context.owner.id,
     conversation,
-    content,
+    // Built from model input: Core admits only remote / inline media and platform tokens (ADR 0056 §2).
+    content: untrustedContent(content, { source: 'qq:agent-tool', locale: context.locale }),
   });
   return { success: receipt.status === 'sent', receipt };
 }

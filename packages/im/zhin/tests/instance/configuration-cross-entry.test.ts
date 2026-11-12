@@ -19,7 +19,8 @@ import { ConsoleConfigurationStore } from '../../src/instance/console/module.js'
 import { registerConsoleRpcRoute } from '../../src/instance/console/rpc-route.js';
 import { installConfigurationHost } from '../../src/instance/configuration-host-installer.js';
 import { createPluginLifecycleStore, resolvePluginLifecycleFile } from '@zhin.js/runtime';
-import { createConfigurationChatAuthorizer, createEndpointRoleResolver, createSenderEnricher } from '@zhin.js/core/runtime';
+import { createConfigurationChatAuthorizer, createSenderEnricher } from '@zhin.js/core/runtime';
+import { chatRolesFromDocument } from './chat-role-fixture.js';
 
 /**
  * #1139 P4: cross-entry regression. Console (`config:patch` over the real HTTP RPC route),
@@ -73,7 +74,7 @@ async function fixture(options: { store?: (real: ConsoleConfigurationStore) => S
   cleanups.push(() => rm(project, { recursive: true, force: true }));
   const modules = new Modules();
   const put = async (file: string, data: unknown) => { await mkdir(dirname(file), { recursive: true }); await writeFile(file, JSON.stringify(data)); };
-  const document: RuntimeConfigDocument = { configVersion: 2, locale: 'en', plugins: { bot: '@test/bot' },
+  const document: RuntimeConfigDocument = { configVersion: 2, locale: 'en', plugins: { bot: '@test/bot' }, ai: { trigger: { masters: ['alice'] } },
     bot: { master: 'alice', commandPrefix: '!!', nickname: 'Before', token: 'DO_NOT_DISCLOSE', endpoints: [{ id: 'same' }] } };
   await put(join(project, 'package.json'), { name: '@test/root', dependencies: { '@test/command': 'workspace:*', '@test/bot': 'workspace:*' },
     zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts', features: [{ package: '@test/command' }] } });
@@ -95,8 +96,8 @@ async function fixture(options: { store?: (real: ConsoleConfigurationStore) => S
   }
   const file = join(project, 'zhin.config.json'); await put(file, document);
   const config = createConfigDocument(file);
-  const roles = await createEndpointRoleResolver(document);
-  const im = new ImRuntime({ enrichSender: await createSenderEnricher(document, roles) });
+  const roles = await chatRolesFromDocument(document);
+  const im = new ImRuntime({ enrichSender: createSenderEnricher({ roles: () => roles }) });
   // One store for every entry, as in `zhin start`.
   const store = new ConsoleConfigurationStore({ projectRoot: project, document: config,
     configDeclarations: () => runtime.configurationSchemas,
@@ -105,7 +106,7 @@ async function fixture(options: { store?: (real: ConsoleConfigurationStore) => S
   const chatStore = options.store?.(store) ?? store;
   // No config watcher: nothing applies a file change unless an entry asks for it.
   const runtime = new RootRuntime({ projectRoot: project, config, modules, environment: { name: 'test', mode: 'test', platform: 'node' },
-    installResources(context) { im.install(context.resources); installConfigurationHost({ store: chatStore, authorize: createConfigurationChatAuthorizer(document, roles) })(context); } });
+    installResources(context) { im.install(context.resources); installConfigurationHost({ store: chatStore, authorize: createConfigurationChatAuthorizer(() => roles, () => runtime.snapshot) })(context); } });
   await runtime.start();
   cleanups.push(() => runtime.stop());
   im.attach(runtime.snapshots);

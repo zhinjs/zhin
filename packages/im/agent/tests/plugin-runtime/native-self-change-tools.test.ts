@@ -50,7 +50,7 @@ async function harness(
 function context(
   subjectId = '42',
   origin: Partial<Extract<ToolExecutionContext['origin'], { kind: 'im' }>> = {},
-  roles: readonly string[] = ['master'],
+  roles: readonly string[] = ['owner'],
 ): ToolExecutionContext {
   return {
     locale: 'zh-CN',

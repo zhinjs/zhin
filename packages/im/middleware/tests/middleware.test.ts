@@ -15,6 +15,7 @@ import {
   type DirectoryEntry,
   type DiscoveryHost,
 } from '@zhin.js/feature-kit';
+import { PermissionHost, permissionHostToken } from '@zhin.js/permission';
 import middlewareFeature, {
   MiddlewareIndex,
   defineMiddleware,
@@ -52,6 +53,35 @@ describe('Middleware Feature', () => {
     await index.run({ clientAdapter: 'middleware-test', [operationSession]: () => session });
     await index.run({ clientAdapter: 'middleware-test' });
     expect(values).toEqual([session, undefined]);
+  });
+
+  it('skips an inbound middleware whose permit is unmet and continues the chain (ADR 0056 §5)', async () => {
+    const root = rootPluginId();
+    const ran: string[] = [];
+    const gated = createCapabilitySlot({ owner: root, feature: middlewareFeatureId, localName: 'gated', source: '/middlewares/gated/index.ts',
+      definition: defineMiddleware({ order: 0, permit: ['group()', 'bot:admin'], async handle(_context, next) { ran.push('gated'); await next(); } }) });
+    const tail = middlewareSlot(root, 'tail', 1, async (_context, next) => { ran.push('tail'); await next(); });
+    const current = snapshot(root, undefined, [gated, tail]);
+    const host = new PermissionHost();
+    const lookups: unknown[] = [];
+    const bot: { cached?: 'admin' } = {};
+    host.setBotStandingResolver((_source, options) => { lookups.push(options); return bot.cached ? { standing: bot.cached } : undefined; });
+    current.resources.get(root)!.set(permissionHostToken.id, host);
+    const index = new MiddlewareIndex([gated, tail], current);
+    const message = { conversation: { endpoint: { id: 'ep', adapter: 'x' }, kind: 'group', id: 'g' }, sender: { id: 'u' } };
+    await index.run(message);
+    expect(ran).toEqual(['tail']);
+    // The Bot standing is read from the cache only: never a platform lookup per message.
+    expect(lookups).toEqual([{ cachedOnly: true }]);
+    bot.cached = 'admin';
+    await index.run(message);
+    expect(ran).toEqual(['tail', 'gated', 'tail']);
+    // Without a Permission host the gate fails closed.
+    current.resources.get(root)!.delete(permissionHostToken.id);
+    await new MiddlewareIndex([gated, tail], current).run(message);
+    expect(ran.at(-1)).toBe('tail');
+    expect(() => defineMiddleware({ permit: ['scene_admin'], async handle() {} })).toThrow(/removed/u);
+    expect(() => defineMiddleware({ target: 'outbound', permit: ['owner'], async handle() {} } as never)).toThrow(/inbound/u);
   });
 
   it('preserves a descendant author through three continuation frames', async () => {

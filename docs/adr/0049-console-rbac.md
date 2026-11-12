@@ -94,7 +94,7 @@ REST（`{http.base}/auth/*`，不带权限要求的只有 login）：
 | POST | `/auth/login` | `{ username, password }` → `{ token, expiresAt, user }`；失败统一 401，按 IP 与用户名限速（5 次 / 15 分钟，指数退避） |
 | POST | `/auth/logout` | 吊销当前会话 |
 | POST | `/auth/setup` | 需初始化令牌：`{ username, password, displayName? }` 创建第一个所有者并返回会话；已有所有者时 409 |
-| GET | `/auth/me` | 当前主体：`{ kind: 'bootstrap'|'user'|'api-token', user?, permissions, bindings, setupRequired }`；`setupRequired` 表示库里还没有任何所有者 |
+| GET | `/auth/me` | 当前主体：`{ kind: 'bootstrap'\|'user'\|'api-token', user?, permissions, bindings, setupRequired }`；`setupRequired` 表示库里还没有任何所有者 |
 | POST | `/auth/password` | 改自己的密码：`{ currentPassword, newPassword }` |
 
 RPC（`iam.*`，需 `iam.view` / `iam.manage`）：`iam.users.list|create|update|disable|delete|reset-password`、`iam.roles.list|create|update|delete`、`iam.bindings.set`、`iam.tokens.list|create|revoke`（`create` 只在此刻返回明文）、`iam.audit.list`（分页、按主体/动作/时间过滤）。
@@ -107,11 +107,11 @@ RPC（`iam.*`，需 `iam.view` / `iam.manage`）：`iam.users.list|create|update
 
 ### 7. 初始化：CLI 与 Web 同一套动作
 
-初始化有两个入口，执行的是同一个服务（`ConsoleSetupService`，`basic/cli/src/plugin-runtime/console/iam/setup-service.ts`），步骤、校验、写入结果完全一致：
+初始化有两个入口，执行的是同一个服务（`ConsoleSetupService`，`packages/host/gateway/src/iam/setup-service.ts`），步骤、校验、写入结果完全一致：
 
 | 步骤 | 服务方法 | Web（初始化令牌） | CLI |
 |---|---|---|---|
-| 查看状态 | `status()` → `{ setupRequired, database: { dialect, source: 'default'|'config', summary } }` | `GET /auth/setup` | `zhin console init --status` |
+| 查看状态 | `status()` → `{ setupRequired, database: { dialect, source: 'default'\|'config', summary } }` | `GET /auth/setup` | `zhin console init --status` |
 | 可选驱动 | `drivers()` → `[{ dialect, label, available, missingPackage?, fields }]` | `GET /auth/setup/database` | 交互选择列表 |
 | 测试连接 | `testDatabase({ dialect, connection })` → `{ ok, latencyMs?, error? }` | `POST /auth/setup/database/test` | 选择后自动测试，失败可重填 |
 | 保存数据库 | `applyDatabase({ dialect, connection })` → `{ restartRequired }` | `POST /auth/setup/database`（随后由 Host 重启进程，返回 `{ restarting: true }`，Console 轮询 `/auth/me`） | 写入后直接用新库继续下一步（CLI 不依赖运行中的 Host；若检测到 Host 正在运行，提示重启它） |
@@ -119,7 +119,7 @@ RPC（`iam.*`，需 `iam.view` / `iam.manage`）：`iam.users.list|create|update
 
 - 驱动列表与连接字段来自 `@zhin.js/scaffold-wizard` 的 `DATABASE_DIALECT_DEFINITIONS`，与 `zhin setup` / `create-zhin` 的数据库步骤同源，校验用同一个 `validateDatabaseConfig`。Web 表单和 CLI 提问都由同一份 `fields` 生成。
 - 写入规则（两个入口相同）：配置文件顶层 `database` 块经现有原子写入路径保存；机密字段写入项目 `.env`（`ZHIN_DATABASE_PASSWORD` 等），配置里只留 `${…}` 引用。
-- 非交互：`zhin console init --database <dialect> --database-<field> <value>… --owner <name> --password-stdin [--yes]`，用于脚本与容器部署；机密字段也可用 `--database-password-env <VAR>` 指向已有环境变量。
+- 非交互：`zhin console init --database <dialect> --database-<field> <value>… --owner <name> --password-stdin [--yes]`，用于脚本与容器部署；数据库密码用 `--database-password-env <VAR>` 指向已有环境变量，或用 `--database-password-stdin` 从标准输入读取（与 `--password-stdin` 同用时第一行是数据库密码、第二行是所有者密码）；`--database-password <value>` 会把机密留在 shell 历史与进程列表里，保留但不推荐。
 - 已初始化后：Web 的 `/auth/setup/*` 返回 409，`zhin console init` 退出并提示改用 `zhin console user …`。
 - 救援与日常用户管理：`zhin console user create <username> [--role <role>] [--password-stdin]`、`passwd`、`disable|enable`、`list`。
 - 网关在运行时（ADR 0054 §6），`zhin console init` / `zhin console user` 经本地控制套接字调用仅限套接字的 `gateway.console.setup.*` / `gateway.console.user.*`（主体 `'local'`，写入记审计），由网关自己的 `ConsoleSetupService` / `ConsoleIamService` 执行：切换数据库由网关重连并重启实例，无需手动重启，所有者状态立即生效；没有网关时直接打开项目数据库（离线救援）。
@@ -135,8 +135,8 @@ RPC（`iam.*`，需 `iam.view` / `iam.manage`）：`iam.users.list|create|update
 
 - 权限常量与 RPC→权限映射：`packages/console/protocol/src/permissions.ts`
 - 主体解析、权限检查：`packages/host/http/src/`（`TokenRegistry` 扩展为可接入外部会话解析器；新增 `access-control.ts`）
-- 数据表、密码与会话、`/auth/*`、`iam.*`、审计：`basic/cli/src/plugin-runtime/console/iam/`
-- 初始化服务：`basic/cli/src/plugin-runtime/console/iam/setup-service.ts`；CLI 命令：`basic/cli/src/commands/console.ts`（`init`、`user`）
+- 数据表、密码与会话、`/auth/*`、`iam.*`、审计：`packages/host/gateway/src/iam/`（ADR 0054 起由管理网关持有）
+- 初始化服务：`packages/host/gateway/src/iam/setup-service.ts`；CLI 命令：`basic/cli/src/commands/console.ts`（`init`、`user`）
 - Console UI：登录页（用户名密码；未初始化时显示初始化向导）、访问控制区（用户、角色、API 令牌、审计）、个人设置（改密码、我的令牌）
 
 ## 后果

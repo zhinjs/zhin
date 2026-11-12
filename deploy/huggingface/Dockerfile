@@ -14,7 +14,7 @@ WORKDIR /app
 COPY package.json ./
 RUN pnpm install
 
-COPY zhin.config.yml ai.plan.yml tsconfig.json plugin.ts ./
+COPY zhin.config.yml ai.plan.yml tsconfig.json plugin.ts start.sh ./
 COPY commands ./commands
 
 RUN mkdir -p /app/data && chown -R node:node /app
@@ -24,10 +24,11 @@ ENV NODE_ENV=production \
   CI=true \
   COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
   NODE_OPTIONS=--import=tsx \
-  ZHIN_PROJECT_ROOT=/app \
-  ZHIN_SUPERVISOR_PID=1
+  ZHIN_PROJECT_ROOT=/app
 
 EXPOSE 7860
 
 ENTRYPOINT ["tini", "--"]
-CMD ["./node_modules/.bin/zhin", "runtime", "start", "--mode", "production", "--no-watch"]
+# Bootstrap token, owner and read-only demo account come from Space secrets (see start.sh);
+# then `zhin start --foreground --mode production --no-watch` (gateway + supervised instance).
+CMD ["sh", "./start.sh"]

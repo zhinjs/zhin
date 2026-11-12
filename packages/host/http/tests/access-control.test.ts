@@ -7,6 +7,7 @@ import {
   authorizeConsoleWebSocket,
   globalPermissions,
   pluginRpcWriteAllowed,
+  requestMeta,
   rpcAuditDetail,
   type ConsoleAccessProvider,
 } from '../src/access-control.js';
@@ -28,10 +29,29 @@ describe('TokenRegistry (ADR 0049 §1)', () => {
   it('is open without credentials and before setup', async () => {
     const registry = new TokenRegistry();
     expect(registry.hasAnyToken()).toBe(false);
-    expect(await registry.authenticate('')).toEqual({ kind: 'bootstrap', open: true });
+    // Only an explicit in-process caller (tests, embedding) or a loopback peer gets the open Host.
+    expect(await registry.authenticate('', { inProcess: true })).toEqual({ kind: 'bootstrap', open: true });
+    // An unknown peer address is not local.
+    expect(await registry.authenticate('')).toBeNull();
+    expect(await registry.authenticate('', requestMeta(new Request('http://h/')))).toBeNull();
+    expect(await registry.authenticate('', requestMeta(new Request('http://h/'), undefined, { inProcess: true }))).toEqual({ kind: 'bootstrap', open: true });
     expect(registry.resolveAccess('').unrestricted).toBe(true);
     // An open Host is not an explicit credential.
     expect(registry.resolve('')).toBeNull();
+  });
+
+  it('opens an open Host to loopback peers without proxy hops only', async () => {
+    const registry = new TokenRegistry();
+    const open = { kind: 'bootstrap', open: true };
+    expect(await registry.authenticate('', requestMeta(new Request('http://h/'), '127.0.0.1'))).toEqual(open);
+    expect(await registry.authenticate('', requestMeta(new Request('http://h/'), '::1'))).toEqual(open);
+    expect(await registry.authenticate('', requestMeta(new Request('http://h/'), '::ffff:127.0.0.1'))).toEqual(open);
+    expect(await registry.authenticate('', requestMeta(new Request('http://h/'), '192.168.1.20'))).toBeNull();
+    const proxied = new Request('http://h/', { headers: { 'x-forwarded-for': '203.0.113.9' } });
+    expect(await registry.authenticate('', requestMeta(proxied, '127.0.0.1'))).toBeNull();
+    // A bootstrap token or a finished setup is never affected.
+    const withToken = new TokenRegistry({ primaryToken: 'boot' });
+    expect(await withToken.authenticate('boot', requestMeta(new Request('http://h/'), '192.168.1.20'))).toEqual({ kind: 'bootstrap', open: false });
   });
 
   it('accepts http.token only until an enabled owner exists', async () => {

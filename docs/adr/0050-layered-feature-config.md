@@ -33,6 +33,7 @@ sidebar: false
 - 省略 `levels` 等同 `["global"]`：只支持全局配置，`overrides` 不可写，Console 不显示适配器 / 账号层。
 - 单个属性可用 `"x-zhin-config": { "levels": ["global"] }` 收窄为仅全局（如数据库连接、API 密钥）；属性不能放宽插件根声明。
 - 没有配置 Schema 的插件：只支持启用 / 禁用的三级开关（见下），没有字段覆盖。
+- 有配置 Schema 但省略 `levels` 的插件只有全局层：Console 的适配器 / 账号（及会话）页面不列出它（2026-11-12 修订，见「后果」）。
 
 ### 3. 存储
 
@@ -62,7 +63,11 @@ effectiveEnabled = !disable_plugins.includes(plugin)
                 && overrides.endpoints[alias/id]?.enabled !== false
 ```
 
-下级的 `enabled: true` 不能重新打开被上级禁用的功能；写入时校验器给出警告，Console 把下级开关显示为「被上级禁用」并锁定。
+启停是逐级的单向选择（2026-11-12 修订，适用于全部层级，含 ADR 0055 的会话层）：
+
+- 只有当上面所有层级都启用时，某一层才可以**停用**；任一上级（全局 / 适配器 / 账号）停用了插件，其下所有层级即被锁定：不能启用，自己的开关显示为「已被〈层级〉停用」并锁定。
+- 被锁定的层级不能修改自己的 `enabled`（启用与停用都拒绝），`feature.set-enabled` 返回 HTTP 409 `{ success: false, code: 'locked', lockedBy: 'global'|'adapter'|'endpoint', error }`，`error` 固定为「已被{全局|适配器|账号}层停用，下级开关已锁定」；群内命令回复是哪一层锁定的。上级之后才停用时，下级先前存下的 `enabled: false` 保留不动（整层删除覆盖时也保留该开关）。
+- 下级永远不存「启用」：在下级启用 = 删除该层的开关（仅在未锁定时允许）。手写的下级 `enabled: true` 不起作用，校验器给出警告。
 
 **其他字段（自下而上，下级优先）：**
 
@@ -102,9 +107,9 @@ effective = deepMerge(global, overrides.adapters[alias], overrides.endpoints[ali
 | 类型 | 权限 | 说明 |
 |---|---|---|
 | `feature.list` | `feature.view` | 全部功能：`{ plugin, displayName, levels, hasSchema, globalEnabled }` |
-| `feature.matrix` | `feature.view` | 行为功能、列为全局 + 每个适配器实例：每格 `{ enabled, lockedBy?: 'global'|'adapter', overridden: boolean }` |
+| `feature.matrix` | `feature.view` | 行为功能、列为全局 + 每个适配器实例：每格 `{ enabled, lockedBy?: 'global'\|'adapter', overridden: boolean }` |
 | `feature.get` | `feature.view` | `{ plugin, level, key? }` → `{ schema, values, effective, sources: { [path]: level }, enabled, lockedBy? }`；机密字段值以掩码返回 |
-| `feature.set-override` | `feature.configure` | `{ plugin, level: 'adapter'|'endpoint', key, patch }`：写入覆盖（合并 patch，`undefined` 删除字段） |
+| `feature.set-override` | `feature.configure` | `{ plugin, level: 'adapter'\|'endpoint', key, patch }`：写入覆盖（合并 patch，`undefined` 删除字段） |
 | `feature.remove-override` | `feature.configure` | `{ plugin, level, key, paths? }`：删除整层或指定字段，回到继承 |
 | `feature.set-enabled` | `feature.toggle` | `{ plugin, level, key?, enabled }`：`global` 层写 `disable_plugins`；其余层写 `overrides.*.enabled`（`true` 时删除该键，而不是写 `true`） |
 
@@ -116,11 +121,11 @@ effective = deepMerge(global, overrides.adapters[alias], overrides.endpoints[ali
 - 解析器（纯函数，带来源追踪）：`packages/im/runtime/src/layered-config.ts`
 - `configFor` / `isEnabledFor`：`packages/im/plugin-runtime`（插件上下文）
 - 分发门禁：`packages/im/core/src/plugin-runtime/im/`（命令、中间件、处理器索引）与 `packages/im/agent`（工具披露）
-- `feature.*` RPC：`basic/cli/src/plugin-runtime/console/`
+- `feature.*` RPC：`packages/im/zhin/src/instance/console/console-feature-rpc.ts`
 - 现有 activity-feedback 的 `platforms / endpoints` 保持兼容，文档标注推荐迁移到 `overrides`
 
 ## 后果
 
-- 插件作者零改动即可获得三级启停；声明 `levels` 后获得字段级覆盖。
+- 没有配置 Schema 的插件零改动即可获得各层启停开关；有配置 Schema 的插件要用 `x-zhin-config.levels`（`Schema.object({...}).featureLevels(levels, …)`）声明支持的层级后，才会出现在下级层并获得开关，再按字段用 `levels` / `.fieldLevels()` 决定哪些字段可覆盖。官方插件（适配器除外）已全部声明全部四级，由 `tests/contracts/plugin-feature-levels.test.ts` 保证。（2026-11-12 修订：原表述「插件作者零改动即可获得三级启停」与 Console 只列出声明了该层级或无 Schema 的插件的行为矛盾。）
 - 启停语义统一为「上级禁用，下级不能开」。
 - 配置文件里的 `overrides` 是普通 YAML，手改与 Console 改等价。

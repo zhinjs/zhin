@@ -143,9 +143,11 @@ export {
 export { adapterConsoleStyles } from './adapter-console/styles.js';
 
 export {
+  ADAPTER_CONSOLE_PAGE_CAPABILITIES,
   AdapterConsolePage,
   createAdapterConsolePage,
   type AdapterConsolePageProps,
+  type AdapterConsoleToolbarControls,
 } from "./adapter-console/AdapterConsolePage.js";
 export {
   createCommentReviewPage,

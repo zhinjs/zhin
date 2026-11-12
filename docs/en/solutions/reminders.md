@@ -57,4 +57,4 @@ Chat creates a personal reminder for the exact original account, conversation ki
 
 Questions and confirmation accept plain text, so buttons, Markdown and images are optional. Delivery uses the shared message pipeline. An uncertain delivery is not automatically retried; inspect the original conversation and task first.
 
-The Console [administrator task center](../paths/console.md#administrator-task-center) manages a separate task category with explicitly selected targets. Its time field still requires ISO timestamps with an offset; this chat flow does not add natural-time parsing to administrator tasks.
+The [Administrator tasks](../paths/console.md#administrator-task-center) tab of Console Operations → Scheduled tasks manages a separate task category with explicitly selected targets. Its time field still requires ISO timestamps with an offset; this chat flow does not add natural-time parsing to administrator tasks.

@@ -63,10 +63,11 @@
     "@zhin.js/adapter-email": "workspace:*",
     "@zhin.js/adapter-lark": "workspace:*",
     "@zhin.js/adapter-dingtalk": "workspace:*",
-    "@zhin.js/adapter-line": "workspace:*"
+    "@zhin.js/adapter-line": "workspace:*",
+    "@zhin.js/cli": "workspace:*",
+    "@zhin.js/gateway": "workspace:*"
   },
   "devDependencies": {
-    "@zhin.js/cli": "workspace:*",
     "typescript": "^6.0.3",
     "yaml": "^2.9.0"
   },

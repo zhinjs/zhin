@@ -35,9 +35,11 @@ describe('usageSubjectFromMessage (#877)', () => {
       .toBe('onebot11:bot-2:g100');
   });
 
-  it('marks master senders as owner', () => {
-    expect(usageSubjectFromMessage(message({ sender: { id: 'u1', roles: ['admin', 'master'] } }))?.owner).toBe(true);
-    expect(usageSubjectFromMessage(message({ sender: { id: 'u1', roles: ['admin'] } }))?.owner).toBe(false);
+  it('marks global chat-role owners only, like Agent turns (ADR 0056 §2)', () => {
+    expect(usageSubjectFromMessage(message({ sender: { id: 'u1', chatRole: 'owner', chatRoleLevels: { owner: 'global' } } }))?.owner).toBe(true);
+    expect(usageSubjectFromMessage(message({ sender: { id: 'u1', chatRole: 'owner', chatRoleLevels: { owner: 'conversation' } } }))?.owner).toBe(false);
+    expect(usageSubjectFromMessage(message({ sender: { id: 'u1', chatRole: 'owner' } }))?.owner).toBe(false);
+    expect(usageSubjectFromMessage(message({ sender: { id: 'u1', chatRole: 'admin', roles: ['owner'] } }))?.owner).toBe(false);
   });
 
   it('returns undefined instead of throwing when there is no sender', () => {

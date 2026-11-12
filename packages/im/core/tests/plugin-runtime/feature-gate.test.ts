@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  childPluginId, createCapabilitySlot, featureId, primaryConfigToken, rootPluginId,
+  childPluginId, createCapabilitySlot, featureConversationOverridesToken, featureId, primaryConfigToken, rootPluginId,
   type CapabilitySlot, type PluginId, type PluginNodeSnapshot, type PrimaryConfig, type RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
 import { CommandIndex, commandFeatureId, defineCommand } from '@zhin.js/command';
@@ -62,14 +62,14 @@ const document = {
   weather: { overrides: { adapters: { qq: { enabled: false } }, endpoints: { 'qq/main': { enabled: true } } } },
 };
 
-const message = (endpoint: string, content: string) => ({
-  content, conversation: { kind: 'group', id: 'g1', endpoint: { id: endpoint, adapter: 'qq' } },
+const message = (endpoint: string, content: string, group = 'g1') => ({
+  content, conversation: { kind: 'group', id: group, endpoint: { id: endpoint, adapter: 'qq' } },
 }) as never;
 
 describe('ADR 0050 dispatch gate', () => {
   it('resolves the endpoint key of messages and endpoint events', () => {
     const { snapshot } = fixture(document);
-    expect(featureKeyOf(message('ep:news', ''), snapshot)).toBe('qq/news');
+    expect(featureKeyOf(message('ep:news', ''), snapshot)).toBe('qq/news/group:g1');
     expect(featureKeyOf({ endpoint: { id: 'ep:main' }, payload: {} }, snapshot)).toBe('qq/main');
     expect(featureKeyOf({ payload: { conversation: { endpoint: { id: 'ep:x' } } } }, snapshot)).toBe('qq/x');
     expect(featureKeyOf({ name: 'system' }, snapshot)).toBeUndefined();
@@ -129,5 +129,28 @@ describe('ADR 0050 dispatch gate', () => {
     await dispatchInboundHandlers({ lease, event: 'message.receive', args: [{ ...event, endpoint: { id: 'ep:news', adapter: 'qq' } }],
       interactions: {} as never, deliver });
     expect(events).toEqual(['handler:rss']);
+  });
+});
+
+describe('ADR 0055 conversation-level dispatch gate', () => {
+  it('drops a command in group A but not in group B, and follows store writes in place', async () => {
+    const { snapshot, events } = fixture({ configVersion: 2, plugins: { rss: '@x/rss', weather: '@x/weather', qq: '@x/qq' } });
+    const rows = new Map<string, { enabled?: false; patch: Record<string, unknown>; revision: number; updatedAt: number }>();
+    const reader = { version: 0, get: (plugin: string, key: string) => rows.get(`${plugin}|${key}`) };
+    (snapshot.resources.get(root) as Map<string, unknown>).set(featureConversationOverridesToken.id, reader);
+    const dispatcher = new MessageDispatcher(() => '');
+    expect(await dispatcher.dispatch(message('ep:main', 'rss', 'A'), snapshot)).toMatchObject({ matched: true });
+    rows.set('rss|qq/main/group:A', { enabled: false, patch: {}, revision: 1, updatedAt: 1 });
+    reader.version = 1;
+    expect(featureKeyOf(message('ep:main', '', 'A'), snapshot)).toBe('qq/main/group:A');
+    expect(await dispatcher.dispatch(message('ep:main', 'rss', 'A'), snapshot)).toMatchObject({ matched: false });
+    expect(await dispatcher.dispatch(message('ep:main', 'rss', 'B'), snapshot)).toMatchObject({ matched: true, owner: rss });
+    expect([...disabledOwnersOf(message('ep:main', '', 'A'), snapshot)]).toEqual([rss]);
+    events.length = 0;
+    await runRuntimeMiddleware(snapshot, message('ep:main', 'hi', 'A'), async () => { events.push('terminal'); }, 'inbound');
+    expect(events).toEqual(['middleware:weather', 'terminal']);
+    rows.delete('rss|qq/main/group:A');
+    reader.version = 2;
+    expect(await dispatcher.dispatch(message('ep:main', 'rss', 'A'), snapshot)).toMatchObject({ matched: true });
   });
 });

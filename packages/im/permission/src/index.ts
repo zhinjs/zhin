@@ -1,7 +1,10 @@
 export {
   PermissionHost,
   type PermissionChecker,
-  type PlatformPermitChecker,
+  type BotStandingResolver,
+  type PermissionCheckOptions,
+  type PermissionSenderRoles,
+  type SenderRoleResolver,
 } from './host.js';
 
 export { permissionHostToken } from './token.js';
@@ -10,17 +13,24 @@ export {
   type PermissionSubject,
   type PermissionScene,
   type PermissionSender,
+  type PermissionPlatformStanding,
+  type PermissionChatRoleLevel,
+  type PermissionChatRoleLevels,
   toPermissionSubject,
+  normalizePermissionStanding,
+  normalizePermissionChatRoleLevels,
 } from './subject.js';
 
 export {
   type PermitKind,
+  type PermitChatRole,
+  type PermitChatRoleLevel,
   type ParsedPermit,
-  type ParsedPlatformPermit,
   parsePermitName,
-  parsePlatformPermitName,
   isBuiltinPermit,
-  isPlatformPermit,
+  permitsNeedBotStanding,
+  BOT_PERMIT_KINDS,
+  removedPermitReplacement,
   assertPermitSyntax,
   checkBuiltinPermit,
   checkBuiltinPermitList,
@@ -28,11 +38,8 @@ export {
 
 export {
   type PermissionDefinition,
-  type PlatformPermissionDefinition,
   definePermission,
-  definePlatformPermission,
 } from './define.js';
 
-export { createSceneRolePlatformChecker, platformPermission } from './helpers.js';
 export * from './check-permissions.js';
 export * from './explain.js';

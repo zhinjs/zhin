@@ -1,4 +1,5 @@
 import type { ConversationRef, EndpointRef } from '@zhin.js/im-contract';
+import { normalizePlatformStanding } from '@zhin.js/im-contract';
 import type { ConversationAddress, MessageSenderRef } from '../plugin-runtime/im/contracts.js';
 
 /** Shared Endpoint event data, with no assumption about chat or participants. */
@@ -89,11 +90,15 @@ export class RuntimeSideEvent extends RuntimeEndpointEvent implements SideEventB
   }
 }
 
+/** Side-event actors carry the Adapter's normalized platform standing only (ADR 0056 §1). */
 function freezeSender(sender?: MessageSenderRef): MessageSenderRef | undefined {
-  return sender ? Object.freeze({
-    ...sender,
-    ...(sender.roles ? { roles: Object.freeze([...sender.roles]) } : {}),
-  }) : undefined;
+  if (!sender) return undefined;
+  const platform = normalizePlatformStanding((sender as { platform?: unknown }).platform);
+  return Object.freeze({
+    id: sender.id,
+    ...(sender.name !== undefined ? { name: sender.name } : {}),
+    ...(platform ? { platform } : {}),
+  });
 }
 
 export function composeSideEventName(type: string, sceneType?: string, subType?: string): string {

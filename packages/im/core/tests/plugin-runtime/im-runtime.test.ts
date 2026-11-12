@@ -107,11 +107,20 @@ const ignoredEndpointEvents = Object.freeze({
 
 const fixtureStores = new WeakMap<ImRuntime, SnapshotStore>();
 
+/** Chat roles tests declare on the inbound sender; the Runtime drops payload roles, the fixture enricher restores these. */
+const declaredChatRoles = new Map<string, 'owner' | 'admin' | 'trusted'>();
+
 function receive(
   im: ImRuntime,
   payload: Parameters<ImRuntime['endpointEvents']['receive']>[0]['payload'],
+  declareRoles = true,
 ) {
   const input = payload as { conversation?: { endpoint?: { id?: string; adapter?: string } } };
+  const sender = (payload as { sender?: { id?: unknown; chatRole?: 'owner' | 'admin' | 'trusted' } }).sender;
+  if (declareRoles && typeof sender?.id === 'string') {
+    if (sender.chatRole) declaredChatRoles.set(sender.id, sender.chatRole);
+    else declaredChatRoles.delete(sender.id);
+  }
   return im.endpointEvents.receive(Object.freeze({
     name: 'message.receive',
     payload,
@@ -2591,6 +2600,26 @@ describe('IM Runtime', () => {
     await fixture.store.close();
   });
 
+  it('drops payload chat roles and publishes the enriched sender; re-reads current roles on demand (ADR 0056)', async () => {
+    const fixture = await createFixture([], []);
+    const events: RuntimeMessageEvent[] = [];
+    fixture.im.messageEvents.subscribe(event => events.push(event));
+    const conversation = { endpoint: { id: String(fixture.adapter.id), adapter: 'memory' }, kind: 'group' as const, id: 'room-roles' };
+    try {
+      // An adapter-supplied role never survives (the fixture enricher only restores roles a test declares).
+      declaredChatRoles.delete('mallory');
+      await receive(fixture.im, { conversation, content: 'hi', sender: { id: 'mallory', chatRole: 'owner', chatRoleLevels: { owner: 'global' } } as never }, false);
+      expect(events.at(-1)?.sender).toEqual({ id: 'mallory' });
+      // The event stream carries the enriched sender (the role the Runtime resolved).
+      await receive(fixture.im, { conversation, content: 'hi', sender: { id: 'carol', chatRole: 'trusted' } });
+      expect(events.at(-1)?.sender).toMatchObject({ id: 'carol', chatRole: 'trusted' });
+      expect(fixture.im.permissionHost.currentSenderRoles({ conversation, sender: { id: 'carol' } })).toEqual({ chatRole: 'trusted' });
+      declaredChatRoles.delete('carol');
+      expect(fixture.im.permissionHost.currentSenderRoles({ conversation, sender: { id: 'carol' } })).toEqual({});
+      expect(fixture.im.permissionHost.currentSenderRoles({ sender: { id: 'carol' } })).toBeUndefined();
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
   it('timestamps incoming observations before a slow command replies so history keeps causal order', async () => {
     const clock = vi.spyOn(Date, 'now').mockReturnValue(1000);
     const fixture = await createFixture([], [], undefined, undefined, undefined, {
@@ -3271,7 +3300,7 @@ async function createFixture(
     definition: defineCommand<{}, SendContent | void, Message>({
       ...(options?.execution ? { execution: options.execution, alias: ['limited-alias'] } : {}),
       ...(options?.validateCommand ? { params: { count: { type: 'integer' as const, min: 1 } } } : {}),
-      ...(options?.restrictCommand ? { permit: ['role(master)'] } : {}),
+      ...(options?.restrictCommand ? { permit: ['owner'] } : {}),
       ...(options?.commandShortcut ? { shortcut: { 'author shortcut': {} } } : {}),
       async execute({ args, input, signal }) {
         if (!input) throw new Error('Fixture command requires a Message');
@@ -3353,6 +3382,11 @@ async function createFixture(
     ...(options?.inboundClaimPending ? { inboundClaimPending: options.inboundClaimPending } : {}),
     ...(options?.peerRegistry ? { peerRegistry: options.peerRegistry } : {}),
     ...(options?.inboundDeduper ? { inboundDeduper: options.inboundDeduper as never } : {}),
+    // Test transports declare the sender's chat role directly (production resolves it from chat_roles).
+    enrichSender: sender => {
+      const chatRole = sender?.id ? declaredChatRoles.get(sender.id) : undefined;
+      return sender && chatRole ? { ...sender, chatRole } : sender;
+    },
     conversationEvents,
   });
   let base = baseState(slots);
@@ -3456,10 +3490,10 @@ describe('Root command feedback presentation', () => {
     try {
       const input = fixtureInput(fixture, '/gh issue list open');
       const conversation = { ...input.conversation, kind: 'channel', parent: { kind: 'channel', id: 'workspace' }, threadId: 'thread' } as const;
-      await receive(fixture.im, { ...input, conversation, sender: { id: 'alice', roles: ['user'] }, metadata: { secret: 'not disclosed' } });
+      await receive(fixture.im, { ...input, conversation, sender: { id: 'alice', platform: { standing: 'member' as const } }, metadata: { secret: 'not disclosed' } });
       expect(renderer.mock.calls[0][1]).toMatchObject({ conversation, clientAdapter: 'memory', generation: 1, sender: { id: 'alice' } });
       expect(Object.isFrozen(renderer.mock.calls[0][1].conversation.parent)).toBe(true);
-      expect(Object.isFrozen(renderer.mock.calls[0][1].sender?.roles)).toBe(true);
+      expect(Object.isFrozen(renderer.mock.calls[0][1].sender?.platform)).toBe(true);
       expect(JSON.stringify(renderer.mock.calls)).not.toContain('not disclosed');
       expect((sent[0] as { payload: unknown }).payload).toEqual([
         { type: 'text', data: { text: '请联系 ' } }, { type: 'mention', data: { target: 'alice' } }, { type: 'text', data: { text: '：denied' } },
@@ -3503,7 +3537,7 @@ describe('Root command feedback presentation', () => {
     const renderer = vi.fn<CommandFeedbackRenderer>(() => 'custom');
     bindFeedback(fixture, renderer);
     const extra = { nested: 'original' };
-    const sender = { id: 'alice', name: 'Alice', roles: ['user'], content: 'PRIVATE_BODY', extra };
+    const sender = { id: 'alice', name: 'Alice', chatRole: 'trusted' as const, platform: { standing: 'member' as const }, content: 'PRIVATE_BODY', extra };
     const input = fixtureInput(fixture, '/gh issue list open');
     const conversation = { ...input.conversation, kind: 'channel', content: 'PRIVATE_ROOM_BODY', extra,
       parent: { kind: 'group', id: 'workspace', content: 'PRIVATE_PARENT_BODY', extra }, threadId: 'thread' } as const;
@@ -3512,13 +3546,14 @@ describe('Root command feedback presentation', () => {
       expect(renderer).toHaveBeenCalledTimes(1);
       const context = renderer.mock.calls[0][1];
       expect(context).toEqual({ generation: 1, clientAdapter: 'memory', locale: 'zh-CN',
-        sender: { id: 'alice', name: 'Alice', roles: ['user'] },
+        sender: { id: 'alice', name: 'Alice', platform: { standing: 'member' }, chatRole: 'trusted' },
         conversation: { endpoint: input.conversation.endpoint, kind: 'channel', id: input.conversation.id,
           parent: { kind: 'group', id: 'workspace' }, threadId: 'thread' } });
-      expect(context.sender?.roles).not.toBe(sender.roles);
+      expect(context.sender).not.toBe(sender);
       expect(context.conversation.parent).not.toBe(conversation.parent);
       expect(JSON.stringify(renderer.mock.calls)).not.toMatch(/PRIVATE_|nested/);
-      expect(Object.isFrozen(sender.roles)).toBe(false);
+      expect(context.sender?.platform).not.toBe(sender.platform);
+      expect(Object.isFrozen(sender.platform)).toBe(false);
       expect(Object.isFrozen(conversation.parent)).toBe(false);
       expect(Object.isFrozen(extra)).toBe(false);
       expect(sent).toHaveLength(1);
@@ -3759,7 +3794,7 @@ describe('full-operation command admission', () => {
       commandResult: () => 'ok',
     });
     try {
-      const input = { ...fixtureInput(f, '/gh issue list nope'), sender: { id: 'alice', roles: ['master'] } };
+      const input = { ...fixtureInput(f, '/gh issue list nope'), sender: { id: 'alice', chatRole: 'owner' as const } };
       expect((await receive(f.im, input)).status).toBe('invalid');
       expect((await receive(f.im, { ...input, content: '/gh issue list --help' })).status).toBe('executed');
       expect((await receive(f.im, { ...input, content: '/gh issue list 1', sender: { id: 'alice' } })).status).toBe('denied');

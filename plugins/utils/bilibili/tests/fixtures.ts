@@ -6,12 +6,12 @@ import { createInMemoryBiliDb, type BiliDb } from '../src/store.js';
 import type { BilibiliRuntime, BiliOutboundPush } from '../src/runtime.js';
 
 /** Default sender is a group admin so subscription flows pass the manager check. */
-export function biliMessage(kind: 'private' | 'group' | 'channel' = 'group', id = '10001', roles: readonly string[] = ['admin'], senderId = 'u1') {
+export function biliMessage(kind: 'private' | 'group' | 'channel' = 'group', id = '10001', chatRole: 'owner' | 'admin' | 'trusted' | null = 'admin', senderId = 'u1') {
   return {
     conversation: { endpoint: { id: 'root/sandbox', adapter: 'root/sandbox' }, kind, id },
     content: 'bili list',
     generation: 1,
-    sender: { id: senderId, name: 'tester', roles: [...roles] },
+    sender: { id: senderId, name: 'tester', ...(chatRole ? { chatRole } : {}) },
     clientAdapter: 'sandbox',
     endpointId: 'bot1',
     segments: [{ type: 'text', data: { text: 'bili list' } }],

@@ -1,12 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import { getLogger } from '@zhin.js/logger';
-import type { ImRuntime } from '@zhin.js/core/runtime';
+import { untrustedContent, type ImRuntime } from '@zhin.js/core/runtime';
 import {
   AIService,
   AgentEventBus,
   AgentResourceHub,
   publishOutboundElements,
   resolveOutboundCapabilities,
+  modelMediaTrust,
   NO_MEDIA_AUTHORITY,
   type AiControlPlane,
   type ApprovalPort,
@@ -133,9 +134,12 @@ export function createRuntimeProactiveOutbound(
     async sendElements(ctx, elements) {
       guard(ctx);
       // Proactive sends carry no Turn policy: only inline media, no model-referenced paths or URLs.
-      const content = await publishOutboundElements(elements, ctx.scene.platform, mediaCapabilities(ctx.scene), { ...NO_MEDIA_AUTHORITY, imageAssets });
+      const authority = { ...NO_MEDIA_AUTHORITY, imageAssets };
+      const caps = mediaCapabilities(ctx.scene);
+      const content = await publishOutboundElements(elements, ctx.scene.platform, caps, authority);
       if (content.length === 0) return [];
-      const id = await this.send(ctx, content);
+      // Model-authored output: Core admits only remote / inline media and platform tokens (no host files).
+      const id = await this.send(ctx, untrustedContent(content, modelMediaTrust(`agent:proactive:${ctx.source}`, authority, { locale: ctx.locale, maxInlineBytes: caps.maxAttachmentBytes })));
       return [id];
     },
   };

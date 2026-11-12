@@ -6,10 +6,16 @@ import { resolveHttpConfig } from '@zhin.js/host-http';
 import { createConfigDocument } from '@zhin.js/runtime';
 import { findConfigFile } from '@zhin.js/gateway/project';
 import { loadRuntimeEnvironmentLayers } from '@zhin.js/gateway/project';
+import { createLocalGatewayFetch, probeLocalGateway, type LocalGatewayFetch } from '@zhin.js/gateway/local';
 
 export interface HostHttpConfig {
   baseUrl: string;
   token: string;
+  /**
+   * Set while a gateway runs for the project: requests go over its local control socket
+   * (`.zhin/gateway.sock`) as the local owner, so no Console token is needed (ADR 0054 §6).
+   */
+  fetch?: LocalGatewayFetch;
 }
 
 /**
@@ -43,11 +49,25 @@ export async function loadHostHttpConfig(
   const scheme = http.tls ? 'https' : 'http';
   const host = connectableHost(http.host ?? '127.0.0.1');
   const base = (http.apiBase ?? '/api').replace(/^\/+|\/+$/g, '') || 'api';
+  const local = await localGatewayFetch(cwd);
+  const consoleToken = process.env.ZHIN_CONSOLE_TOKEN?.trim() || layers.environments?.[environment]?.ZHIN_CONSOLE_TOKEN?.trim() || '';
   return {
     baseUrl: `${scheme}://${host}:${http.port ?? 8086}/${base}`,
-    // After Console setup http.token is rejected (ADR 0049): use a user API token instead.
-    token: process.env.ZHIN_CONSOLE_TOKEN?.trim() || layers.environments?.[environment]?.ZHIN_CONSOLE_TOKEN?.trim() || http.token || '',
+    // After Console setup http.token is rejected (ADR 0049): use a user API token instead. Over
+    // the local socket only an explicit ZHIN_CONSOLE_TOKEN is sent (the gateway then runs the
+    // request as that token's principal); without one the request runs as the local owner.
+    token: local ? consoleToken : consoleToken || http.token || '',
+    ...(local ? { fetch: local } : {}),
   };
+}
+
+/**
+ * The local-socket `fetch` when a gateway runs for `root` (any probe failure — not running,
+ * another user's socket — leaves the caller on HTTP with its token).
+ */
+export async function localGatewayFetch(root: string): Promise<LocalGatewayFetch | undefined> {
+  const running = await probeLocalGateway({ root }).catch(() => undefined);
+  return running ? createLocalGatewayFetch({ root }) : undefined;
 }
 
 export interface HostFetchResult<T> {
@@ -81,7 +101,7 @@ async function hostFetch<T>(
 ): Promise<HostFetchResult<T>> {
   const url = `${http.baseUrl}${apiPath.startsWith('/') ? apiPath : `/${apiPath}`}`;
   try {
-    const res = await fetch(url, {
+    const res = await (http.fetch ?? fetch)(url, {
       method: input.method,
       headers: {
         ...(http.token ? { Authorization: `Bearer ${http.token}` } : {}),
@@ -100,7 +120,9 @@ async function hostFetch<T>(
       return {
         ok: false,
         status: res.status,
-        error: body.error ?? `HTTP ${res.status}`,
+        error: res.status === 401 && !http.fetch
+          ? `${body.error ?? 'HTTP 401'}（Console 初始化后 http.token 失效：在 Console 签发 API 令牌并设置 ZHIN_CONSOLE_TOKEN，或先 zhin start 让命令经本地套接字连接网关）`
+          : body.error ?? `HTTP ${res.status}`,
       };
     }
     return { ok: true, status: res.status, data: body.data ?? (body as T) };

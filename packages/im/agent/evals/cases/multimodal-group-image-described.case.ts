@@ -7,7 +7,7 @@ export default defineEvalCase({
   source: '#769 Gemini switch: Gemini models were text-only by default, so group images were replaced by a text placeholder',
   tags: ['multimodal'],
   modelInput: ['text', 'image'],
-  inbound: { text: '@bot 看看这个', scope: 'group', sender: { id: 'bob', roles: ['user'] }, images: [RED_CIRCLE_PNG] },
+  inbound: { text: '@bot 看看这个', scope: 'group', sender: { id: 'bob' }, images: [RED_CIRCLE_PNG] },
   script: [{ text: '这是一个白底上的红色圆形。' }],
   expect: { modelImages: [1], outboundContains: ['红色圆形'], modelSteps: 1 },
   live: {

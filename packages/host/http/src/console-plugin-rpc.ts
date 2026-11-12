@@ -5,7 +5,11 @@ import type {
   RuntimeConsoleRpcReply,
 } from './console-rpc.js';
 
-/** Dispatches the plugin-management slice; undefined means the type belongs elsewhere. */
+/**
+ * Dispatches the plugin-management slice; undefined means the type belongs elsewhere. Package
+ * installs / updates / uninstalls are not handled in the instance: they are gateway dependency
+ * transactions (`gateway.packages.*`, ADR 0054 §4) that stop the instance first.
+ */
 export async function dispatchPluginConsoleRpc(
   type: string,
   message: RuntimeConsoleRpcMessage,
@@ -71,20 +75,6 @@ export async function dispatchPluginConsoleRpc(
         if (!ctx.pluginManagement) return { requestId, error: 'Plugin management is not configured' };
         return { requestId, data: await ctx.pluginManagement.planInstall(packageName) };
       }
-      case PLUGIN_RPC.INSTALL: {
-        const packageName = stringField(message, 'packageName');
-        if (!packageName) return { requestId, error: 'packageName is required' };
-        if (!ctx.pluginManagement?.install) {
-          return { requestId, error: 'Plugin installation is not configured' };
-        }
-        const result = await ctx.pluginManagement.install(
-          packageName,
-          optionalString(message.expectedRevision),
-          optionalString(message.expectedProjectRevision),
-        );
-        ctx.publishEvent?.('plugin:installed', { packageName, restartRequired: result.restartRequired });
-        return { requestId, data: { success: true, ...result } };
-      }
       case PLUGIN_RPC.PLAN_UNINSTALL: {
         const packageName = stringField(message, 'packageName');
         if (!packageName) return { requestId, error: 'packageName is required' };
@@ -92,22 +82,6 @@ export async function dispatchPluginConsoleRpc(
           return { requestId, error: 'Plugin uninstall planning is not configured' };
         }
         return { requestId, data: await ctx.pluginManagement.planUninstall(packageName) };
-      }
-      case PLUGIN_RPC.UNINSTALL: {
-        const packageName = stringField(message, 'packageName');
-        if (!packageName || stringField(message, 'confirmation') !== packageName) {
-          return { requestId, error: 'confirmation must exactly match packageName' };
-        }
-        if (!ctx.pluginManagement?.uninstall) {
-          return { requestId, error: 'Plugin uninstall is not configured' };
-        }
-        const result = await ctx.pluginManagement.uninstall(
-          packageName,
-          optionalString(message.expectedRevision),
-          optionalString(message.expectedProjectRevision),
-        );
-        ctx.publishEvent?.('plugin:uninstalled', { packageName, restartRequired: result.restartRequired });
-        return { requestId, data: { success: true, ...result } };
       }
       case PLUGIN_RPC.PLAN_UPDATE: {
         const packageName = stringField(message, 'packageName');
@@ -119,26 +93,6 @@ export async function dispatchPluginConsoleRpc(
           return { requestId, error: 'Plugin update planning is not configured' };
         }
         return { requestId, data: await ctx.pluginManagement.planUpdate(packageName, targetVersion) };
-      }
-      case PLUGIN_RPC.UPDATE: {
-        const packageName = stringField(message, 'packageName');
-        const targetVersion = stringField(message, 'targetVersion');
-        if (!packageName || !targetVersion) {
-          return { requestId, error: 'packageName and targetVersion are required' };
-        }
-        if (!ctx.pluginManagement?.update) return { requestId, error: 'Plugin update is not configured' };
-        const result = await ctx.pluginManagement.update(
-          packageName,
-          targetVersion,
-          optionalString(message.expectedRevision),
-          optionalString(message.expectedProjectRevision),
-        );
-        ctx.publishEvent?.('plugin:updated', {
-          packageName,
-          version: result.installedVersion,
-          restartRequired: result.restartRequired,
-        });
-        return { requestId, data: { success: true, ...result } };
       }
       case PLUGIN_RPC.VALIDATE_CONFIG: {
         const pluginName = stringField(message, 'pluginName');

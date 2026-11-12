@@ -12,7 +12,7 @@ import {
   RepeaterEngine,
   resolveGroupId,
 } from '../src/engine.js';
-import { repeaterEngineToken } from '../src/runtime.js';
+import { repeaterConfigToken, repeaterEngineToken } from '../src/runtime.js';
 
 describe('@zhin.js/plugin-repeater', () => {
   it('defines a valid Plugin Runtime entry', () => {
@@ -116,6 +116,7 @@ describe('@zhin.js/plugin-repeater', () => {
         },
       },
       config: { threshold: 3, cooldown: 5_000, maxLength: 200 },
+      has: () => false,
       use: (token: unknown) => {
         expect(token).toBe(repeaterEngineToken);
         return engine;
@@ -160,5 +161,25 @@ describe('@zhin.js/plugin-repeater', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+  it('uses the per-conversation effective threshold (ADR 0055)', async () => {
+    const engine = new RepeaterEngine();
+    const replies: unknown[] = [];
+    const resolved: unknown[] = [];
+    const context = (group: string, sender: string) => ({
+      input: { conversation: { endpoint: { id: 'sandbox\0im\0bot', adapter: 'sandbox' }, kind: 'group', id: group }, content: 'echo',
+        sender: { id: sender }, metadata: {}, $reply: async (content: unknown) => { replies.push([group, content]); } },
+      config: { threshold: 3, cooldown: 5_000, maxLength: 200 },
+      has: (token: unknown) => token === repeaterConfigToken,
+      use: (token: unknown) => token === repeaterEngineToken ? engine
+        : { configFor: (message: { conversation: { id: string } }) => { resolved.push(message.conversation.id); return message.conversation.id === 'g2' ? { threshold: 2 } : {}; } },
+    });
+    const next = vi.fn(async () => {});
+    for (const sender of ['a', 'b']) {
+      await middleware.handle(context('g1', sender) as never, next);
+      await middleware.handle(context('g2', sender) as never, next);
+    }
+    expect(replies).toEqual([['g2', 'echo']]);
+    expect(resolved).toContain('g1');
   });
 });

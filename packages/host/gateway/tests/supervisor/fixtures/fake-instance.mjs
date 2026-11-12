@@ -14,6 +14,11 @@ for (let index = 0; index < (number('FAKE_LOG_LINES') ?? 0); index += 1) {
   process.stderr.write(`err ${index}\n`);
 }
 
+if (env.FAKE_ECHO_STDIN) {
+  process.stdin.once('data', (chunk) => console.log(`stdin=${String(chunk).trim()}`));
+  process.stdin.once('end', () => console.log('stdin-end'));
+}
+
 if (env.FAKE_IGNORE_SIGTERM) process.on('SIGTERM', () => { console.log('sigterm-ignored'); });
 process.on('message', (message) => {
   if (message?.type !== 'shutdown') return;

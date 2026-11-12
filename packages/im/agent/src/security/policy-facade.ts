@@ -370,7 +370,7 @@ function resolveTurnFileOperation(toolName: string): FileOperation | undefined {
 }
 
 function resolveTurnRequesterRole(turn: TurnIngress): ToolRequesterRole {
-  if (turn.principal.roles.includes('master')) return 'master';
+  if (turn.principal.roles.includes('owner')) return 'owner';
   if (turn.principal.roles.includes('trusted')) return 'trusted';
   return 'other';
 }

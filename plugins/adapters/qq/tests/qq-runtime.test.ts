@@ -1,5 +1,6 @@
 import { qqFixture } from './fixture.js';
 import { createAdapterHarness } from '../../test-utils/endpoint.js';
+import { platformStandingOf } from '@zhin.js/core';
 import { checkBuiltinPermit, toPermissionSubject } from '@zhin.js/permission';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { httpHostToken } from '@zhin.js/host-http';
@@ -282,7 +283,7 @@ config: { ...baseConfig, id: `account-${index}`, appid: `app-${index}` }}), () =
     }
   });
 
-  it('projects official guild owner / admin role ids as canonical roles', async () => {
+  it('projects official guild owner / admin role ids as the platform standing', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
     const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
     const endpoint = await qqFixture(() => new QqWebsocketEndpoint({id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
@@ -295,11 +296,12 @@ config: baseConfig}), () => createMockBot(), gateway, undefined);
       await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(index + 1));
     }
     expect(receive.mock.calls.map((call) =>
-      checkBuiltinPermit('role(owner,admin,master)', toPermissionSubject(call[0]))))
+      checkBuiltinPermit('platform:admin', toPermissionSubject({ ...(call[0] as object), sender: { ...((call[0] as { sender?: object }).sender), platform: platformStandingOf((call[0] as { sender?: unknown }).sender) } }))))
       .toEqual(cases.map(([, expected]) => expected));
-    const ownerPayload = receive.mock.calls[0]![0] as { sender: { roles: string[]; permissions: string[] } };
-    expect(ownerPayload.sender.roles).toEqual(['owner']);
-    expect(ownerPayload.sender.permissions).toContain('role:4');
+    const ownerPayload = receive.mock.calls[0]![0] as { sender: { roles?: string[]; platform: unknown } };
+    expect(ownerPayload.sender.roles).toBeUndefined();
+    expect(ownerPayload.sender.platform).toEqual({ standing: 'owner', roles: [{ id: '1', name: '普通成员' }, { id: '4', name: '频道主' }] });
+    expect((receive.mock.calls[2]![0] as { sender: { platform: unknown } }).sender.platform).toMatchObject({ standing: 'member' });
     await endpoint.stop();
   });
 

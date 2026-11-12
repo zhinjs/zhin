@@ -67,12 +67,20 @@ export default defineAgentTool({
   description: 'Kick a group member',
   platforms: ['icqq'],           // QQ only
   scopes: ['group'],             // group chats only
-  permissions: ['role(master)'], // only in conversations started by a master
+  permissions: ['platform:admin', 'bot:admin'], // the requester is a group admin, and so is the bot
   // ...
 });
 ```
 
-When the conditions don't hold, the model doesn't see the tool at all. `permissions` uses the same rules as a command's [`permit`](./commands.md). `hidden: true` registers the tool without offering it to the model; it can still be called by name.
+When the conditions don't hold, the model doesn't see the tool at all, and the same facts are checked again at execution. `permissions` uses the same rules and the same evaluator as a command's [`permit`](./commands.md), across three dimensions:
+
+| Dimension | Spelling | Use it for |
+| --- | --- | --- |
+| The requester's zhin role | `owner` / `admin` / `trusted`, level-qualified `owner@global` … | zhin functions and Agent trust tiers (configuration, memory, dangerous operations); host-wide or cross-conversation / cross-group operations use `owner@global` (a conversation owner owns that conversation only) |
+| The requester's platform standing | `platform:owner\|admin`, `platform-role:<id>`, `platform-permission:<name>` | platform functions: who may have the bot mute, kick, change roles |
+| The bot's own platform standing | `bot:owner\|admin`, `bot-role:<id>`, `bot-permission:<name>` | operations the platform only allows a privileged bot: mute, recall others' messages, kick, change cards, set admins… |
+
+The bot's standing comes from the adapter's self-standing lookup (capability profile `scene.selfStanding`, cached per conversation); when the adapter does not support it or the lookup fails, every `bot:*` condition fails and the tool is not disclosed. A platform group owner / admin is not a zhin role: a tool that only requires `admin` is not open to group owners. `hidden: true` registers the tool without offering it to the model; it can still be called by name.
 
 ### Ask the user to confirm first
 
@@ -394,7 +402,7 @@ my-plugin/
 
 ### Permission rules
 
-`permissions` is parsed by `@zhin.js/permission`: `adapter(name)`, `group(id,...)`, `private(id,...)`, `channel(id,...)`, `user(id,...)`, `role(master|trusted|user)`, plus adapter-checked platform identity `platform(adapter,perm)` (e.g. group owner / admin). All rules in the list must pass; commas inside one rule mean any-of. **Unrecognized rules are always denied.**
+`permissions` is parsed by `@zhin.js/permission`: `adapter(name)`, `group(id,...)`, `private(id,...)`, `channel(id,...)`, `user(id,...)`, the chat roles `owner` / `admin` / `trusted` (or `role(...)`, along this conversation's scope chain; see [Chat roles](../concepts/chat-roles.md)), the requester's platform standing `platform:owner|admin`, `platform-role:<id>` and `platform-permission:<name>` (read from the adapter-reported `sender.platform`), and the bot's own standing `bot:owner|admin`, `bot-role:<id>` and `bot-permission:<name>`. Removed spellings (`scene_admin`, `platform(adapter,perm)`, `role(master)`) fail when the tool is defined. All rules in the list must pass; commas inside one rule mean any-of. **Unrecognized rules are always denied.**
 
 ### Prompt Section fields
 

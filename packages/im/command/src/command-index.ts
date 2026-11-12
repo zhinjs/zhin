@@ -15,6 +15,7 @@ import {
 import type { UserInteractionFactory } from '@zhin.js/im-contract';
 import { bindOperationInput, type CapabilityOperationFactory } from '@zhin.js/feature-kit';
 import {
+  describeDeniedPermit,
   permissionHostToken,
   type PermissionHost,
 } from '@zhin.js/permission';
@@ -74,6 +75,8 @@ interface CommandMenuContext {
   readonly keyword: string;
   readonly snapshot: RuntimeSnapshot;
   readonly locale: Locale;
+  /** The requesting message: the menu lists only commands it may run (ADR 0056 §5). */
+  readonly source?: unknown;
 }
 interface CommandMenuSelection { readonly pluginKey?: string; readonly page?: number }
 
@@ -87,6 +90,11 @@ export interface CommandDispatchResult {
   readonly owner?: PluginId;
   readonly value?: unknown;
   readonly menu?: CommandMenuPage;
+  /**
+   * `denied` only: the first unmet permit and a one-sentence reason for the sender (e.g. 「机器人不是本群管理员」).
+   * Undefined when no Permission host / source answered.
+   */
+  readonly denial?: Readonly<{ permit: string; reason: string }>;
 }
 
 /** Semantic menu navigation; the IM composition layer supplies platform controls. */
@@ -335,7 +343,7 @@ export class CommandIndex {
       this.#diagnoseParameter(name);
       throw new Error(`Unknown Command: ${name}`);
     }
-    if (!(await this.#permitAllows(match.command, undefined, operationSnapshot))) throw new Error(`Permission denied for Command: ${match.command.name}`);
+    if ((await this.#permitDenial(match.command, undefined, operationSnapshot)) !== undefined) throw new Error(`Permission denied for Command: ${match.command.name}`);
     const definition = match.command.slot.definition;
     const supplied = [...match.remaining, ...(args.length > 0 ? [{ type: 'text', data: { text: args.join(' ') } }] : [])];
     const parsed = parseCommandArguments(definition, supplied, resolveDynamicParams(match.params, undefined), {}, locale);
@@ -359,7 +367,7 @@ export class CommandIndex {
     const prefix = commandPrefix ?? '';
     if (this.#menu) {
       const keyword = this.#menu.keyword ?? commandMessages(locale, 'menuKeyword');
-      const menuResult = this.#dispatchMenu(input, { commandPrefix: prefix, snapshot: operationSnapshot, locale, keyword });
+      const menuResult = await this.#dispatchMenu(input, { commandPrefix: prefix, snapshot: operationSnapshot, locale, keyword, source });
       if (menuResult !== undefined) {
         return Object.freeze({
           matched: true,
@@ -378,7 +386,8 @@ export class CommandIndex {
       const candidate = this.#invalidRoute(input);
       if (!candidate) return Object.freeze({ matched: false, status: 'unmatched' });
       if (!commandAdapterMatches(candidate, source)) return Object.freeze({ matched: false, status: 'unmatched' });
-      if (!(await this.#permitAllows(candidate, source, operationSnapshot))) return this.#denied(candidate);
+      const candidateDenial = await this.#permitDenial(candidate, source, operationSnapshot);
+      if (candidateDenial !== undefined) return this.#denied(candidate, candidateDenial, locale);
       const help = commandHelp(commandDisplayName(candidate, locale), candidate.slot.definition, prefix, locale);
       const segments = normalizeSegments(typeof input === 'string' ? [{ type: 'text', data: { text: input } }] : input);
       if (requestsCommandHelp(segments)) return Object.freeze({ matched: true, status: 'executed', command: candidate.name, owner: candidate.slot.owner, value: help });
@@ -386,7 +395,8 @@ export class CommandIndex {
         issues: Object.freeze([commandValidationIssue('invalidParameter', candidate.parameter?.name ?? 'arguments', locale)]), help });
     }
     if (!commandAdapterMatches(match.command, source)) return Object.freeze({ matched: false, status: 'unmatched' });
-    if (!(await this.#permitAllows(match.command, source, operationSnapshot))) return this.#denied(match.command);
+    const denial = await this.#permitDenial(match.command, source, operationSnapshot);
+    if (denial !== undefined) return this.#denied(match.command, denial, locale);
     const definition = match.command.slot.definition;
     const authorSource = bindOperationInput(source, match.command.slot.owner, operationSnapshot);
     const help = commandHelp(commandDisplayName(match.command, locale), definition, prefix, locale);
@@ -413,8 +423,9 @@ export class CommandIndex {
     }
   }
 
-  #denied(record: CommandRecord): CommandDispatchResult {
-    return Object.freeze({ matched: true, status: 'denied', command: record.name, owner: record.slot.owner });
+  #denied(record: CommandRecord, permit: string | null, locale: Locale): CommandDispatchResult {
+    return Object.freeze({ matched: true, status: 'denied', command: record.name, owner: record.slot.owner,
+      ...(permit ? { denial: Object.freeze({ permit, reason: describeDeniedPermit(permit, locale) }) } : {}) });
   }
 
   /** Diagnose only a reliable static route prefix; fully dynamic routes are ordinary chat candidates. */
@@ -430,15 +441,31 @@ export class CommandIndex {
     return undefined;
   }
 
-  async #permitAllows(record: CommandRecord, source: unknown, operationSnapshot: RuntimeSnapshot): Promise<boolean> {
+  /**
+   * ADR 0056 §5: the shared evaluator (PermissionHost) over the three dimensions — sender zhin role,
+   * sender platform standing and the Bot's own standing (resolved from the Adapter index cache).
+   * `undefined` = allowed; a permit string = the first unmet one; `null` = denied without a reason
+   * (no source or no Permission host).
+   */
+  async #permitDenial(record: CommandRecord, source: unknown, operationSnapshot: RuntimeSnapshot, cachedOnly = false): Promise<string | null | undefined> {
     const permits = record.permit;
-    if (!permits || permits.length === 0) return true;
-    if (!source || typeof source !== 'object') return false;
+    if (!permits || permits.length === 0) return undefined;
+    if (!source || typeof source !== 'object') return null;
     const host = this.#resolveHost(operationSnapshot);
-    if (!host) return false;
+    if (!host) return null;
     const subject = toCommandPermissionSubject(source);
-    if (!subject.sender?.id && !subject.scene?.id && !subject.adapter && !subject.endpoint) return false;
-    return host.checkAll(permits, subject);
+    if (!subject.sender?.id && !subject.scene?.id && !subject.adapter && !subject.endpoint) return null;
+    const options = { source, ...(cachedOnly ? { cachedOnly } : {}) };
+    if (await host.checkAll(permits, subject, options)) return undefined;
+    // Denied: name the first unmet permit for the reply (same evaluator; Bot standing is cached now).
+    try { return (await host.firstDenied?.(permits, subject, options)) ?? null; } catch { return null; }
+  }
+
+  /** Whether the menu should list `record` for `source` (adapter restriction + permits). */
+  async #listable(record: CommandRecord, source: unknown, operationSnapshot: RuntimeSnapshot): Promise<boolean> {
+    if (source === undefined) return true;
+    if (!commandAdapterMatches(record, source)) return false;
+    return (await this.#permitDenial(record, source, operationSnapshot)) === undefined;
   }
 
   #resolveHost(operationSnapshot: RuntimeSnapshot): PermissionHost | undefined {
@@ -525,7 +552,7 @@ export class CommandIndex {
   // 内置菜单命令
   // ==========================================================================
 
-  #dispatchMenu(input: CommandMatchInput, context: CommandMenuContext): CommandMenuResult | undefined {
+  async #dispatchMenu(input: CommandMatchInput, context: CommandMenuContext): Promise<CommandMenuResult | undefined> {
     const { commandPrefix, keyword, locale } = context;
     const text = typeof input === 'string' ? input.trim() : exactMessageText(input);
     if (text === undefined) return undefined;
@@ -557,7 +584,7 @@ export class CommandIndex {
     return undefined;
   }
 
-  #buildMenu({ pluginKey, page = 1 }: CommandMenuSelection, { commandPrefix, keyword, snapshot, locale }: CommandMenuContext): CommandMenuResult {
+  async #buildMenu({ pluginKey, page = 1 }: CommandMenuSelection, { commandPrefix, keyword, snapshot, locale, source }: CommandMenuContext): Promise<CommandMenuResult> {
     const root = snapshot.root;
     const targetId = pluginKey
       ? `${root}/${pluginKey.split('.').join('/')}` as PluginId
@@ -566,15 +593,17 @@ export class CommandIndex {
     const node = snapshot.tree.get(targetId);
     if (!node) return { value: commandMessages(locale, 'missingPlugin', { plugin: pluginKey ?? '' }) };
 
-    const directCommands = this.#commands.filter((cmd) => cmd.slot.owner === targetId);
+    const listable = await Promise.all(this.#commands.map(async (cmd) => (await this.#listable(cmd, source, snapshot)) ? cmd : undefined));
+    const available = listable.filter((cmd): cmd is CommandRecord => cmd !== undefined);
+    const directCommands = available.filter((cmd) => cmd.slot.owner === targetId);
     const children = node.children
       .map((childId) => snapshot.tree.get(childId))
       .filter((child): child is NonNullable<typeof child> => !!child);
     const effectiveCommands = targetId === root
       && directCommands.length === 0
-      && this.#commands.length > 0
-      && this.#commands.length <= MENU_PAGE_SIZE
-      ? this.#commands
+      && available.length > 0
+      && available.length <= MENU_PAGE_SIZE
+      ? available
       : directCommands;
 
     const pages = Math.max(1, Math.ceil((effectiveCommands.length + children.length) / MENU_PAGE_SIZE));

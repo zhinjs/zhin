@@ -146,7 +146,6 @@ When the QQ official bot is offline or fails to start, configure `notify` to ale
 icqq:
   # ... a configured ICQQ instance
 qq:
-  master: "${QQ_MASTER_OPENID}"
   notify:
     adapter: icqq
     endpoint: "123456"

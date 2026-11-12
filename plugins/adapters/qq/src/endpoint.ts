@@ -1,12 +1,12 @@
 import { createQqSelfProfile } from './self-profile.js';
 import { Bot, ReceiverMode } from 'qq-official-bot';
 import { installQqUploadDiagnostics } from './upload-diagnostics.js';
-import { projectQqGuildSenderRoles } from './platform-permit.js';
+import { projectQqGuildSenderStanding } from './platform-permit.js';
 import { qqDeliveryFailure } from './delivery-error.js';
 import { normalizeQqInteraction } from './interaction.js';
 import { awaitQqStartup } from './start-deadline.js';
 import { createQqStreaming } from './streaming.js';
-import { EndpointDeliveryError, type MessageRef } from '@zhin.js/im-contract';
+import { EndpointDeliveryError, standingFromMemberRole, type MessageRef, type PlatformStanding, type SelfStandingRequest } from '@zhin.js/im-contract';
 import {
   inspectQqGroupMember,
   inspectQqGroupMemberProfile,
@@ -14,6 +14,7 @@ import {
   kickQqGroupMember,
   moderateQqGroupMember,
   muteQqGroupMember,
+  qqGroupBotState,
   qqGroupService,
 } from './group-admin.js';
 /**
@@ -260,7 +261,7 @@ export class QqWebsocketEndpoint extends Bot<ReceiverMode.WEBSOCKET> implements 
       + (msg.mentioned ? ' (mentioned)' : '')
       + ` | ${truncatePreview(content, 80)}`,
     );
-    const roleProjection = projectQqGuildSenderRoles(msg.authorRoles);
+    const platform = projectQqGuildSenderStanding(msg.authorRoles, conversation);
     if (msg.id) this.#passiveReplies.record(qqOutboundKind(conversation), conversation.id, { id: msg.id });
     void this[endpointSpec].events.emit('message.receive', {
       conversation,
@@ -272,8 +273,7 @@ export class QqWebsocketEndpoint extends Bot<ReceiverMode.WEBSOCKET> implements 
       sender: {
         id: msg.authorId,
         name: senderDisplayName(msg) || undefined,
-        ...(roleProjection.role ? { roles: [roleProjection.role] } : {}),
-        ...(roleProjection.permissions.length ? { permissions: roleProjection.permissions } : {}),
+        ...(platform ? { platform } : {}),
       },
       endpointId: this.#options.config.id,
       ...(msg.mentioned ? { mentioned: true } : {}),
@@ -282,7 +282,6 @@ export class QqWebsocketEndpoint extends Bot<ReceiverMode.WEBSOCKET> implements 
         userId: msg.authorId,
         guildId: msg.guildId,
         authorRoleIds: msg.authorRoles,
-        ...(roleProjection.role ? { senderRole: roleProjection.role } : {}),
       }),
     }).catch((err) => {
       this.#logger.warn(formatCompact({
@@ -558,7 +557,7 @@ export class QqHttpEndpoint extends Bot<ReceiverMode.MIDDLEWARE, 'koa'> implemen
       + (msg.mentioned ? ' (mentioned)' : '')
       + ` | ${truncatePreview(content, 80)}`,
     );
-    const roleProjection = projectQqGuildSenderRoles(msg.authorRoles);
+    const platform = projectQqGuildSenderStanding(msg.authorRoles, conversation);
     if (msg.id) this.#passiveReplies.record(qqOutboundKind(conversation), conversation.id, { id: msg.id });
     void this[endpointSpec].events.emit('message.receive', {
       conversation,
@@ -570,8 +569,7 @@ export class QqHttpEndpoint extends Bot<ReceiverMode.MIDDLEWARE, 'koa'> implemen
       sender: {
         id: msg.authorId,
         name: senderDisplayName(msg) || undefined,
-        ...(roleProjection.role ? { roles: [roleProjection.role] } : {}),
-        ...(roleProjection.permissions.length ? { permissions: roleProjection.permissions } : {}),
+        ...(platform ? { platform } : {}),
       },
       endpointId: this.#options.config.id,
       ...(msg.mentioned ? { mentioned: true } : {}),
@@ -580,7 +578,6 @@ export class QqHttpEndpoint extends Bot<ReceiverMode.MIDDLEWARE, 'koa'> implemen
         userId: msg.authorId,
         guildId: msg.guildId,
         authorRoleIds: msg.authorRoles,
-        ...(roleProjection.role ? { senderRole: roleProjection.role } : {}),
       }),
     }).catch((err) => {
       this.#logger.warn(formatCompact({
@@ -684,7 +681,25 @@ function createQqEndpointManagement(
   isActive: () => boolean,
 ): EndpointManagement {
   const api = () => requireClient();
+  let selfId: string | undefined;
   return Object.freeze<EndpointManagement>({
+    /**
+     * ADR 0056 §1：机器人自身身份。QQ 群走 getBotState（member_role）；频道走频道成员信息（身份组
+     * 4 = 频道主、2 = 超级管理员），与发送者同一套归一。
+     */
+    async inspectSelfStanding({ conversation, signal }: SelfStandingRequest): Promise<PlatformStanding | undefined> {
+      if (conversation.kind === 'group') {
+        const state = await qqGroupBotState(api(), { groupId: conversation.id, signal });
+        return standingFromMemberRole(state.member_role);
+      }
+      const guildId = conversation.kind === 'channel' ? conversation.parent?.id : undefined;
+      if (!guildId) return undefined;
+      const operation = createEndpointOperation({ signal });
+      if (!selfId) selfId = (await operation.run(() => requireClient().getSelfInfo()))?.id || undefined;
+      if (!selfId) return undefined;
+      const member = await operation.run(() => requireClient().memberService.getGuildMemberInfo(guildId, selfId!));
+      return projectQqGuildSenderStanding(member?.roles, conversation) ?? Object.freeze({ standing: 'member' as const });
+    },
     // QQ 群（group_openid / member_openid）：官方 v2 群管理接口，部分为白名单能力（11253）。
     inspectGroupMember: request => inspectQqGroupMember(api(), request),
     inspectGroupScene: request => inspectQqGroupScene(api(), request),

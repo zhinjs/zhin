@@ -24,8 +24,8 @@ const packageJson = JSON.parse(
 
 describe('full-bot L4 配置契约', () => {
   it('由 Plugin Runtime 与约定式能力目录启动', () => {
-    expect(packageJson.scripts.dev).toBe('zhin runtime start --watch source config');
-    expect(packageJson.scripts.start).toContain('zhin runtime start');
+    expect(packageJson.scripts.dev).toBe('zhin start --foreground --watch source config');
+    expect(packageJson.scripts.start).toContain('zhin start --foreground');
     expect(packageJson.zhin?.entry).toBe('./plugin.ts');
     // command/component 经 zhin.js 门面的 platformFeatures 继承（ADR 0053），
     // 静态声明只保留门面不覆盖的 skill/tool/page

@@ -119,6 +119,8 @@ export const TERMINAL_CLOSE_CODES = Object.freeze({
 const MAX_DIMENSION = 1000;
 const MAX_TEXT_FRAME = 4096;
 const MAX_INPUT_FRAME = 1 << 20;
+/** Input queued while the session starts; frames beyond it are dropped. */
+const MAX_PENDING_INPUT = 1 << 20;
 // Output backpressure on the socket's send buffer.
 const PAUSE_BUFFERED = 256 * 1024;
 const RESUME_BUFFERED = 64 * 1024;
@@ -232,14 +234,27 @@ export class TerminalService {
   ): Promise<void> {
     const ip = socket.remoteAddress;
     // Listen before any await: the peer may leave while authorization or startup is pending.
-    const connection: { session?: Session; gone: boolean } = { gone: false };
+    // Frames that arrive before the shell is up (ticket check, PTY / SSH start) are queued and
+    // replayed once it is ready: a client may type or paste right after the socket opens.
+    const connection: { session?: Session; gone: boolean; pending: { data: string | Uint8Array; bytes: number }[]; pendingBytes: number } = {
+      gone: false, pending: [], pendingBytes: 0,
+    };
     const open = () => !connection.gone;
     socket.onClose((code) => {
       connection.gone = true;
+      connection.pending = [];
       connection.session?.end(code === ABNORMAL_CLOSURE ? 'error' : 'disconnect');
     });
     socket.onMessage((data) => {
-      if (connection.session) this.#onMessage(connection.session, data, typeof data !== 'string');
+      if (connection.session?.backend) {
+        this.#onMessage(connection.session, data, typeof data !== 'string');
+        return;
+      }
+      const bytes = typeof data === 'string' ? Buffer.byteLength(data) : data.byteLength;
+      // Bounded: a peer cannot grow memory before its session exists.
+      if (connection.pendingBytes + bytes > MAX_PENDING_INPUT) return;
+      connection.pendingBytes += bytes;
+      connection.pending.push({ data, bytes });
     });
     const ticket = socket.url.searchParams.get('ticket');
     const consumed = this.#tickets.consume(ticket, presentedPrincipal?.id);
@@ -334,6 +349,10 @@ export class TerminalService {
     this.#audit({ action: 'terminal.session.start', actor: principal.id, target: targetId, outcome: 'ok', ip, detail: { sessionId: info.sessionId, kind } });
     sendControl(socket, { type: 'ready', sessionId: info.sessionId, target: targetId, kind, cols, rows }, open);
     this.#resetIdle(live);
+    const queued = connection.pending;
+    connection.pending = [];
+    connection.pendingBytes = 0;
+    for (const frame of queued) this.#onMessage(live, frame.data, typeof frame.data !== 'string');
   }
 
   /** Ends every session (and pending ticket) of a principal. Returns the number of sessions ended. */

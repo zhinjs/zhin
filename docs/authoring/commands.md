@@ -142,34 +142,36 @@ export default defineCommand({
 ```ts
 export default defineCommand({
   description: '清空数据',
-  permit: ['role(master)'],              // 仅 master 可用
+  permit: ['owner'],              // 仅主人（聊天角色 owner）可用
   execute: () => '已清空',
 });
 ```
 
 | 规则 | 含义 |
 | --- | --- |
-| `role(master)` / `role(trusted)` | 发送者角色 |
+| `owner` / `admin` / `trusted` / `role(admin,trusted)` | 发送者在本会话层级链上的聊天角色（`owner` ⊃ `admin` ⊃ `trusted`） |
+| `owner@global` / `owner@adapter` / `admin@endpoint` / `role(owner@global,admin)` | 层级限定：该角色须来自该层级或更高层级（`sender.chatRoleLevels`）。影响整个宿主的命令（重启、改项目配置、执行命令……）写 `owner@global`；会话层 owner 只是该会话的主人 |
+| `platform:owner` / `platform:admin` / `platform-role:<id>` / `platform-permission:<name>` | 发送者的平台身份（适配器上报的 `sender.platform`） |
+| `bot:owner` / `bot:admin` / `bot-role:<id>` / `bot-permission:<name>` | 机器人账号自身在本会话的平台身份（按会话缓存；未知时不满足） |
 | `adapter(icqq)` | 只在某个平台上可用 |
 | `group()` / `private()` / `channel()` | 限制会话类型，空值或 `*` 不限该类型的会话 ID |
 | `group(123)` / `private(…)` / `channel(…)` / `user(…)` | 比较相应会话或发送者 ID；不限制完整账号、父容器或话题 |
 
-数组中的多条规则**同时满足**才通过；一条规则内用逗号分隔表示**满足其一**即可。没有权限的用户也看不到这个命令的帮助。
+数组中的多条规则**同时满足**才通过；一条规则内用逗号分隔表示**满足其一**即可。没有权限的用户看不到这个命令的帮助，[指令菜单](#menu)也只列出当前发送者在本会话可用的命令。
 
-内置角色判断只让 `master` 隐含 `trusted`，不会额外推导 `user`、`admin` 或 `owner`。角色来自当前真实消息；适配器配置可以指定谁是 master：
+命令与 Agent 工具 / 技能共用同一套规则和同一个评估器（三条维度：发送者的 zhin 角色、发送者的平台身份、机器人自身的平台身份）。需要机器人执行的平台操作通常同时写两类条件：
 
-```yaml
-configVersion: 2
-# zhin.config.yml
-plugins:
-  qq: "@zhin.js/adapter-qq"
-qq:
-  master: '10001' # 整个适配器的 master
-  endpoints:
-    - name: main
-      appid: ${QQ_APPID}
-      master: '10001' # 也可以给单个账号单独设置
+```ts
+export default defineCommand({
+  description: '禁言成员',
+  permit: ['group()', 'platform:admin', 'bot:admin'],  // 发送者是群管理员，机器人自己也是
+  execute: async () => { /* … */ },
+});
 ```
+
+不满足时走命令的拒绝回复：`platform:*` / `bot:*` 条件会说明缺哪一项（如「无法执行此指令：机器人不是本群管理员（或无法确认其身份）。」），zhin 角色与会话条件保持通用的「没有权限执行此指令。」。
+
+角色来自当前真实消息（Runtime 写入的 `sender.chatRole`），授予记录存在项目数据库：在 Console 对象页的「角色」页签或聊天命令 `角色 授予` 中管理。平台群主 / 管理员**不会**自动成为 zhin 角色——管 zhin 功能的命令写 `admin` / `owner`，管平台功能的命令写 `platform:*`。详见[聊天角色](../concepts/chat-roles.md)；旧写法 `role(master)`、`scene_admin`、`platform(adapter,perm)` 的对照见[升级到聊天角色](../migrations/chat-roles.md#permits)。
 
 需要逐项理解规则时，可在[Console 命令权限说明](../paths/console.md#命令权限说明)中查看内置条件或填写假设身份。它不执行平台 checker，也不授予权限；`adapter(...)` 与会话 ID 规则不能当作完整会话白名单。
 
@@ -436,9 +438,9 @@ qq:
 
 `npm create zhin-app` 的 `--adapter sandbox` 生成的 Sandbox 已设置为 `/`。
 
-### 查看已加载的指令菜单
+### 查看已加载的指令菜单 {#menu}
 
-启用 Command Feature 后，内置菜单开箱即响应 **`菜单`**、**`帮助`**、**`help`**、**`menu`**（以及带前缀的 `/help`、`/menu` 或 `@Bot 菜单`），不需要另装帮助插件。当命令总数 **≤ 8** 时，首页会自动扁平化展示根命令，方便一眼看完；超过 8 条时按插件分层分页展示。当前账号配置了 `commandPrefix: '/'` 时，也可以加 `/` 发送：
+菜单只列出当前发送者在本会话可用的命令（按 `permit` 与 `adapter` 过滤）。启用 Command Feature 后，内置菜单开箱即响应 **`菜单`**、**`帮助`**、**`help`**、**`menu`**（以及带前缀的 `/help`、`/menu` 或 `@Bot 菜单`），不需要另装帮助插件。当命令总数 **≤ 8** 时，首页会自动扁平化展示根命令，方便一眼看完；超过 8 条时按插件分层分页展示。当前账号配置了 `commandPrefix: '/'` 时，也可以加 `/` 发送：
 
 | 消息（无前缀时） | 返回内容 |
 | --- | --- |
@@ -590,7 +592,7 @@ it('parses positional args and fills option defaults', async () => {
 | 字段 | 行为 |
 |---|---|
 | `alias` | 替换命令名的全部静态部分；目录参数接在后面 |
-| `permit` | 内置规则：`adapter\|group\|private\|channel\|user\|role(...)`。失败返回 `denied`；没有鉴权主体时同样拒绝，程序化的 `CommandIndex.execute` 也不能绕过 |
+| `permit` | 内置规则：`adapter\|group\|private\|channel\|user(...)`、`owner\|admin\|trusted[@层级]` / `role(...)`、`platform:…` / `platform-role:…` / `platform-permission:…`、`bot:…` / `bot-role:…` / `bot-permission:…`。失败返回 `denied`（`denial` 给出第一条不满足的规则与原因）；没有鉴权主体时同样拒绝，程序化的 `CommandIndex.execute` 也不能绕过 |
 | `shortcut` | `{ 触发文本: 预填的 params }`，去掉首尾空白后完全相同才触发 |
 
 冲突按完整的词序列判断：`b` 和 `b list` 可以共存。
@@ -638,7 +640,7 @@ flowchart LR
 - `remove <id>` 取消目标 incarnation 并关闭连接，历史保留；同名重建也获得新身份。
 - 首次修改前由管理员在 Console 核对已有账号清单并确认迁移，聊天命令不能代替确认。
 - 后续变更加密持久化，不写启动配置或 `.env`，不重启 Root。没有运行目录或数据库能力时拒绝写入，不回退文件。
-- `add/remove` 保留 master 权限规则；revision 冲突需刷新，提交结果未知需先读取权威状态核实，不能自动重试。
+- `add/remove` 需要适配器层或以上的聊天角色 `owner`（`owner@adapter`）；revision 冲突需刷新，提交结果未知需先读取权威状态核实，不能自动重试。
 
 ```ts
 // src/telegram-endpoint-commands.ts

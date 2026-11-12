@@ -28,7 +28,7 @@ GitHub Plugin Runtime adapter — Issue/PR comment sections serve as chat channe
 pnpm add @zhin.js/adapter-github
 ```
 
-Webhook requires Root to provide `@zhin.js/host-http` (`zhin runtime start` assembles it by default).
+Webhook requires Root to provide `@zhin.js/host-http` (assembled by default in the instance `zhin start` launches; the management gateway serves HTTP).
 
 ## Prerequisites
 

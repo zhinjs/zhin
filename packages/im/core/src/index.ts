@@ -3,7 +3,17 @@
  * @module @zhin.js/core
  */
 export { defineComponent, type ComponentDefinition, type ComponentContext } from '@zhin.js/component'
-export { component, type ComponentCall, raw, type RawContent } from './plugin-runtime/im/contracts.js'
+export { component, type ComponentCall, raw, type RawContent, untrustedContent, isUntrustedContent, type UntrustedContent } from './plugin-runtime/im/contracts.js'
+export {
+  checkUntrustedMediaRef,
+  DEFAULT_UNTRUSTED_INLINE_MEDIA_BYTES,
+  isPlatformFileToken,
+  isTrustedMediaRef,
+  trustedMediaRef,
+  type OutboundMediaRefusal,
+  type OutboundMediaTrust,
+  type UntrustedMediaDecision,
+} from './built/outbound-media-trust.js'
 export type { MessageChannel, MessageType } from './message.js'
 export { Message, type MessageBase } from './plugin-runtime/im/contracts.js'
 export * from './im-scene.js'

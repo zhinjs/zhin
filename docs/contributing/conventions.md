@@ -76,6 +76,8 @@ flowchart LR
 
 跨平台出站（从一个平台发到另一个平台）用 `root.inject(adapter).sendMessage`，不要直接操作 Endpoint。
 
+适配器 Agent 工具（`plugins/adapters/<name>/agents/**`）同样不能直调平台 SDK / Client 的发送接口：用 `context.use(outboundMessageToken).send({ requester, conversation, content })` 发往当前会话；平台特有内容用适配器的命名空间段表达（如 `discord:embed`、`telegram:poll`、`telegram:sticker`、`napcat:node`），由该适配器的出站编码器渲染。`check:harness-paths` 会扫描这类直调；确实无法由出站链表达的调用（如创建论坛帖、工作通知）登记在 `scripts/agent-send-bypass-allowlist.json` 并写明理由。
+
 ## Host token 模式
 
 HTTP Host（`@zhin.js/host-http`）统一用 Bearer 凭据鉴权：

@@ -51,7 +51,9 @@ export interface FakeMessage extends CommandMessage {
 export interface FakeMessageInit {
   readonly locale?: Locale;
   readonly content?: string;
-  readonly sender?: { readonly id: string; readonly name?: string; readonly roles?: readonly string[] };
+  /** `chatRole`: the zhin chat role effective in the conversation (ADR 0056); `platform`: normalized platform standing. */
+  readonly sender?: { readonly id: string; readonly name?: string; readonly chatRole?: 'owner' | 'admin' | 'trusted';
+    readonly platform?: Readonly<{ standing: 'owner' | 'admin' | 'member' | 'guest'; roles?: readonly Readonly<{ id: string; name?: string }>[]; permissions?: readonly string[] }> };
   readonly conversation?: Partial<CommandMessage['conversation']>;
   readonly id?: string;
   readonly metadata?: Readonly<Record<string, unknown>>;
@@ -64,7 +66,7 @@ export function createFakeMessage(init: FakeMessageInit = {}): FakeMessage {
   const conversation: CommandMessage['conversation'] = {
     endpoint: { id: 'test', adapter: 'test' }, kind: 'group', id: 'test-group', ...init.conversation,
   };
-  const sender = init.sender ?? { id: 'test-user', name: 'Tester', roles: [] };
+  const sender = init.sender ?? { id: 'test-user', name: 'Tester' };
   const recordSend = (target: FakeSentDelivery['target'], content: unknown): string => {
     replies.push(content);
     sent.push({ target, content });
@@ -246,7 +248,8 @@ export function createCommandContext<TConfig, TInput extends CommandMessage = Fa
     adapter: conversation.endpoint.adapter,
     endpoint: conversation.endpoint.id,
     scene: input.scene ?? { id: conversation.id, type: conversation.kind },
-    ...(sender ? { sender: { id: sender.id, name: sender.name, role: sender.roles ?? [] } } : {}),
+    ...(sender ? { sender: { id: sender.id, name: sender.name,
+      ...(sender.chatRole ? { chatRole: sender.chatRole } : {}), ...(sender.platform ? { platform: sender.platform } : {}) } } : {}),
   };
 }
 
@@ -276,7 +279,8 @@ function populateCommandOptionsFromDefinition<TConfig, TResult, TInput extends C
     adapter: input.conversation.endpoint.adapter,
     endpoint: input.conversation.endpoint.id,
     scene: input.scene ?? { id: input.conversation.id, type: input.conversation.kind },
-    ...(input.sender ? { sender: { id: input.sender.id, name: input.sender.name, role: input.sender.roles ?? [] } } : {}),
+    ...(input.sender ? { sender: { id: input.sender.id, name: input.sender.name,
+      ...(input.sender.chatRole ? { chatRole: input.sender.chatRole } : {}), ...(input.sender.platform ? { platform: input.sender.platform } : {}) } } : {}),
   };
   const resolveDefault = (def: CommandParamSchema['default']): CommandParameterValue | undefined => {
     if (def === undefined) return undefined;
@@ -444,7 +448,9 @@ export function createToolContext<TConfig, TAdapter extends string | undefined =
     principal: Object.freeze({ ...(options.principal ?? {
       subjectId: sender?.id ?? 'test-user',
       ...(sender?.name === undefined ? {} : { displayName: sender.name }),
-      roles: sender?.roles ?? [],
+      roles: sender?.chatRole
+        ? (['owner', 'admin', 'trusted'] as const).slice(['owner', 'admin', 'trusted'].indexOf(sender.chatRole))
+        : ['user'],
     }) }),
     policy: Object.freeze({
       permissions: Object.freeze([...(policy.permissions ?? [])]),

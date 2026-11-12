@@ -26,7 +26,7 @@ export const PLUGIN_TOOLING_RANGES = {
   '@types/node': '^26.1.2',
   typescript: '^6.0.3',
   vitest: '^4.1.12',
-  rimraf: '^6.1.3',
+  rimraf: '^6.1.4',
 } as const;
 
 const require = createRequire(import.meta.url);

@@ -8,7 +8,7 @@ tier: Stable
 本页由 [`plugins/adapters/sandbox/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/sandbox/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=a75c82d9bc8f354d -->
+<!-- sync-adapter-docs:sha256=9ea19b5017cb5e78 -->
 
 # @zhin.js/adapter-sandbox
 
@@ -32,19 +32,19 @@ pnpm add @zhin.js/adapter-sandbox
 
 ## 前置条件
 
-Sandbox 不需要外部账号。只需由 `zhin runtime start` 装配 HTTP Host，并确保浏览器能访问启动日志中的 Host 地址。
+Sandbox 不需要外部账号。只需用 `zhin start` 启动项目（管理网关承载 HTTP，实例的路由经网关转发），并确保浏览器能访问启动日志中的 Host 地址。
 
 ## 依赖
 
-### Plugin Runtime（新，`zhin runtime start`）
+### Plugin Runtime（`zhin start`）
 
 - `@zhin.js/adapter` — 约定式 `adapters/sandbox/index.ts`
 - `@zhin.js/host-http` — Root 提供的 `httpHostToken`（WebSocket `/sandbox` + Console HTTP）
 - `@zhin.js/core` — `endpointSpec.events` 入站、`outboundMessageToken` 出站
 - `@zhin.js/page` + `pages/index/index.tsx` — ADR 0046 约定页（`definePage`；路由 `/sandbox`）
 
-Root 在 `zhin runtime start` 时装载 `@zhin.js/host-http`、`ConsoleRuntime` 与
-`ClientBuildModuleRuntime`。打开 `http://<host>:<port>/console` 可浏览页面；Sandbox 页
+`zhin start` 拉起的实例装载 `@zhin.js/host-http`、`ConsoleRuntime` 与
+`ClientBuildModuleRuntime`（HTTP 由管理网关监听并转发）。打开 `http://<host>:<port>/console` 可浏览页面；Sandbox 页
 （路由 `/sandbox`，与 WebSocket `/sandbox` 同 path：GET 开页、Upgrade 走 WS）内置聊天壳。
 
 旧 `client/`（`register(api)` / `pageManager.addEntry`）仅保留给 legacy Host 栈参考，
@@ -97,7 +97,7 @@ Console 原生渲染 Markdown 格式的流式回复（`markdown` 段，`data.con
 
 1. 启动 Zhin 实例：`pnpm dev`（终端会打印 Host 地址，一般为 `http://127.0.0.1:8086`）
 2. 打开 **[Remote Console](https://console.zhin.dev)**，API Base 与 Host 地址一致，用 Console 账号登录（首次连接用 `http.token` / `HTTP_TOKEN` 创建所有者）
-3. 在 Console **会话** 页连接后发送消息
+3. 连接后在 Console 侧栏「试聊一下」（`/sandbox`）发送消息
 
 浏览器客户端连接到默认 `sandbox-bot`，也可以通过多个显式 endpoint 使用不同 WebSocket 路径。
 
@@ -109,7 +109,7 @@ Console 原生渲染 Markdown 格式的流式回复（`markdown` 段，`data.con
 
 刷新后仅恢复当前进程和 generation 中仍有效的待处理交互，继续使用原发起人、会话、期限和单次处理规则。历史与浏览器缓存中的控件不提供当前审批权限；已结束或重启前的操作不会重新激活。
 
-无人值守任务等产生的 Host 工具审批，可在任务中心的「Host 工具审批」中查看并逐次确认。该入口沿用 Console 操作者的权限，只显示当前有效请求，不改变 IM 审批规则。
+无人值守任务等产生的 Host 工具审批，可在「运维 → 定时任务 → 管理员任务」的「Host 工具审批」中查看并逐次确认。该入口沿用 Console 操作者的权限，只显示当前有效请求，不改变 IM 审批规则。
 
 「变更与产物」中的成功文件写入、编辑在 Host 提供项目文件引用时，可打开现有文件管理器查看当前文件。入口沿用文件管理器的项目根与读取权限；旧记录或无法映射的文件仍显示执行记录，不推测链接。该入口读取当前内容，不是执行时的历史快照。
 
@@ -252,3 +252,7 @@ Console 沙盒页和自己写的测试客户端都用这套协议。每个 WebSo
 ## 许可证
 
 MIT License
+
+## 成员身份
+
+模拟器的发送者角色（`master` = 群主 / `admin` / `member`）在群聊、频道中作为 `sender.platform.standing`（`owner` / `admin` / `member`）上报，私聊不上报。它只模拟平台身份，不授予框架角色（主人等由账号配置或聊天角色决定）。能力画像：`group` / `channel` 的 `scene.platformStanding = { standing: true }`。详见 [ADR 0056 §1](https://github.com/zhinjs/zhin/blob/main/docs/adr/0056-chat-roles.md)。

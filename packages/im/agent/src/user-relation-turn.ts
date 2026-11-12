@@ -40,7 +40,7 @@ export function recordRelationTurn(
     userId: principal.subjectId,
     displayName: principal.displayName,
     scene: origin.scope === 'private' ? undefined : `${origin.scope}:${origin.sceneId}`,
-    isMaster: principal.roles.includes('master'),
+    isMaster: principal.roles.includes('owner'),
     addressed: !ambient,
     text: turn.input?.text ?? '',
     toolCalls: countBusinessToolCalls(outcome.toolCalls),

@@ -68,6 +68,8 @@ flowchart LR
 
 For cross-platform outbound messages (sending from one platform to another), use `root.inject(adapter).sendMessage` -- do not operate on Endpoints directly.
 
+Adapter Agent tools (`plugins/adapters/<name>/agents/**`) must not call a platform SDK / Client send API either: send to the current conversation with `context.use(outboundMessageToken).send({ requester, conversation, content })`, expressing platform-specific content as the adapter's namespaced segment (such as `discord:embed`, `telegram:poll`, `telegram:sticker`, `napcat:node`) that its outbound encoder renders. `check:harness-paths` scans for such calls; a call the outbound chain cannot express (creating a forum post, a work notice) is recorded with its reason in `scripts/agent-send-bypass-allowlist.json`.
+
 ## Host Token Pattern
 
 The HTTP Host (`@zhin.js/host-http`) authenticates every request with a Bearer credential:

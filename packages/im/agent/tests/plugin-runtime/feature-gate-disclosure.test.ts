@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  childPluginId, createCapabilitySlot, featureId, primaryConfigToken, rootPluginId,
+  childPluginId, createCapabilitySlot, featureConversationOverridesToken, featureId, primaryConfigToken, rootPluginId,
   type PluginId, type PluginNodeSnapshot, type PrimaryConfig, type RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
 import { defineAgentTool, ToolIndex, toolFeatureId } from '@zhin.js/tool';
@@ -33,10 +33,10 @@ function fixture(document: Record<string, unknown>): RuntimeSnapshot {
   ]) };
 }
 
-function turn(endpoint?: string): TurnAccessContext {
+function turn(endpoint?: string, scene = 'scene'): TurnAccessContext {
   return {
-    origin: { kind: 'im', platform: 'qq', endpoint: endpoint ?? 'none', scope: 'group', sceneId: 'scene',
-      ...(endpoint ? { conversation: { kind: 'group', id: 'scene', endpoint: { id: endpoint, adapter: 'qq' } } } : {}) },
+    origin: { kind: 'im', platform: 'qq', endpoint: endpoint ?? 'none', scope: 'group', sceneId: scene,
+      ...(endpoint ? { conversation: { kind: 'group', id: scene, endpoint: { id: endpoint, adapter: 'qq' } } } : {}) },
     principal: { subjectId: 'member', roles: ['user'] },
     policy: { permissions: [], unattended: false }, session: { key: `qq:${endpoint}:group:scene` },
   } as unknown as TurnAccessContext;
@@ -66,5 +66,20 @@ describe('ADR 0050 tool disclosure gate', () => {
     const gate = featureGate(snapshot, turn('news'));
     expect([rss, weather, root].map(owner => gate(owner))).toEqual([false, false, true]);
     expect(featureGate(snapshot, { ...turn('news'), origin: { kind: 'http', sessionId: 'x' } } as never)(rss)).toBe(true);
+  });
+});
+
+describe('ADR 0055 conversation-level tool gate', () => {
+  it('hides a tool in group A but not in group B of the same endpoint', async () => {
+    const snapshot = fixture({ configVersion: 2, plugins: { rss: '@x/rss', weather: '@x/weather', qq: '@x/qq' } });
+    const reader = { version: 1, get: (plugin: string, key: string) => plugin === 'rss' && key === 'qq/main/group:A'
+      ? { enabled: false as const, patch: {}, revision: 1, updatedAt: 1 } : undefined };
+    (snapshot.resources.get(root) as Map<string, unknown>).set(featureConversationOverridesToken.id, reader);
+    const ingress = new CapabilityIngress();
+    const names = async (scene: string) => (await ingress.read({ snapshot, owner: root, isActive: () => true, turn: turn('main', scene) }))
+      .tools.map(tool => tool.name).sort();
+    expect(await names('A')).toEqual(['host_tool', 'weather__weather_now']);
+    expect(await names('B')).toEqual(['host_tool', 'rss__rss_fetch', 'weather__weather_now']);
+    expect(featureGate(snapshot, turn('main', 'A'))(rss)).toBe(false);
   });
 });

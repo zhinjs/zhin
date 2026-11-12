@@ -36,4 +36,11 @@ describe('resolveHostProtectedPaths (#1030 P0)', () => {
     expect(classifyHostPath(join(root, 'package.json'), paths)).toBe('self');
     expect(classifyHostPath(join(root, 'pnpm-lock.yaml'), paths)).toBe('deny');
   });
+
+  it('denies the gateway control endpoint the gateway passes in ZHIN_GATEWAY_SOCKET (tmpdir fallback included)', async () => {
+    const endpoint = join(tmpdir(), 'custom-endpoint-for-test.sock');
+    const paths = await resolveHostProtectedPaths(root, { ZHIN_GATEWAY_SOCKET: endpoint });
+    expect(paths.controlEndpoints).toEqual([endpoint]);
+    expect(classifyHostPath(endpoint, paths)).toBe('deny');
+  });
 });

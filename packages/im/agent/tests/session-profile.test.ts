@@ -46,10 +46,11 @@ describe('session profile folding', () => {
     expect([record.joinedCount, record.leftCount]).toEqual([1, 1]);
   });
 
-  it('learns scene owners and admins from sender roles and throttles speaker refreshes', () => {
-    expect(sceneRoleOf(['owner'])).toBe('owner');
-    expect(sceneRoleOf(['scene_admin'])).toBe('admin');
-    expect(sceneRoleOf(['user'])).toBeUndefined();
+  it('learns scene owners and admins from the platform standing and throttles speaker refreshes', () => {
+    expect(sceneRoleOf('owner')).toBe('owner');
+    expect(sceneRoleOf('admin')).toBe('admin');
+    expect(sceneRoleOf('member')).toBeUndefined();
+    expect(sceneRoleOf(undefined)).toBeUndefined();
     let record = emptySessionProfile('qq', 'group', 'g1', T0);
     record = foldInboundSender(record, { id: 'u1', name: '群主', sceneRole: 'owner' }, T0);
     const again = foldInboundSender(record, { id: 'u1' }, T0 + 1000);

@@ -26,7 +26,7 @@ describe('life-assistant-bot 配置契约', () => {
 
   it('uses the Plugin Runtime manifest and conventional capabilities', () => {
     const manifest = JSON.parse(fs.readFileSync(path.join(botRoot, 'package.json'), 'utf8'))
-    expect(manifest.scripts.dev).toBe('zhin runtime start --watch source config')
+    expect(manifest.scripts.dev).toBe('zhin start --foreground --watch source config')
     expect(manifest.zhin.entry).toBe('./plugin.ts')
     expect(fs.existsSync(path.join(botRoot, 'commands/remind/[text]/index.ts'))).toBe(true)
     expect(fs.existsSync(path.join(

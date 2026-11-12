@@ -28,6 +28,7 @@ import {
   type DiscordOutboundBody,
   type ResolvedDiscordGatewayConfig,
 } from './protocol.js';
+import { discordPermissionNames, discordSenderStanding } from './sender-standing.js';
 
 const logger = getLogger('discord');
 
@@ -46,12 +47,15 @@ export function discordClientOptions(intents: readonly number[], gatewayFaultPro
   return { rest: { ...restOptions, retries: 0, rejectOnRateLimit: () => true }, intents: [...intents], partials: [Partials.Channel], ...(gatewayFaultProxyUrl ? { ws: { buildStrategy: manager => new DiscordFaultProxyStrategy(manager, gatewayFaultProxyUrl) } } : {}) };
 }
 
+/** Normalized standing word (`owner` / `admin` / `member`); `undefined` outside a guild. */
 export function resolveSenderRole(msg: DiscordInboundMessage): string | undefined {
-  if (msg.isGuildOwner) return 'owner';
-  const tokens = msg.permissionTokens ?? [];
-  if (tokens.includes('ADMINISTRATOR') || tokens.includes('MODERATE_MEMBERS')) return 'admin';
-  if (msg.guildId) return 'member';
-  return undefined;
+  return discordSenderStanding(msg)?.standing;
+}
+
+/** A discord.js thread channel's parent channel id (threads share their parent's conversation key, ADR 0056 §2). */
+function threadParentOf(channel: unknown): string | undefined {
+  const thread = channel as { isThread?: () => boolean; parentId?: string | null } | null | undefined;
+  return thread && typeof thread.isThread === 'function' && thread.isThread() && thread.parentId ? thread.parentId : undefined;
 }
 
 export function normalizeDiscordMessage(raw: unknown): DiscordInboundMessage | null {
@@ -60,6 +64,8 @@ export function normalizeDiscordMessage(raw: unknown): DiscordInboundMessage | n
   if (!msg.author || !msg.channel) return null;
 
   const permissionTokens: string[] = [];
+  let platformPermissions: string[] = [];
+  let authorRoles: { id: string; name?: string }[] = [];
   let isGuildOwner = false;
   const member = msg.member;
   const guild = msg.guild;
@@ -74,6 +80,13 @@ export function normalizeDiscordMessage(raw: unknown): DiscordInboundMessage | n
     for (const [bit, name] of checks) {
       if (member.permissions.has(bit)) permissionTokens.push(name);
     }
+    platformPermissions = discordPermissionNames(bit => member.permissions.has(bit));
+    const cache = (member.roles as { cache?: { values?: () => Iterable<{ id: string; name?: string }> } } | undefined)?.cache;
+    if (cache && typeof cache.values === 'function') {
+      authorRoles = [...cache.values()]
+        .filter((role) => role && role.id && role.id !== guild.id)
+        .map((role) => (role.name ? { id: String(role.id), name: String(role.name) } : { id: String(role.id) }));
+    }
     if (guild.ownerId === msg.author.id) {
       isGuildOwner = true;
       permissionTokens.push('guild_owner', 'ADMINISTRATOR');
@@ -87,6 +100,7 @@ export function normalizeDiscordMessage(raw: unknown): DiscordInboundMessage | n
     content: msg.content ?? '',
     channelId: msg.channel.id,
     channelKind: resolveChannelKind(msg.channel.type),
+    ...(threadParentOf(msg.channel) ? { threadParentId: threadParentOf(msg.channel)! } : {}),
     authorId: msg.author.id,
     authorName: member?.displayName || msg.author.displayName || msg.author.username,
     authorBot: msg.author.bot,
@@ -94,6 +108,8 @@ export function normalizeDiscordMessage(raw: unknown): DiscordInboundMessage | n
     guildId: guild?.id,
     isGuildOwner,
     permissionTokens,
+    ...(platformPermissions.length ? { platformPermissions } : {}),
+    ...(authorRoles.length ? { authorRoles } : {}),
     attachments: [...msg.attachments.values()].map((a) => ({
       id: a.id,
       name: a.name ?? undefined,
@@ -292,6 +308,7 @@ export async function connectDiscordGatewayClient(
           customId: interaction.customId,
           channelId,
           channelKind: interaction.channel ? resolveChannelKind(interaction.channel.type) : interaction.guildId ? 'channel' : 'private',
+          ...(threadParentOf(interaction.channel) ? { threadParentId: threadParentOf(interaction.channel)! } : {}),
           ...(interaction.guildId ? { guildId: interaction.guildId } : {}),
           userId: interaction.user.id,
           userName: interaction.user.username || interaction.user.displayName || interaction.user.id,

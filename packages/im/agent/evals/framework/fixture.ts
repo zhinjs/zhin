@@ -25,7 +25,8 @@ export interface EvalInboundMessage {
   /** Defaults to `private`. */
   readonly scope?: 'private' | 'group';
   /** Defaults to `{ id: 'eval-user', roles: ['user'] }`. */
-  readonly sender?: Readonly<{ id: string; name?: string; roles?: readonly string[] }>;
+  /** `chatRole` (ADR 0056) expands to the principal roles; `roles` sets them directly. */
+  readonly sender?: Readonly<{ id: string; name?: string; roles?: readonly string[]; chatRole?: 'owner' | 'admin' | 'trusted' }>;
   /** Background conversation events rendered as untrusted data before the message. */
   readonly backgroundEvents?: readonly string[];
   /**
@@ -90,7 +91,7 @@ export interface EvalTimerInbound {
   /** Actor that receives the timer Mail; defaults to the entry agent. */
   readonly target?: string;
   /** Reminder owner: the principal and the Venue reply target. Required. */
-  readonly owner: Readonly<{ id: string; roles?: readonly string[] }>;
+  readonly owner: Readonly<{ id: string; roles?: readonly string[]; chatRole?: 'owner' | 'admin' | 'trusted' }>;
   /**
    * Engagement budget grant carried by the timer Mail (ADR 0048 §3.4 invariant 2).
    * Omitted keys fall back to the host mailbox default for that key.

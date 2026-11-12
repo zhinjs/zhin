@@ -151,7 +151,7 @@ Built-in instructions retain essential rules while JSON Schema describes message
 
 | Meta tool | Purpose |
 |-----------|---------|
-| `discover` | Search tools / skills by keyword (`kind: tool|skill|all`, optionally per MCP server), returning Top-K summaries |
+| `discover` | Search tools / skills by keyword (`kind: tool\|skill\|all`, optionally per MCP server), returning Top-K summaries |
 | `load_tool` | Load a tool's definition into this session so it can be called |
 | `load_skill` | Load a skill's full text and unlock the tools it declares |
 
@@ -181,7 +181,7 @@ The framework enforces boundaries while Agents decide how to collaborate (ADR 00
 | `delegate` | Delegate asynchronously and receive a `mailId` immediately; the peer's reply is posted back as a `result` mail to wake the delegator |
 | `tell` | Send a one-way notification without waiting for a reply |
 | `follow_up` | Follow up on a previously delegated or asked `mailId` within the same Engagement |
-| `board_read` | Read entries from the current Engagement's shared Blackboard (with optional `key` or `kind: note | todo | artifact` filter) |
+| `board_read` | Read entries from the current Engagement's shared Blackboard (with optional `key` or `kind: note \| todo \| artifact` filter) |
 | `board_write` | Write or update an entry on the Engagement's shared Blackboard (auto-increments `version` and records `board_written`) |
 | `cancel_delegation` | Cancel a delegated mail (`mailId`) |
 | `escalate` | Freeze the Engagement and hand the decision back to the initiating human principal |
@@ -445,6 +445,18 @@ In groups that are not listed, high-priority events are still stored; they just 
 
 Notes, preferred address, and tone are written explicitly by the model through the `user_profile` tool (`note` / `unnote` / `call_me` / `tone`); the persona is never rewritten automatically. Text that looks like a password, token, cookie, verification code, ID number, or a number of 11+ digits is refused (topics are filtered the same way). Logs record only error messages, never profile contents.
 
+## Outbound media policy
+
+Adapters read and upload local paths (`MediaRef kind: 'path'`), and OneBot / NapCat also hand `file` references and `file://` addresses to the platform side, which reads them from the host. Reading host files is a host-global capability (ADR 0056 §2), so **media the model writes** cannot name a host file. Core enforces this once, in the renderer (no parallel send path, no per-adapter checks):
+
+- Agent replies, streamed replies, scene-event replies, proactive sends (scheduled notifications, …) and adapter Agent tools deliver their content as `untrustedContent(content, trust)`. Content that plugin code builds itself (`$reply`, commands, components) remains a trusted source and is sent as is.
+- Untrusted media may only be: an `http(s)` URL; inline data (`base64` / `data:`, 25 MiB by default); a platform file token (no scheme, no `/` or `\`, not starting with `~` / `.`).
+- A local path (including `file://`) passes only if the sender's `authorizePath` admits it — the Agent uses the Turn's file authority: inside the workspace, allowed by the file policy, and the same read decision as `read_file` for the initiator's file role (only a global `owner` is `owner`; a sensitive read that would need confirmation is refused, since an attachment has no approval step) — or if trusted code built the reference with `trustedMediaRef()` (e.g. the temp file the Agent spools a large attachment to; the same path written by the model does not count).
+- Local sources nested in forward nodes, adapter extension segments or `platform` fields are refused; `html` segments keep only their text (a renderer could load local files); untrusted text is never `${…}` template-compiled.
+- A refused segment is replaced by a visible notice (e.g. "[image not sent: media source not allowed]") and logged as `op=outbound_media_refused` (source, segment type, `kind`, reason — never the path). It is neither sent as is nor dropped silently.
+
+Legitimate local files still work: screenshots and charts that tools write into the workspace (for example `data/media/`) can be referenced by `path`; the Agent reads them inline or spools them as a trusted reference. A plugin tool that puts model arguments into a message gets the same protection by wrapping it with `untrustedContent()`.
+
 ## Built-in tools
 
 | Category | Tools |
@@ -601,7 +613,7 @@ zhin trace --engagements
 zhin trace <engagementId>
 ```
 
-The Collaboration graph page in the Remote Console shows the same data: participants, mail hops (`ask` / `delegate` / `tell` / `result`), the shared Blackboard (`note` / `todo` / `artifact`), and the budget ledger.
+The Workroom page in the Remote Console (`/features/ai/workrooms`) shows the same data: participants, mail hops (`ask` / `delegate` / `tell` / `result`), the shared Blackboard (`note` / `todo` / `artifact`), and the budget ledger.
 
 ## Related
 

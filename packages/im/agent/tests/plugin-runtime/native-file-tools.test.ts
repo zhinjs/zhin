@@ -201,9 +201,9 @@ function createInvocation(workspaceRoot: string, signal = new AbortController().
     turnId: 'turn',
     sessionKey: 'session',
     origin: { kind: 'http', sessionId: 'session' },
-    principal: { subjectId: 'owner', roles: ['master'] },
+    principal: { subjectId: 'owner', roles: ['owner'] },
     policy: {
-      permissions: ['master'],
+      permissions: ['owner'],
       unattended: false,
       network: { enabled: false },
       filesystem: { workspaceRoot },

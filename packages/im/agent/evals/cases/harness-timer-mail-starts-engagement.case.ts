@@ -12,7 +12,7 @@ export default defineEvalCase({
     kind: 'timer',
     timerId: 'standup-reminder',
     content: '提醒：下午三点开周会',
-    owner: { id: 'master', roles: ['master'] },
+    owner: { id: 'master', roles: ['owner'] },
   },
   script: [{ text: '提醒你：下午三点开周会。' }],
   expect: {

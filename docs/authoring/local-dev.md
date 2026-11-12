@@ -75,10 +75,10 @@ pnpm install
 # 并在 zhin.config.yml 的 plugins 映射 中声明
 pnpm install
 pnpm build
-cd examples/my-bot && pnpm exec zhin runtime start --once
+cd examples/my-bot && pnpm exec zhin start --once
 ```
 
-已在当前 `main` 上验证：`examples/test-bot`、`plugins/utils/calendar` 中的 `@zhin.js/command` 都解析到同一个 `packages/im/command`；`examples/minimal-bot` 在 `pnpm build` 后执行 `zhin runtime start --once` 输出 `"started": true`。
+已在当前 `main` 上验证：`examples/test-bot`、`plugins/utils/calendar` 中的 `@zhin.js/command` 都解析到同一个 `packages/im/command`；`examples/minimal-bot` 在 `pnpm build` 后执行 `zhin start --once` 输出 `"started": true`。
 
 其他方式对比：
 
@@ -192,7 +192,7 @@ zhin dev unlink glossary                          # 撤销
 lsof -nP -iTCP:<端口> -sTCP:LISTEN
 ```
 
-只结束你确认属于自己的进程（按 PID），避免 `pkill -f "zhin runtime start"` 误伤其他项目的实例。
+只结束你确认属于自己的进程（按 PID），避免 `pkill -f "zhin start"` 误伤其他项目的实例；后台网关优先用项目目录里的 `zhin stop` 停止。
 
 当前进程的退出行为：
 

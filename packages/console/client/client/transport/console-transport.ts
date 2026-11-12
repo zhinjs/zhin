@@ -19,12 +19,20 @@ import { applyConsoleEvent } from "../persistence/idb-store.js";
 import { fetchConsoleEventHistory } from '../console-events.js';
 import {
   CONFIG_RPC,
+  GATEWAY_RPC,
   PLUGIN_RPC,
   ENDPOINT_RPC,
   CONSOLE_EVENT_RECOVERY_GAP_EVENT,
+  GATEWAY_PACKAGES_PROGRESS,
   SIDE_EVENT_PUSH,
   parseConsoleSseFrame,
   type ConsoleEventData,
+  type GatewayPackageOperation,
+  type GatewayPackagePlan,
+  type GatewayPackagesInstallRequest,
+  type GatewayPackagesUninstallRequest,
+  type GatewayPackagesUpdateRequest,
+  type GatewayPackageTransactionResult,
   type ConsoleEventEnvelope,
   type ConsoleEventHistoryPage,
   type ConsoleEventHistoryQuery,
@@ -46,6 +54,14 @@ export interface ConsoleEventRecoveryGap {
   readonly page: ConsoleEventHistoryPage;
 }
 export type ConsoleEventRecoveryGapListener = (gap: ConsoleEventRecoveryGap) => void;
+
+/** Longest the gateway waits for an instance to become ready (`gateway.readyTimeout`, 1–3600 s). */
+const MAX_INSTANCE_READY_WAIT_MS = 3_600_000;
+/** Transaction phases that wait for the instance to become ready. */
+const READY_WAIT_PHASES: ReadonlySet<string> = new Set(['start-instance', 'restart-instance']);
+
+/** A package transaction outlived the client's wait: it may still run, or have finished. */
+export const PACKAGE_RESULT_UNKNOWN_MESSAGE = '结果未知：等待依赖事务超时，事务可能仍在进行或已经完成。请在「实例」页与依赖列表核对后再决定是否重试。';
 
 export class ConsoleTransport {
   private config: Required<ConsoleTransportConfig>;
@@ -70,7 +86,7 @@ export class ConsoleTransport {
       reconnectInterval: config.reconnectInterval ?? 3000,
       maxReconnectAttempts: config.maxReconnectAttempts ?? 10,
       requestTimeout: config.requestTimeout ?? 10000,
-      packageOperationTimeout: config.packageOperationTimeout ?? 120_000,
+      packageOperationTimeout: config.packageOperationTimeout ?? 300_000,
     };
     this.callbacks = callbacks;
   }
@@ -326,6 +342,8 @@ export class ConsoleTransport {
     const token = auth.token;
     const requestId = ++this.requestId;
     const body = { ...(message as Record<string, unknown>), requestId };
+    const timeoutMs = options.timeoutMs ?? this.config.requestTimeout;
+    const deadline = options.renewOn ? this.renewableDeadline(timeoutMs, options.renewOn) : undefined;
     try {
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
@@ -335,7 +353,7 @@ export class ConsoleTransport {
         method: "POST",
         headers,
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(options.timeoutMs ?? this.config.requestTimeout),
+        signal: deadline?.signal ?? AbortSignal.timeout(timeoutMs),
       });
       const json = (await res.json()) as {
         success?: boolean;
@@ -350,8 +368,44 @@ export class ConsoleTransport {
       return json.data as T;
     } catch (error) {
       if (error instanceof ConsoleTransportError) throw error;
+      if (deadline?.expired) throw new ConsoleTransportError(PACKAGE_RESULT_UNKNOWN_MESSAGE, "RESULT_UNKNOWN", error as Error);
       throw new MessageError("REST request failed", error as Error);
+    } finally {
+      deadline?.dispose();
     }
+  }
+
+  /**
+   * An idle deadline: every `renewOn` event restarts it. While a package transaction waits for the
+   * instance to become ready (phases `start-instance` / `restart-instance`, up to
+   * `gateway.readyTimeout`), the window covers the longest ready wait.
+   */
+  private renewableDeadline(idleMs: number, renewOn: string) {
+    const controller = new AbortController();
+    const state = { expired: false };
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const arm = (ms: number): void => {
+      if (timer !== undefined) clearTimeout(timer);
+      timer = setTimeout(() => {
+        state.expired = true;
+        controller.abort(new DOMException('The operation timed out.', 'TimeoutError'));
+      }, ms);
+    };
+    arm(idleMs);
+    const unsubscribe = this.onConsoleEvent(renewOn, (event) => {
+      const phase = (event.data as { type?: unknown; phase?: unknown } | undefined);
+      const waitsForReady = renewOn === GATEWAY_PACKAGES_PROGRESS && phase?.type === 'phase'
+        && typeof phase.phase === 'string' && READY_WAIT_PHASES.has(phase.phase);
+      arm(waitsForReady ? Math.max(idleMs, MAX_INSTANCE_READY_WAIT_MS + 60_000) : idleMs);
+    });
+    return {
+      signal: controller.signal,
+      get expired() { return state.expired; },
+      dispose: () => {
+        if (timer !== undefined) clearTimeout(timer);
+        unsubscribe();
+      },
+    };
   }
 
   isConnected(): boolean {
@@ -385,12 +439,23 @@ export class ConsoleTransport {
       warnings: string[];
     }>({ type: PLUGIN_RPC.PLAN_INSTALL, packageName });
   }
-  async installPlugin(packageName: string, expectedRevision?: string, options?: ConsoleRequestOptions) {
-    return this.sendRequest<{
-      success: boolean;
-      plan: Awaited<ReturnType<ConsoleTransport['planPluginInstall']>>;
-      restartRequired: boolean;
-    }>({ type: PLUGIN_RPC.INSTALL, packageName, expectedRevision }, this.packageOperation(options));
+  /**
+   * Installs packages as a gateway dependency transaction (`gateway.packages.install`, ADR 0054
+   * §4): the gateway stops the instance, runs the package manager, starts the instance again and
+   * rolls back on failure. `packages` entries are `name` or `name@<range | dist-tag>`. A rolled
+   * back transaction resolves with `ok: false`; plugins whose configuration is incomplete are
+   * installed but not declared and listed in `needsConfiguration` (declare them with
+   * `gateway.plugins.declare`).
+   */
+  async installPlugin(
+    packages: string | readonly string[],
+    request: Omit<GatewayPackagesInstallRequest, 'packages'> = {},
+    options?: ConsoleRequestOptions,
+  ) {
+    return this.sendRequest<GatewayPackageTransactionResult>({
+      type: GATEWAY_RPC.INSTALL,
+      data: { ...request, packages: packageList(packages) },
+    }, this.packageOperation(options));
   }
   async planPluginUninstall(packageName: string) {
     return this.sendRequest<{
@@ -402,16 +467,15 @@ export class ConsoleTransport {
       restartRequired: boolean;
     }>({ type: PLUGIN_RPC.PLAN_UNINSTALL, packageName });
   }
-  async uninstallPlugin(packageName: string, expectedRevision?: string, options?: ConsoleRequestOptions) {
-    return this.sendRequest<{
-      success: boolean;
-      plan: Awaited<ReturnType<ConsoleTransport['planPluginUninstall']>>;
-      restartRequired: boolean;
-    }>({
-      type: PLUGIN_RPC.UNINSTALL,
-      packageName,
-      confirmation: packageName,
-      expectedRevision,
+  /** Uninstalls packages as a gateway dependency transaction (`gateway.packages.uninstall`). */
+  async uninstallPlugin(
+    packages: string | readonly string[],
+    request: Omit<GatewayPackagesUninstallRequest, 'packages'> = {},
+    options?: ConsoleRequestOptions,
+  ) {
+    return this.sendRequest<GatewayPackageTransactionResult>({
+      type: GATEWAY_RPC.UNINSTALL,
+      data: { ...request, packages: packageList(packages) },
     }, this.packageOperation(options));
   }
   async planPluginUpdate(packageName: string, targetVersion: string) {
@@ -426,18 +490,27 @@ export class ConsoleTransport {
       restartRequired: boolean;
     }>({ type: PLUGIN_RPC.PLAN_UPDATE, packageName, targetVersion });
   }
+  /**
+   * Updates one package to an exact version as a gateway dependency transaction
+   * (`gateway.packages.update` with `name@version`; the installed version is verified).
+   */
   async updatePlugin(
     packageName: string,
     targetVersion: string,
-    expectedRevision?: string,
+    request: Omit<GatewayPackagesUpdateRequest, 'packages'> = {},
     options?: ConsoleRequestOptions,
   ) {
-    return this.sendRequest<{
-      success: boolean;
-      plan: Awaited<ReturnType<ConsoleTransport['planPluginUpdate']>>;
-      installedVersion: string;
-      restartRequired: boolean;
-    }>({ type: PLUGIN_RPC.UPDATE, packageName, targetVersion, expectedRevision }, this.packageOperation(options));
+    return this.sendRequest<GatewayPackageTransactionResult>({
+      type: GATEWAY_RPC.UPDATE,
+      data: { ...request, packages: [`${packageName}@${targetVersion}`] },
+    }, this.packageOperation(options));
+  }
+  /** What a gateway dependency transaction would do (`gateway.packages.plan`); changes nothing. */
+  async planPackages(operation: GatewayPackageOperation, packages: string | readonly string[] | 'all') {
+    return this.sendRequest<GatewayPackagePlan>({
+      type: GATEWAY_RPC.PLAN,
+      data: { operation, packages: packages === 'all' ? 'all' : packageList(packages) },
+    });
   }
   async validatePluginConfig(pluginName: string, data: unknown) {
     return this.sendRequest<{
@@ -596,9 +669,13 @@ export class ConsoleTransport {
     return this.sendRequest<{ entries: import("./types.js").KvEntry[] }>({ type: "db:kv:entries", table });
   }
 
-  /** These RPCs run the package manager on the Host and routinely outlast the default timeout. */
+  /**
+   * These RPCs run the package manager on the Host and routinely outlast the default timeout: the
+   * timeout is an idle one, renewed by every transaction progress event (and stretched while the
+   * instance is starting). When it still expires, the result is unknown, not a failure.
+   */
   private packageOperation(options?: ConsoleRequestOptions): ConsoleRequestOptions {
-    return { timeoutMs: options?.timeoutMs ?? this.config.packageOperationTimeout };
+    return { timeoutMs: options?.timeoutMs ?? this.config.packageOperationTimeout, renewOn: options?.renewOn ?? GATEWAY_PACKAGES_PROGRESS };
   }
 
   private async getRest<T>(path: string): Promise<T> {
@@ -711,4 +788,8 @@ function writeEventCursor(cursor: ConsoleEventCursor): void {
   } catch {
     // HTTP history remains available when browser storage is unavailable.
   }
+}
+
+function packageList(packages: string | readonly string[]): readonly string[] {
+  return typeof packages === 'string' ? [packages] : packages;
 }

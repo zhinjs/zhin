@@ -31,7 +31,7 @@ async function fixture(type: 'qrcode' | 'slider' = 'qrcode') {
   const pending = endpoint.loginControl.pending()[0]!;
   const context = {
     owner: rootPluginId(), project: () => runtime.index, args: [] as string[],
-    config: { master: 'master', notify: { id: 'master-openid' } }, input: { sender: { id: 'master-openid' } },
+    config: { notify: { id: 'master-openid' } }, input: { sender: { id: 'master-openid' } },
     use: () => { throw new Error('The Adapter owns login controls, not a plugin resource Map'); }, locale: 'zh-CN',
   };
   return { endpoint, submit, pending, context };
@@ -39,9 +39,15 @@ async function fixture(type: 'qrcode' | 'slider' = 'qrcode') {
 
 describe('ICQQ login recovery commands resolve actual owned incarnations', () => {
   it('accepts the configured notify target as operator', () => {
-    expect(isIcqqLoginOperator({ master: '1' }, { sender: { id: '1' } })).toBe(true);
-    expect(isIcqqLoginOperator({ master: '1', notify: { id: 'openid-1' } }, { sender: { id: 'openid-1' } })).toBe(true);
-    expect(isIcqqLoginOperator({ master: '1', notify: { id: 'openid-1' } }, { sender: { id: 'other' } })).toBe(false);
+    expect(isIcqqLoginOperator({}, { sender: { id: '1', chatRole: 'owner', chatRoleLevels: { owner: 'global' } } })).toBe(true);
+    // Reachable from any adapter: an owner of one conversation / account / adapter does not qualify.
+    for (const level of ['adapter', 'endpoint', 'conversation']) {
+      expect(isIcqqLoginOperator({}, { sender: { id: '1', chatRole: 'owner', chatRoleLevels: { owner: level } } })).toBe(false);
+    }
+    expect(isIcqqLoginOperator({}, { sender: { id: '1', chatRole: 'owner' } })).toBe(false);
+    expect(isIcqqLoginOperator({ master: '1' }, { sender: { id: '1' } })).toBe(false);
+    expect(isIcqqLoginOperator({ notify: { id: 'openid-1' } }, { sender: { id: 'openid-1' } })).toBe(true);
+    expect(isIcqqLoginOperator({ notify: { id: 'openid-1' } }, { sender: { id: 'other' } })).toBe(false);
   });
   it('returns the real SDK QR challenge and pending status', async () => {
     const { context } = await fixture();

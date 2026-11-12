@@ -1,5 +1,6 @@
 export { installConsoleIam, projectEnvironment, type ConsoleIamInstallation, type InstallConsoleIamOptions } from './install.js';
 export {
+  accountInputProblem,
   ConsoleIamService,
   IamError,
   type BindingInput,

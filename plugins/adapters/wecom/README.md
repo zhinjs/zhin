@@ -143,3 +143,7 @@ Access Token 在过期前 5 分钟自动刷新。
 ## 许可证
 
 MIT License
+
+## 成员身份
+
+企业微信回调不带发送者群角色，不上报 `sender.platform`，能力画像也不声明 `scene.platformStanding`。详见 [ADR 0056 §1](https://github.com/zhinjs/zhin/blob/main/docs/adr/0056-chat-roles.md)。

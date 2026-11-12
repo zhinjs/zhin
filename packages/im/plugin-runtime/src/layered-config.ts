@@ -1,5 +1,5 @@
 /**
- * Layered feature configuration (ADR 0050): global < adapter < endpoint.
+ * Layered feature configuration (ADR 0050 / 0055): global < adapter < endpoint < conversation.
  *
  * Pure resolution shared by the Runtime (`configFor` / `isEnabledFor`), IM dispatch
  * gating and Agent tool disclosure. Schema-level checks live in `@zhin.js/runtime`.
@@ -8,9 +8,17 @@ import { primaryConfigToken, type PrimaryConfig } from './host-installer.js';
 import { featureId, type PluginId } from './identity.js';
 import type { RuntimeConfigDocument } from './root-config-document.js';
 import type { RuntimeSnapshot } from './snapshot.js';
+import { createToken } from './token.js';
 
-export type FeatureConfigLevel = 'global' | 'adapter' | 'endpoint';
-export const FEATURE_CONFIG_LEVELS: readonly FeatureConfigLevel[] = Object.freeze(['global', 'adapter', 'endpoint']);
+export type FeatureConfigLevel = 'global' | 'adapter' | 'endpoint' | 'conversation';
+export const FEATURE_CONFIG_LEVELS: readonly FeatureConfigLevel[] = Object.freeze(['global', 'adapter', 'endpoint', 'conversation']);
+/** Levels stored in the configuration file (`conversation` lives in the project database). */
+export type FeatureFileLevel = Exclude<FeatureConfigLevel, 'conversation'>;
+/** Mirrors `ConversationKind` of `@zhin.js/im-contract` (this package has no dependencies). */
+export type FeatureConversationKind = 'group' | 'private' | 'channel';
+export const FEATURE_CONVERSATION_KINDS: readonly FeatureConversationKind[] = Object.freeze(['group', 'private', 'channel']);
+/** Longest accepted platform conversation id (unescaped). */
+export const FEATURE_CONVERSATION_ID_MAX_LENGTH = 256;
 /** Reserved key in a Plugin's own config block that holds adapter / endpoint overrides. */
 export const FEATURE_OVERRIDES_KEY = 'overrides';
 /** Reserved field inside one override entry: the level's enable switch. */
@@ -26,11 +34,42 @@ export interface FeatureOverrides {
   readonly endpoints?: Readonly<Record<string, FeatureOverrideEntry>>;
 }
 
-/** Parsed resolution key: `''` (global), `'qq'` (adapter) or `'qq/bot-1'` (endpoint). */
+/** Parsed resolution key: `''` (global), `'qq'` (adapter), `'qq/bot-1'` (endpoint) or `'qq/bot-1/group:123'` (conversation). */
 export interface FeatureResolutionKey {
   readonly adapter?: string;
   readonly endpointId?: string;
+  /** Requires `adapter` and `endpointId`. `id` is the unescaped platform conversation id. */
+  readonly conversation?: FeatureConversationTarget;
 }
+
+export interface FeatureConversationTarget {
+  readonly kind: FeatureConversationKind;
+  readonly id: string;
+}
+
+/** One stored conversation-level override (ADR 0055 §3). */
+export interface FeatureConversationOverride {
+  /** Only `false` is ever stored: enabling at a lower level removes the switch. */
+  readonly enabled?: false;
+  /** Field patch limited to the Plugin's `conversationFields`. */
+  readonly patch: Readonly<Record<string, unknown>>;
+  readonly revision: number;
+  readonly updatedAt: number;
+  readonly updatedBy?: string;
+}
+
+/** Read side of the instance's conversation override store, provided on the Root Scope. */
+export interface FeatureConversationOverrideReader {
+  /** Bumped on every write; resolution caches compare it. */
+  readonly version: number;
+  /** `plugin` is the instance path (`rss`, `parent/child`); `key` a conversation resolution key. */
+  get(plugin: string, key: string): FeatureConversationOverride | undefined;
+}
+
+export const featureConversationOverridesToken = createToken<FeatureConversationOverrideReader>(
+  'zhin.feature-conversation-overrides',
+  'Conversation-level feature overrides (ADR 0055), read side',
+);
 
 /**
  * What `configFor` / `isEnabledFor` accept: a resolution key string, an explicit
@@ -39,19 +78,28 @@ export interface FeatureResolutionKey {
  */
 export type FeatureTarget =
   | string
-  | Readonly<{ adapter: string; endpointId?: string }>
-  | Readonly<{ conversation: Readonly<{ endpoint: Readonly<{ id: string }> }>; endpointId?: string }>;
+  | Readonly<{ adapter: string; endpointId?: string; conversation?: FeatureConversationTarget }>
+  | Readonly<{ conversation: Readonly<{ endpoint: Readonly<{ id: string }>; kind?: string; id?: string }>; endpointId?: string }>
+  /**
+   * An outbound selector (`outbound.send({ adapter, endpointKey })`): resolved to the Endpoint's
+   * CapabilityId through the same `AdapterIndex.resolve` path as the send, so platform names,
+   * online names and omitted keys address the same account the send reaches.
+   */
+  | Readonly<{ endpoint: Readonly<{ adapter: string; endpointKey: string }>; conversation?: Readonly<{ kind?: string; id?: string }> }>;
 
 export interface FeatureEnabledResolution {
   readonly enabled: boolean;
   /** Highest level whose switch is off. */
   readonly disabledAt?: FeatureConfigLevel;
-  /** Set when a level above the queried one disabled the feature; the queried switch is then locked. */
-  readonly lockedBy?: 'global' | 'adapter';
+  /**
+   * Set when a level above the queried one disabled the feature. The queried level is then
+   * locked: it can neither enable nor change its own switch (ADR 0050 §4).
+   */
+  readonly lockedBy?: FeatureFileLevel;
 }
 
 export interface LayeredConfigResolution<T = Readonly<Record<string, unknown>>> extends FeatureEnabledResolution {
-  /** Normalized resolution key (`''`, `alias` or `alias/endpointId`). */
+  /** Normalized resolution key (`''`, `alias`, `alias/endpointId` or `alias/endpointId/kind:id`). */
   readonly key: string;
   /** Effective value: deep-merged and frozen. Fields cleared with `null` are absent. */
   readonly value: Readonly<T>;
@@ -65,6 +113,8 @@ export interface LayeredConfigInput {
   /** False when the instance alias is listed in `disable_plugins`. */
   readonly globalEnabled?: boolean;
   readonly key?: FeatureResolutionKey | string;
+  /** Conversation-level entry (`{ enabled?: false, ...patch }`); used only for conversation keys. */
+  readonly conversation?: FeatureOverrideEntry;
 }
 
 function plainObject(value: unknown): value is Record<string, unknown> {
@@ -73,21 +123,109 @@ function plainObject(value: unknown): value is Record<string, unknown> {
   return prototype === Object.prototype || prototype === null;
 }
 
+const ADAPTER_ALIAS = /^[a-z0-9][a-z0-9-]*$/u;
+const ENDPOINT_ID = /^[^/~\0]{1,128}$/u;
+// eslint-disable-next-line no-control-regex
+const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/u;
+
+/**
+ * Escapes a platform conversation id for a resolution key: `%` → `%25`, `/` → `%2F`, nothing
+ * else. The key then has exactly two `/` separators and the id round-trips unchanged.
+ */
+export function escapeFeatureConversationId(id: string): string {
+  return id.replaceAll('%', '%25').replaceAll('/', '%2F');
+}
+
+/** Inverse of {@link escapeFeatureConversationId}; undefined for any other `%` sequence or a raw `/`. */
+export function unescapeFeatureConversationId(escaped: string): string | undefined {
+  if (/%(?!25|2[fF])/u.test(escaped) || escaped.includes('/')) return undefined;
+  return escaped.replace(/%2[fF]|%25/gu, match => match === '%25' ? '%' : '/');
+}
+
+/** Whether `id` can be a conversation key id: 1–256 characters without control characters. */
+export function isFeatureConversationId(id: unknown): id is string {
+  return typeof id === 'string' && id.length > 0 && id.length <= FEATURE_CONVERSATION_ID_MAX_LENGTH && !CONTROL_CHARACTERS.test(id);
+}
+
+function assertConversationParts(adapter: string, endpointId: string, conversation: FeatureConversationTarget): void {
+  if (!ADAPTER_ALIAS.test(adapter)) throw new TypeError('A conversation resolution key requires an adapter instance alias');
+  if (!ENDPOINT_ID.test(endpointId)) throw new TypeError('A conversation resolution key requires a valid endpointId');
+  if (!FEATURE_CONVERSATION_KINDS.includes(conversation.kind)) throw new TypeError('Conversation kind must be group, private or channel');
+  if (!isFeatureConversationId(conversation.id)) throw new TypeError('Conversation id must be 1-256 characters without control characters');
+}
+
+/** `<alias>/<endpointId>/<kind>:<escaped id>` (ADR 0055 §1). */
+export function formatFeatureConversationKey(adapter: string, endpointId: string, conversation: FeatureConversationTarget): string {
+  assertConversationParts(adapter, endpointId, conversation);
+  return `${adapter}/${endpointId}/${conversation.kind}:${escapeFeatureConversationId(conversation.id)}`;
+}
+
+/** Parses a conversation key; undefined for adapter / endpoint keys and malformed input. */
+export function parseFeatureConversationKey(key: string): Required<FeatureResolutionKey> | undefined {
+  const first = key.indexOf('/');
+  const second = first < 0 ? -1 : key.indexOf('/', first + 1);
+  if (first <= 0 || second < 0) return undefined;
+  const rest = key.slice(second + 1);
+  const colon = rest.indexOf(':');
+  if (colon <= 0) return undefined;
+  const id = unescapeFeatureConversationId(rest.slice(colon + 1));
+  if (id === undefined) return undefined;
+  const parsed = { adapter: key.slice(0, first), endpointId: key.slice(first + 1, second),
+    conversation: Object.freeze({ kind: rest.slice(0, colon) as FeatureConversationKind, id }) };
+  try { assertConversationParts(parsed.adapter, parsed.endpointId, parsed.conversation); } catch { return undefined; }
+  return formatFeatureConversationKey(parsed.adapter, parsed.endpointId, parsed.conversation) === key ? Object.freeze(parsed) : undefined;
+}
+
 export function parseFeatureResolutionKey(key: string | FeatureResolutionKey | undefined): FeatureResolutionKey {
   if (key === undefined || key === '') return Object.freeze({});
   if (typeof key !== 'string') {
     if (key.endpointId !== undefined && key.adapter === undefined) throw new TypeError('An endpoint resolution key requires its adapter alias');
-    return Object.freeze({ ...(key.adapter !== undefined ? { adapter: key.adapter } : {}), ...(key.endpointId !== undefined ? { endpointId: key.endpointId } : {}) });
+    if (key.conversation !== undefined) {
+      if (key.adapter === undefined || key.endpointId === undefined) throw new TypeError('A conversation resolution key requires its adapter alias and endpointId');
+      assertConversationParts(key.adapter, key.endpointId, key.conversation);
+    }
+    return Object.freeze({ ...(key.adapter !== undefined ? { adapter: key.adapter } : {}), ...(key.endpointId !== undefined ? { endpointId: key.endpointId } : {}),
+      ...(key.conversation !== undefined ? { conversation: Object.freeze({ kind: key.conversation.kind, id: key.conversation.id }) } : {}) });
   }
   const slash = key.indexOf('/');
   if (slash < 0) return Object.freeze({ adapter: key });
+  if (key.indexOf('/', slash + 1) >= 0) {
+    const conversation = parseFeatureConversationKey(key);
+    if (!conversation) throw new TypeError('Invalid conversation resolution key (expected <alias>/<endpointId>/<kind>:<escaped id>)');
+    return conversation;
+  }
   return Object.freeze({ adapter: key.slice(0, slash), endpointId: key.slice(slash + 1) });
 }
 
 export function formatFeatureResolutionKey(key: FeatureResolutionKey | string | undefined): string {
   const parsed = parseFeatureResolutionKey(key);
   if (parsed.adapter === undefined) return '';
-  return parsed.endpointId === undefined ? parsed.adapter : `${parsed.adapter}/${parsed.endpointId}`;
+  if (parsed.endpointId === undefined) return parsed.adapter;
+  return parsed.conversation === undefined ? `${parsed.adapter}/${parsed.endpointId}`
+    : formatFeatureConversationKey(parsed.adapter, parsed.endpointId, parsed.conversation);
+}
+
+/** The endpoint key above a conversation key (`qq/bot/group:1` → `qq/bot`); other keys unchanged. */
+export function featureEndpointKeyOf(key: string): string {
+  const parsed = parseFeatureResolutionKey(key);
+  return parsed.conversation ? `${parsed.adapter}/${parsed.endpointId}` : formatFeatureResolutionKey(parsed);
+}
+
+/** Conversation entry as resolution input: `{ enabled?: false, ...patch }`. */
+export function featureConversationEntry(override: FeatureConversationOverride | undefined): FeatureOverrideEntry | undefined {
+  if (!override) return undefined;
+  return Object.freeze({ ...override.patch, ...(override.enabled === false ? { [FEATURE_ENABLED_KEY]: false } : {}) });
+}
+
+/** The Root Scope's conversation override reader, when the instance provides one. */
+export function readFeatureConversationOverrides(snapshot: Pick<RuntimeSnapshot, 'root' | 'resources'> | undefined): FeatureConversationOverrideReader | undefined {
+  const value = snapshot?.resources.get(snapshot.root)?.get(featureConversationOverridesToken.id) as Partial<FeatureConversationOverrideReader> | undefined;
+  return value && typeof value.get === 'function' ? value as FeatureConversationOverrideReader : undefined;
+}
+
+/** Instance path (`rss`, `parent/child`) of a non-root Plugin id. */
+export function featureInstancePath(owner: PluginId): string {
+  return String(owner).split('/').slice(1).join('/');
 }
 
 /** Reads the structural `overrides` value; anything malformed contributes nothing. */
@@ -115,16 +253,28 @@ function overrideEntries(overrides: FeatureOverrides, key: FeatureResolutionKey)
   return { ...(adapter ? { adapter } : {}), ...(endpoint ? { endpoint } : {}) };
 }
 
-/** Top-down: an upper `false` wins and a lower `enabled: true` never re-enables. */
+/** Level a resolution key addresses. */
+export function featureKeyLevel(key: FeatureResolutionKey | string | undefined): FeatureConfigLevel {
+  const parsed = parseFeatureResolutionKey(key);
+  return parsed.conversation !== undefined ? 'conversation' : parsed.endpointId !== undefined ? 'endpoint' : parsed.adapter !== undefined ? 'adapter' : 'global';
+}
+
+/**
+ * Top-down: an upper `false` wins and a lower `enabled: true` never re-enables. A level is
+ * locked (`lockedBy`) when any level above it is off; it may only disable while every upper
+ * level is on (ADR 0050 §4, ADR 0055 §4).
+ */
 export function resolveFeatureEnabled(input: Omit<LayeredConfigInput, 'global'> & { readonly level?: FeatureConfigLevel }): FeatureEnabledResolution {
   const key = parseFeatureResolutionKey(input.key);
   const { adapter, endpoint } = overrideEntries(readFeatureOverrides(input.overrides), key);
+  const conversation = key.conversation !== undefined && plainObject(input.conversation) ? input.conversation : undefined;
   const disabledAt: FeatureConfigLevel | undefined = input.globalEnabled === false ? 'global'
     : adapter?.enabled === false ? 'adapter'
-      : endpoint?.enabled === false ? 'endpoint' : undefined;
-  const level = input.level ?? (key.endpointId !== undefined ? 'endpoint' : key.adapter !== undefined ? 'adapter' : 'global');
+      : endpoint?.enabled === false ? 'endpoint'
+        : conversation?.enabled === false ? 'conversation' : undefined;
+  const level = input.level ?? featureKeyLevel(key);
   const rank = (value: FeatureConfigLevel) => FEATURE_CONFIG_LEVELS.indexOf(value);
-  const lockedBy = disabledAt !== undefined && disabledAt !== 'endpoint' && rank(disabledAt) < rank(level) ? disabledAt : undefined;
+  const lockedBy = disabledAt !== undefined && disabledAt !== 'conversation' && rank(disabledAt) < rank(level) ? disabledAt : undefined;
   return Object.freeze({ enabled: disabledAt === undefined, ...(disabledAt ? { disabledAt } : {}), ...(lockedBy ? { lockedBy } : {}) });
 }
 
@@ -188,7 +338,7 @@ function deepFreeze<T>(value: T): T {
   return value;
 }
 
-/** Bottom-up merge `global ← adapter ← endpoint` with per-field source tracking. */
+/** Bottom-up merge `global ← adapter ← endpoint ← conversation` with per-field source tracking. */
 export function resolveLayeredConfig<T = Readonly<Record<string, unknown>>>(input: LayeredConfigInput): LayeredConfigResolution<T> {
   const key = parseFeatureResolutionKey(input.key);
   const overrides = readFeatureOverrides(input.overrides);
@@ -202,7 +352,9 @@ export function resolveLayeredConfig<T = Readonly<Record<string, unknown>>>(inpu
   const { adapter, endpoint } = overrideEntries(overrides, key);
   if (adapter) value = mergeLayer(value, adapter, 'adapter', '', sources, true);
   if (endpoint) value = mergeLayer(value, endpoint, 'endpoint', '', sources, true);
-  const enabled = resolveFeatureEnabled({ overrides, globalEnabled: input.globalEnabled, key });
+  const conversation = key.conversation !== undefined && plainObject(input.conversation) ? input.conversation : undefined;
+  if (conversation) value = mergeLayer(value, conversation, 'conversation', '', sources, true);
+  const enabled = resolveFeatureEnabled({ overrides, globalEnabled: input.globalEnabled, key, ...(conversation ? { conversation } : {}) });
   return deepFreeze({
     ...enabled,
     key: formatFeatureResolutionKey(key),
@@ -248,6 +400,8 @@ export function readPrimaryConfig(snapshot: Pick<RuntimeSnapshot, 'root' | 'reso
 interface EndpointResolutionIndex {
   owner(id: string): PluginId;
   endpointEntry(id: string): { readonly desired?: { readonly endpointId?: unknown } } | undefined;
+  /** `AdapterIndex.resolve`: outbound selector → CapabilityId. */
+  resolve?(adapter: string, endpointKey: string): string | undefined;
 }
 
 const adapterProjectionId = featureId('zhin.adapter');
@@ -261,11 +415,14 @@ function endpointIndex(snapshot: Pick<RuntimeSnapshot, 'projections'>): Endpoint
 /**
  * Maps a message endpoint (`conversation.endpoint.id`, a CapabilityId) to its resolution key
  * `<adapter instance alias>/<endpointId>`; undefined when this generation does not know it.
+ * With `conversation` (kind + platform id) the key goes down to the conversation level; an id
+ * that cannot be keyed (too long, control characters) stays at the endpoint level.
  */
 export function resolveEndpointFeatureKey(
   snapshot: Pick<RuntimeSnapshot, 'projections' | 'tree'>,
   endpointCapabilityId: string,
   fallbackEndpointId?: string,
+  conversation?: Readonly<{ kind?: unknown; id?: unknown }>,
 ): string | undefined {
   const index = endpointIndex(snapshot);
   if (!index) return undefined;
@@ -277,7 +434,12 @@ export function resolveEndpointFeatureKey(
   try { endpointId = index.endpointEntry(endpointCapabilityId)?.desired?.endpointId; } catch { endpointId = undefined; }
   const id = typeof endpointId === 'string' && endpointId ? endpointId
     : typeof fallbackEndpointId === 'string' && fallbackEndpointId ? fallbackEndpointId : undefined;
-  return id === undefined ? alias : `${alias}/${id}`;
+  if (id === undefined) return alias;
+  if (conversation && FEATURE_CONVERSATION_KINDS.includes(conversation.kind as FeatureConversationKind) && isFeatureConversationId(conversation.id)) {
+    try { return formatFeatureConversationKey(alias, id, { kind: conversation.kind as FeatureConversationKind, id: conversation.id }); }
+    catch { /* an endpoint id that cannot carry conversations stays at the endpoint level */ }
+  }
+  return `${alias}/${id}`;
 }
 
 /** Normalizes any {@link FeatureTarget}; message targets need the generation's AdapterIndex. */
@@ -287,20 +449,39 @@ export function resolveFeatureTargetKey(
 ): string | undefined {
   if (typeof target === 'string') return formatFeatureResolutionKey(target);
   if (!target || typeof target !== 'object') throw new TypeError('Feature target must be a resolution key, { adapter, endpointId } or a message');
-  if ('conversation' in target) {
-    const id = target.conversation?.endpoint?.id;
-    if (typeof id !== 'string' || !snapshot) return undefined;
-    return resolveEndpointFeatureKey(snapshot, id, typeof target.endpointId === 'string' ? target.endpointId : undefined);
+  const selector = (target as { endpoint?: unknown }).endpoint;
+  if (selector && typeof selector === 'object' && !('id' in selector)) {
+    const { adapter, endpointKey } = selector as { adapter?: unknown; endpointKey?: unknown };
+    if (typeof adapter !== 'string' || typeof endpointKey !== 'string' || !snapshot) return undefined;
+    const index = endpointIndex(snapshot);
+    let id: string | undefined;
+    try { id = index?.resolve?.(adapter, endpointKey); } catch { id = undefined; }
+    if (!id) return undefined;
+    const conversation = (target as { conversation?: Readonly<{ kind?: unknown; id?: unknown }> }).conversation;
+    return resolveEndpointFeatureKey(snapshot, String(id), undefined, conversation);
   }
-  if (typeof target.adapter !== 'string' || !target.adapter) throw new TypeError('Feature target adapter must be an instance alias');
-  return formatFeatureResolutionKey({ adapter: target.adapter, ...(typeof target.endpointId === 'string' ? { endpointId: target.endpointId } : {}) });
+  const conversation = (target as { conversation?: unknown }).conversation;
+  if (conversation && typeof conversation === 'object' && 'endpoint' in conversation) {
+    const message = target as Readonly<{ conversation: Readonly<{ endpoint: Readonly<{ id: string }>; kind?: string; id?: string }>; endpointId?: string }>;
+    const id = message.conversation?.endpoint?.id;
+    if (typeof id !== 'string' || !snapshot) return undefined;
+    return resolveEndpointFeatureKey(snapshot, id, typeof message.endpointId === 'string' ? message.endpointId : undefined, message.conversation);
+  }
+  const explicit = target as Readonly<{ adapter?: unknown; endpointId?: unknown; conversation?: FeatureConversationTarget }>;
+  if (typeof explicit.adapter !== 'string' || !explicit.adapter) throw new TypeError('Feature target adapter must be an instance alias');
+  return formatFeatureResolutionKey({ adapter: explicit.adapter, ...(typeof explicit.endpointId === 'string' ? { endpointId: explicit.endpointId } : {}),
+    ...(explicit.conversation !== undefined ? { conversation: explicit.conversation } : {}) });
 }
 
-const enabledCache = new WeakMap<object, Map<string, boolean>>();
+const enabledCache = new WeakMap<object, { version: number; entries: Map<string, boolean> }>();
+/** Bound for one generation's per-key cache; conversations are open-ended. */
+const ENABLED_CACHE_LIMIT = 20_000;
 
 /**
  * Dispatch gate: whether `owner` is enabled for one resolution key in this generation.
  * Plugins listed in `disable_plugins` never load, so only override levels are consulted here.
+ * Conversation keys also read the instance's conversation overrides; the cache is keyed by
+ * (configuration generation, store version, owner, key).
  */
 export function isFeatureOwnerEnabled(
   snapshot: Pick<RuntimeSnapshot, 'root' | 'resources'>,
@@ -310,17 +491,27 @@ export function isFeatureOwnerEnabled(
   if (!key || owner === snapshot.root) return true;
   const primary = readPrimaryConfig(snapshot);
   if (!primary) return true;
+  let parsed: FeatureResolutionKey;
+  try { parsed = parseFeatureResolutionKey(key); } catch { return true; }
+  const reader = parsed.conversation ? readFeatureConversationOverrides(snapshot) : undefined;
+  const version = reader?.version ?? -1;
   let cache = enabledCache.get(primary);
-  if (!cache) { cache = new Map(); enabledCache.set(primary, cache); }
+  if (!cache || (reader && cache.version !== version)) {
+    // A store write invalidates the generation's cache; file-level entries are rebuilt cheaply.
+    cache = { version: reader ? version : cache?.version ?? -1, entries: new Map() };
+    enabledCache.set(primary, cache);
+  }
   const cacheKey = `${String(owner)}\0${key}`;
-  const cached = cache.get(cacheKey);
+  const cached = cache.entries.get(cacheKey);
   if (cached !== undefined) return cached;
   const overrides = readPluginConfigBlock(primary.document, owner)?.[FEATURE_OVERRIDES_KEY];
+  const conversation = reader ? featureConversationEntry(reader.get(featureInstancePath(owner), key)) : undefined;
   // A nested Plugin inherits its ancestors' switches: a disabled parent hides its children too.
   const parent = String(owner).slice(0, String(owner).lastIndexOf('/')) as PluginId;
   const enabled = (parent === snapshot.root || !String(parent) || isFeatureOwnerEnabled(snapshot, parent, key))
-    && resolveFeatureEnabled({ overrides, key }).enabled;
-  cache.set(cacheKey, enabled);
+    && resolveFeatureEnabled({ overrides, key, ...(conversation ? { conversation } : {}) }).enabled;
+  if (cache.entries.size >= ENABLED_CACHE_LIMIT) cache.entries.clear();
+  cache.entries.set(cacheKey, enabled);
   return enabled;
 }
 

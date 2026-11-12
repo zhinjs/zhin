@@ -1,27 +1,15 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { canAccessTool } from '@zhin.js/core';
 import { PermissionHost } from '@zhin.js/permission';
-import {
-  checkWecomPlatformPermit,
-  normalizeWecomSenderForPermit,
-  platformPermit,
-} from '../src/platform-permit.js';
+import { platformPermit } from '../src/platform-permit.js';
+import * as adapter from '../src/index.js';
 
-function mockSubject(sender: { role?: string; permissions?: string[] }) {
-  return {
-    adapter: 'wecom',
-    sender: { id: 'u1', role: sender.role ? [sender.role] : [], permissions: sender.permissions },
-    scene: { type: 'group', id: 'c1' },
-  };
-}
-
-function mockMsg() {
+function mockMsg(platformPermissions: string[]) {
   return {
     clientAdapter: 'wecom',
     endpointId: 'bot1',
-    conversation: { endpoint: { adapter: 'wecom', id: 'bot1' }, kind: 'group', id: 'c1' },
-    sender: { id: 'u1', roles: [] },
-    metadata: {},
+    conversation: { endpoint: { adapter: 'wecom', id: 'bot1' }, kind: 'group', id: 'g1' },
+    sender: { id: 'u1', platform: { standing: 'member' as const, permissions: platformPermissions } },
   } as any;
 }
 
@@ -30,18 +18,12 @@ describe('wecom platform-permit', () => {
 
   beforeEach(() => {
     host = new PermissionHost();
-    host.registerPlatform('wecom', (perm, subject) => checkWecomPlatformPermit(perm, subject));
   });
 
-  it('normalizeWecomSenderForPermit', () => {
-    expect(normalizeWecomSenderForPermit({ isAdmin: true }).role).toBe('admin');
-    expect(normalizeWecomSenderForPermit({ isOwner: true }).role).toBe('owner');
-    expect(normalizeWecomSenderForPermit({}).role).toBe('member');
-  });
-
-  it('checkWecomPlatformPermit', () => {
-    expect(checkWecomPlatformPermit('chat_admin', mockSubject({ role: 'admin', permissions: ['chat_admin'] }))).toBe(true);
-    expect(checkWecomPlatformPermit('chat_owner', mockSubject({ role: 'member', permissions: [] }))).toBe(false);
+  it('no longer exports the legacy permit resolver / checker (ADR 0056 §5 builtin evaluator only)', () => {
+    expect(adapter).not.toHaveProperty('checkWecomPlatformPermit');
+    expect(adapter).not.toHaveProperty('wecomGroupPermitResolver');
+    expect(adapter).not.toHaveProperty('normalizeWecomSenderForPermit');
   });
 
   it('canAccessTool', async () => {
@@ -52,6 +34,7 @@ describe('wecom platform-permit', () => {
       permissions: [platformPermit('chat_admin')],
       execute: async () => '',
     };
-    expect(await canAccessTool(tool, mockMsg(), host)).toBe(false);
+    expect(await canAccessTool(tool, mockMsg([]), host)).toBe(false);
+    expect(await canAccessTool(tool, mockMsg(['chat_admin']), host)).toBe(true);
   });
 });

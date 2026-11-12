@@ -32,7 +32,10 @@ import {
 import { getProcessStatus, stopProcess } from '../utils/process.js';
 import { runtimeCommand } from './runtime.js';
 
-/** `zhin status` exit code when no gateway runs (LSB "program is not running"). */
+/**
+ * `zhin status` exit code when no gateway runs (LSB "program is not running"; scripts and
+ * service health checks test for 3). Other failures exit 1.
+ */
 export const STATUS_NOT_RUNNING_EXIT_CODE = 3;
 
 const target = (): GatewayTarget => ({ root: resolve(process.cwd()) });
@@ -72,7 +75,7 @@ export const startCommand = new Command('start')
     'Gateway options:',
     '  -f, --foreground  前台运行（开发、systemd、容器、PM2）；默认后台运行并写 .zhin/logs/gateway.log',
     '  -d, --daemon      后台运行（默认，可省略）',
-    formatStartOptionHelp().replaceAll('zhin runtime start', 'zhin start'),
+    formatStartOptionHelp('zhin start'),
   ].join('\n'))
   .allowUnknownOption(true)
   .allowExcessArguments(true)
@@ -153,6 +156,7 @@ export const restartCommand = new Command('restart')
 export const statusCommand = new Command('status')
   .description('查看网关与实例状态（网关未运行时退出码为 3）')
   .option('--json', '以 JSON 输出')
+  .addHelpText('after', '\nExit codes:\n  0  网关正在运行（实例状态见输出）\n  1  查询失败\n  3  网关未运行（LSB「program is not running」）')
   .action(async (options: { json?: boolean }) => {
     const { root } = target();
     try {

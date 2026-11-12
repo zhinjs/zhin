@@ -16,7 +16,7 @@ import { createConfigDocument } from '@zhin.js/runtime';
 import { ConsoleConfigurationStore } from '@zhin.js/gateway/config';
 import { readEnvFile, writeEnvFile } from '@zhin.js/gateway/config';
 import { projectEnvironment } from '@zhin.js/gateway/iam';
-import { ConsoleIamService, IamError, type ConsoleUserView, type SetupDatabaseInput, type SetupStatus } from '@zhin.js/gateway/iam';
+import { accountInputProblem, ConsoleIamService, IamError, type ConsoleUserView, type SetupDatabaseInput, type SetupStatus } from '@zhin.js/gateway/iam';
 import { ConsoleSetupService, type SetupDatabaseField, type SetupDriver } from '@zhin.js/gateway/iam';
 import { defineConsoleIamTables } from '@zhin.js/gateway/iam';
 import {
@@ -192,6 +192,11 @@ export interface ConsoleInitOptions {
   /** `--database-<field>` values keyed by field name. */
   readonly connection?: Readonly<Record<string, string>>;
   readonly passwordEnv?: string;
+  /**
+   * Read the database password from standard input. With `passwordStdin` too, the first line is
+   * the database password and the second the owner password.
+   */
+  readonly databasePasswordStdin?: boolean;
   readonly owner?: string;
   readonly displayName?: string;
   readonly passwordStdin?: boolean;
@@ -235,11 +240,40 @@ export async function runConsoleInit(
     const onboarding = setupOnboardingDeps.createService(projectRoot, async () => !(await project.status()).setupRequired);
     // ---- step 1: database
     let databaseInput: { dialect: string; connection: Record<string, unknown> } | undefined;
+    const passwordSources = [
+      options.connection?.password !== undefined,
+      options.passwordEnv !== undefined,
+      options.databasePasswordStdin === true,
+    ].filter(Boolean).length;
+    if (passwordSources > 1) {
+      io.error('--database-password、--database-password-env 与 --database-password-stdin 只能选一个');
+      return 1;
+    }
+    if (!options.database && (passwordSources > 0)) {
+      io.error('数据库密码参数需要与 --database <dialect> 一起使用');
+      return 1;
+    }
+    // One read serves both secrets: line 1 = database password, line 2 = owner password.
+    const stdinLines = options.databasePasswordStdin || options.passwordStdin
+      ? (await io.readStdin()).split(/\r?\n/u)
+      : [];
     if (options.database) {
       const connection: Record<string, unknown> = { ...(options.connection ?? {}) };
+      if (options.connection?.password !== undefined) {
+        io.error('警告：--database-password 会把密码留在 shell 历史与进程列表里，不推荐；请改用 --database-password-env <VAR> 或 --database-password-stdin。');
+      }
       if (options.passwordEnv) {
         if (!/^[A-Za-z_][A-Za-z0-9_]*$/u.test(options.passwordEnv)) throw new IamError('invalid_input', '--database-password-env 不是合法变量名');
         connection.password = `\${${options.passwordEnv}}`;
+      }
+      if (options.databasePasswordStdin) {
+        const databasePassword = stdinLines.shift() ?? '';
+        if (!databasePassword) {
+          io.error('--database-password-stdin：标准输入第一行为空');
+          return 1;
+        }
+        // A literal secret: the setup service stores it in .env and writes ${VAR} into the config.
+        connection.password = databasePassword;
       }
       databaseInput = { dialect: options.database, connection };
     } else if (interactive) {
@@ -249,37 +283,11 @@ export async function runConsoleInit(
       }]);
       if (change) databaseInput = await promptDatabase(project, io);
     }
-    let switched = false;
-    if (databaseInput) {
-      const tested = await project.testDatabase(databaseInput);
-      if (!tested.ok) {
-        io.error(`数据库连接失败：${tested.error ?? 'unknown error'}`);
-        return 1;
-      }
-      const applied = await project.applyDatabase(databaseInput);
-      switched = applied.switched;
-      io.log(`已写入数据库配置。${applied.notice}`);
-      if (switched) {
-        // The gateway reconnected before it answered; it serves the new database already.
-        io.log(applied.restarting ? '网关已切换到新数据库，并在重启实例。' : '网关已切换到新数据库。');
-      } else {
-        // Continue on the new database directly.
-        await project.close();
-        project = await open(projectRoot);
-      }
-      if (!(await project.status()).setupRequired) {
-        io.error('新数据库里已有所有者：请改用 `zhin console user …`。');
-        return 1;
-      }
-    }
-    await recordOnboardingSteps(onboarding, {
-      database: databaseInput || status.database.source === 'config' ? 'done' : 'skipped',
-    }, setupOnboardingDeps.io);
-    // ---- step 2: owner
+    // ---- step 2: owner — collected and checked before the database is switched or .env written
     let username = options.owner;
     let displayName = options.displayName;
     let password: string | undefined;
-    if (options.passwordStdin) password = firstLine(await io.readStdin());
+    if (options.passwordStdin) password = stdinLines.shift() ?? '';
     if (!username || password === undefined) {
       if (!interactive && !options.database && options.yes) {
         io.error('非交互初始化需要 --owner <name> 与 --password-stdin');
@@ -307,6 +315,37 @@ export async function runConsoleInit(
         password = answers.password;
       }
     }
+    const ownerProblem = accountInputProblem({ username, password });
+    if (ownerProblem) {
+      io.error(`所有者账号无效：${ownerProblem}（数据库与 .env 未改动）`);
+      return 1;
+    }
+    let switched = false;
+    if (databaseInput) {
+      const tested = await project.testDatabase(databaseInput);
+      if (!tested.ok) {
+        io.error(`数据库连接失败：${tested.error ?? 'unknown error'}`);
+        return 1;
+      }
+      const applied = await project.applyDatabase(databaseInput);
+      switched = applied.switched;
+      io.log(`已写入数据库配置。${applied.notice}`);
+      if (switched) {
+        // The gateway reconnected before it answered; it serves the new database already.
+        io.log(applied.restarting ? '网关已切换到新数据库，并在重启实例。' : '网关已切换到新数据库。');
+      } else {
+        // Continue on the new database directly.
+        await project.close();
+        project = await open(projectRoot);
+      }
+      if (!(await project.status()).setupRequired) {
+        io.error('新数据库里已有所有者：请改用 `zhin console user …`。');
+        return 1;
+      }
+    }
+    await recordOnboardingSteps(onboarding, {
+      database: databaseInput || status.database.source === 'config' ? 'done' : 'skipped',
+    }, setupOnboardingDeps.io);
     const { user } = await project.createOwner({ username, password, displayName });
     io.log(`已创建所有者 ${user.username}。现在可以用它登录 Console。`);
     await recordOnboardingSteps(onboarding, {}, setupOnboardingDeps.io);
@@ -431,12 +470,18 @@ const initCommand = new Command('init')
   .description('初始化 Console：选择数据库并创建第一个所有者（与 Console 初始化向导相同）')
   .option('--status', '只显示初始化状态')
   .option('--database <dialect>', '数据库：sqlite / mysql / pg / mongodb')
-  .option('--database-password-env <VAR>', '密码引用已有环境变量（配置里写入 ${VAR}）')
+  .option('--database-password-env <VAR>', '数据库密码引用已有环境变量（配置里写入 ${VAR}；推荐）')
+  .option('--database-password-stdin', '从标准输入第一行读取数据库密码（写入 .env，配置里写 ${VAR}；推荐）')
   .option('--owner <name>', '所有者用户名')
   .option('--display-name <name>', '所有者显示名')
-  .option('--password-stdin', '从标准输入读取密码')
+  .option('--password-stdin', '从标准输入读取所有者密码（与 --database-password-stdin 同用时读第二行）')
   .option('-y, --yes', '非交互：不提问，缺少参数即失败');
-for (const field of DATABASE_FIELDS) initCommand.option(`--database-${field} <value>`, `数据库连接字段 ${field}`);
+for (const field of DATABASE_FIELDS) {
+  initCommand.option(`--database-${field} <value>`, field === 'password'
+    // Kept for compatibility; a secret on the command line ends up in shell history and `ps`.
+    ? '数据库密码（不推荐：会留在 shell 历史与进程列表里；请用 --database-password-env 或 --database-password-stdin）'
+    : `数据库连接字段 ${field}`);
+}
 initCommand.action(async (raw: Record<string, unknown>) => {
   const connection: Record<string, string> = {};
   for (const field of DATABASE_FIELDS) {
@@ -449,6 +494,7 @@ initCommand.action(async (raw: Record<string, unknown>) => {
     ...(typeof raw.database === 'string' ? { database: raw.database } : {}),
     connection,
     ...(typeof raw.databasePasswordEnv === 'string' ? { passwordEnv: raw.databasePasswordEnv } : {}),
+    databasePasswordStdin: raw.databasePasswordStdin === true,
     ...(typeof raw.owner === 'string' ? { owner: raw.owner } : {}),
     ...(typeof raw.displayName === 'string' ? { displayName: raw.displayName } : {}),
     passwordStdin: raw.passwordStdin === true,

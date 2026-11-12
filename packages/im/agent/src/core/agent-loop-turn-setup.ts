@@ -193,7 +193,7 @@ export async function prepareAgentLoopTurnSetup(
     parameters: z.object({}).strict(),
   }] : tools;
   const chatFailure: ChatFailureOptions | undefined = input.turnContext.origin.kind === 'im'
-    ? { master: input.turnContext.principal.roles.includes('master'), locale: input.turnContext.input?.locale }
+    ? { master: input.turnContext.principal.roles.includes('owner'), locale: input.turnContext.input?.locale }
     : undefined;
   const outputSchema = imReply ? structuredReplySchema(input.replySegments)
     : messagePreset || !configuredSchema ? undefined : configuredSchema;

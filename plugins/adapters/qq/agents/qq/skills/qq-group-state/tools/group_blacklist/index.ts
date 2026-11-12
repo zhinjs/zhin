@@ -6,7 +6,7 @@ export default defineAgentTool({
   description: '分页查询当前 QQ 群的成员黑名单；官方白名单能力',
   adapter: 'qq',
   scopes: ['group'],
-  permissions: ['role(master,admin,trusted,owner)'],
+  permissions: ['trusted'],
   requiresApproval: 'never',
   readOnly: true,
   inputSchema: z.object({

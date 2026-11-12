@@ -4,7 +4,7 @@
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { senderRolesFromMessage, type Message } from '@zhin.js/core';
+import { chatRoleHeldAt, type Message } from '@zhin.js/core';
 import { getDataDir } from './bootstrap.js';
 
 /** 解析文件制长期记忆目录（data/memory），不执行文件系统写入。 */
@@ -292,10 +292,11 @@ export function checkMemoryWritePath(
   }
 
   let role: string = 'unknown';
-  if (context && senderRolesFromMessage(context).includes('master')) {
-    role = 'master';
+  // Global / platform memory is host-wide: only a global owner writes it (ADR 0056 §2).
+  if (chatRoleHeldAt(context?.sender, 'owner', 'global')) {
+    role = 'owner';
   }
-  if (role === 'master') {
+  if (role === 'owner') {
     return { allowed: true, scope };
   }
 

@@ -1,5 +1,5 @@
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
-import type { ConversationRef, MessageRef } from '@zhin.js/im-contract';
+import type { ConversationRef, MessageRef, PlatformStanding } from '@zhin.js/im-contract';
 export type { EndpointSendPart, EndpointSendResult } from '@zhin.js/im-contract';
 
 /** Stable identity of the Endpoint which produced an event. */
@@ -60,7 +60,8 @@ export interface EndpointIncomingMessage<TSegment = unknown> {
   readonly sender?: Readonly<{
     id: string;
     name?: string;
-    roles?: readonly string[];
+    /** ADR 0056 §1 platform standing; declare which fields you report in `profile.scene.platformStanding`. */
+    platform?: PlatformStanding;
   }>;
   readonly endpointId?: string;
   readonly mentioned?: boolean;

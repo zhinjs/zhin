@@ -11,7 +11,7 @@
 <!-- #region tiers-table -->
 | 档位 | 安装 | 约 production 体积 | 能力 |
 |------|------|-------------------|------|
-| **IM** | `pnpm add zhin.js` + 适配器（如 `@zhin.js/adapter-sandbox`）；dev：`@zhin.js/cli` | **<10MB**（库包） | 内置命令、组件、中间件、定时任务与热重载运行时（按需在 `zhin.config.yml` 挂载适配器与插件，详见 [插件模型](https://zhin.js.org/concepts/plugin-model)） |
+| **IM** | `pnpm add zhin.js @zhin.js/cli` + 适配器（如 `@zhin.js/adapter-sandbox`）；`@zhin.js/cli` 提供 `zhin start` 与管理网关 `@zhin.js/gateway`，开发与运行都需要 | **<10MB**（库包） | 内置命令、组件、中间件、定时任务与热重载运行时（按需在 `zhin.config.yml` 挂载适配器与插件，详见 [插件模型](https://zhin.js.org/concepts/plugin-model)） |
 | **AI** | `+ @zhin.js/agent zod ai` | +~12–15MB | ZhinAgent、会话、工具、压缩 |
 | **Provider** | `+ @ai-sdk/openai` 等 | 按厂商 | 大模型调用 |
 | **MCP** | `+ @modelcontextprotocol/sdk` | +~数 MB | MCP Client |
@@ -22,7 +22,7 @@
 <!-- #region tiers-table-en -->
 | Tier | Install | ~production size | Capabilities |
 |------|---------|------------------|--------------|
-| **IM** | `pnpm add zhin.js` + an adapter (for example, `@zhin.js/adapter-sandbox`); dev: `@zhin.js/cli` | **&lt;10MB** (library) | Built-in commands, components, middleware, schedules and hot-reload runtime (mount adapters and plugins on demand in `zhin.config.yml`; see [Plugin model](/en/concepts/plugin-model)) |
+| **IM** | `pnpm add zhin.js @zhin.js/cli` + an adapter (for example, `@zhin.js/adapter-sandbox`); `@zhin.js/cli` provides `zhin start` and the management gateway `@zhin.js/gateway`, needed in development and in production | **&lt;10MB** (library) | Built-in commands, components, middleware, schedules and hot-reload runtime (mount adapters and plugins on demand in `zhin.config.yml`; see [Plugin model](/en/concepts/plugin-model)) |
 | **AI** | `+ @zhin.js/agent zod ai` | +~12–15MB | ZhinAgent, sessions, tools, compaction |
 | **Provider** | `+ @ai-sdk/openai` etc. | per vendor | LLM calls |
 | **MCP** | `+ @modelcontextprotocol/sdk` | + a few MB | MCP client |
@@ -33,7 +33,7 @@
 <!-- #region tiers-table-host -->
 | 档位 | 安装 | 能力 |
 |------|------|------|
-| **IM** | `pnpm add zhin.js` + 适配器；`@zhin.js/cli` 装配 Host | 创作面 API 经 `zhin.js/*`；Console Host 由 CLI 注入 |
+| **IM** | `pnpm add zhin.js @zhin.js/cli` + 适配器 | 创作面 API 经 `zhin.js/*`；`zhin start` 启动管理网关（`@zhin.js/gateway`，承载 HTTP 与 Console），网关拉起实例 |
 | **AI** | `+ @zhin.js/agent zod ai` | ZhinAgent、会话与工具 |
 | **Provider** | `+ @ai-sdk/openai` 等 | 大模型调用 |
 | **Cards** | `+ @zhin.js/components` | 纯 JSX 样式组件（按需；无 React / 图片引擎） |
@@ -72,11 +72,11 @@ pnpm add @ai-sdk/openai   # 示例：按 provider 替换
 <!-- #endregion doctor -->
 
 <!-- #region scaffold-note -->
-`npm create zhin-app` / `zhin setup` 在启用 AI 时会自动写入 `package.json` 依赖。上表的 **<10MB 是 IM 库安装体积**，不代表脚手架生成项目的完整依赖体积。新项目还会加入 CLI、Sandbox 适配器、Page/Layout/Skill Feature 与 Satori 卡片示例；AI 仍按选择安装。IM 的 Stable Features 由 `@zhin.js/core` 的 `package.json#zhin.features` 继承（经 `zhin.js` 间接依赖亦可，见 [插件模型](/concepts/plugin-model)）。浏览器 UI 在独立的 Remote Console，CLI 负责装配 HTTP Host。
+`npm create zhin-app` / `zhin setup` 在启用 AI 时会自动写入 `package.json` 依赖。上表的 **<10MB 是 IM 库安装体积**，不代表脚手架生成项目的完整依赖体积。新项目还会加入 CLI、Sandbox 适配器、Page/Layout/Skill Feature 与 Satori 卡片示例；AI 仍按选择安装。IM 的 Stable Features 由 `@zhin.js/core` 的 `package.json#zhin.features` 继承（经 `zhin.js` 间接依赖亦可，见 [插件模型](/concepts/plugin-model)）。浏览器 UI 在独立的 Remote Console；HTTP 与 Console 接口由 `zhin start` 启动的管理网关（`@zhin.js/gateway`，随 CLI 安装）提供。
 
 仓库示例：[minimal-bot](https://github.com/zhinjs/zhin/tree/main/examples/minimal-bot) 默认 **仅 IM**（`ai.enabled: false`）；[full-bot](https://github.com/zhinjs/zhin/tree/main/examples/full-bot) 含完整 AI 栈。
 <!-- #endregion scaffold-note -->
 
 <!-- #region callout-one-liner -->
-**zhin.js 1.1.x 安装分层**：库包 `pnpm add zhin.js`（IM 核心 &lt;10MB）；Plugin Runtime 项目再加适配器与 `@zhin.js/cli`；AI 另装 `@zhin.js/agent zod ai` 与所选 `@ai-sdk/*`。见 [分层架构](/concepts/architecture)、[插件模型](/concepts/plugin-model) 与 [快速开始 — Install tiers](/getting-started/#install-tiers)。
+**zhin.js 1.1.x 安装分层**：库包 `pnpm add zhin.js`（IM 核心 &lt;10MB）；Plugin Runtime 项目再加适配器与 `@zhin.js/cli`（提供 `zhin start` 与管理网关，开发与运行都需要）；AI 另装 `@zhin.js/agent zod ai` 与所选 `@ai-sdk/*`。见 [分层架构](/concepts/architecture)、[插件模型](/concepts/plugin-model) 与 [快速开始 — Install tiers](/getting-started/#install-tiers)。
 <!-- #endregion callout-one-liner -->

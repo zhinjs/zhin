@@ -1,20 +1,21 @@
 import { messages as t } from "../../../../messages.js";
+import { currentGroup } from "../../../../conversation.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-export default defineAgentTool<{ group_id: number; user_id: number; reason: string }>({
-  description: '踢出 QQ 群中的某个成员',
+export default defineAgentTool<{ user_id: number; reason: string }>({
+  description: '踢出当前 QQ 群中的某个成员',
   inputSchema: z.object({
-    group_id: z.number().describe('目标群号'),
     user_id: z.number().describe('要踢出的成员 QQ号'),
-    reason: z.string().min(1).describe('本次踢人的具体原因，随目标群和成员一起供人工确认'),
+    reason: z.string().min(1).describe('本次踢人的具体原因，随目标成员一起供人工确认'),
   }),
   adapter: 'icqq',
   // ADR 0044: offered only while the Bot can actually do this here (e.g. it is a group admin).
   requiresCapabilities: ['actions.kick'],
   scopes:['group'],
-  permissions: ['role(master,admin,trusted,owner)'],
+  permissions: ['platform:admin', 'bot:admin'],
   requiresApproval: 'human',
-  async execute({ group_id, user_id }, context) {
+  async execute({ user_id }, context) {
+    const group_id = currentGroup(context);
     const client = context.$client;
     const [self, member] = await Promise.all([
       client.getGroupMemberInfo(group_id, client.uin, true),

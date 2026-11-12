@@ -85,7 +85,7 @@ describe('lottery localization', () => {
         has: (token: unknown) => token === scheduleHostToken || token === outboundHostToken,
         use: (token: unknown) => token === projectLocaleToken ? projectLocale : token === scheduleHostToken ? schedule : { send },
         provide: (token: unknown, value: LotteryRuntime) => { if (token === lotteryRuntimeToken) runtime = value; },
-      }, lifecycle,
+      }, lifecycle, isEnabledFor: () => true,
     });
     expect(runtime?.locale).toBe('en');
     await upsertDraws(runtime!.db, [draw]);
@@ -95,5 +95,57 @@ describe('lottery localization', () => {
     expect(send).toHaveBeenCalledTimes(1);
     expect(send.mock.calls[0]?.[0]).toMatchObject({ adapter: 'sandbox', endpointKey: 'bot', conversation: { kind: 'private', id: 'user' }, content: expect.stringContaining('[Daily lottery report]') });
     expect(lifecycle.add).toHaveBeenCalledWith(dispose);
+  });
+
+  it('skips push targets whose account or conversation switched lottery off (ADR 0055)', async () => {
+    let runtime: LotteryRuntime | undefined;
+    let tick: (() => Promise<void>) | undefined;
+    const send = vi.fn(async () => undefined);
+    const checked: unknown[] = [];
+    const schedule = { register: vi.fn((task: { execute: () => Promise<void> }) => { tick = task.execute; return () => undefined; }) };
+    await (plugin.setup as (context: unknown) => Promise<void>)({
+      config: { get: () => ({ games: ['ssq'], scheduleEnabled: true, backtestEnabled: false, weightPersistEnabled: false,
+        pushTargets: [
+          { adapter: 'sandbox', endpointKey: 'bot', channelType: 'group', channelId: 'off' },
+          { adapter: 'sandbox', endpointKey: 'bot', channelType: 'group', channelId: 'on' },
+        ] }) },
+      resources: {
+        has: (token: unknown) => token === scheduleHostToken || token === outboundHostToken,
+        use: (token: unknown) => token === projectLocaleToken ? 'zh-CN' : token === scheduleHostToken ? schedule : { send },
+        provide: (token: unknown, value: LotteryRuntime) => { if (token === lotteryRuntimeToken) runtime = value; },
+      }, lifecycle: { add: vi.fn() },
+      isEnabledFor: (target: { conversation: { id: string } }) => { checked.push(target); return target.conversation.id !== 'off'; },
+    });
+    await upsertDraws(runtime!.db, [draw]);
+    const fetch = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('offline fixture'));
+    try { await tick!(); } finally { fetch.mockRestore(); }
+    expect(checked).toEqual([
+      { endpoint: { adapter: 'sandbox', endpointKey: 'bot' }, conversation: { kind: 'group', id: 'off' } },
+      { endpoint: { adapter: 'sandbox', endpointKey: 'bot' }, conversation: { kind: 'group', id: 'on' } },
+    ]);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send.mock.calls[0]?.[0]).toMatchObject({ conversation: { kind: 'group', id: 'on' } });
+  });
+
+  it('still delivers when the switch cannot be evaluated (unresolvable or unusual selector)', async () => {
+    let runtime: LotteryRuntime | undefined;
+    let tick: (() => Promise<void>) | undefined;
+    const send = vi.fn(async () => undefined);
+    const schedule = { register: vi.fn((task: { execute: () => Promise<void> }) => { tick = task.execute; return () => undefined; }) };
+    await (plugin.setup as (context: unknown) => Promise<void>)({
+      config: { get: () => ({ games: ['ssq'], scheduleEnabled: true, backtestEnabled: false, weightPersistEnabled: false,
+        pushTargets: [{ adapter: 'OneBot', endpointKey: 'a/b', channelType: 'group', channelId: '1' }] }) },
+      resources: {
+        has: (token: unknown) => token === scheduleHostToken || token === outboundHostToken,
+        use: (token: unknown) => token === projectLocaleToken ? 'zh-CN' : token === scheduleHostToken ? schedule : { send },
+        provide: (token: unknown, value: LotteryRuntime) => { if (token === lotteryRuntimeToken) runtime = value; },
+      }, lifecycle: { add: vi.fn() },
+      isEnabledFor: () => { throw new TypeError('Feature target adapter must be an instance alias'); },
+    });
+    await upsertDraws(runtime!.db, [draw]);
+    const fetch = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('offline fixture'));
+    try { await tick!(); } finally { fetch.mockRestore(); }
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send.mock.calls[0]?.[0]).toMatchObject({ adapter: 'OneBot', endpointKey: 'a/b' });
   });
 });

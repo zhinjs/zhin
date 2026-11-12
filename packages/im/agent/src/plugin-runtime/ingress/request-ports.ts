@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import * as path from 'node:path';
 import { resolve } from 'node:path';
 import { personalSessionIdentity, type PersonalSessionAddress } from '../../personal-session/index.js';
-import type { TurnCapabilities, UserInteraction } from '@zhin.js/core';
+import { expandChatRole, hostChatRole, normalizeChatRoleLevels, type TurnCapabilities, type UserInteraction } from '@zhin.js/core';
 import type { ImRuntime, Message } from '@zhin.js/core/runtime';
 import {
   approvalOutcomeToDecision,
@@ -408,8 +408,16 @@ export function createRuntimeTurnAccess(
     throw new TypeError(`Runtime IM ingress rejects non-human origin: ${String(messageOrigin)}`);
   }
   const scope = message.conversation.kind;
-  const trustRole = roles.isMaster ? 'master' : roles.isTrusted ? 'trusted' : 'user';
-  const principalRoles = [...new Set([...(message.sender?.roles ?? []), trustRole])];
+  // ADR 0056: zhin chat roles only (expanded, owner → owner/admin/trusted); platform standing
+  // stays on `sender.platform` and never becomes an authorization role. `roles` carry host-wide
+  // trust: `owner` only for a global owner (a lower-level owner counts as admin here); the chain
+  // role itself (permits such as `owner`) is kept on `principal.chatRole`.
+  const hostRole = message.sender?.id ? hostChatRole(message.sender) : undefined;
+  const chatRoles = roles.isMaster ? expandChatRole('owner')
+    : hostRole ? expandChatRole(hostRole) : roles.isTrusted ? expandChatRole('trusted') : [];
+  const chainRole = message.sender?.id ? message.sender.chatRole : undefined;
+  const chainLevels = chainRole ? normalizeChatRoleLevels(message.sender?.chatRoleLevels) : undefined;
+  const principalRoles: string[] = chatRoles.length ? [...chatRoles] : ['user'];
   const hasValidConversationSequence = typeof conversationSequence === 'number' && Number.isFinite(conversationSequence);
   return Object.freeze({
     ...(contextState || platformCapabilities
@@ -433,6 +441,9 @@ export function createRuntimeTurnAccess(
       subjectId,
       ...(message.sender?.name ? { displayName: message.sender.name } : {}),
       roles: Object.freeze(principalRoles),
+      ...(chainRole ? { chatRole: chainRole } : {}),
+      ...(chainLevels ? { chatRoleLevels: chainLevels } : {}),
+      ...(message.sender?.platform ? { platform: message.sender.platform } : {}),
       ...(messageOrigin ? { origin: messageOrigin } : {}),
     }),
     policy: Object.freeze({

@@ -5,8 +5,8 @@
   "description": "Zhin.js Plugin Runtime L4 reference (Sandbox + NapCat + KOOK + Agent)",
   "type": "module",
   "scripts": {
-    "dev": "zhin runtime start --watch source config",
-    "start": "zhin runtime start --mode production --no-watch",
+    "dev": "zhin start --foreground --watch source config",
+    "start": "zhin start --foreground --mode production --no-watch",
     "build": "tsc --noEmit && tsc -p tsconfig.client.json"
   },
   "dependencies": {
@@ -28,11 +28,12 @@
     "ai": "^7.0.44",
     "react": "^19.2.8",
     "zhin.js": "workspace:*",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "@zhin.js/cli": "workspace:*",
+    "@zhin.js/gateway": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "^19.2.18",
-    "@zhin.js/cli": "workspace:*",
     "typescript": "^6.0.3"
   },
   "engines": {

@@ -2,22 +2,136 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
+  "x-zhin-config": {
+    "levels": [
+      "global",
+      "adapter",
+      "endpoint",
+      "conversation"
+    ]
+  },
   "properties": {
-    "pickCount": { "type": "number", "default": 5, "minimum": 1, "maximum": 10 },
-    "scheduleCron": { "type": "string", "default": "0 0 18 * * *" },
-    "historyLimit": { "type": "number", "default": 500, "minimum": 50, "maximum": 2000 },
-    "scheduleEnabled": { "type": "boolean", "default": true },
-    "backtestEnabled": { "type": "boolean", "default": true },
-    "backtestWindow": { "type": "number", "default": 50 },
-    "backtestRandomTrials": { "type": "number", "default": 64 },
-    "backtestMinHistory": { "type": "number", "default": 30 },
-    "backtestAdaptive": { "type": "boolean", "default": true },
-    "weightPersistEnabled": { "type": "boolean", "default": true },
-    "weightHoldoutFallback": { "type": "boolean", "default": true },
+    "pickCount": {
+      "type": "number",
+      "default": 5,
+      "minimum": 1,
+      "maximum": 10,
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
+      }
+    },
+    "scheduleCron": {
+      "type": "string",
+      "default": "0 0 18 * * *",
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
+      }
+    },
+    "historyLimit": {
+      "type": "number",
+      "default": 500,
+      "minimum": 50,
+      "maximum": 2000,
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
+      }
+    },
+    "scheduleEnabled": {
+      "type": "boolean",
+      "default": true,
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
+      }
+    },
+    "backtestEnabled": {
+      "type": "boolean",
+      "default": true,
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
+      }
+    },
+    "backtestWindow": {
+      "type": "number",
+      "default": 50,
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
+      }
+    },
+    "backtestRandomTrials": {
+      "type": "number",
+      "default": 64,
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
+      }
+    },
+    "backtestMinHistory": {
+      "type": "number",
+      "default": 30,
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
+      }
+    },
+    "backtestAdaptive": {
+      "type": "boolean",
+      "default": true,
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
+      }
+    },
+    "weightPersistEnabled": {
+      "type": "boolean",
+      "default": true,
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
+      }
+    },
+    "weightHoldoutFallback": {
+      "type": "boolean",
+      "default": true,
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
+      }
+    },
     "games": {
       "type": "array",
-      "items": { "type": "string" },
-      "default": ["kl8", "ssq", "dlt", "fc3d", "pl3", "pl5"]
+      "items": {
+        "type": "string"
+      },
+      "default": [
+        "kl8",
+        "ssq",
+        "dlt",
+        "fc3d",
+        "pl3",
+        "pl5"
+      ],
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
+      }
     },
     "pushTargets": {
       "type": "array",
@@ -25,27 +139,61 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["adapter", "channelId"],
+        "required": [
+          "adapter",
+          "channelId"
+        ],
         "properties": {
-          "adapter": { "type": "string" },
-          "endpointKey": { "type": "string" },
-          "channelType": { "type": "string", "default": "private" },
-          "channelId": { "type": "string" }
+          "adapter": {
+            "type": "string"
+          },
+          "endpointKey": {
+            "type": "string"
+          },
+          "channelType": {
+            "type": "string",
+            "default": "private"
+          },
+          "channelId": {
+            "type": "string"
+          }
         }
       },
-      "default": []
+      "default": [],
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
+      }
     },
     "kl8": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "pickCount": { "type": "number", "default": 5 },
-        "recommendGroups": { "type": "number", "default": 3 },
+        "pickCount": {
+          "type": "number",
+          "default": 5
+        },
+        "recommendGroups": {
+          "type": "number",
+          "default": 3
+        },
         "groupStrategies": {
           "type": "array",
-          "items": { "type": "string" },
-          "default": ["balanced", "hot", "cold"]
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "balanced",
+            "hot",
+            "cold"
+          ]
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     }
   }

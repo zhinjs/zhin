@@ -25,6 +25,8 @@ export interface ConsoleRpcComposition {
   readonly snapshots?: SnapshotReader;
   /** Host-owned Console methods resolved from each request's captured Root lease. */
   readonly hostConsoleRpc?: import('./plugin-console-rpc.js').HostConsoleRpcFactory;
+  /** Conversation-level feature overrides and in-chat feature admins (ADR 0055). */
+  readonly featureStores?: import('./console-feature-rpc.js').FeatureStores;
 }
 
 export interface ConsoleRpcConfigurationPort {

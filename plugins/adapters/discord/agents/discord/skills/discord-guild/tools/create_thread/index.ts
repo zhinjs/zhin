@@ -1,14 +1,13 @@
 import { messages as t } from "../../../../messages.js";
+import { currentGuildChannel } from "../../../../conversation.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import { requireDiscordGatewayClient } from '@zhin.js/adapter-discord';
-import { platformPermission } from '@zhin.js/permission';
 import { ThreadAutoArchiveDuration } from 'discord.js';
 
-export default defineAgentTool<{ channel_id: string; name: string; message_id?: string; auto_archive_duration?: number }>({
-  description: '在 Discord 频道中创建帖子/子线程',
+export default defineAgentTool<{ name: string; message_id?: string; auto_archive_duration?: number }>({
+  description: '在当前 Discord 频道中创建帖子/子线程',
   inputSchema: z.object({
-    channel_id: z.string().describe('频道 ID'),
     name: z.string().describe('帖子标题'),
     message_id: z.string().optional().describe('基于某条消息创建（可选）'),
     auto_archive_duration: z.number().optional().describe('自动归档时间（分钟：60/1440/4320/10080）'),
@@ -16,8 +15,9 @@ export default defineAgentTool<{ channel_id: string; name: string; message_id?: 
   adapter: 'discord',
   scopes: ["channel"],
   tags: ['discord'],
-  permissions: [platformPermission('discord', 'manage_channels')],
-  async execute({ channel_id, name, message_id, auto_archive_duration  }: { channel_id: string; name: string; message_id?: string; auto_archive_duration?: number }, context) {
+  permissions: ['platform-permission:manage_channels', 'bot-permission:create_public_threads'],
+  async execute({ name, message_id, auto_archive_duration }, context) {
+    const { channelId: channel_id } = currentGuildChannel(context);
     const client = requireDiscordGatewayClient(context.$client);
     const channel = await client.channels.fetch(channel_id);
     if (!channel || !('threads' in channel) || channel.isThreadOnly()) throw new Error(t(context.locale, 'threadsUnsupported', { p0: channel_id }));

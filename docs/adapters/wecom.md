@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/wecom/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/wecom/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=1d55e9770ba85f55 -->
+<!-- sync-adapter-docs:sha256=35fa673f0827cbaa -->
 
 # @zhin.js/adapter-wecom
 
@@ -155,3 +155,7 @@ Access Token 在过期前 5 分钟自动刷新。
 ## 许可证
 
 MIT License
+
+## 成员身份
+
+企业微信回调不带发送者群角色，不上报 `sender.platform`，能力画像也不声明 `scene.platformStanding`。详见 [ADR 0056 §1](https://github.com/zhinjs/zhin/blob/main/docs/adr/0056-chat-roles.md)。

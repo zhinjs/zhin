@@ -23,7 +23,8 @@ import type { ConsoleRpcComposition } from './rpc-composition.js';
 import { dispatchPluginConsoleRpcRequest } from './plugin-console-rpc.js';
 import { dispatchIamRpc, isIamRpc } from '@zhin.js/gateway/iam';
 import { createFeatureRpcContext, dispatchFeatureConsoleRpc } from './console-feature-rpc.js';
-import type { ConsoleScopeTarget } from '@zhin.js/console-protocol';
+import { dispatchChatRolesConsoleRpc } from './chat-roles-rpc.js';
+import { CONSOLE_PERMISSIONS, featureScopeTarget } from '@zhin.js/console-protocol';
 import type { ConsoleIamService } from '@zhin.js/gateway/iam';
 import { internalErrorResponse } from './internal-error.js';
 
@@ -85,10 +86,25 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
         return reply(result.status, result.body, noStore);
       }
       const authorizedPrincipal = principal;
+      // Scoped bindings count for every scope under them (a conversation counts for its endpoint).
       const featureReply = await dispatchFeatureConsoleRpc(message, createFeatureRpcContext(options, authScope,
-        request => principalAllows(authorizedPrincipal, request.permission, featureTarget(request.level, request.key))));
+        request => principalAllows(authorizedPrincipal, request.permission, featureScopeTarget(request.level, request.key)),
+        auditActor(principal),
+        // Overrides are environment-expanded: only principals that may edit `.env` themselves
+        // (owners, `ops.env.write`) may plant `${…}` / `env://` references through feature.*.
+        () => principalAllows(authorizedPrincipal, CONSOLE_PERMISSIONS.OPS_ENV_WRITE)));
       if (featureReply) {
         return reply(featureReply.status, featureReply.body, noStore);
+      }
+      // ADR 0056 §3: chat roles; adapter / endpoint-scoped `iam.manage` counts under its scope.
+      const chatRolesReply = await dispatchChatRolesConsoleRpc(message, {
+        ...(options.featureStores?.roles ? { roles: options.featureStores.roles } : {}),
+        authorize: request => principalAllows(authorizedPrincipal, request.permission, featureScopeTarget(request.level, request.key)),
+        actor: auditActor(principal),
+        publishEvent: (type, data) => options.hub.publish(type, data),
+      });
+      if (chatRolesReply) {
+        return reply(chatRolesReply.status, chatRolesReply.body, noStore);
       }
       // `plugin.<pluginId>.<method>`: the dispatcher authorizes signed-in principals per method
       // (its own, its Page's, or the catalog fallback permission).
@@ -163,19 +179,6 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
     tags: ['console'],
     description: 'Plugin Runtime Console request envelope: `{ type, data?, requestId? }`.',
   });
-}
-
-/**
- * Scope target of a `feature.*` operation (ADR 0049 §3): `adapter` key `<alias>`, `endpoint` key
- * `<alias>/<endpointId>`. Calls without a level (list / matrix, global writes) need a global binding.
- */
-function featureTarget(level: string | undefined, key: string | undefined): ConsoleScopeTarget {
-  if (level === 'adapter' && key && !key.includes('/')) return { kind: 'adapter', adapter: key };
-  if (level === 'endpoint' && key) {
-    const slash = key.indexOf('/');
-    if (slash > 0 && slash < key.length - 1) return { kind: 'endpoint', adapter: key.slice(0, slash), endpoint: key.slice(slash + 1) };
-  }
-  return { kind: 'global' };
 }
 
 /** `endpoint.list` for an adapter/endpoint-scoped user only shows the accounts it covers. */

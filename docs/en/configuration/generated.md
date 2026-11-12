@@ -54,6 +54,8 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `console.terminal.ssh[].passphraseEnv` | string | no | — | Environment variable holding the key passphrase. |
 | `console.terminal.ssh[].hostFingerprint` | string | no | — | Required host key fingerprint (SHA256:…), verified strictly; get it with `ssh-keyscan -t ed25519 &lt;host&gt; \| ssh-keygen -lf -` on a trusted network. |
 | `console.terminal.ssh[].insecureAcceptAnyHostKey` | boolean | no | — | Accept any host key without verification (unsafe, open to man-in-the-middle); only instead of hostFingerprint. The Console marks the target unsafe. |
+| `gateway` | object | no | — | Management gateway (zhin start): instance supervision and dependency transactions. |
+| `gateway.readyTimeout` | integer | no | `60` | Seconds the instance has to report ready after a start, a restart or a dependency transaction before the start counts as failed (the transaction then rolls back). Read again before every start, restart and transaction; no gateway restart needed. |
 | `database` | object | no | — | Database Host and dialect connection options. |
 | `database.dialect` | string | no | — | 数据库方言。 |
 | `database.filename` | string | no | — | SQLite 文件路径。 |
@@ -464,6 +466,9 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `log_level` | string \| number | no | — | Runtime log level. |
 | `plugin` | object | no | — | Root Plugin configuration; replaced by its project schema during composition. |
 | `locale` | string: `"zh-CN"`, `"en"` | no | — | Language used when no personal preference is set; Simplified Chinese when omitted. Language and time zone are independent. |
+| `features` | object | no | — | Feature configuration beyond the plugin blocks (ADR 0055): in-chat self-service. Restart to apply. |
+| `features.selfService` | object | no | — | In-chat `feature` / `功能` and `role` / `角色` commands for chat role admins (ADR 0055 / 0056). Off by default. Platform group owners / admins are not zhin roles: grant them admin explicitly. |
+| `features.selfService.enabled` | boolean | no | `false` | Register the in-chat feature and role commands. |
 
 ## Standalone AI import proposal
 
@@ -544,8 +549,6 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `bilibili.videos` | array&lt;string \| number&gt; | no | — | Allowed videos, using BV or av IDs. Only comments on these videos are polled; no site-wide search. |
 | `bilibili.dynamics` | array&lt;string&gt; | no | — | Allowed dynamics (posts), as dynamic IDs quoted as strings (the number in t.bilibili.com/&lt;id&gt; or bilibili.com/opus/&lt;id&gt;). Each is resolved to its comment area at startup (image post type=11 / text post type=17); dynamics that cannot be resolved are skipped. No site-wide search. |
 | `bilibili.articles` | array&lt;string \| number&gt; | no | — | Allowed articles, as cv IDs (cv123 or 123); comment area type=12. No site-wide search. |
-| `bilibili.master` | string \| number | no | — | Framework masters (Bilibili uid). endpoints[i].master can override this value. |
-| `bilibili.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users (Bilibili uid). |
 | `bilibili.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
 | `bilibili.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
 | `bilibili.endpoints[].id` | string | yes | — | Local endpoint name, not a Bilibili account ID. |
@@ -566,8 +569,6 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `bilibili.endpoints[].notify.kind` | string: `"private"`, `"group"`, `"channel"` | no | `"private"` | Conversation type. |
 | `bilibili.endpoints[].notify.id` | string \| number | yes | — | Conversation id: your account for a private chat, or the group id. |
 | `bilibili.endpoints[].apiBaseUrl` | string | no | `"https://api.bilibili.com"` | — |
-| `bilibili.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (Bilibili uid). |
-| `bilibili.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `bilibili.endpoints[].commandPrefix` | string | no | — | — |
 | `bilibili.endpoints[].nickname` | string \| null | no | — | Fallback account nickname |
 | `bilibili.endpoints[].profile` | object | no | — | Fallback account profile |
@@ -601,8 +602,6 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `bilibili-live.minSendIntervalSec` | number | no | `5` | Minimum seconds between two replies, at least 2; a reply sent sooner is rejected, not queued. |
 | `bilibili-live.apiBaseUrl` | string | no | `"https://api.bilibili.com"` | — |
 | `bilibili-live.liveApiBaseUrl` | string | no | `"https://api.live.bilibili.com"` | — |
-| `bilibili-live.master` | string \| number | no | — | Framework masters (Bilibili uid). endpoints[i].master can override this value. |
-| `bilibili-live.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users (Bilibili uid). |
 | `bilibili-live.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
 | `bilibili-live.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
 | `bilibili-live.endpoints[].id` | string | yes | — | Local endpoint name, not a Bilibili account ID. |
@@ -616,8 +615,6 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `bilibili-live.endpoints[].minSendIntervalSec` | number | no | `5` | Minimum seconds between two replies, at least 2; a reply sent sooner is rejected, not queued. |
 | `bilibili-live.endpoints[].apiBaseUrl` | string | no | `"https://api.bilibili.com"` | — |
 | `bilibili-live.endpoints[].liveApiBaseUrl` | string | no | `"https://api.live.bilibili.com"` | — |
-| `bilibili-live.endpoints[].master` | string \| number | no | — | Framework masters (Bilibili uid). endpoints[i].master can override this value. |
-| `bilibili-live.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users (Bilibili uid). |
 | `bilibili-live.endpoints[].commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
 | `bilibili-live.endpoints[].nickname` | string \| null | no | — | Fallback account nickname |
 | `bilibili-live.endpoints[].profile` | object | no | — | Fallback account profile |
@@ -645,11 +642,7 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
 | `dingtalk.apiBaseUrl` | string | no | `"https://oapi.dingtalk.com"` | — |
-| `dingtalk.master` | string \| number | no | — | Framework masters (DingTalk userid; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
-| `dingtalk.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
 | `dingtalk.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
-| `dingtalk.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (DingTalk userid), overriding the top-level master list. |
-| `dingtalk.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `dingtalk.endpoints[].appKey` | string | yes | — | Dingtalk app key |
 | `dingtalk.endpoints[].appSecret` | string | yes | — | Dingtalk app secret |
 | `dingtalk.endpoints[].webhookPath` | string | no | — | Dingtalk webhook path |
@@ -704,11 +697,7 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `discord.applicationId` | string | no | — | Required when connection is interactions. |
 | `discord.publicKey` | string | no | — | Required when connection is interactions (hex Ed25519 public key). |
 | `discord.interactionsPath` | string | no | `"/discord/interactions"` | POST path on httpHostToken when connection is interactions. |
-| `discord.master` | string \| number | no | — | Framework masters (Discord user snowflake; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
-| `discord.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
 | `discord.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: each entry defines an endpoint. id and token are required; other fields override instance defaults. |
-| `discord.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (Discord user snowflake), overriding the top-level master list. |
-| `discord.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `discord.endpoints[].token` | string | yes | — | Discord bot token |
 | `discord.endpoints[].connection` | string: `"gateway"`, `"interactions"` | no | — | — |
 | `discord.endpoints[].intents` | array&lt;number&gt; | no | — | — |
@@ -759,8 +748,6 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `douyin-live.maxChunks` | number | no | `2` | Maximum danmaku per reply (default 2). |
 | `douyin-live.minSendIntervalSec` | number | no | `5` | Minimum seconds between two replies, at least 2. |
 | `douyin-live.signerUrl` | string | no | — | Optional external signer (GET ?stub=&lt;X-MS-STUB&gt; returns the signature). The package ships no platform signing script; without it the socket connects unsigned and the platform may refuse. |
-| `douyin-live.master` | string \| number | no | — | Framework masters (Douyin user id). endpoints[i].master can override this value. |
-| `douyin-live.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users (Douyin user id). |
 | `douyin-live.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
 | `douyin-live.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
 | `douyin-live.endpoints[].id` | string | yes | — | Local endpoint name, not a Douyin account ID. |
@@ -771,8 +758,6 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `douyin-live.endpoints[].maxChunks` | number | no | `2` | Maximum danmaku per reply (default 2). |
 | `douyin-live.endpoints[].minSendIntervalSec` | number | no | `5` | Minimum seconds between two replies, at least 2. |
 | `douyin-live.endpoints[].signerUrl` | string | no | — | Optional external signer (GET ?stub=&lt;X-MS-STUB&gt; returns the signature). The package ships no platform signing script; without it the socket connects unsigned and the platform may refuse. |
-| `douyin-live.endpoints[].master` | string \| number | no | — | Framework masters (Douyin user id). endpoints[i].master can override this value. |
-| `douyin-live.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users (Douyin user id). |
 | `douyin-live.endpoints[].commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
 | `douyin-live.endpoints[].nickname` | string \| null | no | — | Fallback account nickname |
 | `douyin-live.endpoints[].profile` | object | no | — | Fallback account profile |
@@ -799,11 +784,7 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `email.master` | string \| number | no | — | Framework masters (email address; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
-| `email.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
 | `email.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
-| `email.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (email address), overriding the top-level master list. |
-| `email.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `email.endpoints[].smtp` | object | yes | — | — |
 | `email.endpoints[].smtp.host` | string | yes | — | — |
 | `email.endpoints[].smtp.port` | number | yes | — | — |
@@ -861,11 +842,7 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `github.auto_reply_repos` | array&lt;string&gt; | no | — | Repos whose Issue/PR comments auto-trigger AI without @bot |
 | `github.bot_login` | string | no | — | Override App bot login (default {slug}[bot]) |
 | `github.workspace_root` | string | no | — | Managed git workspace root |
-| `github.master` | string \| number | no | — | Framework masters (GitHub user login or id; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
-| `github.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
 | `github.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. |
-| `github.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (GitHub user login or id), overriding the top-level master list. |
-| `github.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `github.endpoints[].app_id` | string \| number | yes | — | GitHub App ID |
 | `github.endpoints[].private_key` | string | yes | — | GitHub App private key (PEM content or file path) |
 | `github.endpoints[].webhook_secret` | string | no | — | Webhook HMAC secret; enables httpHostToken POST route |
@@ -902,8 +879,6 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `icqq.master` | string \| number | yes | — | Framework master QQ uin list for approval and AI/tool permissions. endpoints[i].master can override this value. |
-| `icqq.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted QQ uin list, below master authority. |
 | `icqq.password` | string | no | — | QQ password (optional); scan a QR code to log in when omitted. |
 | `icqq.platform` | number: `1`, `2`, `3`, `4`, `5`, `6`, `7` | no | `1` | Login device platform: 1=Android, 2=aPad, 3=Watch, 4=iMac, 5=iPad, 6=Tim, 7=Custom. |
 | `icqq.ver` | string | no | — | Protocol version, only applicable when the selected platform has multiple versions. Uses the latest when omitted. |
@@ -919,8 +894,6 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `icqq.ntLogin` | boolean | no | — | Use the NT login method. |
 | `icqq.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
 | `icqq.endpoints[].id` | string | yes | — | QQ uin |
-| `icqq.endpoints[].master` | string \| number | no | — | Master QQ uin list for this endpoint, overriding the top-level master list. |
-| `icqq.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `icqq.endpoints[].password` | string | no | — | QQ password for this endpoint. |
 | `icqq.endpoints[].platform` | number: `1`, `2`, `3`, `4`, `5`, `6`, `7` | no | — | Login device platform: 1=Android, 2=aPad, 3=Watch, 4=iMac, 5=iPad, 6=Tim, 7=Custom. |
 | `icqq.endpoints[].ver` | string | no | — | Protocol version. |
@@ -988,8 +961,6 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `juejin.notify.kind` | string: `"private"`, `"group"`, `"channel"` | no | `"private"` | Conversation type. |
 | `juejin.notify.id` | string \| number | yes | — | Conversation id: your account for a private chat, or the group id. |
 | `juejin.articles` | array&lt;string&gt; | no | — | Allowed articles: article IDs (quoted strings) or https://juejin.cn/post/&lt;id&gt; links. Only these articles are polled; there is no site-wide search. Empty means nothing is polled. |
-| `juejin.master` | string \| number | no | — | Framework masters (Juejin uid). endpoints[i].master can override this value. |
-| `juejin.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users (Juejin uid). |
 | `juejin.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
 | `juejin.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
 | `juejin.endpoints[].id` | string | yes | — | Local endpoint name, not a Juejin account ID. |
@@ -1005,8 +976,6 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `juejin.endpoints[].notify.kind` | string: `"private"`, `"group"`, `"channel"` | no | `"private"` | Conversation type. |
 | `juejin.endpoints[].notify.id` | string \| number | yes | — | Conversation id: your account for a private chat, or the group id. |
 | `juejin.endpoints[].apiBaseUrl` | string | no | `"https://api.juejin.cn"` | — |
-| `juejin.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (Juejin uid). |
-| `juejin.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `juejin.endpoints[].commandPrefix` | string | no | — | — |
 | `juejin.endpoints[].nickname` | string \| null | no | — | Fallback account nickname |
 | `juejin.endpoints[].profile` | object | no | — | Fallback account profile |
@@ -1040,11 +1009,7 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `kook.max_retry` | number | no | `3` | — |
 | `kook.ignore` | string: `"bot"`, `"self"` | no | `"bot"` | — |
 | `kook.logLevel` | string: `"trace"`, `"debug"`, `"info"`, `"warn"`, `"error"`, `"fatal"`, `"mark"`, `"off"` | no | `"info"` | — |
-| `kook.master` | string \| number | no | — | Framework masters (KOOK user id; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
-| `kook.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
 | `kook.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: each entry defines an endpoint. id and token are required; other fields override instance defaults. |
-| `kook.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (KOOK user id), overriding the top-level master list. |
-| `kook.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `kook.endpoints[].token` | string | yes | — | KOOK bot token |
 | `kook.endpoints[].connection` | string: `"websocket"`, `"webhook"` | no | — | — |
 | `kook.endpoints[].webhookPath` | string | no | — | — |
@@ -1091,11 +1056,7 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `lark.webhookPath` | string | no | `"/lark/webhook"` | — |
 | `lark.apiBaseUrl` | string | no | — | — |
 | `lark.isFeishu` | boolean | no | `true` | — |
-| `lark.master` | string \| number | no | — | Framework masters (Lark/Feishu open_id or user_id; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
-| `lark.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
 | `lark.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
-| `lark.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (Lark/Feishu open_id or user_id), overriding the top-level master list. |
-| `lark.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `lark.endpoints[].appId` | string | yes | — | Lark app ID |
 | `lark.endpoints[].appSecret` | string | yes | — | Lark app secret |
 | `lark.endpoints[].encryptKey` | string | no | — | Lark encrypt key |
@@ -1146,11 +1107,7 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | --- | --- | --- | --- | --- |
 | `line.webhookPath` | string | no | `"/line/webhook"` | — |
 | `line.apiBaseUrl` | string | no | `"https://api.line.me"` | — |
-| `line.master` | string \| number | no | — | Framework masters (LINE user id; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
-| `line.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
 | `line.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
-| `line.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (LINE user id), overriding the top-level master list. |
-| `line.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `line.endpoints[].channelSecret` | string | yes | — | LINE channel secret |
 | `line.endpoints[].channelAccessToken` | string | yes | — | LINE channel access token |
 | `line.endpoints[].webhookPath` | string | no | — | — |
@@ -1186,11 +1143,7 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `milky.connection` | string: `"ws"`, `"sse"`, `"webhook"`, `"wss"` | no | `"ws"` | ws (default), sse (EventSource client), webhook or wss (webhook/wss via httpHostToken) |
 | `milky.reconnect_interval` | number | no | `5000` | — |
 | `milky.heartbeat_interval` | number | no | `30000` | — |
-| `milky.master` | string \| number | no | — | Framework masters (QQ uin; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
-| `milky.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
 | `milky.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
-| `milky.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (QQ uin), overriding the top-level master list. |
-| `milky.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `milky.endpoints[].connection` | string: `"ws"`, `"sse"`, `"webhook"`, `"wss"` | no | — | — |
 | `milky.endpoints[].baseUrl` | string | yes | — | Milky HTTP API base URL (required); WS event path is derived as ws(s)://host/event |
 | `milky.endpoints[].path` | string | no | — | Path for webhook / reverse-wss |
@@ -1229,11 +1182,7 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `napcat.reconnect_interval` | number | no | `5000` | — |
 | `napcat.heartbeat_interval` | number | no | `30000` | — |
 | `napcat.poll_interval` | number | no | `30000` | — |
-| `napcat.master` | string \| number | no | — | Framework masters (QQ uin; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
-| `napcat.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
 | `napcat.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
-| `napcat.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (QQ uin), overriding the top-level master list. |
-| `napcat.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `napcat.endpoints[].connection` | string: `"ws"`, `"wss"`, `"http"` | no | — | — |
 | `napcat.endpoints[].url` | string | no | — | NapCat WebSocket URL (required for connection: ws) |
 | `napcat.endpoints[].path` | string | no | — | WS path for reverse-wss |
@@ -1274,11 +1223,7 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `onebot11.connection` | string: `"ws"`, `"wss"` | no | `"ws"` | connection: ws (forward WS client, default) or wss (reverse WS via httpHostToken) |
 | `onebot11.reconnect_interval` | number | no | `5000` | — |
 | `onebot11.heartbeat_interval` | number | no | `30000` | — |
-| `onebot11.master` | string \| number | no | — | Framework masters (platform user id; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
-| `onebot11.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
 | `onebot11.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
-| `onebot11.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (platform user id), overriding the top-level master list. |
-| `onebot11.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `onebot11.endpoints[].connection` | string: `"ws"`, `"wss"` | no | — | — |
 | `onebot11.endpoints[].url` | string | no | — | OneBot implementation WebSocket URL (required for connection: ws) |
 | `onebot11.endpoints[].path` | string | no | — | WS path for reverse-wss (connection: wss) |
@@ -1316,11 +1261,7 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `onebot12.connection` | string: `"ws"`, `"webhook"`, `"wss"` | no | `"ws"` | ws (default), webhook (httpHostToken POST), or wss (reverse WS via httpHostToken) |
 | `onebot12.reconnect_interval` | number | no | `5000` | — |
 | `onebot12.heartbeat_interval` | number | no | `30000` | — |
-| `onebot12.master` | string \| number | no | — | Framework masters (platform user id; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
-| `onebot12.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
 | `onebot12.endpoints` | array&lt;object&gt; | yes | — | Each endpoint explicitly selects platform and userId. id is the local account name; other connection fields override instance defaults. |
-| `onebot12.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (platform user id), overriding the top-level master list. |
-| `onebot12.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `onebot12.endpoints[].connection` | string: `"ws"`, `"webhook"`, `"wss"` | no | — | — |
 | `onebot12.endpoints[].url` | string | no | — | OneBot implementation WebSocket URL (required for connection: ws) |
 | `onebot12.endpoints[].path` | string | no | — | HTTP/WS path for webhook or reverse-wss |
@@ -1361,8 +1302,6 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `qq.mode` | string: `"websocket"`, `"webhook"`, `"middleware"` | no | `"websocket"` | WebSocket gateway (default). webhook/middleware use httpHostToken POST. |
 | `qq.sandbox` | boolean | no | `false` | — |
 | `qq.botKind` | string: `"public"`, `"private"` | no | `"public"` | Public/private bot type. Both include GROUP_AND_C2C_EVENT; channel messages use PUBLIC_GUILD_MESSAGES or GUILD_MESSAGES respectively. Used to derive intents when they are not explicitly configured. |
-| `qq.master` | string \| number | no | — | Framework masters (openid) for endpoint management and AI/tool permissions. endpoints[i].master can override this value. |
-| `qq.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
 | `qq.intents` | array&lt;string&gt; | no | — | WebSocket Identify intents. When omitted, derived from botKind; public includes PUBLIC_GUILD_MESSAGES. |
 | `qq.accessTokenUrl` | string | no | — | — |
 | `qq.gatewayUrl` | string | no | — | — |
@@ -1372,8 +1311,6 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `qq.endpoints[].secret` | string | yes | — | QQ official bot secret |
 | `qq.endpoints[].mode` | string: `"websocket"`, `"webhook"`, `"middleware"` | no | — | — |
 | `qq.endpoints[].sandbox` | boolean | no | — | — |
-| `qq.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (openid), overriding the top-level master list. |
-| `qq.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `qq.endpoints[].botKind` | string: `"public"`, `"private"` | no | — | Override top-level botKind (public/private) when deriving this endpoint's intents. |
 | `qq.endpoints[].intents` | array&lt;string&gt; | no | — | Override top-level intents. |
 | `qq.endpoints[].accessTokenUrl` | string | no | — | — |
@@ -1435,11 +1372,7 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | --- | --- | --- | --- | --- |
 | `sandbox.streaming` | boolean | no | `true` | Publish supported replies while generating. Set false to send only complete replies. |
 | `sandbox.streamingIntervalMs` | number | no | `500` | Minimum delay in milliseconds between reply updates; the first update is immediate. |
-| `sandbox.master` | string \| number | no | — | Framework masters (sandbox client id, distinct from endpoints[].owner; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
-| `sandbox.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
 | `sandbox.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
-| `sandbox.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (sandbox client id, distinct from endpoints[].owner), overriding the top-level master list. |
-| `sandbox.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `sandbox.endpoints[].owner` | string | no | — | Sandbox owner user ID |
 | `sandbox.endpoints[].streaming` | boolean | no | — | Publish supported replies while generating. Set false to send only complete replies. |
 | `sandbox.endpoints[].streamingIntervalMs` | number | no | — | Minimum delay in milliseconds between reply updates; the first update is immediate. |
@@ -1473,11 +1406,7 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | --- | --- | --- | --- | --- |
 | `satori.connection` | string: `"ws"`, `"webhook"` | no | `"ws"` | ws (default) or webhook (httpHostToken POST route) |
 | `satori.heartbeat_interval` | number | no | `10000` | WS PING interval in milliseconds |
-| `satori.master` | string \| number | no | — | Framework masters (platform user id; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
-| `satori.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
 | `satori.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: each entry selects an explicit platform and userId. id and baseUrl are required; remaining fields override instance defaults. |
-| `satori.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (platform user id), overriding the top-level master list. |
-| `satori.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `satori.endpoints[].baseUrl` | string | yes | — | Satori SDK HTTP/WS base URL (e.g. http://127.0.0.1:5140) |
 | `satori.endpoints[].connection` | string: `"ws"`, `"webhook"` | no | — | — |
 | `satori.endpoints[].token` | string | no | — | Bearer token for API and WS IDENTIFY |
@@ -1516,11 +1445,7 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `slack.socketMode` | boolean | no | `true` | Prefer Socket Mode (default). Set false for HTTP Events via httpHostToken. |
 | `slack.webhookPath` | string | no | `"/slack/events"` | — |
 | `slack.clientPingTimeout` | number | no | `15000` | Socket Mode client ping timeout (ms) |
-| `slack.master` | string \| number | no | — | Framework masters (Slack user id; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
-| `slack.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
 | `slack.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
-| `slack.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (Slack user id), overriding the top-level master list. |
-| `slack.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `slack.endpoints[].token` | string | yes | — | Bot User OAuth Token (xoxb-...) |
 | `slack.endpoints[].signingSecret` | string | no | — | Required for HTTP Events API (socketMode: false) |
 | `slack.endpoints[].appToken` | string | no | — | App-Level Token (xapp-...) for Socket Mode |
@@ -1571,11 +1496,7 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `telegram.webhook.secretToken` | string | no | — | Verified via X-Telegram-Bot-Api-Secret-Token. |
 | `telegram.allowedUpdates` | array&lt;string&gt; | no | `["message","callback_query"]` | — |
 | `telegram.apiBaseUrl` | string | no | `"https://api.telegram.org"` | — |
-| `telegram.master` | string \| number | no | — | Framework masters (Telegram user id; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
-| `telegram.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
 | `telegram.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
-| `telegram.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (Telegram user id), overriding the top-level master list. |
-| `telegram.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `telegram.endpoints[].token` | string | yes | — | Telegram bot token |
 | `telegram.endpoints[].polling` | boolean | no | — | — |
 | `telegram.endpoints[].webhook` | object | no | — | — |
@@ -1621,11 +1542,7 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `wechat-mp.encryptMode` | string: `"plain"`, `"compatible"`, `"secure"` | no | — | Default follows encrypt: 'plain' when encrypt=false, 'compatible' when encrypt=true |
 | `wechat-mp.replyMode` | string: `"passive"`, `"customer_service"` | no | `"passive"` | — |
 | `wechat-mp.passiveReplyTimeoutMs` | number | no | `4500` | — |
-| `wechat-mp.master` | string \| number | no | — | Framework masters (WeChat OpenID; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
-| `wechat-mp.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
 | `wechat-mp.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
-| `wechat-mp.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (WeChat OpenID), overriding the top-level master list. |
-| `wechat-mp.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `wechat-mp.endpoints[].appId` | string | yes | — | WeChat MP app ID |
 | `wechat-mp.endpoints[].appSecret` | string | yes | — | WeChat MP app secret |
 | `wechat-mp.endpoints[].token` | string | yes | — | WeChat MP callback token |
@@ -1665,11 +1582,7 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | --- | --- | --- | --- | --- |
 | `wecom.webhookPath` | string | no | `"/wecom/callback"` | — |
 | `wecom.apiBaseUrl` | string | no | `"https://qyapi.weixin.qq.com"` | — |
-| `wecom.master` | string \| number | no | — | Framework masters (WeCom userid; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
-| `wecom.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
 | `wecom.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
-| `wecom.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (WeCom userid), overriding the top-level master list. |
-| `wecom.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `wecom.endpoints[].corpId` | string | yes | — | WeCom corp ID |
 | `wecom.endpoints[].agentSecret` | string | yes | — | WeCom agent secret |
 | `wecom.endpoints[].token` | string | yes | — | WeCom callback token |
@@ -1710,11 +1623,7 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `weixin-ilink.cdnBaseUrl` | string | no | `"https://novac2c.cdn.weixin.qq.com/c2c"` | — |
 | `weixin-ilink.longPollTimeoutMs` | number | no | `35000` | — |
 | `weixin-ilink.dataDir` | string | no | `"data/weixin-ilink"` | Endpoint state root for credentials, cursors, context tokens, and media |
-| `weixin-ilink.master` | string \| number | no | — | Framework masters (Weixin user id; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
-| `weixin-ilink.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
 | `weixin-ilink.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
-| `weixin-ilink.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (Weixin user id), overriding the top-level master list. |
-| `weixin-ilink.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `weixin-ilink.endpoints[].botToken` | string | no | — | iLink bot token; omit to load endpoint state or start QR login |
 | `weixin-ilink.endpoints[].id` | string | yes | — | Weixin iLink bot name |
 | `weixin-ilink.endpoints[].botAgent` | string | no | — | — |
@@ -1746,6 +1655,8 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 ### process-monitor
 
 [`plugins/features/process-monitor/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/features/process-monitor/schema.json)
+
+> Layered configuration (ADR 0050 / 0055) — Levels: `global`, `adapter`, `endpoint`, `conversation`; fields: global only; conversation fields: switch only
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -1797,6 +1708,8 @@ _This Schema declares no fields._
 
 [`plugins/games/roulette/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/games/roulette/schema.json)
 
+> Layered configuration (ADR 0050 / 0055) — Levels: `global`, `adapter`, `endpoint`, `conversation`; fields: global only; conversation fields: switch only
+
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
 | `roulette.chambers` | integer | no | `6` | 弹巢数量，其中一发是实弹 |
@@ -1832,6 +1745,8 @@ _This Schema declares no fields._
 ### activity-feedback
 
 [`plugins/services/activity-feedback/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/services/activity-feedback/schema.json)
+
+> Layered configuration (ADR 0050 / 0055) — Levels: `global`, `adapter`, `endpoint`, `conversation`; fields: global only; conversation fields: switch only
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -2320,6 +2235,8 @@ _This Schema declares no fields._
 
 [`plugins/utils/60s/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/60s/schema.json)
 
+> Layered configuration (ADR 0050 / 0055) — Levels: `global`, `adapter`, `endpoint`, `conversation`; fields: global only; conversation fields: switch only
+
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
 | `60s.apiBase` | string | no | `"https://60s.viki.moe"` | 60s API base URL |
@@ -2327,6 +2244,8 @@ _This Schema declares no fields._
 ### answers
 
 [`plugins/utils/answers/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/answers/schema.json)
+
+> Layered configuration (ADR 0050 / 0055) — Levels: `global`, `adapter`, `endpoint`, `conversation`; every field can be overridden per adapter / account; conversation fields: `dailyStable`, `quizTimeoutSeconds`, `enableDrivingQuiz`; in-chat self-service: `quizTimeoutSeconds`, `enableDrivingQuiz`
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -2338,6 +2257,8 @@ _This Schema declares no fields._
 ### bilibili
 
 [`plugins/utils/bilibili/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/bilibili/schema.json)
+
+> Layered configuration (ADR 0050 / 0055) — Levels: `global`, `adapter`, `endpoint`, `conversation`; fields: global only; conversation fields: switch only
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -2354,6 +2275,8 @@ _This Schema declares no fields._
 ### calendar
 
 [`plugins/utils/calendar/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/calendar/schema.json)
+
+> Layered configuration (ADR 0050 / 0055) — Levels: `global`, `adapter`, `endpoint`, `conversation`; fields: global only; conversation fields: switch only
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -2394,6 +2317,8 @@ _This Schema declares no fields._
 
 [`plugins/utils/content-moderation/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/content-moderation/schema.json)
 
+> Layered configuration (ADR 0050 / 0055) — Levels: `global`, `adapter`, `endpoint`, `conversation`; fields: global only; conversation fields: switch only
+
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
 | `content-moderation.groupModeration` | array&lt;object&gt; | no | `[]` | Exact scope for automatic advertising/abuse moderation. Disabled when unconfigured. Requires AI, atomic persistent state and adapter group-management support. |
@@ -2405,10 +2330,9 @@ _This Schema declares no fields._
 | `content-moderation.onError` | string: `"open"`, `"closed"` | no | `"open"` | Default policy when a review source fails: open treats it as passed; closed treats it as critical. |
 | `content-moderation.maskChar` | string | no | `"*"` | Text masking character. |
 | `content-moderation.replyTemplate` | string | no | — | Reply text for the reply action. When omitted, use the message language; explicit text is preserved. |
-| `content-moderation.masters` | array&lt;string&gt; | no | `[]` | Additional user IDs treated as masters, merged with endpoint masters as a fallback. |
 | `content-moderation.inbound` | object | no | — | — |
 | `content-moderation.inbound.enabled` | boolean | no | `true` | — |
-| `content-moderation.inbound.bypassMasters` | boolean | no | `true` | Skip inbound review for masters. |
+| `content-moderation.inbound.bypass` | array&lt;string&gt; | no | `["owner","platform:admin"]` | Senders matching any of these permit expressions skip inbound review (ADR 0056 §5 built-in DSL, the same evaluator as commands and tools). Moderation is a platform function: the default exempts the zhin owner and platform group owners / admins (platform:admin); [] reviews everyone. |
 | `content-moderation.inbound.whitelist` | object | no | — | — |
 | `content-moderation.inbound.whitelist.userIds` | array&lt;string&gt; | no | `[]` | — |
 | `content-moderation.inbound.whitelist.conversationIds` | array&lt;string&gt; | no | `[]` | — |
@@ -2440,6 +2364,8 @@ _This Schema declares no fields._
 
 [`plugins/utils/earthquake/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/earthquake/schema.json)
 
+> Layered configuration (ADR 0050 / 0055) — Levels: `global`, `adapter`, `endpoint`, `conversation`; fields: global only; conversation fields: switch only
+
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
 | `earthquake.sources` | array&lt;string: `"cenc"`, `"usgs"`&gt; | no | `["cenc","usgs"]` | Enabled data sources in priority order. The first source supplies location text when merging the same earthquake; other sources cover a failed source. |
@@ -2463,6 +2389,8 @@ _This Schema declares no fields._
 ### group-suite
 
 [`plugins/utils/group-suite/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/group-suite/schema.json)
+
+> Layered configuration (ADR 0050 / 0055) — Levels: `global`, `adapter`, `endpoint`, `conversation`; global only (other fields can be overridden per adapter / account): `keywordReply`, `teachAllowRegex`, `welcomeConversations`, `ephemeralKeywords`; conversation fields: `welcomeMessage`, `basePointsMin`, `basePointsMax`, `streakBonus`, `streakCap`, `rankSize`, `teachMaxPerGroup`, `teachCooldownMs`, `teachPageSize`; in-chat self-service: `welcomeMessage`, `rankSize`, `teachCooldownMs`, `teachPageSize`
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -2493,6 +2421,8 @@ _This Schema declares no fields._
 
 [`plugins/utils/ledger/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/ledger/schema.json)
 
+> Layered configuration (ADR 0050 / 0055) — Levels: `global`, `adapter`, `endpoint`, `conversation`; global only (other fields can be overridden per adapter / account): `timezone`, `reportTime`; conversation fields: `reportWhenEmpty`
+
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
 | `ledger.timezone` | string | no | `"Asia/Shanghai"` | IANA timezone used to calculate today, this week (starting Monday), this month and daily-report dates. |
@@ -2508,6 +2438,8 @@ _This Schema declares no fields._
 ### lottery
 
 [`plugins/utils/lottery/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/lottery/schema.json)
+
+> Layered configuration (ADR 0050 / 0055) — Levels: `global`, `adapter`, `endpoint`, `conversation`; fields: global only; conversation fields: switch only
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -2543,6 +2475,8 @@ _This Schema declares no fields._
 
 [`plugins/utils/nettools/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/nettools/schema.json)
 
+> Layered configuration (ADR 0050 / 0055) — Levels: `global`, `adapter`, `endpoint`, `conversation`; fields: global only; conversation fields: switch only
+
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
 | `nettools.cooldownSeconds` | integer | no | `10` | Per-user cooldown in seconds, shared by all nettools commands and tools (0 disables) |
@@ -2564,6 +2498,8 @@ _This Schema declares no fields._
 
 [`plugins/utils/reminder/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/reminder/schema.json)
 
+> Layered configuration (ADR 0050 / 0055) — Levels: `global`, `adapter`, `endpoint`, `conversation`; fields: global only; conversation fields: switch only
+
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
 | `reminder.timezone` | string | no | `"UTC"` | IANA timezone for natural reminder times and display. Absolute ISO times still require an explicit offset. |
@@ -2577,6 +2513,8 @@ _This Schema declares no fields._
 
 [`plugins/utils/repeater/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/repeater/schema.json)
 
+> Layered configuration (ADR 0050 / 0055) — Levels: `global`, `adapter`, `endpoint`, `conversation`; every field can be overridden per adapter / account; conversation fields: `threshold`, `cooldown`; in-chat self-service: `threshold`
+
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
 | `repeater.threshold` | number | no | `3` | Minimum distinct users needed to trigger repetition. |
@@ -2586,6 +2524,8 @@ _This Schema declares no fields._
 ### rss
 
 [`plugins/utils/rss/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/rss/schema.json)
+
+> Layered configuration (ADR 0050 / 0055) — Levels: `global`, `adapter`, `endpoint`, `conversation`; fields: global only; conversation fields: switch only
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |

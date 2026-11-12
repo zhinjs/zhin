@@ -1,52 +1,111 @@
 /**
  * PermissionHost — 统一鉴权面。
  *
- * 解析顺序：builtin → platform(adapter,perm) → 自定义 register → deny。
+ * 解析顺序：builtin（会话、发言者 zhin 角色、发言者平台身份、机器人自身平台身份，ADR 0056 §5）
+ * → 自定义 register → deny。命令、中间件、Agent 工具 / 技能与按钮回调共用这一个评估器。
  */
 
-import type { PermissionSubject } from './subject.js';
-import {
-  checkBuiltinPermit,
-  isBuiltinPermit,
-  isPlatformPermit,
-  parsePlatformPermitName,
-} from './builtin.js';
+import type { PermissionChatRoleLevels, PermissionPlatformStanding, PermissionSubject } from './subject.js';
+import { normalizePermissionChatRoleLevels, normalizePermissionStanding } from './subject.js';
+import { checkBuiltinPermit, isBuiltinPermit, permitsNeedBotStanding } from './builtin.js';
+
+/**
+ * Resolves the receiving Bot account's own standing in the source's conversation (ADR 0056 §1).
+ * `cachedOnly`: answer from the cache, never start a platform lookup (middleware gates).
+ * Undefined / throwing = unknown, so every `bot:*` permit fails.
+ */
+export type BotStandingResolver = (
+  source: unknown,
+  options: Readonly<{ cachedOnly?: boolean; signal?: AbortSignal }>,
+) => PermissionPlatformStanding | undefined | Promise<PermissionPlatformStanding | undefined>;
+
+/** The sender's current zhin chat role facts (`{}` = no role). */
+export interface PermissionSenderRoles {
+  readonly chatRole?: 'owner' | 'admin' | 'trusted';
+  readonly chatRoleLevels?: PermissionChatRoleLevels;
+}
+
+/**
+ * Re-reads the sender's chat role for a message-like `source` (`{ conversation, endpointId?,
+ * sender: { id } }`) from the role store (ADR 0056 §5: execution-time re-checks). Undefined /
+ * throwing = the source cannot be resolved.
+ */
+export type SenderRoleResolver = (source: unknown) => PermissionSenderRoles | undefined;
+
+export interface PermissionCheckOptions {
+  /** Original message-like input; lets the host resolve `subject.bot` for `bot:*` permits. */
+  readonly source?: unknown;
+  readonly cachedOnly?: boolean;
+  readonly signal?: AbortSignal;
+}
 
 export type PermissionChecker = (
   name: string,
   subject: PermissionSubject,
 ) => boolean | Promise<boolean>;
 
-export type PlatformPermitChecker = (
-  perm: string,
-  subject: PermissionSubject,
-) => boolean | Promise<boolean>;
-
 export class PermissionHost {
   readonly #customEntries: CustomEntry[] = [];
-  readonly #platformCheckers = new Map<string, PlatformPermitChecker[]>();
+  #botStanding: BotStandingResolver | undefined;
+  #senderRoles: SenderRoleResolver | undefined;
+
+  /** Installs the resolver of the sender's current chat role (the IM Runtime does, over the role store). */
+  setSenderRoleResolver(resolver: SenderRoleResolver): () => void {
+    this.#senderRoles = resolver;
+    return () => { if (this.#senderRoles === resolver) this.#senderRoles = undefined; };
+  }
+
+  /**
+   * The sender's current chat role for `source`; undefined when no resolver is installed or the
+   * source cannot be resolved (callers then keep the facts they already have).
+   */
+  currentSenderRoles(source: unknown): PermissionSenderRoles | undefined {
+    if (!this.#senderRoles) return undefined;
+    let facts: PermissionSenderRoles | undefined;
+    try { facts = this.#senderRoles(source); } catch { return undefined; }
+    if (!facts) return undefined;
+    const role = facts.chatRole === 'owner' || facts.chatRole === 'admin' || facts.chatRole === 'trusted' ? facts.chatRole : undefined;
+    const levels = role ? normalizePermissionChatRoleLevels(facts.chatRoleLevels) : undefined;
+    return Object.freeze({ ...(role ? { chatRole: role } : {}), ...(levels ? { chatRoleLevels: levels } : {}) });
+  }
+
+  /** Installs the resolver of `subject.bot` (the IM Runtime does, over the Adapter index cache). */
+  setBotStandingResolver(resolver: BotStandingResolver): () => void {
+    this.#botStanding = resolver;
+    return () => { if (this.#botStanding === resolver) this.#botStanding = undefined; };
+  }
+
+  /**
+   * Returns `subject` with `bot` filled when a permit needs it, it is not set yet and a resolver
+   * and source exist. Resolution failures leave `bot` unset (fail closed).
+   */
+  async withBotStanding(permits: readonly string[], subject: PermissionSubject, options: PermissionCheckOptions = {}): Promise<PermissionSubject> {
+    if (subject.bot || options.source === undefined || !this.#botStanding || !permitsNeedBotStanding(permits)) return subject;
+    let bot: PermissionPlatformStanding | undefined;
+    try {
+      bot = normalizePermissionStanding(await this.#botStanding(options.source, {
+        ...(options.cachedOnly ? { cachedOnly: true } : {}), ...(options.signal ? { signal: options.signal } : {}),
+      }));
+    } catch { bot = undefined; }
+    return bot ? Object.freeze({ ...subject, bot }) : subject;
+  }
+
+  /** First permit that fails (AND order), or undefined when all pass. */
+  async firstDenied(permits: readonly string[], subject: PermissionSubject, options: PermissionCheckOptions = {}): Promise<string | undefined> {
+    const prepared = await this.withBotStanding(permits, subject, options);
+    for (const permit of permits) {
+      if (!(await this.check(permit, prepared))) return permit;
+    }
+    return undefined;
+  }
 
   /**
    * 检查单条 permit 是否通过。
-   * 解析顺序：builtin → platform → custom → deny。
+   * 解析顺序：builtin → custom → deny。
    */
   async check(name: string, subject: PermissionSubject): Promise<boolean> {
     if (isBuiltinPermit(name)) {
       return checkBuiltinPermit(name, subject);
-    }
-
-    if (isPlatformPermit(name)) {
-      const parsed = parsePlatformPermitName(name);
-      if (!parsed) return false;
-      if (subject.adapter !== undefined && subject.adapter !== parsed.adapter) {
-        const last = subject.adapter.includes('/')
-          ? subject.adapter.slice(subject.adapter.lastIndexOf('/') + 1)
-          : subject.adapter;
-        if (last !== parsed.adapter && !last.startsWith(`${parsed.adapter}-`)) return false;
-      }
-      const checkers = this.#platformCheckers.get(parsed.adapter);
-      if (!checkers || checkers.length === 0) return false;
-      return checkers[checkers.length - 1]!(parsed.perm, subject);
     }
 
     for (const entry of this.#customEntries) {
@@ -62,11 +121,8 @@ export class PermissionHost {
   /**
    * AND 检查多条 permit。
    */
-  async checkAll(permits: readonly string[], subject: PermissionSubject): Promise<boolean> {
-    for (const permit of permits) {
-      if (!(await this.check(permit, subject))) return false;
-    }
-    return true;
+  async checkAll(permits: readonly string[], subject: PermissionSubject, options: PermissionCheckOptions = {}): Promise<boolean> {
+    return (await this.firstDenied(permits, subject, options)) === undefined;
   }
 
   /**
@@ -82,27 +138,6 @@ export class PermissionHost {
     return () => {
       const index = this.#customEntries.indexOf(entry);
       if (index >= 0) this.#customEntries.splice(index, 1);
-    };
-  }
-
-  /**
-   * 注册平台级 checker。
-   * 当 permit 为 `platform(adapter, perm)` 且 adapter 匹配时调用。
-   */
-  registerPlatform(
-    adapter: string,
-    checker: PlatformPermitChecker,
-  ): () => void {
-    const key = String(adapter);
-    const list = this.#platformCheckers.get(key) ?? [];
-    list.push(checker);
-    this.#platformCheckers.set(key, list);
-    return () => {
-      const current = this.#platformCheckers.get(key);
-      if (!current) return;
-      const index = current.lastIndexOf(checker);
-      if (index >= 0) current.splice(index, 1);
-      if (current.length === 0) this.#platformCheckers.delete(key);
     };
   }
 }

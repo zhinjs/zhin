@@ -16,7 +16,7 @@ tags:
 
 # Zhin 插件测试（Plugin Runtime）
 
-为 Plugin Runtime 插件写 Vitest 测试。**不要**再测 `new Plugin('/path')` / `usePlugin` / `MessageCommand` 旧生命周期——CLI 路径是 `zhin runtime start`。
+为 Plugin Runtime 插件写 Vitest 测试。**不要**再测 `new Plugin('/path')` / `usePlugin` / `MessageCommand` 旧生命周期——CLI 路径是 `zhin start`（`pnpm dev` = `zhin start --foreground --watch source config`）。
 
 ## 适用场景
 

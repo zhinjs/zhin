@@ -1,7 +1,7 @@
 import { createMessages } from '@zhin.js/plugin-runtime';
 
 export const endpointCommandMessages = createMessages({
-  forbidden: { 'zh-CN': '仅 master 可执行 {adapter} endpoint 管理命令', en: 'Only master may manage {adapter} endpoints' },
+  forbidden: { 'zh-CN': '仅聊天角色 owner 可执行 {adapter} endpoint 管理命令', en: 'Only the chat role owner may manage {adapter} endpoints' },
   running: { 'zh-CN': '【运行中的 {adapter} endpoints】', en: '[Running {adapter} endpoints]' },
   runtimeConfigured: { 'zh-CN': '【{adapter} 持久账号配置】', en: '[Persistent {adapter} accounts]' },
   migrationRequired: { 'zh-CN': '请管理员先在 Console 核对账号清单并确认一次迁移；当前尚未写入。', en: 'An administrator must review and confirm the one-time account migration in Console. Nothing was written.' },

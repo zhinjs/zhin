@@ -8,7 +8,7 @@ import { bilibiliRuntimeToken } from '../../../src/runtime.js';
 import { getBiliState, getBiliSubs } from '../../../src/store.js';
 
 export default defineCommand<BilibiliConfig>({
-  description: '取消当前会话对某个 UP 主的订阅（群聊限群主、管理员或机器人主人）', descriptionI18n: { en: "Unsubscribe this conversation from a Bilibili creator (group owner, administrator or bot master required in groups)" },
+  description: '取消当前会话对某个 UP 主的订阅（群聊限本会话 zhin admin 或 owner）', descriptionI18n: { en: "Unsubscribe this conversation from a Bilibili creator (zhin admin or owner of the conversation required in groups)" },
   params: { uid: { type: 'string', description: 'UP 主 UID 或空间链接', descriptionI18n: { en: "Creator UID or profile URL" } } },
   async execute({ locale, formatCommand, params, input, use, adapter, scene, sender }) {
     const runtime = use(bilibiliRuntimeToken);
