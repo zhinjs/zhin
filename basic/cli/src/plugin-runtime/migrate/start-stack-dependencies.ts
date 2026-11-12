@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { withScaffoldVersionRanges } from '@zhin.js/scaffold-wizard';
 
@@ -13,7 +13,9 @@ export const START_STACK_PACKAGES = Object.freeze(['zhin.js', '@zhin.js/cli', '@
 export type StartStackChange =
   | { readonly kind: 'move'; readonly name: string; readonly version: string }
   | { readonly kind: 'add'; readonly name: string; readonly version: string }
-  | { readonly kind: 'drop-dev-duplicate'; readonly name: string; readonly version: string };
+  | { readonly kind: 'drop-dev-duplicate'; readonly name: string; readonly version: string }
+  /** A scaffold placeholder (`^0.0.0`) in devDependencies; the package is added to dependencies instead. */
+  | { readonly kind: 'drop-dev-placeholder'; readonly name: string; readonly version: string };
 
 export interface StartStackDependencies {
   readonly dependencies: Record<string, string>;
@@ -47,6 +49,8 @@ export function withStartStackDependencies(
     if (!hasDeclaredVersion(dependencies[name]) && hasDeclaredVersion(development)) {
       dependencies[name] = development;
       changes.push({ kind: 'move', name, version: development });
+    } else if (!hasDeclaredVersion(development) && !hasDeclaredVersion(dependencies[name])) {
+      changes.push({ kind: 'drop-dev-placeholder', name, version: development });
     } else {
       changes.push({ kind: 'drop-dev-duplicate', name, version: development });
     }
@@ -65,15 +69,44 @@ export function withStartStackDependencies(
   return { dependencies, devDependencies, changes };
 }
 
+let runningCliVersion: string | undefined;
+/** Version of the CLI running the migration. */
+function currentCliVersion(): string {
+  if (runningCliVersion) return runningCliVersion;
+  try {
+    const manifest = JSON.parse(readFileSync(new URL('../../../package.json', import.meta.url), 'utf8')) as { version?: unknown };
+    runningCliVersion = typeof manifest.version === 'string' ? manifest.version : '0.0.0';
+  } catch { runningCliVersion = '0.0.0'; }
+  return runningCliVersion;
+}
+
+/** `major.minor` of the first version in a specifier (`^1.2.3`, `~1.2`, `1.2.x`, `>=1.2.0 <2`). */
+function releaseLine(spec: string): readonly [number, number] | undefined {
+  const match = /(\d+)\.(\d+)/u.exec(spec);
+  return match ? [Number(match[1]), Number(match[2])] : undefined;
+}
+
+/** First release line of `@zhin.js/gateway`: an older CLI line has no gateway of its own. */
+const FIRST_GATEWAY_LINE: readonly [number, number] = [1, 1];
+
 /**
- * The gateway follows the CLI's release line: a dist-tag (`latest`, `next`, …) or a workspace
- * protocol is reused as is; any other specifier gets the gateway range released together with
- * this CLI (the scaffold stack ranges), falling back to `latest` when none is known.
+ * The gateway follows the project CLI's release line: a dist-tag (`latest`, `next`, …) or a
+ * workspace protocol is reused as is; a CLI on the release line of the CLI running the migration
+ * gets the gateway range released together with it (the scaffold stack ranges); a CLI kept on
+ * another line (`1.1.20` while migrating with 1.2) gets the gateway of that line (`~1.1.0`), so
+ * the two are not mismatched. Unknown specifiers fall back to the scaffold range, else `latest`.
  */
-export function gatewayRangeFor(cliSpec: string): string {
+export function gatewayRangeFor(cliSpec: string, runningCli: string = currentCliVersion()): string {
   const spec = cliSpec.trim();
   if (/^workspace:/u.test(spec) || /^[a-z][a-z0-9-]*$/iu.test(spec)) return spec;
-  return withScaffoldVersionRanges({ '@zhin.js/gateway': LATEST })['@zhin.js/gateway'] ?? LATEST;
+  const scaffold = withScaffoldVersionRanges({ '@zhin.js/gateway': LATEST })['@zhin.js/gateway'] ?? LATEST;
+  const project = hasDeclaredVersion(spec) ? releaseLine(spec) : undefined;
+  const running = releaseLine(runningCli);
+  if (!project || !running) return scaffold;
+  if (project[0] === running[0] && project[1] === running[1]) return scaffold;
+  const older = project[0] < FIRST_GATEWAY_LINE[0] || (project[0] === FIRST_GATEWAY_LINE[0] && project[1] < FIRST_GATEWAY_LINE[1]);
+  if (older) return scaffold;
+  return `~${project[0]}.${project[1]}.0`;
 }
 
 const PROJECT_CONFIG_FILES = Object.freeze([

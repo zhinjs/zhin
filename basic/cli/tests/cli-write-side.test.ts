@@ -180,6 +180,39 @@ describe('migrate', () => {
     expect(pkg.devDependencies).toBeUndefined();
   });
 
+  it('derives the gateway range from the project CLI release line, not the migrating CLI', async () => {
+    const { gatewayRangeFor } = await import('../src/plugin-runtime/migrate/start-stack-dependencies.js');
+    const scaffold = gatewayRangeFor('1.2.0', '1.2.9');
+    // A CLI kept on an older line gets that line's gateway.
+    expect(gatewayRangeFor('1.3.4', '1.4.0')).toBe('~1.3.0');
+    expect(gatewayRangeFor('^1.3.0', '1.4.0')).toBe('~1.3.0');
+    expect(gatewayRangeFor('~2.0.1', '1.4.0')).toBe('~2.0.0');
+    // Same line as the migrating CLI: the range released with it; pre-gateway lines and placeholders too.
+    expect(gatewayRangeFor('1.4.2', '1.4.0')).toBe(scaffold);
+    expect(gatewayRangeFor('1.0.9', '1.4.0')).toBe(scaffold);
+    expect(gatewayRangeFor('^0.0.0', '1.4.0')).toBe(scaffold);
+    // Dist-tags and workspace protocols follow the CLI as is.
+    expect(gatewayRangeFor('next', '1.4.0')).toBe('next');
+    expect(gatewayRangeFor('workspace:*', '1.4.0')).toBe('workspace:*');
+  });
+
+  it('says a placeholder ^0.0.0 CLI is replaced, not that dependencies already declare it', () => {
+    fs.writeFileSync(path.join(tmp, 'zhin.config.yml'), 'configVersion: 2\nplugins: {}\n');
+    const pkgPath = path.join(tmp, 'package.json');
+    fs.writeFileSync(pkgPath, JSON.stringify({
+      name: 'bot',
+      engines: { node: '>=22.19.0' },
+      dependencies: { 'zhin.js': '^1.1.0' },
+      devDependencies: { '@zhin.js/cli': '^0.0.0' },
+    }, null, 2));
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    upgradePackageJson(pkgPath, { toLatest: true, dryRun: true });
+    const preview = log.mock.calls.flat().join('\n');
+    expect(preview).toContain('@zhin.js/cli: devDependencies 中的占位版本 ^0.0.0 已移除');
+    expect(preview).not.toContain('@zhin.js/cli: devDependencies 中的重复项已移除');
+    expect(preview).toContain('@zhin.js/cli: + dependencies (latest)');
+  });
+
   it('leaves the CLI of a Plugin package (no project config) in devDependencies', () => {
     const pkgPath = path.join(tmp, 'package.json');
     fs.writeFileSync(pkgPath, JSON.stringify({

@@ -106,7 +106,9 @@ export function upgradePackageJson(pkgPath: string, options: { toLatest: boolean
       }
       const message = change.kind === 'move'
         ? `${change.name}: devDependencies → dependencies (${change.version})`
-        : `${change.name}: devDependencies 中的重复项已移除（dependencies 已声明 / already in dependencies）`;
+        : change.kind === 'drop-dev-placeholder'
+          ? `${change.name}: devDependencies 中的占位版本 ${change.version} 已移除，改在 dependencies 中声明（placeholder removed, declared in dependencies instead）`
+          : `${change.name}: devDependencies 中的重复项已移除（dependencies 已声明 / already in dependencies）`;
       console.log(chalk.cyan(options.dryRun ? `  [dry-run] ${message}` : `  · ${message}`));
     }
     if (stack.changes.length > 0) {
