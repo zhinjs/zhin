@@ -19,6 +19,8 @@ Console 的账号存在项目数据库里（[ADR 0049](../adr/0049-console-rbac.
 | 会话令牌 | 用户名 + 密码登录（`POST {base}/auth/login`） | 浏览器里的 Console。默认 12 小时滑动过期、最长 30 天 |
 | API 令牌 | 用户签发（见下文） | CI、监控、`zhin doctor --live`、MCP / A2A 客户端；命令行从 `ZHIN_CONSOLE_TOKEN` 读取 |
 
+既没有 `http.token` 也还没有所有者时，Host 处于**开放模式**，拥有全部权限，只接受回环地址、且不带 `X-Forwarded-For` / `Forwarded` 的请求（地址未知的请求不算本机）。`http.host` 是非回环地址（如容器里的 `0.0.0.0`）时网关拒绝以开放模式启动：先用 `zhin doctor --fix` 在 `.env` 生成 `HTTP_TOKEN` 并在配置里写 `http.token: ${HTTP_TOKEN}`，或先 `zhin console init` 创建所有者。同机反向代理若不加转发头，开放模式下所有经代理的请求都会被当作本机——放在反向代理后面时务必设置初始化令牌。
+
 所有凭据都以 `Authorization: Bearer …` 发送，不使用 Cookie。登录失败统一返回 401，同一 IP 与用户名 15 分钟内失败 5 次后指数退避（`429`）。
 
 ## 用户 {#users}

@@ -1,25 +1,14 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { canAccessTool } from '@zhin.js/core';
 import { PermissionHost } from '@zhin.js/permission';
-import {
-  checkSlackPlatformPermit,
-  normalizeSlackSenderForPermit,
-  platformPermit,
-} from '../src/platform-permit.js';
-
-function mockSubject(sender: { role?: string; permissions?: string[] }) {
-  return {
-    adapter: 'slack',
-    sender: { id: 'u1', platform: { standing: (sender.role ?? 'member') as never, ...(sender.permissions ? { permissions: sender.permissions } : {}) } },
-    scene: { type: 'group', id: 'C1' },
-  };
-}
+import { platformPermit } from '../src/platform-permit.js';
+import * as adapter from '../src/index.js';
 
 function mockMsg(platformPermissions: string[]) {
   return {
     clientAdapter: 'slack',
     endpointId: 'bot1',
-    conversation: { endpoint: { adapter: 'slack', id: 'bot1' }, kind: 'group', id: 'C1' },
+    conversation: { endpoint: { adapter: 'slack', id: 'bot1' }, kind: 'group', id: 'g1' },
     sender: { id: 'u1', platform: { standing: 'member' as const, permissions: platformPermissions } },
   } as any;
 }
@@ -31,14 +20,10 @@ describe('slack platform-permit', () => {
     host = new PermissionHost();
   });
 
-  it('normalizeSlackSenderForPermit', () => {
-    expect(normalizeSlackSenderForPermit({ isWorkspaceOwner: true }).role).toBe('owner');
-    expect(normalizeSlackSenderForPermit({ isChannelManager: true }).role).toBe('channel_admin');
-  });
-
-  it('checkSlackPlatformPermit', () => {
-    expect(checkSlackPlatformPermit('channel_manager', mockSubject({ role: 'channel_admin', permissions: ['channel_manager'] }))).toBe(true);
-    expect(checkSlackPlatformPermit('workspace_admin', mockSubject({ role: 'member', permissions: [] }))).toBe(false);
+  it('no longer exports the legacy permit resolver / checker (ADR 0056 §5 builtin evaluator only)', () => {
+    expect(adapter).not.toHaveProperty('checkSlackPlatformPermit');
+    expect(adapter).not.toHaveProperty('slackGroupPermitResolver');
+    expect(adapter).not.toHaveProperty('normalizeSlackSenderForPermit');
   });
 
   it('canAccessTool', async () => {

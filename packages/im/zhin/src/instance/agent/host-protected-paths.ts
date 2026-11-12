@@ -1,13 +1,16 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createHostProtectedPaths, type HostProtectedPaths } from '@zhin.js/agent';
+import { GATEWAY_SOCKET_ENV } from '@zhin.js/host-http/bridge';
 import { resolvePluginLifecycleFile } from '@zhin.js/runtime';
 
 /**
  * #1030 P0: the host-owned half of the agent's protected-path set. The agent package ships the
  * conventional names (root config candidates, `package.json`, `schema.json`, `AGENTS.md`, skills
  * dirs); the host knows what only it can know — the project root, the root plugin entry declared
- * in `package.json#zhin.entry`, and where the plugin lifecycle store lives.
+ * in `package.json#zhin.entry`, where the plugin lifecycle store lives, and the management
+ * gateway's actual control endpoint (`ZHIN_GATEWAY_SOCKET`, set by the gateway — including the
+ * `os.tmpdir()` fallback for deep roots): whoever connects there acts as the local owner.
  */
 export async function resolveHostProtectedPaths(
   projectRoot: string,
@@ -27,5 +30,11 @@ export async function resolveHostProtectedPaths(
     // An invalid ZHIN_PLUGIN_LIFECYCLE_FILE already fails host start; fall back to the default location.
     lifecycleFile = resolvePluginLifecycleFile(projectRoot, {});
   }
-  return createHostProtectedPaths({ projectRoot, selfFiles, denyFiles: [lifecycleFile] });
+  const endpoint = environment[GATEWAY_SOCKET_ENV]?.trim();
+  return createHostProtectedPaths({
+    projectRoot,
+    selfFiles,
+    denyFiles: [lifecycleFile],
+    ...(endpoint ? { controlEndpoints: [endpoint] } : {}),
+  });
 }

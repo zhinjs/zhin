@@ -1,6 +1,10 @@
 import { createMessages } from 'zhin.js/i18n';
 
 export const messages = createMessages({
+  "guildRequired": {
+    "zh-CN": "此操作仅支持当前 KOOK 服务器频道",
+    "en": "This operation requires the current KOOK server channel"
+  },
   "unknownAction": {
     "zh-CN": "未知操作: {p0}",
     "en": "Unknown action: {p0}"

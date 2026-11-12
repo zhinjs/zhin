@@ -7,13 +7,17 @@
  * - `standing`：服务器主 → `owner`；持有带「管理员」权限位的角色 → `admin`；否则 `member`。
  *   查询失败、无法判断时不上报（不猜）。
  * - `roles`：发送者持有的服务器角色（id + 名称）。
- * - `permissions`：这些角色权限位的并集，按 KOOK 权限名（snake_case）上报。
+ * - `permissions`：「全体成员」角色（role_id 0，每个成员都持有、事件里不列出）与这些角色权限位的并集，
+ *   按 KOOK 权限名（snake_case）上报；服务器主与持有「管理员」位的成员拥有全部权限，展开为全部权限名。
+ *   机器人自身身份（`inspectSelfStanding`）走同一套规则。
  */
 import { TtlLookupCache } from 'zhin.js/adapter';
 import type { PlatformStanding } from '@zhin.js/im-contract';
 import type { KookClientTransport } from './ws.js';
 
 const CACHE_TTL_MS = 60_000;
+/** 「全体成员」：每个成员都持有的基础角色。 */
+const EVERYONE_ROLE_ID = '0';
 
 /** KOOK 角色权限位（按位序，见 KOOK 开发者文档「权限说明」）。 */
 export const KOOK_ROLE_PERMISSIONS: readonly string[] = Object.freeze([
@@ -55,12 +59,14 @@ export class KookSenderRoleResolver {
     const roleIds = [...new Set((input.authorRoles ?? []).map(String))];
     const snapshot = await this.#snapshot(input.guildId);
     if (!snapshot) return undefined;
-    const held = roleIds.map((id) => ({ id, role: snapshot.roles?.get(id) }));
-    const bits = held.reduce((sum, { role }) => sum | (role?.permissions ?? 0), 0);
-    const permissions = kookPermissionNames(bits);
+    const held = roleIds.filter((id) => id !== EVERYONE_ROLE_ID).map((id) => ({ id, role: snapshot.roles?.get(id) }));
+    const everyone = snapshot.roles?.get(EVERYONE_ROLE_ID)?.permissions ?? 0;
+    const bits = held.reduce((sum, { role }) => sum | (role?.permissions ?? 0), everyone);
     const roles = held.map(({ id, role }) => (role?.name ? { id, name: role.name } : { id }));
     const isOwner = snapshot.ownerId !== undefined && snapshot.ownerId === input.authorId;
-    const isAdmin = permissions.includes('administrator');
+    const isAdmin = kookPermissionNames(bits).includes('administrator');
+    // The server owner and administrators hold every permission (KOOK ignores per-bit grants for them).
+    const permissions = isOwner || isAdmin ? [...KOOK_ROLE_PERMISSIONS] : kookPermissionNames(bits);
     // Without the owner id or the role list the standing cannot be decided; an admin role still proves admin.
     const standing = isOwner ? 'owner' : isAdmin ? 'admin'
       : snapshot.ownerId !== undefined && snapshot.roles ? 'member' : undefined;

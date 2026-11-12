@@ -4,7 +4,11 @@
  * - `standing`: guild owner → `owner`; `Administrator` / `ModerateMembers` → `admin`; other members →
  *   `member`. Direct messages report nothing.
  * - `roles`: the member's guild roles (`@everyone` excluded), with names when the event carries them.
- * - `permissions`: the member's guild permission flags as snake_case names (`ban_members`, `manage_roles`, …).
+ * - `permissions`: the member's **guild-level** permission flags as snake_case names (`ban_members`,
+ *   `manage_roles`, …). Gateway mode reads `GuildMember.permissions` (server-wide, no channel overwrites)
+ *   for senders and the Bot alike. Interactions only carry channel-level bitfields (overwrites applied),
+ *   so they report just the flags that cannot be overwritten per channel (identical at both levels) —
+ *   all flags when the member is an administrator.
  */
 import { PermissionFlagsBits } from 'discord.js';
 import type { PlatformStanding } from '@zhin.js/im-contract';
@@ -32,10 +36,41 @@ export function discordPermissionNames(has: (bit: bigint) => boolean): string[] 
 
 /** Permission names from an interaction's decimal bitfield string (`member.permissions`). */
 export function discordPermissionNamesFromBitfield(bitfield: unknown): string[] {
-  if (typeof bitfield !== 'string' && typeof bitfield !== 'number' && typeof bitfield !== 'bigint') return [];
-  let value: bigint;
-  try { value = BigInt(bitfield); } catch { return []; }
-  return discordPermissionNames(bit => (value & bit) === bit);
+  const value = parseBitfield(bitfield);
+  return value === undefined ? [] : discordPermissionNames(bit => (value & bit) === bit);
+}
+
+function parseBitfield(bitfield: unknown): bigint | undefined {
+  if (typeof bitfield !== 'string' && typeof bitfield !== 'number' && typeof bitfield !== 'bigint') return undefined;
+  try { return BigInt(bitfield); } catch { return undefined; }
+}
+
+/** Flags Discord does not allow in channel overwrites: a channel-level bitfield shows their guild value. */
+const GUILD_ONLY_FLAGS: readonly bigint[] = [
+  PermissionFlagsBits.Administrator, PermissionFlagsBits.KickMembers, PermissionFlagsBits.BanMembers,
+  PermissionFlagsBits.ManageGuild, PermissionFlagsBits.ViewAuditLog, PermissionFlagsBits.ViewGuildInsights,
+  PermissionFlagsBits.ChangeNickname, PermissionFlagsBits.ManageNicknames, PermissionFlagsBits.ManageGuildExpressions,
+  PermissionFlagsBits.ModerateMembers, PermissionFlagsBits.ViewCreatorMonetizationAnalytics,
+  PermissionFlagsBits.CreateGuildExpressions,
+];
+
+/**
+ * Guild-level permission names from a channel-level bitfield (interaction `member.permissions` /
+ * `app_permissions`): an administrator holds every flag server-wide; otherwise only the flags that
+ * channel overwrites cannot change are reported, so a channel overwrite (e.g. "Manage Permissions" in
+ * one channel) never reads as a server-wide `manage_roles`.
+ */
+export function discordGuildPermissionNamesFromChannelBitfield(bitfield: unknown): string[] {
+  const value = parseBitfield(bitfield);
+  if (value === undefined) return [];
+  if ((value & PermissionFlagsBits.Administrator) === PermissionFlagsBits.Administrator) return discordPermissionNames(() => true);
+  return discordPermissionNames(bit => GUILD_ONLY_FLAGS.includes(bit) && (value & bit) === bit);
+}
+
+/** Normalized standing from guild-level permission names (the guild owner is reported separately). */
+export function discordStandingFromPermissions(permissions: readonly string[], isOwner = false): PlatformStanding['standing'] {
+  return isOwner ? 'owner'
+    : permissions.includes('administrator') || permissions.includes('moderate_members') ? 'admin' : 'member';
 }
 
 export function discordSenderStanding(msg: DiscordInboundMessage): PlatformStanding | undefined {

@@ -18,6 +18,6 @@ export default defineCommand({
       '',
       '完整 Console：https://console.zhin.dev',
       'API Base：https://zhinjs-demo.hf.space',
-      'Token：zhin-demo',
+      '登录：用 Space 页面公布的只读账号 demo（写操作返回 403）',
     ].join('\n'),
 });

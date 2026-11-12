@@ -44,6 +44,9 @@ export interface FeatureHost {
   }>): RootResourceInstaller;
 }
 
+/** Newest conversation events scanned for the Console's recent-conversation list. */
+export const RECENT_EVENT_WINDOW = 5_000;
+
 /** Must be created before the DatabaseHost starts (tables are defined here). */
 export function createFeatureHost(options: FeatureHostOptions): FeatureHost {
   defineFeatureConversationTable(options.database);
@@ -56,26 +59,37 @@ export function createFeatureHost(options: FeatureHostOptions): FeatureHost {
   const resolveEndpointOwner = (alias: string, _endpointId: string): string | undefined => {
     try { return roles.ownersOf('', alias)[0]; } catch { return undefined; }
   };
+  /**
+   * Recently active conversations, newest first. Reads only the newest {@link RECENT_EVENT_WINDOW}
+   * events by primary key (no whole-table aggregation), keeps each conversation's latest event and
+   * stops at `limit` distinct keys.
+   */
   const recentConversations = async (limit: number): Promise<readonly FeatureRecentConversation[]> => {
     const raw = options.database.started ? options.database.getRawDatabase() as { models?: Map<string, unknown> } | undefined : undefined;
-    const model = raw?.models?.get('conversation_events') as {
-      select(...fields: string[]): { groupBy?(...fields: string[]): unknown; limit(count: number): PromiseLike<Record<string, unknown>[]> };
-    } | undefined;
+    type Selection = PromiseLike<Record<string, unknown>[]> & {
+      orderBy?(field: string, direction?: 'ASC' | 'DESC'): Selection;
+      limit(count: number): Selection;
+    };
+    const model = raw?.models?.get('conversation_events') as { select(...fields: string[]): Selection } | undefined;
     if (!model) throw new Error('conversation store unavailable');
-    const columns = ['endpoint_id', 'conversation_kind', 'conversation_id'];
-    const query = model.select(...columns);
-    query.groupBy?.(...columns);
-    const rows = await query.limit(limit);
+    const query = model.select('id', 'time', 'endpoint_id', 'conversation_kind', 'conversation_id');
+    if (typeof query.orderBy !== 'function') throw new Error('conversation store cannot order events');
+    const rows = await query.orderBy('id', 'DESC').limit(RECENT_EVENT_WINDOW);
     const lease = options.snapshots().acquire();
     try {
-      return rows.flatMap(row => {
+      const seen = new Map<string, FeatureRecentConversation>();
+      for (const row of rows) {
+        if (seen.size >= limit) break;
         try {
           const endpoint = decodeStorageIdentity(String(row.endpoint_id));
           const id = decodeStorageIdentity(String(row.conversation_id));
           const key = resolveEndpointFeatureKey(lease.value, endpoint, undefined, { kind: row.conversation_kind, id });
-          return key && key.split('/').length >= 3 ? [{ key }] : [];
-        } catch { return []; }
-      });
+          if (!key || key.split('/').length < 3 || seen.has(key)) continue;
+          const time = Number(row.time);
+          seen.set(key, Object.freeze({ key, ...(Number.isFinite(time) && time > 0 ? { lastActiveAt: time } : {}) }));
+        } catch { /* undecodable identity: skipped */ }
+      }
+      return Object.freeze([...seen.values()]);
     } finally { lease.release(); }
   };
   const stores: FeatureStores = Object.freeze({ conversations, roles, recentConversations });

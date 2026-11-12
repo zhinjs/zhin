@@ -159,6 +159,48 @@ describe('feature.* at the conversation level (ADR 0055)', () => {
     expect(matrix.rows.find((row: any) => row.plugin === 'rss').conversationOverrides).toEqual({ qq: { 'bot-1': 2 } });
   });
 
+  it('reports whether conversation overrides persist and says so on writes', async () => {
+    const { call } = harness();
+    expect((await call('feature.get', { plugin: 'repeater', level: 'conversation', key: g1 }))!.body.data).toMatchObject({ persistent: false });
+    expect((await call('feature.conversations'))!.body.data).toMatchObject({ persistent: false });
+    const saved = await call('feature.set-enabled', { plugin: 'rss', level: 'conversation', key: g1, enabled: false });
+    expect(saved!.body.data).toMatchObject({ status: 'saved', persistent: false, message: '会话覆盖已保存，立即生效；当前数据库不支持持久化，重启后丢失' });
+    class Persistent extends FeatureConversationOverrideStore { override get persistent(): boolean { return true; } }
+    const durable = harness({ stores: { conversations: new Persistent() } });
+    expect((await durable.call('feature.set-enabled', { plugin: 'rss', level: 'conversation', key: g1, enabled: false }))!.body.data)
+      .toMatchObject({ persistent: true, message: '会话覆盖已保存，立即生效' });
+  });
+
+  it('keeps the revision monotonic after a removal (no ABA through feature.get)', async () => {
+    const { call } = harness();
+    await call('feature.set-enabled', { plugin: 'rss', level: 'conversation', key: g1, enabled: false, expectedRevision: '0' });
+    await call('feature.set-enabled', { plugin: 'rss', level: 'conversation', key: g1, enabled: true, expectedRevision: '1' });
+    expect((await call('feature.get', { plugin: 'rss', level: 'conversation', key: g1 }))!.body.data).toMatchObject({ revision: '2', enabled: true });
+    expect((await call('feature.set-enabled', { plugin: 'rss', level: 'conversation', key: g1, enabled: false, expectedRevision: '0' }))!.body.data)
+      .toMatchObject({ status: 'conflict', revision: '2' });
+  });
+
+  it('validates conversation keys by their parts, not by a fixed total length', async () => {
+    const { call } = harness();
+    // A 256-character id made of escaped slashes is a valid Runtime key (768 characters escaped).
+    const long = `qq/bot-1/group:${'%2F'.repeat(256)}`;
+    expect((await call('feature.get', { plugin: 'repeater', level: 'conversation', key: long }))!.status).toBe(200);
+    expect((await call('feature.get', { plugin: 'repeater', level: 'conversation', key: `qq/bot-1/group:${'a'.repeat(257)}` }))!.status).toBe(400);
+    expect((await call('feature.get', { plugin: 'repeater', level: 'conversation', key: `qq/${'b'.repeat(129)}/group:1` }))!.status).toBe(400);
+  });
+
+  it('locks a nested plugin wherever an ancestor is switched off above the level (409 locked)', async () => {
+    const { call } = harness();
+    // repeater is disabled at endpoint qq/bot-2, so repeater/child is locked in that account's conversations.
+    const reply = await call('feature.set-enabled', { plugin: 'repeater/child', level: 'conversation', key: 'qq/bot-2/group:1', enabled: false });
+    expect(reply).toMatchObject({ status: 409, body: { success: false, code: 'locked', lockedBy: 'endpoint' } });
+    expect((await call('feature.get', { plugin: 'repeater/child', level: 'conversation', key: 'qq/bot-2/group:1' }))!.body.data)
+      .toMatchObject({ enabled: false, lockedBy: 'endpoint' });
+    // Elsewhere the child keeps its own switch.
+    expect((await call('feature.set-enabled', { plugin: 'repeater/child', level: 'conversation', key: g1, enabled: false }))!.body.data)
+      .toMatchObject({ status: 'saved' });
+  });
+
   it('answers 503 for conversation calls without the stores', async () => {
     const { call } = harness({ stores: undefined });
     expect((await call('feature.get', { plugin: 'repeater', level: 'conversation', key: g1 }))!.status).toBe(503);

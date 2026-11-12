@@ -2,7 +2,7 @@
  * Gateway composition (ADR 0054 §1): the HTTP server and the instance supervisor, joined by a
  * pluggable instance transport (the bridge supplies the IPC one). CLI wiring lives elsewhere.
  */
-import { resolveHttpConfig, type ResolvedHttpConfig, type TokenRegistry } from '@zhin.js/host-http';
+import { isLoopbackHost, resolveHttpConfig, type ResolvedHttpConfig, type TokenRegistry } from '@zhin.js/host-http';
 import type { InstanceTransport } from '@zhin.js/host-http/bridge';
 import { join } from 'node:path';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -64,8 +64,18 @@ export interface StartGatewayOptions {
    * the project root over the supervisor; `false` disables the package RPC.
    */
   readonly packages?: GatewayPackageService | false;
-  /** `gateway.readyTimeout` for dependency transactions (see {@link loadGatewaySettings}). Default 60 s. */
+  /**
+   * `gateway.readyTimeout` for dependency transactions when the project sets none (see
+   * {@link loadGatewaySettings}). Default 60 s.
+   */
   readonly readyTimeoutMs?: number;
+  /**
+   * Reads the project's `gateway` block. Called before every instance start / restart (Console,
+   * CLI, automatic restart after a crash) and every dependency transaction, so a changed
+   * `gateway.readyTimeout` applies without restarting the gateway. Default
+   * {@link loadGatewaySettings} on the project root; `false` reads nothing.
+   */
+  readonly settings?: false | (() => Promise<GatewaySettings>);
 }
 
 export interface RunningGateway {
@@ -140,19 +150,36 @@ export async function startGateway(options: StartGatewayOptions): Promise<Runnin
   const transport = options.transport({ supervisor, projectRoot: options.projectRoot });
   // `tokenRegistry` is read lazily: the server creates the default one.
   let registry: TokenRegistry | undefined = options.tokenRegistry;
+  // gateway.readyTimeout is re-read before each start and transaction (ADR 0054 §4).
+  const readSettings = options.settings === false ? undefined : options.settings ?? (() => loadGatewaySettings(options.projectRoot));
+  let configuredReadyTimeoutMs: number | undefined;
+  const refreshSettings = async (): Promise<void> => {
+    if (!readSettings) return;
+    try {
+      configuredReadyTimeoutMs = (await readSettings()).readyTimeoutMs;
+    } catch {
+      return; // keep the previous value
+    }
+    supervisor.setReadyTimeout(configuredReadyTimeoutMs);
+  };
+  // Automatic restarts wait in `backoff` (crash) or for the old process to stop (`restart-request`,
+  // e.g. after a config change): refresh meanwhile.
+  supervisor.on('state', (status: { readonly state: string }) => { if (status.state === 'backoff') void refreshSettings(); });
+  supervisor.on('restart-request', () => { void refreshSettings(); });
   const packages = options.packages === false
     ? undefined
     : options.packages ?? new GatewayPackageService({
       projectRoot: options.projectRoot,
       instance: supervisor,
-      ...(options.readyTimeoutMs !== undefined ? { readyTimeoutMs: options.readyTimeoutMs } : {}),
+      readyTimeoutMs: () => configuredReadyTimeoutMs ?? options.readyTimeoutMs,
+      beforeTransaction: refreshSettings,
       hasOwner: () => registry?.initialized() ?? true,
     });
   let consoleStopped = false;
   const lifecycle: GatewayRpcInstance = {
-    start: async () => { await supervisor.start(); consoleStopped = false; },
+    start: async () => { await refreshSettings(); await supervisor.start(); consoleStopped = false; },
     stop: async (stopOptions) => { consoleStopped = true; await supervisor.stop(stopOptions); },
-    restart: async (restartOptions) => { await supervisor.restart(restartOptions); consoleStopped = false; },
+    restart: async (restartOptions) => { await refreshSettings(); await supervisor.restart(restartOptions); consoleStopped = false; },
     status: () => supervisor.status(),
     logs: supervisor.logs,
   };
@@ -185,11 +212,16 @@ export async function startGateway(options: StartGatewayOptions): Promise<Runnin
         ...(options.environment ? { environment: options.environment } : {}),
         instance: transport,
         restartInstance: async () => {
-          if (supervisor.state !== 'stopped') await supervisor.restart({ reason: 'database' });
+          if (supervisor.state === 'stopped') return;
+          await refreshSettings();
+          await supervisor.restart({ reason: 'database' });
         },
       });
       await settleWithin(gatewayConsole.ready, options.databaseWaitMs ?? 10_000);
     }
+    assertNotOpenOnNetwork(http, server.tokenRegistry);
+    // Settings for the first instance start, read before listening so it starts right away.
+    if (options.startInstance !== false) await refreshSettings();
     await server.listen();
   } catch (error) {
     disposeEvents();
@@ -233,6 +265,27 @@ export async function startGateway(options: StartGatewayOptions): Promise<Runnin
       return closeResult;
     },
   });
+}
+
+/** Thrown when the gateway would serve an open Host on a network address. */
+export class OpenHostOnNetworkError extends Error {
+  readonly code = 'ZHIN_OPEN_HOST_ON_NETWORK';
+  constructor(readonly host: string) {
+    super(`http.host 为 ${host}（可从网络访问），但既没有初始化令牌（http.token），Console 也还没有所有者：`
+      + '开放模式拥有全部权限，只允许监听本机地址。请运行 zhin doctor --fix 在 .env 生成 HTTP_TOKEN 并在配置里用 '
+      + 'http.token: ${HTTP_TOKEN} 引用，或先运行 zhin console init 创建所有者；也可以把 http.host 改为 127.0.0.1。');
+    this.name = 'OpenHostOnNetworkError';
+  }
+}
+
+/**
+ * An open Host (no bootstrap token, no owner yet) holds every permission and is only meant for
+ * this machine. The per-request loopback check cannot see through a same-host reverse proxy that
+ * adds no forwarding header, so a network-facing `http.host` must not start open (ADR 0049 §1).
+ */
+export function assertNotOpenOnNetwork(http: ResolvedHttpConfig, registry: TokenRegistry): void {
+  if (registry.hasAnyToken() || isLoopbackHost(http.host)) return;
+  throw new OpenHostOnNetworkError(http.host ?? '');
 }
 
 /** Waits for `promise` at most `ms` (the gateway listens anyway; the work continues). */

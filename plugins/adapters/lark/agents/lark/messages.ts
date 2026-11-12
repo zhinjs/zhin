@@ -1,6 +1,10 @@
 import { createMessages } from 'zhin.js/i18n';
 
 export const messages = createMessages({
+  "groupRequired": {
+    "zh-CN": "此操作仅支持当前飞书群",
+    "en": "This operation requires the current Lark group"
+  },
   fileUploadFailed: { 'zh-CN': '文件上传失败，未返回文件标识', en: 'File upload failed; no file key was returned.' },
   "createFailed": {
     "zh-CN": "创建失败",

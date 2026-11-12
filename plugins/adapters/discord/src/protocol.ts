@@ -4,7 +4,7 @@ import { validateDiscordGatewayFaultProxy } from './gateway-fault-proxy.js';
 
 import { createPublicKey, verify as cryptoVerify } from 'node:crypto';
 import { isMediaRef, type ConversationRef } from '@zhin.js/im-contract';
-import { discordPermissionNamesFromBitfield } from './sender-standing.js';
+import { discordGuildPermissionNamesFromChannelBitfield } from './sender-standing.js';
 import type { Segment } from '@zhin.js/core/runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
@@ -540,7 +540,8 @@ export function interactionToInboundMessage(interaction: Record<string, unknown>
   const user = member?.user
     ?? (interaction.user as Record<string, unknown> | undefined);
   const guildId = interaction.guild_id != null ? String(interaction.guild_id) : undefined;
-  const platformPermissions = guildId ? discordPermissionNamesFromBitfield(member?.permissions) : [];
+  // ADR 0056 §1: guild-level names only (the interaction bitfield includes channel overwrites).
+  const platformPermissions = guildId ? discordGuildPermissionNamesFromChannelBitfield(member?.permissions) : [];
   const authorRoles = guildId && Array.isArray(member?.roles)
     ? member.roles.map(String).filter((id) => id && id !== guildId).map((id) => ({ id }))
     : [];

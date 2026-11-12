@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import { jsonResponse } from '@zhin.js/host-http';
-import { loadGatewayHttpConfig, loadGatewaySettings, startGateway, type RunningGateway } from '../../src/http/start-gateway.js';
+import { isLoopbackHost, jsonResponse, TokenRegistry } from '@zhin.js/host-http';
+import { assertNotOpenOnNetwork, loadGatewayHttpConfig, loadGatewaySettings, OpenHostOnNetworkError, startGateway, type RunningGateway } from '../../src/http/start-gateway.js';
 import { EMPTY_ROUTE_TABLE, type InstanceTransport } from '@zhin.js/host-http/bridge';
 
 const fixture = fileURLToPath(new URL('../supervisor/fixtures/fake-instance.mjs', import.meta.url));
@@ -30,6 +30,40 @@ describe('loadGatewaySettings', () => {
     expect(await loadGatewaySettings(await project('http:\n  port: 0\n'))).toEqual({});
     expect(await loadGatewaySettings(await project('gateway:\n  readyTimeout: 0\n'))).toEqual({});
     expect(await loadGatewaySettings(await project('gateway:\n  readyTimeout: "90"\n'))).toEqual({});
+  });
+});
+
+describe('open Host on a network address (ADR 0049 §1)', () => {
+  it('refuses to start open on a non-loopback http.host, with the HTTP_TOKEN / console init hint', () => {
+    const open = new TokenRegistry();
+    for (const host of ['0.0.0.0', '::', '192.168.1.5', 'bot.example.com']) {
+      expect(() => assertNotOpenOnNetwork({ host }, open), host).toThrow(OpenHostOnNetworkError);
+    }
+    expect(() => assertNotOpenOnNetwork({ host: '0.0.0.0' }, open)).toThrow(/HTTP_TOKEN.*zhin console init/su);
+    for (const host of [undefined, '127.0.0.1', 'localhost', '::1', '[::1]']) {
+      expect(() => assertNotOpenOnNetwork(host === undefined ? {} : { host }, open), String(host)).not.toThrow();
+    }
+    // A bootstrap token (or a finished setup) closes the Host: any bind address is fine.
+    expect(() => assertNotOpenOnNetwork({ host: '0.0.0.0' }, new TokenRegistry({ primaryToken: 'boot' }))).not.toThrow();
+    expect(isLoopbackHost('127.10.0.1')).toBe(true);
+    expect(isLoopbackHost('0.0.0.0')).toBe(false);
+  });
+
+  it('fails startGateway before listening', async () => {
+    const root = await project('http:\n  host: 0.0.0.0\n  port: 0\n');
+    await expect(startGateway({
+      projectRoot: root,
+      console: false,
+      startInstance: false,
+      supervisor: { spawn: { command: process.execPath, args: [fixture], cwd: root, env: process.env } },
+      transport: () => ({
+        ready: false,
+        routes: () => EMPTY_ROUTE_TABLE,
+        onRoutes: () => () => undefined,
+        fetch: async () => new Response('never'),
+        openWebSocket: async () => false,
+      }),
+    })).rejects.toBeInstanceOf(OpenHostOnNetworkError);
   });
 });
 
@@ -103,4 +137,38 @@ describe('startGateway', () => {
     expect(health.status).toBe(200);
     expect(await health.json()).toMatchObject({ instance: { ready: false } });
   });
+
+  it('re-reads gateway.readyTimeout before every instance start and restart', async () => {
+    const root = await project('http:\n  host: 127.0.0.1\n  port: 0\n');
+    let configured: number | undefined = 7_000;
+    const gateway = await startGateway({
+      projectRoot: root,
+      console: false,
+      settings: async () => (configured === undefined ? {} : { readyTimeoutMs: configured }),
+      supervisor: {
+        spawn: { command: process.execPath, args: [fixture], cwd: root, env: process.env },
+        readyTimeoutMs: 5_000,
+        shutdownBudgetMs: 300,
+        killGraceMs: 300,
+      },
+      transport: ({ supervisor }) => ({
+        get ready() { return supervisor.state === 'running'; },
+        routes: () => EMPTY_ROUTE_TABLE,
+        onRoutes: () => () => undefined,
+        fetch: async () => new Response('x'),
+        openWebSocket: async () => false,
+      }),
+    });
+    gateways.push(gateway);
+    await gateway.instanceStarted;
+    expect(gateway.supervisor.readyTimeoutMs).toBe(7_000);
+    configured = 9_000;
+    await gateway.rpc({ type: 'gateway.instance.restart' }, 'local');
+    expect(gateway.supervisor.readyTimeoutMs).toBe(9_000);
+    // Removing the setting goes back to the supervisor's own value.
+    configured = undefined;
+    await gateway.rpc({ type: 'gateway.instance.stop' }, 'local');
+    await gateway.rpc({ type: 'gateway.instance.start' }, 'local');
+    expect(gateway.supervisor.readyTimeoutMs).toBe(5_000);
+  }, 30_000);
 });

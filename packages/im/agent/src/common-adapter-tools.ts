@@ -5,7 +5,7 @@
  * then adapts the result to the agent Tool type.
  */
 
-import { createSceneManagementToolsRaw, buildSceneMethodArgs, SCENE_MANAGEMENT_METHOD_SPECS, SCENE_MANAGEMENT_SKILL_KEYWORDS, SCENE_MANAGEMENT_SKILL_TAGS, type ISceneManagement, type SceneManagementMethodSpec } from '@zhin.js/core';
+import { createSceneManagementToolsRaw, sceneManagementSpecPermits, buildSceneMethodArgs, SCENE_MANAGEMENT_METHOD_SPECS, SCENE_MANAGEMENT_SKILL_KEYWORDS, SCENE_MANAGEMENT_SKILL_TAGS, type ISceneManagement, type SceneManagementMethodSpec } from '@zhin.js/core';
 import type { Tool, ToolScope } from './resource-hub/types.js';
 export type { ISceneManagement, SceneManagementMethodSpec };
 export { SCENE_MANAGEMENT_METHOD_SPECS, SCENE_MANAGEMENT_SKILL_KEYWORDS, SCENE_MANAGEMENT_SKILL_TAGS, buildSceneMethodArgs };
@@ -29,7 +29,9 @@ export function createSceneManagementTools(
     execute,
     tags: ['scene', 'management', prefix],
     keywords: spec.keywords,
-    ...(spec.permit ? { permissions: [spec.permit] } : {}),
+    // ADR 0056 §5: platform standing of the sender and of the Bot in the current conversation
+    // (previously the bare spec word was read as a zhin role).
+    ...(spec.permit ? { permissions: sceneManagementSpecPermits(spec)! } : {}),
     scopes: ['group', 'channel'] as ToolScope[],
     preExecutable: spec.preExecutable,
   }));

@@ -61,7 +61,12 @@ describe('Discord sender.platform (ADR 0056 §1)', () => {
     expect(discordPermissionNamesFromBitfield(bitfield)).toEqual(['kick_members', 'administrator']);
     const msg = interactionToInboundMessage({ id: 'i1', type: 2, guild_id: 'g1', channel_id: 'c1',
       member: { user: { id: 'u1', username: 'alice' }, permissions: bitfield, roles: ['r1', 'g1'] }, data: { name: 'ping' } });
-    expect(discordSenderStanding(msg)).toEqual({ standing: 'admin', roles: [{ id: 'r1' }], permissions: ['kick_members', 'administrator'] });
+    // An administrator holds every flag server-wide.
+    expect(discordSenderStanding(msg)).toEqual({ standing: 'admin', roles: [{ id: 'r1' }], permissions: expect.arrayContaining(['kick_members', 'administrator', 'manage_roles']) });
+    // Otherwise only guild-only flags: a channel overwrite granting "Manage Permissions" is not server-wide `manage_roles`.
+    const overwritten = interactionToInboundMessage({ id: 'i2', type: 2, guild_id: 'g1', channel_id: 'c1',
+      member: { user: { id: 'u1', username: 'alice' }, permissions: String(PermissionFlagsBits.ManageRoles | PermissionFlagsBits.KickMembers), roles: [] }, data: { name: 'ping' } });
+    expect(discordSenderStanding(overwritten)).toEqual({ standing: 'member', permissions: ['kick_members'] });
     expect(discordPermissionNamesFromBitfield('not-a-number')).toEqual([]);
   });
 

@@ -261,7 +261,7 @@ export class QqWebsocketEndpoint extends Bot<ReceiverMode.WEBSOCKET> implements 
       + (msg.mentioned ? ' (mentioned)' : '')
       + ` | ${truncatePreview(content, 80)}`,
     );
-    const platform = projectQqGuildSenderStanding(msg.authorRoles);
+    const platform = projectQqGuildSenderStanding(msg.authorRoles, conversation);
     if (msg.id) this.#passiveReplies.record(qqOutboundKind(conversation), conversation.id, { id: msg.id });
     void this[endpointSpec].events.emit('message.receive', {
       conversation,
@@ -557,7 +557,7 @@ export class QqHttpEndpoint extends Bot<ReceiverMode.MIDDLEWARE, 'koa'> implemen
       + (msg.mentioned ? ' (mentioned)' : '')
       + ` | ${truncatePreview(content, 80)}`,
     );
-    const platform = projectQqGuildSenderStanding(msg.authorRoles);
+    const platform = projectQqGuildSenderStanding(msg.authorRoles, conversation);
     if (msg.id) this.#passiveReplies.record(qqOutboundKind(conversation), conversation.id, { id: msg.id });
     void this[endpointSpec].events.emit('message.receive', {
       conversation,
@@ -698,7 +698,7 @@ function createQqEndpointManagement(
       if (!selfId) selfId = (await operation.run(() => requireClient().getSelfInfo()))?.id || undefined;
       if (!selfId) return undefined;
       const member = await operation.run(() => requireClient().memberService.getGuildMemberInfo(guildId, selfId!));
-      return projectQqGuildSenderStanding(member?.roles) ?? Object.freeze({ standing: 'member' as const });
+      return projectQqGuildSenderStanding(member?.roles, conversation) ?? Object.freeze({ standing: 'member' as const });
     },
     // QQ 群（group_openid / member_openid）：官方 v2 群管理接口，部分为白名单能力（11253）。
     inspectGroupMember: request => inspectQqGroupMember(api(), request),

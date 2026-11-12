@@ -1,6 +1,6 @@
 import { link, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
-import { LEGACY_START_SCRIPTS, RECOMMENDED_START_SCRIPTS } from './start-scripts.js';
+import { isLegacyScript, LEGACY_START_SCRIPTS, RECOMMENDED_START_SCRIPTS } from './start-scripts.js';
 import { hasDeclaredVersion, withStartStackDependencies } from './start-stack-dependencies.js';
 
 export type CutoverCapability = 'command' | 'component' | 'middleware';
@@ -389,7 +389,7 @@ function replaceMissingOrLegacyScript(
   replacement: string,
   legacy: readonly string[],
 ): void {
-  if (scripts[name] === undefined || legacy.includes(scripts[name].trim())) scripts[name] = replacement;
+  if (scripts[name] === undefined || isLegacyScript({ [name]: legacy }, name, scripts[name])) scripts[name] = replacement;
 }
 
 function appendScript(existing: string | undefined, command: string): string {

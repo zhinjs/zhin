@@ -85,6 +85,7 @@ export interface InstanceSupervisorOptions {
    */
   readonly input?: 'ignore' | 'inherit';
   readonly logs?: InstanceLogOptions;
+  /** Time a spawned instance gets to report `ready`; see {@link InstanceSupervisor.setReadyTimeout}. */
   readonly readyTimeoutMs?: number;
   /** Budget announced in `shutdown`; SIGTERM follows when the child has not exited after it. */
   readonly shutdownBudgetMs?: number;
@@ -171,6 +172,7 @@ export class InstanceSupervisor extends EventEmitter<InstanceSupervisorEvents> {
    */
   readonly transport: IpcInstanceTransport;
   readonly #options: InstanceSupervisorOptions;
+  #readyTimeoutMs: number | undefined;
   readonly #accepted: readonly number[];
   #state: InstanceState = 'stopped';
   #child: ChildRecord | undefined;
@@ -188,6 +190,7 @@ export class InstanceSupervisor extends EventEmitter<InstanceSupervisorEvents> {
   constructor(options: InstanceSupervisorOptions) {
     super();
     this.#options = options;
+    this.#readyTimeoutMs = options.readyTimeoutMs;
     this.#accepted = Object.freeze([...(options.acceptedProtocolVersions ?? [INSTANCE_BRIDGE_PROTOCOL_VERSION])]);
     this.logs = new InstanceLogCollector(options.logs);
     this.transport = new IpcInstanceTransport(options.transport);
@@ -242,6 +245,19 @@ export class InstanceSupervisor extends EventEmitter<InstanceSupervisorEvents> {
     const stopping = this.#terminate(child, options.reason ?? 'stop', options.timeoutMs).then(() => undefined);
     this.#stopping = stopping.finally(() => { this.#stopping = undefined; });
     return this.#stopping;
+  }
+
+  /**
+   * Ready timeout for the next spawns (`gateway.readyTimeout`, re-read by the gateway before each
+   * start, restart and transaction); `undefined` goes back to the constructor option.
+   */
+  setReadyTimeout(ms: number | undefined): void {
+    this.#readyTimeoutMs = ms ?? this.#options.readyTimeoutMs;
+  }
+
+  /** Ready timeout the next spawn uses. */
+  get readyTimeoutMs(): number {
+    return this.#readyTimeoutMs ?? DEFAULT_INSTANCE_READY_TIMEOUT_MS;
   }
 
   /** Manual restart: stop gracefully, then start (not counted by the storm guard). */
@@ -302,7 +318,7 @@ export class InstanceSupervisor extends EventEmitter<InstanceSupervisorEvents> {
     // Callers may ignore automatic-restart attempts; never leave them unhandled.
     guarded.catch(() => undefined);
 
-    const readyTimeoutMs = this.#options.readyTimeoutMs ?? DEFAULT_INSTANCE_READY_TIMEOUT_MS;
+    const readyTimeoutMs = this.readyTimeoutMs;
     child.readyTimer = setTimeout(() => {
       if (child.ready || this.#child !== child) return;
       const failure = this.#failure('ready-timeout', `Instance did not report ready within ${readyTimeoutMs} ms`, null, null);

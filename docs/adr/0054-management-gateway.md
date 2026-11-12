@@ -118,7 +118,7 @@ interface HttpHost {
 1. 生成计划并校验白名单与 revision；备份 `package.json`、锁文件、配置文件；
 2. 向实例发送 `shutdown`，等待退出；
 3. 执行事务，输出以 SSE（`gateway.packages.progress`）推给 Console：网关接管 `GET {base}/events`，实例在线时转发实例的事件流并在帧边界插入网关帧（网关帧不带 `id:`，续传游标仍是实例的），实例离线时给只含网关事件的流（实例就绪后关闭，Console 重连回合并流），`{base}/events/history` 离线时返回保留调用方游标的空页；`GET {base}/gateway/packages/progress`（`plugin.manage`）只推进度；
-4. 启动实例，等待 `ready`（默认 60 秒；项目配置 `gateway.readyTimeout`，整数秒 1–3600，同时用于网关平时启动 / 重启实例）；
+4. 启动实例，等待 `ready`（默认 60 秒；项目配置 `gateway.readyTimeout`，整数秒 1–3600，同时用于网关平时启动 / 重启实例；网关在每次启动、重启实例与每笔事务前重新读取，改了不必重启网关）；
 5. 失败：恢复备份、重新安装、启动旧版本；向 Console 报告失败阶段与日志尾部。
 
 插件配置的最终校验发生在实例启动后，失败视为第 4 步失败。网关在事务内先用包自带的 `schema.json` 预检：
@@ -146,7 +146,7 @@ interface HttpHost {
 
 生产模板（systemd / Docker / PM2 服务文件）与脚手架的 `pnpm start` 使用 `zhin start --foreground`：进程管理器需要一个不退出的前台进程；后台模式面向在终端里直接操作的用户。`--standalone`（实例在本进程内自带 HTTP 服务器、无网关）只用于测试与开发。
 
-本地控制套接字：`.zhin/gateway.sock`（Windows：`\\.\pipe\zhin-gateway-<项目路径哈希>`），文件权限仅限当前用户，连接者视为本机 `owner`。
+本地控制套接字：`.zhin/gateway.sock`（Windows：`\\.\pipe\zhin-gateway-<项目路径哈希>-<每次启动的随机串>`），文件权限仅限当前用户，连接者视为本机 `owner`。Node 不能给命名管道设 DACL：随机管道名与 `.zhin/gateway.json`（`0600`）里的握手密钥（`gateway.hello`，CLI 校验 HMAC）防止端点被抢占冒充。网关把实际端点（含 `os.tmpdir()` 回退路径）以 `ZHIN_GATEWAY_SOCKET` 传给实例，实例的 Agent 文件 / `bash` 工具拒绝触及它（按命令文本拦截，不约束同一系统用户下不受沙箱约束的插件代码）。`gateway.http.request` 走与 HTTP 相同的路由表；带显式 `ZHIN_CONSOLE_TOKEN` 时按该令牌认证并以其主体执行与审计。
 
 ### 7. 数据
 

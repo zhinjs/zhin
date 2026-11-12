@@ -52,8 +52,104 @@ describe('feature_conversation_overrides store', () => {
     const store = new FeatureConversationOverrideStore();
     await store.write({ plugin: 'rss', key, expectedRevision: 0, next: () => ({ enabled: false, patch: {} }) });
     expect(await store.write({ plugin: 'rss', key, expectedRevision: 0, next: () => null })).toEqual({ status: 'conflict', revision: 1 });
-    expect(await store.write({ plugin: 'rss', key, expectedRevision: 1, next: () => null })).toMatchObject({ status: 'saved', revision: 0 });
+    expect(await store.write({ plugin: 'rss', key, expectedRevision: 1, next: () => null })).toMatchObject({ status: 'saved', revision: 2 });
     expect(store.get('rss', key)).toBeUndefined();
+  });
+
+  it('keeps revisions monotonic across removal so a stale compare-and-swap cannot succeed (no ABA)', async () => {
+    const store = new FeatureConversationOverrideStore();
+    await store.write({ plugin: 'rss', key, next: () => ({ enabled: false, patch: {} }) }); // 1
+    await store.write({ plugin: 'rss', key, next: () => null }); // 2 (tombstone)
+    expect(store.revisionOf('rss', key)).toBe(2);
+    // A client that read "1" (or "no override": 0) before the removal is refused.
+    expect(await store.write({ plugin: 'rss', key, expectedRevision: 0, next: () => ({ enabled: false, patch: {} }) })).toEqual({ status: 'conflict', revision: 2 });
+    expect(await store.write({ plugin: 'rss', key, expectedRevision: 1, next: () => ({ enabled: false, patch: {} }) })).toEqual({ status: 'conflict', revision: 2 });
+    expect(await store.write({ plugin: 'rss', key, expectedRevision: 2, next: () => ({ enabled: false, patch: {} }) })).toMatchObject({ status: 'saved', revision: 3 });
+    expect(store.list()).toHaveLength(1);
+  });
+
+  it.skipIf(!sqliteAvailable)('stores removals as tombstones that survive a reload and never list as overrides', async () => {
+    const db = await sqlite();
+    const first = await db.open();
+    const store = new FeatureConversationOverrideStore({ database: first });
+    await store.load();
+    await store.write({ plugin: 'rss', key, next: () => ({ enabled: false, patch: {} }) });
+    await store.write({ plugin: 'rss', key, next: () => null });
+    await first.stop();
+    const second = await db.open();
+    const reloaded = new FeatureConversationOverrideStore({ database: second });
+    await reloaded.load();
+    expect(reloaded.list()).toEqual([]);
+    expect(reloaded.get('rss', key)).toBeUndefined();
+    expect(reloaded.revisionOf('rss', key)).toBe(2);
+    expect(await reloaded.write({ plugin: 'rss', key, next: () => ({ patch: { maxItems: 2 } }) })).toMatchObject({ status: 'saved', revision: 3 });
+    const third = new FeatureConversationOverrideStore({ database: second });
+    await third.load();
+    expect(third.get('rss', key)).toMatchObject({ revision: 3, patch: { maxItems: 2 } });
+    await second.stop();
+  });
+
+  it('treats a 0-row CAS update and a concurrent insert of the same key as conflicts, then reloads', async () => {
+    type Row = Record<string, unknown>;
+    const table = new Map<string, Row>();
+    let updateAffects: number | undefined;
+    let insertError: unknown;
+    const matches = (row: Row, query: Row) => Object.entries(query).every(([field, value]) => row[field] === value);
+    const model = {
+      select: () => {
+        let query: Row = {};
+        const chain = { where: (next: Row) => { query = next; return chain; },
+          then: (resolve: (rows: Row[]) => unknown, reject?: (error: unknown) => unknown) =>
+            Promise.resolve([...table.values()].filter(row => matches(row, query)).map(row => ({ ...row }))).then(resolve, reject) };
+        return chain;
+      },
+      insert: async (row: Row) => { if (insertError) throw insertError; table.set(String(row.id), { ...row }); return { changes: 1 }; },
+      update: (patch: Row) => ({ where: async (query: Row) => {
+        if (updateAffects !== undefined) return updateAffects;
+        let count = 0;
+        for (const row of table.values()) if (matches(row, query)) { Object.assign(row, patch); count += 1; }
+        return count;
+      } }),
+      delete: () => ({ where: async () => 0 }),
+    };
+    const database = { dialect: 'pg', started: true, models: { get: () => model },
+      transaction: async <T>(callback: (transaction: { model: () => typeof model }) => Promise<T>) => callback({ model: () => model }) };
+    const store = new FeatureConversationOverrideStore({ database: database as never });
+    await store.load();
+    expect(store.persistent).toBe(true);
+    await store.write({ plugin: 'rss', key, next: () => ({ patch: { maxItems: 1 } }) });
+    // Another process bumped the row between our select and our update: 0 rows affected.
+    updateAffects = 0;
+    await expect(store.write({ plugin: 'rss', key, next: () => ({ patch: { maxItems: 2 } }) })).rejects.toBeInstanceOf(FeatureConversationConflictError);
+    expect(store.get('rss', key)).toMatchObject({ patch: { maxItems: 1 }, revision: 1 });
+    updateAffects = undefined;
+    // Two processes insert the same new key: the loser sees a unique violation.
+    insertError = Object.assign(new Error('duplicate key value violates unique constraint'), { code: '23505' });
+    await expect(store.write({ plugin: 'rss', key: 'qq/bot-1/group:2', next: () => ({ patch: { maxItems: 3 } }) }))
+      .rejects.toBeInstanceOf(FeatureConversationConflictError);
+    insertError = new Error('disk full');
+    await expect(store.write({ plugin: 'rss', key: 'qq/bot-1/group:2', next: () => ({ patch: { maxItems: 3 } }) })).rejects.toThrow('disk full');
+  });
+
+  it.skipIf(!sqliteAvailable)('refresh picks up other processes\' writes, throttled', async () => {
+    const db = await sqlite();
+    const host = await db.open();
+    let now = 1_000_000;
+    const mine = new FeatureConversationOverrideStore({ database: host, now: () => now });
+    const other = new FeatureConversationOverrideStore({ database: host });
+    await mine.load(); await other.load();
+    await other.write({ plugin: 'rss', key, next: () => ({ enabled: false, patch: {} }) });
+    await mine.refresh();
+    expect(mine.get('rss', key)).toBeUndefined(); // within the throttle window
+    const version = mine.version;
+    now += 10_000;
+    await mine.refresh();
+    expect(mine.get('rss', key)).toMatchObject({ enabled: false, revision: 1 });
+    expect(mine.version).toBe(version + 1);
+    now += 10_000;
+    await mine.refresh();
+    expect(mine.version).toBe(version + 1); // unchanged content keeps the caches
+    await host.stop();
   });
 
   it.skipIf(!sqliteAvailable)('writes through to the database and loads it again at start', async () => {

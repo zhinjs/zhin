@@ -93,6 +93,34 @@ export interface FeatureRpcContext {
    * Plugin's `chatAdminFields` above the conversation level). Undefined: no extra limit.
    */
   readonly allowedFields?: (schema: JsonSchema | undefined, level: ConsoleFeatureLevel) => readonly string[] | undefined;
+  /**
+   * Whether this caller may write values containing environment references (`${…}` /
+   * `env://…`). File overrides are environment-expanded at run time, so such a value would let
+   * `feature.configure` read secrets back through `feature.get` / runtime echoes. Absent: never
+   * (chat self-service); the Console grants it to principals that may edit `.env` themselves.
+   */
+  readonly mayReferenceEnvironment?: () => boolean;
+}
+
+/** True when `value` (keys included) contains a `${…}` or `env://` reference anywhere. */
+export function containsEnvironmentReference(value: unknown, depth = 0): boolean {
+  if (depth > 32) return true;
+  if (typeof value === 'string') return value.includes('${') || /env:\/\//iu.test(value);
+  if (Array.isArray(value)) return value.some(item => containsEnvironmentReference(item, depth + 1));
+  if (record(value)) {
+    return Object.entries(value).some(([key, item]) => containsEnvironmentReference(key, depth + 1) || containsEnvironmentReference(item, depth + 1));
+  }
+  return false;
+}
+
+/** Refuses (400 `environment-reference`) a write that would plant an environment reference. */
+export function assertNoEnvironmentReference(context: Pick<FeatureRpcContext, 'mayReferenceEnvironment'>, value: unknown): void {
+  if (!containsEnvironmentReference(value)) return;
+  let allowed: boolean;
+  try { allowed = context.mayReferenceEnvironment?.() === true; } catch { allowed = false; }
+  if (!allowed) {
+    throw new FeatureRpcError(400, '值不能包含环境变量引用（${…} / env://）', { code: 'environment-reference' });
+  }
 }
 
 export interface FeatureRpcReply {
@@ -127,9 +155,11 @@ export function createFeatureRpcContext(
   authScope: string,
   authorize?: FeatureRpcAuthorizer,
   actor?: string,
+  mayReferenceEnvironment?: () => boolean,
 ): FeatureRpcContext {
   return Object.freeze({
     authScope,
+    ...(mayReferenceEnvironment ? { mayReferenceEnvironment } : {}),
     ...(composition.featureStores ? { stores: composition.featureStores } : {}),
     ...(actor ? { actor } : {}),
     configuration: composition.configuration,
@@ -199,7 +229,9 @@ export function readScope(input: Record_): { level: ConsoleFeatureLevel; key?: s
   }
   const key = requireString(input, 'key');
   if (level === 'conversation') {
-    if (key.length > 512 || !parseFeatureConversationKey(key)) invalid('key 必须是 <适配器别名>/<账号 id>/<group|private|channel>:<会话 id>（会话 id 中的 % 与 / 转义为 %25 / %2F）');
+    // Each part is validated by the parser (alias, endpoint id ≤ 128, conversation id 1–256 before
+    // escaping); the length guard only bounds the parse work, above any key the Runtime can form.
+    if (key.length > 4096 || !parseFeatureConversationKey(key)) invalid('key 必须是 <适配器别名>/<账号 id>/<group|private|channel>:<会话 id>（会话 id 中的 % 与 / 转义为 %25 / %2F）');
     return { level, key };
   }
   if (!(level === 'adapter' ? ADAPTER_KEY : ENDPOINT_KEY).test(key)) {
@@ -331,7 +363,7 @@ function matrix(state: State, context: FeatureRpcContext): ConsoleFeatureMatrixR
     const overrides = readFeatureOverrides(blockOf(state.document, feature.plugin)?.[FEATURE_OVERRIDES_KEY]);
     const adapters: Record<string, ConsoleFeatureMatrixCell> = {};
     for (const alias of aliases) {
-      const resolved = resolveFeatureEnabled({ overrides, globalEnabled: feature.globalEnabled, key: alias });
+      const resolved = enabledAt(state, context, feature.plugin, 'adapter', alias);
       const entry = overrides.adapters?.[alias];
       adapters[alias] = Object.freeze({ enabled: resolved.enabled, ...(resolved.lockedBy ? { lockedBy: resolved.lockedBy } : {}),
         overridden: !!entry && Object.keys(entry).length > 0 });
@@ -382,12 +414,28 @@ function conversationOverride(context: FeatureRpcContext, plugin: string, key: s
   return key !== undefined && context.stores ? context.stores.conversations.get(plugin, key) : undefined;
 }
 
-/** Enabled state of `plugin` at `level`/`key`, including the stored conversation switch. */
-function enabledAt(state: State, context: FeatureRpcContext, plugin: string, level: ConsoleFeatureLevel, key: string | undefined) {
+/** Enabled state of `plugin` alone at `level`/`key`, including the stored conversation switch. */
+function ownEnabledAt(state: State, context: FeatureRpcContext, plugin: string, level: ConsoleFeatureLevel, key: string | undefined) {
   const overrides = readFeatureOverrides(blockOf(state.document, plugin)?.[FEATURE_OVERRIDES_KEY]);
   const conversation = level === 'conversation' ? featureConversationEntry(conversationOverride(context, plugin, key)) : undefined;
   return resolveFeatureEnabled({ overrides, globalEnabled: globallyEnabled(state.document, plugin), key: key ?? '', level,
     ...(conversation ? { conversation } : {}) });
+}
+
+/**
+ * Enabled state at `level`/`key` along the ancestor chain (the Runtime hides a nested Plugin
+ * wherever an ancestor is off): an ancestor switched off above `level` locks this level too.
+ */
+function enabledAt(state: State, context: FeatureRpcContext, plugin: string, level: ConsoleFeatureLevel, key: string | undefined) {
+  const own = ownEnabledAt(state, context, plugin, level, key);
+  if (own.lockedBy) return own;
+  const segments = plugin.split('/');
+  for (let depth = segments.length - 1; depth >= 1; depth -= 1) {
+    const ancestor = ownEnabledAt(state, context, segments.slice(0, depth).join('/'), level, key);
+    if (ancestor.lockedBy) return Object.freeze({ ...own, enabled: false, disabledAt: ancestor.disabledAt, lockedBy: ancestor.lockedBy });
+    if (!ancestor.enabled && own.enabled) return Object.freeze({ ...own, enabled: false, disabledAt: ancestor.disabledAt });
+  }
+  return own;
 }
 
 /** Refuses (409 `locked`) any change of a level's switch while an upper level is disabled. */
@@ -417,17 +465,21 @@ function getFeature(state: State, input: Record_, context: FeatureRpcContext): C
   let levels: readonly ConsoleFeatureLevel[];
   try { levels = readFeatureLevels(schema); } catch { levels = ['global']; }
   const ref = level === 'conversation' ? parseFeatureConversationKey(key!) : undefined;
+  const chain = enabledAt(state, context, plugin, level, key);
+  const lockedBy = resolved.lockedBy ?? chain.lockedBy;
   return Object.freeze({
-    revision: level === 'conversation' ? String(row?.revision ?? 0) : state.revision, plugin, level, ...(key ? { key } : {}), levels,
+    revision: level === 'conversation' ? String(stores(context).conversations.revisionOf(plugin, key!)) : state.revision,
+    plugin, level, ...(key ? { key } : {}), levels,
     ...conversationDeclaration(schema),
     schema: levelSchema(schema, level),
     values: mask(schema, plugin, values),
     effective: mask(schema, plugin, resolved.value as Record_),
     sources: resolved.sources,
-    enabled: resolved.enabled,
-    ...(resolved.lockedBy ? { lockedBy: resolved.lockedBy } : {}),
+    enabled: resolved.enabled && chain.enabled,
+    ...(lockedBy ? { lockedBy } : {}),
     ...(ref ? { conversation: Object.freeze({ adapter: ref.adapter, endpointId: ref.endpointId, kind: ref.conversation.kind, id: ref.conversation.id }) } : {}),
     ...(row ? { updatedAt: row.updatedAt, ...(row.updatedBy ? { updatedBy: row.updatedBy } : {}) } : {}),
+    ...(context.stores ? { persistent: context.stores.conversations.persistent } : {}),
   });
 }
 
@@ -578,10 +630,14 @@ async function writeConversation(
   if (result.status === 'conflict') return Object.freeze({ status: 'conflict', revision: String(result.revision), message: '会话覆盖已被其他地方修改，未保存。请刷新后重试。' });
   if (result.status === 'unchanged') return Object.freeze({ status: 'unchanged', revision: String(result.revision), warnings: Object.freeze([]) });
   context.publishEvent?.('feature:updated', { plugin, level: 'conversation', key });
-  return Object.freeze({ status: 'saved', revision: String(result.revision), restartRequired: false, warnings: Object.freeze([]), message: '会话覆盖已保存，立即生效' });
+  const persistent = store.persistent;
+  return Object.freeze({ status: 'saved', revision: String(result.revision), restartRequired: false, warnings: Object.freeze([]), persistent,
+    message: persistent ? '会话覆盖已保存，立即生效' : `会话覆盖已保存，立即生效；${NOT_PERSISTENT}` });
 }
 
 const CURSOR = /^o:(\d{1,9})$/u;
+/** Shown wherever a conversation override is written to a store that cannot persist it. */
+export const NOT_PERSISTENT = '当前数据库不支持持久化，重启后丢失';
 
 async function listConversations(state: State, input: Record_, context: FeatureRpcContext): Promise<ConsoleFeatureConversationsResult> {
   const { conversations, recentConversations } = stores(context);
@@ -634,7 +690,8 @@ async function listConversations(state: State, input: Record_, context: FeatureR
     || (right.lastActiveAt ?? 0) - (left.lastActiveAt ?? 0) || (left.key < right.key ? -1 : left.key > right.key ? 1 : 0));
   const page = all.slice(cursor, cursor + limit);
   void state;
-  return Object.freeze({ conversations: Object.freeze(page), ...(cursor + limit < all.length ? { nextCursor: `o:${cursor + limit}` } : {}), recentAvailable });
+  return Object.freeze({ conversations: Object.freeze(page), ...(cursor + limit < all.length ? { nextCursor: `o:${cursor + limit}` } : {}), recentAvailable,
+    persistent: conversations.persistent });
 }
 
 async function handle(type: ConsoleFeatureRpcType, input: Record_, context: FeatureRpcContext): Promise<unknown> {
@@ -644,16 +701,19 @@ async function handle(type: ConsoleFeatureRpcType, input: Record_, context: Feat
       return readState(context, state => listFeatures(state));
     case 'feature.matrix':
       await authorize(context, { type });
+      await context.stores?.conversations.refresh();
       return readState(context, state => matrix(state, context));
     case 'feature.get': {
       const target = readTarget(input, false);
       await authorize(context, { type, ...target });
+      if (target.level === 'conversation') await context.stores?.conversations.refresh();
       return readState(context, state => getFeature(state, input, context));
     }
     case 'feature.set-override': {
       const target = readTarget(input, true);
       await authorize(context, { type, ...target });
       const patch = readPatch(input);
+      assertNoEnvironmentReference(context, patch);
       return readState(context, state => {
         requireDeclared(state.document, target.plugin);
         assertAllowedFields(context, ownSchema(state.snapshot, target.plugin), target.level, Object.keys(patch));
@@ -753,6 +813,7 @@ async function handle(type: ConsoleFeatureRpcType, input: Record_, context: Feat
     }
     case 'feature.conversations':
       await authorize(context, { type });
+      await context.stores?.conversations.refresh();
       return readState(context, state => listConversations(state, input, context));
   }
 }

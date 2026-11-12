@@ -1,27 +1,29 @@
 import { messages as t } from "../../../../messages.js";
+import { currentGuildChannel, requireRoleBelowRequester } from "../../../../conversation.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import { requireDiscordGatewayClient } from '@zhin.js/adapter-discord';
 
-export default defineAgentTool<{ guild_id: string; user_id: string; role_id: string }>({
-  description: '移除成员的 Discord 角色',
+export default defineAgentTool<{ user_id: string; role_id: string }>({
+  description: '移除当前 Discord 服务器成员的身份组（只能是低于你最高身份组的身份组）',
   inputSchema: z.object({
-    guild_id: z.string().describe('服务器 ID'),
     user_id: z.string().describe('用户 ID'),
-    role_id: z.string().describe('角色 ID'),
+    role_id: z.string().describe('身份组 ID'),
   }),
   adapter: 'discord',
   scopes: ["channel"],
   tags: ['discord'],
   permissions: ['platform-permission:manage_roles', 'bot-permission:manage_roles'],
-  async execute({ guild_id, user_id, role_id  }: { guild_id: string; user_id: string; role_id: string }, context) {
+  async execute({ user_id, role_id }, context) {
+    const { guildId } = currentGuildChannel(context);
     const client = requireDiscordGatewayClient(context.$client);
-    const guild = await client.guilds.fetch(guild_id);
+    const guild = await client.guilds.fetch(guildId);
+    const denied = await requireRoleBelowRequester(context, guild, role_id);
+    if (denied) return { success: false, message: denied };
     const member = await guild.members.fetch(user_id) as {
       roles: { remove(id: string): Promise<unknown> };
     };
     await member.roles.remove(role_id);
-    const success = true;
-    return { success, message: success ? t(context.locale, 'memberRoleRemoved', { p0: user_id }) : t(context.locale, 'operationFailed') };
+    return { success: true, message: t(context.locale, 'memberRoleRemoved', { p0: user_id }) };
   },
 });

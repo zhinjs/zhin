@@ -60,11 +60,6 @@ export {
 
 export { type QqClientEventMap } from './client.js';
 
-export {
-  checkQqPlatformPermit,
-  normalizeQqGuildSenderForPermit,
-  platformPermit,
-  qqGuildPermitResolver,
-} from './platform-permit.js';
+export { platformPermit } from './platform-permit.js';
 
 export { QqAdapter } from './adapter.js';

@@ -16,7 +16,7 @@ import { createConfigDocument } from '@zhin.js/runtime';
 import { ConsoleConfigurationStore } from '@zhin.js/gateway/config';
 import { readEnvFile, writeEnvFile } from '@zhin.js/gateway/config';
 import { projectEnvironment } from '@zhin.js/gateway/iam';
-import { ConsoleIamService, IamError, type ConsoleUserView, type SetupDatabaseInput, type SetupStatus } from '@zhin.js/gateway/iam';
+import { accountInputProblem, ConsoleIamService, IamError, type ConsoleUserView, type SetupDatabaseInput, type SetupStatus } from '@zhin.js/gateway/iam';
 import { ConsoleSetupService, type SetupDatabaseField, type SetupDriver } from '@zhin.js/gateway/iam';
 import { defineConsoleIamTables } from '@zhin.js/gateway/iam';
 import {
@@ -283,33 +283,7 @@ export async function runConsoleInit(
       }]);
       if (change) databaseInput = await promptDatabase(project, io);
     }
-    let switched = false;
-    if (databaseInput) {
-      const tested = await project.testDatabase(databaseInput);
-      if (!tested.ok) {
-        io.error(`数据库连接失败：${tested.error ?? 'unknown error'}`);
-        return 1;
-      }
-      const applied = await project.applyDatabase(databaseInput);
-      switched = applied.switched;
-      io.log(`已写入数据库配置。${applied.notice}`);
-      if (switched) {
-        // The gateway reconnected before it answered; it serves the new database already.
-        io.log(applied.restarting ? '网关已切换到新数据库，并在重启实例。' : '网关已切换到新数据库。');
-      } else {
-        // Continue on the new database directly.
-        await project.close();
-        project = await open(projectRoot);
-      }
-      if (!(await project.status()).setupRequired) {
-        io.error('新数据库里已有所有者：请改用 `zhin console user …`。');
-        return 1;
-      }
-    }
-    await recordOnboardingSteps(onboarding, {
-      database: databaseInput || status.database.source === 'config' ? 'done' : 'skipped',
-    }, setupOnboardingDeps.io);
-    // ---- step 2: owner
+    // ---- step 2: owner — collected and checked before the database is switched or .env written
     let username = options.owner;
     let displayName = options.displayName;
     let password: string | undefined;
@@ -341,6 +315,37 @@ export async function runConsoleInit(
         password = answers.password;
       }
     }
+    const ownerProblem = accountInputProblem({ username, password });
+    if (ownerProblem) {
+      io.error(`所有者账号无效：${ownerProblem}（数据库与 .env 未改动）`);
+      return 1;
+    }
+    let switched = false;
+    if (databaseInput) {
+      const tested = await project.testDatabase(databaseInput);
+      if (!tested.ok) {
+        io.error(`数据库连接失败：${tested.error ?? 'unknown error'}`);
+        return 1;
+      }
+      const applied = await project.applyDatabase(databaseInput);
+      switched = applied.switched;
+      io.log(`已写入数据库配置。${applied.notice}`);
+      if (switched) {
+        // The gateway reconnected before it answered; it serves the new database already.
+        io.log(applied.restarting ? '网关已切换到新数据库，并在重启实例。' : '网关已切换到新数据库。');
+      } else {
+        // Continue on the new database directly.
+        await project.close();
+        project = await open(projectRoot);
+      }
+      if (!(await project.status()).setupRequired) {
+        io.error('新数据库里已有所有者：请改用 `zhin console user …`。');
+        return 1;
+      }
+    }
+    await recordOnboardingSteps(onboarding, {
+      database: databaseInput || status.database.source === 'config' ? 'done' : 'skipped',
+    }, setupOnboardingDeps.io);
     const { user } = await project.createOwner({ username, password, displayName });
     io.log(`已创建所有者 ${user.username}。现在可以用它登录 Console。`);
     await recordOnboardingSteps(onboarding, {}, setupOnboardingDeps.io);

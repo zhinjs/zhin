@@ -253,7 +253,8 @@ describe("ConsoleTransport REST/SSE transport", () => {
     await manager.installPlugin('@zhin.js/adapter-telegram', {}, { timeoutMs: 600_000 });
     await manager.sendRequest({ type: 'custom' }, { timeoutMs: 1_234 });
 
-    expect(timeout.mock.calls.map(([ms]) => ms)).toEqual([5_000, 300_000, 300_000, 300_000, 600_000, 1_234]);
+    // Package transactions use a renewable idle deadline instead of AbortSignal.timeout.
+    expect(timeout.mock.calls.map(([ms]) => ms)).toEqual([5_000, 1_234]);
     // Package mutations are gateway dependency transactions (ADR 0054 §4), never instance RPC.
     const bodies = (fetchMock.mock.calls as unknown as [string, RequestInit][]).slice(1, 4).map(([, init]) => JSON.parse(String(init.body)));
     expect(bodies).toEqual([
@@ -262,10 +263,39 @@ describe("ConsoleTransport REST/SSE transport", () => {
       expect.objectContaining({ type: 'gateway.packages.uninstall', data: { packages: ['@zhin.js/adapter-telegram'] } }),
     ]);
 
-    const configured = new ConsoleTransport({ fetch: fetchMock, packageOperationTimeout: 60_000 });
-    timeout.mockClear();
-    await configured.installPlugin('@zhin.js/adapter-telegram');
-    expect(timeout).toHaveBeenCalledWith(60_000);
+  });
+
+  it('renews the package transaction deadline on progress events and reports an unknown result on timeout', async () => {
+    installBrowserGlobals();
+    vi.useFakeTimers();
+    try {
+      let abortSignal: AbortSignal | undefined;
+      const fetchMock = vi.fn((_url: string, init: RequestInit) => new Promise<Response>((_resolve, reject) => {
+        abortSignal = init.signal!;
+        init.signal!.addEventListener('abort', () => reject(init.signal!.reason));
+      }));
+      const manager = new ConsoleTransport({ fetch: fetchMock as never, packageOperationTimeout: 60_000 });
+      const progress = (data: unknown) => (manager as unknown as { eventListeners: Map<string, Set<(event: unknown) => void>> })
+        .eventListeners.get('gateway.packages.progress')!.forEach((listener) => listener({ type: 'gateway.packages.progress', data }));
+      const pending = manager.installPlugin('@zhin.js/adapter-telegram');
+      const outcome = pending.then(() => 'resolved', (error: unknown) => error);
+      await vi.advanceTimersByTimeAsync(50_000);
+      progress({ type: 'phase', id: 't1', phase: 'package-manager' });
+      await vi.advanceTimersByTimeAsync(50_000);
+      expect(abortSignal!.aborted).toBe(false);
+      // Waiting for the instance to become ready can take up to gateway.readyTimeout (3600 s).
+      progress({ type: 'phase', id: 't1', phase: 'start-instance' });
+      await vi.advanceTimersByTimeAsync(3_000_000);
+      expect(abortSignal!.aborted).toBe(false);
+      progress({ type: 'output', id: 't1', stream: 'stdout', chunk: 'x' });
+      await vi.advanceTimersByTimeAsync(60_001);
+      expect(abortSignal!.aborted).toBe(true);
+      expect(await outcome).toMatchObject({ code: 'RESULT_UNKNOWN', message: expect.stringContaining('结果未知') });
+      // The subscription is released with the request.
+      expect((manager as unknown as { eventListeners: Map<string, unknown> }).eventListeners.has('gateway.packages.progress')).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('invalidates the rejected credential and requests re-login on a 401 RPC response', async () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { resolveKeyedValue } from "./hooks.js";
+import { resolveKeyedValue, transactionFailure } from "./hooks.js";
 
 describe("resolveKeyedValue (useConfig stale-state guard)", () => {
   it("returns the value when the entry key matches", () => {
@@ -17,5 +17,18 @@ describe("resolveKeyedValue (useConfig stale-state guard)", () => {
 
   it("returns null when nothing has been loaded", () => {
     expect(resolveKeyedValue(null, "plugin-a")).toBeNull();
+  });
+});
+
+describe("transactionFailure (install / uninstall / update hooks)", () => {
+  const base = { id: "t1", operation: "install", packages: [], instance: { before: "running", after: "running" } } as const;
+  it("is null for a successful transaction", () => {
+    expect(transactionFailure({ ...base, ok: true, status: "succeeded" } as never)).toBeNull();
+  });
+  it("reports a rolled-back transaction as the hook error", () => {
+    expect(transactionFailure({ ...base, ok: false, status: "rolledBack", failedPhase: "start-instance", error: "instance did not start" } as never))
+      .toBe("instance did not start（已回滚，失败阶段 start-instance）");
+    expect(transactionFailure({ ...base, ok: false, status: "rollbackFailed", error: "boom", rollbackError: "disk full" } as never))
+      .toBe("boom（回滚未完成：disk full）");
   });
 });

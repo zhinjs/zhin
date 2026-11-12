@@ -98,6 +98,8 @@ describe('dispatch gate helpers', () => {
     projections: new Map([[featureId('zhin.adapter'), {
       owner: (id: string) => { if (!id.startsWith('ep:')) throw new Error('unknown'); return adapterOwner; },
       endpointEntry: (id: string) => id === 'ep:a' ? { desired: { endpointId: 'bot-a' } } : undefined,
+      // Platform name, online name, alias and omitted key all select the one Endpoint (AdapterIndex.resolve).
+      resolve: (adapter: string, endpointKey: string) => ['OneBot', 'qq'].includes(adapter) && ['', 'bot-a', 'Online Name', 'qq'].includes(endpointKey) ? 'ep:a' : undefined,
     }]]),
   });
 
@@ -111,6 +113,17 @@ describe('dispatch gate helpers', () => {
     expect(resolveFeatureTargetKey(undefined, { conversation: { endpoint: { id: 'ep:a' } } })).toBeUndefined();
     expect(resolveFeatureTargetKey(undefined, { adapter: 'qq', endpointId: 'x' })).toBe('qq/x');
     expect(() => resolveFeatureTargetKey(undefined, { adapter: '' })).toThrow(TypeError);
+  });
+
+  it('resolves outbound selectors through AdapterIndex.resolve, like the send', () => {
+    const value = snapshot({});
+    for (const [adapter, endpointKey] of [['OneBot', ''], ['OneBot', 'Online Name'], ['qq', 'qq'], ['qq', 'bot-a']] as const) {
+      expect(resolveFeatureTargetKey(value, { endpoint: { adapter, endpointKey }, conversation: { kind: 'group', id: 'a/b' } })).toBe('qq/bot-a/group:a%2Fb');
+    }
+    expect(resolveFeatureTargetKey(value, { endpoint: { adapter: 'OneBot', endpointKey: 'bot-a' } })).toBe('qq/bot-a');
+    // Unresolvable selectors fall back to the global switch instead of throwing.
+    expect(resolveFeatureTargetKey(value, { endpoint: { adapter: 'Other', endpointKey: 'x/y' } })).toBeUndefined();
+    expect(resolveFeatureTargetKey(undefined, { endpoint: { adapter: 'OneBot', endpointKey: '' } })).toBeUndefined();
   });
 
   it('gates owners by override levels, nested Plugins by their ancestors', () => {

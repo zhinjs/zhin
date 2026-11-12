@@ -50,10 +50,13 @@ export async function loadHostHttpConfig(
   const host = connectableHost(http.host ?? '127.0.0.1');
   const base = (http.apiBase ?? '/api').replace(/^\/+|\/+$/g, '') || 'api';
   const local = await localGatewayFetch(cwd);
+  const consoleToken = process.env.ZHIN_CONSOLE_TOKEN?.trim() || layers.environments?.[environment]?.ZHIN_CONSOLE_TOKEN?.trim() || '';
   return {
     baseUrl: `${scheme}://${host}:${http.port ?? 8086}/${base}`,
-    // After Console setup http.token is rejected (ADR 0049): use a user API token instead.
-    token: process.env.ZHIN_CONSOLE_TOKEN?.trim() || layers.environments?.[environment]?.ZHIN_CONSOLE_TOKEN?.trim() || http.token || '',
+    // After Console setup http.token is rejected (ADR 0049): use a user API token instead. Over
+    // the local socket only an explicit ZHIN_CONSOLE_TOKEN is sent (the gateway then runs the
+    // request as that token's principal); without one the request runs as the local owner.
+    token: local ? consoleToken : consoleToken || http.token || '',
     ...(local ? { fetch: local } : {}),
   };
 }

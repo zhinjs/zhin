@@ -25,6 +25,11 @@ export interface ConsoleTransportConfig {
 export interface ConsoleRequestOptions {
   /** Overrides the transport-wide timeout for this call. */
   readonly timeoutMs?: number;
+  /**
+   * Console event type whose arrival renews the timeout (an idle timeout instead of a fixed one).
+   * Package transactions renew on `gateway.packages.progress`.
+   */
+  readonly renewOn?: string;
 }
 
 export interface ConsoleTransportCallbacks {

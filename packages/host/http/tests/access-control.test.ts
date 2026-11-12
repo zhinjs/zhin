@@ -29,7 +29,12 @@ describe('TokenRegistry (ADR 0049 §1)', () => {
   it('is open without credentials and before setup', async () => {
     const registry = new TokenRegistry();
     expect(registry.hasAnyToken()).toBe(false);
-    expect(await registry.authenticate('')).toEqual({ kind: 'bootstrap', open: true });
+    // Only an explicit in-process caller (tests, embedding) or a loopback peer gets the open Host.
+    expect(await registry.authenticate('', { inProcess: true })).toEqual({ kind: 'bootstrap', open: true });
+    // An unknown peer address is not local.
+    expect(await registry.authenticate('')).toBeNull();
+    expect(await registry.authenticate('', requestMeta(new Request('http://h/')))).toBeNull();
+    expect(await registry.authenticate('', requestMeta(new Request('http://h/'), undefined, { inProcess: true }))).toEqual({ kind: 'bootstrap', open: true });
     expect(registry.resolveAccess('').unrestricted).toBe(true);
     // An open Host is not an explicit credential.
     expect(registry.resolve('')).toBeNull();

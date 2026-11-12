@@ -1,11 +1,11 @@
 import { messages as t } from "../../../../messages.js";
+import { currentGuild } from "../../../../conversation.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 
-export default defineAgentTool<{ guild_id: string; user_id: string; role_id: string }>({
-  description: '给用户授予 KOOK 服务器角色',
+export default defineAgentTool<{ user_id: string; role_id: string }>({
+  description: '在当前 KOOK 服务器给用户授予角色',
   inputSchema: z.object({
-    guild_id: z.string().describe('服务器 ID'),
     user_id: z.string().describe('用户 ID'),
     role_id: z.string().describe('角色 ID'),
   }),
@@ -13,9 +13,9 @@ export default defineAgentTool<{ guild_id: string; user_id: string; role_id: str
   scopes: ["channel"],
   tags: ['kook'],
   permissions: ['platform-permission:manage_roles', 'bot-permission:manage_roles'],
-  async execute({ guild_id, user_id, role_id  }: { guild_id: string; user_id: string; role_id: string }, context) {
+  async execute({ user_id, role_id }, context) {
     const client = context.$client;
-    const success = await client.pickGuildMember(guild_id, user_id).grant(role_id);
+    const success = await client.pickGuildMember(currentGuild(context), user_id).grant(role_id);
     return { success, message: success ? t(context.locale, 'roleGranted', { p0: user_id, p1: role_id }) : t(context.locale, 'roleGrantFailed') };
   },
 });

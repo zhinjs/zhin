@@ -5,7 +5,8 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { LocalGatewayClient, LocalGatewayClientError, LocalGatewayRpcError, probeLocalGateway } from '../../src/local/client.js';
 import { LocalControlServer, LocalSocketError, prepareLocalSocketPath } from '../../src/local/local-socket.js';
-import { LOCAL_GATEWAY_RPC } from '../../src/local/protocol.js';
+import { handshakeProof, LineDecoder, LOCAL_GATEWAY_RPC, MAX_LOCAL_LINE_BYTES } from '../../src/local/protocol.js';
+import { writeGatewayInfo } from '../../src/local/state-file.js';
 
 const posix = process.platform !== 'win32';
 const dirs: string[] = [];
@@ -127,5 +128,53 @@ describe.runIf(posix)('local control socket', () => {
     const server = await open(path);
     await server.close();
     await expect(lstat(path)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('verifies the endpoint holds the handshake key recorded in gateway.json', async () => {
+    const { root, path } = await project();
+    const key = 'ab'.repeat(32);
+    servers.push(await LocalControlServer.open({ path, handshakeKey: key, handler: async () => ({ ok: true, data: 'pong' }) }));
+    const info = { pid: process.pid, ports: [], origins: [], socket: path, startedAt: Date.now(), version: '0', mode: 'daemon' as const, args: [], handshakeKey: key };
+    await writeGatewayInfo(root, info);
+    const client = await LocalGatewayClient.connect({ root });
+    await expect(client.request('ping')).resolves.toBe('pong');
+    client.close();
+    // Another endpoint at the recorded path (a squatted pipe) cannot prove the key.
+    await writeGatewayInfo(root, { ...info, handshakeKey: 'cd'.repeat(32) });
+    await expect(LocalGatewayClient.connect({ root })).rejects.toMatchObject({ code: 'not_owner' });
+    // The proof is an HMAC of the client's nonce.
+    expect(handshakeProof(key, 'n')).not.toBe(handshakeProof(key, 'm'));
+  });
+
+  it('runs beforeListen once the path is free, before binding', async () => {
+    const { path } = await project();
+    const seen: boolean[] = [];
+    servers.push(await LocalControlServer.open({
+      path,
+      beforeListen: async () => { seen.push(await lstat(path).then(() => true, () => false)); },
+    }));
+    expect(seen).toEqual([false]);
+  });
+
+  it('answers a reply over the line limit (UTF-8 bytes) with an error instead of breaking the connection', async () => {
+    const { root, path } = await project();
+    await open(path, async () => ({ ok: true, data: '中'.repeat(400_000) }));
+    const client = await LocalGatewayClient.connect({ root, path });
+    await expect(client.request('big')).rejects.toMatchObject({ name: 'LocalGatewayRpcError', code: 'unavailable', status: 502 });
+    // The connection survives.
+    await expect(client.request(LOCAL_GATEWAY_RPC.HELLO, { nonce: 'x' })).resolves.toEqual({ proof: null });
+    // Requests over the limit fail locally.
+    await expect(client.request('big', '中'.repeat(400_000))).rejects.toMatchObject({ code: 'protocol' });
+    client.close();
+  });
+});
+
+describe('LineDecoder', () => {
+  it('measures lines in UTF-8 bytes, complete or not', () => {
+    const decoder = new LineDecoder(10);
+    expect(decoder.push('abc\n')).toEqual(['abc']);
+    expect(() => new LineDecoder(10).push('中中中中\n')).toThrow('line too long');
+    expect(() => new LineDecoder(10).push('中中中中')).toThrow('line too long');
+    expect(MAX_LOCAL_LINE_BYTES).toBe(1024 * 1024);
   });
 });

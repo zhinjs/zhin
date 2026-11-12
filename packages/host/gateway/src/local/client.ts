@@ -1,11 +1,15 @@
 /** CLI side of the local control socket (ADR 0054 §6). */
+import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { lstat } from 'node:fs/promises';
 import { connect, type Socket } from 'node:net';
 import type { GatewayPackageEvent, GatewayRpcErrorDetails } from '@zhin.js/console-protocol';
 import { gatewaySocketPath, isNamedPipe } from './paths.js';
 import {
+  handshakeProof,
   LineDecoder,
   LOCAL_GATEWAY_RPC,
+  MAX_LOCAL_HTTP_BODY_BYTES,
+  MAX_LOCAL_LINE_BYTES,
   type LocalGatewayErrorCode,
   type LocalGatewayHttpMethod,
   type LocalGatewayHttpResponse,
@@ -41,6 +45,11 @@ export interface LocalGatewayClientOptions {
   readonly root: string;
   /** Overrides the endpoint (default: `gateway.json#socket`, else {@link gatewaySocketPath}). */
   readonly path?: string;
+  /**
+   * Handshake key the endpoint must prove (default: `gateway.json#handshakeKey` when the endpoint
+   * is the one recorded there). An endpoint that cannot prove it is refused (`not_owner`).
+   */
+  readonly handshakeKey?: string;
   /** Current user id; `undefined` skips the owner check. Default `process.getuid()`. */
   readonly uid?: () => number | undefined;
   readonly connectTimeoutMs?: number;
@@ -87,7 +96,9 @@ export class LocalGatewayClient {
 
   /** Connects to the project's gateway; see {@link LocalGatewayClientErrorCode} for failures. */
   static async connect(options: LocalGatewayClientOptions): Promise<LocalGatewayClient> {
-    const path = options.path ?? (await readGatewayInfo(options.root))?.socket ?? gatewaySocketPath(options.root);
+    const recorded = await readGatewayInfo(options.root);
+    const path = options.path ?? recorded?.socket ?? gatewaySocketPath(options.root);
+    const handshakeKey = options.handshakeKey ?? (recorded?.socket === path ? recorded.handshakeKey : undefined);
     if (!isNamedPipe(path)) {
       let info;
       try { info = await lstat(path); } catch (error) {
@@ -114,12 +125,42 @@ export class LocalGatewayClient {
         else reject(new LocalGatewayClientError('unreachable', `无法连接网关：${error.message}`, { cause: error }));
       });
     });
-    return new LocalGatewayClient(path, socket);
+    const client = new LocalGatewayClient(path, socket);
+    if (handshakeKey) {
+      try { await client.#verify(handshakeKey); } catch (error) {
+        client.close();
+        throw error;
+      }
+    }
+    return client;
+  }
+
+  /**
+   * Proves the peer holds this run's handshake key. Node cannot restrict who creates a Windows
+   * named pipe, so a pipe another account created first must not receive our requests.
+   */
+  async #verify(key: string): Promise<void> {
+    const nonce = randomBytes(16).toString('hex');
+    let reply: { proof?: unknown };
+    try {
+      reply = await this.request<{ proof?: unknown }>(LOCAL_GATEWAY_RPC.HELLO, { nonce }, { timeoutMs: 5_000 });
+    } catch (error) {
+      throw new LocalGatewayClientError('not_owner', `${this.path} 未通过网关握手校验；它可能不是本项目的网关`, { cause: error });
+    }
+    const expected = Buffer.from(handshakeProof(key, nonce), 'hex');
+    const actual = typeof reply?.proof === 'string' && /^[0-9a-f]+$/u.test(reply.proof) ? Buffer.from(reply.proof, 'hex') : Buffer.alloc(0);
+    if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) {
+      throw new LocalGatewayClientError('not_owner', `${this.path} 未通过网关握手校验；它可能不是本项目的网关`);
+    }
   }
 
   request<T = unknown>(type: string, data?: unknown, options: LocalRequestOptions = {}): Promise<T> {
     if (this.#closedError) return Promise.reject(this.#closedError);
     const id = this.#nextId++;
+    const line = `${JSON.stringify({ id, type, ...(data === undefined ? {} : { data }) })}\n`;
+    if (Buffer.byteLength(line) > MAX_LOCAL_LINE_BYTES) {
+      return Promise.reject(new LocalGatewayClientError('protocol', `请求超过本地套接字上限（1 MiB）：${type}`));
+    }
     return new Promise<T>((resolve, reject) => {
       const pending: Pending = { resolve: resolve as (value: unknown) => void, reject, ...(options.onEvent ? { onEvent: options.onEvent } : {}) };
       if (options.timeoutMs !== undefined) {
@@ -129,7 +170,7 @@ export class LocalGatewayClient {
         }, options.timeoutMs);
       }
       this.#pending.set(id, pending);
-      this.#socket.write(`${JSON.stringify({ id, type, ...(data === undefined ? {} : { data }) })}\n`);
+      this.#socket.write(line);
     });
   }
 
@@ -193,10 +234,31 @@ export async function probeLocalGateway(options: LocalGatewayClientOptions): Pro
 /** The subset of `fetch` the CLI's Host clients use. */
 export type LocalGatewayFetch = (input: string | URL, init?: Readonly<{ method?: string; body?: string | null; signal?: AbortSignal | null; headers?: unknown }>) => Promise<Response>;
 
+/** The Bearer credential of `Authorization` in `headers` (a `Headers`, record or entry list). */
+export function bearerFromHeaders(headers: unknown): string | undefined {
+  let value: unknown;
+  if (headers instanceof Headers) value = headers.get('authorization');
+  else if (Array.isArray(headers)) {
+    value = (headers as unknown[]).find((entry): entry is [string, string] => Array.isArray(entry) && String(entry[0]).toLowerCase() === 'authorization')?.[1];
+  } else if (headers && typeof headers === 'object') {
+    value = Object.entries(headers as Record<string, unknown>).find(([name]) => name.toLowerCase() === 'authorization')?.[1];
+  }
+  if (typeof value !== 'string') return undefined;
+  const match = /^Bearer\s+(\S+)\s*$/iu.exec(value.trim());
+  return match?.[1];
+}
+
+/** A JSON reply in the shape `requestPluginConsole` / `hostFetch` read. */
+function localError(status: number, code: string, error: string): Response {
+  return new Response(JSON.stringify({ success: false, code, error }), { status, headers: { 'content-type': 'application/json' } });
+}
+
 /**
  * A `fetch` that sends `{base}/…` requests over the local control socket
- * (`gateway.http.request`) instead of HTTP: the gateway runs them as the local owner, so no
- * Console token is needed (ADR 0054 §6). Only the path and query of the URL are used. A gateway
+ * (`gateway.http.request`) instead of HTTP (ADR 0054 §6). Only the path and query of the URL are
+ * used. Without an `Authorization: Bearer` header the gateway runs the request as the local
+ * owner, so no Console token is needed; with one (an explicit `ZHIN_CONSOLE_TOKEN`), the gateway
+ * authenticates that credential and runs — and audits — the request as its principal. A gateway
  * that is not running rejects like a refused connection (`cause.code === 'ECONNREFUSED'`).
  */
 export function createLocalGatewayFetch(options: LocalGatewayClientOptions): LocalGatewayFetch {
@@ -204,8 +266,15 @@ export function createLocalGatewayFetch(options: LocalGatewayClientOptions): Loc
     const url = typeof input === 'string' ? new URL(input) : input;
     const method = (init.method ?? 'GET').toUpperCase() as LocalGatewayHttpMethod;
     const body = typeof init.body === 'string' ? init.body : undefined;
+    const token = bearerFromHeaders(init.headers);
     const signal = init.signal ?? undefined;
     signal?.throwIfAborted();
+    if (body !== undefined && (method === 'GET' || (method as string) === 'HEAD')) {
+      return localError(400, 'invalid_input', 'GET 请求不能带 body');
+    }
+    if (body !== undefined && Buffer.byteLength(JSON.stringify(body)) > MAX_LOCAL_HTTP_BODY_BYTES) {
+      return localError(413, 'invalid_input', '请求体超过本地套接字上限；改用 HTTP 请求（Console API 令牌 ZHIN_CONSOLE_TOKEN，--host 指向网关地址）');
+    }
     let client: LocalGatewayClient;
     try { client = await LocalGatewayClient.connect(options); } catch (error) {
       if (error instanceof LocalGatewayClientError && error.code === 'not_running') {
@@ -220,15 +289,18 @@ export function createLocalGatewayFetch(options: LocalGatewayClientOptions): Loc
     aborted.catch(() => undefined);
     try {
       const reply = await Promise.race([
-        client.request<LocalGatewayHttpResponse>(LOCAL_GATEWAY_RPC.HTTP_REQUEST, { method, path: `${url.pathname}${url.search}`, ...(body === undefined ? {} : { body }) }),
+        client.request<LocalGatewayHttpResponse>(LOCAL_GATEWAY_RPC.HTTP_REQUEST, {
+          method,
+          path: `${url.pathname}${url.search}`,
+          ...(body === undefined ? {} : { body }),
+          ...(token === undefined ? {} : { token }),
+        }),
         aborted,
       ]);
       return new Response(reply.body === '' ? null : reply.body, { status: reply.status, headers: reply.headers });
     } catch (error) {
       if (signal?.aborted) throw signal.reason;
-      if (error instanceof LocalGatewayRpcError) {
-        return new Response(JSON.stringify({ success: false, code: error.code, error: error.message }), { status: error.status, headers: { 'content-type': 'application/json' } });
-      }
+      if (error instanceof LocalGatewayRpcError) return localError(error.status, error.code, error.message);
       throw error;
     } finally {
       client.close();

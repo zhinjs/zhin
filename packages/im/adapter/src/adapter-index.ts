@@ -69,6 +69,8 @@ export const SELF_STANDING_TTL_MS = 60_000;
 /** A failed / unknown answer is retried sooner. */
 export const SELF_STANDING_UNKNOWN_TTL_MS = 10_000;
 const SELF_STANDING_MAX_ENTRIES = 1024;
+/** Deadline of one shared `inspectSelfStanding` platform call, independent of any caller. */
+const SELF_STANDING_LOOKUP_TIMEOUT_MS = 10_000;
 
 interface SelfStandingEntry {
   readonly at: number;
@@ -169,7 +171,8 @@ export class AdapterIndex {
   readonly #profileDefaults = new Map<PluginId, Readonly<SelfProfile>>();
   readonly #fileProfiles = new Map<CapabilityId, Readonly<SelfProfile>>();
   readonly #selfStanding = new Map<string, SelfStandingEntry>();
-  readonly #selfStandingInflight = new Map<string, Promise<PlatformStanding | undefined>>();
+  /** In-flight lookups; an entry's identity marks the lookup still current (invalidation removes it). */
+  readonly #selfStandingInflight = new Map<string, { promise?: Promise<PlatformStanding | undefined> }>();
   readonly [generationAdmissionSource]: readonly [GenerationAdmissionGate];
 
   private constructor({ adapters, admission, ownerAliases, configurations, slots }: AdapterIndexConstruction) {
@@ -526,28 +529,35 @@ export class AdapterIndex {
     const now = options.now ?? Date.now();
     const cached = this.#selfStanding.get(key);
     if (cached && now - cached.at < cached.ttl) return cached.value;
-    const inflight = this.#selfStandingInflight.get(key);
+    const inflight = this.#selfStandingInflight.get(key)?.promise;
     if (options.cachedOnly) {
       // Warm the cache in the background (one lookup per TTL, shared); answer with what is known now.
       if (!inflight) void this.selfStanding(id, conversation, { ...(options.now !== undefined ? { now: options.now } : {}) }).catch(() => undefined);
       return undefined;
     }
-    if (inflight) return inflight;
+    if (inflight) return waitForCaller(inflight, options.signal);
     const management = this.management(id);
     const inspect = management?.inspectSelfStanding;
     if (!inspect) return undefined;
+    // The shared lookup has its own deadline: one caller's signal must neither lift that bound nor
+    // cancel (and cache as unknown) the answer other callers are waiting for.
+    const entry: { promise?: Promise<PlatformStanding | undefined> } = {};
     const task = (async () => {
+      await undefined; // registered in #selfStandingInflight before the platform call starts
       let value: PlatformStanding | undefined;
       try {
         value = normalizePlatformStanding(await inspect({
           conversation: Object.freeze({ kind: conversation.kind, id: conversation.id,
             ...(conversation.parent ? { parent: Object.freeze({ kind: conversation.parent.kind, id: conversation.parent.id }) } : {}),
             ...(conversation.threadId !== undefined ? { threadId: conversation.threadId } : {}) }),
-          signal: options.signal ?? AbortSignal.timeout(10_000),
+          signal: AbortSignal.timeout(SELF_STANDING_LOOKUP_TIMEOUT_MS),
         }));
       } catch {
         value = undefined;
       }
+      // Invalidated while in flight (role change): do not store the older answer.
+      if (this.#selfStandingInflight.get(key) !== entry) return value;
+      this.#selfStandingInflight.delete(key);
       if (this.#selfStanding.size >= SELF_STANDING_MAX_ENTRIES) {
         const oldest = this.#selfStanding.keys().next();
         if (!oldest.done) this.#selfStanding.delete(oldest.value);
@@ -556,16 +566,19 @@ export class AdapterIndex {
       this.#selfStanding.set(key, Object.freeze({ at: Date.now(), ttl: value ? SELF_STANDING_TTL_MS : SELF_STANDING_UNKNOWN_TTL_MS, value }));
       return value;
     })();
-    this.#selfStandingInflight.set(key, task);
-    try { return await task; } finally { this.#selfStandingInflight.delete(key); }
+    entry.promise = task;
+    this.#selfStandingInflight.set(key, entry);
+    return waitForCaller(task, options.signal);
   }
 
   /** Drops cached Bot standings of one conversation (or every conversation of the Endpoint). */
   invalidateSelfStanding(id: CapabilityId, conversation?: Pick<ConversationRef, 'kind' | 'id'>): void {
     const prefix = `${id}\u0000`;
-    for (const key of [...this.#selfStanding.keys()]) {
-      if (!key.startsWith(prefix)) continue;
-      if (!conversation || key.startsWith(`${prefix}${conversation.kind}\u0000${conversation.id}\u0000`)) this.#selfStanding.delete(key);
+    for (const map of [this.#selfStanding, this.#selfStandingInflight] as const) {
+      for (const key of [...map.keys()]) {
+        if (!key.startsWith(prefix)) continue;
+        if (!conversation || key.startsWith(`${prefix}${conversation.kind}\u0000${conversation.id}\u0000`)) map.delete(key);
+      }
     }
   }
 
@@ -739,6 +752,17 @@ function projectRecord(adapter: AdapterInstance, child: EndpointChildView): Adap
     endpoint: child.endpoint, segments: adapter.descriptor.segments,
     started: child.started, open: child.open, stopped: child.stopped, startAttempted: child.startAttempted,
   };
+}
+
+/** One caller stops waiting when its own signal aborts (answering "unknown"); the shared lookup goes on. */
+function waitForCaller<T>(task: Promise<T | undefined>, signal: AbortSignal | undefined): Promise<T | undefined> {
+  if (!signal) return task;
+  if (signal.aborted) return Promise.resolve(undefined);
+  return new Promise<T | undefined>((resolve, reject) => {
+    const onAbort = () => resolve(undefined);
+    signal.addEventListener('abort', onAbort, { once: true });
+    task.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort));
+  });
 }
 
 function selfStandingKey(id: CapabilityId, conversation: SelfStandingConversation): string {

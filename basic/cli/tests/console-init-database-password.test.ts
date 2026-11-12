@@ -39,6 +39,7 @@ function cliIo(stdin: string): ConsoleCliIo & { logs: string[]; errors: string[]
 function fakeAdmin() {
   const tested: Array<{ dialect: string; connection: Record<string, unknown> }> = [];
   const owners: Array<{ username: unknown; password: unknown }> = [];
+  const applied: unknown[] = [];
   let owner = false;
   const admin = {
     via: 'database',
@@ -49,7 +50,7 @@ function fakeAdmin() {
       tested.push(input);
       return { ok: true };
     },
-    applyDatabase: async () => ({ notice: '', switched: true }),
+    applyDatabase: async (input: unknown) => { applied.push(input); return { notice: '', switched: true }; },
     createOwner: async (input: { username: unknown; password: unknown }) => {
       owners.push(input);
       owner = true;
@@ -57,7 +58,7 @@ function fakeAdmin() {
     },
     close: async () => undefined,
   } as unknown as ConsoleAdmin;
-  return { admin, tested, owners, open: async () => admin };
+  return { admin, tested, owners, applied, open: async () => admin };
 }
 
 async function init(options: ConsoleInitOptions, stdin = '') {
@@ -146,5 +147,27 @@ describe('zhin console init database password', () => {
     expect(empty.code).toBe(1);
     expect(empty.io.errors[0]).toContain('第一行为空');
     expect(empty.tested).toEqual([]);
+  });
+
+  it('checks the owner account before it switches the database or writes .env', async () => {
+    for (const [owner, password, message] of [
+      ['alice', 'short', '密码至少'],
+      ['Bad Name!', OWNER_PASSWORD, '用户名'],
+    ] as const) {
+      const result = await init({
+        database: 'pg',
+        connection: { host: 'db' },
+        databasePasswordStdin: true,
+        owner,
+        passwordStdin: true,
+        yes: true,
+      }, `db-secret\n${password}\n`);
+      expect(result.code, owner).toBe(1);
+      expect(result.io.errors.join('\n')).toContain(message);
+      expect(result.io.errors.join('\n')).toContain('未改动');
+      expect(result.applied).toEqual([]);
+      expect(result.tested).toEqual([]);
+      expect(result.owners).toEqual([]);
+    }
   });
 });

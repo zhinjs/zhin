@@ -39,9 +39,10 @@ short_description: Zhin.js Plugin Runtime Sandbox playground
 - 栈：Plugin Runtime + Sandbox + `@zhin.js/agent`（OpenRouter free）
 - Secrets（Space → Settings → Variables and secrets）：
   - `OPENROUTER_API_KEY`：模型 Key
-  - `HTTP_TOKEN`：初始化令牌，只在创建所有者之前有效；**不要公开**。未设置时 `start.sh` 每次启动随机生成一个，只打印到容器日志
-  - `OWNER_PASSWORD`（可选 `OWNER_USERNAME`，默认 `maintainer`）：启动前离线创建所有者，端口开放时初始化已完成，初始化令牌随即失效
-  - `DEMO_PASSWORD`（可选 `DEMO_ROLE`，默认 `viewer`）：创建公开的只读账号 `demo`；建议按 [部署演示站点](https://github.com/zhinjs/zhin/blob/main/docs/operations/demo-deployment.md) 换成去掉数据库 / 文件读权限的自定义角色；要让访客在 `/sandbox` 里发消息，角色还需要 `endpoint.operate`
+  - `OWNER_PASSWORD`（推荐；可选 `OWNER_USERNAME`，默认 `maintainer`；至少 10 位）：启动前离线创建所有者，端口开放时初始化已完成，初始化令牌随即失效
+  - `HTTP_TOKEN`：初始化令牌，只在创建所有者之前有效；**不要公开**。只有不设 `OWNER_PASSWORD`、要在 Console 里完成初始化时才需要。未设置时 `start.sh` 在内存里随机生成一个，不写日志
+  - `OWNER_PASSWORD` 与 `HTTP_TOKEN` 都没设置时没人能完成初始化，`start.sh` 拒绝启动；密码过短同样直接报错退出（Space 显示 Runtime error 与原因）。账号创建后密码会从环境里移除，网关与实例看不到
+  - `DEMO_PASSWORD`（可选 `DEMO_ROLE`，默认 `viewer`；至少 10 位）：创建公开的只读账号 `demo`；建议按 [部署演示站点](https://github.com/zhinjs/zhin/blob/main/docs/operations/demo-deployment.md) 换成去掉数据库 / 文件读权限的自定义角色；要让访客在 `/sandbox` 里发消息，角色还需要 `endpoint.operate`
 - 数据库在容器内（`./data/playground.db`），Space 重启后重置；账号由 `start.sh` 按 Secrets 重新创建
 - 模型声明在 `ai.plan.yml`（首次启动、数据库为空时自动导入）；启动策略在 `zhin.config.yml`（`configVersion: 2`）
 - Host 由 `zhin start` 拉起的实例装配（HTTP 由管理网关承载）；仓库镜像：[`deploy/huggingface`](https://github.com/zhinjs/zhin/tree/main/deploy/huggingface)

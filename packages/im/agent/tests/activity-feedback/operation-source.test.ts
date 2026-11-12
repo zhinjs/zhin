@@ -14,6 +14,8 @@ it('keeps the native Client out of event JSON while preserving exact authority t
     [operationSession]: () => ({ scene: target, endpoint: client, signal: controller.signal }) };
   const payload = new ZhinAgentEventEmitter().createPayload('session', input as unknown as Message, 'text');
   expect(payload[activityFeedbackSource]).toEqual({ target, client, signal: controller.signal });
+  // Feature switches key on the Endpoint CapabilityId and the raw conversation ref (ADR 0055).
+  expect(payload.conversationRef).toEqual({ endpointId: 'canonical\0account', kind: 'private', id: 'alice' });
   expect(Object.getOwnPropertyDescriptor(payload, activityFeedbackSource)?.enumerable).toBe(false);
   expect(Object.isFrozen(client)).toBe(false);
   expect(() => JSON.stringify(payload)).not.toThrow();

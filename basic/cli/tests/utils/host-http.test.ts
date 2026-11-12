@@ -149,6 +149,34 @@ describe('loadHostHttpConfig', () => {
     }
   });
 
+  it.runIf(process.platform !== 'win32')('sends only an explicit ZHIN_CONSOLE_TOKEN over the local socket, never http.token', async () => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'zhh-'));
+    fs.writeFileSync(path.join(dir, 'zhin.config.yml'), 'http:\n  port: 9100\n  token: bootstrap-token\n');
+    const control = await LocalControlServer.open({ path: path.join(dir, '.zhin', 'gateway.sock') });
+    const seen: Array<{ data?: unknown }> = [];
+    control.setHandler(async (request) => {
+      if (request.type === LOCAL_GATEWAY_RPC.INFO) return { ok: true, data: { gateway: {}, instance: {}, consoleInitialized: true } };
+      seen.push(request);
+      return { ok: true, data: { status: 200, headers: { 'content-type': 'application/json' }, body: '{"success":true,"data":1}' } };
+    });
+    const previous = process.env.ZHIN_CONSOLE_TOKEN;
+    try {
+      delete process.env.ZHIN_CONSOLE_TOKEN;
+      const owner = await loadHostHttpConfig(dir);
+      expect(owner?.token).toBe('');
+      await hostGet(owner!, '/stats');
+      expect(seen.at(-1)!.data).not.toHaveProperty('token');
+      process.env.ZHIN_CONSOLE_TOKEN = 'user-api-token';
+      const user = await loadHostHttpConfig(dir);
+      await hostGet(user!, '/stats');
+      expect(seen.at(-1)!.data).toMatchObject({ token: 'user-api-token' });
+    } finally {
+      if (previous === undefined) delete process.env.ZHIN_CONSOLE_TOKEN;
+      else process.env.ZHIN_CONSOLE_TOKEN = previous;
+      await control.close();
+    }
+  });
+
   it('falls back to the default listener', async () => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-host-http-'));
     fs.writeFileSync(path.join(dir, 'zhin.config.yml'), 'log_level: info\n');

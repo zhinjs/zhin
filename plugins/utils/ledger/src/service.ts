@@ -178,7 +178,11 @@ export class LedgerService {
     const sendTarget = this.#outbound?.sendTarget;
     if (!sendTarget) return false;
     try {
-      await sendTarget.call(this.#outbound, await this.#privateTargetOf(caller), content, { locale: resolveLocale(caller.locale) });
+      const target = await this.#privateTargetOf(caller);
+      // ADR 0050 / 0055: a push to the caller's private chat is not a message there, so the
+      // dispatch gate never sees it; a switched-off private conversation gets the masked reply.
+      if (!this.#enabledFor(target)) return false;
+      await sendTarget.call(this.#outbound, target, content, { locale: resolveLocale(caller.locale) });
       return true;
     } catch (error) {
       logger.debug(`private delivery unavailable: ${error instanceof Error ? error.message : String(error)}`);

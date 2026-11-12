@@ -144,6 +144,11 @@ export interface HttpRouterOptions {
 
 export interface HttpRequestInfo {
   readonly remoteAddress?: string;
+  /**
+   * An in-process caller with no network peer (tests, embedding). Only such an explicit caller is
+   * admitted to an open Host without a loopback `remoteAddress`.
+   */
+  readonly inProcess?: boolean;
   /** Pre-authenticated principal; honoured only by a `forwarded` router. */
   readonly principal?: ConsolePrincipal;
 }
@@ -481,7 +486,7 @@ export function createHttpRouter(options: HttpRouterOptions = {}): HttpRouter {
       request.headers.get('authorization') ?? undefined,
       url.searchParams.get('token'),
     );
-    const meta = requestMeta(request, remoteAddress);
+    const meta = requestMeta(request, remoteAddress, { inProcess: info.inProcess === true });
     if (!requiresHttpAuth(pathname, apiBase, authExempt)) {
       // Public route: still attach a presented credential so page catalogs can filter by it.
       if (token || !tokenRegistry.hasAnyToken()) {

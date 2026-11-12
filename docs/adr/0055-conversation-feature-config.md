@@ -45,6 +45,9 @@ ADR 0050 让功能配置有三级：全局 < 适配器 < 账号。运营中更�
 - 实例拥有的表 `feature_conversation_overrides`（不使用网关保留的 `console_` 前缀）：`(plugin, key, enabled?, patch JSON, revision, updated_at, updated_by)`，主键 `(plugin, key)`。
 - 实例启动时整体加载到内存，按 `(plugin, key)` 索引；写入经实例的 RPC 完成并同步更新缓存，原地生效，不重启、不重载插件。
 - 写入按插件 Schema 校验（只允许 `conversationFields` / `selfServiceFields` 中的字段），乐观并发用 `revision`。
+- 修订号单调递增（2026-11-12 修订）：删除覆盖时保留墓碑行（空 patch、无开关，任何有效覆盖都不会是这种形状）并沿用修订号，重建后接着递增，旧修订号的写入一律冲突（无 ABA）。每次数据库写入检查影响行数，0 行或并发插入同一键（唯一键冲突）时重新加载缓存并返回冲突（409 `conflict`）。
+- 多进程共享数据库时，Console 读取 `feature.get`（会话层）/ `feature.conversations` / `feature.matrix` 前整表重新加载（至多每 5 秒一次，内容不变时不使缓存失效），以看到其他进程的写入。
+- MongoDB、Redis、memory 方言只保存在内存：`feature.get` / `feature.conversations` 返回 `persistent: false`，会话层写入的回复（Console 与聊天）注明「当前数据库不支持持久化，重启后丢失」。
 - 插件卸载或会话不存在时，记录保留；Console 可清理。
 
 ### 4. 解析规则
@@ -80,6 +83,7 @@ ADR 0050 让功能配置有三级：全局 < 适配器 < 账号。运营中更�
 - 字段：会话层只能改 `selfServiceFields`；账号 / 适配器 / 全局层经聊天也只能改 `selfServiceFields`，除非插件声明更宽的 `chatAdminFields`（各层仍按字段自身的 `levels` 过滤）。
 - 锁定：不能开启或改动被上级停用的插件，回复是哪一层锁定的。
 - 私聊：会话层只能在 Console 修改；私聊中可指定账号层及以上（需相应角色）。
+- 环境变量引用（2026-11-12 修订）：聊天写入的任何层级都拒绝含 `${…}` / `env://` 的值（配置文件会展开它们，等于借 `feature.configure` 读取密钥）。Console 的 `feature.set-override` 同样拒绝，除非调用者能直接管理环境变量（`ops.env.write`，owner 默认具有）。
 - 每次修改写入实例审计（`audit` 桥接消息），actor 为 `chat:<适配器别名>:<用户 id>`，带层级与作用范围；`updated_by` 记录同一身份。
 - 角色管理命令见 ADR 0056 §3（`角色 列表|授予|撤销`）。
 

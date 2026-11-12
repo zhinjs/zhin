@@ -40,7 +40,7 @@ zhin start --once --mode test
 
 | Option | Description |
 | --- | --- |
-| `-f, --foreground` | Run the gateway in the foreground (development, systemd, containers, PM2) and echo the instance output. `--once` and `--standalone` always run in the foreground |
+| `-f, --foreground` | Run the gateway in the foreground (development, systemd, containers, PM2) and echo the instance output. When stdin is a terminal and the gateway is the terminal's foreground job, the instance shares that input (terminal adapters, login assist); a gateway started as a background job (`… &`) keeps it from the instance, also after a later `fg`. When the instance exits or crashes, the gateway restores the terminal settings it started with (`stty`; not on Windows). `--once` and `--standalone` always run in the foreground |
 | `-d, --daemon` | Run in the background (what `zhin start` does by default). The background gateway's own output goes to `.zhin/logs/gateway.log` |
 | `--mode <mode>` | Runtime mode: `development` (default) / `test` / `production` |
 | `--environment <name>` | Environment name, defaults to `--mode`; selects `.env.<name>` and must match `/^[a-z0-9][a-z0-9-]*$/` |
@@ -71,11 +71,15 @@ Through the gateway only npm registry packages (`name` / `name@range`) can be in
 
 The CLI talks to the gateway over a local control socket:
 
-- Location: `<project-root>/.zhin/gateway.sock` (when that path exceeds the Unix socket path limit: `<tmp>/zhin-gateway-<project-path-hash>.sock`); on Windows the named pipe `\\.\pipe\zhin-gateway-<project-path-hash>`.
+- Location: `<project-root>/.zhin/gateway.sock` (when that path exceeds the Unix socket path limit: `<tmp>/zhin-gateway-<project-path-hash>.sock`); on Windows the named pipe `\\.\pipe\zhin-gateway-<project-path-hash>-<random>` (a fresh name per start, recorded in `.zhin/gateway.json`).
 - Permissions: the socket is created with mode `0600`, in a directory that must belong to the current user and must not be writable by others. Whoever can connect is the local owner (principal `local`), so run `zhin` as the user that started the gateway; otherwise the CLI reports that the socket belongs to another user.
-- Protocol: one JSON value per line. Requests `{ id, type, data? }`, where `type` is a `gateway.*` RPC (`gateway.instance.*`, `gateway.packages.*`) or the local-only `gateway.info` / `gateway.shutdown`; answers `{ id, ok, data | error }`, preceded by `{ id, event }` lines with dependency-transaction progress.
+- Handshake: each gateway start generates a handshake key, written only to the `0600` `.zhin/gateway.json`. After connecting, the CLI sends `gateway.hello { nonce }` and refuses the endpoint unless it answers with that key's HMAC (so it never talks to a same-named endpoint someone else created first).
+- Windows limitation: Node cannot set an owner or DACL on a named pipe; the pipe keeps the system's default security descriptor. The random pipe name and the handshake keep other accounts from squatting the pipe and impersonating the gateway, provided they cannot read `.zhin/gateway.json` in the project directory; on multi-user Windows hosts keep the project in a directory only the current user can read (e.g. under the user profile).
+- Agent: the gateway passes the actual endpoint (including the `<tmp>` fallback above) to the instance in `ZHIN_GATEWAY_SOCKET`; the Agent's file tools refuse it, and `bash` commands naming a gateway endpoint (`gateway.sock`, `zhin-gateway-<hash>…`) or that path are denied. This is a check on the command text: plugin code running unsandboxed as the gateway's OS user can still connect — the socket cannot tell processes of the same user apart.
+- Protocol: one JSON value per line (at most 1 MiB, counted in UTF-8 bytes). Requests `{ id, type, data? }`, where `type` is a `gateway.*` RPC (`gateway.instance.*`, `gateway.packages.*`) or the local-only `gateway.info` / `gateway.shutdown` / `gateway.http.request`; answers `{ id, ok, data | error }`, preceded by `{ id, event }` lines with dependency-transaction progress.
+- `gateway.http.request`: `zhin config` / `schedule` / `send` / `watch` reach `{base}/…` through it while a gateway runs, over the same route table as HTTP (gateway-owned routes first, then the instance). It runs as the local owner by default; with `ZHIN_CONSOLE_TOKEN` (or `--token-env`) set, the gateway authenticates that API token and runs and audits the request as its principal (`http.token` / `HTTP_TOKEN` is never sent over the socket). Request or response bodies over about 1 MiB, and event-stream (SSE) responses, are refused with a "use HTTP" error; paths cannot contain `\\`, and `GET` cannot carry a body.
 - One gateway per project: a second gateway fails to start while the first one answers; a stale socket left by a `kill -9` is removed on the next start.
-- State file: `.zhin/gateway.json` (`0600`) holds `{ pid, ports, origins, socket, startedAt, version, mode, args, logFile }` and is removed when the gateway exits; `.zhin.pid` holds the gateway pid (migration commands use it to see whether the bot runs).
+- State file: `.zhin/gateway.json` (`0600`) holds `{ pid, ports, origins, socket, startedAt, version, mode, args, logFile, handshakeKey }` and is removed when the gateway exits; `.zhin.pid` holds the gateway pid (migration commands use it to see whether the bot runs).
 
 ## Native TypeScript (strip-types)
 

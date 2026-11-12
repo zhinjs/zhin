@@ -5,6 +5,12 @@
  * the gateway's). Rows load into memory at start; writes are serialized, compare-and-swap on
  * `revision`, write through to the database and bump `version`, which invalidates every
  * `configFor` / `isEnabledFor` / dispatch-gate cache in place (no reload, no restart).
+ *
+ * Revisions are monotonic per (plugin, key): removing an override keeps a tombstone (a row with
+ * an empty patch and no switch, which no live override can be) carrying the last revision, so a
+ * re-created override continues from there and a stale compare-and-swap cannot succeed (no ABA).
+ * Every database step checks its affected-row count; a row changed by another process (0 rows,
+ * or a concurrent insert of the same key) reloads the cache and reports a conflict.
  */
 import { createHash } from 'node:crypto';
 import { assertInstanceTable } from '@zhin.js/database';
@@ -72,16 +78,44 @@ function sameState(left: FeatureConversationOverrideRow | undefined, right: Read
   return (left.enabled === false) === (right.enabled === false) && JSON.stringify(left.patch) === JSON.stringify(right.patch);
 }
 
+/** Affected-row count of an update / delete; undefined when the host does not report one. */
+function affectedRows(result: unknown): number | undefined {
+  if (typeof result === 'number') return result;
+  if (typeof result === 'bigint') return Number(result);
+  if (result && typeof result === 'object' && !Array.isArray(result)) {
+    const value = (result as { affectedRows?: unknown; changes?: unknown; rowCount?: unknown });
+    for (const count of [value.affectedRows, value.changes, value.rowCount]) if (typeof count === 'number') return count;
+  }
+  return undefined;
+}
+
+/** Unique / primary key violation across sqlite, mysql and pg drivers. */
+export function isUniqueViolation(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const { code, errno, message } = error as { code?: unknown; errno?: unknown; message?: unknown };
+  if (code === '23505' || code === 'ER_DUP_ENTRY' || errno === 1062) return true;
+  if (typeof code === 'string' && /^SQLITE_CONSTRAINT(?:_PRIMARYKEY|_UNIQUE)?$/u.test(code)) return true;
+  return typeof message === 'string' && /UNIQUE constraint failed|duplicate key value|Duplicate entry/iu.test(message);
+}
+
+/** Minimum interval between Console-driven reloads of the database (other processes' writes). */
+const REFRESH_INTERVAL_MS = 5_000;
+
 export class FeatureConversationOverrideStore {
   readonly #database?: DatabaseHost;
   readonly #rows = new Map<string, FeatureConversationOverrideRow>();
+  /** Last revision of removed overrides (tombstones), so revisions never restart. */
+  readonly #tombstones = new Map<string, number>();
   #version = 0;
+  #loadedAt = 0;
+  readonly #now: () => number;
   #queue: Promise<unknown> = Promise.resolve();
   #loaded = false;
   readonly reader: FeatureConversationOverrideReader;
 
-  constructor(options: Readonly<{ database?: DatabaseHost }> = {}) {
+  constructor(options: Readonly<{ database?: DatabaseHost; now?: () => number }> = {}) {
     this.#database = options.database;
+    this.#now = options.now ?? Date.now;
     const store = this;
     this.reader = Object.freeze({
       get version() { return store.#version; },
@@ -99,32 +133,75 @@ export class FeatureConversationOverrideStore {
     return database.models.get(FEATURE_CONVERSATION_TABLE);
   }
 
-  /** Loads every row into memory; malformed rows are skipped (reported through `onInvalid`). */
+  /**
+   * Loads every row into memory; malformed rows are skipped (reported through `onInvalid`).
+   * `version` is bumped only when the content changed (or on the first load).
+   */
   async load(onInvalid?: (id: string) => void): Promise<void> {
     const model = this.#model();
-    this.#rows.clear();
-    if (model) {
-      const rows = await model.select(...FIELDS);
-      for (const row of rows) {
-        try {
-          const patch = JSON.parse(String(row.patch)) as unknown;
-          if (!patch || typeof patch !== 'object' || Array.isArray(patch)) throw new TypeError('patch');
-          const value: FeatureConversationOverrideRow = deepFreeze({
-            plugin: String(row.plugin), key: String(row.key),
-            ...(Number(row.enabled) === 0 && row.enabled !== null && row.enabled !== undefined ? { enabled: false as const } : {}),
-            patch: patch as Record<string, unknown>,
-            revision: Number(row.revision), updatedAt: Number(row.updated_at),
-            ...(typeof row.updated_by === 'string' && row.updated_by ? { updatedBy: row.updated_by } : {}),
-          });
-          if (!Number.isSafeInteger(value.revision) || value.revision < 1) throw new TypeError('revision');
-          this.#rows.set(indexKey(value.plugin, value.key), value);
-        } catch {
-          onInvalid?.(String(row.id));
+    if (!model) {
+      // Memory only: nothing to read back.
+      if (!this.#loaded) this.#version += 1;
+      this.#loaded = true;
+      this.#loadedAt = this.#now();
+      return;
+    }
+    const rows = await model.select(...FIELDS);
+    const nextRows = new Map<string, FeatureConversationOverrideRow>();
+    const nextTombstones = new Map<string, number>();
+    for (const row of rows) {
+      try {
+        const patch = JSON.parse(String(row.patch)) as unknown;
+        if (!patch || typeof patch !== 'object' || Array.isArray(patch)) throw new TypeError('patch');
+        const switchedOff = Number(row.enabled) === 0 && row.enabled !== null && row.enabled !== undefined;
+        if (!switchedOff && Object.keys(patch).length === 0) {
+          const revision = Number(row.revision);
+          if (!Number.isSafeInteger(revision) || revision < 1) throw new TypeError('revision');
+          nextTombstones.set(indexKey(String(row.plugin), String(row.key)), revision);
+          continue;
         }
+        const value: FeatureConversationOverrideRow = deepFreeze({
+          plugin: String(row.plugin), key: String(row.key),
+          ...(Number(row.enabled) === 0 && row.enabled !== null && row.enabled !== undefined ? { enabled: false as const } : {}),
+          patch: patch as Record<string, unknown>,
+          revision: Number(row.revision), updatedAt: Number(row.updated_at),
+          ...(typeof row.updated_by === 'string' && row.updated_by ? { updatedBy: row.updated_by } : {}),
+        });
+        if (!Number.isSafeInteger(value.revision) || value.revision < 1) throw new TypeError('revision');
+        nextRows.set(indexKey(value.plugin, value.key), value);
+      } catch {
+        onInvalid?.(String(row.id));
       }
     }
+    const changed = !this.#loaded || nextRows.size !== this.#rows.size
+      || [...nextRows].some(([key, row]) => {
+        const current = this.#rows.get(key);
+        return !current || current.revision !== row.revision || current.updatedAt !== row.updatedAt;
+      });
+    this.#rows.clear();
+    for (const [key, row] of nextRows) this.#rows.set(key, row);
+    this.#tombstones.clear();
+    for (const [key, revision] of nextTombstones) this.#tombstones.set(key, revision);
     this.#loaded = true;
-    this.#version += 1;
+    this.#loadedAt = this.#now();
+    if (changed) this.#version += 1;
+  }
+
+  /**
+   * Picks up writes made by other processes sharing the database: a full reload, at most once per
+   * {@link REFRESH_INTERVAL_MS}, queued behind pending writes. Called from Console read paths; a
+   * failed reload keeps the current cache.
+   */
+  refresh(force = false): Promise<void> {
+    if (!this.persistent || !this.#loaded || (!force && this.#now() - this.#loadedAt < REFRESH_INTERVAL_MS)) return Promise.resolve();
+    const run = this.#queue.then(() => this.load()).catch(() => undefined);
+    this.#queue = run;
+    return run;
+  }
+
+  /** Current revision of (plugin, key): the row's, a tombstone's, or 0 when never written. */
+  revisionOf(plugin: string, key: string): number {
+    return this.get(plugin, key)?.revision ?? this.#tombstones.get(indexKey(plugin, key)) ?? 0;
   }
 
   get loaded(): boolean { return this.#loaded; }
@@ -146,7 +223,7 @@ export class FeatureConversationOverrideStore {
 
   async #write(input: FeatureConversationWrite): Promise<FeatureConversationWriteResult> {
     const current = this.get(input.plugin, input.key);
-    const currentRevision = current?.revision ?? 0;
+    const currentRevision = this.revisionOf(input.plugin, input.key);
     if (input.expectedRevision !== undefined && input.expectedRevision !== currentRevision) {
       return Object.freeze({ status: 'conflict', revision: currentRevision });
     }
@@ -156,36 +233,43 @@ export class FeatureConversationOverrideStore {
     }
     const id = rowId(input.plugin, input.key);
     const model = this.#model();
-    if (!next) {
-      if (model) await this.#persist(async target => {
+    const revision = currentRevision + 1;
+    const updatedAt = this.#now();
+    const updatedBy = input.updatedBy ? input.updatedBy.slice(0, 256) : undefined;
+    if (model) {
+      // Removal stores a tombstone (empty patch, no switch) that keeps the revision monotonic.
+      const row = next
+        ? { plugin: input.plugin, key: input.key, enabled: next.enabled === false ? 0 : null, patch: JSON.stringify(next.patch),
+          revision, updated_at: updatedAt, updated_by: updatedBy ?? null }
+        : { plugin: input.plugin, key: input.key, enabled: null, patch: '{}', revision, updated_at: updatedAt, updated_by: updatedBy ?? null };
+      await this.#persist(async target => {
         const [stored] = await target.select('revision').where({ id });
         if (Number(stored?.revision ?? 0) !== currentRevision) return false;
-        await target.delete().where({ id, revision: currentRevision });
-        return true;
+        if (!stored) {
+          await target.insert({ id, ...row });
+          return true;
+        }
+        // CAS on the revision: 0 rows means another process won the race.
+        const changed = affectedRows(await target.update(row).where({ id, revision: currentRevision }));
+        return changed === undefined || changed === 1;
       });
-      this.#rows.delete(indexKey(input.plugin, input.key));
+    }
+    const key = indexKey(input.plugin, input.key);
+    if (!next) {
+      this.#rows.delete(key);
+      this.#tombstones.set(key, revision);
       this.#version += 1;
-      return Object.freeze({ status: 'saved', revision: 0 });
+      return Object.freeze({ status: 'saved', revision });
     }
     const value: FeatureConversationOverrideRow = deepFreeze({
       plugin: input.plugin, key: input.key,
       ...(next.enabled === false ? { enabled: false as const } : {}),
       patch: structuredClone(next.patch) as Record<string, unknown>,
-      revision: currentRevision + 1, updatedAt: Date.now(),
-      ...(input.updatedBy ? { updatedBy: input.updatedBy.slice(0, 256) } : {}),
+      revision, updatedAt,
+      ...(updatedBy ? { updatedBy } : {}),
     });
-    if (model) {
-      const row = { plugin: value.plugin, key: value.key, enabled: value.enabled === false ? 0 : null, patch: JSON.stringify(value.patch),
-        revision: value.revision, updated_at: value.updatedAt, updated_by: value.updatedBy ?? null };
-      await this.#persist(async target => {
-        const [stored] = await target.select('revision').where({ id });
-        if (Number(stored?.revision ?? 0) !== currentRevision) return false;
-        if (!stored) await target.insert({ id, ...row });
-        else await target.update(row).where({ id, revision: currentRevision });
-        return true;
-      });
-    }
-    this.#rows.set(indexKey(value.plugin, value.key), value);
+    this.#rows.set(key, value);
+    this.#tombstones.delete(key);
     this.#version += 1;
     return Object.freeze({ status: 'saved', revision: value.revision, override: value });
   }
@@ -193,12 +277,19 @@ export class FeatureConversationOverrideStore {
   /** Runs one CAS step, inside a transaction when the database offers one. */
   async #persist(step: (model: DatabaseHostModel) => Promise<boolean>): Promise<void> {
     const database = this.#database!;
-    const ok = database.transaction
-      ? await database.transaction(transaction => step(transaction.model(FEATURE_CONVERSATION_TABLE)))
-      : await step(this.#model()!);
+    let ok: boolean;
+    try {
+      ok = database.transaction
+        ? await database.transaction(transaction => step(transaction.model(FEATURE_CONVERSATION_TABLE)))
+        : await step(this.#model()!);
+    } catch (error) {
+      // A concurrent insert of the same key from another process: same as a lost CAS.
+      if (!isUniqueViolation(error)) throw error;
+      ok = false;
+    }
     // Another process changed the row behind this cache: reload and let the caller retry.
     if (!ok) {
-      await this.load();
+      try { await this.load(); } catch { /* the conflict is reported either way */ }
       throw new FeatureConversationConflictError();
     }
   }

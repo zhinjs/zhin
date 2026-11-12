@@ -67,6 +67,26 @@ export const MAX_EDIT_FILE_SIZE = 1024 * 1024 * 1024;
 
 // ── 敏感文件名模式 ──────────────────────────────────────────────────
 
+/** Base name of a management gateway control endpoint (socket or named pipe), see ADR 0054 §6. */
+export const GATEWAY_CONTROL_ENDPOINT_NAME = /^(?:gateway\.sock|zhin-gateway-[0-9a-f]{16}(?:-[0-9a-f]+)?(?:\.sock)?)$/i;
+
+/**
+ * Whether a shell command names a management gateway control endpoint anywhere — as an operand,
+ * inside `UNIX-CONNECT:<path>`, `--unix-socket=<path>`, a quoted script string, … Connecting is
+ * neither a read nor a write to the file policy, so the command text itself is checked.
+ * `extraEndpoints` are the actual endpoint paths the host injected (exact, case-insensitive).
+ */
+export function commandNamesGatewayEndpoint(command: string, extraEndpoints: Iterable<string> = []): string | undefined {
+  const named = /(?:^|[\s'"`=:,(/\\])((?:gateway\.sock|zhin-gateway-[0-9a-f]{16}(?:-[0-9a-f]+)?(?:\.sock)?))(?=$|[\s'"`;&|)<>,])/iu.exec(command);
+  if (named) return named[1];
+  const folded = command.replace(/\\/g, '/').toLowerCase();
+  for (const endpoint of extraEndpoints) {
+    const target = endpoint.replace(/\\/g, '/').toLowerCase();
+    if (target && folded.includes(target)) return endpoint;
+  }
+  return undefined;
+}
+
 /**
  * 匹配文件基名（不含目录）的敏感模式。
  * 大小写不敏感匹配。
@@ -105,6 +125,10 @@ const SENSITIVE_BASENAME_PATTERNS: RegExp[] = [
   /^\.passwd$/i,
   // SQLite project databases (shared with the gateway's console_* account tables, ADR 0054 §7)
   /\.(sqlite3?|db3?)(-wal|-shm|-journal)?$/i,
+  // Management gateway control endpoint (ADR 0054 §6): `.zhin/gateway.sock`, the os.tmpdir()
+  // fallback `zhin-gateway-<hash>.sock` for deep project roots, the Windows pipe name. Whoever
+  // connects to it acts as the local Console owner.
+  GATEWAY_CONTROL_ENDPOINT_NAME,
   // 历史文件（可能含输入的密码等）
   /^\.bash_history$/i,
   /^\.zsh_history$/i,
