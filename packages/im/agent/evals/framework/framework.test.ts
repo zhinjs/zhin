@@ -52,7 +52,7 @@ describe('eval framework', () => {
     const [trace] = run.traces;
     expect(trace).toMatchObject({
       turn_id: 'approval-gate:turn-1',
-      principal: { subject_id: 'owner', roles: ['owner'] },
+      principal: { subject_id: 'owner', roles: ['owner', 'admin', 'trusted'] },
       termination: { status: 'completed' },
     });
     expect(trace!.model_calls.length).toBeGreaterThanOrEqual(1);
