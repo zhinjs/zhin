@@ -5,7 +5,7 @@ import {
   pluginConsoleRpcToken,
 } from 'zhin.js';
 import { memberWelcomeOwnerToken, outboundMessageToken } from '@zhin.js/core/runtime';
-import { resolveGroupSuiteConfig, type GroupSuiteConfig } from './src/config.js';
+import { groupSuiteConfigStore, resolveGroupSuiteConfig, type GroupSuiteConfig } from './src/config.js';
 import { createGroupSuiteConsoleRpc } from './src/console.js';
 import { createInMemoryGroupSuiteDb, type GroupSuiteMemoryDb } from './src/memory-store.js';
 import { createGroupSuiteRuntime, groupSuiteRuntimeStore } from './src/runtime-state.js';
@@ -74,6 +74,10 @@ export default definePlugin<GroupSuiteConfig>({
       void context.resources.use(databaseHostToken).state;
     }
     const runtime = groupSuiteRuntimeStore.provide(context, createGroupSuiteRuntime(db));
+    // ADR 0050 / 0055: points, teach limits and the welcome text may differ per adapter / account / group.
+    groupSuiteConfigStore.provide(context, {
+      configFor: target => context.configFor(target as Parameters<typeof context.configFor>[0]),
+    });
     return {
       consoleRpc: createGroupSuiteConsoleRpc(runtime),
     };

@@ -45,6 +45,8 @@ export default definePlugin<BilibiliConfig>({
       ? async (input) => {
         if (!input.target) throw new DataMigrationError('unavailable', 'Historical Bilibili subscription awaits exact-target binding');
         if (!outbound.sendTarget) throw new Error('Canonical subscription delivery requires an exact-target Outbound Host');
+        // ADR 0050 / 0055: pushes are not messages; skip accounts / conversations where bilibili is switched off.
+        if (!context.isEnabledFor({ conversation: input.target })) return;
         const run = async () => { await outbound.sendTarget!(input.target!, input.content, { locale: input.locale }); };
         if (migrationScopes) await migrationScopes.run({ scope: subscriptionMigrationScope(input), run });
         else await run();

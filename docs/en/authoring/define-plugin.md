@@ -151,7 +151,7 @@ One plugin can use different settings on different adapter instances, accounts, 
 }
 ```
 
-With an inline `config`, add the same `x-zhin-config.levels` to the root of what `toJsonSchema()` returns; with `Schema.object({...})`, call `.featureLevels(levels, { conversationFields, selfServiceFields, chatAdminFields })`.
+With an inline `config`, add the same `x-zhin-config.levels` to the root of what `toJsonSchema()` returns; with `Schema.object({...})`, call `.featureLevels(levels, { conversationFields, selfServiceFields, chatAdminFields })`, and narrow one property with `.fieldLevels(['global'])` (for example `Schema.string().secret().fieldLevels(['global'])`).
 
 **Conversation level (ADR 0055).** `levels` may include `"conversation"`, which requires `"endpoint"` too. By default the conversation level is a switch only. List `conversationFields` on the root to allow field overrides there, and `selfServiceFields` (a subset of `conversationFields`) for what group admins may change in chat (`feature set …`). In chat, levels above the conversation also allow only `selfServiceFields` unless you widen them with `chatAdminFields`:
 

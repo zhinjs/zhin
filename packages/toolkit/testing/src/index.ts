@@ -14,7 +14,7 @@ import { withTestEndpoints } from './test-module-runtime.js';
 export { FakeClock, FakeScheduleRootHost, parseCron, type FakeScheduledJob } from './fake-clock.js';
 export { FakeDatabaseRootHost, FakeOutboundRootHost, type FakeOutboundCall } from './fake-hosts.js';
 export { FakePlugin, createFakePlugin, runPluginSetup, resolvePluginConfig, PluginConfigValidationError, fakeResource,
-  type FakePluginOptions, type RunPluginSetupOptions, type FakeResource, type FakeRegisteredFeature } from './fake-plugin.js';
+  type FakePluginOptions, type FakeFeatureView, type RunPluginSetupOptions, type FakeResource, type FakeRegisteredFeature } from './fake-plugin.js';
 export { fakeOf } from './partial.js';
 export { createFakeMessage, createFakeInteraction, createCommandContext, runCommand, runMiddleware, runHandler,
   createToolContext, runTool, toolOriginFromMessage,

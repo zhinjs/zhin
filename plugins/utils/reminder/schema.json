@@ -12,7 +12,10 @@
       },
       "default": "UTC",
       "x-zhin-config": {
-        "effect": "reload"
+        "effect": "reload",
+        "levels": [
+          "global"
+        ]
       }
     },
     "maxTasks": {
@@ -28,7 +31,10 @@
       "maximum": 32,
       "multipleOf": 1,
       "x-zhin-config": {
-        "effect": "reload"
+        "effect": "reload",
+        "levels": [
+          "global"
+        ]
       }
     },
     "adminMaxTasks": {
@@ -44,7 +50,10 @@
       "maximum": 32,
       "multipleOf": 1,
       "x-zhin-config": {
-        "effect": "reload"
+        "effect": "reload",
+        "levels": [
+          "global"
+        ]
       }
     },
     "maxTasksPerSender": {
@@ -60,7 +69,10 @@
       "maximum": 10,
       "multipleOf": 1,
       "x-zhin-config": {
-        "effect": "reload"
+        "effect": "reload",
+        "levels": [
+          "global"
+        ]
       }
     },
     "batchSize": {
@@ -76,7 +88,10 @@
       "maximum": 5,
       "multipleOf": 1,
       "x-zhin-config": {
-        "effect": "reload"
+        "effect": "reload",
+        "levels": [
+          "global"
+        ]
       }
     },
     "missedGraceSeconds": {
@@ -92,8 +107,19 @@
       "maximum": 60,
       "multipleOf": 1,
       "x-zhin-config": {
-        "effect": "reload"
+        "effect": "reload",
+        "levels": [
+          "global"
+        ]
       }
     }
+  },
+  "x-zhin-config": {
+    "levels": [
+      "global",
+      "adapter",
+      "endpoint",
+      "conversation"
+    ]
   }
 }

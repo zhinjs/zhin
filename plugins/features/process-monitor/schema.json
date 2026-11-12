@@ -2,6 +2,14 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
+  "x-zhin-config": {
+    "levels": [
+      "global",
+      "adapter",
+      "endpoint",
+      "conversation"
+    ]
+  },
   "properties": {
     "enabled": {
       "type": "boolean",
@@ -11,6 +19,11 @@
         "en": {
           "description": "Enable process monitoring."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "notifyOnStart": {
@@ -21,6 +34,11 @@
         "en": {
           "description": "Notify on first startup."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "notifyOnRestart": {
@@ -31,6 +49,11 @@
         "en": {
           "description": "Notify on normal restart."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "notifyOnCrash": {
@@ -41,6 +64,11 @@
         "en": {
           "description": "Notify after a crash restart."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "notifyChannels": {
@@ -70,6 +98,11 @@
         "en": {
           "description": "Notification channel (slice 1 supports webhook only)."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     }
   }

@@ -2,36 +2,73 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
+  "x-zhin-config": {
+    "levels": [
+      "global",
+      "adapter",
+      "endpoint",
+      "conversation"
+    ]
+  },
   "properties": {
     "enabled": {
       "type": "boolean",
       "default": true,
       "description": "Enable activity feedback for this plugin instance.",
-      "x-descriptionZh": "是否启用当前活动反馈插件实例。"
+      "x-descriptionZh": "是否启用当前活动反馈插件实例。",
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
+      }
     },
     "defaults": {
       "$ref": "#/$defs/activityFeedback",
       "description": "Default policy for all platforms and Endpoints.",
-      "x-descriptionZh": "所有平台与 Endpoint 的默认策略。"
+      "x-descriptionZh": "所有平台与 Endpoint 的默认策略。",
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
+      }
     },
     "platforms": {
       "type": "object",
       "x-keyPlaceholder": "<platform>",
-      "additionalProperties": { "$ref": "#/$defs/activityFeedback" },
+      "additionalProperties": {
+        "$ref": "#/$defs/activityFeedback"
+      },
       "description": "Platform overrides keyed by platform name; values use the same shape as defaults.",
-      "x-descriptionZh": "按平台名覆盖；值的结构与 defaults 相同。"
+      "x-descriptionZh": "按平台名覆盖；值的结构与 defaults 相同。",
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
+      }
     },
     "endpoints": {
       "type": "object",
       "x-keyPlaceholder": "<platform:endpointKey>",
-      "additionalProperties": { "$ref": "#/$defs/activityFeedback" },
+      "additionalProperties": {
+        "$ref": "#/$defs/activityFeedback"
+      },
       "description": "Endpoint overrides keyed by platform:endpointKey; values use the same shape as defaults.",
-      "x-descriptionZh": "按 platform:endpointKey 覆盖；值的结构与 defaults 相同。"
+      "x-descriptionZh": "按 platform:endpointKey 覆盖；值的结构与 defaults 相同。",
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
+      }
     },
     "schedule": {
       "$ref": "#/$defs/scheduleFeedback",
       "description": "Schedule-only start, finish, and error feedback.",
-      "x-descriptionZh": "仅用于 Schedule 的开始、完成与失败反馈。"
+      "x-descriptionZh": "仅用于 Schedule 的开始、完成与失败反馈。",
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
+      }
     }
   },
   "$defs": {
@@ -51,12 +88,24 @@
           "description": "Feedback policy keyed by lifecycle phase.",
           "x-descriptionZh": "按生命周期 phase 配置反馈策略。",
           "properties": {
-            "queued": { "$ref": "#/$defs/scenePhases" },
-            "active": { "$ref": "#/$defs/scenePhases" },
-            "thinking": { "$ref": "#/$defs/scenePhases" },
-            "schedule_start": { "$ref": "#/$defs/scenePhases" },
-            "schedule_finish": { "$ref": "#/$defs/scenePhases" },
-            "schedule_error": { "$ref": "#/$defs/scenePhases" }
+            "queued": {
+              "$ref": "#/$defs/scenePhases"
+            },
+            "active": {
+              "$ref": "#/$defs/scenePhases"
+            },
+            "thinking": {
+              "$ref": "#/$defs/scenePhases"
+            },
+            "schedule_start": {
+              "$ref": "#/$defs/scenePhases"
+            },
+            "schedule_finish": {
+              "$ref": "#/$defs/scenePhases"
+            },
+            "schedule_error": {
+              "$ref": "#/$defs/scenePhases"
+            }
           }
         }
       }
@@ -65,9 +114,15 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "private": { "$ref": "#/$defs/phaseConfig" },
-        "group": { "$ref": "#/$defs/phaseConfig" },
-        "channel": { "$ref": "#/$defs/phaseConfig" }
+        "private": {
+          "$ref": "#/$defs/phaseConfig"
+        },
+        "group": {
+          "$ref": "#/$defs/phaseConfig"
+        },
+        "channel": {
+          "$ref": "#/$defs/phaseConfig"
+        }
       }
     },
     "phaseConfig": {
@@ -76,7 +131,12 @@
       "properties": {
         "type": {
           "type": "string",
-          "enum": ["reaction", "message", "typing", "none"],
+          "enum": [
+            "reaction",
+            "message",
+            "typing",
+            "none"
+          ],
           "description": "How the phase is presented.",
           "x-descriptionZh": "该 phase 的呈现方式。"
         },
@@ -117,9 +177,15 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "start": { "$ref": "#/$defs/scenePhases" },
-            "finish": { "$ref": "#/$defs/scenePhases" },
-            "error": { "$ref": "#/$defs/scenePhases" }
+            "start": {
+              "$ref": "#/$defs/scenePhases"
+            },
+            "finish": {
+              "$ref": "#/$defs/scenePhases"
+            },
+            "error": {
+              "$ref": "#/$defs/scenePhases"
+            }
           }
         }
       }

@@ -1753,6 +1753,8 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 
 [`plugins/features/process-monitor/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/features/process-monitor/schema.json)
 
+> Layered configuration (ADR 0050 / 0055) — Levels: `global`, `adapter`, `endpoint`, `conversation`; fields: global only; conversation fields: switch only
+
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
 | `process-monitor.enabled` | boolean | no | `true` | Enable process monitoring. |
@@ -1803,6 +1805,8 @@ _This Schema declares no fields._
 
 [`plugins/games/roulette/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/games/roulette/schema.json)
 
+> Layered configuration (ADR 0050 / 0055) — Levels: `global`, `adapter`, `endpoint`, `conversation`; fields: global only; conversation fields: switch only
+
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
 | `roulette.chambers` | integer | no | `6` | 弹巢数量，其中一发是实弹 |
@@ -1838,6 +1842,8 @@ _This Schema declares no fields._
 ### activity-feedback
 
 [`plugins/services/activity-feedback/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/services/activity-feedback/schema.json)
+
+> Layered configuration (ADR 0050 / 0055) — Levels: `global`, `adapter`, `endpoint`, `conversation`; fields: global only; conversation fields: switch only
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -2326,6 +2332,8 @@ _This Schema declares no fields._
 
 [`plugins/utils/60s/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/60s/schema.json)
 
+> Layered configuration (ADR 0050 / 0055) — Levels: `global`, `adapter`, `endpoint`, `conversation`; fields: global only; conversation fields: switch only
+
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
 | `60s.apiBase` | string | no | `"https://60s.viki.moe"` | 60s API base URL |
@@ -2333,6 +2341,8 @@ _This Schema declares no fields._
 ### answers
 
 [`plugins/utils/answers/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/answers/schema.json)
+
+> Layered configuration (ADR 0050 / 0055) — Levels: `global`, `adapter`, `endpoint`, `conversation`; every field can be overridden per adapter / account; conversation fields: `dailyStable`, `quizTimeoutSeconds`, `enableDrivingQuiz`; in-chat self-service: `quizTimeoutSeconds`, `enableDrivingQuiz`
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -2344,6 +2354,8 @@ _This Schema declares no fields._
 ### bilibili
 
 [`plugins/utils/bilibili/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/bilibili/schema.json)
+
+> Layered configuration (ADR 0050 / 0055) — Levels: `global`, `adapter`, `endpoint`, `conversation`; fields: global only; conversation fields: switch only
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -2360,6 +2372,8 @@ _This Schema declares no fields._
 ### calendar
 
 [`plugins/utils/calendar/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/calendar/schema.json)
+
+> Layered configuration (ADR 0050 / 0055) — Levels: `global`, `adapter`, `endpoint`, `conversation`; fields: global only; conversation fields: switch only
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -2399,6 +2413,8 @@ _This Schema declares no fields._
 ### content-moderation
 
 [`plugins/utils/content-moderation/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/content-moderation/schema.json)
+
+> Layered configuration (ADR 0050 / 0055) — Levels: `global`, `adapter`, `endpoint`, `conversation`; fields: global only; conversation fields: switch only
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -2446,6 +2462,8 @@ _This Schema declares no fields._
 
 [`plugins/utils/earthquake/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/earthquake/schema.json)
 
+> Layered configuration (ADR 0050 / 0055) — Levels: `global`, `adapter`, `endpoint`, `conversation`; fields: global only; conversation fields: switch only
+
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
 | `earthquake.sources` | array&lt;string: `"cenc"`, `"usgs"`&gt; | no | `["cenc","usgs"]` | Enabled data sources in priority order. The first source supplies location text when merging the same earthquake; other sources cover a failed source. |
@@ -2469,6 +2487,8 @@ _This Schema declares no fields._
 ### group-suite
 
 [`plugins/utils/group-suite/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/group-suite/schema.json)
+
+> Layered configuration (ADR 0050 / 0055) — Levels: `global`, `adapter`, `endpoint`, `conversation`; global only (other fields can be overridden per adapter / account): `keywordReply`, `teachAllowRegex`, `welcomeConversations`, `ephemeralKeywords`; conversation fields: `welcomeMessage`, `basePointsMin`, `basePointsMax`, `streakBonus`, `streakCap`, `rankSize`, `teachMaxPerGroup`, `teachCooldownMs`, `teachPageSize`; in-chat self-service: `welcomeMessage`, `rankSize`, `teachCooldownMs`, `teachPageSize`
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -2499,6 +2519,8 @@ _This Schema declares no fields._
 
 [`plugins/utils/ledger/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/ledger/schema.json)
 
+> Layered configuration (ADR 0050 / 0055) — Levels: `global`, `adapter`, `endpoint`, `conversation`; global only (other fields can be overridden per adapter / account): `timezone`, `reportTime`; conversation fields: `reportWhenEmpty`
+
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
 | `ledger.timezone` | string | no | `"Asia/Shanghai"` | IANA timezone used to calculate today, this week (starting Monday), this month and daily-report dates. |
@@ -2514,6 +2536,8 @@ _This Schema declares no fields._
 ### lottery
 
 [`plugins/utils/lottery/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/lottery/schema.json)
+
+> Layered configuration (ADR 0050 / 0055) — Levels: `global`, `adapter`, `endpoint`, `conversation`; fields: global only; conversation fields: switch only
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -2549,6 +2573,8 @@ _This Schema declares no fields._
 
 [`plugins/utils/nettools/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/nettools/schema.json)
 
+> Layered configuration (ADR 0050 / 0055) — Levels: `global`, `adapter`, `endpoint`, `conversation`; fields: global only; conversation fields: switch only
+
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
 | `nettools.cooldownSeconds` | integer | no | `10` | Per-user cooldown in seconds, shared by all nettools commands and tools (0 disables) |
@@ -2570,6 +2596,8 @@ _This Schema declares no fields._
 
 [`plugins/utils/reminder/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/reminder/schema.json)
 
+> Layered configuration (ADR 0050 / 0055) — Levels: `global`, `adapter`, `endpoint`, `conversation`; fields: global only; conversation fields: switch only
+
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
 | `reminder.timezone` | string | no | `"UTC"` | IANA timezone for natural reminder times and display. Absolute ISO times still require an explicit offset. |
@@ -2583,6 +2611,8 @@ _This Schema declares no fields._
 
 [`plugins/utils/repeater/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/repeater/schema.json)
 
+> Layered configuration (ADR 0050 / 0055) — Levels: `global`, `adapter`, `endpoint`, `conversation`; every field can be overridden per adapter / account; conversation fields: `threshold`, `cooldown`; in-chat self-service: `threshold`
+
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
 | `repeater.threshold` | number | no | `3` | Minimum distinct users needed to trigger repetition. |
@@ -2592,6 +2622,8 @@ _This Schema declares no fields._
 ### rss
 
 [`plugins/utils/rss/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/rss/schema.json)
+
+> Layered configuration (ADR 0050 / 0055) — Levels: `global`, `adapter`, `endpoint`, `conversation`; fields: global only; conversation fields: switch only
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |

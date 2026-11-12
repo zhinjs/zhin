@@ -133,6 +133,44 @@ function flattenProperties(schema, prefix, inheritedRequired = new Set(), rootSc
   return rows;
 }
 
+/** Root `x-zhin-config` layered declaration (ADR 0050 / 0055) plus the properties narrowed to global. */
+function featureLevels(schema) {
+  const meta = schema['x-zhin-config'];
+  if (!meta || !Array.isArray(meta.levels) || meta.levels.length <= 1) return undefined;
+  const globalOnly = Object.entries(schema.properties ?? {})
+    .filter(([, child]) => {
+      const levels = child?.['x-zhin-config']?.levels;
+      return Array.isArray(levels) && levels.length === 1 && levels[0] === 'global';
+    })
+    .map(([name]) => name);
+  return {
+    levels: meta.levels,
+    conversationFields: meta.conversationFields ?? [],
+    selfServiceFields: meta.selfServiceFields ?? [],
+    chatAdminFields: meta.chatAdminFields,
+    globalOnly,
+    fieldCount: Object.keys(schema.properties ?? {}).length,
+  };
+}
+
+function renderFeatureLevels(feature, zh) {
+  const list = items => items.map(item => `\`${item}\``).join(zh ? '、' : ', ');
+  const parts = [`${zh ? '层级' : 'Levels'}: ${list(feature.levels)}`];
+  if (feature.fieldCount > 0) {
+    parts.push(feature.globalOnly.length === feature.fieldCount
+      ? (zh ? '字段仅全局' : 'fields: global only')
+      : feature.globalOnly.length
+        ? `${zh ? '仅全局（其余字段可在适配器 / 账号层覆盖）' : 'global only (other fields can be overridden per adapter / account)'}: ${list(feature.globalOnly)}`
+        : (zh ? '全部字段可在适配器 / 账号层覆盖' : 'every field can be overridden per adapter / account'));
+  }
+  if (feature.levels.includes('conversation')) {
+    parts.push(`${zh ? '会话层字段' : 'conversation fields'}: ${feature.conversationFields.length ? list(feature.conversationFields) : (zh ? '仅开关' : 'switch only')}`);
+    if (feature.selfServiceFields.length) parts.push(`${zh ? '群内自助' : 'in-chat self-service'}: ${list(feature.selfServiceFields)}`);
+    if (feature.chatAdminFields?.length) parts.push(`${zh ? '聊天中上级层字段' : 'chat admin fields'}: ${list(feature.chatAdminFields)}`);
+  }
+  return `> ${zh ? '分层配置（ADR 0050 / 0055）' : 'Layered configuration (ADR 0050 / 0055)'} — ${parts.join(zh ? '；' : '; ')}`;
+}
+
 async function pluginEntries() {
   const { readPluginConfigSchema } = await tsImport(
     pathToFileURL(path.join(repoRoot, 'packages/im/runtime/src/plugin-config-schema.ts')).href,
@@ -161,7 +199,7 @@ async function pluginEntries() {
       && /Schema\.object\(/u.test(fs.readFileSync(configHelper, 'utf8'));
     const relative = path.relative(repoRoot, hasFileSchema ? file : importedConfigHelper ? configHelper : sourceEntry).split(path.sep).join('/');
     const key = path.basename(root);
-    result.push({ key, relative, rows: flattenProperties(schema, key, new Set(), schema) });
+    result.push({ key, relative, rows: flattenProperties(schema, key, new Set(), schema), feature: featureLevels(schema) });
   }
   return result;
 }
@@ -220,6 +258,7 @@ function render(locale) {
   for (const plugin of plugins) {
     lines.push('', `### ${plugin.key}`, '');
     lines.push(`[\`${plugin.relative}\`](https://github.com/zhinjs/zhin/blob/main/${plugin.relative})`, '');
+    if (plugin.feature) lines.push(renderFeatureLevels(plugin.feature, zh), '');
     if (plugin.rows.length === 0) {
       lines.push(zh ? '_该 Schema 没有声明字段。_' : '_This Schema declares no fields._');
       continue;

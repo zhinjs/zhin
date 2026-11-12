@@ -54,7 +54,7 @@ describe('@zhin.js/plugin-earthquake definition', () => {
   });
 
   it('publishes a strict schema whose defaults match the runtime defaults', () => {
-    const validate = new Ajv2020({ useDefaults: true, strict: true }).addKeyword({ keyword: 'x-i18n', schemaType: 'object', valid: true }).compile(schema);
+    const validate = new Ajv2020({ useDefaults: true, strict: true }).addKeyword({ keyword: 'x-i18n', schemaType: 'object', valid: true }).addKeyword({ keyword: 'x-zhin-config', schemaType: 'object', valid: true }).compile(schema);
     const filled: Record<string, unknown> = {};
     expect(validate(filled)).toBe(true);
     expect(filled).toEqual({ ...DEFAULT_EARTHQUAKE_CONFIG });

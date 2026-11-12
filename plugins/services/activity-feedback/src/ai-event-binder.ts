@@ -12,7 +12,7 @@ import {
   createNoopEndpointAccess,
   type ActivityFeedbackEndpointAccess,
 } from './executor.js';
-import { ActivityFeedbackOrchestrator } from './orchestrator.js';
+import { ActivityFeedbackOrchestrator, type ActivityFeedbackConversationGate } from './orchestrator.js';
 import { ActivityFeedbackPolicy } from './policy.js';
 import { isLocale, type Locale } from 'zhin.js/i18n';
 import { messages as t } from './messages.js';
@@ -209,6 +209,8 @@ export interface CreateActivityFeedbackOrchestratorOptions {
   serviceConfig: ActivityFeedbackServiceConfig;
   access: ActivityFeedbackEndpointAccess;
   logger: ActivityFeedbackLogger;
+  /** Layered feature switch per conversation (ADR 0050 / 0055); default: always on. */
+  isEnabledFor?: ActivityFeedbackConversationGate;
 }
 
 export function createActivityFeedbackOrchestrator(
@@ -216,7 +218,7 @@ export function createActivityFeedbackOrchestrator(
 ): ActivityFeedbackOrchestrator {
   const policy = new ActivityFeedbackPolicy(loadActivityFeedbackServiceConfig(options.serviceConfig));
   const executor = new ActivityFeedbackExecutor(options.access);
-  return new ActivityFeedbackOrchestrator(policy, executor, options.logger, options.defaultLocale);
+  return new ActivityFeedbackOrchestrator(policy, executor, options.logger, options.defaultLocale, options.isEnabledFor);
 }
 
 /** Runtime: prefer OutboundHost-backed access; else noop until Host wires outbound. */
@@ -225,11 +227,13 @@ export function createActivityFeedbackOrchestratorForRuntime(
   logger: ActivityFeedbackLogger,
   access: ActivityFeedbackEndpointAccess = createNoopEndpointAccess(),
   defaultLocale: Locale = 'zh-CN',
+  isEnabledFor?: ActivityFeedbackConversationGate,
 ): ActivityFeedbackOrchestrator {
   return createActivityFeedbackOrchestrator({
     serviceConfig,
     access,
     logger,
     defaultLocale,
+    ...(isEnabledFor ? { isEnabledFor } : {}),
   });
 }
