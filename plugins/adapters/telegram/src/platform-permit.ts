@@ -4,6 +4,7 @@
  * `role` 使用跨平台规范名 owner / admin（原生 creator / administrator 仅作兼容输入）；
  * 细粒度能力放在 `permissions`。
  */
+import type { PlatformStanding } from '@zhin.js/im-contract';
 import type { PermissionSubject } from '@zhin.js/permission';
 
 
@@ -44,12 +45,37 @@ export function normalizeTelegramChatMember(member: {
   return { role: 'member', permissions };
 }
 
+/** Administrator rights a chat creator implicitly holds (Bot API `ChatAdministratorRights`). */
+const TELEGRAM_ADMIN_RIGHTS = [
+  'manage_chat', 'delete_messages', 'manage_video_chats', 'restrict_members', 'promote_members', 'change_info',
+  'invite_users', 'post_stories', 'edit_stories', 'delete_stories', 'post_messages', 'edit_messages', 'pin_messages',
+  'manage_topics',
+] as const;
+
+/**
+ * ADR 0056 §1：`getChatMember` 结果 → `sender.platform`。
+ * creator → `owner`（拥有全部管理员权限）；administrator → `admin`，其 `can_*` 权限去掉前缀进
+ * `permissions`（如 `restrict_members`、`pin_messages`）；member / 仍在群内的 restricted → `member`
+ * （restricted 的 `can_*` 同样上报）；left / kicked → `guest`。Telegram 没有身份组，`roles` 不上报。
+ */
+export function telegramChatMemberStanding(member: { readonly status?: string; readonly is_member?: boolean }): PlatformStanding {
+  const granted = Object.entries(member as Readonly<Record<string, unknown>>)
+    .filter(([key, value]) => key.startsWith('can_') && value === true)
+    .map(([key]) => key.slice(4));
+  const status = member.status;
+  if (status === 'creator') return { standing: 'owner', permissions: [...TELEGRAM_ADMIN_RIGHTS] };
+  if (status === 'administrator') return { standing: 'admin', ...(granted.length ? { permissions: granted } : {}) };
+  if (status === 'left' || status === 'kicked' || (status === 'restricted' && member.is_member === false)) return { standing: 'guest' };
+  return { standing: 'member', ...(status === 'restricted' && granted.length ? { permissions: granted } : {}) };
+}
+
 export function checkTelegramPlatformPermit(perm: string, subject: PermissionSubject): boolean {
   // Native role names (e.g. Telegram `creator`) may still arrive until every adapter reports
   // the normalized standing (ADR 0056 §1); compare as plain strings.
   const role = subject.sender?.platform?.standing as string | undefined;
   const permissions = subject.sender?.platform?.permissions ?? [];
-  const has = (t: string) => permissions.includes(t);
+  // Accepts legacy UPPER_SNAKE tokens and ADR 0056 §1 snake_case platform permission names.
+  const has = (t: string) => permissions.includes(t) || permissions.includes(t.toLowerCase());
 
   switch (perm) {
     case 'chat_creator':

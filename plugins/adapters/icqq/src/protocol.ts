@@ -1,6 +1,6 @@
 import type { EndpointProfileConfiguration } from 'zhin.js/adapter';
 import type { MessageElem, Sendable, ShareElem } from '@icqqjs/icqq';
-import { isMediaRef, type ConversationRef } from '@zhin.js/im-contract';
+import { isMediaRef, type ConversationRef, type PlatformStanding } from '@zhin.js/im-contract';
 import { resolveAdapterNotifyTarget, type AdapterNotifyTarget, type ResolvedAdapterNotifyTarget } from 'zhin.js/adapter';
 import type { MessageSegment, SendContent } from "zhin.js";
 import { resolveIcqqMediaFile } from "./cq-message.js";
@@ -289,7 +289,8 @@ export interface IcqqInboundMessage {
    * 与 content（CQ 原文纯文本视图）同源，随 gateway.receive 上送。
    */
   readonly segments?: readonly MessageSegment[];
-  readonly sender: { readonly id: string; readonly name?: string };
+  /** `platform`: ADR 0056 §1 normalized standing (group messages only). */
+  readonly sender: { readonly id: string; readonly name?: string; readonly platform?: PlatformStanding };
   readonly channelType: 'private' | 'group' | 'channel';
   readonly metadata?: Record<string, unknown>;
   readonly replyTo?: { readonly id: string };

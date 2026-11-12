@@ -416,7 +416,7 @@ describe('napcat plugin runtime adapter', () => {
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
       conversation: expect.objectContaining({ kind: 'group', id: '200' }),
-      sender: expect.objectContaining({ id: '2' }),
+      sender: expect.objectContaining({ id: '2', platform: { standing: 'member' } }),
       mentioned: true,
     }));
     await endpoint.stop();

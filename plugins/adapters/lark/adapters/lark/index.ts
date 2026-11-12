@@ -33,6 +33,8 @@ export default defineAdapter<LarkEndpointConfig>({
       },
       delivery: { send: true, proactive: true, spool: true },
     },
+    // ADR 0056 §1：群消息按 chat.get 的群主 / 群管理员归一 standing。
+    group: { scene: { platformStanding: { standing: true } } },
   },
   createAdapter: context => new LarkAdapter(context),
 });

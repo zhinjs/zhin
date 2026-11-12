@@ -44,7 +44,8 @@ try {
   if(mounted) stateDatabase=await sqliteStateHost(join(temporary,'state.sqlite'));
   kit = await PluginTestKit.create({projectRoot:temporary,config,endpoints:['test','other'],segments: {html:'image',outboundMedia:['base64'],interactive:'text'}, installResources: mounted ? ({resources}) => {resources.provide(scheduleRootHostToken,schedules.host);resources.provide(scheduleHostToken,new PluginScheduleHost(rootPluginId(),schedules.host));resources.provide(databaseRootHostToken,stateDatabase.host);resources.provide(databaseHostToken,new PluginDatabaseHost(rootPluginId(),stateDatabase.host));if(mode==='group')resources.provide(htmlRendererToken, {async render(){renderCalls++;return {data:Buffer.from('fake-image'),format:'png',mimeType:'image/png',width:1,height:1};}});} : undefined});
   assert.equal(await kit.start(),1);
-  const incoming = (content, roles=[],group='g1',endpoint='test') => kit.receive({content, conversation:{kind:'group',id:group},sender:{id:'u1',name:'Alice',roles},endpoint});
+  // roles[0] is the declared chat role (ADR 0056); a platform owner in the old fixtures maps to the chat role admin.
+  const incoming = (content, roles=[],group='g1',endpoint='test') => kit.receive({content, conversation:{kind:'group',id:group},sender:{id:'u1',name:'Alice',...(roles.length?{chatRole:roles[0]==='owner'?'admin':roles[0]}:{})},endpoint});
   if (!mounted) {
     assert.equal((await incoming('hello'))?.matched,false);
     assert.equal((await incoming('echo 2'))?.status,'denied');

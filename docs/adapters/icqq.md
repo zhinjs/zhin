@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/icqq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/icqq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=176f2df5f669ca78 -->
+<!-- sync-adapter-docs:sha256=ed4b3ec66d361210 -->
 
 # @zhin.js/adapter-icqq
 
@@ -268,3 +268,7 @@ Endpoint 添加用法中的调用头由当前环境的实际命令前缀与插�
 - 年龄不反推生日；当前安装的 ICQQ 1.12.3 `setBirthday` 月日编码有缺陷，因此不开放生日写入。兴趣无对应已验证接口，只能使用配置兜底。
 
 配置的 `nickname`、`profile` 可放在适配器默认值或某个 `endpoints[]` 项中；Endpoint 逐字段覆盖默认值，只有平台未提供的字段才使用它们。配置兜底不会写回 QQ。
+
+## 成员身份
+
+群消息的 `sender.role`（`owner` / `admin` / `member`）归一为 `sender.platform.standing`；私聊不上报。QQ 群没有原生角色与权限位，`roles` / `permissions` 不上报。能力画像：`group.scene.platformStanding = { standing: true }`。详见 [ADR 0056 §1](https://github.com/zhinjs/zhin/blob/main/docs/adr/0056-chat-roles.md)。

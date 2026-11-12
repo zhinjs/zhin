@@ -127,3 +127,7 @@ LINE 要求 Webhook URL 以 HTTPS 开头。常见方案：
 缓存随端点停止清空，不提供跨重启或跨实例去重；业务处理可能在失败前已有副作用，因此重试仍需业务幂等。Core 的会话事件存储幂等不等同于命令处理幂等。持久去重需要 Host 提供带租约、完成状态及未知状态处理的 inbox，再按端点身份与事件 ID 认领，不能只写一条数据库记录后宣称 exactly-once。
 
 协议依据：[LINE webhook redelivery](https://developers.line.biz/en/docs/messaging-api/receiving-messages/#webhook-redelivery)。
+
+## 成员身份
+
+LINE 事件不带成员身份，不上报 `sender.platform`，能力画像也不声明 `scene.platformStanding`。详见 [ADR 0056 §1](https://github.com/zhinjs/zhin/blob/main/docs/adr/0056-chat-roles.md)。

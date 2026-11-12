@@ -61,8 +61,8 @@ describe('chat role sender identity (ADR 0056)', () => {
     const roles = await grants([['endpoint', 'one/a', 'one', 'owner-a', 'owner'], ['endpoint', 'one/b', 'one', 'attacker', 'owner']]);
     const enrich = createSenderEnricher({ roles: () => roles })!;
     const conversation = state.conversation('one', 'a');
-    expect(enrich({ id: 'attacker', name: 'b', roles: ['member'] }, conversation, state.snapshot))
-      .toEqual({ id: 'attacker', name: 'b', roles: ['member'], platform: { standing: 'member' } });
+    expect(enrich({ id: 'attacker', name: 'b', platform: { standing: 'member' } }, conversation, state.snapshot))
+      .toEqual({ id: 'attacker', name: 'b', platform: { standing: 'member' } });
     expect(enrich({ id: 'attacker', chatRole: 'owner' }, conversation, state.snapshot)?.chatRole).toBeUndefined();
     expect(enrich({ id: 'owner-a', name: 'b' }, conversation, state.snapshot)?.chatRole).toBe('owner');
     const unknown = { ...conversation, endpoint: { ...conversation.endpoint, id: 'not-a-real-endpoint' } };

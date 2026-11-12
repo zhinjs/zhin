@@ -206,3 +206,7 @@ SLACK_WEB_API_PROXY_PORT=18560 pnpm --filter platform-acceptance-bot dev:slack
 ```
 
 启动代理 forwarding 后先发新的 `/acceptance probe:slack-api-baseline`，确认真实回执；control `POST /cut` 只切 API TCP，WSS保持连接，再发独立新样本并确认报告 unknown且无后台重发。`POST /recover` 后先确认旧样本没有补发，再发新样本验证恢复。每个未知样本都保留并检查平台可见消息；禁止因为 unknown 重发同一业务。TCP cut 发生在请求前不能证明“平台已接收但回执丢失”，这一情况已有本地 TLS fixture 在服务收到 POST 后切断覆盖，实机未单独证明。
+
+## 成员身份
+
+Slack 消息事件不带成员身份（工作区角色需额外 `users.info` 查询），不上报 `sender.platform`，能力画像也不声明 `scene.platformStanding`。详见 [ADR 0056 §1](https://github.com/zhinjs/zhin/blob/main/docs/adr/0056-chat-roles.md)。

@@ -35,6 +35,7 @@ export { TelegramAdapter } from './adapter.js';
 export {
   checkTelegramPlatformPermit,
   normalizeTelegramChatMember,
+  telegramChatMemberStanding,
   platformPermit,
   telegramGroupPermitResolver,
 } from './platform-permit.js';

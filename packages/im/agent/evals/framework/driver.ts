@@ -940,5 +940,5 @@ export async function deliverTimerMailInbound(
 /** Principal roles of an eval sender: `chatRole` expanded (ADR 0056), else `roles`, else `user`. */
 export function evalSenderRoles(sender: Readonly<{ roles?: readonly string[]; chatRole?: 'owner' | 'admin' | 'trusted' }>): readonly string[] {
   if (sender.chatRole) return (['owner', 'admin', 'trusted'] as const).slice(['owner', 'admin', 'trusted'].indexOf(sender.chatRole));
-  return sender.roles ?? ['user'];
+  return sender.roles ?? ['user'];  // eval principal roles (not message sender roles)
 }

@@ -75,7 +75,7 @@ it('discovers real ICQQ skills, gates member tools by requester, and loads own r
   expect(admin.tools.some(tool => tool.name.endsWith('__group_leave'))).toBe(false);
   // Promote/demote needs the platform owner role; a merely-admin Bot never sees it.
   expect(admin.tools.some(tool => tool.name.endsWith('__set_group_admin'))).toBe(false);
-  turn.principal.roles = ['master'];
+  turn.principal.roles = ['owner', 'admin', 'trusted'];
   const master = await ingress.read({ snapshot: snapshot, owner: root, isActive: () => true, turn: turn, selectedAgent: 'icqq' });
   expect(master.tools.find(tool => tool.name.endsWith('__group_leave'))).toMatchObject({ requiresApproval: 'human', risk: 'dangerous' });
   turn.input.contextState.bot.platformRole = 'owner';

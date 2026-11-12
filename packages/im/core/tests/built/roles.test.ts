@@ -47,10 +47,10 @@ describe('chat roles (ADR 0056)', () => {
     expect(roles.ownersOf('qq/bot-1', 'tg')).toEqual([]);
   });
 
-  it('normalizes platform standing, falling back to legacy role strings until adapters report it', () => {
+  it('reads only the normalized sender.platform (no legacy role strings)', () => {
     expect(platformStandingOf({ platform: { standing: 'admin', roles: [{ id: 'r' }] } })).toEqual({ standing: 'admin', roles: [{ id: 'r' }] });
-    expect(platformStandingOf({ roles: ['member', 'owner'] })).toEqual({ standing: 'owner' });
-    expect(platformStandingOf({ roles: ['admin'], permissions: ['kick'] })).toEqual({ standing: 'admin', permissions: ['kick'] });
+    expect(platformStandingOf({ roles: ['member', 'owner'] })).toBeUndefined();
+    expect(platformStandingOf({ platform: { standing: 'admin', permissions: ['kick', 'kick', ''] } })).toEqual({ standing: 'admin', permissions: ['kick'] });
     expect(platformStandingOf({ platform: { standing: 'boss' } })).toBeUndefined();
     expect(platformStandingOf({ id: 'u' })).toBeUndefined();
   });
@@ -138,11 +138,11 @@ describe('createChatRoleSenderEnricher', () => {
     const resolved: string[] = [];
     const enrich = createChatRoleSenderEnricher({ roles: () => roles, onResolved: identity => resolved.push(identity.userId) });
     expect(enrich({ id: 'boss', chatRole: 'trusted' } as never, conversation('group'), snapshot())).toEqual({ id: 'boss', chatRole: 'owner' });
-    expect(enrich({ id: 'mod', roles: ['admin'] } as never, conversation('group'), snapshot()))
-      .toEqual({ id: 'mod', roles: ['admin'], platform: { standing: 'admin' }, chatRole: 'admin' });
+    expect(enrich({ id: 'mod', platform: { standing: 'admin' } } as never, conversation('group'), snapshot()))
+      .toEqual({ id: 'mod', platform: { standing: 'admin' }, chatRole: 'admin' });
     // Private chats: no platform standing, no mapped role.
-    expect(enrich({ id: 'mod', roles: ['admin'], platform: { standing: 'owner' } } as never, conversation('private'), snapshot()))
-      .toEqual({ id: 'mod', roles: ['admin'] });
+    expect(enrich({ id: 'mod', platform: { standing: 'owner' } } as never, conversation('private'), snapshot()))
+      .toEqual({ id: 'mod' });
     expect(enrich({ id: 'eve', chatRole: 'owner' } as never, conversation('group'), snapshot())).toEqual({ id: 'eve' });
     expect(resolved).toEqual(['boss', 'mod', 'mod', 'eve']);
     // Without a role service only the normalization runs.

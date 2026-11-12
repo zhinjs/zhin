@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/onebot11/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/onebot11/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=1d848118cf6cd681 -->
+<!-- sync-adapter-docs:sha256=fc52a49de547c25a -->
 
 # @zhin.js/adapter-onebot11
 
@@ -105,7 +105,7 @@ onebot11:
 
 - **notice / request / meta 侧事件**：经统一 `endpointSpec.events` 归一后分发到 `handlers`；消息仍走 `outboundMessageToken`。
 - **群管工具暂未迁移**：旧 Adapter 经 `createSceneManagementTools` 注册踢人 / 禁言 / 群名片等成套 agent 工具；迁移后仅保留 `onebot11_set_title`，其余群管能力可通过 `$client.call()`（如 `set_group_kick`、`set_group_ban`）作为逃生舱调用。
-- **平台权限门禁**：群主 / 管理员归一为 `sender.platform.standing`（owner / admin），工具与命令用 `platform:admin` / `platform:owner` 判断（ADR 0056，见[聊天角色](../concepts/chat-roles.md)）。
+- **平台权限门禁**：群主 / 管理员归一为入站 `sender.platform.standing`（owner / admin，见下文「成员身份」），工具与命令用 `platform:admin` / `platform:owner` 判断（ADR 0056，见[聊天角色](../concepts/chat-roles.md)）。
 
 ## 文档链接
 
@@ -138,3 +138,7 @@ MIT License
 ### 高阶消息支持边界
 
 OneBot11 标准支持链接分享：canonical share 的 url/title/description/image 分别映射标准 url/title/content/image，保留标题与描述。具体桥是否实现需实机确认；NapCat 的 share 发送限制不能以标准支持推断通过。标准没有 Markdown 与 keyboard 段，直接出站明确 `unsupported_operation / not_sent`；文字交互降级不能算原生按钮支持。参考：[OneBot11 消息段规范](https://github.com/botuniverse/onebot-11/blob/master/message/segment.md)。
+
+## 成员身份
+
+群消息的 `sender.role`（`owner` / `admin` / `member`）归一为 `sender.platform.standing`；私聊不上报。OneBot v11 没有平台原生角色与权限位，`roles` / `permissions` 不上报。能力画像：`group.scene.platformStanding = { standing: true }`。详见 [ADR 0056 §1](https://github.com/zhinjs/zhin/blob/main/docs/adr/0056-chat-roles.md)。

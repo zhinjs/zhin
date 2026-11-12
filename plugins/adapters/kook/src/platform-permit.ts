@@ -58,7 +58,8 @@ export function checkKookPlatformPermit(perm: string, subject: PermissionSubject
   // the normalized standing (ADR 0056 §1); compare as plain strings.
   const role = subject.sender?.platform?.standing as string | undefined;
   const permissions = subject.sender?.platform?.permissions ?? [];
-  const has = (t: string) => permissions.includes(t);
+  // Accepts legacy UPPER_SNAKE tokens and ADR 0056 §1 snake_case platform permission names.
+  const has = (t: string) => permissions.includes(t) || permissions.includes(t.toLowerCase());
 
   switch (perm) {
     case 'guild_owner':

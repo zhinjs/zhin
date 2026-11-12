@@ -43,6 +43,8 @@ export default defineAdapter<DiscordEndpointConfig>({
       feedback: { mode: 'reaction' },
       delivery: { send: true, proactive: true, spool: true },
     },
+    // ADR 0056 §1：服务器频道消息上报群主 / 管理员 / 成员、身份组与权限位。
+    channel: { scene: { platformStanding: { standing: true, roles: true, permissions: true } } },
   },
   createAdapter: context => new DiscordAdapter(context),
 });

@@ -25,7 +25,7 @@ describe('handleRuntimeManagementCommand', () => {
       content: '/models',
       senderRoles: { isMaster: false, isTrusted: false },
     });
-    expect(reply).toContain('master / trusted');
+    expect(reply).toContain('owner / admin / trusted');
   });
 
   it('lists models for operators', async () => {
@@ -67,7 +67,7 @@ it.each(['!', '', '/'])('uses the actual %j prefix and keeps plugin namespaces d
   expect(await handleRuntimeManagementCommand({ ...base, content: `${commandPrefix}models` })).toContain('中文模型名');
   expect(await handleRuntimeManagementCommand({ ...base, content: `${commandPrefix}plugin/models` })).toBeNull();
   expect(await handleRuntimeManagementCommand({ ...base, commandPrefix: undefined, content: '/models' })).toBeNull();
-  expect(await handleRuntimeManagementCommand({ ...base, content: `${commandPrefix}models`, senderRoles: { isMaster: false, isTrusted: false } })).toContain('Only master / trusted');
+  expect(await handleRuntimeManagementCommand({ ...base, content: `${commandPrefix}models`, senderRoles: { isMaster: false, isTrusted: false } })).toContain('Only chat roles owner / admin / trusted');
 });
 
 it('uses immutable per-invocation presentation for concurrent locales', async () => {

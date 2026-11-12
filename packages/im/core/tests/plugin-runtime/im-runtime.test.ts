@@ -3458,10 +3458,10 @@ describe('Root command feedback presentation', () => {
     try {
       const input = fixtureInput(fixture, '/gh issue list open');
       const conversation = { ...input.conversation, kind: 'channel', parent: { kind: 'channel', id: 'workspace' }, threadId: 'thread' } as const;
-      await receive(fixture.im, { ...input, conversation, sender: { id: 'alice', roles: ['user'] }, metadata: { secret: 'not disclosed' } });
+      await receive(fixture.im, { ...input, conversation, sender: { id: 'alice', platform: { standing: 'member' as const } }, metadata: { secret: 'not disclosed' } });
       expect(renderer.mock.calls[0][1]).toMatchObject({ conversation, clientAdapter: 'memory', generation: 1, sender: { id: 'alice' } });
       expect(Object.isFrozen(renderer.mock.calls[0][1].conversation.parent)).toBe(true);
-      expect(Object.isFrozen(renderer.mock.calls[0][1].sender?.roles)).toBe(true);
+      expect(Object.isFrozen(renderer.mock.calls[0][1].sender?.platform)).toBe(true);
       expect(JSON.stringify(renderer.mock.calls)).not.toContain('not disclosed');
       expect((sent[0] as { payload: unknown }).payload).toEqual([
         { type: 'text', data: { text: '请联系 ' } }, { type: 'mention', data: { target: 'alice' } }, { type: 'text', data: { text: '：denied' } },

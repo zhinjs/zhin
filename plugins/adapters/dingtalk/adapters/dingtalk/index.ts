@@ -25,6 +25,8 @@ export default defineAdapter<DingTalkEndpointConfig>({
       },
       delivery: { send: true, spool: true },
     },
+    // ADR 0056 §1：群聊回调的 isAdmin 归一 standing（admin / member，回调不区分群主）。
+    group: { scene: { platformStanding: { standing: true } } },
   },
   createAdapter: context => new DingTalkAdapter(context),
 });

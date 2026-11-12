@@ -8,7 +8,7 @@ tier: Stable
 本页由 [`plugins/adapters/sandbox/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/sandbox/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=a75c82d9bc8f354d -->
+<!-- sync-adapter-docs:sha256=3f416349219e1152 -->
 
 # @zhin.js/adapter-sandbox
 
@@ -252,3 +252,7 @@ Console 沙盒页和自己写的测试客户端都用这套协议。每个 WebSo
 ## 许可证
 
 MIT License
+
+## 成员身份
+
+模拟器的发送者角色（`master` = 群主 / `admin` / `member`）在群聊、频道中作为 `sender.platform.standing`（`owner` / `admin` / `member`）上报，私聊不上报。它只模拟平台身份，不授予框架角色（主人等由账号配置或聊天角色决定）。能力画像：`group` / `channel` 的 `scene.platformStanding = { standing: true }`。详见 [ADR 0056 §1](https://github.com/zhinjs/zhin/blob/main/docs/adr/0056-chat-roles.md)。

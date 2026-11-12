@@ -60,9 +60,7 @@ export interface EndpointIncomingMessage<TSegment = unknown> {
   readonly sender?: Readonly<{
     id: string;
     name?: string;
-    /** Legacy platform role strings; superseded by `platform` (ADR 0056 §1). */
-    roles?: readonly string[];
-    /** Normalized platform standing of the sender (ADR 0056 §1). */
+    /** ADR 0056 §1 platform standing; declare which fields you report in `profile.scene.platformStanding`. */
     platform?: PlatformStanding;
   }>;
   readonly endpointId?: string;

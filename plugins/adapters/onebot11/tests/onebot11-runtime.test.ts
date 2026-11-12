@@ -366,7 +366,7 @@ describe('onebot11 plugin runtime adapter', () => {
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
       conversation: { endpoint: canonicalEndpointRef, kind: 'group', id: '200' },
-      sender: expect.objectContaining({ id: '9' }),
+      sender: expect.objectContaining({ id: '9', platform: { standing: 'member' } }),
       mentioned: true, metadata: expect.objectContaining({ nickname: 'bob' }),
     }));
     await endpoint.stop();

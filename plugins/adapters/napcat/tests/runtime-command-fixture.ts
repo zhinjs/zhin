@@ -16,7 +16,7 @@ export async function runtimeCommandFixture<Config>(definition: AdapterDefinitio
   const harness = await createAdapterHarness(definition, baseline, { name, repository: { load: async () => structuredClone(state), compareAndSet } });
   stops.push(harness.stop); await harness.start(); harness.open();
   const context = (overrides: Record<string, unknown> = {}) => ({ owner: rootPluginId(), generation: 1,
-    signal: new AbortController().signal, project: () => harness.index, params: {}, args: [], input: undefined,
+    signal: new AbortController().signal, project: () => harness.index, params: {}, args: [], input: { sender: { id: 'owner-user', chatRole: 'owner' } },
     config: undefined, locale: 'zh-CN', use() { throw new Error('A runtime account command must not access startup file storage'); },
     ...overrides,
   }) as never;

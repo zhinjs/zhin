@@ -12,7 +12,7 @@
  *   (permits, Agent policies, group rules, moderation) reads only those two fields.
  */
 import {
-  isPlatformStanding, isPlatformStandingLevel,
+  isPlatformStandingLevel, normalizePlatformStanding,
   type ConversationRef, type PlatformStanding, type PlatformStandingLevel,
 } from '@zhin.js/im-contract';
 import {
@@ -250,20 +250,9 @@ export class ChatRoleService<TStore extends ChatRoleGrantStore = ChatRoleGrantSt
 
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 
-/**
- * Normalized platform standing of a sender: the adapter-reported `sender.platform`; until every
- * adapter reports it, derived from the legacy `sender.roles` strings (`owner` / `admin`) and
- * `sender.permissions`.
- */
+/** Normalized platform standing of a sender (`sender.platform`, ADR 0056 §1). */
 export function platformStandingOf(sender: unknown): PlatformStanding | undefined {
-  if (!record(sender)) return undefined;
-  if (isPlatformStanding(sender.platform)) return sender.platform;
-  const roles = Array.isArray(sender.roles) ? sender.roles.filter((role): role is string => typeof role === 'string') : [];
-  const permissions = Array.isArray(sender.permissions)
-    ? sender.permissions.filter((permission): permission is string => typeof permission === 'string' && permission.length > 0) : [];
-  if (!roles.length && !permissions.length) return undefined;
-  const standing: PlatformStandingLevel = roles.includes('owner') ? 'owner' : roles.includes('admin') ? 'admin' : 'member';
-  return Object.freeze({ standing, ...(permissions.length ? { permissions: Object.freeze(permissions) } : {}) });
+  return record(sender) ? normalizePlatformStanding(sender.platform) : undefined;
 }
 
 /** `platform:admin` is met by `admin` and `owner` standings, `platform:owner` only by `owner`. */

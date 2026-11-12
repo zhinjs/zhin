@@ -49,6 +49,8 @@ export default defineAdapter<QqEndpointConfig>({
     },
     channel: {
       delivery: { passiveWindow: { seconds: 300, maxMessages: 5 } },
+      // ADR 0056 §1：频道消息的 member.roles → standing（频道主 / 超级管理员）+ 原始身份组 roles。
+      scene: { platformStanding: { standing: true, roles: true } },
     },
   },
   createAdapter: context => new QqAdapter(context),

@@ -132,11 +132,6 @@ export function isSegmentContent(value: unknown): value is Segment {
 export interface MessageSenderRef {
   readonly id: string;
   readonly name?: string;
-  /**
-   * Legacy adapter-reported platform role strings (`owner` / `admin` / …). Read only as the
-   * interim source of {@link MessageSenderRef.platform}; never an authorization role.
-   */
-  readonly roles?: readonly string[];
   /** Normalized platform standing (ADR 0056 §1); the Runtime drops it in private chats. */
   readonly platform?: PlatformStanding;
   /** Highest zhin chat role effective in this conversation (ADR 0056 §2). Set by the Runtime only. */

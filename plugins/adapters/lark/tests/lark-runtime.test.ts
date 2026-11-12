@@ -478,8 +478,10 @@ describe('lark plugin runtime adapter', () => {
       results[openId] = checkBuiltinPermit('platform:admin', toPermissionSubject({ ...(inbound as object), sender: { ...(sender as object), platform: platformStandingOf(sender) } }));
     }
     expect(results).toEqual({ ou_owner: true, ou_admin: true, ou_member: false });
-    expect(receive.mock.calls[0]![0]).toEqual(expect.objectContaining({ sender: expect.objectContaining({ roles: ['owner'] }) }));
-    expect(receive.mock.calls[1]![0]).toEqual(expect.objectContaining({ sender: expect.objectContaining({ roles: ['admin'] }) }));
+    expect(receive.mock.calls[0]![0]).toEqual(expect.objectContaining({ sender: expect.objectContaining({ platform: { standing: 'owner' } }) }));
+    expect(receive.mock.calls[1]![0]).toEqual(expect.objectContaining({ sender: expect.objectContaining({ platform: { standing: 'admin' } }) }));
+    expect(receive.mock.calls[2]![0]).toEqual(expect.objectContaining({ sender: expect.objectContaining({ platform: { standing: 'member' } }) }));
+    expect(receive.mock.calls[0]![0]).not.toHaveProperty('sender.roles');
     // chat.get 按群缓存，只调用一次
     expect(fetch.mock.calls.filter(([u]) => String(u).endsWith('/im/v1/chats/oc_group1'))).toHaveLength(1);
     await endpoint.stop();
@@ -517,7 +519,7 @@ describe('lark plugin runtime adapter', () => {
     await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(3));
     expect(fetch.mock.calls.filter(([u]) => String(u).endsWith('/im/v1/chats/oc_group1'))).toHaveLength(1);
     for (const call of receive.mock.calls) {
-      expect(call[0]).toEqual(expect.objectContaining({ sender: expect.objectContaining({ roles: ['owner'] }) }));
+      expect(call[0]).toEqual(expect.objectContaining({ sender: expect.objectContaining({ platform: { standing: 'owner' } }) }));
     }
     await endpoint.stop();
   });
