@@ -185,6 +185,12 @@ export interface GatewayPackageTransactionResult {
   readonly failedPhase?: GatewayPackagePhase;
   /** The original failure. */
   readonly error?: string;
+  /**
+   * `declare` only: structured validation feedback when the configuration was refused inside
+   * the transaction (it changed after the preflight check). Same format as `GatewayRpcErrorDetails`.
+   */
+  readonly errors?: readonly GatewayValidationIssue[];
+  readonly missingEnv?: readonly string[];
   /** Why the rollback did not complete (`rollbackFailed` only). */
   readonly rollbackError?: string;
   /** Last instance log lines when starting the instance failed. */

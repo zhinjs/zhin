@@ -89,6 +89,12 @@ export class PluginSchemaCatalog {
         if (error instanceof ManifestValidationError) return undefined;
         throw error;
       }
+      // A declaration through another reference (local path, alias) that resolves to the same
+      // package root already declares this package.
+      for (const item of declaration.instances) {
+        const declared = await resolveReference(packages, root, item).catch(() => undefined);
+        if (declared && target && declared.root === target.root) return undefined;
+      }
     } catch (error) {
       throw new Error(`Cannot resolve schema for ${packageName}: invalid or unavailable Plugin manifest`, { cause: error });
     }

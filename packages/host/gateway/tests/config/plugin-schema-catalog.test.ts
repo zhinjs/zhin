@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -224,9 +224,22 @@ describe('PluginSchemaCatalog', () => {
     const dev = join(root, 'node_modules/@zhin.js/adapter-dev');
     await writePackage(dev, '@zhin.js/adapter-dev');
     await writeSchema(dev, 'dev');
+    // List it as a devDependency so accepting devDependencies would make this assertion fail.
+    const manifestPath = join(root, 'package.json');
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as Record<string, unknown>;
+    await writeFile(manifestPath, JSON.stringify({ ...manifest, devDependencies: { '@zhin.js/adapter-dev': '*' } }));
     await expect(catalog.readUndeclared('@zhin.js/adapter-dev')).resolves.toBeUndefined();
     // Declared instances keep the strict read (no package fallback outside readUndeclared).
     await expect(catalog.read('@zhin.js/adapter-bare')).resolves.toBeNull();
+  });
+
+  it('treats a package declared through a local-path reference as declared', async () => {
+    const root = await createProject();
+    await writePackage(root, 'schema-project',
+      [{ package: './node_modules/@zhin.js/adapter-icqq', instanceKey: 'icqq-local' }],
+      { '@zhin.js/adapter-icqq': '*' });
+    const catalog = new PluginSchemaCatalog(root);
+    await expect(catalog.readUndeclared('@zhin.js/adapter-icqq')).resolves.toBeUndefined();
   });
 
   it('reads a batch and omits unresolved plugins without requiring an unrelated package to resolve', async () => {

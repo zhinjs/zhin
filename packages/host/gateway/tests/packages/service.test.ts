@@ -428,6 +428,24 @@ describe('GatewayPackageService plugin configuration (ADR 0053 §2 step 4)', () 
     expect((await readConfig()).plugins).toEqual({});
   });
 
+  it('keeps structured details when the configuration is refused inside the transaction', async () => {
+    const instance = new FakeInstance('running');
+    const subject = realService(instance);
+    await subject.install([SANDBOX], { principal: owner });
+    process.env.ZHIN_DECLARE_RACE = 'bot';
+    try {
+      // The variable exists for the preflight check and disappears before the in-transaction validation.
+      const result = await subject.declare({ package: SANDBOX, config: { endpoints: [{ id: '${ZHIN_DECLARE_RACE}' }] } }, {
+        principal: owner,
+        onEvent: event => { if (event.type === 'phase' && event.phase === 'stop-instance') delete process.env.ZHIN_DECLARE_RACE; },
+      });
+      expect(result).toMatchObject({ ok: false, status: 'rolledBack', operation: 'declare', missingEnv: ['ZHIN_DECLARE_RACE'] });
+      expect((await readConfig()).plugins).toEqual({});
+    } finally {
+      delete process.env.ZHIN_DECLARE_RACE;
+    }
+  });
+
   it('rolls the configuration back without reinstalling when the declared plugin does not start', async () => {
     const instance = new FakeInstance('running', attempt => (attempt === 1 ? 'fail' : 'ready'));
     const calls: string[][] = [];
