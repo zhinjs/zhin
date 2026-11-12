@@ -55,23 +55,20 @@
     "@zhin.js/skill": "workspace:*",
     "@zhin.js/tool": "workspace:*",
     "discord.js": "^14.27.0",
-    "undici": "6.29.1"
+    "undici": "6.29.1",
+    "zod": "^4.6.7"
   },
   "peerDependencies": {
     "@zhin.js/adapter": "workspace:^",
     "@zhin.js/command": "workspace:^",
     "@zhin.js/core": "workspace:^",
-    "zhin.js": "workspace:^",
-    "zod": "^4.0.0"
+    "zhin.js": "workspace:^"
   },
   "peerDependenciesMeta": {
     "@zhin.js/command": {
       "optional": true
     },
     "zhin.js": {
-      "optional": true
-    },
-    "zod": {
       "optional": true
     }
   },
@@ -82,8 +79,7 @@
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",
     "ws": "^8.21.1",
-    "zhin.js": "workspace:*",
-    "zod": "^4.4.3"
+    "zhin.js": "workspace:*"
   },
   "files": [
     "adapters",

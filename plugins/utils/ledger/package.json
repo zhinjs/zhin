@@ -50,7 +50,8 @@
     "@zhin.js/console-contract": "workspace:*",
     "@zhin.js/page": "workspace:*",
     "@zhin.js/skill": "workspace:*",
-    "@zhin.js/tool": "workspace:*"
+    "@zhin.js/tool": "workspace:*",
+    "zod": "^4.6.7"
   },
   "peerDependencies": {
     "zhin.js": "workspace:^",
@@ -58,17 +59,13 @@
     "@zhin.js/page": "workspace:^",
     "@zhin.js/schedule-feature": "workspace:^",
     "@zhin.js/skill": "workspace:^",
-    "@zhin.js/tool": "workspace:^",
-    "zod": "^4.0.0"
+    "@zhin.js/tool": "workspace:^"
   },
   "peerDependenciesMeta": {
     "@zhin.js/command": {
       "optional": true
     },
     "@zhin.js/schedule-feature": {
-      "optional": true
-    },
-    "zod": {
       "optional": true
     }
   },
@@ -77,8 +74,7 @@
     "@zhin.js/testing": "workspace:*",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",
-    "zhin.js": "workspace:*",
-    "zod": "^4.4.3"
+    "zhin.js": "workspace:*"
   },
   "engines": {
     "node": ">=22.19.0"
