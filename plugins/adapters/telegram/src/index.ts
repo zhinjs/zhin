@@ -33,11 +33,8 @@ export { type TelegramClientEventMap } from './client.js';
 export { TelegramAdapter } from './adapter.js';
 
 export {
-  checkTelegramPlatformPermit,
-  normalizeTelegramChatMember,
   telegramChatMemberStanding,
   platformPermit,
-  telegramGroupPermitResolver,
 } from './platform-permit.js';
 
 export type { TelegramPollRequest } from './telegram-client.js';

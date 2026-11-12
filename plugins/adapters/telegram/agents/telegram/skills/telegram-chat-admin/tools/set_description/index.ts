@@ -1,20 +1,20 @@
 import { messages as t } from "../../../../messages.js";
+import { currentChat } from "../../../../conversation.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 
-export default defineAgentTool<{ chat_id: string; description: string }>({
-  description: '设置 Telegram 群组描述',
+export default defineAgentTool<{ description: string }>({
+  description: '设置当前 Telegram 群组描述',
   inputSchema: z.object({
-    chat_id: z.string().describe('聊天 ID'),
     description: z.string().describe('群描述文字'),
   }),
   adapter: 'telegram',
   scopes: ["group","channel"],
-  permissions: ['platform:admin', 'bot-permission:change_info'],
+  permissions: ['platform-permission:change_info', 'bot-permission:change_info'],
   tags: ['telegram'],
-  async execute({ chat_id, description  }: { chat_id: string; description: string }, context) {
+  async execute({ description }, context) {
     const endpoint = context.$client;
-    const success = await endpoint.setChatDescription(Number(chat_id), description);
+    const success = await endpoint.setChatDescription(currentChat(context), description);
     return { success, message: success ? t(context.locale, 'descriptionUpdated') : t(context.locale, 'operationFailed') };
   },
 });

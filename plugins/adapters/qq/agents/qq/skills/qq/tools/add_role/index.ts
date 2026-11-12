@@ -1,12 +1,11 @@
 import { messages as t } from "../../../../messages.js";
+import { currentGuildChannel } from '../../../../conversation.js';
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 
-export default defineAgentTool<{ guild_id: string; channel_id: string; user_id: string; role_id: string }>({
-  description: '给成员添加 QQ 频道角色',
+export default defineAgentTool<{ user_id: string; role_id: string }>({
+  description: '在当前 QQ 频道给成员添加身份组',
   inputSchema: z.object({
-    guild_id: z.string().describe('频道 ID'),
-    channel_id: z.string().describe('子频道 ID'),
     user_id: z.string().describe('用户 ID'),
     role_id: z.string().describe('角色 ID'),
   }),
@@ -14,7 +13,8 @@ export default defineAgentTool<{ guild_id: string; channel_id: string; user_id: 
   scopes: ["channel"],
   tags: ['qq'],
   permissions: ['platform:admin', 'bot:admin'],
-  async execute({ guild_id, channel_id, user_id, role_id  }: { guild_id: string; channel_id: string; user_id: string; role_id: string }, context) {
+  async execute({ user_id, role_id }, context) {
+    const { guildId: guild_id, channelId: channel_id } = currentGuildChannel(context);
     const client = context.$client;
     await client.memberService.addMemberRole(guild_id, channel_id, user_id, role_id);
     const success = true;

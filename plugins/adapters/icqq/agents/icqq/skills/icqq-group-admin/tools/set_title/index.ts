@@ -1,11 +1,11 @@
 import { messages as t } from "../../../../messages.js";
+import { currentGroup } from "../../../../conversation.js";
 import { freshMember, isGroupManager } from "../../../../members.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-export default defineAgentTool<{ group_id: number; user_id: number; title: string; duration?: number }>({
-  description: '设置 QQ 群成员的专属头衔',
+export default defineAgentTool<{ user_id: number; title: string; duration?: number }>({
+  description: '设置当前 QQ 群成员的专属头衔',
   inputSchema: z.object({
-    group_id: z.number().describe('目标群号'),
     user_id: z.number().describe('目标成员 QQ号'),
     title: z.string().describe('头衔文字'),
     duration: z.number().optional().describe('持续时间(秒)，-1永久').default(-1),
@@ -16,7 +16,8 @@ export default defineAgentTool<{ group_id: number; user_id: number; title: strin
   scopes:['group'],
   permissions: ['platform:admin', 'bot:owner'],
   requiresApproval: 'always',
-  async execute({ group_id, user_id, title, duration }, context) {
+  async execute({ user_id, title, duration }, context) {
+    const group_id = currentGroup(context);
     const client = context.$client;
     const [self, member] = await Promise.all([freshMember(client, group_id, client.uin), freshMember(client, group_id, user_id)]);
     if (!isGroupManager(self)) return { success: false, message: t(context.locale, 'titleForbidden') };

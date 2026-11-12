@@ -24,23 +24,40 @@ export interface MilkyManagementCaller {
   callApi(request: PendingRpcRequest): Promise<unknown>;
 }
 
+/** How long one `get_login_info` answer is reused (bursts only; see inspectSelfStanding). */
+const SELF_ID_TTL_MS = 5_000;
+
 export function createMilkyEndpointManagement(
   endpoint: MilkyManagementCaller,
 ): EndpointManagement {
-  let selfId: string | undefined;
+  // The login account can change across reconnects (or a different account on the same
+  // connection), so `get_login_info` is not remembered for the endpoint's lifetime: only briefly,
+  // to coalesce bursts, and never across a failed lookup.
+  let login: { readonly id: string; readonly at: number } | undefined;
+  const loginId = async (signal: AbortSignal | undefined): Promise<string | undefined> => {
+    if (login && Date.now() - login.at < SELF_ID_TTL_MS) return login.id;
+    login = undefined;
+    const info = asRecord(await endpoint.callApi({ action: 'get_login_info', signal }));
+    const id = info.uin ?? info.user_id;
+    const value = (typeof id === 'number' && id > 0) || (typeof id === 'string' && id.trim() !== '' && id !== '0') ? String(id) : undefined;
+    if (value) login = { id: value, at: Date.now() };
+    return value;
+  };
   return Object.freeze<EndpointManagement>({
-    /** ADR 0056 §1: the Bot's own group role (`get_login_info` once, then `get_group_member_info` self). */
+    /** ADR 0056 §1: the Bot's own group role (`get_login_info`, then `get_group_member_info` self). */
     async inspectSelfStanding({ conversation, signal }: SelfStandingRequest): Promise<PlatformStanding | undefined> {
       if (conversation.kind !== 'group') return undefined;
-      if (!selfId) {
-        const login = asRecord(await endpoint.callApi({ action: 'get_login_info', signal }));
-        const id = login.uin ?? login.user_id;
-        selfId = (typeof id === 'number' && id > 0) || (typeof id === 'string' && id.trim() !== '' && id !== '0') ? String(id) : undefined;
-      }
+      const selfId = await loginId(signal);
       if (!selfId) return undefined;
-      const data = asRecord(await endpoint.callApi({ action: 'get_group_member_info', signal, params: {
-        group_id: toNumberId(conversation.id, 'group_id'), user_id: toNumberId(selfId, 'user_id'), no_cache: true,
-      } }));
+      let data: Record<string, unknown>;
+      try {
+        data = asRecord(await endpoint.callApi({ action: 'get_group_member_info', signal, params: {
+          group_id: toNumberId(conversation.id, 'group_id'), user_id: toNumberId(selfId, 'user_id'), no_cache: true,
+        } }));
+      } catch (error) {
+        login = undefined;
+        throw error;
+      }
       return standingFromMemberRole(asRecord(data.member).role ?? data.role);
     },
     async listFriends(request: EndpointManagementRequest = {}): Promise<readonly EndpointFriend[]> {

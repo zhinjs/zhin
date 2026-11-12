@@ -11,7 +11,9 @@ export default defineAgentTool<{ name: string; owner: string; members: string }>
   }),
   adapter: 'dingtalk',
   tags: ['dingtalk'],
-  permissions: ['platform-permission:chat_owner'],
+  // A new group does not depend on any standing in the current group; DingTalk never reports a
+  // `chat_owner` permission either. `trusted` is also met by zhin `admin` / `owner` (ADR 0056 §2).
+  permissions: ['trusted'],
   async execute({ name, owner, members    }: { name: string; owner: string; members: string }, context) {
     const endpoint = context.$client;
     const chatId = await endpoint.createChat(name, owner, members.split(','));

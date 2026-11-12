@@ -180,6 +180,32 @@ describe('onebot11 reverse WebSocket access (ADR 0054 §3)', () => {
 });
 
 describe('inspectSelfStanding (ADR 0056 §1)', () => {
+  it('re-reads the login account after it changes (reconnect / another account) and after a failure', async () => {
+    vi.useFakeTimers();
+    try {
+      let account = 42;
+      let fail = false;
+      const members: unknown[] = [];
+      const management = createOneBot11EndpointManagement({ callApi: async (request: { action: string; params?: { user_id?: number } }) => {
+        if (request.action === 'get_login_info') return { user_id: account };
+        members.push(request.params?.user_id);
+        if (fail) throw new Error('offline');
+        return { role: 'admin', member: { role: 'admin' } };
+      } } as never);
+      const signal = new AbortController().signal;
+      const group = { conversation: { kind: 'group' as const, id: '20001' }, signal };
+      await management.inspectSelfStanding!(group);
+      account = 43;
+      vi.advanceTimersByTime(6_000);
+      await management.inspectSelfStanding!(group);
+      fail = true;
+      await expect(management.inspectSelfStanding!(group)).rejects.toThrow('offline');
+      fail = false; account = 44;
+      await management.inspectSelfStanding!(group);
+      expect(members).toEqual([42, 43, 43, 44]);
+    } finally { vi.useRealTimers(); }
+  });
+
   it('reads the bot\'s own group role once logged in and reports nothing outside groups', async () => {
     const calls: { action: string; params?: unknown }[] = [];
     const management = createOneBot11EndpointManagement({ callApi: async (request: { action: string; params?: unknown }) => {

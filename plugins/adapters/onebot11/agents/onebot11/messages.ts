@@ -1,6 +1,10 @@
 import { createMessages } from 'zhin.js/i18n';
 
 export const messages = createMessages({
+  "groupRequired": {
+    "zh-CN": "此操作仅支持当前 QQ 群",
+    "en": "This operation requires the current QQ group"
+  },
   "setFailed": {
     "zh-CN": "设置失败",
     "en": "Update failed"

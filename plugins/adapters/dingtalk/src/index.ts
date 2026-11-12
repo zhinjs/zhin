@@ -33,12 +33,7 @@ export {
 
 export { type DingtalkClientEventMap } from './client.js';
 
-export {
-  checkDingtalkPlatformPermit,
-  dingtalkGroupPermitResolver,
-  normalizeDingtalkSenderForPermit,
-  platformPermit,
-} from './platform-permit.js';
+export { platformPermit } from './platform-permit.js';
 
 export { DingTalkClient, type DingTalkClientApi } from './client.js';
 export { DingTalkAdapter } from './adapter.js';

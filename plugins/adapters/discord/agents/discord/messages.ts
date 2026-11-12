@@ -1,6 +1,18 @@
 import { createMessages } from 'zhin.js/i18n';
 
 export const messages = createMessages({
+  "guildChannelRequired": {
+    "zh-CN": "此操作仅支持当前 Discord 服务器频道",
+    "en": "This operation requires the current Discord server channel"
+  },
+  "roleMissing": {
+    "zh-CN": "当前服务器没有身份组 {p0}",
+    "en": "Role {p0} does not exist in this server"
+  },
+  "roleAboveRequester": {
+    "zh-CN": "身份组 {p0} 不低于你的最高身份组，不能由你管理",
+    "en": "Role {p0} is not below your highest role, so you cannot manage it"
+  },
   "reactionAdded": {
     "zh-CN": "已添加反应 {p0}",
     "en": "Reaction added: {p0}"

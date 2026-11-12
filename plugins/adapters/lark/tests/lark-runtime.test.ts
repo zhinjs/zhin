@@ -524,6 +524,39 @@ describe('lark plugin runtime adapter', () => {
     await endpoint.stop();
   });
 
+  it.each([
+    ['chat.get fails', { ok: false, status: 500, text: async () => 'boom', json: async () => ({ code: 99991663, msg: 'boom' }) }],
+    ['owner_id is missing', { ok: true, status: 200, text: async () => '', json: async () => ({ code: 0, data: { user_manager_id_list: ['ou_admin'] } }) }],
+  ] as const)('reports an unknown (not member) standing when %s', async (_case, response) => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const receive = vi.fn(async () => Object.freeze({ matched: false }));
+    const base = mockFetchOk();
+    const fetch = vi.fn(async (url: string, init?: unknown) => (String(url).endsWith('/im/v1/chats/oc_group1') ? response : base(url, init as never)));
+    const endpoint = await createEndpointHarness(() => new LarkEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
+      gateway: { receive, send: vi.fn(async () => 'sent') }, http, config: baseConfig, fetch,
+    }), { gateway: createTestEventGateway({ receive, send: vi.fn(async () => 'sent') }, undefined), capabilities: ['inbound', 'outbound'], operations: ['recall'] });
+    await endpoint.start();
+    endpoint.open();
+    try {
+      endpoint.endpoint.admit(textMessage({ message_id: 'om_u1', sender: { sender_id: { open_id: 'ou_member' } } }));
+      await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(1));
+      expect((receive.mock.calls[0]![0] as { sender: object }).sender).not.toHaveProperty('platform');
+      endpoint.endpoint.admit(textMessage({ message_id: 'om_u2', sender: { sender_id: { open_id: 'ou_admin' } } }));
+      await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(2));
+      const second = (receive.mock.calls[1]![0] as { sender: { platform?: unknown } }).sender;
+      if (_case === 'owner_id is missing') expect(second.platform).toEqual({ standing: 'admin' });
+      else expect(second).not.toHaveProperty('platform');
+      // Failures are negatively cached for a short while instead of retried on every message.
+      expect(fetch.mock.calls.filter(([u]) => String(u).endsWith('/im/v1/chats/oc_group1'))).toHaveLength(1);
+      const management = (endpoint.endpoint as unknown as { endpointManagement: { inspectSelfStanding(r: unknown): Promise<unknown> } }).endpointManagement;
+      if (_case === 'owner_id is missing') {
+        await expect(management.inspectSelfStanding({ conversation: { kind: 'group', id: 'oc_group1' }, signal: new AbortController().signal })).resolves.toBeUndefined();
+      }
+    } finally { await endpoint.stop(); }
+  });
+
   it('does not admit inbound while closed', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);

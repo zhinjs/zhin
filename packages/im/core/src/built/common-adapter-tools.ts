@@ -176,8 +176,22 @@ export const SCENE_MANAGEMENT_SKILL_KEYWORDS = [
 // 工厂：根据已实现的方法为指定适配器生成场景治理 Tool 列表（各平台自行调用并 addTool）
 // ============================================================================
 
+/**
+ * Message the tool runs for. Only its endpoint / conversation are read: platform (`platform:*`) and
+ * Bot (`bot:*`) permits are judged in that conversation, so the target always comes from it.
+ */
+export interface SceneManagementInvocation {
+  readonly endpointId?: string;
+  readonly conversation?: { readonly id: string; readonly endpoint?: { readonly id: string } };
+}
+
 export interface SceneManagementToolFactory<T> {
-  (spec: SceneManagementMethodSpec, prefix: string, execute: (args: Record<string, any>) => Promise<any>): T;
+  (spec: SceneManagementMethodSpec, prefix: string, execute: (args: Record<string, any>, message?: SceneManagementInvocation) => Promise<any>): T;
+}
+
+/** Platform standing permits for a spec: the sender's and the Bot's own (ADR 0056 §5). */
+export function sceneManagementSpecPermits(spec: Pick<SceneManagementMethodSpec, 'permit'>): string[] | undefined {
+  return spec.permit ? [`platform:${spec.permit}`, `bot:${spec.permit}`] : undefined;
 }
 
 /** Default: the sender's normalized platform standing (`platform:admin` / `platform:owner`). */
@@ -245,8 +259,14 @@ export function createSceneManagementToolsRaw<T>(
     if (typeof fn !== 'function') continue;
 
     const boundFn = fn.bind(adapter);
-    const execute = async (args: Record<string, any>) => {
-      const { endpoint_id, scene_id, ...rest } = args;
+    const execute = async (args: Record<string, any>, message?: SceneManagementInvocation) => {
+      const { endpoint_id: _endpoint, scene_id: _scene, ...rest } = args;
+      // The target is the conversation the permits were judged in; model-supplied ids are ignored.
+      const scene_id = message?.conversation?.id;
+      const endpoint_id = message?.endpointId ?? message?.conversation?.endpoint?.id;
+      if (!scene_id || !endpoint_id) {
+        throw new Error(`${prefix}_${spec.toolSuffix} only acts on the current conversation`);
+      }
       const methodArgs = buildSceneMethodArgs(spec.method, endpoint_id, scene_id, rest);
       return (boundFn as (...a: any[]) => Promise<any>).apply(adapter, methodArgs);
     };

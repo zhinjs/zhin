@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { resolveTurnCapabilities } from 'zhin.js/adapter';
 import kook from '../adapters/kook/index.js';
-import { KookSenderRoleResolver, kookPermissionNames } from '../src/sender-roles.js';
+import { KOOK_ROLE_PERMISSIONS, KookSenderRoleResolver, kookPermissionNames } from '../src/sender-roles.js';
 
 function clientWith(delayMs = 20) {
   const getGuildInfo = vi.fn(async () => {
@@ -25,8 +25,25 @@ describe('KookSenderRoleResolver', () => {
     expect(getGuildInfo).toHaveBeenCalledTimes(1);
     expect(getRoleList).toHaveBeenCalledTimes(1);
     expect(results.map((result) => result?.standing)).toEqual(['owner', 'admin', 'member']);
-    expect(results[1]).toEqual({ standing: 'admin', roles: [{ id: '7', name: 'Admins' }], permissions: ['administrator', 'kick_members'] });
+    expect(results[1]).toEqual({ standing: 'admin', roles: [{ id: '7', name: 'Admins' }], permissions: [...KOOK_ROLE_PERMISSIONS] });
     expect(results[2]).toEqual({ standing: 'member', roles: [{ id: '8' }] });
+  });
+
+  it('expands the server owner to every permission and merges the everyone role (role_id 0)', async () => {
+    const client = {
+      getGuildInfo: vi.fn(async () => ({ user_id: 'owner-1' })),
+      pickGuild: () => ({ getRoleList: vi.fn(async () => [
+        { role_id: 0, name: '@全体成员', permissions: 2 ** 12 | 2 ** 3 },
+        { role_id: 9, name: 'Helpers', permissions: 2 ** 6 },
+      ]) }),
+    };
+    const resolver = new KookSenderRoleResolver(() => client as never);
+    await expect(resolver.resolve({ guildId: 'g1', authorId: 'owner-1', authorRoles: [] }))
+      .resolves.toEqual({ standing: 'owner', permissions: [...KOOK_ROLE_PERMISSIONS] });
+    await expect(resolver.resolve({ guildId: 'g1', authorId: 'u2', authorRoles: [9] }))
+      .resolves.toEqual({ standing: 'member', roles: [{ id: '9', name: 'Helpers' }], permissions: ['create_invite', 'kick_members', 'send_messages'] });
+    await expect(resolver.resolve({ guildId: 'g1', authorId: 'u3', authorRoles: [] }))
+      .resolves.toEqual({ standing: 'member', permissions: ['create_invite', 'send_messages'] });
   });
 
   it('reports nothing when the guild lookups fail (standing unknown)', async () => {

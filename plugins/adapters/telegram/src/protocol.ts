@@ -143,6 +143,18 @@ export interface TelegramUpdate {
   readonly message?: TelegramMessage;
   readonly edited_message?: TelegramMessage;
   readonly callback_query?: TelegramCallbackQuery;
+  /** A member's status changed (only delivered when `allowed_updates` lists it and the Bot is an admin). */
+  readonly chat_member?: TelegramChatMemberUpdated;
+  /** The Bot's own member status changed. */
+  readonly my_chat_member?: TelegramChatMemberUpdated;
+}
+
+export interface TelegramChatMemberUpdated {
+  readonly chat: TelegramChat;
+  readonly from?: TelegramUser;
+  readonly date?: number;
+  readonly old_chat_member?: TelegramChatMember;
+  readonly new_chat_member: TelegramChatMember;
 }
 
 export interface TelegramChatMember {
@@ -257,7 +269,8 @@ export function resolveTelegramConfig(config: TelegramEndpointConfig): ResolvedT
   const webhookSource = config.webhook;
   const mode: 'polling' | 'webhook' = polling === false ? 'webhook' : 'polling';
   const apiBaseUrl = (config.apiBaseUrl ?? 'https://api.telegram.org').replace(/\/$/, '');
-  const allowedUpdates = config.allowedUpdates ?? ['message', 'callback_query'];
+  // chat_member / my_chat_member keep the cached sender standing fresh (ADR 0056 §1).
+  const allowedUpdates = config.allowedUpdates ?? ['message', 'callback_query', 'chat_member', 'my_chat_member'];
   const webhook = mode === 'webhook'
     ? {
       domain: webhookSource?.domain ?? '',

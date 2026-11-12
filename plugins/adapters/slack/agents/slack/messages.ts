@@ -1,6 +1,10 @@
 import { createMessages } from 'zhin.js/i18n';
 
 export const messages = createMessages({
+  "channelRequired": {
+    "zh-CN": "此操作仅支持当前 Slack 频道",
+    "en": "This operation requires the current Slack channel"
+  },
   "operationFailed": {
     "zh-CN": "操作失败",
     "en": "Operation failed"

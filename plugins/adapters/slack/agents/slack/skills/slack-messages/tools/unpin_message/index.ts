@@ -1,20 +1,20 @@
 import { messages as t } from "../../../../messages.js";
+import { currentChannel } from "../../../../conversation.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 
 export default defineAgentTool<{
-  channel_id: string;
   timestamp: string;
 }>({
-  description: '取消 Slack 频道中消息的置顶',
+  description: '取消当前 Slack 会话中消息的置顶',
   inputSchema: z.object({
-    channel_id: z.string().describe('频道 ID'),
     timestamp: z.string().describe('消息时间戳'),
   }),
   adapter: 'slack',
   tags: ['slack'],
-  permissions: ['platform-permission:channel_manager'],
-  async execute({ channel_id, timestamp }, context) {
+  permissions: ['admin'],
+  async execute({ timestamp }, context) {
+    const channel_id = currentChannel(context, { allowDirect: true });
     const client = context.$client;
     await client.pins.remove({ channel: channel_id, timestamp });
     const success = true;
