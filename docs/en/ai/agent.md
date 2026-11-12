@@ -151,7 +151,7 @@ Built-in instructions retain essential rules while JSON Schema describes message
 
 | Meta tool | Purpose |
 |-----------|---------|
-| `discover` | Search tools / skills by keyword (`kind: tool|skill|all`, optionally per MCP server), returning Top-K summaries |
+| `discover` | Search tools / skills by keyword (`kind: tool\|skill\|all`, optionally per MCP server), returning Top-K summaries |
 | `load_tool` | Load a tool's definition into this session so it can be called |
 | `load_skill` | Load a skill's full text and unlock the tools it declares |
 
@@ -181,7 +181,7 @@ The framework enforces boundaries while Agents decide how to collaborate (ADR 00
 | `delegate` | Delegate asynchronously and receive a `mailId` immediately; the peer's reply is posted back as a `result` mail to wake the delegator |
 | `tell` | Send a one-way notification without waiting for a reply |
 | `follow_up` | Follow up on a previously delegated or asked `mailId` within the same Engagement |
-| `board_read` | Read entries from the current Engagement's shared Blackboard (with optional `key` or `kind: note | todo | artifact` filter) |
+| `board_read` | Read entries from the current Engagement's shared Blackboard (with optional `key` or `kind: note \| todo \| artifact` filter) |
 | `board_write` | Write or update an entry on the Engagement's shared Blackboard (auto-increments `version` and records `board_written`) |
 | `cancel_delegation` | Cancel a delegated mail (`mailId`) |
 | `escalate` | Freeze the Engagement and hand the decision back to the initiating human principal |

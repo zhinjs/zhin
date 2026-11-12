@@ -147,7 +147,7 @@ ai:
 
 | 元工具 | 作用 |
 |--------|------|
-| `discover` | 按关键词检索工具 / 技能（`kind: tool|skill|all`，可按 MCP server 过滤），返回 Top-K 摘要 |
+| `discover` | 按关键词检索工具 / 技能（`kind: tool\|skill\|all`，可按 MCP server 过滤），返回 Top-K 摘要 |
 | `load_tool` | 按名把工具定义载入本会话，之后即可调用 |
 | `load_skill` | 载入技能说明全文，并解锁它声明的工具 |
 
@@ -177,7 +177,7 @@ ai:
 | `delegate` | 异步委派，立即返回 `mailId`；对方完成后结果作为 `result` 邮件投回委派方信箱并唤醒新回合 |
 | `tell` | 单向通知同伴，不等待回复 |
 | `follow_up` | 针对先前已委派或提问的 `mailId` 追问或补充上下文，复用同一 Engagement 与因果链 |
-| `board_read` | 读取当前 Engagement 共享黑板（Blackboard）上的条目（支持按 `key` 或 `kind: note | todo | artifact` 过滤） |
+| `board_read` | 读取当前 Engagement 共享黑板（Blackboard）上的条目（支持按 `key` 或 `kind: note \| todo \| artifact` 过滤） |
 | `board_write` | 向当前 Engagement 共享黑板写入或更新条目（自动递增 `version` 并记入 `board_written` 事件） |
 | `cancel_delegation` | 撤回自己委派出去的工作（传 `delegate` 返回的 `mailId`） |
 | `escalate` | 遇到越权、死锁或高风险决策时冻结当前 Engagement，把决定交还给发起的人类 |

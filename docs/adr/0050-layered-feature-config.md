@@ -107,9 +107,9 @@ effective = deepMerge(global, overrides.adapters[alias], overrides.endpoints[ali
 | 类型 | 权限 | 说明 |
 |---|---|---|
 | `feature.list` | `feature.view` | 全部功能：`{ plugin, displayName, levels, hasSchema, globalEnabled }` |
-| `feature.matrix` | `feature.view` | 行为功能、列为全局 + 每个适配器实例：每格 `{ enabled, lockedBy?: 'global'|'adapter', overridden: boolean }` |
+| `feature.matrix` | `feature.view` | 行为功能、列为全局 + 每个适配器实例：每格 `{ enabled, lockedBy?: 'global'\|'adapter', overridden: boolean }` |
 | `feature.get` | `feature.view` | `{ plugin, level, key? }` → `{ schema, values, effective, sources: { [path]: level }, enabled, lockedBy? }`；机密字段值以掩码返回 |
-| `feature.set-override` | `feature.configure` | `{ plugin, level: 'adapter'|'endpoint', key, patch }`：写入覆盖（合并 patch，`undefined` 删除字段） |
+| `feature.set-override` | `feature.configure` | `{ plugin, level: 'adapter'\|'endpoint', key, patch }`：写入覆盖（合并 patch，`undefined` 删除字段） |
 | `feature.remove-override` | `feature.configure` | `{ plugin, level, key, paths? }`：删除整层或指定字段，回到继承 |
 | `feature.set-enabled` | `feature.toggle` | `{ plugin, level, key?, enabled }`：`global` 层写 `disable_plugins`；其余层写 `overrides.*.enabled`（`true` 时删除该键，而不是写 `true`） |
 

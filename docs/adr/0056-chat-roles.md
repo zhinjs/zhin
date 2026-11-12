@@ -61,7 +61,7 @@ interface PlatformStanding {
 | 能力 | 要求 |
 | --- | --- |
 | 宿主全局能力：Agent 危险工具 / exec / 文件写与敏感读（文件策略）、主人审批的接收人、重启实例、写全局 / 平台记忆、定时任务的高信任运行、聊天改项目配置（`config set`）、跨适配器的账号恢复（如 `icqq login`） | **全局层** `owner` |
-| 增删适配器账号（`<适配器> endpoint add|remove`） | **适配器层或以上** `owner` |
+| 增删适配器账号（`<适配器> endpoint add\|remove`） | **适配器层或以上** `owner` |
 | 其余 zhin 功能（功能自助、角色管理、订阅、群规审批……） | 按目标作用范围判断（§3、§6） |
 
 - Agent 回合主体 `principal.roles` 承载宿主信任档位：只有全局 owner 展开为 `owner, admin, trusted`；更低层的 owner 在这里按 `admin` 计（`hostChatRole`）。链上角色保留在 `principal.chatRole` / `principal.chatRoleLevels`，供 permit 判断。

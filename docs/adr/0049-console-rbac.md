@@ -94,7 +94,7 @@ REST（`{http.base}/auth/*`，不带权限要求的只有 login）：
 | POST | `/auth/login` | `{ username, password }` → `{ token, expiresAt, user }`；失败统一 401，按 IP 与用户名限速（5 次 / 15 分钟，指数退避） |
 | POST | `/auth/logout` | 吊销当前会话 |
 | POST | `/auth/setup` | 需初始化令牌：`{ username, password, displayName? }` 创建第一个所有者并返回会话；已有所有者时 409 |
-| GET | `/auth/me` | 当前主体：`{ kind: 'bootstrap'|'user'|'api-token', user?, permissions, bindings, setupRequired }`；`setupRequired` 表示库里还没有任何所有者 |
+| GET | `/auth/me` | 当前主体：`{ kind: 'bootstrap'\|'user'\|'api-token', user?, permissions, bindings, setupRequired }`；`setupRequired` 表示库里还没有任何所有者 |
 | POST | `/auth/password` | 改自己的密码：`{ currentPassword, newPassword }` |
 
 RPC（`iam.*`，需 `iam.view` / `iam.manage`）：`iam.users.list|create|update|disable|delete|reset-password`、`iam.roles.list|create|update|delete`、`iam.bindings.set`、`iam.tokens.list|create|revoke`（`create` 只在此刻返回明文）、`iam.audit.list`（分页、按主体/动作/时间过滤）。
@@ -111,7 +111,7 @@ RPC（`iam.*`，需 `iam.view` / `iam.manage`）：`iam.users.list|create|update
 
 | 步骤 | 服务方法 | Web（初始化令牌） | CLI |
 |---|---|---|---|
-| 查看状态 | `status()` → `{ setupRequired, database: { dialect, source: 'default'|'config', summary } }` | `GET /auth/setup` | `zhin console init --status` |
+| 查看状态 | `status()` → `{ setupRequired, database: { dialect, source: 'default'\|'config', summary } }` | `GET /auth/setup` | `zhin console init --status` |
 | 可选驱动 | `drivers()` → `[{ dialect, label, available, missingPackage?, fields }]` | `GET /auth/setup/database` | 交互选择列表 |
 | 测试连接 | `testDatabase({ dialect, connection })` → `{ ok, latencyMs?, error? }` | `POST /auth/setup/database/test` | 选择后自动测试，失败可重填 |
 | 保存数据库 | `applyDatabase({ dialect, connection })` → `{ restartRequired }` | `POST /auth/setup/database`（随后由 Host 重启进程，返回 `{ restarting: true }`，Console 轮询 `/auth/me`） | 写入后直接用新库继续下一步（CLI 不依赖运行中的 Host；若检测到 Host 正在运行，提示重启它） |

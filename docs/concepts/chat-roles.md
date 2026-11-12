@@ -73,7 +73,7 @@ interface PlatformStanding {
 | 能力 | 要求 |
 | --- | --- |
 | Agent 危险工具 / exec / 文件写与敏感读、主人审批的接收人、重启实例、写全局 / 平台记忆、定时任务的高信任运行、聊天改项目配置、跨适配器的账号恢复 | **全局层** `owner` |
-| 增删适配器账号（`<适配器> endpoint add|remove`） | **适配器层或以上** `owner` |
+| 增删适配器账号（`<适配器> endpoint add\|remove`） | **适配器层或以上** `owner` |
 | 功能自助、角色管理、订阅等其余 zhin 功能 | 按目标作用范围判断 |
 
 更低层的 owner 在 Agent 信任档位上按 `admin` 计。
