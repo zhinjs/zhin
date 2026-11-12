@@ -42,7 +42,7 @@ import { labelThirdPartyGuidance } from '../prompt/third-party-guidance.js';
 import { capabilitySeamToken } from '../seam/tokens.js';
 import type { SeamIntegration } from '../seam/seam-integration.js';
 import { localImageAssetsToken, type LocalImageAssetStore } from '../media/local-image-assets.js';
-import { captureMcpImages } from '../media/mcp-image-results.js';
+import { captureToolImages } from '../media/tool-image-results.js';
 import { resolveSkillTools } from './skill-tool-resolution.js';
 
 export interface ToolCapability extends ToolDescriptor {
@@ -92,8 +92,9 @@ export class CapabilityIngress {
     const promptProfile: PromptProfile = turn?.origin.kind === 'schedule' ? 'schedule' : 'interactive';
     // ADR 0050 §6: Plugins switched off for this conversation's endpoint disclose no tools or skills.
     const enabled = featureGate(snapshot, turn);
+    const localAssets = resolveLocalAssets(snapshot);
     const featureTools = (await bindTools({ index: tools, owner, isActive, turn,
-      host: resolvePermissionHost(snapshot), selectedAgent, operationSnapshot: snapshot, operation }))
+      host: resolvePermissionHost(snapshot), selectedAgent, operationSnapshot: snapshot, operation, localAssets }))
       .filter(tool => enabled(tool.owner));
     const featureSkills = (await bindSkills(
       projection(snapshot, skillFeatureId, isSkillIndex),
@@ -103,7 +104,7 @@ export class CapabilityIngress {
     )).filter(skill => enabled(skill.owner));
     const seam = resolveSeamIntegration(snapshot);
     const seamTools = seam
-      ? await bindSeamTools(seam, owner, isActive, turn, resolvePermissionHost(snapshot))
+      ? await bindSeamTools(seam, owner, isActive, turn, resolvePermissionHost(snapshot), localAssets)
       : [];
     const seamSkills = seam
       ? await bindSeamSkills(seam, owner, turn, resolvePermissionHost(snapshot))
@@ -128,7 +129,7 @@ export class CapabilityIngress {
       tools: availableTools,
       skills: availableSkills,
       agents: featureAgents,
-      mcp: bindMcp(mcp, owner, isActive, snapshot.resources.get(snapshot.root)?.get(localImageAssetsToken.id) as LocalImageAssetStore | undefined),
+      mcp: bindMcp(mcp, owner, isActive, localAssets),
       promptSegments: collectPromptSegments(snapshot, owner),
       platformGuidanceExternal: adapterIsExternal(snapshot, owner, turn),
       promptSections: Object.freeze([...(promptSections?.visible(owner, promptProfile) ?? [])]
@@ -226,6 +227,7 @@ async function bindSeamTools(
   isActive: () => boolean,
   turn?: TurnAccessContext,
   host?: PermissionHost,
+  localAssets?: LocalImageAssetStore,
 ): Promise<readonly ToolCapability[]> {
   const projected = seam.projectTools(String(owner)).map((entry) => Object.freeze({
     owner,
@@ -249,7 +251,7 @@ async function bindSeamTools(
       assertActive(isActive);
       const result = await entry.execute(input, invocation);
       if (!result.success) throw new Error(result.error ?? `Seam Tool failed: ${entry.schema.function.name}`);
-      return result.output as TResult;
+      return await captureToolImages(result.output, localAssets, invocation, entry.schema.function.name, invocation.signal) as TResult;
     },
   } satisfies ToolCapability));
   const access = await Promise.all(projected.map(async (descriptor) => ({
@@ -328,9 +330,11 @@ interface BindToolsInput {
   readonly selectedAgent?: string;
   readonly operationSnapshot?: RuntimeSnapshot;
   readonly operation?: CapabilityOperationFactory;
+  /** Host private image store; image blocks in tool results are captured here before the journal. */
+  readonly localAssets?: LocalImageAssetStore;
 }
 async function bindTools(input: BindToolsInput): Promise<readonly ToolCapability[]> {
-  const { index, owner, isActive, turn, host, selectedAgent, operationSnapshot, operation } = input;
+  const { index, owner, isActive, turn, host, selectedAgent, operationSnapshot, operation, localAssets } = input;
   if (!index) return Object.freeze([]);
   const descriptors = index.list();
   const accessResults = await Promise.all(
@@ -354,9 +358,10 @@ async function bindTools(input: BindToolsInput): Promise<readonly ToolCapability
         ? false
         : r.descriptor.hidden,
       name: r.descriptor.qualifiedName,
-      execute: <TInput, TResult>(input: TInput, invocation: ToolInvocationContext) => {
+      execute: async <TInput, TResult>(input: TInput, invocation: ToolInvocationContext): Promise<TResult> => {
         assertActive(isActive);
-        return index.execute<TInput, TResult>({ requester: r.descriptor.owner, name: r.descriptor.name, input, invocation, snapshot: operationSnapshot, operation });
+        const result = await index.execute<TInput, TResult>({ requester: r.descriptor.owner, name: r.descriptor.name, input, invocation, snapshot: operationSnapshot, operation });
+        return await captureToolImages(result, localAssets, invocation, r.descriptor.qualifiedName, invocation.signal) as TResult;
       },
     })));
 }
@@ -416,6 +421,10 @@ function resolvePermissionHost(snapshot: RuntimeSnapshot): PermissionHost | unde
   }
 }
 
+function resolveLocalAssets(snapshot: RuntimeSnapshot): LocalImageAssetStore | undefined {
+  return snapshot.resources.get(snapshot.root)?.get(localImageAssetsToken.id) as LocalImageAssetStore | undefined;
+}
+
 function bindMcp(
   index: McpIndex | undefined,
   owner: PluginId,
@@ -432,7 +441,7 @@ function bindMcp(
     callTool: async <TResult>(tool: string, input: unknown, invocation?: ToolInvocationContext) => {
       assertActive(isActive);
       const result = await index.callTool(owner, descriptor.name, tool, input);
-      return await captureMcpImages(result, localAssets, invocation, `${descriptor.qualifiedName}/${tool}`, invocation?.signal) as TResult;
+      return await captureToolImages(result, localAssets, invocation, `${descriptor.qualifiedName}/${tool}`, invocation?.signal) as TResult;
     },
   })));
 }

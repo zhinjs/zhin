@@ -21,7 +21,7 @@ import {
   type ToolPolicyLayerRecord,
 } from '../security/policy-facade.js';
 import type { ToolCallEvent, ToolResultEvent } from '../event/turn-event.js';
-import { captureMcpImages } from '../media/mcp-image-results.js';
+import { captureToolImages } from '../media/tool-image-results.js';
 import { localImageScopeFromMessage, type LocalImageAssetStore, type LocalImageScope } from '../media/local-image-assets.js';
 
 export interface ToolRuntimeJournalPort {
@@ -164,10 +164,9 @@ export class ToolRuntime {
 
     const durationMs = performance.now() - t0;
 
-    if (tool.kind === 'mcp' || tool.source?.startsWith('mcp:')) {
-      output = await captureMcpImages(output, ctx.localAssets,
-        ctx.localAssetScope ?? localImageScopeFromMessage(ctx.commMessage, ctx.sessionId), toolName, ctx.signal);
-    }
+    // Every tool kind, not only MCP: image bytes must never reach the journal or model context.
+    output = await captureToolImages(output, ctx.localAssets,
+      ctx.localAssetScope ?? localImageScopeFromMessage(ctx.commMessage, ctx.sessionId), toolName, ctx.signal);
 
     // 7. Journal: tool_result
     await emitToolResult(ctx, toolName, output, call.toolCallId, durationMs);

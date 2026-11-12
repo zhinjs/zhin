@@ -1,7 +1,10 @@
 import type { LocalImageAssetStore, LocalImageScope } from './local-image-assets.js';
 
-/** Capture protocol image blocks before journaling; ordinary MCP text keeps its meaning. */
-export async function captureMcpImages(
+/**
+ * Capture image blocks in any tool result (MCP, plugin, seam or builtin) before journaling.
+ * Only protocol-shaped payloads are captured; ordinary tool text keeps its meaning.
+ */
+export async function captureToolImages(
   result: unknown,
   store: LocalImageAssetStore | undefined,
   scope: LocalImageScope | undefined,
@@ -16,12 +19,12 @@ export async function captureMcpImages(
       signal?.throwIfAborted();
       if (!store || !scope) throw new Error('Local image storage is unavailable');
       const reference = await store.capture(data, scope, source, signal);
-      text = `[Private MCP image: ${JSON.stringify(reference)}. Use get_local_assets with asset_id to inspect; do not publish this original.]`;
+      text = `[Private tool image: ${JSON.stringify(reference)}. Use get_local_assets with asset_id to inspect; do not publish this original.]`;
     } catch (error) {
       signal?.throwIfAborted();
       const reason = error instanceof Error && ['Local image storage is full', 'Invalid or oversized local image'].includes(error.message)
         ? error.message : 'Local image storage is unavailable';
-      text = `[MCP image unavailable: ${reason}]`;
+      text = `[Tool image unavailable: ${reason}]`;
     }
     replacements.set(data, text);
     return text;
@@ -52,7 +55,7 @@ export async function captureMcpImages(
   };
   const sanitized = await visit(result);
   if (!replacements.size) return result;
-  // MCP servers may mirror structured results into text or structuredContent.
+  // Tools (MCP servers especially) may mirror structured results into text or structuredContent.
   // Replace only bytes actually identified as image payloads, not arbitrary base64-looking strings.
   const removeCopies = (value: unknown): unknown => {
     if (typeof value === 'string') {
