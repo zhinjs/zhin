@@ -19,6 +19,7 @@ import {
   validateEvalCase,
   type EvalCase,
 } from './index.js';
+import { evalSenderRoles } from './driver.js';
 
 const RAW = 'RAW-PAYLOAD {"id":42,"secret_field":"do-not-show"}';
 
@@ -26,7 +27,7 @@ const approvalCase = (approval: EvalCase['approval']) => defineEvalCase({
   id: 'approval-gate',
   description: 'An approval-gated tool asks the approval channel first.',
   source: 'framework self-test',
-  inbound: { text: '把这条消息转发到运营群', sender: { id: 'owner', chatRole: 'owner' } },
+  inbound: { text: '把这条消息转发到运营群', sender: { id: 'owner', chatRole: 'owner', chatRoleLevels: { owner: 'global' } } },
   tools: [{ name: 'forward_message', requiresApproval: 'once', result: 'forwarded' }],
   approval,
   script: [
@@ -45,6 +46,15 @@ describe('eval framework', () => {
     expect(evaluateExpectations(definition, run)).toEqual([]);
   });
 
+  it('derives principal roles like the Host: only a global owner carries owner trust (ADR 0056)', () => {
+    expect(evalSenderRoles({ chatRole: 'owner', chatRoleLevels: { owner: 'global' } })).toEqual(['owner', 'admin', 'trusted']);
+    // A lower-level owner, or one without levels (conversation level, as on the Host), counts as admin host-wide.
+    expect(evalSenderRoles({ chatRole: 'owner', chatRoleLevels: { owner: 'endpoint' } })).toEqual(['admin', 'trusted']);
+    expect(evalSenderRoles({ chatRole: 'owner' })).toEqual(['admin', 'trusted']);
+    expect(evalSenderRoles({ chatRole: 'trusted' })).toEqual(['trusted']);
+    expect(evalSenderRoles({ roles: ['user'] })).toEqual(['user']);
+  });
+
   it('records a TurnTrace per turn and attaches it to failure reports', async () => {
     const definition = { ...approvalCase('approve'), expect: { outboundContains: ['this text never appears'] } };
     const run = await runEvalCase(definition);
@@ -52,7 +62,7 @@ describe('eval framework', () => {
     const [trace] = run.traces;
     expect(trace).toMatchObject({
       turn_id: 'approval-gate:turn-1',
-      principal: { subject_id: 'owner', roles: ['owner'] },
+      principal: { subject_id: 'owner', roles: ['owner', 'admin', 'trusted'] },
       termination: { status: 'completed' },
     });
     expect(trace!.model_calls.length).toBeGreaterThanOrEqual(1);

@@ -5,7 +5,7 @@ export default defineEvalCase({
   description: 'Fresh research is not forced to finish by a read-count hint in continuous interactive turns.',
   source: 'QQ: the model explored file after file without acting (#716 exploration harness)',
   tags: ['long-task', 'context'],
-  inbound: { text: '把 config.ts 里的端口改成 8080', sender: { id: 'master', chatRole: 'owner' } },
+  inbound: { text: '把 config.ts 里的端口改成 8080', sender: { id: 'master', chatRole: 'owner', chatRoleLevels: { owner: 'global' } } },
   agentConfig: { modelHarness: { services: { 'eval-scripted': { models: { 'scripted-model': { explorationBudget: 2 } } } } } },
   workspace: { 'a.ts': 'a\n', 'b.ts': 'b\n', 'config.ts': 'export const port = 3000;\n' },
   nativeTools: ['read_file', 'edit_file'],

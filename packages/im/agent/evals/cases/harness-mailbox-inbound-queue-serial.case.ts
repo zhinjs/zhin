@@ -9,8 +9,8 @@ export default defineEvalCase({
   source: 'ADR 0048 §3.1 / §8 H3 (Mailbox absorbs the inbound queue; one Actor is serial per Engagement)',
   tags: ['collaboration', 'long-task'],
   inbound: [
-    { text: '帮我记一下：周五交周报', sender: { id: 'master', chatRole: 'owner' } },
-    { text: '我刚才让你记的是什么？', sender: { id: 'master', chatRole: 'owner' } },
+    { text: '帮我记一下：周五交周报', sender: { id: 'master', chatRole: 'owner', chatRoleLevels: { owner: 'global' } } },
+    { text: '我刚才让你记的是什么？', sender: { id: 'master', chatRole: 'owner', chatRoleLevels: { owner: 'global' } } },
   ],
   script: [
     { text: '记下了：周五交周报。' },

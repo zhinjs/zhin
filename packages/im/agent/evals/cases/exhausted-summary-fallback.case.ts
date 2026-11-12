@@ -5,7 +5,7 @@ export default defineEvalCase({
   description: 'Provider billing exhaustion after tool use stops without an extra summary or leaking tool output.',
   source: 'Approved continuous execution: stop when provider credits run out; bounded exhaustion fallback remains covered in core tests',
   tags: ['long-task'],
-  inbound: { text: '整理一下这个仓库的依赖', sender: { id: 'owner', chatRole: 'owner' } },
+  inbound: { text: '整理一下这个仓库的依赖', sender: { id: 'owner', chatRole: 'owner', chatRoleLevels: { owner: 'global' } } },
   agentConfig: { maxIterations: 1, toolBudget: { extendBy: 0, autoContinue: 'off', progressMaxUpdates: 0 } },
   tools: [{ name: 'list_packages', result: JSON.stringify({ packages: ['@zhin.js/agent', '@zhin.js/ai', '@zhin.js/core'], total: 95 }) }],
   script: [

@@ -5,7 +5,7 @@ export default defineEvalCase({
   description: 'Three searches that each return something new do not trigger the spin hint.',
   source: 'ADR 0042 §7: spin detection must not fire on real progress',
   tags: ['long-task', 'context'],
-  inbound: { text: '这几个常量在哪？', sender: { id: 'master', chatRole: 'owner' } },
+  inbound: { text: '这几个常量在哪？', sender: { id: 'master', chatRole: 'owner', chatRoleLevels: { owner: 'global' } } },
   workspace: { 'a.ts': 'export const alpha = 1;\n', 'b.ts': 'export const beta = 2;\n', 'c.ts': 'export const gamma = 3;\n' },
   nativeTools: ['grep'],
   script: [

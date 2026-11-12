@@ -7,7 +7,7 @@ export default defineEvalCase({
   description: 'Two agents asking each other the same thing are stopped within the round-trip limit; the loop never runs out the script.',
   source: 'ADR 0048 §3.4 invariant 5 (loop convergence)',
   tags: ['collaboration', 'long-task'],
-  inbound: { text: '这个需求该谁做？', sender: { id: 'master', chatRole: 'owner' } },
+  inbound: { text: '这个需求该谁做？', sender: { id: 'master', chatRole: 'owner', chatRoleLevels: { owner: 'global' } } },
   agents: [
     { name: 'alice', description: 'Frontend.', tools: [], collaboration: { contacts: ['bob'] } },
     { name: 'bob', description: 'Backend.', tools: [], collaboration: { contacts: ['alice'] } },
