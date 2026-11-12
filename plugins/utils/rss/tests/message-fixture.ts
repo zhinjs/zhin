@@ -12,7 +12,7 @@ export function rssMessage(
     },
     content: 'rss-list',
     generation: 4,
-    sender: { id: '1659488338', name: '归雨', roles: ['master'] },
+    sender: { id: '1659488338', name: '归雨', chatRole: 'owner' },
     clientAdapter: 'icqq',
     endpointId,
     segments: [{ type: 'text', data: { text: 'rss-list' } }],

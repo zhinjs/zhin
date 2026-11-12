@@ -20,7 +20,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createConfigDocument, readApplicationPluginDeclaration } from '@zhin.js/runtime';
 import { DevLinkError, collectZhinInstances, isZhinPackage } from './dev-link.js';
-import { findConfigFile } from './config-file.js';
+import { findConfigFile } from '@zhin.js/gateway/project';
 
 export const PLUGIN_LINK_STATE = path.join('.zhin', 'dev-plugin-links.json');
 const INSTANCE_KEY = /^[a-z0-9][a-z0-9_-]*$/iu;

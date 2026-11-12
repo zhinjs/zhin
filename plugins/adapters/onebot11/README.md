@@ -93,7 +93,7 @@ onebot11:
 
 - **notice / request / meta 侧事件**：经统一 `endpointSpec.events` 归一后分发到 `handlers`；消息仍走 `outboundMessageToken`。
 - **群管工具暂未迁移**：旧 Adapter 经 `createSceneManagementTools` 注册踢人 / 禁言 / 群名片等成套 agent 工具；迁移后仅保留 `onebot11_set_title`，其余群管能力可通过 `$client.call()`（如 `set_group_kick`、`set_group_ban`）作为逃生舱调用。
-- **平台权限门禁**：`plugin.ts` setup 通过 generation-owned `permissionHostToken` 调用 `host.registerPlatform('onebot11', createSceneRolePlatformChecker())`，`scene_admin` / `scene_owner` 依据入站 metadata 中的 sender `role`（owner / admin）判定。
+- **平台权限门禁**：工具 / 命令用内置 permit（ADR 0056 §5）：发言者平台身份 `platform:admin` / `platform:owner` 依据入站 `sender.platform.standing`（owner / admin，见下文「成员身份」）；机器人自身群内身份 `bot:admin` / `bot:owner` 依据 `get_group_member_info`（self）的 `role`（能力画像 `scene.selfStanding`，框架按会话缓存）。群管理类工具同时要求两者。
 
 ## 文档链接
 
@@ -108,7 +108,7 @@ onebot11:
 - 经所属 Adapter 增删持久化账号、启停单个 Endpoint；凭据由 Host 加密仓储保存，不改启动 YAML 或 `.env`，不重启进程；
 - 如果适配器要求登录，页面会显示 LoginAssist 的扫码 / 滑块 / 设备确认待办；
 
-读取需要 `onebot11:read`，写操作需要 `onebot11:write`；管理员 full token 不受限。页面里的「添加 endpoint」等价于原来的 `onebot11 endpoint add`。
+读取需要 `onebot11:read`（`read` 级别，内置角色 `viewer` 及以上都有）；增删改账号等写操作需要 `onebot11:write`（`operate` 级别，`operator` 及以上都有，绑定到本适配器的角色也算），首次迁移还需管理员身份；全局所有者不受限，见[插件权限的级别](https://zhin.js.org/console/#插件权限的级别)。页面里的「添加 endpoint」等价于原来的 `onebot11 endpoint add`。
 
 ## 故障排查
 
@@ -126,3 +126,7 @@ MIT License
 ### 高阶消息支持边界
 
 OneBot11 标准支持链接分享：canonical share 的 url/title/description/image 分别映射标准 url/title/content/image，保留标题与描述。具体桥是否实现需实机确认；NapCat 的 share 发送限制不能以标准支持推断通过。标准没有 Markdown 与 keyboard 段，直接出站明确 `unsupported_operation / not_sent`；文字交互降级不能算原生按钮支持。参考：[OneBot11 消息段规范](https://github.com/botuniverse/onebot-11/blob/master/message/segment.md)。
+
+## 成员身份
+
+群消息的 `sender.role`（`owner` / `admin` / `member`）归一为 `sender.platform.standing`；私聊不上报。OneBot v11 没有平台原生角色与权限位，`roles` / `permissions` 不上报。能力画像：`group.scene.platformStanding = { standing: true }`。详见 [ADR 0056 §1](https://github.com/zhinjs/zhin/blob/main/docs/adr/0056-chat-roles.md)。

@@ -1,20 +1,17 @@
 import { messages as t } from "../../../../messages.js";
+import { currentChannel } from "../../../../conversation.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { platformPermission } from '@zhin.js/permission';
 
-export default defineAgentTool<{
-  channel: string;
-}>({
-  description: '归档 Slack 频道',
-  inputSchema: z.object({
-    channel: z.string().describe('频道 ID'),
-  }),
+export default defineAgentTool<Record<string, never>>({
+  description: '归档当前 Slack 频道（仅 zhin owner）',
+  inputSchema: z.object({}),
   adapter: 'slack',
   scopes: ["group"],
   tags: ['slack'],
-  permissions: [platformPermission('slack', 'workspace_admin')],
-  async execute({ channel }, context) {
+  permissions: ['owner'],
+  async execute(_args, context) {
+    const channel = currentChannel(context);
     const client = context.$client;
     await client.conversations.archive({ channel });
     const success = true;

@@ -5,7 +5,7 @@ description: Create administrator RSS tasks with exact targets and baseline-only
 
 # Send feed updates to a specific conversation
 
-In Console's task center, select a loaded RSS instance, enter a feed URL and a complete delivery target, then create an administrator subscription. The first successful check establishes a baseline; only later articles are sent. Resuming also establishes a new baseline without backfill. No AI or impersonated chat sender is required.
+In Console, open the Administrator tasks tab of Operations → Scheduled tasks, select a loaded RSS instance, enter a feed URL and a complete delivery target, then create an administrator subscription. The first successful check establishes a baseline; only later articles are sent. Resuming also establishes a new baseline without backfill. No AI or impersonated chat sender is required.
 
 ## Prepare the plugin and target
 
@@ -22,7 +22,7 @@ The instance's `pollCron` controls polling, every five minutes by default. Sched
 
 ## Create and verify
 
-Open the task center using a full-scope token for the current Host. Select the exact instance and administrator RSS provider. Enter an HTTP(S) feed URL without username or password. Select the account, conversation kind and ID, preserving parent and thread identities. Enter exact IDs manually when the platform has no directory; display names cannot replace addresses.
+Sign in with a Console account holding `feature.configure` and open Operations → Scheduled tasks → Administrator tasks. Select the exact instance and administrator RSS provider. Enter an HTTP(S) feed URL without username or password. Select the account, conversation kind and ID, preserving parent and thread identities. Enter exact IDs manually when the platform has no directory; display names cannot replace addresses.
 
 Review the listed fetching and delivery effects before creating. Creation only saves the task: it does not fetch the feed or send a test message. Wait for a successful check whose details confirm the baseline. Add one article to a controlled test feed, wait for the next poll, then check the task result and original target conversation separately. Real-platform validation requires an authorized test target. Successful storage proves neither account connectivity nor delivery.
 
@@ -62,4 +62,4 @@ Each check examines the first 20 items returned by the feed without following ol
 
 Each instance retains at most eight administrator tasks and 32 operation receipts. Each subscription retains 64 item-identifier digests. Creation may prune cancelled or failed history, but never uncertain tasks. Invalid durable data stops administrator polling while preserving the data for investigation.
 
-See the [administrator task center](../paths/console.md#administrator-task-center) for operations and reconciliation after a lost response.
+See [administrator tasks](../paths/console.md#administrator-task-center) for operations and reconciliation after a lost response.

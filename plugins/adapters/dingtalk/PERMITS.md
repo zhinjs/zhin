@@ -1,19 +1,23 @@
 # 钉钉 DingTalk Platform Permits
 
-## 入站字段
+## 入站字段（ADR 0056 §1）
 
-| 字段 | 来源 |
+| 字段 | 取值 |
 |------|------|
-| `$sender.role` | `isAdmin` → `admin`；`owner` 需业务侧创建群时指定 |
-| `$sender.permissions` | `chat_owner` · `chat_admin` |
+| `sender.platform.standing` | 群聊回调 `isAdmin` → `admin`，否则 `member`；单聊不上报 |
+
+钉钉回调不区分群主，也不提供原生角色与权限位；机器人自身身份不上报（`bot:*` 不满足）。
 
 ## Permit 词汇表
 
-| `platform(dingtalk,…)` | 含义 |
-|------------------------|------|
-| `chat_owner` | 群主（创建群等） |
-| `chat_admin` | 群管理员 |
+| Permit | 含义 |
+|--------|------|
+| `platform:admin` | 群管理员 |
 
-## 工厂映射
+平台身份按**当前会话**判定，只能为当前群的操作作保。钉钉群管理接口使用旧版 `chatid`（与回调中的会话 ID 不同，无法由当前会话推出），因此：
 
-`scene_admin` → `chat_admin` · `scene_owner` → `chat_owner`
+| 工具 | Permit |
+|------|--------|
+| `dingtalk_add_chat_members` · `dingtalk_update_chat`（指定 `chat_id`，可跨群） | zhin `owner@global` |
+| `dingtalk_send_work_notice`（发给任意用户，不在当前会话） | zhin `owner@global` |
+| `dingtalk_create_chat`（新建群，不依赖任何群内身份） | zhin `trusted`（`admin` / `owner` 亦满足） |

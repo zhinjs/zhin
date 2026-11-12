@@ -39,6 +39,9 @@ export default defineAdapter<KookEndpointConfig>({
       },
       delivery: { send: true, proactive: true, spool: true },
     },
+    // ADR 0056 §1：服务器频道消息按服务器主 / 管理员角色归一 standing，并上报角色与权限位。
+    // 机器人自身：/v3/user/view self 的服务器角色 → 地位、角色与权限位（bot:admin、bot-permission:kick_members 等）。
+    channel: { scene: { platformStanding: { standing: true, roles: true, permissions: true }, selfStanding: { standing: true, roles: true, permissions: true } } },
   },
   createAdapter: context => new KookAdapter(context),
 });

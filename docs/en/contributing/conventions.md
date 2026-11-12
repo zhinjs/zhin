@@ -21,7 +21,7 @@ import { DisposeStack } from './dispose';           // Wrong
 
 ## New Plugins: Plugin Runtime (Default)
 
-The only startup path is `zhin runtime start`. For new plugins:
+The only startup path is `zhin start` (the management gateway launches the instance; `zhin runtime start` is an alias for `zhin start --foreground`). For new plugins:
 
 - `plugin.ts` default-exports `definePlugin()` (import from `zhin.js`)
 - Capabilities go in convention directories (`commands/` -> `defineCommand`, `tools/` -> `defineAgentTool`, ...), one default export per file
@@ -31,7 +31,7 @@ See [Writing Your First Plugin](../getting-started/first-plugin.md), [definePlug
 
 ## Removed: `zhin.js/node`
 
-`zhin.js/node` and `bootstrapNode` have been deleted and are no longer exported. The only startup entry is `definePlugin()` + `zhin runtime start`. New features must use Plugin Runtime. Migration guide: `.github/skills/migrate-zhin-plugin-runtime`.
+`zhin.js/node` and `bootstrapNode` have been deleted and are no longer exported. The only startup entry is `definePlugin()` + `zhin start`. New features must use Plugin Runtime. Migration guide: `.github/skills/migrate-zhin-plugin-runtime`.
 
 ## Generation State: Snapshot Resources
 
@@ -68,14 +68,17 @@ flowchart LR
 
 For cross-platform outbound messages (sending from one platform to another), use `root.inject(adapter).sendMessage` -- do not operate on Endpoints directly.
 
+Adapter Agent tools (`plugins/adapters/<name>/agents/**`) must not call a platform SDK / Client send API either: send to the current conversation with `context.use(outboundMessageToken).send({ requester, conversation, content })`, expressing platform-specific content as the adapter's namespaced segment (such as `discord:embed`, `telegram:poll`, `telegram:sticker`, `napcat:node`) that its outbound encoder renders. `check:harness-paths` scans for such calls; a call the outbound chain cannot express (creating a forum post, a work notice) is recorded with its reason in `scripts/agent-send-bypass-allowlist.json`.
+
 ## Host Token Pattern
 
-The HTTP Host (`@zhin.js/host-http`) has no built-in session system; it uses Bearer token authentication uniformly:
+The HTTP Host (`@zhin.js/host-http`) authenticates every request with a Bearer credential:
 
-- Client requests include `Authorization: Bearer <token>`, where the token comes from the `http.token` config; the server validates using `TokenRegistry` (`packages/host/http/src/token-registry.ts`), with `extractBearerToken` parsing the header.
+- Client requests include `Authorization: Bearer <token>` (a session token, an API token, or `http.token` before setup); the server resolves it with `TokenRegistry` (`packages/host/http/src/token-registry.ts`), with `extractBearerToken` parsing the header.
 - Token comparison uses `timingSafeEqualString` (constant-time comparison) -- do not hand-write `===` comparisons.
-- Tokens are scoped by level (`ScopedTokenConfig` / `AuthScope`): write operations require full scope; demo tokens always get 403.
-- Remote Console login = API Base URL + Bearer Token; there is no username/password concept.
+- Access control lives in the database (ADR 0049): `http.token` is only a bootstrap token (valid until the first owner exists); users sign in for a session token and automation uses user-issued API tokens. `TokenRegistry.authenticate` resolves a credential to a principal (`ConsolePrincipal`).
+- Every `/api` route and every Console RPC must be listed in the permission map of `@zhin.js/console-protocol` (`CONSOLE_HTTP_PERMISSIONS` / `CONSOLE_RPC_PERMISSIONS`); unlisted ones are denied to every account, owners included. Register the permission whenever you add a route or RPC.
+- Plugin Webhooks and reverse WebSockets don't use Console accounts: mount them with `ws(path, { auth: 'protocol' })` and authenticate with the plugin's own credential (for example `verifyProtocolAccessToken`).
 
 ## Testing Conventions
 

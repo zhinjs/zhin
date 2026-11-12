@@ -1,3 +1,4 @@
+import { isConsolePageSection } from '@zhin.js/console-protocol';
 import { DEFAULT_CONSOLE_BASE_PATH, type ConsoleClientEntry, type ConsoleEntriesResponse, type ConsolePluginRegister, type PluginRegisterHostApi } from '@zhin.js/contract';
 import type * as React from 'react';
 import { AdapterConsolePage } from '../adapter-console/AdapterConsolePage.js';
@@ -31,6 +32,7 @@ export interface ConsoleEntryMetadataFields {
   readonly order?: number;
   readonly parent?: string | null;
   readonly fullWidth?: boolean;
+  readonly section?: string;
   readonly hideInNav?: boolean;
   readonly requiredPermissions?: string[];
   readonly requiredRoles?: string[];
@@ -149,6 +151,9 @@ export function resolveEntryRegister(
   const order = meta?.order ?? entry.order ?? (typeof entryMeta?.["order"] === "number" ? entryMeta["order"] : undefined);
   const parent = meta?.parent !== undefined ? meta.parent : entry.parent;
   const fullWidth = meta?.fullWidth ?? entry.fullWidth ?? (typeof entryMeta?.["fullWidth"] === "boolean" ? entryMeta["fullWidth"] : undefined);
+  const sectionCandidate = meta?.section ?? entry.section ?? entryMeta?.["section"];
+  // Unknown values are dropped: the Console falls back to its default section.
+  const section = isConsolePageSection(sectionCandidate) ? sectionCandidate : undefined;
   const hideInNav = meta?.hideInNav ?? entry.hideInNav ?? (entryMeta?.["hideInNav"] === true || entryMeta?.["hideInMenu"] === true);
   const requiredPermissions = meta?.requiredPermissions ?? entry.requiredPermissions;
   const requiredRoles = meta?.requiredRoles ?? entry.requiredRoles;
@@ -191,6 +196,7 @@ export function resolveEntryRegister(
         ...(group === undefined ? {} : { group }),
         ...(order === undefined ? {} : { order }),
         ...(fullWidth === undefined ? {} : { fullWidth }),
+        ...(section === undefined ? {} : { section }),
       },
     });
   };

@@ -1,16 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { CONFIG_RPC, DEMO_RPC_WRITE_BLOCKLIST, type ConsoleConfigPatchRequest, type ConsoleConfigPatchResult } from '@zhin.js/console-protocol';
+import { CONFIG_RPC, CONSOLE_WRITE_PERMISSIONS, consoleRpcPermission, type ConsoleConfigPatchRequest, type ConsoleConfigPatchResult } from '@zhin.js/console-protocol';
 import { dispatchRuntimeConsoleRpc, pickRpcReply } from '../src/console-rpc.js';
+import type { ConsolePrincipal } from '../src/access-control.js';
+import { VIEWER } from './fixtures/principals.js';
 
 const revision = 'a'.repeat(64);
 const message = (extra: Record<string, unknown>) => ({ type: CONFIG_RPC.PATCH, requestId: 1, expectedRevision: revision,
   patches: [{ op: 'set', path: ['ai', 'trigger', 'ambient', 'mode'], value: 'shadow' }], ...extra });
 
-function context(result: ConsoleConfigPatchResult | Error, authScope: 'full' | 'demo' = 'full') {
+function context(result: ConsoleConfigPatchResult | Error, principal?: ConsolePrincipal) {
   const calls: ConsoleConfigPatchRequest[] = [];
   const events: Array<[string, unknown]> = [];
   return { calls, events, ctx: {
-    authScope, listPages: async () => [],
+    authScope: 'full' as const, ...(principal ? { principal } : {}), listPages: async () => [],
     patchConfig: async (request: ConsoleConfigPatchRequest) => {
       calls.push(request);
       if (result instanceof Error) throw result;
@@ -43,21 +45,22 @@ describe('config:patch RPC', () => {
     }
   });
 
-  it('requires full scope, a revision and a valid scope field before calling the store', async () => {
+  it('requires a write permission, a revision and a valid scope field before calling the store', async () => {
     const saved = { status: 'saved', revision, restartRequired: false, paths: [], missingEnv: [], message: '' } as const;
-    const cases: Array<[Record<string, unknown>, 'full' | 'demo', RegExp]> = [
-      [{}, 'demo', /Demo scope/],
-      [{ expectedRevision: 'stale' }, 'full', /expectedRevision/],
-      [{ instanceKey: 42 }, 'full', /instanceKey/],
-      [{ patches: 'ai.enabled=false' }, 'full', /patches/],
+    const cases: Array<[Record<string, unknown>, ConsolePrincipal | undefined, RegExp]> = [
+      [{}, VIEWER, /agent\.configure/],
+      [{ instanceKey: 'typesafe' }, VIEWER, /feature\.configure/],
+      [{ expectedRevision: 'stale' }, undefined, /expectedRevision/],
+      [{ instanceKey: 42 }, undefined, /instanceKey/],
+      [{ patches: 'ai.enabled=false' }, undefined, /patches/],
     ];
-    for (const [extra, scope, error] of cases) {
-      const { calls, ctx } = context(saved, scope);
+    for (const [extra, principal, error] of cases) {
+      const { calls, ctx } = context(saved, principal);
       const request = message(extra);
       expect(pickRpcReply(request, await dispatchRuntimeConsoleRpc(request, ctx))?.error).toMatch(error);
       expect(calls).toEqual([]);
     }
-    expect(DEMO_RPC_WRITE_BLOCKLIST.has(CONFIG_RPC.PATCH)).toBe(true);
+    expect(CONSOLE_WRITE_PERMISSIONS.has(consoleRpcPermission(CONFIG_RPC.PATCH)!)).toBe(true);
   });
 
   it('reports scope violations as errors', async () => {

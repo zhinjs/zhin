@@ -1,3 +1,4 @@
+import { wsConnectionFromMock } from '../../test-utils/http.js';
 import { EventEmitter } from 'node:events';
 import { createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
 import { describe, expect, it, vi } from 'vitest';
@@ -141,5 +142,86 @@ describe('napcat endpoint management wiring', () => {
       expect(requestApi).toHaveBeenCalledWith({ action: 'get_friend_list', signal: expect.any(AbortSignal) });
       await endpoint.stop();
     }
+  });
+});
+
+describe('napcat reverse WebSocket access (ADR 0054 §3)', () => {
+  async function mount(accessToken?: string) {
+    let accept!: (connection: unknown) => void;
+    const ws = vi.fn((_path: string, _options?: unknown) => ({ onConnection: (listener: (connection: unknown) => void) => { accept = listener; return () => undefined; } }));
+    const http = { ws, route: vi.fn(() => () => undefined) } as unknown as HttpHost;
+    const config = resolveNapCatConfig({ connection: 'wss', id: 'acl-napcat', path: '/napcat', ...(accessToken ? { access_token: accessToken } : {}) }) as NapCatWssConfig;
+    const endpoint = await createEndpointHarness(() => new NapCatWssEndpoint({ id: endpointKey, http, config }), { name: 'napcat', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway(gateway, undefined) });
+    await endpoint.start();
+    const connect = (request: { authorization?: string; url?: string; ip: string }) => {
+      const socket = createSocket();
+      accept(wsConnectionFromMock({ socket, request: { headers: request.authorization ? { authorization: request.authorization } : {}, url: request.url ?? '/napcat', socket: { remoteAddress: request.ip } } }));
+      return socket;
+    };
+    return { ws, endpoint, connect };
+  }
+  const rejected = (socket: { close: ReturnType<typeof vi.fn> }) => socket.close.mock.calls.some(([code]) => code === 4003);
+
+  it('mounts with protocol auth and checks its own access_token', async () => {
+    const { ws, endpoint, connect } = await mount('secret');
+    expect(ws).toHaveBeenCalledWith('/napcat', { auth: 'protocol' });
+    const wrong = connect({ authorization: 'Bearer console-session-token', ip: '127.0.0.1' });
+    await vi.waitFor(() => expect(rejected(wrong)).toBe(true));
+    const good = connect({ url: `${'/napcat'}?access_token=secret`, ip: '203.0.113.9' });
+    await new Promise(resolve => setTimeout(resolve, 10));
+    expect(rejected(good)).toBe(false);
+    await endpoint.stop();
+  });
+
+  it('without access_token admits loopback peers only', async () => {
+    const { endpoint, connect } = await mount();
+    const remote = connect({ ip: '192.168.1.20' });
+    await vi.waitFor(() => expect(rejected(remote)).toBe(true));
+    const local = connect({ ip: '127.0.0.1' });
+    await new Promise(resolve => setTimeout(resolve, 10));
+    expect(rejected(local)).toBe(false);
+    await endpoint.stop();
+  });
+});
+
+describe('inspectSelfStanding (ADR 0056 §1)', () => {
+  it('re-reads the login account after it changes (reconnect / another account) and after a failure', async () => {
+    vi.useFakeTimers();
+    try {
+      let account = 42;
+      let fail = false;
+      const members: unknown[] = [];
+      const management = createNapCatEndpointManagement({ requestApi: async (request: { action: string; params?: { user_id?: number } }) => {
+        if (request.action === 'get_login_info') return { user_id: account };
+        members.push(request.params?.user_id);
+        if (fail) throw new Error('offline');
+        return { role: 'admin', member: { role: 'admin' } };
+      } } as never);
+      const signal = new AbortController().signal;
+      const group = { conversation: { kind: 'group' as const, id: '20001' }, signal };
+      await management.inspectSelfStanding!(group);
+      account = 43;
+      vi.advanceTimersByTime(6_000);
+      await management.inspectSelfStanding!(group);
+      fail = true;
+      await expect(management.inspectSelfStanding!(group)).rejects.toThrow('offline');
+      fail = false; account = 44;
+      await management.inspectSelfStanding!(group);
+      expect(members).toEqual([42, 43, 43, 44]);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('reads the bot\'s own group role once logged in and reports nothing outside groups', async () => {
+    const calls: { action: string; params?: unknown }[] = [];
+    const management = createNapCatEndpointManagement({ requestApi: async (request: { action: string; params?: unknown }) => {
+      calls.push({ action: request.action, params: request.params });
+      return request.action === 'get_login_info' ? { user_id: 42 } : { role: 'admin' };
+    } } as never);
+    const signal = new AbortController().signal;
+    expect(await management.inspectSelfStanding!({ conversation: { kind: 'group', id: '20001' }, signal })).toEqual({ standing: 'admin' });
+    expect(await management.inspectSelfStanding!({ conversation: { kind: 'group', id: '20002' }, signal })).toEqual({ standing: 'admin' });
+    expect(await management.inspectSelfStanding!({ conversation: { kind: 'private', id: '1' }, signal })).toBeUndefined();
+    expect(calls.map(call => call.action)).toEqual(['get_login_info', 'get_group_member_info', 'get_group_member_info']);
+    expect(calls[1]!.params).toEqual({ group_id: 20001, user_id: 42, no_cache: true });
   });
 });

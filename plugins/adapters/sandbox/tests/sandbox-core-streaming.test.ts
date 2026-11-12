@@ -3,7 +3,8 @@ import { AdapterIndex, adapterFeatureId, endpointEventGatewayToken } from '@zhin
 import { createCapabilitySlot, createSnapshotView, SnapshotStore, rootPluginId, projectLocaleToken, type SnapshotState } from 'zhin.js';
 import { ImRuntime, type CoreReplyStream, type ReplyStreamSnapshot } from '@zhin.js/core/runtime';
 import { MemoryConversationEventStore } from '@zhin.js/im-contract';
-import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
+import { httpHostToken } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import sandboxAdapter from '../adapters/sandbox/index.js';
 
 vi.mock('node:child_process', async importOriginal => ({
@@ -15,7 +16,7 @@ vi.mock('node:child_process', async importOriginal => ({
 it('preserves streamed Markdown through the actual Sandbox declaration, Core projection, native wire and history', async () => {
   const root = rootPluginId(), abort = new AbortController(), events = new MemoryConversationEventStore();
   const im = new ImRuntime({ conversationEvents: events });
-  const http = createHttpHost({ host: '127.0.0.1', port: 0, token: 'synthetic-stream-token' });
+  const http = createHttpHost({ host: '127.0.0.1', port: 0 });
   const slot = createCapabilitySlot({ owner: root, feature: adapterFeatureId, localName: 'sandbox',
     source: '/fixture/adapters/sandbox/index.ts', definition: sandboxAdapter });
   const state: SnapshotState = {
@@ -38,7 +39,7 @@ it('preserves streamed Markdown through the actual Sandbox declaration, Core pro
   try {
     await adapters.start(); adapters.open();
     const { port } = await http.listen();
-    socket = new WebSocket(`ws://127.0.0.1:${port}/sandbox?token=synthetic-stream-token`);
+    socket = new WebSocket(`ws://127.0.0.1:${port}/sandbox`);
     socket.on('message', raw => frames.push(JSON.parse(String(raw))));
     await new Promise<void>((resolve, reject) => { socket!.once('open', resolve); socket!.once('error', reject); });
     await vi.waitFor(() => expect(frames.some(frame => frame.type === 'ready')).toBe(true));

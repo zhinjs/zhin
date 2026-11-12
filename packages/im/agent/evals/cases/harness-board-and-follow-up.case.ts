@@ -7,7 +7,7 @@ export default defineEvalCase({
   description: 'Collaborating agents exchange artifacts via board_write/board_read and send follow_up on prior work.',
   source: 'ADR 0048 §3.3 (board_write, board_read, follow_up)',
   tags: ['collaboration', 'long-task'],
-  inbound: { text: '把目标环境记到黑板，让 researcher 读黑板后再追问对应区域代码', sender: { id: 'master', roles: ['master'] } },
+  inbound: { text: '把目标环境记到黑板，让 researcher 读黑板后再追问对应区域代码', sender: { id: 'master', chatRole: 'owner' } },
   tools: [{ name: 'lookup_docs', result: 'staging region: ap-east-1' }],
   agents: [
     {

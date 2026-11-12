@@ -6,7 +6,7 @@ export default defineAgentTool({
   description: '分页列出当前 QQ 群成员（每页最多 30 人，含 member_openid、昵称、角色）；官方白名单能力',
   adapter: 'qq',
   scopes: ['group'],
-  permissions: ['role(master,admin,trusted,owner)'],
+  permissions: ['trusted'],
   requiresApproval: 'never',
   readOnly: true,
   inputSchema: z.object({

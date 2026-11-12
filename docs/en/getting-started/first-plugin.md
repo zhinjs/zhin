@@ -12,7 +12,7 @@ For everyday bot features — adding commands, JSX cards, or AI tools — you do
 This page walks you through building `ping-pong` from scratch: a user sends `/ping` and the bot replies with text **you can change in config**. By the end you will know the four building blocks of a reusable plugin package — manifest, entry, command, config schema — and how to mount it in `zhin.config.yml`. It takes about 15 minutes.
 
 ::: tip Before you start
-- You have created and run `my-bot` from the [Quick start](./index.md) (if not, run `npm create zhin-app my-bot -y`).
+- You have created and run `my-bot` from the [Quick start](./index.md) (if not, run `npm create zhin-app my-bot -- -y --adapter sandbox`).
 - Node.js ≥22.19.0 and pnpm 9+. `pnpm dev` runs TypeScript source directly — no build step.
 :::
 
@@ -51,7 +51,7 @@ A plugin is an npm package. What makes Zhin recognize it is the `zhin` field in 
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "zhin runtime start"
+    "dev": "zhin start --foreground --watch source config"
   },
   "dependencies": {
     "zhin.js": "^1.1.0"
@@ -231,7 +231,7 @@ Check, in order:
 2. Send `/ping` in the Sandbox and the bot replies `pong!`.
 3. Change `reply` in `zhin.config.yml`, save, and send `/ping` again — the new reply appears without a restart. Editing `commands/ping/index.ts` works the same way.
 
-Just want to check that the plugin assembles, without the interactive mode? Run `zhin runtime start --once`.
+Just want to check that the plugin assembles, without the interactive mode? Run `zhin start --once`.
 
 ::: tip No reply?
 - The command prefix comes from each connection's `commandPrefix`; the scaffolded Sandbox uses `/`, other platforms may use none.

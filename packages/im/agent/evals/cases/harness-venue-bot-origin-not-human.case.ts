@@ -14,7 +14,7 @@ export default defineEvalCase({
       origin: 'member',
       mentions: ['architect'],
       endpointId: 'bot-arch',
-      sender: { id: 'bot-coder', roles: ['user'] },
+      sender: { id: 'bot-coder' },
     },
     {
       text: '@architect 外部机器人广播',
@@ -22,7 +22,7 @@ export default defineEvalCase({
       origin: 'peer_bot',
       mentions: ['architect'],
       endpointId: 'bot-arch',
-      sender: { id: 'external-bot', roles: ['user'] },
+      sender: { id: 'external-bot' },
     },
   ],
   agents: [

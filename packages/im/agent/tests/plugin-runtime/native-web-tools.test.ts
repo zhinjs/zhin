@@ -59,9 +59,9 @@ function executionContext(allowedDomains: readonly string[]): ToolExecutionConte
     turnId: 'turn',
     sessionKey: 'session',
     origin: { kind: 'http', sessionId: 'session' },
-    principal: { subjectId: 'owner', roles: ['master'] },
+    principal: { subjectId: 'owner', roles: ['owner'] },
     policy: {
-      permissions: ['master'],
+      permissions: ['owner'],
       unattended: false,
       network: { enabled: true, httpsOnly: true, allowedDomains },
     },

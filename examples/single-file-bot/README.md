@@ -37,13 +37,13 @@ pnpm --filter single-file-bot dev
 
 ```bash
 pnpm install
-pnpm dev          # = zhin runtime start
+pnpm dev          # = zhin start --foreground --watch source config
 ```
 
 然后：
 
 1. 打开 [Remote Console](https://console.zhin.dev)
-2. Host 填 `http://127.0.0.1:8086`（本示例未配 `http.token`，仅限本机）
+2. Host 填 `http://127.0.0.1:8086`。本示例未配 `http.token`：创建所有者之前，本机 Host 对所有人开放，Console 会直接进入初始化向导；创建所有者账号后用它登录（Host 只监听 `127.0.0.1`）
 3. 进入 **Sandbox / 沙盒**，发送 **`/hello`** 或 **`/status`**
 
 应收到 `Hello from single-file-bot!` 一类回复。编辑 `bot.ts` 会热重载。
@@ -52,7 +52,7 @@ pnpm dev          # = zhin runtime start
 
 ## 它是怎么工作的
 
-- `package.json#zhin.entry` → `./bot.ts`，`zhin runtime start` 加载默认导出的 `definePlugin`
+- `package.json#zhin.entry` → `./bot.ts`，`zhin start` 拉起的实例加载默认导出的 `definePlugin`
 - 主配置 `plugins` 声明 `@zhin.js/adapter-sandbox`（可选再挂真实平台，如 `@zhin.js/adapter-icqq`）
 - `setup()` 里 `addCommand('hello', …)` 与 `commands/` 目录发现进**同一个** `CommandIndex`（冲突检查、generation 事务一致）
 

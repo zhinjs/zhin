@@ -2,6 +2,14 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
+  "x-zhin-config": {
+    "levels": [
+      "global",
+      "adapter",
+      "endpoint",
+      "conversation"
+    ]
+  },
   "properties": {
     "pollCron": {
       "type": "string",
@@ -11,25 +19,45 @@
         "en": {
           "description": "Polling schedule (6-field cron expression)."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "maxPerGroup": {
       "type": "number",
       "default": 30,
       "minimum": 1,
-      "maximum": 200
+      "maximum": 200,
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
+      }
     },
     "maxItems": {
       "type": "number",
       "default": 5,
       "minimum": 1,
-      "maximum": 20
+      "maximum": 20,
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
+      }
     },
     "timeout": {
       "type": "number",
       "default": 15000,
       "minimum": 1000,
-      "maximum": 60000
+      "maximum": 60000,
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
+      }
     },
     "allowPrivateNetwork": {
       "type": "boolean",
@@ -39,6 +67,11 @@
         "en": {
           "description": "Allow feeds on loopback/LAN addresses (for example a self-hosted RSSHub). Refused by default because feed URLs come from chat users."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     }
   }

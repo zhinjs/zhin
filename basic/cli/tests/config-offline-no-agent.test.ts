@@ -7,18 +7,18 @@ import { pathToFileURL } from 'node:url';
 import { createOfflineConfigurationStore } from '../src/utils/config-offline.js';
 
 const lookup = vi.hoisted(() => vi.fn());
-vi.mock('../src/utils/ai-config-loader.js', () => ({ loadAiConfigUtils: lookup }));
+vi.mock('../../../packages/host/gateway/src/config/ai-config-loader.js', () => ({ loadAiConfigUtils: lookup }));
 
 it('keeps disabled AI outside IM-only offline composition but still rejects an active domain or a structured AI write without its package', async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'offline-without-agent-')));
-  const cli = join(root, 'node_modules/@zhin.js/cli');
-  await mkdir(join(cli, 'lib/utils'), { recursive: true });
-  await writeFile(join(cli, 'package.json'), JSON.stringify({ name: '@zhin.js/cli', type: 'module' }));
+  const gateway = join(root, 'node_modules/@zhin.js/gateway');
+  await mkdir(join(gateway, 'lib/config'), { recursive: true });
+  await writeFile(join(gateway, 'package.json'), JSON.stringify({ name: '@zhin.js/gateway', type: 'module' }));
   await symlink(new URL('../node_modules/fs-extra', import.meta.url).pathname, join(root, 'node_modules/fs-extra'), 'dir');
-  // The actual loader resolves from this isolated CLI/project, not the monorepo
+  // The actual loader resolves from this isolated gateway/project, not the monorepo
   // that has Agent installed. Its normal project and fallback lookups both miss.
-  const loader = join(cli, 'lib/utils/ai-config-loader.js');
-  await writeFile(loader, stripTypeScriptTypes(await readFile(new URL('../src/utils/ai-config-loader.ts', import.meta.url), 'utf8')));
+  const loader = join(gateway, 'lib/config/ai-config-loader.js');
+  await writeFile(loader, stripTypeScriptTypes(await readFile(new URL('../../../packages/host/gateway/src/config/ai-config-loader.ts', import.meta.url), 'utf8')));
   const readInstalled = () => {
     // A real Node child avoids Vitest/tsx's workspace resolution hooks that
     // intentionally make the monorepo's optional Agent available to tests.

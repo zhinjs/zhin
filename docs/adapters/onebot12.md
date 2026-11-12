@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/onebot12/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/onebot12/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=ba0055988a06c841 -->
+<!-- sync-adapter-docs:sha256=a5dafad74cbbff7a -->
 
 # @zhin.js/adapter-onebot12
 
@@ -120,7 +120,7 @@ WS、反向 WS 和 Webhook 都在进入原生 SDK 前过滤其他 bot 的事件�
 - 经所属 Adapter 增删持久化账号、启停单个 Endpoint；凭据由 Host 加密仓储保存，不改启动 YAML 或 `.env`，不重启进程；
 - 如果适配器要求登录，页面会显示 LoginAssist 的扫码 / 滑块 / 设备确认待办；
 
-读取需要 `onebot12:read`，写操作需要 `onebot12:write`；管理员 full token 不受限。页面里的「添加 endpoint」等价于原来的 `onebot12 endpoint add`。
+读取需要 `onebot12:read`（`read` 级别，内置角色 `viewer` 及以上都有）；增删改账号等写操作需要 `onebot12:write`（`operate` 级别，`operator` 及以上都有，绑定到本适配器的角色也算），首次迁移还需管理员身份；全局所有者不受限，见[插件权限的级别](https://zhin.js.org/console/#插件权限的级别)。页面里的「添加 endpoint」等价于原来的 `onebot12 endpoint add`。
 
 ## 故障排查
 
@@ -134,3 +134,7 @@ WS、反向 WS 和 Webhook 都在进入原生 SDK 前过滤其他 bot 的事件�
 ## 许可证
 
 MIT License
+
+## 成员身份
+
+OneBot v12 消息事件不带发送者群角色，不上报 `sender.platform`，能力画像也不声明 `scene.platformStanding`。详见 [ADR 0056 §1](https://github.com/zhinjs/zhin/blob/main/docs/adr/0056-chat-roles.md)。

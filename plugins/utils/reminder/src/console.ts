@@ -23,6 +23,8 @@ function resolveService(
 
 export function createReminderConsoleRpc(service?: ReminderService): PluginConsoleRpc {
   const rpc = definePluginConsoleRpc({
+    // Day-to-day edits belong to operators; `:write` would otherwise infer `manage` (ADR 0049).
+    permissions: [{ id: 'reminder:write', level: 'operate', description: '管理提醒' }],
     status: {
       page: 'index',
       requiredPermissions: ['reminder:read'],

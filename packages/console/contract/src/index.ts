@@ -8,6 +8,8 @@ export {
   ENDPOINT_RPC,
   SIDE_EVENT_NAMES,
 } from "./constants.js";
+import type { ConsolePageSection } from "@zhin.js/console-protocol";
+export type { ConsolePageSection } from "@zhin.js/console-protocol";
 
 export type RuntimeEnv = "development" | "production";
 
@@ -51,6 +53,8 @@ export type PluginAddRouteInput = {
     order?: number;
     group?: string;
     fullWidth?: boolean;
+    /** Console navigation section the Page declared (ADR 0052). */
+    section?: ConsolePageSection;
   };
   requiredPermissions?: string[];
   requiredRoles?: string[];

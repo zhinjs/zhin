@@ -342,6 +342,7 @@ type PageMeta = {
   readonly order?: number;
   readonly parent?: string;
   readonly fullWidth?: boolean;
+  readonly section?: string;
   readonly hideInNav?: boolean;
   readonly requiredPermissions?: readonly string[];
   readonly requiredRoles?: readonly string[];
@@ -479,6 +480,7 @@ function synthesizePureBlueprintModule(
     order: meta.order,
     parent: meta.parent,
     fullWidth: meta.fullWidth,
+    section: meta.section,
     hideInNav,
     localName: request.localName,
     requiredPermissions: meta.requiredPermissions,
@@ -580,6 +582,7 @@ async function bundlePageEntry(
     order: meta.order,
     parent: meta.parent,
     fullWidth: meta.fullWidth,
+    section: meta.section,
     hideInNav,
     localName: request.localName,
     requiredPermissions: meta.requiredPermissions,
@@ -653,6 +656,7 @@ export function buildPageRegisterWrapper(
     readonly order?: number;
     readonly parent?: string;
     readonly fullWidth?: boolean;
+    readonly section?: string;
     readonly hideInNav: boolean;
     readonly localName: string;
     readonly requiredPermissions?: readonly string[];
@@ -679,6 +683,7 @@ function buildRegisterFunctionBody(options: {
   readonly order?: number;
   readonly parent?: string;
   readonly fullWidth?: boolean;
+  readonly section?: string;
   readonly hideInNav: boolean;
   readonly localName: string;
   readonly requiredPermissions?: readonly string[];
@@ -693,6 +698,7 @@ function buildRegisterFunctionBody(options: {
   const order = options.order === undefined ? 'undefined' : JSON.stringify(options.order);
   const parent = options.parent === undefined ? 'undefined' : JSON.stringify(options.parent);
   const fullWidth = options.fullWidth === undefined ? 'undefined' : JSON.stringify(options.fullWidth);
+  const section = options.section === undefined ? 'undefined' : JSON.stringify(options.section);
   const hideInNav = options.hideInNav ? 'true' : 'false';
   const toolId = JSON.stringify(options.localName);
   const requiredPermissions = options.requiredPermissions === undefined ? 'undefined' : JSON.stringify(options.requiredPermissions);
@@ -825,6 +831,7 @@ export function register(api) {
   const order = typeof m.order === 'number' ? m.order : ${order};
   const parent = m.parent ?? ${parent};
   const fullWidth = typeof m.fullWidth === 'boolean' ? m.fullWidth : ${fullWidth};
+  const section = typeof m.section === 'string' ? m.section : ${section};
   const titleI18n = m.titleI18n ?? Component?.titleI18n ?? ${titleI18n};
   const requiredPermissions = Array.isArray(m.requiredPermissions) ? m.requiredPermissions : ${requiredPermissions};
   const requiredRoles = Array.isArray(m.requiredRoles) ? m.requiredRoles : ${requiredRoles};
@@ -876,6 +883,7 @@ export function register(api) {
       ...(group !== undefined ? { group } : {}),
       ...(order !== undefined ? { order } : {}),
       ...(fullWidth !== undefined ? { fullWidth } : {}),
+      ...(section !== undefined ? { section } : {}),
     },
   });
   if (typeof api.addTool === 'function') {

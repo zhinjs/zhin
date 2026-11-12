@@ -1,7 +1,7 @@
 import type { CapabilityOperationFactory } from '@zhin.js/feature-kit';
 import { adapterFeatureId, isAdapterIndex } from '@zhin.js/core';
-import type { CapabilityId, FeatureId, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
-import { permissionHostToken, type PermissionHost } from '@zhin.js/permission';
+import { isFeatureOwnerEnabled, resolveEndpointFeatureKey, type CapabilityId, type FeatureId, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { permissionHostToken, type PermissionHost, type PermissionSubject } from '@zhin.js/permission';
 import { turnPermissionSubject, type TurnAccessContext } from '../turn/turn-ingress.js';
 import {
   type AgentIndex,
@@ -42,7 +42,7 @@ import { labelThirdPartyGuidance } from '../prompt/third-party-guidance.js';
 import { capabilitySeamToken } from '../seam/tokens.js';
 import type { SeamIntegration } from '../seam/seam-integration.js';
 import { localImageAssetsToken, type LocalImageAssetStore } from '../media/local-image-assets.js';
-import { captureMcpImages } from '../media/mcp-image-results.js';
+import { captureToolImages } from '../media/tool-image-results.js';
 import { resolveSkillTools } from './skill-tool-resolution.js';
 
 export interface ToolCapability extends ToolDescriptor {
@@ -90,17 +90,21 @@ export class CapabilityIngress {
     const promptProjection = snapshot.projections.get(promptSectionFeatureId);
     const promptSections = isPromptSectionIndex(promptProjection) ? promptProjection : undefined;
     const promptProfile: PromptProfile = turn?.origin.kind === 'schedule' ? 'schedule' : 'interactive';
-    const featureTools = await bindTools({ index: tools, owner, isActive, turn,
-      host: resolvePermissionHost(snapshot), selectedAgent, operationSnapshot: snapshot, operation });
-    const featureSkills = await bindSkills(
+    // ADR 0050 §6: Plugins switched off for this conversation's endpoint disclose no tools or skills.
+    const enabled = featureGate(snapshot, turn);
+    const localAssets = resolveLocalAssets(snapshot);
+    const featureTools = (await bindTools({ index: tools, owner, isActive, turn,
+      host: resolvePermissionHost(snapshot), selectedAgent, operationSnapshot: snapshot, operation, localAssets }))
+      .filter(tool => enabled(tool.owner));
+    const featureSkills = (await bindSkills(
       projection(snapshot, skillFeatureId, isSkillIndex),
       turn,
       resolvePermissionHost(snapshot),
       selectedAgent,
-    );
+    )).filter(skill => enabled(skill.owner));
     const seam = resolveSeamIntegration(snapshot);
     const seamTools = seam
-      ? await bindSeamTools(seam, owner, isActive, turn, resolvePermissionHost(snapshot))
+      ? await bindSeamTools(seam, owner, isActive, turn, resolvePermissionHost(snapshot), localAssets)
       : [];
     const seamSkills = seam
       ? await bindSeamSkills(seam, owner, turn, resolvePermissionHost(snapshot))
@@ -125,7 +129,7 @@ export class CapabilityIngress {
       tools: availableTools,
       skills: availableSkills,
       agents: featureAgents,
-      mcp: bindMcp(mcp, owner, isActive, snapshot.resources.get(snapshot.root)?.get(localImageAssetsToken.id) as LocalImageAssetStore | undefined),
+      mcp: bindMcp(mcp, owner, isActive, localAssets),
       promptSegments: collectPromptSegments(snapshot, owner),
       platformGuidanceExternal: adapterIsExternal(snapshot, owner, turn),
       promptSections: Object.freeze([...(promptSections?.visible(owner, promptProfile) ?? [])]
@@ -145,6 +149,16 @@ export class CapabilityIngress {
 const TRUSTED_ADAPTER_SCOPE = '@zhin.js/';
 export function isTrustedOfficialAdapterPackage(packageName: string | undefined): boolean {
   return typeof packageName === 'string' && packageName.startsWith(TRUSTED_ADAPTER_SCOPE);
+}
+
+/** Owner predicate for the turn's conversation / endpoint; non-IM turns and unknown endpoints see every owner. */
+export function featureGate(snapshot: RuntimeSnapshot, turn?: TurnAccessContext): (owner: PluginId) => boolean {
+  const conversation = turn?.origin.kind === 'im' ? turn.origin.conversation : undefined;
+  const endpoint = conversation?.endpoint.id;
+  // ADR 0055: with a conversation the gate evaluates down to the conversation level.
+  const key = endpoint ? resolveEndpointFeatureKey(snapshot, endpoint, undefined, conversation) : undefined;
+  if (!key) return () => true;
+  return owner => isFeatureOwnerEnabled(snapshot, owner, key);
 }
 
 function adapterIsExternal(snapshot: RuntimeSnapshot, owner: PluginId, turn?: TurnAccessContext): boolean {
@@ -215,6 +229,7 @@ async function bindSeamTools(
   isActive: () => boolean,
   turn?: TurnAccessContext,
   host?: PermissionHost,
+  localAssets?: LocalImageAssetStore,
 ): Promise<readonly ToolCapability[]> {
   const projected = seam.projectTools(String(owner)).map((entry) => Object.freeze({
     owner,
@@ -236,9 +251,11 @@ async function bindSeamTools(
       invocation: ToolInvocationContext,
     ): Promise<TResult> => {
       assertActive(isActive);
+      await assertStillAllowed({ platforms: entry.schema.platforms, scopes: entry.schema.scopes, permissions: entry.schema.permissions,
+        currentConversationBotRoles: entry.schema.currentConversationBotRoles, qualifiedName: entry.schema.function.name }, turn, host);
       const result = await entry.execute(input, invocation);
       if (!result.success) throw new Error(result.error ?? `Seam Tool failed: ${entry.schema.function.name}`);
-      return result.output as TResult;
+      return await captureToolImages(result.output, localAssets, invocation, entry.schema.function.name) as TResult;
     },
   } satisfies ToolCapability));
   const access = await Promise.all(projected.map(async (descriptor) => ({
@@ -317,9 +334,11 @@ interface BindToolsInput {
   readonly selectedAgent?: string;
   readonly operationSnapshot?: RuntimeSnapshot;
   readonly operation?: CapabilityOperationFactory;
+  /** Host private image store; image blocks in tool results are captured here before the journal. */
+  readonly localAssets?: LocalImageAssetStore;
 }
 async function bindTools(input: BindToolsInput): Promise<readonly ToolCapability[]> {
-  const { index, owner, isActive, turn, host, selectedAgent, operationSnapshot, operation } = input;
+  const { index, owner, isActive, turn, host, selectedAgent, operationSnapshot, operation, localAssets } = input;
   if (!index) return Object.freeze([]);
   const descriptors = index.list();
   const accessResults = await Promise.all(
@@ -343,9 +362,12 @@ async function bindTools(input: BindToolsInput): Promise<readonly ToolCapability
         ? false
         : r.descriptor.hidden,
       name: r.descriptor.qualifiedName,
-      execute: <TInput, TResult>(input: TInput, invocation: ToolInvocationContext) => {
+      execute: async <TInput, TResult>(input: TInput, invocation: ToolInvocationContext): Promise<TResult> => {
         assertActive(isActive);
-        return index.execute<TInput, TResult>({ requester: r.descriptor.owner, name: r.descriptor.name, input, invocation, snapshot: operationSnapshot, operation });
+        // ADR 0056 §5: re-check the same three-dimension gate at execution (no call outside disclosure).
+        await assertStillAllowed(r.descriptor, turn, host);
+        const result = await index.execute<TInput, TResult>({ requester: r.descriptor.owner, name: r.descriptor.name, input, invocation, snapshot: operationSnapshot, operation });
+        return await captureToolImages(result, localAssets, invocation, r.descriptor.qualifiedName) as TResult;
       },
     })));
 }
@@ -364,6 +386,8 @@ async function canAccessDescriptor(
   },
   turn: TurnAccessContext | undefined,
   host?: PermissionHost,
+  /** Execution time: re-read the sender's role and the Bot's standing instead of the turn-start facts. */
+  current = false,
 ): Promise<boolean> {
   if (descriptor.platforms?.length) {
     if (turn?.origin.kind !== 'im' || !descriptor.platforms.includes(turn.origin.platform)) {
@@ -389,7 +413,47 @@ async function canAccessDescriptor(
   }
   if (!descriptor.permissions?.length) return true;
   if (!turn || !host) return false;
+  if (current) return host.checkAll(descriptor.permissions, await currentPermissionSubject(descriptor.permissions, turn, host));
   return host.checkAll(descriptor.permissions, turnPermissionSubject(turn));
+}
+
+/**
+ * ADR 0056 §5 execution-time facts: the sender's chat role re-read from the role store (a role
+ * revoked mid-turn no longer counts) and the Bot's own standing looked up again (cached for a
+ * minute, so this rarely reaches the platform). Without resolvers the turn-start facts stay.
+ */
+async function currentPermissionSubject(
+  permits: readonly string[],
+  turn: TurnAccessContext,
+  host: PermissionHost,
+): Promise<PermissionSubject> {
+  const subject = turnPermissionSubject(turn);
+  const im = turn.origin.kind === 'im' ? turn.origin : undefined;
+  if (!im?.conversation) return subject;
+  const source = Object.freeze({ conversation: im.conversation, endpointId: im.endpoint, sender: Object.freeze({ id: turn.principal.subjectId }) });
+  const roles = host.currentSenderRoles(source);
+  let sender = subject.sender;
+  if (sender && roles) {
+    const { chatRole: _turnRole, chatRoleLevels: _turnLevels, ...identity } = sender;
+    sender = Object.freeze({ ...identity, ...roles });
+  }
+  const { bot: turnBot, ...rest } = subject;
+  const refreshed = await host.withBotStanding(permits, Object.freeze({ ...rest, ...(sender ? { sender } : {}) }), { source });
+  // Adapters without a self-standing lookup only have the turn's member-role fact.
+  const fallback = !refreshed.bot && !turn.input?.contextState?.bot?.platform ? turnBot : undefined;
+  return fallback ? Object.freeze({ ...refreshed, bot: fallback }) : refreshed;
+}
+
+/** Execution-time re-check of {@link canAccessDescriptor}; throws when the gate no longer holds. */
+async function assertStillAllowed(
+  descriptor: Parameters<typeof canAccessDescriptor>[0] & { readonly qualifiedName?: string; readonly name?: string },
+  turn: TurnAccessContext | undefined,
+  host: PermissionHost | undefined,
+): Promise<void> {
+  if (!turn) return;
+  if (!(await canAccessDescriptor(descriptor, turn, host, true))) {
+    throw new Error(`Agent Tool is not available in this conversation: ${descriptor.qualifiedName ?? descriptor.name ?? 'tool'}`);
+  }
 }
 
 /** Root resources 上的 PermissionHost（command-index 同款解析；未安装时 fail-closed）。 */
@@ -403,6 +467,10 @@ function resolvePermissionHost(snapshot: RuntimeSnapshot): PermissionHost | unde
   } catch {
     return undefined;
   }
+}
+
+function resolveLocalAssets(snapshot: RuntimeSnapshot): LocalImageAssetStore | undefined {
+  return snapshot.resources.get(snapshot.root)?.get(localImageAssetsToken.id) as LocalImageAssetStore | undefined;
 }
 
 function bindMcp(
@@ -421,7 +489,7 @@ function bindMcp(
     callTool: async <TResult>(tool: string, input: unknown, invocation?: ToolInvocationContext) => {
       assertActive(isActive);
       const result = await index.callTool(owner, descriptor.name, tool, input);
-      return await captureMcpImages(result, localAssets, invocation, `${descriptor.qualifiedName}/${tool}`, invocation?.signal) as TResult;
+      return await captureToolImages(result, localAssets, invocation, `${descriptor.qualifiedName}/${tool}`) as TResult;
     },
   })));
 }

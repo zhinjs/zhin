@@ -75,10 +75,10 @@ pnpm install
 # and declare it in the plugins map in zhin.config.yml
 pnpm install
 pnpm build
-cd examples/my-bot && pnpm exec zhin runtime start --once
+cd examples/my-bot && pnpm exec zhin start --once
 ```
 
-Verified on current `main`: `@zhin.js/command` in both `examples/test-bot` and `plugins/utils/calendar` resolves to the same `packages/im/command`; after `pnpm build`, `zhin runtime start --once` in `examples/minimal-bot` prints `"started": true`.
+Verified on current `main`: `@zhin.js/command` in both `examples/test-bot` and `plugins/utils/calendar` resolves to the same `packages/im/command`; after `pnpm build`, `zhin start --once` in `examples/minimal-bot` prints `"started": true`.
 
 Other options compared:
 
@@ -192,14 +192,14 @@ The control plane listens on `http.host`/`http.port` (default `127.0.0.1:8086`).
 lsof -nP -iTCP:<port> -sTCP:LISTEN
 ```
 
-Only stop processes you know are yours (by PID); avoid `pkill -f "zhin runtime start"`, which can hit other projects' instances.
+Only stop processes you know are yours (by PID); avoid `pkill -f "zhin start"`, which can hit other projects' instances; stop a background gateway with `zhin stop` in its project directory instead.
 
 Current exit behavior:
 
 - **Ctrl+C (SIGINT) / SIGTERM / SIGHUP**: graceful stop, closing HTTP/WS listeners, runtime (adapters, plugin resources), scheduler and database in order; exits `0` on success and frees the port.
 - **Not stopped within 5 seconds**: stderr prints `{"forcedExit":"budget","stillStopping":[...]}` naming components still stopping, then force-exits (SIGINT `130`, SIGTERM `143`, SIGHUP `129`).
 - **Second Ctrl+C while stopping**: exits immediately (`130`) with `"forcedExit":"repeated-signal"`.
-- **Console restart / dependency change requiring restart**: after a full stop, exits naturally with code `75` for the supervisor to relaunch; dependency changes don't interrupt an in-progress plugin management operation, whose apply/restart step triggers it instead.
+- **Console restart / dependency change requiring restart**: the instance sends `restart-request` to the supervisor over the control channel, the supervisor answers with `shutdown` and relaunches it after a full stop; dependency changes don't interrupt an in-progress plugin management operation, whose apply/restart step triggers it instead.
 - Closing a terminal or script session sends SIGHUP, which also triggers a graceful stop; use `--daemon` or a process manager for long-running background use.
 
 Plugins must release their own timers and connections in dispose; a dispose that never finishes is cut off by the 5-second budget and shows up as `runtime` in `stillStopping`.

@@ -14,7 +14,7 @@ import { withTestEndpoints } from './test-module-runtime.js';
 export { FakeClock, FakeScheduleRootHost, parseCron, type FakeScheduledJob } from './fake-clock.js';
 export { FakeDatabaseRootHost, FakeOutboundRootHost, type FakeOutboundCall } from './fake-hosts.js';
 export { FakePlugin, createFakePlugin, runPluginSetup, resolvePluginConfig, PluginConfigValidationError, fakeResource,
-  type FakePluginOptions, type RunPluginSetupOptions, type FakeResource, type FakeRegisteredFeature } from './fake-plugin.js';
+  type FakePluginOptions, type FakeFeatureView, type RunPluginSetupOptions, type FakeResource, type FakeRegisteredFeature } from './fake-plugin.js';
 export { fakeOf } from './partial.js';
 export { createFakeMessage, createFakeInteraction, createCommandContext, runCommand, runMiddleware, runHandler,
   createToolContext, runTool, toolOriginFromMessage,
@@ -47,7 +47,14 @@ export interface TestDelivery {
   readonly id: string;
 }
 
-export type TestReceiveInput = EndpointIncomingMessage & { readonly endpoint?: string };
+/**
+ * A synthetic inbound message. Test transports are trusted, so `sender.chatRole` declares the
+ * sender's chat role in the conversation (ADR 0056) instead of storing grants.
+ */
+export type TestReceiveInput = Omit<EndpointIncomingMessage, 'sender'> & {
+  readonly endpoint?: string;
+  readonly sender?: NonNullable<EndpointIncomingMessage['sender']> & Readonly<{ chatRole?: 'owner' | 'admin' | 'trusted' }>;
+};
 
 export type TestReloadResult =
   | Readonly<{ status: 'reloaded' | 'unchanged'; generation: number }>
@@ -62,6 +69,8 @@ export type TestReloadResult =
 export class PluginTestKit {
   readonly #im: ImRuntime;
   readonly #root: RootRuntime;
+  /** Chat roles declared by `receive()` (the Runtime drops roles carried by the payload itself). */
+  readonly #declaredRoles = new Map<string, 'owner' | 'admin' | 'trusted'>();
   readonly #sinks = new Map<string, EndpointEventSink>();
   readonly #identities = new Map<string, EndpointIdentity>();
   #nextDelivery = 1;
@@ -75,7 +84,13 @@ export class PluginTestKit {
   #closeResult?: Promise<void>;
 
   private constructor(options: PluginTestKitOptions, projectRoot: string, rootEntry: string) {
-    this.#im = new ImRuntime({ commandPrefix: options.commandPrefix });
+    // Test transports are trusted: a test declares the sender's chat role / platform standing
+    // (`sender: { id, chatRole: 'admin' }`) instead of storing grants (ADR 0056); a declared role is
+    // held globally.
+    this.#im = new ImRuntime({ commandPrefix: options.commandPrefix, enrichSender: sender => {
+      const role = sender?.id ? this.#declaredRoles.get(sender.id) : undefined;
+      return sender && role ? { ...sender, chatRole: role, chatRoleLevels: { owner: 'global', admin: 'global', trusted: 'global' } } : sender;
+    } });
     const names = options.endpoints ?? ['test'];
     if (!names.length || new Set(names).size !== names.length
       || names.some(name => !/^[a-z][a-z0-9-]*$/.test(name))) {
@@ -180,6 +195,10 @@ export class PluginTestKit {
   async receive(input: TestReceiveInput): Promise<MessageDispatchResult | undefined> {
     this.#assertStarted();
     const { endpoint, ...message } = input;
+    if (input.sender?.id) {
+      if (input.sender.chatRole) this.#declaredRoles.set(input.sender.id, input.sender.chatRole);
+      else this.#declaredRoles.delete(input.sender.id);
+    }
     return await this.#sink(endpoint).message(message) as MessageDispatchResult | undefined;
   }
 

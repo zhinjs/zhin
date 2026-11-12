@@ -12,7 +12,7 @@ outline: [2, 3]
 
 ## Host 顶层字段
 
-权威契约来自 Runtime 实际消费的 [`packages/im/runtime/src/host-config-schema.json`](https://github.com/zhinjs/zhin/blob/main/packages/im/runtime/src/host-config-schema.json)；消费位置见 [`basic/cli/src/plugin-runtime/console/configuration-projection.ts`](https://github.com/zhinjs/zhin/blob/main/basic/cli/src/plugin-runtime/console/configuration-projection.ts)。
+权威契约来自 Runtime 实际消费的 [`packages/im/runtime/src/host-config-schema.json`](https://github.com/zhinjs/zhin/blob/main/packages/im/runtime/src/host-config-schema.json)；消费位置见 [`packages/host/gateway/src/config/configuration-projection.ts`](https://github.com/zhinjs/zhin/blob/main/packages/host/gateway/src/config/configuration-projection.ts)。
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
@@ -25,9 +25,9 @@ outline: [2, 3]
 | `http.readiness.agents` | array&lt;string&gt; | 否 | — | 必须存在的 Agent binding；不验证模型凭据或 Provider 网络可用性。 |
 | `http.host` | string \| null | 否 | — | 监听地址。 |
 | `http.port` | number \| string \| null | 否 | — | 监听端口。 |
-| `http.token` | string \| null | 否 | — | HTTP Host 访问令牌。 |
-| `http.tokens` | array \| null | 否 | — | — |
+| `http.token` | string \| null | 否 | — | 初始化令牌：创建第一个 Console 所有者之前用于登录初始化向导；之后失效（ADR 0049）。 |
 | `http.corsOrigins` | array \| null | 否 | — | — |
+| `http.trustProxy` | boolean \| integer \| array&lt;string&gt; \| string | 否 | — | 受信任的反向代理，其 X-Forwarded-For / Forwarded 头给出真实客户端地址（登录限流、审计 IP、仅本机套接字）：false（默认）只用 TCP 对端地址；true 信任所有跳；数字表示信任离服务端最近的若干跳；列表表示只信任匹配的 IP / CIDR 或 loopback、private、linklocal。 |
 | `http.base` | string \| null | 否 | — | API 路径前缀。 |
 | `http.tls` | `false` \| null \| object | 否 | — | — |
 | `http.listeners` | array&lt;object&gt; | 否 | — | — |
@@ -35,6 +35,27 @@ outline: [2, 3]
 | `http.listeners[].host` | string | 否 | — | 监听地址。 |
 | `http.listeners[].port` | number \| string | 否 | — | 监听端口。 |
 | `http.listeners[].tls` | `false` \| null \| object | 否 | — | — |
+| `console` | object | 否 | — | Console 宿主功能。 |
+| `console.terminal` | object | 否 | — | Console 终端（宿主 Shell / SSH），仅持有 ops.terminal 的所有者可用；默认关闭。 |
+| `console.terminal.enabled` | boolean | 否 | `false` | 注册终端路由。 |
+| `console.terminal.shell` | string | 否 | — | 本机 Shell；省略时用 $SHELL（Windows 为 powershell.exe）。 |
+| `console.terminal.cwd` | string | 否 | `"."` | 工作目录，相对项目根。 |
+| `console.terminal.idleTimeout` | integer | 否 | `900` | 无输入多少秒后断开（0 表示不限）。 |
+| `console.terminal.maxSessions` | integer | 否 | `4` | 所有用户合计的同时会话上限。 |
+| `console.terminal.ssh` | array&lt;object&gt; | 否 | — | Console 可连接的 SSH 目标。 |
+| `console.terminal.ssh[].name` | string | 是 | — | 目标 id，Console 按它选择（不能是 local）。 |
+| `console.terminal.ssh[].label` | string | 否 | — | 显示名称。 |
+| `console.terminal.ssh[].host` | string | 是 | — | SSH 主机。 |
+| `console.terminal.ssh[].port` | integer | 否 | `22` | SSH 端口。 |
+| `console.terminal.ssh[].username` | string | 是 | — | SSH 用户。 |
+| `console.terminal.ssh[].privateKeyPath` | string | 否 | — | 私钥文件（相对项目根，可用 ~）；与 privateKeyEnv 互斥。 |
+| `console.terminal.ssh[].privateKeyEnv` | string | 否 | — | 保存私钥的环境变量名。 |
+| `console.terminal.ssh[].passwordEnv` | string | 否 | — | 保存密码的环境变量名。 |
+| `console.terminal.ssh[].passphraseEnv` | string | 否 | — | 保存私钥口令的环境变量名。 |
+| `console.terminal.ssh[].hostFingerprint` | string | 否 | — | 必填的主机密钥指纹（SHA256:…），严格校验；在可信网络中用 `ssh-keyscan -t ed25519 &lt;host&gt; \| ssh-keygen -lf -` 获取。 |
+| `console.terminal.ssh[].insecureAcceptAnyHostKey` | boolean | 否 | — | 不校验主机密钥、接受任意密钥（不安全，可被中间人攻击）；仅在不填 hostFingerprint 时使用，Console 会把该目标标为不安全。 |
+| `gateway` | object | 否 | — | 管理网关（zhin start）：实例监管与依赖事务。 |
+| `gateway.readyTimeout` | integer | 否 | `60` | 实例启动、重启或依赖事务后报告就绪的最长秒数；超时视为启动失败（依赖事务随之回滚）。每次启动、重启与事务前重新读取，修改后无需重启网关。 |
 | `database` | object | 否 | — | Database Host 与方言连接参数。 |
 | `database.dialect` | string | 否 | — | 数据库方言。 |
 | `database.filename` | string | 否 | — | SQLite 文件路径。 |
@@ -445,6 +466,9 @@ outline: [2, 3]
 | `log_level` | string \| number | 否 | — | Runtime 日志级别。 |
 | `plugin` | object | 否 | — | Root Plugin 配置；组合时由项目 Schema 替换。 |
 | `locale` | string: `"zh-CN"`, `"en"` | 否 | — | 未设置个人偏好时使用的语言；未配置时使用简体中文，语言与时区独立。 |
+| `features` | object | 否 | — | 插件配置块之外的功能配置（ADR 0055）：群内自助。修改后需重启。 |
+| `features.selfService` | object | 否 | — | 聊天角色 admin 在聊天中使用的 `功能` / `feature` 与 `角色` / `role` 命令（ADR 0055 / 0056），默认关闭。平台群主 / 管理员不是 zhin 角色，需要显式授予 admin。 |
+| `features.selfService.enabled` | boolean | 否 | `false` | 注册群内功能自助与角色命令。 |
 
 ## 独立 AI 导入提案
 
@@ -525,8 +549,6 @@ outline: [2, 3]
 | `bilibili.videos` | array&lt;string \| number&gt; | 否 | — | 白名单视频：BV 号或 av 号。只轮询这些视频的评论，不做全站搜索 |
 | `bilibili.dynamics` | array&lt;string&gt; | 否 | — | 白名单动态：动态 id（t.bilibili.com/&lt;id&gt; 或 bilibili.com/opus/&lt;id&gt; 里的数字，请写成字符串）。启动时经动态详情解析出评论区（图文动态 type=11 / 文字动态 type=17），无法解析的动态会跳过。不做全站搜索 |
 | `bilibili.articles` | array&lt;string \| number&gt; | 否 | — | 白名单专栏：cv 号（cv123 或 123），评论区 type=12。不做全站搜索 |
-| `bilibili.master` | string \| number | 否 | — | 框架 master（B 站 uid）。endpoints[i].master 可逐项覆盖 |
-| `bilibili.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（B 站 uid） |
 | `bilibili.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 | `bilibili.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
 | `bilibili.endpoints[].id` | string | 是 | — | Endpoint 名称（本地标识，不是 B 站账号） |
@@ -547,8 +569,6 @@ outline: [2, 3]
 | `bilibili.endpoints[].notify.kind` | string: `"private"`, `"group"`, `"channel"` | 否 | `"private"` | 会话类型 |
 | `bilibili.endpoints[].notify.id` | string \| number | 是 | — | 会话 id：私聊填你的账号，群聊填群号 |
 | `bilibili.endpoints[].apiBaseUrl` | string | 否 | `"https://api.bilibili.com"` | — |
-| `bilibili.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（B 站 uid） |
-| `bilibili.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
 | `bilibili.endpoints[].commandPrefix` | string | 否 | — | — |
 | `bilibili.endpoints[].nickname` | string \| null | 否 | — | 账号昵称兜底 |
 | `bilibili.endpoints[].profile` | object | 否 | — | 账号资料兜底 |
@@ -582,8 +602,6 @@ outline: [2, 3]
 | `bilibili-live.minSendIntervalSec` | number | 否 | `5` | 两次回复的最小间隔（秒），最小 2；不足时拒绝发送，不排队 |
 | `bilibili-live.apiBaseUrl` | string | 否 | `"https://api.bilibili.com"` | — |
 | `bilibili-live.liveApiBaseUrl` | string | 否 | `"https://api.live.bilibili.com"` | — |
-| `bilibili-live.master` | string \| number | 否 | — | 框架 master（B 站 uid）。endpoints[i].master 可逐项覆盖 |
-| `bilibili-live.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（B 站 uid） |
 | `bilibili-live.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 | `bilibili-live.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
 | `bilibili-live.endpoints[].id` | string | 是 | — | Endpoint 名称（本地标识，不是 B 站账号） |
@@ -597,8 +615,6 @@ outline: [2, 3]
 | `bilibili-live.endpoints[].minSendIntervalSec` | number | 否 | `5` | 两次回复的最小间隔（秒），最小 2；不足时拒绝发送，不排队 |
 | `bilibili-live.endpoints[].apiBaseUrl` | string | 否 | `"https://api.bilibili.com"` | — |
 | `bilibili-live.endpoints[].liveApiBaseUrl` | string | 否 | `"https://api.live.bilibili.com"` | — |
-| `bilibili-live.endpoints[].master` | string \| number | 否 | — | 框架 master（B 站 uid）。endpoints[i].master 可逐项覆盖 |
-| `bilibili-live.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（B 站 uid） |
 | `bilibili-live.endpoints[].commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 | `bilibili-live.endpoints[].nickname` | string \| null | 否 | — | 账号昵称兜底 |
 | `bilibili-live.endpoints[].profile` | object | 否 | — | 账号资料兜底 |
@@ -626,11 +642,7 @@ outline: [2, 3]
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
 | `dingtalk.apiBaseUrl` | string | 否 | `"https://oapi.dingtalk.com"` | — |
-| `dingtalk.master` | string \| number | 否 | — | 框架 master（DingTalk userid；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `dingtalk.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
 | `dingtalk.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `dingtalk.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（DingTalk userid）；覆盖顶层 master |
-| `dingtalk.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
 | `dingtalk.endpoints[].appKey` | string | 是 | — | Dingtalk app key |
 | `dingtalk.endpoints[].appSecret` | string | 是 | — | Dingtalk app secret |
 | `dingtalk.endpoints[].webhookPath` | string | 否 | — | Dingtalk webhook path |
@@ -685,11 +697,7 @@ outline: [2, 3]
 | `discord.applicationId` | string | 否 | — | Required when connection is interactions. |
 | `discord.publicKey` | string | 否 | — | Required when connection is interactions (hex Ed25519 public key). |
 | `discord.interactionsPath` | string | 否 | `"/discord/interactions"` | POST path on httpHostToken when connection is interactions. |
-| `discord.master` | string \| number | 否 | — | 框架 master（Discord user snowflake；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `discord.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
 | `discord.endpoints` | array&lt;object&gt; | 是 | — | 多账号：每项定义一个 endpoint，id/token 必填，其余字段覆盖实例默认值 |
-| `discord.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（Discord user snowflake）；覆盖顶层 master |
-| `discord.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
 | `discord.endpoints[].token` | string | 是 | — | Discord bot token |
 | `discord.endpoints[].connection` | string: `"gateway"`, `"interactions"` | 否 | — | — |
 | `discord.endpoints[].intents` | array&lt;number&gt; | 否 | — | — |
@@ -740,8 +748,6 @@ outline: [2, 3]
 | `douyin-live.maxChunks` | number | 否 | `2` | 一次回复最多拆成几条弹幕（默认 2） |
 | `douyin-live.minSendIntervalSec` | number | 否 | `5` | 两次回复的最小间隔（秒），最小 2 |
 | `douyin-live.signerUrl` | string | 否 | — | 可选：外部签名服务（GET ?stub=&lt;X-MS-STUB&gt; 返回 signature）。本包不内置平台签名脚本；不填时不带签名连接，平台可能拒绝 |
-| `douyin-live.master` | string \| number | 否 | — | 框架 master（抖音 user id）。endpoints[i].master 可逐项覆盖 |
-| `douyin-live.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（抖音 user id） |
 | `douyin-live.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 | `douyin-live.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
 | `douyin-live.endpoints[].id` | string | 是 | — | Endpoint 名称（本地标识，不是抖音账号） |
@@ -752,8 +758,6 @@ outline: [2, 3]
 | `douyin-live.endpoints[].maxChunks` | number | 否 | `2` | 一次回复最多拆成几条弹幕（默认 2） |
 | `douyin-live.endpoints[].minSendIntervalSec` | number | 否 | `5` | 两次回复的最小间隔（秒），最小 2 |
 | `douyin-live.endpoints[].signerUrl` | string | 否 | — | 可选：外部签名服务（GET ?stub=&lt;X-MS-STUB&gt; 返回 signature）。本包不内置平台签名脚本；不填时不带签名连接，平台可能拒绝 |
-| `douyin-live.endpoints[].master` | string \| number | 否 | — | 框架 master（抖音 user id）。endpoints[i].master 可逐项覆盖 |
-| `douyin-live.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（抖音 user id） |
 | `douyin-live.endpoints[].commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 | `douyin-live.endpoints[].nickname` | string \| null | 否 | — | 账号昵称兜底 |
 | `douyin-live.endpoints[].profile` | object | 否 | — | 账号资料兜底 |
@@ -780,11 +784,7 @@ outline: [2, 3]
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `email.master` | string \| number | 否 | — | 框架 master（email address；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `email.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
 | `email.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `email.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（email address）；覆盖顶层 master |
-| `email.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
 | `email.endpoints[].smtp` | object | 是 | — | — |
 | `email.endpoints[].smtp.host` | string | 是 | — | — |
 | `email.endpoints[].smtp.port` | number | 是 | — | — |
@@ -842,11 +842,7 @@ outline: [2, 3]
 | `github.auto_reply_repos` | array&lt;string&gt; | 否 | — | Repos whose Issue/PR comments auto-trigger AI without @bot |
 | `github.bot_login` | string | 否 | — | Override App bot login (default {slug}[bot]) |
 | `github.workspace_root` | string | 否 | — | Managed git workspace root |
-| `github.master` | string \| number | 否 | — | 框架 master（GitHub user login or id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `github.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
 | `github.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint |
-| `github.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（GitHub user login or id）；覆盖顶层 master |
-| `github.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
 | `github.endpoints[].app_id` | string \| number | 是 | — | GitHub App ID |
 | `github.endpoints[].private_key` | string | 是 | — | GitHub App private key (PEM content or file path) |
 | `github.endpoints[].webhook_secret` | string | 否 | — | Webhook HMAC secret; enables httpHostToken POST route |
@@ -883,8 +879,6 @@ outline: [2, 3]
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `icqq.master` | string \| number | 是 | — | 框架 master QQ uin（/approve、AI/工具权限）；endpoints[i].master 可逐项覆盖 |
-| `icqq.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted QQ uin 列表（弱于 master） |
 | `icqq.password` | string | 否 | — | QQ 密码（可选，不填则扫码登录） |
 | `icqq.platform` | number: `1`, `2`, `3`, `4`, `5`, `6`, `7` | 否 | `1` | 登录设备平台：1=Android, 2=aPad, 3=Watch, 4=iMac, 5=iPad, 6=Tim, 7=Custom |
 | `icqq.ver` | string | 否 | — | 协议版本号，仅在对应 platform 有多个版本时有效，不填则使用最新版本 |
@@ -900,8 +894,6 @@ outline: [2, 3]
 | `icqq.ntLogin` | boolean | 否 | — | 是否使用 NT 登录方式 |
 | `icqq.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
 | `icqq.endpoints[].id` | string | 是 | — | QQ uin |
-| `icqq.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的 master QQ uin；覆盖顶层 master |
-| `icqq.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
 | `icqq.endpoints[].password` | string | 否 | — | 本 endpoint 的 QQ 密码 |
 | `icqq.endpoints[].platform` | number: `1`, `2`, `3`, `4`, `5`, `6`, `7` | 否 | — | 登录设备平台：1=Android, 2=aPad, 3=Watch, 4=iMac, 5=iPad, 6=Tim, 7=Custom |
 | `icqq.endpoints[].ver` | string | 否 | — | 协议版本号 |
@@ -969,8 +961,6 @@ outline: [2, 3]
 | `juejin.notify.kind` | string: `"private"`, `"group"`, `"channel"` | 否 | `"private"` | 会话类型 |
 | `juejin.notify.id` | string \| number | 是 | — | 会话 id：私聊填你的账号，群聊填群号 |
 | `juejin.articles` | array&lt;string&gt; | 否 | — | 白名单文章：文章 id（请写成带引号的字符串）或 https://juejin.cn/post/&lt;id&gt; 链接。只轮询这些文章的评论，不做全站搜索；留空 = 不轮询 |
-| `juejin.master` | string \| number | 否 | — | 框架 master（掘金 uid）。endpoints[i].master 可逐项覆盖 |
-| `juejin.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（掘金 uid） |
 | `juejin.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 | `juejin.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
 | `juejin.endpoints[].id` | string | 是 | — | Endpoint 名称（本地标识，不是掘金账号） |
@@ -986,8 +976,6 @@ outline: [2, 3]
 | `juejin.endpoints[].notify.kind` | string: `"private"`, `"group"`, `"channel"` | 否 | `"private"` | 会话类型 |
 | `juejin.endpoints[].notify.id` | string \| number | 是 | — | 会话 id：私聊填你的账号，群聊填群号 |
 | `juejin.endpoints[].apiBaseUrl` | string | 否 | `"https://api.juejin.cn"` | — |
-| `juejin.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（掘金 uid） |
-| `juejin.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
 | `juejin.endpoints[].commandPrefix` | string | 否 | — | — |
 | `juejin.endpoints[].nickname` | string \| null | 否 | — | 账号昵称兜底 |
 | `juejin.endpoints[].profile` | object | 否 | — | 账号资料兜底 |
@@ -1021,11 +1009,7 @@ outline: [2, 3]
 | `kook.max_retry` | number | 否 | `3` | — |
 | `kook.ignore` | string: `"bot"`, `"self"` | 否 | `"bot"` | — |
 | `kook.logLevel` | string: `"trace"`, `"debug"`, `"info"`, `"warn"`, `"error"`, `"fatal"`, `"mark"`, `"off"` | 否 | `"info"` | — |
-| `kook.master` | string \| number | 否 | — | 框架 master（KOOK user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `kook.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
 | `kook.endpoints` | array&lt;object&gt; | 是 | — | 多账号：每项定义一个 endpoint，id/token 必填，其余字段覆盖实例默认值 |
-| `kook.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（KOOK user id）；覆盖顶层 master |
-| `kook.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
 | `kook.endpoints[].token` | string | 是 | — | KOOK bot token |
 | `kook.endpoints[].connection` | string: `"websocket"`, `"webhook"` | 否 | — | — |
 | `kook.endpoints[].webhookPath` | string | 否 | — | — |
@@ -1072,11 +1056,7 @@ outline: [2, 3]
 | `lark.webhookPath` | string | 否 | `"/lark/webhook"` | — |
 | `lark.apiBaseUrl` | string | 否 | — | — |
 | `lark.isFeishu` | boolean | 否 | `true` | — |
-| `lark.master` | string \| number | 否 | — | 框架 master（Lark/Feishu open_id or user_id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `lark.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
 | `lark.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `lark.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（Lark/Feishu open_id or user_id）；覆盖顶层 master |
-| `lark.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
 | `lark.endpoints[].appId` | string | 是 | — | Lark app ID |
 | `lark.endpoints[].appSecret` | string | 是 | — | Lark app secret |
 | `lark.endpoints[].encryptKey` | string | 否 | — | Lark encrypt key |
@@ -1127,11 +1107,7 @@ outline: [2, 3]
 | --- | --- | --- | --- | --- |
 | `line.webhookPath` | string | 否 | `"/line/webhook"` | — |
 | `line.apiBaseUrl` | string | 否 | `"https://api.line.me"` | — |
-| `line.master` | string \| number | 否 | — | 框架 master（LINE user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `line.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
 | `line.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `line.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（LINE user id）；覆盖顶层 master |
-| `line.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
 | `line.endpoints[].channelSecret` | string | 是 | — | LINE channel secret |
 | `line.endpoints[].channelAccessToken` | string | 是 | — | LINE channel access token |
 | `line.endpoints[].webhookPath` | string | 否 | — | — |
@@ -1167,11 +1143,7 @@ outline: [2, 3]
 | `milky.connection` | string: `"ws"`, `"sse"`, `"webhook"`, `"wss"` | 否 | `"ws"` | ws (default), sse (EventSource client), webhook or wss (webhook/wss via httpHostToken) |
 | `milky.reconnect_interval` | number | 否 | `5000` | — |
 | `milky.heartbeat_interval` | number | 否 | `30000` | — |
-| `milky.master` | string \| number | 否 | — | 框架 master（QQ uin；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `milky.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
 | `milky.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `milky.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（QQ uin）；覆盖顶层 master |
-| `milky.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
 | `milky.endpoints[].connection` | string: `"ws"`, `"sse"`, `"webhook"`, `"wss"` | 否 | — | — |
 | `milky.endpoints[].baseUrl` | string | 是 | — | Milky HTTP API base URL (required); WS event path is derived as ws(s)://host/event |
 | `milky.endpoints[].path` | string | 否 | — | Path for webhook / reverse-wss |
@@ -1210,11 +1182,7 @@ outline: [2, 3]
 | `napcat.reconnect_interval` | number | 否 | `5000` | — |
 | `napcat.heartbeat_interval` | number | 否 | `30000` | — |
 | `napcat.poll_interval` | number | 否 | `30000` | — |
-| `napcat.master` | string \| number | 否 | — | 框架 master（QQ uin；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `napcat.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
 | `napcat.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `napcat.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（QQ uin）；覆盖顶层 master |
-| `napcat.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
 | `napcat.endpoints[].connection` | string: `"ws"`, `"wss"`, `"http"` | 否 | — | — |
 | `napcat.endpoints[].url` | string | 否 | — | NapCat WebSocket URL (required for connection: ws) |
 | `napcat.endpoints[].path` | string | 否 | — | WS path for reverse-wss |
@@ -1255,11 +1223,7 @@ outline: [2, 3]
 | `onebot11.connection` | string: `"ws"`, `"wss"` | 否 | `"ws"` | connection: ws (forward WS client, default) or wss (reverse WS via httpHostToken) |
 | `onebot11.reconnect_interval` | number | 否 | `5000` | — |
 | `onebot11.heartbeat_interval` | number | 否 | `30000` | — |
-| `onebot11.master` | string \| number | 否 | — | 框架 master（platform user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `onebot11.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
 | `onebot11.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `onebot11.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（platform user id）；覆盖顶层 master |
-| `onebot11.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
 | `onebot11.endpoints[].connection` | string: `"ws"`, `"wss"` | 否 | — | — |
 | `onebot11.endpoints[].url` | string | 否 | — | OneBot implementation WebSocket URL (required for connection: ws) |
 | `onebot11.endpoints[].path` | string | 否 | — | WS path for reverse-wss (connection: wss) |
@@ -1297,11 +1261,7 @@ outline: [2, 3]
 | `onebot12.connection` | string: `"ws"`, `"webhook"`, `"wss"` | 否 | `"ws"` | ws (default), webhook (httpHostToken POST), or wss (reverse WS via httpHostToken) |
 | `onebot12.reconnect_interval` | number | 否 | `5000` | — |
 | `onebot12.heartbeat_interval` | number | 否 | `30000` | — |
-| `onebot12.master` | string \| number | 否 | — | 框架 master（platform user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `onebot12.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
 | `onebot12.endpoints` | array&lt;object&gt; | 是 | — | 多账号：每项明确选择 platform/userId，id 为本地账号名称，其余连接字段覆盖实例默认值 |
-| `onebot12.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（platform user id）；覆盖顶层 master |
-| `onebot12.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
 | `onebot12.endpoints[].connection` | string: `"ws"`, `"webhook"`, `"wss"` | 否 | — | — |
 | `onebot12.endpoints[].url` | string | 否 | — | OneBot implementation WebSocket URL (required for connection: ws) |
 | `onebot12.endpoints[].path` | string | 否 | — | HTTP/WS path for webhook or reverse-wss |
@@ -1342,8 +1302,6 @@ outline: [2, 3]
 | `qq.mode` | string: `"websocket"`, `"webhook"`, `"middleware"` | 否 | `"websocket"` | WebSocket gateway (default). webhook/middleware use httpHostToken POST. |
 | `qq.sandbox` | boolean | 否 | `false` | — |
 | `qq.botKind` | string: `"public"`, `"private"` | 否 | `"public"` | 公域/私域：均含 GROUP_AND_C2C_EVENT；频道消息分别为 PUBLIC_GUILD_MESSAGES / GUILD_MESSAGES。未显式配置 intents 时按此展开 |
-| `qq.master` | string \| number | 否 | — | 框架 master（endpoint 管理命令、AI/工具权限）；openid。endpoints[i].master 可逐项覆盖 |
-| `qq.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
 | `qq.intents` | array&lt;string&gt; | 否 | — | WebSocket Identify intents；省略时按 botKind 自动生成（public→含 PUBLIC_GUILD_MESSAGES） |
 | `qq.accessTokenUrl` | string | 否 | — | — |
 | `qq.gatewayUrl` | string | 否 | — | — |
@@ -1353,8 +1311,6 @@ outline: [2, 3]
 | `qq.endpoints[].secret` | string | 是 | — | QQ official bot secret |
 | `qq.endpoints[].mode` | string: `"websocket"`, `"webhook"`, `"middleware"` | 否 | — | — |
 | `qq.endpoints[].sandbox` | boolean | 否 | — | — |
-| `qq.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（openid）；覆盖顶层 master |
-| `qq.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
 | `qq.endpoints[].botKind` | string: `"public"`, `"private"` | 否 | — | 覆盖顶层 botKind（公域/私域），用于按 endpoint 生成 intents |
 | `qq.endpoints[].intents` | array&lt;string&gt; | 否 | — | 覆盖顶层 intents |
 | `qq.endpoints[].accessTokenUrl` | string | 否 | — | — |
@@ -1416,11 +1372,7 @@ outline: [2, 3]
 | --- | --- | --- | --- | --- |
 | `sandbox.streaming` | boolean | 否 | `true` | Publish supported replies while generating. Set false to send only complete replies. |
 | `sandbox.streamingIntervalMs` | number | 否 | `500` | Minimum delay in milliseconds between reply updates; the first update is immediate. |
-| `sandbox.master` | string \| number | 否 | — | 框架 master（sandbox client id (distinct from endpoints[].owner)；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `sandbox.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
 | `sandbox.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `sandbox.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（sandbox client id (distinct from endpoints[].owner)）；覆盖顶层 master |
-| `sandbox.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
 | `sandbox.endpoints[].owner` | string | 否 | — | Sandbox owner user ID |
 | `sandbox.endpoints[].streaming` | boolean | 否 | — | Publish supported replies while generating. Set false to send only complete replies. |
 | `sandbox.endpoints[].streamingIntervalMs` | number | 否 | — | Minimum delay in milliseconds between reply updates; the first update is immediate. |
@@ -1454,11 +1406,7 @@ outline: [2, 3]
 | --- | --- | --- | --- | --- |
 | `satori.connection` | string: `"ws"`, `"webhook"` | 否 | `"ws"` | ws (default) or webhook (httpHostToken POST route) |
 | `satori.heartbeat_interval` | number | 否 | `10000` | WS PING interval in milliseconds |
-| `satori.master` | string \| number | 否 | — | 框架 master（platform user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `satori.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
 | `satori.endpoints` | array&lt;object&gt; | 是 | — | 多账号：每项明确选择 platform/userId，id/baseUrl 必填，其余字段覆盖实例默认值 |
-| `satori.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（platform user id）；覆盖顶层 master |
-| `satori.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
 | `satori.endpoints[].baseUrl` | string | 是 | — | Satori SDK HTTP/WS base URL (e.g. http://127.0.0.1:5140) |
 | `satori.endpoints[].connection` | string: `"ws"`, `"webhook"` | 否 | — | — |
 | `satori.endpoints[].token` | string | 否 | — | Bearer token for API and WS IDENTIFY |
@@ -1497,11 +1445,7 @@ outline: [2, 3]
 | `slack.socketMode` | boolean | 否 | `true` | Prefer Socket Mode (default). Set false for HTTP Events via httpHostToken. |
 | `slack.webhookPath` | string | 否 | `"/slack/events"` | — |
 | `slack.clientPingTimeout` | number | 否 | `15000` | Socket Mode client ping timeout (ms) |
-| `slack.master` | string \| number | 否 | — | 框架 master（Slack user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `slack.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
 | `slack.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `slack.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（Slack user id）；覆盖顶层 master |
-| `slack.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
 | `slack.endpoints[].token` | string | 是 | — | Bot User OAuth Token (xoxb-...) |
 | `slack.endpoints[].signingSecret` | string | 否 | — | Required for HTTP Events API (socketMode: false) |
 | `slack.endpoints[].appToken` | string | 否 | — | App-Level Token (xapp-...) for Socket Mode |
@@ -1552,11 +1496,7 @@ outline: [2, 3]
 | `telegram.webhook.secretToken` | string | 否 | — | Verified via X-Telegram-Bot-Api-Secret-Token. |
 | `telegram.allowedUpdates` | array&lt;string&gt; | 否 | `["message","callback_query"]` | — |
 | `telegram.apiBaseUrl` | string | 否 | `"https://api.telegram.org"` | — |
-| `telegram.master` | string \| number | 否 | — | 框架 master（Telegram user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `telegram.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
 | `telegram.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `telegram.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（Telegram user id）；覆盖顶层 master |
-| `telegram.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
 | `telegram.endpoints[].token` | string | 是 | — | Telegram bot token |
 | `telegram.endpoints[].polling` | boolean | 否 | — | — |
 | `telegram.endpoints[].webhook` | object | 否 | — | — |
@@ -1602,11 +1542,7 @@ outline: [2, 3]
 | `wechat-mp.encryptMode` | string: `"plain"`, `"compatible"`, `"secure"` | 否 | — | Default follows encrypt: 'plain' when encrypt=false, 'compatible' when encrypt=true |
 | `wechat-mp.replyMode` | string: `"passive"`, `"customer_service"` | 否 | `"passive"` | — |
 | `wechat-mp.passiveReplyTimeoutMs` | number | 否 | `4500` | — |
-| `wechat-mp.master` | string \| number | 否 | — | 框架 master（WeChat OpenID；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `wechat-mp.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
 | `wechat-mp.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `wechat-mp.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（WeChat OpenID）；覆盖顶层 master |
-| `wechat-mp.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
 | `wechat-mp.endpoints[].appId` | string | 是 | — | WeChat MP app ID |
 | `wechat-mp.endpoints[].appSecret` | string | 是 | — | WeChat MP app secret |
 | `wechat-mp.endpoints[].token` | string | 是 | — | WeChat MP callback token |
@@ -1646,11 +1582,7 @@ outline: [2, 3]
 | --- | --- | --- | --- | --- |
 | `wecom.webhookPath` | string | 否 | `"/wecom/callback"` | — |
 | `wecom.apiBaseUrl` | string | 否 | `"https://qyapi.weixin.qq.com"` | — |
-| `wecom.master` | string \| number | 否 | — | 框架 master（WeCom userid；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `wecom.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
 | `wecom.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `wecom.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（WeCom userid）；覆盖顶层 master |
-| `wecom.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
 | `wecom.endpoints[].corpId` | string | 是 | — | WeCom corp ID |
 | `wecom.endpoints[].agentSecret` | string | 是 | — | WeCom agent secret |
 | `wecom.endpoints[].token` | string | 是 | — | WeCom callback token |
@@ -1691,11 +1623,7 @@ outline: [2, 3]
 | `weixin-ilink.cdnBaseUrl` | string | 否 | `"https://novac2c.cdn.weixin.qq.com/c2c"` | — |
 | `weixin-ilink.longPollTimeoutMs` | number | 否 | `35000` | — |
 | `weixin-ilink.dataDir` | string | 否 | `"data/weixin-ilink"` | Endpoint state root for credentials, cursors, context tokens, and media |
-| `weixin-ilink.master` | string \| number | 否 | — | 框架 master（Weixin user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `weixin-ilink.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
 | `weixin-ilink.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `weixin-ilink.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（Weixin user id）；覆盖顶层 master |
-| `weixin-ilink.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
 | `weixin-ilink.endpoints[].botToken` | string | 否 | — | iLink bot token; omit to load endpoint state or start QR login |
 | `weixin-ilink.endpoints[].id` | string | 是 | — | Weixin iLink bot name |
 | `weixin-ilink.endpoints[].botAgent` | string | 否 | — | — |
@@ -1727,6 +1655,8 @@ outline: [2, 3]
 ### process-monitor
 
 [`plugins/features/process-monitor/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/features/process-monitor/schema.json)
+
+> 分层配置（ADR 0050 / 0055） — 层级: `global`、`adapter`、`endpoint`、`conversation`；字段仅全局；会话层字段: 仅开关
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
@@ -1778,6 +1708,8 @@ _该 Schema 没有声明字段。_
 
 [`plugins/games/roulette/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/games/roulette/schema.json)
 
+> 分层配置（ADR 0050 / 0055） — 层级: `global`、`adapter`、`endpoint`、`conversation`；字段仅全局；会话层字段: 仅开关
+
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
 | `roulette.chambers` | integer | 否 | `6` | 弹巢数量，其中一发是实弹 |
@@ -1813,6 +1745,8 @@ _该 Schema 没有声明字段。_
 ### activity-feedback
 
 [`plugins/services/activity-feedback/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/services/activity-feedback/schema.json)
+
+> 分层配置（ADR 0050 / 0055） — 层级: `global`、`adapter`、`endpoint`、`conversation`；字段仅全局；会话层字段: 仅开关
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
@@ -2301,6 +2235,8 @@ _该 Schema 没有声明字段。_
 
 [`plugins/utils/60s/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/60s/schema.json)
 
+> 分层配置（ADR 0050 / 0055） — 层级: `global`、`adapter`、`endpoint`、`conversation`；字段仅全局；会话层字段: 仅开关
+
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
 | `60s.apiBase` | string | 否 | `"https://60s.viki.moe"` | 60s API base URL |
@@ -2308,6 +2244,8 @@ _该 Schema 没有声明字段。_
 ### answers
 
 [`plugins/utils/answers/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/answers/schema.json)
+
+> 分层配置（ADR 0050 / 0055） — 层级: `global`、`adapter`、`endpoint`、`conversation`；全部字段可在适配器 / 账号层覆盖；会话层字段: `dailyStable`、`quizTimeoutSeconds`、`enableDrivingQuiz`；群内自助: `quizTimeoutSeconds`、`enableDrivingQuiz`
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
@@ -2319,6 +2257,8 @@ _该 Schema 没有声明字段。_
 ### bilibili
 
 [`plugins/utils/bilibili/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/bilibili/schema.json)
+
+> 分层配置（ADR 0050 / 0055） — 层级: `global`、`adapter`、`endpoint`、`conversation`；字段仅全局；会话层字段: 仅开关
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
@@ -2335,6 +2275,8 @@ _该 Schema 没有声明字段。_
 ### calendar
 
 [`plugins/utils/calendar/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/calendar/schema.json)
+
+> 分层配置（ADR 0050 / 0055） — 层级: `global`、`adapter`、`endpoint`、`conversation`；字段仅全局；会话层字段: 仅开关
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
@@ -2375,6 +2317,8 @@ _该 Schema 没有声明字段。_
 
 [`plugins/utils/content-moderation/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/content-moderation/schema.json)
 
+> 分层配置（ADR 0050 / 0055） — 层级: `global`、`adapter`、`endpoint`、`conversation`；字段仅全局；会话层字段: 仅开关
+
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
 | `content-moderation.groupModeration` | array&lt;object&gt; | 否 | `[]` | 自动广告/辱骂审核的精确范围；未配置时关闭。需要 AI、原子持久状态和适配器群管支持。禁言 / 踢人交给 Agent 群规（ADR 0039），名单内的群会生成待确认的默认规则，确认前只提醒 / 警告。 |
@@ -2386,10 +2330,9 @@ _该 Schema 没有声明字段。_
 | `content-moderation.onError` | string: `"open"`, `"closed"` | 否 | `"open"` | 审查源失败时的全局默认策略：open=视为通过，closed=视为 critical |
 | `content-moderation.maskChar` | string | 否 | `"*"` | 文本打码字符 |
 | `content-moderation.replyTemplate` | string | 否 | — | reply 动作时的提示文案；省略时按本次消息语言选择默认文案，显式文本保持原样 |
-| `content-moderation.masters` | array&lt;string&gt; | 否 | `[]` | 额外视为 master 的 userId（兜底，与 endpoint master 合并） |
 | `content-moderation.inbound` | object | 否 | — | — |
 | `content-moderation.inbound.enabled` | boolean | 否 | `true` | — |
-| `content-moderation.inbound.bypassMasters` | boolean | 否 | `true` | master 跳过入站审查 |
+| `content-moderation.inbound.bypass` | array&lt;string&gt; | 否 | `["owner","platform:admin"]` | 满足任一 permit 表达式的发送者跳过入站审查（ADR 0056 §5 内置 DSL，与命令 / 工具同一评估器）。内容审核是平台功能，默认 zhin owner 或平台群主 / 管理员（platform:admin）；[] 表示都审 |
 | `content-moderation.inbound.whitelist` | object | 否 | — | — |
 | `content-moderation.inbound.whitelist.userIds` | array&lt;string&gt; | 否 | `[]` | — |
 | `content-moderation.inbound.whitelist.conversationIds` | array&lt;string&gt; | 否 | `[]` | — |
@@ -2421,6 +2364,8 @@ _该 Schema 没有声明字段。_
 
 [`plugins/utils/earthquake/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/earthquake/schema.json)
 
+> 分层配置（ADR 0050 / 0055） — 层级: `global`、`adapter`、`endpoint`、`conversation`；字段仅全局；会话层字段: 仅开关
+
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
 | `earthquake.sources` | array&lt;string: `"cenc"`, `"usgs"`&gt; | 否 | `["cenc","usgs"]` | 启用的数据源及优先顺序；合并同一地震时排在前面的数据源提供地点文字，某个数据源失败时由其余数据源兜底 |
@@ -2444,6 +2389,8 @@ _该 Schema 没有声明字段。_
 ### group-suite
 
 [`plugins/utils/group-suite/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/group-suite/schema.json)
+
+> 分层配置（ADR 0050 / 0055） — 层级: `global`、`adapter`、`endpoint`、`conversation`；仅全局（其余字段可在适配器 / 账号层覆盖）: `keywordReply`、`teachAllowRegex`、`welcomeConversations`、`ephemeralKeywords`；会话层字段: `welcomeMessage`、`basePointsMin`、`basePointsMax`、`streakBonus`、`streakCap`、`rankSize`、`teachMaxPerGroup`、`teachCooldownMs`、`teachPageSize`；群内自助: `welcomeMessage`、`rankSize`、`teachCooldownMs`、`teachPageSize`
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
@@ -2474,6 +2421,8 @@ _该 Schema 没有声明字段。_
 
 [`plugins/utils/ledger/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/ledger/schema.json)
 
+> 分层配置（ADR 0050 / 0055） — 层级: `global`、`adapter`、`endpoint`、`conversation`；仅全局（其余字段可在适配器 / 账号层覆盖）: `timezone`、`reportTime`；会话层字段: `reportWhenEmpty`
+
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
 | `ledger.timezone` | string | 否 | `"Asia/Shanghai"` | 计算今日、本周（周一开始）、本月与日报日期所用的 IANA 时区 |
@@ -2489,6 +2438,8 @@ _该 Schema 没有声明字段。_
 ### lottery
 
 [`plugins/utils/lottery/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/lottery/schema.json)
+
+> 分层配置（ADR 0050 / 0055） — 层级: `global`、`adapter`、`endpoint`、`conversation`；字段仅全局；会话层字段: 仅开关
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
@@ -2524,6 +2475,8 @@ _该 Schema 没有声明字段。_
 
 [`plugins/utils/nettools/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/nettools/schema.json)
 
+> 分层配置（ADR 0050 / 0055） — 层级: `global`、`adapter`、`endpoint`、`conversation`；字段仅全局；会话层字段: 仅开关
+
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
 | `nettools.cooldownSeconds` | integer | 否 | `10` | Per-user cooldown in seconds, shared by all nettools commands and tools (0 disables) |
@@ -2545,6 +2498,8 @@ _该 Schema 没有声明字段。_
 
 [`plugins/utils/reminder/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/reminder/schema.json)
 
+> 分层配置（ADR 0050 / 0055） — 层级: `global`、`adapter`、`endpoint`、`conversation`；字段仅全局；会话层字段: 仅开关
+
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
 | `reminder.timezone` | string | 否 | `"UTC"` | 解释 create 自然时间并显示提醒的 IANA 时区；ISO 绝对时间仍须显式 offset |
@@ -2558,6 +2513,8 @@ _该 Schema 没有声明字段。_
 
 [`plugins/utils/repeater/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/repeater/schema.json)
 
+> 分层配置（ADR 0050 / 0055） — 层级: `global`、`adapter`、`endpoint`、`conversation`；全部字段可在适配器 / 账号层覆盖；会话层字段: `threshold`、`cooldown`；群内自助: `threshold`
+
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
 | `repeater.threshold` | number | 否 | `3` | 触发复读的最少人数 |
@@ -2567,6 +2524,8 @@ _该 Schema 没有声明字段。_
 ### rss
 
 [`plugins/utils/rss/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/rss/schema.json)
+
+> 分层配置（ADR 0050 / 0055） — 层级: `global`、`adapter`、`endpoint`、`conversation`；字段仅全局；会话层字段: 仅开关
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |

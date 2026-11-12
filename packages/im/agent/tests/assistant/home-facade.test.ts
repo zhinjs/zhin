@@ -8,7 +8,7 @@ const policy = {
   allowedServiceDomains: ['light', 'climate', 'scene', 'cover', 'script'],
 };
 
-const masterCtx = { subjectId: '100', roles: ['master'] } as const;
+const masterCtx = { subjectId: '100', roles: ['owner'] } as const;
 const otherCtx = { subjectId: '999', roles: ['user'] } as const;
 
 function makeFacade(aliases: Record<string, string>, fetchMock = vi.fn()) {
@@ -29,7 +29,7 @@ describe('HomeFacade policy', () => {
     expect(r.ok).toBe(false);
     if (!r.ok) {
       expect(r.kind).toBe('deny');
-      expect(r.message).toContain('master');
+      expect(r.message).toContain('owner');
     }
   });
 

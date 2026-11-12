@@ -1,6 +1,6 @@
 import { defineMiddleware } from 'zhin.js/middleware';
 import type { Message } from '@zhin.js/core/runtime';
-import { resolveGroupSuiteConfig, type GroupSuiteConfig } from '../../src/config.js';
+import { groupSuiteConfigFor, type GroupSuiteConfig } from '../../src/config.js';
 import { tryTeachReply } from '../../src/teach-lib.js';
 import { resolveGroupSuiteRuntime } from '../../src/runtime-state.js';
 
@@ -11,7 +11,7 @@ import { resolveGroupSuiteRuntime } from '../../src/runtime-state.js';
 export default defineMiddleware<Message, GroupSuiteConfig>({
   target: 'inbound',
   async handle(context, next) {
-    const config = resolveGroupSuiteConfig(context.config);
+    const config = groupSuiteConfigFor(context, context.input);
     const reply = await tryTeachReply(context.input, config, resolveGroupSuiteRuntime(context));
     if (reply) {
       await context.input.$reply(reply);

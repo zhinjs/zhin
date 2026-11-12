@@ -14,7 +14,7 @@ import {
   type EndpointSendRequest,
   type PendingRpcRequest,
 } from 'zhin.js/adapter';
-import type { HttpHost, WsConnection } from '@zhin.js/host-http';
+import { verifyProtocolAccessToken, type HttpHost, type WsConnection } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
 import { createOneBot12EndpointManagement } from './endpoint-management.js';
@@ -36,8 +36,7 @@ import {
 import { receiveOneBot12SideEvent } from './side-event-dispatch.js';
 import { createOneBot12ContentPort } from './content-port.js';
 import { callOnebot12Client, readOnebot12Response, onebot12ClientOptions, forwardOnebot12ClientEvents, Onebot12Client } from './client.js';
-import { verifyOneBotAccessToken } from './wss-auth.js';
-import { type OneBot12WsSocket } from './ws-types.js';
+import { socketOfConnection, type OneBot12WsSocket } from './ws-types.js';
 import { createOneBot12Rpc, type OneBot12Rpc } from './ws-transport.js';
 
 export interface OneBot12WssEndpointOptions {
@@ -102,15 +101,16 @@ export class OneBot12WssEndpoint extends Onebot12Client implements Endpoint {
   async #start(): Promise<void> {
     if (this.#started) return;
     if (!this.#options.config.access_token) {
-      // wss 模式未配 access_token 时任何连接都会被放行（verifyOneBotAccessToken 直接 return true）
+      // 未配 access_token 时只接受本机回环连接（verifyProtocolAccessToken）。
       this.#logger.warn(formatCompact({
         endpoint: this.#options.config.id,
         mode: 'wss',
         ok: false,
-        error: 'missing access_token',
+        error: 'missing access_token: only loopback peers are accepted',
       }));
     }
-    const handle = this.#options.http.ws(this.#options.config.path);
+    // The peer authenticates with this endpoint's own access_token, not a Console credential.
+    const handle = this.#options.http.ws(this.#options.config.path, { auth: 'protocol' });
     this.#wsRelease = handle.onConnection((connection) => {
       this.#connectionTask = this.#connectionTask
         .then(() => this.#acceptConnection(connection))
@@ -221,11 +221,11 @@ export class OneBot12WssEndpoint extends Onebot12Client implements Endpoint {
   }
 
   async #acceptConnection(connection: WsConnection): Promise<void> {
-    if (!verifyOneBotAccessToken(this.#options.config.access_token, connection.request)) {
-      connection.socket.close(4003, 'Unauthorized');
+    if (!verifyProtocolAccessToken(this.#options.config.access_token, connection)) {
+      connection.close(4003, 'Unauthorized');
       return;
     }
-    const socket = connection.socket as unknown as OneBot12WsSocket;
+    const socket = socketOfConnection(connection);
     await this.#connectionLifecycle.stop();
     this.#rpc.disconnect('连接已替换');
     await this.#connectionLifecycle.start(async (lifecycleHandle) => {
@@ -263,7 +263,7 @@ export class OneBot12WssEndpoint extends Onebot12Client implements Endpoint {
     this.#logger.debug(formatCompact({
       endpoint: this.#options.config.id,
       mode: 'wss',
-      peer: connection.request.socket.remoteAddress,
+      peer: connection.remoteAddress,
     }));
   }
 

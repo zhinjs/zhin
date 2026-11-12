@@ -158,7 +158,7 @@ export const newCommand = new Command('new')
       logger.log('📝 下一步操作：');
       logger.log('  1. 在 app 主配置的 plugins 映射中添加：');
       logger.log(`     ${name}: "${packageName}"`);
-      logger.log('  2. pnpm dev  # 即 zhin runtime start（约定式插件运行时）');
+      logger.log('  2. pnpm dev  # 即 zhin start --foreground（网关 + 实例，热重载）');
       logger.log('');
       logger.log('📦 发布到 npm（在项目根）：');
       logger.log(`  pnpm exec zhin pub ${name}`);
@@ -509,7 +509,7 @@ disable_plugins: []
 ${pluginName}: {}
 \`\`\`
 
-然后 \`pnpm dev\`（即 \`zhin runtime start\`）启动。`;
+然后 \`pnpm dev\`（即 \`zhin start --foreground\`）启动。`;
   const readmeUse = standaloneUse;
 
   const readmeContent = `# ${packageName}

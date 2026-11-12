@@ -56,17 +56,17 @@ Console 持续显示离线或重连中，页面数据不再更新。
 
 ### 原因
 
-- Console Token 与当前 generation 的 `http.token` 不一致。
-- 当前是只读 Demo 会话，或 Token 没有该操作需要的 scope。
+- 会话已过期或被吊销（改密码、禁用用户都会吊销全部会话），或 API 令牌已被吊销。
+- 账号的角色没有该操作需要的权限（403 响应会写明缺少哪个权限）；或初始化完成后仍在用 `http.token`，它只在创建第一个所有者之前有效。
 
 ### 操作
 
-- 重新从部署环境读取 `HTTP_TOKEN`，不要从浏览器历史或旧配置复制。
-- 生产环境修改 Token 后发布新 generation，并重新登录。
+- 重新登录；自动化换一个新签发的 API 令牌，或让所有者在「访问控制」里绑定合适的角色。
+- 所有者无法登录时，停下 Host，用 `zhin console user passwd <用户名>` 或 `zhin console user enable <用户名>` 离线恢复。
 
 ### 验证
 
-- 使用 `curl -H "Authorization: Bearer $HTTP_TOKEN" http://127.0.0.1:8086/api/system/stats` 验证同一 Token。
+- 使用 `curl -H "Authorization: Bearer $ZHIN_CONSOLE_TOKEN" http://127.0.0.1:8086/api/auth/me` 查看凭据对应的主体与权限。
 
 </section>
 
@@ -85,7 +85,7 @@ Console 持续显示离线或重连中，页面数据不再更新。
 
 ### 操作
 
-- 在 Console Endpoint 详情查看最近错误，再对照[自动生成配置字段参考](/configuration/generated)。
+- 在 Console 账号页的「接入」「概览」页签查看连接状态与最近错误，再对照[自动生成配置字段参考](/configuration/generated)。
 - 按平台文档重新验证凭据、回调地址与网络出口。
 
 ### 验证
@@ -138,7 +138,7 @@ Console 持续显示离线或重连中，页面数据不再更新。
 
 ### 验证
 
-- `npx zhin doctor` 应通过，随后 `npx zhin runtime start` 不再出现配置校验错误。
+- `npx zhin doctor` 应通过，随后 `npx zhin start --foreground` 不再出现配置校验错误。
 
 </section>
 
@@ -187,7 +187,7 @@ Console 持续显示离线或重连中，页面数据不再更新。
 
 ### 验证
 
-- 重新 `pnpm install` 后，每个 zhin 包只有一个实际解析路径，`zhin runtime start --once` 输出 `"started": true`。
+- 重新 `pnpm install` 后，每个 zhin 包只有一个实际解析路径，`zhin start --once` 输出 `"started": true`。
 
 </section>
 
@@ -197,7 +197,7 @@ Console 持续显示离线或重连中，页面数据不再更新。
 
 ### 症状
 
-Agent 工作台无法开始回合，提示 Provider、模型或 API Key 不可用。
+「试聊一下」里的 Agent 会话无法开始回合，提示 Provider、模型或 API Key 不可用。
 
 ### 原因
 
@@ -230,7 +230,7 @@ Agent 回合停在工具步骤，显示待审批、拒绝或取消。
 
 ### 操作
 
-- 在 Agent 工作台检查 cwd、安全策略与审批详情，只批准明确理解的副作用。
+- 在「试聊一下」的 Agent 会话与「机器人状态」检查 cwd、安全策略与审批详情，只批准明确理解的副作用。
 - 取消后的任务创建新回合，不要重放可能已经产生副作用的工具调用。
 
 ### 验证

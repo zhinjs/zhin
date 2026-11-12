@@ -6,7 +6,6 @@
  * verification, replay protection, and Bearer authentication.
  */
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
-import type { ServerResponse } from 'node:http';
 import {
   BUDGET_KEYS,
   TRUST_LEVELS,
@@ -17,7 +16,7 @@ import {
   type RemoteMailTransport,
   type TrustLevel,
 } from '@zhin.js/harness';
-import { HttpBodyError, readJsonBody, type HttpRouteHost } from '@zhin.js/host-http-contract';
+import { HttpBodyError, jsonResponse, readJsonBody, type HttpRouteHost } from '@zhin.js/host-http-contract';
 import type { AgentHostPort } from '@zhin.js/agent/runtime';
 import { verifyA2aBearer } from './auth.js';
 
@@ -553,10 +552,9 @@ export function installRuntimeA2aMailbox(
     : DEFAULT_MAX_BODY_BYTES;
   const bearerToken = options.fallbackToken || secret;
 
-  const unregister = options.http.route('POST', routePath, async (request, response) => {
+  const unregister = options.http.route('POST', routePath, async (request) => {
     if (bearerToken && !verifyA2aBearer(request, bearerToken)) {
-      writeJson(response, 401, { error: 'Unauthorized - Bearer token required' });
-      return;
+      return jsonResponse(401, { error: 'Unauthorized - Bearer token required' });
     }
     let rawBody: unknown;
     try {
@@ -564,17 +562,14 @@ export function installRuntimeA2aMailbox(
       rawBody = await readJsonBody(request, { limit: maxBodyBytes });
     } catch (error) {
       if (!(error instanceof HttpBodyError)) throw error;
-      writeJson(response, error.statusCode, { error: error.message });
-      return;
+      return jsonResponse(error.statusCode, { error: error.message });
     }
     if (rawBody === undefined) {
-      writeJson(response, 400, { error: 'Invalid JSON body' });
-      return;
+      return jsonResponse(400, { error: 'Invalid JSON body' });
     }
-    const signatureHeader = request.headers['x-zhin-mailbox-signature'];
-    const headerSignature = Array.isArray(signatureHeader) ? signatureHeader[0] : signatureHeader;
+    const headerSignature = request.headers.get('x-zhin-mailbox-signature') ?? undefined;
     const result = await transport.receiveEnvelope(rawBody, { headerSignature });
-    writeJson(response, result.httpStatus, result.body);
+    return jsonResponse(result.httpStatus, result.body);
   }, { summary: 'A2A Remote Mailbox transport (ADR 0048 §3.6)', tags: ['a2a', 'mailbox'] });
 
   return {
@@ -585,14 +580,6 @@ export function installRuntimeA2aMailbox(
   };
 }
 
-function writeJson(response: ServerResponse, status: number, body: unknown): void {
-  const payload = JSON.stringify(body);
-  response.writeHead(status, {
-    'content-type': 'application/json; charset=utf-8',
-    'content-length': String(Buffer.byteLength(payload)),
-  });
-  response.end(payload);
-}
 
 function normalizeMailboxPath(path: string): string {
   const trimmed = path.trim();

@@ -17,7 +17,7 @@ This is the complete reference for `zhin.config.yml`. When configuring for the f
 | Connect a database | [database](#database) |
 | Configure a plugin or adapter, add platform credentials | [plugin and plugins](#plugin-and-plugins) |
 | Log one adapter into several accounts | [endpoints array](#endpoints-array-one-instance-with-multiple-accounts) |
-| Set masters or the command prefix | [Adapter instances](#adapter-instances-master-trusted-commandprefix) |
+| Set the command prefix | [Adapter instances](#adapter-instances-commandprefix) |
 | Configure AI models | [ai](#ai), or the [AI overview](../ai/index.md) |
 | Reference secrets from `.env` | [Environment variable expansion](#environment-variable-expansion) |
 | Apply configuration changes selectively | [Applying configuration changes](#applying-configuration-changes) |
@@ -25,7 +25,7 @@ This is the complete reference for `zhin.config.yml`. When configuring for the f
 
 ## Where the config file lives
 
-At startup, `zhin runtime start` checks these project-root candidates in order. If more than one exists, startup fails instead of guessing:
+At startup (`zhin start`), the instance checks these project-root candidates in order. If more than one exists, startup fails instead of guessing:
 
 1. `config.yml`
 2. `config.yaml`
@@ -67,17 +67,17 @@ flowchart LR
 
 Configuration passes JSON Schema validation, and **only the keys listed below are allowed at the top level**. A misspelled key produces `Invalid Plugin config in zhin.config.yml` at startup.
 
-Host sections are consumed by CLI assembly. Each plugin receives only its own same-named business block.
+Host sections are consumed by the instance composition root (`zhin.js/instance`) and the management gateway. Each plugin receives only its own same-named business block.
 
 ## Applying configuration changes
 
-`zhin runtime start` **watches changes only when `--watch` is explicit**. Without it, editing a file does not apply it automatically. Development scripts that need watching should select their scopes:
+`zhin start` **watches changes only when `--watch` is explicit**. Without it, editing a file does not apply it automatically. Development scripts that need watching should select their scopes:
 
 ```bash
-npx zhin runtime start --watch source config  # Source and configuration
-npx zhin runtime start --watch config         # Configuration only
-npx zhin runtime start --watch source         # Source only
-npx zhin runtime start --mode production      # Neither
+npx zhin start --foreground --watch source config  # Source and configuration
+npx zhin start --foreground --watch config         # Configuration only
+npx zhin start --foreground --watch source         # Source only
+npx zhin start --foreground --mode production      # Neither
 ```
 
 `--no-watch` remains a compatibility alias for watching neither and cannot be combined with `--watch`. Source watching does not enable configuration watching; a source reload does not pull in configuration that is still pending a restart.
@@ -106,7 +106,7 @@ With the root Command Feature installed, a Bot owner can send `config` (Chinese 
 
 Hints use the account's actual command prefix and namespace. AI Agent is not required.
 
-**Who can use it**: only the `master` of any configured account (endpoint) on the same adapter that received the private message (the account-level `master`, otherwise the inherited plugin-level `master`), so owner identity always stays on the same adapter/platform. Masters of other adapters (including another plugin instance of the same adapter package) cannot use it. `ai.trigger.masters` has no platform dimension and is not accepted for chat configuration in v1. Groups, channels and forged metadata never reach the save path.
+**Who can use it**: only someone holding the chat role `owner` on the same adapter that received the private message — globally, at the adapter level or on any account of that adapter ([Chat roles](../concepts/chat-roles.md)); identities are registered per adapter, so owners of other adapters (including another plugin instance of the same adapter package) cannot use it. Groups, channels and forged metadata never reach the save path.
 
 **Entry is per adapter; field scope is project-wide**: authorization (entry) only considers masters on the same Adapter instance that received the message. Once authorized, the manageable field scope is **every chat-safe leaf in the project** plus the Host allowlist `HOST_CONFIG_PATCH_PATHS`; it is not limited to the authorizing adapter's own plugin, so any legitimate owner can manage chat-safe fields globally (including other plugins' fields). If an owner should not change other plugins, do not grant them master, or manage those settings with the CLI/Console.
 
@@ -114,7 +114,7 @@ Hints use the account's actual command prefix and namespace. AI Agent is not req
 
 - Host config is limited to the same allowlist as ordinary Console pages (`HOST_CONFIG_PATCH_PATHS`, currently fields under `ai.trigger.ambient`). Use the CLI or Console for `locale`, `http`, `database` and other Host settings.
 - Plugin config must be proven safe by its schema. Secrets, tokens, passwords, missing schemas and uncertain scopes are rejected.
-- Permission fields such as owners, trust lists, approvals and tool gates (`master`, `trusted`, `endpoints[*].master`, `ai.trigger.masters`, `toolHardGate.*`) cannot be read or changed in chat. Matching is by contains/prefix/suffix, so compound names are refused too, e.g. `adminIds`, `ownerId`, `masterId`, `trustedUsers`, `superUsers`, `whitelist`/`allowlist`/`blacklist` and `bypassMasters` (such as content-moderation's `inbound.whitelist.userIds` and `inbound.bypassMasters`). The rule is deliberately conservative: ordinary fields whose names contain these words (e.g. `masterVolume`) must be changed with the CLI.
+- Permission fields such as owners, trust lists, approvals and tool gates (`master`, `trusted`, `roles`, `endpoints[*].roles`, `toolHardGate.*`; the people lists themselves moved into the database, see [Upgrading to chat roles](../migrations/chat-roles.md)) cannot be read or changed in chat. Matching is by contains/prefix/suffix, so compound names are refused too, e.g. `adminIds`, `ownerId`, `masterId`, `trustedUsers`, `superUsers`, `whitelist`/`allowlist`/`blacklist` and `bypass` (such as content-moderation's `inbound.whitelist.userIds` and `inbound.bypass`). The rule is deliberately conservative: ordinary fields whose names contain these words (e.g. `masterVolume`) must be changed with the CLI.
 - `endpoints[*].id` / `endpoints[*].name` bind account-level masters and trust lists, so remapping them is an indirect permission change and is refused in chat; `set`/`unset` only target fields listed by `config fields <root>`.
 - A `set` value cannot contain a `${…}` or `env://` environment reference (regardless of whether the name looks like a secret), so a later read or echo cannot leak an environment value; existing references are not affected by other operations.
 - Chat reads and writes a **single leaf field** (a scalar or scalar array) only; whole objects cannot be overwritten or removed, and required fields cannot be unset. `configVersion`, `plugins`, `disable_plugins`, root `plugin` and undeclared instances cannot be changed either.
@@ -167,7 +167,7 @@ Dotenv loads `.env` then `.env.<environment>`. `--environment` selects the name 
 http:
   port: 8086                 # Runtime fallback when no config exists
   host: 127.0.0.1            # Default 127.0.0.1
-  token: ${HTTP_TOKEN}       # API Bearer token
+  token: ${HTTP_TOKEN}       # bootstrap token: only creates the first Console owner, refused afterwards
   corsOrigins:               # Allowed cross-origin sources
     - "https://console.zhin.dev"
   base: /api                 # API mount path
@@ -189,7 +189,7 @@ npx zhin config check
 `setup` writes the non-secret structure to `zhin.config.yml` and the actual connection values to the
 project-root `.env`. Runtime reads `.env` first, then overrides matching keys from the selected
 `.env.<environment>`. For example, use
-`zhin runtime start --mode production` to load `.env.production` by default; an explicit
+`zhin start --mode production` to load `.env.production` by default; an explicit
 `--environment <name>` selects a different environment overlay.
 
 ### SQLite
@@ -299,15 +299,23 @@ The remaining sub-key is `queue` (Schedule execution concurrency/retry/timeout).
 mcp:
   enabled: true
   path: /mcp
-  token: ${HTTP_TOKEN}                  # Falls back to http.token if unset
+  token: ${MCP_TOKEN}                   # MCP protocol token; does not fall back to http.token
   allowUnauthenticatedLocalhost: false  # Recommend false for production
 
 a2a:
   enabled: true
   path: /a2a
+  token: ${A2A_TOKEN}                   # A2A protocol token; does not fall back to http.token
 ```
 
 Both sections are mounted on the HTTP Host and enabled as needed; when not configured, the corresponding SDK is not loaded.
+
+**Authentication**: the Bearer accepts two kinds of credential:
+
+- the protocol token `mcp.token` / `a2a.token`;
+- a Console API token issued after the account (or one of its roles) has been granted the **global** permission `mcp.access` / `a2a.access`; see [Access control · API tokens](../console/access-control.md#api-tokens). A token never holds more than the account that issued it, and stops working as soon as the account is disabled or the token revoked.
+
+`http.token` is the bootstrap token: it is valid only until the first owner exists (MCP / A2A accept it until then too) and is refused everywhere afterwards, so it is not a protocol credential. Outside production, A2A without `a2a.token` accepts loopback requests only, and MCP accepts local requests by default (turn that off with `allowUnauthenticatedLocalhost: false`). Production always requires a Bearer.
 
 Cross-process Agent collaboration travels over `a2a.mailbox` (ADR 0048): each Mail is signed together with its Authority and budget grant, so a remote peer cannot widen authority or exceed the granted budget.
 
@@ -317,7 +325,7 @@ a2a:
   mailbox:
     enabled: true
     path: /a2a/mailbox                  # inbound route, defaults to /a2a/mailbox
-    secret: ${A2A_MAILBOX_SECRET}       # signing secret; required in production (falls back to a2a.token / http.token)
+    secret: ${A2A_MAILBOX_SECRET}       # signing secret; required in production
     peers:
       - actor: remote-reviewer          # the name local Agents list under contacts
         url: https://agents.example.com/a2a/mailbox
@@ -445,15 +453,15 @@ sandbox:
 
 `zhin install` writes the package reference under `plugins.<instanceKey>` and business settings under the top-level alias. It no longer writes manifest mounts.
 
-### Adapter Instances: master / trusted / commandPrefix
+### Adapter Instances: commandPrefix
 
-Platform adapter plugin instance configurations support three common keys:
+Platform adapter plugin instance configurations support a common key:
 
 | Key | Location | Description |
 | --- | --- | --- |
-| `master` | Instance top-level | Stable Endpoint Owner ID used for authorization and explicit `/approve` management commands |
-| `trusted` | Instance top-level / per-endpoint | Trusted user ID list; array or whitespace/comma-separated string |
 | `commandPrefix` | Instance top-level / per-endpoint | Command prefix, default `''`; per-endpoint values override top-level |
+
+The owner and trusted users are no longer configured here: manage them in the **Roles** tab of the Console object pages or with `role grant` in chat; old `master` / `trusted` fields move into the database on the first start, see [Upgrading to chat roles](../migrations/chat-roles.md). Platform standing is not mapped into zhin roles: `roles` (mapping rules) was removed and stops startup (see [Upgrading to chat roles](../migrations/chat-roles.md#mappings)).
 
 ### endpoints Array: One Instance with Multiple Accounts
 
@@ -464,7 +472,6 @@ configVersion: 2
 plugins:
   icqq: "@zhin.js/adapter-icqq"
 icqq:
-  master: "${ICQQ_MASTER}" # Top-level shared: applies to all endpoints
   endpoints:
     # Per-entry: id is required, other fields merge with top-level (per-entry takes priority)
     - id: "${ICQQ_ACCOUNT_1}"
@@ -523,7 +530,7 @@ plugin:
 plugins: {}
 ```
 
-After starting, use the `zhin setup` wizard to progressively add database / adapters / AI (see [CLI Reference](../cli/index.md)); for how to run, see [zhin runtime start in Detail](../cli/runtime.md).
+After starting, use the `zhin setup` wizard to progressively add database / adapters / AI (see [CLI Reference](../cli/index.md)); for how to run, see [zhin start in Detail](../cli/runtime.md).
 
 ## Account self profile
 
@@ -535,7 +542,6 @@ internal task agents keep their role identities.
 
 ```yaml
 icqq:
-  master: "your QQ ID"
   nickname: Zhin
   profile:
     gender: unknown

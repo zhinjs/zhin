@@ -6,7 +6,7 @@ export default defineAgentTool<Record<string, never>>({
   description: '获取当前 QQ 账号的群列表',
   inputSchema: z.object({}),
   requiresApproval: 'on-risk',
-  permissions: ['role(master,admin,trusted,owner)'],
+  permissions: ['trusted'],
   async execute(_input, context) {
     const client = context.$client;
     const groups = Array.from(client.gl.values()).map((group) => ({

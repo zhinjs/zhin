@@ -1,3 +1,4 @@
+import { wsConnectionFromMock } from '../../test-utils/http.js';
 import { createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
@@ -102,7 +103,7 @@ describe('onebot11 transport fault ownership', () => {
     const http = { ws: () => ({ onConnection(fn: typeof accept) { accept = fn; return vi.fn(); } }) };
     const bot = await createEndpointHarness(() => new OneBot11WssEndpoint({ id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'onebot11'), http: http as never,
       config: resolveOneBot11Config({ connection: 'wss', id: 'reverse', path: '/test', access_token: 'test', heartbeat_interval: 10 }) as never }), { name: 'onebot11', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway() });
-    const connect = (ws: ReturnType<typeof socket>) => accept({ socket: ws, request: { headers: { authorization: 'Bearer test' }, url: '/', socket: { remoteAddress: '127.0.0.1' } } });
+    const connect = (ws: ReturnType<typeof socket>) => accept(wsConnectionFromMock({ socket: ws, request: { headers: { authorization: 'Bearer test' }, url: '/', socket: { remoteAddress: '127.0.0.1' } } }));
     const first = socket(), second = socket();
     await bot.start(); connect(first); await vi.advanceTimersByTimeAsync(0);
     expect(bot.index.describe()[0]?.transportState).toBe('open');
@@ -151,7 +152,7 @@ it('serializes concurrent reverse replacements and refuses connections queued du
   const http = { ws: () => ({ onConnection(fn: typeof accept) { accept = fn; return vi.fn(); } }) };
   const bot = await createEndpointHarness(() => new OneBot11WssEndpoint({ id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'onebot11'), http: http as never,
     config: resolveOneBot11Config({ connection: 'wss', id: 'reverse', path: '/test', access_token: 'test', heartbeat_interval: 10 }) as never }), { name: 'onebot11', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway() });
-  const connect = (ws: ReturnType<typeof socket>) => accept({ socket: ws, request: { headers: { authorization: 'Bearer test' }, url: '/', socket: { remoteAddress: '127.0.0.1' } } });
+  const connect = (ws: ReturnType<typeof socket>) => accept(wsConnectionFromMock({ socket: ws, request: { headers: { authorization: 'Bearer test' }, url: '/', socket: { remoteAddress: '127.0.0.1' } } }));
   const first = socket(), second = socket(), third = socket();
   await bot.start(); connect(first); connect(second); connect(third); await vi.advanceTimersByTimeAsync(0);
   expect(first.close).toHaveBeenCalledOnce(); expect(second.close).toHaveBeenCalledOnce(); expect(third.close).not.toHaveBeenCalled();

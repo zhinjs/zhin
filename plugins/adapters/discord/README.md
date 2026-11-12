@@ -32,7 +32,7 @@ pnpm add @zhin.js/adapter-discord discord.js
 
 ### 平台权限（platform permit）
 
-- sender role 已恢复：Gateway 入站 `metadata.role` / `metadata.permissions`（来自 member 权限位与 guild owner 判定，见 `src/gateway.ts` `resolveSenderRole`）。
+- 成员身份：服务器频道消息上报 `sender.platform`（见下文「成员身份」）；`metadata.role` / `metadata.permissions` 仅为兼容保留。
 - `plugin.ts` 在 generation setup 注册 checker，并在 dispose 注销；Plugin Runtime CapabilityIngress 与 ToolSystem 统一经 Core `canAccessTool()` 消费 `permissions`。
 
 ## 前置条件
@@ -97,7 +97,7 @@ discord:
 - 在账号库保存、修改、启动、停止、替换或删除该 Adapter 的账号；新增仅保存，不创建 SDK Client，需手动启动；
 - 如果适配器要求登录，页面会显示 LoginAssist 的扫码 / 滑块 / 设备确认待办；
 
-读取需要 `discord:read`，写操作需要 `discord:write`；管理员 full token 不受限。页面里的「添加 endpoint」等价于原来的 `discord endpoint add`。
+读取需要 `discord:read`（`read` 级别，内置角色 `viewer` 及以上都有）；增删改账号等写操作需要 `discord:write`（`operate` 级别，`operator` 及以上都有，绑定到本适配器的角色也算），首次迁移还需管理员身份；全局所有者不受限，见[插件权限的级别](https://zhin.js.org/console/#插件权限的级别)。页面里的「添加 endpoint」等价于原来的 `discord endpoint add`。
 
 首次修改启动配置里的既有账号前，管理员必须核对清单并确认一次迁移。原 canonical 身份与历史保留，完整账号配置加密进入 Host 数据库；此后账号管理只写数据库，不修改启动文件或 `.env`，不重启进程。没有持久化账号端口的环境可使用静态配置连接，动态写操作明确不可用。
 
@@ -152,3 +152,7 @@ Gateway 和 Interactions 模式均通过资料端口暴露当前认证账号的�
 支持修改昵称和头像；其他资料字段没有对应适配器操作时不声明可写。平台响应提供有效头像资料时返回其 CDN URL；若仅确认修改成功，则不返回未确认的资料。图片字节只在请求内部使用，不返回模型；Agent 解析图片沿用现有本地图片和网络权限。
 
 `nickname` / `profile` 配置仅补足平台缺失字段，Endpoint 配置优先于适配器默认值。接口依据 [discord.js ClientUser](https://discord.js.org/docs/packages/discord.js/main/ClientUser:Class)。
+
+## 成员身份
+
+服务器频道消息上报 `sender.platform`：服务器所有者 → `owner`；拥有 `Administrator` 或 `ModerateMembers` → `admin`；其余 → `member`。`roles` 为成员持有的身份组（不含 `@everyone`，Gateway 消息带名称、斜杠命令只有 id）；`permissions` 为成员的服务器权限位，按 snake_case 命名（`ban_members`、`manage_roles` …）。私信不上报。能力画像：`channel.scene.platformStanding = { standing: true, roles: true, permissions: true }`。详见 [ADR 0056 §1](https://github.com/zhinjs/zhin/blob/main/docs/adr/0056-chat-roles.md)。

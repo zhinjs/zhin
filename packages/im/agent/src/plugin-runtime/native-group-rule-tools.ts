@@ -7,6 +7,7 @@
  *   否则拒绝并写 `rule_draft_forbidden`。
  * - 规则内容的校验（trigger / 阶梯 / 禁言时长 / 冷静期 / 豁免）与 `content_hash` 都由存储做。
  */
+import { chatRolesInclude } from '@zhin.js/core';
 import {
   defineAgentTool,
   toolFeatureId,
@@ -24,7 +25,6 @@ import {
   groupRuleHashShort,
   type AiGroupRules,
 } from '../group-rules.js';
-import { sceneRoleOf } from '../session-profile.js';
 
 export const GROUP_RULE_DRAFT_TOOL_NAME = 'rule_draft';
 
@@ -115,7 +115,8 @@ async function draftGroupRule(
   const platform = origin.platform;
   const sceneId = `group:${origin.sceneId}`;
   const actorId = context.principal?.subjectId?.trim() || '';
-  if (!actorId || !sceneRoleOf(context.principal?.roles)) {
+  // ADR 0056: drafting needs the chat role admin here (group owners / admins map to it by default).
+  if (!actorId || !chatRolesInclude(context.principal?.roles, 'admin')) {
     store.recordDraftForbidden({ platform, sceneId, actorId: actorId || 'unknown', turnId: context.turnId });
     throw new GroupRuleDraftForbiddenError();
   }

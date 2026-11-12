@@ -1,6 +1,6 @@
 import { createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
-import { createHttpHost } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import { LarkEndpoint } from '../src/endpoint.js';
 import { formatOutboundBody, resolveLarkConfig } from '../src/protocol.js';
 import upload from '../agents/lark/skills/lark/tools/upload_file/index.js';

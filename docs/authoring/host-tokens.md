@@ -89,7 +89,43 @@ export default definePlugin<ReminderConfig>({
 | Token | 得到 | 主要方法 |
 | --- | --- | --- |
 | `htmlRendererToken`（`zhin.js`） | `HtmlRendererHost` | `render(html, opts)` → PNG；需安装 `@zhin.js/html-renderer`，未安装时出站 HTML 降级为文字 |
-| `httpHostToken`（`@zhin.js/host-http`） | `HttpHost` | `route(method, path, handler, meta?)` 注册 HTTP 路由（Console、MCP、A2A、适配器 webhook 共用） |
+| `httpHostToken`（`@zhin.js/host-http`） | `HttpHost` | `route(method, path, handler, meta?)` 注册 HTTP 路由（Console、MCP、A2A、适配器 webhook 共用）；`ws(path, { auth? })` 注册 WebSocket |
+
+#### HTTP 路由契约
+
+路由与传输无关（ADR 0054 §2）：处理函数收 Web 标准 `Request`，返回 `Response`；WebSocket 收到 `WsConnection`。不要导入 `node:http` / `ws`。
+
+```ts
+import { createResponseStream, httpHostToken, jsonResponse, readJsonBody, readTextBody, SSE_HEADERS, verifyProtocolAccessToken } from '@zhin.js/host-http';
+
+const http = context.resources.use(httpHostToken);
+
+// context：url、params（前缀路由 `/x/*` 的剩余部分在 params['*']）、principal（Host 认证后的主体）、remoteAddress
+http.route('POST', '/my-plugin/webhook', async (request, { url, remoteAddress }) => {
+  if (!verifyProtocolAccessToken(token, { headers: request.headers, url, remoteAddress })) {
+    return new Response('Forbidden', { status: 403 });
+  }
+  const raw = await readTextBody(request);           // 默认上限 1 MiB，超限 413
+  return jsonResponse(200, { ok: true, size: raw.length });
+});
+
+// 流式响应（SSE / 大文件）：ReadableStream 响应体；write() 返回 false 表示背压，onDrain 后再写
+http.route('GET', '/my-plugin/events', () => {
+  const stream = createResponseStream();
+  const timer = setInterval(() => stream.write('data: tick\n\n'), 1000);
+  stream.onClose(() => clearInterval(timer));        // 客户端断开
+  return new Response(stream.stream, { headers: SSE_HEADERS });
+});
+
+// 插件自己的协议 socket（反向 WS 等）：auth: 'protocol'，自己校验凭据
+http.ws('/my-plugin/ws', { auth: 'protocol' }).onConnection((connection) => {
+  if (!verifyProtocolAccessToken(token, connection)) return connection.close(4003, 'Unauthorized');
+  connection.onMessage((data) => connection.send(data));   // 文本帧为 string，二进制帧为 Uint8Array
+  connection.onClose((code, reason) => { /* … */ });
+});
+```
+
+请求体用 `request.json()` / `text()` / `arrayBuffer()` / `body` 或有上限的 `readJsonBody` / `readTextBody` / `readBodyBytes` 读取；请求被客户端中断时 `request.signal` 会 abort。协议层心跳（ping / pong）由 Host 传输负责，`WsConnection` 不暴露 `ping`。
 
 ## 调用纯文本 AI 补全
 

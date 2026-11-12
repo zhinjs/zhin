@@ -6,7 +6,7 @@ sidebar: false
 
 本目录收录 Zhin.js 的架构决策记录（Architecture Decision Records, ADR）。每份 ADR 记录一项关键架构边界、背景动机、演进取舍与代码落盘位置。
 
-## 现存 ADR 列表（0034–0048）
+## 现存 ADR 列表（0034–0056）
 
 ### 服务插件与平台适配器契约
 
@@ -42,6 +42,19 @@ sidebar: false
 | [ADR 0046](./0046-personal-session-model-policy.md) | Personal Session model policy | Partially Superseded（Personal Session 有效；Model Catalog/Policy 被 ADR 0047 取代） | `@zhin.js/agent/personal-session`（有效）；模型目录与策略已迁至 `@zhin.js/ai/provider` |
 | [ADR 0047](./0047-ai-provider-subscriptions-and-decision-models.md) | AI Provider 订阅接入与多决策模型 | Implemented（Accepted，S0–S4 已合入 main） | `@zhin.js/ai/src/provider/`、`@zhin.js/ai/src/providers/`、`@zhin.js/agent/src/decision/` |
 | [ADR 0048](./0048-agent-harness.md) | Agent Harness——从流程到协作 | Implemented（Accepted，H0–H5 已全部完成） | `@zhin.js/harness`、`@zhin.js/core`（`venue/`）、`@zhin.js/agent`、`@zhin.js/a2a` |
+
+### Console：访问控制、三级功能配置与运维
+
+| ADR | 标题 | 状态 | 核心落盘模块 |
+| --- | --- | --- | --- |
+| [ADR 0049](./0049-console-rbac.md) | Console 访问控制——数据库里的用户、角色与权限 | Accepted | `@zhin.js/console-protocol`、`@zhin.js/host-http`、`@zhin.js/gateway`（`packages/host/gateway/src/iam/`）、`basic/cli`（`zhin console`） |
+| [ADR 0050](./0050-layered-feature-config.md) | 功能配置三级覆盖——全局 < 适配器 < 账号 | Accepted | `@zhin.js/runtime`、`@zhin.js/plugin-runtime`、`@zhin.js/core`、`packages/im/zhin/src/instance/console/`（`feature.*` RPC） |
+| [ADR 0051](./0051-console-terminal.md) | Console 终端——宿主 Shell 与 SSH | Accepted | `@zhin.js/gateway`（`packages/host/gateway/src/terminal/`）、`@zhin.js/host-http` |
+| [ADR 0052](./0052-console-information-architecture.md) | Console 信息架构——状态、功能、运维、访问控制分区 | Accepted | Console 前端（`zhinjs/console`） |
+| [ADR 0053](./0053-console-onboarding.md) | Console 引导——create-zhin 只建项目，其余在 Console 完成 | Accepted | `create-zhin`、`@zhin.js/gateway`（`packages/host/gateway/src/onboarding/`）、Console 前端 |
+| [ADR 0054](./0054-management-gateway.md) | 管理网关——CLI 启动网关，网关管理 Zhin 实例 | Accepted | `@zhin.js/gateway`（`packages/host/gateway/src/`）、`zhin.js/instance`（`packages/im/zhin/src/instance/`）、`basic/cli`（`commands/`） |
+| [ADR 0055](./0055-conversation-feature-config.md) | 会话级功能配置——在账号之下按群 / 私聊覆盖，存数据库，可群内自助 | Accepted | `packages/im/plugin-runtime`、`packages/im/zhin/src/instance/console/` |
+| [ADR 0056](./0056-chat-roles.md) | 聊天角色——zhin 角色分四级；发言者平台身份与机器人自身身份是独立维度，三维度过滤能力（2026-11-12 修订） | Accepted | `packages/im/zhin/src/instance/`（`chat-roles.ts`、`feature-self-service.ts`）、`packages/im/core` |
 
 ---
 

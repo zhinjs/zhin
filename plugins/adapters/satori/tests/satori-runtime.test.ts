@@ -4,7 +4,8 @@ import { describe, expect, it, vi, afterEach } from 'vitest';
 import { listEndpointManagementCapabilities } from 'zhin.js/adapter';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import type { OutboundMessageService } from '@zhin.js/core/runtime';
-import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
+import { httpHostToken } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import defineSatoriAdapter from '../adapters/satori/index.js';
 import {
   SatoriWebhookEndpoint,
@@ -649,8 +650,8 @@ describe('satori plugin runtime adapter', () => {
 describe('satori webhook auth', () => {
   it('verifySatoriToken compares constant-time and tolerates length mismatch', () => {
     const req = (auth?: string) => ({
-      headers: auth === undefined ? {} : { authorization: auth },
-    }) as never;
+      headers: new Headers(auth === undefined ? {} : { authorization: auth }),
+    });
     expect(verifySatoriToken(undefined, req())).toBe(true);
     expect(verifySatoriToken('secret', req('Bearer secret'))).toBe(true);
     expect(verifySatoriToken('secret', req('Bearer wrong!'))).toBe(false);

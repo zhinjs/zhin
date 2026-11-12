@@ -1,5 +1,4 @@
-import { Readable } from 'node:stream';
-import type { IncomingMessage, ServerResponse } from 'node:http';
+import { recordResponse, webhookRequest } from '../../test-utils/http.js';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { computeSignatureHash, resolveWeChatMpConfig } from '../src/protocol.js';
 import { handleWeChatMpMessage } from '../src/webhook.js';
@@ -10,14 +9,11 @@ const xml = '<xml><ToUserName>bot</ToUserName><FromUserName>sender</FromUserName
 async function invoke(locale: 'en' | 'zh-CN' | undefined, valid = true) {
   const resolveLocale = vi.fn(async () => locale);
   const admit = vi.fn();
-  const end = vi.fn();
-  const writeHead = vi.fn();
   const url = new URL('http://fixture/wechat');
   const timestamp = String(Math.floor(Date.now() / 1000));
   url.search = new URLSearchParams({ timestamp, nonce: 'nonce', signature: valid ? computeSignatureHash(config.token, { timestamp, nonce: 'nonce' }) : 'invalid' }).toString();
-  await handleWeChatMpMessage(Readable.from([Buffer.from(xml)]) as IncomingMessage,
-    { end, writeHead } as unknown as ServerResponse, url,
-    { config, id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'wechat'), isOpen: true, resolveLocale, admit });
+  const { end, writeHead } = await recordResponse(await handleWeChatMpMessage(webhookRequest(xml), url,
+    { config, id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'wechat'), isOpen: true, resolveLocale, admit }));
   return { resolveLocale, admit, end, writeHead };
 }
 

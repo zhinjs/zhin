@@ -1,3 +1,4 @@
+import { wsConnectionFromMock } from '../../test-utils/http.js';
 import { EventEmitter } from 'node:events';
 import { createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
 import { OneBotV12Client } from '@imhelper/onebot-v12';
@@ -23,7 +24,7 @@ const gateway: OutboundMessageService = { receive: vi.fn(), send: vi.fn(async ()
 const sockets: ReturnType<typeof createSocket>[] = [];
 const httpStub = {
   ws: vi.fn(() => ({ onConnection: (receive: (connection: unknown) => void) => {
-    queueMicrotask(() => receive({ socket: createSocket(), request: { headers: {} } }));
+    queueMicrotask(() => receive(wsConnectionFromMock({ socket: createSocket(), request: { headers: {}, socket: { remoteAddress: '127.0.0.1' } } })));
     return () => undefined;
   } })), route: vi.fn(() => () => undefined),
 } as unknown as HttpHost;
@@ -170,5 +171,44 @@ describe('onebot12 endpoint management wiring', () => {
       id: 'test-ob12',
       path: '/onebot12/webhook',
     })).toThrow('non-empty api_url');
+  });
+});
+
+describe('onebot12 reverse WebSocket access (ADR 0054 §3)', () => {
+  async function mount(accessToken?: string) {
+    let accept!: (connection: unknown) => void;
+    const ws = vi.fn((_path: string, _options?: unknown) => ({ onConnection: (listener: (connection: unknown) => void) => { accept = listener; return () => undefined; } }));
+    const http = { ws, route: vi.fn(() => () => undefined) } as unknown as HttpHost;
+    const config = resolveOneBot12Config({ platform: 'qq', userId: 'bot-1', connection: 'wss', id: 'acl-ob12', path: '/onebot12', ...(accessToken ? { access_token: accessToken } : {}) }) as OneBot12WssConfig;
+    const endpoint = await createEndpointHarness(() => new OneBot12WssEndpoint({ id: endpointKey, http, config }), { name: 'onebot12', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway(gateway, undefined) });
+    await endpoint.start();
+    const connect = (request: { authorization?: string; url?: string; ip: string }) => {
+      const socket = createSocket();
+      accept(wsConnectionFromMock({ socket, request: { headers: request.authorization ? { authorization: request.authorization } : {}, url: request.url ?? '/onebot12', socket: { remoteAddress: request.ip } } }));
+      return socket;
+    };
+    return { ws, endpoint, connect };
+  }
+  const rejected = (socket: { close: ReturnType<typeof vi.fn> }) => socket.close.mock.calls.some(([code]) => code === 4003);
+
+  it('mounts with protocol auth and checks its own access_token', async () => {
+    const { ws, endpoint, connect } = await mount('secret');
+    expect(ws).toHaveBeenCalledWith('/onebot12', { auth: 'protocol' });
+    const wrong = connect({ authorization: 'Bearer console-session-token', ip: '127.0.0.1' });
+    await vi.waitFor(() => expect(rejected(wrong)).toBe(true));
+    const good = connect({ url: `${'/onebot12'}?access_token=secret`, ip: '203.0.113.9' });
+    await new Promise(resolve => setTimeout(resolve, 10));
+    expect(rejected(good)).toBe(false);
+    await endpoint.stop();
+  });
+
+  it('without access_token admits loopback peers only', async () => {
+    const { endpoint, connect } = await mount();
+    const remote = connect({ ip: '192.168.1.20' });
+    await vi.waitFor(() => expect(rejected(remote)).toBe(true));
+    const local = connect({ ip: '127.0.0.1' });
+    await new Promise(resolve => setTimeout(resolve, 10));
+    expect(rejected(local)).toBe(false);
+    await endpoint.stop();
   });
 });

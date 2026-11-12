@@ -16,12 +16,12 @@ When you're done you'll have:
 ## 1. Get it working in Sandbox
 
 ```bash
-npm create zhin-app my-bot -y
+npm create zhin-app my-bot -- -y --adapter sandbox
 cd my-bot
 pnpm dev
 ```
 
-Sandbox is a built-in simulated chat window; it needs no platform account. Connect [Console](https://console.zhin.dev) with the API Base printed in the terminal and `HTTP_TOKEN` from `.env`, open **Bot → Try a chat** (Sandbox) in the sidebar, send `/hello`, and check that it replies.
+Sandbox is a built-in simulated chat window; it needs no platform account. `--adapter sandbox` installs it at creation time (without it, pick Sandbox in the Console onboarding's chat platform step). Open the [Console](https://console.zhin.dev) link printed at the end of creation, keep the default database, create the owner account, then open **Bot → Try a chat** (Sandbox) in the sidebar, send `/hello`, and check that it replies.
 
 ## 2. Add a command
 
@@ -85,7 +85,7 @@ export default definePlugin<Config>({
 
 The job is registered only after you set `morningTarget` in config:
 
-- `endpointKey` is the full Endpoint identity shown in **Chat accounts** (an Endpoint is one account the bot is signed in to on a platform);
+- `endpointKey` is the full Endpoint identity shown in the account page header under **Accounts and conversations** (an Endpoint is one account the bot is signed in to on a platform);
 - `cron` has six fields: second, minute, hour, day, month, weekday;
 - `context.lifecycle.add()` unregisters the old job on hot reload or when the plugin stops, so nothing is sent twice.
 
@@ -107,7 +107,7 @@ The `/roll` command and the notification need no changes: commands don't depend 
 
 ## 5. Accept the result in Console
 
-1. Confirm the Endpoint and send a message in **Chat accounts**.
+1. Confirm the account is online in **Accounts and conversations** and send a message in its Chat tab.
 2. In **Runtime Capabilities**, confirm `/roll` is loaded and is the version you last saved.
 3. Check **Logs** for command or notification failures.
 4. Restart the Host and repeat the real-platform test.

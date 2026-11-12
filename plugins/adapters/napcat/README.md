@@ -83,7 +83,7 @@ endpoint 配置，不会从环境变量推断 endpoint id。
 
 - **notice / request / meta 侧事件**：经统一 `endpointSpec.events` 归一后分发到 `handlers`（`notice.receive` / `request.receive` / `system.receive`），请求带 `$approve` / `$reject`。消息仍走 `outboundMessageToken`。
 - **群管工具暂未迁移**：旧 Adapter 经 `createSceneManagementTools` 注册踢人 / 禁言 / 群名片等成套 agent 工具；迁移后 `agents/napcat/skills/napcat-*/tools/` 仅覆盖 NapCat 扩展 API（含 `set_title`、`get_group_shut_list` 等），没有踢人 / 禁言 / 群名片工具，其余群管能力可通过 `callApi`（如 `set_group_kick`、`set_group_ban`）作为逃生舱调用。
-- **平台权限门禁**：`plugin.ts` setup 通过 generation-owned `permissionHostToken` 调用 `host.registerPlatform('napcat', createSceneRolePlatformChecker())`，`scene_admin` / `scene_owner` 依据入站 metadata 中的 sender `role`（owner / admin）判定。
+- **平台权限门禁**：工具 / 命令用内置 permit（ADR 0056 §5）：发言者平台身份 `platform:admin` / `platform:owner` 依据入站 `sender.platform.standing`（owner / admin，见下文「成员身份」）；机器人自身群内身份 `bot:admin` / `bot:owner` 依据 `get_group_member_info`（self）的 `role`（能力画像 `scene.selfStanding`，框架按会话缓存）。群管理类工具同时要求两者。
 
 ## 文档链接
 
@@ -98,7 +98,7 @@ endpoint 配置，不会从环境变量推断 endpoint id。
 - 经所属 Adapter 增删持久化账号、启停单个 Endpoint；凭据由 Host 加密仓储保存，不改启动 YAML 或 `.env`，不重启进程；
 - 如果适配器要求登录，页面会显示 LoginAssist 的扫码 / 滑块 / 设备确认待办；
 
-读取需要 `napcat:read`，写操作需要 `napcat:write`；管理员 full token 不受限。页面里的「添加 endpoint」等价于原来的 `napcat endpoint add`。
+读取需要 `napcat:read`（`read` 级别，内置角色 `viewer` 及以上都有）；增删改账号等写操作需要 `napcat:write`（`operate` 级别，`operator` 及以上都有，绑定到本适配器的角色也算），首次迁移还需管理员身份；全局所有者不受限，见[插件权限的级别](https://zhin.js.org/console/#插件权限的级别)。页面里的「添加 endpoint」等价于原来的 `napcat endpoint add`。
 
 ## 故障排查
 
@@ -127,3 +127,7 @@ NapCat 官方消息兼容表标明 share 仅接收，不支持发送；Markdown 
 - `set_qq_profile` 内层 `result` 非零同样视为拒绝。头像修改只报告平台已确认成功，不查询或返回修改后的头像 URL，也不把上传源链接或 base64 当成平台头像。
 
 `nickname` / `profile` 配置仅补足缺失字段，Endpoint 项可覆盖适配器默认值，配置不写回 QQ。接口语义依据 [NapCat 的资料设置实现](https://github.com/NapNeko/NapCatQQ/blob/main/packages/napcat-onebot/action/go-cqhttp/SetQQProfile.ts) 与 [账号信息实现](https://github.com/NapNeko/NapCatQQ/blob/main/packages/napcat-onebot/action/go-cqhttp/GetStrangerInfo.ts)。
+
+## 成员身份
+
+群消息的 `sender.role`（`owner` / `admin` / `member`）归一为 `sender.platform.standing`；私聊不上报。NapCat 没有平台原生角色与权限位，`roles` / `permissions` 不上报。能力画像：`group.scene.platformStanding = { standing: true }`。详见 [ADR 0056 §1](https://github.com/zhinjs/zhin/blob/main/docs/adr/0056-chat-roles.md)。

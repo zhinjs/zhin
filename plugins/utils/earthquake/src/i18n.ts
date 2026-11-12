@@ -17,7 +17,7 @@ export const messages = createMessages({
   maxRegions: { 'zh-CN': "最多设置 {count} 个地区关键词", en: "Use at most {count} region keywords." },
   conversation: { 'zh-CN': "请在机器人私聊、群聊或频道中使用此命令", en: "Use this command in a private chat, group or channel with the bot." },
   noThread: { 'zh-CN': "暂不支持在话题／子频道内订阅，请在主会话中使用", en: "Subscriptions in threads or subchannels are not supported. Use the main conversation." },
-  denied: { 'zh-CN': "只有群主、群管理员或机器人主人可以在群聊中修改地震订阅；私聊中可以直接订阅本会话。", en: "Only a group owner, administrator or bot master may change group earthquake subscriptions. Private chats can subscribe their own conversation." },
+  denied: { 'zh-CN': "只有本会话的 zhin 管理员（admin）或机器人主人（owner）可以在群聊中修改地震订阅；私聊中可以直接订阅本会话。", en: "Only a zhin admin of this conversation or the bot owner may change group earthquake subscriptions. Private chats can subscribe their own conversation." },
   global: { 'zh-CN': "全球", en: "Worldwide" },
   subscribed: { 'zh-CN': "已订阅：M{magnitude} 以上，地区：{regions}", en: "Subscribed: M{magnitude}+, regions: {regions}" },
   updated: { 'zh-CN': "已更新订阅：M{magnitude} 以上，地区：{regions}", en: "Subscription updated: M{magnitude}+, regions: {regions}" },

@@ -73,7 +73,7 @@ export function bootstrapSceneFromTurn(
 ): BootstrapScene {
   const scope = turn?.origin.kind === 'im' ? turn.origin.scope : undefined;
   const kind: BootstrapSceneKind = scope === 'group' || scope === 'private' || scope === 'channel' ? scope : 'other';
-  return { kind, master: turn?.principal.roles.includes('master') === true };
+  return { kind, master: turn?.principal.roles.includes('owner') === true };
 }
 
 /**

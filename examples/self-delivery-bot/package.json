@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "zhin runtime start --watch",
-    "start": "zhin runtime start",
+    "dev": "zhin start --foreground --watch source config",
+    "start": "zhin start --foreground",
     "test": "vitest run --root ../.. examples/self-delivery-bot/tests"
   },
   "zhin": {

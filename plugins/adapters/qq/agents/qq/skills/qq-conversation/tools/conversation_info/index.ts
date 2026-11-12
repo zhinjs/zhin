@@ -24,7 +24,7 @@ export default defineAgentTool({
       conversation,
       requester: {
         roles,
-        canRequestGroupModeration: roles.some(role => ['master', 'admin', 'trusted', 'owner'].includes(role)),
+        canRequestGroupModeration: roles.includes('trusted'),
       },
       operations: {
         quoteReply: true,

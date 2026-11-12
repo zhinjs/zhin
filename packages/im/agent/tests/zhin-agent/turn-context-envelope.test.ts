@@ -77,7 +77,7 @@ describe('buildTurnContextEnvelope', () => {
     const envelope = buildTurnContextEnvelope({
       turn: turnContext({
         origin: { kind: 'im', platform: 'qq', endpoint: '知音', scope: 'private', sceneId: 'user' },
-        principal: { subjectId: '477561AD3A89AFCDABB6AFCB71FF54DF', roles: ['master'] },
+        principal: { subjectId: '477561AD3A89AFCDABB6AFCB71FF54DF', roles: ['owner'] },
       }),
     });
     expect(envelope).not.toContain('477561AD3A89AFCDABB6AFCB71FF54DF');

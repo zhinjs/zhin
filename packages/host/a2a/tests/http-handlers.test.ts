@@ -1,4 +1,5 @@
 import { createServer, request as httpRequest, type Server } from 'node:http';
+import { createNodeRequest, writeNodeResponse } from '@zhin.js/host-http/node';
 import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
 import { StreamResponse } from '@a2a-js/sdk';
@@ -43,9 +44,12 @@ async function serve(kind: 'rest' | 'jsonrpc', handler: A2ARequestHandler): Prom
   let settle!: (value: void | PromiseLike<void>) => void;
   const handled = new Promise<void>((resolve) => { settle = resolve; });
   const server = createServer((req, res) => {
-    settle(kind === 'rest'
-      ? handleRest(req, res, handler, 'message:stream')
-      : handleJsonRpc(req, res, handler));
+    const abort = new AbortController();
+    res.once('close', () => { if (!res.writableFinished) abort.abort(); });
+    const request = createNodeRequest(req, { url: new URL(req.url ?? '/', 'http://localhost'), signal: abort.signal });
+    settle((kind === 'rest'
+      ? handleRest(request, handler, 'message:stream')
+      : handleJsonRpc(request, handler)).then((response) => writeNodeResponse(res, response)));
   });
   servers.push(server);
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -70,7 +74,9 @@ describe('A2A SSE streaming', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toBe('text/event-stream');
     expect(text).toContain('"text":"one"');
-    expect(text).toContain('event: error\ndata: {"error":"executor exploded"}\n\n');
+    // An executor's own failure detail never reaches the client.
+    expect(text).toContain('event: error\ndata: {"error":"Internal error"}\n\n');
+    expect(text).not.toContain('executor exploded');
     await expect(handled).resolves.toBeUndefined();
   });
 
@@ -86,7 +92,7 @@ describe('A2A SSE streaming', () => {
     });
 
     expect(response.status).toBe(500);
-    expect(await response.json()).toEqual({ error: 'never started' });
+    expect(await response.json()).toEqual({ error: 'Internal error' });
     await expect(handled).resolves.toBeUndefined();
   });
 

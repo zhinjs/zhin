@@ -76,7 +76,7 @@ export const ADAPTERS: AdapterDefinition[] = [
     plugin: '@zhin.js/adapter-sandbox',
     needsHttp: true,
     description: '终端 + Remote Console 沙盒页，本地开发首选',
-    setupHint: '无需额外凭据；pnpm dev（zhin runtime start）后可在 Console 沙盒页直接对话。',
+    setupHint: '无需额外凭据；pnpm dev（zhin start --foreground）后可在 Console 沙盒页直接对话。',
     fields: [],
   },
   {
@@ -630,6 +630,49 @@ export function getAdapterSetupNotes(result: AdapterSetupResult, locale: 'zh-CN'
 /**
  * 获取适配器所需的额外依赖包
  */
+/**
+ * Non-interactive adapter selection (`create-zhin --adapter`, `zhin setup --adapter`): Sandbox and
+ * field-based adapters use their defaults (secrets become `${ENV}` references with empty `.env`
+ * values); adapters with a dedicated configurer keep their own credential questions.
+ */
+export async function buildDefaultAdapterSetup(values: readonly string[], locale: 'zh-CN' | 'en' = 'zh-CN'): Promise<AdapterSetupResult> {
+  const result: AdapterSetupResult = { packages: [], plugins: [], instances: [], envVars: {}, requiresDatabase: false };
+  for (const value of values) {
+    const adapter = ADAPTERS.find((entry) => entry.value === value);
+    if (!adapter) throw new TypeError(`Unknown adapter: ${value}`);
+    result.packages.push(adapter.package);
+    for (const [pkg, version] of Object.entries(adapter.extraDeps ?? {})) result.packages.push(`${pkg}@${version}`);
+    result.plugins.push(adapter.plugin);
+    if (adapter.requiresDatabase) result.requiresDatabase = true;
+
+    let config: Record<string, unknown>;
+    if (adapter.value === 'sandbox') {
+      config = { commandPrefix: '/', endpoints: [{ id: 'sandbox-bot', owner: 'sandbox-user' }] };
+    } else if (adapter.configure) {
+      config = await adapter.configure({
+        envVars: result.envVars,
+        locale,
+        markRequiresDatabase: () => { result.requiresDatabase = true; },
+      });
+    } else if (adapter.fields.length > 0) {
+      const fieldValues: Record<string, unknown> = {};
+      for (const field of adapter.fields) {
+        if (field.envKey) {
+          result.envVars[field.envKey] = field.default ?? '';
+          fieldValues[field.key] = `\${${field.envKey}}`;
+        } else if (field.default !== undefined) {
+          fieldValues[field.key] = field.default;
+        }
+      }
+      config = buildFieldBasedInstanceConfig(adapter, fieldValues);
+    } else {
+      config = {};
+    }
+    result.instances.push({ package: adapter.package, instanceKey: adapter.value, config });
+  }
+  return result;
+}
+
 export function getAdapterDependencies(result: AdapterSetupResult): Record<string, string> {
   const deps: Record<string, string> = {};
 

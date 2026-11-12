@@ -1,7 +1,7 @@
 import { createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
-import { createHttpHost } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import { LineEndpoint } from '../src/endpoint.js';
 import { resolveLineConfig } from '../src/protocol.js';
 

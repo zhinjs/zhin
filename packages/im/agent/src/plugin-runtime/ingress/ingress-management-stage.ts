@@ -94,7 +94,7 @@ export async function tryHandleIngressCommands(input: IngressCommandsContext): P
         scope: turnAccess.origin.scope,
         sceneId: turnAccess.origin.sceneId,
         senderId: turnAccess.principal.subjectId,
-        senderRoles: message.sender?.roles,
+        senderChatRole: message.sender?.chatRole,
         endpoint: effectiveEndpoint,
         commandText: managementCommandText(message.content, message.commandPrefix),
       })

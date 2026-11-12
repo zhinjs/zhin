@@ -8,7 +8,7 @@ import {
 const toolContext = {
   sessionKey: 'im:qq:bot:private:u1',
   origin: { kind: 'im', platform: 'qq', endpoint: 'bot', scope: 'private', sceneId: 'u1' },
-  principal: { subjectId: 'u1', displayName: 'Alice', roles: ['master'] },
+  principal: { subjectId: 'u1', displayName: 'Alice', roles: ['owner'] },
 } as const;
 
 describe('addScheduleJob', () => {
@@ -94,14 +94,14 @@ describe('parseScheduleAddFromRpcMessage', () => {
       notify: { channel: 'silent' },
       executionPlan: { prompt: 'refined morning', tools: ['t1'] },
       activityFeedback: true,
-      createdBy: { userId: 'rpc-user', roles: ['master'] },
+      createdBy: { userId: 'rpc-user', roles: ['owner'] },
     });
 
     expect('error' in result).toBe(false);
     if ('error' in result) return;
     expect(result.schedule).toMatchObject({ kind: 'solar', cron: '0 0 8 * * *' });
     expect(result.activityFeedback).toBe(true);
-    expect(result.createdBy).toMatchObject({ userId: 'rpc-user', roles: ['master'] });
+    expect(result.createdBy).toMatchObject({ userId: 'rpc-user', roles: ['owner'] });
     expect(result.executionPlan?.confirmed).toBe(true);
   });
 });

@@ -1,6 +1,6 @@
 import { isEmpty } from './utils.js';
 import { safeParseSchema, type SchemaSafeParseResult } from './validate.js';
-import { toJsonSchema, type ConfigFieldMetadata, type ConfigFieldI18n } from './json-schema.js';
+import { toJsonSchema, type ConfigFeatureLevels, type ConfigFieldMetadata, type ConfigFieldI18n } from './json-schema.js';
 
 export { SchemaValidationError, type SchemaSafeParseResult, type SchemaValidationIssue } from './validate.js';
 export { safeParseSchema };
@@ -103,6 +103,25 @@ export class Schema<S = any, T = S> {
     effect(effect: ConfigFieldMetadata['effect']): this {
         if (effect !== 'reload') throw new TypeError('Plugin configuration fields support only reload');
         this.meta.effect = effect;
+        return this;
+    }
+    /**
+     * Plugin root only: layered feature levels (ADR 0050 / 0055) and the fields editable at the
+     * conversation level, in chat by group admins, and in chat above the conversation level.
+     */
+    featureLevels(levels: ConfigFeatureLevels['levels'], fields: Omit<ConfigFeatureLevels, 'levels'> = {}): this {
+        if (this.meta.type !== 'object') throw new TypeError('featureLevels only supports the plugin root object');
+        this.meta.feature = structuredClone({ levels, ...fields });
+        return this;
+    }
+    /**
+     * Plugin property only: narrow the feature levels that may override this field (ADR 0050 §2),
+     * e.g. `.fieldLevels(['global'])` for secrets and process-wide resources. It can never widen
+     * the root `featureLevels` declaration; the Runtime rejects a wider list at startup.
+     */
+    fieldLevels(levels: ConfigFeatureLevels['levels']): this {
+        if (!levels.length || !levels.includes('global')) throw new TypeError('fieldLevels must include global');
+        this.meta.fieldLevels = [...levels];
         return this;
     }
     /** Export the standard JSON Schema consumed by Runtime and Console. */
@@ -265,6 +284,8 @@ export namespace Schema {
         step?: number;
         secret?: boolean;
         effect?: ConfigFieldMetadata['effect'];
+        feature?: ConfigFeatureLevels;
+        fieldLevels?: ConfigFeatureLevels['levels'];
     }
     export interface Options {
         object?: Record<string, Schema>;

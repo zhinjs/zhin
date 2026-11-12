@@ -1,25 +1,22 @@
-# QQ 官方频道 Platform Permits
+# QQ 官方 Platform Permits
 
-> 与 QQ 群 `group_*` **分开命名**，仅用于 guild/channel 场景。
+## 入站字段（ADR 0056 §1）
 
-## 入站字段
-
-`message_type === guild` 时 `getGuildMember` + `getGuildInfo`（TTL 60s）：
+仅**频道**（guild 子频道）消息上报 `sender.platform`，取自事件自带的 `member.roles`：
 
 | 字段 | 取值 |
 |------|------|
-| `$sender.role` | `owner` · `admin` · `member` |
-| `$sender.permissions` | `guild_owner` · `guild_admin` · `manage_roles` · `manage_channels` · 角色 ID |
+| `sender.platform.standing` | `owner`（频道主，身份组 4）· `admin`（超级管理员，身份组 2）· `member` |
+| `sender.platform.roles` | 原始身份组 id（内置身份带名称） |
+
+QQ 群、单聊与频道私信不上报发送者平台身份；QQ 官方事件没有权限位，`permissions` 不上报。机器人自身身份：群取 `getBotState.member_role`，频道取机器人成员的身份组。
 
 ## Permit 词汇表
 
-| `platform(qq,…)` | 含义 |
-|------------------|------|
-| `guild_owner` | 频道主 |
-| `guild_admin` | 频道管理员 |
-| `manage_roles` | 管理身份组 |
-| `manage_channels` | 管理子频道 |
+| Permit | 含义 |
+|--------|------|
+| `platform:owner` / `platform:admin` | 频道主 / 超级管理员（含频道主） |
+| `platform-role:<id>` | 持有指定身份组 |
+| `bot:*` / `bot-role:<id>` | 同上，判定机器人账号自身 |
 
-## 工厂映射
-
-`scene_admin` → `guild_admin` · `scene_owner` → `guild_owner`
+平台身份与机器人身份都按**当前会话**判定，因此群 / 频道管理工具只作用于当前群或当前频道。

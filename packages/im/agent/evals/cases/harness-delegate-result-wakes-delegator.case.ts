@@ -7,7 +7,7 @@ export default defineEvalCase({
   description: 'An async delegation acknowledges first, then the result mail wakes the delegator to answer with it.',
   source: 'ADR 0048 §3.3 (delegate + result mail)',
   tags: ['collaboration', 'long-task'],
-  inbound: { text: '让 researcher 查一下 Node 24 什么时候进入 LTS', sender: { id: 'master', roles: ['master'] } },
+  inbound: { text: '让 researcher 查一下 Node 24 什么时候进入 LTS', sender: { id: 'master', chatRole: 'owner' } },
   tools: [{ name: 'lookup_docs', result: 'Node.js 24 entered Active LTS in October 2025.' }],
   agents: [{ name: 'researcher', description: 'Looks things up; read-only.', tools: ['lookup_docs'] }],
   // Entry turn 1: delegate, then acknowledge. researcher runs in the background. Entry turn 2 (woken by the

@@ -196,7 +196,7 @@ describe('Command Feature', () => {
         id: '12345',
       },
       content: 'who',
-      sender: { id: '1659488338', name: '凉菜', roles: ['admin'] },
+      sender: { id: '1659488338', name: '凉菜', chatRole: 'admin', platform: { standing: 'admin' } },
       metadata: {
         endpoint: '1689919782',
         channelType: 'group',
@@ -210,7 +210,7 @@ describe('Command Feature', () => {
       adapter: 'root/icqq',
       endpoint: '1689919782',
       scene: { id: '12345', type: 'group', name: '测试群' },
-      sender: { id: '1659488338', name: '凉菜', role: ['admin'] },
+      sender: { id: '1659488338', name: '凉菜', chatRole: 'admin', platform: { standing: 'admin' } },
     });
 
     seen = undefined;
@@ -263,7 +263,7 @@ describe('Command Feature', () => {
     const session: OperationSession<'command-test'> = {
       adapterName: 'command-test', adapter: {}, endpoint: client,
       scene: { endpoint: { adapter: 'adapter-owner', id: 'canonical' }, kind: 'group', id: 'room', name: 'canonical room' },
-      sender: { id: 'speaker', platformRoles: ['admin'], authorizationRoles: ['trusted'] }, message: { text: 'original', receivedAt: 100 }, event: native,
+      sender: { id: 'speaker', platform: { standing: 'admin' }, chatRole: 'trusted' }, message: { text: 'original', receivedAt: 100 }, event: native,
       signal: new AbortController().signal, reply: async () => undefined,
     };
     const contexts: unknown[] = [];
@@ -274,7 +274,7 @@ describe('Command Feature', () => {
       expect(context.session.event).toBe(native);
       expect(context.$client).toBe(client);
       expect(context.scene).toEqual({ id: 'room', type: 'group', name: 'canonical room' });
-      expect(context.sender).toEqual({ id: 'speaker', role: ['trusted', 'admin'] });
+      expect(context.sender).toEqual({ id: 'speaker', chatRole: 'trusted', platform: { standing: 'admin' } });
       expect(context.endpoint).toBe('account');
       expect(Reflect.set(context, 'session', undefined)).toBe(false);
       return context.session.message.text;
@@ -670,7 +670,7 @@ describe('Command Feature', () => {
     });
   });
 
-  it('reads enriched sender.roles including master/trusted from upstream', async () => {
+  it('reads the Runtime-set sender.chatRole and never roles from metadata or legacy role strings', async () => {
     const owner = rootPluginId();
     const slot = createCapabilitySlot({
       owner,
@@ -680,7 +680,7 @@ describe('Command Feature', () => {
       definition: defineCommand({
         shortcut: {
           '我是谁': {
-            identity: (session) => session.sender?.role?.join(',') ?? 'none',
+            identity: (session) => session.sender?.chatRole ?? 'none',
           },
         },
         params: { identity: { type: 'string' } },
@@ -699,10 +699,10 @@ describe('Command Feature', () => {
         kind: 'group' as const,
         id: 'g1',
       },
-      sender: { id: '100', name: 'Admin', roles: ['master', 'owner'] },
+      sender: { id: '100', name: 'Admin', chatRole: 'owner' as const },
     };
     const masterResult = await index.dispatch({ input: '我是谁', source: masterMessage });
-    expect(masterResult).toMatchObject({ matched: true, value: 'master,owner' });
+    expect(masterResult).toMatchObject({ matched: true, value: 'owner' });
 
     const trustedMessage = {
       content: '我是谁',
@@ -711,7 +711,7 @@ describe('Command Feature', () => {
         kind: 'group' as const,
         id: 'g1',
       },
-      sender: { id: '200', roles: ['trusted'] },
+      sender: { id: '200', chatRole: 'trusted' as const },
     };
     const trustedResult = await index.dispatch({ input: '我是谁', source: trustedMessage });
     expect(trustedResult).toMatchObject({ matched: true, value: 'trusted' });
@@ -724,9 +724,10 @@ describe('Command Feature', () => {
         id: 'g1',
       },
       sender: { id: '300', roles: ['admin'] },
+      metadata: { isMaster: true, roles: ['owner'] },
     };
     const plainResult = await index.dispatch({ input: '我是谁', source: plainMessage });
-    expect(plainResult).toMatchObject({ matched: true, value: 'admin' });
+    expect(plainResult).toMatchObject({ matched: true, value: 'none' });
   });
 
   it('reports permit failure separately and skips permit on execute', async () => {
@@ -737,7 +738,7 @@ describe('Command Feature', () => {
       localName: 'secret',
       source: '/commands/secret/index.ts',
       definition: defineCommand({
-        permit: ['adapter(icqq)', 'role(master)'],
+        permit: ['adapter(icqq)', 'owner'],
         execute: () => 'ok',
       }),
     });
@@ -752,8 +753,7 @@ describe('Command Feature', () => {
         id: '1',
       },
       content: 'secret',
-      sender: { id: '1' },
-      metadata: { isMaster: true },
+      sender: { id: '1', chatRole: 'owner' },
     } })).resolves.toMatchObject({ matched: true, status: 'denied' });
 
     await expect(index.dispatch({ input: 'secret', source: {
@@ -763,9 +763,13 @@ describe('Command Feature', () => {
         id: '1',
       },
       content: 'secret',
-      sender: { id: '1' },
-      metadata: { isMaster: true },
+      sender: { id: '1', chatRole: 'owner' },
     } })).resolves.toMatchObject({ matched: true, value: 'ok' });
+    // Metadata flags never stand in for a chat role.
+    await expect(index.dispatch({ input: 'secret', source: {
+      conversation: { endpoint: { id: 'root/icqq\0x', adapter: 'root/icqq' }, kind: 'private', id: '1' },
+      content: 'secret', sender: { id: '1' }, metadata: { isMaster: true },
+    } })).resolves.toMatchObject({ matched: true, status: 'denied' });
 
     await expect(index.execute('secret')).rejects.toThrow('Permission denied');
   });
@@ -1647,6 +1651,32 @@ describe('内置菜单命令', () => {
     expect(text).not.toContain('qq.status');
   });
 
+  it('只列出当前发言者在本会话可用的指令（ADR 0056 §5，同一评估器）', async () => {
+    const { root, slots, snapshot } = menuSnapshot();
+    const guarded = createCapabilitySlot({
+      owner: root, feature: commandFeatureId, localName: 'mute', source: '/commands/mute/index.ts',
+      definition: defineCommand({ description: '禁言', permit: ['platform:admin', 'bot:admin'], execute: () => 'muted' }),
+    });
+    const all = [...slots, guarded];
+    const withHost = { ...snapshot, capabilities: new Map(all.map(slot => [slot.id, slot])) } as RuntimeSnapshot;
+    const host = new PermissionHost();
+    let bot: 'admin' | 'member' = 'member';
+    host.setBotStandingResolver(async () => ({ standing: bot }));
+    withHost.resources.get(root)!.set(permissionHostToken.id, host);
+    const index = new CommandIndex(all, withHost, { keyword: '菜单' });
+    const source = { conversation: { endpoint: { id: 'ep', adapter: 'test' }, kind: 'group', id: 'g' }, sender: { id: 'm', platform: { standing: 'admin' } } };
+    expect((await index.dispatch({ input: '菜单', source })).value as string).not.toContain('mute');
+    // Denied with the missing condition named for the reply.
+    expect(await index.dispatch({ input: 'mute', source })).toMatchObject({ status: 'denied',
+      denial: { permit: 'bot:admin', reason: '机器人不是本群管理员（或无法确认其身份）。' } });
+    bot = 'admin';
+    expect((await index.dispatch({ input: '菜单', source })).value as string).toContain('mute');
+    expect(await index.dispatch({ input: 'mute', source })).toMatchObject({ status: 'executed', value: 'muted' });
+    // A member sender: the platform condition fails first.
+    expect(await index.dispatch({ input: 'mute', source: { ...source, sender: { id: 'm' } } }))
+      .toMatchObject({ status: 'denied', denial: { permit: 'platform:admin' } });
+  });
+
   it('菜单列表自动加上 commandPrefix', async () => {
     const { slots, snapshot } = menuSnapshot();
     const index = new CommandIndex(slots, snapshot, { keyword: '菜单' });
@@ -1872,13 +1902,13 @@ describe('central command argument declarations', () => {
   it('requires an actual permission subject for restricted Host calls', async () => {
     const owner = rootPluginId();
     const execute = vi.fn().mockReturnValue('ok');
-    const slot = createCapabilitySlot({ owner, feature: commandFeatureId, localName: 'secret', source: '/commands/secret/index.ts', definition: defineCommand({ permit: ['role(master)'], execute }) });
+    const slot = createCapabilitySlot({ owner, feature: commandFeatureId, localName: 'secret', source: '/commands/secret/index.ts', definition: defineCommand({ permit: ['owner'], execute }) });
     const snapshot = snapshotFor(owner, [slot]);
     const index = new CommandIndex([slot], { ...snapshot, resources: new Map([[owner, new Map([[permissionHostToken.id, new PermissionHost()]])]]) });
     await expect(index.dispatch({ input: 'secret' })).resolves.toMatchObject({ status: 'denied' });
     await expect(index.execute('secret')).rejects.toThrow('Permission denied');
     expect(execute).not.toHaveBeenCalled();
-    await expect(index.dispatch({ input: 'secret', source: { sender: { id: 'operator', role: ['master'] } } })).resolves.toMatchObject({ status: 'executed', value: 'ok' });
+    await expect(index.dispatch({ input: 'secret', source: { sender: { id: 'operator', chatRole: 'owner' } } })).resolves.toMatchObject({ status: 'executed', value: 'ok' });
   });
 
   it('rejects impossible declarations before startup', () => {

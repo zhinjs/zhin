@@ -7,7 +7,7 @@ export const DEFAULT_ALLOWED_SERVICE_DOMAINS = ['light', 'climate', 'scene', 'co
 export const DEFAULT_DEBOUNCE_MS = 5000;
 
 export interface HomePolicyConfig {
-  /** 仅 master 可调用 home_*（默认 true） */
+  /** 仅主人（聊天角色 owner）可调用 home_*（默认 true） */
   requireMaster?: boolean;
   /** 写操作需 Owner 审批的 HA domain（默认 lock、alarm_control_panel） */
   confirmServices?: string[];

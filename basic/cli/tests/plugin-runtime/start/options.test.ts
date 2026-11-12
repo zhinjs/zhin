@@ -9,7 +9,7 @@ describe('start options', () => {
   it('parses process, runtime, and Remote Console options into one immutable value', () => {
     const options = parseStartOptions([
       '--open', '--once', '--no-watch', '--environment=test', '--mode', 'test',
-      '--daemon', '--log-file=.zhin/test.log',
+      '--daemon', '--log-file=.zhin/test.log', '--standalone',
     ]);
 
     expect(options).toEqual({
@@ -21,6 +21,7 @@ describe('start options', () => {
       mode: 'test',
       daemon: true,
       logFile: '.zhin/test.log',
+      standalone: true,
     });
     expect(Object.isFrozen(options)).toBe(true);
   });
@@ -34,6 +35,7 @@ describe('start options', () => {
   it('only watches explicitly selected sources', () => {
     expect(parseStartOptions([]).watch).toEqual([]);
     expect(parseStartOptions([]).noWatch).toBe(true);
+    expect(parseStartOptions([]).standalone).toBe(false);
     expect(parseStartOptions(['--watch', 'config']).watch).toEqual(['config']);
     expect(parseStartOptions(['--watch', 'source']).watch).toEqual(['source']);
     const both = parseStartOptions(['--watch', 'source', 'config', 'source', '--mode', 'production']);
@@ -75,11 +77,22 @@ describe('start options', () => {
 
   it('lists every parsed option in the help text', () => {
     const help = formatStartOptionHelp();
-    const parsedFlags = ['--mode', '--environment', '--watch', '--no-watch', '--once', '--open', '--daemon', '-d', '--log-file'];
+    const parsedFlags = ['--mode', '--environment', '--watch', '--no-watch', '--once', '--open', '--daemon', '-d', '--log-file', '--standalone'];
 
     for (const flag of parsedFlags) {
       expect(help).toContain(flag);
     }
     expect(help).toContain('Start options:');
+  });
+
+  it('gives zhin start examples that match where it runs', () => {
+    const help = formatStartOptionHelp('zhin start');
+    // Only -f / --foreground, --once and --standalone attach; --mode production alone runs in the background.
+    expect(help).toContain('zhin start --foreground --mode production --no-watch    前台运行');
+    expect(help).not.toMatch(/zhin start --mode production\s+前台/u);
+    expect(help).not.toContain('zhin runtime start');
+    // `-d, --daemon` is listed once, under the gateway options of `zhin start`.
+    expect(help).not.toContain('-d, --daemon');
+    expect(formatStartOptionHelp()).toContain('zhin runtime start 是 zhin start --foreground 的别名');
   });
 });

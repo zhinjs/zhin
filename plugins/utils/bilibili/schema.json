@@ -2,6 +2,14 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
+  "x-zhin-config": {
+    "levels": [
+      "global",
+      "adapter",
+      "endpoint",
+      "conversation"
+    ]
+  },
   "properties": {
     "pollCron": {
       "type": "string",
@@ -11,6 +19,11 @@
         "en": {
           "description": "Poll schedule (6-field cron, every 60 seconds by default)."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "jitterMs": {
@@ -23,6 +36,11 @@
         "en": {
           "description": "Maximum random delay before each poll, in milliseconds."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "requestGapMs": {
@@ -35,6 +53,11 @@
         "en": {
           "description": "Gap between dynamic requests within one poll, in milliseconds."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "maxBackoffMinutes": {
@@ -47,6 +70,11 @@
         "en": {
           "description": "Upper bound of exponential backoff after API failures or rate limiting, in minutes."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "maxPerChannel": {
@@ -59,6 +87,11 @@
         "en": {
           "description": "Maximum UP subscriptions per conversation."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "timeout": {
@@ -71,6 +104,11 @@
         "en": {
           "description": "HTTP request timeout in milliseconds."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "live": {
@@ -81,6 +119,11 @@
         "en": {
           "description": "Poll live-stream status."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "dynamic": {
@@ -91,6 +134,11 @@
         "en": {
           "description": "Poll UP activity."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "cookie": {
@@ -101,6 +149,11 @@
         "en": {
           "description": "Optional Bilibili cookie for stricter rate limits. Reference ${BILIBILI_COOKIE}; do not put credentials directly in configuration."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     }
   }

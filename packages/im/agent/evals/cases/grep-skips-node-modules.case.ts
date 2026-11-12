@@ -5,7 +5,7 @@ export default defineEvalCase({
   description: 'Native grep over the workspace skips node_modules, so dependency code never floods the model context.',
   source: 'QQ: grep scanned node_modules and blew the context (#716 agent-file-tool-hygiene)',
   tags: ['context', 'tool-use'],
-  inbound: { text: '哪里定义了 startBot？', sender: { id: 'master', roles: ['master'] } },
+  inbound: { text: '哪里定义了 startBot？', sender: { id: 'master', chatRole: 'owner' } },
   workspace: {
     'src/bot.ts': 'export function startBot() {}\n',
     'node_modules/some-dep/index.js': 'function startBot() { /* vendored */ }\n',

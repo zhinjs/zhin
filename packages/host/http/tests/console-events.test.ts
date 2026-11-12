@@ -1,23 +1,34 @@
 import { EventEmitter } from 'node:events';
-import type { ServerResponse } from 'node:http';
 import { describe, expect, it } from 'vitest';
-import { createConsoleEventHub, serializeConsoleEvent } from '../src/console-events.js';
+import { createResponseStream } from '@zhin.js/host-http-contract';
+import { createConsoleEventHub, serializeConsoleEvent, type ConsoleEventSink } from '../src/console-events.js';
 
-type WriteCallback = (error?: Error | null) => void;
+type FakeSink = ConsoleEventSink & { emit(event: 'drain' | 'close'): void };
+
+/** A response stream double driven by `drain` / `close` events. */
+function sinkOf(emitter: EventEmitter, impl: { write(chunk: string): boolean; destroy?(): void }): FakeSink {
+  return {
+    write: (chunk) => impl.write(String(chunk)),
+    onDrain: (listener) => { emitter.on('drain', listener); return () => { emitter.off('drain', listener); }; },
+    onClose: (listener) => { emitter.once('close', listener); return () => { emitter.off('close', listener); }; },
+    error: () => impl.destroy?.(),
+    emit: (event) => { emitter.emit(event); },
+  };
+}
 
 function stubResponse(
-  onWrite?: (chunk: string, callback?: WriteCallback) => void,
-): { response: ServerResponse; written: string[] } {
+  onWrite?: (chunk: string, emitter: EventEmitter) => void,
+): { response: FakeSink; written: string[] } {
   const written: string[] = [];
   const emitter = new EventEmitter();
-  const response = Object.assign(emitter, {
-    write(chunk: string, callback?: WriteCallback) {
+  const response = sinkOf(emitter, {
+    write(chunk: string) {
       written.push(chunk);
-      onWrite?.(chunk, callback);
+      onWrite?.(chunk, emitter);
       return true;
     },
   });
-  return { response: response as unknown as ServerResponse, written };
+  return { response, written };
 }
 
 describe('console event hub', () => {
@@ -39,9 +50,9 @@ describe('console event hub', () => {
     expect(hub.subscriberCount).toBe(2);
   });
 
-  it('removes subscribers whose writes fail', () => {
+  it('removes subscribers whose stream closes while writing', () => {
     const hub = createConsoleEventHub();
-    const broken = stubResponse((_chunk, callback) => callback?.(new Error('socket closed')));
+    const broken = stubResponse((_chunk, emitter) => emitter.emit('close'));
     const healthy = stubResponse();
     hub.subscribe(broken.response);
     hub.subscribe(healthy.response);
@@ -56,9 +67,9 @@ describe('console event hub', () => {
   it('removes subscribers that throw synchronously on write', () => {
     const hub = createConsoleEventHub();
     const emitter = new EventEmitter();
-    const throwing = Object.assign(emitter, {
+    const throwing = sinkOf(emitter, {
       write() { throw new Error('destroyed'); },
-    }) as unknown as ServerResponse;
+    });
     hub.subscribe(throwing);
 
     hub.publish('hmr:reload', { generation: 2 });
@@ -161,10 +172,10 @@ describe('console event hub', () => {
     const hub = createConsoleEventHub({ runtimeId: 'runtime-a' });
     const emitter = new EventEmitter();
     let destroyed = false;
-    const response = Object.assign(emitter, {
-      write(_chunk: string, _callback?: WriteCallback) { return false; },
+    const response = sinkOf(emitter, {
+      write(_chunk: string) { return false; },
       destroy() { destroyed = true; emitter.emit('close'); },
-    }) as unknown as ServerResponse;
+    });
     hub.subscribe(response);
     expect(hub.subscriberCount).toBe(1);
     hub.publish('test', { value: 1 });
@@ -179,10 +190,10 @@ describe('console event hub', () => {
     const written: string[] = [];
     let destroyed = false;
     // Accepts one frame per drain cycle, like a socket with a full send buffer.
-    const response = Object.assign(emitter, {
-      write(chunk: string, _callback?: WriteCallback) { written.push(chunk); return false; },
+    const response = sinkOf(emitter, {
+      write(chunk: string) { written.push(chunk); return false; },
       destroy() { destroyed = true; emitter.emit('close'); },
-    }) as unknown as ServerResponse;
+    });
 
     hub.subscribe(response, { runtimeId: 'runtime-a', after: 0 });
     expect(written).toEqual([serializeConsoleEvent(replayed[0]!)]);
@@ -192,7 +203,7 @@ describe('console event hub', () => {
     const live = hub.publish('test', { index: 4 });
     expect(written).toHaveLength(1);
 
-    for (let i = 0; i < 4; i += 1) emitter.emit('drain');
+    for (let i = 0; i < 4; i += 1) response.emit('drain');
 
     expect(destroyed).toBe(false);
     expect(hub.subscriberCount).toBe(1);
@@ -204,10 +215,10 @@ describe('console event hub', () => {
     hub.publish('test', { index: 0 });
     const emitter = new EventEmitter();
     let destroyed = false;
-    const response = Object.assign(emitter, {
-      write(_chunk: string, _callback?: WriteCallback) { return false; },
+    const response = sinkOf(emitter, {
+      write(_chunk: string) { return false; },
       destroy() { destroyed = true; emitter.emit('close'); },
-    }) as unknown as ServerResponse;
+    });
 
     hub.subscribe(response, { runtimeId: 'runtime-a', after: 0 });
     for (let index = 1; index <= 3; index += 1) hub.publish('test', { index });
@@ -215,5 +226,19 @@ describe('console event hub', () => {
     hub.publish('test', { index: 4 });
     expect(destroyed).toBe(true);
     expect(hub.subscriberCount).toBe(0);
+  });
+
+  it('streams frames through a real response stream and unsubscribes when the reader cancels', async () => {
+    const hub = createConsoleEventHub({ runtimeId: 'runtime-a' });
+    const stream = createResponseStream();
+    hub.subscribe(stream);
+    const event = hub.publish('test', { value: 1 });
+    const reader = stream.stream.getReader();
+    const { value } = await reader.read();
+    expect(new TextDecoder().decode(value)).toBe(serializeConsoleEvent(event));
+    expect(hub.subscriberCount).toBe(1);
+    await reader.cancel();
+    expect(hub.subscriberCount).toBe(0);
+    expect(stream.signal.aborted).toBe(true);
   });
 });

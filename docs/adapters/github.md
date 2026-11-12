@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/github/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/github/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=c07bca18817b6919 -->
+<!-- sync-adapter-docs:sha256=228c4b2facb62735 -->
 
 # @zhin.js/adapter-github
 
@@ -28,7 +28,7 @@ GitHub Plugin Runtime 适配器 — Issue/PR 评论区即聊天通道，GitHub A
 pnpm add @zhin.js/adapter-github
 ```
 
-Webhook 需要 Root 提供 `@zhin.js/host-http`（`zhin runtime start` 默认装配）。
+Webhook 需要 Root 提供 `@zhin.js/host-http`（`zhin start` 拉起的实例默认装配，HTTP 由管理网关承载）。
 
 ## 前置条件
 
@@ -115,7 +115,7 @@ github:
 
 新增仅保存，需手动启动；运行账号的普通配置更新只重连该账号。身份变化走明确替换，新账号不会继承旧 Session 或登录状态。账号凭据变化先按平台实际只读接口核验；平台无法核验时需明确替换。空白或遮蔽的密码不会覆盖既有密码。
 
-读取需要 `github:read`，写入需要 `github:write`；首次迁移还需管理员身份。无持久化存储时管理操作不可用，提交结果未知时先刷新核实，不重复提交。
+读取需要 `github:read`（`read` 级别，内置角色 `viewer` 及以上都有），写入需要 `github:write`（`operate` 级别，`operator` 及以上都有，绑定到本适配器的角色也算）；首次迁移还需管理员身份，见[插件权限的级别](https://zhin.js.org/console/#插件权限的级别)。无持久化存储时管理操作不可用，提交结果未知时先刷新核实，不重复提交。
 
 ## 故障排查
 

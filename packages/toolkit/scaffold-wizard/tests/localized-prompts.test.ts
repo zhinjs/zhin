@@ -55,3 +55,17 @@ it('does not carry a previous wizard language into another invocation or change 
   expect((prompt.mock.calls[0]![0] as any[])[0]).toMatchObject({message:'Enable AI Agent? (LLM conversations and tool calls)',default:true});
   expect((prompt.mock.calls[1]![0] as any[])[0].message).toContain('是否启用');
 });
+
+it('describes HTTP_TOKEN in the generated .env files as the bootstrap token, not a Console login token', () => {
+  for (const key of ['templates.environment', 'templates.environmentExample'] as const) {
+    const zh = wizardText('zh-CN', key, ['tok', '', '', '']);
+    const en = wizardText('en', key, ['tok', '', '', '']);
+    expect(zh, key).toContain('初始化令牌');
+    expect(zh, key).toContain('仅在创建首个所有者之前有效');
+    expect(zh, key).not.toContain('Token 认证');
+    expect(en, key).toContain('Bootstrap token');
+    expect(en, key).toContain('valid only until the first owner exists');
+    expect(en, key).not.toContain('Token authentication');
+    expect(zh, key).toMatch(/^HTTP_TOKEN=/mu);
+  }
+});

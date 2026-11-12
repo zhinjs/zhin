@@ -26,7 +26,7 @@ flowchart LR
 pnpm add @zhin.js/speech
 ```
 
-在 `zhin.config.yml` 顶层加入 `speech:` 段，重启后 CLI 会自动装配 Speech Host：
+在 `zhin.config.yml` 顶层加入 `speech:` 段，重启后实例会自动装配 Speech Host：
 
 ```yaml
 speech:

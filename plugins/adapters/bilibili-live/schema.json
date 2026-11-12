@@ -72,39 +72,6 @@
       "type": "string",
       "default": "https://api.live.bilibili.com"
     },
-    "master": {
-      "type": [
-        "string",
-        "number"
-      ],
-      "description": "框架 master（B 站 uid）。endpoints[i].master 可逐项覆盖",
-      "x-i18n": {
-        "en": {
-          "description": "Framework masters (Bilibili uid). endpoints[i].master can override this value."
-        }
-      }
-    },
-    "trusted": {
-      "type": "array",
-      "items": {
-        "type": [
-          "string",
-          "number"
-        ],
-        "description": "信任的 Bilibili 用户 ID",
-        "x-i18n": {
-          "en": {
-            "description": "Trusted Bilibili user ID"
-          }
-        }
-      },
-      "description": "框架 trusted 用户列表（B 站 uid）",
-      "x-i18n": {
-        "en": {
-          "description": "Framework trusted users (Bilibili uid)."
-        }
-      }
-    },
     "commandPrefix": {
       "type": "string",
       "default": "",
@@ -230,39 +197,6 @@
           "liveApiBaseUrl": {
             "type": "string",
             "default": "https://api.live.bilibili.com"
-          },
-          "master": {
-            "type": [
-              "string",
-              "number"
-            ],
-            "description": "框架 master（B 站 uid）。endpoints[i].master 可逐项覆盖",
-            "x-i18n": {
-              "en": {
-                "description": "Framework masters (Bilibili uid). endpoints[i].master can override this value."
-              }
-            }
-          },
-          "trusted": {
-            "type": "array",
-            "items": {
-              "type": [
-                "string",
-                "number"
-              ],
-              "description": "信任的 Bilibili 用户 ID",
-              "x-i18n": {
-                "en": {
-                  "description": "Trusted Bilibili user ID"
-                }
-              }
-            },
-            "description": "框架 trusted 用户列表（B 站 uid）",
-            "x-i18n": {
-              "en": {
-                "description": "Framework trusted users (Bilibili uid)."
-              }
-            }
           },
           "commandPrefix": {
             "type": "string",

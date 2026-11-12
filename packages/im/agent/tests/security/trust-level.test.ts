@@ -54,11 +54,13 @@ function groupTurn(roles: string[], scope: 'group' | 'private' = 'group', tools:
 
 describe('trust tiers (#726)', () => {
   it('resolves the initiator level from ingress roles and scene, never from message text', () => {
-    expect(resolveTurnTrustLevel(view('group', ['user', 'master']))).toBe('owner');
-    expect(resolveTurnTrustLevel(view('private', ['master']))).toBe('owner');
+    expect(resolveTurnTrustLevel(view('group', ['user', 'owner']))).toBe('owner');
+    expect(resolveTurnTrustLevel(view('private', ['owner']))).toBe('owner');
     expect(resolveTurnTrustLevel(view('group', ['user', 'trusted']))).toBe('trusted_member');
     expect(resolveTurnTrustLevel(view('group', ['user']))).toBe('group_member');
-    expect(resolveTurnTrustLevel(view('channel', ['user', 'admin']))).toBe('group_member');
+    // ADR 0056: the chat role admin includes trusted.
+    expect(resolveTurnTrustLevel(view('channel', ['user', 'admin']))).toBe('trusted_member');
+    expect(resolveTurnTrustLevel(view('channel', ['user', 'group_admin']))).toBe('group_member');
     // #753: a private chat from a non-owner, untrusted sender is group_member.
     expect(resolveTurnTrustLevel(view('private', ['user']))).toBe('group_member');
     expect(resolveTurnTrustLevel(view('private', ['user', 'trusted']))).toBe('trusted_member');
@@ -95,7 +97,7 @@ describe('trust tiers (#726)', () => {
     const member = applyTurnTrust({ ...view('group', ['user']), policy: POLICY }, tools);
     expect(member).toMatchObject({ level: 'group_member', restricted: true });
     expect(member.tools.map(tool => tool.name)).toEqual(['read_file']);
-    const owner = applyTurnTrust({ ...view('group', ['master']), policy: POLICY }, tools);
+    const owner = applyTurnTrust({ ...view('group', ['owner']), policy: POLICY }, tools);
     expect(owner).toMatchObject({ level: 'owner', restricted: false, policy: POLICY });
     expect(owner.tools).toHaveLength(3);
   });
@@ -141,7 +143,7 @@ describe('trust tiers (#726)', () => {
   });
 
   it('leaves owner and trusted turns unchanged', async () => {
-    for (const roles of [['user', 'master'], ['user', 'trusted']]) {
+    for (const roles of [['user', 'owner'], ['user', 'trusted']]) {
       const send = capability('plugin__send_private_message');
       const runtime = new TurnToolRuntime(groupTurn(roles, 'group', [send.name]), [send]);
       await expect(runtime.execute(send.name, {}, 'c')).resolves.toMatchObject({ status: 'completed' });

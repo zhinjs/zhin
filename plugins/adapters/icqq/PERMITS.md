@@ -1,6 +1,6 @@
 # ICQQ Agent 权限与会话信息
 
-调用者的角色与 Bot 的平台角色相互独立。`role(master,admin,trusted,owner)` 由框架校验调用者；它不代表 Bot 是群管理员。群管操作还需检查 Bot 与目标成员的实时平台身份。
+调用者的角色与 Bot 的平台角色相互独立。`trusted` 由框架校验调用者；它不代表 Bot 是群管理员。群管操作还需检查 Bot 与目标成员的实时平台身份。
 
 选择 ICQQ Agent 后，先从目录加载对应 Skill，其私有工具才会暴露。`icqq-conversation` 的 `conversation_info` 按当前 endpoint 查询 Bot 自己的身份及群／频道信息，不把共享会话画像当作权限依据，也不在每条聊天消息前增加一次角色查询。
 
@@ -19,3 +19,7 @@
 引用和转发只接受当前会话内可核实的原消息 ID，不允许跨会话读取／转发或伪造作者。读取入站引用和转发仍使用 `inspect_conversation_reference`，它不是发送工具。
 
 当前 guild-channel 接入可查询频道信息和 Bot 的 guild 角色，但没有这些消息操作和退群工具。SDK 的成员列表可能不完整；`channel_admin` 也未携带所管子频道的范围，不能据此判断当前子频道有管理权限。不要把 QQ 号、群号、guild ID 和 tiny ID 混用。
+
+## 目标来源
+
+群工具只作用于当前群（不接受 `group_id`）：`group_invite`、`group_member_info`、`group_sign`、`poke`、`group_files`、`list_muted`，以及上表的群管理工具；`group_leave` 的 `group_id` 只用于审批展示，必须等于当前群。

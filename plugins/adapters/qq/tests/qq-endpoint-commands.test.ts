@@ -37,7 +37,7 @@ let f: Awaited<ReturnType<typeof fixture>>;
 beforeEach(async () => { f = await fixture(); startQqBindFlowMock.mockReset(); });
 afterEach(async () => { await f.harness.stop(); });
 function commandContext(state: ReturnType<typeof createQqRuntimeState>, id?: string) {
-  return { owner: rootPluginId(), generation: 1, project: () => f.harness.index, config: {}, input: undefined, params: id ? { id } : {}, args: [],
+  return { owner: rootPluginId(), generation: 1, project: () => f.harness.index, config: {}, input: { sender: { id: 'owner-user', chatRole: 'owner', chatRoleLevels: { owner: 'adapter' } } }, params: id ? { id } : {}, args: [],
     use: (token: unknown) => { if (token === qqRuntimeStateToken) return state; throw new Error('No file/env account writer'); } } as never;
 }
 
@@ -70,34 +70,25 @@ describe('extractQqCommandReply', () => {
 });
 
 describe('isQqEndpointOperator', () => {
-  const message = (sender: string) => ({ sender: { id: sender } });
+  const message = (sender: string, chatRole?: 'owner' | 'admin') => ({ sender: { id: sender, ...(chatRole ? { chatRole, chatRoleLevels: { [chatRole]: 'adapter' } } : {}) } });
 
-  it('未配置 master 时放行（首个绑定者即 owner）', () => {
-    expect(isQqEndpointOperator({}, message('alice'))).toBe(true);
-    expect(isQqEndpointOperator({ endpoints: [{ id: 'a' }] }, message('alice'))).toBe(true);
-  });
-
-  it('顶层 master 命中放行，不命中拒绝', () => {
-    const config = { master: '1659488338' };
-    expect(isQqEndpointOperator(config, message('1659488338'))).toBe(true);
-    expect(isQqEndpointOperator(config, message('8596238'))).toBe(false);
-  });
-
-  it('endpoints[i].master 逐项命中同样放行', () => {
-    const config = { endpoints: [{ id: 'a', master: 8596238 }] };
-    expect(isQqEndpointOperator(config, message('8596238'))).toBe(true);
-    expect(isQqEndpointOperator(config, message('111'))).toBe(false);
+  it('requires the chat role owner (ADR 0056); configured master lists no longer count', () => {
+    expect(isQqEndpointOperator({}, message('alice', 'owner'))).toBe(true);
+    expect(isQqEndpointOperator({}, message('alice', 'admin'))).toBe(false);
+    expect(isQqEndpointOperator({}, message('alice'))).toBe(false);
+    expect(isQqEndpointOperator({ master: '1659488338' }, message('1659488338'))).toBe(false);
   });
 
   it('notify.id 作为通知目标也可执行 endpoint 管理', () => {
-    const config = { master: '1659488338', notify: { id: 'openid-master' } };
+    const config = { notify: { id: 'openid-master' } };
     expect(isQqEndpointOperator(config, message('openid-master'))).toBe(true);
     expect(isQqEndpointOperator(config, message('other'))).toBe(false);
+    expect(isQqEndpointOperator({ endpoints: [{ id: 'a', notify: { id: 'n' } }] }, message('n'))).toBe(true);
   });
 
-  it('sender 缺失时拒绝（已配置 master）', () => {
-    expect(isQqEndpointOperator({ master: '1' }, {})).toBe(false);
-    expect(isQqEndpointOperator({ master: '1' }, undefined)).toBe(false);
+  it('sender 缺失时拒绝', () => {
+    expect(isQqEndpointOperator({}, {})).toBe(false);
+    expect(isQqEndpointOperator({}, undefined)).toBe(false);
   });
 });
 

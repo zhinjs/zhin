@@ -17,7 +17,7 @@ import {
 } from './install.js';
 import { runPluginInfo, runPluginSearch } from './search.js';
 import { logger } from '../utils/logger.js';
-import { PluginManagementWorkflow } from '../plugin-management/workflow.js';
+import { PluginManagementWorkflow } from '@zhin.js/gateway/plugin-management';
 import { requestPluginConsole } from '../plugin-management/console-client.js';
 import { PLUGIN_RPC } from '@zhin.js/console-protocol';
 

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { createHttpHost, type HttpHost } from '@zhin.js/host-http';
+import { type HttpHost } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import {
   registerQqWebhookRoutes,
   type QqHttpBotTransport,

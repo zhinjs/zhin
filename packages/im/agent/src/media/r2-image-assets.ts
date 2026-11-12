@@ -1,23 +1,22 @@
-import { randomUUID } from 'node:crypto';
-import { AwsClient } from 'aws4fetch';
+import { S3PublicStore } from '@zhin.js/agent-media/core';
 import { inspectMediaBytes } from './media-normalize.js';
 import { DEFAULT_MULTIMODAL_CONFIG } from './media-types.js';
 import type { ImageAssetPublisher, PublishedImage, R2ImageStorageConfig } from './image-assets.js';
 
-const EXTENSIONS: Readonly<Record<string, string>> = {
-  'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp',
-};
+const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
 const IMAGE_KEY = /^[0-9a-f-]{36}\.(?:png|jpg|gif|webp)$/u;
 
-/** Generation-owned S3 client. Cleanup belongs to the operator's R2 lifecycle rule. */
+/**
+ * `ai.imageStorage` (Cloudflare R2) on top of agent-media's S3 store.
+ * Upload signing, object naming and URL ownership come from `@zhin.js/agent-media/core`;
+ * this adapter keeps zhin's config validation, the attachment size limit and the image-only rule.
+ * Cleanup belongs to the operator's R2 lifecycle rule.
+ */
 export class R2ImageAssetPublisher implements ImageAssetPublisher {
-  readonly #client: AwsClient;
-  readonly #objectBase: string;
+  readonly #store: S3PublicStore;
   readonly #publicBase: string;
-  private readonly fetchImpl: typeof fetch;
 
   constructor(config: R2ImageStorageConfig, fetchImpl: typeof fetch = fetch) {
-    this.fetchImpl = fetchImpl;
     if (!/^[a-f0-9]{32}$/iu.test(config.accountId)) throw new Error('imageStorage.accountId must be an R2 account ID');
     if (!/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/u.test(config.bucket)) throw new Error('imageStorage.bucket is invalid');
     if (!config.accessKeyId?.trim() || !config.secretAccessKey?.trim()) throw new Error('imageStorage credentials are required');
@@ -27,34 +26,31 @@ export class R2ImageAssetPublisher implements ImageAssetPublisher {
       throw new Error('imageStorage.publicBaseUrl must be an HTTPS URL without credentials, query or fragment');
     }
     this.#publicBase = `${base.href.replace(/\/+$/u, '')}/${config.prefix}`;
-    this.#objectBase = `https://${config.accountId}.r2.cloudflarestorage.com/${config.bucket}/${config.prefix}`;
-    this.#client = new AwsClient({
-      service: 's3', region: 'auto', accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey,
+    this.#store = new S3PublicStore({
+      endpoint: `https://${config.accountId}.r2.cloudflarestorage.com`,
+      bucket: config.bucket,
+      region: 'auto',
+      virtualHosted: false,
+      accessKeyId: config.accessKeyId,
+      secretAccessKey: config.secretAccessKey,
+      prefix: config.prefix,
+      urlMode: 'public',
+      publicBaseUrl: config.publicBaseUrl,
+      fetch: fetchImpl,
     });
   }
 
+  /** Only images this publisher minted: exact public URL, no query, fragment or extra path. */
   ownsUrl(url: string): boolean {
-    return url.startsWith(this.#publicBase) && IMAGE_KEY.test(url.slice(this.#publicBase.length));
+    return this.#store.ownsUrl(url) && IMAGE_KEY.test(url.slice(this.#publicBase.length));
   }
 
   async publish(bytes: Uint8Array, signal?: AbortSignal): Promise<PublishedImage> {
     signal?.throwIfAborted();
     if (bytes.byteLength > DEFAULT_MULTIMODAL_CONFIG.maxFileBytes) throw new Error('Image exceeds the 25 MiB attachment limit');
     const media = inspectMediaBytes(Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength), 'image');
-    const extension = media && EXTENSIONS[media.mimeType];
-    if (!extension) throw new Error('Only PNG, JPEG, GIF and WebP images can be uploaded');
-    const key = `${randomUUID()}.${extension}`;
-    const request = await this.#client.sign(`${this.#objectBase}${key}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': media.mimeType, 'Cache-Control': 'no-store' },
-      body: new Uint8Array(bytes),
-    });
-    signal?.throwIfAborted();
-    // sign + fetch deliberately avoids the signing client's automatic retry loop.
-    const response = await this.fetchImpl(request, { signal, redirect: 'error' });
-    await response.body?.cancel();
-    if (!response.ok) throw new Error(`Image upload failed (HTTP ${response.status})`);
-    signal?.throwIfAborted();
-    return { image_url: `${this.#publicBase}${key}`, mime: media.mimeType, size: bytes.byteLength };
+    if (!media || !IMAGE_TYPES.has(media.mimeType)) throw new Error('Only PNG, JPEG, GIF and WebP images can be uploaded');
+    const ref = await this.#store.publish({ bytes, mime: media.mimeType }, signal);
+    return { image_url: ref.url, mime: ref.mime, size: ref.size };
   }
 }

@@ -44,7 +44,6 @@ GitHub 仓库通知。以前是每个平台一个进程一套代码，现在要�
 ```yaml
 plugins:
   icqq:
-    master: "${ICQQ_MASTER}"
     endpoints:                        # 一个实例，五个账号
       - name: "${ICQQ_ACCOUNT}"
       - name: "${ICQQ_ACCOUNT_2}"
@@ -77,8 +76,8 @@ plugins:
 
 ## 运维经验
 
-- 日志在 Console「日志」页直接看（SystemLog 落库，带级别过滤），不用 ssh 翻文件。
-- 定时任务（游戏会话清理、彩票 pipeline）在 Console「定时任务」页管理，不用改配置重启。
+- 日志在 Console「运行日志」页直接看（SystemLog 落库，带级别过滤），不用 ssh 翻文件。
+- 定时任务（游戏会话清理、彩票 pipeline）在 Console「运维 → 定时任务」页管理，不用改配置重启。
 - AI 用 OpenRouter 免费模型做兜底，贵模型按 agent 角色分流（`ai.agents.<name>.provider`）。
 
 ## 下一步

@@ -8,7 +8,7 @@ tier: Stable
 本页由 [`plugins/adapters/sandbox/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/sandbox/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=1382e9e6a35e4d0f -->
+<!-- sync-adapter-docs:sha256=9ea19b5017cb5e78 -->
 
 # @zhin.js/adapter-sandbox
 
@@ -32,19 +32,19 @@ pnpm add @zhin.js/adapter-sandbox
 
 ## 前置条件
 
-Sandbox 不需要外部账号。只需由 `zhin runtime start` 装配 HTTP Host，并确保浏览器能访问启动日志中的 Host 地址。
+Sandbox 不需要外部账号。只需用 `zhin start` 启动项目（管理网关承载 HTTP，实例的路由经网关转发），并确保浏览器能访问启动日志中的 Host 地址。
 
 ## 依赖
 
-### Plugin Runtime（新，`zhin runtime start`）
+### Plugin Runtime（`zhin start`）
 
 - `@zhin.js/adapter` — 约定式 `adapters/sandbox/index.ts`
 - `@zhin.js/host-http` — Root 提供的 `httpHostToken`（WebSocket `/sandbox` + Console HTTP）
 - `@zhin.js/core` — `endpointSpec.events` 入站、`outboundMessageToken` 出站
 - `@zhin.js/page` + `pages/index/index.tsx` — ADR 0046 约定页（`definePage`；路由 `/sandbox`）
 
-Root 在 `zhin runtime start` 时装载 `@zhin.js/host-http`、`ConsoleRuntime` 与
-`ClientBuildModuleRuntime`。打开 `http://<host>:<port>/console` 可浏览页面；Sandbox 页
+`zhin start` 拉起的实例装载 `@zhin.js/host-http`、`ConsoleRuntime` 与
+`ClientBuildModuleRuntime`（HTTP 由管理网关监听并转发）。打开 `http://<host>:<port>/console` 可浏览页面；Sandbox 页
 （路由 `/sandbox`，与 WebSocket `/sandbox` 同 path：GET 开页、Upgrade 走 WS）内置聊天壳。
 
 旧 `client/`（`register(api)` / `pageManager.addEntry`）仅保留给 legacy Host 栈参考，
@@ -96,8 +96,8 @@ Console 原生渲染 Markdown 格式的流式回复（`markdown` 段，`data.con
 ## 使用方式
 
 1. 启动 Zhin 实例：`pnpm dev`（终端会打印 Host 地址，一般为 `http://127.0.0.1:8086`）
-2. 打开 **[Remote Console](https://console.zhin.dev)**，API Base 与 Host 地址一致，Token 与 `http.token` / `HTTP_TOKEN` 一致
-3. 在 Console **会话** 页连接后发送消息
+2. 打开 **[Remote Console](https://console.zhin.dev)**，API Base 与 Host 地址一致，用 Console 账号登录（首次连接用 `http.token` / `HTTP_TOKEN` 创建所有者）
+3. 连接后在 Console 侧栏「试聊一下」（`/sandbox`）发送消息
 
 浏览器客户端连接到默认 `sandbox-bot`，也可以通过多个显式 endpoint 使用不同 WebSocket 路径。
 
@@ -109,7 +109,7 @@ Console 原生渲染 Markdown 格式的流式回复（`markdown` 段，`data.con
 
 刷新后仅恢复当前进程和 generation 中仍有效的待处理交互，继续使用原发起人、会话、期限和单次处理规则。历史与浏览器缓存中的控件不提供当前审批权限；已结束或重启前的操作不会重新激活。
 
-无人值守任务等产生的 Host 工具审批，可在任务中心的「Host 工具审批」中查看并逐次确认。该入口沿用 Console 操作者的权限，只显示当前有效请求，不改变 IM 审批规则。
+无人值守任务等产生的 Host 工具审批，可在「运维 → 定时任务 → 管理员任务」的「Host 工具审批」中查看并逐次确认。该入口沿用 Console 操作者的权限，只显示当前有效请求，不改变 IM 审批规则。
 
 「变更与产物」中的成功文件写入、编辑在 Host 提供项目文件引用时，可打开现有文件管理器查看当前文件。入口沿用文件管理器的项目根与读取权限；旧记录或无法映射的文件仍显示执行记录，不推测链接。该入口读取当前内容，不是执行时的历史快照。
 
@@ -122,9 +122,9 @@ Console 沙盒页和自己写的测试客户端都用这套协议。每个 WebSo
 ### 连接
 
 - **地址**：`ws://<host>:<port>/sandbox`。同一个 HTTP Host 上的第一个 Sandbox endpoint 挂在 `/sandbox`，其余 endpoint 挂在 `/sandbox/<endpoint id>`（重名时依次加 `-2`、`-3`），启动日志会打印 `ws mounted <path>`。
-- **鉴权**：Host 配置了 token 时，握手请求需带 `Authorization: Bearer <token>` 或查询参数 `?token=<token>`，否则返回 `401`。demo 权限的 token 只能连 `/sandbox`，而且是只读的：消息会被接收，但不会进入命令和 Agent，服务端回一条 `type: "error"`。
+- **鉴权**：Host 需要凭据时（已配置 `http.token` 或已完成初始化），握手请求需带 Console 凭据：`Authorization: Bearer <会话或 API 令牌>` 或查询参数 `?token=`，并且该账号要有 `endpoint.operate` 权限（所有者、管理员、运营），否则返回 `401`。初始化令牌不能连接。
 - **多连接**：同一 endpoint 的浏览器连接可以并存，共用已配置的 `owner`；`connectionId` 只标识连接，不改变 Bot 或 Agent 会话身份。关闭一个页面只移除该连接，不取消或重跑任务；endpoint 停止时关闭全部连接（`1001`），generation 退役继续由 Host 关闭（`1012`）。
-- **会话投递**：每个 full 连接订阅一个 `type` + `id`；默认订阅 `private` + `owner`，发送普通消息也会更新该连接的订阅。回复只投递到同会话的 full 连接，demo 连接不能订阅或接收这些消息。无匹配连接时不确认发送，所有发送尝试失败时保留结果未知，不自动重试。
+- **会话投递**：每个连接订阅一个 `type` + `id`；默认订阅 `private` + `owner`，发送普通消息也会更新该连接的订阅。回复只投递到同会话的连接。无匹配连接时不确认发送，所有发送尝试失败时保留结果未知，不自动重试。
 
 ### 客户端 → 服务端：订阅当前会话
 
@@ -194,7 +194,7 @@ Console 沙盒页和自己写的测试客户端都用这套协议。每个 WebSo
 }
 ```
 
-`canExecute` 表示当前连接是否为 full 权限（能运行命令和 Agent 任务）；`shellIsolation` 是 Docker 隔离环境的探测结果，仅供展示。`ready` 与 `subscribed` 仅确认连接和订阅，不代表任务或审批成功。
+`canExecute` 表示当前连接能否运行命令和 Agent 任务（通过鉴权的连接都可以）；`shellIsolation` 是 Docker 隔离环境的探测结果，仅供展示。`ready` 与 `subscribed` 仅确认连接和订阅，不代表任务或审批成功。
 
 **回复消息**：
 
@@ -216,7 +216,7 @@ Console 沙盒页和自己写的测试客户端都用这套协议。每个 WebSo
 - `image` / `audio` / `video` / `file` 段只读 `data.media`（MediaRef）：`url` 原样透传；`base64` 补上 `base64://` 前缀后内联；`path` 由服务端读取文件后转成 `base64` 内联；其他类型和缺少 `data.media` 的媒体段会被丢弃，并在日志中记录 `sandbox_outbound_media_dropped`。
 - 插件直接发送完整消息对象时，其他字段会原样保留。
 
-**用户消息回声**：只发给已完成新协议订阅的同会话 full 连接。
+**用户消息回声**：只发给已完成新协议订阅的同会话连接。
 
 ```json
 {
@@ -233,18 +233,6 @@ Console 沙盒页和自己写的测试客户端都用这套协议。每个 WebSo
 ```
 
 客户端按会话、消息方向及 `messageId` 合并本页乐观消息、真实历史和回声。按钮操作仍由原服务端交互与审批逻辑裁决，页面显示「已提交」不代表审批通过。多连接沿用当前 Console 操作者和配置的 Sandbox owner，不增加多人账号体系。
-
-**只读连接的提示**：demo 权限的连接发送消息后，服务端回复：
-
-```json
-{
-  "type": "error",
-  "id": "sandbox-user",
-  "endpoint": "sandbox-bot",
-  "content": [{ "type": "text", "data": { "text": "当前连接是只读演示权限，不能运行 Agent 任务。" } }],
-  "timestamp": 1700000000000
-}
-```
 
 ## 适用场景
 
@@ -264,3 +252,7 @@ Console 沙盒页和自己写的测试客户端都用这套协议。每个 WebSo
 ## 许可证
 
 MIT License
+
+## 成员身份
+
+模拟器的发送者角色（`master` = 群主 / `admin` / `member`）在群聊、频道中作为 `sender.platform.standing`（`owner` / `admin` / `member`）上报，私聊不上报。它只模拟平台身份，不授予框架角色（主人等由账号配置或聊天角色决定）。能力画像：`group` / `channel` 的 `scene.platformStanding = { standing: true }`。详见 [ADR 0056 §1](https://github.com/zhinjs/zhin/blob/main/docs/adr/0056-chat-roles.md)。

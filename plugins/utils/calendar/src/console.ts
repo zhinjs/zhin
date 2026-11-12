@@ -42,6 +42,8 @@ export function createCalendarConsoleRpc(defaultRuntime?: CalendarRuntime): Plug
   const localEvents: CalendarConsoleEventItem[] = [];
 
   return definePluginConsoleRpc({
+    // Day-to-day edits belong to operators; `:write` would otherwise infer `manage` (ADR 0049).
+    permissions: [{ id: 'calendar:write', level: 'operate', description: '编辑日程' }],
     status: {
       page: 'index',
       requiredPermissions: ['calendar:read'],

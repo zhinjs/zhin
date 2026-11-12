@@ -94,7 +94,7 @@ The root plugin the main configuration `plugins` map (or project graph) must ref
 
 - **Notice / request / meta side events** enter the unified `endpoint[endpointSpec].events.emit(...)` ingress and dispatch to handlers. Requests expose `$approve` / `$reject`; messages continue through `outboundMessageToken`.
 - **Group management tools have not been migrated yet**: the old Adapter registered a full set of agent tools (kick/mute/group card, etc.) via `createSceneManagementTools`; after migration, `tools/` only covers NapCat extension APIs. Other group management capabilities can be invoked via `callApi` (e.g., `set_group_kick`, `set_group_ban`) as an escape hatch.
-- **Platform permission access control**: `plugin.ts` setup registers `createSceneRolePlatformChecker()` through the generation-owned `permissionHostToken`. `scene_admin` / `scene_owner` are determined based on the sender's `role` (owner / admin) in the inbound metadata.
+- **Platform permission access control**: group owner / admin is normalized to `sender.platform.standing` (owner / admin); tools and commands check it with `platform:admin` / `platform:owner` (ADR 0056, see [Chat roles](../concepts/chat-roles.md)).
 
 ## Documentation Links
 
@@ -111,7 +111,7 @@ Open the Console **NapCat** page (route `/napcat`) to:
 
 An administrator must review and confirm the existing account list before its first migration; identity and history are retained. New or replaced accounts are saved disabled and must be started explicitly. A connection update reconnects only that account; replacement uses a new internal identity and does not inherit Sessions or settings. If a commit outcome is unknown, refresh to verify it before taking another action.
 
-Reading requires `napcat:read`; writes require `napcat:write`. A full admin token is unrestricted. "Add endpoint" is equivalent to the old `napcat endpoint add` command.
+Reading requires `napcat:read`; writes require `napcat:write`. A global owner is unrestricted. Plugin permissions are granted by level (see [Plugin permission levels](../console/index.md#plugin-permission-levels)): `:read` to `viewer` and above, `:write` (`operate` level for these account permissions) to `operator` and above; a role bound to this adapter counts too, and the first migration additionally needs an administrator. "Add endpoint" is equivalent to the old `napcat endpoint add` command.
 
 ## Troubleshooting
 

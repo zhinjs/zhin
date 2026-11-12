@@ -5,7 +5,7 @@ export default defineEvalCase({
   description: 'A Gemini SAFETY finish is final: not re-asked, no fallback model, and the owner gets a short refusal saying the model blocked it.',
   source: '#724 provider resilience, Gemini primary (#770): safety block → no retry, no fallback',
   tags: ['long-task'],
-  inbound: { text: '帮我写一句早安问候', sender: { id: 'owner', roles: ['master'] } },
+  inbound: { text: '帮我写一句早安问候', sender: { id: 'owner', chatRole: 'owner' } },
   models: ['scripted-fallback'],
   // Even with an empty-reply re-ask enabled, a refusal is not re-asked.
   agentConfig: { modelHarness: { services: { 'eval-scripted': { models: { 'scripted-model': { emptyReplyRetries: 1 } } } } } },

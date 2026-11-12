@@ -138,6 +138,7 @@ export function createAssistantScheduleRuntime(
     due: createTimerMailDueHandler({
       mailbox: () => agent.hostMailbox,
       executor,
+      creatorRoles: source => im.permissionHost.currentSenderRoles(source),
     }),
     history,
     notifyOnFailure: defaults.notifyOnFailure,

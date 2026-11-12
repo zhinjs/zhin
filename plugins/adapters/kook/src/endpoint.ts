@@ -1,4 +1,4 @@
-import { EndpointDeliveryError, type ConversationRef } from '@zhin.js/im-contract';
+import { EndpointDeliveryError, type ConversationRef, type PlatformStanding, type SelfStandingRequest } from '@zhin.js/im-contract';
 /**
  * KookEndpoint — lifecycle, outbound, admit, OpenAPI helpers for agent tools.
  */
@@ -40,7 +40,7 @@ import {
   type KookClientTransport,
 } from './ws.js';
 import { recallKookMessage, sendKookOutbound } from './outbound.js';
-import { KookSenderRoleResolver, type KookSenderRoleProjection } from './sender-roles.js';
+import { KookSenderRoleResolver } from './sender-roles.js';
 import { receiveKookSideEvent } from './side-event-dispatch.js';
 import { createKookSelfProfile } from './self-profile.js';
 
@@ -49,12 +49,12 @@ export interface KookEndpointOptions {
   readonly config: ResolvedKookWebsocketConfig;
 }
 
-/** 入站 message.receive 载荷：规范角色 owner/admin 进 roles，原始角色 id 进 permissions。 */
+/** 入站 message.receive 载荷：发送者平台身份进 `sender.platform`（ADR 0056 §1）。 */
 function kookInboundPayload(
   endpointId: string,
   conversation: ConversationRef,
   msg: KookInboundMessage,
-  projection: KookSenderRoleProjection,
+  platform: PlatformStanding | undefined,
   selfId: string | undefined,
 ) {
   return {
@@ -66,8 +66,7 @@ function kookInboundPayload(
     sender: {
       id: msg.authorId,
       name: senderDisplayName(msg) || undefined,
-      ...(projection.role ? { roles: [projection.role] } : {}),
-      ...(projection.permissions.length ? { permissions: [...projection.permissions] } : {}),
+      ...(platform ? { platform } : {}),
     },
     endpointId,
     ...(isKookBotMentioned(msg, selfId) ? { mentioned: true } : {}),
@@ -76,7 +75,6 @@ function kookInboundPayload(
       userId: msg.authorId,
       guildId: msg.guildId,
       authorRoleIds: msg.authorRoles,
-      ...(projection.role ? { senderRole: projection.role } : {}),
     }),
   };
 }
@@ -91,7 +89,7 @@ export class KookWebsocketEndpoint extends RuntimeKookClient implements Endpoint
   #open = false;
   #executionSignal?: AbortSignal;
   #started = false;
-  readonly #management: EndpointManagement = createKookEndpointManagement(() => this.#requireClient());
+  readonly #management: EndpointManagement = createKookEndpointManagement(() => this.#requireClient(), this.#roles);
   readonly #control: EndpointControl = Object.freeze<EndpointControl>({
     recall: request => recallKookMessage(this.#requireClient(), request),
   });
@@ -172,10 +170,10 @@ export class KookWebsocketEndpoint extends RuntimeKookClient implements Endpoint
       if (msg.authorBot) return;
       const conversation = kookInboundConversation(String(this.#options.id), msg);
       const selfId = this.self_id != null ? String(this.self_id) : undefined;
-      return this.#roles.resolve(msg).then((projection) => {
+      return this.#roles.resolve(msg).then((platform) => {
         this.#executionSignal?.throwIfAborted();
         return this[endpointSpec].events.emit('message.receive',
-          kookInboundPayload(this.#options.config.id, conversation, msg, projection, selfId));
+          kookInboundPayload(this.#options.config.id, conversation, msg, platform, selfId));
       }).catch((err) => {
         this.#logger.warn(formatCompact({
           op: 'kook_gateway_receive_failed',
@@ -255,7 +253,7 @@ export class KookWebhookEndpoint extends RuntimeKookClient implements Endpoint {
   #open = false;
   #executionSignal?: AbortSignal;
   #started = false;
-  readonly #management: EndpointManagement = createKookEndpointManagement(() => this.#requireClient());
+  readonly #management: EndpointManagement = createKookEndpointManagement(() => this.#requireClient(), this.#roles);
   readonly #control: EndpointControl = Object.freeze<EndpointControl>({
     recall: request => recallKookMessage(this.#requireClient(), request),
   });
@@ -374,10 +372,10 @@ export class KookWebhookEndpoint extends RuntimeKookClient implements Endpoint {
       if (msg.authorBot) return;
       const conversation = kookInboundConversation(String(this.#options.id), msg);
       const selfId = this.self_id != null ? String(this.self_id) : undefined;
-      return this.#roles.resolve(msg).then((projection) => {
+      return this.#roles.resolve(msg).then((platform) => {
         this.#executionSignal?.throwIfAborted();
         return this[endpointSpec].events.emit('message.receive',
-          kookInboundPayload(this.#options.config.id, conversation, msg, projection, selfId));
+          kookInboundPayload(this.#options.config.id, conversation, msg, platform, selfId));
       }).catch((err) => {
         this.#logger.warn(formatCompact({
           op: 'kook_gateway_receive_failed',
@@ -438,8 +436,24 @@ function isKookTextChannelType(type: string | number | undefined): boolean {
  */
 export function createKookEndpointManagement(
   requireClient: () => KookClientTransport,
+  roles: KookSenderRoleResolver = new KookSenderRoleResolver(requireClient),
 ): EndpointManagement {
   return Object.freeze<EndpointManagement>({
+    /**
+     * ADR 0056 §1: the Bot's own standing in the channel's guild (`/v3/user/view` self → its role
+     * ids, then the same guild owner / role-permission resolution as senders).
+     */
+    async inspectSelfStanding({ conversation, signal }: SelfStandingRequest): Promise<PlatformStanding | undefined> {
+      const guildId = conversation.kind === 'channel' ? conversation.parent?.id : undefined;
+      if (!guildId) return undefined;
+      const operation = createEndpointOperation({ signal });
+      const client = requireClient();
+      const selfId = client.self_id != null ? String(client.self_id) : undefined;
+      if (!selfId) return undefined;
+      const { data } = await operation.run(() => client.request.get('/v3/user/view', { params: { user_id: selfId, guild_id: guildId } }));
+      const held = Array.isArray((data as { roles?: unknown })?.roles) ? (data as { roles: unknown[] }).roles.map(Number).filter(Number.isFinite) : [];
+      return roles.resolve({ guildId, authorId: selfId, authorRoles: held });
+    },
     async listGroups(request: EndpointManagementRequest = {}): Promise<readonly EndpointGroup[]> {
       const operation = createEndpointOperation(request);
       const guilds = await operation.run(() => requireClient().getGuildList());

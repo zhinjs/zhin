@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/milky/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/milky/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=d13821c2ecc90c67 -->
+<!-- sync-adapter-docs:sha256=d68d291a916d0f51 -->
 
 # @zhin.js/adapter-milky
 
@@ -112,7 +112,7 @@ milky:
 - 经所属 Adapter 增删持久化账号、启停单个 Endpoint；凭据由 Host 加密仓储保存，不改启动 YAML 或 `.env`，不重启进程；
 - 如果适配器要求登录，页面会显示 LoginAssist 的扫码 / 滑块 / 设备确认待办；
 
-读取需要 `milky:read`，写操作需要 `milky:write`；管理员 full token 不受限。页面里的「添加 endpoint」等价于原来的 `milky endpoint add`。
+读取需要 `milky:read`（`read` 级别，内置角色 `viewer` 及以上都有）；增删改账号等写操作需要 `milky:write`（`operate` 级别，`operator` 及以上都有，绑定到本适配器的角色也算），首次迁移还需管理员身份；全局所有者不受限，见[插件权限的级别](https://zhin.js.org/console/#插件权限的级别)。页面里的「添加 endpoint」等价于原来的 `milky endpoint add`。
 
 ## 故障排查
 
@@ -126,3 +126,7 @@ milky:
 ## 许可证
 
 MIT License
+
+## 成员身份
+
+群消息的 `group_member.role`（`owner` / `admin` / `member`）归一为 `sender.platform.standing`；私聊、临时会话不上报。Milky 没有平台原生角色与权限位。能力画像：`group.scene.platformStanding = { standing: true }`。详见 [ADR 0056 §1](https://github.com/zhinjs/zhin/blob/main/docs/adr/0056-chat-roles.md)。

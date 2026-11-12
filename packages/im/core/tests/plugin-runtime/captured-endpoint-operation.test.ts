@@ -769,6 +769,25 @@ it('excludes inline media bytes from the semantic bound and still authorizes the
   } finally { operation.release(); await f.close(); }
 });
 
+it('holds untrusted streamed media to the media policy after prepare (no host files reach the Endpoint)', async () => {
+  const native = nativeStreaming(), ordinary = vi.fn(async () => 'image');
+  const seen: unknown[] = [];
+  const f = await fixture(ordinary, { streaming: native.streaming, middleware: [defineMiddleware({
+    target: 'outbound', incremental: true, async handle(envelope: OutboundEnvelope, next) { seen.push(envelope.payload); await next(); },
+  })] });
+  const operation = f.im.endpoints.captureOperation({ target: f.target, client: f.index.clientById(f.one.canonicalId) });
+  const hostFile: Segment = { type: 'image', data: { media: { kind: 'file', value: 'file:///etc/passwd' } } };
+  try {
+    const stream = operation.openReplyStream!({ prepare: async segments => segments, mediaTrust: { source: 'test:model' } })!;
+    expect(await stream.finish({ revision: 1, messages: [{ key: 'answer', complete: true, segments: [{ key: 'image', complete: true, value: hostFile }] }] }))
+      .toMatchObject({ status: 'sent' });
+    const payload = ordinary.mock.calls[0]![0].payload as Segment[];
+    expect(payload).toEqual([{ type: 'text', data: { text: '[图片未发送：媒体来源不被允许]' } }]);
+    expect(seen.length).toBeGreaterThan(0);
+    expect(JSON.stringify(seen)).not.toContain('passwd');
+  } finally { operation.release(); await f.close(); }
+});
+
 it('routes existing-message control solely by its canonical reference, not contradictory selectors', async () => {
   const f = await fixture();
   try {

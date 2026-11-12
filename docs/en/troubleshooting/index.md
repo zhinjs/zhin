@@ -56,17 +56,17 @@ Requests remain rejected after login, or write actions report insufficient permi
 
 ### Cause
 
-- The Console token differs from the active generation's `http.token`.
-- The session is read-only Demo mode, or its token lacks the required scope.
+- The session expired or was revoked (a password change or disabling the user revokes every session), or the API token was revoked.
+- The account's roles lack the permission the operation needs (the 403 response names it), or `http.token` is still used after setup; it is only valid until the first owner exists.
 
 ### Action
 
-- Reload `HTTP_TOKEN` from the deployment environment rather than browser history or stale config.
-- After changing the production token, publish a new generation and sign in again.
+- Sign in again; give automation a newly issued API token, or ask an owner to bind a suitable role under Access.
+- If no owner can sign in, stop the Host and recover offline with `zhin console user passwd <username>` or `zhin console user enable <username>`.
 
 ### Verification
 
-- Verify the same token with `curl -H "Authorization: Bearer $HTTP_TOKEN" http://127.0.0.1:8086/api/system/stats`.
+- Check which principal and permissions a credential resolves to with `curl -H "Authorization: Bearer $ZHIN_CONSOLE_TOKEN" http://127.0.0.1:8086/api/auth/me`.
 
 </section>
 
@@ -85,7 +85,7 @@ The adapter is installed, but its Endpoint is offline and cannot receive or send
 
 ### Action
 
-- Inspect the latest error in Endpoint details, then compare it with the [generated configuration fields](/en/configuration/generated).
+- Inspect the connection state and latest error in the account page's Access and Overview tabs, then compare it with the [generated configuration fields](/en/configuration/generated).
 - Revalidate credentials, callback URLs, and network egress against the platform guide.
 
 ### Verification
@@ -138,7 +138,7 @@ Startup reports `Invalid Plugin config`, an unknown top-level field, or environm
 
 ### Verification
 
-- `npx zhin doctor` should pass, followed by `npx zhin runtime start` without validation errors.
+- `npx zhin doctor` should pass, followed by `npx zhin start --foreground` without validation errors.
 
 </section>
 
@@ -187,7 +187,7 @@ Startup fails with `Multiple package locations for @zhin.js/... are not supporte
 
 ### Verification
 
-- After `pnpm install`, each zhin package has a single resolved path and `zhin runtime start --once` prints `"started": true`.
+- After `pnpm install`, each zhin package has a single resolved path and `zhin start --once` prints `"started": true`.
 
 </section>
 
@@ -197,7 +197,7 @@ Startup fails with `Multiple package locations for @zhin.js/... are not supporte
 
 ### Symptom
 
-Agent Studio cannot start a turn and reports an unavailable provider, model, or API key.
+An Agent session in **Try a conversation** cannot start a turn and reports an unavailable provider, model, or API key.
 
 ### Cause
 
@@ -230,7 +230,7 @@ An Agent turn stops at a tool step marked pending approval, denied, or cancelled
 
 ### Action
 
-- Inspect cwd, security policy, and approval details in Agent Studio; approve only understood side effects.
+- Inspect cwd, security policy, and approval details in the **Try a conversation** Agent session and **Bot status**; approve only understood side effects.
 - After cancellation, start a new turn rather than replaying a tool call that may have produced side effects.
 
 ### Verification

@@ -5,7 +5,7 @@ export default defineEvalCase({
   description: 'When every retry hits a 5xx, the owner gets a chat-voice line with the cause instead of the raw provider error.',
   source: '#724 provider resilience (retries exhausted → friendly feedback)',
   tags: ['long-task'],
-  inbound: { text: '帮我写一句早安问候', sender: { id: 'owner', roles: ['master'] } },
+  inbound: { text: '帮我写一句早安问候', sender: { id: 'owner', chatRole: 'owner' } },
   agentConfig: { providerResilience: { maxRetries: 1, baseDelayMs: 1, maxDelayMs: 1 } },
   script: [
     { fault: { kind: 'error', message: 'upstream exploded: internal trace id 42', status: 503 } },

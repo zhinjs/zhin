@@ -22,34 +22,6 @@
       "type": "number",
       "default": 30000
     },
-    "master": {
-      "type": [
-        "string",
-        "number"
-      ],
-      "description": "框架 master（QQ uin；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖",
-      "x-i18n": {
-        "en": {
-          "description": "Framework masters (QQ uin; AI/tool permissions and endpoint management). endpoints[i].master can override this value."
-        }
-      }
-    },
-    "trusted": {
-      "type": "array",
-      "items": {
-        "type": [
-          "string",
-          "number"
-        ],
-        "description": "Trusted QQ uin"
-      },
-      "description": "框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加",
-      "x-i18n": {
-        "en": {
-          "description": "Framework trusted users, below master authority. endpoints[i].trusted can add users."
-        }
-      }
-    },
     "endpoints": {
       "type": "array",
       "minItems": 1,
@@ -58,34 +30,6 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "master": {
-            "type": [
-              "string",
-              "number"
-            ],
-            "description": "本 endpoint 的框架 master（QQ uin）；覆盖顶层 master",
-            "x-i18n": {
-              "en": {
-                "description": "Framework masters for this endpoint (QQ uin), overriding the top-level master list."
-              }
-            }
-          },
-          "trusted": {
-            "type": "array",
-            "items": {
-              "type": [
-                "string",
-                "number"
-              ],
-              "description": "Trusted QQ uin"
-            },
-            "description": "本 endpoint 的 trusted 列表",
-            "x-i18n": {
-              "en": {
-                "description": "Trusted users for this endpoint."
-              }
-            }
-          },
           "connection": {
             "type": "string",
             "enum": [

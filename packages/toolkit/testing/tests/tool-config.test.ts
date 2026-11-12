@@ -68,7 +68,7 @@ describe('runTool', () => {
 
   it('runs a tool definition with an IM origin derived from a fake message', async () => {
     const fake = createFakePlugin({ config: { prefix: '> ' } });
-    const message = createFakeMessage({ id: 'm1', sender: { id: 'u1', roles: ['admin'] },
+    const message = createFakeMessage({ id: 'm1', sender: { id: 'u1', chatRole: 'admin' },
       conversation: { endpoint: { id: 'bot', adapter: 'qq' }, kind: 'private', id: 'u1' } });
     expect(await runTool(fake, echo, { text: 'hi' }, { message })).toBe('> hi@qq/u1 by u1');
     expect(toolOriginFromMessage(message)).toEqual({
@@ -107,6 +107,6 @@ describe('runTool', () => {
     const context = createToolContext(createFakePlugin());
     expect(Object.isFrozen(context)).toBe(true);
     expect(context.policy).toEqual({ permissions: [], unattended: false, network: { enabled: false } });
-    expect(context.principal).toEqual({ subjectId: 'test-user', roles: [] });
+    expect(context.principal).toEqual({ subjectId: 'test-user', roles: ['user'] });
   });
 });

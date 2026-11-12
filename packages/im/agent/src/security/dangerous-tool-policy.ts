@@ -1,4 +1,4 @@
-import { hasSenderRole, senderRolesFromMessage, type Message } from '@zhin.js/core';
+import { chatRoleIncludes, hostChatRole, type Message } from '@zhin.js/core';
 import { getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('DangerousToolPolicy');
@@ -66,9 +66,11 @@ function resolveRoleFromMessage(commMessage?: Message): {
 
 /** host root 不可用时，从 Message.sender 快照或重算角色（测试/降级路径） */
 function resolveRoleFromMessageFallback(commMessage: Message): ToolRequesterRole {
-  const snapshot = senderRolesFromMessage(commMessage);
-  if (hasSenderRole(snapshot, 'master')) return 'master';
-  if (hasSenderRole(snapshot, 'trusted')) return 'trusted';
+  // ADR 0056: the Runtime-set chat role (admin includes trusted); host-wide `owner` needs a
+  // global owner — a conversation / account / adapter owner is treated as admin here.
+  const role = hostChatRole(commMessage.sender);
+  if (role === 'owner') return 'owner';
+  if (chatRoleIncludes(role, 'trusted')) return 'trusted';
   return 'other';
 }
 
@@ -86,13 +88,13 @@ export function checkFileToolAccess(toolName: FileToolName, commMessage?: Messag
   const { role, hasIdentity } = resolveRoleFromMessage(commMessage);
   const op = FILE_TOOL_OPERATION[toolName];
 
-  if (role === 'master') {
+  if (role === 'owner') {
     return { allowed: true, role };
   }
 
   if (!hasIdentity) {
     // 无 IM 上下文（直接工具调用）→ 全权
-    return { allowed: true, role: 'master' };
+    return { allowed: true, role: 'owner' };
   }
 
   if (role === 'unknown') {
@@ -138,7 +140,7 @@ export function checkSensitiveFilePathAccess(
     return { allowed: true, role };
   }
 
-    if (role === 'master') {
+    if (role === 'owner') {
       return {
         allowed: false,
         needsOwnerApproval: true,
@@ -194,11 +196,11 @@ export function checkDangerousToolAccess(toolName: 'write_file' | 'edit_file' | 
 
   if (!hasIdentity) {
     // 无 IM 上下文 → 全权
-    return { allowed: true, role: 'master' };
+    return { allowed: true, role: 'owner' };
   }
 
   try {
-    if (role === 'master') {
+    if (role === 'owner') {
       return { allowed: true, role };
     }
 

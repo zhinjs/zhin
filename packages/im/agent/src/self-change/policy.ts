@@ -243,7 +243,10 @@ export const SELF_CHANGE_SECURITY_CONFIG_KEYS: readonly string[] = Object.freeze
   'ai.agent.schedule.security',
   // 访问令牌
   'http.token',
-  'http.tokens',
+  // 受信任代理：决定登录限流 / 审计 IP / 本机套接字看到的客户端地址
+  'http.trustProxy',
+  // Console 终端（宿主 Shell / SSH，ADR 0051）
+  'console.terminal',
   // 跨进程 A2A Mailbox 传输与签名配置（ADR 0048 §3.6）
   'a2a.mailbox',
   // 主人私域策略

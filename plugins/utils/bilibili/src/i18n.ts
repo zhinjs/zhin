@@ -20,7 +20,7 @@ export const messages = createMessages({
   failed: { 'zh-CN': '查询失败：{error}', en: 'Lookup failed: {error}' },
   notSubscribed: { 'zh-CN': '当前会话没有订阅该 UP 主', en: 'This conversation does not subscribe to this creator.' },
   removed: { 'zh-CN': '已取消订阅：{name}', en: 'Unsubscribed from {name}.' },
-  denied: { 'zh-CN': '只有群主、群管理员或机器人主人可以在群聊中修改 B 站订阅；私聊中可以直接订阅本会话。', en: 'Only a group owner, administrator, or bot master may change group subscriptions. In private chat you can subscribe the current conversation.' },
+  denied: { 'zh-CN': '只有本会话的 zhin 管理员（admin）或机器人主人（owner）可以在群聊中修改 B 站订阅；私聊中可以直接订阅本会话。', en: 'Only a zhin admin of this conversation or the bot owner may change group subscriptions. In private chat you can subscribe the current conversation.' },
   source: { 'zh-CN': '请在机器人私聊、群聊或频道内执行此命令；当前调用没有有效的订阅会话', en: 'Run this command in a private chat, group, or channel with the bot. This invocation has no valid subscription destination.' },
   address: { 'zh-CN': '暂不支持线程／父频道寻址的订阅，请在无需线程或父频道信息的会话内执行', en: 'Subscriptions with a thread or parent-channel address are not supported. Use a conversation that requires neither.' },
   all: { 'zh-CN': '开播 + 动态', en: 'Live streams + posts' },

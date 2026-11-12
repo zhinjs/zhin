@@ -9,7 +9,7 @@ import { getBiliSubs, parseKinds } from '../../../src/store.js';
 
 
 export default defineCommand<BilibiliConfig>({
-  description: '订阅 B 站 UP 主的开播和动态推送（群聊限群主、管理员或机器人主人）', descriptionI18n: { en: "Subscribe to a Bilibili creator's live streams and posts (group owner, administrator or bot master required in groups)" },
+  description: '订阅 B 站 UP 主的开播和动态推送（群聊限本会话 zhin admin 或 owner）', descriptionI18n: { en: "Subscribe to a Bilibili creator's live streams and posts (zhin admin or owner of the conversation required in groups)" },
   params: {
     uid: { type: 'string', description: 'UP 主 UID 或空间链接', descriptionI18n: { en: "Creator UID or profile URL" } },
     kind: { type: 'string', default: 'all', description: 'all（默认）/ live / dynamic', descriptionI18n: { en: "all (default), live, or dynamic" } },

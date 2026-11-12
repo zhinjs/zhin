@@ -149,7 +149,7 @@ describe('native semantic-memory tools', () => {
   });
 
   describe('write policy (#733)', () => {
-    const owner = { ...context, turnId: 'turn-owner', principal: { subjectId: 'owner-1', roles: ['master'] } } as ToolExecutionContext;
+    const owner = { ...context, turnId: 'turn-owner', principal: { subjectId: 'owner-1', roles: ['owner'] } } as ToolExecutionContext;
     const member = { ...context, turnId: 'turn-member', principal: { subjectId: 'mallory', roles: ['user'] } } as ToolExecutionContext;
 
     function setup(options?: ConstructorParameters<typeof SemanticMemoryRuntime>[0]) {

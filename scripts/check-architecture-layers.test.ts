@@ -10,6 +10,7 @@ import { findForbiddenRelativeImports } from './lib/find-forbidden-imports.mjs';
 import { findBarrelViolations, parseImports, parseReexports } from './lib/parse-imports.mjs';
 import {
   extractBarePackageName,
+  findManagementManifestViolations,
   findUndeclaredWorkspaceImports,
   layers,
   packageNameToPath,
@@ -352,6 +353,33 @@ describe('findUndeclaredWorkspaceImports', () => {
       workspacePackageNames,
     });
     expect(violations).toEqual([]);
+  });
+});
+
+describe('ADR 0054 management packages', () => {
+  it('keeps @zhin.js/cli and @zhin.js/gateway off IM layers and zhin.js', () => {
+    for (const key of ['basic/cli', 'packages/host/gateway'] as const) {
+      const allowed = layers[key].allowedImports;
+      expect(allowed).not.toContain('packages/im');
+      expect(allowed).not.toContain('packages/host');
+      expect(allowed).toEqual(expect.arrayContaining(['packages/im/plugin-runtime', 'packages/im/runtime', 'packages/host/http']));
+    }
+    expect(layers['packages/host/gateway'].allowedImports).not.toContain('basic');
+    expect(layers['basic/cli'].allowedImports).toContain('packages/host/gateway');
+    expect(layers['packages/im/zhin/src/instance'].allowedImports).toContain('packages/host');
+    expect(packageNameToPath['@zhin.js/gateway']).toBe('packages/host/gateway');
+  });
+
+  it('rejects IM-layer dependencies in any manifest section', () => {
+    const violations = findManagementManifestViolations({
+      dependencies: { '@zhin.js/runtime': 'workspace:*', '@zhin.js/core': 'workspace:*' },
+      devDependencies: { 'zhin.js': 'workspace:*', '@zhin.js/host-http': 'workspace:*' },
+      peerDependencies: { '@zhin.js/agent': 'workspace:^' },
+      optionalDependencies: { '@zhin.js/mcp': 'workspace:*' },
+    }, 'basic/cli/package.json', '@zhin.js/cli');
+    expect(violations.map(v => v.import).sort()).toEqual(['@zhin.js/agent', '@zhin.js/core', '@zhin.js/mcp', 'zhin.js']);
+    expect(findManagementManifestViolations({ dependencies: { '@zhin.js/cli': 'workspace:*' } }, 'packages/host/gateway/package.json', '@zhin.js/gateway'))
+      .toEqual([expect.objectContaining({ import: '@zhin.js/cli' })]);
   });
 });
 

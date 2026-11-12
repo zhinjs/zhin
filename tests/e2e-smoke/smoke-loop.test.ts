@@ -11,7 +11,7 @@ describe('#829 user-experience loop smoke suite', () => {
       'conversation: root command replies with its configured default',
       'conversation: migrated plugin instance still welcomes new members',
       'conversation: permission denial and unmatched text are recorded, not silently dropped',
-      'verify: diagnostics API needs a full-scope token',
+      'verify: diagnostics API needs a signed-in Console user with status.view',
       'verify: GET /api/messages/diagnostics explains each message without message bodies',
       'verify: one diagnostic can be read back by id and by exact conversation + messageId',
     ]);

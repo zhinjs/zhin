@@ -427,11 +427,12 @@ export class SatoriWebhookEndpoint extends SatoriClient implements Endpoint {
     this.#routeReleases.push(...registerSatoriWebhookRoutes(this.#options.http, {
       config: this.#options.config,
       get isOpen() { return isOpen(); },
-      acceptHttp: async (request, response) => {
-        await acceptHttpIngress<SatoriEventBody>(request, response, body => {
+      acceptHttp: async (request) => {
+        const result = await acceptHttpIngress<SatoriEventBody>(request, undefined, body => {
           void this[endpointSpec].events.run(() => this.#receive(body))
             .catch(error => this.#warnPlatformEvent('event', error));
         });
+        return new Response(JSON.stringify(result.body), { status: result.status, headers: result.headers });
       },
     }));
     this.#logger.info(formatCompact({

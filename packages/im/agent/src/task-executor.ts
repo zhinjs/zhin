@@ -211,7 +211,7 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
       updatedAt: now,
       state: {},
       source: 'manual',
-      createdBy: scheduleJobCreatorFromPrincipal(source.principal),
+      createdBy: scheduleJobCreatorFromPrincipal(source.principal, source.origin),
       activityFeedback: options.activityFeedback,
     };
     return execute(job, { previewSource: source });

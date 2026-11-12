@@ -89,7 +89,43 @@ export default definePlugin<ReminderConfig>({
 | Token | You get | Main methods |
 | --- | --- | --- |
 | `htmlRendererToken` (`zhin.js`) | `HtmlRendererHost` | `render(html, opts)` → PNG; requires `@zhin.js/html-renderer`, otherwise outbound HTML falls back to text |
-| `httpHostToken` (`@zhin.js/host-http`) | `HttpHost` | `route(method, path, handler, meta?)` registers HTTP routes (shared by Console, MCP, A2A and adapter webhooks) |
+| `httpHostToken` (`@zhin.js/host-http`) | `HttpHost` | `route(method, path, handler, meta?)` registers HTTP routes (shared by Console, MCP, A2A and adapter webhooks); `ws(path, { auth? })` registers WebSockets |
+
+#### HTTP route contract
+
+Routes are transport independent (ADR 0054 §2): a handler takes a Web standard `Request` and returns a `Response`; a WebSocket route receives a `WsConnection`. Do not import `node:http` or `ws`.
+
+```ts
+import { createResponseStream, httpHostToken, jsonResponse, readJsonBody, readTextBody, SSE_HEADERS, verifyProtocolAccessToken } from '@zhin.js/host-http';
+
+const http = context.resources.use(httpHostToken);
+
+// context: url, params (a `/x/*` prefix route puts the remainder in params['*']), principal (authenticated by the Host), remoteAddress
+http.route('POST', '/my-plugin/webhook', async (request, { url, remoteAddress }) => {
+  if (!verifyProtocolAccessToken(token, { headers: request.headers, url, remoteAddress })) {
+    return new Response('Forbidden', { status: 403 });
+  }
+  const raw = await readTextBody(request);           // 1 MiB default limit, 413 when exceeded
+  return jsonResponse(200, { ok: true, size: raw.length });
+});
+
+// Streaming responses (SSE, large files): a ReadableStream body; write() returns false under backpressure, write again after onDrain
+http.route('GET', '/my-plugin/events', () => {
+  const stream = createResponseStream();
+  const timer = setInterval(() => stream.write('data: tick\n\n'), 1000);
+  stream.onClose(() => clearInterval(timer));        // client disconnected
+  return new Response(stream.stream, { headers: SSE_HEADERS });
+});
+
+// The plugin's own protocol socket (reverse WS…): auth: 'protocol', verify your own credential
+http.ws('/my-plugin/ws', { auth: 'protocol' }).onConnection((connection) => {
+  if (!verifyProtocolAccessToken(token, connection)) return connection.close(4003, 'Unauthorized');
+  connection.onMessage((data) => connection.send(data));   // text frames are strings, binary frames Uint8Array
+  connection.onClose((code, reason) => { /* … */ });
+});
+```
+
+Read request bodies with `request.json()` / `text()` / `arrayBuffer()` / `body`, or the bounded `readJsonBody` / `readTextBody` / `readBodyBytes`; `request.signal` aborts when the client goes away. Protocol keepalive (ping / pong) belongs to the Host transport; `WsConnection` has no `ping`.
 
 ## Plain text AI completion
 

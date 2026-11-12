@@ -203,7 +203,7 @@ export function renderWatchText(options: {
   if (options.error) {
     lines.push(`⚠ ${options.error}`);
     lines.push('');
-    lines.push('提示: 在项目根运行 zhin runtime start（Console Host 由 CLI 自动装配）');
+    lines.push('提示: 在项目根运行 zhin start（管理网关承载 Console）');
     return lines.join('\n');
   }
 

@@ -2,7 +2,7 @@ import type { ProviderCallContext } from '@zhin.js/ai/provider';
 import type { TurnRequest } from '../../index.js';
 import type { ConversationRef } from '@zhin.js/im-contract';
 import type { RuntimeMessage } from '@zhin.js/core/runtime';
-import { createRuntimeTurnAccess, runtimePersonalSessionAddress } from '../ingress/request.js';
+import { createRuntimeTurnAccess, resolveRuntimeSenderRoles, runtimePersonalSessionAddress } from '../ingress/request.js';
 import {
   personalSessionIdentity,
   personalSessionOwnerId,
@@ -36,10 +36,7 @@ export async function resolveInferenceMessageContext(
   message: RuntimeMessage,
   operationId: string
 ): Promise<ProviderCallContext> {
-  const access = createRuntimeTurnAccess(message, {
-    isMaster: message.sender?.roles?.includes('master') ?? false,
-    isTrusted: message.sender?.roles?.includes('trusted') ?? false,
-  });
+  const access = createRuntimeTurnAccess(message, resolveRuntimeSenderRoles(message));
   const personal = runtimePersonalSessionAddress(access, options.rootId);
   return resolveContext(options, {
     personal,

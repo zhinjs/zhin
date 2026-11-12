@@ -3,7 +3,7 @@ import type { Message } from '@zhin.js/core/runtime';
 import {
   type RepeaterConfig,
 } from '../../src/engine.js';
-import { repeaterEngineToken } from '../../src/runtime.js';
+import { repeaterConfigToken, repeaterEngineToken } from '../../src/runtime.js';
 
 /**
  * Runtime `Message` 是 conversation 原生：`conversation.kind/id` 直接喂给引擎
@@ -14,7 +14,9 @@ import { repeaterEngineToken } from '../../src/runtime.js';
 export default defineMiddleware<Message, RepeaterConfig>({
   target: 'inbound',
   async handle(context, next) {
-    const config = context.config;
+    // Per-conversation effective configuration (ADR 0055); falls back to the global view.
+    const resolver = context.has(repeaterConfigToken) ? context.use(repeaterConfigToken) : undefined;
+    const config = { ...context.config, ...(resolver?.configFor(context.input) ?? {}) } as RepeaterConfig;
     const engine = context.use(repeaterEngineToken);
     const result = engine.tick({
       conversation: context.input.conversation,

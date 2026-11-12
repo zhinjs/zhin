@@ -90,7 +90,7 @@ describe('Client build adapter', () => {
     const source = join(root, 'pages/ops.tsx');
     await writeSource(source, [
       "import { definePage } from '@zhin.js/page';",
-      "export const meta = definePage({ title: 'Ops', group: 'system', order: 5, parent: 'root', fullWidth: true, requiredPermissions: ['ops:read'] });",
+      "export const meta = definePage({ title: 'Ops', group: 'system', order: 5, parent: 'root', fullWidth: true, section: 'ops', requiredPermissions: ['ops:read'] });",
       'export default function OpsPage() { return <section>Ops</section>; }',
     ].join('\n'));
     const builder = new TypeScriptClientBuilder({
@@ -108,6 +108,7 @@ describe('Client build adapter', () => {
       order: 5,
       parent: 'root',
       fullWidth: true,
+      section: 'ops',
       requiredPermissions: ['ops:read'],
     });
   });

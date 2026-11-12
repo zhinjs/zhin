@@ -58,6 +58,8 @@ export default defineAdapter<QqEndpointConfig>({
         text: '群聊 @全体成员使用 mention target "all"（发送为 <qqbot-at-everyone />）。机器人必须是该群管理员，且每个群每个自然日只能发送 1 次。图文卡片只用于群聊和单聊。',
       },
       delivery: { passiveWindow: { seconds: 300, maxMessages: 5 } },
+      // ADR 0056 §1：机器人自身群内角色（getBotState.member_role），供 bot:* permit。
+      scene: { selfStanding: { standing: true } },
     },
     channel: {
       messaging: {
@@ -74,6 +76,8 @@ export default defineAdapter<QqEndpointConfig>({
         text: '文字子频道 @全体成员使用 mention target "all"（发送为 <qqbot-at-everyone />），机器人需要拥有发送 @全体成员的权限。图文卡片不能发到频道。',
       },
       delivery: { passiveWindow: { seconds: 300, maxMessages: 5 } },
+      // ADR 0056 §1：频道消息的 member.roles → standing（频道主 / 超级管理员）+ 原始身份组 roles。
+      scene: { platformStanding: { standing: true, roles: true }, selfStanding: { standing: true, roles: true } },
     },
   },
   createAdapter: context => new QqAdapter(context),

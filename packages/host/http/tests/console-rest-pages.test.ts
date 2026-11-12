@@ -2,14 +2,15 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createHttpHost, type HttpHost } from '../src/http-host.js';
+import { createHttpHost, type ProcessHttpHost } from '../src/node/server.js';
+import { userPrincipal } from './fixtures/principals.js';
 import {
   registerConsoleRestPages,
   type ConsoleAgentRuntime,
   type ConsoleRestCtx,
 } from '../src/console-rest-pages.js';
 
-const hosts: HttpHost[] = [];
+const hosts: ProcessHttpHost[] = [];
 const tempDirs: string[] = [];
 
 afterEach(async () => {
@@ -710,10 +711,10 @@ describe('console-rest-pages introspection', () => {
     }));
     const response = await fetch(`${base}/api/introspection/commands`);
     expect(response.status).toBe(503);
-    expect(await json(response)).toMatchObject({
-      success: false,
-      error: 'CommandIndex 不可用',
-    });
+    // The collector's own failure detail stays in the log.
+    const body = await json(response);
+    expect(body).toMatchObject({ success: false, error: 'Introspection unavailable' });
+    expect(JSON.stringify(body)).not.toContain('CommandIndex 不可用');
   });
 
   it('holds the generation lease until a catalog collector completes', async () => {
@@ -874,16 +875,27 @@ describe('console-rest-pages agent sessions', () => {
 
   it('uses the existing HTTP authentication boundary for full message reads', async () => {
     let reads = 0;
-    const host = createHttpHost({host: '127.0.0.1', port: 0, token: 'synthetic-full', tokens: [{token: 'synthetic-demo', scope: 'demo'}]});
+    const host = createHttpHost({host: '127.0.0.1', port: 0, token: 'synthetic-bootstrap'});
     hosts.push(host);
+    const operator = userPrincipal('operator');
+    const statusOnly = { ...operator, userId: 'status', grants: [{ scope: { kind: 'global' as const }, permissions: ['status.view'] }] };
+    let initialized = false;
+    host.tokenRegistry.useAccessProvider({
+      initialized: () => initialized,
+      authenticate: async token => (token === 'synthetic-agent' ? operator : token === 'synthetic-status' ? statusOnly : null),
+    });
     registerConsoleRestPages(host, baseCtx({acquireAgentRuntime: () => lease({sessionTree: {...fakeSessionTree(), readBranchMessage: async () => { reads += 1; return 'message'; }}})}));
     const {port} = await host.listen();
     const url = `http://127.0.0.1:${port}/api/agent/sessions/known/message?sessionId=sid-1&messageId=3`;
     expect((await fetch(url)).status).toBe(401);
     expect((await fetch(url, {headers: {Authorization: 'Bearer synthetic-wrong'}})).status).toBe(401);
-    expect((await fetch(url, {headers: {Authorization: 'Bearer synthetic-demo'}})).status).toBe(403);
+    // The bootstrap token only reaches setup.
+    expect((await fetch(url, {headers: {Authorization: 'Bearer synthetic-bootstrap'}})).status).toBe(403);
+    initialized = true;
+    expect((await fetch(url, {headers: {Authorization: 'Bearer synthetic-bootstrap'}})).status).toBe(401);
+    expect((await fetch(url, {headers: {Authorization: 'Bearer synthetic-status'}})).status).toBe(403);
     expect(reads).toBe(0);
-    expect((await fetch(url, {headers: {Authorization: 'Bearer synthetic-full'}})).status).toBe(200);
+    expect((await fetch(url, {headers: {Authorization: 'Bearer synthetic-agent'}})).status).toBe(200);
     expect(reads).toBe(1);
   });
 

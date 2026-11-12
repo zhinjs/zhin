@@ -1,5 +1,5 @@
 import { type AgentSessionRepository, type ContextRepository, type CreateAgentSessionInput, type ConversationActor, createUserMessage, renderUserMessageForLlm, type UserMessage } from '@zhin.js/ai';
-import { type AgentTurnMessage, type Message, formatSenderRolesForLabel, senderRolesFromMessage, stripUserSpoofedSenderPrefix } from '@zhin.js/core';
+import { type AgentTurnMessage, type ChatRole, hostChatRole, type Message, stripUserSpoofedSenderPrefix } from '@zhin.js/core';
 import { stampUserHeader } from './participant-header-stamp.js';
 export interface SessionIODeps {
   agentSessionStore: AgentSessionRepository;
@@ -21,29 +21,26 @@ function mapPlatformRoleForLabel(role?: string): string | undefined {
   return role;
 }
 
+/**
+ * Header label of a zhin chat role (ADR 0056). Distinct from the platform labels (`owner` /
+ * `admin` / `member`), so the model never confuses the bot's owner with a group owner.
+ */
+export function chatRoleHeaderLabel(role: ChatRole | undefined): string | undefined {
+  return role === 'owner' ? 'bot_owner' : role === 'admin' ? 'bot_admin' : role === 'trusted' ? 'trusted' : undefined;
+}
+
+/** Highest chat role of an expanded role list (`owner` / `admin` / `trusted` / `user`). */
+export function highestPrincipalChatRole(roles: readonly string[]): ChatRole | undefined {
+  return roles.includes('owner') ? 'owner' : roles.includes('admin') ? 'admin' : roles.includes('trusted') ? 'trusted' : undefined;
+}
+
 function resolveSenderRoleLabels(commMessage: Message): string[] {
-  const labels = formatSenderRolesForLabel([...senderRolesFromMessage(commMessage)])
-    .split(',')
-    .map((r) => r.trim())
-    .filter((r) => r && r !== 'user');
-  const frameworkRoles = new Set(['master', 'trusted', 'user']);
-  const platformRoles = new Set<string>();
-  for (const role of commMessage.sender?.roles ?? []) {
-    if (!frameworkRoles.has(role)) platformRoles.add(role);
-  }
-  if (typeof commMessage.metadata.senderRole === 'string') {
-    platformRoles.add(commMessage.metadata.senderRole);
-  }
-  if (typeof commMessage.metadata.role === 'string') {
-    platformRoles.add(commMessage.metadata.role);
-  }
-  if (Array.isArray(commMessage.metadata.roles)) {
-    for (const role of commMessage.metadata.roles) platformRoles.add(String(role));
-  }
-  for (const role of platformRoles) {
-    const platform = mapPlatformRoleForLabel(role);
-    if (platform && !labels.includes(platform)) labels.push(platform);
-  }
+  const labels: string[] = [];
+  const platform = mapPlatformRoleForLabel(commMessage.sender?.platform?.standing);
+  if (platform) labels.push(platform);
+  // `bot_owner` only for a global owner: the label must not suggest host trust a lower-level owner lacks.
+  const chat = chatRoleHeaderLabel(hostChatRole(commMessage.sender));
+  if (chat) labels.push(chat);
   return labels.length > 0 ? labels : ['user'];
 }
 
@@ -76,7 +73,7 @@ export function resolveTurnUserMessage(
 ): { content: string; llmMessage: UserMessage } {
   const { content, actor } = prepareUserContentForSession(commMessage, rawContent);
   const user = createUserMessage(content, undefined, Date.now(), {
-    ...actor, authorizationRoles: [...senderRolesFromMessage(commMessage)],
+    ...actor, authorizationRoles: [chatRoleHeaderLabel(hostChatRole(commMessage.sender)) ?? 'user'],
   });
   const llmMessage = renderUserMessageForLlm(stampUserHeader({
     ...user,

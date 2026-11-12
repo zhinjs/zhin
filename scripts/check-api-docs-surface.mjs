@@ -12,7 +12,7 @@ const expectedSurface = new Map([
   ['@zhin.js/host-http', [
     'AuthenticatedTokenPrincipal', 'HttpHost', 'HttpHostAddress', 'WsConnection',
     'WsHandle', 'AuthScope', 'HttpHandler', 'ListedRoute', 'OpenApiParameter',
-    'RouteMeta', 'HttpRouteRegistration', 'httpHostToken',
+    'RouteMeta', 'HttpRouteRegistration', 'httpHostToken', 'RouteContext', 'WsRouteOptions',
   ]],
   ['@zhin.js/prompt-section', [
     'AgentPromptSectionDefinition', 'AgentPromptSectionInput', 'PromptProfile',

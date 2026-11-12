@@ -25,9 +25,7 @@ export { qqRuntimeStateToken };
 export type QqCommandReply = EndpointCommandReply;
 
 /**
- * endpoint 管理命令的操作者校验：实例配置声明了 master（顶层或任一端点项）时
- * 仅 master 可执行 add/cancel/remove；未配置则放行（首个扫码绑定者即为 owner，
- * legacy applyBindOwnership 会把 operator 写为新端点的 master）。
+ * endpoint 管理命令的操作者校验：发送者有聊天角色 `owner`（ADR 0056），或是配置的掉线通知目标。
  */
 export function isQqEndpointOperator(config: unknown, input: unknown): boolean {
   if (isEndpointOperator(config, input)) return true;

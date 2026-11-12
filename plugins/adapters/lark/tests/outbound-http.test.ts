@@ -2,7 +2,7 @@ import { createEndpointHarness, createTestEventGateway } from '../../test-utils/
 import http from 'node:http';
 import { once } from 'node:events';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
-import { createHttpHost } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import { LarkEndpoint } from '../src/endpoint.js';
 import { resolveLarkConfig } from '../src/protocol.js';
 

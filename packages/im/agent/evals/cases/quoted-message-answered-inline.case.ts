@@ -8,7 +8,7 @@ export default defineEvalCase({
   inbound: {
     text: '@bot 这个我该选哪个？',
     scope: 'group',
-    sender: { id: 'alice', name: 'Alice', roles: ['user'] },
+    sender: { id: 'alice', name: 'Alice' },
     quote: { id: 'platform-msg-8841', text: '方案A：便宜但要等两周；方案B：贵一倍，明天到', sender: { id: 'bob', name: 'Bob' }, timestamp: Date.UTC(2026, 9, 28, 14, 5) },
   },
   script: [{ text: '赶时间就选 B，不急的话 A 更划算。' }],

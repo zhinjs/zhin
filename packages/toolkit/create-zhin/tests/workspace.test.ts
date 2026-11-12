@@ -122,8 +122,8 @@ describe('createWorkspace', () => {
     const rootTsconfig = await fs.readJson(path.join(projectPath, 'tsconfig.json'))
 
     // scripts：新 runtime 启动命令
-    expect(pkg.scripts.dev).toBe('zhin runtime start --watch source config')
-    expect(pkg.scripts.start).toBe('zhin runtime start --mode production --no-watch')
+    expect(pkg.scripts.dev).toBe('zhin start --foreground --watch source config')
+    expect(pkg.scripts.start).toBe('zhin start --foreground --mode production --no-watch')
 
     // 依赖：用户面只直列 zhin.js + 适配器 +（卡片示例）components；无 legacy host
     expect(pkg.dependencies['zhin.js']).toBe(scaffoldDependencyRange('zhin.js'))
@@ -147,7 +147,11 @@ describe('createWorkspace', () => {
     expect(pkg.dependencies).not.toHaveProperty('@zhin.js/command')
     expect(pkg.dependencies).not.toHaveProperty('@zhin.js/host-api')
     expect(pkg.dependencies).not.toHaveProperty('@zhin.js/host-router')
-    expect(pkg.devDependencies['@zhin.js/cli']).toBe(scaffoldDependencyRange('@zhin.js/cli'))
+    // ADR 0054 §0: CLI, gateway and zhin.js are production dependencies of one release (`--prod` keeps `zhin start`).
+    expect(pkg.dependencies['@zhin.js/cli']).toBe(scaffoldDependencyRange('@zhin.js/cli'))
+    expect(pkg.devDependencies).not.toHaveProperty('@zhin.js/cli')
+    expect(pkg.dependencies['@zhin.js/gateway']).toBe(scaffoldDependencyRange('@zhin.js/gateway'))
+    expect(pkg.dependencies['@zhin.js/gateway']).not.toBe('latest')
     expect(pkg.engines.node).toBe('>=22.19.0')
 
     // zhin 清单：Stable Features 随 zhin.js 默认挂载；Console Feature 显式声明
@@ -201,7 +205,7 @@ describe('createWorkspace', () => {
     expect(rootTsconfig.include).toContain('pages/**/*.tsx')
     expect(await fs.pathExists(path.join(projectPath, '.env.example'))).toBe(true)
     expect(readme).toContain('zhin.config.yml')
-    expect(readme).toContain('zhin runtime start')
+    expect(readme).toContain('zhin start --foreground')
     expect(readme).toContain('Remote Console')
   })
 

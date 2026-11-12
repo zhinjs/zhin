@@ -93,6 +93,8 @@ export default definePlugin<RssConfig>({
       outboundPush = async (input) => {
         if (!input.target) throw new DataMigrationError('unavailable', 'Historical RSS subscription awaits exact-target binding');
         if (!outbound.sendTarget) throw new Error('Canonical subscription delivery requires an exact-target Outbound Host');
+        // ADR 0050 / 0055: pushes are not messages, so the plugin checks its own switch per target conversation.
+        if (!context.isEnabledFor({ conversation: input.target })) return;
         const run = async () => { await outbound.sendTarget!(input.target!, input.content, { locale: input.locale }); };
         if (migrationScopes) await migrationScopes.run({ scope: subscriptionMigrationScope(input), run });
         else await run();
@@ -121,7 +123,8 @@ export default definePlugin<RssConfig>({
       let state;
       try { state = database.state; } catch { /* No persistent state port: no administrator provider. */ }
       if (state) {
-        administrator = new AdministratorRssTasks(createAdministratorRssState(database), outbound, config, undefined, runtime.locale);
+        administrator = new AdministratorRssTasks(createAdministratorRssState(database), outbound, config, undefined, runtime.locale,
+          target => context.isEnabledFor({ conversation: target }));
         context.lifecycle.add(() => administrator?.stop());
       }
     }

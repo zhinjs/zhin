@@ -111,7 +111,7 @@ export function resolveToolBudget(
 export function autoContinueAllowed(mode: ToolBudgetAutoContinue, turn: TurnContextView | undefined): boolean {
   if (mode === 'on') return true;
   if (mode !== 'master_dm' || !turn) return false;
-  return turn.principal.roles.includes('master')
+  return turn.principal.roles.includes('owner')
     && turn.origin.kind === 'im'
     && turn.origin.scope === 'private';
 }

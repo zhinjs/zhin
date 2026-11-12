@@ -31,34 +31,6 @@
         }
       }
     },
-    "master": {
-      "type": [
-        "string",
-        "number"
-      ],
-      "description": "框架 master（endpoint 管理命令、AI/工具权限）；openid。endpoints[i].master 可逐项覆盖",
-      "x-i18n": {
-        "en": {
-          "description": "Framework masters (openid) for endpoint management and AI/tool permissions. endpoints[i].master can override this value."
-        }
-      }
-    },
-    "trusted": {
-      "type": "array",
-      "items": {
-        "type": [
-          "string",
-          "number"
-        ],
-        "description": "Trusted openid"
-      },
-      "description": "框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加",
-      "x-i18n": {
-        "en": {
-          "description": "Framework trusted users, below master authority. endpoints[i].trusted can add users."
-        }
-      }
-    },
     "intents": {
       "type": "array",
       "items": {
@@ -108,34 +80,6 @@
           },
           "sandbox": {
             "type": "boolean"
-          },
-          "master": {
-            "type": [
-              "string",
-              "number"
-            ],
-            "description": "本 endpoint 的框架 master（openid）；覆盖顶层 master",
-            "x-i18n": {
-              "en": {
-                "description": "Framework masters for this endpoint (openid), overriding the top-level master list."
-              }
-            }
-          },
-          "trusted": {
-            "type": "array",
-            "items": {
-              "type": [
-                "string",
-                "number"
-              ],
-              "description": "Trusted openid"
-            },
-            "description": "本 endpoint 的 trusted 列表",
-            "x-i18n": {
-              "en": {
-                "description": "Trusted users for this endpoint."
-              }
-            }
           },
           "botKind": {
             "type": "string",

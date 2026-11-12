@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   dispatchRuntimeConsoleRpc,
-  isDemoHttpAllowed,
   pickRpcReply,
 } from '../src/console-rpc.js';
+import { VIEWER, userPrincipal } from './fixtures/principals.js';
+import { authorizeConsoleHttp } from '../src/access-control.js';
 
 describe('runtime console RPC', () => {
   it('denies raw configuration to demo before reading secret-bearing storage', async () => {
@@ -11,14 +12,13 @@ describe('runtime console RPC', () => {
       let reads = 0;
       const read = async () => { reads++; return { apiKey: 'fixture-secret-must-not-leak' }; };
       const replies = await dispatchRuntimeConsoleRpc({ type, requestId: 100 }, {
-        authScope: 'demo', listPages: async () => [], readConfigDocument: read,
+        authScope: 'full', principal: VIEWER, listPages: async () => [], readConfigDocument: read,
         readConfigSource: async () => { reads++; return { source: 'apiKey: fixture-secret-must-not-leak', format: 'yaml', revision: 'fixture', configKeys: [] }; },
       });
-      expect(pickRpcReply({ type, requestId: 100 }, replies)?.error).toMatch(/Demo scope/);
+      expect(pickRpcReply({ type, requestId: 100 }, replies)?.error).toMatch(/缺少权限/);
       expect(reads).toBe(0);
       expect(JSON.stringify(replies)).not.toContain('fixture-secret-must-not-leak');
     }
-    expect(isDemoHttpAllowed('GET', '/api/config', '/api')).toBe(false);
   });
 
   it('answers ping and maps pages for entries:get', async () => {
@@ -80,22 +80,23 @@ describe('runtime console RPC', () => {
     });
   });
 
-  it('enforces demo RPC allowlist and HTTP path allowlist', async () => {
+  it('denies writes to a read-only principal and unmapped types to every user', async () => {
     const denied = await dispatchRuntimeConsoleRpc(
       { type: 'config:replace-source', requestId: 3 },
-      { authScope: 'demo', listPages: async () => [] },
+      { authScope: 'full', principal: VIEWER, listPages: async () => [] },
     );
-    expect(pickRpcReply({ type: 'config:replace-source', requestId: 3 }, denied)?.error)
-      .toMatch(/Demo scope/);
-
-    expect(isDemoHttpAllowed('POST', '/api/console/request', '/api')).toBe(true);
-    expect(isDemoHttpAllowed('GET', '/api/events', '/api')).toBe(true);
-    expect(isDemoHttpAllowed('GET', '/api/events/history', '/api')).toBe(true);
-    expect(isDemoHttpAllowed('GET', '/api/introspection/middlewares', '/api')).toBe(true);
-    expect(isDemoHttpAllowed('GET', '/api/introspection/components', '/api')).toBe(true);
-    expect(isDemoHttpAllowed('GET', '/api/introspection/prompt-sections', '/api')).toBe(true);
-    expect(isDemoHttpAllowed('POST', '/api/introspection/components/render', '/api')).toBe(false);
-    expect(isDemoHttpAllowed('POST', '/api/plugins', '/api')).toBe(false);
+    expect(pickRpcReply({ type: 'config:replace-source', requestId: 3 }, denied))
+      .toMatchObject({ code: 'forbidden', error: expect.stringMatching(/缺少权限/) });
+    const unmapped = await dispatchRuntimeConsoleRpc(
+      { type: 'made.up', requestId: 4 },
+      { authScope: 'full', principal: userPrincipal('owner'), listPages: async () => [] },
+    );
+    expect(pickRpcReply({ type: 'made.up', requestId: 4 }, unmapped)).toMatchObject({ code: 'unmapped' });
+    const setupOnly = await dispatchRuntimeConsoleRpc(
+      { type: 'ping', requestId: 5 },
+      { authScope: 'full', principal: { kind: 'bootstrap', open: false }, listPages: async () => [] },
+    );
+    expect(pickRpcReply({ type: 'ping', requestId: 5 }, setupOnly)).toMatchObject({ code: 'setup_required' });
   });
 
   it('returns a shared plugin install plan for full-scope Console clients', async () => {
@@ -123,93 +124,16 @@ describe('runtime console RPC', () => {
     });
   });
 
-  it('passes the config revision to the install transaction', async () => {
-    let receivedRevision: string | undefined;
-    const replies = await dispatchRuntimeConsoleRpc(
-      {
-        type: 'plugin:install',
-        requestId: 92,
-        packageName: '@zhin.js/adapter-telegram',
-        expectedRevision: 'rev-1',
-      },
-      {
-        authScope: 'full',
-        listPages: async () => [],
-        pluginManagement: {
-          planInstall: async () => ({
-            packageName: '@zhin.js/adapter-telegram',
-            instanceKey: 'adapter-telegram',
-            alreadyDeclared: false,
-            alreadyInstalled: false,
-            restartRequired: true,
-            changes: { packageManifest: 'add-plugin', config: 'create-entry' },
-            warnings: [],
-          }),
-          install: async (_packageName, revision) => {
-            receivedRevision = revision;
-            return {
-              plan: await Promise.resolve({
-                packageName: '@zhin.js/adapter-telegram',
-                instanceKey: 'adapter-telegram',
-                alreadyDeclared: false,
-                alreadyInstalled: false,
-                restartRequired: true,
-                changes: { packageManifest: 'add-plugin', config: 'create-entry' },
-                warnings: [],
-              }),
-              restartRequired: true,
-            };
-          },
-        },
-      },
-    );
-    expect(receivedRevision).toBe('rev-1');
-    expect(pickRpcReply({ type: 'plugin:install', requestId: 92 }, replies)).toMatchObject({
-      requestId: 92,
-      data: { success: true, restartRequired: true },
-    });
-  });
-
-  it('requires exact confirmation before uninstalling a plugin', async () => {
-    let calls = 0;
-    const ctx = {
-      authScope: 'full' as const,
-      listPages: async () => [],
-      pluginManagement: {
-        planInstall: async () => ({
-          packageName: '@zhin.js/adapter-telegram', instanceKey: 'telegram',
-          alreadyDeclared: true, alreadyInstalled: true, restartRequired: false,
-          changes: { packageManifest: 'unchanged' as const, config: 'unchanged' as const },
-          warnings: [],
-        }),
-        uninstall: async () => {
-          calls += 1;
-          return {
-            plan: {
-              packageName: '@zhin.js/adapter-telegram', instanceKey: 'telegram',
-              installed: true, declared: true, hasConfig: true, restartRequired: true,
-            },
-            restartRequired: true,
-          };
-        },
-      },
-    };
-    const denied = await dispatchRuntimeConsoleRpc({
-      type: 'plugin:uninstall', requestId: 95,
-      packageName: '@zhin.js/adapter-telegram', confirmation: 'telegram',
-    }, ctx);
-    expect(pickRpcReply({ type: 'plugin:uninstall', requestId: 95 }, denied)?.error)
-      .toContain('confirmation');
-    expect(calls).toBe(0);
-
-    const accepted = await dispatchRuntimeConsoleRpc({
-      type: 'plugin:uninstall', requestId: 96,
-      packageName: '@zhin.js/adapter-telegram', confirmation: '@zhin.js/adapter-telegram',
-    }, ctx);
-    expect(pickRpcReply({ type: 'plugin:uninstall', requestId: 96 }, accepted)).toMatchObject({
-      data: { success: true, restartRequired: true },
-    });
-    expect(calls).toBe(1);
+  it('does not run package installs, updates or uninstalls inside the instance', async () => {
+    // Those are gateway dependency transactions (`gateway.packages.*`, ADR 0054 §4).
+    for (const [index, type] of ['plugin:install', 'plugin:update', 'plugin:uninstall'].entries()) {
+      const requestId = 92 + index;
+      const replies = await dispatchRuntimeConsoleRpc(
+        { type, requestId, packageName: '@zhin.js/adapter-telegram', targetVersion: '2.0.0', confirmation: '@zhin.js/adapter-telegram' },
+        { authScope: 'full', principal: userPrincipal('owner'), listPages: async () => [] },
+      );
+      expect(pickRpcReply({ type, requestId }, replies)).toMatchObject({ code: 'unmapped' });
+    }
   });
 
   it('validates plugin config through the shared Console context', async () => {
@@ -250,7 +174,7 @@ describe('runtime console RPC', () => {
     const replies = await dispatchRuntimeConsoleRpc(
       { type: 'endpoint.test', requestId: 97, adapter: 'telegram', endpointKey: 'bot' },
       {
-        authScope: 'demo',
+        authScope: 'full', principal: VIEWER,
         listPages: async () => [],
         getEndpoint: async () => ({
           name: 'bot', adapter: 'telegram', connected: true, status: 'online', phase: 'online',
@@ -262,17 +186,18 @@ describe('runtime console RPC', () => {
     });
   });
 
-  it('allows read-only status/stats/plugins GETs in demo scope', () => {
-    expect(isDemoHttpAllowed('GET', '/api/system/status', '/api')).toBe(true);
-    expect(isDemoHttpAllowed('GET', '/api/stats', '/api')).toBe(true);
-    expect(isDemoHttpAllowed('GET', '/api/plugins', '/api')).toBe(true);
-    expect(isDemoHttpAllowed('GET', '/api/plugins/icqq', '/api')).toBe(true);
-    expect(isDemoHttpAllowed('GET', '/api/plugins/%40zhin.js%2Fadapter-icqq', '/api')).toBe(true);
-    expect(isDemoHttpAllowed('GET', '/api/agent/workroom/portfolio', '/api')).toBe(false);
-    expect(isDemoHttpAllowed('POST', '/api/system/status', '/api')).toBe(false);
-    expect(isDemoHttpAllowed('POST', '/api/plugins', '/api')).toBe(false);
-    expect(isDemoHttpAllowed('DELETE', '/api/plugins/icqq', '/api')).toBe(false);
-    expect(isDemoHttpAllowed('GET', '/api/config', '/api')).toBe(false);
+  it('allows read-only status/stats/plugins GETs to a viewer and nothing unmapped', () => {
+    const allowed = (method: string, path: string) => authorizeConsoleHttp(VIEWER, method, path).allowed;
+    expect(allowed('GET', '/system/status')).toBe(true);
+    expect(allowed('GET', '/stats')).toBe(true);
+    expect(allowed('GET', '/plugins')).toBe(true);
+    expect(allowed('GET', '/plugins/icqq')).toBe(true);
+    expect(allowed('GET', '/plugins/%40zhin.js%2Fadapter-icqq')).toBe(true);
+    expect(allowed('GET', '/agent/workroom/portfolio')).toBe(false);
+    expect(allowed('POST', '/system/status')).toBe(false);
+    expect(allowed('POST', '/plugins')).toBe(false);
+    expect(allowed('DELETE', '/plugins/icqq')).toBe(false);
+    expect(allowed('GET', '/config')).toBe(false);
   });
 
   it('dispatches canonical endpoint RPCs', async () => {
@@ -335,9 +260,9 @@ describe('runtime console RPC', () => {
     }]);
   });
 
-  it('applies demo scope to canonical RPC names', async () => {
+  it('applies the permission map to canonical RPC names', async () => {
     const ctx = {
-      authScope: 'demo' as const,
+      authScope: 'full' as const, principal: VIEWER,
       listPages: async () => [],
       listEndpoints: async () => [],
       sendEndpointMessage: async () => ({ messageId: 'msg-demo' }),
@@ -345,8 +270,7 @@ describe('runtime console RPC', () => {
     const listed = await dispatchRuntimeConsoleRpc({ type: 'endpoint.list', requestId: 70 }, ctx);
     expect(pickRpcReply({ type: 'endpoint.list', requestId: 70 }, listed)?.error).toBeUndefined();
 
-    // endpoint.send_message is a write op; demo token must NOT be allowed
-    // to drive bots into sending messages on arbitrary channels.
+    // endpoint.send_message needs endpoint.operate: a viewer must NOT drive bots.
     const sentReply = await dispatchRuntimeConsoleRpc(
       {
         type: 'endpoint.send_message',
@@ -360,7 +284,18 @@ describe('runtime console RPC', () => {
       ctx,
     );
     expect(pickRpcReply({ type: 'endpoint.send_message', requestId: 71 }, sentReply))
-      .toMatchObject({ requestId: 71, error: expect.stringContaining('forbidden') });
+      .toMatchObject({ requestId: 71, code: 'forbidden' });
+    // An operator bound to another adapter is denied; one bound to this endpoint is admitted.
+    const elsewhere = await dispatchRuntimeConsoleRpc(
+      { type: 'endpoint.send_message', requestId: 72, adapter: 'sandbox', endpointKey: 'bot', channelId: '1', channelType: 'private', content: 'hi' },
+      { ...ctx, principal: userPrincipal('operator', { kind: 'adapter', key: 'qq' }) },
+    );
+    expect(pickRpcReply({ type: 'endpoint.send_message', requestId: 72 }, elsewhere)).toMatchObject({ code: 'forbidden' });
+    const bound = await dispatchRuntimeConsoleRpc(
+      { type: 'endpoint.send_message', requestId: 73, adapter: 'sandbox', endpointKey: 'bot', channelId: '1', channelType: 'private', content: 'hi' },
+      { ...ctx, principal: userPrincipal('operator', { kind: 'endpoint', key: 'sandbox/bot' }) },
+    );
+    expect(pickRpcReply({ type: 'endpoint.send_message', requestId: 73 }, bound)?.code).toBeUndefined();
   });
 
   it('writes config via config:replace-source and config:set on full scope', async () => {
@@ -436,7 +371,7 @@ describe('runtime console RPC', () => {
     let calls = 0;
     const applyConfig = async () => { calls++; return { status: 'unconfirmed' as const, message: 'Unknown result' }; };
     const request = { type: 'config:apply', requestId: 112, expectedRevision: 'a'.repeat(64) };
-    const demo = await dispatchRuntimeConsoleRpc(request, { authScope: 'demo', listPages: async () => [], applyConfig });
+    const demo = await dispatchRuntimeConsoleRpc(request, { authScope: 'full', principal: VIEWER, listPages: async () => [], applyConfig });
     expect(pickRpcReply(request, demo)).toHaveProperty('error');
     const malformed = { ...request, expectedRevision: 'missing' };
     expect(pickRpcReply(malformed, await dispatchRuntimeConsoleRpc(malformed,
@@ -500,17 +435,17 @@ describe('runtime console RPC', () => {
 
     const demoRead = await dispatchRuntimeConsoleRpc(
       { type: 'workrooms:get', requestId: 83 },
-      { ...ctx, authScope: 'demo' },
+      { ...ctx, authScope: 'full', principal: VIEWER },
     );
     expect(pickRpcReply({ type: 'workrooms:get', requestId: 83 }, demoRead)).toMatchObject({
       data: { workrooms, revision },
     });
     const demoWrite = await dispatchRuntimeConsoleRpc(
       { type: 'workrooms:set', requestId: 84, data: workrooms, expectedRevision: revision },
-      { ...ctx, authScope: 'demo' },
+      { ...ctx, authScope: 'full', principal: VIEWER },
     );
     expect(pickRpcReply({ type: 'workrooms:set', requestId: 84 }, demoWrite)?.error)
-      .toMatch(/Demo scope/u);
+      .toMatch(/缺少权限/u);
   });
 
   it('publishes config:updated after config:set / config:replace-source and system:restarting on restart', async () => {
@@ -571,46 +506,53 @@ describe('runtime console RPC', () => {
     expect(published[0]?.type).toBe('system:restarting');
   });
 
-  it('keeps project files and environment values outside demo scope', async () => {
+  it('lets a viewer browse files but keeps environment and config values behind their own permissions', async () => {
     const tree = await dispatchRuntimeConsoleRpc(
       { type: 'files:tree', requestId: 20 },
       {
-        authScope: 'demo',
+        authScope: 'full', principal: VIEWER,
         listPages: async () => [],
         listProjectFiles: async () => [{ name: 'README.md', path: 'README.md', type: 'file' }],
       },
     );
-    expect(pickRpcReply({ type: 'files:tree', requestId: 20 }, tree)?.error)
-      .toMatch(/Demo scope/);
+    expect(pickRpcReply({ type: 'files:tree', requestId: 20 }, tree)?.error).toBeUndefined();
+    for (const filePath of ['zhin.config.yml', 'sub/.env.production', ['.env']]) {
+      const denied = await dispatchRuntimeConsoleRpc(
+        { type: 'files:read', requestId: 25, filePath },
+        { authScope: 'full', principal: VIEWER, listPages: async () => [], readProjectFile: async () => ({ content: 'SECRET=exposed', size: 14 }) },
+      );
+      expect(JSON.stringify(denied)).not.toContain('exposed');
+      expect(pickRpcReply({ type: 'files:read', requestId: 25 }, denied)?.error).toMatch(/ops\.(env|config)\.read/);
+    }
 
     const deniedEnv = await dispatchRuntimeConsoleRpc(
       { type: 'env:get', requestId: 23, filename: '.env' },
       {
-        authScope: 'demo',
+        authScope: 'full', principal: VIEWER,
         listPages: async () => [],
         readEnvFile: async () => 'SECRET=exposed',
       },
     );
     expect(pickRpcReply({ type: 'env:get', requestId: 23 }, deniedEnv)?.error)
-      .toMatch(/Demo scope/);
+      .toMatch(/缺少权限/);
 
     const deniedEnvViaFiles = await dispatchRuntimeConsoleRpc(
       { type: 'files:read', requestId: 24, filePath: '.env' },
       {
-        authScope: 'demo',
+        authScope: 'full', principal: VIEWER,
         listPages: async () => [],
         readProjectFile: async () => ({ content: 'SECRET=exposed', size: 14 }),
       },
     );
     expect(pickRpcReply({ type: 'files:read', requestId: 24 }, deniedEnvViaFiles)?.error)
-      .toMatch(/Demo scope/);
+      .toMatch(/缺少权限/);
 
     const deniedSave = await dispatchRuntimeConsoleRpc(
       { type: 'files:save', requestId: 21, filePath: 'README.md', content: 'x' },
-      { authScope: 'demo', listPages: async () => [] },
+      { authScope: 'full', principal: VIEWER, listPages: async () => [] },
     );
     expect(pickRpcReply({ type: 'files:save', requestId: 21 }, deniedSave)?.error)
-      .toMatch(/Demo scope/);
+      .toMatch(/缺少权限/);
 
     const saved = await dispatchRuntimeConsoleRpc(
       { type: 'files:save', requestId: 22, filePath: 'README.md', content: 'ok' },
@@ -629,7 +571,7 @@ describe('runtime console RPC', () => {
   it('answers schema and db stub RPCs', async () => {    const schema = await dispatchRuntimeConsoleRpc(
       { type: 'schema:get', requestId: 30, pluginName: 'repeater' },
       {
-        authScope: 'demo',
+        authScope: 'full', principal: VIEWER,
         listPages: async () => [],
         getSchema: async (name) => (name === 'repeater' ? { type: 'object' } : null),
       },
@@ -718,7 +660,7 @@ describe('runtime console RPC', () => {
     const listed = await dispatchRuntimeConsoleRpc(
       { type: 'endpoint.list', requestId: 40 },
       {
-        authScope: 'demo',
+        authScope: 'full', principal: VIEWER,
         listPages: async () => [],
         listEndpoints: async () => [{
           name: 'bot',
@@ -740,10 +682,10 @@ describe('runtime console RPC', () => {
       let restarted = false;
       const denied = await dispatchRuntimeConsoleRpc(
         { type: 'system:restart', requestId: 50 },
-        { authScope: 'demo', listPages: async () => [] },
+        { authScope: 'full', principal: VIEWER, listPages: async () => [] },
       );
       expect(pickRpcReply({ type: 'system:restart', requestId: 50 }, denied)?.error)
-        .toMatch(/Demo scope/);
+        .toMatch(/缺少权限/);
 
       const ok = await dispatchRuntimeConsoleRpc(
         { type: 'system:restart', requestId: 51 },
@@ -793,12 +735,13 @@ describe('runtime console RPC', () => {
   });
 });
 
-it('does not retain removed model authorities in the demo HTTP allowlist', () => {
+it('does not map removed model authorities and keeps inference writes behind agent.configure', () => {
   for (const route of ['personal-models', 'personal-session', 'personal-sessions', 'model-policy']) {
-    for (const method of ['GET', 'PUT', 'POST']) expect(isDemoHttpAllowed(method, `/api/agent/${route}`, '/api')).toBe(false);
+    for (const method of ['GET', 'PUT', 'POST']) expect(authorizeConsoleHttp(userPrincipal('owner'), method, `/agent/${route}`).allowed).toBe(false);
   }
-  expect(isDemoHttpAllowed('POST', '/api/agent/inference/key/prepare', '/api')).toBe(true);
-  for (const route of ['login/begin', 'login/complete', 'client/prepare', 'disconnect', 'targets']) {
-    expect(isDemoHttpAllowed(route === 'targets' ? 'GET' : 'POST', `/api/agent/inference/${route}`, '/api')).toBe(false);
+  expect(authorizeConsoleHttp(VIEWER, 'GET', '/agent/inference/targets').allowed).toBe(true);
+  for (const route of ['login/begin', 'login/complete', 'client/prepare', 'disconnect', 'key/prepare']) {
+    expect(authorizeConsoleHttp(VIEWER, 'POST', `/agent/inference/${route}`).allowed).toBe(false);
+    expect(authorizeConsoleHttp(userPrincipal('admin'), 'POST', `/agent/inference/${route}`).allowed).toBe(true);
   }
 });

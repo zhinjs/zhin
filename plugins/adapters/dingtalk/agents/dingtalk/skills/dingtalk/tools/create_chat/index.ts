@@ -1,7 +1,6 @@
 import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { platformPermission } from '@zhin.js/permission';
 
 export default defineAgentTool<{ name: string; owner: string; members: string }>({
   description: '创建钉钉群聊',
@@ -12,7 +11,9 @@ export default defineAgentTool<{ name: string; owner: string; members: string }>
   }),
   adapter: 'dingtalk',
   tags: ['dingtalk'],
-  permissions: [platformPermission('dingtalk', 'chat_owner')],
+  // A new group does not depend on any standing in the current group; DingTalk never reports a
+  // `chat_owner` permission either. `trusted` is also met by zhin `admin` / `owner` (ADR 0056 §2).
+  permissions: ['trusted'],
   async execute({ name, owner, members    }: { name: string; owner: string; members: string }, context) {
     const endpoint = context.$client;
     const chatId = await endpoint.createChat(name, owner, members.split(','));

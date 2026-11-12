@@ -17,7 +17,7 @@ export default defineEvalCase({
   inbound: {
     text: 'Alice: 周会改到几点了？\nBob: 周会在哪个会议室？',
     scope: 'group',
-    sender: { id: 'alice', name: 'Alice', roles: ['user'] },
+    sender: { id: 'alice', name: 'Alice' },
     mergedSenders: senders,
   },
   script: [{ segments: [

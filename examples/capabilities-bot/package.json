@@ -5,15 +5,17 @@
   "description": "definePlugin 能力展示样板：一个插件 + 一个 zhin.config.yml 即可启动",
   "type": "module",
   "scripts": {
-    "dev": "zhin runtime start --watch source config",
-    "start": "zhin runtime start --mode production --no-watch"
+    "dev": "zhin start --foreground --watch source config",
+    "start": "zhin start --foreground --mode production --no-watch"
   },
   "dependencies": {
     "@zhin.js/adapter-sandbox": "workspace:*",
     "@zhin.js/agent": "workspace:*",
     "@zhin.js/tool": "workspace:*",
     "zhin.js": "workspace:*",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "@zhin.js/cli": "workspace:*",
+    "@zhin.js/gateway": "workspace:*"
   },
   "zhin": {
     "protocol": 1,
@@ -30,7 +32,6 @@
     "plugins": []
   },
   "devDependencies": {
-    "@zhin.js/cli": "workspace:*",
     "@zhin.js/runtime": "workspace:*",
     "vitest": "^4.1.10"
   }

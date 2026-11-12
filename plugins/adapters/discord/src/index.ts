@@ -24,12 +24,7 @@ export {
   type DiscordClientEventMap,
 } from './client.js';
 
-export {
-  checkDiscordPlatformPermit,
-  discordGroupPermitResolver,
-  normalizeDiscordSenderForPermit,
-  platformPermit,
-} from './platform-permit.js';
+export { platformPermit } from './platform-permit.js';
 
 export {
   DiscordGatewayEndpoint,

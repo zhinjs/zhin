@@ -1,7 +1,9 @@
+import { wsConnectionFromMock } from '../../test-utils/http.js';
 import { createAdapterHarness, createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
 import { ProtocolError } from '@imhelper/onebot-v11';
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
+import { httpHostToken } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import { type OutboundMessageService } from '@zhin.js/core/runtime';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { OneBot11WsEndpoint } from '../src/ws-endpoint.js';
@@ -364,7 +366,7 @@ describe('onebot11 plugin runtime adapter', () => {
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
       conversation: { endpoint: canonicalEndpointRef, kind: 'group', id: '200' },
-      sender: expect.objectContaining({ id: '9' }),
+      sender: expect.objectContaining({ id: '9', platform: { standing: 'member' } }),
       mentioned: true, metadata: expect.objectContaining({ nickname: 'bob' }),
     }));
     await endpoint.stop();
@@ -733,30 +735,28 @@ describe('onebot11 reverse ws lifecycle', () => {
   }
 
   function reverseConnection(socket: OneBot11WsSocket) {
-    return {
+    return wsConnectionFromMock({
       socket,
       request: {
         headers: { authorization: 'Bearer secret' },
         url: '/',
         socket: { remoteAddress: '127.0.0.1' },
       },
-      authScope: 'full',
-    };
+    });
   }
 
-  it('owns the accepted connection heartbeat and closes it on stop', async () => {
+  it('leaves keepalive to the Host and closes the accepted connection on stop', async () => {
     const harness = await createReverseEndpoint();
     const ws = createMockWs();
 
     await harness.endpoint.start();
     harness.endpoint.open();
     harness.acceptConnection?.(reverseConnection(ws));
-    await vi.waitFor(() => expect((ws.ping as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(0));
+    // Keepalive pings belong to the Host transport; the endpoint never pings itself.
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(ws.ping).not.toHaveBeenCalled();
 
     await harness.endpoint.stop();
-    const pingsAfterStop = (ws.ping as ReturnType<typeof vi.fn>).mock.calls.length;
-    await new Promise((resolve) => setTimeout(resolve, 60));
-    expect((ws.ping as ReturnType<typeof vi.fn>).mock.calls.length).toBe(pingsAfterStop);
     expect(ws.close).toHaveBeenCalled();
     expect(harness.releaseRoute).toHaveBeenCalledOnce();
   });
@@ -776,7 +776,7 @@ describe('onebot11 reverse ws lifecycle', () => {
 
     await harness.endpoint.start();
     harness.acceptConnection?.(reverseConnection(first));
-    await vi.waitFor(() => expect((first.ping as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(0));
+    await new Promise((resolve) => setTimeout(resolve, 10));
     harness.acceptConnection?.(reverseConnection(second));
     await vi.waitFor(() => expect(first.close).toHaveBeenCalled());
 

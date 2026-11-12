@@ -188,11 +188,12 @@ describe('exec-policy — allowlist pattern anchoring', () => {
   } as unknown as Parameters<typeof checkExecPolicy>[0]
 
   it('anchors every alternative of an allowlist pattern', () => {
-    expect(checkExecPolicy(config, 'git status', 'owner').allowed).toBe(true)
-    expect(checkExecPolicy(config, 'npm ls', 'owner').allowed).toBe(true)
+    // `owner` is the chat role that bypasses the allowlist (ADR 0056); anchoring is checked for `trusted`.
+    expect(checkExecPolicy(config, 'git status', 'trusted').allowed).toBe(true)
+    expect(checkExecPolicy(config, 'npm ls', 'trusted').allowed).toBe(true)
     // `^git|npm$` used to match any command name starting with `git` or ending with `npm`.
-    expect(checkExecPolicy(config, 'gitevil status', 'owner').allowed).toBe(false)
-    expect(checkExecPolicy(config, 'xnpm ls', 'owner').allowed).toBe(false)
+    expect(checkExecPolicy(config, 'gitevil status', 'trusted').allowed).toBe(false)
+    expect(checkExecPolicy(config, 'xnpm ls', 'trusted').allowed).toBe(false)
   })
 })
 

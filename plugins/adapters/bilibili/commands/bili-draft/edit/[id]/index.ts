@@ -3,7 +3,7 @@ import { bilibiliEndpoints, editDraftText, draftEditUsage } from '@zhin.js/adapt
 
 export default defineCommand({
   description: '改写一条 B 站评论草稿，改完仍需审批发送', descriptionI18n: { en: 'Edit a Bilibili comment draft; approval is still required to send' },
-  permit: ['role(master)'],
+  permit: ['owner'],
   params: { id: { type: 'string', description: '草稿 ID', descriptionI18n: { en: 'Draft ID' } } },
   execute(context) {
     const { params, args, locale, formatCommand } = context;

@@ -44,7 +44,6 @@ configVersion: 2
 plugins:
   icqq: "@zhin.js/adapter-icqq"
 icqq:
-  master: "1659488338" # Required, shared at top level (/approve and master role)
   autoReconnect: true
   endpoints:
     - id: "${ICQQ_ACCOUNT}" # QQ number
@@ -58,7 +57,6 @@ configVersion: 2
 plugins:
   icqq: "@zhin.js/adapter-icqq"
 icqq:
-  master: "1659488338" # Top-level fields are shared by all endpoints
   endpoints:
     - id: "${ICQQ_ACCOUNT}"
     - id: "${ICQQ_ACCOUNT_2}"
@@ -107,7 +105,7 @@ Open the Console **ICQQ** page (route `/icqq`) to:
 
 An administrator must review and confirm the existing account list before its first migration; identity and history are retained. New or replaced accounts are saved disabled and must be started explicitly. A connection update reconnects only that account; replacement uses a new internal identity and does not inherit Sessions or settings. If a commit outcome is unknown, refresh to verify it before taking another action.
 
-Reading requires `icqq:read`; writes require `icqq:write`. A full admin token is unrestricted. "Add endpoint" is equivalent to the old `icqq endpoint add` command.
+Reading requires `icqq:read`; writes require `icqq:write`. A global owner is unrestricted. Plugin permissions are granted by level (see [Plugin permission levels](../console/index.md#plugin-permission-levels)): `:read` to `viewer` and above, `:write` (`operate` level for these account permissions) to `operator` and above; a role bound to this adapter counts too, and the first migration additionally needs an administrator. "Add endpoint" is equivalent to the old `icqq endpoint add` command.
 
 First-login QR codes, slider challenges and device confirmations appear under **Pending logins**, so you do not need to return to the terminal.
 
@@ -119,7 +117,6 @@ With `notify` configured, ICQQ sends an out-of-band notice through another adapt
 qq:
   # ... a configured QQ official bot
 icqq:
-  master: 123456
   autoReconnect: true   # default true: retry login after a kickoff
   notify:
     adapter: qq
@@ -138,7 +135,7 @@ With `autoReconnect: true`, the endpoint retries login automatically. When a QR 
 | `icqq login status` | show online state and pending login tasks |
 | `icqq login retry` | trigger another login attempt |
 
-Only the master (top-level or `endpoints[i].master`) or the `notify.id` account may run these commands; when neither is configured, use the Console ICQQ page. Without `notify`, outages are only logged and shown as pending logins on the Console ICQQ page.
+Only the chat role `owner` or the `notify.id` account may run these commands; when neither is configured, use the Console ICQQ page. Without `notify`, outages are only logged and shown as pending logins on the Console ICQQ page.
 
 ## Troubleshooting
 

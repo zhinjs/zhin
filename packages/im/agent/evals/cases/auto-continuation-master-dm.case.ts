@@ -5,7 +5,7 @@ export default defineEvalCase({
   description: 'An interactive master task finishes in the same turn without step-budget checkpoints.',
   source: 'Approved continuous interactive task; bounded continuation regressions remain in core/progress-budget.test.ts',
   tags: ['long-task'],
-  inbound: { text: '把 n0 到 n3 四条笔记都写上 x', sender: { id: 'master', roles: ['master'] } },
+  inbound: { text: '把 n0 到 n3 四条笔记都写上 x', sender: { id: 'master', chatRole: 'owner' } },
   agentConfig: { maxIterations: 2, toolBudget: { extendBy: 0, autoContinue: 'master_dm', maxContinuations: 1, progressMaxUpdates: 0 } },
   tools: [{ name: 'edit_note', result: (args: Record<string, unknown>) => `written ${String(args.id)}` }],
   script: [

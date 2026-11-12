@@ -19,7 +19,7 @@ export default definePlugin({
 ## "Host Plugin" Narrative -> basic/cli Assembly + Host Tokens
 
 - **Old approach**: `@zhin.js/host` series router / api plugin packages that installed HTTP routing and Console API as "plugins" (these packages have been deleted).
-- **New approach**: The Host is a composition root -- `basic/cli`'s `zhin runtime start` assembles IM / Agent / Console Host uniformly. Plugins do not install Hosts; instead they consume Host capabilities through Host tokens in `setup` (`zhin.js` exports six tokens like `databaseHostToken`, `@zhin.js/host-http` exports `httpHostToken`). When a token is not assembled, use `has()` to check and degrade gracefully.
+- **New approach**: The Host is a composition root -- the instance composition root `zhin.js/instance` (launched by the management gateway that `zhin start` runs) assembles IM / Agent / Console Host uniformly. Plugins do not install Hosts; instead they consume Host capabilities through Host tokens in `setup` (`zhin.js` exports six tokens like `databaseHostToken`, `@zhin.js/host-http` exports `httpHostToken`). When a token is not assembled, use `has()` to check and degrade gracefully.
 
 ```ts
 // Old: Install host plugin to get HTTP capability
@@ -74,7 +74,7 @@ The old orchestration stack (mutable repositories, `AgentDispatcher`, executing 
 | `OrchestrationService` / `OrchestrationKernel` / repositories / `AgentDispatcher` | There is no compatibility object. Collaboration state is read only from the `engagement_events` Journal (`zhin trace --engagements`, the Console collaboration graph). |
 | `ai.remoteAgents` / `remote_mesh` / Remote Agent poller | No longer supported; startup fails when `ai.remoteAgents` is present. Declare remote Agents under `a2a.mailbox.peers`; each Mail is signed together with its Authority and budget. |
 | `ai.workroom` / `ai.workrooms`, `a2a.workroomCallbacks` / `a2a.workroomRemoteExecutors`, `@zhin.js/workroom` | Removed; startup fails when these keys are present. Declare groups or channels shared by several Bots under `ai.venues`, and each Agent's contacts and budget ceiling under `collaboration` in `agents/<name>/agent.json`. |
-| `/api/agent/orchestration/runs`, `/api/agent/workroom/runs` | Use the read-only `GET /api/agent/engagements[/*]` endpoint and the Console collaboration graph page. |
+| `/api/agent/orchestration/runs`, `/api/agent/workroom/runs` | Use the read-only `GET /api/agent/engagements[/*]` endpoint and the Console Workroom page. |
 
 Old Runs, Workroom Journals, and Catalogs are no longer supported and there is no migration tooling; to keep historical information, curate it by hand and resubmit it as a new message. See the [Agent CONTEXT on GitHub](https://github.com/zhinjs/zhin/blob/main/packages/im/agent/CONTEXT.md) for the implemented authority boundary.
 

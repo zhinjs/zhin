@@ -67,3 +67,19 @@ it('supports definePluginConsoleRpc.withConfig<TConfig>() and typed call.config'
   const pingMethod = rpc.methods.get('ping')!;
   expect(pingMethod.handler({ msg: 'ok' }, { signal, config: { prefix: 'bot', maxItems: 5 } })).toBe('bot:ok');
 });
+
+it('normalizes declared permission levels (ADR 0049 amendment 2026-11-11)', () => {
+  const rpc = definePluginConsoleRpc({
+    permissions: [{ id: 'rss:write', level: 'operate', description: ' 编辑订阅 ' }, { id: 'rss:read', level: 'read' }],
+    status: { handler, requiredPermissions: ['rss:read'] },
+  });
+  expect(rpc.permissions).toEqual([{ id: 'rss:write', level: 'operate', description: '编辑订阅' }, { id: 'rss:read', level: 'read' }]);
+  expect(definePluginConsoleRpc({ status: { handler } }).permissions).toBeUndefined();
+  const define = (permissions: unknown) => () => definePluginConsoleRpc({ permissions: permissions as never, status: { handler } });
+  expect(define('rss:read')).toThrow(/must be an array/u);
+  expect(define([{ id: 'rss.read', level: 'read' }])).toThrow(/<plugin>:<action>/u);
+  expect(define([{ id: 'rss:read', level: 'admin' }])).toThrow(/level/u);
+  expect(define([{ id: 'rss:read', level: 'read' }, { id: 'rss:read', level: 'manage' }])).toThrow(/Duplicate/u);
+  expect(define([{ id: 'rss:read', level: 'read', scope: 'x' }])).toThrow(/unknown keys/u);
+  expect(define([{ id: 'rss:read', level: 'read', description: ' ' }])).toThrow(/description/u);
+});

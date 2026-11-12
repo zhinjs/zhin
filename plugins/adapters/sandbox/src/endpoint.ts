@@ -9,9 +9,10 @@ import { execFile } from 'node:child_process';
 import type { HttpHost, WsConnection } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
-import { EndpointDeliveryError } from '@zhin.js/im-contract';
+import { EndpointDeliveryError, type PlatformStandingLevel } from '@zhin.js/im-contract';
 import {
   bindSandboxWsSocket,
+  sandboxSocketOf,
   formatSandboxOutbound,
   parseSandboxWsFrame,
   sandboxInboundConversation,
@@ -320,8 +321,9 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
       ? `sandbox-${randomUUID().slice(0, 8)}`
       : this.#options.defaults.id;
     const owner = this.#options.defaults.owner;
-    const canExecute = connection.authScope === 'full';
-    const socket = connection.socket as SandboxWsSocket;
+    // Every admitted host-authenticated socket carries a Console principal allowed to use it.
+    const canExecute = true;
+    const socket = sandboxSocketOf(connection);
     const connectionId = randomUUID();
     const subscription: SandboxConnection = {
       connectionId, target, owner, socket, canExecute, scoped: false,
@@ -387,16 +389,13 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
             ...(parsed.senderRole ? { senderRole: parsed.senderRole } : {}),
             messageId, endpoint: this.#options.defaults.id, content: parsed.content, timestamp: parsed.timestamp,
           }));
+          // ADR 0056 §1: the simulated group role is a platform standing (master = 群主). It never
+          // grants framework roles; those come from the runtime (account owner / chat roles).
+          const standing: PlatformStandingLevel | undefined = parsed.senderRole === 'master' ? 'owner' : parsed.senderRole;
           const sender = {
             id: senderId,
             name: senderName,
-            ...(parsed.senderRole
-              ? {
-                  role: parsed.senderRole,
-                  roles: parsed.senderRole === 'master' ? ['master', 'admin'] : parsed.senderRole === 'admin' ? ['admin'] : ['member'],
-                  permissions: parsed.senderRole === 'master' ? ['master', 'admin'] : parsed.senderRole === 'admin' ? ['admin'] : [],
-                }
-              : {}),
+            ...(standing && conversation.kind !== 'private' ? { platform: { standing } } : {}),
           };
           void this[endpointSpec].events.message({
             event: raw,

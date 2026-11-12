@@ -1,4 +1,5 @@
-import { createHttpHost, type HttpHost } from '@zhin.js/host-http';
+import { type HttpHost } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import { createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';

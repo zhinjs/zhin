@@ -35,7 +35,7 @@ export function scopeEndpointControl({ port, invoke }: ScopedPortOptions<Endpoin
 
 /** Semantic method wrappers retain source receivers without proxying or copying native SDK state. */
 export function scopeEndpointManagement({ port, invoke }: ScopedPortOptions<EndpointManagement>): Readonly<EndpointManagement> {
-  const { inspectGroupMember, inspectGroupScene, inspectGroupMemberProfile, moderateGroupMember,
+  const { inspectGroupMember, inspectGroupScene, inspectGroupMemberProfile, inspectSelfStanding, moderateGroupMember,
     listFriends, listGroups, listChannels, listGroupMembers, listRequests, approveRequest, rejectRequest,
     kickGroupMember, muteGroupMember, setGroupAdmin, deleteFriend, sendGroupNotice,
     listGroupJoinRequests, approveGroupJoinRequest, declineGroupJoinRequest,
@@ -47,6 +47,8 @@ export function scopeEndpointManagement({ port, invoke }: ScopedPortOptions<Endp
       run: signal => inspectGroupScene.call(port, { ...request, signal }) }) } : {}),
     ...(inspectGroupMemberProfile ? { inspectGroupMemberProfile: request => invoke({ signal: request.signal,
       run: signal => inspectGroupMemberProfile.call(port, { ...request, signal }) }) } : {}),
+    ...(inspectSelfStanding ? { inspectSelfStanding: request => invoke({ signal: request.signal,
+      run: signal => inspectSelfStanding.call(port, { ...request, signal }) }) } : {}),
     ...(moderateGroupMember ? { moderateGroupMember: request => invoke({ signal: request.signal,
       run: signal => moderateGroupMember.call(port, { ...request, signal }) }) } : {}),
     ...(listFriends ? { listFriends: request => invoke({ signal: request?.signal,

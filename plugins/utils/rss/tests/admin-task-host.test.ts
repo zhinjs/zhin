@@ -4,12 +4,13 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Adapter, adapterFeatureId, AdapterIndex, createEndpointSpecification, defineAdapter, endpointSpec, endpointEventGatewayToken } from '../../../../packages/im/adapter/src/index.js';
-import { createHttpHost } from '../../../../packages/host/http/src/index.js';
+import { createHttpHost } from '../../../../packages/host/http/src/node/index.js';
 import { childPluginId, createCapabilitySlot, createSnapshotView, PluginStateStore, pluginTaskProviderToken, rootPluginId,
   SnapshotStore, type SnapshotState } from '../../../../packages/im/plugin-runtime/src/index.js';
-import { registerPluginTaskRoutes } from '../../../../basic/cli/src/plugin-runtime/console/plugin-task-routes.js';
+import { registerPluginTaskRoutes } from '../../../../packages/im/zhin/src/instance/console/plugin-task-routes.js';
 import { createDatabaseHost } from '../../../../packages/im/core/src/plugin-runtime/im/index.js';
-import { sqliteAvailable } from '../../../../basic/cli/tests/plugin-runtime/sqlite-availability.js';
+import { sqliteAvailable } from '../../../../packages/im/zhin/tests/instance/sqlite-availability.js';
+import { withTestUsers } from '../../../../packages/im/zhin/tests/instance/utils/console-users.js';
 import { AdministratorRssTasks, ADMIN_RSS_STATE_KEY, type AdministratorRssBook } from '../src/admin-tasks.js';
 import { resolveRssConfig } from '../src/feed.js';
 
@@ -46,7 +47,7 @@ async function fixture() {
   const snapshots = new SnapshotStore({ ...state, projections: new Map([[adapterFeatureId, adapters]]) });
   const target = { endpoint: { id: String(adapter.id), adapter: adapters.clientAdapter(adapter.id) }, kind: 'channel' as const,
     id: 'channel', parent: { kind: 'channel' as const, id: 'parent' }, threadId: 'thread' };
-  const http = createHttpHost({ host: '127.0.0.1', port: 0, token: 'synthetic-operator', tokens: [{ token: 'synthetic-demo', scope: 'demo' }] });
+  const http = withTestUsers(createHttpHost({ host: '127.0.0.1', port: 0 }), { 'synthetic-operator': 'operator', 'synthetic-demo': 'none' });
   registerPluginTaskRoutes({ http, base: '/api', snapshots }); const { port } = await http.listen();
   cleanups.push(async () => { await http.close(); provider.stop(); await snapshots.close(); await adapters.stop(); });
   const request = (path = '/providers', body?: unknown, token = 'synthetic-operator') => fetch(`http://127.0.0.1:${port}/api/tasks${path}`, {

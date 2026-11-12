@@ -4,8 +4,9 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { PluginTestKit, FakeClock, FakeScheduleRootHost } from '../../../packages/toolkit/testing/src/index.ts';
-import { createHttpHost } from '../../../packages/host/http/src/index.ts';
-import { registerPluginTaskRoutes } from '../../../basic/cli/src/plugin-runtime/console/plugin-task-routes.ts';
+import { createHttpHost } from '../../../packages/host/http/src/node/index.ts';
+import { installSmokeConsoleUsers } from '../harness/smoke-console-users.mjs';
+import { registerPluginTaskRoutes } from '../../../packages/im/zhin/src/instance/console/plugin-task-routes.ts';
 import { createSmokeProject } from '../harness/smoke-project.mjs';
 import { createSmokeHosts } from '../harness/smoke-hosts.mjs';
 import { useFakeWallClock } from '../harness/fake-wall-clock.mjs';
@@ -53,7 +54,7 @@ try {
       installResources: hosts.installResources,
     });
     await kit.start();
-    httpHost = createHttpHost({ host: '127.0.0.1', port: 0, token: operatorToken });
+    httpHost = installSmokeConsoleUsers(createHttpHost({ host: '127.0.0.1', port: 0 }), { [operatorToken]: 'admin' });
     registerPluginTaskRoutes({ http: httpHost, base: '/api', snapshots: kit.snapshots });
     const { port } = await httpHost.listen();
     tasksUrl = `http://127.0.0.1:${port}/api/tasks`;

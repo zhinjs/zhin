@@ -1,16 +1,15 @@
-import type { IncomingMessage, ServerResponse } from 'node:http';
 import { ListToolsRequestSchema, CallToolRequestSchema, McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import {
   type HttpRouteHost,
   type HttpRouteRegistration,
 } from '@zhin.js/host-http-contract';
-import { HttpBodyError, readJsonBody } from '@zhin.js/host-http-contract';
+import { HttpBodyError, jsonResponse, readJsonBody } from '@zhin.js/host-http-contract';
 import type { ToolInvocationContext } from '@zhin.js/tool';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { mcpAuthRequired, verifyMcpBearer } from './mesh-auth.js';
+import { mcpAuthRequired, verifyMcpBearer, type McpAuthRequest } from './mesh-auth.js';
 
 export interface RuntimeMcpConfig {
   readonly enabled?: boolean;
@@ -37,6 +36,12 @@ export interface InstallRuntimeMcpOptions {
   readonly http: HttpRouteHost;
   readonly config: RuntimeMcpConfig;
   readonly fallbackToken?: string;
+  /**
+   * Shared Host credential check (ADR 0049): user API tokens with `mcp.access`, or the
+   * bootstrap token before setup. Tried when the bearer does not match `config.token`.
+   * `principal` is what the Host (or the gateway in front of it) resolved from that bearer.
+   */
+  readonly authenticateBearer?: (token: string, request: Request, remoteAddress?: string, principal?: unknown) => Promise<boolean>;
   readonly production?: boolean;
   readonly tools: RuntimeMcpToolProvider;
 }
@@ -45,24 +50,24 @@ export interface InstallRuntimeMcpOptions {
 export function installRuntimeMcp(options: InstallRuntimeMcpOptions): () => void {
   if (options.config.enabled === false) return () => undefined;
   const path = normalizePath(options.config.path ?? '/mcp');
-  const unregister = options.http.route('ALL', `${path}/*`, async (request, response) => {
-    await handleRuntimeMcpRequest(request, response, options);
-  }, { summary: 'Model Context Protocol', tags: ['mcp'] });
+  const unregister = options.http.route('ALL', `${path}/*`, (request, { remoteAddress, principal }) => (
+    handleRuntimeMcpRequest(request, options, remoteAddress, principal)
+  ), { summary: 'Model Context Protocol', tags: ['mcp'] });
   return unregister;
 }
 
 export async function handleRuntimeMcpRequest(
-  request: IncomingMessage,
-  response: ServerResponse,
+  request: Request,
   options: Omit<InstallRuntimeMcpOptions, 'http'>,
-): Promise<void> {
+  remoteAddress?: string,
+  principal?: unknown,
+): Promise<Response> {
   if (request.method !== 'POST') {
-    writeJson(response, 405, {
+    return jsonResponse(405, {
       jsonrpc: '2.0',
       error: { code: -32000, message: 'Method not allowed in stateless mode' },
       id: null,
     }, { Allow: 'POST' });
-    return;
   }
 
   let body: unknown;
@@ -71,48 +76,95 @@ export async function handleRuntimeMcpRequest(
   } catch (error) {
     // JSON-RPC keeps a protocol error envelope while the HTTP status preserves
     // the transport-level distinction between malformed and oversized input.
-    writeJson(response, error instanceof HttpBodyError ? error.statusCode : 400, {
+    return jsonResponse(error instanceof HttpBodyError ? error.statusCode : 400, {
       jsonrpc: '2.0',
       error: { code: -32700, message: 'Parse error' },
       id: null,
     });
-    return;
   }
 
+  const auth: McpAuthRequest = { headers: request.headers, ...(remoteAddress ? { remoteAddress } : {}) };
   const expectedToken = options.config.token ?? options.fallbackToken ?? '';
-  const bearerAuthenticated = verifyMcpBearer(request, expectedToken);
-  if (mcpAuthRequired(body, request, options.config, options.production ?? false)
+  const bearer = bearerOf(request);
+  const bearerAuthenticated = verifyMcpBearer(auth, expectedToken)
+    || (bearer !== '' && options.authenticateBearer !== undefined
+      && await options.authenticateBearer(bearer, request, remoteAddress, principal).catch(() => false));
+  if (mcpAuthRequired(body, auth, options.config, options.production ?? false)
     && !bearerAuthenticated) {
-    writeJson(response, 401, {
+    return jsonResponse(401, {
       jsonrpc: '2.0',
       error: { code: -32001, message: 'Unauthorized - Bearer token required' },
       id: requestId(body),
     });
-    return;
   }
 
-  try {
-    const invocation = mcpInvocationContext(request, response, body, bearerAuthenticated);
-    await options.tools.withTools(invocation, async (tools) => {
+  const internalError = () => jsonResponse(500, {
+    jsonrpc: '2.0',
+    error: { code: -32603, message: 'Internal server error' },
+    id: requestId(body),
+  });
+  const { invocation, detach } = mcpInvocationContext(request, body, bearerAuthenticated);
+  // The tool lease must outlive the (possibly streaming) response body, so the
+  // response is handed out while `withTools` keeps waiting for the body to finish.
+  return new Promise<Response>((resolve) => {
+    let handedOut = false;
+    void options.tools.withTools(invocation, async (tools) => {
       const server = createRuntimeMcpServer(tools, invocation);
-      const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+      const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined });
       try {
         await server.connect(transport);
-        await transport.handleRequest(request, response, body);
+        const response = await transport.handleRequest(request, { parsedBody: body });
+        if (!response.body) {
+          handedOut = true;
+          resolve(response);
+          return;
+        }
+        await new Promise<void>((finished) => {
+          handedOut = true;
+          resolve(new Response(onBodyFinished(response.body!, () => {
+            detach();
+            finished();
+          }), { status: response.status, statusText: response.statusText, headers: response.headers }));
+        });
       } finally {
         await transport.close().catch(() => undefined);
         await server.close().catch(() => undefined);
       }
+    }).catch(() => {
+      if (!handedOut) resolve(internalError());
     });
-  } catch {
-    if (!response.headersSent) {
-      writeJson(response, 500, {
-        jsonrpc: '2.0',
-        error: { code: -32603, message: 'Internal server error' },
-        id: requestId(body),
-      });
-    }
-  }
+  });
+}
+
+/** Pass-through body that reports when it was read to the end, failed or was cancelled. */
+function onBodyFinished(source: ReadableStream<Uint8Array>, finished: () => void): ReadableStream<Uint8Array> {
+  const reader = source.getReader();
+  let done = false;
+  const finish = (): void => {
+    if (done) return;
+    done = true;
+    finished();
+  };
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        const next = await reader.read();
+        if (next.done) {
+          finish();
+          controller.close();
+        } else {
+          controller.enqueue(next.value);
+        }
+      } catch (error) {
+        finish();
+        controller.error(error);
+      }
+    },
+    async cancel(reason) {
+      finish();
+      await reader.cancel(reason).catch(() => undefined);
+    },
+  }, { highWaterMark: 0 });
 }
 
 function createRuntimeMcpServer(
@@ -152,20 +204,17 @@ function createRuntimeMcpServer(
 }
 
 function mcpInvocationContext(
-  request: IncomingMessage,
-  response: ServerResponse,
+  request: Request,
   body: unknown,
   bearerAuthenticated: boolean,
-): ToolInvocationContext {
+): { invocation: ToolInvocationContext; detach(): void } {
   const controller = new AbortController();
-  request.once('aborted', () => controller.abort(new Error('MCP request aborted')));
-  response.once('close', () => {
-    if (!response.writableEnded) controller.abort(new Error('MCP response closed'));
-  });
-  response.once('error', (error) => controller.abort(error));
+  const onAbort = () => controller.abort(new Error('MCP request aborted'));
+  if (request.signal.aborted) onAbort();
+  else request.signal.addEventListener('abort', onAbort, { once: true });
   const id = String(requestId(body) ?? 'notification');
   const invocationId = randomUUID();
-  return Object.freeze({
+  const invocation: ToolInvocationContext = Object.freeze({
     signal: controller.signal,
     traceId: `mcp:${id}:${invocationId}`,
     turnId: `mcp:${invocationId}`,
@@ -181,6 +230,8 @@ function mcpInvocationContext(
       network: Object.freeze({ enabled: false }),
     }),
   });
+  // Body finished: nothing listens any more, drop the disconnect hook.
+  return { invocation, detach: () => request.signal.removeEventListener('abort', onAbort) };
 }
 
 function inputSchemaToZodShape(schema: unknown): Record<string, z.ZodType> {
@@ -249,19 +300,9 @@ function requestId(body: unknown): unknown {
     : null;
 }
 
-function writeJson(
-  response: ServerResponse,
-  status: number,
-  body: unknown,
-  headers: Record<string, string> = {},
-): void {
-  const payload = JSON.stringify(body);
-  response.writeHead(status, {
-    'content-type': 'application/json; charset=utf-8',
-    'content-length': String(Buffer.byteLength(payload)),
-    ...headers,
-  });
-  response.end(payload);
+function bearerOf(request: Request): string {
+  const auth = request.headers.get('authorization') ?? '';
+  return auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
 }
 
 function trimTrailingSlashes(s: string): string {

@@ -83,7 +83,7 @@ export function buildAgentCardForBinding(
         scheme: {
           $case: 'httpAuthSecurityScheme',
           value: {
-            description: 'Bearer token (http.token)',
+            description: 'Bearer token (a2a.token, or a Console API token with a2a.access)',
             scheme: 'Bearer',
             bearerFormat: '',
           },

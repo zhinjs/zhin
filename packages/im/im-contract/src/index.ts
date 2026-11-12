@@ -10,3 +10,5 @@ export * from './conversation-store.js';
 export * from './endpoint.js';
 export * from './self-profile.js';
 export * from './interaction.js';
+export * from './platform-standing.js';
+export * from './chat-role-level.js';

@@ -15,7 +15,7 @@ import {
   type PendingRpcRequest,
   type EndpointTransportState,
 } from 'zhin.js/adapter';
-import type { HttpHost, WsConnection } from '@zhin.js/host-http';
+import { verifyProtocolAccessToken, type HttpHost, type WsConnection } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
 import { createOneBot11EndpointManagement } from './endpoint-management.js';
@@ -27,17 +27,15 @@ import {
   isMessageEvent,
   onebot11InboundConversation,
   senderDisplayName,
+  onebot11SenderStanding,
   senderUserId,
   type OneBot11Event,
   type OneBot11WssConfig,
 } from './protocol.js';
 import { receiveOneBot11SideEvent } from './side-event-dispatch.js';
 import { createOneBot11ContentPort } from './content-port.js';
-import { verifyOneBotAccessToken } from './wss-auth.js';
 import { createOneBot11Rpc, type OneBot11Rpc } from './ws-transport.js';
-import {
-  type OneBot11WsSocket,
-} from './ws-types.js';
+import { socketOfConnection, type OneBot11WsSocket } from './ws-types.js';
 import { probeOnebot11SelfId, resolveOnebot11SelfId } from './self-id.js';
 import { callOnebot11Client, readOnebot11Response, onebot11ClientOptions, forwardOnebot11ClientEvents, Onebot11Client } from './client.js';
 
@@ -117,15 +115,16 @@ export class OneBot11WssEndpoint extends Onebot11Client implements Endpoint {
     if (this.#started) return;
     this.#stopped = false;
     if (!this.#options.config.access_token) {
-      // wss 模式未配 access_token 时任何连接都会被放行（verifyOneBotAccessToken 直接 return true）
+      // 未配 access_token 时只接受本机回环连接（verifyProtocolAccessToken）。
       this.#logger.warn(formatCompact({
         endpoint: this.#options.config.id,
         mode: 'wss',
         ok: false,
-        error: 'missing access_token',
+        error: 'missing access_token: only loopback peers are accepted',
       }));
     }
-    const handle = this.#options.http.ws(this.#options.config.path);
+    // The peer authenticates with this endpoint's own access_token, not a Console credential.
+    const handle = this.#options.http.ws(this.#options.config.path, { auth: 'protocol' });
     this.#wsRelease = handle.onConnection((connection) => {
       this.#connectionTask = this.#connectionTask
         .then(() => this.#acceptConnection(connection))
@@ -194,6 +193,7 @@ export class OneBot11WssEndpoint extends Onebot11Client implements Endpoint {
     }
     const conversation = { ...onebot11InboundConversation(String(this.#options.id), ev), endpoint: this[endpointSpec].identity };
     const inbound = formatInboundMetadata(ev, this.#options.config.id);
+    const platform = onebot11SenderStanding(ev);
     void this[endpointSpec].events.message({
       event: ev,
       ...(typeof ev.time === 'number' ? { platformSentAt: ev.time * 1000 } : {}),
@@ -203,7 +203,7 @@ export class OneBot11WssEndpoint extends Onebot11Client implements Endpoint {
       sender: {
         id: senderUserId(ev),
         name: senderDisplayName(ev) || undefined,
-        ...(ev.sender?.role ? { roles: [ev.sender.role] } : {}),
+        ...(platform ? { platform } : {}),
       },
       endpointId: inbound.endpointId,
       ...(inbound.mentioned ? { mentioned: true } : {}),
@@ -240,14 +240,14 @@ export class OneBot11WssEndpoint extends Onebot11Client implements Endpoint {
 
   async #acceptConnection(connection: WsConnection): Promise<void> {
     if (!this.#started || this.#stopped) {
-      connection.socket.close();
+      connection.close();
       return;
     }
-    if (!verifyOneBotAccessToken(this.#options.config.access_token, connection.request)) {
-      connection.socket.close(4003, 'Unauthorized');
+    if (!verifyProtocolAccessToken(this.#options.config.access_token, connection)) {
+      connection.close(4003, 'Unauthorized');
       return;
     }
-    const socket = connection.socket as unknown as OneBot11WsSocket;
+    const socket = socketOfConnection(connection);
     await this.#connectionLifecycle.stop();
     this.#rpc.disconnect('连接已替换');
     await this.#connectionLifecycle.start(async (lifecycleHandle) => {
@@ -264,16 +264,7 @@ export class OneBot11WssEndpoint extends Onebot11Client implements Endpoint {
         }
         if (this.#ws === socket) this.#ws = undefined;
       });
-      this.#connectionLifecycle.startHeartbeat(() => {
-        try {
-          socket.ping?.();
-        } catch {
-          /* ignore */
-        }
-      }, this.#options.config.heartbeat_interval);
-      socket.on('pong', () => {
-        if (this.#ws === socket) this.#connectionLifecycle.notifyHeartbeatAck();
-      });
+      // Dead-peer detection is the Host transport's keepalive (protocol ping / pong).
       socket.on('message', (data) => {
         if (this.#ws !== socket || this.#connectionLifecycle.state === 'closed') return;
         this.#connectionLifecycle.notifyHeartbeatAck();
@@ -296,7 +287,7 @@ export class OneBot11WssEndpoint extends Onebot11Client implements Endpoint {
     this.#logger.debug(formatCompact({
       endpoint: this.#options.config.id,
       mode: 'wss',
-      peer: connection.request.socket.remoteAddress,
+      peer: connection.remoteAddress,
     }));
   }
 }

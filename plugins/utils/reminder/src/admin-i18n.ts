@@ -126,6 +126,10 @@ const catalog = {
     "zh-CN": "已确认投递",
     "en": "Delivery confirmed"
   },
+  "featureDisabled": {
+    "zh-CN": "提醒已在目标账号或会话停用，本次未发送",
+    "en": "Reminders are switched off for the target account or conversation; this run was not sent"
+  },
   "rejected": {
     "zh-CN": "平台明确未投递或拒绝；任务已停止",
     "en": "The platform confirmed no delivery or rejected it. The task has stopped."

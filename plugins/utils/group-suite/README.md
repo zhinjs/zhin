@@ -65,6 +65,15 @@ group-suite:
 它是 best-effort 计数，并非持久 outbox：停止、插件重载或崩溃时尚未落库的批次可能丢失。
 退休 generation 的清理不额外写数据库，也不绕过代级准入。
 
+## 分层配置（ADR 0050 / 0055）
+
+支持全部四个层级：
+
+- 适配器、账号、会话层可以覆盖 `welcomeMessage`、`basePointsMin`、`basePointsMax`、`streakBonus`、`streakCap`、`rankSize`、`teachMaxPerGroup`、`teachCooldownMs`、`teachPageSize`。
+- `keywordReply`、`ephemeralKeywords`（决定存储方式）、`welcomeConversations`、`teachAllowRegex`（正则安全）只能在全局层修改。
+- 开启 `features.selfService.enabled` 后，群里的 `admin` 可以用 `功能 设置 group-suite welcomeMessage "欢迎 {name}"` 改本群欢迎语，也可以改 `rankSize`、`teachCooldownMs`、`teachPageSize`（`selfServiceFields`）；积分与问答上限只能在 Console 改。
+- 命令、中间件与入群欢迎都按所在会话读取有效配置，改动原地生效。推荐用会话层开关（`功能 关闭 group-suite`）代替 `welcomeConversations` 这类按群名单。
+
 ## 使用与权限
 
 未配置命名空间时直接使用表内指令名；如果实例设 `commandNamespace: suite`，使用

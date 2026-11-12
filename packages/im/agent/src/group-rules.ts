@@ -61,7 +61,7 @@ export interface GroupRuleStage {
 }
 
 export interface GroupRuleExempt {
-  /** 群主 / 管理员豁免（默认 true）。 */
+  /** 平台群主 / 管理员（`platform:admin`）与 zhin `owner` 豁免（默认 true；ADR 0056 §5）。 */
   readonly ownerAndAdmins: boolean;
   /** 额外白名单（成员 id，去重排序）。 */
   readonly userIds: readonly string[];

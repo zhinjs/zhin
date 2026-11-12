@@ -44,7 +44,7 @@ describe('spin hint trace event (ADR 0042 §7)', () => {
       id: 'spin-trace',
       description: 'spin trace',
       source: 'test',
-      inbound: { text: 'find it', scope: 'group', sender: { id: 'bob', roles: ['user'] } },
+      inbound: { text: 'find it', scope: 'group', sender: { id: 'bob' } },
       agentConfig: { maxIterations: 15, toolBudget: { extendBy: 0, autoContinue: 'off', progressMaxUpdates: 0 } },
       tools: [{ name: 'lookup', description: 'Look up.', result: 'same result' }],
       script: [

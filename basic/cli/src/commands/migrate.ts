@@ -16,27 +16,28 @@ import path, { join, resolve } from 'path';
 import { execSync } from 'child_process';
 import { formatCompact } from '@zhin.js/logger';
 import { logger } from '../utils/logger.js';
-import { NODE_ENGINES_HINT } from '../utils/node-requirements.js';
-import { applyInstanceDeclarationMigration, formatInstanceMigrationPreview, planInstanceDeclarationMigration, recoverInstanceDeclarationMigration } from '../plugin-runtime/migrate/instance-declarations.js';
-import { CONFIG_V2_MIGRATION_DOCS_URL, detectLegacyConfig } from '../utils/legacy-config.js';
+import { NODE_ENGINES_HINT } from '@zhin.js/gateway/project';
+import { applyInstanceDeclarationMigration, formatInstanceMigrationPreview, planInstanceDeclarationMigration, recoverInstanceDeclarationMigration } from '@zhin.js/gateway/project';
+import { CONFIG_V2_MIGRATION_DOCS_URL, detectLegacyConfig } from '@zhin.js/gateway/project';
+import { importProjectInstanceCli } from '../utils/project-instance.js';
+import { isLegacyScript, LEGACY_START_SCRIPTS, RECOMMENDED_START_SCRIPTS } from '../plugin-runtime/migrate/start-scripts.js';
+import { gatewayRangeFor, isBotProjectDirectory, withStartStackDependencies } from '../plugin-runtime/migrate/start-stack-dependencies.js';
 
 const cwd = process.cwd();
 
 const ZHIN_PACKAGE_PREFIX = '@zhin.js/';
 const CORE_PACKAGE = 'zhin.js';
 
+// `zhin start` is the entry (ADR 0054 §6); `zhin runtime start` is an accepted alias, never rewritten.
+// A bare `zhin start` in `start` / `dev` is rewritten: it runs in the background by default now.
 const RECOMMENDED_SCRIPTS: Record<string, string> = {
-  dev: 'zhin runtime start',
-  start: 'zhin runtime start',
-  daemon: 'zhin runtime start --daemon',
+  ...RECOMMENDED_START_SCRIPTS,
   stop: 'zhin stop',
   build: 'tsc --noEmit',
 };
 
 const LEGACY_SCRIPTS: Readonly<Record<string, readonly string[]>> = Object.freeze({
-  dev: ['zhin dev'],
-  start: ['zhin start'],
-  daemon: ['zhin start --daemon'],
+  ...LEGACY_START_SCRIPTS,
   build: ['zhin build'],
 });
 
@@ -90,7 +91,36 @@ export function upgradePackageJson(pkgPath: string, options: { toLatest: boolean
   let changed = false;
   const targetVersion = options.toLatest ? 'latest' : 'latest';
 
-  for (const { dep, current, inDev } of zhinDeps) {
+  // `zhin start` needs zhin.js, the CLI and the gateway in production: a bot project lists all
+  // three under dependencies (older projects had the CLI in devDependencies and no gateway).
+  // Moves happen before the upgrade below; an added package is versioned after it, so the
+  // gateway follows the CLI's final specifier.
+  const added = new Set<string>();
+  const upgraded = new Map<string, string>();
+  if (isBotProjectDirectory(path.dirname(pkgPath))) {
+    const stack = withStartStackDependencies(pkg.dependencies, pkg.devDependencies);
+    for (const change of stack.changes) {
+      if (change.kind === 'add') {
+        added.add(change.name);
+        continue;
+      }
+      const message = change.kind === 'move'
+        ? `${change.name}: devDependencies → dependencies (${change.version})`
+        : change.kind === 'drop-dev-placeholder'
+          ? `${change.name}: devDependencies 中的占位版本 ${change.version} 已移除，改在 dependencies 中声明（placeholder removed, declared in dependencies instead）`
+          : `${change.name}: devDependencies 中的重复项已移除（dependencies 已声明 / already in dependencies）`;
+      console.log(chalk.cyan(options.dryRun ? `  [dry-run] ${message}` : `  · ${message}`));
+    }
+    if (stack.changes.length > 0) {
+      changed = true;
+      pkg.dependencies = stack.dependencies;
+      if (Object.keys(stack.devDependencies).length > 0) pkg.devDependencies = stack.devDependencies;
+      else delete pkg.devDependencies;
+    }
+  }
+
+  for (const { dep, current, inDev } of collectZhinDeps(pkg)) {
+    if (added.has(dep)) continue;
     const key = inDev ? 'devDependencies' : 'dependencies';
     const existing = pkg[key]?.[dep];
     if (existing === undefined) continue;
@@ -108,15 +138,23 @@ export function upgradePackageJson(pkgPath: string, options: { toLatest: boolean
     } else {
       pkg[key][dep] = targetVersion;
     }
+    upgraded.set(dep, targetVersion);
     changed = true;
+  }
+
+  for (const name of added) {
+    const version = name === '@zhin.js/gateway'
+      ? gatewayRangeFor(upgraded.get('@zhin.js/cli') ?? String(pkg.dependencies['@zhin.js/cli']))
+      : pkg.dependencies[name];
+    pkg.dependencies[name] = version;
+    console.log(chalk.cyan(`  ${options.dryRun ? '[dry-run]' : '·'} ${name}: + dependencies (${version})`));
   }
 
   // 替换已失效的启动入口，同时保留用户自定义 scripts。
   if (!pkg.scripts) pkg.scripts = {};
   for (const [name, cmd] of Object.entries(RECOMMENDED_SCRIPTS)) {
     const current = pkg.scripts[name];
-    const isLegacy = typeof current === 'string'
-      && (LEGACY_SCRIPTS[name] ?? []).includes(current.trim());
+    const isLegacy = isLegacyScript(LEGACY_SCRIPTS, name, current);
     if (!current || isLegacy) {
       if (options.dryRun) {
         console.log(chalk.cyan(`  [dry-run] scripts.${name}: ${current ?? '(missing)'} → "${cmd}"`));
@@ -589,7 +627,7 @@ migrateCommand.addCommand(
                 'Session binding neither finalizes startup files nor imports credentials'
               );
             const sessions = await loadInferenceMigrationModule(
-              () => import('../plugin-runtime/inference/migration-session-bindings.js')
+              async () => (await importProjectInstanceCli(process.cwd())).loadInferenceMigrationSessionBindings()
             );
             const preview = await sessions.readSessionBindingsPreview(previewFile);
             if (preview.rootId !== resolve(process.cwd()))
@@ -603,13 +641,13 @@ migrateCommand.addCommand(
             return;
           }
           const migration = await loadInferenceMigrationModule(
-            () => import('../plugin-runtime/inference/migration-preview.js')
+            async () => (await importProjectInstanceCli(process.cwd())).loadInferenceMigrationPreview()
           );
           const preview = await migration.readInferenceMigrationPreview(previewFile);
           if (preview.rootId !== resolve(process.cwd()))
             throw new Error('Migration preview belongs to another project Root');
           const writer = await loadInferenceMigrationModule(
-            () => import('../plugin-runtime/inference/migration-apply.js')
+            async () => (await importProjectInstanceCli(process.cwd())).loadInferenceMigrationApply()
           );
           const run = options.finalize
             ? writer.finalizeInferenceMigration
@@ -643,7 +681,7 @@ migrateCommand.addCommand(
           if (options.withCredentials)
             throw new Error('Session binding does not import credentials');
           const sessions = await loadInferenceMigrationModule(
-            () => import('../plugin-runtime/inference/migration-session-bindings.js')
+            async () => (await importProjectInstanceCli(process.cwd())).loadInferenceMigrationSessionBindings()
           );
           const preview = await sessions.previewSessionBindings({ ...sources, mapping });
           await fs.writeFile(resolve(options.output), `${JSON.stringify(preview, null, 2)}\n`, {
@@ -667,7 +705,7 @@ migrateCommand.addCommand(
           return;
         }
         const migration = await loadInferenceMigrationModule(
-          () => import('../plugin-runtime/inference/migration-preview.js')
+          async () => (await importProjectInstanceCli(process.cwd())).loadInferenceMigrationPreview()
         );
         const preview = await migration.previewInferenceMigration({
           ...sources,
@@ -683,7 +721,7 @@ migrateCommand.addCommand(
               id: preview.id,
               output: resolve(options.output),
               stateSource: preview.stateSource,
-              units: preview.units.map((unit) => ({
+              units: preview.units.map((unit: any) => ({
                 id: unit.id,
                 ownerId: unit.ownerId,
                 blocked: unit.migration.blocked,

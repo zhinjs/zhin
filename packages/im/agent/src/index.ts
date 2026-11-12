@@ -552,7 +552,7 @@ export {
   type SelfChangeTrialResult,
 } from './self-change/trial.js';
 export {
-  SELF_CHANGE_MASTER_ROLE,
+  SELF_CHANGE_OWNER_ROLE,
   SelfChangeDraftForbiddenError,
   canDraftSelfChange,
   type SelfChangeDrafter,
@@ -742,6 +742,7 @@ export { getFileMemoryContext, getMemoryDir } from './memory-layers.js';
 export type { BootstrapFile, ContextFile } from './bootstrap.js';
 
 export {
+  modelMediaTrust,
   NO_MEDIA_AUTHORITY,
   preprocessInboundMedia,
   publishOutboundElements,
@@ -907,7 +908,7 @@ export {
 export type {
   McpConnection,
   ResourceScope, ResourceEntry,
-  Tool, Message, SenderRole, ToolScope, FileRole,
+  Tool, Message, PrincipalRole, ToolScope, FileRole,
   ToolParametersSchema, PropertySchema, ToolJsonSchema,
   Skill, SkillMetadata,
   SubAgentDef, AgentPreset,

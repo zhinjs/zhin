@@ -6,7 +6,7 @@ import {
 
 describe('schedule security harness', () => {
   it('demotes creator roles by one level', () => {
-    expect(demoteScheduleCreator({ userId: 'u1', roles: ['master'] }).roles).toEqual(['trusted']);
+    expect(demoteScheduleCreator({ userId: 'u1', roles: ['owner'] }).roles).toEqual(['trusted']);
     expect(demoteScheduleCreator({ userId: 'u2', roles: ['trusted'] }).roles).toEqual(['user']);
     expect(demoteScheduleCreator({ userId: 'u3', roles: ['user'] }).roles).toEqual([]);
   });

@@ -44,7 +44,7 @@ Outbound: `send({ conversation, payload })` -> Telegram Bot API (chat_id is `con
 
 ### Platform Permissions (platform permit)
 
-- Sender role has been restored: for group messages, inbound uses `getChatMember` (60s cache) to resolve the sender, writing to `metadata.senderRole` / `metadata.senderPermissions`.
+- Member standing: for group messages, inbound uses `getChatMember` (60s cache) and reports `sender.platform` (`creator` → `owner`, `administrator` → `admin` with its `can_*` rights in `permissions`, `left` / `kicked` → `guest`; ADR 0056 §1).
 - `plugin.ts` registers a checker during generation setup and unregisters on dispose; Plugin Runtime CapabilityIngress and ToolSystem uniformly consume `permissions` via Core's `canAccessTool()`.
 
 ## Prerequisites
@@ -119,7 +119,7 @@ Open the Console **Telegram** page (route `/telegram`) to:
 
 An administrator must review and confirm the existing account list before its first migration; identity and history are retained. New or replaced accounts are saved disabled and must be started explicitly. A connection update reconnects only that account; replacement uses a new internal identity and does not inherit Sessions or settings. If a commit outcome is unknown, refresh to verify it before taking another action.
 
-Reading requires `telegram:read`; writes require `telegram:write`. A full admin token is unrestricted. "Add endpoint" is equivalent to the old `telegram endpoint add` command.
+Reading requires `telegram:read`; writes require `telegram:write`. A global owner is unrestricted. Plugin permissions are granted by level (see [Plugin permission levels](../console/index.md#plugin-permission-levels)): `:read` to `viewer` and above, `:write` (`operate` level for these account permissions) to `operator` and above; a role bound to this adapter counts too, and the first migration additionally needs an administrator. "Add endpoint" is equivalent to the old `telegram endpoint add` command.
 
 ## Troubleshooting
 

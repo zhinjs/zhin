@@ -2,7 +2,8 @@ import WebSocket from 'ws';
 import { AdapterIndex, adapterFeatureId, endpointEventGatewayToken, type EndpointEvent, type EndpointEventGateway } from '@zhin.js/adapter';
 import { createCapabilitySlot, createSnapshotView, SnapshotStore, rootPluginId, projectLocaleToken, readOperationSession, type OperationSession, type SnapshotState } from 'zhin.js';
 import { ImRuntime, RuntimeMessage, type Message } from '@zhin.js/core/runtime';
-import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
+import { httpHostToken } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import sandboxAdapter from '../adapters/sandbox/index.js';
 import { SandboxClient } from '../src/client.js';
 
@@ -27,7 +28,7 @@ it('settles the original Core confirm once through the real Sandbox wire, never 
     const session = readOperationSession(message); if (!session) throw new Error('Sandbox Core Session is missing'); sessions.push(session);
     ordinary(message.content); return true;
   } });
-  const http = createHttpHost({ host: '127.0.0.1', port: 0, token: 'local-full' });
+  const http = createHttpHost({ host: '127.0.0.1', port: 0 });
   const adapter = createCapabilitySlot({ owner: root, feature: adapterFeatureId, localName: 'sandbox',
     source: '/project/adapters/sandbox/index.ts', definition: sandboxAdapter });
   let processed = 0;
@@ -55,7 +56,7 @@ it('settles the original Core confirm once through the real Sandbox wire, never 
     await adapters.start(); adapters.open();
     const { port } = await http.listen();
     const connect = async () => {
-      const socket = new WebSocket(`ws://127.0.0.1:${port}/sandbox?token=local-full`);
+      const socket = new WebSocket(`ws://127.0.0.1:${port}/sandbox`);
       clients.push(socket);
       const frames: Record<string, any>[] = [];
       socket.on('message', raw => frames.push(JSON.parse(String(raw))));

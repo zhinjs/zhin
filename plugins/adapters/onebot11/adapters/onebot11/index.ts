@@ -32,6 +32,9 @@ export default defineAdapter<OneBot11EndpointConfig>({
       },
       delivery: { send: true, proactive: true, spool: true },
     },
+    // ADR 0056 §1：群消息带 sender.role，归一为 sender.platform.standing。
+    // ADR 0056 §1：发言者与机器人自身的群内地位（get_group_member_info self，供 bot:* permit）。
+    group: { scene: { platformStanding: { standing: true }, selfStanding: { standing: true } } },
   },
   createAdapter: context => new Onebot11Adapter(context),
 });

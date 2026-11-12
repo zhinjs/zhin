@@ -1,3 +1,4 @@
+import type { PlatformStanding, SelfStandingRequest } from '@zhin.js/im-contract';
 import { isEndpoint, endpointRuntimeOf } from './endpoint-specification.js';
 
 export interface EndpointFriend {
@@ -121,6 +122,13 @@ export interface EndpointManagement {
   /** Scene name, owner, admins, size and mute facts; missing fields remain unknown. */
   inspectGroupScene?(request: EndpointGroupInspectionRequest): Promise<GroupSceneFacts>;
   inspectGroupMemberProfile?(request: EndpointMemberInspectionRequest): Promise<GroupMemberProfile>;
+  /**
+   * ADR 0056 §1: the Bot account's own standing in one conversation (normalized `standing`, plus
+   * platform roles / permissions as far as the platform exposes them). Declare it with
+   * `scene.selfStanding` in the capability profile. `undefined` = unknown. Callers go through
+   * `AdapterIndex.selfStanding`, which caches per conversation; never call it per message.
+   */
+  inspectSelfStanding?(request: SelfStandingRequest): Promise<PlatformStanding | undefined>;
   /** Recheck membership and platform permissions immediately before any effect. */
   moderateGroupMember?(request: EndpointModerationRequest): Promise<void>;
   listFriends?(request?: EndpointManagementRequest): Promise<readonly EndpointFriend[]>;

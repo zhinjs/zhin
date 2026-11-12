@@ -78,89 +78,11 @@
             "string",
             "null"
           ],
-          "description": "HTTP Host 访问令牌。",
+          "description": "Bootstrap token: signs in to the setup wizard until the first Console owner exists, then stops working (ADR 0049).",
+          "x-descriptionZh": "初始化令牌：创建第一个 Console 所有者之前用于登录初始化向导；之后失效（ADR 0049）。",
           "writeOnly": true,
           "x-zhin-config": {
             "secret": true,
-            "security": true
-          }
-        },
-        "tokens": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": [
-              "object",
-              "null"
-            ],
-            "additionalProperties": true,
-            "properties": {
-              "token": {
-                "type": [
-                  "string",
-                  "null"
-                ],
-                "description": "访问令牌。",
-                "writeOnly": true,
-                "x-zhin-config": {
-                  "secret": true
-                }
-              },
-              "scope": {
-                "type": [
-                  "string",
-                  "null"
-                ],
-                "description": "令牌作用范围：full 为管理员；user（与 demo 等价）为普通用户，按 permissions / roles 开放页面和插件操作。",
-                "x-zhin-config": {
-                  "options": [
-                    {
-                      "label": "完整管理",
-                      "value": "full"
-                    },
-                    {
-                      "label": "普通用户",
-                      "value": "user"
-                    },
-                    {
-                      "label": "只读演示",
-                      "value": "demo"
-                    }
-                  ]
-                }
-              },
-              "principalId": {
-                "type": [
-                  "string",
-                  "null"
-                ],
-                "description": "稳定管理主体身份。"
-              },
-              "permissions": {
-                "type": [
-                  "array",
-                  "null"
-                ],
-                "items": {
-                  "type": "string"
-                },
-                "description": "Console 权限，对应页面的 requiredPermissions；full 令牌忽略此项。"
-              },
-              "roles": {
-                "type": [
-                  "array",
-                  "null"
-                ],
-                "items": {
-                  "type": "string"
-                },
-                "description": "Console 角色，对应页面的 requiredRoles；full 令牌忽略此项。"
-              }
-            }
-          },
-          "x-zhin-config": {
             "security": true
           }
         },
@@ -174,6 +96,33 @@
               "string",
               "null"
             ]
+          }
+        },
+        "trustProxy": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 32
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "description": "Reverse proxies whose X-Forwarded-For / Forwarded header names the client (login rate limit, audit IP, loopback-only sockets): false (default) uses the TCP peer; true trusts every hop; a number trusts that many hops; a list trusts peers matching IPs / CIDRs or loopback, private, linklocal.",
+          "x-descriptionZh": "受信任的反向代理，其 X-Forwarded-For / Forwarded 头给出真实客户端地址（登录限流、审计 IP、仅本机套接字）：false（默认）只用 TCP 对端地址；true 信任所有跳；数字表示信任离服务端最近的若干跳；列表表示只信任匹配的 IP / CIDR 或 loopback、private、linklocal。",
+          "x-zhin-config": {
+            "security": true
           }
         },
         "base": {
@@ -311,6 +260,244 @@
               }
             }
           }
+        }
+      }
+    },
+    "console": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Console Host features.",
+      "x-descriptionZh": "Console 宿主功能。",
+      "properties": {
+        "terminal": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Console terminal (host shell / SSH) for owners holding ops.terminal; off by default.",
+          "x-descriptionZh": "Console 终端（宿主 Shell / SSH），仅持有 ops.terminal 的所有者可用；默认关闭。",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": false,
+              "description": "Register the terminal routes.",
+              "x-descriptionZh": "注册终端路由。"
+            },
+            "shell": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Local shell; defaults to $SHELL (powershell.exe on Windows).",
+              "x-descriptionZh": "本机 Shell；省略时用 $SHELL（Windows 为 powershell.exe）。"
+            },
+            "cwd": {
+              "type": "string",
+              "default": ".",
+              "description": "Working directory, relative to the project root.",
+              "x-descriptionZh": "工作目录，相对项目根。"
+            },
+            "idleTimeout": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 604800,
+              "default": 900,
+              "description": "Seconds without input before the session closes (0 = never).",
+              "x-descriptionZh": "无输入多少秒后断开（0 表示不限）。"
+            },
+            "maxSessions": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 256,
+              "default": 4,
+              "description": "Concurrent sessions across all users.",
+              "x-descriptionZh": "所有用户合计的同时会话上限。"
+            },
+            "ssh": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "name",
+                  "host",
+                  "username"
+                ],
+                "description": "Allow-listed SSH target; credentials come only from environment variables or local key files.",
+                "x-descriptionZh": "白名单 SSH 目标；凭据只从环境变量或本地密钥文件读取。",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$",
+                    "not": {
+                      "const": "local"
+                    },
+                    "description": "Target id the Console selects (not \"local\").",
+                    "x-descriptionZh": "目标 id，Console 按它选择（不能是 local）。"
+                  },
+                  "label": {
+                    "type": "string",
+                    "description": "Display name.",
+                    "x-descriptionZh": "显示名称。"
+                  },
+                  "host": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "SSH host.",
+                    "x-descriptionZh": "SSH 主机。"
+                  },
+                  "port": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 65535,
+                    "default": 22,
+                    "description": "SSH port.",
+                    "x-descriptionZh": "SSH 端口。"
+                  },
+                  "username": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "SSH user.",
+                    "x-descriptionZh": "SSH 用户。"
+                  },
+                  "privateKeyPath": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Private key file (relative to the project root, ~ allowed); exclusive with privateKeyEnv.",
+                    "x-descriptionZh": "私钥文件（相对项目根，可用 ~）；与 privateKeyEnv 互斥。"
+                  },
+                  "privateKeyEnv": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+                    "description": "Environment variable holding the private key.",
+                    "x-descriptionZh": "保存私钥的环境变量名。"
+                  },
+                  "passwordEnv": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+                    "description": "Environment variable holding the password.",
+                    "x-descriptionZh": "保存密码的环境变量名。"
+                  },
+                  "passphraseEnv": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+                    "description": "Environment variable holding the key passphrase.",
+                    "x-descriptionZh": "保存私钥口令的环境变量名。"
+                  },
+                  "hostFingerprint": {
+                    "type": "string",
+                    "pattern": "^[Ss][Hh][Aa]256:[A-Za-z0-9+/]{43}=*$",
+                    "description": "Required host key fingerprint (SHA256:…), verified strictly; get it with `ssh-keyscan -t ed25519 <host> | ssh-keygen -lf -` on a trusted network.",
+                    "x-descriptionZh": "必填的主机密钥指纹（SHA256:…），严格校验；在可信网络中用 `ssh-keyscan -t ed25519 <host> | ssh-keygen -lf -` 获取。"
+                  },
+                  "insecureAcceptAnyHostKey": {
+                    "type": "boolean",
+                    "description": "Accept any host key without verification (unsafe, open to man-in-the-middle); only instead of hostFingerprint. The Console marks the target unsafe.",
+                    "x-descriptionZh": "不校验主机密钥、接受任意密钥（不安全，可被中间人攻击）；仅在不填 hostFingerprint 时使用，Console 会把该目标标为不安全。"
+                  }
+                },
+                "allOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "properties": {
+                          "hostFingerprint": true
+                        },
+                        "required": [
+                          "hostFingerprint"
+                        ],
+                        "not": {
+                          "properties": {
+                            "insecureAcceptAnyHostKey": {
+                              "const": true
+                            }
+                          },
+                          "required": [
+                            "insecureAcceptAnyHostKey"
+                          ]
+                        }
+                      },
+                      {
+                        "properties": {
+                          "insecureAcceptAnyHostKey": {
+                            "const": true
+                          }
+                        },
+                        "required": [
+                          "insecureAcceptAnyHostKey"
+                        ],
+                        "not": {
+                          "properties": {
+                            "hostFingerprint": true
+                          },
+                          "required": [
+                            "hostFingerprint"
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "anyOf": [
+                      {
+                        "properties": {
+                          "privateKeyPath": true
+                        },
+                        "required": [
+                          "privateKeyPath"
+                        ]
+                      },
+                      {
+                        "properties": {
+                          "privateKeyEnv": true
+                        },
+                        "required": [
+                          "privateKeyEnv"
+                        ]
+                      },
+                      {
+                        "properties": {
+                          "passwordEnv": true
+                        },
+                        "required": [
+                          "passwordEnv"
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "not": {
+                      "properties": {
+                        "privateKeyPath": true,
+                        "privateKeyEnv": true
+                      },
+                      "required": [
+                        "privateKeyPath",
+                        "privateKeyEnv"
+                      ]
+                    }
+                  }
+                ]
+              },
+              "description": "SSH targets the Console may open.",
+              "x-descriptionZh": "Console 可连接的 SSH 目标。"
+            }
+          },
+          "x-zhin-config": {
+            "security": true
+          }
+        }
+      }
+    },
+    "gateway": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Management gateway (zhin start): instance supervision and dependency transactions.",
+      "x-descriptionZh": "管理网关（zhin start）：实例监管与依赖事务。",
+      "properties": {
+        "readyTimeout": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3600,
+          "default": 60,
+          "description": "Seconds the instance has to report ready after a start, a restart or a dependency transaction before the start counts as failed (the transaction then rolls back). Read again before every start, restart and transaction; no gateway restart needed.",
+          "x-descriptionZh": "实例启动、重启或依赖事务后报告就绪的最长秒数；超时视为启动失败（依赖事务随之回滚）。每次启动、重启与事务前重新读取，修改后无需重启网关。"
         }
       }
     },
@@ -3705,6 +3892,28 @@
             "Simplified Chinese",
             "English"
           ]
+        }
+      }
+    },
+    "features": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Feature configuration beyond the plugin blocks (ADR 0055): in-chat self-service. Restart to apply.",
+      "x-descriptionZh": "插件配置块之外的功能配置（ADR 0055）：群内自助。修改后需重启。",
+      "properties": {
+        "selfService": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "In-chat `feature` / `功能` and `role` / `角色` commands for chat role admins (ADR 0055 / 0056). Off by default. Platform group owners / admins are not zhin roles: grant them admin explicitly.",
+          "x-descriptionZh": "聊天角色 admin 在聊天中使用的 `功能` / `feature` 与 `角色` / `role` 命令（ADR 0055 / 0056），默认关闭。平台群主 / 管理员不是 zhin 角色，需要显式授予 admin。",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": false,
+              "description": "Register the in-chat feature and role commands.",
+              "x-descriptionZh": "注册群内功能自助与角色命令。"
+            }
+          }
         }
       }
     }

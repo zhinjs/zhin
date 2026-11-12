@@ -118,7 +118,7 @@ export interface AgentTool {
   tags?: string[];
   /** 触发关键词，用户消息包含这些词时优先选择此工具 */
   keywords?: string[];
-  /** permit 门禁字符串（如 role(master)） */
+  /** permit 门禁字符串（如 owner） */
   permissions?: readonly string[];
   /** 是否允许预执行（opt-in），默认 false */
   preExecutable?: boolean;

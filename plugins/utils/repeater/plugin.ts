@@ -1,6 +1,7 @@
 import { definePlugin } from 'zhin.js';
 import { RepeaterEngine } from './src/engine.js';
-import { repeaterEngineToken } from './src/runtime.js';
+import { repeaterConfigToken, repeaterEngineToken } from './src/runtime.js';
+import type { RepeaterConfig } from './src/config.js';
 
 export default definePlugin({
   name: 'repeater',
@@ -9,5 +10,9 @@ export default definePlugin({
   },
   setup(context) {
     repeaterEngineToken.provide(context, () => new RepeaterEngine());
+    // `threshold` etc. may be overridden per adapter / endpoint / conversation (in place, no reload).
+    repeaterConfigToken.provide(context, {
+      configFor: message => context.configFor(message as Parameters<typeof context.configFor>[0]) as Readonly<RepeaterConfig>,
+    });
   },
 });

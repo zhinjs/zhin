@@ -225,7 +225,7 @@ describe('TurnToolRuntime', () => {
 
   it('lets canonical on-risk reads execute after their dedicated policy passes', async () => {
     const execute = vi.fn(async () => 'contents');
-    const { turn } = fixture({ roles: ['master'], workspaceRoot: process.cwd() });
+    const { turn } = fixture({ roles: ['owner'], workspaceRoot: process.cwd() });
     const runtime = new TurnToolRuntime(turn, [tool(execute, 'on-risk', 'read_file')]);
 
     await expect(runtime.execute('read_file', { file_path: 'README.md' }, 'safe-read'))
@@ -307,7 +307,7 @@ describe('TurnToolRuntime', () => {
 
   it('keeps runtime-private .zhin state outside every file Tool capability', async () => {
     const execute = vi.fn(async () => 'private state');
-    const { turn } = fixture({ roles: ['master'], workspaceRoot: process.cwd() });
+    const { turn } = fixture({ roles: ['owner'], workspaceRoot: process.cwd() });
     const runtime = new TurnToolRuntime(turn, [tool(execute, 'never', 'read_file')]);
 
     await expect(runtime.execute('read_file', {
@@ -320,7 +320,7 @@ describe('TurnToolRuntime', () => {
 
   it('fails closed when a file tool has no workspace authority', async () => {
     const execute = vi.fn(async () => 'contents');
-    const { turn } = fixture({ roles: ['master'] });
+    const { turn } = fixture({ roles: ['owner'] });
     const runtime = new TurnToolRuntime(turn, [tool(execute, 'never', 'read_file')]);
 
     await expect(runtime.execute('read_file', { file_path: 'README.md' }, 'call-no-workspace'))
@@ -330,7 +330,7 @@ describe('TurnToolRuntime', () => {
 
   it('normalizes file targets inside the authorized workspace before execution', async () => {
     const execute = vi.fn(async () => 'contents');
-    const { turn } = fixture({ roles: ['master'], workspaceRoot: process.cwd() });
+    const { turn } = fixture({ roles: ['owner'], workspaceRoot: process.cwd() });
     const runtime = new TurnToolRuntime(turn, [tool(execute, 'never', 'read_file')]);
 
     await expect(runtime.execute('read_file', { file_path: 'README.md' }, 'call-workspace'))
@@ -343,7 +343,7 @@ describe('TurnToolRuntime', () => {
 
   it('denies absolute paths outside the authorized workspace even for master', async () => {
     const execute = vi.fn(async () => 'contents');
-    const { turn } = fixture({ roles: ['master'], workspaceRoot: process.cwd() });
+    const { turn } = fixture({ roles: ['owner'], workspaceRoot: process.cwd() });
     const runtime = new TurnToolRuntime(turn, [tool(execute, 'never', 'read_file')]);
 
     await expect(runtime.execute('read_file', { file_path: '/etc/hosts' }, 'call-outside'))
@@ -357,7 +357,7 @@ describe('TurnToolRuntime', () => {
     try {
       await symlink(join(outside, 'missing.txt'), join(workspace, 'escape.txt'));
       const execute = vi.fn(async () => 'unsafe write');
-      const { turn } = fixture({ roles: ['master'], workspaceRoot: workspace });
+      const { turn } = fixture({ roles: ['owner'], workspaceRoot: workspace });
       const runtime = new TurnToolRuntime(turn, [tool(execute, 'never', 'write_file')]);
 
       await expect(runtime.execute('write_file', {
@@ -483,7 +483,7 @@ describe('TurnToolRuntime', () => {
     const executeFile = vi.fn(async () => 'wrote');
     const executeBash = vi.fn(async () => 'wrote');
     const { turn } = fixture({
-      roles: ['master'],
+      roles: ['owner'],
       filesystem: { workspaceRoot: process.cwd(), workingDirectory: process.cwd(), access: 'read-only' },
     });
     const runtime = new TurnToolRuntime(turn, [
@@ -502,7 +502,7 @@ describe('TurnToolRuntime', () => {
   it('injects the configured working directory into Bash execution', async () => {
     const execute = vi.fn(async () => 'pwd');
     const { turn } = fixture({
-      roles: ['master'],
+      roles: ['owner'],
       filesystem: { workspaceRoot: process.cwd(), workingDirectory: join(process.cwd(), 'packages'), access: 'workspace-write' },
     });
     const runtime = new TurnToolRuntime(turn, [tool(execute, 'never', 'bash')]);
@@ -519,7 +519,7 @@ describe('TurnToolRuntime', () => {
     const execute = vi.fn(async () => 'ok');
     const workspace = join(process.cwd(), 'packages');
     const { turn } = fixture({
-      roles: ['master'],
+      roles: ['owner'],
       filesystem: { workspaceRoot: workspace, workingDirectory: workspace, access: 'workspace-write' },
       shell: {
         security: 'allowlist',
@@ -550,7 +550,7 @@ describe('TurnToolRuntime', () => {
     const execute = vi.fn(async () => 'ok');
     const requestApproval = vi.fn(async () => true);
     const { turn } = fixture({
-      roles: ['master'],
+      roles: ['owner'],
       approval: { available: true, requestApproval },
       filesystem: { workspaceRoot: process.cwd(), workingDirectory: process.cwd(), access: 'workspace-write' },
       shell: {
@@ -578,7 +578,7 @@ describe('TurnToolRuntime', () => {
     const execute = vi.fn(async () => '{}');
     const requestApproval = vi.fn(async () => false);
     const { turn } = fixture({
-      roles: ['master'],
+      roles: ['owner'],
       workspaceRoot: process.cwd(),
       approval: { available: true, requestApproval },
     });
@@ -594,7 +594,7 @@ describe('TurnToolRuntime', () => {
     const execute = vi.fn(async () => 'written');
     const requestApproval = vi.fn(async () => false);
     const { turn } = fixture({
-      roles: ['master'],
+      roles: ['owner'],
       workspaceRoot: process.cwd(),
       approval: { available: true, requestApproval },
     });
@@ -738,7 +738,7 @@ describe('TurnToolRuntime file change evidence', () => {
   afterEach(async () => { await rm(workspace, { recursive: true, force: true }); });
 
   it.each(['write_file', 'edit_file'])('records the policy-approved absolute path for a successful %s without changing model output', async name => {
-    const { turn, events } = fixture({ roles: ['master'], filesystem: {
+    const { turn, events } = fixture({ roles: ['owner'], filesystem: {
       workspaceRoot: workspace, workingDirectory: join(workspace, 'src', 'nested'), access: 'workspace-write',
     } });
     const execute = vi.fn<ToolCapability['execute']>(async () => 'unchanged tool output');
@@ -753,7 +753,7 @@ describe('TurnToolRuntime file change evidence', () => {
   });
 
   it('snapshots the approved path before the tool can mutate its execution arguments', async () => {
-    const { turn, events } = fixture({ roles: ['master'], workspaceRoot: workspace,
+    const { turn, events } = fixture({ roles: ['owner'], workspaceRoot: workspace,
       approval: { requestApproval: async () => true } });
     const execute: ToolCapability['execute'] = async input => {
       Object.assign(input as object, { file_path: join(workspace, 'src', 'different.txt') });
@@ -765,8 +765,8 @@ describe('TurnToolRuntime file change evidence', () => {
   });
 
   it('does not create file evidence for a denied, failed, or unrelated tool', async () => {
-    const writable = fixture({ roles: ['master'], workspaceRoot: workspace });
-    const readonly = fixture({ roles: ['master'], filesystem: { workspaceRoot: workspace, access: 'read-only' } });
+    const writable = fixture({ roles: ['owner'], workspaceRoot: workspace });
+    const readonly = fixture({ roles: ['owner'], filesystem: { workspaceRoot: workspace, access: 'read-only' } });
     const fail = vi.fn<ToolCapability['execute']>(async () => { throw Error('write failed'); });
     await new TurnToolRuntime(writable.turn, [tool(fail, 'never', 'write_file')])
       .execute('write_file', { file_path: 'src/result.txt', content: 'x' }, 'failed');
@@ -816,7 +816,7 @@ describe('TurnToolRuntime host-protected paths (#1030 P0)', () => {
     const execute = vi.fn(async () => 'ran');
     const requestApproval = vi.fn(async () => true);
     const { turn } = fixture({
-      roles: ['master'],
+      roles: ['owner'],
       workspaceRoot: workspace,
       shell: { security: 'full', approvalMode: 'bypass', isolation: 'none' },
       approval: { available: true, requestApproval },
@@ -831,7 +831,7 @@ describe('TurnToolRuntime host-protected paths (#1030 P0)', () => {
 
   it('does not latch the turn: an ordinary write still works after an A denial', async () => {
     const execute = vi.fn(async () => 'written');
-    const { turn } = fixture({ hostProtectedPaths: protectedPaths, roles: ['master'], workspaceRoot: workspace });
+    const { turn } = fixture({ hostProtectedPaths: protectedPaths, roles: ['owner'], workspaceRoot: workspace });
     const runtime = new TurnToolRuntime(turn, [writer(execute)]);
     await runtime.execute('write_file', { file_path: 'pnpm-lock.yaml', content: 'x' }, 'a');
     await expect(runtime.execute('write_file', { file_path: 'notes.md', content: 'x' }, 'b'))
@@ -841,7 +841,7 @@ describe('TurnToolRuntime host-protected paths (#1030 P0)', () => {
   it('keeps a nested plugins/x/schema.json an ordinary workspace file, but gates the root one', async () => {
     const execute = vi.fn(async () => 'written');
     const requestApproval = vi.fn(async () => false);
-    const { turn } = fixture({ hostProtectedPaths: protectedPaths, roles: ['master'], workspaceRoot: workspace, approval: { available: true, requestApproval } });
+    const { turn } = fixture({ hostProtectedPaths: protectedPaths, roles: ['owner'], workspaceRoot: workspace, approval: { available: true, requestApproval } });
     const runtime = new TurnToolRuntime(turn, [writer(execute)]);
 
     await expect(runtime.execute('write_file', { file_path: 'plugins/x/schema.json', content: '{}' }, 'nested'))
@@ -859,7 +859,7 @@ describe('TurnToolRuntime host-protected paths (#1030 P0)', () => {
     const requestApproval = vi.fn(async () => false);
     for (const file of ['plugins/x/alias.txt', 'ZHIN.CONFIG.YML']) {
       // A fresh runtime per call: a denial latches the self category for the rest of its turn.
-      const { turn } = fixture({ hostProtectedPaths: protectedPaths, roles: ['master'], workspaceRoot: workspace, approval: { available: true, requestApproval } });
+      const { turn } = fixture({ hostProtectedPaths: protectedPaths, roles: ['owner'], workspaceRoot: workspace, approval: { available: true, requestApproval } });
       await new TurnToolRuntime(turn, [writer(execute)]).execute('write_file', { file_path: file, content: '{}' }, file);
     }
     expect(requestApproval).toHaveBeenCalledTimes(2);
@@ -868,15 +868,15 @@ describe('TurnToolRuntime host-protected paths (#1030 P0)', () => {
 
   it('never lets a bypass approval port, a missing approval port or a filesystem-root workspace write B', async () => {
     const execute = vi.fn(async () => 'written');
-    const bypass = fixture({ hostProtectedPaths: protectedPaths, roles: ['master'], workspaceRoot: workspace, approval: createBypassApprovalPort() });
+    const bypass = fixture({ hostProtectedPaths: protectedPaths, roles: ['owner'], workspaceRoot: workspace, approval: createBypassApprovalPort() });
     await expect(new TurnToolRuntime(bypass.turn, [writer(execute)]).execute('write_file', { file_path: 'zhin.config.yml', content: 'x' }, 'bypass'))
       .resolves.toMatchObject({ status: 'denied', policy: 'tool-hard-gate' });
     // The fixture's origin is http (no IM identity) and has no approval port at all.
-    const none = fixture({ hostProtectedPaths: protectedPaths, roles: ['master'], workspaceRoot: workspace });
+    const none = fixture({ hostProtectedPaths: protectedPaths, roles: ['owner'], workspaceRoot: workspace });
     await expect(new TurnToolRuntime(none.turn, [writer(execute)]).execute('write_file', { file_path: 'AGENTS.md', content: 'x' }, 'none'))
       .resolves.toMatchObject({ status: 'denied', policy: 'tool-hard-gate' });
     // danger-full-access sandbox runs use the filesystem root as workspace; B is anchored to the project root regardless.
-    const full = fixture({ hostProtectedPaths: protectedPaths, roles: ['master'], filesystem: { workspaceRoot: '/', workingDirectory: workspace, access: 'workspace-write' } });
+    const full = fixture({ hostProtectedPaths: protectedPaths, roles: ['owner'], filesystem: { workspaceRoot: '/', workingDirectory: workspace, access: 'workspace-write' } });
     await expect(new TurnToolRuntime(full.turn, [writer(execute)]).execute('write_file', { file_path: join(workspace, 'skills', 'a', 'SKILL.md'), content: 'x' }, 'full'))
       .resolves.toMatchObject({ status: 'denied', policy: 'tool-hard-gate' });
     expect(execute).not.toHaveBeenCalled();
@@ -891,7 +891,7 @@ describe('TurnToolRuntime host-protected paths come from the Turn (#1030 P0)', (
       const run = async (hostProtectedPaths: HostProtectedPaths | undefined, file: string) => {
         const requestApproval = vi.fn(async () => false);
         const { turn } = fixture({
-          roles: ['master'],
+          roles: ['owner'],
           hostProtectedPaths,
           filesystem: { workspaceRoot: '/', workingDirectory: rootA, access: 'workspace-write' },
           approval: { available: true, requestApproval },

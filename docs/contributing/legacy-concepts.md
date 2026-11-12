@@ -19,7 +19,7 @@ export default definePlugin({
 ## `host` 插件叙事 → basic/cli 装配 + Host token
 
 - **旧写法**：`@zhin.js/host` 系列的 router / api 插件包，把 HTTP 路由与 Console API 当作「插件」安装挂载（这些包已删除）。
-- **新写法**：Host 是 composition root——`basic/cli` 的 `zhin runtime start` 统一装配 IM / Agent / Console Host；插件不安装 Host，而是在 `setup` 里通过 Host token 消费 Host 能力（`zhin.js` 导出 `databaseHostToken` 等六个，`@zhin.js/host-http` 导出 `httpHostToken`），未装配的 token 用 `has()` 判空降级。
+- **新写法**：Host 是 composition root——实例装配根 `zhin.js/instance`（由 `zhin start` 启动的管理网关拉起）统一装配 IM / Agent / Console Host；插件不安装 Host，而是在 `setup` 里通过 Host token 消费 Host 能力（`zhin.js` 导出 `databaseHostToken` 等六个，`@zhin.js/host-http` 导出 `httpHostToken`），未装配的 token 用 `has()` 判空降级。
 
 ```ts
 // 旧：安装 host 插件获得 HTTP 能力
@@ -74,7 +74,7 @@ export default defineAdapter<MyConfig>({
 | `OrchestrationService` / `OrchestrationKernel` / repositories / `AgentDispatcher` | 无兼容替代对象。协作状态只读自 `engagement_events` Journal（`zhin trace --engagements`、Console 协作图谱）。 |
 | `ai.remoteAgents` / `remote_mesh` / Remote Agent poller | 不再支持，启动时遇到 `ai.remoteAgents` 会直接报错。远程 Agent 在 `a2a.mailbox.peers` 声明，Mail 连同 Authority 与预算签名传递。 |
 | `ai.workroom` / `ai.workrooms`、`a2a.workroomCallbacks` / `a2a.workroomRemoteExecutors`、`@zhin.js/workroom` | 已删除，启动时遇到这些配置键会直接报错。多 Bot 共享的群或频道改在 `ai.venues` 声明，Agent 能联系谁与预算上限写在 `agents/<name>/agent.json` 的 `collaboration`。 |
-| `/api/agent/orchestration/runs`、`/api/agent/workroom/runs` | 改为只读的 `GET /api/agent/engagements[/*]` 与 Console 协作图谱页面。 |
+| `/api/agent/orchestration/runs`、`/api/agent/workroom/runs` | 改为只读的 `GET /api/agent/engagements[/*]` 与 Console Workroom 页面。 |
 
 旧 Run、Workroom Journal 与 Catalog 不再受支持，也没有迁移工具。如需保留历史信息，请人工整理后作为新消息重新提交。已落地的权威边界见 GitHub 上的 [Agent CONTEXT](https://github.com/zhinjs/zhin/blob/main/packages/im/agent/CONTEXT.md)。
 

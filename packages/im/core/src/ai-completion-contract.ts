@@ -6,6 +6,7 @@
  * configured; check with {@link hasResource} (or `context.has?.(token)`) before `use()`.
  */
 import { createToken, type Token } from '@zhin.js/plugin-runtime';
+import { hostChatRole } from '@zhin.js/im-contract';
 
 /** Who a completion is billed to (`onBehalfOf`). `groupId` is `${platform}:${endpoint}:${sceneId}` in group / channel chats. */
 export interface UsageSubject {
@@ -124,7 +125,7 @@ export interface UsageSubjectSource {
     kind: string;
     id: string;
   }>;
-  readonly sender?: Readonly<{ id?: string; roles?: readonly string[] }>;
+  readonly sender?: Readonly<{ id?: string; chatRole?: 'owner' | 'admin' | 'trusted'; chatRoleLevels?: unknown }>;
   readonly clientAdapter?: string;
   readonly endpointId?: string;
 }
@@ -133,7 +134,7 @@ export interface UsageSubjectSource {
  * The {@link UsageSubject} for a call made on behalf of a message's sender, with the same rules as
  * Agent turns (so both count against one quota bucket): platform = `clientAdapter` or the endpoint
  * adapter, endpoint = `endpointId` or the endpoint id, `groupId` only in group / channel chats,
- * `owner` when the sender has the `master` role.
+ * `owner` when the sender is a global chat-role `owner` (same host-wide rule as Agent turns, ADR 0056 §2).
  *
  * Returns `undefined` when the message has no sender (e.g. system events); omit `onBehalfOf` then.
  * Throws `TypeError` for a malformed conversation (missing platform / endpoint / id, unknown kind).
@@ -155,7 +156,7 @@ export function usageSubjectFromMessage(message: UsageSubjectSource): UsageSubje
   return Object.freeze({
     userId,
     ...(kind === 'private' ? {} : { groupId: usageGroupId(platform, endpoint, sceneId) }),
-    owner: message.sender?.roles?.includes('master') ?? false,
+    owner: hostChatRole(message.sender) === 'owner',
   });
 }
 

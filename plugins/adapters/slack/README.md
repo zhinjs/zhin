@@ -152,7 +152,7 @@ HTTP 模式下 Runtime Host（`http`）须已 listen；Slack App 的 Event Subsc
 - 在账号库保存、修改、启动、停止、替换或删除该 Adapter 的账号；新增仅保存，不创建 SDK Client，需手动启动；
 - 如果适配器要求登录，页面会显示 LoginAssist 的扫码 / 滑块 / 设备确认待办；
 
-读取需要 `slack:read`，写操作需要 `slack:write`；管理员 full token 不受限。页面里的「添加 endpoint」等价于原来的 `slack endpoint add`。
+读取需要 `slack:read`（`read` 级别，内置角色 `viewer` 及以上都有）；增删改账号等写操作需要 `slack:write`（`operate` 级别，`operator` 及以上都有，绑定到本适配器的角色也算），首次迁移还需管理员身份；全局所有者不受限，见[插件权限的级别](https://zhin.js.org/console/#插件权限的级别)。页面里的「添加 endpoint」等价于原来的 `slack endpoint add`。
 
 首次修改启动配置里的既有账号前，管理员必须核对清单并确认一次迁移。原 canonical 身份与历史保留，完整账号配置加密进入 Host 数据库；此后账号管理只写数据库，不修改启动文件或 `.env`，不重启进程。没有持久化账号端口的环境可使用静态配置连接，动态写操作明确不可用。
 
@@ -206,3 +206,7 @@ SLACK_WEB_API_PROXY_PORT=18560 pnpm --filter platform-acceptance-bot dev:slack
 ```
 
 启动代理 forwarding 后先发新的 `/acceptance probe:slack-api-baseline`，确认真实回执；control `POST /cut` 只切 API TCP，WSS保持连接，再发独立新样本并确认报告 unknown且无后台重发。`POST /recover` 后先确认旧样本没有补发，再发新样本验证恢复。每个未知样本都保留并检查平台可见消息；禁止因为 unknown 重发同一业务。TCP cut 发生在请求前不能证明“平台已接收但回执丢失”，这一情况已有本地 TLS fixture 在服务收到 POST 后切断覆盖，实机未单独证明。
+
+## 成员身份
+
+Slack 消息事件不带成员身份（工作区角色需额外 `users.info` 查询），不上报 `sender.platform`，能力画像也不声明 `scene.platformStanding`。详见 [ADR 0056 §1](https://github.com/zhinjs/zhin/blob/main/docs/adr/0056-chat-roles.md)。

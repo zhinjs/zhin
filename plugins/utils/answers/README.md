@@ -53,9 +53,20 @@ import { pickBookAnswer, FUN_QUESTIONS, QuizService } from '@zhin.js/plugin-answ
 const answer = pickBookAnswer({ question: '今天出门吗', senderId: 'alice', dailyStable: true, timezone: 'Asia/Shanghai' });
 ```
 
+## 分层配置（ADR 0050 / 0055）
+
+支持全部四个层级：
+
+- 适配器、账号层可以覆盖所有字段（写在 `answers.overrides`）。
+- 会话层可以改 `dailyStable`、`quizTimeoutSeconds`、`enableDrivingQuiz`（`conversationFields`）；`timezone` 只到账号层。
+- 开启 `features.selfService.enabled` 后，群里的 `admin` 可以用 `功能 设置 answers quizTimeoutSeconds 60` 或 `功能 设置 answers enableDrivingQuiz false` 调整本群（`selfServiceFields`），用 `功能 关闭 answers` 关闭本群。
+- 命令按消息所在会话读取有效配置，改动原地生效，不重载插件。
+
 ## English
 
 Fun, platform-agnostic chat toys with **original** content: `答案之书 <question>` (book of answers, optional per-day stable answers), `好无聊` (multiple-choice trivia) and `科目一` (traffic-rule quiz written from the public PRC Road Traffic Safety Law and its implementing regulations; entertainment only). Only the asker can answer, by replying a single letter in the same conversation before the timeout.
+
+Layered configuration: all fields can be overridden per adapter / account; `dailyStable`, `quizTimeoutSeconds` and `enableDrivingQuiz` also per conversation. Group admins may change `quizTimeoutSeconds` and `enableDrivingQuiz` in chat (`feature set answers …`) once `features.selfService.enabled` is on.
 
 ## 许可
 

@@ -31,7 +31,7 @@ import { DisposeStack } from './dispose';           // ❌
 
 ## 新插件：Plugin Runtime（默认）
 
-唯一启动路径是 `zhin runtime start`。新插件：
+唯一启动路径是 `zhin start`（管理网关拉起实例；`zhin runtime start` 是 `zhin start --foreground` 的别名）。新插件：
 
 - `plugin.ts` default-export `definePlugin()`（从 `zhin.js` 导入）
 - 能力放在约定目录（`commands/` → `defineCommand`，`tools/` → `defineAgentTool`，…），一个文件一个 default export
@@ -41,7 +41,7 @@ import { DisposeStack } from './dispose';           // ❌
 
 ## Removed：`usePlugin()` / `getPlugin()` / `bootstrapNode`
 
-`zhin.js/node`、`bootstrapNode`、`usePlugin()` 与 `getPlugin()` **已删除且不再导出**。唯一入口是 `definePlugin()` + `zhin runtime start`。门禁 `pnpm check:no-removed-plugin-api` 阻止重新引入这些调用。迁移：`.github/skills/migrate-zhin-plugin-runtime`。
+`zhin.js/node`、`bootstrapNode`、`usePlugin()` 与 `getPlugin()` **已删除且不再导出**。唯一入口是 `definePlugin()` + `zhin start`。门禁 `pnpm check:no-removed-plugin-api` 阻止重新引入这些调用。迁移：`.github/skills/migrate-zhin-plugin-runtime`。
 ## 代级状态：Snapshot Resource
 
 共享连接、数据库和其他有状态对象必须在 setup 中通过 `context.resources.provide`
@@ -76,14 +76,17 @@ flowchart LR
 
 跨平台出站（从一个平台发到另一个平台）用 `root.inject(adapter).sendMessage`，不要直接操作 Endpoint。
 
+适配器 Agent 工具（`plugins/adapters/<name>/agents/**`）同样不能直调平台 SDK / Client 的发送接口：用 `context.use(outboundMessageToken).send({ requester, conversation, content })` 发往当前会话；平台特有内容用适配器的命名空间段表达（如 `discord:embed`、`telegram:poll`、`telegram:sticker`、`napcat:node`），由该适配器的出站编码器渲染。`check:harness-paths` 会扫描这类直调；确实无法由出站链表达的调用（如创建论坛帖、工作通知）登记在 `scripts/agent-send-bypass-allowlist.json` 并写明理由。
+
 ## Host token 模式
 
-HTTP Host（`@zhin.js/host-http`）不内置会话体系，统一用 Bearer token 鉴权：
+HTTP Host（`@zhin.js/host-http`）统一用 Bearer 凭据鉴权：
 
-- 客户端请求带 `Authorization: Bearer <token>`，token 来自 `http.token` 配置；服务端用 `TokenRegistry`（`packages/host/http/src/token-registry.ts`）校验，`extractBearerToken` 解析头。
+- 客户端请求带 `Authorization: Bearer <token>`（会话令牌、API 令牌，或初始化前的 `http.token`）；服务端用 `TokenRegistry`（`packages/host/http/src/token-registry.ts`）解析，`extractBearerToken` 解析头。
 - token 比对走 `timingSafeEqualString`（常数时间比较），不要手写 `===` 比对。
-- token 按 scope 分级（`ScopedTokenConfig` / `AuthScope`）：写操作要求 full scope，demo token 一律 403。
-- Remote Console 登录 = API Base URL + Bearer Token，没有账号密码概念。
+- 访问控制在数据库里（ADR 0049）：`http.token` 只是初始化令牌（创建第一个所有者之前有效）；用户登录得到会话令牌，自动化用用户签发的 API 令牌。`TokenRegistry.authenticate` 把凭据解析为主体（`ConsolePrincipal`）。
+- 每条 `/api` 路由和每个 Console RPC 都必须登记在 `@zhin.js/console-protocol` 的权限表（`CONSOLE_HTTP_PERMISSIONS` / `CONSOLE_RPC_PERMISSIONS`）里，未登记的对所有账号一律拒绝（所有者也不例外）；新增路由或 RPC 时同时登记权限。
+- 插件的 Webhook、反向 WebSocket 不走 Console 账号：用 `ws(path, { auth: 'protocol' })` 挂载，并用自己的凭据鉴权（如 `verifyProtocolAccessToken`）。
 
 ## 测试约定
 

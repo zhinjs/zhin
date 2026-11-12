@@ -7,7 +7,7 @@
  * 2. 写回滚快照 `snapshot/`；把 `applying` + 回报目标 + 生效进度**先落盘**，再动手。
  * 3. 暂存文件写入目标路径（同目录临时文件 + rename），应用 `configPatch`。
  * 4. 按影响面：`none` 直接校验；`generation` 调热重载端口（返回需重启时按 `process`）；
- *    `process` 落盘 `verifying` 后请求受控重启（exit 75），由下次启动的 {@link SelfChangeApplier.recover} 接续。
+ *    `process` 落盘 `verifying` 后请求受控重启（经网关 `restart-request`），由下次启动的 {@link SelfChangeApplier.recover} 接续。
  * 5. 健康检查通过 → `applied`，回报「已生效」；失败 → 用快照回滚**一次**，按同样方式恢复：
  *    恢复健康 → `rolled_back`，回报「失败，已回滚」；仍不健康 → `failed` + 控制面 `emergency_stop`，改投主人私聊，不再自动重启。
  *
@@ -108,7 +108,7 @@ export interface SelfChangeApplyPorts {
   reload(input: { readonly record: SelfChangeRecord; readonly changed: readonly string[];
     /** The configuration Host has already handled this exact save/restore. Reload only the source files. */
     readonly configurationHandled?: boolean }): Promise<'reloaded' | 'restart'>;
-  /** 受控重启（exit 75）；调用前 `verifying` 已落盘。 */
+  /** 受控重启（经网关 `restart-request`）；调用前 `verifying` 已落盘。 */
   requestRestart(record: SelfChangeRecord): void | Promise<void>;
   /**
    * 受控重启能否把进程拉起来（有守护进程、不是 `--once`）。缺省视为可以。

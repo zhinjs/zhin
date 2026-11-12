@@ -12,7 +12,7 @@ description: "从零写一个可配置的 /ping 子插件，挂载到你的 Bot 
 这一页带你从零写一个叫 `ping-pong` 的子插件包（`plugins/ping-pong`）：用户发 `/ping`，Bot 回复一段**可以在配置里修改**的文字。做完后你会掌握独立插件包的四个基本组成——清单、入口、命令、配置 Schema——以及怎样在 `zhin.config.yml` 中把它挂载到 Bot 上。大约需要 15 分钟。
 
 ::: tip 开始前
-- 已经按 [快速开始](./index.md) 创建并跑通了 `my-bot`（没有的话先运行 `npm create zhin-app my-bot -y`）。
+- 已经按 [快速开始](./index.md) 创建并跑通了 `my-bot`（没有的话先运行 `npm create zhin-app my-bot -- -y --adapter sandbox`）。
 - Node.js ≥22.19.0、pnpm 9+。`pnpm dev` 会直接运行 TypeScript 源码，不需要先编译。
 :::
 
@@ -51,7 +51,7 @@ plugins/ping-pong/
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "zhin runtime start"
+    "dev": "zhin start --foreground --watch source config"
   },
   "dependencies": {
     "zhin.js": "^1.1.0"
@@ -231,7 +231,7 @@ pnpm dev
 2. 在 Sandbox 里发送 `/ping`，Bot 回复 `pong!`。
 3. 把 `zhin.config.yml` 里的 `reply` 改成别的文字并保存，再发 `/ping` —— 不重启就能看到新回复。改 `commands/ping/index.ts` 也一样。
 
-只想检查插件能否正常装配、不想进入交互模式？运行 `zhin runtime start --once`。
+只想检查插件能否正常装配、不想进入交互模式？运行 `zhin start --once`。
 
 ::: tip 没有回复？
 - 命令前缀由每个平台连接的 `commandPrefix` 决定；脚手架生成的 Sandbox 设为 `/`，其他平台可能为空。

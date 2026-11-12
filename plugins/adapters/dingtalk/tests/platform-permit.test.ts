@@ -1,27 +1,15 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { canAccessTool } from '@zhin.js/core';
 import { PermissionHost } from '@zhin.js/permission';
-import {
-  checkDingtalkPlatformPermit,
-  normalizeDingtalkSenderForPermit,
-  platformPermit,
-} from '../src/platform-permit.js';
+import { platformPermit } from '../src/platform-permit.js';
+import * as adapter from '../src/index.js';
 
-function mockSubject(sender: { role?: string; permissions?: string[] }) {
-  return {
-    adapter: 'dingtalk',
-    sender: { id: 'u1', role: sender.role ? [sender.role] : [], permissions: sender.permissions },
-    scene: { type: 'group', id: 'c1' },
-  };
-}
-
-function mockMsg(sender: { role?: string; permissions?: string[] }) {
+function mockMsg(platformPermissions: string[]) {
   return {
     clientAdapter: 'dingtalk',
     endpointId: 'bot1',
-    conversation: { endpoint: { adapter: 'dingtalk', id: 'bot1' }, kind: 'group', id: 'c1' },
-    sender: { id: 'u1', roles: sender.role ? [sender.role] : [] },
-    metadata: { role: sender.role, permissions: sender.permissions },
+    conversation: { endpoint: { adapter: 'dingtalk', id: 'bot1' }, kind: 'group', id: 'g1' },
+    sender: { id: 'u1', platform: { standing: 'member' as const, permissions: platformPermissions } },
   } as any;
 }
 
@@ -30,17 +18,12 @@ describe('dingtalk platform-permit', () => {
 
   beforeEach(() => {
     host = new PermissionHost();
-    host.registerPlatform('dingtalk', (perm, subject) => checkDingtalkPlatformPermit(perm, subject));
   });
 
-  it('normalizeDingtalkSenderForPermit isAdmin', () => {
-    expect(normalizeDingtalkSenderForPermit({ isAdmin: true }).role).toBe('admin');
-    expect(normalizeDingtalkSenderForPermit({ isOwner: true }).role).toBe('owner');
-  });
-
-  it('checkDingtalkPlatformPermit', () => {
-    expect(checkDingtalkPlatformPermit('chat_admin', mockSubject({ role: 'admin', permissions: ['chat_admin'] }))).toBe(true);
-    expect(checkDingtalkPlatformPermit('chat_owner', mockSubject({ role: 'member', permissions: [] }))).toBe(false);
+  it('no longer exports the legacy permit resolver / checker (ADR 0056 §5 builtin evaluator only)', () => {
+    expect(adapter).not.toHaveProperty('checkDingtalkPlatformPermit');
+    expect(adapter).not.toHaveProperty('dingtalkGroupPermitResolver');
+    expect(adapter).not.toHaveProperty('normalizeDingtalkSenderForPermit');
   });
 
   it('canAccessTool', async () => {
@@ -51,7 +34,7 @@ describe('dingtalk platform-permit', () => {
       permissions: [platformPermit('chat_admin')],
       execute: async () => '',
     };
-    expect(await canAccessTool(tool, mockMsg({ role: 'member', permissions: [] }), host)).toBe(false);
-    expect(await canAccessTool(tool, mockMsg({ role: 'admin', permissions: ['chat_admin'] }), host)).toBe(true);
+    expect(await canAccessTool(tool, mockMsg([]), host)).toBe(false);
+    expect(await canAccessTool(tool, mockMsg(['chat_admin']), host)).toBe(true);
   });
 });

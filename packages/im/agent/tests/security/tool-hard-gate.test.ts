@@ -172,7 +172,7 @@ describe('TurnToolRuntime hard gate', () => {
     const port = scriptedPort([]);
     const audit = auditSink();
     // The owner passes the trust-level policy; the hard gate still applies to them.
-    const { turn } = fixture({ approval: port, roles: ['master'] });
+    const { turn } = fixture({ approval: port, roles: ['owner'] });
     const execute = vi.fn(async () => 'posted');
     const runtime = new TurnToolRuntime(turn, [tool('send_group_notice', execute, 'never')], {
       hardGate: { approvalTimeoutMs: 20 },
@@ -263,11 +263,11 @@ describe('TurnToolRuntime hard gate', () => {
   it('keeps funds tools disabled unless the Host enables them, then still asks', async () => {
     const execute = vi.fn(async () => 'paid');
     const port = scriptedPort([{ status: 'approved', decision: 'approve-once' }]);
-    const disabled = new TurnToolRuntime(fixture({ approval: port, roles: ['master'] }).turn, [tool('send_red_packet', execute, 'never')]);
+    const disabled = new TurnToolRuntime(fixture({ approval: port, roles: ['owner'] }).turn, [tool('send_red_packet', execute, 'never')]);
     await expect(disabled.execute('send_red_packet', { amount: 1 }, 'tu-1')).resolves.toMatchObject({ status: 'denied' });
     expect(port.requests).toHaveLength(0);
 
-    const enabled = new TurnToolRuntime(fixture({ approval: port, roles: ['master'] }).turn, [tool('send_red_packet', execute, 'never')], {
+    const enabled = new TurnToolRuntime(fixture({ approval: port, roles: ['owner'] }).turn, [tool('send_red_packet', execute, 'never')], {
       hardGate: { allowFunds: true },
     });
     await expect(enabled.execute('send_red_packet', { amount: 1 }, 'tu-2')).resolves.toMatchObject({ status: 'completed' });

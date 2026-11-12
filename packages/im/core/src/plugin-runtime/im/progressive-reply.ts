@@ -2,7 +2,8 @@ import { isDeepStrictEqual } from 'node:util';
 import { createEndpointOperation, type EndpointStreaming, type EndpointStreamAcknowledgement, type EndpointMessageStream, type EndpointChildLease, type EndpointStreamSource } from '@zhin.js/adapter';
 import { EndpointDeliveryError, isMediaRef, type DeliveryPart, type DeliveryReceipt, type MessageRef, type Segment } from '@zhin.js/im-contract';
 import type { Locale } from '@zhin.js/plugin-runtime';
-import type { SendContent, SendRequest } from './contracts.js';
+import { untrustedContent, type SendContent, type SendRequest } from './contracts.js';
+import type { OutboundMediaTrust } from '../../built/outbound-media-trust.js';
 import { receiptFromEndpointError, type OutboundDeliveryExecution } from './outbound-delivery-runtime.js';
 
 /** Host-owned keys identify content, independently of model-authored or platform identifiers. */
@@ -27,6 +28,11 @@ export interface OpenReplyStreamOptions {
   readonly beforeSubmit?: () => void;
   /** Resource authorization/materialization; this must not submit an external message. */
   readonly prepare?: (segments: readonly Segment[], signal: AbortSignal) => Promise<readonly Segment[]>;
+  /**
+   * The streamed segments come from an untrusted source (Agent model output): every submission is
+   * delivered as {@link untrustedContent} under this policy, after `prepare`.
+   */
+  readonly mediaTrust?: OutboundMediaTrust;
 }
 
 export interface ConfirmedReplyContent {
@@ -106,8 +112,13 @@ export function createCoreReplyStream(context: ProgressiveReplyContext): CoreRep
   const remember = (key: string, part: DeliveryPart, content: readonly Segment[] | undefined) => {
     confirmed.set(key, Object.freeze({ key, segments: content ?? [], ...(part.message ? { message: part.message } : {}) }));
   };
-  const prepare = (segments: readonly Segment[]) => context.options.prepare
+  const prepareSegments = (segments: readonly Segment[]) => context.options.prepare
     ? createEndpointOperation({ signal }).prepare(() => context.options.prepare!(segments, signal)) : Promise.resolve(segments);
+  const mediaTrust = context.options.mediaTrust;
+  const prepare = async (segments: readonly Segment[]): Promise<SendContent> => {
+    const prepared = await prepareSegments(segments);
+    return mediaTrust ? untrustedContent([...prepared], mediaTrust) : prepared;
+  };
   const wait = async () => {
     if (!lastSubmission) return;
     for (;;) {

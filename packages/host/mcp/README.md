@@ -6,7 +6,7 @@ This is the MCP **server**. To let a Zhin Agent consume tools from another serve
 
 ## Install and enable
 
-In a project that already uses `zhin runtime start`:
+In a project that already runs with `zhin start`:
 
 ```bash
 pnpm add @zhin.js/mcp @zhin.js/agent zod ai
@@ -26,7 +26,7 @@ mcp:
   allowUnauthenticatedLocalhost: false  # require Bearer even in development
 ```
 
-Start the project with `pnpm dev` or `zhin runtime start`. Use the HTTP address printed at startup: new scaffolded projects currently use port **8068**, while the Runtime fallback without an `http:` configuration is **8086**. The MCP endpoint uses `mcp.path` (default `/mcp`). Omitting `mcp:` does not enable it.
+Start the project with `pnpm dev` or `zhin start`. Use the HTTP address printed at startup: new scaffolded projects currently use port **8068**, while the Runtime fallback without an `http:` configuration is **8086**. The MCP endpoint uses `mcp.path` (default `/mcp`). Omitting `mcp:` does not enable it.
 
 ## Connect a client
 
@@ -50,4 +50,4 @@ The endpoint accepts **POST** requests; GET and DELETE return 405. Each request 
 
 The current Runtime Host registers **Tools only**. It does not register the legacy `create_plugin` / `create_command` generators, documentation Resources, or workflow Prompts described in older versions of this README. Use [`zhin new`](https://zhin.js.org/cli/) for project scaffolding.
 
-Source of truth: [`src/runtime.ts`](https://github.com/zhinjs/zhin/blob/main/packages/host/mcp/src/runtime.ts) for transport and Tool projection, [`src/mesh-auth.ts`](https://github.com/zhinjs/zhin/blob/main/packages/host/mcp/src/mesh-auth.ts) for authentication, and [`protocol-host-installer.ts`](https://github.com/zhinjs/zhin/blob/main/basic/cli/src/plugin-runtime/protocol-host-installer.ts) for Host assembly.
+Source of truth: [`src/runtime.ts`](https://github.com/zhinjs/zhin/blob/main/packages/host/mcp/src/runtime.ts) for transport and Tool projection, [`src/mesh-auth.ts`](https://github.com/zhinjs/zhin/blob/main/packages/host/mcp/src/mesh-auth.ts) for authentication, and [`protocol-host-installer.ts`](https://github.com/zhinjs/zhin/blob/main/packages/im/zhin/src/instance/protocol-host-installer.ts) for Host assembly.

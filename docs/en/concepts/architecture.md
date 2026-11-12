@@ -53,7 +53,9 @@ flowchart BT
     end
     zhin["zhin.js (facade)"]
     host["packages/host/* (http / mcp / a2a)"]
-    cli["@zhin.js/cli (composition root)"]
+    gateway["@zhin.js/gateway (management gateway)"]
+    instance["zhin.js/instance (instance composition root)"]
+    cli["@zhin.js/cli"]
 
     pr --> fk --> ad & cmd & comp & mw & tool
     imc --> ad & cmd & core & agent
@@ -66,7 +68,8 @@ flowchart BT
     agent -. peer .-> zhin
     pr & fk --> rt
     zhin --> host
-    rt & core & host --> cli
+    rt & core & host & gateway --> instance
+    rt --> gateway --> cli
 ```
 
 Dependencies are defined by each package's `package.json`. Read the diagram from the bottom up:
@@ -91,31 +94,97 @@ Moving further up, `@zhin.js/core` assembles the adapter / command / component /
 | Console | `@zhin.js/console-protocol` (including contract / review-kit), `@zhin.js/pagemanager`, `@zhin.js/client` | Server-Driven Blueprints (`definePageBlueprint`), multi-surface projection (Web / IM Card / CLI TUI), Console shell rendering (`renderConsoleShell`), and browser SDK |
 | Facade | `zhin.js` | Re-exports the core authoring surface; `zhin.js/agent`, `zhin.js/ai` sub-paths exposed on demand |
 | Runtime | `@zhin.js/runtime` (including the `/config-file` and `/isolate` subpaths) | `RootRuntime`: scans the project graph, composes configuration, executes generation transactions, HMR, and shared Host lifecycle |
-| Assembly | `@zhin.js/cli` | Composition root -- `zhin runtime start` wires domain Hosts into a runnable process and owns the installers for the generic HTTP/Protocol (MCP, A2A)/Speech/HTML-Renderer/Schedule Hosts (`basic/cli/src/plugin-runtime/*-host-installer.ts`) |
+| Assembly | `zhin.js/instance` | Instance composition root (ADR 0054 §0) -- wires domain Hosts into a runnable process and owns the installers for the generic HTTP/Protocol (MCP, A2A)/Speech/HTML-Renderer/Schedule Hosts (`packages/im/zhin/src/instance/*-host-installer.ts`) and the runtime-side Console backend |
+| Management | `@zhin.js/gateway`, `@zhin.js/cli` | Management gateway: the HTTP port, Console accounts and permissions, terminal, project configuration and package transactions, instance supervision and logs; the CLI manages the project and talks to the gateway over the local control socket. Neither depends on `zhin.js` or IM layers (see [Four packages, two processes](#gateway-and-instance)) |
 
-## Composition root: `@zhin.js/cli`
+## Four packages, two processes {#gateway-and-instance}
 
-The framework itself does not "start" anything -- each layer only provides mechanisms. The entry code that assembles these mechanisms into a runnable process lives in `@zhin.js/cli` (`basic/cli/src/commands/runtime.ts` and `basic/cli/src/plugin-runtime/`), the only composition root allowed to wire across all layers. IM and Agent Host implementations live in their owning domain packages (`@zhin.js/core/runtime`, `@zhin.js/agent/runtime`, and `@zhin.js/pagemanager`) so the CLI holds no domain state machines; the installers for the generic HTTP, Protocol, Speech, and HTML-Renderer Hosts stay in the CLI's own `basic/cli/src/plugin-runtime/`.
+A running Zhin project is made of four public packages working together ([ADR 0054](../../adr/0054-management-gateway.md)):
 
-`zhin runtime start` does the following:
+| Package | What it is | Dependency boundary |
+| --- | --- | --- |
+| `create-zhin-app` | Creates a project; asks only for language, project name and bootstrap token (ADR 0053) | Depends only on `@zhin.js/scaffold-wizard` |
+| `@zhin.js/cli` (the `zhin` command) | Manages the project: `start / stop / restart / status / logs`, `install / uninstall / update`, `console init / user`, `setup`, plugin tooling | Depends on `@zhin.js/gateway`, **never on `zhin.js` or IM layers** |
+| `@zhin.js/gateway` | The management gateway process: HTTP server, authentication and permissions, setup and onboarding, instance supervision, dependency transactions, terminal, logs, local control socket | Depends on `host-http`, `database`, `console-protocol`, `runtime` (config and project-file tools only), `scaffold-wizard`; **never on `zhin.js` or IM layers, and loads no plugins** |
+| `zhin.js` | The Zhin instance: IM Runtime, plugins, adapters, Agent; instance composition root `zhin.js/instance` | The IM layers; HTTP only through `BridgedHttpHost` (`@zhin.js/host-http/bridge`) |
 
-1. Wraps the single YAML/JSON Root config with `createConfigDocument` (`@zhin.js/runtime`) into a transactional `ConfigDocumentPort`;
-2. Creates `RootRuntime` (`@zhin.js/runtime`), injecting the module loader (in dev mode: `NativeDevelopmentModuleRuntime`), config port, and Root resource installer;
-3. Assembles Host-level resources via `installResources`: HTTP/Protocol/Speech/HTML-Renderer Hosts (the CLI's `*-host-installer.ts`), Database/Outbound/Inbox/IM Hosts (`@zhin.js/core/runtime`), Agent/Inference Hosts (`@zhin.js/agent/runtime`), and Console shell & Blueprint routes (`@zhin.js/pagemanager`);
-4. After startup, attaches `HmrCoordinator` -- file changes trigger generation reloads or process restarts.
+New projects depend on `zhin.js`, `@zhin.js/gateway` and `@zhin.js/cli`. `pnpm check:architecture` enforces that the CLI and the gateway import no IM layer.
 
-A user project's entry point can therefore be minimal. `examples/minimal-bot/package.json`:
+```mermaid
+flowchart LR
+  subgraph clients[Callers]
+    B[Browser Console]
+    W[Platform webhooks / reverse WS]
+    C[zhin CLI]
+  end
+  subgraph gw[Gateway process · @zhin.js/gateway]
+    HS[HTTP server<br/>http.port]
+    AU[Authentication: sessions / API tokens / bootstrap token]
+    OWN[Own routes: /auth/*, iam.*, /gateway/*,<br/>terminal, /pub/health, Console assets]
+    SUP[InstanceSupervisor<br/>start / stop, crash restarts, logs, dependency transactions]
+    LS[Local control socket<br/>.zhin/gateway.sock]
+  end
+  subgraph inst[Instance process · zhin.js/instance]
+    BR[BridgedHttpHost<br/>route table]
+    RT[RootRuntime: plugins, adapters, Agent]
+    CB[Console backend: RPC authorization, SSE, REST]
+  end
+  DB[(Project database)]
+  LOG[.zhin/logs/]
+  B --> HS
+  W --> HS
+  C --> LS --> SUP
+  HS --> AU --> OWN
+  HS -->|"{base}/*: forwarded with the principal after authentication"| BR
+  HS -->|"other routes: forwarded unchanged"| BR
+  SUP <-->|"IPC control channel<br/>ready / routes / http.* / ws.* /<br/>restart-request / shutdown / catalog / audit"| BR
+  BR --> CB --> RT
+  AU --- DB
+  RT --- DB
+  SUP --> LOG
+```
+
+### Who owns what {#ownership}
+
+| Responsibility | Owner | Notes |
+| --- | --- | --- |
+| Public ports (`http.port`, additional listeners) | Gateway | The instance listens on no port and loads neither `node:http` nor `ws` |
+| Authentication (sessions, API tokens, bootstrap token) | Gateway | The instance parses no Bearer credential; it only receives the principal forwarded with each request |
+| Authorization | Both | The gateway checks its own routes; the instance's Console RPC dispatcher checks the forwarded principal against `CONSOLE_RPC_PERMISSIONS` (only it knows the RPC type and the scope target in the payload). Both use the same permission map |
+| `console_*` tables (users, roles, sessions, tokens, audit) | Gateway | Instance-side denials and writes are sent to the gateway as `audit` messages |
+| Business data | Instance | Plugin tables, journals, conversations, usage |
+| Database connections | One each | Same `database` configuration; SQLite uses WAL |
+| Setup, onboarding, terminal | Gateway | Available while the instance is crashed |
+| Dependency install / uninstall / update | Gateway | Stop instance → package manager → start instance, rollback on failure |
+| Raw configuration file and `.env` | Gateway (instance offline) / instance | Both write through the same revisioned atomic path |
+| Logs | Gateway | Collects instance stdout / stderr into `.zhin/logs/instance.log` (rotated) and an in-memory ring buffer |
+| Plugins, adapters, Agent, schedules, most Console APIs | Instance | They need the runtime snapshot |
+| Plugin-owned HTTP / WS routes | Declared by the instance, served by the gateway | Webhooks and reverse WS skip gateway authentication; the plugin authenticates them itself |
+
+The IPC protocol between gateway and instance (message types, version) is defined in `@zhin.js/host-http/bridge` and shared by both; on a version mismatch the gateway rejects the instance. The gateway resolves `zhin.js/instance` from the project's `node_modules` and starts it as a child process; it bundles no instance code. One instance per project is supported (modelled internally as `instanceId = 'default'`).
+
+### Instance composition root: `zhin.js/instance` {#composition-root}
+
+The framework itself does not "start" anything -- each layer only provides mechanisms. The entry that wires them into a runnable instance is `zhin.js/instance` (`packages/im/zhin/src/instance/`), the only composition root in the repository allowed to combine every IM package. IM and Agent domain Host implementations live in their domain packages (`@zhin.js/core/runtime`, `@zhin.js/agent/runtime` and `@zhin.js/pagemanager`); installers for the generic HTTP, Protocol, Speech and HTML-Renderer Hosts live in `packages/im/zhin/src/instance/`.
+
+When the instance starts it:
+
+1. wraps the single YAML/JSON Root configuration in a transactional `ConfigDocumentPort` with `createConfigDocument` (`@zhin.js/runtime`);
+2. creates a `RootRuntime` (`@zhin.js/runtime`) with the module loader, configuration port and Root resource installers;
+3. assembles Host-level resources through `installResources`: HTTP (`BridgedHttpHost`) / Protocol / Speech / HTML-Renderer Hosts, Database / Outbound / Inbox / IM Hosts (`@zhin.js/core/runtime`), Agent / Inference Hosts (`@zhin.js/agent/runtime`), Console shell and Blueprint routes (`@zhin.js/pagemanager`);
+4. after the first generation commits, sends `ready` (with protocol version and route table) to the gateway, then attaches the `HmrCoordinator`: file changes trigger generation reloads, and a whole-process restart is requested with `restart-request`.
+
+Without a control channel `zhin.js/instance` refuses to start; `zhin start --standalone` is for development and tests only, and then the instance runs its own Node HTTP server and assembles sign-in and the terminal in-process.
+
+So the user project's entry can be tiny. The scaffolded `package.json` (excerpt, dependencies omitted — the runtime dependency is `zhin.js`, the dev dependency `@zhin.js/cli`, which brings `@zhin.js/gateway`):
 
 ```json
 {
-  "name": "minimal-bot",
   "type": "module",
   "scripts": {
-    "dev": "zhin runtime start",
-    "start": "zhin runtime start --mode production --no-watch"
-  },
-  "dependencies": {
-    "zhin.js": "workspace:*"
+    "dev": "zhin start --foreground --watch source config",
+    "start": "zhin start --foreground --mode production --no-watch",
+    "stop": "zhin stop"
   },
   "zhin": {
     "protocol": 1,
@@ -129,11 +198,11 @@ A user project's entry point can therefore be minimal. `examples/minimal-bot/pac
 }
 ```
 
-The project itself is a plugin (Root Plugin), and the CLI is responsible for discovering and starting it. For a full explanation of manifest fields, see [Plugin model](./plugin-model.md); for config declaration and validation, see [Config as data](./config-as-data.md).
+The project itself is a plugin (the Root Plugin); the instance launched by the gateway discovers and starts it. Start commands in full: [zhin start](../cli/runtime.md); manifest fields: [Plugin model](./plugin-model.md); configuration declaration and validation: [Config as data](./config-as-data.md).
 
 ## Corollaries of the layering rules
 
-When writing a Feature (a new capability type), depend only on `feature-kit` / `plugin-runtime` -- do not import `core`. `kernel` and `ai` know nothing about IM concepts like "group" or "direct message"; IM concepts only appear in `core` and above. Host packages (`packages/host/http`, `mcp`, `a2a`) sit above `core` and are assembled by the CLI; plugins do not depend on Host processes directly.
+When writing a Feature (a new capability type), depend only on `feature-kit` / `plugin-runtime` -- do not import `core`. `kernel` and `ai` know nothing about IM concepts like "group" or "direct message"; IM concepts only appear in `core` and above. Host packages (`packages/host/http`, `mcp`, `a2a`) sit above `core` and are assembled by the instance composition root `zhin.js/instance`; plugins do not depend on Host processes directly.
 
 ## JSX and visual components
 

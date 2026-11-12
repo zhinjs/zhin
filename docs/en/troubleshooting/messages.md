@@ -5,7 +5,7 @@ description: Use observed message diagnostics to investigate prefixes, permissio
 
 # Find where a message stopped
 
-In Console, select the actual account and conversation, then open a message's diagnostic action or Recent diagnostics. Reading a diagnostic never replays the message. It requires a full-scope token for the current Host. If no record is found, check the account, parent and thread before checking process restarts and record expiry.
+In Console, select the actual account and conversation, then open a message's diagnostic action or Recent diagnostics. Reading a diagnostic never replays the message. It requires signing in with an account holding `status.view`. If no record is found, check the account, parent and thread before checking process restarts and record expiry.
 
 Inbound processing ended means only that this part of the pipeline ended. Inspect Agent work, scheduled tasks and platform delivery separately. A truncated record is incomplete; a missing step is not proof that it never ran.
 

@@ -1,10 +1,11 @@
-import { readOperationSession } from '@zhin.js/core';
+import { readOperationSession, untrustedContent } from '@zhin.js/core';
 import type { HostMailbox } from '../../collaboration/host-mailbox.js';
 import type { ImRuntime, Message } from '@zhin.js/core/runtime';
 import type { ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { rootPluginId } from '@zhin.js/plugin-runtime';
 import {
+  modelMediaTrust,
   publishOutboundElements,
   resolveOutboundCapabilities,
 } from '../../index.js';
@@ -174,7 +175,8 @@ export function observeFloodMessage(input: Readonly<{
       groupId: message.conversation.id,
       memberId,
       ...(message.sender?.name ? { memberName: message.sender.name } : {}),
-      ...(message.sender?.roles ? { memberRoles: message.sender.roles } : {}),
+      ...(message.sender?.chatRole ? { memberChatRole: message.sender.chatRole } : {}),
+      ...(message.sender?.platform ? { memberPlatform: message.sender.platform } : {}),
       trigger: 'flood',
       sentAt: at,
       ...(message.message?.id ? { messageId: message.message.id } : {}),
@@ -254,6 +256,12 @@ export function createSceneEventIngress(input: Readonly<{
 }>): SceneEventIngress {
   const { projectRoot, im, runtime, agent, memberLifecycle, onSpoke, mailbox } = input;
   const readOnlyFilesystem = Object.freeze({ workspaceRoot: projectRoot, access: 'read-only' as const });
+  // Scene-event turns have no single initiator: model-referenced files get the `user` decision.
+  const moderationMediaAuthority = () => Object.freeze({
+    filesystem: readOnlyFilesystem,
+    imageAssets: agent.service.imageAssets,
+    fileRole: 'user' as const,
+  });
   return new SceneEventIngress({
     projectRoot,
     ...(mailbox ? { mailbox } : {}),
@@ -280,15 +288,17 @@ export function createSceneEventIngress(input: Readonly<{
         // 没有原消息可回应：表情回应类输出直接视为不发。
         if (reactionOf(messageOutput) !== undefined) return { status: 'suppressed' as const };
         const adapter = capabilityLocalName(String(conversation.endpoint.id));
-        const content = await publishOutboundElements([...messageOutput], adapter || undefined, resolveOutboundCapabilities(adapter, {
+        const mediaAuthority = moderationMediaAuthority();
+        const caps = resolveOutboundCapabilities(adapter, {
           capabilities: im.endpoints.capabilities({ adapter, endpointKey: adapter }),
           kind: conversation.kind as 'private' | 'group' | 'channel',
-        }), {
-          filesystem: readOnlyFilesystem,
-          imageAssets: agent.service.imageAssets,
         });
+        const content = await publishOutboundElements([...messageOutput], adapter || undefined, caps, mediaAuthority);
         if (content.length === 0) return { status: 'suppressed' as const };
-        return deliveryOutcomeFromReceipt(await im.send({ conversation, requester: rootPluginId(), content }));
+        return deliveryOutcomeFromReceipt(await im.send({
+          conversation, requester: rootPluginId(),
+          content: untrustedContent(content, modelMediaTrust('agent:moderation', mediaAuthority, { maxInlineBytes: caps.maxAttachmentBytes })),
+        }));
       },
     }),
     executeTurn: (request) => {

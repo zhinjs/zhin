@@ -45,12 +45,12 @@ function walk(dir) {
 for (const root of scanRoots) walk(path.join(repoRoot, root));
 
 const hostSource = fs.readFileSync(
-  path.join(repoRoot, 'basic/cli/src/plugin-runtime/speech-host-installer.ts'),
+  path.join(repoRoot, 'packages/im/zhin/src/instance/speech-host-installer.ts'),
   'utf8',
 );
 if (!hostSource.includes("import('@zhin.js/speech')") || !hostSource.includes('AudioTranscriptionPort')) {
   violations.push({
-    file: 'basic/cli/src/plugin-runtime/speech-host-installer.ts',
+    file: 'packages/im/zhin/src/instance/speech-host-installer.ts',
     line: 1,
     token: 'missing composition-root Speech ownership',
   });

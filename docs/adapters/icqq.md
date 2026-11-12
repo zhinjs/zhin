@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/icqq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/icqq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=9c706f78191d9b43 -->
+<!-- sync-adapter-docs:sha256=59ce471df8486f83 -->
 
 # @zhin.js/adapter-icqq
 
@@ -195,7 +195,7 @@ ICQQ Agent 可按需加载 `icqq-conversation` 查询当前群／频道和 Bot �
 
 ICQQ 首次登录的二维码、滑块、设备确认会出现在「登录待办」里，不需要再回到终端确认。
 
-读取需要 `icqq:read`，写操作需要 `icqq:write`；管理员 full token 不受限。页面里的「添加 endpoint」等价于原来的 `icqq endpoint add`。
+读取需要 `icqq:read`（`read` 级别，内置角色 `viewer` 及以上都有）；增删改账号等写操作需要 `icqq:write`（`operate` 级别，`operator` 及以上都有，绑定到本适配器的角色也算），首次迁移还需管理员身份；全局所有者不受限，见[插件权限的级别](https://zhin.js.org/console/#插件权限的级别)。页面里的「添加 endpoint」等价于原来的 `icqq endpoint add`。
 
 首次修改启动配置里的既有账号前，管理员必须核对清单并确认一次迁移。原 canonical 身份与历史保留，完整账号配置加密进入 Host 数据库；此后账号管理只写数据库，不修改启动文件或 `.env`，不重启进程。没有持久化账号端口的环境可使用静态配置连接，动态写操作明确不可用。
 
@@ -237,7 +237,7 @@ icqq:
 | 一直停在登录中 | 打开 Console 登录待办，完成二维码、滑块或设备确认 |
 | 签名失败 | 检查 `signApiAddr`；本地模式确认 `@icqqjs/qqsign` 已安装且版本匹配 |
 | 重启后重复登录 | 持久化设备与会话数据目录，避免每次生成新设备 |
-| 请求或通知未显示 | 在 Endpoint 详情检查请求视图；ICQQ 优先读取平台请求列表 |
+| 请求或通知未显示 | 在账号页「聊天」页签检查好友申请与邀请、通知；ICQQ 优先读取平台请求列表 |
 
 ## License
 
@@ -271,3 +271,7 @@ Endpoint 添加用法中的调用头由当前环境的实际命令前缀与插�
 - 年龄不反推生日；当前安装的 ICQQ 1.12.3 `setBirthday` 月日编码有缺陷，因此不开放生日写入。兴趣无对应已验证接口，只能使用配置兜底。
 
 配置的 `nickname`、`profile` 可放在适配器默认值或某个 `endpoints[]` 项中；Endpoint 逐字段覆盖默认值，只有平台未提供的字段才使用它们。配置兜底不会写回 QQ。
+
+## 成员身份
+
+群消息的 `sender.role`（`owner` / `admin` / `member`）归一为 `sender.platform.standing`；私聊不上报。QQ 群没有原生角色与权限位，`roles` / `permissions` 不上报。能力画像：`group.scene.platformStanding = { standing: true }`。详见 [ADR 0056 §1](https://github.com/zhinjs/zhin/blob/main/docs/adr/0056-chat-roles.md)。

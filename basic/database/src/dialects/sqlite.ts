@@ -1,6 +1,7 @@
 import type { StatementColumnMetadata } from 'node:sqlite';
 import * as fs from 'node:fs';
 import path from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 import { Dialect, Database } from '../base/index.js';
 
 import { Column, Transaction, TransactionOptions } from '../types.js';
@@ -9,11 +10,43 @@ import { RelatedDatabase } from '../type/related/database.js';
 export interface SQLiteDialectConfig {
   filename: string;
   mode?: string;
+  /**
+   * `PRAGMA busy_timeout` in ms (default 0: no synchronous wait; see `busyRetryMs`). The wait
+   * is synchronous (`node:sqlite`), so only a connection whose own writes are short statements
+   * should set it — the gateway does for its `console_*` connection (ADR 0054 §7). Two
+   * connections of one process with async transactions would block each other's event loop.
+   */
+  busyTimeoutMs?: number;
+  /**
+   * Without `busyTimeoutMs`, a statement outside a transaction (and `BEGIN IMMEDIATE`) that hits
+   * `SQLITE_BUSY` is retried with an async backoff for at most this long (default 5000 ms; 0
+   * disables). The event loop keeps running while another process (the gateway) holds the
+   * write lock, so two connections in one process cannot deadlock each other.
+   */
+  busyRetryMs?: number;
+}
+
+/** Default budget of {@link SQLiteDialectConfig.busyRetryMs}. */
+export const SQLITE_BUSY_RETRY_MS = 5_000;
+const BUSY_RETRY_FIRST_DELAY_MS = 2;
+const BUSY_RETRY_MAX_DELAY_MS = 100;
+
+/** `SQLITE_BUSY` and its extended codes except `SQLITE_BUSY_SNAPSHOT` (a stale read snapshot never clears by waiting). */
+export function isSqliteBusyError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const errcode = (error as { errcode?: unknown }).errcode;
+  return typeof errcode === 'number' && (errcode & 0xff) === 5 && errcode !== 517;
+}
+
+function isInMemoryFilename(filename: string): boolean {
+  return filename === ':memory:' || filename === '' || filename.startsWith('file::memory:');
 }
 
 export class SQLiteDialect<S extends Record<string, object> = Record<string, object>> extends Dialect<SQLiteDialectConfig, S, string> {
   /** Node 内置 SQLite 连接（node:sqlite），在 connect() 中动态加载 */
-  private db: { prepare(sql: string): any; close(): void } | null = null;
+  private db: { prepare(sql: string): any; exec(sql: string): void; close(): void; readonly isTransaction?: boolean } | null = null;
+  /** Own transaction flag; `DatabaseSync#isTransaction` is preferred where Node provides it. */
+  private transactionOpen = false;
 
   constructor(config: SQLiteDialectConfig) {
     super('sqlite', config);
@@ -32,7 +65,18 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
       if (!fs.existsSync(dirname)) {
         fs.mkdirSync(dirname, { recursive: true });
       }
-      this.db = new DatabaseSync(this.config.filename);
+      const db = new DatabaseSync(this.config.filename);
+      try {
+        // Two processes share the file (gateway: console_* tables, instance: the rest):
+        // WAL lets readers run beside one writer and never blocks readers on a writer.
+        const busy = this.config.busyTimeoutMs;
+        if (busy !== undefined && Number.isSafeInteger(busy) && busy > 0) db.exec(`PRAGMA busy_timeout = ${busy}`);
+        if (!isInMemoryFilename(this.config.filename)) db.exec('PRAGMA journal_mode = WAL');
+      } catch (error) {
+        db.close();
+        throw error;
+      }
+      this.db = db;
     } catch (error) {
       throw new Error(`SQLite 连接失败（需要 Node.js 22.5+，推荐 24+）: ${error}`);
     }
@@ -66,6 +110,40 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
   }
 
   async query<U = any>(sql: string, params?: any[]): Promise<U> {
+    const budget = this.busyRetryBudget();
+    if (budget <= 0) return this.execute<U>(sql, params);
+    const deadline = Date.now() + budget;
+    let wait = BUSY_RETRY_FIRST_DELAY_MS;
+    for (;;) {
+      // A statement inside an open transaction is never replayed here: the transaction's caller
+      // owns that retry (BEGIN IMMEDIATE takes the write lock up front, so this is rare).
+      // COMMIT is the exception: SQLite documents a busy COMMIT as safe to retry.
+      const replayable = !this.inTransaction() || /^\s*commit\b/i.test(sql);
+      try {
+        return await this.execute<U>(sql, params);
+      } catch (error) {
+        if (!replayable || !isSqliteBusyError(error) || Date.now() + wait > deadline) throw error;
+      }
+      await delay(wait);
+      wait = Math.min(wait * 2, BUSY_RETRY_MAX_DELAY_MS);
+    }
+  }
+
+  /** Async retry budget: only for connections that do not wait synchronously (`busyTimeoutMs`). */
+  private busyRetryBudget(): number {
+    const busy = this.config.busyTimeoutMs;
+    if (busy !== undefined && busy > 0) return 0;
+    if (isInMemoryFilename(this.config.filename)) return 0;
+    const budget = this.config.busyRetryMs ?? SQLITE_BUSY_RETRY_MS;
+    return Number.isFinite(budget) && budget > 0 ? budget : 0;
+  }
+
+  private inTransaction(): boolean {
+    const native = this.db?.isTransaction;
+    return typeof native === 'boolean' ? native : this.transactionOpen;
+  }
+
+  private async execute<U = any>(sql: string, params?: any[]): Promise<U> {
     if (!this.db) throw new Error('SQLite 未连接');
     const trimmedSql = sql.trim().toLowerCase();
     const isInsert = trimmedSql.startsWith('insert');
@@ -257,19 +335,42 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
    */
   async beginTransaction(options?: TransactionOptions): Promise<Transaction> {
     const dialect = this;
-    
-    // 开始事务
-    await this.query('BEGIN TRANSACTION');
-    
+    const readOnly = options?.readOnly === true;
+
+    // Write transactions: IMMEDIATE takes the write lock at BEGIN, so contention with the
+    // gateway's connection surfaces there (retried by query()), never as SQLITE_BUSY_SNAPSHOT
+    // halfway through. A declared read-only transaction takes no write lock (DEFERRED: WAL
+    // readers never wait for a writer) and query_only makes an accidental write fail loudly.
+    // Callers that cannot declare intent (the plugin-runtime Database Host) stay IMMEDIATE.
+    await this.query(readOnly ? 'BEGIN DEFERRED' : 'BEGIN IMMEDIATE');
+    this.transactionOpen = true;
+    if (readOnly) {
+      try {
+        await this.query('PRAGMA query_only = ON');
+      } catch (error) {
+        await this.query('ROLLBACK').catch(() => undefined);
+        this.transactionOpen = false;
+        throw error;
+      }
+    }
+    const close = async (): Promise<void> => {
+      dialect.transactionOpen = false;
+      if (readOnly) await dialect.query('PRAGMA query_only = OFF').catch(() => undefined);
+    };
+    const finish = async (sql: 'COMMIT' | 'ROLLBACK'): Promise<void> => {
+      try {
+        await dialect.query(sql);
+      } catch (error) {
+        // A failed COMMIT (e.g. busy past the budget) leaves the transaction to the caller's rollback.
+        if (sql === 'ROLLBACK') await close();
+        throw error;
+      }
+      await close();
+    };
+
     return {
-      async commit(): Promise<void> {
-        await dialect.query('COMMIT');
-      },
-      
-      async rollback(): Promise<void> {
-        await dialect.query('ROLLBACK');
-      },
-      
+      commit: () => finish('COMMIT'),
+      rollback: () => finish('ROLLBACK'),
       async query<T = any>(sql: string, params?: any[]): Promise<T> {
         return dialect.query<T>(sql, params);
       }

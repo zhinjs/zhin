@@ -136,7 +136,7 @@ Open the Console **QQ** page (route `/qq`) to:
 - view, edit, start, stop, replace, or remove accounts from Host runtime storage;
 - scan-bind a new bot from **Platform actions**; save it disabled and start it explicitly.
 
-Reads require `qq:read`; writes require `qq:write`, with full administrator tokens unrestricted. The first migration requires an administrator to confirm the existing account list and retains identity and history. Account changes do not rewrite startup files or `.env`. Connection updates reconnect only that account; replacement assigns a new identity without inheriting Sessions or settings. Refresh to verify an unknown commit outcome instead of retrying automatically.
+Reads require `qq:read`; writes require `qq:write`, with a global owner unrestricted; plugin permissions are granted by level (see [Plugin permission levels](../console/index.md#plugin-permission-levels)): `:read` to `viewer` and above, `:write` (`operate` level for these account permissions) to `operator` and above; a role bound to this adapter counts too, and the first migration additionally needs an administrator. The first migration requires an administrator to confirm the existing account list and retains identity and history. Account changes do not rewrite startup files or `.env`. Connection updates reconnect only that account; replacement assigns a new identity without inheriting Sessions or settings. Refresh to verify an unknown commit outcome instead of retrying automatically.
 
 ## Outage notifications
 
@@ -146,7 +146,6 @@ When the QQ official bot is offline or fails to start, configure `notify` to ale
 icqq:
   # ... a configured ICQQ instance
 qq:
-  master: "${QQ_MASTER_OPENID}"
   notify:
     adapter: icqq
     endpoint: "123456"

@@ -2,7 +2,7 @@
 
 import { readFileSync } from 'node:fs';
 import { Command } from 'commander';
-import { stopCommand } from './commands/stop.js';
+import { logsCommand, restartCommand, startCommand, statusCommand, stopCommand, updateCommand } from './commands/lifecycle.js';
 import { buildCommand } from './commands/build.js';
 import { newCommand } from './commands/new.js';
 import { pubCommand } from './commands/pub.js';
@@ -26,6 +26,7 @@ import { devCommand } from './commands/dev.js';
 import { useCasesCommand } from './commands/use-cases.js';
 import { pluginCommand } from './commands/plugin.js';
 import { previewCommand } from './commands/preview.js';
+import { consoleCommand } from './commands/console.js';
 
 // src/cli.ts 与 lib/cli.js 都在包根下一层，../package.json 就是 @zhin.js/cli 自己的清单。
 const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string };
@@ -38,7 +39,12 @@ program
   .version(version);
 
 // 注册命令
+program.addCommand(startCommand);
 program.addCommand(stopCommand);
+program.addCommand(restartCommand);
+program.addCommand(statusCommand);
+program.addCommand(logsCommand);
+program.addCommand(updateCommand);
 program.addCommand(buildCommand);
 program.addCommand(newCommand);
 program.addCommand(pubCommand);
@@ -64,20 +70,12 @@ program.addCommand(needsAgentCommand
   ? (await import('./commands/agent.js')).agentCommand
   : new Command('agent').description('Inspect Agent capabilities'));
 program.addCommand(runtimeCommand);
-program
-  .command('start')
-  .description('启动 Bot（同 zhin runtime start）')
-  .usage('[options]')
-  .allowUnknownOption(true)
-  .allowExcessArguments(true)
-  .action(async (_options, command) => {
-    await runtimeCommand.parseAsync(['start', ...command.args], { from: 'user' });
-  });
 program.addCommand(traceCommand);
 program.addCommand(usageCommand);
 program.addCommand(devCommand);
 program.addCommand(useCasesCommand);
 program.addCommand(previewCommand);
+program.addCommand(consoleCommand);
 
 try {
   await program.parseAsync();

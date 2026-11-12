@@ -21,6 +21,7 @@ export type ConsoleRouteRecord = {
     order?: number;
     group?: string;
     fullWidth?: boolean;
+    section?: import('@zhin.js/contract').ConsolePageSection;
   };
 };
 

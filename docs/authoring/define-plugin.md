@@ -134,6 +134,89 @@ export default definePlugin({
 
 更多规则见页尾 [配置声明细则](#配置声明细则)。
 
+#### 按适配器 / 账号 / 会话覆盖配置 {#layered-config}
+
+同一个插件可以在不同适配器实例、不同账号、不同群 / 私聊上用不同的设置（[ADR 0050](../adr/0050-layered-feature-config.md)、[ADR 0055](../adr/0055-conversation-feature-config.md)）。层级从上到下是 `global`（插件自己的配置块）< `adapter`（适配器实例别名，如 `qq`）< `endpoint`（`<别名>/<账号 id>`，如 `qq/bot-1`）< `conversation`（`<别名>/<账号 id>/<kind>:<会话 id>`，如 `qq/bot-1/group:123`，存在项目数据库里）。
+
+**1. 在 Schema 根上声明支持的层级。** 省略时等同 `["global"]`：只能写全局配置，覆盖里只能写启用开关。单个属性可以用同名关键字收窄（例如密钥只允许全局），但不能比根更宽，否则启动报错：
+
+```json
+{
+  "type": "object",
+  "x-zhin-config": { "levels": ["global", "adapter", "endpoint"] },
+  "properties": {
+    "maxItems": { "type": "integer", "minimum": 1, "default": 5 },
+    "apiKey": { "type": "string", "x-zhin-config": { "levels": ["global"], "secret": true } }
+  }
+}
+```
+
+用内联 `config` 时，在 `toJsonSchema()` 的结果根上加同样的 `x-zhin-config.levels`；用 `Schema.object({...})` 声明时调用 `.featureLevels(levels, { conversationFields, selfServiceFields, chatAdminFields })`，单个属性用 `.fieldLevels(['global'])` 收窄（例如 `Schema.string().secret().fieldLevels(['global'])`）。
+
+**会话层（ADR 0055）。** `levels` 可以包含 `"conversation"`，但必须同时包含 `"endpoint"`。会话层默认只能开关；要允许在会话层改字段，在根上列出 `conversationFields`；要允许群管理员在聊天里改（`功能 设置 …`），再列出 `selfServiceFields`（必须是 `conversationFields` 的子集）；聊天里在账号层及以上改字段默认也只允许 `selfServiceFields`，可用 `chatAdminFields` 放宽：
+
+```json
+{
+  "type": "object",
+  "x-zhin-config": {
+    "levels": ["global", "adapter", "endpoint", "conversation"],
+    "conversationFields": ["threshold", "cooldown"],
+    "selfServiceFields": ["threshold"]
+  },
+  "properties": {
+    "threshold": { "type": "integer", "minimum": 2, "default": 3 },
+    "cooldown": { "type": "integer", "default": 30000 }
+  }
+}
+```
+
+- 列出的字段必须是插件自己的属性，且其 `levels` 允许会话层；不满足时启动报错。
+- 没有配置 Schema 的插件也有会话层开关，但没有字段覆盖。
+- 会话 id 写进键时转义 `%` → `%25`、`/` → `%2F`，其余字符原样（id 可以含 `:`），因此键里恰好两个 `/`。
+- 会话层覆盖不在配置文件里：由 Console（`feature.*` 的 `level: 'conversation'`）或群内自助命令写入表 `feature_conversation_overrides`，写入后原地生效。
+- 会话层的字段补丁不做环境变量展开（`${VAR}` 原样保留）。
+
+**2. 覆盖写在插件自己的块里，保留键 `overrides`。** 每个覆盖值是插件 Schema 的部分对象，外加保留字段 `enabled`：
+
+```yaml
+rss:
+  maxItems: 5
+  overrides:
+    adapters:
+      qq: { enabled: false }
+    endpoints:
+      "tg-main/news": { maxItems: 1 }
+```
+
+- 字段自下而上合并：普通对象逐键深合并，数组和标量整体替换，`null` 表示“显式清空”（该字段不再继承上级的值）。
+- 启用自上而下：只有上面所有层级都启用时某一层才能停用；任一上级停用后，下级全部锁定，既不能启用也不能改自己的开关（Console 返回 409 `locked`）。下级从不存「启用」：启用 = 删除该层开关；手写的 `enabled: true` 不起作用，只会得到一条警告。全局层的启停仍是 `disable_plugins`（改动后重启）。
+- 指向未声明的适配器别名或账号的键会保留并给出警告，不报错，方便先写配置、后加账号。
+- 插件的 Schema 里不能再声明名为 `overrides` 的属性；插件自己的 `enabled` 字段不参与覆盖。
+- 没有配置 Schema 的插件也能用三级启停开关（只写 `enabled`）。
+
+**3. 在代码里读取有效配置。** `context.config` 仍是全局视图，不含 `overrides`：
+
+```ts
+setup(context) {
+  const schedule = context.resources.use(scheduleHostToken);
+  context.lifecycle.add(schedule.register({ id: 'push', cron: '0 */10 * * * *', async execute() {
+    for (const target of targets) {
+      // target 可以是消息、{ adapter: 'qq', endpointId: 'bot-1', conversation?: { kind: 'group', id: '123' } }、
+      // 带 endpoint 的会话引用 { conversation: target }，或解析键 'qq/bot-1' / 'qq/bot-1/group:123'
+      if (!context.isEnabledFor(target)) continue;
+      const { maxItems } = context.configFor(target);
+      // ...
+    }
+  } }));
+}
+```
+
+`configFor(target)` 返回合并后冻结的有效配置，按“配置代次 + 解析键（含会话）”缓存，会话层写入时缓存失效，读到的总是最新生效的配置。target 是消息时解析到消息所在的会话层。只改 `overrides`（包括适配器 / 账号层的开关）会原地生效：不重启、不重载插件，下一条消息就读到新值；改全局字段沿用字段自己的 `x-zhin-config.effect`。
+
+**自动门禁：** 插件在某个账号或会话上被停用时，命令（含菜单）、中间件、带账号的消息与事件处理器、Agent 工具与技能披露都会按消息所在会话直接跳过，表现和插件不存在一样（命令不会回复“已禁用”）。定时任务、后台轮询等不经过消息的能力，需要像上例那样自己调用 `isEnabledFor`。
+
+Console 的功能页通过 `feature.*` RPC（`feature.list` / `feature.matrix` / `feature.get` / `feature.set-override` / `feature.remove-override` / `feature.set-enabled` / `feature.conversations`）读写同一份 `overrides` 与会话层覆盖，手改 YAML 与 Console 改等价。activity-feedback 现有的 `platforms` / `endpoints` 仍然兼容，新插件推荐使用 `overrides`。
+
 ### 使用数据库
 
 在 `zhin.config.yml` 里配置了 `database:` 后，插件可以定义自己的表：
@@ -263,6 +346,7 @@ async setup(context) {
 | --- | --- |
 | `plugin` | 当前插件实例的信息：`id`、`instanceKey`、`parent`、`root`、`role`（`'root'` 或 `'child'`） |
 | `config` | `config.get()` 返回只读的配置 |
+| `configFor(target)` / `isEnabledFor(target)` | 某个适配器 / 账号 / 会话上的有效配置与启用状态，见 [按适配器 / 账号 / 会话覆盖配置](#layered-config) |
 | `resources` | 取用和提供资源：`has(token)`、`use(token)`、`provide(token, value, dispose?)` |
 | `lifecycle` | `lifecycle.add(dispose)` 登记清理函数，热重载或卸载时逆序执行 |
 | `handoff` | 让自定义资源参与热重载切换，见下文「热重载交接」 |
@@ -307,7 +391,7 @@ export default definePlugin({
 | `outboundHostToken` | 有可用的适配器 | `send(input)` 主动推送，返回平台消息 id 或 `null`；部分平台支持 `addReaction` / `removeReaction` / `recall` |
 | `htmlRendererToken` | 安装了 `@zhin.js/html-renderer` | `render(html, { width, format, backgroundColor })` 输出 PNG；未安装时应降级为纯文本 |
 | `runtimeEventPublisherToken` | Bot 根插件，启用 Console 时 | `publish(type, data)` 向 Console 实时事件流广播 |
-| `httpHostToken` | 启用了 HTTP 服务 | `route(method, path, handler, meta?)` 注册 HTTP 路由；`ws(path).onConnection(cb)` 注册 WebSocket |
+| `httpHostToken` | 启用了 HTTP 服务 | `route(method, path, (request, context) => Response, meta?)` 注册 HTTP 路由（Web 标准 `Request` / `Response`，见 [HTTP 路由契约](./host-tokens.md#http-路由契约)）；`ws(path).onConnection(connection => …)` 注册 WebSocket |
 
 数据库和定时任务只暴露本插件私有的表名和任务 ID，不提供原始数据库连接或进程级控制。全部 token 见 [Host Token 总览](./host-tokens.md)。
 

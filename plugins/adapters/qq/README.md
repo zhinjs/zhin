@@ -240,7 +240,7 @@ QQ 开放平台按有没有带上用户消息的 `msg_id`（或事件的 `event_
 - 在账号库查看、修改、启停、替换或删除 QQ 账号；新增走扫码绑定，保存后需手动启动；
 - 「平台操作」里扫码绑定新机器人：扫码 → 选择公域 / 私域 → 通过同一账号 CAS 保存为未启动状态；原来的 `qq endpoint add` 仍然保留。
 
-读取需要 `qq:read`，写操作需要 `qq:write`；管理员 full token 不受限。页面里的「扫码绑定新机器人」等价于原来的 `qq endpoint add`。
+读取需要 `qq:read`（`read` 级别，内置角色 `viewer` 及以上都有）；增删改账号等写操作需要 `qq:write`（`operate` 级别，`operator` 及以上都有，绑定到本适配器的角色也算），首次迁移还需管理员身份；全局所有者不受限，见[插件权限的级别](https://zhin.js.org/console/#插件权限的级别)。页面里的「扫码绑定新机器人」等价于原来的 `qq endpoint add`。
 
 首次修改启动配置里的既有账号前，管理员必须核对清单并确认一次迁移。原 canonical 身份与历史保留，完整账号配置加密进入 Host 数据库；此后账号管理只写数据库，不修改启动文件或 `.env`，不重启进程。没有持久化账号端口的环境可使用静态配置连接，动态写操作明确不可用。
 
@@ -311,3 +311,7 @@ QQ 当前未实现 canonical `share` 的标题/描述/URL 消息卡片。适配�
 Endpoint 管理命令和工具反馈使用当前操作语言。扫码绑定在开始时固定语言，后续二维码刷新、公域/私域选择和结果回复保持一致；`public` / `private` 是稳定的配置值，两种语言都可使用，中文别名只在中文流程中接受。
 
 取消指引使用发起命令时的真实前缀及插件命名空间，不猜测调用方式。确认回复仅接受发起者所在的完整会话（Endpoint、会话、父容器、线程和发送者）；其他成员或线程不会完成该绑定。
+
+## 成员身份
+
+频道（guild）消息的 `member.roles` 归一为 `sender.platform`：身份组 `4`（频道主）→ `owner`，`2`（超级管理员）→ `admin`，其余为 `member`（`5` 子频道管理员不视为 admin）；原始身份组进 `roles`（内置身份带名称）。QQ 群、单聊事件不带身份组，不上报；官方事件没有权限位，`permissions` 不上报。能力画像：`channel.scene.platformStanding = { standing: true, roles: true }`。详见 [ADR 0056 §1](https://github.com/zhinjs/zhin/blob/main/docs/adr/0056-chat-roles.md)。

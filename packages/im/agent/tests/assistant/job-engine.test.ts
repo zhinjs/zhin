@@ -112,7 +112,7 @@ describe('TimerScheduler', () => {
       schedule: { kind: 'every', everyMs: 60_000 },
       action: { kind: 'agent', prompt: 'daily weather' },
       notify: { channel: 'silent' },
-      createdBy: { userId: '1659488338', roles: ['master'], name: 'Owner' },
+      createdBy: { userId: '1659488338', roles: ['owner'], name: 'Owner' },
     });
     engine.registerOne((await store.getJob('sched-owner'))!);
     await engine.runJobNow('sched-owner');
@@ -121,7 +121,7 @@ describe('TimerScheduler', () => {
       expect.objectContaining({
         createdBy: {
           userId: '1659488338',
-          roles: ['master'],
+          roles: ['owner'],
           name: 'Owner',
         },
       }),

@@ -66,6 +66,8 @@ export default definePlugin<ActivityFeedbackServiceConfig>({
       logger,
       access,
       locale,
+      // ADR 0050 / 0055: no typing / status feedback in conversations where activity-feedback is off.
+      target => context.isEnabledFor(target),
     );
     const admission = createGenerationAdmissionGate();
     void activityFeedbackAdmissionToken;

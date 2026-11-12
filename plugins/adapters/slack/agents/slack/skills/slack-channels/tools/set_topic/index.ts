@@ -1,22 +1,21 @@
 import { messages as t } from "../../../../messages.js";
+import { currentChannel } from "../../../../conversation.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { platformPermission } from '@zhin.js/permission';
 
 export default defineAgentTool<{
-  channel: string;
   topic: string;
 }>({
-  description: '设置 Slack 频道话题',
+  description: '设置当前 Slack 频道话题',
   inputSchema: z.object({
-    channel: z.string().describe('频道 ID'),
     topic: z.string().describe('新话题'),
   }),
   adapter: 'slack',
   scopes: ["group"],
   tags: ['slack'],
-  permissions: [platformPermission('slack', 'channel_manager')],
-  async execute({ channel, topic }, context) {
+  permissions: ['admin'],
+  async execute({ topic }, context) {
+    const channel = currentChannel(context);
     const client = context.$client;
     await client.conversations.setTopic({ channel, topic });
     const success = true;

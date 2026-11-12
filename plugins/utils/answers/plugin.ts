@@ -1,7 +1,7 @@
 import { definePlugin } from 'zhin.js';
 import type { AnswersConfig } from './src/config.js';
 import { QuizService } from './src/quiz.js';
-import { quizServiceStore } from './src/runtime.js';
+import { answersConfigStore, quizServiceStore } from './src/runtime.js';
 
 /**
  * Plugin Runtime:
@@ -16,5 +16,9 @@ export default definePlugin<AnswersConfig>({
   },
   setup(context) {
     quizServiceStore.provide(context, new QuizService());
+    // ADR 0050 / 0055: quiz settings may differ per adapter / account / conversation (in place, no reload).
+    answersConfigStore.provide(context, {
+      configFor: message => context.configFor(message as Parameters<typeof context.configFor>[0]),
+    });
   },
 });

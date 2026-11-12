@@ -168,5 +168,5 @@ export function iterationSceneOf(turn: Readonly<{
 }> | undefined): IterationScene | undefined {
   if (turn?.origin.kind !== 'im') return undefined;
   if (turn.origin.scope === 'group') return 'group';
-  return turn.principal.roles.includes('master') ? 'master-private' : 'private';
+  return turn.principal.roles.includes('owner') ? 'master-private' : 'private';
 }

@@ -15,6 +15,7 @@ pnpm build              # Full build (Turborepo: basic/ → packages/ → plugin
 pnpm test               # Run all Vitest tests
 pnpm test:watch         # Watch mode
 pnpm test:coverage      # Coverage report
+pnpm test:e2e:gateway   # Slow process-level gateway suite (tests/e2e-gateway, after pnpm build); skipped by pnpm test, run once in full-validation.yml
 pnpm lint               # ESLint (.ts,.tsx)
 pnpm type-check         # tsc --noEmit -p tsconfig.typecheck.json
 pnpm dev                # Start minimal-bot (examples/minimal-bot); use pnpm dev:test for test-bot
@@ -34,7 +35,7 @@ pnpm vitest run packages/im/core/tests/ai-access.test.ts
 ```
 
 Custom lint checks:
-- `pnpm check:harness-paths` — 检测插件是否绕过 Adapter.sendMessage 直调 bot.$sendMessage
+- `pnpm check:harness-paths` — 检测插件是否绕过 Adapter.sendMessage 直调 bot.$sendMessage，以及适配器 Agent 工具（`plugins/adapters/*/agents/**`）是否绕过出站端口直调平台发送接口（白名单 `scripts/agent-send-bypass-allowlist.json`）
 - `pnpm check:no-koa` — 检测插件是否直接 import koa（应使用 RouterContext）
 - `pnpm check:prod` — 检查生产环境配置（无 console.log/debugger/TODO/FIXME）
 - `pnpm check:plugin` — 检查插件是否符合标准规范（入口文件、测试、README）
@@ -63,6 +64,10 @@ packages/im/core            # Canonical IM runtime and message contracts
 packages/im/agent           # Agent orchestration (ZhinAgent, security policies, MCP client)
   ↓
 packages/im/zhin            # Main entry — IM core; agent via optional peer + zhin.js/agent
+                            #   src/instance/ = instance composition root (zhin.js/instance, ADR 0054)
+
+packages/host/gateway       # Management gateway (ADR 0054): IAM, terminal, project files; no zhin.js / IM layers
+basic/cli                   # `zhin` CLI: depends on the gateway, never on IM layers
 
 packages/console/{contract,protocol,plugin-contract,page,layout,pagemanager,client}  # 控制台栈（平行，不经 IM 发送链）
 packages/toolkit/{create-zhin,components,tailwind,html-renderer}         # 脚手架与渲染库
@@ -78,16 +83,24 @@ packages/toolkit/{create-zhin,components,tailwind,html-renderer}         # 脚�
 | ai | `packages/im/ai/src/` | Provider abstraction, agent loop, sessions, memory, compaction |
 | core | `packages/im/core/src/` | ImRuntime, messages, side events, rendering, interaction |
 | agent | `packages/im/agent/src/` | ZhinAgent orchestrator, security (ExecPolicy, FilePolicy), MCP client |
-| host-http | `packages/host/http/src/` | 极简 HTTP/WS Host（Bearer、CORS，无 Koa）；Console/管理面由 `basic/cli` 装配 |
+| host-http | `packages/host/http/src/` | 极简 HTTP/WS Host（Bearer、CORS，无 Koa）、Console 访问控制门禁；Console/管理面由 `zhin.js/instance` 装配 |
+| gateway | `packages/host/gateway/src/` | 管理网关（ADR 0054）：Console 账号与权限（`iam/`）、终端（`terminal/`）、项目配置与 `.env`、依赖事务、实例监管；不依赖 `zhin.js` 与 IM 层 |
+| instance | `packages/im/zhin/src/instance/` | Zhin 实例装配根（`zhin.js/instance`）：IM Runtime、Agent Host、运行时侧 Console 后端 |
 | mcp / a2a | `packages/host/{mcp,a2a}/src/` | MCP Server、A2A Server |
 
 ### Outbound send chain (do not bypass)
 
 `Message.$reply` / Runtime outbound port → `OutboundRenderer` → outbound middleware → platform `Endpoint`. No parallel send path.
 
+### Console access control (ADR 0049)
+
+- Users, roles, sessions, API tokens and the audit log live in the project database (`packages/host/gateway/src/iam/`), not in config. `http.token` is only a **bootstrap token**: valid until the first owner exists (Console wizard or `zhin console init`), refused everywhere afterwards. `http.tokens` is removed (startup fails). Automation uses user-issued API tokens via `ZHIN_CONSOLE_TOKEN`.
+- Every `/api` route and every Console RPC must be listed in the permission map of `@zhin.js/console-protocol` (`CONSOLE_HTTP_PERMISSIONS`, `CONSOLE_RPC_PERMISSIONS`, `CONSOLE_WS_PERMISSIONS`); unlisted ones are denied to every signed-in principal (owners included). Register a permission whenever you add a route, RPC or host-authenticated socket.
+- Plugin routes outside the Console (Webhooks, adapter reverse WebSockets) authenticate themselves: `http.ws(path, { auth: 'protocol' })` plus the plugin's own credential (`verifyProtocolAccessToken`).
+
 ### Plugin system (Plugin Runtime — current)
 
-`zhin runtime start` is the only start path. Plugins are **packages**: `package.json#zhin` declares the manifest (`entry`, `engine`, `runtime`, `features`, `plugins`), and `plugin.ts` must **default-export a `definePlugin()` definition** — `PluginScopeAssembler` throws `does not default-export a Plugin definition` otherwise.
+Start a project with **`zhin start`** (ADR 0054): it runs the management gateway (`@zhin.js/gateway`) and the gateway supervises the Zhin instance (`zhin.js/instance`). `zhin start` runs in the background by default (`zhin status` / `logs` / `stop` / `restart` reach it over `.zhin/gateway.sock`); `--foreground` attaches (production templates and `pnpm start` use it); `zhin runtime start` is an alias for `zhin start --foreground`; `--standalone` (instance with its own HTTP server, no gateway) is for tests and development only. The gateway owns the HTTP port, the project database's `console_*` tables and Console authentication (`/auth/*`, `iam.*`, terminal, audit); the instance never authenticates — it only authorizes the principal the gateway forwards. Plugins are **packages**: `package.json#zhin` declares the manifest (`entry`, `engine`, `runtime`, `features`, `plugins`), and `plugin.ts` must **default-export a `definePlugin()` definition** — `PluginScopeAssembler` throws `does not default-export a Plugin definition` otherwise.
 
 ```ts
 // plugin.ts — thin wiring only
@@ -124,7 +137,7 @@ DI is **Scope + Token** based (`context.resources`), generation-scoped rather th
 
 ### Removed legacy APIs (`usePlugin()` / `getPlugin()` / `bootstrapNode`)
 
-`zhin.js/node` and `bootstrapNode` have been **deleted and are no longer exported**. The **sole entry path** is `definePlugin()` + `zhin runtime start` (Plugin Runtime). Do not author or call legacy plugin APIs.
+`zhin.js/node` and `bootstrapNode` have been **deleted and are no longer exported**. The **sole entry path** is `definePlugin()` + `zhin start` (Plugin Runtime under the gateway). Do not author or call legacy plugin APIs.
 
 ### Build output
 
@@ -219,6 +232,8 @@ Agent harness engineering 提供多层安全防护：执行策略（5 层防御�
 | Sandbox environment | `packages/im/agent/src/security/sandbox.ts` |
 | Prompt assembly | `packages/im/agent/src/prompt/system-prompt.ts`, `assembly.ts` |
 | AI providers | `packages/im/ai/src/providers/` |
+| Instance composition root | `packages/im/zhin/src/instance/` (`start-command.ts`, `console/`, `*-host-installer.ts`) |
+| Management gateway | `packages/host/gateway/src/` (`iam/`, `terminal/`, `config/`, `plugin-management/`, `project/`, `supervisor/`) |
 | Architecture docs index | `docs/concepts/architecture.md` |
 | Architecture overview | `docs/concepts/architecture.md` |
 | Repo structure | `docs/contributing/repo-structure.md` |
@@ -232,9 +247,9 @@ Agent harness engineering 提供多层安全防护：执行策略（5 层防御�
 These rules are non-negotiable — violating them will break the project:
 
 1. **Never bypass the send chain** — All outbound messages must flow through `Message.$reply` or `Adapter.sendMessage` → `renderSendMessage` → `before.sendMessage` → platform Endpoint.
-2. **Respect the dependency direction** — `basic → kernel → ai → core → agent → zhin`. Lower layers must never import from higher layers. Exception: `basic/cli` is the Plugin Runtime composition root (`zhin runtime start` assembles IM/Agent/Console hosts) and may import `packages/im` layers; this exception is scoped to `basic/cli` only.
+2. **Respect the dependency direction** — `basic → kernel → ai → core → agent → zhin`. Lower layers must never import from higher layers. Exception: the Zhin instance composition root `packages/im/zhin/src/instance/` (`zhin.js/instance`, ADR 0054 §0) assembles IM/Agent/Console hosts and may import every `packages/im` layer, the protocol Hosts and the Console stack; this exception is scoped to that directory only. `@zhin.js/cli` and `@zhin.js/gateway` must not import `zhin.js` or IM layers (only `@zhin.js/plugin-runtime` contracts and `@zhin.js/runtime` config / project-file tools); the CLI resolves `zhin.js/instance` from the project at run time (`check:architecture` enforces both).
 3. **`plugin.ts` must default-export `definePlugin()`** — The Plugin Runtime loader requires it; capabilities belong in convention directories (`commands/`, `middlewares/`, `tools/`, …), not in imperative top-level registration.
-4. **Legacy startup is removed** — `zhin.js/node` / `bootstrapNode` and Plugin lookup APIs no longer exist; use `definePlugin()` + `zhin runtime start` only. `check:no-removed-plugin-api` prevents their reintroduction.
+4. **Legacy startup is removed** — `zhin.js/node` / `bootstrapNode` and Plugin lookup APIs no longer exist; use `definePlugin()` + `zhin start` (gateway + supervised instance; `zhin runtime start` is its foreground alias) only. `check:no-removed-plugin-api` prevents their reintroduction.
 5. **Use `.js` extensions in imports** — TypeScript local imports require `.js` suffix (`import { x } from './y.js'`).
 6. **Build order matters** — When building incrementally, follow: logger/schema/database → kernel → ai → core → agent → zhin.
 7. **No git submodules** — This is a pnpm workspace monorepo; all packages live under `basic/`, `packages/`, `plugins/`, or `examples/`.

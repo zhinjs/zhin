@@ -147,7 +147,7 @@ ai:
 
 | 元工具 | 作用 |
 |--------|------|
-| `discover` | 按关键词检索工具 / 技能（`kind: tool|skill|all`，可按 MCP server 过滤），返回 Top-K 摘要 |
+| `discover` | 按关键词检索工具 / 技能（`kind: tool\|skill\|all`，可按 MCP server 过滤），返回 Top-K 摘要 |
 | `load_tool` | 按名把工具定义载入本会话，之后即可调用 |
 | `load_skill` | 载入技能说明全文，并解锁它声明的工具 |
 
@@ -177,7 +177,7 @@ ai:
 | `delegate` | 异步委派，立即返回 `mailId`；对方完成后结果作为 `result` 邮件投回委派方信箱并唤醒新回合 |
 | `tell` | 单向通知同伴，不等待回复 |
 | `follow_up` | 针对先前已委派或提问的 `mailId` 追问或补充上下文，复用同一 Engagement 与因果链 |
-| `board_read` | 读取当前 Engagement 共享黑板（Blackboard）上的条目（支持按 `key` 或 `kind: note | todo | artifact` 过滤） |
+| `board_read` | 读取当前 Engagement 共享黑板（Blackboard）上的条目（支持按 `key` 或 `kind: note \| todo \| artifact` 过滤） |
 | `board_write` | 向当前 Engagement 共享黑板写入或更新条目（自动递增 `version` 并记入 `board_written` 事件） |
 | `cancel_delegation` | 撤回自己委派出去的工作（传 `delegate` 返回的 `mailId`） |
 | `escalate` | 遇到越权、死锁或高风险决策时冻结当前 Engagement，把决定交还给发起的人类 |
@@ -341,6 +341,18 @@ Anthropic 在已有 system、tools 缓存标记之外，分别在当前输入末
 - 其他会话的记忆：本回合从 `data/memory/sessions/<其他会话>/` 读到的内容 → `[已隐藏：其他会话的记忆]`。
 
 检查是回复通道上的一步：处理完后交给原来的发送链，渲染和 `before.sendMessage` 中间件都不受影响。
+
+### 出站媒体
+
+适配器会读取并上传本地路径（`MediaRef kind: 'path'`），OneBot / NapCat 等还会把 `file` 引用、`file://` 地址原样交给平台端去读宿主文件。读宿主文件是宿主全局能力（ADR 0056 §2），所以**模型写出的媒体**不能自己指定宿主文件。Core 在渲染器里统一处理（只此一处，不经并行发送路径，适配器无需各自补检查）：
+
+- Agent 的回复、流式回复、场景事件回复、主动发送（定时通知等）和适配器 Agent 工具发出的内容都以 `untrustedContent(content, trust)` 交给出站链；插件代码自己构造的内容（`$reply`、命令、组件）仍是可信来源，照常发送。
+- 不可信内容中的媒体只允许：`http(s)` 链接；内联数据（`base64` / `data:`，默认上限 25 MiB）；平台文件标识（不含 scheme、`/`、`\`，不以 `~` / `.` 开头）。
+- 本地路径（含 `file://`）只有两种情况放行：发送方的 `authorizePath` 认可它——Agent 用本回合的文件授权判断：必须在工作区内、通过文件策略，并按发起人的文件角色做与 `read_file` 相同的读取判定（只有全局 `owner` 是 `owner`；需要确认的敏感读取直接拒绝，因为附件没有审批步骤）；或者它是可信代码用 `trustedMediaRef()` 构造的引用（例如 Agent 把大附件落到临时目录的文件；模型自己写出同一路径不算）。
+- 嵌套在转发节点、适配器扩展段或 `platform` 字段里的本地来源一律拒绝；`html` 段只保留文字（渲染器可能加载本地文件）；不可信文本不做 `${…}` 模板替换。
+- 被拒的段替换为可见提示（如「[图片未发送：媒体来源不被允许]」），并记录 `op=outbound_media_refused` 警告（含来源、段类型、`kind`、原因，不含路径本身），不会原样发出，也不会静默丢弃。
+
+合法的本地文件仍可发送：工具生成的截图、图表放在工作区（如 `data/media/`）里，模型以 `path` 引用即可；Agent 会读成内联数据或落盘为可信引用。插件工具把模型参数拼进消息时，用 `untrustedContent()` 包装即可得到同样的保护。
 
 ### 用量配额
 
@@ -531,7 +543,7 @@ ai:
 | 任务 | `todo_read`、`todo_write` |
 | 协作 | `agents`、`ask`、`delegate`、`tell`、`cancel_delegation`、`escalate`（有其他可联系的 Agent 时才提供） |
 | 记忆 / 检索 | `memory_search`、`memory_upsert`、`knowledge_search`、`inspect_conversation_reference` |
-| 媒体 | `generate_image`；配置 R2 后可审批调用 `upload_image(file_path)`；Host 的 MCP 私有图片通过 `get_local_assets(asset_id)` 按需查看，见[图片存储](./index.md#ai-imagestorage) |
+| 媒体 | `generate_image`；配置 R2 后可审批调用 `upload_image(file_path)`；工具结果里的私有图片（MCP、插件、Seam 与内置工具）通过 `get_local_assets(asset_id)` 按需查看，见[图片存储](./index.md#ai-imagestorage) |
 | 元工具 | `discover`、`load_tool`、`load_skill` |
 | 定时 | `schedule_list`、`schedule_add`、`schedule_remove`、`schedule_pause`、`schedule_resume`、`schedule_preview` |
 
@@ -705,7 +717,7 @@ zhin trace --engagements
 zhin trace <engagementId>
 ```
 
-在 Remote Console 的协作图谱页面中，也可以可视化查看每个 Engagement 的参与者拓扑、消息跳数（`ask` / `delegate` / `tell` / `result`）、共享黑板（`note` / `todo` / `artifact`）与预算账本。
+在 Remote Console 的 Workroom 页面（`/features/ai/workrooms`）中，也可以可视化查看每个 Engagement 的参与者拓扑、消息跳数（`ask` / `delegate` / `tell` / `result`）、共享黑板（`note` / `todo` / `artifact`）与预算账本。
 
 ## 相关
 

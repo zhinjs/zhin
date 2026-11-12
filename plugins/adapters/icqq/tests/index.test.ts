@@ -88,7 +88,7 @@ describe('@zhin.js/adapter-icqq package', () => {
         default: { requiresApproval: string; permissions?: readonly string[] };
       };
       expect(mod.default.requiresApproval).toBe('on-risk');
-      expect(mod.default.permissions).toEqual(['role(master,admin,trusted,owner)']);
+      expect(mod.default.permissions).toEqual(['trusted']);
     }
   });
 });

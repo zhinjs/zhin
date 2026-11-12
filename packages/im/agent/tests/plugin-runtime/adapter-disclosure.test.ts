@@ -106,8 +106,9 @@ function turn(platform: string, scope: 'private' | 'group' | 'channel', botPlatf
   const caps = platform === 'icqq' ? platformCapabilities(scope, botPlatformRole) : undefined;
   return {
     origin: { kind: 'im', platform, endpoint: 'bot', scope, sceneId: 'scene' },
-    principal: { subjectId: 'sender', roles: ['master'] },
-    policy: { permissions: ['master'], unattended: false },
+    // A zhin owner who is also a platform group owner: only the Bot's own standing varies.
+    principal: { subjectId: 'sender', roles: ['owner'], platform: { standing: 'owner' } },
+    policy: { permissions: ['owner'], unattended: false },
     ...(botPlatformRole || caps ? { input: {
       ...(botPlatformRole ? { contextState: { bot: { platformRole: botPlatformRole } } } : {}),
       ...(caps ? { platformCapabilities: caps } : {}),
@@ -137,6 +138,8 @@ describe('adapter-owned scene disclosure (#949)', () => {
       expect(capabilities.tools.map(tool => tool.name)).toEqual(tools.list()
         .filter(tool => !tool.scopes || tool.scopes.includes(scope))
         .filter(tool => !botRole || !tool.currentConversationBotRoles?.length || tool.currentConversationBotRoles.includes(botRole))
+        .filter(tool => platform !== 'icqq' || !tool.requiresCapabilities?.length
+          || tool.requiresCapabilities.every(path => platformCapabilities(scope, botRole).has(path)))
         .map(tool => tool.qualifiedName));
       if (platform === 'qq' && scope === 'channel') {
         const disclosed = capabilities.tools.map(tool => tool.name);
@@ -174,9 +177,10 @@ describe('adapter-owned scene disclosure (#949)', () => {
       ...turn('icqq', 'group'),
       input: { contextState: { bot: { platformRoleError: 'lookup_failed' } }, platformCapabilities: platformCapabilities('group') },
     }, selectedAgent: 'icqq' });
+    // recall-others / set-admin now declare `bot:admin` / `bot:owner` permits (ADR 0056 §5) instead
+    // of an exact Bot role list; only the safe-leave rule still needs one.
     const roleDependent = [
       'agent__icqq__skill__icqq-group-admin__group_leave',
-      'agent__icqq__skill__icqq-group-admin__recall_member_message',
     ];
     expect(admin.tools.filter(tool => tool.currentConversationBotRoles?.length).map(tool => tool.name))
       .toEqual(roleDependent);

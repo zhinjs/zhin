@@ -30,18 +30,18 @@ pnpm add @zhin.js/adapter-sandbox
 
 ## Prerequisites
 
-Sandbox needs no external account. Let `zhin runtime start` assemble the HTTP Host and ensure the browser can reach the Host address printed at startup.
+Sandbox needs no external account. Start the project with `zhin start` (the management gateway serves HTTP and forwards the instance's routes) and ensure the browser can reach the Host address printed at startup.
 
 ## Dependencies
 
-### Plugin Runtime (new, `zhin runtime start`)
+### Plugin Runtime (`zhin start`)
 
 - `@zhin.js/adapter` — convention-based `adapters/sandbox/index.ts`
 - `@zhin.js/host-http` — `httpHostToken` provided by Root (WebSocket `/sandbox` + Console HTTP)
 - `@zhin.js/core` — `endpoint[endpointSpec].events.emit(...)` inbound, `outboundMessageToken` outbound
 - `@zhin.js/page` + `pages/index/index.tsx` — ADR 0046 convention page (`definePage`; route `/sandbox`)
 
-Root loads `@zhin.js/host-http`, `ConsoleRuntime`, and `ClientBuildModuleRuntime` at `zhin runtime start`. Open `http://<host>:<port>/console` to browse pages. The Sandbox page (route `/sandbox`, sharing the same path as WebSocket `/sandbox`: GET opens the page, Upgrade goes to WS) has a built-in chat shell.
+The instance `zhin start` launches loads `@zhin.js/host-http`, `ConsoleRuntime`, and `ClientBuildModuleRuntime` (the management gateway listens for HTTP and forwards). Open `http://<host>:<port>/console` to browse pages. The Sandbox page (route `/sandbox`, sharing the same path as WebSocket `/sandbox`: GET opens the page, Upgrade goes to WS) has a built-in chat shell.
 
 The old `client/` (`register(api)` / `pageManager.addEntry`) is kept only as a reference for the legacy Host stack and is **not** the Plugin Runtime production entry point.
 
@@ -81,8 +81,8 @@ sandbox:
 ## Usage
 
 1. Start the Zhin instance: `pnpm dev` (the terminal will print the Host address, typically `http://127.0.0.1:8086`)
-2. Open the **[Remote Console](https://console.zhin.dev)**, set the API Base to match the Host address, and set the Token to match `http.token` / `HTTP_TOKEN`
-3. Send messages for testing on the Console **Sandbox** page after connecting
+2. Open the **[Remote Console](https://console.zhin.dev)**, set the API Base to match the Host address, and sign in with a Console account (on the first connection, use `http.token` / `HTTP_TOKEN` to create the owner)
+3. Send messages for testing on the Console **Try a conversation** page (`/sandbox`) after connecting
 
 The Sandbox plugin creates one endpoint from each configured entry. With an empty endpoint list, it creates the stable `sandbox-bot` default.
 
@@ -95,9 +95,9 @@ The Console Sandbox page and any test client you write use this protocol. Every 
 ### Connecting
 
 - **URL**: `ws://<host>:<port>/sandbox`. On one HTTP Host the first Sandbox endpoint mounts `/sandbox`; the others mount `/sandbox/<endpoint id>` (with `-2`, `-3`… on a name clash). The startup log prints `ws mounted <path>`.
-- **Auth**: when the Host has a token, the handshake must carry `Authorization: Bearer <token>` or the `?token=<token>` query parameter, otherwise it gets `401`. A demo-scope token can only connect to `/sandbox` and is read-only: messages are received but never reach commands or the Agent, and the server answers with `type: "error"`.
+- **Auth**: when the Host requires credentials (`http.token` is set or setup is done), the handshake must carry a Console credential, `Authorization: Bearer <session or API token>` or `?token=`, for an account holding `endpoint.operate` (owners, admins, operators); otherwise it gets `401`. The bootstrap token cannot connect.
 - **Concurrent connections**: pages sharing an endpoint keep separate `connectionId`s and the configured `owner`. The connection ID does not change the Bot or Agent session identity. Closing a page removes only that connection, without cancelling or restarting a task. Endpoint stop closes all connections with `1001`; generation retirement still closes them through the Host with `1012`.
-- **Conversation delivery**: each full-scope connection subscribes to one `type` + `id`, initially `private` + `owner`. Sending a normal input also selects its conversation. Replies reach matching full-scope connections only; demo connections cannot subscribe or receive these messages. No matching connection means `not_sent`; all send attempts failing leaves delivery `unknown`. There is no automatic retry.
+- **Conversation delivery**: each connection subscribes to one `type` + `id`, initially `private` + `owner`. Sending a normal input also selects its conversation. Replies reach matching connections only. No matching connection means `not_sent`; all send attempts failing leaves delivery `unknown`. There is no automatic retry.
 
 ### Client → server: subscribe to a conversation
 
@@ -167,7 +167,7 @@ Unrecognised values fall back to the defaults.
 }
 ```
 
-`canExecute` tells whether the connection has full scope (can run commands and Agent tasks); `shellIsolation` is the Docker isolation probe result, for display only. Ready and subscription acknowledgements do not confirm task completion or approval.
+`canExecute` tells whether the connection can run commands and Agent tasks (every authenticated connection can); `shellIsolation` is the Docker isolation probe result, for display only. Ready and subscription acknowledgements do not confirm task completion or approval.
 
 **Replies**:
 
@@ -189,18 +189,6 @@ Unrecognised values fall back to the defaults.
 - When a plugin sends a complete message object, its other fields are kept as they are.
 
 Clients merge optimistic messages and input echoes by conversation, direction, and `messageId`. Approval decisions remain on the existing server interaction path; submitting a button does not mean approval succeeded. This change does not add offline result storage, cross-browser history restoration, or multiple operator accounts.
-
-**Read-only notice**: after a demo-scope connection sends a message, the server replies:
-
-```json
-{
-  "type": "error",
-  "id": "sandbox-user",
-  "endpoint": "sandbox-bot",
-  "content": [{ "type": "text", "data": { "text": "当前连接是只读演示权限，不能运行 Agent 任务。" } }],
-  "timestamp": 1700000000000
-}
-```
 
 ## Use Cases
 

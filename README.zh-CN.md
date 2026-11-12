@@ -45,18 +45,21 @@
 不需要任何平台账号，也不需要模型 Key（要求 Node.js **≥22.19.0** 与 pnpm 9+）：
 
 ```bash
-npm create zhin-app my-bot -y
+npm create zhin-app my-bot -- -y --adapter sandbox
 cd my-bot
-pnpm dev
+pnpm dev          # zhin start --foreground：管理网关 + 你的 Bot，热重载
 ```
 
-1. **本地内置 Sandbox**：浏览器直接打开 `http://127.0.0.1:8068/sandbox`，发送 `/hello` 即可收到回复。
-2. **Remote Console 管理台**：打开 [console.zhin.dev](https://console.zhin.dev)，填入 `http://127.0.0.1:8068` 和 `.env` 里的 `HTTP_TOKEN`，查看日志、管理插件与实时会话。
+1. **在 Console 里完成初始化**：打开终端打印的 Console 链接（`https://console.zhin.dev/?apiBaseUrl=…#token=…`，`#` 之后的初始化令牌不会离开浏览器），保持默认 SQLite，创建所有者账号。
+2. **在沙盒里聊天**：打开 `http://127.0.0.1:8068/sandbox`（或 Console 的「会话 → 沙盒」），发送 `/hello`。
+3. **后台运行**：`npx zhin start`（之后用 `zhin status`、`zhin logs -f`、`zhin stop`）。
 
 完整步骤：[快速开始](./docs/getting-started/index.md) · 遇到环境问题先运行 `npx zhin doctor`。
 
 > [!IMPORTANT]
 > **从 1.1.13 及更早版本升级已有 Bot？** Runtime 现在只接受 `configVersion: 2`。先停止 Bot，把 `zhin.js` / `@zhin.js/cli` 升级到最新，再运行 `zhin migrate instances`（预览）和 `zhin migrate instances --apply`（自动备份）。完整步骤与恢复方式：[升级到 configVersion 2](./docs/operations/upgrades.md#configversion-2)。
+>
+> **从单进程 `zhin runtime start` 升级？** `zhin start` 现在启动常驻的管理网关并由它监管 Bot，Console 账号取代了 `http.tokens`。把 `@zhin.js/gateway` 与同批的 `zhin.js` / `@zhin.js/cli` 一起装上，按[升级到管理网关](./docs/migrations/management-gateway.md)操作。
 
 ## 为什么选择 Zhin.js？
 
@@ -156,13 +159,13 @@ sandbox:
 | **中间件** | 每条消息都会经过——关键词回复、限流、过滤 | `middlewares/<name>/index.ts` |
 | **适配器** | 接入某个平台的 npm 包；一个适配器可挂多个账号 `endpoints` | `@zhin.js/adapter-*`，在 `zhin.config.yml` 中配置 |
 | **AI Agent**（可选） | 回答没匹配到命令的消息，并调用你写的工具 | `tools/<name>/index.ts`，用 `npx zhin setup --ai` 启用 |
-| **Console** | 浏览器管理后台：日志、配置、测试消息 | 本地 `/sandbox` 或 [console.zhin.dev](https://console.zhin.dev) |
+| **Console** | 浏览器管理后台：按「全局 → 适配器 → 账号 → 会话」分级开关功能、管理聊天角色、收发消息；另有账号与权限、实例与日志、终端、审计 | [console.zhin.dev](https://console.zhin.dev)，由管理网关提供接口；本地 `/sandbox` 试聊 |
 
 ```text
 my-bot/
 ├── package.json      # zhin 字段：入口（"./plugin.ts"）与能力 features
 ├── zhin.config.yml   # configVersion: 2 —— 挂载插件、平台账号 endpoints、HTTP 端口
-├── .env              # 密钥：HTTP_TOKEN、平台凭据、API Key
+├── .env              # 密钥：HTTP_TOKEN（初始化令牌）、平台凭据、API Key
 ├── plugin.ts         # Root 插件入口：definePlugin()
 ├── commands/         # 命令——目录路径即命令名
 ├── middlewares/      # 每条消息都会经过
@@ -246,7 +249,7 @@ defaults:
 
 | 档位 | 安装 | 约 production 体积 | 能力 |
 |------|------|-------------------|------|
-| **IM** | `pnpm add zhin.js` + 适配器（如 `@zhin.js/adapter-sandbox`）；dev：`@zhin.js/cli` | **<10MB**（库包） | 内置命令、组件、中间件、定时任务与热重载运行时（按需在 `zhin.config.yml` 挂载适配器与插件，详见 [插件模型](https://zhin.js.org/concepts/plugin-model)） |
+| **IM** | `pnpm add zhin.js @zhin.js/cli` + 适配器（如 `@zhin.js/adapter-sandbox`）；`@zhin.js/cli` 提供 `zhin start` 与管理网关 `@zhin.js/gateway`，开发与运行都需要 | **<10MB**（库包） | 内置命令、组件、中间件、定时任务与热重载运行时（按需在 `zhin.config.yml` 挂载适配器与插件，详见 [插件模型](https://zhin.js.org/concepts/plugin-model)） |
 | **AI** | `+ @zhin.js/agent zod ai` | +~12–15MB | ZhinAgent、会话、工具、压缩 |
 | **Provider** | `+ @ai-sdk/openai` 等 | 按厂商 | 大模型调用 |
 | **MCP** | `+ @modelcontextprotocol/sdk` | +~数 MB | MCP Client |
@@ -257,10 +260,28 @@ defaults:
 
 ## 运营 / 群主：不写代码管好 Bot
 
-部署完成后，日常运营全部在浏览器 [console.zhin.dev](https://console.zhin.dev) 完成：
+部署完成后，日常运营在浏览器 Console（[console.zhin.dev](https://console.zhin.dev)）里完成。Console 连接的是项目的**管理网关**：登录、权限、实例起停、依赖安装与终端都由网关处理，Bot 实例崩溃或正在升级时 Console 仍能登录、看状态和日志。
 
-- **看状态与收发消息**：查看各平台账号在线状态、回看群聊记录、直接在网页发消息。
-- **无代码配置与任务中心**：开关插件、通过表单改配置、在「任务中心」按用途配置指定群欢迎语与定时提醒。
+**首次打开**：用 `zhin start` 打印的初始化链接（或 `.env` 里的 `HTTP_TOKEN`）创建第一个所有者账号；此后初始化令牌失效，所有人都用账号登录。也可以在服务器上运行 `zhin console init`。
+
+Console 按对象分四级：**全局 → 适配器 → 账号 → 会话**，每一级是一个对象页，结构相同：
+
+| 页面块 | 看什么、做什么 |
+|--------|----------------|
+| 概览 | 这一级的在线状态与统计 |
+| 功能 | 在这一级开关插件、覆盖配置；上级关掉后下级锁定，每个字段标明继承自哪一级（[分层配置](./docs/console/features.md)） |
+| 角色 | 谁在这一级是聊天中的 `owner` / `admin` / `trusted`（向下继承，在 Console 或聊天里授予）；平台群主、管理员是另一条维度，不会自动变成 zhin 角色（[聊天角色](./docs/concepts/chat-roles.md)） |
+| 记录 | 这一级的聊天记录、日志与操作记录 |
+
+账号页另有「接入」：登录、扫码、连接诊断；会话页另有「聊天」：回看记录、直接发消息。
+
+管理区：
+
+- **账号与权限**：Console 用户、内置角色（`owner` / `admin` / `operator` / `viewer`）与自定义角色，角色可绑定到全局、某个适配器或某个账号；自动化用 API 令牌。所有登录、被拒绝的请求和写操作都进审计日志。见[访问控制](./docs/console/access-control.md)。
+- **实例与运维**：实例页查看状态、重启、看日志，依赖安装与更新失败自动回滚；还有数据库、配置文件、环境变量、定时任务、文件，以及只给所有者的终端（默认关闭）。见[运维](./docs/console/operations.md)。
+- **群内自助**：开启 `features.selfService` 后，拥有本群 zhin `admin`（或更高）角色的人可以在聊天里用「功能」「角色」命令管理本群。
+- **三维度鉴权**：命令、Agent 工具与技能、中间件、按钮按「发言者的 zhin 角色 + 发言者的平台身份 + 机器人自己在群里的身份」判断是否可用，例如禁言工具要求 `platform:admin` 且 `bot:admin`；Agent 每轮只拿到当前可用的工具。见[聊天角色](./docs/concepts/chat-roles.md)。
+- **升级提示**：`master` 已改名 `owner`；配置里的 `master` / `trusted` / `ai.trigger.masters` 在首次启动时自动迁入数据库，之后再出现会启动报错；权限写法 `role(master)`、`scene_admin` 等已删除。见[聊天角色升级指南](./docs/migrations/chat-roles.md)。
 - **带护栏的群管与一键止损**：AI 起草公告或踢人等高风险动作须经人工审批；随时通过决策回放查原因，或一键切换静音 / 只读 / 紧急停止。
 
 👉 完整指南：[运营与群管指南](./docs/customer/index.md) · [Console 管理路径](./docs/paths/console.md) · [按问题选方案](./docs/solutions/index.md)
@@ -282,6 +303,15 @@ defaults:
 ## CLI 速查
 
 ```bash
+npx zhin start            # 后台启动管理网关与 Bot（--foreground 前台，用于开发、systemd、容器）
+npx zhin status           # 网关与实例状态（未运行时退出码 3）
+npx zhin logs -f          # 实例日志
+npx zhin restart          # 只重启 Bot 实例，网关与 Console 不断开
+npx zhin stop             # 停止网关与实例
+npx zhin update           # 更新依赖：停实例 → 安装 → 启实例，失败回滚
+npx zhin console init     # 首次创建 Console 所有者（与网页初始化向导相同）
+npx zhin console user create alice --role viewer   # 管理 Console 账号；passwd / disable / enable / list
+npx zhin service install  # 安装为开机自启的系统服务
 npx zhin setup            # 给已有项目补充平台、AI、数据库
 npx zhin doctor           # 诊断 Node、端口、Token、清单
 npx @zhin.js/cli new my-plugin --standalone  # 创建可发布的独立插件包
@@ -298,6 +328,7 @@ npx zhin install <插件名>  # 安装并挂载插件
 | [`zhin.js`](./packages/im/zhin) | 你要安装的主包——插件作者需要的 API 都从这里导入 |
 | [`create-zhin-app`](./packages/toolkit/create-zhin) | 项目脚手架（`npm create zhin-app`） |
 | [`@zhin.js/cli`](./basic/cli) | `zhin` 命令：启动、配置、诊断、迁移、发布 |
+| [`@zhin.js/gateway`](./packages/host/gateway) | 管理网关：HTTP、Console 账号与权限、终端、依赖事务、实例监管（随 CLI 安装，建议同批写进项目依赖） |
 | [`@zhin.js/agent`](./packages/im/agent) | 可选的 AI Agent 运行时，含安全策略 |
 | [`@zhin.js/adapter-*`](./plugins/adapters) | 各平台适配器 |
 | [`plugins/`](./plugins) | 官方插件：小游戏、提醒、RSS、日历、内容审核…… |

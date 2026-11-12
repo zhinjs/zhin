@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import { createHttpHost } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import { installRuntimeMcp, type RuntimeMcpTool } from '../src/runtime.js';
 
 const hosts: Array<ReturnType<typeof createHttpHost>> = [];
@@ -41,6 +41,24 @@ describe('Runtime MCP Host', () => {
       origin: { kind: 'mcp', requestId: expect.any(String) },
       principal: { subjectId: 'mcp-client', roles: ['authenticated'] },
     }));
+  });
+
+  it('accepts Host user API tokens through the shared authenticator (ADR 0049)', async () => {
+    const host = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(host);
+    const authenticateBearer = vi.fn(async (token: string) => token === 'user-api-token');
+    installRuntimeMcp({
+      http: host,
+      config: { allowUnauthenticatedLocalhost: false },
+      authenticateBearer,
+      tools: { withTools: (_context, operation) => operation([]) },
+    });
+    const { port } = await host.listen();
+    const baseUrl = `http://127.0.0.1:${port}/mcp`;
+    expect((await mcpRequest(baseUrl, 'tools/list', {}, 'wrong')).status).toBe(401);
+    expect((await mcpRequest(baseUrl, 'tools/list', {}, 'user-api-token')).status).toBe(200);
+    // The 4th argument is the principal the Host resolved for the request (here: an open Host).
+    expect(authenticateBearer).toHaveBeenCalledWith('user-api-token', expect.any(Request), '127.0.0.1', { kind: 'bootstrap', open: true });
   });
 
   it('keeps the advertised tool protocol available for an empty generation', async () => {

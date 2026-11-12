@@ -1,14 +1,7 @@
-import type { IncomingMessage } from 'node:http';
+import { verifyProtocolAccessToken, type ProtocolAuthRequest } from '@zhin.js/host-http';
 
-export function verifyMilkyAccessToken(accessToken: string | undefined, request: IncomingMessage): boolean {
+export function verifyMilkyAccessToken(accessToken: string | undefined, request: ProtocolAuthRequest): boolean {
+  // Webhook semantics: no configured token admits any caller (reverse sockets use verifyProtocolAccessToken).
   if (!accessToken) return true;
-  const auth = request.headers.authorization ?? '';
-  if (auth === `Bearer ${accessToken}`) return true;
-  try {
-    const url = new URL(request.url ?? '/', 'http://localhost');
-    if (url.searchParams.get('access_token') === accessToken) return true;
-  } catch {
-    /* ignore */
-  }
-  return false;
+  return verifyProtocolAccessToken(accessToken, request);
 }

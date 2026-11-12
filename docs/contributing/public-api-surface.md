@@ -74,9 +74,9 @@
 
 | API | 稳定性 | 来源包 | 一句话 |
 |-----|--------|--------|--------|
-| `usePlugin()` / `getPlugin()` | `removed` | 无（不再导出） | 唯一入口为 `definePlugin` + `zhin runtime start` |
+| `usePlugin()` / `getPlugin()` | `removed` | 无（不再导出） | 唯一入口为 `definePlugin` + `zhin start` |
 | `MessageCommand` / `CommandFeature` | `removed` | 无（不再导出） | 命令统一使用 `defineCommand` + Runtime `CommandIndex` |
-| `bootstrapNode` / `zhin.js/node` | `removed` | 无（子路径已删除） | 唯一启动入口为 `zhin runtime start` |
+| `bootstrapNode` / `zhin.js/node` | `removed` | 无（子路径已删除） | 唯一启动入口为 `zhin start` |
 | `AgentMessageSenderExtra` / `SenderScope` | `removed` | 无（不再导出） | 参与者身份只存于 `UserMessage.actor` |
 | `buildSenderPrefix` / `applySenderExtraToUserMessage` / `stripSenderPrefixFromText` | `removed` | 无（不再导出） | 参与者标签由 AI 边界从 actor 渲染，不再从文本或 extra 推断身份 |
 | `buildSenderPrefixForMessage` | `removed` | 无（不再导出） | Core trigger 只返回用户正文，不编码 Agent 身份 |
@@ -100,7 +100,7 @@
 
 | 命令 | 稳定性 | 来源包 | 一句话 |
 |------|--------|--------|--------|
-| `zhin runtime start` | `stable` | `@zhin.js/cli` | Plugin Runtime 启动入口（composition root） |
+| `zhin start` | `stable` | `@zhin.js/cli` | 启动管理网关并由它拉起实例（ADR 0054）；`zhin runtime start` 是 `zhin start --foreground` 的别名 |
 | `zhin setup` | `stable` | `@zhin.js/cli` | 已有项目增量配置向导 |
 | `zhin doctor` | `stable` | `@zhin.js/cli` | 环境/配置体检 |
 | `pnpm create zhin-app` | `stable` | `create-zhin-app` | 新建项目脚手架 |
@@ -128,7 +128,7 @@
 
 | 项 | 稳定性 | 现状 | 一句话 |
 |----|--------|------|--------|
-| legacy `usePlugin()` / `getPlugin()` 插件体系 | `removed` | 源码与 public surface 均已删除 | 唯一入口：`definePlugin` + `zhin runtime start` |
+| legacy `usePlugin()` / `getPlugin()` 插件体系 | `removed` | 源码与 public surface 均已删除 | 唯一入口：`definePlugin` + `zhin start` |
 | `MessageCommand` / classic `CommandFeature` | `removed` | 源码与 public surface 均已删除 | 命令统一走 `defineCommand` + Runtime `CommandIndex` |
 | Core `ToolFeature` / `SkillFeature` | `removed` | 源码与 public surface 均已删除 | Tool / Skill 统一走 Feature provider、generation projection 与 Agent `CapabilityIngress` |
 | Agent `FeatureCapabilityIngress` | `removed` | 源码与 public surface 均已删除 | Agent 只保留读取 Runtime snapshot 的 `CapabilityIngress` |
@@ -147,7 +147,7 @@
 | classic Core `Plugin` runtime | `removed` | Plugin 类、Context ALS、重复 Dispatcher 与入站管线均已删除 | 插件生命周期由 `@zhin.js/plugin-runtime` 的 generation snapshot 管理；IM 分发只走 `ImRuntime` |
 | Kernel `PluginBase` / mutable `Feature` registry | `removed` | Plugin tree、字符串 DI、prototype extension registry 与自证测试已删除 | 生命周期统一属于 `@zhin.js/plugin-runtime`；能力发现和投影统一属于 `@zhin.js/feature-kit` |
 | Kernel global Schedule getters/setters | `removed` | `get/setScheduleEngine` 与 `get/setScheduler` 已删除 | 每个 `ScheduleJobEngine` 私有持有并销毁自己的调度引擎，Host 调度走 generation-owned token |
-| `bootstrapNode` / `zhin.js/node` | `removed` | 不再导出 | 唯一启动入口：`zhin runtime start` |
+| `bootstrapNode` / `zhin.js/node` | `removed` | 不再导出 | 唯一启动入口：`zhin start` |
 | `AgentOrchestrator` / `ResourceHub` | `removed` | 兼容名称不再导出 | 能力注册改用 `AgentResourceHub`；多 Agent 协作改走 `@zhin.js/harness`（ADR 0048） |
 | 「`host` 插件」叙事 | `deprecated` | 文档已收口 | Host 能力改为 token 化（见上表 Host Token），不再是插件概念 |
 | `examples/test-bot` 作为用户路径 | `deprecated` | 维护者厨房水槽 | 用户路径为 minimal-bot（Stable）→ full-bot（L4），勿把 test-bot 配置当模板 |

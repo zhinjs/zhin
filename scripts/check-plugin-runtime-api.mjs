@@ -29,6 +29,9 @@ const migratedRoots = [
   ['pagemanager/client-build', 'packages/console/pagemanager/src/client-build'],
   ['runtime', 'packages/im/runtime/src'],
   ['cli/runtime', 'basic/cli/src/plugin-runtime'],
+  // ADR 0054 §0: the instance composition root and the management gateway.
+  ['zhin.js/instance', 'packages/im/zhin/src/instance'],
+  ['gateway', 'packages/host/gateway/src'],
 ];
 
 function normalize(statement) {

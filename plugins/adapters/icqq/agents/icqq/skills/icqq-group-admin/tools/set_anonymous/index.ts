@@ -1,18 +1,19 @@
 import { messages as t } from "../../../../messages.js";
+import { currentGroup } from "../../../../conversation.js";
 import { freshMember, isGroupManager } from "../../../../members.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-export default defineAgentTool<{ group_id: number; enable?: boolean }>({
-  description: '开启或关闭 QQ 群的匿名聊天功能',
+export default defineAgentTool<{ enable?: boolean }>({
+  description: '开启或关闭当前 QQ 群的匿名聊天功能',
   inputSchema: z.object({
-    group_id: z.number().describe('目标群号'),
     enable: z.boolean().optional().describe('true=开启，false=关闭，默认 true'),
   }),
   adapter: 'icqq',
   requiresApproval: 'once',
   scopes:['group'],
-  permissions: ['role(master,trusted,owner,admin)'],
-  async execute({ group_id, enable }, context) {
+  permissions: ['platform:admin', 'bot:admin'],
+  async execute({ enable }, context) {
+    const group_id = currentGroup(context);
     const client = context.$client;
     const on = enable ?? true;
     if (!isGroupManager(await freshMember(client, group_id, client.uin))) return { success: false, message: t(context.locale, 'anonymousForbidden') };

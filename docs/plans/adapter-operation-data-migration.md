@@ -45,7 +45,7 @@ migration unit. Read only the namespaces selected by an administrator.
 | `bilibili_subscriptions` | same destination fields, plus `uid` and `kinds` | No declared primary `id`. Use exact business tuple and snapshot digest; preserve duplicate groups rather than choosing an arbitrary row |
 | `rss_seen`, `bilibili_watch_state` | feed/UID cursors and deduplication state, not account authority | Do not reset or relabel cursors when moving one destination; they may serve multiple subscriptions |
 | Earthquake plugin state key `subscriptions/v1` | JSON entries: `adapter`, `endpointKey`, `conversationKind`, `conversationId`, `createdBy`, locale and filters | owning state namespace, complete document digest, selected entry/group digest; mutations currently serialize the whole document |
-| `<workspace>/data/owner-approve-always.json` historical version 2 | `endpoints[platform + '|' + endpoint + '|' + ownerId]` contains `bashAlways` and `bashRules` | full document digest and exact original key; the original owner and grant are retained for display, not imported as authority |
+| `<workspace>/data/owner-approve-always.json` historical version 2 | `endpoints[platform + '\|' + endpoint + '\|' + ownerId]` contains `bashAlways` and `bashRules` | full document digest and exact original key; the original owner and grant are retained for display, not imported as authority |
 
 Schema sources: `plugins/games/*/src/models.ts`,
 `packages/game-kit/src/game-records.ts`, `plugins/utils/rss/plugin.ts`,

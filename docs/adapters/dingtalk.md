@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/dingtalk/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/dingtalk/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=b49ee65e62eb250b -->
+<!-- sync-adapter-docs:sha256=ba4823722721d37a -->
 
 # @zhin.js/adapter-dingtalk
 
@@ -119,7 +119,7 @@ pnpm --filter @zhin.js/adapter-dingtalk test
 
 新增仅保存，需手动启动；运行账号的普通配置更新只重连该账号。身份变化走明确替换，新账号不会继承旧 Session 或登录状态。账号凭据变化先按平台实际只读接口核验；平台无法核验时需明确替换。空白或遮蔽的密码不会覆盖既有密码。
 
-读取需要 `dingtalk:read`，写入需要 `dingtalk:write`；首次迁移还需管理员身份。无持久化存储时管理操作不可用，提交结果未知时先刷新核实，不重复提交。
+读取需要 `dingtalk:read`（`read` 级别，内置角色 `viewer` 及以上都有），写入需要 `dingtalk:write`（`operate` 级别，`operator` 及以上都有，绑定到本适配器的角色也算）；首次迁移还需管理员身份，见[插件权限的级别](https://zhin.js.org/console/#插件权限的级别)。无持久化存储时管理操作不可用，提交结果未知时先刷新核实，不重复提交。
 
 ## 故障排查
 
@@ -157,3 +157,7 @@ canonical `share` 编码为原生 `link` 卡片，映射 `url/title/description/
 先通过临时启动配置加 `streamProxy`，若未知网关域名，可先填写占位域名；拒绝日志只显示实际 hostname。使用该域名启动 `scripts/platform-acceptance/tcp-fault-proxy.mjs --upstream-host 实际网关域名 --upstream-port 443 --port 18443 --control-port 18444`，将 serverName 同步设为此域名。不要覆盖用户已有 `.env`。恢复正常验收后移除临时配置并停止代理。
 
 正常收发后 `POST http://127.0.0.1:18444/cut`；现有 WSS 立即关闭，Endpoint 的 `transportState` 经统一 lifecycle 进入重连，期间健康记录不能认定在线。`POST /recover` 后仅允许新建连接；需观察重新 `open`，再发送新的唯一 probe，验证入站及可见回包。Stream 入站恢复与 sessionWebhook 出站恢复是不同链路：该代理仅切断 WSS，HTTP 发送未被切断；不能把这次试验记为所有平台网络故障、发送重试或离线消息无损验收。网关域名变化需停止验收并更新固定上游，不能绕代理继续取通过证据。
+
+## 成员身份
+
+群聊回调的 `isAdmin` 归一为 `sender.platform.standing`（`admin` / `member`；回调不区分群主）；单聊不上报。能力画像：`group.scene.platformStanding = { standing: true }`。详见 [ADR 0056 §1](https://github.com/zhinjs/zhin/blob/main/docs/adr/0056-chat-roles.md)。

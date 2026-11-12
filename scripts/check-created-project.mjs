@@ -95,6 +95,30 @@ async function run(command, args, cwd, extraEnv = {}) {
   }
 }
 
+/** Runs a command with `input` on stdin (e.g. `--password-stdin`). */
+function runWithInput(command, args, cwd, input) {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(command, args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
+    let log = '';
+    for (const stream of [proc.stdout, proc.stderr]) stream.on('data', (data) => { log = (log + data.toString()).slice(-6000); });
+    proc.once('error', reject);
+    proc.once('close', (code) => code === 0 ? resolve(log) : reject(new Error(`${command} ${args.join(' ')} failed (${code}):\n${log}`)));
+    proc.stdin.end(input);
+  });
+}
+
+/** Console access control (ADR 0049): sign in as the fixture owner and use its session as the bearer. */
+async function login(origin, username, password) {
+  const response = await fetch(`${origin}/api/auth/login`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }), signal: AbortSignal.timeout(10_000),
+  });
+  const body = await response.json();
+  const session = body?.data?.token ?? body?.token;
+  if (!response.ok || typeof session !== 'string') throw new Error(`Console login failed (HTTP ${response.status})`);
+  return session;
+}
+
 async function packRoots(roots) {
   const closure = resolveWorkspacePackClosure(workspace, roots);
   const missing = closure.filter((entry) => !packed.has(entry.name));
@@ -217,11 +241,12 @@ async function stopBot() {
 async function startBot(mode) {
   output = '';
   const bin = path.join(project, 'node_modules', '@zhin.js', 'cli', 'bin', 'zhin.js');
-  child = spawn(process.execPath, ['--experimental-strip-types', bin, 'runtime', 'start', '--mode', mode,
+  // `--standalone`: no gateway subprocess, so cleanup always owns the actual Host process, and the
+  // instance serves HTTP itself (ADR 0054 §3: the gateway otherwise owns the only listener).
+  child = spawn(process.execPath, ['--experimental-strip-types', bin, 'runtime', 'start', '--standalone', '--mode', mode,
     ...(mode === 'production' ? ['--no-watch'] : ['--watch', 'source', 'config'])], {
     cwd: project,
-    // Avoid a supervisor subprocess so cleanup always owns the actual Host process.
-    env: { ...env, ZHIN_RUNTIME_CHILD: '1' },
+    env,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   child.on('error', (error) => { output += error.message; });
@@ -295,7 +320,7 @@ try {
   }), null, 2));
   await run('pnpm', ['install', '--no-frozen-lockfile'], creator);
   console.log('Creating an empty project with the packed creator CLI…');
-  await run(process.execPath, [path.join(creator, 'node_modules/create-zhin-app/lib/index.js'), 'acceptance-bot', '-y', '--skip-install', ...localeFlags], creator);
+  await run(process.execPath, [path.join(creator, 'node_modules/create-zhin-app/lib/index.js'), 'acceptance-bot', '-y', '--skip-install', '--adapter', 'sandbox', ...localeFlags], creator);
   const manifestFile = path.join(project, 'package.json');
   const manifest = JSON.parse(await readFile(manifestFile, 'utf8'));
   if (platform !== 'sandbox') {
@@ -360,7 +385,8 @@ if (text('en', 'done') !== 'Done' || text('zh-CN', 'done') !== '完成') throw n
   if (config.locale !== locale) throw new Error('The generated project did not preserve the selected locale');
   // The fixture explicitly opts into SQL so personal preference persistence is exercised.
   config.database = { dialect: 'sqlite', filename: path.join(temp, 'locale.sqlite') };
-  const token = 'local-acceptance-token';
+  const owner = { username: 'acceptance', password: 'acceptance-owner-password' };
+  let token = '';
   if (platform !== 'sandbox') {
     delete config.plugins.sandbox;
     delete config.sandbox;
@@ -372,7 +398,7 @@ if (text('en', 'done') !== 'Done' || text('zh-CN', 'done') !== '完成') throw n
       : { connection: 'ws', endpoints: [{ id: 'fixture-bot', url: `ws://127.0.0.1:${gateway.address().port}`, access_token: 'fixture-token' }] };
   }
   if (platform !== 'sandbox') config[platform].commandPrefix = '/';
-  config.http = { ...config.http, host: '127.0.0.1', port: 0, token,
+  config.http = { ...config.http, host: '127.0.0.1', port: 0,
     readiness: { endpoints: [{ owner: `root/${platform}`, name: platform === 'sandbox' ? 'sandbox~sandbox-bot' : `${platform}~fixture-bot` }] } };
   await writeFile(configFile, stringify(config));
   const localeProbe = path.join(project, 'commands/locale-probe');
@@ -390,8 +416,12 @@ export default defineCommand({ execute(context) {
     env.ZHIN_ACCEPTANCE_POLICY = path.join(temp, 'policy.json');
     await writeFile(env.ZHIN_ACCEPTANCE_POLICY, JSON.stringify({ version: 1, platform, mode: platform === 'telegram' ? 'polling' : 'websocket', targets: [{ alias: 'fixture-private', adapter: `root/${platform}`, endpoint: 'fixture-bot', kind: 'private', id: '20001' }], actions: ['reply-text'], minIntervalMs: 1000, maxSends: 10, eventsPath: path.join(temp, 'probe-events.jsonl') }));
   }
+  console.log('Creating the Console owner (zhin console init)…');
+  await runWithInput(process.execPath, [path.join(project, 'node_modules/@zhin.js/cli/bin/zhin.js'),
+    'console', 'init', '--yes', '--owner', owner.username, '--password-stdin'], project, `${owner.password}\n`);
   console.log('Checking development startup, /hello and command HMR…');
   const origin = await startBot('development');
+  token = await login(origin, owner.username, owner.password);
   await requestHello(origin, token, greeting);
   await requestHello(origin, token, locale + '|/locale-probe', '/locale-probe');
   const personalLocale = locale === 'en' ? 'zh-CN' : 'en';
@@ -436,7 +466,7 @@ export default defineCommand({ execute(context) {
   await requestHello(production, token, 'candidate HMR accepted');
   if (platform === 'sandbox') await requestHello(production, token, 'candidate JSX HMR accepted', '/card', 'html');
   await run(process.execPath, [path.join(project, 'node_modules/@zhin.js/cli/bin/zhin.js'),
-    'doctor', '--live', production, '--json'], project, { ZHIN_HTTP_TOKEN: token });
+    'doctor', '--live', production, '--json'], project, { ZHIN_CONSOLE_TOKEN: token });
   if (platform !== 'sandbox') {
     await requestHello(production, token, 'acceptance:fixture-private:sample0001', '/acceptance probe:sample0001');
     await waitFor(async () => {

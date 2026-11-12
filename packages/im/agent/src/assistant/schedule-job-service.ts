@@ -172,7 +172,7 @@ export function parseScheduleAddFromToolArgs(
     label: args.label != null ? String(args.label) : undefined,
     source: 'schedule',
     locale: context.locale,
-    createdBy: scheduleJobCreatorFromPrincipal(context.principal),
+    createdBy: scheduleJobCreatorFromPrincipal(context.principal, context.origin),
     executionPlan,
     activityFeedback: args.activity_feedback === true ? true : undefined,
     budget: parseScheduleBudget(args),

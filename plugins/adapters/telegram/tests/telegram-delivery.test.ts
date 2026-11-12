@@ -1,5 +1,4 @@
-import { Readable } from 'node:stream';
-import type { IncomingMessage, ServerResponse } from 'node:http';
+import { respondInto, webhookRequest } from '../../test-utils/http.js';
 import { getEventListeners } from 'node:events';
 import { telegramFixture, telegramDeliveryFixture } from './fixture.js';
 import { createTestEndpointEventGateway } from '../../test-utils/endpoint.js';
@@ -41,11 +40,8 @@ function deferred<T>() {
 }
 
 function webhook(handler: TelegramWebhookHandler, body = JSON.stringify(update), token = 'secret') {
-  const request = Readable.from([body]) as IncomingMessage;
-  request.headers = { 'x-telegram-bot-api-secret-token': token };
-  const response = { writeHead: vi.fn(), end: vi.fn() };
-  const done = handleTelegramWebhookRequest(request, response as unknown as ServerResponse, handler);
-  return { response, done };
+  const response = respondInto(handleTelegramWebhookRequest(webhookRequest(body, { 'x-telegram-bot-api-secret-token': token }), handler));
+  return { response, done: response.done };
 }
 
 async function candidate(receive: (event: EndpointEvent) => Promise<unknown>) {

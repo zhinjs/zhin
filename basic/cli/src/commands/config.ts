@@ -9,7 +9,7 @@ import { loadHostHttpConfig } from '../utils/host-http.js';
 import {
   ConsoleAuthenticationError, ConsoleConnectionError, ConsoleRequestUnconfirmedError, ConsoleRpcError, requestPluginConsole,
 } from '../plugin-management/console-client.js';
-import { parseConfigurationPath } from '../plugin-runtime/console/configuration-path.js';
+import { parseConfigurationPath } from '@zhin.js/gateway/config';
 import { createOfflineConfigurationStore, ENVIRONMENT_NAME, requireConfigFile } from '../utils/config-offline.js';
 
 /**
@@ -30,7 +30,7 @@ export const CONFIG_EXIT_CODES = Object.freeze({
 type Options = {
   offline?: boolean; host?: string; live?: string; tokenEnv?: string; json?: boolean; environment?: string; reveal?: boolean;
 };
-type Connection = { host: string; token?: string; tokenEnvironment: string };
+type Connection = { host: string; token?: string; tokenEnvironment: string; fetch?: import('@zhin.js/gateway/local').LocalGatewayFetch };
 type Outcome = Readonly<Record<string, unknown> & { status: string; message: string }>;
 
 class ConfigCommandError extends Error {
@@ -77,13 +77,19 @@ async function connection(options: Options): Promise<Connection> {
       message: `未找到 Host 地址；请用 --host <url> 指定运行中的 Host。${NOT_CONNECTED_MESSAGE}` }, CONFIG_EXIT_CODES.notConnected);
   }
   // ZHIN_CONSOLE_TOKEN / HTTP_TOKEN (or --token-env) wins over the project's http.token.
-  return { host: discovered.baseUrl, token: envToken || discovered.token || undefined, tokenEnvironment };
+  if (!discovered.fetch) return { host: discovered.baseUrl, token: envToken || discovered.token || undefined, tokenEnvironment };
+  // A running gateway answers over its local socket: as the local owner, or — with an explicit
+  // Console API token (ZHIN_CONSOLE_TOKEN / --token-env) — as that token's principal. The
+  // bootstrap HTTP_TOKEN is not a user credential and is not sent.
+  const userToken = (tokenEnvironment === 'ZHIN_CONSOLE_TOKEN' ? process.env.ZHIN_CONSOLE_TOKEN : process.env[tokenEnvironment])?.trim()
+    || discovered.token || undefined;
+  return { host: discovered.baseUrl, token: userToken, tokenEnvironment, fetch: discovered.fetch };
 }
 
 /** Pre-mutation requests: a lost reply means nothing was written, so it is not `unknown`. */
 async function read<T>(target: Connection, data: Record<string, unknown>): Promise<T> {
   try {
-    return await requestPluginConsole<T>(target.host, data, target.tokenEnvironment, { token: target.token });
+    return await requestPluginConsole<T>(target.host, data, target.tokenEnvironment, { token: target.token, ...(target.fetch ? { fetch: target.fetch } : {}) });
   } catch (error) {
     throw transportFailure(error, false);
   }
@@ -218,7 +224,7 @@ async function mutate(options: Options, patches: readonly ConsoleConfigPatchOper
   try {
     // Exactly one dispatch; the Host owns read-modify-write against expectedRevision.
     reply = await requestPluginConsole<unknown>(target.host, { type: CONFIG_RPC.PATCH_PROJECT, expectedRevision, patches },
-      target.tokenEnvironment, { token: target.token, requestId });
+      target.tokenEnvironment, { token: target.token, requestId, ...(target.fetch ? { fetch: target.fetch } : {}) });
   } catch (error) {
     throw transportFailure(error, true, { expectedRevision });
   }
@@ -268,7 +274,7 @@ export function createConfigCommand(): Command {
     .option('--offline', '不连接 Host：本地校验后保存（不启动 Runtime、不执行插件 setup，可能执行模块顶层代码），不请求生效')
     .option('--host <url>', '运行中 Host 的 HTTP(S) API 地址（默认按配置 http.* 推导）')
     .addOption(new Option('--live <url>', '--host 的别名（兼容）').hideHelp())
-    .option('--token-env <name>', 'Console full token 所在环境变量（优先于配置 http.token）', 'ZHIN_CONSOLE_TOKEN')
+    .option('--token-env <name>', 'Console API 令牌所在环境变量（优先于配置 http.token）', 'ZHIN_CONSOLE_TOKEN')
     .option('--environment <name>', '--offline 校验时加载 .env.<name>', 'development')
     .option('--reveal', '读取时显示原值（默认按 Schema 打码敏感值）')
     .option('--json', '仅输出紧凑 JSON');

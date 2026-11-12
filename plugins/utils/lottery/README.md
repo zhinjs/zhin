@@ -67,6 +67,12 @@ lottery:
       channelId: operator
 ```
 
+## 分层配置（ADR 0050 / 0055）
+
+所有字段（玩法、推送目标、调度、回测）只能在全局层修改；启停开关支持适配器、账号与会话四级。在 Console「功能」区可以按适配器、账号或会话（群 / 私聊）单独停用；开启 `features.selfService.enabled` 后，群里有 `admin` 角色（默认含群主 / 管理员）的人也可以用 `功能 关闭 lottery` 关闭本群。上级停用后下级锁定，不能再开启。
+
+定时日报与发布推送不是消息，插件按 `pushTargets` 里每个目标（`adapter` 别名 + `endpointKey` + 会话）检查开关，已停用的目标跳过，其余目标照常发送。
+
 ## 权重训练（模拟盘）
 
 `lottery-train` 对库内**全部历史**做 walk-forward 训练（无需下注）：

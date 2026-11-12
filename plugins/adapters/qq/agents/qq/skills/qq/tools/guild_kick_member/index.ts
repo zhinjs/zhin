@@ -1,6 +1,5 @@
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { platformPermission } from '@zhin.js/permission';
 import { currentGuildChannel } from '../../../../conversation.js';
 import { messages as t } from '../../../../messages.js';
 
@@ -9,7 +8,7 @@ export default defineAgentTool({
   adapter: 'qq',
   scopes: ['channel'],
   tags: ['qq'],
-  permissions: [platformPermission('qq', 'guild_admin')],
+  permissions: ['platform:admin', 'bot:admin'],
   requiresApproval: 'human',
   risk: 'dangerous',
   riskCategory: 'member',

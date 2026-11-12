@@ -8,7 +8,7 @@ import { createBilibiliConsoleRpc } from './src/console.js';
 /**
  * Plugin Runtime:
  * - Adapter: `adapters/bilibili` 轮询白名单视频评论（可选「回复我的 / @我的」），出站只进草稿队列（落盘，重启不丢）。
- * - Commands: `bili-draft list|show|edit|send|drop`、`bili-login start|status`（仅 master）。
+ * - Commands: `bili-draft list|show|edit|send|drop`、`bili-login start|status`（仅聊天角色 owner）。
  * - Page: `pages/index` →「评论审批」：扫码登录、白名单视频、待审草稿的发送 / 改写 / 丢弃。
  */
 export default definePlugin({

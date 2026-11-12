@@ -71,7 +71,7 @@ In `zhin.config.yml` (`configVersion: 2`), mounted child plugins are declared un
 
 ### Console
 
-The browser admin UI, always at [console.zhin.dev](https://console.zhin.dev) — **you do not deploy it**. On startup the bot prints an API address (new projects default to `http://127.0.0.1:8068`). Enter that address and the `HTTP_TOKEN` from `.env` in Console to send test messages, read logs, edit config and manage plugins. More: [Console](../console/index.md)
+The browser admin UI, always at [console.zhin.dev](https://console.zhin.dev) — **you do not deploy it**. On startup the bot prints an API address (new projects default to `http://127.0.0.1:8068`). Enter that address in Console, create the owner account with the `HTTP_TOKEN` from `.env` the first time, then sign in with that account to send test messages, read logs, edit config and manage plugins. More: [Console](../console/index.md)
 
 ## Once you start writing plugins
 
@@ -95,7 +95,7 @@ Here `ping-pong` is the `instanceKey` — it decides which top-level section of 
 
 ### Host
 
-The HTTP server the bot process exposes. Console, webhook-style platform callbacks and MCP all reach the bot through it. The CLI assembles it during `zhin runtime start`; the port is `http.port` in `zhin.config.yml`. More: [Deployment and recovery](../operations/production.md)
+The HTTP server the bot process exposes. Console, webhook-style platform callbacks and MCP all reach the bot through it. It is served by the management gateway `zhin start` launches (still up while the instance crashes); the port is `http.port` in `zhin.config.yml`. More: [Deployment and recovery](../operations/production.md)
 
 ### Message flow and outbound sending
 

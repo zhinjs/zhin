@@ -1,3 +1,4 @@
+import { isBuiltinPermit } from '@zhin.js/permission';
 import {
   isAction,
   type Action,
@@ -22,10 +23,9 @@ export const DEFAULT_MODERATION_CONFIG: ModerationConfig = Object.freeze({
   enabled: true,
   onError: 'open',
   maskChar: '*',
-  masters: Object.freeze([] as string[]),
   inbound: Object.freeze({
     enabled: true,
-    bypassMasters: true,
+    bypass: Object.freeze(['owner', 'platform:admin']),
     whitelist: Object.freeze({
       userIds: Object.freeze([] as string[]),
       conversationIds: Object.freeze([] as string[]),
@@ -38,6 +38,12 @@ export const DEFAULT_MODERATION_CONFIG: ModerationConfig = Object.freeze({
   actions: DEFAULT_ACTIONS,
   sources: Object.freeze([] as SourceConfig[]),
 });
+
+/** Built-in permit expressions only; removed / unknown spellings are dropped (logged by the schema on load). */
+function parseBypass(value: unknown): ModerationConfig['inbound']['bypass'] {
+  if (!Array.isArray(value)) return DEFAULT_MODERATION_CONFIG.inbound.bypass;
+  return Object.freeze([...new Set(value.filter((item): item is string => typeof item === 'string' && isBuiltinPermit(item.trim())).map(item => item.trim()))]);
+}
 
 export function resolveModerationConfig(raw: unknown): ModerationConfig {
   const input = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
@@ -66,10 +72,9 @@ export function resolveModerationConfig(raw: unknown): ModerationConfig {
     onError,
     maskChar,
     ...(replyTemplate === undefined ? {} : { replyTemplate }),
-    masters: freezeStrings(input.masters),
     inbound: Object.freeze({
       enabled: inboundRaw.enabled !== false,
-      bypassMasters: inboundRaw.bypassMasters !== false,
+      bypass: parseBypass(inboundRaw.bypass),
       whitelist: Object.freeze({
         userIds: freezeStrings(whitelistRaw.userIds),
         conversationIds: freezeStrings(whitelistRaw.conversationIds),

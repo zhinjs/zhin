@@ -736,7 +736,7 @@ describe('FullAgentTurnEngine', () => {
       execution: {
         kind: 'schedule',
         executionPlan: { prompt: 'publish weather', tools: ['weather'], skills: ['report'] },
-        createdBy: { userId: 'owner', roles: ['master'] },
+        createdBy: { userId: 'owner', roles: ['owner'] },
         security: { execPreset: 'readonly', allowedDomains: ['weather.example'] },
       },
       capabilities: { tools: ['weather'], skills: ['report'] },

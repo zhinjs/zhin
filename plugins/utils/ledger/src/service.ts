@@ -36,6 +36,12 @@ export type LedgerConsoleSnapshot = {
 export interface LedgerServiceOptions {
   /** Wall clock; tests pass a fake. */
   readonly now?: () => number;
+  /**
+   * Layered feature view (ADR 0050 / 0055). Daily reports are not messages, so the service asks
+   * whether ledger is on for each subscriber's private conversation and reads `reportWhenEmpty` there.
+   */
+  readonly isEnabledFor?: (target: DeliveryTarget) => boolean;
+  readonly reportWhenEmptyFor?: (target: DeliveryTarget) => boolean;
 }
 
 /**
@@ -50,6 +56,8 @@ export class LedgerService {
   readonly #outbound: OutboundHost | undefined;
   readonly #config: ResolvedLedgerConfig;
   readonly #now: () => number;
+  readonly #enabledFor: (target: DeliveryTarget) => boolean;
+  readonly #reportWhenEmptyFor: (target: DeliveryTarget) => boolean;
   /** Serialises writes per user so two quick `记` commands never share an `#id`. */
   readonly #userQueues = new Map<string, Promise<unknown>>();
   /** Private targets already saved this process, to skip redundant writes. */
@@ -60,6 +68,8 @@ export class LedgerService {
     this.#outbound = outbound;
     this.#config = config;
     this.#now = options.now ?? (() => Date.now());
+    this.#enabledFor = options.isEnabledFor ?? (() => true);
+    this.#reportWhenEmptyFor = options.reportWhenEmptyFor ?? (() => config.reportWhenEmpty);
   }
 
   #withUserLock<T>(ownerKey: string, operation: () => Promise<T>): Promise<T> {
@@ -168,7 +178,11 @@ export class LedgerService {
     const sendTarget = this.#outbound?.sendTarget;
     if (!sendTarget) return false;
     try {
-      await sendTarget.call(this.#outbound, await this.#privateTargetOf(caller), content, { locale: resolveLocale(caller.locale) });
+      const target = await this.#privateTargetOf(caller);
+      // ADR 0050 / 0055: a push to the caller's private chat is not a message there, so the
+      // dispatch gate never sees it; a switched-off private conversation gets the masked reply.
+      if (!this.#enabledFor(target)) return false;
+      await sendTarget.call(this.#outbound, target, content, { locale: resolveLocale(caller.locale) });
       return true;
     } catch (error) {
       logger.debug(`private delivery unavailable: ${error instanceof Error ? error.message : String(error)}`);
@@ -219,8 +233,9 @@ export class LedgerService {
       if (subscriber.lastReportDate === today) continue;
       await this.#store.markReported(subscriber.ownerKey, today);
       if (!subscriber.reportTarget || !this.#outbound?.sendTarget) continue;
+      if (!this.#enabledFor(subscriber.reportTarget)) continue;
       const entries = await this.#entriesIn(subscriber.ownerKey, 'today');
-      if (entries.length === 0 && !this.#config.reportWhenEmpty) continue;
+      if (entries.length === 0 && !this.#reportWhenEmptyFor(subscriber.reportTarget)) continue;
       const summary = formatPeriodSummary(summarize(entries, 'today', nowMs, timezone, subscriber.reportLocale), subscriber.reportLocale);
       try {
         await this.#outbound.sendTarget(subscriber.reportTarget, t(subscriber.reportLocale, 'report', { text: summary.full }), { locale: resolveLocale(subscriber.reportLocale) });

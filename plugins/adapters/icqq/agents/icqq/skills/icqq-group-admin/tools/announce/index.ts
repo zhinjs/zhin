@@ -1,10 +1,10 @@
 import { messages as t } from "../../../../messages.js";
+import { currentGroup } from "../../../../conversation.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-export default defineAgentTool<{ group_id: number; content: string }>({
-  description: '发送 QQ 群公告（需要管理员权限）',
+export default defineAgentTool<{ content: string }>({
+  description: '在当前 QQ 群发送群公告（需要管理员权限）',
   inputSchema: z.object({
-    group_id: z.number().describe('目标群号'),
     content: z.string().describe('公告内容'),
   }),
   adapter: 'icqq',
@@ -12,9 +12,10 @@ export default defineAgentTool<{ group_id: number; content: string }>({
   requiresCapabilities: ['actions.announce'],
   requiresApproval: 'once',
   scopes:['group'],
-  permissions: ['role(master,admin,trusted,owner)'],
-  async execute({ group_id, content }, context) {
-    await context.$client.sendGroupNotice(group_id, content);
+  // Platform permits are judged in the current conversation, so the target is the current group only.
+  permissions: ['platform:admin', 'bot:admin'],
+  async execute({ content }, context) {
+    await context.$client.sendGroupNotice(currentGroup(context), content);
     return { success: true, message: t(context.locale, 'announcementSent') };
   },
 });

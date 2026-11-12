@@ -179,6 +179,27 @@ describe('NodeIsolatedPluginRuntime', () => {
     await prepared.dispose();
   });
 
+  it('gives prepare its own start budget, apart from the per-call timeout', async () => {
+    const root = await temporaryDirectory();
+    const entry = join(root, 'slow-start.mjs');
+    // Starting the isolate (Worker boot + import) takes longer than one RPC may.
+    await writeFile(entry, `
+await new Promise(resolve => setTimeout(resolve, 600));
+export default { name: 'slow-start' };
+`);
+    const owner = childPluginId(rootPluginId(), 'slow-start');
+    const request = {
+      owner, parent: rootPluginId(), packageName: '@test/slow-start', entry, config: {},
+      environment: { name: 'test', mode: 'test', platform: 'node' } as const,
+    };
+    const tight = new NodeIsolatedPluginRuntime({ requestTimeoutMs: 250, startTimeoutMs: 250 });
+    await expect(tight.prepare(request, new AbortController().signal)).rejects.toThrow('timed out after 250ms: prepare');
+    const runtime = new NodeIsolatedPluginRuntime({ requestTimeoutMs: 250 });
+    const prepared = await runtime.prepare(request, new AbortController().signal);
+    expect(prepared.descriptor.name).toBe('slow-start');
+    await prepared.dispose?.();
+  });
+
   it('rejects Host resources and retires an instance after an RPC timeout', async () => {
     const root = await temporaryDirectory();
     const hostBound = join(root, 'host-bound.mjs');

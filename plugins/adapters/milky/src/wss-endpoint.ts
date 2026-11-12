@@ -11,10 +11,9 @@ import {
   type EndpointManagement,
   type EndpointSendRequest,
 } from 'zhin.js/adapter';
-import type { HttpHost, WsConnection } from '@zhin.js/host-http';
+import { verifyProtocolAccessToken, type HttpHost, type WsConnection } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
-import { verifyMilkyAccessToken } from './milky-auth.js';
 import { createMilkyEndpointManagement } from './endpoint-management.js';
 import { createMilkyActionCaller, readMilkyResponse, type MilkyActionCaller, milkyClientOptions, forwardMilkyClientEvents, MilkyClient } from './client.js';
 import {
@@ -28,6 +27,7 @@ import {
   formatOutboundSegments,
   isMentioned,
   milkyInboundConversation,
+  milkySenderStanding,
   parseMessageReceiveData,
   parseMilkyMessageId,
   senderNickname,
@@ -35,7 +35,7 @@ import {
   type MilkyIncomingMessage,
   type MilkyWssConfig,
 } from './protocol.js';
-import type { MilkyWsSocket } from './ws-types.js';
+import { socketOfConnection, type MilkyWsSocket } from './ws-types.js';
 
 const WS_OPEN = 1;
 
@@ -99,7 +99,17 @@ export class MilkyWssEndpoint extends MilkyClient implements Endpoint {
   async #start(): Promise<void> {
     if (this.#started) return;
     this.#started = true;
-    const handle = this.#options.http.ws(this.#options.config.path);
+    if (!this.#options.config.access_token) {
+      // 未配 access_token 时只接受本机回环连接（verifyProtocolAccessToken）。
+      this.#logger.warn(formatCompact({
+        endpoint: this.#options.config.id,
+        mode: 'wss',
+        ok: false,
+        error: 'missing access_token: only loopback peers are accepted',
+      }));
+    }
+    // The peer authenticates with this endpoint's own access_token, not a Console credential.
+    const handle = this.#options.http.ws(this.#options.config.path, { auth: 'protocol' });
     this.#wsRelease = handle.onConnection((connection) => {
       this.#connectionTask = this.#connectionTask
         .then(() => this.#acceptConnection(connection))
@@ -177,6 +187,7 @@ export class MilkyWssEndpoint extends MilkyClient implements Endpoint {
     const segments = formatInboundSegments(data);
     const audioUrl = extractInboundAudioUrl(data);
     const nickname = senderNickname(data);
+    const platform = milkySenderStanding(data);
     const mentioned = isMentioned(data, event.self_id);
     void this[endpointSpec].events.message({
       event,
@@ -185,7 +196,7 @@ export class MilkyWssEndpoint extends MilkyClient implements Endpoint {
       message: { conversation, id: formatInboundMessageId(data) },
       content,
       segments,
-      sender: { id: String(data.sender_id) },
+      sender: { id: String(data.sender_id), ...(platform ? { platform } : {}) },
       endpointId: this.#options.config.id,
       ...(mentioned ? { mentioned: true } : {}),
       metadata: Object.freeze({
@@ -207,11 +218,11 @@ export class MilkyWssEndpoint extends MilkyClient implements Endpoint {
   }
 
   async #acceptConnection(connection: WsConnection): Promise<void> {
-    if (!verifyMilkyAccessToken(this.#options.config.access_token, connection.request)) {
-      connection.socket.close(4003, 'Unauthorized');
+    if (!verifyProtocolAccessToken(this.#options.config.access_token, connection)) {
+      connection.close(4003, 'Unauthorized');
       return;
     }
-    const socket = connection.socket as unknown as MilkyWsSocket;
+    const socket = socketOfConnection(connection);
     await this.#connectionLifecycle.stop();
     await this.#connectionLifecycle.start(async (lifecycleHandle) => {
       this.#ws = socket;
@@ -229,13 +240,7 @@ export class MilkyWssEndpoint extends MilkyClient implements Endpoint {
         }
         if (this.#ws === socket) this.#ws = undefined;
       });
-      this.#connectionLifecycle.startHeartbeat(() => {
-        try {
-          if (socket.readyState === WS_OPEN) socket.ping?.();
-        } catch {
-          /* ignore */
-        }
-      }, this.#options.config.heartbeat_interval);
+      // Dead-peer detection is the Host transport's keepalive (protocol ping / pong).
       socket.on('message', () => {
         this.#connectionLifecycle.notifyHeartbeatAck();
       });
@@ -251,7 +256,7 @@ export class MilkyWssEndpoint extends MilkyClient implements Endpoint {
     this.#logger.debug(formatCompact({
       endpoint: this.#options.config.id,
       mode: 'wss',
-      peer: connection.request.socket.remoteAddress,
+      peer: connection.remoteAddress,
     }));
   }
 

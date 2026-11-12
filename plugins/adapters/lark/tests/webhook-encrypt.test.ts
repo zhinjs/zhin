@@ -1,6 +1,5 @@
 import { createCipheriv, createHash, randomBytes } from 'node:crypto';
-import type { IncomingMessage, ServerResponse } from 'node:http';
-import { Readable } from 'node:stream';
+import { webhookRequest } from '../../test-utils/http.js';
 import { describe, expect, it, vi } from 'vitest';
 import { decryptLarkEvent, resolveLarkConfig } from '../src/protocol.js';
 import { handleLarkWebhookRequest } from '../src/webhook.js';
@@ -39,14 +38,9 @@ async function post(
     'x-lark-request-nonce': nonce,
     'x-lark-signature': options.signature ?? sign(body, timestamp, nonce),
   };
-  const request = Object.assign(Readable.from([body]), { headers });
-  let status = 0;
-  let text = '';
-  const response = {
-    writeHead: vi.fn((code: number) => { status = code; }),
-    end: vi.fn((chunk?: string) => { text = chunk ?? ''; }),
-  };
-  await handleLarkWebhookRequest(request as unknown as IncomingMessage, response as unknown as ServerResponse, handler);
+  const response = await handleLarkWebhookRequest(webhookRequest(body, headers), handler);
+  const status = response.status;
+  const text = await response.text();
   let parsed: unknown = text;
   try { parsed = JSON.parse(text); } catch { /* plain text response */ }
   return { status, body: parsed };

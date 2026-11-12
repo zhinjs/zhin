@@ -1,22 +1,22 @@
 import { messages as t } from "../../../../messages.js";
+import { currentGroup } from "../../../../conversation.js";
 import { freshMember } from "../../../../members.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-export default defineAgentTool<{ group_id: number; user_id: number; enabled: boolean; reason: string }>({
-  description: '设置或取消 QQ 群管理员（enabled=true 设为管理员，false 取消管理员）；仅你是该群群主时可用，每次人工审批',
+export default defineAgentTool<{ user_id: number; enabled: boolean; reason: string }>({
+  description: '设置或取消当前 QQ 群管理员（enabled=true 设为管理员，false 取消管理员）；仅你是本群群主时可用，每次人工审批',
   inputSchema: z.object({
-    group_id: z.number().describe('目标群号'),
     user_id: z.number().describe('目标成员 QQ号'),
     enabled: z.boolean().describe('true 设为管理员（目标须为普通成员）；false 取消管理员（目标须为现任管理员）'),
-    reason: z.string().min(1).describe('本次设置或取消管理员的具体原因，随目标群和成员一起供人工确认'),
+    reason: z.string().min(1).describe('本次设置或取消管理员的具体原因，随目标成员一起供人工确认'),
   }),
   adapter: 'icqq',
   scopes: ['group'],
   requiresCapabilities: ['actions.setAdmin'],
-  currentConversationBotRoles: ['owner'],
-  permissions: ['role(master,admin,trusted,owner)'],
+  permissions: ['platform:owner', 'bot:owner'],
   requiresApproval: 'human',
-  async execute({ group_id, user_id, enabled }, context) {
+  async execute({ user_id, enabled }, context) {
+    const group_id = currentGroup(context);
     const client = context.$client;
     if (user_id === client.uin) return { success: false, message: t(context.locale, 'adminForbidden') };
     const [self, member] = await Promise.all([freshMember(client, group_id, client.uin), freshMember(client, group_id, user_id)]);

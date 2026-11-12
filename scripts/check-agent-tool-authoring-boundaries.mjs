@@ -206,7 +206,8 @@ const retiredToolNames = [
 for (const file of files) {
   const fileName = relative(file);
   if (!fileName.endsWith('.ts')) continue;
-  if (!fileName.startsWith('packages/im/agent/src/') && !fileName.startsWith('basic/cli/src/')) continue;
+  if (!fileName.startsWith('packages/im/agent/src/') && !fileName.startsWith('basic/cli/src/')
+    && !fileName.startsWith('packages/im/zhin/src/instance/') && !fileName.startsWith('packages/host/gateway/src/')) continue;
   const content = fs.readFileSync(file, 'utf8');
   for (const name of retiredToolNames) {
     const match = new RegExp(`\\b${name}\\b`, 'u').exec(content);

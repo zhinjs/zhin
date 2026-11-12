@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runStartCommand } from '@zhin.js/cli';
+import { runStartCommand } from 'zhin.js/instance';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   commandFeatureId,
@@ -92,6 +92,8 @@ describe('single-file-bot runtime contract', () => {
       await runStartCommand({
         root: botRoot,
         args: ['--once', '--no-watch', '--mode=test'],
+        // In-process Node HTTP server: no gateway in this test (ADR 0054 §3).
+        standaloneHttp: true,
         writeOutput: (value) => output.push(value),
         writeError: (value) => errors.push(value),
       });

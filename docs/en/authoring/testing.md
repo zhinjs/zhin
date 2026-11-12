@@ -90,7 +90,7 @@ import { createFakeMessage, createFakePlugin, fakeResource, runCommand, runMiddl
 import checkin from '../commands/checkin/index.js';
 
 const fake = createFakePlugin({ resources: [fakeResource(greeterToken, greeter)] });
-const message = createFakeMessage({ sender: { id: 'u1', name: 'Ann', roles: ['admin'] } });
+const message = createFakeMessage({ sender: { id: 'u1', name: 'Ann', platform: { standing: 'admin' } } });
 
 await runCommand(fake, checkin, { input: message, params: { days: 3 } });
 expect(message.replies).toEqual(['checked in']);        // $reply calls are recorded

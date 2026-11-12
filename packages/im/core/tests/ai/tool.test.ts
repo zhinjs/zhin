@@ -6,14 +6,13 @@
  * 2. Tool 的 IM 上下文准入
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { canAccessTool, roleSatisfies, type Tool } from '@zhin.js/core';
-import { PermissionHost, createSceneRolePlatformChecker } from '@zhin.js/permission';
+import { canAccessTool, chatRoleIncludes, type Tool } from '@zhin.js/core';
+import { PermissionHost } from '@zhin.js/permission';
 
 let host: PermissionHost;
 
 beforeEach(() => {
   host = new PermissionHost();
-  host.registerPlatform('qq', createSceneRolePlatformChecker());
 });
 
 afterEach(() => {
@@ -22,40 +21,38 @@ afterEach(() => {
 
 function mockCommMessage(overrides: Record<string, any> = {}) {
   const scope = overrides.scope ?? 'private';
-  const roles = overrides.sender_roles as string[] | undefined
-    ?? (overrides.isMaster ? ['master'] : overrides.isTrusted ? ['trusted'] : ['user']);
+  const chatRole = overrides.isMaster ? 'owner' : overrides.isTrusted ? 'trusted' : undefined;
   const adapter = overrides.adapter ?? 'qq';
   const endpoint = overrides.endpoint ?? 'bot1';
   return {
     clientAdapter: adapter,
     endpointId: endpoint,
     conversation: { endpoint: { adapter, id: endpoint }, kind: scope, id: overrides.sceneId ?? 'scene1' },
-    sender: { id: overrides.senderId ?? 'user1', roles, ...(overrides.sender ?? {}) },
-    metadata: overrides.role ? { senderRole: overrides.role } : {},
+    sender: { id: overrides.senderId ?? 'user1', ...(chatRole ? { chatRole } : {}), ...(overrides.sender ?? {}) },
+    metadata: {},
   };
 }
 
-function mockMessage(role: 'user' | 'scene_admin' | 'scene_owner' | 'master' = 'user') {
-  const adapter = role === 'master' ? 'process' : 'qq';
-  const senderRoles = role === 'master' ? ['master'] : ['user'];
-  const senderRole = role === 'scene_admin' ? 'admin' : role === 'scene_owner' ? 'owner' : undefined;
+function mockMessage(role: 'user' | 'platform_admin' | 'platform_owner' | 'owner' = 'user') {
+  const adapter = role === 'owner' ? 'process' : 'qq';
+  const standing = role === 'platform_admin' ? 'admin' : role === 'platform_owner' ? 'owner' : undefined;
   return {
     clientAdapter: adapter,
     endpointId: 'b1',
     conversation: { endpoint: { adapter, id: 'b1' }, kind: 'group', id: 'g1' },
-    sender: { id: 'u1', roles: senderRoles },
-    metadata: senderRole ? { senderRole } : {},
+    sender: { id: 'u1', ...(role === 'owner' ? { chatRole: 'owner' } : {}), ...(standing ? { platform: { standing } } : {}) },
+    metadata: {},
   } as any;
 }
 
 
-describe('roleSatisfies', () => {
-  it('master 可满足 trusted 要求', () => {
-    expect(roleSatisfies(['master'], ['trusted'])).toBe(true);
+describe('chatRoleIncludes', () => {
+  it('owner 可满足 trusted 要求', () => {
+    expect(chatRoleIncludes('owner', 'trusted')).toBe(true);
   });
 
-  it('user 无法满足 trusted 要求', () => {
-    expect(roleSatisfies(['user'], ['trusted'])).toBe(false);
+  it('无角色无法满足 trusted 要求', () => {
+    expect(chatRoleIncludes(undefined, 'trusted')).toBe(false);
   });
 });
 
@@ -87,11 +84,11 @@ describe('canAccessTool 函数', () => {
     expect(await canAccessTool(tool, mockCommMessage({ scope: 'private' }))).toBe(false);
   });
 
-  it('应该正确检查 platform(...) permit', async () => {
-    const tool: Tool = { ...baseTool, permissions: ['platform(qq,scene_admin)'] };
-    const adminMsg = mockMessage('scene_admin');
-    const ownerMsg = mockMessage('scene_owner');
-    const masterMsg = mockMessage('master');
+  it('应该正确检查 platform:admin permit（平台归一地位，不是聊天角色）', async () => {
+    const tool: Tool = { ...baseTool, permissions: ['platform:admin'] };
+    const adminMsg = mockMessage('platform_admin');
+    const ownerMsg = mockMessage('platform_owner');
+    const masterMsg = mockMessage('owner');
 
     expect(await canAccessTool(tool, adminMsg, host)).toBe(true);
     expect(await canAccessTool(tool, ownerMsg, host)).toBe(true);
@@ -104,9 +101,9 @@ describe('canAccessTool 函数', () => {
       ...baseTool,
       platforms: ['qq'],
       scopes: ['group'],
-      permissions: ['platform(qq,scene_admin)'],
+      permissions: ['platform:admin'],
     };
-    const okMsg = mockMessage('scene_admin');
+    const okMsg = mockMessage('platform_admin');
 
     expect(await canAccessTool(tool, { ...okMsg, clientAdapter: 'qq', conversation: { ...okMsg.conversation, kind: 'group' } }, host)).toBe(true);
 

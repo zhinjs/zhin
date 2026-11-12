@@ -2,7 +2,7 @@ import { createEndpointHarness, createTestEventGateway } from '../../test-utils/
 import { createHash } from 'node:crypto';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
-import { createHttpHost } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import type { OutboundMessageService } from '@zhin.js/core/runtime';
 import type { ConversationRef } from '@zhin.js/im-contract';
 import { WeChatMpEndpoint } from '../src/endpoint.js';

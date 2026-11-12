@@ -1,7 +1,7 @@
 import { createMessages } from '@zhin.js/plugin-runtime';
 
 export const managementMessages = createMessages({
-  denied: { 'zh-CN': '⚠️ 仅 master / trusted 可使用此管理指令。', en: '⚠️ Only master / trusted users can use this management command.' },
+  denied: { 'zh-CN': '⚠️ 仅聊天角色 owner / admin / trusted 可使用此管理指令。', en: '⚠️ Only chat roles owner / admin / trusted can use this management command.' },
   models: { 'zh-CN': '🤖 可用模型:', en: '🤖 Available models:' },
   more: { 'zh-CN': '  ... 还有 {count} 个', en: '  ... {count} more' },
   usage: { 'zh-CN': 'ℹ️ 用法：{command}', en: 'ℹ️ Usage: {command}' },

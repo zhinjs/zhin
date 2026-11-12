@@ -17,7 +17,7 @@ description: "zhin.config.yml 的结构与每个顶层键：HTTP、数据库、A
 | 接入数据库 | [database](#database) |
 | 给插件或适配器填配置、填平台凭据 | [plugin 与 plugins](#plugin-与-plugins) |
 | 一个适配器登录多个账号 | [endpoints 数组](#endpoints-数组-一个实例挂多个账号) |
-| 设置 master、命令前缀 | [适配器实例](#适配器实例-master-trusted-commandprefix) |
+| 设置命令前缀 | [适配器实例](#适配器实例-commandprefix) |
 | 配置 AI 模型 | [ai](#ai)，或直接看 [AI 总览](../ai/index.md) |
 | 引用 `.env` 里的密钥 | [环境变量展开](#环境变量展开) |
 | 修改配置后按需生效 | [修改后如何生效](#修改后如何生效) |
@@ -25,7 +25,7 @@ description: "zhin.config.yml 的结构与每个顶层键：HTTP、数据库、A
 
 ## 配置文件的位置
 
-启动时 `zhin runtime start` 会在项目根目录找配置文件，按下面的顺序找到第一个就停；同时存在多个则直接报错，不会帮你猜：
+启动时（`zhin start`）实例会在项目根目录找配置文件，按下面的顺序找到第一个就停；同时存在多个则直接报错，不会帮你猜：
 
 1. `config.yml`
 2. `config.yaml`
@@ -67,17 +67,17 @@ flowchart LR
 
 配置文件会经过 JSON Schema 校验，**顶层只允许下文列出的键**。键名写错会在启动时报 `Invalid Plugin config in zhin.config.yml`。
 
-Host 键由 CLI 装配层消费；每个插件只收到顶层同名块的业务值，不会收到其他实例的配置。
+Host 键由实例装配层（`zhin.js/instance`）与管理网关消费；每个插件只收到顶层同名块的业务值，不会收到其他实例的配置。
 
 ## 修改后如何生效
 
-`zhin runtime start` **只有显式传入 `--watch` 才监听变化**。不传时，编辑文件不会自动应用；已有开发脚本若需要热更新，应显式选择范围：
+`zhin start` **只有显式传入 `--watch` 才监听变化**。不传时，编辑文件不会自动应用；已有开发脚本若需要热更新，应显式选择范围：
 
 ```bash
-npx zhin runtime start --watch source config  # 源码与配置
-npx zhin runtime start --watch config         # 仅配置
-npx zhin runtime start --watch source         # 仅源码
-npx zhin runtime start --mode production      # 均不监听
+npx zhin start --foreground --watch source config  # 源码与配置
+npx zhin start --foreground --watch config         # 仅配置
+npx zhin start --foreground --watch source         # 仅源码
+npx zhin start --foreground --mode production      # 均不监听
 ```
 
 `--no-watch` 保留为均不监听的兼容入口，不能与 `--watch` 同用。源码监听不代替配置监听；源码重载也不会顺带应用尚待重启的配置。
@@ -106,7 +106,7 @@ Agent 安装、角色权限和其他未声明可替换的启动依赖保留待�
 
 提示会自动带上当前账号的实际命令前缀和 namespace，无需 AI Agent。
 
-**谁能用**：只有接收这条私聊的同一适配器（同一平台实例）下，任一已配置账号（端点）的 `master`（账号级 `master`，未设置时继承插件级 `master`）才能使用；这样主人身份与消息始终来自同一适配器/平台。其他适配器（包括同一适配器包的另一个插件实例）的主人不能使用。`ai.trigger.masters` 不带平台信息，首版不作为聊天配置的授权依据。群聊、频道和伪造的 metadata 都不能进入保存流程。
+**谁能用**：只有在接收这条私聊的同一适配器（同一平台实例）上拥有聊天角色 `owner` 的人——全局、适配器层或该适配器任一账号上的 `owner`（[聊天角色](../concepts/chat-roles.md)）；身份按适配器登记，其他适配器（包括同一适配器包的另一个插件实例）的主人不能使用。群聊、频道和伪造的 metadata 都不能进入保存流程。
 
 **入口按适配器，字段范围按项目**：授权（入口）只看接收消息的同一适配器实例上的主人；一旦通过，可管理的字段范围是**整个项目**中所有聊天安全的叶子字段加上 Host 白名单 `HOST_CONFIG_PATCH_PATHS`，并不局限于授权适配器所属的插件——即任一合法主人可管理全局的聊天安全字段（包括其他插件的字段）。若不希望某个主人改动其他插件，请勿在聊天中授予其主人身份，或改用 CLI/Console 管理。
 
@@ -114,7 +114,7 @@ Agent 安装、角色权限和其他未声明可替换的启动依赖保留待�
 
 - Host 段只开放与 Console 普通页面相同的白名单（`HOST_CONFIG_PATCH_PATHS`，目前只有 `ai.trigger.ambient` 下的字段）；`locale`、`http`、`database` 等其余 Host 配置请用 CLI 或 Console。
 - 插件段需要 Schema 能证明安全：密钥、token、密码等敏感字段、缺少 Schema 或无法判断范围的字段一律拒绝。
-- 主人、信任名单、审批与工具门槛等权限字段（如 `master`、`trusted`、`endpoints[*].master`、`ai.trigger.masters`、`toolHardGate.*`）不能通过聊天读写。按包含/前后缀匹配，复合名同样拒绝，例如 `adminIds`、`ownerId`、`masterId`、`trustedUsers`、`superUsers`、`whitelist`/`allowlist`/`blacklist`、`bypassMasters`（如 content-moderation 的 `inbound.whitelist.userIds`、`inbound.bypassMasters`）；该规则偏保守，名称中含这些词的普通字段（如 `masterVolume`）也请用 CLI 修改。
+- 主人、信任名单、审批与工具门槛等权限字段（如 `master`、`trusted`、`roles`、`endpoints[*].roles`、`toolHardGate.*`；人员名单本身已移入数据库，见[升级到聊天角色](../migrations/chat-roles.md)）不能通过聊天读写。按包含/前后缀匹配，复合名同样拒绝，例如 `adminIds`、`ownerId`、`masterId`、`trustedUsers`、`superUsers`、`whitelist`/`allowlist`/`blacklist`、`bypass`（如 content-moderation 的 `inbound.whitelist.userIds`、`inbound.bypass`）；该规则偏保守，名称中含这些词的普通字段（如 `masterVolume`）也请用 CLI 修改。
 - `endpoints[*].id` / `endpoints[*].name` 用于绑定账号级主人与信任名单，属于间接的权限变更，不能通过聊天修改；`set`/`unset` 只能作用于 `config fields <根>` 列出的字段。
 - `set` 的新值不能包含 `${…}` 或 `env://` 环境变量引用（无论变量名是否像密钥），以免之后读取或回显时泄露环境值；已有引用不受其他操作影响。
 - 只能读写**单个叶子字段**（标量或标量数组），不能整体覆盖或删除对象；必填字段不能 `unset`。`configVersion`、`plugins`、`disable_plugins`、根 `plugin` 和未声明实例同样不能修改。
@@ -167,7 +167,7 @@ dotenv 按 `.env` → `.env.<环境>` 加载。环境名由 `--environment` 指�
 http:
   port: 8086                 # Runtime 无配置时的回退值
   host: 127.0.0.1            # 默认 127.0.0.1
-  token: ${HTTP_TOKEN}       # API Bearer 令牌
+  token: ${HTTP_TOKEN}       # 初始化令牌：只用于创建第一个 Console 所有者，之后失效
   corsOrigins:               # 允许的跨域来源
     - "https://console.zhin.dev"
   base: /api                 # API 挂载路径
@@ -188,7 +188,7 @@ npx zhin config check
 
 `setup` 会把非敏感结构写入 `zhin.config.yml`，把实际连接值写入项目根目录 `.env`。Runtime
 先读取 `.env`，再用所选环境的 `.env.<environment>` 覆盖同名变量；例如生产启动使用
-`zhin runtime start --mode production` 默认读取 `.env.production`；显式传入
+`zhin start --mode production` 默认读取 `.env.production`；显式传入
 `--environment <name>` 可选择其他环境覆盖层。
 
 ### SQLite
@@ -292,15 +292,23 @@ assistant:
 mcp:
   enabled: true
   path: /mcp
-  token: ${HTTP_TOKEN}                  # 未设时回退 http.token
+  token: ${MCP_TOKEN}                   # MCP 协议令牌；不回退 http.token
   allowUnauthenticatedLocalhost: false  # 生产建议 false
 
 a2a:
   enabled: true
   path: /a2a
+  token: ${A2A_TOKEN}                   # A2A 协议令牌；不回退 http.token
 ```
 
 两段都挂在 HTTP Host 上，按需启用；未配置时对应 SDK 不会被加载。
+
+**鉴权**：Bearer 只接受两种凭据——
+
+- 协议令牌 `mcp.token` / `a2a.token`；
+- Console API 令牌：给账号（或其角色）授予**全局**权限 `mcp.access` / `a2a.access` 后签发，见[访问控制 · API 令牌](../console/access-control.md#api-tokens)。令牌的权限不超过签发账号，账号禁用或令牌吊销后立即失效。
+
+`http.token` 是初始化令牌，只在创建首个所有者之前有效（那时它也能通过 MCP / A2A），之后处处拒绝，不能当作协议凭据。非生产环境下：A2A 未配置 `a2a.token` 时只放行本机回环请求；MCP 默认放行本机请求，设 `allowUnauthenticatedLocalhost: false` 关闭。生产环境一律要求 Bearer。
 
 跨进程的 Agent 协作通过 `a2a.mailbox` 传输（ADR 0048）：Mail 连同 Authority 与预算一起签名传递，远端不能放大权限或超出划拨的预算。
 
@@ -310,7 +318,7 @@ a2a:
   mailbox:
     enabled: true
     path: /a2a/mailbox                  # 入站路由，默认 /a2a/mailbox
-    secret: ${A2A_MAILBOX_SECRET}       # 签名密钥；生产环境必须配置（或回退 a2a.token / http.token）
+    secret: ${A2A_MAILBOX_SECRET}       # 签名密钥；生产环境必须配置
     peers:
       - actor: remote-reviewer          # 本地 Agent 的 contacts 里写这个名字
         url: https://agents.example.com/a2a/mailbox
@@ -438,15 +446,15 @@ sandbox:
 
 `zhin install` 将包引用写入 `plugins.<instanceKey>`，业务参数写入顶层 `<instanceKey>`；不再写入包清单的旧挂载数组。
 
-### 适配器实例：master / trusted / commandPrefix
+### 适配器实例：commandPrefix
 
-平台适配器插件的实例配置支持三个通用键：
+平台适配器插件的实例配置支持通用键：
 
 | 键 | 位置 | 说明 |
 | --- | --- | --- |
-| `master` | 实例顶层 | Endpoint Owner：用于权限判定与显式 `/approve` 管理命令的稳定用户 id |
-| `trusted` | 实例顶层 / endpoints 逐项 | 受信任用户 id 列表；数组或空白/逗号分隔字符串 |
 | `commandPrefix` | 实例顶层 / endpoints 逐项 | 命令前缀，默认 `''`；endpoints 逐项的值覆盖顶层 |
+
+主人（`owner`）与受信任用户（`trusted`）不再写在配置里：用 Console 对象页的「角色」页签或聊天 `角色 授予` 管理；旧的 `master` / `trusted` 首次启动时自动迁入数据库，见[升级到聊天角色](../migrations/chat-roles.md)。平台身份不映射为 zhin 角色，`roles`（映射规则）已删除，出现时启动报错（见[升级到聊天角色](../migrations/chat-roles.md#mappings)）。
 
 ### endpoints 数组：一个实例挂多个账号
 
@@ -457,7 +465,6 @@ configVersion: 2
 plugins:
   icqq: "@zhin.js/adapter-icqq"
 icqq:
-  master: "${ICQQ_MASTER}" # 顶层共享：所有 endpoint 生效
   endpoints:
     # 逐项：id 必填，其余字段与顶层合并（逐项优先）
     - id: "${ICQQ_ACCOUNT_1}"
@@ -516,7 +523,7 @@ plugin:
 plugins: {}
 ```
 
-启动后按 `zhin setup` 向导逐步补齐 database / 适配器 / AI（见 [CLI 参考](../cli/index.md)）；运行方式见 [zhin runtime start 详解](../cli/runtime.md)。
+启动后按 `zhin setup` 向导逐步补齐 database / 适配器 / AI（见 [CLI 参考](../cli/index.md)）；运行方式见 [zhin start 详解](../cli/runtime.md)。
 
 ## 账号自身资料
 
@@ -525,7 +532,6 @@ Agent 优先使用当前 Endpoint 的平台资料。适配器顶层的 `nickname
 
 ```yaml
 icqq:
-  master: "你的 QQ 号"
   nickname: 小知
   profile:
     gender: unknown

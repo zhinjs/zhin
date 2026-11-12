@@ -112,7 +112,7 @@ Access Token 在过期前 5 分钟自动刷新。
 
 新增仅保存，需手动启动；运行账号的普通配置更新只重连该账号。身份变化走明确替换，新账号不会继承旧 Session 或登录状态。账号凭据变化先按平台实际只读接口核验；平台无法核验时需明确替换。空白或遮蔽的密码不会覆盖既有密码。
 
-读取需要 `wecom:read`，写入需要 `wecom:write`；首次迁移还需管理员身份。无持久化存储时管理操作不可用，提交结果未知时先刷新核实，不重复提交。
+读取需要 `wecom:read`（`read` 级别，内置角色 `viewer` 及以上都有），写入需要 `wecom:write`（`operate` 级别，`operator` 及以上都有，绑定到本适配器的角色也算）；首次迁移还需管理员身份，见[插件权限的级别](https://zhin.js.org/console/#插件权限的级别)。无持久化存储时管理操作不可用，提交结果未知时先刷新核实，不重复提交。
 
 ## 故障排查
 
@@ -143,3 +143,7 @@ Access Token 在过期前 5 分钟自动刷新。
 ## 许可证
 
 MIT License
+
+## 成员身份
+
+企业微信回调不带发送者群角色，不上报 `sender.platform`，能力画像也不声明 `scene.platformStanding`。详见 [ADR 0056 §1](https://github.com/zhinjs/zhin/blob/main/docs/adr/0056-chat-roles.md)。

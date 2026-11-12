@@ -15,16 +15,49 @@ import {
   type EndpointGroupRequest,
   type PendingRpcRequest,
 } from 'zhin.js/adapter';
+import { standingFromMemberRole, type PlatformStanding, type SelfStandingRequest } from '@zhin.js/im-contract';
 
 /** 管理面只依赖 endpoint 的 callApi（ws/wss 两种传输各自实现）。 */
 export interface OneBot11ManagementCaller {
   callApi(request: PendingRpcRequest): Promise<unknown>;
 }
 
+/** How long one `get_login_info` answer is reused (bursts only; see inspectSelfStanding). */
+const SELF_ID_TTL_MS = 5_000;
+
 export function createOneBot11EndpointManagement(
   endpoint: OneBot11ManagementCaller,
 ): EndpointManagement {
+  // The login account can change across reconnects (or a different account on the same
+  // connection), so `get_login_info` is not remembered for the endpoint's lifetime: only briefly,
+  // to coalesce bursts, and never across a failed lookup.
+  let login: { readonly id: string; readonly at: number } | undefined;
+  const loginId = async (signal: AbortSignal | undefined): Promise<string | undefined> => {
+    if (login && Date.now() - login.at < SELF_ID_TTL_MS) return login.id;
+    login = undefined;
+    const info = asRecord(await endpoint.callApi({ action: 'get_login_info', signal }));
+    const id = info.user_id;
+    const value = (typeof id === 'number' && id > 0) || (typeof id === 'string' && id.trim() !== '' && id !== '0') ? String(id) : undefined;
+    if (value) login = { id: value, at: Date.now() };
+    return value;
+  };
   return Object.freeze<EndpointManagement>({
+    /** ADR 0056 §1: the Bot's own group role (`get_login_info`, then `get_group_member_info` self). */
+    async inspectSelfStanding({ conversation, signal }: SelfStandingRequest): Promise<PlatformStanding | undefined> {
+      if (conversation.kind !== 'group') return undefined;
+      const selfId = await loginId(signal);
+      if (!selfId) return undefined;
+      let member: Record<string, unknown>;
+      try {
+        member = asRecord(await endpoint.callApi({ action: 'get_group_member_info', signal, params: {
+          group_id: toNumberId(conversation.id, 'group_id'), user_id: toNumberId(selfId, 'user_id'), no_cache: true,
+        } }));
+      } catch (error) {
+        login = undefined;
+        throw error;
+      }
+      return standingFromMemberRole(member.role);
+    },
     async listFriends(request: EndpointManagementRequest = {}): Promise<readonly EndpointFriend[]> {
       const data = await endpoint.callApi({ action: 'get_friend_list', signal: request.signal });
       return toArray(data).map((value) => {

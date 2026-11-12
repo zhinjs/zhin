@@ -54,7 +54,7 @@ describe('@zhin.js/plugin-earthquake definition', () => {
   });
 
   it('publishes a strict schema whose defaults match the runtime defaults', () => {
-    const validate = new Ajv2020({ useDefaults: true, strict: true }).addKeyword({ keyword: 'x-i18n', schemaType: 'object', valid: true }).compile(schema);
+    const validate = new Ajv2020({ useDefaults: true, strict: true }).addKeyword({ keyword: 'x-i18n', schemaType: 'object', valid: true }).addKeyword({ keyword: 'x-zhin-config', schemaType: 'object', valid: true }).compile(schema);
     const filled: Record<string, unknown> = {};
     expect(validate(filled)).toBe(true);
     expect(filled).toEqual({ ...DEFAULT_EARTHQUAKE_CONFIG });
@@ -99,7 +99,7 @@ describe('@zhin.js/plugin-earthquake runtime', () => {
     stubFeeds({ cenc: () => [], usgs: () => quakes });
     const fake = await runPluginSetup(plugin, { config: {} });
     try {
-      const input = createFakeMessage({ locale: 'en', sender: { id: 'u', roles: ['admin'] } });
+      const input = createFakeMessage({ locale: 'en', sender: { id: 'u', chatRole: 'admin' } });
       const options = { input, params: { filters: ['5'] }, formatCommand: (path: string) => `/alerts ${path}` };
       const reply = await runCommand(fake, subscribeCommand, options);
       expect(reply).toContain('Subscribed: M5.0+');
@@ -123,7 +123,7 @@ describe('@zhin.js/plugin-earthquake runtime', () => {
     stubFeeds({ cenc: () => cenc, usgs: () => usgs });
     const fake = await runPluginSetup(plugin, { config: {} });
     try {
-      const message = createFakeMessage({ sender: { id: 'admin-1', name: 'Admin', roles: ['admin'] } });
+      const message = createFakeMessage({ sender: { id: 'admin-1', name: 'Admin', chatRole: 'admin' } });
       const subscribed = await runCommand(fake, subscribeCommand, { input: message, params: { filters: ['5', '中国'] } });
       expect(String(subscribed)).toContain('已订阅：M5.0 以上，地区：中国');
 
@@ -185,21 +185,18 @@ describe('@zhin.js/plugin-earthquake runtime', () => {
 });
 
 describe('@zhin.js/plugin-earthquake subscription permissions', () => {
-  function groupMessage(roles: string[]) {
-    return createFakeMessage({ conversation: { kind: 'group', id: 'g-perm' }, sender: { id: `user-${roles.join('-') || 'member'}`, roles } });
+  function groupMessage(chatRole?: 'owner' | 'admin' | 'trusted') {
+    return createFakeMessage({ conversation: { kind: 'group', id: 'g-perm' }, sender: { id: `user-${chatRole ?? 'member'}`, ...(chatRole ? { chatRole } : {}) } });
   }
 
   it('denies ordinary group members with a clear message and leaves no subscription', async () => {
     stubFeeds({ cenc: () => [], usgs: () => [] });
     const fake = await runPluginSetup(plugin, { config: {} });
     try {
-      const member = groupMessage([]);
+      const member = groupMessage();
       expect(await runCommand(fake, subscribeCommand, { input: member, params: { filters: ['5'] } })).toBe(SUBSCRIPTION_PERMISSION_DENIED_MESSAGE);
       expect(await runCommand(fake, unsubscribeCommand, { input: member })).toBe(SUBSCRIPTION_PERMISSION_DENIED_MESSAGE);
-      // Adapters project ordinary Telegram / Lark members as `member`; KOOK role ids are no longer in roles.
-      const adapterMember = groupMessage(['member']);
-      expect(await runCommand(fake, subscribeCommand, { input: adapterMember, params: { filters: [] } })).toBe(SUBSCRIPTION_PERMISSION_DENIED_MESSAGE);
-      const trusted = groupMessage(['trusted']);
+      const trusted = groupMessage('trusted');
       expect(await runCommand(fake, subscribeCommand, { input: trusted, params: { filters: [] } })).toBe(SUBSCRIPTION_PERMISSION_DENIED_MESSAGE);
       expect(await fake.resources.use(earthquakeServiceToken).store.list()).toEqual([]);
     } finally {
@@ -207,11 +204,12 @@ describe('@zhin.js/plugin-earthquake subscription permissions', () => {
     }
   });
 
-  it.each([['owner'], ['admin'], ['master']])('allows the group %s to subscribe and unsubscribe', async (role) => {
+  // Only granted zhin roles count; platform standing is a separate dimension (ADR 0056 §4, revised).
+  it.each([['owner'], ['admin']] as const)('allows the chat role %s to subscribe and unsubscribe', async (role) => {
     stubFeeds({ cenc: () => [], usgs: () => [] });
     const fake = await runPluginSetup(plugin, { config: {} });
     try {
-      const message = groupMessage([role]);
+      const message = groupMessage(role);
       expect(String(await runCommand(fake, subscribeCommand, { input: message, params: { filters: ['6'] } }))).toContain('已订阅');
       expect(await runCommand(fake, unsubscribeCommand, { input: message })).toBe('已取消本会话的地震速报订阅');
     } finally {
@@ -223,7 +221,7 @@ describe('@zhin.js/plugin-earthquake subscription permissions', () => {
     stubFeeds({ cenc: () => [], usgs: () => [] });
     const fake = await runPluginSetup(plugin, { config: {} });
     try {
-      const message = createFakeMessage({ conversation: { kind: 'private', id: 'u-private' }, sender: { id: 'u-private', roles: [] } });
+      const message = createFakeMessage({ conversation: { kind: 'private', id: 'u-private' }, sender: { id: 'u-private' } });
       expect(String(await runCommand(fake, subscribeCommand, { input: message, params: { filters: [] } }))).toContain('已订阅');
       expect(await runCommand(fake, unsubscribeCommand, { input: message })).toBe('已取消本会话的地震速报订阅');
     } finally {
@@ -235,7 +233,7 @@ describe('@zhin.js/plugin-earthquake subscription permissions', () => {
     stubFeeds({ cenc: () => [liveQuake('CD.q', 5)], usgs: () => [] });
     const fake = await runPluginSetup(plugin, { config: {} });
     try {
-      const member = groupMessage([]);
+      const member = groupMessage();
       expect(String(await runCommand(fake, queryCommand, { input: member, params: {}, options: {} }))).toContain('四川绵阳市北川县');
       expect(String(await runCommand(fake, statusCommand, { input: member }))).toContain('本会话未订阅');
     } finally {
@@ -244,9 +242,11 @@ describe('@zhin.js/plugin-earthquake subscription permissions', () => {
   });
 
   it('evaluates the rule with the built-in permit checker', () => {
-    expect(canManageConversation({ scene: { id: 'u', type: 'private' }, sender: { id: 'u', role: [] } })).toBe(true);
-    expect(canManageConversation({ scene: { id: 'c', type: 'channel' }, sender: { id: 'u', role: ['user'] } })).toBe(false);
-    expect(canManageConversation({ scene: { id: 'c', type: 'channel' }, sender: { id: 'u', role: ['admin'] } })).toBe(true);
+    expect(canManageConversation({ scene: { id: 'u', type: 'private' }, sender: { id: 'u' } })).toBe(true);
+    expect(canManageConversation({ scene: { id: 'c', type: 'channel' }, sender: { id: 'u', chatRole: 'trusted' } })).toBe(false);
+    expect(canManageConversation({ scene: { id: 'c', type: 'channel' }, sender: { id: 'u', chatRole: 'admin' } })).toBe(true);
+    // Platform standing is never a zhin role.
+    expect(canManageConversation({ scene: { id: 'c', type: 'channel' }, sender: { id: 'u', platform: { standing: 'admin' } } })).toBe(false);
     expect(canManageConversation({ scene: { id: 'g', type: 'group' } })).toBe(false);
   });
 });

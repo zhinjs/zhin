@@ -108,6 +108,12 @@ oauth_callback_path: /grokbot/calendar/oauth/callback
 
 注意：Google「桌面应用」客户端只接受 `127.0.0.1` / `localhost` 回调。如果用公网域名回调，需要创建「Web 应用」类型的客户端，并把完整回调地址加入「已获授权的重定向 URI」。
 
+## 分层配置（ADR 0050 / 0055）
+
+日历只有一个共享的后端账号，所有字段（后端、时区、OAuth、各提供方凭据）只能在全局层修改；启停开关支持适配器、账号与会话四级。在 Console「功能」区可以按适配器、账号或会话（群 / 私聊）单独停用；开启 `features.selfService.enabled` 后，群里有 `admin` 角色（默认含群主 / 管理员）的人也可以用 `功能 关闭 calendar` 关闭本群。上级停用后下级锁定，不能再开启。
+
+授权成功 / 失败 / 失效等通知不是消息，插件在发送前按目标会话检查开关，已停用的会话不会收到。
+
 ## Google Cloud 设置
 
 1. 打开 [Google Cloud Console](https://console.cloud.google.com/)，创建或选择一个项目。
@@ -189,7 +195,7 @@ npx zhin-calendar-auth microsoft
 | ---------------- | ------------------------------------- |
 | `list_events`    | 列出时间范围内事件                    |
 | `find_free_time` | 工作时段内找空档                      |
-| `create_event`   | 创建事件（`role(master)` + 始终批准） |
+| `create_event`   | 创建事件（`owner` + 始终批准） |
 
 创建前应向用户确认标题、时间与时区。
 

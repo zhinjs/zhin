@@ -12,10 +12,10 @@ import {
   validateDatabaseConfig,
 } from '@zhin.js/scaffold-wizard';
 import { expandEnvironmentValue, readApplicationPluginDeclaration } from '@zhin.js/runtime';
-import { findConfigFile, readConfig } from './config-file.js';
-import { detectLegacyConfig, formatLegacyConfigHint } from './legacy-config.js';
+import { findConfigFile, readConfig } from '@zhin.js/gateway/project';
+import { detectLegacyConfig, formatLegacyConfigHint } from '@zhin.js/gateway/project';
 import { hostModelOwnerId } from '@zhin.js/plugin-runtime';
-import { loadAiConfigUtils, type AiConfigUtils } from './ai-config-loader.js';
+import { loadAiConfigUtils, type AiConfigUtils } from '@zhin.js/gateway/config';
 
 export type ConfigIssueSeverity = 'error' | 'warn' | 'info';
 

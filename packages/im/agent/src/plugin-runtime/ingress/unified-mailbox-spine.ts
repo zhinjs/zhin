@@ -91,7 +91,6 @@ import {
   resolveRuntimeSenderRoles,
   resolveSandboxTurnPolicy,
   resolveSnapshotTurnIntentResolver,
-  resolveTrustedForRuntimeMessage,
   runtimeSceneTaskSessionKey,
   type ResolvedSandboxTurnPolicy,
   type SandboxTurnPolicyInput,
@@ -371,7 +370,6 @@ export interface AgentTurnIngressRouteOptions {
   readonly approvalPort?: ApprovalPort;
   readonly resolveTurnIntent?: TurnIntentResolver;
   readonly resolveEndpointOwner?: (adapterLocalName: string, endpointKey: string) => string | undefined;
-  readonly resolveEndpointTrusted?: (adapterLocalName: string, endpointKey: string) => readonly string[];
   readonly ingress: CapabilityIngress;
   readonly agent: AgentIngressFoundationPort;
   /** Optional VenueRegistry for multi-bot Venue routing (ADR 0048 H4). */
@@ -478,7 +476,8 @@ export class AgentTurnIngressRoute implements IngressRoute {
         groupId: conversation.id,
         memberId: report.memberId,
         ...(report.memberName ? { memberName: report.memberName } : {}),
-        ...(report.memberRoles ? { memberRoles: report.memberRoles } : {}),
+        ...(report.memberChatRole ? { memberChatRole: report.memberChatRole } : {}),
+        ...(report.memberPlatform ? { memberPlatform: report.memberPlatform } : {}),
         trigger: report.trigger,
         sentAt: report.sentAt,
         ...(report.messageId ? { messageId: report.messageId } : {}),
@@ -606,8 +605,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
     const trigger = service.getTriggerConfig();
 
     const ownerId = resolveOwnerForRuntimeMessage(message, options.resolveEndpointOwner, snapshot);
-    const endpointTrusted = resolveTrustedForRuntimeMessage(message, options.resolveEndpointTrusted, snapshot);
-    const senderRoles = resolveRuntimeSenderRoles(message, { endpointMaster: ownerId, endpointTrusted, trigger });
+    const senderRoles = resolveRuntimeSenderRoles(message);
     const turnAccess = createRuntimeTurnAccess(message, senderRoles, undefined, undefined, conversationSequence);
     const effectiveAdapter = capabilityLocalName(String(message.conversation.endpoint.id));
     const effectiveEndpoint = adapterLiveEndpointId(message);

@@ -5,7 +5,6 @@ import type { EndpointProfileConfiguration } from 'zhin.js/adapter';
  */
 
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import type { IncomingMessage } from 'node:http';
 import { isMediaRef, type ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
@@ -242,12 +241,10 @@ export function verifyWebhookSignature(
 }
 
 export function headerValue(
-  headers: IncomingMessage['headers'],
+  headers: Headers,
   name: string,
 ): string {
-  const raw = headers[name] ?? headers[name.toLowerCase()];
-  if (Array.isArray(raw)) return raw[0] ?? '';
-  return raw ?? '';
+  return headers.get(name) ?? '';
 }
 
 

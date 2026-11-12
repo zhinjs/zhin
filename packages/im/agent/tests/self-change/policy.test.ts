@@ -143,7 +143,7 @@ describe('config patch', () => {
       expectedRevision: 'r1',
       patches: [
         { op: 'set', path: ['ai', 'agent', 'maxIterations'], value: 8 },
-        { op: 'set', path: ['http', 'tokens'], value: [{ token: 'x', scope: 'full' }] },
+        { op: 'set', path: ['console', 'terminal', 'enabled'], value: true },
       ],
     };
     expect(() => normalizeChangeConfigPatch(input)).toThrow(SelfChangeConfigKeyError);

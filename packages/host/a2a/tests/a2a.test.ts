@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createHttpHost } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import { ALL, only, type BudgetAmounts, type Mail } from '@zhin.js/harness';
 import {
   A2AMailboxTransport,

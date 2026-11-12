@@ -271,7 +271,7 @@ it('forwards the captured authorization language through the plugin outbound fac
       has: (token: { id: string }) => values.has(token.id),
       use: (token: { id: string }) => values.get(token.id),
       provide: (token: { id: string }, value: unknown) => values.set(token.id, value),
-    } } as never);
+    }, isEnabledFor: () => true } as never);
     const { auth } = values.get(calendarRuntimeToken.id) as { auth: CalendarAuthService<unknown> };
     const reply = await auth.startAuthorization('google', { ...requester, locale: 'en' }, 'en');
     await auth.handleCallback(new URLSearchParams({ state: extractState(reply), code: 'fixture-code' }));

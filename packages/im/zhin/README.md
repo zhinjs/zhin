@@ -13,7 +13,7 @@ AI / Agent 能力在 **`@zhin.js/agent`**（及 `@zhin.js/ai`），须显式安�
 | **IM** | `pnpm add zhin.js` | `@zhin.js/core` 全部 API |
 | **AI** | `+ @zhin.js/agent zod ai` | ZhinAgent、`ctx.ai`、会话与工具 |
 | **Provider** | `+ @ai-sdk/openai` 等 | 大模型调用 |
-| **Host** | 无需安装，由 `@zhin.js/cli` 自动装配 | Console API（可选 peer） |
+| **Host** | 无需安装，由 `zhin.js/instance` 自动装配 | Console API（可选 peer） |
 
 ## 子路径导出
 
@@ -24,6 +24,8 @@ AI / Agent 能力在 **`@zhin.js/agent`**（及 `@zhin.js/ai`），须显式安�
 | `zhin.js/ai` | `@zhin.js/ai` 引擎 API |
 | `zhin.js/runtime` | `@zhin.js/runtime` optional-peer facade；不进入默认 IM 闭包 |
 | `zhin.js/jsx*` | 消息 JSX / 原生 Segment 标签 / 显式 Html 边界 |
+| `zhin.js/instance` | Zhin 实例装配根（ADR 0054 §0，原 `@zhin.js/cli` 的 `runStartCommand` / `RootHost`）：IM Runtime、Agent Host、运行时侧 Console 后端；由管理网关（`zhin start`）按项目解析并以子进程拉起。需要项目安装 `@zhin.js/runtime`、`@zhin.js/gateway`、`@zhin.js/pagemanager`（随 `@zhin.js/cli` 安装）；MCP / A2A / 语音按需安装 `@zhin.js/mcp`、`@zhin.js/a2a`、`@zhin.js/speech` |
+| `zhin.js/instance/cli` | `@zhin.js/cli` 在运行时从项目加载的 IM 侧辅助（`zhin console`、`zhin preview`、`zhin trace`、`zhin agent info`、`zhin migrate inference`），不是插件 API |
 
 **4.x breaking**：`import from 'zhin.js'` 不再含 `ZhinAgent`、`AIService`、`ModelRegistry`。请改用 `zhin.js/agent` 或 `zhin.js/ai`。
 
@@ -51,15 +53,15 @@ manifest 动态装配。Feature definition 校验失败时不会提交候选 gen
 
 ## 快速开始
 
-三步（`-y` = IM 黄金路径，无需模型 Key）：
+三步（无需平台账号与模型 Key）：
 
 ```bash
-npm create zhin-app my-bot -y
+npm create zhin-app my-bot -- -y --adapter sandbox
 cd my-bot
-pnpm dev
+pnpm dev          # zhin start --foreground：管理网关 + 实例，热重载
 ```
 
-打开 [console.zhin.dev](https://console.zhin.dev) → Host `http://127.0.0.1:8086` → Sandbox 发 `/hello`。
+打开终端打印的 Console 链接（`https://console.zhin.dev/?apiBaseUrl=http%3A%2F%2F127.0.0.1%3A8068#token=…`）→ 初始化向导（保持默认 SQLite，创建所有者）→「会话 → 沙盒」发 `/hello`。
 
 想看「一个 `bot.ts` 就是 bot」：仓库 [`examples/single-file-bot`](../../../examples/single-file-bot/)。完整安装与路径说明：[快速开始](https://zhin.js.org/getting-started/)。
 
@@ -102,7 +104,7 @@ ai:
 
 ## 编写插件
 
-唯一启动路径：`zhin runtime start`。`plugin.ts`（或单文件 `bot.ts`）必须 default-export `definePlugin()`；能力按约定目录发现。
+唯一启动路径：`zhin start`（管理网关拉起实例；开发、systemd、容器用 `zhin start --foreground`）。`plugin.ts`（或单文件 `bot.ts`）必须 default-export `definePlugin()`；能力按约定目录发现。
 
 ```typescript
 // plugin.ts — 装配入口
@@ -153,7 +155,7 @@ export default defineAgentTool({
 
 ## 已移除：`zhin.js/node`
 
-`zhin.js/node`、`bootstrapNode` 与 `MessageCommand` **已删除且不再导出**。唯一入口为 `definePlugin()` + `zhin runtime start`，命令使用 `defineCommand()`。迁移见 `.github/skills/migrate-zhin-plugin-runtime`。
+`zhin.js/node`、`bootstrapNode` 与 `MessageCommand` **已删除且不再导出**。唯一入口为 `definePlugin()` + `zhin start`，命令使用 `defineCommand()`。迁移见 `.github/skills/migrate-zhin-plugin-runtime`。
 
 ## 核心概念
 
@@ -170,9 +172,14 @@ export default defineAgentTool({
 ## 常用命令
 
 ```bash
-pnpm dev          # 开发模式（热重载）
-pnpm start        # 生产模式
-npx zhin stop     # 停止守护进程
+pnpm dev          # 开发模式（前台，热重载）
+pnpm start        # 生产模式（前台，供 systemd / Docker / PM2）
+npx zhin start    # 后台运行网关与实例
+npx zhin status   # 网关与实例状态
+npx zhin logs -f  # 实例日志
+npx zhin restart  # 只重启实例，网关与 Console 不断开
+npx zhin stop     # 停止实例与网关
+npx zhin console init   # 首次创建 Console 所有者（之后 http.token 失效）
 npx zhin doctor   # 诊断（含 AI 依赖）
 ```
 

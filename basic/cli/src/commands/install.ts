@@ -5,7 +5,8 @@ import fs from 'fs-extra';
 import path from 'path';
 import inquirer from 'inquirer';
 import { execFileSync } from 'node:child_process';
-import { PluginManagementWorkflow } from '../plugin-management/workflow.js';
+import { PluginManagementWorkflow } from '@zhin.js/gateway/plugin-management';
+import { configurationHints, probeGateway, runPackageOperationViaGateway } from '../utils/gateway.js';
 import {
   applyProjectConfigPlan,
   createProjectConfigPlan,
@@ -63,9 +64,6 @@ async function installPluginAction(plugin: string, options: InstallOptions) {
 
     // 构建安装命令
     const installArgs = buildInstallArgs(pluginToInstall, pluginType, options);
-    
-    logger.log(`执行命令: pnpm ${installArgs.join(' ')}`);
-    logger.log('');
 
     const pluginName = resolvePluginNameForEnable(pluginToInstall, pluginType, process.cwd());
     const shouldEnable = options.enable !== false && !options.global;
@@ -92,12 +90,32 @@ async function installPluginAction(plugin: string, options: InstallOptions) {
       return;
     }
 
+    // Through a running gateway the transaction prints its own phases instead (ADR 0054 §6).
+    const viaGateway = !options.dryRun && !options.global && Boolean(pluginName) && Boolean(await probeGateway({ root: process.cwd() }));
+    if (!viaGateway) {
+      logger.log(`执行命令: pnpm ${installArgs.join(' ')}`);
+      logger.log('');
+    }
+
     if (options.global) {
       execFileSync('pnpm', installArgs, { cwd: process.cwd(), stdio: 'inherit' });
       logger.success('✓ 全局依赖安装完成（未挂载到项目 Runtime）');
       return;
     }
     if (!pluginName) throw new Error('无法确定包名，请使用 npm 包名或带 package.json 的本地目录');
+    // ADR 0054 §6: with a running gateway the transaction goes through it (instance stopped
+    // while the package manager runs, rolled back on failure).
+    if (viaGateway) {
+      const registrySpec = pluginType === 'npm' && !pluginToInstall.startsWith('.') && !pluginToInstall.startsWith('file:') && !path.isAbsolute(pluginToInstall);
+      if (!registrySpec || options.saveDev) {
+        throw new Error('网关正在运行：经网关只能安装 npm 注册表包（不支持 git / 本地路径 / --save-dev）；请先 zhin stop 再安装');
+      }
+      const result = await runPackageOperationViaGateway({ root: process.cwd() }, {
+        operation: 'install', packages: [pluginToInstall.replace(/^npm:/u, '')], enable: shouldEnable,
+      });
+      if (!result.ok) process.exit(1);
+      return;
+    }
     const result = await new PluginManagementWorkflow(process.cwd()).install(
       pluginType === 'npm' && !pluginToInstall.startsWith('.') && !pluginToInstall.startsWith('file:') && !path.isAbsolute(pluginToInstall)
         ? pluginToInstall : pluginName,
@@ -107,6 +125,7 @@ async function installPluginAction(plugin: string, options: InstallOptions) {
     logger.success(`✓ 依赖安装完成：${result.state.packageName}@${result.state.version ?? 'unknown'}`);
     logger.log(`插件状态: ${result.state.status}；功能验证: ${result.state.verification}`);
     if (!result.state.plugin) logger.log('该包是普通依赖，不会挂载到 Plugin Runtime。');
+    if (result.needsConfiguration) for (const line of configurationHints([result.needsConfiguration])) logger.log(line);
     if (result.state.status === 'missing-config') logger.log('运行 zhin setup 补齐配置和环境变量，再应用。');
     if (result.restartRequired) logger.log('配置就绪后启动/重启 Host，再用 packages status 检查当前 generation。');
 

@@ -1,8 +1,6 @@
 import { readOperationInputResources } from '@zhin.js/feature-kit';
 import { adapterFeatureId, isAdapterIndex } from '@zhin.js/adapter';
 import {
-  commandFeatureId,
-  isCommandIndex,
   type CommandMatchInput,
   type CommandSegment,
 } from '@zhin.js/command';
@@ -11,6 +9,7 @@ import { formatCompact, getLogger, truncatePreview } from '@zhin.js/logger';
 import type { CapabilityId, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import type { Message, MessageDispatchResult, SendContent } from './contracts.js';
 import { commandMenuReply, renderCommandFeedback } from './command-feedback.js';
+import { gatedCommandIndex } from './feature-gate.js';
 
 const logger = getLogger('command');
 
@@ -78,8 +77,8 @@ export class MessageDispatcher {
 
   commandEnvironment(message: Message, snapshot: RuntimeSnapshot): Readonly<{ prefix: string; menu?: string }> {
     const prefix = this.resolvePrefix(message, snapshot);
-    const commands = snapshot.projections.get(commandFeatureId);
-    return Object.freeze({ prefix, menu: isCommandIndex(commands) ? commands.formatMenu(prefix, message.locale) : undefined });
+    const commands = gatedCommandIndex(message, snapshot);
+    return Object.freeze({ prefix, menu: commands ? commands.formatMenu(prefix, message.locale) : undefined });
   }
 
   async dispatch(
@@ -113,8 +112,9 @@ export class MessageDispatcher {
       note('dispatch', 'empty_input');
       return dispatchOutcome(Object.freeze({ matched: false }));
     }
-    const commands = snapshot.projections.get(commandFeatureId);
-    if (!isCommandIndex(commands)) {
+    // ADR 0050: commands of a Plugin disabled for this endpoint do not exist here (no "disabled" reply).
+    const commands = gatedCommandIndex(message, snapshot);
+    if (!commands) {
       note('dispatch', 'commands_unavailable');
       return dispatchOutcome(Object.freeze({ matched: false }));
     }

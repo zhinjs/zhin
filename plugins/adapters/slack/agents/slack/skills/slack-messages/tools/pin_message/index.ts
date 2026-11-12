@@ -1,21 +1,20 @@
 import { messages as t } from "../../../../messages.js";
+import { currentChannel } from "../../../../conversation.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { platformPermission } from '@zhin.js/permission';
 
 export default defineAgentTool<{
-  channel: string;
   timestamp: string;
 }>({
-  description: '置顶 Slack 消息',
+  description: '置顶当前 Slack 会话中的消息',
   inputSchema: z.object({
-    channel: z.string().describe('频道 ID'),
     timestamp: z.string().describe('消息时间戳'),
   }),
   adapter: 'slack',
   tags: ['slack'],
-  permissions: [platformPermission('slack', 'channel_manager')],
-  async execute({ channel, timestamp }, context) {
+  permissions: ['admin'],
+  async execute({ timestamp }, context) {
+    const channel = currentChannel(context, { allowDirect: true });
     const client = context.$client;
     await client.pins.add({ channel, timestamp });
     const success = true;

@@ -210,12 +210,9 @@ export function foldConversationEvent(
   }
 }
 
-/** 从发送者平台角色里读出群主/管理员。 */
-export function sceneRoleOf(roles: readonly unknown[] | undefined): 'owner' | 'admin' | undefined {
-  const set = new Set((roles ?? []).map((role) => String(role)));
-  if (set.has('owner') || set.has('scene_owner')) return 'owner';
-  if (set.has('admin') || set.has('scene_admin')) return 'admin';
-  return undefined;
+/** 平台归一地位（`sender.platform.standing`，ADR 0056 §1）里的群主 / 管理员。 */
+export function sceneRoleOf(standing: string | undefined): 'owner' | 'admin' | undefined {
+  return standing === 'owner' || standing === 'admin' ? standing : undefined;
 }
 
 export interface InboundSender {

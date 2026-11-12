@@ -13,7 +13,7 @@ Cloning this repo for the first time, the 20-odd top-level directories can feel 
 | `basic/` | Foundation layer: `cli`, `database`, `logger`, `schedule`, `schema` (logging, database, config validation, CLI) |
 | `packages/im/` | IM core layer: `adapter`, `agent`, `ai`, `command`, `component`, `config-file`, `core`, `feature-kit`, `handler`, `isolate`, `kernel`, `mcp-feature`, `middleware`, `plugin-runtime`, `runtime`, `skill`, `tool`, `zhin`, etc. |
 | `packages/console/` | Remote Console support packages (`client`, `contract`, `layout`, `page`, `pagemanager`, `plugin-contract`, `protocol`). The Host only provides the API; the UI lives in a separate repo [zhin-console](https://github.com/zhinjs/console) (console.zhin.dev) |
-| `packages/host/` | Host runtime: `http` (`@zhin.js/host-http`), `mcp` (MCP Server), `a2a` (A2A Server) |
+| `packages/host/` | Host runtime: `http` (`@zhin.js/host-http`), `mcp` (MCP Server), `a2a` (A2A Server), `gateway` (`@zhin.js/gateway`, management gateway, ADR 0054) |
 | `packages/toolkit/` | `create-zhin` (`pnpm create zhin-app`), `scaffold-wizard` (config wizard), `components` (pure JSX visuals), `satori`, `html-renderer`, `speech` |
 | `packages/game-kit/` | Game development kit (used by `plugins/games/`) |
 | `plugins/adapters/` | Platform adapters: sandbox, qq, icqq, napcat, onebot11/12, discord, telegram, slack, kook, dingtalk, lark, line, wecom, email, github, satori, etc. |
@@ -48,11 +48,38 @@ flowchart BT
   core --> zhin["zhin.js"]
   contract --> runtime["runtime"]
   featureKit --> runtime
-  runtime --> cli["cli composition root"]
-  agent --> cli
+  runtime --> instance["zhin.js/instance (instance composition root)"]
+  agent --> instance
+  runtime --> gateway["@zhin.js/gateway (management gateway)"]
+  gateway --> cli["@zhin.js/cli"]
 ```
 
-`plugin-runtime`, `im-contract`, and `interaction` are the foundation contracts. Feature packages describe one capability above them, while `core` assembles the IM path. `kernel` and `ai` contain no IM concepts. The only cross-layer assembly point is `basic/cli`, where `zhin runtime start` composes IM, Agent, and Console Host.
+`plugin-runtime`, `im-contract`, and `interaction` are the foundation contracts. Feature packages describe one capability above them, while `core` assembles the IM path. `kernel` and `ai` contain no IM concepts. The only cross-layer assembly point is `packages/im/zhin/src/instance/` (`zhin.js/instance`, ADR 0054 §0), which composes IM, Agent, and Console Host. `@zhin.js/gateway` (`packages/host/gateway`: Console accounts and permissions, terminal, project configuration and package transactions) and `@zhin.js/cli` do not depend on `zhin.js` or IM layers.
+
+## Four packages and two processes
+
+| Package | Directory | Where it runs |
+| --- | --- | --- |
+| `create-zhin-app` | `packages/toolkit/create-zhin` | Only when creating a project |
+| `@zhin.js/cli` (`zhin`) | `basic/cli` | The user's terminal; after `zhin start` launches the gateway, `stop / status / logs / install` call it over `.zhin/gateway.sock` |
+| `@zhin.js/gateway` | `packages/host/gateway` | Gateway process: the only HTTP port, authentication, `console_*` tables, setup and onboarding, terminal, instance supervision, dependency transactions, logs |
+| `zhin.js` | `packages/im/zhin` (instance composition root `src/instance/`) | Instance process: launched by the gateway as a child; IM Runtime, plugins, adapters, Agent, most Console APIs |
+
+The two processes talk over a Node IPC control channel whose protocol (route table, chunked requests / responses, WebSocket frames, `restart-request`, `shutdown`, `catalog`, `audit`) lives in `packages/host/http/src/bridge/` (`@zhin.js/host-http/bridge`) and is shared by both. Change both sides together and bump the protocol version; gateway and instance releases must ship together. Process model and ownership: [Layered architecture](../concepts/architecture.md#gateway-and-instance).
+
+| To change | Look in |
+| --- | --- |
+| Sign-in, users, roles, API tokens, audit | `packages/host/gateway/src/iam/` |
+| Gateway HTTP server, forwarding and `gateway.*` RPC | `packages/host/gateway/src/http/` |
+| Instance supervision, log collection | `packages/host/gateway/src/supervisor/` |
+| Local control socket | `packages/host/gateway/src/local/` |
+| Dependency transactions | `packages/host/gateway/src/packages/`, `plugin-management/` |
+| Setup and onboarding | `packages/host/gateway/src/onboarding/`, `iam/` (setup service) |
+| Terminal | `packages/host/gateway/src/terminal/` |
+| The gateway's own database connection | `packages/host/gateway/src/database/` |
+| Permission maps | `packages/console/protocol/src/permissions.ts` |
+| Instance-side Console RPC and routes | `packages/im/zhin/src/instance/console/` |
+| CLI commands | `basic/cli/src/commands/` |
 
 ## AGENTS.md Overview
 

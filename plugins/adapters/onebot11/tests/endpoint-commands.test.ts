@@ -51,8 +51,8 @@ describe('onebot11 commands through the real Adapter directory', () => {
   it('preserves the configured master boundary for add and remove', async () => {
     const f = await fixture();
     const denied = f.context({ config: { master: 'alice' }, input: { sender: { id: 'bob' } }, params: { id: 'bot1' }, args });
-    expect(await addCommand.execute(denied)).toBe('仅 master 可执行 OneBot 11 endpoint 管理命令');
-    expect(await removeCommand.execute(denied)).toBe('仅 master 可执行 OneBot 11 endpoint 管理命令');
+    expect(await addCommand.execute(denied)).toBe('仅聊天角色 owner 可执行 OneBot 11 endpoint 管理命令');
+    expect(await removeCommand.execute(denied)).toBe('仅聊天角色 owner 可执行 OneBot 11 endpoint 管理命令');
     expect(f.compareAndSet).not.toHaveBeenCalled();
   });
   it('fails explicitly without a runtime directory instead of falling back to startup files', async () => {

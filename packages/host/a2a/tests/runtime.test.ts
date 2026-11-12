@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createHttpHost } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import type { AgentHostPort } from '@zhin.js/agent/runtime';
 import { installRuntimeA2a } from '../src/runtime.js';
 
@@ -25,13 +25,13 @@ describe('Runtime A2A Host', () => {
       config: { path: '/mesh' },
       fallbackPublicUrl: 'https://bot.example.test',
       production: true,
-    })).toThrow('requires a2a.token or http.token');
+    })).toThrow('requires a2a.token or Host API tokens');
   });
 
   it('without a token only serves loopback callers', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
-    let handler!: (request: never, response: never, url: URL) => Promise<void>;
+    let handler!: (request: Request, context: { url: URL; params: Record<string, string>; remoteAddress?: string }) => Promise<Response>;
     const routeHost = {
       route: (_method: string, _path: string, registered: typeof handler) => {
         handler = registered;
@@ -44,24 +44,33 @@ describe('Runtime A2A Host', () => {
       fallbackPublicUrl: 'http://localhost',
     });
     const call = async (remoteAddress: string) => {
-      let status = 0;
-      const response = {
-        setHeader: () => undefined,
-        writeHead: (code: number) => { status = code; },
-        end: () => undefined,
-      };
-      await handler(
-        { method: 'GET', headers: {}, socket: { remoteAddress } } as never,
-        response as never,
-        new URL('http://bot.test/a2a/zhin/.well-known/agent-card.json'),
-      );
-      return status;
+      const url = new URL('http://bot.test/a2a/zhin/.well-known/agent-card.json');
+      const response = await handler(new Request(url), { url, params: {}, remoteAddress });
+      return response.status;
     };
 
     expect(await call('203.0.113.9')).toBe(401);
     expect(await call('::ffff:10.0.0.4')).toBe(401);
     expect(await call('127.0.0.1')).toBe(200);
     expect(await call('::1')).toBe(200);
+  });
+
+  it('accepts Host user API tokens through the shared authenticator, also in production (ADR 0049)', async () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    installRuntimeA2a({
+      http,
+      agentHost: testAgentHost(),
+      config: { path: '/mesh' },
+      authenticateBearer: async token => token === 'user-api-token',
+      fallbackPublicUrl: 'https://bot.example.test',
+      production: true,
+    });
+    const { port } = await http.listen();
+    const url = `http://127.0.0.1:${port}/mesh/zhin/.well-known/agent-card.json`;
+    expect((await fetch(url)).status).toBe(401);
+    expect((await fetch(url, { headers: { authorization: 'Bearer wrong' } })).status).toBe(401);
+    expect((await fetch(url, { headers: { authorization: 'Bearer user-api-token' } })).status).toBe(200);
   });
 
   it('serves authenticated Agent Cards from the active binding registry', async () => {

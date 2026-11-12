@@ -3,6 +3,8 @@ import {
   dispatchExtendedConsoleRpc,
   type ConsoleRpcExtendedCtx,
 } from '../src/console-rpc-extended/index.js';
+import { authorizeConsoleRpc } from '../src/access-control.js';
+import { VIEWER } from './fixtures/principals.js';
 
 function makeCtx(overrides: Partial<ConsoleRpcExtendedCtx> = {}): ConsoleRpcExtendedCtx {
   return {
@@ -125,7 +127,7 @@ describe('dispatchExtendedConsoleRpc', () => {
       }, { principalId: 'sponsor:alpha' });
     });
 
-    it('rejects demo writes and caller-carried principal/authority facts before control invocation', async () => {
+    it('rejects caller-carried principal/authority facts before control invocation', async () => {
       const publishPack = vi.fn();
       const control = {
         getPlanningStatus: vi.fn(), bootstrapPlanning: vi.fn(),
@@ -135,12 +137,6 @@ describe('dispatchExtendedConsoleRpc', () => {
         operationId: 'console:pack:1', pack: {}, authenticatedPrincipalId: 'sponsor:forged',
       }, makeCtx({ workroomProfileControl: control }))).resolves.toEqual({
         error: 'Console Workroom Profile request cannot carry authenticatedPrincipalId',
-      });
-      expect(publishPack).not.toHaveBeenCalled();
-      await expect(dispatchExtendedConsoleRpc('workroom.profile.pack.publish', {
-        operationId: 'console:pack:1', pack: {},
-      }, makeCtx({ fullScope: false, workroomProfileControl: control }))).resolves.toEqual({
-        error: 'Demo scope: RPC "workroom.profile.pack.publish" is forbidden',
       });
       expect(publishPack).not.toHaveBeenCalled();
     });
@@ -265,20 +261,11 @@ describe('dispatchExtendedConsoleRpc', () => {
       expect(await dispatchExtendedConsoleRpc('cron:validate', { cronExpression: '99 99 * * * *' }, ctx)).toMatchObject({ data: { valid: false } });
     });
 
-    it('cron write ops report 未接线 on full scope and are forbidden on demo scope', async () => {
+    it('cron write ops report 未接线 without a schedule engine', async () => {
       for (const type of ['cron:add', 'cron:remove', 'cron:pause', 'cron:resume']) {
         const full = await dispatchExtendedConsoleRpc(type, {}, makeCtx());
         expect(full).toHaveProperty('error');
         expect((full as { error: string }).error).toContain('未接线');
-
-        const demo = await dispatchExtendedConsoleRpc(
-          type,
-          {},
-          makeCtx({ fullScope: false }),
-        );
-        expect(demo).toEqual({
-          error: `Demo scope: RPC "${type}" is forbidden`,
-        });
       }
     });
   });
@@ -748,7 +735,7 @@ describe('dispatchExtendedConsoleRpc', () => {
   });
 
   describe('endpoint request actions', () => {
-    it('requestConsumed / noticeConsumed report 未接线 (full) and forbidden (demo)', async () => {
+    it('requestConsumed / noticeConsumed report 未接线 without a database', async () => {
       for (const type of ['request.consumed', 'notice.consumed']) {
         const full = await dispatchExtendedConsoleRpc(
           type,
@@ -756,14 +743,6 @@ describe('dispatchExtendedConsoleRpc', () => {
           makeCtx(),
         );
         expect((full as { error: string }).error).toContain('未接线');
-        const demo = await dispatchExtendedConsoleRpc(
-          type,
-          { rowIds: [1] },
-          makeCtx({ fullScope: false }),
-        );
-        expect(demo).toEqual({
-          error: `Demo scope: RPC "${type}" is forbidden`,
-        });
       }
     });
 
@@ -863,16 +842,6 @@ describe('dispatchExtendedConsoleRpc', () => {
         ),
       ).resolves.toEqual({
         error: 'adapter, endpointKey, and platformRequestId are required',
-      });
-
-      await expect(
-        dispatchExtendedConsoleRpc(
-          'request.approve',
-          { adapter: 'icqq', endpointKey: '1', platformRequestId: 'r' },
-          makeCtx({ fullScope: false }),
-        ),
-      ).resolves.toEqual({
-        error: 'Demo scope: RPC "request.approve" is forbidden',
       });
     });
   });
@@ -1086,17 +1055,9 @@ describe('dispatchExtendedConsoleRpc', () => {
       }
     });
 
-    it('demo scope forbids all social write ops', async () => {
+    it('a viewer is denied every social write op by the permission map', async () => {
       for (const c of writeCases) {
-        const ctx = makeCtx({
-          fullScope: false,
-          withEndpointManagement: async (_adapter, _endpointKey, run) => run({ [c.method]: async () => undefined }),
-        });
-        await expect(
-          dispatchExtendedConsoleRpc(c.type, c.data, ctx),
-        ).resolves.toEqual({
-          error: `Demo scope: RPC "${c.type}" is forbidden`,
-        });
+        expect(authorizeConsoleRpc(VIEWER, { type: c.type, ...c.data })).toMatchObject({ allowed: false, code: 'forbidden' });
       }
     });
 

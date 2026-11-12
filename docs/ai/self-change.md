@@ -65,7 +65,7 @@ Bot 自己写的指令、插件代码不会直接进生产目录。提交审批�
 凡是会放松安全或扩大工具面的配置项，Bot 起草时直接拒绝，不会出审批卡，例如：
 
 - `ai.agent` 下的危险工具硬闸（`toolHardGate`，含 IM 审批人名单）、执行审批与执行安全（`execApprovalMode`、`execSecurity`、`execPreset`、`execAllowlist` 等）、主人 shell、注入防护、配额的主人豁免、定时任务安全；
-- `ai.decisions.approval`、`http.token` / `http.tokens`、`a2a` 远程执行器与回调、`mcp` / `ai.mcpServers`（新增 MCP 服务器等于新增工具）等。
+- `ai.decisions.approval`、`http.token`、`console.terminal`（Console 终端）、`a2a` 远程执行器与回调、`mcp` / `ai.mcpServers`（新增 MCP 服务器等于新增工具）等。
 
 完整名单见[默认行为规范](./default-behavior.md#危险工具硬闸)。这些配置请自己直接改配置文件。
 

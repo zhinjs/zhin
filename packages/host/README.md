@@ -7,8 +7,9 @@ Zhin **Host 运行时**（与 `packages/im`、`packages/console` 并列的常驻
 | [http](./http/) | `@zhin.js/host-http` | 极简 HTTP/WS Host（`httpHostToken`、Bearer、CORS） |
 | [mcp](./mcp/) | `@zhin.js/mcp` | MCP **Server**（向外暴露 Zhin 工具） |
 | [a2a](./a2a/) | `@zhin.js/a2a` | A2A v1.0 **Server**（Agent Card + 跨实例委派） |
+| [gateway](./gateway/) | `@zhin.js/gateway` | 管理网关（ADR 0054）：Console 账号与权限、终端、项目配置与依赖事务、实例监管；不依赖 `zhin.js` 与 IM 层 |
 
-> 原 legacy 插件包 `@zhin.js/host-router`（Koa 传输）与 `@zhin.js/host-api`（管理面 REST）已删除；Console/HTTP Host 现由 `@zhin.js/cli` 作为 composition root 自动装配，无需在 `plugins` 列表中启用任何 Host 插件。
+> 原 legacy 插件包 `@zhin.js/host-router`（Koa 传输）与 `@zhin.js/host-api`（管理面 REST）已删除；Console/HTTP Host 现由 `zhin.js/instance`（实例装配根）自动装配，无需在 `plugins` 列表中启用任何 Host 插件。
 
 配置：`zhin.config` 中 **`http:`**（监听地址、`port`、`token`、`base`、CORS）；MCP / A2A 分别读 **`mcp:`** 与 **`a2a:`**。管理面 REST 与 Console API 随 HTTP Host 自动装配，没有单独的开关键。
 

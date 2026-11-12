@@ -36,10 +36,4 @@ export {
 export { type KookClientEventMap } from './client.js';
 export { KookAdapter } from './adapter.js';
 
-export {
-  checkKookPlatformPermit,
-  kookGroupPermitResolver,
-  normalizeKookSenderForPermit,
-  platformPermit,
-  type KookSenderInfo,
-} from './platform-permit.js';
+export { platformPermit } from './platform-permit.js';

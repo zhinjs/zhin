@@ -246,8 +246,8 @@ describe('Agent CapabilityIngress', () => {
     const selection = { binding: agent.activeBinding, mcpServers: ['memory'] };
     try {
       for (const id of ['first', 'second']) {
-        const outcome = await runtime.execute(fixture.child, { ...externalRequest(id), policy: { permissions: ['master'], unattended: false },
-          principal: { subjectId: 'owner', roles: ['master'] }, ports: { approval: { requestApproval: async () => true } } }, selection);
+        const outcome = await runtime.execute(fixture.child, { ...externalRequest(id), policy: { permissions: ['owner'], unattended: false },
+          principal: { subjectId: 'owner', roles: ['owner'] }, ports: { approval: { requestApproval: async () => true } } }, selection);
         expect(outcome.status, JSON.stringify(outcome)).toBe('completed');
       }
       expect(requests).toHaveLength(5);
@@ -284,6 +284,39 @@ describe('Agent CapabilityIngress', () => {
       if (inspected.status === 'completed') expect(localAssets.isInspection(inspected.output)).toBe(true);
       expect(JSON.stringify(events)).not.toContain(image);
     } finally { await fixture.mcp.stop(); await rm(directory, { recursive: true, force: true }); }
+  });
+  it('captures images returned by plugin tools, not only MCP tools, and keeps ordinary results untouched', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'zhin-plugin-tool-ingress-'));
+    const localAssets = new LocalImageAssetStore(directory);
+    const image = 'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+    const fixture = await createFixture({ localAssets, toolResult: { content: [
+      { type: 'text', text: 'rendered' },
+      { type: 'image', data: image, mimeType: 'image/gif' },
+    ] } });
+    try {
+      const capabilities = await new CapabilityIngress().read({ snapshot: fixture.snapshot, owner: fixture.child });
+      const events: unknown[] = [];
+      const turn = createTurnIngress({ ...accessTurn('icqq'), capabilities: { tools: capabilities.tools.map(tool => tool.name), skills: [] }, ports: { journal: { append: event => { events.push(event); } } } });
+      const runtime = new TurnToolRuntime(turn, capabilities.tools);
+      const lookup = capabilities.tools.find(tool => tool.name.endsWith('lookup'))!;
+      const outcome = await runtime.execute(lookup.name, { value: 'x' }, 'render');
+      expect(outcome.status, JSON.stringify(outcome)).toBe('completed');
+      expect(JSON.stringify(outcome)).not.toContain(image);
+      expect(JSON.stringify(outcome)).toContain('rendered');
+      expect(JSON.stringify(events)).not.toContain(image);
+      const assetId = JSON.stringify(outcome).match(/asset_id[^a-f0-9]+([a-f0-9-]{36})/u)?.[1];
+      expect(assetId).toBeTruthy();
+      const inspected = await runtime.execute('get_local_assets', { asset_id: assetId }, 'inspect');
+      expect(inspected.status).toBe('completed');
+      if (inspected.status === 'completed') expect(localAssets.isInspection(inspected.output)).toBe(true);
+    } finally { await fixture.mcp.stop(); await rm(directory, { recursive: true, force: true }); }
+
+    const plain = await createFixture({});
+    try {
+      const capabilities = await new CapabilityIngress().read({ snapshot: plain.snapshot, owner: plain.child });
+      const lookup = capabilities.tools.find(tool => tool.name.endsWith('lookup'))!;
+      expect(await lookup.execute({ value: 'ok' }, invocation() as never)).toBe('old:ok');
+    } finally { await plain.mcp.stop(); }
   });
   it('exposes one scoped reference tool and rejects references outside the current turn', async () => {
     const calls: string[] = [];
@@ -671,7 +704,7 @@ describe('Agent CapabilityIngress', () => {
     });
 
     await runtime.execute(fixture.child, request(['user'], 'member'), selection());
-    await runtime.execute(fixture.child, request(['user', 'master'], 'owner'), selection());
+    await runtime.execute(fixture.child, request(['user', 'owner'], 'owner'), selection());
 
     expect(seen[0]?.policy.shell).toBeUndefined();
     expect(seen[0]?.policy.filesystem?.access).toBe('read-only');
@@ -1060,6 +1093,31 @@ permissions: [role(trusted)]
     await guidance.mcp.stop();
   });
 
+  it('filters by the Bot\'s own standing (bot:*) before disclosure and re-checks at execution (ADR 0056 §5)', async () => {
+    const fixture = await createFixture({ scopes: ['group'], permissions: ['platform:admin', 'bot:admin', 'bot-permission:ban_members'] });
+    const ingress = new CapabilityIngress();
+    const turnWith = (bot: TurnContextState['bot'], senderStanding?: 'admin' | 'member') => {
+      const turn = accessTurn('qq', ['user'], 'group', bot);
+      return senderStanding ? { ...turn, principal: { ...turn.principal, platform: { standing: senderStanding } } } : turn;
+    };
+    const names = async (turn: ReturnType<typeof turnWith>) =>
+      (await ingress.read({ snapshot: fixture.snapshot, owner: fixture.child, isActive: () => true, turn })).tools.map(tool => tool.name);
+    const botAdmin = { platform: { standing: 'admin' as const, permissions: ['ban_members'] } };
+    expect(await names(turnWith(botAdmin, 'admin'))).toEqual(['child__lookup']);
+    // Sender is not a group admin; the bot lacks the permission; the member-role fact alone has no permissions; unknown fails closed.
+    expect(await names(turnWith(botAdmin, 'member'))).toEqual([]);
+    expect(await names(turnWith({ platform: { standing: 'admin' } }, 'admin'))).toEqual([]);
+    expect(await names(turnWith({ platformRole: 'admin' }, 'admin'))).toEqual([]);
+    expect(await names(turnWith({ platformRoleError: 'lookup_failed' }, 'admin'))).toEqual([]);
+    // A zhin owner is not a platform admin.
+    expect(await names({ ...turnWith(botAdmin), principal: { ...turnWith(botAdmin).principal, roles: ['owner', 'admin', 'trusted'] } })).toEqual([]);
+    // Execution re-checks the gate with the turn facts: a capability bound for one turn cannot run under another.
+    const allowed = await ingress.read({ snapshot: fixture.snapshot, owner: fixture.child, isActive: () => true, turn: turnWith(botAdmin, 'admin') });
+    const tool = allowed.tools.find(entry => entry.name === 'child__lookup')!;
+    await expect(tool.execute({ value: 'ok' }, invocation())).resolves.toBeDefined();
+    await fixture.mcp.stop();
+  });
+
   it('projects an Agent-private Skill only when that Agent is selected', async () => {
     const fixture = await createFixture({ privateSkillAgent: 'planner' });
     const ingress = new CapabilityIngress();
@@ -1102,9 +1160,15 @@ permissions: [role(trusted)]
   });
 });
 
+function omitFixtureOnly<T extends { readonly toolResult?: unknown; readonly mcpResult?: unknown; readonly localAssets?: unknown }>(access: T) {
+  const { toolResult: _toolResult, ...rest } = access;
+  return rest;
+}
+
 async function createFixture(access: {
   readonly localAssets?: LocalImageAssetStore;
   readonly mcpResult?: unknown;
+  readonly toolResult?: unknown;
   readonly platforms?: readonly string[];
   readonly scopes?: readonly ('private' | 'group' | 'channel')[];
   readonly currentConversationBotRoles?: readonly string[];
@@ -1131,9 +1195,9 @@ async function createFixture(access: {
     source: '/plugins/child/tools/lookup.ts',
     definition: defineAgentTool<{ value: string }>({
       description: 'Lookup',
-      ...access,
+      ...omitFixtureOnly(access),
       requiresApproval: access.requiresApproval ?? 'never',
-      execute(input) { return `old:${input.value}`; },
+      execute(input) { return (access.toolResult ?? `old:${input.value}`) as string; },
     }),
   });
   const skill = createCapabilitySlot({

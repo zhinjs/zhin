@@ -11,7 +11,7 @@ const context = {
   turnId: 'turn-schedule',
   sessionKey: 'im:qq:bot:private:u1',
   origin: { kind: 'im', platform: 'qq', endpoint: 'bot', scope: 'private', sceneId: 'u1' },
-  principal: { subjectId: 'u1', displayName: 'Alice', roles: ['master'] },
+  principal: { subjectId: 'u1', displayName: 'Alice', roles: ['owner'] },
 } as ToolExecutionContext;
 
 function manager(listJobs: ScheduleManager['engine'] extends infer _T ? () => Promise<unknown[]> : never): ScheduleManager {
@@ -48,7 +48,7 @@ describe('canonical schedule tools', () => {
 
     expect(result.success).toBe(true);
     expect(addJob).toHaveBeenCalledWith(expect.objectContaining({
-      createdBy: { userId: 'u1', name: 'Alice', roles: ['master'] },
+      createdBy: { userId: 'u1', name: 'Alice', roles: ['owner'] },
       notify: {
         channel: 'im',
         target: {

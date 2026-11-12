@@ -44,7 +44,7 @@ class NativeEvent { readonly buffer = Buffer.from('private'); method() { return 
 
 async function fixture(execute: (session: OperationSession<string>, message: Message, signal: AbortSignal) => Promise<unknown>, sideHandler?: HandlerDefinition) {
   const root = rootPluginId(), author = childPluginId(root, 'command-author');
-  const im = new ImRuntime({ enrichSender: sender => sender ? { ...sender, roles: ['trusted', ...(sender.roles ?? [])] } : sender });
+  const im = new ImRuntime({ enrichSender: sender => sender ? { ...sender, platform: { standing: 'admin' as const }, chatRole: 'trusted' as const } : sender });
   const adapter = new NativeAdapter();
   let saved: EndpointDesiredSnapshot | undefined;
   const repository: EndpointDesiredRepository = {
@@ -110,7 +110,7 @@ it('captures the real Adapter, SDK Endpoint and native event through Command and
     expect(session.adapter).toBe(f.adapter);
     expect(session.endpoint).toBe(f.endpoint);
     expect(session.event).toBe(f.event);
-    expect(session.sender).toEqual({ id: 'alice', name: 'Alice', platformRoles: ['admin'], authorizationRoles: ['trusted'] });
+    expect(session.sender).toEqual({ id: 'alice', name: 'Alice', platform: { standing: 'admin' }, chatRole: 'trusted' });
     expect(session.scene).toMatchObject({ kind: 'group', id: 'room', parent: { id: 'parent' }, threadId: 'thread' });
     expect(session.message).toMatchObject({ text: '/run', platformSentAt: 100, receivedAt: expect.any(Number) });
     await session.reply('answer');

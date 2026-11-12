@@ -5,9 +5,10 @@ import { randomUUID } from 'node:crypto';
 import { PluginTestKit, FakeClock, FakeScheduleRootHost } from '../../../packages/toolkit/testing/src/index.ts';
 import { PluginScheduleHost, rootPluginId, scheduleHostToken, scheduleRootHostToken } from '../../../packages/im/plugin-runtime/src/index.ts';
 import { createConfigDocument } from '../../../packages/im/runtime/src/config-file/index.ts';
-import { createHttpHost } from '../../../packages/host/http/src/index.ts';
-import { applyInstanceDeclarationMigration, planInstanceDeclarationMigration } from '../../../basic/cli/src/plugin-runtime/migrate/instance-declarations.ts';
-import { registerMessageDiagnosticRoutes } from '../../../basic/cli/src/plugin-runtime/console/message-diagnostic-routes.ts';
+import { createHttpHost } from '../../../packages/host/http/src/node/index.ts';
+import { installSmokeConsoleUsers } from '../harness/smoke-console-users.mjs';
+import { applyInstanceDeclarationMigration, planInstanceDeclarationMigration } from '../../../packages/host/gateway/src/project/instance-declarations.ts';
+import { registerMessageDiagnosticRoutes } from '../../../packages/im/zhin/src/instance/console/message-diagnostic-routes.ts';
 import { createSmokeProject } from '../harness/smoke-project.mjs';
 import { lastDeliveryText, smokeStep } from '../harness/smoke-checks.mjs';
 
@@ -130,8 +131,8 @@ try {
   });
 
   let diagnosticsUrl;
-  await smokeStep('verify: diagnostics API needs a full-scope token', async () => {
-    httpHost = createHttpHost({ host: '127.0.0.1', port: 0, token: operatorToken, tokens: [{ token: demoToken, scope: 'demo' }] });
+  await smokeStep('verify: diagnostics API needs a signed-in Console user with status.view', async () => {
+    httpHost = installSmokeConsoleUsers(createHttpHost({ host: '127.0.0.1', port: 0 }), { [operatorToken]: 'operator', [demoToken]: 'none' });
     registerMessageDiagnosticRoutes({ http: httpHost, base: '/api', diagnostics: kit.messageDiagnostics });
     const { port } = await httpHost.listen();
     diagnosticsUrl = `http://127.0.0.1:${port}/api/messages/diagnostics`;

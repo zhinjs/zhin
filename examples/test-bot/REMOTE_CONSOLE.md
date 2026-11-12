@@ -7,7 +7,7 @@ Host **不再**提供 `http://<host>:8086/console` 静态 UI，仅保留 Console
 ```yaml
 http:
   port: 8086
-  token: <与 .env HTTP_TOKEN 一致>
+  token: <与 .env HTTP_TOKEN 一致>   # 初始化令牌：只用于创建第一个所有者
   corsOrigins:
     - "http://127.0.0.1:5173"
     - "https://console.zhin.dev"
@@ -31,12 +31,10 @@ pnpm install
 pnpm dev          # 或 preview，见该仓库 README
 ```
 
-浏览器打开开发地址（通常 `http://127.0.0.1:5173`），登录：
+浏览器打开开发地址（通常 `http://127.0.0.1:5173`），API Base URL 填 `http://127.0.0.1:8086`：
 
-| 字段 | 值 |
-|------|-----|
-| API Base URL | `http://127.0.0.1:8086` |
-| Token | `HTTP_TOKEN` |
+1. 第一次连接（还没有所有者）：用 `HTTP_TOKEN` 进入初始化向导，创建所有者账号；也可以先在 `examples/test-bot` 运行 `pnpm exec zhin console init`。
+2. 之后用账号登录；初始化令牌在所有者创建后失效。只读验收可另建 `viewer` 账号：`pnpm exec zhin console user create viewer --role viewer`。
 
 验收：登录、bot 列表、发消息、插件市场、配置页；Network 中 API 指向 **8086**（含 `/entries`、`/api/console/request`、`/api/events`）。
 

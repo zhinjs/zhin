@@ -13,10 +13,24 @@ A routine patch upgrade usually needs only:
 npx zhin migrate --dry-run   # see what would change
 npx zhin migrate             # upgrade
 npx zhin doctor && pnpm test # check
-npx zhin runtime start --once --mode test  # assembly smoke test
+npx zhin start --once --mode test  # assembly smoke test
 ```
 
 For production, follow the full flow below and take a backup first. Stop the Bot before upgrading so dependency directories are not replaced under a running process.
+
+## Upgrading to `@zhin.js/cli` 1.2: Console access control {#console-access-control}
+
+1.2 stores Console users, roles and API tokens in the database: `http.token` only creates the first owner, `http.tokens` is removed (the Host refuses to start while it is configured), and automation uses an API token from `ZHIN_CONSOLE_TOKEN`. See [Upgrading to Console access control](../migrations/console-access-control.md) for the full steps.
+
+## Upgrading to the management gateway: `zhin start` {#management-gateway}
+
+`zhin start` now starts the long-lived management gateway (ADR 0054), which launches and supervises the instance. Full steps (dependencies, systemd / Docker / PM2, HTTP routes moving to `Request` / `Response`, reverse WebSockets, plugin permissions, logs and SQLite): [Upgrading to the management gateway](../migrations/management-gateway.md). Key points:
+
+- **It runs in the background by default.** For development, systemd, Docker and PM2 use `zhin start --foreground` (`zhin runtime start` is its alias, so existing scripts keep working). Scaffolded `pnpm dev` becomes `zhin start --foreground --watch source config` and `pnpm start` becomes `zhin start --foreground --mode production --no-watch`.
+- **An instance crash no longer ends the process**: crashes are restarted under the 10-per-minute storm guard; past it the instance stays `crashed` and the gateway keeps running. Only SIGTERM / Ctrl+C / `zhin stop` end the gateway (exit code 0 / 130). Monitoring that relied on the process exit code to detect instance crashes should read `zhin status --json`, `/pub/health` or `/pub/ready` instead.
+- **`zhin stop` / `restart` / `status` / `logs`** talk to the gateway over the local control socket `.zhin/gateway.sock` (`0600`) and must run as the user that started it. `zhin stop` still stops an older process that only wrote `.zhin.pid`.
+- **`zhin install` / `uninstall` / `update`** go through the gateway while it runs (stop instance → install → start instance, rolled back on failure); git URLs, local paths and `--save-dev` need `zhin stop` first.
+- `--daemon` no longer means "foreground with crash restarts": crash restarts apply to every mode and `--daemon` only selects a background run.
 
 ## Adapter API 2: this patch batch's plugin boundary {#adapter-api-2}
 
@@ -143,7 +157,7 @@ Create one checkpoint: Git commit, `package.json`, lockfile, config, `.env` key 
 1. Run `zhin migrate --dry-run` on a copy or staging environment.
 2. Enter a maintenance window and stop the Bot and any ingress that creates new side effects (before upgrading dependencies).
 3. Run `zhin migrate` and review package, script, and directory changes.
-4. Run doctor, type checks, tests, and `runtime start --once --mode test`.
+4. Run doctor, type checks, tests, and `zhin start --once --mode test`.
 5. Start production and accept Sandbox, a real Endpoint, Agent, and multi-Agent collaboration (when `ai.venues` is configured).
 
 Never share one writable SQLite file or file Journal between live instances. Blue/green release needs isolated copies and an explicit cutover; only one instance may own write authority.

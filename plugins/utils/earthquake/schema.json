@@ -2,6 +2,14 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
+  "x-zhin-config": {
+    "levels": [
+      "global",
+      "adapter",
+      "endpoint",
+      "conversation"
+    ]
+  },
   "properties": {
     "sources": {
       "type": "array",
@@ -23,6 +31,11 @@
         "en": {
           "description": "Enabled data sources in priority order. The first source supplies location text when merging the same earthquake; other sources cover a failed source."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "cencUrls": {
@@ -43,6 +56,11 @@
         "en": {
           "description": "CENC catalog URLs, tried in order (primary followed by mirrors). HTTPS only, up to 5 URLs."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "usgsFeed": {
@@ -63,6 +81,11 @@
         "en": {
           "description": "USGS GeoJSON summary feed name (minimum-magnitude_time-range)."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "pollCron": {
@@ -73,6 +96,11 @@
         "en": {
           "description": "Subscription polling schedule (6-field cron: second, minute, hour, day, month, weekday)."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "timezone": {
@@ -83,6 +111,11 @@
         "en": {
           "description": "IANA timezone used to display earthquake times."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "requestTimeoutMs": {
@@ -95,6 +128,11 @@
         "en": {
           "description": "HTTP request timeout in milliseconds."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "maxRetries": {
@@ -108,6 +146,11 @@
         "en": {
           "description": "Retries for network errors, timeouts, HTTP 429 and 5xx, excluding the initial request."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "retryBaseDelayMs": {
@@ -120,6 +163,11 @@
         "en": {
           "description": "Initial exponential-backoff delay in milliseconds; doubles for each retry with random jitter."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "retryMaxDelayMs": {
@@ -132,6 +180,11 @@
         "en": {
           "description": "Maximum backoff or Retry-After wait in milliseconds. Longer server waits abandon this round and cool down the source."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "defaultMinMagnitude": {
@@ -144,6 +197,11 @@
         "en": {
           "description": "Minimum magnitude for subscriptions that do not specify one."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "queryMinMagnitude": {
@@ -156,6 +214,11 @@
         "en": {
           "description": "Minimum magnitude for earthquake queries that do not specify one."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "queryLimit": {
@@ -169,6 +232,11 @@
         "en": {
           "description": "Default number of earthquake query results."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "maxEventAgeMinutes": {
@@ -181,6 +249,11 @@
         "en": {
           "description": "Only notify about earthquakes from the last specified number of minutes, avoiding delayed or replayed old events."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "pushLimit": {
@@ -194,6 +267,11 @@
         "en": {
           "description": "Maximum notification messages per conversation in one rate-limit window."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "pushWindowMinutes": {
@@ -206,6 +284,11 @@
         "en": {
           "description": "Notification rate-limit window in minutes."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "maxEventsPerMessage": {
@@ -219,6 +302,11 @@
         "en": {
           "description": "Maximum earthquakes listed in one notification; the remainder is summarized as a count."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     },
     "maxSubscriptions": {
@@ -232,6 +320,11 @@
         "en": {
           "description": "Maximum subscriptions across this instance, at most one per conversation."
         }
+      },
+      "x-zhin-config": {
+        "levels": [
+          "global"
+        ]
       }
     }
   }

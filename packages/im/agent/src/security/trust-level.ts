@@ -15,6 +15,7 @@
  *
  * Replaces the #719 group-member stopgap.
  */
+import { chatRolesInclude } from '@zhin.js/core';
 import type { TurnPolicyContext } from '../turn/turn-ingress.js';
 import { deriveSubagentPolicy } from './policy-narrowing.js';
 
@@ -76,8 +77,9 @@ export function isOutboundToolName(name: string): boolean {
 /** Trust level of a turn's initiator. Roles come from the trusted product ingress, never from message text. */
 export function resolveTurnTrustLevel(turn: TrustTurnView): InitiatorTrustLevel {
   const roles = turn.principal.roles;
-  if (roles.includes('master')) return 'owner';
-  if (roles.includes('trusted')) return 'trusted_member';
+  if (chatRolesInclude(roles, 'owner')) return 'owner';
+  // ADR 0056: admin includes trusted.
+  if (chatRolesInclude(roles, 'trusted')) return 'trusted_member';
   // Any IM sender that is neither owner nor on the trusted list — including a
   // stranger in a private chat (#753) — gets the group_member ceiling.
   return turn.origin.kind === 'im' ? 'group_member' : 'trusted_member';

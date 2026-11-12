@@ -2,7 +2,6 @@ import { createMilkySelfProfile } from './self-profile.js';
 /**
  * Milky webhook endpoint — httpHostToken POST inbound + baseUrl HTTP API outbound.
  */
-import type { IncomingMessage, ServerResponse } from 'node:http';
 import { acceptHttpIngress } from 'imhelper';
 import {
   createEndpointSpecification, endpointSpec, type Endpoint, type EndpointSpecification,
@@ -28,6 +27,7 @@ import {
   formatOutboundSegments,
   isMentioned,
   milkyInboundConversation,
+  milkySenderStanding,
   parseMessageReceiveData,
   parseMilkyMessageId,
   senderNickname,
@@ -150,6 +150,7 @@ export class MilkyWebhookEndpoint extends MilkyClient implements Endpoint {
     const segments = formatInboundSegments(data);
     const audioUrl = extractInboundAudioUrl(data);
     const nickname = senderNickname(data);
+    const platform = milkySenderStanding(data);
     const mentioned = isMentioned(data, event.self_id);
     void this[endpointSpec].events.message({
       event,
@@ -158,7 +159,7 @@ export class MilkyWebhookEndpoint extends MilkyClient implements Endpoint {
       message: { conversation, id: formatInboundMessageId(data) },
       content,
       segments,
-      sender: { id: String(data.sender_id), name: nickname },
+      sender: { id: String(data.sender_id), name: nickname, ...(platform ? { platform } : {}) },
       endpointId: this.#options.config.id,
       ...(mentioned ? { mentioned: true } : {}),
       metadata: Object.freeze({
@@ -182,34 +183,26 @@ export class MilkyWebhookEndpoint extends MilkyClient implements Endpoint {
   #setupRoutes(): void {
     const path = this.#options.config.path;
     this.#routeReleases.push(
-      this.#options.http.route('POST', path, async (request, response) => {
-        await this.#handleWebhook(request, response);
-      }, { summary: 'Milky webhook callback', tags: ['milky'] }),
+      this.#options.http.route('POST', path, (request) => this.#handleWebhook(request), { summary: 'Milky webhook callback', tags: ['milky'] }),
     );
   }
 
-  async #handleWebhook(request: IncomingMessage, response: ServerResponse): Promise<void> {
+  async #handleWebhook(request: Request): Promise<Response> {
     try {
       if (!verifyMilkyAccessToken(this.#options.config.access_token, request)) {
-        response.writeHead(403, { 'Content-Type': 'application/json' });
-        response.end(JSON.stringify({ message: 'Unauthorized' }));
-        return;
+        return new Response(JSON.stringify({ message: 'Unauthorized' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
       }
       if (!this.#open) {
-        response.writeHead(200, { 'Content-Type': 'application/json' });
-        response.end(JSON.stringify({ status: 'ok' }));
-        return;
+        return new Response(JSON.stringify({ status: 'ok' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
       }
-      await acceptHttpIngress<MilkyEvent>(request, response, event => {
+      const result = await acceptHttpIngress<MilkyEvent>(request, undefined, event => {
         void this[endpointSpec].events.run(() => this.ingest(event as Parameters<MilkyClient['ingest']>[0]))
           .catch(error => this.#warnPlatformEvent(error));
       });
+      return new Response(JSON.stringify(result.body), { status: result.status, headers: result.headers });
     } catch (error) {
       this.#logger.error('Milky webhook error:', error);
-      if (!response.headersSent) {
-        response.writeHead(500, { 'Content-Type': 'application/json' });
-        response.end(JSON.stringify({ message: 'Internal Server Error' }));
-      }
+      return new Response(JSON.stringify({ message: 'Internal Server Error' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
     }
   }
 }

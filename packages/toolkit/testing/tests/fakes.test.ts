@@ -31,6 +31,20 @@ const plugin = definePlugin<{ target: string }>({
 let disposed = false;
 
 describe('testing fakes', () => {
+  it('fakes the layered feature view (ADR 0050 / 0055)', () => {
+    let off = 'g1';
+    const fake = createFakePlugin({ config: { limit: 3, name: 'x' }, feature: {
+      isEnabledFor: target => typeof target === 'object' && 'conversation' in target && target.conversation?.id !== off,
+      configFor: target => typeof target === 'string' && target.endsWith('group:g2') ? { limit: 9 } : undefined,
+    } });
+    const g1 = { conversation: { endpoint: { id: 'e' }, kind: 'group', id: 'g1' } };
+    expect(fake.context.isEnabledFor(g1)).toBe(false);
+    off = 'none';
+    expect(fake.context.isEnabledFor(g1)).toBe(true);
+    expect(fake.context.configFor('sandbox/e/group:g2')).toEqual({ limit: 9, name: 'x' });
+    expect(createFakePlugin({ config: { limit: 3 } }).context.configFor('a')).toEqual({ limit: 3 });
+    expect(createFakePlugin().context.isEnabledFor('a')).toBe(true);
+  });
   it('does not manufacture an operation Session for direct fake runners', async () => {
     const fake = createFakePlugin();
     expect(createCommandContext(fake).session).toBeUndefined();
@@ -120,7 +134,7 @@ describe('testing fakes', () => {
         return text;
       },
     });
-    const message = createFakeMessage({ sender: { id: 'u', name: 'Ann', roles: ['admin'] } });
+    const message = createFakeMessage({ sender: { id: 'u', name: 'Ann', chatRole: 'admin' } });
     expect(await runCommand(fake, command, { input: message })).toBe('hi Ann');
     expect(message.replies).toEqual(['hi Ann']);
 

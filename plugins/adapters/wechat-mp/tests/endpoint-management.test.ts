@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { listEndpointManagementCapabilities } from 'zhin.js/adapter';
 import type { OutboundMessageService } from '@zhin.js/core/runtime';
-import { createHttpHost } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http/node';
 import { WeChatMpEndpoint } from '../src/endpoint.js';
 import type { WeChatMpFetch } from '../src/client.js';
 import { resolveWeChatMpConfig } from '../src/protocol.js';

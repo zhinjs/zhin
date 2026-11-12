@@ -4,6 +4,7 @@ import {
   operationsImpliedByProfile,
   resolveStaticCapabilities,
   resolveTurnCapabilities,
+  selfStandingDeclared,
   type AdapterCapabilityProfile,
   type AdapterCapabilityResolver,
   type ResolveTurnCapabilitiesInput,
@@ -48,6 +49,9 @@ import {
 import { endpointContentOf, type EndpointContentResolveContext } from './endpoint-content.js';
 import {
   EndpointDeliveryError,
+  normalizePlatformStanding,
+  type ConversationRef,
+  type PlatformStanding,
   type ConversationReference,
   type ConversationResolution,
   type EndpointCapabilities,
@@ -59,6 +63,29 @@ import { type EndpointDesiredRepository, type EndpointSecretResolver, type Endpo
 import { bindPlatformEndpoint, endpointRuntimeOf, type AnyEndpoint } from './endpoint-specification.js';
 import { configuredSelfProfile, endpointCreationConfiguration, isEndpointProfileConfigurationChange, mergeEndpointProfileConfiguration,
   type SelfProfile, type SelfProfilePort, type SelfProfileSnapshot } from './endpoint-profile.js';
+
+/** ADR 0056 §1: how long the Bot's own standing in one conversation is reused. */
+export const SELF_STANDING_TTL_MS = 60_000;
+/** A failed / unknown answer is retried sooner. */
+export const SELF_STANDING_UNKNOWN_TTL_MS = 10_000;
+const SELF_STANDING_MAX_ENTRIES = 1024;
+/** Deadline of one shared `inspectSelfStanding` platform call, independent of any caller. */
+const SELF_STANDING_LOOKUP_TIMEOUT_MS = 10_000;
+
+interface SelfStandingEntry {
+  readonly at: number;
+  readonly ttl: number;
+  readonly value: PlatformStanding | undefined;
+}
+
+export interface SelfStandingLookupOptions {
+  readonly signal?: AbortSignal;
+  /** Answer from the cache only; never start a platform lookup (middleware gates). */
+  readonly cachedOnly?: boolean;
+  readonly now?: number;
+}
+
+type SelfStandingConversation = Pick<ConversationRef, 'kind' | 'id' | 'parent' | 'threadId'>;
 
 /** Trusted composition input, excluded from public snapshot resources and authoring contexts. */
 export interface AdapterPersistencePorts {
@@ -143,6 +170,9 @@ export class AdapterIndex {
   readonly #slots: readonly Readonly<CapabilitySlot>[];
   readonly #profileDefaults = new Map<PluginId, Readonly<SelfProfile>>();
   readonly #fileProfiles = new Map<CapabilityId, Readonly<SelfProfile>>();
+  readonly #selfStanding = new Map<string, SelfStandingEntry>();
+  /** In-flight lookups; an entry's identity marks the lookup still current (invalidation removes it). */
+  readonly #selfStandingInflight = new Map<string, { promise?: Promise<PlatformStanding | undefined> }>();
   readonly [generationAdmissionSource]: readonly [GenerationAdmissionGate];
 
   private constructor({ adapters, admission, ownerAliases, configurations, slots }: AdapterIndexConstruction) {
@@ -482,6 +512,77 @@ export class AdapterIndex {
   }
 
   /**
+   * ADR 0056 §1: the Bot account's own standing in one conversation, for `bot:*` permits. Only where
+   * the profile declares `scene.selfStanding` and the Endpoint implements
+   * `management.inspectSelfStanding`; private chats and failures are `undefined` (unknown). Answers
+   * are cached per conversation for {@link SELF_STANDING_TTL_MS} (unknown ones shorter) within this
+   * generation, concurrent lookups share one platform call, and {@link invalidateSelfStanding}
+   * drops entries when the Bot's role changes. `cachedOnly` never waits for the platform: it
+   * answers from a fresh cache entry and refreshes a missing / expired one in the background — an
+   * expired entry answers *unknown* (a stale standing never satisfies a `bot:*` permit).
+   */
+  async selfStanding(id: CapabilityId, conversation: SelfStandingConversation, options: SelfStandingLookupOptions = {}): Promise<PlatformStanding | undefined> {
+    if (conversation.kind === 'private') return undefined;
+    const record = this.#record(id);
+    if (!record || !selfStandingDeclared(record.profile, conversation)) return undefined;
+    const key = selfStandingKey(id, conversation);
+    const now = options.now ?? Date.now();
+    const cached = this.#selfStanding.get(key);
+    if (cached && now - cached.at < cached.ttl) return cached.value;
+    const inflight = this.#selfStandingInflight.get(key)?.promise;
+    if (options.cachedOnly) {
+      // Warm the cache in the background (one lookup per TTL, shared); answer with what is known now.
+      if (!inflight) void this.selfStanding(id, conversation, { ...(options.now !== undefined ? { now: options.now } : {}) }).catch(() => undefined);
+      return undefined;
+    }
+    if (inflight) return waitForCaller(inflight, options.signal);
+    const management = this.management(id);
+    const inspect = management?.inspectSelfStanding;
+    if (!inspect) return undefined;
+    // The shared lookup has its own deadline: one caller's signal must neither lift that bound nor
+    // cancel (and cache as unknown) the answer other callers are waiting for.
+    const entry: { promise?: Promise<PlatformStanding | undefined> } = {};
+    const task = (async () => {
+      await undefined; // registered in #selfStandingInflight before the platform call starts
+      let value: PlatformStanding | undefined;
+      try {
+        value = normalizePlatformStanding(await inspect({
+          conversation: Object.freeze({ kind: conversation.kind, id: conversation.id,
+            ...(conversation.parent ? { parent: Object.freeze({ kind: conversation.parent.kind, id: conversation.parent.id }) } : {}),
+            ...(conversation.threadId !== undefined ? { threadId: conversation.threadId } : {}) }),
+          signal: AbortSignal.timeout(SELF_STANDING_LOOKUP_TIMEOUT_MS),
+        }));
+      } catch {
+        value = undefined;
+      }
+      // Invalidated while in flight (role change): do not store the older answer.
+      if (this.#selfStandingInflight.get(key) !== entry) return value;
+      this.#selfStandingInflight.delete(key);
+      if (this.#selfStanding.size >= SELF_STANDING_MAX_ENTRIES) {
+        const oldest = this.#selfStanding.keys().next();
+        if (!oldest.done) this.#selfStanding.delete(oldest.value);
+      }
+      this.#selfStanding.delete(key);
+      this.#selfStanding.set(key, Object.freeze({ at: Date.now(), ttl: value ? SELF_STANDING_TTL_MS : SELF_STANDING_UNKNOWN_TTL_MS, value }));
+      return value;
+    })();
+    entry.promise = task;
+    this.#selfStandingInflight.set(key, entry);
+    return waitForCaller(task, options.signal);
+  }
+
+  /** Drops cached Bot standings of one conversation (or every conversation of the Endpoint). */
+  invalidateSelfStanding(id: CapabilityId, conversation?: Pick<ConversationRef, 'kind' | 'id'>): void {
+    const prefix = `${id}\u0000`;
+    for (const map of [this.#selfStanding, this.#selfStandingInflight] as const) {
+      for (const key of [...map.keys()]) {
+        if (!key.startsWith(prefix)) continue;
+        if (!conversation || key.startsWith(`${prefix}${conversation.kind}\u0000${conversation.id}\u0000`)) map.delete(key);
+      }
+    }
+  }
+
+  /**
    * Resolve the capabilities of one turn for an Endpoint (ADR 0044 §2): static profile + generic
    * narrowing + the Adapter's narrow-only `resolveCapabilities`. Unknown ids resolve to `undefined`.
    */
@@ -651,6 +752,21 @@ function projectRecord(adapter: AdapterInstance, child: EndpointChildView): Adap
     endpoint: child.endpoint, segments: adapter.descriptor.segments,
     started: child.started, open: child.open, stopped: child.stopped, startAttempted: child.startAttempted,
   };
+}
+
+/** One caller stops waiting when its own signal aborts (answering "unknown"); the shared lookup goes on. */
+function waitForCaller<T>(task: Promise<T | undefined>, signal: AbortSignal | undefined): Promise<T | undefined> {
+  if (!signal) return task;
+  if (signal.aborted) return Promise.resolve(undefined);
+  return new Promise<T | undefined>((resolve, reject) => {
+    const onAbort = () => resolve(undefined);
+    signal.addEventListener('abort', onAbort, { once: true });
+    task.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort));
+  });
+}
+
+function selfStandingKey(id: CapabilityId, conversation: SelfStandingConversation): string {
+  return [id, conversation.kind, conversation.id, conversation.threadId ?? '', conversation.parent ? `${conversation.parent.kind}:${conversation.parent.id}` : ''].join('\u0000');
 }
 
 export function isAdapterIndex(value: unknown): value is AdapterIndex {

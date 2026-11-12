@@ -561,26 +561,6 @@ export function errorReply(
   return payloads;
 }
 
-/** HTTP paths under apiBase that demo scope may call (ADR 0016). */
-export function isDemoHttpAllowed(method: string, pathname: string, apiBase: string): boolean {
-  const normalizedBase = apiBase.replace(/\/$/u, '') || '/api';
-  const m = method.toUpperCase();
-  // Each inference handler resolves a static authenticated personal binding before reading or mutating anything.
-  if (m === 'GET' && ['', '/owners', '/export', '/mutation', '/sessions', '/session'].some(path => pathname === `${normalizedBase}/agent/inference${path}`)) return true;
-  if (m === 'PUT' && pathname === `${normalizedBase}/agent/inference/session`) return true;
-  if (m === 'POST' && ['/plan', '/apply', '/key/prepare', '/discover', '/profile-schema'].some(path => pathname === `${normalizedBase}/agent/inference${path}`)) return true;
-  if (m === 'GET' && pathname === `${normalizedBase}/events`) return true;
-  if (m === 'GET' && pathname === `${normalizedBase}/events/history`) return true;
-  if (m === 'GET' && DEMO_INTROSPECTION_PATHS.has(pathname.slice(normalizedBase.length))) return true;
-  if (m === 'POST' && pathname === `${normalizedBase}/console/request`) return true;
-  // Read-only dashboard / plugin inspection routes (legacy host-api parity).
-  if (m === 'GET' && pathname === `${normalizedBase}/system/status`) return true;
-  if (m === 'GET' && pathname === `${normalizedBase}/stats`) return true;
-  if (m === 'GET' && (pathname === `${normalizedBase}/plugins`
-    || pathname.startsWith(`${normalizedBase}/plugins/`))) return true;
-  return false;
-}
-
 export function configurationSaveMessage(result: { restartRequired: boolean; revision?: string }
   & ConsoleConfigApplicationStatus): string {
   if (result.applicationError === 'superseded') return '配置已保存，但该次生效申请已被替代';
@@ -597,13 +577,3 @@ export function configurationSaveMessage(result: { restartRequired: boolean; rev
   return result.restartRequired ? '配置已保存，需重启进程才能生效' : '配置已保存';
 }
 
-const DEMO_INTROSPECTION_PATHS: ReadonlySet<string> = new Set([
-  '/introspection/commands',
-  '/introspection/middlewares',
-  '/introspection/components',
-  '/introspection/endpoints',
-  '/introspection/bindings',
-  '/introspection/tools',
-  '/introspection/prompt-sections',
-  '/introspection/mcp',
-]);

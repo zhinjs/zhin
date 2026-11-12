@@ -71,7 +71,7 @@ export default definePlugin({
 
 ### Console
 
-浏览器里的管理后台，地址固定为 [console.zhin.dev](https://console.zhin.dev)，**不需要你部署**。Bot 启动时会打印一个 API 地址（新项目默认 `http://127.0.0.1:8068`），在 Console 里填入这个地址和 `.env` 里的 `HTTP_TOKEN`，就能发测试消息、看日志、改配置、管理插件。深入：[Console](../console/index.md)
+浏览器里的管理后台，地址固定为 [console.zhin.dev](https://console.zhin.dev)，**不需要你部署**。Bot 启动时会打印一个 API 地址（新项目默认 `http://127.0.0.1:8068`），在 Console 里填入这个地址，第一次用 `.env` 里的 `HTTP_TOKEN` 创建所有者账号，之后用账号登录，就能发测试消息、看日志、改配置、管理插件。深入：[Console](../console/index.md)
 
 ## 开始写插件后会遇到的
 
@@ -95,7 +95,7 @@ plugins:
 
 ### Host
 
-Bot 进程对外开放的 HTTP 服务。Console、Webhook 类平台回调、MCP 等都通过它访问 Bot。由 CLI 在 `zhin runtime start` 时自动装配，端口在 `zhin.config.yml` 的 `http.port`。深入：[部署与恢复](../operations/production.md)
+Bot 进程对外开放的 HTTP 服务。Console、Webhook 类平台回调、MCP 等都通过它访问 Bot。由 `zhin start` 启动的管理网关承载（实例崩溃时仍可用），端口在 `zhin.config.yml` 的 `http.port`。深入：[部署与恢复](../operations/production.md)
 
 ### 消息流与出站
 

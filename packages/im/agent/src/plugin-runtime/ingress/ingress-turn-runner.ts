@@ -329,7 +329,7 @@ export async function executeAdmittedMailTurn(input: ExecuteAdmittedMailTurnInpu
             projectRoot,
             defaultNetwork: interactiveNetworkPolicy(service.getAgentConfig()),
           });
-          const approverId = senderRoles.isMaster ? message.sender?.id : (ownerId ?? trigger?.masters?.[0]);
+          const approverId = senderRoles.isMaster ? message.sender?.id : ownerId;
           const approvalInteraction = approverId
             ? im.createInteraction(message, { subjectId: approverId })
             : undefined;

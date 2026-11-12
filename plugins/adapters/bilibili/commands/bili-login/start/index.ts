@@ -4,7 +4,7 @@ import { bilibiliEndpoints, startLoginForChat } from '@zhin.js/adapter-bilibili'
 
 export default defineCommand({
   description: '扫码登录 B 站（只在私聊里发二维码）', descriptionI18n: { en: 'Sign in to Bilibili with a QR code (private chats only)' },
-  permit: ['role(master)'],
+  permit: ['owner'],
   async execute(context) {
     const { args, locale, input, formatCommand } = context;
     const directory = bilibiliEndpoints(context);

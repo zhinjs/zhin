@@ -4,7 +4,7 @@ import { turnPolicyAllowsShell } from '../../src/plugin-runtime/native-bash-tool
 import type { TurnPolicyContext } from '../../src/turn/turn-ingress.js';
 
 const ISOLATED: TurnPolicyContext = Object.freeze({
-  permissions: ['master'],
+  permissions: ['owner'],
   unattended: false,
   shell: { security: 'allowlist', execPreset: 'development', approvalMode: 'auto', isolation: 'required' },
   filesystem: { workspaceRoot: '/ws', workingDirectory: '/ws', access: 'workspace-write' },

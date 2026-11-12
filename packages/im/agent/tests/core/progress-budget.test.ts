@@ -248,7 +248,7 @@ describe('automatic continuation', () => {
       toolBudget: { extendBy: 0, autoContinue: 'on' },
       turn: {
         origin: { kind: 'http', sessionId: 'h' },
-        principal: { subjectId: 'u', roles: ['master'] },
+        principal: { subjectId: 'u', roles: ['owner'] },
         session: { key: 'k' },
         policy: { permissions: [], unattended: false },
       },
@@ -278,10 +278,10 @@ describe('automatic continuation', () => {
       session: { key: 'k' },
     }) as never;
     expect(resolveToolBudget({}).autoContinue).toBe('master_dm');
-    expect(autoContinueAllowed('master_dm', turn(['master'], 'private'))).toBe(true);
-    expect(autoContinueAllowed('master_dm', turn(['master'], 'group'))).toBe(false);
+    expect(autoContinueAllowed('master_dm', turn(['owner'], 'private'))).toBe(true);
+    expect(autoContinueAllowed('master_dm', turn(['owner'], 'group'))).toBe(false);
     expect(autoContinueAllowed('master_dm', turn(['user'], 'private'))).toBe(false);
-    expect(autoContinueAllowed('off', turn(['master'], 'private'))).toBe(false);
+    expect(autoContinueAllowed('off', turn(['owner'], 'private'))).toBe(false);
   });
 
   it('counts sub-agent completion as progress and continues the parent', async () => {

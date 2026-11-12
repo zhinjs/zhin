@@ -292,7 +292,7 @@ async function runInWorkspace(
         entry: entryActor,
         text: routed.userText,
         plainText: !message.images?.length && !message.quote,
-        isMaster: (sender.roles ?? []).includes('master'),
+        isMaster: evalSenderRoles(sender).includes('owner'),
         ...(sender.name ? { senderName: sender.name } : {}),
         ...(message.addressed === false ? { unaddressed: true } : {}),
         ...(venueDef
@@ -440,7 +440,7 @@ async function runInWorkspace(
       const owner = inbound.owner;
       const message: EvalInboundMessage = {
         text: inbound.content,
-        sender: { id: owner.id, roles: [...(owner.roles ?? ['user'])] },
+        sender: { id: owner.id, roles: [...evalSenderRoles(owner)] },
       };
       await runAdmitted(message, index, admission);
     };
@@ -510,7 +510,7 @@ function buildTurn(
 ) {
   const scope = message.scope ?? 'private';
   const sender = message.sender ?? { id: 'eval-user', roles: ['user'] };
-  const roles = [...(sender.roles ?? ['user'])];
+  const roles = [...evalSenderRoles(sender)];
   const sceneId = scope === 'group' ? 'eval-group' : sender.id;
   const baseSessionKey = sessionKeyFor(message);
   const hasActorScript = entryActor !== 'zhin' && definition.script.some((step) => step.actor === entryActor);
@@ -667,10 +667,10 @@ function createTurnTrace(definition: EvalCase, message: EvalInboundMessage, inde
     principal: {
       subjectId: sender.id,
       ...(sender.name ? { displayName: sender.name } : {}),
-      roles: [...(sender.roles ?? ['user'])],
+      roles: [...evalSenderRoles(sender)],
       trustLevel: resolveTurnTrustLevel({
         origin: { kind: 'im', scope: message.scope ?? 'private' },
-        principal: { roles: sender.roles ?? ['user'] },
+        principal: { roles: evalSenderRoles(sender) },
       }),
     },
   });
@@ -919,8 +919,8 @@ export async function deliverTimerMailInbound(
   inbound: EvalTimerInbound,
 ): Promise<TurnAdmission> {
   const owner = inbound.owner;
-  const roles = owner.roles ?? [];
-  const isMaster = roles.includes('master');
+  const roles = evalSenderRoles(owner);
+  const isMaster = roles.includes('owner');
   const ownerSession = `im:${PLATFORM}:${ENDPOINT}:private:${owner.id}`;
   return mailbox.admit({
     sessionKey: `timer:${inbound.timerId}`,
@@ -935,4 +935,10 @@ export async function deliverTimerMailInbound(
     venue: Object.freeze({ kind: 'turn', id: ownerSession }),
     ...(inbound.budget ? { budget: engagementBudget(inbound.budget) } : {}),
   });
+}
+
+/** Principal roles of an eval sender: `chatRole` expanded (ADR 0056), else `roles`, else `user`. */
+export function evalSenderRoles(sender: Readonly<{ roles?: readonly string[]; chatRole?: 'owner' | 'admin' | 'trusted' }>): readonly string[] {
+  if (sender.chatRole) return (['owner', 'admin', 'trusted'] as const).slice(['owner', 'admin', 'trusted'].indexOf(sender.chatRole));
+  return sender.roles ?? ['user'];  // eval principal roles (not message sender roles)
 }

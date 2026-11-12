@@ -12,7 +12,7 @@ export default defineEvalCase({
     kind: 'timer',
     timerId: 'hourly-health-check',
     content: '每小时巡检：检查所有服务的健康状态',
-    owner: { id: 'master', roles: ['master'] },
+    owner: { id: 'master', roles: ['owner'] },
     // Bounded grant: two model calls for tool work, then report-back (trap steps unused).
     budget: { modelCalls: 2 },
   },

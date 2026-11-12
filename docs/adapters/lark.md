@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/lark/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/lark/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=133f9045697b3060 -->
+<!-- sync-adapter-docs:sha256=c21fdd61d4976c0e -->
 
 # @zhin.js/adapter-lark
 
@@ -126,7 +126,7 @@ pnpm --filter @zhin.js/adapter-lark test
 
 新增仅保存，需手动启动；运行账号的普通配置更新只重连该账号。身份变化走明确替换，新账号不会继承旧 Session 或登录状态。账号凭据变化先按平台实际只读接口核验；平台无法核验时需明确替换。空白或遮蔽的密码不会覆盖既有密码。
 
-读取需要 `lark:read`，写入需要 `lark:write`；首次迁移还需管理员身份。无持久化存储时管理操作不可用，提交结果未知时先刷新核实，不重复提交。
+读取需要 `lark:read`（`read` 级别，内置角色 `viewer` 及以上都有），写入需要 `lark:write`（`operate` 级别，`operator` 及以上都有，绑定到本适配器的角色也算）；首次迁移还需管理员身份，见[插件权限的级别](https://zhin.js.org/console/#插件权限的级别)。无持久化存储时管理操作不可用，提交结果未知时先刷新核实，不重复提交。
 
 ## 故障排查
 
@@ -192,3 +192,7 @@ LARK_WEB_API_PROXY_PORT=18094 pnpm --filter platform-acceptance-bot start:lark
 ```
 
 控制端使用工具指南的 cut/recover。恢复后发送新 probe；断线发生在 POST 接收后时结果保持 unknown，不自动重投旧样本。此入口适用于专用测试实例，不能用本地 TLS fixture 冒充真实飞书恢复。默认未配置时仍使用原有 global fetch 直连。代理使用同一依赖版本的 [undici fetch](https://github.com/nodejs/undici/blob/v6.28.0/docs/docs/api/Fetch.md) 与 dispatcher，避免 Node 内置版本的 handler 合同差异；采用 [undici 6.x Agent connect 合同](https://github.com/nodejs/undici/blob/v6.28.0/docs/docs/api/Agent.md)。
+
+## 成员身份
+
+群消息按 `chat.get`（群主 `owner_id`、群管理员列表，按群缓存）归一为 `sender.platform.standing`（`owner` / `admin` / `member`）；私聊不上报。飞书群没有原生角色与权限位。能力画像：`group.scene.platformStanding = { standing: true }`。详见 [ADR 0056 §1](https://github.com/zhinjs/zhin/blob/main/docs/adr/0056-chat-roles.md)。
