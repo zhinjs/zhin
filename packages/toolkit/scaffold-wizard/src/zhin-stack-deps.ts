@@ -15,6 +15,7 @@ import { findMissingPackageDependencies, findUnresolvedPackageInstalls, isAiEnab
 export const ZHIN_STACK_VERSIONS = {
   'zhin.js': 'latest',
   '@zhin.js/cli': 'latest',
+  '@zhin.js/gateway': 'latest',
   '@zhin.js/agent': 'latest',
   '@zhin.js/database': 'latest',
   '@zhin.js/plugin-runtime': 'latest',
@@ -139,6 +140,10 @@ export function getCreateBotPnpmWorkspaceConfig(): Record<string, unknown> {
 export function getCreateBotBaseDependencies(): Record<string, string> {
   return {
     'zhin.js': ZHIN_STACK_VERSIONS['zhin.js'],
+    // `zhin start` runs the CLI and the management gateway in production too (ADR 0054 §0), so all
+    // three are production dependencies (a `--prod` install keeps them) pinned to one release.
+    '@zhin.js/cli': ZHIN_STACK_VERSIONS['@zhin.js/cli'],
+    '@zhin.js/gateway': ZHIN_STACK_VERSIONS['@zhin.js/gateway'],
     '@zhin.js/skill': ZHIN_STACK_VERSIONS['@zhin.js/skill'],
   };
 }

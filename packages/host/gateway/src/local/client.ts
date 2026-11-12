@@ -7,6 +7,8 @@ import {
   LineDecoder,
   LOCAL_GATEWAY_RPC,
   type LocalGatewayErrorCode,
+  type LocalGatewayHttpMethod,
+  type LocalGatewayHttpResponse,
   type LocalGatewayInfoResult,
   type LocalGatewayServerLine,
 } from './protocol.js';
@@ -186,4 +188,50 @@ export async function probeLocalGateway(options: LocalGatewayClientOptions): Pro
     throw error;
   }
   try { return await client.info(); } finally { client.close(); }
+}
+
+/** The subset of `fetch` the CLI's Host clients use. */
+export type LocalGatewayFetch = (input: string | URL, init?: Readonly<{ method?: string; body?: string | null; signal?: AbortSignal | null; headers?: unknown }>) => Promise<Response>;
+
+/**
+ * A `fetch` that sends `{base}/…` requests over the local control socket
+ * (`gateway.http.request`) instead of HTTP: the gateway runs them as the local owner, so no
+ * Console token is needed (ADR 0054 §6). Only the path and query of the URL are used. A gateway
+ * that is not running rejects like a refused connection (`cause.code === 'ECONNREFUSED'`).
+ */
+export function createLocalGatewayFetch(options: LocalGatewayClientOptions): LocalGatewayFetch {
+  return async (input, init = {}) => {
+    const url = typeof input === 'string' ? new URL(input) : input;
+    const method = (init.method ?? 'GET').toUpperCase() as LocalGatewayHttpMethod;
+    const body = typeof init.body === 'string' ? init.body : undefined;
+    const signal = init.signal ?? undefined;
+    signal?.throwIfAborted();
+    let client: LocalGatewayClient;
+    try { client = await LocalGatewayClient.connect(options); } catch (error) {
+      if (error instanceof LocalGatewayClientError && error.code === 'not_running') {
+        throw new TypeError('fetch failed', { cause: Object.assign(new Error(error.message), { code: 'ECONNREFUSED' }) });
+      }
+      throw error;
+    }
+    const aborted = new Promise<never>((_, reject) => {
+      if (!signal) return;
+      signal.addEventListener('abort', () => { client.close(); reject(signal.reason); }, { once: true });
+    });
+    aborted.catch(() => undefined);
+    try {
+      const reply = await Promise.race([
+        client.request<LocalGatewayHttpResponse>(LOCAL_GATEWAY_RPC.HTTP_REQUEST, { method, path: `${url.pathname}${url.search}`, ...(body === undefined ? {} : { body }) }),
+        aborted,
+      ]);
+      return new Response(reply.body === '' ? null : reply.body, { status: reply.status, headers: reply.headers });
+    } catch (error) {
+      if (signal?.aborted) throw signal.reason;
+      if (error instanceof LocalGatewayRpcError) {
+        return new Response(JSON.stringify({ success: false, code: error.code, error: error.message }), { status: error.status, headers: { 'content-type': 'application/json' } });
+      }
+      throw error;
+    } finally {
+      client.close();
+    }
+  };
 }

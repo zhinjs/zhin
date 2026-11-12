@@ -14,6 +14,7 @@ import {
   type ConsoleRpcPermissionRule,
   type ConsoleScopeTarget,
 } from '@zhin.js/console-protocol';
+import { hasForwardingHeaders } from './trust-proxy.js';
 
 /**
  * Console principals (ADR 0049 §1):
@@ -44,6 +45,11 @@ export interface ConsoleUserPrincipal {
 export interface ConsoleRequestMeta {
   readonly ip?: string;
   readonly userAgent?: string;
+  /**
+   * The request carried proxy forwarding headers (`X-Forwarded-For` / `Forwarded`). Such a
+   * request never counts as local: an open Host (no bootstrap token, no owner) refuses it.
+   */
+  readonly forwarded?: boolean;
 }
 
 export interface ConsoleAuditEntry {
@@ -95,6 +101,7 @@ export function requestMeta(
   return Object.freeze({
     ...(remoteAddress ? { ip: remoteAddress } : {}),
     ...(typeof agent === 'string' ? { userAgent: agent.slice(0, 256) } : {}),
+    ...(hasForwardingHeaders(request.headers) ? { forwarded: true } : {}),
   });
 }
 

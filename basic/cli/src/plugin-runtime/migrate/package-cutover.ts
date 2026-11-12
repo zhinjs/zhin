@@ -1,5 +1,6 @@
 import { link, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
+import { LEGACY_START_SCRIPTS, RECOMMENDED_START_SCRIPTS } from './start-scripts.js';
 
 export type CutoverCapability = 'command' | 'component' | 'middleware';
 export type PackageCutoverMode = 'development' | 'publish';
@@ -353,9 +354,9 @@ function runtimeScripts(
   mode: PackageCutoverMode,
 ): Record<string, string> {
   const scripts = { ...existing };
-  replaceMissingOrLegacyScript(scripts, 'dev', 'zhin runtime start', ['zhin dev']);
-  replaceMissingOrLegacyScript(scripts, 'start', 'zhin runtime start', ['zhin start']);
-  replaceMissingOrLegacyScript(scripts, 'daemon', 'zhin runtime start --daemon', ['zhin start --daemon']);
+  for (const [name, replacement] of Object.entries(RECOMMENDED_START_SCRIPTS)) {
+    replaceMissingOrLegacyScript(scripts, name, replacement, LEGACY_START_SCRIPTS[name] ?? []);
+  }
   replaceMissingOrLegacyScript(
     scripts,
     'build',

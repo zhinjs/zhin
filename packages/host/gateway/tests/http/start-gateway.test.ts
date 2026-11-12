@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { jsonResponse } from '@zhin.js/host-http';
-import { loadGatewayHttpConfig, startGateway, type RunningGateway } from '../../src/http/start-gateway.js';
+import { loadGatewayHttpConfig, loadGatewaySettings, startGateway, type RunningGateway } from '../../src/http/start-gateway.js';
 import { EMPTY_ROUTE_TABLE, type InstanceTransport } from '@zhin.js/host-http/bridge';
 
 const fixture = fileURLToPath(new URL('../supervisor/fixtures/fake-instance.mjs', import.meta.url));
@@ -23,6 +23,15 @@ async function project(config: string, env = ''): Promise<string> {
   if (env) await writeFile(join(dir, '.env.development'), env);
   return dir;
 }
+
+describe('loadGatewaySettings', () => {
+  it('reads gateway.readyTimeout in seconds and ignores invalid values', async () => {
+    expect(await loadGatewaySettings(await project('gateway:\n  readyTimeout: 180\n'))).toEqual({ readyTimeoutMs: 180_000 });
+    expect(await loadGatewaySettings(await project('http:\n  port: 0\n'))).toEqual({});
+    expect(await loadGatewaySettings(await project('gateway:\n  readyTimeout: 0\n'))).toEqual({});
+    expect(await loadGatewaySettings(await project('gateway:\n  readyTimeout: "90"\n'))).toEqual({});
+  });
+});
 
 describe('startGateway', () => {
   it('reads http.* (with .env placeholders and extra listeners) from the project config', async () => {

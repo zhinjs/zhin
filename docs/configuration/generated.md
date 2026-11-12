@@ -54,6 +54,8 @@ outline: [2, 3]
 | `console.terminal.ssh[].passphraseEnv` | string | 否 | — | 保存私钥口令的环境变量名。 |
 | `console.terminal.ssh[].hostFingerprint` | string | 否 | — | 必填的主机密钥指纹（SHA256:…），严格校验；在可信网络中用 `ssh-keyscan -t ed25519 &lt;host&gt; \| ssh-keygen -lf -` 获取。 |
 | `console.terminal.ssh[].insecureAcceptAnyHostKey` | boolean | 否 | — | 不校验主机密钥、接受任意密钥（不安全，可被中间人攻击）；仅在不填 hostFingerprint 时使用，Console 会把该目标标为不安全。 |
+| `gateway` | object | 否 | — | 管理网关（zhin start）：实例监管与依赖事务。 |
+| `gateway.readyTimeout` | integer | 否 | `60` | 实例启动、重启或依赖事务后报告就绪的最长秒数；超时视为启动失败（依赖事务随之回滚）。 |
 | `database` | object | 否 | — | Database Host 与方言连接参数。 |
 | `database.dialect` | string | 否 | — | 数据库方言。 |
 | `database.filename` | string | 否 | — | SQLite 文件路径。 |

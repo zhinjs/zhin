@@ -18,7 +18,7 @@ import { removeGatewayInfo, writeGatewayInfo } from '../local/state-file.js';
 import { isNodeVersionSupported, NODE_ENGINES_HINT } from '../project/node-requirements.js';
 import { InstanceSupervisor, type InstanceRestartPolicy, type InstanceStatus } from '../supervisor/instance-supervisor.js';
 import { defaultInstanceLogFile, supervisedNodeArguments, type RunSupervisedInstanceOptions } from '../supervisor/run-instance.js';
-import { startGateway, type RunningGateway } from './start-gateway.js';
+import { loadGatewaySettings, startGateway, type RunningGateway } from './start-gateway.js';
 
 /** Set on the instance when its output is echoed to an interactive terminal (TTY-style logging). */
 export const INSTANCE_INTERACTIVE_ENV = 'ZHIN_INSTANCE_INTERACTIVE';
@@ -62,6 +62,11 @@ export function consoleLink(origin: string, token?: string): string {
   return token ? `${url}#token=${encodeURIComponent(token)}` : url;
 }
 
+/** Whether the instance gets the gateway's stdin: a foreground gateway whose stdin is a TTY. */
+export function foregroundStdin(daemon: boolean, stdin: { readonly isTTY?: boolean } = process.stdin): boolean {
+  return !daemon && stdin.isTTY === true;
+}
+
 /** Strips the `zhin runtime start` / `zhin start` prefix of the instance arguments. */
 function startArguments(args: readonly string[]): readonly string[] {
   if (args[0] === 'runtime' && args[1] === 'start') return args.slice(2);
@@ -84,8 +89,10 @@ export async function runGateway(input: RunGatewayOptions): Promise<number> {
   const interactive = echo && process.stdout.isTTY === true;
   const logFile = options.logFile ?? defaultInstanceLogFile(root);
   await mkdir(dirname(logFile), { recursive: true });
+  const settings = await loadGatewaySettings(root);
 
   const supervisor = new InstanceSupervisor({
+    ...(settings.readyTimeoutMs !== undefined ? { readyTimeoutMs: settings.readyTimeoutMs } : {}),
     spawn: {
       command: process.execPath,
       args: [...supervisedNodeArguments(), entry, ...args],
@@ -96,6 +103,8 @@ export async function runGateway(input: RunGatewayOptions): Promise<number> {
       },
     },
     output: 'pipe',
+    // Foreground on a TTY: the instance reads the terminal (terminal adapters); never in the background.
+    input: foregroundStdin(daemon) ? 'inherit' : 'ignore',
     logs: { ...input.logs, file: logFile },
     // The gateway outlives the instance (ADR 0054 §5); `--once` is a single check run.
     restart: { onCrash: !options.once, onRequest: !options.once, ...input.restart },
@@ -131,6 +140,7 @@ export async function runGateway(input: RunGatewayOptions): Promise<number> {
       ...(input.http ? { http: input.http } : {}),
       supervisor,
       transport: () => supervisor.transport,
+      ...(settings.readyTimeoutMs !== undefined ? { readyTimeoutMs: settings.readyTimeoutMs } : {}),
     });
   } catch (error) {
     await control?.close();
@@ -171,6 +181,7 @@ export async function runGateway(input: RunGatewayOptions): Promise<number> {
     ...(gateway.console ? { console: gateway.console.localAdmin } : {}),
     info: infoResult,
     shutdown: () => shutdown(0),
+    http: (request) => gateway.http.localRequest(request),
   }));
 
   const pidFile = join(root, '.zhin.pid');

@@ -205,11 +205,12 @@ export function usePluginInstall() {
     }
   }, [wsManager]);
 
-  const install = useCallback(async (packageName: string, expectedRevision?: string) => {
+  /** Gateway dependency transaction (`gateway.packages.install`); check `ok` / `needsConfiguration`. */
+  const install = useCallback(async (packageName: string) => {
     setLoading(true);
     setError(null);
     try {
-      return await wsManager.installPlugin(packageName, expectedRevision);
+      return await wsManager.installPlugin(packageName);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unknown error');
       throw e;
@@ -296,11 +297,12 @@ export function usePluginUninstall() {
       setLoading(false);
     }
   }, [wsManager]);
-  const uninstall = useCallback(async (packageName: string, expectedRevision?: string) => {
+  /** Gateway dependency transaction (`gateway.packages.uninstall`). */
+  const uninstall = useCallback(async (packageName: string) => {
     setLoading(true);
     setError(null);
     try {
-      return await wsManager.uninstallPlugin(packageName, expectedRevision);
+      return await wsManager.uninstallPlugin(packageName);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unknown error');
       throw e;
@@ -327,10 +329,11 @@ export function usePluginUpdate() {
       })
       .finally(() => setLoading(false));
   }, [wsManager]);
-  const update = useCallback((packageName: string, targetVersion: string, expectedRevision?: string) => {
+  /** Gateway dependency transaction (`gateway.packages.update` with `name@version`). */
+  const update = useCallback((packageName: string, targetVersion: string) => {
     setLoading(true);
     setError(null);
-    return wsManager.updatePlugin(packageName, targetVersion, expectedRevision)
+    return wsManager.updatePlugin(packageName, targetVersion)
       .catch((e) => {
         setError(e instanceof Error ? e.message : 'Unknown error');
         throw e;

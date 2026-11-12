@@ -124,93 +124,16 @@ describe('runtime console RPC', () => {
     });
   });
 
-  it('passes the config revision to the install transaction', async () => {
-    let receivedRevision: string | undefined;
-    const replies = await dispatchRuntimeConsoleRpc(
-      {
-        type: 'plugin:install',
-        requestId: 92,
-        packageName: '@zhin.js/adapter-telegram',
-        expectedRevision: 'rev-1',
-      },
-      {
-        authScope: 'full',
-        listPages: async () => [],
-        pluginManagement: {
-          planInstall: async () => ({
-            packageName: '@zhin.js/adapter-telegram',
-            instanceKey: 'adapter-telegram',
-            alreadyDeclared: false,
-            alreadyInstalled: false,
-            restartRequired: true,
-            changes: { packageManifest: 'add-plugin', config: 'create-entry' },
-            warnings: [],
-          }),
-          install: async (_packageName, revision) => {
-            receivedRevision = revision;
-            return {
-              plan: await Promise.resolve({
-                packageName: '@zhin.js/adapter-telegram',
-                instanceKey: 'adapter-telegram',
-                alreadyDeclared: false,
-                alreadyInstalled: false,
-                restartRequired: true,
-                changes: { packageManifest: 'add-plugin', config: 'create-entry' },
-                warnings: [],
-              }),
-              restartRequired: true,
-            };
-          },
-        },
-      },
-    );
-    expect(receivedRevision).toBe('rev-1');
-    expect(pickRpcReply({ type: 'plugin:install', requestId: 92 }, replies)).toMatchObject({
-      requestId: 92,
-      data: { success: true, restartRequired: true },
-    });
-  });
-
-  it('requires exact confirmation before uninstalling a plugin', async () => {
-    let calls = 0;
-    const ctx = {
-      authScope: 'full' as const,
-      listPages: async () => [],
-      pluginManagement: {
-        planInstall: async () => ({
-          packageName: '@zhin.js/adapter-telegram', instanceKey: 'telegram',
-          alreadyDeclared: true, alreadyInstalled: true, restartRequired: false,
-          changes: { packageManifest: 'unchanged' as const, config: 'unchanged' as const },
-          warnings: [],
-        }),
-        uninstall: async () => {
-          calls += 1;
-          return {
-            plan: {
-              packageName: '@zhin.js/adapter-telegram', instanceKey: 'telegram',
-              installed: true, declared: true, hasConfig: true, restartRequired: true,
-            },
-            restartRequired: true,
-          };
-        },
-      },
-    };
-    const denied = await dispatchRuntimeConsoleRpc({
-      type: 'plugin:uninstall', requestId: 95,
-      packageName: '@zhin.js/adapter-telegram', confirmation: 'telegram',
-    }, ctx);
-    expect(pickRpcReply({ type: 'plugin:uninstall', requestId: 95 }, denied)?.error)
-      .toContain('confirmation');
-    expect(calls).toBe(0);
-
-    const accepted = await dispatchRuntimeConsoleRpc({
-      type: 'plugin:uninstall', requestId: 96,
-      packageName: '@zhin.js/adapter-telegram', confirmation: '@zhin.js/adapter-telegram',
-    }, ctx);
-    expect(pickRpcReply({ type: 'plugin:uninstall', requestId: 96 }, accepted)).toMatchObject({
-      data: { success: true, restartRequired: true },
-    });
-    expect(calls).toBe(1);
+  it('does not run package installs, updates or uninstalls inside the instance', async () => {
+    // Those are gateway dependency transactions (`gateway.packages.*`, ADR 0054 §4).
+    for (const [index, type] of ['plugin:install', 'plugin:update', 'plugin:uninstall'].entries()) {
+      const requestId = 92 + index;
+      const replies = await dispatchRuntimeConsoleRpc(
+        { type, requestId, packageName: '@zhin.js/adapter-telegram', targetVersion: '2.0.0', confirmation: '@zhin.js/adapter-telegram' },
+        { authScope: 'full', principal: userPrincipal('owner'), listPages: async () => [] },
+      );
+      expect(pickRpcReply({ type, requestId }, replies)).toMatchObject({ code: 'unmapped' });
+    }
   });
 
   it('validates plugin config through the shared Console context', async () => {

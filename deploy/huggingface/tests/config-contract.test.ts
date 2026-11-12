@@ -54,6 +54,21 @@ describe('deploy/huggingface template', () => {
 
   it('copies every file the runtime reads into the image', () => {
     const docker = read('Dockerfile');
-    for (const file of ['zhin.config.yml', 'ai.plan.yml', 'plugin.ts']) expect(docker).toContain(file);
+    for (const file of ['zhin.config.yml', 'ai.plan.yml', 'plugin.ts', 'start.sh']) expect(docker).toContain(file);
+  });
+
+  it('never ships a public bootstrap token and starts through the gateway', () => {
+    // The bootstrap token comes from the Space secret (or a random one printed to the log only).
+    expect((config.http as Record<string, unknown>).token).toBe('${HTTP_TOKEN}');
+    expect(read('README.md')).not.toMatch(/zhin-demo`|Token 填/u);
+    const start = read('start.sh');
+    expect(start).toContain('randomBytes(32)');
+    expect(start).toContain('console init --yes');
+    expect(start).toContain('console user create demo --role "${DEMO_ROLE:-viewer}" --password-stdin');
+    expect(start).toMatch(/exec "\$ZHIN" start --foreground --mode production --no-watch/u);
+    expect(read('Dockerfile')).toContain('CMD ["sh", "./start.sh"]');
+    expect(read('Dockerfile')).not.toContain('ZHIN_SUPERVISOR_PID');
+    expect(manifest.scripts.start).toBe('zhin start --foreground --mode production --no-watch');
+    for (const name of ['zhin.js', '@zhin.js/cli', '@zhin.js/gateway']) expect(manifest.dependencies).toHaveProperty([name]);
   });
 });

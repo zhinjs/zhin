@@ -19,12 +19,19 @@ import { applyConsoleEvent } from "../persistence/idb-store.js";
 import { fetchConsoleEventHistory } from '../console-events.js';
 import {
   CONFIG_RPC,
+  GATEWAY_RPC,
   PLUGIN_RPC,
   ENDPOINT_RPC,
   CONSOLE_EVENT_RECOVERY_GAP_EVENT,
   SIDE_EVENT_PUSH,
   parseConsoleSseFrame,
   type ConsoleEventData,
+  type GatewayPackageOperation,
+  type GatewayPackagePlan,
+  type GatewayPackagesInstallRequest,
+  type GatewayPackagesUninstallRequest,
+  type GatewayPackagesUpdateRequest,
+  type GatewayPackageTransactionResult,
   type ConsoleEventEnvelope,
   type ConsoleEventHistoryPage,
   type ConsoleEventHistoryQuery,
@@ -70,7 +77,7 @@ export class ConsoleTransport {
       reconnectInterval: config.reconnectInterval ?? 3000,
       maxReconnectAttempts: config.maxReconnectAttempts ?? 10,
       requestTimeout: config.requestTimeout ?? 10000,
-      packageOperationTimeout: config.packageOperationTimeout ?? 120_000,
+      packageOperationTimeout: config.packageOperationTimeout ?? 300_000,
     };
     this.callbacks = callbacks;
   }
@@ -385,12 +392,23 @@ export class ConsoleTransport {
       warnings: string[];
     }>({ type: PLUGIN_RPC.PLAN_INSTALL, packageName });
   }
-  async installPlugin(packageName: string, expectedRevision?: string, options?: ConsoleRequestOptions) {
-    return this.sendRequest<{
-      success: boolean;
-      plan: Awaited<ReturnType<ConsoleTransport['planPluginInstall']>>;
-      restartRequired: boolean;
-    }>({ type: PLUGIN_RPC.INSTALL, packageName, expectedRevision }, this.packageOperation(options));
+  /**
+   * Installs packages as a gateway dependency transaction (`gateway.packages.install`, ADR 0054
+   * §4): the gateway stops the instance, runs the package manager, starts the instance again and
+   * rolls back on failure. `packages` entries are `name` or `name@<range | dist-tag>`. A rolled
+   * back transaction resolves with `ok: false`; plugins whose configuration is incomplete are
+   * installed but not declared and listed in `needsConfiguration` (declare them with
+   * `gateway.plugins.declare`).
+   */
+  async installPlugin(
+    packages: string | readonly string[],
+    request: Omit<GatewayPackagesInstallRequest, 'packages'> = {},
+    options?: ConsoleRequestOptions,
+  ) {
+    return this.sendRequest<GatewayPackageTransactionResult>({
+      type: GATEWAY_RPC.INSTALL,
+      data: { ...request, packages: packageList(packages) },
+    }, this.packageOperation(options));
   }
   async planPluginUninstall(packageName: string) {
     return this.sendRequest<{
@@ -402,16 +420,15 @@ export class ConsoleTransport {
       restartRequired: boolean;
     }>({ type: PLUGIN_RPC.PLAN_UNINSTALL, packageName });
   }
-  async uninstallPlugin(packageName: string, expectedRevision?: string, options?: ConsoleRequestOptions) {
-    return this.sendRequest<{
-      success: boolean;
-      plan: Awaited<ReturnType<ConsoleTransport['planPluginUninstall']>>;
-      restartRequired: boolean;
-    }>({
-      type: PLUGIN_RPC.UNINSTALL,
-      packageName,
-      confirmation: packageName,
-      expectedRevision,
+  /** Uninstalls packages as a gateway dependency transaction (`gateway.packages.uninstall`). */
+  async uninstallPlugin(
+    packages: string | readonly string[],
+    request: Omit<GatewayPackagesUninstallRequest, 'packages'> = {},
+    options?: ConsoleRequestOptions,
+  ) {
+    return this.sendRequest<GatewayPackageTransactionResult>({
+      type: GATEWAY_RPC.UNINSTALL,
+      data: { ...request, packages: packageList(packages) },
     }, this.packageOperation(options));
   }
   async planPluginUpdate(packageName: string, targetVersion: string) {
@@ -426,18 +443,27 @@ export class ConsoleTransport {
       restartRequired: boolean;
     }>({ type: PLUGIN_RPC.PLAN_UPDATE, packageName, targetVersion });
   }
+  /**
+   * Updates one package to an exact version as a gateway dependency transaction
+   * (`gateway.packages.update` with `name@version`; the installed version is verified).
+   */
   async updatePlugin(
     packageName: string,
     targetVersion: string,
-    expectedRevision?: string,
+    request: Omit<GatewayPackagesUpdateRequest, 'packages'> = {},
     options?: ConsoleRequestOptions,
   ) {
-    return this.sendRequest<{
-      success: boolean;
-      plan: Awaited<ReturnType<ConsoleTransport['planPluginUpdate']>>;
-      installedVersion: string;
-      restartRequired: boolean;
-    }>({ type: PLUGIN_RPC.UPDATE, packageName, targetVersion, expectedRevision }, this.packageOperation(options));
+    return this.sendRequest<GatewayPackageTransactionResult>({
+      type: GATEWAY_RPC.UPDATE,
+      data: { ...request, packages: [`${packageName}@${targetVersion}`] },
+    }, this.packageOperation(options));
+  }
+  /** What a gateway dependency transaction would do (`gateway.packages.plan`); changes nothing. */
+  async planPackages(operation: GatewayPackageOperation, packages: string | readonly string[] | 'all') {
+    return this.sendRequest<GatewayPackagePlan>({
+      type: GATEWAY_RPC.PLAN,
+      data: { operation, packages: packages === 'all' ? 'all' : packageList(packages) },
+    });
   }
   async validatePluginConfig(pluginName: string, data: unknown) {
     return this.sendRequest<{
@@ -711,4 +737,8 @@ function writeEventCursor(cursor: ConsoleEventCursor): void {
   } catch {
     // HTTP history remains available when browser storage is unavailable.
   }
+}
+
+function packageList(packages: string | readonly string[]): readonly string[] {
+  return typeof packages === 'string' ? [packages] : packages;
 }

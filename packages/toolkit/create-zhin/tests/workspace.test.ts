@@ -147,7 +147,11 @@ describe('createWorkspace', () => {
     expect(pkg.dependencies).not.toHaveProperty('@zhin.js/command')
     expect(pkg.dependencies).not.toHaveProperty('@zhin.js/host-api')
     expect(pkg.dependencies).not.toHaveProperty('@zhin.js/host-router')
-    expect(pkg.devDependencies['@zhin.js/cli']).toBe(scaffoldDependencyRange('@zhin.js/cli'))
+    // ADR 0054 §0: CLI, gateway and zhin.js are production dependencies of one release (`--prod` keeps `zhin start`).
+    expect(pkg.dependencies['@zhin.js/cli']).toBe(scaffoldDependencyRange('@zhin.js/cli'))
+    expect(pkg.devDependencies).not.toHaveProperty('@zhin.js/cli')
+    expect(pkg.dependencies['@zhin.js/gateway']).toBe(scaffoldDependencyRange('@zhin.js/gateway'))
+    expect(pkg.dependencies['@zhin.js/gateway']).not.toBe('latest')
     expect(pkg.engines.node).toBe('>=22.19.0')
 
     // zhin 清单：Stable Features 随 zhin.js 默认挂载；Console Feature 显式声明

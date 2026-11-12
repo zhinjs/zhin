@@ -485,6 +485,22 @@
         }
       }
     },
+    "gateway": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Management gateway (zhin start): instance supervision and dependency transactions.",
+      "x-descriptionZh": "管理网关（zhin start）：实例监管与依赖事务。",
+      "properties": {
+        "readyTimeout": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3600,
+          "default": 60,
+          "description": "Seconds the instance has to report ready after a start, a restart or a dependency transaction before the start counts as failed (the transaction then rolls back).",
+          "x-descriptionZh": "实例启动、重启或依赖事务后报告就绪的最长秒数；超时视为启动失败（依赖事务随之回滚）。"
+        }
+      }
+    },
     "database": {
       "type": "object",
       "additionalProperties": true,

@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process';
 import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -330,4 +331,28 @@ describe('InstanceSupervisor HTTP bridge', () => {
     expect(supervisor.transport.ready).toBe(false);
     await expect(supervisor.transport.fetch(new Request('http://gateway/hello'))).rejects.toMatchObject({ code: 'instance-offline' });
   }, 60_000);
+});
+
+describe('InstanceSupervisor stdin', () => {
+  const wrapper = fileURLToPath(new URL('./fixtures/stdin-supervisor.mts', import.meta.url));
+  const run = (input: 'inherit' | 'ignore'): Promise<string> => new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, ['--import', 'tsx', '--conditions=development', wrapper, input], { stdio: ['pipe', 'pipe', 'inherit'] });
+    let output = '';
+    child.stdout.on('data', (chunk: Buffer) => { output += String(chunk); });
+    child.once('error', reject);
+    child.once('exit', () => resolve(output));
+    // Kept open: with `ignore` the instance must see end-of-input anyway.
+    child.stdin.write('hello from the terminal\n');
+    setTimeout(() => child.kill('SIGKILL'), 15_000).unref();
+  });
+
+  it('hands the instance the supervisor\'s stdin with input: inherit (foreground TTY)', async () => {
+    expect(await run('inherit')).toContain('stdin=hello from the terminal');
+  }, 20_000);
+
+  it('keeps the instance off stdin by default (background gateway)', async () => {
+    const output = await run('ignore');
+    expect(output).toContain('stdin-end');
+    expect(output).not.toContain('stdin=hello');
+  }, 20_000);
 });

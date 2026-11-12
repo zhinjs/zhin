@@ -134,21 +134,8 @@ export interface PluginManagementPort {
   verificationPlan?(packageName: string): Promise<PluginVerificationPlan>;
   verify?(packageName: string, checkId: string, expectedGeneration: number | null, expectedProjectRevision: string, expectedCheckRevision: string): Promise<PluginVerificationResult>;
   planInstall(packageName: string): Promise<PluginInstallPlan>;
-  install?(packageName: string, expectedRevision?: string, expectedProjectRevision?: string): Promise<Readonly<{
-    readonly plan: PluginInstallPlan;
-    readonly restartRequired: boolean;
-  }>>;
   planUninstall?(packageName: string): Promise<PluginUninstallPlan>;
-  uninstall?(packageName: string, expectedRevision?: string, expectedProjectRevision?: string): Promise<Readonly<{
-    readonly plan: PluginUninstallPlan;
-    readonly restartRequired: boolean;
-  }>>;
   planUpdate?(packageName: string, targetVersion: string): Promise<PluginUpdatePlan>;
-  update?(packageName: string, targetVersion: string, expectedRevision?: string, expectedProjectRevision?: string): Promise<Readonly<{
-    readonly plan: PluginUpdatePlan;
-    readonly installedVersion: string;
-    readonly restartRequired: boolean;
-  }>>;
 }
 
 export interface PluginConfigValidation {

@@ -79,6 +79,11 @@ export interface InstanceSupervisorOptions {
   readonly spawn: InstanceSpawnSpec;
   /** `pipe` captures stdout / stderr into {@link InstanceSupervisor.logs}; `inherit` shares the terminal. */
   readonly output?: 'pipe' | 'inherit';
+  /**
+   * The child's stdin. `inherit` hands it the supervisor's own stdin (a foreground gateway on a
+   * TTY, so terminal adapters can read input); default `ignore` (background gateways).
+   */
+  readonly input?: 'ignore' | 'inherit';
   readonly logs?: InstanceLogOptions;
   readonly readyTimeoutMs?: number;
   /** Budget announced in `shutdown`; SIGTERM follows when the child has not exited after it. */
@@ -268,7 +273,7 @@ export class InstanceSupervisor extends EventEmitter<InstanceSupervisorEvents> {
         cwd: spec.cwd,
         // The marker carries the protocol version: the instance refuses an incompatible gateway.
         env: { ...(spec.env ?? process.env), [INSTANCE_CHILD_ENV]: String(INSTANCE_BRIDGE_PROTOCOL_VERSION) },
-        stdio: ['ignore', output, output, 'ipc'],
+        stdio: [this.#options.input ?? 'ignore', output, output, 'ipc'],
         serialization: 'advanced',
         windowsHide: true,
       });

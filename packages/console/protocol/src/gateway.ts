@@ -211,6 +211,47 @@ export type GatewayPackageEvent =
   | Readonly<{ type: 'output'; id: string; stream: 'stdout' | 'stderr'; chunk: string }>
   | Readonly<{ type: 'result'; id: string; result: GatewayPackageTransactionResult }>;
 
+// ---- forwarded requests while the instance cannot answer (ADR 0054 §3) ----
+
+/**
+ * Error codes of `{base}/…` requests the gateway could not forward. `instance_unavailable` (503,
+ * with `Retry-After`): no ready instance; `instance_timeout` (504): the instance did not answer
+ * in time; `instance_error` (502; with `Retry-After` when the bridge was overloaded): the
+ * forward failed otherwise. Gateway-owned routes (`/auth/*`, `gateway.*`, `iam.*`,
+ * `GET /pub/health`) never answer with these.
+ */
+export const GATEWAY_INSTANCE_ERROR = Object.freeze({
+  UNAVAILABLE: 'instance_unavailable',
+  TIMEOUT: 'instance_timeout',
+  ERROR: 'instance_error',
+} as const);
+
+export type GatewayInstanceErrorCode = (typeof GATEWAY_INSTANCE_ERROR)[keyof typeof GATEWAY_INSTANCE_ERROR];
+
+/** Body of a {@link GatewayInstanceErrorCode} response. */
+export interface GatewayInstanceErrorReply {
+  readonly success: false;
+  readonly code: GatewayInstanceErrorCode;
+  /**
+   * `not-dispatched`: the instance never saw the request (safe to retry). `unknown`: it may have
+   * run (timeout, failure mid-request) — re-read state before retrying a write.
+   */
+  readonly requestOutcome: 'not-dispatched' | 'unknown';
+  /** Supervisor state when the gateway answered (poll `GET /pub/health` or `gateway.instance.status`). */
+  readonly state: GatewayInstanceState;
+  readonly error: string;
+}
+
+/** `GET /pub/health`: unauthenticated gateway liveness plus the instance state; never forwarded. */
+export const GATEWAY_HEALTH_PATH = '/pub/health' as const;
+
+export interface GatewayHealth {
+  readonly success: true;
+  readonly status: 'ok';
+  readonly timestamp: string;
+  readonly instance: Readonly<{ state: GatewayInstanceState; ready: boolean }>;
+}
+
 // ---- gateway.instance.* ----
 
 export type GatewayInstanceState = 'stopped' | 'starting' | 'running' | 'stopping' | 'backoff' | 'crashed';
