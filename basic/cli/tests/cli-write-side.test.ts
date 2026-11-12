@@ -183,7 +183,7 @@ describe('migrate', () => {
     }
   });
 
-  it('将失效的 zhin dev/start/build scripts 替换为 Plugin Runtime 入口', () => {
+  it('将失效的 zhin dev/build scripts 替换为 zhin start 入口，保留 zhin start 与 zhin runtime start', () => {
     const pkgPath = path.join(tmp, 'package.json');
     fs.writeFileSync(pkgPath, JSON.stringify({
       name: 'demo',
@@ -191,7 +191,7 @@ describe('migrate', () => {
       scripts: {
         dev: 'zhin dev',
         start: 'zhin start',
-        daemon: 'zhin start --daemon',
+        daemon: 'zhin runtime start --daemon',
         build: 'zhin build',
       },
     }, null, 2));
@@ -199,10 +199,24 @@ describe('migrate', () => {
     upgradePackageJson(pkgPath, { toLatest: true, dryRun: false, includePinned: true });
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
     expect(pkg.scripts).toMatchObject({
-      dev: 'zhin runtime start',
-      start: 'zhin runtime start',
+      // `zhin dev` is the link / unlink tool now.
+      dev: 'zhin start --foreground --watch source config',
+      // `zhin start` is current and `zhin runtime start` its accepted alias (ADR 0054 §6).
+      start: 'zhin start',
       daemon: 'zhin runtime start --daemon',
       build: 'tsc --noEmit',
+    });
+  });
+
+  it('补齐缺失的启动 scripts（zhin start）', () => {
+    const pkgPath = path.join(tmp, 'package.json');
+    fs.writeFileSync(pkgPath, JSON.stringify({ name: 'demo', dependencies: { 'zhin.js': '1.0.0' } }, null, 2));
+    upgradePackageJson(pkgPath, { toLatest: true, dryRun: false, includePinned: true });
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+    expect(pkg.scripts).toMatchObject({
+      dev: 'zhin start --foreground --watch source config',
+      start: 'zhin start --foreground --mode production --no-watch',
+      daemon: 'zhin start --mode production --no-watch',
     });
   });
 

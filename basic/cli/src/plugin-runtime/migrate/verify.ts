@@ -116,7 +116,7 @@ function assertStartScripts(pkg: PackageJson, mode: PackageCutoverMode): void {
   if (!isAcceptedStartScript(pkg.scripts?.dev) || !isAcceptedStartScript(pkg.scripts?.start)) {
     throw new Error(`${mode} migration must start dev and start with "zhin start" (or its alias "zhin runtime start")`);
   }
-  if (typeof pkg.scripts.build !== 'string') throw new Error(`${mode} migration requires a build script`);
+  if (typeof pkg.scripts?.build !== 'string') throw new Error(`${mode} migration requires a build script`);
 }
 
 async function packedArchive(destination: string): Promise<string> {
