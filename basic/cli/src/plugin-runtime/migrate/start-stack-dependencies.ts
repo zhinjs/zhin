@@ -82,8 +82,20 @@ function currentCliVersion(): string {
 
 /** `major.minor` of the first version in a specifier (`^1.2.3`, `~1.2`, `1.2.x`, `>=1.2.0 <2`). */
 function releaseLine(spec: string): readonly [number, number] | undefined {
-  const match = /(\d+)\.(\d+)/u.exec(spec);
-  return match ? [Number(match[1]), Number(match[2])] : undefined;
+  // One linear pass (no backtracking regex): find the first `<digits>.<digits>`.
+  const isDigit = (char: string | undefined) => char !== undefined && char >= '0' && char <= '9';
+  let index = 0;
+  while (index < spec.length) {
+    if (!isDigit(spec[index])) { index += 1; continue; }
+    const majorStart = index;
+    while (isDigit(spec[index])) index += 1;
+    if (spec[index] !== '.' || !isDigit(spec[index + 1])) continue;
+    const minorStart = index + 1;
+    let minorEnd = minorStart;
+    while (isDigit(spec[minorEnd])) minorEnd += 1;
+    return [Number(spec.slice(majorStart, index)), Number(spec.slice(minorStart, minorEnd))];
+  }
+  return undefined;
 }
 
 /** First release line of `@zhin.js/gateway`: an older CLI line has no gateway of its own. */
