@@ -1,7 +1,7 @@
 import { defineGamePlugin, type InMemoryGameDb } from '@zhin.js/game-kit';
 import type { RouletteConfig } from './src/config.js';
 import { ROULETTE_TABLES, defineHostTables, type RouletteSessionRow } from './src/models.js';
-import { rouletteServicesToken } from './src/runtime.js';
+import { rouletteFeatureGateStore, rouletteServicesToken } from './src/runtime.js';
 import {
   createServices,
   type RouletteDatabase,
@@ -46,4 +46,8 @@ export default defineGamePlugin<RouletteServices, RouletteSessionRow, Partial<Ro
     createServices(database as unknown as RouletteDatabase),
   session: (services) => services.sessions,
   stale: false,
+  setup(context) {
+    // ADR 0050 / 0055: the deadline sweep checks the game conversation's switch before announcing.
+    rouletteFeatureGateStore.provide(context, { isEnabledFor: target => context.isEnabledFor({ conversation: target }) });
+  },
 });

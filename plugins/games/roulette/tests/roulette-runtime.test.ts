@@ -10,6 +10,7 @@ import {
   createCommandContext,
   runMiddleware,
   runPluginSetup,
+  type FakeFeatureView,
   type FakeMessage,
   type FakePlugin,
 } from '@zhin.js/testing';
@@ -91,7 +92,7 @@ function resetAdapters(): void {
 }
 
 /** Plugin setup plus the convention `schedules/deadlines` job, run by the fake cron with a capability context. */
-async function setUpRoulette(options: { readonly schedule?: boolean; readonly adapterFeature?: boolean } = {}): Promise<RouletteFake> {
+async function setUpRoulette(options: { readonly schedule?: boolean; readonly adapterFeature?: boolean; readonly feature?: FakeFeatureView } = {}): Promise<RouletteFake> {
   const projections = options.adapterFeature === false
     ? new Map()
     : new Map([[adapterFeatureId, adapters]]);
@@ -100,6 +101,7 @@ async function setUpRoulette(options: { readonly schedule?: boolean; readonly ad
     config,
     projections,
     ...(options.schedule === false ? { hosts: { schedule: false } } : {}),
+    ...(options.feature ? { feature: options.feature } : {}),
   });
   if (options.schedule !== false) {
     created.scheduleHost.register({
@@ -426,7 +428,25 @@ describe('timeouts (FakeClock)', () => {
     expect((await activeState())?.phase).toBe('playing');
   });
 
-  it('a lobby that never starts is dissolved without records', async () => {
+  it('ends a timed-out game silently where roulette is switched off (ADR 0055)', async () => {
+    await fake.dispose();
+    let off = '';
+    fake = await setUpRoulette({ feature: { isEnabledFor: target =>
+      !(typeof target === 'object' && 'conversation' in target && target.conversation?.id === off) } });
+    await seatThreeAndStart('g1');
+    await seatThreeAndStart('g2');
+    off = 'g1';
+    const sentBefore = sentTexts().length;
+    await clock.advance(65_000);
+    expect(await activeState('g1')).toMatchObject({ phase: 'aborted', endReason: 'cancelled' });
+    expect((await activeState('g2'))?.phase).toBe('finished');
+    // Only g2 announces its result; g1 leaves no records and no mute.
+    expect(sentTexts().length - sentBefore).toBe(1);
+    expect(fake.rows('game_records')).toHaveLength(3);
+    expect(muteCalls()).toHaveLength(0);
+  });
+
+    it('a lobby that never starts is dissolved without records', async () => {
     await say('alice', '开局');
     await say('bob', '加入');
 

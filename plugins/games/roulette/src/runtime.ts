@@ -1,5 +1,5 @@
 import type { Locale } from 'zhin.js/i18n';
-import { definePluginStore, type Token } from 'zhin.js';
+import { definePluginStore, type DeliveryTarget, type Token } from 'zhin.js';
 import { resolveRouletteConfig } from './config.js';
 import type { RouletteFlow } from './game-flow.js';
 import { resolveMutePenalty, type AdapterProjectionContext } from './mute-penalty.js';
@@ -8,6 +8,13 @@ import type { RouletteServices } from './session-service.js';
 /** Owner-scoped services consumed by discovered commands, middleware and the deadline job. */
 export const rouletteServicesStore = definePluginStore<RouletteServices>('zhin.game.roulette.services');
 export const rouletteServicesToken = rouletteServicesStore;
+
+/**
+ * Whether roulette is enabled for one game conversation (ADR 0050 / 0055). The deadline sweep is
+ * not a message, so the dispatch gate does not see it; the sweep asks before announcing a result.
+ */
+export const rouletteFeatureGateStore = definePluginStore<RouletteFeatureGate>('zhin.game.roulette.feature-gate');
+export interface RouletteFeatureGate { isEnabledFor(target: DeliveryTarget): boolean }
 
 /** A command, middleware or schedule capability context. */
 export interface RouletteCapabilityContext extends AdapterProjectionContext {
