@@ -16,12 +16,26 @@ import type { ModuleRuntime, ModuleWatchRoot } from './module-runtime.js';
 import { withToolPackageInstallHint } from './missing-tool-package.js';
 import { isEditorTempFile } from './editor-temp-file.js';
 import { ensureTypeScriptSpecifierRemap } from './typescript-specifier-remap.js';
+import { getEsmCacheEvictor, type EsmCacheEvictor } from './esm-cache-evictor.js';
 
 export interface NativeDevelopmentModuleRuntimeOptions {
   readonly projectRoot: string;
   readonly watch?: boolean;
   /** Optional scoped loader used only when the active Node loader rejects TSX. */
   readonly tsxLoader?: TsxModuleLoader;
+  /**
+   * Evicts retired `zhin-generation` URLs from Node's ESM load cache after a
+   * generation commits, so their module instances can be garbage collected.
+   * Best effort: silently disabled when the runtime cannot reach the cache.
+   * Defaults to on; `ZHIN_HMR_EVICT=0` turns it off. Pass an evictor to test.
+   */
+  readonly evictRetiredModules?: boolean | EsmCacheEvictor;
+}
+
+/** Counters describing retired module eviction, for diagnostics and tests. */
+export interface ModuleEvictionStats {
+  readonly enabled: boolean;
+  readonly evicted: number;
 }
 
 export interface TsxModuleLoader {
@@ -55,6 +69,12 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
   #revision = 0;
   readonly #entryRevisions = new Map<string, number>();
   #closed = false;
+  readonly #evictionOption: boolean | EsmCacheEvictor;
+  #evictor?: EsmCacheEvictor | null;
+  #evicted = 0;
+  /** Revision each entry was actually loaded at, by the committed generation. */
+  readonly #committedRevisions = new Map<string, number>();
+  #pendingRevisions?: Map<string, number>;
 
   constructor(options: NativeDevelopmentModuleRuntimeOptions) {
     ensureTypeScriptSpecifierRemap();
@@ -62,6 +82,7 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
     this.#watchEnabled = options.watch ?? true;
     this.#tsxLoader = options.tsxLoader;
     this.#watchRoots = normalizeWatchRoots([this.#projectRoot]);
+    this.#evictionOption = options.evictRetiredModules ?? process.env.ZHIN_HMR_EVICT !== '0';
   }
 
   async load<T = unknown>(source: string): Promise<T> {
@@ -89,8 +110,14 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
         throw withToolPackageInstallHint(tsxError);
       }
     }
-    if (this.#pendingDependencies) this.#pendingDependencies.set(normalized, analysis);
-    else this.#dependencies.commit(normalized, analysis);
+    const revision = this.#entryRevisions.get(normalized) ?? this.#revision;
+    if (this.#pendingDependencies) {
+      this.#pendingDependencies.set(normalized, analysis);
+      this.#pendingRevisions?.set(normalized, revision);
+    } else {
+      this.#dependencies.commit(normalized, analysis);
+      this.#committedRevisions.set(normalized, revision);
+    }
     return loaded;
   }
 
@@ -163,6 +190,7 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
       throw new Error('A module generation transaction is already active');
     }
     this.#pendingDependencies = new Map();
+    this.#pendingRevisions = new Map();
   }
 
   commitGeneration(sources: readonly string[]): void {
@@ -171,15 +199,58 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
       this.#dependencies.commit(entry, analysis);
     }
     this.#pendingDependencies = undefined;
+    for (const [entry, revision] of this.#pendingRevisions ?? []) this.#committedRevisions.set(entry, revision);
+    this.#pendingRevisions = undefined;
     this.#dependencies.retain(sources);
     const retained = new Set(sources.map(normalizeSourcePath));
     for (const entry of this.#entryRevisions.keys()) {
       if (!retained.has(entry)) this.#entryRevisions.delete(entry);
     }
+    for (const entry of this.#committedRevisions.keys()) {
+      if (!retained.has(entry)) this.#committedRevisions.delete(entry);
+    }
+    this.#evictRetiredRevisions();
+  }
+
+  get evictionStats(): ModuleEvictionStats {
+    return { enabled: Boolean(this.#resolveEvictor()), evicted: this.#evicted };
+  }
+
+  #resolveEvictor(): EsmCacheEvictor | undefined {
+    if (this.#evictor === undefined) {
+      const option = this.#evictionOption;
+      this.#evictor = option === false ? null : option === true ? getEsmCacheEvictor() ?? null : option;
+    }
+    return this.#evictor ?? undefined;
+  }
+
+  /**
+   * A revision is live while the committed generation loaded some entry at it;
+   * helpers inherit their importer's revision, so a URL whose revision no
+   * committed entry was loaded at belongs only to retired generations (or to a
+   * rolled-back attempt). Running code keeps its linked instances, so eviction
+   * affects memory and never the identity of modules already in use.
+   */
+  #evictRetiredRevisions(): void {
+    if (this.#revision === 0) return;
+    const evictor = this.#resolveEvictor();
+    if (!evictor) return;
+    const live = new Set([...this.#committedRevisions.values()].map(String));
+    for (const href of evictor.urls()) {
+      if (!href.startsWith('file:') || !href.includes('zhin-generation=')) continue;
+      let revision: string | null;
+      try {
+        revision = new URL(href).searchParams.get('zhin-generation');
+      } catch {
+        continue;
+      }
+      if (revision !== null && !live.has(revision) && evictor.evict(href)) this.#evicted += 1;
+    }
   }
 
   rollbackGeneration(): void {
     this.#pendingDependencies = undefined;
+    this.#pendingRevisions = undefined;
   }
 
   updateWatchRoots(roots: readonly ModuleWatchRoot[]): void {
@@ -212,6 +283,8 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
     this.#pendingDependencies = undefined;
     this.#dependencies.clear();
     this.#entryRevisions.clear();
+    this.#committedRevisions.clear();
+    this.#pendingRevisions = undefined;
     await this.#tsxLoader?.close?.();
   }
 
