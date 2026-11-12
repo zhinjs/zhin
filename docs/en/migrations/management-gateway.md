@@ -170,7 +170,7 @@ Monitoring that detects Bot crashes from the process exit code must switch to:
 
 - the instance state in `zhin status --json` (`stopped / starting / running / stopping / backoff / crashed`, last exit code, log tail);
 - `/pub/ready` (runtime readiness) and `/pub/health` (gateway liveness, including the instance state);
-- the Console **Operations → Instance** page.
+- the Console **Operations → Instance** page (`/ops/instance`).
 
 ## 7. Custom HTTP routes: `Request` / `Response` {#http-routes}
 

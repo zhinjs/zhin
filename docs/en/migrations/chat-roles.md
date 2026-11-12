@@ -33,7 +33,7 @@ If the process exits half-way, the next start resumes from the `pending` record.
 
 After the migration, configuration that names these fields **again** stops startup (`LEGACY_CHAT_ROLE_CONFIG`) and points here. Use instead:
 
-- the Console: the **Roles** block on adapter / account / conversation pages (`chat-roles.grant` / `revoke`, permission `iam.manage`);
+- the Console: the **Roles** tab of the global / adapter / account / conversation object pages (`chat-roles.grant` / `revoke`, permission `iam.manage`);
 - chat: with `features.selfService.enabled`, `role grant <user> <owner|admin|trusted> [level]` / `角色 授予 …`.
 
 ::: warning Removed, no compatibility
@@ -49,7 +49,7 @@ The preview implementation turned platform group owners / admins into `admin` of
 
 | Relied on the mapping | Now |
 | --- | --- |
-| Group owners / admins use the `feature` / `role` commands in the group | grant them zhin `admin` (`role grant @owner admin`, or the conversation page's **Roles** block) |
+| Group owners / admins use the `feature` / `role` commands in the group | grant them zhin `admin` (`role grant @owner admin`, or the conversation page's **Roles** tab) |
 | Group owners / admins manage subscriptions (Bilibili, earthquake and other `canManageConversation` commands) | same: subscriptions are a zhin function |
 | Group owners / admins got the Agent trusted tier (`admin` ⊃ `trusted`) | no longer: Agent trust tiers read zhin roles only |
 | A tool / command requires the sender to be a group manager | write `platform:admin` (or `platform:owner`, `platform-permission:<name>`) |

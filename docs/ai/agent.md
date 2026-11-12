@@ -705,7 +705,7 @@ zhin trace --engagements
 zhin trace <engagementId>
 ```
 
-在 Remote Console 的协作图谱页面中，也可以可视化查看每个 Engagement 的参与者拓扑、消息跳数（`ask` / `delegate` / `tell` / `result`）、共享黑板（`note` / `todo` / `artifact`）与预算账本。
+在 Remote Console 的 Workroom 页面（`/features/ai/workrooms`）中，也可以可视化查看每个 Engagement 的参与者拓扑、消息跳数（`ask` / `delegate` / `tell` / `result`）、共享黑板（`note` / `todo` / `artifact`）与预算账本。
 
 ## 相关
 

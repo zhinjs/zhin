@@ -24,7 +24,7 @@ The key point: **nothing written into a prompt grants the AI any permission.** P
 2. Expose only the tools you need in `tools/`, with structured input schemas; don't set tools that change data to "never needs approval".
 3. Start command execution at `execSecurity: deny` or `allowlist`, and open only the commands you need in known working directories.
 4. After startup, check source, profiles, and budget policy under **Runtime Capabilities → Prompt Sections** in Console.
-5. In the Agent workbench, run one read-only task and one task with side effects, and confirm approval, cancellation, the run record, and outputs behave as expected.
+5. In the Console's **Try a conversation**, run one read-only task and one task with side effects, then confirm in **Bot status** that approval, cancellation, the run record, and outputs behave as expected.
 
 ## Acceptance checklist
 

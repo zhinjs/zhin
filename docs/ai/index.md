@@ -26,7 +26,7 @@ AI 是可选的：不启用时，Bot 不依赖任何模型 SDK，也不需要 AP
    pnpm dev
    ```
 
-   首次启动（数据库尚无模型配置）时，`ai.plan.yml` 会**自动种子化（seed）导入 Host 数据库**——无需手动打开 Console 点击导入，直接访问本地 `/sandbox` 就能和 Bot 对话！后续你可以随时在 Console 的「模型管理」页面调整服务、账号、Profile 和用途，保存后下一轮对话立即生效，无需重启进程。
+   首次启动（数据库尚无模型配置）时，`ai.plan.yml` 会**自动种子化（seed）导入 Host 数据库**——无需手动打开 Console 点击导入，直接访问本地 `/sandbox` 就能和 Bot 对话！后续你可以随时在 Console 的「AI 与模型」页面（`/features/ai`）调整服务、账号、Profile 和用途，保存后下一轮对话立即生效，无需重启进程。
 
 ```yaml
 # ai.plan.yml 示例（DeepSeek）

@@ -82,7 +82,7 @@ sandbox:
 
 1. Start the Zhin instance: `pnpm dev` (the terminal will print the Host address, typically `http://127.0.0.1:8086`)
 2. Open the **[Remote Console](https://console.zhin.dev)**, set the API Base to match the Host address, and sign in with a Console account (on the first connection, use `http.token` / `HTTP_TOKEN` to create the owner)
-3. Send messages for testing on the Console **Sandbox** page after connecting
+3. Send messages for testing on the Console **Try a conversation** page (`/sandbox`) after connecting
 
 The Sandbox plugin creates one endpoint from each configured entry. With an empty endpoint list, it creates the stable `sandbox-bot` default.
 

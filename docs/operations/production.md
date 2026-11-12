@@ -217,7 +217,7 @@ Runtime Process Host 在启动和运行期间记录 `unhandledRejection`，避�
 ## 事故检查顺序
 
 1. `/pub/health` 是否可达。
-2. Dashboard 是否连接到预期 Host 与版本。
+2. 首页是否连接到预期 Host 与版本。
 3. Endpoint 是否在线，统一收件箱是否收到事件。
 4. 当前 generation 是否发布所需能力。
 5. Database（含 `engagement_events`）与 SSE history 是否从同一权威恢复。

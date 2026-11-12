@@ -170,7 +170,7 @@ export default defineCommand({
 
 When unmet the command takes its denial reply: `platform:*` / `bot:*` conditions say what is missing (e.g. 「无法执行此指令：机器人不是本群管理员（或无法确认其身份）。」), zhin role and conversation conditions keep the generic 「没有权限执行此指令。」.
 
-Roles come from the actual message (`sender.chatRole`, set by the Runtime) and grants live in the project database: manage them in the Console **Roles** block or with the `role grant` chat command. A platform group owner / admin is **not** a zhin role — commands for zhin functions use `admin` / `owner`, commands for platform functions use `platform:*`. See [Chat roles](../concepts/chat-roles.md); the old `role(master)`, `scene_admin` and `platform(adapter,perm)` spellings map as listed in [Upgrading to chat roles](../migrations/chat-roles.md#permits).
+Roles come from the actual message (`sender.chatRole`, set by the Runtime) and grants live in the project database: manage them in the **Roles** tab of the Console object pages or with the `role grant` chat command. A platform group owner / admin is **not** a zhin role — commands for zhin functions use `admin` / `owner`, commands for platform functions use `platform:*`. See [Chat roles](../concepts/chat-roles.md); the old `role(master)`, `scene_admin` and `platform(adapter,perm)` spellings map as listed in [Upgrading to chat roles](../migrations/chat-roles.md#permits).
 
 For the same check in middleware or event handlers, use `checkPermissions`:
 

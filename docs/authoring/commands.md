@@ -170,7 +170,7 @@ export default defineCommand({
 
 不满足时走命令的拒绝回复：`platform:*` / `bot:*` 条件会说明缺哪一项（如「无法执行此指令：机器人不是本群管理员（或无法确认其身份）。」），zhin 角色与会话条件保持通用的「没有权限执行此指令。」。
 
-角色来自当前真实消息（Runtime 写入的 `sender.chatRole`），授予记录存在项目数据库：在 Console 的「角色」区块或聊天命令 `角色 授予` 中管理。平台群主 / 管理员**不会**自动成为 zhin 角色——管 zhin 功能的命令写 `admin` / `owner`，管平台功能的命令写 `platform:*`。详见[聊天角色](../concepts/chat-roles.md)；旧写法 `role(master)`、`scene_admin`、`platform(adapter,perm)` 的对照见[升级到聊天角色](../migrations/chat-roles.md#permits)。
+角色来自当前真实消息（Runtime 写入的 `sender.chatRole`），授予记录存在项目数据库：在 Console 对象页的「角色」页签或聊天命令 `角色 授予` 中管理。平台群主 / 管理员**不会**自动成为 zhin 角色——管 zhin 功能的命令写 `admin` / `owner`，管平台功能的命令写 `platform:*`。详见[聊天角色](../concepts/chat-roles.md)；旧写法 `role(master)`、`scene_admin`、`platform(adapter,perm)` 的对照见[升级到聊天角色](../migrations/chat-roles.md#permits)。
 
 需要逐项理解规则时，可在[Console 命令权限说明](../paths/console.md#命令权限说明)中查看内置条件或填写假设身份。它不执行平台 checker，也不授予权限；`adapter(...)` 与会话 ID 规则不能当作完整会话白名单。
 

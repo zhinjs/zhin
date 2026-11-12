@@ -454,7 +454,7 @@ sandbox:
 | --- | --- | --- |
 | `commandPrefix` | 实例顶层 / endpoints 逐项 | 命令前缀，默认 `''`；endpoints 逐项的值覆盖顶层 |
 
-主人（`owner`）与受信任用户（`trusted`）不再写在配置里：用 Console「角色」或聊天 `角色 授予` 管理；旧的 `master` / `trusted` 首次启动时自动迁入数据库，见[升级到聊天角色](../migrations/chat-roles.md)。平台身份不映射为 zhin 角色，`roles`（映射规则）已删除，出现时启动报错（见[升级到聊天角色](../migrations/chat-roles.md#mappings)）。
+主人（`owner`）与受信任用户（`trusted`）不再写在配置里：用 Console 对象页的「角色」页签或聊天 `角色 授予` 管理；旧的 `master` / `trusted` 首次启动时自动迁入数据库，见[升级到聊天角色](../migrations/chat-roles.md)。平台身份不映射为 zhin 角色，`roles`（映射规则）已删除，出现时启动报错（见[升级到聊天角色](../migrations/chat-roles.md#mappings)）。
 
 ### endpoints 数组：一个实例挂多个账号
 

@@ -1,11 +1,11 @@
 ---
-title: 功能矩阵与分层配置
-description: Console「功能」区：在全局、适配器、账号、会话四个层级上启用 / 禁用功能并覆盖配置，继承与锁定规则，群内自助、聊天角色，以及对应的权限
+title: 功能与分层配置
+description: Console 对象页的「功能」与「角色」页签：在全局、适配器、账号、会话四个层级上启用 / 禁用功能并覆盖配置，继承与锁定规则，功能矩阵，群内自助、聊天角色，以及对应的权限
 ---
 
-# 功能矩阵与分层配置
+# 功能与分层配置
 
-同一个功能在不同平台、不同账号、不同群上常常要有不同设置：某个 QQ 账号不开 RSS，某个 Telegram 账号每次只推 1 条，某个群把复读阈值调高。Console「功能」区按四个层级管理（[ADR 0050](../adr/0050-layered-feature-config.md)、[ADR 0055](../adr/0055-conversation-feature-config.md)）：
+同一个功能在不同平台、不同账号、不同群上常常要有不同设置：某个 QQ 账号不开 RSS，某个 Telegram 账号每次只推 1 条，某个群把复读阈值调高。Console 按对象树的四个层级管理，每一级对象页都有「功能」页签（[ADR 0050](../adr/0050-layered-feature-config.md)、[ADR 0055](../adr/0055-conversation-feature-config.md)）：
 
 | 层级 | 键 | 写在配置的哪里 |
 | --- | --- | --- |
@@ -26,18 +26,29 @@ rss:
 
 `overrides` 是普通 YAML，手改与在 Console 里改等价。会话层数量可能成百上千，存在项目数据库里：备份数据库即备份这部分配置。会话 id 写进键时把 `%` 转义为 `%25`、`/` 转义为 `%2F`，其余字符原样。
 
-## 页面 {#pages}
+## 在哪里改 {#pages}
 
-| 路由 | 页面 | 读 / 写权限 |
-| --- | --- | --- |
-| `/features` | 功能矩阵 | `feature.view` / `feature.toggle` |
-| `/features/global/:plugin` | 全局配置（Schema 表单） | `feature.view` / `feature.configure` |
-| `/features/adapters` | 适配器列表：别名、类型、账号数、在线数 | `feature.view` |
-| `/features/adapters/:adapter` | 适配器页：该适配器下的功能覆盖 + 账号连接管理 | `feature.*`；账号增删改启停需要 `endpoint.manage` |
-| `/features/adapters/:adapter/endpoints/:endpoint` | 账号配置：该账号的功能覆盖；「会话」标签搜索该账号下的会话，查看各插件在会话中的状态与来源、开关与改字段；「角色」区块管理聊天角色 | `feature.*`；角色需要 `iam.manage` |
-| `/features/ai` | AI 与模型（模型路由、技能、Ambient、场所） | `agent.view` / `agent.configure` |
+功能设置不再有单独的「适配器」「账号配置」页面，而是放在[对象树](./index.md#navigation)每一级对象页的「功能」页签里：
 
-旧的插件详情配置页重定向到 `/features/global/:plugin`。「会话」区的账号工作区有一个「功能配置」入口，跳到对应的账号配置页。
+| 位置 | 路由 | 能做什么 | 读 / 写权限 |
+| --- | --- | --- | --- |
+| 全局「功能」页签 | `/scope?tab=features` | 全部功能的总览：可设置层级、全局开关、下级另有设置的数量；「矩阵」视图（`&view=matrix`）显示每个功能在全局与各适配器的开关。点功能名打开它的全局配置 | `feature.view` / `feature.toggle` |
+| 适配器「功能」页签 | `/scope/:adapter?tab=features` | 作用于该适配器下所有账号与会话 | `feature.view` / `feature.configure`、`feature.toggle` |
+| 账号「功能」页签 | `/scope/:adapter/:endpoint?tab=features` | 只作用于该账号及其会话 | 同上 |
+| 会话「功能」页签 | `/scope/:adapter/:endpoint/:conversation?tab=features` | 只作用于这个会话；只能改插件声明为会话可改的字段 | 同上 |
+| 功能矩阵 | `/features` | 与全局「功能」页签的矩阵视图相同的独立入口 | `feature.view` / `feature.toggle` |
+| 全局配置 | `/features/global/:plugin` | 插件的全局配置（Schema 表单） | `feature.view` / `feature.configure` |
+| 插件详情「在哪开了」 | `/plugins/:name` | 只汇总：全局与各适配器的开关、有几个会话单独覆盖（账号层的开关在各账号的「功能」页签），链到对应的「功能」页签 | `plugin.manage` |
+
+适配器、账号、会话三级「功能」页签的写法相同：
+
+- 每个插件一行：有效状态（启用 / 已关闭 / 已锁定）、来源层级、本层覆盖了几项。可按「全部」「本层有覆盖」「已关闭」「已锁定」筛选，也可以搜索。
+- 展开一行，逐字段显示**继承值 / 本层覆盖 / 有效值 / 来源**。编辑一个字段就创建本层覆盖；「移除覆盖」让它改回继承上级的值，「全部移除」删除这一层对该插件的全部覆盖。
+- 开关、覆盖与移除都先「预览修改」，再在[操作回执](./index.md#receipts)里确认；关掉开关时会提示「关闭后，这一层以下的范围都不能再打开它」。
+- 被上级关掉的插件显示「被 … 锁定」，附锁定层级的链接；这一层不能打开它，也不能改它的开关。
+- 只支持全局配置的功能不会出现在下级页签里，它们在全局「功能」页签。Host 不支持按层级配置时，页签说明需要新版 Host，并沿用上级配置。
+
+账号「概览」列出有覆盖的会话与最近活跃的会话；会话「概览」列出这个会话单独改过的功能。
 
 ## 功能矩阵 {#matrix}
 
@@ -45,9 +56,9 @@ rss:
 
 - **启用**；
 - **禁用**；
-- **被上级禁用并锁定**——鼠标悬停显示「已在 全局 / 适配器 qq 禁用」，附跳转链接。
+- **被上级禁用并锁定**——鼠标悬停显示「已在全局禁用」「已在适配器禁用」或「已在账号禁用」，附跳转链接。
 
-有覆盖的格子带标记；有会话层覆盖的账号显示会话数（`feature.matrix` 的 `conversationOverrides`）。点功能名进全局配置，点格子进对应层级的配置页。数据来自 `feature.matrix`。
+有覆盖的格子带标记；有会话层覆盖的账号显示会话数（`feature.matrix` 的 `conversationOverrides`）。点功能名进全局配置，点适配器名进它的「功能」页签。全局开关会重启 Host，确认框会提示这一点。数据来自 `feature.matrix`。
 
 ## 继承规则 {#resolution}
 
@@ -131,11 +142,13 @@ features:
 
 | 来源 | 说明 |
 | --- | --- |
-| 授予（`chat_roles` 表，`source: 'grant'`） | Console「角色」区块或聊天命令 `角色 授予\|撤销 <用户> <角色> [层级]` / `role grant\|revoke …`；这是 zhin 角色的唯一来源 |
+| 授予（`chat_roles` 表，`source: 'grant'`） | 对象页的「角色」页签或聊天命令 `角色 授予\|撤销 <用户> <角色> [层级]` / `role grant\|revoke …`；这是 zhin 角色的唯一来源 |
 
 平台身份（发送者的群主 / 管理员 / 身份组 / 权限，以及机器人自身在群里的身份）不换算为 zhin 角色，只在 permit 的 `platform:*` / `bot:*` 条件中使用。
 
 配置文件不再保存人员名单：旧的账号 `master` / `trusted` 与 `ai.trigger.masters` / `trusted` 在首次启动时迁入 `chat_roles`，见[升级到聊天角色](../migrations/chat-roles.md)。
+
+在 Console 里，四个层级的对象页都有「角色」页签（需要 `iam.manage`，绑定到该适配器 / 账号的作用域角色也算）：列出在这一层有效的角色、在这一层授予的与从上级继承的，以及「授予角色」（填平台用户 ID，选所有者 / 管理员 / 受信任）。撤销只撤销在这一层直接授予的角色。全局角色可为每个平台登记一个身份；适配器以下各层的身份只能属于它自己的适配器。
 
 聊天中授予角色时，授予者必须在目标作用范围拥有不低于被授予角色的角色；`owner` 只能由更高层的 `owner` 授予或撤销。`角色 列表` 显示本会话生效的角色与来源。
 

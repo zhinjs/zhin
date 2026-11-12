@@ -33,7 +33,7 @@ description: 从 master / trusted 配置名单迁移到 ADR 0056 聊天角色：
 
 迁移完成后，如果配置文件中**再次出现**这些字段，实例启动会报错（`LEGACY_CHAT_ROLE_CONFIG`）并指向本文。请改用：
 
-- Console：适配器 / 账号 / 会话页的「角色」区块（`chat-roles.grant` / `revoke`，需要 `iam.manage`）；
+- Console：全局 / 适配器 / 账号 / 会话对象页的「角色」页签（`chat-roles.grant` / `revoke`，需要 `iam.manage`）；
 - 聊天：开启 `features.selfService.enabled` 后发送 `角色 授予 <用户> <owner|admin|trusted> [层级]` / `role grant …`。
 
 ::: warning 已删除、没有兼容
@@ -49,7 +49,7 @@ description: 从 master / trusted 配置名单迁移到 ADR 0056 聊天角色：
 
 | 以前依赖映射的地方 | 现在 |
 | --- | --- |
-| 群主 / 管理员在群内用 `功能` / `角色` 命令 | 需要被授予 zhin `admin`（`角色 授予 @群主 admin`，或 Console 会话页「角色」区块） |
+| 群主 / 管理员在群内用 `功能` / `角色` 命令 | 需要被授予 zhin `admin`（`角色 授予 @群主 admin`，或 Console 会话页「角色」页签） |
 | 群主 / 管理员管理订阅（B 站、地震等 `canManageConversation` 类命令） | 同上：订阅是 zhin 功能 |
 | 群主 / 管理员获得 Agent 受信任档位（`admin` ⊃ `trusted`） | 不再获得；Agent 信任档位只看 zhin 角色 |
 | 工具 / 命令要求「发言者是群管」 | 写 `platform:admin`（或 `platform:owner`、`platform-permission:<名>`） |

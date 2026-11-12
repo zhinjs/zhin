@@ -111,7 +111,7 @@ Permissions (plugin-defined, granted by level — see [Plugin permission levels]
 | `bilibili:review` | Send / edit / discard drafts |
 | `bilibili:login` | QR login / sign out |
 
-Review commands require the chat role `owner`: grant yourself `owner` on the chat adapter you talk to the bot through (QQ / Telegram, …) in the Console **Roles** block or with `role grant` (see [Chat roles](../concepts/chat-roles.md)); to run them from Bilibili comments your Bilibili identity needs `owner` too. With no owner, nobody can send via commands.
+Review commands require the chat role `owner`: grant yourself `owner` on the chat adapter you talk to the bot through (QQ / Telegram, …) in the **Roles** tab of the Console object pages or with `role grant` (see [Chat roles](../concepts/chat-roles.md)); to run them from Bilibili comments your Bilibili identity needs `owner` too. With no owner, nobody can send via commands.
 
 ## Conversations and messages
 
@@ -203,7 +203,7 @@ Without `notify`, drafts only show on the Console page and in logs (`bilibili_dr
 | No "Comment review" in the Console | Make sure the Console (`@zhin.js/page`) is installed and the token has `bilibili:read` |
 | Page buttons say you lack permission | The token lacks `bilibili:review` / `bilibili:login` |
 | `bili-draft send` says it is too soon | `minSendIntervalSec` has not passed; try again later, the draft is kept |
-| `bili-draft` reports no permission | You do not hold the chat role `owner`; grant it in the Console **Roles** block |
+| `bili-draft` reports no permission | You do not hold the chat role `owner`; grant it in the **Roles** tab of the Console object pages |
 | Log `bilibili_notifications_disabled` | `notifications` is on but you are not signed in, so notifications are not polled |
 | Log `bilibili_notify_failed` | The `notify` conversation cannot be reached: check adapter / endpoint / id and that the adapter is online |
 | Log `bilibili_draft_persist_failed` | The data directory is not writable; check `dataDir` permissions. Drafts remain in memory |

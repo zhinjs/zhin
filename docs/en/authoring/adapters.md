@@ -95,7 +95,7 @@ terminal:
     interactive: true
 ```
 
-After startup, check in Console's **Chat accounts** that the account is online and receiving. Mounting is covered in [First plugin · Mount it on your bot](../getting-started/first-plugin.md).
+After startup, check in Console's **Accounts and conversations** that the account is online (its Access tab tests the connection) and that its Chat tab receives messages. Mounting is covered in [First plugin · Mount it on your bot](../getting-started/first-plugin.md).
 
 ### Several accounts on one adapter
 

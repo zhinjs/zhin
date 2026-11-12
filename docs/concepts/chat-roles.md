@@ -68,11 +68,11 @@ interface PlatformStanding {
 
 管理入口：
 
-- Console：适配器 / 账号 / 会话页的「角色」区块（`chat-roles.list|grant|revoke`，需要 `iam.manage`；绑定到适配器 / 账号的权限对其下的作用范围也有效）；
+- Console：全局 / 适配器 / 账号 / 会话对象页的「角色」页签（`chat-roles.list|grant|revoke`，需要 `iam.manage`；绑定到适配器 / 账号的权限对其下的作用范围也有效）；
 - 聊天：`角色 列表|授予|撤销 <用户> <角色> [层级]` / `role list|grant|revoke …`（需开启 `features.selfService.enabled`）。授予者必须在目标作用范围拥有不低于被授予角色的角色；`owner` 只能由更高层的 `owner` 授予或撤销。
 
 ::: tip 群主想管理功能怎么办
-功能开关、订阅等是 zhin 的功能，平台群主 / 管理员需要被授予 zhin 角色才能使用：由 owner 在聊天中发送 `角色 授予 @群主 admin`，或在 Console 会话页的「角色」区块授予。
+功能开关、订阅等是 zhin 的功能，平台群主 / 管理员需要被授予 zhin 角色才能使用：由 owner 在聊天中发送 `角色 授予 @群主 admin`，或在 Console 会话页的「角色」页签授予。
 :::
 
 ## 在代码里使用

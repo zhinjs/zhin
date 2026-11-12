@@ -170,7 +170,7 @@ PM2 托管的是网关进程，`max_memory_restart` 只看网关自己的内存�
 
 - `zhin status --json` 的实例状态（`stopped / starting / running / stopping / backoff / crashed`、最近退出码、日志尾部）；
 - `/pub/ready`（运行时就绪）与 `/pub/health`（网关存活，含实例状态）；
-- Console「运维 → 实例」页。
+- Console「运维 → 实例」页（`/ops/instance`）。
 
 ## 7. 自定义 HTTP 路由：改为 `Request` / `Response` {#http-routes}
 

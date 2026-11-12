@@ -8,7 +8,7 @@ tier: Stable
 本页由 [`plugins/adapters/sandbox/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/sandbox/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=d62c470117f08c50 -->
+<!-- sync-adapter-docs:sha256=9ea19b5017cb5e78 -->
 
 # @zhin.js/adapter-sandbox
 
@@ -97,7 +97,7 @@ Console 原生渲染 Markdown 格式的流式回复（`markdown` 段，`data.con
 
 1. 启动 Zhin 实例：`pnpm dev`（终端会打印 Host 地址，一般为 `http://127.0.0.1:8086`）
 2. 打开 **[Remote Console](https://console.zhin.dev)**，API Base 与 Host 地址一致，用 Console 账号登录（首次连接用 `http.token` / `HTTP_TOKEN` 创建所有者）
-3. 在 Console **会话** 页连接后发送消息
+3. 连接后在 Console 侧栏「试聊一下」（`/sandbox`）发送消息
 
 浏览器客户端连接到默认 `sandbox-bot`，也可以通过多个显式 endpoint 使用不同 WebSocket 路径。
 
@@ -109,7 +109,7 @@ Console 原生渲染 Markdown 格式的流式回复（`markdown` 段，`data.con
 
 刷新后仅恢复当前进程和 generation 中仍有效的待处理交互，继续使用原发起人、会话、期限和单次处理规则。历史与浏览器缓存中的控件不提供当前审批权限；已结束或重启前的操作不会重新激活。
 
-无人值守任务等产生的 Host 工具审批，可在任务中心的「Host 工具审批」中查看并逐次确认。该入口沿用 Console 操作者的权限，只显示当前有效请求，不改变 IM 审批规则。
+无人值守任务等产生的 Host 工具审批，可在「运维 → 定时任务 → 管理员任务」的「Host 工具审批」中查看并逐次确认。该入口沿用 Console 操作者的权限，只显示当前有效请求，不改变 IM 审批规则。
 
 「变更与产物」中的成功文件写入、编辑在 Host 提供项目文件引用时，可打开现有文件管理器查看当前文件。入口沿用文件管理器的项目根与读取权限；旧记录或无法映射的文件仍显示执行记录，不推测链接。该入口读取当前内容，不是执行时的历史快照。
 

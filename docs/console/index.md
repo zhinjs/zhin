@@ -1,51 +1,187 @@
 ---
 title: "Console"
-description: "在浏览器里管理 Bot：连接方式、能看到什么、出问题时先看哪里"
+description: "在浏览器里管理 Bot：对象树「全局 ─ 适配器 ─ 账号 ─ 会话」、每一页的页签、常见任务在哪里做，以及出问题时先看哪里"
 ---
 
 # Console
 
-Console 是 Bot 的浏览器管理后台。你可以在里面**发测试消息、看日志、改配置、管理插件和账号、观察 AI 在做什么**。
+Console 是 Bot 的浏览器管理后台。你可以在里面**接入聊天账号、按群开关插件、授予聊天角色、安装插件、查看消息为什么没被回复、管理实例与访问控制**。
 
 它不需要你部署：打开 <https://console.zhin.dev>，填入 `zhin start` 启动时打印的 API 地址（新项目默认 `http://127.0.0.1:8068`）。第一次连接时用 `.env` 里的 `HTTP_TOKEN`（初始化令牌）完成[初始化与引导](./onboarding.md)，之后用账号登录。也可以直接打开 Host 自带的本地 `/console` 与 Sandbox 页面。
 
-Console 连接的是**管理网关**（[ADR 0054](../adr/0054-management-gateway.md)）：网关负责登录、权限、初始化、实例起停、依赖安装与终端，其余接口转发给 Zhin 实例。实例崩溃、停止或正在安装依赖时，Console 仍能登录、看实例状态与日志；只有实例提供的页面暂时返回 `503`。
+Console 连接的是**管理网关**（[ADR 0054](../adr/0054-management-gateway.md)）：网关负责登录、权限、初始化、实例起停、依赖安装与终端，其余接口转发给 Zhin 实例。实例崩溃、停止或正在安装依赖时，Console 仍能登录、看实例状态与日志；只有实例提供的页面暂时返回 `503`，页面顶部显示「实例不可用」横幅（见[实例离线怎么办](#instance-offline)）。
 
 | 专题 | 内容 |
 | --- | --- |
-| [初始化与引导](./onboarding.md) | 数据库 → 所有者 → AI → 适配器，每步的凭据与权限 |
-| [访问控制](./access-control.md) | 用户、角色、API 令牌、审计日志，权限目录与插件权限级别 |
-| [功能矩阵与三级配置](./features.md) | 全局 / 适配器 / 账号三层启停与覆盖 |
-| [运维](./operations.md) | 实例状态与起停、依赖安装与回滚、数据库 / 配置 / 文件、终端 |
+| [初始化与引导](./onboarding.md) | 数据库 → 所有者 → AI → 聊天平台，每步的凭据与权限 |
+| [功能与分层配置](./features.md) | 对象页的「功能」页签：全局 / 适配器 / 账号 / 会话四层启停与覆盖、继承与锁定；「角色」页签与聊天角色 |
+| [访问控制](./access-control.md) | Console 用户、角色、API 令牌、审计日志，权限目录与插件权限级别 |
+| [运维](./operations.md) | 实例（运行状态与项目依赖）、插件安装与回滚、数据库 / 配置 / 定时任务 / 文件、终端 |
 
-## 连上之后能做什么
+## 导航结构 {#navigation}
 
-| 页面 | 用来做什么 |
+Console 的主干是一棵四级对象树：**全局 ─ 适配器 ─ 账号 ─ 会话**（与[分层功能配置](./features.md)、[聊天角色](../concepts/chat-roles.md)的四个层级一致）。每个对象只有一个页面，关于它的一切都放在这一页的页签里。侧栏的「账号与会话」进入全局页，从这里逐级点进下级对象。
+
+| 层级 | 路由 | 页签（顺序固定） |
+| --- | --- | --- |
+| 全局 | `/scope` | 概览 · 功能 · 角色 · 记录 |
+| 适配器 | `/scope/:adapter` | 概览 · 功能 · 角色 · 记录 |
+| 账号 | `/scope/:adapter/:endpoint` | 概览 · 聊天 · 接入 · 功能 · 角色 · 记录 |
+| 会话 | `/scope/:adapter/:endpoint/:conversation` | 概览 · 聊天 · 功能 · 角色 · 记录 |
+
+- `:adapter` 是适配器实例别名（配置里的顶层键，如 `qq`、`tg-main`），`:endpoint` 是账号 ID，`:conversation` 是 `<类型>:<ID>`（类型为 `group` 群聊 / `private` 私聊 / `channel` 频道）整体做一次 URI 编码，例如 `/scope/qq/bot-1/group%3A123`。
+- 当前页签记在 `?tab=` 里（`chat`、`access`、`features`、`roles`、`records`；「概览」是默认页签，不写进地址），刷新和分享链接都能直达。
+- 没有权限的页签仍然显示（带锁），内容说明缺少哪个权限，不会悄悄隐藏：概览需要 `endpoint.view` 或 `feature.view`，聊天与接入需要 `endpoint.view` 或 `endpoint.operate`，功能需要 `feature.view`，角色需要 `iam.manage`，记录需要 `status.view`。
+
+| 页签 | 内容 |
 | --- | --- |
-| 聊天账号 / 试聊一下 | 给 Bot 发测试消息，查看各平台账号的收发情况 |
-| 聊天记录 | 回看机器人和大家聊过什么，并可从某段继续 |
-| 运行时能力（高级） | 确认命令、中间件、组件、工具是否已加载，以及来自哪个插件 |
-| 运行记录 | 按时间和来源查看运行日志 |
-| 配置（高级） | 用表单或源码编辑 `zhin.config.yml`，保存失败会自动回滚 |
-| 机器人状态 | 查看 AI 的对话、调用了哪些工具、审批与取消记录；「决策回放」按时间倒序列出机器人每次回 / 不回的原因，可按回合展开时间线、按时间范围导出 JSON（需要令牌有 `decisions:read` 权限，默认保留 14 天，`ai.audit.retentionDays` 可改） |
-| 群聊插话 | 决定没人 @ 机器人时它要不要自己在群里接话（关闭 / 只观察 / 主动参与）、在哪些群、每小时最多几次，并查看最近 24 小时的情况。保存后需要重启才生效；查看需要令牌有 `ambient:read` 权限，修改需要管理员令牌 |
-| 技能助手 | 让一个专门的小助手帮机器人挑技能、挑工具、挑记忆、决定交给哪个助手、自动通过审批、判断群里要不要接话，每项选「关闭 / 只观察 / 正式使用」，并查看最近 24 小时用了几次、成功几次。需要先安装 `@zhin.js/service-typesafe`（`zhin setup --decisions`）。保存后需要重启才生效；查看需要令牌有 `skills:read` 权限，修改需要管理员令牌 |
-| 协作图谱（高级） | 只读查看多 Agent 协作（Engagement）的参与者、消息跳数、共享黑板与预算，以及已配置的协作场所（`ai.venues`） |
+| 概览 | 全局：全部聊天账号（状态、待处理事件、等待登录的账号）、各适配器的在线数，以及「接入新平台账号」。适配器：该适配器的账号列表与「连接管理」（由适配器插件提供：添加、编辑、启停账号与登录方式）。账号：运行状态、好友申请与邀请、通知，以及有覆盖的会话与最近活跃的会话。会话：这个会话单独改过的功能 |
+| 聊天 | 账号：会话列表与聊天窗口（会话、好友申请与邀请、通知），选中的会话记在地址里（`?tab=chat&conversation=<类型>:<ID>`）。会话：只有这个会话的聊天，成员、「最近诊断」与历史在会话顶部 |
+| 接入 | 仅账号页：连接状态与「测试连接」（只读取状态，不发送消息）、待完成的登录验证（扫码、滑块 Ticket、短信或设备锁），以及去适配器「连接管理」改连接参数的入口 |
+| 功能 | 每个插件一行：有效状态、来源层级、本层覆盖、锁定层级。展开后逐字段显示继承值 / 本层覆盖 / 有效值 / 来源。全局「功能」是全部功能的总览，可切到「矩阵」视图（`?view=matrix`）。见[功能与分层配置](./features.md) |
+| 角色 | 这一层的聊天角色（所有者 / 管理员 / 受信任）：在这一层授予的、从上级继承的，以及「授予角色」。见[聊天角色](./features.md#chat-roles) |
+| 记录 | 按这个范围筛选好的入口：聊天记录、决策回放、运行日志、审计日志；每个入口标明筛选有多精确（精确 / 范围更宽 / 文本匹配） |
 
-## 侧栏导航
+对象页的页头：面包屑（全局以下每级带层级名，祖先可点）、显示名与状态徽标（在线 / 离线 / 有覆盖 / 已锁定）、完整身份（如 `qq / bot-1 / group:123`）旁的「复制范围键」，以及右侧的「切换范围」。**切换范围只改变查看的对象，不会授予权限。**
 
-导航分六个区（[ADR 0052](../adr/0052-console-information-architecture.md)）：前四个是日常，后两个是管理。没有权限的区整体隐藏。
+### 侧栏 {#sidebar}
 
-| 区 | 回答的问题 | 页面 | 权限 |
-| --- | --- | --- | --- |
-| 概览 | 现在怎么样？ | 仪表盘、日志、Agent 观测 | `status.view` |
-| 会话 | 在和谁说话？ | 账号工作区（会话、收件箱、请求通知）、沙盒 | `endpoint.view` / `endpoint.operate` |
-| 功能 | 机器人能做什么、在哪里做？ | 功能矩阵、全局配置、适配器、账号配置、AI 与模型 | `feature.*`、`agent.*` |
-| 插件 | 装了什么？ | 已安装、市场、插件详情（版本、依赖、日志） | `plugin.manage` |
-| 运维 | 宿主机怎么样？ | 实例、数据库、配置文件、环境变量、定时任务、文件、终端 | `ops.*`、`status.view` |
-| 访问控制 | 谁能做什么？ | 用户、角色、API 令牌、审计日志 | `iam.*` |
+对象树之外的页面在侧栏里，按下面的分组排列。分组里没有当前身份能看的页面时，整组不显示。
 
-插件贡献的页面按 `metadata.section` 落到对应区，未声明的落到「功能」。旧路由保留重定向：插件详情的配置页 → `/features/global/:plugin`，旧的数据库 / 配置 / 定时任务页 → `/ops/*`。
+| 分组 | 入口（路由） | 不在菜单里、从上级页面进入 |
+| --- | --- | --- |
+| 概览 | 首页 `/dashboard`、运行日志 `/logs`、机器人状态 `/agent/workbench`、Token 用量 `/agent/usage` | 决策回放 `/agent/replay`（从机器人状态与「记录」页签进入） |
+| 会话 | 试聊一下 `/sandbox`（Sandbox 插件页）、账号与会话 `/scope`、聊天记录 `/agent/sessions` | 适配器 / 账号 / 会话的对象页 |
+| 功能 | 功能矩阵 `/features`、AI 与模型 `/features/ai`、技能助手 `/features/ai/skills`、群聊插话 `/features/ai/ambient`、Workroom `/features/ai/workrooms`、运行时能力 `/introspection`、消息场景试验台 `/scenario-lab`，以及没有声明分组的插件页 | 全局配置 `/features/global/:plugin`、Workroom 配置 `/features/ai/workrooms/catalog`、命令权限说明 `/permissions`、群欢迎配置流程 `/use-cases/group-welcome` |
+| 插件 | 插件 `/plugins`、插件市场 `/marketplace` | 插件详情 `/plugins/:name` |
+| 运维 | 实例 `/ops/instance`、数据库 `/ops/database`、配置文件 `/ops/config`、环境变量 `/ops/env`、定时任务 `/ops/schedules`、项目文件 `/ops/files`、终端 `/ops/terminal` | — |
+| 访问控制 | 用户 `/access/users`、角色 `/access/roles`、API 令牌 `/access/tokens`、审计日志 `/access/audit` | — |
+
+顶栏的用户名进入个人设置 `/account`（改密码、我的 API 令牌）；引导未完成时页面顶部的横幅进入开始使用 `/onboarding`。插件贡献的页面按 `/entries` 里声明的分组（`metadata.section`，如 `ops` 或 `运维`）落位，未声明的进「功能」；适配器插件自己的页面（如 `/qq`）仍然可以打开，它的账号管理同时嵌在该适配器对象页的「连接管理」里。
+
+::: details 旧地址会跳到哪里
+旧书签不会失效，Console 把它们重定向到新位置：
+
+| 旧地址 | 现在 |
+| --- | --- |
+| `/endpoints` | `/scope`（全局概览） |
+| `/endpoints/:adapter/:endpointId` | 账号页「聊天」；带 `channelType` + `channelId` 时到该会话的「聊天」 |
+| `/features/adapters`、`/features/adapters/:adapter` | `/scope`、`/scope/:adapter` |
+| `/features/adapters/:adapter/endpoints/:endpoint` | 账号页「功能」（`?tab=conversations` → 账号概览） |
+| `/features/adapters/:adapter/endpoints/:endpoint/conversations/:conversation` | 会话页「功能」 |
+| `/features/global`、`/features/ai/models` | `/features`、`/features/ai` |
+| `/config` | `/ops/config`（`/config?plugin=x` → `/features/global/x`） |
+| `/env`、`/files`、`/database` | `/ops/env`、`/ops/files`、`/ops/database` |
+| `/tasks`、`/cron`、`/assistant/jobs` | `/ops/schedules`（后两个分别打开「定时提醒」「助手任务」页签） |
+| `/agent/models`、`/agent/skills`、`/agent/ambient`、`/agent/workrooms` | `/features/ai`、`/features/ai/skills`、`/features/ai/ambient`、`/features/ai/workrooms` |
+:::
+
+## 在哪里做什么 {#tasks}
+
+| 我想… | 去哪里 |
+| --- | --- |
+| 接入一个平台账号 | [接入账号](#connect-account) |
+| 让某个群不用某个插件 | [按会话关插件](#turn-off-in-conversation) |
+| 让某人能在群里管理功能 | [授予角色](#grant-role) |
+| 安装、更新、卸载插件 | [装插件](#install-plugin) |
+| 查清一条消息为什么没被回复 | [看为什么没回复](#why-no-reply) |
+| 页面顶部出现「实例不可用」 | [实例离线怎么办](#instance-offline) |
+| 发一条测试消息 | 侧栏「试聊一下」，或账号页「聊天」 |
+| 看机器人和大家聊过什么 | 侧栏「聊天记录」，或任一对象页的「记录」页签（已按范围筛选） |
+| 确认命令、中间件、工具已加载 | 侧栏「运行时能力」；某个插件的能力在插件详情的「能力清单」 |
+| 查看定时任务 | 运维 → 定时任务（「全部任务」总览，各类任务在各自页签） |
+| 改配置文件、环境变量 | 运维 → 配置文件 / 环境变量（插件的配置在「全局配置」） |
+| 给同事开账号、发 API 令牌 | 访问控制 → 用户 / API 令牌，见[访问控制](./access-control.md) |
+
+### 接入账号 {#connect-account}
+
+1. 打开「账号与会话」（`/scope`），在「接入新平台账号」里选平台。适配器还没安装时按钮是「先安装适配器」，进入插件市场安装（见[装插件](#install-plugin)）；已安装时点「前往接入」，进入该适配器的页面。
+2. 在适配器页「概览」的「连接管理」里点「添加账号」，填写 Token、地址或登录方式。需要 `endpoint.manage`。
+3. 打开新账号的「接入」页签：点「测试连接」确认连接；需要扫码、滑块、短信或设备锁验证时，验证出现在「登录」区块，完成后账号自动上线。全局概览的「等待登录」也会列出这些账号。
+4. 到账号的「聊天」页签收一条消息、回一条消息，确认收发正常。
+
+Host 当前没有运行这个账号时，「接入」页签会说明原因（已从配置移除、被停用或还没启动），并给出「打开适配器」。
+
+### 按会话关插件 {#turn-off-in-conversation}
+
+1. 进入会话页：「账号与会话」→ 适配器 → 账号 → 在账号「概览」的会话列表（或「聊天」里）点这个会话。
+2. 打开「功能」页签，找到插件那一行，关掉开关，在操作回执里确认。
+3. 只影响这个会话：命令不再匹配、中间件不执行、Agent 工具在这里不可见。要对整个账号或适配器关，在对应对象页的「功能」页签里做；上级关掉后，下级显示「已锁定」，不能再打开。
+
+会话层只能改插件声明为会话可改的字段，其余字段只读。规则见[继承规则](./features.md#resolution)。
+
+### 授予角色 {#grant-role}
+
+1. 进入目标范围的对象页（全局、适配器、账号或会话），打开「角色」页签。需要 `iam.manage`（绑定到该适配器 / 账号的作用域角色也算）。
+2. 在「授予角色」里填平台用户 ID，选「所有者」「管理员」或「受信任」，确认。角色在这一层及其下所有范围生效。
+3. 撤销只撤销在这一层直接授予的角色；从上级继承的角色要到授予它的那一层撤销。
+
+聊天角色只影响机器人在聊天里的权限，不影响 Console 登录与权限（那是[访问控制](./access-control.md)的角色）。平台群主 / 管理员是平台身份，不会自动成为 zhin 角色。见[聊天角色](../concepts/chat-roles.md)。
+
+### 装插件 {#install-plugin}
+
+1. 打开「插件市场」（`/marketplace`），搜索并打开插件详情；详情会核验注册表的 latest 版本。
+2. 点「安装」：网关先生成安装计划，确认后停止实例、安装、校验并重新启动；失败自动回滚，进度实时显示。需要 `plugin.manage`。
+3. 插件有必填配置时显示「需要配置」，按按钮打开配置表单，提交后网关写入声明并重启实例。
+4. 在对象页的「功能」页签决定它在哪些范围开启。插件详情的「在哪开了」汇总了各层开关。
+
+已安装插件在「插件」（`/plugins`）里列出来源、版本与健康状态；更新与卸载在插件详情「版本与依赖」里执行，同样走网关事务。项目里全部依赖在「实例」页的「项目依赖」管理。见[依赖安装与回滚](./operations.md#packages)。
+
+### 看为什么没回复 {#why-no-reply}
+
+1. 进入会话页「聊天」，在会话顶部点「最近诊断」，或点那条入站消息旁的诊断按钮。诊断显示实际处理阶段、指令状态、回复目标与投递结果（只读，不会重放消息）。
+2. 打开会话页「记录」页签 →「决策回放」：机器人每次回或不回、调没调模型、发没发消息的原因。
+3. 怀疑命令被权限挡住：打开「命令权限说明」（`/permissions`，也可从运行时能力的命令目录进入），用假设的 zhin 角色与平台身份试算规则。
+4. 怀疑插件在这里被关了：看会话页「功能」页签里这个插件的有效状态与来源层级。
+5. 怀疑实例本身有问题：看「实例」页的运行状态与实例日志。
+
+诊断记录只在内存保留最近 15 分钟、最多 500 条；查不到不代表处理成功。细节见[消息处理排查](../troubleshooting/messages.md)。
+
+### 实例离线怎么办 {#instance-offline}
+
+网关返回 `503 instance_unavailable`（实例没在运行）、`504 instance_timeout`（没在限定时间内答复）或 `502 instance_error`（答复失败或过载）时，所有页面顶部显示「实例不可用」横幅：按 `Retry-After` 倒计时并自动重试，也可以「立即重试」，或点「查看实例」。
+
+- 访问控制、实例与终端由网关提供，照常可用；其他页面只在对应区块显示「实例不可用」，不整页拦截。实例恢复后横幅消失，各区块自动重新读取。
+- 在「实例」页看状态与「失败前的日志」，修复后点「启动」或「重启」（需要 `ops.restart`）。见[实例](./operations.md#instance)。
+- 横幅出现时刚提交的写操作，回执会显示「结果未知」：先点「核对当前状态」，不要重复提交（见[操作回执](#receipts)）。
+
+## 首页 {#home}
+
+首页（`/dashboard`）回答「现在需要处理什么」：
+
+- **需要关注**：离线的聊天账号、未连接的 MCP 服务、历史错误与警告、Host 不可达等，每项带去处理的入口。
+- **关键指标**的口径各不相同，卡片上写明来源：
+  - 「收到消息」是**缓冲内观察**：来自 Host 的内存事件缓冲（覆盖最近 24 小时，缓冲更短时注明从何时起），实例重启后清空；
+  - 「错误日志」是**持久统计**：来自日志库，清理日志后重新计数；
+  - 「在线聊天账号」是**当前状态**，附在线率。
+- 最近 24 小时消息量、最近的消息、进程与资源（运行环境、内存、CPU）。进程与实例的完整运行状态只在「实例」页。
+
+## 状态提示与操作回执 {#receipts}
+
+一种情况只有一种说法：「暂无数据」「无权限」（列出需要的权限）「未安装」（去插件市场）「需要新版 Host」「已锁定」（链到锁定的上级）「内容已被修改」（重新读取后再决定）「数据库忙」「实例不可用」「需要配置」「已断开连接」「结果未知」「读取失败」。原始错误放在「技术详情」里；读取失败不会显示成空列表。
+
+写操作（开关功能、改覆盖、授予 / 撤销角色、安装插件等）都先列出要改什么，再确认、提交，结果就地显示为一张操作回执：
+
+| 结果 | 含义 | 下一步 |
+| --- | --- | --- |
+| 已完成 / 部分完成 | Host 确认了修改 | 关闭回执 |
+| 未执行 | Host 明确拒绝（权限、校验、冲突、锁定，或实例不可用未转发） | 看原因，重新准备 |
+| 结果未知 | 请求已发出，没有收到可信答复（超时、断连、`504` / `502`） | 只能「核对当前状态」（只读重读），不要重复提交 |
+
+删除、撤销、全局停用等影响面大的操作会要求再确认一次。
+
+## 命令权限说明 {#command-permissions}
+
+「命令权限说明」（`/permissions`）解释一条命令的 `permit` 为什么匹配或不匹配，按[聊天角色](../concepts/chat-roles.md)的维度试算：
+
+- 选当前运行代里的命令（按命令名、说明或插件实例搜索），页面逐项解释它声明的 `permit` 与 `adapter` 约束：数组各项都要满足（AND），同一项括号内逗号任选其一（OR）。
+- 可选填假设会话与账号、发送者 ID、**假设 zhin 角色**（普通用户 / 受信任 / 管理员 / 所有者）与**假设平台身份**（群主 / 管理员 / 成员 / 访客，以及平台角色 ID），点「检查假设条件」。
+- 身份完全由你假设，不向平台核实；留空表示未知，不会被当作已知角色。页面不执行命令，也不执行平台与自定义 checker，这些条件显示「未评估」，缺少依据时显示「缺少依据」。「条件符合」不代表已授权或可执行。
+- 需要持有 `status.view` 的账号登录；运行代变化后要刷新目录重新检查。
+
+## Console 与 Host 的连接 {#architecture}
+
+浏览器可以打开远程 Console（console.zhin.dev），也可以打开 Host 自带的本地页面；两者都只和管理网关通信，网关把实例的接口经 IPC 转发给 Zhin 实例。
 
 ::: details 为什么 Bot 还在登录时 Console 就能连上？
 HTTP 服务、Console RPC 与 SSE 属于进程控制面，会在插件全部启动（首个 generation 发布）之前就开始监听。所以 ICQQ 等适配器即使还在等待扫码、滑块或设备确认，浏览器也能通过 `login.list`、`login.submit` 与 `endpoint.login.pending` 完成登录。此时依赖已启动插件的页面可能暂时为空或显示未就绪；适配器全部启动完成后才会正常显示。
@@ -89,33 +225,37 @@ Runtime 无配置时回退到 8086，当前脚手架默认写入 8068。连接�
 
 | 你看到的现象 | 先看哪里 | 要确认的事实 |
 | --- | --- | --- |
-| Console 连不上 | Dashboard / 启动日志 | Host、端口、token、CORS 与 HTTP Host 是否降级 |
-| 平台在线但收不到消息 | Endpoint 详情 | 连接状态、统一收件箱、请求/通知与平台回调 |
-| 命令、中间件或组件没生效 | 运行时能力 | 当前 generation 是否发布能力、顺序与 owner |
-| Agent 没调用工具 | Agent 工作台 + 运行时能力 | Tool 可见性、审批、安全策略、轨迹与取消终态 |
-| 刷新后消息缺失 | Endpoint 会话 + 日志 | history RPC 是否恢复、SSE 是否报告 recovery gap |
-| 多 Bot 群里没有按预期的 Agent 接话 | 协作图谱 + 机器人状态 | `ai.venues` 的 `conversation` 是否与群一致、`members[].botEndpoint` 是否在线、`entry` 是否是成员之一 |
-| 配置文件写了但行为没变 | Config + Dashboard | 保存是否成功，是否发布了新 generation |
+| Console 连不上 | 首页 / 启动日志 | Host、端口、token、CORS 与 HTTP Host 是否降级 |
+| 页面顶部「实例不可用」 | 实例 | 实例状态、最近一次失败与实例日志 |
+| 平台在线但收不到消息 | 账号页「接入」「概览」 | 连接状态、待完成的登录验证、好友申请与通知、平台回调 |
+| 收到了但没回复 | 会话页「聊天」→ 最近诊断；「记录」→ 决策回放 | 处理阶段、指令状态、回不回的原因、投递结果 |
+| 命令、中间件或组件没生效 | 运行时能力 + 会话页「功能」 | 当前 generation 是否发布能力、顺序与 owner；插件在这个会话是否被关或被上级锁定 |
+| 命令对某人不可用 | 命令权限说明 + 「角色」页签 | `permit` 各项、发送者的 zhin 角色与平台身份 |
+| Agent 没调用工具 | 机器人状态 + 运行时能力 | Tool 可见性、审批、安全策略、轨迹与取消终态 |
+| 刷新后消息缺失 | 会话页「聊天」+ 运行日志 | history RPC 是否恢复、SSE 是否报告 recovery gap |
+| 多 Bot 群里没有按预期的 Agent 接话 | Workroom + 机器人状态 | `ai.venues` 的 `conversation` 是否与群一致、`members[].botEndpoint` 是否在线、`entry` 是否是成员之一 |
+| 配置文件写了但行为没变 | 配置文件 + 首页 | 保存是否成功，是否发布了新 generation |
 
 ## 页面功能
 
 | 页面 | 数据来源 | 说明 |
 |------|----------|------|
-| Dashboard | `GET /api/system/status`、`GET /api/stats` | 运行状态、版本、统计概览 |
-| Plugins | `GET /api/plugins`、`GET /api/plugins/<name>`、RPC `plugin:*` | 插件列表与详情；安装/更新/卸载计划与提交、配置校验、诊断和启停管理 |
-| Endpoints | Endpoint 摘要 + RPC `endpoint.test` + 收件箱表 | 各平台端点连接状态和连通性诊断；详情页含统一收件箱（消息 / 请求 / 通知） |
-| 适配器页面 | `plugin.<pluginId>.status` + RPC `endpoint.list` / `endpoint.test` + `login.*` | 每个平台适配器自带页面（路由 `/<adapter>`）：连接状态与测试、endpoint 增删、LoginAssist 登录待办；QQ 另有扫码绑定 |
-| Config | RPC `config:get-source` / `config:replace-source` / `config:set` / `config:patch` | 按当前 YAML/JSON 格式在线查看、带 revision 编辑 Root 配置；简单页面用 `config:patch` 按路径写入（见[插件页面](../authoring/console-pages.md#在页面里保存设置-config-patch)） |
-| Logs | `GET /api/logs`、`GET /api/logs/stats`、`DELETE /api/logs`、`POST /api/logs/cleanup` | 系统日志（`SystemLog` 表，需 Database 启动） |
-| Cron | RPC `cron:*` | 插件注册的内存任务（list）；安装 Agent 后可增删暂停持久化任务 |
-| Database | RPC `db:info` / `db:tables` / `db:select` / `db:insert` / `db:update` / `db:delete` / `db:kv:*` | 数据库浏览与编辑、KV 存储 |
-| Files | RPC `files:tree` / `files:read` / `files:save`、`env:list` / `env:save` | 项目文件树与 `.env` 管理 |
+| 首页 | `GET /api/system/status`、`GET /api/stats`、事件缓冲、日志统计 | 需要关注的事项、关键指标（标明口径）、最近消息、进程与资源 |
+| 账号与会话（对象树） | RPC `endpoint.list` / `endpoint.test`、`login.*`、`feature.get` / `feature.set-*` / `feature.conversations`、`chat-roles.list` / `grant` / `revoke` + 收件箱表 | 全局 / 适配器 / 账号 / 会话四级对象页；账号「聊天」含统一收件箱（消息 / 请求 / 通知），「接入」含连接测试与 LoginAssist 登录待办 |
+| 适配器连接管理 | `plugin.<pluginId>.status` + RPC `endpoint.list` / `endpoint.test` + `login.*` | 由适配器插件提供，嵌在适配器对象页「概览」：连接状态与测试、账号增删改启停；QQ 另有扫码绑定 |
+| 插件 / 插件详情 | `GET /api/plugins`、`GET /api/plugins/<name>`、RPC `plugin:*`、`gateway.packages.*` | 已安装插件的来源、版本与健康状态；详情含版本与依赖、在哪开了、声明与配置、权限、能力清单；安装 / 更新 / 卸载计划与提交、配置校验、诊断 |
+| 插件市场 | `GET /pub/marketplace/search`、`/pub/marketplace/detail/*`、`GET /api/marketplace/updates` | 插件索引（plugins.json + npmmirror）、核验 latest、检查更新 |
+| 功能矩阵 / 全局配置 | RPC `feature.matrix`、`feature.get`、`config:*` | 每个功能在全局与各适配器的开关；插件的全局 Schema 表单 |
+| 配置文件 | RPC `config:get-source` / `config:replace-source` / `config:set` / `config:patch` | 按当前 YAML/JSON 格式在线查看、带 revision 编辑 Root 配置；简单页面用 `config:patch` 按路径写入（见[插件页面](../authoring/console-pages.md#在页面里保存设置-config-patch)） |
+| 运行日志 | `GET /api/logs`、`GET /api/logs/stats`、`DELETE /api/logs`、`POST /api/logs/cleanup` | 系统日志（`SystemLog` 表，需 Database 启动） |
+| 定时任务 | RPC `cron:*`、`GET /api/tasks/*`、`POST /api/tasks/create` / `change` | 「全部任务」总览；管理员任务、定时提醒、助手任务、执行记录各一个页签 |
+| 数据库 | RPC `db:info` / `db:tables` / `db:select` / `db:insert` / `db:update` / `db:delete` / `db:kv:*` | 数据库浏览与编辑、KV 存储 |
+| 项目文件 / 环境变量 | RPC `files:tree` / `files:read` / `files:save`、`env:list` / `env:save` | 项目文件树与 `.env` 管理 |
+| 实例 | RPC `gateway.instance.status` / `logs` / `start` / `stop` / `restart`、`gateway.packages.*` | 运行状态的唯一详情页：状态、起停、实例日志、项目依赖 |
 | 运行时能力 | `GET /api/introspection/{commands,middlewares,components,tools,prompt-sections,endpoints,bindings,mcp}`、`POST /api/introspection/components/render` | 当前 generation 的能力契约、owner、中间件顺序、组件渲染实验台与 Prompt Section 治理信息 |
-| Agent Sessions | `GET/POST /api/agent/sessions/*` | AI 会话树查看与分支切换；渠道会话尚未产生 AI 对话时，GET 返回 `state: not_started` 空树 |
-| 聊天记录 | `GET /api/conversations/history?sessionKey=...&beforeSequence=...` | 实际收发的 canonical 记录，与 Agent 内部会话树分开；不要求曾触发 AI |
-| 协作图谱 | `GET /api/agent/engagements[/*]`（需要 `agent.view`）；RPC `agent.engagements.list` / `agent.engagements.get` / `agent.venues.list` | 只读投影：最近的 Engagement、单个 Engagement 的事件与黑板、已配置的 Venue；数据来自 `engagement_events` Journal，Console 不能改写 |
-| Marketplace | `GET /pub/marketplace/search`、`/pub/marketplace/detail/*`、`GET /api/marketplace/updates` | 插件市场（plugins.json + npmmirror）与更新检查 |
-| Sandbox | WS `/sandbox` | 内置沙箱聊天，免平台联调直接对话 |
+| 聊天记录 | `GET/POST /api/agent/sessions/*`、`GET /api/conversations/history?sessionKey=...&beforeSequence=...` | AI 会话树查看与分支切换；渠道会话尚未产生 AI 对话时，GET 返回 `state: not_started` 空树。实际收发的 canonical 记录与 Agent 内部会话树分开，不要求曾触发 AI |
+| Workroom | `GET /api/agent/engagements[/*]`（需要 `agent.view`）；RPC `agent.engagements.list` / `agent.engagements.get` / `agent.venues.list` | 只读投影：最近的 Engagement、单个 Engagement 的事件与黑板、已配置的 Venue；数据来自 `engagement_events` Journal，Console 不能改写 |
+| 试聊一下（Sandbox） | WS `/sandbox` | 内置沙箱聊天，免平台联调直接对话 |
 
 实时推送走 SSE：`GET /api/events`（页面目录同步、HMR 重载、消息/配置事件）。 事件流与历史（`/api/events`、`/api/events/history`）需要 `status.view`。
 
@@ -146,9 +286,9 @@ Runtime 无配置时回退到 8086，当前脚手架默认写入 8068。连接�
 由用户明确选择替换；只改该字段，不删除未选日历后端或其他实例的配置。此展示需要配套 Console 更新。
 :::
 
-## Agent 工作台运行策略
+## 试聊一下的 Agent 运行策略
 
-工作目录与安全策略属于每一次运行，不写入 Prompt，也不会由模型自行提升。新手可以从默认组合开始：工作目录留空时使用当前项目目录，`safetyMode` 选 `workspace-write`，`approvalMode` 选 `ask`，`networkAccess` 保持关闭。
+在「试聊一下」里开 Agent 会话时，工作目录与安全策略属于每一次运行，不写入 Prompt，也不会由模型自行提升。新手可以从默认组合开始：工作目录留空时使用当前项目目录，`safetyMode` 选 `workspace-write`，`approvalMode` 选 `ask`，`networkAccess` 保持关闭。
 
 | 字段 | 可选值 | 怎么选 |
 | --- | --- | --- |
@@ -157,15 +297,15 @@ Runtime 无配置时回退到 8086，当前脚手架默认写入 8068。连接�
 | `networkAccess` | `false` / `true` | 只有任务确实要访问网络时开启；`danger-full-access` 会天然包含网络权限 |
 | `workingDirectory` | 目录路径 | 指向本次任务允许工作的项目目录，不要用宽泛的系统根目录 |
 
-这些是固定契约，不是自由文本。未知的 `safetyMode` / `approvalMode` 会回退到 `workspace-write` / `ask`；工作台应始终回显最终生效值供用户确认。
+这些是固定契约，不是自由文本。未知的 `safetyMode` / `approvalMode` 会回退到 `workspace-write` / `ask`；页面应始终回显最终生效值供用户确认。
 
 ## 一次标准验收
 
-1. Dashboard 显示连接正常，版本与运行时信息可读。
-2. 在 Sandbox 发送消息，并在 Endpoint 会话刷新后确认历史仍存在。
-3. 在运行时能力核对命令、中间件、组件、Tool 与 Prompt Section 的当前 owner。
+1. 首页显示连接正常，「需要关注」里没有未处理的项，版本与运行时信息可读。
+2. 在「试聊一下」发送消息；再在某个账号页「聊天」里收发一条，刷新后确认历史仍存在。
+3. 在运行时能力核对命令、中间件、组件、Tool 与 Prompt Section 的当前 owner；在会话页「功能」页签确认插件在这个会话的有效状态。
 4. 运行一条 Agent 任务，验证工作目录、安全策略、审批、取消、轨迹和产物。
-5. 若配置了 `ai.venues`，在对应的群里发一条真实消息，验证由入口 Agent 接话，并能用 `zhin trace --engagements` 看到这次协作。
+5. 若配置了 `ai.venues`，在对应的群里发一条真实消息，验证由入口 Agent 接话，并能在 Workroom 与 `zhin trace --engagements` 看到这次协作。
 
 只有当前 generation 与持久投影都符合预期，才算发布成功。磁盘配置和插件清单只是候选输入。
 
@@ -177,7 +317,7 @@ Runtime 无配置时回退到 8086，当前脚手架默认写入 8068。连接�
 2. Host 的 ConsoleRuntime 汇总页面目录，`GET /entries` 返回 `{ entries, runtimeEnvHint }`——每条 entry 含 `id`、`title`、`route`、`module`（页面模块 URL）、`order`、`hash`；
 3. Remote Console / 本地 shell 拉取 `/entries` 后动态 import 对应模块渲染；浏览器裸导入（react 等）由 Host 的 `/esm/*` 代理为可执行 ESM。
 
-页面目录变化通过 SSE `sync` 事件实时推给已连接的 UI。
+页面目录变化通过 SSE `sync` 事件实时推给已连接的 UI。页面落在侧栏的哪个分组见[侧栏](#sidebar)。
 
 ## 用户与权限
 
@@ -227,4 +367,5 @@ Console 的用户、角色、会话和 API 令牌存在项目数据库里（ADR 
 ## 相关
 
 - [AI 能力总览](../ai/index.md)
-- [Agent 深入](../ai/agent.md)：Console 的 Agent Sessions / Orchestration 页对应的运行时
+- [Agent 深入](../ai/agent.md)：Console「机器人状态」「聊天记录」页对应的运行时
+- [Console 管理路径](../paths/console.md)：按任务走一遍 Console

@@ -16,9 +16,9 @@ This page is for **operators, group owners, and community / support leads**: you
 
 | Outcome | How | Code needed? |
 | --- | --- | --- |
-| One bot managing groups on QQ, WeChat, WeCom, Lark, Discord and more | A developer deploys once; you watch everything under Console → chat accounts | No |
+| One bot managing groups on QQ, WeChat, WeCom, Lark, Discord and more | A developer deploys once; you watch everything under Console → Accounts and conversations | No |
 | Welcome new members, only in selected groups | [Group welcome guide](/en/solutions/group-welcome) | No |
-| Check-in points, message stats, group Q&A / keyword replies | Install the group suite `@zhin.js/plugin-group-suite` from the feature store | No |
+| Check-in points, message stats, group Q&A / keyword replies | Install the group suite `@zhin.js/plugin-group-suite` from the Plugin store | No |
 | Scheduled and event reminders | [Reminders without AI](/en/solutions/reminders) | No |
 | Push feed updates into a group | [Admin RSS subscriptions](/en/solutions/rss-subscriptions) | No |
 | Block ads, abuse and other unwanted content | Install `@zhin.js/plugin-content-moderation` | No |
@@ -46,15 +46,18 @@ No running bot yet? A developer or ops person does this once: create a project w
 | I want to… | Console page |
 | --- | --- |
 | Check health and which account is offline | Home |
-| Message a group or DM, see recent messages | Chat accounts |
+| Connect a platform account | Accounts and conversations → **Connect platform account** |
+| Message a group or DM, see recent messages | Accounts and conversations → account → Chat tab |
 | Review what the bot said | Chat history |
-| Try replies without a real platform | Try chatting (Sandbox) |
+| Try replies without a real platform | Try a conversation (Sandbox) |
 | See why the AI replied or stayed silent, and which tools it used | Bot status (incl. decision replay) |
-| Make the bot go quiet now | Bot status → control plane (see [Emergency stop](#stop)) |
-| Manage scheduled reminders | Reminders |
-| Install or disable features | Feature store, feature management |
-| Follow a guided setup (e.g. new-member welcome) | Task center → start by use case |
-| Investigate errors | Run log |
+| Make the bot go quiet now | Home → AI runtime controls (see [Emergency stop](#stop)) |
+| Manage scheduled reminders | Operations → Scheduled tasks |
+| Install plugins | Plugin store |
+| Turn a plugin on or off in one group | Accounts and conversations → adapter → account → conversation → Features tab |
+| Let a group owner or colleague manage features in a group | The Roles tab of that conversation (or account, adapter) page |
+| Follow a guided setup (e.g. new-member welcome) | Operations → Scheduled tasks → Administrator tasks → start by use case |
+| Investigate errors, find out why there was no reply | **Recent diagnostics** in the conversation's Chat tab, Runtime logs |
 
 Details for every page: [Console path](/en/paths/console) and [Console reference](/en/console/).
 
@@ -62,9 +65,9 @@ Details for every page: [Console path](/en/paths/console) and [Console reference
 
 The bot's behavior comes from one file, `zhin.config.yml`. You don't need to edit it by hand:
 
-- **Install features** from the feature store; enable or disable them in feature management.
+- **Install features** from the Plugin store; decide in the Features tab of the object pages whether each is on globally, on one platform, one account or one group (see [Turn a plugin off in a conversation](/en/console/#turn-off-in-conversation)).
 - **Change feature settings** in each plugin's form — welcome text, check-in points, keyword limits. The form follows the fields the plugin declares and won't save malformed values.
-- **Secrets** such as platform credentials and model keys go in Advanced → environment variables, not in regular config.
+- **Secrets** such as platform credentials and model keys go in Operations → Environment variables, not in regular config.
 - **Confirm it applied**: a successful save is not the same as live. Follow the page's distinction between "restart required" and "plugin config pending verification", use "read apply evidence" when needed, and treat the runtime capabilities page as the source of truth.
 
 ::: details Comfortable with a terminal?
@@ -93,7 +96,7 @@ For risky actions such as kicking a member, messaging another group or changing 
 
 ### Emergency stop {#stop}
 
-The control plane under Bot status has four switches, per bot or per group, kept across restarts:
+The AI runtime controls on Home have four switches, per bot or per group, kept across restarts:
 
 | Switch | Effect |
 | --- | --- |
@@ -110,10 +113,11 @@ Announcements, conversation welcomes, conversation schedules and the control pla
 
 ## Check problems yourself first {#troubleshooting}
 
-1. **Home**: is the bot connected and are accounts online?
-2. **Chat accounts**: did the member's message reach the bot? Open that message's "Diagnostics".
-3. **Runtime capabilities**: is the relevant feature loaded?
-4. **Bot status**: how far did the AI get, and why didn't it reply?
+1. **Home**: is the bot connected and are accounts online? If an **Instance unavailable** banner is at the top, click **View instance**.
+2. **The conversation's Chat tab**: did the member's message reach the bot? Open that message's "Diagnostics", or **Recent diagnostics** in the conversation header.
+3. **The conversation's Features tab**: is the relevant plugin on in this group?
+4. **Runtime capabilities**: is the relevant feature loaded?
+5. **Bot status**, and the conversation's Records tab → **Decision replay**: how far did the AI get, and why didn't it reply?
 
 More in [Find where a message stopped](/en/troubleshooting/messages) and the [Troubleshooting center](/en/troubleshooting/).
 
@@ -126,9 +130,9 @@ More in [Find where a message stopped](/en/troubleshooting/messages) and the [Tr
 | A platform with no adapter yet | Needs an adapter; see [Adapter authoring](/en/authoring/adapters) |
 | Letting the AI call your business systems | Needs AI tools; see [Agent tools](/en/authoring/agent-tools) |
 | Console can't connect, CORS errors, reverse proxy issues | Needs server config; see [Deployment and Recovery](/en/operations/production) |
-| Errors in the run log you can't interpret | Send the error and time to a developer; see the [Troubleshooting center](/en/troubleshooting/) |
+| Errors in the runtime logs you can't interpret | Send the error and time to a developer; see the [Troubleshooting center](/en/troubleshooting/) |
 
-When you reach out, include: which group, when, what you expected, what actually happened, and a screenshot of Bot status or the run log (hide the token).
+When you reach out, include: which group, when, what you expected, what actually happened, and a screenshot of Bot status or the runtime logs (hide the token).
 
 ## Further reading
 

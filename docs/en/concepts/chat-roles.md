@@ -68,11 +68,11 @@ Roles include each other: `owner` ⊃ `admin` ⊃ `trusted` — wherever `truste
 
 Management:
 
-- Console: the **Roles** section of the adapter / account / conversation pages (`chat-roles.list|grant|revoke`, needs `iam.manage`; a permission bound to an adapter / account also counts for scopes below it);
+- Console: the **Roles** tab of the global / adapter / account / conversation object pages (`chat-roles.list|grant|revoke`, needs `iam.manage`; a permission bound to an adapter / account also counts for scopes below it);
 - Chat: `role list|grant|revoke <user> <role> [level]` / `角色 列表|授予|撤销 …` (with `features.selfService.enabled`). The grantor needs at least the granted role at the target scope; `owner` is granted or revoked only by an `owner` at a higher level.
 
 ::: tip A group owner who wants to manage features
-Feature switches and subscriptions are zhin functions, so a platform group owner / admin needs a granted zhin role: an owner sends `role grant @owner admin` in chat, or grants it in the conversation page's **Roles** section in the Console.
+Feature switches and subscriptions are zhin functions, so a platform group owner / admin needs a granted zhin role: an owner sends `role grant @owner admin` in chat, or grants it in the conversation page's **Roles** tab in the Console.
 :::
 
 ## In code

@@ -1,11 +1,11 @@
 ---
-title: Feature Matrix and Layered Configuration
-description: The Console Features section - enable, disable and override features at the global, adapter, account and conversation levels; inheritance and lock rules; in-chat self-service, chat roles; permissions
+title: Features and Layered Configuration
+description: The Features and Roles tabs of the Console object pages - enable, disable and override features at the global, adapter, account and conversation levels; inheritance and lock rules; the feature matrix; in-chat self-service, chat roles; permissions
 ---
 
-# Feature Matrix and Layered Configuration
+# Features and Layered Configuration
 
-The same feature often needs different settings on different platforms, accounts and groups: no RSS on one QQ account, a single item per push on one Telegram account, a higher repeat threshold in one group. The Console **Features** section manages four levels ([ADR 0050](../../adr/0050-layered-feature-config.md), [ADR 0055](../../adr/0055-conversation-feature-config.md)):
+The same feature often needs different settings on different platforms, accounts and groups: no RSS on one QQ account, a single item per push on one Telegram account, a higher repeat threshold in one group. The Console manages the four levels of its object tree, and every object page has a **Features** tab ([ADR 0050](../../adr/0050-layered-feature-config.md), [ADR 0055](../../adr/0055-conversation-feature-config.md)):
 
 | Level | Key | Where it is stored |
 | --- | --- | --- |
@@ -26,18 +26,29 @@ rss:
 
 `overrides` is plain YAML; editing it by hand and editing it in the Console are equivalent. Conversations can number in the hundreds, so their overrides live in the project database: backing up the database backs them up. In keys, conversation ids escape `%` as `%25` and `/` as `%2F`; nothing else changes.
 
-## Pages {#pages}
+## Where to change it {#pages}
 
-| Route | Page | Read / write permission |
-| --- | --- | --- |
-| `/features` | Feature matrix | `feature.view` / `feature.toggle` |
-| `/features/global/:plugin` | Global configuration (schema form) | `feature.view` / `feature.configure` |
-| `/features/adapters` | Adapter list: alias, type, account count, online count | `feature.view` |
-| `/features/adapters/:adapter` | Adapter page: feature overrides for this adapter + account connection management | `feature.*`; adding, changing, starting and stopping accounts needs `endpoint.manage` |
-| `/features/adapters/:adapter/endpoints/:endpoint` | Account configuration: feature overrides for this account; the **Conversations** tab searches conversations under it, shows each plugin's state and source there, toggles and edits fields; the **Roles** block manages chat roles | `feature.*`; roles need `iam.manage` |
-| `/features/ai` | AI and models (model routing, skills, Ambient, venues) | `agent.view` / `agent.configure` |
+There are no separate "adapter" or "account configuration" pages any more: feature settings live in the **Features** tab of every object page in the [object tree](./index.md#navigation):
 
-The old plugin-detail configuration page redirects to `/features/global/:plugin`. The account workspace in the **Conversations** section has a "Feature configuration" link to the matching account page.
+| Place | Route | What it does | Read / write permission |
+| --- | --- | --- | --- |
+| Global Features tab | `/scope?tab=features` | Overview of every feature: settable levels, the global switch, how many levels below have their own settings; the **Matrix** view (`&view=matrix`) shows each feature's switch globally and per adapter. Click a feature name for its global settings | `feature.view` / `feature.toggle` |
+| Adapter Features tab | `/scope/:adapter?tab=features` | Applies to every account and conversation of the adapter | `feature.view` / `feature.configure`, `feature.toggle` |
+| Account Features tab | `/scope/:adapter/:endpoint?tab=features` | Applies only to the account and its conversations | Same |
+| Conversation Features tab | `/scope/:adapter/:endpoint/:conversation?tab=features` | Applies only to this conversation; only fields the plugin declares as conversation-level can change | Same |
+| Feature matrix | `/features` | A standalone entry to the same matrix as the global Features tab | `feature.view` / `feature.toggle` |
+| Global settings | `/features/global/:plugin` | The plugin's global configuration (schema form) | `feature.view` / `feature.configure` |
+| **Where it is on** in plugin details | `/plugins/:name` | A summary only: the global and per-adapter switches and how many conversations override the plugin (account switches are in each account's Features tab), linking to the matching Features tab | `plugin.manage` |
+
+The adapter, account and conversation Features tabs work the same way:
+
+- One row per plugin: effective state (on / off / locked), source level, how many fields are overridden here. Filter by All, Overridden here, Off or Locked, or search.
+- Expand a row to see each field's **inherited / overridden here / effective value / source**. Editing a field creates an override at this level; **Remove override** returns it to the inherited value, and **Remove all** deletes every override of that plugin at this level.
+- Switches, overrides and removals go through **Review change** and are confirmed in an [action receipt](./index.md#receipts); switching off warns that no scope below this level can switch it back on.
+- A plugin switched off above shows "Locked by …" with a link to the locking level; this level cannot switch it on or change its switch.
+- Features with global settings only are not listed below the global level; find them in the global Features tab. If the Host does not support per-level settings, the tab says a newer Host is needed and keeps the settings from above.
+
+The account Overview lists conversations with overrides and recently active ones; the conversation Overview lists the features changed for that conversation only.
 
 ## Feature matrix {#matrix}
 
@@ -45,9 +56,9 @@ Rows are features; columns are "Global" plus one per adapter instance. Each cell
 
 - **enabled**;
 - **disabled**;
-- **disabled by a higher level and locked** — hovering shows "disabled at global / adapter qq" with a link.
+- **disabled by a higher level and locked** — hovering shows "disabled globally", "disabled at the adapter" or "disabled at the account" with a link.
 
-Cells with overrides are marked; accounts with conversation overrides show their count (`conversationOverrides` of `feature.matrix`). Click a feature name for its global configuration, or a cell for that level's page. The data comes from `feature.matrix`.
+Cells with overrides are marked; accounts with conversation overrides show their count (`conversationOverrides` of `feature.matrix`). Click a feature name for its global settings, or an adapter name for its Features tab. A global switch restarts the Host, and the confirmation says so. The data comes from `feature.matrix`.
 
 ## Inheritance {#resolution}
 
@@ -131,11 +142,13 @@ Who may do what in chat follows the roles of [ADR 0056](../../adr/0056-chat-role
 
 | Source | Meaning |
 | --- | --- |
-| Grant (`chat_roles` table, `source: 'grant'`) | The Console **Roles** block, or `role grant\|revoke <user> <role> [level]` / `角色 授予\|撤销 …` in chat; the only source of zhin roles |
+| Grant (`chat_roles` table, `source: 'grant'`) | The **Roles** tab of the object pages, or `role grant\|revoke <user> <role> [level]` / `角色 授予\|撤销 …` in chat; the only source of zhin roles |
 
 Platform standing (the sender's group owner / admin / roles / permissions, and the bot's own standing in the group) is never converted into a zhin role; it is used only by the `platform:*` / `bot:*` permit conditions.
 
 The configuration file no longer holds people lists: the old account `master` / `trusted` and `ai.trigger.masters` / `trusted` move into `chat_roles` on the first start; see [Upgrading to chat roles](../migrations/chat-roles.md).
+
+In the Console, the object page at every level has a **Roles** tab (needs `iam.manage`; a scoped binding on that adapter / account counts): it lists the roles effective at this level, those granted here and those inherited from above, and **Grant a role** (enter the platform user ID, choose Owner / Administrator / Trusted). Revoking removes only roles granted directly at this level. A global role can register one identity per platform; below the global level an identity can only belong to that scope's own adapter.
 
 When granting in chat, the grantor needs at least the granted role at the target scope; `owner` can only be granted or revoked by an `owner` at a higher level. `role list` shows the roles effective in this conversation and their sources.
 

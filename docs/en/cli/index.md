@@ -326,7 +326,7 @@ zhin use-cases keyword-reply
 
 Find the required plugin, installation preview, steps and current limitations for reminders, welcome messages and keyword replies. This command only prints a guide: it does not install plugins, change configuration, start the bot or send messages. The existing installation, configuration and chat interfaces still own those operations.
 
-The Console [administrator task center](../paths/console.md#administrator-task-center) uses the same catalog. Its first creation flow manages administrator reminders. Welcome messages and keyword replies currently link to existing setup paths; Console does not impersonate a chat member.
+The [Administrator tasks](../paths/console.md#administrator-task-center) tab of Console Operations → Scheduled tasks uses the same catalog. Its first creation flow manages administrator reminders. Welcome messages and keyword replies currently link to existing setup paths; Console does not impersonate a chat member.
 
 ### preview: Preview Components and Pages
 

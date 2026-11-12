@@ -41,10 +41,10 @@ Once `pnpm dev` is running, open the link above (lost it? Open [console.zhin.dev
 1. **Database**: keep the default SQLite (stored in `.zhin/data.sqlite`).
 2. **Owner account**: choose a username and password and sign in; the bootstrap token stops working after this, and you sign in with the account from then on.
 3. **AI**: skip it for now; enable it later from the Console or with `npx zhin setup --ai`.
-4. **Adapters**: pick **Sandbox** — no platform account needed.
-5. **Finish**: a summary, then the dashboard.
+4. **Chat platforms**: pick **Sandbox** — no platform account needed.
+5. **Finish**: a summary, then Home.
 
-Every step can be skipped and revisited later from the Features section. The credential and permissions each step needs are described in [Console setup and onboarding](../console/onboarding.md).
+Every step can be skipped: set up AI later under **AI & models**, and connect chat platforms from **Connect platform account** in **Accounts and conversations**. The credential and permissions each step needs are described in [Console setup and onboarding](../console/onboarding.md).
 
 ## 3. Send `/hello` to verify
 

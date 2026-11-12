@@ -461,7 +461,7 @@ Platform adapter plugin instance configurations support a common key:
 | --- | --- | --- |
 | `commandPrefix` | Instance top-level / per-endpoint | Command prefix, default `''`; per-endpoint values override top-level |
 
-The owner and trusted users are no longer configured here: manage them in the Console **Roles** block or with `role grant` in chat; old `master` / `trusted` fields move into the database on the first start, see [Upgrading to chat roles](../migrations/chat-roles.md). Platform standing is not mapped into zhin roles: `roles` (mapping rules) was removed and stops startup (see [Upgrading to chat roles](../migrations/chat-roles.md#mappings)).
+The owner and trusted users are no longer configured here: manage them in the **Roles** tab of the Console object pages or with `role grant` in chat; old `master` / `trusted` fields move into the database on the first start, see [Upgrading to chat roles](../migrations/chat-roles.md). Platform standing is not mapped into zhin roles: `roles` (mapping rules) was removed and stops startup (see [Upgrading to chat roles](../migrations/chat-roles.md#mappings)).
 
 ### endpoints Array: One Instance with Multiple Accounts
 

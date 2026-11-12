@@ -215,7 +215,7 @@ Rollback restores code, lockfile, configuration, and data from one checkpoint. I
 ## Incident order
 
 1. Is `/pub/health` reachable?
-2. Does Dashboard show the expected Host and version?
+2. Does Home show the expected Host and version?
 3. Is the Endpoint online and receiving inbox events?
 4. Did the current generation publish the required capability?
 5. Did the Database (including `engagement_events`) and SSE history recover from one authority?

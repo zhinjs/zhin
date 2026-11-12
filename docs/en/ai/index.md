@@ -26,7 +26,7 @@ AI is optional: without it, the bot depends on no model SDK and needs no API key
    pnpm dev
    ```
 
-   On first startup (when the Host database has no model graph yet), `ai.plan.yml` is **automatically seeded into the Host database** — you can open `/sandbox` and chat with the bot right away without manual Console steps! You can adjust Services, Accounts, Profiles, and purposes anytime in Console, and changes take effect on the very next turn without restarting the process.
+   On first startup (when the Host database has no model graph yet), `ai.plan.yml` is **automatically seeded into the Host database** — you can open `/sandbox` and chat with the bot right away without manual Console steps! You can adjust Services, Accounts, Profiles, and purposes anytime on the Console **AI & models** page (`/features/ai`), and changes take effect on the very next turn without restarting the process.
 
 ```yaml
 # Example ai.plan.yml (DeepSeek)

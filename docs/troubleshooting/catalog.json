@@ -42,7 +42,7 @@
         { "zh": "平台网络不可达、Webhook 地址错误，或账号被平台拒绝。", "en": "The platform is unreachable, the webhook URL is wrong, or the account is rejected." }
       ],
       "actions": [
-        { "zh": "在 Console Endpoint 详情查看最近错误，再对照[自动生成配置字段参考](/configuration/generated)。", "en": "Inspect the latest error in Endpoint details, then compare it with the [generated configuration fields](/en/configuration/generated)." },
+        { "zh": "在 Console 账号页的「接入」「概览」页签查看连接状态与最近错误，再对照[自动生成配置字段参考](/configuration/generated)。", "en": "Inspect the connection state and latest error in the account page's Access and Overview tabs, then compare it with the [generated configuration fields](/en/configuration/generated)." },
         { "zh": "按平台文档重新验证凭据、回调地址与网络出口。", "en": "Revalidate credentials, callback URLs, and network egress against the platform guide." }
       ],
       "verification": [
@@ -117,7 +117,7 @@
     {
       "id": "agent-provider-unavailable",
       "title": { "zh": "Agent 无模型或 Provider 不可用", "en": "Agent has no available model or provider" },
-      "symptom": { "zh": "Agent 工作台无法开始回合，提示 Provider、模型或 API Key 不可用。", "en": "Agent Studio cannot start a turn and reports an unavailable provider, model, or API key." },
+      "symptom": { "zh": "「试聊一下」里的 Agent 会话无法开始回合，提示 Provider、模型或 API Key 不可用。", "en": "An Agent session in **Try a conversation** cannot start a turn and reports an unavailable provider, model, or API key." },
       "causes": [
         { "zh": "Provider 的环境变量为空，被 Runtime soft-prune。", "en": "The provider environment variable is empty and the Runtime soft-prunes it." },
         { "zh": "Agent 绑定的模型名不属于当前 generation 发布的 Provider。", "en": "The Agent's model is not published by any provider in the active generation." }
@@ -139,7 +139,7 @@
         { "zh": "审批请求没有处理，或取消信号已经终止回合。", "en": "The approval was not handled, or a cancellation signal already ended the turn." }
       ],
       "actions": [
-        { "zh": "在 Agent 工作台检查 cwd、安全策略与审批详情，只批准明确理解的副作用。", "en": "Inspect cwd, security policy, and approval details in Agent Studio; approve only understood side effects." },
+        { "zh": "在「试聊一下」的 Agent 会话与「机器人状态」检查 cwd、安全策略与审批详情，只批准明确理解的副作用。", "en": "Inspect cwd, security policy, and approval details in the **Try a conversation** Agent session and **Bot status**; approve only understood side effects." },
         { "zh": "取消后的任务创建新回合，不要重放可能已经产生副作用的工具调用。", "en": "After cancellation, start a new turn rather than replaying a tool call that may have produced side effects." }
       ],
       "verification": [

@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/icqq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/icqq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=ed4b3ec66d361210 -->
+<!-- sync-adapter-docs:sha256=59ce471df8486f83 -->
 
 # @zhin.js/adapter-icqq
 
@@ -237,7 +237,7 @@ icqq:
 | 一直停在登录中 | 打开 Console 登录待办，完成二维码、滑块或设备确认 |
 | 签名失败 | 检查 `signApiAddr`；本地模式确认 `@icqqjs/qqsign` 已安装且版本匹配 |
 | 重启后重复登录 | 持久化设备与会话数据目录，避免每次生成新设备 |
-| 请求或通知未显示 | 在 Endpoint 详情检查请求视图；ICQQ 优先读取平台请求列表 |
+| 请求或通知未显示 | 在账号页「聊天」页签检查好友申请与邀请、通知；ICQQ 优先读取平台请求列表 |
 
 ## License
 

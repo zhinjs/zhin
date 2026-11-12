@@ -601,7 +601,7 @@ zhin trace --engagements
 zhin trace <engagementId>
 ```
 
-The Collaboration graph page in the Remote Console shows the same data: participants, mail hops (`ask` / `delegate` / `tell` / `result`), the shared Blackboard (`note` / `todo` / `artifact`), and the budget ledger.
+The Workroom page in the Remote Console (`/features/ai/workrooms`) shows the same data: participants, mail hops (`ask` / `delegate` / `tell` / `result`), the shared Blackboard (`note` / `todo` / `artifact`), and the budget ledger.
 
 ## Related
 
