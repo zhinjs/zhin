@@ -12,4 +12,6 @@ Slack 适配器不上报 `sender.platform`，也不声明 `scene.platformStandin
 |------|--------|
 | `slack_set_topic` · `slack_set_purpose` · `slack_invite_to_channel` · `slack_pin_message` · `slack_unpin_message` | `admin` |
 | `slack_archive_channel` | `owner` |
-| `slack_unarchive`（归档频道内无法对话，需指定频道 ID） | `owner` |
+| `slack_unarchive`（归档频道内无法对话，需指定频道 ID，可跨频道） | `owner@global` |
+
+消息工具 `slack_add_reaction` / `slack_remove_reaction` / `slack_edit_message` 只作用于当前频道或私信（不接受频道 ID 入参）。

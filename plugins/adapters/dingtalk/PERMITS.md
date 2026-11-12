@@ -18,5 +18,6 @@
 
 | 工具 | Permit |
 |------|--------|
-| `dingtalk_add_chat_members` · `dingtalk_update_chat`（指定 `chat_id`，可跨群） | zhin `owner` |
+| `dingtalk_add_chat_members` · `dingtalk_update_chat`（指定 `chat_id`，可跨群） | zhin `owner@global` |
+| `dingtalk_send_work_notice`（发给任意用户，不在当前会话） | zhin `owner@global` |
 | `dingtalk_create_chat`（新建群，不依赖任何群内身份） | zhin `trusted`（`admin` / `owner` 亦满足） |

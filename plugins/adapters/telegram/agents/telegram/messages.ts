@@ -1,6 +1,10 @@
 import { createMessages } from 'zhin.js/i18n';
 
 export const messages = createMessages({
+  "conversationRequired": {
+    "zh-CN": "此操作仅支持当前 Telegram 会话",
+    "en": "This operation requires the current Telegram chat"
+  },
   "chatRequired": {
     "zh-CN": "此操作仅支持当前 Telegram 群组或频道",
     "en": "This operation requires the current Telegram group or channel"

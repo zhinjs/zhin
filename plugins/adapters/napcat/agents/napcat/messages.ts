@@ -5,6 +5,18 @@ export const messages = createMessages({
     "zh-CN": "该消息不在当前群中",
     "en": "The message is not in the current group"
   },
+  "conversationRequired": {
+    "zh-CN": "此操作仅支持当前 QQ 群或私聊",
+    "en": "This operation requires the current QQ group or private chat"
+  },
+  "privateRequired": {
+    "zh-CN": "此操作仅支持当前私聊",
+    "en": "This operation requires the current private chat"
+  },
+  "messageOutsideConversation": {
+    "zh-CN": "该消息不在当前会话中",
+    "en": "The message is not in the current conversation"
+  },
   "groupRequired": {
     "zh-CN": "此操作仅支持当前 QQ 群",
     "en": "This operation requires the current QQ group"
@@ -16,6 +28,10 @@ export const messages = createMessages({
   "memberTitleSet": {
     "zh-CN": "已设置 {p0} 头衔为 \"{p1}\"",
     "en": "Title for {p0} set to \"{p1}\""
+  },
+  "pokeTargetRequired": {
+    "zh-CN": "群聊中请指定要戳的成员",
+    "en": "Name the group member to poke"
   },
   "userPoked": {
     "zh-CN": "已戳 {p0}",

@@ -24,3 +24,5 @@ restricted 成员的 `can_*` 是对其个人的发言许可（普通成员按群
 | `bot:*` / `bot-permission:*` | 同上，判定机器人账号自身（`getChatMember(bot)`） |
 
 平台身份与机器人身份都按**当前会话**判定，因此群管理工具只作用于当前群（不接受 `chat_id` 入参）。
+
+不带平台 permit 的工具同样只作用于当前会话（不接受 `chat_id`）：`telegram_list_admins` / `telegram_member_count` 作用于当前群 / 频道；`telegram_react` / `telegram_send_poll` / `telegram_send_sticker` 作用于当前群、频道或私聊。

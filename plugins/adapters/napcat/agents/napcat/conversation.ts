@@ -24,3 +24,35 @@ export async function requireMessageInGroup(context: NapcatToolContext, groupId:
     throw new Error(t(context.locale, 'messageOutsideGroup'));
   }
 }
+
+/** The current conversation as a OneBot target: the group, or the private peer (QQ number). */
+export function currentTarget(context: NapcatToolContext): { readonly type: 'group' | 'private'; readonly id: number } {
+  const { origin } = context;
+  const conversation = origin?.kind === 'im' && origin.platform === 'napcat' ? origin.conversation : undefined;
+  const id = Number(conversation?.id);
+  if (!conversation || (conversation.kind !== 'group' && conversation.kind !== 'private') || !Number.isSafeInteger(id) || id <= 0) {
+    throw new Error(t(context.locale, 'conversationRequired'));
+  }
+  context.signal?.throwIfAborted();
+  return { type: conversation.kind, id };
+}
+
+/** The current private peer; model input cannot select another friend's history or chat. */
+export function currentPrivatePeer(context: NapcatToolContext): number {
+  const target = currentTarget(context);
+  if (target.type !== 'private') throw new Error(t(context.locale, 'privateRequired'));
+  return target.id;
+}
+
+/** OneBot message ids are account-wide: verify the message belongs to the current conversation. */
+export async function requireMessageInConversation(context: NapcatToolContext, messageId: number): Promise<void> {
+  const target = currentTarget(context);
+  if (target.type === 'group') return requireMessageInGroup(context, target.id, messageId);
+  const message = await context.$client.callApi('get_msg', { message_id: messageId }) as
+    { message_type?: unknown; user_id?: unknown; target_id?: unknown; sender?: { user_id?: unknown } } | undefined;
+  context.signal?.throwIfAborted();
+  const peers = [message?.user_id, message?.target_id, message?.sender?.user_id].map(Number);
+  if (message?.message_type !== 'private' || !peers.includes(target.id)) {
+    throw new Error(t(context.locale, 'messageOutsideConversation'));
+  }
+}

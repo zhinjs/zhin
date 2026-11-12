@@ -5,11 +5,12 @@ import mute from '../agents/icqq/skills/icqq-group-admin/tools/set_mute/index.js
 
 it('localizes tool validation and preserves the provider input and single-call behavior', async () => {
   const sendPoll = vi.fn().mockResolvedValue({ message_id: 42 });
-  const context = { locale: 'en', $client: { sendPoll } };
-  expect(await poll.execute({ chat_id: '123', question: '原文', options: 'not-json' }, context as never))
+  const context = { locale: 'en', $client: { sendPoll },
+    origin: { kind: 'im', platform: 'telegram', conversation: { endpoint: { adapter: 'telegram', id: 'bot' }, kind: 'group', id: '123' } } };
+  expect(await poll.execute({ question: '原文', options: 'not-json' }, context as never))
     .toEqual({ success: false, message: 'options must be a JSON array' });
   expect(sendPoll).not.toHaveBeenCalled();
-  expect(await poll.execute({ chat_id: '123', question: '原文', options: '["中文","English"]' }, context as never))
+  expect(await poll.execute({ question: '原文', options: '["中文","English"]' }, context as never))
     .toMatchObject({ message: 'Poll sent', message_id: 42 });
   expect(sendPoll).toHaveBeenCalledOnce();
   expect(sendPoll).toHaveBeenCalledWith({

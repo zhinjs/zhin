@@ -1,13 +1,13 @@
 import { messages as t } from "../../../../messages.js";
+import { currentChannel } from "../../../../conversation.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import { requireDiscordGatewayClient } from '@zhin.js/adapter-discord';
 import { ChannelType } from 'discord.js';
 
-export default defineAgentTool<{ channel_id: string; name: string; content: string; tags?: string }>({
-  description: '在 Discord 论坛频道中创建帖子',
+export default defineAgentTool<{ name: string; content: string; tags?: string }>({
+  description: '在当前 Discord 论坛频道中创建帖子（需在该论坛的帖子里发起）',
   inputSchema: z.object({
-    channel_id: z.string().describe('论坛频道 ID'),
     name: z.string().describe('帖子标题'),
     content: z.string().describe('帖子内容'),
     tags: z.string().optional().describe('标签名，逗号分隔（可选）'),
@@ -15,7 +15,10 @@ export default defineAgentTool<{ channel_id: string; name: string; content: stri
   adapter: 'discord',
   scopes: ["channel"],
   tags: ['discord'],
-  async execute({ channel_id, name, content, tags  }: { channel_id: string; name: string; content: string; tags?: string }, context) {
+  async execute({ name, content, tags }, context) {
+    // A forum post reports the forum as its conversation id and the post as `threadId`.
+    const { conversationChannelId: channel_id, guildId } = currentChannel(context);
+    if (!guildId) throw new Error(t(context.locale, 'guildChannelRequired'));
     const client = requireDiscordGatewayClient(context.$client);
     const tagList = tags ? tags.split(',').map((t: string) => t.trim()) : undefined;
     const channel = await client.channels.fetch(channel_id);

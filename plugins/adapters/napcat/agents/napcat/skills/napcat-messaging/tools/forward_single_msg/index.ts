@@ -6,7 +6,7 @@ export default defineAgentTool<{
   target_id: number;
   message_id: number;
 }>({
-  description: '转发单条消息到指定好友或群。',
+  description: '转发单条消息到指定好友或群（可跨会话，仅全局主人可用）。',
   inputSchema: z.object({
     target_type: z.enum(['friend', 'group']).describe('friend 或 group'),
     target_id: z.number().describe('目标好友 QQ 号或群号'),
@@ -15,6 +15,8 @@ export default defineAgentTool<{
   adapter: 'napcat',
   tags: ['napcat', 'qq'],
   keywords: ['转发', 'forward', '单条转发'],
+  // Reads any message of the account and sends it to any friend / group: a cross-conversation capability.
+  permissions: ['owner@global'],
   async execute({ target_type, target_id, message_id }: {
     target_type: 'friend' | 'group';
     target_id: number;

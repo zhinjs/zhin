@@ -3,6 +3,7 @@ import { checkBuiltinPermit, toPermissionSubject } from '@zhin.js/permission';
 import createChat from '../agents/dingtalk/skills/dingtalk/tools/create_chat/index.js';
 import addMembers from '../agents/dingtalk/skills/dingtalk-group-admin/tools/add_chat_members/index.js';
 import updateChat from '../agents/dingtalk/skills/dingtalk-group-admin/tools/update_chat/index.js';
+import sendWorkNotice from '../agents/dingtalk/skills/dingtalk/tools/send_work_notice/index.js';
 
 function subject(chatRole?: 'owner' | 'admin' | 'trusted', standing?: 'owner' | 'admin' | 'member', level: 'global' | 'conversation' = 'global') {
   return toPermissionSubject({
@@ -21,8 +22,8 @@ describe('DingTalk chat tools', () => {
     expect(allowed(createChat.permissions, subject(undefined, 'admin'))).toBe(false);
   });
 
-  it('cross-group chat administration needs a global zhin owner; a group admin or a conversation owner is not enough (H1)', () => {
-    for (const tool of [addMembers, updateChat]) {
+  it('cross-group chat administration and work notices to arbitrary users need a global zhin owner; a group admin or a conversation owner is not enough (H1)', () => {
+    for (const tool of [addMembers, updateChat, sendWorkNotice]) {
       expect(tool.permissions).toEqual(['owner@global']);
       expect(allowed(tool.permissions, subject(undefined, 'admin'))).toBe(false);
       expect(allowed(tool.permissions, subject('owner', undefined, 'conversation'))).toBe(false);

@@ -5,6 +5,10 @@ export const messages = createMessages({
     "zh-CN": "此操作仅支持当前 Discord 服务器频道",
     "en": "This operation requires the current Discord server channel"
   },
+  "conversationRequired": {
+    "zh-CN": "此操作仅支持当前 Discord 会话",
+    "en": "This operation requires the current Discord conversation"
+  },
   "roleMissing": {
     "zh-CN": "当前服务器没有身份组 {p0}",
     "en": "Role {p0} does not exist in this server"
@@ -50,8 +54,8 @@ export const messages = createMessages({
     "en": "Forum post \"{p0}\" created"
   },
   "notForumChannel": {
-    "zh-CN": "Channel {p0} 不是论坛频道",
-    "en": "Channel {p0} is not a forum channel"
+    "zh-CN": "Channel {p0} 不是论坛频道（请在论坛的帖子里发起）",
+    "en": "Channel {p0} is not a forum channel (ask from a post in the forum)"
   },
   "memberRoleRemoved": {
     "zh-CN": "已移除用户 {p0} 的角色",

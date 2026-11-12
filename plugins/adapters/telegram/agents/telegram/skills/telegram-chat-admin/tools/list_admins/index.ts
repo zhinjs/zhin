@@ -1,17 +1,15 @@
+import { currentChat } from "../../../../conversation.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 
-export default defineAgentTool<{ chat_id: string }>({
-  description: '获取 Telegram 群组管理员列表',
-  inputSchema: z.object({
-    chat_id: z.string().describe('聊天 ID'),
-  }),
+export default defineAgentTool<Record<string, never>>({
+  description: '获取当前 Telegram 群组的管理员列表',
+  inputSchema: z.object({}),
   adapter: 'telegram',
   scopes: ["group","channel"],
   tags: ['telegram'],
-  async execute({ chat_id  }: { chat_id: string }, context) {
-    const endpoint = context.$client;
-    const admins = await endpoint.getChatAdmins(Number(chat_id));
+  async execute(_input, context) {
+    const admins = await context.$client.getChatAdmins(currentChat(context));
     return {
       admins: admins.map((a: { user: { id: number; username?: string; first_name?: string }; status: string }) => ({
         user_id: a.user.id,

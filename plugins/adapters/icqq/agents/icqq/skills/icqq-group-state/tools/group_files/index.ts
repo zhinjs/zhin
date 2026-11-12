@@ -1,17 +1,16 @@
 import { messages as t } from "../../../../messages.js";
+import { currentGroup } from "../../../../conversation.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-export default defineAgentTool<{ group_id: number }>({
-  description: '获取 QQ 群的群文件列表',
-  inputSchema: z.object({
-    group_id: z.number().describe('群号'),
-  }),
+export default defineAgentTool<Record<string, never>>({
+  description: '获取当前 QQ 群的群文件列表',
+  inputSchema: z.object({}),
   adapter: 'icqq',
   requiresApproval: 'once',
   scopes:['group'],
   permissions: ['trusted'],
-  async execute({ group_id }, context) {
-    const files = await context.$client.acquireGfs(group_id).ls('/');
+  async execute(_input, context) {
+    const files = await context.$client.acquireGfs(currentGroup(context)).ls('/');
     if (!files.length) return { files: [], message: t(context.locale, 'filesEmpty') };
     return {
       files: files.slice(0, 30).map((f) => 'size' in f
