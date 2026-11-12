@@ -35,7 +35,7 @@ pnpm vitest run packages/im/core/tests/ai-access.test.ts
 ```
 
 Custom lint checks:
-- `pnpm check:harness-paths` — 检测插件是否绕过 Adapter.sendMessage 直调 bot.$sendMessage
+- `pnpm check:harness-paths` — 检测插件是否绕过 Adapter.sendMessage 直调 bot.$sendMessage，以及适配器 Agent 工具（`plugins/adapters/*/agents/**`）是否绕过出站端口直调平台发送接口（白名单 `scripts/agent-send-bypass-allowlist.json`）
 - `pnpm check:no-koa` — 检测插件是否直接 import koa（应使用 RouterContext）
 - `pnpm check:prod` — 检查生产环境配置（无 console.log/debugger/TODO/FIXME）
 - `pnpm check:plugin` — 检查插件是否符合标准规范（入口文件、测试、README）
