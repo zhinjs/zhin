@@ -1,6 +1,6 @@
 ---
-"@zhin.js/adapter": minor
-"@zhin.js/adapter-qq": minor
+"@zhin.js/adapter": patch
+"@zhin.js/adapter-qq": patch
 ---
 
 QQ 官方适配器支持群聊和单聊图文卡片，以及群聊、文字子频道的 @全体成员。管理端口可以拉取和审批入群申请，并查询、加入、移出群黑名单。
