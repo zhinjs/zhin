@@ -178,10 +178,11 @@ describe('generated minimal project', () => {
     const projectPath = await generate(options);
     const pkg = await fs.readJson(path.join(projectPath, 'package.json'));
     expect(Object.keys(pkg.dependencies).sort()).toEqual([
-      '@zhin.js/components', '@zhin.js/console-contract', '@zhin.js/layout', '@zhin.js/page', '@zhin.js/skill', 'zhin.js',
+      '@zhin.js/cli', '@zhin.js/components', '@zhin.js/console-contract', '@zhin.js/gateway', '@zhin.js/layout', '@zhin.js/page', '@zhin.js/skill', 'zhin.js',
     ]);
     expect(pkg.dependencies['zhin.js']).toBe(scaffoldDependencyRange('zhin.js'));
-    expect(Object.keys(pkg.devDependencies)).toContain('@zhin.js/cli');
+    expect(Object.keys(pkg.dependencies)).toContain('@zhin.js/cli');
+    expect(Object.keys(pkg.devDependencies)).not.toContain('@zhin.js/cli');
 
     const config = parse(await fs.readFile(path.join(projectPath, 'zhin.config.yml'), 'utf8'));
     expect(config.plugins).toEqual({});

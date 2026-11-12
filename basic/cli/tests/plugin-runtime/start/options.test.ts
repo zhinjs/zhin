@@ -84,4 +84,15 @@ describe('start options', () => {
     }
     expect(help).toContain('Start options:');
   });
+
+  it('gives zhin start examples that match where it runs', () => {
+    const help = formatStartOptionHelp('zhin start');
+    // Only -f / --foreground, --once and --standalone attach; --mode production alone runs in the background.
+    expect(help).toContain('zhin start --foreground --mode production --no-watch    前台运行');
+    expect(help).not.toMatch(/zhin start --mode production\s+前台/u);
+    expect(help).not.toContain('zhin runtime start');
+    // `-d, --daemon` is listed once, under the gateway options of `zhin start`.
+    expect(help).not.toContain('-d, --daemon');
+    expect(formatStartOptionHelp()).toContain('zhin runtime start 是 zhin start --foreground 的别名');
+  });
 });

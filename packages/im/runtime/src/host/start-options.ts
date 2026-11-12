@@ -41,15 +41,40 @@ export const START_OPTION_HELP: readonly StartOptionHelp[] = Object.freeze([
   { flags: '--standalone', description: '仅开发 / 测试：不经网关，实例在本进程内自带 HTTP 服务器（无受管重启）' },
 ]);
 
-/** Help section listing {@link START_OPTION_HELP}, aligned like Commander's own option list. */
-export function formatStartOptionHelp(): string {
-  const flagColumnWidth = Math.max(...START_OPTION_HELP.map((option) => option.flags.length)) + 2;
-  const lines = START_OPTION_HELP.map((option) => `  ${option.flags.padEnd(flagColumnWidth)}${option.description}`);
-  return ['', 'Start options:', ...lines, '', 'Examples:',
-    '  zhin runtime start --watch source config          同时监听源码和配置',
-    '  zhin runtime start --watch config                 仅监听配置',
-    '  zhin runtime start --mode production              前台运行，由 systemd / Docker 管理进程（同 zhin start --foreground）',
-    '  zhin runtime start --once --mode test            CI 中检查配置与装配'].join('\n');
+/** Which command prints the start options: their examples differ (ADR 0054 §6). */
+export type StartHelpCommand = 'zhin start' | 'zhin runtime start';
+
+/**
+ * Help section listing {@link START_OPTION_HELP}, aligned like Commander's own option list.
+ * `zhin start` runs in the background unless `-f, --foreground`, `--once` or `--standalone` is
+ * given, so its examples spell `--foreground` out; it lists `-d, --daemon` under its own
+ * gateway options. `zhin runtime start` is always the foreground alias.
+ */
+export function formatStartOptionHelp(command: StartHelpCommand = 'zhin runtime start'): string {
+  const options = command === 'zhin start'
+    ? START_OPTION_HELP.filter((option) => option.flags !== '-d, --daemon')
+    : START_OPTION_HELP;
+  const flagColumnWidth = Math.max(...options.map((option) => option.flags.length)) + 2;
+  const lines = options.map((option) => `  ${option.flags.padEnd(flagColumnWidth)}${option.description}`);
+  const examples = command === 'zhin start'
+    ? [
+      '  zhin start                                              后台运行网关与实例（zhin status / zhin logs -f / zhin stop）',
+      '  zhin start --mode production --no-watch                 后台运行生产模式',
+      '  zhin start --foreground --watch source config           前台开发：同时监听源码和配置，Ctrl+C 停止',
+      '  zhin start --foreground --mode production --no-watch    前台运行，由 systemd / Docker / PM2 管理进程',
+      '  zhin start --once --mode test                           CI 中检查配置与装配（--once / --standalone 总在前台）',
+      '',
+      '只有 -f / --foreground、--once、--standalone 在前台运行；其余（包括 --mode production）都在后台运行。',
+    ]
+    : [
+      '  zhin runtime start --watch source config                同时监听源码和配置',
+      '  zhin runtime start --watch config                       仅监听配置',
+      '  zhin runtime start --mode production --no-watch         前台运行，由 systemd / Docker 管理进程',
+      '  zhin runtime start --once --mode test                   CI 中检查配置与装配',
+      '',
+      'zhin runtime start 是 zhin start --foreground 的别名，总在前台运行。',
+    ];
+  return ['', 'Start options:', ...lines, '', 'Examples:', ...examples].join('\n');
 }
 
 export function parseStartOptions(args: readonly string[]): StartOptions {

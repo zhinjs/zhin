@@ -33,7 +33,31 @@ export const LOCAL_GATEWAY_RPC = Object.freeze({
   CONSOLE_USER_PASSWD: 'gateway.console.user.passwd',
   /** `{ username, disabled }`. */
   CONSOLE_USER_DISABLE: 'gateway.console.user.disable',
+  /**
+   * `{base}/…` request on behalf of the local owner ({@link LocalGatewayHttpRequest}): what
+   * `zhin config` / `schedule` / `send` / `watch` use while a gateway runs, so they need no
+   * Console token (ADR 0054 §6). Answered like the HTTP route ({@link LocalGatewayHttpResponse}).
+   */
+  HTTP_REQUEST: 'gateway.http.request',
 } as const);
+
+export type LocalGatewayHttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+
+export interface LocalGatewayHttpRequest {
+  readonly method: LocalGatewayHttpMethod;
+  /** Path and query under the API base, e.g. `/api/assistant/jobs` (the gateway's `http.base`). */
+  readonly path: string;
+  /** Request body (JSON text); sent as `application/json`. */
+  readonly body?: string;
+}
+
+export interface LocalGatewayHttpResponse {
+  readonly status: number;
+  /** `content-type` and `retry-after` when present. */
+  readonly headers: Readonly<Record<string, string>>;
+  /** Response body as text. */
+  readonly body: string;
+}
 
 export type LocalGatewayRpcType = (typeof LOCAL_GATEWAY_RPC)[keyof typeof LOCAL_GATEWAY_RPC];
 

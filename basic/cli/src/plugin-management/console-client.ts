@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { LocalGatewayFetch } from '@zhin.js/gateway/local';
 
 /** A request was dispatched but no authoritative RPC result was received. Never retry a mutation blindly. */
 export class ConsoleRequestUnconfirmedError extends Error {
@@ -63,7 +64,7 @@ export async function requestPluginConsole<T>(
   host: string,
   request: Readonly<Record<string, unknown>>,
   tokenEnvironment = 'ZHIN_CONSOLE_TOKEN',
-  options: Readonly<{ token?: string; requestId?: string; timeoutMs?: number }> = {},
+  options: Readonly<{ token?: string; requestId?: string; timeoutMs?: number; fetch?: LocalGatewayFetch }> = {},
 ): Promise<T> {
   const url = new URL(host);
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) {
@@ -79,7 +80,7 @@ export async function requestPluginConsole<T>(
   let response: Response;
   try {
     // Exactly one attempt: no retry, no redirect.
-    response = await fetch(url, {
+    response = await (options.fetch ?? fetch)(url, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
       body: JSON.stringify({ ...request, requestId }),

@@ -126,9 +126,10 @@ async function completedProject(source: string): Promise<string> {
       typescript: 'latest',
     },
     scripts: {
+      // `zhin runtime start` stays an accepted alias of `zhin start --foreground`.
       dev: 'zhin runtime start',
-      start: 'zhin runtime start',
-      daemon: 'zhin runtime start --daemon',
+      start: 'zhin start --foreground --mode production --no-watch',
+      daemon: 'zhin start --mode production --no-watch',
       build: 'tsc --noEmit',
     },
     zhin: {

@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import { gunzipSync } from 'node:zlib';
 import { PackageCutover, type PackageCutoverMode } from './package-cutover.js';
+import { isAcceptedStartScript } from './start-scripts.js';
 
 export interface MigrationVerificationCommand {
   readonly command: string;
@@ -112,8 +113,8 @@ async function readPackage(file: string): Promise<PackageJson> {
 }
 
 function assertStartScripts(pkg: PackageJson, mode: PackageCutoverMode): void {
-  if (pkg.scripts?.dev !== 'zhin runtime start' || pkg.scripts.start !== 'zhin runtime start') {
-    throw new Error(`${mode} migration must retain dev and start as "zhin runtime start"`);
+  if (!isAcceptedStartScript(pkg.scripts?.dev) || !isAcceptedStartScript(pkg.scripts?.start)) {
+    throw new Error(`${mode} migration must start dev and start with "zhin start" (or its alias "zhin runtime start")`);
   }
   if (typeof pkg.scripts.build !== 'string') throw new Error(`${mode} migration requires a build script`);
 }

@@ -5,7 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { findMissingEndpointFields, loadPluginSchemaJson } from '../src/utils/adapter-endpoints-check.js';
 
-vi.mock('child_process', () => ({
+vi.mock('child_process', async importOriginal => ({
+  ...await importOriginal<typeof import('child_process')>(),
   exec: (_command: string, callback: (error: null, result: { stdout: string; stderr: string }) => void) => callback(null, { stdout: '9.0.0', stderr: '' }),
 }));
 
@@ -69,6 +70,41 @@ describe('doctor console diagnostics', () => {
       exit.mockRestore();
       fs.rmSync(directory, { recursive: true, force: true });
     }
+  });
+
+  it('--fix writes a random bootstrap token, never a fixed one', async () => {
+    const tokens: string[] = [];
+    for (const existingEnv of [undefined, '# keep me\nOTHER=1']) {
+      const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'doctor-fix-token-'));
+      const cwd = vi.spyOn(process, 'cwd').mockReturnValue(directory);
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const exit = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('doctor exited'); });
+      const previous = process.env.HTTP_TOKEN;
+      delete process.env.HTTP_TOKEN;
+      try {
+        fs.writeFileSync(path.join(directory, 'package.json'), JSON.stringify({ name: 'doctor-fix-token', private: true, dependencies: { 'zhin.js': '^1.0.0' } }));
+        if (existingEnv !== undefined) fs.writeFileSync(path.join(directory, '.env'), existingEnv);
+        const { doctorCommand } = await import('../src/commands/doctor.js');
+        await doctorCommand.parseAsync(['node', 'zhin', '--fix']).catch(() => {});
+        const env = fs.readFileSync(path.join(directory, '.env'), 'utf8');
+        if (existingEnv !== undefined) expect(env.startsWith(existingEnv)).toBe(true);
+        const token = /^HTTP_TOKEN=(\S+)$/mu.exec(env)?.[1];
+        expect(token).toMatch(/^[\w-]{43}$/u);
+        expect(env).not.toContain('zhin-local-token');
+        tokens.push(token!);
+        const output = log.mock.calls.map(args => args.join(' ')).join('\n');
+        expect(output).toContain('仅在创建首个所有者之前有效');
+        expect(output).not.toContain('Console/API 无法鉴权');
+      } finally {
+        if (previous === undefined) delete process.env.HTTP_TOKEN;
+        else process.env.HTTP_TOKEN = previous;
+        cwd.mockRestore();
+        log.mockRestore();
+        exit.mockRestore();
+        fs.rmSync(directory, { recursive: true, force: true });
+      }
+    }
+    expect(tokens[0]).not.toBe(tokens[1]);
   });
 
   it('detects missing Sandbox, CORS, and token config', () => {

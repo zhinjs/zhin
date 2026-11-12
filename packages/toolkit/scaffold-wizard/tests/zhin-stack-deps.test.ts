@@ -13,6 +13,8 @@ describe('zhin-stack-deps', () => {
     const base = getCreateBotBaseDependencies();
     expect(base).toEqual({
       'zhin.js': 'latest',
+      '@zhin.js/cli': 'latest',
+      '@zhin.js/gateway': 'latest',
       '@zhin.js/skill': 'latest',
     });
     // Stable Features / runtime 由平台（CLI）与 zhin.js 传递依赖提供，不直列

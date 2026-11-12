@@ -141,7 +141,6 @@ export async function createWorkspace(projectPath: string, projectName: string, 
       ...consoleFeatureDeps,
     }),
     devDependencies: withScaffoldVersionRanges({
-      '@zhin.js/cli': ZHIN_STACK_VERSIONS['@zhin.js/cli'],
       '@types/node': '^25.0.0',
       'typescript': '^6.0.0',
       'pm2': '^6.0.0'

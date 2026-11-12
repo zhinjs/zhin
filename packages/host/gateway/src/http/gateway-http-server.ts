@@ -49,6 +49,7 @@ import type { GatewayHealth, GatewayInstanceErrorCode, GatewayInstanceErrorReply
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { databaseBusyResponse, isDatabaseBusyError } from '../database/project-database.js';
 import { GATEWAY_RPC_PREFIX, type GatewayConsoleRpc, type GatewayRpcHandler } from './console-rpc.js';
+import { LOCAL_OWNER_PRINCIPAL } from './local-principal.js';
 
 const logger = getLogger('gateway');
 
@@ -340,6 +341,28 @@ export class GatewayHttpServer {
       signal: request.signal,
       body: bytes,
     }), context);
+  }
+
+  /**
+   * A `{base}/…` request from the local control socket (`gateway.http.request`, ADR 0054 §6):
+   * the socket's owner check is the authentication, so it runs as {@link LOCAL_OWNER_PRINCIPAL}.
+   * `POST {base}/console/request` keeps its split between gateway-owned and instance RPC; every
+   * other path is forwarded to the instance. Paths outside `{base}` are refused.
+   */
+  async localRequest(input: { readonly method: string; readonly path: string; readonly body?: string }): Promise<Response> {
+    const url = new URL(input.path, 'http://gateway.local');
+    const pathname = normalizePath(url.pathname);
+    if (pathname !== this.apiBase && !pathname.startsWith(`${this.apiBase}/`)) {
+      return jsonResponse(404, { success: false, code: 'not_found', error: `Only ${this.apiBase}/… is reachable over the local socket` });
+    }
+    const request = new Request(url, {
+      method: input.method,
+      headers: input.body === undefined ? {} : { 'content-type': 'application/json' },
+      ...(input.body === undefined ? {} : { body: input.body }),
+    });
+    const context = { url, params: {}, principal: LOCAL_OWNER_PRINCIPAL } as RouteContext;
+    if (input.method === 'POST' && pathname === `${this.apiBase}/console/request`) return this.#consoleRequest(request, context);
+    return this.#forward(request, context);
   }
 
   async #upgrade(request: WsUpgradeRequest): Promise<WsUpgradeDecision> {

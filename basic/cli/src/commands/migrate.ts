@@ -20,24 +20,22 @@ import { NODE_ENGINES_HINT } from '@zhin.js/gateway/project';
 import { applyInstanceDeclarationMigration, formatInstanceMigrationPreview, planInstanceDeclarationMigration, recoverInstanceDeclarationMigration } from '@zhin.js/gateway/project';
 import { CONFIG_V2_MIGRATION_DOCS_URL, detectLegacyConfig } from '@zhin.js/gateway/project';
 import { importProjectInstanceCli } from '../utils/project-instance.js';
+import { LEGACY_START_SCRIPTS, RECOMMENDED_START_SCRIPTS } from '../plugin-runtime/migrate/start-scripts.js';
 
 const cwd = process.cwd();
 
 const ZHIN_PACKAGE_PREFIX = '@zhin.js/';
 const CORE_PACKAGE = 'zhin.js';
 
+// `zhin start` is the entry (ADR 0054 §6); `zhin runtime start` is an accepted alias, never rewritten.
 const RECOMMENDED_SCRIPTS: Record<string, string> = {
-  dev: 'zhin runtime start',
-  start: 'zhin runtime start',
-  daemon: 'zhin runtime start --daemon',
+  ...RECOMMENDED_START_SCRIPTS,
   stop: 'zhin stop',
   build: 'tsc --noEmit',
 };
 
 const LEGACY_SCRIPTS: Readonly<Record<string, readonly string[]>> = Object.freeze({
-  dev: ['zhin dev'],
-  start: ['zhin start'],
-  daemon: ['zhin start --daemon'],
+  ...LEGACY_START_SCRIPTS,
   build: ['zhin build'],
 });
 

@@ -64,6 +64,8 @@ export interface StartGatewayOptions {
    * the project root over the supervisor; `false` disables the package RPC.
    */
   readonly packages?: GatewayPackageService | false;
+  /** `gateway.readyTimeout` for dependency transactions (see {@link loadGatewaySettings}). Default 60 s. */
+  readonly readyTimeoutMs?: number;
 }
 
 export interface RunningGateway {
@@ -101,6 +103,35 @@ export async function loadGatewayHttpConfig(projectRoot: string, environment = '
   return resolveHttpConfig(document, layers.environments?.[environment], projectRoot);
 }
 
+/** The project's `gateway` block (ADR 0054 §4 / §5). */
+export interface GatewaySettings {
+  /** `gateway.readyTimeout` (seconds) in ms; undefined: the built-in 60 s. */
+  readonly readyTimeoutMs?: number;
+}
+
+/**
+ * Reads the `gateway` block. An invalid value is logged and ignored (the instance rejects the
+ * config on its own); like {@link loadGatewayHttpConfig}, it never keeps the gateway down.
+ */
+export async function loadGatewaySettings(projectRoot: string): Promise<GatewaySettings> {
+  const file = findConfigFile(projectRoot);
+  if (!file) return {};
+  let block: unknown;
+  try {
+    block = (await createConfigDocument(join(projectRoot, file)).read()).document.gateway;
+  } catch {
+    return {};
+  }
+  if (block === undefined || block === null) return {};
+  const readyTimeout = typeof block === 'object' && !Array.isArray(block) ? (block as Record<string, unknown>).readyTimeout : undefined;
+  if (readyTimeout === undefined) return {};
+  if (typeof readyTimeout === 'number' && Number.isInteger(readyTimeout) && readyTimeout >= 1 && readyTimeout <= 3600) {
+    return Object.freeze({ readyTimeoutMs: readyTimeout * 1000 });
+  }
+  logger.warn(formatCompact({ op: 'gateway_config_invalid', key: 'gateway.readyTimeout', hint: 'integer seconds 1-3600; using 60' }));
+  return {};
+}
+
 export async function startGateway(options: StartGatewayOptions): Promise<RunningGateway> {
   const http = options.http ?? await loadGatewayHttpConfig(options.projectRoot, options.environment);
   const supervisor = options.supervisor instanceof InstanceSupervisor
@@ -114,6 +145,7 @@ export async function startGateway(options: StartGatewayOptions): Promise<Runnin
     : options.packages ?? new GatewayPackageService({
       projectRoot: options.projectRoot,
       instance: supervisor,
+      ...(options.readyTimeoutMs !== undefined ? { readyTimeoutMs: options.readyTimeoutMs } : {}),
       hasOwner: () => registry?.initialized() ?? true,
     });
   let consoleStopped = false;

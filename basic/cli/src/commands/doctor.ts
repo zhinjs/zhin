@@ -3,6 +3,7 @@ import chalk from 'chalk';
 import fs from 'fs-extra';
 import path from 'path';
 import { exec } from 'child_process';
+import { randomBytes } from 'node:crypto';
 import { promisify } from 'util';
 import { formatCompact } from '@zhin.js/logger';
 import { readPluginConfigurationMap } from '@zhin.js/plugin-runtime';
@@ -28,6 +29,7 @@ import {
   type ConsoleConfigDiagnosis,
 } from '@zhin.js/scaffold-wizard';
 import { logger } from '../utils/logger.js';
+import { probeGateway } from '../utils/gateway.js';
 import { formatNodeRequirementMessage, isNodeVersionSupported } from '@zhin.js/gateway/project';
 import { findConfigFile, readConfig } from '@zhin.js/gateway/project';
 import { detectLegacyConfig, formatLegacyConfigHint } from '@zhin.js/gateway/project';
@@ -681,24 +683,58 @@ export const doctorCommand = new Command('doctor')
         name: '环境变量',
         status: 'warn',
         message: '.env 文件不存在',
-        fix: options.fix ? '将创建空的 .env 文件' : '手动创建 .env 文件'
+        fix: options.fix ? '将创建 .env 文件（含随机初始化令牌 HTTP_TOKEN）' : '手动创建 .env 文件'
       });
-      
+
       if (options.fix) {
-        await fs.writeFile(envFile, '# Zhin.js 环境变量\nHTTP_TOKEN=zhin-local-token\n');
+        // Never a fixed value: a predictable bootstrap token lets anyone create the owner first.
+        await fs.writeFile(envFile, `# Zhin.js 环境变量\n${bootstrapTokenEnvLines()}`, { mode: 0o600 });
         logger.info(formatCompact( { cmd: 'doctor', op: 'create_env', file: '.env' }));
       }
     }
 
-    // 10b. 检查 HTTP_TOKEN 是否设置（http.token / Console 登录鉴权依赖它）
-    const envContent = fs.existsSync(envFile) ? await fs.readFile(envFile, 'utf-8') : '';
-    const httpTokenSet = Boolean(process.env.HTTP_TOKEN) || /^\s*HTTP_TOKEN\s*=\s*\S+/m.test(envContent);
+    // 10b. HTTP_TOKEN：初始化令牌（ADR 0049），只在创建首个 Console 所有者之前有效
+    let envContent = fs.existsSync(envFile) ? await fs.readFile(envFile, 'utf-8') : '';
+    let httpTokenSet = Boolean(process.env.HTTP_TOKEN) || HTTP_TOKEN_LINE.test(envContent);
+    if (!httpTokenSet && options.fix && fs.existsSync(envFile)) {
+      await fs.appendFile(envFile, `${envContent === '' || envContent.endsWith('\n') ? '' : '\n'}${bootstrapTokenEnvLines()}`);
+      envContent = await fs.readFile(envFile, 'utf-8');
+      httpTokenSet = true;
+      logger.info(formatCompact({ cmd: 'doctor', op: 'add_bootstrap_token', file: '.env' }));
+    }
     results.push({
       name: 'HTTP_TOKEN',
       status: httpTokenSet ? 'ok' : 'warn',
-      message: httpTokenSet ? '已设置' : '未设置（http.token 引用 ${HTTP_TOKEN} 时 Console/API 无法鉴权）',
-      fix: httpTokenSet ? undefined : '在 .env 添加 HTTP_TOKEN=<随机串>，或 export HTTP_TOKEN=<随机串>'
+      message: httpTokenSet
+        ? '已设置（初始化令牌：仅在创建首个所有者之前有效，之后一律被拒绝）'
+        : '未设置：Console 尚未初始化时需要初始化令牌（创建首个所有者后失效）；也可运行 zhin console init',
+      fix: httpTokenSet ? undefined : 'zhin doctor --fix 写入随机令牌，或在 .env 添加 HTTP_TOKEN=<随机串>'
     });
+
+    // 10c. 管理网关与 Console 初始化状态（ADR 0054）
+    const gateway = await probeGateway({ root: cwd }).catch(() => undefined);
+    if (!gateway) {
+      results.push({
+        name: '管理网关',
+        status: 'ok',
+        message: '未运行（zhin start 启动；zhin status 查看）'
+      });
+    } else {
+      results.push({
+        name: '管理网关',
+        status: gateway.instance.state === 'running' ? 'ok' : 'warn',
+        message: `运行中（pid ${gateway.gateway.pid}），实例：${gateway.instance.state}`,
+        fix: gateway.instance.state === 'running' ? undefined : 'zhin logs 查看实例日志，zhin restart 重启实例'
+      });
+      results.push({
+        name: 'Console 初始化',
+        status: gateway.consoleInitialized ? 'ok' : 'warn',
+        message: gateway.consoleInitialized
+          ? '已初始化（用账号登录；自动化用 API 令牌 ZHIN_CONSOLE_TOKEN）'
+          : '尚未创建所有者：初始化令牌（HTTP_TOKEN）在此之前拥有全部权限',
+        fix: gateway.consoleInitialized ? undefined : 'zhin console init，或用初始化令牌打开 Console 完成初始化向导'
+      });
+    }
 
     // 打印结果
     console.log('');
@@ -771,4 +807,11 @@ async function createMissingBootstrapFiles(cwd: string, files: string[]): Promis
       await fs.writeFile(path.join(cwd, file), templates[file]);
     }
   }
+}
+
+const HTTP_TOKEN_LINE = /^\s*HTTP_TOKEN\s*=\s*\S+/m;
+
+/** `.env` lines with a fresh random bootstrap token (32 bytes, base64url). */
+export function bootstrapTokenEnvLines(): string {
+  return `# Console 初始化令牌：只在创建首个所有者之前有效（zhin console init 或 Console 初始化向导）\nHTTP_TOKEN=${randomBytes(32).toString('base64url')}\n`;
 }
