@@ -1,22 +1,22 @@
 import { messages as t } from "../../../../messages.js";
+import { currentChannel } from "../../../../conversation.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import { normalizeSlackReactionName } from '@zhin.js/adapter-slack';
 
 export default defineAgentTool<{
-  channel: string;
   timestamp: string;
   emoji: string;
 }>({
-  description: '给 Slack 消息添加表情反应',
+  description: '给当前 Slack 频道（或私信）中的消息添加表情反应',
   inputSchema: z.object({
-    channel: z.string().describe('频道 ID'),
-    timestamp: z.string().describe('消息时间戳'),
+    timestamp: z.string().describe('当前频道中的消息时间戳'),
     emoji: z.string().describe('表情名称（不含冒号）'),
   }),
   adapter: 'slack',
   tags: ['slack'],
-  async execute({ channel, timestamp, emoji }, context) {
+  async execute({ timestamp, emoji }, context) {
+    const channel = currentChannel(context, { allowDirect: true });
     const client = context.$client;
     const name = normalizeSlackReactionName(emoji);
     try {

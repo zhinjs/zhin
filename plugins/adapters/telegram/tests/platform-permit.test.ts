@@ -8,6 +8,11 @@ import setDescription from '../agents/telegram/skills/telegram-chat-admin/tools/
 import createInvite from '../agents/telegram/skills/telegram-chat-admin/tools/create_invite/index.js';
 import pinMessage from '../agents/telegram/skills/telegram-chat-admin/tools/pin_message/index.js';
 import unpinMessage from '../agents/telegram/skills/telegram-chat-admin/tools/unpin_message/index.js';
+import listAdmins from '../agents/telegram/skills/telegram-chat-admin/tools/list_admins/index.js';
+import memberCount from '../agents/telegram/skills/telegram-chat-admin/tools/member_count/index.js';
+import react from '../agents/telegram/skills/telegram-messages/tools/react/index.js';
+import sendPoll from '../agents/telegram/skills/telegram-messages/tools/send_poll/index.js';
+import sendSticker from '../agents/telegram/skills/telegram-messages/tools/send_sticker/index.js';
 
 function mockMsg(platformPermissions: string[]) {
   return {
@@ -19,7 +24,7 @@ function mockMsg(platformPermissions: string[]) {
 }
 
 function toolContext(client: Record<string, unknown>, kind: 'group' | 'private' = 'group') {
-  const conversation = { endpoint: { adapter: 'telegram', id: 'bot1' }, kind, id: '-1001' };
+  const conversation = { endpoint: { adapter: 'telegram', id: 'bot1' }, kind, id: kind === 'private' ? '42' : '-1001' };
   return { locale: 'en', $client: client, signal: new AbortController().signal,
     origin: { kind: 'im', platform: 'telegram', conversation } } as never;
 }
@@ -103,5 +108,40 @@ describe('telegram chat administration tools', () => {
     const client = { setChatDescription: vi.fn(async () => true) };
     await expect(setDescription.execute({ description: 'd' }, toolContext(client, 'private'))).rejects.toThrow('Telegram group');
     expect(client.setChatDescription).not.toHaveBeenCalled();
+  });
+});
+
+describe('telegram chat / message tools without a cross-chat permit', () => {
+  it.each([['list_admins', listAdmins], ['member_count', memberCount], ['react', react], ['send_poll', sendPoll],
+    ['send_sticker', sendSticker]] as const)('%s has no chat_id input', (_name, tool) => {
+    expect((tool.inputSchema as unknown as { shape: Record<string, unknown> }).shape).not.toHaveProperty('chat_id');
+  });
+
+  it('act on the current chat even when the model names another one', async () => {
+    const client = {
+      getChatAdmins: vi.fn(async () => []), getChatMemberCount: vi.fn(async () => 3),
+      setMessageReaction: vi.fn(async () => true), sendPoll: vi.fn(async () => ({ message_id: 1 })),
+      sendStickerMessage: vi.fn(async () => ({ message_id: 2 })),
+    };
+    await listAdmins.execute({ chat_id: '-2002' } as never, toolContext(client));
+    expect(client.getChatAdmins).toHaveBeenCalledWith(-1001);
+    await memberCount.execute({ chat_id: '-2002' } as never, toolContext(client));
+    expect(client.getChatMemberCount).toHaveBeenCalledWith(-1001);
+    await react.execute({ chat_id: '-2002', message_id: '5', reaction: '👍' } as never, toolContext(client));
+    expect(client.setMessageReaction).toHaveBeenCalledWith(-1001, 5, '👍');
+    await sendPoll.execute({ chat_id: '-2002', question: 'q', options: '["a","b"]' } as never, toolContext(client));
+    expect(client.sendPoll).toHaveBeenCalledWith(expect.objectContaining({ chatId: -1001 }));
+    await sendSticker.execute({ chat_id: '-2002', sticker: 's' } as never, toolContext(client));
+    expect(client.sendStickerMessage).toHaveBeenCalledWith(-1001, 's');
+  });
+
+  it('message tools also work in the current private chat; directory tools need a group', async () => {
+    const client = { setMessageReaction: vi.fn(async () => true), sendStickerMessage: vi.fn(async () => ({ message_id: 2 })), getChatAdmins: vi.fn() };
+    await react.execute({ message_id: '5', reaction: '👍' }, toolContext(client, 'private'));
+    expect(client.setMessageReaction).toHaveBeenCalledWith(42, 5, '👍');
+    await sendSticker.execute({ sticker: 's' }, toolContext(client, 'private'));
+    expect(client.sendStickerMessage).toHaveBeenCalledWith(42, 's');
+    await expect(listAdmins.execute({}, toolContext(client, 'private'))).rejects.toThrow('Telegram group');
+    expect(client.getChatAdmins).not.toHaveBeenCalled();
   });
 });

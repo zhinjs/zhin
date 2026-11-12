@@ -5,6 +5,18 @@ export const messages = createMessages({
     "zh-CN": "此操作仅支持当前 KOOK 服务器频道",
     "en": "This operation requires the current KOOK server channel"
   },
+  "roleMissing": {
+    "zh-CN": "当前服务器没有角色 {p0}",
+    "en": "Role {p0} does not exist in this server"
+  },
+  "roleAboveRequester": {
+    "zh-CN": "角色 {p0} 不低于你的最高角色，不能由你管理",
+    "en": "Role {p0} is not below your highest role, so you cannot manage it"
+  },
+  "memberAboveRequester": {
+    "zh-CN": "用户 {p0} 的角色不低于你的最高角色，不能由你管理",
+    "en": "User {p0} does not rank below your highest role, so you cannot manage them"
+  },
   "unknownAction": {
     "zh-CN": "未知操作: {p0}",
     "en": "Unknown action: {p0}"

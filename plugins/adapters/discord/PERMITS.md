@@ -22,3 +22,5 @@
 | `bot:*` / `bot-permission:<name>` | 同上，判定机器人账号自身 |
 
 平台身份与机器人身份都按**当前会话**判定，因此服务器管理工具只作用于当前服务器 / 频道（不接受 `guild_id` / `channel_id` 入参）。`discord_add_role` / `discord_remove_role` 另外要求目标身份组低于发起者的最高身份组（服务器主豁免）。
+
+不带平台 permit 的工具同样只作用于当前会话：`discord_react` / `discord_send_embed` 作用于当前频道（线程内为该线程，私信为该私信）；`discord_forum_post` 只在论坛帖子里可用，在该帖子所属的论坛中发新帖（不接受 `channel_id`）。

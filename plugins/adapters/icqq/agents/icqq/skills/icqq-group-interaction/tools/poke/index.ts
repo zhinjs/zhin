@@ -1,17 +1,17 @@
 import { messages as t } from "../../../../messages.js";
+import { currentGroup } from "../../../../conversation.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-export default defineAgentTool<{ group_id: number; user_id: number }>({
-  description: '在 QQ 群中对某个成员执行戳一戳互动操作',
+export default defineAgentTool<{ user_id: number }>({
+  description: '在当前 QQ 群中对某个成员执行戳一戳互动操作',
   inputSchema: z.object({
-    group_id: z.number().describe('目标群号'),
     user_id: z.number().describe('要戳的目标成员 QQ号'),
   }),
   adapter: 'icqq',
   scopes:['group'],
   requiresApproval: 'never',
-  async execute({ group_id, user_id }, context) {
-    await context.$client.sendGroupPoke(group_id, user_id);
+  async execute({ user_id }, context) {
+    await context.$client.sendGroupPoke(currentGroup(context), user_id);
     return { success: true, message: t(context.locale, 'poked', { p0: user_id }) };
   },
 });

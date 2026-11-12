@@ -17,6 +17,20 @@ export function currentGuildChannel(context: DiscordToolContext): { guildId: str
   return { guildId, channelId: conversation.threadId ?? conversation.id };
 }
 
+/**
+ * The current Discord conversation's channel: the thread when there is one (`channelId`), and the
+ * conversation's own channel (`conversationChannelId`: the parent channel of a thread, e.g. the forum
+ * of a forum post). Works in DMs and guild channels; model input cannot select another channel.
+ */
+export function currentChannel(context: DiscordToolContext): { channelId: string; conversationChannelId: string; guildId?: string } {
+  const { origin } = context;
+  const conversation = origin?.kind === 'im' && origin.platform === 'discord' ? origin.conversation : undefined;
+  if (!conversation?.id) throw new Error(t(context.locale, 'conversationRequired'));
+  context.signal?.throwIfAborted();
+  const guildId = conversation.kind === 'channel' && conversation.parent?.kind === 'channel' ? conversation.parent.id : undefined;
+  return { channelId: conversation.threadId ?? conversation.id, conversationChannelId: conversation.id, ...(guildId ? { guildId } : {}) };
+}
+
 interface RoleLike { readonly id: string; readonly position: number; readonly managed?: boolean }
 interface GuildLike {
   readonly id: string;

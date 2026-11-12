@@ -1,12 +1,12 @@
 import { messages as t } from "../../../../messages.js";
+import { currentChannel } from "../../../../conversation.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import { requireDiscordGatewayClient } from '@zhin.js/adapter-discord';
 
-export default defineAgentTool<{ channel_id: string; title?: string; description?: string; color?: number; url?: string; fields?: string }>({
-  description: '发送 Discord 富文本嵌入消息（Embed）',
+export default defineAgentTool<{ title?: string; description?: string; color?: number; url?: string; fields?: string }>({
+  description: '在当前 Discord 频道（或线程）发送富文本嵌入消息（Embed）',
   inputSchema: z.object({
-    channel_id: z.string().describe('频道 ID'),
     title: z.string().optional().describe('Embed 标题'),
     description: z.string().optional().describe('Embed 描述'),
     color: z.number().optional().describe('颜色值（十进制，如 0x00ff00 = 65280）'),
@@ -15,7 +15,8 @@ export default defineAgentTool<{ channel_id: string; title?: string; description
   }),
   adapter: 'discord',
   tags: ['discord'],
-  async execute({ channel_id, title, description, color, url, fields  }: { channel_id: string; title?: string; description?: string; color?: number; url?: string; fields?: string }, context) {
+  async execute({ title, description, color, url, fields }, context) {
+    const { channelId: channel_id } = currentChannel(context);
     const client = requireDiscordGatewayClient(context.$client);
     const embedData: Record<string, unknown> = {};
     if (title) embedData.title = title;

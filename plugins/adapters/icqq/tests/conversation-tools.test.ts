@@ -12,6 +12,10 @@ import leave from '../agents/icqq/skills/icqq-group-admin/tools/group_leave/inde
 import mute from '../agents/icqq/skills/icqq-group-admin/tools/set_mute/index.js';
 import invite from '../agents/icqq/skills/icqq-group-admin/tools/group_invite/index.js';
 import memberInfo from '../agents/icqq/skills/icqq-group-directory/tools/group_member_info/index.js';
+import groupSign from '../agents/icqq/skills/icqq-group-interaction/tools/group_sign/index.js';
+import poke from '../agents/icqq/skills/icqq-group-interaction/tools/poke/index.js';
+import groupFiles from '../agents/icqq/skills/icqq-group-state/tools/group_files/index.js';
+import listMuted from '../agents/icqq/skills/icqq-group-state/tools/list_muted/index.js';
 import kick from '../agents/icqq/skills/icqq-group-admin/tools/group_kick/index.js';
 import setAdmin from '../agents/icqq/skills/icqq-group-admin/tools/set_group_admin/index.js';
 import setTitle from '../agents/icqq/skills/icqq-group-admin/tools/set_title/index.js';
@@ -231,7 +235,7 @@ describe('group_member_info', () => {
   it('returns a fresh, serializable member record', async () => {
     const f = fixture();
     f.client.getGroupMemberInfo.mockResolvedValue({ group_id: 100, user_id: 5, nickname: 'n', card: 'c', role: 'member' } as never);
-    const result = await memberInfo.execute({ group_id: 100, user_id: 5 }, f.ctx);
+    const result = await memberInfo.execute({ user_id: 5 }, f.ctx);
     expect(f.client.getGroupMemberInfo).toHaveBeenCalledWith(100, 5, true);
     expect(JSON.parse(JSON.stringify(result))).toMatchObject({ success: true, member: { user_id: 5, nickname: 'n', card: 'c', role: 'member' } });
   });
@@ -239,7 +243,7 @@ describe('group_member_info', () => {
   it('reports a missing member when the lookup fails', async () => {
     const f = fixture();
     f.client.getGroupMemberInfo.mockRejectedValue(new Error('not a member'));
-    expect(await memberInfo.execute({ group_id: 100, user_id: 5 }, f.ctx)).toMatchObject({ success: false });
+    expect(await memberInfo.execute({ user_id: 5 }, f.ctx)).toMatchObject({ success: false });
   });
 });
 
@@ -259,7 +263,7 @@ describe('group admin tools read fresh membership', () => {
     f.client.getGroupMemberInfo.mockRejectedValue(new Error('not a member'));
     const inviteFriend = vi.fn(async () => true);
     Object.assign(f.client, { inviteFriend });
-    expect(await invite.execute({ group_id: 100, user_id: 5 }, f.ctx)).toMatchObject({ success: true });
+    expect(await invite.execute({ user_id: 5 }, f.ctx)).toMatchObject({ success: true });
     expect(inviteFriend).toHaveBeenCalledWith(100, 5);
   });
 
@@ -267,8 +271,50 @@ describe('group admin tools read fresh membership', () => {
     const f = fixture();
     const inviteFriend = vi.fn(async () => true);
     Object.assign(f.client, { inviteFriend });
-    expect(await invite.execute({ group_id: 100, user_id: 5 }, f.ctx)).toMatchObject({ success: false });
+    expect(await invite.execute({ user_id: 5 }, f.ctx)).toMatchObject({ success: false });
     expect(inviteFriend).not.toHaveBeenCalled();
+  });
+});
+
+describe('group tools without a cross-group permit target only the current group', () => {
+  // These tools carry no level-qualified zhin owner permit, so a model-supplied group_id would let
+  // a member of group A read or act in any group B the Bot account is in.
+  const tools = [
+    ['group_invite', invite], ['group_member_info', memberInfo], ['group_sign', groupSign],
+    ['poke', poke], ['group_files', groupFiles], ['list_muted', listMuted],
+  ] as const;
+  it.each(tools)('%s has no group_id input', (_name, tool) => {
+    expect((tool.inputSchema as unknown as { shape: Record<string, unknown> }).shape).not.toHaveProperty('group_id');
+  });
+
+  it('ignore a model-supplied group_id and act in the current group', async () => {
+    const f = fixture();
+    const inviteFriend = vi.fn(async () => true);
+    const sendGroupSign = vi.fn(async () => ({ result: 0 }));
+    const sendGroupPoke = vi.fn(async () => true);
+    const ls = vi.fn(async () => []);
+    const acquireGfs = vi.fn(() => ({ ls }));
+    const getGroupMemberList = vi.fn(async () => new Map());
+    f.client.getGroupMemberInfo.mockRejectedValueOnce(new Error('not a member'));
+    Object.assign(f.client, { inviteFriend, sendGroupSign, sendGroupPoke, acquireGfs, getGroupMemberList });
+    const other = { group_id: 999 } as never;
+    await invite.execute({ ...other, user_id: 5 }, f.ctx);
+    await memberInfo.execute({ ...other, user_id: 5 }, f.ctx);
+    await groupSign.execute(other, f.ctx);
+    await poke.execute({ ...other, user_id: 5 }, f.ctx);
+    await groupFiles.execute(other, f.ctx);
+    await listMuted.execute(other, f.ctx);
+    expect(inviteFriend).toHaveBeenCalledWith(100, 5);
+    expect(f.client.getGroupMemberInfo.mock.calls.every(([group]) => group === 100)).toBe(true);
+    expect(sendGroupSign).toHaveBeenCalledWith(100);
+    expect(sendGroupPoke).toHaveBeenCalledWith(100, 5);
+    expect(acquireGfs).toHaveBeenCalledWith(100);
+    expect(getGroupMemberList).toHaveBeenCalledWith(100);
+  });
+
+  it.each(tools)('%s refuses outside a group', async (_name, tool) => {
+    const f = fixture('private');
+    await expect((tool.execute as (input: unknown, context: unknown) => Promise<unknown>)({ user_id: 5 }, f.ctx)).rejects.toThrow();
   });
 });
 
