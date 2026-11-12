@@ -8,7 +8,7 @@ tier: Stable
 本页由 [`plugins/adapters/sandbox/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/sandbox/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=a75c82d9bc8f354d -->
+<!-- sync-adapter-docs:sha256=5bbc406524a095bb -->
 
 # @zhin.js/adapter-sandbox
 
@@ -32,19 +32,19 @@ pnpm add @zhin.js/adapter-sandbox
 
 ## 前置条件
 
-Sandbox 不需要外部账号。只需由 `zhin runtime start` 装配 HTTP Host，并确保浏览器能访问启动日志中的 Host 地址。
+Sandbox 不需要外部账号。只需用 `zhin start` 启动项目（管理网关承载 HTTP，实例的路由经网关转发），并确保浏览器能访问启动日志中的 Host 地址。
 
 ## 依赖
 
-### Plugin Runtime（新，`zhin runtime start`）
+### Plugin Runtime（`zhin start`）
 
 - `@zhin.js/adapter` — 约定式 `adapters/sandbox/index.ts`
 - `@zhin.js/host-http` — Root 提供的 `httpHostToken`（WebSocket `/sandbox` + Console HTTP）
 - `@zhin.js/core` — `endpointSpec.events` 入站、`outboundMessageToken` 出站
 - `@zhin.js/page` + `pages/index/index.tsx` — ADR 0046 约定页（`definePage`；路由 `/sandbox`）
 
-Root 在 `zhin runtime start` 时装载 `@zhin.js/host-http`、`ConsoleRuntime` 与
-`ClientBuildModuleRuntime`。打开 `http://<host>:<port>/console` 可浏览页面；Sandbox 页
+`zhin start` 拉起的实例装载 `@zhin.js/host-http`、`ConsoleRuntime` 与
+`ClientBuildModuleRuntime`（HTTP 由管理网关监听并转发）。打开 `http://<host>:<port>/console` 可浏览页面；Sandbox 页
 （路由 `/sandbox`，与 WebSocket `/sandbox` 同 path：GET 开页、Upgrade 走 WS）内置聊天壳。
 
 旧 `client/`（`register(api)` / `pageManager.addEntry`）仅保留给 legacy Host 栈参考，

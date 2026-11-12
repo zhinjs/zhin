@@ -93,8 +93,8 @@ defaults:
    no need to implement it yourself; splitting large documents in `knowledge/` into smaller chunks significantly improves retrieval hit rate.
 2. **Reminder tasks "stop bugging me"**: The assistant's scheduled tasks notify on failure by default.
    Set `assistant.defaults.notifyOnFailure: false` to turn it off.
-3. **Console won't connect**: The Host token is in `.env` under `HTTP_TOKEN`.
-   Enter `http://127.0.0.1:8068` + that token in Console (or open `http://127.0.0.1:8068/sandbox` directly) -- no account system to configure.
+3. **Console won't connect**: Enter `http://127.0.0.1:8068` in Console. The first time, create the owner account with `HTTP_TOKEN` from `.env` (the bootstrap token),
+   then sign in with that account (or run `npx zhin console init` first); to just chat, open `http://127.0.0.1:8068/sandbox` directly.
 
 ## Future Extension Paths
 

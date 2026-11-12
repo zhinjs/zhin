@@ -218,7 +218,7 @@ pnpm add @ai-sdk/openai   # 示例：按厂商安装 provider SDK
 
 ### 在 Zhin 项目中
 
-CLI 装配 Agent Host；Service、Account、Profile 和用途在 Console 管理。向导只生成 `ai.plan.yml` 导入提案，保存后由管理员预览并显式导入。模型能力必须明确声明，不由模型名字推测。见[模型服务与订阅账号](../../../docs/ai/providers.md)。
+实例装配根（`zhin.js/instance`）装配 Agent Host；Service、Account、Profile 和用途在 Console 管理。向导只生成 `ai.plan.yml` 导入提案，保存后由管理员预览并显式导入。模型能力必须明确声明，不由模型名字推测。见[模型服务与订阅账号](../../../docs/ai/providers.md)。
 
 普通命令／工具通过 `context.use(aiInferenceClientToken)` 使用本次受控执行作用域的 `list/generate/stream/evaluate/image`，不持有全局 Provider 或填写 owner。框架不会自动执行普通推理返回的工具调用。
 

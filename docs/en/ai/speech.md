@@ -26,7 +26,7 @@ flowchart LR
 pnpm add @zhin.js/speech
 ```
 
-Add a `speech:` section at the top level of `zhin.config.yml`; after a restart the CLI assembles the Speech Host automatically:
+Add a `speech:` section at the top level of `zhin.config.yml`; after a restart the instance assembles the Speech Host automatically:
 
 ```yaml
 speech:

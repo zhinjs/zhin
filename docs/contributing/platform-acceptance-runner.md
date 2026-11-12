@@ -78,7 +78,7 @@ pnpm check:created-project:qq
 node scripts/platform-acceptance/run.mjs --project /absolute/test-project --policy /absolute/policy.json --prepare
 
 # 切换到测试项目目录，启动已配置的真实账号：
-ZHIN_ACCEPTANCE_POLICY=/absolute/policy.json pnpm exec zhin runtime start
+ZHIN_ACCEPTANCE_POLICY=/absolute/policy.json pnpm exec zhin start --foreground
 
 # 另开终端，在 Zhin 仓库根目录开始观察：
 node scripts/platform-acceptance/run.mjs --project /absolute/test-project --policy /absolute/policy.json --report /absolute/new-report.json --duration 30s

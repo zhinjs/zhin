@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/github/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/github/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=22cc6bb082f23b26 -->
+<!-- sync-adapter-docs:sha256=228c4b2facb62735 -->
 
 # @zhin.js/adapter-github
 
@@ -28,7 +28,7 @@ GitHub Plugin Runtime 适配器 — Issue/PR 评论区即聊天通道，GitHub A
 pnpm add @zhin.js/adapter-github
 ```
 
-Webhook 需要 Root 提供 `@zhin.js/host-http`（`zhin runtime start` 默认装配）。
+Webhook 需要 Root 提供 `@zhin.js/host-http`（`zhin start` 拉起的实例默认装配，HTTP 由管理网关承载）。
 
 ## 前置条件
 

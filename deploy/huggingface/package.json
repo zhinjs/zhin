@@ -5,7 +5,7 @@
   "description": "Zhin.js Plugin Runtime Playground — Hugging Face Spaces (Sandbox + OpenRouter free)",
   "type": "module",
   "scripts": {
-    "dev": "zhin start --foreground",
+    "dev": "zhin start --foreground --watch source config",
     "start": "zhin start --foreground --mode production --no-watch",
     "build": "tsc --noEmit"
   },

@@ -30,18 +30,18 @@ pnpm add @zhin.js/adapter-sandbox
 
 ## Prerequisites
 
-Sandbox needs no external account. Let `zhin runtime start` assemble the HTTP Host and ensure the browser can reach the Host address printed at startup.
+Sandbox needs no external account. Start the project with `zhin start` (the management gateway serves HTTP and forwards the instance's routes) and ensure the browser can reach the Host address printed at startup.
 
 ## Dependencies
 
-### Plugin Runtime (new, `zhin runtime start`)
+### Plugin Runtime (`zhin start`)
 
 - `@zhin.js/adapter` — convention-based `adapters/sandbox/index.ts`
 - `@zhin.js/host-http` — `httpHostToken` provided by Root (WebSocket `/sandbox` + Console HTTP)
 - `@zhin.js/core` — `endpoint[endpointSpec].events.emit(...)` inbound, `outboundMessageToken` outbound
 - `@zhin.js/page` + `pages/index/index.tsx` — ADR 0046 convention page (`definePage`; route `/sandbox`)
 
-Root loads `@zhin.js/host-http`, `ConsoleRuntime`, and `ClientBuildModuleRuntime` at `zhin runtime start`. Open `http://<host>:<port>/console` to browse pages. The Sandbox page (route `/sandbox`, sharing the same path as WebSocket `/sandbox`: GET opens the page, Upgrade goes to WS) has a built-in chat shell.
+The instance `zhin start` launches loads `@zhin.js/host-http`, `ConsoleRuntime`, and `ClientBuildModuleRuntime` (the management gateway listens for HTTP and forwards). Open `http://<host>:<port>/console` to browse pages. The Sandbox page (route `/sandbox`, sharing the same path as WebSocket `/sandbox`: GET opens the page, Upgrade goes to WS) has a built-in chat shell.
 
 The old `client/` (`register(api)` / `pageManager.addEntry`) is kept only as a reference for the legacy Host stack and is **not** the Plugin Runtime production entry point.
 

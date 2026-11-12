@@ -104,7 +104,7 @@ ai:
 
 ## 编写插件
 
-唯一启动路径：`zhin start`（管理网关拉起实例；`zhin runtime start` 是 `zhin start --foreground` 的别名）。`plugin.ts`（或单文件 `bot.ts`）必须 default-export `definePlugin()`；能力按约定目录发现。
+唯一启动路径：`zhin start`（管理网关拉起实例；开发、systemd、容器用 `zhin start --foreground`）。`plugin.ts`（或单文件 `bot.ts`）必须 default-export `definePlugin()`；能力按约定目录发现。
 
 ```typescript
 // plugin.ts — 装配入口
@@ -176,7 +176,10 @@ pnpm dev          # 开发模式（前台，热重载）
 pnpm start        # 生产模式（前台，供 systemd / Docker / PM2）
 npx zhin start    # 后台运行网关与实例
 npx zhin status   # 网关与实例状态
+npx zhin logs -f  # 实例日志
+npx zhin restart  # 只重启实例，网关与 Console 不断开
 npx zhin stop     # 停止实例与网关
+npx zhin console init   # 首次创建 Console 所有者（之后 http.token 失效）
 npx zhin doctor   # 诊断（含 AI 依赖）
 ```
 

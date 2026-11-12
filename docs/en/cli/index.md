@@ -24,6 +24,9 @@ Inside a project that has `@zhin.js/cli` installed, `npx zhin` uses it directly.
 | --- | --- |
 | Start the bot (dev mode, hot reload on save) | `pnpm dev` (i.e. `zhin start --foreground --watch source config`) |
 | Run in the background on a server / inspect / stop | `npx zhin start` / `npx zhin status`, `npx zhin logs -f` / `npx zhin stop` |
+| Run under systemd / Docker / PM2 (foreground) | `pnpm start` (i.e. `zhin start --foreground --mode production --no-watch`) |
+| Create the first Console owner | `npx zhin console init` (or finish it in the Console with the link printed at startup) |
+| Add Console accounts, reset a password | `npx zhin console user create <username> --role viewer` / `npx zhin console user passwd <username>` |
 | Connect a platform, configure AI or a database | `npx zhin setup` (optionally `--adapters` / `--ai` / `--database`) |
 | Diagnose environment or config problems | `npx zhin doctor` |
 | Check the config file is valid | `npx zhin config check` |
@@ -32,6 +35,7 @@ Inside a project that has `@zhin.js/cli` installed, `npx zhin` uses it directly.
 | Create a new, publishable plugin | `npx @zhin.js/cli new my-plugin --standalone` |
 | Check a plugin before publishing | `npx @zhin.js/cli plugin check` |
 | Add a local plugin to an existing bot project | `npx zhin new my-plugin` |
+| Update dependencies (stop instance → install → start, rolled back on failure) | `npx zhin update` |
 | Upgrade Zhin | `npx zhin migrate --dry-run`, then again without `--dry-run` |
 | Install as a start-on-boot system service | `npx zhin service install` |
 
@@ -42,14 +46,17 @@ All commands, grouped by purpose, follow.
 ### start / stop / restart / status / logs: Gateway and Instance
 
 ```bash
-zhin start [--foreground] [--mode production] [--watch source config | --no-watch] [--once]
+zhin start [--foreground] [--mode development|test|production] [--environment <name>]
+           [--watch source config | --no-watch] [--once] [--open] [--log-file <path>] [--standalone]
 zhin stop [--timeout <ms>]
 zhin restart [--gateway]
 zhin status [--json]
-zhin logs [-f] [-n <1-1000>]
+zhin logs [-f] [-n <1-1000>] [--interval <ms>]
 ```
 
-`zhin start` starts the management gateway (long-lived; serves HTTP and the Console), which launches the Zhin instance. It runs in the background by default; `--foreground` keeps it attached (development, systemd, containers). While the gateway runs, the other commands talk to it over the local control socket `.zhin/gateway.sock`: `stop` stops instance and gateway, `restart` restarts only the instance (`--gateway` restarts a background gateway), `status` shows both (exit code 3 when not running), `logs` reads the instance logs. Without a gateway, `stop` / `restart` have nothing to do and `logs` reads `.zhin/logs/instance.log`. See [zhin start](./runtime.md).
+`zhin start` starts the management gateway (long-lived; serves HTTP and the Console), which launches the Zhin instance. It runs in the background by default; `--foreground` (`-f`) keeps it attached (development, systemd, containers, PM2). Only `--foreground`, `--once` and `--standalone` run attached: `--mode production` on its own still runs in the background, so process managers must pass `--foreground`. While the gateway runs, the other commands talk to it over the local control socket `.zhin/gateway.sock`: `stop` stops instance and gateway, `restart` restarts only the instance (`--gateway` restarts a background gateway), `status` shows both (exit code 3 when not running), `logs` reads the instance logs. Without a gateway, `stop` / `restart` have nothing to do and `logs` reads `.zhin/logs/instance.log`. Run the management commands as the same system user that started the gateway. Options, exit codes and a systemd example: [zhin start](./runtime.md).
+
+For `zhin update`, see [Update dependencies](#update-update-dependencies) below.
 
 ### runtime: Project Tools
 
@@ -92,7 +99,38 @@ zhin service uninstall [--user]
 zhin service status [--user]
 ```
 
-Installs a start-on-boot / supervised service. `--user` uses user-level systemd on Linux; `status` works on Linux and macOS only.
+Installs a start-on-boot / supervised service. `--user` uses user-level systemd on Linux; `status` works on Linux and macOS only. The service runs the gateway in the foreground (`zhin start --foreground --mode production --no-watch`); the gateway restarts the instance.
+
+### console: Setup and User Management {#console}
+
+```bash
+zhin console init [--status]
+zhin console init [--database sqlite|mysql|pg|mongodb] [--database-<field> <value> ...] [--database-password-env <VAR>]
+                  [--owner <username>] [--display-name <name>] [--password-stdin] [-y]
+zhin console user create <username> [--role viewer] [--display-name <name>] [--password-stdin]
+zhin console user passwd <username> [--password-stdin]
+zhin console user disable <username>
+zhin console user enable <username>
+zhin console user list
+```
+
+Console users, roles and API tokens live in the project database ([ADR 0049](../../adr/0049-console-rbac.md)). These commands do the same as the Console's setup wizard and Access pages — use them on a server, in a container build, or when a password is lost.
+
+- **Who runs them**: while the project's gateway runs, the commands go to it over the local control socket `.zhin/gateway.sock` (a connection counts as the local owner), so a database switch or a new owner takes effect at once. Without a gateway they open the project database directly (offline setup and rescue). A socket that belongs to another system user or does not answer is an error; the command never edits files behind the gateway's back.
+- **`init`** has two steps: choose the database (the current configuration, usually SQLite, is kept by default), then create the first owner. Without flags it asks interactively; `--status` prints the setup state as JSON. Once an owner exists it fails — use `zhin console user` instead.
+  - `--database <dialect>` switches database; pass connection fields as `--database-filename`, `--database-host`, `--database-port`, `--database-user`, `--database-database`, `--database-url`, `--database-db-name`, `--database-mode` and so on. The CLI tests the connection first, then writes the configuration and puts secret fields in `.env`.
+  - For the password, reference an existing environment variable with `--database-password-env <VAR>` (the config gets `${VAR}`). `--database-password <value>` leaves the secret in shell history and the process list and is not recommended.
+  - `--owner` plus `--password-stdin` creates the owner non-interactively (the password is the first line of stdin, at least 10 characters); with `-y`, missing flags fail instead of prompting, for scripts.
+- **`user`**: `create` binds the global `viewer` role by default, `--role` takes `owner` / `admin` / `operator` / `viewer` or a custom role; `passwd` resets the password and revokes all of the user's sessions; `disable` / `enable` suspend and restore; `list` prints users, state and role bindings. Adapter- or account-scoped bindings are set in the Console's Access pages.
+- `http.token` is only a **bootstrap token**: valid until the first owner exists, refused on every endpoint afterwards.
+
+```bash
+# Non-interactive setup in a container or on a server: create the owner before opening the port
+printf '%s\n' "$OWNER_PASSWORD" | zhin console init -y --owner admin --password-stdin
+printf '%s\n' "$VIEWER_PASSWORD" | zhin console user create alice --role viewer --password-stdin
+```
+
+Exit code `0` on success, `1` on failure (already set up, unknown user, database connection failed, missing flags and so on).
 
 ## Configuration and diagnostics
 
@@ -103,13 +141,14 @@ zhin setup                 # full wizard
 zhin setup --database      # database only
 zhin setup --adapters      # adapters only (add accounts)
 zhin setup --ai            # AI only
+zhin setup -y --adapter sandbox --enable-ai --install   # non-interactive: run only the steps given by flags
 zhin setup --decisions     # optional TypeSafe Jev decision service (needs existing AI config)
 zhin setup --bootstrap     # bootstrap files only (SOUL.md / TOOLS.md / AGENTS.md)
 zhin setup --global        # initialize a global instance in ~/.zhin
 zhin setup --locale en     # set the project language (zh-CN or en); combines with the other options
 ```
 
-The wizard edits the matching parts of [`zhin.config.yml`](../configuration/index.md) and writes secrets to `.env`.
+The wizard edits the matching parts of [`zhin.config.yml`](../configuration/index.md) and writes secrets to `.env`. Non-interactive flags: `--adapter <name>` (repeatable) adds an adapter, `--enable-ai` enables AI (add model providers later in the Console), `--skip-ai` / `--skip-adapters` skip those onboarding steps, `--install` installs the needed dependencies now (the Console's allowlist), and `-y` asks nothing and runs only the steps given by flags.
 
 Without `--locale` the project's existing language is kept; language and time zone are independent. See [Language and Localization](../configuration/localization.md).
 
@@ -152,9 +191,10 @@ Exit codes are a public contract:
 
 ```bash
 zhin doctor [--fix] [--upgrade-l4]
+zhin doctor --live <host-url> [--json]
 ```
 
-Checks Node, ports, tokens, config and other environment issues; `--fix` repairs what it can; `--upgrade-l4` diagnoses what's needed to go from a minimal project to the full AI stack. When `--fix` adds dependencies it writes the real version ranges released alongside the CLI (e.g. `^1.1.11`), never `latest`; run `pnpm install` afterwards.
+Checks Node, ports, tokens, config and other environment issues; `--fix` repairs what it can; `--upgrade-l4` diagnoses what's needed to go from a minimal project to the full AI stack. `--live` reads a running Host's readiness report (needs an API token with `status.view` in `ZHIN_CONSOLE_TOKEN`; put a custom `http.base` in the URL path) and `--json` prints it as JSON; exit code `0` when ready, `1` otherwise. See [Production](../operations/production.md). When `--fix` adds dependencies it writes the real version ranges released alongside the CLI (e.g. `^1.1.11`), never `latest`; run `pnpm install` afterwards.
 
 ### dev: Develop Against a Local zhin Checkout or a Standalone Plugin
 
@@ -385,7 +425,7 @@ States returned by `status`:
 
 ## Working with a running bot
 
-These commands talk to a running bot over HTTP, so start it with `zhin start` with the HTTP service enabled first.
+These commands talk to a running bot over HTTP, so start it with `zhin start` with the HTTP service enabled first. Requests carry the Console API token from `ZHIN_CONSOLE_TOKEN` (issued in your Console account settings, never more than your own permissions); after Console setup `http.token` is always refused, so without an API token these commands get 401.
 
 ### send: Send a Message to a Running Bot
 
@@ -512,10 +552,11 @@ Per day: turns, model calls, calls per turn and per-call input tokens (p50 / p90
 | Code | Meaning |
 | --- | --- |
 | `0` | Normal exit |
+| `3` | `zhin status`: the gateway is not running |
 | `130` | Interrupted by a signal |
-| other non-zero | The instance failed to start or crashed and was not restarted; restarts are requested from the supervisor over the control channel, not through exit codes |
+| other non-zero | The gateway failed to start (port in use, a gateway already runs for the project, unsupported Node version, unreadable config), or a management command failed (socket owned by another user, gateway not answering, transaction rolled back). An instance crash does not end the gateway: the gateway restarts it, and restarts are requested over the control channel, not through exit codes |
 
-Process model and hot-reload behavior: [zhin start](./runtime.md).
+`zhin config` and `zhin doctor --live` have their own exit codes (above). Process model, exit codes per start mode and hot-reload behavior: [zhin start](./runtime.md).
 
 ## Migrating app instance declarations {#migrate-instances}
 

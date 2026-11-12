@@ -61,7 +61,7 @@ curl --fail http://127.0.0.1:8068/pub/ready
 
 ## 3. Create the owner and the demo account
 
-The owner is for maintainers only. Create it offline on the server (no browser involved, the bootstrap token is never exposed):
+The owner is for maintainers only. Create it on the server as the same system user that runs the service (no browser involved, the bootstrap token is never exposed). While the gateway runs these commands go to it over the local control socket; without one they write the project database directly. **Do this before the reverse proxy or a public ingress is opened** — until an owner exists, the bootstrap token is a full credential for anyone who can reach the Host:
 
 ```bash
 # Owner: first-time setup
@@ -112,9 +112,9 @@ A visitor opens the link → signs in with the username and password → sees th
 - [ ] **Read-only account only**: the demo account is bound to `viewer` or a narrower custom role; never `operator` or above, never any `*.write` / `*.manage` / `ops.restart` / `iam.*` / `plugin.manage`.
 - [ ] **No terminal**: keep `console.terminal.enabled` at `false`. Only owners with `ops.terminal` could use it, but a demo machine has no reason to enable it.
 - [ ] **Dedicated project, no real data**: no real platform credentials or model keys; `.env` holds only `HTTP_TOKEN`.
-- [ ] **Publish only after setup**: create the owner before opening the port; after setup `http.token` is refused everywhere.
+- [ ] **Publish only after setup**: create the owner before opening the port; after setup `http.token` is refused everywhere. Use a random bootstrap token and never put it in a public README, image or demo page.
 - [ ] **Reverse proxy**: bind the Host to `127.0.0.1` and serve HTTPS from nginx / Caddy / Cloudflare Tunnel; preserve the `Authorization` header, streaming SSE responses (never cache `/api/events`) and WebSocket upgrades.
-- [ ] **Rate limits**: the gateway has a built-in sign-in limit (5 failures per IP and username in 15 minutes, then exponential backoff with `429`). The gateway does not read `X-Forwarded-For`, so requests through a proxy share the proxy's address — the sign-in limit then applies to all visitors at once, and the audit log records the proxy's IP. Rate-limit `/api/auth/login` and `/api/*` per client IP at the proxy and keep real IPs in its logs.
+- [ ] **Rate limits**: the gateway has a built-in sign-in limit (5 failures per IP and username in 15 minutes, then exponential backoff with `429`). By default it does not read `X-Forwarded-For`, so requests through a proxy share the proxy's address — the sign-in limit then applies to all visitors at once, and the audit log records the proxy's IP. With `http.trustProxy` set (for example `[loopback]`, see [Production](./production.md#_2-network-and-authentication)) the gateway takes the client address from a trusted proxy's forwarding headers; still rate-limit `/api/auth/login` and `/api/*` per client IP at the proxy and keep real IPs in its logs.
 - [ ] **`access_token` on reverse WebSockets**: if the demo uses OneBot / NapCat / Milky reverse WebSockets, configure `access_token`. Without it the gateway accepts only loopback peers — and connections through a same-host reverse proxy look exactly like loopback.
 - [ ] **CORS lists only what is needed**: `http.corsOrigins` contains only the demo Console's domain (`console.zhin.dev` is merged automatically).
 - [ ] **Expose only the routes you need**: forward only `/api/*`, `/pub/*` and the pages / WebSockets the demo needs at the proxy; return 404 for the rest.

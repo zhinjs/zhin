@@ -75,10 +75,10 @@ pnpm install
 # and declare it in the plugins map in zhin.config.yml
 pnpm install
 pnpm build
-cd examples/my-bot && pnpm exec zhin runtime start --once
+cd examples/my-bot && pnpm exec zhin start --once
 ```
 
-Verified on current `main`: `@zhin.js/command` in both `examples/test-bot` and `plugins/utils/calendar` resolves to the same `packages/im/command`; after `pnpm build`, `zhin runtime start --once` in `examples/minimal-bot` prints `"started": true`.
+Verified on current `main`: `@zhin.js/command` in both `examples/test-bot` and `plugins/utils/calendar` resolves to the same `packages/im/command`; after `pnpm build`, `zhin start --once` in `examples/minimal-bot` prints `"started": true`.
 
 Other options compared:
 
@@ -192,7 +192,7 @@ The control plane listens on `http.host`/`http.port` (default `127.0.0.1:8086`).
 lsof -nP -iTCP:<port> -sTCP:LISTEN
 ```
 
-Only stop processes you know are yours (by PID); avoid `pkill -f "zhin runtime start"`, which can hit other projects' instances.
+Only stop processes you know are yours (by PID); avoid `pkill -f "zhin start"`, which can hit other projects' instances; stop a background gateway with `zhin stop` in its project directory instead.
 
 Current exit behavior:
 

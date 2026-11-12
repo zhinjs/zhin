@@ -39,7 +39,7 @@ cp .env.example .env                         # 按需填入平台凭据后，取
 
 模板由 `tests/config-template.test.ts` 用真实解析器校验（`configVersion: 2`、`plugins` 映射、各插件 `schema.json`）。
 
-Node `>=22.19.0`（Plugin Runtime 依赖 Node 原生 TypeScript）。依赖本目录 `.env`（与 legacy 相同变量）。Console：https://console.zhin.dev → `http://127.0.0.1:8086`，Token `test-bot-dev-token`。
+Node `>=22.19.0`（Plugin Runtime 依赖 Node 原生 TypeScript）。依赖本目录 `.env`（与 legacy 相同变量）。Console：https://console.zhin.dev → `http://127.0.0.1:8086`。第一次连接时用初始化令牌 `test-bot-dev-token`（`http.token`）完成初始化向导、创建所有者账号，之后用账号登录（或先运行 `pnpm exec zhin console init`）。后台运行用 `pnpm daemon`（`zhin start --mode production --no-watch`），`pnpm stop` 停止。
 
 **ICQQ 协议库**：`@icqqjs/icqq` 是 `@zhin.js/adapter-icqq` 的可选对等依赖。启用 `icqq` endpoint 时在本目录安装：
 

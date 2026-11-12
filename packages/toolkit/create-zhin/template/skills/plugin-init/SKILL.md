@@ -18,7 +18,7 @@ tags:
 
 # Zhin 插件初始化（Plugin Runtime）
 
-引导创建一个符合 **Plugin Runtime** 的新插件。唯一启动路径是 `zhin runtime start`；插件即 package，`plugin.ts` 必须 default-export `definePlugin()`。
+引导创建一个符合 **Plugin Runtime** 的新插件。唯一启动路径是 `zhin start`（开发时 `pnpm dev`）；插件即 package，`plugin.ts` 必须 default-export `definePlugin()`。
 
 **禁止**再脚手架 `usePlugin()` / `MessageCommand` / `src/index.ts` 命令式注册——`zhin.js/node` 与 `bootstrapNode` 已删除，唯一入口是 Plugin Runtime。
 
@@ -181,7 +181,7 @@ export default defineCommand({
 ### 第 7 步：测试与 README
 
 - 测试：对 `defineCommand` 的 `execute` 做纯函数测，或按仓库现有 Runtime 测试模式装配；**不要**再写 `new Plugin('/path')` 旧生命周期测。
-- README：说明命令怎么触发、依赖哪些 Feature、`zhin runtime start` 如何加载本包。
+- README：说明命令怎么触发、依赖哪些 Feature、`zhin start` 如何加载本包。
 
 ### 第 8 步：输出格式
 
@@ -193,7 +193,7 @@ export default defineCommand({
 
 ## 下一步
 - `zhin.config.yml` 挂上本插件
-- `zhin runtime start` / `pnpm dev`
+- `pnpm dev`（`zhin start --foreground --watch source config`）
 - Sandbox 发送命令原文验证
 ```
 

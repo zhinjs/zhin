@@ -39,7 +39,7 @@ pnpm dev
 ```
 
 - Host 默认 `http://127.0.0.1:8069`
-- Remote Console API Base + Token 与 `.env` 中 `HTTP_TOKEN` 一致
+- Remote Console 连接该地址；第一次连接时用 `.env` 中的 `HTTP_TOKEN`（初始化令牌，未设置时为 `full-bot-dev-token`）完成初始化向导、创建所有者账号，之后用账号登录（或先在本目录运行 `pnpm exec zhin console init` 创建所有者）
 - NapCat/KOOK：见 [ACCEPTANCE.md](./ACCEPTANCE.md) 可选实机段
 
 ## L4 配置要点

@@ -107,7 +107,7 @@ RPC（`iam.*`，需 `iam.view` / `iam.manage`）：`iam.users.list|create|update
 
 ### 7. 初始化：CLI 与 Web 同一套动作
 
-初始化有两个入口，执行的是同一个服务（`ConsoleSetupService`，`basic/cli/src/plugin-runtime/console/iam/setup-service.ts`），步骤、校验、写入结果完全一致：
+初始化有两个入口，执行的是同一个服务（`ConsoleSetupService`，`packages/host/gateway/src/iam/setup-service.ts`），步骤、校验、写入结果完全一致：
 
 | 步骤 | 服务方法 | Web（初始化令牌） | CLI |
 |---|---|---|---|
@@ -135,8 +135,8 @@ RPC（`iam.*`，需 `iam.view` / `iam.manage`）：`iam.users.list|create|update
 
 - 权限常量与 RPC→权限映射：`packages/console/protocol/src/permissions.ts`
 - 主体解析、权限检查：`packages/host/http/src/`（`TokenRegistry` 扩展为可接入外部会话解析器；新增 `access-control.ts`）
-- 数据表、密码与会话、`/auth/*`、`iam.*`、审计：`basic/cli/src/plugin-runtime/console/iam/`
-- 初始化服务：`basic/cli/src/plugin-runtime/console/iam/setup-service.ts`；CLI 命令：`basic/cli/src/commands/console.ts`（`init`、`user`）
+- 数据表、密码与会话、`/auth/*`、`iam.*`、审计：`packages/host/gateway/src/iam/`（ADR 0054 起由管理网关持有）
+- 初始化服务：`packages/host/gateway/src/iam/setup-service.ts`；CLI 命令：`basic/cli/src/commands/console.ts`（`init`、`user`）
 - Console UI：登录页（用户名密码；未初始化时显示初始化向导）、访问控制区（用户、角色、API 令牌、审计）、个人设置（改密码、我的令牌）
 
 ## 后果

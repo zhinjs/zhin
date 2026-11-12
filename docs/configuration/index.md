@@ -167,7 +167,7 @@ dotenv 按 `.env` → `.env.<环境>` 加载。环境名由 `--environment` 指�
 http:
   port: 8086                 # Runtime 无配置时的回退值
   host: 127.0.0.1            # 默认 127.0.0.1
-  token: ${HTTP_TOKEN}       # API Bearer 令牌
+  token: ${HTTP_TOKEN}       # 初始化令牌：只用于创建第一个 Console 所有者，之后失效
   corsOrigins:               # 允许的跨域来源
     - "https://console.zhin.dev"
   base: /api                 # API 挂载路径
@@ -516,7 +516,7 @@ plugin:
 plugins: {}
 ```
 
-启动后按 `zhin setup` 向导逐步补齐 database / 适配器 / AI（见 [CLI 参考](../cli/index.md)）；运行方式见 [zhin runtime start 详解](../cli/runtime.md)。
+启动后按 `zhin setup` 向导逐步补齐 database / 适配器 / AI（见 [CLI 参考](../cli/index.md)）；运行方式见 [zhin start 详解](../cli/runtime.md)。
 
 ## 账号自身资料
 

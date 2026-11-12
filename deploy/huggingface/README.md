@@ -44,4 +44,4 @@ short_description: Zhin.js Plugin Runtime Sandbox playground
   - `DEMO_PASSWORD`（可选 `DEMO_ROLE`，默认 `viewer`）：创建公开的只读账号 `demo`；建议按 [部署演示站点](https://github.com/zhinjs/zhin/blob/main/docs/operations/demo-deployment.md) 换成去掉数据库 / 文件读权限的自定义角色；要让访客在 `/sandbox` 里发消息，角色还需要 `endpoint.operate`
 - 数据库在容器内（`./data/playground.db`），Space 重启后重置；账号由 `start.sh` 按 Secrets 重新创建
 - 模型声明在 `ai.plan.yml`（首次启动、数据库为空时自动导入）；启动策略在 `zhin.config.yml`（`configVersion: 2`）
-- Host 由 CLI 装配；仓库镜像：[`deploy/huggingface`](https://github.com/zhinjs/zhin/tree/main/deploy/huggingface)
+- Host 由 `zhin start` 拉起的实例装配（HTTP 由管理网关承载）；仓库镜像：[`deploy/huggingface`](https://github.com/zhinjs/zhin/tree/main/deploy/huggingface)

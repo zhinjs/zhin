@@ -6,7 +6,7 @@ This is the MCP **server**. To let a Zhin Agent consume tools from another serve
 
 ## Install and enable
 
-In a project that already uses `zhin runtime start`:
+In a project that already runs with `zhin start`:
 
 ```bash
 pnpm add @zhin.js/mcp @zhin.js/agent zod ai
@@ -26,7 +26,7 @@ mcp:
   allowUnauthenticatedLocalhost: false  # require Bearer even in development
 ```
 
-Start the project with `pnpm dev` or `zhin runtime start`. Use the HTTP address printed at startup: new scaffolded projects currently use port **8068**, while the Runtime fallback without an `http:` configuration is **8086**. The MCP endpoint uses `mcp.path` (default `/mcp`). Omitting `mcp:` does not enable it.
+Start the project with `pnpm dev` or `zhin start`. Use the HTTP address printed at startup: new scaffolded projects currently use port **8068**, while the Runtime fallback without an `http:` configuration is **8086**. The MCP endpoint uses `mcp.path` (default `/mcp`). Omitting `mcp:` does not enable it.
 
 ## Connect a client
 
