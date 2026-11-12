@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -203,6 +203,43 @@ describe('PluginSchemaCatalog', () => {
     await expect(catalog.read('qq-main')).resolves.toEqual(expectField('account'));
     await expect(catalog.read('@zhin.js/adapter-icqq')).resolves.toEqual(expectField('account'));
     await expect(catalog.read('root/qq-main')).resolves.toEqual(expectField('account'));
+  });
+
+  it('reads the schema of an installed but undeclared production-dependency plugin by package name', async () => {
+    const root = await createProject();
+    await writePackage(root, 'schema-project', [{ package: '@zhin.js/adapter-sandbox', instanceKey: 'sandbox' }],
+      { '@zhin.js/adapter-icqq': '*', '@zhin.js/adapter-sandbox': '*', 'plain-lib': '*', '@zhin.js/adapter-bare': '*' });
+    const catalog = new PluginSchemaCatalog(root);
+    await expect(catalog.readUndeclared('@zhin.js/adapter-icqq')).resolves.toEqual({ ...expectField('account') as object, declared: false });
+    // A plugin package without schema.json has no form.
+    await writePackage(join(root, 'node_modules/@zhin.js/adapter-bare'), '@zhin.js/adapter-bare');
+    await expect(catalog.readUndeclared('@zhin.js/adapter-bare')).resolves.toBeNull();
+    // Not such a package: declared, not a Plugin, not installed, not a dependency, or not a package name.
+    await mkdir(join(root, 'node_modules/plain-lib'), { recursive: true });
+    await writeFile(join(root, 'node_modules/plain-lib/package.json'), JSON.stringify({ name: 'plain-lib' }));
+    await writeFile(join(root, 'node_modules/plain-lib/schema.json'), JSON.stringify({ type: 'object' }));
+    for (const name of ['@zhin.js/adapter-sandbox', 'sandbox', 'plain-lib', 'http', 'root', '../outside', './plugins/x']) {
+      await expect(catalog.readUndeclared(name)).resolves.toBeUndefined();
+    }
+    const dev = join(root, 'node_modules/@zhin.js/adapter-dev');
+    await writePackage(dev, '@zhin.js/adapter-dev');
+    await writeSchema(dev, 'dev');
+    // List it as a devDependency so accepting devDependencies would make this assertion fail.
+    const manifestPath = join(root, 'package.json');
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as Record<string, unknown>;
+    await writeFile(manifestPath, JSON.stringify({ ...manifest, devDependencies: { '@zhin.js/adapter-dev': '*' } }));
+    await expect(catalog.readUndeclared('@zhin.js/adapter-dev')).resolves.toBeUndefined();
+    // Declared instances keep the strict read (no package fallback outside readUndeclared).
+    await expect(catalog.read('@zhin.js/adapter-bare')).resolves.toBeNull();
+  });
+
+  it('treats a package declared through a local-path reference as declared', async () => {
+    const root = await createProject();
+    await writePackage(root, 'schema-project',
+      [{ package: './node_modules/@zhin.js/adapter-icqq', instanceKey: 'icqq-local' }],
+      { '@zhin.js/adapter-icqq': '*' });
+    const catalog = new PluginSchemaCatalog(root);
+    await expect(catalog.readUndeclared('@zhin.js/adapter-icqq')).resolves.toBeUndefined();
   });
 
   it('reads a batch and omits unresolved plugins without requiring an unrelated package to resolve', async () => {

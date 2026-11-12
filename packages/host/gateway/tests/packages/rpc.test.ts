@@ -11,6 +11,7 @@ import {
   type GatewayRpcInstance,
 } from '../../src/packages/index.js';
 import type { InstanceState, InstanceStatus } from '../../src/supervisor/instance-supervisor.js';
+import { PluginDeclarationError } from '../../src/plugin-management/workflow.js';
 import { noPermissionUser, testUser } from '../utils/console-users.js';
 
 let root: string;
@@ -92,6 +93,21 @@ describe('dispatchGatewayRpc', () => {
     expect(await dispatch({ type: GATEWAY_RPC.INSTALL, data: { packages: 'pg' } }, testUser('owner'))).toMatchObject({ ok: false, error: { code: 'invalid_input' } });
     expect(await dispatch({ type: GATEWAY_RPC.INSTALL, data: { packages: ['pg'], enable: 'yes' } }, testUser('owner'))).toMatchObject({ ok: false, error: { code: 'invalid_input' } });
     expect(await dispatch({ type: GATEWAY_RPC.UNINSTALL, data: { packages: ['pg'] } }, testUser('operator'))).toMatchObject({ ok: false, error: { code: 'forbidden' } });
+  });
+
+  it('returns structured schema errors and missing environment variables for a refused declaration', async () => {
+    const errors = [{ path: '$.endpoints.0.id', message: '缺少必填项' }];
+    const packages = new GatewayPackageService({ projectRoot: root, hasOwner: () => true, instance: new FakeSupervisor(), stableMs: 0, packageManager: async () => undefined,
+      workflow: { inspect: async () => ({ declared: false }), install: async () => undefined, uninstall: async () => undefined, update: async () => undefined,
+        planDeclaration: async () => { throw new PluginDeclarationError('配置未通过插件 Schema 校验，未声明：$.endpoints.0.id 缺少必填项；缺少环境变量 BOT_TOKEN', errors, ['BOT_TOKEN']); },
+        declare: async () => undefined } });
+    const dispatch = createGatewayRpcDispatcher({ packages });
+    const reply = await dispatch({ type: GATEWAY_RPC.DECLARE, data: { package: '@zhin.js/adapter-sandbox', config: {} } }, testUser('owner'));
+    expect(reply).toEqual({ ok: false, error: { code: 'invalid_input', status: 400,
+      message: '配置未通过插件 Schema 校验，未声明：$.endpoints.0.id 缺少必填项；缺少环境变量 BOT_TOKEN', errors, missingEnv: ['BOT_TOKEN'] } });
+    // Errors without details keep the plain shape.
+    expect(await dispatch({ type: GATEWAY_RPC.DECLARE, data: { config: {} } }, testUser('owner')))
+      .toEqual({ ok: false, error: { code: 'invalid_input', status: 400, message: expect.any(String) } });
   });
 
   it('dispatches gateway.plugins.declare with plugin.manage and validates its payload', async () => {

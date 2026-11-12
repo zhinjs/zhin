@@ -2,6 +2,7 @@ import {
   ConnectionState,
   ConnectionError,
   ConsoleTransportError,
+  readConsoleErrorDetails,
   MessageError,
   type ConsoleTransportMessage,
   type ConsoleTransportConfig,
@@ -344,7 +345,7 @@ export class ConsoleTransport {
       };
       if (!res.ok || json.success === false) {
         if (res.status === 401) handleUnauthorized(auth);
-        throw new ConsoleTransportError(json.error ?? `HTTP ${res.status}`, "SERVER_ERROR");
+        throw new ConsoleTransportError(json.error ?? `HTTP ${res.status}`, "SERVER_ERROR", undefined, readConsoleErrorDetails(json));
       }
       return json.data as T;
     } catch (error) {
@@ -612,7 +613,7 @@ export class ConsoleTransport {
     const body = await response.json() as { success?: boolean; data?: T; error?: string };
     if (!response.ok || body.success === false) {
       if (response.status === 401) handleUnauthorized(auth);
-      throw new ConsoleTransportError(body.error ?? `HTTP ${response.status}`, 'SERVER_ERROR');
+      throw new ConsoleTransportError(body.error ?? `HTTP ${response.status}`, 'SERVER_ERROR', undefined, readConsoleErrorDetails(body));
     }
     return body.data as T;
   }

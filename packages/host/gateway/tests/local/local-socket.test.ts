@@ -58,6 +58,18 @@ describe.runIf(posix)('local control socket', () => {
     client.close();
   });
 
+  it('carries structured validation details of an error reply to the client', async () => {
+    const { root, path } = await project();
+    const errors = [{ path: '$.endpoints.0.id', message: '缺少必填项' }];
+    await open(path, async (request) => (request.type === 'details'
+      ? { ok: false, error: { code: 'invalid_input', message: 'bad', status: 400, errors, missingEnv: ['BOT_TOKEN'] } }
+      : { ok: false, error: { code: 'invalid_input', message: 'plain', status: 400 } }));
+    const client = await LocalGatewayClient.connect({ root, path });
+    await expect(client.request('details')).rejects.toMatchObject({ code: 'invalid_input', message: 'bad', details: { errors, missingEnv: ['BOT_TOKEN'] } });
+    await expect(client.request('plain')).rejects.toMatchObject({ code: 'invalid_input', details: {} });
+    client.close();
+  });
+
   it('answers unavailable until the handler is installed', async () => {
     const { root, path } = await project();
     const server = await open(path);

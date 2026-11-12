@@ -383,7 +383,7 @@ export class GatewayPackageService {
         ok: status === 'succeeded',
         status,
         ...(failedPhase ? { failedPhase } : {}),
-        ...(failure === undefined ? {} : { error: failureMessage(failure) }),
+        ...(failure === undefined ? {} : { error: failureMessage(failure), ...declarationDetails(failure) }),
         ...(rollbackFailure === undefined ? {} : { rollbackError: failureMessage(rollbackFailure) }),
         ...(logTail?.length ? { logTail } : {}),
         ...(status === 'succeeded' && extras?.needsConfiguration?.length ? { needsConfiguration: extras.needsConfiguration } : {}),
@@ -490,7 +490,19 @@ function configurationNeed(result: unknown): GatewayPluginConfigurationNeed | un
 
 /** A refused declaration is the caller's input problem; anything else stays internal. */
 function declarationError(error: unknown): unknown {
-  return error instanceof PluginDeclarationError ? new GatewayError('invalid_input', error.message, { cause: error }) : error;
+  return error instanceof PluginDeclarationError
+    ? new GatewayError('invalid_input', error.message, { cause: error, details: { errors: error.errors, missingEnv: error.missingEnv } })
+    : error;
+}
+
+/** Structured feedback of a declaration refused inside the transaction (config changed after preflight). */
+function declarationDetails(error: unknown): { errors?: PluginDeclarationError['errors']; missingEnv?: PluginDeclarationError['missingEnv'] } {
+  const cause = error instanceof PluginManagementOperationError ? error.cause : error;
+  if (!(cause instanceof PluginDeclarationError)) return {};
+  return {
+    ...(cause.errors?.length ? { errors: cause.errors } : {}),
+    ...(cause.missingEnv?.length ? { missingEnv: cause.missingEnv } : {}),
+  };
 }
 
 /** The workflow's own error says files were not rolled back; the gateway does roll back, so report the cause. */
