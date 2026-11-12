@@ -5,7 +5,7 @@ export default defineEvalCase({
   description: 'A user denial is reported to the model as a decision (not a retryable error); the tool never runs.',
   source: 'QQ: approval silently denied and the model kept retrying (#716 agent-im-approval)',
   tags: ['approval'],
-  inbound: { text: '删除昨天的备份', sender: { id: 'owner', chatRole: 'owner' } },
+  inbound: { text: '删除昨天的备份', sender: { id: 'owner', chatRole: 'owner', chatRoleLevels: { owner: 'global' } } },
   tools: [{ name: 'delete_backup', requiresApproval: 'once', result: 'deleted' }],
   approval: 'deny',
   script: [

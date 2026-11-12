@@ -5,7 +5,7 @@ export default defineEvalCase({
   description: 'The master in a group keeps the same tools: messaging another conversation still works.',
   source: '#719 group_member turn tightening — master must not be affected (PR #737)',
   tags: ['approval'],
-  inbound: { text: '@bot 私聊提醒 alice 明天开会', scope: 'group', sender: { id: 'master', chatRole: 'owner' } },
+  inbound: { text: '@bot 私聊提醒 alice 明天开会', scope: 'group', sender: { id: 'master', chatRole: 'owner', chatRoleLevels: { owner: 'global' } } },
   tools: [{ name: 'send_private_message', result: 'sent' }],
   script: [
     { toolCalls: [{ name: 'send_private_message', args: { to: 'alice', text: '明天开会' } }] },

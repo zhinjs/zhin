@@ -5,7 +5,7 @@ export default defineEvalCase({
   description: 'Three greps in a row that match nothing make the harness tell the model to change approach or answer.',
   source: 'ADR 0042 §7: 21-call kick turn spent grepping plugin source in a group',
   tags: ['long-task', 'context'],
-  inbound: { text: '怎么踢人？', sender: { id: 'master', chatRole: 'owner' } },
+  inbound: { text: '怎么踢人？', sender: { id: 'master', chatRole: 'owner', chatRoleLevels: { owner: 'global' } } },
   workspace: { 'a.ts': 'export const a = 1;\n' },
   nativeTools: ['grep'],
   script: [

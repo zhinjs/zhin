@@ -12,6 +12,10 @@ import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import {
+  expandChatRole,
+  hostChatRole,
+  type ChatRole,
+  type ChatRoleLevels,
   createVenueProjector,
   createVenueRegistry,
   routeVenueMessage,
@@ -937,8 +941,19 @@ export async function deliverTimerMailInbound(
   });
 }
 
-/** Principal roles of an eval sender: `chatRole` expanded (ADR 0056), else `roles`, else `user`. */
-export function evalSenderRoles(sender: Readonly<{ roles?: readonly string[]; chatRole?: 'owner' | 'admin' | 'trusted' }>): readonly string[] {
-  if (sender.chatRole) return (['owner', 'admin', 'trusted'] as const).slice(['owner', 'admin', 'trusted'].indexOf(sender.chatRole));
+/** Role facts of an eval sender, shaped like the Host's `sender.chatRole` / `sender.chatRoleLevels` (ADR 0056). */
+export type EvalSender = Readonly<{
+  id: string; name?: string; roles?: readonly string[];
+  chatRole?: ChatRole;
+  /** Levels the roles are held at; as on the Host, a role without a level counts as conversation level. */
+  chatRoleLevels?: ChatRoleLevels;
+}>;
+
+/**
+ * Principal roles of an eval sender: `chatRole` expanded the way the Host derives host-wide trust
+ * (`hostChatRole`: only a global owner is `owner`, a lower-level owner counts as `admin`), else `roles`, else `user`.
+ */
+export function evalSenderRoles(sender: Omit<EvalSender, 'id'>): readonly string[] {
+  if (sender.chatRole) return expandChatRole(hostChatRole(sender));
   return sender.roles ?? ['user'];  // eval principal roles (not message sender roles)
 }
