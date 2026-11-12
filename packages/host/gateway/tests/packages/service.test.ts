@@ -168,6 +168,23 @@ describe('GatewayPackageService transactions', () => {
     expect(await exists(join(root, '.zhin/gateway-packages.lock'))).toBe(false);
   });
 
+  it('refreshes settings before each transaction and reads the ready timeout at start', async () => {
+    const instance = new FakeInstance('running');
+    let readyTimeoutMs = 200;
+    const order: string[] = [];
+    const packages = new GatewayPackageService({
+      projectRoot: root,
+      packageManager: fakePackageManager(),
+      instance,
+      hasOwner: () => true,
+      readyTimeoutMs: () => { order.push(`read:${readyTimeoutMs}`); return readyTimeoutMs; },
+      beforeTransaction: async () => { order.push('refresh'); readyTimeoutMs = 250; },
+      stableMs: 30,
+    });
+    expect(await packages.install(['pg'], { principal: owner })).toMatchObject({ ok: true });
+    expect(order).toEqual(['refresh', 'read:250']);
+  });
+
   it('leaves a stopped instance stopped unless asked to start it', async () => {
     const instance = new FakeInstance('stopped');
     const packages = service({ instance });

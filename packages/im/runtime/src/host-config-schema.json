@@ -496,8 +496,8 @@
           "minimum": 1,
           "maximum": 3600,
           "default": 60,
-          "description": "Seconds the instance has to report ready after a start, a restart or a dependency transaction before the start counts as failed (the transaction then rolls back).",
-          "x-descriptionZh": "实例启动、重启或依赖事务后报告就绪的最长秒数；超时视为启动失败（依赖事务随之回滚）。"
+          "description": "Seconds the instance has to report ready after a start, a restart or a dependency transaction before the start counts as failed (the transaction then rolls back). Read again before every start, restart and transaction; no gateway restart needed.",
+          "x-descriptionZh": "实例启动、重启或依赖事务后报告就绪的最长秒数；超时视为启动失败（依赖事务随之回滚）。每次启动、重启与事务前重新读取，修改后无需重启网关。"
         }
       }
     },

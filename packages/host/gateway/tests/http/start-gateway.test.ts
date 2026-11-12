@@ -137,4 +137,38 @@ describe('startGateway', () => {
     expect(health.status).toBe(200);
     expect(await health.json()).toMatchObject({ instance: { ready: false } });
   });
+
+  it('re-reads gateway.readyTimeout before every instance start and restart', async () => {
+    const root = await project('http:\n  host: 127.0.0.1\n  port: 0\n');
+    let configured: number | undefined = 7_000;
+    const gateway = await startGateway({
+      projectRoot: root,
+      console: false,
+      settings: async () => (configured === undefined ? {} : { readyTimeoutMs: configured }),
+      supervisor: {
+        spawn: { command: process.execPath, args: [fixture], cwd: root, env: process.env },
+        readyTimeoutMs: 5_000,
+        shutdownBudgetMs: 300,
+        killGraceMs: 300,
+      },
+      transport: ({ supervisor }) => ({
+        get ready() { return supervisor.state === 'running'; },
+        routes: () => EMPTY_ROUTE_TABLE,
+        onRoutes: () => () => undefined,
+        fetch: async () => new Response('x'),
+        openWebSocket: async () => false,
+      }),
+    });
+    gateways.push(gateway);
+    await gateway.instanceStarted;
+    expect(gateway.supervisor.readyTimeoutMs).toBe(7_000);
+    configured = 9_000;
+    await gateway.rpc({ type: 'gateway.instance.restart' }, 'local');
+    expect(gateway.supervisor.readyTimeoutMs).toBe(9_000);
+    // Removing the setting goes back to the supervisor's own value.
+    configured = undefined;
+    await gateway.rpc({ type: 'gateway.instance.stop' }, 'local');
+    await gateway.rpc({ type: 'gateway.instance.start' }, 'local');
+    expect(gateway.supervisor.readyTimeoutMs).toBe(5_000);
+  }, 30_000);
 });

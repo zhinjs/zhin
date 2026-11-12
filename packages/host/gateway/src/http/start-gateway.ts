@@ -64,8 +64,18 @@ export interface StartGatewayOptions {
    * the project root over the supervisor; `false` disables the package RPC.
    */
   readonly packages?: GatewayPackageService | false;
-  /** `gateway.readyTimeout` for dependency transactions (see {@link loadGatewaySettings}). Default 60 s. */
+  /**
+   * `gateway.readyTimeout` for dependency transactions when the project sets none (see
+   * {@link loadGatewaySettings}). Default 60 s.
+   */
   readonly readyTimeoutMs?: number;
+  /**
+   * Reads the project's `gateway` block. Called before every instance start / restart (Console,
+   * CLI, automatic restart after a crash) and every dependency transaction, so a changed
+   * `gateway.readyTimeout` applies without restarting the gateway. Default
+   * {@link loadGatewaySettings} on the project root; `false` reads nothing.
+   */
+  readonly settings?: false | (() => Promise<GatewaySettings>);
 }
 
 export interface RunningGateway {
@@ -140,19 +150,36 @@ export async function startGateway(options: StartGatewayOptions): Promise<Runnin
   const transport = options.transport({ supervisor, projectRoot: options.projectRoot });
   // `tokenRegistry` is read lazily: the server creates the default one.
   let registry: TokenRegistry | undefined = options.tokenRegistry;
+  // gateway.readyTimeout is re-read before each start and transaction (ADR 0054 §4).
+  const readSettings = options.settings === false ? undefined : options.settings ?? (() => loadGatewaySettings(options.projectRoot));
+  let configuredReadyTimeoutMs: number | undefined;
+  const refreshSettings = async (): Promise<void> => {
+    if (!readSettings) return;
+    try {
+      configuredReadyTimeoutMs = (await readSettings()).readyTimeoutMs;
+    } catch {
+      return; // keep the previous value
+    }
+    supervisor.setReadyTimeout(configuredReadyTimeoutMs);
+  };
+  // Automatic restarts wait in `backoff` (crash) or for the old process to stop (`restart-request`,
+  // e.g. after a config change): refresh meanwhile.
+  supervisor.on('state', (status: { readonly state: string }) => { if (status.state === 'backoff') void refreshSettings(); });
+  supervisor.on('restart-request', () => { void refreshSettings(); });
   const packages = options.packages === false
     ? undefined
     : options.packages ?? new GatewayPackageService({
       projectRoot: options.projectRoot,
       instance: supervisor,
-      ...(options.readyTimeoutMs !== undefined ? { readyTimeoutMs: options.readyTimeoutMs } : {}),
+      readyTimeoutMs: () => configuredReadyTimeoutMs ?? options.readyTimeoutMs,
+      beforeTransaction: refreshSettings,
       hasOwner: () => registry?.initialized() ?? true,
     });
   let consoleStopped = false;
   const lifecycle: GatewayRpcInstance = {
-    start: async () => { await supervisor.start(); consoleStopped = false; },
+    start: async () => { await refreshSettings(); await supervisor.start(); consoleStopped = false; },
     stop: async (stopOptions) => { consoleStopped = true; await supervisor.stop(stopOptions); },
-    restart: async (restartOptions) => { await supervisor.restart(restartOptions); consoleStopped = false; },
+    restart: async (restartOptions) => { await refreshSettings(); await supervisor.restart(restartOptions); consoleStopped = false; },
     status: () => supervisor.status(),
     logs: supervisor.logs,
   };
@@ -185,12 +212,16 @@ export async function startGateway(options: StartGatewayOptions): Promise<Runnin
         ...(options.environment ? { environment: options.environment } : {}),
         instance: transport,
         restartInstance: async () => {
-          if (supervisor.state !== 'stopped') await supervisor.restart({ reason: 'database' });
+          if (supervisor.state === 'stopped') return;
+          await refreshSettings();
+          await supervisor.restart({ reason: 'database' });
         },
       });
       await settleWithin(gatewayConsole.ready, options.databaseWaitMs ?? 10_000);
     }
     assertNotOpenOnNetwork(http, server.tokenRegistry);
+    // Settings for the first instance start, read before listening so it starts right away.
+    if (options.startInstance !== false) await refreshSettings();
     await server.listen();
   } catch (error) {
     disposeEvents();

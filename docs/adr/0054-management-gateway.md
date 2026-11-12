@@ -118,7 +118,7 @@ interface HttpHost {
 1. 生成计划并校验白名单与 revision；备份 `package.json`、锁文件、配置文件；
 2. 向实例发送 `shutdown`，等待退出；
 3. 执行事务，输出以 SSE（`gateway.packages.progress`）推给 Console：网关接管 `GET {base}/events`，实例在线时转发实例的事件流并在帧边界插入网关帧（网关帧不带 `id:`，续传游标仍是实例的），实例离线时给只含网关事件的流（实例就绪后关闭，Console 重连回合并流），`{base}/events/history` 离线时返回保留调用方游标的空页；`GET {base}/gateway/packages/progress`（`plugin.manage`）只推进度；
-4. 启动实例，等待 `ready`（默认 60 秒；项目配置 `gateway.readyTimeout`，整数秒 1–3600，同时用于网关平时启动 / 重启实例）；
+4. 启动实例，等待 `ready`（默认 60 秒；项目配置 `gateway.readyTimeout`，整数秒 1–3600，同时用于网关平时启动 / 重启实例；网关在每次启动、重启实例与每笔事务前重新读取，改了不必重启网关）；
 5. 失败：恢复备份、重新安装、启动旧版本；向 Console 报告失败阶段与日志尾部。
 
 插件配置的最终校验发生在实例启动后，失败视为第 4 步失败。网关在事务内先用包自带的 `schema.json` 预检：

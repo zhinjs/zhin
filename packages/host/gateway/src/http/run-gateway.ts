@@ -21,7 +21,7 @@ import { isNodeVersionSupported, NODE_ENGINES_HINT } from '../project/node-requi
 import { InstanceSupervisor, type InstanceRestartPolicy, type InstanceStatus } from '../supervisor/instance-supervisor.js';
 import { defaultInstanceLogFile, supervisedNodeArguments, type RunSupervisedInstanceOptions } from '../supervisor/run-instance.js';
 import { captureTerminalState, isForegroundProcessGroup } from '../supervisor/terminal-state.js';
-import { loadGatewaySettings, startGateway, type RunningGateway } from './start-gateway.js';
+import { startGateway, type RunningGateway } from './start-gateway.js';
 
 /** Set on the instance when its output is echoed to an interactive terminal (TTY-style logging). */
 export const INSTANCE_INTERACTIVE_ENV = 'ZHIN_INSTANCE_INTERACTIVE';
@@ -113,7 +113,6 @@ export async function runGateway(input: RunGatewayOptions): Promise<number> {
   const interactive = echo && process.stdout.isTTY === true;
   const logFile = options.logFile ?? defaultInstanceLogFile(root);
   await mkdir(dirname(logFile), { recursive: true });
-  const settings = await loadGatewaySettings(root);
   const socketPath = input.localSocket === false ? undefined : input.localSocket?.path ?? await localEndpoint(root);
   // Keyed proof the CLI checks before it talks to the endpoint (only in the 0600 state file).
   const handshakeKey = randomBytes(32).toString('hex');
@@ -121,8 +120,8 @@ export async function runGateway(input: RunGatewayOptions): Promise<number> {
   const shareTerminal = foregroundStdin(daemon);
   // The instance may leave the shared terminal raw / without echo when it exits or crashes.
   const terminal = shareTerminal ? captureTerminalState() : undefined;
+  // gateway.readyTimeout: startGateway re-reads it before every start, restart and transaction.
   const supervisor = new InstanceSupervisor({
-    ...(settings.readyTimeoutMs !== undefined ? { readyTimeoutMs: settings.readyTimeoutMs } : {}),
     spawn: {
       command: process.execPath,
       args: [...supervisedNodeArguments(), entry, ...args],
@@ -175,7 +174,6 @@ export async function runGateway(input: RunGatewayOptions): Promise<number> {
       ...(input.http ? { http: input.http } : {}),
       supervisor,
       transport: () => supervisor.transport,
-      ...(settings.readyTimeoutMs !== undefined ? { readyTimeoutMs: settings.readyTimeoutMs } : {}),
     });
   } catch (error) {
     await control?.close();
