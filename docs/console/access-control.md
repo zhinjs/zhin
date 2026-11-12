@@ -110,6 +110,7 @@ Console 的账号存在项目数据库里（[ADR 0049](../adr/0049-console-rbac.
 - 明文**只在签发时显示一次**，库里只存 SHA-256。
 - 令牌的权限不超过签发用户：列出的插件权限只有用户自己（按名或按级别）持有时才生效；用户被禁用、删除时令牌一起失效；也可以单独吊销。
 - 命令行工具读 `ZHIN_CONSOLE_TOKEN`：`ZHIN_CONSOLE_TOKEN=<令牌> zhin doctor --live https://bot.example.com/api --json`。
+- MCP / A2A 客户端把令牌作为 `Authorization: Bearer` 发送；签发账号必须**全局**持有 `mcp.access` / `a2a.access`（只在某个作用域内持有不算）。也可以改用协议自己的 `mcp.token` / `a2a.token`，见[配置 · mcp / a2a](../configuration/index.md#mcp-a2a)。初始化令牌在首个所有者创建后失效，不能用于 MCP / A2A。
 
 ## 审计日志 {#audit}
 

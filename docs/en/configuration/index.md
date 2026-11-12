@@ -299,15 +299,23 @@ The remaining sub-key is `queue` (Schedule execution concurrency/retry/timeout).
 mcp:
   enabled: true
   path: /mcp
-  token: ${HTTP_TOKEN}                  # Falls back to http.token if unset
+  token: ${MCP_TOKEN}                   # MCP protocol token; does not fall back to http.token
   allowUnauthenticatedLocalhost: false  # Recommend false for production
 
 a2a:
   enabled: true
   path: /a2a
+  token: ${A2A_TOKEN}                   # A2A protocol token; does not fall back to http.token
 ```
 
 Both sections are mounted on the HTTP Host and enabled as needed; when not configured, the corresponding SDK is not loaded.
+
+**Authentication**: the Bearer accepts two kinds of credential:
+
+- the protocol token `mcp.token` / `a2a.token`;
+- a Console API token issued after the account (or one of its roles) has been granted the **global** permission `mcp.access` / `a2a.access`; see [Access control · API tokens](../console/access-control.md#api-tokens). A token never holds more than the account that issued it, and stops working as soon as the account is disabled or the token revoked.
+
+`http.token` is the bootstrap token: it is valid only until the first owner exists (MCP / A2A accept it until then too) and is refused everywhere afterwards, so it is not a protocol credential. Outside production, A2A without `a2a.token` accepts loopback requests only, and MCP accepts local requests by default (turn that off with `allowUnauthenticatedLocalhost: false`). Production always requires a Bearer.
 
 Cross-process Agent collaboration travels over `a2a.mailbox` (ADR 0048): each Mail is signed together with its Authority and budget grant, so a remote peer cannot widen authority or exceed the granted budget.
 
@@ -317,7 +325,7 @@ a2a:
   mailbox:
     enabled: true
     path: /a2a/mailbox                  # inbound route, defaults to /a2a/mailbox
-    secret: ${A2A_MAILBOX_SECRET}       # signing secret; required in production (falls back to a2a.token / http.token)
+    secret: ${A2A_MAILBOX_SECRET}       # signing secret; required in production
     peers:
       - actor: remote-reviewer          # the name local Agents list under contacts
         url: https://agents.example.com/a2a/mailbox

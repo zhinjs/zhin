@@ -110,6 +110,7 @@ When issuing, set a name and an expiry, and optionally tick only the permissions
 - The plaintext is **shown once, at issue time**; the database stores only its SHA-256.
 - A token never exceeds its user: listed plugin permissions take effect only if the user holds them (by name or level); disabling or deleting the user invalidates the token; tokens can also be revoked individually.
 - Command-line tools read `ZHIN_CONSOLE_TOKEN`: `ZHIN_CONSOLE_TOKEN=<token> zhin doctor --live https://bot.example.com/api --json`.
+- MCP / A2A clients send the token as `Authorization: Bearer`; the issuing account must hold `mcp.access` / `a2a.access` **globally** (a grant limited to one scope does not count). The protocols' own `mcp.token` / `a2a.token` work as well; see [Configuration · mcp / a2a](../configuration/index.md#mcp-a2a). The bootstrap token stops working once the first owner exists and cannot be used for MCP / A2A.
 
 ## Audit log {#audit}
 

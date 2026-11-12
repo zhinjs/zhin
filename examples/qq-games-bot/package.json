@@ -24,10 +24,11 @@
     "@zhin.js/plugin-tic-tac-toe": "workspace:*",
     "@zhin.js/plugin-word-riddle": "workspace:*",
     "sqlite3": "^6.0.1",
-    "zhin.js": "workspace:*"
+    "zhin.js": "workspace:*",
+    "@zhin.js/cli": "workspace:*",
+    "@zhin.js/gateway": "workspace:*"
   },
   "devDependencies": {
-    "@zhin.js/cli": "workspace:*",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10"
   },

@@ -12,11 +12,12 @@
   },
   "dependencies": {
     "@zhin.js/adapter-sandbox": "workspace:*",
-    "zhin.js": "workspace:*"
+    "zhin.js": "workspace:*",
+    "@zhin.js/cli": "workspace:*",
+    "@zhin.js/gateway": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^25.9.5",
-    "@zhin.js/cli": "workspace:*",
     "typescript": "^6.0.3"
   },
   "engines": {

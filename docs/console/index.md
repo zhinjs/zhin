@@ -132,8 +132,10 @@ Runtime 无配置时回退到 8086，当前脚手架默认写入 8068。连接�
 请求正文默认保存在 Host 的 `data/agent-traces`，只记录脱敏文本，图片／音频等二进制仅留占位。默认保留最多 7 天、归档硬上限 64 MiB；容量不足会清理最旧记录，正文过大时保留统计并标记未保存。`ai.agent.recordRequestBodies: false` 可停止新增正文留存。现有 `ZHIN_TRACE_RETENTION_DAYS` / `ZHIN_TRACE_MAX_MB` 配置仍可显式调整保留范围；用量数据库的保留规则独立。过期记录立即停止返回；文件在启动后的维护、写入和既有每小时维护中清理。每个数据目录由一个 Host 进程写入。64 MiB 是归档容量，不是进程内存上限；原子替换期间可能短暂存在临时副本，并发回合和待写队列也会占用内存。
 
 插件写操作都采用“计划后提交”：Console 先调用 `plugin:plan-install`、
-`plugin:plan-update` 或 `plugin:plan-uninstall` 展示变更，再携带当前配置 revision 提交。
-安装、更新和卸载会维护 package manifest、锁文件、`zhin.plugins` 与插件配置；失败时恢复文件快照。
+`plugin:plan-update` 或 `plugin:plan-uninstall`（实例只读）展示变更，再携带当前配置 revision
+向管理网关提交 `gateway.packages.install | update | uninstall`（`plugin.manage`，见 ADR 0054 §4）；
+实例内已没有安装、更新、卸载入口。网关停止实例后执行事务，维护 package manifest、锁文件、
+`zhin.plugins` 与插件配置，再启动实例并等待就绪；失败时恢复文件快照并启动旧版本。
 配置保存前调用 `plugin:validate-config`，详情页可用 `plugin:diagnose` 汇总安装、挂载、schema
 与环境变量状态。
 

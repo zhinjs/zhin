@@ -119,7 +119,7 @@ RPC（`iam.*`，需 `iam.view` / `iam.manage`）：`iam.users.list|create|update
 
 - 驱动列表与连接字段来自 `@zhin.js/scaffold-wizard` 的 `DATABASE_DIALECT_DEFINITIONS`，与 `zhin setup` / `create-zhin` 的数据库步骤同源，校验用同一个 `validateDatabaseConfig`。Web 表单和 CLI 提问都由同一份 `fields` 生成。
 - 写入规则（两个入口相同）：配置文件顶层 `database` 块经现有原子写入路径保存；机密字段写入项目 `.env`（`ZHIN_DATABASE_PASSWORD` 等），配置里只留 `${…}` 引用。
-- 非交互：`zhin console init --database <dialect> --database-<field> <value>… --owner <name> --password-stdin [--yes]`，用于脚本与容器部署；机密字段也可用 `--database-password-env <VAR>` 指向已有环境变量。
+- 非交互：`zhin console init --database <dialect> --database-<field> <value>… --owner <name> --password-stdin [--yes]`，用于脚本与容器部署；数据库密码用 `--database-password-env <VAR>` 指向已有环境变量，或用 `--database-password-stdin` 从标准输入读取（与 `--password-stdin` 同用时第一行是数据库密码、第二行是所有者密码）；`--database-password <value>` 会把机密留在 shell 历史与进程列表里，保留但不推荐。
 - 已初始化后：Web 的 `/auth/setup/*` 返回 409，`zhin console init` 退出并提示改用 `zhin console user …`。
 - 救援与日常用户管理：`zhin console user create <username> [--role <role>] [--password-stdin]`、`passwd`、`disable|enable`、`list`。
 - 网关在运行时（ADR 0054 §6），`zhin console init` / `zhin console user` 经本地控制套接字调用仅限套接字的 `gateway.console.setup.*` / `gateway.console.user.*`（主体 `'local'`，写入记审计），由网关自己的 `ConsoleSetupService` / `ConsoleIamService` 执行：切换数据库由网关重连并重启实例，无需手动重启，所有者状态立即生效；没有网关时直接打开项目数据库（离线救援）。

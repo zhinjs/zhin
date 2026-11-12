@@ -105,7 +105,8 @@ zhin service status [--user]
 
 ```bash
 zhin console init [--status]
-zhin console init [--database sqlite|mysql|pg|mongodb] [--database-<字段> <值> ...] [--database-password-env <VAR>]
+zhin console init [--database sqlite|mysql|pg|mongodb] [--database-<字段> <值> ...]
+                  [--database-password-env <VAR> | --database-password-stdin]
                   [--owner <用户名>] [--display-name <显示名>] [--password-stdin] [-y]
 zhin console user create <用户名> [--role viewer] [--display-name <显示名>] [--password-stdin]
 zhin console user passwd <用户名> [--password-stdin]
@@ -119,8 +120,9 @@ Console 的用户、角色与 API 令牌存在项目数据库里（[ADR 0049](..
 - **经由谁执行**：项目的网关在运行时，命令经本地控制套接字 `.zhin/gateway.sock` 交给网关处理（连上即视为本机所有者），切换数据库、创建所有者立即生效；网关未运行时直接打开项目数据库（离线初始化与救援）。套接字存在但属于其他系统用户或无响应时报错，不会绕过网关改文件。
 - **`init`**：两步——选择数据库（默认保留当前配置，通常是 SQLite），再创建第一个所有者。不带参数时交互提问；`--status` 只输出初始化状态（JSON）。已经有所有者时报错退出，请改用 `zhin console user`。
   - `--database <dialect>` 换数据库，连接字段用 `--database-filename`、`--database-host`、`--database-port`、`--database-user`、`--database-database`、`--database-url`、`--database-db-name`、`--database-mode` 等传入；CLI 先测试连接，成功后写入配置，机密字段写进 `.env`。
-  - 密码请用 `--database-password-env <VAR>`（配置里写入 `${VAR}`）引用已有环境变量；`--database-password <值>` 会把机密留在 shell 历史与进程列表里，不建议使用。
-  - `--owner` 加 `--password-stdin` 可非交互创建所有者（密码取标准输入第一行，至少 10 位）；加 `-y` 时缺少参数直接失败而不提问，适合脚本。
+  - 数据库密码有两种推荐方式（三种来源只能选一个）：`--database-password-env <VAR>` 引用已有环境变量（配置里写入 `${VAR}`）；`--database-password-stdin` 从标准输入第一行读取，写进 `.env`，配置里写 `${VAR}`。同时用 `--password-stdin` 时，第一行是数据库密码、第二行是所有者密码。
+  - `--database-password <值>` 仍可用但**不推荐**：机密会留在 shell 历史与进程列表（`ps`）里，命令执行时会打印警告。
+  - `--owner` 加 `--password-stdin` 可非交互创建所有者（密码取标准输入第一行，与 `--database-password-stdin` 同用时取第二行；至少 10 位）；加 `-y` 时缺少参数直接失败而不提问，适合脚本。
 - **`user`**：`create` 默认绑定全局 `viewer`，`--role` 可指定 `owner` / `admin` / `operator` / `viewer` 或自定义角色；`passwd` 重置密码并吊销该用户的全部会话；`disable` / `enable` 禁用与恢复；`list` 列出用户、状态和角色绑定。适配器 / 账号作用域的绑定在 Console「访问控制」里设置。
 - `http.token` 只是**初始化令牌**：所有者创建之前有效，之后在所有接口上失效。
 
@@ -128,6 +130,10 @@ Console 的用户、角色与 API 令牌存在项目数据库里（[ADR 0049](..
 # 容器或服务器上的非交互初始化：先创建所有者，再开放端口
 printf '%s\n' "$OWNER_PASSWORD" | zhin console init -y --owner admin --password-stdin
 printf '%s\n' "$VIEWER_PASSWORD" | zhin console user create alice --role viewer --password-stdin
+# 换 PostgreSQL：数据库密码在第一行、所有者密码在第二行，都不出现在命令行上
+printf '%s\n%s\n' "$PG_PASSWORD" "$OWNER_PASSWORD" | zhin console init -y --database pg \
+  --database-host db --database-user zhin --database-database zhin \
+  --database-password-stdin --owner admin --password-stdin
 ```
 
 成功时退出码为 `0`，失败（已初始化、用户不存在、数据库连接失败、参数缺失等）为 `1`。
@@ -224,6 +230,8 @@ zhin migrate [--dry-run] [--no-install] [--include-pinned]
 ```
 
 把旧版本 Zhin 项目升级到最新：依赖、scripts 与目录结构。`--dry-run` 只打印计划，结束时提示“nothing was changed”；`--no-install` 跳过最后的 `pnpm install`。精确版本（如 `1.1.6`）、`link:`、`file:` 等用户锁定的依赖默认保留，`--include-pinned` 才会一并改为 `latest`。完整升级流程见 [版本兼容与迁移](../operations/upgrades.md)。
+
+项目目录（有 `zhin.config.*`）里，`zhin start` 在生产环境也要用 CLI 和管理网关，所以 `zhin migrate` 把 `zhin.js`、`@zhin.js/cli`、`@zhin.js/gateway` 一起放进 `dependencies`：只写在 `devDependencies` 的连同版本挪过去，两处都有时删掉 `devDependencies` 里的重复项，缺 `@zhin.js/gateway` 就补上（CLI 是 `latest` 等标签时用同一标签，否则用与当前 CLI 同批发布的版本范围）。`--prod` 安装因此不会丢掉启动所需的包。插件包（没有项目配置）的 CLI 仍留在 `devDependencies`。`zhin runtime migrate` 的 cutover 对私有（项目）包做同样的调整。
 
 `zhin migrate` 不改配置文件。启动报 `configVersion must be 2` 或 `zhin doctor` / `zhin config check` 提示 v1 配置时，使用下文的 `zhin migrate instances`。`zhin runtime migrate` 是旧插件能力代码迁移，与配置版本无关。
 

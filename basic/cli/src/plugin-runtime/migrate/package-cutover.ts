@@ -1,6 +1,7 @@
 import { link, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { LEGACY_START_SCRIPTS, RECOMMENDED_START_SCRIPTS } from './start-scripts.js';
+import { hasDeclaredVersion, withStartStackDependencies } from './start-stack-dependencies.js';
 
 export type CutoverCapability = 'command' | 'component' | 'middleware';
 export type PackageCutoverMode = 'development' | 'publish';
@@ -80,12 +81,20 @@ export class PackageCutover {
         ...capabilities,
       ]),
     ];
+    // A bot project runs `zhin start` in production: zhin.js, the CLI and the gateway go to
+    // dependencies together. A publishable Plugin keeps the CLI as a development tool.
+    const stack = mode === 'development'
+      ? withStartStackDependencies(value.dependencies, value.devDependencies)
+      : undefined;
     const dependencies = withRuntimeDependencies(
-      value.dependencies,
+      stack?.dependencies ?? value.dependencies,
       mountedCapabilities,
       !existingManifest,
     );
-    const devDependencies = withDevelopmentDependencies(value.devDependencies);
+    const devDependencies = withDevelopmentDependencies(
+      stack?.devDependencies ?? value.devDependencies,
+      !stack,
+    );
     const candidate = createCandidatePackage(value, {
       mode,
       manifestEntry,
@@ -296,15 +305,18 @@ function withRuntimeDependencies(
   return dependencies;
 }
 
-function withDevelopmentDependencies(existing: Record<string, string> | undefined): Record<string, string> {
+function withDevelopmentDependencies(
+  existing: Record<string, string> | undefined,
+  includeCli: boolean,
+): Record<string, string> {
   const dependencies = { ...existing };
-  setRequiredDependency(dependencies, '@zhin.js/cli');
+  if (includeCli) setRequiredDependency(dependencies, '@zhin.js/cli');
   setRequiredDependency(dependencies, 'typescript');
   return dependencies;
 }
 
 function setRequiredDependency(dependencies: Record<string, string>, name: string): void {
-  if (dependencies[name] === undefined || dependencies[name] === '^0.0.0' || dependencies[name] === '0.0.0') {
+  if (!hasDeclaredVersion(dependencies[name])) {
     dependencies[name] = LATEST;
   }
 }

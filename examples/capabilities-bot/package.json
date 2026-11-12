@@ -13,7 +13,9 @@
     "@zhin.js/agent": "workspace:*",
     "@zhin.js/tool": "workspace:*",
     "zhin.js": "workspace:*",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "@zhin.js/cli": "workspace:*",
+    "@zhin.js/gateway": "workspace:*"
   },
   "zhin": {
     "protocol": 1,
@@ -30,7 +32,6 @@
     "plugins": []
   },
   "devDependencies": {
-    "@zhin.js/cli": "workspace:*",
     "@zhin.js/runtime": "workspace:*",
     "vitest": "^4.1.10"
   }

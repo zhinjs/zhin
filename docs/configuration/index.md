@@ -292,15 +292,23 @@ assistant:
 mcp:
   enabled: true
   path: /mcp
-  token: ${HTTP_TOKEN}                  # 未设时回退 http.token
+  token: ${MCP_TOKEN}                   # MCP 协议令牌；不回退 http.token
   allowUnauthenticatedLocalhost: false  # 生产建议 false
 
 a2a:
   enabled: true
   path: /a2a
+  token: ${A2A_TOKEN}                   # A2A 协议令牌；不回退 http.token
 ```
 
 两段都挂在 HTTP Host 上，按需启用；未配置时对应 SDK 不会被加载。
+
+**鉴权**：Bearer 只接受两种凭据——
+
+- 协议令牌 `mcp.token` / `a2a.token`；
+- Console API 令牌：给账号（或其角色）授予**全局**权限 `mcp.access` / `a2a.access` 后签发，见[访问控制 · API 令牌](../console/access-control.md#api-tokens)。令牌的权限不超过签发账号，账号禁用或令牌吊销后立即失效。
+
+`http.token` 是初始化令牌，只在创建首个所有者之前有效（那时它也能通过 MCP / A2A），之后处处拒绝，不能当作协议凭据。非生产环境下：A2A 未配置 `a2a.token` 时只放行本机回环请求；MCP 默认放行本机请求，设 `allowUnauthenticatedLocalhost: false` 关闭。生产环境一律要求 Bearer。
 
 跨进程的 Agent 协作通过 `a2a.mailbox` 传输（ADR 0048）：Mail 连同 Authority 与预算一起签名传递，远端不能放大权限或超出划拨的预算。
 
@@ -310,7 +318,7 @@ a2a:
   mailbox:
     enabled: true
     path: /a2a/mailbox                  # 入站路由，默认 /a2a/mailbox
-    secret: ${A2A_MAILBOX_SECRET}       # 签名密钥；生产环境必须配置（或回退 a2a.token / http.token）
+    secret: ${A2A_MAILBOX_SECRET}       # 签名密钥；生产环境必须配置
     peers:
       - actor: remote-reviewer          # 本地 Agent 的 contacts 里写这个名字
         url: https://agents.example.com/a2a/mailbox

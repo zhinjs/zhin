@@ -30,10 +30,11 @@
     "@zhin.js/adapter-sandbox": "workspace:*",
     "ai": "^7.0.44",
     "@ai-sdk/openai-compatible": "^3.0.18",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "@zhin.js/cli": "workspace:*",
+    "@zhin.js/gateway": "workspace:*"
   },
   "devDependencies": {
-    "@zhin.js/cli": "workspace:*",
     "typescript": "^6.0.3"
   },
   "engines": {

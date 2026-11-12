@@ -19,10 +19,11 @@
     "zhin.js": "workspace:*",
     "zod": "^4.4.3",
     "@zhin.js/components": "workspace:*",
-    "@zhin.js/middleware": "workspace:*"
+    "@zhin.js/middleware": "workspace:*",
+    "@zhin.js/cli": "workspace:*",
+    "@zhin.js/gateway": "workspace:*"
   },
   "devDependencies": {
-    "@zhin.js/cli": "workspace:*",
     "@zhin.js/runtime": "workspace:*",
     "typescript": "^6.0.3"
   },

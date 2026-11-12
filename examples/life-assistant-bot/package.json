@@ -17,10 +17,11 @@
     "@zhin.js/tool": "workspace:*",
     "ai": "^7.0.44",
     "zhin.js": "workspace:*",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "@zhin.js/cli": "workspace:*",
+    "@zhin.js/gateway": "workspace:*"
   },
   "devDependencies": {
-    "@zhin.js/cli": "workspace:*",
     "tsx": "^4.23.1",
     "typescript": "^6.0.3"
   },

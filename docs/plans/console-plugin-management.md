@@ -21,12 +21,12 @@ CLI 与 Console 必须调用同一套项目级插件管理事务。Console 负�
 本阶段已先落地：
 
 - `plugin:plan-install` RPC 与 Console transport 方法；
-- `plugin:install` RPC 与 CLI 共享安装事务：revision 校验、pnpm 安装、插件清单/配置写入和失败回滚；
+- 安装事务（现为网关 `gateway.packages.install`，实例内的 `plugin:install` 已删除，见 ADR 0054 §4）与 CLI 共享：revision 校验、pnpm 安装、插件清单/配置写入和失败回滚；
 - `plugin:validate-config` RPC 与 Console hooks：按插件 schema 校验类型、必填项、枚举和环境变量引用（同时检查进程环境与项目 `.env*` 文件）；
 - `plugin:diagnose` RPC 与 Console hook：汇总安装计划、当前配置校验和环境变量缺失状态。
 - Console client 已统一提供 Marketplace 搜索/详情/更新检查、已安装列表和插件启停 hooks。
-- `plugin:plan-uninstall` / `plugin:uninstall` 提供精确包名确认、revision 校验，以及依赖、清单和配置的事务化移除；CLI `uninstall plugin --remove-pkg` 复用相同事务。
-- `plugin:plan-update` / `plugin:update` 使用精确目标版本、revision 校验、安装后版本校验和清单/锁文件回滚。
+- `plugin:plan-uninstall`（实例只读）/ 网关 `gateway.packages.uninstall` 提供精确包名确认、revision 校验，以及依赖、清单和配置的事务化移除；CLI `uninstall plugin --remove-pkg` 复用相同事务。
+- `plugin:plan-update`（实例只读）/ 网关 `gateway.packages.update` 使用精确目标版本、revision 校验、安装后版本校验和清单/锁文件回滚。
 - `endpoint.test` 从当前 generation 返回连接、登录等待、失败或未配置状态，供适配器配置向导验收。
 - CLI 根据项目真实 `package.json` 计算 npm 插件的安装、挂载、配置变化和重启需求；
 - CLI 与 Console 共用 `PluginManagementPort`，后续安装提交不再复制判断逻辑。
@@ -51,7 +51,7 @@ discover → inspect → plan → confirm → install → configure → validate
 - 是否需要重启或新 generation；
 - 回滚所需的文件和依赖快照。
 
-Console 首先接入只读 `plugin:plan-install`，确认后再调用 `plugin:install`。两者都必须带项目配置 revision，避免两个页面同时覆盖配置。
+Console 首先接入只读 `plugin:plan-install`，确认后再调用网关 `gateway.packages.install`。两者都必须带项目配置 revision，避免两个页面同时覆盖配置。
 
 ## 第二阶段：配置和 Endpoint 工作台
 

@@ -21,6 +21,7 @@ import { applyInstanceDeclarationMigration, formatInstanceMigrationPreview, plan
 import { CONFIG_V2_MIGRATION_DOCS_URL, detectLegacyConfig } from '@zhin.js/gateway/project';
 import { importProjectInstanceCli } from '../utils/project-instance.js';
 import { LEGACY_START_SCRIPTS, RECOMMENDED_START_SCRIPTS } from '../plugin-runtime/migrate/start-scripts.js';
+import { gatewayRangeFor, isBotProjectDirectory, withStartStackDependencies } from '../plugin-runtime/migrate/start-stack-dependencies.js';
 
 const cwd = process.cwd();
 
@@ -89,7 +90,34 @@ export function upgradePackageJson(pkgPath: string, options: { toLatest: boolean
   let changed = false;
   const targetVersion = options.toLatest ? 'latest' : 'latest';
 
-  for (const { dep, current, inDev } of zhinDeps) {
+  // `zhin start` needs zhin.js, the CLI and the gateway in production: a bot project lists all
+  // three under dependencies (older projects had the CLI in devDependencies and no gateway).
+  // Moves happen before the upgrade below; an added package is versioned after it, so the
+  // gateway follows the CLI's final specifier.
+  const added = new Set<string>();
+  const upgraded = new Map<string, string>();
+  if (isBotProjectDirectory(path.dirname(pkgPath))) {
+    const stack = withStartStackDependencies(pkg.dependencies, pkg.devDependencies);
+    for (const change of stack.changes) {
+      if (change.kind === 'add') {
+        added.add(change.name);
+        continue;
+      }
+      const message = change.kind === 'move'
+        ? `${change.name}: devDependencies → dependencies (${change.version})`
+        : `${change.name}: devDependencies 中的重复项已移除（dependencies 已声明 / already in dependencies）`;
+      console.log(chalk.cyan(options.dryRun ? `  [dry-run] ${message}` : `  · ${message}`));
+    }
+    if (stack.changes.length > 0) {
+      changed = true;
+      pkg.dependencies = stack.dependencies;
+      if (Object.keys(stack.devDependencies).length > 0) pkg.devDependencies = stack.devDependencies;
+      else delete pkg.devDependencies;
+    }
+  }
+
+  for (const { dep, current, inDev } of collectZhinDeps(pkg)) {
+    if (added.has(dep)) continue;
     const key = inDev ? 'devDependencies' : 'dependencies';
     const existing = pkg[key]?.[dep];
     if (existing === undefined) continue;
@@ -107,7 +135,16 @@ export function upgradePackageJson(pkgPath: string, options: { toLatest: boolean
     } else {
       pkg[key][dep] = targetVersion;
     }
+    upgraded.set(dep, targetVersion);
     changed = true;
+  }
+
+  for (const name of added) {
+    const version = name === '@zhin.js/gateway'
+      ? gatewayRangeFor(upgraded.get('@zhin.js/cli') ?? String(pkg.dependencies['@zhin.js/cli']))
+      : pkg.dependencies[name];
+    pkg.dependencies[name] = version;
+    console.log(chalk.cyan(`  ${options.dryRun ? '[dry-run]' : '·'} ${name}: + dependencies (${version})`));
   }
 
   // 替换已失效的启动入口，同时保留用户自定义 scripts。

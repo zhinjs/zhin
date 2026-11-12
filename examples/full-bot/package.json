@@ -28,11 +28,12 @@
     "ai": "^7.0.44",
     "react": "^19.2.8",
     "zhin.js": "workspace:*",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "@zhin.js/cli": "workspace:*",
+    "@zhin.js/gateway": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "^19.2.18",
-    "@zhin.js/cli": "workspace:*",
     "typescript": "^6.0.3"
   },
   "engines": {

@@ -105,7 +105,8 @@ Installs a start-on-boot / supervised service. `--user` uses user-level systemd 
 
 ```bash
 zhin console init [--status]
-zhin console init [--database sqlite|mysql|pg|mongodb] [--database-<field> <value> ...] [--database-password-env <VAR>]
+zhin console init [--database sqlite|mysql|pg|mongodb] [--database-<field> <value> ...]
+                  [--database-password-env <VAR> | --database-password-stdin]
                   [--owner <username>] [--display-name <name>] [--password-stdin] [-y]
 zhin console user create <username> [--role viewer] [--display-name <name>] [--password-stdin]
 zhin console user passwd <username> [--password-stdin]
@@ -119,8 +120,9 @@ Console users, roles and API tokens live in the project database ([ADR 0049](../
 - **Who runs them**: while the project's gateway runs, the commands go to it over the local control socket `.zhin/gateway.sock` (a connection counts as the local owner), so a database switch or a new owner takes effect at once. Without a gateway they open the project database directly (offline setup and rescue). A socket that belongs to another system user or does not answer is an error; the command never edits files behind the gateway's back.
 - **`init`** has two steps: choose the database (the current configuration, usually SQLite, is kept by default), then create the first owner. Without flags it asks interactively; `--status` prints the setup state as JSON. Once an owner exists it fails — use `zhin console user` instead.
   - `--database <dialect>` switches database; pass connection fields as `--database-filename`, `--database-host`, `--database-port`, `--database-user`, `--database-database`, `--database-url`, `--database-db-name`, `--database-mode` and so on. The CLI tests the connection first, then writes the configuration and puts secret fields in `.env`.
-  - For the password, reference an existing environment variable with `--database-password-env <VAR>` (the config gets `${VAR}`). `--database-password <value>` leaves the secret in shell history and the process list and is not recommended.
-  - `--owner` plus `--password-stdin` creates the owner non-interactively (the password is the first line of stdin, at least 10 characters); with `-y`, missing flags fail instead of prompting, for scripts.
+  - There are two recommended ways to pass the database password (use only one source): `--database-password-env <VAR>` references an existing environment variable (the config gets `${VAR}`); `--database-password-stdin` reads the first line of stdin, stores it in `.env` and writes `${VAR}` into the config. Together with `--password-stdin`, the first line is the database password and the second the owner password.
+  - `--database-password <value>` still works but is **not recommended**: the secret stays in shell history and the process list (`ps`), and the command prints a warning.
+  - `--owner` plus `--password-stdin` creates the owner non-interactively (the password is the first line of stdin, or the second line together with `--database-password-stdin`; at least 10 characters); with `-y`, missing flags fail instead of prompting, for scripts.
 - **`user`**: `create` binds the global `viewer` role by default, `--role` takes `owner` / `admin` / `operator` / `viewer` or a custom role; `passwd` resets the password and revokes all of the user's sessions; `disable` / `enable` suspend and restore; `list` prints users, state and role bindings. Adapter- or account-scoped bindings are set in the Console's Access pages.
 - `http.token` is only a **bootstrap token**: valid until the first owner exists, refused on every endpoint afterwards.
 
@@ -128,6 +130,10 @@ Console users, roles and API tokens live in the project database ([ADR 0049](../
 # Non-interactive setup in a container or on a server: create the owner before opening the port
 printf '%s\n' "$OWNER_PASSWORD" | zhin console init -y --owner admin --password-stdin
 printf '%s\n' "$VIEWER_PASSWORD" | zhin console user create alice --role viewer --password-stdin
+# Switch to PostgreSQL: database password on line 1, owner password on line 2, neither on the command line
+printf '%s\n%s\n' "$PG_PASSWORD" "$OWNER_PASSWORD" | zhin console init -y --database pg \
+  --database-host db --database-user zhin --database-database zhin \
+  --database-password-stdin --owner admin --password-stdin
 ```
 
 Exit code `0` on success, `1` on failure (already set up, unknown user, database connection failed, missing flags and so on).
@@ -224,6 +230,8 @@ zhin migrate [--dry-run] [--no-install] [--include-pinned]
 ```
 
 Upgrades an older Zhin project to the latest: dependencies, scripts and folder structure. `--dry-run` only prints the plan and ends with "nothing was changed"; `--no-install` skips the final `pnpm install`. Dependencies you locked (exact versions such as `1.1.6`, `link:`, `file:`) are kept unless you pass `--include-pinned`. Full upgrade flow: [Compatibility and migration](../operations/upgrades.md).
+
+In a project directory (one with `zhin.config.*`), `zhin start` needs the CLI and the management gateway in production too, so `zhin migrate` puts `zhin.js`, `@zhin.js/cli` and `@zhin.js/gateway` together in `dependencies`: a package listed only in `devDependencies` moves with its version, a duplicate left in `devDependencies` is removed, and a missing `@zhin.js/gateway` is added (the CLI's dist-tag such as `latest` when it uses one, otherwise the range released together with the running CLI). A `--prod` install therefore keeps everything startup needs. A Plugin package (no project config) keeps the CLI in `devDependencies`. The `zhin runtime migrate` cutover does the same for private (project) packages.
 
 `zhin migrate` never edits config files. When startup reports `configVersion must be 2`, or `zhin doctor` / `zhin config check` flags a v1 config, use `zhin migrate instances`, described [below](#migrate-instances). `zhin runtime migrate` migrates legacy plugin capability code and is unrelated to the config version.
 

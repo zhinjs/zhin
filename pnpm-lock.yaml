@@ -290,6 +290,12 @@ importers:
       '@zhin.js/agent':
         specifier: workspace:*
         version: link:../../packages/im/agent
+      '@zhin.js/cli':
+        specifier: workspace:*
+        version: link:../../basic/cli
+      '@zhin.js/gateway':
+        specifier: workspace:*
+        version: link:../../packages/host/gateway
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../packages/im/tool
@@ -300,9 +306,6 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
-      '@zhin.js/cli':
-        specifier: workspace:*
-        version: link:../../basic/cli
       '@zhin.js/runtime':
         specifier: workspace:*
         version: link:../../packages/im/runtime
@@ -333,12 +336,18 @@ importers:
       '@zhin.js/agent':
         specifier: workspace:*
         version: link:../../packages/im/agent
+      '@zhin.js/cli':
+        specifier: workspace:*
+        version: link:../../basic/cli
       '@zhin.js/components':
         specifier: workspace:*
         version: link:../../packages/toolkit/components
       '@zhin.js/console-contract':
         specifier: workspace:*
         version: link:../../packages/console/plugin-contract
+      '@zhin.js/gateway':
+        specifier: workspace:*
+        version: link:../../packages/host/gateway
       '@zhin.js/jsx':
         specifier: workspace:*
         version: link:../../packages/im/jsx
@@ -373,9 +382,6 @@ importers:
       '@types/react':
         specifier: ^19.2.18
         version: 19.2.18
-      '@zhin.js/cli':
-        specifier: workspace:*
-        version: link:../../basic/cli
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -391,6 +397,12 @@ importers:
       '@zhin.js/agent':
         specifier: workspace:*
         version: link:../../packages/im/agent
+      '@zhin.js/cli':
+        specifier: workspace:*
+        version: link:../../basic/cli
+      '@zhin.js/gateway':
+        specifier: workspace:*
+        version: link:../../packages/host/gateway
       '@zhin.js/skill':
         specifier: workspace:*
         version: link:../../packages/im/skill
@@ -407,9 +419,6 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
-      '@zhin.js/cli':
-        specifier: workspace:*
-        version: link:../../basic/cli
       tsx:
         specifier: ^4.23.1
         version: 4.23.1
@@ -419,6 +428,9 @@ importers:
 
   examples/minimal-bot:
     dependencies:
+      '@zhin.js/cli':
+        specifier: workspace:*
+        version: link:../../basic/cli
       '@zhin.js/command':
         specifier: workspace:*
         version: link:../../packages/im/command
@@ -428,6 +440,9 @@ importers:
       '@zhin.js/components':
         specifier: workspace:*
         version: link:../../packages/toolkit/components
+      '@zhin.js/gateway':
+        specifier: workspace:*
+        version: link:../../packages/host/gateway
       '@zhin.js/middleware':
         specifier: workspace:*
         version: link:../../packages/im/middleware
@@ -441,9 +456,6 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
-      '@zhin.js/cli':
-        specifier: workspace:*
-        version: link:../../basic/cli
       '@zhin.js/runtime':
         specifier: workspace:*
         version: link:../../packages/im/runtime
@@ -465,6 +477,12 @@ importers:
       '@zhin.js/agent-feature':
         specifier: workspace:*
         version: link:../../packages/im/agent-feature
+      '@zhin.js/cli':
+        specifier: workspace:*
+        version: link:../../basic/cli
+      '@zhin.js/gateway':
+        specifier: workspace:*
+        version: link:../../packages/host/gateway
       ai:
         specifier: ^7.0.44
         version: 7.0.44(zod@4.4.3)
@@ -475,9 +493,6 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
-      '@zhin.js/cli':
-        specifier: workspace:*
-        version: link:../../basic/cli
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -517,13 +532,16 @@ importers:
       '@zhin.js/adapter-telegram':
         specifier: workspace:*
         version: link:../../plugins/adapters/telegram
+      '@zhin.js/cli':
+        specifier: workspace:*
+        version: link:../../basic/cli
+      '@zhin.js/gateway':
+        specifier: workspace:*
+        version: link:../../packages/host/gateway
       zhin.js:
         specifier: workspace:*
         version: link:../../packages/im/zhin
     devDependencies:
-      '@zhin.js/cli':
-        specifier: workspace:*
-        version: link:../../basic/cli
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -536,6 +554,12 @@ importers:
       '@zhin.js/adapter-qq':
         specifier: workspace:*
         version: link:../../plugins/adapters/qq
+      '@zhin.js/cli':
+        specifier: workspace:*
+        version: link:../../basic/cli
+      '@zhin.js/gateway':
+        specifier: workspace:*
+        version: link:../../packages/host/gateway
       '@zhin.js/plugin-blackjack':
         specifier: workspace:*
         version: link:../../plugins/games/blackjack
@@ -576,9 +600,6 @@ importers:
         specifier: workspace:*
         version: link:../../packages/im/zhin
     devDependencies:
-      '@zhin.js/cli':
-        specifier: workspace:*
-        version: link:../../basic/cli
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -607,6 +628,12 @@ importers:
       '@zhin.js/adapter-sandbox':
         specifier: workspace:*
         version: link:../../plugins/adapters/sandbox
+      '@zhin.js/cli':
+        specifier: workspace:*
+        version: link:../../basic/cli
+      '@zhin.js/gateway':
+        specifier: workspace:*
+        version: link:../../packages/host/gateway
       zhin.js:
         specifier: workspace:*
         version: link:../../packages/im/zhin
@@ -614,9 +641,6 @@ importers:
       '@types/node':
         specifier: ^25.9.5
         version: 25.9.5
-      '@zhin.js/cli':
-        specifier: workspace:*
-        version: link:../../basic/cli
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -713,6 +737,9 @@ importers:
       '@zhin.js/components':
         specifier: workspace:*
         version: link:../../packages/toolkit/components
+      '@zhin.js/gateway':
+        specifier: workspace:*
+        version: link:../../packages/host/gateway
       '@zhin.js/html-renderer':
         specifier: workspace:*
         version: link:../../packages/toolkit/html-renderer
