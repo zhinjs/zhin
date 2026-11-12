@@ -46,15 +46,45 @@ export enum ConnectionState {
   ERROR = "error",
 }
 
+/** Structured validation feedback a Host error reply may carry (e.g. `gateway.plugins.declare`). */
+export interface ConsoleTransportErrorDetails {
+  /** The Host's own error code (`invalid_input`, `forbidden`, …), when it sent one. */
+  readonly serverCode?: string;
+  readonly errors?: readonly { readonly path: string; readonly message: string }[];
+  readonly missingEnv?: readonly string[];
+}
+
 export class ConsoleTransportError extends Error {
   constructor(
     message: string,
     public code: string,
     public originalError?: Error,
+    public details: ConsoleTransportErrorDetails = {},
   ) {
     super(message);
     this.name = "ConsoleTransportError";
   }
+}
+
+/** Reads the structured fields of a Host error body; unknown shapes are dropped. */
+export function readConsoleErrorDetails(body: unknown): ConsoleTransportErrorDetails {
+  if (!body || typeof body !== 'object') return {};
+  const record = body as Record<string, unknown>;
+  const errors = Array.isArray(record.errors)
+    ? record.errors.flatMap(item => item && typeof item === 'object'
+      && typeof (item as Record<string, unknown>).path === 'string'
+      && typeof (item as Record<string, unknown>).message === 'string'
+      ? [{ path: (item as { path: string }).path, message: (item as { message: string }).message }]
+      : [])
+    : [];
+  const missingEnv = Array.isArray(record.missingEnv)
+    ? record.missingEnv.filter((item): item is string => typeof item === 'string')
+    : [];
+  return {
+    ...(typeof record.code === 'string' ? { serverCode: record.code } : {}),
+    ...(errors.length ? { errors } : {}),
+    ...(missingEnv.length ? { missingEnv } : {}),
+  };
 }
 
 export class ConnectionError extends ConsoleTransportError {

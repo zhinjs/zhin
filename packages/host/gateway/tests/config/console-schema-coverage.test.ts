@@ -48,6 +48,26 @@ describe('complete Console configuration projection through real authorities', (
     expect(await store.readSchema('log_level')).toMatchObject({ type: 'union' });
   });
 
+  it('serves schema:get for an installed but undeclared plugin package with declared: false', async () => {
+    const root = await project();
+    await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'schema-coverage', dependencies: { 'zhin-plugin-pending': '*' },
+      devDependencies: { 'zhin-plugin-dev': '*' }, zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts' } }));
+    for (const name of ['zhin-plugin-pending', 'zhin-plugin-dev']) {
+      const dir = join(root, 'node_modules', name);
+      await mkdir(dir, { recursive: true });
+      await writeFile(join(dir, 'package.json'), JSON.stringify({ name, zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts' } }));
+      await writeFile(join(dir, 'schema.json'), JSON.stringify({ type: 'object', properties: { token: { type: 'string' } }, required: ['token'] }));
+    }
+    const store = new ConsoleConfigurationStore({ projectRoot: root, document: createConfigDocument(join(root, 'zhin.config.json')) });
+    const replies = await dispatchRuntimeConsoleRpc({ type: 'schema:get', requestId: 7, pluginName: 'zhin-plugin-pending' }, {
+      authScope: 'full', listPages: async () => [], getSchema: name => store.readSchema(name),
+    });
+    expect(replies).toContainEqual({ requestId: 7, data: expect.objectContaining({ declared: false, type: 'object',
+      object: { token: expect.objectContaining({ type: 'string', required: true }) } }) });
+    await expect(store.readSchema('zhin-plugin-dev')).rejects.toThrow(/Unknown configuration key/);
+    await expect(store.readSchema('ai')).resolves.not.toHaveProperty('declared');
+  });
+
   it('projects standard constructs from actual published plugin schema files through the catalog', async () => {
     const root = await project(), catalog = new PluginSchemaCatalog(root);
     const plugins = resolve(import.meta.dirname, '../../../../../plugins');

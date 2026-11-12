@@ -546,6 +546,20 @@ export class ConsoleConfigurationStore {
 
   async readSchema(pluginName?: string): Promise<unknown> {
     const {document} = await this.#document.read();
+    if (pluginName && !HOST_CONFIG_KEYS.includes(pluginName)
+      && !readApplicationPluginDeclaration(document).instances.some(item => item.instanceKey === pluginName)) {
+      // Installed but undeclared Plugin package (`needsConfiguration`): read-only form for the declare flow.
+      const undeclared = await this.#schemas.readUndeclared(pluginName, document);
+      if (undeclared !== undefined) {
+        // Package resolution is async: re-check against the latest document so a declaration
+        // committed meanwhile is not reported as `declared: false`.
+        const latest = (await this.#document.read()).document;
+        const stillUndeclared = await this.#schemas.readUndeclared(pluginName, latest);
+        if (stillUndeclared !== undefined) return stillUndeclared;
+        await this.#assertUnambiguousKey(latest, pluginName);
+        return this.#schemas.read(pluginName, latest);
+      }
+    }
     if (pluginName) await this.#assertUnambiguousKey(document, pluginName);
     return this.#schemas.read(pluginName, document);
   }

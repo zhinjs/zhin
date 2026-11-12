@@ -2,7 +2,8 @@
  * Gateway-owned Console RPC on `POST {base}/console/request` (ADR 0054 §4 / §5): the Console
  * sends `{ type, requestId?, data? }`; `gateway.*` types are answered here with the same reply
  * envelope the instance uses (`{ success, data, type, requestId }` / `{ success: false, code,
- * error, requestId }`), every other type is forwarded to the instance by the HTTP server.
+ * error, requestId, errors?, missingEnv? }`, see `GatewayRpcHttpErrorReply`), every other
+ * type is forwarded to the instance by the HTTP server.
  */
 import {
   auditActor,
@@ -11,7 +12,7 @@ import {
   type RouteContext,
   type TokenRegistry,
 } from '@zhin.js/host-http';
-import { GATEWAY_RPC } from '@zhin.js/console-protocol';
+import { GATEWAY_RPC, type GatewayRpcHttpErrorReply } from '@zhin.js/console-protocol';
 import type { GatewayRpcDispatcher } from '../packages/rpc.js';
 
 /** RPC types with this prefix belong to the gateway (unknown ones are refused as unmapped). */
@@ -59,7 +60,9 @@ export function createGatewayConsoleRpc(dispatch: GatewayRpcDispatcher): Gateway
         code: result.error.code,
         error: result.error.message,
         requestId,
-      }, noStore);
+        ...(result.error.errors ? { errors: result.error.errors } : {}),
+        ...(result.error.missingEnv ? { missingEnv: result.error.missingEnv } : {}),
+      } satisfies GatewayRpcHttpErrorReply, noStore);
     },
   });
 }
