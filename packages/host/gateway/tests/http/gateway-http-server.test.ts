@@ -385,7 +385,9 @@ describe('GatewayHttpServer instance availability', () => {
 
     // Gateway-owned routes keep working.
     expect((await fetch(`${origin}/api/gateway/ping`)).status).toBe(200);
-    expect(await (await fetch(`${origin}/pub/health`)).json()).toMatchObject({ instance: { state: 'backoff', ready: false } });
+    const health = await fetch(`${origin}/pub/health`);
+    expect(health.headers.get('cache-control')).toBe('no-store');
+    expect(await health.json()).toMatchObject({ success: true, status: 'ok', instance: { state: 'backoff', ready: false } });
 
     await expect(new Promise((resolve, reject) => {
       const socket = new WebSocket(`${origin.replace('http', 'ws')}/adapter/reverse`);
@@ -426,19 +428,21 @@ describe('GatewayHttpServer instance availability', () => {
     const offline = await fetch(`${origin}/webhook/x`);
     expect(offline.status).toBe(503);
     expect(offline.headers.get('retry-after')).toBe('7');
-    expect(await offline.json()).toMatchObject({ code: 'instance_unavailable', state: 'stopping' });
+    expect(await offline.json()).toEqual({ success: false, code: 'instance_unavailable', requestOutcome: 'not-dispatched', state: 'stopping', error: expect.any(String) });
     transport.handler = async () => { throw new InstanceTransportError('timeout', 'slow'); };
     const timeout = await fetch(`${origin}/webhook/x`);
     expect(timeout.status).toBe(504);
-    expect(await timeout.json()).toMatchObject({ code: 'instance_timeout' });
+    expect(timeout.headers.get('retry-after')).toBeNull();
+    expect(await timeout.json()).toEqual({ success: false, code: 'instance_timeout', requestOutcome: 'unknown', state: 'stopping', error: expect.any(String) });
     transport.handler = async () => { throw new InstanceTransportError('instance-error', 'handler failed'); };
     const failed = await fetch(`${origin}/webhook/x`);
     expect(failed.status).toBe(502);
-    expect(await failed.json()).toMatchObject({ code: 'instance_error' });
+    expect(await failed.json()).toEqual({ success: false, code: 'instance_error', requestOutcome: 'unknown', state: 'stopping', error: expect.any(String) });
     transport.handler = async () => { throw new InstanceTransportError('overloaded', 'busy'); };
     const busy = await fetch(`${origin}/webhook/x`);
     expect(busy.status).toBe(502);
     expect(busy.headers.get('retry-after')).toBe('7');
+    expect(await busy.json()).toMatchObject({ code: 'instance_error', requestOutcome: 'not-dispatched' });
   });
 });
 

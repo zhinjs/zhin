@@ -12,7 +12,7 @@ short_description: Zhin.js Plugin Runtime Sandbox playground
 
 # Zhin.js Playground
 
-在线体验 [Zhin.js](https://github.com/zhinjs/zhin) **Plugin Runtime**（`zhin runtime start`）。
+在线体验 [Zhin.js](https://github.com/zhinjs/zhin) **Plugin Runtime**（`zhin start --foreground`：管理网关 + 受监管的实例）。
 
 - Space：https://huggingface.co/spaces/zhinjs/demo （旧名 `zhinjs/zhin-playground` 会 307 到这里）
 - App：https://zhinjs-demo.hf.space
@@ -20,7 +20,7 @@ short_description: Zhin.js Plugin Runtime Sandbox playground
 ## 怎么玩
 
 1. 打开 App → [/sandbox](https://zhinjs-demo.hf.space/sandbox)（或 [/console](https://zhinjs-demo.hf.space/console) 进沙盒）
-2. 或打开 [console.zhin.dev](https://console.zhin.dev)，API Base 填 `https://zhinjs-demo.hf.space`，Token 填 `zhin-demo`
+2. 或打开 [console.zhin.dev/?apiBaseUrl=https%3A%2F%2Fzhinjs-demo.hf.space](https://console.zhin.dev/?apiBaseUrl=https%3A%2F%2Fzhinjs-demo.hf.space)，用 Space 页面公布的只读账号 `demo` 登录（只能看，写操作返回 403）
 3. 命令以 `/` 开头；AI 对话用前缀 `ai:` / `AI:` / `#`（例如 `ai: 你好`）
 
 ## 可用命令
@@ -37,6 +37,11 @@ short_description: Zhin.js Plugin Runtime Sandbox playground
 ## 说明
 
 - 栈：Plugin Runtime + Sandbox + `@zhin.js/agent`（OpenRouter free）
-- Secret：`OPENROUTER_API_KEY`
+- Secrets（Space → Settings → Variables and secrets）：
+  - `OPENROUTER_API_KEY`：模型 Key
+  - `HTTP_TOKEN`：初始化令牌，只在创建所有者之前有效；**不要公开**。未设置时 `start.sh` 每次启动随机生成一个，只打印到容器日志
+  - `OWNER_PASSWORD`（可选 `OWNER_USERNAME`，默认 `maintainer`）：启动前离线创建所有者，端口开放时初始化已完成，初始化令牌随即失效
+  - `DEMO_PASSWORD`（可选 `DEMO_ROLE`，默认 `viewer`）：创建公开的只读账号 `demo`；建议按 [部署演示站点](https://github.com/zhinjs/zhin/blob/main/docs/operations/demo-deployment.md) 换成去掉数据库 / 文件读权限的自定义角色；要让访客在 `/sandbox` 里发消息，角色还需要 `endpoint.operate`
+- 数据库在容器内（`./data/playground.db`），Space 重启后重置；账号由 `start.sh` 按 Secrets 重新创建
 - 模型声明在 `ai.plan.yml`（首次启动、数据库为空时自动导入）；启动策略在 `zhin.config.yml`（`configVersion: 2`）
 - Host 由 CLI 装配；仓库镜像：[`deploy/huggingface`](https://github.com/zhinjs/zhin/tree/main/deploy/huggingface)

@@ -17,7 +17,7 @@ export interface ConsoleTransportConfig {
   reconnectInterval?: number;
   maxReconnectAttempts?: number;
   requestTimeout?: number;
-  /** Timeout for RPCs that run the package manager (install / update / uninstall). Default 120 s. */
+  /** Timeout for gateway dependency transactions (install / update / uninstall). Default 300 s. */
   packageOperationTimeout?: number;
 }
 

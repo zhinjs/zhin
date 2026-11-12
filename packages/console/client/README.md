@@ -210,7 +210,7 @@ await loadConsoleEntries({ hostApi });
 - `fetchConsoleEntries(options?)` — 仅拉 JSON，不 import
 - `registerConsolePluginsFromEntries(entries, hostApi, ...)` — 已知 entries 列表时注册
 - `getRegisterFn(mod)` — 从动态模块解析 `register` 导出
-- `ConsoleTransport.sendRequest(message, { timeoutMs })` — 单次调用覆盖超时；`installPlugin` / `updatePlugin` / `uninstallPlugin` 默认使用 `packageOperationTimeout`（120 s，可在构造时配置），其余 RPC 使用 `requestTimeout`（10 s）
+- `ConsoleTransport.sendRequest(message, { timeoutMs })` — 单次调用覆盖超时；`installPlugin` / `updatePlugin` / `uninstallPlugin`（网关依赖事务 `gateway.packages.install|update|uninstall`，ADR 0054 §4）默认使用 `packageOperationTimeout`（300 s，可在构造时配置），其余 RPC 使用 `requestTimeout`（10 s）
 
 重复调用 `loadConsoleEntries`（传入同一个 `hostApi` 对象）会对比上一次的结果：已消失的 entry 注册的路由与工具会被移除（需要宿主 API 提供 `removeRoute` / `removeTool`，`createPluginRegisterHostApi` 已提供），未显式指定 `id` 的工具使用 `<entryId>:<name>` 形式的稳定 id，不会在重载时重复。
 

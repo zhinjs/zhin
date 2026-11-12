@@ -250,10 +250,17 @@ describe("ConsoleTransport REST/SSE transport", () => {
     await manager.installPlugin('@zhin.js/adapter-telegram');
     await manager.updatePlugin('@zhin.js/adapter-telegram', '2.0.0');
     await manager.uninstallPlugin('@zhin.js/adapter-telegram');
-    await manager.installPlugin('@zhin.js/adapter-telegram', undefined, { timeoutMs: 300_000 });
+    await manager.installPlugin('@zhin.js/adapter-telegram', {}, { timeoutMs: 600_000 });
     await manager.sendRequest({ type: 'custom' }, { timeoutMs: 1_234 });
 
-    expect(timeout.mock.calls.map(([ms]) => ms)).toEqual([5_000, 120_000, 120_000, 120_000, 300_000, 1_234]);
+    expect(timeout.mock.calls.map(([ms]) => ms)).toEqual([5_000, 300_000, 300_000, 300_000, 600_000, 1_234]);
+    // Package mutations are gateway dependency transactions (ADR 0054 §4), never instance RPC.
+    const bodies = (fetchMock.mock.calls as unknown as [string, RequestInit][]).slice(1, 4).map(([, init]) => JSON.parse(String(init.body)));
+    expect(bodies).toEqual([
+      expect.objectContaining({ type: 'gateway.packages.install', data: { packages: ['@zhin.js/adapter-telegram'] } }),
+      expect.objectContaining({ type: 'gateway.packages.update', data: { packages: ['@zhin.js/adapter-telegram@2.0.0'] } }),
+      expect.objectContaining({ type: 'gateway.packages.uninstall', data: { packages: ['@zhin.js/adapter-telegram'] } }),
+    ]);
 
     const configured = new ConsoleTransport({ fetch: fetchMock, packageOperationTimeout: 60_000 });
     timeout.mockClear();

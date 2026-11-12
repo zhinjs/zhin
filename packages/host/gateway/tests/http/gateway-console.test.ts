@@ -107,6 +107,9 @@ describe('gateway Console access control without an instance (B1.4)', () => {
     // Before setup: bootstrap token only.
     const anonymous = await context.call('GET', '/auth/me');
     expect(anonymous.body.data).toMatchObject({ kind: 'anonymous', setupRequired: true });
+    // The Console checks a pasted bootstrap token here (the instance is offline).
+    expect((await context.call('GET', '/auth/me', undefined, 'setup-token')).body.data).toMatchObject({ kind: 'bootstrap', open: false, setupRequired: true });
+    expect((await context.call('GET', '/auth/me', undefined, 'not-the-token')).body.data).toMatchObject({ kind: 'anonymous' });
     const setup = await context.call('GET', '/auth/setup', undefined, 'setup-token');
     expect(setup.status).toBe(200);
     expect(setup.body.data).toMatchObject({
@@ -130,6 +133,11 @@ describe('gateway Console access control without an instance (B1.4)', () => {
       onboarding: { steps: { owner: 'done' } },
     });
     expect(me.body.data.permissions).toContain('plugin.manage');
+    // API tokens are verified by the gateway too, with the instance offline.
+    const issued = await context.call('POST', '/auth/tokens', { name: 'automation', permissions: ['status.view'] }, login.body.data.token);
+    expect(issued.status).toBe(201);
+    const tokenMe = await context.call('GET', '/auth/me', undefined, issued.body.data.token);
+    expect(tokenMe.body.data).toMatchObject({ kind: 'api-token', user: { username: 'owner' }, permissions: ['status.view'] });
 
     // Gateway RPC works; instance routes do not exist without an instance.
     const users = await context.rpc('iam.users.list', {}, session);

@@ -5,6 +5,7 @@ import {
   type ConsolePluginPermissionLevelResolver,
 } from '@zhin.js/console-protocol';
 import { timingSafeEqualString } from './timing-safe-equal.js';
+import { isLoopbackAddress } from './protocol-auth.js';
 import {
   globalPermissions,
   type ConsoleAccessProvider,
@@ -125,7 +126,10 @@ export class TokenRegistry {
 
   /** Resolves a bearer to a principal; null when it is not (or no longer) valid. */
   async authenticate(token: string, meta: ConsoleRequestMeta = {}): Promise<ConsolePrincipal | null> {
-    if (!this.hasAnyToken()) return openBootstrap;
+    // An open Host (no bootstrap token, no owner) holds every permission, so it is only open to
+    // loopback peers that did not come through a proxy. In-process calls without a peer address
+    // (tests, embedding) stay open.
+    if (!this.hasAnyToken()) return isOpenHostPeer(meta) ? openBootstrap : null;
     if (this.isBootstrapToken(token)) return tokenBootstrap;
     if (!token || !this.#provider) return null;
     try {
@@ -197,4 +201,10 @@ export function extractBearerToken(
 ): string {
   if (authorization?.startsWith('Bearer ')) return authorization.slice(7).trim();
   return queryToken?.trim() ?? '';
+}
+
+/** Who may use an open Host: no proxy hop, and a loopback peer when the address is known. */
+function isOpenHostPeer(meta: ConsoleRequestMeta): boolean {
+  if (meta.forwarded) return false;
+  return meta.ip === undefined || isLoopbackAddress(meta.ip);
 }

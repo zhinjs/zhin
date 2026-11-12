@@ -248,9 +248,6 @@ export const CONSOLE_RPC_PERMISSIONS: Readonly<Record<string, ConsolePermission>
   'plugin:diagnose': P.FEATURE_VIEW,
   'plugin:apply': P.PLUGIN_MANAGE,
   'plugin:verify': P.PLUGIN_MANAGE,
-  'plugin:install': P.PLUGIN_MANAGE,
-  'plugin:uninstall': P.PLUGIN_MANAGE,
-  'plugin:update': P.PLUGIN_MANAGE,
   'plugin:set-enabled': P.FEATURE_TOGGLE,
   // Layered feature configuration (ADR 0050 §8)
   ...FEATURE_RPC_PERMISSIONS,
