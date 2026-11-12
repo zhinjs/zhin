@@ -9,7 +9,8 @@ export function mockCommMessage(overrides: {
   sender_roles?: readonly SenderRole[];
   isMaster?: boolean;
   isTrusted?: boolean;
-  role?: string;
+  /** Platform standing reported by the adapter (`sender.platform.standing`). */
+  role?: 'owner' | 'admin' | 'member' | 'guest';
   extra?: Record<string, unknown>;
 } = {}): Message<{ extra?: Record<string, unknown> }> {
   const scope = overrides.scope ?? 'private';
@@ -32,8 +33,8 @@ export function mockCommMessage(overrides: {
     conversation,
     content: '',
     generation: 1,
-    metadata: overrides.role ? { senderRole: overrides.role } : {},
-    sender: { id: senderId, roles },
+    metadata: {},
+    sender: { id: senderId, roles, ...(overrides.role ? { platform: { standing: overrides.role } } : {}) },
     endpointId: endpoint,
     clientAdapter: adapter,
     extra: overrides.extra,

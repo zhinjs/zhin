@@ -58,8 +58,8 @@ const kit = await PluginTestKit.create({ projectRoot: ${JSON.stringify(project)}
     renderCalls++; return { data: Buffer.from('synthetic-image'), format: 'png', mimeType: 'image/png', width: 1, height: 1 };
   } }); },
 });
-const receive = (content, kind = 'private', roles = []) => kit.receive({
-  content, conversation: { kind, id: 'room' }, sender: { id: 'member', roles },
+const receive = (content, kind = 'private', standing) => kit.receive({
+  content, conversation: { kind, id: 'room' }, sender: { id: 'member', ...(standing ? { platform: { standing } } : {}) },
 });
 try {
   await kit.start();
@@ -76,7 +76,7 @@ try {
   assert.equal(kit.deliveries.at(-1).payload, selected ? '此指令需要管理员权限，请联系管理员。' : '没有权限执行此指令。');
   assert.equal((await receive('restricted', 'group')).status, 'denied');
   assert.equal(kit.deliveries.at(-1).payload, '没有权限执行此指令。');
-  assert.equal((await receive('restricted', 'private', ['admin'])).status, 'executed');
+  assert.equal((await receive('restricted', 'private', 'admin')).status, 'executed');
   assert.equal(kit.deliveries.at(-1).payload, 'admitted');
   assert.equal(kit.deliveries.length, 3);
 
@@ -89,7 +89,7 @@ try {
   else assert.equal(menuPayload[0].type, 'image');
   const buttons = menuPayload.filter(item => item.type === 'keyboard').flatMap(item => item.data.rows.flat());
   assert.deepEqual(buttons.map(button => button.disabled), [true, false]);
-  await kit.receive({ content: '', conversation: { kind: 'private', id: 'room' }, sender: { id: 'member', roles: [] },
+  await kit.receive({ content: '', conversation: { kind: 'private', id: 'room' }, sender: { id: 'member' },
     segments: [{ type: 'action', data: { id: 'next', payload: buttons[1].payload } }],
   });
   if (selected) assert.match(kit.deliveries.at(-1).payload[0].data.text, /第 2\\/2 页/);

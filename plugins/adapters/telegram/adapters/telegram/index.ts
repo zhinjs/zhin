@@ -34,6 +34,8 @@ export default defineAdapter<TelegramEndpointConfig>({
       },
       delivery: { send: true, proactive: true, spool: true },
     },
+    // ADR 0056 §1：群消息经 getChatMember 上报 creator / administrator / member，管理员 can_* 权限进 permissions。
+    group: { scene: { platformStanding: { standing: true, permissions: true } } },
   },
   createAdapter: context => new TelegramAdapter(context),
 });

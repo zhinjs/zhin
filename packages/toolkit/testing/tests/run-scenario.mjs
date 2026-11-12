@@ -55,21 +55,21 @@ try {
       s.assertions.deliveries = [[{ type: 'text', data: { text: 'deliberately-wrong-expected-output' } }]];
       return s;
     })()],
-    ['case-3-denied-empty-roles', (() => {
+    ['case-3-denied-member-standing', (() => {
       const s = structuredClone(baseScene);
       s.assertions = { dispatchStatus: 'denied', deliveries: ['没有权限执行此指令。'] };
-      s.sender.roles = [];
+      s.sender.platform = { standing: 'member' };
       return s;
     })()],
-    ['case-4-denied-omitted-roles', (() => {
+    ['case-4-denied-omitted-standing', (() => {
       const s = structuredClone(baseScene);
       s.assertions = { dispatchStatus: 'denied', deliveries: ['没有权限执行此指令。'] };
-      delete s.sender.roles;
+      delete s.sender.platform;
       return s;
     })()],
     ['case-5-unmatched', (() => {
       const s = structuredClone(baseScene);
-      delete s.sender.roles;
+      delete s.sender.platform;
       s.input = 'not-a-command';
       s.assertions = { dispatchStatus: 'unmatched', deliveries: [] };
       return s;
@@ -78,7 +78,7 @@ try {
       const s = structuredClone(baseScene);
       s.fixture.config.plugin = { commandPrefix: '/' };
       s.input = 'hello';
-      s.sender.roles = ['admin'];
+      s.sender.platform = { standing: 'admin' };
       s.assertions = { dispatchStatus: 'unmatched', deliveries: [] };
       return s;
     })()],
@@ -86,7 +86,7 @@ try {
       const s = structuredClone(baseScene);
       s.fixture.config.plugin = { commandPrefix: '/' };
       s.input = '/hello';
-      s.sender.roles = ['admin'];
+      s.sender.platform = { standing: 'admin' };
       s.assertions = { dispatchStatus: 'executed', deliveries: [[{ type: 'text', data: { text: '你好，测试成员' } }]] };
       return s;
     })()],
@@ -114,8 +114,8 @@ try {
     for (const passed of [
       'case-0-missing-env',
       'case-1-default',
-      'case-3-denied-empty-roles',
-      'case-4-denied-omitted-roles',
+      'case-3-denied-member-standing',
+      'case-4-denied-omitted-standing',
       'case-5-unmatched',
       'case-6-prefix-unmatched',
       'case-7-prefix-executed',

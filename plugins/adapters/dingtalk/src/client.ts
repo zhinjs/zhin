@@ -293,7 +293,8 @@ export class DingTalkClient extends EventEmitter {
       ...(senderId ? { sender: {
         id: senderId,
         name: event.senderNick || undefined,
-        ...(permit.role ? { roles: [permit.role] } : {}),
+        // ADR 0056 §1：群聊回调的 isAdmin → standing（admin / member）；单聊不上报。
+        ...(chatType === 'group' && (permit.role === 'admin' || permit.role === 'member') ? { platform: { standing: permit.role } } : {}),
       } } : {}),
       endpointId: this.#options.config.id,
       ...(isDingtalkBotMentioned(event, this.#options.config.robotCode) ? { mentioned: true } : {}),

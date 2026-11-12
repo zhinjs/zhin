@@ -29,13 +29,13 @@ describe('resolveTurnUserMessage', () => {
   });
 
   it('群聊添加结构化 sender 前缀（roles）', () => {
-    const commMessage = ({ ...mockCommMessage({ adapter: 'qq', endpoint: 'b1', senderId: '12345', scope: 'group', sceneId: 'g1', role: 'admin' }), sender: { id: '12345', name: 'Alice', roles: ['user'] } } as AgentTurnMessage);
+    const commMessage = ({ ...mockCommMessage({ adapter: 'qq', endpoint: 'b1', senderId: '12345', scope: 'group', sceneId: 'g1', role: 'admin' }), sender: { id: '12345', name: 'Alice', roles: ['user'], platform: { standing: 'admin' } } } as AgentTurnMessage);
     const out = resolveUserText(commMessage, '你好');
     expect(out).toMatch(/^\[user_id:12345;name:Alice;role:admin;date:[\d-]+;time:\d{2}:\d{2};\]\n你好$/u);
   });
 
   it('prepareUserContentForSession 返回干净正文与 actor', () => {
-    const commMessage = ({ ...mockCommMessage({ adapter: 'qq', endpoint: 'b1', senderId: '12345', scope: 'group', sceneId: 'g1', role: 'admin' }), sender: { id: '12345', name: 'Alice', roles: ['user'] } } as AgentTurnMessage);
+    const commMessage = ({ ...mockCommMessage({ adapter: 'qq', endpoint: 'b1', senderId: '12345', scope: 'group', sceneId: 'g1', role: 'admin' }), sender: { id: '12345', name: 'Alice', roles: ['user'], platform: { standing: 'admin' } } } as AgentTurnMessage);
     const prepared = prepareUserContentForSession(commMessage, '你好');
     expect(prepared.content).toBe('你好');
     expect(prepared.actor.subjectId).toBe('12345');
@@ -43,16 +43,13 @@ describe('resolveTurnUserMessage', () => {
     expect(prepared.actor.roles).toContain('scene_admin');
   });
 
-  it('从真实 sender.roles 与 metadata.role 读取平台角色', () => {
+  it('只从 sender.platform.standing 读取平台角色，忽略 metadata（ADR 0056 §1）', () => {
     const commMessage = ({
       ...mockCommMessage({ adapter: 'discord', endpoint: 'b1', senderId: '12345', scope: 'group', sceneId: 'g1' }),
-      sender: { id: '12345', name: 'Alice', roles: ['user', 'owner'] },
-      metadata: { role: 'admin' },
+      sender: { id: '12345', name: 'Alice', roles: ['user'], platform: { standing: 'owner' } },
+      metadata: { role: 'admin', senderRole: 'admin' },
     } as AgentTurnMessage);
-    expect(prepareUserContentForSession(commMessage, 'hello').actor.roles).toEqual([
-      'scene_owner',
-      'scene_admin',
-    ]);
+    expect(prepareUserContentForSession(commMessage, 'hello').actor.roles).toEqual(['scene_owner']);
   });
 
   it('actor 保留稳定身份原值，展示转义只发生在 LLM 边界', () => {

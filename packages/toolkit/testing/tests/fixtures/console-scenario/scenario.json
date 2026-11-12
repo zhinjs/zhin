@@ -17,9 +17,9 @@
   "sender": {
     "id": "test-author",
     "name": "测试成员",
-    "roles": [
-      "admin"
-    ]
+    "platform": {
+      "standing": "admin"
+    }
   },
   "input": "hello",
   "preview": [

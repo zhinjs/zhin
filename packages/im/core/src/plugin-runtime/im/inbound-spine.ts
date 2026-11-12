@@ -1,7 +1,7 @@
 import type { EndpointEvent } from '@zhin.js/adapter';
 import { bindOperationInput, operationInputBinding } from '@zhin.js/feature-kit';
 import type { HandlerDispatchOptions } from '@zhin.js/handler';
-import type { ConversationRef, DeliveryReceipt, UserInteraction, UserInteractionFactory } from '@zhin.js/im-contract';
+import type { ConversationRef, DeliveryReceipt, PlatformStandingLevel, UserInteraction, UserInteractionFactory } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
   MiddlewareIndex,
@@ -98,8 +98,8 @@ export interface GroupRuleViolationReport {
   readonly conversation: ConversationRef;
   readonly memberId: string;
   readonly memberName?: string;
-  /** 入站消息上的平台角色（群主 / 管理员豁免）。 */
-  readonly memberRoles?: readonly unknown[];
+  /** 入站消息上的平台身份 `sender.platform.standing`（群主 / 管理员豁免，ADR 0056 §1）。 */
+  readonly memberStanding?: PlatformStandingLevel;
   readonly trigger: GroupRuleViolationTrigger;
   /** 原消息发出时间（毫秒）。 */
   readonly sentAt: number;

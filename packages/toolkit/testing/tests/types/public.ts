@@ -2,8 +2,10 @@ import { PluginTestKit, type TestDelivery, type TestReloadResult } from '../../s
 
 declare const kit: PluginTestKit;
 const received = kit.receive({ endpoint: 'test', content: 'checkin',
-  conversation: { kind: 'group', id: 'g1' }, sender: { id: 'u1', roles: ['admin'] } });
+  conversation: { kind: 'group', id: 'g1' }, sender: { id: 'u1', platform: { standing: 'admin' } } });
 void received;
+// @ts-expect-error Adapters report the platform standing; framework roles are never adapter input (ADR 0056 §1).
+void kit.receive({ content: 'x', conversation: { kind: 'group', id: 'g1' }, sender: { id: 'u1', roles: ['master'] } });
 void kit.send({ conversation: { kind: 'private', id: 'u1' }, content: 'hello' });
 void kit.patchConfig([{ op: 'set', path: ['plugin', 'enabled'], value: true }]);
 const captures: readonly TestDelivery[] = kit.deliveries;

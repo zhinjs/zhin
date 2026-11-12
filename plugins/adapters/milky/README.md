@@ -114,3 +114,7 @@ milky:
 ## 许可证
 
 MIT License
+
+## 成员身份
+
+群消息的 `group_member.role`（`owner` / `admin` / `member`）归一为 `sender.platform.standing`；私聊、临时会话不上报。Milky 没有平台原生角色与权限位。能力画像：`group.scene.platformStanding = { standing: true }`。详见 [ADR 0056 §1](https://github.com/zhinjs/zhin/blob/main/docs/adr/0056-chat-roles.md)。

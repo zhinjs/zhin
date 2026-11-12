@@ -28,13 +28,13 @@
  */
 import { randomUUID } from 'node:crypto';
 import type { GroupRuleDefaultOutcome, GroupRuleViolationTrigger } from '@zhin.js/core/runtime';
+import { isPlatformManager, type PlatformStandingLevel } from '@zhin.js/im-contract';
 import {
   DEFAULT_GROUP_RULE_WINDOW_MS,
   GROUP_RULE_TRIGGERS,
   groupRuleContentHash,
   groupRuleHashShort,
   normalizeGroupRuleSpec,
-  sceneRoleOf,
   speakBlock,
   speakBlockReasonCode,
   type AiControlPlane,
@@ -105,8 +105,8 @@ export interface GroupRuleViolation {
   readonly groupId: string;
   readonly memberId: string;
   readonly memberName?: string;
-  /** 入站消息上的平台角色（群主 / 管理员实时判定）。 */
-  readonly memberRoles?: readonly unknown[];
+  /** 入站消息上的平台身份 `sender.platform.standing`（群主 / 管理员实时判定）。 */
+  readonly memberStanding?: PlatformStandingLevel;
   readonly trigger: GroupRuleTrigger;
   /** 原消息发出时间（毫秒）；早于上次提醒送达的消息不推进阶梯。 */
   readonly sentAt: number;
@@ -335,7 +335,7 @@ export class GroupRuleEnforcer {
     }
 
     // 2. 豁免。
-    if ((rule.exempt.ownerAndAdmins && sceneRoleOf(violation.memberRoles)) || rule.exempt.userIds.includes(violation.memberId)) {
+    if ((rule.exempt.ownerAndAdmins && isPlatformManager(violation.memberStanding ? { standing: violation.memberStanding } : undefined)) || rule.exempt.userIds.includes(violation.memberId)) {
       return skip('rule_hit_exempt');
     }
 
@@ -777,8 +777,8 @@ export interface GroupRuleCommandInput {
   /** 平台原生会话 id。 */
   readonly sceneId: string;
   readonly senderId: string;
-  /** 入站消息上的平台角色（群主 / 管理员实时判定）。 */
-  readonly senderRoles: readonly unknown[] | undefined;
+  /** 入站消息上的平台身份 `sender.platform.standing`（群主 / 管理员实时判定）。 */
+  readonly senderStanding: PlatformStandingLevel | undefined;
   readonly endpoint?: string;
   /** 已去掉命令前缀的文本；不是命令时为 undefined。 */
   readonly commandText: string | undefined;
@@ -893,7 +893,7 @@ export class GroupRuleImChannel {
   }
 
   #isApprover(input: GroupRuleCommandInput): boolean {
-    if (sceneRoleOf(input.senderRoles)) return true;
+    if (isPlatformManager(input.senderStanding ? { standing: input.senderStanding } : undefined)) return true;
     const settings = this.#deps.imApproval?.();
     return settings ? imApproversFor(settings, input.platform).includes(input.senderId.trim()) : false;
   }

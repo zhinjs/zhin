@@ -18,7 +18,7 @@ function harness(options: { approvers?: string[]; control?: AiControlPlane } = {
   });
   const stop = channel.start();
   const command = (text: string, overrides: Partial<GroupRuleCommandInput> = {}) => channel.handleCommand({
-    platform: 'icqq', scope: 'group', sceneId: '123', senderId: 'u-1', senderRoles: ['admin'], endpoint: '10086', commandText: text, ...overrides,
+    platform: 'icqq', scope: 'group', sceneId: '123', senderId: 'u-1', senderStanding: 'admin', endpoint: '10086', commandText: text, ...overrides,
   });
   const submitted = async () => {
     const created = await store.create({ ...scene, ...spec, createdBy: 'u-9', createdVia: 'model' });
@@ -58,9 +58,9 @@ describe('group rule IM channel', () => {
     const { store, command, submitted } = harness({ approvers: ['u-7'] });
     const rule = await submitted();
     const code = groupRuleHashShort(rule.contentHash);
-    expect(await command(`rule approve ${code}`, { senderId: 'u-2', senderRoles: ['user'] })).toContain('只有本群群主或管理员');
+    expect(await command(`rule approve ${code}`, { senderId: 'u-2', senderStanding: 'member' })).toContain('只有本群群主或管理员');
     expect((await store.get(rule.id))!.status).toBe('pending');
-    expect(await command(`rule approve ${code}`, { senderId: 'u-7', senderRoles: ['user'] })).toContain('已生效');
+    expect(await command(`rule approve ${code}`, { senderId: 'u-7', senderStanding: 'member' })).toContain('已生效');
   });
 
   it('only settles in the rule\'s own group and with a matching code', async () => {
@@ -88,9 +88,9 @@ describe('group rule IM channel', () => {
     expect((await store.get(first.id))!.status).toBe('rejected');
     const second = await submitted();
     await command(`rule approve ${groupRuleHashShort(second.contentHash)}`);
-    expect(await command('rules', { senderRoles: ['user'] })).toContain('生效中');
-    expect(await command('rule disable advertising', { senderRoles: ['user'] })).toContain('只有本群群主或管理员');
-    expect(await command('rule disable advertising', { senderRoles: ['owner'] })).toContain('已停用');
+    expect(await command('rules', { senderStanding: 'member' })).toContain('生效中');
+    expect(await command('rule disable advertising', { senderStanding: 'member' })).toContain('只有本群群主或管理员');
+    expect(await command('rule disable advertising', { senderStanding: 'owner' })).toContain('已停用');
     expect(await store.getActive({ ...scene, trigger: 'advertising' })).toBeNull();
     expect(await command('rules')).toContain('还没有');
   });

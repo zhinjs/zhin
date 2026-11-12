@@ -29,6 +29,7 @@ import {
   isMessageEvent,
   onebot11InboundConversation,
   senderDisplayName,
+  onebot11SenderStanding,
   senderUserId,
   type OneBot11Event,
   type OneBot11WsConfig,
@@ -192,6 +193,7 @@ export class OneBot11WsEndpoint extends Onebot11Client implements Endpoint {
     const conversation = { ...onebot11InboundConversation(String(this.#options.id), ev), endpoint: this[endpointSpec].identity };
     const content = formatInboundContent(ev);
     const inbound = formatInboundMetadata(ev, this.#options.config.id);
+    const platform = onebot11SenderStanding(ev);
     void this[endpointSpec].events.message({
       event: ev,
       ...(typeof ev.time === 'number' ? { platformSentAt: ev.time * 1000 } : {}),
@@ -201,7 +203,7 @@ export class OneBot11WsEndpoint extends Onebot11Client implements Endpoint {
       sender: {
         id: senderUserId(ev),
         name: senderDisplayName(ev) || undefined,
-        ...(ev.sender?.role ? { roles: [ev.sender.role] } : {}),
+        ...(platform ? { platform } : {}),
       },
       endpointId: inbound.endpointId,
       ...(inbound.mentioned ? { mentioned: true } : {}),

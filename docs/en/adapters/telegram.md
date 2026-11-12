@@ -44,7 +44,7 @@ Outbound: `send({ conversation, payload })` -> Telegram Bot API (chat_id is `con
 
 ### Platform Permissions (platform permit)
 
-- Sender role has been restored: for group messages, inbound uses `getChatMember` (60s cache) to resolve the sender, writing to `metadata.senderRole` / `metadata.senderPermissions`.
+- Member standing: for group messages, inbound uses `getChatMember` (60s cache) and reports `sender.platform` (`creator` → `owner`, `administrator` → `admin` with its `can_*` rights in `permissions`, `left` / `kicked` → `guest`; ADR 0056 §1).
 - `plugin.ts` registers a checker during generation setup and unregisters on dispose; Plugin Runtime CapabilityIngress and ToolSystem uniformly consume `permissions` via Core's `canAccessTool()`.
 
 ## Prerequisites

@@ -9,6 +9,7 @@
  */
 import { createHash } from 'node:crypto';
 import { assertInstanceTable } from '@zhin.js/database';
+import { normalizePlatformStanding } from '@zhin.js/im-contract';
 import {
   featureKeyLevel, formatFeatureResolutionKey, parseFeatureConversationKey, parseFeatureResolutionKey, resolveEndpointFeatureKey,
   type DatabaseHost, type DatabaseHostModel, type FeatureConfigLevel, type RuntimeSnapshot,
@@ -53,7 +54,7 @@ export interface ChatRoleEntry extends ChatIdentity {
   readonly detail?: string;
 }
 
-/** Normalized platform standing (ADR 0056 §1); derived from `sender.roles` strings until adapters report it. */
+/** Normalized platform standing (ADR 0056 §1), as reported in `sender.platform`. */
 export interface ChatPlatformStanding {
   readonly standing?: 'owner' | 'admin' | 'member' | 'guest';
   readonly roles?: readonly Readonly<{ id: string; name?: string }>[];
@@ -296,16 +297,9 @@ export class ChatRoleService {
 
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 
-/**
- * Interim platform standing from the adapter-reported `sender.roles` strings (`owner` / `admin`).
- * The follow-up replaces this with the normalized `sender.platform` (ADR 0056 §1).
- */
+/** The adapter-reported, ingress-normalized `sender.platform` (ADR 0056 §1); nothing else counts. */
 export function platformStandingFromSender(sender: unknown): ChatPlatformStanding | undefined {
-  if (record(sender) && record(sender.platform) && typeof sender.platform.standing === 'string') return sender.platform as ChatPlatformStanding;
-  const roles = record(sender) && Array.isArray(sender.roles) ? sender.roles.filter((role): role is string => typeof role === 'string') : [];
-  if (roles.includes('owner')) return { standing: 'owner' };
-  if (roles.includes('admin')) return { standing: 'admin' };
-  return undefined;
+  return record(sender) ? normalizePlatformStanding(sender.platform) : undefined;
 }
 
 /** Identity + context of a message's sender; undefined outside a keyed conversation. */

@@ -14,7 +14,12 @@ export type OperationScene =
 export interface OperationSender {
   readonly id: string;
   readonly name?: string;
-  readonly platformRoles?: readonly string[];
+  /** ADR 0056 §1 normalized platform standing (structural mirror of `@zhin.js/im-contract` PlatformStanding). */
+  readonly platform?: Readonly<{
+    standing: 'owner' | 'admin' | 'member' | 'guest';
+    roles?: readonly Readonly<{ id: string; name?: string }>[];
+    permissions?: readonly string[];
+  }>;
   readonly authorizationRoles?: readonly string[];
 }
 export interface OperationMessageRef {

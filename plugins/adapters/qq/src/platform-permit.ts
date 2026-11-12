@@ -1,6 +1,7 @@
 /**
  * QQ 官方频道 platform permit（guild/channel，非 QQ 群 group_*）
  */
+import type { PlatformStanding } from '@zhin.js/im-contract';
 import type { PermissionSubject } from '@zhin.js/permission';
 
 const ADAPTER = 'qq';
@@ -37,25 +38,31 @@ export function normalizeQqGuildSenderForPermit(input: {
 }
 
 /**
- * QQ 官方频道事件 `member.roles` 中的内置身份 id：4 = 频道主，2 = 超级管理员。
- * 事件已自带，无需额外 API；其余 id（含 5 子频道管理员）不视为 admin。
+ * QQ 官方频道事件 `member.roles` 中的内置身份 id：4 = 频道主，2 = 超级管理员，
+ * 5 = 子频道管理员，1 = 普通成员。事件已自带，无需额外 API；5 不视为 admin。
  */
 const QQ_GUILD_OWNER_ROLE_ID = '4';
 const QQ_GUILD_ADMIN_ROLE_ID = '2';
+const QQ_GUILD_BUILTIN_ROLE_NAMES: Readonly<Record<string, string>> = Object.freeze({
+  '1': '普通成员',
+  '2': '超级管理员',
+  '4': '频道主',
+  '5': '子频道管理员',
+});
 
-/** 入站角色投影：规范角色 owner / admin 进 roles，原始角色 id 进 permissions（`role:<id>`）。 */
-export function projectQqGuildSenderRoles(authorRoles: readonly string[] | undefined): {
-  role?: 'owner' | 'admin';
-  permissions: string[];
-} {
-  const ids = authorRoles ?? [];
-  const projected = normalizeQqGuildSenderForPermit({
-    roles: ids.map((id) => `role:${id}`),
-    isOwner: ids.includes(QQ_GUILD_OWNER_ROLE_ID),
-    isAdmin: ids.includes(QQ_GUILD_ADMIN_ROLE_ID),
-  });
-  const role = projected.role === 'owner' || projected.role === 'admin' ? projected.role : undefined;
-  return { ...(role ? { role } : {}), permissions: projected.permissions ?? [] };
+/**
+ * ADR 0056 §1 入站平台身份：频道主 / 超级管理员 → `owner` / `admin`，其余为 `member`；
+ * 原始身份组 id 进 `roles`（内置身份带名称）。事件不带身份组（如 QQ 群、单聊）时不上报。
+ * QQ 官方事件没有权限位，`permissions` 不上报。
+ */
+export function projectQqGuildSenderStanding(authorRoles: readonly string[] | undefined): PlatformStanding | undefined {
+  if (!authorRoles?.length) return undefined;
+  const ids = [...new Set(authorRoles.map(String).filter(Boolean))];
+  const standing = ids.includes(QQ_GUILD_OWNER_ROLE_ID) ? 'owner' : ids.includes(QQ_GUILD_ADMIN_ROLE_ID) ? 'admin' : 'member';
+  return {
+    standing,
+    roles: ids.map((id) => (QQ_GUILD_BUILTIN_ROLE_NAMES[id] ? { id, name: QQ_GUILD_BUILTIN_ROLE_NAMES[id] } : { id })),
+  };
 }
 
 export function checkQqPlatformPermit(perm: string, subject: PermissionSubject): boolean {

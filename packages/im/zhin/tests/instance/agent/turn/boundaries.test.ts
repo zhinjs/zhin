@@ -490,16 +490,16 @@ describe('canonical IM TurnRequest ingress', () => {
     }), text: 'x', roles: { isMaster: false, isTrusted: false } }, options)).toThrow('endpoint identity');
   });
 
-  it('preserves platform roles alongside framework trust roles', () => {
+  it('preserves the platform standing alongside framework trust roles', () => {
     const message = makeMessage({
-      content: 'x', sender: { id: 'u', roles: ['owner', 'admin'] }, metadata: { endpoint: 'bot' },
+      content: 'x', sender: { id: 'u', platform: { standing: 'owner' } }, metadata: { endpoint: 'bot', role: 'admin' },
     });
     const request = createRuntimeTurnRequest({ message, text: 'x', roles: {
       isMaster: false,
       isTrusted: true,
     } }, { traceId: 't', turnId: 'u', signal: new AbortController().signal, projectRoot: '/workspace', workspaceRoot: '/workspace', ports: {}, intent: { kind: 'new' } });
-    expect(request.principal.roles).toEqual(['owner', 'admin', 'trusted']);
-    expect(request.policy.permissions).toEqual(['owner', 'admin', 'trusted']);
+    expect(request.principal.roles).toEqual(['owner', 'trusted']);
+    expect(request.policy.permissions).toEqual(['owner', 'trusted']);
   });
 
   it('uses a trusted Workroom envelope without exposing ordinary conversation context', () => {

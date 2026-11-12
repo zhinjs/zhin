@@ -20,8 +20,8 @@ function mockMsg(sender: { role?: string; permissions?: string[] }) {
     clientAdapter: 'discord',
     endpointId: 'bot1',
     conversation: { endpoint: { adapter: 'discord', id: 'bot1' }, kind: 'group', id: 'g1' },
-    sender: { id: 'u1', roles: sender.role ? [sender.role] : [] },
-    metadata: { role: sender.role, permissions: sender.permissions },
+    sender: { id: 'u1', ...(sender.role ? { platform: { standing: sender.role, permissions: sender.permissions } } : {}) },
+    metadata: {},
   } as any;
 }
 

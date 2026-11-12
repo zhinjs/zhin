@@ -25,12 +25,16 @@ export function resolveRouletteFlow(context: RouletteCapabilityContext): Roulett
   };
 }
 
-/** Framework roles (master / trusted / user) of whoever sent the message. */
+/**
+ * Framework roles (master / trusted / user) of whoever sent the message, plus the platform
+ * standing (`owner` / `admin` / `member` / `guest`, ADR 0056 §1 `sender.platform`).
+ */
 export function senderRolesOf(input: unknown): readonly string[] {
   if (!input || typeof input !== 'object') return [];
   const sender = (input as { readonly sender?: unknown }).sender;
   if (!sender || typeof sender !== 'object') return [];
   const roles = (sender as { readonly roles?: unknown }).roles;
-  if (!Array.isArray(roles)) return [];
-  return roles.filter((role): role is string => typeof role === 'string');
+  const framework = Array.isArray(roles) ? roles.filter((role): role is string => typeof role === 'string') : [];
+  const platform = (sender as { readonly platform?: { readonly standing?: unknown } }).platform;
+  return typeof platform?.standing === 'string' ? [...framework, platform.standing] : framework;
 }

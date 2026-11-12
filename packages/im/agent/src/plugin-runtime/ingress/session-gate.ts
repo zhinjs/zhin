@@ -27,10 +27,8 @@ export async function observeSessionAndCheckSpeak(input: SessionGateInput): Prom
   if (!sessions || !input.platform || !input.sceneId) return null;
   try {
     const metadata = (message.metadata ?? {}) as Record<string, unknown>;
-    const roles = [
-      ...((message.sender as { roles?: readonly unknown[] } | undefined)?.roles ?? []),
-      ...(Array.isArray(metadata.roles) ? metadata.roles : []),
-    ];
+    // ADR 0056 §1: the sender's platform standing is the only source of owner / admin.
+    const roles = message.sender?.platform ? [message.sender.platform.standing] : [];
     const selfIds = [input.endpointId, metadata.selfId, metadata.self_id]
       .filter((value): value is string | number => typeof value === 'string' || typeof value === 'number')
       .map(String);

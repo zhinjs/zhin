@@ -196,13 +196,13 @@ describe('Command Feature', () => {
         id: '12345',
       },
       content: 'who',
-      sender: { id: '1659488338', name: '凉菜', roles: ['admin'] },
+      sender: { id: '1659488338', name: '凉菜', platform: { standing: 'admin' } },
       metadata: {
         endpoint: '1689919782',
         channelType: 'group',
         channelName: '测试群',
         nickname: '凉菜',
-        senderRole: 'admin',
+        senderRole: 'owner',
       },
     } });
 
@@ -263,7 +263,7 @@ describe('Command Feature', () => {
     const session: OperationSession<'command-test'> = {
       adapterName: 'command-test', adapter: {}, endpoint: client,
       scene: { endpoint: { adapter: 'adapter-owner', id: 'canonical' }, kind: 'group', id: 'room', name: 'canonical room' },
-      sender: { id: 'speaker', platformRoles: ['admin'], authorizationRoles: ['trusted'] }, message: { text: 'original', receivedAt: 100 }, event: native,
+      sender: { id: 'speaker', platform: { standing: 'admin' }, authorizationRoles: ['trusted'] }, message: { text: 'original', receivedAt: 100 }, event: native,
       signal: new AbortController().signal, reply: async () => undefined,
     };
     const contexts: unknown[] = [];

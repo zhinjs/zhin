@@ -1,7 +1,7 @@
 import type { EndpointChildLease, EndpointEvent, PeerRegistry } from '@zhin.js/adapter';
 import type { CommandExecutionBudget, CommandOperationController } from '@zhin.js/command/internal/execution';
 import type { OperationResourceView } from '@zhin.js/feature-kit';
-import type { DeliveryReceipt, UserInteraction } from '@zhin.js/im-contract';
+import { normalizePlatformStanding, type DeliveryReceipt, type UserInteraction } from '@zhin.js/im-contract';
 import { formatCompact, getLogger, truncatePreview } from '@zhin.js/logger';
 import type {
   CapabilityId,
@@ -162,7 +162,10 @@ export class InboundRuntime {
         ...(source.payload.conversation.parent ? { parent: Object.freeze({ ...source.payload.conversation.parent }) } : {}),
         endpoint: Object.freeze({ id: source.endpoint.id, adapter: adapters.clientAdapter(adapter) }),
       });
-      const input = Object.freeze({ ...source.payload, conversation,
+      const sender = adapterSender(source.payload.sender);
+      const { sender: _payloadSender, ...payload } = source.payload;
+      const input = Object.freeze({ ...payload, conversation,
+        ...(sender ? { sender } : {}),
         ...(source.payload.message ? { message: Object.freeze({ ...source.payload.message, conversation }) } : {}),
       });
       this.context.diagnostics?.identify(conversation);
@@ -268,7 +271,6 @@ export class InboundRuntime {
       });
       const execute = async (): Promise<MessageDispatchResult> => {
         const segments = input.segments ? Object.freeze([...input.segments]) : undefined;
-        const platformRoles = input.sender?.roles?.filter(role => role !== 'master' && role !== 'trusted' && role !== 'user');
         const authorizationRoles = enrichedSender?.roles?.filter(role => role === 'master' || role === 'trusted' || role === 'user');
         const message = new RuntimeMessage(
           {
@@ -305,7 +307,7 @@ export class InboundRuntime {
                     sender: Object.freeze({
                       id: enrichedSender.id,
                       ...(enrichedSender.name !== undefined ? { name: enrichedSender.name } : {}),
-                      ...(platformRoles ? { platformRoles: Object.freeze(platformRoles) } : {}),
+                      ...(enrichedSender.platform ? { platform: enrichedSender.platform } : {}),
                       ...(authorizationRoles
                         ? { authorizationRoles: Object.freeze(authorizationRoles) }
                         : {}),
@@ -547,4 +549,18 @@ export class InboundRuntime {
       try { endpointLease?.release(); } finally { this.context.release(lease); }
     }
   }
+}
+
+/**
+ * ADR 0056 §1: an Adapter reports `id`, `name` and the normalized `platform` standing only.
+ * Framework roles (`roles`) come from the runtime's sender enrichment, never from the payload.
+ */
+function adapterSender(sender: MessageSenderRef | undefined): MessageSenderRef | undefined {
+  if (!sender || typeof sender !== 'object' || typeof sender.id !== 'string') return sender;
+  const platform = normalizePlatformStanding((sender as { platform?: unknown }).platform);
+  return Object.freeze({
+    id: sender.id,
+    ...(sender.name !== undefined ? { name: sender.name } : {}),
+    ...(platform ? { platform } : {}),
+  });
 }

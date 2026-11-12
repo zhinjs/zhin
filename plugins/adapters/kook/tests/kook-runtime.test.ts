@@ -340,7 +340,7 @@ describe('kook plugin runtime adapter', () => {
     await endpoint.stop();
   });
 
-  it('projects guild owner / admin-role holders as canonical roles and keeps role ids out of roles', async () => {
+  it('projects guild owner / admin-role holders as the normalized platform standing', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
     const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
     const mock = createMockClient();
@@ -373,11 +373,11 @@ describe('kook plugin runtime adapter', () => {
     const results = receive.mock.calls.map((call) =>
       checkBuiltinPermit('role(owner,admin,master)', toPermissionSubject(call[0])));
     expect(results).toEqual(cases.map(([, , expected]) => expected));
-    const adminPayload = receive.mock.calls[1]![0] as { sender: { roles: string[]; permissions: string[] } };
-    expect(adminPayload.sender.roles).toEqual(['admin']);
-    expect(adminPayload.sender.permissions).toContain('role:11');
-    const memberPayload = receive.mock.calls[2]![0] as { sender: { roles?: string[] } };
-    expect(memberPayload.sender.roles).toBeUndefined();
+    const adminPayload = receive.mock.calls[1]![0] as { sender: { roles?: string[]; platform: unknown } };
+    expect(adminPayload.sender.roles).toBeUndefined();
+    expect(adminPayload.sender.platform).toEqual({ standing: 'admin', roles: [{ id: '11', name: 'Admin' }], permissions: ['administrator'] });
+    const memberPayload = receive.mock.calls[2]![0] as { sender: { platform: unknown } };
+    expect(memberPayload.sender.platform).toEqual({ standing: 'member', roles: [{ id: '12', name: 'Cosmetic' }] });
     expect(mock.getGuildInfo).toHaveBeenCalledTimes(1);
     await endpoint.stop();
   });

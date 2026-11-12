@@ -167,7 +167,19 @@ export interface CommandScene {
 export interface CommandSender {
   readonly id: string;
   readonly name?: string;
+  /** Framework roles plus the normalized platform standing (`owner` / `admin` / `member` / `guest`). */
   readonly role: readonly string[];
+  /** Platform-native permission names from `sender.platform.permissions`. */
+  readonly permissions?: readonly string[];
+  /** Platform-native role ids from `sender.platform.roles`. */
+  readonly platformRoleIds?: readonly string[];
+}
+
+/** Structural mirror of `@zhin.js/im-contract` `PlatformStanding` (ADR 0056 §1). */
+export interface CommandSenderPlatform {
+  readonly standing: 'owner' | 'admin' | 'member' | 'guest';
+  readonly roles?: readonly Readonly<{ id: string; name?: string }>[];
+  readonly permissions?: readonly string[];
 }
 
 /**
@@ -201,7 +213,13 @@ export interface CommandMessage {
   /** Display preference resolved by the IM runtime, when this is an IM operation. */
   readonly locale?: Locale;
   /** 发送者（结构化视图见 CommandContext.sender）。 */
-  readonly sender?: { readonly id: string; readonly name?: string; readonly roles?: readonly string[] };
+  readonly sender?: {
+    readonly id: string;
+    readonly name?: string;
+    /** Framework roles (`master` / `trusted`) attached by the runtime. */
+    readonly roles?: readonly string[];
+    readonly platform?: CommandSenderPlatform;
+  };
   readonly id?: string;
   readonly metadata?: Readonly<Record<string, unknown>>;
   readonly clientAdapter?: string;
@@ -650,14 +668,18 @@ export function resolveCommandSession(input: unknown): CommandSession {
   if (operation) {
     const endpoint = input && typeof input === 'object' ? (input as { readonly endpointId?: unknown }).endpointId : undefined;
     const sender = operation.sender;
-    const roles = [...new Set([...sender?.authorizationRoles ?? [], ...sender?.platformRoles ?? []])];
+    const roles = [...new Set([...sender?.authorizationRoles ?? [], ...(sender?.platform ? [sender.platform.standing] : [])])];
+    const permissions = sender?.platform?.permissions ?? [];
+    const platformRoleIds = sender?.platform?.roles?.map((role) => role.id) ?? [];
     return Object.freeze({
       adapter: operation.scene.endpoint.adapter,
       ...(typeof endpoint === 'string' && endpoint ? { endpoint } : {}),
       scene: Object.freeze({ id: operation.scene.id, type: operation.scene.kind,
         ...(operation.scene.name !== undefined ? { name: operation.scene.name } : {}) }),
       ...(sender ? { sender: Object.freeze({ id: sender.id, ...(sender.name !== undefined ? { name: sender.name } : {}),
-        role: Object.freeze(roles.length ? roles : ['user']) }) } : {}),
+        role: Object.freeze(roles.length ? roles : ['user']),
+        ...(permissions.length ? { permissions: Object.freeze([...permissions]) } : {}),
+        ...(platformRoleIds.length ? { platformRoleIds: Object.freeze(platformRoleIds) } : {}) }) } : {}),
     });
   }
   if (!isCommandMessageLike(input)) return Object.freeze({});
@@ -738,11 +760,16 @@ export function resolveCommandSender(
 
   const name = input.sender?.name || firstString(metadata?.nickname, metadata?.senderName, metadata?.name);
   const role = resolveRoles(input, metadata);
+  const platform = input.sender?.platform;
+  const permissions = platform?.permissions?.filter((item) => typeof item === 'string' && item.length > 0) ?? [];
+  const platformRoleIds = platform?.roles?.map((item) => item?.id).filter((item): item is string => typeof item === 'string' && item.length > 0) ?? [];
 
   return Object.freeze({
     id,
     ...(name !== undefined ? { name } : {}),
     role,
+    ...(permissions.length ? { permissions: Object.freeze([...permissions]) } : {}),
+    ...(platformRoleIds.length ? { platformRoleIds: Object.freeze(platformRoleIds) } : {}),
   });
 }
 
@@ -750,23 +777,19 @@ function resolveRoles(
   input: Pick<CommandMessage, 'sender'>,
   metadata: Readonly<Record<string, unknown>> | undefined,
 ): readonly string[] {
-  if (input.sender?.roles?.length) {
-    return Object.freeze([...input.sender.roles]);
-  }
   const roles: string[] = [];
   const push = (value: unknown) => {
     if (typeof value !== 'string') return;
     const trimmed = value.trim();
     if (trimmed && !roles.includes(trimmed)) roles.push(trimmed);
   };
-
-  if (Array.isArray(metadata?.roles)) {
-    for (const item of metadata.roles) push(item);
+  for (const role of input.sender?.roles ?? []) push(role);
+  if (roles.length === 0) {
+    if (metadata?.isMaster === true) push('master');
+    if (metadata?.isTrusted === true) push('trusted');
   }
-  push(metadata?.senderRole);
-  push(metadata?.role);
-  if (metadata?.isMaster === true) push('master');
-  if (metadata?.isTrusted === true) push('trusted');
+  // ADR 0056 §1: platform owner / admin comes only from the normalized standing, never metadata.
+  push(input.sender?.platform?.standing);
   if (roles.length === 0) roles.push('user');
   return Object.freeze(roles);
 }
@@ -794,6 +817,8 @@ function freezeSender(sender: CommandSender): CommandSender {
     id: sender.id,
     ...(sender.name !== undefined ? { name: sender.name } : {}),
     role: Object.freeze([...sender.role]),
+    ...(sender.permissions?.length ? { permissions: Object.freeze([...sender.permissions]) } : {}),
+    ...(sender.platformRoleIds?.length ? { platformRoleIds: Object.freeze([...sender.platformRoleIds]) } : {}),
   });
 }
 

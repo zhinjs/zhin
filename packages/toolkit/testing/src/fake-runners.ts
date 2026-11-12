@@ -51,7 +51,8 @@ export interface FakeMessage extends CommandMessage {
 export interface FakeMessageInit {
   readonly locale?: Locale;
   readonly content?: string;
-  readonly sender?: { readonly id: string; readonly name?: string; readonly roles?: readonly string[] };
+  /** `roles`: framework roles (master / trusted); `platform`: ADR 0056 §1 platform standing. */
+  readonly sender?: CommandMessage['sender'];
   readonly conversation?: Partial<CommandMessage['conversation']>;
   readonly id?: string;
   readonly metadata?: Readonly<Record<string, unknown>>;

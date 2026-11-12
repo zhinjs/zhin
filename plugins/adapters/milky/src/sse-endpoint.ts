@@ -28,6 +28,7 @@ import {
   formatOutboundSegments,
   isMentioned,
   milkyInboundConversation,
+  milkySenderStanding,
   parseMessageReceiveData,
   parseMilkyMessageId,
   senderNickname,
@@ -170,6 +171,7 @@ export class MilkySseEndpoint extends MilkyClient implements Endpoint {
     const segments = formatInboundSegments(data);
     const audioUrl = extractInboundAudioUrl(data);
     const nickname = senderNickname(data);
+    const platform = milkySenderStanding(data);
     const mentioned = isMentioned(data, event.self_id);
     void this[endpointSpec].events.message({
       event,
@@ -178,7 +180,7 @@ export class MilkySseEndpoint extends MilkyClient implements Endpoint {
       message: { conversation, id: formatInboundMessageId(data) },
       content,
       segments,
-      sender: { id: String(data.sender_id), name: nickname },
+      sender: { id: String(data.sender_id), name: nickname, ...(platform ? { platform } : {}) },
       endpointId: this.#options.config.id,
       ...(mentioned ? { mentioned: true } : {}),
       metadata: Object.freeze({

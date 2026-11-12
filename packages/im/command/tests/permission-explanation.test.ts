@@ -2,11 +2,11 @@ import { createCapabilitySlot, rootPluginId, type RuntimeSnapshot } from '@zhin.
 import { CommandIndex, canManageConversation, commandFeatureId, defineCommand, explainCommandPermissions, toCommandPermissionSubject } from '../src/index.js';
 
 const target = { endpoint: { id: 'endpoint-1', adapter: 'qq' }, kind: 'group', id: 'g1', parent: { kind: 'channel', id: 'parent' }, threadId: 'topic' };
-const source = { conversation: target, content: '', clientAdapter: 'qq', sender: { id: 'u1', roles: ['master'] }, metadata: { roles: ['admin'], senderPermissions: ['manage'] } };
+const source = { conversation: target, content: '', clientAdapter: 'qq', sender: { id: 'u1', roles: ['master'], platform: { standing: 'member', permissions: ['manage'] } }, metadata: { roles: ['admin'], senderPermissions: ['ignored'] } };
 
 it('shares real command role precedence and the separate exact adapter gate', () => {
   expect(toCommandPermissionSubject(source)).toEqual({ adapter: 'qq', endpoint: 'endpoint-1', scene: { type: 'group', id: 'g1' },
-    sender: { id: 'u1', role: ['master'], permissions: ['manage'] } });
+    sender: { id: 'u1', role: ['master', 'member'], permissions: ['manage'] } });
   const result = explainCommandPermissions({ adapter: 'qq', permit: ['adapter(qq)', 'role(trusted)', 'role(admin)'] }, { source, rolesKnown: true, permissionHost: 'present' });
   expect(result.adapter.outcome).toBe('match'); expect(result.rules.map(item => item.outcome)).toEqual(['match', 'match', 'mismatch']);
   expect(result.summary.outcome).toBe('mismatch');

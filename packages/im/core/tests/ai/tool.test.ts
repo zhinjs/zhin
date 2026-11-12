@@ -31,7 +31,8 @@ function mockCommMessage(overrides: Record<string, any> = {}) {
     endpointId: endpoint,
     conversation: { endpoint: { adapter, id: endpoint }, kind: scope, id: overrides.sceneId ?? 'scene1' },
     sender: { id: overrides.senderId ?? 'user1', roles, ...(overrides.sender ?? {}) },
-    metadata: overrides.role ? { senderRole: overrides.role } : {},
+    ...(overrides.role ? { sender: { id: overrides.senderId ?? 'user1', roles, platform: { standing: overrides.role } } } : {}),
+    metadata: {},
   };
 }
 
@@ -43,8 +44,8 @@ function mockMessage(role: 'user' | 'scene_admin' | 'scene_owner' | 'master' = '
     clientAdapter: adapter,
     endpointId: 'b1',
     conversation: { endpoint: { adapter, id: 'b1' }, kind: 'group', id: 'g1' },
-    sender: { id: 'u1', roles: senderRoles },
-    metadata: senderRole ? { senderRole } : {},
+    sender: { id: 'u1', roles: senderRoles, ...(senderRole ? { platform: { standing: senderRole } } : {}) },
+    metadata: {},
   } as any;
 }
 

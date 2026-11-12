@@ -60,7 +60,7 @@ describe('chat roles (ADR 0056)', () => {
     expect(roles.roleAt({ adapter: 'qq', userId: 'mod' }, 'qq/bot-1', context)).toBeUndefined();
     expect(roles.roleAt({ adapter: 'qq', userId: 'mod' }, 'qq/bot-1/group:2', context)).toBeUndefined();
     expect(roles.roleAbove({ adapter: 'qq', userId: 'alice' }, 'qq/bot-2/group:9')).toBe('admin');
-    expect(platformStandingFromSender({ roles: ['member', 'owner'] })).toEqual({ standing: 'owner' });
+    expect(platformStandingFromSender({ roles: ['member', 'owner'] })).toBeUndefined();
     expect(platformStandingFromSender({ platform: { standing: 'admin' } })).toEqual({ standing: 'admin' });
   });
 
@@ -68,11 +68,11 @@ describe('chat roles (ADR 0056)', () => {
     const { roles, platform } = service();
     const snapshot = { tree: new Map([['root/qq', { instanceKey: 'qq' }]]),
       projections: new Map([['zhin.adapter', { owner: () => 'root/qq', endpointEntry: () => ({ desired: { endpointId: 'bot-1' } }) }]]) } as never;
-    const resolved = roles.effectiveRoles(snapshot, { conversation: { kind: 'group', id: '1', endpoint: { id: 'ep' } }, sender: { id: 'mod', roles: ['admin'] } });
+    const resolved = roles.effectiveRoles(snapshot, { conversation: { kind: 'group', id: '1', endpoint: { id: 'ep' } }, sender: { id: 'mod', platform: { standing: 'admin' } } });
     expect(resolved).toMatchObject({ identity: { adapter: 'qq', userId: 'mod' }, conversationKey: 'qq/bot-1/group:1', role: 'admin',
       entries: [{ source: 'mapping', level: 'conversation' }] });
     // Private chats carry no platform standing.
-    expect(roles.effectiveRoles(snapshot, { conversation: { kind: 'private', id: 'mod', endpoint: { id: 'ep' } }, sender: { id: 'mod', roles: ['admin'] } })?.role).toBeUndefined();
+    expect(roles.effectiveRoles(snapshot, { conversation: { kind: 'private', id: 'mod', endpoint: { id: 'ep' } }, sender: { id: 'mod', platform: { standing: 'admin' } } })?.role).toBeUndefined();
     platform.record({ adapter: 'qq', userId: 'mod' }, { conversationKey: 'qq/bot-1/group:1', platform: { standing: 'owner' } }, 5);
     await roles.store.grant({ level: 'endpoint', key: 'qq/bot-1', adapter: 'qq', userId: 'eve', role: 'trusted' });
     const listed = roles.list('qq/bot-1/group:1').map(entry => `${entry.source}:${entry.role}:${entry.userId}@${entry.key}`);

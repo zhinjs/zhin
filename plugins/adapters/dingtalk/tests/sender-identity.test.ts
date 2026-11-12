@@ -19,6 +19,12 @@ it('retains the complete DingTalk event/message while omitting sender when no ac
     expect(message).toMatchObject({ content: 'anonymous group message', conversation: { kind: 'group', id: 'actual-group' }, message: { id: 'native-message' } });
     expect(message).not.toHaveProperty('sender'); expect(message.event).toBe(event);
     await harness.endpoint.admit({ ...event, senderStaffId: 'actual-staff' });
-    expect(receive.mock.calls[1]![0]).toMatchObject({ sender: { id: 'actual-staff' } });
+    expect(receive.mock.calls[1]![0]).toMatchObject({ sender: { id: 'actual-staff', platform: { standing: 'member' } } });
+    // ADR 0056 §1: the group callback's isAdmin becomes the normalized standing; private chats report none.
+    await harness.endpoint.admit({ ...event, msgId: 'admin-message', senderStaffId: 'admin-staff', isAdmin: true });
+    expect(receive.mock.calls[2]![0]).toMatchObject({ sender: { id: 'admin-staff', platform: { standing: 'admin' } } });
+    await harness.endpoint.admit({ ...event, msgId: 'private-message', conversationType: '1', conversationId: 'dm', senderStaffId: 'admin-staff', isAdmin: true });
+    const direct = receive.mock.calls[3]![0] as { sender: Record<string, unknown> };
+    expect(direct.sender).not.toHaveProperty('platform'); expect(direct.sender).not.toHaveProperty('roles');
   } finally { await harness.stop(); await http.close(); }
 });

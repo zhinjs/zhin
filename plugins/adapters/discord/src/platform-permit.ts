@@ -39,7 +39,8 @@ export function normalizeDiscordSenderForPermit(input: {
 export function checkDiscordPlatformPermit(perm: string, subject: PermissionSubject): boolean {
   const role = subject.sender?.role?.[0];
   const permissions = subject.sender?.permissions ?? [];
-  const has = (t: string) => permissions.includes(t);
+  // Accepts the legacy UPPER_SNAKE tokens and ADR 0056 §1 snake_case platform permission names.
+  const has = (t: string) => permissions.includes(t) || permissions.includes(t.toLowerCase());
 
   switch (perm) {
     case 'guild_owner':

@@ -20,7 +20,7 @@ function mockMsg() {
     clientAdapter: 'wecom',
     endpointId: 'bot1',
     conversation: { endpoint: { adapter: 'wecom', id: 'bot1' }, kind: 'group', id: 'c1' },
-    sender: { id: 'u1', roles: [] },
+    sender: { id: 'u1' },
     metadata: {},
   } as any;
 }

@@ -25,38 +25,22 @@ describe('toPermissionSubject', () => {
       clientAdapter: 'discord',
       endpointId: 'e2',
       conversation: { endpoint: { adapter: 'root/discord', id: 'capability' }, id: 'ch1', kind: 'group', name: 'test' },
-      sender: { id: 'u2', name: 'Alice', roles: ['trusted'], permissions: ['manage'] },
-      metadata: { senderRole: 'admin' },
+      sender: { id: 'u2', name: 'Alice', roles: ['trusted'], platform: { standing: 'admin', permissions: ['manage'], roles: [{ id: 'r1', name: 'Mods' }] } },
     });
     expect(result.adapter).toBe('discord');
     expect(result.endpoint).toBe('e2');
     expect(result.scene).toEqual({ id: 'ch1', type: 'group', name: 'test' });
-    expect(result.sender).toEqual({ id: 'u2', name: 'Alice', role: ['trusted', 'admin'], permissions: ['manage'] });
+    expect(result.sender).toEqual({ id: 'u2', name: 'Alice', role: ['trusted', 'admin'], permissions: ['manage'], platformRoleIds: ['r1'] });
   });
 
-  it('falls back to the canonical conversation endpoint and platform metadata', () => {
+  it('ignores platform roles carried in adapter metadata (ADR 0056 §1)', () => {
     const result = toPermissionSubject({
-      conversation: {
-        endpoint: { adapter: 'telegram', id: 'runtime-endpoint' },
-        id: 'group-1',
-        kind: 'group',
-      },
-      sender: { id: 'u2', roles: ['administrator'] },
-      metadata: {
-        role: 'owner',
-        roles: ['moderator'],
-        senderPermissions: ['pin_messages'],
-        permissions: ['manage_channels'],
-      },
+      conversation: { endpoint: { adapter: 'telegram', id: 'runtime-endpoint' }, id: 'group-1', kind: 'group' },
+      sender: { id: 'u2' },
+      metadata: { role: 'owner', roles: ['moderator'], senderRole: 'admin', senderPermissions: ['pin_messages'], permissions: ['manage_channels'] },
     });
-    expect(result).toMatchObject({
-      adapter: 'telegram',
-      endpoint: 'runtime-endpoint',
-      sender: {
-        role: ['administrator', 'owner', 'moderator'],
-        permissions: ['pin_messages', 'manage_channels'],
-      },
-    });
+    expect(result).toMatchObject({ adapter: 'telegram', endpoint: 'runtime-endpoint', sender: { id: 'u2', role: [] } });
+    expect(result.sender?.permissions).toBeUndefined();
   });
 
   it('CommandSession-style takes precedence over canonical fallback fields', () => {

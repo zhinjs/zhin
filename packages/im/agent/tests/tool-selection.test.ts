@@ -51,8 +51,7 @@ describe('tool-selection permissions', () => {
       permissions: ['platform(qq,scene_admin)'],
     });
     const msg = {
-      ...mockCommMessage({ adapter: 'qq', endpoint: 'b1', senderId: 'u1', scope: 'group', sceneId: 'g1' }),
-      metadata: { senderRole: 'admin' },
+      ...mockCommMessage({ adapter: 'qq', endpoint: 'b1', senderId: 'u1', scope: 'group', sceneId: 'g1', role: 'admin' }),
     } as any;
 
     expect(await canAccessTool(tool, msg, host)).toBe(true);

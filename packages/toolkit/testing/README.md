@@ -29,7 +29,7 @@ expect(fake.sent).toHaveLength(1);               // recorded outbound calls
 expect(fake.rows('notes')).toEqual([]);          // tables the plugin defined
 await fake.dispose();
 
-const message = createFakeMessage({ sender: { id: 'u1', roles: ['admin'] } });
+const message = createFakeMessage({ sender: { id: 'u1', platform: { standing: 'admin' } } });
 await runCommand(fake, commandDefinition, { input: message, params: {} });
 expect(message.replies).toEqual(['ok']);
 ```
@@ -83,7 +83,7 @@ try {
   const result = await kit.receive({
     endpoint: 'test',
     conversation: { kind: 'group', id: 'test-group' },
-    sender: { id: 'test-member', name: 'Alice', roles: ['admin'] },
+    sender: { id: 'test-member', name: 'Alice', platform: { standing: 'admin' } },
     content: 'suite checkin',
   });
   console.log(result?.status, kit.deliveries);

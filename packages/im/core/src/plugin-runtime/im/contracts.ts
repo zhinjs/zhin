@@ -3,7 +3,8 @@ import type { JSXElement } from '@zhin.js/jsx';
 import { commandFeatureId, isCommandIndex, type CommandMenuPage } from '@zhin.js/command';
 import { createRootPrivateToken, resolveLocale, type PluginId, type RuntimeSnapshot, type SnapshotLease, type SnapshotReader, type Locale } from '@zhin.js/plugin-runtime';
 import { operationInputBinding, operationInputSignal, operationInputResources, operationSession, type OperationSession, type OperationResourceView, type CapabilityOperationFactory } from '@zhin.js/feature-kit';
-import type { ConversationRef, DeliveryReceipt, MessageRef, SelfProfilePort } from '@zhin.js/im-contract';
+import type { ConversationRef, DeliveryReceipt, MessageRef, PlatformStanding, SelfProfilePort } from '@zhin.js/im-contract';
+import type { SenderRole } from '../../built/roles.js';
 import type { MessageOrigin } from './inbound-origin.js';
 import type { CoreReplyStream, OpenReplyStreamOptions } from './progressive-reply.js';
 import type { MediaRef, Segment } from '../../built/segment-contract/types.js';
@@ -131,7 +132,14 @@ export function isSegmentContent(value: unknown): value is Segment {
 export interface MessageSenderRef {
   readonly id: string;
   readonly name?: string;
-  readonly roles?: readonly string[];
+  /** ADR 0056 §1: normalized platform standing reported by the Adapter (private chats: `member` or absent). */
+  readonly platform?: PlatformStanding;
+  /**
+   * Framework sender roles (`master` / `trusted`) attached by the runtime's sender enrichment only;
+   * Adapter-supplied values are stripped at ingress. Platform owner/admin lives in `platform`.
+   * Superseded by ADR 0056 §2 chat roles.
+   */
+  readonly roles?: readonly SenderRole[];
 }
 
 export interface IncomingMessage {

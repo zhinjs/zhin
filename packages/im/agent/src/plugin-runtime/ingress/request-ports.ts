@@ -409,7 +409,10 @@ export function createRuntimeTurnAccess(
   }
   const scope = message.conversation.kind;
   const trustRole = roles.isMaster ? 'master' : roles.isTrusted ? 'trusted' : 'user';
-  const principalRoles = [...new Set([...(message.sender?.roles ?? []), trustRole])];
+  // Platform owner / admin is projected from the normalized standing (ADR 0056 §1).
+  const standing = message.sender?.platform?.standing;
+  const platformManager = standing === 'owner' || standing === 'admin' ? [standing] : [];
+  const principalRoles = [...new Set([...(message.sender?.roles ?? []), ...platformManager, trustRole])];
   const hasValidConversationSequence = typeof conversationSequence === 'number' && Number.isFinite(conversationSequence);
   return Object.freeze({
     ...(contextState || platformCapabilities

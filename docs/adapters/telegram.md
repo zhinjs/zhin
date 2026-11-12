@@ -55,7 +55,7 @@ pnpm add @zhin.js/adapter-telegram
 
 ### 平台权限（platform permit）
 
-- sender role 已恢复：群消息入站时经 `getChatMember`（60s 缓存）解析，写入 `metadata.senderRole` / `metadata.senderPermissions`。
+- 成员身份：群消息入站时经 `getChatMember`（60s 缓存）解析，写入 `sender.platform`（`creator` → `owner`、`administrator` → `admin` 且 `can_*` 权限进 `permissions`、`left` / `kicked` → `guest`，ADR 0056 §1）。
 - `plugin.ts` 在 generation setup 注册 checker，并在 dispose 注销；Plugin Runtime CapabilityIngress 与 ToolSystem 统一经 Core `canAccessTool()` 消费 `permissions`。
 
 ## 前置条件

@@ -17,13 +17,14 @@ import {
   type ConversationReference,
   type ConversationResolution,
   type MessageRef,
+  type PlatformStanding,
 } from '@zhin.js/im-contract';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
 import { runTelegramPollLoop } from './polling.js';
 import { TelegramApiError } from './api-error.js';
 export { TelegramApiError } from './api-error.js';
-import { normalizeTelegramChatMember } from './platform-permit.js';
+import { telegramChatMemberStanding } from './platform-permit.js';
 import {
   buildWebhookUrl,
   formatCallbackContent,
@@ -49,10 +50,8 @@ const CHAT_MEMBER_CACHE_MAX = 2_000;
 const ADMITTED_UPDATE_LIMIT = 2_048;
 const INFLIGHT_UPDATE_LIMIT = 256;
 
-interface ChatMemberPermit {
-  readonly role?: string;
-  readonly permissions: string[];
-}
+/** ADR 0056 §1 normalized standing of one chat member (cached per chat + user). */
+type ChatMemberPermit = PlatformStanding;
 
 /** One admitted platform message and its original framework lifetime. */
 interface TelegramMessageAdmission {
@@ -409,7 +408,7 @@ export class TelegramEndpoint extends TelegramClient implements Endpoint {
       sender: {
         id: String(msg.from?.id ?? ''),
         name: senderDisplayName(msg.from) || undefined,
-        ...(permit?.role ? { roles: [permit.role] } : {}),
+        ...(permit ? { platform: permit } : {}),
       },
       endpointId: this.#options.config.id,
       ...(mentioned ? { mentioned: true } : {}),
@@ -419,8 +418,6 @@ export class TelegramEndpoint extends TelegramClient implements Endpoint {
         chatType: msg.chat.type,
         userId: msg.from?.id,
         date: msg.date,
-        ...(permit?.role ? { senderRole: permit.role } : {}),
-        ...(permit?.permissions.length ? { senderPermissions: [...permit.permissions] } : {}),
       }),
     });
   }
@@ -460,8 +457,7 @@ export class TelegramEndpoint extends TelegramClient implements Endpoint {
         user_id: userId,
       }, signal);
       if (signal.aborted) return undefined;
-      const normalized = normalizeTelegramChatMember(member);
-      const entry: ChatMemberPermit = { ...normalized };
+      const entry: ChatMemberPermit = telegramChatMemberStanding(member);
       this.#chatMemberCache.set(key, entry);
       return entry;
     } catch {

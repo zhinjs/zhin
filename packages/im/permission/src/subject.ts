@@ -12,8 +12,12 @@ export interface PermissionScene {
 export interface PermissionSender {
   readonly id: string;
   readonly name?: string;
+  /** Framework roles plus the platform standing (`owner` / `admin` / `member` / `guest`). */
   readonly role: readonly string[];
+  /** Platform-native permission names (`sender.platform.permissions`). */
   readonly permissions?: readonly string[];
+  /** Platform-native role ids (`sender.platform.roles`). */
+  readonly platformRoleIds?: readonly string[];
 }
 
 export interface PermissionSubject {
@@ -56,25 +60,21 @@ export function toPermissionSubject(source: unknown): PermissionSubject {
   }
   if (obj.sender && typeof obj.sender === 'object' && !result.sender) {
     const s = obj.sender as Record<string, unknown>;
-    const metadata = obj.metadata as Record<string, unknown> | undefined;
+    // Framework roles (master / trusted) + the normalized platform standing (ADR 0056 §1).
+    // Adapter metadata never contributes roles or permissions.
     const roles = new Set(Array.isArray(s.roles) ? s.roles.map(String) : []);
-    if (typeof metadata?.senderRole === 'string') roles.add(metadata.senderRole);
-    if (typeof metadata?.role === 'string') roles.add(metadata.role);
-    if (Array.isArray(metadata?.roles)) {
-      for (const role of metadata.roles) roles.add(String(role));
-    }
-    const permissions = new Set(Array.isArray(s.permissions) ? s.permissions.map(String) : []);
-    if (Array.isArray(metadata?.senderPermissions)) {
-      for (const permission of metadata.senderPermissions) permissions.add(String(permission));
-    }
-    if (Array.isArray(metadata?.permissions)) {
-      for (const permission of metadata.permissions) permissions.add(String(permission));
-    }
+    const platform = s.platform && typeof s.platform === 'object' ? s.platform as Record<string, unknown> : undefined;
+    if (typeof platform?.standing === 'string') roles.add(platform.standing);
+    const permissions = new Set(Array.isArray(platform?.permissions) ? platform.permissions.map(String) : []);
+    const platformRoleIds = Array.isArray(platform?.roles)
+      ? platform.roles.map((role) => (role && typeof role === 'object' ? String((role as { id?: unknown }).id ?? '') : '')).filter(Boolean)
+      : [];
     result.sender = {
       id: String(s.id ?? ''),
       ...(s.name ? { name: String(s.name) } : {}),
       role: [...roles],
       ...(permissions.size > 0 ? { permissions: [...permissions] } : {}),
+      ...(platformRoleIds.length > 0 ? { platformRoleIds } : {}),
     };
   }
 

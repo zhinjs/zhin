@@ -64,7 +64,7 @@ import {
   handlerFeatureId,
 } from '@zhin.js/handler';
 import { EndpointDeliveryError, MemoryConversationEventStore, type ConversationRef, type EndpointSendResult } from '@zhin.js/im-contract';
-import type { ConversationAddress } from '../../src/plugin-runtime/im/contracts.js';
+import type { ConversationAddress, MessageSenderRef } from '../../src/plugin-runtime/im/contracts.js';
 import type { IngressRoute } from '../../src/plugin-runtime/im/inbound-spine.js';
 import type { RoomInboundRouteInput, RoomRouteDecision } from '../../src/plugin-runtime/im/inbound-origin.js';
 import {
@@ -3211,6 +3211,8 @@ async function createFixture(
     middleware?: boolean;
     validateCommand?: boolean;
     restrictCommand?: boolean;
+    /** Sender ids the runtime's sender enrichment marks as `master`. */
+    masterIds?: readonly string[];
     adapterSegments?: { supported?: readonly string[]; html?: 'direct' | 'image' | 'text'; markdown?: 'native' | 'text'; interactive?: 'native' | 'text'; outboundMedia?: readonly ('url' | 'path' | 'base64' | 'upload')[] };
     commandResult?: (input: Message) => SendContent | void | Promise<SendContent | void>;
     commandSignal?: (signal: AbortSignal, input: Message) => void;
@@ -3353,6 +3355,7 @@ async function createFixture(
     ...(options?.inboundClaimPending ? { inboundClaimPending: options.inboundClaimPending } : {}),
     ...(options?.peerRegistry ? { peerRegistry: options.peerRegistry } : {}),
     ...(options?.inboundDeduper ? { inboundDeduper: options.inboundDeduper as never } : {}),
+    ...(options?.masterIds ? { enrichSender: (sender: MessageSenderRef | undefined) => sender && options.masterIds!.includes(sender.id) ? { ...sender, roles: ['master' as const] } : sender } : {}),
     conversationEvents,
   });
   let base = baseState(slots);
@@ -3512,10 +3515,9 @@ describe('Root command feedback presentation', () => {
       expect(renderer).toHaveBeenCalledTimes(1);
       const context = renderer.mock.calls[0][1];
       expect(context).toEqual({ generation: 1, clientAdapter: 'memory', locale: 'zh-CN',
-        sender: { id: 'alice', name: 'Alice', roles: ['user'] },
+        sender: { id: 'alice', name: 'Alice' },
         conversation: { endpoint: input.conversation.endpoint, kind: 'channel', id: input.conversation.id,
           parent: { kind: 'group', id: 'workspace' }, threadId: 'thread' } });
-      expect(context.sender?.roles).not.toBe(sender.roles);
       expect(context.conversation.parent).not.toBe(conversation.parent);
       expect(JSON.stringify(renderer.mock.calls)).not.toMatch(/PRIVATE_|nested/);
       expect(Object.isFrozen(sender.roles)).toBe(false);
@@ -3756,13 +3758,14 @@ describe('full-operation command admission', () => {
   it('counts the same capability through aliases and shortcuts, while help, invalid and denied attempts consume no budget', async () => {
     const f = await createFixture([], [], undefined, undefined, undefined, {
       execution: { cooldownMs: 1000 }, middleware: false, validateCommand: true, restrictCommand: true, commandShortcut: true,
-      commandResult: () => 'ok',
+      commandResult: () => 'ok', masterIds: ['boss'],
     });
     try {
-      const input = { ...fixtureInput(f, '/gh issue list nope'), sender: { id: 'alice', roles: ['master'] } };
+      const input = { ...fixtureInput(f, '/gh issue list nope'), sender: { id: 'boss' } };
       expect((await receive(f.im, input)).status).toBe('invalid');
       expect((await receive(f.im, { ...input, content: '/gh issue list --help' })).status).toBe('executed');
-      expect((await receive(f.im, { ...input, content: '/gh issue list 1', sender: { id: 'alice' } })).status).toBe('denied');
+      // Adapter-supplied roles are stripped at ingress (ADR 0056 §1): only enrichment grants master.
+      expect((await receive(f.im, { ...input, content: '/gh issue list 1', sender: { id: 'alice', roles: ['master'] } as never })).status).toBe('denied');
       expect((await receive(f.im, { ...input, content: '/gh issue list 1' })).status).toBe('executed');
       expect((await receive(f.im, { ...input, content: '/limited-alias 1' })).limit).toMatchObject({ reason: 'cooldown' });
       // The shortcut lacks a required parameter, so it stays invalid rather than charging or consulting the budget.

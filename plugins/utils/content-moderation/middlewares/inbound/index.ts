@@ -196,7 +196,7 @@ async function enqueueGroupModeration(
               conversation, memberId: message.sender!.id, trigger: hit.category, newcomer: hit.newcomer,
               sentAt: Number(message.metadata?.platformSentAt), evidence: hit.evidence,
               ...(message.sender?.name ? { memberName: message.sender.name } : {}),
-              ...(message.sender?.roles ? { memberRoles: message.sender.roles } : {}),
+              ...(message.sender?.platform ? { memberStanding: message.sender.platform.standing } : {}),
               ...(messageId ? { messageId } : {}),
               ...(hit.recall ? { recall: hit.recall } : {}),
             });

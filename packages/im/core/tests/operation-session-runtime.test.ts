@@ -95,7 +95,7 @@ async function fixture(execute: (session: OperationSession<string>, message: Mes
   const event = new NativeEvent();
   const input = { conversation: { endpoint: { id: rows[0].canonicalId, adapter: 'native' }, kind: 'group' as const,
     id: 'room', parent: { kind: 'channel' as const, id: 'parent' }, threadId: 'thread' },
-  content: '/run', sender: { id: 'alice', name: 'Alice', roles: ['admin'] }, event, platformSentAt: 100 };
+  content: '/run', sender: { id: 'alice', name: 'Alice', platform: { standing: 'admin' as const }, roles: ['master'] } as never, event, platformSentAt: 100 };
   return { adapter, author, rows, endpoint, other, im, index, store, input, event, owners, handlerReplies,
     receive: () => endpoint[endpointSpec].events.message(input),
     close: async () => { await index.stop(); await store.close(); } };
@@ -110,7 +110,7 @@ it('captures the real Adapter, SDK Endpoint and native event through Command and
     expect(session.adapter).toBe(f.adapter);
     expect(session.endpoint).toBe(f.endpoint);
     expect(session.event).toBe(f.event);
-    expect(session.sender).toEqual({ id: 'alice', name: 'Alice', platformRoles: ['admin'], authorizationRoles: ['trusted'] });
+    expect(session.sender).toEqual({ id: 'alice', name: 'Alice', platform: { standing: 'admin' }, authorizationRoles: ['trusted'] });
     expect(session.scene).toMatchObject({ kind: 'group', id: 'room', parent: { id: 'parent' }, threadId: 'thread' });
     expect(session.message).toMatchObject({ text: '/run', platformSentAt: 100, receivedAt: expect.any(Number) });
     await session.reply('answer');

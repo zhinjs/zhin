@@ -236,7 +236,7 @@ describe('in-chat role management (ADR 0056 §3)', () => {
 
   it('resolves the actor from a message', () => {
     const resolved = featureChatActor(snapshot(), { conversation: { kind: 'group', id: '100', endpoint: { id: 'qq:bot-1', adapter: 'qq' } },
-      sender: { id: 'u1', roles: ['master', 'owner'] } });
+      sender: { id: 'u1', roles: ['master'], platform: { standing: 'owner' } } });
     expect(resolved).toEqual({ identity: { adapter: 'qq', userId: 'u1' }, conversationKey: 'qq/bot-1/group:100', endpointKey: 'qq/bot-1',
       kind: 'group', context: { conversationKey: 'qq/bot-1/group:100', platform: { standing: 'owner' } } });
     expect(featureChatActor(snapshot(), { conversation: { endpoint: { id: 'qq:bot-1' } }, sender: { id: 'u1' } })).toBeUndefined();

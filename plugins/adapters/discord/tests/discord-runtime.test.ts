@@ -461,14 +461,15 @@ config: baseConfig}), createClient, gateway, undefined);
     expect(endpoint.transportState).toBe('reconnecting');
     endpoint.endpoint.ws.status = Status.Ready;
     expect(endpoint.transportState).toBe('open');
-    endpoint.endpoint.admit(textMessage());
+    endpoint.endpoint.admit(textMessage({ guildId: 'guild-1', authorRoles: [{ id: 'r1', name: 'Mods' }], platformPermissions: ['moderate_members'] }));
 
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
       conversation: expect.objectContaining({ kind: 'channel', id: 'chan-1' }),
       message: expect.objectContaining({ id: 'msg-1' }),
       content: 'hello',
-      sender: expect.objectContaining({ id: 'user-1', name: 'alice' }),
+      sender: expect.objectContaining({ id: 'user-1', name: 'alice',
+        platform: { standing: 'admin', roles: [{ id: 'r1', name: 'Mods' }], permissions: ['moderate_members'] } }),
     }));
 
     await endpoint.stop();

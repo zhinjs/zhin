@@ -478,7 +478,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
         groupId: conversation.id,
         memberId: report.memberId,
         ...(report.memberName ? { memberName: report.memberName } : {}),
-        ...(report.memberRoles ? { memberRoles: report.memberRoles } : {}),
+        ...(report.memberStanding ? { memberStanding: report.memberStanding } : {}),
         trigger: report.trigger,
         sentAt: report.sentAt,
         ...(report.messageId ? { messageId: report.messageId } : {}),

@@ -113,10 +113,10 @@ async function setUpRoulette(options: { readonly schedule?: boolean; readonly ad
 
 function message(
   senderId: string,
-  options: { readonly group?: string; readonly roles?: readonly string[]; readonly kind?: 'group' | 'private' } = {},
+  options: { readonly group?: string; readonly roles?: readonly string[]; readonly standing?: 'owner' | 'admin' | 'member'; readonly kind?: 'group' | 'private' } = {},
 ): FakeMessage {
   return createFakeMessage({
-    sender: { id: senderId, name: senderId.toUpperCase(), roles: options.roles ?? [] },
+    sender: { id: senderId, name: senderId.toUpperCase(), roles: options.roles ?? [], ...(options.standing ? { platform: { standing: options.standing } } : {}) },
     conversation: { kind: options.kind ?? 'group', id: options.group ?? 'g1' },
   });
 }
@@ -292,8 +292,8 @@ describe('mute penalty', () => {
     expect(await say('bob', '开启禁言')).toBe('只有群主、群管理员、机器人主人或受信任用户可以修改禁言惩罚。');
     expect(await say('bob', '开启禁言', { roles: ['member'] })).toBe('只有群主、群管理员、机器人主人或受信任用户可以修改禁言惩罚。');
     expect(await say('owner', '开启禁言', { roles: ['master'] })).toContain('当前平台不支持禁言');
-    expect(await say('carol', '开启禁言', { roles: ['admin'] })).toContain('当前平台不支持禁言');
-    expect(await say('dave', '开启禁言', { roles: ['owner'] })).toContain('当前平台不支持禁言');
+    expect(await say('carol', '开启禁言', { standing: 'admin' })).toContain('当前平台不支持禁言');
+    expect(await say('dave', '开启禁言', { standing: 'owner' })).toContain('当前平台不支持禁言');
     expect(await say('bob', '禁言')).toContain('本群禁言惩罚：关闭。当前平台不支持禁言');
   });
 

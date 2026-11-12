@@ -1054,7 +1054,7 @@ export class IcqqEndpoint extends ManagedIcqqClient implements Endpoint {
       sender: {
         id: normalized.userId,
         name: normalized.nickname || undefined,
-        ...(normalized.senderRole ? { roles: [normalized.senderRole] } : {}),
+        ...(normalized.senderRole ? { platform: { standing: normalized.senderRole } } : {}),
       },
       channelType: normalized.channelType,
       ...(quoteId ? { replyTo: { id: quoteId } } : {}),

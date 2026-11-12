@@ -4,6 +4,7 @@ import { validateDiscordGatewayFaultProxy } from './gateway-fault-proxy.js';
 
 import { createPublicKey, verify as cryptoVerify } from 'node:crypto';
 import { isMediaRef, type ConversationRef } from '@zhin.js/im-contract';
+import { discordPermissionNamesFromBitfield } from './sender-standing.js';
 import type { Segment } from '@zhin.js/core/runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
@@ -86,6 +87,10 @@ export interface DiscordInboundMessage {
   readonly guildId?: string;
   readonly isGuildOwner?: boolean;
   readonly permissionTokens?: readonly string[];
+  /** ADR 0056 §1: guild permission flags as snake_case names (`ban_members`, …). */
+  readonly platformPermissions?: readonly string[];
+  /** ADR 0056 §1: the member's guild roles (`@everyone` excluded). */
+  readonly authorRoles?: readonly { readonly id: string; readonly name?: string }[];
   readonly attachments?: readonly DiscordInboundAttachment[];
   readonly embedTitles?: readonly string[];
   readonly stickerNames?: readonly string[];
@@ -507,8 +512,14 @@ export function formatSlashCommandContent(interaction: Record<string, unknown>):
 }
 
 export function interactionToInboundMessage(interaction: Record<string, unknown>): DiscordInboundMessage {
-  const user = (interaction.member as { user?: Record<string, unknown> } | undefined)?.user
+  const member = interaction.member as { user?: Record<string, unknown>; permissions?: unknown; roles?: unknown } | undefined;
+  const user = member?.user
     ?? (interaction.user as Record<string, unknown> | undefined);
+  const guildId = interaction.guild_id != null ? String(interaction.guild_id) : undefined;
+  const platformPermissions = guildId ? discordPermissionNamesFromBitfield(member?.permissions) : [];
+  const authorRoles = guildId && Array.isArray(member?.roles)
+    ? member.roles.map(String).filter((id) => id && id !== guildId).map((id) => ({ id }))
+    : [];
   return {
     event: interaction,
     id: String(interaction.id),
@@ -518,6 +529,8 @@ export function interactionToInboundMessage(interaction: Record<string, unknown>
     authorId: String(user?.id ?? ''),
     authorName: String(user?.username ?? user?.id ?? ''),
     createdTimestamp: Date.now(),
-    guildId: interaction.guild_id != null ? String(interaction.guild_id) : undefined,
+    guildId,
+    ...(platformPermissions.length ? { platformPermissions } : {}),
+    ...(authorRoles.length ? { authorRoles } : {}),
   };
 }
