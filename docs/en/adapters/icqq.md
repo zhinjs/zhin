@@ -93,7 +93,7 @@ Start with `src/endpoint.ts` when reading the implementation, then follow the ca
 - ICQQ voice, video, and file elements are standalone messages. The adapter rejects unsupported mixed sends instead of silently dropping segments.
 - **Console social/group management RPC is now wired**: the endpoint within the Adapter normalizes ICQQ's `get_friend_list` / `get_group_list` / `get_group_member_list`, request approval, and group management operations into frozen `EndpointManagement` objects. The Host only consumes this semantic port and no longer probes for method aliases or reads `friends` / `groups` SDK caches.
 - Friend and group requests enter the unified Endpoint event gateway and expose approval through `Request` and `EndpointManagement`.
-- Login QR, slider, device, and auth challenges persist as Console login tasks and can also continue through terminal input.
+- **Login assistance**: every login attempt is one login flow ([ADR 0058](/adr/0058-login-assist-v2)); `system.login.qrcode|slider|device|auth` become challenges of that flow that Console, the terminal and the QQ commands can answer. See [Login](#login) below.
 
 ## Console page
 
@@ -101,13 +101,32 @@ Open the Console **ICQQ** page (route `/icqq`) to:
 
 - view running connections and test connectivity;
 - add, edit, start, stop, replace, or remove accounts through Host runtime storage; startup configuration and `.env` remain unchanged;
-- complete LoginAssist tasks (QR code, slider, SMS or device confirmation) without returning to the terminal;
+- complete logins (QR code, slider, device lock, SMS, identity verification), and use **Log in again** or **Refresh QR code**;
 
 An administrator must review and confirm the existing account list before its first migration; identity and history are retained. New or replaced accounts are saved disabled and must be started explicitly. A connection update reconnects only that account; replacement uses a new internal identity and does not inherit Sessions or settings. If a commit outcome is unknown, refresh to verify it before taking another action.
 
 Reading requires `icqq:read`; writes require `icqq:write`. A global owner is unrestricted. Plugin permissions are granted by level (see [Plugin permission levels](../console/index.md#plugin-permission-levels)): `:read` to `viewer` and above, `:write` (`operate` level for these account permissions) to `operator` and above; a role bound to this adapter counts too, and the first migration additionally needs an administrator. "Add endpoint" is equivalent to the old `icqq endpoint add` command.
 
-First-login QR codes, slider challenges and device confirmations appear under **Pending logins**, so you do not need to return to the terminal.
+First-login QR codes, slider challenges and device locks appear under **Pending logins**, so you do not need to return to the terminal.
+
+## Login
+
+The adapter declares `login: { mode: 'interactive', challenges: ['qrcode', 'slider', 'device', 'auth', 'sms'], relogin: true, refreshQr: true }`. Each login attempt is one flow: connect → challenge → verifying → online or failed. After you submit, you see the real result (wrong code, too many attempts, expired, …).
+
+| Challenge | How to finish it |
+|-----------|------------------|
+| QR code | Scan with mobile QQ, then confirm on the phone. After the scan the timeline shows "Scanned. Confirm the login on your phone"; after you confirm it continues by itself. If it does not, choose **I confirmed the login**. An expired QR code is replaced automatically (twice at most); after that use **Refresh QR code**. |
+| Slider | In Console, open the captcha helper page (default `https://zhin.js.org/login-assist/tcaptcha.html`; set `console.loginAssist.captchaHelperUrl` to use your own); it submits the result for you, no developer tools needed. Manual fallback: open the slider link, press F12, find the `cap_union_new_verify` response in the Network panel and copy `ticket`, or paste the whole response or a link containing ticket; it is extracted for you. |
+| Device lock | Scan the verification link's QR code with mobile QQ (or open it on the phone), verify, then choose **I verified on my phone**. When the SDK reports the account's phone you can choose **Use an SMS code instead**: enter the 6-digit code; **Send again** waits 60 seconds. No SMS is sent unless you ask for one. |
+| Identity verification | Follow the steps: ① copy the device JSON; ② open the verification link and go to the page that sends the code; ③ run the helper script in that page's developer tools Console (or drag it to the bookmarks bar) and paste the JSON when asked; ④ choose **Done, continue logging in**. Never paste the device JSON on other sites or send it to anyone. |
+
+Details:
+
+- **Slider answer format**: on the NT login path (the SDK's `sig.nt_captcha` points at this slider) the adapter submits `ticket,randstr` and asks again when randstr is missing; the legacy wtlogin path gets the ticket alone.
+- **The device JSON** exists only on the active challenge and is cleared when it ends; it is never logged and never enters events or `system.receive`. The helper script is static text: it runs only on `accounts.qq.com/login/attack`, only sets `window.__INITIAL_STATE__.deviceInfo`, never submits anything and contains no device data.
+- **Error codes**: `system.login.error` is mapped by one table to `code_invalid` (wrong code / ticket; the same challenge opens again), `rate_limited`, `challenge_expired`, `risk_blocked` (frozen account, blacklisted device, …), `credential_invalid` (wrong password), `network` and `unknown`. The platform's text is shown only as a sanitized one-line message without local paths.
+- **Automatic relogin**: never while someone answers a challenge. A failed verification or an expired challenge stops the flow as failed / expired until you choose **Log in again** or send `icqq login retry`. Only failures that need no verification (kicked offline, network or server errors, a plain login that failed before any challenge) retry with backoff (from 5 seconds, at most 8 times), each retry on the timeline.
+- **Refresh QR code** gets a new QR code in place; other challenges cannot be refreshed alone, so it logs in again.
 
 ## Outage notifications and re-login
 
@@ -125,17 +144,17 @@ icqq:
     id: "${QQ_MASTER_OPENID}"   # master openid on the QQ official bot
 ```
 
-With `autoReconnect: true`, the endpoint retries login automatically. When a QR code, slider or device confirmation is ready, the notice tells you what to send. Reply in QQ to finish login:
+With `autoReconnect: true`, the endpoint retries login after a kickoff. When a QR code, slider, device lock or identity verification is waiting, the notice tells you what to send. Reply in QQ to finish login:
 
 | Command | Purpose |
 |---------|---------|
 | `icqq login qr` | send the ICQQ login QR code to the current conversation (when images are supported) |
-| `icqq login confirm` | confirm after scanning the QR code |
-| `icqq login code <value>` | submit a slider ticket, SMS code or device-confirmation value |
-| `icqq login status` | show online state and pending login tasks |
-| `icqq login retry` | trigger another login attempt |
+| `icqq login confirm` | continue after the QR scan, device lock or identity verification |
+| `icqq login code [uin] <value>` | submit a slider ticket (the whole response works too) or a 6-digit SMS code; on a device lock send `sms` to switch to an SMS code, on an SMS challenge `resend` to send it again |
+| `icqq login status` | show online state, the current challenge's steps and links, and the last failure |
+| `icqq login retry` | log in again (a new login flow) |
 
-**Device lock**: the log, Console and notification show a verification link. Open it, verify in mobile QQ, then submit `ok` (type it in the terminal, submit in Console, or `icqq login code ok`) to continue. If the link does not work, submit `sms` to send a code to the bound phone, then submit the code. No SMS is sent unless you submit `sms`. While the verification waits, no automatic relogin runs (it would void the link); only after 5 minutes without an answer does it retry with backoff and show a new verification.
+**Device lock**: `icqq login status` shows the verification link. Verify in mobile QQ, then reply `icqq login confirm`. If the link does not work, reply `icqq login code sms`, then `icqq login code <code>` once the SMS arrives. No SMS is sent unless you ask for one. Identity verification needs the device information, so finish it in Console. While a verification waits, no automatic relogin runs (it would void the link); after 5 minutes without an answer the challenge expires and waits for you to log in again.
 
 Only the chat role `owner` or the `notify.id` account may run these commands; when neither is configured, use the Console ICQQ page. Without `notify`, outages are only logged and shown as pending logins on the Console ICQQ page.
 
@@ -143,7 +162,7 @@ Only the chat role `owner` or the `notify.id` account may run these commands; wh
 
 | Symptom | Check |
 | --- | --- |
-| Login never completes | Open Console login tasks and complete QR, slider, or device confirmation |
+| Login never completes | Open Console login tasks and finish the QR code, slider, device lock or identity verification; when the flow stopped as failed / expired, choose **Log in again** |
 | Signature fails | Reachability of `signApiAddr`, or installed and compatible local `@icqqjs/qqsign` |
 | Login repeats after restart | Persist device and session data directories |
 | Requests are missing | Endpoint request view; ICQQ reads the platform request list first |

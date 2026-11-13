@@ -1,0 +1,511 @@
+import { icqqFixture } from './fixture.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { runInNewContext } from 'node:vm';
+import { capabilityId, featureId, rootPluginId } from 'zhin.js';
+import type { OutboundMessageService } from '@zhin.js/core/runtime';
+import { LoginAssist, LoginSubmissionError, withoutLoginMedia, type LoginChallenge, type LoginFlowSnapshot } from '@zhin.js/core';
+
+vi.mock('@icqqjs/icqq', async () => import('./_icqq-mock.js'));
+
+import { resolveIcqqConfig } from '../src/protocol.js';
+import { createIcqqTestPorts } from './_icqq-mock.js';
+import { ICQQ_LOGIN_ERROR_TABLE, mapIcqqLoginError, sanitizeIcqqLoginMessage } from '../src/icqq-login-errors.js';
+import { authDescriptor, icqqAuthHelperScript, sliderCaptchaQuery } from '../src/icqq-login-descriptors.js';
+import { icqqSliderSubmission, isNtCaptcha } from '../src/icqq-login-assist.js';
+import definition from '../adapters/icqq/index.js';
+
+const endpointKey = capabilityId(rootPluginId(), featureId('zhin.adapter'), 'icqq');
+const DEVICE = { guid: 'device-guid-secret-0123', qimei: 'qimei-secret', qimei36: 'qimei-secret', subappid: '537', platform: 'Android', brand: 'Xiaomi', model: 'MI 9', bssid: '', devInfo: 'Xiaomi MI 9', sysVersion: '30' };
+const SLIDER_URL = 'https://ssl.captcha.qq.com/template/wireless_mqq_captcha.html?style=simple&aid=16&uin=10001&sid=abc&cap_cd=xyz';
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+type Setup = Awaited<ReturnType<typeof setup>>;
+const cleanups: Array<() => Promise<void>> = [];
+afterEach(async () => {
+  await Promise.all(cleanups.splice(0).map((cleanup) => cleanup()));
+  vi.useRealTimers();
+});
+
+async function setup(options: { locale?: 'zh-CN' | 'en'; autoReconnect?: boolean } = {}) {
+  const assist = new LoginAssist(null, { defaultTimeoutMs: 300_000, verifyTimeoutMs: 0 });
+  const events: LoginFlowSnapshot[] = [];
+  assist.subscribe('endpoint.login.flow', (flow) => events.push(flow));
+  const gateway: OutboundMessageService = { receive: vi.fn(async () => Object.freeze({ matched: true })), send: vi.fn(async () => 'sent') };
+  const sideEvents = createIcqqTestPorts().sideEvents;
+  const fixture = await icqqFixture({
+    id: endpointKey, gateway, sideEvents, loginAssist: assist, locale: options.locale ?? 'zh-CN',
+    config: resolveIcqqConfig({ id: '10001', autoReconnect: options.autoReconnect ?? false }),
+  }, gateway, sideEvents);
+  const client = fixture.endpoint;
+  const flow = () => assist.getFlow('icqq', '10001')!;
+  const active = (): { taskId: string; challenge: LoginChallenge } | undefined => {
+    const snapshot = assist.getFlow('icqq', '10001');
+    const step = snapshot?.steps.find((item) => item.taskId && item.taskId === snapshot.activeTaskId);
+    return step?.challenge ? { taskId: step.taskId!, challenge: step.challenge } : undefined;
+  };
+  let starting: Promise<unknown> | undefined;
+  const start = (raise: () => void) => {
+    vi.mocked(client.login).mockImplementationOnce(async () => { raise(); });
+    starting = fixture.start(new AbortController().signal).catch((error) => error);
+  };
+  cleanups.push(async () => { await fixture.stop(); await starting; assist.dispose(); });
+  return { assist, fixture, client, flow, active, events, sideEvents, start };
+}
+
+const steps = (s: Setup) => s.flow().steps.map((step) => `${step.kind}:${step.status}`);
+
+describe('icqq login flow (ADR 0058)', () => {
+  it('declares interactive login with relogin and QR refresh', () => {
+    expect(definition.login).toEqual({ mode: 'interactive', challenges: ['qrcode', 'slider', 'device', 'auth', 'sms'], relogin: true, refreshQr: true });
+  });
+
+  it('runs one flow per attempt: connect → challenge → verifying → online', async () => {
+    const s = await setup();
+    s.start(() => s.client.emit('system.login.qrcode', { image: Buffer.from('png') }));
+    await flush();
+    expect(s.flow().state).toBe('active');
+    const { taskId, challenge } = s.active()!;
+    expect(challenge).toMatchObject({
+      kind: 'qrcode', title: '扫码登录',
+      help: { steps: ['用手机 QQ 扫码', '在手机上确认登录', expect.any(String)] },
+      media: { qrImage: expect.stringMatching(/^data:image\/png;base64,/), refreshable: true },
+      actions: [{ id: 'confirm', variant: 'primary' }],
+    });
+    s.assist.submit(taskId, { action: 'confirm', values: {} });
+    await flush();
+    expect(s.client.login).toHaveBeenCalledTimes(2);
+    s.client.emit('system.online');
+    expect(s.flow().state).toBe('online');
+    expect(steps(s)).toEqual(['connect:done', 'challenge:done', 'verifying:done']);
+  });
+
+  describe('qrcode', () => {
+    function withQrApi(s: Setup, results: number[]) {
+      const query = vi.fn(async () => ({ retcode: results.length > 1 ? results.shift()! : results[0]! }));
+      const qrcodeLogin = vi.fn(async () => undefined);
+      const fetchQrcode = vi.fn(async () => { s.client.emit('system.login.qrcode', { image: Buffer.from('new') }); });
+      Object.assign(s.client, { queryQrcodeResult: query, qrcodeLogin, fetchQrcode });
+      return { query, qrcodeLogin, fetchQrcode };
+    }
+
+    it('follows the scan: scanned is an info step, a confirmed scan continues by itself', async () => {
+      vi.useFakeTimers();
+      const s = await setup();
+      const api = withQrApi(s, [48, 53, 53, 0]);
+      s.start(() => s.client.emit('system.login.qrcode', { image: Buffer.from('png') }));
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(s.active()).toBeDefined();
+      await vi.advanceTimersByTimeAsync(4_000);
+      expect(s.flow().steps.filter((step) => step.kind === 'info').map((step) => step.title)).toEqual(['已扫码，请在手机上确认登录']);
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(api.qrcodeLogin).toHaveBeenCalledTimes(1);
+      expect(s.client.login).toHaveBeenCalledTimes(1);
+      expect(s.active()).toBeUndefined();
+      expect(steps(s)).toEqual(['connect:done', 'challenge:done', 'info:done', 'verifying:active']);
+      s.client.emit('system.online');
+      expect(s.flow().state).toBe('online');
+    });
+
+    it('"I confirmed" before scanning reports it and shows the same QR code again', async () => {
+      const s = await setup();
+      const api = withQrApi(s, [48]);
+      Object.assign(s.client, { queryQrcodeResult: vi.fn(async () => ({ retcode: 48 })) });
+      s.start(() => s.client.emit('system.login.qrcode', { image: Buffer.from('png') }));
+      await flush();
+      const first = s.active()!;
+      const answer = await s.assist.submitAndWait(first.taskId, 'ok', { timeoutMs: 1_000 });
+      expect(answer.outcome).toMatchObject({ result: 'rejected', message: '还没有扫码，请先用手机 QQ 扫码', next: 'retry_input' });
+      await flush();
+      expect(s.active()?.challenge.kind).toBe('qrcode');
+      expect(s.active()?.taskId).not.toBe(first.taskId);
+      expect(api.qrcodeLogin).not.toHaveBeenCalled();
+    });
+
+    it('replaces an expired QR code twice by itself, then waits for the person', async () => {
+      vi.useFakeTimers();
+      const s = await setup();
+      const api = withQrApi(s, [17]);
+      s.start(() => s.client.emit('system.login.qrcode', { image: Buffer.from('png') }));
+      await vi.advanceTimersByTimeAsync(2_000);
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(api.fetchQrcode).toHaveBeenCalledTimes(2);
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(api.fetchQrcode).toHaveBeenCalledTimes(2);
+      expect(s.flow().state).toBe('expired');
+      expect(s.flow().lastOutcome).toMatchObject({ result: 'expired', code: 'challenge_expired', next: 'refresh_challenge' });
+      expect(s.active()).toBeUndefined();
+      // Nothing logs in again on its own.
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(s.client.login).toHaveBeenCalledTimes(1);
+    });
+
+    // The Console reaches the hooks through the Endpoint lease, i.e. once the account was started.
+    it('refreshChallenge asks the SDK for a new QR code in place; relogin starts a new attempt', async () => {
+      const s = await setup();
+      s.start(() => s.client.emit('system.online'));
+      await flush();
+      const api = withQrApi(s, [48]);
+      s.client.emit('system.login.qrcode', { image: Buffer.from('png') });
+      await flush();
+      const hooks = s.fixture.index.loginControl(s.fixture.canonicalId)!;
+      const before = s.active()!.taskId;
+      await hooks.refreshChallenge!({});
+      expect(api.fetchQrcode).toHaveBeenCalledTimes(1);
+      expect(s.client.login).toHaveBeenCalledTimes(1);
+      expect(s.active()?.taskId).not.toBe(before);
+      expect(s.flow().steps.some((step) => step.kind === 'info' && step.title === '正在换一张二维码…')).toBe(true);
+
+      const attempt = s.flow().attempt;
+      vi.mocked(s.client.login).mockImplementationOnce(async () => { s.client.emit('system.login.qrcode', { image: Buffer.from('again') }); });
+      await hooks.relogin!({});
+      expect(s.client.login).toHaveBeenCalledTimes(2);
+      expect(s.flow().attempt).toBe(attempt + 1);
+      expect(s.active()?.challenge.kind).toBe('qrcode');
+    });
+
+    it('refreshChallenge without a QR challenge logs in again', async () => {
+      const s = await setup();
+      s.start(() => s.client.emit('system.online'));
+      await flush();
+      s.client.emit('system.login.slider', { url: SLIDER_URL });
+      await flush();
+      vi.mocked(s.client.login).mockImplementationOnce(async () => undefined);
+      await s.fixture.index.loginControl(s.fixture.canonicalId)!.refreshChallenge!({});
+      expect(s.client.login).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('slider', () => {
+    it('offers the hosted captcha helper, a link and the manual fallback', async () => {
+      const s = await setup();
+      s.start(() => s.client.emit('system.login.slider', { url: SLIDER_URL }));
+      await flush();
+      const { challenge } = s.active()!;
+      expect(challenge).toMatchObject({
+        kind: 'slider',
+        media: { captcha: { provider: 'tencent', query: new URL(SLIDER_URL).search.slice(1) } },
+        input: { kind: 'ticket', extract: 'ticket-json-or-url' },
+        blocks: [{ kind: 'link', id: 'slider-link', url: SLIDER_URL }],
+      });
+      expect(challenge.help?.steps?.[0]).toMatchObject({ blockId: 'slider-link', doneWhen: 'opened' });
+      expect(challenge.help?.steps?.map((step) => (typeof step === 'string' ? step : step.text)).join('\n')).toContain('cap_union_new_verify');
+      // Old Consoles and chat commands still get the link.
+      expect(s.assist.listPending()[0]!.payload.url).toBe(SLIDER_URL);
+    });
+
+    it('legacy wtlogin path submits the ticket alone, even from a pasted response JSON', async () => {
+      const s = await setup();
+      Object.assign(s.client, { sig: { nt_captcha: null } });
+      s.start(() => s.client.emit('system.login.slider', { url: SLIDER_URL }));
+      await flush();
+      s.assist.submit(s.active()!.taskId, '{"errorCode":"0","ticket":"t03-legacy","randstr":"@rs"}');
+      await flush();
+      expect(s.client.submitSlider).toHaveBeenCalledWith('t03-legacy');
+    });
+
+    it('NT path submits ticket,randstr from the captcha helper', async () => {
+      const s = await setup();
+      Object.assign(s.client, { sig: { nt_captcha: { url: SLIDER_URL } } });
+      s.start(() => s.client.emit('system.login.slider', { url: SLIDER_URL }));
+      await flush();
+      s.assist.submit(s.active()!.taskId, { action: 'submit', values: { ticket: 't03-nt,@randstr' } });
+      await flush();
+      expect(s.client.submitSlider).toHaveBeenCalledWith('t03-nt,@randstr');
+      expect(steps(s).at(-1)).toBe('verifying:active');
+    });
+
+    it('NT path without randstr stays on the slider and explains why', async () => {
+      const s = await setup();
+      Object.assign(s.client, { sig: { nt_captcha: { url: SLIDER_URL } } });
+      s.start(() => s.client.emit('system.login.slider', { url: SLIDER_URL }));
+      await flush();
+      const result = await s.assist.submitAndWait(s.active()!.taskId, 'only-ticket', { timeoutMs: 1_000 });
+      expect(result.outcome).toMatchObject({ result: 'rejected', code: 'code_invalid', next: 'retry_input' });
+      expect(result.outcome?.message).toContain('randstr');
+      expect(result.outcome?.message).not.toContain('only-ticket');
+      expect(s.client.submitSlider).not.toHaveBeenCalled();
+      expect(s.active()?.challenge.kind).toBe('slider');
+    });
+
+    it('detects the NT captcha from the SDK state of this slider URL', () => {
+      expect(isNtCaptcha({ sig: { nt_captcha: { url: SLIDER_URL } } }, SLIDER_URL)).toBe(true);
+      expect(isNtCaptcha({ sig: { nt_captcha: { url: 'https://other.example/x' } } }, SLIDER_URL)).toBe(false);
+      expect(isNtCaptcha({ sig: { nt_captcha: null } }, SLIDER_URL)).toBe(false);
+      expect(isNtCaptcha({}, SLIDER_URL)).toBe(false);
+      expect(icqqSliderSubmission({ ticket: 't', randstr: 'r' }, true)).toBe('t,r');
+      expect(icqqSliderSubmission({ ticket: 't', randstr: 'r' }, false)).toBe('t');
+      expect(sliderCaptchaQuery('javascript:alert(1)')).toBeUndefined();
+    });
+
+    it('a wrong ticket (login.error) stays on the slider', async () => {
+      const s = await setup({ autoReconnect: true });
+      s.start(() => s.client.emit('system.login.slider', { url: SLIDER_URL }));
+      await flush();
+      s.assist.submit(s.active()!.taskId, 'bad-ticket');
+      await flush();
+      s.client.emit('system.login.error', { code: 140022016, message: '[登录失败]ticket无效' });
+      await flush();
+      expect(s.flow().state).toBe('active');
+      expect(s.flow().lastOutcome).toMatchObject({ result: 'rejected', code: 'code_invalid', next: 'retry_input' });
+      expect(s.active()?.challenge.kind).toBe('slider');
+    });
+  });
+
+  describe('device lock and SMS', () => {
+    it('continue logs in again without sending an SMS', async () => {
+      const s = await setup();
+      s.start(() => s.client.emit('system.login.device', { url: 'https://accounts.qq.com/safe/verify?sig=1', phone: '138****0000' }));
+      await flush();
+      const { taskId, challenge } = s.active()!;
+      expect(challenge).toMatchObject({
+        kind: 'device',
+        actions: [{ id: 'continue', label: '我已在手机完成验证', variant: 'primary' }, { id: 'sms', label: '改用短信验证码' }],
+        blocks: [{ kind: 'link', id: 'verify-link', showQr: true }],
+      });
+      s.assist.submit(taskId, { action: 'continue', values: {} });
+      await flush();
+      expect(s.client.login).toHaveBeenCalledTimes(2);
+      expect(s.client.sendSmsCode).not.toHaveBeenCalled();
+    });
+
+    it('offers no SMS when the SDK reports no phone', async () => {
+      const s = await setup();
+      s.start(() => s.client.emit('system.login.device', { url: 'https://accounts.qq.com/safe/verify?sig=1', phone: '' }));
+      await flush();
+      expect(s.active()!.challenge.actions.map((action) => action.id)).toEqual(['continue']);
+    });
+
+    it('sms → code challenge, validates the code, resend honours the cooldown', async () => {
+      vi.useFakeTimers();
+      const s = await setup();
+      s.start(() => s.client.emit('system.login.device', { url: 'https://accounts.qq.com/safe/verify?sig=1', phone: '138****0000' }));
+      await vi.advanceTimersByTimeAsync(0);
+      s.assist.submit(s.active()!.taskId, { action: 'sms', values: {} });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(s.client.sendSmsCode).toHaveBeenCalledTimes(1);
+      const sms = s.active()!;
+      expect(sms.challenge).toMatchObject({
+        kind: 'sms',
+        input: { kind: 'code', length: 6, pattern: '^\\d{6}$' },
+        actions: [{ id: 'submit', requiresInput: true }, { id: 'resend', cooldownMs: 60_000 }],
+      });
+      expect(sms.challenge.help?.short).toContain('138****0000');
+      // The device step counted as accepted.
+      expect(s.flow().steps.find((step) => step.kind === 'verifying')?.outcome).toEqual({ result: 'accepted' });
+
+      expect(() => s.assist.submit(sms.taskId, '12ab')).toThrow(LoginSubmissionError);
+      expect(s.active()?.taskId).toBe(sms.taskId);
+
+      s.assist.submit(sms.taskId, { action: 'resend', values: {} });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(s.client.sendSmsCode).toHaveBeenCalledTimes(1);
+      expect(s.flow().lastOutcome).toMatchObject({ result: 'rejected', code: 'rate_limited', next: 'wait' });
+      expect(s.flow().lastOutcome?.retryAfterMs).toBeGreaterThan(0);
+
+      await vi.advanceTimersByTimeAsync(60_000);
+      s.assist.submit(s.active()!.taskId, { action: 'resend', values: {} });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(s.client.sendSmsCode).toHaveBeenCalledTimes(2);
+      expect(s.flow().steps.some((step) => step.kind === 'info' && step.title === '已重新发送短信验证码')).toBe(true);
+
+      s.assist.submit(s.active()!.taskId, ' 654321 ');
+      await vi.advanceTimersByTimeAsync(0);
+      expect(s.client.submitSmsCode).toHaveBeenCalledWith('654321');
+    });
+
+    it('a wrong SMS code (login.error 163) re-opens the SMS challenge', async () => {
+      const s = await setup({ autoReconnect: true });
+      s.start(() => s.client.emit('system.login.device', { url: 'https://accounts.qq.com/safe/verify?sig=1', phone: '138****0000' }));
+      await flush();
+      s.assist.submit(s.active()!.taskId, { action: 'sms', values: {} });
+      await flush();
+      s.assist.submit(s.active()!.taskId, '111111');
+      await flush();
+      s.client.emit('system.login.error', { code: 163, message: '验证码错误' });
+      await flush();
+      expect(s.active()?.challenge.kind).toBe('sms');
+      expect(s.flow().lastOutcome).toMatchObject({ result: 'rejected', code: 'code_invalid', message: '验证码错误' });
+      expect(s.client.sendSmsCode).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([
+      [new Error('发送短信过于频繁'), 'rate_limited', 'wait'],
+      [new Error('socket closed'), 'unknown', 'retry_input'],
+    ] as const)('an SMS send failure (%s) is reported and stays on the device lock', async (error, code, next) => {
+      const s = await setup();
+      vi.mocked(s.client.sendSmsCode).mockRejectedValueOnce(error);
+      s.start(() => s.client.emit('system.login.device', { url: 'https://accounts.qq.com/safe/verify?sig=1', phone: '138****0000' }));
+      await flush();
+      const result = await s.assist.submitAndWait(s.active()!.taskId, { action: 'sms', values: {} }, { timeoutMs: 1_000 });
+      expect(result.outcome).toMatchObject({ result: 'rejected', code, next });
+      expect(result.outcome?.message).toContain(error.message);
+      await flush();
+      expect(s.active()?.challenge.kind).toBe('device');
+    });
+  });
+
+  describe('identity verification (auth)', () => {
+    it('guides with the device JSON, the verification link and the helper script', async () => {
+      const s = await setup();
+      s.start(() => s.client.emit('system.login.auth', { url: 'https://accounts.qq.com/login/attack?sig=abc', device: DEVICE }));
+      await flush();
+      const { taskId, challenge } = s.active()!;
+      expect(challenge.help?.warning).toBe('不要把设备 JSON 粘贴到其他网站或发给他人');
+      expect(challenge.help?.steps).toEqual([
+        { text: '复制设备 JSON', blockId: 'device-json', doneWhen: 'copied' },
+        { text: '打开验证链接，进入发送验证码的页面', blockId: 'verify-link', doneWhen: 'opened' },
+        expect.objectContaining({ blockId: 'helper-script', doneWhen: 'copied' }),
+        { text: '完成后点「已完成，继续登录」', doneWhen: 'manual' },
+      ]);
+      const [json, link, script] = challenge.blocks!;
+      expect(json).toMatchObject({ kind: 'copy', id: 'device-json', format: 'json', sensitive: true, thenOpen: 'verify-link' });
+      expect(JSON.parse((json as { content: string }).content)).toEqual(DEVICE);
+      expect(link).toMatchObject({ kind: 'link', id: 'verify-link', showQr: true });
+      expect(script).toMatchObject({ kind: 'copy', id: 'helper-script', format: 'script', collapsed: true, bookmarklet: true });
+      expect((script as { content: string }).content).not.toContain(DEVICE.guid);
+      expect(challenge.actions).toEqual([expect.objectContaining({ id: 'continue', label: '已完成，继续登录', variant: 'primary' })]);
+
+      // Device data never leaves the live challenge: not in event-safe snapshots, side events or the ended step.
+      expect(JSON.stringify(s.events.map(withoutLoginMedia))).not.toContain(DEVICE.guid);
+      expect(JSON.stringify(vi.mocked(s.sideEvents.receiveSystem).mock.calls)).not.toContain(DEVICE.guid);
+      s.assist.submit(taskId, { action: 'continue', values: {} });
+      await flush();
+      expect(s.client.login).toHaveBeenCalledTimes(2);
+      expect(JSON.stringify(s.flow())).not.toContain(DEVICE.guid);
+    });
+
+    it('without device information shows only the link', () => {
+      const descriptor = authDescriptor({ url: 'https://accounts.qq.com/login/attack?x=1' });
+      expect(descriptor.blocks?.map((block) => block.kind)).toEqual(['link']);
+      expect(descriptor.help?.warning).toBeUndefined();
+    });
+
+    describe('helper script', () => {
+      const run = (hostname: string, pathname: string, answer: string | null, state: Record<string, unknown> | undefined = {}) => {
+        const alerts: string[] = [];
+        const window: Record<string, unknown> = { __INITIAL_STATE__: state };
+        runInNewContext(icqqAuthHelperScript('zh-CN'), {
+          location: { hostname, pathname }, window, prompt: () => answer, alert: (text: string) => alerts.push(text),
+        });
+        return { alerts, state: window.__INITIAL_STATE__ as Record<string, unknown> | undefined };
+      };
+
+      it('is static text with a host guard and no submission', () => {
+        const script = icqqAuthHelperScript('zh-CN');
+        expect(script).toBe(icqqAuthHelperScript('zh-CN'));
+        expect(script).toContain("location.hostname !== \"accounts.qq.com\"");
+        expect(script).toContain("location.pathname !== \"/login/attack\"");
+        expect(script).not.toMatch(/fetch\(|XMLHttpRequest|\.submit\(|\.click\(|sendBeacon/u);
+        // A bookmarklet is one line: no line comments.
+        expect(script.split('\n').some((line) => line.trim().startsWith('//'))).toBe(false);
+        expect(icqqAuthHelperScript('en')).toContain('Paste the device JSON');
+      });
+
+      it('runs only on accounts.qq.com/login/attack', () => {
+        const other = run('evil.example', '/login/attack', JSON.stringify(DEVICE));
+        expect(other.state).toEqual({});
+        expect(other.alerts[0]).toContain('accounts.qq.com/login/attack');
+        expect(run('accounts.qq.com', '/other', JSON.stringify(DEVICE)).state).toEqual({});
+      });
+
+      it('validates the pasted JSON and sets deviceInfo', () => {
+        expect(run('accounts.qq.com', '/login/attack', '{oops').alerts[0]).toContain('格式不正确');
+        expect(run('accounts.qq.com', '/login/attack', '{"qimei":"x"}').alerts[0]).toContain('guid');
+        expect(run('accounts.qq.com', '/login/attack', null).alerts).toEqual([]);
+        expect(run('accounts.qq.com', '/login/attack', JSON.stringify(DEVICE), null as never).alerts[0]).toContain('刷新');
+        const ok = run('accounts.qq.com', '/login/attack', JSON.stringify(DEVICE));
+        expect(ok.state?.deviceInfo).toEqual(DEVICE);
+        expect(ok.alerts[0]).toContain('设备信息已写入');
+      });
+    });
+  });
+
+  describe('login errors', () => {
+    it.each([
+      [{ code: 1, message: '密码错误' }, 'credential_invalid', 'relogin'],
+      [{ code: 140022013, message: '[登录失败]账号或密码错误' }, 'credential_invalid', 'relogin'],
+      [{ code: 163, message: '验证码错误' }, 'code_invalid', 'retry_input'],
+      [{ code: 150022026, message: 'x' }, 'code_invalid', 'retry_input'],
+      [{ code: 162, message: '短信发送次数过多' }, 'rate_limited', 'wait'],
+      [{ code: 150022022, message: '' }, 'rate_limited', 'wait'],
+      [{ code: 237, message: '[登陆失败](237)当前QQ登录频繁，暂时被限制登录' }, 'rate_limited', 'wait'],
+      [{ code: 40, message: '账号被冻结' }, 'risk_blocked', 'none'],
+      [{ code: 235, message: '[登陆失败](235)当前设备信息被拉黑，建议删除"/home/bot/data/device.json"后重新登录！' }, 'risk_blocked', 'none'],
+      [{ code: 140022014, message: '' }, 'challenge_expired', 'relogin'],
+      [{ code: 140022003, message: '' }, 'network', 'wait'],
+      [{ code: 9, message: '[登陆失败]未知错误' }, 'unknown', 'relogin'],
+      [{ code: 2, message: '[登陆失败]未知格式的验证码' }, 'unknown', 'relogin'],
+      [{ code: 999, message: '服务器繁忙' }, 'network', 'wait'],
+      [{}, 'unknown', 'relogin'],
+    ] as const)('maps %j → %s / %s', (event, code, next) => {
+      expect(mapIcqqLoginError(event)).toMatchObject({ code, next });
+    });
+
+    it('keeps only a sanitized platform message', () => {
+      const mapped = mapIcqqLoginError({ code: 235, message: '[登陆失败](235)\n当前设备信息被拉黑，建议删除"/home/bot/data/device.json"后重新登录！' });
+      expect(mapped.message).not.toContain('/home/bot');
+      expect(mapped.message).not.toContain('\n');
+      expect(sanitizeIcqqLoginMessage(`x${'y'.repeat(400)}`).length).toBeLessThanOrEqual(200);
+      expect(mapIcqqLoginError({ code: 1 }, 'en').message).toBe('The password or login credential is not valid');
+      for (const rule of ICQQ_LOGIN_ERROR_TABLE) expect(rule.codes?.length || rule.pattern).toBeTruthy();
+    });
+
+    it('a verification failure ends the flow and waits for the person (no automatic relogin)', async () => {
+      vi.useFakeTimers();
+      const s = await setup({ autoReconnect: true });
+      s.start(() => s.client.emit('system.login.device', { url: 'https://accounts.qq.com/safe/verify?sig=1', phone: '' }));
+      await vi.advanceTimersByTimeAsync(0);
+      s.assist.submit(s.active()!.taskId, { action: 'continue', values: {} });
+      vi.mocked(s.client.login).mockImplementation(async () => undefined);
+      await vi.advanceTimersByTimeAsync(0);
+      s.client.emit('system.login.error', { code: 9, message: '[登陆失败]未知错误' });
+      expect(s.flow().state).toBe('failed');
+      expect(s.flow().lastOutcome).toMatchObject({ result: 'failed', code: 'unknown', next: 'relogin' });
+      await vi.advanceTimersByTimeAsync(600_000);
+      expect(s.client.login).toHaveBeenCalledTimes(2);
+    });
+
+    it('a credential error never retries on its own', async () => {
+      vi.useFakeTimers();
+      const s = await setup({ autoReconnect: true });
+      s.start(() => s.client.emit('system.login.error', { code: 1, message: '密码错误' }));
+      await vi.advanceTimersByTimeAsync(600_000);
+      expect(s.client.login).toHaveBeenCalledTimes(1);
+      expect(s.flow().lastOutcome).toMatchObject({ result: 'failed', code: 'credential_invalid', next: 'relogin' });
+    });
+
+    it('a network failure keeps the automatic backoff, each retry on the timeline', async () => {
+      vi.useFakeTimers();
+      const s = await setup({ autoReconnect: true });
+      vi.mocked(s.client.login).mockImplementation(async () => { s.client.emit('system.login.error', { code: 140022003, message: '' }); });
+      s.start(() => s.client.emit('system.login.error', { code: 140022003, message: '' }));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(s.flow().state).toBe('active');
+      expect(s.flow().lastOutcome).toMatchObject({ result: 'rejected', code: 'network', next: 'wait' });
+      await vi.advanceTimersByTimeAsync(5_000);
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(s.client.login).toHaveBeenCalledTimes(3);
+      const info = s.flow().steps.filter((step) => step.kind === 'info').map((step) => step.title);
+      expect(info).toEqual([
+        '网络或服务器出错，5 秒后自动重新登录（第 1 次）',
+        '网络或服务器出错，10 秒后自动重新登录（第 2 次）',
+        '网络或服务器出错，20 秒后自动重新登录（第 3 次）',
+      ]);
+      expect(s.flow().attempt).toBe(1);
+    });
+
+    it('being kicked off relogs in with backoff on a new flow', async () => {
+      vi.useFakeTimers();
+      const s = await setup({ autoReconnect: true });
+      s.start(() => s.client.emit('system.online'));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(s.flow().state).toBe('online');
+      s.client.emit('system.offline.kickoff', { message: 'kicked' });
+      expect(s.flow().state).toBe('active');
+      expect(s.flow().steps[0]).toMatchObject({ kind: 'info', title: '账号被踢下线，5 秒后自动重新登录（第 1 次）' });
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(s.client.login).toHaveBeenCalledTimes(2);
+      expect(s.flow().state).toBe('online');
+    });
+  });
+});

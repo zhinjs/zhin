@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/icqq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/icqq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=59ce471df8486f83 -->
+<!-- sync-adapter-docs:sha256=4f837d759d0b222b -->
 
 # @zhin.js/adapter-icqq
 
@@ -177,7 +177,7 @@ IM turn 的场景，应通过 Host 提供的显式账号作用域操作，不能
 - **Console 社交/群管 RPC 已接线**：endpoint 把好友/群/群成员列表、请求审批和群管操作归一化为冻结的 `EndpointManagement`。Host 只消费该语义端口。
 - 好友/入群请求与通知：经 the unified `endpoint[endpointSpec].events` ingress 分发到 `handlers`（`notice.receive` / `request.receive`）；审批走 `Request.$approve` / `EndpointManagement.approveRequest`。Console `request.list` 优先读 `management.listRequests()`（`getSystemMsg`），不再写入 `unified_inbox_request/notice`。
 - `system.*`（登录扫码等）分发到 `system.receive`。
-- **登录辅助**：`system.login.qrcode|slider|device|auth` 经 `loginAssistToken`（`LoginAssist`）挂起待办；刷新后可用 Console `login.list` / `login.submit` 或终端 stdin 继续（对齐 icqq 官方 stdin 流程）。`system.online` / `login.error` 会清理该 endpoint 待办。
+- **登录辅助**：每次登录是一条登录流程（[ADR 0058](https://zhin.js.org/adr/0058-login-assist-v2)），`system.login.qrcode|slider|device|auth` 变成流程里的挑战，Console、终端和 QQ 命令都能作答，见下文「登录」。
 
 ## Agent 会话与消息操作
 
@@ -191,15 +191,34 @@ ICQQ Agent 可按需加载 `icqq-conversation` 查询当前群／频道和 Bot �
 
 - 查看运行中的连接、点「测试连接」做连通性诊断；
 - 在账号库保存、修改、启动、停止、替换或删除该 Adapter 的账号；新增仅保存，不创建 SDK Client，需手动启动；
-- 处理登录待办（扫码 / 滑块 / 设备确认等，来自 LoginAssist）；
+- 处理登录（扫码、滑块、设备锁、短信、身份验证），并「重新登录」或「刷新二维码」；
 
-ICQQ 首次登录的二维码、滑块、设备确认会出现在「登录待办」里，不需要再回到终端确认。
+ICQQ 首次登录的二维码、滑块、设备锁会出现在「登录待办」里，不需要再回到终端确认。
 
 读取需要 `icqq:read`（`read` 级别，内置角色 `viewer` 及以上都有）；增删改账号等写操作需要 `icqq:write`（`operate` 级别，`operator` 及以上都有，绑定到本适配器的角色也算），首次迁移还需管理员身份；全局所有者不受限，见[插件权限的级别](https://zhin.js.org/console/#插件权限的级别)。页面里的「添加 endpoint」等价于原来的 `icqq endpoint add`。
 
 首次修改启动配置里的既有账号前，管理员必须核对清单并确认一次迁移。原 canonical 身份与历史保留，完整账号配置加密进入 Host 数据库；此后账号管理只写数据库，不修改启动文件或 `.env`，不重启进程。没有持久化账号端口的环境可使用静态配置连接，动态写操作明确不可用。
 
 启停意图在进程重启后恢复。停止或删除会取消并关闭目标账号的在途操作，其他账号继续运行；删除保留历史。已启动账号的连接配置更新先关闭旧 incarnation，再仅重连该账号；平台身份变化按替换处理，分配新内部身份、保留旧历史，新账号不继承旧 Session、个人设置或启动意图。提交结果未知时先刷新核实，不自动重复 CAS 或平台操作。
+
+## 登录
+
+适配器声明 `login: { mode: 'interactive', challenges: ['qrcode', 'slider', 'device', 'auth', 'sms'], relogin: true, refreshQr: true }`。每次登录尝试是一条登录流程：连接 → 挑战 → 验证中 → 在线或失败。提交后能看到真实结果（验证码错误、太频繁、已过期等），不再是「提交了就没消息」。
+
+| 挑战 | 怎么完成 |
+|------|----------|
+| 扫码登录 | 用手机 QQ 扫码，再在手机上确认。扫码后时间线显示「已扫码，请在手机上确认登录」，确认后自动继续；没有继续时点「我已确认登录」。二维码过期会自动换新的（最多两次），之后点「刷新二维码」。 |
+| 滑块验证 | 在 Console 打开验证码辅助页（默认 `https://zhin.js.org/login-assist/tcaptcha.html`，可用 `console.loginAssist.captchaHelperUrl` 换成自己的页面），完成后自动提交，不需要开发者工具。手动方式：打开滑块链接，按 F12 在「网络」面板找到 `cap_union_new_verify` 的响应，复制 `ticket`，或者直接粘贴整段响应 / 带 ticket 的链接，会自动提取。 |
+| 设备锁 | 用手机 QQ 扫验证链接的二维码（或在手机上打开链接）完成验证，再点「我已在手机完成验证」。SDK 给出密保手机时可以点「改用短信验证码」：发送验证码后输入 6 位数字，「重新发送」要等 60 秒。不点就不会发短信。 |
+| 身份验证 | 按步骤：① 复制设备 JSON；② 打开验证链接，进入发送验证码的页面；③ 在该页开发者工具 Console 运行辅助脚本（也可拖到书签栏），按提示粘贴 JSON；④ 完成后点「已完成，继续登录」。不要把设备 JSON 粘贴到其他网站或发给他人。 |
+
+细节：
+
+- **滑块提交格式**：NT 登录（SDK 的 `sig.nt_captcha` 指向这个滑块）提交 `ticket,randstr`，缺 randstr 时会提示并留在滑块；旧版 wtlogin 只提交 `ticket`。
+- **设备 JSON** 只存在于当前挑战上：挑战结束即清空；不写日志，不进事件和 `system.receive`。辅助脚本是固定文本，只在 `accounts.qq.com/login/attack` 上运行，只设置 `window.__INITIAL_STATE__.deviceInfo`，从不自动提交，也不含任何设备数据。
+- **错误码**：`system.login.error` 按一张表映射到 `code_invalid`（验证码 / ticket 错误，留在原挑战重试）、`rate_limited`、`challenge_expired`、`risk_blocked`（冻结、设备被拉黑等）、`credential_invalid`（密码错误）、`network`、`unknown`。平台原文只作为清洗后的说明显示（单行，不含本机路径）。
+- **自动重新登录**：有人正在答挑战时不会自动重新登录。验证失败、挑战过期等需要人处理的情况，流程停在「失败 / 已过期」，等你点「重新登录」或发 `icqq login retry`。只有不需要验证的失败（被踢下线、网络或服务器错误、没有出现任何挑战的普通登录失败）才按退避自动重试（5 秒起，最多 8 次），每次重试都记在时间线上。
+- Console「刷新二维码」在扫码挑战上直接换一张新二维码；其他挑战不能单独刷新，会改为重新登录。
 
 ## 掉线通知与重新登录
 
@@ -218,17 +237,17 @@ icqq:
     id: "${QQ_MASTER_OPENID}"   # master 在 QQ 官方机器人里的 openid
 ```
 
-`autoReconnect: true` 时，被踢下线会自动重试登录；二维码/滑块/设备确认就绪后，通知会提示下一步。收到通知后可以直接在 QQ 里完成：
+`autoReconnect: true` 时，被踢下线会自动重试登录；出现二维码、滑块、设备锁或身份验证时，通知会提示下一步。收到通知后可以直接在 QQ 里完成：
 
 | 命令 | 作用 |
 |------|------|
 | `icqq login qr` | 把 ICQQ 登录二维码发到当前会话（QQ 支持图片时） |
-| `icqq login confirm` | 扫码后确认继续登录 |
-| `icqq login code <内容>` | 提交滑块 ticket、短信验证码或设备确认内容 |
-| `icqq login status` | 查看在线状态与登录待办 |
-| `icqq login retry` | 强制重新触发登录 |
+| `icqq login confirm` | 扫码、设备锁或身份验证完成后继续登录 |
+| `icqq login code [QQ号] <内容>` | 提交滑块 ticket（可粘贴整段响应）或 6 位短信验证码；设备锁回复 `sms` 改用短信，短信挑战回复 `resend` 重新发送 |
+| `icqq login status` | 查看在线状态、当前挑战的步骤和链接、上次失败原因 |
+| `icqq login retry` | 重新登录（新的登录流程） |
 
-**设备锁**：日志、Console 和通知里会给出验证链接。打开链接，用手机 QQ 完成验证后提交 `ok`（终端直接输入、Console 提交，或 `icqq login code ok`），登录继续。无法用链接验证时提交 `sms`，会向密保手机发送验证码，再提交收到的验证码。没有提交 `sms` 不会发短信。等待验证期间不会自动重新登录（否则链接会失效）；超过 5 分钟未处理，才会按退避重试并给出新的验证。
+**设备锁**：`icqq login status` 会给出验证链接。用手机 QQ 完成验证后回复 `icqq login confirm`；无法用链接验证时回复 `icqq login code sms`，收到短信后回复 `icqq login code <验证码>`。不回复 `sms` 不会发短信。身份验证需要复制设备信息，请在 Console 完成。等待验证期间不会自动重新登录（否则链接会失效）；5 分钟没有处理，挑战过期，等你重新登录。
 
 命令只接受 master（顶层或 `endpoints[i].master`）或 `notify.id` 对应账号；两者都没配置时请用 Console 的 ICQQ 页面。没有配置 `notify` 时，掉线只写日志并在 Console 显示登录待办。
 
@@ -236,7 +255,7 @@ icqq:
 
 | 现象 | 排查 |
 | --- | --- |
-| 一直停在登录中 | 打开 Console 登录待办，完成二维码、滑块或设备确认 |
+| 一直停在登录中 | 打开 Console 登录待办，完成二维码、滑块、设备锁或身份验证；流程停在「失败 / 已过期」时点「重新登录」 |
 | 签名失败 | 检查 `signApiAddr`；本地模式确认 `@icqqjs/qqsign` 已安装且版本匹配 |
 | 重启后重复登录 | 持久化设备与会话数据目录，避免每次生成新设备 |
 | 请求或通知未显示 | 在账号页「聊天」页签检查好友申请与邀请、通知；ICQQ 优先读取平台请求列表 |

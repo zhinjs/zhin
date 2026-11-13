@@ -1473,11 +1473,17 @@ function legacyTypeOf(challenge: LoginChallenge): LoginAssistType {
   }
 }
 
+/**
+ * Legacy task payload of a flow challenge (`login.list`, older Consoles, chat commands): the title
+ * with the short help, the QR image, and the main link (`media.link`, else the first link block).
+ */
 function legacyPayloadOf(challenge: LoginChallenge): PendingLoginTaskPayload {
+  const url = challenge.media?.link?.url
+    ?? challenge.blocks?.find((block): block is Extract<LoginChallengeBlock, { kind: 'link' }> => block.kind === 'link')?.url;
   return {
-    message: challenge.title,
+    message: challenge.help?.short ? `${challenge.title}：${challenge.help.short}` : challenge.title,
     ...(challenge.media?.qrImage ? { image: challenge.media.qrImage } : {}),
-    ...(challenge.media?.link ? { url: challenge.media.link.url } : {}),
+    ...(url ? { url } : {}),
   };
 }
 

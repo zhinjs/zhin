@@ -6,7 +6,7 @@
 import { adapterFeatureId, isAdapterIndex } from 'zhin.js/adapter';
 import type { FeatureId, PluginId } from 'zhin.js';
 import { IcqqAdapter } from './adapter.js';
-import type { PendingLoginTask } from '@zhin.js/core';
+import type { LoginFlowSnapshot, PendingLoginTask } from '@zhin.js/core';
 
 export interface IcqqLoginControlState {
   readonly endpointId: string;
@@ -19,8 +19,11 @@ export interface IcqqLoginControl {
   readonly endpointId: string;
   state(): IcqqLoginControlState;
   pending(): readonly PendingLoginTask[];
+  /** Latest login flow of this incarnation (ADR 0058), including the active challenge. */
+  flow(): LoginFlowSnapshot | undefined;
   /** Force a login attempt; rejects when the endpoint is stopped or the SDK login fails. */
   relogin(): Promise<void>;
+  /** Answer a challenge; throws `LoginSubmissionError` when the answer does not fit it. */
   submit(taskId: string, value: string | Record<string, unknown>): boolean;
   cancel(taskId: string, reason?: string): boolean;
 }

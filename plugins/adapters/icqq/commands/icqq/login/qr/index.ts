@@ -1,8 +1,12 @@
 import { defineCommand } from 'zhin.js/command';
 import {
+  activeIcqqChallenge,
+  challengeCommandHint,
+  challengeLinks,
   icqqLoginControls,
   icqqLoginForbidden,
   isIcqqLoginOperator,
+  pendingTaskLabel,
   pickIcqqLoginControl,
 } from '../definition.js';
 
@@ -16,34 +20,32 @@ export default defineCommand({
     const picked = pickIcqqLoginControl(icqqLoginControls({ project, owner }), args[0]);
     if (!picked.control) return picked.text ?? 'ICQQ 适配器还没有启动';
     const control = picked.control;
-    const findQr = () => control.pending().find((task) => task.type === 'qrcode' || task.type === 'auth');
-    let task = findQr();
-    if (!task) {
-      const other = control.pending().find((item) => item.type !== 'qrcode' && item.type !== 'auth');
-      if (other) {
-        const url = typeof other.payload.url === 'string' ? other.payload.url : '';
-        return `ICQQ ${other.endpointKey} 当前是${other.type === 'slider' ? '滑块验证' : '登录验证'}，请打开 ${url || '验证页面'}，`
-          + '完成后回复 `icqq login code <内容>`。';
-      }
+    let active = activeIcqqChallenge(control);
+    if (active && active.challenge.kind !== 'qrcode') {
+      const links = challengeLinks(active.challenge).map((link) => `${link.label}：${link.url}`);
+      return [`ICQQ ${control.endpointId} 当前是${pendingTaskLabel(active.challenge.kind)}，不是扫码登录。`, ...links,
+        challengeCommandHint(active.challenge.kind, control.endpointId)].join('\n');
+    }
+    if (!active) {
       try {
         await control.relogin();
       } catch {
         // The SDK may still deliver a QR challenge asynchronously.
       }
-      task = findQr();
-      if (!task) return '已触发重新登录，请 5 秒后再发送 `icqq login qr` 获取二维码。';
+      active = activeIcqqChallenge(control);
+      if (!active || active.challenge.kind !== 'qrcode') return '已触发重新登录，请 5 秒后再发送 `icqq login qr` 获取二维码。';
     }
-    const raw = typeof task.payload.image === 'string' ? task.payload.image : '';
+    const raw = active.challenge.media?.qrImage ?? '';
     const base64 = QR_IMAGE.exec(raw)?.[1];
     if (!base64) {
-      return `ICQQ ${task.endpointKey} 当前是 ${task.type === 'qrcode' ? '二维码' : '登录确认'}待办，但没有可发送的图片；请打开 Console 的 ICQQ 页面完成。`;
+      return `ICQQ ${control.endpointId} 正在等待扫码，但没有可发送的二维码图片；请打开 Console 的 ICQQ 页面完成。`;
     }
     return [
       {
         type: 'text',
         data: {
-          text: `ICQQ ${task.endpointKey} 登录二维码（约 3 分钟有效）。\n`
-            + '用手机 QQ 扫码，完成后回复 `icqq login confirm`。',
+          text: `ICQQ ${control.endpointId} 登录二维码（约 2 分钟有效）。\n`
+            + '用手机 QQ 扫码，并在手机上确认登录，登录会自动继续；没有继续时回复 `icqq login confirm`。',
         },
       },
       {

@@ -69,10 +69,9 @@ describe('IcqqEndpoint selfUserId', () => {
     expect(getProcessPeerRegistry().isReady(endpoint.canonicalId)).toBe(false);
   });
 
-  it('still goes online and cancels login assist when reporting throws', async () => {
+  it('still goes online and finishes the login flow when reporting throws', async () => {
     const gateway = { receive: vi.fn(async () => undefined), send: vi.fn(async () => 'sent') };
     const ports = createIcqqTestPorts();
-    const cancelOwned = vi.spyOn(ports.loginAssist, 'cancelOwned');
     const endpoint = await icqqFixture({
       id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'icqq'),
       gateway,
@@ -85,7 +84,8 @@ describe('IcqqEndpoint selfUserId', () => {
     await vi.waitFor(() => expect(report).toHaveBeenCalled());
     endpoint.endpoint.emit('system.online');
     await expect(starting).resolves.toBeUndefined();
-    expect(cancelOwned).toHaveBeenCalledWith(expect.anything(), 'online');
+    // ADR 0058: the login flow reports online (it used to be `cancelOwned(owner, 'online')`).
+    expect(ports.loginAssist.getFlow('icqq', '10001')?.state).toBe('online');
     expect(endpoint.selfUserId).toBeUndefined();
     retireEndpoint(endpoint.endpoint);
     await endpoint.stop();
