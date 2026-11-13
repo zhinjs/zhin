@@ -57,6 +57,13 @@ const SQLITE_ATTACH_ACTION = 24;
 const SQLITE_DENY_RESULT = 1;
 const SQLITE_OK_RESULT = 0;
 
+/** `SQLITE_AUTH`: the statement was refused by the authorizer (which only ever denies ATTACH here). */
+const SQLITE_AUTH_ERRCODE = 23;
+function isAuthorizerDenial(error: unknown): boolean {
+  const record = error as { errcode?: unknown; message?: unknown } | null;
+  return record?.errcode === SQLITE_AUTH_ERRCODE || /\bnot authorized\b/iu.test(String(record?.message ?? ''));
+}
+
 /** Installs an authorizer that denies ATTACH when `node:sqlite` supports `setAuthorizer` (feature-detected). */
 function installAttachAuthorizer(db: unknown): boolean {
   const target = db as { setAuthorizer?: (callback: (action: number, ...rest: unknown[]) => number) => void };
@@ -172,6 +179,8 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
    * cannot turn the ATTACH check off.
    */
   readonly #denyAttach: boolean;
+  /** An ATTACH-denying authorizer is installed (Node with `setAuthorizer`). */
+  #authorizer = false;
 
   constructor(config: SQLiteDialectConfig) {
     super('sqlite', config);
@@ -195,7 +204,7 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
       // `limits.attach = 0` where Node honours it (ignored by Node 22); the database_list check is the defense.
       const db = deny ? new DatabaseSync(this.config.filename, { limits: { attach: 0 } }) : new DatabaseSync(this.config.filename);
       try {
-        if (deny) installAttachAuthorizer(db);
+        if (deny) this.#authorizer = installAttachAuthorizer(db);
         // Two processes share the file (gateway: console_* tables, instance: the rest):
         // WAL lets readers run beside one writer and never blocks readers on a writer.
         const busy = this.config.busyTimeoutMs;
@@ -276,6 +285,8 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
         if (this.isolatedReader === reader) this.isolatedReader = null;
         if (message.attach?.length) {
           finish(new SqliteAttachRefusedError(message.attach));
+        } else if (!message.ok && this.#denyAttach && isAuthorizerDenial(message)) {
+          finish(new SqliteAttachRefusedError(['(refused by the SQLite authorizer)']));
         } else if (message.ok) {
           finish(null, { columns: message.columns ?? [], rows: message.rows ?? [], truncated: message.truncated === true });
         } else if (message.timeout) {
@@ -380,6 +391,12 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
     if (!this.#denyAttach || !this.#db) return;
     const extra = attachedSchemas(this.#db);
     if (!extra.length) return;
+    this.refuseAttach(extra);
+  }
+
+  /** Rolls back and poisons an open transaction, detaches `extra` and throws (naming `reported`). */
+  private refuseAttach(extra: readonly string[], reported: readonly string[] = extra): never {
+    if (!this.#db) throw new SqliteAttachRefusedError(reported);
     if (this.currentTransaction) {
       this.currentTransaction.poisoned = true;
       try { this.#db.exec('ROLLBACK'); } catch { /* not in a transaction any more */ }
@@ -388,7 +405,7 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
     for (const schema of extra) {
       try { this.#db.exec(`DETACH DATABASE ${this.quoteIdentifier(schema)}`); } catch { /* already gone */ }
     }
-    throw new SqliteAttachRefusedError(extra);
+    throw new SqliteAttachRefusedError(reported);
   }
 
   /** Statements of a poisoned transaction are refused (it was rolled back when ATTACH was found). */
@@ -404,6 +421,12 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
     this.assertNotAttached();
     try {
       return await this.executeUnchecked<U>(sql, params);
+    } catch (error) {
+      // Where Node has `setAuthorizer` (24+), SQLite refuses the ATTACH itself ("not authorized").
+      // Same outcome as the database_list defense on Node 22: the transaction is poisoned and the
+      // caller sees SqliteAttachRefusedError, whichever Node runs the instance.
+      if (this.#authorizer && isAuthorizerDenial(error)) this.refuseAttach([], ['(refused by the SQLite authorizer)']);
+      throw error;
     } finally {
       this.assertNotAttached();
     }
@@ -664,6 +687,9 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
             if (rows.length >= maxRows) { truncated = true; break; }
             rows.push(row);
           }
+        } catch (error) {
+          if (dialect.#authorizer && isAuthorizerDenial(error)) dialect.refuseAttach([], ['(refused by the SQLite authorizer)']);
+          throw error;
         } finally {
           dialect.assertNotAttached();
         }
