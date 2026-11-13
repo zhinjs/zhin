@@ -1445,6 +1445,9 @@ function legacyPayloadOf(challenge: LoginChallenge): PendingLoginTaskPayload {
 function legacyValue(value: SubmittedValue): string | Record<string, unknown> {
   const raw = value.raw;
   if (typeof raw === 'string' || !isStructured(raw)) return raw;
+  // Only the descriptor's own default actions collapse to the input; any other action is the
+  // caller's own vocabulary (icqq's device lock reads `{ action: 'sms' }`) and passes through.
+  if (raw.action !== 'submit' && raw.action !== 'confirm') return raw;
   return value.answer.values.input ?? 'ok';
 }
 
@@ -1497,7 +1500,8 @@ function resolveAnswer(
   };
   if (isStructured(value)) {
     const action = challenge?.actions.find((item) => item.id === value.action);
-    if (!action && challenge) throw new LoginSubmissionError('invalid_action', `unknown login action: ${value.action.slice(0, 64)}`);
+    // A legacy waitForInput task keeps accepting any structured action (e.g. icqq's `{ action: 'sms' }`).
+    if (!action && challenge && validate) throw new LoginSubmissionError('invalid_action', `unknown login action: ${value.action.slice(0, 64)}`);
     const values: Record<string, string> = {};
     for (const [key, item] of Object.entries(value.values ?? {})) {
       if (key !== 'input' && (typeof item === 'string' || typeof item === 'number')) values[key] = String(item);

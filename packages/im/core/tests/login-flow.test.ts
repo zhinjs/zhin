@@ -106,6 +106,14 @@ describe('LoginFlow', () => {
     });
   });
 
+  it('passes a legacy caller\'s own structured action through unchanged (icqq device lock `{ action: "sms" }`)', async () => {
+    const assist = new LoginAssist(null, { defaultTimeoutMs: 60_000 });
+    const waiting = assist.waitForInput('icqq', 'bot1', 'device', { message: '设备锁', url: 'https://verify.example/x' }, { owner });
+    const task = assist.listPending()[0]!;
+    expect(() => assist.submit(task.id, { action: 'sms' })).not.toThrow();
+    await expect(waiting).resolves.toEqual({ action: 'sms' });
+  });
+
   it('keeps legacy waitForInput working and maps the payload to a descriptor', async () => {
     const assist = new LoginAssist(null, { defaultTimeoutMs: 60_000 });
     const waiting = assist.waitForInput('icqq', 'bot1', 'slider', { message: '请完成滑块', url: 'https://captcha.example/x' }, { owner });
