@@ -190,6 +190,7 @@ async function fixture() {
   };
 }
 
+// Spawns the real CLI from source through tsx (transpiled per run), which outgrows the 10 s unit default under full-suite load.
 it("previews selected SQLite state read-only, then binds an unavailable third-party Profile via the real CLI", async () => {
   const f = await fixture();
   const fetch = vi.spyOn(globalThis, "fetch");
@@ -291,7 +292,7 @@ it("previews selected SQLite state read-only, then binds an unavailable third-pa
     fetch.mockRestore();
     await f.close();
   }
-});
+}, 60_000);
 
 it("rejects a missing database without creating a database, key or migration directory", async () => {
   const root = await mkdtemp(join(tmpdir(), "session-preview-missing-"));
@@ -761,6 +762,7 @@ it.each(['valid', 'wrong-incarnation'] as const)('checks deferred targets at app
   } finally { await f.close(); }
 });
 
+// Spawns the real CLI from source through tsx (transpiled per run), which outgrows the 10 s unit default under full-suite load.
 it('refuses inherited dry-run before the real CLI can apply a Session-only preview', async () => {
   const f = await fixture();
   try {
@@ -798,4 +800,4 @@ it('refuses inherited dry-run before the real CLI can apply a Session-only previ
   } finally {
     await f.close();
   }
-});
+}, 60_000);
