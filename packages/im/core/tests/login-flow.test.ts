@@ -141,6 +141,43 @@ describe('LoginFlow', () => {
     expect(assist.getFlow('icqq', 'bot1')!.state).toBe('online');
   });
 
+  it('drops verification links (they carry a session id) from event / history copies, not from the live flow', () => {
+    const assist = new LoginAssist(null, { defaultTimeoutMs: 60_000 });
+    const sid = 'sid=secret-session-0123';
+    const flow = assist.beginFlow({ adapter: 'demo', endpointKey: 'bot1', owner });
+    void flow.challenge({
+      kind: 'slider', title: '滑块',
+      media: { link: { url: `https://captcha.example/x?${sid}`, label: 'open' }, captcha: { provider: 'tencent', query: `aid=1&${sid}` } },
+      blocks: [{ kind: 'link', id: 'l', label: '打开', url: `https://captcha.example/x?${sid}` }, { kind: 'note', text: '提示' }],
+      input: { kind: 'ticket', label: 'ticket', extract: 'ticket-json-or-url' },
+    }).catch(() => undefined);
+    const live = assist.getFlow('demo', 'bot1')!;
+    expect(JSON.stringify(live)).toContain(sid);
+    const safe = withoutLoginMedia(live);
+    expect(JSON.stringify(safe)).not.toContain('secret-session');
+    expect(safe.steps.at(-1)!.challenge).toMatchObject({ media: { linkOmitted: true }, blocks: [{ kind: 'note' }] });
+    expect(safe.steps.at(-1)!.challenge!.media).not.toHaveProperty('captcha');
+
+    // Device / auth / link_verify likewise; a QR challenge keeps its (non-verification) link.
+    for (const kind of ['device', 'auth', 'link_verify'] as const) {
+      void flow.challenge({ kind, title: kind, blocks: [{ kind: 'link', label: 'v', url: `https://verify.example/?${sid}`, showQr: true }] })
+        .catch(() => undefined);
+      const copy = withoutLoginMedia(assist.getFlow('demo', 'bot1')!);
+      expect(JSON.stringify(copy)).not.toContain('secret-session');
+      expect(copy.steps.at(-1)!.challenge).toMatchObject({ media: { linkOmitted: true } });
+      expect(copy.steps.at(-1)!.challenge).not.toHaveProperty('blocks');
+    }
+    void flow.challenge({ kind: 'qrcode', title: 'qr', media: { link: { url: 'https://help.example/', label: 'help' } } }).catch(() => undefined);
+    const qr = withoutLoginMedia(assist.getFlow('demo', 'bot1')!).steps.at(-1)!.challenge!;
+    expect(qr.media).toEqual({ link: { url: 'https://help.example/', label: 'help' } });
+    // A flow without verification links is returned as is.
+    const plain = assist.beginFlow({ adapter: 'demo', endpointKey: 'bot2', owner });
+    plain.step('connect', 'x');
+    const snapshot = assist.getFlow('demo', 'bot2')!;
+    expect(withoutLoginMedia(snapshot)).toBe(snapshot);
+    assist.dispose();
+  });
+
   it('tells a cancel apart from a resolved answer', async () => {
     const assist = new LoginAssist(null, { defaultTimeoutMs: 60_000 });
     const flow = assist.beginFlow({ adapter: 'demo', endpointKey: 'bot1', owner });

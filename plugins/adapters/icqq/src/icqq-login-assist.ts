@@ -48,7 +48,8 @@ export async function runIcqqLoginAssistStep(input: {
     endpoint: endpointKey,
     type: step,
     message: payload.message,
-    ...(typeof payload.url === 'string' ? { url: payload.url } : {}),
+    // The link carries a session id (sid / sig): only its host is logged.
+    ...(icqqLinkHost(payload.url) ? { host: icqqLinkHost(payload.url) } : {}),
   }));
 
   try {
@@ -168,6 +169,17 @@ function normalizeSubmitValue(value: string | Record<string, unknown>): string {
   if (typeof value.code === 'string') return value.code.trim();
   if (typeof value.value === 'string') return value.value.trim();
   return JSON.stringify(value);
+}
+
+/** Host name of an http(s) link (what logs may show of a verification link), or undefined. */
+export function icqqLinkHost(url: unknown): string | undefined {
+  if (typeof url !== 'string' || !url) return undefined;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.hostname : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function bufferToDataUrl(image: unknown): string | undefined {

@@ -147,6 +147,12 @@ export interface LoginChallengeMedia {
   readonly qrImage?: string;
   /** Set on event payloads that omitted `qrImage`; read the flow with `login.flow.get`. */
   readonly qrImageOmitted?: boolean;
+  /**
+   * Set on event payloads that omitted verification links (`media.link`, `media.captcha` and link
+   * blocks of slider / device / auth / link_verify challenges, which carry a session id); read them
+   * with `login.flow.get`.
+   */
+  readonly linkOmitted?: boolean;
   /** Only http / https links are kept. */
   readonly link?: Readonly<{ url: string; label: string }>;
   readonly expiresAt?: number;
@@ -1077,11 +1083,15 @@ function lastActive(flow: FlowRecord, kind: LoginStepKind): StepRecord | undefin
 }
 
 /**
- * Event / history-safe copy of a flow snapshot: QR images are replaced by `qrImageOmitted` and
- * sensitive copy blocks are redacted. Consumers read the live material with `login.flow.get`.
+ * Event / history-safe copy of a flow snapshot: QR images are replaced by `qrImageOmitted`,
+ * sensitive copy blocks are redacted, and verification links (`media.link`, `media.captcha`, link
+ * blocks) of slider / device / auth / link_verify challenges — they carry a session id — are
+ * dropped with `linkOmitted`. Consumers read
+ * the live material with `login.flow.get`.
  */
 export function withoutLoginMedia(flow: LoginFlowSnapshot): LoginFlowSnapshot {
-  if (!flow.steps.some((step) => step.challenge?.media?.qrImage || step.challenge?.blocks?.some(isSensitiveBlock))) return flow;
+  if (!flow.steps.some((step) => step.challenge?.media?.qrImage || step.challenge?.blocks?.some(isSensitiveBlock)
+    || (step.challenge && hasVerificationLink(step.challenge)))) return flow;
   return Object.freeze({
     ...flow,
     steps: Object.freeze(flow.steps.map((step) => {
@@ -1093,9 +1103,28 @@ export function withoutLoginMedia(flow: LoginFlowSnapshot): LoginFlowSnapshot {
         next = { ...next, media: Object.freeze({ ...rest, qrImageOmitted: true }) };
       }
       if (challenge.blocks?.some(isSensitiveBlock)) next = { ...next, blocks: redactBlocks(challenge.blocks) };
+      if (hasVerificationLink(next)) {
+        // The captcha query is the slider link's query string: same session id.
+        const { link: _link, captcha: _captcha, ...media } = next.media ?? {};
+        const blocks = next.blocks?.filter((block) => block.kind !== 'link');
+        const { blocks: _blocks, ...rest } = next;
+        next = {
+          ...rest,
+          ...(blocks && blocks.length > 0 ? { blocks: Object.freeze(blocks) } : {}),
+          media: Object.freeze({ ...media, linkOmitted: true }),
+        };
+      }
       return next === challenge ? step : Object.freeze({ ...step, challenge: Object.freeze(next) });
     })),
   });
+}
+
+const LINK_REDACTED_KINDS: ReadonlySet<LoginChallengeKind> = new Set(['slider', 'device', 'auth', 'link_verify']);
+
+/** Verification links (they carry a session id) that events and history must not contain. */
+function hasVerificationLink(challenge: LoginChallenge): boolean {
+  return LINK_REDACTED_KINDS.has(challenge.kind)
+    && (!!challenge.media?.link || !!challenge.media?.captcha || !!challenge.blocks?.some((block) => block.kind === 'link'));
 }
 
 /** Alias that names the purpose: what may enter events, history and logs. */

@@ -76,6 +76,8 @@ export interface ConsoleLoginChallengeMedia {
   readonly qrImage?: string;
   /** Event payloads omit the QR image; read it with `login.flow.get`. */
   readonly qrImageOmitted?: boolean;
+  /** Event payloads omit verification links (`link`, `captcha`, link blocks); read them with `login.flow.get`. */
+  readonly linkOmitted?: boolean;
   readonly link?: Readonly<{ url: string; label: string }>;
   readonly expiresAt?: number;
   readonly refreshable?: boolean;
