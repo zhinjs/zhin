@@ -1,3 +1,4 @@
+import type { ConsoleAdapterLoginDeclaration, ConsoleLoginFlow, ConsoleLoginOutcome } from '@zhin.js/console-protocol';
 interface LoginEndpointIdentity {
   readonly canonicalId: string;
   readonly instanceId: string;
@@ -21,21 +22,14 @@ export interface ConsoleRpcExtendedCtx {
   databaseHost?: { models: { get(name: string): unknown } };
   /** Narrow generation-bound persistent-job port; null when Assistant is disabled. */
   resolveScheduleEngine?: () => ConsoleScheduleEngine | null | undefined;
-  /** LoginAssist list/submit/cancel（刷新后仍可消费扫码/滑块待办）。 */
-  loginAssist?: {
-    listPending(): readonly {
-      id: string;
-      adapter: string;
-      endpointKey: string;
-      endpointIdentity?: LoginEndpointIdentity;
-      type: string;
-      payload: Record<string, unknown>;
-      createdAt: number;
-      expiresAt?: number;
-    }[];
-    submit(id: string, value: string | Record<string, unknown>, endpointIdentity?: LoginEndpointIdentity): boolean;
-    cancel(id: string, reason?: string, endpointIdentity?: LoginEndpointIdentity): boolean;
-  };
+  /** LoginAssist list/submit/cancel（刷新后仍可消费扫码/滑块待办）；ADR 0058 flow methods are optional. */
+  loginAssist?: ConsoleLoginAssistPort;
+  /** ADR 0058: the Endpoint's login declaration and lease-scoped login control (`null` = unknown Endpoint). */
+  withEndpointLogin?: <T>(
+    adapter: string,
+    endpointKey: string,
+    run: (login: ConsoleEndpointLoginAccess) => T | Promise<T>,
+  ) => Promise<T | null>;
   /** Authenticated Root adapter; mutation DTOs deliberately contain no principal/decision fields. */
   workroomProfileControl?: ConsoleWorkroomProfileControlPort;
   /** Authenticated HTTP principal; never accepted from the RPC body. */
@@ -98,7 +92,43 @@ export interface ConsoleScheduleEngine {
   listJobs(): Promise<Record<string, unknown>[]>;
 }
 
-export type ExtendedRpcResult = { data: unknown } | { error: string };
+/** `data` next to `error` carries a machine-readable code (e.g. `{ code: 'unsupported' }`). */
+export type ExtendedRpcResult = { data: unknown } | { error: string; data?: unknown };
+
+/** Structural LoginAssist port (host/http must not import `@zhin.js/core`). */
+export interface ConsoleLoginAssistPort {
+  listPending(): readonly {
+    id: string;
+    adapter: string;
+    endpointKey: string;
+    endpointIdentity?: LoginEndpointIdentity;
+    type: string;
+    payload: Record<string, unknown>;
+    createdAt: number;
+    expiresAt?: number;
+    flowId?: string;
+    challengeId?: string;
+  }[];
+  submit(id: string, value: string | Record<string, unknown>, endpointIdentity?: LoginEndpointIdentity): boolean;
+  cancel(id: string, reason?: string, endpointIdentity?: LoginEndpointIdentity): boolean;
+  /** ADR 0058 */
+  listFlows?(): readonly ConsoleLoginFlow[];
+  getFlow?(adapter: string, endpointKey: string): ConsoleLoginFlow | undefined;
+  getFlowById?(id: string): ConsoleLoginFlow | undefined;
+  submitAndWait?(
+    id: string,
+    value: string | Record<string, unknown>,
+    options?: { endpointIdentity?: LoginEndpointIdentity; timeoutMs?: number },
+  ): Promise<{ accepted: boolean; outcome?: ConsoleLoginOutcome; pending?: boolean; flow?: ConsoleLoginFlow }>;
+}
+
+export interface ConsoleEndpointLoginAccess {
+  readonly declaration?: ConsoleAdapterLoginDeclaration;
+  readonly control?: {
+    relogin?(request: { signal?: AbortSignal }): Promise<void>;
+    refreshChallenge?(request: { signal?: AbortSignal }): Promise<void>;
+  };
+}
 
 const CRON_NOT_WIRED =
   '持久化调度未接线：当前 Plugin Runtime ScheduleHost 仅支持插件注册的内存任务（list），' +

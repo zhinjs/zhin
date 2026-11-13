@@ -5,6 +5,7 @@ import {
   HttpBodyError,
   isUserPrincipal,
   jsonResponse,
+  loginAuditDetail,
   pickRpcReply,
   principalAllows,
   readJsonBody,
@@ -50,22 +51,24 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
     let principal: ConsolePrincipal | undefined;
     let message: Record<string, unknown> = {};
     let decision: ConsoleRpcDecision | undefined;
-    const audit = (outcome: 'ok' | 'denied' | 'error') => {
+    const audit = (outcome: 'ok' | 'denied' | 'error', replyData?: unknown) => {
       if (!decision) return;
       if (outcome !== 'denied' && !(decision.allowed && decision.write)) return;
       try {
+        // ADR 0058: login actions also record their result category (never values or messages).
+        const login = loginAuditDetail(message.type, replyData);
         http.tokenRegistry?.accessProvider?.audit?.({
           actor: auditActor(principal),
           action: `rpc:${String(message.type ?? '')}`.slice(0, 256),
           ...(decision.allowed && rpcAuditTarget(decision.rule) ? { target: rpcAuditTarget(decision.rule)! } : {}),
           outcome,
-          detail: rpcAuditDetail(message),
+          detail: login ? { ...rpcAuditDetail(message), ...login } : rpcAuditDetail(message),
           ...(context.remoteAddress ? { ip: context.remoteAddress } : {}),
         });
       } catch { /* audit never breaks a request */ }
     };
     const reply = (status: number, body: Record<string, unknown>, headers?: HeadersInit) => {
-      if (decision?.allowed && decision.write) audit(status < 400 && body.success !== false ? 'ok' : 'error');
+      if (decision?.allowed && decision.write) audit(status < 400 && body.success !== false ? 'ok' : 'error', body.data);
       return jsonResponse(status, body, headers);
     };
     const noStore = { 'cache-control': 'no-store' };

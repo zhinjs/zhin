@@ -1,4 +1,4 @@
-import type { LoginAssist } from '@zhin.js/core';
+import { withoutLoginMedia, type LoginAssist } from '@zhin.js/core';
 import type { ConsoleEventHub } from '@zhin.js/host-http';
 import { bindLoginAssistStdin } from './login-assist-stdin.js';
 
@@ -34,6 +34,15 @@ export class ConsoleLoginAssistBindings {
     const unsubExpired = assist.subscribe('endpoint.login.expired', task => {
       hub.publish('endpoint.login.expired', task);
     });
+    // ADR 0058: flow snapshots without QR images or sensitive material — the event history keeps
+    // them, and Consoles read live material with `login.flow.get`.
+    const unsubFlow = assist.subscribe('endpoint.login.flow', flow => {
+      try {
+        hub.publish('endpoint.login.flow', withoutLoginMedia(flow));
+      } catch {
+        /* an oversized snapshot must not break the producer; Consoles still poll login.flow.list */
+      }
+    });
     const unbindStdin = this.#bindStdin(assist);
     const binding: LoginAssistBinding = {
       hub,
@@ -41,6 +50,7 @@ export class ConsoleLoginAssistBindings {
       dispose: () => {
         unsubPending();
         unsubExpired();
+        unsubFlow();
         unbindStdin();
       },
     };

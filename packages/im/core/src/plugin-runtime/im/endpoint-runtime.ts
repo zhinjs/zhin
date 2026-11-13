@@ -21,7 +21,10 @@ import {
   type EndpointTransportState,
   type EndpointManagement,
   type EndpointManagementCapability,
+  type AdapterLoginDeclaration,
+  type EndpointLoginControl,
 } from '@zhin.js/adapter';
+import type { LoginFlowSnapshot } from '../../built/login-assist.js';
 import { normalizeDeliveryTarget, type DeliveryTarget, type CapabilityId, type PluginId, type RuntimeSnapshot, type SnapshotLease, type Locale } from '@zhin.js/plugin-runtime';
 import {
   EndpointDeliveryError,
@@ -45,6 +48,18 @@ export interface EndpointRuntimeSummary {
   readonly phase: AdapterEndpointPhase;
   readonly operations: readonly AdapterOperation[];
   readonly managementCapabilities: readonly EndpointManagementCapability[];
+  /** ADR 0058: an unfinished login flow of this Endpoint waits for a person. */
+  readonly pendingLogin: boolean;
+  /** ADR 0058: where the unfinished login flow is (1-based step of the timeline). */
+  readonly loginStep?: Readonly<{ index: number; total: number; title: string }>;
+  /** ADR 0058: the Adapter's login declaration (absent = no Console login actions). */
+  readonly login?: AdapterLoginDeclaration;
+}
+
+/** Login facts of one Endpoint for `login.relogin` / `login.refresh`. */
+export interface EndpointLoginAccess {
+  readonly declaration?: AdapterLoginDeclaration;
+  readonly control?: EndpointLoginControl;
 }
 
 export type EndpointRuntimeDetail = Omit<EndpointRuntimeSummary, 'id' | 'owner'>;
@@ -95,6 +110,8 @@ interface EndpointRuntimeContext {
   retain(): SnapshotLease;
   release(lease: SnapshotLease): void;
   send(request: SendRequest, snapshot: RuntimeSnapshot, execution?: OutboundDeliveryExecution): Promise<DeliveryReceipt>;
+  /** ADR 0058: latest login flow per Endpoint (LoginAssist). */
+  loginFlows?(): readonly LoginFlowSnapshot[];
 }
 
 /** Owns generation-leased Endpoint discovery, control, management, and Console delivery. */
@@ -102,9 +119,12 @@ export class EndpointRuntime {
   constructor(private readonly context: EndpointRuntimeContext) {}
 
   list(): readonly EndpointRuntimeSummary[] {
+    const flows = this.#loginFlows();
     return this.#withLease<readonly EndpointRuntimeSummary[]>((snapshot) =>
       requireAdapters(snapshot).describe().map((row) =>
         Object.freeze({
+          ...loginFacts(flows, row, adapterTypeName(snapshot.tree.get(row.owner)?.packageName) ?? row.name,
+            requireAdapters(snapshot).loginDeclaration(row.id)),
           id: String(row.id),
           endpoint: Object.freeze({ id: String(row.id), adapter: requireAdapters(snapshot).clientAdapter(row.id) }),
           name: row.name,
@@ -133,6 +153,7 @@ export class EndpointRuntime {
   }
 
   get(adapter: string, endpointKey: string): EndpointRuntimeDetail | null {
+    const flows = this.#loginFlows();
     return this.#withLease((snapshot) => {
       const index = requireAdapters(snapshot);
       const id = index.resolve(adapter, endpointKey);
@@ -140,6 +161,7 @@ export class EndpointRuntime {
       const row = index.describe().find((item) => item.id === id);
       if (!row) return null;
       return Object.freeze({
+        ...loginFacts(flows, row, adapterTypeName(snapshot.tree.get(row.owner)?.packageName) ?? row.name, index.loginDeclaration(row.id)),
         name: row.name,
         endpoint: Object.freeze({ id: String(row.id), adapter: index.clientAdapter(row.id) }),
         adapter: adapterTypeName(snapshot.tree.get(row.owner)?.packageName) ?? row.name,
@@ -336,6 +358,43 @@ export class EndpointRuntime {
       run: control => control.typing!({ conversation: input.conversation, active: input.active }) });
   }
 
+  /**
+   * ADR 0058: run with the Endpoint's login declaration and lease-scoped login control port.
+   * `null` when the Endpoint is unknown or the snapshot is gone.
+   */
+  async withLogin<T>(
+    adapter: string,
+    endpointKey: string,
+    run: (login: EndpointLoginAccess) => T | Promise<T>,
+  ): Promise<T | null> {
+    let lease: SnapshotLease;
+    try {
+      lease = this.context.acquire();
+    } catch {
+      return null;
+    }
+    try {
+      const index = requireAdapters(lease.value);
+      const id = index.resolve(adapter, endpointKey);
+      if (!id) return null;
+      const declaration = index.loginDeclaration(id);
+      const control = index.loginControl(id, { assertActive: () => {
+        if (!lease.active) throw new EndpointDeliveryError('operation_scope_ended', 'Login operation scope has ended', 'not_sent');
+      } });
+      return await run(Object.freeze({ ...(declaration ? { declaration } : {}), ...(control ? { control } : {}) }));
+    } finally {
+      this.context.release(lease);
+    }
+  }
+
+  #loginFlows(): readonly LoginFlowSnapshot[] {
+    try {
+      return this.context.loginFlows?.() ?? [];
+    } catch {
+      return [];
+    }
+  }
+
   async withManagement<T>(
     adapter: string,
     endpointKey: string,
@@ -439,4 +498,23 @@ function assertSameEndpoint(expected: ConversationRef, actual: ConversationRef):
   if (expected.endpoint.id !== actual.endpoint.id || expected.endpoint.adapter !== actual.endpoint.adapter) {
     throw new EndpointDeliveryError('endpoint_identity_mismatch', 'Message reference belongs to another Endpoint.', 'not_sent');
   }
+}
+
+/** ADR 0058: pending-login facts of one Endpoint row from the latest login flows. */
+function loginFacts(
+  flows: readonly LoginFlowSnapshot[],
+  row: { readonly id: CapabilityId | string; readonly name: string },
+  adapter: string,
+  declaration: AdapterLoginDeclaration | undefined,
+): Pick<EndpointRuntimeSummary, 'pendingLogin' | 'loginStep' | 'login'> {
+  const flow = flows.find((item) => item.endpointIdentity?.canonicalId === String(row.id))
+    ?? flows.find((item) => !item.endpointIdentity && item.adapter === adapter
+      && (item.endpointKey === row.name || item.endpointKey === String(row.id)));
+  const unfinished = !!flow && (flow.state === 'active' || flow.state === 'expired');
+  const index = unfinished && flow.currentStep ? flow.steps.findIndex((step) => step.id === flow.currentStep) : -1;
+  return {
+    pendingLogin: unfinished && !!flow.activeTaskId,
+    ...(index >= 0 ? { loginStep: Object.freeze({ index: index + 1, total: flow!.steps.length, title: flow!.steps[index]!.title }) } : {}),
+    ...(declaration ? { login: declaration } : {}),
+  };
 }

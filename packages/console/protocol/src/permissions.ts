@@ -312,6 +312,11 @@ export const CONSOLE_RPC_PERMISSIONS: Readonly<Record<string, ConsolePermission>
   'login.list': P.ENDPOINT_VIEW,
   'login.submit': P.ENDPOINT_OPERATE,
   'login.cancel': P.ENDPOINT_OPERATE,
+  // ADR 0058 login flows: reads with endpoint.view, actions that change a login with endpoint.operate.
+  'login.flow.list': P.ENDPOINT_VIEW,
+  'login.flow.get': P.ENDPOINT_VIEW,
+  'login.relogin': P.ENDPOINT_OPERATE,
+  'login.refresh': P.ENDPOINT_OPERATE,
   // Agent / Workroom
   'workrooms:get': P.AGENT_VIEW,
   'workrooms:set': P.AGENT_CONFIGURE,

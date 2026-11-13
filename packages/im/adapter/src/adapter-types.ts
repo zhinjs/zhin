@@ -4,6 +4,7 @@ import type { AnyEndpoint } from './endpoint-specification.js';
 import type { EndpointSendRequest, EndpointSendResult } from './endpoint-contract.js';
 import type { AdapterCapabilityProfile, AdapterCapabilityResolver } from './capability-profile.js';
 import type { EndpointStreaming } from './endpoint-stream.js';
+import type { AdapterLoginDeclaration } from './login-capability.js';
 
 /** Persistent account identity is independent of its reusable display/config name. */
 export interface EndpointDesiredRecord {
@@ -68,6 +69,8 @@ export interface AdapterDescriptorInfo {
   /** ADR 0044: the definition's declared profile (absent = derived per Endpoint from its legacy declarations). */
   readonly profile?: AdapterCapabilityProfile;
   readonly resolveCapabilities?: AdapterCapabilityResolver;
+  /** ADR 0058: the definition's login declaration (absent = no Console login actions). */
+  readonly login?: AdapterLoginDeclaration;
 }
 
 export type EndpointDesiredMetadata = Omit<EndpointDesiredRecord, 'config' | 'secretRefs' | 'platformUserId'>;

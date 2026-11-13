@@ -15,6 +15,7 @@ import type {
 } from './endpoint-contract.js';
 import { getProcessPeerRegistry } from './peer-registry.js';
 import type { EndpointManagement } from './endpoint-management.js';
+import type { EndpointLoginControl } from './login-capability.js';
 import type { EndpointControl } from './endpoint-control.js';
 import type { EndpointContentPort } from './endpoint-content.js';
 import type { EndpointStreaming } from './endpoint-stream.js';
@@ -98,6 +99,8 @@ export abstract class EndpointRuntime<TClient = unknown> {
   readonly content?: EndpointContentPort;
   readonly streaming?: EndpointStreaming;
   readonly profile?: EndpointProfile;
+  /** ADR 0058: optional login control hooks (relogin / refresh challenge). */
+  readonly login?: EndpointLoginControl;
   #selfProfile?: EndpointProfileState;
 
   /** Source-account facts live with this concrete Client, separately from its immutable identity. */

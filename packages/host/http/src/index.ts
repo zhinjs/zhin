@@ -135,6 +135,10 @@ export {
   type ConsoleWorkroomProfileControlPort,
   type ConsoleWorkroomKnowledgeControlPort,
   type ExtendedRpcResult,
+  type ConsoleLoginAssistPort,
+  type ConsoleEndpointLoginAccess,
+  loginAuditDetail,
+  LOGIN_SUBMIT_WAIT_MS,
 } from './console-rpc-extended/index.js';
 export * from './host-installer.js';
 

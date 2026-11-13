@@ -285,7 +285,7 @@ export async function dispatchRuntimeConsoleRpc(
     );
     if (extended !== undefined) {
       emit('error' in extended
-        ? { requestId, error: extended.error }
+        ? { requestId, error: extended.error, ...(extended.data !== undefined ? { data: extended.data } : {}) }
         : { requestId, data: extended.data });
       return payloads;
     }

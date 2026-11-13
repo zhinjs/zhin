@@ -9,6 +9,7 @@ import type {
   EndpointOperation,
 } from '@zhin.js/im-contract';
 import type { AdapterInstance } from './adapter.js';
+import { normalizeLoginDeclaration, type AdapterLoginDeclaration } from './login-capability.js';
 import {
   normalizeCapabilityProfile,
   type AdapterCapabilityProfile,
@@ -157,6 +158,8 @@ export interface AdapterDefinition<TConfig = unknown> {
   readonly profile?: AdapterCapabilityProfile;
   /** ADR 0044: per-turn narrow-only refinement of the profile from trusted facts. */
   readonly resolveCapabilities?: AdapterCapabilityResolver;
+  /** ADR 0058: how the Adapter logs in. Absent = the Console offers no login actions. */
+  readonly login?: AdapterLoginDeclaration;
   createAdapter(context: AdapterContext<TConfig>): AdapterInstance;
 }
 
@@ -226,6 +229,7 @@ export function defineAdapter<TConfig = unknown>(
   const operations = typeof definition.operations === 'function'
     ? definition.operations
     : normalizeOperations(definition.operations);
+  const login = normalizeLoginDeclaration(definition.login);
   return Object.freeze({
     ...definition,
     $feature: adapterBrand,
@@ -233,6 +237,7 @@ export function defineAdapter<TConfig = unknown>(
     ...(operations ? { operations } : {}),
     ...(segments ? { segments } : {}),
     ...(profile ? { profile } : {}),
+    ...(login ? { login } : {}),
   });
 }
 
@@ -406,6 +411,7 @@ export function parseAdapterDefinition(value: unknown): AdapterDefinition {
   if (typeof definition.operations !== 'function') {
     normalizeOperations(definition.operations);
   }
+  normalizeLoginDeclaration(definition.login);
   return definition as AdapterDefinition;
 }
 

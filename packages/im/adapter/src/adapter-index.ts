@@ -36,6 +36,7 @@ import {
   type EndpointSendResult,
 } from './definition.js';
 import { type EndpointRuntime, type EndpointTransportState } from './endpoint.js';
+import type { AdapterLoginDeclaration, EndpointLoginControl } from './login-capability.js';
 import {
   listEndpointManagementCapabilities,
   type EndpointManagementCapability,
@@ -258,7 +259,8 @@ export class AdapterIndex {
           descriptor: { id: slot.id, owner: slot.owner, name: slot.localName, source: slot.source,
             capabilities: definition.capabilities, segments: definition.segments,
             ...(definition.profile ? { profile: definition.profile } : {}),
-            ...(definition.resolveCapabilities ? { resolveCapabilities: definition.resolveCapabilities } : {}) }, initial,
+            ...(definition.resolveCapabilities ? { resolveCapabilities: definition.resolveCapabilities } : {}),
+            ...(definition.login ? { login: definition.login } : {}) }, initial,
           ...persistence,
           creationDefaults,
           bind: (endpoint, record, childSignal) => {
@@ -456,6 +458,26 @@ export class AdapterIndex {
     if (!record.operations.includes(operation)) return undefined;
     const port = endpointControlOf(record.endpoint ? endpointRuntimeOf(record.endpoint) : undefined);
     return port && record.endpoint ? scopeEndpointControl({ port, invoke: this.#portInvoker({ id, endpoint: record.endpoint, scope }) }) : undefined;
+  }
+
+  /** ADR 0058: the owning Adapter definition's login declaration (absent = unsupported). */
+  loginDeclaration(id: CapabilityId): AdapterLoginDeclaration | undefined {
+    return this.adapterForEndpoint(id)?.descriptor.login;
+  }
+
+  /** ADR 0058: lease-scoped login control hooks of one started Endpoint (absent = unsupported). */
+  loginControl(id: CapabilityId, scope?: EndpointPortScope): EndpointLoginControl | undefined {
+    const record = this.#record(id);
+    const port = record?.endpoint ? endpointRuntimeOf(record.endpoint).login : undefined;
+    if (!port || !record?.endpoint) return undefined;
+    const invoke = this.#portInvoker({ id, endpoint: record.endpoint, scope });
+    const { relogin, refreshChallenge } = port;
+    return Object.freeze<EndpointLoginControl>({
+      ...(relogin ? { relogin: request => invoke({ signal: request.signal,
+        run: signal => relogin.call(port, { ...request, signal }) }) } : {}),
+      ...(refreshChallenge ? { refreshChallenge: request => invoke({ signal: request.signal,
+        run: signal => refreshChallenge.call(port, { ...request, signal }) }) } : {}),
+    });
   }
 
   management(id: CapabilityId, scope?: EndpointPortScope): EndpointManagement | undefined {
