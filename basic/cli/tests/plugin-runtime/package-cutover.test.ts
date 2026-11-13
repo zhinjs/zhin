@@ -208,9 +208,12 @@ describe('package cutover', () => {
   });
 
   it('moves the CLI of an old bot project into dependencies next to zhin.js and adds the gateway', async () => {
+    // A CLI range on the release line of the CLI running the cutover gets the gateway released with it.
+    const cliVersion = (JSON.parse(await readFile(join(import.meta.dirname, '../../package.json'), 'utf8')) as { version: string }).version;
+    const cliRange = `^${cliVersion.split('.').slice(0, 2).join('.')}.0`;
     const root = await fixture({
       dependencies: { existing: '^1.0.0', 'zhin.js': '^1.1.0' },
-      devDependencies: { '@zhin.js/cli': '^1.1.20', typescript: '^5.0.0', '@types/node': '^22.0.0' },
+      devDependencies: { '@zhin.js/cli': cliRange, typescript: '^5.0.0', '@types/node': '^22.0.0' },
     });
     const plan = await new PackageCutover().plan(root);
     const candidate = JSON.parse(plan.candidatePackage) as {
@@ -226,7 +229,7 @@ describe('package cutover', () => {
     expect(candidate.dependencies).toMatchObject({
       existing: '^1.0.0',
       'zhin.js': '^1.1.0',
-      '@zhin.js/cli': '^1.1.20',
+      '@zhin.js/cli': cliRange,
       '@zhin.js/gateway': `^${gatewayVersion}`,
     });
     expect(plan.dependencies['@zhin.js/gateway']).toBe(`^${gatewayVersion}`);
