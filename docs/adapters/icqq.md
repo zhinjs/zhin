@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/icqq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/icqq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=d1809e990cfba6c5 -->
+<!-- sync-adapter-docs:sha256=a97fea7b9b0fbf66 -->
 
 # @zhin.js/adapter-icqq
 
@@ -226,6 +226,28 @@ ICQQ 首次登录的二维码、滑块、设备锁会出现在「登录待办」
 - **NT 滑块答错**：NT 验证码提交一次就作废，适配器会重新登录拿一个新滑块（失败则流程失败，等你重新登录）；旧版滑块留在原挑战重试。
 - **token 不兼容**（错误码 123456）：重新登录读到的还是同一个 token 文件，所以提示删除数据目录里的 `<QQ号>_*_token` 后再登录，而不是建议重新登录。
 - Console「刷新二维码」在扫码挑战上直接换一张新二维码；其他挑战不能单独刷新，会改为重新登录。
+
+## 滑块验证助手页
+
+ICQQ 登录要求滑块验证时，Console「登录待办」可以用弹窗打开验证助手页 `https://zhin.js.org/login-assist/tcaptcha.html`：你在弹窗里完成滑块，结果自动回填到待办，不必再打开浏览器开发者工具、从 `cap_union_new_verify` 响应里抄 ticket。
+
+- **它做什么**：在本页加载腾讯验证码脚本（`https://ssl.captcha.qq.com/template/TCapIframeApi.js` 加滑块链接的查询参数，和腾讯自己的验证页发出的请求一致），由你本人完成验证；通过后用 `postMessage` 把 `{ type: 'zhin.login-assist.captcha', nonce, ticket, randstr }` 交回打开它的 Console 窗口（目标源固定为 Console 的源，从不用 `*`），约 1.5 秒后自动关闭。
+- **它不做什么**：不替你过验证码；不保存、不上报任何数据（无统计、无存储，除腾讯验证码外不发其他请求）。参数只放在 URL 的 `#` 片段里，不会进入任何服务器日志，并在加载腾讯脚本前从地址栏移除。
+- **为什么是独立的域名**：Console 把登录凭据存在自己源的 localStorage，第三方脚本不能在 Console 的源里运行；而腾讯脚本必须在页面自己的源里执行（放进沙箱 iframe 会一直停在「安全检测中」）。所以助手页放在 `zhin.js.org`，不放在 Console 里。
+- **在别的设备上打开**（例如把链接发到手机）：没有可回传的 Console 窗口，页面会显示 `ticket,randstr` 文本和「复制」按钮，把它粘贴到 Console 登录待办的滑块输入框提交即可。
+- **验证没通过或被关闭**：页面显示「验证未完成」，点「重试」重新加载验证码。
+
+链接格式：`#` 后是 base64url 编码的 JSON `{ q, n, o }`。`q` 是滑块链接的查询串（开头的 `?` 可有可无，参数名在白名单内，值必须已 URL 编码，总长不超过 4096）；`n` 是 Console 生成的一次性标识（1–128 个 `A-Z a-z 0-9 . _ ~ -` 字符）；`o` 是 Console 的源（如 `https://console.example.com`，只允许 http/https，不能带路径）。不合格的链接会被拒绝，并且不会加载腾讯脚本。
+
+**自建**：不想依赖 `zhin.js.org` 时，把 [`docs/public/login-assist/tcaptcha.html`](https://github.com/zhinjs/zhin/blob/main/docs/public/login-assist/tcaptcha.html) 复制到你自己的 https 域名（单文件，不依赖其他资源；该域名没有 `/logo.svg` 时 logo 自动隐藏），再把 `console.loginAssist.captchaHelperUrl` 设为它的地址：
+
+```yaml
+console:
+  loginAssist:
+    captchaHelperUrl: https://captcha.example.com/tcaptcha.html
+```
+
+不要把它放在 Console 的同一个源下。页面自带严格的 CSP（内联脚本按 sha256 放行）；如果改动了内联脚本，要同步更新 CSP 里的哈希（`pnpm vitest run tests/docs/login-assist-captcha-page.test.ts` 会给出新值）。托管方不能改写 HTML（压缩、注入脚本会让哈希失效），并且应当用响应头禁止嵌入：参考仓库里 `docs/public/_headers` 的 `/login-assist/*` 规则（`Cache-Control: no-transform`、`Content-Security-Policy: frame-ancestors 'none'`、`Referrer-Policy: no-referrer`）。
 
 ## 掉线通知与重新登录
 

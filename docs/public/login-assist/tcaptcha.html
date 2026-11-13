@@ -1,0 +1,512 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-CrYEhaa0JuW9wOgrs7+qDCAScNo7nbBXJ0/zn+4TgD0=' https://ssl.captcha.qq.com https://captcha.gtimg.com https://t.captcha.qq.com; style-src 'unsafe-inline' https://captcha.gtimg.com; img-src 'self' https: data: blob:; frame-src https://captcha.gtimg.com https://t.captcha.qq.com https://ssl.captcha.qq.com; connect-src https://*.captcha.qq.com https://captcha.gtimg.com; worker-src blob:; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<meta name="color-scheme" content="light dark">
+<title>QQ 登录验证 · Zhin</title>
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
+<style>
+:root {
+  --bg: #f4f7f5;
+  --card: #ffffff;
+  --text: #1c2420;
+  --muted: #5d6b64;
+  --border: #dfe7e2;
+  --brand: #2f9e6e;
+  --brand-strong: #247a56;
+  --brand-soft: #e6f4ed;
+  --danger: #c2413a;
+  --danger-soft: #fbeceb;
+  --field: #f7faf8;
+  --shadow: 0 1px 2px rgba(16, 40, 28, .06), 0 8px 24px rgba(16, 40, 28, .08);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111513;
+    --card: #1a201d;
+    --text: #e6ece8;
+    --muted: #9aa8a1;
+    --border: #2b3530;
+    --brand: #4cc38a;
+    --brand-strong: #6fd0a8;
+    --brand-soft: #1d3329;
+    --danger: #f07a72;
+    --danger-soft: #3a2220;
+    --field: #141917;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .35);
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.6 system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 32px 16px;
+}
+.card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.head {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.head img { width: 36px; height: 36px; flex: none; border-radius: 9px; }
+.head h1 { margin: 0; font-size: 17px; font-weight: 650; letter-spacing: .01em; }
+.head p { margin: 2px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.stage { padding: 16px 20px; }
+.loading {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+  color: var(--muted);
+  font-size: 14px;
+}
+.spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  border-top-color: var(--brand);
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } }
+.captcha { display: flex; justify-content: center; }
+.captcha:empty { display: none; }
+.status {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 14px;
+  border-radius: 10px;
+  background: var(--brand-soft);
+}
+.status.error { background: var(--danger-soft); }
+.status .mark {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--brand);
+}
+.status.error .mark { background: var(--danger); }
+.status h2 { margin: 0; font-size: 15px; font-weight: 650; }
+.status p { margin: 2px 0 0; color: var(--muted); font-size: 13px; word-break: break-word; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+button {
+  font: inherit;
+  font-size: 14px;
+  min-height: 36px;
+  padding: 6px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--brand);
+  background: var(--brand);
+  color: #fff;
+  cursor: pointer;
+}
+@media (prefers-color-scheme: dark) { button { color: #0d1f16; } }
+button.ghost { background: transparent; color: var(--brand-strong); border-color: var(--border); }
+button:hover { filter: brightness(1.05); }
+button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.result { margin-top: 14px; }
+.result label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+.result textarea {
+  width: 100%;
+  min-height: 84px;
+  resize: vertical;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--field);
+  color: var(--text);
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  word-break: break-all;
+}
+.result p { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
+.foot {
+  padding: 12px 20px 16px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+}
+.foot a { color: var(--brand-strong); text-decoration: none; }
+.foot a:hover { text-decoration: underline; }
+[hidden] { display: none !important; }
+@media (max-width: 480px) {
+  body { padding: 0; background: var(--card); }
+  .card { max-width: none; border: 0; border-radius: 0; box-shadow: none; min-height: 100vh; }
+  .stage { padding: 14px 16px; }
+  .head, .foot { padding-left: 16px; padding-right: 16px; }
+}
+</style>
+</head>
+<body>
+<main class="card">
+  <header class="head">
+    <img id="logo" src="/logo.svg" alt="" width="36" height="36">
+    <div>
+      <h1 id="title">QQ 登录验证</h1>
+      <p id="lead">本页只把验证结果交回你的 zhin Console，不保存任何数据。</p>
+    </div>
+  </header>
+  <section class="stage">
+    <div id="loading" class="loading"><span class="spinner" aria-hidden="true"></span><span id="loading-text">正在加载腾讯验证码…</span></div>
+    <div id="captcha" class="captcha"></div>
+    <div id="status" class="status" role="status" aria-live="polite" hidden>
+      <span id="status-mark" class="mark" aria-hidden="true"></span>
+      <div>
+        <h2 id="status-title"></h2>
+        <p id="status-text"></p>
+        <div id="status-actions" class="actions" hidden></div>
+      </div>
+    </div>
+    <div id="result" class="result" hidden>
+      <label for="result-text" id="result-label">验证结果</label>
+      <textarea id="result-text" readonly spellcheck="false"></textarea>
+      <div class="actions"><button type="button" id="copy">复制</button></div>
+      <p id="result-help"></p>
+    </div>
+  </section>
+  <footer class="foot"><span id="foot-text">遇到问题或想自建本页？</span> <a id="docs" href="https://zhin.js.org/adapters/icqq#滑块验证助手页" target="_blank" rel="noopener noreferrer">说明文档</a></footer>
+</main>
+<script>
+(function () {
+  'use strict';
+
+  var SCRIPT_URL = 'https://ssl.captcha.qq.com/template/TCapIframeApi.js';
+  var MESSAGE_TYPE = 'zhin.login-assist.captcha';
+  var MAX_FRAGMENT = 8192;
+  var MAX_QUERY = 4096;
+  var MAX_VALUE = 2048;
+  var MAX_RESULT = 4096;
+  var MAX_RANDSTR = 256;
+  // Query parameter names seen in ICQQ / NT login slider URLs and read by TCapIframeApi.js.
+  var ALLOWED_PARAMS = [
+    'style', 'aid', 'uin', 'uid', 'sid', 'subsid', 'cap_cd', 'clientype', 'apptype', 'lang',
+    'accver', 'protocol', 'showtype', 'noheader', 'enableDarkMode', 'aged', 'enableAged',
+    'grayscale', 'color', 'theme', 'fb', 'captype', 'disturblevel'
+  ];
+  var VALUE_RE = /^(?:[A-Za-z0-9\-._~*!+,:@]|%[0-9A-Fa-f]{2})*$/;
+  var NONCE_RE = /^[A-Za-z0-9._~-]{1,128}$/;
+
+  var STRINGS = {
+    zh: {
+      title: 'QQ 登录验证',
+      lead: '本页只把验证结果交回你的 zhin Console，不保存任何数据。',
+      loading: '正在加载腾讯验证码…',
+      foot: '遇到问题或想自建本页？',
+      docs: '说明文档',
+      docsHref: 'https://zhin.js.org/adapters/icqq#滑块验证助手页',
+      doneTitle: '验证完成，可以关闭此窗口',
+      doneText: '结果已交回 zhin Console，登录会继续进行。',
+      showResult: 'Console 没有收到？显示结果',
+      manualTitle: '验证完成',
+      manualText: '没有找到打开本页的 Console 窗口，请手动把结果粘贴回去。',
+      resultLabel: '验证结果（ticket,randstr）',
+      resultHelp: '复制上面的文本，回到 zhin Console 的「登录待办」，粘贴到滑块验证的输入框并提交。',
+      copy: '复制',
+      copied: '已复制',
+      copyFailed: '复制失败，请手动选择文本',
+      failTitle: '验证未完成',
+      failText: '验证码没有通过或已关闭，请重试。',
+      retry: '重试',
+      badTitle: '链接无效',
+      badHint: '请回到 zhin Console，重新点击「打开验证页」。',
+      loadTitle: '验证码加载失败',
+      loadText: '无法加载腾讯验证码脚本，请检查网络后重试。',
+      framedTitle: '不能在框架中打开',
+      framedText: '请在独立的浏览器窗口中打开本页。',
+      errMissing: '链接里缺少验证参数。',
+      errEncoding: '验证参数不是有效的 base64url JSON。',
+      errShape: '验证参数格式不正确。',
+      errQueryShape: '验证码地址必须是查询串，且不超过 4096 个字符。',
+      errQuery: '验证码地址的参数不合法：',
+      errOrigin: 'Console 地址必须是 http(s) 源（如 https://console.example.com）。',
+      errNonce: '会话标识无效（1–128 个字母、数字或 ._~-）。'
+    },
+    en: {
+      title: 'QQ login verification',
+      lead: 'This page only hands the result back to your zhin Console and stores nothing.',
+      loading: 'Loading the Tencent captcha…',
+      foot: 'Trouble, or want to host this page yourself?',
+      docs: 'Docs',
+      docsHref: 'https://zhin.js.org/en/adapters/icqq#captcha-helper-page',
+      doneTitle: 'Verified — you can close this window',
+      doneText: 'The result was handed back to your zhin Console; login continues there.',
+      showResult: 'Console did not get it? Show the result',
+      manualTitle: 'Verified',
+      manualText: 'The Console window that opened this page was not found. Paste the result back by hand.',
+      resultLabel: 'Result (ticket,randstr)',
+      resultHelp: 'Copy the text above, go back to the zhin Console login task, paste it into the slider field and submit.',
+      copy: 'Copy',
+      copied: 'Copied',
+      copyFailed: 'Copy failed; select the text manually',
+      failTitle: 'Verification not completed',
+      failText: 'The captcha was not passed or was closed. Try again.',
+      retry: 'Retry',
+      badTitle: 'Invalid link',
+      badHint: 'Go back to the zhin Console and open the verification page again.',
+      loadTitle: 'Captcha failed to load',
+      loadText: 'The Tencent captcha script could not be loaded. Check the network and retry.',
+      framedTitle: 'Cannot run inside a frame',
+      framedText: 'Open this page in its own browser window.',
+      errMissing: 'The link carries no verification data.',
+      errEncoding: 'The verification data is not valid base64url JSON.',
+      errShape: 'The verification data is malformed.',
+      errQueryShape: 'The captcha query must be a query string of at most 4096 characters.',
+      errQuery: 'The captcha URL has an invalid parameter: ',
+      errOrigin: 'The Console address must be an http(s) origin (e.g. https://console.example.com).',
+      errNonce: 'Invalid session id (1–128 letters, digits or ._~-).'
+    }
+  };
+
+  var lang = String((navigator.languages && navigator.languages[0]) || navigator.language || 'zh-CN');
+  var L = /^zh\b/i.test(lang) || !/^[a-z]/i.test(lang) ? STRINGS.zh : STRINGS.en;
+  document.documentElement.lang = L === STRINGS.zh ? 'zh-CN' : 'en';
+
+  function $(id) { return document.getElementById(id); }
+  function text(id, value) { $(id).textContent = value; }
+
+  text('title', L.title);
+  text('lead', L.lead);
+  text('loading-text', L.loading);
+  text('foot-text', L.foot);
+  text('docs', L.docs);
+  $('docs').href = L.docsHref;
+  text('copy', L.copy);
+  document.title = L.title + ' · Zhin';
+  $('logo').addEventListener('error', function () { this.hidden = true; });
+
+  function InputError(message) { this.message = message; }
+
+  function decodeFragment(hash) {
+    var raw = hash.charAt(0) === '#' ? hash.slice(1) : hash;
+    if (!raw) throw new InputError(L.errMissing);
+    if (raw.length > MAX_FRAGMENT || !/^[A-Za-z0-9_-]+={0,2}$/.test(raw)) throw new InputError(L.errEncoding);
+    var data;
+    try {
+      var b64 = raw.replace(/=+$/, '').replace(/-/g, '+').replace(/_/g, '/');
+      while (b64.length % 4) b64 += '=';
+      var binary = atob(b64);
+      var bytes = new Uint8Array(binary.length);
+      for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      data = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+    } catch (e) {
+      throw new InputError(L.errEncoding);
+    }
+    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new InputError(L.errShape);
+    return {
+      query: validateQuery(data.q),
+      nonce: validateNonce(data.n),
+      origin: validateOrigin(data.o)
+    };
+  }
+
+  function validateQuery(q) {
+    // The Console sends the query without its leading `?` (core buildCaptchaHelperUrl); accept both.
+    if (typeof q === 'string' && q.charAt(0) !== '?') q = '?' + q;
+    if (typeof q !== 'string' || q.length < 2 || q.length > MAX_QUERY + 1) {
+      throw new InputError(L.errQueryShape);
+    }
+    var seen = {};
+    var capcd = '';
+    var pairs = q.slice(1).split('&');
+    for (var i = 0; i < pairs.length; i++) {
+      var pair = pairs[i];
+      var eq = pair.indexOf('=');
+      var name = eq < 0 ? pair : pair.slice(0, eq);
+      var value = eq < 0 ? '' : pair.slice(eq + 1);
+      if (ALLOWED_PARAMS.indexOf(name) < 0) {
+        throw new InputError(L.errQuery + (/^[A-Za-z0-9_.-]{1,40}$/.test(name) ? name : '?'));
+      }
+      if (Object.prototype.hasOwnProperty.call(seen, name)) throw new InputError(L.errQuery + name);
+      seen[name] = true;
+      if (value.length > MAX_VALUE || !VALUE_RE.test(value)) throw new InputError(L.errQuery + name);
+      // Passed on as written in the URL, like Tencent's own template does.
+      if (name === 'cap_cd') capcd = value;
+    }
+    return { search: q, capcd: capcd };
+  }
+
+  function validateNonce(n) {
+    if (typeof n !== 'string' || !NONCE_RE.test(n)) throw new InputError(L.errNonce);
+    return n;
+  }
+
+  function validateOrigin(o) {
+    if (typeof o !== 'string' || o.length > 512) throw new InputError(L.errOrigin);
+    var url;
+    try { url = new URL(o); } catch (e) { throw new InputError(L.errOrigin); }
+    if ((url.protocol !== 'https:' && url.protocol !== 'http:') || url.origin !== o) throw new InputError(L.errOrigin);
+    return o;
+  }
+
+  function hideLoading() { $('loading').hidden = true; }
+
+  function showStatus(kind, title, message, actions) {
+    hideLoading();
+    var box = $('status');
+    box.className = 'status' + (kind === 'error' ? ' error' : '');
+    text('status-mark', kind === 'error' ? '!' : '✓');
+    text('status-title', title);
+    text('status-text', message || '');
+    $('status-text').hidden = !message;
+    var holder = $('status-actions');
+    holder.textContent = '';
+    (actions || []).forEach(function (action) {
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = action.label;
+      if (action.ghost) button.className = 'ghost';
+      button.addEventListener('click', action.run);
+      holder.appendChild(button);
+    });
+    holder.hidden = !actions || actions.length === 0;
+    box.hidden = false;
+  }
+
+  function showResult(value) {
+    text('result-label', L.resultLabel);
+    text('result-help', L.resultHelp);
+    $('result-text').value = value;
+    $('result').hidden = false;
+  }
+
+  $('copy').addEventListener('click', function () {
+    var field = $('result-text');
+    var button = this;
+    function done(ok) {
+      button.textContent = ok ? L.copied : L.copyFailed;
+      setTimeout(function () { button.textContent = L.copy; }, 2000);
+    }
+    function fallback() {
+      field.focus();
+      field.select();
+      var ok = false;
+      try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+      done(ok);
+    }
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(field.value).then(function () { done(true); }, fallback);
+    } else {
+      fallback();
+    }
+  });
+
+  if (window.top !== window.self) {
+    showStatus('error', L.framedTitle, L.framedText);
+    return;
+  }
+
+  var input;
+  var fragment = location.hash;
+  try {
+    input = decodeFragment(fragment);
+  } catch (e) {
+    if (!(e instanceof InputError)) throw e;
+    showStatus('error', L.badTitle, e.message + ' ' + L.badHint);
+    return;
+  }
+  // Tencent's loader reports location.href (as entry_url); drop the fragment so the nonce and
+  // Console origin stay on this page. reload() puts it back first.
+  try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* keep going */ }
+
+  // Retry is a full reload: a clean captcha session from the same validated input.
+  function reload() {
+    try { history.replaceState(null, '', location.pathname + location.search + fragment); } catch (e) { /* ignore */ }
+    location.reload();
+  }
+
+  // Ignore any callback after the first success.
+  var finished = false;
+
+  function onResult(res) {
+    if (finished) return;
+    // Same acceptance rule as the Console (core parseCaptchaHelperMessage): a result the Console
+    // would drop must not be reported as handed back.
+    var ok = res && res.ret === 0 &&
+      typeof res.ticket === 'string' && res.ticket.length > 0 && res.ticket.length <= MAX_RESULT &&
+      !/[\s,]/.test(res.ticket) &&
+      (res.randstr === undefined || res.randstr === null || res.randstr === '' ||
+        (typeof res.randstr === 'string' && res.randstr.length <= MAX_RANDSTR && !/[\s,]/.test(res.randstr)));
+    if (!ok) {
+      showStatus('error', L.failTitle, L.failText, [{ label: L.retry, run: reload }]);
+      return;
+    }
+    finished = true;
+    var ticket = res.ticket;
+    var randstr = typeof res.randstr === 'string' ? res.randstr : '';
+    var manual = randstr ? ticket + ',' + randstr : ticket;
+    var opener = null;
+    try { opener = window.opener && !window.opener.closed ? window.opener : null; } catch (e) { opener = null; }
+    if (opener) {
+      opener.postMessage({ type: MESSAGE_TYPE, nonce: input.nonce, ticket: ticket, randstr: randstr }, input.origin);
+      showStatus('ok', L.doneTitle, L.doneText, [{
+        label: L.showResult,
+        ghost: true,
+        run: function () { this.hidden = true; showResult(manual); }
+      }]);
+      setTimeout(function () { window.close(); }, 1500);
+    } else {
+      showStatus('ok', L.manualTitle, L.manualText);
+      showResult(manual);
+    }
+  }
+
+  function loadFailed() {
+    showStatus('error', L.loadTitle, L.loadText, [{ label: L.retry, run: reload }]);
+  }
+
+  var script = document.createElement('script');
+  script.src = SCRIPT_URL + input.query.search;
+  script.async = true;
+  script.addEventListener('error', loadFailed);
+  script.addEventListener('load', function () {
+    if (typeof window.capInit !== 'function') {
+      loadFailed();
+      return;
+    }
+    var options = {
+      callback: onResult,
+      readyCallback: hideLoading,
+      showHeader: false
+    };
+    if (input.query.capcd) options.capcd = input.query.capcd;
+    try {
+      window.capInit($('captcha'), options);
+    } catch (e) {
+      loadFailed();
+      return;
+    }
+    setTimeout(hideLoading, 8000);
+  });
+  document.head.appendChild(script);
+})();
+</script>
+</body>
+</html>
