@@ -1,6 +1,6 @@
 {
   "name": "zhin",
-  "version": "4.0.1",
+  "version": "4.0.2",
   "description": "Alias of @zhin.js/cli: `npx zhin` runs the Zhin.js command-line interface",
   "type": "module",
   "bin": {

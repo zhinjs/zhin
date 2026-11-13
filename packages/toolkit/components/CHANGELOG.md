@@ -1,5 +1,12 @@
 # @zhin.js/components
 
+## 1.1.14
+
+### Patch Changes
+
+- Updated dependencies [e1fda87]
+  - @zhin.js/jsx@1.1.13
+
 ## 1.1.13
 
 ### Patch Changes

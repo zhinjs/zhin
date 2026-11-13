@@ -1,5 +1,25 @@
 # @zhin.js/page
 
+## 1.1.18
+
+### Patch Changes
+
+- c2bbdcf: 页面元数据新增可选 `section`（`overview` / `conversations` / `features` / `plugins` / `ops` / `access`，ADR 0052），声明页面在 Console 导航里属于哪个分区；`definePage` 校验取值，Host 的 `/entries` 与客户端 `resolveEntryRegister` 把它透传到路由 `meta.section`，未知值被丢弃。
+- Updated dependencies [57c6cdc]
+- Updated dependencies [e1fda87]
+- Updated dependencies [a9c7a13]
+- Updated dependencies [120e225]
+- Updated dependencies [c2bbdcf]
+- Updated dependencies [63595fc]
+- Updated dependencies [fd055d2]
+- Updated dependencies [fd22375]
+- Updated dependencies [c2bbdcf]
+- Updated dependencies [c606d51]
+- Updated dependencies [5cd9d3d]
+  - @zhin.js/feature-kit@1.1.16
+  - @zhin.js/console-contract@1.1.6
+  - @zhin.js/plugin-runtime@1.2.0
+
 ## 1.1.17
 
 ### Patch Changes

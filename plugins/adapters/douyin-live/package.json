@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-douyin-live",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Zhin.js Douyin live danmaku adapter for Plugin Runtime (Experimental; unofficial webcast WebSocket, listen-only by default, one reply per danmaku window)",
   "type": "module",
   "main": "./lib/index.js",

@@ -1,5 +1,32 @@
 # zhin
 
+## 4.0.2
+
+### Patch Changes
+
+- c2bbdcf: `npx zhin` 别名包随 `@zhin.js/cli` 1.2（Console 访问控制、`zhin console` 命令）一起发布。
+- Updated dependencies [1a5c569]
+- Updated dependencies [57c6cdc]
+- Updated dependencies [e1fda87]
+- Updated dependencies [4e8ba38]
+- Updated dependencies [f8bf684]
+- Updated dependencies [c2bbdcf]
+- Updated dependencies [c2bbdcf]
+- Updated dependencies [c2bbdcf]
+- Updated dependencies [fd055d2]
+- Updated dependencies [4e8ba38]
+- Updated dependencies [cc7a5f9]
+- Updated dependencies [518cd79]
+- Updated dependencies [cc7a5f9]
+- Updated dependencies [9f4b996]
+- Updated dependencies [e0bc008]
+- Updated dependencies [5cd9d3d]
+- Updated dependencies [c2bbdcf]
+- Updated dependencies [518cd79]
+- Updated dependencies [5cd9d3d]
+- Updated dependencies [0e35afd]
+  - @zhin.js/cli@1.2.0
+
 ## 4.0.1
 
 ### Patch Changes
