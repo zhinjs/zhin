@@ -1,0 +1,11 @@
+# Cloudflare Pages response headers (copied verbatim into the docs build output).
+
+# QQ captcha helper (ADR 0058): its inline script is allowed by a sha256 in the page's CSP, so the
+# HTML must reach the browser byte-for-byte (no-transform keeps Cloudflare from minifying or
+# rewriting it); it must never be framed (frame-ancestors only works as a header); no Referer.
+/login-assist/*
+  Cache-Control: public, max-age=300, no-transform
+  Content-Security-Policy: frame-ancestors 'none'
+  X-Frame-Options: DENY
+  Referrer-Policy: no-referrer
+  X-Content-Type-Options: nosniff

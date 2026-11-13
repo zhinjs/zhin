@@ -71,4 +71,13 @@ describe('login-assist captcha helper page', () => {
       'zhin.js.org',
     ]);
   });
+
+  it('is served unmodified and unframeable by Cloudflare Pages (docs/public/_headers)', () => {
+    const headers = readFileSync(path.resolve(__dirname, '../../docs/public/_headers'), 'utf8');
+    const block = headers.split(/\n(?=\S)/).find((section) => section.startsWith('/login-assist/*')) ?? '';
+    expect(block).toMatch(/Cache-Control: .*no-transform/);
+    expect(block).toMatch(/Content-Security-Policy: frame-ancestors 'none'/);
+    expect(block).toMatch(/X-Frame-Options: DENY/);
+    expect(block).toMatch(/Referrer-Policy: no-referrer/);
+  });
 });

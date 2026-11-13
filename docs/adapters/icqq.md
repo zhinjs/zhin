@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/icqq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/icqq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=d9382e55c8475a83 -->
+<!-- sync-adapter-docs:sha256=71d0b61e47eed0db -->
 
 # @zhin.js/adapter-icqq
 
@@ -247,7 +247,7 @@ console:
     captchaHelperUrl: https://captcha.example.com/tcaptcha.html
 ```
 
-不要把它放在 Console 的同一个源下。页面自带严格的 CSP（内联脚本按 sha256 放行）；如果改动了内联脚本，要同步更新 CSP 里的哈希（`pnpm vitest run tests/docs/login-assist-captcha-page.test.ts` 会给出新值）。
+不要把它放在 Console 的同一个源下。页面自带严格的 CSP（内联脚本按 sha256 放行）；如果改动了内联脚本，要同步更新 CSP 里的哈希（`pnpm vitest run tests/docs/login-assist-captcha-page.test.ts` 会给出新值）。托管方不能改写 HTML（压缩、注入脚本会让哈希失效），并且应当用响应头禁止嵌入：参考仓库里 `docs/public/_headers` 的 `/login-assist/*` 规则（`Cache-Control: no-transform`、`Content-Security-Policy: frame-ancestors 'none'`、`Referrer-Policy: no-referrer`）。
 
 ## 掉线通知与重新登录
 

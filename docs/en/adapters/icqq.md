@@ -155,7 +155,7 @@ console:
     captchaHelperUrl: https://captcha.example.com/tcaptcha.html
 ```
 
-Do not host it on the Console origin. The page carries a strict CSP that allows its inline script by sha256; if you change that script, update the hash in the CSP (`pnpm vitest run tests/docs/login-assist-captcha-page.test.ts` prints the new value).
+Do not host it on the Console origin. The page carries a strict CSP that allows its inline script by sha256; if you change that script, update the hash in the CSP (`pnpm vitest run tests/docs/login-assist-captcha-page.test.ts` prints the new value). The host must serve the HTML unmodified (minification or injected scripts break the hash) and should forbid framing with response headers — see the `/login-assist/*` rule in the repo's `docs/public/_headers` (`Cache-Control: no-transform`, `Content-Security-Policy: frame-ancestors 'none'`, `Referrer-Policy: no-referrer`).
 
 ## Outage notifications and re-login
 
