@@ -178,6 +178,32 @@ describe('LoginFlow', () => {
     assist.dispose();
   });
 
+  it('a plain string naming an action without input selects it (text-only consumers)', async () => {
+    const assist = new LoginAssist(null, { defaultTimeoutMs: 60_000 });
+    const flow = assist.beginFlow({ adapter: 'demo', endpointKey: 'bot1', owner });
+    const device = flow.challenge({ kind: 'device', title: 'lock', actions: [
+      { id: 'continue', label: 'done', variant: 'primary' }, { id: 'sms', label: 'sms', variant: 'secondary' },
+    ] });
+    assist.submit(assist.listPending()[0]!.id, ' sms ');
+    await expect(device).resolves.toEqual({ actionId: 'sms', values: {} });
+    const again = flow.challenge({ kind: 'device', title: 'lock', actions: [
+      { id: 'continue', label: 'done', variant: 'primary' }, { id: 'sms', label: 'sms', variant: 'secondary' },
+    ] });
+    assist.submit(assist.listPending()[0]!.id, 'ok');
+    await expect(again).resolves.toEqual({ actionId: 'continue', values: {} });
+    // An action that requires input is never selected by its name; the text is the input.
+    const code = flow.challenge({ kind: 'sms', title: 'code', input: { kind: 'code', label: 'code' }, actions: [
+      { id: 'submit', label: 'submit', variant: 'primary', requiresInput: true },
+      { id: 'resend', label: 'resend', variant: 'secondary' },
+    ] });
+    assist.submit(assist.listPending()[0]!.id, 'resend');
+    await expect(code).resolves.toEqual({ actionId: 'resend', values: {} });
+    const typed = flow.challenge({ kind: 'sms', title: 'code', input: { kind: 'code', label: 'code' } });
+    assist.submit(assist.listPending()[0]!.id, 'submit');
+    await expect(typed).resolves.toEqual({ actionId: 'submit', values: { input: 'submit' } });
+    assist.dispose();
+  });
+
   it('gives a flow challenge\'s legacy task the short help and the first link block', () => {
     const assist = new LoginAssist(null, { defaultTimeoutMs: 60_000 });
     const flow = assist.beginFlow({ adapter: 'demo', endpointKey: 'bot1', owner });

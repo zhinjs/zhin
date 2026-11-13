@@ -6,7 +6,7 @@ import {
   icqqLoginForbidden,
   isIcqqLoginOperator,
   pendingTaskLabel,
-  pickIcqqLoginControl,
+  pickIcqqCodeTarget,
   submitIcqqAnswer,
 } from '../definition.js';
 
@@ -16,13 +16,10 @@ export default defineCommand({
   async execute({ args, config, input, project, owner }) {
     if (!isIcqqLoginOperator(config, input)) return icqqLoginForbidden();
     const controls = icqqLoginControls({ project, owner });
-    // `icqq login code [uin] <内容>`: the UIN is required with several endpoints, optional with one.
-    const named = args.length > 1 && controls.has(String(args[0]).trim());
-    const requested = controls.size > 1 || named ? args[0] : undefined;
-    const value = (requested !== undefined ? args.slice(1) : args).join(' ').trim();
-    const picked = pickIcqqLoginControl(controls, requested);
-    if (!picked.control) return picked.text ?? 'ICQQ 适配器还没有启动';
-    const control = picked.control;
+    const target = pickIcqqCodeTarget(controls, args);
+    if (!target.control) return target.text;
+    const { value } = target;
+    const control = target.control;
     if (!value) {
       return '请把验证内容放在命令后面，例如 `icqq login code 123456` 或 `icqq login code <ticket>`。';
     }

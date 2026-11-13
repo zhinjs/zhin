@@ -34,6 +34,12 @@ export class Client {
   };
 
   uin: number;
+  /** The SDK's log4js logger (the Endpoint may wrap `logger`; this keeps the original). */
+  readonly rawLog = {
+    level: 'info' as unknown,
+    trace: vi.fn(), debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), fatal: vi.fn(), mark: vi.fn(),
+  };
+  logger: unknown = this.rawLog;
   fl = new Map<number, unknown>();
   gl = new Map<number, unknown>();
   status = 0;

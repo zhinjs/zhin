@@ -304,5 +304,13 @@ export const messages = createMessages({
   "loginErrorUnknown": {
     "zh-CN": "登录失败",
     "en": "Login failed"
+  },
+  "loginErrorTokenIncompatible": {
+    "zh-CN": "保存的登录凭据（token 文件）与当前协议不兼容。请停止账号，删除数据目录中的 {uin}_*_token 文件后再登录",
+    "en": "The saved login credential (token file) does not fit the current protocol. Stop the account, delete {uin}_*_token in the data directory, then log in again"
+  },
+  "loginRetryExhausted": {
+    "zh-CN": "自动重新登录 {attempts} 次仍未成功，请检查网络后手动重新登录",
+    "en": "Logging in again automatically failed {attempts} times. Check the network, then log in again yourself"
   }
 });

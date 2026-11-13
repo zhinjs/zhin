@@ -90,7 +90,11 @@ export class IcqqLoginDriver {
   /** Invalidates the running challenge step when a newer event takes over. */
   #token = 0;
   #running = false;
-  #last?: { kind: IcqqChallengeKind; event: Record<string, unknown> };
+  /**
+   * Last challenge of this attempt. `nt` is fixed when a slider arrives: the SDK clears
+   * `sig.nt_captcha` once a ticket is submitted, so it is never recomputed.
+   */
+  #last?: { kind: IcqqChallengeKind; event: Record<string, unknown>; nt?: boolean };
   #qrAutoRefreshes = 0;
   #pollTimer?: ReturnType<typeof setTimeout>;
   #smsSentAt = 0;
@@ -138,7 +142,7 @@ export class IcqqLoginDriver {
     }
     this.#last = undefined;
     this.#qrAutoRefreshes = 0;
-    this.#smsSentAt = 0;
+    // #smsSentAt survives a new attempt: QQ's SMS limit is per account, not per login flow.
     if (title) this.#flow.step('connect', title);
     return this.#flow;
   }
@@ -184,13 +188,17 @@ export class IcqqLoginDriver {
 
   /** Open a challenge for an SDK event and drive it. */
   challenge(kind: IcqqChallengeKind, event: Record<string, unknown>): void {
+    this.#open(kind, event, kind === 'slider' ? isNtCaptcha(this.#o.client) : undefined);
+  }
+
+  #open(kind: IcqqChallengeKind, event: Record<string, unknown>, nt: boolean | undefined): void {
     if (this.#o.signal?.aborted) return;
     const flow = this.flow ?? this.begin(null);
     if (!flow) return;
     this.invalidate();
     const token = this.#token;
     this.#running = true;
-    this.#last = { kind, event };
+    this.#last = { kind, event, ...(nt !== undefined ? { nt } : {}) };
     this.#o.logger.info(formatCompact({
       op: 'login_assist_challenge',
       endpoint: this.#o.endpointKey,
@@ -198,7 +206,7 @@ export class IcqqLoginDriver {
       // The link carries a session id (sid / sig): only its host is logged.
       ...(icqqLinkHost(event.url) ? { host: icqqLinkHost(event.url) } : {}),
     }));
-    void this.#drive(kind, event, token).catch((error: unknown) => {
+    void this.#drive(kind, event, token, nt === true).catch((error: unknown) => {
       if (token !== this.#token) return;
       const message = error instanceof Error ? error.message : String(error);
       this.#o.logger.warn(formatCompact({ op: 'login_assist_failed', endpoint: this.#o.endpointKey, type: kind, error: message }));
@@ -214,15 +222,48 @@ export class IcqqLoginDriver {
    * otherwise the caller decides between failing the flow and an automatic retry.
    */
   loginError(event: unknown): IcqqLoginErrorResult {
-    const mapping = mapIcqqLoginError(event, this.#o.locale);
+    const mapping = mapIcqqLoginError(event, this.#o.locale, this.#o.endpointKey);
     const last = this.#last;
     this.invalidate();
+    if (mapping.code === 'code_invalid' && last?.kind === 'slider' && last.nt) {
+      // The NT captcha is consumed by the submit (the SDK cleared `sig.nt_captcha`): the same link
+      // cannot take another ticket. Log in again for a fresh slider.
+      this.outcome({ result: 'rejected', code: 'code_invalid', message: mapping.message, next: 'wait' });
+      this.#running = true;
+      const token = this.#token;
+      void Promise.resolve().then(() => this.#o.client.login()).catch((error: unknown) => {
+        if (token !== this.#token) return;
+        this.#o.logger.warn(formatCompact({ op: 'login_assist_slider_retry_failed', endpoint: this.#o.endpointKey,
+          error: error instanceof Error ? error.message : String(error) }));
+        this.fail('code_invalid', mapping.message, 'relogin');
+      }).finally(() => { if (token === this.#token) this.#running = false; });
+      return { mapping, hadChallenge: true, retrying: true };
+    }
     if (mapping.code === 'code_invalid' && last && (last.kind === 'sms' || last.kind === 'slider')) {
       this.outcome({ result: 'rejected', code: 'code_invalid', message: mapping.message, next: 'retry_input' });
-      this.challenge(last.kind, last.event);
+      this.#open(last.kind, last.event, last.nt);
       return { mapping, hadChallenge: true, retrying: true };
     }
     return { mapping, hadChallenge: !!last, retrying: false };
+  }
+
+  /**
+   * `internal.error.qrcode` after a QR login call (the SDK's second scan query failed). An expired
+   * or cancelled code is replaced by the SDK itself; anything else shows the same QR code again.
+   */
+  qrcodeError(code: unknown, message: unknown): void {
+    const last = this.#last;
+    const flow = this.flow;
+    if (!flow || last?.kind !== 'qrcode' || flow.snapshot().activeTaskId) return;
+    const text = sanitizeIcqqLoginMessage(message) || t(this.#o.locale, 'qrExpired');
+    if (code === ICQQ_QR_RESULT.timeout || code === ICQQ_QR_RESULT.canceled) {
+      this.invalidate();
+      flow.outcome({ result: 'expired', code: 'challenge_expired', message: text, next: 'refresh_challenge' });
+      return;
+    }
+    const known = code === ICQQ_QR_RESULT.waitingForScan || code === ICQQ_QR_RESULT.waitingForConfirm;
+    flow.outcome({ result: 'rejected', ...(known ? {} : { code: 'unknown' as const }), message: text, next: 'retry_input' });
+    this.#open('qrcode', last.event, undefined);
   }
 
   /**
@@ -239,10 +280,10 @@ export class IcqqLoginDriver {
 
   // --------------------------------------------------------------------------
 
-  async #drive(kind: IcqqChallengeKind, event: Record<string, unknown>, token: number): Promise<void> {
+  async #drive(kind: IcqqChallengeKind, event: Record<string, unknown>, token: number, nt: boolean): Promise<void> {
     switch (kind) {
       case 'qrcode': return this.#driveQr(event, token);
-      case 'slider': return this.#driveSlider(event, token);
+      case 'slider': return this.#driveSlider(event, token, nt);
       case 'device': return this.#driveDevice(event, token);
       case 'sms': return this.#driveSms(event, token);
       case 'auth': return this.#driveAuth(event, token);
@@ -385,10 +426,8 @@ export class IcqqLoginDriver {
 
   // --- slider ---------------------------------------------------------------
 
-  async #driveSlider(event: Record<string, unknown>, token: number): Promise<void> {
+  async #driveSlider(event: Record<string, unknown>, token: number, nt: boolean): Promise<void> {
     const url = typeof event.url === 'string' && event.url ? event.url : undefined;
-    // Captured now: the SDK clears its NT captcha state once a ticket was submitted.
-    const nt = isNtCaptcha(this.#o.client, url);
     for (;;) {
       const answer = await this.#ask(token, sliderDescriptor(url, this.#o.locale));
       if (!answer) return;
@@ -486,16 +525,13 @@ function isLive(flow: LoginFlow): boolean {
 }
 
 /**
- * NT login captcha (`sig.nt_captcha` set for this slider URL): the SDK splits `ticket,randstr`.
- * The legacy wtlogin path puts the raw text into TLV 0x193, so it must get the ticket alone.
+ * The SDK's own rule (`submitSlider`): a truthy `sig.nt_captcha` means the NT path, which splits
+ * `ticket,randstr`; otherwise the legacy wtlogin path puts the raw text into TLV 0x193, so it must
+ * get the ticket alone. Read once, when the slider arrives (submitting clears it).
  */
-export function isNtCaptcha(client: Pick<IcqqLoginClient, 'sig'>, url?: string): boolean {
+export function isNtCaptcha(client: Pick<IcqqLoginClient, 'sig'>): boolean {
   const sig = client.sig;
-  if (!sig || typeof sig !== 'object') return false;
-  const captcha = (sig as { nt_captcha?: unknown }).nt_captcha;
-  if (!captcha || typeof captcha !== 'object') return false;
-  const captchaUrl = (captcha as { url?: unknown }).url;
-  return typeof captchaUrl !== 'string' || !url || captchaUrl === url;
+  return !!sig && typeof sig === 'object' && !!(sig as { nt_captcha?: unknown }).nt_captcha;
 }
 
 /** What `submitSlider` receives: `ticket,randstr` on the NT path, the ticket alone otherwise. */

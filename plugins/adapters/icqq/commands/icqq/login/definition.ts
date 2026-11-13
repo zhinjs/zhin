@@ -85,6 +85,24 @@ export function pickIcqqLoginControl(
   return { text: `有多个 ICQQ endpoint，请指定 QQ 号：${[...controls.keys()].join('、')}` };
 }
 
+/**
+ * `icqq login code [uin] <内容>`: the UIN is required with several endpoints, optional with one.
+ * The reply never echoes the arguments (the first one may be the code itself).
+ */
+export function pickIcqqCodeTarget(
+  controls: ReadonlyMap<string, IcqqLoginControl>,
+  args: readonly unknown[],
+): { control: IcqqLoginControl; value: string; text?: undefined } | { control?: undefined; text: string } {
+  const words = args.map((arg) => String(arg));
+  const named = words.length > 1 && controls.has(words[0]!.trim());
+  if (controls.size === 0) return { text: 'ICQQ 适配器还没有启动' };
+  if (controls.size > 1 && !named) {
+    return { text: `有多个 ICQQ 账号，请用 \`icqq login code <QQ号> <内容>\`。可选 QQ 号：${[...controls.keys()].join('、')}` };
+  }
+  const control = named ? controls.get(words[0]!.trim())! : [...controls.values()][0]!;
+  return { control, value: (named ? words.slice(1) : words).join(' ').trim() };
+}
+
 export function icqqLoginForbidden(): string {
   return '仅 owner（聊天角色）或 notify 目标账号可以操作 ICQQ 登录';
 }

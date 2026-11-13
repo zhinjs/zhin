@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/icqq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/icqq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=809dee87edddb31a -->
+<!-- sync-adapter-docs:sha256=d1809e990cfba6c5 -->
 
 # @zhin.js/adapter-icqq
 
@@ -209,16 +209,22 @@ ICQQ 首次登录的二维码、滑块、设备锁会出现在「登录待办」
 |------|----------|
 | 扫码登录 | 用手机 QQ 扫码，再在手机上确认。扫码后时间线显示「已扫码，请在手机上确认登录」，确认后自动继续；没有继续时点「我已确认登录」。二维码过期会自动换新的（最多两次），之后点「刷新二维码」。 |
 | 滑块验证 | 在 Console 打开验证码辅助页（默认 `https://zhin.js.org/login-assist/tcaptcha.html`，可用 `console.loginAssist.captchaHelperUrl` 换成自己的页面），完成后自动提交，不需要开发者工具。手动方式：打开滑块链接，按 F12 在「网络」面板找到 `cap_union_new_verify` 的响应，复制 `ticket`，或者直接粘贴整段响应 / 带 ticket 的链接，会自动提取。 |
-| 设备锁 | 用手机 QQ 扫验证链接的二维码（或在手机上打开链接）完成验证，再点「我已在手机完成验证」。SDK 给出密保手机时可以点「改用短信验证码」：发送验证码后输入 6 位数字，「重新发送」要等 60 秒。不点就不会发短信。 |
+| 设备锁 | 用手机 QQ 扫验证链接的二维码（或在手机上打开链接）完成验证，再点「我已在手机完成验证」。SDK 给出密保手机时可以点「改用短信验证码」：发送验证码后输入 6 位数字，「重新发送」要等 60 秒（按账号计，重新登录也不清零）。不点就不会发短信。只能输入文字的旧版 Console、终端里输入 `sms` 同样表示改用短信。 |
 | 身份验证 | 按步骤：① 复制设备 JSON；② 打开验证链接，进入发送验证码的页面；③ 在该页开发者工具 Console 运行辅助脚本（也可拖到书签栏），按提示粘贴 JSON；④ 完成后点「已完成，继续登录」。不要把设备 JSON 粘贴到其他网站或发给他人。 |
 
 细节：
 
 - **滑块提交格式**：NT 登录（SDK 的 `sig.nt_captcha` 指向这个滑块）提交 `ticket,randstr`，缺 randstr 时会提示并留在滑块；旧版 wtlogin 只提交 `ticket`。
-- **验证链接**带会话标识（sid / sig）：日志只记录挑战类型和链接的主机名；`endpoint.login.flow` 事件和历史里不含验证链接（`linkOmitted`），Console 用 `login.flow.get` 读取当前链接。
-- **设备 JSON** 只存在于当前挑战上：挑战结束即清空；不写日志，不进事件和 `system.receive`。辅助脚本是固定文本，只在 `accounts.qq.com/login/attack` 上运行，只设置 `window.__INITIAL_STATE__.deviceInfo`，从不自动提交，也不含任何设备数据。
+- **验证链接**带会话标识（sid / sig），密保手机号也算敏感信息：
+  - Zhin 自己的日志和 `system.receive` 副事件只有挑战类型和链接的主机名（`{ kind, host }`），不含链接、手机号、设备信息和二维码图片；`login.error` 只带错误码和清洗后的说明。
+  - icqq SDK 自己的日志（log4js，`mark` 级别会打印滑块、设备锁、身份验证链接和手机号）经适配器包装：链接只保留到路径（查询串变成 `?…`），手机号变成 `***`。
+  - **未覆盖**：SDK 绕过日志直接写到控制台的两处——终端里画出的登录二维码，以及旧版登录 237 分支的 `console.log(proto.toJSON())`（可能包含验证页信息）。这两处不改 SDK 无法拦截；如果控制台输出会被收集，请注意。
+  - `endpoint.login.flow` 事件和历史里不含验证链接（`linkOmitted`），Console 用 `login.flow.get` 读取当前链接。
+- **设备 JSON** 只存在于当前挑战上：挑战结束即清空；不写 Zhin 的日志，不进事件和 `system.receive`。辅助脚本是固定文本，只在 `accounts.qq.com/login/attack` 上运行，只设置 `window.__INITIAL_STATE__.deviceInfo`，从不自动提交，也不含任何设备数据。
 - **错误码**：`system.login.error` 按一张表映射到 `code_invalid`（验证码 / ticket 错误，留在原挑战重试）、`rate_limited`、`challenge_expired`、`risk_blocked`（冻结、设备被拉黑等）、`credential_invalid`（密码错误）、`network`、`unknown`。平台原文只作为清洗后的说明显示（单行，不含本机路径）。
-- **自动重新登录**：有人正在答挑战时不会自动重新登录。验证失败、挑战过期等需要人处理的情况，流程停在「失败 / 已过期」，等你点「重新登录」或发 `icqq login retry`。只有不需要验证的失败（被踢下线、网络或服务器错误、没有出现任何挑战的普通登录失败）才按退避自动重试（5 秒起，最多 8 次），每次重试都记在时间线上。
+- **自动重新登录**：有人正在答挑战时不会自动重新登录。验证失败、挑战过期等需要人处理的情况，流程停在「失败 / 已过期」，等你点「重新登录」或发 `icqq login retry`。只有不需要验证的失败（被踢下线、网络或服务器错误、没有出现任何挑战的普通登录失败）才按退避自动重试（5 秒起，最多 8 次），每次重试都记在时间线上；8 次都失败后流程标记为失败（`next: relogin`），并发送不再自动重试的掉线通知。
+- **NT 滑块答错**：NT 验证码提交一次就作废，适配器会重新登录拿一个新滑块（失败则流程失败，等你重新登录）；旧版滑块留在原挑战重试。
+- **token 不兼容**（错误码 123456）：重新登录读到的还是同一个 token 文件，所以提示删除数据目录里的 `<QQ号>_*_token` 后再登录，而不是建议重新登录。
 - Console「刷新二维码」在扫码挑战上直接换一张新二维码；其他挑战不能单独刷新，会改为重新登录。
 
 ## 掉线通知与重新登录

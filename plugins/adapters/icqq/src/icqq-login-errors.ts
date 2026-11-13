@@ -18,13 +18,18 @@ export interface IcqqLoginErrorRule {
   readonly next: LoginNextAction;
   /** What the SDK means (documentation). */
   readonly note: string;
+  /** Localized message used instead of the SDK text (when the SDK text would mislead). */
+  readonly messageKey?: 'loginErrorTokenIncompatible';
 }
 
 /** Ordered: the first matching rule wins; code rules are checked before message rules. */
 export const ICQQ_LOGIN_ERROR_TABLE: readonly IcqqLoginErrorRule[] = Object.freeze([
   // --- exact codes ---
-  { codes: [1, 140022013, 150022029, 150022032, 123456], code: 'credential_invalid', next: 'relogin',
-    note: 'WrongPassword / AccountOrPasswordError / MultiplePasswordIncorrect / PasswordModifiedDuringLogin / token incompatible' },
+  { codes: [1, 140022013, 150022029, 150022032], code: 'credential_invalid', next: 'relogin',
+    note: 'WrongPassword / AccountOrPasswordError / MultiplePasswordIncorrect / PasswordModifiedDuringLogin' },
+  // The saved token does not fit the protocol; logging in again reads the same file, so only
+  // removing it helps.
+  { codes: [123456], code: 'credential_invalid', next: 'none', note: 'token incompatible', messageKey: 'loginErrorTokenIncompatible' },
   { codes: [140022009], code: 'credential_invalid', next: 'relogin', note: 'RefusePasswordLogin (log in by QR code instead)' },
   { codes: [163, 150022026, 140022016], code: 'code_invalid', next: 'retry_input', note: 'WrongSmsCode / SmsInvalid / IllegalTicket' },
   { codes: [162, 150022022, 150022023], code: 'rate_limited', next: 'wait', note: 'TooManySms / TooOften / TooManyTimesToday' },
@@ -35,9 +40,10 @@ export const ICQQ_LOGIN_ERROR_TABLE: readonly IcqqLoginErrorRule[] = Object.free
   // --- message patterns (the SDK reuses codes such as 237 for different texts) ---
   { pattern: /频繁|频率|too (?:many|often)|frequent/iu, code: 'rate_limited', next: 'wait', note: 'too frequent' },
   { pattern: /冻结|拉黑|封禁|封号|风险|风控|安全原因|frozen|blocked/iu, code: 'risk_blocked', next: 'none', note: 'risk control' },
+  // Before the ticket rule: "ticket 已过期" is an expired challenge, not a wrong answer.
+  { pattern: /过期|超时|expired|timed? ?out/iu, code: 'challenge_expired', next: 'relogin', note: 'expired' },
   { pattern: /验证码(?:错误|不正确|无效)|ticket|wrong code/iu, code: 'code_invalid', next: 'retry_input', note: 'wrong code' },
   { pattern: /密码|password/iu, code: 'credential_invalid', next: 'relogin', note: 'password' },
-  { pattern: /过期|超时|expired|timed? ?out/iu, code: 'challenge_expired', next: 'relogin', note: 'expired' },
   { pattern: /网络|繁忙|network|busy/iu, code: 'network', next: 'wait', note: 'network' },
 ]);
 
@@ -61,7 +67,7 @@ const LABEL_KEYS = {
 } as const satisfies Record<LoginErrorCode, string>;
 
 /** Map one `system.login.error` payload (`{ code, message }`). */
-export function mapIcqqLoginError(event: unknown, locale?: Locale): IcqqLoginErrorMapping {
+export function mapIcqqLoginError(event: unknown, locale?: Locale, uin?: string): IcqqLoginErrorMapping {
   const raw = event && typeof event === 'object' ? event as { code?: unknown; message?: unknown } : {};
   const platformCode = typeof raw.code === 'number' && Number.isFinite(raw.code) ? raw.code : undefined;
   const text = typeof raw.message === 'string' ? raw.message : '';
@@ -71,7 +77,8 @@ export function mapIcqqLoginError(event: unknown, locale?: Locale): IcqqLoginErr
   return Object.freeze({
     code,
     next: rule?.next ?? 'relogin',
-    message: sanitizeIcqqLoginMessage(text) || t(locale, LABEL_KEYS[code]),
+    message: rule?.messageKey ? t(locale, rule.messageKey, { uin: uin || '<uin>' })
+      : sanitizeIcqqLoginMessage(text) || t(locale, LABEL_KEYS[code]),
     ...(platformCode !== undefined ? { platformCode } : {}),
   });
 }

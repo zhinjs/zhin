@@ -12,6 +12,9 @@ import { createIcqqTestPorts } from './_icqq-mock.js';
 import { ICQQ_LOGIN_ERROR_TABLE, mapIcqqLoginError, sanitizeIcqqLoginMessage } from '../src/icqq-login-errors.js';
 import { authDescriptor, icqqAuthHelperScript, sliderCaptchaQuery } from '../src/icqq-login-descriptors.js';
 import { icqqLinkHost, icqqSliderSubmission, isNtCaptcha } from '../src/icqq-login-assist.js';
+import { redactIcqqLogText, redactingIcqqLogger } from '../src/sdk-logger.js';
+import { pickIcqqCodeTarget } from '../commands/icqq/login/definition.js';
+import type { IcqqLoginControl } from '../src/icqq-login-control.js';
 import { loginChallengeLogLine } from '../src/endpoint.js';
 import definition from '../adapters/icqq/index.js';
 
@@ -241,17 +244,57 @@ describe('icqq login flow (ADR 0058)', () => {
       expect(s.active()?.challenge.kind).toBe('slider');
     });
 
-    it('detects the NT captcha from the SDK state of this slider URL', () => {
-      expect(isNtCaptcha({ sig: { nt_captcha: { url: SLIDER_URL } } }, SLIDER_URL)).toBe(true);
-      expect(isNtCaptcha({ sig: { nt_captcha: { url: 'https://other.example/x' } } }, SLIDER_URL)).toBe(false);
-      expect(isNtCaptcha({ sig: { nt_captcha: null } }, SLIDER_URL)).toBe(false);
-      expect(isNtCaptcha({}, SLIDER_URL)).toBe(false);
+    it('detects the NT captcha by the SDK rule (truthy sig.nt_captcha)', () => {
+      expect(isNtCaptcha({ sig: { nt_captcha: { url: SLIDER_URL } } })).toBe(true);
+      // The URL never flips a true SDK state to legacy.
+      expect(isNtCaptcha({ sig: { nt_captcha: { url: 'https://other.example/x' } } })).toBe(true);
+      expect(isNtCaptcha({ sig: { nt_captcha: null } })).toBe(false);
+      expect(isNtCaptcha({})).toBe(false);
       expect(icqqSliderSubmission({ ticket: 't', randstr: 'r' }, true)).toBe('t,r');
       expect(icqqSliderSubmission({ ticket: 't', randstr: 'r' }, false)).toBe('t');
       expect(sliderCaptchaQuery('javascript:alert(1)')).toBeUndefined();
     });
 
-    it('a wrong ticket (login.error) stays on the slider', async () => {
+    it('a wrong NT ticket logs in again for a fresh slider (the captcha was consumed), still in NT format', async () => {
+      const s = await setup({ autoReconnect: true });
+      const sig: { nt_captcha: { url: string } | null } = { nt_captcha: { url: SLIDER_URL } };
+      Object.assign(s.client, { sig });
+      // Like the SDK: submitting clears the NT captcha state; a new login raises a new NT slider.
+      vi.mocked(s.client.submitSlider).mockImplementation(async () => { sig.nt_captcha = null; });
+      const fresh = `${SLIDER_URL}&fresh=1`;
+      s.start(() => s.client.emit('system.login.slider', { url: SLIDER_URL }));
+      await flush();
+      s.assist.submit(s.active()!.taskId, { action: 'submit', values: { ticket: 't1,r1' } });
+      await flush();
+      expect(s.client.submitSlider).toHaveBeenLastCalledWith('t1,r1');
+      vi.mocked(s.client.login).mockImplementationOnce(async () => {
+        sig.nt_captcha = { url: fresh };
+        s.client.emit('system.login.slider', { url: fresh });
+      });
+      s.client.emit('system.login.error', { code: 140022016, message: '[登录失败]ticket无效' });
+      await flush();
+      expect(s.client.login).toHaveBeenCalledTimes(2);
+      expect(s.flow().steps.some((step) => step.outcome?.code === 'code_invalid')).toBe(true);
+      expect(s.active()?.challenge.blocks?.[0]).toMatchObject({ url: fresh });
+      s.assist.submit(s.active()!.taskId, { action: 'submit', values: { ticket: 't2,r2' } });
+      await flush();
+      expect(vi.mocked(s.client.submitSlider).mock.calls).toEqual([['t1,r1'], ['t2,r2']]);
+    });
+
+    it('a wrong NT ticket fails the attempt when the fresh login cannot start', async () => {
+      const s = await setup();
+      Object.assign(s.client, { sig: { nt_captcha: { url: SLIDER_URL } } });
+      s.start(() => s.client.emit('system.login.slider', { url: SLIDER_URL }));
+      await flush();
+      s.assist.submit(s.active()!.taskId, { action: 'submit', values: { ticket: 't1,r1' } });
+      await flush();
+      vi.mocked(s.client.login).mockRejectedValueOnce(new Error('socket closed'));
+      s.client.emit('system.login.error', { code: 140022016, message: '[登录失败]ticket无效' });
+      await flush(); await flush();
+      expect(s.flow()).toMatchObject({ state: 'failed', lastOutcome: { code: 'code_invalid', next: 'relogin' } });
+    });
+
+    it('a wrong legacy ticket (login.error) stays on the slider, still in legacy format', async () => {
       const s = await setup({ autoReconnect: true });
       s.start(() => s.client.emit('system.login.slider', { url: SLIDER_URL }));
       await flush();
@@ -262,6 +305,9 @@ describe('icqq login flow (ADR 0058)', () => {
       expect(s.flow().state).toBe('active');
       expect(s.flow().lastOutcome).toMatchObject({ result: 'rejected', code: 'code_invalid', next: 'retry_input' });
       expect(s.active()?.challenge.kind).toBe('slider');
+      s.assist.submit(s.active()!.taskId, '{"ticket":"t2","randstr":"r2"}');
+      await flush();
+      expect(s.client.submitSlider).toHaveBeenLastCalledWith('t2');
     });
   });
 
@@ -381,7 +427,6 @@ describe('icqq login flow (ADR 0058)', () => {
 
       // Device data never leaves the live challenge: not in event-safe snapshots, side events or the ended step.
       expect(JSON.stringify(s.events.map(withoutLoginMedia))).not.toContain(DEVICE.guid);
-      expect(JSON.stringify(vi.mocked(s.sideEvents.receiveSystem).mock.calls)).not.toContain(DEVICE.guid);
       s.assist.submit(taskId, { action: 'continue', values: {} });
       await flush();
       expect(s.client.login).toHaveBeenCalledTimes(2);
@@ -446,6 +491,10 @@ describe('icqq login flow (ADR 0058)', () => {
       [{ code: 40, message: '账号被冻结' }, 'risk_blocked', 'none'],
       [{ code: 235, message: '[登陆失败](235)当前设备信息被拉黑，建议删除"/home/bot/data/device.json"后重新登录！' }, 'risk_blocked', 'none'],
       [{ code: 140022014, message: '' }, 'challenge_expired', 'relogin'],
+      [{ code: 9999, message: '[登录失败]ticket已过期' }, 'challenge_expired', 'relogin'],
+      [{ code: 9999, message: 'ticket expired' }, 'challenge_expired', 'relogin'],
+      [{ code: 9999, message: 'ticket无效' }, 'code_invalid', 'retry_input'],
+      [{ code: 123456, message: 'token不兼容' }, 'credential_invalid', 'none'],
       [{ code: 140022003, message: '' }, 'network', 'wait'],
       [{ code: 9, message: '[登陆失败]未知错误' }, 'unknown', 'relogin'],
       [{ code: 2, message: '[登陆失败]未知格式的验证码' }, 'unknown', 'relogin'],
@@ -461,6 +510,9 @@ describe('icqq login flow (ADR 0058)', () => {
       expect(mapped.message).not.toContain('\n');
       expect(sanitizeIcqqLoginMessage(`x${'y'.repeat(400)}`).length).toBeLessThanOrEqual(200);
       expect(mapIcqqLoginError({ code: 1 }, 'en').message).toBe('The password or login credential is not valid');
+      // A token incompatible with the protocol is not fixed by logging in again: say what does.
+      expect(mapIcqqLoginError({ code: 123456, message: 'token不兼容' }, 'zh-CN', '10001').message)
+        .toBe('保存的登录凭据（token 文件）与当前协议不兼容。请停止账号，删除数据目录中的 10001_*_token 文件后再登录');
       for (const rule of ICQQ_LOGIN_ERROR_TABLE) expect(rule.codes?.length || rule.pattern).toBeTruthy();
     });
 
@@ -549,6 +601,135 @@ describe('icqq login flow (ADR 0058)', () => {
       expect(lines).not.toContain('sid=abc');
       expect(lines).not.toContain('cap_cd');
       spy.mockRestore(); warn.mockRestore();
+    });
+  });
+
+  describe('review fixes', () => {
+    it('system.receive side events of login challenges carry only kind and host', async () => {
+      const s = await setup();
+      s.start(() => s.client.emit('system.online'));
+      await vi.waitFor(() => expect(s.flow()?.state).toBe('online'));
+      await flush();
+      // Side events are admitted once the Endpoint is open.
+      s.fixture.open();
+      s.client.emit('system.login.device', { url: 'https://accounts.qq.com/safe/verify?sig=SECRETSIG', phone: '138****0000' });
+      s.client.emit('system.login.slider', { url: 'https://ssl.captcha.qq.com/x?sid=SECRETSID' });
+      s.client.emit('system.login.auth', { url: 'https://accounts.qq.com/login/attack?sig=AUTHSIG', device: DEVICE });
+      s.client.emit('system.login.qrcode', { image: Buffer.from('qr-secret-image') });
+      s.client.emit('system.login.error', { code: 235, message: '设备被拉黑，建议删除"/home/bot/data/device.json"' });
+      await vi.waitFor(() => expect(vi.mocked(s.sideEvents.receiveSystem).mock.calls.length).toBeGreaterThanOrEqual(5));
+      const sent = JSON.stringify(vi.mocked(s.sideEvents.receiveSystem).mock.calls);
+      for (const secret of ['SECRETSIG', 'SECRETSID', 'AUTHSIG', '138****0000', DEVICE.guid, 'cXItc2VjcmV0', '/home/bot']) {
+        expect(sent).not.toContain(secret);
+      }
+      expect(sent).toContain('accounts.qq.com');
+      expect(sent).toContain('ssl.captcha.qq.com');
+    });
+
+    it('the SDK logger is wrapped: links lose their query, phones are masked', () => {
+      expect(redactIcqqLogText('请访问以下地址完成滑动：https://ssl.captcha.qq.com/x.html?aid=1&sid=SECRET#frag 继续'))
+        .toBe('请访问以下地址完成滑动：https://ssl.captcha.qq.com/x.html?… 继续');
+      expect(redactIcqqLogText('密保手机号：138****0000')).toBe('密保手机号：***');
+      expect(redactIcqqLogText('phone 13800138000 / +86 13800138000')).toBe('phone *** / ***');
+      expect(redactIcqqLogText('uin 10001 group 123456789')).toBe('uin 10001 group 123456789');
+      const original = { level: 'info' as unknown, trace: vi.fn(), debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), fatal: vi.fn(), mark: vi.fn() };
+      const wrapped = redactingIcqqLogger(original);
+      wrapped.mark('登录保护验证URL：https://accounts.qq.com/safe/verify?sig=S', 42);
+      expect(original.mark).toHaveBeenCalledWith('登录保护验证URL：https://accounts.qq.com/safe/verify?…', 42);
+      wrapped.level = 'warn';
+      expect(original.level).toBe('warn');
+      expect(redactingIcqqLogger(wrapped)).toBe(wrapped);
+    });
+
+    it('the Endpoint installs the redacting logger on its SDK client', async () => {
+      const s = await setup();
+      const client = s.client as unknown as { logger: { mark(...args: unknown[]): void }; rawLog: { mark: ReturnType<typeof vi.fn> } };
+      client.logger.mark('收到滑动验证码，请访问以下地址完成滑动：https://ssl.captcha.qq.com/x?sid=LEAK');
+      expect(client.rawLog.mark).toHaveBeenCalledWith('收到滑动验证码，请访问以下地址完成滑动：https://ssl.captcha.qq.com/x?…');
+    });
+
+    it('fails the attempt when the automatic relogin is exhausted', async () => {
+      vi.useFakeTimers();
+      const s = await setup({ autoReconnect: true });
+      vi.mocked(s.client.login).mockImplementation(async () => { s.client.emit('system.login.error', { code: 140022003, message: '' }); });
+      s.start(() => s.client.emit('system.login.error', { code: 140022003, message: '' }));
+      await vi.advanceTimersByTimeAsync(3_600_000);
+      expect(s.client.login).toHaveBeenCalledTimes(9);
+      expect(s.flow()).toMatchObject({ state: 'failed', lastOutcome: { result: 'failed', code: 'network', next: 'relogin' } });
+      expect(s.flow().lastOutcome?.message).toContain('8');
+      await vi.advanceTimersByTimeAsync(3_600_000);
+      expect(s.client.login).toHaveBeenCalledTimes(9);
+    });
+
+    it('turns a failed QR login query (internal.error.qrcode) into an outcome', async () => {
+      const s = await setup();
+      Object.assign(s.client, { queryQrcodeResult: vi.fn(async () => ({ retcode: 0 })), qrcodeLogin: vi.fn(async () => undefined), fetchQrcode: vi.fn() });
+      s.start(() => s.client.emit('system.login.qrcode', { image: Buffer.from('png') }));
+      await flush();
+      s.assist.submit(s.active()!.taskId, 'ok');
+      await flush();
+      expect(steps(s).at(-1)).toBe('verifying:active');
+      s.client.emit('internal.error.qrcode', 48, '二维码尚未扫描');
+      expect(s.flow().lastOutcome).toMatchObject({ result: 'rejected', message: '二维码尚未扫描', next: 'retry_input' });
+      expect(s.active()?.challenge.kind).toBe('qrcode');
+      // While a QR challenge is shown, the SDK's own errors are ignored.
+      s.client.emit('internal.error.qrcode', 0, 'x');
+      expect(s.flow().lastOutcome?.message).toBe('二维码尚未扫描');
+      s.assist.submit(s.active()!.taskId, 'ok');
+      await flush();
+      s.client.emit('internal.error.qrcode', 17, '二维码超时，请重新获取');
+      expect(s.flow().lastOutcome).toMatchObject({ result: 'expired', code: 'challenge_expired', next: 'refresh_challenge' });
+    });
+
+    it('login hooks do not wait for a hanging SDK call once their signal aborts', async () => {
+      const s = await setup();
+      s.start(() => s.client.emit('system.login.qrcode', { image: Buffer.from('png') }));
+      await flush();
+      vi.mocked(s.client.login).mockImplementationOnce(() => new Promise(() => undefined));
+      const controller = new AbortController();
+      const relogin = s.fixture.index.loginControl(s.fixture.canonicalId)!.relogin!({ signal: controller.signal });
+      controller.abort(new Error('caller gone'));
+      await expect(relogin).rejects.toThrow('caller gone');
+    });
+
+    it('a plain "sms" string still asks for an SMS on the device lock (released Consoles, stdin)', async () => {
+      const s = await setup();
+      s.start(() => s.client.emit('system.login.device', { url: 'https://accounts.qq.com/safe/verify?sig=1', phone: '138****0000' }));
+      await flush();
+      s.assist.submit(s.assist.listPending()[0]!.id, 'sms');
+      await flush();
+      expect(s.client.sendSmsCode).toHaveBeenCalledTimes(1);
+      expect(s.active()?.challenge.kind).toBe('sms');
+    });
+
+    it('keeps the SMS cooldown across a relogin', async () => {
+      const s = await setup();
+      s.start(() => s.client.emit('system.login.device', { url: 'https://accounts.qq.com/safe/verify?sig=1', phone: '138****0000' }));
+      await flush();
+      s.assist.submit(s.active()!.taskId, { action: 'sms', values: {} });
+      await flush();
+      vi.mocked(s.client.login).mockImplementationOnce(async () => {
+        s.client.emit('system.login.device', { url: 'https://accounts.qq.com/safe/verify?sig=2', phone: '138****0000' });
+      });
+      await s.client.relogin();
+      await flush();
+      const result = await s.assist.submitAndWait(s.active()!.taskId, { action: 'sms', values: {} }, { timeoutMs: 1_000 });
+      expect(result.outcome).toMatchObject({ result: 'rejected', code: 'rate_limited', next: 'wait' });
+      expect(s.client.sendSmsCode).toHaveBeenCalledTimes(1);
+    });
+
+    it('the code command never echoes its arguments when the account is ambiguous', () => {
+      const control = (id: string) => ({ endpointId: id } as unknown as IcqqLoginControl);
+      const two = new Map([['10001', control('10001')], ['10002', control('10002')]]);
+      const reply = pickIcqqCodeTarget(two, ['654321']);
+      expect(reply.text).toContain('10001');
+      expect(reply.text).not.toContain('654321');
+      expect(pickIcqqCodeTarget(two, ['99999', 'ticket-secret']).text).not.toContain('ticket-secret');
+      expect(pickIcqqCodeTarget(two, ['10002', '654321'])).toMatchObject({ control: { endpointId: '10002' }, value: '654321' });
+      const one = new Map([['10001', control('10001')]]);
+      expect(pickIcqqCodeTarget(one, ['654321'])).toMatchObject({ value: '654321' });
+      expect(pickIcqqCodeTarget(one, ['10001', '654321'])).toMatchObject({ value: '654321' });
+      expect(pickIcqqCodeTarget(new Map(), ['1']).text).toBe('ICQQ 适配器还没有启动');
     });
   });
 });

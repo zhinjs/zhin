@@ -4,7 +4,7 @@ sidebar: false
 
 # ADR 0058：登录辅助 v2——每个账号一条登录流程，挑战带引导材料，提交后能看到真实结果
 
-状态：Accepted（2026-11-13），P1、P2（icqq）已实施；P2 的真实账号端到端测试尚未完成
+状态：Accepted（2026-11-13），P1、P2（icqq）已实施；P2 的真实账号端到端测试尚未完成。已知限制：icqq SDK 直接写控制台的终端二维码与旧版 237 分支的 `console.log(proto)` 不经日志脱敏（见 icqq README「登录」）
 
 关联：ADR 0044（适配器能力画像）、ADR 0049（Console 访问控制与审计）、ADR 0054（管理网关与实例）、ADR 0057（配置与状态存放）。
 
@@ -172,6 +172,8 @@ Console 新版提交时带 `wait: true`：主机最多等 15 秒，回 `{ accept
 ### 10. 旧 API 映射
 
 `waitForInput` 继续可用：在隐式流程里开一个挑战，旧 payload 映射为描述符（`qrcode` / `auth` → 「已完成」操作；`slider` → ticket 输入；其它 → 文本输入 + 提交）。旧格式字符串提交时原样交给旧调用方；新格式 `{ action, values }` 提交给旧任务时，旧调用方收到 `values.input`，没有输入时收到 `ok`。
+
+纯字符串提交给新挑战时，如果等于某个不需要输入的操作 id（如设备锁的 `sms`），就选择该操作；这样只能输入文字的旧 Console、终端和聊天命令仍能选择操作。
 
 `cancelOwned(owner, reason)` 的原因映射到流程：`replaced_by_*` 只替换挑战，`online` 记为上线，`login_error` 记为失败，其余结束流程。
 

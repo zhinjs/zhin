@@ -41,6 +41,8 @@ import type { CapabilityId } from 'zhin.js';
 import type { IcqqLoginControl } from './icqq-login-control.js';
 import { IcqqLoginDriver, icqqLinkHost, type IcqqChallengeKind } from './icqq-login-assist.js';
 import { messages as t } from './i18n.js';
+import { redactingIcqqLogger, type IcqqSdkLogger } from './sdk-logger.js';
+import { sanitizeIcqqLoginMessage } from './icqq-login-errors.js';
 import { IcqqContentResolver } from './content-resolver.js';
 import {
   InboundMessageDeduper,
@@ -131,6 +133,7 @@ export class IcqqEndpoint extends ManagedIcqqClient implements Endpoint {
   #retirementEpoch = 0;
   #retirementArmed = false;
   #disposeNativeEvents?: () => void;
+  #disposeQrcodeError?: () => void;
   #resolveStartOnline?: () => void;
   #heldInbound: IcqqInboundMessage[] = [];
   readonly #inflightInbound = new Set<Promise<void>>();
@@ -140,6 +143,8 @@ export class IcqqEndpoint extends ManagedIcqqClient implements Endpoint {
   readonly loginControl: IcqqLoginControl;
   #reloginTimer?: ReturnType<typeof setTimeout>;
   #reloginAttempts = 0;
+  /** Error code of the failure the automatic relogin is retrying (reported when it gives up). */
+  #lastAutoFailure: 'network' | 'unknown' = 'network';
   #reloginInFlight?: Promise<void>;
   /**
    * Login flow of this Endpoint instance (ADR 0058). While a person answers a challenge no
@@ -254,10 +259,15 @@ export class IcqqEndpoint extends ManagedIcqqClient implements Endpoint {
       management: this.#management, control: this.#control, profile: createIcqqSelfProfile(this),
       get content() { return content(); },
       login: {
-        relogin: async ({ signal }) => { signal?.throwIfAborted(); await this.relogin(); },
-        refreshChallenge: async ({ signal }) => { signal?.throwIfAborted(); await this.refreshLoginChallenge(); },
+        // The lease signal aborts on stop / retirement: never let a slow SDK call block it.
+        relogin: async ({ signal }) => { await (signal ? raceAbort(this.relogin(), signal) : this.relogin()); },
+        refreshChallenge: async ({ signal }) => {
+          await (signal ? raceAbort(this.refreshLoginChallenge(), signal) : this.refreshLoginChallenge());
+        },
       },
     });
+    // The SDK logs verification links (sid / sig) and the phone at `mark` level: redact them.
+    if (this.logger) this.logger = redactingIcqqLogger(this.logger as IcqqSdkLogger) as typeof this.logger;
     this.#contentResolver = new IcqqContentResolver(this);
     this.#content = this.#contentResolver.port;
     this.#logger = getAdapterLogger('icqq', options.config.id);
@@ -362,7 +372,15 @@ export class IcqqEndpoint extends ManagedIcqqClient implements Endpoint {
     // A failed verification or an expired challenge waits for the person (next: relogin / refresh).
     if (reason === 'relogin_failed' && this.#login.awaitingPerson) return;
     if (this.#reloginTimer || this.#reloginInFlight) return;
-    if (this.#reloginAttempts >= 8) return;
+    if (this.#reloginAttempts >= ICQQ_RELOGIN_ATTEMPTS) {
+      // Exhausted: the attempt ends and waits for the person.
+      if (!this.#login.awaitingPerson) {
+        const message = t(this.#options.locale, 'loginRetryExhausted', { attempts: ICQQ_RELOGIN_ATTEMPTS });
+        this.#login.fail(this.#lastAutoFailure, message, 'relogin');
+        this.#notifyOffline('relogin_exhausted', false, true);
+      }
+      return;
+    }
     const attempt = this.#reloginAttempts++;
     const delayMs = Math.min(300_000, 5_000 * (2 ** Math.min(attempt, 5)));
     const locale = this.#options.locale;
@@ -415,11 +433,11 @@ export class IcqqEndpoint extends ManagedIcqqClient implements Endpoint {
         : task.endpointKey === this.endpointName));
   }
 
-  #notifyOffline(reason: string, willRetry: boolean): void {
+  #notifyOffline(reason: string, willRetry: boolean, force = false): void {
     const notifier = this.#options.notifier;
     if (!notifier?.configured) return;
     const now = Date.now();
-    if (now - this.#offlineNoticeAt < 60_000) return;
+    if (!force && now - this.#offlineNoticeAt < 60_000) return;
     this.#offlineNoticeAt = now;
     const recovery = willRetry
       ? '已开始自动重新登录。'
@@ -575,6 +593,8 @@ export class IcqqEndpoint extends ManagedIcqqClient implements Endpoint {
     this.#heldInbound.length = 0;
     this.#disposeNativeEvents?.();
     this.#disposeNativeEvents = undefined;
+    this.#disposeQrcodeError?.();
+    this.#disposeQrcodeError = undefined;
     for (const event of BOUND_EVENTS) {
       // The retirement guard owns this matcher until a late login handshake
       // has finished. start()/open() replace it with the normal listener.
@@ -883,10 +903,22 @@ export class IcqqEndpoint extends ManagedIcqqClient implements Endpoint {
       this.#handleLoginChallenge('slider', event);
     });
     this.on('system.login.error', (event) => {
-      this.#logSystemEvent('login.error', event);
+      const raw = event && typeof event === 'object' ? event as { code?: unknown; message?: unknown } : {};
+      this.#logSystemEvent('login.error', event, {
+        ...(typeof raw.code === 'number' ? { code: raw.code } : {}),
+        message: sanitizeIcqqLoginMessage(raw.message),
+      });
       if (this.#retiring || this.#stopped || this.#options.signal?.aborted) return;
       this.#handleLoginError(event);
     });
+    // The SDK's second scan query (inside qrcodeLogin) failed: report it instead of verifying forever.
+    // Only our listener is removed on stop (the SDK has its own one on this internal event).
+    this.#disposeQrcodeError?.();
+    const disposeQrcodeError = this.on('internal.error.qrcode', (code: unknown, message: unknown) => {
+      if (this.#retiring || this.#stopped || this.#options.signal?.aborted) return;
+      this.#login.qrcodeError(code, message);
+    });
+    this.#disposeQrcodeError = () => { disposeQrcodeError(); };
     this.on('system.login.auth', (event) => {
       this.#handleLoginChallenge('auth', event);
     });
@@ -960,7 +992,7 @@ export class IcqqEndpoint extends ManagedIcqqClient implements Endpoint {
       ? event as Record<string, unknown>
       : null);
     // Verification links carry a session id (sid / sig): logs get the challenge kind and host only.
-    this.#logSystemEvent(`login.${step}`, step === 'auth' ? redactAuthEvent(payload) : event, loginChallengeLogLine(step, payload));
+    this.#logSystemEvent(`login.${step}`, event, loginChallengeLogLine(step, payload));
     this.#clearReloginTimer();
     this.#notifyChallenge(step);
     // The QR image is a Buffer, which serialization drops; the driver reads the raw event.
@@ -985,6 +1017,7 @@ export class IcqqEndpoint extends ManagedIcqqClient implements Endpoint {
     this.#notifyOffline('login_error', autoRetry);
     if (autoRetry) {
       this.#login.outcome({ result: 'rejected', code: mapping.code, message: mapping.message, next: 'wait' });
+      this.#lastAutoFailure = mapping.code === 'network' ? 'network' : 'unknown';
       this.#scheduleRelogin(mapping.code === 'network' ? 'login_network' : 'login_failed');
       return;
     }
@@ -992,10 +1025,13 @@ export class IcqqEndpoint extends ManagedIcqqClient implements Endpoint {
     this.#login.fail(mapping.code, mapping.message, mapping.next);
   }
 
-  /** `logged` replaces the payload in the log line (login challenges keep only kind and host). */
-  #logSystemEvent(type: string, event: unknown, logged?: Record<string, unknown> | null): void {
-    const payload = serializeIcqqEvent(event);
-    const line = logged === undefined ? payload : logged;
+  /**
+   * `safe` replaces the payload in the log line and the `system.receive` side event (login
+   * challenges keep only kind and host: links carry a sid, plus phone / device / QR image).
+   */
+  #logSystemEvent(type: string, event: unknown, safe?: Record<string, unknown> | null): void {
+    const payload = safe === undefined ? serializeIcqqEvent(event) : safe;
+    const line = payload;
     this.#logger.warn(formatCompact({
       op: `system.${type}`,
       endpoint: this.endpointName,
@@ -1419,12 +1455,6 @@ export function loginChallengeLogLine(kind: string, payload: Record<string, unkn
   return { kind, ...(host ? { host } : {}) };
 }
 
-/** `system.login.auth` carries the device information: it never enters logs or side events. */
-function redactAuthEvent(payload: Record<string, unknown> | null): Record<string, unknown> | null {
-  if (!payload || !('device' in payload)) return payload;
-  return { ...payload, device: '[redacted]' };
-}
-
 function serializeIcqqEvent(event: unknown): Record<string, unknown> | null {
   if (!event || typeof event !== 'object') return null;
   const nativeToJSON = (event as { toJSON?: (keys: string[]) => unknown }).toJSON;
@@ -1447,5 +1477,7 @@ function serializeIcqqEvent(event: unknown): Record<string, unknown> | null {
 }
 
 const INBOUND_HOLD_LIMIT = 32;
+/** Automatic backoff relogins before the attempt fails and waits for the person. */
+const ICQQ_RELOGIN_ATTEMPTS = 8;
 
 const ICQQ_SERIALIZE_SKIP = ['group', 'member', 'friend', 'discuss', 'client'] as const;

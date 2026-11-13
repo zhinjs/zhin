@@ -10,3 +10,5 @@ ICQQ 改用登录辅助 v2 的登录流程（ADR 0058 P2）：每次登录一条
 adapter：`AdapterIndex.loginControl` 的登录钩子（重新登录、刷新挑战）在账号启动中（卡在登录挑战上）也能调用，新增 `acquireLogin` 租约；已停止的账号和被替换的旧 incarnation 仍然拒绝。
 
 验证链接带会话标识：icqq 日志只记录挑战类型和链接主机名；core 的 `withoutLoginMedia`（`endpoint.login.flow` 事件与历史）去掉滑块 / 设备锁 / 身份验证 / link_verify 挑战的 `media.link`、`media.captcha` 和链接块，并标 `linkOmitted: true`（console-protocol 增加该字段）。
+
+复审修正：NT 滑块答错后重新登录拿新滑块（NT / 旧版格式按挑战记录，不再重新判断）；「ticket 已过期」映射为 `challenge_expired`；`system.receive` 的登录挑战副事件只带 `{ kind, host }`；包装 icqq SDK 日志，去掉链接查询串和手机号（SDK 直接写控制台的终端二维码和 237 分支 `console.log` 无法拦截，已在 README 说明）；自动重新登录 8 次用尽后流程失败并通知；扫码时 SDK 的 `internal.error.qrcode` 转为结果；登录钩子随租约中止；token 不兼容提示删除 token 文件；`icqq login code` 在多账号时不回显参数；短信冷却跨重新登录保留。core：纯字符串等于某个无输入操作的 id 时选择该操作（旧 Console 输入 `sms` 仍可用）。
