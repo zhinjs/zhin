@@ -32,6 +32,12 @@ export function suggestFreeVersion(version, published) {
   return `${target[0]}.${highestMinor + 1}.0`;
 }
 
+/** `@scope/name` → `…/@scope%2Fname`: keep the leading `@`, encode the rest as one path segment. */
+export function registryUrl(name) {
+  const path = name.startsWith('@') ? `@${encodeURIComponent(name.slice(1))}` : encodeURIComponent(name);
+  return `https://registry.npmjs.org/${path}`;
+}
+
 /**
  * Registry metadata for one package: `{ versions: string[], latest?: string }`, or `null` when the
  * package does not exist yet (first publish is handled by `check:unpublished`).
@@ -39,7 +45,7 @@ export function suggestFreeVersion(version, published) {
  * @param {typeof fetch} fetchImpl
  */
 export async function readRegistryVersions(name, fetchImpl = fetch) {
-  const response = await fetchImpl(`https://registry.npmjs.org/${encodeURIComponent(name).replace('%40', '@')}`, {
+  const response = await fetchImpl(registryUrl(name), {
     headers: { Accept: 'application/vnd.npm.install-v1+json' },
   });
   if (response.status === 404) return null;

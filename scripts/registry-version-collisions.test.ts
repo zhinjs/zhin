@@ -2,6 +2,7 @@ import {
   compareVersions,
   findLocalCollisions,
   findPlannedCollisions,
+  registryUrl,
   suggestFreeVersion,
 } from './registry-version-collisions.mjs';
 
@@ -33,6 +34,12 @@ describe('registry version collisions', () => {
       { name: '@zhin.js/new-package', version: '1.0.0' },
     ], lookup);
     expect(hits).toEqual([expect.objectContaining({ name: '@zhin.js/core', version: '1.2.0', latest: '1.1.60', suggestion: '1.6.0' })]);
+  });
+
+  it('builds registry URLs that keep the scope and encode the rest', () => {
+    expect(registryUrl('@zhin.js/core')).toBe('https://registry.npmjs.org/@zhin.js%2Fcore');
+    expect(registryUrl('zhin.js')).toBe('https://registry.npmjs.org/zhin.js');
+    expect(registryUrl('@a/b@c')).toBe('https://registry.npmjs.org/@a%2Fb%40c');
   });
 
   it('compares and suggests by x.y.z', () => {
