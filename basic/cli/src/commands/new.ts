@@ -35,7 +35,7 @@ const PLUGIN_NAME_PATTERN = /^[a-z][a-z0-9-]*$/;
 const PLUGIN_NAME_HINT = '插件名称需匹配 /^[a-z][a-z0-9-]*$/（小写字母开头，仅小写字母、数字、横线）';
 
 /** my-cool-plugin → MyCoolPlugin，用作 displayName / 类型名 */
-function toCapitalizedName(pluginName: string): string {
+export function toCapitalizedName(pluginName: string): string {
   return (
     pluginName.charAt(0).toUpperCase() +
     pluginName.slice(1).replace(/-([a-z])/g, (_, c: string) => c.toUpperCase())

@@ -12,7 +12,7 @@
 
 - pnpm workspace monorepo，不用 git submodule。
 - TypeScript 本地相对导入必须带 `.js` 扩展名。
-- 新插件：`plugin.ts` default-export `definePlugin()`；能力按目录发现。
+- 新插件：`plugin.ts`（如果有）default-export `definePlugin()`；只有约定目录时可省略 `plugin.ts` 与 `zhin.entry`；能力按目录发现。
 - IM 出站：`Message.$reply` / `Adapter.sendMessage` → `renderSendMessage` → `before.sendMessage` → Endpoint；禁止旁路。
 - 分层：`basic → kernel → ai → core → agent → zhin`（实例装配根 `packages/im/zhin/src/instance/` 可跨层装配；`@zhin.js/cli` 与 `@zhin.js/gateway` 不得导入 IM 层，ADR 0054）。
 - 启动：`zhin start`（ADR 0054）启动管理网关 `@zhin.js/gateway`，由网关监管 Zhin 实例；默认后台运行，`--foreground` 前台运行（生产模板、`pnpm start`）；`zhin runtime start` 是前台别名；`--standalone` 只用于测试与开发。Console 认证与项目数据库的 `console_*` 表归网关，实例只接收网关转发的主体并做授权。

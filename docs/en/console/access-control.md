@@ -76,8 +76,8 @@ Built-in roles cannot be changed or deleted, but can be copied:
 | --- | --- |
 | `status.view` | Home, system status, logs, capability browser, command permissions, the Records tab of object pages, event stream, instance status and logs |
 | `endpoint.view` / `endpoint.operate` / `endpoint.manage` | Reading accounts and conversations / sending messages, handling requests, login assist / adding, changing, starting and stopping account connections |
-| `feature.view` / `feature.configure` / `feature.toggle` | Reading feature configuration / writing configuration and overrides / enabling and disabling (see [Feature matrix and layered configuration](./features.md)) |
-| `plugin.manage` | Installing, updating and uninstalling plugins and dependencies; onboarding steps 3–5 |
+| `feature.view` / `feature.configure` / `feature.toggle` | Reading feature configuration / writing configuration and overrides / enabling and disabling at the adapter, account and conversation levels (see [Feature matrix and layered configuration](./features.md)) |
+| `plugin.manage` | Installing, updating and uninstalling plugins and dependencies; global plugin on / off (`disable_plugins`, a gateway transaction); onboarding steps 3–5 |
 | `agent.view` / `agent.configure` | AI and Agent reads / writes |
 | `ops.config.read` / `ops.config.write` | Raw configuration file |
 | `ops.env.read` / `ops.env.write` | Environment file |

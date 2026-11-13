@@ -122,6 +122,13 @@ describe('access control decisions', () => {
     expect(authorizeConsoleRpc(adapterOperator, send('tg', 'bot-1')).allowed).toBe(false);
     expect(authorizeConsoleRpc(adapterOperator, { type: 'feature.set-enabled', data: { plugin: 'rss', level: 'endpoint', key: 'qq/bot-1' } }).allowed).toBe(true);
     expect(authorizeConsoleRpc(adapterOperator, { type: 'feature.set-enabled', data: { plugin: 'rss', level: 'global' } }).allowed).toBe(false);
+    // The global switch is plugin lifecycle (plugin.manage): a global operator's feature.toggle is not enough.
+    const operator = userPrincipal('operator');
+    expect(authorizeConsoleRpc(operator, { type: 'feature.set-enabled', data: { plugin: 'rss', level: 'adapter', key: 'qq' } }).allowed).toBe(true);
+    expect(authorizeConsoleRpc(operator, { type: 'feature.set-enabled', data: { plugin: 'rss', level: 'global' } })).toMatchObject({ allowed: false, code: 'forbidden' });
+    expect(authorizeConsoleRpc(operator, { type: 'plugin:set-enabled', instanceKey: 'rss', enabled: false })).toMatchObject({ allowed: false, code: 'forbidden' });
+    expect(authorizeConsoleRpc(userPrincipal('admin'), { type: 'feature.set-enabled', data: { plugin: 'rss', level: 'global' } })).toMatchObject({ allowed: true, write: true });
+    expect(authorizeConsoleRpc(userPrincipal('admin'), { type: 'plugin:set-enabled', instanceKey: 'rss', enabled: false })).toMatchObject({ allowed: true, write: true });
     // Non-scoped permissions need a global binding even when the role carries them.
     expect(authorizeConsoleRpc(adapterOperator, { type: 'ping' }).allowed).toBe(false);
     expect(authorizeConsoleRpc(adapterOperator, { type: 'endpoint.list' }).allowed).toBe(true);

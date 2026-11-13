@@ -250,6 +250,8 @@ describe("ConsoleTransport REST/SSE transport", () => {
     await manager.installPlugin('@zhin.js/adapter-telegram');
     await manager.updatePlugin('@zhin.js/adapter-telegram', '2.0.0');
     await manager.uninstallPlugin('@zhin.js/adapter-telegram');
+    // The global plugin switch is a gateway enable / disable transaction as well.
+    await manager.setPluginEnabled('telegram', false);
     await manager.installPlugin('@zhin.js/adapter-telegram', {}, { timeoutMs: 600_000 });
     await manager.sendRequest({ type: 'custom' }, { timeoutMs: 1_234 });
 

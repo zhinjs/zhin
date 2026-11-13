@@ -10,6 +10,9 @@
  *   Console reconnects to the merged stream. `GET {base}/events/history` then answers an empty
  *   page that keeps the caller's cursor.
  *
+ * A succeeded plugin enable / disable that changed `disable_plugins` also sends
+ * `plugin:lifecycle-updated` on `{base}/events` (the Console reloads its entries on it).
+ *
  * `GET {base}/gateway/packages/progress` serves the progress frames alone.
  */
 import type { ConsoleEventHistoryPage, GatewayPackageEvent } from '@zhin.js/console-protocol';
@@ -18,6 +21,8 @@ import { jsonResponse, type RouteContext } from '@zhin.js/host-http';
 import type { GatewayHttpServer } from './gateway-http-server.js';
 
 const KEEPALIVE_MS = 15_000;
+/** Console event the client reloads its entries on (`CONSOLE_ENTRY_LIFECYCLE_EVENTS`). */
+export const PLUGIN_LIFECYCLE_UPDATED = 'plugin:lifecycle-updated';
 /** Gateway frames held while an instance frame is half written. */
 const MAX_PENDING_FRAMES = 1_024;
 /** Chunks queued for a client that does not read; beyond it the stream ends (the client resumes). */
@@ -90,8 +95,19 @@ export function registerGatewayEventRoutes(options: RegisterGatewayEventRoutesOp
     return { stream, write, finish, cleanups, get finished() { return finished; } };
   };
 
-  const subscribeProgress = (deliver: (frame: string) => void): (() => void) | undefined =>
-    options.packages?.subscribe((event) => deliver(gatewayEventFrame(GATEWAY_PACKAGES_PROGRESS, event)));
+  /**
+   * Progress frames; on the Console event stream (`lifecycle`) a succeeded enable / disable that
+   * changed `disable_plugins` is followed by `plugin:lifecycle-updated` `{ instanceKey, enabled }`,
+   * the event the instance used to publish for the Console switch (the Console reloads its entries).
+   */
+  const subscribeProgress = (deliver: (frame: string) => void, lifecycle = false): (() => void) | undefined =>
+    options.packages?.subscribe((event) => {
+      deliver(gatewayEventFrame(GATEWAY_PACKAGES_PROGRESS, event));
+      const plugin = event.type === 'result' && event.result.ok ? event.result.plugin : undefined;
+      if (lifecycle && plugin?.changed) {
+        deliver(gatewayEventFrame(PLUGIN_LIFECYCLE_UPDATED, { instanceKey: plugin.instanceKey, enabled: plugin.enabled }));
+      }
+    });
 
   const events = async (request: Request, context: RouteContext): Promise<Response> => {
     if (!server.instanceReady) return offlineStream(request);
@@ -121,7 +137,7 @@ export function registerGatewayEventRoutes(options: RegisterGatewayEventRoutesOp
         return;
       }
       client.write(frame);
-    });
+    }, true);
     if (stop) client.cleanups.push(stop);
     void (async () => {
       try {
@@ -144,7 +160,7 @@ export function registerGatewayEventRoutes(options: RegisterGatewayEventRoutesOp
   const offlineStream = (request: Request): Response => {
     const client = open(request);
     client.write(': gateway\n\n');
-    const stop = subscribeProgress((frame) => client.write(frame));
+    const stop = subscribeProgress((frame) => client.write(frame), true);
     if (stop) client.cleanups.push(stop);
     // Reconnect to the merged stream once the instance is back.
     const unwatch = options.instance?.onChange(() => { if (server.instanceReady) client.finish(); });

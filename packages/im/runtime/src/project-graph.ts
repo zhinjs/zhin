@@ -20,10 +20,13 @@ import {
   declaredPackageDependency,
   mergeFeatureReferences,
 } from './platform-features.js';
+import { inferConventionFeatureReferences } from './convention-features.js';
 
 export interface FeatureRequirementNode {
   readonly reference: PackageReference;
   readonly package: ResolvedPackage;
+  /** Convention directory that implied this requirement when `zhin.features` does not list it. */
+  readonly inferredFrom?: string;
 }
 
 export interface PluginGraphNode {
@@ -141,6 +144,15 @@ export class ProjectGraphService {
       }
       if (pluginFacade) addPackage(packages, pluginFacade);
     }
+    // With zhin.features omitted, convention directories imply their Feature package unless the
+    // Root already inherits it from the platform carrier (which keeps its api range).
+    const inferredFrom = new Map<string, string>();
+    const inferred = inferConventionFeatureReferences(pkg.root, manifest)
+      .filter((reference) => !featureRefs.some((item) => item.package === reference.package));
+    for (const reference of inferred) inferredFrom.set(reference.package, reference.directory);
+    if (inferred.length > 0) {
+      featureRefs = mergeFeatureReferences(featureRefs, inferred.map((reference) => Object.freeze({ package: reference.package })));
+    }
 
     const featurePackages = new Set<string>();
     const features = await Promise.all(
@@ -151,13 +163,24 @@ export class ProjectGraphService {
           );
         }
         featurePackages.add(reference.package);
-        const resolved = await this.#resolveFeatureReference(pkg, reference, featureCarrier);
+        const directory = inferredFrom.get(reference.package);
+        let resolved: ResolvedPackage | undefined;
+        try {
+          resolved = await this.#resolveFeatureReference(pkg, reference, featureCarrier);
+        } catch (error) {
+          if (directory === undefined || !(error instanceof PackageResolutionError)) throw error;
+          throw new PackageResolutionError(
+            `${error.message} (Feature ${reference.package} is inferred from the convention directory ${directory}/ `
+            + `of ${pkg.name}; install it and declare it as a dependency, or remove ${directory}/)`,
+            error.request ?? reference.package,
+          );
+        }
         if (!resolved) return undefined;
         assertPackageType(resolved, 'feature');
         assertPackageEngine(resolved, this.#engineVersion);
         assertFeatureApi(pkg, reference, resolved);
         addPackage(packages, resolved);
-        return Object.freeze({ reference, package: resolved });
+        return Object.freeze({ reference, package: resolved, ...(directory !== undefined ? { inferredFrom: directory } : {}) });
       }),
     );
 

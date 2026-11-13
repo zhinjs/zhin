@@ -4,8 +4,9 @@ import {
   type PluginId, type RuntimeConfigDocument, type RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
 import type { ConsoleConfigPatchRequest, ConsoleConfigPatchResult } from '@zhin.js/console-protocol';
+import { PLUGIN_SWITCH_REQUIRES_GATEWAY } from '@zhin.js/host-http';
 import {
-  dispatchFeatureConsoleRpc, type FeatureRpcContext,
+  createFeatureRpcContext, dispatchFeatureConsoleRpc, type FeatureRpcContext,
 } from '../../../src/instance/console/console-feature-rpc.js';
 
 const root = rootPluginId();
@@ -201,7 +202,7 @@ describe('feature.* Console RPC', () => {
       .toMatchObject({ status: 409, body: { code: 'locked' } });
   });
 
-  it('keeps the global switch on disable_plugins with a restart', async () => {
+  it('keeps the in-chat global switch on disable_plugins with a restart (setGlobalEnabled)', async () => {
     vi.useFakeTimers();
     try {
       const setGlobalEnabled = vi.fn(async () => undefined);
@@ -216,5 +217,38 @@ describe('feature.* Console RPC', () => {
       expect((await call('feature.set-enabled', { plugin: 'rss', level: 'global', enabled: true }))!.body.data).toMatchObject({ status: 'unchanged' });
       expect((await call('feature.set-enabled', { plugin: 'rss', level: 'global', enabled: 'yes' }))!.status).toBe(400);
     } finally { vi.useRealTimers(); }
+  });
+
+  it('refuses the global switch on the Console path: it is a gateway transaction (ADR 0054 §4)', async () => {
+    vi.useFakeTimers();
+    try {
+      const published: string[] = [];
+      const { call, patches, context } = harness(base, { publishEvent: type => { published.push(type); } });
+      for (const enabled of [true, false]) {
+        // Refused whatever the current state (plain is disabled, rss enabled): never "unchanged".
+        for (const plugin of ['plain', 'rss']) {
+          const reply = await call('feature.set-enabled', { plugin, level: 'global', enabled });
+          expect(reply).toMatchObject({ status: 409, body: { success: false, code: 'gateway-required', error: PLUGIN_SWITCH_REQUIRES_GATEWAY } });
+        }
+      }
+      expect(patches).toEqual([]);
+      expect(published).toEqual([]);
+      expect(context.setGlobalEnabled).toBeUndefined();
+      // Lower levels keep working on the instance (feature switches, ADR 0050 / 0055).
+      expect((await call('feature.set-enabled', { plugin: 'rss', level: 'endpoint', key: 'tg/news', enabled: false }))!.body.data).toMatchObject({ status: 'saved' });
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('builds the Console context without a global writer or restart hook', async () => {
+    const { context } = harness(base);
+    const consoleContext = createFeatureRpcContext({
+      configuration: context.configuration as never,
+      snapshots: context.snapshots as never,
+      hub: { publish: () => undefined } as never,
+    }, 'full', () => true);
+    expect(consoleContext.setGlobalEnabled).toBeUndefined();
+    expect(consoleContext.requestRestart).toBeUndefined();
+    const reply = await dispatchFeatureConsoleRpc({ type: 'feature.set-enabled', data: { plugin: 'plain', level: 'global', enabled: true } }, consoleContext);
+    expect(reply).toMatchObject({ status: 409, body: { code: 'gateway-required' } });
   });
 });

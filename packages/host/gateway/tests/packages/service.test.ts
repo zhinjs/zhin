@@ -481,6 +481,108 @@ describe('GatewayPackageService plugin configuration (ADR 0053 §2 step 4)', () 
   });
 });
 
+describe('GatewayPackageService enable / disable', () => {
+  const SANDBOX = '@zhin.js/adapter-sandbox';
+  const schema = { type: 'object', required: ['endpoints'], properties: { endpoints: { type: 'array', items: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } } } } };
+  const readConfig = () => readJson(join(root, 'zhin.config.json'));
+  const phases = (events: GatewayPackageEvent[]) => events.filter(event => event.type === 'phase').map(event => (event as { phase: string }).phase);
+
+  async function declaredService(instance: FakeInstance, calls: string[][] = []) {
+    const subject = new GatewayPackageService({
+      projectRoot: root, instance, packageManager: fakePackageManager({ calls, plugins: { [SANDBOX]: schema } }), hasOwner: () => true, readyTimeoutMs: 200, stableMs: 30,
+    });
+    await subject.install([SANDBOX], { principal: owner });
+    await subject.declare({ package: SANDBOX, config: { endpoints: [{ id: 'bot' }] } }, { principal: owner });
+    instance.calls.length = 0;
+    calls.length = 0;
+    return subject;
+  }
+
+  it('disables and enables a declared instance as configuration-only transactions that restart the instance', async () => {
+    const instance = new FakeInstance('running');
+    const calls: string[][] = [];
+    const subject = await declaredService(instance, calls);
+    const events: GatewayPackageEvent[] = [];
+    const disabled = await subject.setEnabled({ plugin: 'sandbox' }, false, { principal: admin, onEvent: event => events.push(event) });
+    expect(disabled).toMatchObject({ ok: true, status: 'succeeded', operation: 'disable', packages: [{ name: SANDBOX, source: 'adapter' }],
+      plugin: { instanceKey: 'sandbox', packageName: SANDBOX, enabled: false, changed: true }, instance: { before: 'running', after: 'running' } });
+    expect(phases(events)).toEqual(['snapshot', 'stop-instance', 'configure', 'start-instance', 'done']);
+    expect((await readConfig()).disable_plugins).toEqual(['sandbox']);
+    const enabled = await subject.setEnabled({ plugin: SANDBOX }, true, { principal: owner });
+    expect(enabled).toMatchObject({ ok: true, operation: 'enable', plugin: { instanceKey: 'sandbox', enabled: true, changed: true } });
+    expect((await readConfig()).disable_plugins).toEqual([]);
+    // No package manager runs and no reinstall: only the configuration file changes.
+    expect(calls).toEqual([]);
+    expect(instance.calls).toEqual(['stop', 'start', 'stop', 'start']);
+  });
+
+  it('succeeds without touching the instance when the plugin already is in the requested state', async () => {
+    const instance = new FakeInstance('running');
+    const subject = await declaredService(instance);
+    const before = await readFile(join(root, 'zhin.config.json'), 'utf8');
+    const events: GatewayPackageEvent[] = [];
+    const result = await subject.setEnabled({ plugin: 'sandbox' }, true, { principal: owner, onEvent: event => events.push(event) });
+    expect(result).toMatchObject({ ok: true, status: 'succeeded', operation: 'enable', plugin: { instanceKey: 'sandbox', changed: false }, instance: { before: 'running', after: 'running' } });
+    expect(events.map(event => event.type)).toEqual(['start', 'phase', 'result']);
+    expect(instance.calls).toEqual([]);
+    expect(await readFile(join(root, 'zhin.config.json'), 'utf8')).toBe(before);
+  });
+
+  it('refuses invalid requests and missing permissions before touching the instance', async () => {
+    const instance = new FakeInstance('running');
+    const subject = await declaredService(instance);
+    await expect(subject.setEnabled({ plugin: 'missing' }, false, { principal: owner })).rejects.toMatchObject({ code: 'invalid_input', message: expect.stringContaining('未在配置中声明') });
+    await expect(subject.setEnabled({ plugin: 'http' }, false, { principal: owner })).rejects.toMatchObject({ code: 'invalid_input', message: expect.stringContaining('保留配置键') });
+    await expect(subject.setEnabled({ plugin: 'bot' }, false, { principal: owner })).rejects.toMatchObject({ code: 'invalid_input', message: expect.stringContaining('根插件') });
+    await expect(subject.setEnabled({ plugin: 42 }, false, { principal: owner })).rejects.toMatchObject({ code: 'invalid_input' });
+    await expect(subject.setEnabled({ plugin: 'sandbox' }, false, { principal: testUser('viewer') })).rejects.toMatchObject({ code: 'forbidden' });
+    await expect(subject.setEnabled({ plugin: 'sandbox' }, false, { principal: { kind: 'bootstrap', open: true } })).rejects.toMatchObject({ code: 'forbidden' });
+    await expect(subject.setEnabled({ plugin: 'sandbox' }, false, { principal: undefined })).rejects.toMatchObject({ code: 'forbidden' });
+    expect(instance.calls).toEqual([]);
+    expect((await readConfig()).disable_plugins).toBeUndefined();
+  });
+
+  it('refuses to enable an instance whose configuration fails its schema, with structured details', async () => {
+    const instance = new FakeInstance('running');
+    const subject = await declaredService(instance);
+    await subject.setEnabled({ plugin: 'sandbox' }, false, { principal: owner });
+    const config = await readConfig();
+    await writeFile(join(root, 'zhin.config.json'), JSON.stringify({ ...config, sandbox: { endpoints: [{}] } }));
+    instance.calls.length = 0;
+    await expect(subject.setEnabled({ plugin: 'sandbox' }, true, { principal: owner })).rejects.toMatchObject({ code: 'invalid_input',
+      details: { errors: [expect.objectContaining({ path: '$.endpoints.0.id' })] } });
+    expect(instance.calls).toEqual([]);
+  });
+
+  it('rolls the configuration back when the instance does not start after enabling', async () => {
+    // Starts: install, declare, disable, then the enable that fails.
+    const instance = new FakeInstance('running', attempt => (attempt === 3 ? 'fail' : 'ready'));
+    const subject = await declaredService(instance);
+    await subject.setEnabled({ plugin: 'sandbox' }, false, { principal: owner });
+    const before = await readFile(join(root, 'zhin.config.json'), 'utf8');
+    const events: GatewayPackageEvent[] = [];
+    const result = await subject.setEnabled({ plugin: 'sandbox' }, true, { principal: owner, onEvent: event => events.push(event) });
+    expect(result).toMatchObject({ ok: false, status: 'rolledBack', failedPhase: 'start-instance', operation: 'enable', instance: { after: 'running' } });
+    expect(result.plugin).toBeUndefined();
+    expect(phases(events)).toEqual(['snapshot', 'stop-instance', 'configure', 'start-instance', 'rollback', 'restore-files', 'restart-instance', 'done']);
+    expect(await readFile(join(root, 'zhin.config.json'), 'utf8')).toBe(before);
+  });
+
+  it('lets only owners toggle a project-local plugin', async () => {
+    await mkdir(join(root, 'plugins', 'local'), { recursive: true });
+    await writeFile(join(root, 'plugins', 'local', 'package.json'), JSON.stringify({ name: 'local-plugin', version: '1.0.0', zhin: { protocol: 1, type: 'plugin', entry: './plugin.js', platformFeatures: false } }));
+    await writeFile(join(root, 'plugins', 'local', 'plugin.js'), 'export default {};');
+    await writeFile(join(root, 'zhin.config.json'), JSON.stringify({ configVersion: 2, plugins: { local: './plugins/local' }, local: {} }));
+    const instance = new FakeInstance('stopped');
+    const subject = service({ instance });
+    await expect(subject.setEnabled({ plugin: 'local' }, false, { principal: admin })).rejects.toMatchObject({ code: 'forbidden' });
+    const result = await subject.setEnabled({ plugin: 'local' }, false, { principal: owner });
+    expect(result).toMatchObject({ ok: true, operation: 'disable', packages: [{ name: './plugins/local', spec: './plugins/local', source: 'local' }], instance: { before: 'stopped', after: 'stopped' } });
+    expect((await readConfig()).disable_plugins).toEqual(['local']);
+    expect(instance.calls).toEqual([]);
+  });
+});
+
 describe('GatewayPackageService with the real workflow and supervisor', () => {
   const fixture = fileURLToPath(new URL('./fixtures/project-instance.mjs', import.meta.url));
 

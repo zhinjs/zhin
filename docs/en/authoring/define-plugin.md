@@ -5,7 +5,7 @@ description: "How to write a plugin entry: name it, declare config, use database
 
 # definePlugin: the plugin entry
 
-Every plugin's `plugin.ts` default-exports a `definePlugin({ ... })`. It does three things: **names the plugin**, **declares its config**, and **prepares runtime resources in `setup`** (database tables, scheduled jobs, proactive messaging…).
+A plugin's `plugin.ts` (if present) default-exports a `definePlugin({ ... })`. It does three things: **names the plugin**, **declares its config**, and **prepares runtime resources in `setup`** (database tables, scheduled jobs, proactive messaging…).
 
 Individual commands, middleware and components usually live in [convention directories](./conventions.md), not in the entry. This page covers what the entry itself can do.
 
@@ -21,6 +21,24 @@ export default definePlugin({
 ```
 
 `name` is the only required field: lowercase letters, digits and hyphens, starting with a letter. A plugin that only uses convention directories and has no startup logic needs nothing more.
+
+### Without plugin.ts {#entryless-plugin}
+
+A plugin that only uses convention directories can omit `plugin.ts` altogether. The smallest plugin is two files:
+
+```text
+my-plugin/
+├── package.json          # "zhin": { "protocol": 1, "type": "plugin" }: no entry, no features
+└── commands/demo/index.ts
+```
+
+When `package.json#zhin` declares neither `entry` nor `exports["./zhin"]`, the runtime assembles the package as `export default definePlugin({ name })`: no `setup`, and convention directories are discovered from the **package root** as usual.
+
+- **The plugin name** is the unscoped package name: `@scope/foo` → `foo`, `foo` → `foo`. Prefixes such as `zhin-plugin-` are not stripped.
+- That name must still match `/^[a-z][a-z0-9-]*$/`. If it does not (for example `zhin.js-foo` contains a `.`), startup fails and tells you to add a `plugin.ts` with an explicit `name`.
+- Put `displayName` and `icon` in `zhin.metadata`.
+- A declared `entry` (or `exports["./zhin"]`) must exist; only omitting both makes an entry-less plugin. A `plugin.ts` on disk without a declared entry is not loaded, and `zhin plugin check` warns about it.
+- Add a `plugin.ts` and declare `zhin.entry` once you need `setup`, inline `config`, `requires` or `capabilityGraph`.
 
 To do work at startup, add `setup`:
 
@@ -444,11 +462,11 @@ Plugins and Feature packages declare their packaging contract in the top-level `
   "zhin": {
     "protocol": 1,                    // required, always 1 for now
     "type": "plugin",                 // required: "plugin" | "feature"
-    "entry": "./plugin.js",           // required: JS for published packages; a private local Root may use ./plugin.ts
+    "entry": "./plugin.js",           // optional for plugins (entry-less plugin); JS for published packages; a private local Root may use ./plugin.ts
     "engine": "^1.0.0",               // optional: required Zhin runtime version
     "runtime": "trusted",             // optional (plugin only): "trusted" (default) | "isolated"
     "platformFeatures": true,         // optional (plugin only): default true, Root gets the official Stable Features
-    "features": [                     // optional (plugin only): Feature packages this plugin depends on
+    "features": [                     // optional (plugin only): Feature packages this plugin depends on; inferred from convention directories when omitted
       { "package": "@zhin.js/command", "api": "^1.0.0", "optional": false }
     ]
   }
@@ -459,13 +477,43 @@ Plugins and Feature packages declare their packaging contract in the top-level `
 | --- | --- | --- |
 | `protocol` | Yes | Manifest protocol version; must be `1` |
 | `type` | Yes | `plugin` (a regular plugin package) or `feature` (a platform package providing a kind of capability) |
-| `entry` | Yes (or `exports["./zhin"]`) | Entry file, package-relative, starting with `./` and without `..`; when omitted, `exports["./zhin"]` is read (see below) |
+| `entry` | Features: yes; plugins: no | Entry file, package-relative, starting with `./` and without `..`; when omitted, `exports["./zhin"]` is read (see below). A plugin that omits both is an [entry-less plugin](#entryless-plugin) |
 | `engine` | No | A semver range; loading is refused if the runtime version doesn't satisfy it |
 | `runtime` | No | `isolated` runs the plugin in an isolated environment: child plugins only, no Host Features, and an isolation adapter is required |
 | `platformFeatures` | No | Default `true`: the Root plugin gets the official Stable Features even without declaring them |
-| `features` | No | Feature packages depended on. `package` is an npm name or a `./` relative path; `api` is a range on its `featureApi`; `optional` allows degrading when missing |
+| `features` | No | Feature packages depended on. `package` is an npm name or a `./` relative path; `api` is a range on its `featureApi`; `optional` allows degrading when missing. [Inferred from convention directories](#infer-features) when omitted |
 
 A `type: "feature"` package has only `protocol` / `type` / `entry` / `engine` / `featureApi`; `featureApi` declares the API version it implements, checked against consumers' `features[].api`.
+
+A plugin truly requires only two fields; the minimal manifest is `"zhin": { "protocol": 1, "type": "plugin" }`. The entry may be omitted ([entry-less plugin](#entryless-plugin)) and so may `features` (inferred, see below).
+
+#### Inferring features from convention directories {#infer-features}
+
+`zhin.features` may be omitted. The runtime then infers the Feature packages to mount from the convention directories present at the plugin package root:
+
+| Directory | Feature package |
+| --- | --- |
+| `commands/` | `@zhin.js/command` |
+| `components/` | `@zhin.js/component` |
+| `middlewares/` | `@zhin.js/middleware` |
+| `handlers/` | `@zhin.js/handler` |
+| `schedules/` | `@zhin.js/schedule-feature` |
+| `tools/` | `@zhin.js/tool` |
+| `prompt-sections/` | `@zhin.js/prompt-section` |
+| `hooks/` | `@zhin.js/hook-feature` |
+| `mcps/` | `@zhin.js/mcp-feature` |
+| `adapters/` | `@zhin.js/adapter` |
+| `skills/` | `@zhin.js/skill` |
+| `agents/` | `@zhin.js/agent-feature` |
+
+The table exists once, in `@zhin.js/runtime` (`CONVENTION_FEATURE_PACKAGES`); `zhin plugin check`, `zhin create` and the repository checks all read it.
+
+- **`features` omitted**: every directory present requires its Feature package. Inferred references carry no `api` range and accept the installed version; the package must still be listed in `dependencies` / `peerDependencies`. A missing one fails with `PackageResolutionError`, like a missing declared Feature, and the message names the directory that implied it.
+- **`features` written** (even `[]`): the list is complete and nothing is inferred, exactly as before. Entries apply as written (`api` and `optional` kept); a directory the list does not cover does not mount its Feature (`zhin plugin check` warns).
+- Stable Features the Root inherits from `zhin.js` / `@zhin.js/core` take precedence over inference; `platformFeatures` is unchanged.
+- Plugins with `runtime: "isolated"` never infer (isolated plugins cannot mount Host Features).
+- Write `features` explicitly to **pin an `api` range**, mark a Feature `optional`, or when the Feature comes from a package other than the one in the table (for example a local workspace Feature).
+- A new kind of convention directory created while running is picked up the next time the manifest is read (edit `package.json` or restart).
 
 ### Declaring the entry with exports {#exports-zhin}
 

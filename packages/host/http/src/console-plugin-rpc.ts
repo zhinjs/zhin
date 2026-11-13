@@ -6,9 +6,17 @@ import type {
 } from './console-rpc.js';
 
 /**
+ * Refusal of the global plugin switch (`plugin:set-enabled`, `feature.set-enabled` at `global`)
+ * by an instance: the switch is a gateway transaction (stop → write `disable_plugins` → start,
+ * rollback on failure) and is never written by the instance itself (ADR 0054 §4).
+ */
+export const PLUGIN_SWITCH_REQUIRES_GATEWAY = '插件全局启停由管理网关执行（停止实例 → 写入 disable_plugins → 启动，失败回滚）：请在 zhin start 启动的 Console 中操作，或运行 zhin enable / zhin disable <插件>';
+
+/**
  * Dispatches the plugin-management slice; undefined means the type belongs elsewhere. Package
  * installs / updates / uninstalls are not handled in the instance: they are gateway dependency
- * transactions (`gateway.packages.*`, ADR 0054 §4) that stop the instance first.
+ * transactions (`gateway.packages.*`, ADR 0054 §4) that stop the instance first, and so is the
+ * global plugin switch (`plugin:set-enabled`, refused here).
  */
 export async function dispatchPluginConsoleRpc(
   type: string,
@@ -18,32 +26,10 @@ export async function dispatchPluginConsoleRpc(
   const requestId = message.requestId as number | string | undefined;
   try {
     switch (type) {
-      case PLUGIN_RPC.SET_ENABLED: {
-        const instanceKey = stringField(message, 'instanceKey');
-        const enabled = message.enabled;
-        if (!instanceKey || typeof enabled !== 'boolean') {
-          return { requestId, error: 'instanceKey and boolean enabled are required' };
-        }
-        if (!ctx.setPluginEnabled) {
-          return { requestId, error: 'Plugin lifecycle management is not configured' };
-        }
-        const lifecycle = await ctx.setPluginEnabled(instanceKey, enabled);
-        ctx.publishEvent?.('plugin:lifecycle-updated', { instanceKey, enabled });
-        if (ctx.requestRestart) {
-          setTimeout(() => void Promise.resolve(ctx.requestRestart?.()).catch(() => undefined), 500);
-        }
-        return {
-          requestId,
-          data: {
-            success: true,
-            instanceKey,
-            enabled,
-            disabled: lifecycle.disabled,
-            restartRequired: true,
-            message: `${instanceKey} 已${enabled ? '启用' : '停用'}，Host 正在重启`,
-          },
-        };
-      }
+      case PLUGIN_RPC.SET_ENABLED:
+        // Global plugin on / off is a management gateway transaction (ADR 0054 §4): the gateway
+        // answers it before forwarding. Reaching the instance means no gateway is in front.
+        return { requestId, error: PLUGIN_SWITCH_REQUIRES_GATEWAY };
       case PLUGIN_RPC.INSPECT:
       case PLUGIN_RPC.APPLY:
       case PLUGIN_RPC.PLAN_VERIFICATION:

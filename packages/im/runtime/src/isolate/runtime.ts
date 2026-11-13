@@ -85,7 +85,7 @@ export class NodeIsolatedPluginRuntime implements IsolatedPluginRuntimePort {
         metadata?: PluginMetadata;
       }>('prepare', {
         ...request,
-        entry: pathToFileURL(request.entry).href,
+        ...(request.entry !== undefined ? { entry: pathToFileURL(request.entry).href } : {}),
       }, signal, this.#startTimeoutMs);
       return {
         descriptor,

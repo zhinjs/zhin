@@ -125,6 +125,13 @@ export function packageEventPrinter(output: Output = processOutput): (event: Gat
 
 export function renderTransactionResult(result: GatewayPackageTransactionResult): string[] {
   const names = result.packages.map((item) => item.spec).join(' ') || '(全部依赖)';
+  if (result.ok && result.plugin) {
+    const { instanceKey, packageName, enabled, changed } = result.plugin;
+    const state = enabled ? '启用' : '停用';
+    return [changed
+      ? `✓ 已${state}插件实例 ${instanceKey}（${packageName}），已更新 disable_plugins（实例 ${result.instance.before} → ${result.instance.after}）`
+      : `✓ 插件实例 ${instanceKey}（${packageName}）已是${state}状态，未改动配置，实例未重启`];
+  }
   if (result.ok) return [`✓ ${result.operation} 完成：${names}（实例 ${result.instance.before} → ${result.instance.after}）`,
     ...configurationHints(result.needsConfiguration ?? [])];
   const lines = [
@@ -178,6 +185,26 @@ export async function runPackageOperationViaGateway(
   const print = packageEventPrinter(output);
   const result = await withGateway(target, (client) => client.request<GatewayPackageTransactionResult>(
     RPC_BY_OPERATION[request.operation], rpcData(request), { onEvent: print },
+  ));
+  for (const line of renderTransactionResult(result)) (result.ok ? output.out : output.err)(`${line}\n`);
+  return result;
+}
+
+export interface PluginEnablementRequest {
+  /** Instance key, or the package name of a package declared once. */
+  readonly plugin: string;
+  readonly enabled: boolean;
+}
+
+/** `zhin enable` / `zhin disable` through the running gateway (configuration-only transaction). */
+export async function runPluginEnablementViaGateway(
+  target: GatewayTarget,
+  request: PluginEnablementRequest,
+  output: Output = processOutput,
+): Promise<GatewayPackageTransactionResult> {
+  const print = packageEventPrinter(output);
+  const result = await withGateway(target, (client) => client.request<GatewayPackageTransactionResult>(
+    request.enabled ? GATEWAY_RPC.ENABLE : GATEWAY_RPC.DISABLE, { plugin: request.plugin }, { onEvent: print },
   ));
   for (const line of renderTransactionResult(result)) (result.ok ? output.out : output.err)(`${line}\n`);
   return result;

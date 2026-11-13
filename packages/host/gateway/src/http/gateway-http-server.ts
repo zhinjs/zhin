@@ -338,11 +338,15 @@ export class GatewayHttpServer {
       } catch {
         return jsonResponse(400, { success: false, code: 'invalid_body', error: 'Invalid JSON body' });
       }
-      try {
-        return await owner.handle(message, context, this.tokenRegistry);
-      } catch (error) {
-        if (isDatabaseBusyError(error)) return databaseBusyResponse({ requestId: message.requestId });
-        throw error;
+      const claimed = typeof message === 'object' && message !== null && !Array.isArray(message)
+        && (!('claims' in owner) || typeof owner.claims !== 'function' || owner.claims(message));
+      if (claimed) {
+        try {
+          return await owner.handle(message, context, this.tokenRegistry);
+        } catch (error) {
+          if (isDatabaseBusyError(error)) return databaseBusyResponse({ requestId: message.requestId });
+          throw error;
+        }
       }
     }
     const headers = new Headers(request.headers);

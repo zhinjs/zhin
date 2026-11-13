@@ -187,11 +187,6 @@ export type RuntimeConsoleRpcContext = {
   /** Full-scope project read (`config:get-project`); masked unless `reveal`. */
   readProjectConfig?(request: import('@zhin.js/console-protocol').ConsoleConfigProjectReadRequest): Promise<import('@zhin.js/console-protocol').ConsoleConfigProjectRead>;
   applyConfig?(expectedRevision: string): Promise<import('@zhin.js/console-protocol').ConsoleConfigApplyResult>;
-  /** Persist a declared child Plugin lifecycle state. Takes effect after restart. */
-  setPluginEnabled?(
-    instanceKey: string,
-    enabled: boolean,
-  ): Promise<Readonly<{ disabled: readonly string[] }>>;
   /** Read-only install planning shared by Console Web and CLI surfaces. */
   pluginManagement?: PluginManagementPort;
   validatePluginConfig?(pluginName: string, data: unknown): Promise<PluginConfigValidation>;

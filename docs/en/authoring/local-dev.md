@@ -120,7 +120,7 @@ If you can't use the command, hand-write `pnpm.overrides` (`link:` into the same
 
 Run `pnpm install` afterwards and use the commands from section 1 to confirm each package has a single resolved path.
 
-To temporarily disable an instance, add its alias to `disable_plugins`. Keep its package dependency, `plugins` mapping and top-level business configuration. Removing a declaration deletes the instance; disabling does not uninstall it.
+To temporarily disable an instance, run `zhin disable <alias>` (and `zhin enable <alias>` to bring it back, see the [CLI reference](../cli/index.md#enable-disable)); it adds the alias to `disable_plugins`. Keep its package dependency, `plugins` mapping and top-level business configuration. Removing a declaration deletes the instance; disabling does not uninstall it.
 
 ## 5. Trying a standalone plugin in a bot {#standalone-plugin}
 

@@ -158,11 +158,14 @@ describe('migrate', () => {
   it('keeps a pinned CLI and gives the added gateway the range released with this CLI', () => {
     fs.writeFileSync(path.join(tmp, 'zhin.config.yml'), 'configVersion: 2\nplugins: {}\n');
     const pkgPath = path.join(tmp, 'package.json');
+    // The project pins the CLI release that runs this migration, so the gateway released with it applies
+    // (a CLI on another release line gets that line's gateway; see the next test).
+    const cliVersion = (JSON.parse(fs.readFileSync(path.join(import.meta.dirname, '../package.json'), 'utf8')) as { version: string }).version;
     fs.writeFileSync(pkgPath, JSON.stringify({
       name: 'bot',
       engines: { node: '>=22.19.0' },
       dependencies: { 'zhin.js': '1.1.25' },
-      devDependencies: { '@zhin.js/cli': '1.1.32', 'zhin.js': '1.1.25' },
+      devDependencies: { '@zhin.js/cli': cliVersion, 'zhin.js': '1.1.25' },
     }, null, 2));
     vi.spyOn(console, 'log').mockImplementation(() => {});
     const gatewayVersion = (JSON.parse(fs.readFileSync(
@@ -174,7 +177,7 @@ describe('migrate', () => {
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
     expect(pkg.dependencies).toEqual({
       'zhin.js': '1.1.25',
-      '@zhin.js/cli': '1.1.32',
+      '@zhin.js/cli': cliVersion,
       '@zhin.js/gateway': `^${gatewayVersion}`,
     });
     expect(pkg.devDependencies).toBeUndefined();

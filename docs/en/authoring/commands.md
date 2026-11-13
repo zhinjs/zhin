@@ -52,6 +52,32 @@ export default definePlugin({
 Both styles share the same command table and conflict detection. As commands grow, move them into `commands/`; editing one then reloads only that file.
 :::
 
+## Fixed replies and pattern triggers
+
+When the reply never changes, use `reply` instead of `execute`. To let a plain sentence (not `/name`) trigger the command, add a `match` regular expression:
+
+```ts
+// commands/demo/index.ts
+import { defineCommand } from 'zhin.js/command';
+
+export default defineCommand({ description: 'Status', match: /^demo$/, reply: 'All good' });
+```
+
+- Use either `reply` or `execute`. `reply` can be text, message segments or JSX.
+- `match` tests the whole message text after the command prefix and surrounding whitespace are removed, and only for text-only messages. The command name (`/demo`) keeps working.
+- Command names are matched first; patterns are tried only when no name matches. If several patterns fit, the first command in the command list (sorted by name) runs.
+- The result is in `context.match`, with named groups in `match.groups`:
+
+```ts
+export default defineCommand({
+  description: 'Weather',
+  match: /^weather (?<city>\S+)$/u,
+  execute: ({ match }) => `Looking up the weather in ${match?.groups?.city}`,
+});
+```
+
+- The `g` and `y` flags are rejected: they make a pattern remember its last position, so the same message would match only every other time.
+
 ## Common tasks
 
 ### Accept parameters
@@ -585,13 +611,15 @@ See [Testing Plugins](./testing.md) for the full guide.
 
 `input` isn't always a message (it may come from a Host call), so type-check before reading the sender; for non-message sources `$reply` does nothing. `input` is typed as `CommandMessage` by default, structurally compatible with the runtime `Message` (layering prevents `@zhin.js/command` from depending on `@zhin.js/core`).
 
-### alias / permit / shortcut
+### alias / permit / shortcut / match / reply
 
 | Field | Behavior |
 |---|---|
 | `alias` | Replaces all static parts of the command name; folder params follow |
 | `permit` | Built-in rules: `adapter\|group\|private\|channel\|user(...)`, `owner\|admin\|trusted[@level]` / `role(...)`, `platform:…` / `platform-role:…` / `platform-permission:…`, `bot:…` / `bot-role:…` / `bot-permission:…`. Failure returns `denied` (`denial` names the first unmet rule and the reason); no auth subject also means denied, and programmatic `CommandIndex.execute` can't bypass it |
 | `shortcut` | `{ trigger text: prefilled params }`, fires on an exact match after trimming |
+| `match` | Pattern trigger: runs when a text-only message, without the command prefix and surrounding whitespace, fits; the result is in `context.match`. Command names win; see [Fixed replies and pattern triggers](#fixed-replies-and-pattern-triggers) |
+| `reply` | Fixed reply; use instead of `execute` |
 
 Conflicts are judged on the full word sequence: `b` and `b list` can coexist.
 

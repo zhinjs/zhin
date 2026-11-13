@@ -6,8 +6,10 @@ applyTo: "plugins/**,examples/**"
 
 ## Package contract
 
-- Every Plugin is an npm package with `package.json#zhin`, `plugin.ts` and optional `schema.json`.
-- `plugin.ts` default-exports `definePlugin()` from `zhin.js` (Feature package authors may
+- Every Plugin is an npm package with `package.json#zhin`, an optional `plugin.ts` and optional `schema.json`.
+  Without `plugin.ts` (no `zhin.entry` / `exports["./zhin"]`) the Plugin is named after its unscoped
+  package name and contributes only convention directories.
+- `plugin.ts`, if present, default-exports `definePlugin()` from `zhin.js` (Feature package authors may
   import from `@zhin.js/plugin-runtime` directly); it owns lifecycle and
   Resources, not capability registration.
 - Child packages live one level below `plugins/*`. Logical ancestry comes from `zhin.plugins`, not

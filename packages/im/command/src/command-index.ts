@@ -57,6 +57,8 @@ export interface CommandDescriptor {
   readonly execution?: CommandDefinition['execution'];
   /** shortcut 触发键列表（不含预填 params）。 */
   readonly shortcut?: readonly string[];
+  /** `match` 正则的字面形式（如 `/^demo$/i`）。 */
+  readonly match?: string;
 }
 
 /** One dispatch reads the caller's exact operation generation and presentation. */
@@ -128,6 +130,7 @@ interface CommandRecord extends CommandDescriptor {
   readonly segments: readonly string[];
   readonly preferredSegments: Readonly<Partial<Record<Locale, readonly string[]>>>;
   readonly parameter?: CommandParameterDefinition;
+  readonly pattern?: RegExp;
 }
 
 interface CommandRoute {
@@ -148,6 +151,7 @@ interface CommandMatch {
   readonly params: Readonly<Record<string, CommandDynamicValue>>;
   readonly remaining: readonly Readonly<CommandSegment>[];
   readonly helpRequested: boolean;
+  readonly regex?: RegExpExecArray;
 }
 
 export type CommandMatchInput = string | readonly Readonly<CommandSegment>[];
@@ -244,6 +248,7 @@ export class CommandIndex {
         ...(alias ? { alias } : {}),
         ...(permit ? { permit } : {}),
         ...(shortcutKeys && shortcutKeys.length > 0 ? { shortcut: shortcutKeys } : {}),
+        ...(slot.definition.match ? { match: String(slot.definition.match), pattern: slot.definition.match } : {}),
         slot,
         segments: Object.freeze(primarySegments),
         preferredSegments: Object.freeze(Object.fromEntries(Object.entries(slot.definition.preferredAliasI18n ?? {}).map(([locale, entry]) =>
@@ -379,9 +384,10 @@ export class CommandIndex {
       }
     }
     const shortcut = this.#matchShortcut(input);
-    const match = shortcut
+    const routed = shortcut
       ? { command: shortcut.record, params: shortcut.params, remaining: Object.freeze([]), helpRequested: false }
       : this.#match(input, false);
+    const match = routed ? withPattern(routed, input) : this.#matchPattern(input);
     if (!match) {
       const candidate = this.#invalidRoute(input);
       if (!candidate) return Object.freeze({ matched: false, status: 'unmatched' });
@@ -416,7 +422,8 @@ export class CommandIndex {
         interaction: interactionFactory?.(authorSource), adapter: definition.adapter,
         presentation: { locale, formatCommand: (localPath, owner = match.command.owner) => this.formatCommand(owner, localPath,
           source && typeof source === 'object' && 'conversation' in source ? commandPrefix : undefined, locale) },
-      }, { args: textArgs(parsed.remaining), params: parsed.params, segments: parsed.remaining, options: parsed.options }));
+      }, { args: textArgs(parsed.remaining), params: parsed.params, segments: parsed.remaining, options: parsed.options,
+        ...(match.regex ? { match: match.regex } : {}) }));
       return Object.freeze({ matched: true, status: 'executed', command: match.command.name, owner: match.command.slot.owner, value });
     } finally {
       try { await operation?.resources?.close(); } catch { /* Cleanup never replaces the command's actual outcome. */ }
@@ -479,6 +486,17 @@ export class CommandIndex {
     } catch {
       return undefined;
     }
+  }
+
+  /** `match` 正则：路由不中时，按指令列表顺序取第一条正文符合的指令（只看纯文本消息）。 */
+  #matchPattern(input: CommandMatchInput): CommandMatch | undefined {
+    const text = exactMessageText(input);
+    if (text === undefined) return undefined;
+    for (const command of this.#commands) {
+      const regex = command.pattern?.exec(text);
+      if (regex) return { command, params: Object.freeze({}), remaining: Object.freeze([]), helpRequested: false, regex };
+    }
+    return undefined;
   }
 
   #matchShortcut(input: CommandMatchInput): ShortcutEntry | undefined {
@@ -1072,10 +1090,19 @@ function textArgs(segments: readonly Readonly<CommandSegment>[]): readonly strin
   }));
 }
 
+/** A routed command whose `match` also fits the text exposes the match result too. */
+function withPattern(match: CommandMatch, input: CommandMatchInput): CommandMatch {
+  const pattern = match.command.pattern;
+  const text = pattern ? exactMessageText(input) : undefined;
+  const regex = pattern && text !== undefined ? pattern.exec(text) : null;
+  return regex ? { ...match, regex } : match;
+}
+
 function toDescriptor({
   slot: _slot,
   segments: _segments,
   parameter: _parameter,
+  pattern: _pattern,
   ...descriptor
 }: CommandRecord): CommandDescriptor {
   return descriptor;

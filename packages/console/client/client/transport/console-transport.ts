@@ -526,7 +526,13 @@ export class ConsoleTransport {
       validation: { valid: boolean; errors: Array<{ path: string; message: string }>; missingEnv: string[] };
     }>({ type: PLUGIN_RPC.DIAGNOSE, pluginName });
   }
-  async setPluginEnabled(instanceKey: string, enabled: boolean) {
+  /**
+   * Global plugin on / off (`disable_plugins`, `plugin.manage`): the gateway answers it as an
+   * enable / disable transaction (stop the instance, write, start it, roll back on failure;
+   * ADR 0054 §4), so it gets the package-transaction deadline. `restartRequired` is true when the
+   * instance was restarted for the change; `transaction` is the gateway transaction result.
+   */
+  async setPluginEnabled(instanceKey: string, enabled: boolean, options?: ConsoleRequestOptions) {
     return this.sendRequest<{
       success: boolean;
       instanceKey: string;
@@ -534,7 +540,8 @@ export class ConsoleTransport {
       disabled: string[];
       restartRequired: boolean;
       message: string;
-    }>({ type: PLUGIN_RPC.SET_ENABLED, instanceKey, enabled });
+      transaction?: GatewayPackageTransactionResult;
+    }>({ type: PLUGIN_RPC.SET_ENABLED, instanceKey, enabled }, this.packageOperation(options));
   }
   async listPlugins() {
     return this.getRest<Array<Record<string, unknown>>>('/api/plugins');

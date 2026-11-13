@@ -13,6 +13,7 @@ import { InstanceSupervisor, type InstanceSupervisorOptions } from '../superviso
 import { GatewayPackageService } from '../packages/service.js';
 import { createGatewayRpcDispatcher, type GatewayRpcDispatcher, type GatewayRpcInstance } from '../packages/rpc.js';
 import { createGatewayConsoleRpc } from './console-rpc.js';
+import { createGatewayPluginSwitchRpc } from './plugin-switch-rpc.js';
 import { startGatewayConsole, type GatewayConsole, type GatewayConsoleInstancePort, type GatewayConsoleOptions } from './gateway-console.js';
 import { registerGatewayEventRoutes } from './gateway-events.js';
 import { GatewayHttpServer } from './gateway-http-server.js';
@@ -196,6 +197,9 @@ export async function startGateway(options: StartGatewayOptions): Promise<Runnin
     consoleRpc: createGatewayConsoleRpc(rpc),
   });
   registry = server.tokenRegistry;
+  // The Console's global plugin switch is a gateway transaction (stop → write → start, rollback);
+  // registered even without package management so it is never forwarded to the instance.
+  const disposePluginSwitch = server.useConsoleRpc(createGatewayPluginSwitchRpc({ projectRoot: options.projectRoot, packages }));
   const disposeEvents = registerGatewayEventRoutes({
     server,
     ...(packages ? { packages } : {}),
@@ -225,6 +229,7 @@ export async function startGateway(options: StartGatewayOptions): Promise<Runnin
     await server.listen();
   } catch (error) {
     disposeEvents();
+    disposePluginSwitch();
     await gatewayConsole?.close().catch(() => undefined);
     await transport.dispose?.();
     supervisor.dispose();
@@ -257,6 +262,7 @@ export async function startGateway(options: StartGatewayOptions): Promise<Runnin
           await transport.dispose?.();
         } finally {
           disposeEvents();
+          disposePluginSwitch();
           await gatewayConsole?.close().catch(() => undefined);
           supervisor.dispose();
           await server.close();

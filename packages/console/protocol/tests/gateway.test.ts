@@ -26,6 +26,8 @@ describe('gateway RPC catalog (ADR 0054 §4 / §5)', () => {
     expect(GATEWAY_RPC_PERMISSIONS['gateway.packages.plan']).toBe('plugin.manage');
     expect(GATEWAY_RPC_PERMISSIONS['gateway.packages.list']).toBe('feature.view');
     expect(GATEWAY_RPC_PERMISSIONS['gateway.plugins.declare']).toBe('plugin.manage');
+    expect(GATEWAY_RPC_PERMISSIONS['gateway.plugins.enable']).toBe('plugin.manage');
+    expect(GATEWAY_RPC_PERMISSIONS['gateway.plugins.disable']).toBe('plugin.manage');
     expect(GATEWAY_RPC_PERMISSIONS['gateway.instance.status']).toBe('status.view');
     expect(GATEWAY_RPC_PERMISSIONS['gateway.instance.logs']).toBe('status.view');
     for (const type of ['gateway.instance.start', 'gateway.instance.stop', 'gateway.instance.restart'] as const) {

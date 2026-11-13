@@ -77,7 +77,7 @@ The browser admin UI, always at [console.zhin.dev](https://console.zhin.dev) —
 
 ### Feature
 
-**A capability package that scans one convention directory.** `@zhin.js/command` discovers `commands/`, `@zhin.js/tool` discovers `tools/`, and so on. A Feature takes effect when declared in `package.json#zhin.features`.
+**A capability package that scans one convention directory.** `@zhin.js/command` discovers `commands/`, `@zhin.js/tool` discovers `tools/`, and so on. A Feature takes effect when declared in `package.json#zhin.features`, or, when `features` is omitted, when its convention directory exists (inferred).
 
 When your Root plugin depends on `zhin.js`, it inherits the common Stable Features automatically (adapters, commands, components, middleware, handlers, schedules), so most projects never write this by hand. Only the AI folders (`tools/`, `prompt-sections/`…) need extra declarations — `npx zhin setup --ai` writes them for you. More: [Plugin model · Plugin and Feature](../concepts/plugin-model.md)
 

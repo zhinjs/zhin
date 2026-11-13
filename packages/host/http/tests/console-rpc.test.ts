@@ -5,6 +5,7 @@ import {
 } from '../src/console-rpc.js';
 import { VIEWER, userPrincipal } from './fixtures/principals.js';
 import { authorizeConsoleHttp } from '../src/access-control.js';
+import { PLUGIN_SWITCH_REQUIRES_GATEWAY } from '../src/console-plugin-rpc.js';
 
 describe('runtime console RPC', () => {
   it('denies raw configuration to demo before reading secret-bearing storage', async () => {
@@ -706,7 +707,7 @@ describe('runtime console RPC', () => {
     }
   });
 
-  it('persists a Plugin lifecycle change, publishes it and schedules restart', async () => {
+  it('refuses plugin:set-enabled: the global plugin switch is a gateway transaction (ADR 0054 §4)', async () => {
     vi.useFakeTimers();
     try {
       const published: Array<{type: string; data: unknown}> = [];
@@ -716,19 +717,19 @@ describe('runtime console RPC', () => {
         {
           authScope: 'full',
           listPages: async () => [],
-          setPluginEnabled: async () => ({disabled: ['sandbox']}),
           requestRestart: () => { restarted = true; },
           publishEvent: (type, data) => { published.push({type, data}); },
         },
       );
       expect(pickRpcReply({type: 'plugin:set-enabled', requestId: 90}, result)).toMatchObject({
-        data: {instanceKey: 'sandbox', enabled: false, restartRequired: true},
+        requestId: 90,
+        error: PLUGIN_SWITCH_REQUIRES_GATEWAY,
       });
-      expect(published).toEqual([{
-        type: 'plugin:lifecycle-updated', data: {instanceKey: 'sandbox', enabled: false},
-      }]);
+      expect(PLUGIN_SWITCH_REQUIRES_GATEWAY).toContain('zhin enable / zhin disable');
+      // Nothing written, published or restarted by the instance.
+      expect(published).toEqual([]);
       await vi.advanceTimersByTimeAsync(600);
-      expect(restarted).toBe(true);
+      expect(restarted).toBe(false);
     } finally {
       vi.useRealTimers();
     }

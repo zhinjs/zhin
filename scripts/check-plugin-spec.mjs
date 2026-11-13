@@ -68,7 +68,11 @@ function checkPlugin(pluginPath, pluginName) {
 
   if (!packageJson.private && packageJson.zhin?.type === 'plugin') {
     const runtimeEntry = packageJson.zhin.entry;
-    if (typeof runtimeEntry !== 'string' || !/\.[cm]?js$/u.test(runtimeEntry)) {
+    const exportsEntry = packageJson.exports && typeof packageJson.exports === 'object'
+      && !Array.isArray(packageJson.exports) && Object.hasOwn(packageJson.exports, './zhin');
+    // An entry-less Plugin (neither zhin.entry nor exports["./zhin"]) has no runtime entry to publish.
+    const entryless = runtimeEntry === undefined && !exportsEntry;
+    if (!entryless && (typeof runtimeEntry !== 'string' || !/\.[cm]?js$/u.test(runtimeEntry))) {
       violations.push({
         plugin: relativePath,
         issue: 'Published Plugin Runtime entry must be compiled JavaScript',

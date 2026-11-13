@@ -51,7 +51,7 @@ Run `npx zhin doctor` before committing. After startup, trust what Console shows
 | Which Agents may contact each other, and collaboration budget ceilings | `collaboration` in `agents/<name>/agent.json` |
 | What the runtime actually published | Endpoint, capability catalog, and generation state in Console |
 
-Use `configVersion: 2`. Install dependencies, map instance aliases to packages in `plugins`, and place business values in same-named top-level blocks. `disable_plugins` lists inactive instances; Feature requirements remain in `package.json#zhin.features`. See the [migration guide](../../migrations/plugin-instance-declarations.md).
+Use `configVersion: 2`. Install dependencies, map instance aliases to packages in `plugins`, and place business values in same-named top-level blocks. `disable_plugins` lists inactive instances (change it with `zhin disable` / `zhin enable` or the Console's global switch; while running, the gateway stops and starts the instance and rolls back on failure, `plugin.manage` required); Feature requirements remain in `package.json#zhin.features`. See the [migration guide](../../migrations/plugin-instance-declarations.md).
 
 ## Loading and Validation Flow
 

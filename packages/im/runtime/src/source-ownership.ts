@@ -1,6 +1,7 @@
 import { normalizeSourcePath } from './source-path.js';
 import { isAbsolute, relative, resolve } from 'node:path';
 import type { CapabilityId, FeatureId, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import type { ZhinFeatureManifest } from './manifest.js';
 import type { ModuleWatchRoot } from './module-runtime.js';
 import type { ProjectGraph, PluginGraphNode } from './project-graph.js';
 
@@ -40,11 +41,15 @@ export class SourceOwnershipIndex {
     }
     visitPlugin(graph.root, (node) => {
       index.addPackageRoot(node.package.root, node.id);
-      index.add({
-        source: resolve(node.package.root, node.package.packageJson.zhin.entry),
-        role: 'plugin',
-        owner: node.id,
-      });
+      const entry = node.package.packageJson.zhin.entry;
+      // Entry-less Plugins own no entry module; their convention files are indexed below.
+      if (entry !== undefined) {
+        index.add({
+          source: resolve(node.package.root, entry),
+          role: 'plugin',
+          owner: node.id,
+        });
+      }
       index.add({
         source: resolve(node.package.root, 'schema.json'),
         role: 'schema',
@@ -65,7 +70,7 @@ export class SourceOwnershipIndex {
           feature: featureIdsByPackageRoot.get(packageRoot),
         });
         index.add({
-          source: resolve(packageRoot, requirement.package.packageJson.zhin.entry),
+          source: resolve(packageRoot, (requirement.package.packageJson.zhin as ZhinFeatureManifest).entry),
           role: 'feature',
           owner: node.id,
           feature: featureIdsByPackageRoot.get(packageRoot),

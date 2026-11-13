@@ -52,6 +52,32 @@ export default definePlugin({
 两种写法共用同一套命令表和冲突检测。命令变多后移到 `commands/` 目录，修改单个命令时只会重载这一个文件。
 :::
 
+## 固定回复与正则触发
+
+回复是固定内容时，用 `reply` 代替 `execute`；想让一句话（而不是 `/命令名`）触发命令时，加上 `match` 正则：
+
+```ts
+// commands/demo/index.ts
+import { defineCommand } from 'zhin.js/command';
+
+export default defineCommand({ description: '状态', match: /^demo$/, reply: '一切正常' });
+```
+
+- `reply` 与 `execute` 二选一，可以是文本、消息段或 JSX。
+- `match` 对整条消息正文生效：去掉命令前缀、首尾空白后，只含文本的消息才会拿来匹配。`/demo` 这样的命令名照常可用。
+- 先按命令名匹配，命令名不中时才试正则；几条命令的正则都符合时，取命令列表（按命令名排序）中的第一条。
+- 匹配结果在 `context.match`，具名捕获组在 `match.groups`：
+
+```ts
+export default defineCommand({
+  description: '查天气',
+  match: /^(?<city>\S+)天气$/u,
+  execute: ({ match }) => `正在查 ${match?.groups?.city} 的天气`,
+});
+```
+
+- 不允许 `g` / `y` 标志：它们让正则记住上次的位置，同一条消息会时中时不中。
+
 ## 常见需求
 
 ### 接收参数
@@ -587,13 +613,15 @@ it('parses positional args and fills option defaults', async () => {
 
 `input` 不一定是消息（可能来自 Host 调用），读取发送者前要做类型判断；非消息来源时 `$reply` 不做任何事。`input` 的类型默认为 `CommandMessage`，与运行时的 `Message` 结构兼容（因分层限制，`@zhin.js/command` 不能直接依赖 `@zhin.js/core`）。
 
-### alias / permit / shortcut
+### alias / permit / shortcut / match / reply
 
 | 字段 | 行为 |
 |---|---|
 | `alias` | 替换命令名的全部静态部分；目录参数接在后面 |
 | `permit` | 内置规则：`adapter\|group\|private\|channel\|user(...)`、`owner\|admin\|trusted[@层级]` / `role(...)`、`platform:…` / `platform-role:…` / `platform-permission:…`、`bot:…` / `bot-role:…` / `bot-permission:…`。失败返回 `denied`（`denial` 给出第一条不满足的规则与原因）；没有鉴权主体时同样拒绝，程序化的 `CommandIndex.execute` 也不能绕过 |
 | `shortcut` | `{ 触发文本: 预填的 params }`，去掉首尾空白后完全相同才触发 |
+| `match` | 正则触发：去掉命令前缀与首尾空白后的纯文本消息符合时执行，结果在 `context.match`；命令名路由优先，见[固定回复与正则触发](#固定回复与正则触发) |
+| `reply` | 固定回复，与 `execute` 二选一 |
 
 冲突按完整的词序列判断：`b` 和 `b list` 可以共存。
 

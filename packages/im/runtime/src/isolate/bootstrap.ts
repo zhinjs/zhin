@@ -76,8 +76,10 @@ export function isolateBootstrap(): void {
     async prepare(payload: any) {
       if (state !== 'empty') throw new Error('Isolated Plugin has already been prepared');
       preparePayload = payload;
-      const namespace = await importModule(payload.entry);
-      definition = namespace.default;
+      // An entry-less Plugin is `definePlugin({ name })` without setup; the Host derived its name.
+      definition = payload.entry === undefined
+        ? (typeof payload.entrylessName === 'string' ? { name: payload.entrylessName } : undefined)
+        : (await importModule(payload.entry)).default;
       if (!definition || typeof definition.name !== 'string') {
         throw new TypeError(`${payload.packageName} does not default-export a Plugin definition`);
       }

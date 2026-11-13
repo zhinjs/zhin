@@ -8,6 +8,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { inferConventionFeatureReferences } from '../packages/im/runtime/src/convention-features.ts';
 import { parse as parseYaml } from 'yaml';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -105,7 +106,9 @@ for (const workspaceRoot of workspaceRoots) {
     if (manifest.dependencies?.['@zhin.js/skill'] !== 'workspace:*') {
       violations.push(`${relative(packageJson)}: must depend on @zhin.js/skill`);
     }
-    if (!manifest.zhin?.features?.some((feature) => feature.package === '@zhin.js/skill')) {
+    // Mounted explicitly in zhin.features, or inferred from the package-root convention directory.
+    if (!manifest.zhin?.features?.some((feature) => feature.package === '@zhin.js/skill')
+      && !inferConventionFeatureReferences(packageRoot, manifest.zhin).some((feature) => feature.package === '@zhin.js/skill')) {
       violations.push(`${relative(packageJson)}: must mount the @zhin.js/skill Feature`);
     }
   }

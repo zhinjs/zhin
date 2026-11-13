@@ -125,6 +125,8 @@ interface HttpHost {
 
 - `install` 声明新插件前用 Schema 默认值补全空配置并校验；有无默认值的必填字段（或引用缺失的环境变量）时只安装依赖、不声明，事务成功，结果带 `needsConfiguration`（缺少的配置路径与环境变量），实例不会因缺配置而回滚整笔安装。
 - `gateway.plugins.declare { package, instanceKey?, config, startInstance? }`（`plugin.manage`；非所有者只能声明白名单内的包）是声明已安装插件并写入首份配置的唯一受支持入口：先在停实例前校验（包须是已安装的生产依赖、实例键未声明且非保留键、配置通过插件 Schema 且无缺失环境变量，否则 `invalid_input`；Schema 校验失败时回复除 `error` 文本外另带结构化 `errors: [{ path, message }]`（`path` 相对实例块，`$` 加 `.键/索引`，如 `$.endpoints.0.id`）与 `missingEnv: string[]`，仅非空时出现，类型见 `GatewayRpcErrorDetails`，本地 socket 的错误行同形），再作为事务执行（`snapshot → stop-instance → configure → start-instance`），一次原子写入 `plugins.<instanceKey>` 与实例块；启动失败时恢复配置文件（不重新安装依赖）并启动旧实例。进度同样经 `gateway.packages.progress` 推送，`operation` 为 `declare`。`config:patch-project` 仍拒绝修改声明。已安装但未声明的插件（`needsConfiguration`）可用 `schema:get { pluginName: <包名> }` 读取其 `schema.json` 表单（只读，须是生产依赖且为 Plugin 包），形状与已声明实例相同并带 `declared: false`。
+- `gateway.plugins.enable { plugin, startInstance? }` / `gateway.plugins.disable { plugin, startInstance? }`（`plugin.manage`；非所有者只能启停白名单内的包，`./` 本地插件只限所有者）把一个已声明实例移出或加入 `disable_plugins`（`plugin` 为实例键，或只声明一次的包名）。先在停实例前校验（未声明、保留键、项目根插件一律 `invalid_input`；`enable` 另要求包已安装、依赖可解析、实例配置通过插件 Schema，失败时与 `declare` 同样带 `errors` / `missingEnv`），再作为只写配置的事务执行（`snapshot → stop-instance → configure → start-instance`），启动失败时恢复配置文件并启动旧实例。已是目标状态时直接成功、不停实例、不写文件。结果带 `plugin: { instanceKey, packageName, enabled, changed }`。CLI 的 `zhin enable` / `zhin disable` 在网关运行时经本地 socket 调用它们，否则直接写配置。
+- Console 的全局插件开关（`plugin:set-enabled { instanceKey, enabled }`，以及 `feature.set-enabled` 的 `level: 'global'`）是同一笔启停事务（2026-11-13 修订）：网关在 `POST {base}/console/request` 转发前拦截这两种请求，按 `plugin.manage` 授权（权限表把 `plugin:set-enabled` 映射到 `plugin.manage`，`feature.set-enabled` 按 `level` 细化：`global` → `plugin.manage`，其余层仍是 `feature.toggle`），调用 `PackageService.setEnabled`，用各自原有的回复形状作答（`plugin:set-enabled`：`{ success, instanceKey, enabled, disabled, restartRequired, message }`；`feature.set-enabled`：`{ status: 'saved' | 'unchanged', revision, restartRequired?, warnings, message? }`，`revision` 与 `warnings` 取事务后的配置文件），并多带 `transaction`（事务结果）。`restartRequired` 为 `true` 表示实例已为这次变更由网关重启。事务失败或回滚时回复错误信封 `{ success: false, code: 'transaction_failed' | 'rollback_failed', error, transaction }`（HTTP 500）；事务前的拒绝（校验、并发事务、权限）保留网关错误码与状态。事务成功且有变化时，网关在 `{base}/events` 上补发 `plugin:lifecycle-updated { instanceKey, enabled }`。`feature.set-enabled` 的适配器 / 账号 / 会话层是功能开关（ADR 0050 / 0055），原样转发给实例。实例不再写全局开关：Console 路径上的 `plugin:set-enabled` 与全局 `feature.set-enabled` 一律拒绝（后者为 409 `gateway-required`），`zhin start --standalone`（无网关）下也一样，提示改用 `zhin enable` / `zhin disable` 或在网关下运行。聊天命令 `功能 开启|关闭 <插件> 全局` + `功能 确认 <码>` 暂仍由实例写 `disable_plugins` 并请求重启（无回滚），待实例 → 网关的事务请求通道。
 - 回滚报告的 `logTail` 只含本次事务期间实例输出的行。
 
 ### 5. 实例生命周期
@@ -164,7 +166,7 @@ interface HttpHost {
 | ADR | 落在哪个进程 | 说明 |
 |---|---|---|
 | 0049 RBAC | 网关（认证、`/auth/*`、`iam.*`、初始化、审计写入）；实例（RPC 授权） | — |
-| 0050 三级功能配置 | 实例 | `feature.*` RPC 经网关代理 |
+| 0050 三级功能配置 | 实例；全局开关在网关 | `feature.*` RPC 经网关代理；`feature.set-enabled` 的全局层是网关启停事务（§4） |
 | 0051 终端 | 网关 | 实例崩溃时仍可用 |
 | 0052 Console 导航 | — | 运维区新增「实例」页：状态、起停、日志、依赖 |
 | 0053 引导 | 网关 | 在线安装走 §4 |

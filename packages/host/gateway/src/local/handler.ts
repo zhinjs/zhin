@@ -73,7 +73,7 @@ async function handleHttp(options: LocalRpcHandlerOptions, data: unknown): Promi
   return { ok: true, data: result };
 }
 
-const STREAMED: ReadonlySet<string> = new Set([GATEWAY_RPC.INSTALL, GATEWAY_RPC.UNINSTALL, GATEWAY_RPC.UPDATE, GATEWAY_RPC.DECLARE]);
+const STREAMED: ReadonlySet<string> = new Set([GATEWAY_RPC.INSTALL, GATEWAY_RPC.UNINSTALL, GATEWAY_RPC.UPDATE, GATEWAY_RPC.DECLARE, GATEWAY_RPC.ENABLE, GATEWAY_RPC.DISABLE]);
 
 export function createLocalRpcHandler(options: LocalRpcHandlerOptions): LocalRequestHandler {
   return async (request, emit) => {

@@ -32,11 +32,11 @@ rss:
 
 | 位置 | 路由 | 能做什么 | 读 / 写权限 |
 | --- | --- | --- | --- |
-| 全局「功能」页签 | `/scope?tab=features` | 全部功能的总览：可设置层级、全局开关、下级另有设置的数量；「矩阵」视图（`&view=matrix`）显示每个功能在全局与各适配器的开关。点功能名打开它的全局配置 | `feature.view` / `feature.toggle` |
+| 全局「功能」页签 | `/scope?tab=features` | 全部功能的总览：可设置层级、全局开关、下级另有设置的数量；「矩阵」视图（`&view=matrix`）显示每个功能在全局与各适配器的开关。点功能名打开它的全局配置 | `feature.view` / 全局开关 `plugin.manage` |
 | 适配器「功能」页签 | `/scope/:adapter?tab=features` | 作用于该适配器下所有账号与会话 | `feature.view` / `feature.configure`、`feature.toggle` |
 | 账号「功能」页签 | `/scope/:adapter/:endpoint?tab=features` | 只作用于该账号及其会话 | 同上 |
 | 会话「功能」页签 | `/scope/:adapter/:endpoint/:conversation?tab=features` | 只作用于这个会话；只能改插件声明为会话可改的字段 | 同上 |
-| 功能矩阵 | `/features` | 与全局「功能」页签的矩阵视图相同的独立入口 | `feature.view` / `feature.toggle` |
+| 功能矩阵 | `/features` | 与全局「功能」页签的矩阵视图相同的独立入口 | `feature.view` / 全局列 `plugin.manage`，适配器列 `feature.toggle` |
 | 全局配置 | `/features/global/:plugin` | 插件的全局配置（Schema 表单） | `feature.view` / `feature.configure` |
 | 插件详情「在哪开了」 | `/plugins/:name` | 只汇总：全局与各适配器的开关、有几个会话单独覆盖（账号层的开关在各账号的「功能」页签），链到对应的「功能」页签 | `plugin.manage` |
 
@@ -58,7 +58,7 @@ rss:
 - **禁用**；
 - **被上级禁用并锁定**——鼠标悬停显示「已在全局禁用」「已在适配器禁用」或「已在账号禁用」，附跳转链接。
 
-有覆盖的格子带标记；有会话层覆盖的账号显示会话数（`feature.matrix` 的 `conversationOverrides`）。点功能名进全局配置，点适配器名进它的「功能」页签。全局开关会重启 Host，确认框会提示这一点。数据来自 `feature.matrix`。
+有覆盖的格子带标记；有会话层覆盖的账号显示会话数（`feature.matrix` 的 `conversationOverrides`）。点功能名进全局配置，点适配器名进它的「功能」页签。全局开关是插件启停：由管理网关作为事务执行（停止实例 → 写入 `disable_plugins` → 启动实例，启动失败则恢复配置并启动原实例），需要 `plugin.manage`，确认框会提示实例将重启。数据来自 `feature.matrix`。
 
 ## 继承规则 {#resolution}
 
@@ -92,7 +92,7 @@ rss:
 | 只改 `overrides`（含适配器 / 账号层的启停） | 原地生效：不重启、不重载插件，下一条消息读到新值 |
 | 会话层覆盖（数据库） | 原地生效，同上 |
 | 全局字段 | 按字段声明的 `x-zhin-config.effect` |
-| 全局启停（`disable_plugins`） | 重启实例（网关负责，Console 不中断） |
+| 全局启停（`disable_plugins`） | 网关启停事务：停止实例、写入、启动，失败回滚（Console 不中断） |
 
 功能在某个账号或会话上被禁用时，Runtime 在分发处按消息所在会话直接跳过：命令不匹配（也不回复「已禁用」）、中间件与处理器不执行、Agent 工具在该会话里不可见也调不到。定时任务等不经过消息的能力由插件自己用 `isEnabledFor` 判断。
 
@@ -105,9 +105,12 @@ rss:
 | `feature.get` | `feature.view` | 某层级（含 `conversation`）的 Schema、值、有效值与来源；会话层的 `revision` 是该条覆盖的修订号 |
 | `feature.set-override` | `feature.configure` | 写入覆盖（合并补丁） |
 | `feature.remove-override` | `feature.configure` | 删除整层或指定字段 |
-| `feature.set-enabled` | `feature.toggle` | 全局层写 `disable_plugins`；适配器 / 账号层写 `overrides.*.enabled`；会话层写数据库；被锁定时 409 |
+| `feature.set-enabled` | `feature.toggle`；全局层 `plugin.manage` | 全局层写 `disable_plugins`（由网关拦截并作为启停事务执行，见下）；适配器 / 账号层写 `overrides.*.enabled`；会话层写数据库；被锁定时 409 |
+| `plugin:set-enabled` | `plugin.manage` | `{ instanceKey, enabled }`：与全局层 `feature.set-enabled` 相同的网关启停事务 |
 | `feature.conversations` | `feature.view` | `{ plugin?, adapter?, endpoint?, query?, cursor?, limit? }`：有覆盖的会话（分页），以及实例近期见过的会话（`hasOverrides: false`） |
 | `chat-roles.list` / `grant` / `revoke` | `iam.manage` | 聊天角色（见下） |
+
+**全局开关**（全局层 `feature.set-enabled` 与 `plugin:set-enabled`）是插件生命周期，不是功能开关：管理网关在转发给实例前拦截它们，按 `plugin.manage` 授权（只有 `feature.toggle` 的运营会被拒绝；非所有者只能启停可管理目录内的包，项目本地插件只限所有者），执行 `gateway.plugins.enable` / `disable` 同一笔事务，并用原有的回复形状作答（多带 `transaction`；`restartRequired: true` 表示实例已为此重启）。已是目标状态时回复 `unchanged`，实例不动。事务失败或已回滚时回复 `{ success: false, code: 'transaction_failed' | 'rollback_failed', error, transaction }`。成功变更后事件流会收到 `plugin:lifecycle-updated`。实例自身不再写全局开关：没有网关时（`zhin start --standalone`）全局开关被拒绝（`feature.set-enabled` 为 409 `gateway-required`），请改用 `zhin enable` / `zhin disable <插件>` 或在 `zhin start` 下操作。
 
 `feature.configure`、`feature.toggle` 与 `iam.manage`（仅 `chat-roles.*`）按作用域检查：绑定到适配器 `qq` 的运营只能改 `qq` 及其账号、会话上的覆盖与角色，不能改全局或别的适配器；会话键按它所属的账号计。配置文件层的写入带配置修订号，会话层带该条覆盖的修订号，并发修改会被拒绝而不是互相覆盖。
 
@@ -132,7 +135,7 @@ features:
 | `功能 确认 <码>` | 全局开启 / 关闭会重启实例，必须在 2 分钟内确认 |
 
 - 发送者必须在目标作用范围（当前会话在所选层级的祖先）拥有 `admin` 或 `owner` 聊天角色。
-- 会话层写数据库；账号 / 适配器层写配置文件 `overrides`（原地生效）；全局开关写 `disable_plugins` 并重启。
+- 会话层写数据库；账号 / 适配器层写配置文件 `overrides`（原地生效）；全局开关由实例写 `disable_plugins` 并请求重启（与 Console 不同，暂不经网关事务、失败不回滚）。
 - 私聊的会话层覆盖只能在 Console 修改。
 - 每次修改都写入实例审计（actor `chat:<适配器别名>:<用户 id>`，带层级与作用范围）。
 

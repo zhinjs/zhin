@@ -132,6 +132,27 @@ describe('dispatchGatewayRpc', () => {
     expect(instance.calls).toEqual(['stop', 'start']);
   });
 
+  it('dispatches gateway.plugins.enable / disable with plugin.manage', async () => {
+    const calls: unknown[][] = [];
+    const instance = new FakeSupervisor();
+    const packages = new GatewayPackageService({ projectRoot: root, hasOwner: () => true, instance, stableMs: 0, packageManager: async () => undefined,
+      workflow: { inspect: async () => ({ declared: true }), install: async () => undefined, uninstall: async () => undefined, update: async () => undefined,
+        planSetEnabled: async (request, enabled) => { calls.push(['plan', request, enabled]); return { packageName: '@zhin.js/adapter-sandbox', instanceKey: 'sandbox', changed: request !== 'unchanged' }; },
+        setEnabled: async (...args) => { calls.push(['set', ...args]); } } });
+    const dispatch = createGatewayRpcDispatcher({ instance, packages });
+    expect(await dispatch({ type: GATEWAY_RPC.DISABLE, data: { plugin: 'sandbox' } }, testUser('operator'))).toMatchObject({ ok: false, error: { code: 'forbidden' } });
+    expect(await dispatch({ type: GATEWAY_RPC.DISABLE, data: { plugin: 'sandbox' } }, { kind: 'bootstrap', open: false })).toMatchObject({ ok: false, error: { code: 'forbidden' } });
+    expect(await dispatch({ type: GATEWAY_RPC.DISABLE, data: {} }, testUser('owner'))).toMatchObject({ ok: false, error: { code: 'invalid_input' } });
+    expect(await dispatch({ type: GATEWAY_RPC.DISABLE, data: { plugin: 'sandbox', startInstance: 'yes' } }, testUser('owner'))).toMatchObject({ ok: false, error: { code: 'invalid_input' } });
+    expect(calls).toEqual([]);
+    expect(await dispatch({ type: GATEWAY_RPC.DISABLE, data: { plugin: 'sandbox' } }, testUser('admin')))
+      .toMatchObject({ ok: true, data: { ok: true, operation: 'disable', packages: [{ name: '@zhin.js/adapter-sandbox', source: 'adapter' }], plugin: { instanceKey: 'sandbox', enabled: false, changed: true } } });
+    expect(await dispatch({ type: GATEWAY_RPC.ENABLE, data: { plugin: 'unchanged' } }, testUser('admin')))
+      .toMatchObject({ ok: true, data: { ok: true, operation: 'enable', plugin: { enabled: true, changed: false } } });
+    expect(calls).toEqual([['plan', 'sandbox', false], ['set', 'sandbox', false], ['plan', 'unchanged', true]]);
+    expect(instance.calls).toEqual(['stop', 'start']);
+  });
+
   it('lets the bootstrap token plan database drivers only', async () => {
     const packages = new GatewayPackageService({ projectRoot: root, hasOwner: () => false, packageManager: async () => undefined });
     const bootstrap: ConsolePrincipal = { kind: 'bootstrap', open: false };

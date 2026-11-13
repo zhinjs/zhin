@@ -11,7 +11,13 @@ export interface ChildPluginReference extends PackageReference {
 export interface ZhinPluginManifest {
   readonly protocol: 1;
   readonly type: 'plugin';
-  readonly entry: string;
+  /**
+   * Package-relative runtime entry (`zhin.entry` or `exports["./zhin"]`).
+   * Absent for an entry-less Plugin: it is assembled as
+   * `definePlugin({ name: <unscoped package name> })` and contributes only
+   * convention directories discovered from the package root.
+   */
+  readonly entry?: string;
   readonly engine?: string;
   readonly runtime?: 'trusted' | 'isolated';
   readonly metadata?: Readonly<{ displayName?: string; icon?: string }>;
@@ -22,6 +28,12 @@ export interface ZhinPluginManifest {
    */
   readonly platformFeatures?: boolean;
   readonly features: readonly PackageReference[];
+  /**
+   * Present (true) when the manifest omits `features`: Feature packages are then inferred from
+   * convention directories (see `inferConventionFeatureReferences`). A written list, even an
+   * empty one, is authoritative.
+   */
+  readonly featuresOmitted?: true;
   readonly plugins: readonly ChildPluginReference[];
 }
 
@@ -106,6 +118,33 @@ export function parsePackageJson(value: unknown, source: string): PackageJson {
   });
 }
 
+/** The Plugin name rule enforced by `definePlugin()`. */
+export const PLUGIN_NAME_PATTERN = /^[a-z][a-z0-9-]*$/;
+
+export class EntrylessPluginNameError extends TypeError {
+  constructor(readonly packageName: string, readonly derivedName: string) {
+    super(
+      `Plugin package ${packageName} has no entry (zhin.entry / exports["./zhin"]), `
+      + `and its unscoped package name "${derivedName}" is not a valid Plugin name `
+      + `(${PLUGIN_NAME_PATTERN.source}). Add a plugin.ts that default-exports `
+      + 'definePlugin({ name: ... }) with an explicit name and declare it as zhin.entry.',
+    );
+    this.name = 'EntrylessPluginNameError';
+  }
+}
+
+/**
+ * The Plugin name of an entry-less Plugin package: its unscoped package name
+ * (`@scope/foo` → `foo`, `foo` → `foo`), with no other prefix stripped.
+ * Throws {@link EntrylessPluginNameError} when that is not a valid Plugin name.
+ */
+export function deriveEntrylessPluginName(packageName: string): string {
+  const slash = packageName.startsWith('@') ? packageName.indexOf('/') : -1;
+  const derived = slash >= 0 ? packageName.slice(slash + 1) : packageName;
+  if (!PLUGIN_NAME_PATTERN.test(derived)) throw new EntrylessPluginNameError(packageName, derived);
+  return derived;
+}
+
 /** Conditions tried, in order, when `exports["./zhin"]` is a condition object. */
 export const ZHIN_EXPORT_CONDITIONS = Object.freeze(['zhin', 'import', 'default'] as const);
 
@@ -151,12 +190,16 @@ function parseZhinManifest(
   if (record.protocol !== 1) issues.push(`${source}.protocol must be 1`);
   const type = readString(record, 'type', source, issues);
   // `zhin.entry` wins when present; `exports["./zhin"]` is the standard-field alternative.
+  // A Plugin may declare neither (entry-less Plugin); a Feature always needs an entry.
   const exportedEntry = record.entry === undefined ? zhinExportTarget(packageExports) : undefined;
-  const entry = exportedEntry !== undefined
-    ? readRelativeEntry(exportedEntry, `${exportsSource}["./zhin"]`, issues)
-    : readRelativeEntry(record.entry, `${source}.entry`, issues, `${exportsSource}["./zhin"]`);
+  const entryless = type === 'plugin' && record.entry === undefined && exportedEntry === undefined;
+  const entry = entryless
+    ? undefined
+    : exportedEntry !== undefined
+      ? readRelativeEntry(exportedEntry, `${exportsSource}["./zhin"]`, issues)
+      : readRelativeEntry(record.entry, `${source}.entry`, issues, `${exportsSource}["./zhin"]`);
   const engine = optionalString(record.engine, `${source}.engine`, issues);
-  if (!entry || (type !== 'plugin' && type !== 'feature')) {
+  if ((!entry && !entryless) || (type !== 'plugin' && type !== 'feature')) {
     if (type && type !== 'plugin' && type !== 'feature') {
       issues.push(`${source}.type must be "plugin" or "feature"`);
     }
@@ -164,6 +207,7 @@ function parseZhinManifest(
   }
 
   if (type === 'feature') {
+    if (!entry) return undefined;
     return Object.freeze({
       protocol: 1,
       type,
@@ -185,12 +229,13 @@ function parseZhinManifest(
   return Object.freeze({
     protocol: 1,
     type,
-    entry,
+    ...(entry !== undefined ? { entry } : {}),
     engine,
     runtime: runtime as 'trusted' | 'isolated' | undefined,
     metadata: parsePluginMetadata(record.metadata, `${source}.metadata`, issues),
     platformFeatures,
     features: parseReferences(record.features, `${source}.features`, issues, false),
+    ...(record.features === undefined ? { featuresOmitted: true as const } : {}),
     plugins: parseReferences(record.plugins, `${source}.plugins`, issues, true),
   });
 }

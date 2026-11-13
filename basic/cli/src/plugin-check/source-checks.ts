@@ -5,8 +5,10 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { deriveEntrylessPluginName, EntrylessPluginNameError, zhinExportTarget } from '@zhin.js/runtime';
 import {
   CONVENTION_ASSET_DIRECTORIES,
+  CONVENTION_FEATURE_PACKAGES,
   CONVENTION_SOURCE_DIRECTORIES,
 } from '../commands/new-plugin-manifest.js';
 import { filesWhitelistIncludes } from './files-whitelist.js';
@@ -21,21 +23,6 @@ const TYPESCRIPT_SOURCE = /\.(?:ts|tsx|mts|cts)$/u;
 const DECLARATION = /\.d\.[cm]?ts$/u;
 const TEST_FILE = /\.(?:test|spec)\.[cm]?[jt]sx?$/u;
 const RUNTIME_ENTRIES_BUILDER = /runtime-entries/u;
-
-const DIRECTORY_FEATURE_PACKAGE: Readonly<Record<string, string>> = {
-  commands: '@zhin.js/command',
-  components: '@zhin.js/component',
-  middlewares: '@zhin.js/middleware',
-  handlers: '@zhin.js/handler',
-  schedules: '@zhin.js/schedule-feature',
-  tools: '@zhin.js/tool',
-  'prompt-sections': '@zhin.js/prompt-section',
-  hooks: '@zhin.js/hook-feature',
-  mcps: '@zhin.js/mcp-feature',
-  adapters: '@zhin.js/adapter',
-  skills: '@zhin.js/skill',
-  agents: '@zhin.js/agent-feature',
-};
 
 /** Reads package.json; a missing or invalid file is reported as an error. */
 export function readPluginManifest(pluginDirectory: string, problems: PluginCheckProblems): Record<string, unknown> | undefined {
@@ -100,7 +87,7 @@ export function checkPluginSource(pluginDirectory: string, manifest: Record<stri
   const zhinManifest = manifest.zhin;
   const hasZhinManifest = Boolean(zhinManifest) && typeof zhinManifest === 'object' && !Array.isArray(zhinManifest);
   if (!hasZhinManifest) {
-    problems.errors.push('package.json 缺少 zhin 清单（至少需要 zhin.type 与 zhin.entry）');
+    problems.errors.push('package.json 缺少 zhin 清单（至少需要 zhin.protocol 与 zhin.type）');
   }
   const zhinFields = hasZhinManifest ? zhinManifest as Record<string, unknown> : {};
   if (hasZhinManifest && zhinFields.type !== 'plugin') {
@@ -114,7 +101,10 @@ export function checkPluginSource(pluginDirectory: string, manifest: Record<stri
     problems.warnings.push('未声明 files 白名单：npm 会打包整个目录（源码、测试与配置），建议参照 zhin new 生成的 files');
   }
 
-  checkRuntimeEntry(pluginDirectory, zhinFields.entry, hasZhinManifest, files, problems);
+  const entryless = hasZhinManifest && zhinFields.type === 'plugin'
+    && zhinFields.entry === undefined && zhinExportTarget(manifest.exports) === undefined;
+  if (entryless) checkEntrylessPlugin(pluginDirectory, manifest.name, problems);
+  else checkRuntimeEntry(pluginDirectory, zhinFields.entry, hasZhinManifest, files, problems);
   checkConventionDirectories(pluginDirectory, files, problems);
   checkCapabilityFeatures(pluginDirectory, hasZhinManifest, zhinFields.features, problems);
   checkPackScripts(pluginDirectory, manifest, problems);
@@ -130,6 +120,28 @@ export function checkPluginSource(pluginDirectory: string, manifest: Record<stri
     problems.warnings.push('未找到测试（tests/**/*.test.ts）');
   }
   return problems;
+}
+
+/**
+ * An entry-less Plugin (no `zhin.entry`, no `exports["./zhin"]`) is assembled as
+ * `definePlugin({ name: <unscoped package name> })`, so that name must be a valid Plugin name.
+ */
+function checkEntrylessPlugin(pluginDirectory: string, packageName: unknown, problems: PluginCheckProblems): void {
+  if (typeof packageName === 'string' && packageName !== '') {
+    try {
+      deriveEntrylessPluginName(packageName);
+    } catch (error) {
+      if (!(error instanceof EntrylessPluginNameError)) throw error;
+      problems.errors.push(
+        `未声明 zhin.entry，插件名取自包名去掉 scope 后的 "${error.derivedName}"，但它不符合插件名规则 /^[a-z][a-z0-9-]*$/：`
+        + '请添加 plugin.ts（default-export definePlugin({ name })）并声明 zhin.entry',
+      );
+    }
+  }
+  const strayEntry = ['plugin.ts', 'plugin.tsx', 'plugin.js'].find((file) => fs.existsSync(path.join(pluginDirectory, file)));
+  if (strayEntry) {
+    problems.warnings.push(`存在 ${strayEntry} 但未声明 zhin.entry / exports["./zhin"]：运行时不会加载它（插件按无入口插件装配）`);
+  }
 }
 
 function checkRuntimeEntry(
@@ -195,6 +207,9 @@ function checkCapabilityFeatures(
   problems: PluginCheckProblems,
 ): void {
   if (!hasZhinManifest) return;
+  // With `zhin.features` omitted the Runtime infers every directory's Feature (manifest checks
+  // require it to be a dependency); a written list is authoritative and can leave one uncovered.
+  if (rawFeatures === undefined) return;
   const declaredFeatures = new Set<string>();
   if (Array.isArray(rawFeatures)) {
     for (const item of rawFeatures) {
@@ -213,9 +228,9 @@ function checkCapabilityFeatures(
     if (asset.includes('/')) activeDirectories.add(asset.split('/')[0]!);
   }
   for (const directory of activeDirectories) {
-    const featurePackage = DIRECTORY_FEATURE_PACKAGE[directory];
+    const featurePackage = CONVENTION_FEATURE_PACKAGES[directory];
     if (featurePackage && !declaredFeatures.has(featurePackage)) {
-      problems.warnings.push(`约定目录 ${directory}/ 存在能力源码，但 zhin.features 未声明 ${featurePackage}`);
+      problems.warnings.push(`约定目录 ${directory}/ 存在能力源码，但 zhin.features 未声明 ${featurePackage}（写了 features 时不做推断：声明它，或省略 features 交给约定目录推断）`);
     }
   }
 }

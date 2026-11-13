@@ -77,7 +77,7 @@ export default definePlugin({
 
 ### Feature
 
-**负责"扫描某个约定目录"的能力包。**比如 `@zhin.js/command` 负责发现 `commands/`，`@zhin.js/tool` 负责发现 `tools/`。在 `package.json#zhin.features` 里声明后才会生效。
+**负责"扫描某个约定目录"的能力包。**比如 `@zhin.js/command` 负责发现 `commands/`，`@zhin.js/tool` 负责发现 `tools/`。在 `package.json#zhin.features` 里声明后才会生效；省略 `features` 时按存在的约定目录自动推断。
 
 你的 Root 插件依赖 `zhin.js` 时，会自动继承常用的 Stable Features（适配器、命令、组件、中间件、事件处理、定时任务），所以大多数项目不用手写。只有 AI 相关目录（`tools/`、`prompt-sections/` 等）需要额外声明——`npx zhin setup --ai` 会替你写好。深入：[插件模型 · Plugin 与 Feature](../concepts/plugin-model.md)
 

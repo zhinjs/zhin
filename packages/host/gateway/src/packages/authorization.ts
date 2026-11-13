@@ -21,6 +21,8 @@ export interface AuthorizePackagesOptions {
 }
 
 const MAX_PACKAGES = 32;
+/** A project-local plugin package reference as declared in `plugins.<instanceKey>`. */
+const LOCAL_PACKAGE = /^\.\/[A-Za-z0-9._@-]+(?:\/[A-Za-z0-9._@-]+)*$/u;
 const EXACT_VERSION = /^\d{1,9}\.\d{1,9}\.\d{1,9}(?:-[0-9A-Za-z][0-9A-Za-z.-]{0,63})?$/u;
 
 /** A global `owner` binding, or the local control socket. */
@@ -48,7 +50,8 @@ function rethrow(error: unknown): never {
  * - bootstrap token: `install` of allowlisted database drivers only, before the first owner (ADR 0053 §3);
  * - `plugin.manage` without a global owner binding: allowlisted packages only (ADR 0053 §3);
  * - owners and the local socket: any npm package by name, with the same strict spec rules.
- * `'all'` (update every dependency) is owner-only. `declare` takes bare names, like `uninstall`.
+ * `'all'` (update every dependency) is owner-only. `declare` takes bare names, like `uninstall`;
+ * `enable` / `disable` take the declared package (a bare name, or a `./` local plugin for owners).
  */
 export function authorizePackages(
   principal: GatewayPrincipal | undefined,
@@ -84,7 +87,19 @@ export function authorizePackages(
   }
   const seen = new Set<string>();
   const authorized: GatewayAuthorizedPackage[] = [];
+  const toggle = operation === 'enable' || operation === 'disable';
   for (const request of requests) {
+    // enable / disable name the declared package, which may be a project-local plugin directory.
+    if (toggle && typeof request === 'string' && request.startsWith('./')) {
+      if (!LOCAL_PACKAGE.test(request) || request.split('/').slice(1).some(part => part === '.' || part === '..')) {
+        throw new GatewayError('invalid_input', `本地插件路径无效：${request.slice(0, 64)}`);
+      }
+      if (!owner) throw new GatewayError('forbidden', '只有所有者可以启停本地插件');
+      if (seen.has(request)) throw new GatewayError('invalid_input', `重复的包：${request}`);
+      seen.add(request);
+      authorized.push(Object.freeze({ name: request, spec: request, source: 'local' as const }));
+      continue;
+    }
     let parsed: { readonly name: string; readonly version?: string };
     try { parsed = parseInstallRequest(request); } catch (error) { rethrow(error); }
     const { name } = parsed;
@@ -95,6 +110,7 @@ export function authorizePackages(
     let version = parsed.version;
     if (operation === 'uninstall' && version !== undefined) throw new GatewayError('invalid_input', `卸载 ${name} 时不能指定版本`);
     if (operation === 'declare' && version !== undefined) throw new GatewayError('invalid_input', `声明 ${name} 时不能指定版本`);
+    if (toggle && version !== undefined) throw new GatewayError('invalid_input', `启停 ${name} 时不能指定版本`);
     if (operation === 'update' && version !== undefined && !EXACT_VERSION.test(version)) {
       throw new GatewayError('invalid_input', `${name} 的更新版本必须是精确 semver 版本`);
     }

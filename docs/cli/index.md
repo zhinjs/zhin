@@ -31,9 +31,11 @@ npx zhin --help        # 查看全部命令
 | 环境或配置有问题 | `npx zhin doctor` |
 | 检查配置文件是否有效 | `npx zhin config check` |
 | 安装一个社区插件 | `npx zhin install <插件名>` |
+| 临时停用 / 重新启用一个插件（不卸载） | `npx zhin disable <instanceKey>` / `npx zhin enable <instanceKey>` |
 | 按功能查找插件和配置步骤 | `npx zhin use-cases` |
 | 创建一个可独立发布的新插件 | `npx @zhin.js/cli new my-plugin --standalone` |
 | 发布前检查插件 | `npx @zhin.js/cli plugin check` |
+| 在插件里新增命令、中间件、工具等文件 | `npx zhin create command hello` |
 | 在已有 Bot 项目里加一个本地插件 | `npx zhin new my-plugin` |
 | 更新依赖（停实例 → 安装 → 启实例，失败回滚） | `npx zhin update` |
 | 升级 Zhin | `npx zhin migrate --dry-run`，确认后去掉 `--dry-run` |
@@ -270,14 +272,43 @@ zhin new [plugin-name] [--standalone] [--type normal|service|adapter] [--package
 - 生成的 `pnpm test`（Vitest）和 `pnpm typecheck`（`tsc --noEmit`）直接可用，不需要设置 `NODE_ENV`。
 - `--skip-install` 同时跳过插件目录和项目根的 `pnpm install`。
 
-### install / add：安装插件
+### create：生成约定目录文件 {#create}
+
+```bash
+zhin create <command|middleware|handler|tool|component> <name> [--cwd <插件目录>] [--force] [--event <事件>]
+```
+
+在当前插件包里生成一个能力文件，省去手写约定目录与 `package.json#zhin` 清单。插件包是从当前目录向上找到的第一个 `package.json`，它必须带 `zhin.type: "plugin"` 清单（`zhin new` 生成的插件、Bot 项目根都满足）；`--cwd` 指定别的起点。
+
+| 类型 | 生成文件 | 默认导出 | Feature 包 |
+| --- | --- | --- | --- |
+| `command` | `commands/<path>/index.ts` | `defineCommand`（`zhin.js/command`） | `@zhin.js/command` |
+| `middleware` | `middlewares/<name>/index.ts` | `defineMiddleware`（`zhin.js/middleware`） | `@zhin.js/middleware` |
+| `handler` | `handlers/<path>/index.ts` | `defineHandler`（`zhin.js/handler`） | `@zhin.js/handler` |
+| `tool` | `tools/<name>/index.ts` | `defineAgentTool`（`@zhin.js/tool`） | `@zhin.js/tool` |
+| `component` | `components/<name>/index.tsx` | `defineComponent`（`zhin.js/component`） | `@zhin.js/component` |
+
+```bash
+zhin create command gh/issue                         # commands/gh/issue/index.ts → /gh issue
+zhin create command echo/[text]                      # 末段 [text] 是必填参数，模板里已声明 params.text
+zhin create handler message/receive                  # 事件由路径推断：message.receive
+zhin create handler welcome --event notice.receive   # 路径不是内置事件时用 --event 指定
+zhin create tool lookup
+```
+
+- 名称每段需匹配 `/^[a-z][a-z0-9-]*$/`。`command` 与 `handler` 可以用 `/` 分段；`command` 的最后一段可以是必填参数目录 `[name]`（`[[name]]`、`[...name]` 请手动创建，见[命令](../authoring/commands.md)）。
+- 模板是能通过类型检查的最小默认导出，按需修改即可。
+- `package.json`：`zhin.features` 里没有对应 Feature 包时追加 `{ package, api }`；插件还没有依赖它时，按 `zhin new` 的规则写进 `peerDependencies`（`optional`）和 `devDependencies`，版本跟随插件自己的 `zhin.js` 写法（`workspace:` 仍用 workspace 链接，否则用发布版本 `^x.y.z`）。已有的条目不会重复添加，其余字段与格式（2 空格缩进、末尾换行）保持不变。依赖有变化时会提示运行 `pnpm install`。
+- 目标文件已存在时报错退出（退出码 1），加 `--force` 覆盖。
+- `zhin add <包名>` 是 `zhin install` 的旧写法，仍可用（会提示改用 `zhin install`）；创建插件用 `zhin new`。
+
+### install：安装插件
 
 ```bash
 zhin install <插件名或 git 地址> [--no-enable] [--dry-run]
-zhin add ...          # install 的别名
 ```
 
-默认会用 pnpm 安装，再把包引用写进 `zhin.config.yml` 的 `plugins.<instanceKey>`；业务参数写在顶层同名实例块，启停由 `disable_plugins` 控制。插件 Schema 有无默认值的必填字段（例如适配器的 `endpoints` 账号）时，只安装依赖、不写声明，并提示缺少的配置项：在 Console 填写后声明（`gateway.plugins.declare`），或运行 `zhin setup --adapters`，或手动在配置文件中添加 `plugins.<instanceKey>` 与实例块后重启。
+默认会用 pnpm 安装，再把包引用写进 `zhin.config.yml` 的 `plugins.<instanceKey>`；业务参数写在顶层同名实例块，启停由 `disable_plugins` 控制（用 [`zhin enable` / `zhin disable`](#enable-disable) 修改）。插件 Schema 有无默认值的必填字段（例如适配器的 `endpoints` 账号）时，只安装依赖、不写声明，并提示缺少的配置项：在 Console 填写后声明（`gateway.plugins.declare`），或运行 `zhin setup --adapters`，或手动在配置文件中添加 `plugins.<instanceKey>` 与实例块后重启。
 
 | 选项 | 说明 |
 | --- | --- |
@@ -296,6 +327,23 @@ zhin uninstall adapter <name> [--remove-pkg]
 ```
 
 `name` 可以是 npm 包名或 instanceKey；`--remove-pkg` 同时从 `package.json` 移除依赖。网关在运行时经网关执行（停启实例、失败回滚）。系统服务用 `zhin service uninstall` 卸载。
+
+### enable / disable：启用或停用插件实例 {#enable-disable}
+
+```bash
+zhin disable <instanceKey 或包名>
+zhin enable <instanceKey 或包名>
+```
+
+把已安装并已声明的插件实例加入或移出配置文件的 `disable_plugins`，不改依赖、不删实例配置块（彻底移除用 `zhin uninstall plugin`）。参数是 `plugins.<instanceKey>` 的实例键；包名只在它只声明了一个实例时可用，多实例时须写实例键。
+
+| 情况 | 结果 |
+| --- | --- |
+| 网关在运行（`zhin start`） | 经网关事务执行：备份配置 → 停止实例 → 写入 `disable_plugins` → 启动实例并等待就绪；启动失败时恢复配置文件并启动原实例（不运行包管理器）。需要 `plugin.manage` 权限，本地 socket 视为所有者 |
+| 网关未运行 | 直接写入配置文件，下次 `zhin start` 时生效 |
+| 已是目标状态 | 成功退出，不改配置，也不重启实例 |
+| 未声明、保留键（`http`、`plugins` 等）、项目根插件 | 报错，退出码 1 |
+| `enable` 时包未安装、依赖无法解析或实例配置不通过插件 Schema | 报错，退出码 1，配置不变；`disable` 不要求包仍已安装，可用来先停掉一个损坏的插件 |
 
 ### update：更新依赖
 

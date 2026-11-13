@@ -112,6 +112,37 @@ describe('startGateway', () => {
     expect(gateway.supervisor.state).toBe('stopped');
   });
 
+  it('answers the global plugin switch itself and never forwards it to the instance', async () => {
+    const root = await project('http:\n  host: 127.0.0.1\n  port: 0\n');
+    const forwarded: string[] = [];
+    const gateway = await startGateway({
+      projectRoot: root,
+      console: false,
+      packages: false,
+      startInstance: false,
+      settings: false,
+      supervisor: { spawn: { command: process.execPath, args: [fixture], cwd: root }, readyTimeoutMs: 1_000, shutdownBudgetMs: 100, killGraceMs: 100 },
+      transport: () => ({
+        ready: true,
+        routes: () => ({ revision: 1, apiBase: '/api', http: [{ method: 'ALL', pattern: '/*' }], ws: [] }),
+        onRoutes: () => () => undefined,
+        fetch: async (request) => { forwarded.push(await request.text()); return jsonResponse(200, { success: true, from: 'instance' }); },
+        openWebSocket: async () => false,
+      }),
+    });
+    gateways.push(gateway);
+    const post = async (body: unknown) => (await fetch(`${gateway.http.address!.origin}/api/console/request`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+    })).json();
+    expect(await post({ type: 'feature.set-enabled', data: { plugin: 'rss', level: 'global', enabled: false } }))
+      .toMatchObject({ success: false, code: 'unavailable' });
+    expect(await post({ type: 'plugin:set-enabled', instanceKey: 'rss', enabled: false })).toMatchObject({ success: false, code: 'unavailable' });
+    expect(forwarded).toEqual([]);
+    expect(await post({ type: 'feature.set-enabled', data: { plugin: 'rss', level: 'adapter', key: 'qq', enabled: false } }))
+      .toEqual({ success: true, from: 'instance' });
+    expect(forwarded).toHaveLength(1);
+  });
+
   it('keeps the gateway up when the instance fails to start', async () => {
     const root = await project('http:\n  host: 127.0.0.1\n  port: 0\n');
     const gateway = await startGateway({

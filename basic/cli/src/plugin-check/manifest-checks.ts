@@ -11,6 +11,7 @@
  */
 import {
   assertPackageEngine,
+  inferConventionFeatureReferences,
   ManifestValidationError,
   parsePackageJson,
   runtimeEngineVersion,
@@ -66,8 +67,31 @@ export function checkZhinManifest(
       }
     }
     checkReferencesAreDeclared(parsed, problems);
+    checkInferredFeaturesAreDeclared(pluginDirectory, parsed, problems);
   }
   return parsed;
+}
+
+/**
+ * With `zhin.features` omitted, every convention directory requires its Feature package
+ * (inferred by the Runtime); it must be a declared dependency like an explicit reference.
+ */
+function checkInferredFeaturesAreDeclared(
+  pluginDirectory: string,
+  parsed: PackageJson,
+  problems: PluginCheckProblems,
+): void {
+  const declared = new Set([
+    ...Object.keys(parsed.dependencies ?? {}),
+    ...Object.keys(parsed.optionalDependencies ?? {}),
+    ...Object.keys(parsed.peerDependencies ?? {}),
+  ]);
+  for (const reference of inferConventionFeatureReferences(pluginDirectory, parsed.zhin)) {
+    if (declared.has(reference.package)) continue;
+    problems.errors.push(
+      `约定目录 ${reference.directory}/ 推断出 Feature ${reference.package}，但它未在 dependencies / peerDependencies 中声明（Runtime 会拒绝加载）`,
+    );
+  }
 }
 
 function checkReferencesAreDeclared(parsed: PackageJson, problems: PluginCheckProblems): void {

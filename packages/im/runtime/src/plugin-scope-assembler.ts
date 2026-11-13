@@ -50,7 +50,7 @@ import {
   envStoreToken,
   type EnvironmentLayers,
 } from './environment-store.js';
-import type { ZhinPluginManifest } from './manifest.js';
+import { deriveEntrylessPluginName, type ZhinPluginManifest } from './manifest.js';
 import type { ModuleRuntime } from './module-runtime.js';
 import type { PluginGraphNode } from './project-graph.js';
 import type { IsolatedPluginRuntimePort } from './isolation.js';
@@ -208,7 +208,9 @@ export class PluginScopeAssembler {
         owner: node.id,
         parent: node.parent,
         packageName: node.package.name,
-        entry: resolve(node.package.root, manifest.entry),
+        ...(manifest.entry !== undefined
+          ? { entry: resolve(node.package.root, manifest.entry) }
+          : { entrylessName: deriveEntrylessPluginName(node.package.name) }),
         config,
         environment: this.environment,
       }, signal);
@@ -230,11 +232,13 @@ export class PluginScopeAssembler {
         declaredCapabilityGraph = prepared.descriptor.capabilityGraph;
       }
     } else {
-      const module = await this.modules.load<ModuleNamespace>(
-        resolve(node.package.root, manifest.entry),
-      );
+      // An entry-less Plugin behaves as `definePlugin({ name: <unscoped package name> })`:
+      // no setup; its capabilities come from convention directories under the package root.
+      const definition = manifest.entry === undefined
+        ? entrylessPluginDefinition(node.package.name)
+        : (await this.modules.load<ModuleNamespace>(resolve(node.package.root, manifest.entry))).default as
+          PluginDefinition | undefined;
       signal.throwIfAborted();
-      const definition = module.default as PluginDefinition | undefined;
       if (!definition || typeof definition.name !== 'string') {
         throw new TypeError(`${node.package.name} does not default-export a Plugin definition`);
       }
@@ -325,7 +329,8 @@ export class PluginScopeAssembler {
       owner: node.id,
       feature: featureName,
       localName,
-      source: resolve(node.package.root, manifest.entry),
+      // Root resource installers also register here, so an entry-less Plugin attributes them to its manifest.
+      source: resolve(node.package.root, manifest.entry ?? 'package.json'),
       definition,
     }));
   }
@@ -403,6 +408,10 @@ const rootGenerationAdmissionToken = createToken<GenerationAdmissionGate>(
 
 interface ModuleNamespace {
   readonly default?: unknown;
+}
+
+function entrylessPluginDefinition(packageName: string): PluginDefinition {
+  return Object.freeze({ name: deriveEntrylessPluginName(packageName) });
 }
 
 function mergePluginMetadata(

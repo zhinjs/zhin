@@ -49,6 +49,10 @@ Skills and Agents are the exception: they are described in Markdown / JSON, with
 
 Missing folders are simply skipped; create only the ones you use.
 
+::: tip Generate them with zhin create
+No need to hand-write the folder and manifest: run `npx zhin create <command|middleware|handler|tool|component> <name>` in the plugin directory (e.g. `npx zhin create command gh/issue`). It writes the `index.ts` / `index.tsx` template and declares the feature package it needs in `package.json`. See [CLI reference · create](../cli/index.md#create).
+:::
+
 ## Writing each folder
 
 ### commands/: commands
@@ -268,7 +272,8 @@ flowchart LR
 }
 ```
 
-- Every package in `zhin.features` must also appear in `dependencies`, `peerDependencies` or `optionalDependencies`, or startup fails with `PackageResolutionError`.
+- `zhin.features` may be omitted: the Feature packages are then inferred from the convention directories present (see [definePlugin · Inferring features](./define-plugin.md#infer-features)). Write it explicitly to pin an `api` range.
+- Every package in `zhin.features` (and, when it is omitted, every inferred package) must also appear in `dependencies`, `peerDependencies` or `optionalDependencies`, or startup fails with `PackageResolutionError`.
 - Child plugins declare Stable Features (command / middleware / component / handler) as **optional peers** provided by the bot — don't add them to their own `dependencies`, or there will be two copies.
 - `@zhin.js/adapter`, `@zhin.js/tool` and similar go in `dependencies` or non-optional peers as needed.
 
