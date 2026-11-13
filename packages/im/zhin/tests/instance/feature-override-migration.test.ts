@@ -340,4 +340,40 @@ describe('post-merge review fixes (A-1 … A-4)', () => {
     expect((await record(root)).status).toBe('done');
     expect(await readFile(configFile, 'utf8')).not.toContain('overrides');
   });
+
+  it('refuses at update time a nested block the update adds for a child Plugin the tree does not know yet', async () => {
+    const { root, configFile } = await project();
+    const store = new FeatureOverrideStore();
+    const migration = await start(root, configFile, store);
+    expect(migration.done).toBe(true);
+    // The update adds a new child Plugin `rss/extra` with its own overrides block.
+    const previous = { configVersion: 2, plugins: { rss: '@x/rss' }, rss: { maxItems: 5 } };
+    const next = { ...previous, rss: { maxItems: 5, extra: { overrides: { endpoints: { 'qq/bot-1': { enabled: false } } } } } };
+    expect(() => migration.configUpdate.validate!({ current: TREE, previous, next } as never)).toThrow(LegacyFeatureOverrideConfigError);
+    // A lookalike plugin setting that was already there (and judged not a child at start) is not re-refused.
+    const routing = { ...previous, rss: { maxItems: 5, routing: { overrides: { endpoints: { 'qq/bot-1': { target: 'x' } } } } } };
+    expect(() => migration.configUpdate.validate!({ current: TREE, previous: routing, next: { ...routing, rss: { ...routing.rss, maxItems: 6 } } } as never)).not.toThrow();
+    // The tree of the generation in service is used, not the startup tree: a child mounted since is recognised.
+    const mounted = pluginTree({ qq: [], rss: ['routing'], tg: [], parent: ['child'] });
+    expect(() => migration.configUpdate.validate!({ current: mounted, previous: routing, next: { ...routing, rss: { ...routing.rss, maxItems: 6 } } } as never))
+      .toThrow(LegacyFeatureOverrideConfigError);
+  });
+
+  it('keeps migration-written rows file-owned across repeated resyncs until the migration is done', async () => {
+    const { root, configFile, config } = await project();
+    const store = new FeatureOverrideStore();
+    const first = await prepareFeatureOverrideMigration({ projectRoot: root, config, configFile, logger: logger().logger });
+    await first.complete(store, TREE);
+    // finish never ran; the file is edited twice, each followed by a start whose finish also fails.
+    for (const value of [7, 8]) {
+      await writeFile(configFile, LEGACY_YAML.replace('        maxItems: 3\n', `        maxItems: ${value}\n`));
+      const again = await prepareFeatureOverrideMigration({ projectRoot: root, config: createConfigDocument(configFile), configFile, logger: logger().logger });
+      await again.complete(store, TREE);
+      expect(store.get('rss', 'qq')).toMatchObject({ patch: { maxItems: value }, updatedBy: 'migration:rss.overrides.adapters.qq' });
+    }
+    expect(store.revisionOf('rss', 'qq')).toBe(3);
+    await start(root, configFile, store);
+    expect((await record(root)).status).toBe('done');
+    expect(store.get('rss', 'qq')).toMatchObject({ patch: { maxItems: 8 } });
+  });
 });

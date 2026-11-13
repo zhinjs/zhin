@@ -306,11 +306,23 @@ export async function prepareFeatureOverrideMigration(options: Readonly<{
   const configUpdate: RootConfigUpdateHandler = Object.freeze({
     id: 'feature-overrides-in-database',
     paths: Object.freeze([]),
-    validate: ({ next }: { next: RuntimeConfigDocument }) => {
+    validate: ({ current: generation, previous, next }: { current?: Pick<RuntimeSnapshot, 'root' | 'tree'>; previous?: RuntimeConfigDocument; next: RuntimeConfigDocument }) => {
       if (!done) return;
-      // The same recognition as startup: top-level blocks and real child Plugin blocks only.
-      const found = readLegacyFeatureOverrideConfig(next, { childInstances: knownChildren }).paths;
-      if (found.length) throw new LegacyFeatureOverrideConfigError(found.map(path => path.join('.')));
+      // The Plugin tree of the generation in service (refreshed on every update, not the startup tree).
+      if (generation) knownChildren = childPluginInstancePaths(generation);
+      // The same recognition as startup: top-level blocks and real child Plugin blocks …
+      const found = new Set(readLegacyFeatureOverrideConfig(next, { childInstances: knownChildren }).paths.map(path => path.join('.')));
+      // … and, conservatively, any nested override-shaped block the update adds: a child Plugin this
+      // very update introduces is not in the tree yet, and its block would otherwise be refused only
+      // at the next start.
+      if (previous) {
+        const before = new Set(readLegacyFeatureOverrideConfig(previous).paths.map(path => path.join('.')));
+        for (const path of readLegacyFeatureOverrideConfig(next).paths) {
+          const field = path.join('.');
+          if (!before.has(field)) found.add(field);
+        }
+      }
+      if (found.size) throw new LegacyFeatureOverrideConfigError([...found]);
     },
     prepare: async () => undefined,
   });
@@ -360,8 +372,12 @@ export async function prepareFeatureOverrideMigration(options: Readonly<{
       }
       // An earlier start imported but could not edit the file: the file may have changed since.
       const previous = current?.status === 'imported' ? new Map(current.entries.map(entry => [entryId(entry), entry])) : undefined;
-      /** Whether the stored row is still exactly what the migration wrote (nobody changed it since). */
-      const migrationWritten = (plugin: string, key: string) => store.revisionOf(plugin, key) === 1
+      /**
+       * Whether the migration was the last writer of the row (nobody changed it in the database
+       * since): until the migration is done such rows stay owned by the configuration file, also
+       * after an earlier resync raised their revision. A Console edit records its actor instead.
+       */
+      const migrationWritten = (plugin: string, key: string) => store.revisionOf(plugin, key) > 0
         && (store.get(plugin, key)?.updatedBy ?? '').startsWith('migration:');
       let written = 0;
       let kept = 0;
@@ -374,7 +390,7 @@ export async function prepareFeatureOverrideMigration(options: Readonly<{
             const before = previous.get(entryId(entry));
             if (before && !sameOverride(before, entry) && migrationWritten(entry.plugin, entry.key)) {
               // Edited in the file after the import, never touched in the database: the file wins.
-              const result = await store.write({ plugin: entry.plugin, key: entry.key, expectedRevision: 1,
+              const result = await store.write({ plugin: entry.plugin, key: entry.key, expectedRevision: revision,
                 updatedBy: `migration:${entry.source}`, next });
               if (result.status === 'saved') { written += 1; continue; }
             }
@@ -396,7 +412,7 @@ export async function prepareFeatureOverrideMigration(options: Readonly<{
           if (present.has(entryId(before)) || !store.get(before.plugin, before.key)) continue;
           if (migrationWritten(before.plugin, before.key)) {
             // Removed from the file after the import, never touched in the database: removed here too.
-            const result = await store.write({ plugin: before.plugin, key: before.key, expectedRevision: 1,
+            const result = await store.write({ plugin: before.plugin, key: before.key, expectedRevision: store.revisionOf(before.plugin, before.key),
               updatedBy: `migration:${before.source}`, next: () => null });
             if (result.status === 'saved') { written += 1; continue; }
           }

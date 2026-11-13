@@ -28,6 +28,10 @@ On the first start with this release the instance:
 
 If any step fails the configuration file stays as it was and the next start retries; entries already in the database are not imported twice. If the file was changed elsewhere right before step 4 (revision mismatch), the blocks are removed on the next start as well.
 
+While the status is `imported` (imported, blocks not removed yet), a row whose last writer is still the migration (`updated_by` starting with `migration:`, kept by every resync from the file even as the revision grows) stays owned by the configuration file: file edits overwrite it and removed entries are removed. A row changed elsewhere (the Console records its actor) keeps the stored value, with a warning per entry.
+
+Once the migration is `done`, configuration updates that write an `overrides` block at the top level or in a real child Plugin are refused; to refuse at update time rather than at the next start, an update that adds a nested override-shaped `overrides` block is refused too (fields that were already there and judged plugin settings at start are not affected); child Plugins are judged by the Plugin tree in service.
+
 Conversation overrides used to live in `feature_conversation_overrides`. On the first load they are copied to `feature_overrides` with `level = 'conversation'` (skipped when the new table already has that key). The old table is left in place and never written again; drop it by hand once you are satisfied.
 
 Without a relational database (MongoDB, Redis or memory dialects) the file's overrides take effect in memory only, the file is left alone and the record stays `pending` (with `memoryOnlyAt`) until sqlite / mysql / pg is configured. Every override write from the Console or chat (conversation level included) is refused meanwhile (Console 503 `feature-overrides-unpersisted`, chat answers "Not saved"), so nothing is reported as saved and then lost on restart.
