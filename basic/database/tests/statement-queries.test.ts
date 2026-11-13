@@ -81,7 +81,7 @@ describe('Transaction.queryStatement: one statement per protocol', () => {
 });
 
 describe('SQLite isolated reads', () => {
-  it('reads on a read-only connection in a worker, capped, and stops at the time budget', async () => {
+  it('reads on a read-only connection in a child process, capped, and killed at the time budget', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'zhin-isolated-read-'));
     const dialect = new SQLiteDialect<any>({ filename: join(directory, 'x.db') });
     await dialect.connect();
@@ -102,8 +102,10 @@ describe('SQLite isolated reads', () => {
       clearInterval(interval);
       expect(Date.now() - started).toBeLessThan(2000);
       expect(ticks).toBeGreaterThan(5);
-      // The stopped worker may still be inside its step: the next read is refused, not queued.
-      await expect(dialect.queryReadOnlyIsolated('SELECT 1', { maxRows: 1, timeoutMs: 1000 })).rejects.toThrow(/still running/);
+      // The stopped read is killed (SIGKILL) inside its step: the next read works right away.
+      const recovered = Date.now();
+      expect(await dialect.queryReadOnlyIsolated('SELECT 1 AS one', { maxRows: 1, timeoutMs: 5000 })).toMatchObject({ rows: [{ one: 1 }] });
+      expect(Date.now() - recovered).toBeLessThan(1500);
     } finally {
       await dialect.disconnect();
       await rm(directory, { recursive: true, force: true });

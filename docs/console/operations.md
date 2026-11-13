@@ -62,10 +62,11 @@ description: Console 侧栏「运维」分组：实例状态、起停与日志�
 SQL 控制台的约束（对 `owner` 同样生效）：
 
 - 每条语句都经单语句协议执行（PostgreSQL 扩展查询协议、MySQL 预处理语句、SQLite `prepare`），服务端不会执行藏在一条语句里的第二条；事务控制（`BEGIN`、`COMMIT`、`ROLLBACK`、`SAVEPOINT`、`SET`…）、`PREPARE` / `EXECUTE`、定义函数 / 过程 / 规则 / 扩展、改角色与服务端设置一律拒绝，所以「试运行」总能回滚。
-- 只读查询在只读事务中执行，最多返回 1000 行（PostgreSQL 用游标、MySQL 流式读取、SQLite 逐行读取，只取保留的行），超时 10 秒（PostgreSQL `SET LOCAL statement_timeout`，不能用 `set_config` 解除；MySQL `max_execution_time`）。SQLite 文件库的只读查询在独立线程里用只读连接执行，超时即停止，不阻塞实例；内存库没有这层隔离。
-- 网关的 `console_*` 表对所有人拒绝：按去掉引号、还原转义后的标识符与字面量比对；PostgreSQL `U&"…"` 转义写法、动态 SQL 与文件函数（`query_to_xml` 等 `*_to_xml*`、`xpath`、`ts_stat`、`dblink*`、`lo_*`、`pg_read_*`、`pg_ls_*`、`set_config`…）、MySQL 可执行注释 `/*! … */` 与优化器提示 `/*+ … */` 均被拒绝。表清单与表结构不列出 `console_*`；`sqlite_master`、`information_schema` 这类系统目录仍可查询，会看到 `console_*` 的表名与列名（看不到数据），这是已接受的限制。
+- 只读查询在只读事务中执行，最多返回 1000 行（PostgreSQL 用游标、MySQL 流式读取、SQLite 逐行读取，只取保留的行），超时 10 秒（PostgreSQL `SET LOCAL statement_timeout`，不能用 `set_config` 解除；MySQL `max_execution_time`）。SQLite 文件库的只读查询在子进程里用只读连接执行，超时即强制结束，不阻塞实例；内存库无法这样隔离，SQL 控制台不可用。服务端读字符串的方式与默认不同时（PostgreSQL `standard_conforming_strings = off`，MySQL `sql_mode` 含 `NO_BACKSLASH_ESCAPES` 或 `ANSI_QUOTES`），SQL 控制台关闭并说明原因。
+- 网关的 `console_*` 表对所有人拒绝：按去掉引号、还原转义后的标识符与字面量比对；PostgreSQL `U&"…"` 转义写法、动态 SQL 与文件函数（`query_to_xml` 等 `*_to_xml*`、`xpath`、`ts_stat`、`dblink*`、`lo_*`、`pg_read_*`、`pg_ls_*`、`set_config`…）、MySQL 可执行注释 `/*! … */` 与优化器提示 `/*+ … */` 均被拒绝。表清单与表结构不列出 `console_*`；`sqlite_master`、`information_schema` 这类系统目录仍可查询，会看到 `console_*` 的表名与列名（看不到数据），这是已接受的限制；带有真实取值的统计视图（`pg_stats`、`pg_stats_ext*`、`pg_statistic*`、`sqlite_stat*`、MySQL `column_statistics`）以及角色密码哈希（`pg_authid`、`pg_shadow`、MySQL `mysql.*`）一律拒绝。
+- 按名字保护看不到的批量或级联破坏一律拒绝：`DROP OWNED`、`REASSIGN OWNED`、建 / 改 / 删数据库与模式、`DROP … CASCADE`、`TRUNCATE … CASCADE`、`ALTER … OWNER TO`、表空间、用户与角色、MySQL `RESTART` / `CLONE` / `PURGE` 等；触发器与事件也不能在这里创建。
 - 代码声明的表（插件 `define` 的表）不能在这里删列或改列名：插件读这些列，下次启动还会把它们加回来，应改插件里的表定义。MySQL 改列用 `MODIFY COLUMN` 重述整列，未改动的部分（完整类型、字符集与排序规则、`ON UPDATE`、`AUTO_INCREMENT`、注释、表达式默认值）取自 `information_schema`。
-- 审计日志记录 SQL 文本与结构变更（含失败时尝试执行的 DDL），字符串字面量替换为 `'…'`，不记录结果行。
+- 审计日志记录 SQL 文本与结构变更（含失败时尝试执行的 DDL），字符串字面量替换为 `'…'`、注释去掉，不记录结果行。
 
 ## 终端 {#terminal}
 

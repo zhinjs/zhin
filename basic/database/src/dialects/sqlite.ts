@@ -51,7 +51,7 @@ export interface SqliteIsolatedQueryResult {
   readonly truncated: boolean;
 }
 
-/** Thrown when an isolated read exceeded its time budget (the worker is terminated). */
+/** Thrown when an isolated read exceeded its time budget (its process is killed). */
 export class SqliteQueryTimeoutError extends Error {
   readonly code = 'timeout';
   constructor(timeoutMs: number) {
@@ -61,39 +61,47 @@ export class SqliteQueryTimeoutError extends Error {
 }
 
 /**
- * Worker body of {@link SQLiteDialect.queryReadOnlyIsolated} (CommonJS, evaluated): its own
- * read-only connection, `query_only`, rows iterated up to the cap and the wall-clock budget.
+ * Child-process body of {@link SQLiteDialect.queryReadOnlyIsolated} (CommonJS, `node -e`): its own
+ * read-only connection with `query_only`, rows iterated up to the cap and the wall-clock budget.
+ * A separate process, because only a process can be stopped (SIGKILL) inside a native SQLite step.
  */
-const ISOLATED_READ_WORKER = `
-const { parentPort, workerData } = require('node:worker_threads');
+const ISOLATED_READ_CHILD = `
 const { DatabaseSync } = require('node:sqlite');
-const { filename, sql, maxRows, deadline, json } = workerData;
-let db;
-try {
-  db = new DatabaseSync(filename, { readOnly: true });
-  db.exec('PRAGMA query_only = ON');
-  const statement = db.prepare(sql);
-  const meta = typeof statement.columns === 'function' ? statement.columns() : [];
-  const decode = new Set(meta.filter(c => c.database === 'main' && c.table && c.column && (json[c.table] || []).includes(c.column)).map(c => c.name));
-  const rows = [];
-  let truncated = false;
-  for (const row of statement.iterate()) {
-    if (rows.length >= maxRows) { truncated = true; break; }
-    const out = {};
-    for (const [key, value] of Object.entries(row)) {
-      out[key] = value;
-      if (decode.has(key) && typeof value === 'string') { try { out[key] = JSON.parse(value); } catch {} }
+process.once('message', (job) => {
+  const { filename, sql, maxRows, deadline, json } = job;
+  let db;
+  let reply;
+  try {
+    db = new DatabaseSync(filename, { readOnly: true });
+    db.exec('PRAGMA query_only = ON');
+    const statement = db.prepare(sql);
+    const meta = typeof statement.columns === 'function' ? statement.columns() : [];
+    const decode = new Set(meta.filter(c => c.database === 'main' && c.table && c.column && (json[c.table] || []).includes(c.column)).map(c => c.name));
+    const rows = [];
+    let truncated = false;
+    let timeout = false;
+    for (const row of statement.iterate()) {
+      if (rows.length >= maxRows) { truncated = true; break; }
+      const out = {};
+      for (const [key, value] of Object.entries(row)) {
+        out[key] = value;
+        if (decode.has(key) && typeof value === 'string') { try { out[key] = JSON.parse(value); } catch {} }
+      }
+      rows.push(out);
+      if (Date.now() > deadline) { timeout = true; break; }
     }
-    rows.push(out);
-    if (Date.now() > deadline) { parentPort.postMessage({ ok: false, timeout: true }); process.exit(0); }
+    reply = timeout ? { ok: false, timeout: true } : { ok: true, rows, truncated, columns: meta.map(c => c.name) };
+  } catch (error) {
+    reply = { ok: false, message: String(error && error.message || error), code: error && error.code, errcode: error && error.errcode };
+  } finally {
+    try { db && db.close(); } catch {}
   }
-  parentPort.postMessage({ ok: true, rows, truncated, columns: meta.map(c => c.name) });
-} catch (error) {
-  parentPort.postMessage({ ok: false, message: String(error && error.message || error), code: error && error.code, errcode: error && error.errcode });
-} finally {
-  try { db && db.close(); } catch {}
-}
+  process.send(reply, () => process.exit(0));
+});
 `;
+
+/** How long a new isolated read waits for a stopped one to be gone. */
+const ISOLATED_READER_EXIT_WAIT_MS = 2_000;
 
 function isInMemoryFilename(filename: string): boolean {
   return filename === ':memory:' || filename === '' || filename.startsWith('file::memory:');
@@ -105,7 +113,7 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
   /** Own transaction flag; `DatabaseSync#isTransaction` is preferred where Node provides it. */
   private transactionOpen = false;
   /** Worker of the isolated read in flight (also while a terminated one is still unwinding). */
-  private isolatedReader: { terminate(): Promise<number> } | null = null;
+  private isolatedReader: { readonly child: import('node:child_process').ChildProcess; readonly exited: Promise<void>; killed: boolean } | null = null;
 
   constructor(config: SQLiteDialectConfig) {
     super('sqlite', config);
@@ -147,25 +155,38 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
   }
 
   /**
-   * Runs one read statement on its own read-only connection in a worker thread, so a slow query
-   * never blocks this event loop: rows are iterated up to `maxRows` and the worker is terminated
-   * when `timeoutMs` passes. One isolated read runs at a time per connection — SQLite cannot
-   * interrupt a step in progress, so a terminated worker may keep its thread busy until that step
-   * returns, and a new read is refused until it has exited.
+   * Runs one read statement on its own read-only connection in a child process, so a slow query
+   * never blocks this event loop: rows are iterated up to `maxRows`, and the process is killed
+   * (SIGKILL — SQLite cannot be interrupted inside a step otherwise) when `timeoutMs` passes. One
+   * isolated read runs at a time per connection; the child never keeps this process alive.
    */
   async queryReadOnlyIsolated(sql: string, options: SqliteIsolatedQueryOptions): Promise<SqliteIsolatedQueryResult> {
     if (!this.supportsIsolatedReads()) throw new Error('Isolated reads need a file database');
-    if (this.isolatedReader) throw new Error('A previous query is still running; try again shortly');
-    const { Worker } = await import('node:worker_threads');
+    const previous = this.isolatedReader;
+    if (previous) {
+      // A killed reader is gone within milliseconds; a running one is not waited for.
+      if (previous.killed) await Promise.race([previous.exited, delay(ISOLATED_READER_EXIT_WAIT_MS, undefined, { ref: false })]);
+      if (this.isolatedReader) throw new Error('A previous query is still running; try again shortly');
+    }
+    const { spawn } = await import('node:child_process');
     const json = Object.fromEntries([...this.jsonColumns].map(([table, columns]) => [table, [...columns]]));
-    const worker = new Worker(ISOLATED_READ_WORKER, {
-      eval: true,
-      workerData: { filename: this.config.filename, sql, maxRows: options.maxRows, deadline: Date.now() + options.timeoutMs, json },
-      stdout: true,
-      stderr: true,
+    const { NODE_OPTIONS: _options, ...env } = process.env;
+    const child = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', '-e', ISOLATED_READ_CHILD], {
+      stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+      serialization: 'advanced',
+      env,
+      windowsHide: true,
     });
-    this.isolatedReader = worker;
-    worker.once('exit', () => { if (this.isolatedReader === worker) this.isolatedReader = null; });
+    let markExited!: () => void;
+    const reader = { child, exited: new Promise<void>(resolve => { markExited = resolve; }), killed: false };
+    this.isolatedReader = reader;
+    // Neither the child nor its channel keeps this process alive (the pending timer does, while needed).
+    child.unref();
+    (child as unknown as { channel?: { unref?(): void } }).channel?.unref?.();
+    const kill = () => {
+      reader.killed = true;
+      try { child.kill('SIGKILL'); } catch { /* already gone */ }
+    };
     return await new Promise<SqliteIsolatedQueryResult>((resolve, reject) => {
       let settled = false;
       const finish = (error: Error | null, value?: SqliteIsolatedQueryResult) => {
@@ -175,12 +196,22 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
         if (error) reject(error); else resolve(value!);
       };
       const timer = setTimeout(() => {
+        kill();
         finish(new SqliteQueryTimeoutError(options.timeoutMs));
-        void worker.terminate().catch(() => undefined);
       }, options.timeoutMs);
-      worker.once('message', (message: { ok: boolean; timeout?: boolean; message?: string; code?: string; errcode?: number; rows?: Record<string, unknown>[]; columns?: string[]; truncated?: boolean }) => {
-        // A worker that answered is done with SQLite; only a stopped one may still be busy.
-        if (!message.timeout && this.isolatedReader === worker) this.isolatedReader = null;
+      child.once('exit', code => {
+        if (this.isolatedReader === reader) this.isolatedReader = null;
+        markExited();
+        finish(new Error(`SQLite query process exited (${code ?? 'killed'})`));
+      });
+      child.once('error', error => {
+        if (this.isolatedReader === reader) this.isolatedReader = null;
+        markExited();
+        finish(error);
+      });
+      child.once('message', (message: { ok: boolean; timeout?: boolean; message?: string; code?: string; errcode?: number; rows?: Record<string, unknown>[]; columns?: string[]; truncated?: boolean }) => {
+        // A child that answered has closed SQLite and is exiting: the next read need not wait.
+        if (this.isolatedReader === reader) this.isolatedReader = null;
         if (message.ok) {
           finish(null, { columns: message.columns ?? [], rows: message.rows ?? [], truncated: message.truncated === true });
         } else if (message.timeout) {
@@ -189,13 +220,17 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
           finish(Object.assign(new Error(message.message ?? 'SQLite query failed'), { code: message.code, errcode: message.errcode }));
         }
       });
-      worker.once('error', error => finish(error instanceof Error ? error : new Error(String(error))));
-      worker.once('exit', code => finish(new Error(`SQLite query worker exited (${code})`)));
+      child.send({ filename: this.config.filename, sql, maxRows: options.maxRows, deadline: Date.now() + options.timeoutMs, json }, error => {
+        if (error) { kill(); finish(error); }
+      });
     });
   }
 
   async disconnect(): Promise<void> {
-    void this.isolatedReader?.terminate().catch(() => undefined);
+    if (this.isolatedReader) {
+      this.isolatedReader.killed = true;
+      try { this.isolatedReader.child.kill('SIGKILL'); } catch { /* already gone */ }
+    }
     if (this.db) {
       try {
         this.db.close();

@@ -84,7 +84,7 @@ describe('Console database: read-only SQL', () => {
       const reply = await db.rpc({ type: 'db:query', sql: 'SELECT id, title FROM notes ORDER BY id' });
       expect(reply.data).toMatchObject({ columns: ['id', 'title'], rowCount: 3, truncated: false, rows: [{ id: 1, title: 'b' }, { id: 2 }, { id: 3 }] });
       expect(typeof (reply.data as { durationMs: unknown }).durationMs).toBe('number');
-      // SQLite file databases read in a worker on their own read-only connection, off the event loop.
+      // SQLite file databases read in a child process on their own read-only connection, off the event loop.
       expect(transaction).not.toHaveBeenCalled();
 
       const many = await db.rpc({ type: 'db:query', sql: 'WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM n WHERE x < 1500) SELECT x FROM n' });
@@ -111,21 +111,29 @@ describe('Console database: read-only SQL', () => {
       expect(timed?.message).toMatch(/time limit/);
       expect(Date.now() - started).toBeLessThan(3000);
       expect(ticks).toBeGreaterThan(5);
-      // A read never waits on the stopped worker's thread: the next one is refused until it exits, not queued.
+      // The stopped read's process is killed inside its step: the next read works within a second.
+      const recovered = Date.now();
       const next = await db.rpc({ type: 'db:query', sql: 'SELECT 1 AS one' });
-      expect(next.error ?? next.data).toBeTruthy();
+      expect(next.data).toMatchObject({ rows: [{ one: 1 }] });
+      expect(Date.now() - recovered).toBeLessThan(1500);
+      // Stopping the host does not wait for (or leave behind) a running read.
+      const pending = db.instance.console!.query!(slow, { timeoutMs: 30_000 }).catch((error: Error) => error);
+      await new Promise(resolve => setTimeout(resolve, 200));
+      const stopping = Date.now();
+      await db.instance.stop();
+      expect(Date.now() - stopping).toBeLessThan(1000);
+      expect(await pending).toBeInstanceOf(Error);
     } finally { await db.close(); }
   }, 60_000);
 
-  it('reads row by row inside a read-only transaction for in-memory databases', async () => {
+  it('refuses raw SQL on an in-memory database (a query there could not be stopped)', async () => {
     const host = createDatabaseHost({ dialect: 'sqlite', filename: ':memory:' });
     host.define('notes', { id: { type: 'integer', primary: true } });
     await host.start();
     try {
-      const transaction = vi.spyOn(host.db as unknown as { transaction: (...args: unknown[]) => unknown }, 'transaction');
-      const result = await host.console!.query!('WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM n) SELECT x FROM n', { maxRows: 5 });
-      expect(result).toMatchObject({ rowCount: 5, truncated: true, rows: [{ x: 1 }, { x: 2 }, { x: 3 }, { x: 4 }, { x: 5 }] });
-      expect(transaction).toHaveBeenCalledWith(expect.any(Function), { readOnly: true });
+      expect(host.console!.info().capabilities).toMatchObject({ sql: false, schema: true, reason: expect.stringContaining('in-memory') });
+      await expect(host.console!.query!('WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM n) SELECT x FROM n')).rejects.toMatchObject({ code: 'unsupported' });
+      await expect(host.console!.execute!('DELETE FROM notes')).rejects.toMatchObject({ code: 'unsupported' });
     } finally { await host.stop(); }
   });
 
@@ -229,13 +237,13 @@ describe('Console database: write SQL', () => {
     expect(rpcAuditDetail({ type: 'db:execute', sql: "SELECT 'sk-live-123'" })).toMatchObject({ statementLength: 20 });
     expect(JSON.stringify(rpcAuditDetail({ type: 'db:execute', sql: "SELECT 'sk-live-123'" }))).not.toContain('sk-live');
     // The detail stays parseable once the gateway stores it, whatever the statement contains.
-    for (const sql of [`SELECT '${'x'.repeat(10_000)}'`, `DELETE FROM notes WHERE 1=0${'\n'.repeat(2500)}`, `SELECT "${'\\"'.repeat(3000)}"`]) {
+    for (const sql of [`SELECT '${'x'.repeat(10_000)}'`, `DELETE FROM notes WHERE 1=0${'\n'.repeat(2500)}AND 1=1`, `SELECT "${'\\"'.repeat(3000)}"`]) {
       const detail = rpcAuditDetail({ type: 'db:execute', sql }, undefined, audit);
       const stored = JSON.stringify(detail);
       expect(stored.length).toBeLessThanOrEqual(3500);
       expect(JSON.parse(stored)).toMatchObject({ type: 'db:execute' });
     }
-    expect(rpcAuditDetail({ type: 'db:execute', sql: `DELETE FROM notes WHERE 1=0${'\n'.repeat(2500)}` }, undefined, audit)).toMatchObject({ truncated: true });
+    expect(rpcAuditDetail({ type: 'db:execute', sql: `DELETE FROM notes WHERE 1=0${'\n'.repeat(2500)}AND 1=1` }, undefined, audit)).toMatchObject({ truncated: true });
     expect(rpcAuditDetail({ type: 'db:select', table: 'notes' })).not.toHaveProperty('statements');
   });
 

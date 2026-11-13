@@ -94,7 +94,7 @@ type RawDatabase = {
     mapColumnType(type: string): string;
     formatDefaultValue(value: unknown): string;
     formatColumnDefinition?(field: string, column: Record<string, unknown>): string;
-    /** SQLite file databases: one read on its own connection in a worker (see `queryReadOnlyIsolated`). */
+    /** SQLite file databases: one read on its own connection in a child process (see `queryReadOnlyIsolated`). */
     supportsIsolatedReads?(): boolean;
     queryReadOnlyIsolated?(sql: string, options: { maxRows: number; timeoutMs: number }): Promise<{ columns: readonly string[]; rows: Record<string, unknown>[]; truncated: boolean }>;
   };
@@ -202,7 +202,7 @@ export function createDatabaseHost(config: DatabaseHostConfig): DatabaseHost & {
   const additions = new Map<string, Record<string, Column>>();
   let rawGuard: RawDatabase | undefined;
   let gatewayView: GatewayTableHost | undefined;
-  const { port: consolePort, refreshDiscovered } = createDatabaseConsole(
+  const { port: consolePort, refreshDiscovered, refreshRawSql } = createDatabaseConsole(
     db,
     config.dialect,
     () => started,
@@ -345,6 +345,7 @@ export function createDatabaseHost(config: DatabaseHostConfig): DatabaseHost & {
         await refreshDiscovered().catch((error: unknown) => {
           logger.debug(formatCompact({ op: 'database_discover_failed', error: error instanceof Error ? error.message : String(error) }));
         });
+        await refreshRawSql();
         logger.debug(formatCompact({ op: 'database_start', dialect: config.dialect }));
       } catch (error) {
         await db.stop().catch(() => undefined);
@@ -400,7 +401,7 @@ function createDatabaseConsole(
   isStarted: () => boolean,
   tableNames: Set<string>,
   definitions: Map<string, Record<string, unknown>>,
-): { port: DatabaseHostConsole; refreshDiscovered(): Promise<void> } {
+): { port: DatabaseHostConsole; refreshDiscovered(): Promise<void>; refreshRawSql(): Promise<void> } {
   const type = databaseType(configuredDialect);
   const sqlDialect: ConsoleSqlDialect | undefined = type === 'related' && SQL_DIALECTS.has(configuredDialect)
     ? configuredDialect as ConsoleSqlDialect
@@ -429,6 +430,25 @@ function createDatabaseConsole(
     if (!sqlDialect) throw new ConsoleSqlRefusal('unsupported', capabilities.reason ?? 'SQL is not supported by this database');
     return sqlDialect;
   };
+  /** Why raw SQL (`db:query` / `db:execute`) is off on this connection, if it is. */
+  let rawSqlProblem: string | undefined;
+  const refreshRawSql = async (): Promise<void> => {
+    if (!sqlDialect || !isStarted()) return;
+    rawSqlProblem = await rawSqlCompatibilityProblem(sqlDialect, {
+      query: (sql) => db.query(sql),
+      isolatedReads: () => db.dialect.supportsIsolatedReads?.() === true,
+    }).catch((error: unknown) => `Cannot check how the server reads SQL text: ${error instanceof Error ? error.message : String(error)}`);
+  };
+  /** Raw SQL needs the server to read text as the Console lexer does (checked again on every run). */
+  const requireRawSql = async (): Promise<ConsoleSqlDialect> => {
+    const dialect = requireSql();
+    await refreshRawSql();
+    if (rawSqlProblem) throw new ConsoleSqlRefusal('unsupported', rawSqlProblem);
+    return dialect;
+  };
+  const currentCapabilities = (): DatabaseHostConsoleCapabilities => (rawSqlProblem && sqlDialect
+    ? Object.freeze({ ...capabilities, sql: false, reason: rawSqlProblem })
+    : capabilities);
   const describe = async (table: string): Promise<DatabaseHostTableSchema> => {
     assertInstanceTable(table);
     const dialect = requireSql();
@@ -536,7 +556,7 @@ function createDatabaseConsole(
       type,
       tables: listed(),
       connected: isStarted(),
-      capabilities,
+      capabilities: currentCapabilities(),
     }),
     tables: () => listed().map((name) => ({
       name,
@@ -649,14 +669,14 @@ function createDatabaseConsole(
       return (await model.entries()).map(([key, value]) => ({ key, value }));
     },
     async query(sql, options) {
-      const dialect = requireSql();
+      const dialect = await requireRawSql();
       const statement = readOnlyConsoleStatement(sql, dialect);
       const maxRows = Math.min(Math.max(1, Math.floor(options?.maxRows ?? CONSOLE_QUERY_MAX_ROWS)), CONSOLE_QUERY_MAX_ROWS);
       const timeoutMs = Math.max(1, Math.floor(options?.timeoutMs ?? CONSOLE_QUERY_TIMEOUT_MS));
       const started = Date.now();
       let read: { rows: Record<string, unknown>[]; truncated: boolean; columns?: readonly string[] };
       if (dialect === 'sqlite' && db.dialect.supportsIsolatedReads?.() && db.dialect.queryReadOnlyIsolated) {
-        // node:sqlite cannot interrupt a statement: run it off this event loop, stopped at the budget.
+        // node:sqlite cannot interrupt a statement: run it in a child process, killed at the budget.
         read = await db.dialect.queryReadOnlyIsolated(statement.text, { maxRows, timeoutMs });
       } else {
         read = await inTransaction(async trx => {
@@ -673,7 +693,7 @@ function createDatabaseConsole(
       return Object.freeze({ columns, rows, rowCount: rows.length, truncated: read.truncated, durationMs: Date.now() - started });
     },
     async execute(sql, options) {
-      const dialect = requireSql();
+      const dialect = await requireRawSql();
       const statements = writeConsoleStatements(sql, dialect);
       const dryRun = options?.dryRun === true;
       const started = Date.now();
@@ -725,7 +745,32 @@ function createDatabaseConsole(
       return planned;
     },
   };
-  return { port: Object.freeze(port), refreshDiscovered };
+  return { port: Object.freeze(port), refreshDiscovered, refreshRawSql };
+}
+
+/**
+ * Why the Console must not run raw SQL on this connection, or undefined. The Console lexer reads
+ * strings the way the server does by default; a server that treats backslashes (MySQL
+ * `NO_BACKSLASH_ESCAPES`, PostgreSQL `standard_conforming_strings = off`) or double quotes (MySQL
+ * `ANSI_QUOTES`) differently would split and classify statements differently. SQLite needs a file
+ * database: only a separate connection can be stopped at the time limit.
+ */
+export async function rawSqlCompatibilityProblem(
+  dialect: ConsoleSqlDialect,
+  probe: { query(sql: string): Promise<unknown>; isolatedReads(): boolean },
+): Promise<string | undefined> {
+  if (dialect === 'sqlite') {
+    return probe.isolatedReads() ? undefined : 'The SQL console is unsupported for an in-memory SQLite database (a query could not be stopped at the time limit)';
+  }
+  if (dialect === 'pg') {
+    const rows = await probe.query('SELECT current_setting(\'standard_conforming_strings\') AS value') as Record<string, unknown>[];
+    const value = String(rows?.[0]?.value ?? '').toLowerCase();
+    return value === 'on' ? undefined : `The SQL console needs standard_conforming_strings = on (the server reports '${value || 'unknown'}'), so that it reads string literals as the server does`;
+  }
+  const rows = await probe.query('SELECT @@SESSION.sql_mode AS mode') as Record<string, unknown>[];
+  const modes = String(rows?.[0]?.mode ?? '').toUpperCase().split(',').map(mode => mode.trim());
+  const conflicting = modes.filter(mode => mode === 'NO_BACKSLASH_ESCAPES' || mode === 'ANSI_QUOTES' || mode === 'ANSI');
+  return conflicting.length ? `The SQL console is off while sql_mode contains ${conflicting.join(', ')}: the server would read string literals differently from the Console` : undefined;
 }
 
 function primaryKeyOf(definition: Record<string, unknown> | undefined): string | undefined {

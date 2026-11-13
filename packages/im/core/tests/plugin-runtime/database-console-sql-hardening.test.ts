@@ -188,9 +188,23 @@ describe('Console SQL audit redaction', () => {
   it('replaces literal values and keeps identifiers and numbers', () => {
     expect(redactConsoleSql(String.raw`UPDATE "users" SET key = 'sk-1', note = E'it\'s' WHERE b = $t$x$t$ AND c = $$y$$ AND n = 5`, 'pg'))
       .toBe(`UPDATE "users" SET key = '…', note = E'…' WHERE b = $t$…$t$ AND c = $$…$$ AND n = 5`);
+    // Comments are dropped entirely (a quote inside one never shifts what counts as a literal).
     expect(redactConsoleSql("UPDATE `users` SET a = \"secret\", b = 'it\\'s' -- 'x'", 'mysql'))
-      .toBe("UPDATE `users` SET a = \"…\", b = '…' -- '…'");
-    expect(redactConsoleSql("INSERT INTO t VALUES ('a''b', 'unterminated", 'sqlite')).toBe("INSERT INTO t VALUES ('…', '…'");
+      .toBe("UPDATE `users` SET a = \"…\", b = '…'");
+    // Text the lexer cannot read is not recorded at all.
+    expect(redactConsoleSql("INSERT INTO t VALUES ('a''b', 'unterminated", 'sqlite')).toMatch(/^\[SQL not recorded: \d+ characters/);
+  });
+
+  it('uses the Console lexer: quotes in comments, quoted names and backticks do not shift literals', () => {
+    expect(redactConsoleSql("-- fix user's key\nUPDATE accounts SET api_key = 'sk-live-123' WHERE id = 1", 'pg'))
+      .toBe("UPDATE accounts SET api_key = '…' WHERE id = 1");
+    expect(redactConsoleSql(`SELECT "it's" AS a, 'sk-live-123' AS b`, 'pg')).toBe(`SELECT "it's" AS a, '…' AS b`);
+    expect(redactConsoleSql("SELECT `it's` AS a, 'sk-live-123' AS b", 'mysql')).toBe("SELECT `it's` AS a, '…' AS b");
+    expect(redactConsoleSql("/* it's */ INSERT INTO t VALUES ('sk-live-123')", 'sqlite')).toBe("INSERT INTO t VALUES ('…')");
+    expect(redactConsoleSql("SELECT e'\\'' , 'sk-live-123'", 'pg')).toBe("SELECT e'…' , '…'");
+    for (const sql of ["-- fix user's key\nUPDATE a SET k = 'sk-live-123'", "/* it's */ SELECT 'sk-live-123'", `SELECT "it's", 'sk-live-123'`]) {
+      expect(redactConsoleSql(sql, 'pg')).not.toContain('sk-live');
+    }
   });
 });
 
@@ -276,5 +290,74 @@ describe('Console schema editor and code-declared tables', () => {
     expect((await planConsoleSchemaChange({ kind: 'drop-column', table: 'notes', column: 'title' }, context(false))).statements)
       .toEqual(['ALTER TABLE "notes" DROP COLUMN "title"']);
     expect((await planConsoleSchemaChange({ kind: 'add-column', table: 'notes', column: { name: 'tag', type: 'text', nullable: true } }, context(true))).destructive).toBe(false);
+  });
+});
+
+describe('Console SQL refuses what name-based protection cannot see (re-review of #1246)', () => {
+  it('refuses statistics views and credential catalogs on both paths', () => {
+    for (const sql of [
+      "select tablename, attname, histogram_bounds::text from pg_stats where tablename like 'con%'",
+      'select * from pg_catalog.pg_stats',
+      'select * from "pg_stats_ext"',
+      'select * from pg_stats_ext_exprs',
+      'select * from pg_statistic',
+      'select * from pg_statistic_ext_data',
+      'select usename, passwd from pg_shadow',
+      'select * from pg_authid',
+      'select * from pg_largeobject',
+    ]) {
+      expect(refusal(() => readOnlyConsoleStatement(sql, 'pg')), sql).toBe('refused_statement');
+      expect(refusal(() => writeConsoleStatements(`create table x as ${sql}`, 'pg')), sql).toBe('refused_statement');
+    }
+    for (const sql of ['select * from sqlite_stat1', 'select * from sqlite_stat4', 'select * from main.sqlite_stat1']) {
+      expect(refusal(() => readOnlyConsoleStatement(sql, 'sqlite')), sql).toBe('refused_statement');
+    }
+    for (const sql of ['select * from mysql.user', 'select * from `mysql`.`global_priv`', 'select * from information_schema.column_statistics']) {
+      expect(refusal(() => readOnlyConsoleStatement(sql, 'mysql')), sql).toBe('refused_statement');
+    }
+    expect(refusal(() => writeConsoleStatements('analyze table t update histogram on a', 'mysql'))).toBe('refused_statement');
+    // ANALYZE itself stays allowed; catalogs show names, not values.
+    expect(writeConsoleStatements('analyze', 'pg')).toHaveLength(1);
+    expect(readOnlyConsoleStatement("select relname from pg_class where relname like 'con%'", 'pg').kind).toBe('select');
+  });
+
+  it('refuses bulk and cascading destruction', () => {
+    for (const [sql, dialect] of [
+      ['drop owned by current_user', 'pg'],
+      ['reassign owned by a to b', 'pg'],
+      ['drop schema public cascade', 'pg'],
+      ['drop schema s', 'pg'],
+      ['alter schema public rename to x', 'pg'],
+      ['create database x', 'pg'],
+      ['alter database x set statement_timeout = 0', 'pg'],
+      ['drop database zhin', 'pg'],
+      ['drop table notes cascade', 'pg'],
+      ['drop view v cascade', 'pg'],
+      ['truncate notes cascade', 'pg'],
+      ['alter table foo owner to postgres', 'pg'],
+      ['create tablespace t location \'/tmp\'', 'pg'],
+      ['drop database zhin', 'mysql'],
+      ['drop schema zhin', 'mysql'],
+      ['restart', 'mysql'],
+      ['clone local data directory = \'/tmp/x\'', 'mysql'],
+      ['purge binary logs before now()', 'mysql'],
+      ['rename user a to b', 'mysql'],
+    ] as const) expect(refusal(() => writeConsoleStatements(sql, dialect)), sql).toBe('refused_statement');
+    expect(writeConsoleStatements('drop table scratch', 'pg')).toHaveLength(1);
+    expect(writeConsoleStatements('truncate scratch', 'pg')).toHaveLength(1);
+  });
+
+  it('refuses triggers, including the MySQL DEFINER form', () => {
+    for (const [sql, dialect] of [
+      ['create trigger t before insert on foo for each row execute function suppress_redundant_updates_trigger()', 'pg'],
+      ['create or replace trigger t after insert on foo execute function f()', 'pg'],
+      ['create constraint trigger t after insert on foo for each row execute function f()', 'pg'],
+      ['create trigger t before insert on foo for each row set new.a = 1', 'mysql'],
+      ['create definer=`root`@`%` trigger t before insert on foo for each row set new.a=1', 'mysql'],
+      ['create definer = root@localhost trigger t before insert on foo for each row set new.a=1', 'mysql'],
+      ['create trigger t after insert on foo begin select 1; end', 'sqlite'],
+      ['create event e on schedule every 1 second do select 1', 'mysql'],
+    ] as const) expect(refusal(() => writeConsoleStatements(sql, dialect)), sql).toBe('refused_statement');
+    expect(writeConsoleStatements('create definer = root@localhost view v as select 1', 'mysql')).toHaveLength(1);
   });
 });

@@ -52,6 +52,19 @@ const DOLLAR_TAG = /^\$(?:[A-Za-z_\u0080-\uffff][A-Za-z0-9_\u0080-\uffff]*)?\$/;
  * `U&` escaped names and strings, MySQL executable comments (`/*! … *\/`) and optimizer hints.
  */
 export function splitConsoleSql(sql: string, dialect: ConsoleSqlDialect): ConsoleSqlStatement[] {
+  return lexConsoleSql(sql, dialect);
+}
+
+/** Where a literal or a comment sits in the SQL text (for audit redaction). */
+interface LexSpan {
+  readonly kind: 'string' | 'comment';
+  readonly start: number;
+  readonly end: number;
+  /** Placeholder that replaces a string: its own quotes around `…`. */
+  readonly placeholder?: string;
+}
+
+function lexConsoleSql(sql: string, dialect: ConsoleSqlDialect, spans?: LexSpan[]): ConsoleSqlStatement[] {
   const statements: ConsoleSqlStatement[] = [];
   let start = 0;
   let code = '';
@@ -80,6 +93,7 @@ export function splitConsoleSql(sql: string, dialect: ConsoleSqlDialect): Consol
     if (char === '-' && next === '-' && (dialect !== 'mysql' || index + 2 >= sql.length || /[\s\u0000-\u001f]/.test(sql[index + 2]!))
       || (dialect === 'mysql' && char === '#')) {
       const end = sql.indexOf('\n', index);
+      spans?.push({ kind: 'comment', start: index, end: end === -1 ? sql.length : end });
       index = end === -1 ? sql.length : end;
       code += ' ';
       continue;
@@ -88,7 +102,9 @@ export function splitConsoleSql(sql: string, dialect: ConsoleSqlDialect): Consol
       if (dialect === 'mysql' && (sql[index + 2] === '!' || sql[index + 2] === '+')) {
         throw new ConsoleSqlRefusal('refused_statement', 'MySQL executable comments (/*! … */) and optimizer hints (/*+ … */) are not allowed');
       }
-      index = skipBlockComment(sql, index, dialect === 'pg');
+      const end = skipBlockComment(sql, index, dialect === 'pg');
+      spans?.push({ kind: 'comment', start: index, end });
+      index = end;
       code += ' ';
       continue;
     }
@@ -102,6 +118,7 @@ export function splitConsoleSql(sql: string, dialect: ConsoleSqlDialect): Consol
         || (dialect === 'pg' && previous?.type === 'word' && previous.value === 'e' && /[eE]/.test(sql[index - 1] ?? ''));
       if (escapeString && dialect === 'pg') { tokens.pop(); code = code.slice(0, -1); }
       const end = skipQuoted(sql, index, char, escapeString);
+      spans?.push({ kind: 'string', start: index, end, placeholder: `${char}…${char}` });
       push('string', unquote(sql.slice(index + 1, end - 1), char, escapeString));
       code += ' \'\' ';
       index = end;
@@ -121,6 +138,7 @@ export function splitConsoleSql(sql: string, dialect: ConsoleSqlDialect): Consol
         const end = sql.indexOf(tag[0], index + tag[0].length);
         if (end === -1) throw new ConsoleSqlRefusal('refused_statement', 'Unterminated dollar-quoted string');
         push('string', sql.slice(index + tag[0].length, end));
+        spans?.push({ kind: 'string', start: index, end: end + tag[0].length, placeholder: `${tag[0]}…${tag[0]}` });
         index = end + tag[0].length;
         code += ' \'\' ';
         continue;
@@ -336,8 +354,15 @@ export function protectedTableIn(statement: ConsoleSqlStatement, options: { read
   return undefined;
 }
 
-/** `CREATE` / `ALTER` forms that define code running SQL later (functions, rules) or change roles and server settings. */
-const REFUSED_DEFINITION = /^(?:create (?:or replace )?(?:definer ?= ?\S+ )?(?:(?:temp|temporary|trusted|procedural|constraint) )*(?:function|procedure|rule|extension|language|server|event|role|user|foreign|aggregate|operator|cast|transform|publication|subscription|access method|text search)\b|alter (?:system|role|user|database|function|procedure|extension|server|default privileges|event|language|foreign|publication|subscription)\b|import foreign\b|security label\b)/;
+/** `CREATE` / `ALTER` forms that define code running SQL later (functions, triggers, rules, events) or change roles and server settings. */
+const REFUSED_DEFINITION = /^(?:create (?:or replace )?(?:definer ?= ?(?:"q"|[^\s@]+)(?: ?@ ?(?:"q"|\S+))? )?(?:(?:temp|temporary|trusted|procedural|constraint) )*(?:function|procedure|trigger|rule|extension|language|server|event|role|user|foreign|aggregate|operator|cast|transform|publication|subscription|access method|text search)\b|alter (?:system|role|user|database|function|procedure|extension|server|default privileges|event|language|foreign|publication|subscription)\b|import foreign\b|security label\b)/;
+
+/**
+ * Bulk or cascading destruction that name-based table protection cannot see: `DROP OWNED` /
+ * `REASSIGN OWNED`, databases and schemas, any `DROP … CASCADE` / `TRUNCATE … CASCADE`, ownership
+ * changes, tablespaces, users and roles, and MySQL server administration.
+ */
+const REFUSED_BULK = /^(?:drop owned\b|reassign owned\b|(?:create|alter|drop) (?:database|schema|tablespace)\b|alter large object\b|drop (?:user|role)\b|rename user\b|alter instance\b|restart\b|clone\b|purge\b|binlog\b|change (?:replication|master)\b|(?:create|alter|drop) resource group\b|(?:create|alter|drop) logfile group\b|(?:create|drop) spatial reference\b|(?:drop|truncate)\b.*\bcascade\b|alter\b.*\bowner to\b|analyze\b.*\bupdate histogram\b)/;
 
 /** Statements the Console refuses even for an owner (transaction control, engine settings, dynamic SQL). */
 export function refusedWriteStatement(statement: ConsoleSqlStatement): string | undefined {
@@ -350,15 +375,41 @@ export function refusedWriteStatement(statement: ConsoleSqlStatement): string | 
   if (/\binto (?:outfile|dumpfile)\b/.test(statement.code)) return 'INTO OUTFILE';
   const definition = REFUSED_DEFINITION.exec(statement.code.replace(/^\(+\s*/, ''));
   if (definition) return definition[0].toUpperCase();
+  const bulk = REFUSED_BULK.exec(statement.code);
+  if (bulk) return bulk[0].length > 40 ? `${bulk[0].slice(0, 40).toUpperCase()}…` : bulk[0].toUpperCase();
   return undefined;
 }
 
 /** Checks both paths share: refused functions, non-literal PRAGMA functions, protected tables. */
-function assertConsoleStatement(statement: ConsoleSqlStatement, forRead: boolean): void {
+/**
+ * Relations the Console never reads or writes: statistics samples (`pg_stats` histograms and most
+ * common values, `sqlite_stat*`, MySQL histograms) hold values of every table, the gateway's
+ * included; role password hashes, raw large objects and server access rules are credentials.
+ */
+const REFUSED_RELATIONS: ReadonlySet<string> = new Set([
+  'pg_stats', 'pg_stats_ext', 'pg_stats_ext_exprs', 'pg_statistic', 'pg_statistic_ext', 'pg_statistic_ext_data',
+  'sqlite_stat1', 'sqlite_stat2', 'sqlite_stat3', 'sqlite_stat4', 'sqlite_dbpage', 'column_statistics',
+  'pg_authid', 'pg_shadow', 'pg_user_mapping', 'pg_user_mappings', 'pg_largeobject', 'pg_hba_file_rules', 'pg_ident_file_mappings',
+]);
+
+/** First refused relation a statement names (normalised identifiers), or the MySQL `mysql.` schema. */
+export function refusedRelationIn(statement: ConsoleSqlStatement, dialect: ConsoleSqlDialect): string | undefined {
+  const named = statement.identifiers.find(identifier => REFUSED_RELATIONS.has(identifier));
+  if (named) return named;
+  if (dialect !== 'mysql') return undefined;
+  const { tokens } = statement;
+  for (let index = 0; index + 1 < tokens.length; index += 1) {
+    const token = tokens[index]!;
+    if ((token.type === 'word' || token.type === 'quoted') && token.value.toLowerCase() === 'mysql' && tokens[index + 1]!.type === 'punct' && tokens[index + 1]!.value === '.') return 'mysql.*';
+  }
+  return undefined;
+}
+
+function assertConsoleStatement(statement: ConsoleSqlStatement, forRead: boolean, dialect: ConsoleSqlDialect): void {
+  const relation = refusedRelationIn(statement, dialect);
+  if (relation) throw new ConsoleSqlRefusal('refused_statement', `${relation} is not accessible from the Console (it exposes other tables' values or credentials)`);
   const refusedFunction = refusedFunctionIn(statement);
   if (refusedFunction) throw new ConsoleSqlRefusal('refused_statement', `${refusedFunction}() is not allowed from the Console`);
-  // Raw database pages (when compiled in) would expose every table's bytes, the gateway's included.
-  if (statement.identifiers.includes('sqlite_dbpage')) throw new ConsoleSqlRefusal('refused_statement', 'sqlite_dbpage is not allowed from the Console');
   const pragma = nonLiteralPragmaCall(statement);
   if (pragma) throw new ConsoleSqlRefusal('refused_statement', `${pragma}() only takes literal arguments from the Console`);
   const table = protectedTableIn(statement, { forRead });
@@ -379,7 +430,7 @@ export function readOnlyConsoleStatement(sql: string, dialect: ConsoleSqlDialect
   if (TRANSACTION_CONTROL.has(first)) throw new ConsoleSqlRefusal('refused_statement', `${first.toUpperCase()} is not allowed from the Console SQL editor`);
   const kind = readStatementKind(statement, dialect);
   if (!kind) throw new ConsoleSqlRefusal('read_only', 'Only read statements (SELECT / WITH / EXPLAIN / SHOW / read PRAGMA) run as a read-only query; use a write run for others');
-  assertConsoleStatement(statement, true);
+  assertConsoleStatement(statement, true, dialect);
   return Object.freeze({ ...statement, kind });
 }
 
@@ -391,40 +442,33 @@ export function writeConsoleStatements(sql: string, dialect: ConsoleSqlDialect, 
   for (const statement of statements) {
     const refused = refusedWriteStatement(statement);
     if (refused) throw new ConsoleSqlRefusal('refused_statement', `${refused} is not allowed from the Console SQL editor`);
-    assertConsoleStatement(statement, false);
+    assertConsoleStatement(statement, false, dialect);
   }
   return statements;
 }
 
 /**
  * SQL text for the audit log with literal values replaced by `'…'` (strings, `E'…'`, `$tag$…$tag$`,
- * MySQL double-quoted strings): statements may carry passwords or tokens that a viewer of the
- * audit log must not read. Keywords, identifiers and numbers stay.
+ * MySQL double-quoted strings) and comments removed: statements may carry passwords or tokens that a
+ * viewer of the audit log must not read. It uses the same lexer as the Console, so quotes inside
+ * comments, quoted names or backticks never shift what counts as a literal. Keywords, identifiers
+ * and numbers stay; text the lexer cannot read is not recorded at all.
  */
 export function redactConsoleSql(sql: string, dialect: ConsoleSqlDialect): string {
-  let out = '';
-  let index = 0;
-  while (index < sql.length) {
-    const char = sql[index]!;
-    if (char === '\'' || (char === '"' && dialect === 'mysql')) {
-      const backslash = dialect === 'mysql' || (dialect === 'pg' && /[eE]/.test(sql[index - 1] ?? '') && !isWordChar(sql[index - 2]));
-      let end: number;
-      try { end = skipQuoted(sql, index, char, backslash); } catch { end = sql.length; }
-      out += `${char}…${char}`;
-      index = end;
-      continue;
-    }
-    if (char === '$' && dialect === 'pg') {
-      const tag = DOLLAR_TAG.exec(sql.slice(index, index + 256));
-      if (tag) {
-        const end = sql.indexOf(tag[0], index + tag[0].length);
-        out += `${tag[0]}…${tag[0]}`;
-        index = end === -1 ? sql.length : end + tag[0].length;
-        continue;
-      }
-    }
-    out += char;
-    index += 1;
+  const spans: LexSpan[] = [];
+  try {
+    lexConsoleSql(sql, dialect, spans);
+  } catch {
+    return `[SQL not recorded: ${sql.length} characters the Console could not read]`;
   }
-  return out;
+  let out = '';
+  let cursor = 0;
+  for (const span of spans.sort((left, right) => left.start - right.start)) {
+    if (span.start < cursor) continue;
+    out += sql.slice(cursor, span.start);
+    out += span.kind === 'string' ? span.placeholder : ' ';
+    cursor = span.end;
+  }
+  out += sql.slice(cursor);
+  return out.trim();
 }
