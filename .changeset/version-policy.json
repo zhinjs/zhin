@@ -1,15 +1,4 @@
 {
   "defaultReleaseType": "patch",
-  "approvedNonPatchReleases": [
-    {
-      "package": "@zhin.js/core",
-      "type": "minor",
-      "reason": "1.2.0 撞上 npm 上旧架构的 1.2.0（1.2.0–1.5.16 均已占用），改发 1.6.0；package.json 先置为 1.5.16 由 minor 升至 1.6.0"
-    },
-    {
-      "package": "@zhin.js/agent",
-      "type": "minor",
-      "reason": "1.2.0 撞上 npm 上旧架构的 1.2.0（1.2.0–1.2.1 已占用），改发 1.3.0；package.json 先置为 1.2.1 由 minor 升至 1.3.0"
-    }
-  ]
+  "approvedNonPatchReleases": []
 }
