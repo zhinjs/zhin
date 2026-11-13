@@ -76,8 +76,8 @@ Console 的账号存在项目数据库里（[ADR 0049](../adr/0049-console-rbac.
 | --- | --- |
 | `status.view` | 首页、系统状态、日志、能力浏览、命令权限说明、对象页「记录」页签、事件流、实例状态与日志 |
 | `endpoint.view` / `endpoint.operate` / `endpoint.manage` | 账号与会话读取 / 发消息、处理请求、登录辅助 / 增删改启停账号连接 |
-| `feature.view` / `feature.configure` / `feature.toggle` | 读取功能配置 / 写配置与覆盖 / 启用禁用（见[功能与三级配置](./features.md)） |
-| `plugin.manage` | 安装、更新、卸载插件与依赖；引导第 3–5 步 |
+| `feature.view` / `feature.configure` / `feature.toggle` | 读取功能配置 / 写配置与覆盖 / 适配器、账号、会话层的启用禁用（见[功能与三级配置](./features.md)） |
+| `plugin.manage` | 安装、更新、卸载插件与依赖；插件全局启停（`disable_plugins`，网关事务）；引导第 3–5 步 |
 | `agent.view` / `agent.configure` | AI 与 Agent 读取 / 写入 |
 | `ops.config.read` / `ops.config.write` | 原始配置文件 |
 | `ops.env.read` / `ops.env.write` | 环境变量文件 |

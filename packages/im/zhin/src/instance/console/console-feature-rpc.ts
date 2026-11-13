@@ -3,8 +3,13 @@
  *
  * File levels write through ConsoleConfigurationStore.patch (revision CAS, atomic write,
  * whole-document validation, configuration application), so override-only edits apply in
- * place. The global switch keeps the `disable_plugins` + restart path of `plugin:set-enabled`.
- * The conversation level writes the instance's database store (in place as well).
+ * place. The conversation level writes the instance's database store (in place as well).
+ *
+ * The global switch (`disable_plugins`) is plugin lifecycle: on the Console it is a management
+ * gateway transaction (`plugin.manage`, stop → write → start with rollback, ADR 0054 §4) that the
+ * gateway answers before forwarding, so the Console context here refuses it (409
+ * `gateway-required`, also under `zhin start --standalone`). Only the in-chat `功能 确认` path
+ * still passes {@link FeatureRpcContext.setGlobalEnabled} (write + instance restart).
  *
  * Enable rule (ADR 0050 §4): a level may only change its switch while every level above it is
  * enabled; below a disabled level every switch is locked (409 `locked`). "Enabled" is never
@@ -25,10 +30,11 @@ import {
   type FeatureConfigLevel, type PluginId, type RuntimeConfigDocument, type RuntimeSnapshot, type SnapshotReader,
 } from '@zhin.js/plugin-runtime';
 import {
-  collectFeatureOverrideWarnings, overridableFields, readFeatureConversationDeclaration, readFeatureLevels, setProjectPluginEnabled, validateConversationOverride,
+  collectFeatureOverrideWarnings, overridableFields, readFeatureConversationDeclaration, readFeatureLevels, validateConversationOverride,
   validateFeatureOverrides, type JsonSchema,
 } from '@zhin.js/runtime';
 import { maskConfigValue } from '@zhin.js/gateway/config';
+import { PLUGIN_SWITCH_REQUIRES_GATEWAY } from '@zhin.js/host-http';
 import type { ConsoleRpcComposition } from './rpc-composition.js';
 import type { FeatureConversationOverrideStore } from './feature-conversation-store.js';
 import { FeatureConversationConflictError } from './feature-conversation-store.js';
@@ -79,7 +85,11 @@ export interface FeatureRpcContext {
   readonly authScope: string;
   readonly configuration: FeatureRpcConfigurationPort;
   readonly snapshots?: Pick<SnapshotReader, 'acquire'>;
-  /** Global level: the `disable_plugins` writer used by `plugin:set-enabled`. */
+  /**
+   * Global level, in-chat only (`功能 确认`): writes `disable_plugins`, then {@link requestRestart}.
+   * The Console context never sets it: there the global switch is a gateway transaction and is
+   * refused here (409 `gateway-required`).
+   */
   readonly setGlobalEnabled?: (instanceKey: string, enabled: boolean) => Promise<unknown>;
   readonly requestRestart?: () => void;
   readonly publishEvent?: (type: string, data: unknown) => void;
@@ -151,7 +161,7 @@ const RESERVED_FIELDS = new Set(['commandNamespace', 'disabledCommands', FEATURE
 
 /** Context from the Console RPC composition; `authorize` is the RBAC (ADR 0049) hook. */
 export function createFeatureRpcContext(
-  composition: Pick<ConsoleRpcComposition, 'configuration' | 'snapshots' | 'projectRoot' | 'onRestart' | 'hub' | 'featureStores'>,
+  composition: Pick<ConsoleRpcComposition, 'configuration' | 'snapshots' | 'hub' | 'featureStores'>,
   authScope: string,
   authorize?: FeatureRpcAuthorizer,
   actor?: string,
@@ -164,8 +174,7 @@ export function createFeatureRpcContext(
     ...(actor ? { actor } : {}),
     configuration: composition.configuration,
     ...(composition.snapshots ? { snapshots: composition.snapshots } : {}),
-    setGlobalEnabled: (instanceKey: string, enabled: boolean) => setProjectPluginEnabled(composition.projectRoot, instanceKey, enabled),
-    ...(composition.onRestart ? { requestRestart: composition.onRestart } : {}),
+    // No setGlobalEnabled: the Console's global switch is the gateway's transaction (ADR 0054 §4).
     publishEvent: (type: string, data: unknown) => composition.hub.publish(type, data),
     ...(authorize ? { authorize } : {}),
   });
@@ -778,13 +787,15 @@ async function handle(type: ConsoleFeatureRpcType, input: Record_, context: Feat
       await authorize(context, { type, ...target });
       if (target.level === 'global') {
         if (target.plugin.includes('/')) invalid('全局开关只适用于顶层插件实例');
+        // Console (gateway or standalone): never written here, whatever the current state.
+        if (!context.setGlobalEnabled) throw new FeatureRpcError(409, PLUGIN_SWITCH_REQUIRES_GATEWAY, { code: 'gateway-required' });
+        const setGlobalEnabled = context.setGlobalEnabled;
         return readState(context, async state => {
           requireDeclared(state.document, target.plugin);
           if (globallyEnabled(state.document, target.plugin) === enabled) {
             return Object.freeze({ status: 'unchanged', revision: state.revision, warnings: Object.freeze([]) });
           }
-          if (!context.setGlobalEnabled) throw new FeatureRpcError(503, '插件启停管理不可用');
-          await context.setGlobalEnabled(target.plugin, enabled);
+          await setGlobalEnabled(target.plugin, enabled);
           context.publishEvent?.('plugin:lifecycle-updated', { instanceKey: target.plugin, enabled });
           if (context.requestRestart) setTimeout(() => { try { context.requestRestart?.(); } catch { /* restart is best effort */ } }, 500);
           const block = blockOf(state.document, target.plugin);

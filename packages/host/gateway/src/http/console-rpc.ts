@@ -29,9 +29,17 @@ export interface GatewayConsoleRpc {
   handle(message: Readonly<Record<string, unknown>>, context: RouteContext, tokenRegistry: TokenRegistry): Promise<Response>;
 }
 
-/** Further gateway-owned RPC types (`iam.*`, `onboarding.update`), see `GatewayHttpServer.useConsoleRpc`. */
+/**
+ * Further gateway-owned RPC types (`iam.*`, `onboarding.update`, the global plugin switch), see
+ * `GatewayHttpServer.useConsoleRpc`.
+ */
 export interface GatewayRpcHandler extends GatewayConsoleRpc {
   owns(type: string): boolean;
+  /**
+   * Narrows {@link owns} by payload: when present and false for the parsed message, the request
+   * is forwarded to the instance untouched (e.g. `feature.set-enabled` below the global level).
+   */
+  claims?(message: Readonly<Record<string, unknown>>): boolean;
 }
 
 export function createGatewayConsoleRpc(dispatch: GatewayRpcDispatcher): GatewayConsoleRpc {

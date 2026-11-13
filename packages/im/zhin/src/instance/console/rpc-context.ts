@@ -18,7 +18,6 @@ import type {
 } from './rpc-composition.js';
 import {
   readDeclaredPlugins,
-  setProjectPluginEnabled,
   type DeclaredPluginReference,
 } from '@zhin.js/runtime';
 
@@ -89,7 +88,6 @@ function createRpcContext(
     patchProjectConfig: configuration.patchProject ? request => configuration.patchProject!(request) : undefined,
     applyConfig: configuration.apply ? expectedRevision => configuration.apply!(expectedRevision) : undefined,
     pluginManagement,
-    setPluginEnabled: (instanceKey: string, enabled: boolean) => setProjectPluginEnabled(projectRoot, instanceKey, enabled),
     listProjectFiles: () => buildProjectFileTree(projectRoot),
     readProjectFile: (filePath: string) => readProjectFile(projectRoot, filePath),
     saveProjectFile: (filePath: string, content: string) =>

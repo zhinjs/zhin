@@ -17,7 +17,12 @@ export const FEATURE_RPC = Object.freeze({
 export type ConsoleFeatureRpcType = typeof FEATURE_RPC[keyof typeof FEATURE_RPC];
 export type ConsoleFeaturePermission = 'feature.view' | 'feature.configure' | 'feature.toggle';
 
-/** Permission each `feature.*` RPC requires (ADR 0049 catalog names). */
+/**
+ * Permission each `feature.*` RPC requires (ADR 0049 catalog names). `feature.set-enabled` at the
+ * `global` level is plugin lifecycle, not a feature switch: it requires `plugin.manage`
+ * ({@link FEATURE_GLOBAL_SWITCH_PERMISSION}) and runs as a management gateway transaction
+ * (ADR 0054 §4), see {@link isGlobalFeatureSwitch}.
+ */
 export const FEATURE_RPC_PERMISSIONS: Readonly<Record<ConsoleFeatureRpcType, ConsoleFeaturePermission>> = Object.freeze({
   [FEATURE_RPC.LIST]: 'feature.view',
   [FEATURE_RPC.MATRIX]: 'feature.view',
@@ -27,6 +32,26 @@ export const FEATURE_RPC_PERMISSIONS: Readonly<Record<ConsoleFeatureRpcType, Con
   [FEATURE_RPC.SET_ENABLED]: 'feature.toggle',
   [FEATURE_RPC.CONVERSATIONS]: 'feature.view',
 });
+
+/**
+ * Permission of `feature.set-enabled` with `level: 'global'` (writes `disable_plugins` through the
+ * gateway's stop → write → start transaction with rollback, ADR 0054 §4).
+ */
+export const FEATURE_GLOBAL_SWITCH_PERMISSION = 'plugin.manage' as const;
+
+/**
+ * Whether a Console RPC message is the global plugin switch (`feature.set-enabled` at `global`).
+ * The payload is read like the instance's `feature.*` dispatcher reads it: `data` when it is an
+ * object, otherwise the message itself.
+ */
+export function isGlobalFeatureSwitch(message: unknown): boolean {
+  if (!message || typeof message !== 'object' || Array.isArray(message)) return false;
+  const envelope = message as Readonly<Record<string, unknown>>;
+  if (envelope.type !== FEATURE_RPC.SET_ENABLED) return false;
+  const data = envelope.data;
+  const input = data && typeof data === 'object' && !Array.isArray(data) ? data as Readonly<Record<string, unknown>> : envelope;
+  return input.level === 'global';
+}
 
 export function isConsoleFeatureRpcType(value: unknown): value is ConsoleFeatureRpcType {
   return typeof value === 'string' && Object.prototype.hasOwnProperty.call(FEATURE_RPC_PERMISSIONS, value);

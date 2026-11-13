@@ -12,6 +12,7 @@ import {
   PLUGIN_RPC,
   SIDE_EVENT_RPC,
   bindingScopeCovers,
+  consoleRpcPermission,
   grantsAllow,
   isConsolePermission,
   parseConsoleBindingScope,
@@ -63,6 +64,34 @@ describe('Console permission catalog (ADR 0049 §3)', () => {
       .toMatchObject({ target: { kind: 'global' } });
     expect(resolveConsoleRpcPermission('endpoint.list')).toMatchObject({ target: { kind: 'any' } });
     expect(resolveConsoleRpcPermission('inbox.recent', {})).toMatchObject({ target: { kind: 'global' } });
+  });
+
+  it('requires plugin.manage for the global plugin switch (gateway transaction, ADR 0054 §4)', async () => {
+    const { isGlobalFeatureSwitch, FEATURE_GLOBAL_SWITCH_PERMISSION } = await import('../src/index.js');
+    expect(CONSOLE_RPC_PERMISSIONS['plugin:set-enabled']).toBe('plugin.manage');
+    expect(FEATURE_GLOBAL_SWITCH_PERMISSION).toBe('plugin.manage');
+    expect(resolveConsoleRpcPermission('feature.set-enabled', { data: { plugin: 'rss', level: 'global', enabled: false } }))
+      .toMatchObject({ kind: 'exact', permission: 'plugin.manage', target: { kind: 'global' } });
+    expect(resolveConsoleRpcPermission('feature.set-enabled', { plugin: 'rss', level: 'global', enabled: false }))
+      .toMatchObject({ permission: 'plugin.manage' });
+    // A `global` anywhere in the envelope keeps the stronger requirement.
+    expect(resolveConsoleRpcPermission('feature.set-enabled', { level: 'global', data: { level: 'adapter', key: 'qq' } }))
+      .toMatchObject({ permission: 'plugin.manage' });
+    for (const level of ['adapter', 'endpoint', 'conversation']) {
+      expect(resolveConsoleRpcPermission('feature.set-enabled', { data: { plugin: 'rss', level, key: 'qq' } }), level)
+        .toMatchObject({ permission: 'feature.toggle' });
+    }
+    expect(consoleRpcPermission('feature.set-enabled')).toBe('feature.toggle');
+    expect(isGlobalFeatureSwitch({ type: 'feature.set-enabled', data: { level: 'global' } })).toBe(true);
+    expect(isGlobalFeatureSwitch({ type: 'feature.set-enabled', level: 'global' })).toBe(true);
+    // Read like the instance dispatcher: `data` wins when it is an object.
+    expect(isGlobalFeatureSwitch({ type: 'feature.set-enabled', level: 'global', data: { level: 'adapter' } })).toBe(false);
+    expect(isGlobalFeatureSwitch({ type: 'feature.set-enabled', data: { level: 'adapter' } })).toBe(false);
+    expect(isGlobalFeatureSwitch({ type: 'feature.set-override', data: { level: 'global' } })).toBe(false);
+    expect(isGlobalFeatureSwitch(null)).toBe(false);
+    const toggleOnly = [{ scope: { kind: 'global' as const }, permissions: ['feature.toggle'] }];
+    const rule = resolveConsoleRpcPermission('feature.set-enabled', { data: { plugin: 'rss', level: 'global', enabled: true } });
+    expect(rule?.kind === 'exact' && grantsAllow(toggleOnly, rule.permission, rule.target)).toBe(false);
   });
 
   it('applies binding scopes only to scoped permissions', () => {

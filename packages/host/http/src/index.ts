@@ -109,7 +109,7 @@ export {
   type PluginVerificationPlan,
   type PluginConfigValidation,
 } from './console-rpc.js';
-export { dispatchPluginConsoleRpc } from './console-plugin-rpc.js';
+export { dispatchPluginConsoleRpc, PLUGIN_SWITCH_REQUIRES_GATEWAY } from './console-plugin-rpc.js';
 export {
   buildProjectFileTree,
   FILE_MANAGER_ALLOWED,

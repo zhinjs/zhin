@@ -51,7 +51,7 @@ rss:
 
 - `overrides.adapters.*` / `overrides.endpoints.*` 的值是插件 Schema 的**部分对象**（所有字段可选，仅允许 `levels` 包含对应层级的字段），外加保留字段 `enabled: boolean`。
 - 校验：覆盖值按插件 Schema 的对应子集用 Ajv 校验；指向不存在的适配器别名或账号的键保留并给出警告（账号可能稍后添加），不报错。
-- 全局层的启用 / 禁用仍是 `disable_plugins`，不新增第二种写法。
+- 全局层的启用 / 禁用仍是 `disable_plugins`，不新增第二种写法。它是插件生命周期而非功能开关：Console 上由管理网关作为启停事务执行（停实例 → 写入 → 启动，失败回滚），权限为 `plugin.manage`（ADR 0054 §4，2026-11-13 修订）。
 
 ### 4. 解析规则
 
@@ -100,7 +100,7 @@ effective = deepMerge(global, overrides.adapters[alias], overrides.endpoints[ali
 
 - 只改 `overrides`：原地生效（`in-place`），不重启、不重载插件——`configFor` 缓存失效即可，下一条消息读到新值。
 - 改全局字段：沿用字段现有的 `x-zhin-config.effect`。
-- 改 `disable_plugins`：沿用现状（重启）。适配器 / 账号层的 `enabled` 走原地生效。
+- 改 `disable_plugins`：重启实例。Console 上由网关事务完成（停实例、写入、启动，启动失败回滚，ADR 0054 §4）；适配器 / 账号层的 `enabled` 走原地生效。
 
 ### 8. Console 接口（RPC，`feature.*`）
 
@@ -111,7 +111,7 @@ effective = deepMerge(global, overrides.adapters[alias], overrides.endpoints[ali
 | `feature.get` | `feature.view` | `{ plugin, level, key? }` → `{ schema, values, effective, sources: { [path]: level }, enabled, lockedBy? }`；机密字段值以掩码返回 |
 | `feature.set-override` | `feature.configure` | `{ plugin, level: 'adapter'\|'endpoint', key, patch }`：写入覆盖（合并 patch，`undefined` 删除字段） |
 | `feature.remove-override` | `feature.configure` | `{ plugin, level, key, paths? }`：删除整层或指定字段，回到继承 |
-| `feature.set-enabled` | `feature.toggle` | `{ plugin, level, key?, enabled }`：`global` 层写 `disable_plugins`；其余层写 `overrides.*.enabled`（`true` 时删除该键，而不是写 `true`） |
+| `feature.set-enabled` | `feature.toggle`；`global` 层 `plugin.manage` | `{ plugin, level, key?, enabled }`：`global` 层写 `disable_plugins`，由网关拦截并作为启停事务执行（ADR 0054 §4，实例拒绝该层，409 `gateway-required`）；其余层写 `overrides.*.enabled`（`true` 时删除该键，而不是写 `true`） |
 
 所有写入走 `ConsoleConfigurationStore` 现有的修订号与原子写入路径。RBAC 作用域（ADR 0049）按 `level` + `key` 检查。
 
@@ -121,7 +121,7 @@ effective = deepMerge(global, overrides.adapters[alias], overrides.endpoints[ali
 - 解析器（纯函数，带来源追踪）：`packages/im/runtime/src/layered-config.ts`
 - `configFor` / `isEnabledFor`：`packages/im/plugin-runtime`（插件上下文）
 - 分发门禁：`packages/im/core/src/plugin-runtime/im/`（命令、中间件、处理器索引）与 `packages/im/agent`（工具披露）
-- `feature.*` RPC：`packages/im/zhin/src/instance/console/console-feature-rpc.ts`
+- `feature.*` RPC：`packages/im/zhin/src/instance/console/console-feature-rpc.ts`；全局开关：`packages/host/gateway/src/http/plugin-switch-rpc.ts`
 - 现有 activity-feedback 的 `platforms / endpoints` 保持兼容，文档标注推荐迁移到 `overrides`
 
 ## 后果

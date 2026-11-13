@@ -320,4 +320,30 @@ describe('gateway Console event stream', () => {
     expect(await readUntil(reader, 'added 1 package')).toContain('event: gateway.packages.progress');
     await reader.cancel();
   });
+
+  it('follows a succeeded plugin enable / disable that changed something with plugin:lifecycle-updated', async () => {
+    const { origin, progress } = await serve(new FakeInstance());
+    const response = await fetch(`${origin}/api/events`);
+    const reader = response.body!.pipeThrough(new TextDecoderStream()).getReader();
+    await readUntil(reader, ': gateway');
+    const result = (id: string, ok: boolean, changed: boolean) => ({
+      id, operation: 'disable', packages: [], ok, status: ok ? 'succeeded' : 'rolledBack', startedAt: 0, finishedAt: 0,
+      instance: { before: 'running', after: 'running' },
+      ...(ok ? { plugin: { instanceKey: `rss-${id}`, packageName: '@zhin.js/plugin-rss', enabled: false, changed } } : {}),
+    }) as never;
+    progress.emit({ type: 'result', id: 'unchanged', result: result('unchanged', true, false) });
+    progress.emit({ type: 'result', id: 'failed', result: result('failed', false, true) });
+    progress.emit({ type: 'result', id: 'changed', result: result('changed', true, true) });
+    const text = await readUntil(reader, 'plugin:lifecycle-updated');
+    expect(text).toContain('event: plugin:lifecycle-updated\ndata: {"instanceKey":"rss-changed","enabled":false}\n\n');
+    expect(text.match(/plugin:lifecycle-updated/gu)).toHaveLength(1);
+    await reader.cancel();
+    // The progress-only stream carries the transaction frames alone.
+    const only = (await fetch(`${origin}/api/gateway/packages/progress`)).body!.pipeThrough(new TextDecoderStream()).getReader();
+    await readUntil(only, ': gateway packages');
+    progress.emit({ type: 'result', id: 'changed', result: result('again', true, true) });
+    const frames = await readUntil(only, '"again"');
+    expect(frames).not.toContain('plugin:lifecycle-updated');
+    await only.cancel();
+  });
 });

@@ -5,7 +5,7 @@
  * This module must not import from `./index.js` (the barrel re-exports it), so RPC names
  * are spelled as literals; protocol tests assert every catalog entry is mapped.
  */
-import { FEATURE_RPC_PERMISSIONS, parseFeatureConversationKey } from './feature.js';
+import { FEATURE_GLOBAL_SWITCH_PERMISSION, FEATURE_RPC_PERMISSIONS, parseFeatureConversationKey } from './feature.js';
 import { CHAT_ROLES_RPC_PERMISSIONS } from './chat-roles.js';
 import { GATEWAY_RPC_PERMISSIONS } from './gateway.js';
 import {
@@ -248,8 +248,10 @@ export const CONSOLE_RPC_PERMISSIONS: Readonly<Record<string, ConsolePermission>
   'plugin:diagnose': P.FEATURE_VIEW,
   'plugin:apply': P.PLUGIN_MANAGE,
   'plugin:verify': P.PLUGIN_MANAGE,
-  'plugin:set-enabled': P.FEATURE_TOGGLE,
-  // Layered feature configuration (ADR 0050 §8)
+  // Global plugin on / off: a gateway transaction (ADR 0054 §4), like `gateway.plugins.enable`.
+  'plugin:set-enabled': P.PLUGIN_MANAGE,
+  // Layered feature configuration (ADR 0050 §8); `feature.set-enabled` at `global` is refined
+  // to plugin.manage in resolveConsoleRpcPermission.
   ...FEATURE_RPC_PERMISSIONS,
   ...CHAT_ROLES_RPC_PERMISSIONS,
   // Project files / environment / database / process
@@ -387,6 +389,10 @@ export function resolveConsoleRpcPermission(type: unknown, message?: unknown): C
       // Without instanceKey the Host allowlist only reaches AI/Ambient paths; with one it is plugin config.
       const instanceKey = firstString(payload, 'instanceKey');
       permission = instanceKey ? P.FEATURE_CONFIGURE : P.AGENT_CONFIGURE;
+    }
+    if (type === 'feature.set-enabled' && payload.some(item => item.level === 'global')) {
+      // The global switch is plugin lifecycle (`disable_plugins`), run by the gateway (ADR 0054 §4).
+      permission = FEATURE_GLOBAL_SWITCH_PERMISSION;
     }
     if (type === 'files:read' || type === 'files:save') {
       // The file manager also reaches dotenv and config files: they keep their own (secret) permission.

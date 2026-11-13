@@ -32,11 +32,11 @@ There are no separate "adapter" or "account configuration" pages any more: featu
 
 | Place | Route | What it does | Read / write permission |
 | --- | --- | --- | --- |
-| Global Features tab | `/scope?tab=features` | Overview of every feature: settable levels, the global switch, how many levels below have their own settings; the **Matrix** view (`&view=matrix`) shows each feature's switch globally and per adapter. Click a feature name for its global settings | `feature.view` / `feature.toggle` |
+| Global Features tab | `/scope?tab=features` | Overview of every feature: settable levels, the global switch, how many levels below have their own settings; the **Matrix** view (`&view=matrix`) shows each feature's switch globally and per adapter. Click a feature name for its global settings | `feature.view` / global switch `plugin.manage` |
 | Adapter Features tab | `/scope/:adapter?tab=features` | Applies to every account and conversation of the adapter | `feature.view` / `feature.configure`, `feature.toggle` |
 | Account Features tab | `/scope/:adapter/:endpoint?tab=features` | Applies only to the account and its conversations | Same |
 | Conversation Features tab | `/scope/:adapter/:endpoint/:conversation?tab=features` | Applies only to this conversation; only fields the plugin declares as conversation-level can change | Same |
-| Feature matrix | `/features` | A standalone entry to the same matrix as the global Features tab | `feature.view` / `feature.toggle` |
+| Feature matrix | `/features` | A standalone entry to the same matrix as the global Features tab | `feature.view` / global column `plugin.manage`, adapter columns `feature.toggle` |
 | Global settings | `/features/global/:plugin` | The plugin's global configuration (schema form) | `feature.view` / `feature.configure` |
 | **Where it is on** in plugin details | `/plugins/:name` | A summary only: the global and per-adapter switches and how many conversations override the plugin (account switches are in each account's Features tab), linking to the matching Features tab | `plugin.manage` |
 
@@ -58,7 +58,7 @@ Rows are features; columns are "Global" plus one per adapter instance. Each cell
 - **disabled**;
 - **disabled by a higher level and locked** — hovering shows "disabled globally", "disabled at the adapter" or "disabled at the account" with a link.
 
-Cells with overrides are marked; accounts with conversation overrides show their count (`conversationOverrides` of `feature.matrix`). Click a feature name for its global settings, or an adapter name for its Features tab. A global switch restarts the Host, and the confirmation says so. The data comes from `feature.matrix`.
+Cells with overrides are marked; accounts with conversation overrides show their count (`conversationOverrides` of `feature.matrix`). Click a feature name for its global settings, or an adapter name for its Features tab. A global switch is plugin lifecycle: the management gateway runs it as a transaction (stop the instance → write `disable_plugins` → start the instance; if it does not start, the configuration is restored and the previous instance started again). It needs `plugin.manage`, and the confirmation says the instance restarts. The data comes from `feature.matrix`.
 
 ## Inheritance {#resolution}
 
@@ -92,7 +92,7 @@ Every field shows its source badge: "inherited from global", "inherited from ada
 | Only `overrides` (including adapter / account on / off) | In place: no restart, no plugin reload; the next message reads the new value |
 | Conversation overrides (database) | In place, likewise |
 | Global fields | Per the field's declared `x-zhin-config.effect` |
-| Global on / off (`disable_plugins`) | Instance restart (handled by the gateway; the Console stays connected) |
+| Global on / off (`disable_plugins`) | Gateway enable / disable transaction: stop the instance, write, start, roll back on failure (the Console stays connected) |
 
 When a feature is disabled for an account or a conversation, the Runtime skips it at dispatch for messages in that conversation: commands do not match (and do not answer "disabled"), middleware and handlers do not run, and Agent tools are neither visible nor callable there. Capabilities that do not go through messages, such as scheduled tasks, check `isEnabledFor` themselves.
 
@@ -105,9 +105,12 @@ When a feature is disabled for an account or a conversation, the Runtime skips i
 | `feature.get` | `feature.view` | Schema, values, effective values and sources for one level (including `conversation`, whose `revision` is that override's own) |
 | `feature.set-override` | `feature.configure` | Write an override (merge patch) |
 | `feature.remove-override` | `feature.configure` | Remove a whole level or specific fields |
-| `feature.set-enabled` | `feature.toggle` | Global writes `disable_plugins`; adapter / account write `overrides.*.enabled`; conversation writes the database; 409 when locked |
+| `feature.set-enabled` | `feature.toggle`; global level `plugin.manage` | Global writes `disable_plugins` (intercepted by the gateway and run as an enable / disable transaction, see below); adapter / account write `overrides.*.enabled`; conversation writes the database; 409 when locked |
+| `plugin:set-enabled` | `plugin.manage` | `{ instanceKey, enabled }`: the same gateway transaction as the global `feature.set-enabled` |
 | `feature.conversations` | `feature.view` | `{ plugin?, adapter?, endpoint?, query?, cursor?, limit? }`: conversations with overrides (paginated) plus conversations the instance saw recently (`hasOverrides: false`) |
 | `chat-roles.list` / `grant` / `revoke` | `iam.manage` | Chat roles (below) |
+
+The **global switch** (`feature.set-enabled` at the global level and `plugin:set-enabled`) is plugin lifecycle, not a feature switch: the management gateway intercepts it before forwarding to the instance, authorizes it with `plugin.manage` (an operator holding only `feature.toggle` is refused; non-owners can only toggle packages in the managed catalog, project-local plugins are owner-only), runs the same transaction as `gateway.plugins.enable` / `disable`, and answers in the RPC's existing reply shape (plus `transaction`; `restartRequired: true` means the instance was restarted for it). Already in the requested state answers `unchanged` and leaves the instance alone. A failed or rolled-back transaction answers `{ success: false, code: 'transaction_failed' | 'rollback_failed', error, transaction }`. After a change the event stream carries `plugin:lifecycle-updated`. The instance no longer writes the global switch itself: without a gateway (`zhin start --standalone`) it is refused (`feature.set-enabled` answers 409 `gateway-required`); use `zhin enable` / `zhin disable <plugin>` or run under `zhin start`.
 
 `feature.configure`, `feature.toggle` and `iam.manage` (for `chat-roles.*` only) are checked against scope: an operator bound to adapter `qq` can change overrides and roles on `qq`, its accounts and their conversations only, not global or other adapters; a conversation key counts for its account. File-level writes carry the configuration revision and conversation writes that override's revision, so concurrent edits are rejected rather than overwriting each other.
 
@@ -132,7 +135,7 @@ Feature switches are a zhin function: platform group owners / admins do not beco
 | `feature confirm <code>` | Global enable / disable restarts the instance and must be confirmed within 2 minutes |
 
 - The sender needs the chat role `admin` or `owner` at the target scope (the current conversation's ancestor at the chosen level).
-- The conversation level writes the database; account / adapter levels write the configuration file `overrides` (in place); the global switch writes `disable_plugins` and restarts.
+- The conversation level writes the database; account / adapter levels write the configuration file `overrides` (in place); the global switch is written by the instance to `disable_plugins` and requests a restart (unlike the Console, not yet a gateway transaction and not rolled back on failure).
 - Conversation overrides for private chats can only be changed in the Console.
 - Every change is audited by the instance (actor `chat:<adapter alias>:<user id>`, with level and scope).
 
