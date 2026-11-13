@@ -310,6 +310,11 @@ export interface CommandContext<
    */
   /** Canonical user-facing input/confirmation/selection module. */
   readonly interaction?: UserInteraction;
+  /**
+   * 由 `match` 正则触发时的匹配结果（捕获组、具名组 `match.groups`）。
+   * 走指令名路由且正文同样符合 `match` 时也会填入；其余情况为 `undefined`。
+   */
+  readonly match?: Readonly<RegExpExecArray>;
 }
 
 export interface CommandDefinition<
@@ -351,6 +356,17 @@ export interface CommandDefinition<
    * 与普通路由一样是全局用户输入，冲突会在 generation 构建时拒绝。
    */
   readonly shortcut?: Readonly<Record<string, Readonly<Record<string, CommandDynamicValue>>>>;
+  /**
+   * 正则触发：消息正文（去掉指令前缀并 trim 后、只含文本时）符合此正则即执行本指令，
+   * 匹配结果见 `context.match`。指令名路由照常可用，先按路由匹配，路由不中再试正则；
+   * 多条指令的正则都符合时取指令列表顺序中的第一条。不允许 `g` / `y` 标志（有状态）。
+   */
+  readonly match?: RegExp;
+  /**
+   * 固定回复：与 `execute` 二选一，等价于 `execute: () => reply`。
+   * 可以是文本、消息段或 JSX 等任何 `execute` 可返回的内容。
+   */
+  readonly reply?: TResult;
   execute(context: CommandContext<TConfig, TInput, TAdapter>): TResult | Promise<TResult>;
 }
 
@@ -378,13 +394,18 @@ type CommandAuthoringDefinition<
   P extends CommandParams,
   O extends CommandOptions,
 > =
-  | Omit<CommandDefinition<TConfig, TResult, TInput, undefined>, '$feature' | '$parameter' | 'params' | 'options' | 'execute'> & { readonly params?: P; readonly options?: O; execute(context: TypedCommandContext<TConfig, TInput, undefined, P, O>): TResult | Promise<TResult> }
+  | Omit<CommandDefinition<TConfig, TResult, TInput, undefined>, '$feature' | '$parameter' | 'params' | 'options' | 'execute' | 'reply'> & { readonly params?: P; readonly options?: O } & CommandBody<TConfig, TResult, TInput, undefined, P, O>
   | {
       [TAdapter in RegisteredAdapterName]: Omit<
         CommandDefinition<TConfig, TResult, TInput, TAdapter>,
-        '$feature' | '$parameter' | 'params' | 'options' | 'execute'
-      > & { readonly adapter: TAdapter; readonly params?: P; readonly options?: O; execute(context: TypedCommandContext<TConfig, TInput, TAdapter, P, O>): TResult | Promise<TResult> }
+        '$feature' | '$parameter' | 'params' | 'options' | 'execute' | 'reply'
+      > & { readonly adapter: TAdapter; readonly params?: P; readonly options?: O } & CommandBody<TConfig, TResult, TInput, TAdapter, P, O>
     }[RegisteredAdapterName];
+
+/** `execute` 与固定回复 `reply` 二选一。 */
+type CommandBody<TConfig, TResult, TInput extends CommandMessage, TAdapter extends string | undefined, P extends CommandParams, O extends CommandOptions> =
+  | { execute(context: TypedCommandContext<TConfig, TInput, TAdapter, P, O>): TResult | Promise<TResult> }
+  | { readonly reply: TResult; readonly execute?: undefined };
 
 type TypedCommandContext<TConfig, TInput extends CommandMessage, TAdapter extends string | undefined, P extends CommandParams, O extends CommandOptions> =
   Omit<CommandContext<TConfig, TInput, TAdapter>, 'params' | 'options'> & {
@@ -426,9 +447,7 @@ export function defineCommand<
 >(
   definition: CommandAuthoringDefinition<TConfig, TResult, TInput, P, O> & D,
 ): Readonly<TypedCommandDefinition<TConfig, TResult, TInput, DeclaredCommandAdapter<D>, P, O> & Pick<D, keyof D & 'adapter'>> {
-  if (typeof definition.execute !== 'function') {
-    throw new TypeError('Command execute must be a function');
-  }
+  const body = normalizeCommandBody(definition as { readonly execute?: unknown; readonly reply?: unknown });
   validateAdapterName(definition.adapter);
   if (definition.params !== undefined) {
     if (!definition.params || typeof definition.params !== 'object') {
@@ -447,8 +466,9 @@ export function defineCommand<
   validatePreferredAliases(definition);
   validateCommandPermit(definition.permit);
   validateCommandShortcutShape(definition.shortcut);
+  validateCommandMatch(definition.match);
   const execution = normalizeExecutionPolicy(definition.execution);
-  return Object.freeze({ $feature: commandBrand, ...definition, ...(execution ? { execution } : {}) }) as Readonly<
+  return Object.freeze({ $feature: commandBrand, ...definition, ...body, ...(execution ? { execution } : {}) }) as Readonly<
     TypedCommandDefinition<TConfig, TResult, TInput, DeclaredCommandAdapter<D>, P, O> & Pick<D, keyof D & 'adapter'>
   >;
 }
@@ -483,6 +503,28 @@ defineCommand.withConfig = function withConfig<
 >(): CommandDefiner<TConfig, TInput> {
   return (definition) => defineCommand(definition);
 };
+
+function normalizeCommandBody(definition: { readonly execute?: unknown; readonly reply?: unknown }): { readonly execute: (...args: never[]) => unknown } {
+  const hasReply = Object.hasOwn(definition, 'reply') && definition.reply !== undefined;
+  if (typeof definition.execute === 'function') {
+    if (hasReply) throw new TypeError('Command declares both execute and reply; use one of them');
+    return { execute: definition.execute as (...args: never[]) => unknown };
+  }
+  if (definition.execute !== undefined) throw new TypeError('Command execute must be a function');
+  if (!hasReply) throw new TypeError('Command needs execute or reply');
+  if (typeof definition.reply === 'function') {
+    throw new TypeError('Command reply is a fixed value; pass a function as execute instead');
+  }
+  const reply = definition.reply;
+  return { execute: () => reply };
+}
+
+/** @internal `match` is tested many times per generation, so stateful flags would skip matches. */
+export function validateCommandMatch(match: unknown): void {
+  if (match === undefined) return;
+  if (!(match instanceof RegExp)) throw new TypeError('Command match must be a RegExp');
+  if (match.global || match.sticky) throw new TypeError('Command match must not use the g or y flag');
+}
 
 function validateAdapterName(adapter: string | undefined): void {
   if (adapter !== undefined && (typeof adapter !== 'string' || adapter.trim() === '')) {
@@ -602,6 +644,7 @@ export interface CommandInvocationArguments {
   readonly params?: Readonly<Record<string, CommandParameterValue>>;
   readonly options?: Readonly<Record<string, CommandParameterValue>>;
   readonly segments?: readonly Readonly<CommandSegment>[];
+  readonly match?: RegExpExecArray;
 }
 
 /** Author and lifetime authority captured by the dispatcher for this invocation. */
@@ -621,7 +664,7 @@ export interface CommandInvocationOperation {
 /** @internal Command dispatcher assembly helper; each value has one owner. */
 export function createCommandContext(operation: CommandInvocationOperation, invocation: CommandInvocationArguments): CommandContext {
   const { snapshot, ownerId, input, interaction, adapter, presentation } = operation;
-  const { args, params = {}, options = {}, segments = [] } = invocation;
+  const { args, params = {}, options = {}, segments = [], match } = invocation;
   const context = createCapabilityContext({ snapshot, ownerId, signal: readOperationInputSignal(input), operation: operation.operation });
   const session = resolveCommandSession(input);
   const parameterValues: Record<string, CommandParameterValue> = { __proto__: null, ...params };
@@ -637,6 +680,7 @@ export function createCommandContext(operation: CommandInvocationOperation, invo
     segments: freezeSegments(segments),
     ...(input !== undefined ? { input: input as CommandMessage } : {}),
     ...(interaction !== undefined ? { interaction } : {}),
+    ...(match !== undefined ? { match: Object.freeze(match) } : {}),
   } as CommandContext;
   Object.defineProperty(result, 'session', {
     enumerable: true,

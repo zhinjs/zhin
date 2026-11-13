@@ -146,7 +146,7 @@ const expectedMembers = new Map([
   ['zhin.js/command.CommandContext', [
     '$client', 'adapter', 'args', 'config', 'endpoint', 'generation', 'has', 'input', 'interaction',
     'options', 'owner', 'params', 'project', 'scene', 'segments', 'sender', 'session', 'signal', 'use',
-    'locale', 'formatCommand',
+    'locale', 'formatCommand', 'match',
   ]],
   ['zhin.js/command.CommandOptionSchema', [
     'alias', 'choices', 'default', 'description', 'max', 'min', 'optional', 'pattern', 'type', 'validate',
@@ -154,7 +154,7 @@ const expectedMembers = new Map([
   ]],
   ['zhin.js/command.CommandDefinition', [
     'adapter', 'alias', 'description', 'execute', 'execution', 'options', 'params', 'permit', 'shortcut',
-    'descriptionI18n', 'preferredAliasI18n',
+    'descriptionI18n', 'preferredAliasI18n', 'match', 'reply',
   ]],
   ['zhin.js/command.CommandExecutionPolicy', ['cooldownMs', 'maxConcurrent', 'progressAfterMs']],
   ['zhin.js/command.CommandExecutionLimit', ['reason', 'retryAfterMs']],

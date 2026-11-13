@@ -623,6 +623,58 @@ describe('Command Feature', () => {
     });
   });
 
+  it('answers with a fixed reply instead of execute', async () => {
+    const owner = rootPluginId();
+    const slot = createCapabilitySlot({
+      owner, feature: commandFeatureId, localName: 'demo', source: '/commands/demo/index.ts',
+      definition: defineCommand({ description: '状态', reply: 'xxxxxxxxxxx' }),
+    });
+    const index = new CommandIndex([slot], snapshotWithOwners([owner], [slot]));
+    await expect(index.dispatch({ input: 'demo' })).resolves.toMatchObject({ matched: true, status: 'executed', value: 'xxxxxxxxxxx' });
+    expect(() => defineCommand({ reply: 'a', execute: () => 'b' } as never)).toThrow(/both execute and reply/);
+    expect(() => defineCommand({} as never)).toThrow(/needs execute or reply/);
+    expect(() => defineCommand({ reply: () => 'x' } as never)).toThrow(/fixed value/);
+  });
+
+  it('triggers a command whose match fits the whole text, after ordinary routes', async () => {
+    const owner = rootPluginId();
+    const regex = createCapabilitySlot({
+      owner, feature: commandFeatureId, localName: 'weather', source: '/commands/weather/index.ts',
+      definition: defineCommand({
+        match: /^(?<city>\S+)天气$/u,
+        execute: ({ match }) => `weather:${match?.groups?.city ?? 'none'}`,
+      }),
+    });
+    const greet = createCapabilitySlot({
+      owner, feature: commandFeatureId, localName: 'demo', source: '/commands/demo/index.ts',
+      definition: defineCommand({ match: /^demo$/iu, reply: 'demo!' }),
+    });
+    // Several matches fitting the same text resolve in command-list order (by name), so a broad
+    // catch-all named after the specific commands only runs when none of them fits.
+    const everything = createCapabilitySlot({
+      owner, feature: commandFeatureId, localName: 'zz-echo', source: '/commands/zz-echo/index.ts',
+      definition: defineCommand({ match: /.+/u, execute: ({ match }) => `echo:${match?.[0]}` }),
+    });
+    const index = new CommandIndex([regex, greet, everything], snapshotWithOwners([owner], [regex, greet, everything]));
+
+    await expect(index.dispatch({ input: '北京天气' })).resolves.toMatchObject({ status: 'executed', command: 'weather', value: 'weather:北京' });
+    await expect(index.dispatch({ input: '  DEMO  ' })).resolves.toMatchObject({ status: 'executed', command: 'demo', value: 'demo!' });
+    // An ordinary route wins over a broad match; the routed command still sees its own match result.
+    await expect(index.dispatch({ input: 'weather' })).resolves.toMatchObject({ command: 'weather', value: 'weather:none' });
+    await expect(index.dispatch({ input: '随便说点' })).resolves.toMatchObject({ command: 'zz-echo', value: 'echo:随便说点' });
+    // Only plain-text messages are tested against match.
+    await expect(index.dispatch({ input: [{ type: 'at', data: { id: '1' } }, { type: 'text', data: { text: 'demo' } }] }))
+      .resolves.toEqual({ matched: false, status: 'unmatched' });
+    expect(index.list().find((command) => command.name === 'demo')).toMatchObject({ match: '/^demo$/iu' });
+    expect('pattern' in index.list().find((command) => command.name === 'demo')!).toBe(false);
+  });
+
+  it('rejects a match that is not a RegExp or carries a stateful flag', () => {
+    expect(() => defineCommand({ match: '^demo$' as never, reply: 'x' })).toThrow(/must be a RegExp/);
+    expect(() => defineCommand({ match: /demo/g, reply: 'x' })).toThrow(/g or y flag/);
+    expect(() => defineCommand({ match: /demo/y, reply: 'x' })).toThrow(/g or y flag/);
+  });
+
   it('resolves dynamic shortcut values from CommandSession at dispatch time', async () => {
     const owner = rootPluginId();
     const slot = createCapabilitySlot({
