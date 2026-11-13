@@ -443,11 +443,27 @@ export interface TransactionOptions {
   readOnly?: boolean;
 }
 
+export interface StatementQueryOptions {
+  /**
+   * Keep at most this many rows. Drivers stop reading past it where they can (SQLite iterates,
+   * MySQL streams and discards); the returned array then carries a non-enumerable `truncated`.
+   */
+  readonly maxRows?: number;
+}
+
 export interface Transaction {
   commit(): Promise<void>;
   rollback(): Promise<void>;
   query<T = any>(sql: string, params?: any[]): Promise<T>;
+  /**
+   * Runs exactly one statement through a protocol that refuses a second one: PostgreSQL's
+   * extended protocol (`cannot insert multiple commands into a prepared statement`), MySQL
+   * prepared statements (never `multipleStatements`, whatever the connection config says) and
+   * SQLite `prepare()` (which compiles only the first statement). For SQL typed by a person.
+   */
+  queryStatement?<T = any>(sql: string, options?: StatementQueryOptions): Promise<T>;
 }
+
 
 /**
  * 增强的事务接口，支持链式调用

@@ -34,4 +34,21 @@ describe('gateway-owned tables (ADR 0054 §7)', () => {
       'SELECT is_console_flag FROM t',
     ]) expect(referencesGatewayOwnedTable(sql)).toBe(false);
   });
+
+  it('decodes escaped spellings of gateway table names (U&, E strings, backslashes)', () => {
+    for (const sql of [
+      String.raw`SELECT * FROM U&"\0063onsole_users"`,
+      String.raw`SELECT * FROM u&"\+000063onsole_sessions"`,
+      String.raw`SELECT query_to_xml(E'select * from \x63onsole_users', true, true, '')`,
+      String.raw`SELECT query_to_xml(E'select * from \143onsole_users', true, true, '')`,
+      String.raw`SELECT query_to_xml(E'select * from console_users', true, true, '')`,
+      String.raw`PREPARE s FROM 'SELECT * FROM con\sole_users'`,
+      String.raw`SELECT * FROM U&"!0063onsole_users" UESCAPE '!'`,
+    ]) expect(referencesGatewayOwnedTable(sql), sql).toBe(true);
+    for (const sql of [
+      String.raw`SELECT U&'\0061bc' FROM messages`,
+      String.raw`SELECT E'\x41' FROM t`,
+      String.raw`SELECT id FROM console_conversations`,
+    ]) expect(referencesGatewayOwnedTable(sql), sql).toBe(false);
+  });
 });

@@ -3,7 +3,8 @@ import {RelatedDatabase} from "../type/related/database.js";
 
 import { getLogger } from '@zhin.js/logger';
 import type { ClientConfig, PoolConfig as PgPoolConfig } from 'pg';
-import {Column, Transaction, TransactionOptions, PoolConfig, type Definition} from "../types.js";
+import {Column, Transaction, TransactionOptions, PoolConfig, type Definition, type StatementQueryOptions} from "../types.js";
+import { capRows } from '../base/statement-rows.js';
 
 const logger = getLogger('database');
 
@@ -95,6 +96,30 @@ export class PostgreSQLDialect<S extends Record<string, object> = Record<string,
     const result = await this.connection.query(sql, params);
     return this.normalizeResult(result) as U;
     }
+  }
+
+  /**
+   * One statement through the extended protocol: the server refuses a second command in it
+   * (`cannot insert multiple commands into a prepared statement`), whatever the text hides.
+   */
+  private async queryStatementOn(client: { query(config: unknown): Promise<any> }, sql: string, options?: StatementQueryOptions): Promise<unknown> {
+    await this.assertExtendedProtocol();
+    const result = await client.query({ text: sql, values: [], queryMode: 'extended' });
+    return capRows(this.normalizeResult(result), options?.maxRows);
+  }
+
+  private extendedProtocol: Promise<void> | undefined;
+
+  /** `queryMode: 'extended'` arrived in pg 8.11; an older driver would silently use the simple protocol. */
+  private assertExtendedProtocol(): Promise<void> {
+    return this.extendedProtocol ??= (async () => {
+      const pg = await import('pg') as unknown as { Query?: new (config: unknown) => { requiresPreparation?(): boolean }; default?: { Query?: new (config: unknown) => { requiresPreparation?(): boolean } } };
+      const Query = pg.Query ?? pg.default?.Query;
+      const probe = Query ? new Query({ text: 'SELECT 1', values: [], queryMode: 'extended' }) : undefined;
+      if (probe?.requiresPreparation?.() !== true) {
+        throw new Error('Single-statement queries need the pg driver 8.11 or later (queryMode: extended)');
+      }
+    })();
   }
 
   private normalizeResult(result: { rows: Record<string, unknown>[]; fields?: Array<{ name: string; dataTypeID: number }>; rowCount?: number | null; command?: string }): Record<string, unknown>[] {
@@ -344,6 +369,10 @@ export class PostgreSQLDialect<S extends Record<string, object> = Record<string,
         async query<T = any>(sql: string, params?: any[]): Promise<T> {
           const result = await client.query(sql, params);
           return dialect.normalizeResult(result) as T;
+        },
+
+        async queryStatement<T = any>(sql: string, options?: StatementQueryOptions): Promise<T> {
+          return await dialect.queryStatementOn(client, sql, options) as T;
         }
       };
     } else {
@@ -365,6 +394,10 @@ export class PostgreSQLDialect<S extends Record<string, object> = Record<string,
         
         async query<T = any>(sql: string, params?: any[]): Promise<T> {
           return dialect.query<T>(sql, params);
+        },
+
+        async queryStatement<T = any>(sql: string, options?: StatementQueryOptions): Promise<T> {
+          return await dialect.queryStatementOn(dialect.connection, sql, options) as T;
         }
       };
     }

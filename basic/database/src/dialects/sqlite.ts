@@ -4,7 +4,8 @@ import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { Dialect, Database } from '../base/index.js';
 
-import { Column, Transaction, TransactionOptions } from '../types.js';
+import { Column, Transaction, TransactionOptions, type StatementQueryOptions } from '../types.js';
+import { capRows, markTruncated } from '../base/statement-rows.js';
 import { RelatedDatabase } from '../type/related/database.js';
 
 export interface SQLiteDialectConfig {
@@ -38,6 +39,62 @@ export function isSqliteBusyError(error: unknown): boolean {
   return typeof errcode === 'number' && (errcode & 0xff) === 5 && errcode !== 517;
 }
 
+/** Options of {@link SQLiteDialect.queryReadOnlyIsolated}. */
+export interface SqliteIsolatedQueryOptions {
+  readonly maxRows: number;
+  readonly timeoutMs: number;
+}
+
+export interface SqliteIsolatedQueryResult {
+  readonly columns: readonly string[];
+  readonly rows: Record<string, unknown>[];
+  readonly truncated: boolean;
+}
+
+/** Thrown when an isolated read exceeded its time budget (the worker is terminated). */
+export class SqliteQueryTimeoutError extends Error {
+  readonly code = 'timeout';
+  constructor(timeoutMs: number) {
+    super(`Query exceeded the ${timeoutMs} ms time limit and was stopped`);
+    this.name = 'SqliteQueryTimeoutError';
+  }
+}
+
+/**
+ * Worker body of {@link SQLiteDialect.queryReadOnlyIsolated} (CommonJS, evaluated): its own
+ * read-only connection, `query_only`, rows iterated up to the cap and the wall-clock budget.
+ */
+const ISOLATED_READ_WORKER = `
+const { parentPort, workerData } = require('node:worker_threads');
+const { DatabaseSync } = require('node:sqlite');
+const { filename, sql, maxRows, deadline, json } = workerData;
+let db;
+try {
+  db = new DatabaseSync(filename, { readOnly: true });
+  db.exec('PRAGMA query_only = ON');
+  const statement = db.prepare(sql);
+  const meta = typeof statement.columns === 'function' ? statement.columns() : [];
+  const decode = new Set(meta.filter(c => c.database === 'main' && c.table && c.column && (json[c.table] || []).includes(c.column)).map(c => c.name));
+  const rows = [];
+  let truncated = false;
+  for (const row of statement.iterate()) {
+    if (rows.length >= maxRows) { truncated = true; break; }
+    const out = {};
+    for (const [key, value] of Object.entries(row)) {
+      out[key] = value;
+      if (decode.has(key) && typeof value === 'string') { try { out[key] = JSON.parse(value); } catch {} }
+    }
+    rows.push(out);
+    if (Date.now() > deadline) { parentPort.postMessage({ ok: false, timeout: true }); process.exit(0); }
+  }
+  parentPort.postMessage({ ok: true, rows, truncated, columns: meta.map(c => c.name) });
+} catch (error) {
+  parentPort.postMessage({ ok: false, message: String(error && error.message || error), code: error && error.code, errcode: error && error.errcode });
+} finally {
+  try { db && db.close(); } catch {}
+}
+`;
+
 function isInMemoryFilename(filename: string): boolean {
   return filename === ':memory:' || filename === '' || filename.startsWith('file::memory:');
 }
@@ -47,6 +104,8 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
   private db: { prepare(sql: string): any; exec(sql: string): void; close(): void; readonly isTransaction?: boolean } | null = null;
   /** Own transaction flag; `DatabaseSync#isTransaction` is preferred where Node provides it. */
   private transactionOpen = false;
+  /** Worker of the isolated read in flight (also while a terminated one is still unwinding). */
+  private isolatedReader: { terminate(): Promise<number> } | null = null;
 
   constructor(config: SQLiteDialectConfig) {
     super('sqlite', config);
@@ -82,7 +141,61 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
     }
   }
 
+  /** True when {@link queryReadOnlyIsolated} can open its own connection (a file database). */
+  supportsIsolatedReads(): boolean {
+    return this.db !== null && !isInMemoryFilename(this.config.filename);
+  }
+
+  /**
+   * Runs one read statement on its own read-only connection in a worker thread, so a slow query
+   * never blocks this event loop: rows are iterated up to `maxRows` and the worker is terminated
+   * when `timeoutMs` passes. One isolated read runs at a time per connection — SQLite cannot
+   * interrupt a step in progress, so a terminated worker may keep its thread busy until that step
+   * returns, and a new read is refused until it has exited.
+   */
+  async queryReadOnlyIsolated(sql: string, options: SqliteIsolatedQueryOptions): Promise<SqliteIsolatedQueryResult> {
+    if (!this.supportsIsolatedReads()) throw new Error('Isolated reads need a file database');
+    if (this.isolatedReader) throw new Error('A previous query is still running; try again shortly');
+    const { Worker } = await import('node:worker_threads');
+    const json = Object.fromEntries([...this.jsonColumns].map(([table, columns]) => [table, [...columns]]));
+    const worker = new Worker(ISOLATED_READ_WORKER, {
+      eval: true,
+      workerData: { filename: this.config.filename, sql, maxRows: options.maxRows, deadline: Date.now() + options.timeoutMs, json },
+      stdout: true,
+      stderr: true,
+    });
+    this.isolatedReader = worker;
+    worker.once('exit', () => { if (this.isolatedReader === worker) this.isolatedReader = null; });
+    return await new Promise<SqliteIsolatedQueryResult>((resolve, reject) => {
+      let settled = false;
+      const finish = (error: Error | null, value?: SqliteIsolatedQueryResult) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        if (error) reject(error); else resolve(value!);
+      };
+      const timer = setTimeout(() => {
+        finish(new SqliteQueryTimeoutError(options.timeoutMs));
+        void worker.terminate().catch(() => undefined);
+      }, options.timeoutMs);
+      worker.once('message', (message: { ok: boolean; timeout?: boolean; message?: string; code?: string; errcode?: number; rows?: Record<string, unknown>[]; columns?: string[]; truncated?: boolean }) => {
+        // A worker that answered is done with SQLite; only a stopped one may still be busy.
+        if (!message.timeout && this.isolatedReader === worker) this.isolatedReader = null;
+        if (message.ok) {
+          finish(null, { columns: message.columns ?? [], rows: message.rows ?? [], truncated: message.truncated === true });
+        } else if (message.timeout) {
+          finish(new SqliteQueryTimeoutError(options.timeoutMs));
+        } else {
+          finish(Object.assign(new Error(message.message ?? 'SQLite query failed'), { code: message.code, errcode: message.errcode }));
+        }
+      });
+      worker.once('error', error => finish(error instanceof Error ? error : new Error(String(error))));
+      worker.once('exit', code => finish(new Error(`SQLite query worker exited (${code})`)));
+    });
+  }
+
   async disconnect(): Promise<void> {
+    void this.isolatedReader?.terminate().catch(() => undefined);
     if (this.db) {
       try {
         this.db.close();
@@ -373,6 +486,19 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
       rollback: () => finish('ROLLBACK'),
       async query<T = any>(sql: string, params?: any[]): Promise<T> {
         return dialect.query<T>(sql, params);
+      },
+      /** `prepare()` compiles only the first statement; with `maxRows` rows are iterated, not all read. */
+      async queryStatement<T = any>(sql: string, options?: StatementQueryOptions): Promise<T> {
+        const maxRows = options?.maxRows;
+        if (maxRows === undefined || !dialect.db) return capRows(await dialect.query<T>(sql), maxRows);
+        const statement = dialect.db.prepare(sql);
+        const rows: unknown[] = [];
+        let truncated = false;
+        for (const row of statement.iterate()) {
+          if (rows.length >= maxRows) { truncated = true; break; }
+          rows.push(row);
+        }
+        return markTruncated(dialect.processQueryResults(rows, statement.columns()) as unknown[], truncated) as T;
       }
     };
   }

@@ -3,7 +3,8 @@ import {RelatedDatabase} from "../type/related/database.js";
 import { getLogger } from '@zhin.js/logger';
 import type { ConnectionOptions, PoolOptions } from 'mysql2/promise';
 
-import {Column, Transaction, TransactionOptions, PoolConfig, type Definition} from "../types.js";
+import {Column, Transaction, TransactionOptions, PoolConfig, type Definition, type StatementQueryOptions} from "../types.js";
+import { markTruncated } from '../base/statement-rows.js';
 
 const logger = getLogger('database');
 
@@ -85,6 +86,39 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
     const [rows, fields] = await this.connection.execute(sql, params);
     return this.processQueryResults(rows, fields) as U;
     }
+  }
+
+  /**
+   * One statement as a prepared statement (binary protocol): MySQL never runs a second statement
+   * from it, even when the connection was configured with `multipleStatements`. With `maxRows`
+   * the rows are streamed and those past the cap discarded, so memory stays bounded.
+   */
+  private async queryStatementOn(connection: any, sql: string, options?: StatementQueryOptions): Promise<unknown> {
+    const maxRows = options?.maxRows;
+    const core = connection?.connection;
+    if (maxRows === undefined || typeof core?.execute !== 'function') {
+      const [rows, fields] = await connection.execute(sql, []);
+      if (maxRows === undefined || !Array.isArray(rows)) return this.processQueryResults(rows, fields);
+      const extra = rows.length > maxRows;
+      return markTruncated(this.processQueryResults(rows.slice(0, maxRows), fields) as unknown[], extra);
+    }
+    const { rows, fields, truncated, header } = await new Promise<{ rows: unknown[]; fields: unknown; truncated: boolean; header?: unknown }>((resolve, reject) => {
+      const rows: unknown[] = [];
+      let fields: unknown;
+      let header: unknown;
+      let truncated = false;
+      const command = core.execute(sql, []);
+      command.on('error', reject);
+      command.on('fields', (value: unknown) => { fields = value; });
+      command.on('result', (row: unknown) => {
+        if (fields === undefined) { header = row; return; }
+        if (rows.length < maxRows) rows.push(row);
+        else truncated = true;
+      });
+      command.on('end', () => resolve({ rows, fields, truncated, header }));
+    });
+    if (fields === undefined && header !== undefined) return header;
+    return markTruncated(this.processQueryResults(rows, fields) as unknown[], truncated);
   }
 
   registerTableSchema(table: string, definition: Record<string, { type: string }>): void {
@@ -173,11 +207,12 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
   }
 
   formatJson(value: any): string {
-    return `'${JSON.stringify(value).replace(/'/g, "''")}'`;
+    return `'${this.escapeString(JSON.stringify(value))}'`;
   }
 
+  /** MySQL string literals treat `\\` as an escape (unless `NO_BACKSLASH_ESCAPES`): double both. */
   escapeString(value: string): string {
-    return value.replace(/'/g, "''");
+    return value.replace(/\\/g, '\\\\').replace(/'/g, "''");
   }
 
   formatDefaultValue(value: any): string {
@@ -353,6 +388,10 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
         async query<T = any>(sql: string, params?: any[]): Promise<T> {
           const [rows, fields] = await connection.execute(sql, params);
           return dialect.processQueryResults(rows, fields) as T;
+        },
+
+        async queryStatement<T = any>(sql: string, options?: StatementQueryOptions): Promise<T> {
+          return await dialect.queryStatementOn(connection, sql, options) as T;
         }
       };
     } else {
@@ -378,6 +417,10 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
         async query<T = any>(sql: string, params?: any[]): Promise<T> {
           const [rows, fields] = await connection.execute(sql, params);
           return dialect.processQueryResults(rows, fields) as T;
+        },
+
+        async queryStatement<T = any>(sql: string, options?: StatementQueryOptions): Promise<T> {
+          return await dialect.queryStatementOn(connection, sql, options) as T;
         }
       };
     }

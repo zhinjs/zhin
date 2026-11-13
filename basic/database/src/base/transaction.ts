@@ -5,7 +5,8 @@ import {
   TransactionUpdation, 
   TransactionDeletion,
   Condition,
-  BuildQueryResult
+  BuildQueryResult,
+  StatementQueryOptions,
 } from '../types.js';
 import type { Database } from './database.js';
 
@@ -158,6 +159,12 @@ export class TransactionContextImpl<S extends Record<string, object>> implements
    */
   async query<T = any>(sql: string, params?: any[]): Promise<T> {
     return this.trx.query<T>(sql, params);
+  }
+
+  /** One statement through the single-statement protocol of the dialect (see {@link Transaction.queryStatement}). */
+  async queryStatement<T = any>(sql: string, options?: StatementQueryOptions): Promise<T> {
+    if (!this.trx.queryStatement) throw new Error('This database does not support single-statement queries');
+    return this.trx.queryStatement<T>(sql, options);
   }
   
   /**
