@@ -16,7 +16,7 @@ const baseConfig = resolveIcqqConfig({ id: '10001', autoReconnect: false });
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-async function makeEndpoint(assist: LoginAssist, locale: 'zh-CN' | 'en' = 'zh-CN', lifetime: Pick<ConstructorParameters<typeof IcqqEndpoint>[0], 'signal' | 'endpointIdentity'> = {}) {
+async function makeEndpoint(assist: LoginAssist, locale: 'zh-CN' | 'en' = 'zh-CN', lifetime: Pick<ConstructorParameters<typeof IcqqEndpoint>[0], 'signal' | 'endpointIdentity'> = {}, config = baseConfig) {
   const gateway: OutboundMessageService = {
     receive: vi.fn(async () => Object.freeze({ matched: true })),
     send: vi.fn(async () => 'sent'),
@@ -24,7 +24,7 @@ async function makeEndpoint(assist: LoginAssist, locale: 'zh-CN' | 'en' = 'zh-CN
   return await icqqFixture({
     id: endpointKey,
     gateway,
-    config: baseConfig,
+    config,
     sideEvents: createIcqqTestPorts().sideEvents,
     loginAssist: assist, locale, ...lifetime,
   }, gateway, createIcqqTestPorts().sideEvents);
@@ -103,22 +103,107 @@ describe('icqq LoginAssist wiring', () => {
     await endpoint.stop();
   });
 
-  it('device challenge sends SMS then submits code', async () => {
+  it('device challenge waits for the URL check: ok continues with login() and sends no SMS', async () => {
     const assist = new LoginAssist(null, { defaultTimeoutMs: 60_000 });
     const endpoint = await makeEndpoint(assist);
-    vi.mocked(endpoint.endpoint.login).mockImplementation(async () => {
+    vi.mocked(endpoint.endpoint.login).mockImplementationOnce(async () => {
       endpoint.endpoint.emit('system.login.device', { url: 'https://ex', phone: '138****' });
     });
 
     const startP = endpoint.start(new AbortController().signal);
     await flush();
-    expect(endpoint.endpoint.sendSmsCode).toHaveBeenCalled();
-    assist.submit(assist.listPending()[0]!.id, '123456');
+    const [task] = assist.listPending();
+    expect(task).toMatchObject({ type: 'device', payload: { url: 'https://ex' } });
+    expect(String(task!.payload.message)).toContain('ok');
+    expect(endpoint.endpoint.sendSmsCode).not.toHaveBeenCalled();
+    assist.submit(task!.id, 'ok');
+    await flush();
+    expect(endpoint.endpoint.login).toHaveBeenCalledTimes(2);
+    expect(endpoint.endpoint.submitSmsCode).not.toHaveBeenCalled();
+    endpoint.endpoint.emit('system.online');
+    await startP;
+    await endpoint.stop();
+  });
+
+  it('device challenge sends an SMS only when asked, then submits the code', async () => {
+    const assist = new LoginAssist(null, { defaultTimeoutMs: 60_000 });
+    const endpoint = await makeEndpoint(assist);
+    vi.mocked(endpoint.endpoint.login).mockImplementationOnce(async () => {
+      endpoint.endpoint.emit('system.login.device', { url: 'https://ex', phone: '138****' });
+    });
+
+    const startP = endpoint.start(new AbortController().signal);
+    await flush();
+    assist.submit(assist.listPending()[0]!.id, { action: 'sms' });
+    await flush();
+    expect(endpoint.endpoint.sendSmsCode).toHaveBeenCalledTimes(1);
+    const [smsTask] = assist.listPending();
+    expect(smsTask).toMatchObject({ type: 'sms' });
+    expect(String(smsTask!.payload.message)).toContain('138****');
+    assist.submit(smsTask!.id, ' 123456 ');
     await flush();
     expect(endpoint.endpoint.submitSmsCode).toHaveBeenCalledWith('123456');
     endpoint.endpoint.emit('system.online');
     await startP;
     await endpoint.stop();
+  });
+
+  it('a failed SMS request asks again and still allows the URL check', async () => {
+    const assist = new LoginAssist(null, { defaultTimeoutMs: 60_000 });
+    const endpoint = await makeEndpoint(assist);
+    vi.mocked(endpoint.endpoint.login).mockImplementationOnce(async () => {
+      endpoint.endpoint.emit('system.login.device', { url: 'https://ex' });
+    });
+    vi.mocked(endpoint.endpoint.sendSmsCode).mockRejectedValueOnce(new Error('too frequent'));
+
+    const startP = endpoint.start(new AbortController().signal);
+    await flush();
+    assist.submit(assist.listPending()[0]!.id, 'sms');
+    await flush();
+    const [again] = assist.listPending();
+    expect(again).toMatchObject({ type: 'device', payload: { url: 'https://ex' } });
+    expect(String(again!.payload.message)).toContain('too frequent');
+    assist.submit(again!.id, 'ok');
+    await flush();
+    expect(endpoint.endpoint.login).toHaveBeenCalledTimes(2);
+    endpoint.endpoint.emit('system.online');
+    await startP;
+    await endpoint.stop();
+  });
+
+  it('never relogs in while a challenge waits for the operator, and retries with backoff once it goes unanswered', async () => {
+    vi.useFakeTimers();
+    try {
+      const assist = new LoginAssist(null, { defaultTimeoutMs: 60_000 });
+      const endpoint = await makeEndpoint(assist, 'zh-CN', {}, resolveIcqqConfig({ id: '10001', autoReconnect: true }));
+      // The reported loop: a login error schedules a relogin; that relogin's login() returns while
+      // a device lock waits, and the relogin used to schedule another one that replaced the lock.
+      vi.mocked(endpoint.endpoint.login)
+        .mockImplementationOnce(async () => { endpoint.endpoint.emit('system.login.error', { code: 9, message: '[登陆失败]未知错误' }); })
+        .mockImplementation(async () => { endpoint.endpoint.emit('system.login.device', { url: 'https://ex' }); });
+
+      const startP = endpoint.start(new AbortController().signal);
+      startP.catch(() => undefined);
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(endpoint.endpoint.login).toHaveBeenCalledTimes(2);
+      expect(assist.listPending()).toHaveLength(1);
+      const [lock] = assist.listPending();
+
+      // While the operator works on it, nothing replaces it.
+      await vi.advanceTimersByTimeAsync(50_000);
+      expect(endpoint.endpoint.login).toHaveBeenCalledTimes(2);
+      expect(assist.listPending().map(task => task.id)).toEqual([lock!.id]);
+
+      // Unanswered: the task expires, then one backoff relogin raises a fresh challenge.
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(assist.listPending().map(task => task.id)).not.toContain(lock!.id);
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(endpoint.endpoint.login).toHaveBeenCalledTimes(3);
+      expect(assist.listPending()).toHaveLength(1);
+      await endpoint.stop();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
