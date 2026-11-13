@@ -16,18 +16,15 @@ interface LoginAssistBinding {
  */
 export function eventSafeLoginTask<T extends { readonly payload?: Readonly<Record<string, unknown>> }>(task: T): T {
   const payload = task.payload;
-  if (!payload || (payload.image === undefined && payload.url === undefined)) return task;
-  // Verification links (slider / device / auth) can carry a session id (`sid=`); like the QR image
-  // they stay in `login.list` only.
-  const { image, url, ...rest } = payload;
-  return Object.freeze({
-    ...task,
-    payload: Object.freeze({
-      ...rest,
-      ...(image !== undefined ? { imageOmitted: true } : {}),
-      ...(url !== undefined ? { urlOmitted: true } : {}),
-    }),
-  });
+  if (!payload) return task;
+  // Allow-list: only the message survives. QR images, verification links (sid) and any other field a
+  // legacy adapter put in the payload stay in `login.list` for operators.
+  const safe: Record<string, unknown> = {};
+  if (typeof payload.message === 'string') safe.message = payload.message;
+  if (payload.image !== undefined) safe.imageOmitted = true;
+  if (payload.url !== undefined) safe.urlOmitted = true;
+  if (Object.keys(payload).some((key) => key !== 'message' && key !== 'image' && key !== 'url')) safe.fieldsOmitted = true;
+  return Object.freeze({ ...task, payload: Object.freeze(safe) });
 }
 
 export type LoginAssistStdinBinder = (assist: LoginAssist) => () => void;

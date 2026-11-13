@@ -213,4 +213,24 @@ describe('login read RPCs return live challenge material only to operators (ADR 
       expect(CONSOLE_RPC_PERMISSIONS[type]).toBe('endpoint.operate');
     }
   });
+
+  it('legacy qrcode / sms / other urls and extra payload fields never reach a viewer through any read', async () => {
+    const assist = new LoginAssist(null, { defaultTimeoutMs: 0 });
+    for (const [key, type, secret] of [['q', 'qrcode', 'QRSECRET'], ['s', 'sms', 'SMSSECRET'], ['o', 'other', 'OTHERSECRET']] as const) {
+      assist.waitForInput('qq', key, type, { message: type, url: `https://x.example/?k=${secret}`, ticket: `${secret}-TICKET` }, { owner: {} }).catch(() => undefined);
+    }
+    const v2 = assist.beginFlow({ adapter: 'qq', endpointKey: 'c', owner: {} });
+    v2.challenge({ kind: 'confirm', title: 'confirm', media: { link: { url: 'https://x.example/?k=CONFIRMSECRET', label: 'l' } }, blocks: [{ kind: 'link', label: 'b', url: 'https://x.example/?k=CBLOCK' }] }).catch(() => undefined);
+    const secrets = ['QRSECRET', 'SMSSECRET', 'OTHERSECRET', 'CONFIRMSECRET', 'CBLOCK'];
+    const hits = (value: unknown) => secrets.filter(secret => JSON.stringify(value).includes(secret));
+    expect(hits(await rpc({ type: LOGIN_RPC.LIST }, assist, GLOBAL_VIEWER))).toEqual([]);
+    const list = await rpc({ type: LOGIN_RPC.FLOW_LIST }, assist, GLOBAL_VIEWER);
+    expect(hits(list)).toEqual([]);
+    for (const flow of (list as { data: { flows: { id: string }[] } }).data.flows) {
+      expect(hits(await rpc({ type: LOGIN_RPC.FLOW_GET, flowId: flow.id }, assist, GLOBAL_VIEWER))).toEqual([]);
+    }
+    // Operators keep the live material.
+    expect(hits(await rpc({ type: LOGIN_RPC.FLOW_LIST }, assist, GLOBAL_OPERATOR)).sort()).toEqual([...secrets].sort());
+    assist.dispose();
+  });
 });

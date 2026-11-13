@@ -247,13 +247,13 @@ function withoutChallengeMaterial(flow: ConsoleLoginFlow): ConsoleLoginFlow {
  * session id), marked `imageOmitted` / `urlOmitted` like the `endpoint.login.*` events.
  */
 function eventSafeLoginPayload(payload: Record<string, unknown>): Record<string, unknown> {
-  if (payload.image === undefined && payload.url === undefined) return payload;
-  const { image, url, ...rest } = payload;
-  return {
-    ...rest,
-    ...(image !== undefined ? { imageOmitted: true } : {}),
-    ...(url !== undefined ? { urlOmitted: true } : {}),
-  };
+  // Allow-list: only the message survives; legacy adapters may put sid / ticket / device anywhere.
+  const safe: Record<string, unknown> = {};
+  if (typeof payload.message === 'string') safe.message = payload.message;
+  if (payload.image !== undefined) safe.imageOmitted = true;
+  if (payload.url !== undefined) safe.urlOmitted = true;
+  if (Object.keys(payload).some((key) => key !== 'message' && key !== 'image' && key !== 'url')) safe.fieldsOmitted = true;
+  return safe;
 }
 
 function inScope(scope: LoginScope, item: { readonly adapter: string; readonly endpointKey: string }): boolean {

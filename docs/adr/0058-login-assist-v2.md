@@ -154,7 +154,7 @@ Console 新版提交时带 `wait: true`：主机最多等 15 秒，回 `{ accept
 | `login.submit`、`login.cancel`、`login.relogin`、`login.refresh` | `endpoint.operate` |
 
 - 请求带 `adapter` + `endpointKey` 时按账号授权，账号范围的操作员也能处理自己的账号；主机校验任务确实属于这个账号，否则当作找不到。
-- 读接口按账号脱敏：`login.list`、`login.flow.list`、`login.flow.get` 只有在调用方对该账号有 `endpoint.operate`（所有者、全局操作员、该账号或其适配器范围的操作员）时才返回活动挑战的原始材料（二维码图片、敏感复制块、带会话 id 的验证链接 / captcha，旧任务的 `payload.image` / `payload.url`）。只有 `endpoint.view` 的只读调用方拿到与事件相同的安全形式：流程经核心 `withoutLoginMedia`（`qrImageOmitted` / `linkOmitted`、敏感块 `redacted: true`），旧任务改为 `imageOmitted` / `urlOmitted`。判断逐个账号进行，由分发器根据已认证的主体计算，不读请求体；权限表和审计不变。
+- 读接口按账号脱敏：`login.list`、`login.flow.list`、`login.flow.get` 只有在调用方对该账号有 `endpoint.operate`（所有者、全局操作员、该账号或其适配器范围的操作员）时才返回活动挑战的原始材料（二维码图片、敏感复制块、带会话 id 的验证链接 / captcha，旧任务的 `payload.image` / `payload.url`）。只有 `endpoint.view` 的只读调用方拿到与事件相同的安全形式：流程经核心 `withoutLoginMedia`（`qrImageOmitted` / `linkOmitted`、敏感块 `redacted: true`），旧任务的 payload 按白名单只保留 `message`，`image` / `url` 改为 `imageOmitted` / `urlOmitted`，其它字段一律丢弃并标 `fieldsOmitted`。验证链接（`media.link`、`media.captcha`、`link` 块）对所有挑战类型都去掉，不按 kind 区分。判断逐个账号进行，由分发器根据已认证的主体计算，不读请求体；权限表和审计不变。
 - 新事件 `endpoint.login.flow` 和其它 Console 事件一样走 `/api/events`（`status.view`）；事件里没有二维码图片（`qrImageOmitted: true`）和敏感块。它不是独立的 WebSocket，所以 `CONSOLE_WS_PERMISSIONS` 不变。
 - 写操作照常进审计：操作者、`rpc:login.*`、目标账号（请求带账号时）、成败，再加结果类别（`accepted` / `rejected` / `pending` / `unsupported` 与错误码）。从不记录值和结果文本。
 - 快照、事件、日志、终端时间线都不含提交的值；二维码只挂在活动挑战上，结束即删除。
