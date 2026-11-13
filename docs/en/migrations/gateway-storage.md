@@ -33,7 +33,7 @@ After the migration (or the decision that there was nothing to migrate) the gate
 - restore `.zhin/gateway.db` from a backup;
 - accept that the old accounts are gone: `zhin stop`, then `zhin console init --reset-store` (asks for confirmation; `--yes` skips it). It points the marker at the current gateway.db, records `auth.store.reset` in the new audit log and continues with the normal setup.
 
-redis / memory projects have nowhere to keep the marker: persisting `.zhin/` matters even more there.
+On the first start of a SQLite project the instance has not created the project database file yet; the gateway creates it (same path) to write the marker. redis / memory projects have nowhere to keep the marker: persisting `.zhin/` matters even more there. When the current gateway.db already holds accounts, `--reset-store` only points the marker at it and deletes nothing.
 
 Old passwords, sessions and API tokens keep working after the migration; nobody has to sign in again.
 
@@ -77,6 +77,7 @@ database:
 - If the main account may not create accounts (common on managed databases): `zhin db console-role --print-sql` only prints the SQL (the password is the placeholder `<ZHIN_DB_CONSOLE_PASSWORD>`, the real value is in `.env`); have a DBA run it, then `zhin restart`;
 - `zhin doctor --fix` does the same;
 - At start the instance only **probes** the account (not a superuser, cannot create roles / databases / schemas, cannot create objects in any schema, owns no object, role settings unchanged, member of no other role, on MySQL privileges on this database only and no roles or PROXY grants, …); if it fails, the SQL editor is off with the reason and the probe runs again at most every 5 minutes. A healthy account is probed again every 60 seconds and before the first use after an error on its connection. On PostgreSQL the main account also grants it access to tables created since and revokes anything on gateway tables;
+- The probe also turns the SQL editor off when the account can execute server file / remote functions (`pg_read_file`, `pg_ls_dir`, `lo_export`, `dblink*`, …), use tables outside schema `public`, owns large objects, or holds any column privilege on a gateway table. On managed PostgreSQL where an extension (e.g. dblink) leaves such functions executable by PUBLIC, the SQL editor stays off until you revoke them;
 - On PostgreSQL the probe turns the SQL editor off when the account can execute a SECURITY DEFINER function owned by another role (PUBLIC may execute every function by default; extension functions count too): such functions run with their owner's rights. `zhin db console-role` does not change this for you (it would affect other users); for each function the instance log names, run `REVOKE EXECUTE ON FUNCTION <schema>.<function>(<argument types>) FROM PUBLIC`, grant it only to the roles that need it, then `zhin restart`;
 - Restrict the account to the instance's host in `pg_hba.conf` (or the host part of the MySQL account). On PostgreSQL the account is created with a client-computed SCRAM verifier, so the `--print-sql` output can go to a DBA as is;
 - **On PostgreSQL the SQL editor cannot run DDL** (`CREATE` / `ALTER` / `DROP` answer 42501 insufficient privilege): use the Console schema editor;

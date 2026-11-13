@@ -23,6 +23,8 @@ import { ConsoleSetupService, type SetupDatabaseField, type SetupDriver } from '
 import {
   importLegacyIamTables,
   LegacyImportError,
+  legacyImportSettled,
+  readLegacyImportRecord,
   resetGatewayStore,
   revertLegacyIamImport,
   type LegacyImportInspection,
@@ -490,18 +492,23 @@ async function resetStoreStep(projectRoot: string, options: ConsoleInitOptions, 
     io.error('网关正在运行：先 zhin stop，再运行 zhin console init --reset-store');
     return 1;
   }
-  if (!options.yes) {
-    const { confirm } = await io.prompt<{ confirm: boolean }>([{
-      type: 'confirm', name: 'confirm', default: false,
-      message: '项目数据库记录的 Console 账号存储（.zhin/gateway.db）已不可用。重置会放弃原来的全部 Console 账号、会话、API 令牌与审计，并重新开放初始化。确定吗？',
-    }]);
-    if (!confirm) {
-      io.error('已取消');
-      return 1;
-    }
-  }
   const store = await openGatewayStore(projectRoot);
   try {
+    if (!options.yes) {
+      // A store that already holds accounts loses nothing: only the marker is pointed at it.
+      const counts = await store.counts();
+      const healthy = legacyImportSettled(await readLegacyImportRecord(store)) && (counts.console_users ?? 0) > 0;
+      const { confirm } = await io.prompt<{ confirm: boolean }>([{
+        type: 'confirm', name: 'confirm', default: false,
+        message: healthy
+          ? `当前 .zhin/gateway.db（store ${store.storeId}）有 ${counts.console_users} 个 Console 账号：重置只把项目数据库的标记改为指向它，不删除任何账号。确定吗？`
+          : '项目数据库记录的 Console 账号存储（.zhin/gateway.db）已不可用。重置会放弃原来的全部 Console 账号、会话、API 令牌与审计，并重新开放初始化。确定吗？',
+      }]);
+      if (!confirm) {
+        io.error('已取消');
+        return 1;
+      }
+    }
     const result = await resetGatewayStore({ store, projectRoot, projectDatabase: () => projectDatabaseOf(projectRoot) });
     io.log(`已重置 Console 账号存储：项目数据库现在指向 store ${result.storeId}${result.previousStoreId ? `（原 store ${result.previousStoreId}）` : ''}，已写入审计日志。`);
     return 0;

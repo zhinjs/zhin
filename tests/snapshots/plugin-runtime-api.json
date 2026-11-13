@@ -300,7 +300,7 @@
     "export{createLocalConsoleAdmin,type LocalConsoleAdmin,type LocalConsoleAdminOptions,type LocalConsoleAdminResult}from './local-admin.js';",
     "export{defineConsoleIamTables,IAM_TABLE_DEFINITIONS,IAM_TABLES,type IamTableHost}from './tables.js';",
     "export{dispatchIamRpc,isIamRpc}from './rpc.js';",
-    "export{importLegacyIamTables,isTransientLegacyImportError,LEGACY_IMPORT_FAILURE_KEY,resetGatewayStore,type LegacyImportFailure,inspectLegacyIamImport,LEGACY_IMPORT_KEY,LegacyImportError,legacyImportSettled,readLegacyImportRecord,revertLegacyIamImport,tableChecksum,type LegacyIamSource,type LegacyImportErrorCode,type LegacyImportInspection,type LegacyImportOptions,type LegacyImportRecord,type LegacySourceSummary,type RevertLegacyImportResult,}from './legacy-import.js';",
+    "export{importLegacyIamTables,ensureGatewayStoreMarker,isTransientLegacyImportError,LEGACY_IMPORT_FAILURE_KEY,resetGatewayStore,type LegacyImportFailure,inspectLegacyIamImport,LEGACY_IMPORT_KEY,LegacyImportError,legacyImportSettled,readLegacyImportRecord,revertLegacyIamImport,tableChecksum,type LegacyIamSource,type LegacyImportErrorCode,type LegacyImportInspection,type LegacyImportOptions,type LegacyImportRecord,type LegacySourceSummary,type RevertLegacyImportResult,}from './legacy-import.js';",
     "export{installConsoleIam,projectEnvironment,type ConsoleIamInstallation,type InstallConsoleIamOptions}from './install.js';",
     "export{registerConsoleAuthRoutes}from './routes.js';"
   ],

@@ -51,6 +51,15 @@ describe('computeReadOnlyOverlays', () => {
     expect(t['src/index.ts']).toBeUndefined();
   });
 
+  it('hides an existing .zhin/ behind an empty read-only tmpfs (gateway.db, keys; ADR 0059 §7)', async () => {
+    touch('.zhin/gateway.db', 'SECRET');
+    touch('.zhin/keys/config-secrets.key', 'KEY');
+    const paths = await createHostProtectedPaths({ projectRoot: root });
+    const overlays = computeReadOnlyOverlays(root, toProtectedPathData(paths));
+    expect(targets(overlays)['.zhin']).toBe('tmpfs-dir');
+    expect(overlays.some(overlay => overlay.source?.includes('.zhin'))).toBe(false);
+  });
+
   it('does not tmpfs a missing .git', async () => {
     const paths = await createHostProtectedPaths({ projectRoot: root });
     expect(targets(computeReadOnlyOverlays(root, toProtectedPathData(paths)))['.git']).toBeUndefined();

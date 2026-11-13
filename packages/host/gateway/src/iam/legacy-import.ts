@@ -17,7 +17,6 @@ import type { GatewayStore } from '../database/gateway-store.js';
 import {
   ProjectDatabase,
   quoteTableName,
-  isDatabaseBusyError,
   type ProjectDatabaseTransaction,
   type StoreMarker,
   type TableRows,
@@ -94,22 +93,13 @@ export interface LegacyImportFailure {
   readonly at: number;
 }
 
-/** Network / server-gone errors of a driver: the import may succeed later. */
-function isTransientDriverError(error: unknown): boolean {
-  for (let current = error, depth = 0; current && depth < 4; depth += 1) {
-    if (isDatabaseBusyError(current)) return true;
-    const code = String((current as { code?: unknown }).code ?? '');
-    if (/^(?:ECONN|ETIMEDOUT|EPIPE|ENOTFOUND|EAI_AGAIN|EHOSTUNREACH|PROTOCOL_CONNECTION_LOST)/u.test(code) || /^(?:08|57P0)/u.test(code)) return true;
-    current = (current as { cause?: unknown }).cause;
-  }
-  return false;
-}
-
 /** A `LegacyImportError` for whatever went wrong while copying / dropping. */
 function classify(error: unknown): LegacyImportError {
   if (error instanceof LegacyImportError) return error;
-  if (isTransientDriverError(error)) return new LegacyImportError('unavailable', `项目数据库暂时不可用：${errorText(error)}`, { cause: error });
-  return new LegacyImportError('invalid', `旧版 Console 账号表无法迁移：${errorText(error)}`, { cause: error });
+  // Only what this module decided is permanent (conflict, mismatch, invalid rows, store_lost /
+  // store_mismatch). Any driver error — connection terminated, statement / lock timeout,
+  // serialization failure, deadlock, too many connections, a network error — may pass: retried.
+  return new LegacyImportError('unavailable', `项目数据库暂时不可用：${errorText(error)}`, { cause: error });
 }
 
 /** What the import reads and drops (ProjectDatabase satisfies it). */
@@ -293,8 +283,10 @@ async function readStoreTable(trx: ProjectDatabaseTransaction, table: string, co
 function markerCapable(config: ProjectDatabaseConfig): boolean {
   if (!SOURCE_DIALECTS.has(config.dialect)) return false;
   const filename = (config as { filename?: unknown }).filename;
-  // Never create the project SQLite file just for the marker; it is written once the file exists.
-  return !(config.dialect === 'sqlite' && typeof filename === 'string' && (filename === ':memory:' || !existsSync(filename)));
+  // A SQLite project file that does not exist yet is created (directory included, as the instance
+  // would) for the marker: the instance creates it only after the gateway's first connect, and a
+  // first run without a marker would let a later loss of gateway.db reopen setup.
+  return !(config.dialect === 'sqlite' && (filename === ':memory:' || filename === '' || (typeof filename === 'string' && filename.startsWith('file::memory:'))));
 }
 
 function storeLostMessage(marker: StoreMarker, storeId: string): string {
@@ -409,6 +401,21 @@ async function importOnce(options: LegacyImportOptions): Promise<LegacyImportRec
  * `store_mismatch`. An unreachable project database is not an error here: this gateway.db is
  * intact, and the marker is checked again on the next start.
  */
+/**
+ * Writes the marker if it is missing for a settled store (the gateway calls it again after the
+ * first owner was created and after the supervised instance first reported ready). A store whose
+ * import has not settled is left alone; errors are logged, never thrown, except `store_mismatch`.
+ */
+export async function ensureGatewayStoreMarker(options: LegacyImportOptions): Promise<void> {
+  if (!legacyImportSettled(await readLegacyImportRecord(options.store))) return;
+  try {
+    await verifyStoreMarker(options, options.now ?? Date.now);
+  } catch (error) {
+    if (error instanceof LegacyImportError && error.code === 'store_mismatch') throw error;
+    options.logger?.warn?.(`console iam: cannot check the gateway store marker in the project database: ${errorText(error)}`);
+  }
+}
+
 async function verifyStoreMarker(options: LegacyImportOptions, now: () => number): Promise<void> {
   let config: ProjectDatabaseConfig;
   try {

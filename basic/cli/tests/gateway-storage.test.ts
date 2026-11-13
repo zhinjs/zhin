@@ -91,11 +91,15 @@ describe.runIf(process.platform !== 'win32')('zhin console without a gateway (AD
     expect(await projectTables(root)).toEqual([]);
   });
 
-  it('user commands on a fresh project never create the project database file', async () => {
+  it('user commands on a fresh project create gateway.db and the store marker in the project database (ADR 0059 §3)', async () => {
     const root = await project();
     expect(await consoleUserActions.list(root, io())).toBe(0);
     expect(existsSync(path.join(root, '.zhin', 'gateway.db'))).toBe(true);
-    expect(existsSync(path.join(root, '.zhin', 'data.sqlite'))).toBe(false);
+    // The SQLite project file is created for the marker, so losing gateway.db later is noticed.
+    const db = new ProjectDatabase({ dialect: 'sqlite', filename: path.join(root, '.zhin', 'data.sqlite') });
+    await db.start();
+    expect(await db.readStoreMarker()).toMatchObject({ storeId: expect.stringMatching(/^[0-9a-f]{32}$/u) });
+    await db.stop();
   });
 
   it('reports an unreachable project database instead of opening access control', async () => {

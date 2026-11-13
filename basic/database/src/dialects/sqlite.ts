@@ -167,8 +167,15 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
   /** Worker of the isolated read in flight (also while a terminated one is still unwinding). */
   private isolatedReader: { readonly child: import('node:child_process').ChildProcess; readonly exited: Promise<void>; killed: boolean } | null = null;
 
+  /**
+   * Captured once at construction: later changes to `config` (a plugin holding the config object)
+   * cannot turn the ATTACH check off.
+   */
+  readonly #denyAttach: boolean;
+
   constructor(config: SQLiteDialectConfig) {
     super('sqlite', config);
+    this.#denyAttach = config.denyAttach === true;
   }
 
   isConnected(): boolean {
@@ -184,7 +191,7 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
       if (!fs.existsSync(dirname)) {
         fs.mkdirSync(dirname, { recursive: true });
       }
-      const deny = this.config.denyAttach === true;
+      const deny = this.#denyAttach;
       // `limits.attach = 0` where Node honours it (ignored by Node 22); the database_list check is the defense.
       const db = deny ? new DatabaseSync(this.config.filename, { limits: { attach: 0 } }) : new DatabaseSync(this.config.filename);
       try {
@@ -277,7 +284,7 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
           finish(Object.assign(new Error(message.message ?? 'SQLite query failed'), { code: message.code, errcode: message.errcode }));
         }
       });
-      child.send({ filename: this.config.filename, sql, maxRows: options.maxRows, deadline: Date.now() + options.timeoutMs, json, denyAttach: this.config.denyAttach === true }, error => {
+      child.send({ filename: this.config.filename, sql, maxRows: options.maxRows, deadline: Date.now() + options.timeoutMs, json, denyAttach: this.#denyAttach }, error => {
         if (error) { kill(); finish(error); }
       });
     });
@@ -370,7 +377,7 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
    * locks); then every extra schema is detached.
    */
   private assertNotAttached(): void {
-    if (this.config.denyAttach !== true || !this.#db) return;
+    if (!this.#denyAttach || !this.#db) return;
     const extra = attachedSchemas(this.#db);
     if (!extra.length) return;
     if (this.currentTransaction) {

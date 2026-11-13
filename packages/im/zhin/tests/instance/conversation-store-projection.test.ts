@@ -21,7 +21,8 @@ async function fixture(legacy = false) {
   if (!legacy) await migrateConversationColumns(raw);
   const events = host.models.get('conversation_events')!;
   const store = new DatabaseConversationEventStore(events, host.models.get('conversation_event_cursors')!);
-  return { host, raw, events, store };
+  // Instrument the registry itself (`host.db`): the plugin-facing raw handle is a frozen facade.
+  return { host, raw, db: host.db as unknown as StructuredDatabase, events, store };
 }
 afterEach(async () => {
   for (const { host, directory } of resources.splice(0)) { await host.stop(); await rm(directory, { recursive: true, force: true }); }
@@ -63,8 +64,8 @@ it('bounds fetched JSON bodies and query rounds by page identities rather than a
   const f = await fixture();
   await f.store.append(created('a')); await f.store.append(created('b'));
   for (let revision = 1; revision <= 100; revision++) await f.store.append(updated('a', revision, `body ${revision}`));
-  const query = f.raw.query.bind(f.raw), reads: number[] = [], statements: string[] = [];
-  vi.spyOn(f.raw, 'query').mockImplementation(async (sql, params) => {
+  const query = f.db.query.bind(f.db), reads: number[] = [], statements: string[] = [];
+  vi.spyOn(f.db, 'query').mockImplementation(async (sql, params) => {
     const rows = await query(sql, params);
     statements.push(String(sql));
     if (String(sql).startsWith('SELECT') && String(sql).includes('"event_json"')) reads.push(Array.isArray(rows) ? rows.length : 0);
@@ -113,9 +114,9 @@ it('uses the earliest recall across encoded and legacy key aliases before select
 it('uses one read high-water mark when recall and a newer update arrive between projection queries', async () => {
   const f = await fixture();
   await f.store.append(created('a')); await f.store.append(updated('a', 1, 'before recall'));
-  const query = f.raw.query.bind(f.raw);
+  const query = f.db.query.bind(f.db);
   let inject = true;
-  vi.spyOn(f.raw, 'query').mockImplementation(async (sql, params) => {
+  vi.spyOn(f.db, 'query').mockImplementation(async (sql, params) => {
     const rows = await query(sql, params);
     if (inject && String(sql).includes('MIN(') && String(sql).includes('GROUP BY')) {
       inject = false;
@@ -153,8 +154,8 @@ it.each(['encoded-update', 'legacy-key-update', 'empty-key-recall'] as const)(
 
 it('surfaces NULL-metadata probe failures instead of treating them as indexed absence', async () => {
   const f = await fixture(); await f.store.append(created('a'));
-  const query = f.raw.query.bind(f.raw);
-  vi.spyOn(f.raw, 'query').mockImplementation(async (sql, params) => {
+  const query = f.db.query.bind(f.db);
+  vi.spyOn(f.db, 'query').mockImplementation(async (sql, params) => {
     if (String(sql).includes('"message_revision" IS NULL')) throw new Error('synthetic metadata lookup failure');
     return query(sql, params);
   });
@@ -164,8 +165,8 @@ it('surfaces NULL-metadata probe failures instead of treating them as indexed ab
 it('defers an old-version write arriving after the probe to the next bounded read', async () => {
   const f = await fixture(); await f.store.append(created('a')); await f.store.append(updated('a', 1, 'indexed'));
   const [identity] = await f.events.select('conversation_key', 'message_key').where({ event_type: 'message.created' });
-  const query = f.raw.query.bind(f.raw); let inject = true;
-  vi.spyOn(f.raw, 'query').mockImplementation(async (sql, params) => {
+  const query = f.db.query.bind(f.db); let inject = true;
+  vi.spyOn(f.db, 'query').mockImplementation(async (sql, params) => {
     const rows = await query(sql, params);
     if (inject && String(sql).includes('"message_revision" IS NULL')) {
       inject = false;
@@ -189,8 +190,8 @@ it('seeks past each completed backfill batch and starts fresh on repeated migrat
       message_key: '', event_json: JSON.stringify(event), time: event.timestamp });
   }
   const before = await f.events.select('id', 'event_json').orderBy('id');
-  const query = f.raw.query.bind(f.raw), batches: number[][] = [], plans: string[][] = [];
-  const statements = vi.spyOn(f.raw, 'query').mockImplementation(async (sql, params) => {
+  const query = f.db.query.bind(f.db), batches: number[][] = [], plans: string[][] = [];
+  const statements = vi.spyOn(f.db, 'query').mockImplementation(async (sql, params) => {
     const rows = await query(sql, params);
     if (String(sql).startsWith('SELECT') && String(sql).includes('"event_json"') && String(sql).includes('"message_revision" IS NULL')) {
       batches.push((rows as Record<string, unknown>[]).map(row => Number(row.id)));

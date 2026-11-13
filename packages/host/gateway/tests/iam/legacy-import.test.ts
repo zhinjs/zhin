@@ -105,7 +105,9 @@ describe('importLegacyIamTables', () => {
     const target = await store(root);
     const record = await importLegacyIamTables({ store: target, projectRoot: root, projectDatabase: async () => config });
     expect(record).toMatchObject({ status: 'fresh', reason: 'no-database-file', source: { dialect: 'sqlite', location: join('.zhin', 'data.sqlite') } });
-    expect(existsSync(config.filename as string)).toBe(false);
+    // The file is then created for the store marker only (no console_* table in it).
+    expect(existsSync(config.filename as string)).toBe(true);
+    expect(await legacyTables(config)).toEqual([]);
 
     const other = await project();
     const existing = new ProjectDatabase(other.config);

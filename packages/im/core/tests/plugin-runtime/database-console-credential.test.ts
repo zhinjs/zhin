@@ -272,7 +272,13 @@ describe('raw database handle of plugins (frozen view)', () => {
       expect(raw.models.has('notes')).toBe(true);
       const model = raw.models.get('notes')!;
       expect(model.database).toBeUndefined();
-      expect(() => raw.models.set('x', {})).toThrow(/read-only/);
+      expect((raw.models as unknown as Record<string, unknown>).set).toBeUndefined();
+      // Every way of reading the map hands out wrapped models.
+      expect([...raw.models.values()].every(entry => (entry as Record<string, unknown>).database === undefined)).toBe(true);
+      raw.models.forEach(entry => { expect((entry as Record<string, unknown>).database).toBeUndefined(); });
+      const builder = (raw as unknown as { select(table: string, fields: string[]): Record<string, unknown> }).select('notes', ['id']);
+      expect([builder.dialect, builder.database]).toEqual([undefined, undefined]);
+      expect(Object.isFrozen(raw)).toBe(true);
       expect(() => raw.models.get('console_users')).toThrow(/management gateway/);
       expect(await raw.query('SELECT id FROM notes')).toEqual([]);
       await expect(raw.query(`ATTACH DATABASE '${join(directory, 'gateway.db')}' AS g`)).rejects.toThrow(/ATTACH DATABASE is not allowed/);

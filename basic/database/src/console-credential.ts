@@ -332,8 +332,8 @@ export function mysqlRoleAndProxyGrants(lines: readonly string[]): { readonly ro
   for (const line of lines) {
     const proxy = /^GRANT\s+PROXY\s+ON\s+(.+?)\s+TO\s/iu.exec(line);
     if (proxy) { proxies.push(proxy[1]!); continue; }
-    // A role grant has no ON clause: GRANT `r1`@`%`,`r2`@`%` TO `u`@`h`.
-    const role = /^GRANT\s+((?:[`'][^`']*[`']@[`'][^`']*[`']\s*,?\s*)+)\s+TO\s/iu.exec(line);
+    // A role grant has no ON clause: GRANT `r1`@`%`,`r2`@`%` TO `u`@`h` (MariaDB: GRANT `r1` TO …, no host).
+    const role = /^GRANT\s+((?:[`'][^`']*[`'](?:@[`'][^`']*[`'])?\s*,?\s*)+)\s+TO\s/iu.exec(line);
     if (role && !/\sON\s/iu.test(line.slice(0, line.search(/\sTO\s/iu)))) {
       roles.push(...role[1]!.split(/,\s*/u).map(entry => entry.trim()).filter(Boolean));
     }
@@ -383,6 +383,18 @@ export const PG_DEFINER_FUNCTIONS_LOGGED = 5;
  */
 export const PG_DEFINER_FUNCTION_PROBLEM = 'the console user can execute SECURITY DEFINER functions owned by other roles (they run with the owner\'s rights): '
   + 'REVOKE EXECUTE ON FUNCTION <schema>.<function>(…) FROM PUBLIC, or grant EXECUTE only to the roles that need it; the instance log names the functions';
+
+/**
+ * Functions that read or write server files or reach other servers (`pg_ls_*`, `pg_read_file`,
+ * `pg_read_binary_file`, `pg_stat_file`, server-side `lo_import` / `lo_export`, adminpack
+ * `pg_file_*`, `dblink*`): none of them may be executable by the console account (they are
+ * revoked from PUBLIC by default; an explicit grant or an extension that grants them is refused).
+ */
+export const PG_FILE_FUNCTIONS_QUERY = `SELECT DISTINCT p.proname AS name FROM pg_proc p
+    WHERE (p.proname LIKE 'pg\\_ls\\_%' OR p.proname IN ('pg_read_file', 'pg_read_binary_file', 'pg_stat_file', 'lo_import', 'lo_export')
+      OR p.proname LIKE 'pg\\_file\\_%' OR p.proname LIKE 'dblink%')
+      AND has_function_privilege(current_user, p.oid, 'EXECUTE')
+    ORDER BY 1`;
 
 /** The query behind {@link PG_DEFINER_FUNCTION_PROBLEM} (at most PG_DEFINER_FUNCTIONS_LOGGED + 1 rows). */
 export const PG_DEFINER_FUNCTIONS_QUERY = `SELECT n.nspname AS schema, p.proname AS name FROM pg_proc p
@@ -456,10 +468,24 @@ async function probePg(run: ConsoleSqlRunner, options: ProbeConsoleCredentialOpt
   if (JSON.stringify([...settings].sort()) !== JSON.stringify(expected)) {
     problems.push(`the console user's role settings are ${JSON.stringify(settings)}, expected ${JSON.stringify(expected)}`);
   }
+  // Column-level grants count too (GRANT UPDATE (store_id) ON zhin_gateway_store …).
   const gatewayTables = rows(await run(`SELECT c.relname AS name FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-    WHERE c.relkind IN ('r', 'p', 'v', 'm', 'f') AND has_table_privilege(current_user, c.oid, 'SELECT, INSERT, UPDATE, DELETE, TRUNCATE')`))
+    WHERE c.relkind IN ('r', 'p', 'v', 'm', 'f') AND (has_table_privilege(current_user, c.oid, 'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER')
+      OR has_any_column_privilege(current_user, c.oid, 'SELECT, INSERT, UPDATE, REFERENCES'))`))
     .map(row => String(row.name)).filter(name => isGatewayOwnedTable(name));
   if (gatewayTables.length) problems.push(`the console user can reach gateway tables: ${gatewayTables.join(', ')}`);
+  // Grants beyond the project schema (another schema's tables / views it can use).
+  const elsewhere = rows(await run(`SELECT DISTINCT n.nspname AS schema FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname NOT IN ('public', 'pg_catalog', 'information_schema') AND ${temp} AND n.nspname <> 'pg_toast'
+      AND c.relkind IN ('r', 'p', 'v', 'm', 'f') AND has_schema_privilege(current_user, n.oid, 'USAGE')
+      AND (has_table_privilege(current_user, c.oid, 'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER')
+        OR has_any_column_privilege(current_user, c.oid, 'SELECT, INSERT, UPDATE, REFERENCES'))
+    ORDER BY 1 LIMIT 5`)).map(row => String(row.schema));
+  if (elsewhere.length) problems.push(`the console user can use tables outside schema public: ${elsewhere.join(', ')}`);
+  const fileFunctions = rows(await run(PG_FILE_FUNCTIONS_QUERY)).map(row => String(row.name));
+  if (fileFunctions.length) problems.push(`the console user may execute server file / remote functions: ${[...new Set(fileFunctions)].join(', ')}`);
+  const largeObjects = firstRow(await run(`SELECT count(*)::int AS n FROM pg_largeobject_metadata WHERE lomowner = (SELECT oid FROM pg_roles WHERE rolname = current_user)`));
+  if (Number(largeObjects.n ?? 0) > 0) problems.push(`the console user owns large objects (${largeObjects.n})`);
   const definers = rows(await run(PG_DEFINER_FUNCTIONS_QUERY)).map(row => `${String(row.schema)}.${String(row.name)}`);
   const details: string[] = [];
   if (definers.length) {
@@ -578,7 +604,8 @@ const MYSQL_URI_KEPT_PARAMS: ReadonlySet<string> = new Set(['charset', 'timezone
  */
 export function consoleConnectionOptions(dialect: ConsoleCredentialDialect, main: Readonly<Record<string, unknown>>, credential: ConsoleCredential): Record<string, unknown> {
   const {
-    user: _user, password: _password, connectionString, uri, pool: _pool, options: _options,
+    user: _user, password: _password, password1: _password1, password2: _password2, password3: _password3, passwordSha1: _passwordSha1,
+    connectionString, uri, pool: _pool, options: _options,
     flags: _flags, multipleStatements: _multiple, infileStreamFactory: _infile, localInfile: _localInfile,
     resetSession: _reset, console: _console, ...rest
   } = main;

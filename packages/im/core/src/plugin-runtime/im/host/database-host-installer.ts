@@ -199,6 +199,8 @@ export interface DatabaseHostInternalOptions {
 export const CONSOLE_CREDENTIAL_RETRY_MS = 5 * 60_000;
 /** How long a successful probe is trusted (raw SQL probes again after this, and after any error). */
 export const CONSOLE_CREDENTIAL_TTL_MS = 60_000;
+/** Minimum time between error-triggered re-probes. */
+export const CONSOLE_CREDENTIAL_STALE_MIN_MS = 30_000;
 
 /** Why raw SQL is off on PostgreSQL / MySQL without a restricted account. */
 export const CONSOLE_ROLE_MISSING_REASON = 'Raw SQL on PostgreSQL / MySQL runs only on a restricted database account: run `zhin db console-role` (or `zhin doctor --fix`; `--print-sql` for a DBA) and restart';
@@ -530,7 +532,9 @@ function createDatabaseConsole(
     if (!sqlDialect || sqlDialect === 'sqlite' || !sqlOptions.restricted || !isStarted()) return;
     const now = sqlOptions.now();
     const healthy = restrictedDb !== undefined && accessProblem === undefined;
-    if (!force && healthy && !probeStale && lastProbeAt !== undefined && now - lastProbeAt < sqlOptions.ttlMs) return;
+    // After an error the next use probes again, but not more often than every 30 s (a burst of
+    // failing statements does not turn into a burst of probes and grant refreshes).
+    if (!force && healthy && lastProbeAt !== undefined && now - lastProbeAt < (probeStale ? CONSOLE_CREDENTIAL_STALE_MIN_MS : sqlOptions.ttlMs)) return;
     if (!force && !healthy && lastProbeAt !== undefined && now - lastProbeAt < sqlOptions.retryMs) return;
     lastProbeAt = now;
     probeStale = false;
@@ -1043,92 +1047,105 @@ function jsonSafeRow(row: Record<string, unknown>): Record<string, unknown> {
  * Root-only raw registry with the gateway's tables cut off: raw SQL naming them and table-name
  * arguments (`model`, `define`, `select`, …) are refused. Methods run on the real registry.
  */
-/** Data properties of the raw registry a plugin may read through the guarded handle. */
-const RAW_DATABASE_READABLE: ReadonlySet<PropertyKey> = new Set(['models', 'dialectName', 'isStarted', 'hasStarted', 'definitions']);
-/** Properties of a model that lead back to the registry, its dialect or the driver. */
-const MODEL_INTERNALS: ReadonlySet<PropertyKey> = new Set(['database', 'dialect', 'db', 'config']);
-
-/** A model without its way back to the registry / dialect / driver handle. */
-function guardRawModel<T extends object>(model: T): T {
-  return new Proxy(model, {
-    get(target, property) {
-      if (MODEL_INTERNALS.has(property)) return undefined;
-      const value = Reflect.get(target, property, target);
-      return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(target) : value;
-    },
-    set: () => false,
-    defineProperty: () => false,
-    deleteProperty: () => false,
-  });
+/** Kinds of values a facade passes through unchanged (data, not handles). */
+function isPlainData(value: unknown): boolean {
+  if (value === null || typeof value !== 'object') return true;
+  if (Array.isArray(value) || value instanceof Date || value instanceof Uint8Array || value instanceof RegExp || value instanceof Error) return true;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
 }
 
-/** Read-only view of the registry's model map whose models are guarded too. */
-function guardModelMap(models: Map<string, unknown>): Map<string, unknown> {
-  return new Proxy(models, {
-    get(target, property) {
-      if (property === 'get') return (name: string) => { assertInstanceTable(name); const model = target.get(name); return model && typeof model === 'object' ? guardRawModel(model) : model; };
-      if (property === 'set' || property === 'delete' || property === 'clear') return () => { throw new TypeError('The model map of the raw database handle is read-only'); };
-      if (property === 'size') return target.size;
-      const value = Reflect.get(target, property, target);
-      return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(target) : value;
-    },
-  });
+/** Properties a facade never exposes, whatever object it wraps. */
+const FACADE_HIDDEN: ReadonlySet<string> = new Set(['constructor', 'dialect', 'database', 'db', 'config', 'transactionContext', 'connection', 'pool']);
+
+interface FacadeGuard {
+  /** Checked before every call with the method name and its arguments. */
+  (method: string, args: readonly unknown[]): void;
 }
 
 /**
- * Root-only raw registry with the gateway's tables cut off: raw SQL naming them and table-name
- * arguments (`model`, `define`, `select`, …) are refused. Methods run on the real registry. Data
- * properties are a frozen view: the dialect, its config and the driver handle (`dialect`, `config`,
- * `db`, …) are not reachable from it, so the handle cannot turn off `denyAttach` or reach the raw
- * `node:sqlite` connection. Plugins are trusted code in the same process and user (ADR 0059 §1):
- * this keeps accidental and Console / Agent-driven access off the gateway's data, it does not
- * contain a malicious plugin.
+ * A frozen object exposing only the methods (and primitive-valued fields) of `target`. Every result
+ * that is itself a handle (a model, a query builder, a transaction context, a Map of models) is
+ * wrapped the same way; function arguments (callbacks) receive wrapped values. Methods are looked
+ * up on `target` at call time, so instrumenting the real object (tests spy on `host.db`) still
+ * works, while nothing reachable from the facade leads back to the dialect, its config or the
+ * driver handle — and the facade itself cannot be modified.
+ */
+function methodFacade(target: object, guard: FacadeGuard, cache: WeakMap<object, unknown>): object {
+  const cached = cache.get(target);
+  if (cached) return cached as object;
+  const facade: Record<PropertyKey, unknown> = Object.create(null);
+  cache.set(target, facade);
+  const wrapValue = (value: unknown): unknown => {
+    if (value === target) return facade;
+    if (value instanceof Promise) return value.then(wrapValue);
+    if (value instanceof Map) return mapFacade(value, guard, cache);
+    if (typeof value === 'function') return (...args: unknown[]) => wrapValue((value as (...values: unknown[]) => unknown)(...args.map(wrapValue)));
+    if (isPlainData(value)) return value;
+    return methodFacade(value as object, guard, cache);
+  };
+  const names = new Set<string>();
+  for (let level: object | null = target; level && level !== Object.prototype; level = Object.getPrototypeOf(level)) {
+    for (const name of Object.getOwnPropertyNames(level)) names.add(name);
+  }
+  for (const name of names) {
+    if (FACADE_HIDDEN.has(name) || name.startsWith('_') || name.startsWith('#')) continue;
+    let probe: unknown;
+    try { probe = Reflect.get(target, name, target); } catch { continue; }
+    if (typeof probe === 'function') {
+      facade[name] = (...args: unknown[]) => {
+        guard(name, args);
+        const method = Reflect.get(target, name, target) as (...values: unknown[]) => unknown;
+        // Callbacks (transactions, `then`) receive wrapped handles.
+        const passed = args.map(arg => (typeof arg === 'function' ? (...inner: unknown[]) => (arg as (...values: unknown[]) => unknown)(...inner.map(wrapValue)) : arg));
+        return wrapValue(method.apply(target, passed));
+      };
+    } else if (probe instanceof Map) {
+      Object.defineProperty(facade, name, { enumerable: true, get: () => mapFacade(Reflect.get(target, name, target) as Map<unknown, unknown>, guard, cache) });
+    } else if (probe === undefined || probe === null || typeof probe !== 'object') {
+      Object.defineProperty(facade, name, { enumerable: true, get: () => { const value = Reflect.get(target, name, target); return value !== null && typeof value === 'object' ? undefined : value; } });
+    }
+  }
+  return Object.freeze(facade);
+}
+
+/** Read-only, fully wrapped view of a Map (every way of reading it: get, iteration, forEach). */
+function mapFacade(map: Map<unknown, unknown>, guard: FacadeGuard, cache: WeakMap<object, unknown>): ReadonlyMap<unknown, unknown> {
+  const cached = cache.get(map);
+  if (cached) return cached as ReadonlyMap<unknown, unknown>;
+  const wrap = (value: unknown) => (isPlainData(value) || typeof value !== 'object' ? value : methodFacade(value as object, guard, cache));
+  const entries = function* (): IterableIterator<[unknown, unknown]> { for (const [key, value] of map) yield [key, wrap(value)]; };
+  const view = Object.freeze({
+    get: (key: unknown) => { guard('get', [key]); return wrap(map.get(key)); },
+    has: (key: unknown) => map.has(key),
+    get size() { return map.size; },
+    keys: () => map.keys(),
+    values: function* () { for (const [, value] of entries()) yield value; },
+    entries,
+    forEach: (callback: (value: unknown, key: unknown, owner: unknown) => void) => { for (const [key, value] of entries()) callback(value, key, view); },
+    [Symbol.iterator]: entries,
+    [Symbol.toStringTag]: 'Map',
+  });
+  cache.set(map, view);
+  return view as unknown as ReadonlyMap<unknown, unknown>;
+}
+
+/**
+ * The raw registry as plugins get it (`getRawDatabase()`): an explicit facade of its methods
+ * (`query`, `transaction` with a wrapped transaction context, `model` / `models` with every Map
+ * read wrapped, `select` / `insert` / `update` / `delete` / … returning wrapped builders), frozen,
+ * with no `dialect`, `database`, `config` or driver handle anywhere behind it. Gateway tables are
+ * refused: raw SQL naming them and table-name arguments. Plugins are trusted code in the same
+ * process and user (ADR 0059 §1): this keeps accidental and Console / Agent-driven access off the
+ * gateway's data; it does not contain a malicious plugin.
  */
 function guardRawDatabase(db: RawDatabase): RawDatabase {
-  const wrapped = new Map<PropertyKey, unknown>();
-  let models: Map<string, unknown> | undefined;
-  return new Proxy(db, {
-    get(target, property) {
-      // Getters run against the real registry (`dialectName` reads `this.dialect`).
-      const value = Reflect.get(target, property, target);
-      if (typeof value !== 'function') {
-        if (!RAW_DATABASE_READABLE.has(property)) return undefined;
-        if (property === 'models' && value instanceof Map) return models ??= guardModelMap(value as Map<string, unknown>);
-        return value;
-      }
-      const cached = wrapped.get(property);
-      if (cached) return cached;
-      const guarded = function (this: unknown, ...args: unknown[]) {
-        const [first] = args;
-        if (property === 'query' && typeof first === 'string' && referencesGatewayOwnedTable(first)) {
-          throw new GatewayOwnedTableError();
-        }
-        if (typeof first === 'string') assertInstanceTable(first);
-        const result = (value as (...values: unknown[]) => unknown).apply(target, args);
-        // `model(name)` hands out the same guarded view as `models.get(name)`.
-        return property === 'model' && result && typeof result === 'object' ? guardRawModel(result as object) : result;
-      };
-      wrapped.set(property, guarded);
-      return guarded;
-    },
-    // Methods may be replaced (instrumentation, tests): the replacement is guarded like the
-    // original. Data properties (`dialect`, `config`, …) cannot be written through the handle.
-    set(target, property, value) {
-      if (typeof value !== 'function' || typeof Reflect.get(target, property, target) !== 'function') return false;
-      wrapped.delete(property);
-      return Reflect.set(target, property, value, target);
-    },
-    defineProperty(target, property, descriptor) {
-      if (typeof descriptor.value !== 'function' || typeof Reflect.get(target, property, target) !== 'function') return false;
-      wrapped.delete(property);
-      return Reflect.defineProperty(target, property, descriptor);
-    },
-    deleteProperty(target, property) {
-      if (typeof Reflect.get(target, property, target) !== 'function') return false;
-      wrapped.delete(property);
-      return Reflect.deleteProperty(target, property);
-    },
-  });
+  const guard: FacadeGuard = (method, args) => {
+    const [first] = args;
+    if (method === 'query' && typeof first === 'string' && referencesGatewayOwnedTable(first)) throw new GatewayOwnedTableError();
+    if (typeof first === 'string') assertInstanceTable(first);
+  };
+  return methodFacade(db, guard, new WeakMap()) as RawDatabase;
 }
 
 function databaseType(dialect: string): 'related' | 'document' | 'keyvalue' {

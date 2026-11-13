@@ -85,13 +85,81 @@ describe('the store marker in the project database', () => {
 
     const fresh = await project();
     const freshStore = await open(fresh.root);
-    // No project file yet: none is created for the marker…
+    // No project file yet (the instance starts after the gateway): it is created for the marker.
     await importLegacyIamTables({ store: freshStore, projectRoot: fresh.root, projectDatabase: async () => fresh.config });
-    expect(existsSync(fresh.config.filename as string)).toBe(false);
-    // …it is written on a later start, once the instance created the file.
-    await createProjectFile(fresh.config);
-    await importLegacyIamTables({ store: freshStore, projectRoot: fresh.root, projectDatabase: async () => fresh.config });
+    expect(existsSync(fresh.config.filename as string)).toBe(true);
     expect(await marker(fresh.config)).toMatchObject({ storeId: freshStore.storeId });
+  });
+
+  it('first run of a SQLite project, then gateway.db is lost: setup stays closed (review m2)', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-store-marker-m2-'));
+    dirs.push(root);
+    const config: ProjectDatabaseConfig = { dialect: 'sqlite', filename: join(root, 'data', 'bot.db') };
+    let store = await openGatewayStore(root);
+    expect(await importLegacyIamTables({ store, projectRoot: root, projectDatabase: async () => config })).toMatchObject({ status: 'fresh' });
+    // The owner is created; the instance starts and uses data/bot.db.
+    const iam = new ConsoleIamService({ database: store, projectRoot: root });
+    await iam.start({ timers: false });
+    await iam.createOwner({ username: 'owner', password: PASSWORD });
+    iam.stop();
+    await createProjectFile(config);
+    await store.close();
+    expect(await marker(config)).toBeDefined();
+    for (const suffix of ['', '-wal', '-shm']) await rm(join(root, '.zhin', `gateway.db${suffix}`), { force: true });
+    store = await open(root);
+    await expect(importLegacyIamTables({ store, projectRoot: root, projectDatabase: async () => config }))
+      .rejects.toSatisfy((error: unknown) => error instanceof LegacyImportError && error.code === 'store_lost');
+  });
+
+  it('the gateway writes a missing marker after the first owner and when the instance first runs', async () => {
+    const { root, config } = await project();
+    const server = new GatewayHttpServer({ http: { host: '127.0.0.1', port: 0 }, instance: { transport: () => undefined, state: () => 'running' } });
+    closers.push(() => server.close());
+    const gateway = await startGatewayConsole({ server, projectRoot: root, database: config, retryMs: 60_000 } as never);
+    closers.push(() => gateway.close());
+    await gateway.ready;
+    // Marker removed behind its back (e.g. the project file was recreated): the next owner / ready event restores it.
+    const db = new ProjectDatabase(config);
+    await db.start();
+    await db.deleteStoreMarker();
+    await db.stop();
+    await gateway.iam()!.createOwner({ username: 'owner', password: PASSWORD });
+    await expect.poll(() => marker(config)).toMatchObject({ storeId: gateway.database()!.storeId });
+    const again = new ProjectDatabase(config);
+    await again.start();
+    await again.deleteStoreMarker();
+    await again.stop();
+    await gateway.ensureStoreMarker();
+    expect(await marker(config)).toMatchObject({ storeId: gateway.database()!.storeId });
+  });
+
+  it('treats every driver error as transient; only its own refusals are permanent (review 5)', async () => {
+    const { root, config } = await project();
+    await seedLegacy(root, config);
+    const store = await open(root);
+    for (const error of [
+      new Error('Connection terminated unexpectedly'),
+      Object.assign(new Error('canceling statement due to statement timeout'), { code: '57014' }),
+      Object.assign(new Error('sorry, too many clients already'), { code: '53300' }),
+      Object.assign(new Error('could not serialize access'), { code: '40001' }),
+      Object.assign(new Error('deadlock detected'), { code: '40P01' }),
+      Object.assign(new Error('Lock wait timeout exceeded'), { code: 'ER_LOCK_WAIT_TIMEOUT', errno: 1205 }),
+      Object.assign(new Error('connection closed'), { name: 'MongoNetworkError' }),
+    ]) {
+      const failing = (cfg: ProjectDatabaseConfig): LegacyIamSource => {
+        const inner = new ProjectDatabase(cfg);
+        return {
+          dialect: cfg.dialect, start: () => inner.start(), stop: () => inner.stop(), dropTables: tables => inner.dropTables(tables),
+          tableExists: names => inner.tableExists(names), readStoreMarker: () => inner.readStoreMarker(),
+          readSnapshot: async () => { throw error; },
+        };
+      };
+      const caught = await importLegacyIamTables({ store, projectRoot: root, projectDatabase: async () => config, openSource: failing }).catch((thrown: unknown) => thrown);
+      expect(caught, error.message).toBeInstanceOf(LegacyImportError);
+      expect((caught as LegacyImportError).code, error.message).toBe('unavailable');
+      expect(isTransientLegacyImportError(caught), error.message).toBe(true);
+    }
+    expect(await store.getMeta('legacy_import_failure')).toBeUndefined();
   });
 
   it('refuses a lost gateway.db instead of reopening setup, until zhin console init --reset-store', async () => {

@@ -146,6 +146,8 @@ export interface ConsoleIamServiceOptions {
    * goes to the logs and to the local owner (`zhin doctor`, `zhin console migrate`).
    */
   readonly unavailableCode?: () => string | undefined;
+  /** Called after the first owner was created (the gateway then makes sure its store marker exists). */
+  readonly onOwnerCreated?: () => void;
 }
 
 /** What anonymous callers learn while access control is closed (no paths or driver messages). */
@@ -189,6 +191,7 @@ export class ConsoleIamService implements ConsoleAccessProvider {
   readonly #pluginPermissions: () => readonly ConsolePluginPermissionInfo[];
   readonly #unavailable: () => string | undefined;
   readonly #unavailableCode: () => string | undefined;
+  readonly #onOwnerCreated: (() => void) | undefined;
   #ready = false;
   #initialized: boolean | undefined;
   #cleanupTimer: ReturnType<typeof setInterval> | undefined;
@@ -208,6 +211,7 @@ export class ConsoleIamService implements ConsoleAccessProvider {
     this.#pluginPermissions = options.pluginPermissions ?? (() => []);
     this.#unavailable = options.unavailable ?? (() => undefined);
     this.#unavailableCode = options.unavailableCode ?? (() => undefined);
+    this.#onOwnerCreated = options.onOwnerCreated;
   }
 
   get ready(): boolean {
@@ -463,7 +467,9 @@ export class ConsoleIamService implements ConsoleAccessProvider {
     return this.#serialize(async () => {
       this.#requireReady();
       if ((await this.#activeOwnerIds()).size > 0) throw new IamError('conflict', '已初始化：所有者已存在');
-      return this.#createUser({ ...input, bindings: [{ role: 'owner', scopeKind: 'global' }] });
+      const owner = await this.#createUser({ ...input, bindings: [{ role: 'owner', scopeKind: 'global' }] });
+      try { this.#onOwnerCreated?.(); } catch (error) { this.#onError(error); }
+      return owner;
     });
   }
 

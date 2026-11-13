@@ -37,7 +37,7 @@ import { projectEnvironment } from '../iam/install.js';
 import { createLocalConsoleAdmin, type LocalConsoleAdmin } from '../iam/local-admin.js';
 import { registerConsoleAuthRoutes } from '../iam/routes.js';
 import { dispatchIamRpc, isIamRpc } from '../iam/rpc.js';
-import { importLegacyIamTables, inspectLegacyIamImport, isTransientLegacyImportError, LegacyImportError, readLegacyImportRecord } from '../iam/legacy-import.js';
+import { ensureGatewayStoreMarker, importLegacyIamTables, inspectLegacyIamImport, isTransientLegacyImportError, LegacyImportError, readLegacyImportRecord } from '../iam/legacy-import.js';
 import { ConsoleIamService, type IamDatabase } from '../iam/service.js';
 import { ConsoleSetupService } from '../iam/setup-service.js';
 import { OnboardingError } from '../onboarding/errors.js';
@@ -94,6 +94,11 @@ export interface GatewayConsole {
   readonly terminal: ConsoleTerminalHandle;
   /** Closes gateway.db and opens it again (and retries a pending import). */
   reopenDatabase(): Promise<void>;
+  /**
+   * Writes the store marker into the project database if it is missing (after the first owner was
+   * created and after the instance first reported ready: a first-run project file exists by then).
+   */
+  ensureStoreMarker(): Promise<void>;
   /** Socket-only `gateway.console.*` (`zhin console init` / `zhin console user` beside the gateway). */
   readonly localAdmin: LocalConsoleAdmin;
   close(): Promise<void>;
@@ -210,6 +215,7 @@ export async function startGatewayConsole(options: GatewayConsoleOptions): Promi
       projectRoot,
       onError: (error) => logger.warn(`console iam: ${errorText(error)}`),
       pluginPermissions: () => registry.pluginPermissions(),
+      onOwnerCreated: () => { void ensureStoreMarker(); },
     });
     try {
       await service.start();
@@ -229,6 +235,16 @@ export async function startGatewayConsole(options: GatewayConsoleOptions): Promi
   }
 
   /** Transient failure: retry with a growing delay (retryMs, 2×, 4×, … at most MAX_RETRY_MS). */
+  async function ensureStoreMarker(): Promise<void> {
+    const store = connection.database;
+    if (!store || pending !== undefined) return;
+    try {
+      await ensureGatewayStoreMarker({ store, projectRoot, projectDatabase, logger: { warn: (message) => logger.warn(message) } });
+    } catch (error) {
+      logger.warn(formatCompact({ op: 'gateway_store_marker_failed', error: errorText(error) }));
+    }
+  }
+
   function scheduleRetry(): void {
     if (closed || retryTimer) return;
     const delay = Math.min(retryMs * 2 ** failures, Math.max(retryMs, MAX_RETRY_MS));
@@ -325,6 +341,7 @@ export async function startGatewayConsole(options: GatewayConsoleOptions): Promi
     onboarding,
     terminal,
     reopenDatabase: reopen,
+    ensureStoreMarker,
     localAdmin,
     close(): Promise<void> {
       closeResult ??= (async () => {

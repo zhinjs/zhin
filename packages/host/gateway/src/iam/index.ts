@@ -33,6 +33,7 @@ export {
 export { defineConsoleIamTables, IAM_TABLE_DEFINITIONS, IAM_TABLES, type IamTableHost } from './tables.js';
 export {
   importLegacyIamTables,
+  ensureGatewayStoreMarker,
   isTransientLegacyImportError,
   LEGACY_IMPORT_FAILURE_KEY,
   resetGatewayStore,

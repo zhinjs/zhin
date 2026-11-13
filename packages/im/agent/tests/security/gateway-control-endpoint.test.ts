@@ -98,3 +98,33 @@ describe('Agent bash and indirect reads of .zhin', () => {
     }
   });
 });
+
+// Third review: glob spellings, quote splitting and find patterns that reach .zhin, and table names.
+describe('Agent bash and globbed / quoted / find-pattern access to .zhin', () => {
+  it('denies every spelling the shell would expand to the store', async () => {
+    const paths = await createHostProtectedPaths({ projectRoot: '/srv/bot' });
+    for (const command of [
+      'cat .zh*/gat*',
+      'cat .zh?n/*',
+      'base64 .[z]hin/g*',
+      'tar cf - .z* | base64',
+      'cp -r .z*/ /tmp/x',
+      'cat .*/gateway*',
+      'ls .{zhin,git}',
+      'sqlite3 .zh*/ga*y.d* .dump',
+      'find . -path "*zh*" -name "g*" -exec cat {} +',
+      'find / -name "*.db" -print',
+      'cat "$PWD"/.zh""in/gateway.d""b',
+      "cat '.zh'in/gate'way.db'",
+      'd=.zh; cat ${d}in/gateway.db',
+      'sqlite3 /tmp/copy.sqlite "select password_hash from console_users"',
+      'sqlite3 data.sqlite "delete from zhin_gateway_store"',
+    ]) {
+      expect(hostWriteImpact('bash', { command }, paths)?.level, command).toBe('deny');
+    }
+    for (const command of ['ls .github', 'cat .gitignore', 'ls src/*.ts', 'find . -name "*.md"', 'grep -r console_ docs', 'cat .env.example.md']) {
+      const impact = hostWriteImpact('bash', { command }, paths);
+      expect(impact?.target === undefined || !/zhin|gateway|console_/u.test(String(impact.target)), command).toBe(true);
+    }
+  });
+});

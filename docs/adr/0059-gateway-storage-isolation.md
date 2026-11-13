@@ -42,7 +42,7 @@ ADR 0049 / 0054 让网关和实例共用一个项目数据库：网关读写 6 �
 - Node 提供 `setAuthorizer` 时额外装一个拒绝 `SQLITE_ATTACH` 的 authorizer；构造时传 `limits: { attach: 0 }`（新 Node 生效，Node 22 忽略）。都是特性检测，`database_list` 检查才是兜底。
 - 方言新增 `backupTo(path)`（`node:sqlite` 的 `backup()`，没有时用 `VACUUM INTO`），产物 `0600`；回退迁移前用它给 gateway.db 留副本。实测：同一连接处在写事务中时 `backup()` 失败（“not an error”），所以在事务外做。
 - SQLite 不需要受限账号：账号在另一个文件里，实例连接又打不开它。
-- 插件拿到的原始句柄（`getRawDatabase()`）是冻结视图：方言对象、其配置与 `node:sqlite` 连接（`dialect` / `config` / `db`）都取不到，也写不进去，模型不带回指 registry 的属性；SQLite 方言的连接是真正的私有字段（`#db`）。这是防误用，不是对抗受信任插件的沙箱（见 §1 威胁模型）。
+- 插件拿到的原始句柄（`getRawDatabase()`）不是 registry 本身，而是一个显式的门面对象：只有 registry 的方法（`query`、`transaction`、`model`、`select` / `insert` / `update` / `delete` 等）和原始类型字段（`dialectName`、`isStarted`）；`models` 是只读的 Map 视图，`get`、`values()`、`entries()`、`forEach`、迭代拿到的都是同样的门面；方法返回的模型、查询构造器、事务上下文以及回调收到的参数也都包成门面。任何门面上都没有 `dialect`、`database`、`config`、`db` 之类的字段，门面对象被冻结，不能赋值、不能替换方法（测试要观察调用时 spy 的是 `host.db`，门面在调用时才去 registry 上取方法）。`denyAttach` 在 SQLite 方言构造时存入私有字段 `#denyAttach`，之后改 `config` 无效；连接是私有字段 `#db`。这是防误用，不是对抗受信任插件的沙箱（见 §1 威胁模型）。
 
 ### 3. 迁移：网关连接阶段把旧表导入 gateway.db
 
@@ -82,7 +82,7 @@ ADR 0049 / 0054 让网关和实例共用一个项目数据库：网关读写 6 �
 
 ### 7. Agent 文件策略
 
-`.zhin/` 整体已在 Agent 文件工具的拒绝目录里，`*.db` 及其 `-wal` / `-shm` 也按文件名拒绝（ADR 0054 §7 以来），覆盖 `.zhin/gateway.db*` 与 `.zhin/keys/`。`bash` 另按命令文本拒绝：命令里出现 `.zhin` 路径、`gateway.db`、`zhin/keys`，或带通配符的 `gateway…` / `*.db`（`tar cf - .zhin`、`cp -r .zhin`、`cd .zhin && cat …`、`find … -name "gateway*" -exec cat`、脚本字符串里的路径）。这是文本检查：运行时拼出来的路径（例如逐字符拼接文件名）看不到，它只缩小提示注入后 Agent 用 `bash` 能做的事，不是沙箱；真正的边界仍是 §1 的文件权限与“实例不打开 gateway.db”。
+`.zhin/` 整体已在 Agent 文件工具的拒绝目录里，`*.db` 及其 `-wal` / `-shm` 也按文件名拒绝（ADR 0054 §7 以来），覆盖 `.zhin/gateway.db*` 与 `.zhin/keys/`。`bash` 另按命令文本拒绝：命令里出现 `.zhin` 路径、`gateway.db`、`zhin/keys`，或带通配符的 `gateway…` / `*.db`（`tar cf - .zhin`、`cp -r .zhin`、`cd .zhin && cat …`、`find … -name "gateway*" -exec cat`、脚本字符串里的路径）。另外拒绝：以 `.` 开头、带通配符且字面前缀可能展开成 `.zhin` 的路径分量（`.z*`、`.zh?n`、`.[z]hin`、`.*`、`.{zhin,…}`），能匹配 `.zhin`、`gateway.db`（含 `-wal` / `-shm`）或 `keys` 的通配词与 `find -name` / `-path` 模式（`gat*`、`*.db`、`*zh*`），去掉引号后再比对（`.zh""in/gateway.d""b`），以及网关表名（`console_users` 等 6 张与 `zhin_gateway_store`）。这是文本检查：运行时拼出来的路径（例如逐字符拼接文件名）看不到，它只缩小提示注入后 Agent 用 `bash` 能做的事，不是沙箱。隔离执行（Docker 沙箱）里，项目的 `.zhin/` 被一个空的只读 tmpfs 盖住，容器内看不到 gateway.db 与钥匙；没有容器的 `danger-full-access` 模式没有这层。真正的边界仍是 §1 的文件权限与“实例不打开 gateway.db”。
 
 ### 8. 版本
 
@@ -160,4 +160,13 @@ PostgreSQL 放到 `zhin_gateway` schema、MySQL 放到另一个库，并只授�
 10. **SECURITY DEFINER 函数（评审补充，所有者决定）**：PostgreSQL 探针在受限账号能执行属主不是它自己的 SECURITY DEFINER 函数时拒绝（`pg_catalog` / `information_schema` 之外，扩展函数也算），`sqlReasonCode` 为 `console-role-invalid`；`sqlReason` 只给通用说明与改法（`REVOKE EXECUTE ON FUNCTION … FROM PUBLIC` 或显式授予），函数名（`schema.name`，最多 5 个）只进日志。建号不撤销 PUBLIC 的 EXECUTE（会改变其他用户的访问），`zhin db console-role --print-sql` 附注释提示如何检查与撤销。
 11. **Console 前端（L9）**：`capabilities.sqlReasonCode` 区分 `console-role-missing` / `console-role-invalid` / `text-compatibility` / `sqlite-isolation`，只有前两种提示运行 `zhin db console-role`；PostgreSQL 的 42501 提示按方言 id 判断。
 12. **Agent `bash`**：见 §7，按命令文本补拒绝间接读取的写法，并说明其局限。
+
+### 第三轮评审（同日）
+
+13. **首次运行的 SQLite 项目没有标记**：实例在网关首次连接之后才创建项目库文件，原来判定 `fresh('no-database-file')` 后不写标记，之后丢失 gateway.db 会重新开放初始化。现在网关为写标记直接创建 SQLite 项目库文件（与实例相同的路径，父目录一并创建，权限同实例新建时），并在首个所有者创建后、以及受监管实例第一次进入运行状态时再检查一次标记（缺了就补写）。
+14. **插件原始句柄**：Proxy 可经 `models.values()` / `forEach` / 迭代、查询构造器的 `dialect` / `database` 字段、以及替换方法后以真实对象为 `this` 执行而绕过；改为 §2 所述的显式门面，`denyAttach` 改为构造时捕获的私有字段。
+15. **Agent `bash` 通配符**：见 §7 的通配与 `find` 模式规则；Docker 沙箱里 `.zhin/` 改为隐藏（空只读 tmpfs），不再只是只读挂载。
+16. **标记表与探针补充**：PostgreSQL 上网关建标记表后立即撤销 PUBLIC 与所有被授予者（含受限账号）的权限；MySQL 的受限账号是库级授权，做不到按表撤销，那里只有 Console 文本检查与启动探针（`console_*` / 标记表名）挡着，这一点如实记下。探针新增：能执行服务器文件 / 远程函数（`pg_ls_*`、`pg_read_file`、`pg_read_binary_file`、`pg_stat_file`、服务端 `lo_import` / `lo_export`、adminpack `pg_file_*`、`dblink*`）、对网关表有任何列级权限（`has_any_column_privilege`）、拥有大对象、能使用 `public` 以外模式的表时拒绝。数据库级的 `search_path` 设置被受限账号的角色级设置覆盖，不影响它；PUBLIC 默认的 `TEMPORARY` 只产生本会话可见的临时对象（`pg_temp` 中的函数不会被隐式解析），两者不拒绝。
+17. **错误分类**：只有本模块自己判定的失败（`conflict`、`mismatch`、`invalid`、`store_lost`、`store_mismatch`）是永久的；驱动报的任何错误（连接中断、语句或锁超时、序列化失败、死锁、连接数满、MongoDB 网络错误……）都按暂时性处理并退避重试。
+18. **其他**：受限连接还去掉 `password1` / `password2` / `password3` / `passwordSha1`；受限连接出错触发的重新探测至少间隔 30 秒；`--reset-store` 在当前 gateway.db 已有账号时提示“只改标记、不删账号”；MariaDB 的角色授予（不带 `@host`）也被识别并撤销。托管 PostgreSQL 若装有 PUBLIC 可执行的 SECURITY DEFINER 扩展函数（或 dblink 等），在撤销之前原始 SQL 一直关闭——这是有意的，见迁移指南。
 

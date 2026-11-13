@@ -346,6 +346,17 @@ export class ProjectDatabase {
     this.#requireSql();
     const table = quoteTableName(dialect, GATEWAY_STORE_MARKER_TABLE);
     await this.query(`CREATE TABLE IF NOT EXISTS ${table} (id VARCHAR(32) NOT NULL PRIMARY KEY, store_id VARCHAR(64) NOT NULL, migrated_at BIGINT NOT NULL)`);
+    if (dialect === 'pg') {
+      // The main account's default privileges would grant it to the restricted Console account
+      // (ADR 0059 §4): take that, and PUBLIC's, away at once. (MySQL grants that account the whole
+      // database; there only the text guard and the start-up probe keep it off this table.)
+      await this.query(`REVOKE ALL ON TABLE ${table} FROM PUBLIC`);
+      // Every role the default privileges (or anyone) granted it to, the console account included,
+      // whether or not this connection knows `database.console`.
+      const grantees = await this.query<Array<{ grantee: string }>>(`SELECT DISTINCT a.grantee::regrole::text AS grantee
+        FROM pg_class c, aclexplode(c.relacl) a WHERE c.oid = to_regclass($1) AND a.grantee <> c.relowner AND a.grantee <> 0`, [table]);
+      for (const { grantee } of grantees) await this.query(`REVOKE ALL ON TABLE ${table} FROM ${grantee}`);
+    }
     await this.transaction(async (trx) => {
       await trx.query(`DELETE FROM ${table} WHERE id = ${placeholder(dialect, 1)}`, ['gateway']);
       await trx.query(`INSERT INTO ${table} (id, store_id, migrated_at) VALUES (${placeholder(dialect, 1)}, ${placeholder(dialect, 2)}, ${placeholder(dialect, 3)})`, ['gateway', marker.storeId, marker.migratedAt]);

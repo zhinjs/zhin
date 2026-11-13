@@ -164,6 +164,35 @@ describe.skipIf(!live)('Console role on PostgreSQL (live)', () => {
     }
   });
 
+  it('refuses file / remote functions, column grants on gateway tables and owned large objects (third review)', async () => {
+    const probe = () => probeConsoleCredential(restrictedRun, { dialect: 'pg', expectedUser: plan.user, mainUser });
+    const role = `"${plan.user}"`;
+    const [{ super: isSuper }] = await run('SELECT rolsuper AS super FROM pg_roles WHERE rolname = current_user') as Array<{ super: boolean }>;
+    const cases: Array<[string, string, string, RegExp, boolean]> = [
+      ['EXECUTE pg_read_file', `GRANT EXECUTE ON FUNCTION pg_read_file(text) TO ${role}`, `REVOKE EXECUTE ON FUNCTION pg_read_file(text) FROM ${role}`, /server file \/ remote functions: .*pg_read_file/, true],
+      ['EXECUTE pg_ls_dir', `GRANT EXECUTE ON FUNCTION pg_ls_dir(text) TO ${role}`, `REVOKE EXECUTE ON FUNCTION pg_ls_dir(text) FROM ${role}`, /pg_ls_dir/, true],
+      ['EXECUTE lo_export', `GRANT EXECUTE ON FUNCTION lo_export(oid, text) TO ${role}`, `REVOKE EXECUTE ON FUNCTION lo_export(oid, text) FROM ${role}`, /lo_export/, true],
+      ['column grant on the marker', `CREATE TABLE IF NOT EXISTS zhin_gateway_store (id text, store_id text, migrated_at bigint); REVOKE ALL ON zhin_gateway_store FROM ${role}; GRANT UPDATE (store_id) ON zhin_gateway_store TO ${role}`, 'DROP TABLE zhin_gateway_store', /can reach gateway tables: zhin_gateway_store/, false],
+      ['tables in another schema', `CREATE SCHEMA zhin_cve_s9; CREATE TABLE zhin_cve_s9.t (a int); GRANT USAGE ON SCHEMA zhin_cve_s9 TO ${role}; GRANT SELECT ON zhin_cve_s9.t TO ${role}`, 'DROP SCHEMA zhin_cve_s9 CASCADE', /outside schema public: zhin_cve_s9/, false],
+      ['owns a large object', `SELECT lo_from_bytea(424242, 'x'); ALTER LARGE OBJECT 424242 OWNER TO ${role}`, 'SELECT lo_unlink(424242)', /owns large objects/, true],
+    ];
+    let ran = 0;
+    for (const [label, apply, undo, problem, needsSuper] of cases) {
+      if (needsSuper && !isSuper) continue;
+      for (const statement of apply.split('; ')) await run(statement);
+      try {
+        const result = await probe();
+        expect(result.ok, label).toBe(false);
+        expect(result.problems.join('\n'), label).toMatch(problem);
+      } finally {
+        for (const statement of undo.split('; ')) await run(statement).catch(() => undefined);
+      }
+      ran += 1;
+    }
+    expect(ran).toBe(isSuper ? cases.length : 2);
+    expect((await probe()).ok).toBe(true);
+  });
+
   it('never sends the password: the role stores the client-computed SCRAM verifier', async () => {
     expect(plan.statements.join('\n')).not.toContain(plan.password);
     expect(plan.statements[0]).toMatch(/PASSWORD 'SCRAM-SHA-256\$4096:/);

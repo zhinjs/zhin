@@ -79,16 +79,52 @@ export const GATEWAY_CONTROL_ENDPOINT_NAME = /^(?:gateway\.sock|zhin-gateway-[0-
  * what a prompt-injected Agent can do with `bash`; it is not a sandbox.
  */
 export function commandNamesProtectedStore(command: string): string | undefined {
-  const text = command.replace(/\\/g, '/');
-  const zhinDir = /(?:^|[\s'"`=:,(/;&|<>])(\.zhin)(?=$|[\s'"`/;&|)<>*?[,])/iu.exec(text);
+  // Quotes and backslash escapes do not change what the shell opens: `.zh""in`, `gateway.d\b`.
+  const text = command.replace(/\\/g, '/').replace(/["'`]/g, '');
+  const zhinDir = /(?:^|[\s=:,(/;&|<>{}$])(\.zhin)(?=$|[\s/;&|)<>*?[,}])/iu.exec(text);
   if (zhinDir) return '.zhin';
   const store = /gateway\.db/iu.exec(text);
   if (store) return 'gateway.db';
   const keys = /zhin\/keys/iu.exec(text);
   if (keys) return '.zhin/keys';
-  const wildcard = /(?:^|[\s'"`=/])(gate[a-z.]*[*?[][^\s'"`]*|[^\s'"`/]*[*?[][^\s'"`/]*\.db[*?]?)(?=$|[\s'"`;&|)])/iu.exec(text);
-  if (wildcard && /gate|\*\.db|\?\.db/iu.test(wildcard[1]!)) return wildcard[1];
+  // The gateway's tables by name (an `sqlite3 … "select … from console_users"` on any copy).
+  const table = /(?<![A-Za-z0-9_])(console_users|console_roles|console_role_bindings|console_sessions|console_api_tokens|console_audit_log|zhin_gateway_store)(?![A-Za-z0-9_])/iu.exec(text);
+  if (table) return table[1];
+  for (const word of text.split(/[\s;&|()<>]+/u).filter(Boolean)) {
+    // A dot-prefixed glob component whose literal start could still become `.zhin`:
+    // `.z*`, `.zh?n`, `.[z]hin`, `.*`, `.{zhin,x}`.
+    for (const component of word.split('/')) {
+      const glob = component.search(/[*?[{]/u);
+      if (component.startsWith('.') && glob >= 0 && '.zhin'.startsWith(component.slice(0, glob).toLowerCase())) return component;
+    }
+    // Glob words matching the store or its keys (`gat*`, `*.db`, `g*`, `ga*y.d*`).
+    if (/[*?[]/u.test(word) && globCouldName(word)) return word;
+  }
   return undefined;
+}
+
+/** Names a glob might reach: the store, its WAL / SHM files, the keys and `.zhin` itself. */
+const PROTECTED_STORE_NAMES = ['.zhin', 'gateway.db', 'gateway.db-wal', 'gateway.db-shm', 'keys', '.zhin/gateway.db', './.zhin/gateway.db', '.zhin/keys'];
+
+/** Whether a shell glob (or find -name / -path pattern) can match one of {@link PROTECTED_STORE_NAMES}. */
+function globCouldName(pattern: string): boolean {
+  let source = '';
+  for (let index = 0; index < pattern.length; index += 1) {
+    const char = pattern[index]!;
+    if (char === '*') source += '.*';
+    else if (char === '?') source += '.';
+    else if (char === '[') {
+      const end = pattern.indexOf(']', index + 1);
+      if (end < 0) { source += '\\['; continue; }
+      source += `[${pattern.slice(index + 1, end).replace(/^!/u, '^').replace(/\\/gu, '\\\\')}]`;
+      index = end;
+    } else source += char.replace(/[.+^${}()|\\]/gu, '\\$&');
+  }
+  let regex: RegExp;
+  try { regex = new RegExp(`^${source}$`, 'iu'); } catch { return true; }
+  const last = pattern.split('/').filter(Boolean).at(-1) ?? pattern;
+  const name = new RegExp(`^${source.split('/').filter(Boolean).at(-1) ?? source}$`, 'iu');
+  return PROTECTED_STORE_NAMES.some(candidate => regex.test(candidate) || (last !== pattern ? false : name.test(candidate.split('/').at(-1)!)));
 }
 
 /**

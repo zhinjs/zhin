@@ -218,6 +218,12 @@ export function computeReadOnlyOverlays(
   }
   if (!fs.existsSync(path.join(mount, 'node_modules'))) add({ kind: 'tmpfs-dir', target: 'node_modules' });
 
+  // `.zhin/` (the gateway's account store, the project keys, the control socket — ADR 0059 §7) is
+  // hidden, not only read-only: an empty read-only tmpfs takes its place inside the container.
+  const hidden = new Set([...anchors].flatMap(root => POLICY_ROOT_DIRS.map(dir => safeRealpath(path.join(root, dir)))).filter((value): value is string => !!value));
+  for (const [target, overlay] of overlays) {
+    if (overlay.kind === 'bind-dir' && overlay.source && hidden.has(overlay.source)) overlays.set(target, { kind: 'tmpfs-dir', target });
+  }
   return pruneOverlays([...overlays.values()]);
 }
 

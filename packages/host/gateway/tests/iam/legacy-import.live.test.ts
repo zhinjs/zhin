@@ -105,6 +105,14 @@ describe.skipIf(!live).each(sources)('legacy import from $name (live)', ({ confi
       const reverted = await revertLegacyIamImport({ store, projectRoot: root, projectDatabase: async () => revertConfig });
       if (role) {
         expect(reverted.warnings.join('\n')).toMatch(/DROP ROLE/);
+        // The marker written by the gateway is never readable by PUBLIC or the console account.
+        const marked = new ProjectDatabase(revertConfig as ProjectDatabaseConfig);
+        await marked.start();
+        await marked.writeStoreMarker({ storeId: 'f'.repeat(32), migratedAt: 1 });
+        expect(await marked.query(`SELECT has_table_privilege($1, 'public.zhin_gateway_store', 'SELECT') AS role_select,
+          has_any_column_privilege($1, 'public.zhin_gateway_store', 'SELECT, UPDATE') AS role_columns`, [role.user])).toEqual([{ role_select: false, role_columns: false }]);
+        await marked.deleteStoreMarker();
+        await marked.stop();
         const restricted = new ProjectDatabase({ ...config, user: role.user, password: role.password } as ProjectDatabaseConfig);
         await restricted.start();
         await expect(restricted.query(`SELECT password_hash FROM ${IAM_TABLES.users}`)).rejects.toMatchObject({ code: '42501' });
