@@ -110,7 +110,7 @@ describe('zhin create: convention files and manifest features', () => {
     const base = pluginManifest();
     const { features: _features, ...zhin } = base.zhin as Record<string, unknown>;
     writePlugin(root, { ...base, zhin });
-    const result = addConvention({ kind: 'middleware', name: 'audit', cwd: root });
+    const result = createConvention({ kind: 'middleware', name: 'audit', cwd: root });
     const manifest = readManifest();
     expect(manifest.zhin.features).toBeUndefined();
     expect(result.manifestChanges.some((change) => change.includes('zhin.features'))).toBe(false);

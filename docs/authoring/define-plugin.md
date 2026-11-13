@@ -506,7 +506,7 @@ Zhin 内部把每个版本称为一个 generation，详见 [Generation 生命周
 | `skills/` | `@zhin.js/skill` |
 | `agents/` | `@zhin.js/agent-feature` |
 
-这张表在 `@zhin.js/runtime` 里只有一份（`CONVENTION_FEATURE_PACKAGES`），`zhin plugin check`、`zhin add` 与仓库检查脚本都读它。
+这张表在 `@zhin.js/runtime` 里只有一份（`CONVENTION_FEATURE_PACKAGES`），`zhin plugin check`、`zhin create` 与仓库检查脚本都读它。
 
 - **省略 `features`**：每个存在的目录都要求对应的 Feature 包。推断出的引用不带 `api` 范围，接受已安装的版本；包仍然要写进 `dependencies` / `peerDependencies`，找不到时与显式声明缺失一样报 `PackageResolutionError`，并在信息里写明是哪个目录推断出来的。
 - **写了 `features`**（哪怕是 `[]`）：列表就是全部，不做推断，行为与以前完全一致。列表里的条目原样生效（保留 `api` 与 `optional`），没列出的目录不会挂载对应 Feature（`zhin plugin check` 会警告）。

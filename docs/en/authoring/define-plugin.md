@@ -506,7 +506,7 @@ A plugin truly requires only two fields; the minimal manifest is `"zhin": { "pro
 | `skills/` | `@zhin.js/skill` |
 | `agents/` | `@zhin.js/agent-feature` |
 
-The table exists once, in `@zhin.js/runtime` (`CONVENTION_FEATURE_PACKAGES`); `zhin plugin check`, `zhin add` and the repository checks all read it.
+The table exists once, in `@zhin.js/runtime` (`CONVENTION_FEATURE_PACKAGES`); `zhin plugin check`, `zhin create` and the repository checks all read it.
 
 - **`features` omitted**: every directory present requires its Feature package. Inferred references carry no `api` range and accept the installed version; the package must still be listed in `dependencies` / `peerDependencies`. A missing one fails with `PackageResolutionError`, like a missing declared Feature, and the message names the directory that implied it.
 - **`features` written** (even `[]`): the list is complete and nothing is inferred, exactly as before. Entries apply as written (`api` and `optional` kept); a directory the list does not cover does not mount its Feature (`zhin plugin check` warns).
