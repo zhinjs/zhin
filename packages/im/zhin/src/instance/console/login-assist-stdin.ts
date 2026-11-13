@@ -272,6 +272,7 @@ function challengeLines(flow: LoginFlowSnapshot, challenge: LoginChallenge): str
   for (const block of challenge.blocks ?? []) lines.push(...blockLines(block));
   if (challenge.media?.link) lines.push(`${challenge.media.link.label === challenge.media.link.url ? '链接' : challenge.media.link.label}：${challenge.media.link.url}`);
   if (challenge.media?.qrImage) lines.push('二维码请在 Console 中查看（或使用适配器打印的终端二维码）');
+  if (challenge.media?.captcha) lines.push('也可以在 Console 中打开验证码辅助页一键完成，无需开发者工具');
   const menu = menuOf(challenge);
   const hasInput = !!challenge.input && challenge.input.kind !== 'none';
   if (menu.length > 1 || !hasInput) {

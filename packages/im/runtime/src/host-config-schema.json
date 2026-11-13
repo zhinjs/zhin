@@ -485,6 +485,20 @@
           "x-zhin-config": {
             "security": true
           }
+        },
+        "loginAssist": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Login assistance shown in the Console (ADR 0058).",
+          "x-descriptionZh": "Console 中的登录辅助（ADR 0058）。",
+          "properties": {
+            "captchaHelperUrl": {
+              "type": "string",
+              "pattern": "^(https://|http://(localhost|127\\.0\\.0\\.1)(:|/))",
+              "description": "Hosted captcha helper page on its own origin; defaults to https://zhin.js.org/login-assist/tcaptcha.html.",
+              "x-descriptionZh": "独立源上的验证码辅助页；默认 https://zhin.js.org/login-assist/tcaptcha.html。"
+            }
+          }
         }
       }
     },

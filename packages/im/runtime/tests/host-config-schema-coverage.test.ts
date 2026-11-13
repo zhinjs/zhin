@@ -48,6 +48,14 @@ describe('Host configuration field coverage', () => {
     expect(parsePluginConfigSchema(hostSchema, { http: { trustProxy: { hops: 1 } } }).errors).not.toEqual([]);
   });
 
+  it('declares console.loginAssist.captchaHelperUrl (ADR 0058)', () => {
+    expect(field(['console', 'loginAssist', 'captchaHelperUrl'])).toMatchObject({ type: 'string' });
+    check({ console: { loginAssist: { captchaHelperUrl: 'https://helper.example/tcaptcha.html' } } });
+    check({ console: { loginAssist: { captchaHelperUrl: 'http://localhost:5173/tcaptcha.html' } } });
+    expect(parsePluginConfigSchema(hostSchema, { console: { loginAssist: { captchaHelperUrl: 'http://evil.example/x' } } }).errors).not.toEqual([]);
+    expect(parsePluginConfigSchema(hostSchema, { console: { loginAssist: { other: true } } }).errors).not.toEqual([]);
+  });
+
   it('declares console.terminal with the same rules as the terminal parser (ADR 0051)', () => {
     expect(field(['console', 'terminal'])).toMatchObject({ 'x-zhin-config': { security: true } });
     const terminal = {

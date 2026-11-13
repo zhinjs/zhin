@@ -54,6 +54,8 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `console.terminal.ssh[].passphraseEnv` | string | no | — | Environment variable holding the key passphrase. |
 | `console.terminal.ssh[].hostFingerprint` | string | no | — | Required host key fingerprint (SHA256:…), verified strictly; get it with `ssh-keyscan -t ed25519 &lt;host&gt; \| ssh-keygen -lf -` on a trusted network. |
 | `console.terminal.ssh[].insecureAcceptAnyHostKey` | boolean | no | — | Accept any host key without verification (unsafe, open to man-in-the-middle); only instead of hostFingerprint. The Console marks the target unsafe. |
+| `console.loginAssist` | object | no | — | Login assistance shown in the Console (ADR 0058). |
+| `console.loginAssist.captchaHelperUrl` | string | no | — | Hosted captcha helper page on its own origin; defaults to https://zhin.js.org/login-assist/tcaptcha.html. |
 | `gateway` | object | no | — | Management gateway (zhin start): instance supervision and dependency transactions. |
 | `gateway.readyTimeout` | integer | no | `60` | Seconds the instance has to report ready after a start, a restart or a dependency transaction before the start counts as failed (the transaction then rolls back). Read again before every start, restart and transaction; no gateway restart needed. |
 | `database` | object | no | — | Database Host and dialect connection options. |

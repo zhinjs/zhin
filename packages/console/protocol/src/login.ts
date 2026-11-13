@@ -79,6 +79,8 @@ export interface ConsoleLoginChallengeMedia {
   readonly link?: Readonly<{ url: string; label: string }>;
   readonly expiresAt?: number;
   readonly refreshable?: boolean;
+  /** Hosted captcha helper: open `helperUrl` (or the default) with this query in a popup. */
+  readonly captcha?: Readonly<{ provider: 'tencent'; query: string; helperUrl?: string }>;
 }
 
 export interface ConsoleLoginChallenge {

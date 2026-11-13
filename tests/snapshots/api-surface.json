@@ -163,6 +163,7 @@
     "export * from './built/html-to-text.js'",
     "export * from './built/interactive-segments/index.js'",
     "export * from './built/login-assist.js'",
+    "export * from './built/login-captcha.js'",
     "export * from './built/message-enrich.js'",
     "export * from './built/outbound-media-utils.js'",
     "export * from './built/roles.js'",

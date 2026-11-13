@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { LoginChallengeKind } from '@zhin.js/adapter';
+import { isValidCaptchaHelperUrl, type LoginCaptchaMedia } from './login-captcha.js';
 
 /**
  * LoginAssist — 登录辅助（ADR 0058 Login Assist v2）
@@ -150,6 +151,11 @@ export interface LoginChallengeMedia {
   readonly link?: Readonly<{ url: string; label: string }>;
   readonly expiresAt?: number;
   readonly refreshable?: boolean;
+  /**
+   * Hosted captcha helper (slider): the Console opens the helper page on its own origin with this
+   * query; the ticket comes back by `postMessage` (see `login-captcha.ts`).
+   */
+  readonly captcha?: LoginCaptchaMedia;
 }
 
 /**
@@ -318,6 +324,8 @@ export interface LoginAssistOptions {
   verifyTimeoutMs?: number;
   /** Title of the automatically inserted verifying step. */
   verifyingTitle?: string;
+  /** Host-configured captcha helper page, filled into `media.captcha.helperUrl` when absent. */
+  captchaHelperUrl?: string;
 }
 
 // ============================================================================
@@ -386,6 +394,7 @@ export class LoginAssist {
   private readonly defaultTimeoutMs: number;
   readonly #verifyTimeoutMs: number;
   readonly #verifyingTitle: string;
+  #captchaHelperUrl: string | undefined;
   readonly #flows = new Map<string, FlowRecord>();
   #seq = 0;
 
@@ -394,6 +403,12 @@ export class LoginAssist {
     this.defaultTimeoutMs = options?.defaultTimeoutMs ?? DEFAULT_LOGIN_ASSIST_TIMEOUT_MS;
     this.#verifyTimeoutMs = options?.verifyTimeoutMs ?? DEFAULT_LOGIN_VERIFY_TIMEOUT_MS;
     this.#verifyingTitle = options?.verifyingTitle ?? '验证中…';
+    this.configure({ captchaHelperUrl: options?.captchaHelperUrl });
+  }
+
+  /** Host configuration (`console.loginAssist`); an invalid helper URL is ignored. */
+  configure(options: Pick<LoginAssistOptions, 'captchaHelperUrl'>): void {
+    this.#captchaHelperUrl = isValidCaptchaHelperUrl(options.captchaHelperUrl) ? options.captchaHelperUrl : undefined;
   }
 
   /**
@@ -738,7 +753,7 @@ export class LoginAssist {
   ): Promise<SubmittedValue> {
     const timeoutMs = resolveTimeoutMs(options.timeoutMs, this.defaultTimeoutMs);
     const createdAt = Date.now();
-    const normalized = normalizeChallenge(descriptor, flow.secrets);
+    const normalized = normalizeChallenge(descriptor, flow.secrets, this.#captchaHelperUrl);
     const expiresAt = normalized.expiresAt ?? (timeoutMs != null ? createdAt + timeoutMs : undefined);
     const challenge: LoginChallenge = Object.freeze({ ...normalized, ...(expiresAt !== undefined ? { expiresAt } : {}) });
 
@@ -1212,6 +1227,7 @@ const INPUT_KINDS = ['none', 'code', 'ticket', 'text'] as const;
 function normalizeChallenge(
   descriptor: LoginChallengeDescriptor,
   secrets: readonly string[],
+  captchaHelperUrl?: string,
 ): Mutable<LoginChallenge> & { media?: Mutable<LoginChallengeMedia> } {
   const kind = CHALLENGE_KINDS.includes(descriptor.kind) ? descriptor.kind : 'other';
   const input = descriptor.input && INPUT_KINDS.includes(descriptor.input.kind) && descriptor.input.kind !== 'none'
@@ -1248,6 +1264,7 @@ function normalizeChallenge(
     ...(link ? { link: Object.freeze({ url: link, label: sanitizeText(descriptor.media.link?.label, secrets, 80) || link }) } : {}),
     ...(Number.isFinite(descriptor.media.expiresAt) ? { expiresAt: descriptor.media.expiresAt } : {}),
     ...(descriptor.media.refreshable ? { refreshable: true } : {}),
+    ...normalizeCaptcha(descriptor.media.captcha, captchaHelperUrl),
   } : undefined;
   const blocks = normalizeBlocks(descriptor.blocks, secrets);
   const blockIds = new Set(blocks.map((block) => block.id).filter((id): id is string => !!id));
@@ -1273,6 +1290,15 @@ function normalizeChallenge(
     actions: Object.freeze(actions),
     ...(Number.isFinite(descriptor.expiresAt) ? { expiresAt: descriptor.expiresAt } : {}),
   };
+}
+
+/** Keeps a Tencent captcha query (no `?`, bounded) and a valid helper URL. */
+function normalizeCaptcha(captcha: LoginCaptchaMedia | undefined, configured: string | undefined): { captcha?: LoginCaptchaMedia } {
+  if (!captcha || captcha.provider !== 'tencent' || typeof captcha.query !== 'string') return {};
+  const query = captcha.query.replace(/^\?/u, '');
+  if (!query || query.length > 4096 || /[\s#]/u.test(query)) return {};
+  const helperUrl = isValidCaptchaHelperUrl(captcha.helperUrl) ? captcha.helperUrl : configured;
+  return { captcha: Object.freeze({ provider: 'tencent', query, ...(helperUrl ? { helperUrl } : {}) }) };
 }
 
 const COPY_FORMATS = ['json', 'script', 'text'] as const;
@@ -1476,7 +1502,8 @@ function resolveAnswer(
     for (const [key, item] of Object.entries(value.values ?? {})) {
       if (key !== 'input' && (typeof item === 'string' || typeof item === 'number')) values[key] = String(item);
     }
-    const rawInput = value.values?.input;
+    // The captcha helper answers `{ ticket: 'ticket,randstr' }`; it is the input of a ticket challenge.
+    const rawInput = value.values?.input ?? (input?.extract === 'ticket-json-or-url' ? value.values?.ticket : undefined);
     const text = typeof rawInput === 'string' || typeof rawInput === 'number' ? String(rawInput) : '';
     Object.assign(values, inputValues(text, !!action?.requiresInput));
     return Object.freeze({ actionId: value.action, values: Object.freeze(values) });

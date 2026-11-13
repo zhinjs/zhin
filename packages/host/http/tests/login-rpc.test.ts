@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CONSOLE_RPC_PERMISSIONS, LOGIN_RPC, resolveConsoleRpcPermission } from '@zhin.js/console-protocol';
-import { dispatchExtendedConsoleRpc, type ConsoleRpcExtendedCtx } from '../src/console-rpc-extended/index.js';
-import { loginAuditDetail, LOGIN_SUBMIT_WAIT_MS } from '../src/console-rpc-extended/login-rpc.js';
-import type { ConsoleEndpointLoginAccess } from '../src/console-rpc-extended/contracts.js';
+import {
+  dispatchExtendedConsoleRpc, loginAuditDetail, LOGIN_SUBMIT_WAIT_MS,
+  type ConsoleEndpointLoginAccess, type ConsoleRpcExtendedCtx,
+} from '../src/console-rpc-extended/index.js';
 
 const { LoginAssist } = await import('../../../im/core/src/built/login-assist.js');
 

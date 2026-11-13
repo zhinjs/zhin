@@ -225,6 +225,45 @@ export default defineAdapter({
 - **不写画像也能用**。没有 `profile` 的适配器按 `capabilities`、`operations`、`segments` 得到一个保守画像（能发送、已声明的撤回/编辑/回应/输入中、已有的段策略），其余一律不支持。
 - 回合内读取：`turn.input.platformCapabilities?.has('actions.mute')`、`.get('actions.mute.durationSeconds')`（动作的 `params` 在路径里可省略）。能力描述平台允许什么；谁能让 Bot 这么做，仍由角色、硬闸和审批决定。
 
+## 登录辅助（扫码、验证码、滑块）
+
+需要人帮忙登录的适配器用 LoginAssist 的登录流程（[ADR 0058](../adr/0058-login-assist-v2.md)）。分三步：
+
+1. **声明**：`defineAdapter({ login: { mode: 'interactive', challenges: ['qrcode', 'slider'], relogin: true, refreshQr: true } })`。`mode` 取 `interactive` / `credential` / `external`；不写 `login` 就是不支持，Console 不会显示登录操作。
+2. **实现钩子**（声明了 `relogin` / `refreshQr` 才需要）：`createEndpointSpecification(this, { …, login: { relogin: ({ signal }) => …, refreshChallenge: ({ signal }) => … } })`。两者启动工作后就返回，结果走登录流程。
+3. **驱动流程**：
+
+```ts
+// const assist = context.use(loginAssistToken)  —  import { loginAssistToken } from '@zhin.js/core/runtime'
+
+const flow = assist.beginFlow({ adapter: 'demo', endpointKey, owner, signal, endpointIdentity });
+flow.step('connect', t(locale, 'connecting'));
+const answer = await flow.challenge({
+  kind: 'sms',
+  title: t(locale, 'smsTitle'),
+  help: { short: t(locale, 'smsHelp'), steps: [t(locale, 'smsStep1'), t(locale, 'smsStep2')] },
+  input: { kind: 'code', label: t(locale, 'code'), pattern: '^\\d{6}$', patternHint: t(locale, 'sixDigits'), secret: true },
+  actions: [
+    { id: 'submit', label: t(locale, 'submit'), variant: 'primary', requiresInput: true },
+    { id: 'resend', label: t(locale, 'resend'), variant: 'secondary', cooldownMs: 60_000 },
+  ],
+});
+// 提交后 core 自动插入「验证中」；适配器报告真实结果：
+const result = await sdk.submitSmsCode(answer.values.input);
+if (result.ok) flow.online();
+else flow.outcome({ result: 'rejected', code: 'code_invalid', message: t(locale, 'codeWrong'), next: 'retry_input' });
+```
+
+要点：
+
+- 文案和多语言由适配器负责；`kind` 只决定图标和排序。
+- 平台错误映射到固定错误码：验证码错 `code_invalid`、太频繁 `rate_limited`、过期 `challenge_expired`、风控 `risk_blocked`、密码或令牌错 `credential_invalid`、网络 `network`，其余 `unknown`。`flow.fail(code, message?)` 结束流程。
+- 新挑战会替换旧挑战（旧的 Promise 以 `LoginChallengeReplacedError` 结束）。
+- 有人正在答挑战时不要自动重连：先看 `assist.hasActiveChallenge(endpointKey, adapter)`。
+- 需要给用户材料时用 `blocks`：`copy`（设备信息等标 `sensitive: true`）、`link`（只允许 http/https，`showQr` 方便手机扫）、`note`。脚本块必须是静态文本，不要拼入用户或设备数据。
+- 滑块 ticket 输入设 `extract: 'ticket-json-or-url'`，core 的 `parseLoginTicket()` 会识别 ticket、`ticket,randstr`、JSON 和链接。
+- 旧的 `waitForInput()` 仍可用，会自动生成隐式流程；新代码请用 `beginFlow()`。
+
 ## 官方适配器能力矩阵
 
 「✓」表示画像已声明且端口已实现；空白表示未声明，即不支持。管理类动作仅 icqq 有完整实现，napcat 只有群公告。
