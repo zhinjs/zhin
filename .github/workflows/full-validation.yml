@@ -164,7 +164,6 @@ jobs:
           packages/im/zhin/tests/instance/database-console-sql.live.test.ts
           packages/im/zhin/tests/instance/persistent-state.live.test.ts
           packages/im/ai/tests/memory/context-repository-database.test.ts
-          --no-file-parallelism
         env:
           NODE_OPTIONS: --throw-deprecation
           ZHIN_TEST_EXTERNAL_DATABASES: '1'

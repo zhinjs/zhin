@@ -99,3 +99,5 @@ zhin console migrate --revert
 - 插件从来不能访问 `console_*` 表；现在它们根本不在项目数据库里。SQLite 上插件对原始句柄执行 `ATTACH` 会被拒绝，所在事务被回滚。
 - `@zhin.js/gateway/iam` 删除了 `IAM_DIALECTS`；`installConsoleIam` 改为传 `projectDatabase`（`--standalone` 装配用）。`@zhin.js/core` 的 `createDatabaseHost` 不再有 `gatewayTableHost()`。
 - 在网关运行时读 gateway.db 请用本地控制套接字（`zhin console …`），不要另开连接。
+- 插件的原始数据库句柄（`getRawDatabase()`）与其事务句柄：每个方法的每个字符串类参数（包括 `queryStatement`、数组与对象里的字符串、`$raw` 条件、`new String(…)` 与自带 `toString` 的对象）都按网关表名检查，命中即抛 `GatewayOwnedTableError`。参数数据里字面写着网关表名（例如插入内容为 `console_users` 的文本）也会被拒绝；类字符串对象会先转换成字符串再交给驱动。
+- Agent 的 `bash` 在 Docker 沙箱里运行时，项目 `.zhin/` 在可写与只读回合里都是空目录。自己用 `Sandbox` 且 `useDocker: 'auto'` 的代码在没有 Docker 时回退到宿主执行，`.zhin/` 可读（日志里有一条警告）；需要隔离时用 `useDocker: 'always'`。

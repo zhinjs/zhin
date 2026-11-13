@@ -234,17 +234,36 @@ export async function startGatewayConsole(options: GatewayConsoleOptions): Promi
     logger.info(formatCompact({ op: 'gateway_store_open', file: store.filename }));
   }
 
-  /** Transient failure: retry with a growing delay (retryMs, 2×, 4×, … at most MAX_RETRY_MS). */
+  /** Writes the project database's store marker if missing; a foreign marker closes the Console. */
   async function ensureStoreMarker(): Promise<void> {
     const store = connection.database;
     if (!store || pending !== undefined) return;
     try {
       await ensureGatewayStoreMarker({ store, projectRoot, projectDatabase, logger: { warn: (message) => logger.warn(message) } });
     } catch (error) {
+      if (error instanceof LegacyImportError && (error.code === 'store_mismatch' || error.code === 'store_lost')) {
+        // The project database belongs to another gateway.db (found after the start, e.g. once the
+        // project database became reachable): the same fail-closed state as at connect — Console
+        // closed, no retry, until the operator acts (`zhin console init --reset-store`).
+        logger.warn(formatCompact({ op: 'gateway_legacy_import_failed', code: error.code, transient: false, error: errorText(error) }));
+        opening = (opening ?? Promise.resolve()).then(async () => {
+          const current = connection;
+          if (closed || current.database !== store) return;
+          pending = errorText(error);
+          pendingCode = error.code;
+          // gateway.db stays open (the local owner can inspect it, `--reset-store` can run).
+          connection = { database: store, service: failClosed().service, dispose: [] };
+          for (const dispose of current.dispose.splice(0)) dispose();
+          current.service.stop();
+        });
+        await opening;
+        return;
+      }
       logger.warn(formatCompact({ op: 'gateway_store_marker_failed', error: errorText(error) }));
     }
   }
 
+  /** Transient failure: retry with a growing delay (retryMs, 2×, 4×, … at most MAX_RETRY_MS). */
   function scheduleRetry(): void {
     if (closed || retryTimer) return;
     const delay = Math.min(retryMs * 2 ** failures, Math.max(retryMs, MAX_RETRY_MS));

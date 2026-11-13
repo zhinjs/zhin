@@ -9,6 +9,7 @@ import {
   refreshConsoleGrants,
   type ConsoleRolePlan,
 } from '../src/console-credential.js';
+import { createLiveMysqlDatabase, createLivePgDatabase, livePgBase, type LiveDatabase } from './support/live-database.js';
 
 /**
  * The restricted Console account against real servers (full-validation, ADR 0059 §4): it is
@@ -17,17 +18,12 @@ import {
  */
 const live = process.env.ZHIN_TEST_EXTERNAL_DATABASES === '1';
 
-const pgConfig = (user: string, password: string) => ({
-  host: process.env.ZHIN_TEST_PG_HOST ?? '127.0.0.1',
-  port: Number(process.env.ZHIN_TEST_PG_PORT ?? 35432),
-  user,
-  password,
-  database: process.env.ZHIN_TEST_PG_DATABASE ?? 'zhin_test',
-});
-
 describe.skipIf(!live)('Console role on PostgreSQL (live)', () => {
-  const mainUser = process.env.ZHIN_TEST_PG_USER ?? 'zhin';
-  const main = new PG(pgConfig(mainUser, process.env.ZHIN_TEST_PG_PASSWORD ?? 'zhin'));
+  const mainUser = livePgBase().user;
+  // A database of its own: the suite creates and drops `console_users` / marker tables.
+  let own: LiveDatabase;
+  let pgConfig: (user: string, password: string) => ReturnType<typeof livePgBase>;
+  let main: PG;
   const run = (sql: string, params?: unknown[]) => main.query(sql, params as never[]);
   let plan: ConsoleRolePlan;
   let restricted: PG;
@@ -42,11 +38,15 @@ describe.skipIf(!live)('Console role on PostgreSQL (live)', () => {
   };
 
   beforeAll(async () => {
+    own = await createLivePgDatabase('console_credential');
+    pgConfig = (user, password) => ({ ...own.config, user, password });
+    main = new PG(own.config as never);
     await main.start();
     await run('DROP TABLE IF EXISTS zhin_console_cred_rows, zhin_console_cred_later, console_users');
     await run('CREATE TABLE zhin_console_cred_rows (id serial PRIMARY KEY, body text)');
     await run("INSERT INTO zhin_console_cred_rows (body) VALUES ('a')");
     plan = await provisionConsoleRole(run, { dialect: 'pg', projectKey: `live-${randomBytes(4).toString('hex')}` });
+    own.adoptRole(plan.user);
     restricted = new PG(pgConfig(plan.user, plan.password));
     await restricted.start();
   });
@@ -58,7 +58,8 @@ describe.skipIf(!live)('Console role on PostgreSQL (live)', () => {
       await run(`DROP OWNED BY "${plan.user}"`).catch(() => undefined);
       await run(`DROP ROLE IF EXISTS "${plan.user}"`).catch(() => undefined);
     }
-    await main.stop();
+    await main?.stop();
+    await own?.drop();
   });
 
   it('passes the probe as the configured account', async () => {
@@ -223,11 +224,12 @@ describe.skipIf(!live)('Console role on PostgreSQL (live)', () => {
 });
 
 describe.skipIf(!live || !process.env.ZHIN_TEST_MYSQL_ROOT_PASSWORD)('Console account on MySQL (live)', () => {
-  const host = process.env.ZHIN_TEST_MYSQL_HOST ?? '127.0.0.1';
-  const port = Number(process.env.ZHIN_TEST_MYSQL_PORT ?? 33306);
-  const database = process.env.ZHIN_TEST_MYSQL_DATABASE ?? 'zhin_test';
+  let own: LiveDatabase;
+  let host: string;
+  let port: number;
+  let database: string;
   // Docker's MYSQL_USER cannot create users; root provisions the account.
-  const admin = new MySQL({ host, port, user: process.env.ZHIN_TEST_MYSQL_ROOT_USER ?? 'root', password: process.env.ZHIN_TEST_MYSQL_ROOT_PASSWORD, database });
+  let admin: MySQL;
   const run = (sql: string, params?: unknown[]) => admin.query(sql, params as never[]);
   let plan: ConsoleRolePlan;
   let restricted: MySQL;
@@ -242,6 +244,9 @@ describe.skipIf(!live || !process.env.ZHIN_TEST_MYSQL_ROOT_PASSWORD)('Console ac
   };
 
   beforeAll(async () => {
+    own = await createLiveMysqlDatabase('console_credential');
+    ({ host, port, database } = own.config);
+    admin = new MySQL({ host, port, user: process.env.ZHIN_TEST_MYSQL_ROOT_USER ?? 'root', password: process.env.ZHIN_TEST_MYSQL_ROOT_PASSWORD, database });
     await admin.start();
     await run('DROP TABLE IF EXISTS zhin_console_cred_rows');
     await run('CREATE TABLE zhin_console_cred_rows (id int PRIMARY KEY, body text)');
@@ -255,7 +260,8 @@ describe.skipIf(!live || !process.env.ZHIN_TEST_MYSQL_ROOT_PASSWORD)('Console ac
     await restricted?.stop().catch(() => undefined);
     await run('DROP TABLE IF EXISTS zhin_console_cred_rows, zhin_console_cred_ddl').catch(() => undefined);
     if (plan) await run(`DROP USER IF EXISTS '${plan.user}'@'${plan.host ?? '%'}'`).catch(() => undefined);
-    await admin.stop();
+    await admin?.stop();
+    await own?.drop();
   });
 
   it('passes the probe and works on rows and DDL of its database', async () => {
@@ -268,8 +274,11 @@ describe.skipIf(!live || !process.env.ZHIN_TEST_MYSQL_ROOT_PASSWORD)('Console ac
   it('cannot reach other databases, server files, triggers or routines', async () => {
     expect(await errno('SELECT user FROM mysql.user')).toBe('1142');
     expect(await restrictedRun("SELECT LOAD_FILE('/etc/passwd') AS f")).toEqual([{ f: null }]);
-    expect(await errno('CREATE TRIGGER zhin_console_cred_t BEFORE INSERT ON zhin_console_cred_rows FOR EACH ROW SET NEW.body = NEW.body')).toBe('1142');
-    expect(await errno('CREATE PROCEDURE zhin_console_cred_p() SELECT 1')).toBe('1044');
+    // MySQL 8 refuses CREATE TRIGGER / PROCEDURE in the prepared-statement protocol (1295) before it
+    // checks the privilege (1142 / 1044): either way refused, and the account holds neither privilege.
+    expect(['1142', '1295']).toContain(await errno('CREATE TRIGGER zhin_console_cred_t BEFORE INSERT ON zhin_console_cred_rows FOR EACH ROW SET NEW.body = NEW.body'));
+    expect(await run("SELECT PRIVILEGE_TYPE FROM information_schema.SCHEMA_PRIVILEGES WHERE GRANTEE = CONCAT(QUOTE(?), '@', QUOTE(?)) AND PRIVILEGE_TYPE IN ('TRIGGER', 'CREATE ROUTINE', 'FILE')", [plan.user, plan.host ?? '%'])).toEqual([]);
+    expect(['1044', '1295']).toContain(await errno('CREATE PROCEDURE zhin_console_cred_p() SELECT 1'));
     // LOAD DATA LOCAL: the client refuses to send a file (LOCAL_FILES off).
     expect(await errno("LOAD DATA LOCAL INFILE '/etc/passwd' INTO TABLE zhin_console_cred_rows")).not.toBe('ok');
   });

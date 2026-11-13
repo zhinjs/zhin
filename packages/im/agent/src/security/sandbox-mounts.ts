@@ -134,8 +134,15 @@ export function computeReadOnlyOverlays(
   mountDir: string,
   protectedPaths: ToolProtectedPathData | undefined,
 ): ReadOnlyOverlay[] {
+  return computeOverlaySet(mountDir, protectedPaths).overlays;
+}
+
+function computeOverlaySet(
+  mountDir: string,
+  protectedPaths: ToolProtectedPathData | undefined,
+): { overlays: ReadOnlyOverlay[]; hidden: ReadOnlyOverlay[] } {
   const mount = safeRealpath(mountDir);
-  if (!mount) return [];
+  if (!mount) return { overlays: [], hidden: [] };
   const listing = makeListing();
   const candidates: Candidate[] = [];
 
@@ -221,10 +228,15 @@ export function computeReadOnlyOverlays(
   // `.zhin/` (the gateway's account store, the project keys, the control socket — ADR 0059 §7) is
   // hidden, not only read-only: an empty read-only tmpfs takes its place inside the container.
   const hidden = new Set([...anchors].flatMap(root => POLICY_ROOT_DIRS.map(dir => safeRealpath(path.join(root, dir)))).filter((value): value is string => !!value));
+  const hiddenOverlays: ReadOnlyOverlay[] = [];
   for (const [target, overlay] of overlays) {
-    if (overlay.kind === 'bind-dir' && overlay.source && hidden.has(overlay.source)) overlays.set(target, { kind: 'tmpfs-dir', target });
+    if (overlay.kind === 'bind-dir' && overlay.source && hidden.has(overlay.source)) {
+      const replacement: ReadOnlyOverlay = { kind: 'tmpfs-dir', target };
+      overlays.set(target, replacement);
+      hiddenOverlays.push(replacement);
+    }
   }
-  return pruneOverlays([...overlays.values()]);
+  return { overlays: pruneOverlays([...overlays.values()]), hidden: hiddenOverlays };
 }
 
 /** Bounded scan; see the module comment for the limits. */
@@ -288,6 +300,16 @@ export function overlayDockerArgs(overlays: readonly ReadOnlyOverlay[]): string[
     }
   }
   return args;
+}
+
+/**
+ * The overlays that hide `.zhin/` (the gateway's account store, the project keys, the control
+ * socket — ADR 0059 §7) under the mounted directory: an empty read-only tmpfs over each existing
+ * `.zhin` of the project roots. Applied in every mode, read-only turns included (a read-only mount
+ * alone would still let `find . -type f -exec cat {} +` read gateway.db).
+ */
+export function computeHiddenOverlays(mountDir: string, protectedPaths?: ToolProtectedPathData): ReadOnlyOverlay[] {
+  return computeOverlaySet(mountDir, protectedPaths).hidden;
 }
 
 /**

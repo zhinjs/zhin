@@ -15,9 +15,27 @@ import * as child_process from 'node:child_process';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import * as fs from 'node:fs';
+import { getLogger } from '@zhin.js/logger';
 import { matchHardBlockedCommand } from './exec-policy.js';
 import { executeInDocker, isDockerAvailable } from './sandbox-docker.js';
 import type { ReadOnlyOverlay } from './sandbox-mounts.js';
+
+const logger = getLogger('Sandbox');
+let softFallbackWarned = false;
+
+/**
+ * `useDocker: 'auto'` without a usable Docker runs on the host (soft sandbox): no mount boundary,
+ * so neither the read-only overlays nor the hidden `.zhin/` (ADR 0059 §7) apply; only the text
+ * checks of the policy layer remain. Warned once per process. The agent's bash tool never takes
+ * this path (it uses `'always'` and fails closed).
+ */
+function warnSoftFallback(reason: string): void {
+  if (softFallbackWarned) return;
+  softFallbackWarned = true;
+  logger.warn(`Sandbox useDocker='auto' fell back to host execution (${reason}): no container boundary, `
+    + '.zhin/ (gateway.db, keys) and other protected paths are readable by the command; '
+    + "install Docker or use useDocker: 'always' to fail closed.");
+}
 
 // ── 资源限制包装 ────────────────────────────────────────────────────
 
@@ -138,8 +156,9 @@ export interface SandboxConfig {
   /** Host workspace mount access when a container boundary is required. */
   filesystemAccess?: 'read-only' | 'workspace-write';
   /**
-   * Paths bound read-only on top of a writable workspace mount (#1030 P0-c). Ignored for a
-   * read-only mount; see `sandbox-mounts.ts`.
+   * Paths bound read-only on top of a writable workspace mount (#1030 P0-c). On a read-only
+   * mount only the hiding overlays (`tmpfs-dir`, e.g. `.zhin/`, ADR 0059 §7) apply; see
+   * `sandbox-mounts.ts`.
    */
   readOnlyOverlays?: readonly ReadOnlyOverlay[];
 }
@@ -446,6 +465,7 @@ export class Sandbox {
     }
 
     // 降级：软沙箱（ulimit 包装 + 进程组隔离）
+    if ((this.config.useDocker || 'auto') === 'auto') warnSoftFallback(this._dockerAvailable === false ? 'Docker unavailable' : 'Docker run failed');
     return this.executeSoft(command, options);
   }
 

@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -7,6 +8,7 @@ import { provisionConsoleRole } from '@zhin.js/database';
 import { importLegacyIamTables, revertLegacyIamImport } from '../../src/iam/legacy-import.js';
 import { ConsoleIamService } from '../../src/iam/service.js';
 import { defineConsoleIamTables, IAM_TABLES } from '../../src/iam/tables.js';
+import { createLiveMysqlDatabase, createLivePgDatabase } from '../../../../../basic/database/tests/support/live-database.js';
 
 /**
  * ADR 0059 §3 against real servers (full-validation): accounts an earlier version kept in a
@@ -15,37 +17,38 @@ import { defineConsoleIamTables, IAM_TABLES } from '../../src/iam/tables.js';
 const live = process.env.ZHIN_TEST_EXTERNAL_DATABASES === '1';
 const PASSWORD = 'correct-horse-battery';
 
-const sources: Array<{ name: string; config: ProjectDatabaseConfig }> = [
+// Each source gets a database of its own (the suite writes markers and `console_*` tables), so
+// the live suites can run in parallel.
+interface OwnDatabase { config: ProjectDatabaseConfig; adoptRole(name: string): void; drop(): Promise<void> }
+
+const sources: Array<{ name: string; create(): Promise<OwnDatabase> }> = [
   {
     name: 'postgresql',
-    config: {
-      dialect: 'pg',
-      host: process.env.ZHIN_TEST_PG_HOST ?? '127.0.0.1',
-      port: Number(process.env.ZHIN_TEST_PG_PORT ?? 35432),
-      user: process.env.ZHIN_TEST_PG_USER ?? 'zhin',
-      password: process.env.ZHIN_TEST_PG_PASSWORD ?? 'zhin',
-      database: process.env.ZHIN_TEST_PG_DATABASE ?? 'zhin_test',
+    async create() {
+      const own = await createLivePgDatabase('legacy_import');
+      return { config: { dialect: 'pg', ...own.config } as ProjectDatabaseConfig, adoptRole: role => own.adoptRole(role), drop: () => own.drop() };
     },
   },
   ...(process.env.ZHIN_TEST_MYSQL_PORT || process.env.ZHIN_TEST_MYSQL_HOST ? [{
     name: 'mysql',
-    config: {
-      dialect: 'mysql',
-      host: process.env.ZHIN_TEST_MYSQL_HOST ?? '127.0.0.1',
-      port: Number(process.env.ZHIN_TEST_MYSQL_PORT ?? 33306),
-      user: process.env.ZHIN_TEST_MYSQL_USER ?? 'zhin',
-      password: process.env.ZHIN_TEST_MYSQL_PASSWORD ?? 'zhin',
-      database: process.env.ZHIN_TEST_MYSQL_DATABASE ?? 'zhin_test',
-    } as ProjectDatabaseConfig,
+    async create() {
+      const own = await createLiveMysqlDatabase('legacy_import');
+      return { config: { dialect: 'mysql', ...own.config } as ProjectDatabaseConfig, adoptRole: role => own.adoptRole(role), drop: () => own.drop() };
+    },
   }] : []),
   ...(process.env.ZHIN_TEST_MONGODB_URL ? [{
     name: 'mongodb',
-    config: { dialect: 'mongodb', url: process.env.ZHIN_TEST_MONGODB_URL, dbName: process.env.ZHIN_TEST_MONGODB_DATABASE ?? 'zhin_test' } as ProjectDatabaseConfig,
+    async create() {
+      const dbName = `${process.env.ZHIN_TEST_MONGODB_DATABASE ?? 'zhin_test'}_legacy_${process.pid}_${randomBytes(3).toString('hex')}`;
+      return { config: { dialect: 'mongodb', url: process.env.ZHIN_TEST_MONGODB_URL, dbName } as ProjectDatabaseConfig, adoptRole: () => undefined, drop: async () => undefined };
+    },
   }] : []),
 ];
 
-describe.skipIf(!live).each(sources)('legacy import from $name (live)', ({ config }) => {
+describe.skipIf(!live).each(sources)('legacy import from $name (live)', (source) => {
   let root: string;
+  let config: ProjectDatabaseConfig;
+  let own: OwnDatabase | undefined;
 
   async function dropLegacy(): Promise<void> {
     const db = new ProjectDatabase(config);
@@ -56,10 +59,13 @@ describe.skipIf(!live).each(sources)('legacy import from $name (live)', ({ confi
 
   beforeAll(async () => {
     root = await mkdtemp(join(tmpdir(), 'zhin-legacy-live-'));
+    own = await source.create();
+    config = own.config;
     await dropLegacy();
   });
   afterAll(async () => {
     await dropLegacy().catch(() => undefined);
+    await own?.drop();
     await rm(root, { recursive: true, force: true });
   });
 
@@ -99,6 +105,7 @@ describe.skipIf(!live).each(sources)('legacy import from $name (live)', ({ confi
         const admin = new ProjectDatabase(config);
         await admin.start();
         role = await provisionConsoleRole((sql, params) => admin.query(sql, params), { dialect: 'pg', projectKey: `revert-${root}` });
+        own?.adoptRole(role.user);
         await admin.stop();
       }
       const revertConfig = role ? { ...config, console: { user: role.user, password: role.password } } : config;

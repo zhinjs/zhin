@@ -1059,8 +1059,11 @@ function isPlainData(value: unknown): boolean {
 const FACADE_HIDDEN: ReadonlySet<string> = new Set(['constructor', 'dialect', 'database', 'db', 'config', 'transactionContext', 'connection', 'pool']);
 
 interface FacadeGuard {
-  /** Checked before every call with the method name and its arguments. */
-  (method: string, args: readonly unknown[]): void;
+  /**
+   * Checked before every call with the method name and its arguments; returns the arguments to
+   * pass on (string-like values replaced by the primitive string that was checked).
+   */
+  (method: string, args: readonly unknown[]): readonly unknown[] | void;
 }
 
 /**
@@ -1094,10 +1097,10 @@ function methodFacade(target: object, guard: FacadeGuard, cache: WeakMap<object,
     try { probe = Reflect.get(target, name, target); } catch { continue; }
     if (typeof probe === 'function') {
       facade[name] = (...args: unknown[]) => {
-        guard(name, args);
+        const checked = guard(name, args) ?? args;
         const method = Reflect.get(target, name, target) as (...values: unknown[]) => unknown;
         // Callbacks (transactions, `then`) receive wrapped handles.
-        const passed = args.map(arg => (typeof arg === 'function' ? (...inner: unknown[]) => (arg as (...values: unknown[]) => unknown)(...inner.map(wrapValue)) : arg));
+        const passed = checked.map(arg => (typeof arg === 'function' ? (...inner: unknown[]) => (arg as (...values: unknown[]) => unknown)(...inner.map(wrapValue)) : arg));
         return wrapValue(method.apply(target, passed));
       };
     } else if (probe instanceof Map) {
@@ -1140,12 +1143,68 @@ function mapFacade(map: Map<unknown, unknown>, guard: FacadeGuard, cache: WeakMa
  * gateway's data; it does not contain a malicious plugin.
  */
 function guardRawDatabase(db: RawDatabase): RawDatabase {
-  const guard: FacadeGuard = (method, args) => {
-    const [first] = args;
-    if (method === 'query' && typeof first === 'string' && referencesGatewayOwnedTable(first)) throw new GatewayOwnedTableError();
+  const guard: FacadeGuard = (_method, args) => {
+    // Every method, every argument (not by method name: `query`, `queryStatement`, `$raw`
+    // conditions, …): each string anywhere in the arguments is SQL text as far as this check
+    // knows. Data that literally names a gateway table is refused as well (fail closed).
+    const checked = args.map(arg => checkedSqlArgument(arg, 0));
+    const [first] = checked;
     if (typeof first === 'string') assertInstanceTable(first);
+    return checked;
   };
   return methodFacade(db, guard, new WeakMap()) as RawDatabase;
+}
+
+const SQL_ARGUMENT_MAX_DEPTH = 16;
+
+/**
+ * Checks one raw-handle argument for gateway table names, at any depth of arrays and plain
+ * objects. String-like values (`new String(…)`, objects with their own `toString` /
+ * `Symbol.toPrimitive`) are converted once and the checked primitive is what the driver gets, so
+ * a value cannot read differently at check and at use. Returns the argument unchanged when
+ * nothing needed converting.
+ */
+function checkedSqlArgument(value: unknown, depth: number): unknown {
+  if (typeof value === 'string') {
+    if (referencesGatewayOwnedTable(value)) throw new GatewayOwnedTableError();
+    return value;
+  }
+  if (value === null || typeof value !== 'object') return value;
+  if (depth >= SQL_ARGUMENT_MAX_DEPTH) throw new TypeError('Raw database argument is nested too deeply');
+  if (value instanceof String) return checkedSqlArgument(String.prototype.valueOf.call(value), depth + 1);
+  if (value instanceof Date || ArrayBuffer.isView(value) || value instanceof ArrayBuffer) return value;
+  if (Array.isArray(value)) {
+    let changed = false;
+    const items = value.map(item => {
+      const next = checkedSqlArgument(item, depth + 1);
+      if (next !== item) changed = true;
+      return next;
+    });
+    return changed ? items : value;
+  }
+  const proto = Object.getPrototypeOf(value) as object | null;
+  if (proto === Object.prototype || proto === null) {
+    let changed = false;
+    const entries = Object.entries(value).map(([key, item]) => {
+      if (referencesGatewayOwnedTable(key)) throw new GatewayOwnedTableError();
+      const next = checkedSqlArgument(item, depth + 1);
+      if (next !== item) changed = true;
+      return [key, next] as const;
+    });
+    if (stringConvertible(value)) return checkedSqlArgument(String(value), depth + 1);
+    return changed ? Object.assign(Object.create(proto) as object, Object.fromEntries(entries)) : value;
+  }
+  // Other class instances: string-convertible ones are what a driver would stringify.
+  return stringConvertible(value) ? checkedSqlArgument(String(value), depth + 1) : value;
+}
+
+/** An object whose string conversion is its own code (`toString`, `valueOf`, `Symbol.toPrimitive`). */
+function stringConvertible(value: object): boolean {
+  const own = (name: 'toString' | 'valueOf') => {
+    const method = (value as Record<string, unknown>)[name];
+    return typeof method === 'function' && method !== Object.prototype[name];
+  };
+  return typeof (value as { [Symbol.toPrimitive]?: unknown })[Symbol.toPrimitive] === 'function' || own('toString') || own('valueOf');
 }
 
 function databaseType(dialect: string): 'related' | 'document' | 'keyvalue' {

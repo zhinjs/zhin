@@ -75,10 +75,128 @@ export const GATEWAY_CONTROL_ENDPOINT_NAME = /^(?:gateway\.sock|zhin-gateway-[0-
  * anywhere in its text: `.zhin` as a path (`tar cf - .zhin`, `cp -r .zhin`, `cd .zhin && cat …`,
  * `.zhin/g*.db`), `gateway.db` in any spelling the text keeps whole (including inside a script
  * string), `zhin/keys`, or a `gateway…` name with a shell wildcard (`find -name "gateway*" -exec
- * cat {} +`). A text check: it cannot see names a script assembles at run time, so it narrows
- * what a prompt-injected Agent can do with `bash`; it is not a sandbox.
+ * cat {} +`). ANSI-C quoting (`$'\x2e'zhin`) is decoded and brace lists / ranges (`{.,x}zhin`)
+ * are expanded before matching. A text check: it cannot see names a script assembles at run time
+ * (`$var`, `$(…)`, whole-tree reads such as `find . -type f -exec cat {} +`), so it narrows what a
+ * prompt-injected Agent can do with `bash`; it is not a sandbox (the container hides `.zhin/`).
  */
 export function commandNamesProtectedStore(command: string): string | undefined {
+  // The text as written, and as the shell would read it after ANSI-C quoting (`$'\x2ezhin'`,
+  // `$'\056zhin'`) and brace expansion (`{.,x}zhin`, `{-../}zhin`): any spelling that names the
+  // store is refused. Run-time names (`$var`, `$(…)`, whole-tree reads) stay with the sandbox.
+  const decoded = decodeAnsiCQuoting(command);
+  const expanded = expandBraces(command);
+  const variants = new Set([command, decoded, expanded, expandBraces(decoded), expanded === undefined ? undefined : decodeAnsiCQuoting(expanded)]);
+  for (const variant of variants) {
+    if (variant === undefined) return 'brace expansion';
+    const hit = protectedStoreInText(variant);
+    if (hit) return hit;
+  }
+  return undefined;
+}
+
+/** `$'…'` strings with their escapes decoded (bash ANSI-C quoting); `$"…"` loses its `$`. */
+function decodeAnsiCQuoting(command: string): string {
+  const simple: Record<string, string> = { a: '\x07', b: '\b', e: '\x1b', E: '\x1b', f: '\f', n: '\n', r: '\r', t: '\t', v: '\v' };
+  const code = (value: string, radix: number) => {
+    const point = Number.parseInt(value, radix);
+    return Number.isFinite(point) && point <= 0x10ffff ? String.fromCodePoint(point) : '';
+  };
+  return command
+    .replace(/\$'((?:[^'\\]|\\[\s\S])*)'/gu, (_, body: string) => body.replace(
+      /\\(x[0-9a-fA-F]{1,2}|u[0-9a-fA-F]{1,4}|U[0-9a-fA-F]{1,8}|[0-7]{1,3}|c[\s\S]|[\s\S])/gu,
+      (__, escape: string) => {
+        const head = escape[0]!;
+        if (head === 'x') return escape.length > 1 ? code(escape.slice(1), 16) : escape;
+        if (head === 'u' || head === 'U') return escape.length > 1 ? code(escape.slice(1), 16) : escape;
+        if (/[0-7]/u.test(head)) return String.fromCharCode(Number.parseInt(escape, 8) & 0xff);
+        if (head === 'c' && escape.length > 1) return String.fromCharCode(escape.charCodeAt(1) & 0x1f);
+        return simple[head] ?? escape;
+      },
+    ))
+    .replace(/\$"/gu, '"');
+}
+
+const BRACE_EXPANSION_LIMIT = 4096;
+
+/**
+ * Every whitespace-separated word with its brace lists (`{a,b}`, nested) and character / number
+ * ranges (`{a..z}`, `{1..3}`) expanded, joined by spaces; `undefined` when a word would expand to
+ * more than {@link BRACE_EXPANSION_LIMIT} words (refused rather than checked partially).
+ */
+function expandBraces(command: string): string | undefined {
+  const out: string[] = [];
+  for (const word of command.split(/(\s+)/u)) {
+    if (!word.includes('{')) { out.push(word); continue; }
+    const expanded = expandWord(word);
+    if (!expanded) return undefined;
+    out.push(expanded.join(' '));
+  }
+  return out.join('');
+}
+
+function expandWord(word: string): string[] | undefined {
+  let results = [word];
+  for (let round = 0; round < 64; round += 1) {
+    let changed = false;
+    const next: string[] = [];
+    for (const item of results) {
+      const parts = firstBraceExpansion(item);
+      if (!parts) { next.push(item); continue; }
+      changed = true;
+      for (const alternative of parts.alternatives) next.push(parts.prefix + alternative + parts.suffix);
+      if (next.length > BRACE_EXPANSION_LIMIT) return undefined;
+    }
+    results = next;
+    if (!changed) return results;
+  }
+  return undefined;
+}
+
+/** The first `{…}` of a word that bash would expand, split into its alternatives. */
+function firstBraceExpansion(word: string): { prefix: string; alternatives: string[]; suffix: string } | undefined {
+  for (let open = word.indexOf('{'); open >= 0; open = word.indexOf('{', open + 1)) {
+    let depth = 0;
+    let close = -1;
+    const commas: number[] = [];
+    for (let index = open; index < word.length; index += 1) {
+      const char = word[index];
+      if (char === '\\') { index += 1; continue; }
+      if (char === '{') depth += 1;
+      else if (char === '}') {
+        depth -= 1;
+        if (depth === 0) { close = index; break; }
+      } else if (char === ',' && depth === 1) commas.push(index);
+    }
+    if (close < 0) return undefined;
+    const prefix = word.slice(0, open);
+    const suffix = word.slice(close + 1);
+    if (commas.length) {
+      const bounds = [open, ...commas, close];
+      return { prefix, suffix, alternatives: bounds.slice(0, -1).map((start, index) => word.slice(start + 1, bounds[index + 1])) };
+    }
+    const range = /^(-?\d+|[\s\S])\.\.(-?\d+|[\s\S])(?:\.\.(-?\d+))?$/u.exec(word.slice(open + 1, close));
+    if (range) {
+      const [, from, to, stepText] = range as unknown as [string, string, string, string | undefined];
+      const step = Math.max(1, Math.abs(Number(stepText ?? 1)) || 1);
+      const numeric = /^-?\d+$/u.test(from) && /^-?\d+$/u.test(to);
+      // Digits never spell a protected name: one representative is enough to check.
+      if (numeric) return { prefix, suffix, alternatives: [from] };
+      const start = numeric ? Number(from) : from.codePointAt(0)!;
+      const end = numeric ? Number(to) : to.codePointAt(0)!;
+      if (!numeric && (from.length !== 1 || to.length !== 1)) continue;
+      const count = Math.floor(Math.abs(end - start) / step) + 1;
+      if (count > BRACE_EXPANSION_LIMIT) return { prefix, suffix, alternatives: new Array<string>(BRACE_EXPANSION_LIMIT + 1).fill('') };
+      const direction = end >= start ? step : -step;
+      const alternatives: string[] = [];
+      for (let value = start, n = 0; n < count; value += direction, n += 1) alternatives.push(numeric ? String(value) : String.fromCodePoint(value));
+      return { prefix, suffix, alternatives };
+    }
+  }
+  return undefined;
+}
+
+function protectedStoreInText(command: string): string | undefined {
   // Quotes and backslash escapes do not change what the shell opens: `.zh""in`, `gateway.d\b`.
   const text = command.replace(/\\/g, '/').replace(/["'`]/g, '');
   const zhinDir = /(?:^|[\s=:,(/;&|<>{}$])(\.zhin)(?=$|[\s/;&|)<>*?[,}])/iu.exec(text);

@@ -63,10 +63,11 @@ export type LegacyImportRecord =
   }>;
 
 /**
- * `unavailable` (project database unreachable or busy: retried with backoff); the rest need the
+ * `unavailable` (project database unreachable or busy, and every error a driver reports — a
+ * unique-key violation while copying included: retried with backoff); the rest need the
  * operator and are not retried automatically: `conflict` (gateway.db holds data without a record,
  * or the project database already holds rows on revert), `mismatch` (copy did not read back
- * identically), `invalid` (the old rows cannot be copied: missing `id`, duplicate keys, …),
+ * identically), `invalid` (the old rows cannot be copied: a table without an `id` column),
  * `unsupported`, `store_lost` (the project database's marker says the accounts are in another
  * gateway.db: the store was lost or replaced) and `store_mismatch` (marker of a different store).
  */

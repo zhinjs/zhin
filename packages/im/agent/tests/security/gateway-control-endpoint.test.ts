@@ -128,3 +128,32 @@ describe('Agent bash and globbed / quoted / find-pattern access to .zhin', () =>
     }
   });
 });
+
+// Fourth review: ANSI-C quoting and brace expansion are read the way the shell reads them.
+describe('Agent bash and $\'…\' / brace-expanded spellings of .zhin', () => {
+  it('denies decoded and expanded spellings', async () => {
+    const paths = await createHostProtectedPaths({ projectRoot: '/srv/bot' });
+    for (const command of [
+      "cat $'\\x2e'zhin/*",
+      "cat $'\\056zhin'/g*",
+      "cat $'\\u002ezhin/gateway\\x2edb'",
+      'cat {.,x}zhin/*',
+      'cat {{.,a},b}zhin/k*',
+      'cat {-../}zhin/*',
+      "sqlite3 copy.sqlite $'select * from console_\\x75sers'",
+      'cat {a..c}{.,x}zhin/../.zhin',
+    ]) {
+      expect(hostWriteImpact('bash', { command }, paths)?.level, command).toBe('deny');
+    }
+    for (const command of ['ls src/{a,b}', 'mkdir -p a/{b,c}/{d,e}', 'echo {1..100000}', "echo $'hello\\n'", "git log --format='%H {x}'", 'cat x{.,y}{zh,a}in']) {
+      const impact = hostWriteImpact('bash', { command }, paths);
+      expect(impact?.level === 'deny' && /zhin|gateway|console_|brace/u.test(String(impact.target)), command).toBe(false);
+    }
+  });
+
+  it('refuses a brace expansion too large to check', async () => {
+    const paths = await createHostProtectedPaths({ projectRoot: '/srv/bot' });
+    const huge = `cat ${'{a,b,c,d}'.repeat(7)}`;
+    expect(hostWriteImpact('bash', { command: huge }, paths)?.level).toBe('deny');
+  });
+});

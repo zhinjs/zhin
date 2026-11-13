@@ -100,6 +100,44 @@ describe('instance database paths never reach the gateway console_* tables', () 
       expect(await raw.query('SELECT id FROM notes')).toEqual([]);
     } finally { await db.close(); }
   });
+
+  it('checks every string-like argument of every raw and transaction method, not only query', async () => {
+    const db = await sharedDatabase();
+    try {
+      const raw = db.instance.getRawDatabase() as unknown as {
+        query(sql: unknown, params?: unknown[]): Promise<unknown>;
+        transaction<T>(callback: (trx: Record<string, (...args: unknown[]) => Promise<unknown>>) => Promise<T>): Promise<T>;
+        select(name: string, fields: string[]): { where(condition: unknown): Promise<unknown> };
+      };
+      const refused = async (run: () => unknown) => {
+        await expect(Promise.resolve().then(run)).rejects.toThrow(/management gateway/);
+      };
+      const marker = 'DELETE FROM console_users';
+      await refused(() => raw.transaction(trx => trx.queryStatement!(marker)));
+      await refused(() => raw.transaction(trx => trx.query!(marker)));
+      await refused(() => raw.query(new String(marker)));
+      await refused(() => raw.query({ toString: () => marker }));
+      await refused(() => raw.query([marker]));
+      await refused(() => raw.query('SELECT id FROM notes WHERE id IN (?)', [{ nested: [marker] }]));
+      await refused(() => raw.select('notes', ['id']).where({ id: { $raw: '1) UNION SELECT password_hash FROM console_users --' } }));
+      await refused(() => raw.transaction(trx => trx.query!(Object.assign(Object.create(null), { toString: () => marker }))));
+      // A toString that answers differently the second time cannot slip through: the checked string
+      // is what the driver gets.
+      let calls = 0;
+      await expect(raw.query({ toString: () => (calls++ === 0 ? 'SELECT id FROM notes' : marker) })).resolves.toEqual([]);
+      expect(calls).toBe(1);
+      // The gateway rows are intact.
+      const check = new ProjectDatabase({ dialect: 'sqlite', filename: join(db.directory, 'bot.db') });
+      defineConsoleIamTables(check as never);
+      await check.start();
+      try {
+        expect(await check.models.get(IAM_TABLES.users)!.select('id')).toEqual([{ id: 'u1' }]);
+      } finally { await check.stop(); }
+      // Ordinary transaction statements keep working.
+      await raw.transaction(trx => trx.query!('INSERT INTO notes (id, text) VALUES (?, ?)', [1, new String('hello')]));
+      expect(await raw.query('SELECT id, text FROM notes')).toEqual([{ id: 1, text: 'hello' }]);
+    } finally { await db.close(); }
+  });
 });
 
 describe('a plugin on the SQLite instance database cannot open .zhin/gateway.db (ADR 0059 §2)', () => {

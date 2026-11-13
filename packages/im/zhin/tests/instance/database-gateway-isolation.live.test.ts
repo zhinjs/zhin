@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { createDatabaseHost } from '@zhin.js/core/runtime';
 import { provisionConsoleRole, Registry, type ConsoleRolePlan } from '@zhin.js/database';
 import { dispatchRuntimeConsoleRpc, pickRpcReply } from '@zhin.js/host-http';
+import { createLiveMysqlDatabase, createLivePgDatabase, liveMysqlBase, livePgBase, type LiveDatabase } from '../../../../../basic/database/tests/support/live-database.js';
 
 /**
  * ADR 0059 §4 / §5 against real servers (full-validation): the owner's raw Console SQL runs on
@@ -25,22 +26,22 @@ async function outcome(run: Promise<unknown>): Promise<string> {
 }
 
 describe.skipIf(!live)('owner raw SQL on PostgreSQL (live)', () => {
-  const main = {
-    host: process.env.ZHIN_TEST_PG_HOST ?? '127.0.0.1',
-    port: Number(process.env.ZHIN_TEST_PG_PORT ?? 35432),
-    user: process.env.ZHIN_TEST_PG_USER ?? 'zhin',
-    password: process.env.ZHIN_TEST_PG_PASSWORD ?? 'zhin',
-    database: process.env.ZHIN_TEST_PG_DATABASE ?? 'zhin_test',
-  };
-  const admin = Registry.create('pg', main as never) as unknown as Raw;
+  // A database of its own (filled in by beforeAll): suites run in parallel.
+  const main = livePgBase();
+  let own: LiveDatabase;
+  let admin: Raw;
   let plan: ConsoleRolePlan;
 
   beforeAll(async () => {
+    own = await createLivePgDatabase('gateway_isolation');
+    Object.assign(main, own.config);
+    admin = Registry.create('pg', main as never) as unknown as Raw;
     await admin.start();
     await admin.query('DROP TABLE IF EXISTS console_isolation_users, zhin_isolation_rows');
     await admin.query('CREATE TABLE zhin_isolation_rows (id int PRIMARY KEY, body text)');
     await admin.query("INSERT INTO zhin_isolation_rows VALUES (1, 'a')");
     plan = await provisionConsoleRole((sql, params) => admin.query(sql, params), { dialect: 'pg', projectKey: `isolation-${randomBytes(4).toString('hex')}` });
+    own.adoptRole(plan.user);
     // An old gateway table still in the project database (the import has not run yet): created
     // after the role, so the default privileges grant on it — the start-up refresh must revoke.
     await admin.query('CREATE TABLE console_isolation_users (id text PRIMARY KEY, password_hash text)');
@@ -52,7 +53,8 @@ describe.skipIf(!live)('owner raw SQL on PostgreSQL (live)', () => {
       await admin.query(`DROP OWNED BY "${plan.user}"`).catch(() => undefined);
       await admin.query(`DROP ROLE IF EXISTS "${plan.user}"`).catch(() => undefined);
     }
-    await admin.stop();
+    await admin?.stop();
+    await own?.drop();
   });
 
   describe.each([true, false])('text guard %s', (textGuard) => {
@@ -123,17 +125,15 @@ describe.skipIf(!live)('owner raw SQL on PostgreSQL (live)', () => {
 });
 
 describe.skipIf(!live || !process.env.ZHIN_TEST_MYSQL_ROOT_PASSWORD)('owner raw SQL on MySQL (live)', () => {
-  const main = {
-    host: process.env.ZHIN_TEST_MYSQL_HOST ?? '127.0.0.1',
-    port: Number(process.env.ZHIN_TEST_MYSQL_PORT ?? 33306),
-    user: process.env.ZHIN_TEST_MYSQL_USER ?? 'zhin',
-    password: process.env.ZHIN_TEST_MYSQL_PASSWORD ?? 'zhin',
-    database: process.env.ZHIN_TEST_MYSQL_DATABASE ?? 'zhin_test',
-  };
-  const admin = Registry.create('mysql', { ...main, user: process.env.ZHIN_TEST_MYSQL_ROOT_USER ?? 'root', password: process.env.ZHIN_TEST_MYSQL_ROOT_PASSWORD } as never) as unknown as Raw;
+  const main = liveMysqlBase();
+  let own: LiveDatabase;
+  let admin: Raw;
   let plan: ConsoleRolePlan;
 
   beforeAll(async () => {
+    own = await createLiveMysqlDatabase('gateway_isolation');
+    Object.assign(main, own.config);
+    admin = Registry.create('mysql', { ...main, user: process.env.ZHIN_TEST_MYSQL_ROOT_USER ?? 'root', password: process.env.ZHIN_TEST_MYSQL_ROOT_PASSWORD } as never) as unknown as Raw;
     await admin.start();
     await admin.query('DROP TABLE IF EXISTS zhin_isolation_rows');
     await admin.query('CREATE TABLE zhin_isolation_rows (id int PRIMARY KEY, body text)');
@@ -143,7 +143,8 @@ describe.skipIf(!live || !process.env.ZHIN_TEST_MYSQL_ROOT_PASSWORD)('owner raw 
   afterAll(async () => {
     await admin.query('DROP TABLE IF EXISTS zhin_isolation_rows').catch(() => undefined);
     if (plan) await admin.query(`DROP USER IF EXISTS '${plan.user}'@'${plan.host ?? '%'}'`).catch(() => undefined);
-    await admin.stop();
+    await admin?.stop();
+    await own?.drop();
   });
 
   describe.each([true, false])('text guard %s', (textGuard) => {
@@ -156,17 +157,20 @@ describe.skipIf(!live || !process.env.ZHIN_TEST_MYSQL_ROOT_PASSWORD)('owner raw 
 
     it('cannot reach gateway data, other databases, server files, triggers or routines', async () => {
       expect(host.console!.info().capabilities).toMatchObject({ sql: true, sqlIsolation: 'restricted-credential' });
-      const attempts: Record<string, [() => Promise<unknown>, string]> = {
+      // MySQL 8 refuses CREATE TRIGGER / PROCEDURE in the prepared-statement protocol (1295) before
+      // it checks the privilege (1142 / 1044); the account has neither privilege (checked below).
+      const attempts: Record<string, [() => Promise<unknown>, string | string[]]> = {
         'console_isolation_users': [() => host.console!.query!('SELECT password_hash FROM console_isolation_users'), '1146'],
         'mysql.user': [() => host.console!.query!('SELECT authentication_string FROM mysql.user'), '1142'],
-        'TRIGGER': [() => host.console!.execute!('CREATE TRIGGER zhin_isolation_t BEFORE INSERT ON zhin_isolation_rows FOR EACH ROW SET NEW.body = NEW.body'), '1142'],
-        'PROCEDURE': [() => host.console!.execute!('CREATE PROCEDURE zhin_isolation_p() SELECT 1'), '1044'],
+        'TRIGGER': [() => host.console!.execute!('CREATE TRIGGER zhin_isolation_t BEFORE INSERT ON zhin_isolation_rows FOR EACH ROW SET NEW.body = NEW.body'), ['1142', '1295']],
+        'PROCEDURE': [() => host.console!.execute!('CREATE PROCEDURE zhin_isolation_p() SELECT 1'), ['1044', '1295']],
       };
       for (const [name, [attempt, code]] of Object.entries(attempts)) {
         const result = await outcome(attempt());
         expect(result, name).not.toBe('ok');
-        if (!textGuard) expect(result, name).toBe(code);
+        if (!textGuard) expect(Array.isArray(code) ? code : [code], name).toContain(result);
       }
+      expect(await admin.query("SELECT PRIVILEGE_TYPE FROM information_schema.SCHEMA_PRIVILEGES WHERE GRANTEE = CONCAT(QUOTE(?), '@', QUOTE(?)) AND PRIVILEGE_TYPE IN ('TRIGGER', 'CREATE ROUTINE', 'FILE')", [plan.user, plan.host ?? '%'])).toEqual([]);
       if (!textGuard) {
         // LOAD DATA LOCAL: the client refuses to send a file (no LOCAL_FILES); LOAD_FILE reads nothing.
         expect(await outcome(host.console!.execute!("LOAD DATA LOCAL INFILE '/etc/passwd' INTO TABLE zhin_isolation_rows"))).not.toBe('ok');
