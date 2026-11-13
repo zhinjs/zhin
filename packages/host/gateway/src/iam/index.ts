@@ -1,6 +1,7 @@
 export { installConsoleIam, projectEnvironment, type ConsoleIamInstallation, type InstallConsoleIamOptions } from './install.js';
 export {
   accountInputProblem,
+  IAM_UNAVAILABLE_PUBLIC_MESSAGE,
   ConsoleIamService,
   IamError,
   type BindingInput,
@@ -32,6 +33,10 @@ export {
 export { defineConsoleIamTables, IAM_TABLE_DEFINITIONS, IAM_TABLES, type IamTableHost } from './tables.js';
 export {
   importLegacyIamTables,
+  isTransientLegacyImportError,
+  LEGACY_IMPORT_FAILURE_KEY,
+  resetGatewayStore,
+  type LegacyImportFailure,
   inspectLegacyIamImport,
   LEGACY_IMPORT_KEY,
   LegacyImportError,

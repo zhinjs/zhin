@@ -114,7 +114,7 @@ On PostgreSQL / MySQL the Console SQL editor runs only on a separately logged-in
 ### console: Setup and User Management {#console}
 
 ```bash
-zhin console init [--status]
+zhin console init [--status] [--reset-store]
 zhin console init [--database sqlite|mysql|pg|mongodb] [--database-<field> <value> ...]
                   [--database-password-env <VAR> | --database-password-stdin]
                   [--owner <username>] [--display-name <name>] [--password-stdin] [-y]
@@ -135,6 +135,7 @@ Console users, roles, sessions, API tokens and the audit log live in the gateway
   - `--database-password <value>` still works but is **not recommended**: the secret stays in shell history and the process list (`ps`), and the command prints a warning.
   - `--owner` plus `--password-stdin` creates the owner non-interactively (the password is the first line of stdin, or the second line together with `--database-password-stdin`; at least 10 characters); with `-y`, missing flags fail instead of prompting, for scripts.
 - **`user`**: `create` binds the global `viewer` role by default, `--role` takes `owner` / `admin` / `operator` / `viewer` or a custom role; `passwd` resets the password and revokes all of the user's sessions; `disable` / `enable` suspend and restore; `list` prints users, state and role bindings. Adapter- or account-scoped bindings are set in the Console's Access pages.
+- **`init --reset-store`**: when `.zhin/gateway.db` was lost or replaced (the project database's marker `zhin_gateway_store` names another store) the Console stays closed; once you accept that the old accounts are gone, this resets it (gateway stopped first, asks for confirmation, `--yes` skips it), records the reset in the new audit log and continues with setup.
 - **`migrate`** moves the Console account tables an earlier version kept in the project database into `.zhin/gateway.db` (the gateway also does it when it starts; while a gateway runs the command only reports the state). `--revert` writes them back into the project database and empties gateway.db — required before downgrading, with the gateway stopped (`zhin stop`). See the [upgrade notes](../migrations/gateway-storage.md).
 - `http.token` is only a **bootstrap token**: valid until the first owner exists, refused on every endpoint afterwards.
 

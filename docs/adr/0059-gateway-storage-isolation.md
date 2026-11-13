@@ -32,6 +32,7 @@ ADR 0049 / 0054 让网关和实例共用一个项目数据库：网关读写 6 �
 - 网关不再常驻连接项目库，只在**迁移**（§3）和初始化向导**测试连接**时临时连接（ADR 0054 §7 修订）。
 - IAM 不再受项目库方言限制：redis / memory 项目也能建 Console 账号，`IAM_DIALECTS` 删除（ADR 0049 §8 修订）。初始化向导的可选驱动只是“能测试连接的方言”（sqlite / mysql / pg / mongodb）。
 - 数据库切换（初始化向导）：网关不必重连，只重启实例；账号留在 gateway.db。
+- **威胁模型**：隔离针对的是 Console 原始 SQL、Agent 工具与插件的**无意**访问（以及经它们发起的提示注入 / 越权操作）。插件是受信任代码，与实例同进程、同系统用户运行，能直接读写项目目录下的文件——包括 `.zhin/gateway.db`；本 ADR 不把恶意插件挡在外面，部署时只安装可信插件。
 
 ### 2. SQLite 实例连接拒绝 `ATTACH`（`denyAttach`）
 
@@ -41,6 +42,7 @@ ADR 0049 / 0054 让网关和实例共用一个项目数据库：网关读写 6 �
 - Node 提供 `setAuthorizer` 时额外装一个拒绝 `SQLITE_ATTACH` 的 authorizer；构造时传 `limits: { attach: 0 }`（新 Node 生效，Node 22 忽略）。都是特性检测，`database_list` 检查才是兜底。
 - 方言新增 `backupTo(path)`（`node:sqlite` 的 `backup()`，没有时用 `VACUUM INTO`），产物 `0600`；回退迁移前用它给 gateway.db 留副本。实测：同一连接处在写事务中时 `backup()` 失败（“not an error”），所以在事务外做。
 - SQLite 不需要受限账号：账号在另一个文件里，实例连接又打不开它。
+- 插件拿到的原始句柄（`getRawDatabase()`）是冻结视图：方言对象、其配置与 `node:sqlite` 连接（`dialect` / `config` / `db`）都取不到，也写不进去，模型不带回指 registry 的属性；SQLite 方言的连接是真正的私有字段（`#db`）。这是防误用，不是对抗受信任插件的沙箱（见 §1 威胁模型）。
 
 ### 3. 迁移：网关连接阶段把旧表导入 gateway.db
 
@@ -80,7 +82,7 @@ ADR 0049 / 0054 让网关和实例共用一个项目数据库：网关读写 6 �
 
 ### 7. Agent 文件策略
 
-`.zhin/` 整体已在 Agent 文件 / `bash` 工具的拒绝目录里，`*.db` 及其 `-wal` / `-shm` 也按文件名拒绝（ADR 0054 §7 以来），覆盖 `.zhin/gateway.db*` 与 `.zhin/keys/`；补测试固定这一点。
+`.zhin/` 整体已在 Agent 文件工具的拒绝目录里，`*.db` 及其 `-wal` / `-shm` 也按文件名拒绝（ADR 0054 §7 以来），覆盖 `.zhin/gateway.db*` 与 `.zhin/keys/`。`bash` 另按命令文本拒绝：命令里出现 `.zhin` 路径、`gateway.db`、`zhin/keys`，或带通配符的 `gateway…` / `*.db`（`tar cf - .zhin`、`cp -r .zhin`、`cd .zhin && cat …`、`find … -name "gateway*" -exec cat`、脚本字符串里的路径）。这是文本检查：运行时拼出来的路径（例如逐字符拼接文件名）看不到，它只缩小提示注入后 Agent 用 `bash` 能做的事，不是沙箱；真正的边界仍是 §1 的文件权限与“实例不打开 gateway.db”。
 
 ### 8. 版本
 
@@ -141,3 +143,20 @@ PostgreSQL 放到 `zhin_gateway` schema、MySQL 放到另一个库，并只授�
 5. `@zhin.js/cli`：`zhin console migrate [--revert]`、`zhin db console-role`、`zhin doctor` 10e；
 6. Console 前端：`sql = false` 时显示 `sqlReason`，PostgreSQL 写 SQL 遇 42501 提示改用结构编辑器；
 7. 文档与修订：ADR 0049 / 0054 / 0057、`docs/migrations/gateway-storage.md`、配置参考、生产部署、Console 运维。
+
+## 修订 2026-11-13：独立评审后的加固
+
+独立评审（同日）发现的问题与处理：
+
+1. **gateway.db 丢失会重新打开初始化**（原 §3 判定 `fresh('no-tables')`）：迁移完成（`done`）或判定无需迁移（`fresh`）后，网关在项目库写入标记表 `zhin_gateway_store`（`id = 'gateway'`、`store_id`、`migrated_at`；MongoDB 为同名集合），`store_id` 是 gateway.db 打开时生成的随机 id（`gateway_meta.store_id`）。之后每次连接：gateway.db 是新的 / 空的而项目库有标记 → `store_lost`；gateway.db 已就绪但标记里是别的 store → `store_mismatch`。两者都让 Console 访问控制保持关闭（初始化令牌被拒），原因说明恢复备份或运行 **`zhin console init --reset-store`**（需先 `zhin stop`、需确认或 `--yes`）：重置把标记改写为当前 store、记 `fresh` / `reset-store`、并在新 store 的审计日志写一条 `auth.store.reset`（含原 store id），然后继续初始化。项目库连不上时不阻止已就绪的 store（它本身没有丢）。SQLite 项目库文件尚不存在时不为标记创建它，下次启动补写。标记表与 `console_*` 一样属网关所有（`isGatewayOwnedTable`）：实例、Console 与受限账号都碰不到。**redis / memory 项目没有地方写标记**：`.zhin/` 必须持久化，否则丢失 gateway.db 会回到“没有所有者”。`--revert` 删除标记。
+2. **重复失败时每 10 秒写一份完整备份**：备份目录按快照内容命名（`.zhin/backups/gateway-db-legacy-<内容摘要>`），同样的行只写一次。失败分两类：项目库不可用 / 忙为暂时性，网关按 `retryMs × 2ⁿ` 退避重试（上限 5 分钟）；`conflict`、`mismatch`、`invalid`（缺 `id` 列、唯一键冲突等）、`store_lost`、`store_mismatch` 需要运维处理，不再自动重试，写入 `gateway_meta.legacy_import_failure`，`zhin doctor` 报告（网关运行时经 `gateway.console.migration.status` 读取，带 `pendingCode`），处理后重启网关。
+3. **PostgreSQL 连接串（M1）**：受限连接由 `consoleConnectionOptions`（`@zhin.js/database`）构造：主账号的 `user` / `password` 字段、连接串的用户信息与 `?user=` / `?password=` / `?options=` 查询参数全部去掉，受限账号以查询参数写入（`pg-connection-string` 会用连接串里的值覆盖显式字段，空值也算）。MySQL `uri` 拆成 `host` / `port` / `database`，只保留 `charset`、`timezone`、`connectTimeout`、`ssl` 等白名单参数——`?multipleStatements=true`、`?flags=LOCAL_FILES` 会盖过假值字段，一律丢弃；连接后读驱动合并后的配置（`connectionSafety()`），仍有 `LOCAL_FILES` 或多语句时拒绝使用。连接池 `resetSession`：PostgreSQL 归还前 `DISCARD ALL`，MySQL `connection.reset()`（COM_RESET_CONNECTION），重置失败的连接直接销毁。
+4. **PostgreSQL 探针补 CVE-2018-1058 前提（L1）与角色设置（L5）**：受限账号在任一非临时模式上有 `CREATE`、拥有任何模式 / 表 / 函数 / 类型 / 运算符、角色级设置（`pg_db_role_setting`）不等于 `search_path=public`、`statement_timeout=60s`，或能访问任何网关表（`console_*`、`zhin_gateway_store`）时，探针不通过。账号自己可以 `ALTER ROLE CURRENT_USER SET …` / 改密码（PostgreSQL 允许），所以建号时先 `ALTER ROLE … RESET ALL` 再写入预期设置，探针逐项比对。成功的探针 60 秒后过期：之后的原始 SQL、以及受限连接上出过错之后的第一次使用，都先重新补授权并探测（在已开的连接上进行）；失败后最多每 5 分钟重试。部署时还应在 `pg_hba.conf` / MySQL 账号主机部分把受限账号限制为实例所在主机。
+5. **回退后默认权限（L2）**：`--revert` 把账号表写回项目库后，主账号的默认权限会把这些新表授予受限账号（MySQL 是库级授权）：回退时撤销受限账号在 6 张表上的权限，PostgreSQL 撤销 `ALTER DEFAULT PRIVILEGES` 授予，MySQL 撤销该账号的全部授权，并提示删除账号与 `database.console`。正常运行时每次补授权都撤销网关表上的授权，探针也检查。
+6. **MySQL 角色与 PROXY（L3）**：探针拒绝 `information_schema.APPLICABLE_ROLES` 非空（8.0.19 前 / MariaDB 解析 `SHOW GRANTS` 的角色授予行）、`PROXY` 授权、以及本库之外或允许集合之外的 `TABLE_PRIVILEGES` / `COLUMN_PRIVILEGES`；建号时按 `SHOW GRANTS FOR` 撤销遗留的角色与 PROXY。MySQL < 5.7.6 / MariaDB < 10.1.3 不支持 `CREATE USER IF NOT EXISTS` / `ALTER USER`，建号直接报版本过低。
+7. **匿名响应泄露细节（L6）**：IAM 关闭期间，`/auth/me` 与 503 回复只给通用说明和类别码（`unavailableCode` / `reason`：`starting`、`store`、`migration_pending`、`migration_failed`、`store_lost`、`store_mismatch`），路径与驱动报错只写日志、只给本机所有者（`zhin doctor`、`zhin console migrate`）。
+8. **建号的密码（L7）**：PostgreSQL 发送客户端算好的 SCRAM-SHA-256 校验值（`PASSWORD 'SCRAM-SHA-256$4096:…'`），口令本身不经网络、不进服务器日志，`--print-sql` 可原样交给 DBA；MySQL 的语句用占位符。任何错误信息里出现的口令（原样、转义、URL 编码）都替换为 `[redacted]`，驱动原始错误不再作为 `cause` 带出。
+9. **插件原始句柄（L8）**：见 §2 最后一条；威胁模型写入 §1。
+10. **Console 前端（L9）**：`capabilities.sqlReasonCode` 区分 `console-role-missing` / `console-role-invalid` / `text-compatibility` / `sqlite-isolation`，只有前两种提示运行 `zhin db console-role`；PostgreSQL 的 42501 提示按方言 id 判断。
+11. **Agent `bash`**：见 §7，按命令文本补拒绝间接读取的写法，并说明其局限。
+

@@ -197,9 +197,9 @@ macOS 使用不带 `--user` 的 launchd 服务命令。只保留一层进程重�
 
 SQLite 备份应使用数据库快照或停写复制，不要在写入中直接复制单个文件。外部数据库使用对应引擎的备份工具，并定期做恢复演练。
 
-**`.zhin/` 必须持久化**（容器卷、Kubernetes PVC）：丢了 `.zhin/gateway.db` 就丢了全部 Console 账号、会话、令牌与审计，丢了 `.zhin/keys/` 就解不开账号与模型凭据。升级到 ADR 0059 的版本时，网关第一次启动会把旧版存在项目数据库里的 Console 账号表迁入 `gateway.db`，完成前 Console 登录返回 503，见[升级说明](../migrations/gateway-storage.md)；降级前先 `zhin console migrate --revert`。
+**`.zhin/` 必须持久化**（容器卷、Kubernetes PVC）。项目数据库里的标记表 `zhin_gateway_store` 记着 gateway.db 的 id：gateway.db 丢了，Console 会保持关闭而不是重新开放初始化，需要恢复备份或 `zhin console init --reset-store`；redis / memory 项目没有这个标记，只能靠 `.zhin/` 持久化。丢了 `.zhin/gateway.db` 就丢了全部 Console 账号、会话、令牌与审计，丢了 `.zhin/keys/` 就解不开账号与模型凭据。升级到 ADR 0059 的版本时，网关第一次启动会把旧版存在项目数据库里的 Console 账号表迁入 `gateway.db`，完成前 Console 登录返回 503，见[升级说明](../migrations/gateway-storage.md)；降级前先 `zhin console migrate --revert`。
 
-PostgreSQL / MySQL 部署要用 Console 的 SQL 控制台时，运行 `zhin db console-role` 创建受限账号（托管数据库没有建号权限时用 `--print-sql` 交给 DBA），见[配置：`database.console`](../configuration/index.md#database-console)。
+PostgreSQL / MySQL 部署要用 Console 的 SQL 控制台时，运行 `zhin db console-role` 创建受限账号（托管数据库没有建号权限时用 `--print-sql` 交给 DBA），并在 `pg_hba.conf` / MySQL 账号主机部分只允许实例所在主机登录，见[配置：`database.console`](../configuration/index.md#database-console)。
 
 ## 6. 监控与告警
 

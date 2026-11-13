@@ -218,14 +218,21 @@ describe('gateway Console access control without an instance (B1.4)', () => {
     // No setup marker and an empty gateway.db: still not "no owner yet" while the project database is unreachable.
     const context = await gatewayOnly({ token: 'setup-token', database: { dialect: 'sqlite', filename: tmpdir() } });
     const me = await context.call('GET', '/auth/me', undefined, 'setup-token');
-    expect(me.body.data).toMatchObject({ kind: 'anonymous', setupRequired: false, unavailable: expect.stringContaining('项目数据库') });
+    expect(me.body.data).toMatchObject({ kind: 'anonymous', setupRequired: false, unavailableCode: 'migration_pending', unavailable: expect.stringContaining('zhin doctor') });
+    // Anonymous callers never see paths or driver messages (they go to the logs and `zhin doctor`).
+    expect(JSON.stringify(me.body)).not.toContain(tmpdir());
+    expect(JSON.stringify(me.body)).not.toMatch(/SQLite|unable to open/u);
     // The bootstrap token is refused outright (the Host counts as initialized while closed)…
     expect((await context.call('GET', '/auth/setup', undefined, 'setup-token')).status).toBe(401);
     expect((await context.call('POST', '/auth/setup', { username: 'owner', password: PASSWORD }, 'setup-token')).status).toBe(401);
     // …and the public /auth routes but /auth/me answer 503 with the reason.
     const login = await context.call('POST', '/auth/login', { username: 'owner', password: PASSWORD });
     expect(login.status).toBe(503);
-    expect(login.body).toMatchObject({ code: 'iam_unavailable', error: expect.stringContaining('项目数据库') });
+    expect(login.body).toMatchObject({ code: 'iam_unavailable', reason: 'migration_pending', error: expect.stringContaining('zhin doctor') });
+    expect(JSON.stringify(login.body)).not.toContain(tmpdir());
+    // The local owner gets the detail over the control socket.
+    const status = await context.gateway.console!.localAdmin.handle('gateway.console.migration.status', {});
+    expect(status).toMatchObject({ ok: true, data: { pendingCode: 'migration_pending', pending: expect.stringContaining('无法连接项目数据库') } });
     expect((await context.rpc('gateway.instance.status', {}, 'setup-token')).status).toBe(401);
   });
 

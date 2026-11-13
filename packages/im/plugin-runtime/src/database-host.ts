@@ -111,6 +111,12 @@ export interface DatabaseHostConsoleCapabilities {
    */
   readonly sqlReason?: string;
   /**
+   * Machine-readable kind of `sqlReason`: `console-role-missing` (no `database.console`),
+   * `console-role-invalid` (the account cannot log in or holds too much), `text-compatibility`
+   * (the server reads SQL text differently), `sqlite-isolation` (in-memory SQLite).
+   */
+  readonly sqlReasonCode?: 'console-role-missing' | 'console-role-invalid' | 'text-compatibility' | 'sqlite-isolation';
+  /**
    * What keeps raw SQL away from the gateway's data (ADR 0059): `separate-store` (SQLite — the
    * accounts are in `.zhin/gateway.db`, which this connection cannot ATTACH) or
    * `restricted-credential` (PostgreSQL / MySQL — raw SQL logs in as a restricted account).

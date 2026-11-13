@@ -23,6 +23,7 @@ import { ConsoleSetupService, type SetupDatabaseField, type SetupDriver } from '
 import {
   importLegacyIamTables,
   LegacyImportError,
+  resetGatewayStore,
   revertLegacyIamImport,
   type LegacyImportInspection,
   type LegacyImportRecord,
@@ -173,7 +174,9 @@ export async function openConsoleAdmin(projectRoot: string, options: OpenConsole
 /** Errors the commands report as a message (exit 1) instead of a stack. */
 function reportable(error: unknown): string | undefined {
   if (error instanceof IamError) return error.message;
-  if (error instanceof LegacyImportError) return `迁移旧版 Console 账号表失败：${error.message}`;
+  if (error instanceof LegacyImportError) {
+    return error.code === 'store_lost' || error.code === 'store_mismatch' ? error.message : `迁移旧版 Console 账号表失败：${error.message}`;
+  }
   if (error instanceof LocalGatewayRpcError) return error.message;
   if (error instanceof LocalGatewayClientError) return describeGatewayError(error);
   return undefined;
@@ -216,6 +219,13 @@ export interface ConsoleInitOptions {
   readonly displayName?: string;
   readonly passwordStdin?: boolean;
   readonly yes?: boolean;
+  /**
+   * ADR 0059 §3 修订: the project database's marker names another gateway.db (the store was lost
+   * or replaced). Accept that its Console accounts are gone: adopt this store, record the reset in
+   * its audit log, then continue the setup. Needs the gateway stopped; asks for confirmation
+   * unless `yes`.
+   */
+  readonly resetStore?: boolean;
 }
 
 type Opener = (projectRoot: string) => Promise<ConsoleAdmin>;
@@ -231,6 +241,10 @@ export async function runConsoleInit(
   io: ConsoleCliIo = defaultConsoleCliIo,
   open: Opener = openConsoleAdmin,
 ): Promise<number> {
+  if (options.resetStore) {
+    const reset = await resetStoreStep(projectRoot, options, io);
+    if (reset !== 0) return reset;
+  }
   let project: ConsoleAdmin;
   try {
     project = await open(projectRoot);
@@ -471,10 +485,40 @@ export const consoleUserActions = {
   },
 };
 
+async function resetStoreStep(projectRoot: string, options: ConsoleInitOptions, io: ConsoleCliIo): Promise<number> {
+  if (await probeGateway({ root: projectRoot })) {
+    io.error('网关正在运行：先 zhin stop，再运行 zhin console init --reset-store');
+    return 1;
+  }
+  if (!options.yes) {
+    const { confirm } = await io.prompt<{ confirm: boolean }>([{
+      type: 'confirm', name: 'confirm', default: false,
+      message: '项目数据库记录的 Console 账号存储（.zhin/gateway.db）已不可用。重置会放弃原来的全部 Console 账号、会话、API 令牌与审计，并重新开放初始化。确定吗？',
+    }]);
+    if (!confirm) {
+      io.error('已取消');
+      return 1;
+    }
+  }
+  const store = await openGatewayStore(projectRoot);
+  try {
+    const result = await resetGatewayStore({ store, projectRoot, projectDatabase: () => projectDatabaseOf(projectRoot) });
+    io.log(`已重置 Console 账号存储：项目数据库现在指向 store ${result.storeId}${result.previousStoreId ? `（原 store ${result.previousStoreId}）` : ''}，已写入审计日志。`);
+    return 0;
+  } catch (error) {
+    const message = reportable(error);
+    if (message === undefined) throw error;
+    io.error(message);
+    return 1;
+  } finally {
+    await store.close();
+  }
+}
+
 /** One line about the import state of the old account tables. */
 export function describeLegacyImport(record: LegacyImportRecord | undefined): string {
   if (!record) return '尚未迁移：旧版 Console 账号表还没有导入 .zhin/gateway.db（Console 访问控制关闭中）';
-  if (record.status === 'fresh') return `无需迁移（${record.reason === 'no-tables' ? '项目数据库里没有旧表' : record.reason === 'no-database-file' ? '项目数据库文件不存在' : `项目数据库是 ${record.source.dialect}`}）`;
+  if (record.status === 'fresh') return `无需迁移（${record.reason === 'no-tables' ? '项目数据库里没有旧表' : record.reason === 'no-database-file' ? '项目数据库文件不存在' : record.reason === 'reset-store' ? '已用 --reset-store 重置' : `项目数据库是 ${record.source.dialect}`}）`;
   const counts = Object.entries(record.counts).map(([table, count]) => `${table}=${count}`).join(' ');
   if (record.status === 'copied') return `已复制但旧表尚未删除（${counts}；备份 ${record.backup}）：网关或 zhin console migrate 会继续`;
   return `已迁移（${counts}；备份 ${record.backup}）${record.changed ? `；复制后旧表有变化，删除前的内容在 ${record.changedExport}` : ''}`;
@@ -500,7 +544,7 @@ export async function runConsoleMigrate(projectRoot: string, options: ConsoleMig
       }
       const client = await LocalGatewayClient.connect(target);
       try {
-        const status = await client.request<LegacyImportInspection & { pending?: string }>(LOCAL_GATEWAY_RPC.CONSOLE_MIGRATION_STATUS);
+        const status = await client.request<LegacyImportInspection & { pending?: string; pendingCode?: string }>(LOCAL_GATEWAY_RPC.CONSOLE_MIGRATION_STATUS);
         io.log(`网关运行中，迁移由网关完成：${describeLegacyImport(status.record)}`);
         if (status.pending) io.log(`Console 访问控制关闭中：${status.pending}`);
         return status.pending ? 1 : 0;
@@ -514,6 +558,7 @@ export async function runConsoleMigrate(projectRoot: string, options: ConsoleMig
       if (options.revert) {
         const result = await revertLegacyIamImport({ store, projectRoot, projectDatabase });
         io.log(`已把 Console 账号表写回项目数据库（${Object.entries(result.counts).map(([table, count]) => `${table}=${count}`).join(' ')}），.zhin/gateway.db 已清空；回退前的副本在 ${result.backup}`);
+        for (const warning of result.warnings) io.log(`注意：${warning}`);
         io.log('现在可以安装旧版本；再次升级时网关会重新迁移。');
         return 0;
       }
@@ -545,7 +590,8 @@ const initCommand = new Command('init')
   .option('--owner <name>', '所有者用户名')
   .option('--display-name <name>', '所有者显示名')
   .option('--password-stdin', '从标准输入读取所有者密码（与 --database-password-stdin 同用时读第二行）')
-  .option('-y, --yes', '非交互：不提问，缺少参数即失败');
+  .option('-y, --yes', '非交互：不提问，缺少参数即失败')
+  .option('--reset-store', 'gateway.db 丢失或被替换后（项目数据库的标记指向另一个 store）：放弃原有 Console 账号，重置后继续初始化（需先 zhin stop）');
 for (const field of DATABASE_FIELDS) {
   initCommand.option(`--database-${field} <value>`, field === 'password'
     // Kept for compatibility; a secret on the command line ends up in shell history and `ps`.
@@ -569,6 +615,7 @@ initCommand.action(async (raw: Record<string, unknown>) => {
     ...(typeof raw.displayName === 'string' ? { displayName: raw.displayName } : {}),
     passwordStdin: raw.passwordStdin === true,
     yes: raw.yes === true,
+    resetStore: raw.resetStore === true,
   }));
 });
 

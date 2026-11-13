@@ -158,7 +158,8 @@ function isInMemoryFilename(filename: string): boolean {
 
 export class SQLiteDialect<S extends Record<string, object> = Record<string, object>> extends Dialect<SQLiteDialectConfig, S, string> {
   /** Node 内置 SQLite 连接（node:sqlite），在 connect() 中动态加载 */
-  private db: { prepare(sql: string): any; exec(sql: string): void; close(): void; readonly isTransaction?: boolean } | null = null;
+  /** The `node:sqlite` connection: a true private field, so no handle on the dialect object reaches it. */
+  #db: { prepare(sql: string): any; exec(sql: string): void; close(): void; readonly isTransaction?: boolean } | null = null;
   /** Own transaction flag; `DatabaseSync#isTransaction` is preferred where Node provides it. */
   private transactionOpen = false;
   /** The transaction in progress; `poisoned` once a statement in it attached a database (denyAttach). */
@@ -171,7 +172,7 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
   }
 
   isConnected(): boolean {
-    return this.db !== null;
+    return this.#db !== null;
   }
 
   async connect(): Promise<void> {
@@ -197,7 +198,7 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
         db.close();
         throw error;
       }
-      this.db = db;
+      this.#db = db;
     } catch (error) {
       throw new Error(`SQLite 连接失败（需要 Node.js 22.5+，推荐 24+）: ${error}`);
     }
@@ -205,7 +206,7 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
 
   /** True when {@link queryReadOnlyIsolated} can open its own connection (a file database). */
   supportsIsolatedReads(): boolean {
-    return this.db !== null && !isInMemoryFilename(this.config.filename);
+    return this.#db !== null && !isInMemoryFilename(this.config.filename);
   }
 
   /**
@@ -288,13 +289,13 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
    * copy is created owner-only (0600). The destination must not exist.
    */
   async backupTo(destination: string): Promise<void> {
-    if (!this.db) throw new Error('SQLite 未连接');
+    if (!this.#db) throw new Error('SQLite 未连接');
     if (fs.existsSync(destination)) throw new Error(`Backup destination already exists: ${destination}`);
-    fs.mkdirSync(path.dirname(destination), { recursive: true });
+    fs.mkdirSync(path.dirname(destination), { recursive: true, mode: 0o700 });
     const { createRequire } = await import('node:module');
     const sqlite = createRequire(import.meta.url)('node:sqlite') as { backup?: (source: unknown, path: string) => Promise<unknown> };
-    if (typeof sqlite.backup === 'function') await sqlite.backup(this.db, destination);
-    else this.db.prepare('VACUUM INTO ?').run(destination);
+    if (typeof sqlite.backup === 'function') await sqlite.backup(this.#db, destination);
+    else this.#db.prepare('VACUUM INTO ?').run(destination);
     fs.chmodSync(destination, 0o600);
   }
 
@@ -303,11 +304,11 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
       this.isolatedReader.killed = true;
       try { this.isolatedReader.child.kill('SIGKILL'); } catch { /* already gone */ }
     }
-    if (this.db) {
+    if (this.#db) {
       try {
-        this.db.close();
+        this.#db.close();
       } finally {
-        this.db = null;
+        this.#db = null;
       }
     }
   }
@@ -359,7 +360,7 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
   }
 
   private inTransaction(): boolean {
-    const native = this.db?.isTransaction;
+    const native = this.#db?.isTransaction;
     return typeof native === 'boolean' ? native : this.transactionOpen;
   }
 
@@ -369,16 +370,16 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
    * locks); then every extra schema is detached.
    */
   private assertNotAttached(): void {
-    if (this.config.denyAttach !== true || !this.db) return;
-    const extra = attachedSchemas(this.db);
+    if (this.config.denyAttach !== true || !this.#db) return;
+    const extra = attachedSchemas(this.#db);
     if (!extra.length) return;
     if (this.currentTransaction) {
       this.currentTransaction.poisoned = true;
-      try { this.db.exec('ROLLBACK'); } catch { /* not in a transaction any more */ }
+      try { this.#db.exec('ROLLBACK'); } catch { /* not in a transaction any more */ }
       this.transactionOpen = false;
     }
     for (const schema of extra) {
-      try { this.db.exec(`DETACH DATABASE ${this.quoteIdentifier(schema)}`); } catch { /* already gone */ }
+      try { this.#db.exec(`DETACH DATABASE ${this.quoteIdentifier(schema)}`); } catch { /* already gone */ }
     }
     throw new SqliteAttachRefusedError(extra);
   }
@@ -391,7 +392,7 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
   }
 
   private async execute<U = any>(sql: string, params?: any[]): Promise<U> {
-    if (!this.db) throw new Error('SQLite 未连接');
+    if (!this.#db) throw new Error('SQLite 未连接');
     this.assertTransactionUsable();
     this.assertNotAttached();
     try {
@@ -402,7 +403,7 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
   }
 
   private async executeUnchecked<U = any>(sql: string, params?: any[]): Promise<U> {
-    if (!this.db) throw new Error('SQLite 未连接');
+    if (!this.#db) throw new Error('SQLite 未连接');
     const trimmedSql = sql.trim().toLowerCase();
     const isInsert = trimmedSql.startsWith('insert');
     const isUpdateOrDelete = trimmedSql.startsWith('update') || trimmedSql.startsWith('delete');
@@ -411,7 +412,7 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
     const hasReturning = /\breturning\b/.test(sqlWithoutLiterals);
     const args = this.prepareBindParams(params ?? []);
 
-    const stmt = this.db.prepare(sql);
+    const stmt = this.#db.prepare(sql);
     if (isInsert && !hasReturning) {
       const result = stmt.run(...args) as { changes: number | bigint; lastInsertRowid: number | bigint };
       return {
@@ -464,11 +465,11 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
   }
 
   async dispose(): Promise<void> {
-    if (this.db) {
+    if (this.#db) {
       try {
-        this.db.close();
+        this.#db.close();
       } finally {
-        this.db = null;
+        this.#db = null;
       }
     }
   }
@@ -644,14 +645,14 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
       /** `prepare()` compiles only the first statement; with `maxRows` rows are iterated, not all read. */
       async queryStatement<T = any>(sql: string, options?: StatementQueryOptions): Promise<T> {
         const maxRows = options?.maxRows;
-        if (maxRows === undefined || !dialect.db) return capRows(await dialect.query<T>(sql), maxRows);
+        if (maxRows === undefined || !dialect.#db) return capRows(await dialect.query<T>(sql), maxRows);
         dialect.assertTransactionUsable();
         dialect.assertNotAttached();
         const rows: unknown[] = [];
         let truncated = false;
         let statement: any;
         try {
-          statement = dialect.db.prepare(sql);
+          statement = dialect.#db.prepare(sql);
           for (const row of statement.iterate()) {
             if (rows.length >= maxRows) { truncated = true; break; }
             rows.push(row);

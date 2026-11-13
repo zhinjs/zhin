@@ -100,6 +100,69 @@ describe.skipIf(!live)('Console role on PostgreSQL (live)', () => {
     expect(refreshed.granted).toContain('zhin_console_cred_rows');
   });
 
+  it('refuses every CVE-2018-1058 precondition and changed role settings (review L1 / L5)', async () => {
+    const probe = async () => probeConsoleCredential(restrictedRun, { dialect: 'pg', expectedUser: plan.user, mainUser });
+    const role = `"${plan.user}"`;
+    const cases: Array<[string, string, string, RegExp]> = [
+      ['member of the main account', `GRANT "${mainUser}" TO ${role}`, `REVOKE "${mainUser}" FROM ${role}`, /member of other roles|privileges of the main account/],
+      ['CREATE on public', `GRANT CREATE ON SCHEMA public TO ${role}`, `REVOKE CREATE ON SCHEMA public FROM ${role}`, /CREATE in schema public/],
+      ['pg_read_server_files', `GRANT pg_read_server_files TO ${role}`, `REVOKE pg_read_server_files FROM ${role}`, /member of other roles/],
+      ['a schema named like the main account', `CREATE SCHEMA zhin_cve_main AUTHORIZATION ${role}`, 'DROP SCHEMA zhin_cve_main CASCADE', /owns objects \(schemas: 1|CREATE in schema zhin_cve_main/],
+      ['CREATE on another schema', `CREATE SCHEMA zhin_cve_s2; GRANT CREATE ON SCHEMA zhin_cve_s2 TO ${role}`, 'DROP SCHEMA zhin_cve_s2 CASCADE', /CREATE in schema zhin_cve_s2/],
+      ['owns a table', `CREATE TABLE zhin_cve_owned (a int); ALTER TABLE zhin_cve_owned OWNER TO ${role}`, 'DROP TABLE zhin_cve_owned', /owns objects \(relations/],
+      ['a changed search_path', `ALTER ROLE ${role} SET search_path = "$user", pg_temp, public`, `ALTER ROLE ${role} SET search_path = public`, /role settings/],
+    ];
+    expect((await probe()).ok).toBe(true);
+    const ran: string[] = [];
+    const [{ super: isSuper }] = await run('SELECT rolsuper AS super FROM pg_roles WHERE rolname = current_user') as Array<{ super: boolean }>;
+    for (const [label, apply, undo, problem] of cases) {
+      // A CREATEROLE (non-superuser) main account cannot grant predefined roles or itself (PG 16).
+      if (!isSuper && (label === 'pg_read_server_files' || label === 'member of the main account')) continue;
+      try {
+        for (const statement of apply.split('; ')) await run(statement);
+      } catch (error) {
+        // PG 16: a CREATEROLE account may not give objects to a role it cannot SET ROLE to.
+        if (isSuper || (error as { code?: string }).code !== '42501') throw error;
+        for (const statement of undo.split('; ')) await run(statement).catch(() => undefined);
+        continue;
+      }
+      ran.push(label);
+      try {
+        const result = await probe();
+        expect(result.ok, label).toBe(false);
+        expect(result.problems.join('\n'), label).toMatch(problem);
+      } finally {
+        for (const statement of undo.split('; ')) await run(statement).catch(() => undefined);
+      }
+    }
+    expect(ran).toEqual(expect.arrayContaining(['CREATE on public', 'CREATE on another schema', 'a changed search_path']));
+    if (isSuper) expect(ran).toHaveLength(cases.length);
+    expect((await probe()).ok).toBe(true);
+    // The account may change its own settings (PG allows it): the probe notices.
+    await restrictedRun(`ALTER ROLE CURRENT_USER SET search_path = pg_temp, public`);
+    expect((await probe()).problems.join('\n')).toMatch(/role settings/);
+    await run(`ALTER ROLE ${role} SET search_path = public`);
+    expect((await probe()).ok).toBe(true);
+  });
+
+  it('never sends the password: the role stores the client-computed SCRAM verifier', async () => {
+    expect(plan.statements.join('\n')).not.toContain(plan.password);
+    expect(plan.statements[0]).toMatch(/PASSWORD 'SCRAM-SHA-256\$4096:/);
+  });
+
+  it('refuses the probe while a gateway table is reachable (review L2)', async () => {
+    await run('DROP TABLE IF EXISTS console_users');
+    await run('CREATE TABLE console_users (id text PRIMARY KEY, password_hash text)');
+    try {
+      const probe = await probeConsoleCredential(restrictedRun, { dialect: 'pg', expectedUser: plan.user, mainUser });
+      expect(probe.problems.join('\n')).toMatch(/can reach gateway tables: console_users/);
+      await refreshConsoleGrants(run, { role: plan.user });
+      expect((await probeConsoleCredential(restrictedRun, { dialect: 'pg', expectedUser: plan.user, mainUser })).ok).toBe(true);
+    } finally {
+      await run('DROP TABLE IF EXISTS console_users');
+    }
+  });
+
   it('rotates the password of an existing role', async () => {
     const rotated = await provisionConsoleRole(run, { dialect: 'pg', projectKey: 'unused', role: plan.user });
     expect(rotated.statements[0]).toMatch(/^ALTER ROLE/);

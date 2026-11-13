@@ -5,7 +5,7 @@
  * in the setup wizard — a short-lived connection to the project database. SQLite runs in WAL
  * mode (`@zhin.js/database`), so several processes can hold a file open.
  */
-import { isSqliteBusyError, Registry } from '@zhin.js/database';
+import { GATEWAY_STORE_MARKER_TABLE, isSqliteBusyError, Registry } from '@zhin.js/database';
 import type { DatabaseHostModel, DatabaseHostSelection } from '@zhin.js/plugin-runtime';
 import type { ProjectDatabaseConfig } from './config.js';
 
@@ -77,6 +77,16 @@ interface RawDatabase {
 /** One statement inside {@link ProjectDatabase.transaction}. */
 export interface ProjectDatabaseTransaction {
   query<T = unknown>(sql: string, params?: unknown[]): Promise<T>;
+}
+
+/** The gateway's marker in the project database. */
+export interface StoreMarker {
+  readonly storeId: string;
+  readonly migratedAt: number;
+}
+
+function markerOf(row: Record<string, unknown>): StoreMarker {
+  return Object.freeze({ storeId: String(row.store_id ?? ''), migratedAt: Number(row.migrated_at ?? 0) });
 }
 
 /** Rows keyed by table name. */
@@ -309,6 +319,42 @@ export class ProjectDatabase {
     await this.transaction(async (trx) => {
       for (const statement of statements) await trx.query(statement);
     });
+  }
+
+  /** The gateway's marker (ADR 0059 §3 修订): which gateway.db holds the Console accounts, or undefined. */
+  async readStoreMarker(): Promise<StoreMarker | undefined> {
+    this.#requireStarted();
+    const { dialect } = this.config;
+    if (!(await this.tableExists([GATEWAY_STORE_MARKER_TABLE])).length) return undefined;
+    if (dialect === 'mongodb') {
+      const [row] = await this.#db.query<Record<string, unknown>[]>({ collection: GATEWAY_STORE_MARKER_TABLE, operation: 'find', filter: { id: 'gateway' }, limit: 1 });
+      return row ? markerOf(row) : undefined;
+    }
+    const [row] = await this.query<Record<string, unknown>[]>(`SELECT store_id, migrated_at FROM ${quoteTableName(dialect, GATEWAY_STORE_MARKER_TABLE)} WHERE id = ${placeholder(dialect, 1)}`, ['gateway']);
+    return row ? markerOf(row) : undefined;
+  }
+
+  /** Writes (replaces) the marker. */
+  async writeStoreMarker(marker: StoreMarker): Promise<void> {
+    this.#requireStarted();
+    const { dialect } = this.config;
+    if (dialect === 'mongodb') {
+      await this.#db.query({ collection: GATEWAY_STORE_MARKER_TABLE, operation: 'deleteMany', filter: { id: 'gateway' } });
+      await this.#db.query({ collection: GATEWAY_STORE_MARKER_TABLE, operation: 'insertOne', filter: {} }, [{ id: 'gateway', store_id: marker.storeId, migrated_at: marker.migratedAt }]);
+      return;
+    }
+    this.#requireSql();
+    const table = quoteTableName(dialect, GATEWAY_STORE_MARKER_TABLE);
+    await this.query(`CREATE TABLE IF NOT EXISTS ${table} (id VARCHAR(32) NOT NULL PRIMARY KEY, store_id VARCHAR(64) NOT NULL, migrated_at BIGINT NOT NULL)`);
+    await this.transaction(async (trx) => {
+      await trx.query(`DELETE FROM ${table} WHERE id = ${placeholder(dialect, 1)}`, ['gateway']);
+      await trx.query(`INSERT INTO ${table} (id, store_id, migrated_at) VALUES (${placeholder(dialect, 1)}, ${placeholder(dialect, 2)}, ${placeholder(dialect, 3)})`, ['gateway', marker.storeId, marker.migratedAt]);
+    });
+  }
+
+  /** Removes the marker (revert to a version without it). */
+  async deleteStoreMarker(): Promise<void> {
+    await this.dropTables([GATEWAY_STORE_MARKER_TABLE]);
   }
 
   async start(): Promise<void> {

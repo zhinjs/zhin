@@ -9,7 +9,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ProjectDatabase } from '@zhin.js/gateway/database';
 import { ConsoleIamService, defineConsoleIamTables, IAM_TABLES } from '@zhin.js/gateway/iam';
-import { consoleUserActions, runConsoleMigrate, type ConsoleCliIo } from '../src/commands/console.js';
+import { consoleUserActions, runConsoleInit, runConsoleMigrate, type ConsoleCliIo } from '../src/commands/console.js';
 import { runConsoleRole } from '../src/commands/db.js';
 import { diagnoseGatewayStorage } from '../src/utils/gateway-storage-check.js';
 
@@ -161,5 +161,30 @@ describe('zhin doctor: gateway storage checks', () => {
     await writeFile(path.join(configured, '.env'), 'ZHIN_DB_CONSOLE_USER=zhin_console_x\nZHIN_DB_CONSOLE_PASSWORD=secret\n');
     expect(await diagnoseGatewayStorage(configured)).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'Console SQL 受限账号', status: 'ok' })]));
     expect(await readFile(path.join(configured, '.env'), 'utf8')).toContain('ZHIN_DB_CONSOLE_USER');
+  });
+});
+
+describe.runIf(process.platform !== 'win32')('a lost gateway.db (ADR 0059 §3 修订)', () => {
+  it('keeps access control closed, doctor says why, and --reset-store reopens setup with an audit entry', async () => {
+    const root = await project();
+    await seedLegacy(root);
+    expect(await runConsoleMigrate(root, {}, io(), noGateway)).toBe(0);
+    for (const suffix of ['', '-wal', '-shm']) await rm(path.join(root, '.zhin', `gateway.db${suffix}`), { force: true });
+
+    const users = io();
+    expect(await consoleUserActions.list(root, users)).toBe(1);
+    expect(users.errors.join('\n')).toMatch(/zhin console init --reset-store/);
+    const checks = await diagnoseGatewayStorage(root);
+    expect(checks).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'Console 账号存储', status: 'error', fix: expect.stringContaining('--reset-store') })]));
+
+    const init = io();
+    init.readStdin = async () => 'new-owner-password-1\n';
+    expect(await runConsoleInit(root, { resetStore: true, yes: true, owner: 'neo', passwordStdin: true }, init)).toBe(0);
+    expect(init.logs.join('\n')).toMatch(/已重置 Console 账号存储/);
+    expect(init.logs.join('\n')).toMatch(/已创建所有者 neo/);
+    const after = io();
+    expect(await consoleUserActions.list(root, after)).toBe(0);
+    expect(after.logs.join('\n')).toContain('neo');
+    expect(after.logs.join('\n')).not.toContain('owner\t');
   });
 });

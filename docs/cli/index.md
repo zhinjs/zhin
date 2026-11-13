@@ -114,7 +114,7 @@ PostgreSQL / MySQL 上，Console 的 SQL 控制台只用单独登录的受限账
 ### console：初始化与用户管理 {#console}
 
 ```bash
-zhin console init [--status]
+zhin console init [--status] [--reset-store]
 zhin console init [--database sqlite|mysql|pg|mongodb] [--database-<字段> <值> ...]
                   [--database-password-env <VAR> | --database-password-stdin]
                   [--owner <用户名>] [--display-name <显示名>] [--password-stdin] [-y]
@@ -135,6 +135,7 @@ Console 的用户、角色、会话、API 令牌与审计存在网关自己的 `
   - `--database-password <值>` 仍可用但**不推荐**：机密会留在 shell 历史与进程列表（`ps`）里，命令执行时会打印警告。
   - `--owner` 加 `--password-stdin` 可非交互创建所有者（密码取标准输入第一行，与 `--database-password-stdin` 同用时取第二行；至少 10 位）；加 `-y` 时缺少参数直接失败而不提问，适合脚本。
 - **`user`**：`create` 默认绑定全局 `viewer`，`--role` 可指定 `owner` / `admin` / `operator` / `viewer` 或自定义角色；`passwd` 重置密码并吊销该用户的全部会话；`disable` / `enable` 禁用与恢复；`list` 列出用户、状态和角色绑定。适配器 / 账号作用域的绑定在 Console「访问控制」里设置。
+- **`init --reset-store`**：`.zhin/gateway.db` 丢失或被替换（项目数据库的标记 `zhin_gateway_store` 指向另一个 store）时 Console 保持关闭；确认放弃原有账号后用它重置（需先 `zhin stop`，会要求确认，`--yes` 跳过），重置记入新的审计日志，然后继续初始化。
 - **`migrate`**：把旧版存在项目数据库里的 Console 账号表迁入 `.zhin/gateway.db`（网关启动时也会自动执行；网关运行时只显示状态）。`--revert` 写回项目数据库并清空 gateway.db，降级到旧版本之前必须执行，需先 `zhin stop`。见[升级说明](../migrations/gateway-storage.md)。
 - `http.token` 只是**初始化令牌**：所有者创建之前有效，之后在所有接口上失效。
 

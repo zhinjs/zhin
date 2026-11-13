@@ -26,7 +26,14 @@ Console 的用户、角色、角色绑定、会话、API 令牌与审计日志�
 4. 再核对一次后，从项目数据库删除这 6 张表；
 5. 在 gateway.db 的 `gateway_meta.legacy_import` 记下 `done`。
 
-**迁移完成前 Console 登录不可用**：`/auth/login` 等返回 `503 iam_unavailable`，`/auth/me` 返回匿名并带 `unavailable` 原因，初始化令牌（`http.token`）也被拒绝——空的 gateway.db 不会被当成“还没有所有者”。常见原因是项目数据库暂时连不上，网关每 10 秒重试；`zhin logs` 可以看到 `gateway_legacy_import_failed`。SQLite 项目通常一秒内完成。
+**迁移完成前 Console 登录不可用**：`/auth/login` 等返回 `503 iam_unavailable`（`reason` 是类别码，如 `migration_pending`），`/auth/me` 返回匿名并带通用说明与 `unavailableCode`，初始化令牌（`http.token`）也被拒绝——空的 gateway.db 不会被当成“还没有所有者”。具体原因（路径、驱动报错）只写进日志，并由 `zhin doctor` / `zhin console migrate` 显示给服务器上的你。项目数据库暂时连不上时网关自动重试（10 秒起，逐次加倍，最长 5 分钟），`zhin logs` 可以看到 `gateway_legacy_import_failed`；数据冲突、复制核对不一致、旧表缺 `id` 列之类需要人处理的失败不会自动重试，`zhin doctor` 报告原因，处理后 `zhin stop && zhin start`。重复失败不会反复写备份：同样的旧数据只备份一次（目录 `.zhin/backups/gateway-db-legacy-<摘要>`）。SQLite 项目通常一秒内完成。
+
+迁移（或判定无需迁移）之后，网关在项目数据库写一个标记表 `zhin_gateway_store`，记下当前 gateway.db 的随机 id。以后 gateway.db 丢失或被换成别的文件，网关会发现、保持 Console 关闭（初始化令牌不会重新生效），并提示两条路：
+
+- 从备份恢复 `.zhin/gateway.db`；
+- 确认放弃原有账号：`zhin stop`，然后 `zhin console init --reset-store`（会要求确认；`--yes` 跳过），它把标记改为当前 gateway.db、在新的审计日志里记一条 `auth.store.reset`，再进入正常的初始化。
+
+redis / memory 项目没有地方放标记：这类项目尤其要保证 `.zhin/` 持久化。
 
 旧的密码、会话与 API 令牌在迁移后照常可用，不需要重新登录。
 
@@ -69,7 +76,8 @@ database:
 
 - 主账号没有建号权限（托管数据库常见）：`zhin db console-role --print-sql` 只打印 SQL（密码处是 `<ZHIN_DB_CONSOLE_PASSWORD>` 占位，真实值在 `.env`），交给 DBA 执行后 `zhin restart`；
 - `zhin doctor --fix` 做同样的事；
-- 实例启动时只**探测**这个账号（不是超级用户、不能建角色 / 库 / 模式、不属于其他角色、MySQL 上只有本库权限等），不合格时 SQL 控制台关闭并说明原因，之后最多每 5 分钟重新探测一次；PostgreSQL 上还会用主账号补授权给新建的表；
+- 实例启动时只**探测**这个账号（不是超级用户、不能建角色 / 库 / 模式、在任何模式上都不能建对象、不拥有任何对象、角色设置未被改动、不属于其他角色、MySQL 上只有本库权限且没有角色与 PROXY 等），不合格时 SQL 控制台关闭并说明原因，之后最多每 5 分钟重新探测一次；正常时每 60 秒、以及受限连接出错后的下一次使用前也会重新探测；PostgreSQL 上还会用主账号补授权给新建的表，并撤销它在网关表上的任何权限；
+- 建议在 `pg_hba.conf`（或 MySQL 账号的主机部分）把受限账号限制为实例所在主机；PostgreSQL 建号时发送的是客户端算好的 SCRAM 校验值，`--print-sql` 输出可以原样交给 DBA；
 - **PostgreSQL 上 SQL 控制台不能做 DDL**（`CREATE` / `ALTER` / `DROP` 回 42501 权限不足）：请用 Console 的结构编辑器；
 - SQLite 不需要受限账号：账号在另一个文件里，实例的连接拒绝 `ATTACH`。
 
@@ -82,7 +90,7 @@ zhin stop
 zhin console migrate --revert
 ```
 
-它先把 gateway.db 复制到 `.zhin/backups/gateway-db-<时间>/`，再把 6 张表写回项目数据库并核对，然后清空 gateway.db 里的这些表。项目数据库里这些表已有数据时拒绝覆盖。之后可以安装旧版本；再次升级时会重新迁移。
+它先把 gateway.db 复制到 `.zhin/backups/gateway-db-<时间>/`，再把 6 张表写回项目数据库并核对，然后清空 gateway.db 里的这些表、删除标记表，并撤销受限账号在这些表上的权限（PostgreSQL 还撤销它的默认权限）——旧版本不用受限账号，按提示删除它和 `database.console`。项目数据库里这些表已有数据时拒绝覆盖。之后可以安装旧版本；再次升级时会重新迁移。
 
 ## 5. 对集成与插件的影响
 

@@ -98,6 +98,18 @@ describe.skipIf(!live)('owner raw SQL on PostgreSQL (live)', () => {
     });
   });
 
+  it('logs in as the console user also when the main account comes from a connection string (review M1)', async () => {
+    const url = `postgresql://${encodeURIComponent(main.user)}:${encodeURIComponent(main.password)}@${main.host}:${main.port}/${main.database}?user=${encodeURIComponent(main.user)}&password=${encodeURIComponent(main.password)}`;
+    const host = createDatabaseHost({ dialect: 'pg', connectionString: url, console: { user: plan.user, password: plan.password } } as never);
+    await host.start();
+    try {
+      expect(host.console!.info().capabilities).toMatchObject({ sql: true });
+      expect((await host.console!.query!('SELECT current_user AS who')).rows).toEqual([{ who: plan.user }]);
+    } finally {
+      await host.stop();
+    }
+  });
+
   it('answers 42P01 once the old table is gone (imported into gateway.db)', async () => {
     await admin.query('DROP TABLE IF EXISTS console_isolation_users');
     const host = createDatabaseHost({ dialect: 'pg', ...main, console: { user: plan.user, password: plan.password } } as never, { textGuard: false });

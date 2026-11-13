@@ -37,7 +37,7 @@ import { projectEnvironment } from '../iam/install.js';
 import { createLocalConsoleAdmin, type LocalConsoleAdmin } from '../iam/local-admin.js';
 import { registerConsoleAuthRoutes } from '../iam/routes.js';
 import { dispatchIamRpc, isIamRpc } from '../iam/rpc.js';
-import { importLegacyIamTables, inspectLegacyIamImport, LegacyImportError, readLegacyImportRecord } from '../iam/legacy-import.js';
+import { importLegacyIamTables, inspectLegacyIamImport, isTransientLegacyImportError, LegacyImportError, readLegacyImportRecord } from '../iam/legacy-import.js';
 import { ConsoleIamService, type IamDatabase } from '../iam/service.js';
 import { ConsoleSetupService } from '../iam/setup-service.js';
 import { OnboardingError } from '../onboarding/errors.js';
@@ -50,6 +50,8 @@ import type { GatewayHttpServer } from './gateway-http-server.js';
 
 const logger = getLogger('gateway');
 const DEFAULT_RETRY_MS = 10_000;
+/** Cap of the retry backoff while the project database stays unreachable. */
+const MAX_RETRY_MS = 5 * 60_000;
 
 /** What the Console module needs from the instance bridge (`IpcInstanceTransport` has all of it). */
 export interface GatewayConsoleInstancePort {
@@ -110,8 +112,17 @@ export async function startGatewayConsole(options: GatewayConsoleOptions): Promi
   const { server, projectRoot } = options;
   /** Why access control is closed (undefined once gateway.db is open and the import settled). */
   let pending: string | undefined = 'Console 访问控制正在启动';
+  /** Category of `pending` shown to anonymous callers (never the detail). */
+  let pendingCode = 'starting';
+  /** Consecutive transient failures (backoff exponent). */
+  let failures = 0;
   const failClosed = (): Connection => ({
-    service: new ConsoleIamService({ database: UNAVAILABLE_DATABASE, projectRoot, unavailable: () => pending ?? 'Console 访问控制正在重新连接' }),
+    service: new ConsoleIamService({
+      database: UNAVAILABLE_DATABASE,
+      projectRoot,
+      unavailable: () => pending ?? 'Console 访问控制正在重新连接',
+      unavailableCode: () => (pending === undefined ? 'starting' : pendingCode),
+    }),
     dispose: [],
   });
   const environment = options.environment ?? 'development';
@@ -162,6 +173,7 @@ export async function startGatewayConsole(options: GatewayConsoleOptions): Promi
       store = await openGatewayStore(projectRoot, options.store ?? {});
     } catch (error) {
       pending = `无法打开 .zhin/gateway.db：${errorText(error)}`;
+      pendingCode = 'store';
       logger.warn(formatCompact({ op: 'gateway_store_open_failed', error: errorText(error) }));
       scheduleRetry();
       return;
@@ -180,11 +192,17 @@ export async function startGatewayConsole(options: GatewayConsoleOptions): Promi
         logger.warn(formatCompact({ op: 'gateway_legacy_import_changed', export: record.changedExport }));
       }
     } catch (error) {
-      pending = error instanceof LegacyImportError && error.code === 'unavailable'
-        ? `正在等待项目数据库，以迁移旧版的 Console 账号表：${error.message}`
-        : `迁移旧版 Console 账号表失败：${errorText(error)}`;
-      logger.warn(formatCompact({ op: 'gateway_legacy_import_failed', code: error instanceof LegacyImportError ? error.code : 'error', error: errorText(error) }));
-      scheduleRetry();
+      const code = error instanceof LegacyImportError ? error.code : 'error';
+      const transient = isTransientLegacyImportError(error);
+      pending = code === 'store_lost' || code === 'store_mismatch'
+        ? errorText(error)
+        : transient
+          ? `正在等待项目数据库，以迁移旧版的 Console 账号表：${errorText(error)}`
+          : `迁移旧版 Console 账号表失败，需要处理后重启网关（zhin stop && zhin start）：${errorText(error)}`;
+      pendingCode = code === 'store_lost' || code === 'store_mismatch' ? code : transient ? 'migration_pending' : 'migration_failed';
+      logger.warn(formatCompact({ op: 'gateway_legacy_import_failed', code, transient, error: errorText(error) }));
+      // Retrying cannot fix a conflict, a mismatch or a lost store: stay closed until the operator acts.
+      if (transient) scheduleRetry();
       return;
     }
     const service = new ConsoleIamService({
@@ -197,6 +215,7 @@ export async function startGatewayConsole(options: GatewayConsoleOptions): Promi
       await service.start();
     } catch (error) {
       pending = `Console 访问控制无法启动：${errorText(error)}`;
+      pendingCode = 'store';
       logger.warn(formatCompact({ op: 'gateway_store_open_failed', error: errorText(error) }));
       service.stop();
       scheduleRetry();
@@ -205,16 +224,20 @@ export async function startGatewayConsole(options: GatewayConsoleOptions): Promi
     const dispose = [service.onCredentialsRevoked(({ userId, reason }) => revoke(userId, reason))];
     connection = { database: store, service, dispose };
     pending = undefined;
+    failures = 0;
     logger.info(formatCompact({ op: 'gateway_store_open', file: store.filename }));
   }
 
+  /** Transient failure: retry with a growing delay (retryMs, 2×, 4×, … at most MAX_RETRY_MS). */
   function scheduleRetry(): void {
     if (closed || retryTimer) return;
+    const delay = Math.min(retryMs * 2 ** failures, Math.max(retryMs, MAX_RETRY_MS));
+    failures += 1;
     retryTimer = setTimeout(() => {
       retryTimer = undefined;
       if (closed) return;
       void reopen();
-    }, retryMs);
+    }, delay);
     retryTimer.unref?.();
   }
 
@@ -273,7 +296,7 @@ export async function startGatewayConsole(options: GatewayConsoleOptions): Promi
       const store = connection.database;
       if (!store) return { pending };
       const inspection = await inspectLegacyIamImport({ store, projectRoot, projectDatabase });
-      return { ...inspection, record: inspection.record ?? await readLegacyImportRecord(store), ...(pending !== undefined ? { pending } : {}) };
+      return { ...inspection, record: inspection.record ?? await readLegacyImportRecord(store), ...(pending !== undefined ? { pending, pendingCode } : {}) };
     },
   });
 

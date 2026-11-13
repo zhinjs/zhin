@@ -31,7 +31,7 @@ export async function dispatchIamRpc(
     : message) as Record<string, unknown>;
   const ok = (data: unknown): IamRpcReply => ({ status: 200, body: { success: true, data, type, requestId } });
   try {
-    if (!service?.ready) throw new IamError('unavailable', service?.unavailableReason() ?? 'Console 访问控制尚未就绪');
+    if (!service?.ready) throw new IamError('unavailable', service?.publicUnavailable()?.message ?? 'Console 访问控制尚未就绪');
     const id = (key = 'id') => {
       const value = payload[key];
       if (typeof value !== 'string' || !value) throw new IamError('invalid_input', `${key} 必填`);

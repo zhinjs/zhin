@@ -31,7 +31,7 @@ describe('raw SQL needs the server to read text like the Console lexer', () => {
         if (/@@SESSION\.sql_mode/.test(sql)) return [{ mode }];
         if (/CURRENT_USER\(\) AS account/.test(sql)) return [{ account: 'zhin_console_x@%', db: 'bot' }];
         if (/USER_PRIVILEGES/.test(sql)) return [{ privilege: 'USAGE', grantable: 'NO' }];
-        if (/TABLE_PRIVILEGES/.test(sql)) return [{ n: 0 }];
+        if (/COUNT\(\*\) AS n FROM information_schema.TABLE_PRIVILEGES/.test(sql)) return [{ n: 0 }];
         if (/CURRENT_ROLE/.test(sql)) return [{ role: 'NONE' }];
         return [];
       },

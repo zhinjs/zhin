@@ -4,7 +4,7 @@ import { readEnvFile, writeEnvFile } from '../config/environment-files.js';
 import type { ProjectDatabaseConfig } from '../database/config.js';
 import { openGatewayStore, type GatewayStore } from '../database/gateway-store.js';
 import { normalizeBase } from '../http-response.js';
-import { importLegacyIamTables } from './legacy-import.js';
+import { importLegacyIamTables, LegacyImportError } from './legacy-import.js';
 import { registerConsoleAuthRoutes } from './routes.js';
 import { ConsoleIamService, type IamDatabase } from './service.js';
 import { ConsoleSetupService, type SetupConfigPort } from './setup-service.js';
@@ -45,6 +45,7 @@ export interface ConsoleIamInstallation {
 export function installConsoleIam(http: HttpHost, options: InstallConsoleIamOptions): ConsoleIamInstallation {
   let store: GatewayStore | undefined;
   let pending: string | undefined = 'Console 访问控制正在启动';
+  let pendingCode = 'starting';
   const database: IamDatabase = Object.freeze({
     get started() { return store?.started ?? false; },
     models: Object.freeze({ get: (name: string) => store?.models.get(name) }),
@@ -56,6 +57,7 @@ export function installConsoleIam(http: HttpHost, options: InstallConsoleIamOpti
     // Installed on the token registry by the runtime composition root; empty until then.
     pluginPermissions: () => http.tokenRegistry.pluginPermissions(),
     unavailable: () => pending,
+    unavailableCode: () => pendingCode,
   });
   const setup = new ConsoleSetupService({
     projectRoot: options.projectRoot,
@@ -93,6 +95,7 @@ export function installConsoleIam(http: HttpHost, options: InstallConsoleIamOpti
           pending = undefined;
         } catch (error) {
           pending = `Console 访问控制不可用：${error instanceof Error ? error.message : String(error)}`;
+          pendingCode = error instanceof LegacyImportError && (error.code === 'store_lost' || error.code === 'store_mismatch') ? error.code : 'migration_failed';
           options.logger?.warn(`console iam: ${pending}`);
         }
       })();

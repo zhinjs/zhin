@@ -7,7 +7,9 @@ import { openGatewayStore, ProjectDatabase, type GatewayStore, type ProjectDatab
 import {
   importLegacyIamTables,
   inspectLegacyIamImport,
+  isTransientLegacyImportError,
   LegacyImportError,
+  resetGatewayStore,
   readLegacyImportRecord,
   revertLegacyIamImport,
   tableChecksum,
@@ -198,7 +200,10 @@ describe('importLegacyIamTables', () => {
       store: target, projectRoot: root, projectDatabase: async () => config,
       openSource: flakySource({ failDrop: 0, mutate: ({ id: _id, ...row }) => row }),
     });
-    await expect(failing).rejects.toSatisfy((error: unknown) => error instanceof LegacyImportError && error.code === 'mismatch');
+    await expect(failing).rejects.toSatisfy((error: unknown) => error instanceof LegacyImportError && error.code === 'invalid');
+    // Not retried automatically: recorded for zhin doctor.
+    expect(isTransientLegacyImportError(await failing.catch((error: unknown) => error))).toBe(false);
+    expect(await target.getMeta('legacy_import_failure')).toMatchObject({ code: 'invalid', message: expect.stringContaining('没有 id 列') });
     expect(await readLegacyImportRecord(target)).toBeUndefined();
     expect(Object.values(await target.counts()).every(count => count === 0)).toBe(true);
     expect(await legacyTables(config)).toContain(IAM_TABLES.users);

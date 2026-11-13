@@ -188,7 +188,7 @@ export class ConsoleSetupService {
 
   async createOwner(input: Readonly<{ username: unknown; password: unknown; displayName?: unknown }>): Promise<{ user: ConsoleUserView }> {
     const iam = this.#options.iam();
-    if (!iam?.ready) throw new IamError('unavailable', iam?.unavailableReason() ?? 'Console 访问控制尚未就绪');
+    if (!iam?.ready) throw new IamError('unavailable', iam?.publicUnavailable()?.message ?? 'Console 访问控制尚未就绪');
     if (iam.initialized()) throw new IamError('conflict', '已初始化：请改用 zhin console user 管理用户');
     return { user: await iam.createOwner(input) };
   }

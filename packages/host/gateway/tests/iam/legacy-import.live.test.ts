@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { openGatewayStore, ProjectDatabase, type ProjectDatabaseConfig } from '../../src/database/index.js';
+import { provisionConsoleRole } from '@zhin.js/database';
 import { importLegacyIamTables, revertLegacyIamImport } from '../../src/iam/legacy-import.js';
 import { ConsoleIamService } from '../../src/iam/service.js';
 import { defineConsoleIamTables, IAM_TABLES } from '../../src/iam/tables.js';
@@ -91,7 +92,29 @@ describe.skipIf(!live).each(sources)('legacy import from $name (live)', ({ confi
       expect(await iam.authenticate(token.token)).toMatchObject({ kind: 'api-token' });
       iam.stop();
 
-      const reverted = await revertLegacyIamImport({ store, projectRoot: root, projectDatabase: async () => config });
+      // A restricted Console account with default privileges for the main account (ADR 0059 §4):
+      // the tables written back must not become readable by it (review L2).
+      let role: { user: string; password: string; host?: string } | undefined;
+      if (config.dialect === 'pg') {
+        const admin = new ProjectDatabase(config);
+        await admin.start();
+        role = await provisionConsoleRole((sql, params) => admin.query(sql, params), { dialect: 'pg', projectKey: `revert-${root}` });
+        await admin.stop();
+      }
+      const revertConfig = role ? { ...config, console: { user: role.user, password: role.password } } : config;
+      const reverted = await revertLegacyIamImport({ store, projectRoot: root, projectDatabase: async () => revertConfig });
+      if (role) {
+        expect(reverted.warnings.join('\n')).toMatch(/DROP ROLE/);
+        const restricted = new ProjectDatabase({ ...config, user: role.user, password: role.password } as ProjectDatabaseConfig);
+        await restricted.start();
+        await expect(restricted.query(`SELECT password_hash FROM ${IAM_TABLES.users}`)).rejects.toMatchObject({ code: '42501' });
+        await restricted.stop();
+        const admin = new ProjectDatabase(config);
+        await admin.start();
+        await admin.query(`DROP OWNED BY "${role.user}"`).catch(() => undefined);
+        await admin.query(`DROP ROLE IF EXISTS "${role.user}"`).catch(() => undefined);
+        await admin.stop();
+      }
       expect(reverted.counts).toMatchObject({ [IAM_TABLES.users]: 1, [IAM_TABLES.sessions]: 1 });
       const back = new ProjectDatabase(config);
       defineConsoleIamTables(back);

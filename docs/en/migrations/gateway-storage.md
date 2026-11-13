@@ -26,7 +26,14 @@ On the first `zhin start` after upgrading, the gateway, while it connects:
 4. Checks again and drops the six tables from the project database;
 5. Records `done` in `gateway_meta.legacy_import` of gateway.db.
 
-**Until the migration finishes Console sign-in is unavailable**: `/auth/login` and friends answer `503 iam_unavailable`, `/auth/me` answers anonymous with an `unavailable` reason, and the bootstrap token (`http.token`) is refused too — an empty gateway.db is never taken for "no owner yet". The usual cause is a project database that cannot be reached for now; the gateway retries every 10 seconds and `zhin logs` shows `gateway_legacy_import_failed`. SQLite projects finish within a second.
+**Until the migration finishes Console sign-in is unavailable**: `/auth/login` and friends answer `503 iam_unavailable` (`reason` is a category code such as `migration_pending`), `/auth/me` answers anonymous with a generic note and `unavailableCode`, and the bootstrap token (`http.token`) is refused too — an empty gateway.db is never taken for "no owner yet". The actual reason (paths, driver messages) only goes to the logs and to you on the server through `zhin doctor` / `zhin console migrate`. While the project database cannot be reached the gateway retries (from 10 seconds, doubling, at most 5 minutes) and `zhin logs` shows `gateway_legacy_import_failed`; failures that need a person (conflicting data, a copy that did not verify, old tables without an `id` column) are not retried — `zhin doctor` reports them; fix, then `zhin stop && zhin start`. Repeated failures do not write backups over and over: the same old rows are backed up once (`.zhin/backups/gateway-db-legacy-<digest>`). SQLite projects finish within a second.
+
+After the migration (or the decision that there was nothing to migrate) the gateway writes a marker table `zhin_gateway_store` into the project database with the random id of the current gateway.db. If gateway.db is later lost or replaced by another file, the gateway notices, keeps the Console closed (the bootstrap token does not come back) and points to two ways out:
+
+- restore `.zhin/gateway.db` from a backup;
+- accept that the old accounts are gone: `zhin stop`, then `zhin console init --reset-store` (asks for confirmation; `--yes` skips it). It points the marker at the current gateway.db, records `auth.store.reset` in the new audit log and continues with the normal setup.
+
+redis / memory projects have nowhere to keep the marker: persisting `.zhin/` matters even more there.
 
 Old passwords, sessions and API tokens keep working after the migration; nobody has to sign in again.
 
@@ -69,7 +76,8 @@ database:
 
 - If the main account may not create accounts (common on managed databases): `zhin db console-role --print-sql` only prints the SQL (the password is the placeholder `<ZHIN_DB_CONSOLE_PASSWORD>`, the real value is in `.env`); have a DBA run it, then `zhin restart`;
 - `zhin doctor --fix` does the same;
-- At start the instance only **probes** the account (not a superuser, cannot create roles / databases / schemas, member of no other role, on MySQL privileges on this database only, …); if it fails, the SQL editor is off with the reason and the probe runs again at most every 5 minutes. On PostgreSQL the main account also grants it access to tables created since;
+- At start the instance only **probes** the account (not a superuser, cannot create roles / databases / schemas, cannot create objects in any schema, owns no object, role settings unchanged, member of no other role, on MySQL privileges on this database only and no roles or PROXY grants, …); if it fails, the SQL editor is off with the reason and the probe runs again at most every 5 minutes. A healthy account is probed again every 60 seconds and before the first use after an error on its connection. On PostgreSQL the main account also grants it access to tables created since and revokes anything on gateway tables;
+- Restrict the account to the instance's host in `pg_hba.conf` (or the host part of the MySQL account). On PostgreSQL the account is created with a client-computed SCRAM verifier, so the `--print-sql` output can go to a DBA as is;
 - **On PostgreSQL the SQL editor cannot run DDL** (`CREATE` / `ALTER` / `DROP` answer 42501 insufficient privilege): use the Console schema editor;
 - SQLite needs no restricted account: the accounts are in another file and the instance connection refuses `ATTACH`.
 
@@ -82,7 +90,7 @@ zhin stop
 zhin console migrate --revert
 ```
 
-It copies gateway.db to `.zhin/backups/gateway-db-<time>/`, writes the six tables back into the project database and verifies them, then empties them in gateway.db. It refuses when those tables already hold rows in the project database. Then install the older version; upgrading again migrates again.
+It copies gateway.db to `.zhin/backups/gateway-db-<time>/`, writes the six tables back into the project database and verifies them, then empties them in gateway.db, drops the marker table and revokes the restricted account's access to those tables (on PostgreSQL its default privileges too) — older versions do not use the account: drop it and `database.console` as the command tells you. It refuses when those tables already hold rows in the project database. Then install the older version; upgrading again migrates again.
 
 ## 5. Integrations and plugins
 

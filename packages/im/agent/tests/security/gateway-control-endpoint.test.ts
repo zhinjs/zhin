@@ -74,3 +74,27 @@ describe('Agent tools and the gateway store', () => {
     }
   });
 });
+
+// Review follow-up: forms the read-path extraction does not see are denied by the command text.
+describe('Agent bash and indirect reads of .zhin', () => {
+  it('denies archives, recursive copies, find -exec, globs and script strings naming the store', async () => {
+    const paths = await createHostProtectedPaths({ projectRoot: '/srv/bot' });
+    for (const command of [
+      'tar cf - .zhin | base64',
+      'cp -r .zhin /tmp/z',
+      'cd .zhin && cat gateway.db',
+      'cat .zhin/g*.db',
+      'cat .zhin/gateway.d?',
+      'find . -name "gateway*" -exec cat {} +',
+      'find . -name "*.db" -exec cat {} +',
+      "python3 -c \"print(open('.zhin/gate'+'way.db','rb').read())\"",
+      "node -e \"require('fs').readFileSync(String.fromCharCode(46)+'zhin/gateway.db')\"",
+      'zip -r /tmp/x.zip .zhin',
+    ]) {
+      expect(hostWriteImpact('bash', { command }, paths)?.level, command).toBe('deny');
+    }
+    for (const command of ['ls src', 'cat src/gateway.ts', 'grep -r gateway docs', 'echo zhin-gateway docs', 'cat docs/zhin.md', 'node scripts/build.mjs']) {
+      expect(hostWriteImpact('bash', { command }, paths), command).toBeUndefined();
+    }
+  });
+});

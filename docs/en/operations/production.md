@@ -197,9 +197,9 @@ The gateway (ADR 0054) is long-lived and supervises the instance: Console restar
 
 Use a database snapshot or stop writes before copying SQLite. Use the native backup tool for external databases and rehearse restoration regularly.
 
-**Persist `.zhin/`** (container volume, Kubernetes PVC): losing `.zhin/gateway.db` loses every Console account, session, token and audit entry; losing `.zhin/keys/` makes account and model credentials undecryptable. When upgrading to a release with ADR 0059, the gateway's first start moves the Console account tables an earlier version kept in the project database into `gateway.db`; Console sign-in answers 503 until it finishes — see the [upgrade notes](../migrations/gateway-storage.md). Before downgrading run `zhin console migrate --revert`.
+**Persist `.zhin/`** (container volume, Kubernetes PVC). The marker table `zhin_gateway_store` in the project database records the id of gateway.db: if gateway.db is lost the Console stays closed instead of reopening setup — restore a backup or run `zhin console init --reset-store`; redis / memory projects have no marker and rely on `.zhin/` alone. losing `.zhin/gateway.db` loses every Console account, session, token and audit entry; losing `.zhin/keys/` makes account and model credentials undecryptable. When upgrading to a release with ADR 0059, the gateway's first start moves the Console account tables an earlier version kept in the project database into `gateway.db`; Console sign-in answers 503 until it finishes — see the [upgrade notes](../migrations/gateway-storage.md). Before downgrading run `zhin console migrate --revert`.
 
-To use the Console SQL editor on PostgreSQL / MySQL, create the restricted account with `zhin db console-role` (`--print-sql` for a DBA when a managed database does not let the main account create accounts); see [configuration: `database.console`](../configuration/index.md#database-console).
+To use the Console SQL editor on PostgreSQL / MySQL, create the restricted account with `zhin db console-role` (`--print-sql` for a DBA when a managed database does not let the main account create accounts) and allow it to log in only from the instance's host (`pg_hba.conf`, MySQL account host); see [configuration: `database.console`](../configuration/index.md#database-console).
 
 ## 6. Monitoring and alerts
 

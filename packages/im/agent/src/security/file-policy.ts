@@ -71,6 +71,27 @@ export const MAX_EDIT_FILE_SIZE = 1024 * 1024 * 1024;
 export const GATEWAY_CONTROL_ENDPOINT_NAME = /^(?:gateway\.sock|zhin-gateway-[0-9a-f]{16}(?:-[0-9a-f]+)?(?:\.sock)?)$/i;
 
 /**
+ * Whether a shell command names the gateway's account store or the project keys (ADR 0059 §7)
+ * anywhere in its text: `.zhin` as a path (`tar cf - .zhin`, `cp -r .zhin`, `cd .zhin && cat …`,
+ * `.zhin/g*.db`), `gateway.db` in any spelling the text keeps whole (including inside a script
+ * string), `zhin/keys`, or a `gateway…` name with a shell wildcard (`find -name "gateway*" -exec
+ * cat {} +`). A text check: it cannot see names a script assembles at run time, so it narrows
+ * what a prompt-injected Agent can do with `bash`; it is not a sandbox.
+ */
+export function commandNamesProtectedStore(command: string): string | undefined {
+  const text = command.replace(/\\/g, '/');
+  const zhinDir = /(?:^|[\s'"`=:,(/;&|<>])(\.zhin)(?=$|[\s'"`/;&|)<>*?[,])/iu.exec(text);
+  if (zhinDir) return '.zhin';
+  const store = /gateway\.db/iu.exec(text);
+  if (store) return 'gateway.db';
+  const keys = /zhin\/keys/iu.exec(text);
+  if (keys) return '.zhin/keys';
+  const wildcard = /(?:^|[\s'"`=/])(gate[a-z.]*[*?[][^\s'"`]*|[^\s'"`/]*[*?[][^\s'"`/]*\.db[*?]?)(?=$|[\s'"`;&|)])/iu.exec(text);
+  if (wildcard && /gate|\*\.db|\?\.db/iu.test(wildcard[1]!)) return wildcard[1];
+  return undefined;
+}
+
+/**
  * Whether a shell command names a management gateway control endpoint anywhere — as an operand,
  * inside `UNIX-CONNECT:<path>`, `--unix-socket=<path>`, a quoted script string, … Connecting is
  * neither a read nor a write to the file policy, so the command text itself is checked.

@@ -53,9 +53,10 @@ export function registerConsoleAuthRoutes(options: RegisterConsoleAuthRoutesOpti
     const noStore = { 'cache-control': 'no-store' };
     // ADR 0059 §3: closed until gateway.db is open and the old tables are imported (`/auth/me`
     // still answers, anonymously and with `setupRequired: false`, so the Console can say why).
-    const closed = path === CONSOLE_AUTH_ROUTES.ME ? undefined : options.iam()?.unavailableReason();
+    // The reason itself (paths, driver messages) is for the logs and the local owner only.
+    const closed = path === CONSOLE_AUTH_ROUTES.ME ? undefined : options.iam()?.publicUnavailable();
     if (closed !== undefined) {
-      return jsonResponse(503, { success: false, code: 'iam_unavailable', error: closed }, { ...noStore, 'retry-after': String(DATABASE_BUSY_RETRY_AFTER_SECONDS) });
+      return jsonResponse(503, { success: false, code: 'iam_unavailable', reason: closed.code, error: closed.message }, { ...noStore, 'retry-after': String(DATABASE_BUSY_RETRY_AFTER_SECONDS) });
     }
     try {
       const result = await handler({
@@ -86,7 +87,7 @@ export function registerConsoleAuthRoutes(options: RegisterConsoleAuthRoutesOpti
 
   const requireIam = (): ConsoleIamService => {
     const iam = options.iam();
-    if (!iam?.ready) throw new IamError('unavailable', iam?.unavailableReason() ?? 'Console 访问控制尚未就绪');
+    if (!iam?.ready) throw new IamError('unavailable', iam?.publicUnavailable()?.message ?? 'Console 访问控制尚未就绪');
     return iam;
   };
   const requireUser = (principal: ConsolePrincipal | undefined) => {
@@ -121,8 +122,8 @@ export function registerConsoleAuthRoutes(options: RegisterConsoleAuthRoutesOpti
     }, 'Console logout'),
     route('GET', CONSOLE_AUTH_ROUTES.ME, async ({ principal }) => {
       const setupRequired = options.setup.setupRequired();
-      const unavailable = options.iam()?.unavailableReason();
-      if (!principal) return ok({ kind: 'anonymous', permissions: [], bindings: [], setupRequired, ...(unavailable !== undefined ? { unavailable } : {}) });
+      const closed = options.iam()?.publicUnavailable();
+      if (!principal) return ok({ kind: 'anonymous', permissions: [], bindings: [], setupRequired, ...(closed ? { unavailable: closed.message, unavailableCode: closed.code } : {}) });
       if (principal.kind === 'bootstrap') {
         const permissions = globalPermissions(principal);
         return ok({

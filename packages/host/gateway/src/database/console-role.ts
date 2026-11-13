@@ -12,6 +12,7 @@ import {
   generateConsolePassword,
   planConsoleRole,
   provisionConsoleRole,
+  scrubSecret,
   type ConsoleCredentialDialect,
 } from '@zhin.js/database';
 import { ConsoleConfigurationStore } from '../config/configuration.js';
@@ -94,9 +95,13 @@ export async function setupConsoleRole(options: SetupConsoleRoleOptions): Promis
         statements = plan.statements;
         user = plan.user;
       } catch (error) {
-        throw new ConsoleRoleError('denied', `主账号无法创建受限账号（${error instanceof Error ? error.message : String(error)}）；改用 zhin db console-role --print-sql 把 SQL 交给 DBA 执行`, { cause: error });
+        // The message never carries the new password (provisionConsoleRole scrubs; scrub again here).
+        throw new ConsoleRoleError('denied', scrubSecret(`主账号无法创建受限账号（${error instanceof Error ? error.message : String(error)}）；改用 zhin db console-role --print-sql 把 SQL 交给 DBA 执行`, [password]));
       }
     }
+  } catch (error) {
+    if (error instanceof ConsoleRoleError) throw error;
+    throw new ConsoleRoleError('unavailable', scrubSecret(error instanceof Error ? error.message : String(error), [password]));
   } finally {
     await main.stop().catch(() => undefined);
   }
@@ -118,7 +123,8 @@ export async function setupConsoleRole(options: SetupConsoleRoleOptions): Promis
     dialect,
     user,
     provisioned: !options.printSql,
-    statements: Object.freeze(statements.map(statement => statement.split(password).join(CONSOLE_ROLE_PASSWORD_PLACEHOLDER))),
+    // PostgreSQL statements carry a SCRAM verifier, never the password; MySQL's are shown with a placeholder.
+    statements: Object.freeze(statements.map(statement => scrubSecret(statement, [password]).split('[redacted]').join(CONSOLE_ROLE_PASSWORD_PLACEHOLDER))),
     envFile: '.env',
   });
 }

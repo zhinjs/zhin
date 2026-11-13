@@ -140,7 +140,16 @@ export interface ConsoleIamServiceOptions {
    * nothing authenticates and `/auth/*` answers 503 — an empty store never reads as "no owner".
    */
   readonly unavailable?: () => string | undefined;
+  /**
+   * Category of `unavailable` (`starting`, `store`, `migration`, `store_lost`, …). Anonymous HTTP
+   * callers only ever see this code and a generic message; the detail (paths, driver messages)
+   * goes to the logs and to the local owner (`zhin doctor`, `zhin console migrate`).
+   */
+  readonly unavailableCode?: () => string | undefined;
 }
+
+/** What anonymous callers learn while access control is closed (no paths or driver messages). */
+export const IAM_UNAVAILABLE_PUBLIC_MESSAGE = 'Console 访问控制暂不可用：请在服务器上运行 zhin doctor 查看原因';
 
 const USERNAME = /^[a-z0-9][a-z0-9._-]{1,63}$/u;
 
@@ -179,6 +188,7 @@ export class ConsoleIamService implements ConsoleAccessProvider {
   readonly #onError: (error: unknown) => void;
   readonly #pluginPermissions: () => readonly ConsolePluginPermissionInfo[];
   readonly #unavailable: () => string | undefined;
+  readonly #unavailableCode: () => string | undefined;
   #ready = false;
   #initialized: boolean | undefined;
   #cleanupTimer: ReturnType<typeof setInterval> | undefined;
@@ -197,15 +207,22 @@ export class ConsoleIamService implements ConsoleAccessProvider {
     this.#onError = options.onError ?? (() => undefined);
     this.#pluginPermissions = options.pluginPermissions ?? (() => []);
     this.#unavailable = options.unavailable ?? (() => undefined);
+    this.#unavailableCode = options.unavailableCode ?? (() => undefined);
   }
 
   get ready(): boolean {
     return this.#ready && this.#unavailable() === undefined;
   }
 
-  /** See {@link ConsoleIamServiceOptions.unavailable}. */
+  /** See {@link ConsoleIamServiceOptions.unavailable} (detail: logs and the local owner only). */
   unavailableReason(): string | undefined {
     return this.#unavailable();
+  }
+
+  /** `{ code, message }` safe for any HTTP caller while closed, or undefined. */
+  publicUnavailable(): { readonly code: string; readonly message: string } | undefined {
+    if (this.#unavailable() === undefined) return undefined;
+    return Object.freeze({ code: this.#unavailableCode() ?? 'unavailable', message: IAM_UNAVAILABLE_PUBLIC_MESSAGE });
   }
 
   /** Seeds built-in roles and loads the owner state; call after the database started. */

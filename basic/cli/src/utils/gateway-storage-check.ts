@@ -47,7 +47,7 @@ export async function diagnoseGatewayStorage(projectRoot: string, options: Gatew
   }
 
   // ---- import of the old account tables
-  let inspection: (LegacyImportInspection & { pending?: string }) | undefined;
+  let inspection: (LegacyImportInspection & { pending?: string; pendingCode?: string }) | undefined;
   let problem: string | undefined;
   try {
     if (options.gatewayRunning) {
@@ -75,7 +75,23 @@ export async function diagnoseGatewayStorage(projectRoot: string, options: Gatew
   } else {
     const record = inspection.record;
     const settled = record?.status === 'fresh' || record?.status === 'done';
-    if (!settled) {
+    const lost = inspection.failure?.code === 'store_lost' || inspection.failure?.code === 'store_mismatch'
+      || inspection.pendingCode === 'store_lost' || inspection.pendingCode === 'store_mismatch';
+    if (lost) {
+      results.push({
+        name: 'Console 账号存储',
+        status: 'error',
+        message: `${inspection.failure?.message ?? inspection.pending ?? 'gateway.db 与项目数据库的标记不一致'}`,
+        fix: '从备份恢复 .zhin/gateway.db；确认放弃原有账号时：zhin stop && zhin console init --reset-store',
+      });
+    } else if (inspection.failure) {
+      results.push({
+        name: 'Console 账号存储',
+        status: 'error',
+        message: `迁移失败且不会自动重试（${inspection.failure.code}）：${inspection.failure.message}`,
+        fix: '按提示处理后重启网关（zhin stop && zhin start）或运行 zhin console migrate',
+      });
+    } else if (!settled) {
       results.push({
         name: 'Console 账号存储',
         status: 'warn',

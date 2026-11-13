@@ -11,7 +11,7 @@
  * or printed for a DBA with `--print-sql`), by the instance's startup probe and by the PostgreSQL
  * grant refresh.
  */
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, createHmac, pbkdf2Sync, randomBytes } from 'node:crypto';
 import { isGatewayOwnedTable } from './reserved-tables.js';
 
 export type ConsoleCredentialDialect = 'pg' | 'mysql';
@@ -38,6 +38,56 @@ export const MYSQL_FORBIDDEN_PRIVILEGES: ReadonlySet<string> = new Set([
 ]);
 
 const ROLE_NAME = /^[a-z_][a-z0-9_]{0,62}$/u;
+
+/**
+ * Role-level settings of the PostgreSQL account (`pg_db_role_setting`), exactly: the probe refuses
+ * an account whose settings differ — the account itself may `ALTER ROLE current_user SET …`
+ * (e.g. `search_path = pg_temp, public`), which would change how the main account's objects resolve
+ * in its sessions.
+ */
+export const PG_CONSOLE_ROLE_SETTINGS: readonly string[] = Object.freeze([
+  `search_path=public`,
+  `statement_timeout=${CONSOLE_ROLE_STATEMENT_TIMEOUT}`,
+]);
+
+/** SCRAM-SHA-256 iteration count of the verifier sent instead of the password (PostgreSQL default). */
+export const PG_SCRAM_ITERATIONS = 4096;
+
+/**
+ * A PostgreSQL SCRAM-SHA-256 verifier (`SCRAM-SHA-256$<iter>:<salt>$<StoredKey>:<ServerKey>`, RFC
+ * 7677 / `pg_authid.rolpassword` format) computed on the client, so `CREATE` / `ALTER ROLE` never
+ * carries the password itself — not to the server log, not into `--print-sql` output. The password
+ * is base64url ASCII, so SASLprep leaves it unchanged.
+ */
+export function pgScramVerifier(password: string, salt: Buffer = randomBytes(16), iterations = PG_SCRAM_ITERATIONS): string {
+  const salted = pbkdf2Sync(password, salt, iterations, 32, 'sha256');
+  const clientKey = createHmac('sha256', salted).update('Client Key').digest();
+  const storedKey = createHash('sha256').update(clientKey).digest();
+  const serverKey = createHmac('sha256', salted).update('Server Key').digest();
+  return `SCRAM-SHA-256$${iterations}:${salt.toString('base64')}$${storedKey.toString('base64')}:${serverKey.toString('base64')}`;
+}
+
+/** Replaces every spelling of `secret` (raw, quoted, URL-encoded) in `text` with `[redacted]`. */
+export function scrubSecret(text: string, secrets: readonly (string | undefined)[]): string {
+  let out = String(text);
+  for (const secret of secrets) {
+    if (!secret || secret.length < 4) continue;
+    for (const form of new Set([secret, encodeURIComponent(secret), secret.replace(/'/gu, "''"), secret.replace(/\\/gu, '\\\\')])) {
+      out = out.split(form).join('[redacted]');
+    }
+  }
+  return out;
+}
+
+/** An error with `secrets` scrubbed from its message (driver codes kept; the original is dropped). */
+export function scrubbedError(error: unknown, secrets: readonly (string | undefined)[]): Error {
+  const source = error as { message?: unknown; code?: unknown; errno?: unknown; sqlState?: unknown; name?: unknown };
+  const scrubbed = new Error(scrubSecret(String(source?.message ?? error), secrets));
+  for (const key of ['code', 'errno', 'sqlState'] as const) {
+    if (source && (typeof source[key] === 'string' || typeof source[key] === 'number')) Object.defineProperty(scrubbed, key, { value: source[key], enumerable: true });
+  }
+  return scrubbed;
+}
 
 /** `zhin_console_<first 8 hex of SHA-256(projectKey)>`: one account per project. */
 export function consoleRoleName(projectKey: string): string {
@@ -114,7 +164,8 @@ export function consoleRoleStatements(options: ConsoleRoleStatementOptions): str
 function pgRoleStatements(options: ConsoleRoleStatementOptions): string[] {
   const role = quotePgIdentifier(options.role);
   const main = quotePgIdentifier(options.mainUser);
-  const password = pgLiteral(options.password);
+  // A literal SCRAM verifier: the server stores it as is, the password never travels.
+  const password = pgLiteral(options.password.startsWith('SCRAM-SHA-256$') || options.password.startsWith('<') ? options.password : pgScramVerifier(options.password));
   // On ALTER, a CREATEROLE (non-superuser) account cannot even name SUPERUSER / REPLICATION /
   // BYPASSRLS, nor CREATEDB unless it holds it (PG 16); their defaults are off, and the probe
   // checks every attribute either way.
@@ -123,6 +174,8 @@ function pgRoleStatements(options: ConsoleRoleStatementOptions): string[] {
   const attributes = `LOGIN${privileged}${createdb} NOCREATEROLE NOINHERIT CONNECTION LIMIT ${CONSOLE_ROLE_CONNECTION_LIMIT} PASSWORD ${password}`;
   const statements = [
     options.exists ? `ALTER ROLE ${role} WITH ${attributes}` : `CREATE ROLE ${role} WITH ${attributes}`,
+    // Exactly the expected settings (PG_CONSOLE_ROLE_SETTINGS), whatever an earlier run left.
+    `ALTER ROLE ${role} RESET ALL`,
     `ALTER ROLE ${role} SET statement_timeout = ${pgLiteral(CONSOLE_ROLE_STATEMENT_TIMEOUT)}`,
     `ALTER ROLE ${role} SET search_path = public`,
     `GRANT CONNECT ON DATABASE ${quotePgIdentifier(options.database)} TO ${role}`,
@@ -152,6 +205,7 @@ function mysqlRoleStatements(options: ConsoleRoleStatementOptions): string[] {
   const account = `${mysqlString(options.role)}@${mysqlString(options.host ?? '%')}`;
   const password = mysqlString(options.password);
   return [
+    // MySQL ≥ 5.7.6 / MariaDB ≥ 10.1.3 (planConsoleRole refuses older servers).
     `CREATE USER IF NOT EXISTS ${account} IDENTIFIED BY ${password} WITH MAX_USER_CONNECTIONS ${CONSOLE_ROLE_CONNECTION_LIMIT}`,
     `ALTER USER ${account} IDENTIFIED BY ${password} WITH MAX_USER_CONNECTIONS ${CONSOLE_ROLE_CONNECTION_LIMIT}`,
     // Back to a known state: an account reused from an earlier setup keeps no extra grant.
@@ -226,9 +280,11 @@ export async function planConsoleRole(run: ConsoleSqlRunner, options: ProvisionC
       })),
     });
   }
-  const facts = firstRow(await run('SELECT CURRENT_USER() AS main, DATABASE() AS db'));
+  const facts = firstRow(await run('SELECT CURRENT_USER() AS main, DATABASE() AS db, VERSION() AS version'));
   const database = facts.db == null ? '' : String(facts.db);
   if (!database) throw new Error('The MySQL connection has no default database (database.database)');
+  const unsupported = mysqlVersionProblem(String(facts.version ?? ''));
+  if (unsupported) throw new Error(unsupported);
   const main = splitMysqlAccount(String(facts.main));
   return Object.freeze({
     dialect: 'mysql', user: role, password, host: main.host, database, mainUser: main.user,
@@ -244,9 +300,63 @@ export async function planConsoleRole(run: ConsoleSqlRunner, options: ProvisionC
 export async function provisionConsoleRole(run: ConsoleSqlRunner, options: ProvisionConsoleRoleOptions): Promise<ConsoleRolePlan> {
   const plan = await planConsoleRole(run, options);
   assertPassword(plan.password);
-  for (const statement of plan.statements) await run(statement);
-  if (plan.dialect === 'pg') await refreshConsoleGrants(run, { role: plan.user });
+  try {
+    for (const statement of plan.statements) await run(statement);
+    if (plan.dialect === 'pg') await refreshConsoleGrants(run, { role: plan.user });
+    else await revokeMysqlRolesAndProxies(run, plan.user, plan.host ?? '%');
+  } catch (error) {
+    // A driver error may quote the statement (mysql2 keeps `sql`): the password never leaves here.
+    throw scrubbedError(error, [plan.password]);
+  }
   return plan;
+}
+
+/**
+ * Version check of `CREATE USER IF NOT EXISTS` / `ALTER USER … IDENTIFIED BY` (MySQL 5.7.6,
+ * MariaDB 10.1.3); `undefined` when supported.
+ */
+export function mysqlVersionProblem(version: string): string | undefined {
+  const match = /^(\d+)\.(\d+)\.(\d+)/u.exec(version);
+  if (!match) return undefined;
+  const [major, minor, patch] = match.slice(1).map(Number) as [number, number, number];
+  const at = (a: number, b: number, c: number) => major > a || (major === a && (minor > b || (minor === b && patch >= c)));
+  const mariadb = /mariadb/iu.test(version);
+  const ok = mariadb ? at(10, 1, 3) : at(5, 7, 6);
+  return ok ? undefined : `${mariadb ? 'MariaDB' : 'MySQL'} ${version} is too old for the restricted Console account (needs ${mariadb ? 'MariaDB 10.1.3' : 'MySQL 5.7.6'}+ for CREATE USER IF NOT EXISTS / ALTER USER)`;
+}
+
+/** Role grants and PROXY grants in `SHOW GRANTS` output (`GRANT \`r\`@\`%\` TO …`, `GRANT PROXY ON …`). */
+export function mysqlRoleAndProxyGrants(lines: readonly string[]): { readonly roles: readonly string[]; readonly proxies: readonly string[] } {
+  const roles: string[] = [];
+  const proxies: string[] = [];
+  for (const line of lines) {
+    const proxy = /^GRANT\s+PROXY\s+ON\s+(.+?)\s+TO\s/iu.exec(line);
+    if (proxy) { proxies.push(proxy[1]!); continue; }
+    // A role grant has no ON clause: GRANT `r1`@`%`,`r2`@`%` TO `u`@`h`.
+    const role = /^GRANT\s+((?:[`'][^`']*[`']@[`'][^`']*[`']\s*,?\s*)+)\s+TO\s/iu.exec(line);
+    if (role && !/\sON\s/iu.test(line.slice(0, line.search(/\sTO\s/iu)))) {
+      roles.push(...role[1]!.split(/,\s*/u).map(entry => entry.trim()).filter(Boolean));
+    }
+  }
+  return Object.freeze({ roles: Object.freeze(roles), proxies: Object.freeze(proxies) });
+}
+
+function grantLines(result: unknown): string[] {
+  return rows(result).map(row => String(Object.values(row)[0] ?? ''));
+}
+
+/** MySQL: revokes roles and PROXY grants the account may still hold (REVOKE ALL PRIVILEGES does not). */
+async function revokeMysqlRolesAndProxies(run: ConsoleSqlRunner, user: string, host: string): Promise<void> {
+  const account = `${mysqlString(user)}@${mysqlString(host)}`;
+  let lines: string[];
+  try {
+    lines = grantLines(await run(`SHOW GRANTS FOR ${account}`));
+  } catch {
+    return; // The probe still refuses an account with roles or PROXY grants.
+  }
+  const { roles, proxies } = mysqlRoleAndProxyGrants(lines);
+  for (const role of roles) await run(`REVOKE ${role} FROM ${account}`);
+  for (const proxy of proxies) await run(`REVOKE PROXY ON ${proxy} FROM ${account}`);
 }
 
 export interface ConsoleCredentialProbe {
@@ -300,6 +410,31 @@ async function probePg(run: ConsoleSqlRunner, options: ProbeConsoleCredentialOpt
     const member = firstRow(await run(`SELECT pg_has_role(current_user, oid, 'USAGE') AS usage FROM pg_roles WHERE rolname = $1`, [options.mainUser]));
     if (truthy(member.usage)) problems.push(`the console user can use the privileges of the main account '${options.mainUser}'`);
   }
+  // CVE-2018-1058 preconditions: objects the main account could resolve to in a schema the console
+  // user may create in, or owns already (a schema named after the main account comes first in
+  // its default search_path "$user", public).
+  const temp = `n.nspname NOT LIKE 'pg\\_temp\\_%' AND n.nspname NOT LIKE 'pg\\_toast\\_temp\\_%'`;
+  const creatable = rows(await run(`SELECT n.nspname AS name FROM pg_namespace n WHERE has_schema_privilege(current_user, n.oid, 'CREATE') AND ${temp} ORDER BY 1`)).map(row => String(row.name));
+  if (creatable.length) problems.push(`the console user may CREATE in schema ${creatable.join(', ')}`);
+  const owned = firstRow(await run(`SELECT
+      (SELECT count(*) FROM pg_namespace n WHERE n.nspowner = r.oid AND ${temp})::int AS schemas,
+      (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE c.relowner = r.oid AND ${temp})::int AS relations,
+      (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE p.proowner = r.oid AND ${temp})::int AS functions,
+      (SELECT count(*) FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace WHERE t.typowner = r.oid AND ${temp})::int AS types,
+      (SELECT count(*) FROM pg_operator o JOIN pg_namespace n ON n.oid = o.oprnamespace WHERE o.oprowner = r.oid AND ${temp})::int AS operators
+    FROM pg_roles r WHERE r.rolname = current_user`));
+  const ownedKinds = ['schemas', 'relations', 'functions', 'types', 'operators'].filter(kind => Number(owned[kind] ?? 0) > 0);
+  if (ownedKinds.length) problems.push(`the console user owns objects (${ownedKinds.map(kind => `${kind}: ${owned[kind]}`).join(', ')})`);
+  const settings = rows(await run(`SELECT unnest(s.setconfig) AS setting FROM pg_db_role_setting s JOIN pg_roles r ON r.oid = s.setrole
+    WHERE r.rolname = current_user AND s.setdatabase IN (0, (SELECT oid FROM pg_database WHERE datname = current_database()))`)).map(row => String(row.setting));
+  const expected = [...PG_CONSOLE_ROLE_SETTINGS].sort();
+  if (JSON.stringify([...settings].sort()) !== JSON.stringify(expected)) {
+    problems.push(`the console user's role settings are ${JSON.stringify(settings)}, expected ${JSON.stringify(expected)}`);
+  }
+  const gatewayTables = rows(await run(`SELECT c.relname AS name FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE c.relkind IN ('r', 'p', 'v', 'm', 'f') AND has_table_privilege(current_user, c.oid, 'SELECT, INSERT, UPDATE, DELETE, TRUNCATE')`))
+    .map(row => String(row.name)).filter(name => isGatewayOwnedTable(name));
+  if (gatewayTables.length) problems.push(`the console user can reach gateway tables: ${gatewayTables.join(', ')}`);
   return Object.freeze({ ok: problems.length === 0, problems: Object.freeze(problems), user });
 }
 
@@ -325,6 +460,27 @@ async function probeMysql(run: ConsoleSqlRunner, options: ProbeConsoleCredential
   if ([...global, ...schema].some(row => String(row.grantable).toUpperCase() === 'YES')) problems.push('the console user holds GRANT OPTION');
   const tables = firstRow(await run('SELECT COUNT(*) AS n FROM information_schema.TABLE_PRIVILEGES WHERE GRANTEE = ? AND TABLE_SCHEMA <> DATABASE()', [grantee]));
   if (Number(tables.n ?? 0) > 0) problems.push('the console user holds table privileges on other databases');
+  const allowed = new Set<string>(MYSQL_CONSOLE_PRIVILEGES);
+  const fine = [
+    ...rows(await run('SELECT TABLE_SCHEMA AS db, PRIVILEGE_TYPE AS privilege, IS_GRANTABLE AS grantable FROM information_schema.TABLE_PRIVILEGES WHERE GRANTEE = ?', [grantee])),
+    ...rows(await run('SELECT TABLE_SCHEMA AS db, PRIVILEGE_TYPE AS privilege, IS_GRANTABLE AS grantable FROM information_schema.COLUMN_PRIVILEGES WHERE GRANTEE = ?', [grantee])),
+  ];
+  const outside = [...new Set(fine.filter(row => unescape(String(row.db)) !== database || !allowed.has(String(row.privilege).toUpperCase()) || String(row.grantable).toUpperCase() === 'YES')
+    .map(row => `${String(row.privilege).toUpperCase()} on ${unescape(String(row.db))}`))];
+  if (outside.length) problems.push(`the console user holds table / column privileges outside its grant: ${outside.join(', ')}`);
+  try {
+    const applicable = firstRow(await run('SELECT COUNT(*) AS n FROM information_schema.APPLICABLE_ROLES'));
+    if (Number(applicable.n ?? 0) > 0) problems.push('the console user has granted roles (information_schema.APPLICABLE_ROLES)');
+  } catch {
+    // Before MySQL 8.0.19 / MariaDB: SHOW GRANTS below lists role grants.
+  }
+  try {
+    const { roles, proxies } = mysqlRoleAndProxyGrants(grantLines(await run('SHOW GRANTS')));
+    if (roles.length) problems.push(`the console user has granted roles: ${roles.join(', ')}`);
+    if (proxies.length) problems.push(`the console user holds PROXY grants: ${proxies.join(', ')}`);
+  } catch (error) {
+    problems.push(`SHOW GRANTS failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
   try {
     const role = firstRow(await run('SELECT CURRENT_ROLE() AS role'));
     const active = String(role.role ?? 'NONE');
@@ -369,4 +525,68 @@ export async function refreshConsoleGrants(run: ConsoleSqlRunner, options: Refre
   }
   await run(`GRANT ${PG_CONSOLE_SEQUENCE_PRIVILEGES} ON ALL SEQUENCES IN SCHEMA public TO ${role}`);
   return Object.freeze({ granted: Object.freeze(granted), revoked: Object.freeze(revoked) });
+}
+
+export interface ConsoleCredential {
+  readonly user: string;
+  readonly password: string;
+}
+
+/** Query parameters of a MySQL `uri` the restricted connection keeps (no credentials, flags or statements switches). */
+const MYSQL_URI_KEPT_PARAMS: ReadonlySet<string> = new Set(['charset', 'timezone', 'connectTimeout', 'ssl', 'supportBigNumbers', 'bigNumberStrings', 'dateStrings', 'decimalNumbers']);
+
+/**
+ * Connection options of the restricted Console account, built from the main connection's options
+ * (ADR 0059 §4): the main account's credentials never reach it — neither as fields nor inside a
+ * PostgreSQL `connectionString` (whose `user` / `password`, also as query parameters, would win over
+ * explicit fields, empty ones included) nor a MySQL `uri` (whose query parameters fill every falsy
+ * field: `?multipleStatements=true` would beat `false`, `?flags=LOCAL_FILES` would re-enable LOCAL
+ * INFILE). Pool of at most two connections, session reset on release; MySQL without
+ * `LOCAL_FILES` and multiple statements.
+ */
+export function consoleConnectionOptions(dialect: ConsoleCredentialDialect, main: Readonly<Record<string, unknown>>, credential: ConsoleCredential): Record<string, unknown> {
+  const {
+    user: _user, password: _password, connectionString, uri, pool: _pool, options: _options,
+    flags: _flags, multipleStatements: _multiple, infileStreamFactory: _infile, localInfile: _localInfile,
+    resetSession: _reset, console: _console, ...rest
+  } = main;
+  const base: Record<string, unknown> = { ...rest };
+  if (dialect === 'pg' && typeof connectionString === 'string') {
+    let url: URL;
+    try {
+      url = new URL(connectionString);
+    } catch {
+      throw new TypeError('database.connectionString is not a URL; the restricted Console account cannot reuse it');
+    }
+    url.username = '';
+    url.password = '';
+    for (const key of ['user', 'password', 'options']) url.searchParams.delete(key);
+    // pg-connection-string reads these query parameters before the URL's user info.
+    url.searchParams.set('user', credential.user);
+    url.searchParams.set('password', credential.password);
+    base.connectionString = url.toString();
+  }
+  if (dialect === 'mysql' && typeof uri === 'string') {
+    let url: URL;
+    try {
+      url = new URL(uri);
+    } catch {
+      throw new TypeError('database.uri is not a URL; the restricted Console account cannot reuse it');
+    }
+    const fromUri: Record<string, unknown> = {};
+    if (url.hostname) fromUri.host = decodeURIComponent(url.hostname);
+    if (url.port) fromUri.port = Number(url.port);
+    if (url.pathname.length > 1) fromUri.database = decodeURIComponent(url.pathname.slice(1));
+    for (const [key, value] of url.searchParams) {
+      if (!MYSQL_URI_KEPT_PARAMS.has(key)) continue;
+      try { fromUri[key] = JSON.parse(value); } catch { fromUri[key] = value; }
+    }
+    Object.assign(base, { ...fromUri, ...rest });
+  }
+  base.user = credential.user;
+  base.password = credential.password;
+  base.pool = { max: 2, min: 0 };
+  base.resetSession = true;
+  if (dialect === 'mysql') Object.assign(base, { flags: ['-LOCAL_FILES', '-MULTI_STATEMENTS'], multipleStatements: false });
+  return base;
 }

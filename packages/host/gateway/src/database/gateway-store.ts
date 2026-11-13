@@ -8,6 +8,7 @@
  * holds both connections, so there is no process isolation). A supervised instance never opens
  * it, and its own SQLite connection refuses `ATTACH` (`denyAttach`).
  */
+import { randomBytes } from 'node:crypto';
 import { chmodSync, closeSync, existsSync, mkdirSync, openSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { DatabaseHostModel } from '@zhin.js/plugin-runtime';
@@ -29,6 +30,11 @@ const META_DEFINITION = Object.freeze({
 export interface GatewayStore {
   /** Absolute path of `gateway.db`. */
   readonly filename: string;
+  /**
+   * Random id of this store (`gateway_meta.store_id`), also written to the marker in the project
+   * database (ADR 0059 §3 修订): a new or different gateway.db is noticed instead of reopening setup.
+   */
+  readonly storeId: string;
   readonly started: boolean;
   readonly models: { get(name: string): DatabaseHostModel | undefined };
   /** JSON value of a `gateway_meta` key, or undefined. */
@@ -76,8 +82,10 @@ export async function openGatewayStore(projectRoot: string, options: OpenGateway
   await database.start();
   for (const suffix of ['', '-wal', '-shm']) restrict(`${filename}${suffix}`);
   const run = <T>(sql: string, params: unknown[], trx?: ProjectDatabaseTransaction) => (trx ? trx.query<T>(sql, params) : database.query<T>(sql, params));
+  let storeId = '';
   const store: GatewayStore = {
     filename,
+    get storeId() { return storeId; },
     get started() { return database.started; },
     models: database.models,
     async getMeta<T>(key: string, trx?: ProjectDatabaseTransaction): Promise<T | undefined> {
@@ -104,5 +112,11 @@ export async function openGatewayStore(projectRoot: string, options: OpenGateway
     close: () => database.stop(),
   };
   if (await store.getMeta('schema_version') === undefined) await store.setMeta('schema_version', GATEWAY_STORE_SCHEMA_VERSION);
+  storeId = await store.getMeta<string>('store_id') ?? '';
+  if (!storeId) {
+    // Insert-if-absent: two processes opening a new store agree on one id.
+    await database.query(`INSERT INTO ${GATEWAY_META_TABLE} (key, value) VALUES ('store_id', ?) ON CONFLICT(key) DO NOTHING`, [JSON.stringify(randomBytes(16).toString('hex'))]);
+    storeId = await store.getMeta<string>('store_id') ?? '';
+  }
   return Object.freeze(store);
 }

@@ -9,6 +9,7 @@ import {
   isGatewayOwnedTable,
   referencesGatewayOwnedTable,
   RelatedModel,
+  consoleConnectionOptions,
   probeConsoleCredential,
   refreshConsoleGrants,
   splitMysqlAccount,
@@ -184,6 +185,8 @@ export interface DatabaseHostInternalOptions {
   readonly textGuard?: boolean;
   /** Minimum time between two probes of the restricted Console account after a failure (default 5 min). */
   readonly consoleProbeIntervalMs?: number;
+  /** How long a successful probe is trusted before raw SQL probes again (default 60 s). */
+  readonly consoleProbeTtlMs?: number;
   readonly now?: () => number;
   /**
    * Tests: opens the restricted account's connection from the options the host would pass to
@@ -194,6 +197,8 @@ export interface DatabaseHostInternalOptions {
 
 /** How long a failed restricted-account probe is kept before the next try. */
 export const CONSOLE_CREDENTIAL_RETRY_MS = 5 * 60_000;
+/** How long a successful probe is trusted (raw SQL probes again after this, and after any error). */
+export const CONSOLE_CREDENTIAL_TTL_MS = 60_000;
 
 /** Why raw SQL is off on PostgreSQL / MySQL without a restricted account. */
 export const CONSOLE_ROLE_MISSING_REASON = 'Raw SQL on PostgreSQL / MySQL runs only on a restricted database account: run `zhin db console-role` (or `zhin doctor --fix`; `--print-sql` for a DBA) and restart';
@@ -224,6 +229,7 @@ export function createDatabaseHost(config: DatabaseHostConfig, internal: Databas
       textGuard: internal.textGuard !== false,
       restricted: restrictedConsoleConnection(config.dialect, connectionConfig, consoleCredential, internal.openConsoleConnection),
       retryMs: internal.consoleProbeIntervalMs ?? CONSOLE_CREDENTIAL_RETRY_MS,
+      ttlMs: internal.consoleProbeTtlMs ?? CONSOLE_CREDENTIAL_TTL_MS,
       now: internal.now ?? Date.now,
     },
   );
@@ -414,9 +420,10 @@ interface RestrictedConsoleConnection {
 }
 
 /**
- * PostgreSQL / MySQL: a lazily opened pool (at most 2 connections) that logs in as
- * `database.console.user`. MySQL connections refuse `LOAD DATA LOCAL` (no LOCAL_FILES flag, no
- * stream factory) and multiple statements.
+ * PostgreSQL / MySQL: a lazily opened pool (at most 2 connections, session reset on release) that
+ * logs in as `database.console.user`, built by `consoleConnectionOptions` (`@zhin.js/database`):
+ * nothing of the main account's credentials — fields, connection string, URI query — reaches it;
+ * MySQL connections refuse `LOAD DATA LOCAL` and multiple statements.
  */
 function restrictedConsoleConnection(
   dialect: string,
@@ -431,33 +438,27 @@ function restrictedConsoleConnection(
   return Object.freeze({
     user,
     open: () => {
-      const { pool: _pool, user: _user, password: _password, connectionString, uri, infileStreamFactory: _infile, multipleStatements: _multiple, flags: _flags, ...rest } = connection;
-      const target = dialect === 'pg' && typeof connectionString === 'string' ? { connectionString: withoutCredentials(connectionString) }
-        : dialect === 'mysql' && typeof uri === 'string' ? { uri: withoutCredentials(uri) } : {};
-      const options: Record<string, unknown> = { ...rest, ...target, user, password, pool: { max: 2, min: 0 } };
-      if (dialect === 'mysql') Object.assign(options, { flags: ['-LOCAL_FILES'], multipleStatements: false });
-      if (openConnection) return openConnection(dialect, Object.freeze(options)) as RawDatabase;
+      const options = Object.freeze(consoleConnectionOptions(dialect, connection, { user, password }));
+      if (openConnection) return openConnection(dialect, options) as RawDatabase;
       return Registry.create(dialect as keyof Registry.Config, options as never) as unknown as RawDatabase;
     },
   });
 }
 
-/** A connection URL without its user / password (the restricted account supplies its own). */
-function withoutCredentials(url: string): string {
-  try {
-    const parsed = new URL(url);
-    parsed.username = '';
-    parsed.password = '';
-    return parsed.toString();
-  } catch {
-    return url;
-  }
+/** Why a MySQL restricted connection is unsafe after connecting (the driver's merged config), or undefined. */
+function mysqlConnectionProblem(candidate: RawDatabase): string | undefined {
+  const safety = (candidate as unknown as { dialect?: { connectionSafety?(): { localFiles: boolean; multipleStatements: boolean } | undefined } }).dialect?.connectionSafety?.();
+  if (!safety) return undefined;
+  if (safety.localFiles) return 'the restricted MySQL connection would allow LOAD DATA LOCAL';
+  if (safety.multipleStatements) return 'the restricted MySQL connection would allow multiple statements';
+  return undefined;
 }
 
 interface ConsoleSqlOptions {
   readonly textGuard: boolean;
   readonly restricted: RestrictedConsoleConnection | undefined;
   readonly retryMs: number;
+  readonly ttlMs: number;
   readonly now: () => number;
 }
 
@@ -508,6 +509,12 @@ function createDatabaseConsole(
     ? (sqlOptions.restricted ? 'The restricted Console database account has not been checked yet' : CONSOLE_ROLE_MISSING_REASON)
     : undefined;
   let lastProbeAt: number | undefined;
+  /** Set after an error on the restricted connection: probe again before the next use. */
+  let probeStale = false;
+  /** Why raw SQL is off, as a code the Console can act on. */
+  let accessProblemCode: 'console-role-missing' | 'console-role-invalid' | undefined = sqlDialect && sqlDialect !== 'sqlite'
+    ? (sqlOptions.restricted ? 'console-role-invalid' : 'console-role-missing')
+    : undefined;
   const closeRestricted = async (): Promise<void> => {
     const current = restrictedDb;
     restrictedDb = undefined;
@@ -515,13 +522,18 @@ function createDatabaseConsole(
   };
   /**
    * Opens and probes the restricted account (and, on PostgreSQL, refreshes its grants with the
-   * main account first). A failure keeps raw SQL off and is retried at most every `retryMs`.
+   * main account first — instance tables granted, `console_*` / marker grants revoked). A healthy
+   * account is probed again on its own connection after `ttlMs` and after any error; a failure
+   * keeps raw SQL off and is retried at most every `retryMs`.
    */
   const refreshConsoleAccess = async (force = false): Promise<void> => {
     if (!sqlDialect || sqlDialect === 'sqlite' || !sqlOptions.restricted || !isStarted()) return;
-    if (!force && restrictedDb && !accessProblem) return;
-    if (!force && lastProbeAt !== undefined && sqlOptions.now() - lastProbeAt < sqlOptions.retryMs) return;
-    lastProbeAt = sqlOptions.now();
+    const now = sqlOptions.now();
+    const healthy = restrictedDb !== undefined && accessProblem === undefined;
+    if (!force && healthy && !probeStale && lastProbeAt !== undefined && now - lastProbeAt < sqlOptions.ttlMs) return;
+    if (!force && !healthy && lastProbeAt !== undefined && now - lastProbeAt < sqlOptions.retryMs) return;
+    lastProbeAt = now;
+    probeStale = false;
     const restricted = sqlOptions.restricted;
     try {
       const mainUser = await mainAccount(sqlDialect, sql => db.query(sql));
@@ -530,40 +542,59 @@ function createDatabaseConsole(
           logger.warn(formatCompact({ op: 'database_console_grants_failed', error: error instanceof Error ? error.message : String(error) }));
         });
       }
-      await closeRestricted();
-      const candidate = restricted.open();
-      await candidate.start();
-      const probe = await probeConsoleCredential((sql, params) => candidate.query(sql, params), {
+      let candidate = healthy ? restrictedDb! : undefined;
+      if (!candidate) {
+        await closeRestricted();
+        candidate = restricted.open();
+        await candidate.start();
+      }
+      const opened = candidate;
+      const unsafe = sqlDialect === 'mysql' ? mysqlConnectionProblem(opened) : undefined;
+      const probe = unsafe ? { ok: false, problems: [unsafe] } : await probeConsoleCredential((sql, params) => opened.query(sql, params), {
         dialect: sqlDialect, expectedUser: restricted.user, ...(mainUser ? { mainUser } : {}),
       }).catch(async (error: unknown) => {
-        await candidate.stop().catch(() => undefined);
+        await opened.stop().catch(() => undefined);
+        if (restrictedDb === opened) restrictedDb = undefined;
         throw error;
       });
       if (!probe.ok) {
-        await candidate.stop().catch(() => undefined);
+        await opened.stop().catch(() => undefined);
+        if (restrictedDb === opened) restrictedDb = undefined;
         accessProblem = `The restricted Console database account is not restricted enough: ${probe.problems.join('; ')}`;
+        accessProblemCode = 'console-role-invalid';
       } else {
-        restrictedDb = candidate;
+        restrictedDb = opened;
         accessProblem = undefined;
+        accessProblemCode = undefined;
       }
     } catch (error) {
       accessProblem = `The restricted Console database account cannot be used: ${error instanceof Error ? error.message : String(error)}`;
+      accessProblemCode = 'console-role-invalid';
     }
     if (accessProblem) logger.warn(formatCompact({ op: 'database_console_role_unusable', reason: accessProblem }));
   };
+  /** Marks the restricted account for a fresh probe after an error on it. */
+  const onRestrictedError = <T>(work: Promise<T>): Promise<T> => (sqlDialect === 'sqlite' ? work : work.catch((error: unknown) => {
+    probeStale = true;
+    throw error;
+  }));
   /** The connection raw Console SQL runs on. */
   const executor = (): ConsoleSqlExecutor | undefined => {
     if (sqlDialect === 'sqlite') return db;
     return accessProblem ? undefined : restrictedDb;
   };
+  /** Code of `rawSqlProblem` (Console: `console-role-*` asks for `zhin db console-role`). */
+  let rawSqlProblemCode: DatabaseHostConsoleCapabilities['sqlReasonCode'];
   const refreshRawSql = async (): Promise<void> => {
     if (!sqlDialect || !isStarted()) return;
     await refreshConsoleAccess();
     const target = executor();
     if (!target) {
       rawSqlProblem = accessProblem;
+      rawSqlProblemCode = accessProblemCode;
       return;
     }
+    rawSqlProblemCode = sqlDialect === 'sqlite' ? 'sqlite-isolation' : 'text-compatibility';
     rawSqlProblem = await rawSqlCompatibilityProblem(sqlDialect, {
       query: (sql) => target.query(sql),
       isolatedReads: () => db.dialect.supportsIsolatedReads?.() === true,
@@ -582,7 +613,7 @@ function createDatabaseConsole(
     return dialect;
   };
   const currentCapabilities = (): DatabaseHostConsoleCapabilities => (rawSqlProblem && sqlDialect
-    ? Object.freeze({ ...capabilities, sql: false, sqlReason: rawSqlProblem, reason: rawSqlProblem })
+    ? Object.freeze({ ...capabilities, sql: false, sqlReason: rawSqlProblem, ...(rawSqlProblemCode ? { sqlReasonCode: rawSqlProblemCode } : {}), reason: rawSqlProblem })
     : capabilities);
   const describe = async (table: string): Promise<DatabaseHostTableSchema> => {
     assertInstanceTable(table);
@@ -637,7 +668,10 @@ function createDatabaseConsole(
         if (options.rollback) throw discard;
       }, options.readOnly ? { readOnly: true } : undefined);
     } catch (error) {
-      if (error !== discard) throw error;
+      if (error === discard) return result as T;
+      // Probe the restricted account again before its next use (it may have changed).
+      if (on !== db) probeStale = true;
+      throw error;
     }
     return result as T;
   };
@@ -849,7 +883,7 @@ function createDatabaseConsole(
       const results = transactional
         ? await inTransaction(trx => runAll(text => trx.statement(text)), { rollback: dryRun, ...(options?.timeoutMs ? { timeoutMs: options.timeoutMs } : {}) }, on)
         // MySQL DDL: dialect queries are prepared statements (one statement each).
-        : await runAll(text => on.query(text));
+        : await runAll(text => onRestrictedError(on.query(text)));
       if (!dryRun) await refreshDiscovered().catch(() => undefined);
       return Object.freeze({ statements: Object.freeze(results), dryRun, durationMs: Date.now() - started });
     },
@@ -1006,12 +1040,59 @@ function jsonSafeRow(row: Record<string, unknown>): Record<string, unknown> {
  * Root-only raw registry with the gateway's tables cut off: raw SQL naming them and table-name
  * arguments (`model`, `define`, `select`, …) are refused. Methods run on the real registry.
  */
+/** Data properties of the raw registry a plugin may read through the guarded handle. */
+const RAW_DATABASE_READABLE: ReadonlySet<PropertyKey> = new Set(['models', 'dialectName', 'isStarted', 'hasStarted', 'definitions']);
+/** Properties of a model that lead back to the registry, its dialect or the driver. */
+const MODEL_INTERNALS: ReadonlySet<PropertyKey> = new Set(['database', 'dialect', 'db', 'config']);
+
+/** A model without its way back to the registry / dialect / driver handle. */
+function guardRawModel<T extends object>(model: T): T {
+  return new Proxy(model, {
+    get(target, property) {
+      if (MODEL_INTERNALS.has(property)) return undefined;
+      const value = Reflect.get(target, property, target);
+      return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(target) : value;
+    },
+    set: () => false,
+    defineProperty: () => false,
+    deleteProperty: () => false,
+  });
+}
+
+/** Read-only view of the registry's model map whose models are guarded too. */
+function guardModelMap(models: Map<string, unknown>): Map<string, unknown> {
+  return new Proxy(models, {
+    get(target, property) {
+      if (property === 'get') return (name: string) => { assertInstanceTable(name); const model = target.get(name); return model && typeof model === 'object' ? guardRawModel(model) : model; };
+      if (property === 'set' || property === 'delete' || property === 'clear') return () => { throw new TypeError('The model map of the raw database handle is read-only'); };
+      if (property === 'size') return target.size;
+      const value = Reflect.get(target, property, target);
+      return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(target) : value;
+    },
+  });
+}
+
+/**
+ * Root-only raw registry with the gateway's tables cut off: raw SQL naming them and table-name
+ * arguments (`model`, `define`, `select`, …) are refused. Methods run on the real registry. Data
+ * properties are a frozen view: the dialect, its config and the driver handle (`dialect`, `config`,
+ * `db`, …) are not reachable from it, so the handle cannot turn off `denyAttach` or reach the raw
+ * `node:sqlite` connection. Plugins are trusted code in the same process and user (ADR 0059 §1):
+ * this keeps accidental and Console / Agent-driven access off the gateway's data, it does not
+ * contain a malicious plugin.
+ */
 function guardRawDatabase(db: RawDatabase): RawDatabase {
   const wrapped = new Map<PropertyKey, unknown>();
+  let models: Map<string, unknown> | undefined;
   return new Proxy(db, {
-    get(target, property, receiver) {
-      const value = Reflect.get(target, property, receiver);
-      if (typeof value !== 'function') return value;
+    get(target, property) {
+      // Getters run against the real registry (`dialectName` reads `this.dialect`).
+      const value = Reflect.get(target, property, target);
+      if (typeof value !== 'function') {
+        if (!RAW_DATABASE_READABLE.has(property)) return undefined;
+        if (property === 'models' && value instanceof Map) return models ??= guardModelMap(value as Map<string, unknown>);
+        return value;
+      }
       const cached = wrapped.get(property);
       if (cached) return cached;
       const guarded = function (this: unknown, ...args: unknown[]) {
@@ -1020,10 +1101,29 @@ function guardRawDatabase(db: RawDatabase): RawDatabase {
           throw new GatewayOwnedTableError();
         }
         if (typeof first === 'string') assertInstanceTable(first);
-        return (value as (...values: unknown[]) => unknown).apply(target, args);
+        const result = (value as (...values: unknown[]) => unknown).apply(target, args);
+        // `model(name)` hands out the same guarded view as `models.get(name)`.
+        return property === 'model' && result && typeof result === 'object' ? guardRawModel(result as object) : result;
       };
       wrapped.set(property, guarded);
       return guarded;
+    },
+    // Methods may be replaced (instrumentation, tests): the replacement is guarded like the
+    // original. Data properties (`dialect`, `config`, …) cannot be written through the handle.
+    set(target, property, value) {
+      if (typeof value !== 'function' || typeof Reflect.get(target, property, target) !== 'function') return false;
+      wrapped.delete(property);
+      return Reflect.set(target, property, value, target);
+    },
+    defineProperty(target, property, descriptor) {
+      if (typeof descriptor.value !== 'function' || typeof Reflect.get(target, property, target) !== 'function') return false;
+      wrapped.delete(property);
+      return Reflect.defineProperty(target, property, descriptor);
+    },
+    deleteProperty(target, property) {
+      if (typeof Reflect.get(target, property, target) !== 'function') return false;
+      wrapped.delete(property);
+      return Reflect.deleteProperty(target, property);
     },
   });
 }
