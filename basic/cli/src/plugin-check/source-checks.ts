@@ -207,6 +207,9 @@ function checkCapabilityFeatures(
   problems: PluginCheckProblems,
 ): void {
   if (!hasZhinManifest) return;
+  // With `zhin.features` omitted the Runtime infers every directory's Feature (manifest checks
+  // require it to be a dependency); a written list is authoritative and can leave one uncovered.
+  if (rawFeatures === undefined) return;
   const declaredFeatures = new Set<string>();
   if (Array.isArray(rawFeatures)) {
     for (const item of rawFeatures) {
@@ -227,7 +230,7 @@ function checkCapabilityFeatures(
   for (const directory of activeDirectories) {
     const featurePackage = CONVENTION_FEATURE_PACKAGES[directory];
     if (featurePackage && !declaredFeatures.has(featurePackage)) {
-      problems.warnings.push(`约定目录 ${directory}/ 存在能力源码，但 zhin.features 未声明 ${featurePackage}`);
+      problems.warnings.push(`约定目录 ${directory}/ 存在能力源码，但 zhin.features 未声明 ${featurePackage}（写了 features 时不做推断：声明它，或省略 features 交给约定目录推断）`);
     }
   }
 }

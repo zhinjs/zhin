@@ -272,7 +272,8 @@ flowchart LR
 }
 ```
 
-- Every package in `zhin.features` must also appear in `dependencies`, `peerDependencies` or `optionalDependencies`, or startup fails with `PackageResolutionError`.
+- `zhin.features` may be omitted: the Feature packages are then inferred from the convention directories present (see [definePlugin · Inferring features](./define-plugin.md#infer-features)). Write it explicitly to pin an `api` range.
+- Every package in `zhin.features` (and, when it is omitted, every inferred package) must also appear in `dependencies`, `peerDependencies` or `optionalDependencies`, or startup fails with `PackageResolutionError`.
 - Child plugins declare Stable Features (command / middleware / component / handler) as **optional peers** provided by the bot — don't add them to their own `dependencies`, or there will be two copies.
 - `@zhin.js/adapter`, `@zhin.js/tool` and similar go in `dependencies` or non-optional peers as needed.
 

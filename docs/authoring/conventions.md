@@ -272,7 +272,8 @@ flowchart LR
 }
 ```
 
-- `zhin.features` 里出现的包，必须同时写在 `dependencies` / `peerDependencies` / `optionalDependencies` 之一，否则启动报 `PackageResolutionError`。
+- `zhin.features` 可以省略：省略时按存在的约定目录推断 Feature 包（见 [definePlugin · 由约定目录推断 features](./define-plugin.md#infer-features)）。想固定 `api` 范围时再显式写。
+- `zhin.features` 里出现的包（以及省略时推断出的包），必须同时写在 `dependencies` / `peerDependencies` / `optionalDependencies` 之一，否则启动报 `PackageResolutionError`。
 - 子插件对 Stable Feature（command / middleware / component / handler）声明为**可选 peer**，由 Bot 统一提供，不要装进自己的 `dependencies`，避免出现两份。
 - `@zhin.js/adapter`、`@zhin.js/tool` 等按需放进 `dependencies` 或非可选 peer。
 

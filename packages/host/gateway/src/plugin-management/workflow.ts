@@ -18,7 +18,7 @@ import { explainConfigFields } from './config-explanation.js';
 import type { ConsoleConfigExplanation, GatewayPluginConfigurationNeed } from '@zhin.js/console-protocol';
 import type { PluginManagementActivity } from './activity.js';
 import { resolveCommand } from '../onboarding/package-manager.js';
-import { readPluginLifecycleState, resolvePluginLifecycleFile } from '@zhin.js/runtime';
+import { inferConventionFeatureReferences, readPluginLifecycleState, resolvePluginLifecycleFile } from '@zhin.js/runtime';
 
 const execute = promisify(execFile);
 
@@ -660,6 +660,8 @@ export class PluginManagementWorkflow implements PluginManagementPort {
       seen.add(pkg.root);
       if (pkg.packageJson.zhin.type !== 'plugin') return false;
       if (pkg.packageJson.zhin.features.some(item => item.package === packageName)) return true;
+      // A convention directory implies its Feature package even when zhin.features omits it.
+      if (inferConventionFeatureReferences(pkg.root, pkg.packageJson.zhin).some(item => item.package === packageName)) return true;
       if (!isRoot && [pkg.packageJson.dependencies, pkg.packageJson.optionalDependencies, pkg.packageJson.peerDependencies].some(deps => deps?.[packageName])) return true;
       const entries = isRoot ? await this.#declaredEntries() : [];
       for (const entry of entries) {

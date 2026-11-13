@@ -177,23 +177,10 @@ export const CONVENTION_SOURCE_DIRECTORIES = [
 
 /**
  * Feature package that discovers each convention directory (docs/authoring/conventions.md).
- * `zhin plugin check` warns when a directory with capability sources lacks its feature;
- * `zhin create` declares it.
+ * The single source of truth lives in `@zhin.js/runtime`, which infers these packages for
+ * `zhin.features`; `zhin plugin check` checks them and `zhin create` declares them.
  */
-export const CONVENTION_FEATURE_PACKAGES: Readonly<Record<string, string>> = {
-  commands: '@zhin.js/command',
-  components: '@zhin.js/component',
-  middlewares: '@zhin.js/middleware',
-  handlers: '@zhin.js/handler',
-  schedules: '@zhin.js/schedule-feature',
-  tools: '@zhin.js/tool',
-  'prompt-sections': '@zhin.js/prompt-section',
-  hooks: '@zhin.js/hook-feature',
-  mcps: '@zhin.js/mcp-feature',
-  adapters: '@zhin.js/adapter',
-  skills: '@zhin.js/skill',
-  agents: '@zhin.js/agent-feature',
-};
+export { CONVENTION_FEATURE_PACKAGES } from '@zhin.js/runtime';
 
 /** `zhin.features[].api` ranges: the major of each provider's `zhin.featureApi`. */
 const FEATURE_API_RANGES: Readonly<Record<string, string>> = {

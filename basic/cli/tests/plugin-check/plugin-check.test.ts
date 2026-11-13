@@ -7,6 +7,7 @@ import { filesWhitelistIncludes } from '../../src/plugin-check/files-whitelist.j
 import { checkPluginSource, readPluginManifest } from '../../src/plugin-check/source-checks.js';
 import { findMissingConventionFiles, loadSpecifierScanner } from '../../src/plugin-check/pack-checks.js';
 import { checkPlugin, formatPluginCheckReport } from '../../src/plugin-check/index.js';
+import { checkZhinManifest } from '../../src/plugin-check/manifest-checks.js';
 import { scanRelativeSpecifiers } from '../../shared/pack-rules.mjs';
 import {
   createPluginManifest,
@@ -134,6 +135,25 @@ describe('plugin source checks', () => {
     expect(result.errors).toEqual([expect.stringContaining('"zhin.js-example"')]);
     expect(result.errors[0]).toContain('请添加 plugin.ts');
     expect(result.warnings).toEqual([expect.stringContaining('存在 plugin.ts 但未声明 zhin.entry')]);
+  });
+
+  it('infers features from convention directories when zhin.features is omitted', () => {
+    const manifest = scaffoldManifest();
+    manifest.name = '@acme/demo';
+    const zhin = manifest.zhin as Record<string, unknown>;
+    delete zhin.entry;
+    delete zhin.features;
+    const directory = createPluginDirectory({
+      'package.json': JSON.stringify(manifest),
+      'commands/demo/index.ts': 'export default {};\n',
+      'middlewares/audit/index.ts': 'export default {};\n',
+    });
+
+    expect(checkPluginSource(directory, manifest).warnings.filter((warning) => warning.includes('zhin.features'))).toEqual([]);
+    const problems = { errors: [] as string[], warnings: [] as string[] };
+    checkZhinManifest(directory, manifest, problems);
+    // @zhin.js/command is a scaffold peer; @zhin.js/middleware is inferred but not declared.
+    expect(problems.errors).toEqual([expect.stringContaining('约定目录 middlewares/ 推断出 Feature @zhin.js/middleware')]);
   });
 
   it('still reports an entry declared only through exports["./zhin"] as before', () => {

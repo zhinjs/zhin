@@ -28,6 +28,12 @@ export interface ZhinPluginManifest {
    */
   readonly platformFeatures?: boolean;
   readonly features: readonly PackageReference[];
+  /**
+   * Present (true) when the manifest omits `features`: Feature packages are then inferred from
+   * convention directories (see `inferConventionFeatureReferences`). A written list, even an
+   * empty one, is authoritative.
+   */
+  readonly featuresOmitted?: true;
   readonly plugins: readonly ChildPluginReference[];
 }
 
@@ -229,6 +235,7 @@ function parseZhinManifest(
     metadata: parsePluginMetadata(record.metadata, `${source}.metadata`, issues),
     platformFeatures,
     features: parseReferences(record.features, `${source}.features`, issues, false),
+    ...(record.features === undefined ? { featuresOmitted: true as const } : {}),
     plugins: parseReferences(record.plugins, `${source}.plugins`, issues, true),
   });
 }

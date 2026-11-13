@@ -257,7 +257,9 @@ function objectField(manifest: JsonObject, field: string): JsonObject {
 }
 
 /**
- * Declare the Feature in `zhin.features` and, when the package does not already depend on it,
+ * Declare the Feature in `zhin.features` (only when the manifest lists features: with
+ * `zhin.features` omitted the Runtime infers it from the convention directory) and, when the
+ * package does not already depend on it,
  * as an optional peer plus devDependency (the `zhin new` policy; the Runtime rejects features
  * that are not declared as dependencies). Ranges follow the package's own zhin.js spec:
  * `workspace:` stays a workspace link, anything else gets the release range.
@@ -265,11 +267,12 @@ function objectField(manifest: JsonObject, field: string): JsonObject {
 export function declareFeature(manifest: JsonObject, featurePackage: string, pluginDirectory: string): string[] {
   const changes: string[] = [];
   const zhin = manifest.zhin as JsonObject;
-  if (!Array.isArray(zhin.features)) zhin.features = [];
-  const features = zhin.features as unknown[];
-  const declared = features.some((entry) => entry === featurePackage
+  // Omitted features stay omitted: writing a list would make it authoritative and switch
+  // convention inference off for the other directories.
+  const features = Array.isArray(zhin.features) ? zhin.features as unknown[] : undefined;
+  const declared = features === undefined || features.some((entry) => entry === featurePackage
     || (isObject(entry) && entry.package === featurePackage));
-  if (!declared) {
+  if (!declared && features) {
     features.push({ package: featurePackage, api: featureApiRange(featurePackage) });
     changes.push(`zhin.features 添加 ${featurePackage}（api ${featureApiRange(featurePackage)}）`);
   }

@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { inferConventionFeatureReferences } from '../packages/im/runtime/src/convention-features.ts';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const workspaceRoots = ['basic', 'packages', 'plugins', 'examples'];
@@ -93,7 +94,9 @@ for (const packageRoot of packageRoots) {
   if (manifest.dependencies?.['@zhin.js/tool'] !== 'workspace:*') {
     report(manifestPath, 'tools package must depend on @zhin.js/tool');
   }
-  if (!manifest.zhin?.features?.some((feature) => feature.package === '@zhin.js/tool')) {
+  // Mounted explicitly in zhin.features, or inferred from the package-root convention directory.
+  if (!manifest.zhin?.features?.some((feature) => feature.package === '@zhin.js/tool')
+    && !inferConventionFeatureReferences(packageRoot, manifest.zhin).some((feature) => feature.package === '@zhin.js/tool')) {
     report(manifestPath, 'tools package must mount the @zhin.js/tool Feature');
   }
   if (manifest.private !== true && !manifest.files?.includes('tools')

@@ -28,7 +28,7 @@ export default definePlugin({
 
 ```text
 my-plugin/
-├── package.json          # "zhin": { "protocol": 1, "type": "plugin", ... }，不写 entry
+├── package.json          # "zhin": { "protocol": 1, "type": "plugin" }，不写 entry 和 features
 └── commands/demo/index.ts
 ```
 
@@ -466,7 +466,7 @@ Zhin 内部把每个版本称为一个 generation，详见 [Generation 生命周
     "engine": "^1.0.0",               // 可选：要求的 Zhin 运行时版本
     "runtime": "trusted",             // 可选（仅 plugin）："trusted"（默认）| "isolated"
     "platformFeatures": true,         // 可选（仅 plugin）：默认 true，Root 自动获得官方 Stable Features
-    "features": [                     // 可选（仅 plugin）：依赖的 Feature 包
+    "features": [                     // 可选（仅 plugin）：依赖的 Feature 包；省略时按约定目录推断
       { "package": "@zhin.js/command", "api": "^1.0.0", "optional": false }
     ]
   }
@@ -481,9 +481,39 @@ Zhin 内部把每个版本称为一个 generation，详见 [Generation 生命周
 | `engine` | 否 | semver 范围，与运行时版本不匹配时拒绝加载 |
 | `runtime` | 否 | `isolated` 表示在隔离环境中运行：仅限子插件、不能挂载 Host Feature，且需要隔离适配器支持 |
 | `platformFeatures` | 否 | 默认 `true`：Root 插件即使不声明，也会获得官方 Stable Features |
-| `features` | 否 | 依赖的 Feature 包。`package` 可以是 npm 包名或 `./` 相对路径；`api` 是对其 `featureApi` 的版本要求；`optional` 表示缺失时可降级 |
+| `features` | 否 | 依赖的 Feature 包。`package` 可以是 npm 包名或 `./` 相对路径；`api` 是对其 `featureApi` 的版本要求；`optional` 表示缺失时可降级。省略时[按约定目录推断](#infer-features) |
 
 `type: "feature"` 的包只有 `protocol` / `type` / `entry` / `engine` / `featureApi` 五个字段，`featureApi` 声明它实现的 API 版本，供使用方的 `features[].api` 校验。
+
+插件真正必填的只有两项，最小清单是 `"zhin": { "protocol": 1, "type": "plugin" }`：入口可省略（[无入口插件](#entryless-plugin)），`features` 可省略（见下文推断）。
+
+#### 由约定目录推断 features {#infer-features}
+
+`zhin.features` 可以省略。省略时，运行时按插件包根目录下存在的约定目录推断要挂载的 Feature 包：
+
+| 目录 | Feature 包 |
+| --- | --- |
+| `commands/` | `@zhin.js/command` |
+| `components/` | `@zhin.js/component` |
+| `middlewares/` | `@zhin.js/middleware` |
+| `handlers/` | `@zhin.js/handler` |
+| `schedules/` | `@zhin.js/schedule-feature` |
+| `tools/` | `@zhin.js/tool` |
+| `prompt-sections/` | `@zhin.js/prompt-section` |
+| `hooks/` | `@zhin.js/hook-feature` |
+| `mcps/` | `@zhin.js/mcp-feature` |
+| `adapters/` | `@zhin.js/adapter` |
+| `skills/` | `@zhin.js/skill` |
+| `agents/` | `@zhin.js/agent-feature` |
+
+这张表在 `@zhin.js/runtime` 里只有一份（`CONVENTION_FEATURE_PACKAGES`），`zhin plugin check`、`zhin add` 与仓库检查脚本都读它。
+
+- **省略 `features`**：每个存在的目录都要求对应的 Feature 包。推断出的引用不带 `api` 范围，接受已安装的版本；包仍然要写进 `dependencies` / `peerDependencies`，找不到时与显式声明缺失一样报 `PackageResolutionError`，并在信息里写明是哪个目录推断出来的。
+- **写了 `features`**（哪怕是 `[]`）：列表就是全部，不做推断，行为与以前完全一致。列表里的条目原样生效（保留 `api` 与 `optional`），没列出的目录不会挂载对应 Feature（`zhin plugin check` 会警告）。
+- Root 从 `zhin.js` / `@zhin.js/core` 继承的 Stable Features 优先于推断；`platformFeatures` 的语义不变。
+- `runtime: "isolated"` 的插件不做推断（隔离插件不能挂载 Host Feature）。
+- 想**固定 `api` 范围**、把某个 Feature 标成 `optional`，或者 Feature 由同名之外的包（如 workspace 里的本地 Feature）提供时，显式写 `features`。
+- 运行中新建一种约定目录时，推断结果在下一次读取清单时更新（修改 `package.json` 或重启）。
 
 ### 用 exports 声明入口 {#exports-zhin}
 

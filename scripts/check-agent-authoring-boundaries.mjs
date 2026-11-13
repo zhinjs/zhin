@@ -3,6 +3,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { inferConventionFeatureReferences } from '../packages/im/runtime/src/convention-features.ts';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const workspaceRoots = ['basic', 'packages', 'plugins', 'examples'];
@@ -30,7 +31,9 @@ for (const workspaceRoot of workspaceRoots) {
       if (manifest.dependencies?.['@zhin.js/agent-feature'] !== 'workspace:*') {
         violations.push(`${relative(packageJson)}: must depend on @zhin.js/agent-feature`);
       }
-      if (!manifest.zhin?.features?.some((feature) => feature.package === '@zhin.js/agent-feature')) {
+      // Mounted explicitly in zhin.features, or inferred from the package-root convention directory.
+      if (!manifest.zhin?.features?.some((feature) => feature.package === '@zhin.js/agent-feature')
+        && !inferConventionFeatureReferences(packageRoot, manifest.zhin).some((feature) => feature.package === '@zhin.js/agent-feature')) {
         violations.push(`${relative(packageJson)}: must mount the @zhin.js/agent-feature Feature`);
       }
     }

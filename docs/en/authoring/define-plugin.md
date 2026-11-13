@@ -28,7 +28,7 @@ A plugin that only uses convention directories can omit `plugin.ts` altogether. 
 
 ```text
 my-plugin/
-├── package.json          # "zhin": { "protocol": 1, "type": "plugin", ... } with no entry
+├── package.json          # "zhin": { "protocol": 1, "type": "plugin" }: no entry, no features
 └── commands/demo/index.ts
 ```
 
@@ -466,7 +466,7 @@ Plugins and Feature packages declare their packaging contract in the top-level `
     "engine": "^1.0.0",               // optional: required Zhin runtime version
     "runtime": "trusted",             // optional (plugin only): "trusted" (default) | "isolated"
     "platformFeatures": true,         // optional (plugin only): default true, Root gets the official Stable Features
-    "features": [                     // optional (plugin only): Feature packages this plugin depends on
+    "features": [                     // optional (plugin only): Feature packages this plugin depends on; inferred from convention directories when omitted
       { "package": "@zhin.js/command", "api": "^1.0.0", "optional": false }
     ]
   }
@@ -481,9 +481,39 @@ Plugins and Feature packages declare their packaging contract in the top-level `
 | `engine` | No | A semver range; loading is refused if the runtime version doesn't satisfy it |
 | `runtime` | No | `isolated` runs the plugin in an isolated environment: child plugins only, no Host Features, and an isolation adapter is required |
 | `platformFeatures` | No | Default `true`: the Root plugin gets the official Stable Features even without declaring them |
-| `features` | No | Feature packages depended on. `package` is an npm name or a `./` relative path; `api` is a range on its `featureApi`; `optional` allows degrading when missing |
+| `features` | No | Feature packages depended on. `package` is an npm name or a `./` relative path; `api` is a range on its `featureApi`; `optional` allows degrading when missing. [Inferred from convention directories](#infer-features) when omitted |
 
 A `type: "feature"` package has only `protocol` / `type` / `entry` / `engine` / `featureApi`; `featureApi` declares the API version it implements, checked against consumers' `features[].api`.
+
+A plugin truly requires only two fields; the minimal manifest is `"zhin": { "protocol": 1, "type": "plugin" }`. The entry may be omitted ([entry-less plugin](#entryless-plugin)) and so may `features` (inferred, see below).
+
+#### Inferring features from convention directories {#infer-features}
+
+`zhin.features` may be omitted. The runtime then infers the Feature packages to mount from the convention directories present at the plugin package root:
+
+| Directory | Feature package |
+| --- | --- |
+| `commands/` | `@zhin.js/command` |
+| `components/` | `@zhin.js/component` |
+| `middlewares/` | `@zhin.js/middleware` |
+| `handlers/` | `@zhin.js/handler` |
+| `schedules/` | `@zhin.js/schedule-feature` |
+| `tools/` | `@zhin.js/tool` |
+| `prompt-sections/` | `@zhin.js/prompt-section` |
+| `hooks/` | `@zhin.js/hook-feature` |
+| `mcps/` | `@zhin.js/mcp-feature` |
+| `adapters/` | `@zhin.js/adapter` |
+| `skills/` | `@zhin.js/skill` |
+| `agents/` | `@zhin.js/agent-feature` |
+
+The table exists once, in `@zhin.js/runtime` (`CONVENTION_FEATURE_PACKAGES`); `zhin plugin check`, `zhin add` and the repository checks all read it.
+
+- **`features` omitted**: every directory present requires its Feature package. Inferred references carry no `api` range and accept the installed version; the package must still be listed in `dependencies` / `peerDependencies`. A missing one fails with `PackageResolutionError`, like a missing declared Feature, and the message names the directory that implied it.
+- **`features` written** (even `[]`): the list is complete and nothing is inferred, exactly as before. Entries apply as written (`api` and `optional` kept); a directory the list does not cover does not mount its Feature (`zhin plugin check` warns).
+- Stable Features the Root inherits from `zhin.js` / `@zhin.js/core` take precedence over inference; `platformFeatures` is unchanged.
+- Plugins with `runtime: "isolated"` never infer (isolated plugins cannot mount Host Features).
+- Write `features` explicitly to **pin an `api` range**, mark a Feature `optional`, or when the Feature comes from a package other than the one in the table (for example a local workspace Feature).
+- A new kind of convention directory created while running is picked up the next time the manifest is read (edit `package.json` or restart).
 
 ### Declaring the entry with exports {#exports-zhin}
 

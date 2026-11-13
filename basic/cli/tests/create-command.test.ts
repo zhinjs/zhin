@@ -106,6 +106,18 @@ describe('zhin create: convention files and manifest features', () => {
     expect(afterFirst).toContain('\n  "zhin": {\n');
   });
 
+  it('leaves an omitted features list to convention inference and still declares the dependency', () => {
+    const base = pluginManifest();
+    const { features: _features, ...zhin } = base.zhin as Record<string, unknown>;
+    writePlugin(root, { ...base, zhin });
+    const result = addConvention({ kind: 'middleware', name: 'audit', cwd: root });
+    const manifest = readManifest();
+    expect(manifest.zhin.features).toBeUndefined();
+    expect(result.manifestChanges.some((change) => change.includes('zhin.features'))).toBe(false);
+    expect(manifest.peerDependencies['@zhin.js/middleware']).toBe('workspace:^');
+    expect(manifest.devDependencies['@zhin.js/middleware']).toBe('workspace:*');
+  });
+
   it('accepts string feature entries and dependencies declared outside peers', () => {
     writePlugin(root, pluginManifest({
       dependencies: { '@zhin.js/tool': 'workspace:*' },
