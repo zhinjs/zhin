@@ -1,5 +1,24 @@
 # @zhin.js/layout
 
+## 1.1.18
+
+### Patch Changes
+
+- Updated dependencies [57c6cdc]
+- Updated dependencies [e1fda87]
+- Updated dependencies [a9c7a13]
+- Updated dependencies [120e225]
+- Updated dependencies [c2bbdcf]
+- Updated dependencies [63595fc]
+- Updated dependencies [fd055d2]
+- Updated dependencies [fd22375]
+- Updated dependencies [c2bbdcf]
+- Updated dependencies [c606d51]
+- Updated dependencies [5cd9d3d]
+  - @zhin.js/feature-kit@1.1.16
+  - @zhin.js/console-contract@1.1.6
+  - @zhin.js/plugin-runtime@1.2.0
+
 ## 1.1.17
 
 ### Patch Changes
