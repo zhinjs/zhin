@@ -158,6 +158,7 @@ jobs:
           basic/database/tests/live-dialects.test.ts
           packages/im/zhin/tests/instance/database-conversation-live.test.ts
           packages/im/zhin/tests/instance/mysql-startup.live.test.ts
+          packages/im/zhin/tests/instance/database-console-sql.live.test.ts
           packages/im/zhin/tests/instance/persistent-state.live.test.ts
           packages/im/ai/tests/memory/context-repository-database.test.ts
         env:

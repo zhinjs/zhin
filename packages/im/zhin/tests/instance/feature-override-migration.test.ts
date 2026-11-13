@@ -6,8 +6,9 @@ import { createConfigDocument } from '@zhin.js/runtime';
 import { FeatureOverrideStore, type FeatureOverrideWrite } from '../../src/instance/console/feature-override-store.js';
 import {
   FEATURE_OVERRIDE_MIGRATION_FILE, FeatureOverrideMigrationReferenceError, LegacyFeatureOverrideConfigError,
-  prepareFeatureOverrideMigration, readLegacyFeatureOverrideConfig,
+  childPluginInstancePaths, prepareFeatureOverrideMigration, readLegacyFeatureOverrideConfig,
 } from '../../src/instance/feature-override-migration.js';
+import { readStoredFeatureOverrides, resolveLayeredConfig } from '@zhin.js/plugin-runtime';
 
 const directories: string[] = [];
 afterEach(async () => { for (const directory of directories.splice(0)) await rm(directory, { recursive: true, force: true }); });
@@ -58,9 +59,27 @@ function logger() {
 const record = async (root: string) => JSON.parse(await readFile(join(root, FEATURE_OVERRIDE_MIGRATION_FILE), 'utf8')) as Record<string, any>;
 const exists = async (file: string) => readFile(file).then(() => true, () => false);
 
+/**
+ * The candidate generation's Plugin tree (what startup passes to `complete`): top-level instances
+ * and their nested child instances, e.g. `{ parent: ['child'] }`.
+ */
+function pluginTree(instances: Readonly<Record<string, readonly string[]>> = { qq: [], rss: [], tg: [], parent: ['child'] }) {
+  const root = 'root';
+  const tree = new Map<string, { id: string; instanceKey: string; parent?: string; children: string[] }>();
+  tree.set(root, { id: root, instanceKey: '', children: [] });
+  for (const [alias, children] of Object.entries(instances)) {
+    const id = `${root}/${alias}`;
+    tree.get(root)!.children.push(id);
+    tree.set(id, { id, instanceKey: alias, parent: root, children: children.map(child => `${id}/${child}`) });
+    for (const child of children) tree.set(`${id}/${child}`, { id: `${id}/${child}`, instanceKey: child, parent: id, children: [] });
+  }
+  return { root, tree } as never;
+}
+const TREE = pluginTree();
+
 async function start(root: string, configFile: string, store: FeatureOverrideStore, log = logger()) {
   const migration = await prepareFeatureOverrideMigration({ projectRoot: root, config: createConfigDocument(configFile), configFile, logger: log.logger, now: () => 1_700_000_000_000 });
-  await migration.complete(store);
+  await migration.complete(store, TREE);
   await migration.finish();
   return migration;
 }
@@ -92,7 +111,7 @@ describe('prepareFeatureOverrideMigration (ADR 0057 §2)', () => {
     expect(migration.pending).toHaveLength(3);
     // Still accepted while the import is pending.
     expect(() => migration.configUpdate.validate!({ next: { configVersion: 2, plugins: { rss: '@x/rss' }, rss: { overrides: { adapters: {} } } } } as never)).not.toThrow();
-    await migration.complete(store);
+    await migration.complete(store, TREE);
     expect(store.get('rss', 'qq')).toMatchObject({ level: 'adapter', enabled: false, patch: { maxItems: 3 }, updatedBy: 'migration:rss.overrides.adapters.qq' });
     expect(store.get('rss', 'qq/bot-1')).toMatchObject({ level: 'endpoint', patch: { maxItems: 1 } });
     expect(store.get('parent/child', 'qq/bot-1')).toMatchObject({ enabled: false, patch: {} });
@@ -149,7 +168,7 @@ describe('prepareFeatureOverrideMigration (ADR 0057 §2)', () => {
     // One store across both starts stands for the shared database.
     const store = new FlakyStore();
     const first = await prepareFeatureOverrideMigration({ projectRoot: root, config: createConfigDocument(configFile), configFile, logger: logger().logger });
-    await expect(first.complete(store)).rejects.toThrow('database went away');
+    await expect(first.complete(store, TREE)).rejects.toThrow('database went away');
     await first.finish();
     expect(await readFile(configFile, 'utf8')).toBe(LEGACY_YAML);
     expect(await exists(join(root, FEATURE_OVERRIDE_MIGRATION_FILE))).toBe(false);
@@ -172,7 +191,7 @@ describe('prepareFeatureOverrideMigration (ADR 0057 §2)', () => {
     const store = new FeatureOverrideStore();
     const log = logger();
     const migration = await prepareFeatureOverrideMigration({ projectRoot: root, config: createConfigDocument(configFile), configFile, logger: log.logger });
-    await migration.complete(store);
+    await migration.complete(store, TREE);
     const edited = LEGACY_YAML.replace('maxItems: 5', 'maxItems: 6');
     await writeFile(configFile, edited);
     await migration.finish();
@@ -211,5 +230,150 @@ describe('prepareFeatureOverrideMigration (ADR 0057 §2)', () => {
     expect(await record(root)).toMatchObject({ status: 'pending', memoryOnlyAt: 1_700_000_000_000 });
     expect(migration.done).toBe(false);
     expect(log.lines.some(line => line.startsWith('warn Feature overrides: 3 override(s)'))).toBe(true);
+  });
+});
+
+describe('post-merge review fixes (A-1 … A-4)', () => {
+  const head = 'configVersion: 2\nplugins:\n  rss: "@x/rss"\n';
+
+  it('A-1: skips malformed keys with a warning instead of failing every start; the backup keeps them', async () => {
+    const yaml = `${head}rss:\n  overrides:\n    endpoints:\n      qq/a/b:\n        maxItems: 3\n      qq/ok:\n        maxItems: 4\n`;
+    const { root, configFile } = await project(yaml);
+    const store = new FeatureOverrideStore();
+    await store.load();
+    const log = logger();
+    // The reviewer's PoC rejected here (store.write threw), on every start.
+    const migration = await start(root, configFile, store, log);
+    expect(migration.done).toBe(true);
+    expect(store.list().map(row => row.key)).toEqual(['qq/ok']);
+    expect(log.lines.some(line => line.startsWith('warn') && line.includes('skipped rss.overrides.endpoints.qq/a/b'))).toBe(true);
+    expect(await readFile(configFile, 'utf8')).not.toContain('qq/a/b');
+    expect(await readFile(join(root, (await record(root)).backup), 'utf8')).toContain('qq/a/b');
+    // A second start is a no-op.
+    await start(root, configFile, store);
+  });
+
+  it('A-2: an entry filed under the wrong level stays inert (never becomes live by the import)', async () => {
+    const yaml = `${head}rss:\n  overrides:\n    adapters:\n      qq/bot-1:\n        enabled: false\n`;
+    const { root, configFile } = await project(yaml);
+    const before = resolveLayeredConfig({ global: {}, overrides: { adapters: { 'qq/bot-1': { enabled: false } } }, key: 'qq/bot-1' });
+    expect(before.enabled).toBe(true);
+    const store = new FeatureOverrideStore();
+    await store.load();
+    const log = logger();
+    await start(root, configFile, store, log);
+    const after = resolveLayeredConfig({ global: {}, overrides: readStoredFeatureOverrides(store.reader, 'rss', 'qq/bot-1'), key: 'qq/bot-1' });
+    expect(after.enabled).toBe(true);
+    expect(store.list()).toHaveLength(0);
+    expect(log.lines.some(line => line.includes('skipped rss.overrides.adapters.qq/bot-1') && line.includes('other level'))).toBe(true);
+    expect(readLegacyFeatureOverrideConfig({ configVersion: 2, plugins: { rss: '@x/rss' }, rss: { overrides: { adapters: { 'qq/bot-1': {} }, endpoints: { qq: {} } } } }).skipped)
+      .toEqual([
+        { source: 'rss.overrides.adapters.qq/bot-1', reason: 'wrong_level' },
+        { source: 'rss.overrides.endpoints.qq', reason: 'wrong_level' },
+      ]);
+  });
+
+  it('A-3: a plugin setting shaped like a child block is left alone, and is not refused afterwards', async () => {
+    const yaml = `${head}rss:\n  routing:\n    overrides:\n      endpoints:\n        qq/bot-1:\n          target: x\n`;
+    const { root, configFile } = await project(yaml);
+    const store = new FeatureOverrideStore();
+    await store.load();
+    const tree = pluginTree({ rss: [] });
+    const migration = await prepareFeatureOverrideMigration({ projectRoot: root, config: createConfigDocument(configFile), configFile, logger: logger().logger });
+    await migration.complete(store, tree);
+    await migration.finish();
+    expect(await readFile(configFile, 'utf8')).toBe(yaml);
+    expect(store.get('rss/routing', 'qq/bot-1')).toBeUndefined();
+    expect(migration.done).toBe(true);
+    // Not refused: neither on the next start nor on a configuration update.
+    const next = await prepareFeatureOverrideMigration({ projectRoot: root, config: createConfigDocument(configFile), configFile, logger: logger().logger });
+    await next.complete(store, tree);
+    const routing = { configVersion: 2, plugins: { rss: '@x/rss' }, rss: { routing: { overrides: { endpoints: { 'qq/bot-1': { target: 'y' } } } } } };
+    expect(() => next.configUpdate.validate!({ next: routing } as never)).not.toThrow();
+    // A real child instance's block is still refused once the migration is done.
+    const withChild = pluginTree({ rss: ['routing'] });
+    const third = await prepareFeatureOverrideMigration({ projectRoot: root, config: createConfigDocument(configFile), configFile, logger: logger().logger });
+    await expect(third.complete(store, withChild)).rejects.toBeInstanceOf(LegacyFeatureOverrideConfigError);
+    expect(() => third.configUpdate.validate!({ next: routing } as never)).toThrow(LegacyFeatureOverrideConfigError);
+  });
+
+  it('A-3: without the Plugin tree, nested candidates are not guessed at (the import waits for a start with it)', async () => {
+    const { root, configFile } = await project();
+    const store = new FeatureOverrideStore();
+    const log = logger();
+    const migration = await prepareFeatureOverrideMigration({ projectRoot: root, config: createConfigDocument(configFile), configFile, logger: log.logger });
+    await migration.complete(store);
+    await migration.finish();
+    expect(store.list()).toHaveLength(0);
+    expect(await readFile(configFile, 'utf8')).toBe(LEGACY_YAML);
+    expect(log.lines.some(line => line.startsWith('warn Feature overrides: the Plugin tree is not available'))).toBe(true);
+    await start(root, configFile, store);
+    expect(store.get('parent/child', 'qq/bot-1')).toMatchObject({ enabled: false });
+  });
+
+  it('childPluginInstancePaths lists nested instances only', () => {
+    expect([...childPluginInstancePaths(pluginTree({ rss: [], parent: ['child', 'other'] }))]).toEqual(['parent/child', 'parent/other']);
+  });
+
+  it('A-4: in the imported state a file edit wins over a migration-written row; a changed row wins with a warning', async () => {
+    const { root, configFile, config } = await project();
+    const store = new FeatureOverrideStore();
+    const migration = await prepareFeatureOverrideMigration({ projectRoot: root, config, configFile, logger: logger().logger });
+    await migration.complete(store, TREE);
+    expect((await record(root)).status).toBe('imported');
+    // finish never ran (crash): the file still holds the blocks. The person edits them …
+    const edited = LEGACY_YAML
+      .replace('        maxItems: 3\n', '        maxItems: 7\n')
+      .replace('      qq/bot-1:\n        maxItems: 1\n', '      qq/bot-1:\n        maxItems: 2\n')
+      .replace('parent:\n  label: p\n  child:\n    overrides:\n      endpoints:\n        qq/bot-1:\n          enabled: false\n', 'parent:\n  label: p\n');
+    await writeFile(configFile, edited);
+    // … while someone changed rss/qq/bot-1 on the Console.
+    await store.write({ plugin: 'rss', key: 'qq/bot-1', next: () => ({ patch: { maxItems: 9 } }) });
+    const log = logger();
+    await start(root, configFile, store, log);
+    // Untouched since the import: the file edit applies; the removed entry is removed too.
+    expect(store.get('rss', 'qq')).toMatchObject({ enabled: false, patch: { maxItems: 7 }, revision: 2 });
+    expect(store.get('parent/child', 'qq/bot-1')).toBeUndefined();
+    // Changed in the database: kept, with a warning naming the entry.
+    expect(store.get('rss', 'qq/bot-1')).toMatchObject({ patch: { maxItems: 9 } });
+    expect(log.lines.some(line => line.startsWith('warn') && line.includes('rss.overrides.endpoints.qq/bot-1 differs from the stored override'))).toBe(true);
+    expect((await record(root)).status).toBe('done');
+    expect(await readFile(configFile, 'utf8')).not.toContain('overrides');
+  });
+
+  it('refuses at update time a nested block the update adds for a child Plugin the tree does not know yet', async () => {
+    const { root, configFile } = await project();
+    const store = new FeatureOverrideStore();
+    const migration = await start(root, configFile, store);
+    expect(migration.done).toBe(true);
+    // The update adds a new child Plugin `rss/extra` with its own overrides block.
+    const previous = { configVersion: 2, plugins: { rss: '@x/rss' }, rss: { maxItems: 5 } };
+    const next = { ...previous, rss: { maxItems: 5, extra: { overrides: { endpoints: { 'qq/bot-1': { enabled: false } } } } } };
+    expect(() => migration.configUpdate.validate!({ current: TREE, previous, next } as never)).toThrow(LegacyFeatureOverrideConfigError);
+    // A lookalike plugin setting that was already there (and judged not a child at start) is not re-refused.
+    const routing = { ...previous, rss: { maxItems: 5, routing: { overrides: { endpoints: { 'qq/bot-1': { target: 'x' } } } } } };
+    expect(() => migration.configUpdate.validate!({ current: TREE, previous: routing, next: { ...routing, rss: { ...routing.rss, maxItems: 6 } } } as never)).not.toThrow();
+    // The tree of the generation in service is used, not the startup tree: a child mounted since is recognised.
+    const mounted = pluginTree({ qq: [], rss: ['routing'], tg: [], parent: ['child'] });
+    expect(() => migration.configUpdate.validate!({ current: mounted, previous: routing, next: { ...routing, rss: { ...routing.rss, maxItems: 6 } } } as never))
+      .toThrow(LegacyFeatureOverrideConfigError);
+  });
+
+  it('keeps migration-written rows file-owned across repeated resyncs until the migration is done', async () => {
+    const { root, configFile, config } = await project();
+    const store = new FeatureOverrideStore();
+    const first = await prepareFeatureOverrideMigration({ projectRoot: root, config, configFile, logger: logger().logger });
+    await first.complete(store, TREE);
+    // finish never ran; the file is edited twice, each followed by a start whose finish also fails.
+    for (const value of [7, 8]) {
+      await writeFile(configFile, LEGACY_YAML.replace('        maxItems: 3\n', `        maxItems: ${value}\n`));
+      const again = await prepareFeatureOverrideMigration({ projectRoot: root, config: createConfigDocument(configFile), configFile, logger: logger().logger });
+      await again.complete(store, TREE);
+      expect(store.get('rss', 'qq')).toMatchObject({ patch: { maxItems: value }, updatedBy: 'migration:rss.overrides.adapters.qq' });
+    }
+    expect(store.revisionOf('rss', 'qq')).toBe(3);
+    await start(root, configFile, store);
+    expect((await record(root)).status).toBe('done');
+    expect(store.get('rss', 'qq')).toMatchObject({ patch: { maxItems: 8 } });
   });
 });

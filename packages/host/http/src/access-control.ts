@@ -237,13 +237,87 @@ export function authorizeConsoleWebSocket(principal: ConsolePrincipal, pathname:
   return permission !== null && grantsAllow(principal.grants, permission);
 }
 
-/** Audit detail for an RPC: type, target and parameter key names only. */
-export function rpcAuditDetail(message: Readonly<Record<string, unknown>>): Readonly<Record<string, unknown>> {
+/**
+ * JSON length of the detail of one audit entry. The gateway stores at most 4096 characters of
+ * JSON detail; statements are cut so the whole detail stays below this budget once serialised
+ * (escapes such as `\n` count twice), so the stored detail always parses.
+ */
+export const AUDIT_DETAIL_JSON_LIMIT = 3_500;
+
+export interface RpcAuditOptions {
+  /**
+   * Replaces literal values in SQL text (`'…'`) before it is recorded, with the dialect's own
+   * lexing (the database Host's `redactSql`). Without it no statement text is recorded at all.
+   */
+  readonly redactSql?: (sql: string) => string;
+}
+
+function statementTexts(message: Readonly<Record<string, unknown>>, reply: Readonly<Record<string, unknown>> | undefined): string[] {
+  if (message.type === 'db:execute' || message.type === 'db:query') return typeof message.sql === 'string' && message.sql ? [message.sql] : [];
+  const data = reply?.data && typeof reply.data === 'object' ? reply.data as Record<string, unknown> : undefined;
+  return (Array.isArray(data?.statements) ? data.statements as unknown[] : []).filter((entry): entry is string => typeof entry === 'string' && !!entry);
+}
+
+/**
+ * Statement text of Console SQL (`db:query` / `db:execute`, the DDL `db:schema:apply` ran or
+ * would have run), literals redacted; result rows are never recorded.
+ */
+function databaseStatementDetail(
+  message: Readonly<Record<string, unknown>>,
+  reply: Readonly<Record<string, unknown>> | undefined,
+  options: RpcAuditOptions | undefined,
+): Record<string, unknown> {
+  if (message.type !== 'db:execute' && message.type !== 'db:query' && message.type !== 'db:schema:apply') return {};
+  const change = message.type === 'db:schema:apply' && message.change && typeof message.change === 'object' ? message.change as Record<string, unknown> : {};
+  const texts = statementTexts(message, reply);
+  const redact = options?.redactSql;
+  return {
+    ...(message.type === 'db:execute' && message.dryRun === true ? { dryRun: true } : {}),
+    ...(typeof change.kind === 'string' ? { change: change.kind.slice(0, 64) } : {}),
+    ...(typeof change.table === 'string' ? { table: change.table.slice(0, 256) } : {}),
+    ...(texts.length && redact
+      ? { statements: texts.map(text => { try { return redact(text); } catch { return '[unavailable]'; } }) }
+      : texts.length ? { statementLength: texts.reduce((total, text) => total + text.length, 0) } : {}),
+  };
+}
+
+/** Cuts the longest statement until the serialised detail fits {@link AUDIT_DETAIL_JSON_LIMIT}. */
+function fitAuditDetail(detail: Record<string, unknown>): Record<string, unknown> {
+  const statements = Array.isArray(detail.statements) ? [...detail.statements as string[]] : undefined;
+  if (!statements) return detail;
+  let truncated = false;
+  for (;;) {
+    const candidate = { ...detail, statements, ...(truncated ? { truncated: true } : {}) };
+    const overflow = JSON.stringify(candidate).length - AUDIT_DETAIL_JSON_LIMIT;
+    if (overflow <= 0) return { ...candidate, statements: Object.freeze(statements) };
+    truncated = true;
+    let longest = 0;
+    for (let index = 1; index < statements.length; index += 1) if (statements[index]!.length > statements[longest]!.length) longest = index;
+    const text = statements[longest]!;
+    if (text.length <= 1) { statements.splice(longest, 1); continue; }
+    statements[longest] = `${text.slice(0, Math.max(0, text.length - overflow - 1))}…`;
+  }
+}
+
+/**
+ * Audit detail for an RPC: type, target and parameter key names only — plus the statement text
+ * of Console database writes (pass the reply so the DDL a schema change ran is recorded), with
+ * literals redacted by `options.redactSql`.
+ */
+export function rpcAuditDetail(
+  message: Readonly<Record<string, unknown>>,
+  reply?: Readonly<Record<string, unknown>>,
+  options?: RpcAuditOptions,
+): Readonly<Record<string, unknown>> {
   const data = message.data && typeof message.data === 'object' && !Array.isArray(message.data)
     ? Object.keys(message.data as Record<string, unknown>).sort()
     : [];
   const keys = Object.keys(message).filter(key => key !== 'type' && key !== 'requestId' && key !== 'data').sort();
-  return Object.freeze({ type: String(message.type ?? ''), keys: Object.freeze([...new Set([...keys, ...data])]) });
+  return Object.freeze(fitAuditDetail({
+    type: String(message.type ?? '').slice(0, 256),
+    keys: Object.freeze([...new Set([...keys, ...data])].slice(0, 64).map(key => key.slice(0, 128))),
+    ...databaseStatementDetail(message, reply, options),
+  }));
 }
 
 export function rpcAuditTarget(rule: ConsoleRpcPermissionRule | null): string | undefined {

@@ -6,10 +6,12 @@ const NOT_WIRED = '登录辅助未接线（LoginAssist 未挂载）';
 /** `login.submit` with `wait: true` waits at most this long for the login result. */
 export const LOGIN_SUBMIT_WAIT_MS = 15_000;
 
-export function listLoginPending(ctx: ConsoleRpcExtendedCtx): ExtendedRpcResult {
+export function listLoginPending(d: Record<string, unknown>, ctx: ConsoleRpcExtendedCtx): ExtendedRpcResult {
   const assist = ctx.loginAssist;
   if (!assist) return { error: NOT_WIRED };
-  const tasks = assist.listPending().map((task) => ({
+  const scope = loginScope(d, ctx);
+  if ('error' in scope) return scope;
+  const tasks = assist.listPending().filter((task) => inScope(scope, task)).map((task) => ({
     id: task.id,
     adapter: task.adapter,
     endpointKey: task.endpointKey,
@@ -89,10 +91,9 @@ export function listLoginFlows(d: Record<string, unknown>, ctx: ConsoleRpcExtend
   const assist = ctx.loginAssist;
   if (!assist) return { error: NOT_WIRED };
   if (!assist.listFlows) return unsupported('login flows');
-  const adapter = strField(d, 'adapter');
-  const endpointKey = strField(d, 'endpointKey');
-  const flows = assist.listFlows().filter((flow) => (!adapter || flow.adapter === adapter)
-    && (!endpointKey || flow.endpointKey === endpointKey));
+  const scope = loginScope(d, ctx);
+  if ('error' in scope) return scope;
+  const flows = assist.listFlows().filter((flow) => inScope(scope, flow));
   return { data: { flows, count: flows.length } };
 }
 
@@ -102,18 +103,15 @@ export function getLoginFlow(d: Record<string, unknown>, ctx: ConsoleRpcExtended
   if (!assist) return { error: NOT_WIRED };
   if (!assist.getFlow || !assist.getFlowById) return unsupported('login flows');
   const flowId = strField(d, 'flowId');
-  const adapter = strField(d, 'adapter');
-  const endpointKey = strField(d, 'endpointKey');
+  const scope = loginScope(d, ctx);
+  if ('error' in scope) return scope;
   if (flowId) {
     const flow = assist.getFlowById(flowId);
     // A flow id names one Endpoint; a scoped caller cannot read another Endpoint's flow by id.
-    if (flow && ((adapter && flow.adapter !== adapter) || (endpointKey && flow.endpointKey !== endpointKey))) {
-      return { data: { flow: null } };
-    }
-    return { data: { flow: flow ?? null } };
+    return { data: { flow: flow && inScope(scope, flow) ? flow : null } };
   }
-  if (!adapter || !endpointKey) return { error: 'flowId or adapter and endpointKey are required' };
-  return { data: { flow: assist.getFlow(adapter, endpointKey) ?? null } };
+  if (!scope.adapter || !scope.endpointKey) return { error: 'flowId or adapter and endpointKey are required' };
+  return { data: { flow: assist.getFlow(scope.adapter, scope.endpointKey) ?? null } };
 }
 
 /** `login.relogin` / `login.refresh { adapter, endpointKey }` through the Endpoint's login port. */
@@ -122,8 +120,9 @@ export async function controlLogin(
   d: Record<string, unknown>,
   ctx: ConsoleRpcExtendedCtx,
 ): Promise<ExtendedRpcResult> {
-  const adapter = strField(d, 'adapter');
-  const endpointKey = strField(d, 'endpointKey');
+  const scope = loginScope(d, ctx);
+  if ('error' in scope) return scope;
+  const { adapter, endpointKey } = scope;
   if (!adapter || !endpointKey) return { error: 'adapter and endpointKey are required' };
   const relogin = type === LOGIN_RPC.RELOGIN;
   const label = relogin ? 'relogin' : 'refresh challenge';
@@ -164,15 +163,54 @@ function unsupported(what: string, adapter?: string): ExtendedRpcResult {
   };
 }
 
-/** When the caller names an Endpoint (scoped permission), the task must belong to it. */
-function checkTaskTarget(d: Record<string, unknown>, ctx: ConsoleRpcExtendedCtx, id: string): ExtendedRpcResult | undefined {
-  const adapter = strField(d, 'adapter');
-  const endpointKey = strField(d, 'endpointKey');
-  if (!adapter && !endpointKey) return undefined;
-  const task = ctx.loginAssist?.listPending().find((item) => item.id === id);
-  if (!task || (adapter && task.adapter !== adapter) || (endpointKey && task.endpointKey !== endpointKey)) {
-    return { error: `login task not found: ${id}` };
+interface LoginScope { readonly adapter: string; readonly endpointKey: string }
+
+/**
+ * The Endpoint a login RPC is about: `adapter` / `endpointKey` read from `data` and the top level,
+ * exactly the fields the authorization map reads (ADR 0049). Sources that disagree, or a value that
+ * is not a string, are rejected. When the dispatcher admitted the caller only through an adapter /
+ * endpoint-scoped grant (`ctx.authorizedEndpoint`), the scope is that Endpoint and any other named
+ * target is rejected; global callers may omit it (`''` = no filter).
+ */
+function loginScope(d: Record<string, unknown>, ctx: ConsoleRpcExtendedCtx): LoginScope | { error: string } {
+  const sources = d.data && typeof d.data === 'object' && !Array.isArray(d.data)
+    ? [d.data as Record<string, unknown>, d]
+    : [d];
+  const read = (key: 'adapter' | 'endpointKey'): string | false => {
+    let found = '';
+    for (const source of sources) {
+      const value = source[key];
+      if (value === undefined || value === null || value === '') continue;
+      if (typeof value !== 'string') return false;
+      const text = value.trim();
+      if (!text) continue;
+      if (found && found !== text) return false;
+      found = text;
+    }
+    return found;
+  };
+  const adapter = read('adapter');
+  const endpointKey = read('endpointKey');
+  if (adapter === false || endpointKey === false) return { error: 'Conflicting login target (adapter / endpointKey)' };
+  const authorized = ctx.authorizedEndpoint;
+  if (!authorized) return { adapter, endpointKey };
+  if ((adapter && adapter !== authorized.adapter) || (endpointKey && endpointKey !== authorized.endpointKey)) {
+    return { error: 'Login target outside the authorized Endpoint' };
   }
+  return { adapter: authorized.adapter, endpointKey: authorized.endpointKey };
+}
+
+function inScope(scope: LoginScope, item: { readonly adapter: string; readonly endpointKey: string }): boolean {
+  return (!scope.adapter || item.adapter === scope.adapter) && (!scope.endpointKey || item.endpointKey === scope.endpointKey);
+}
+
+/** When the caller names an Endpoint, or was authorized for one, the task must belong to it. */
+function checkTaskTarget(d: Record<string, unknown>, ctx: ConsoleRpcExtendedCtx, id: string): ExtendedRpcResult | undefined {
+  const scope = loginScope(d, ctx);
+  if ('error' in scope) return scope;
+  if (!scope.adapter && !scope.endpointKey) return undefined;
+  const task = ctx.loginAssist?.listPending().find((item) => item.id === id);
+  if (!task || !inScope(scope, task)) return { error: `login task not found: ${id}` };
   return undefined;
 }
 

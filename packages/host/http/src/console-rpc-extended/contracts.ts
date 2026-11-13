@@ -34,6 +34,12 @@ export interface ConsoleRpcExtendedCtx {
   workroomProfileControl?: ConsoleWorkroomProfileControlPort;
   /** Authenticated HTTP principal; never accepted from the RPC body. */
   authenticatedPrincipal?: Readonly<{ principalId: string }>;
+  /**
+   * The Endpoint the caller was authorized for when its grant covers this call only at an adapter /
+   * endpoint scope (never set for global grants, owners or in-process callers). Handlers that act on
+   * login tasks or flows restrict themselves to it; set by the dispatcher, never read from the body.
+   */
+  authorizedEndpoint?: Readonly<{ adapter: string; endpointKey: string }>;
   workroomKnowledgeControl?: ConsoleWorkroomKnowledgeControlPort;
 }
 

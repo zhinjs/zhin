@@ -147,6 +147,12 @@ export interface LoginChallengeMedia {
   readonly qrImage?: string;
   /** Set on event payloads that omitted `qrImage`; read the flow with `login.flow.get`. */
   readonly qrImageOmitted?: boolean;
+  /**
+   * Set on event payloads that omitted verification links (`media.link`, `media.captcha` and link
+   * blocks of slider / device / auth / link_verify challenges, which carry a session id); read them
+   * with `login.flow.get`.
+   */
+  readonly linkOmitted?: boolean;
   /** Only http / https links are kept. */
   readonly link?: Readonly<{ url: string; label: string }>;
   readonly expiresAt?: number;
@@ -801,7 +807,19 @@ export class LoginAssist {
     return new Promise<SubmittedValue>((resolve, reject) => {
       const entry: PendingEntry = { task, owner: flow.owner, flow, stepId, legacy: !!legacy, resolve, reject };
       if (effectiveTimeout !== undefined) {
-        entry.timer = setTimeout(() => {
+        // setTimeout overflows above 2^31-1 ms (~24.8 days) and would fire at once: re-arm in steps.
+        let remaining = effectiveTimeout;
+        const arm = () => {
+          const step = Math.min(remaining, MAX_TIMER_DELAY_MS);
+          remaining -= step;
+          entry.timer = setTimeout(() => {
+            if (remaining > 0) { if (this.pending.get(id) === entry) arm(); return; }
+            expire();
+          }, step);
+          // Node: 不阻止进程退出
+          entry.timer.unref?.();
+        };
+        const expire = () => {
           if (!this.pending.has(id)) return;
           this.pending.delete(id);
           this.#detach(entry);
@@ -812,9 +830,8 @@ export class LoginAssist {
           }
           this.#expireChallenge(flow, stepId, id);
           reject(new Error(`LoginAssist task timed out after ${effectiveTimeout}ms`));
-        }, effectiveTimeout);
-        // Node: 不阻止进程退出
-        entry.timer.unref?.();
+        };
+        arm();
       }
       this.pending.set(id, entry);
       if (options.signal) {
@@ -911,7 +928,7 @@ export class LoginAssist {
       if (!lastActive(flow, 'verifying')) return;
       flow.pendingConfirmation = true;
       this.#emitFlow(flow);
-    }, this.#verifyTimeoutMs);
+    }, Math.min(this.#verifyTimeoutMs, MAX_TIMER_DELAY_MS));
     flow.verifyTimer.unref?.();
   }
 
@@ -1066,11 +1083,15 @@ function lastActive(flow: FlowRecord, kind: LoginStepKind): StepRecord | undefin
 }
 
 /**
- * Event / history-safe copy of a flow snapshot: QR images are replaced by `qrImageOmitted` and
- * sensitive copy blocks are redacted. Consumers read the live material with `login.flow.get`.
+ * Event / history-safe copy of a flow snapshot: QR images are replaced by `qrImageOmitted`,
+ * sensitive copy blocks are redacted, and verification links (`media.link`, `media.captcha`, link
+ * blocks) of slider / device / auth / link_verify challenges — they carry a session id — are
+ * dropped with `linkOmitted`. Consumers read
+ * the live material with `login.flow.get`.
  */
 export function withoutLoginMedia(flow: LoginFlowSnapshot): LoginFlowSnapshot {
-  if (!flow.steps.some((step) => step.challenge?.media?.qrImage || step.challenge?.blocks?.some(isSensitiveBlock))) return flow;
+  if (!flow.steps.some((step) => step.challenge?.media?.qrImage || step.challenge?.blocks?.some(isSensitiveBlock)
+    || (step.challenge && hasVerificationLink(step.challenge)))) return flow;
   return Object.freeze({
     ...flow,
     steps: Object.freeze(flow.steps.map((step) => {
@@ -1082,9 +1103,28 @@ export function withoutLoginMedia(flow: LoginFlowSnapshot): LoginFlowSnapshot {
         next = { ...next, media: Object.freeze({ ...rest, qrImageOmitted: true }) };
       }
       if (challenge.blocks?.some(isSensitiveBlock)) next = { ...next, blocks: redactBlocks(challenge.blocks) };
+      if (hasVerificationLink(next)) {
+        // The captcha query is the slider link's query string: same session id.
+        const { link: _link, captcha: _captcha, ...media } = next.media ?? {};
+        const blocks = next.blocks?.filter((block) => block.kind !== 'link');
+        const { blocks: _blocks, ...rest } = next;
+        next = {
+          ...rest,
+          ...(blocks && blocks.length > 0 ? { blocks: Object.freeze(blocks) } : {}),
+          media: Object.freeze({ ...media, linkOmitted: true }),
+        };
+      }
       return next === challenge ? step : Object.freeze({ ...step, challenge: Object.freeze(next) });
     })),
   });
+}
+
+const LINK_REDACTED_KINDS: ReadonlySet<LoginChallengeKind> = new Set(['slider', 'device', 'auth', 'link_verify']);
+
+/** Verification links (they carry a session id) that events and history must not contain. */
+function hasVerificationLink(challenge: LoginChallenge): boolean {
+  return LINK_REDACTED_KINDS.has(challenge.kind)
+    && (!!challenge.media?.link || !!challenge.media?.captcha || !!challenge.blocks?.some((block) => block.kind === 'link'));
 }
 
 /** Alias that names the purpose: what may enter events, history and logs. */
@@ -1526,6 +1566,9 @@ function resolveAnswer(
   if (text) Object.assign(values, inputValues(text, false));
   return Object.freeze({ actionId: defaultAction(challenge, !!input), values: Object.freeze(values) });
 }
+
+/** Largest delay `setTimeout` accepts (2^31-1 ms); longer ones fire immediately. */
+const MAX_TIMER_DELAY_MS = 2 ** 31 - 1;
 
 function resolveTimeoutMs(
   explicit: number | undefined,

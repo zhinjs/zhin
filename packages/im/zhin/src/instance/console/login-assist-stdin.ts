@@ -6,6 +6,7 @@ import type {
   LoginOutcome,
   LoginStep,
 } from '@zhin.js/core';
+import { closeSync, openSync, writeSync } from 'node:fs';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('login-assist');
@@ -15,8 +16,15 @@ export const LOGIN_ASSIST_PROMPT = '> 请在下方输入后回车（或在 Conso
 
 /** Terminal side of the consumer; lets tests drive it without a TTY. */
 export interface LoginAssistTerminalIo {
-  /** Writes one or more whole lines (each ends with `\n`). */
+  /** Writes one or more whole lines (each ends with `\n`). May be captured (logs, supervisor). */
   write(text: string): void;
+  /**
+   * Writes to the person's terminal only, never to captured output: under `zhin start --foreground`
+   * the instance's stdout / stderr are piped into the gateway's log buffer and log files, so this is
+   * the controlling terminal (`/dev/tty`) or a stderr that is itself a TTY. Absent → sensitive blocks
+   * and verification links are not printed at all (the person opens the Console instead).
+   */
+  writePrivate?(text: string): void;
   /** Delivers each line typed by the person; returns unsubscribe. */
   onLine(listener: (line: string) => void): () => void;
 }
@@ -27,8 +35,10 @@ export interface LoginAssistTerminalIo {
  */
 export function bindLoginAssistStdin(assist: LoginAssist): () => void {
   if (!process.stdin.isTTY) return () => {};
-  return bindLoginAssistTerminal(assist, {
+  const privateTerminal = openPrivateTerminal();
+  const unbind = bindLoginAssistTerminal(assist, {
     write: (text) => { process.stderr.write(text); },
+    ...(privateTerminal ? { writePrivate: privateTerminal.write } : {}),
     onLine: (listener) => {
       const onData = (chunk: Buffer | string) => {
         for (const line of chunk.toString().split(/\r?\n/u).slice(0, -1)) listener(line);
@@ -37,6 +47,40 @@ export function bindLoginAssistStdin(assist: LoginAssist): () => void {
       return () => { process.stdin.off('data', onData); };
     },
   });
+  return () => {
+    unbind();
+    privateTerminal?.close();
+  };
+}
+
+/**
+ * A sink that reaches the person's terminal without passing through captured output: stderr when it
+ * is a TTY (not piped), else the controlling terminal. `undefined` when neither exists.
+ */
+export function openPrivateTerminal(
+  stream: { readonly isTTY?: boolean; write(text: string): unknown } = process.stderr,
+  ttyPath = '/dev/tty',
+): { write(text: string): void; close(): void } | undefined {
+  if (stream.isTTY === true) return { write: (text) => { stream.write(text); }, close: () => {} };
+  if (process.platform === 'win32') return undefined;
+  let fd: number;
+  try {
+    fd = openSync(ttyPath, 'w');
+  } catch {
+    return undefined;
+  }
+  let open = true;
+  return {
+    write: (text) => {
+      if (!open) return;
+      try { writeSync(fd, text); } catch { /* terminal went away: drop, never fall back to captured output */ }
+    },
+    close: () => {
+      if (!open) return;
+      open = false;
+      try { closeSync(fd); } catch { /* already closed */ }
+    },
+  };
 }
 
 interface PrintedFlow {
@@ -66,6 +110,25 @@ export function bindLoginAssistTerminal(assist: LoginAssist, io: LoginAssistTerm
   const write = (lines: readonly string[]) => {
     if (!closed && lines.length > 0) io.write(lines.map((line) => `${line}\n`).join(''));
   };
+  const hasPrivate = typeof io.writePrivate === 'function';
+  /** Writes lines in order, sending private ones to the uncaptured terminal only. */
+  const writeMixed = (lines: readonly TerminalLine[]) => {
+    let run: string[] = [];
+    let runPrivate = false;
+    const flush = () => {
+      if (run.length === 0 || closed) { run = []; return; }
+      const text = run.map((line) => `${line}\n`).join('');
+      if (runPrivate) io.writePrivate?.(text);
+      else io.write(text);
+      run = [];
+    };
+    for (const line of lines) {
+      const isPrivate = typeof line !== 'string';
+      if (isPrivate !== runPrivate) { flush(); runPrivate = isPrivate; }
+      run.push(typeof line === 'string' ? line : line.private);
+    }
+    flush();
+  };
 
   const activeChallenge = (flow: LoginFlowSnapshot | undefined): { step: LoginStep; challenge: LoginChallenge } | undefined => {
     if (!flow?.activeTaskId) return undefined;
@@ -83,7 +146,7 @@ export function bindLoginAssistTerminal(assist: LoginAssist, io: LoginAssistTerm
     if (active && flow.activeTaskId !== previous?.promptedTask) {
       focus = flow;
       promptedTask = flow.activeTaskId;
-      write(challengeLines(flow, active.challenge));
+      writeMixed(challengeLines(flow, active.challenge, hasPrivate));
       logger.info(formatCompact({
         op: 'login_assist_stdin',
         flow: flow.id,
@@ -98,6 +161,13 @@ export function bindLoginAssistTerminal(assist: LoginAssist, io: LoginAssistTerm
     if (!flow.activeTaskId && focus?.id === flow.id) {
       // Focus moves to another flow that still waits, if any.
       focus = [...latest.values()].find((item) => item.id !== flow.id && item.activeTaskId);
+    }
+    if (flow.state === 'online' || flow.state === 'failed' || flow.state === 'cancelled') {
+      // A finished flow never changes again (a retry or relogin starts a new flow id); an expired
+      // one may still get a refreshed challenge, so it stays.
+      latest.delete(flow.id);
+      printed.delete(flow.id);
+      return;
     }
     latest.set(flow.id, flow);
     printed.set(flow.id, {
@@ -117,7 +187,7 @@ export function bindLoginAssistTerminal(assist: LoginAssist, io: LoginAssistTerm
       return;
     }
     const { challenge } = active;
-    const menu = menuOf(challenge);
+    const menu = menuOf(challenge, hasPrivate);
     const line = raw.trim();
     const hasInput = !!challenge.input && challenge.input.kind !== 'none';
     const pick = (token: string): MenuEntry | undefined => {
@@ -141,8 +211,8 @@ export function bindLoginAssistTerminal(assist: LoginAssist, io: LoginAssistTerm
       return;
     }
     if (entry.kind === 'reveal') {
-      // Explicit request only; written to the terminal, never to the logger.
-      write([`${prefix(flow)} ${entry.label}：`, ...entry.content.split(/\r?\n/u)]);
+      // Explicit request only; written to the uncaptured terminal, never to the logger or piped output.
+      io.writePrivate?.([`${prefix(flow)} ${entry.label}：`, ...entry.content.split(/\r?\n/u)].map((text) => `${text}\n`).join(''));
       return;
     }
     try {
@@ -237,10 +307,26 @@ function timelineLines(flow: LoginFlowSnapshot, previous: PrintedFlow | undefine
   return lines;
 }
 
-function menuOf(challenge: LoginChallenge): MenuEntry[] {
+/** A line for captured output (string) or for the uncaptured terminal only. */
+type TerminalLine = string | { readonly private: string };
+
+/**
+ * Challenge kinds whose links carry a verification session (QQ device lock / slider `sid`, …): their
+ * links are printed to the uncaptured terminal only.
+ */
+const PRIVATE_LINK_KINDS: ReadonlySet<LoginChallenge['kind']> = new Set(['device', 'auth', 'slider', 'link_verify']);
+
+function linkLine(challenge: LoginChallenge, label: string, url: string, hasPrivate: boolean): TerminalLine {
+  if (!PRIVATE_LINK_KINDS.has(challenge.kind)) return `${label}：${url}`;
+  return hasPrivate ? { private: `${label}：${url}` } : `${label}：请在 Console 中打开（验证链接不写入日志）`;
+}
+
+function menuOf(challenge: LoginChallenge, hasPrivate: boolean): MenuEntry[] {
   const menu: MenuEntry[] = challenge.actions.map((action) => ({
     kind: 'action', id: action.id, label: action.label, requiresInput: !!action.requiresInput,
   }));
+  // Revealing needs a terminal whose output is not captured (logs / gateway supervisor).
+  if (!hasPrivate) return menu;
   for (const block of challenge.blocks ?? []) {
     if (block.kind === 'copy' && block.sensitive && !block.redacted && block.content) {
       menu.push({ kind: 'reveal', id: `show-${block.id}`, label: `显示${block.label}`, content: block.content });
@@ -249,31 +335,38 @@ function menuOf(challenge: LoginChallenge): MenuEntry[] {
   return menu;
 }
 
-function blockLines(block: LoginChallengeBlock): string[] {
+function blockLines(challenge: LoginChallenge, block: LoginChallengeBlock, hasPrivate: boolean): TerminalLine[] {
   switch (block.kind) {
     case 'note':
       return [`${block.tone === 'warning' ? '⚠ ' : ''}${block.text}`];
     case 'link':
-      return [`${block.label}：${block.url}`];
+      return [linkLine(challenge, block.label, block.url, hasPrivate)];
     case 'copy':
-      if (block.sensitive) return [`${block.label}：已隐藏（选择「显示${block.label}」查看）`];
+      if (block.sensitive) {
+        return [hasPrivate
+          ? `${block.label}：已隐藏（选择「显示${block.label}」查看）`
+          : `${block.label}：已隐藏（终端输出会写入日志，请在 Console 中查看）`];
+      }
       if (block.collapsed) return [`${block.collapsedLabel ?? block.label}（内容较长，请在 Console 复制）`];
       return [`${block.label}：`, ...block.content.split(/\r?\n/u)];
   }
 }
 
-function challengeLines(flow: LoginFlowSnapshot, challenge: LoginChallenge): string[] {
-  const lines = [`${prefix(flow)} ${challenge.title}`];
+function challengeLines(flow: LoginFlowSnapshot, challenge: LoginChallenge, hasPrivate: boolean): TerminalLine[] {
+  const lines: TerminalLine[] = [`${prefix(flow)} ${challenge.title}`];
   if (challenge.help?.short) lines.push(challenge.help.short);
   (challenge.help?.steps ?? []).forEach((step, index) => {
     lines.push(`  ${index + 1}. ${typeof step === 'string' ? step : step.text}`);
   });
   if (challenge.help?.warning) lines.push(`⚠ ${challenge.help.warning}`);
-  for (const block of challenge.blocks ?? []) lines.push(...blockLines(block));
-  if (challenge.media?.link) lines.push(`${challenge.media.link.label === challenge.media.link.url ? '链接' : challenge.media.link.label}：${challenge.media.link.url}`);
+  for (const block of challenge.blocks ?? []) lines.push(...blockLines(challenge, block, hasPrivate));
+  if (challenge.media?.link) {
+    const { label, url } = challenge.media.link;
+    lines.push(linkLine(challenge, label === url ? '链接' : label, url, hasPrivate));
+  }
   if (challenge.media?.qrImage) lines.push('二维码请在 Console 中查看（或使用适配器打印的终端二维码）');
   if (challenge.media?.captcha) lines.push('也可以在 Console 中打开验证码辅助页一键完成，无需开发者工具');
-  const menu = menuOf(challenge);
+  const menu = menuOf(challenge, hasPrivate);
   const hasInput = !!challenge.input && challenge.input.kind !== 'none';
   if (menu.length > 1 || !hasInput) {
     lines.push(`操作：${menu.map((entry, index) => `${index + 1}) ${entry.label}`).join('  ')}`);

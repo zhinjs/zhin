@@ -257,14 +257,71 @@ export async function dispatchHostResourceConsoleRpc(
       const page = positiveInteger(message.page, 1);
       const pageSize = Math.min(positiveInteger(message.pageSize, 50), 500);
       const where = recordField(message.where);
+      const order = recordField(message.orderBy);
+      if (message.orderBy !== undefined && message.orderBy !== null
+        && (!order || typeof order.column !== 'string' || (order.direction !== 'asc' && order.direction !== 'desc'))) {
+        errorReply(payloads, requestId, 'orderBy must be { column, direction: "asc" | "desc" }');
+        return true;
+      }
       if (!ctx.database) {
         emit({ requestId, data: { rows: [], total: 0, page, pageSize } });
         return true;
       }
       try {
-        emit({ requestId, data: await ctx.database.select(table, page, pageSize, where) });
+        const orderBy = order ? { column: order.column as string, direction: order.direction as 'asc' | 'desc' } : undefined;
+        emit({ requestId, data: await ctx.database.select(table, page, pageSize, where, orderBy) });
       } catch (error) {
-        emit({ requestId, error: `Failed to select: ${errorMessage(error)}` });
+        emit({ requestId, error: `Failed to select: ${errorMessage(error)}`, ...refusalData(error) });
+      }
+      return true;
+    }
+    case 'db:query': {
+      const sql = sqlField(message);
+      if (!sql) { errorReply(payloads, requestId, `sql is required (at most ${MAX_CONSOLE_SQL_LENGTH} characters)`); return true; }
+      if (!ctx.database?.query) { unsupportedDatabaseFeature(payloads, requestId, 'SQL query'); return true; }
+      try {
+        const maxRows = typeof message.maxRows === 'number' ? message.maxRows : undefined;
+        emit({ requestId, data: await ctx.database.query(sql, maxRows ? { maxRows } : undefined) });
+      } catch (error) {
+        emit({ requestId, error: errorMessage(error), ...refusalData(error) });
+      }
+      return true;
+    }
+    case 'db:execute': {
+      const sql = sqlField(message);
+      if (!sql) { errorReply(payloads, requestId, `sql is required (at most ${MAX_CONSOLE_SQL_LENGTH} characters)`); return true; }
+      if (!ctx.database?.execute) { unsupportedDatabaseFeature(payloads, requestId, 'SQL execution'); return true; }
+      try {
+        emit({ requestId, data: await ctx.database.execute(sql, { dryRun: message.dryRun === true }) });
+      } catch (error) {
+        emit({ requestId, error: errorMessage(error), ...refusalData(error) });
+      }
+      return true;
+    }
+    case 'db:schema:describe': {
+      const table = stringField(message, 'table');
+      if (!table) { errorReply(payloads, requestId, 'table is required'); return true; }
+      if (!ctx.database?.describe) { unsupportedDatabaseFeature(payloads, requestId, 'Schema inspection'); return true; }
+      try {
+        emit({ requestId, data: await ctx.database.describe(table) });
+      } catch (error) {
+        emit({ requestId, error: errorMessage(error), ...refusalData(error) });
+      }
+      return true;
+    }
+    case 'db:schema:preview':
+    case 'db:schema:apply': {
+      const change = recordField(message.change);
+      if (!change) { errorReply(payloads, requestId, 'change is required'); return true; }
+      const database = ctx.database;
+      if (!database?.previewSchema || !database.applySchema) { unsupportedDatabaseFeature(payloads, requestId, 'Schema editing'); return true; }
+      try {
+        const plan = type === 'db:schema:apply'
+          ? await database.applySchema(change, typeof message.confirm === 'string' ? message.confirm : undefined)
+          : await database.previewSchema(change);
+        emit({ requestId, data: plan });
+      } catch (error) {
+        emit({ requestId, error: errorMessage(error), ...refusalData(error) });
       }
       return true;
     }
@@ -530,6 +587,34 @@ export async function dispatchHostResourceConsoleRpc(
     default:
       return false;
   }
+}
+
+/** Longest statement text the Console SQL editor sends. */
+export const MAX_CONSOLE_SQL_LENGTH = 100_000;
+
+function sqlField(message: RuntimeConsoleRpcMessage): string {
+  const value = message.sql;
+  return typeof value === 'string' && value.trim() && value.length <= MAX_CONSOLE_SQL_LENGTH ? value : '';
+}
+
+const REFUSAL_NAMES: ReadonlySet<string> = new Set(['ConsoleSqlRefusal', 'ConsoleSchemaRefusal', 'ConsoleSelectRefusal', 'SqliteQueryTimeoutError']);
+
+/**
+ * `data.code` of a refusal by the database port (`read_only`, `protected_table`, …), and the DDL a
+ * failed `db:schema:apply` attempted (`data.statements`, for the audit log).
+ */
+function refusalData(error: unknown): { data?: { code?: string; statements?: readonly string[] } } {
+  if (!(error instanceof Error)) return {};
+  const attempted = (error as { statements?: unknown }).statements;
+  const statements = Array.isArray(attempted) && attempted.every(entry => typeof entry === 'string') ? { statements: attempted as string[] } : {};
+  if (error.name === 'GatewayOwnedTableError') return { data: { code: 'protected_table', ...statements } };
+  const code = (error as { code?: unknown }).code;
+  const data = { ...(REFUSAL_NAMES.has(error.name) && typeof code === 'string' ? { code } : {}), ...statements };
+  return Object.keys(data).length ? { data } : {};
+}
+
+function unsupportedDatabaseFeature(payloads: RuntimeConsoleRpcReply[], requestId: number | string | undefined, feature: string): void {
+  payloads.push({ requestId, error: `${feature} is not supported by this database Host`, data: { code: 'unsupported' } });
 }
 
 export function stringField(message: RuntimeConsoleRpcMessage, key: string): string {

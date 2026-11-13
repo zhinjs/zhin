@@ -3,7 +3,8 @@ import {RelatedDatabase} from "../type/related/database.js";
 
 import { getLogger } from '@zhin.js/logger';
 import type { ClientConfig, PoolConfig as PgPoolConfig } from 'pg';
-import {Column, Transaction, TransactionOptions, PoolConfig, type Definition} from "../types.js";
+import {Column, Transaction, TransactionOptions, PoolConfig, type Definition, type StatementQueryOptions} from "../types.js";
+import { capRows } from '../base/statement-rows.js';
 
 const logger = getLogger('database');
 
@@ -13,6 +14,17 @@ export interface PostgreSQLDialectConfig extends ClientConfig {
    * 如果提供此选项，将使用连接池而不是单连接
    */
   pool?: PoolConfig;
+}
+
+/**
+ * Keeps the driver's `command` / `rowCount` on the row array as non-enumerable properties, so
+ * callers that need the affected row count of DML (Console SQL editor) can read it.
+ */
+function withCommandInfo(rows: Record<string, unknown>[], result: { rowCount?: number | null; command?: string }): Record<string, unknown>[] {
+  if (!Array.isArray(rows) || Object.isFrozen(rows)) return rows;
+  if (typeof result.command === 'string') Object.defineProperty(rows, 'command', { value: result.command, enumerable: false, configurable: true });
+  if (typeof result.rowCount === 'number') Object.defineProperty(rows, 'rowCount', { value: result.rowCount, enumerable: false, configurable: true });
+  return rows;
 }
 
 export class PostgreSQLDialect<S extends Record<string, object> = Record<string, object>> extends Dialect<PostgreSQLDialectConfig, S, string> {
@@ -86,7 +98,35 @@ export class PostgreSQLDialect<S extends Record<string, object> = Record<string,
     }
   }
 
-  private normalizeResult(result: { rows: Record<string, unknown>[]; fields?: Array<{ name: string; dataTypeID: number }> }): Record<string, unknown>[] {
+  /**
+   * One statement through the extended protocol: the server refuses a second command in it
+   * (`cannot insert multiple commands into a prepared statement`), whatever the text hides.
+   */
+  private async queryStatementOn(client: { query(config: unknown): Promise<any> }, sql: string, options?: StatementQueryOptions): Promise<unknown> {
+    await this.assertExtendedProtocol();
+    const result = await client.query({ text: sql, values: [], queryMode: 'extended' });
+    return capRows(this.normalizeResult(result), options?.maxRows);
+  }
+
+  private extendedProtocol: Promise<void> | undefined;
+
+  /** `queryMode: 'extended'` arrived in pg 8.11; an older driver would silently use the simple protocol. */
+  private assertExtendedProtocol(): Promise<void> {
+    return this.extendedProtocol ??= (async () => {
+      const pg = await import('pg') as unknown as { Query?: new (config: unknown) => { requiresPreparation?(): boolean }; default?: { Query?: new (config: unknown) => { requiresPreparation?(): boolean } } };
+      const Query = pg.Query ?? pg.default?.Query;
+      const probe = Query ? new Query({ text: 'SELECT 1', values: [], queryMode: 'extended' }) : undefined;
+      if (probe?.requiresPreparation?.() !== true) {
+        throw new Error('Single-statement queries need the pg driver 8.11 or later (queryMode: extended)');
+      }
+    })();
+  }
+
+  private normalizeResult(result: { rows: Record<string, unknown>[]; fields?: Array<{ name: string; dataTypeID: number }>; rowCount?: number | null; command?: string }): Record<string, unknown>[] {
+    return withCommandInfo(this.normalizeRows(result), result);
+  }
+
+  private normalizeRows(result: { rows: Record<string, unknown>[]; fields?: Array<{ name: string; dataTypeID: number }> }): Record<string, unknown>[] {
     const bigintFields = new Set((result.fields ?? [])
       .filter((field) => field.dataTypeID === 20)
       .map((field) => field.name));
@@ -288,6 +328,12 @@ export class PostgreSQLDialect<S extends Record<string, object> = Record<string,
    * 开始事务
    * 在连接池模式下，会获取一个专用连接用于事务
    */
+  /** `BEGIN [ISOLATION LEVEL …] [READ ONLY]`: a declared read-only transaction refuses writes. */
+  private formatBegin(options?: TransactionOptions): string {
+    const isolation = options?.isolationLevel ? ` ISOLATION LEVEL ${this.formatIsolationLevel(options.isolationLevel)}` : '';
+    return `BEGIN${isolation}${options?.readOnly ? ' READ ONLY' : ''}`;
+  }
+
   async beginTransaction(options?: TransactionOptions): Promise<Transaction> {
     const dialect = this;
     if (this.usePool) {
@@ -295,10 +341,7 @@ export class PostgreSQLDialect<S extends Record<string, object> = Record<string,
       const client = await this.pool.connect();
       
       // 开始事务（可以带隔离级别）
-      let beginSql = 'BEGIN';
-      if (options?.isolationLevel) {
-        beginSql = `BEGIN ISOLATION LEVEL ${this.formatIsolationLevel(options.isolationLevel)}`;
-      }
+      const beginSql = this.formatBegin(options);
       try {
         await client.query(beginSql);
       } catch (error) {
@@ -326,6 +369,10 @@ export class PostgreSQLDialect<S extends Record<string, object> = Record<string,
         async query<T = any>(sql: string, params?: any[]): Promise<T> {
           const result = await client.query(sql, params);
           return dialect.normalizeResult(result) as T;
+        },
+
+        async queryStatement<T = any>(sql: string, options?: StatementQueryOptions): Promise<T> {
+          return await dialect.queryStatementOn(client, sql, options) as T;
         }
       };
     } else {
@@ -333,10 +380,7 @@ export class PostgreSQLDialect<S extends Record<string, object> = Record<string,
       const dialect = this;
       
       // 开始事务（可以带隔离级别）
-      let beginSql = 'BEGIN';
-      if (options?.isolationLevel) {
-        beginSql = `BEGIN ISOLATION LEVEL ${this.formatIsolationLevel(options.isolationLevel)}`;
-      }
+      const beginSql = this.formatBegin(options);
       await this.query(beginSql);
       
       return {
@@ -350,6 +394,10 @@ export class PostgreSQLDialect<S extends Record<string, object> = Record<string,
         
         async query<T = any>(sql: string, params?: any[]): Promise<T> {
           return dialect.query<T>(sql, params);
+        },
+
+        async queryStatement<T = any>(sql: string, options?: StatementQueryOptions): Promise<T> {
+          return await dialect.queryStatementOn(dialect.connection, sql, options) as T;
         }
       };
     }

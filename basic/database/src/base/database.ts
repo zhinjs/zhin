@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { Dialect } from './dialect.js';
 import { Model } from './model.js';
-import { Definition, QueryParams, AlterDefinition, Condition, BuildQueryResult, Transaction, TransactionOptions, TransactionContext } from '../types.js';
+import { Definition, QueryParams, AlterDefinition, Condition, BuildQueryResult, Transaction, TransactionOptions, TransactionContext, StatementQueryOptions } from '../types.js';
 import * as QueryClasses from './query-classes.js';
 import { TransactionContextImpl } from './transaction.js';
 import { getLogger } from '@zhin.js/logger';
@@ -275,6 +275,12 @@ export abstract class Database<D=any,S extends Record<string, object>=Record<str
         },
         commit: () => trx.commit(),
         rollback: () => trx.rollback(),
+        ...(trx.queryStatement ? {
+          queryStatement: (sql: string, options?: StatementQueryOptions) => {
+            if (!frame.active) return Promise.reject(new Error('Database transaction is already closed'));
+            return trx.queryStatement!(sql, options);
+          },
+        } : {}),
       };
       const trxContext = new TransactionContextImpl<S>(this as any, guarded);
       try {

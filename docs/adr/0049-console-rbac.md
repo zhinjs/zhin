@@ -60,7 +60,8 @@ Zhin 总是有数据库（未配置时为 `.zhin/data.sqlite`），因此访问�
 | `agent.view` / `agent.configure` | AI 与 Agent 相关读取 / 写入（模型、技能、Ambient、场所） |
 | `ops.config.read` / `ops.config.write` | 原始配置文件读取 / 写入、应用配置 |
 | `ops.env.read` / `ops.env.write` | 环境变量文件 |
-| `ops.database.read` / `ops.database.write` | 数据库浏览 / 增删改 |
+| `ops.database.read` / `ops.database.write` | 数据库结构化浏览（排序、筛选、表结构、结构变更预览）/ 增删改 |
+| `ops.database.schema` | SQL 控制台（只读查询与写 SQL）与表结构调整（2026-11 增补，默认仅 owner，见[修订 2026-11-13](#修订-2026-11-13原始-sql-只归-opsdatabaseschema)） |
 | `ops.schedule.read` / `ops.schedule.write` | 定时任务 |
 | `ops.files.read` / `ops.files.write` | 项目文件 |
 | `ops.restart` | 重启进程 |
@@ -81,7 +82,7 @@ Zhin 总是有数据库（未配置时为 `.zhin/data.sqlite`），因此访问�
 | 角色 | 权限 |
 |---|---|
 | `owner` 所有者 | 全部 |
-| `admin` 管理员 | 除 `ops.terminal`、`iam.manage` 外全部 |
+| `admin` 管理员 | 除 `ops.terminal`、`ops.database.schema`、`iam.manage` 外全部 |
 | `operator` 运营 | `status.view`、`endpoint.view`、`endpoint.operate`、`feature.view`、`feature.configure`、`feature.toggle`、`agent.view`、`ops.schedule.read`、`plugin.perms.read`、`plugin.perms.operate` |
 | `viewer` 只读 | 所有 `*.view` 与 `*.read`（不含 `ops.config.read`、`ops.env.read`，它们可能含机密） |
 
@@ -176,3 +177,17 @@ RPC（`iam.*`，需 `iam.view` / `iam.manage`）：`iam.users.list|create|update
 2. 已登录主体必须满足方法自己的 `requiredPermissions` / `requiredRoles` / `anyOfPermissions` 与所绑定页面的要求（插件权限按级别）。都没声明时兜底：读方法需要 `feature.view`；动作自己没有声明要求时需要 `feature.configure`（页面要求照样叠加）。不满足返回 403 `forbidden`。
 3. 目标：适配器账号方法（`endpoint-*`）的目标按处理函数选账号的同一规则从 `data` 求出（`consoleAccountTarget`：先 `instanceId`，否则 `id`；`add` / `replace` 只到适配器层）；`id` 与 `instanceId` 同时出现却指向不同账号，或 `data` 之外另带不一致的 `id` / `instanceId`，返回 400 `invalid_input`；拥有适配器的插件（`root/<别名>`，当前代的适配器目录里确有它的适配器）的其他方法以该适配器为目标；其余为全局。绑定到目标适配器 / 账号的角色对目录权限（如 `endpoint.manage`、`feature.configure`）和插件权限都算数；绑定到别的适配器的不算。
 4. 账号方法另外接受目标上的 `endpoint.manage`，原有只含 `endpoint.manage` 的适配器作用域角色可继续维护该适配器的账号。处理函数看到的 `runtime.operator`（首次迁移确认）为：适配器目标上持有 `endpoint.manage`，否则全局持有 `feature.configure`。
+
+## 修订 2026-11-13：原始 SQL 只归 `ops.database.schema`
+
+Console 数据库页的 SQL 控制台最初把只读 SQL（`db:query`）归在 `ops.database.read`，靠语句文本分类加只读事务保证「只读」，并承诺网关的 `console_*` 表在原始 SQL 中对任何人拒绝。独立评审在真实 PostgreSQL 上证明了文本分类绕得过去：词法器与服务端对 `E'\''`、嵌套注释 `/* /* */ */`、带数字的 `$a1$` 标签理解不同，简单查询协议又允许一次发多条语句，`viewer` 就能执行 `COMMIT; DELETE …`；`U&"\0063onsole_users"`、`query_to_xml('select … from con' || 'sole_users', …)` 能读到网关表；带引号的 `"set_config"(…)` 能解除超时。
+
+决定：
+
+1. **`db:query` 改为需要 `ops.database.schema`**（与 `db:execute`、`db:schema:apply` 相同，内置角色中只有 `owner`）。网关与实例共用同一个数据库时，按文本判断「只读」不能当安全边界。`viewer` 等保留结构化浏览：`db:select` 的列、运算符与排序都经校验并参数化；`db:schema:describe`（参数化的结构查询）与 `db:schema:preview`（只生成 DDL）仍归 `ops.database.read`。
+2. **执行层强制单语句**：Console SQL 一律经单语句协议执行——PostgreSQL 扩展查询协议（服务端拒绝 `cannot insert multiple commands into a prepared statement`）、MySQL 预处理语句（与连接是否配置 `multipleStatements` 无关）、SQLite `prepare`；事务控制（`BEGIN`/`COMMIT`/`ROLLBACK`/`SAVEPOINT`/`SET`…）、`PREPARE`/`EXECUTE`、定义函数 / 过程 / 规则 / 扩展、改角色与服务端设置一律拒绝，试运行因此必定回滚。词法器同步修正（E 字符串、PostgreSQL 嵌套注释、`$tag$`、MySQL `--` 后需空白、拒绝 `/*!` 与 `/*+`），作为纵深防御。
+3. **`console_*` 对所有人拒绝的承诺保留**：标识符去引号、还原双写引号、去掉模式前缀后比对，字面量按内容与解码后的转义比对；PostgreSQL `U&` 写法与动态 SQL / 文件 / 设置函数（`*_to_xml*`、`query_to_*`、`cursor_to_xml*`、`xpath*`、`ts_stat`、`dblink*`、`lo_*`、`pg_read_*`、`pg_ls_*`、`set_config`…，按规范化后的函数名）拒绝。插件侧原始 SQL 守卫（`referencesGatewayOwnedTable`）同样解码 `U&` / `E''` / 反斜杠转义。系统目录（`sqlite_master`、`information_schema`、`pg_class`）只暴露 `console_*` 的表名与列名，不含数据——已接受；统计视图带有各表的真实取值（`pg_stats` 的直方图与高频值、`pg_stats_ext*`、`pg_statistic*`、`sqlite_stat*`、MySQL `column_statistics` 与 `ANALYZE … UPDATE HISTOGRAM`），读写两条路径都拒绝，同样拒绝角色密码哈希与大对象（`pg_authid`、`pg_shadow`、`pg_largeobject`、MySQL `mysql.*`）。`ANALYZE` 本身保留。
+4. **资源边界**：只读查询最多 1000 行且只读取这些行（PostgreSQL 游标、MySQL 流式、SQLite 逐行）；PostgreSQL `SET LOCAL statement_timeout`，MySQL `max_execution_time`；SQLite 文件库在子进程里用独立只读连接执行，超时即 `SIGKILL`（SQLite 无法从单步中途中断，线程做不到），不阻塞也不拖住实例进程；内存库无法另开连接，原始 SQL 不可用。
+5. **审计**：SQL 文本用控制台同一词法器处理，字符串字面量替换为 `'…'`、注释整段去掉（词法器读不了的文本不记录）；审计详情按序列化后的长度截断，网关存储超长详情时改存可解析的摘要；结构变更失败时也记录尝试执行的 DDL。
+6. **按名字保护看不到的破坏**：`DROP OWNED`、`REASSIGN OWNED`、建 / 改 / 删数据库与模式、任何 `DROP … CASCADE` / `TRUNCATE … CASCADE`、`ALTER … OWNER TO`、表空间、用户与角色、MySQL 服务端管理（`RESTART`、`CLONE`、`PURGE` 等），以及触发器（含 MySQL `DEFINER=` 写法）与事件，一律拒绝。
+7. **词法与服务端一致**：服务端读字符串的方式与默认不同（PostgreSQL `standard_conforming_strings = off`，MySQL `sql_mode` 含 `NO_BACKSLASH_ESCAPES` / `ANSI_QUOTES`）时，原始 SQL 关闭（`capabilities.sql = false` 并给出原因），每次执行前重新检查。

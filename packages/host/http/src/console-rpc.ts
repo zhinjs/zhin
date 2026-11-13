@@ -3,6 +3,7 @@ import type { DatabaseHostConsole } from '@zhin.js/plugin-runtime';
 import {
   CONFIG_PATCH_LIMITS,
   CONFIG_RPC,
+  grantsAllow,
   type ConsoleConfigPatchRequest,
   type ConsoleConfigPatchResult,
   type ConsoleConfigProjectPatchResult,
@@ -257,6 +258,21 @@ export function pickRpcReply(
   );
 }
 
+/**
+ * The Endpoint a principal was admitted for when only an adapter / endpoint-scoped grant covers the
+ * call (B-1): handlers must then stay inside it. `undefined` when a global grant covers it.
+ */
+function scopedAuthorizedEndpoint(
+  principal: ConsolePrincipal,
+  decision: Extract<ReturnType<typeof authorizeConsoleRpc>, { allowed: true }>,
+): ConsoleRpcExtendedCtx['authorizedEndpoint'] {
+  if (principal.kind === 'bootstrap' || !decision.permission || !decision.rule) return undefined;
+  if (grantsAllow(principal.grants, decision.permission)) return undefined;
+  const target = decision.rule.target;
+  if (target.kind !== 'endpoint') return undefined;
+  return Object.freeze({ adapter: target.adapter, endpointKey: target.endpoint });
+}
+
 export async function dispatchRuntimeConsoleRpc(
   message: RuntimeConsoleRpcMessage,
   ctx: RuntimeConsoleRpcContext,
@@ -268,12 +284,14 @@ export async function dispatchRuntimeConsoleRpc(
   const type = String(message.type ?? '');
   const requestId = message.requestId as number | string | undefined;
 
+  let authorizedEndpoint: ConsoleRpcExtendedCtx['authorizedEndpoint'];
   if (ctx.principal) {
     const decision = authorizeConsoleRpc(ctx.principal, message as Record<string, unknown>);
     if (!decision.allowed) {
       emit({ requestId, error: decision.error, code: decision.code });
       return payloads;
     }
+    authorizedEndpoint = scopedAuthorizedEndpoint(ctx.principal, decision);
   }
 
   // Extended RPC surface (cron/schedule、endpoint 社交/inbox)
@@ -281,7 +299,11 @@ export async function dispatchRuntimeConsoleRpc(
     const extended = await dispatchExtendedConsoleRpc(
       type,
       message as Record<string, unknown>,
-      { ...ctx.extended, fullScope: ctx.authScope === 'full' },
+      {
+        ...ctx.extended,
+        fullScope: ctx.authScope === 'full',
+        ...(authorizedEndpoint ? { authorizedEndpoint } : {}),
+      },
     );
     if (extended !== undefined) {
       emit('error' in extended

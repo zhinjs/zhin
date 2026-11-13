@@ -61,7 +61,7 @@ Console 的账号存在项目数据库里（[ADR 0049](../adr/0049-console-rbac.
 | 角色 | 权限 |
 | --- | --- |
 | `owner` | 全部（含 `ops.terminal`、`iam.manage`） |
-| `admin` | 除 `ops.terminal`、`iam.manage` 外的全部 |
+| `admin` | 除 `ops.terminal`、`ops.database.schema`、`iam.manage` 外的全部 |
 | `operator` | `status.view`、`endpoint.view`、`endpoint.operate`、`feature.view`、`feature.configure`、`feature.toggle`、`agent.view`、`ops.schedule.read`、`plugin.perms.read`、`plugin.perms.operate` |
 | `viewer` | 所有 `*.view` 与 `*.read`，不含 `ops.config.read`、`ops.env.read`（可能含机密） |
 
@@ -81,7 +81,8 @@ Console 的账号存在项目数据库里（[ADR 0049](../adr/0049-console-rbac.
 | `agent.view` / `agent.configure` | AI 与 Agent 读取 / 写入 |
 | `ops.config.read` / `ops.config.write` | 原始配置文件 |
 | `ops.env.read` / `ops.env.write` | 环境变量文件 |
-| `ops.database.read` / `ops.database.write` | 数据库浏览 / 增删改 |
+| `ops.database.read` / `ops.database.write` | 数据库浏览（按列排序、筛选，查看表结构与结构变更预览）/ 记录增删改 |
+| `ops.database.schema` | SQL 控制台（只读查询与写 SQL）与表结构调整（加/改名/删列、改类型、建表、索引）；默认只有 `owner` 拥有，每条语句（字面量已脱敏）写入审计。见[数据库](./operations.md#database) |
 | `ops.schedule.read` / `ops.schedule.write` | 定时任务 |
 | `ops.files.read` / `ops.files.write` | 项目文件（读写 `.env` 与配置文件仍需要对应的 `ops.env.*` / `ops.config.*`） |
 | `ops.restart` | 实例起停与重启 |

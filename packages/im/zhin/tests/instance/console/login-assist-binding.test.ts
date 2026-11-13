@@ -65,6 +65,25 @@ it('forwards login flow snapshots without QR images or sensitive material', asyn
   release();
 });
 
+it('strips QR images from the legacy pending / expired events, like the flow events', async () => {
+  const assist = new LoginAssist(null, { defaultTimeoutMs: 0 });
+  const hub = createConsoleEventHub({ runtimeId: 'login-legacy-test' });
+  const release = new ConsoleLoginAssistBindings(() => () => {}).acquire(assist, hub);
+  const flow = assist.beginFlow({ adapter: 'demo', endpointKey: 'bot', owner: {} });
+  const qr = flow.challenge({ kind: 'qrcode', title: '扫码', media: { qrImage: 'data:image/png;base64,QRDATA' } });
+  const legacy = assist.waitForInput('demo', 'other', 'qrcode', { message: '扫码', image: 'data:image/png;base64,LEGACYQR' }, { owner: {}, timeoutMs: 0 });
+  const pending = hub.history().items.filter(item => item.type === 'endpoint.login.pending');
+  expect(pending).toHaveLength(2);
+  expect(JSON.stringify(hub.history().items)).not.toMatch(/QRDATA|LEGACYQR/u);
+  expect(pending.every(item => (item.data as { payload: { imageOmitted?: boolean } }).payload.imageOmitted === true)).toBe(true);
+  // login.list (authorized per Endpoint) still carries the live material for the Console.
+  expect(JSON.stringify(assist.listPending())).toMatch(/QRDATA/u);
+  expect(JSON.stringify(assist.listPending())).toMatch(/LEGACYQR/u);
+  for (const task of assist.listPending()) assist.submit(task.id, 'ok');
+  await Promise.all([qr, legacy]);
+  release();
+});
+
 async function emitPendingTask(assist: LoginAssist, owner: object): Promise<void> {
   const result = assist.waitForInput('icqq', 'main', 'qrcode', {}, { owner, timeoutMs: 0 });
   const task = assist.listPending().at(-1);
@@ -72,3 +91,19 @@ async function emitPendingTask(assist: LoginAssist, owner: object): Promise<void
   assist.submit(task.id, 'ok');
   await result;
 }
+
+it('strips verification links (they can carry a sid) from the legacy pending events', async () => {
+  const assist = new LoginAssist(null, { defaultTimeoutMs: 0 });
+  const hub = createConsoleEventHub({ runtimeId: 'login-legacy-url-test' });
+  const release = new ConsoleLoginAssistBindings(() => () => {}).acquire(assist, hub);
+  const answer = assist.waitForInput('demo', 'bot', 'slider', { message: '滑块', url: 'https://captcha.example/x?sid=SECRETSID' }, { owner: {}, timeoutMs: 0 });
+  const pending = hub.history().items.filter(item => item.type === 'endpoint.login.pending');
+  expect(pending).toHaveLength(1);
+  // (flow events drop links in withoutLoginMedia, covered by the core login-flow tests)
+  expect(JSON.stringify(pending)).not.toMatch(/SECRETSID/u);
+  expect((pending[0]!.data as { payload: { urlOmitted?: boolean } }).payload.urlOmitted).toBe(true);
+  expect(JSON.stringify(assist.listPending())).toMatch(/SECRETSID/u);
+  assist.submit(assist.listPending()[0]!.id, 'ticket');
+  await answer;
+  release();
+});

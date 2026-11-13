@@ -49,7 +49,7 @@ export async function dispatchExtendedConsoleRpc(
       return actOnRequest(type, d, ctx);
 
     case 'login.list':
-      return listLoginPending(ctx);
+      return listLoginPending(d, ctx);
     case 'login.submit':
       return submitLogin(d, ctx);
     case 'login.cancel':

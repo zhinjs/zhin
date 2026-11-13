@@ -4,6 +4,7 @@ import {
   CONSOLE_BUILTIN_ROLES,
   CONSOLE_PERMISSION_LIST,
   CONSOLE_RPC_PERMISSIONS,
+  CONSOLE_WRITE_PERMISSIONS,
   ENDPOINT_RPC,
   IAM_RPC,
   INBOX_RPC,
@@ -118,6 +119,12 @@ describe('Console permission catalog (ADR 0049 §3)', () => {
     expect(CONSOLE_BUILTIN_ROLES.admin.permissions).not.toContain('ops.terminal');
     expect(CONSOLE_BUILTIN_ROLES.admin.permissions).not.toContain('iam.manage');
     expect(CONSOLE_BUILTIN_ROLES.admin.permissions).toContain('mcp.access');
+    // Write SQL and schema changes are owner-only by default.
+    expect(CONSOLE_BUILTIN_ROLES.owner.permissions).toContain('ops.database.schema');
+    expect(CONSOLE_BUILTIN_ROLES.admin.permissions).not.toContain('ops.database.schema');
+    expect(CONSOLE_BUILTIN_ROLES.admin.permissions).toContain('ops.database.write');
+    expect(CONSOLE_BUILTIN_ROLES.operator.permissions).not.toContain('ops.database.schema');
+    expect(CONSOLE_BUILTIN_ROLES.viewer.permissions).not.toContain('ops.database.schema');
     expect(CONSOLE_BUILTIN_ROLES.viewer.permissions).toContain('iam.view');
     expect(CONSOLE_BUILTIN_ROLES.viewer.permissions).not.toContain('ops.config.read');
     expect(CONSOLE_BUILTIN_ROLES.viewer.permissions).not.toContain('ops.env.read');
@@ -126,6 +133,17 @@ describe('Console permission catalog (ADR 0049 §3)', () => {
       'status.view', 'endpoint.view', 'endpoint.operate', 'feature.view', 'feature.configure', 'feature.toggle', 'agent.view', 'ops.schedule.read',
       'plugin.perms.read', 'plugin.perms.operate',
     ]);
+  });
+
+  it('maps the Console SQL editor and schema editor RPCs (all raw SQL is schema, structured reads are reads)', () => {
+    expect(consoleRpcPermission('db:query')).toBe('ops.database.schema');
+    expect(consoleRpcPermission('db:select')).toBe('ops.database.read');
+    expect(consoleRpcPermission('db:schema:describe')).toBe('ops.database.read');
+    expect(consoleRpcPermission('db:schema:preview')).toBe('ops.database.read');
+    expect(consoleRpcPermission('db:execute')).toBe('ops.database.schema');
+    expect(consoleRpcPermission('db:schema:apply')).toBe('ops.database.schema');
+    expect(CONSOLE_WRITE_PERMISSIONS.has('ops.database.schema')).toBe(true);
+    expect(CONSOLE_WRITE_PERMISSIONS.has('ops.database.read')).toBe(false);
   });
 
   it('maps HTTP routes, preferring the most specific rule and denying unknown routes', () => {

@@ -45,30 +45,33 @@ function rpcPrincipal(http: HttpHost, resolved: ConsolePrincipal | undefined): C
 
 export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions): void {
   const { http, base } = options;
+  // Console SQL is recorded with its literals redacted by the database Host's own lexer.
+  const redactSql = options.databaseHost?.console?.redactSql;
+  const auditOptions = redactSql ? { redactSql: (sql: string) => redactSql(sql) } : undefined;
 
   http.route('POST', `${base}/console/request`, async (request, context) => {
     const authScope = 'full' as const;
     let principal: ConsolePrincipal | undefined;
     let message: Record<string, unknown> = {};
     let decision: ConsoleRpcDecision | undefined;
-    const audit = (outcome: 'ok' | 'denied' | 'error', replyData?: unknown) => {
+    const audit = (outcome: 'ok' | 'denied' | 'error', body?: Record<string, unknown>) => {
       if (!decision) return;
       if (outcome !== 'denied' && !(decision.allowed && decision.write)) return;
       try {
         // ADR 0058: login actions also record their result category (never values or messages).
-        const login = loginAuditDetail(message.type, replyData);
+        const login = loginAuditDetail(message.type, body?.data);
         http.tokenRegistry?.accessProvider?.audit?.({
           actor: auditActor(principal),
           action: `rpc:${String(message.type ?? '')}`.slice(0, 256),
           ...(decision.allowed && rpcAuditTarget(decision.rule) ? { target: rpcAuditTarget(decision.rule)! } : {}),
           outcome,
-          detail: login ? { ...rpcAuditDetail(message), ...login } : rpcAuditDetail(message),
+          detail: login ? { ...rpcAuditDetail(message, body, auditOptions), ...login } : rpcAuditDetail(message, body, auditOptions),
           ...(context.remoteAddress ? { ip: context.remoteAddress } : {}),
         });
       } catch { /* audit never breaks a request */ }
     };
     const reply = (status: number, body: Record<string, unknown>, headers?: HeadersInit) => {
-      if (decision?.allowed && decision.write) audit(status < 400 && body.success !== false ? 'ok' : 'error', body.data);
+      if (decision?.allowed && decision.write) audit(status < 400 && body.success !== false ? 'ok' : 'error', body);
       return jsonResponse(status, body, headers);
     };
     const noStore = { 'cache-control': 'no-store' };
