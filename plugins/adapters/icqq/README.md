@@ -203,6 +203,7 @@ ICQQ 首次登录的二维码、滑块、设备锁会出现在「登录待办」
 细节：
 
 - **滑块提交格式**：NT 登录（SDK 的 `sig.nt_captcha` 指向这个滑块）提交 `ticket,randstr`，缺 randstr 时会提示并留在滑块；旧版 wtlogin 只提交 `ticket`。
+- **验证链接**带会话标识（sid / sig）：日志只记录挑战类型和链接的主机名；`endpoint.login.flow` 事件和历史里不含验证链接（`linkOmitted`），Console 用 `login.flow.get` 读取当前链接。
 - **设备 JSON** 只存在于当前挑战上：挑战结束即清空；不写日志，不进事件和 `system.receive`。辅助脚本是固定文本，只在 `accounts.qq.com/login/attack` 上运行，只设置 `window.__INITIAL_STATE__.deviceInfo`，从不自动提交，也不含任何设备数据。
 - **错误码**：`system.login.error` 按一张表映射到 `code_invalid`（验证码 / ticket 错误，留在原挑战重试）、`rate_limited`、`challenge_expired`、`risk_blocked`（冻结、设备被拉黑等）、`credential_invalid`（密码错误）、`network`、`unknown`。平台原文只作为清洗后的说明显示（单行，不含本机路径）。
 - **自动重新登录**：有人正在答挑战时不会自动重新登录。验证失败、挑战过期等需要人处理的情况，流程停在「失败 / 已过期」，等你点「重新登录」或发 `icqq login retry`。只有不需要验证的失败（被踢下线、网络或服务器错误、没有出现任何挑战的普通登录失败）才按退避自动重试（5 秒起，最多 8 次），每次重试都记在时间线上。

@@ -11,7 +11,8 @@ import { resolveIcqqConfig } from '../src/protocol.js';
 import { createIcqqTestPorts } from './_icqq-mock.js';
 import { ICQQ_LOGIN_ERROR_TABLE, mapIcqqLoginError, sanitizeIcqqLoginMessage } from '../src/icqq-login-errors.js';
 import { authDescriptor, icqqAuthHelperScript, sliderCaptchaQuery } from '../src/icqq-login-descriptors.js';
-import { icqqSliderSubmission, isNtCaptcha } from '../src/icqq-login-assist.js';
+import { icqqLinkHost, icqqSliderSubmission, isNtCaptcha } from '../src/icqq-login-assist.js';
+import { loginChallengeLogLine } from '../src/endpoint.js';
 import definition from '../adapters/icqq/index.js';
 
 const endpointKey = capabilityId(rootPluginId(), featureId('zhin.adapter'), 'icqq');
@@ -139,14 +140,13 @@ describe('icqq login flow (ADR 0058)', () => {
       expect(s.client.login).toHaveBeenCalledTimes(1);
     });
 
-    // The Console reaches the hooks through the Endpoint lease, i.e. once the account was started.
-    it('refreshChallenge asks the SDK for a new QR code in place; relogin starts a new attempt', async () => {
+    // The first start is still blocked on the QR challenge: exactly when the person needs the hooks.
+    it('refreshChallenge asks the SDK for a new QR code in place while the first start waits; relogin starts a new attempt', async () => {
       const s = await setup();
-      s.start(() => s.client.emit('system.online'));
-      await flush();
       const api = withQrApi(s, [48]);
-      s.client.emit('system.login.qrcode', { image: Buffer.from('png') });
+      s.start(() => s.client.emit('system.login.qrcode', { image: Buffer.from('png') }));
       await flush();
+      expect(s.fixture.index.describe()[0]).toMatchObject({ phase: 'starting' });
       const hooks = s.fixture.index.loginControl(s.fixture.canonicalId)!;
       const before = s.active()!.taskId;
       await hooks.refreshChallenge!({});
@@ -161,13 +161,27 @@ describe('icqq login flow (ADR 0058)', () => {
       expect(s.client.login).toHaveBeenCalledTimes(2);
       expect(s.flow().attempt).toBe(attempt + 1);
       expect(s.active()?.challenge.kind).toBe('qrcode');
+      // The restarted attempt completes the still-pending first start.
+      s.client.emit('system.online');
+      await flush();
+      expect(s.flow().state).toBe('online');
+      await vi.waitFor(() => expect(s.fixture.index.describe()[0]!.phase).not.toBe('starting'));
+    });
+
+    it('refuses the hooks once the account was stopped', async () => {
+      const s = await setup();
+      s.start(() => s.client.emit('system.login.qrcode', { image: Buffer.from('png') }));
+      await flush();
+      const hooks = s.fixture.index.loginControl(s.fixture.canonicalId)!;
+      await s.fixture.stop();
+      await expect(hooks.relogin!({})).rejects.toBeDefined();
+      await expect(hooks.refreshChallenge!({})).rejects.toBeDefined();
+      expect(s.client.login).toHaveBeenCalledTimes(1);
     });
 
     it('refreshChallenge without a QR challenge logs in again', async () => {
       const s = await setup();
-      s.start(() => s.client.emit('system.online'));
-      await flush();
-      s.client.emit('system.login.slider', { url: SLIDER_URL });
+      s.start(() => s.client.emit('system.login.slider', { url: SLIDER_URL }));
       await flush();
       vi.mocked(s.client.login).mockImplementationOnce(async () => undefined);
       await s.fixture.index.loginControl(s.fixture.canonicalId)!.refreshChallenge!({});
@@ -506,6 +520,35 @@ describe('icqq login flow (ADR 0058)', () => {
       await vi.advanceTimersByTimeAsync(5_000);
       expect(s.client.login).toHaveBeenCalledTimes(2);
       expect(s.flow().state).toBe('online');
+    });
+  });
+
+  describe('logs', () => {
+    it('show only the challenge kind and the link host, never the link (it carries a sid)', () => {
+      expect(loginChallengeLogLine('slider', { url: SLIDER_URL })).toEqual({ kind: 'slider', host: 'ssl.captcha.qq.com' });
+      expect(loginChallengeLogLine('auth', { url: 'https://accounts.qq.com/login/attack?sig=abc', device: DEVICE }))
+        .toEqual({ kind: 'auth', host: 'accounts.qq.com' });
+      expect(loginChallengeLogLine('qrcode', { image: 'data:image/png;base64,AAAA' })).toEqual({ kind: 'qrcode' });
+      expect(icqqLinkHost('javascript:alert(1)')).toBeUndefined();
+      expect(icqqLinkHost('not a url')).toBeUndefined();
+    });
+
+    it('the driver logs the host of a challenge link, not its query', async () => {
+      const s = await setup();
+      const info = vi.fn();
+      // Reach the driver's logger through the adapter logger it was given.
+      const { getAdapterLogger } = await import('@zhin.js/logger');
+      const logger = getAdapterLogger('icqq', '10001');
+      const spy = vi.spyOn(logger, 'info').mockImplementation(info);
+      const warn = vi.spyOn(logger, 'warn').mockImplementation(info);
+      s.start(() => s.client.emit('system.login.slider', { url: SLIDER_URL }));
+      await flush();
+      expect(s.active()?.challenge.kind).toBe('slider');
+      const lines = info.mock.calls.map((call) => String(call[0])).join('\n');
+      expect(lines).toContain('ssl.captcha.qq.com');
+      expect(lines).not.toContain('sid=abc');
+      expect(lines).not.toContain('cap_cd');
+      spy.mockRestore(); warn.mockRestore();
     });
   });
 });

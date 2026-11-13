@@ -458,6 +458,22 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
     return this.#lease(canonicalId, captured, signal);
   }
 
+  /**
+   * ADR 0058: login control hooks (relogin / refresh challenge) are needed while the Endpoint's
+   * start is still in progress — it is blocked on the very challenge the person wants to refresh.
+   * A lease is granted once the current incarnation's start was attempted (starting or started);
+   * a stopped / stopping / retired incarnation, a disposed Adapter and a replaced generation
+   * (`expectedClient` source check) are refused as for {@link acquire}.
+   */
+  acquireLogin(canonicalId: CapabilityId, signal?: AbortSignal, expectedClient?: unknown): EndpointChildLease<E> {
+    const captured = this.#capture(canonicalId);
+    if (!captured.epoch.started && !captured.epoch.startAttempted) {
+      throw new EndpointDeliveryError('endpoint_inactive', 'Adapter Endpoint has not started', 'not_sent');
+    }
+    if (expectedClient !== undefined) assertEndpointSource(captured.endpoint, expectedClient);
+    return this.#lease(canonicalId, captured, signal);
+  }
+
   /** A native callback may precede start readiness; source identity and lifetime still apply. */
   acquireInbound(canonicalId: CapabilityId, expectedClient: unknown, signal?: AbortSignal): EndpointChildLease<E> {
     const captured = this.#capture(canonicalId);

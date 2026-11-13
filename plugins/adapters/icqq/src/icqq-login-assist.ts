@@ -195,7 +195,8 @@ export class IcqqLoginDriver {
       op: 'login_assist_challenge',
       endpoint: this.#o.endpointKey,
       type: kind,
-      ...(typeof event.url === 'string' && event.url ? { url: event.url } : {}),
+      // The link carries a session id (sid / sig): only its host is logged.
+      ...(icqqLinkHost(event.url) ? { host: icqqLinkHost(event.url) } : {}),
     }));
     void this.#drive(kind, event, token).catch((error: unknown) => {
       if (token !== this.#token) return;
@@ -500,6 +501,17 @@ export function isNtCaptcha(client: Pick<IcqqLoginClient, 'sig'>, url?: string):
 /** What `submitSlider` receives: `ticket,randstr` on the NT path, the ticket alone otherwise. */
 export function icqqSliderSubmission(value: { ticket: string; randstr?: string }, nt: boolean): string {
   return nt && value.randstr ? `${value.ticket},${value.randstr}` : value.ticket;
+}
+
+/** Host name of an http(s) link (what logs may show of a verification link), or undefined. */
+export function icqqLinkHost(url: unknown): string | undefined {
+  if (typeof url !== 'string' || !url) return undefined;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.hostname : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export function bufferToDataUrl(image: unknown): string | undefined {

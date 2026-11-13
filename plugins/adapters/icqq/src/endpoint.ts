@@ -39,7 +39,7 @@ import { EndpointDeliveryError, type EndpointSendPart, type EndpointSendResult, 
 import { formatCompact, getAdapterLogger, truncatePreview } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
 import type { IcqqLoginControl } from './icqq-login-control.js';
-import { IcqqLoginDriver, type IcqqChallengeKind } from './icqq-login-assist.js';
+import { IcqqLoginDriver, icqqLinkHost, type IcqqChallengeKind } from './icqq-login-assist.js';
 import { messages as t } from './i18n.js';
 import { IcqqContentResolver } from './content-resolver.js';
 import {
@@ -959,7 +959,8 @@ export class IcqqEndpoint extends ManagedIcqqClient implements Endpoint {
     const payload = serializeIcqqEvent(event) ?? (event && typeof event === 'object'
       ? event as Record<string, unknown>
       : null);
-    this.#logSystemEvent(`login.${step}`, step === 'auth' ? redactAuthEvent(payload) : event);
+    // Verification links carry a session id (sid / sig): logs get the challenge kind and host only.
+    this.#logSystemEvent(`login.${step}`, step === 'auth' ? redactAuthEvent(payload) : event, loginChallengeLogLine(step, payload));
     this.#clearReloginTimer();
     this.#notifyChallenge(step);
     // The QR image is a Buffer, which serialization drops; the driver reads the raw event.
@@ -991,12 +992,14 @@ export class IcqqEndpoint extends ManagedIcqqClient implements Endpoint {
     this.#login.fail(mapping.code, mapping.message, mapping.next);
   }
 
-  #logSystemEvent(type: string, event: unknown): void {
+  /** `logged` replaces the payload in the log line (login challenges keep only kind and host). */
+  #logSystemEvent(type: string, event: unknown, logged?: Record<string, unknown> | null): void {
     const payload = serializeIcqqEvent(event);
+    const line = logged === undefined ? payload : logged;
     this.#logger.warn(formatCompact({
       op: `system.${type}`,
       endpoint: this.endpointName,
-      ...(payload ? { event: JSON.stringify(payload) } : {}),
+      ...(line ? { event: JSON.stringify(line) } : {}),
     }));
     this.#dispatchIcqqSystemSideEvent(type, payload);
   }
@@ -1408,6 +1411,12 @@ function resolveNativeClientConfig(config: ResolvedIcqqConfig): NativeIcqqClient
     ...(config.ntLogin != null ? { NTLogin: config.ntLogin } : {}),
     reconn_interval: config.autoReconnect ? 5 : 0,
   };
+}
+
+/** Log line of a login challenge: its kind and the link's host, never the link, image or device. */
+export function loginChallengeLogLine(kind: string, payload: Record<string, unknown> | null): Record<string, unknown> {
+  const host = icqqLinkHost(payload?.url);
+  return { kind, ...(host ? { host } : {}) };
 }
 
 /** `system.login.auth` carries the device information: it never enters logs or side events. */

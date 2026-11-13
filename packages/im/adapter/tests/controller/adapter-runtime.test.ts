@@ -153,6 +153,42 @@ describe('Adapter-owned native Endpoint runtime', () => {
     await adapter.dispose();
   });
 
+  it('grants login leases while start is blocked on login, never to stopped or replaced incarnations (ADR 0058)', async () => {
+    const { adapter } = await create();
+    const one = await add(adapter, 'one');
+    const readiness = gate<void>();
+    adapter.connect = endpoint => {
+      if (adapter.created.length === 1) endpoint.connected.mockImplementation(() => readiness.promise);
+    };
+    // Not started yet: no lease of any kind.
+    expect(() => adapter.acquireLogin(one.canonicalId)).toThrow(expect.objectContaining({ code: 'endpoint_inactive' }));
+    const original = adapter.start(one.instanceId, adapter.revision);
+    await vi.waitFor(() => expect(adapter.created[0]?.connected).toHaveBeenCalled());
+    const first = adapter.created[0]!;
+    // Starting (blocked on a login challenge): login hooks are reachable, other ports are not.
+    expect(() => adapter.acquire(one.canonicalId)).toThrow(expect.objectContaining({ code: 'endpoint_inactive' }));
+    const lease = adapter.acquireLogin(one.canonicalId, undefined, first);
+    expect(lease.endpoint).toBe(first);
+    await expect(lease.run(endpoint => endpoint.nativeMethod('relogin'))).resolves.toBe(1);
+    await expect(lease.send({} as never)).rejects.toMatchObject({ code: 'endpoint_inactive' });
+    lease.release();
+
+    // Replaced generation: a port captured on the old Client is refused, the new one is not.
+    const updated = await adapter.update(one.instanceId, adapter.revision, { config: { replaced: true } });
+    expect(updated.execution.status).toBe('applied');
+    const second = adapter.created[1]!;
+    expect(() => adapter.acquireLogin(one.canonicalId, undefined, first)).toThrow(expect.objectContaining({ code: 'endpoint_inactive' }));
+    adapter.acquireLogin(one.canonicalId, undefined, second).release();
+    expect((await original).execution.status).toBe('failed');
+
+    // Stopped: refused.
+    await adapter.stop(one.instanceId, adapter.revision);
+    expect(() => adapter.acquireLogin(one.canonicalId, undefined, second)).toThrow(expect.objectContaining({ code: 'endpoint_inactive' }));
+    readiness.resolve();
+    await adapter.dispose();
+    expect(() => adapter.acquireLogin(one.canonicalId)).toThrow();
+  });
+
   it('shares the same pending login when explicit start is repeated at a newer desired revision', async () => {
     const { adapter } = await create(); const record = await add(adapter, 'one');
     const ready = gate<void>();
