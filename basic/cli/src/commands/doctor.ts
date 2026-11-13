@@ -30,6 +30,7 @@ import {
 } from '@zhin.js/scaffold-wizard';
 import { logger } from '../utils/logger.js';
 import { probeGateway } from '../utils/gateway.js';
+import { diagnoseGatewayStorage } from '../utils/gateway-storage-check.js';
 import { formatNodeRequirementMessage, isNodeVersionSupported } from '@zhin.js/gateway/project';
 import { findConfigFile, readConfig } from '@zhin.js/gateway/project';
 import { detectLegacyConfig, formatLegacyConfigHint } from '@zhin.js/gateway/project';
@@ -789,6 +790,11 @@ export const doctorCommand = new Command('doctor')
           : '尚未创建所有者：初始化令牌（HTTP_TOKEN）在此之前拥有全部权限',
         fix: gateway.consoleInitialized ? undefined : 'zhin console init，或用初始化令牌打开 Console 完成初始化向导'
       });
+    }
+
+    // 10e. Console 账号存储 .zhin/gateway.db 与 Console SQL 受限账号（ADR 0059）
+    for (const check of await diagnoseGatewayStorage(cwd, { fix: options.fix === true, gatewayRunning: gateway !== undefined })) {
+      results.push(check);
     }
 
     // 打印结果

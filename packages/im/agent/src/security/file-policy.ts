@@ -71,6 +71,230 @@ export const MAX_EDIT_FILE_SIZE = 1024 * 1024 * 1024;
 export const GATEWAY_CONTROL_ENDPOINT_NAME = /^(?:gateway\.sock|zhin-gateway-[0-9a-f]{16}(?:-[0-9a-f]+)?(?:\.sock)?)$/i;
 
 /**
+ * Whether a shell command names the gateway's account store or the project keys (ADR 0059 §7)
+ * anywhere in its text: `.zhin` as a path (`tar cf - .zhin`, `cp -r .zhin`, `cd .zhin && cat …`,
+ * `.zhin/g*.db`), `gateway.db` in any spelling the text keeps whole (including inside a script
+ * string), `zhin/keys`, or a `gateway…` name with a shell wildcard (`find -name "gateway*" -exec
+ * cat {} +`). ANSI-C quoting (`$'\x2e'zhin`) is decoded and brace lists / ranges (`{.,x}zhin`)
+ * are expanded before matching. A text check: it cannot see names a script assembles at run time
+ * (`$var`, `$(…)`, whole-tree reads such as `find . -type f -exec cat {} +`), so it narrows what a
+ * prompt-injected Agent can do with `bash`; it is not a sandbox (the container hides `.zhin/`).
+ */
+export function commandNamesProtectedStore(command: string): string | undefined {
+  // The text as written, and as the shell would read it after ANSI-C quoting (`$'\x2ezhin'`,
+  // `$'\056zhin'`) and brace expansion (`{.,x}zhin`, `{-../}zhin`): any spelling that names the
+  // store is refused. Run-time names (`$var`, `$(…)`, whole-tree reads) stay with the sandbox.
+  // Line continuations first: `.zh\<newline>in` is `.zhin` to the shell.
+  const joined = command.replace(/\\\r?\n/gu, '');
+  const defaults = expandParameterDefaults(joined);
+  const bases = new Set([joined, defaults, extglobAsBraces(joined), extglobAsBraces(defaults)]);
+  const variants = new Set<string | undefined>();
+  for (const base of bases) {
+    const decoded = decodeAnsiCQuoting(base);
+    const expanded = expandBraces(base);
+    for (const variant of [base, decoded, expanded, expandBraces(decoded), expanded === undefined ? undefined : decodeAnsiCQuoting(expanded)]) variants.add(variant);
+  }
+  for (const variant of variants) {
+    if (variant === undefined) return 'brace expansion';
+    const hit = protectedStoreInText(variant);
+    if (hit) return hit;
+  }
+  return undefined;
+}
+
+/**
+ * `${name:-word}` / `${name-word}` / `:=` / `=` / `:+` / `+` / `:?` / `?`: the word as an extra
+ * candidate (the variable may be unset, so the shell may use it).
+ */
+function expandParameterDefaults(command: string): string {
+  let text = command;
+  // Innermost first, so nested defaults (`${a:-${b:-.zhin}}`) unfold too.
+  for (let round = 0; round < 16; round += 1) {
+    const next = text.replace(/\$\{#?[A-Za-z_][A-Za-z0-9_]*(?:\[[^\]{}]*\])?:?[-=+?]([^{}]*)\}/gu, (_, word: string) => word);
+    if (next === text) break;
+    text = next;
+  }
+  return text;
+}
+
+/**
+ * Extended globs (`shopt -s extglob`) as brace lists, over-approximating what they can match:
+ * `@(a|b)` / `+(a|b)` → `{a,b}`, `?(a|b)` / `*(a|b)` → `{,a,b}`, `!(…)` → `*` (anything).
+ */
+function extglobAsBraces(command: string): string {
+  let text = command;
+  for (let round = 0; round < 16; round += 1) {
+    const next = text.replace(/([?*+@!])\(([^()]*)\)/gu, (_, op: string, body: string) => {
+      if (op === '!') return '*';
+      const alternatives = body.split('|');
+      if (op === '?' || op === '*') return `{,${alternatives.join(',')}}`;
+      return alternatives.length === 1 ? alternatives[0]! : `{${alternatives.join(',')}}`;
+    });
+    if (next === text) break;
+    text = next;
+  }
+  return text;
+}
+
+/** `$'…'` strings with their escapes decoded (bash ANSI-C quoting); `$"…"` loses its `$`. */
+function decodeAnsiCQuoting(command: string): string {
+  const simple: Record<string, string> = { a: '\x07', b: '\b', e: '\x1b', E: '\x1b', f: '\f', n: '\n', r: '\r', t: '\t', v: '\v' };
+  const code = (value: string, radix: number) => {
+    const point = Number.parseInt(value, radix);
+    return Number.isFinite(point) && point <= 0x10ffff ? String.fromCodePoint(point) : '';
+  };
+  return command
+    .replace(/\$'((?:[^'\\]|\\[\s\S])*)'/gu, (_, body: string) => body.replace(
+      /\\(x[0-9a-fA-F]{1,2}|u[0-9a-fA-F]{1,4}|U[0-9a-fA-F]{1,8}|[0-7]{1,3}|c[\s\S]|[\s\S])/gu,
+      (__, escape: string) => {
+        const head = escape[0]!;
+        if (head === 'x') return escape.length > 1 ? code(escape.slice(1), 16) : escape;
+        if (head === 'u' || head === 'U') return escape.length > 1 ? code(escape.slice(1), 16) : escape;
+        if (/[0-7]/u.test(head)) return String.fromCharCode(Number.parseInt(escape, 8) & 0xff);
+        if (head === 'c' && escape.length > 1) return String.fromCharCode(escape.charCodeAt(1) & 0x1f);
+        return simple[head] ?? escape;
+      },
+    ))
+    .replace(/\$"/gu, '"');
+}
+
+const BRACE_EXPANSION_LIMIT = 4096;
+
+/**
+ * Every whitespace-separated word with its brace lists (`{a,b}`, nested) and character / number
+ * ranges (`{a..z}`, `{1..3}`) expanded, joined by spaces; `undefined` when a word would expand to
+ * more than {@link BRACE_EXPANSION_LIMIT} words (refused rather than checked partially).
+ */
+function expandBraces(command: string): string | undefined {
+  const out: string[] = [];
+  for (const word of command.split(/(\s+)/u)) {
+    if (!word.includes('{')) { out.push(word); continue; }
+    const expanded = expandWord(word);
+    if (!expanded) return undefined;
+    out.push(expanded.join(' '));
+  }
+  return out.join('');
+}
+
+function expandWord(word: string): string[] | undefined {
+  let results = [word];
+  for (let round = 0; round < 64; round += 1) {
+    let changed = false;
+    const next: string[] = [];
+    for (const item of results) {
+      const parts = firstBraceExpansion(item);
+      if (!parts) { next.push(item); continue; }
+      changed = true;
+      for (const alternative of parts.alternatives) next.push(parts.prefix + alternative + parts.suffix);
+      if (next.length > BRACE_EXPANSION_LIMIT) return undefined;
+    }
+    results = next;
+    if (!changed) return results;
+  }
+  return undefined;
+}
+
+/** The first `{…}` of a word that bash would expand, split into its alternatives. */
+function firstBraceExpansion(word: string): { prefix: string; alternatives: string[]; suffix: string } | undefined {
+  for (let open = word.indexOf('{'); open >= 0; open = word.indexOf('{', open + 1)) {
+    let depth = 0;
+    let close = -1;
+    const commas: number[] = [];
+    for (let index = open; index < word.length; index += 1) {
+      const char = word[index];
+      if (char === '\\') { index += 1; continue; }
+      if (char === '{') depth += 1;
+      else if (char === '}') {
+        depth -= 1;
+        if (depth === 0) { close = index; break; }
+      } else if (char === ',' && depth === 1) commas.push(index);
+    }
+    if (close < 0) return undefined;
+    const prefix = word.slice(0, open);
+    const suffix = word.slice(close + 1);
+    if (commas.length) {
+      const bounds = [open, ...commas, close];
+      return { prefix, suffix, alternatives: bounds.slice(0, -1).map((start, index) => word.slice(start + 1, bounds[index + 1])) };
+    }
+    const range = /^(-?\d+|[\s\S])\.\.(-?\d+|[\s\S])(?:\.\.(-?\d+))?$/u.exec(word.slice(open + 1, close));
+    if (range) {
+      const [, from, to, stepText] = range as unknown as [string, string, string, string | undefined];
+      const step = Math.max(1, Math.abs(Number(stepText ?? 1)) || 1);
+      const numeric = /^-?\d+$/u.test(from) && /^-?\d+$/u.test(to);
+      // Digits never spell a protected name: one representative is enough to check.
+      if (numeric) return { prefix, suffix, alternatives: [from] };
+      const start = numeric ? Number(from) : from.codePointAt(0)!;
+      const end = numeric ? Number(to) : to.codePointAt(0)!;
+      if (!numeric && (from.length !== 1 || to.length !== 1)) continue;
+      const count = Math.floor(Math.abs(end - start) / step) + 1;
+      if (count > BRACE_EXPANSION_LIMIT) return { prefix, suffix, alternatives: new Array<string>(BRACE_EXPANSION_LIMIT + 1).fill('') };
+      const direction = end >= start ? step : -step;
+      const alternatives: string[] = [];
+      for (let value = start, n = 0; n < count; value += direction, n += 1) alternatives.push(numeric ? String(value) : String.fromCodePoint(value));
+      return { prefix, suffix, alternatives };
+    }
+  }
+  return undefined;
+}
+
+function protectedStoreInText(command: string): string | undefined {
+  // Backslashes read two ways: removed, as bash does (`.\zhin`, `gateway.d\b` → `gateway.db`), and
+  // as path separators (Windows paths). Quotes are removed as well (`.zh""in`).
+  for (const text of new Set([command.replace(/\\([\s\S])/gu, '$1'), command.replace(/\\/gu, '/')])) {
+    const hit = protectedStoreInUnquoted(text.replace(/["'`]/gu, ''));
+    if (hit) return hit;
+  }
+  return undefined;
+}
+
+function protectedStoreInUnquoted(text: string): string | undefined {
+  const zhinDir = /(?:^|[\s=:,(/;&|<>{}$\-+?@!*])(\.zhin)(?=$|[\s/;&|)<>*?[,}])/iu.exec(text);
+  if (zhinDir) return '.zhin';
+  const store = /gateway\.db/iu.exec(text);
+  if (store) return 'gateway.db';
+  const keys = /zhin\/keys/iu.exec(text);
+  if (keys) return '.zhin/keys';
+  // The gateway's tables by name (an `sqlite3 … "select … from console_users"` on any copy).
+  const table = /(?<![A-Za-z0-9_])(console_users|console_roles|console_role_bindings|console_sessions|console_api_tokens|console_audit_log|zhin_gateway_store)(?![A-Za-z0-9_])/iu.exec(text);
+  if (table) return table[1];
+  for (const word of text.split(/[\s;&|()<>]+/u).filter(Boolean)) {
+    // A dot-prefixed glob component whose literal start could still become `.zhin`:
+    // `.z*`, `.zh?n`, `.[z]hin`, `.*`, `.{zhin,x}`.
+    for (const component of word.split('/')) {
+      const glob = component.search(/[*?[{]/u);
+      if (component.startsWith('.') && glob >= 0 && '.zhin'.startsWith(component.slice(0, glob).toLowerCase())) return component;
+    }
+    // Glob words matching the store or its keys (`gat*`, `*.db`, `g*`, `ga*y.d*`).
+    if (/[*?[]/u.test(word) && globCouldName(word)) return word;
+  }
+  return undefined;
+}
+
+/** Names a glob might reach: the store, its WAL / SHM files, the keys and `.zhin` itself. */
+const PROTECTED_STORE_NAMES = ['.zhin', 'gateway.db', 'gateway.db-wal', 'gateway.db-shm', 'keys', '.zhin/gateway.db', './.zhin/gateway.db', '.zhin/keys'];
+
+/** Whether a shell glob (or find -name / -path pattern) can match one of {@link PROTECTED_STORE_NAMES}. */
+function globCouldName(pattern: string): boolean {
+  let source = '';
+  for (let index = 0; index < pattern.length; index += 1) {
+    const char = pattern[index]!;
+    if (char === '*') source += '.*';
+    else if (char === '?') source += '.';
+    else if (char === '[') {
+      const end = pattern.indexOf(']', index + 1);
+      if (end < 0) { source += '\\['; continue; }
+      source += `[${pattern.slice(index + 1, end).replace(/^!/u, '^').replace(/\\/gu, '\\\\')}]`;
+      index = end;
+    } else source += char.replace(/[.+^${}()|\\]/gu, '\\$&');
+  }
+  let regex: RegExp;
+  try { regex = new RegExp(`^${source}$`, 'iu'); } catch { return true; }
+  const last = pattern.split('/').filter(Boolean).at(-1) ?? pattern;
+  const name = new RegExp(`^${source.split('/').filter(Boolean).at(-1) ?? source}$`, 'iu');
+  return PROTECTED_STORE_NAMES.some(candidate => regex.test(candidate) || (last !== pattern ? false : name.test(candidate.split('/').at(-1)!)));
+}
+
+/**
  * Whether a shell command names a management gateway control endpoint anywhere — as an operand,
  * inside `UNIX-CONNECT:<path>`, `--unix-socket=<path>`, a quoted script string, … Connecting is
  * neither a read nor a write to the file policy, so the command text itself is checked.
@@ -123,7 +347,8 @@ const SENSITIVE_BASENAME_PATTERNS: RegExp[] = [
   /^\.pgpass$/i,
   /^\.my\.cnf$/i,
   /^\.passwd$/i,
-  // SQLite project databases (shared with the gateway's console_* account tables, ADR 0054 §7)
+  // SQLite databases: the project database and the gateway's account store `.zhin/gateway.db`
+  // (ADR 0059; `.zhin/` and `.zhin/keys/` are denied as a whole below as well)
   /\.(sqlite3?|db3?)(-wal|-shm|-journal)?$/i,
   // Management gateway control endpoint (ADR 0054 §6): `.zhin/gateway.sock`, the os.tmpdir()
   // fallback `zhin-gateway-<hash>.sock` for deep project roots, the Windows pipe name. Whoever

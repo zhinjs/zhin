@@ -156,6 +156,9 @@ jobs:
         run: >-
           pnpm exec vitest run
           basic/database/tests/live-dialects.test.ts
+          basic/database/tests/console-credential.live.test.ts
+          packages/host/gateway/tests/iam/legacy-import.live.test.ts
+          packages/im/zhin/tests/instance/database-gateway-isolation.live.test.ts
           packages/im/zhin/tests/instance/database-conversation-live.test.ts
           packages/im/zhin/tests/instance/mysql-startup.live.test.ts
           packages/im/zhin/tests/instance/database-console-sql.live.test.ts
@@ -169,6 +172,9 @@ jobs:
           ZHIN_TEST_MYSQL_USER: zhin
           ZHIN_TEST_MYSQL_PASSWORD: zhin
           ZHIN_TEST_MYSQL_DATABASE: zhin_test
+          # The restricted Console account (ADR 0059) is created by root: MYSQL_USER cannot create users.
+          ZHIN_TEST_MYSQL_ROOT_USER: root
+          ZHIN_TEST_MYSQL_ROOT_PASSWORD: root
           ZHIN_TEST_PG_HOST: 127.0.0.1
           ZHIN_TEST_PG_PORT: '5432'
           ZHIN_TEST_PG_USER: zhin

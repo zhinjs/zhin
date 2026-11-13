@@ -42,6 +42,12 @@ export const LOCAL_GATEWAY_RPC = Object.freeze({
   /** `{ username, disabled }`. */
   CONSOLE_USER_DISABLE: 'gateway.console.user.disable',
   /**
+   * `zhin console migrate` / `zhin doctor` beside a running gateway (ADR 0059 §3): the state of the
+   * import of the old `console_*` tables (`{ record, pending?, reappeared?, problem? }`), read by
+   * the gateway, the only process that opens `.zhin/gateway.db` while it runs.
+   */
+  CONSOLE_MIGRATION_STATUS: 'gateway.console.migration.status',
+  /**
    * `{base}/…` request on behalf of the local owner ({@link LocalGatewayHttpRequest}): what
    * `zhin config` / `schedule` / `send` / `watch` use while a gateway runs, so they need no
    * Console token (ADR 0054 §6). Answered like the HTTP route ({@link LocalGatewayHttpResponse}).

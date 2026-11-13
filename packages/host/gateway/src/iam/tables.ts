@@ -1,4 +1,7 @@
-/** Console access-control tables (ADR 0049 §2). Defined by the composition root before DB start. */
+/**
+ * Console access-control tables (ADR 0049 §2). Since ADR 0059 they live in the gateway's own store
+ * `.zhin/gateway.db` (SQLite), whatever the project database is.
+ */
 
 export const IAM_TABLES = Object.freeze({
   users: 'console_users',
@@ -69,23 +72,17 @@ export const IAM_TABLE_DEFINITIONS: Readonly<Record<string, Record<string, unkno
   },
 });
 
-/** Dialects that can hold accounts (redis / memory cannot, ADR 0049 §8). */
-export const IAM_DIALECTS: ReadonlySet<string> = new Set(['sqlite', 'mysql', 'pg', 'mongodb']);
-
 export interface IamTableHost {
-  readonly dialect: string;
   readonly started: boolean;
   define(name: string, definition: Record<string, unknown>): void;
   tables(): readonly string[];
 }
 
-/** Idempotent; must run before the database starts. Returns false for unsupported dialects. */
-export function defineConsoleIamTables(host: IamTableHost): boolean {
-  if (!IAM_DIALECTS.has(host.dialect)) return false;
-  if (host.started) return true;
+/** Idempotent; must run before the database starts. */
+export function defineConsoleIamTables(host: IamTableHost): void {
+  if (host.started) return;
   const existing = new Set(host.tables());
   for (const [name, definition] of Object.entries(IAM_TABLE_DEFINITIONS)) {
     if (!existing.has(name)) host.define(name, definition);
   }
-  return true;
 }

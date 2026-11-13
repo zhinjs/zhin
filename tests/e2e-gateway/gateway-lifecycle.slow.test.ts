@@ -3,7 +3,8 @@
 // first-run Console setup, restart, crash supervision, a rolled-back dependency install,
 // session revocation and stop. Slow (about two minutes): `pnpm test` skips it; run it with
 // `pnpm test:e2e:gateway` (after `pnpm build`). CI runs it once in full-validation.yml.
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync, readlinkSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import {
   createGatewayProject,
   isProcessAlive,
@@ -18,6 +19,20 @@ const enabled = process.env.ZHIN_TEST_GATEWAY_E2E === '1' && process.platform !=
 const OWNER = { username: 'owner', password: 'e2e-owner-password-1' };
 const OPERATOR = { username: 'operator', password: 'e2e-operator-password-1' };
 const BROKEN_PLUGIN = 'zhin-plugin-e2e-broken';
+const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as typeof import('node:sqlite');
+
+/** Files a process holds open (Linux `/proc/<pid>/fd`). */
+function openFiles(pid: number): string[] {
+  return readdirSync(`/proc/${pid}/fd`).flatMap((fd) => {
+    try { return [readlinkSync(`/proc/${pid}/fd/${fd}`)]; } catch { return []; }
+  });
+}
+
+/** Rows of `sql` from a SQLite file, read-only. */
+function readSqlite(file: string, sql: string): Record<string, unknown>[] {
+  const db = new DatabaseSync(file, { readOnly: true });
+  try { return db.prepare(sql).all() as Record<string, unknown>[]; } finally { db.close(); }
+}
 
 /** Reads an SSE response until the server ends it; resolves with what arrived. */
 async function readUntilClosed(response: Response): Promise<string> {
@@ -107,6 +122,19 @@ describe.skipIf(!enabled)('management gateway end to end (zhin start, examples/m
     expect(instance.body).toMatchObject({ success: true, type: 'gateway.instance.status', data: { state: 'running' } });
     expect((await project.json('/api/system/status', { token: ownerToken })).status).toBe(200);
   }, 60_000);
+
+  it.runIf(process.platform === 'linux')('keeps the accounts in .zhin/gateway.db, which only the gateway holds open (ADR 0059)', async () => {
+    const status = await project.status();
+    const store = project.path('.zhin/gateway.db');
+    expect(existsSync(store)).toBe(true);
+    expect(openFiles(status.gateway.pid!).some((file) => file.startsWith(store))).toBe(true);
+    const instanceFiles = openFiles(status.instance!.pid!);
+    expect(instanceFiles.some((file) => file.includes('gateway.db'))).toBe(false);
+    // The instance keeps its own project database; it has no console_* tables.
+    expect(instanceFiles.some((file) => file.startsWith(project.path('.zhin/data.sqlite')))).toBe(true);
+    expect(readSqlite(project.path('.zhin/data.sqlite'), "SELECT name FROM sqlite_master WHERE name LIKE 'console_%' AND name <> 'console_conversations'")).toEqual([]);
+    expect(readSqlite(store, 'SELECT username FROM console_users')).toEqual([{ username: OWNER.username }]);
+  }, 30_000);
 
   it('zhin restart replaces the instance; the gateway keeps its pid and keeps answering', async () => {
     const before = await project.status();
@@ -261,5 +289,51 @@ describe.skipIf(!enabled)('management gateway end to end (zhin start, examples/m
     const offlineLogs = await project.zhin(['logs', '-n', '5']);
     expect(offlineLogs.code).toBe(0);
     expect(offlineLogs.stderr).toContain('网关未运行');
+
+    // Without a gateway, zhin console user writes .zhin/gateway.db directly (ADR 0059).
+    const created = await project.zhin(['console', 'user', 'create', 'rescue', '--role', 'owner', '--password-stdin'], { input: 'e2e-rescue-password-1\n' });
+    expect(created.code, created.stderr).toBe(0);
+    expect(readSqlite(project.path('.zhin/gateway.db'), "SELECT username FROM console_users WHERE username = 'rescue'")).toEqual([{ username: 'rescue' }]);
+    const migrate = await project.zhin(['console', 'migrate']);
+    expect(migrate.code, migrate.stderr).toBe(0);
+    expect(migrate.stdout).toContain('无需迁移');
   }, 90_000);
+});
+
+describe.skipIf(!enabled)('upgrading a project whose accounts are in the project database (ADR 0059 §3)', () => {
+  let project: GatewayProject;
+
+  beforeAll(async () => {
+    project = await createGatewayProject('legacy');
+    // What an earlier version left: account tables in .zhin/data.sqlite (the default project database).
+    const { ProjectDatabase } = await import('../../packages/host/gateway/src/database/project-database.js');
+    const { ConsoleIamService } = await import('../../packages/host/gateway/src/iam/service.js');
+    const { defineConsoleIamTables } = await import('../../packages/host/gateway/src/iam/tables.js');
+    const legacy = new ProjectDatabase({ dialect: 'sqlite', filename: project.path('.zhin/data.sqlite') });
+    defineConsoleIamTables(legacy);
+    await legacy.start();
+    const iam = new ConsoleIamService({ database: legacy, projectRoot: project.root });
+    await iam.start({ timers: false });
+    await iam.createOwner(OWNER);
+    iam.stop();
+    await legacy.stop();
+  }, 60_000);
+
+  afterAll(async () => {
+    await project?.zhin(['stop']).catch(() => undefined);
+    await project?.dispose();
+  }, 60_000);
+
+  it('migrates on start; the old owner signs in; zhin doctor reports the import', async () => {
+    const started = await project.zhin(['start']);
+    expect(started.code, started.stderr).toBe(0);
+    await waitFor('instance running', async () => ((await project.status()).instance?.state === 'running' ? true : undefined), 60_000);
+    expect((await project.json('/api/auth/me')).body.data).toMatchObject({ kind: 'anonymous', setupRequired: false });
+    const { token } = await project.login(OWNER.username, OWNER.password);
+    expect((await project.json('/api/auth/me', { token })).body.data).toMatchObject({ kind: 'user', user: { username: OWNER.username } });
+    expect(readSqlite(project.path('.zhin/data.sqlite'), "SELECT name FROM sqlite_master WHERE name = 'console_users'")).toEqual([]);
+    const migrate = await project.zhin(['console', 'migrate']);
+    expect(migrate.code, migrate.stderr).toBe(0);
+    expect(migrate.stdout).toMatch(/网关运行中，迁移由网关完成：已迁移/);
+  }, 120_000);
 });

@@ -103,10 +103,18 @@ zhin service status [--user]
 
 Installs a start-on-boot / supervised service. `--user` uses user-level systemd on Linux; `status` works on Linux and macOS only. The service runs the gateway in the foreground (`zhin start --foreground --mode production --no-watch`); the gateway restarts the instance.
 
+### db: restricted account of the Console SQL editor {#db}
+
+```bash
+zhin db console-role [--print-sql] [--role <name>]
+```
+
+On PostgreSQL / MySQL the Console SQL editor runs only on a separately logged-in restricted account ([ADR 0059](../../adr/0059-gateway-storage-isolation.md), Chinese). This command creates it with the main account (default name `zhin_console_<project hash>`), writes a random password to `.env` (`ZHIN_DB_CONSOLE_USER` / `ZHIN_DB_CONSOLE_PASSWORD`) and references it from `database.console`; running it again rotates the password. When the main account may not create accounts, add `--print-sql`: nothing is created, the SQL is printed for a DBA (the password is the placeholder `<ZHIN_DB_CONSOLE_PASSWORD>`, the real value is in `.env`). It refuses while the project database still holds the old Console account tables — migrate first. Then `zhin restart`. `zhin doctor --fix` does the same. SQLite needs none. See [configuration: `database.console`](../configuration/index.md#database-console).
+
 ### console: Setup and User Management {#console}
 
 ```bash
-zhin console init [--status]
+zhin console init [--status] [--reset-store]
 zhin console init [--database sqlite|mysql|pg|mongodb] [--database-<field> <value> ...]
                   [--database-password-env <VAR> | --database-password-stdin]
                   [--owner <username>] [--display-name <name>] [--password-stdin] [-y]
@@ -115,17 +123,20 @@ zhin console user passwd <username> [--password-stdin]
 zhin console user disable <username>
 zhin console user enable <username>
 zhin console user list
+zhin console migrate [--revert]
 ```
 
-Console users, roles and API tokens live in the project database ([ADR 0049](../../adr/0049-console-rbac.md)). These commands do the same as the Console's setup wizard and Access pages — use them on a server, in a container build, or when a password is lost.
+Console users, roles, sessions, API tokens and the audit log live in the gateway's own `.zhin/gateway.db` ([ADR 0049](../../adr/0049-console-rbac.md), [ADR 0059](../../adr/0059-gateway-storage-isolation.md)), not in the project database. These commands do the same as the Console's setup wizard and Access pages — use them on a server, in a container build, or when a password is lost.
 
-- **Who runs them**: while the project's gateway runs, the commands go to it over the local control socket `.zhin/gateway.sock` (a connection counts as the local owner), so a database switch or a new owner takes effect at once. Without a gateway they open the project database directly (offline setup and rescue). A socket that belongs to another system user or does not answer is an error; the command never edits files behind the gateway's back.
+- **Who runs them**: while the project's gateway runs, the commands go to it over the local control socket `.zhin/gateway.sock` (a connection counts as the local owner), so a database switch or a new owner takes effect at once. Without a gateway they open `.zhin/gateway.db` directly (offline setup and rescue), after moving over the account tables an earlier version left in the project database. A socket that belongs to another system user or does not answer is an error; the command never edits files behind the gateway's back.
 - **`init`** has two steps: choose the database (the current configuration, usually SQLite, is kept by default), then create the first owner. Without flags it asks interactively; `--status` prints the setup state as JSON. Once an owner exists it fails — use `zhin console user` instead.
   - `--database <dialect>` switches database; pass connection fields as `--database-filename`, `--database-host`, `--database-port`, `--database-user`, `--database-database`, `--database-url`, `--database-db-name`, `--database-mode` and so on. The CLI tests the connection first, then writes the configuration and puts secret fields in `.env`.
   - There are two recommended ways to pass the database password (use only one source): `--database-password-env <VAR>` references an existing environment variable (the config gets `${VAR}`); `--database-password-stdin` reads the first line of stdin, stores it in `.env` and writes `${VAR}` into the config. Together with `--password-stdin`, the first line is the database password and the second the owner password.
   - `--database-password <value>` still works but is **not recommended**: the secret stays in shell history and the process list (`ps`), and the command prints a warning.
   - `--owner` plus `--password-stdin` creates the owner non-interactively (the password is the first line of stdin, or the second line together with `--database-password-stdin`; at least 10 characters); with `-y`, missing flags fail instead of prompting, for scripts.
 - **`user`**: `create` binds the global `viewer` role by default, `--role` takes `owner` / `admin` / `operator` / `viewer` or a custom role; `passwd` resets the password and revokes all of the user's sessions; `disable` / `enable` suspend and restore; `list` prints users, state and role bindings. Adapter- or account-scoped bindings are set in the Console's Access pages.
+- **`init --reset-store`**: when `.zhin/gateway.db` was lost or replaced (the project database's marker `zhin_gateway_store` names another store) the Console stays closed; once you accept that the old accounts are gone, this resets it (gateway stopped first, asks for confirmation, `--yes` skips it), records the reset in the new audit log and continues with setup.
+- **`migrate`** moves the Console account tables an earlier version kept in the project database into `.zhin/gateway.db` (the gateway also does it when it starts; while a gateway runs the command only reports the state). `--revert` writes them back into the project database and empties gateway.db — required before downgrading, with the gateway stopped (`zhin stop`). See the [upgrade notes](../migrations/gateway-storage.md).
 - `http.token` is only a **bootstrap token**: valid until the first owner exists, refused on every endpoint afterwards.
 
 ```bash

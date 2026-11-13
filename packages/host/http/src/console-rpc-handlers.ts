@@ -603,13 +603,25 @@ const REFUSAL_NAMES: ReadonlySet<string> = new Set(['ConsoleSqlRefusal', 'Consol
  * `data.code` of a refusal by the database port (`read_only`, `protected_table`, …), and the DDL a
  * failed `db:schema:apply` attempted (`data.statements`, for the audit log).
  */
-function refusalData(error: unknown): { data?: { code?: string; statements?: readonly string[] } } {
+/** SQLSTATE of a driver error (PostgreSQL `code`, mysql2 `sqlState`), e.g. `42501` insufficient privilege. */
+function sqlStateOf(error: Error): string | undefined {
+  const record = error as { code?: unknown; sqlState?: unknown };
+  for (const candidate of [record.sqlState, record.code]) {
+    if (typeof candidate === 'string' && /^[0-9A-Z]{5}$/u.test(candidate)) return candidate;
+  }
+  return undefined;
+}
+
+function refusalData(error: unknown): { data?: { code?: string; statements?: readonly string[]; sqlState?: string } } {
   if (!(error instanceof Error)) return {};
   const attempted = (error as { statements?: unknown }).statements;
   const statements = Array.isArray(attempted) && attempted.every(entry => typeof entry === 'string') ? { statements: attempted as string[] } : {};
   if (error.name === 'GatewayOwnedTableError') return { data: { code: 'protected_table', ...statements } };
   const code = (error as { code?: unknown }).code;
-  const data = { ...(REFUSAL_NAMES.has(error.name) && typeof code === 'string' ? { code } : {}), ...statements };
+  const refused = REFUSAL_NAMES.has(error.name) && typeof code === 'string';
+  // The server's SQLSTATE lets the Console explain e.g. 42501 from the restricted account (ADR 0059 §4).
+  const sqlState = refused ? undefined : sqlStateOf(error);
+  const data = { ...(refused ? { code } : {}), ...(sqlState ? { sqlState } : {}), ...statements };
   return Object.keys(data).length ? { data } : {};
 }
 

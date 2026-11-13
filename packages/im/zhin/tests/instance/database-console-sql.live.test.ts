@@ -1,5 +1,8 @@
+import { randomBytes } from 'node:crypto';
 import { createDatabaseHost } from '@zhin.js/core/runtime';
+import { provisionConsoleRole, Registry } from '@zhin.js/database';
 import { dispatchRuntimeConsoleRpc, pickRpcReply } from '@zhin.js/host-http';
+import { createLiveMysqlDatabase, createLivePgDatabase, liveMysqlBase, livePgBase, type LiveDatabase } from '../../../../../basic/database/tests/support/live-database.js';
 
 /**
  * Console SQL against real servers (full-validation): the single-statement protocol holds even
@@ -11,31 +14,72 @@ const live = process.env.ZHIN_TEST_EXTERNAL_DATABASES === '1';
 type Host = ReturnType<typeof createDatabaseHost>;
 type Raw = { transaction<T>(callback: (trx: { queryStatement(sql: string, options?: { maxRows?: number }): Promise<unknown>; query(sql: string): Promise<unknown> }) => Promise<T>, options?: { readOnly?: boolean }): Promise<T>; query(sql: string): Promise<unknown> };
 
+/**
+ * Raw Console SQL runs only on the restricted account (ADR 0059 §4): create one with an account
+ * that may (PostgreSQL: the test user; MySQL: root), drop it afterwards.
+ */
+async function consoleAccount(dialect: 'pg' | 'mysql', admin: Record<string, unknown>): Promise<{ user: string; password: string; drop(): Promise<void> }> {
+  const db = Registry.create(dialect, admin as never) as unknown as { start(): Promise<void>; stop(): Promise<void>; query(sql: string, params?: unknown[]): Promise<unknown> };
+  await db.start();
+  try {
+    const plan = await provisionConsoleRole((sql, params) => db.query(sql, params), { dialect, projectKey: `live-${randomBytes(4).toString('hex')}` });
+    return {
+      user: plan.user,
+      password: plan.password,
+      async drop() {
+        const again = Registry.create(dialect, admin as never) as unknown as typeof db;
+        await again.start();
+        try {
+          if (dialect === 'pg') {
+            await again.query(`DROP OWNED BY "${plan.user}"`).catch(() => undefined);
+            await again.query(`DROP ROLE IF EXISTS "${plan.user}"`).catch(() => undefined);
+          } else {
+            await again.query(`DROP USER IF EXISTS '${plan.user}'@'${plan.host ?? '%'}'`).catch(() => undefined);
+          }
+        } finally {
+          await again.stop();
+        }
+      },
+    };
+  } finally {
+    await db.stop();
+  }
+}
+
 const rpc = async (host: Host, message: Record<string, unknown>) => {
   const request = { requestId: 1, ...message };
   return pickRpcReply(request, await dispatchRuntimeConsoleRpc(request, { database: host.console } as never))!;
 };
 
 describe.skipIf(!live)('Console SQL on PostgreSQL (live)', () => {
-  const host = createDatabaseHost({
-    dialect: 'pg',
-    host: process.env.ZHIN_TEST_PG_HOST ?? '127.0.0.1',
-    port: Number(process.env.ZHIN_TEST_PG_PORT ?? 35432),
-    user: process.env.ZHIN_TEST_PG_USER ?? 'zhin',
-    password: process.env.ZHIN_TEST_PG_PASSWORD ?? 'zhin',
-    database: process.env.ZHIN_TEST_PG_DATABASE ?? 'zhin_test',
-  } as never);
-  const raw = host.db as unknown as Raw;
+  // A database of its own (filled in by beforeAll): suites run in parallel.
+  const main = { dialect: 'pg', ...livePgBase() };
+  let own: LiveDatabase;
+  let host: Host;
+  let raw: Raw;
+  let account: Awaited<ReturnType<typeof consoleAccount>>;
 
   beforeAll(async () => {
+    own = await createLivePgDatabase('console_sql');
+    Object.assign(main, own.config);
+    const { dialect: _dialect, ...admin } = main;
+    const setup = Registry.create('pg', admin as never) as unknown as Raw & { start(): Promise<void>; stop(): Promise<void> };
+    await setup.start();
+    await setup.query('DROP TABLE IF EXISTS zhin_console_victim');
+    await setup.query('CREATE TABLE zhin_console_victim (a int)');
+    await setup.query('INSERT INTO zhin_console_victim VALUES (1), (2)');
+    await setup.stop();
+    account = await consoleAccount('pg', admin);
+    own.adoptRole(account.user);
+    host = createDatabaseHost({ ...main, console: { user: account.user, password: account.password } } as never);
+    raw = host.db as unknown as Raw;
     await host.start();
-    await raw.query('DROP TABLE IF EXISTS zhin_console_victim');
-    await raw.query('CREATE TABLE zhin_console_victim (a int)');
-    await raw.query('INSERT INTO zhin_console_victim VALUES (1), (2)');
   });
   afterAll(async () => {
-    await raw.query('DROP TABLE IF EXISTS zhin_console_victim').catch(() => undefined);
-    await host.stop();
+    await raw?.query('DROP TABLE IF EXISTS zhin_console_victim').catch(() => undefined);
+    await host?.stop();
+    await account?.drop();
+    await own?.drop();
   });
 
   it('refuses a second statement at the server, whatever the Console lexer saw', async () => {
@@ -74,20 +118,28 @@ describe.skipIf(!live)('Console SQL on PostgreSQL (live)', () => {
   });
 });
 
-describe.skipIf(!live)('Console SQL on MySQL (live)', () => {
-  const host = createDatabaseHost({
+describe.skipIf(!live || !process.env.ZHIN_TEST_MYSQL_ROOT_PASSWORD)('Console SQL on MySQL (live)', () => {
+  const main = {
     dialect: 'mysql',
-    host: process.env.ZHIN_TEST_MYSQL_HOST ?? '127.0.0.1',
-    port: Number(process.env.ZHIN_TEST_MYSQL_PORT ?? 33306),
-    user: process.env.ZHIN_TEST_MYSQL_USER ?? 'zhin',
-    password: process.env.ZHIN_TEST_MYSQL_PASSWORD ?? 'zhin',
-    database: process.env.ZHIN_TEST_MYSQL_DATABASE ?? 'zhin_test',
+    ...liveMysqlBase(),
     // Even when the project enables it, Console SQL never runs several statements.
     multipleStatements: true,
-  } as never);
-  const raw = host.db as unknown as Raw;
+  };
+  let own: LiveDatabase;
+  let host: Host;
+  let raw: Raw;
+  let account: Awaited<ReturnType<typeof consoleAccount>>;
 
   beforeAll(async () => {
+    own = await createLiveMysqlDatabase('console_sql');
+    Object.assign(main, own.config);
+    // Docker's MYSQL_USER cannot create users: root provisions the restricted account.
+    account = await consoleAccount('mysql', {
+      host: main.host, port: main.port, database: main.database,
+      user: process.env.ZHIN_TEST_MYSQL_ROOT_USER ?? 'root', password: process.env.ZHIN_TEST_MYSQL_ROOT_PASSWORD,
+    });
+    host = createDatabaseHost({ ...main, console: { user: account.user, password: account.password } } as never);
+    raw = host.db as unknown as Raw;
     await host.start();
     await raw.query('DROP TABLE IF EXISTS zhin_console_victim');
     await raw.query('DROP TABLE IF EXISTS zhin_console_modify');
@@ -100,9 +152,11 @@ describe.skipIf(!live)('Console SQL on MySQL (live)', () => {
     )`);
   });
   afterAll(async () => {
-    await raw.query('DROP TABLE IF EXISTS zhin_console_victim').catch(() => undefined);
-    await raw.query('DROP TABLE IF EXISTS zhin_console_modify').catch(() => undefined);
-    await host.stop();
+    await raw?.query('DROP TABLE IF EXISTS zhin_console_victim').catch(() => undefined);
+    await raw?.query('DROP TABLE IF EXISTS zhin_console_modify').catch(() => undefined);
+    await host?.stop();
+    await account?.drop();
+    await own?.drop();
   });
 
   it('refuses a second statement through prepared statements', async () => {

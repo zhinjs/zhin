@@ -34,7 +34,7 @@ async function startHost(root: string, options: { token?: string } = {}) {
   const http: ProcessHttpHost = createHttpHost({ host: '127.0.0.1', port: 0, ...(options.token ? { token: options.token } : {}) });
   const configStore = new ConsoleConfigurationStore({ projectRoot: root, document: createConfigDocument(join(root, 'zhin.config.yml')) });
   const requestRestart = vi.fn();
-  const iam = installConsoleIam(http, { database: database.gatewayTableHost(), configStore, projectRoot: root, requestRestart });
+  const iam = installConsoleIam(http, { projectDatabase: async () => ({ dialect: 'sqlite', filename: join(root, '.zhin', 'data.sqlite') }), configStore, projectRoot: root, requestRestart });
   registerConsoleRpcRoute({ http, base: '/api', projectRoot: root, consoleRuntime: { runView: async () => ({ pages: [] }) } as unknown as ConsoleRuntime,
     hub: createConsoleEventHub(), pluginLifecycleFile: resolvePluginLifecycleFile(root), pluginLifecycleStore: createPluginLifecycleStore(root),
     configuration: configStore, consoleIam: () => iam.service,
@@ -43,7 +43,7 @@ async function startHost(root: string, options: { token?: string } = {}) {
   await database.start();
   await iam.activate();
   const { origin } = await http.listen();
-  closers.push(async () => { iam.dispose(); await http.close(); await database.stop(); });
+  closers.push(async () => { await iam.dispose(); await http.close(); await database.stop(); });
   const call = async (method: string, path: string, body?: unknown, token?: string) => {
     const response = await fetch(`${origin}/api${path}`, {
       method,
@@ -277,11 +277,11 @@ async function startHostOn(root: string, filename = '.zhin/data.sqlite') {
   const database = createDatabaseHost({ dialect: 'sqlite', filename: join(root, filename) } as never);
   const http = createHttpHost({ host: '127.0.0.1', port: 0 });
   const configStore = new ConsoleConfigurationStore({ projectRoot: root, document: createConfigDocument(join(root, 'zhin.config.yml')) });
-  const iam = installConsoleIam(http, { database: database.gatewayTableHost(), configStore, projectRoot: root });
+  const iam = installConsoleIam(http, { projectDatabase: async () => ({ dialect: 'sqlite', filename: join(root, filename) }), configStore, projectRoot: root });
   await database.start();
   await iam.activate();
   const { origin } = await http.listen();
-  closers.push(async () => { iam.dispose(); await http.close(); await database.stop(); });
+  closers.push(async () => { await iam.dispose(); await http.close(); await database.stop(); });
   return {
     call: async (method: string, path: string, body?: unknown) => {
       const response = await fetch(`${origin}/api${path}`, { method, headers: { 'content-type': 'application/json' }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });

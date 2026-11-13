@@ -130,9 +130,9 @@ Where a setting lives depends on who changes it, when, and how many entries it h
 | Store | Holds | Written by |
 |---|---|---|
 | `zhin.config.yml` | **Declarations** fixed at deploy time, reviewed in git, applied by reload or restart: plugin instances and plugin config, `disable_plugins`, Host infrastructure (`http`, `database` connection, `console`, `gateway`, `mcp`, `a2a`, `log_level`, `locale`), `ai.*` behaviour and security policy, global feature defaults and `features.selfService` | People: by hand, the CLI, Console config forms (all through the gateway config transaction) |
-| Database | **Runtime state**: Console accounts and audit, chat roles, accounts and credentials, model directory, adapter / account / conversation feature overrides (table `feature_overrides`), control-plane switches, schedules, messages / sessions / memory, plugin state | Console RPCs, chat commands, AI tools, plugins |
+| Database | **Runtime state**: chat roles, accounts and credentials, model directory, adapter / account / conversation feature overrides (table `feature_overrides`), control-plane switches, schedules, messages / sessions / memory, plugin state | Console RPCs, chat commands, AI tools, plugins |
 | `.env` | **Secrets and per-environment values**; the YAML only holds `${VAR}` references | People, `zhin doctor --fix`, the gateway |
-| `.zhin/` | **Machine-local runtime files**: sockets, locks, logs, caches, onboarding progress, encryption keys | Runtime, gateway |
+| `.zhin/` | **Machine-local runtime files**: sockets, locks, logs, caches, onboarding progress, encryption keys; the gateway's Console account store `gateway.db` (accounts, sessions, API tokens, audit, [ADR 0059](../../adr/0059-gateway-storage-isolation.md)). `keys/` and `gateway.db` must persist and be backed up | Runtime, gateway |
 
 **Secret fields** are annotated with `x-zhin-secret: true` in the schema (the Host schema marks `http.token`, `database.password`, `mcp.token`, `a2a.token` and others; `Schema.string().secret()` emits it for plugins). Without an annotation the field name decides (`token`, `password`, `secret`, `apiKey`, `privateKey`, `*Token`, `*Secret`, …). At startup a literal value in such a field (not a `${…}` reference) produces one warning listing the paths, never the values. `zhin doctor` reports the same; `zhin doctor --fix` writes each literal into `.env` as `ZHIN_<PATH_UPPER_SNAKE>` (for example `ZHIN_HTTP_TOKEN`; an existing variable with the same value is reused, a name holding another value gets `_2`, `_3`) and replaces the YAML value with `${NAME}`. The YAML goes through the config file transaction (revision check, file lock, atomic replace); `.env` is written under the same kind of lock as a temporary file that is fsynced and renamed, keeping the file mode (`0600` for a new file). With the gateway running, these files are still edited directly (like the other `zhin doctor` fixes; the shared lock prevents lost writes) and the instance picks up the references the next time it loads the configuration.
 
@@ -248,6 +248,30 @@ DB_DATABASE=zhin_bot
 Create `DB_DATABASE` first and allow `DB_USER` to connect from the machine running the bot. If the bot
 runs in a container, `127.0.0.1` points to that container; use the PostgreSQL service name or a reachable
 host address instead.
+
+### Restricted account of the Console SQL editor (`database.console`) {#database-console}
+
+On PostgreSQL / MySQL the SQL editor of the Console database page runs only on a separately logged-in restricted account ([ADR 0059](../../adr/0059-gateway-storage-isolation.md), Chinese). Create it with the CLI:
+
+```bash
+npx zhin db console-role            # created with the main account; add --print-sql for a DBA when it may not create accounts
+```
+
+It writes a random password to `.env` and references it from the configuration:
+
+```yaml
+database:
+  dialect: pg
+  # …main account connection fields…
+  console:
+    user: ${ZHIN_DB_CONSOLE_USER}
+    password: ${ZHIN_DB_CONSOLE_PASSWORD}
+```
+
+- Only `user` and `password`; they are removed before the main connection's driver sees the block, and `user` must differ from the main account. With both variables unset the block counts as absent (SQL editor off, everything else works).
+- At start the instance probes the account's privileges; if it holds too much, the SQL editor is off and the page says why (`capabilities.sqlReason`). The instance **never** creates the account by itself.
+- SQLite, MongoDB, Redis and memory ignore the block. The instance's SQLite connection always refuses `ATTACH` (not configurable).
+- Console accounts are not in the project database but in `.zhin/gateway.db`; see the [upgrade notes](../migrations/gateway-storage.md).
 
 ### Other dialects
 

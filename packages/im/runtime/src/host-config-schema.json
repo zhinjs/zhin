@@ -933,6 +933,26 @@
             "string"
           ],
           "description": "Redis 心跳间隔毫秒。"
+        },
+        "console": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "PostgreSQL / MySQL：Console SQL 控制台使用的受限账号（ADR 0059；zhin db console-role 创建）。未配置时原始 SQL 关闭。",
+          "properties": {
+            "user": {
+              "type": "string",
+              "description": "受限账号用户名，通常写 ${ZHIN_DB_CONSOLE_USER}。"
+            },
+            "password": {
+              "type": "string",
+              "description": "受限账号密码，写 ${ZHIN_DB_CONSOLE_PASSWORD}，值只放 .env。",
+              "writeOnly": true,
+              "x-zhin-secret": true,
+              "x-zhin-config": {
+                "secret": true
+              }
+            }
+          }
         }
       }
     },

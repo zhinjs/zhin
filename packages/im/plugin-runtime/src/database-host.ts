@@ -102,8 +102,26 @@ export interface DatabaseHostConsoleCapabilities {
   readonly sql: boolean;
   /** `db:schema:*` structured schema editor. */
   readonly schema: boolean;
-  /** Why `sql` / `schema` are unavailable (non-relational dialect). */
+  /** Why `sql` / `schema` are unavailable (non-relational dialect; also repeats `sqlReason`). */
   readonly reason?: string;
+  /**
+   * Why raw SQL (`sql`) is off while the schema editor may still work: no restricted account on
+   * PostgreSQL / MySQL (`zhin db console-role`), a failed account probe, or a server that reads
+   * SQL text differently from the Console (ADR 0059 §4).
+   */
+  readonly sqlReason?: string;
+  /**
+   * Machine-readable kind of `sqlReason`: `console-role-missing` (no `database.console`),
+   * `console-role-invalid` (the account cannot log in or holds too much), `text-compatibility`
+   * (the server reads SQL text differently), `sqlite-isolation` (in-memory SQLite).
+   */
+  readonly sqlReasonCode?: 'console-role-missing' | 'console-role-invalid' | 'text-compatibility' | 'sqlite-isolation';
+  /**
+   * What keeps raw SQL away from the gateway's data (ADR 0059): `separate-store` (SQLite — the
+   * accounts are in `.zhin/gateway.db`, which this connection cannot ATTACH) or
+   * `restricted-credential` (PostgreSQL / MySQL — raw SQL logs in as a restricted account).
+   */
+  readonly sqlIsolation?: 'separate-store' | 'restricted-credential';
 }
 
 export interface DatabaseHostQueryResult {

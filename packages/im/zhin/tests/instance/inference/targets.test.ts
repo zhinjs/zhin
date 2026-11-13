@@ -85,7 +85,8 @@ it('selects only distinct complete conversation addresses with SQL pagination, n
       endpoint: { ...conversation.endpoint, id: 'another-account' },
     });
     const raw = database.getRawDatabase() as StructuredDatabase;
-    const query = vi.spyOn(raw, 'query');
+    // Instrument the registry itself: the plugin-facing raw handle is a frozen facade.
+    const query = vi.spyOn(database.db as unknown as StructuredDatabase, 'query');
     const read = createInferenceTargetsReader({ rootId: '/host', lease, database });
     const metadata = await read();
     expect(metadata.scenesError).toBe('not_requested');

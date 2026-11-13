@@ -139,3 +139,10 @@ sidebar: false
 3. **种子移除与导出**：`endpoints[]`、`ai.plan.yml` 导入后移除，Console 导出（含网关 RPC 与审计）。
 4. **永久批准入库**。
 5. **钥匙集中**与 `zhin backup`。
+
+## 修订 2026-11-13：Console 账号不在数据库里（ADR 0059）
+
+- §1「数据库：Console 账号与审计…」改为：Console 账号、角色、会话、API 令牌与审计放在网关的 `.zhin/gateway.db`（[ADR 0059](./0059-gateway-storage-isolation.md)），不在项目数据库；`.zhin/` 表格行的「可以丢弃（`keys/` 除外）」相应改为「`keys/` 与 `gateway.db` 除外」。
+- §4 密钥规则同样适用于 PostgreSQL / MySQL 的 Console 受限账号：`database.console.password` 写 `${ZHIN_DB_CONSOLE_PASSWORD}`，值只在 `.env`（`zhin db console-role` 写入）。
+- §6 `zhin backup` 实现时必须包含 `.zhin/gateway.db`（SQLite 在线备份），所有方言都要：`pg_dump` / `mysqldump` 不再含账号。文档写明 `.zhin/` 必须持久化。
+

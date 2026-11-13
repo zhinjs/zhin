@@ -27,7 +27,7 @@ import { realpath } from 'node:fs/promises';
 import * as path from 'node:path';
 import { ROOT_CONFIG_FILE_NAMES, createToken } from '@zhin.js/plugin-runtime';
 import type { ToolProtectedPathData } from '@zhin.js/tool';
-import { checkFileAccess, commandNamesGatewayEndpoint } from './file-policy.js';
+import { checkFileAccess, commandNamesGatewayEndpoint, commandNamesProtectedStore } from './file-policy.js';
 import { classifyBashFileOperation } from './file-role-policy.js';
 
 export type HostPathClass = 'deny' | 'self';
@@ -347,6 +347,10 @@ export function hostWriteImpact(
   }
   const hit = strongest(named, paths, base);
   if (hit?.level === 'deny') return hit;
+  // The gateway's account store and the project keys, also when only read or reached indirectly
+  // (`tar cf - .zhin`, `find … -exec cat`, a script string; ADR 0059 §7).
+  const store = commandNamesProtectedStore(command);
+  if (store) return { level: 'deny', target: store };
   if (DEPENDENCY_CHANGE.test(command)) return { level: 'self', target: 'package.json' };
   return hit;
 }

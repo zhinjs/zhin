@@ -133,6 +133,10 @@ export class MongoDBDialect<S extends Record<string, object> = Record<string, ob
           return await this.executeDropCollection(collection) as T;
         case 'createCollection':
           return await this.executeCreateCollection(query.collection) as T;
+        case 'listCollections':
+          // `collection` is ignored; `filter` filters collection infos (e.g. `{ name: { $in: [...] } }`).
+          return await this.db.listCollections(query.filter ?? {}, { nameOnly: true }).toArray()
+            .then((infos: Array<{ name: string }>) => infos.map(info => ({ name: info.name }))) as T;
         default:
           throw new Error(`不支持的 MongoDB 操作: ${query.operation}`);
       }

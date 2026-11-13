@@ -29,6 +29,8 @@ export interface LocalConsoleAdminOptions {
    * is being restarted.
    */
   readonly switchDatabase: () => Promise<{ restarting: boolean }>;
+  /** `gateway.console.migration.status`: the import state and whether old tables reappeared. */
+  readonly migration?: () => Promise<unknown>;
 }
 
 const TYPES: ReadonlySet<string> = new Set([
@@ -41,6 +43,7 @@ const TYPES: ReadonlySet<string> = new Set([
   LOCAL_GATEWAY_RPC.CONSOLE_USER_CREATE,
   LOCAL_GATEWAY_RPC.CONSOLE_USER_PASSWD,
   LOCAL_GATEWAY_RPC.CONSOLE_USER_DISABLE,
+  LOCAL_GATEWAY_RPC.CONSOLE_MIGRATION_STATUS,
 ]);
 
 const ACTOR = 'local';
@@ -49,7 +52,7 @@ export function createLocalConsoleAdmin(options: LocalConsoleAdminOptions): Loca
   const { setup } = options;
   const requireIam = (): ConsoleIamService => {
     const iam = options.iam();
-    if (!iam?.ready) throw new IamError('unavailable', '当前数据库不能存储 Console 用户，或尚未就绪；请先运行 zhin console init 选择 sqlite/mysql/pg/mongodb');
+    if (!iam?.ready) throw new IamError('unavailable', iam?.unavailableReason() ?? 'Console 访问控制尚未就绪');
     return iam;
   };
   const requireUser = async (iam: ConsoleIamService, username: unknown) => {
@@ -102,6 +105,9 @@ export function createLocalConsoleAdmin(options: LocalConsoleAdminOptions): Loca
         audit(updated.disabled ? 'iam.users.disable' : 'iam.users.enable', `user:${user.id}`);
         return { user: updated };
       }
+      case LOCAL_GATEWAY_RPC.CONSOLE_MIGRATION_STATUS:
+        if (!options.migration) throw new IamError('unavailable', '迁移状态不可用');
+        return options.migration();
       default: throw new IamError('invalid_input', `Unknown RPC type: ${type}`);
     }
   }
