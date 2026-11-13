@@ -13,7 +13,10 @@ export interface IsolatedPluginPrepareRequest {
   readonly owner: PluginId;
   readonly parent: PluginId;
   readonly packageName: string;
-  readonly entry: string;
+  /** Absolute entry path; absent for an entry-less Plugin, which then carries `entrylessName`. */
+  readonly entry?: string;
+  /** Plugin name of an entry-less Plugin (derived from its package name by the Host). */
+  readonly entrylessName?: string;
   readonly config: unknown;
   readonly environment: RuntimeEnvironment;
 }

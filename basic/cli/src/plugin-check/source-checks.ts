@@ -5,6 +5,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { deriveEntrylessPluginName, EntrylessPluginNameError, zhinExportTarget } from '@zhin.js/runtime';
 import {
   CONVENTION_ASSET_DIRECTORIES,
   CONVENTION_FEATURE_PACKAGES,
@@ -86,7 +87,7 @@ export function checkPluginSource(pluginDirectory: string, manifest: Record<stri
   const zhinManifest = manifest.zhin;
   const hasZhinManifest = Boolean(zhinManifest) && typeof zhinManifest === 'object' && !Array.isArray(zhinManifest);
   if (!hasZhinManifest) {
-    problems.errors.push('package.json 缺少 zhin 清单（至少需要 zhin.type 与 zhin.entry）');
+    problems.errors.push('package.json 缺少 zhin 清单（至少需要 zhin.protocol 与 zhin.type）');
   }
   const zhinFields = hasZhinManifest ? zhinManifest as Record<string, unknown> : {};
   if (hasZhinManifest && zhinFields.type !== 'plugin') {
@@ -100,7 +101,10 @@ export function checkPluginSource(pluginDirectory: string, manifest: Record<stri
     problems.warnings.push('未声明 files 白名单：npm 会打包整个目录（源码、测试与配置），建议参照 zhin new 生成的 files');
   }
 
-  checkRuntimeEntry(pluginDirectory, zhinFields.entry, hasZhinManifest, files, problems);
+  const entryless = hasZhinManifest && zhinFields.type === 'plugin'
+    && zhinFields.entry === undefined && zhinExportTarget(manifest.exports) === undefined;
+  if (entryless) checkEntrylessPlugin(pluginDirectory, manifest.name, problems);
+  else checkRuntimeEntry(pluginDirectory, zhinFields.entry, hasZhinManifest, files, problems);
   checkConventionDirectories(pluginDirectory, files, problems);
   checkCapabilityFeatures(pluginDirectory, hasZhinManifest, zhinFields.features, problems);
   checkPackScripts(pluginDirectory, manifest, problems);
@@ -116,6 +120,28 @@ export function checkPluginSource(pluginDirectory: string, manifest: Record<stri
     problems.warnings.push('未找到测试（tests/**/*.test.ts）');
   }
   return problems;
+}
+
+/**
+ * An entry-less Plugin (no `zhin.entry`, no `exports["./zhin"]`) is assembled as
+ * `definePlugin({ name: <unscoped package name> })`, so that name must be a valid Plugin name.
+ */
+function checkEntrylessPlugin(pluginDirectory: string, packageName: unknown, problems: PluginCheckProblems): void {
+  if (typeof packageName === 'string' && packageName !== '') {
+    try {
+      deriveEntrylessPluginName(packageName);
+    } catch (error) {
+      if (!(error instanceof EntrylessPluginNameError)) throw error;
+      problems.errors.push(
+        `未声明 zhin.entry，插件名取自包名去掉 scope 后的 "${error.derivedName}"，但它不符合插件名规则 /^[a-z][a-z0-9-]*$/：`
+        + '请添加 plugin.ts（default-export definePlugin({ name })）并声明 zhin.entry',
+      );
+    }
+  }
+  const strayEntry = ['plugin.ts', 'plugin.tsx', 'plugin.js'].find((file) => fs.existsSync(path.join(pluginDirectory, file)));
+  if (strayEntry) {
+    problems.warnings.push(`存在 ${strayEntry} 但未声明 zhin.entry / exports["./zhin"]：运行时不会加载它（插件按无入口插件装配）`);
+  }
 }
 
 function checkRuntimeEntry(

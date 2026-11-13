@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { parsePackageJson } from '@zhin.js/runtime';
 import { filesWhitelistIncludes } from '../../src/plugin-check/files-whitelist.js';
 import { checkPluginSource, readPluginManifest } from '../../src/plugin-check/source-checks.js';
 import { findMissingConventionFiles, loadSpecifierScanner } from '../../src/plugin-check/pack-checks.js';
@@ -103,6 +104,47 @@ describe('plugin source checks', () => {
       expect.stringContaining('约定目录 commands/'),
       expect.stringContaining('约定目录 skills/'),
     ]));
+  });
+
+  it('accepts an entry-less plugin whose unscoped package name is a valid plugin name', () => {
+    const manifest = scaffoldManifest();
+    manifest.name = '@acme/demo';
+    delete (manifest.zhin as Record<string, unknown>).entry;
+    const directory = createPluginDirectory({
+      'package.json': JSON.stringify(manifest),
+      'commands/demo/index.ts': 'export default {};\n',
+      'src/index.ts': 'export {};\n',
+      'tests/plugin.test.ts': '',
+      'README.md': '# demo\n',
+    });
+
+    const result = checkPluginSource(directory, manifest);
+
+    expect(result).toEqual({ errors: [], warnings: [] });
+    expect(parsePackageJson(manifest, 'package.json').zhin.entry).toBeUndefined();
+  });
+
+  it('rejects an entry-less plugin whose package name is not a valid plugin name and flags a stray plugin.ts', () => {
+    const manifest = scaffoldManifest();
+    delete (manifest.zhin as Record<string, unknown>).entry;
+    const directory = healthyPlugin(manifest);
+
+    const result = checkPluginSource(directory, manifest);
+
+    expect(result.errors).toEqual([expect.stringContaining('"zhin.js-example"')]);
+    expect(result.errors[0]).toContain('请添加 plugin.ts');
+    expect(result.warnings).toEqual([expect.stringContaining('存在 plugin.ts 但未声明 zhin.entry')]);
+  });
+
+  it('still reports an entry declared only through exports["./zhin"] as before', () => {
+    const manifest = scaffoldManifest();
+    delete (manifest.zhin as Record<string, unknown>).entry;
+    manifest.exports = { ...(manifest.exports as Record<string, unknown>), './zhin': './plugin.js' };
+    const directory = healthyPlugin(manifest);
+
+    const result = checkPluginSource(directory, manifest);
+
+    expect(result.errors).toEqual([expect.stringContaining('zhin.entry 未声明')]);
   });
 
   it('reports a missing zhin manifest and warns about a missing files whitelist', () => {

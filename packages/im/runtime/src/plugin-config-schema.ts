@@ -21,7 +21,7 @@ export async function readPluginConfigSchema(
   const manifest = pkg.packageJson.zhin;
   let declaration: PluginDefinition['config'];
   let entryFile: string | undefined;
-  if (modules && manifest.type === 'plugin' && manifest.runtime !== 'isolated') {
+  if (modules && manifest.type === 'plugin' && manifest.runtime !== 'isolated' && manifest.entry !== undefined) {
     entryFile = resolve(pkg.root, manifest.entry);
     const module = await modules.load<{ default?: PluginDefinition }>(entryFile);
     declaration = module.default?.config;
@@ -29,7 +29,7 @@ export async function readPluginConfigSchema(
   const inlineSchema = declaration ? declaration.toJsonSchema() : undefined;
   if (inlineSchema !== undefined && fileSchema !== undefined) {
     if (!schemasMatch(inlineSchema, fileSchema)) {
-      throw new PluginConfigSourceConflictError(pkg.name, entryFile ?? manifest.entry, file);
+      throw new PluginConfigSourceConflictError(pkg.name, entryFile ?? manifest.entry ?? pkg.root, file);
     }
   }
   const schema: unknown = inlineSchema ?? fileSchema;

@@ -43,14 +43,14 @@ describe('exports["./zhin"] as the runtime entry', () => {
     expect(parsed.zhin.entry).toBe('./plugin.js');
   });
 
-  it('validates the exported target like zhin.entry and names both fields when neither is set', () => {
+  it('validates the exported target like zhin.entry and names both fields when a Feature sets neither', () => {
     expect(() => parsePackageJson({ name: 'x', exports: { './zhin': './../escape.js' }, zhin: plugin }, 'package.json'))
       .toThrow('package.json#exports["./zhin"] must not escape the package root');
     expect(() => parsePackageJson({ name: 'x', exports: { './zhin': 'plugin.js' }, zhin: plugin }, 'package.json'))
       .toThrow('package.json#exports["./zhin"] must be a package-relative path starting with ./');
     let error: unknown;
     try {
-      parsePackageJson({ name: 'x', zhin: plugin }, 'package.json');
+      parsePackageJson({ name: 'x', zhin: { protocol: 1, type: 'feature' } }, 'package.json');
     } catch (caught) {
       error = caught;
     }

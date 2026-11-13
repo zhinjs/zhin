@@ -197,7 +197,8 @@ export class PluginManagementWorkflow implements PluginManagementPort {
     if (pkg) {
       try {
         if (pkg.packageJson.zhin.type !== 'plugin') throw new Error(`${packageName} is a Feature package, not a Plugin`);
-        await access(join(pkg.root, pkg.packageJson.zhin.entry));
+        // An entry-less Plugin has no entry file; its manifest alone makes it a Plugin.
+        if (pkg.packageJson.zhin.entry !== undefined) await access(join(pkg.root, pkg.packageJson.zhin.entry));
         return { installed: true, plugin: true, version: pkg.packageJson.version ?? null, error: undefined, pkg };
       } catch (error) { return { installed: true, plugin: false, version: pkg.packageJson.version ?? null, error: errorMessage(error), pkg }; }
     }
@@ -215,7 +216,8 @@ export class PluginManagementWorkflow implements PluginManagementPort {
       const resolver = await NodePackageResolver.create(this.#root);
       const installedPackage = await resolver.loadPackage(directory);
       if (installedPackage.packageJson.zhin.type !== 'plugin') throw new Error(`${packageName} is a Feature package, not a Plugin`);
-      await access(join(installedPackage.root, installedPackage.packageJson.zhin.entry));
+      const entry = installedPackage.packageJson.zhin.entry;
+      if (entry !== undefined) await access(join(installedPackage.root, entry));
       const declarationMissing = resolutionError instanceof PackageResolutionError && resolutionError.message.includes('does not declare');
       return { installed: true, plugin: true, version, error: declarationMissing ? errorMessage(resolutionError) : undefined, pkg: installedPackage };
     } catch (error) { return { installed: true, plugin: false, version, error: errorMessage(error) }; }

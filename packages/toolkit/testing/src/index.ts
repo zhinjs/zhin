@@ -169,7 +169,12 @@ export class PluginTestKit {
     if (root.packageJson.zhin.type !== 'plugin' || root.packageJson.zhin.runtime === 'isolated') {
       throw new TypeError('Test application must be a trusted Plugin root');
     }
-    return new PluginTestKit(options, projectRoot, resolve(projectRoot, root.packageJson.zhin.entry));
+    const rootEntry = root.packageJson.zhin.entry;
+    if (rootEntry === undefined) {
+      // Test endpoints are mounted by wrapping the root entry's setup.
+      throw new TypeError('Test application root must declare a Plugin entry (zhin.entry or exports["./zhin"])');
+    }
+    return new PluginTestKit(options, projectRoot, resolve(projectRoot, rootEntry));
   }
 
   /** The same PermissionHost consumed by real command admission. */

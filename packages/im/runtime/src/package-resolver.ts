@@ -123,12 +123,12 @@ export class NodePackageResolver implements PackageResolver {
     const file = join(normalized, 'package.json');
     const content = await readFile(file, 'utf8');
     const parsedPackageJson = parsePackageJson(JSON.parse(content) as unknown, file);
-    const entry = await resolveRuntimeEntry(
-      normalized,
-      parsedPackageJson.zhin.entry,
-      source,
-    );
-    const packageJson = entry === parsedPackageJson.zhin.entry
+    // An entry-less Plugin has nothing to resolve; it is assembled from its convention directories.
+    const declaredEntry = parsedPackageJson.zhin.entry;
+    const entry = declaredEntry === undefined
+      ? undefined
+      : await resolveRuntimeEntry(normalized, declaredEntry, source);
+    const packageJson = entry === undefined || entry === declaredEntry
       ? parsedPackageJson
       : Object.freeze({
           ...parsedPackageJson,

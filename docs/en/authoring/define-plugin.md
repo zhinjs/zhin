@@ -5,7 +5,7 @@ description: "How to write a plugin entry: name it, declare config, use database
 
 # definePlugin: the plugin entry
 
-Every plugin's `plugin.ts` default-exports a `definePlugin({ ... })`. It does three things: **names the plugin**, **declares its config**, and **prepares runtime resources in `setup`** (database tables, scheduled jobs, proactive messaging…).
+A plugin's `plugin.ts` (if present) default-exports a `definePlugin({ ... })`. It does three things: **names the plugin**, **declares its config**, and **prepares runtime resources in `setup`** (database tables, scheduled jobs, proactive messaging…).
 
 Individual commands, middleware and components usually live in [convention directories](./conventions.md), not in the entry. This page covers what the entry itself can do.
 
@@ -21,6 +21,24 @@ export default definePlugin({
 ```
 
 `name` is the only required field: lowercase letters, digits and hyphens, starting with a letter. A plugin that only uses convention directories and has no startup logic needs nothing more.
+
+### Without plugin.ts {#entryless-plugin}
+
+A plugin that only uses convention directories can omit `plugin.ts` altogether. The smallest plugin is two files:
+
+```text
+my-plugin/
+├── package.json          # "zhin": { "protocol": 1, "type": "plugin", ... } with no entry
+└── commands/demo/index.ts
+```
+
+When `package.json#zhin` declares neither `entry` nor `exports["./zhin"]`, the runtime assembles the package as `export default definePlugin({ name })`: no `setup`, and convention directories are discovered from the **package root** as usual.
+
+- **The plugin name** is the unscoped package name: `@scope/foo` → `foo`, `foo` → `foo`. Prefixes such as `zhin-plugin-` are not stripped.
+- That name must still match `/^[a-z][a-z0-9-]*$/`. If it does not (for example `zhin.js-foo` contains a `.`), startup fails and tells you to add a `plugin.ts` with an explicit `name`.
+- Put `displayName` and `icon` in `zhin.metadata`.
+- A declared `entry` (or `exports["./zhin"]`) must exist; only omitting both makes an entry-less plugin. A `plugin.ts` on disk without a declared entry is not loaded, and `zhin plugin check` warns about it.
+- Add a `plugin.ts` and declare `zhin.entry` once you need `setup`, inline `config`, `requires` or `capabilityGraph`.
 
 To do work at startup, add `setup`:
 
@@ -444,7 +462,7 @@ Plugins and Feature packages declare their packaging contract in the top-level `
   "zhin": {
     "protocol": 1,                    // required, always 1 for now
     "type": "plugin",                 // required: "plugin" | "feature"
-    "entry": "./plugin.js",           // required: JS for published packages; a private local Root may use ./plugin.ts
+    "entry": "./plugin.js",           // optional for plugins (entry-less plugin); JS for published packages; a private local Root may use ./plugin.ts
     "engine": "^1.0.0",               // optional: required Zhin runtime version
     "runtime": "trusted",             // optional (plugin only): "trusted" (default) | "isolated"
     "platformFeatures": true,         // optional (plugin only): default true, Root gets the official Stable Features
@@ -459,7 +477,7 @@ Plugins and Feature packages declare their packaging contract in the top-level `
 | --- | --- | --- |
 | `protocol` | Yes | Manifest protocol version; must be `1` |
 | `type` | Yes | `plugin` (a regular plugin package) or `feature` (a platform package providing a kind of capability) |
-| `entry` | Yes (or `exports["./zhin"]`) | Entry file, package-relative, starting with `./` and without `..`; when omitted, `exports["./zhin"]` is read (see below) |
+| `entry` | Features: yes; plugins: no | Entry file, package-relative, starting with `./` and without `..`; when omitted, `exports["./zhin"]` is read (see below). A plugin that omits both is an [entry-less plugin](#entryless-plugin) |
 | `engine` | No | A semver range; loading is refused if the runtime version doesn't satisfy it |
 | `runtime` | No | `isolated` runs the plugin in an isolated environment: child plugins only, no Host Features, and an isolation adapter is required |
 | `platformFeatures` | No | Default `true`: the Root plugin gets the official Stable Features even without declaring them |
