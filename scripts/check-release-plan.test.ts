@@ -35,7 +35,7 @@ function fixture() {
   write('packages/demo/CHANGELOG.md', '# Demo\n\n## 1.1.0\n');
   manifest('1.1.0');
   mkdirSync(path.join(root, 'scripts'));
-  for (const file of ['check-release-plan.mjs', 'release-version-coverage.mjs']) {
+  for (const file of ['check-release-plan.mjs', 'release-version-coverage.mjs', 'registry-version-collisions.mjs']) {
     cpSync(new URL(file, import.meta.url), path.join(root, 'scripts', file));
   }
   commit();
@@ -50,7 +50,8 @@ function fixture() {
     const result = spawnSync(process.execPath, ['scripts/check-release-plan.mjs'], {
       cwd: root,
       encoding: 'utf8',
-      env: { ...process.env, INIT_CWD: path.resolve(import.meta.dirname, '..'), GITHUB_HEAD_REF: '', GITHUB_BASE_REF: '', ...env },
+      // Fixture packages are not on npm; the registry lookup is covered by registry-version-collisions.test.ts.
+      env: { ...process.env, INIT_CWD: path.resolve(import.meta.dirname, '..'), GITHUB_HEAD_REF: '', GITHUB_BASE_REF: '', ZHIN_RELEASE_REGISTRY_CHECK: 'off', ...env },
     });
     return { status: result.status, output: result.stdout + result.stderr };
   };

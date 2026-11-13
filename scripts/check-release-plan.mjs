@@ -10,6 +10,7 @@ import {
   findVersionedReleaseBaseline,
   findUncoveredPackageChanges,
 } from './release-version-coverage.mjs';
+import { findPlannedCollisions, readRegistryVersions } from './registry-version-collisions.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 const changesetDir = path.join(root, '.changeset');
@@ -304,6 +305,29 @@ try {
       for (const file of pkg.changedFiles) console.error(`  - ${file}`);
     }
     process.exit(1);
+  }
+
+  // A planned version already on npm would be skipped by `changeset publish` with only a warning.
+  // Offline runs (no registry) warn locally and fail in CI, so the gate is never silently off there.
+  if (process.env.ZHIN_RELEASE_REGISTRY_CHECK === 'off') {
+    console.warn('Registry version check skipped (ZHIN_RELEASE_REGISTRY_CHECK=off).');
+  } else try {
+    const collisions = await findPlannedCollisions(plannedReleases, (name) => readRegistryVersions(name));
+    if (collisions.length > 0) {
+      console.error('Planned versions already exist on npm (changeset publish would skip them):');
+      for (const hit of collisions) {
+        console.error(`- ${hit.name}: ${hit.oldVersion} -> ${hit.newVersion}; first free minor is ${hit.suggestion}. `
+          + 'Set the package.json version just below it and keep the bump, or pick another version.');
+      }
+      process.exit(1);
+    }
+  } catch (error) {
+    const message = `Could not check planned versions against the npm registry: ${error instanceof Error ? error.message : String(error)}`;
+    if (process.env.CI) {
+      console.error(message);
+      process.exit(1);
+    }
+    console.warn(`${message} (skipped outside CI)`);
   }
 
   const minorCount = plannedReleases.filter((release) => release.type === 'minor').length;

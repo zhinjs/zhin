@@ -53,6 +53,17 @@ npm trust github <包名> --repo zhinjs/zhin --file publish.yml --env npm-produc
 
 然后重跑 **Build and Publish**。`npm trust` 需要 npm ≥ 11.15.0 且账号开启 2FA，也可以改在网页上配置（见下文）。
 
+## 版本号撞号
+
+npm 上已经存在的版本号不能再发。`changeset publish` 遇到这种版本只打一句 `already published` 警告就跳过，发版照样显示成功，而依赖它的包却按新版本号发了出去。1.2 发版就出过这个问题：`@zhin.js/core` 与 `@zhin.js/agent` 按 minor 升到 1.2.0，可 npm 上早有旧架构的 1.2.0（core 的 1.2.0–1.5.16、agent 的 1.2.0–1.2.1 都已占用）。
+
+两道检查防止再次发生：
+
+- `pnpm check:release-plan`（PR 的 contracts 阶段）：发版计划里的新版本号已在 npm 上就失败，并给出第一个空闲的 minor。离线时本地只警告，CI 里失败。
+- `pnpm check:version-collisions`（发布前）：本地版本号已在 npm 上、且高于 npm 的 `latest`，说明是别的版本线占用的号，失败。
+
+遇到撞号：把 `package.json` 的 `version` 设成目标版本的前一个号，保留原来的 changeset（例如目标是 core 1.6.0，就写 `1.5.16`，再用 minor 升上去），并在 `version-policy.json` 里批准这个 minor。依赖它的包要一并加 patch changeset 重新发布，让它们的依赖和 peer 范围指向新版本。
+
 ## 打包产物导入检查
 
 工作区测试直接导入 `src/`，所以「打包后的入口引用了没被编译出来的模块」这类问题只有在发布包里才会暴露（例如 `@zhin.js/plugin-group-suite@1.1.8` 缺少 `lib/keywords.js`）。`pnpm check:pack-imports` 会在 `pnpm build` 之后对每个可发布包：

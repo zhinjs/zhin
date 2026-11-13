@@ -188,6 +188,11 @@ jobs:
         if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.skip_unpublished_check) }}
         run: pnpm check:unpublished
 
+      # changeset publish only warns "already published" and skips a version that npm already has
+      # from another release line (core / agent 1.2.0 in the 1.2 release); fail instead.
+      - name: refuse versions already taken on npm by another release line
+        run: pnpm check:version-collisions
+
       - name: report npm publish authentication mode
         env:
           TRUSTED_PUBLISHING_ONLY: ${{ vars.NPM_TRUSTED_PUBLISHING_ONLY }}
