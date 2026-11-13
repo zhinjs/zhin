@@ -1,5 +1,17 @@
 # @zhin.js/adapter-juejin
 
+## 0.1.7
+
+### Patch Changes
+
+- d80964d: 修复 1.2 发版撞号：`@zhin.js/core` 与 `@zhin.js/agent` 按 minor 升到 1.2.0 时，npm 上早已有同号的旧架构版本（core 1.2.0–1.5.16、agent 1.2.0–1.2.1），`changeset publish` 只提示 already published 就跳过，导致 `zhin.js@1.1.26` 等已发布的包依赖了旧 core / agent，启动时缺少 `CHAT_ROLES`。
+
+  本次把 core 发为 1.6.0、agent 发为 1.3.0（npm 上第一个空闲的 minor），并重新发布所有直接依赖它们的包，让依赖版本与 peer 范围指向新版本（`^1.6.0` / `^1.3.0`，不再落进旧架构版本）。
+
+- Updated dependencies [d80964d]
+  - @zhin.js/core@1.6.0
+  - @zhin.js/adapter@1.1.33
+
 ## 0.1.6
 
 ### Patch Changes
