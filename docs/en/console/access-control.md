@@ -5,7 +5,7 @@ description: The four pages of the Console Access control section - who can sign
 
 # Access Control: Users, Roles, API Tokens and Audit
 
-Console accounts live in the project database ([ADR 0049](../../adr/0049-console-rbac.md)); the management gateway handles sign-in and authentication ([ADR 0054](../../adr/0054-management-gateway.md)). These pages keep working while the instance is stopped or crashed.
+Console accounts live in the gateway's own `.zhin/gateway.db`, not in the project database ([ADR 0049](../../adr/0049-console-rbac.md), [ADR 0059](../../adr/0059-gateway-storage-isolation.md)); the management gateway handles sign-in and authentication ([ADR 0054](../../adr/0054-management-gateway.md)). These pages keep working while the instance is stopped or crashed.
 
 The **Access control** group in the sidebar has four pages: **Users** (`/access/users`), **Roles** (`/access/roles`), **API tokens** (`/access/tokens`) and **Audit log** (`/access/audit`). Reading needs `iam.view`, changes need `iam.manage` — among the built-in roles only `owner` holds `iam.manage`; `admin` has `iam.view`; without `iam.manage` the pages are read-only. Accounts without `iam.view` do not see the group. Deleting, disabling and revoking ask for confirmation, and deleting a user or role asks you to type its name.
 
@@ -135,7 +135,7 @@ On the API tokens page, click **Issue for a user**, pick the user and set a name
 
 ## Offline rescue {#rescue}
 
-Forgot a password or locked the owner out? Work on the project database directly on the server; no running gateway is needed and there is no online super-credential.
+Forgot a password or locked the owner out? Work on `.zhin/gateway.db` directly on the server (`zhin console user …`); no running gateway is needed and there is no online super-credential.
 
 ```bash
 zhin console user list

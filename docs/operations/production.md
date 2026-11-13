@@ -150,7 +150,7 @@ printf '%s\n' "$OWNER_PASSWORD" | kubectl exec -i deploy/zhin -- ./node_modules/
 
 ### 首次创建所有者 {#first-owner}
 
-新部署的项目数据库里还没有 Console 所有者。这时 `http.token`（`.env` 里的 `HTTP_TOKEN`）是**初始化令牌**：任何持有它、能连到 Host 的人都可以创建第一个所有者，进而读写配置、`.env`、数据库与项目文件。所以：
+新部署还没有 Console 所有者（账号在 `.zhin/gateway.db`）。这时 `http.token`（`.env` 里的 `HTTP_TOKEN`）是**初始化令牌**：任何持有它、能连到 Host 的人都可以创建第一个所有者，进而读写配置、`.env`、数据库与项目文件。所以：
 
 - **先创建所有者，再开放端口、反向代理或公网入口。** 所有者一旦存在，初始化令牌在所有接口上失效，之后一律用账号登录；自动化改用账号签发的 API 令牌（`ZHIN_CONSOLE_TOKEN`）。
 - 初始化令牌用随机值，不要用示例或文档里的固定值，也不要贴到公开页面。
@@ -158,7 +158,7 @@ printf '%s\n' "$OWNER_PASSWORD" | kubectl exec -i deploy/zhin -- ./node_modules/
 
 两种做法任选其一：
 
-1. **命令行**（服务器与容器推荐）：在项目目录、以运行服务的同一个系统用户执行 `zhin console init`（上面各模板的命令）。网关在运行时命令经本地控制套接字 `.zhin/gateway.sock` 交给网关；网关未运行时直接写项目数据库，也可以在首次启动前完成。完整参数见 [CLI 参考](../cli/index.md#console)。
+1. **命令行**（服务器与容器推荐）：在项目目录、以运行服务的同一个系统用户执行 `zhin console init`（上面各模板的命令）。网关在运行时命令经本地控制套接字 `.zhin/gateway.sock` 交给网关；网关未运行时直接写 `.zhin/gateway.db`，也可以在首次启动前完成。完整参数见 [CLI 参考](../cli/index.md#console)。
 2. **Console 向导**：只在 Host 仅本机可达时进行，例如 `ssh -L 8068:127.0.0.1:8068 <服务器>` 或 `kubectl port-forward`，然后用 `zhin start` 打印的初始化链接或 `HTTP_TOKEN` 打开 Console 完成向导。见 [初始化与引导](../console/onboarding.md)。
 
 完成后 `zhin console init --status` 显示已初始化。其他人用 `zhin console user create <用户名> --role viewer|operator|admin` 或 Console「访问控制」添加；忘记密码用 `zhin console user passwd <用户名>`。
@@ -189,12 +189,17 @@ macOS 使用不带 `--user` 的 launchd 服务命令。只保留一层进程重�
 | 状态 | 默认位置或权威源 | 备份要求 |
 | --- | --- | --- |
 | 主数据库 | `.zhin/data.sqlite` 或 `database` 指定后端 | 使用数据库一致性快照 |
+| Console 账号存储 | `.zhin/gateway.db`（含 `-wal` / `-shm`，`0600`）：Console 用户、角色、会话、API 令牌与审计（[ADR 0059](../adr/0059-gateway-storage-isolation.md)） | **所有方言都要单独备份**：`pg_dump` / `mysqldump` 不含 Console 账号。网关运行时用 SQLite 在线备份（`sqlite3 .zhin/gateway.db ".backup …"`），或停机后连同 `-wal` 复制 |
 | 多 Agent 协作 Journal | 主数据库的 `engagement_events` 表 | 随主数据库同一快照恢复；append-only 数据必须完整复制 |
 | 调度任务 | `data/schedule-jobs.json` | 与配置、时区和目标 Endpoint 一起保存 |
 | Runtime 私有状态 | `.zhin/` | 按功能选择；不要通过 Agent 文件工具暴露 |
 | 密钥 | Secret manager / 环境注入 | 单独轮换，不进入普通备份包 |
 
 SQLite 备份应使用数据库快照或停写复制，不要在写入中直接复制单个文件。外部数据库使用对应引擎的备份工具，并定期做恢复演练。
+
+**`.zhin/` 必须持久化**（容器卷、Kubernetes PVC）。项目数据库里的标记表 `zhin_gateway_store` 记着 gateway.db 的 id：gateway.db 丢了，Console 会保持关闭而不是重新开放初始化，需要恢复备份或 `zhin console init --reset-store`；redis / memory 项目没有这个标记，只能靠 `.zhin/` 持久化。丢了 `.zhin/gateway.db` 就丢了全部 Console 账号、会话、令牌与审计，丢了 `.zhin/keys/` 就解不开账号与模型凭据。升级到 ADR 0059 的版本时，网关第一次启动会把旧版存在项目数据库里的 Console 账号表迁入 `gateway.db`，完成前 Console 登录返回 503，见[升级说明](../migrations/gateway-storage.md)；降级前先 `zhin console migrate --revert`。
+
+PostgreSQL / MySQL 部署要用 Console 的 SQL 控制台时，运行 `zhin db console-role` 创建受限账号（托管数据库没有建号权限时用 `--print-sql` 交给 DBA），并在 `pg_hba.conf` / MySQL 账号主机部分只允许实例所在主机登录，见[配置：`database.console`](../configuration/index.md#database-console)。
 
 ## 6. 监控与告警
 

@@ -64,6 +64,34 @@ function normalizeRedisDatabase(value: unknown): number | undefined {
 }
 
 /**
+ * `database.console` (ADR 0059 §4): the restricted account raw Console SQL runs on, PostgreSQL /
+ * MySQL only. Both fields required; the password belongs in `.env`
+ * (`password: ${ZHIN_DB_CONSOLE_PASSWORD}`). Other dialects need none and ignore the block.
+ */
+function normalizeConsoleCredential(config: Record<string, unknown>): void {
+  if (!('console' in config) || config.console === undefined) return;
+  const value = config.console;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw configurationError('database.console', '必须是对象 { user, password }');
+  const block = { ...(value as Record<string, unknown>) };
+  // `${ZHIN_DB_CONSOLE_*}` not set (yet): no restricted account — raw SQL stays off, the rest works.
+  if ((block.user === undefined || block.user === '') && (block.password === undefined || block.password === '')) {
+    delete config.console;
+    return;
+  }
+  normalizeRequiredText(block, 'user', 'database.console.user', 'ZHIN_DB_CONSOLE_USER=zhin_console_xxxxxxxx');
+  if (typeof block.password !== 'string' || block.password === '') {
+    throw configurationError('database.console.password', '不能为空', 'ZHIN_DB_CONSOLE_PASSWORD=…（zhin db console-role 生成）');
+  }
+  if (String(block.user) === String(config.user ?? '')) {
+    throw configurationError('database.console.user', '不能与主账号 database.user 相同（原始 SQL 只在受限账号上执行）');
+  }
+  for (const key of Object.keys(block)) {
+    if (key !== 'user' && key !== 'password') throw configurationError(`database.console.${key}`, '不支持（只有 user 与 password）');
+  }
+  config.console = Object.freeze({ user: block.user, password: block.password });
+}
+
+/**
  * Validate and normalize the expanded Root database configuration before a
  * third-party driver sees it. Dotenv expansion produces strings, while the
  * network clients require numeric ports and otherwise surface opaque NaN
@@ -79,6 +107,8 @@ export function normalizeDatabaseHostConfig(input: DatabaseHostConfig): Database
   }
 
   const config: Record<string, unknown> = { ...input, dialect };
+  // Only PostgreSQL / MySQL use a restricted Console account.
+  if (dialect !== 'pg' && dialect !== 'mysql') delete config.console;
   switch (dialect) {
     case 'mysql':
       normalizeOptionalText(config, 'host', 'database.host', 'DB_HOST=127.0.0.1');
@@ -87,6 +117,7 @@ export function normalizeDatabaseHostConfig(input: DatabaseHostConfig): Database
       normalizeOptionalText(config, 'uri', 'database.uri');
       config.port = normalizePort(config.port, 'database.port', 'DB_PORT=3306');
       if (config.port === undefined) delete config.port;
+      normalizeConsoleCredential(config);
       break;
     case 'pg':
       normalizeOptionalText(config, 'host', 'database.host', 'DB_HOST=127.0.0.1');
@@ -95,6 +126,7 @@ export function normalizeDatabaseHostConfig(input: DatabaseHostConfig): Database
       normalizeOptionalText(config, 'connectionString', 'database.connectionString');
       config.port = normalizePort(config.port, 'database.port', 'DB_PORT=5432');
       if (config.port === undefined) delete config.port;
+      normalizeConsoleCredential(config);
       break;
     case 'mongodb':
       normalizeRequiredText(config, 'url', 'database.url', 'DB_URL=mongodb://127.0.0.1:27017');
@@ -122,6 +154,9 @@ export function normalizeDatabaseHostConfig(input: DatabaseHostConfig): Database
     case 'sqlite':
       if (config.filename === undefined) config.filename = './data/bot.db';
       normalizeOptionalText(config, 'filename', 'database.filename');
+      // ADR 0059 §2: the instance's connection never attaches another file (.zhin/gateway.db);
+      // not configurable.
+      config.denyAttach = true;
       break;
     case 'memory':
       break;

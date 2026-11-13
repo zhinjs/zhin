@@ -57,13 +57,19 @@ description: Console 侧栏「运维」分组：实例状态、起停与日志�
 
 「数据库」页按表浏览数据：服务端排序与筛选（筛选只接受表中存在的列与 `$eq`、`$ne`、`$gt`、`$gte`、`$lt`、`$lte`、`$like`、`$nlike`、`$in`、`$nin`），查看表结构并预览结构变更，需要 `ops.database.read`；增删改记录需要 `ops.database.write`。
 
-**SQL 控制台**（只读查询与写 SQL）和**表结构调整**需要 `ops.database.schema`，内置角色中只有 `owner` 拥有。只读 SQL 也不对 `viewer` / `admin` 开放：网关与实例共用同一个数据库，按文本判断语句是否「只读」做不了安全边界（转义写法、动态 SQL 函数都能绕开），所以没有该权限的账号只用上面的结构化浏览；Console 会隐藏 SQL 页签并说明原因。
+**SQL 控制台**（只读查询与写 SQL）和**表结构调整**需要 `ops.database.schema`，内置角色中只有 `owner` 拥有。只读 SQL 也不对 `viewer` / `admin` 开放：按文本判断语句是否「只读」做不了安全边界（转义写法、动态 SQL 函数都能绕开），所以没有该权限的账号只用上面的结构化浏览；Console 会隐藏 SQL 页签并说明原因。
+
+**SQL 控制台的前提**（[ADR 0059](../adr/0059-gateway-storage-isolation.md)）：Console 账号不在项目数据库里（在网关的 `.zhin/gateway.db`），SQL 控制台怎么写都读不到它们——这道边界由存储与数据库账号保证，下文的文本检查只是纵深防御：
+
+- **SQLite**：无需额外设置。实例的连接拒绝 `ATTACH`，`ATTACH` 别的文件会被拒绝并回滚所在事务（能力里 `sqlIsolation: 'separate-store'`）。内存库不可用（见下文）。
+- **PostgreSQL / MySQL**：SQL 控制台只用单独登录的受限账号执行（`sqlIsolation: 'restricted-credential'`）。没有配置 `database.console`、或启动时的权限探测不合格，SQL 页签显示原因、不能执行（数据浏览与表结构调整照常）。用 `zhin db console-role` 创建（无建号权限时 `--print-sql` 交给 DBA，或 `zhin doctor --fix`），然后 `zhin restart`，见[配置：`database.console`](../configuration/index.md#database-console)。
+- **PostgreSQL 上 SQL 控制台不能做 DDL**：受限账号不拥有任何表、不能在 `public` 建对象，`CREATE` / `ALTER` / `DROP` 返回 42501（权限不足），Console 会提示改用表结构调整。MySQL 的受限账号有本库的建表 / 改表 / 删表权限，但没有触发器、存储过程、事件、`FILE` 与任何全局权限，且客户端拒绝 `LOAD DATA LOCAL`。
 
 SQL 控制台的约束（对 `owner` 同样生效）：
 
 - 每条语句都经单语句协议执行（PostgreSQL 扩展查询协议、MySQL 预处理语句、SQLite `prepare`），服务端不会执行藏在一条语句里的第二条；事务控制（`BEGIN`、`COMMIT`、`ROLLBACK`、`SAVEPOINT`、`SET`…）、`PREPARE` / `EXECUTE`、定义函数 / 过程 / 规则 / 扩展、改角色与服务端设置一律拒绝，所以「试运行」总能回滚。
 - 只读查询在只读事务中执行，最多返回 1000 行（PostgreSQL 用游标、MySQL 流式读取、SQLite 逐行读取，只取保留的行），超时 10 秒（PostgreSQL `SET LOCAL statement_timeout`，不能用 `set_config` 解除；MySQL `max_execution_time`）。SQLite 文件库的只读查询在子进程里用只读连接执行，超时即强制结束，不阻塞实例；内存库无法这样隔离，SQL 控制台不可用。服务端读字符串的方式与默认不同时（PostgreSQL `standard_conforming_strings = off`，MySQL `sql_mode` 含 `NO_BACKSLASH_ESCAPES` 或 `ANSI_QUOTES`），SQL 控制台关闭并说明原因。
-- 网关的 `console_*` 表对所有人拒绝：按去掉引号、还原转义后的标识符与字面量比对；PostgreSQL `U&"…"` 转义写法、动态 SQL 与文件函数（`query_to_xml` 等 `*_to_xml*`、`xpath`、`ts_stat`、`dblink*`、`lo_*`、`pg_read_*`、`pg_ls_*`、`set_config`…）、MySQL 可执行注释 `/*! … */` 与优化器提示 `/*+ … */` 均被拒绝。表清单与表结构不列出 `console_*`；`sqlite_master`、`information_schema` 这类系统目录仍可查询，会看到 `console_*` 的表名与列名（看不到数据），这是已接受的限制；带有真实取值的统计视图（`pg_stats`、`pg_stats_ext*`、`pg_statistic*`、`sqlite_stat*`、MySQL `column_statistics`）以及角色密码哈希（`pg_authid`、`pg_shadow`、MySQL `mysql.*`）一律拒绝。
+- （纵深防御）网关的 `console_*` 表名对所有人拒绝：按去掉引号、还原转义后的标识符与字面量比对；PostgreSQL `U&"…"` 转义写法、动态 SQL 与文件函数（`query_to_xml` 等 `*_to_xml*`、`xpath`、`ts_stat`、`dblink*`、`lo_*`、`pg_read_*`、`pg_ls_*`、`set_config`…）、MySQL 可执行注释 `/*! … */` 与优化器提示 `/*+ … */` 均被拒绝。表清单与表结构不列出 `console_*`；`sqlite_master`、`information_schema` 这类系统目录仍可查询，会看到 `console_*` 的表名与列名（看不到数据），这是已接受的限制；带有真实取值的统计视图（`pg_stats`、`pg_stats_ext*`、`pg_statistic*`、`sqlite_stat*`、MySQL `column_statistics`）以及角色密码哈希（`pg_authid`、`pg_shadow`、MySQL `mysql.*`）一律拒绝。
 - 按名字保护看不到的批量或级联破坏一律拒绝：`DROP OWNED`、`REASSIGN OWNED`、建 / 改 / 删数据库与模式、`DROP … CASCADE`、`TRUNCATE … CASCADE`、`ALTER … OWNER TO`、表空间、用户与角色、MySQL `RESTART` / `CLONE` / `PURGE` 等；触发器与事件也不能在这里创建。
 - 代码声明的表（插件 `define` 的表）不能在这里删列或改列名：插件读这些列，下次启动还会把它们加回来，应改插件里的表定义。MySQL 改列用 `MODIFY COLUMN` 重述整列，未改动的部分（完整类型、字符集与排序规则、`ON UPDATE`、`AUTO_INCREMENT`、注释、表达式默认值）取自 `information_schema`。
 - 审计日志记录 SQL 文本与结构变更（含失败时尝试执行的 DDL），字符串字面量替换为 `'…'`、注释去掉，不记录结果行。

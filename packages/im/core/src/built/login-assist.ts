@@ -463,6 +463,14 @@ export class LoginAssist {
     return flow ? this.#snapshot(flow) : undefined;
   }
 
+  /**
+   * Event-safe form of a snapshot ({@link withoutLoginMedia}): what Console readers without
+   * `endpoint.operate` on the flow's Endpoint receive from `login.flow.*` (ADR 0058 §8).
+   */
+  eventSafeFlow(flow: LoginFlowSnapshot): LoginFlowSnapshot {
+    return withoutLoginMedia(flow);
+  }
+
   /** Flow a pending task belongs to. */
   flowOfTask(taskId: string): LoginFlowSnapshot | undefined {
     const entry = this.pending.get(taskId);
@@ -1086,8 +1094,8 @@ function lastActive(flow: FlowRecord, kind: LoginStepKind): StepRecord | undefin
  * Event / history-safe copy of a flow snapshot: QR images are replaced by `qrImageOmitted`,
  * sensitive copy blocks are redacted, and verification links (`media.link`, `media.captcha`, link
  * blocks) of slider / device / auth / link_verify challenges — they carry a session id — are
- * dropped with `linkOmitted`. Consumers read
- * the live material with `login.flow.get`.
+ * dropped with `linkOmitted`. Operators (`endpoint.operate` on the Endpoint) read
+ * the live material with `login.flow.get`; read-only Console callers receive this form there too.
  */
 export function withoutLoginMedia(flow: LoginFlowSnapshot): LoginFlowSnapshot {
   if (!flow.steps.some((step) => step.challenge?.media?.qrImage || step.challenge?.blocks?.some(isSensitiveBlock)
@@ -1119,12 +1127,13 @@ export function withoutLoginMedia(flow: LoginFlowSnapshot): LoginFlowSnapshot {
   });
 }
 
-const LINK_REDACTED_KINDS: ReadonlySet<LoginChallengeKind> = new Set(['slider', 'device', 'auth', 'link_verify']);
-
-/** Verification links (they carry a session id) that events and history must not contain. */
+/**
+ * Links events and history must not contain. Every kind: verification links carry a session id
+ * (`sid=`), a QR challenge's link is the QR content itself, and a legacy `waitForInput` url lands in
+ * `media.link` whatever its type — live links are read with `login.flow.get` (operators only).
+ */
 function hasVerificationLink(challenge: LoginChallenge): boolean {
-  return LINK_REDACTED_KINDS.has(challenge.kind)
-    && (!!challenge.media?.link || !!challenge.media?.captcha || !!challenge.blocks?.some((block) => block.kind === 'link'));
+  return !!challenge.media?.link || !!challenge.media?.captcha || !!challenge.blocks?.some((block) => block.kind === 'link');
 }
 
 /** Alias that names the purpose: what may enter events, history and logs. */

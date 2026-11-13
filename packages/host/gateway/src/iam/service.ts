@@ -133,7 +133,25 @@ export interface ConsoleIamServiceOptions {
    * Without it, levels are inferred from the permission suffix.
    */
   readonly pluginPermissions?: () => readonly ConsolePluginPermissionInfo[];
+  /**
+   * Why access control is closed right now (gateway.db not open, the import of the old project
+   * database tables not finished, ADR 0059 §3), or undefined. While closed the service fails
+   * closed: {@link ConsoleIamService.initialized} is true (the bootstrap token is refused),
+   * nothing authenticates and `/auth/*` answers 503 — an empty store never reads as "no owner".
+   */
+  readonly unavailable?: () => string | undefined;
+  /**
+   * Category of `unavailable` (`starting`, `store`, `migration`, `store_lost`, …). Anonymous HTTP
+   * callers only ever see this code and a generic message; the detail (paths, driver messages)
+   * goes to the logs and to the local owner (`zhin doctor`, `zhin console migrate`).
+   */
+  readonly unavailableCode?: () => string | undefined;
+  /** Called after the first owner was created (the gateway then makes sure its store marker exists). */
+  readonly onOwnerCreated?: () => void;
 }
+
+/** What anonymous callers learn while access control is closed (no paths or driver messages). */
+export const IAM_UNAVAILABLE_PUBLIC_MESSAGE = 'Console 访问控制暂不可用：请在服务器上运行 zhin doctor 查看原因';
 
 const USERNAME = /^[a-z0-9][a-z0-9._-]{1,63}$/u;
 
@@ -171,6 +189,9 @@ export class ConsoleIamService implements ConsoleAccessProvider {
   readonly #limiter: LoginRateLimiter;
   readonly #onError: (error: unknown) => void;
   readonly #pluginPermissions: () => readonly ConsolePluginPermissionInfo[];
+  readonly #unavailable: () => string | undefined;
+  readonly #unavailableCode: () => string | undefined;
+  readonly #onOwnerCreated: (() => void) | undefined;
   #ready = false;
   #initialized: boolean | undefined;
   #cleanupTimer: ReturnType<typeof setInterval> | undefined;
@@ -188,10 +209,24 @@ export class ConsoleIamService implements ConsoleAccessProvider {
     this.#limiter = options.rateLimiter ?? new LoginRateLimiter({ now: this.#now });
     this.#onError = options.onError ?? (() => undefined);
     this.#pluginPermissions = options.pluginPermissions ?? (() => []);
+    this.#unavailable = options.unavailable ?? (() => undefined);
+    this.#unavailableCode = options.unavailableCode ?? (() => undefined);
+    this.#onOwnerCreated = options.onOwnerCreated;
   }
 
   get ready(): boolean {
-    return this.#ready;
+    return this.#ready && this.#unavailable() === undefined;
+  }
+
+  /** See {@link ConsoleIamServiceOptions.unavailable} (detail: logs and the local owner only). */
+  unavailableReason(): string | undefined {
+    return this.#unavailable();
+  }
+
+  /** `{ code, message }` safe for any HTTP caller while closed, or undefined. */
+  publicUnavailable(): { readonly code: string; readonly message: string } | undefined {
+    if (this.#unavailable() === undefined) return undefined;
+    return Object.freeze({ code: this.#unavailableCode() ?? 'unavailable', message: IAM_UNAVAILABLE_PUBLIC_MESSAGE });
   }
 
   /** Seeds built-in roles and loads the owner state; call after the database started. */
@@ -238,6 +273,7 @@ export class ConsoleIamService implements ConsoleAccessProvider {
   }
 
   initialized(): boolean {
+    if (this.#unavailable() !== undefined) return true;
     if (this.#initialized === true) return true;
     // Database not up yet, or another process (`zhin console init` beside a running gateway)
     // completed setup since the last refresh: fail closed on the setup marker and re-read the
@@ -275,7 +311,7 @@ export class ConsoleIamService implements ConsoleAccessProvider {
   // ------------------------------------------------------------------ authentication
 
   async authenticate(token: string, meta: ConsoleRequestMeta = {}): Promise<ConsoleUserPrincipal | null> {
-    if (!this.#ready || !token || token.length > 256) return null;
+    if (!this.ready || !token || token.length > 256) return null;
     const hash = sha256(token);
     const now = this.#now();
     const [session] = await this.#model('sessions').select('id', 'user_id', 'created_at', 'expires_at', 'last_seen_at').where({ id: hash });
@@ -431,7 +467,9 @@ export class ConsoleIamService implements ConsoleAccessProvider {
     return this.#serialize(async () => {
       this.#requireReady();
       if ((await this.#activeOwnerIds()).size > 0) throw new IamError('conflict', '已初始化：所有者已存在');
-      return this.#createUser({ ...input, bindings: [{ role: 'owner', scopeKind: 'global' }] });
+      const owner = await this.#createUser({ ...input, bindings: [{ role: 'owner', scopeKind: 'global' }] });
+      try { this.#onOwnerCreated?.(); } catch (error) { this.#onError(error); }
+      return owner;
     });
   }
 

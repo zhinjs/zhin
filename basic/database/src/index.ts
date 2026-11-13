@@ -16,6 +16,7 @@ export * from './migration.js';
 export * from './structured-schema.js';
 export * from './probe.js';
 export * from './reserved-tables.js';
+export * from './console-credential.js';
 
 import { registerBuiltinDatabases } from './builtin-runtime.js';
 

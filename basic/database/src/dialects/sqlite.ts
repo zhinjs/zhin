@@ -25,6 +25,55 @@ export interface SQLiteDialectConfig {
    * write lock, so two connections in one process cannot deadlock each other.
    */
   busyRetryMs?: number;
+  /**
+   * Refuse `ATTACH DATABASE` on this connection (ADR 0059 §2). Every raw statement — `query`,
+   * single statements of a transaction, the isolated read process — reads `PRAGMA database_list`
+   * before and after it runs; any schema besides `main` / `temp` fails the statement. Inside a
+   * transaction the transaction is rolled back and poisoned (later statements, `COMMIT` included,
+   * are refused), then the extra schema is detached. Where Node provides `setAuthorizer`, an
+   * authorizer denying `SQLITE_ATTACH` is installed as well. Off by default: the instance turns it
+   * on, so its raw SQL cannot open the gateway's `.zhin/gateway.db` beside the project database.
+   */
+  denyAttach?: boolean;
+}
+
+/** A statement attached another database file to a connection with {@link SQLiteDialectConfig.denyAttach}. */
+export class SqliteAttachRefusedError extends Error {
+  readonly code = 'attach_refused';
+  constructor(readonly schemas: readonly string[]) {
+    super(`ATTACH DATABASE is not allowed on this connection (attached: ${schemas.join(', ')}); the statement was undone`);
+    this.name = 'SqliteAttachRefusedError';
+  }
+}
+
+/** Schemas of `PRAGMA database_list` other than `main` / `temp`. */
+function attachedSchemas(db: { prepare(sql: string): any }): string[] {
+  const rows = db.prepare('PRAGMA database_list').all() as Array<{ name?: unknown }>;
+  return rows.map(row => String(row.name ?? '')).filter(name => name !== 'main' && name !== 'temp');
+}
+
+/** `SQLITE_ATTACH` / `SQLITE_DENY` / `SQLITE_OK` (sqlite3.h), for an authorizer where Node has one. */
+const SQLITE_ATTACH_ACTION = 24;
+const SQLITE_DENY_RESULT = 1;
+const SQLITE_OK_RESULT = 0;
+
+/** `SQLITE_AUTH`: the statement was refused by the authorizer (which only ever denies ATTACH here). */
+const SQLITE_AUTH_ERRCODE = 23;
+function isAuthorizerDenial(error: unknown): boolean {
+  const record = error as { errcode?: unknown; message?: unknown } | null;
+  return record?.errcode === SQLITE_AUTH_ERRCODE || /\bnot authorized\b/iu.test(String(record?.message ?? ''));
+}
+
+/** Installs an authorizer that denies ATTACH when `node:sqlite` supports `setAuthorizer` (feature-detected). */
+function installAttachAuthorizer(db: unknown): boolean {
+  const target = db as { setAuthorizer?: (callback: (action: number, ...rest: unknown[]) => number) => void };
+  if (typeof target.setAuthorizer !== 'function') return false;
+  try {
+    target.setAuthorizer((action: number) => (action === SQLITE_ATTACH_ACTION ? SQLITE_DENY_RESULT : SQLITE_OK_RESULT));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Default budget of {@link SQLiteDialectConfig.busyRetryMs}. */
@@ -67,12 +116,16 @@ export class SqliteQueryTimeoutError extends Error {
  */
 const ISOLATED_READ_CHILD = `
 const { DatabaseSync } = require('node:sqlite');
+const attached = (db) => db.prepare('PRAGMA database_list').all().map(row => String(row.name)).filter(name => name !== 'main' && name !== 'temp');
 process.once('message', (job) => {
-  const { filename, sql, maxRows, deadline, json } = job;
+  const { filename, sql, maxRows, deadline, json, denyAttach } = job;
   let db;
   let reply;
   try {
-    db = new DatabaseSync(filename, { readOnly: true });
+    db = new DatabaseSync(filename, denyAttach ? { readOnly: true, limits: { attach: 0 } } : { readOnly: true });
+    if (denyAttach && typeof db.setAuthorizer === 'function') {
+      try { db.setAuthorizer((action) => (action === 24 ? 1 : 0)); } catch {}
+    }
     db.exec('PRAGMA query_only = ON');
     const statement = db.prepare(sql);
     const meta = typeof statement.columns === 'function' ? statement.columns() : [];
@@ -90,7 +143,10 @@ process.once('message', (job) => {
       rows.push(out);
       if (Date.now() > deadline) { timeout = true; break; }
     }
-    reply = timeout ? { ok: false, timeout: true } : { ok: true, rows, truncated, columns: meta.map(c => c.name) };
+    const extra = denyAttach ? attached(db) : [];
+    reply = extra.length
+      ? { ok: false, attach: extra }
+      : timeout ? { ok: false, timeout: true } : { ok: true, rows, truncated, columns: meta.map(c => c.name) };
   } catch (error) {
     reply = { ok: false, message: String(error && error.message || error), code: error && error.code, errcode: error && error.errcode };
   } finally {
@@ -109,18 +165,30 @@ function isInMemoryFilename(filename: string): boolean {
 
 export class SQLiteDialect<S extends Record<string, object> = Record<string, object>> extends Dialect<SQLiteDialectConfig, S, string> {
   /** Node 内置 SQLite 连接（node:sqlite），在 connect() 中动态加载 */
-  private db: { prepare(sql: string): any; exec(sql: string): void; close(): void; readonly isTransaction?: boolean } | null = null;
+  /** The `node:sqlite` connection: a true private field, so no handle on the dialect object reaches it. */
+  #db: { prepare(sql: string): any; exec(sql: string): void; close(): void; readonly isTransaction?: boolean } | null = null;
   /** Own transaction flag; `DatabaseSync#isTransaction` is preferred where Node provides it. */
   private transactionOpen = false;
+  /** The transaction in progress; `poisoned` once a statement in it attached a database (denyAttach). */
+  private currentTransaction: { poisoned: boolean } | null = null;
   /** Worker of the isolated read in flight (also while a terminated one is still unwinding). */
   private isolatedReader: { readonly child: import('node:child_process').ChildProcess; readonly exited: Promise<void>; killed: boolean } | null = null;
 
+  /**
+   * Captured once at construction: later changes to `config` (a plugin holding the config object)
+   * cannot turn the ATTACH check off.
+   */
+  readonly #denyAttach: boolean;
+  /** An ATTACH-denying authorizer is installed (Node with `setAuthorizer`). */
+  #authorizer = false;
+
   constructor(config: SQLiteDialectConfig) {
     super('sqlite', config);
+    this.#denyAttach = config.denyAttach === true;
   }
 
   isConnected(): boolean {
-    return this.db !== null;
+    return this.#db !== null;
   }
 
   async connect(): Promise<void> {
@@ -132,8 +200,11 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
       if (!fs.existsSync(dirname)) {
         fs.mkdirSync(dirname, { recursive: true });
       }
-      const db = new DatabaseSync(this.config.filename);
+      const deny = this.#denyAttach;
+      // `limits.attach = 0` where Node honours it (ignored by Node 22); the database_list check is the defense.
+      const db = deny ? new DatabaseSync(this.config.filename, { limits: { attach: 0 } }) : new DatabaseSync(this.config.filename);
       try {
+        if (deny) this.#authorizer = installAttachAuthorizer(db);
         // Two processes share the file (gateway: console_* tables, instance: the rest):
         // WAL lets readers run beside one writer and never blocks readers on a writer.
         const busy = this.config.busyTimeoutMs;
@@ -143,7 +214,7 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
         db.close();
         throw error;
       }
-      this.db = db;
+      this.#db = db;
     } catch (error) {
       throw new Error(`SQLite 连接失败（需要 Node.js 22.5+，推荐 24+）: ${error}`);
     }
@@ -151,7 +222,7 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
 
   /** True when {@link queryReadOnlyIsolated} can open its own connection (a file database). */
   supportsIsolatedReads(): boolean {
-    return this.db !== null && !isInMemoryFilename(this.config.filename);
+    return this.#db !== null && !isInMemoryFilename(this.config.filename);
   }
 
   /**
@@ -209,10 +280,14 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
         markExited();
         finish(error);
       });
-      child.once('message', (message: { ok: boolean; timeout?: boolean; message?: string; code?: string; errcode?: number; rows?: Record<string, unknown>[]; columns?: string[]; truncated?: boolean }) => {
+      child.once('message', (message: { ok: boolean; timeout?: boolean; attach?: string[]; message?: string; code?: string; errcode?: number; rows?: Record<string, unknown>[]; columns?: string[]; truncated?: boolean }) => {
         // A child that answered has closed SQLite and is exiting: the next read need not wait.
         if (this.isolatedReader === reader) this.isolatedReader = null;
-        if (message.ok) {
+        if (message.attach?.length) {
+          finish(new SqliteAttachRefusedError(message.attach));
+        } else if (!message.ok && this.#denyAttach && isAuthorizerDenial(message)) {
+          finish(new SqliteAttachRefusedError(['(refused by the SQLite authorizer)']));
+        } else if (message.ok) {
           finish(null, { columns: message.columns ?? [], rows: message.rows ?? [], truncated: message.truncated === true });
         } else if (message.timeout) {
           finish(new SqliteQueryTimeoutError(options.timeoutMs));
@@ -220,10 +295,26 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
           finish(Object.assign(new Error(message.message ?? 'SQLite query failed'), { code: message.code, errcode: message.errcode }));
         }
       });
-      child.send({ filename: this.config.filename, sql, maxRows: options.maxRows, deadline: Date.now() + options.timeoutMs, json }, error => {
+      child.send({ filename: this.config.filename, sql, maxRows: options.maxRows, deadline: Date.now() + options.timeoutMs, json, denyAttach: this.#denyAttach }, error => {
         if (error) { kill(); finish(error); }
       });
     });
+  }
+
+  /**
+   * Copies the database to `destination` (a consistent snapshot, also while WAL frames are not
+   * checkpointed): `node:sqlite` `backup()` where Node provides it, otherwise `VACUUM INTO`. The
+   * copy is created owner-only (0600). The destination must not exist.
+   */
+  async backupTo(destination: string): Promise<void> {
+    if (!this.#db) throw new Error('SQLite 未连接');
+    if (fs.existsSync(destination)) throw new Error(`Backup destination already exists: ${destination}`);
+    fs.mkdirSync(path.dirname(destination), { recursive: true, mode: 0o700 });
+    const { createRequire } = await import('node:module');
+    const sqlite = createRequire(import.meta.url)('node:sqlite') as { backup?: (source: unknown, path: string) => Promise<unknown> };
+    if (typeof sqlite.backup === 'function') await sqlite.backup(this.#db, destination);
+    else this.#db.prepare('VACUUM INTO ?').run(destination);
+    fs.chmodSync(destination, 0o600);
   }
 
   async disconnect(): Promise<void> {
@@ -231,11 +322,11 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
       this.isolatedReader.killed = true;
       try { this.isolatedReader.child.kill('SIGKILL'); } catch { /* already gone */ }
     }
-    if (this.db) {
+    if (this.#db) {
       try {
-        this.db.close();
+        this.#db.close();
       } finally {
-        this.db = null;
+        this.#db = null;
       }
     }
   }
@@ -287,12 +378,62 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
   }
 
   private inTransaction(): boolean {
-    const native = this.db?.isTransaction;
+    const native = this.#db?.isTransaction;
     return typeof native === 'boolean' ? native : this.transactionOpen;
   }
 
+  /**
+   * denyAttach: fails when `db` has a schema besides main / temp. Inside a transaction the
+   * transaction is rolled back first and marked poisoned (DETACH is refused while it holds
+   * locks); then every extra schema is detached.
+   */
+  private assertNotAttached(): void {
+    if (!this.#denyAttach || !this.#db) return;
+    const extra = attachedSchemas(this.#db);
+    if (!extra.length) return;
+    this.refuseAttach(extra);
+  }
+
+  /** Rolls back and poisons an open transaction, detaches `extra` and throws (naming `reported`). */
+  private refuseAttach(extra: readonly string[], reported: readonly string[] = extra): never {
+    if (!this.#db) throw new SqliteAttachRefusedError(reported);
+    if (this.currentTransaction) {
+      this.currentTransaction.poisoned = true;
+      try { this.#db.exec('ROLLBACK'); } catch { /* not in a transaction any more */ }
+      this.transactionOpen = false;
+    }
+    for (const schema of extra) {
+      try { this.#db.exec(`DETACH DATABASE ${this.quoteIdentifier(schema)}`); } catch { /* already gone */ }
+    }
+    throw new SqliteAttachRefusedError(reported);
+  }
+
+  /** Statements of a poisoned transaction are refused (it was rolled back when ATTACH was found). */
+  private assertTransactionUsable(): void {
+    if (this.currentTransaction?.poisoned) {
+      throw new SqliteAttachRefusedError(['(transaction rolled back after ATTACH)']);
+    }
+  }
+
   private async execute<U = any>(sql: string, params?: any[]): Promise<U> {
-    if (!this.db) throw new Error('SQLite 未连接');
+    if (!this.#db) throw new Error('SQLite 未连接');
+    this.assertTransactionUsable();
+    this.assertNotAttached();
+    try {
+      return await this.executeUnchecked<U>(sql, params);
+    } catch (error) {
+      // Where Node has `setAuthorizer` (24+), SQLite refuses the ATTACH itself ("not authorized").
+      // Same outcome as the database_list defense on Node 22: the transaction is poisoned and the
+      // caller sees SqliteAttachRefusedError, whichever Node runs the instance.
+      if (this.#authorizer && isAuthorizerDenial(error)) this.refuseAttach([], ['(refused by the SQLite authorizer)']);
+      throw error;
+    } finally {
+      this.assertNotAttached();
+    }
+  }
+
+  private async executeUnchecked<U = any>(sql: string, params?: any[]): Promise<U> {
+    if (!this.#db) throw new Error('SQLite 未连接');
     const trimmedSql = sql.trim().toLowerCase();
     const isInsert = trimmedSql.startsWith('insert');
     const isUpdateOrDelete = trimmedSql.startsWith('update') || trimmedSql.startsWith('delete');
@@ -301,7 +442,7 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
     const hasReturning = /\breturning\b/.test(sqlWithoutLiterals);
     const args = this.prepareBindParams(params ?? []);
 
-    const stmt = this.db.prepare(sql);
+    const stmt = this.#db.prepare(sql);
     if (isInsert && !hasReturning) {
       const result = stmt.run(...args) as { changes: number | bigint; lastInsertRowid: number | bigint };
       return {
@@ -354,11 +495,11 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
   }
 
   async dispose(): Promise<void> {
-    if (this.db) {
+    if (this.#db) {
       try {
-        this.db.close();
+        this.#db.close();
       } finally {
-        this.db = null;
+        this.#db = null;
       }
     }
   }
@@ -492,6 +633,8 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
     // Callers that cannot declare intent (the plugin-runtime Database Host) stay IMMEDIATE.
     await this.query(readOnly ? 'BEGIN DEFERRED' : 'BEGIN IMMEDIATE');
     this.transactionOpen = true;
+    const state = { poisoned: false };
+    this.currentTransaction = state;
     if (readOnly) {
       try {
         await this.query('PRAGMA query_only = ON');
@@ -503,9 +646,16 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
     }
     const close = async (): Promise<void> => {
       dialect.transactionOpen = false;
+      if (dialect.currentTransaction === state) dialect.currentTransaction = null;
       if (readOnly) await dialect.query('PRAGMA query_only = OFF').catch(() => undefined);
     };
     const finish = async (sql: 'COMMIT' | 'ROLLBACK'): Promise<void> => {
+      if (state.poisoned) {
+        // Already rolled back when the ATTACH was found: nothing to commit, nothing to roll back.
+        await close();
+        if (sql === 'COMMIT') throw new SqliteAttachRefusedError(['(transaction rolled back after ATTACH)']);
+        return;
+      }
       try {
         await dialect.query(sql);
       } catch (error) {
@@ -525,13 +675,23 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
       /** `prepare()` compiles only the first statement; with `maxRows` rows are iterated, not all read. */
       async queryStatement<T = any>(sql: string, options?: StatementQueryOptions): Promise<T> {
         const maxRows = options?.maxRows;
-        if (maxRows === undefined || !dialect.db) return capRows(await dialect.query<T>(sql), maxRows);
-        const statement = dialect.db.prepare(sql);
+        if (maxRows === undefined || !dialect.#db) return capRows(await dialect.query<T>(sql), maxRows);
+        dialect.assertTransactionUsable();
+        dialect.assertNotAttached();
         const rows: unknown[] = [];
         let truncated = false;
-        for (const row of statement.iterate()) {
-          if (rows.length >= maxRows) { truncated = true; break; }
-          rows.push(row);
+        let statement: any;
+        try {
+          statement = dialect.#db.prepare(sql);
+          for (const row of statement.iterate()) {
+            if (rows.length >= maxRows) { truncated = true; break; }
+            rows.push(row);
+          }
+        } catch (error) {
+          if (dialect.#authorizer && isAuthorizerDenial(error)) dialect.refuseAttach([], ['(refused by the SQLite authorizer)']);
+          throw error;
+        } finally {
+          dialect.assertNotAttached();
         }
         return markTruncated(dialect.processQueryResults(rows, statement.columns()) as unknown[], truncated) as T;
       }

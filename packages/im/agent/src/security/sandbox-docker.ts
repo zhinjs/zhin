@@ -154,8 +154,10 @@ export function buildDockerRunArgs(
     '--workdir', CONTAINER_WORKSPACE,
     '-v', `${cwd}:${CONTAINER_WORKSPACE}:${writable ? 'rw' : 'ro'}`,
   ];
-  if (writable && merged.readOnlyOverlays?.length) {
-    dockerArgs.push(...overlayDockerArgs(merged.readOnlyOverlays));
+  // Writable turns: every read-only overlay. Read-only turns: the workspace is :ro already, but the
+  // hiding overlays (`.zhin/` behind an empty tmpfs) still apply.
+  if (merged.readOnlyOverlays?.length) {
+    dockerArgs.push(...overlayDockerArgs(writable ? merged.readOnlyOverlays : merged.readOnlyOverlays.filter(overlay => overlay.kind === 'tmpfs-dir')));
   }
   if (!merged.enableNetwork) {
     dockerArgs.push('--network', 'none');
@@ -201,7 +203,7 @@ export async function executeInDocker(
   const cwd = merged.workingDirectory || process.cwd();
 
   const writable = merged.filesystemAccess === 'workspace-write';
-  const overlays = writable ? (merged.readOnlyOverlays ?? []) : [];
+  const overlays = writable ? (merged.readOnlyOverlays ?? []) : (merged.readOnlyOverlays ?? []).filter(overlay => overlay.kind === 'tmpfs-dir');
   const containerName = createSandboxContainerName();
   const dockerArgs = buildDockerRunArgs(command, merged, cwd, process.env, containerName);
   // Docker creates missing mount points on the host; remember which ones are ours to remove.

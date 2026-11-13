@@ -191,3 +191,13 @@ Console 数据库页的 SQL 控制台最初把只读 SQL（`db:query`）归在 `
 5. **审计**：SQL 文本用控制台同一词法器处理，字符串字面量替换为 `'…'`、注释整段去掉（词法器读不了的文本不记录）；审计详情按序列化后的长度截断，网关存储超长详情时改存可解析的摘要；结构变更失败时也记录尝试执行的 DDL。
 6. **按名字保护看不到的破坏**：`DROP OWNED`、`REASSIGN OWNED`、建 / 改 / 删数据库与模式、任何 `DROP … CASCADE` / `TRUNCATE … CASCADE`、`ALTER … OWNER TO`、表空间、用户与角色、MySQL 服务端管理（`RESTART`、`CLONE`、`PURGE` 等），以及触发器（含 MySQL `DEFINER=` 写法）与事件，一律拒绝。
 7. **词法与服务端一致**：服务端读字符串的方式与默认不同（PostgreSQL `standard_conforming_strings = off`，MySQL `sql_mode` 含 `NO_BACKSLASH_ESCAPES` / `ANSI_QUOTES`）时，原始 SQL 关闭（`capabilities.sql = false` 并给出原因），每次执行前重新检查。
+
+## 修订 2026-11-13：账号表移入 `.zhin/gateway.db`（ADR 0059）
+
+[ADR 0059](./0059-gateway-storage-isolation.md) 把 §2 的 6 张表从项目数据库移到网关自己的 SQLite 文件 `.zhin/gateway.db`（`0600`），与项目库方言无关：
+
+- §2「由 CLI composition root 定义」改为：由网关的存储（`openGatewayStore`）定义；表名、字段、`ConsoleIamService` 行为不变。升级后网关在连接阶段把旧表导入 gateway.db、校验后从项目库删除，完成前 `/auth/*` 回 503（`zhin console migrate [--revert]`）。
+- §7：网关未运行时 `zhin console init` / `zhin console user` 直接打开 gateway.db（不再打开项目数据库）；初始化向导切换数据库时只重启实例，账号留在 gateway.db。
+- §8：删除「`redis` 与 `memory` 不能存账号」——任何方言的项目都能建 Console 账号；向导的可选驱动只是能测试连接的方言（sqlite / mysql / pg / mongodb）。
+- 修订 2026-11-13 第 3 条（`console_*` 对所有人拒绝）仍保留为纵深防御，但不再是边界：SQLite 实例连接拒绝 `ATTACH`，PostgreSQL / MySQL 的原始 SQL 只用受限账号执行（`database.console`，`zhin db console-role`），没有受限账号时 `capabilities.sql = false` 并给出 `sqlReason`。
+

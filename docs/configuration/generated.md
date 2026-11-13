@@ -105,6 +105,9 @@ outline: [2, 3]
 | `database.auth.password` | string | 否 | — | MongoDB 密码。 |
 | `database.disableOfflineQueue` | boolean \| string | 否 | — | Redis 禁止离线队列。 |
 | `database.pingInterval` | number \| string | 否 | — | Redis 心跳间隔毫秒。 |
+| `database.console` | object | 否 | — | PostgreSQL / MySQL：Console SQL 控制台使用的受限账号（ADR 0059；zhin db console-role 创建）。未配置时原始 SQL 关闭。 |
+| `database.console.user` | string | 否 | — | 受限账号用户名，通常写 ${ZHIN_DB_CONSOLE_USER}。 |
+| `database.console.password` | string | 否 | — | 受限账号密码，写 ${ZHIN_DB_CONSOLE_PASSWORD}，值只放 .env。 |
 | `ai` | object | 否 | — | Provider、Agent、会话、记忆、工具与执行安全策略。 |
 | `ai.venues` | array&lt;object&gt; | 否 | — | 多 Bot 共享 IM 房间（ADR 0048 §3.2）。 |
 | `ai.venues[].id` | string | 是 | — | — |

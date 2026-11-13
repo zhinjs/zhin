@@ -185,3 +185,14 @@ interface HttpHost {
 - 多一个常驻进程（不运行插件）与一跳进程间转发。
 - 实例没有 HTTP 服务器，不依赖 `node:http` / `ws`；HTTP 能力全部集中在网关。
 - **破坏性变更**：HTTP 路由契约改为 Web 标准 `Request` / `Response` 与 `WsConnection`，所有插件与适配器同步迁移；`zhin runtime start` 不能再单独运行（它是 `zhin start --foreground` 的别名，同样拉起网关），部署改用 `zhin start --foreground`（容器入口同样）。CLAUDE.md 中「`zhin runtime start` 是唯一启动路径」更新为「`zhin start` 是唯一启动路径」。
+
+## 修订 2026-11-13：网关不再共用项目数据库（ADR 0059）
+
+§7「数据」改为：
+
+- 网关的访问控制表在它自己的 `.zhin/gateway.db`（SQLite，WAL，`0600`），见 [ADR 0059](./0059-gateway-storage-isolation.md)。网关**不常驻连接项目数据库**，只在导入旧版留在项目库的 `console_*` 表、以及初始化向导「测试连接」时临时连接；受监管的实例从不打开 gateway.db，其 SQLite 连接拒绝 `ATTACH`。
+- SQLite 的 WAL 与异步退避重试（`busyRetryMs`，网关 5 秒，预算用尽回 `503 database_busy`）沿用，对象换成 gateway.db：同时打开它的另一个连接只可能是网关未运行时的 `zhin console …`、`zhin doctor` 或 `--standalone` 实例。
+- 「数据库不可用时 `/auth/*` 返回 503、取初始化标记文件」改为：gateway.db 打不开，或旧表导入未完成（项目库连不上等）时，Console 访问控制关闭——视为已初始化（初始化令牌被拒），不认证任何会话，`/auth/*` 回 503 `iam_unavailable`，并定时重试。
+- 「数据库切换」改为：网关写配置后只重启实例，不再重连。
+- 本地控制套接字新增 `gateway.console.migration.status`（`zhin console migrate` / `zhin doctor` 在网关运行时读迁移状态）。
+

@@ -105,6 +105,9 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `database.auth.password` | string | no | — | MongoDB 密码。 |
 | `database.disableOfflineQueue` | boolean \| string | no | — | Redis 禁止离线队列。 |
 | `database.pingInterval` | number \| string | no | — | Redis 心跳间隔毫秒。 |
+| `database.console` | object | no | — | PostgreSQL / MySQL：Console SQL 控制台使用的受限账号（ADR 0059；zhin db console-role 创建）。未配置时原始 SQL 关闭。 |
+| `database.console.user` | string | no | — | 受限账号用户名，通常写 ${ZHIN_DB_CONSOLE_USER}。 |
+| `database.console.password` | string | no | — | 受限账号密码，写 ${ZHIN_DB_CONSOLE_PASSWORD}，值只放 .env。 |
 | `ai` | object | no | — | Providers, Agents, sessions, memory, tools, and execution security. |
 | `ai.venues` | array&lt;object&gt; | no | — | Shared multi-Bot IM rooms (ADR 0048 §3.2). |
 | `ai.venues[].id` | string | yes | — | — |

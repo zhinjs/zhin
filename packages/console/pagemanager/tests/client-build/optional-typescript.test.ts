@@ -24,7 +24,12 @@ it('loads static metadata without TypeScript and reports the peer only when comp
       }
       console.log('import_without_compiler_and_explicit_build_error');
     `);
-    const output = execFileSync(process.execPath, [join(fixture, 'probe.mjs')], { cwd: fixture, encoding: 'utf8' });
+    // A global NODE_PATH (e.g. one holding a global typescript) must not leak into the fixture.
+    const output = execFileSync(process.execPath, [join(fixture, 'probe.mjs')], {
+      cwd: fixture,
+      encoding: 'utf8',
+      env: { ...process.env, NODE_PATH: '' },
+    });
     expect(output.trim()).toBe('import_without_compiler_and_explicit_build_error');
   } finally { await rm(fixture, { recursive: true, force: true }); }
 });

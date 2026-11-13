@@ -314,14 +314,14 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     },
   });
   // Console access control (ADR 0049) and the terminal (ADR 0051) belong to the gateway, which
-  // owns the console_* tables and authenticates every request (ADR 0054 §3 / §7); this instance
-  // only authorizes the forwarded principal. A standalone (dev / test) instance has no gateway,
-  // so it still serves them itself.
+  // keeps the accounts in its own .zhin/gateway.db and authenticates every request (ADR 0054 §3 /
+  // §7, ADR 0059); this instance only authorizes the forwarded principal and never opens that
+  // file. A standalone (dev / test) instance has no gateway, so it opens gateway.db itself on a
+  // connection of its own (never through the DatabaseHost) — no process isolation there.
   const consoleIam = bridgedHttpHost ? undefined : installConsoleIam(httpHost, {
-    // Only the standalone path may reach the console_* tables; everything else is denied them.
-    database: databaseHost.gatewayTableHost(),
     configStore: consoleConfigurationStore,
     projectRoot: options.root,
+    projectDatabase: async () => databaseConfig,
     apiBase: httpConfig.apiBase,
     logger: getLogger('console'),
     requestRestart: () => { void requestProcessRestart('database'); },
@@ -330,10 +330,10 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     config: readConsoleTerminalConfig(hostConfig),
     projectRoot: options.root,
     base: httpConfig.apiBase ?? '/api',
-    iam: () => (consoleIam?.supported ? consoleIam.service : undefined),
+    iam: () => consoleIam?.service,
     logger: getLogger('console'),
   });
-  const consoleIamService = () => (consoleIam?.supported ? consoleIam.service : undefined);
+  const consoleIamService = () => consoleIam?.service;
   const currentSnapshot = () => {
     const lease = host.runtime.snapshots.acquire();
     try { return lease.value; } finally { lease.release(); }
@@ -595,7 +595,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
       disposeReadiness();
       disposeConsoleControlPlane();
       consoleTerminal?.close();
-      consoleIam?.dispose();
+      await consoleIam?.dispose();
       // Process ingress owns WebSocket operation leases. Close it before Root
       // drain so long-lived connections release those leases instead of
       // deadlocking SnapshotStore.close().

@@ -6,6 +6,12 @@
  */
 export const GATEWAY_TABLE_PREFIX = 'console_';
 
+/**
+ * The gateway's marker in the project database (ADR 0059 §3 修订): which `.zhin/gateway.db` holds
+ * the Console accounts. Gateway-owned like `console_*`: no instance path may read or drop it.
+ */
+export const GATEWAY_STORE_MARKER_TABLE = 'zhin_gateway_store';
+
 /** `console_`-prefixed tables that the instance itself owns (historical names). */
 export const INSTANCE_CONSOLE_TABLES: readonly string[] = Object.freeze(['console_conversations']);
 
@@ -16,10 +22,11 @@ export function isGatewayOwnedTable(name: string): boolean {
   const bare = String(name).trim().replace(/^[`"[]|[`"\]]$/g, '');
   const table = (bare.includes('.') ? bare.slice(bare.lastIndexOf('.') + 1) : bare)
     .replace(/^[`"[]|[`"\]]$/g, '').toLowerCase();
+  if (table === GATEWAY_STORE_MARKER_TABLE) return true;
   return table.startsWith(GATEWAY_TABLE_PREFIX) && !instanceConsoleTables.has(table);
 }
 
-const IDENTIFIER = /(?<![A-Za-z0-9_$])console_[A-Za-z0-9_$]*/gi;
+const IDENTIFIER = /(?<![A-Za-z0-9_$])(?:console_[A-Za-z0-9_$]*|zhin_gateway_store)(?![A-Za-z0-9_$])/gi;
 
 /**
  * Spellings of the SQL text with escape sequences decoded: PostgreSQL `U&"\\0063…"` /

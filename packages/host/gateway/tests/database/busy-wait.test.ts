@@ -8,9 +8,10 @@ import { EMPTY_ROUTE_TABLE } from '@zhin.js/host-http/bridge';
 import { startGateway, type GatewayInstanceTransport, type RunningGateway } from '../../src/http/start-gateway.js';
 import { GATEWAY_SQLITE_BUSY_RETRY_MS } from '../../src/database/index.js';
 
-// ADR 0054 §7: the instance opens write transactions with BEGIN IMMEDIATE on the same SQLite
-// file. While it holds the write lock, the gateway retries asynchronously (no busy_timeout):
-// its event loop keeps running, and `/auth/*` writes succeed once the lock is released.
+// ADR 0054 §7 / ADR 0059: another connection to `.zhin/gateway.db` (the CLI's import or rescue
+// path, a standalone instance) may hold its write lock with BEGIN IMMEDIATE. Meanwhile the
+// gateway retries asynchronously (no busy_timeout): its event loop keeps running, and `/auth/*`
+// writes succeed once the lock is released.
 const require = createRequire(import.meta.url);
 const { DatabaseSync } = require('node:sqlite') as typeof import('node:sqlite');
 
@@ -32,11 +33,11 @@ const offline: GatewayInstanceTransport = {
   openWebSocket: async () => false,
 };
 
-async function gatewayWithOwner(database?: Record<string, unknown>): Promise<{ gateway: RunningGateway; filename: string }> {
+async function gatewayWithOwner(store?: { busyRetryMs?: number }): Promise<{ gateway: RunningGateway; filename: string }> {
   const root = await mkdtemp(join(tmpdir(), 'zhin-gateway-busy-'));
   dirs.push(root);
   await writeFile(join(root, 'zhin.config.yml'), 'configVersion: 2\nplugins: {}\n');
-  const filename = join(root, '.zhin', 'data.sqlite');
+  const filename = join(root, '.zhin', 'gateway.db');
   const gateway = await startGateway({
     projectRoot: root,
     http: { host: '127.0.0.1', port: 0 },
@@ -44,14 +45,14 @@ async function gatewayWithOwner(database?: Record<string, unknown>): Promise<{ g
     transport: () => offline,
     startInstance: false,
     packages: false,
-    console: { database: { dialect: 'sqlite', filename, ...database } as never, retryMs: 60_000 },
+    console: { ...(store ? { store } : {}), retryMs: 60_000 },
   });
   closers.push(() => gateway.close());
   await gateway.console!.setup.createOwner({ username: 'owner', password: PASSWORD });
   return { gateway, filename };
 }
 
-/** Instance-style connection: no busy_timeout, a write transaction held for `ms`. */
+/** A second connection to gateway.db: no busy_timeout, a write transaction held for `ms`. */
 function holdInstanceWriteLock(filename: string, ms: number): Promise<void> {
   const instance = new DatabaseSync(filename);
   closers.push(() => instance.close());

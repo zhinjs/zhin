@@ -5,7 +5,7 @@ description: Console「访问控制」区的四个页面：谁能登录、能做
 
 # 访问控制：用户、角色、API 令牌与审计
 
-Console 的账号存在项目数据库里（[ADR 0049](../adr/0049-console-rbac.md)），由管理网关负责登录与鉴权（[ADR 0054](../adr/0054-management-gateway.md)）。实例停止或崩溃时这些页面照常可用。
+Console 的账号存在网关自己的 `.zhin/gateway.db` 里，不在项目数据库（[ADR 0049](../adr/0049-console-rbac.md)、[ADR 0059](../adr/0059-gateway-storage-isolation.md)），由管理网关负责登录与鉴权（[ADR 0054](../adr/0054-management-gateway.md)）。实例停止或崩溃时这些页面照常可用。
 
 侧栏「访问控制」分组有四个页面：**用户**（`/access/users`）、**角色**（`/access/roles`）、**API 令牌**（`/access/tokens`）、**审计日志**（`/access/audit`）。查看需要 `iam.view`，修改需要 `iam.manage`——内置角色里只有 `owner` 持有 `iam.manage`，`admin` 只有 `iam.view`；没有 `iam.manage` 时页面只读。没有 `iam.view` 的账号看不到这个分组。删除、禁用、吊销会先确认，删除用户或角色要输入名称。
 
@@ -135,7 +135,7 @@ Console 的账号存在项目数据库里（[ADR 0049](../adr/0049-console-rbac.
 
 ## 离线救援 {#rescue}
 
-忘记密码或所有者被锁：在服务器上直接操作项目数据库，不需要运行中的网关，也没有在线的超级凭据。
+忘记密码或所有者被锁：在服务器上直接操作 `.zhin/gateway.db`（`zhin console user …`），不需要运行中的网关，也没有在线的超级凭据。
 
 ```bash
 zhin console user list

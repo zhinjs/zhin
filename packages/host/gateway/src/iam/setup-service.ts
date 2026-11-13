@@ -12,7 +12,6 @@ import {
   type DatabaseDialectDefinition,
 } from '@zhin.js/scaffold-wizard';
 import { IamError, type ConsoleIamService, type ConsoleUserView } from './service.js';
-import { IAM_DIALECTS } from './tables.js';
 
 export type SetupDialect = ProbeDialect;
 
@@ -109,7 +108,15 @@ function fieldsOf(definition: DatabaseDialectDefinition): readonly SetupDatabase
   }));
 }
 
-const SETUP_DEFINITIONS = DATABASE_DIALECT_DEFINITIONS.filter(definition => IAM_DIALECTS.has(definition.dialect));
+/**
+ * Dialects the wizard can test a connection for. Console accounts no longer depend on it: they
+ * live in `.zhin/gateway.db` (ADR 0059); a redis / memory project keeps its database block.
+ */
+const SETUP_DIALECTS: ReadonlySet<string> = new Set<SetupDialect>(['sqlite', 'mysql', 'pg', 'mongodb']);
+const SETUP_DEFINITIONS = DATABASE_DIALECT_DEFINITIONS.filter(definition => SETUP_DIALECTS.has(definition.dialect));
+
+/** PostgreSQL / MySQL: raw Console SQL needs the restricted account (ADR 0059 §4). */
+export const SETUP_CONSOLE_ROLE_NOTICE = 'PostgreSQL / MySQL 上 Console 的原始 SQL 只用受限账号执行：运行 zhin db console-role 创建（无建号权限时加 --print-sql 交给 DBA）。';
 
 /**
  * The one setup flow (ADR 0049 §7): `/auth/setup*` and `zhin console init` are thin wrappers.
@@ -175,12 +182,13 @@ export class ConsoleSetupService {
       await this.#options.envFile.write(upsertDotenv(await this.#options.envFile.read(), envUpdates));
     }
     await this.#options.config.setKey('database', block);
-    return Object.freeze({ restartRequired: true, notice: SETUP_NO_MIGRATION_NOTICE });
+    const notice = prepared.dialect === 'pg' || prepared.dialect === 'mysql' ? `${SETUP_NO_MIGRATION_NOTICE}${SETUP_CONSOLE_ROLE_NOTICE}` : SETUP_NO_MIGRATION_NOTICE;
+    return Object.freeze({ restartRequired: true, notice });
   }
 
   async createOwner(input: Readonly<{ username: unknown; password: unknown; displayName?: unknown }>): Promise<{ user: ConsoleUserView }> {
     const iam = this.#options.iam();
-    if (!iam?.ready) throw new IamError('unavailable', '当前数据库不能存储账号，或尚未就绪');
+    if (!iam?.ready) throw new IamError('unavailable', iam?.publicUnavailable()?.message ?? 'Console 访问控制尚未就绪');
     if (iam.initialized()) throw new IamError('conflict', '已初始化：请改用 zhin console user 管理用户');
     return { user: await iam.createOwner(input) };
   }

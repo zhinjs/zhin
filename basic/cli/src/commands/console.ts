@@ -1,9 +1,11 @@
 /**
- * `zhin console init` / `zhin console user …` (ADR 0049 §7). With a gateway running for the
- * project they go through its local control socket (`gateway.console.*`, principal `'local'`):
- * the gateway's own setup / IAM services answer, so a database switch is applied live and the owner
- * state changes at once. Without one they open the project database directly (offline setup and
- * rescue). Both paths run the same ConsoleSetupService as `/auth/setup*`.
+ * `zhin console init` / `zhin console user …` / `zhin console migrate` (ADR 0049 §7, ADR 0059).
+ * With a gateway running for the project they go through its local control socket
+ * (`gateway.console.*`, principal `'local'`): the gateway's own setup / IAM services answer, so a
+ * database switch is applied live and the owner state changes at once. Without one they open the
+ * gateway store `.zhin/gateway.db` directly (offline setup and rescue), after importing the
+ * account tables an earlier version left in the project database. Both paths run the same
+ * ConsoleSetupService as `/auth/setup*`.
  */
 import path from 'node:path';
 import { Command } from 'commander';
@@ -18,7 +20,16 @@ import { readEnvFile, writeEnvFile } from '@zhin.js/gateway/config';
 import { projectEnvironment } from '@zhin.js/gateway/iam';
 import { accountInputProblem, ConsoleIamService, IamError, type ConsoleUserView, type SetupDatabaseInput, type SetupStatus } from '@zhin.js/gateway/iam';
 import { ConsoleSetupService, type SetupDatabaseField, type SetupDriver } from '@zhin.js/gateway/iam';
-import { defineConsoleIamTables } from '@zhin.js/gateway/iam';
+import {
+  importLegacyIamTables,
+  LegacyImportError,
+  legacyImportSettled,
+  readLegacyImportRecord,
+  resetGatewayStore,
+  revertLegacyIamImport,
+  type LegacyImportInspection,
+  type LegacyImportRecord,
+} from '@zhin.js/gateway/iam';
 import {
   LOCAL_GATEWAY_RPC,
   LocalGatewayClient,
@@ -26,7 +37,7 @@ import {
   LocalGatewayRpcError,
 } from '@zhin.js/gateway/local';
 import { findConfigFile } from '@zhin.js/gateway/project';
-import { ProjectDatabase, resolveProjectDatabaseConfig } from '@zhin.js/gateway/database';
+import { openGatewayStore, resolveProjectDatabaseConfig } from '@zhin.js/gateway/database';
 import { loadHostHttpConfig } from '../utils/host-http.js';
 import { describeGatewayError, probeGateway } from '../utils/gateway.js';
 import { recordOnboardingSteps, setupOnboardingDeps } from './setup-onboarding.js';
@@ -60,29 +71,36 @@ export interface ConsoleAdmin {
   /** `switched`: the gateway already uses the new database (and restarts the instance). */
   applyDatabase(input: SetupDatabaseInput): Promise<{ notice: string; switched: boolean; restarting?: boolean }>;
   createOwner(input: Readonly<{ username: unknown; password: unknown; displayName?: unknown }>): Promise<{ user: ConsoleUserView }>;
-  /** Undefined when the configured database cannot store Console users (direct access only). */
-  readonly users: ConsoleUserAdmin | undefined;
-  /** Dialect of the directly opened database (direct access only). */
-  readonly dialect?: string;
+  readonly users: ConsoleUserAdmin;
   close(): Promise<void>;
 }
 
-/** Opens the project database the same way the gateway resolves it (ADR 0054 §7). */
+/** The project `database` block, expanded and resolved the way the gateway resolves it (ADR 0054 §7). */
+async function projectDatabaseOf(projectRoot: string) {
+  const configFile = path.join(projectRoot, findConfigFile(projectRoot) ?? DEFAULT_ROOT_CONFIG_FILE_NAME);
+  const environment = await projectEnvironment(projectRoot);
+  const raw = (await createConfigDocument(configFile).read()).document;
+  // Relative SQLite files are anchored at the project root, whatever the CLI's cwd.
+  return resolveProjectDatabaseConfig(projectRoot, expandEnvironmentValue(raw, key => environment[key]));
+}
+
+/**
+ * Opens `.zhin/gateway.db` the way the gateway does (no gateway runs): first imports the account
+ * tables an earlier version left in the project database (ADR 0059 §3).
+ */
 export async function openProjectConsole(projectRoot: string): Promise<ConsoleAdmin> {
   const configFile = path.join(projectRoot, findConfigFile(projectRoot) ?? DEFAULT_ROOT_CONFIG_FILE_NAME);
   const document = createConfigDocument(configFile);
   const configStore = new ConsoleConfigurationStore({ projectRoot, document });
-  const environment = await projectEnvironment(projectRoot);
-  const raw = (await document.read()).document;
-  const expanded = expandEnvironmentValue(raw, key => environment[key]);
-  // Relative SQLite files are anchored at the project root, whatever the CLI's cwd.
-  const database = new ProjectDatabase(await resolveProjectDatabaseConfig(projectRoot, expanded));
-  const supported = defineConsoleIamTables(database);
-  let iam: ConsoleIamService | undefined;
-  if (supported) {
-    await database.start();
-    iam = new ConsoleIamService({ database, projectRoot });
+  const store = await openGatewayStore(projectRoot);
+  let iam: ConsoleIamService;
+  try {
+    await importLegacyIamTables({ store, projectRoot, projectDatabase: () => projectDatabaseOf(projectRoot) });
+    iam = new ConsoleIamService({ database: store, projectRoot });
     await iam.start({ timers: false });
+  } catch (error) {
+    await store.close().catch(() => undefined);
+    throw error;
   }
   const setup = new ConsoleSetupService({
     projectRoot,
@@ -96,7 +114,7 @@ export async function openProjectConsole(projectRoot: string): Promise<ConsoleAd
     if (!user) throw new IamError('not_found', `用户不存在：${username}`);
     return user;
   };
-  const users: ConsoleUserAdmin | undefined = iam && (service => ({
+  const users: ConsoleUserAdmin = (service => ({
     list: () => service.listUsers(),
     create: input => service.createUser({ username: input.username, password: input.password, displayName: input.displayName, bindings: [{ role: input.role, scopeKind: 'global' }] }),
     passwd: async (username, password) => {
@@ -114,8 +132,7 @@ export async function openProjectConsole(projectRoot: string): Promise<ConsoleAd
     applyDatabase: async input => ({ notice: (await setup.applyDatabase(input)).notice, switched: false }),
     createOwner: input => setup.createOwner(input),
     users,
-    dialect: database.dialect,
-    close: async () => { iam?.stop(); if (supported) await database.stop(); },
+    close: async () => { iam.stop(); await store.close(); },
   };
 }
 
@@ -159,6 +176,9 @@ export async function openConsoleAdmin(projectRoot: string, options: OpenConsole
 /** Errors the commands report as a message (exit 1) instead of a stack. */
 function reportable(error: unknown): string | undefined {
   if (error instanceof IamError) return error.message;
+  if (error instanceof LegacyImportError) {
+    return error.code === 'store_lost' || error.code === 'store_mismatch' ? error.message : `迁移旧版 Console 账号表失败：${error.message}`;
+  }
   if (error instanceof LocalGatewayRpcError) return error.message;
   if (error instanceof LocalGatewayClientError) return describeGatewayError(error);
   return undefined;
@@ -201,6 +221,13 @@ export interface ConsoleInitOptions {
   readonly displayName?: string;
   readonly passwordStdin?: boolean;
   readonly yes?: boolean;
+  /**
+   * ADR 0059 §3 修订: the project database's marker names another gateway.db (the store was lost
+   * or replaced). Accept that its Console accounts are gone: adopt this store, record the reset in
+   * its audit log, then continue the setup. Needs the gateway stopped; asks for confirmation
+   * unless `yes`.
+   */
+  readonly resetStore?: boolean;
 }
 
 type Opener = (projectRoot: string) => Promise<ConsoleAdmin>;
@@ -216,6 +243,10 @@ export async function runConsoleInit(
   io: ConsoleCliIo = defaultConsoleCliIo,
   open: Opener = openConsoleAdmin,
 ): Promise<number> {
+  if (options.resetStore) {
+    const reset = await resetStoreStep(projectRoot, options, io);
+    if (reset !== 0) return reset;
+  }
   let project: ConsoleAdmin;
   try {
     project = await open(projectRoot);
@@ -331,15 +362,15 @@ export async function runConsoleInit(
       switched = applied.switched;
       io.log(`已写入数据库配置。${applied.notice}`);
       if (switched) {
-        // The gateway reconnected before it answered; it serves the new database already.
-        io.log(applied.restarting ? '网关已切换到新数据库，并在重启实例。' : '网关已切换到新数据库。');
+        // Accounts stay in .zhin/gateway.db (ADR 0059); only the instance moves to the new database.
+        io.log(applied.restarting ? '网关正在重启实例以使用新数据库（Console 账号仍在 .zhin/gateway.db）。' : '已写入；实例下次启动时使用新数据库（Console 账号仍在 .zhin/gateway.db）。');
       } else {
-        // Continue on the new database directly.
+        // Continue directly (the accounts are in .zhin/gateway.db either way).
         await project.close();
         project = await open(projectRoot);
       }
       if (!(await project.status()).setupRequired) {
-        io.error('新数据库里已有所有者：请改用 `zhin console user …`。');
+        io.error('已有所有者：请改用 `zhin console user …`。');
         return 1;
       }
     }
@@ -400,10 +431,6 @@ async function withProject<T>(projectRoot: string, open: Opener, io: ConsoleCliI
   let project: ConsoleAdmin | undefined;
   try {
     project = await open(projectRoot);
-    if (!project.users) {
-      io.error(`当前数据库（${project.dialect ?? 'unknown'}）不能存储 Console 用户；请先运行 zhin console init 选择 sqlite/mysql/pg/mongodb`);
-      return 1;
-    }
     await run(project.users);
     return 0;
   } catch (error) {
@@ -460,6 +487,101 @@ export const consoleUserActions = {
   },
 };
 
+async function resetStoreStep(projectRoot: string, options: ConsoleInitOptions, io: ConsoleCliIo): Promise<number> {
+  if (await probeGateway({ root: projectRoot })) {
+    io.error('网关正在运行：先 zhin stop，再运行 zhin console init --reset-store');
+    return 1;
+  }
+  const store = await openGatewayStore(projectRoot);
+  try {
+    if (!options.yes) {
+      // A store that already holds accounts loses nothing: only the marker is pointed at it.
+      const counts = await store.counts();
+      const healthy = legacyImportSettled(await readLegacyImportRecord(store)) && (counts.console_users ?? 0) > 0;
+      const { confirm } = await io.prompt<{ confirm: boolean }>([{
+        type: 'confirm', name: 'confirm', default: false,
+        message: healthy
+          ? `当前 .zhin/gateway.db（store ${store.storeId}）有 ${counts.console_users} 个 Console 账号：重置只把项目数据库的标记改为指向它，不删除任何账号。确定吗？`
+          : '项目数据库记录的 Console 账号存储（.zhin/gateway.db）已不可用。重置会放弃原来的全部 Console 账号、会话、API 令牌与审计，并重新开放初始化。确定吗？',
+      }]);
+      if (!confirm) {
+        io.error('已取消');
+        return 1;
+      }
+    }
+    const result = await resetGatewayStore({ store, projectRoot, projectDatabase: () => projectDatabaseOf(projectRoot) });
+    io.log(`已重置 Console 账号存储：项目数据库现在指向 store ${result.storeId}${result.previousStoreId ? `（原 store ${result.previousStoreId}）` : ''}，已写入审计日志。`);
+    return 0;
+  } catch (error) {
+    const message = reportable(error);
+    if (message === undefined) throw error;
+    io.error(message);
+    return 1;
+  } finally {
+    await store.close();
+  }
+}
+
+/** One line about the import state of the old account tables. */
+export function describeLegacyImport(record: LegacyImportRecord | undefined): string {
+  if (!record) return '尚未迁移：旧版 Console 账号表还没有导入 .zhin/gateway.db（Console 访问控制关闭中）';
+  if (record.status === 'fresh') return `无需迁移（${record.reason === 'no-tables' ? '项目数据库里没有旧表' : record.reason === 'no-database-file' ? '项目数据库文件不存在' : record.reason === 'reset-store' ? '已用 --reset-store 重置' : `项目数据库是 ${record.source.dialect}`}）`;
+  const counts = Object.entries(record.counts).map(([table, count]) => `${table}=${count}`).join(' ');
+  if (record.status === 'copied') return `已复制但旧表尚未删除（${counts}；备份 ${record.backup}）：网关或 zhin console migrate 会继续`;
+  return `已迁移（${counts}；备份 ${record.backup}）${record.changed ? `；复制后旧表有变化，删除前的内容在 ${record.changedExport}` : ''}`;
+}
+
+export interface ConsoleMigrateOptions {
+  readonly revert?: boolean;
+}
+
+/**
+ * `zhin console migrate [--revert]` (ADR 0059 §3). Without a gateway: imports the old tables (what
+ * the gateway does when it connects), or with `--revert` writes them back into the project
+ * database (required before installing an older version). With a gateway running: reports its
+ * state (`--revert` needs the gateway stopped).
+ */
+export async function runConsoleMigrate(projectRoot: string, options: ConsoleMigrateOptions = {}, io: Pick<ConsoleCliIo, 'log' | 'error'> = defaultConsoleCliIo, uid?: () => number | undefined): Promise<number> {
+  const target = { root: projectRoot, ...(uid ? { uid } : {}) };
+  try {
+    if (await probeGateway(target)) {
+      if (options.revert) {
+        io.error('网关正在运行：先 zhin stop，再运行 zhin console migrate --revert');
+        return 1;
+      }
+      const client = await LocalGatewayClient.connect(target);
+      try {
+        const status = await client.request<LegacyImportInspection & { pending?: string; pendingCode?: string }>(LOCAL_GATEWAY_RPC.CONSOLE_MIGRATION_STATUS);
+        io.log(`网关运行中，迁移由网关完成：${describeLegacyImport(status.record)}`);
+        if (status.pending) io.log(`Console 访问控制关闭中：${status.pending}`);
+        return status.pending ? 1 : 0;
+      } finally {
+        client.close();
+      }
+    }
+    const store = await openGatewayStore(projectRoot);
+    try {
+      const projectDatabase = () => projectDatabaseOf(projectRoot);
+      if (options.revert) {
+        const result = await revertLegacyIamImport({ store, projectRoot, projectDatabase });
+        io.log(`已把 Console 账号表写回项目数据库（${Object.entries(result.counts).map(([table, count]) => `${table}=${count}`).join(' ')}），.zhin/gateway.db 已清空；回退前的副本在 ${result.backup}`);
+        for (const warning of result.warnings) io.log(`注意：${warning}`);
+        io.log('现在可以安装旧版本；再次升级时网关会重新迁移。');
+        return 0;
+      }
+      io.log(describeLegacyImport(await importLegacyIamTables({ store, projectRoot, projectDatabase })));
+      return 0;
+    } finally {
+      await store.close();
+    }
+  } catch (error) {
+    const message = reportable(error) ?? (error instanceof LegacyImportError ? error.message : undefined);
+    if (message === undefined) throw error;
+    io.error(message);
+    return 1;
+  }
+}
+
 const DATABASE_FIELDS = ['filename', 'mode', 'host', 'port', 'user', 'password', 'database', 'url', 'db-name'] as const;
 
 function finish(code: number): void {
@@ -475,7 +597,8 @@ const initCommand = new Command('init')
   .option('--owner <name>', '所有者用户名')
   .option('--display-name <name>', '所有者显示名')
   .option('--password-stdin', '从标准输入读取所有者密码（与 --database-password-stdin 同用时读第二行）')
-  .option('-y, --yes', '非交互：不提问，缺少参数即失败');
+  .option('-y, --yes', '非交互：不提问，缺少参数即失败')
+  .option('--reset-store', 'gateway.db 丢失或被替换后（项目数据库的标记指向另一个 store）：放弃原有 Console 账号，重置后继续初始化（需先 zhin stop）');
 for (const field of DATABASE_FIELDS) {
   initCommand.option(`--database-${field} <value>`, field === 'password'
     // Kept for compatibility; a secret on the command line ends up in shell history and `ps`.
@@ -499,10 +622,11 @@ initCommand.action(async (raw: Record<string, unknown>) => {
     ...(typeof raw.displayName === 'string' ? { displayName: raw.displayName } : {}),
     passwordStdin: raw.passwordStdin === true,
     yes: raw.yes === true,
+    resetStore: raw.resetStore === true,
   }));
 });
 
-const userCommand = new Command('user').description('管理 Console 用户（网关运行时经由网关，否则直接打开项目数据库）');
+const userCommand = new Command('user').description('管理 Console 用户（网关运行时经由网关，否则直接打开 .zhin/gateway.db）');
 userCommand.command('create <username>')
   .description('创建用户')
   .option('--role <role>', `全局角色（${CONSOLE_BUILTIN_ROLE_NAMES.join(' / ')} 或自定义）`, 'viewer')
@@ -527,7 +651,15 @@ userCommand.command('list').description('列出用户').action(async () => {
   finish(await consoleUserActions.list(process.cwd()));
 });
 
+const migrateCommand = new Command('migrate')
+  .description('把旧版存在项目数据库里的 Console 账号表迁入 .zhin/gateway.db（ADR 0059；网关启动时也会自动执行）')
+  .option('--revert', '写回项目数据库并清空 gateway.db（安装旧版本之前必须执行；需先 zhin stop）')
+  .action(async (raw: { revert?: boolean }) => {
+    finish(await runConsoleMigrate(process.cwd(), { revert: raw.revert === true }));
+  });
+
 export const consoleCommand = new Command('console')
-  .description('Console 访问控制：初始化与用户管理（ADR 0049）')
+  .description('Console 访问控制：初始化、用户管理与账号存储迁移（ADR 0049 / 0059）')
   .addCommand(initCommand)
-  .addCommand(userCommand);
+  .addCommand(userCommand)
+  .addCommand(migrateCommand);

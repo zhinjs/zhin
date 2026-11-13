@@ -158,7 +158,7 @@ describe('LoginFlow', () => {
     expect(safe.steps.at(-1)!.challenge).toMatchObject({ media: { linkOmitted: true }, blocks: [{ kind: 'note' }] });
     expect(safe.steps.at(-1)!.challenge!.media).not.toHaveProperty('captcha');
 
-    // Device / auth / link_verify likewise; a QR challenge keeps its (non-verification) link.
+    // Device / auth / link_verify likewise.
     for (const kind of ['device', 'auth', 'link_verify'] as const) {
       void flow.challenge({ kind, title: kind, blocks: [{ kind: 'link', label: 'v', url: `https://verify.example/?${sid}`, showQr: true }] })
         .catch(() => undefined);
@@ -169,7 +169,13 @@ describe('LoginFlow', () => {
     }
     void flow.challenge({ kind: 'qrcode', title: 'qr', media: { link: { url: 'https://help.example/', label: 'help' } } }).catch(() => undefined);
     const qr = withoutLoginMedia(assist.getFlow('demo', 'bot1')!).steps.at(-1)!.challenge!;
-    expect(qr.media).toEqual({ link: { url: 'https://help.example/', label: 'help' } });
+    // Every kind drops links too: a QR challenge's link is the QR content itself (review of #1249).
+    expect(qr.media).toEqual({ linkOmitted: true });
+    for (const kind of ['sms', 'confirm', 'other'] as const) {
+      void flow.challenge({ kind, title: kind, media: { link: { url: `https://x.example/?${sid}`, label: 'l' } }, blocks: [{ kind: 'link', label: 'b', url: `https://y.example/?${sid}` }] })
+        .catch(() => undefined);
+      expect(JSON.stringify(withoutLoginMedia(assist.getFlow('demo', 'bot1')!))).not.toContain('secret-session');
+    }
     // A flow without verification links is returned as is.
     const plain = assist.beginFlow({ adapter: 'demo', endpointKey: 'bot2', owner });
     plain.step('connect', 'x');

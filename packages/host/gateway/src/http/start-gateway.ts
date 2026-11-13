@@ -222,6 +222,14 @@ export async function startGateway(options: StartGatewayOptions): Promise<Runnin
         },
       });
       await settleWithin(gatewayConsole.ready, options.databaseWaitMs ?? 10_000);
+      // ADR 0059 §3: once the instance runs, a first-run SQLite project file exists; make sure the
+      // store marker is there (normally written at connect time already).
+      let markerChecked = false;
+      supervisor.on('state', (status: { readonly state: string }) => {
+        if (markerChecked || status.state !== 'running') return;
+        markerChecked = true;
+        void gatewayConsole?.ensureStoreMarker();
+      });
     }
     assertNotOpenOnNetwork(http, server.tokenRegistry);
     // Settings for the first instance start, read before listening so it starts right away.

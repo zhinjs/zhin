@@ -14,6 +14,12 @@ export interface PostgreSQLDialectConfig extends ClientConfig {
    * 如果提供此选项，将使用连接池而不是单连接
    */
   pool?: PoolConfig;
+  /**
+   * Pool mode: `DISCARD ALL` before a connection goes back to the pool (session settings, roles,
+   * temp objects and prepared statements never outlive one use). A connection that cannot be
+   * reset is destroyed. The restricted Console account uses it (ADR 0059 §4).
+   */
+  resetSession?: boolean;
 }
 
 /**
@@ -37,6 +43,17 @@ export class PostgreSQLDialect<S extends Record<string, object> = Record<string,
     this.usePool = !!config.pool;
   }
 
+  /** Gives a pool client back, after `DISCARD ALL` with {@link PostgreSQLDialectConfig.resetSession}. */
+  private async releaseClient(client: { query(sql: string): Promise<unknown>; release(destroy?: boolean | Error): void }): Promise<void> {
+    if (!this.config.resetSession) { client.release(); return; }
+    try {
+      await client.query('DISCARD ALL');
+      client.release();
+    } catch (error) {
+      client.release(error instanceof Error ? error : new Error(String(error)));
+    }
+  }
+
   // Connection management
   isConnected(): boolean {
     return this.usePool ? this.pool !== null : this.connection !== null;
@@ -46,7 +63,7 @@ export class PostgreSQLDialect<S extends Record<string, object> = Record<string,
     try {
       if (this.usePool) {
         const { Pool } = await import('pg');
-        const { pool, ...connectionOptions } = this.config;
+        const { pool, resetSession: _reset, ...connectionOptions } = this.config;
         const poolConfig: PgPoolConfig = {
           ...connectionOptions,
           max: pool?.max ?? 10,
@@ -58,7 +75,8 @@ export class PostgreSQLDialect<S extends Record<string, object> = Record<string,
         logger.info(`PostgreSQL 连接池已创建 (max: ${poolConfig.max})`);
       } else {
       const { Client } = await import('pg');
-      this.connection = new Client(this.config);
+      const { resetSession: _reset, ...clientOptions } = this.config;
+      this.connection = new Client(clientOptions);
       await this.connection.connect();
       }
     } catch (error) {
@@ -90,6 +108,14 @@ export class PostgreSQLDialect<S extends Record<string, object> = Record<string,
 
   async query<U = any>(sql: string, params?: any[]): Promise<U> {
     if (this.usePool) {
+      if (this.config.resetSession) {
+        const client = await this.pool.connect();
+        try {
+          return this.normalizeResult(await client.query(sql, params)) as U;
+        } finally {
+          await this.releaseClient(client);
+        }
+      }
       const result = await this.pool.query(sql, params);
       return this.normalizeResult(result) as U;
     } else {
@@ -345,7 +371,7 @@ export class PostgreSQLDialect<S extends Record<string, object> = Record<string,
       try {
         await client.query(beginSql);
       } catch (error) {
-        client.release();
+        await dialect.releaseClient(client);
         throw error;
       }
       
@@ -354,7 +380,7 @@ export class PostgreSQLDialect<S extends Record<string, object> = Record<string,
           try {
             await client.query('COMMIT');
           } finally {
-            client.release(); // 归还连接到池
+            await dialect.releaseClient(client); // 归还连接到池
           }
         },
         
@@ -362,7 +388,7 @@ export class PostgreSQLDialect<S extends Record<string, object> = Record<string,
           try {
             await client.query('ROLLBACK');
           } finally {
-            client.release(); // 归还连接到池
+            await dialect.releaseClient(client); // 归还连接到池
           }
         },
         

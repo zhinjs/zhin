@@ -14,7 +14,18 @@ export interface MySQLDialectConfig extends ConnectionOptions {
    * 如果提供此选项，将使用连接池而不是单连接
    */
   pool?: PoolConfig;
+  /**
+   * Pool mode: `COM_RESET_CONNECTION` (`connection.reset()`, MySQL 5.7.3+) before a connection
+   * goes back to the pool, so session variables, user variables, temporary tables and prepared
+   * statements never outlive one use; a connection that cannot be reset is destroyed. The
+   * restricted Console account uses it (ADR 0059 §4).
+   */
+  resetSession?: boolean;
 }
+
+/** `ClientConstants.LOCAL_FILES` / `MULTI_STATEMENTS` of the MySQL protocol. */
+const CLIENT_LOCAL_FILES = 0x80;
+const CLIENT_MULTI_STATEMENTS = 0x10000;
 
 export class MySQLDialect<S extends Record<string, object> = Record<string, object>> extends Dialect<MySQLDialectConfig, S, string> {
   private connection: any = null;
@@ -37,7 +48,7 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
     try {
       if (this.usePool) {
         const { createPool } = await import('mysql2/promise');
-        const { pool, ...connectionOptions } = this.config;
+        const { pool, resetSession: _reset, ...connectionOptions } = this.config;
         const poolConfig: PoolOptions = {
           ...connectionOptions,
           waitForConnections: true,
@@ -49,7 +60,8 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
         logger.info(`MySQL 连接池已创建 (max: ${poolConfig.connectionLimit})`);
       } else {
       const { createConnection } = await import('mysql2/promise');
-      this.connection = await createConnection(this.config);
+      const { resetSession: _reset, ...connectionOptions } = this.config;
+      this.connection = await createConnection(connectionOptions);
       }
     } catch (error) {
       logger.error('forgot install mysql2 ?');
@@ -78,7 +90,41 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
     }
   }
 
+  /**
+   * What the driver will actually send at connect time (after merging `uri` and `flags`):
+   * whether `LOAD DATA LOCAL` and multiple statements are possible on this connection.
+   */
+  connectionSafety(): { readonly localFiles: boolean; readonly multipleStatements: boolean } | undefined {
+    const config = this.usePool ? this.pool?.pool?.config?.connectionConfig : this.connection?.connection?.config;
+    if (!config || typeof config.clientFlags !== 'number') return undefined;
+    return Object.freeze({
+      localFiles: (config.clientFlags & CLIENT_LOCAL_FILES) !== 0 || typeof config.infileStreamFactory === 'function',
+      multipleStatements: config.multipleStatements === true || (config.clientFlags & CLIENT_MULTI_STATEMENTS) !== 0,
+    });
+  }
+
+  /** Gives a pool connection back, reset first with {@link MySQLDialectConfig.resetSession}. */
+  private async releaseConnection(connection: { reset?(): Promise<void>; release(): void; destroy(): void }): Promise<void> {
+    if (!this.config.resetSession) { connection.release(); return; }
+    try {
+      if (typeof connection.reset !== 'function') throw new Error('connection.reset() is not available');
+      await connection.reset();
+      connection.release();
+    } catch {
+      connection.destroy();
+    }
+  }
+
   async query<U = any>(sql: string, params?: any[]): Promise<U> {
+    if (this.usePool && this.config.resetSession) {
+      const connection = await this.pool.getConnection();
+      try {
+        const [rows, fields] = await connection.execute(sql, params);
+        return this.processQueryResults(rows, fields) as U;
+      } finally {
+        await this.releaseConnection(connection);
+      }
+    }
     if (this.usePool) {
       const [rows, fields] = await this.pool.execute(sql, params);
       return this.processQueryResults(rows, fields) as U;
@@ -364,7 +410,7 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
         if (options?.readOnly) await connection.query('START TRANSACTION READ ONLY');
         else await connection.beginTransaction();
       } catch (error) {
-        connection.release();
+        await dialect.releaseConnection(connection);
         throw error;
       }
       
@@ -373,7 +419,7 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
           try {
             await connection.commit();
           } finally {
-            connection.release(); // 归还连接到池
+            await dialect.releaseConnection(connection); // 归还连接到池
           }
         },
         
@@ -381,7 +427,7 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
           try {
             await connection.rollback();
           } finally {
-            connection.release(); // 归还连接到池
+            await dialect.releaseConnection(connection); // 归还连接到池
           }
         },
         

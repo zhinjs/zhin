@@ -6,6 +6,7 @@ import { createHostProtectedPaths, toProtectedPathData } from '../../src/securit
 import {
   NODE_MODULES_SCAN_DEPTH,
   NODE_MODULES_SCAN_MAX_HITS,
+  computeHiddenOverlays,
   computeReadOnlyOverlays,
   missingMountPointDirs,
   overlayDockerArgs,
@@ -49,6 +50,24 @@ describe('computeReadOnlyOverlays', () => {
     expect(t['zhin.config.yml']).toBeUndefined();
     expect(t['yarn.lock']).toBeUndefined();
     expect(t['src/index.ts']).toBeUndefined();
+  });
+
+  it('hides an existing .zhin/ behind an empty read-only tmpfs (gateway.db, keys; ADR 0059 §7)', async () => {
+    touch('.zhin/gateway.db', 'SECRET');
+    touch('.zhin/keys/config-secrets.key', 'KEY');
+    const paths = await createHostProtectedPaths({ projectRoot: root });
+    const overlays = computeReadOnlyOverlays(root, toProtectedPathData(paths));
+    expect(targets(overlays)['.zhin']).toBe('tmpfs-dir');
+    expect(overlays.some(overlay => overlay.source?.includes('.zhin'))).toBe(false);
+  });
+
+  it('computeHiddenOverlays returns only the existing .zhin/ (read-only turns)', async () => {
+    const paths = await createHostProtectedPaths({ projectRoot: root });
+    expect(computeHiddenOverlays(root, toProtectedPathData(paths))).toEqual([]);
+    touch('.zhin/gateway.db', 'SECRET');
+    touch('AGENTS.md');
+    expect(computeHiddenOverlays(root, toProtectedPathData(paths))).toEqual([{ kind: 'tmpfs-dir', target: '.zhin' }]);
+    expect(computeHiddenOverlays(root, undefined)).toEqual([{ kind: 'tmpfs-dir', target: '.zhin' }]);
   });
 
   it('does not tmpfs a missing .git', async () => {
@@ -164,10 +183,17 @@ describe('docker argument building', () => {
     expect(args.slice(-3)).toEqual(['bash', '-c', 'echo hi']);
   });
 
-  it('adds no overlays to a read-only mount', () => {
+  it('adds only the hiding (tmpfs) overlays to a read-only mount (ADR 0059 §7)', () => {
     const args = buildDockerRunArgs('ls', { filesystemAccess: 'read-only', readOnlyOverlays: overlays }, '/host/ws');
     expect(args).toContain('/host/ws:/workspace:ro');
-    expect(args).not.toContain('--mount');
+    const mounts = args.flatMap((a, i) => (a === '--mount' ? [args[i + 1]] : []));
+    expect(mounts).toEqual(['type=tmpfs,target=/workspace/skills,tmpfs-size=4096,readonly']);
+  });
+
+  it('hides .zhin/ in a read-only mount too', () => {
+    const args = buildDockerRunArgs('find . -type f -exec cat {} +', { filesystemAccess: 'read-only', readOnlyOverlays: [{ kind: 'tmpfs-dir', target: '.zhin' }] }, '/host/ws');
+    expect(args).toContain('/host/ws:/workspace:ro');
+    expect(args).toContain('type=tmpfs,target=/workspace/.zhin,tmpfs-size=4096,readonly');
   });
 
   it('CSV-quotes paths containing commas or quotes', () => {
