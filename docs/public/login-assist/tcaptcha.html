@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-2+Iw0P/dAieuwTAwOGLn4NsgDwS0a8GCQBsQhuIS8XA=' https://ssl.captcha.qq.com https://captcha.gtimg.com https://t.captcha.qq.com; style-src 'unsafe-inline' https://captcha.gtimg.com; img-src 'self' https: data: blob:; frame-src https://captcha.gtimg.com https://t.captcha.qq.com https://ssl.captcha.qq.com; connect-src https://*.captcha.qq.com https://captcha.gtimg.com; worker-src blob:; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-CrYEhaa0JuW9wOgrs7+qDCAScNo7nbBXJ0/zn+4TgD0=' https://ssl.captcha.qq.com https://captcha.gtimg.com https://t.captcha.qq.com; style-src 'unsafe-inline' https://captcha.gtimg.com; img-src 'self' https: data: blob:; frame-src https://captcha.gtimg.com https://t.captcha.qq.com https://ssl.captcha.qq.com; connect-src https://*.captcha.qq.com https://captcha.gtimg.com; worker-src blob:; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="color-scheme" content="light dark">
@@ -204,6 +204,7 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
   var MAX_QUERY = 4096;
   var MAX_VALUE = 2048;
   var MAX_RESULT = 4096;
+  var MAX_RANDSTR = 256;
   // Query parameter names seen in ICQQ / NT login slider URLs and read by TCapIframeApi.js.
   var ALLOWED_PARAMS = [
     'style', 'aid', 'uin', 'uid', 'sid', 'subsid', 'cap_cd', 'clientype', 'apptype', 'lang',
@@ -243,7 +244,7 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
       errMissing: '链接里缺少验证参数。',
       errEncoding: '验证参数不是有效的 base64url JSON。',
       errShape: '验证参数格式不正确。',
-      errQueryShape: '验证码地址必须是以 ? 开头的查询串，且不超过 4096 个字符。',
+      errQueryShape: '验证码地址必须是查询串，且不超过 4096 个字符。',
       errQuery: '验证码地址的参数不合法：',
       errOrigin: 'Console 地址必须是 http(s) 源（如 https://console.example.com）。',
       errNonce: '会话标识无效（1–128 个字母、数字或 ._~-）。'
@@ -277,7 +278,7 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
       errMissing: 'The link carries no verification data.',
       errEncoding: 'The verification data is not valid base64url JSON.',
       errShape: 'The verification data is malformed.',
-      errQueryShape: 'The captcha query must start with ? and be at most 4096 characters.',
+      errQueryShape: 'The captcha query must be a query string of at most 4096 characters.',
       errQuery: 'The captcha URL has an invalid parameter: ',
       errOrigin: 'The Console address must be an http(s) origin (e.g. https://console.example.com).',
       errNonce: 'Invalid session id (1–128 letters, digits or ._~-).'
@@ -327,7 +328,9 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
   }
 
   function validateQuery(q) {
-    if (typeof q !== 'string' || q.length < 2 || q.length > MAX_QUERY || q.charAt(0) !== '?') {
+    // The Console sends the query without its leading `?` (core buildCaptchaHelperUrl); accept both.
+    if (typeof q === 'string' && q.charAt(0) !== '?') q = '?' + q;
+    if (typeof q !== 'string' || q.length < 2 || q.length > MAX_QUERY + 1) {
       throw new InputError(L.errQueryShape);
     }
     var seen = {};
@@ -444,15 +447,20 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px sol
 
   function onResult(res) {
     if (finished) return;
+    // Same acceptance rule as the Console (core parseCaptchaHelperMessage): a result the Console
+    // would drop must not be reported as handed back.
     var ok = res && res.ret === 0 &&
-      typeof res.ticket === 'string' && res.ticket.length > 0 && res.ticket.length <= MAX_RESULT;
+      typeof res.ticket === 'string' && res.ticket.length > 0 && res.ticket.length <= MAX_RESULT &&
+      !/[\s,]/.test(res.ticket) &&
+      (res.randstr === undefined || res.randstr === null || res.randstr === '' ||
+        (typeof res.randstr === 'string' && res.randstr.length <= MAX_RANDSTR && !/[\s,]/.test(res.randstr)));
     if (!ok) {
       showStatus('error', L.failTitle, L.failText, [{ label: L.retry, run: reload }]);
       return;
     }
     finished = true;
     var ticket = res.ticket;
-    var randstr = typeof res.randstr === 'string' && res.randstr.length <= MAX_RESULT ? res.randstr : '';
+    var randstr = typeof res.randstr === 'string' ? res.randstr : '';
     var manual = randstr ? ticket + ',' + randstr : ticket;
     var opener = null;
     try { opener = window.opener && !window.opener.closed ? window.opener : null; } catch (e) { opener = null; }

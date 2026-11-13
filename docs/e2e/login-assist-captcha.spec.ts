@@ -98,6 +98,21 @@ test.describe('login-assist captcha helper', () => {
     expect(external).toEqual([]);
   });
 
+  test('accepts the query without its leading ? (as the Console builds it)', async ({ page, context, baseURL }) => {
+    const { loaderUrls } = await stubNetwork(context, { ret: 0, ticket: 'T', randstr: 'R' });
+    const popup = await openFromConsole(page, helperUrl(baseURL!, { q: QUERY.slice(1), n: 'nonce-123', o: CONSOLE_ORIGIN }));
+    await expect(popup.getByRole('heading', { name: '验证完成，可以关闭此窗口' })).toBeVisible();
+    expect(loaderUrls).toEqual([`https://ssl.captcha.qq.com/template/TCapIframeApi.js${QUERY}`]);
+  });
+
+  test('a result the Console would refuse (comma in the ticket) is not reported as handed back', async ({ page, context, baseURL }) => {
+    await stubNetwork(context, { ret: 0, ticket: 'T,X', randstr: 'R' });
+    const popup = await openFromConsole(page, helperUrl(baseURL!, { q: QUERY, n: 'nonce-123', o: CONSOLE_ORIGIN }));
+    await expect(popup.getByRole('heading', { name: '验证未完成' })).toBeVisible();
+    await page.waitForTimeout(300);
+    expect(await page.evaluate(() => (window as unknown as { __messages: unknown[] }).__messages)).toEqual([]);
+  });
+
   test('never delivers the ticket to an opener whose origin differs from the requested one', async ({ page, context, baseURL }) => {
     await stubNetwork(context, { ret: 0, ticket: 'T', randstr: 'R' });
     const popup = await openFromConsole(page, helperUrl(baseURL!, { q: QUERY, n: 'nonce-123', o: 'https://other.example.test' }));
@@ -136,7 +151,6 @@ test.describe('login-assist captcha helper', () => {
     ['not base64url', { raw: '%%%' }],
     ['not JSON', 'not json'],
     ['JSON array', [QUERY, 'n', CONSOLE_ORIGIN]],
-    ['query without ?', { q: QUERY.slice(1), n: 'n', o: CONSOLE_ORIGIN }],
     ['unknown query parameter', { q: `${QUERY}&callback=evil`, n: 'n', o: CONSOLE_ORIGIN }],
     ['duplicate query parameter', { q: `${QUERY}&sid=1`, n: 'n', o: CONSOLE_ORIGIN }],
     ['unencoded value', { q: '?sid=a"b<c', n: 'n', o: CONSOLE_ORIGIN }],

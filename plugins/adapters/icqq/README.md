@@ -225,7 +225,7 @@ ICQQ 登录要求滑块验证时，Console「登录待办」可以用弹窗打�
 - **在别的设备上打开**（例如把链接发到手机）：没有可回传的 Console 窗口，页面会显示 `ticket,randstr` 文本和「复制」按钮，把它粘贴到 Console 登录待办的滑块输入框提交即可。
 - **验证没通过或被关闭**：页面显示「验证未完成」，点「重试」重新加载验证码。
 
-链接格式：`#` 后是 base64url 编码的 JSON `{ q, n, o }`。`q` 是滑块链接的查询串（以 `?` 开头，参数名在白名单内，值必须已 URL 编码，总长不超过 4096）；`n` 是 Console 生成的一次性标识（1–128 个 `A-Z a-z 0-9 . _ ~ -` 字符）；`o` 是 Console 的源（如 `https://console.example.com`，只允许 http/https，不能带路径）。不合格的链接会被拒绝，并且不会加载腾讯脚本。
+链接格式：`#` 后是 base64url 编码的 JSON `{ q, n, o }`。`q` 是滑块链接的查询串（开头的 `?` 可有可无，参数名在白名单内，值必须已 URL 编码，总长不超过 4096）；`n` 是 Console 生成的一次性标识（1–128 个 `A-Z a-z 0-9 . _ ~ -` 字符）；`o` 是 Console 的源（如 `https://console.example.com`，只允许 http/https，不能带路径）。不合格的链接会被拒绝，并且不会加载腾讯脚本。
 
 **自建**：不想依赖 `zhin.js.org` 时，把 [`docs/public/login-assist/tcaptcha.html`](https://github.com/zhinjs/zhin/blob/main/docs/public/login-assist/tcaptcha.html) 复制到你自己的 https 域名（单文件，不依赖其他资源；该域名没有 `/logo.svg` 时 logo 自动隐藏），再把 `console.loginAssist.captchaHelperUrl` 设为它的地址：
 

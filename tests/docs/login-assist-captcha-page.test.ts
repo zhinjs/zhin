@@ -7,7 +7,8 @@ import path from 'node:path';
  * docs/e2e/login-assist-captcha.spec.ts (pnpm test:docs:e2e).
  */
 const pagePath = path.resolve(__dirname, '../../docs/public/login-assist/tcaptcha.html');
-const html = readFileSync(pagePath, 'utf8');
+// Browsers normalise CRLF to LF before hashing inline scripts; a Windows checkout may have CRLF.
+const html = readFileSync(pagePath, 'utf8').replace(/\r\n?/g, '\n');
 const csp = html.match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)">/)?.[1] ?? '';
 const directives = new Map(
   csp.split(';').map((part) => part.trim()).filter(Boolean).map((part) => {
@@ -15,7 +16,9 @@ const directives = new Map(
     return [name, values] as const;
   }),
 );
-const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)];
+// Case-insensitive and tolerant of `</script >` so a differently cased or spaced tag can't slip past
+// the "exactly one inline script" check.
+const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi)];
 
 describe('login-assist captcha helper page', () => {
   it('has exactly one inline script, allowed by its sha256 hash', () => {
