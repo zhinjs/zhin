@@ -24,6 +24,9 @@ const ICQQ_MUTE_SECONDS = { min: 60, max: 2592000 } as const;
 
 export default defineAdapter<IcqqEndpointConfig>({
   capabilities: ['inbound', 'outbound'],
+  // ADR 0058: a person answers QR / slider / device-lock / SMS / identity challenges; the Endpoint
+  // implements `login.relogin` and `login.refreshChallenge` (a new QR code in place).
+  login: { mode: 'interactive', challenges: ['qrcode', 'slider', 'device', 'auth', 'sms'], relogin: true, refreshQr: true },
   profile: {
     default: {
       messaging: {

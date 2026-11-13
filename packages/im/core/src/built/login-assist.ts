@@ -1473,11 +1473,17 @@ function legacyTypeOf(challenge: LoginChallenge): LoginAssistType {
   }
 }
 
+/**
+ * Legacy task payload of a flow challenge (`login.list`, older Consoles, chat commands): the title
+ * with the short help, the QR image, and the main link (`media.link`, else the first link block).
+ */
 function legacyPayloadOf(challenge: LoginChallenge): PendingLoginTaskPayload {
+  const url = challenge.media?.link?.url
+    ?? challenge.blocks?.find((block): block is Extract<LoginChallengeBlock, { kind: 'link' }> => block.kind === 'link')?.url;
   return {
-    message: challenge.title,
+    message: challenge.help?.short ? `${challenge.title}：${challenge.help.short}` : challenge.title,
     ...(challenge.media?.qrImage ? { image: challenge.media.qrImage } : {}),
-    ...(challenge.media?.link ? { url: challenge.media.link.url } : {}),
+    ...(url ? { url } : {}),
   };
 }
 
@@ -1553,6 +1559,10 @@ function resolveAnswer(
     return Object.freeze({ actionId: value.action, values: Object.freeze(values) });
   }
   if (typeof value === 'string') {
+    // A plain string naming one of the challenge's actions that takes no input selects it, so
+    // text-only consumers (released Consoles, stdin, chat) can still pick e.g. `sms`.
+    const named = challenge?.actions.find((action) => !action.requiresInput && action.id === value.trim());
+    if (named) return Object.freeze({ actionId: named.id, values: Object.freeze({}) });
     if (input) {
       const values = inputValues(value, true);
       return Object.freeze({ actionId: defaultAction(challenge, true), values: Object.freeze(values) });

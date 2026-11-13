@@ -263,6 +263,7 @@ else flow.outcome({ result: 'rejected', code: 'code_invalid', message: t(locale,
 - 需要给用户材料时用 `blocks`：`copy`（设备信息等标 `sensitive: true`）、`link`（只允许 http/https，`showQr` 方便手机扫）、`note`。脚本块必须是静态文本，不要拼入用户或设备数据。
 - 滑块 ticket 输入设 `extract: 'ticket-json-or-url'`，core 的 `parseLoginTicket()` 会识别 ticket、`ticket,randstr`、JSON 和链接。
 - 旧的 `waitForInput()` 仍可用，会自动生成隐式流程；新代码请用 `beginFlow()`。
+- 参考实现：[`plugins/adapters/icqq/src/icqq-login-assist.ts`](https://github.com/zhinjs/zhin/blob/main/plugins/adapters/icqq/src/icqq-login-assist.ts)（扫码状态跟踪、滑块辅助页、设备锁 / 短信、身份验证引导）与错误码映射表 [`icqq-login-errors.ts`](https://github.com/zhinjs/zhin/blob/main/plugins/adapters/icqq/src/icqq-login-errors.ts)。
 
 ## 官方适配器能力矩阵
 

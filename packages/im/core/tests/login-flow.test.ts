@@ -178,6 +178,50 @@ describe('LoginFlow', () => {
     assist.dispose();
   });
 
+  it('a plain string naming an action without input selects it (text-only consumers)', async () => {
+    const assist = new LoginAssist(null, { defaultTimeoutMs: 60_000 });
+    const flow = assist.beginFlow({ adapter: 'demo', endpointKey: 'bot1', owner });
+    const device = flow.challenge({ kind: 'device', title: 'lock', actions: [
+      { id: 'continue', label: 'done', variant: 'primary' }, { id: 'sms', label: 'sms', variant: 'secondary' },
+    ] });
+    assist.submit(assist.listPending()[0]!.id, ' sms ');
+    await expect(device).resolves.toEqual({ actionId: 'sms', values: {} });
+    const again = flow.challenge({ kind: 'device', title: 'lock', actions: [
+      { id: 'continue', label: 'done', variant: 'primary' }, { id: 'sms', label: 'sms', variant: 'secondary' },
+    ] });
+    assist.submit(assist.listPending()[0]!.id, 'ok');
+    await expect(again).resolves.toEqual({ actionId: 'continue', values: {} });
+    // An action that requires input is never selected by its name; the text is the input.
+    const code = flow.challenge({ kind: 'sms', title: 'code', input: { kind: 'code', label: 'code' }, actions: [
+      { id: 'submit', label: 'submit', variant: 'primary', requiresInput: true },
+      { id: 'resend', label: 'resend', variant: 'secondary' },
+    ] });
+    assist.submit(assist.listPending()[0]!.id, 'resend');
+    await expect(code).resolves.toEqual({ actionId: 'resend', values: {} });
+    const typed = flow.challenge({ kind: 'sms', title: 'code', input: { kind: 'code', label: 'code' } });
+    assist.submit(assist.listPending()[0]!.id, 'submit');
+    await expect(typed).resolves.toEqual({ actionId: 'submit', values: { input: 'submit' } });
+    assist.dispose();
+  });
+
+  it('gives a flow challenge\'s legacy task the short help and the first link block', () => {
+    const assist = new LoginAssist(null, { defaultTimeoutMs: 60_000 });
+    const flow = assist.beginFlow({ adapter: 'demo', endpointKey: 'bot1', owner });
+    void flow.challenge({
+      kind: 'device', title: '设备锁验证', help: { short: '用手机确认' },
+      blocks: [{ kind: 'note', text: '提示' }, { kind: 'link', id: 'verify', label: '验证链接', url: 'https://verify.example/a' }],
+      actions: [{ id: 'continue', label: '已完成', variant: 'primary' }],
+    }).catch(() => undefined);
+    expect(assist.listPending()[0]!.payload).toEqual({ message: '设备锁验证：用手机确认', url: 'https://verify.example/a' });
+    // `media.link` stays the main link when both exist.
+    void flow.challenge({
+      kind: 'slider', title: '滑块', media: { link: { url: 'https://main.example/', label: 'main' } },
+      blocks: [{ kind: 'link', label: 'other', url: 'https://other.example/' }],
+    }).catch(() => undefined);
+    expect(assist.listPending()[0]!.payload).toEqual({ message: '滑块', url: 'https://main.example/' });
+    assist.dispose();
+  });
+
   it('tells a cancel apart from a resolved answer', async () => {
     const assist = new LoginAssist(null, { defaultTimeoutMs: 60_000 });
     const flow = assist.beginFlow({ adapter: 'demo', endpointKey: 'bot1', owner });

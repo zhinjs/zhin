@@ -113,8 +113,10 @@ describe('icqq LoginAssist wiring', () => {
     const startP = endpoint.start(new AbortController().signal);
     await flush();
     const [task] = assist.listPending();
-    expect(task).toMatchObject({ type: 'device', payload: { url: 'https://ex' } });
-    expect(String(task!.payload.message)).toContain('ok');
+    // ADR 0058: the device lock is a flow challenge with actions; its legacy task has no input
+    // (type `auth`), keeps the link and still accepts the legacy `ok`.
+    expect(task).toMatchObject({ type: 'auth', payload: { url: 'https://ex/' } });
+    expect(assist.flowOfTask(task!.id)?.steps.at(-1)?.challenge).toMatchObject({ kind: 'device' });
     expect(endpoint.endpoint.sendSmsCode).not.toHaveBeenCalled();
     assist.submit(task!.id, 'ok');
     await flush();
@@ -152,17 +154,20 @@ describe('icqq LoginAssist wiring', () => {
     const assist = new LoginAssist(null, { defaultTimeoutMs: 60_000 });
     const endpoint = await makeEndpoint(assist);
     vi.mocked(endpoint.endpoint.login).mockImplementationOnce(async () => {
-      endpoint.endpoint.emit('system.login.device', { url: 'https://ex' });
+      // SMS is offered only when the SDK reports the account's phone.
+      endpoint.endpoint.emit('system.login.device', { url: 'https://ex', phone: '138****' });
     });
     vi.mocked(endpoint.endpoint.sendSmsCode).mockRejectedValueOnce(new Error('too frequent'));
 
     const startP = endpoint.start(new AbortController().signal);
     await flush();
-    assist.submit(assist.listPending()[0]!.id, 'sms');
+    // The SMS choice is the structured `sms` action (a bare string answers the primary action).
+    assist.submit(assist.listPending()[0]!.id, { action: 'sms', values: {} });
     await flush();
     const [again] = assist.listPending();
-    expect(again).toMatchObject({ type: 'device', payload: { url: 'https://ex' } });
-    expect(String(again!.payload.message)).toContain('too frequent');
+    expect(again).toMatchObject({ type: 'auth', payload: { url: 'https://ex/' } });
+    expect(assist.getFlow('icqq', '10001')?.lastOutcome).toMatchObject({ result: 'rejected', code: 'rate_limited' });
+    expect(assist.getFlow('icqq', '10001')?.lastOutcome?.message).toContain('too frequent');
     assist.submit(again!.id, 'ok');
     await flush();
     expect(endpoint.endpoint.login).toHaveBeenCalledTimes(2);
@@ -171,7 +176,7 @@ describe('icqq LoginAssist wiring', () => {
     await endpoint.stop();
   });
 
-  it('never relogs in while a challenge waits for the operator, and retries with backoff once it goes unanswered', async () => {
+  it('never relogs in while a challenge waits for the operator, nor after it went unanswered', async () => {
     vi.useFakeTimers();
     try {
       const assist = new LoginAssist(null, { defaultTimeoutMs: 60_000 });
@@ -194,10 +199,16 @@ describe('icqq LoginAssist wiring', () => {
       expect(endpoint.endpoint.login).toHaveBeenCalledTimes(2);
       expect(assist.listPending().map(task => task.id)).toEqual([lock!.id]);
 
-      // Unanswered: the task expires, then one backoff relogin raises a fresh challenge.
+      // Unanswered: the challenge expires and the flow waits for the person (ADR 0058 §6: an
+      // expired verification is not retried automatically; the Console / `icqq login retry` logs in again).
       await vi.advanceTimersByTimeAsync(10_000);
       expect(assist.listPending().map(task => task.id)).not.toContain(lock!.id);
-      await vi.advanceTimersByTimeAsync(60_000);
+      await vi.advanceTimersByTimeAsync(600_000);
+      expect(endpoint.endpoint.login).toHaveBeenCalledTimes(2);
+      expect(assist.getFlow('icqq', '10001')).toMatchObject({ state: 'expired', lastOutcome: { code: 'challenge_expired' } });
+      expect(endpoint.endpoint.sendSmsCode).not.toHaveBeenCalled();
+      // An explicit relogin raises a fresh challenge.
+      await endpoint.endpoint.relogin();
       expect(endpoint.endpoint.login).toHaveBeenCalledTimes(3);
       expect(assist.listPending()).toHaveLength(1);
       await endpoint.stop();

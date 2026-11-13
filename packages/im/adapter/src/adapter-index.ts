@@ -214,6 +214,12 @@ export class AdapterIndex {
     if (!adapter) throw new EndpointDeliveryError('endpoint_not_found', 'Unknown Adapter Endpoint', 'not_sent');
     return adapter.acquire(id, signal, expectedClient);
   }
+  /** ADR 0058: lease for login hooks, also while the Endpoint's start is in progress. */
+  acquireLogin(id: CapabilityId, signal?: AbortSignal, expectedClient?: unknown): EndpointChildLease {
+    const adapter = this.adapterForEndpoint(id);
+    if (!adapter) throw new EndpointDeliveryError('endpoint_not_found', 'Unknown Adapter Endpoint', 'not_sent');
+    return adapter.acquireLogin(id, signal, expectedClient);
+  }
   acquireInbound(id: CapabilityId, expectedClient: unknown, signal?: AbortSignal): EndpointChildLease {
     const adapter = this.adapterForEndpoint(id);
     if (!adapter) throw new EndpointDeliveryError('endpoint_not_found', 'Unknown Adapter Endpoint', 'not_sent');
@@ -465,12 +471,16 @@ export class AdapterIndex {
     return this.adapterForEndpoint(id)?.descriptor.login;
   }
 
-  /** ADR 0058: lease-scoped login control hooks of one started Endpoint (absent = unsupported). */
+  /**
+   * ADR 0058: lease-scoped login control hooks of one Endpoint (absent = unsupported). Unlike the
+   * other ports they are callable while the Endpoint is starting (blocked on a login challenge);
+   * stopped incarnations and replaced generations are refused by the lease.
+   */
   loginControl(id: CapabilityId, scope?: EndpointPortScope): EndpointLoginControl | undefined {
     const record = this.#record(id);
     const port = record?.endpoint ? endpointRuntimeOf(record.endpoint).login : undefined;
     if (!port || !record?.endpoint) return undefined;
-    const invoke = this.#portInvoker({ id, endpoint: record.endpoint, scope });
+    const invoke = this.#portInvoker({ id, endpoint: record.endpoint, scope }, 'login');
     const { relogin, refreshChallenge } = port;
     return Object.freeze<EndpointLoginControl>({
       ...(relogin ? { relogin: request => invoke({ signal: request.signal,
@@ -506,14 +516,14 @@ export class AdapterIndex {
     } satisfies SelfProfilePort);
   }
   /** Each facade captures its original Client; calls cannot resolve a replacement incarnation. */
-  #portInvoker({ id, endpoint, scope }: EndpointPortBinding): EndpointPortInvoker {
+  #portInvoker({ id, endpoint, scope }: EndpointPortBinding, kind: 'port' | 'login' = 'port'): EndpointPortInvoker {
     return async ({ run, signal }) => {
       scope?.assertActive?.();
       const releaseScope = scope?.retain?.();
       try {
         const callerSignal = scope?.signal
           ? signal ? AbortSignal.any([scope.signal, signal]) : scope.signal : signal;
-        const lease = this.acquire(id, callerSignal, endpoint);
+        const lease = kind === 'login' ? this.acquireLogin(id, callerSignal, endpoint) : this.acquire(id, callerSignal, endpoint);
         try { return await lease.run((_endpoint, activeSignal) => run(activeSignal)); }
         finally { lease.release(); }
       } finally { releaseScope?.(); }
