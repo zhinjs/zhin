@@ -251,10 +251,15 @@ export async function startGatewayConsole(options: GatewayConsoleOptions): Promi
           if (closed || current.database !== store) return;
           pending = errorText(error);
           pendingCode = error.code;
+          const users = await current.service.listUsers().catch(() => [] as const);
           // gateway.db stays open (the local owner can inspect it, `--reset-store` can run).
           connection = { database: store, service: failClosed().service, dispose: [] };
           for (const dispose of current.dispose.splice(0)) dispose();
           current.service.stop();
+          // Sessions and API tokens no longer authenticate (the service is closed); what is already
+          // open ends too: terminals and the instance's sockets of every user, as on a revocation.
+          for (const user of users) revoke(user.id, error.code);
+          for (const session of terminal.sessions()) terminal.terminatePrincipal(session.principalId, 'revoked');
         });
         await opening;
         return;

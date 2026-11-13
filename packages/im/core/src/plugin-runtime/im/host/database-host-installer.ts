@@ -1159,10 +1159,10 @@ const SQL_ARGUMENT_MAX_DEPTH = 16;
 
 /**
  * Checks one raw-handle argument for gateway table names, at any depth of arrays and plain
- * objects. String-like values (`new String(…)`, objects with their own `toString` /
- * `Symbol.toPrimitive`) are converted once and the checked primitive is what the driver gets, so
- * a value cannot read differently at check and at use. Returns the argument unchanged when
- * nothing needed converting.
+ * objects, and returns the checked copy that goes to the driver: arrays and plain objects are
+ * copied (each element / property read once), string-like values (`new String(…)`, objects with
+ * their own `toString` / `valueOf` / `Symbol.toPrimitive`) are converted once. Nothing can read
+ * differently at check and at use (a getter, a `toString` answering differently the second time).
  */
 function checkedSqlArgument(value: unknown, depth: number): unknown {
   if (typeof value === 'string') {
@@ -1173,26 +1173,16 @@ function checkedSqlArgument(value: unknown, depth: number): unknown {
   if (depth >= SQL_ARGUMENT_MAX_DEPTH) throw new TypeError('Raw database argument is nested too deeply');
   if (value instanceof String) return checkedSqlArgument(String.prototype.valueOf.call(value), depth + 1);
   if (value instanceof Date || ArrayBuffer.isView(value) || value instanceof ArrayBuffer) return value;
-  if (Array.isArray(value)) {
-    let changed = false;
-    const items = value.map(item => {
-      const next = checkedSqlArgument(item, depth + 1);
-      if (next !== item) changed = true;
-      return next;
-    });
-    return changed ? items : value;
-  }
+  if (Array.isArray(value)) return Array.from(value, item => checkedSqlArgument(item, depth + 1));
   const proto = Object.getPrototypeOf(value) as object | null;
   if (proto === Object.prototype || proto === null) {
-    let changed = false;
-    const entries = Object.entries(value).map(([key, item]) => {
-      if (referencesGatewayOwnedTable(key)) throw new GatewayOwnedTableError();
-      const next = checkedSqlArgument(item, depth + 1);
-      if (next !== item) changed = true;
-      return [key, next] as const;
-    });
     if (stringConvertible(value)) return checkedSqlArgument(String(value), depth + 1);
-    return changed ? Object.assign(Object.create(proto) as object, Object.fromEntries(entries)) : value;
+    const copy = Object.create(proto) as Record<string, unknown>;
+    for (const [key, item] of Object.entries(value)) {
+      if (referencesGatewayOwnedTable(key)) throw new GatewayOwnedTableError();
+      Object.defineProperty(copy, key, { value: checkedSqlArgument(item, depth + 1), enumerable: true, writable: true, configurable: true });
+    }
+    return copy;
   }
   // Other class instances: string-convertible ones are what a driver would stringify.
   return stringConvertible(value) ? checkedSqlArgument(String(value), depth + 1) : value;

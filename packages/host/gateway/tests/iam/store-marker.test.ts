@@ -288,13 +288,18 @@ describe('retries (review M3)', () => {
     const server = new GatewayHttpServer({ http: { host: '127.0.0.1', port: 0 }, instance: { transport: () => undefined, state: () => 'running' } });
     closers.push(() => server.close());
     let attempts = 0;
+    const revoked: Array<{ principalId: string; reason?: string }> = [];
     const gateway = await startGatewayConsole({
       server, projectRoot: root, retryMs: 20,
       get database() { attempts += 1; return config; },
+      instance: { revokePrincipal: (principalId: string, reason?: string) => { revoked.push({ principalId, ...(reason ? { reason } : {}) }); } },
     } as never);
     closers.push(() => gateway.close());
     await gateway.ready;
     expect(gateway.iam()?.publicUnavailable()).toBeUndefined();
+    const owner = await gateway.iam()!.createOwner({ username: 'owner', password: PASSWORD });
+    const session = await gateway.iam()!.login('owner', PASSWORD);
+    expect(await gateway.iam()!.authenticate(session.token, {})).not.toBeNull();
     await gateway.ensureStoreMarker();
     const own = await marker(config);
     expect(own?.storeId).toMatch(/^[0-9a-f]{32}$/);
@@ -307,6 +312,9 @@ describe('retries (review M3)', () => {
     expect(gateway.iam()?.initialized()).toBe(true);
     expect(gateway.iam()?.publicUnavailable()).toMatchObject({ code: 'store_mismatch' });
     expect(await gateway.localAdmin.handle('gateway.console.migration.status', {})).toMatchObject({ ok: true, data: { pendingCode: 'store_mismatch' } });
+    // Open sessions end: the token no longer authenticates and the instance drops the user.
+    expect(await gateway.iam()!.authenticate(session.token, {})).toBeNull();
+    expect(revoked).toContainEqual({ principalId: (owner as { id: string }).id, reason: 'store_mismatch' });
     // Not retried: it needs the operator.
     const before = attempts;
     await new Promise(resolve => setTimeout(resolve, 200));

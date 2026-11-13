@@ -157,3 +157,35 @@ describe('Agent bash and $\'…\' / brace-expanded spellings of .zhin', () => {
     expect(hostWriteImpact('bash', { command: huge }, paths)?.level).toBe('deny');
   });
 });
+
+// Fifth review: backslashes, line continuations, parameter defaults and extended globs.
+describe('Agent bash and escaped / defaulted / extglob spellings of .zhin', () => {
+  it('denies them, keeps ordinary commands', async () => {
+    const paths = await createHostProtectedPaths({ projectRoot: '/srv/bot' });
+    for (const command of [
+      'cat .\\zhin/*',
+      'cat .z\\hin/*',
+      'cat gateway.d\\b',
+      'cat .zh\\\nin/*',
+      'cat ${x:-.zhin}/*',
+      'cat ${x-.zhin}/*',
+      'cat ${x:=.zhin}/g*',
+      'cat ${x=.zhin}/*',
+      'cat ${x:+.zhin}/*',
+      'cat ${x+.zhin}/*',
+      'cat ${a:-${b:-.zhin}}/*',
+      'shopt -s extglob\ncat ?(.)zhin/*',
+      'shopt -s extglob\ncat *(.)zhin/*',
+      'shopt -s extglob\ncat +(.)zhin/*',
+      'shopt -s extglob\ncat @(.|x)zhin/*',
+      'shopt -s extglob\ncat !(x)hin/*',
+      'cat @(.zhin)/*',
+    ]) {
+      expect(hostWriteImpact('bash', { command }, paths)?.level, command).toBe('deny');
+    }
+    for (const command of ['cat ${HOME:-/tmp}/notes.txt', 'ls src\\\n  docs', 'echo ${x:-default}', 'cat src\\index.ts', 'ls @(src|docs)']) {
+      const impact = hostWriteImpact('bash', { command }, paths);
+      expect(impact?.level === 'deny' && /zhin|gateway|console_|brace/u.test(String(impact.target)), command).toBe(false);
+    }
+  });
+});

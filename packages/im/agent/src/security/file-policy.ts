@@ -84,15 +84,56 @@ export function commandNamesProtectedStore(command: string): string | undefined 
   // The text as written, and as the shell would read it after ANSI-C quoting (`$'\x2ezhin'`,
   // `$'\056zhin'`) and brace expansion (`{.,x}zhin`, `{-../}zhin`): any spelling that names the
   // store is refused. Run-time names (`$var`, `$(…)`, whole-tree reads) stay with the sandbox.
-  const decoded = decodeAnsiCQuoting(command);
-  const expanded = expandBraces(command);
-  const variants = new Set([command, decoded, expanded, expandBraces(decoded), expanded === undefined ? undefined : decodeAnsiCQuoting(expanded)]);
+  // Line continuations first: `.zh\<newline>in` is `.zhin` to the shell.
+  const joined = command.replace(/\\\r?\n/gu, '');
+  const defaults = expandParameterDefaults(joined);
+  const bases = new Set([joined, defaults, extglobAsBraces(joined), extglobAsBraces(defaults)]);
+  const variants = new Set<string | undefined>();
+  for (const base of bases) {
+    const decoded = decodeAnsiCQuoting(base);
+    const expanded = expandBraces(base);
+    for (const variant of [base, decoded, expanded, expandBraces(decoded), expanded === undefined ? undefined : decodeAnsiCQuoting(expanded)]) variants.add(variant);
+  }
   for (const variant of variants) {
     if (variant === undefined) return 'brace expansion';
     const hit = protectedStoreInText(variant);
     if (hit) return hit;
   }
   return undefined;
+}
+
+/**
+ * `${name:-word}` / `${name-word}` / `:=` / `=` / `:+` / `+` / `:?` / `?`: the word as an extra
+ * candidate (the variable may be unset, so the shell may use it).
+ */
+function expandParameterDefaults(command: string): string {
+  let text = command;
+  // Innermost first, so nested defaults (`${a:-${b:-.zhin}}`) unfold too.
+  for (let round = 0; round < 16; round += 1) {
+    const next = text.replace(/\$\{#?[A-Za-z_][A-Za-z0-9_]*(?:\[[^\]{}]*\])?:?[-=+?]([^{}]*)\}/gu, (_, word: string) => word);
+    if (next === text) break;
+    text = next;
+  }
+  return text;
+}
+
+/**
+ * Extended globs (`shopt -s extglob`) as brace lists, over-approximating what they can match:
+ * `@(a|b)` / `+(a|b)` → `{a,b}`, `?(a|b)` / `*(a|b)` → `{,a,b}`, `!(…)` → `*` (anything).
+ */
+function extglobAsBraces(command: string): string {
+  let text = command;
+  for (let round = 0; round < 16; round += 1) {
+    const next = text.replace(/([?*+@!])\(([^()]*)\)/gu, (_, op: string, body: string) => {
+      if (op === '!') return '*';
+      const alternatives = body.split('|');
+      if (op === '?' || op === '*') return `{,${alternatives.join(',')}}`;
+      return alternatives.length === 1 ? alternatives[0]! : `{${alternatives.join(',')}}`;
+    });
+    if (next === text) break;
+    text = next;
+  }
+  return text;
 }
 
 /** `$'…'` strings with their escapes decoded (bash ANSI-C quoting); `$"…"` loses its `$`. */
@@ -197,9 +238,17 @@ function firstBraceExpansion(word: string): { prefix: string; alternatives: stri
 }
 
 function protectedStoreInText(command: string): string | undefined {
-  // Quotes and backslash escapes do not change what the shell opens: `.zh""in`, `gateway.d\b`.
-  const text = command.replace(/\\/g, '/').replace(/["'`]/g, '');
-  const zhinDir = /(?:^|[\s=:,(/;&|<>{}$])(\.zhin)(?=$|[\s/;&|)<>*?[,}])/iu.exec(text);
+  // Backslashes read two ways: removed, as bash does (`.\zhin`, `gateway.d\b` → `gateway.db`), and
+  // as path separators (Windows paths). Quotes are removed as well (`.zh""in`).
+  for (const text of new Set([command.replace(/\\([\s\S])/gu, '$1'), command.replace(/\\/gu, '/')])) {
+    const hit = protectedStoreInUnquoted(text.replace(/["'`]/gu, ''));
+    if (hit) return hit;
+  }
+  return undefined;
+}
+
+function protectedStoreInUnquoted(text: string): string | undefined {
+  const zhinDir = /(?:^|[\s=:,(/;&|<>{}$\-+?@!*])(\.zhin)(?=$|[\s/;&|)<>*?[,}])/iu.exec(text);
   if (zhinDir) return '.zhin';
   const store = /gateway\.db/iu.exec(text);
   if (store) return 'gateway.db';

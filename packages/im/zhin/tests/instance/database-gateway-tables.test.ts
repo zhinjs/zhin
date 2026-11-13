@@ -133,6 +133,19 @@ describe('instance database paths never reach the gateway console_* tables', () 
       try {
         expect(await check.models.get(IAM_TABLES.users)!.select('id')).toEqual([{ id: 'u1' }]);
       } finally { await check.stop(); }
+      // Containers are copied when checked: a getter that answers differently on a second read
+      // (at use) is read once, and the checked value is what the driver gets.
+      let reads = 0;
+      const params = [1, 'safe'];
+      Object.defineProperty(params, 1, { enumerable: true, get: () => (reads++ === 0 ? 'safe' : 'DROP TABLE console_users') });
+      await raw.query('INSERT INTO notes (id, text) VALUES (?, ?)', params);
+      expect(reads).toBe(1);
+      expect(await raw.query('SELECT text FROM notes WHERE id = 1')).toEqual([{ text: 'safe' }]);
+      let condReads = 0;
+      const condition = Object.defineProperty({}, 'id', { enumerable: true, get: () => (condReads++ === 0 ? 1 : { $raw: '1) UNION SELECT password_hash FROM console_users --' }) });
+      expect(await raw.select('notes', ['id']).where(condition)).toEqual([{ id: 1 }]);
+      expect(condReads).toBe(1);
+      await raw.query('DELETE FROM notes');
       // Ordinary transaction statements keep working.
       await raw.transaction(trx => trx.query!('INSERT INTO notes (id, text) VALUES (?, ?)', [1, new String('hello')]));
       expect(await raw.query('SELECT id, text FROM notes')).toEqual([{ id: 1, text: 'hello' }]);
