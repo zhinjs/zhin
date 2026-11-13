@@ -11,7 +11,7 @@ import {
   type ConsoleConfigExplanation,
   type ConsoleEndpointSummary,
 } from '@zhin.js/console-protocol';
-import { authorizeConsoleRpc, type ConsolePrincipal } from './access-control.js';
+import { authorizeConsoleRpc, principalAllows, type ConsolePrincipal } from './access-control.js';
 import { dispatchExtendedConsoleRpc, type ConsoleRpcExtendedCtx } from './console-rpc-extended/index.js';
 import { dispatchPluginConsoleRpc } from './console-plugin-rpc.js';
 import {
@@ -285,13 +285,19 @@ export async function dispatchRuntimeConsoleRpc(
   const requestId = message.requestId as number | string | undefined;
 
   let authorizedEndpoint: ConsoleRpcExtendedCtx['authorizedEndpoint'];
+  let canOperateEndpoint: ConsoleRpcExtendedCtx['canOperateEndpoint'];
   if (ctx.principal) {
-    const decision = authorizeConsoleRpc(ctx.principal, message as Record<string, unknown>);
+    const principal = ctx.principal;
+    const decision = authorizeConsoleRpc(principal, message as Record<string, unknown>);
     if (!decision.allowed) {
       emit({ requestId, error: decision.error, code: decision.code });
       return payloads;
     }
-    authorizedEndpoint = scopedAuthorizedEndpoint(ctx.principal, decision);
+    authorizedEndpoint = scopedAuthorizedEndpoint(principal, decision);
+    // Same grant check the map applies to `login.submit` for that Endpoint (ADR 0058 §8).
+    canOperateEndpoint = (adapter, endpointKey) => principalAllows(
+      principal, 'endpoint.operate', Object.freeze({ kind: 'endpoint', adapter, endpoint: endpointKey }),
+    );
   }
 
   // Extended RPC surface (cron/schedule、endpoint 社交/inbox)
@@ -303,6 +309,7 @@ export async function dispatchRuntimeConsoleRpc(
         ...ctx.extended,
         fullScope: ctx.authScope === 'full',
         ...(authorizedEndpoint ? { authorizedEndpoint } : {}),
+        ...(canOperateEndpoint ? { canOperateEndpoint } : {}),
       },
     );
     if (extended !== undefined) {

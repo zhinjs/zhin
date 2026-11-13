@@ -40,6 +40,13 @@ export interface ConsoleRpcExtendedCtx {
    * login tasks or flows restrict themselves to it; set by the dispatcher, never read from the body.
    */
   authorizedEndpoint?: Readonly<{ adapter: string; endpointKey: string }>;
+  /**
+   * Whether the caller holds `endpoint.operate` on one Endpoint (set by the dispatcher from the
+   * authenticated principal, never read from the body). Login read RPCs return live challenge
+   * material (QR image, sensitive blocks, verification links, legacy `payload.image` / `url`) only
+   * when it says yes; absent (in-process callers without a principal) = trusted.
+   */
+  canOperateEndpoint?: (adapter: string, endpointKey: string) => boolean;
   workroomKnowledgeControl?: ConsoleWorkroomKnowledgeControlPort;
 }
 
@@ -121,6 +128,12 @@ export interface ConsoleLoginAssistPort {
   listFlows?(): readonly ConsoleLoginFlow[];
   getFlow?(adapter: string, endpointKey: string): ConsoleLoginFlow | undefined;
   getFlowById?(id: string): ConsoleLoginFlow | undefined;
+  /**
+   * Event-safe copy of a flow (core `withoutLoginMedia`): no QR image, sensitive blocks redacted,
+   * verification links dropped. Returned to readers without `endpoint.operate` on the flow's
+   * Endpoint; without it the host strips every challenge's media and blocks.
+   */
+  eventSafeFlow?(flow: ConsoleLoginFlow): ConsoleLoginFlow;
   submitAndWait?(
     id: string,
     value: string | Record<string, unknown>,

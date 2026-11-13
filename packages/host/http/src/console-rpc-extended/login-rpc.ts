@@ -1,5 +1,5 @@
-import { CONSOLE_LOGIN_UNSUPPORTED, LOGIN_RPC } from '@zhin.js/console-protocol';
-import type { ConsoleEndpointLoginAccess, ConsoleRpcExtendedCtx, ExtendedRpcResult } from './contracts.js';
+import { CONSOLE_LOGIN_UNSUPPORTED, LOGIN_RPC, type ConsoleLoginFlow } from '@zhin.js/console-protocol';
+import type { ConsoleEndpointLoginAccess, ConsoleLoginAssistPort, ConsoleRpcExtendedCtx, ExtendedRpcResult } from './contracts.js';
 import { strField } from './rpc-values.js';
 
 const NOT_WIRED = '登录辅助未接线（LoginAssist 未挂载）';
@@ -17,7 +17,7 @@ export function listLoginPending(d: Record<string, unknown>, ctx: ConsoleRpcExte
     endpointKey: task.endpointKey,
     ...(task.endpointIdentity ? { endpointIdentity: task.endpointIdentity } : {}),
     type: task.type,
-    payload: task.payload,
+    payload: canOperate(ctx, task) ? task.payload : eventSafeLoginPayload(task.payload),
     createdAt: task.createdAt,
     expiresAt: task.expiresAt,
     ...(task.flowId ? { flowId: task.flowId } : {}),
@@ -86,14 +86,17 @@ export function cancelLogin(
   return { data: { success: true } };
 }
 
-/** `login.flow.list { adapter?, endpointKey? }`: latest flow per Endpoint, with live challenge material. */
+/**
+ * `login.flow.list { adapter?, endpointKey? }`: latest flow per Endpoint. Live challenge material
+ * only for Endpoints the caller may operate; the event-safe form otherwise (ADR 0058 §8).
+ */
 export function listLoginFlows(d: Record<string, unknown>, ctx: ConsoleRpcExtendedCtx): ExtendedRpcResult {
   const assist = ctx.loginAssist;
   if (!assist) return { error: NOT_WIRED };
   if (!assist.listFlows) return unsupported('login flows');
   const scope = loginScope(d, ctx);
   if ('error' in scope) return scope;
-  const flows = assist.listFlows().filter((flow) => inScope(scope, flow));
+  const flows = assist.listFlows().filter((flow) => inScope(scope, flow)).map((flow) => visibleFlow(assist, ctx, flow));
   return { data: { flows, count: flows.length } };
 }
 
@@ -108,10 +111,11 @@ export function getLoginFlow(d: Record<string, unknown>, ctx: ConsoleRpcExtended
   if (flowId) {
     const flow = assist.getFlowById(flowId);
     // A flow id names one Endpoint; a scoped caller cannot read another Endpoint's flow by id.
-    return { data: { flow: flow && inScope(scope, flow) ? flow : null } };
+    return { data: { flow: flow && inScope(scope, flow) ? visibleFlow(assist, ctx, flow) : null } };
   }
   if (!scope.adapter || !scope.endpointKey) return { error: 'flowId or adapter and endpointKey are required' };
-  return { data: { flow: assist.getFlow(scope.adapter, scope.endpointKey) ?? null } };
+  const flow = assist.getFlow(scope.adapter, scope.endpointKey);
+  return { data: { flow: flow ? visibleFlow(assist, ctx, flow) : null } };
 }
 
 /** `login.relogin` / `login.refresh { adapter, endpointKey }` through the Endpoint's login port. */
@@ -198,6 +202,58 @@ function loginScope(d: Record<string, unknown>, ctx: ConsoleRpcExtendedCtx): Log
     return { error: 'Login target outside the authorized Endpoint' };
   }
   return { adapter: authorized.adapter, endpointKey: authorized.endpointKey };
+}
+
+/** The caller may handle this Endpoint's challenge (`endpoint.operate` there); no principal = trusted. */
+function canOperate(ctx: ConsoleRpcExtendedCtx, item: { readonly adapter: string; readonly endpointKey: string }): boolean {
+  return ctx.canOperateEndpoint ? ctx.canOperateEndpoint(item.adapter, item.endpointKey) : true;
+}
+
+/**
+ * A flow as this caller may see it: live for operators, otherwise the event-safe form (no QR image,
+ * sensitive blocks redacted, verification links dropped). A port without `eventSafeFlow` falls back
+ * to removing every challenge's media and blocks.
+ */
+function visibleFlow(assist: ConsoleLoginAssistPort, ctx: ConsoleRpcExtendedCtx, flow: ConsoleLoginFlow): ConsoleLoginFlow {
+  if (canOperate(ctx, flow)) return flow;
+  return assist.eventSafeFlow ? assist.eventSafeFlow(flow) : withoutChallengeMaterial(flow);
+}
+
+function withoutChallengeMaterial(flow: ConsoleLoginFlow): ConsoleLoginFlow {
+  if (!flow.steps.some((step) => step.challenge?.media || step.challenge?.blocks)) return flow;
+  return Object.freeze({
+    ...flow,
+    steps: Object.freeze(flow.steps.map((step) => {
+      if (!step.challenge || (!step.challenge.media && !step.challenge.blocks)) return step;
+      const { media, blocks: _blocks, ...challenge } = step.challenge;
+      return Object.freeze({
+        ...step,
+        challenge: Object.freeze({
+          ...challenge,
+          media: Object.freeze({
+            ...(media?.expiresAt !== undefined ? { expiresAt: media.expiresAt } : {}),
+            ...(media?.refreshable !== undefined ? { refreshable: media.refreshable } : {}),
+            ...(media?.qrImage ? { qrImageOmitted: true } : {}),
+            ...(media?.link || media?.captcha ? { linkOmitted: true } : {}),
+          }),
+        }),
+      });
+    })),
+  });
+}
+
+/**
+ * Legacy task payload without the QR image (`image`) and verification link (`url`, may carry a
+ * session id), marked `imageOmitted` / `urlOmitted` like the `endpoint.login.*` events.
+ */
+function eventSafeLoginPayload(payload: Record<string, unknown>): Record<string, unknown> {
+  if (payload.image === undefined && payload.url === undefined) return payload;
+  const { image, url, ...rest } = payload;
+  return {
+    ...rest,
+    ...(image !== undefined ? { imageOmitted: true } : {}),
+    ...(url !== undefined ? { urlOmitted: true } : {}),
+  };
 }
 
 function inScope(scope: LoginScope, item: { readonly adapter: string; readonly endpointKey: string }): boolean {
