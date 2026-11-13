@@ -16,9 +16,29 @@ const directives = new Map(
     return [name, values] as const;
   }),
 );
-// Case-insensitive and tolerant of `</script >` so a differently cased or spaced tag can't slip past
-// the "exactly one inline script" check.
-const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi)];
+/**
+ * Every `<script …>…</script …>` element, found by scanning instead of a regular expression so that
+ * any casing or end-tag form (`</SCRIPT>`, `</script\t\n foo>`) is counted — the "exactly one inline
+ * script" check must not be fooled by an unusual tag. Returns `[whole, attributes, body]` tuples.
+ */
+function findScripts(source: string): Array<[string, string, string]> {
+  const lower = source.toLowerCase();
+  const found: Array<[string, string, string]> = [];
+  let from = 0;
+  for (;;) {
+    const open = lower.indexOf('<script', from);
+    if (open < 0) return found;
+    const after = lower.charAt(open + 7);
+    if (after !== '>' && after !== '/' && !/\s/.test(after)) { from = open + 7; continue; }
+    const openEnd = source.indexOf('>', open);
+    const close = lower.indexOf('</script', openEnd);
+    const closeEnd = close < 0 ? -1 : source.indexOf('>', close);
+    if (openEnd < 0 || close < 0 || closeEnd < 0) throw new Error('unterminated <script> element');
+    found.push([source.slice(open, closeEnd + 1), source.slice(open + 7, openEnd), source.slice(openEnd + 1, close)]);
+    from = closeEnd + 1;
+  }
+}
+const scripts = findScripts(html);
 
 describe('login-assist captcha helper page', () => {
   it('has exactly one inline script, allowed by its sha256 hash', () => {
@@ -82,5 +102,10 @@ describe('login-assist captcha helper page', () => {
     expect(block).toMatch(/Content-Security-Policy: frame-ancestors 'none'/);
     expect(block).toMatch(/X-Frame-Options: DENY/);
     expect(block).toMatch(/Referrer-Policy: no-referrer/);
+  });
+
+  it('the script scanner counts unusual casing and end-tag forms', () => {
+    const tricky = '<SCRIPT>a</SCRIPT><script type="x">b</script\t\n foo><scripts>no</scripts><script>c</script >';
+    expect(findScripts(tricky).map((entry) => entry[2])).toEqual(['a', 'b', 'c']);
   });
 });
