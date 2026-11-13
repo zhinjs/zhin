@@ -9,6 +9,9 @@ import {
   isGatewayOwnedTable,
   referencesGatewayOwnedTable,
   RelatedModel,
+  probeConsoleCredential,
+  refreshConsoleGrants,
+  splitMysqlAccount,
   type Column, type StructuredDatabase, type TransactionContext } from '@zhin.js/database';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
@@ -171,25 +174,35 @@ function wrapModel(model: RawModel, db?: RawDatabase, tableName?: string): Datab
   };
 }
 
-/**
- * Root-only view of the gateway-owned `console_*` tables. Only a standalone composition (no
- * gateway, dev / test) hands it to its in-process Console access control; every other path of
- * the host refuses those tables.
- */
-export interface GatewayTableHost {
-  readonly dialect: string;
-  readonly started: boolean;
-  define(name: string, definition: Record<string, unknown>): void;
-  tables(): readonly string[];
-  readonly models: { get(name: string): DatabaseHostModel | undefined };
+/** Test and composition knobs of {@link createDatabaseHost} (not part of the config file). */
+export interface DatabaseHostInternalOptions {
+  /**
+   * Tests only: `false` turns the Console SQL text checks off (statement classification, refused
+   * statements, the `console_*` name guard), so a test can show that the storage boundary alone
+   * keeps the gateway's data out of reach (ADR 0059 §5). Default true.
+   */
+  readonly textGuard?: boolean;
+  /** Minimum time between two probes of the restricted Console account after a failure (default 5 min). */
+  readonly consoleProbeIntervalMs?: number;
+  readonly now?: () => number;
+  /**
+   * Tests: opens the restricted account's connection from the options the host would pass to
+   * `Registry.create` (default: `Registry.create`).
+   */
+  readonly openConsoleConnection?: (dialect: 'pg' | 'mysql', options: Readonly<Record<string, unknown>>) => unknown;
 }
 
-export function createDatabaseHost(config: DatabaseHostConfig): DatabaseHost & {
+/** How long a failed restricted-account probe is kept before the next try. */
+export const CONSOLE_CREDENTIAL_RETRY_MS = 5 * 60_000;
+
+/** Why raw SQL is off on PostgreSQL / MySQL without a restricted account. */
+export const CONSOLE_ROLE_MISSING_REASON = 'Raw SQL on PostgreSQL / MySQL runs only on a restricted database account: run `zhin db console-role` (or `zhin doctor --fix`; `--print-sql` for a DBA) and restart';
+
+export function createDatabaseHost(config: DatabaseHostConfig, internal: DatabaseHostInternalOptions = {}): DatabaseHost & {
   readonly db: { define: (name: string, definition: unknown) => void; start(): Promise<void>; stop(): Promise<void>; models: Map<string, unknown> };
-  /** See {@link GatewayTableHost}; never pass it to plugins, Agent or Console database RPC. */
-  gatewayTableHost(): GatewayTableHost;
 } {
-  const { dialect, ...connectionConfig } = config;
+  // `console` (the restricted Console account) never reaches the main connection's driver.
+  const { dialect, console: consoleCredential, ...connectionConfig } = config as DatabaseHostConfig & { console?: unknown };
   const db = Registry.create(
     dialect as keyof Registry.Config,
     connectionConfig as never,
@@ -201,13 +214,18 @@ export function createDatabaseHost(config: DatabaseHostConfig): DatabaseHost & {
   const definitions = new Map<string, Record<string, unknown>>();
   const additions = new Map<string, Record<string, Column>>();
   let rawGuard: RawDatabase | undefined;
-  let gatewayView: GatewayTableHost | undefined;
-  const { port: consolePort, refreshDiscovered, refreshRawSql } = createDatabaseConsole(
+  const { port: consolePort, refreshDiscovered, refreshRawSql, stopConsoleSql } = createDatabaseConsole(
     db,
     config.dialect,
     () => started,
     definedTables,
     definitions,
+    {
+      textGuard: internal.textGuard !== false,
+      restricted: restrictedConsoleConnection(config.dialect, connectionConfig, consoleCredential, internal.openConsoleConnection),
+      retryMs: internal.consoleProbeIntervalMs ?? CONSOLE_CREDENTIAL_RETRY_MS,
+      now: internal.now ?? Date.now,
+    },
   );
   const modelOf = (name: string): DatabaseHostModel | undefined => {
     if (!started) return undefined;
@@ -274,18 +292,6 @@ export function createDatabaseHost(config: DatabaseHostConfig): DatabaseHost & {
       get(name) {
         return isGatewayOwnedTable(name) ? undefined : modelOf(name);
       },
-    },
-    gatewayTableHost() {
-      return gatewayView ??= Object.freeze({
-        get dialect() { return config.dialect; },
-        get started() { return started; },
-        define(name: string, definition: Record<string, unknown>) {
-          if (!isGatewayOwnedTable(name)) throw new Error(`Table '${name}' is not a gateway table`);
-          defineTable(name, definition);
-        },
-        tables: () => [...definedTables].filter(isGatewayOwnedTable),
-        models: Object.freeze({ get: (name: string) => (isGatewayOwnedTable(name) ? modelOf(name) : undefined) }),
-      });
     },
     async transaction(callback) {
       if (!started) throw new Error('Database is not connected');
@@ -354,6 +360,7 @@ export function createDatabaseHost(config: DatabaseHostConfig): DatabaseHost & {
     },
     async stop() {
       if (!started) return;
+      await stopConsoleSql();
       await db.stop();
       started = false;
       wrapped.clear();
@@ -395,17 +402,78 @@ export class ConsoleSelectRefusal extends Error {
   }
 }
 
+/** Where raw Console SQL runs: the main connection (SQLite) or the restricted account's own pool. */
+interface ConsoleSqlExecutor {
+  transaction: RawDatabase['transaction'];
+  query(sql: string): Promise<unknown>;
+}
+
+interface RestrictedConsoleConnection {
+  readonly user: string;
+  open(): RawDatabase;
+}
+
+/**
+ * PostgreSQL / MySQL: a lazily opened pool (at most 2 connections) that logs in as
+ * `database.console.user`. MySQL connections refuse `LOAD DATA LOCAL` (no LOCAL_FILES flag, no
+ * stream factory) and multiple statements.
+ */
+function restrictedConsoleConnection(
+  dialect: string,
+  connection: Record<string, unknown>,
+  credential: unknown,
+  openConnection?: DatabaseHostInternalOptions['openConsoleConnection'],
+): RestrictedConsoleConnection | undefined {
+  if (dialect !== 'pg' && dialect !== 'mysql') return undefined;
+  if (!credential || typeof credential !== 'object') return undefined;
+  const { user, password } = credential as { user?: unknown; password?: unknown };
+  if (typeof user !== 'string' || !user || typeof password !== 'string' || !password) return undefined;
+  return Object.freeze({
+    user,
+    open: () => {
+      const { pool: _pool, user: _user, password: _password, connectionString, uri, infileStreamFactory: _infile, multipleStatements: _multiple, flags: _flags, ...rest } = connection;
+      const target = dialect === 'pg' && typeof connectionString === 'string' ? { connectionString: withoutCredentials(connectionString) }
+        : dialect === 'mysql' && typeof uri === 'string' ? { uri: withoutCredentials(uri) } : {};
+      const options: Record<string, unknown> = { ...rest, ...target, user, password, pool: { max: 2, min: 0 } };
+      if (dialect === 'mysql') Object.assign(options, { flags: ['-LOCAL_FILES'], multipleStatements: false });
+      if (openConnection) return openConnection(dialect, Object.freeze(options)) as RawDatabase;
+      return Registry.create(dialect as keyof Registry.Config, options as never) as unknown as RawDatabase;
+    },
+  });
+}
+
+/** A connection URL without its user / password (the restricted account supplies its own). */
+function withoutCredentials(url: string): string {
+  try {
+    const parsed = new URL(url);
+    parsed.username = '';
+    parsed.password = '';
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
+interface ConsoleSqlOptions {
+  readonly textGuard: boolean;
+  readonly restricted: RestrictedConsoleConnection | undefined;
+  readonly retryMs: number;
+  readonly now: () => number;
+}
+
 function createDatabaseConsole(
   db: RawDatabase,
   configuredDialect: string,
   isStarted: () => boolean,
   tableNames: Set<string>,
   definitions: Map<string, Record<string, unknown>>,
-): { port: DatabaseHostConsole; refreshDiscovered(): Promise<void>; refreshRawSql(): Promise<void> } {
+  sqlOptions: ConsoleSqlOptions,
+): { port: DatabaseHostConsole; refreshDiscovered(): Promise<void>; refreshRawSql(): Promise<void>; stopConsoleSql(): Promise<void> } {
   const type = databaseType(configuredDialect);
   const sqlDialect: ConsoleSqlDialect | undefined = type === 'related' && SQL_DIALECTS.has(configuredDialect)
     ? configuredDialect as ConsoleSqlDialect
     : undefined;
+  const sqlIsolation = sqlDialect === 'sqlite' ? 'separate-store' as const : sqlDialect ? 'restricted-credential' as const : undefined;
   /** Physical tables no code declared (created from the Console, left by removed plugins). */
   const discovered = new Map<string, Record<string, unknown>>();
   const capabilities: DatabaseHostConsoleCapabilities = Object.freeze({
@@ -413,6 +481,7 @@ function createDatabaseConsole(
     filterOperators: type === 'keyvalue' ? Object.freeze([]) : FILTER_OPERATORS,
     sql: !!sqlDialect,
     schema: !!sqlDialect,
+    ...(sqlIsolation ? { sqlIsolation } : {}),
     ...(sqlDialect ? {} : { reason: `SQL and schema editing need SQLite, MySQL or PostgreSQL (current: ${configuredDialect})` }),
   });
   const listed = () => [...tableNames, ...[...discovered.keys()].filter(name => !tableNames.has(name))]
@@ -432,12 +501,78 @@ function createDatabaseConsole(
   };
   /** Why raw SQL (`db:query` / `db:execute`) is off on this connection, if it is. */
   let rawSqlProblem: string | undefined;
+  // ---- the restricted account (PostgreSQL / MySQL, ADR 0059 §4)
+  let restrictedDb: RawDatabase | undefined;
+  /** Why the restricted account cannot be used (undefined once probed ok). */
+  let accessProblem: string | undefined = sqlDialect && sqlDialect !== 'sqlite'
+    ? (sqlOptions.restricted ? 'The restricted Console database account has not been checked yet' : CONSOLE_ROLE_MISSING_REASON)
+    : undefined;
+  let lastProbeAt: number | undefined;
+  const closeRestricted = async (): Promise<void> => {
+    const current = restrictedDb;
+    restrictedDb = undefined;
+    await current?.stop().catch(() => undefined);
+  };
+  /**
+   * Opens and probes the restricted account (and, on PostgreSQL, refreshes its grants with the
+   * main account first). A failure keeps raw SQL off and is retried at most every `retryMs`.
+   */
+  const refreshConsoleAccess = async (force = false): Promise<void> => {
+    if (!sqlDialect || sqlDialect === 'sqlite' || !sqlOptions.restricted || !isStarted()) return;
+    if (!force && restrictedDb && !accessProblem) return;
+    if (!force && lastProbeAt !== undefined && sqlOptions.now() - lastProbeAt < sqlOptions.retryMs) return;
+    lastProbeAt = sqlOptions.now();
+    const restricted = sqlOptions.restricted;
+    try {
+      const mainUser = await mainAccount(sqlDialect, sql => db.query(sql));
+      if (sqlDialect === 'pg') {
+        await refreshConsoleGrants((sql, params) => db.query(sql, params), { role: restricted.user }).catch((error: unknown) => {
+          logger.warn(formatCompact({ op: 'database_console_grants_failed', error: error instanceof Error ? error.message : String(error) }));
+        });
+      }
+      await closeRestricted();
+      const candidate = restricted.open();
+      await candidate.start();
+      const probe = await probeConsoleCredential((sql, params) => candidate.query(sql, params), {
+        dialect: sqlDialect, expectedUser: restricted.user, ...(mainUser ? { mainUser } : {}),
+      }).catch(async (error: unknown) => {
+        await candidate.stop().catch(() => undefined);
+        throw error;
+      });
+      if (!probe.ok) {
+        await candidate.stop().catch(() => undefined);
+        accessProblem = `The restricted Console database account is not restricted enough: ${probe.problems.join('; ')}`;
+      } else {
+        restrictedDb = candidate;
+        accessProblem = undefined;
+      }
+    } catch (error) {
+      accessProblem = `The restricted Console database account cannot be used: ${error instanceof Error ? error.message : String(error)}`;
+    }
+    if (accessProblem) logger.warn(formatCompact({ op: 'database_console_role_unusable', reason: accessProblem }));
+  };
+  /** The connection raw Console SQL runs on. */
+  const executor = (): ConsoleSqlExecutor | undefined => {
+    if (sqlDialect === 'sqlite') return db;
+    return accessProblem ? undefined : restrictedDb;
+  };
   const refreshRawSql = async (): Promise<void> => {
     if (!sqlDialect || !isStarted()) return;
+    await refreshConsoleAccess();
+    const target = executor();
+    if (!target) {
+      rawSqlProblem = accessProblem;
+      return;
+    }
     rawSqlProblem = await rawSqlCompatibilityProblem(sqlDialect, {
-      query: (sql) => db.query(sql),
+      query: (sql) => target.query(sql),
       isolatedReads: () => db.dialect.supportsIsolatedReads?.() === true,
     }).catch((error: unknown) => `Cannot check how the server reads SQL text: ${error instanceof Error ? error.message : String(error)}`);
+  };
+  const requireExecutor = (): ConsoleSqlExecutor => {
+    const target = executor();
+    if (!target) throw new ConsoleSqlRefusal('unsupported', accessProblem ?? 'Raw SQL is unavailable');
+    return target;
   };
   /** Raw SQL needs the server to read text as the Console lexer does (checked again on every run). */
   const requireRawSql = async (): Promise<ConsoleSqlDialect> => {
@@ -447,7 +582,7 @@ function createDatabaseConsole(
     return dialect;
   };
   const currentCapabilities = (): DatabaseHostConsoleCapabilities => (rawSqlProblem && sqlDialect
-    ? Object.freeze({ ...capabilities, sql: false, reason: rawSqlProblem })
+    ? Object.freeze({ ...capabilities, sql: false, sqlReason: rawSqlProblem, reason: rawSqlProblem })
     : capabilities);
   const describe = async (table: string): Promise<DatabaseHostTableSchema> => {
     assertInstanceTable(table);
@@ -479,12 +614,12 @@ function createDatabaseConsole(
     }
   };
   /** Runs `body` in one transaction; `rollback` discards it after collecting the result. */
-  const inTransaction = async <T>(body: (trx: ConsoleTransaction) => Promise<T>, options: { readOnly?: boolean; rollback?: boolean; timeoutMs?: number }): Promise<T> => {
+  const inTransaction = async <T>(body: (trx: ConsoleTransaction) => Promise<T>, options: { readOnly?: boolean; rollback?: boolean; timeoutMs?: number }, on: ConsoleSqlExecutor = db): Promise<T> => {
     const dialect = requireSql();
     const discard = Symbol('rollback');
     let result: T | undefined;
     try {
-      await db.transaction(async trx => {
+      await on.transaction(async trx => {
         const run = (sql: string) => trx.query(sql);
         const statement = (sql: string, statementOptions?: { maxRows?: number }) => {
           if (!trx.queryStatement) throw new Error('This database driver cannot run single statements');
@@ -670,7 +805,8 @@ function createDatabaseConsole(
     },
     async query(sql, options) {
       const dialect = await requireRawSql();
-      const statement = readOnlyConsoleStatement(sql, dialect);
+      const on = requireExecutor();
+      const statement = sqlOptions.textGuard ? readOnlyConsoleStatement(sql, dialect) : { text: sql, kind: 'unchecked' as const };
       const maxRows = Math.min(Math.max(1, Math.floor(options?.maxRows ?? CONSOLE_QUERY_MAX_ROWS)), CONSOLE_QUERY_MAX_ROWS);
       const timeoutMs = Math.max(1, Math.floor(options?.timeoutMs ?? CONSOLE_QUERY_TIMEOUT_MS));
       const started = Date.now();
@@ -686,7 +822,7 @@ function createDatabaseConsole(
             return cappedRows(await trx.statement(`FETCH FORWARD ${maxRows + 1} FROM ${PG_CONSOLE_CURSOR}`), maxRows);
           }
           return cappedRows(await trx.statement(statement.text, { maxRows }), maxRows);
-        }, { readOnly: true, rollback: true, timeoutMs });
+        }, { readOnly: true, rollback: true, timeoutMs }, on);
       }
       const rows = read.rows.map(jsonSafeRow);
       const columns = read.columns?.length ? [...read.columns] : [...new Set(rows.flatMap(row => Object.keys(row)))];
@@ -694,7 +830,8 @@ function createDatabaseConsole(
     },
     async execute(sql, options) {
       const dialect = await requireRawSql();
-      const statements = writeConsoleStatements(sql, dialect);
+      const on = requireExecutor();
+      const statements = sqlOptions.textGuard ? writeConsoleStatements(sql, dialect) : [{ text: sql, code: sql.trim().toLowerCase() }];
       const dryRun = options?.dryRun === true;
       const started = Date.now();
       const runAll = async (run: (text: string) => Promise<unknown>) => {
@@ -710,9 +847,9 @@ function createDatabaseConsole(
         return Object.freeze({ statements: statements.map(statement => ({ sql: statement.text })), dryRun, estimateUnavailable: true, durationMs: 0 });
       }
       const results = transactional
-        ? await inTransaction(trx => runAll(text => trx.statement(text)), { rollback: dryRun, ...(options?.timeoutMs ? { timeoutMs: options.timeoutMs } : {}) })
+        ? await inTransaction(trx => runAll(text => trx.statement(text)), { rollback: dryRun, ...(options?.timeoutMs ? { timeoutMs: options.timeoutMs } : {}) }, on)
         // MySQL DDL: dialect queries are prepared statements (one statement each).
-        : await runAll(text => db.query(text));
+        : await runAll(text => on.query(text));
       if (!dryRun) await refreshDiscovered().catch(() => undefined);
       return Object.freeze({ statements: Object.freeze(results), dryRun, durationMs: Date.now() - started });
     },
@@ -745,7 +882,15 @@ function createDatabaseConsole(
       return planned;
     },
   };
-  return { port: Object.freeze(port), refreshDiscovered, refreshRawSql };
+  return { port: Object.freeze(port), refreshDiscovered, refreshRawSql, stopConsoleSql: closeRestricted };
+}
+
+/** The main account's name (PostgreSQL `current_user`, MySQL user part of `CURRENT_USER()`). */
+async function mainAccount(dialect: ConsoleSqlDialect, query: (sql: string) => Promise<unknown>): Promise<string | undefined> {
+  const rows = await query(dialect === 'pg' ? 'SELECT current_user AS account' : 'SELECT CURRENT_USER() AS account') as Array<{ account?: unknown }>;
+  const account = rows?.[0]?.account;
+  if (typeof account !== 'string') return undefined;
+  return dialect === 'mysql' ? splitMysqlAccount(account).user : account;
 }
 
 /**

@@ -2,10 +2,9 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createDatabaseHost } from '@zhin.js/core/runtime';
 import { ConsoleIamService, IamError } from '../../../../../../host/gateway/src/iam/service.js';
 import { LoginRateLimiter } from '../../../../../../host/gateway/src/iam/rate-limit.js';
-import { defineConsoleIamTables } from '../../../../../../host/gateway/src/iam/tables.js';
+import { openGatewayStore } from '../../../../../../host/gateway/src/database/gateway-store.js';
 import { verifyPassword, hashPassword } from '../../../../../../host/gateway/src/iam/crypto.js';
 
 const PASSWORD = 'correct-horse-battery';
@@ -19,14 +18,13 @@ afterEach(async () => {
 async function openIam(options: Partial<ConstructorParameters<typeof ConsoleIamService>[0]> = {}) {
   const root = await mkdtemp(join(tmpdir(), 'zhin-iam-'));
   roots.push(root);
-  const database = createDatabaseHost({ dialect: 'sqlite', filename: join(root, '.zhin', 'data.sqlite') } as never);
-  expect(defineConsoleIamTables(database.gatewayTableHost())).toBe(true);
-  await database.start();
+  // The accounts live in the gateway store (ADR 0059).
+  const database = await openGatewayStore(root);
   let now = 1_700_000_000_000;
   const clock = { now: () => now, advance: (ms: number) => { now += ms; } };
-  const service = new ConsoleIamService({ database: database.gatewayTableHost(), projectRoot: root, now: clock.now, ...options });
+  const service = new ConsoleIamService({ database, projectRoot: root, now: clock.now, ...options });
   await service.start({ timers: false });
-  closers.push(async () => { service.stop(); await database.stop(); });
+  closers.push(async () => { service.stop(); await database.close(); });
   return { service, database, root, clock };
 }
 

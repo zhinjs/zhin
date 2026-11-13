@@ -60,6 +60,30 @@ function normalizeRedisDatabase(value: unknown): number | undefined {
   return normalized;
 }
 
+/** `database.console` (ADR 0059 §4; port of the instance's check): PostgreSQL / MySQL only. */
+function normalizeConsoleCredential(config: Record<string, unknown>): void {
+  if (!('console' in config) || config.console === undefined) return;
+  const value = config.console;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw configurationError('database.console', '必须是对象 { user, password }');
+  const block = { ...(value as Record<string, unknown>) };
+  // `${ZHIN_DB_CONSOLE_*}` not set (yet): no restricted account — raw SQL stays off, the rest works.
+  if ((block.user === undefined || block.user === '') && (block.password === undefined || block.password === '')) {
+    delete config.console;
+    return;
+  }
+  normalizeRequiredText(block, 'user', 'database.console.user', 'ZHIN_DB_CONSOLE_USER=zhin_console_xxxxxxxx');
+  if (typeof block.password !== 'string' || block.password === '') {
+    throw configurationError('database.console.password', '不能为空', 'ZHIN_DB_CONSOLE_PASSWORD=…（zhin db console-role 生成）');
+  }
+  if (String(block.user) === String(config.user ?? '')) {
+    throw configurationError('database.console.user', '不能与主账号 database.user 相同（原始 SQL 只在受限账号上执行）');
+  }
+  for (const key of Object.keys(block)) {
+    if (key !== 'user' && key !== 'password') throw configurationError(`database.console.${key}`, '不支持（只有 user 与 password）');
+  }
+  config.console = Object.freeze({ user: block.user, password: block.password });
+}
+
 /** Validates an expanded `database` block (port of `normalizeDatabaseHostConfig`). */
 export function normalizeProjectDatabaseConfig(input: ProjectDatabaseConfig): ProjectDatabaseConfig {
   const dialect = input.dialect;
@@ -67,6 +91,8 @@ export function normalizeProjectDatabaseConfig(input: ProjectDatabaseConfig): Pr
     throw new TypeError(`数据库配置 database.dialect 不支持 ${JSON.stringify(dialect)}；可选值为 sqlite、mysql、pg、mongodb、redis、memory。`);
   }
   const config: Record<string, unknown> = { ...input, dialect };
+  if (dialect !== 'pg' && dialect !== 'mysql') delete config.console;
+  delete config.denyAttach;
   switch (dialect) {
     case 'mysql':
       normalizeOptionalText(config, 'host', 'database.host', 'DB_HOST=127.0.0.1');
@@ -75,6 +101,7 @@ export function normalizeProjectDatabaseConfig(input: ProjectDatabaseConfig): Pr
       normalizeOptionalText(config, 'uri', 'database.uri');
       config.port = normalizePort(config.port, 'database.port', 'DB_PORT=3306');
       if (config.port === undefined) delete config.port;
+      normalizeConsoleCredential(config);
       break;
     case 'pg':
       normalizeOptionalText(config, 'host', 'database.host', 'DB_HOST=127.0.0.1');
@@ -83,6 +110,7 @@ export function normalizeProjectDatabaseConfig(input: ProjectDatabaseConfig): Pr
       normalizeOptionalText(config, 'connectionString', 'database.connectionString');
       config.port = normalizePort(config.port, 'database.port', 'DB_PORT=5432');
       if (config.port === undefined) delete config.port;
+      normalizeConsoleCredential(config);
       break;
     case 'mongodb':
       normalizeRequiredText(config, 'url', 'database.url', 'DB_URL=mongodb://127.0.0.1:27017');

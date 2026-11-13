@@ -17,7 +17,8 @@ import {
 } from '@zhin.js/gateway/local';
 import { createGatewayConsoleRpc, GatewayHttpServer, startGatewayConsole, type GatewayConsole } from '@zhin.js/gateway/server';
 import { createGatewayRpcDispatcher } from '@zhin.js/gateway/packages';
-import { consoleUserActions, runConsoleInit, type ConsoleCliIo } from '../src/commands/console.js';
+import { consoleUserActions, runConsoleInit, runConsoleMigrate, type ConsoleCliIo } from '../src/commands/console.js';
+import { diagnoseGatewayStorage } from '../src/utils/gateway-storage-check.js';
 
 const PASSWORD = 'correct-horse-battery';
 const dirs: string[] = [];
@@ -78,7 +79,7 @@ async function runningGateway(root: string): Promise<{ console: GatewayConsole; 
 }
 
 describe.runIf(process.platform !== 'win32')('zhin console beside a running gateway', () => {
-  it('init switches the database in the gateway (reconnect + instance restart) and creates the owner there', async () => {
+  it('init switches the project database (instance restart) and creates the owner in the gateway store', async () => {
     const root = await project();
     const gateway = await runningGateway(root);
     expect(gateway.console.iam()?.initialized()).toBe(false);
@@ -88,16 +89,17 @@ describe.runIf(process.platform !== 'win32')('zhin console beside a running gate
       database: 'sqlite', connection: { filename: '.zhin/accounts.sqlite' }, owner: 'alice', passwordStdin: true, yes: true,
     }, io)).toBe(0);
     expect(io.errors).toEqual([]);
-    expect(io.logs.join('\n')).toContain('网关已切换到新数据库');
+    expect(io.logs.join('\n')).toContain('网关正在重启实例以使用新数据库');
     expect(gateway.requests).toEqual(expect.arrayContaining([
       LOCAL_GATEWAY_RPC.CONSOLE_SETUP_STATUS,
       LOCAL_GATEWAY_RPC.CONSOLE_SETUP_DATABASE_TEST,
       LOCAL_GATEWAY_RPC.CONSOLE_SETUP_DATABASE,
       LOCAL_GATEWAY_RPC.CONSOLE_SETUP_OWNER,
     ]));
-    // The same ConsoleSetupService wrote the config; the gateway reconnected without a restart.
+    // The same ConsoleSetupService wrote the config; the accounts stay in .zhin/gateway.db (ADR 0059).
     expect(await readFile(path.join(root, 'zhin.config.yml'), 'utf8')).toContain('accounts.sqlite');
-    expect(gateway.console.database()?.config).toMatchObject({ filename: path.join(root, '.zhin', 'accounts.sqlite') });
+    expect(gateway.console.database()?.filename).toBe(path.join(root, '.zhin', 'gateway.db'));
+    expect(await gateway.console.database()!.counts()).toMatchObject({ console_users: 1 });
     expect(gateway.restartInstance).toHaveBeenCalledTimes(1);
     // Owner state changed at once in the gateway (no 30 s refresh): the bootstrap token is closed.
     expect(gateway.console.iam()?.initialized()).toBe(true);
@@ -175,5 +177,20 @@ describe.runIf(process.platform !== 'win32')('zhin console beside a running gate
     const list = cliIo();
     expect(await consoleUserActions.list(root, list)).toBe(0);
     expect(list.logs.join('\n')).toContain('alice');
+  });
+  it('migrate reports the gateway\'s import state and refuses --revert while it runs (ADR 0059)', async () => {
+    const root = await project();
+    const gateway = await runningGateway(root);
+    await gateway.console.ready;
+    const io = cliIo();
+    expect(await runConsoleMigrate(root, {}, io)).toBe(0);
+    expect(io.logs.join('\n')).toMatch(/网关运行中，迁移由网关完成：无需迁移/);
+    expect(gateway.requests).toContain(LOCAL_GATEWAY_RPC.CONSOLE_MIGRATION_STATUS);
+    const revert = cliIo();
+    expect(await runConsoleMigrate(root, { revert: true }, revert)).toBe(1);
+    expect(revert.errors.join('\n')).toContain('zhin stop');
+    // zhin doctor reads the same state over the socket instead of opening gateway.db.
+    const checks = await diagnoseGatewayStorage(root, { gatewayRunning: true });
+    expect(checks).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'Console 账号存储', status: 'ok' })]));
   });
 });

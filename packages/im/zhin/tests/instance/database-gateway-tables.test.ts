@@ -1,9 +1,9 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createDatabaseHost } from '@zhin.js/core/runtime';
+import { createDatabaseHost, normalizeDatabaseHostConfig } from '@zhin.js/core/runtime';
 import { authorizeConsoleRpc, dispatchRuntimeConsoleRpc, pickRpcReply, type ConsolePrincipal } from '@zhin.js/host-http';
-import { ProjectDatabase } from '@zhin.js/gateway/database';
+import { openGatewayStore, ProjectDatabase } from '@zhin.js/gateway/database';
 import { defineConsoleIamTables, IAM_TABLES } from '@zhin.js/gateway/iam';
 
 const viewer: ConsolePrincipal = Object.freeze({
@@ -18,7 +18,10 @@ const viewer: ConsolePrincipal = Object.freeze({
 
 const HASH = 'scrypt$secret-password-hash';
 
-/** The gateway and the instance share one SQLite file; the gateway owns console_* (ADR 0054 §7). */
+/**
+ * Tables an earlier version's gateway left in the shared SQLite file (before the import of ADR 0059
+ * §3 ran): every instance path still refuses them (defense in depth).
+ */
 async function sharedDatabase() {
   const directory = await mkdtemp(join(tmpdir(), 'zhin-gateway-tables-'));
   const filename = join(directory, 'bot.db');
@@ -99,25 +102,42 @@ describe('instance database paths never reach the gateway console_* tables', () 
   });
 });
 
-describe('standalone Console access control (no gateway)', () => {
-  it('reaches console_* only through the root-only gateway table view', async () => {
-    const directory = await mkdtemp(join(tmpdir(), 'zhin-gateway-view-'));
-    const host = createDatabaseHost({ dialect: 'sqlite', filename: join(directory, 'bot.db') });
+describe('a plugin on the SQLite instance database cannot open .zhin/gateway.db (ADR 0059 §2)', () => {
+  it('refuses raw ATTACH, poisons a transaction that swallowed it, and has no gateway table view', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'zhin-gateway-attach-'));
+    const store = await openGatewayStore(directory);
+    await store.models.get(IAM_TABLES.users)!.insert({
+      id: 'u1', username: 'alice', display_name: 'Alice', password_hash: HASH,
+      disabled: 0, password_changed_at: 1, created_at: 1, updated_at: 1,
+    });
+    // The instance resolves its database through the core config (denyAttach is forced on).
+    const host = createDatabaseHost(normalizeDatabaseHostConfig({ dialect: 'sqlite', filename: join(directory, '.zhin', 'data.sqlite') }));
+    host.define('notes', { id: { type: 'integer', primary: true }, text: { type: 'text' } });
     try {
-      const view = host.gatewayTableHost();
-      defineConsoleIamTables(view);
-      expect(() => view.define('notes', { id: { type: 'integer', primary: true } })).toThrow(/not a gateway table/);
-      host.define('notes', { id: { type: 'integer', primary: true } });
       await host.start();
-      expect(view.started).toBe(true);
-      expect(view.tables()).toContain(IAM_TABLES.users);
-      expect(view.models.get(IAM_TABLES.users)).toBeDefined();
-      expect(view.models.get('notes')).toBeUndefined();
-      // Every other surface of the same host still refuses them.
-      expect(host.tables()).toEqual(['notes']);
+      expect('gatewayTableHost' in host).toBe(false);
       expect(host.models.get(IAM_TABLES.users)).toBeUndefined();
-      expect((await rpc(host, { type: 'db:select', table: IAM_TABLES.users })).error).toMatch(/owned by the management gateway/);
-      expect(JSON.stringify((await rpc(host, { type: 'db:tables' })).data)).not.toContain('console_');
-    } finally { await host.stop(); await rm(directory, { recursive: true, force: true }); }
+      const raw = host.getRawDatabase() as unknown as {
+        query(sql: string): Promise<unknown>;
+        transaction<T>(callback: (trx: { query(sql: string): Promise<unknown> }) => Promise<T>): Promise<T>;
+      };
+      const attach = `ATTACH DATABASE '${store.filename}' AS g`;
+      await expect(raw.query(attach)).rejects.toThrow(/ATTACH DATABASE is not allowed/);
+      // Even a table name the text guard does not know cannot be read through an attachment.
+      await expect(raw.query('SELECT name FROM g.sqlite_master')).rejects.toThrow(/no such table/);
+      let afterAttach: unknown;
+      await expect(raw.transaction(async (trx) => {
+        await trx.query("INSERT INTO notes (id, text) VALUES (1, 'x')");
+        await trx.query(attach).catch(() => undefined);
+        afterAttach = await trx.query('SELECT name FROM g.sqlite_master').catch((error: unknown) => error);
+      })).rejects.toThrow(/ATTACH DATABASE is not allowed/);
+      expect(String(afterAttach)).toMatch(/ATTACH DATABASE is not allowed/);
+      expect(await raw.query('SELECT id FROM notes')).toEqual([]);
+      expect(((await raw.query('PRAGMA database_list')) as Array<{ name: string }>).map(row => row.name)).toEqual(['main']);
+    } finally {
+      await host.stop();
+      await store.close();
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 });

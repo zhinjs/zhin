@@ -130,9 +130,9 @@ Agent 安装、角色权限和其他未声明可替换的启动依赖保留待�
 | 存放处 | 放什么 | 谁写 |
 |---|---|---|
 | `zhin.config.yml` | **声明**：部署时定下、随代码进 git 评审、改了要重载或重启——插件实例与插件配置、`disable_plugins`、主机基础设施（`http`、`database` 连接、`console`、`gateway`、`mcp`、`a2a`、`log_level`、`locale`）、`ai.*` 行为与安全策略、功能的全局默认值与 `features.selfService` | 人：手改、CLI、Console 配置表单（都经网关配置事务） |
-| 数据库 | **运行时状态**：Console 账号与审计、聊天角色、账号与凭据、模型目录、适配器 / 账号 / 会话三级功能覆盖（表 `feature_overrides`）、控制面开关、定时任务、消息 / 会话 / 记忆、插件状态 | Console RPC、聊天命令、AI 工具、插件 |
+| 数据库 | **运行时状态**：聊天角色、账号与凭据、模型目录、适配器 / 账号 / 会话三级功能覆盖（表 `feature_overrides`）、控制面开关、定时任务、消息 / 会话 / 记忆、插件状态 | Console RPC、聊天命令、AI 工具、插件 |
 | `.env` | **密钥与环境差异**：yml 里只写 `${VAR}` 引用 | 人、`zhin doctor --fix`、网关 |
-| `.zhin/` | **本机运行文件**：socket、锁、日志、缓存、引导进度、加密钥匙 | 运行时、网关 |
+| `.zhin/` | **本机运行文件**：socket、锁、日志、缓存、引导进度、加密钥匙；网关的 Console 账号存储 `gateway.db`（账号、会话、API 令牌、审计，[ADR 0059](../adr/0059-gateway-storage-isolation.md)）。`keys/` 与 `gateway.db` 必须持久化并备份 | 运行时、网关 |
 
 **密钥字段**：Schema 用 `x-zhin-secret: true` 标注（主机 Schema 的 `http.token`、`database.password`、`mcp.token`、`a2a.token` 等已标注；插件用 `Schema.string().secret()` 生成）；没有标注时按字段名兜底（`token`、`password`、`secret`、`apiKey`、`privateKey` 及 `*Token`、`*Secret` 等）。启动时若发现这些字段是字面值而不是 `${…}` 引用，会打一条警告，只列路径、不打印值。`zhin doctor` 同样报告；`zhin doctor --fix` 把每个字面值写进 `.env`（变量名 `ZHIN_<路径大写下划线>`，如 `ZHIN_HTTP_TOKEN`；同名已有相同值时直接复用，值不同时追加 `_2`、`_3`），再把 yml 里的值换成 `${变量名}`。yml 经配置文件事务写入（修订号检查、文件锁、原子替换），`.env` 同样加锁、临时文件 + fsync + rename 原子写，并保留原文件权限（新文件为 `0600`）。网关运行时也直接改这两个文件（与 `zhin doctor` 其他修复一致，同一把锁防止并发覆盖）；实例在下次加载配置时读到新的引用。
 
@@ -245,6 +245,30 @@ DB_DATABASE=zhin_bot
 `DB_PORT` 只写端口数字，不要写 `http://`、主机名或 `host:port`。目标数据库 `DB_DATABASE`
 必须已经创建，并允许 `DB_USER` 从 Bot 所在机器连接。在容器中运行 Bot 时，`127.0.0.1`
 指向容器自身，应改成 PostgreSQL 服务名或宿主机可访问地址。
+
+### Console SQL 的受限账号（`database.console`） {#database-console}
+
+PostgreSQL / MySQL 上，Console 数据库页的 SQL 控制台只用单独登录的受限账号执行（[ADR 0059](../adr/0059-gateway-storage-isolation.md)）。用 CLI 创建：
+
+```bash
+npx zhin db console-role            # 用主账号建号；无建号权限时加 --print-sql 交给 DBA
+```
+
+它把随机密码写进 `.env`，并在配置里写入引用：
+
+```yaml
+database:
+  dialect: pg
+  # …主账号连接字段…
+  console:
+    user: ${ZHIN_DB_CONSOLE_USER}
+    password: ${ZHIN_DB_CONSOLE_PASSWORD}
+```
+
+- 只有 `user` 与 `password` 两个字段，交给驱动前从主连接剥离；`user` 不能与主账号相同。两个变量都没设置时视为未配置（SQL 控制台关闭，其余照常）。
+- 实例启动时探测这个账号的权限，不合格时 SQL 控制台关闭并在页面上说明原因（`capabilities.sqlReason`）；实例启动时**不会**自动建号。
+- SQLite、MongoDB、Redis、内存方言忽略这个块。SQLite 的实例连接总是拒绝 `ATTACH`（不能配置）。
+- Console 账号本身不在项目数据库里，而在 `.zhin/gateway.db`，见[升级说明](../migrations/gateway-storage.md)。
 
 ### 其他方言
 

@@ -1,0 +1,143 @@
+---
+sidebar: false
+---
+
+# ADR 0059：网关存储隔离——Console 账号放 `.zhin/gateway.db`，原始 SQL 不再靠文本检查守边界
+
+状态：Accepted（2026-11-13）
+
+关联：ADR 0049（Console 访问控制入库，含修订 2026-11-13「原始 SQL 只归 `ops.database.schema`」）、ADR 0054（管理网关，§7 数据）、ADR 0057（配置与状态存放：密钥放 `.env`、钥匙放 `.zhin/keys/`、`zhin backup`）、ADR 0058（无直接关系，编号相邻）。
+
+## 背景
+
+ADR 0049 / 0054 让网关和实例共用一个项目数据库：网关读写 6 张访问控制表（`console_users`、`console_roles`、`console_role_bindings`、`console_sessions`、`console_api_tokens`、`console_audit_log`，以 `IAM_TABLES` 为准；`console_conversations` 是实例表，不在其内），实例的插件、Agent 与 Console 数据库页用其余的表。实例这一侧“碰不到网关表”完全靠文本检查：
+
+1. **Console 原始 SQL**（`db:query` / `db:execute`）：词法器、单语句协议、拒绝列表、`console_*` 名称守卫（ADR 0049 修订 2026-11-13）。
+2. **插件原始句柄**：`getRawDatabase()` 的 `referencesGatewayOwnedTable` 文本守卫。
+3. **模型 / 结构化浏览**：按表名拒绝（`assertInstanceTable`）。
+
+独立评审已证明第 1 条绕得过去（`E'\''`、嵌套注释、`$a1$`、`U&"\0063onsole_users"`、`query_to_xml('select … from con' || 'sole_users', …)`）。修订之后拒绝列表更长，但根本问题没变：**同一个连接、同一个账号，能执行任意 SQL 的人就能读到口令哈希、会话与令牌哈希**。文本检查只能证明“我们想到的写法都拒绝了”。还有两条文本守卫覆盖不到的路：
+
+- **SQLite `ATTACH`**：实例连接能 `ATTACH` 同目录下任何文件。Node 22 的 `node:sqlite` 没有 `setAuthorizer`，`limits: { attach: 0 }` 被忽略，`ATTACH` 在事务里也能成功（实测：Node 22.23）。
+- **插件事务**：`transaction(trx => …)` 里的 `trx` 没经过文本守卫包装。
+
+另外，账号表放在项目库里还带来：redis / memory 项目不能建 Console 账号（ADR 0049 §8）；网关常驻一个项目库连接；`pg_dump` / `mysqldump` 的备份里含账号与会话。
+
+## 决策
+
+### 1. 6 张访问控制表一律放进 `.zhin/gateway.db`
+
+- 与项目库方言无关：`.zhin/gateway.db` 是 SQLite（WAL），文件权限 `0600`，`-wal` / `-shm` 同样 `0600`（先以 `0600` 建文件，SQLite 让 `-wal` / `-shm` 跟随主文件权限；打开后再校正一次）。另有 `gateway_meta` 表（`schema_version`、`legacy_import`）。
+- **打开它的只有**：网关；网关未运行时的 `zhin console …`（以及 `zhin doctor`，只在文件已存在时）；`zhin start --standalone`（开发与测试：实例进程另开一个连接，不经 DatabaseHost，**没有进程隔离**，文档写明）。受网关监管的实例从不打开它。
+- 网关不再常驻连接项目库，只在**迁移**（§3）和初始化向导**测试连接**时临时连接（ADR 0054 §7 修订）。
+- IAM 不再受项目库方言限制：redis / memory 项目也能建 Console 账号，`IAM_DIALECTS` 删除（ADR 0049 §8 修订）。初始化向导的可选驱动只是“能测试连接的方言”（sqlite / mysql / pg / mongodb）。
+- 数据库切换（初始化向导）：网关不必重连，只重启实例；账号留在 gateway.db。
+
+### 2. SQLite 实例连接拒绝 `ATTACH`（`denyAttach`）
+
+- `@zhin.js/database` 的 SQLite 方言新增选项 `denyAttach`（默认关；`tests/sqlite-json-columns.test.ts` 等仍要 `ATTACH`，所以不全局禁止）。实例的 `database` 配置在规范化时**强制开启**，配置里写 `denyAttach: false` 也无效。
+- 每条原始语句——`query`、事务内的 `query` / `queryStatement`（含按行读取的路径）、Console 只读查询的隔离子进程——执行前后读 `PRAGMA database_list`，出现 `main` / `temp` 以外的库就拒绝（`SqliteAttachRefusedError`）。
+- 在事务内发现：先 `ROLLBACK` 并把事务标记为 poisoned（之后的语句与 `COMMIT` 一律拒绝，调用方吞掉错误也没用），再 `DETACH`（事务内 `DETACH` 可能被拒，所以先回滚）。
+- Node 提供 `setAuthorizer` 时额外装一个拒绝 `SQLITE_ATTACH` 的 authorizer；构造时传 `limits: { attach: 0 }`（新 Node 生效，Node 22 忽略）。都是特性检测，`database_list` 检查才是兜底。
+- 方言新增 `backupTo(path)`（`node:sqlite` 的 `backup()`，没有时用 `VACUUM INTO`），产物 `0600`；回退迁移前用它给 gateway.db 留副本。实测：同一连接处在写事务中时 `backup()` 失败（“not an error”），所以在事务外做。
+- SQLite 不需要受限账号：账号在另一个文件里，实例连接又打不开它。
+
+### 3. 迁移：网关连接阶段把旧表导入 gateway.db
+
+迁移由同一个函数（`importLegacyIamTables`）完成：网关在连接阶段执行；网关未运行时 `zhin console …` 执行；`--standalone` 由实例执行。`gateway_meta.legacy_import` 记录状态：无记录（未决定）→ `fresh`（无需迁移）| `copied`（已复制，旧表未删）→ `done`。
+
+- **判定**：已是 `done` / `fresh` 直接跳过（不读项目库配置，项目库配置写错也不影响登录）。redis / memory → `fresh`。SQLite 项目库文件不存在 → `fresh`（不为此创建文件）。否则临时连项目库，**不定义任何表**，从系统目录查 6 张表（`sqlite_master` / `to_regclass` / `information_schema.TABLES` / `listCollections`），都不在 → `fresh`；连不上 → 什么都不写。
+- **迁移完成前 IAM 一律关闭**：`ConsoleIamService` 有 `unavailable` 原因时视为“已初始化”（初始化令牌被拒），任何会话 / 令牌都不认证，`/auth/*` 回 503 `iam_unavailable`（`/auth/me` 仍回匿名、`setupRequired: false` 并带 `unavailable` 原因）。空的 gateway.db 绝不当作“还没有所有者”。网关按 `retryMs`（默认 10 秒）重试。
+- **备份**：复制前把 6 表全部行导出到 `.zhin/backups/gateway-db-<时间>/console-tables.json`（目录 `0700`，文件 `0600`，不覆盖已有文件）。
+- **复制**：gateway.db 上 `BEGIN IMMEDIATE`（同时是网关 / CLI 之间的互斥锁）；目标必须为空（非空又没有记录 → 报错，不合并）；源端在只读可重复读快照内按 `id` 分批 500 行读取；列取目标定义与源行的交集；每表记录行数与校验和——按 `id` 排序（码元序）的规范化 JSON 的 SHA-256，`integer` / `bigint` 统一成十进制字符串，`null` 保持——写入后在同一事务内重读复算，一致才在同一事务写 `copied { counts, checksums, columns, source, backup }`；任何一步失败整体回滚。
+- **删除旧表**：再读一次源端并算校验和。一致则删（SQLite / PostgreSQL 一个事务；MySQL / MongoDB 逐张，中断后续删）；不一致说明复制后旧表又被写过（旧版本还在跑），另外导出 `console-tables-changed.json`，照删并告警（`zhin doctor` 报告），gateway.db 保留复制时的数据。写 `done`。处于 `copied` 时从删除这一步继续。
+- **之后**：项目库里再出现这些表，不读；`zhin doctor` 警告。PostgreSQL 的授权刷新（§4）撤销受限账号在这些表上的一切权限。
+- **回退**：`zhin console migrate --revert`（降级前必须执行，网关须已停止）：先用 `backupTo` 给 gateway.db 留副本并导出 `gateway-tables.json`，把 6 表写回项目库（项目库里这些表有数据则拒绝），重读校验，再清空 gateway.db 的 6 表并删除 `legacy_import` 记录。再次升级时重新迁移。
+
+### 4. PostgreSQL / MySQL：Console 原始 SQL 只用受限账号
+
+- Console 原始 SQL（`db:query` / `db:execute`）在**受限账号的独立连接池**上执行（懒创建，`pool.max = 2`）；数据浏览、`describe`、结构编辑器（`db:schema:*`）、发现物理表仍用主连接。
+- **配置**：`database.console: { user: ${ZHIN_DB_CONSOLE_USER}, password: ${ZHIN_DB_CONSOLE_PASSWORD} }`（密码只在 `.env`，ADR 0057）；交给主连接驱动前剥离。两个变量都未设置时视为没有受限账号（原始 SQL 关闭、其余照常），只设一个或与 `database.user` 相同是配置错误。其他方言忽略这个块。
+- **`zhin db console-role [--print-sql] [--role <名>]`**（与 `zhin doctor --fix` 同一动作，`setupConsoleRole`）：用主账号建号、随机 32 字节密码（base64url）写 `.env`、经配置事务写入 `database.console` 引用；主账号没有建号权限时 `--print-sql` 打印给 DBA 的语句（密码以 `<ZHIN_DB_CONSOLE_PASSWORD>` 占位，真实值只在 `.env`），同样写入 `.env` 与配置。项目库里还有旧账号表时拒绝（先完成 §3 的迁移：MySQL 的库级授权会覆盖它们）。**实例启动时不会悄悄建号**，只做探针与（PostgreSQL）幂等补授权。
+- **PostgreSQL 角色** `zhin_console_<项目根路径 SHA-256 前 8 位>`：`LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 4`，不属于任何角色；`CONNECT` 本库；`public` 只 `USAGE`、显式 `REVOKE CREATE`；`public` 下现有表与视图 `SELECT, INSERT, UPDATE, DELETE, TRUNCATE`（逐表授予，`console_*` 网关表除外），序列 `USAGE, SELECT, UPDATE`；`ALTER DEFAULT PRIVILEGES FOR ROLE <主账号> IN SCHEMA public` 同样授予；角色级 `statement_timeout = 60s`、`search_path = public`。PostgreSQL ≤ 14 时 `PUBLIC` 默认可在 `public` 建对象：provision 先 `GRANT CREATE ON SCHEMA public TO <主账号>` 再 `REVOKE CREATE ON SCHEMA public FROM PUBLIC`。已有角色时改为 `ALTER ROLE`（轮换密码）；主账号不是超级用户时不写 `SUPERUSER` / `REPLICATION` / `BYPASSRLS`，没有 `CREATEDB` 时不写 `CREATEDB`（PG 16 实测：`CREATEROLE` 账号连 `NO…` 也不能写），由探针检查属性。
+- **PostgreSQL 原始 SQL 不做 DDL**：受限账号不拥有任何表、不能在 `public` 建对象（防止 CVE-2018-1058 一类为主账号预埋同名函数 / 表的反向提权）；`CREATE` / `ALTER` / `DROP` 回 42501，Console 提示改用结构编辑器。`SET [LOCAL] ROLE` 不是边界（`RESET ROLE`、`set_config('role', …)` 就能回去），所以必须是**单独登录**的连接。
+- **MySQL 账号** `'zhin_console_<哈希>'@'<主账号 CURRENT_USER() 的主机部分>'`，`MAX_USER_CONNECTIONS 4`；先 `REVOKE ALL PRIVILEGES, GRANT OPTION` 回到已知状态，再在 `` `<库>`.* ``（`_` / `%` 转义，避免通配）授予 `SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, INDEX, REFERENCES, CREATE VIEW, SHOW VIEW, CREATE TEMPORARY TABLES`；不给 `TRIGGER`、`CREATE ROUTINE` / `ALTER ROUTINE`、`EXECUTE`、`EVENT`、`LOCK TABLES`、`GRANT OPTION` 与任何全局权限（`FILE` 等）。受限连接关闭 `LOCAL_FILES`（mysql2 `flags: ['-LOCAL_FILES']`，不配 `infileStreamFactory`）与 `multipleStatements`。
+- **探针**（启动时；失败后最多每 5 分钟重试一次，下一次原始 SQL 请求触发）：
+  - PostgreSQL：`current_user` / `session_user` 等于配置的用户且不是主账号；非超级用户，无 `CREATEROLE` / `CREATEDB` / `BYPASSRLS` / `REPLICATION`；`has_schema_privilege(current_user, 'public', 'CREATE') = false`；`has_database_privilege(current_user, current_database(), 'CREATE') = false`；不是任何角色的成员；`pg_has_role(current_user, <主账号>, 'USAGE') = false`。探针前用主账号做一次幂等补授权（`refreshConsoleGrants`：给新出现的实例表授权，撤销残留 `console_*` 表上的一切权限）。
+  - MySQL：`CURRENT_USER()` 用户部分等于配置的用户；`USER_PRIVILEGES` 只有 `USAGE`；`SCHEMA_PRIVILEGES` 只在本库、不含禁止权限、没有 `IS_GRANTABLE = YES`；其他库没有表级权限；`CURRENT_ROLE()` 为 `NONE`（5.7 / MariaDB 没有这个函数时跳过）。
+  - 不满足 → 原始 SQL 停用并给出原因。文本兼容检查（`standard_conforming_strings`、`sql_mode`）改在受限连接上做。
+- **能力上报**：`capabilities.sqlIsolation` 为 `separate-store`（SQLite）或 `restricted-credential`（PostgreSQL / MySQL）；没有可用受限账号时 `sql: false`，`sqlReason`（同时写入原有的 `reason`）说明原因并指引 `zhin db console-role`。**不提供用主账号执行原始 SQL 的选项。**
+- 测试可经 `createDatabaseHost(config, { textGuard: false })` 关掉 Console 的文本检查，证明边界只靠存储与账号也成立（不是配置项）。
+
+### 5. 文本检查保留，作为纵深防御
+
+前缀守卫（`assertInstanceTable`）、Console SQL 词法器、单语句协议与拒绝列表、插件文本守卫（`referencesGatewayOwnedTable`）、审计脱敏全部保留，不再承担隔离：即使其中一条被绕过，SQLite 上读到的是 `no such table` / `ATTACH` 被拒，PostgreSQL / MySQL 上是 42P01 / 42501 / 1146 / 1142。
+
+### 6. 备份
+
+- 所有方言都要备份 `.zhin/gateway.db`（含 `-wal`，或用在线备份）：`pg_dump` / `mysqldump` 不再含账号。`zhin backup`（ADR 0057 第 5 步，尚未实现）落地时必须包含它。
+- 部署文档写明 `.zhin/` 必须持久化（容器卷）：丢了 gateway.db 就丢了全部 Console 账号、会话、令牌与审计。
+
+### 7. Agent 文件策略
+
+`.zhin/` 整体已在 Agent 文件 / `bash` 工具的拒绝目录里，`*.db` 及其 `-wal` / `-shm` 也按文件名拒绝（ADR 0054 §7 以来），覆盖 `.zhin/gateway.db*` 与 `.zhin/keys/`；补测试固定这一点。
+
+### 8. 版本
+
+`@zhin.js/database`、`@zhin.js/gateway`、`@zhin.js/core`、`zhin.js`、`@zhin.js/cli` 发 minor（所有者已批准，记在 `.changeset/version-policy.json` 的 `approvedNonPatchReleases`）；其余受影响的包 patch。
+
+## 迁移
+
+用户可见的步骤见 [`docs/migrations/gateway-storage.md`](../migrations/gateway-storage.md)：
+
+1. 升级后第一次 `zhin start`：网关自动迁移；完成前 Console 登录返回 503。SQLite 项目通常在一秒内完成。
+2. PostgreSQL / MySQL：运行 `zhin db console-role`（或 `zhin doctor --fix`；没有建号权限用 `--print-sql`），再 `zhin restart`，Console 的 SQL 控制台才可用。数据浏览与结构编辑器不受影响。
+3. 部署确保 `.zhin/` 持久化；备份加上 `.zhin/gateway.db`。
+4. 降级前：`zhin stop` 后 `zhin console migrate --revert`。
+
+## 兼容
+
+- `console_*` 表名、字段、`ConsoleIamService` 行为不变，只是换了库；`/auth/*`、`iam.*` 协议不变，只多了 503 `iam_unavailable` 与 `/auth/me` 的 `unavailable` 字段。
+- 公共 API 变化：`@zhin.js/gateway/iam` 删除 `IAM_DIALECTS`，`defineConsoleIamTables` 不再返回布尔值，`installConsoleIam` 改为 `{ projectDatabase, openStore? }` 且没有 `supported`、`dispose()` 返回 Promise；`@zhin.js/gateway/database` 新增 `openGatewayStore` / `setupConsoleRole` 等，`GatewayConsole.database()` 返回 gateway store；`@zhin.js/core` 的 `createDatabaseHost` 删除 `gatewayTableHost()`，新增第二个参数；`@zhin.js/database` 新增 `denyAttach`、`backupTo`、`console-credential` 一组函数与 MongoDB `listCollections` 操作；`DatabaseHostConsoleCapabilities` 新增 `sqlReason`、`sqlIsolation`。
+- 本地控制套接字新增 `gateway.console.migration.status`（`zhin console migrate` / `zhin doctor` 在网关运行时读迁移状态，不再自己打开 gateway.db）。
+- 旧版 Console 前端只认 `reason`：`sqlReason` 同时写进 `reason`，旧前端也能看到原因。
+
+## 备选（未采用）
+
+### A. 留在项目库，用 `REVOKE` 把网关表从实例账号收走
+
+网关用一个账号、实例用另一个账号，同一个库里对实例账号 `REVOKE` 6 张表。未采用：
+
+- SQLite 没有账号，文件谁能打开谁就能读全部表——最常见的部署恰恰没有边界。
+- 要求每个 PostgreSQL / MySQL 部署都有两个账号且由我们管理授权，托管数据库常常不给 `CREATEROLE` / `CREATE USER`；做不到时只能退回文本检查。
+- 实例账号仍需在同库建表（插件迁移），PostgreSQL 上与网关账号的 `search_path` 交互又回到 CVE-2018-1058 一类问题。
+- redis / memory 项目依旧不能有账号。
+
+### B. 独立 schema / 独立库（同一服务器）
+
+PostgreSQL 放到 `zhin_gateway` schema、MySQL 放到另一个库，并只授权给网关账号。未采用：
+
+- 同样需要两个账号与 DBA 配合，SQLite 依旧无解；
+- 备份、迁移、恢复变成每个方言各一套；
+- 网关仍然常驻连接业务数据库服务器，数据库不可用时 Console 无法登录。
+
+`.zhin/gateway.db` 对所有方言一样，网关只依赖本地文件；受限账号只用来约束“能执行任意 SQL 的那条路”，不需要它时（SQLite）也不缺边界。
+
+## 待定
+
+- **Web 初始化向导里一键建受限账号**：目前向导保存 PostgreSQL / MySQL 时只提示 `zhin db console-role`（`SETUP_CONSOLE_ROLE_NOTICE`）；在 Web 上用主账号建号需要把主账号密码再交给网关一次，暂不做。
+- **`zhin backup`**（ADR 0057 第 5 步）：实现时包含 gateway.db（`backupTo`）。
+- **需要实测**（本地无法覆盖）：MySQL 5.7 / 8.x / MariaDB 的 `CURRENT_USER()` 主机部分、`SCHEMA_PRIVILEGES` 的转义写法、mysql2 `-LOCAL_FILES` 在各版本的效果、受限账号经预处理协议执行 DDL；PostgreSQL 托管服务（RDS、Cloud SQL 等）的 `CREATEROLE` 限制与 `pg_hba`、PostgreSQL ≤ 14 的 `public` CREATE；MongoDB 旧集合迁移；Node 22.19 上 `node:sqlite` 的 `backup()`；Windows 上 gateway.db 的权限（不做 `chmod`）。
+- **`--standalone` 的进程隔离**：开发与测试路径，实例进程同时持有 gateway.db 连接；不打算补。
+
+## 实施顺序
+
+一个 PR 完成：
+
+1. `@zhin.js/database`：`denyAttach`、`backupTo`、`console-credential`（`consoleRoleStatements` / `planConsoleRole` / `provisionConsoleRole` / `probeConsoleCredential` / `refreshConsoleGrants`）、MongoDB `listCollections`；
+2. `@zhin.js/gateway`：`openGatewayStore`、`importLegacyIamTables` / `revertLegacyIamImport` / `inspectLegacyIamImport`、`ProjectDatabase` 的 `tableExists` / `readSnapshot` / `dropTables` / `query` / `transaction`、网关连接阶段改造、`IAM_DIALECTS` 删除、`unavailable` 语义、`setupConsoleRole`、`gateway.console.migration.status`；
+3. `@zhin.js/core`：`database.console`、SQLite 强制 `denyAttach`、受限账号连接池与探针 / 补授权、`sqlReason` / `sqlIsolation`、删除 `gatewayTableHost()`；`@zhin.js/plugin-runtime` 能力类型；
+4. `zhin.js/instance`：`--standalone` 改用 gateway store；
+5. `@zhin.js/cli`：`zhin console migrate [--revert]`、`zhin db console-role`、`zhin doctor` 10e；
+6. Console 前端：`sql = false` 时显示 `sqlReason`，PostgreSQL 写 SQL 遇 42501 提示改用结构编辑器；
+7. 文档与修订：ADR 0049 / 0054 / 0057、`docs/migrations/gateway-storage.md`、配置参考、生产部署、Console 运维。

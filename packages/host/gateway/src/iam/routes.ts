@@ -51,6 +51,12 @@ export function registerConsoleAuthRoutes(options: RegisterConsoleAuthRoutesOpti
   const { http, base } = options;
   const route = (method: string, path: string, handler: Handler, summary: string) => http.route(method, `${base}${path}`, async (request, { principal, remoteAddress }) => {
     const noStore = { 'cache-control': 'no-store' };
+    // ADR 0059 §3: closed until gateway.db is open and the old tables are imported (`/auth/me`
+    // still answers, anonymously and with `setupRequired: false`, so the Console can say why).
+    const closed = path === CONSOLE_AUTH_ROUTES.ME ? undefined : options.iam()?.unavailableReason();
+    if (closed !== undefined) {
+      return jsonResponse(503, { success: false, code: 'iam_unavailable', error: closed }, { ...noStore, 'retry-after': String(DATABASE_BUSY_RETRY_AFTER_SECONDS) });
+    }
     try {
       const result = await handler({
         request,
@@ -80,7 +86,7 @@ export function registerConsoleAuthRoutes(options: RegisterConsoleAuthRoutesOpti
 
   const requireIam = (): ConsoleIamService => {
     const iam = options.iam();
-    if (!iam?.ready) throw new IamError('unavailable', '当前数据库不能存储账号，或尚未就绪');
+    if (!iam?.ready) throw new IamError('unavailable', iam?.unavailableReason() ?? 'Console 访问控制尚未就绪');
     return iam;
   };
   const requireUser = (principal: ConsolePrincipal | undefined) => {
@@ -115,7 +121,8 @@ export function registerConsoleAuthRoutes(options: RegisterConsoleAuthRoutesOpti
     }, 'Console logout'),
     route('GET', CONSOLE_AUTH_ROUTES.ME, async ({ principal }) => {
       const setupRequired = options.setup.setupRequired();
-      if (!principal) return ok({ kind: 'anonymous', permissions: [], bindings: [], setupRequired });
+      const unavailable = options.iam()?.unavailableReason();
+      if (!principal) return ok({ kind: 'anonymous', permissions: [], bindings: [], setupRequired, ...(unavailable !== undefined ? { unavailable } : {}) });
       if (principal.kind === 'bootstrap') {
         const permissions = globalPermissions(principal);
         return ok({

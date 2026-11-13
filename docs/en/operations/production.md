@@ -189,12 +189,17 @@ The gateway (ADR 0054) is long-lived and supervises the instance: Console restar
 | State | Default location or authority | Backup requirement |
 | --- | --- | --- |
 | Primary database | `.zhin/data.sqlite` or configured backend | Database-consistent snapshot |
+| Console account store | `.zhin/gateway.db` (with `-wal` / `-shm`, `0600`): Console users, roles, sessions, API tokens and audit ([ADR 0059](../../adr/0059-gateway-storage-isolation.md), Chinese) | **Back it up separately for every dialect**: `pg_dump` / `mysqldump` do not contain Console accounts. While the gateway runs use SQLite's online backup (`sqlite3 .zhin/gateway.db ".backup …"`), or copy it with its `-wal` file while stopped |
 | Multi-Agent collaboration Journal | `engagement_events` table in the main database | Restored from the same snapshot as the main database; copy the full append-only data |
 | Scheduled jobs | `data/schedule-jobs.json` | Save with config, timezone, and Endpoint targets |
 | Runtime-private state | `.zhin/` | Select by feature; never expose through Agent file tools |
 | Secrets | Secret manager / environment injection | Rotate separately; exclude from normal backup archives |
 
 Use a database snapshot or stop writes before copying SQLite. Use the native backup tool for external databases and rehearse restoration regularly.
+
+**Persist `.zhin/`** (container volume, Kubernetes PVC): losing `.zhin/gateway.db` loses every Console account, session, token and audit entry; losing `.zhin/keys/` makes account and model credentials undecryptable. When upgrading to a release with ADR 0059, the gateway's first start moves the Console account tables an earlier version kept in the project database into `gateway.db`; Console sign-in answers 503 until it finishes — see the [upgrade notes](../migrations/gateway-storage.md). Before downgrading run `zhin console migrate --revert`.
+
+To use the Console SQL editor on PostgreSQL / MySQL, create the restricted account with `zhin db console-role` (`--print-sql` for a DBA when a managed database does not let the main account create accounts); see [configuration: `database.console`](../configuration/index.md#database-console).
 
 ## 6. Monitoring and alerts
 

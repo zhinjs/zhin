@@ -123,7 +123,8 @@ const SENSITIVE_BASENAME_PATTERNS: RegExp[] = [
   /^\.pgpass$/i,
   /^\.my\.cnf$/i,
   /^\.passwd$/i,
-  // SQLite project databases (shared with the gateway's console_* account tables, ADR 0054 §7)
+  // SQLite databases: the project database and the gateway's account store `.zhin/gateway.db`
+  // (ADR 0059; `.zhin/` and `.zhin/keys/` are denied as a whole below as well)
   /\.(sqlite3?|db3?)(-wal|-shm|-journal)?$/i,
   // Management gateway control endpoint (ADR 0054 §6): `.zhin/gateway.sock`, the os.tmpdir()
   // fallback `zhin-gateway-<hash>.sock` for deep project roots, the Windows pipe name. Whoever

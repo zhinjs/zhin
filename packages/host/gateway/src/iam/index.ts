@@ -17,6 +17,7 @@ export {
 } from './service.js';
 export {
   ConsoleSetupService,
+  SETUP_CONSOLE_ROLE_NOTICE,
   SETUP_NO_MIGRATION_NOTICE,
   upsertDotenv,
   type ConsoleSetupServiceOptions,
@@ -28,7 +29,24 @@ export {
   type SetupEnvFilePort,
   type SetupStatus,
 } from './setup-service.js';
-export { defineConsoleIamTables, IAM_DIALECTS, IAM_TABLE_DEFINITIONS, IAM_TABLES } from './tables.js';
+export { defineConsoleIamTables, IAM_TABLE_DEFINITIONS, IAM_TABLES, type IamTableHost } from './tables.js';
+export {
+  importLegacyIamTables,
+  inspectLegacyIamImport,
+  LEGACY_IMPORT_KEY,
+  LegacyImportError,
+  legacyImportSettled,
+  readLegacyImportRecord,
+  revertLegacyIamImport,
+  tableChecksum,
+  type LegacyIamSource,
+  type LegacyImportErrorCode,
+  type LegacyImportInspection,
+  type LegacyImportOptions,
+  type LegacyImportRecord,
+  type LegacySourceSummary,
+  type RevertLegacyImportResult,
+} from './legacy-import.js';
 export { dispatchIamRpc, isIamRpc } from './rpc.js';
 export { registerConsoleAuthRoutes } from './routes.js';
 export { LoginRateLimiter } from './rate-limit.js';

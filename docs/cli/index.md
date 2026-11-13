@@ -103,6 +103,14 @@ zhin service status [--user]
 
 安装开机自启 / 守护服务。`--user` 在 Linux 下使用用户级 systemd；`status` 仅支持 Linux 和 macOS。服务文件以前台方式运行网关（`zhin start --foreground --mode production --no-watch`），实例由网关监管重启。
 
+### db：Console SQL 的受限账号 {#db}
+
+```bash
+zhin db console-role [--print-sql] [--role <账号名>]
+```
+
+PostgreSQL / MySQL 上，Console 的 SQL 控制台只用单独登录的受限账号执行（[ADR 0059](../adr/0059-gateway-storage-isolation.md)）。这条命令用主账号创建它（默认名 `zhin_console_<项目哈希>`），随机密码写进 `.env`（`ZHIN_DB_CONSOLE_USER` / `ZHIN_DB_CONSOLE_PASSWORD`），配置写入 `database.console` 的 `${…}` 引用；再运行时轮换密码。主账号没有建号权限时加 `--print-sql`：不建号，只打印 SQL 交给 DBA（密码位置是 `<ZHIN_DB_CONSOLE_PASSWORD>` 占位，真实值在 `.env`）。项目数据库里还有旧版 Console 账号表时拒绝，先完成迁移。完成后 `zhin restart`。`zhin doctor --fix` 做同样的事。SQLite 不需要。见[配置：`database.console`](../configuration/index.md#database-console)。
+
 ### console：初始化与用户管理 {#console}
 
 ```bash
@@ -115,17 +123,19 @@ zhin console user passwd <用户名> [--password-stdin]
 zhin console user disable <用户名>
 zhin console user enable <用户名>
 zhin console user list
+zhin console migrate [--revert]
 ```
 
-Console 的用户、角色与 API 令牌存在项目数据库里（[ADR 0049](../adr/0049-console-rbac.md)）。这组命令与 Console 网页上的初始化向导、「访问控制」页做同一件事，适合在服务器上、容器构建里或忘记密码时使用。
+Console 的用户、角色、会话、API 令牌与审计存在网关自己的 `.zhin/gateway.db` 里（[ADR 0049](../adr/0049-console-rbac.md)、[ADR 0059](../adr/0059-gateway-storage-isolation.md)），不在项目数据库里。这组命令与 Console 网页上的初始化向导、「访问控制」页做同一件事，适合在服务器上、容器构建里或忘记密码时使用。
 
-- **经由谁执行**：项目的网关在运行时，命令经本地控制套接字 `.zhin/gateway.sock` 交给网关处理（连上即视为本机所有者），切换数据库、创建所有者立即生效；网关未运行时直接打开项目数据库（离线初始化与救援）。套接字存在但属于其他系统用户或无响应时报错，不会绕过网关改文件。
+- **经由谁执行**：项目的网关在运行时，命令经本地控制套接字 `.zhin/gateway.sock` 交给网关处理（连上即视为本机所有者），切换数据库、创建所有者立即生效；网关未运行时直接打开 `.zhin/gateway.db`（离线初始化与救援），先把旧版留在项目数据库里的账号表迁过来。套接字存在但属于其他系统用户或无响应时报错，不会绕过网关改文件。
 - **`init`**：两步——选择数据库（默认保留当前配置，通常是 SQLite），再创建第一个所有者。不带参数时交互提问；`--status` 只输出初始化状态（JSON）。已经有所有者时报错退出，请改用 `zhin console user`。
   - `--database <dialect>` 换数据库，连接字段用 `--database-filename`、`--database-host`、`--database-port`、`--database-user`、`--database-database`、`--database-url`、`--database-db-name`、`--database-mode` 等传入；CLI 先测试连接，成功后写入配置，机密字段写进 `.env`。
   - 数据库密码有两种推荐方式（三种来源只能选一个）：`--database-password-env <VAR>` 引用已有环境变量（配置里写入 `${VAR}`）；`--database-password-stdin` 从标准输入第一行读取，写进 `.env`，配置里写 `${VAR}`。同时用 `--password-stdin` 时，第一行是数据库密码、第二行是所有者密码。
   - `--database-password <值>` 仍可用但**不推荐**：机密会留在 shell 历史与进程列表（`ps`）里，命令执行时会打印警告。
   - `--owner` 加 `--password-stdin` 可非交互创建所有者（密码取标准输入第一行，与 `--database-password-stdin` 同用时取第二行；至少 10 位）；加 `-y` 时缺少参数直接失败而不提问，适合脚本。
 - **`user`**：`create` 默认绑定全局 `viewer`，`--role` 可指定 `owner` / `admin` / `operator` / `viewer` 或自定义角色；`passwd` 重置密码并吊销该用户的全部会话；`disable` / `enable` 禁用与恢复；`list` 列出用户、状态和角色绑定。适配器 / 账号作用域的绑定在 Console「访问控制」里设置。
+- **`migrate`**：把旧版存在项目数据库里的 Console 账号表迁入 `.zhin/gateway.db`（网关启动时也会自动执行；网关运行时只显示状态）。`--revert` 写回项目数据库并清空 gateway.db，降级到旧版本之前必须执行，需先 `zhin stop`。见[升级说明](../migrations/gateway-storage.md)。
 - `http.token` 只是**初始化令牌**：所有者创建之前有效，之后在所有接口上失效。
 
 ```bash

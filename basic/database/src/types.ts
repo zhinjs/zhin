@@ -332,7 +332,7 @@ export interface DocumentQueryResult {
   limit?: number;
   skip?: number;
   projection?: Record<string, 1 | 0>;
-  operation?: 'find' | 'insertOne' | 'insertMany' | 'updateOne' | 'updateMany' | 'deleteOne' | 'deleteMany' | 'createCollection' | 'createIndex' | 'dropIndex' | 'dropCollection';
+  operation?: 'find' | 'insertOne' | 'insertMany' | 'updateOne' | 'updateMany' | 'deleteOne' | 'deleteMany' | 'createCollection' | 'createIndex' | 'dropIndex' | 'dropCollection' | 'listCollections';
 }
 
 /**

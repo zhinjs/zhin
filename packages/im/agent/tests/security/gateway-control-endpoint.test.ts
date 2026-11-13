@@ -1,4 +1,4 @@
-import { checkFileAccess, commandNamesGatewayEndpoint } from '../../src/security/file-policy.js';
+import { checkFileAccess, commandNamesGatewayEndpoint, extractBashReadPaths } from '../../src/security/file-policy.js';
 import { createHostProtectedPaths, hostWriteImpact } from '../../src/security/host-config-paths.js';
 
 // Whoever connects to the management gateway's control endpoint acts as the local owner (ADR 0054 §6).
@@ -37,5 +37,40 @@ describe('Agent tools and the gateway control endpoint', () => {
     expect(hostWriteImpact('write_file', { file_path: endpoint }, paths)?.level).toBe('deny');
     expect(hostWriteImpact('bash', { command: `nc -U ${endpoint}` }, paths)).toEqual({ level: 'deny', target: endpoint });
     expect(commandNamesGatewayEndpoint('ls /run/custom', [endpoint])).toBeUndefined();
+  });
+});
+
+// ADR 0059 §1 / §7: the gateway's account store and the project keys are out of reach of Agent tools.
+describe('Agent tools and the gateway store', () => {
+  it('file tools cannot touch .zhin/gateway.db, its WAL / SHM files, backups or .zhin/keys/', () => {
+    for (const file of [
+      '/srv/bot/.zhin/gateway.db',
+      '/srv/bot/.zhin/gateway.db-wal',
+      '/srv/bot/.zhin/gateway.db-shm',
+      '/srv/bot/.zhin/backups/gateway-db-2026-11-13T00-00-00-000Z/console-tables.json',
+      '/srv/bot/.zhin/keys/config-secrets.key',
+      '.zhin/gateway.db',
+      '.zhin/keys/anything',
+      // A copy elsewhere is still an SQLite file of the same name.
+      '/tmp/copy/gateway.db',
+    ]) {
+      expect(checkFileAccess(file, '/srv/bot').allowed, file).toBe(false);
+    }
+  });
+
+  it('a shell command reading or writing them is denied', async () => {
+    const paths = await createHostProtectedPaths({ projectRoot: '/srv/bot' });
+    for (const command of [
+      'sqlite3 .zhin/gateway.db "select * from console_users"',
+      'cat .zhin/gateway.db-wal',
+      'cp .zhin/gateway.db /tmp/x.db',
+      'cat .zhin/keys/config-secrets.key',
+      'rm -f .zhin/gateway.db',
+      'echo x > .zhin/keys/new.key',
+    ]) {
+      const impact = hostWriteImpact('bash', { command }, paths);
+      const read = extractBashReadPaths(command).some(file => !checkFileAccess(file, '/srv/bot').allowed);
+      expect(impact?.level === 'deny' || read, command).toBe(true);
+    }
   });
 });

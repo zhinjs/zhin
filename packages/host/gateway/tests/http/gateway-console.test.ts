@@ -14,6 +14,9 @@ import type { ConsolePluginPermissionInfo, GatewayPackageEvent } from '@zhin.js/
 import { startGateway, type GatewayInstanceTransport, type RunningGateway } from '../../src/http/start-gateway.js';
 import { GatewayHttpServer } from '../../src/http/gateway-http-server.js';
 import { registerGatewayEventRoutes } from '../../src/http/gateway-events.js';
+import { ProjectDatabase } from '../../src/database/project-database.js';
+import { ConsoleIamService } from '../../src/iam/service.js';
+import { defineConsoleIamTables } from '../../src/iam/tables.js';
 
 const fixture = fileURLToPath(new URL('../supervisor/fixtures/fake-instance.mjs', import.meta.url));
 const PASSWORD = 'correct-horse-battery';
@@ -61,9 +64,9 @@ class FakeInstance implements GatewayInstanceTransport {
   emitAudit(entry: ConsoleAuditEntry): void { for (const listener of [...this.#audit]) listener(entry); }
 }
 
-async function gatewayOnly(options: { token?: string; config?: string; marker?: boolean; database?: Record<string, unknown> } = {}) {
-  const root = await mkdtemp(join(tmpdir(), 'zhin-gateway-console-'));
-  dirs.push(root);
+async function gatewayOnly(options: { root?: string; token?: string; config?: string; marker?: boolean; database?: Record<string, unknown> } = {}) {
+  const root = options.root ?? await mkdtemp(join(tmpdir(), 'zhin-gateway-console-'));
+  if (!options.root) dirs.push(root);
   await writeFile(join(root, 'zhin.config.yml'), options.config ?? 'configVersion: 2\nplugins: {}\n');
   if (options.marker) {
     await mkdir(join(root, '.zhin'), { recursive: true });
@@ -209,6 +212,46 @@ describe('gateway Console access control without an instance (B1.4)', () => {
     expect((await context.call('GET', '/auth/me')).body.data).toMatchObject({ kind: 'anonymous', setupRequired: false });
     expect((await context.rpc('gateway.instance.status', {})).status).toBe(401);
     expect((await context.call('POST', '/auth/login', { username: 'owner', password: PASSWORD })).status).toBe(503);
+  });
+
+  it('keeps access control closed — bootstrap token included — while the old tables cannot be imported (ADR 0059 §3)', async () => {
+    // No setup marker and an empty gateway.db: still not "no owner yet" while the project database is unreachable.
+    const context = await gatewayOnly({ token: 'setup-token', database: { dialect: 'sqlite', filename: tmpdir() } });
+    const me = await context.call('GET', '/auth/me', undefined, 'setup-token');
+    expect(me.body.data).toMatchObject({ kind: 'anonymous', setupRequired: false, unavailable: expect.stringContaining('项目数据库') });
+    // The bootstrap token is refused outright (the Host counts as initialized while closed)…
+    expect((await context.call('GET', '/auth/setup', undefined, 'setup-token')).status).toBe(401);
+    expect((await context.call('POST', '/auth/setup', { username: 'owner', password: PASSWORD }, 'setup-token')).status).toBe(401);
+    // …and the public /auth routes but /auth/me answer 503 with the reason.
+    const login = await context.call('POST', '/auth/login', { username: 'owner', password: PASSWORD });
+    expect(login.status).toBe(503);
+    expect(login.body).toMatchObject({ code: 'iam_unavailable', error: expect.stringContaining('项目数据库') });
+    expect((await context.rpc('gateway.instance.status', {}, 'setup-token')).status).toBe(401);
+  });
+
+  it('imports the accounts an earlier version kept in the project database, then signs in with them', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-gateway-legacy-'));
+    dirs.push(root);
+    const filename = join(root, '.zhin', 'data.sqlite');
+    const legacy = new ProjectDatabase({ dialect: 'sqlite', filename });
+    defineConsoleIamTables(legacy);
+    await legacy.start();
+    const old = new ConsoleIamService({ database: legacy, projectRoot: root });
+    await old.start({ timers: false });
+    await old.createOwner({ username: 'owner', password: PASSWORD });
+    const session = await old.login('owner', PASSWORD);
+    old.stop();
+    await legacy.stop();
+    const context = await gatewayOnly({ root, token: 'setup-token' });
+    expect((await context.call('GET', '/auth/me', undefined, session.token)).body.data).toMatchObject({ kind: 'user', user: { username: 'owner' } });
+    expect((await context.call('POST', '/auth/login', { username: 'owner', password: PASSWORD })).status).toBe(200);
+    // The bootstrap token stays closed: the imported owner exists.
+    expect((await context.call('GET', '/auth/setup', undefined, 'setup-token')).status).toBe(401);
+    const check = new ProjectDatabase({ dialect: 'sqlite', filename });
+    await check.start();
+    expect(await check.tableExists(['console_users', 'console_sessions'])).toEqual([]);
+    await check.stop();
+    expect(await context.gateway.console!.database()!.getMeta('legacy_import')).toMatchObject({ status: 'done' });
   });
 
   it('answers onboarding.update with the step permissions of ADR 0053 §2', async () => {

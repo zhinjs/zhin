@@ -133,6 +133,13 @@ export interface ConsoleIamServiceOptions {
    * Without it, levels are inferred from the permission suffix.
    */
   readonly pluginPermissions?: () => readonly ConsolePluginPermissionInfo[];
+  /**
+   * Why access control is closed right now (gateway.db not open, the import of the old project
+   * database tables not finished, ADR 0059 §3), or undefined. While closed the service fails
+   * closed: {@link ConsoleIamService.initialized} is true (the bootstrap token is refused),
+   * nothing authenticates and `/auth/*` answers 503 — an empty store never reads as "no owner".
+   */
+  readonly unavailable?: () => string | undefined;
 }
 
 const USERNAME = /^[a-z0-9][a-z0-9._-]{1,63}$/u;
@@ -171,6 +178,7 @@ export class ConsoleIamService implements ConsoleAccessProvider {
   readonly #limiter: LoginRateLimiter;
   readonly #onError: (error: unknown) => void;
   readonly #pluginPermissions: () => readonly ConsolePluginPermissionInfo[];
+  readonly #unavailable: () => string | undefined;
   #ready = false;
   #initialized: boolean | undefined;
   #cleanupTimer: ReturnType<typeof setInterval> | undefined;
@@ -188,10 +196,16 @@ export class ConsoleIamService implements ConsoleAccessProvider {
     this.#limiter = options.rateLimiter ?? new LoginRateLimiter({ now: this.#now });
     this.#onError = options.onError ?? (() => undefined);
     this.#pluginPermissions = options.pluginPermissions ?? (() => []);
+    this.#unavailable = options.unavailable ?? (() => undefined);
   }
 
   get ready(): boolean {
-    return this.#ready;
+    return this.#ready && this.#unavailable() === undefined;
+  }
+
+  /** See {@link ConsoleIamServiceOptions.unavailable}. */
+  unavailableReason(): string | undefined {
+    return this.#unavailable();
   }
 
   /** Seeds built-in roles and loads the owner state; call after the database started. */
@@ -238,6 +252,7 @@ export class ConsoleIamService implements ConsoleAccessProvider {
   }
 
   initialized(): boolean {
+    if (this.#unavailable() !== undefined) return true;
     if (this.#initialized === true) return true;
     // Database not up yet, or another process (`zhin console init` beside a running gateway)
     // completed setup since the last refresh: fail closed on the setup marker and re-read the
@@ -275,7 +290,7 @@ export class ConsoleIamService implements ConsoleAccessProvider {
   // ------------------------------------------------------------------ authentication
 
   async authenticate(token: string, meta: ConsoleRequestMeta = {}): Promise<ConsoleUserPrincipal | null> {
-    if (!this.#ready || !token || token.length > 256) return null;
+    if (!this.ready || !token || token.length > 256) return null;
     const hash = sha256(token);
     const now = this.#now();
     const [session] = await this.#model('sessions').select('id', 'user_id', 'created_at', 'expires_at', 'last_seen_at').where({ id: hash });

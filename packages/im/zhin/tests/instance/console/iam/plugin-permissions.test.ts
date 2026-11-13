@@ -1,12 +1,11 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createDatabaseHost } from '@zhin.js/core/runtime';
 import type { ConsolePluginPermissionInfo } from '@zhin.js/console-protocol';
 import { TokenRegistry, type ConsoleUserPrincipal } from '@zhin.js/host-http';
 import { ConsoleIamService, IamError } from '../../../../../../host/gateway/src/iam/service.js';
 import { dispatchIamRpc } from '../../../../../../host/gateway/src/iam/rpc.js';
-import { defineConsoleIamTables } from '../../../../../../host/gateway/src/iam/tables.js';
+import { openGatewayStore } from '../../../../../../host/gateway/src/database/gateway-store.js';
 
 const PASSWORD = 'correct-horse-battery';
 const roots: string[] = [];
@@ -26,12 +25,11 @@ const CATALOG: readonly ConsolePluginPermissionInfo[] = Object.freeze([
 async function openIam() {
   const root = await mkdtemp(join(tmpdir(), 'zhin-iam-plugin-'));
   roots.push(root);
-  const database = createDatabaseHost({ dialect: 'sqlite', filename: join(root, '.zhin', 'data.sqlite') } as never);
-  expect(defineConsoleIamTables(database.gatewayTableHost())).toBe(true);
-  await database.start();
-  const service = new ConsoleIamService({ database: database.gatewayTableHost(), projectRoot: root, pluginPermissions: () => CATALOG });
+  // The accounts live in the gateway store (ADR 0059).
+  const database = await openGatewayStore(root);
+  const service = new ConsoleIamService({ database, projectRoot: root, pluginPermissions: () => CATALOG });
   await service.start({ timers: false });
-  closers.push(async () => { service.stop(); await database.stop(); });
+  closers.push(async () => { service.stop(); await database.close(); });
   const tokens = new TokenRegistry();
   tokens.usePluginPermissions(() => CATALOG);
   return { service, tokens };

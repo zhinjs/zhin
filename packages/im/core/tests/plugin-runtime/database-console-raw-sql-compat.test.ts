@@ -20,24 +20,36 @@ describe('raw SQL needs the server to read text like the Console lexer', () => {
   });
 
   it('turns raw SQL off (capabilities and RPCs) when the server reads text differently, re-checked on every run', async () => {
-    const host = createDatabaseHost({ dialect: 'mysql' } as never);
     let mode = 'NO_BACKSLASH_ESCAPES';
     const sent: string[] = [];
+    // The check runs on the restricted account's connection, where raw SQL would run (ADR 0059 §4).
+    const restricted = {
+      start: async () => undefined,
+      stop: async () => undefined,
+      query: async (sql: string) => {
+        sent.push(sql);
+        if (/@@SESSION\.sql_mode/.test(sql)) return [{ mode }];
+        if (/CURRENT_USER\(\) AS account/.test(sql)) return [{ account: 'zhin_console_x@%', db: 'bot' }];
+        if (/USER_PRIVILEGES/.test(sql)) return [{ privilege: 'USAGE', grantable: 'NO' }];
+        if (/TABLE_PRIVILEGES/.test(sql)) return [{ n: 0 }];
+        if (/CURRENT_ROLE/.test(sql)) return [{ role: 'NONE' }];
+        return [];
+      },
+      transaction: vi.fn(async () => { throw new Error('must not run'); }),
+    };
+    const host = createDatabaseHost({ dialect: 'mysql', user: 'zhin', console: { user: 'zhin_console_x', password: 'p' } } as never, { openConsoleConnection: () => restricted });
     const raw = host.db as unknown as { start(): Promise<void>; query(sql: string): Promise<unknown>; transaction: unknown };
     raw.start = async () => undefined;
-    raw.query = async (sql: string) => {
-      sent.push(sql);
-      if (/@@SESSION\.sql_mode/.test(sql)) return [{ mode }];
-      return [];
-    };
-    raw.transaction = vi.fn(async () => { throw new Error('must not run'); });
+    raw.query = async (sql: string) => (/CURRENT_USER/.test(sql) ? [{ account: 'zhin@%' }] : []);
+    raw.transaction = vi.fn(async () => { throw new Error('main connection must not run Console SQL'); });
     await host.start();
-    expect(host.console!.info().capabilities).toMatchObject({ sql: false, schema: true, reason: expect.stringContaining('NO_BACKSLASH_ESCAPES') });
+    expect(host.console!.info().capabilities).toMatchObject({ sql: false, schema: true, sqlIsolation: 'restricted-credential', sqlReason: expect.stringContaining('NO_BACKSLASH_ESCAPES'), reason: expect.stringContaining('NO_BACKSLASH_ESCAPES') });
     await expect(host.console!.query!("select '\\\\', 1 into outfile '/tmp/x' #'")).rejects.toMatchObject({ code: 'unsupported' });
     await expect(host.console!.execute!('delete from t')).rejects.toMatchObject({ code: 'unsupported' });
-    expect(raw.transaction).not.toHaveBeenCalled();
+    expect(restricted.transaction).not.toHaveBeenCalled();
     mode = 'STRICT_TRANS_TABLES';
     await expect(host.console!.execute!('delete from t', { dryRun: true })).rejects.toThrow('must not run');
+    expect(raw.transaction).not.toHaveBeenCalled();
     expect(host.console!.info().capabilities).toMatchObject({ sql: true });
     expect(sent.filter(sql => /sql_mode/.test(sql)).length).toBeGreaterThanOrEqual(3);
   });
