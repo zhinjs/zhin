@@ -10,14 +10,24 @@ interface LoginAssistBinding {
 
 /**
  * Event / history-safe copy of a legacy login task, matching {@link withoutLoginMedia} for flows:
- * the QR image (`payload.image`) is replaced by `imageOmitted: true`. Consoles read it with
+ * the QR image (`payload.image`) and verification link (`payload.url`) are replaced by `imageOmitted` /
+ * `urlOmitted: true`. Consoles read them with
  * `login.list`, which is authorized per Endpoint (the event history is replayed to every subscriber).
  */
 export function eventSafeLoginTask<T extends { readonly payload?: Readonly<Record<string, unknown>> }>(task: T): T {
   const payload = task.payload;
-  if (!payload || payload.image === undefined) return task;
-  const { image: _image, ...rest } = payload;
-  return Object.freeze({ ...task, payload: Object.freeze({ ...rest, imageOmitted: true }) });
+  if (!payload || (payload.image === undefined && payload.url === undefined)) return task;
+  // Verification links (slider / device / auth) can carry a session id (`sid=`); like the QR image
+  // they stay in `login.list` only.
+  const { image, url, ...rest } = payload;
+  return Object.freeze({
+    ...task,
+    payload: Object.freeze({
+      ...rest,
+      ...(image !== undefined ? { imageOmitted: true } : {}),
+      ...(url !== undefined ? { urlOmitted: true } : {}),
+    }),
+  });
 }
 
 export type LoginAssistStdinBinder = (assist: LoginAssist) => () => void;

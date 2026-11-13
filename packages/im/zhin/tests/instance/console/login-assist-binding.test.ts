@@ -91,3 +91,19 @@ async function emitPendingTask(assist: LoginAssist, owner: object): Promise<void
   assist.submit(task.id, 'ok');
   await result;
 }
+
+it('strips verification links (they can carry a sid) from the legacy pending events', async () => {
+  const assist = new LoginAssist(null, { defaultTimeoutMs: 0 });
+  const hub = createConsoleEventHub({ runtimeId: 'login-legacy-url-test' });
+  const release = new ConsoleLoginAssistBindings(() => () => {}).acquire(assist, hub);
+  const answer = assist.waitForInput('demo', 'bot', 'slider', { message: '滑块', url: 'https://captcha.example/x?sid=SECRETSID' }, { owner: {}, timeoutMs: 0 });
+  const pending = hub.history().items.filter(item => item.type === 'endpoint.login.pending');
+  expect(pending).toHaveLength(1);
+  // (flow events drop links in withoutLoginMedia, covered by the core login-flow tests)
+  expect(JSON.stringify(pending)).not.toMatch(/SECRETSID/u);
+  expect((pending[0]!.data as { payload: { urlOmitted?: boolean } }).payload.urlOmitted).toBe(true);
+  expect(JSON.stringify(assist.listPending())).toMatch(/SECRETSID/u);
+  assist.submit(assist.listPending()[0]!.id, 'ticket');
+  await answer;
+  release();
+});
