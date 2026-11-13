@@ -273,25 +273,80 @@ function protectedStoreInUnquoted(text: string): string | undefined {
 /** Names a glob might reach: the store, its WAL / SHM files, the keys and `.zhin` itself. */
 const PROTECTED_STORE_NAMES = ['.zhin', 'gateway.db', 'gateway.db-wal', 'gateway.db-shm', 'keys', '.zhin/gateway.db', './.zhin/gateway.db', '.zhin/keys'];
 
+/**
+ * Whether the bracket expression starting at `pattern[open] === '['` admits `char` (case-insensitive);
+ * `[!…]` / `[^…]` negate, `a-z` ranges. `{ end }` is the index after `]`, or undefined when there is
+ * no closing `]` (then `[` is literal).
+ */
+function bracketMatches(pattern: string, open: number, char: string): { readonly matched: boolean; readonly end: number } | undefined {
+  let index = open + 1;
+  const negate = pattern[index] === '!' || pattern[index] === '^';
+  if (negate) index += 1;
+  const lower = char.toLowerCase();
+  let matched = false;
+  let first = true;
+  while (index < pattern.length && (first || pattern[index] !== ']')) {
+    first = false;
+    let low = pattern[index]!;
+    if (low === '\\' && index + 1 < pattern.length) { index += 1; low = pattern[index]!; }
+    let high = low;
+    if (pattern[index + 1] === '-' && index + 2 < pattern.length && pattern[index + 2] !== ']') {
+      high = pattern[index + 2]!;
+      index += 2;
+    }
+    const a = low.toLowerCase();
+    const b = high.toLowerCase();
+    if ((lower >= a && lower <= b) || (char >= low && char <= high)) matched = true;
+    index += 1;
+  }
+  if (index >= pattern.length) return undefined;
+  return { matched: matched !== negate, end: index + 1 };
+}
+
+/**
+ * Shell-glob match of the whole `text` (`*`, `?`, `[…]`; case-insensitive), without building a
+ * RegExp from the command text. Linear in pattern × text (dynamic programming over positions).
+ */
+function globMatches(pattern: string, text: string): boolean {
+  // reachable[j]: the pattern consumed so far can match text[0, j).
+  let reachable = new Array<boolean>(text.length + 1).fill(false);
+  reachable[0] = true;
+  let index = 0;
+  while (index < pattern.length) {
+    const char = pattern[index]!;
+    const next = new Array<boolean>(text.length + 1).fill(false);
+    if (char === '*') {
+      let any = false;
+      for (let j = 0; j <= text.length; j += 1) { any = any || reachable[j]!; next[j] = any; }
+      index += 1;
+    } else {
+      const bracket = char === '[' ? bracketMatches(pattern, index, 'x') : undefined;
+      for (let j = 0; j < text.length; j += 1) {
+        if (!reachable[j]) continue;
+        const target = text[j]!;
+        let ok: boolean;
+        if (char === '?') ok = true;
+        else if (bracket) ok = bracketMatches(pattern, index, target)!.matched;
+        else {
+          const literal = char === '\\' && index + 1 < pattern.length ? pattern[index + 1]! : char;
+          ok = literal.toLowerCase() === target.toLowerCase();
+        }
+        if (ok) next[j + 1] = true;
+      }
+      index = bracket ? bracket.end : char === '\\' && index + 1 < pattern.length ? index + 2 : index + 1;
+    }
+    reachable = next;
+    if (!reachable.some(Boolean)) return false;
+  }
+  return reachable[text.length]!;
+}
+
 /** Whether a shell glob (or find -name / -path pattern) can match one of {@link PROTECTED_STORE_NAMES}. */
 function globCouldName(pattern: string): boolean {
-  let source = '';
-  for (let index = 0; index < pattern.length; index += 1) {
-    const char = pattern[index]!;
-    if (char === '*') source += '.*';
-    else if (char === '?') source += '.';
-    else if (char === '[') {
-      const end = pattern.indexOf(']', index + 1);
-      if (end < 0) { source += '\\['; continue; }
-      source += `[${pattern.slice(index + 1, end).replace(/^!/u, '^').replace(/\\/gu, '\\\\')}]`;
-      index = end;
-    } else source += char.replace(/[.+^${}()|\\]/gu, '\\$&');
-  }
-  let regex: RegExp;
-  try { regex = new RegExp(`^${source}$`, 'iu'); } catch { return true; }
-  const last = pattern.split('/').filter(Boolean).at(-1) ?? pattern;
-  const name = new RegExp(`^${source.split('/').filter(Boolean).at(-1) ?? source}$`, 'iu');
-  return PROTECTED_STORE_NAMES.some(candidate => regex.test(candidate) || (last !== pattern ? false : name.test(candidate.split('/').at(-1)!)));
+  const bare = !pattern.slice(0, -1).includes('/');
+  const trimmed = pattern.endsWith('/') ? pattern.slice(0, -1) : pattern;
+  return PROTECTED_STORE_NAMES.some(candidate =>
+    globMatches(trimmed, candidate) || (bare && globMatches(trimmed, candidate.split('/').at(-1)!)));
 }
 
 /**
