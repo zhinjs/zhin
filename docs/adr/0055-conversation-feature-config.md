@@ -4,7 +4,7 @@ sidebar: false
 
 # ADR 0055：会话级功能配置——在账号之下按群 / 私聊覆盖
 
-状态：Accepted（2026-11-11）
+状态：Accepted（2026-11-11）；§1 / §3 / §7 的存储 2026-11-13 由 [ADR 0057](./0057-config-storage.md) §2 修订（已实现）：适配器、账号、会话三级覆盖统一存在表 `feature_overrides`。
 
 扩展 [ADR 0050](./0050-layered-feature-config.md)。
 
@@ -21,8 +21,8 @@ ADR 0050 让功能配置有三级：全局 < 适配器 < 账号。运营中更�
 | 层级 | 解析键 | 存储 |
 |---|---|---|
 | `global` | — | 配置文件（插件块） |
-| `adapter` | `<别名>` | 配置文件 `overrides.adapters` |
-| `endpoint` | `<别名>/<endpointId>` | 配置文件 `overrides.endpoints` |
+| `adapter` | `<别名>` | 配置文件 `overrides.adapters`（2026-11-13 起：项目数据库，ADR 0057 §2） |
+| `endpoint` | `<别名>/<endpointId>` | 配置文件 `overrides.endpoints`（2026-11-13 起：项目数据库，ADR 0057 §2） |
 | `conversation` | `<别名>/<endpointId>/<kind>:<id>` | **项目数据库** |
 
 - `kind` 取 `@zhin.js/im-contract` 的 `ConversationKind`：`group` / `private` / `channel`；`id` 是平台的会话 id（群号、对方用户 id、频道 id）。私聊按对方用户区分。
@@ -42,12 +42,14 @@ ADR 0050 让功能配置有三级：全局 < 适配器 < 账号。运营中更�
 
 ### 3. 存储：项目数据库
 
+> 2026-11-13 修订（ADR 0057 §2，已实现）：本表扩展为通用的 `feature_overrides`，新增 `level` 列（`adapter` / `endpoint` / `conversation`），主键由 `(plugin, level, key)` 生成；`enabled` / `patch` / `revision` / `updated_at` / `updated_by` 语义不变。旧表 `feature_conversation_overrides` 的行在首次加载时以 `level = 'conversation'` 复制过去（新表已有该键的行或墓碑时跳过，可重复执行），旧表此后只读不写、原样保留。非关系型方言不再「只保存在内存」，而是拒绝写入（见下）。
+
 - 实例拥有的表 `feature_conversation_overrides`（不使用网关保留的 `console_` 前缀）：`(plugin, key, enabled?, patch JSON, revision, updated_at, updated_by)`，主键 `(plugin, key)`。
 - 实例启动时整体加载到内存，按 `(plugin, key)` 索引；写入经实例的 RPC 完成并同步更新缓存，原地生效，不重启、不重载插件。
 - 写入按插件 Schema 校验（只允许 `conversationFields` / `selfServiceFields` 中的字段），乐观并发用 `revision`。
 - 修订号单调递增（2026-11-12 修订）：删除覆盖时保留墓碑行（空 patch、无开关，任何有效覆盖都不会是这种形状）并沿用修订号，重建后接着递增，旧修订号的写入一律冲突（无 ABA）。每次数据库写入检查影响行数，0 行或并发插入同一键（唯一键冲突）时重新加载缓存并返回冲突（409 `conflict`）。
 - 多进程共享数据库时，Console 读取 `feature.get`（会话层）/ `feature.conversations` / `feature.matrix` 前整表重新加载（至多每 5 秒一次，内容不变时不使缓存失效），以看到其他进程的写入。
-- MongoDB、Redis、memory 方言只保存在内存：`feature.get` / `feature.conversations` 返回 `persistent: false`，会话层写入的回复（Console 与聊天）注明「当前数据库不支持持久化，重启后丢失」。
+- MongoDB、Redis、memory 方言只保存在内存：`feature.get` / `feature.conversations` 返回 `persistent: false`，会话层写入的回复（Console 与聊天）注明「当前数据库不支持持久化，重启后丢失」。（2026-11-13 修订，ADR 0057 §2：改为拒绝写入——Console 返回 503 `feature-overrides-unpersisted`，聊天回复「未保存：功能覆盖需要关系型项目数据库……」，与聊天角色（ADR 0056 §3）一致；`persistent: false` 仍然返回。）
 - 插件卸载或会话不存在时，记录保留；Console 可清理。
 
 ### 4. 解析规则
@@ -79,7 +81,7 @@ ADR 0050 让功能配置有三级：全局 < 适配器 < 账号。运营中更�
   - `功能 重置 <插件> [层级]` / `feature reset …`：删除该层（本会话或其上级）的覆盖；
   - 层级取 `会话|账号|适配器|全局` / `conversation|endpoint|adapter|global`，目标作用范围是当前会话在该层级的祖先。
 - 谁能用：发送者必须在目标作用范围（或其上级）拥有 ADR 0056 的 zhin 角色 `admin`（或 `owner`）。角色向下继承（全局 → 适配器 → 账号 → 会话），同一人可在不同范围担任不同角色。来源只有 `chat_roles` 表中的授予（含首次启动时从原配置名单迁入的授予）。功能开关管的是 zhin 的功能，平台群主 / 管理员**不会**自动具备（2026-11-12 修订，ADR 0056 §4）：需要由 Console「角色」区块或聊天 `角色 授予` 显式授予。
-- 写入去向：会话层写项目数据库；账号层 / 适配器层写配置文件 `overrides`（走 `feature.set-override` / `feature.set-enabled`，原地生效、不重启）；全局层的开启 / 关闭写 `disable_plugins` 并重启实例，聊天中必须再发确认码（`功能 确认 <码>`，2 分钟有效）。
+- 写入去向：会话层写项目数据库；账号层 / 适配器层写配置文件 `overrides`（走 `feature.set-override` / `feature.set-enabled`，原地生效、不重启；2026-11-13 起同样写项目数据库，ADR 0057 §2）；全局层的开启 / 关闭写 `disable_plugins` 并重启实例，聊天中必须再发确认码（`功能 确认 <码>`，2 分钟有效）。
 - 字段：会话层只能改 `selfServiceFields`；账号 / 适配器 / 全局层经聊天也只能改 `selfServiceFields`，除非插件声明更宽的 `chatAdminFields`（各层仍按字段自身的 `levels` 过滤）。
 - 锁定：不能开启或改动被上级停用的插件，回复是哪一层锁定的。
 - 私聊：会话层只能在 Console 修改；私聊中可指定账号层及以上（需相应角色）。

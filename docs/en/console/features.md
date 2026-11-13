@@ -9,22 +9,14 @@ The same feature often needs different settings on different platforms, accounts
 
 | Level | Key | Where it is stored |
 | --- | --- | --- |
-| Global | — | The plugin's own configuration block; global on / off is `disable_plugins` |
-| Adapter | Adapter instance alias (a top-level key such as `qq` or `tg-main`) | `overrides.adapters.<alias>` |
-| Account | `<alias>/<endpointId>`, e.g. `qq/bot-1` | `overrides.endpoints."<alias>/<endpointId>"` |
-| Conversation | `<alias>/<endpointId>/<kind>:<conversation id>`, e.g. `qq/bot-1/group:123` (`kind` is `group` / `private` / `channel`) | The project database table `feature_conversation_overrides` (not the configuration file) |
+| Global | — | The plugin's own block in the configuration file; global on / off is `disable_plugins` |
+| Adapter | Adapter instance alias (a top-level key such as `qq` or `tg-main`) | The project database table `feature_overrides` (`level = 'adapter'`) |
+| Account | `<alias>/<endpointId>`, e.g. `qq/bot-1` | Same table (`level = 'endpoint'`) |
+| Conversation | `<alias>/<endpointId>/<kind>:<conversation id>`, e.g. `qq/bot-1/group:123` (`kind` is `group` / `private` / `channel`) | Same table (`level = 'conversation'`) |
 
-```yaml
-rss:
-  maxItems: 5
-  overrides:
-    adapters:
-      qq: { enabled: false }
-    endpoints:
-      "tg-main/news": { maxItems: 1 }
-```
+The global default lives in the configuration file and is reviewed with the code; the adapter, account and conversation levels are runtime state changed from the Console or in chat, so they live in the project database ([ADR 0057](../../adr/0057-config-storage.md), Chinese): backing up the database backs them up. A plugin block in the configuration file no longer accepts `overrides`; an existing project imports them on its first start, see [Upgrading: feature overrides move to the database](../migrations/feature-overrides.md). In keys, conversation ids escape `%` as `%25` and `/` as `%2F`; nothing else changes.
 
-`overrides` is plain YAML; editing it by hand and editing it in the Console are equivalent. Conversations can number in the hundreds, so their overrides live in the project database: backing up the database backs them up. In keys, conversation ids escape `%` as `%25` and `/` as `%2F`; nothing else changes.
+With a MongoDB, Redis or memory database these three levels cannot be saved: `feature.get` / `feature.conversations` answer `persistent: false` and writes are refused (HTTP 503, `code: 'feature-overrides-unpersisted'`; in chat, "Not saved: feature overrides need a relational project database …"), the same as [chat roles](../concepts/chat-roles.md).
 
 ## Where to change it {#pages}
 
@@ -66,8 +58,8 @@ Cells with overrides are marked; accounts with conversation overrides show their
 
 ```text
 effectively enabled = not in disable_plugins
-                    and overrides.adapters[alias].enabled is not false
-                    and overrides.endpoints[alias/id].enabled is not false
+                    and the adapter override's enabled is not false
+                    and the account override's enabled is not false
                     and the conversation override's enabled is not false
 ```
 
@@ -89,8 +81,7 @@ Every field shows its source badge: "inherited from global", "inherited from ada
 
 | What changed | How it applies |
 | --- | --- |
-| Only `overrides` (including adapter / account on / off) | In place: no restart, no plugin reload; the next message reads the new value |
-| Conversation overrides (database) | In place, likewise |
+| Adapter / account / conversation overrides and switches (database) | In place: no restart, no plugin reload; the next message reads the new value. Other instances sharing the database see it within 5 seconds |
 | Global fields | Per the field's declared `x-zhin-config.effect` |
 | Global on / off (`disable_plugins`) | Gateway enable / disable transaction: stop the instance, write, start, roll back on failure (the Console stays connected) |
 
@@ -102,17 +93,17 @@ When a feature is disabled for an account or a conversation, the Runtime skips i
 | --- | --- | --- |
 | `feature.list` | `feature.view` | All features and their supported levels |
 | `feature.matrix` | `feature.view` | Matrix data |
-| `feature.get` | `feature.view` | Schema, values, effective values and sources for one level (including `conversation`, whose `revision` is that override's own) |
+| `feature.get` | `feature.view` | Schema, values, effective values and sources for one level; `revision` is the configuration file's at the global level and the stored override's own at the adapter / account / conversation levels (`'0'` when none exists) |
 | `feature.set-override` | `feature.configure` | Write an override (merge patch) |
 | `feature.remove-override` | `feature.configure` | Remove a whole level or specific fields |
-| `feature.set-enabled` | `feature.toggle`; global level `plugin.manage` | Global writes `disable_plugins` (intercepted by the gateway and run as an enable / disable transaction, see below); adapter / account write `overrides.*.enabled`; conversation writes the database; 409 when locked |
+| `feature.set-enabled` | `feature.toggle`; global level `plugin.manage` | Global writes `disable_plugins` (intercepted by the gateway and run as an enable / disable transaction, see below); adapter / account / conversation write the database; 409 when locked |
 | `plugin:set-enabled` | `plugin.manage` | `{ instanceKey, enabled }`: the same gateway transaction as the global `feature.set-enabled` |
 | `feature.conversations` | `feature.view` | `{ plugin?, adapter?, endpoint?, query?, cursor?, limit? }`: conversations with overrides (paginated) plus conversations the instance saw recently (`hasOverrides: false`) |
 | `chat-roles.list` / `grant` / `revoke` | `iam.manage` | Chat roles (below) |
 
 The **global switch** (`feature.set-enabled` at the global level and `plugin:set-enabled`) is plugin lifecycle, not a feature switch: the management gateway intercepts it before forwarding to the instance, authorizes it with `plugin.manage` (an operator holding only `feature.toggle` is refused; non-owners can only toggle packages in the managed catalog, project-local plugins are owner-only), runs the same transaction as `gateway.plugins.enable` / `disable`, and answers in the RPC's existing reply shape (plus `transaction`; `restartRequired: true` means the instance was restarted for it). Already in the requested state answers `unchanged` and leaves the instance alone. A failed or rolled-back transaction answers `{ success: false, code: 'transaction_failed' | 'rollback_failed', error, transaction }`. After a change the event stream carries `plugin:lifecycle-updated`. The instance no longer writes the global switch itself: without a gateway (`zhin start --standalone`) it is refused (`feature.set-enabled` answers 409 `gateway-required`); use `zhin enable` / `zhin disable <plugin>` or run under `zhin start`.
 
-`feature.configure`, `feature.toggle` and `iam.manage` (for `chat-roles.*` only) are checked against scope: an operator bound to adapter `qq` can change overrides and roles on `qq`, its accounts and their conversations only, not global or other adapters; a conversation key counts for its account. File-level writes carry the configuration revision and conversation writes that override's revision, so concurrent edits are rejected rather than overwriting each other.
+`feature.configure`, `feature.toggle` and `iam.manage` (for `chat-roles.*` only) are checked against scope: an operator bound to adapter `qq` can change overrides and roles on `qq`, its accounts and their conversations only, not global or other adapters; a conversation key counts for its account. Adapter / account / conversation writes carry that override's revision (`expectedRevision`), so concurrent edits are rejected (`conflict`) rather than overwriting each other; for older Console builds the adapter / account levels still accept the configuration revision returned by `feature.list` / `feature.matrix` (no row check while it is current, a conflict otherwise).
 
 ## In-chat self-service {#self-service}
 
@@ -135,7 +126,7 @@ Feature switches are a zhin function: platform group owners / admins do not beco
 | `feature confirm <code>` | Global enable / disable restarts the instance and must be confirmed within 2 minutes |
 
 - The sender needs the chat role `admin` or `owner` at the target scope (the current conversation's ancestor at the chosen level).
-- The conversation level writes the database; account / adapter levels write the configuration file `overrides` (in place); the global switch is written by the instance to `disable_plugins` and requests a restart (unlike the Console, not yet a gateway transaction and not rolled back on failure).
+- The conversation, account and adapter levels write the database (in place); the global switch is written by the instance to `disable_plugins` and requests a restart (unlike the Console, not yet a gateway transaction and not rolled back on failure).
 - Conversation overrides for private chats can only be changed in the Console.
 - Every change is audited by the instance (actor `chat:<adapter alias>:<user id>`, with level and scope).
 

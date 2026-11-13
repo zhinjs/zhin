@@ -154,7 +154,7 @@ export default definePlugin({
 
 #### 按适配器 / 账号 / 会话覆盖配置 {#layered-config}
 
-同一个插件可以在不同适配器实例、不同账号、不同群 / 私聊上用不同的设置（[ADR 0050](../adr/0050-layered-feature-config.md)、[ADR 0055](../adr/0055-conversation-feature-config.md)）。层级从上到下是 `global`（插件自己的配置块）< `adapter`（适配器实例别名，如 `qq`）< `endpoint`（`<别名>/<账号 id>`，如 `qq/bot-1`）< `conversation`（`<别名>/<账号 id>/<kind>:<会话 id>`，如 `qq/bot-1/group:123`，存在项目数据库里）。
+同一个插件可以在不同适配器实例、不同账号、不同群 / 私聊上用不同的设置（[ADR 0050](../adr/0050-layered-feature-config.md)、[ADR 0055](../adr/0055-conversation-feature-config.md)、[ADR 0057](../adr/0057-config-storage.md)）。层级从上到下是 `global`（配置文件里插件自己的配置块）< `adapter`（适配器实例别名，如 `qq`）< `endpoint`（`<别名>/<账号 id>`，如 `qq/bot-1`）< `conversation`（`<别名>/<账号 id>/<kind>:<会话 id>`，如 `qq/bot-1/group:123`）；全局以下三级存在项目数据库表 `feature_overrides` 里。
 
 **1. 在 Schema 根上声明支持的层级。** 省略时等同 `["global"]`：只能写全局配置，覆盖里只能写启用开关。单个属性可以用同名关键字收窄（例如密钥只允许全局），但不能比根更宽，否则启动报错：
 
@@ -191,26 +191,17 @@ export default definePlugin({
 - 列出的字段必须是插件自己的属性，且其 `levels` 允许会话层；不满足时启动报错。
 - 没有配置 Schema 的插件也有会话层开关，但没有字段覆盖。
 - 会话 id 写进键时转义 `%` → `%25`、`/` → `%2F`，其余字符原样（id 可以含 `:`），因此键里恰好两个 `/`。
-- 会话层覆盖不在配置文件里：由 Console（`feature.*` 的 `level: 'conversation'`）或群内自助命令写入表 `feature_conversation_overrides`，写入后原地生效。
-- 会话层的字段补丁不做环境变量展开（`${VAR}` 原样保留）。
+- 会话层覆盖与适配器 / 账号层一样不在配置文件里，见下一步。
 
-**2. 覆盖写在插件自己的块里，保留键 `overrides`。** 每个覆盖值是插件 Schema 的部分对象，外加保留字段 `enabled`：
-
-```yaml
-rss:
-  maxItems: 5
-  overrides:
-    adapters:
-      qq: { enabled: false }
-    endpoints:
-      "tg-main/news": { maxItems: 1 }
-```
+**2. 覆盖存在项目数据库里，由 Console 或聊天命令写入。** 每条覆盖是插件 Schema 的部分对象（只含该层级允许的字段），外加启用开关；由 Console 功能页（`feature.set-override` / `feature.set-enabled` / `feature.remove-override`）或群内自助命令（`功能 设置 / 开启 / 关闭 <插件> … [会话|账号|适配器]`）写入表 `feature_overrides`，写入后原地生效。配置文件的插件块里不能再写 `overrides`（旧项目首次启动时自动导入数据库并从配置文件删除，见[升级：功能覆盖迁入数据库](../migrations/feature-overrides.md)）。
 
 - 字段自下而上合并：普通对象逐键深合并，数组和标量整体替换，`null` 表示“显式清空”（该字段不再继承上级的值）。
-- 启用自上而下：只有上面所有层级都启用时某一层才能停用；任一上级停用后，下级全部锁定，既不能启用也不能改自己的开关（Console 返回 409 `locked`）。下级从不存「启用」：启用 = 删除该层开关；手写的 `enabled: true` 不起作用，只会得到一条警告。全局层的启停仍是 `disable_plugins`（改动后重启）。
+- 启用自上而下：只有上面所有层级都启用时某一层才能停用；任一上级停用后，下级全部锁定，既不能启用也不能改自己的开关（Console 返回 409 `locked`）。下级从不存「启用」：启用 = 删除该层开关。全局层的启停仍是 `disable_plugins`（改动后重启）。
 - 指向未声明的适配器别名或账号的键会保留并给出警告，不报错，方便先写配置、后加账号。
-- 插件的 Schema 里不能再声明名为 `overrides` 的属性；插件自己的 `enabled` 字段不参与覆盖。
-- 没有配置 Schema 的插件也能用三级启停开关（只写 `enabled`）。
+- 存进数据库的字段补丁不做环境变量展开（`${VAR}` 原样保留）；聊天里不能写这类引用。
+- 插件的 Schema 里不能声明名为 `overrides` 的属性（保留键）；插件自己的 `enabled` 字段不参与覆盖。
+- 没有配置 Schema 的插件也能用三级启停开关。
+- 项目数据库是 MongoDB、Redis 或内存方言时无法保存覆盖，写入会被拒绝。
 
 **3. 在代码里读取有效配置。** `context.config` 仍是全局视图，不含 `overrides`：
 
@@ -229,11 +220,11 @@ setup(context) {
 }
 ```
 
-`configFor(target)` 返回合并后冻结的有效配置，按“配置代次 + 解析键（含会话）”缓存，会话层写入时缓存失效，读到的总是最新生效的配置。target 是消息时解析到消息所在的会话层。只改 `overrides`（包括适配器 / 账号层的开关）会原地生效：不重启、不重载插件，下一条消息就读到新值；改全局字段沿用字段自己的 `x-zhin-config.effect`。
+`configFor(target)` 返回合并后冻结的有效配置，按“配置代次 + 覆盖存储版本 + 解析键（含会话）”缓存，任何一级覆盖写入时缓存失效，读到的总是最新生效的配置。target 是消息时解析到消息所在的会话层。改适配器 / 账号 / 会话层的覆盖或开关会原地生效：不重启、不重载插件，下一条消息就读到新值；改全局字段沿用字段自己的 `x-zhin-config.effect`。
 
 **自动门禁：** 插件在某个账号或会话上被停用时，命令（含菜单）、中间件、带账号的消息与事件处理器、Agent 工具与技能披露都会按消息所在会话直接跳过，表现和插件不存在一样（命令不会回复“已禁用”）。定时任务、后台轮询等不经过消息的能力，需要像上例那样自己调用 `isEnabledFor`。
 
-Console 的功能页通过 `feature.*` RPC（`feature.list` / `feature.matrix` / `feature.get` / `feature.set-override` / `feature.remove-override` / `feature.set-enabled` / `feature.conversations`）读写同一份 `overrides` 与会话层覆盖，手改 YAML 与 Console 改等价。activity-feedback 现有的 `platforms` / `endpoints` 仍然兼容，新插件推荐使用 `overrides`。
+Console 的功能页通过 `feature.*` RPC（`feature.list` / `feature.matrix` / `feature.get` / `feature.set-override` / `feature.remove-override` / `feature.set-enabled` / `feature.conversations`）读写全局配置块与数据库里的三级覆盖。activity-feedback 现有的 `platforms` / `endpoints` 仍然兼容，新插件推荐声明 `x-zhin-config.levels`、改用分层覆盖。
 
 ### 使用数据库
 
