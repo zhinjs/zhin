@@ -3,6 +3,7 @@ import inquirer from 'inquirer';
 import chalk from 'chalk';
 import fs from 'fs-extra';
 import path from 'node:path';
+import { updateDotenvFile } from '@zhin.js/runtime';
 import { formatEnvValue, mergeEnvText } from './env.js';
 import { clonePluginConfigurationMap, mergeDependenciesIntoPackageJson, setPluginInstanceConfig } from './apply.js';
 import { isAiEnabledInConfig } from './project-deps.js';
@@ -88,12 +89,10 @@ export async function saveTypeSafeSetupDependencies(projectDir: string, setup: T
   const variable = envVariable(setup);
   await mergeDependenciesIntoPackageJson(projectDir, { [TYPESAFE_DECISION_PACKAGE]: '^1.0.0' });
   const envPath = path.join(projectDir, '.env');
-  const envExists = await fs.pathExists(envPath);
-  const previous = envExists ? await fs.readFile(envPath, 'utf8') : '';
-  // writeFile's mode applies only when creating a file. Restrict existing files
-  // before adding credentials; Windows access control is not POSIX file modes.
-  if (envExists && process.platform !== 'win32') await fs.chmod(envPath, 0o600);
-  await fs.writeFile(envPath, mergeEnvText(previous, `${variable}=${formatEnvValue(setup.apiKey)}\n`), { mode: 0o600 });
+  // The atomic writer keeps an existing file's mode. Restrict existing files before
+  // adding credentials; Windows access control is not POSIX file modes.
+  if (await fs.pathExists(envPath) && process.platform !== 'win32') await fs.chmod(envPath, 0o600);
+  await updateDotenvFile(envPath, previous => mergeEnvText(previous, `${variable}=${formatEnvValue(setup.apiKey)}\n`));
 }
 
 /** Local checks only; never sends a paid API request or returns credential values. */

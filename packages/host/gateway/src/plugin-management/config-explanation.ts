@@ -1,5 +1,5 @@
 import { isDeepStrictEqual } from 'node:util';
-import { parsePluginConfigSchema } from '@zhin.js/runtime';
+import { isSecretConfigSchema, parsePluginConfigSchema } from '@zhin.js/runtime';
 import type { ConsoleConfigExplanation, ConsoleConfigFieldEvidence } from '@zhin.js/console-protocol';
 import { readStringLiteralOptions } from '../config/console-schema.js';
 
@@ -24,7 +24,7 @@ export function explainConfigFields(schema: Schema, input: unknown, current: unk
       || (node.additionalProperties !== undefined && node.additionalProperties !== false))) { issue = 'complex-schema'; return; }
     if (path.length > 8 || path.some(key => !key || key.length > 128 || forbiddenKeys.has(key))) { issue = 'bound-exceeded'; return; }
     const metadata = record(node['x-zhin-config']) ? node['x-zhin-config'] : {};
-    const secret = inheritedSecret || node.writeOnly === true || metadata.secret === true || metadata.hidden === true || metadata.component === 'password';
+    const secret = inheritedSecret || isSecretConfigSchema(node) || metadata.hidden === true;
     if (node.type === 'object') {
       if (node.properties !== undefined && !record(node.properties)) { issue = 'complex-schema'; return; }
       for (const [key, child] of Object.entries(node.properties ?? {})) visit(child, [...path, key], secret);
@@ -37,7 +37,7 @@ export function explainConfigFields(schema: Schema, input: unknown, current: unk
     if (path.length === 0 || fields.length >= 128) { issue = 'bound-exceeded'; return; }
     const items = list && record(node.items) ? node.items : {};
     const itemMetadata = record(items['x-zhin-config']) ? items['x-zhin-config'] : {};
-    const itemSecret = items.writeOnly === true || itemMetadata.secret === true || itemMetadata.hidden === true || itemMetadata.component === 'password';
+    const itemSecret = isSecretConfigSchema(items) || itemMetadata.hidden === true;
     fields.push({ path: Object.freeze([...path]), secret: secret || itemSecret, list });
   };
   visit(schema, [], false);

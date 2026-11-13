@@ -1,3 +1,5 @@
+import { isSecretConfigSchema } from '@zhin.js/runtime';
+
 type Schema = Record<string, unknown>;
 type Context = { root: unknown; references: ReadonlySet<string>; depth: number; budget: { remaining: number }; properties?: ReadonlySet<string> };
 const record = (value: unknown): value is Schema => Boolean(value && typeof value === 'object' && !Array.isArray(value));
@@ -11,7 +13,7 @@ export function readStringLiteralOptions(input: Record<string, unknown>): readon
 }[] | null {
   if (!Array.isArray(input.anyOf) || input.anyOf.length === 0 || input.anyOf.length > 64) return null;
   const annotations = ['title', 'description', 'x-descriptionZh', 'x-i18n', '$comment'];
-  const parentKeys = ['anyOf', 'type', 'default', 'writeOnly', 'readOnly', 'deprecated', 'x-zhin-config', ...annotations];
+  const parentKeys = ['anyOf', 'type', 'default', 'writeOnly', 'readOnly', 'deprecated', 'x-zhin-config', 'x-zhin-secret', ...annotations];
   if (Object.keys(input).some(key => !parentKeys.includes(key))
     || (input.type !== undefined && input.type !== 'string')) return null;
   const values = new Set<string>();
@@ -128,7 +130,7 @@ function convert(input: unknown, key: string | undefined, context: Context): Sch
   const inferred = type ?? (Array.isArray(schema.enum) && schema.enum.length ? (schema.enum[0] === null ? 'null' : typeof schema.enum[0]) : 'any');
   return finish({ type: inferred === 'integer' ? 'number' : jsonTypes.has(inferred) ? inferred : 'any', ...(inferred === 'integer' ? { integer: true } : {}) });
 }
-const annotationKeys = new Set(['title', 'description', 'x-descriptionZh', 'x-i18n', 'default', 'readOnly', 'writeOnly', 'examples', 'deprecated', 'x-zhin-config', 'key', 'hidden', 'component', 'options', 'effect', 'secret']);
+const annotationKeys = new Set(['title', 'description', 'x-descriptionZh', 'x-i18n', 'default', 'readOnly', 'writeOnly', 'examples', 'deprecated', 'x-zhin-config', 'x-zhin-secret', 'key', 'hidden', 'component', 'options', 'effect', 'secret']);
 function annotate(result: Schema, schema: Schema, key?: string): Schema {
   const output: Schema = { ...result };
   if (record(schema['x-i18n'])) output['x-i18n'] = schema['x-i18n'];
@@ -148,7 +150,7 @@ function annotate(result: Schema, schema: Schema, key?: string): Schema {
   const metadata = record(schema['x-zhin-config']) ? schema['x-zhin-config'] : {};
   for (const name of ['hidden', 'component', 'options', 'effect']) if (metadata[name] !== undefined) output[name] = metadata[name];
   if (output.secret !== true && typeof schema.secret === 'boolean') output.secret = schema.secret;
-  if (output.secret === true || schema.writeOnly === true || schema.secret === true || metadata.secret === true) {
+  if (output.secret === true || isSecretConfigSchema(schema)) {
     output.secret = true;
     if (output.component !== 'textarea') output.component = 'password';
   }

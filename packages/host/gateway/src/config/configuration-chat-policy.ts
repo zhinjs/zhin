@@ -1,4 +1,5 @@
 import { expandEnvironmentValue } from '@zhin.js/runtime';
+import { isSecretConfigSchema } from '@zhin.js/runtime';
 import { isUnknownConfigurationSchemaBoundary, sensitiveConfigKey as sensitiveKey } from './configuration-redaction.js';
 type Schema = Readonly<Record<string, unknown>>;
 type Variants = readonly (readonly Schema[])[];
@@ -105,8 +106,7 @@ function record(value: unknown): value is Schema {
 }
 function own(value: Schema, key: string): boolean { return Object.hasOwn(value, key); }
 function sensitive(schema: Schema): boolean {
-  return schema.writeOnly === true || schema.secret === true || schema.format === 'password' || schema.component === 'password'
-    || record(schema['x-zhin-config']) && (schema['x-zhin-config'].secret === true || schema['x-zhin-config'].component === 'password');
+  return isSecretConfigSchema(schema);
 }
 function unknown(): never { throw new ConfigChatAccessError('unknown'); }
 function assertSafe(nodes: readonly Schema[]): void {
