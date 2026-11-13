@@ -31,6 +31,7 @@ npx zhin --help        # 查看全部命令
 | 环境或配置有问题 | `npx zhin doctor` |
 | 检查配置文件是否有效 | `npx zhin config check` |
 | 安装一个社区插件 | `npx zhin install <插件名>` |
+| 临时停用 / 重新启用一个插件（不卸载） | `npx zhin disable <instanceKey>` / `npx zhin enable <instanceKey>` |
 | 按功能查找插件和配置步骤 | `npx zhin use-cases` |
 | 创建一个可独立发布的新插件 | `npx @zhin.js/cli new my-plugin --standalone` |
 | 发布前检查插件 | `npx @zhin.js/cli plugin check` |
@@ -307,7 +308,7 @@ zhin create tool lookup
 zhin install <插件名或 git 地址> [--no-enable] [--dry-run]
 ```
 
-默认会用 pnpm 安装，再把包引用写进 `zhin.config.yml` 的 `plugins.<instanceKey>`；业务参数写在顶层同名实例块，启停由 `disable_plugins` 控制。插件 Schema 有无默认值的必填字段（例如适配器的 `endpoints` 账号）时，只安装依赖、不写声明，并提示缺少的配置项：在 Console 填写后声明（`gateway.plugins.declare`），或运行 `zhin setup --adapters`，或手动在配置文件中添加 `plugins.<instanceKey>` 与实例块后重启。
+默认会用 pnpm 安装，再把包引用写进 `zhin.config.yml` 的 `plugins.<instanceKey>`；业务参数写在顶层同名实例块，启停由 `disable_plugins` 控制（用 [`zhin enable` / `zhin disable`](#enable-disable) 修改）。插件 Schema 有无默认值的必填字段（例如适配器的 `endpoints` 账号）时，只安装依赖、不写声明，并提示缺少的配置项：在 Console 填写后声明（`gateway.plugins.declare`），或运行 `zhin setup --adapters`，或手动在配置文件中添加 `plugins.<instanceKey>` 与实例块后重启。
 
 | 选项 | 说明 |
 | --- | --- |
@@ -326,6 +327,23 @@ zhin uninstall adapter <name> [--remove-pkg]
 ```
 
 `name` 可以是 npm 包名或 instanceKey；`--remove-pkg` 同时从 `package.json` 移除依赖。网关在运行时经网关执行（停启实例、失败回滚）。系统服务用 `zhin service uninstall` 卸载。
+
+### enable / disable：启用或停用插件实例 {#enable-disable}
+
+```bash
+zhin disable <instanceKey 或包名>
+zhin enable <instanceKey 或包名>
+```
+
+把已安装并已声明的插件实例加入或移出配置文件的 `disable_plugins`，不改依赖、不删实例配置块（彻底移除用 `zhin uninstall plugin`）。参数是 `plugins.<instanceKey>` 的实例键；包名只在它只声明了一个实例时可用，多实例时须写实例键。
+
+| 情况 | 结果 |
+| --- | --- |
+| 网关在运行（`zhin start`） | 经网关事务执行：备份配置 → 停止实例 → 写入 `disable_plugins` → 启动实例并等待就绪；启动失败时恢复配置文件并启动原实例（不运行包管理器）。需要 `plugin.manage` 权限，本地 socket 视为所有者 |
+| 网关未运行 | 直接写入配置文件，下次 `zhin start` 时生效 |
+| 已是目标状态 | 成功退出，不改配置，也不重启实例 |
+| 未声明、保留键（`http`、`plugins` 等）、项目根插件 | 报错，退出码 1 |
+| `enable` 时包未安装、依赖无法解析或实例配置不通过插件 Schema | 报错，退出码 1，配置不变；`disable` 不要求包仍已安装，可用来先停掉一个损坏的插件 |
 
 ### update：更新依赖
 

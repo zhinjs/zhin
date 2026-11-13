@@ -51,7 +51,7 @@ description: "zhin.config.yml 的结构与每个顶层键：HTTP、数据库、A
 | Agent 之间能联系谁、协作预算上限 | `agents/<name>/agent.json` 的 `collaboration` |
 | 当前运行时到底发布了什么 | Console 的 Endpoint、能力目录与 generation 状态 |
 
-主配置使用 `configVersion: 2`。先安装依赖，再在 `plugins` 映射实例名与包，业务参数放在顶层同名块；`disable_plugins` 列出停用实例。Feature 需求仍在 `package.json#zhin.features`。旧配置请先阅读[迁移指南](../migrations/plugin-instance-declarations.md)。
+主配置使用 `configVersion: 2`。先安装依赖，再在 `plugins` 映射实例名与包，业务参数放在顶层同名块；`disable_plugins` 列出停用实例（可用 `zhin disable` / `zhin enable` 修改）。Feature 需求仍在 `package.json#zhin.features`。旧配置请先阅读[迁移指南](../migrations/plugin-instance-declarations.md)。
 
 ## 加载与校验流程
 

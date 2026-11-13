@@ -125,6 +125,7 @@ interface HttpHost {
 
 - `install` 声明新插件前用 Schema 默认值补全空配置并校验；有无默认值的必填字段（或引用缺失的环境变量）时只安装依赖、不声明，事务成功，结果带 `needsConfiguration`（缺少的配置路径与环境变量），实例不会因缺配置而回滚整笔安装。
 - `gateway.plugins.declare { package, instanceKey?, config, startInstance? }`（`plugin.manage`；非所有者只能声明白名单内的包）是声明已安装插件并写入首份配置的唯一受支持入口：先在停实例前校验（包须是已安装的生产依赖、实例键未声明且非保留键、配置通过插件 Schema 且无缺失环境变量，否则 `invalid_input`；Schema 校验失败时回复除 `error` 文本外另带结构化 `errors: [{ path, message }]`（`path` 相对实例块，`$` 加 `.键/索引`，如 `$.endpoints.0.id`）与 `missingEnv: string[]`，仅非空时出现，类型见 `GatewayRpcErrorDetails`，本地 socket 的错误行同形），再作为事务执行（`snapshot → stop-instance → configure → start-instance`），一次原子写入 `plugins.<instanceKey>` 与实例块；启动失败时恢复配置文件（不重新安装依赖）并启动旧实例。进度同样经 `gateway.packages.progress` 推送，`operation` 为 `declare`。`config:patch-project` 仍拒绝修改声明。已安装但未声明的插件（`needsConfiguration`）可用 `schema:get { pluginName: <包名> }` 读取其 `schema.json` 表单（只读，须是生产依赖且为 Plugin 包），形状与已声明实例相同并带 `declared: false`。
+- `gateway.plugins.enable { plugin, startInstance? }` / `gateway.plugins.disable { plugin, startInstance? }`（`plugin.manage`；非所有者只能启停白名单内的包，`./` 本地插件只限所有者）把一个已声明实例移出或加入 `disable_plugins`（`plugin` 为实例键，或只声明一次的包名）。先在停实例前校验（未声明、保留键、项目根插件一律 `invalid_input`；`enable` 另要求包已安装、依赖可解析、实例配置通过插件 Schema，失败时与 `declare` 同样带 `errors` / `missingEnv`），再作为只写配置的事务执行（`snapshot → stop-instance → configure → start-instance`），启动失败时恢复配置文件并启动旧实例。已是目标状态时直接成功、不停实例、不写文件。结果带 `plugin: { instanceKey, packageName, enabled, changed }`。CLI 的 `zhin enable` / `zhin disable` 在网关运行时经本地 socket 调用它们，否则直接写配置。
 - 回滚报告的 `logTail` 只含本次事务期间实例输出的行。
 
 ### 5. 实例生命周期

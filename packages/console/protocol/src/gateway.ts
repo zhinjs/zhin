@@ -25,6 +25,8 @@ export const GATEWAY_INSTANCE_RPC = Object.freeze({
 /** Plugin declarations written by the gateway (ADR 0053 §2 step 4, ADR 0054 §4). */
 export const GATEWAY_PLUGINS_RPC = Object.freeze({
   DECLARE: 'gateway.plugins.declare',
+  ENABLE: 'gateway.plugins.enable',
+  DISABLE: 'gateway.plugins.disable',
 } as const);
 
 export const GATEWAY_RPC = Object.freeze({ ...GATEWAY_PACKAGES_RPC, ...GATEWAY_INSTANCE_RPC, ...GATEWAY_PLUGINS_RPC });
@@ -48,6 +50,8 @@ export const GATEWAY_RPC_PERMISSIONS = Object.freeze({
   'gateway.instance.stop': 'ops.restart',
   'gateway.instance.restart': 'ops.restart',
   'gateway.plugins.declare': 'plugin.manage',
+  'gateway.plugins.enable': 'plugin.manage',
+  'gateway.plugins.disable': 'plugin.manage',
 } as const satisfies Readonly<Record<GatewayRpcType, string>>);
 
 /**
@@ -64,11 +68,17 @@ export const GATEWAY_PACKAGES_PROGRESS_PATH = '/gateway/packages/progress' as co
 
 export type GatewayPackageOperation = 'install' | 'uninstall' | 'update';
 
-/** Every gateway transaction: package operations plus `declare` (`gateway.plugins.declare`). */
-export type GatewayTransactionOperation = GatewayPackageOperation | 'declare';
+/**
+ * Every gateway transaction: package operations plus the configuration-only plugin operations
+ * `declare` (`gateway.plugins.declare`) and `enable` / `disable` (`gateway.plugins.enable|disable`).
+ */
+export type GatewayTransactionOperation = GatewayPackageOperation | 'declare' | 'enable' | 'disable';
 
-/** Where an authorized package came from: an allowlist catalog, or any npm name (owners only). */
-export type GatewayPackageSource = 'database-driver' | 'adapter' | 'ai' | 'market' | 'npm';
+/**
+ * Where an authorized package came from: an allowlist catalog, any npm name (owners only), or a
+ * project-local plugin directory (`./plugins/x`, owners only; `enable` / `disable` only).
+ */
+export type GatewayPackageSource = 'database-driver' | 'adapter' | 'ai' | 'market' | 'npm' | 'local';
 
 export interface GatewayPackagesInstallRequest {
   /** `name` or `name@<semver range | dist-tag>`; 1–32 entries. */
@@ -93,6 +103,29 @@ export interface GatewayPluginsDeclareRequest {
   /** The instance's configuration section (`<instanceKey>:`); default `{}`. */
   readonly config?: Readonly<Record<string, unknown>>;
   readonly startInstance?: boolean;
+}
+
+/**
+ * `gateway.plugins.enable` / `gateway.plugins.disable`: remove the declared instance from, or add
+ * it to, `disable_plugins` in the root configuration, then restart the instance (rolled back when
+ * it does not come up). Enabling requires an installed plugin package whose configuration passes
+ * its schema. Already in the requested state: succeeds without stopping the instance or writing
+ * (`plugin.changed: false`).
+ */
+export interface GatewayPluginsSetEnabledRequest {
+  /** A declared instance key, or the package name of a package declared exactly once. */
+  readonly plugin: string;
+  readonly startInstance?: boolean;
+}
+
+/** The instance an `enable` / `disable` transaction toggled. */
+export interface GatewayPluginEnablement {
+  readonly instanceKey: string;
+  readonly packageName: string;
+  /** The requested state. */
+  readonly enabled: boolean;
+  /** False when the instance already was in the requested state (nothing written, instance untouched). */
+  readonly changed: boolean;
 }
 
 /**
@@ -153,7 +186,7 @@ export interface GatewayInstalledPackage {
   /** Version found in node_modules; null when missing. */
   readonly installedVersion: string | null;
   /** Allowlist catalog the package belongs to, if any. */
-  readonly catalog?: Exclude<GatewayPackageSource, 'npm'>;
+  readonly catalog?: Exclude<GatewayPackageSource, 'npm' | 'local'>;
 }
 
 export interface GatewayPackageList {
@@ -200,6 +233,8 @@ export interface GatewayPackageTransactionResult {
    * (the transaction still succeeds and the instance stays healthy). Absent when none.
    */
   readonly needsConfiguration?: readonly GatewayPluginConfigurationNeed[];
+  /** `enable` / `disable` only (succeeded): the toggled instance. */
+  readonly plugin?: GatewayPluginEnablement;
   readonly instance: Readonly<{ before: GatewayInstanceState | 'unmanaged'; after: GatewayInstanceState | 'unmanaged' }>;
   readonly startedAt: number;
   readonly finishedAt: number;

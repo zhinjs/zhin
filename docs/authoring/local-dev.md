@@ -120,7 +120,7 @@ zhin dev link ../zhin --project ../my-bot   # 不在项目目录时用 --project
 
 修改后执行 `pnpm install`，再用第 1 节的命令确认每个包只有一个解析路径。
 
-临时停用某个实例时，把实例名加入主配置 `disable_plugins`；保留包依赖、`plugins` 映射和顶层同名业务块。移除声明才是删除实例，不能把停用等同于卸载。
+临时停用某个实例时，运行 `zhin disable <实例名>`（恢复用 `zhin enable <实例名>`，见 [CLI 参考](../cli/index.md#enable-disable)），它把实例名加入主配置 `disable_plugins`；保留包依赖、`plugins` 映射和顶层同名业务块。移除声明才是删除实例，不能把停用等同于卸载。
 
 ## 5. 独立插件联调 {#standalone-plugin}
 

@@ -31,6 +31,7 @@ Inside a project that has `@zhin.js/cli` installed, `npx zhin` uses it directly.
 | Diagnose environment or config problems | `npx zhin doctor` |
 | Check the config file is valid | `npx zhin config check` |
 | Install a community plugin | `npx zhin install <plugin>` |
+| Turn a plugin off / on again without uninstalling it | `npx zhin disable <instanceKey>` / `npx zhin enable <instanceKey>` |
 | Find plugins and setup steps by purpose | `npx zhin use-cases` |
 | Create a new, publishable plugin | `npx @zhin.js/cli new my-plugin --standalone` |
 | Check a plugin before publishing | `npx @zhin.js/cli plugin check` |
@@ -307,7 +308,7 @@ zhin create tool lookup
 zhin install <plugin name or git URL> [--no-enable] [--dry-run]
 ```
 
-By default it installs with pnpm and writes the package reference into `plugins.<instanceKey>` in `zhin.config.yml`. Business settings use the top-level alias block; `disable_plugins` controls activation. When the plugin schema has required fields without defaults (such as an adapter's `endpoints` accounts), only the dependency is installed, nothing is declared, and the missing fields are printed: fill them in the Console and declare the plugin there (`gateway.plugins.declare`), run `zhin setup --adapters`, or add `plugins.<instanceKey>` and the instance block to the config file yourself and restart.
+By default it installs with pnpm and writes the package reference into `plugins.<instanceKey>` in `zhin.config.yml`. Business settings use the top-level alias block; `disable_plugins` controls activation (change it with [`zhin enable` / `zhin disable`](#enable-disable)). When the plugin schema has required fields without defaults (such as an adapter's `endpoints` accounts), only the dependency is installed, nothing is declared, and the missing fields are printed: fill them in the Console and declare the plugin there (`gateway.plugins.declare`), run `zhin setup --adapters`, or add `plugins.<instanceKey>` and the instance block to the config file yourself and restart.
 
 | Option | Description |
 | --- | --- |
@@ -326,6 +327,23 @@ zhin uninstall adapter <name> [--remove-pkg]
 ```
 
 `name` can be an npm package name or an instanceKey; `--remove-pkg` also removes the dependency from `package.json`. While the gateway runs, the uninstall goes through it (instance stopped and started, rolled back on failure). Remove the system service with `zhin service uninstall`.
+
+### enable / disable: Turn a Plugin Instance On or Off {#enable-disable}
+
+```bash
+zhin disable <instanceKey or package>
+zhin enable <instanceKey or package>
+```
+
+Adds an installed, declared plugin instance to `disable_plugins` in the config file, or removes it from that list. Dependencies and the instance's config block are left alone (use `zhin uninstall plugin` to remove a plugin entirely). The argument is the instance key of `plugins.<instanceKey>`; a package name works only when that package is declared once. With several instances, pass the instance key.
+
+| Situation | Result |
+| --- | --- |
+| Gateway running (`zhin start`) | Runs as a gateway transaction: back up the config → stop the instance → write `disable_plugins` → start the instance and wait for ready. If it fails to start, the config file is restored and the previous instance started again (the package manager never runs). Needs `plugin.manage`; the local socket counts as the owner |
+| No gateway | Writes the config file directly; the change applies at the next `zhin start` |
+| Already in the requested state | Exits successfully without changing the config or restarting the instance |
+| Undeclared, a reserved key (`http`, `plugins`, …) or the project's root plugin | Error, exit code 1 |
+| `enable` when the package isn't installed, its dependencies don't resolve or the instance config fails the plugin schema | Error, exit code 1, config unchanged. `disable` doesn't require the package to still be installed, so you can switch off a broken plugin first |
 
 ### update: Update Dependencies
 

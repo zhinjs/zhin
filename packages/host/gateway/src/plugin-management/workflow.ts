@@ -36,7 +36,7 @@ function isAdapterIndex(value: unknown): value is AdapterIndexView {
   return !!value && typeof value === 'object'
     && (value as { readonly $projection?: unknown }).$projection === 'zhin.adapter-index/1';
 }
-type Project = { dependencies?: Record<string, string>; optionalDependencies?: Record<string, string>; devDependencies?: Record<string, string>; zhin?: { plugins?: { package: string; instanceKey: string }[] } };
+type Project = { name?: string; dependencies?: Record<string, string>; optionalDependencies?: Record<string, string>; devDependencies?: Record<string, string>; zhin?: { plugins?: { package: string; instanceKey: string }[] } };
 
 export interface PluginManagementOptions {
   readonly activity?: PluginManagementActivity;
@@ -70,6 +70,42 @@ export class PluginDeclarationError extends Error {
     this.missingEnv = Object.freeze([...missingEnv]);
   }
 }
+
+/** Why an enable / disable request was refused before anything was written. */
+export type PluginEnablementErrorCode = 'invalid-request' | 'reserved' | 'root' | 'not-declared' | 'not-installed' | 'invalid-config';
+
+/** An enable / disable refused before anything was written (invalid target or configuration). */
+export class PluginEnablementError extends Error {
+  readonly code: PluginEnablementErrorCode;
+  readonly errors: readonly { readonly path: string; readonly message: string }[];
+  readonly missingEnv: readonly string[];
+  constructor(code: PluginEnablementErrorCode, message: string, errors: readonly { path: string; message: string }[] = [], missingEnv: readonly string[] = []) {
+    super(message);
+    this.name = 'PluginEnablementError';
+    this.code = code;
+    this.errors = Object.freeze(errors.map(error => Object.freeze({ ...error })));
+    this.missingEnv = Object.freeze([...missingEnv]);
+  }
+}
+
+/** What `setEnabled` would write to `disable_plugins`; changes nothing. */
+export interface PluginEnablementPlan {
+  readonly packageName: string;
+  readonly instanceKey: string;
+  /** The requested state. */
+  readonly enabled: boolean;
+  /** False when the instance already is in the requested state: nothing would be written. */
+  readonly changed: boolean;
+  /** `disable_plugins` after the change. */
+  readonly disabled: readonly string[];
+  readonly projectRevision: string;
+  readonly configurationRevision: string;
+  /** A running instance must restart to reflect the (current or requested) state. */
+  readonly restartRequired: boolean;
+}
+
+/** Keys that never name a plugin instance (Host sections and the declaration protocol). */
+const RESERVED_INSTANCE_KEYS: ReadonlySet<string> = new Set([...HOST_CONFIG_KEYS, 'configVersion', 'plugins', 'disable_plugins', 'plugin', 'root']);
 
 /** One installation authority for CLI and Console. No generation or package parser of its own. */
 export class PluginManagementWorkflow implements PluginManagementPort {
@@ -511,6 +547,75 @@ export class PluginManagementWorkflow implements PluginManagementPort {
       completed.push('application-declaration', 'config');
       const state = await this.inspect(plan.instanceKey);
       return Object.freeze({ packageName: plan.packageName, instanceKey: plan.instanceKey, restartRequired: state.restartRequired, state });
+    }, request);
+  }
+
+  /**
+   * Validates enabling / disabling one declared instance (an instance key, or a package name
+   * declared exactly once) without writing. Enabling needs an installed plugin package whose
+   * dependencies and configuration pass; disabling also accepts a declared package that is no
+   * longer installed, so a broken instance can be taken out of the next generation.
+   */
+  async planSetEnabled(request: string, enabled: boolean): Promise<PluginEnablementPlan> {
+    if (typeof request !== 'string' || !request.trim() || request.length > 256) throw new PluginEnablementError('invalid-request', '请提供插件包名或 instanceKey');
+    if (typeof enabled !== 'boolean') throw new PluginEnablementError('invalid-request', 'enabled 必须是布尔值');
+    const key = request.trim().replace(/^root\//u, '');
+    if (RESERVED_INSTANCE_KEYS.has(key)) throw new PluginEnablementError('reserved', `${key} 是保留配置键，不是插件实例`);
+    const { project } = await this.#project();
+    if (project.name !== undefined && key === project.name) throw new PluginEnablementError('root', '项目根插件始终加载，不能启用或停用');
+    let target: { packageName: string; instanceKey: string };
+    let declared: boolean;
+    try {
+      const entries = await this.#declaredEntries();
+      target = await this.#resolveTarget(key, entries);
+      declared = entries.some(entry => entry.package === target.packageName && entry.instanceKey === target.instanceKey);
+    } catch (error) { throw new PluginEnablementError('invalid-request', errorMessage(error), [], []); }
+    if (!declared) throw new PluginEnablementError('not-declared', `插件实例 ${target.instanceKey}（${target.packageName}）未在配置中声明；先运行 zhin install ${target.packageName}`);
+    const state = await this.inspect(target.instanceKey);
+    if (enabled && (!state.installed || !state.plugin)) {
+      throw new PluginEnablementError('not-installed', `${state.packageName} ${state.installed ? `不是可加载的 Plugin 包${state.issues[0] ? `：${state.issues[0]}` : ''}` : '未安装'}；先运行 zhin install ${state.packageName}`);
+    }
+    const configuration = this.#configuration();
+    if (!configuration) throw new Error('Missing configVersion: 2 configuration; run zhin setup');
+    const current = await configuration.document.read();
+    if (current.revision !== state.revision) throw new Error('配置在读取期间变化，请重试');
+    const declaration = readApplicationPluginDeclaration(current.document);
+    const wasDisabled = declaration.disabled.includes(state.instanceKey);
+    const changed = enabled === wasDisabled;
+    const disabled = enabled ? declaration.disabled.filter(item => item !== state.instanceKey)
+      : wasDisabled ? declaration.disabled : [...declaration.disabled, state.instanceKey];
+    if (enabled && changed) {
+      const candidate = { ...current.document, disable_plugins: disabled };
+      readApplicationPluginDeclaration(candidate);
+      try { await this.#checkDependencies(undefined, candidate); }
+      catch (error) { throw new PluginEnablementError('invalid-config', `依赖检查未通过，未启用：${errorMessage(error)}`); }
+      const validation = await configuration.store.validatePluginConfig(state.instanceKey, readPluginConfigurationMap(candidate)[state.instanceKey] ?? {}, candidate);
+      if (!validation.valid || validation.missingEnv.length) {
+        throw new PluginEnablementError('invalid-config', `配置未通过插件 Schema 校验，未启用：${[
+          ...validation.errors.map(error => `${error.path} ${error.message}`),
+          ...validation.missingEnv.map(name => `缺少环境变量 ${name}`)].join('；')}`, validation.errors, validation.missingEnv);
+      }
+    }
+    return Object.freeze({ packageName: state.packageName, instanceKey: state.instanceKey, enabled, changed,
+      disabled: Object.freeze([...disabled]), projectRevision: state.projectRevision, configurationRevision: current.revision,
+      restartRequired: changed || state.restartRequired });
+  }
+
+  /** Writes `disable_plugins` in one atomic config write; already in the requested state → nothing written. */
+  async setEnabled(request: string, enabled: boolean, expectedRevision?: string, expectedProjectRevision?: string) {
+    return this.#mutate(async completed => {
+      await this.#assertRevision(expectedRevision, expectedProjectRevision);
+      const plan = await this.planSetEnabled(request, enabled);
+      if (plan.changed) {
+        const configuration = this.#configuration();
+        if (!configuration) throw new Error('Missing configVersion: 2 configuration; run zhin setup');
+        const current = await configuration.document.read();
+        if (current.revision !== plan.configurationRevision) throw new Error('配置在校验期间变化，请刷新后重试');
+        await (await configuration.document.prepare(current, [{ op: 'set', path: ['disable_plugins'], value: [...plan.disabled] }])).commit();
+        completed.push(enabled ? 'plugin-enable' : 'plugin-disable');
+      }
+      const state = await this.inspect(plan.instanceKey);
+      return Object.freeze({ plan, changed: plan.changed, restartRequired: plan.changed || state.restartRequired, state });
     }, request);
   }
 

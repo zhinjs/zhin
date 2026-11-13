@@ -18,13 +18,14 @@ import type {
   GatewayPackageTransactionResult,
   GatewayPackageTransactionStatus,
   GatewayPluginConfigurationNeed,
+  GatewayPluginEnablement,
   GatewayTransactionOperation,
 } from '@zhin.js/console-protocol';
 import { CONSOLE_PERMISSIONS } from '@zhin.js/console-protocol';
 import { createInstallAllowlist, type InstallAllowlist, type MarketCatalogEntry } from '../onboarding/allowlist.js';
 import { InstallOutputRelay, streamEvents } from '../onboarding/install.js';
 import { createStreamingPackageManager, detectPackageManager, type PackageManagerOutput } from '../onboarding/package-manager.js';
-import { PluginDeclarationError, PluginManagementOperationError, PluginManagementWorkflow, type PluginManagementOptions } from '../plugin-management/workflow.js';
+import { PluginDeclarationError, PluginEnablementError, PluginManagementOperationError, PluginManagementWorkflow, type PluginManagementOptions } from '../plugin-management/workflow.js';
 import { InstanceStartError, type InstanceFailure, type InstanceState, type InstanceStatus, type InstanceStopOptions } from '../supervisor/instance-supervisor.js';
 import type { InstanceLogLine } from '../supervisor/instance-logs.js';
 import { authorizePackages, gatewayPrincipalAllows, type GatewayPackageAction, type GatewayPrincipal } from './authorization.js';
@@ -51,6 +52,9 @@ export interface PackageWorkflowPort {
   /** Validates a declaration without writing (throws `PluginDeclarationError`). */
   planDeclaration?(request: string, config?: unknown, options?: { readonly instanceKey?: string }): Promise<unknown>;
   declare?(request: string, config?: unknown, options?: { readonly instanceKey?: string }): Promise<unknown>;
+  /** Validates an enable / disable without writing (throws `PluginEnablementError`). */
+  planSetEnabled?(request: string, enabled: boolean): Promise<{ readonly packageName: string; readonly instanceKey: string; readonly changed: boolean }>;
+  setEnabled?(request: string, enabled: boolean): Promise<unknown>;
 }
 
 /**
@@ -111,6 +115,11 @@ export interface GatewayDeclareRequest {
   readonly config?: unknown;
 }
 
+export interface GatewaySetEnabledRequest {
+  /** A declared instance key, or the package name of a package declared exactly once. */
+  readonly plugin: unknown;
+}
+
 export const DEFAULT_PACKAGE_READY_TIMEOUT_MS = 60_000;
 export const DEFAULT_PACKAGE_STABLE_MS = 5_000;
 const LOCK_FILE = 'gateway-packages.lock';
@@ -120,7 +129,11 @@ const RUNNING_STATES: ReadonlySet<InstanceState> = new Set(['running', 'starting
 /** Fields a successful transaction adds to its result. */
 interface TransactionExtras {
   readonly needsConfiguration?: readonly GatewayPluginConfigurationNeed[];
+  readonly plugin?: GatewayPluginEnablement;
 }
+
+/** Transactions that only write the configuration file: no package manager, no reinstall on rollback. */
+const CONFIG_ONLY_OPERATIONS: ReadonlySet<GatewayTransactionOperation> = new Set(['declare', 'enable', 'disable']);
 
 type TransactionBody = (ctx: TransactionContext, authorized: readonly GatewayAuthorizedPackage[]) => Promise<TransactionExtras | void>;
 
@@ -248,6 +261,53 @@ export class GatewayPackageService {
     });
   }
 
+  /**
+   * `gateway.plugins.enable` / `gateway.plugins.disable`: rewrites `disable_plugins` for one
+   * declared instance, then restarts the instance (a failed start restores the configuration file
+   * and starts the previous instance again). Validation runs before the instance is touched; an
+   * instance already in the requested state succeeds without stopping anything or writing.
+   */
+  async setEnabled(request: GatewaySetEnabledRequest, enabled: boolean, options: GatewayTransactionOptions): Promise<GatewayPackageTransactionResult> {
+    const workflow = this.#workflow;
+    if (!workflow.planSetEnabled || !workflow.setEnabled) throw new GatewayError('unavailable', '插件启停不可用');
+    const operation = enabled ? 'enable' : 'disable';
+    // Permission before anything about the project is read.
+    if (!options.principal || options.principal !== 'local' && options.principal.kind === 'bootstrap'
+      || !gatewayPrincipalAllows(options.principal, CONSOLE_PERMISSIONS.PLUGIN_MANAGE)) {
+      throw new GatewayError('forbidden', `需要 ${CONSOLE_PERMISSIONS.PLUGIN_MANAGE} 权限`);
+    }
+    if (typeof request.plugin !== 'string' || !request.plugin.trim() || request.plugin.length > 256) {
+      throw new GatewayError('invalid_input', 'plugin 必须是插件包名或 instanceKey');
+    }
+    let plan: { readonly packageName: string; readonly instanceKey: string; readonly changed: boolean };
+    try { plan = await workflow.planSetEnabled(request.plugin, enabled); }
+    catch (error) { throw enablementError(error); }
+    const plugin: GatewayPluginEnablement = Object.freeze({ instanceKey: plan.instanceKey, packageName: plan.packageName, enabled, changed: plan.changed });
+    if (!plan.changed) return this.#unchanged(operation, await this.authorize(options.principal, operation, [plan.packageName]), plugin, options);
+    return this.#transaction(operation, [plan.packageName], options, async (ctx) => {
+      // The exact instance key: the declaration may not be re-resolved to another instance.
+      await ctx.workflow.setEnabled!(plan.instanceKey, enabled);
+      return { plugin };
+    });
+  }
+
+  /** The result of an enable / disable that found nothing to change (instance untouched). */
+  #unchanged(operation: GatewayTransactionOperation, authorized: readonly GatewayAuthorizedPackage[], plugin: GatewayPluginEnablement, options: GatewayTransactionOptions): GatewayPackageTransactionResult {
+    const now = (this.#options.now ?? Date.now)();
+    const id = randomUUID();
+    const state = this.#instanceState();
+    const result: GatewayPackageTransactionResult = Object.freeze({
+      id, operation, packages: authorized, ok: true, status: 'succeeded' as const, plugin,
+      instance: Object.freeze({ before: state, after: state }), startedAt: now, finishedAt: now,
+    });
+    for (const event of [{ type: 'start', id, operation, packages: authorized }, { type: 'phase', id, phase: 'done' }, { type: 'result', id, result }] as GatewayPackageEvent[]) {
+      for (const listener of [options.onEvent, ...this.#listeners]) {
+        try { listener?.(event); } catch { /* listeners never break a request */ }
+      }
+    }
+    return result;
+  }
+
   uninstall(packages: readonly unknown[], options: GatewayUninstallOptions): Promise<GatewayPackageTransactionResult> {
     return this.#transaction('uninstall', packages, options, async (ctx, authorized) => {
       for (const item of authorized) {
@@ -330,7 +390,7 @@ export class GatewayPackageService {
     // Rollback log tails only show what this transaction's instances printed.
     const logMark = instance?.logs?.tail(1).at(-1)?.seq ?? -1;
     // A declaration only writes the configuration file: no package manager, no reinstall on rollback.
-    const configOnly = operation === 'declare';
+    const configOnly = CONFIG_ONLY_OPERATIONS.has(operation);
     let extras: TransactionExtras | void = undefined;
     let snapshot: ProjectFileSnapshot | undefined;
     let mutated = false;
@@ -393,6 +453,7 @@ export class GatewayPackageService {
         ...(rollbackFailure === undefined ? {} : { rollbackError: failureMessage(rollbackFailure) }),
         ...(logTail?.length ? { logTail } : {}),
         ...(status === 'succeeded' && extras?.needsConfiguration?.length ? { needsConfiguration: extras.needsConfiguration } : {}),
+        ...(status === 'succeeded' && extras?.plugin ? { plugin: extras.plugin } : {}),
         instance: Object.freeze({ before, after: this.#instanceState() }),
         startedAt,
         finishedAt: now(),
@@ -502,10 +563,17 @@ function declarationError(error: unknown): unknown {
     : error;
 }
 
+/** A refused enable / disable is the caller's input problem; anything else stays internal. */
+function enablementError(error: unknown): unknown {
+  return error instanceof PluginEnablementError
+    ? new GatewayError('invalid_input', error.message, { cause: error, details: { errors: error.errors, missingEnv: error.missingEnv } })
+    : error;
+}
+
 /** Structured feedback of a declaration refused inside the transaction (config changed after preflight). */
 function declarationDetails(error: unknown): { errors?: PluginDeclarationError['errors']; missingEnv?: PluginDeclarationError['missingEnv'] } {
   const cause = error instanceof PluginManagementOperationError ? error.cause : error;
-  if (!(cause instanceof PluginDeclarationError)) return {};
+  if (!(cause instanceof PluginDeclarationError) && !(cause instanceof PluginEnablementError)) return {};
   return {
     ...(cause.errors?.length ? { errors: cause.errors } : {}),
     ...(cause.missingEnv?.length ? { missingEnv: cause.missingEnv } : {}),

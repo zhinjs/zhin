@@ -97,6 +97,11 @@ async function handle(type: GatewayRpcType, data: Readonly<Record<string, unknow
         principal, ...optionalBoolean(data, 'startInstance'),
       });
     }
+    case 'gateway.plugins.enable':
+    case 'gateway.plugins.disable':
+      return packagesOf(deps).setEnabled({ plugin: data.plugin }, type === 'gateway.plugins.enable', {
+        principal, ...optionalBoolean(data, 'startInstance'),
+      });
     case 'gateway.instance.status': return instanceStatus(instanceOf(deps).status());
     case 'gateway.instance.logs': {
       const lines = data.lines === undefined ? DEFAULT_LOG_LINES : data.lines;
