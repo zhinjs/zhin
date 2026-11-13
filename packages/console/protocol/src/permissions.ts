@@ -35,6 +35,8 @@ export const CONSOLE_PERMISSIONS = Object.freeze({
   OPS_ENV_WRITE: 'ops.env.write',
   OPS_DATABASE_READ: 'ops.database.read',
   OPS_DATABASE_WRITE: 'ops.database.write',
+  /** Raw write SQL and schema changes (table structure, indexes) from the Console. */
+  OPS_DATABASE_SCHEMA: 'ops.database.schema',
   OPS_SCHEDULE_READ: 'ops.schedule.read',
   OPS_SCHEDULE_WRITE: 'ops.schedule.write',
   OPS_FILES_READ: 'ops.files.read',
@@ -81,6 +83,7 @@ export const CONSOLE_WRITE_PERMISSIONS: ReadonlySet<ConsolePermission> = new Set
   'ops.config.write',
   'ops.env.write',
   'ops.database.write',
+  'ops.database.schema',
   'ops.schedule.write',
   'ops.files.write',
   'ops.restart',
@@ -100,8 +103,8 @@ export const CONSOLE_BUILTIN_ROLES: Readonly<Record<ConsoleBuiltinRoleName, Read
 }>>> = Object.freeze({
   owner: Object.freeze({ description: '所有者：全部权限', permissions: CONSOLE_PERMISSION_LIST }),
   admin: Object.freeze({
-    description: '管理员：除终端与访问控制管理外的全部权限',
-    permissions: Object.freeze(CONSOLE_PERMISSION_LIST.filter(p => p !== 'ops.terminal' && p !== 'iam.manage')),
+    description: '管理员：除终端、数据库结构与访问控制管理外的全部权限',
+    permissions: Object.freeze(CONSOLE_PERMISSION_LIST.filter(p => p !== 'ops.terminal' && p !== 'iam.manage' && p !== 'ops.database.schema')),
   }),
   operator: Object.freeze({
     description: '运营：账号与功能日常操作',
@@ -272,6 +275,12 @@ export const CONSOLE_RPC_PERMISSIONS: Readonly<Record<string, ConsolePermission>
   'db:drop-table': P.OPS_DATABASE_WRITE,
   'db:kv:set': P.OPS_DATABASE_WRITE,
   'db:kv:delete': P.OPS_DATABASE_WRITE,
+  // Read-only SQL runs in a read-only transaction; schema preview only renders DDL.
+  'db:query': P.OPS_DATABASE_READ,
+  'db:schema:describe': P.OPS_DATABASE_READ,
+  'db:schema:preview': P.OPS_DATABASE_READ,
+  'db:execute': P.OPS_DATABASE_SCHEMA,
+  'db:schema:apply': P.OPS_DATABASE_SCHEMA,
   'system:restart': P.OPS_RESTART,
   // Schedules
   'schedule:list': P.OPS_SCHEDULE_READ,

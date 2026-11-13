@@ -64,6 +64,8 @@ export type DatabaseHostType = 'related' | 'document' | 'keyvalue';
 export interface DatabaseHostTable {
   readonly name: string;
   readonly columns?: Readonly<Record<string, unknown>>;
+  /** A physical table no code declared (created from the Console or left by a removed plugin). */
+  readonly discovered?: boolean;
 }
 
 /** Explicit, additive upgrades applied before SQL models become available. */
@@ -77,6 +79,112 @@ export interface DatabaseHostSelectResult {
   readonly total: number;
   readonly page: number;
   readonly pageSize: number;
+  /** The ordering the Host applied (absent: unordered, or a Host without server-side sort). */
+  readonly orderBy?: DatabaseHostOrderBy;
+}
+
+/** Server-side ordering of a Console `db:select`. */
+export interface DatabaseHostOrderBy {
+  readonly column: string;
+  readonly direction: 'asc' | 'desc';
+}
+
+/**
+ * What the Console database port supports beyond the base CRUD surface; a Host that reports no
+ * capabilities supports none of these (older Hosts), and the Console falls back accordingly.
+ */
+export interface DatabaseHostConsoleCapabilities {
+  /** `db:select` honours `orderBy` across the whole table. */
+  readonly sort: boolean;
+  /** `where` operators `db:select` accepts per column (`$eq`, `$ne`, `$gt`, …). */
+  readonly filterOperators: readonly string[];
+  /** `db:query` (read-only) and `db:execute` (write, `ops.database.schema`). */
+  readonly sql: boolean;
+  /** `db:schema:*` structured schema editor. */
+  readonly schema: boolean;
+  /** Why `sql` / `schema` are unavailable (non-relational dialect). */
+  readonly reason?: string;
+}
+
+export interface DatabaseHostQueryResult {
+  readonly columns: readonly string[];
+  readonly rows: readonly Record<string, unknown>[];
+  readonly rowCount: number;
+  /** More rows existed than the cap; only the first `rows.length` are returned. */
+  readonly truncated: boolean;
+  readonly durationMs: number;
+}
+
+export interface DatabaseHostExecuteResult {
+  readonly statements: readonly {
+    readonly sql: string;
+    /** Rows changed (DML) when the driver reports it. */
+    readonly affected?: number;
+    /** Rows returned (statements with a result set). */
+    readonly rows?: number;
+  }[];
+  /** True when the run was rolled back on purpose (`dryRun`). */
+  readonly dryRun: boolean;
+  /** The dry run could not be rolled back safely for these statements, so it did not run them. */
+  readonly estimateUnavailable?: boolean;
+  readonly durationMs: number;
+}
+
+export type DatabaseHostColumnType = 'text' | 'integer' | 'bigint' | 'float' | 'boolean' | 'date' | 'json';
+
+export interface DatabaseHostColumnSpec {
+  readonly name: string;
+  readonly type: DatabaseHostColumnType;
+  readonly nullable?: boolean;
+  readonly default?: string | number | boolean | null;
+  readonly primary?: boolean;
+  readonly autoIncrement?: boolean;
+  readonly unique?: boolean;
+  readonly length?: number;
+}
+
+export type DatabaseHostSchemaChange =
+  | { readonly kind: 'create-table'; readonly table: string; readonly columns: readonly DatabaseHostColumnSpec[] }
+  | { readonly kind: 'add-column'; readonly table: string; readonly column: DatabaseHostColumnSpec }
+  | { readonly kind: 'rename-column'; readonly table: string; readonly column: string; readonly to: string }
+  | { readonly kind: 'drop-column'; readonly table: string; readonly column: string }
+  | {
+    readonly kind: 'alter-column'; readonly table: string; readonly column: string;
+    readonly type?: DatabaseHostColumnType; readonly nullable?: boolean;
+    readonly default?: string | number | boolean | null; readonly dropDefault?: boolean;
+  }
+  | { readonly kind: 'create-index'; readonly table: string; readonly name: string; readonly columns: readonly string[]; readonly unique?: boolean }
+  | { readonly kind: 'drop-index'; readonly table: string; readonly name: string };
+
+export interface DatabaseHostSchemaPlan {
+  readonly change: DatabaseHostSchemaChange;
+  /** The exact DDL `applySchema` runs. */
+  readonly statements: readonly string[];
+  /** Loses data or an object: apply needs `confirm`. */
+  readonly destructive: boolean;
+  /** Name the operator must type to apply a destructive change. */
+  readonly confirm?: string;
+  /** Stable warning codes (`data_loss`, `type_change_may_fail`, …). */
+  readonly warnings: readonly string[];
+}
+
+export interface DatabaseHostTableSchema {
+  readonly table: string;
+  readonly columns: readonly {
+    readonly name: string;
+    /** Zhin column type (best effort for physical types). */
+    readonly type: string;
+    readonly nativeType: string;
+    readonly nullable: boolean;
+    readonly primary: boolean;
+    readonly defaultSql?: string;
+  }[];
+  readonly indexes: readonly {
+    readonly name: string;
+    readonly columns: readonly string[];
+    readonly unique: boolean;
+    readonly primary: boolean;
+  }[];
 }
 
 /** Root-only database administration surface used by Console RPC. */
@@ -86,6 +194,7 @@ export interface DatabaseHostConsole {
     readonly type: DatabaseHostType;
     readonly tables: readonly string[];
     readonly connected: boolean;
+    readonly capabilities?: DatabaseHostConsoleCapabilities;
   };
   tables(): readonly DatabaseHostTable[];
   select(
@@ -93,7 +202,16 @@ export interface DatabaseHostConsole {
     page: number,
     pageSize: number,
     where?: Record<string, unknown>,
+    orderBy?: DatabaseHostOrderBy,
   ): Promise<DatabaseHostSelectResult>;
+  /** One read-only statement in a read-only transaction, capped at `maxRows`. */
+  query?(sql: string, options?: { readonly maxRows?: number; readonly timeoutMs?: number }): Promise<DatabaseHostQueryResult>;
+  /** Write statements (`ops.database.schema`); `dryRun` runs them in a transaction and rolls back. */
+  execute?(sql: string, options?: { readonly dryRun?: boolean; readonly timeoutMs?: number }): Promise<DatabaseHostExecuteResult>;
+  describe?(table: string): Promise<DatabaseHostTableSchema>;
+  previewSchema?(change: unknown): Promise<DatabaseHostSchemaPlan>;
+  /** Re-plans `change` and runs it; destructive plans need `confirm` equal to `plan.confirm`. */
+  applySchema?(change: unknown, confirm?: string): Promise<DatabaseHostSchemaPlan>;
   insert(table: string, row: Record<string, unknown>): Promise<void>;
   update(
     table: string,

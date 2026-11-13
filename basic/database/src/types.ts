@@ -438,6 +438,7 @@ export interface TransactionOptions {
   /**
    * The transaction only reads. SQLite then opens it with `BEGIN DEFERRED` (no write lock, so it
    * never waits for another connection's writer) and refuses writes inside it (`query_only`).
+   * PostgreSQL opens it `READ ONLY` and MySQL with `START TRANSACTION READ ONLY`.
    */
   readOnly?: boolean;
 }

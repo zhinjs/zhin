@@ -237,13 +237,64 @@ export function authorizeConsoleWebSocket(principal: ConsolePrincipal, pathname:
   return permission !== null && grantsAllow(principal.grants, permission);
 }
 
-/** Audit detail for an RPC: type, target and parameter key names only. */
-export function rpcAuditDetail(message: Readonly<Record<string, unknown>>): Readonly<Record<string, unknown>> {
+/**
+ * Statement text kept in one audit entry. The gateway stores at most 4096 characters of JSON
+ * detail, so statements stay well below that and the stored detail remains valid JSON.
+ */
+const AUDIT_STATEMENT_LIMIT = 3_000;
+
+function auditText(value: unknown): string | undefined {
+  if (typeof value !== 'string' || !value) return undefined;
+  return value.length > AUDIT_STATEMENT_LIMIT ? `${value.slice(0, AUDIT_STATEMENT_LIMIT)}…` : value;
+}
+
+/**
+ * Statement text of Console database writes (`db:execute` SQL, the DDL `db:schema:apply` ran).
+ * The statement is not a secret; result rows are never recorded.
+ */
+function databaseStatementDetail(
+  message: Readonly<Record<string, unknown>>,
+  reply: Readonly<Record<string, unknown>> | undefined,
+): Readonly<Record<string, unknown>> {
+  if (message.type === 'db:execute') {
+    const sql = auditText(message.sql);
+    return sql ? { statements: Object.freeze([sql]), ...(message.dryRun === true ? { dryRun: true } : {}) } : {};
+  }
+  if (message.type !== 'db:schema:apply') return {};
+  const change = message.change && typeof message.change === 'object' ? message.change as Record<string, unknown> : {};
+  const data = reply?.data && typeof reply.data === 'object' ? reply.data as Record<string, unknown> : undefined;
+  const statements: string[] = [];
+  let budget = AUDIT_STATEMENT_LIMIT;
+  for (const entry of Array.isArray(data?.statements) ? data.statements as unknown[] : []) {
+    const text = typeof entry === 'string' ? entry : '';
+    if (!text || budget <= 0) continue;
+    statements.push(text.length > budget ? `${text.slice(0, budget)}…` : text);
+    budget -= text.length;
+  }
+  return {
+    ...(typeof change.kind === 'string' ? { change: change.kind.slice(0, 64) } : {}),
+    ...(typeof change.table === 'string' ? { table: change.table.slice(0, 256) } : {}),
+    ...(statements.length ? { statements: Object.freeze(statements) } : {}),
+  };
+}
+
+/**
+ * Audit detail for an RPC: type, target and parameter key names only — plus the statement text
+ * of Console database writes (pass the reply so the DDL a schema change ran is recorded).
+ */
+export function rpcAuditDetail(
+  message: Readonly<Record<string, unknown>>,
+  reply?: Readonly<Record<string, unknown>>,
+): Readonly<Record<string, unknown>> {
   const data = message.data && typeof message.data === 'object' && !Array.isArray(message.data)
     ? Object.keys(message.data as Record<string, unknown>).sort()
     : [];
   const keys = Object.keys(message).filter(key => key !== 'type' && key !== 'requestId' && key !== 'data').sort();
-  return Object.freeze({ type: String(message.type ?? ''), keys: Object.freeze([...new Set([...keys, ...data])]) });
+  return Object.freeze({
+    type: String(message.type ?? ''),
+    keys: Object.freeze([...new Set([...keys, ...data])]),
+    ...databaseStatementDetail(message, reply),
+  });
 }
 
 export function rpcAuditTarget(rule: ConsoleRpcPermissionRule | null): string | undefined {

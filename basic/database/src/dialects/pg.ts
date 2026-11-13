@@ -15,6 +15,17 @@ export interface PostgreSQLDialectConfig extends ClientConfig {
   pool?: PoolConfig;
 }
 
+/**
+ * Keeps the driver's `command` / `rowCount` on the row array as non-enumerable properties, so
+ * callers that need the affected row count of DML (Console SQL editor) can read it.
+ */
+function withCommandInfo(rows: Record<string, unknown>[], result: { rowCount?: number | null; command?: string }): Record<string, unknown>[] {
+  if (!Array.isArray(rows) || Object.isFrozen(rows)) return rows;
+  if (typeof result.command === 'string') Object.defineProperty(rows, 'command', { value: result.command, enumerable: false, configurable: true });
+  if (typeof result.rowCount === 'number') Object.defineProperty(rows, 'rowCount', { value: result.rowCount, enumerable: false, configurable: true });
+  return rows;
+}
+
 export class PostgreSQLDialect<S extends Record<string, object> = Record<string, object>> extends Dialect<PostgreSQLDialectConfig, S, string> {
   private connection: any = null;
   private pool: any = null;
@@ -86,7 +97,11 @@ export class PostgreSQLDialect<S extends Record<string, object> = Record<string,
     }
   }
 
-  private normalizeResult(result: { rows: Record<string, unknown>[]; fields?: Array<{ name: string; dataTypeID: number }> }): Record<string, unknown>[] {
+  private normalizeResult(result: { rows: Record<string, unknown>[]; fields?: Array<{ name: string; dataTypeID: number }>; rowCount?: number | null; command?: string }): Record<string, unknown>[] {
+    return withCommandInfo(this.normalizeRows(result), result);
+  }
+
+  private normalizeRows(result: { rows: Record<string, unknown>[]; fields?: Array<{ name: string; dataTypeID: number }> }): Record<string, unknown>[] {
     const bigintFields = new Set((result.fields ?? [])
       .filter((field) => field.dataTypeID === 20)
       .map((field) => field.name));
@@ -288,6 +303,12 @@ export class PostgreSQLDialect<S extends Record<string, object> = Record<string,
    * 开始事务
    * 在连接池模式下，会获取一个专用连接用于事务
    */
+  /** `BEGIN [ISOLATION LEVEL …] [READ ONLY]`: a declared read-only transaction refuses writes. */
+  private formatBegin(options?: TransactionOptions): string {
+    const isolation = options?.isolationLevel ? ` ISOLATION LEVEL ${this.formatIsolationLevel(options.isolationLevel)}` : '';
+    return `BEGIN${isolation}${options?.readOnly ? ' READ ONLY' : ''}`;
+  }
+
   async beginTransaction(options?: TransactionOptions): Promise<Transaction> {
     const dialect = this;
     if (this.usePool) {
@@ -295,10 +316,7 @@ export class PostgreSQLDialect<S extends Record<string, object> = Record<string,
       const client = await this.pool.connect();
       
       // 开始事务（可以带隔离级别）
-      let beginSql = 'BEGIN';
-      if (options?.isolationLevel) {
-        beginSql = `BEGIN ISOLATION LEVEL ${this.formatIsolationLevel(options.isolationLevel)}`;
-      }
+      const beginSql = this.formatBegin(options);
       try {
         await client.query(beginSql);
       } catch (error) {
@@ -333,10 +351,7 @@ export class PostgreSQLDialect<S extends Record<string, object> = Record<string,
       const dialect = this;
       
       // 开始事务（可以带隔离级别）
-      let beginSql = 'BEGIN';
-      if (options?.isolationLevel) {
-        beginSql = `BEGIN ISOLATION LEVEL ${this.formatIsolationLevel(options.isolationLevel)}`;
-      }
+      const beginSql = this.formatBegin(options);
       await this.query(beginSql);
       
       return {

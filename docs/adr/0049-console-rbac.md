@@ -61,6 +61,7 @@ Zhin 总是有数据库（未配置时为 `.zhin/data.sqlite`），因此访问�
 | `ops.config.read` / `ops.config.write` | 原始配置文件读取 / 写入、应用配置 |
 | `ops.env.read` / `ops.env.write` | 环境变量文件 |
 | `ops.database.read` / `ops.database.write` | 数据库浏览 / 增删改 |
+| `ops.database.schema` | 写 SQL 与表结构调整（2026-11 增补，默认仅 owner） |
 | `ops.schedule.read` / `ops.schedule.write` | 定时任务 |
 | `ops.files.read` / `ops.files.write` | 项目文件 |
 | `ops.restart` | 重启进程 |
@@ -81,7 +82,7 @@ Zhin 总是有数据库（未配置时为 `.zhin/data.sqlite`），因此访问�
 | 角色 | 权限 |
 |---|---|
 | `owner` 所有者 | 全部 |
-| `admin` 管理员 | 除 `ops.terminal`、`iam.manage` 外全部 |
+| `admin` 管理员 | 除 `ops.terminal`、`ops.database.schema`、`iam.manage` 外全部 |
 | `operator` 运营 | `status.view`、`endpoint.view`、`endpoint.operate`、`feature.view`、`feature.configure`、`feature.toggle`、`agent.view`、`ops.schedule.read`、`plugin.perms.read`、`plugin.perms.operate` |
 | `viewer` 只读 | 所有 `*.view` 与 `*.read`（不含 `ops.config.read`、`ops.env.read`，它们可能含机密） |
 

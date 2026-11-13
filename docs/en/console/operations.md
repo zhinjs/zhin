@@ -10,7 +10,7 @@ The **Operations** group in the sidebar answers "how is the host doing". The ins
 | Page | Route | Read | Write |
 | --- | --- | --- | --- |
 | Instance (with project dependencies) | `/ops/instance` | `status.view`; dependency list `feature.view` | Start / stop `ops.restart`; dependencies `plugin.manage` |
-| Database | `/ops/database` | `ops.database.read` | `ops.database.write` |
+| Database | `/ops/database` | `ops.database.read` (incl. read-only SQL) | records `ops.database.write`; write SQL and schema `ops.database.schema` |
 | Configuration file | `/ops/config` | `ops.config.read` | `ops.config.write` |
 | Environment variables | `/ops/env` | `ops.env.read` | `ops.env.write` |
 | Scheduled tasks | `/ops/schedules` | `ops.schedule.read` | `ops.schedule.write` |

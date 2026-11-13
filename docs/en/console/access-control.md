@@ -61,7 +61,7 @@ Built-in roles cannot be changed or deleted, but can be copied:
 | Role | Permissions |
 | --- | --- |
 | `owner` | Everything (including `ops.terminal` and `iam.manage`) |
-| `admin` | Everything except `ops.terminal` and `iam.manage` |
+| `admin` | Everything except `ops.terminal`, `ops.database.schema` and `iam.manage` |
 | `operator` | `status.view`, `endpoint.view`, `endpoint.operate`, `feature.view`, `feature.configure`, `feature.toggle`, `agent.view`, `ops.schedule.read`, `plugin.perms.read`, `plugin.perms.operate` |
 | `viewer` | Every `*.view` and `*.read` except `ops.config.read` and `ops.env.read` (they may contain secrets) |
 
@@ -81,7 +81,8 @@ Built-in roles cannot be changed or deleted, but can be copied:
 | `agent.view` / `agent.configure` | AI and Agent reads / writes |
 | `ops.config.read` / `ops.config.write` | Raw configuration file |
 | `ops.env.read` / `ops.env.write` | Environment file |
-| `ops.database.read` / `ops.database.write` | Database browser / edits |
+| `ops.database.read` / `ops.database.write` | Database browser and read-only SQL (one statement, read-only transaction, at most 1000 rows) / record edits |
+| `ops.database.schema` | Write SQL and schema changes (add / rename / drop columns, change types, create tables, indexes); owner-only by default, every statement is audited |
 | `ops.schedule.read` / `ops.schedule.write` | Scheduled tasks |
 | `ops.files.read` / `ops.files.write` | Project files (reading or writing `.env` and the configuration file still needs `ops.env.*` / `ops.config.*`) |
 | `ops.restart` | Starting, stopping and restarting the instance |

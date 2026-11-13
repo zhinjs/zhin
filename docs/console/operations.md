@@ -10,7 +10,7 @@ description: Console 侧栏「运维」分组：实例状态、起停与日志�
 | 页面 | 路由 | 读 | 写 |
 | --- | --- | --- | --- |
 | 实例（含项目依赖） | `/ops/instance` | `status.view`；依赖列表 `feature.view` | 起停 `ops.restart`；依赖 `plugin.manage` |
-| 数据库 | `/ops/database` | `ops.database.read` | `ops.database.write` |
+| 数据库 | `/ops/database` | `ops.database.read`（含只读 SQL） | 记录 `ops.database.write`；写 SQL 与表结构 `ops.database.schema` |
 | 配置文件 | `/ops/config` | `ops.config.read` | `ops.config.write` |
 | 环境变量 | `/ops/env` | `ops.env.read` | `ops.env.write` |
 | 定时任务 | `/ops/schedules` | `ops.schedule.read` | `ops.schedule.write` |

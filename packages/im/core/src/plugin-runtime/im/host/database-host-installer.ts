@@ -8,6 +8,7 @@ import {
   GatewayOwnedTableError,
   isGatewayOwnedTable,
   referencesGatewayOwnedTable,
+  RelatedModel,
   type Column, type StructuredDatabase, type TransactionContext } from '@zhin.js/database';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
@@ -18,6 +19,12 @@ import {
   rootPluginId,
   type DatabaseHost,
   type DatabaseHostConsole,
+  type DatabaseHostConsoleCapabilities,
+  type DatabaseHostExecuteResult,
+  type DatabaseHostOrderBy,
+  type DatabaseHostSchemaChange,
+  type DatabaseHostSchemaPlan,
+  type DatabaseHostTableSchema,
   type DatabaseHostModel,
   type DatabaseHostSelection,
   type DatabaseHostAggregation,
@@ -31,6 +38,19 @@ import {
   type DatabaseHostConfig,
 } from './database-config.js';
 import { createDatabaseState, type StateDatabase } from './database-state.js';
+import {
+  ConsoleSqlRefusal,
+  isProtectedConsoleTable,
+  readOnlyConsoleStatement,
+  writeConsoleStatements,
+  type ConsoleSqlDialect,
+} from './database-console-sql.js';
+import {
+  ConsoleSchemaRefusal,
+  introspectConsoleTable,
+  listPhysicalTables,
+  planConsoleSchemaChange,
+} from './database-console-schema.js';
 
 const logger = getLogger('Database');
 
@@ -61,17 +81,22 @@ type RawConsoleModel = RawModel & {
 
 type RawDatabase = {
   define: (name: string, definition: unknown) => void;
-  transaction<T>(callback: (transaction: TransactionContext<Record<string, Record<string, unknown>>>) => Promise<T>, options?: { isolationLevel: 'REPEATABLE_READ' }): Promise<T>;
+  transaction<T>(callback: (transaction: TransactionContext<Record<string, Record<string, unknown>>>) => Promise<T>, options?: { isolationLevel?: 'REPEATABLE_READ'; readOnly?: boolean }): Promise<T>;
   start(): Promise<void>;
   stop(): Promise<void>;
   models: Map<string, RawConsoleModel>;
   definitions: Map<string, Record<string, unknown>>;
-  dialect: { name: string; formatDropTable(name: string, ifExists?: boolean): unknown };
+  dialect: {
+    name: string;
+    formatDropTable(name: string, ifExists?: boolean): unknown;
+    mapColumnType(type: string): string;
+    formatDefaultValue(value: unknown): string;
+  };
   dialectName: string;
   aggregate(name: string): {
     count(field: string, alias: string): { where(query: Record<string, unknown>): Promise<Array<{ total: number }>> };
   };
-  query(query: unknown): Promise<unknown>;
+  query(query: unknown, params?: unknown[]): Promise<unknown>;
 };
 
 function wrapModel(model: RawModel, db?: RawDatabase, tableName?: string): DatabaseHostModel {
@@ -171,7 +196,7 @@ export function createDatabaseHost(config: DatabaseHostConfig): DatabaseHost & {
   const additions = new Map<string, Record<string, Column>>();
   let rawGuard: RawDatabase | undefined;
   let gatewayView: GatewayTableHost | undefined;
-  const consolePort = createDatabaseConsole(
+  const { port: consolePort, refreshDiscovered } = createDatabaseConsole(
     db,
     config.dialect,
     () => started,
@@ -311,6 +336,9 @@ export function createDatabaseHost(config: DatabaseHostConfig): DatabaseHost & {
         }
         started = true;
         wrapped.clear();
+        await refreshDiscovered().catch((error: unknown) => {
+          logger.debug(formatCompact({ op: 'database_discover_failed', error: error instanceof Error ? error.message : String(error) }));
+        });
         logger.debug(formatCompact({ op: 'database_start', dialect: config.dialect }));
       } catch (error) {
         await db.stop().catch(() => undefined);
@@ -326,14 +354,45 @@ export function createDatabaseHost(config: DatabaseHostConfig): DatabaseHost & {
   };
 }
 
+const SQL_DIALECTS: ReadonlySet<string> = new Set(['sqlite', 'mysql', 'pg']);
+const FILTER_OPERATORS = Object.freeze(['$eq', '$ne', '$gt', '$gte', '$lt', '$lte', '$like', '$nlike', '$in', '$nin']);
+const FILTER_OPERATOR_SET: ReadonlySet<string> = new Set(FILTER_OPERATORS);
+/** Row cap and statement timeout of the Console SQL editor. */
+export const CONSOLE_QUERY_MAX_ROWS = 1000;
+export const CONSOLE_QUERY_TIMEOUT_MS = 10_000;
+const DML = /^\(*\s*(?:insert|update|delete|replace)\b/;
+
+/** Thrown for a malformed `where` / `orderBy` of `db:select`. */
+export class ConsoleSelectRefusal extends Error {
+  readonly code = 'invalid';
+  constructor(message: string) {
+    super(message);
+    this.name = 'ConsoleSelectRefusal';
+  }
+}
+
 function createDatabaseConsole(
   db: RawDatabase,
   configuredDialect: string,
   isStarted: () => boolean,
   tableNames: Set<string>,
   definitions: Map<string, Record<string, unknown>>,
-): DatabaseHostConsole {
+): { port: DatabaseHostConsole; refreshDiscovered(): Promise<void> } {
   const type = databaseType(configuredDialect);
+  const sqlDialect: ConsoleSqlDialect | undefined = type === 'related' && SQL_DIALECTS.has(configuredDialect)
+    ? configuredDialect as ConsoleSqlDialect
+    : undefined;
+  /** Physical tables no code declared (created from the Console, left by removed plugins). */
+  const discovered = new Map<string, Record<string, unknown>>();
+  const capabilities: DatabaseHostConsoleCapabilities = Object.freeze({
+    sort: type !== 'keyvalue',
+    filterOperators: type === 'keyvalue' ? Object.freeze([]) : FILTER_OPERATORS,
+    sql: !!sqlDialect,
+    schema: !!sqlDialect,
+    ...(sqlDialect ? {} : { reason: `SQL and schema editing need SQLite, MySQL or PostgreSQL (current: ${configuredDialect})` }),
+  });
+  const listed = () => [...tableNames, ...[...discovered.keys()].filter(name => !tableNames.has(name))]
+    .filter(name => !isGatewayOwnedTable(name));
   const requireModel = (table: string): RawConsoleModel => {
     // Gateway tables (console_users, sessions, tokens, audit) are never reachable from here.
     assertInstanceTable(table);
@@ -342,18 +401,124 @@ function createDatabaseConsole(
     if (!model) throw new Error(`Table '${table}' not found`);
     return model;
   };
+  const requireSql = (): ConsoleSqlDialect => {
+    if (!isStarted()) throw new Error('Database is not connected');
+    if (!sqlDialect) throw new ConsoleSqlRefusal('unsupported', capabilities.reason ?? 'SQL is not supported by this database');
+    return sqlDialect;
+  };
+  const describe = async (table: string): Promise<DatabaseHostTableSchema> => {
+    assertInstanceTable(table);
+    const dialect = requireSql();
+    const schema = await introspectConsoleTable(dialect, (sql, params) => db.query(sql, params), table);
+    if (!schema.columns.length) throw new ConsoleSchemaRefusal('not_found', `Table '${table}' not found`);
+    return schema;
+  };
+  const columnsOf = async (table: string): Promise<readonly string[] | undefined> => {
+    const declared = definitions.get(table) ?? discovered.get(table);
+    if (declared) return Object.keys(declared);
+    if (sqlDialect) return (await describe(table)).columns.map(column => column.name);
+    return undefined;
+  };
+  const refreshDiscovered = async (): Promise<void> => {
+    if (!sqlDialect || !isStarted()) return;
+    const physical = await listPhysicalTables(sqlDialect, (sql, params) => db.query(sql, params));
+    const present = new Set(physical);
+    for (const name of [...discovered.keys()]) if (!present.has(name)) discovered.delete(name);
+    for (const name of physical) {
+      if (tableNames.has(name) || isProtectedConsoleTable(name)) continue;
+      const schema = await introspectConsoleTable(sqlDialect, (sql, params) => db.query(sql, params), name);
+      discovered.set(name, Object.fromEntries(schema.columns.map(column => [column.name, {
+        type: column.type,
+        ...(column.primary ? { primary: true } : {}),
+        ...(column.nullable ? {} : { nullable: false }),
+      }])));
+      if (!db.models.has(name)) db.models.set(name, new RelatedModel(db as never, name as never) as unknown as RawConsoleModel);
+    }
+  };
+  /** Runs `body` in one transaction; `rollback` discards it after collecting the result. */
+  const inTransaction = async <T>(body: (run: (sql: string) => Promise<unknown>) => Promise<T>, options: { readOnly?: boolean; rollback?: boolean; timeoutMs?: number }): Promise<T> => {
+    const dialect = requireSql();
+    const discard = Symbol('rollback');
+    let result: T | undefined;
+    try {
+      await db.transaction(async trx => {
+        const run = (sql: string) => trx.query(sql);
+        const timeout = Math.max(1, Math.floor(options.timeoutMs ?? CONSOLE_QUERY_TIMEOUT_MS));
+        if (dialect === 'pg') await run(`SET LOCAL statement_timeout = ${timeout}`);
+        if (dialect === 'mysql' && options.readOnly) await run(`SET SESSION max_execution_time = ${timeout}`);
+        try {
+          result = await body(run);
+        } finally {
+          if (dialect === 'mysql' && options.readOnly) await run('SET SESSION max_execution_time = DEFAULT').catch(() => undefined);
+        }
+        if (options.rollback) throw discard;
+      }, options.readOnly ? { readOnly: true } : undefined);
+    } catch (error) {
+      if (error !== discard) throw error;
+    }
+    return result as T;
+  };
+  const syncAfterSchemaChange = async (change: DatabaseHostSchemaChange): Promise<void> => {
+    if (change.kind === 'create-table') {
+      discovered.set(change.table, Object.fromEntries(change.columns.map(column => [column.name, { ...column, name: undefined }])
+        .map(([name, column]) => [name, Object.fromEntries(Object.entries(column as Record<string, unknown>).filter(([key, value]) => key !== 'name' && value !== undefined))])));
+      if (!db.models.has(change.table)) db.models.set(change.table, new RelatedModel(db as never, change.table as never) as unknown as RawConsoleModel);
+      return;
+    }
+    const declared = definitions.get(change.table);
+    if (!declared) {
+      await refreshDiscovered();
+      return;
+    }
+    // Keep the declared definition (its Zhin types) in step with the physical table.
+    const next: Record<string, unknown> = { ...declared };
+    if (change.kind === 'add-column') {
+      const { name, ...column } = change.column;
+      next[name] = column;
+    } else if (change.kind === 'rename-column') {
+      next[change.to] = next[change.column];
+      delete next[change.column];
+    } else if (change.kind === 'drop-column') {
+      delete next[change.column];
+    } else if (change.kind === 'alter-column') {
+      const previous = (next[change.column] ?? {}) as Record<string, unknown>;
+      const merged: Record<string, unknown> = { ...previous };
+      if (change.type) merged.type = change.type;
+      if (change.nullable !== undefined) merged.nullable = change.nullable;
+      if (change.default !== undefined) merged.default = change.default;
+      if (change.dropDefault) delete merged.default;
+      next[change.column] = merged;
+    } else {
+      return;
+    }
+    definitions.set(change.table, next);
+    db.definitions.set(change.table, next);
+  };
+  const plan = async (change: unknown): Promise<DatabaseHostSchemaPlan> => {
+    const dialect = requireSql();
+    await refreshDiscovered();
+    return planConsoleSchemaChange(change, {
+      dialect,
+      host: db.dialect,
+      hasTable: table => tableNames.has(table) || discovered.has(table),
+      describe,
+    });
+  };
+
   const port: DatabaseHostConsole = {
     info: () => ({
       dialect: configuredDialect,
       type,
-      tables: [...tableNames].filter(name => !isGatewayOwnedTable(name)),
+      tables: listed(),
       connected: isStarted(),
+      capabilities,
     }),
-    tables: () => [...tableNames].filter(name => !isGatewayOwnedTable(name)).map((name) => ({
+    tables: () => listed().map((name) => ({
       name,
-      columns: definitions.get(name),
+      columns: definitions.get(name) ?? discovered.get(name),
+      ...(tableNames.has(name) ? {} : { discovered: true }),
     })),
-    async select(table, page, pageSize, where) {
+    async select(table, page, pageSize, where, orderBy) {
       const model = requireModel(table);
       if (type === 'keyvalue') {
         if (!model.entries) throw new Error(`Table '${table}' is not a key-value bucket`);
@@ -367,6 +532,9 @@ function createDatabaseConsole(
         };
       }
       const filter = where ?? {};
+      const columns = type === 'related' ? await columnsOf(table) : undefined;
+      validateWhere(filter, columns, 0);
+      const order = orderBy ? validateOrderBy(orderBy, columns) : undefined;
       let total: number;
       try {
         const counted = await db.aggregate(table).count('*', 'total').where(filter);
@@ -377,12 +545,19 @@ function createDatabaseConsole(
       }
       let selection = model.select() as unknown as {
         where(query: Record<string, unknown>): typeof selection;
+        orderBy(field: string, direction: 'ASC' | 'DESC'): typeof selection;
         limit(value: number): typeof selection;
         offset(value: number): Promise<unknown[]>;
       };
       if (Object.keys(filter).length > 0) selection = selection.where(filter);
+      if (order) {
+        selection = selection.orderBy(order.column, order.direction === 'desc' ? 'DESC' : 'ASC');
+        // A unique tie-breaker keeps pages stable when many rows share the sorted value.
+        const tieBreaker = primaryKeyOf(definitions.get(table) ?? discovered.get(table)) ?? (type === 'document' ? '_id' : undefined);
+        if (tieBreaker && tieBreaker !== order.column) selection = selection.orderBy(tieBreaker, 'ASC');
+      }
       const rows = await selection.limit(pageSize).offset((page - 1) * pageSize);
-      return { rows, total, page, pageSize };
+      return { rows, total, page, pageSize, ...(order ? { orderBy: order } : {}) };
     },
     async insert(table, row) {
       const model = requireModel(table);
@@ -426,6 +601,7 @@ function createDatabaseConsole(
       db.definitions.delete(table);
       tableNames.delete(table);
       definitions.delete(table);
+      discovered.delete(table);
     },
     async kvGet(table, key) {
       const model = requireModel(table);
@@ -447,8 +623,137 @@ function createDatabaseConsole(
       if (!model.entries) throw new Error(`Table '${table}' is not a key-value bucket`);
       return (await model.entries()).map(([key, value]) => ({ key, value }));
     },
+    async query(sql, options) {
+      const dialect = requireSql();
+      const statement = readOnlyConsoleStatement(sql, dialect);
+      const maxRows = Math.min(Math.max(1, Math.floor(options?.maxRows ?? CONSOLE_QUERY_MAX_ROWS)), CONSOLE_QUERY_MAX_ROWS);
+      const started = Date.now();
+      const result = await inTransaction(run => run(statement.text), { readOnly: true, rollback: true, ...(options?.timeoutMs ? { timeoutMs: options.timeoutMs } : {}) });
+      const all = Array.isArray(result) ? result as Record<string, unknown>[] : [];
+      const rows = all.slice(0, maxRows).map(jsonSafeRow);
+      const columns = [...new Set(rows.flatMap(row => Object.keys(row)))];
+      return Object.freeze({ columns, rows, rowCount: all.length, truncated: all.length > maxRows, durationMs: Date.now() - started });
+    },
+    async execute(sql, options) {
+      const dialect = requireSql();
+      const statements = writeConsoleStatements(sql, dialect);
+      const dryRun = options?.dryRun === true;
+      const started = Date.now();
+      const runAll = async (run: (text: string) => Promise<unknown>) => {
+        const results: DatabaseHostExecuteResult['statements'][number][] = [];
+        for (const statement of statements) results.push(statementResult(statement.text, await run(statement.text)));
+        return results;
+      };
+      // MySQL commits DDL implicitly: only all-DML batches run in a transaction (and can be dry-run).
+      const transactional = dialect !== 'mysql' || statements.every(statement => DML.test(statement.code));
+      if (!transactional && dryRun) {
+        return Object.freeze({ statements: statements.map(statement => ({ sql: statement.text })), dryRun, estimateUnavailable: true, durationMs: 0 });
+      }
+      const results = transactional
+        ? await inTransaction(runAll, { rollback: dryRun, ...(options?.timeoutMs ? { timeoutMs: options.timeoutMs } : {}) })
+        : await runAll(text => db.query(text));
+      if (!dryRun) await refreshDiscovered().catch(() => undefined);
+      return Object.freeze({ statements: Object.freeze(results), dryRun, durationMs: Date.now() - started });
+    },
+    describe,
+    previewSchema: plan,
+    async applySchema(change, confirm) {
+      const dialect = requireSql();
+      const planned = await plan(change);
+      if (planned.destructive && confirm !== planned.confirm) {
+        throw new ConsoleSchemaRefusal('confirm_required', `Type '${planned.confirm}' to confirm this change`);
+      }
+      if (dialect === 'mysql') {
+        for (const statement of planned.statements) await db.query(statement);
+      } else {
+        await inTransaction(async run => { for (const statement of planned.statements) await run(statement); }, {});
+      }
+      await syncAfterSchemaChange(planned.change);
+      return planned;
+    },
   };
-  return Object.freeze(port);
+  return { port: Object.freeze(port), refreshDiscovered };
+}
+
+function primaryKeyOf(definition: Record<string, unknown> | undefined): string | undefined {
+  if (!definition) return undefined;
+  return Object.entries(definition).find(([, column]) => column && typeof column === 'object' && (column as { primary?: unknown }).primary === true)?.[0];
+}
+
+function validateOrderBy(orderBy: DatabaseHostOrderBy, columns: readonly string[] | undefined): DatabaseHostOrderBy {
+  const column = typeof orderBy?.column === 'string' ? orderBy.column : '';
+  if (!column || column.startsWith('$') || (columns && !columns.includes(column))) throw new ConsoleSelectRefusal(`Unknown sort column '${column}'`);
+  if (orderBy.direction !== 'asc' && orderBy.direction !== 'desc') throw new ConsoleSelectRefusal('Sort direction must be asc or desc');
+  return Object.freeze({ column, direction: orderBy.direction });
+}
+
+function isScalar(value: unknown): boolean {
+  return value === null || typeof value === 'string' || typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value));
+}
+
+/**
+ * `where` of `db:select`: known columns (related tables), allow-listed operators, scalar values.
+ * Column names are checked because the query builder quotes identifiers without escaping.
+ */
+function validateWhere(where: Record<string, unknown>, columns: readonly string[] | undefined, depth: number): void {
+  if (depth > 4) throw new ConsoleSelectRefusal('Filter is nested too deeply');
+  const keys = Object.keys(where);
+  if (keys.length > 50) throw new ConsoleSelectRefusal('Too many filter conditions');
+  for (const key of keys) {
+    const value = where[key];
+    if (key === '$and' || key === '$or') {
+      if (!Array.isArray(value) || value.length > 50) throw new ConsoleSelectRefusal(`${key} needs an array of conditions`);
+      for (const entry of value) {
+        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) throw new ConsoleSelectRefusal(`${key} needs an array of conditions`);
+        validateWhere(entry as Record<string, unknown>, columns, depth + 1);
+      }
+      continue;
+    }
+    if (key === '$not') {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) throw new ConsoleSelectRefusal('$not needs a condition');
+      validateWhere(value as Record<string, unknown>, columns, depth + 1);
+      continue;
+    }
+    if (key.startsWith('$') || (columns && !columns.includes(key))) throw new ConsoleSelectRefusal(`Unknown filter column '${key}'`);
+    if (isScalar(value)) continue;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new ConsoleSelectRefusal(`Unsupported filter value for '${key}'`);
+    for (const [operator, operand] of Object.entries(value as Record<string, unknown>)) {
+      if (!FILTER_OPERATOR_SET.has(operator)) throw new ConsoleSelectRefusal(`Unsupported filter operator '${operator}'`);
+      const ok = operator === '$in' || operator === '$nin'
+        ? Array.isArray(operand) && operand.length <= 500 && operand.every(isScalar)
+        : operator === '$like' || operator === '$nlike' ? typeof operand === 'string' : isScalar(operand);
+      if (!ok) throw new ConsoleSelectRefusal(`Unsupported value for ${operator} on '${key}'`);
+    }
+  }
+}
+
+function statementResult(sql: string, result: unknown): DatabaseHostExecuteResult['statements'][number] {
+  if (typeof result === 'number') return Object.freeze({ sql, affected: result });
+  if (Array.isArray(result)) {
+    const info = result as unknown as { rowCount?: unknown; command?: unknown };
+    if (typeof info.rowCount === 'number' && /^(?:INSERT|UPDATE|DELETE|MERGE)$/.test(String(info.command))) {
+      return Object.freeze({ sql, affected: info.rowCount });
+    }
+    return Object.freeze({ sql, ...(result.length ? { rows: result.length } : {}) });
+  }
+  if (result && typeof result === 'object') {
+    const record = result as { changes?: unknown; affectedRows?: unknown };
+    const affected = typeof record.changes === 'number' ? record.changes : typeof record.affectedRows === 'number' ? record.affectedRows : undefined;
+    return Object.freeze({ sql, ...(affected !== undefined ? { affected } : {}) });
+  }
+  return Object.freeze({ sql });
+}
+
+/** JSON-safe cell values for the RPC reply (bigint, binary, dates). */
+function jsonSafeRow(row: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(row ?? {})) {
+    if (typeof value === 'bigint') out[key] = Number.isSafeInteger(Number(value)) ? Number(value) : value.toString();
+    else if (value instanceof Date) out[key] = value.toISOString();
+    else if (value instanceof Uint8Array) out[key] = `<binary ${value.byteLength} bytes>`;
+    else out[key] = value;
+  }
+  return out;
 }
 
 /**

@@ -325,8 +325,9 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
           await connection.query(`SET TRANSACTION ISOLATION LEVEL ${this.formatIsolationLevel(options.isolationLevel)}`);
         }
         
-        // 开始事务
-        await connection.beginTransaction();
+        // 开始事务；声明只读时数据库拒绝写入
+        if (options?.readOnly) await connection.query('START TRANSACTION READ ONLY');
+        else await connection.beginTransaction();
       } catch (error) {
         connection.release();
         throw error;
@@ -360,8 +361,9 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
         await this.connection.query(`SET TRANSACTION ISOLATION LEVEL ${this.formatIsolationLevel(options.isolationLevel)}`);
       }
       
-      // 开始事务
-      await this.connection.beginTransaction();
+      // 开始事务；声明只读时数据库拒绝写入
+      if (options?.readOnly) await this.connection.query('START TRANSACTION READ ONLY');
+      else await this.connection.beginTransaction();
       const connection = this.connection;
       
       return {
