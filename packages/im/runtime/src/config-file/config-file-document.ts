@@ -1,6 +1,7 @@
-import { createHash, randomUUID } from 'node:crypto';
-import { chmod, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
-import { basename, dirname, resolve } from 'node:path';
+import { createHash } from 'node:crypto';
+import { readFile, rm, stat } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { atomicWriteFile } from './atomic-file.js';
 import { withConfigFileLock } from './config-file-lock.js';
 import type {
   ConfigDocumentPort,
@@ -255,17 +256,8 @@ async function readConfigFileState(file: string): Promise<ConfigFileState> {
   }
 }
 
-async function atomicReplace(file: string, source: string, mode?: number): Promise<void> {
-  const temporary = `${basename(file)}.${process.pid}.${randomUUID()}.tmp`;
-  const target = resolve(dirname(file), temporary);
-  try {
-    await writeFile(target, source, mode === undefined ? undefined : { mode });
-    if (mode !== undefined) await chmod(target, mode & 0o7777);
-    await rename(target, file);
-  } catch (error) {
-    await rm(target, { force: true }).catch(() => undefined);
-    throw error;
-  }
+function atomicReplace(file: string, source: string, mode?: number): Promise<void> {
+  return atomicWriteFile(file, source, mode === undefined ? {} : { mode });
 }
 
 function requireSnapshot(

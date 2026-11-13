@@ -1,5 +1,6 @@
 export * from './config-composer.js';
 export * from './layered-config.js';
+export * from './config-secrets.js';
 export * from './convention-feature-scanner.js';
 export * from './application-plugin-declaration.js';
 export { readPluginConfigSchema } from './plugin-config-schema.js';

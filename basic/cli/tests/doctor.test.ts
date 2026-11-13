@@ -154,6 +154,46 @@ describe('doctor console diagnostics', () => {
     }
   });
 
+  it('reports literal secrets by path and --fix moves them into .env as ${ZHIN_…} references (ADR 0057)', async () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'doctor-literal-secrets-'));
+    const cwd = vi.spyOn(process, 'cwd').mockReturnValue(directory);
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const exit = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('doctor exited'); });
+    try {
+      fs.writeFileSync(path.join(directory, 'package.json'), JSON.stringify({ name: 'doctor-literal-secrets', private: true, dependencies: { 'zhin.js': '^1.0.0' } }));
+      fs.writeFileSync(path.join(directory, '.env'), 'HTTP_TOKEN=Hk3m9x_QwZr7Lp2V5tYb8NcAqq11zz\n');
+      fs.writeFileSync(path.join(directory, 'zhin.config.yml'), [
+        'configVersion: 2', 'plugins:', '  sandbox: "@zhin.js/adapter-sandbox"', 'sandbox: {}',
+        'http:', '  token: ${HTTP_TOKEN}', '  corsOrigins:', '    - https://console.zhin.dev',
+        'database:', '  dialect: pg', '  password: literal-db-password', '',
+      ].join('\n'));
+      const { doctorCommand } = await import('../src/commands/doctor.js');
+      await doctorCommand.parseAsync(['node', 'zhin']).catch(() => {});
+      const report = log.mock.calls.map(args => args.join(' ')).join('\n');
+      expect(report).toContain('database.password');
+      expect(report).not.toContain('literal-db-password');
+      expect(fs.readFileSync(path.join(directory, 'zhin.config.yml'), 'utf8')).toContain('literal-db-password');
+
+      log.mockClear();
+      await doctorCommand.parseAsync(['node', 'zhin', '--fix']).catch(() => {});
+      const config = fs.readFileSync(path.join(directory, 'zhin.config.yml'), 'utf8');
+      expect(config).toContain('password: ${ZHIN_DATABASE_PASSWORD}');
+      expect(config).not.toContain('literal-db-password');
+      const env = fs.readFileSync(path.join(directory, '.env'), 'utf8');
+      expect(env).toContain("ZHIN_DATABASE_PASSWORD='literal-db-password'");
+      expect(env).toContain('HTTP_TOKEN=Hk3m9x_QwZr7Lp2V5tYb8NcAqq11zz');
+      expect(log.mock.calls.map(args => args.join(' ')).join('\n')).not.toContain('literal-db-password');
+
+      await doctorCommand.parseAsync(['node', 'zhin', '--fix']).catch(() => {});
+      expect(fs.readFileSync(path.join(directory, '.env'), 'utf8')).toBe(env);
+    } finally {
+      cwd.mockRestore();
+      log.mockRestore();
+      exit.mockRestore();
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it('detects missing Sandbox, CORS, and token config', () => {
     const diagnosis = diagnoseConsoleConfig({ configVersion: 2, plugins: {example: 'example'}, example: {}, http: {} });
 

@@ -41,6 +41,10 @@ import {
   type RootResourceInstaller,
   ensureTypeScriptSpecifierRemap,
   expandEnvironmentValue,
+  findLiteralConfigSecrets,
+  formatLiteralConfigSecretWarning,
+  HOST_CONFIG_SCHEMA,
+  snapshotConfigSecretSchemas,
 } from '@zhin.js/runtime';
 import {
   createConsoleHostModules,
@@ -614,6 +618,8 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
       }
     }
     snapshot = await host.start();
+    // ADR 0057 §4: one warning for literal secrets (paths only), using the committed Plugin schemas.
+    warnLiteralConfigSecrets(rawConfigDocument, host.runtime.snapshot, configFile);
     // The constructor-time prune ran before the database host started and was skipped;
     // without this a frequently restarted process would never prune (next tick is hours away).
     void systemLogStore.prune();
@@ -914,6 +920,21 @@ function warnUnsetConfigEnvPlaceholders(
     const rel = relative(process.cwd(), configFile) || configFile;
     getLogger('setup').warn(`配置文件 ${rel} 中引用了未设置的环境变量: ${vars}（已展开为空字符串，请检查 .env）`);
   }
+}
+
+/** Logs ONE warning listing secret paths that hold literals instead of `${VAR}`; never the values. */
+export function warnLiteralConfigSecrets(
+  document: unknown,
+  snapshot: Parameters<typeof snapshotConfigSecretSchemas>[0],
+  configFile: string,
+  logger: Pick<ReturnType<typeof getLogger>, 'warn'> = getLogger('setup'),
+): void {
+  const secrets = findLiteralConfigSecrets(document, {
+    host: HOST_CONFIG_SCHEMA as Readonly<Record<string, unknown>>,
+    plugins: snapshotConfigSecretSchemas(snapshot),
+  });
+  if (secrets.length === 0) return;
+  logger.warn(formatLiteralConfigSecretWarning(secrets, relative(process.cwd(), configFile) || configFile));
 }
 
 function openBrowser(url: string): void {

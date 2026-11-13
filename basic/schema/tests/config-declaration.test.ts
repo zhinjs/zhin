@@ -5,6 +5,8 @@ function configValidator(schema: Schema) {
   const ajv = new Ajv2020({ useDefaults: true, allErrors: true, strict: true });
   ajv.addKeyword({ keyword: 'x-zhin-config', schemaType: 'object' });
   ajv.addKeyword({ keyword: 'x-i18n', schemaType: 'object' });
+  // ADR 0057 secret annotation; the Runtime validator registers it as well.
+  ajv.addKeyword({ keyword: 'x-zhin-secret', schemaType: 'boolean' });
   return ajv.compile(schema.toJsonSchema());
 }
 
@@ -64,7 +66,7 @@ describe('configuration declaration export', () => {
     expect(exported).toMatchObject({
       required: ['apiKey'],
       properties: {
-        apiKey: { type: 'string', writeOnly: true, 'x-zhin-config': { secret: true, component: 'password' } },
+        apiKey: { type: 'string', writeOnly: true, 'x-zhin-secret': true, 'x-zhin-config': { secret: true, component: 'password' } },
         diagnostics: { 'x-zhin-config': { hidden: true } },
       },
     });

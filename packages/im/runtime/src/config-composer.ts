@@ -10,6 +10,7 @@ import Ajv2020, { type ErrorObject } from 'ajv/dist/2020.js';
 import type { PluginGraphNode, ProjectGraph } from './project-graph.js';
 import hostConfigSchema from './host-config-schema.json' with { type: 'json' };
 import { readPluginConfigSchema } from './plugin-config-schema.js';
+import { CONFIG_SECRET_KEYWORD } from './config-secrets.js';
 import type { ModuleRuntime } from './module-runtime.js';
 import { readApplicationPluginDeclaration } from './application-plugin-declaration.js';
 
@@ -413,5 +414,7 @@ export function configurationValidator(): Ajv2020 {
   ajv.addKeyword({ keyword: 'x-i18n', schemaType: 'object' });
   ajv.addKeyword({ keyword: 'x-keyPlaceholder', schemaType: 'string' });
   ajv.addKeyword({ keyword: 'x-zhin-config', schemaType: 'object' });
+  // ADR 0057: annotation only (secret detection / redaction), never a validation rule.
+  ajv.addKeyword({ keyword: CONFIG_SECRET_KEYWORD, schemaType: 'boolean' });
   return ajv;
 }

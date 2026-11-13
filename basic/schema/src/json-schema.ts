@@ -108,7 +108,8 @@ export function toJsonSchema(schema: Schema): ConfigJsonSchema {
     for (const option of meta.options) assertJsonValue(option.value);
     result.enum = structuredClone(meta.options.map(option => option.value));
   }
-  if (meta.secret) result.writeOnly = true;
+  // ADR 0057: `x-zhin-secret` is the canonical secret annotation; writeOnly keeps form/OpenAPI semantics.
+  if (meta.secret) { result.writeOnly = true; result['x-zhin-secret'] = true; }
   const annotations: ConfigFieldMetadata = {
     ...(meta.secret ? { secret: true } : {}),
     ...(meta.hidden ? { hidden: true } : {}),

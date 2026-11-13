@@ -35,7 +35,10 @@ import { findConfigFile, readConfig } from '@zhin.js/gateway/project';
 import { detectLegacyConfig, formatLegacyConfigHint } from '@zhin.js/gateway/project';
 import { findMissingEndpointFields, loadPluginSchemaJson } from '../utils/adapter-endpoints-check.js';
 import { findDuplicateZhinInstances } from '../utils/dev-link.js';
-import { fetchReadiness } from '@zhin.js/runtime';
+import {
+  createConfigDocument, fetchReadiness, formatConfigSecretPath, formatLiteralConfigSecretWarning, updateDotenvFile,
+} from '@zhin.js/runtime';
+import { findProjectLiteralSecrets, moveLiteralSecretsToEnv } from '@zhin.js/gateway/config';
 
 const execAsync = promisify(exec);
 const CONSOLE_URL = 'https://console.zhin.dev';
@@ -688,7 +691,8 @@ export const doctorCommand = new Command('doctor')
 
       if (options.fix) {
         // Never a fixed value: a predictable bootstrap token lets anyone create the owner first.
-        await fs.writeFile(envFile, `# Zhin.js 环境变量\n${bootstrapTokenEnvLines()}`, { mode: 0o600 });
+        // Locked atomic write; a new .env is created 0600 (ADR 0057).
+        await updateDotenvFile(envFile, current => current === '' ? `# Zhin.js 环境变量\n${bootstrapTokenEnvLines()}` : undefined);
         logger.info(formatCompact( { cmd: 'doctor', op: 'create_env', file: '.env' }));
       }
     }
@@ -701,17 +705,14 @@ export const doctorCommand = new Command('doctor')
     let weak = (environmentToken !== undefined && isWeakBootstrapToken(environmentToken))
       || (environmentToken === undefined && fileToken !== undefined && isWeakBootstrapToken(fileToken));
     if (options.fix && fs.existsSync(envFile) && (!httpTokenSet || (weak && fileToken !== undefined && environmentToken === undefined))) {
-      const replaced = replaceEnvAssignment(envContent, 'HTTP_TOKEN', bootstrapTokenEnvLines().split('\n')[1]!);
-      if (replaced !== undefined) {
+      let replacedExisting = false;
+      envContent = await updateDotenvFile(envFile, current => {
         // The first assignment (even an empty one) takes the fresh token; later duplicates are dropped.
-        envContent = replaced;
-        await fs.writeFile(envFile, envContent);
-        logger.info(formatCompact({ cmd: 'doctor', op: fileToken === undefined ? 'add_bootstrap_token' : 'replace_weak_bootstrap_token', file: '.env' }));
-      } else {
-        await fs.appendFile(envFile, `${envContent === '' || envContent.endsWith('\n') ? '' : '\n'}${bootstrapTokenEnvLines()}`);
-        envContent = await fs.readFile(envFile, 'utf-8');
-        logger.info(formatCompact({ cmd: 'doctor', op: 'add_bootstrap_token', file: '.env' }));
-      }
+        const replaced = replaceEnvAssignment(current, 'HTTP_TOKEN', bootstrapTokenEnvLines().split('\n')[1]!);
+        replacedExisting = replaced !== undefined;
+        return replaced ?? `${current}${current === '' || current.endsWith('\n') ? '' : '\n'}${bootstrapTokenEnvLines()}`;
+      });
+      logger.info(formatCompact({ cmd: 'doctor', op: replacedExisting && fileToken !== undefined ? 'replace_weak_bootstrap_token' : 'add_bootstrap_token', file: '.env' }));
       await restrictToOwner(envFile);
       httpTokenSet = true;
       weak = false;
@@ -731,7 +732,41 @@ export const doctorCommand = new Command('doctor')
           : undefined,
     });
 
-    // 10c. 管理网关与 Console 初始化状态（ADR 0054）
+    // 10c. yml 里的明文密钥（ADR 0057 §4）：--fix 移到 .env，配置改为 ${VAR} 引用
+    if (existingConfig && !configParseFailed) {
+      const configPath = path.join(cwd, existingConfig);
+      try {
+        const document = (await createConfigDocument(configPath).read()).document;
+        let secrets = await findProjectLiteralSecrets(cwd, document);
+        let skipped: readonly { path: readonly string[]; reason: string }[] = [];
+        if (options.fix && secrets.length > 0) {
+          // Same lock / revision check / atomic rename as every other config writer, gateway running or not.
+          const fixed = await moveLiteralSecretsToEnv(cwd, configPath);
+          for (const item of fixed.moved) {
+            logger.info(formatCompact({ cmd: 'doctor', op: item.reused ? 'reuse_env_secret' : 'move_secret_to_env', path: formatConfigSecretPath(item.path), variable: item.variable }));
+          }
+          skipped = fixed.skipped;
+          secrets = await findProjectLiteralSecrets(cwd, (await createConfigDocument(configPath).read()).document);
+        }
+        results.push(secrets.length === 0
+          ? { name: '明文密钥', status: 'ok', message: `${existingConfig} 中的密钥字段都使用 \${VAR} 引用` }
+          : {
+            name: '明文密钥',
+            status: 'warn',
+            message: `${formatLiteralConfigSecretWarning(secrets, existingConfig)}${skipped.length ? `；未自动迁移：${skipped.map(item => `${formatConfigSecretPath(item.path)}（${item.reason}）`).join('，')}` : ''}`,
+            fix: 'zhin doctor --fix',
+          });
+      } catch (error) {
+        results.push({
+          name: '明文密钥',
+          status: 'warn',
+          message: `无法检查或迁移明文密钥：${error instanceof Error ? error.message.split('\n')[0] : String(error)}`,
+          fix: '确认配置文件未被其他进程修改后重跑 zhin doctor --fix',
+        });
+      }
+    }
+
+    // 10d. 管理网关与 Console 初始化状态（ADR 0054）
     const gateway = await probeGateway({ root: cwd }).catch(() => undefined);
     if (!gateway) {
       results.push({

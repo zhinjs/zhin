@@ -3,7 +3,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import yaml from 'yaml';
 import { isLocale, readPluginConfigurationMap } from '@zhin.js/plugin-runtime';
-import { readApplicationPluginDeclaration } from '@zhin.js/runtime';
+import { readApplicationPluginDeclaration, updateDotenvFile } from '@zhin.js/runtime';
 import type { AdapterSetupResult, AISetupConfig, DatabaseConfig, InitOptions } from './types.js';
 import {
   collectAdapterPluginManifest,
@@ -163,10 +163,8 @@ export async function appendWizardEnvVars(
     (adapters ? generateAdapterEnvVars(adapters, locale) : '') +
     (ai ? generateAIEnvVars(ai, locale) : '');
   if (extra.trim()) {
-    const envPath = path.join(projectDir, '.env');
-    const existing = (await fs.pathExists(envPath)) ? await fs.readFile(envPath, 'utf-8') : '';
-    // 按 KEY 覆盖而非追加：重复运行向导幂等，不产生重复行
-    await fs.writeFile(envPath, mergeEnvText(existing, extra));
+    // 按 KEY 覆盖而非追加：重复运行向导幂等，不产生重复行；加锁原子写，新文件为 0600（ADR 0057）
+    await updateDotenvFile(path.join(projectDir, '.env'), existing => mergeEnvText(existing, extra));
   }
 
 
