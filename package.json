@@ -128,6 +128,7 @@
     "check:pack-imports": "node scripts/check-pack-imports.mjs",
     "check:publish-repository": "node scripts/check-publish-repository.mjs",
     "check:unpublished": "node scripts/check-unpublished-packages.mjs",
+    "check:version-collisions": "node scripts/check-version-collisions.mjs",
     "check:agent-tool-schema": "node scripts/check-agent-tool-schema.mjs",
     "check:skill-authoring-boundaries": "node scripts/check-skill-authoring-boundaries.mjs",
     "check:agent-authoring-boundaries": "node scripts/check-agent-authoring-boundaries.mjs",
