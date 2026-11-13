@@ -75,15 +75,18 @@ export function resolvePluginStackRanges(
   releaseRanges?: StackVersionRanges,
 ): PluginStackRanges {
   const ranges = {} as PluginStackRanges;
-  for (const name of PLUGIN_STACK_PACKAGES) {
-    const released = scaffoldDependencyRange(name, releaseRanges);
-    const floor = released.startsWith('^') ? semver.valid(released.slice(1)) : null;
-    if (!floor) throw new Error(`Cannot create plugin: release version is unavailable for ${name}`);
-    const installed = caretRange(findInstalledVersion(name, cwd));
-    ranges[name] = installed && semver.satisfies(installed.slice(1), released, { includePrerelease: true })
-      && semver.gt(installed.slice(1), floor) ? installed : released;
-  }
+  for (const name of PLUGIN_STACK_PACKAGES) ranges[name] = resolveStackRange(name, cwd, releaseRanges);
   return ranges;
+}
+
+/** One package of {@link resolvePluginStackRanges}; `zhin add` uses it for Feature packages too. */
+export function resolveStackRange(name: string, cwd: string, releaseRanges?: StackVersionRanges): string {
+  const released = scaffoldDependencyRange(name, releaseRanges);
+  const floor = released.startsWith('^') ? semver.valid(released.slice(1)) : null;
+  if (!floor) throw new Error(`Cannot create plugin: release version is unavailable for ${name}`);
+  const installed = caretRange(findInstalledVersion(name, cwd));
+  return installed && semver.satisfies(installed.slice(1), released, { includePrerelease: true })
+    && semver.gt(installed.slice(1), floor) ? installed : released;
 }
 
 /**
@@ -171,6 +174,35 @@ export const CONVENTION_SOURCE_DIRECTORIES = [
   'pages',
   'adapters',
 ] as const;
+
+/**
+ * Feature package that discovers each convention directory (docs/authoring/conventions.md).
+ * `zhin plugin check` warns when a directory with capability sources lacks its feature;
+ * `zhin add` declares it.
+ */
+export const CONVENTION_FEATURE_PACKAGES: Readonly<Record<string, string>> = {
+  commands: '@zhin.js/command',
+  components: '@zhin.js/component',
+  middlewares: '@zhin.js/middleware',
+  handlers: '@zhin.js/handler',
+  schedules: '@zhin.js/schedule-feature',
+  tools: '@zhin.js/tool',
+  'prompt-sections': '@zhin.js/prompt-section',
+  hooks: '@zhin.js/hook-feature',
+  mcps: '@zhin.js/mcp-feature',
+  adapters: '@zhin.js/adapter',
+  skills: '@zhin.js/skill',
+  agents: '@zhin.js/agent-feature',
+};
+
+/** `zhin.features[].api` ranges: the major of each provider's `zhin.featureApi`. */
+const FEATURE_API_RANGES: Readonly<Record<string, string>> = {
+  '@zhin.js/adapter': '^2.1.0',
+};
+
+export function featureApiRange(featurePackage: string): string {
+  return FEATURE_API_RANGES[featurePackage] ?? '^1.0.0';
+}
 
 /** Convention directories shipped as-is (Markdown / JSON assets + progressive-disclosure tools). */
 export const CONVENTION_ASSET_DIRECTORIES = ['skills', 'agents'] as const;
@@ -304,9 +336,6 @@ if (!process.argv.includes('--clean')) {
 export function createPluginManifest(input: PluginManifestInput): Record<string, unknown> {
   const { kind, peerRanges, devRanges } = input;
   const capabilities = capabilityPackages(kind);
-  const featureApis: Readonly<Record<string, string>> = {
-    '@zhin.js/adapter': '^2.1.0',
-  };
 
   const peerDependencies: Record<string, string> = { 'zhin.js': peerRanges['zhin.js'] };
   const peerDependenciesMeta: Record<string, { optional: true }> = {};
@@ -367,7 +396,7 @@ export function createPluginManifest(input: PluginManifestInput): Record<string,
       runtime: 'trusted',
       features: capabilities.map((name) => ({
         package: name,
-        api: featureApis[name] ?? '^1.0.0',
+        api: featureApiRange(name),
       })),
       plugins: [],
     },

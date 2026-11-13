@@ -15,8 +15,8 @@ describe('CLI option surface', () => {
     buildCommand.setOptionValue('production', true);
   });
 
-  it('install: `add` is an alias, and the unread -S/--save flag is gone', () => {
-    expect(installCommand.aliases()).toEqual(['add']);
+  it('install: no `add` alias (`zhin add` generates convention files), and the unread -S/--save flag is gone', () => {
+    expect(installCommand.aliases()).toEqual([]);
     expect(installCommand.options.map((option) => option.long)).not.toContain('--save');
   });
 

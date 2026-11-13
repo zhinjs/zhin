@@ -49,6 +49,10 @@ Skills and Agents are the exception: they are described in Markdown / JSON, with
 
 Missing folders are simply skipped; create only the ones you use.
 
+::: tip Generate them with zhin add
+No need to hand-write the folder and manifest: run `npx zhin add <command|middleware|handler|tool|component> <name>` in the plugin directory (e.g. `npx zhin add command gh/issue`). It writes the `index.ts` / `index.tsx` template and declares the feature package it needs in `package.json`. See [CLI reference · add](../cli/index.md#add).
+:::
+
 ## Writing each folder
 
 ### commands/: commands

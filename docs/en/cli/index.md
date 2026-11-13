@@ -34,6 +34,7 @@ Inside a project that has `@zhin.js/cli` installed, `npx zhin` uses it directly.
 | Find plugins and setup steps by purpose | `npx zhin use-cases` |
 | Create a new, publishable plugin | `npx @zhin.js/cli new my-plugin --standalone` |
 | Check a plugin before publishing | `npx @zhin.js/cli plugin check` |
+| Add a command, middleware, tool… file to a plugin | `npx zhin add command hello` |
 | Add a local plugin to an existing bot project | `npx zhin new my-plugin` |
 | Update dependencies (stop instance → install → start, rolled back on failure) | `npx zhin update` |
 | Upgrade Zhin | `npx zhin migrate --dry-run`, then again without `--dry-run` |
@@ -270,11 +271,40 @@ zhin new [plugin-name] [--standalone] [--type normal|service|adapter] [--package
 - The generated `pnpm test` (Vitest) and `pnpm typecheck` (`tsc --noEmit`) work as is; no `NODE_ENV` setting is needed.
 - `--skip-install` skips `pnpm install` in both the plugin directory and the project root.
 
-### install / add: Install a Plugin
+### add: Generate a Convention File {#add}
+
+```bash
+zhin add <command|middleware|handler|tool|component> <name> [--cwd <plugin-dir>] [--force] [--event <event>]
+```
+
+Writes one capability file into the current plugin package, so you do not hand-write the convention directory or the `package.json#zhin` manifest. The plugin package is the first `package.json` found walking up from the current directory, and it must carry a `zhin.type: "plugin"` manifest (plugins from `zhin new` and bot project roots do); `--cwd` sets another starting point.
+
+| Kind | File | Default export | Feature package |
+| --- | --- | --- | --- |
+| `command` | `commands/<path>/index.ts` | `defineCommand` (`zhin.js/command`) | `@zhin.js/command` |
+| `middleware` | `middlewares/<name>/index.ts` | `defineMiddleware` (`zhin.js/middleware`) | `@zhin.js/middleware` |
+| `handler` | `handlers/<path>/index.ts` | `defineHandler` (`zhin.js/handler`) | `@zhin.js/handler` |
+| `tool` | `tools/<name>/index.ts` | `defineAgentTool` (`@zhin.js/tool`) | `@zhin.js/tool` |
+| `component` | `components/<name>/index.tsx` | `defineComponent` (`zhin.js/component`) | `@zhin.js/component` |
+
+```bash
+zhin add command gh/issue                         # commands/gh/issue/index.ts → /gh issue
+zhin add command echo/[text]                      # trailing [text] is a required parameter; the template declares params.text
+zhin add handler message/receive                  # event inferred from the path: message.receive
+zhin add handler welcome --event notice.receive   # use --event when the path is not a built-in event
+zhin add tool lookup
+```
+
+- Every name segment must match `/^[a-z][a-z0-9-]*$/`. `command` and `handler` names may use `/`; the last segment of a `command` may be a required parameter directory `[name]` (create `[[name]]` / `[...name]` by hand, see [Commands](../authoring/commands.md)).
+- Templates are the smallest default export that type-checks; edit them from there.
+- `package.json`: when `zhin.features` does not list the feature package, `{ package, api }` is appended; when the plugin does not depend on it yet, it is added to `peerDependencies` (`optional`) and `devDependencies` following the `zhin new` rules, with the range following the plugin's own `zhin.js` spec (`workspace:` stays a workspace link, otherwise the release range `^x.y.z`). Existing entries are never duplicated; other fields and the formatting (2-space indent, trailing newline) are kept. When dependencies change it reminds you to run `pnpm install`.
+- An existing target file is an error (exit code 1); `--force` overwrites it.
+- `zhin add` used to be an alias of `zhin install`; install plugins with `zhin install <package>`.
+
+### install: Install a Plugin
 
 ```bash
 zhin install <plugin name or git URL> [--no-enable] [--dry-run]
-zhin add ...          # alias of install
 ```
 
 By default it installs with pnpm and writes the package reference into `plugins.<instanceKey>` in `zhin.config.yml`. Business settings use the top-level alias block; `disable_plugins` controls activation. When the plugin schema has required fields without defaults (such as an adapter's `endpoints` accounts), only the dependency is installed, nothing is declared, and the missing fields are printed: fill them in the Console and declare the plugin there (`gateway.plugins.declare`), run `zhin setup --adapters`, or add `plugins.<instanceKey>` and the instance block to the config file yourself and restart.

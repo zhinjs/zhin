@@ -136,7 +136,6 @@ async function installPluginAction(plugin: string, options: InstallOptions) {
 }
 
 export const installCommand = new Command('install')
-  .alias('add')
   .description('安装插件（npm 包或 git 仓库）')
   .argument('[plugin]', '插件名称或 git 地址')
   .option('-D, --save-dev', '安装到 devDependencies（默认 dependencies）', false)

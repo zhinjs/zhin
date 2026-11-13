@@ -34,6 +34,7 @@ npx zhin --help        # 查看全部命令
 | 按功能查找插件和配置步骤 | `npx zhin use-cases` |
 | 创建一个可独立发布的新插件 | `npx @zhin.js/cli new my-plugin --standalone` |
 | 发布前检查插件 | `npx @zhin.js/cli plugin check` |
+| 在插件里新增命令、中间件、工具等文件 | `npx zhin add command hello` |
 | 在已有 Bot 项目里加一个本地插件 | `npx zhin new my-plugin` |
 | 更新依赖（停实例 → 安装 → 启实例，失败回滚） | `npx zhin update` |
 | 升级 Zhin | `npx zhin migrate --dry-run`，确认后去掉 `--dry-run` |
@@ -270,11 +271,40 @@ zhin new [plugin-name] [--standalone] [--type normal|service|adapter] [--package
 - 生成的 `pnpm test`（Vitest）和 `pnpm typecheck`（`tsc --noEmit`）直接可用，不需要设置 `NODE_ENV`。
 - `--skip-install` 同时跳过插件目录和项目根的 `pnpm install`。
 
-### install / add：安装插件
+### add：生成约定目录文件 {#add}
+
+```bash
+zhin add <command|middleware|handler|tool|component> <name> [--cwd <插件目录>] [--force] [--event <事件>]
+```
+
+在当前插件包里生成一个能力文件，省去手写约定目录与 `package.json#zhin` 清单。插件包是从当前目录向上找到的第一个 `package.json`，它必须带 `zhin.type: "plugin"` 清单（`zhin new` 生成的插件、Bot 项目根都满足）；`--cwd` 指定别的起点。
+
+| 类型 | 生成文件 | 默认导出 | Feature 包 |
+| --- | --- | --- | --- |
+| `command` | `commands/<path>/index.ts` | `defineCommand`（`zhin.js/command`） | `@zhin.js/command` |
+| `middleware` | `middlewares/<name>/index.ts` | `defineMiddleware`（`zhin.js/middleware`） | `@zhin.js/middleware` |
+| `handler` | `handlers/<path>/index.ts` | `defineHandler`（`zhin.js/handler`） | `@zhin.js/handler` |
+| `tool` | `tools/<name>/index.ts` | `defineAgentTool`（`@zhin.js/tool`） | `@zhin.js/tool` |
+| `component` | `components/<name>/index.tsx` | `defineComponent`（`zhin.js/component`） | `@zhin.js/component` |
+
+```bash
+zhin add command gh/issue                         # commands/gh/issue/index.ts → /gh issue
+zhin add command echo/[text]                      # 末段 [text] 是必填参数，模板里已声明 params.text
+zhin add handler message/receive                  # 事件由路径推断：message.receive
+zhin add handler welcome --event notice.receive   # 路径不是内置事件时用 --event 指定
+zhin add tool lookup
+```
+
+- 名称每段需匹配 `/^[a-z][a-z0-9-]*$/`。`command` 与 `handler` 可以用 `/` 分段；`command` 的最后一段可以是必填参数目录 `[name]`（`[[name]]`、`[...name]` 请手动创建，见[命令](../authoring/commands.md)）。
+- 模板是能通过类型检查的最小默认导出，按需修改即可。
+- `package.json`：`zhin.features` 里没有对应 Feature 包时追加 `{ package, api }`；插件还没有依赖它时，按 `zhin new` 的规则写进 `peerDependencies`（`optional`）和 `devDependencies`，版本跟随插件自己的 `zhin.js` 写法（`workspace:` 仍用 workspace 链接，否则用发布版本 `^x.y.z`）。已有的条目不会重复添加，其余字段与格式（2 空格缩进、末尾换行）保持不变。依赖有变化时会提示运行 `pnpm install`。
+- 目标文件已存在时报错退出（退出码 1），加 `--force` 覆盖。
+- `zhin add` 以前是 `zhin install` 的别名；安装插件请改用 `zhin install <包名>`。
+
+### install：安装插件
 
 ```bash
 zhin install <插件名或 git 地址> [--no-enable] [--dry-run]
-zhin add ...          # install 的别名
 ```
 
 默认会用 pnpm 安装，再把包引用写进 `zhin.config.yml` 的 `plugins.<instanceKey>`；业务参数写在顶层同名实例块，启停由 `disable_plugins` 控制。插件 Schema 有无默认值的必填字段（例如适配器的 `endpoints` 账号）时，只安装依赖、不写声明，并提示缺少的配置项：在 Console 填写后声明（`gateway.plugins.declare`），或运行 `zhin setup --adapters`，或手动在配置文件中添加 `plugins.<instanceKey>` 与实例块后重启。

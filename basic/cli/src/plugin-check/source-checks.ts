@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {
   CONVENTION_ASSET_DIRECTORIES,
+  CONVENTION_FEATURE_PACKAGES,
   CONVENTION_SOURCE_DIRECTORIES,
 } from '../commands/new-plugin-manifest.js';
 import { filesWhitelistIncludes } from './files-whitelist.js';
@@ -21,21 +22,6 @@ const TYPESCRIPT_SOURCE = /\.(?:ts|tsx|mts|cts)$/u;
 const DECLARATION = /\.d\.[cm]?ts$/u;
 const TEST_FILE = /\.(?:test|spec)\.[cm]?[jt]sx?$/u;
 const RUNTIME_ENTRIES_BUILDER = /runtime-entries/u;
-
-const DIRECTORY_FEATURE_PACKAGE: Readonly<Record<string, string>> = {
-  commands: '@zhin.js/command',
-  components: '@zhin.js/component',
-  middlewares: '@zhin.js/middleware',
-  handlers: '@zhin.js/handler',
-  schedules: '@zhin.js/schedule-feature',
-  tools: '@zhin.js/tool',
-  'prompt-sections': '@zhin.js/prompt-section',
-  hooks: '@zhin.js/hook-feature',
-  mcps: '@zhin.js/mcp-feature',
-  adapters: '@zhin.js/adapter',
-  skills: '@zhin.js/skill',
-  agents: '@zhin.js/agent-feature',
-};
 
 /** Reads package.json; a missing or invalid file is reported as an error. */
 export function readPluginManifest(pluginDirectory: string, problems: PluginCheckProblems): Record<string, unknown> | undefined {
@@ -213,7 +199,7 @@ function checkCapabilityFeatures(
     if (asset.includes('/')) activeDirectories.add(asset.split('/')[0]!);
   }
   for (const directory of activeDirectories) {
-    const featurePackage = DIRECTORY_FEATURE_PACKAGE[directory];
+    const featurePackage = CONVENTION_FEATURE_PACKAGES[directory];
     if (featurePackage && !declaredFeatures.has(featurePackage)) {
       problems.warnings.push(`约定目录 ${directory}/ 存在能力源码，但 zhin.features 未声明 ${featurePackage}`);
     }

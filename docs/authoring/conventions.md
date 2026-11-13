@@ -49,6 +49,10 @@ Skill 和 Agent 是例外：它们用 Markdown / JSON 描述，入口分别是 `
 
 目录不存在时直接跳过，插件只需要创建自己用到的目录。
 
+::: tip 用 zhin add 生成
+不必手写目录和清单：在插件目录运行 `npx zhin add <command|middleware|handler|tool|component> <name>`（如 `npx zhin add command gh/issue`），会生成对应的 `index.ts` / `index.tsx` 模板，并在 `package.json` 声明所需的 Feature 包。见 [CLI 参考 · add](../cli/index.md#add)。
+:::
+
 ## 各目录的写法
 
 ### commands/：命令
