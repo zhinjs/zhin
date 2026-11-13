@@ -7,6 +7,7 @@
  */
 import { FEATURE_GLOBAL_SWITCH_PERMISSION, FEATURE_RPC_PERMISSIONS, parseFeatureConversationKey } from './feature.js';
 import { CHAT_ROLES_RPC_PERMISSIONS } from './chat-roles.js';
+import { ATTENTION_RPC_PERMISSIONS } from './attention.js';
 import { GATEWAY_RPC_PERMISSIONS } from './gateway.js';
 import {
   isConsolePluginPermission,
@@ -226,6 +227,8 @@ export const CONSOLE_RPC_PERMISSIONS: Readonly<Record<string, ConsolePermission>
   'ping': P.STATUS_VIEW,
   'entries:get': P.STATUS_VIEW,
   'pages:list': P.STATUS_VIEW,
+  // Attention inbox (「需要你处理」): a dashboard read; items are filtered per permission inside.
+  ...ATTENTION_RPC_PERMISSIONS,
   // Raw configuration (CONFIG_RPC)
   'config:get': P.OPS_CONFIG_READ,
   'config:get-all': P.OPS_CONFIG_READ,

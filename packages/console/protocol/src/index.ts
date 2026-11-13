@@ -731,6 +731,7 @@ export * from './plugin-permissions.js';
 export * from './navigation.js';
 export * from './feature.js';
 export * from './chat-roles.js';
+export * from './attention.js';
 export * from './gateway.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {

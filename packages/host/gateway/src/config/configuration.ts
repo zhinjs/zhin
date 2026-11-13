@@ -15,6 +15,8 @@ import { readPluginPackageMap } from './plugin-package-map.js';
 import { assertUnambiguousConfigKey, configKeyPatch, configKeyRemovePatch, flattenConfigDocument } from './configuration-projection.js';
 import { readEnvFile, writeEnvFile } from './environment-files.js';
 import { PluginSchemaCatalog } from './plugin-schema-catalog.js';
+import { findProjectLiteralSecrets } from './literal-secrets.js';
+import type { LiteralConfigSecret } from '@zhin.js/runtime';
 import { hostModelOwnerId } from '@zhin.js/plugin-runtime';
 import {
   assertChatConfigurationAccess, assertChatConfigurationScope, assertChatValueHasNoEnvironmentReference, assertChatOptionalLeaf, chatConfigurationLeaves, chatHostRoots, chatLeafTypes,
@@ -136,6 +138,14 @@ export class ConsoleConfigurationStore {
           [key, configKeyPatch(snapshot.document, key, undefined).path]))),
       });
     });
+  }
+
+  /**
+   * Secret fields of the stored (unexpanded) configuration that hold literals instead of
+   * `${VAR}` references (ADR 0057). Paths only, never values.
+   */
+  readLiteralSecrets(): Promise<readonly LiteralConfigSecret[]> {
+    return this.#afterMutations(async () => findProjectLiteralSecrets(this.#projectRoot, (await this.#document.read()).document));
   }
 
   readDocument(): Promise<Record<string, unknown>> {

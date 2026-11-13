@@ -55,6 +55,11 @@ export function createAgentRuntimeLeaseResolver(
   };
 }
 
+/** Configured MCP servers (not connected until the Agent reports them) merged with the Agent's live view. */
+export function listMcpServerStatus(projectRoot: string, snapshot: RuntimeSnapshot): readonly Record<string, unknown>[] {
+  return mergeMcpServers(new AgentConfigProjection(projectRoot), snapshot).rows;
+}
+
 function mergeMcpServers(
   configuration: AgentConfigProjection,
   snapshot: RuntimeSnapshot,

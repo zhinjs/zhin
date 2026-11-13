@@ -32,6 +32,8 @@ export interface ConsoleRpcComposition {
 export interface ConsoleRpcConfigurationPort {
   readSource(): Promise<import('@zhin.js/console-protocol').ConsoleConfigSource>;
   readDocument(): Promise<Record<string, unknown>>;
+  /** Literal secret paths of the stored configuration (ADR 0057); never values. */
+  readLiteralSecrets?(): Promise<readonly { readonly path: readonly string[] }[]>;
   apply?(expectedRevision: string): Promise<import('@zhin.js/console-protocol').ConsoleConfigApplyResult>;
   replaceSource(
     source: string,

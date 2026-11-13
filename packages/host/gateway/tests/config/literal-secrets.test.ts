@@ -6,6 +6,8 @@ import { parse as parseYaml } from 'yaml';
 import {
   findProjectLiteralSecrets, literalSecretEnvironmentName, moveLiteralSecretsToEnv,
 } from '../../src/config/literal-secrets.js';
+import { ConsoleConfigurationStore } from '../../src/config/configuration.js';
+import { createConfigDocument } from '@zhin.js/runtime';
 
 let root: string;
 const configFile = () => join(root, 'zhin.config.yml');
@@ -45,6 +47,13 @@ describe('ADR 0057 zhin doctor literal secrets', () => {
     const found = await findProjectLiteralSecrets(root, await readConfig());
     expect(found.map(item => item.path.join('.')).sort()).toEqual(['custom.endpoints.0.appSecret', 'database.password', 'http.token']);
     expect(JSON.stringify(found)).not.toContain('literal-value');
+  });
+
+  it('the configuration store reports the stored literals (paths only) for the Console attention inbox', async () => {
+    const store = new ConsoleConfigurationStore({ projectRoot: root, document: createConfigDocument(configFile()) });
+    const found = await store.readLiteralSecrets();
+    expect(found.map(item => item.path.join('.')).sort()).toEqual(['custom.endpoints.0.appSecret', 'database.password', 'http.token']);
+    expect(JSON.stringify(found)).not.toContain('literal');
   });
 
   it('--fix moves literals into .env (0600), replaces them with ${…} and is idempotent', async () => {

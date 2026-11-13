@@ -25,6 +25,8 @@ import { dispatchPluginConsoleRpcRequest } from './plugin-console-rpc.js';
 import { dispatchIamRpc, isIamRpc } from '@zhin.js/gateway/iam';
 import { createFeatureRpcContext, dispatchFeatureConsoleRpc } from './console-feature-rpc.js';
 import { dispatchChatRolesConsoleRpc } from './chat-roles-rpc.js';
+import { AttentionObservations, dispatchAttentionConsoleRpc } from './attention.js';
+import { createAttentionSources } from './attention-sources.js';
 import { CONSOLE_PERMISSIONS, featureScopeTarget } from '@zhin.js/console-protocol';
 import type { ConsoleIamService } from '@zhin.js/gateway/iam';
 import { internalErrorResponse } from './internal-error.js';
@@ -48,6 +50,8 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
   // Console SQL is recorded with its literals redacted by the database Host's own lexer.
   const redactSql = options.databaseHost?.console?.redactSql;
   const auditOptions = redactSql ? { redactSql: (sql: string) => redactSql(sql) } : undefined;
+  const attentionSources = createAttentionSources(options);
+  const attentionObservations = new AttentionObservations();
 
   http.route('POST', `${base}/console/request`, async (request, context) => {
     const authScope = 'full' as const;
@@ -111,6 +115,16 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
       });
       if (chatRolesReply) {
         return reply(chatRolesReply.status, chatRolesReply.body, noStore);
+      }
+      // 「需要你处理」: every item is filtered by what this principal may view.
+      const attentionReply = await dispatchAttentionConsoleRpc(message, {
+        sources: attentionSources,
+        observations: attentionObservations,
+        allows: (permission, target) => principalAllows(authorizedPrincipal, permission, target),
+        allowsPluginPermission: permission => principalAllows(authorizedPrincipal, permission, undefined, http.tokenRegistry?.pluginPermissionLevels()),
+      });
+      if (attentionReply) {
+        return reply(attentionReply.status, attentionReply.body, noStore);
       }
       // `plugin.<pluginId>.<method>`: the dispatcher authorizes signed-in principals per method
       // (its own, its Page's, or the catalog fallback permission).
