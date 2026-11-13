@@ -299,7 +299,7 @@ zhin add tool lookup
 - 模板是能通过类型检查的最小默认导出，按需修改即可。
 - `package.json`：`zhin.features` 里没有对应 Feature 包时追加 `{ package, api }`；插件还没有依赖它时，按 `zhin new` 的规则写进 `peerDependencies`（`optional`）和 `devDependencies`，版本跟随插件自己的 `zhin.js` 写法（`workspace:` 仍用 workspace 链接，否则用发布版本 `^x.y.z`）。已有的条目不会重复添加，其余字段与格式（2 空格缩进、末尾换行）保持不变。依赖有变化时会提示运行 `pnpm install`。
 - 目标文件已存在时报错退出（退出码 1），加 `--force` 覆盖。
-- `zhin add` 以前是 `zhin install` 的别名；安装插件请改用 `zhin install <包名>`。
+- 第一个参数不是能力类型时，`zhin add <包名>` 仍按 `zhin install <包名>` 安装（以前它是 `install` 的别名），并提示改用 `zhin install`。
 
 ### install：安装插件
 

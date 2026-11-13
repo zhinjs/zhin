@@ -3,10 +3,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import ts from 'typescript';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { installCommand } from '../src/commands/install.js';
 import {
   ADD_KINDS,
   AddConventionError,
+  addCommand,
   addConvention,
   conventionTemplate,
   parseConventionName,
@@ -182,6 +184,17 @@ describe('zhin add: refusals', () => {
     expect(() => addConvention({ kind: 'some-plugin', name: 'x', cwd: root })).toThrow(/zhin install/u);
   });
 
+  it('zhin add <package> still installs: a first argument that is not a kind goes to zhin install with its options', async () => {
+    const install = vi.spyOn(installCommand, 'parseAsync').mockResolvedValue(installCommand);
+    try {
+      await addCommand.parseAsync(['@zhin.js/adapter-qq', '-D'], { from: 'user' });
+      expect(install).toHaveBeenCalledWith(['@zhin.js/adapter-qq', '-D'], { from: 'user' });
+      expect(fs.readdirSync(root)).toEqual(['package.json']);
+    } finally {
+      install.mockRestore();
+    }
+  });
+
   it('handler without a canonical path asks for --event', () => {
     expect(() => addConvention({ kind: 'handler', name: 'welcome', cwd: root })).toThrow(/--event/u);
     expect(() => addConvention({ kind: 'command', name: 'x', event: 'notice.receive', cwd: root })).toThrow(/handler/u);
@@ -238,9 +251,9 @@ describe('zhin add: templates', () => {
 describe('zhin add: CLI', () => {
   it('is listed in zhin --help and documents its kinds', () => {
     const help = execFileSync(process.execPath, [cliPath, '--help'], { encoding: 'utf8', timeout: 20_000 });
-    expect(help).toMatch(/^\s+add \[options\] <kind> <name>/mu);
+    expect(help).toMatch(/^\s+add \[options\] <kind> \[name\]/mu);
     const addHelp = execFileSync(process.execPath, [cliPath, 'add', '--help'], { encoding: 'utf8', timeout: 20_000 });
-    for (const text of ['Usage: zhin add [options] <kind> <name>', '--cwd <dir>', '--force', '--event <event>', 'components/<name>/index.tsx']) {
+    for (const text of ['Usage: zhin add [options] <kind> [name]', '--cwd <dir>', '--force', '--event <event>', 'components/<name>/index.tsx']) {
       expect(addHelp).toContain(text);
     }
   });

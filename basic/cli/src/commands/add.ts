@@ -8,6 +8,7 @@ import {
   resolveStackRange,
 } from './new-plugin-manifest.js';
 import { toCapitalizedName } from './new.js';
+import { installCommand } from './install.js';
 
 /**
  * `zhin add <kind> <name>`: write one convention-directory capability file into the current plugin
@@ -16,6 +17,10 @@ import { toCapitalizedName } from './new.js';
  */
 export const ADD_KINDS = ['command', 'middleware', 'handler', 'tool', 'component'] as const;
 export type AddKind = (typeof ADD_KINDS)[number];
+
+export function isAddKind(value: string): value is AddKind {
+  return (ADD_KINDS as readonly string[]).includes(value);
+}
 
 interface KindSpec {
   /** Convention directory; also the key of {@link CONVENTION_FEATURE_PACKAGES}. */
@@ -344,7 +349,10 @@ interface AddCommandOptions {
 export const addCommand = new Command('add')
   .description('在当前插件包生成约定目录能力文件，并在 package.json#zhin.features 声明对应 Feature')
   .argument('<kind>', `能力类型（${ADD_KINDS.join(' | ')}）`)
-  .argument('<name>', '名称；command / handler 可用 / 分段（如 gh/issue、message/receive），command 末段可为 [param]')
+  .argument('[name]', '名称；command / handler 可用 / 分段（如 gh/issue、message/receive），command 末段可为 [param]')
+  // `zhin add <包名>` 以前是 `zhin install` 的别名：不是能力类型时原样转给 install（含其选项）。
+  .allowUnknownOption()
+  .allowExcessArguments()
   .option('--cwd <dir>', '插件目录（默认从当前目录向上找最近的 package.json）')
   .option('--force', '覆盖已存在的文件', false)
   .option('--event <event>', 'handler 监听的事件（默认由路径推断，如 message/receive → message.receive）')
@@ -364,9 +372,19 @@ export const addCommand = new Command('add')
     '  zhin add handler welcome --event notice.receive',
     '',
     '已存在的文件不会被覆盖（除非 --force）；已声明的 Feature 与依赖保持不变。',
-    '安装插件请用 zhin install <包名>（zhin add 不再是 install 的别名）。',
+    '第一个参数不是能力类型时按 zhin install 处理（旧写法 zhin add <包名> 仍可用，建议改用 zhin install）。',
   ].join('\n'))
-  .action((kind: string, name: string, options: AddCommandOptions) => {
+  .action(async (kind: string, name: string | undefined, options: AddCommandOptions, command: Command) => {
+    if (!isAddKind(kind)) {
+      logger.warn(`zhin add <包名> 已改为 zhin install <包名>，这次按安装处理（能力类型：${ADD_KINDS.join(' / ')}）`);
+      await installCommand.parseAsync(command.args, { from: 'user' });
+      return;
+    }
+    if (name === undefined) {
+      logger.error(`缺少名称：zhin add ${kind} <name>`);
+      process.exitCode = 1;
+      return;
+    }
     try {
       const result = addConvention({ kind, name, cwd: options.cwd, force: options.force, event: options.event });
       const relativeRoot = path.relative(process.cwd(), result.pluginDirectory) || '.';

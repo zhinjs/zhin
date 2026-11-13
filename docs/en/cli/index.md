@@ -299,7 +299,7 @@ zhin add tool lookup
 - Templates are the smallest default export that type-checks; edit them from there.
 - `package.json`: when `zhin.features` does not list the feature package, `{ package, api }` is appended; when the plugin does not depend on it yet, it is added to `peerDependencies` (`optional`) and `devDependencies` following the `zhin new` rules, with the range following the plugin's own `zhin.js` spec (`workspace:` stays a workspace link, otherwise the release range `^x.y.z`). Existing entries are never duplicated; other fields and the formatting (2-space indent, trailing newline) are kept. When dependencies change it reminds you to run `pnpm install`.
 - An existing target file is an error (exit code 1); `--force` overwrites it.
-- `zhin add` used to be an alias of `zhin install`; install plugins with `zhin install <package>`.
+- When the first argument is not a kind, `zhin add <package>` still installs it like `zhin install <package>` (it used to be an alias) and suggests `zhin install` instead.
 
 ### install: Install a Plugin
 
