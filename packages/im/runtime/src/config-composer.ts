@@ -307,7 +307,8 @@ async function readOwnSchema(node: PluginGraphNode, modules?: Pick<ModuleRuntime
         description: 'Commands of this Plugin instance to leave out of routing, by local path without commandNamespace or parameters (e.g. "fanyi", "netease login"). A parent path also disables its subcommands.',
         'x-descriptionZh': '不注册的指令：写插件内的指令路径（不含 commandNamespace 和参数，如 fanyi、netease login），写上级路径会连同子命令一起禁用。',
       },
-      // ADR 0050: every feature Plugin accepts the reserved per adapter / endpoint override block.
+      // ADR 0050: the reserved per adapter / endpoint override block. Since ADR 0057 §2 it is only
+      // read by the one-time import into the database (the instance refuses it afterwards).
       ...(node.parent ? { [FEATURE_OVERRIDES_KEY]: FEATURE_OVERRIDES_SCHEMA } : {}),
       ...properties,
     },

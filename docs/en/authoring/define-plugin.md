@@ -154,7 +154,7 @@ More rules in [Config declaration details](#config-declaration-details) below.
 
 #### Per adapter / endpoint / conversation overrides {#layered-config}
 
-One plugin can use different settings on different adapter instances, accounts, groups and private chats ([ADR 0050](../../adr/0050-layered-feature-config.md), [ADR 0055](../../adr/0055-conversation-feature-config.md)). Levels, top to bottom: `global` (the plugin's own block) < `adapter` (adapter instance alias, e.g. `qq`) < `endpoint` (`<alias>/<endpointId>`, e.g. `qq/bot-1`) < `conversation` (`<alias>/<endpointId>/<kind>:<conversation id>`, e.g. `qq/bot-1/group:123`, stored in the project database).
+One plugin can use different settings on different adapter instances, accounts, groups and private chats ([ADR 0050](../../adr/0050-layered-feature-config.md), [ADR 0055](../../adr/0055-conversation-feature-config.md), [ADR 0057](../../adr/0057-config-storage.md)). Levels, top to bottom: `global` (the plugin's own block in the configuration file) < `adapter` (adapter instance alias, e.g. `qq`) < `endpoint` (`<alias>/<endpointId>`, e.g. `qq/bot-1`) < `conversation` (`<alias>/<endpointId>/<kind>:<conversation id>`, e.g. `qq/bot-1/group:123`); the three levels below global are stored in the project database table `feature_overrides`.
 
 **1. Declare the supported levels on the schema root.** Omitting it means `["global"]`: global config only, and overrides may hold just the enable switch. A property can narrow its levels with the same keyword (for example, keep an API key global-only) but never widen the root; that fails at startup:
 
@@ -191,26 +191,17 @@ With an inline `config`, add the same `x-zhin-config.levels` to the root of what
 - Listed fields must be the plugin's own properties whose `levels` allow the conversation level; otherwise startup fails.
 - Plugins without a configuration schema still get the conversation switch, without field overrides.
 - In keys, conversation ids escape `%` → `%25` and `/` → `%2F` and nothing else (ids may contain `:`), so a key has exactly two `/`.
-- Conversation overrides are not in the configuration file: the Console (`feature.*` with `level: 'conversation'`) or the in-chat command writes them to the `feature_conversation_overrides` table, effective in place.
-- Conversation field patches are never environment-expanded (`${VAR}` stays literal).
+- Conversation overrides, like the adapter and account levels, are not in the configuration file; see the next step.
 
-**2. Overrides live in the plugin's own block under the reserved `overrides` key.** Each value is a partial object of the plugin schema plus the reserved `enabled` field:
-
-```yaml
-rss:
-  maxItems: 5
-  overrides:
-    adapters:
-      qq: { enabled: false }
-    endpoints:
-      "tg-main/news": { maxItems: 1 }
-```
+**2. Overrides live in the project database and are written by the Console or the chat command.** Each override is a partial object of the plugin schema (only the fields its level allows) plus the enable switch. The Console feature page (`feature.set-override` / `feature.set-enabled` / `feature.remove-override`) or the in-chat command (`feature set / enable / disable <plugin> … [conversation|endpoint|adapter]`) writes them to the `feature_overrides` table, effective in place. A plugin block in the configuration file can no longer hold `overrides` (an existing project imports them into the database on its first start and removes them from the file, see [Upgrading: feature overrides move to the database](../migrations/feature-overrides.md)).
 
 - Fields merge bottom-up: plain objects deep-merge key by key, arrays and scalars replace as a whole, and `null` means "explicitly cleared" (the field stops inheriting the upper value).
-- Enabling is top-down: a level may only disable while every level above it is enabled; once an upper level disables the plugin, every level below is locked and can neither enable nor change its own switch (the Console answers 409 `locked`). A lower level never stores "enabled": enabling removes that level's switch; a hand-written `enabled: true` has no effect and only produces a warning. The global switch is still `disable_plugins` (changing it restarts the Host).
+- Enabling is top-down: a level may only disable while every level above it is enabled; once an upper level disables the plugin, every level below is locked and can neither enable nor change its own switch (the Console answers 409 `locked`). A lower level never stores "enabled": enabling removes that level's switch. The global switch is still `disable_plugins` (changing it restarts the Host).
 - Keys naming an undeclared adapter alias or account are kept with a warning, not an error, so you can write config before adding the account.
-- A plugin schema cannot declare its own `overrides` property, and a plugin's own `enabled` field is not overridable.
-- Plugins without a config schema still get the three-level enable switch (`enabled` only).
+- Stored field patches are never environment-expanded (`${VAR}` stays literal), and chat cannot write such references.
+- A plugin schema cannot declare its own `overrides` property (a reserved key), and a plugin's own `enabled` field is not overridable.
+- Plugins without a config schema still get the three-level enable switch.
+- With a MongoDB, Redis or memory project database the overrides cannot be saved and writes are refused.
 
 **3. Read the effective config in code.** `context.config` stays the global view and never contains `overrides`:
 
@@ -229,11 +220,11 @@ setup(context) {
 }
 ```
 
-`configFor(target)` returns the merged, frozen effective config, cached per configuration generation and resolution key (conversation included; a conversation write invalidates it), and always reflects the latest applied configuration. Changing only `overrides` (including adapter / endpoint switches) applies in place: no restart and no plugin reload, the next message sees the new value. Changing a global field keeps that field's own `x-zhin-config.effect`.
+`configFor(target)` returns the merged, frozen effective config, cached per configuration generation, override store version and resolution key (conversation included; any override write invalidates it), and always reflects the latest applied configuration. Changing an adapter / endpoint / conversation override or switch applies in place: no restart and no plugin reload, the next message sees the new value. Changing a global field keeps that field's own `x-zhin-config.effect`.
 
 **Automatic gating:** when a plugin is disabled for an account or a conversation, its commands (and menu entries), middleware, message and event handlers that carry an endpoint, and Agent tool and skill disclosure are skipped for messages in that conversation, exactly as if the plugin did not exist (commands do not answer "disabled"). Scheduled jobs and background polling do not go through a message, so call `isEnabledFor` yourself as above.
 
-The Console feature page reads and writes the same `overrides` through the `feature.*` RPC (`feature.list` / `feature.matrix` / `feature.get` / `feature.set-override` / `feature.remove-override` / `feature.set-enabled` / `feature.conversations`), together with the conversation overrides; editing the YAML by hand is equivalent. activity-feedback keeps its existing `platforms` / `endpoints`; new plugins should prefer `overrides`.
+The Console feature page reads and writes the global block and the three stored levels through the `feature.*` RPC (`feature.list` / `feature.matrix` / `feature.get` / `feature.set-override` / `feature.remove-override` / `feature.set-enabled` / `feature.conversations`). activity-feedback keeps its existing `platforms` / `endpoints`; new plugins should declare `x-zhin-config.levels` and use the layered overrides.
 
 ### Use the database
 

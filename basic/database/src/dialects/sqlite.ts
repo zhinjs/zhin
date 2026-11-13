@@ -230,7 +230,7 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
   }
   
   quoteIdentifier(identifier: string): string {
-    return `"${identifier}"`;
+    return `"${identifier.replace(/"/g, '""')}"`;
   }
   
   getParameterPlaceholder(index: number): string {

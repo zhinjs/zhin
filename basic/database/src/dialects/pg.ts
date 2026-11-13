@@ -134,7 +134,7 @@ export class PostgreSQLDialect<S extends Record<string, object> = Record<string,
   }
   
   quoteIdentifier(identifier: string): string {
-    return `"${identifier}"`;
+    return `"${identifier.replace(/"/g, '""')}"`;
   }
   
   getParameterPlaceholder(index: number): string {

@@ -153,7 +153,7 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
   }
 
   quoteIdentifier(identifier: string): string {
-    return `\`${identifier}\``;
+    return `\`${identifier.replace(/`/g, '``')}\``;
   }
 
   getParameterPlaceholder(index: number): string {

@@ -130,15 +130,16 @@ Agent 安装、角色权限和其他未声明可替换的启动依赖保留待�
 | 存放处 | 放什么 | 谁写 |
 |---|---|---|
 | `zhin.config.yml` | **声明**：部署时定下、随代码进 git 评审、改了要重载或重启——插件实例与插件配置、`disable_plugins`、主机基础设施（`http`、`database` 连接、`console`、`gateway`、`mcp`、`a2a`、`log_level`、`locale`）、`ai.*` 行为与安全策略、功能的全局默认值与 `features.selfService` | 人：手改、CLI、Console 配置表单（都经网关配置事务） |
-| 数据库 | **运行时状态**：Console 账号与审计、聊天角色、账号与凭据、模型目录、会话级功能覆盖、控制面开关、定时任务、消息 / 会话 / 记忆、插件状态 | Console RPC、聊天命令、AI 工具、插件 |
+| 数据库 | **运行时状态**：Console 账号与审计、聊天角色、账号与凭据、模型目录、适配器 / 账号 / 会话三级功能覆盖（表 `feature_overrides`）、控制面开关、定时任务、消息 / 会话 / 记忆、插件状态 | Console RPC、聊天命令、AI 工具、插件 |
 | `.env` | **密钥与环境差异**：yml 里只写 `${VAR}` 引用 | 人、`zhin doctor --fix`、网关 |
 | `.zhin/` | **本机运行文件**：socket、锁、日志、缓存、引导进度、加密钥匙 | 运行时、网关 |
 
 **密钥字段**：Schema 用 `x-zhin-secret: true` 标注（主机 Schema 的 `http.token`、`database.password`、`mcp.token`、`a2a.token` 等已标注；插件用 `Schema.string().secret()` 生成）；没有标注时按字段名兜底（`token`、`password`、`secret`、`apiKey`、`privateKey` 及 `*Token`、`*Secret` 等）。启动时若发现这些字段是字面值而不是 `${…}` 引用，会打一条警告，只列路径、不打印值。`zhin doctor` 同样报告；`zhin doctor --fix` 把每个字面值写进 `.env`（变量名 `ZHIN_<路径大写下划线>`，如 `ZHIN_HTTP_TOKEN`；同名已有相同值时直接复用，值不同时追加 `_2`、`_3`），再把 yml 里的值换成 `${变量名}`。yml 经配置文件事务写入（修订号检查、文件锁、原子替换），`.env` 同样加锁、临时文件 + fsync + rename 原子写，并保留原文件权限（新文件为 `0600`）。网关运行时也直接改这两个文件（与 `zhin doctor` 其他修复一致，同一把锁防止并发覆盖）；实例在下次加载配置时读到新的引用。
 
+**功能覆盖**：功能的全局默认值就是 yml 里插件自己的配置块，全局开关是 `disable_plugins`；适配器、账号、会话三级覆盖都存在项目数据库表 `feature_overrides`，由 Console 功能页或聊天命令「功能 设置 / 开启 / 关闭」写入，立即生效、不重启。yml 里不再接受插件块下的 `overrides`：旧项目首次启动时自动导入数据库，再从 yml 删除（原文件先备份到 `.zhin/backups/`），之后再写会在启动时报错，见[升级：功能覆盖迁入数据库](../migrations/feature-overrides.md)。数据库是 MongoDB、Redis 或内存方言时无法保存这些覆盖，写入会被拒绝。
+
 **仍在迁移中**（ADR 0057 后续步骤，目前行为不变）：
 
-- 适配器 / 账号级功能覆盖仍写在 yml 的 `plugins.<实例>.overrides`（会话级已在数据库），后续迁入数据库表；
 - 插件块里的 `endpoints[]` 与项目的 `ai.plan.yml` 仍是首次启动导入数据库的种子：已导入后，YAML 中的账号种子不会改写已经存在的受管账号记录，适配器资料默认值仍能作用于继承它的账号；导入后移除与 Console 导出尚未提供；
 - 永久批准仍在 `data/owner-approve-always.json`；
 - 加密钥匙仍在 `.zhin/inference/`、`.zhin/endpoint-credentials/`，尚无 `zhin backup`——备份数据库时请一并保存 `.zhin/` 中的钥匙，否则无法解密凭据。

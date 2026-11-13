@@ -1,13 +1,16 @@
 /**
- * ADR 0050 schema side: `x-zhin-config.levels`, the reserved `overrides` key,
- * override validation / warnings and the Plugin context accessor behind
- * `configFor` / `isEnabledFor`. Pure merge semantics live in `@zhin.js/plugin-runtime`.
+ * ADR 0050 schema side: `x-zhin-config.levels`, the reserved `overrides` key (legacy, imported
+ * into the database by ADR 0057 §2), override validation / warnings and the Plugin context
+ * accessor behind `configFor` / `isEnabledFor`, which reads the adapter / endpoint /
+ * conversation levels from the instance's override store. Pure merge semantics live in
+ * `@zhin.js/plugin-runtime`.
  */
 import type { ValidateFunction } from 'ajv/dist/2020.js';
 import {
   FEATURE_ADAPTER_KEY_PATTERN, FEATURE_CONFIG_LEVELS, FEATURE_ENABLED_KEY, FEATURE_ENDPOINT_KEY_PATTERN,
   FEATURE_OVERRIDES_KEY, escapeJsonPointerSegment, featureConversationEntry, featureInstancePath,
   parseFeatureResolutionKey, readFeatureConversationOverrides, readFeatureOverrides, readPluginConfigBlock, readPrimaryConfig,
+  readStoredFeatureOverrides,
   resolveFeatureEnabled, resolveFeatureTargetKey, resolveLayeredConfig,
   type FeatureConfigLevel, type FeatureOverrideEntry, type FeatureTarget, type LayeredConfigResolution, type PluginId, type PrimaryConfig,
   type RuntimeConfigDocument, type RuntimeSnapshot,
@@ -18,10 +21,10 @@ export type { FeatureConfigLevel } from '@zhin.js/plugin-runtime';
 
 type SchemaRecord = Record<string, unknown>;
 const record = (value: unknown): value is SchemaRecord => !!value && typeof value === 'object' && !Array.isArray(value);
-/** Override levels stored in the configuration file (`overrides.adapters` / `overrides.endpoints`). */
+/** Override levels of the legacy `overrides` block (`overrides.adapters` / `overrides.endpoints`), imported into the database (ADR 0057 §2). */
 const OVERRIDE_LEVELS = ['adapter', 'endpoint'] as const;
 export type FeatureFileOverrideLevel = typeof OVERRIDE_LEVELS[number];
-/** Every override level; `conversation` is stored in the project database (ADR 0055). */
+/** Every override level; all of them are stored in the project database (ADR 0055, ADR 0057 §2). */
 export type FeatureOverrideLevel = FeatureFileOverrideLevel | 'conversation';
 /** Framework-injected fields that never take part in per-endpoint overrides. */
 const NON_OVERRIDABLE_FIELDS: ReadonlySet<string> = new Set(['commandNamespace', 'disabledCommands', FEATURE_OVERRIDES_KEY, FEATURE_ENABLED_KEY]);
@@ -147,8 +150,8 @@ export function overridableFields(schema: JsonSchema, level: FeatureOverrideLeve
  */
 export const FEATURE_OVERRIDES_SCHEMA: JsonSchema = deepFreeze({
   type: 'object',
-  description: 'Per adapter / endpoint overrides (ADR 0050). Edit through the Console feature page or by hand.',
-  'x-descriptionZh': '按适配器 / 账号覆盖的配置（ADR 0050）。可在 Console 功能页编辑，也可手写。',
+  description: 'Removed (ADR 0057): per adapter / endpoint overrides live in the project database. A block left here is imported once on the first start and refused afterwards; use the Console feature page or the chat command.',
+  'x-descriptionZh': '已移除（ADR 0057）：按适配器 / 账号的覆盖存放在项目数据库。这里遗留的块在首次启动时导入一次，之后会被拒绝；请改用 Console 功能页或聊天命令。',
   // Hidden from generic config forms / explanations; the feature editor owns this block.
   'x-zhin-config': { hidden: true },
 });
@@ -333,6 +336,7 @@ function effectiveValidator(schema: JsonSchema): ValidateFunction {
  * Validates one conversation-level entry (`{ enabled?, ...patch }`) for `key`: shape against
  * the conversation fields (narrowed to `fields` when given, e.g. `selfServiceFields`), then the
  * effective merged configuration against the whole own schema. Paths are relative to the entry.
+ * `overrides` are the stored adapter / endpoint entries above `key` (ADR 0057 §2).
  */
 export function validateConversationOverride(
   schema: JsonSchema,
@@ -340,17 +344,49 @@ export function validateConversationOverride(
   key: string,
   entry: unknown,
   fields?: readonly string[],
+  overrides?: unknown,
 ): readonly FeatureOverrideIssue[] {
+  return validateStoredFeatureOverride(schema, { block, level: 'conversation', key, entry, ...(fields ? { fields } : {}), ...(overrides !== undefined ? { overrides } : {}) });
+}
+
+/**
+ * Validates one stored override entry (`{ enabled?, ...patch }`) at `level` / `key` (ADR 0057 §2):
+ * shape against the fields the level allows (narrowed to `fields` when given), then the effective
+ * merged configuration (global block ← stored `overrides` above ← this entry) against the whole
+ * own schema. Paths are relative to the entry.
+ */
+export function validateStoredFeatureOverride(
+  schema: JsonSchema,
+  input: Readonly<{
+    /** The Plugin's global config block (the configuration file). */
+    block: unknown;
+    level: FeatureOverrideLevel;
+    key: string;
+    entry: unknown;
+    fields?: readonly string[];
+    /** Stored adapter / endpoint entries ({@link readStoredFeatureOverrides}); this level's own entry is replaced by `entry`. */
+    overrides?: unknown;
+  }>,
+): readonly FeatureOverrideIssue[] {
+  const { level, key, entry, fields } = input;
   if (!record(entry)) return Object.freeze([{ path: '', message: 'must be object' }]);
-  const narrowed = fields ? `conversation:${[...fields].sort().join(',')}` : 'conversation';
-  const shape = compiled(schema, narrowed, () => featureOverrideEntrySchema(schema, 'conversation', fields));
-  const allowed = overridableFields(schema, 'conversation').filter(field => !fields || fields.includes(field));
+  const narrowed = fields ? `${level}:${[...fields].sort().join(',')}` : level;
+  const shape = compiled(schema, narrowed, () => featureOverrideEntrySchema(schema, level, fields));
+  const allowed = overridableFields(schema, level).filter(field => !fields || fields.includes(field));
   const cleared = clearIssues(schema, entry, allowed, '');
   if (cleared.length) return Object.freeze(cleared);
   if (!shape(structuredClone(withoutNulls(entry)))) return Object.freeze(issues(shape, ''));
-  const own = record(block) ? block : {};
-  const { [FEATURE_OVERRIDES_KEY]: overrides, ...globalFields } = own;
-  const merged = resolveLayeredConfig({ global: globalFields, overrides, key, conversation: entry as FeatureOverrideEntry }).value;
+  const own = record(input.block) ? input.block : {};
+  const { [FEATURE_OVERRIDES_KEY]: _legacy, ...globalFields } = own;
+  const upper = readFeatureOverrides(input.overrides);
+  const parsed = parseFeatureResolutionKey(key);
+  const overrides = level === 'adapter'
+    ? { ...upper, adapters: { ...upper.adapters, [parsed.adapter!]: entry as FeatureOverrideEntry } }
+    : level === 'endpoint'
+      ? { ...upper, endpoints: { ...upper.endpoints, [`${parsed.adapter}/${parsed.endpointId}`]: entry as FeatureOverrideEntry } }
+      : upper;
+  const merged = resolveLayeredConfig({ global: globalFields, overrides, key,
+    ...(level === 'conversation' ? { conversation: entry as FeatureOverrideEntry } : {}) }).value;
   const effective = effectiveValidator(schema);
   if (!effective(structuredClone(merged))) {
     return Object.freeze(issues(effective, '').map(issue => ({ ...issue, message: `effective configuration ${issue.message}` })));
@@ -463,16 +499,18 @@ export function createLayeredConfigAccessor(options: LayeredConfigAccessorOption
     const { primary, snapshot } = current();
     const key = resolveFeatureTargetKey(snapshot, target) ?? '';
     const conversationKey = key !== '' && parseFeatureResolutionKey(key).conversation !== undefined;
-    const reader = conversationKey ? readFeatureConversationOverrides(snapshot) : undefined;
+    // ADR 0057 §2: adapter / endpoint / conversation levels all come from the override store.
+    const reader = key !== '' ? readFeatureConversationOverrides(snapshot) : undefined;
     let byKey = cache.get(primary);
     if (!byKey || (reader && byKey.version !== reader.version)) {
-      // A conversation store write invalidates this generation's resolutions.
+      // An override store write invalidates this generation's resolutions.
       byKey = { version: reader?.version ?? byKey?.version ?? -1, entries: new Map() };
       cache.set(primary, byKey);
     }
     const cached = byKey.entries.get(key);
     if (cached) return cached;
-    const conversation = reader ? featureConversationEntry(reader.get(featureInstancePath(options.owner), key)) : undefined;
+    const plugin = featureInstancePath(options.owner);
+    const conversation = reader && conversationKey ? featureConversationEntry(reader.get(plugin, key)) : undefined;
     const block = readPluginConfigBlock(primary.document, options.owner);
     const global = block
       ? options.expand(Object.fromEntries(Object.entries(block).filter(([field]) =>
@@ -480,17 +518,18 @@ export function createLayeredConfigAccessor(options: LayeredConfigAccessorOption
       : options.view;
     let resolution = resolveLayeredConfig({
       global,
-      overrides: block ? options.expand(block[FEATURE_OVERRIDES_KEY]) : undefined,
+      // Never environment-expanded: stored patches come from the Console and from chat.
+      overrides: readStoredFeatureOverrides(reader, plugin, key),
       globalEnabled: isGloballyEnabled(primary.document, instancePath),
       key,
-      // Never environment-expanded: conversation patches come from the database and from chat.
       ...(conversation ? { conversation } : {}),
     });
     // A nested Plugin is hidden wherever one of its ancestors is switched off (same rule as dispatch).
     for (let depth = 1; resolution.enabled && depth < instancePath.length; depth += 1) {
       const ancestor = `root/${instancePath.slice(0, depth).join('/')}` as PluginId;
-      const ancestorConversation = reader ? featureConversationEntry(reader.get(featureInstancePath(ancestor), key)) : undefined;
-      const upper = resolveFeatureEnabled({ overrides: readPluginConfigBlock(primary.document, ancestor)?.[FEATURE_OVERRIDES_KEY], key,
+      const ancestorPath = featureInstancePath(ancestor);
+      const ancestorConversation = reader && conversationKey ? featureConversationEntry(reader.get(ancestorPath, key)) : undefined;
+      const upper = resolveFeatureEnabled({ overrides: readStoredFeatureOverrides(reader, ancestorPath, key), key,
         ...(ancestorConversation ? { conversation: ancestorConversation } : {}) });
       if (!upper.enabled) {
         resolution = deepFreeze({ ...resolution, enabled: false, disabledAt: upper.disabledAt,

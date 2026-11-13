@@ -5,7 +5,7 @@ import {
 } from '@zhin.js/plugin-runtime';
 import type { ConsoleConfigPatchRequest, ConsoleConfigPatchResult } from '@zhin.js/console-protocol';
 import type { ConsoleAuditEntry } from '@zhin.js/host-http';
-import { FeatureConversationOverrideStore } from '../../src/instance/console/feature-conversation-store.js';
+import { FeatureOverrideStore } from '../../src/instance/console/feature-override-store.js';
 import {
   ChatRoleService, ChatRoleStore, type InstanceChatRoleService,
 } from '../../src/instance/chat-roles.js';
@@ -44,20 +44,17 @@ function snapshot(qqConfig: unknown = {}): RuntimeSnapshot {
 const base: RuntimeConfigDocument = {
   configVersion: 2, plugins: { repeater: '@x/repeater', rss: '@x/rss', qq: '@x/qq', tg: '@x/tg' },
   qq: { endpoints: [{ id: 'bot-1' }, { id: 'bot-2' }] }, tg: { endpoints: [{ id: 'news' }] },
-  repeater: { threshold: 3, overrides: { endpoints: { 'qq/bot-2': { enabled: false } } } },
+  repeater: { threshold: 3 },
 };
 
 const on: FeatureSelfServiceConfig = { ...DEFAULT_FEATURE_SELF_SERVICE, enabled: true };
 
 let current = snapshot();
 
-/** Behaves like a database-backed store (the default deployment); memory-only replies are tested separately. */
-class PersistentStore extends FeatureConversationOverrideStore {
-  override get persistent(): boolean { return true; }
-}
-
 async function harness(config: FeatureSelfServiceConfig = on, owners: Record<string, string> = { 'qq/bot-1': 'boss' }, globalOwners: string[] = [],
-  conversations: FeatureConversationOverrideStore = new PersistentStore()) {
+  conversations: FeatureOverrideStore = new FeatureOverrideStore()) {
+  // ADR 0057 §2: the endpoint level lives in the override store (repeater is off on qq/bot-2).
+  conversations.seed([{ plugin: 'repeater', key: 'qq/bot-2', enabled: false, patch: {} }]);
   const state = { document: structuredClone(base), revision: 1 };
   const patches: ConsoleConfigPatchRequest[] = [];
   const configuration = {
@@ -78,7 +75,7 @@ async function harness(config: FeatureSelfServiceConfig = on, owners: Record<str
   const setGlobalEnabled = vi.fn(async () => undefined);
   const deps = {
     config, roles, audit: (entry: ConsoleAuditEntry) => { audits.push(entry); }, pending: new Map(), code: () => '123456',
-    context: { configuration, snapshots: { acquire: () => ({ value: snap, release() {} }) as never }, stores: { conversations }, setGlobalEnabled },
+    context: { configuration, snapshots: { acquire: () => ({ value: snap, release() {} }) as never }, stores: { overrides: conversations }, setGlobalEnabled },
   };
   const run = (actor: FeatureChatActor | undefined, text: string, locale: 'zh-CN' | 'en' = 'zh-CN') =>
     executeFeatureChat({ tokens: text.split(' ').filter(Boolean), actor, locale }, deps);
@@ -120,7 +117,7 @@ describe('in-chat feature self-service (ADR 0055 §7, roles per ADR 0056)', () =
     // Platform standing is a separate dimension and never becomes a zhin role.
     expect(await run(actor({ standing: 'admin' }), '关闭 rss')).toBe(DENIED);
     expect(await run(actor({ standing: 'owner' }), '关闭 rss')).toBe(DENIED);
-    expect(conversations.list()).toEqual([]);
+    expect(conversations.list('conversation')).toEqual([]);
     // trusted is not enough.
     const trusted = await harness();
     await trusted.roles.store.grant({ level: 'endpoint', key: 'qq/bot-1', adapter: 'qq', userId: 't', role: 'trusted' });
@@ -156,13 +153,18 @@ describe('in-chat feature self-service (ADR 0055 §7, roles per ADR 0056)', () =
     expect(conversations.get('repeater', 'qq/bot-1/group:100')).toBeUndefined();
   });
 
-  it('tells the admin when the conversation store cannot persist (memory, MongoDB, Redis)', async () => {
-    const { run, roles } = await harness(on, { 'qq/bot-1': 'boss' }, [], new FeatureConversationOverrideStore());
+  it('refuses writes when the project database cannot persist overrides (memory, MongoDB, Redis), at every stored level', async () => {
+    const store = new FeatureOverrideStore({ database: { dialect: 'mongodb', started: true, models: { get: () => undefined } } as never });
+    await store.load();
+    const { run, roles, patches } = await harness(on, { 'qq/bot-1': 'boss' }, [], store);
     await promote(roles);
-    expect(await run(actor(), '关闭 rss')).toBe('已保存（会话层），立即生效。（当前数据库不支持持久化，重启后丢失）');
-    expect(await run(actor(), '开启 rss', 'en')).toBe('Saved (conversation level), effective now. (the current database cannot persist this; it is lost on restart)');
-    // File levels are persistent regardless of the database.
-    expect(await run(actor({ user: 'boss' }), '关闭 rss 账号')).toBe('已保存（账号层），立即生效。');
+    const refused = '未保存：功能覆盖需要关系型项目数据库（sqlite / mysql / pg），当前数据库不支持持久化。';
+    expect(await run(actor(), '关闭 rss')).toBe(refused);
+    expect(await run(actor(), '关闭 rss', 'en')).toBe('Not saved: feature overrides need a relational project database (sqlite / mysql / pg); the current database cannot persist them.');
+    expect(await run(actor({ user: 'boss' }), '关闭 rss 账号')).toBe(refused);
+    expect(store.list('conversation')).toEqual([]);
+    expect(store.get('rss', 'qq/bot-1')).toBeUndefined();
+    expect(patches).toEqual([]);
   });
 
   it('never plants environment references from chat, at any level', async () => {
@@ -175,7 +177,7 @@ describe('in-chat feature self-service (ADR 0055 §7, roles per ADR 0056)', () =
     expect(await run(actor({ user: 'boss' }), '设置 repeater threshold ${SECRET} 账号')).toBe(refused);
     expect(await run(actor({ user: 'root' }), '设置 repeater threshold env://SECRET 全局')).toBe(refused);
     expect(await run(actor({ user: 'root' }), '设置 repeater threshold ["${A:-x}"] 适配器')).toBe(refused);
-    expect(conversations.list()).toEqual([]);
+    expect(conversations.list('conversation')).toEqual([]);
     expect(patches).toEqual([]);
   });
 
@@ -185,19 +187,20 @@ describe('in-chat feature self-service (ADR 0055 §7, roles per ADR 0056)', () =
     const admin = actor({ key: 'qq/bot-2/group:5', standing: 'owner' });
     expect(await run(admin, '开启 repeater')).toBe('repeater 已在账号层停用，下级不能开启或修改开关。');
     expect(await run(admin, '关闭 repeater')).toBe('repeater 已在账号层停用，下级不能开启或修改开关。');
-    expect(conversations.list()).toEqual([]);
+    expect(conversations.list('conversation')).toEqual([]);
     const list = await run(admin, '列表');
     expect(list).toContain('repeater：停用（账号层停用，已锁定）');
     expect(list).toContain('rss：启用');
     expect(list).toContain('你的角色：admin@会话 qq/bot-2/group:5');
   });
 
-  it('treats a stored account owner as endpoint owner and writes the configuration file in place', async () => {
-    const { run, state, patches } = await harness();
+  it('treats a stored account owner as endpoint owner and writes the override store, not the configuration file', async () => {
+    const { run, state, patches, conversations } = await harness();
     const owner = actor({ user: 'boss' });
     expect(await run(owner, '关闭 rss 账号')).toBe('已保存（账号层），立即生效。');
-    expect((state.document.rss as any).overrides).toEqual({ endpoints: { 'qq/bot-1': { enabled: false } } });
-    expect(patches).toHaveLength(1);
+    expect(conversations.get('rss', 'qq/bot-1')).toMatchObject({ level: 'endpoint', enabled: false, patch: {}, updatedBy: 'chat:qq:boss' });
+    expect(state.document.rss).toBeUndefined();
+    expect(patches).toEqual([]);
     expect(await run(owner, '关闭 rss 适配器')).toBe(DENIED);
     expect(await run(actor({ user: 'boss', key: 'qq/bot-2/group:1' }), '关闭 rss')).toBe(DENIED);
     expect(await run(owner, '开启 rss')).toBe('rss 已在账号层停用，下级不能开启或修改开关。');
@@ -209,11 +212,13 @@ describe('in-chat feature self-service (ADR 0055 §7, roles per ADR 0056)', () =
     const alice = actor({ user: 'alice' });
     expect(await run(alice, '关闭 rss')).toBe('已保存（会话层），立即生效。');
     expect(await run(alice, '设置 repeater threshold 4 账号')).toBe('已保存（账号层），立即生效。');
-    expect((state.document.repeater as any).overrides.endpoints['qq/bot-1']).toEqual({ threshold: 4 });
+    expect(conversations.get('repeater', 'qq/bot-1')?.patch).toEqual({ threshold: 4 });
+    expect(state.document.repeater).toEqual({ threshold: 3 });
     expect(await run(alice, '关闭 rss 适配器')).toBe('已保存（适配器层），立即生效。');
+    expect(conversations.get('rss', 'qq')).toMatchObject({ level: 'adapter', enabled: false });
     expect(await run(alice, '关闭 rss 全局')).toBe(DENIED);
     expect(await run(actor({ user: 'alice', key: 'tg/news/group:1' }), '关闭 rss')).toBe(DENIED);
-    expect(conversations.list()).toHaveLength(1);
+    expect(conversations.list('conversation')).toHaveLength(1);
   });
 
   it('lets the same person hold different roles in different scopes', async () => {

@@ -407,7 +407,8 @@ export async function planRuntimeInputs(
   const updates = await preparePureConfigViews(ctx.snapshot, ctx.model, inspected, inputPlan.roots, signal);
   const pluginPaths = isDeepStrictEqual(ctx.configDocument, document) ? []
     : changedConfigurationPaths(ctx.configDocument, document).filter(path => !HOST_RESOURCE_CONFIG_KEYS.includes(path[0]!));
-  // ADR 0050: override-only edits reach dispatch through the next primary config; no owner reloads.
+  // Edits of only the legacy `overrides` blocks (ADR 0050; since ADR 0057 §2 only their one-time
+  // removal after the import into the database) apply in place: no owner reloads.
   const overridesOnly = pluginPaths.length > 0 && pluginPaths.every(path => isFeatureOverridePath(document, path));
   return Object.freeze({
     document, configSnapshot, environmentLayers, inputSources, roots: updates.roots, inspected,
@@ -421,7 +422,7 @@ export async function planRuntimeInputs(
   });
 }
 
-/** `<alias>[/<child>...]/overrides/...` of a declared Plugin instance block. */
+/** `<alias>[/<child>...]/overrides/...` of a declared Plugin instance block (the legacy block, ADR 0057 §2). */
 export function isFeatureOverridePath(document: RuntimeConfigDocument, path: readonly string[]): boolean {
   const declared = document.plugins && typeof document.plugins === 'object' ? document.plugins : {};
   const index = path.indexOf(FEATURE_OVERRIDES_KEY);

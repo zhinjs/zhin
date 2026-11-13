@@ -1,6 +1,7 @@
 import { resolveHostCredentialSource } from '@zhin.js/plugin-runtime';
 import { createConfigurationChatAuthorizer, createSenderEnricher } from '@zhin.js/core/runtime';
 import { chatRoleMigrationAdapterKinds, prepareChatRoleMigration } from './chat-role-migration.js';
+import { prepareFeatureOverrideMigration } from './feature-override-migration.js';
 import { migrateConversationColumns, migrateInboxColumns } from '@zhin.js/core/runtime';
 import type { StructuredDatabase } from '@zhin.js/database';
 import { assertNoPendingInstanceMigration } from '@zhin.js/gateway/project';
@@ -202,6 +203,12 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     projectRoot: options.root, config, logger: getLogger('chat-roles'),
     expand: document => hostEnvironment.expandMissingAsEmpty(document) as Readonly<Record<string, unknown>>,
   });
+  // ADR 0057 §2: per adapter / account feature overrides move out of the configuration file into
+  // feature_overrides (imported once the database is loaded, removed from the file after start),
+  // or stop startup once that migration is done.
+  const featureOverrideMigration = await prepareFeatureOverrideMigration({
+    projectRoot: options.root, config, configFile, logger: getLogger('feature'),
+  });
   const rawConfigDocument = (await config.read()).document;
   warnUnsetConfigEnvPlaceholders(rawConfigDocument, name => hostEnvironment.get(name), configFile);
   const hostConfig = hostEnvironment.expandMissingAsEmpty(rawConfigDocument);
@@ -242,10 +249,13 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   // ADR 0055 / 0056: conversation-level feature overrides and chat roles (tables defined before start).
   const featureHost = createFeatureHost({
     database: databaseHost, hostConfig, snapshots: () => host.runtime.snapshots,
-    afterLoad: (roles, candidate) => chatRoleMigration.complete(roles, {
-      persistent: ['sqlite', 'mysql', 'pg'].includes(databaseHost.dialect),
-      adapterKind: chatRoleMigrationAdapterKinds(candidate),
-    }),
+    afterLoad: async (roles, candidate, overrides) => {
+      await chatRoleMigration.complete(roles, {
+        persistent: ['sqlite', 'mysql', 'pg'].includes(databaseHost.dialect),
+        adapterKind: chatRoleMigrationAdapterKinds(candidate),
+      });
+      await featureOverrideMigration.complete(overrides);
+    },
   });
   const senderEnricher = createSenderEnricher({ roles: () => featureHost.roles });
   const im = new ImRuntime({ enrichSender: senderEnricher });
@@ -345,6 +355,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     environment: runtimeEnvironment,
     environmentVariables,
     environmentSource,
+    configUpdates: [featureOverrideMigration.configUpdate],
     disabledPluginInstanceKeys: [],
     installResources: async (context) => {
       await options.installTrustedResources?.(context);
@@ -618,6 +629,8 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
       }
     }
     snapshot = await host.start();
+    // ADR 0057 §2: the overrides are in the database now; back up and remove the file's blocks.
+    await featureOverrideMigration.finish();
     // ADR 0057 §4: one warning for literal secrets (paths only), using the committed Plugin schemas.
     warnLiteralConfigSecrets(rawConfigDocument, host.runtime.snapshot, configFile);
     // The constructor-time prune ran before the database host started and was skipped;

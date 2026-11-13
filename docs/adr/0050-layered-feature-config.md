@@ -4,7 +4,7 @@ sidebar: false
 
 # ADR 0050：功能配置三级覆盖——全局 < 适配器 < 账号
 
-状态：Accepted（2026-11-11）
+状态：Accepted（2026-11-11）；§3 存储 2026-11-13 由 [ADR 0057](./0057-config-storage.md) §2 修订：适配器 / 账号级覆盖改存项目数据库表 `feature_overrides`，配置文件不再接受 `overrides`。
 
 ## 背景
 
@@ -36,6 +36,8 @@ sidebar: false
 - 有配置 Schema 但省略 `levels` 的插件只有全局层：Console 的适配器 / 账号（及会话）页面不列出它（2026-11-12 修订，见「后果」）。
 
 ### 3. 存储
+
+> 2026-11-13 修订（[ADR 0057](./0057-config-storage.md) §2，已实现）：适配器 / 账号级覆盖与会话级一样存在项目数据库表 `feature_overrides`（`level` 列为 `adapter` / `endpoint` / `conversation`），由 Console 与聊天命令写入、即时生效；配置文件里的插件块仍是全局默认值，`disable_plugins` 仍是全局开关。原来写在配置文件里的 `overrides` 块在首次启动时导入数据库并从文件删除，之后再出现会在启动时被拒绝。下文描述的是原设计；解析顺序、锁定规则与字段白名单不变，只是读取来源换成了数据库。
 
 覆盖写在插件自己的配置块里，保留键 `overrides`（与 `commandNamespace`、`disabledCommands` 一样由 composer 注入 Schema、在 `pickOwnFields` 之前剥离）：
 
@@ -113,7 +115,7 @@ effective = deepMerge(global, overrides.adapters[alias], overrides.endpoints[ali
 | `feature.remove-override` | `feature.configure` | `{ plugin, level, key, paths? }`：删除整层或指定字段，回到继承 |
 | `feature.set-enabled` | `feature.toggle`；`global` 层 `plugin.manage` | `{ plugin, level, key?, enabled }`：`global` 层写 `disable_plugins`，由网关拦截并作为启停事务执行（ADR 0054 §4，实例拒绝该层，409 `gateway-required`）；其余层写 `overrides.*.enabled`（`true` 时删除该键，而不是写 `true`） |
 
-所有写入走 `ConsoleConfigurationStore` 现有的修订号与原子写入路径。RBAC 作用域（ADR 0049）按 `level` + `key` 检查。
+所有写入走 `ConsoleConfigurationStore` 现有的修订号与原子写入路径。RBAC 作用域（ADR 0049）按 `level` + `key` 检查。（2026-11-13 修订，ADR 0057 §2：适配器 / 账号层改写数据库 `feature_overrides`，修订号是该行的修订号；请求与响应形状不变。）
 
 ## 落盘位置
 
@@ -128,4 +130,4 @@ effective = deepMerge(global, overrides.adapters[alias], overrides.endpoints[ali
 
 - 没有配置 Schema 的插件零改动即可获得各层启停开关；有配置 Schema 的插件要用 `x-zhin-config.levels`（`Schema.object({...}).featureLevels(levels, …)`）声明支持的层级后，才会出现在下级层并获得开关，再按字段用 `levels` / `.fieldLevels()` 决定哪些字段可覆盖。官方插件（适配器除外）已全部声明全部四级，由 `tests/contracts/plugin-feature-levels.test.ts` 保证。（2026-11-12 修订：原表述「插件作者零改动即可获得三级启停」与 Console 只列出声明了该层级或无 Schema 的插件的行为矛盾。）
 - 启停语义统一为「上级禁用，下级不能开」。
-- 配置文件里的 `overrides` 是普通 YAML，手改与 Console 改等价。
+- 配置文件里的 `overrides` 是普通 YAML，手改与 Console 改等价。（2026-11-13 起不再成立：覆盖存在数据库里，只能经 Console 或聊天命令修改，见 ADR 0057 §2。）

@@ -1,9 +1,14 @@
 /**
- * ADR 0050 §8 / ADR 0055 §6: `feature.*` Console RPC over the layered feature configuration.
+ * ADR 0050 §8 / ADR 0055 §6 / ADR 0057 §2: `feature.*` Console RPC over the layered feature
+ * configuration.
  *
- * File levels write through ConsoleConfigurationStore.patch (revision CAS, atomic write,
- * whole-document validation, configuration application), so override-only edits apply in
- * place. The conversation level writes the instance's database store (in place as well).
+ * The global level is the Plugin's config block in the configuration file (edited through the
+ * Console configuration form). The adapter, endpoint and conversation levels write the instance's
+ * database store (`feature_overrides`): revision compare-and-swap per row, effective at once (no
+ * reload, no restart). `revision` / `expectedRevision` of those levels is the stored row's
+ * revision (`'0'` when none exists); for adapter / endpoint writes the configuration revision
+ * returned by `feature.list` / `feature.matrix` is still accepted (no row check) so Console
+ * builds that predate the store keep working.
  *
  * The global switch (`disable_plugins`) is plugin lifecycle: on the Console it is a management
  * gateway transaction (`plugin.manage`, stop → write → start with rollback, ADR 0054 §4) that the
@@ -15,7 +20,6 @@
  * enabled; below a disabled level every switch is locked (409 `locked`). "Enabled" is never
  * stored below global: enabling removes the level's switch.
  */
-import { isDeepStrictEqual } from 'node:util';
 import {
   FEATURE_RPC_PERMISSIONS,
   type ConsoleConfigPatchRequest, type ConsoleConfigPatchResult, type ConsoleFeatureConversationSummary,
@@ -25,25 +29,25 @@ import {
   type ConsoleFeatureWriteResult,
 } from '@zhin.js/console-protocol';
 import {
-  FEATURE_ENABLED_KEY, FEATURE_OVERRIDES_KEY, featureConversationEntry, parseFeatureConversationKey, readFeatureOverrides,
-  resolveFeatureEnabled, resolveLayeredConfig,
-  type FeatureConfigLevel, type PluginId, type RuntimeConfigDocument, type RuntimeSnapshot, type SnapshotReader,
+  FEATURE_ENABLED_KEY, FEATURE_OVERRIDES_KEY, featureConversationEntry, parseFeatureConversationKey,
+  readStoredFeatureOverrides, resolveFeatureEnabled, resolveLayeredConfig,
+  type FeatureConfigLevel, type FeatureOverrideEntry, type PluginId, type RuntimeConfigDocument, type RuntimeSnapshot, type SnapshotReader,
 } from '@zhin.js/plugin-runtime';
 import {
-  collectFeatureOverrideWarnings, overridableFields, readFeatureConversationDeclaration, readFeatureLevels, validateConversationOverride,
-  validateFeatureOverrides, type JsonSchema,
+  collectFeatureOverrideWarnings, overridableFields, readFeatureConversationDeclaration, readFeatureLevels, validateStoredFeatureOverride,
+  type JsonSchema,
 } from '@zhin.js/runtime';
 import { maskConfigValue } from '@zhin.js/gateway/config';
 import { PLUGIN_SWITCH_REQUIRES_GATEWAY } from '@zhin.js/host-http';
 import type { ConsoleRpcComposition } from './rpc-composition.js';
-import type { FeatureConversationOverrideStore } from './feature-conversation-store.js';
-import { FeatureConversationConflictError } from './feature-conversation-store.js';
+import type { FeatureOverrideStore } from './feature-override-store.js';
+import { FeatureOverrideConflictError, FeatureOverrideStorageUnavailableError } from './feature-override-store.js';
 
 const FEATURE_RPC_TYPES: Readonly<Record<ConsoleFeatureRpcType, ConsoleFeaturePermission>> = FEATURE_RPC_PERMISSIONS;
 
-/** Process-owned stores behind the conversation level (ADR 0055); chat roles are ADR 0056's. */
+/** Process-owned stores behind the adapter / endpoint / conversation levels (ADR 0057 §2); chat roles are ADR 0056's. */
 export interface FeatureStores {
-  readonly conversations: FeatureConversationOverrideStore;
+  readonly overrides: FeatureOverrideStore;
   /** Chat roles (ADR 0056), served by `chat-roles.*`. */
   readonly roles?: import('../chat-roles.js').InstanceChatRoleService;
   /** Known recent conversations (keys), newest first; best effort. */
@@ -94,7 +98,7 @@ export interface FeatureRpcContext {
   readonly requestRestart?: () => void;
   readonly publishEvent?: (type: string, data: unknown) => void;
   readonly authorize?: FeatureRpcAuthorizer;
-  /** Conversation level and admins; without them those calls answer 503. */
+  /** Adapter / endpoint / conversation levels; without them those calls answer 503. */
   readonly stores?: FeatureStores;
   /** Recorded as `updated_by` (e.g. `user:<id>` or `chat:<alias>:<userId>`). */
   readonly actor?: string;
@@ -105,8 +109,8 @@ export interface FeatureRpcContext {
   readonly allowedFields?: (schema: JsonSchema | undefined, level: ConsoleFeatureLevel) => readonly string[] | undefined;
   /**
    * Whether this caller may write values containing environment references (`${…}` /
-   * `env://…`). File overrides are environment-expanded at run time, so such a value would let
-   * `feature.configure` read secrets back through `feature.get` / runtime echoes. Absent: never
+   * `env://…`). Stored overrides are never environment-expanded (the value is kept literally),
+   * but a reference is still refused unless the caller may edit `.env` itself. Absent: never
    * (chat self-service); the Console grants it to principals that may edit `.env` themselves.
    */
   readonly mayReferenceEnvironment?: () => boolean;
@@ -191,11 +195,14 @@ export async function dispatchFeatureConsoleRpc(message: Record_, context: Featu
     const data = await handle(rpc, input, context);
     return { status: 200, body: { success: true, data, type: rpc, requestId } };
   } catch (error) {
-    const status = error instanceof FeatureRpcError ? error.status : error instanceof FeatureConversationConflictError ? 409 : 500;
+    const status = error instanceof FeatureRpcError ? error.status : error instanceof FeatureOverrideConflictError ? 409
+      : error instanceof FeatureOverrideStorageUnavailableError ? 503 : 500;
     const text = error instanceof FeatureRpcError ? error.message
-      : error instanceof FeatureConversationConflictError ? '会话覆盖已被其他地方修改，请刷新后重试' : '功能配置操作失败';
+      : error instanceof FeatureOverrideConflictError ? '覆盖已被其他地方修改，请刷新后重试'
+        : error instanceof FeatureOverrideStorageUnavailableError ? error.message : '功能配置操作失败';
     const extra = error instanceof FeatureRpcError ? error.extra
-      : error instanceof FeatureConversationConflictError ? { code: 'conflict' } : {};
+      : error instanceof FeatureOverrideConflictError ? { code: 'conflict' }
+        : error instanceof FeatureOverrideStorageUnavailableError ? { code: error.code } : {};
     return { status, body: { success: false, ...extra, error: text, type: rpc, requestId } };
   }
 }
@@ -335,22 +342,37 @@ function listFeatures(state: State): ConsoleFeatureListResult {
   return Object.freeze({ revision: state.revision, features: Object.freeze(features) });
 }
 
-function endpointColumns(state: State, alias: string): readonly string[] {
+function endpointColumns(state: State, context: FeatureRpcContext, alias: string): readonly string[] {
   const ids = new Set<string>();
   const endpoints = blockOf(state.document, alias)?.endpoints;
   if (Array.isArray(endpoints)) for (const item of endpoints) if (record(item) && typeof item.id === 'string') ids.add(item.id);
-  for (const plugin of declaredInstances(state.document)) {
-    for (const key of Object.keys(readFeatureOverrides(blockOf(state.document, plugin)?.[FEATURE_OVERRIDES_KEY]).endpoints ?? {})) {
-      if (key.startsWith(`${alias}/`)) ids.add(key.slice(alias.length + 1));
-    }
+  const declared = new Set(declaredInstances(state.document));
+  for (const row of context.stores?.overrides.list('endpoint') ?? []) {
+    if (declared.has(row.plugin.split('/')[0]!) && row.key.startsWith(`${alias}/`)) ids.add(row.key.slice(alias.length + 1));
   }
   return [...ids].sort();
+}
+
+/** Stored adapter / endpoint entries above (and at) `key` for `plugin`. */
+function storedOverrides(context: FeatureRpcContext, plugin: string, key: string | undefined) {
+  return readStoredFeatureOverrides(context.stores?.overrides.reader, plugin, key ?? '');
+}
+
+/** Every stored adapter / endpoint entry of `plugin`, shaped like the legacy `overrides` block (warnings only). */
+function allStoredOverrides(context: FeatureRpcContext, plugin: string): Record_ {
+  const adapters: Record<string, FeatureOverrideEntry> = {};
+  const endpoints: Record<string, FeatureOverrideEntry> = {};
+  for (const row of context.stores?.overrides.list() ?? []) {
+    if (row.plugin !== plugin || row.level === 'conversation') continue;
+    (row.level === 'adapter' ? adapters : endpoints)[row.key] = featureConversationEntry(row)!;
+  }
+  return { ...(Object.keys(adapters).length ? { adapters } : {}), ...(Object.keys(endpoints).length ? { endpoints } : {}) };
 }
 
 function matrix(state: State, context: FeatureRpcContext): ConsoleFeatureMatrixResult {
   const perPlugin = new Map<string, Record<string, Record<string, number>>>();
   const conversations = new Map<string, Set<string>>();
-  for (const row of context.stores?.conversations.list() ?? []) {
+  for (const row of context.stores?.overrides.list('conversation') ?? []) {
     const ref = parseFeatureConversationKey(row.key);
     if (!ref) continue;
     const counts = perPlugin.get(row.plugin) ?? {};
@@ -369,13 +391,12 @@ function matrix(state: State, context: FeatureRpcContext): ConsoleFeatureMatrixR
   }
   const aliases = adapterAliases(state.snapshot);
   const rows: ConsoleFeatureMatrixRow[] = listFeatures(state).features.map(feature => {
-    const overrides = readFeatureOverrides(blockOf(state.document, feature.plugin)?.[FEATURE_OVERRIDES_KEY]);
     const adapters: Record<string, ConsoleFeatureMatrixCell> = {};
     for (const alias of aliases) {
       const resolved = enabledAt(state, context, feature.plugin, 'adapter', alias);
-      const entry = overrides.adapters?.[alias];
+      const entry = context.stores?.overrides.get(feature.plugin, alias);
       adapters[alias] = Object.freeze({ enabled: resolved.enabled, ...(resolved.lockedBy ? { lockedBy: resolved.lockedBy } : {}),
-        overridden: !!entry && Object.keys(entry).length > 0 });
+        overridden: !!entry });
     }
     const counts = perPlugin.get(feature.plugin);
     return Object.freeze({ plugin: feature.plugin, displayName: feature.displayName, ...(counts ? { conversationOverrides: counts } : {}),
@@ -384,7 +405,7 @@ function matrix(state: State, context: FeatureRpcContext): ConsoleFeatureMatrixR
   return Object.freeze({
     revision: state.revision,
     adapters: Object.freeze([...aliases]),
-    endpoints: Object.freeze(Object.fromEntries(aliases.map(alias => [alias, endpointColumns(state, alias)]))),
+    endpoints: Object.freeze(Object.fromEntries(aliases.map(alias => [alias, endpointColumns(state, context, alias)]))),
     rows: Object.freeze(rows),
     ...(context.stores ? { conversationOverrides: totals } : {}),
   });
@@ -415,17 +436,17 @@ function mask(schema: JsonSchema | undefined, plugin: string, value: Record_): R
 }
 
 function stores(context: FeatureRpcContext): FeatureStores {
-  if (!context.stores) throw new FeatureRpcError(503, '会话级功能配置不可用');
+  if (!context.stores) throw new FeatureRpcError(503, '适配器 / 账号 / 会话级功能配置不可用');
   return context.stores;
 }
 
 function conversationOverride(context: FeatureRpcContext, plugin: string, key: string | undefined) {
-  return key !== undefined && context.stores ? context.stores.conversations.get(plugin, key) : undefined;
+  return key !== undefined && context.stores ? context.stores.overrides.get(plugin, key) : undefined;
 }
 
-/** Enabled state of `plugin` alone at `level`/`key`, including the stored conversation switch. */
+/** Enabled state of `plugin` alone at `level`/`key`, including the stored switches. */
 function ownEnabledAt(state: State, context: FeatureRpcContext, plugin: string, level: ConsoleFeatureLevel, key: string | undefined) {
-  const overrides = readFeatureOverrides(blockOf(state.document, plugin)?.[FEATURE_OVERRIDES_KEY]);
+  const overrides = storedOverrides(context, plugin, key);
   const conversation = level === 'conversation' ? featureConversationEntry(conversationOverride(context, plugin, key)) : undefined;
   return resolveFeatureEnabled({ overrides, globalEnabled: globallyEnabled(state.document, plugin), key: key ?? '', level,
     ...(conversation ? { conversation } : {}) });
@@ -459,16 +480,13 @@ function getFeature(state: State, input: Record_, context: FeatureRpcContext): C
   requireDeclared(state.document, plugin);
   const schema = ownSchema(state.snapshot, plugin);
   const block = blockOf(state.document, plugin) ?? {};
-  const overrides = readFeatureOverrides(block[FEATURE_OVERRIDES_KEY]);
+  const overrides = storedOverrides(context, plugin, key);
   const global = Object.fromEntries(Object.entries(block).filter(([field]) => !RESERVED_FIELDS.has(field)));
-  const row = level === 'conversation' ? stores(context).conversations.get(plugin, key!) : undefined;
-  const stored = level === 'global' ? global
-    : level === 'conversation' ? row?.patch ?? {}
-      : (level === 'adapter' ? overrides.adapters?.[key!] : overrides.endpoints?.[key!]) ?? {};
-  // The reserved switch is reported as `enabled`; a Plugin's own `enabled` field stays a global value.
-  const values = level === 'global' ? stored
-    : Object.fromEntries(Object.entries(stored).filter(([field]) => field !== FEATURE_ENABLED_KEY));
-  const conversation = featureConversationEntry(row);
+  const row = level === 'global' ? undefined : stores(context).overrides.get(plugin, key!);
+  // The reserved switch is reported as `enabled` (stored apart from the patch); a Plugin's own
+  // `enabled` field stays a global value.
+  const values = level === 'global' ? global : row?.patch ?? {};
+  const conversation = level === 'conversation' ? featureConversationEntry(row) : undefined;
   const resolved = resolveLayeredConfig({ global, overrides, globalEnabled: globallyEnabled(state.document, plugin), key: key ?? '',
     ...(conversation ? { conversation } : {}) });
   let levels: readonly ConsoleFeatureLevel[];
@@ -477,7 +495,7 @@ function getFeature(state: State, input: Record_, context: FeatureRpcContext): C
   const chain = enabledAt(state, context, plugin, level, key);
   const lockedBy = resolved.lockedBy ?? chain.lockedBy;
   return Object.freeze({
-    revision: level === 'conversation' ? String(stores(context).conversations.revisionOf(plugin, key!)) : state.revision,
+    revision: level === 'global' ? state.revision : String(stores(context).overrides.revisionOf(plugin, key!)),
     plugin, level, ...(key ? { key } : {}), levels,
     ...conversationDeclaration(schema),
     schema: levelSchema(schema, level),
@@ -488,71 +506,15 @@ function getFeature(state: State, input: Record_, context: FeatureRpcContext): C
     ...(lockedBy ? { lockedBy } : {}),
     ...(ref ? { conversation: Object.freeze({ adapter: ref.adapter, endpointId: ref.endpointId, kind: ref.conversation.kind, id: ref.conversation.id }) } : {}),
     ...(row ? { updatedAt: row.updatedAt, ...(row.updatedBy ? { updatedBy: row.updatedBy } : {}) } : {}),
-    ...(context.stores ? { persistent: context.stores.conversations.persistent } : {}),
+    ...(context.stores ? { persistent: context.stores.overrides.persistent } : {}),
   });
 }
 
-function nextOverrides(
-  current: unknown,
-  level: 'adapter' | 'endpoint',
-  key: string,
-  edit: (entry: Record_) => Record_,
-): Record_ | undefined {
-  const overrides = record(current) ? structuredClone(current) : {};
-  const group = `${level}s`;
-  const entries = record(overrides[group]) ? overrides[group] as Record_ : {};
-  const entry = edit(record(entries[key]) ? structuredClone(entries[key] as Record_) : {});
-  if (Object.keys(entry).length) entries[key] = entry; else delete entries[key];
-  if (Object.keys(entries).length) overrides[group] = entries; else delete overrides[group];
-  return Object.keys(overrides).length ? overrides : undefined;
-}
-
+/** Warnings for the stored adapter / endpoint entries of `plugin` (unknown adapter / account keys). */
 function warningsFor(document: RuntimeConfigDocument, plugin: string, overrides: unknown): readonly ConsoleFeatureWarning[] {
   if (overrides === undefined) return Object.freeze([]);
   return Object.freeze(collectFeatureOverrideWarnings(document, plugin, overrides, globallyEnabled(document, plugin))
     .map(({ code, path, message }) => Object.freeze({ code, path, message })));
-}
-
-async function writeOverrides(
-  context: FeatureRpcContext,
-  state: State,
-  input: Record_,
-  plugin: string,
-  overrides: Record_ | undefined,
-): Promise<ConsoleFeatureWriteResult> {
-  const expectedRevision = input.expectedRevision === undefined ? state.revision : input.expectedRevision;
-  if (typeof expectedRevision !== 'string') invalid('expectedRevision 必须是字符串');
-  const block = blockOf(state.document, plugin) ?? {};
-  const before = block[FEATURE_OVERRIDES_KEY];
-  const warnings = warningsFor(state.document, plugin, overrides);
-  if (isDeepStrictEqual(before, overrides)) {
-    return Object.freeze({ status: 'unchanged', revision: state.revision, warnings });
-  }
-  if (expectedRevision !== state.revision) {
-    return Object.freeze({ status: 'conflict', revision: state.revision, message: '配置已被其他地方修改，未保存。请刷新后重试。' });
-  }
-  const schema = ownSchema(state.snapshot, plugin);
-  if (schema && overrides !== undefined) {
-    const issues = validateFeatureOverrides(schema, { ...block, [FEATURE_OVERRIDES_KEY]: overrides });
-    if (issues.length) {
-      return Object.freeze({ status: 'invalid', revision: state.revision, message: '覆盖配置校验失败，未保存',
-        errors: Object.freeze(issues.map(issue => Object.freeze({ path: issue.path, message: issue.message }))) });
-    }
-  }
-  const segments = plugin.split('/');
-  const path = [...segments, FEATURE_OVERRIDES_KEY];
-  const result = await context.configuration.patch({
-    instanceKey: segments[0]!,
-    expectedRevision,
-    patches: [overrides === undefined ? { op: 'remove', path } : { op: 'set', path, value: overrides }],
-  });
-  if (result.status === 'conflict') return Object.freeze({ status: 'conflict', revision: result.revision, message: result.message });
-  if (result.status === 'invalid') {
-    return Object.freeze({ status: 'invalid', revision: result.revision, message: result.message,
-      errors: Object.freeze(result.errors.map(error => Object.freeze({ path: error.path, message: error.message }))) });
-  }
-  context.publishEvent?.('feature:updated', { plugin });
-  return Object.freeze({ status: 'saved', revision: result.revision, restartRequired: result.restartRequired, warnings, message: result.message });
 }
 
 function readPatch(input: Record_): Record_ {
@@ -598,58 +560,81 @@ function assertAllowedFields(context: FeatureRpcContext, schema: JsonSchema | un
   for (const field of fields) if (!allowed.includes(field)) throw new FeatureRpcError(403, `字段 ${field} 不允许在此修改`, { code: 'field-not-allowed', field });
 }
 
-function conversationExpectedRevision(input: Record_): number | undefined {
+/**
+ * Stored-row revision the caller read. For adapter / endpoint levels a non-numeric value equal to
+ * the current configuration revision (what Console builds before ADR 0057 sent) is accepted
+ * without a row check; any other non-numeric value is a conflict.
+ */
+function storedExpectedRevision(input: Record_, level: ConsoleFeatureLevel, state: State): number | undefined | 'stale' {
   if (input.expectedRevision === undefined) return undefined;
-  const value = typeof input.expectedRevision === 'string' && /^\d{1,15}$/u.test(input.expectedRevision) ? Number(input.expectedRevision) : NaN;
-  if (!Number.isSafeInteger(value)) invalid('expectedRevision 必须是会话覆盖的修订号');
-  return value;
+  if (typeof input.expectedRevision === 'string' && /^\d{1,15}$/u.test(input.expectedRevision)) {
+    const value = Number(input.expectedRevision);
+    if (Number.isSafeInteger(value)) return value;
+  }
+  if (level !== 'conversation' && typeof input.expectedRevision === 'string') {
+    return input.expectedRevision === state.revision ? undefined : 'stale';
+  }
+  return invalid(level === 'conversation' ? 'expectedRevision 必须是会话覆盖的修订号' : 'expectedRevision 必须是覆盖的修订号');
 }
 
-/** Writes one conversation override; `edit` receives a copy of the stored entry `{ enabled?, ...patch }`. */
-async function writeConversation(
+const LEVEL_LABEL: Readonly<Record<Exclude<ConsoleFeatureLevel, 'global'>, string>> = { adapter: '适配器', endpoint: '账号', conversation: '会话' };
+
+/**
+ * Writes one stored override (adapter / endpoint / conversation, ADR 0057 §2); `edit` receives a
+ * copy of the stored entry `{ enabled?, ...patch }`. Effective at once, no restart.
+ */
+async function writeStored(
   context: FeatureRpcContext,
   state: State,
   input: Record_,
   plugin: string,
+  level: Exclude<ConsoleFeatureLevel, 'global'>,
   key: string,
   edit: (entry: Record_) => Record_,
 ): Promise<ConsoleFeatureWriteResult> {
-  const store = stores(context).conversations;
-  const expectedRevision = conversationExpectedRevision(input);
+  const store = stores(context).overrides;
+  const expectedRevision = storedExpectedRevision(input, level, state);
+  const label = LEVEL_LABEL[level];
+  if (expectedRevision === 'stale') {
+    return Object.freeze({ status: 'conflict', revision: String(store.revisionOf(plugin, key)), message: `${label}覆盖已被其他地方修改，未保存。请刷新后重试。` });
+  }
   const schema = ownSchema(state.snapshot, plugin);
   const block = blockOf(state.document, plugin) ?? {};
   let issues: readonly { path: string; message: string }[] = [];
+  let written: FeatureOverrideEntry | undefined;
   const result = await store.write({
     plugin, key, ...(expectedRevision !== undefined ? { expectedRevision } : {}), ...(context.actor ? { updatedBy: context.actor } : {}),
     next: current => {
       const entry = edit(structuredClone(featureConversationEntry(current) ?? {}) as Record_);
       const { [FEATURE_ENABLED_KEY]: enabled, ...patch } = entry;
       if (Object.keys(patch).length) {
-        issues = schema ? validateConversationOverride(schema, block, key, entry)
-          : [{ path: '', message: '没有配置 Schema 的插件在会话层只能开关' }];
+        issues = schema ? validateStoredFeatureOverride(schema, { block, level, key, entry, overrides: storedOverrides(context, plugin, key) })
+          : [{ path: '', message: `没有配置 Schema 的插件在${label}层只能开关` }];
         if (issues.length) return current ? { ...(current.enabled === false ? { enabled: false } : {}), patch: current.patch } : null;
       }
-      return enabled === false || Object.keys(patch).length ? { ...(enabled === false ? { enabled: false as const } : {}), patch } : null;
+      const next = enabled === false || Object.keys(patch).length ? { ...(enabled === false ? { enabled: false as const } : {}), patch } : null;
+      written = next ? { ...patch, ...(enabled === false ? { [FEATURE_ENABLED_KEY]: false } : {}) } : undefined;
+      return next;
     },
   });
   if (issues.length) {
     return Object.freeze({ status: 'invalid', revision: String(result.revision), message: '覆盖配置校验失败，未保存',
       errors: Object.freeze(issues.map(issue => Object.freeze({ path: issue.path, message: issue.message }))) });
   }
-  if (result.status === 'conflict') return Object.freeze({ status: 'conflict', revision: String(result.revision), message: '会话覆盖已被其他地方修改，未保存。请刷新后重试。' });
-  if (result.status === 'unchanged') return Object.freeze({ status: 'unchanged', revision: String(result.revision), warnings: Object.freeze([]) });
-  context.publishEvent?.('feature:updated', { plugin, level: 'conversation', key });
-  const persistent = store.persistent;
-  return Object.freeze({ status: 'saved', revision: String(result.revision), restartRequired: false, warnings: Object.freeze([]), persistent,
-    message: persistent ? '会话覆盖已保存，立即生效' : `会话覆盖已保存，立即生效；${NOT_PERSISTENT}` });
+  if (result.status === 'conflict') return Object.freeze({ status: 'conflict', revision: String(result.revision), message: `${label}覆盖已被其他地方修改，未保存。请刷新后重试。` });
+  // Unknown adapter alias / account id: kept (the account may be added later), reported.
+  const warnings = level === 'conversation' || !written ? Object.freeze([])
+    : warningsFor(state.document, plugin, level === 'adapter' ? { adapters: { [key]: written } } : { endpoints: { [key]: written } });
+  if (result.status === 'unchanged') return Object.freeze({ status: 'unchanged', revision: String(result.revision), warnings });
+  context.publishEvent?.('feature:updated', { plugin, level, key });
+  return Object.freeze({ status: 'saved', revision: String(result.revision), restartRequired: false, warnings, persistent: store.persistent,
+    message: `${label}覆盖已保存，立即生效` });
 }
 
 const CURSOR = /^o:(\d{1,9})$/u;
-/** Shown wherever a conversation override is written to a store that cannot persist it. */
-export const NOT_PERSISTENT = '当前数据库不支持持久化，重启后丢失';
 
 async function listConversations(state: State, input: Record_, context: FeatureRpcContext): Promise<ConsoleFeatureConversationsResult> {
-  const { conversations, recentConversations } = stores(context);
+  const { overrides: conversations, recentConversations } = stores(context);
   const plugin = input.plugin === undefined ? undefined : requireString(input, 'plugin');
   if (plugin !== undefined && !INSTANCE_PATH.test(plugin)) invalid('plugin 必须是插件实例别名');
   const adapter = input.adapter === undefined ? undefined : requireString(input, 'adapter');
@@ -662,7 +647,7 @@ async function listConversations(state: State, input: Record_, context: FeatureR
   const cursor = input.cursor === undefined ? 0 : Number(CURSOR.exec(String(input.cursor))?.[1] ?? NaN);
   if (!Number.isSafeInteger(cursor)) invalid('cursor 无效');
   const byKey = new Map<string, { overrides: ConsoleFeatureConversationSummary['overrides'][number][]; name?: string; lastActiveAt?: number }>();
-  for (const row of conversations.list()) {
+  for (const row of conversations.list('conversation')) {
     if (plugin !== undefined && row.plugin !== plugin) continue;
     const item = byKey.get(row.key) ?? { overrides: [] };
     item.overrides.push(Object.freeze({ plugin: row.plugin, ...(row.enabled === false ? { enabled: false as const } : {}), fields: Object.freeze(Object.keys(row.patch).sort()),
@@ -710,12 +695,13 @@ async function handle(type: ConsoleFeatureRpcType, input: Record_, context: Feat
       return readState(context, state => listFeatures(state));
     case 'feature.matrix':
       await authorize(context, { type });
-      await context.stores?.conversations.refresh();
+      await context.stores?.overrides.refresh();
       return readState(context, state => matrix(state, context));
     case 'feature.get': {
       const target = readTarget(input, false);
       await authorize(context, { type, ...target });
-      if (target.level === 'conversation') await context.stores?.conversations.refresh();
+      // Other processes sharing the database: picked up at most every 5 s (ADR 0057 §2).
+      if (target.level !== 'global') await context.stores?.overrides.refresh();
       return readState(context, state => getFeature(state, input, context));
     }
     case 'feature.set-override': {
@@ -732,15 +718,7 @@ async function handle(type: ConsoleFeatureRpcType, input: Record_, context: Feat
           }
           return entry;
         };
-        if (target.level === 'conversation') return writeConversation(context, state, input, target.plugin, target.key!, apply);
-        const overrides = nextOverrides(blockOf(state.document, target.plugin)?.[FEATURE_OVERRIDES_KEY],
-          target.level as 'adapter' | 'endpoint', target.key!, entry => {
-            for (const [field, value] of Object.entries(patch)) {
-              if (value === undefined) delete entry[field]; else entry[field] = structuredClone(value);
-            }
-            return entry;
-          });
-        return writeOverrides(context, state, input, target.plugin, overrides);
+        return writeStored(context, state, input, target.plugin, target.level as Exclude<ConsoleFeatureLevel, 'global'>, target.key!, apply);
       });
     }
     case 'feature.remove-override': {
@@ -774,10 +752,7 @@ async function handle(type: ConsoleFeatureRpcType, input: Record_, context: Feat
           }
           return entry;
         };
-        if (target.level === 'conversation') return writeConversation(context, state, input, target.plugin, target.key!, remove);
-        const overrides = nextOverrides(blockOf(state.document, target.plugin)?.[FEATURE_OVERRIDES_KEY],
-          target.level as 'adapter' | 'endpoint', target.key!, remove);
-        return writeOverrides(context, state, input, target.plugin, overrides);
+        return writeStored(context, state, input, target.plugin, target.level as Exclude<ConsoleFeatureLevel, 'global'>, target.key!, remove);
       });
     }
     case 'feature.set-enabled': {
@@ -798,12 +773,11 @@ async function handle(type: ConsoleFeatureRpcType, input: Record_, context: Feat
           await setGlobalEnabled(target.plugin, enabled);
           context.publishEvent?.('plugin:lifecycle-updated', { instanceKey: target.plugin, enabled });
           if (context.requestRestart) setTimeout(() => { try { context.requestRestart?.(); } catch { /* restart is best effort */ } }, 500);
-          const block = blockOf(state.document, target.plugin);
           const after = { ...state.document, disable_plugins: enabled
             ? (Array.isArray(state.document.disable_plugins) ? state.document.disable_plugins : []).filter(alias => alias !== target.plugin)
             : [...(Array.isArray(state.document.disable_plugins) ? state.document.disable_plugins : []), target.plugin] } as RuntimeConfigDocument;
           return Object.freeze({ status: 'saved', revision: state.revision, restartRequired: true,
-            warnings: warningsFor(after, target.plugin, block?.[FEATURE_OVERRIDES_KEY]),
+            warnings: warningsFor(after, target.plugin, allStoredOverrides(context, target.plugin)),
             message: `${target.plugin} 已${enabled ? '启用' : '停用'}，Host 正在重启` });
         });
       }
@@ -816,15 +790,12 @@ async function handle(type: ConsoleFeatureRpcType, input: Record_, context: Feat
           if (enabled) delete entry[FEATURE_ENABLED_KEY]; else entry[FEATURE_ENABLED_KEY] = false;
           return entry;
         };
-        if (target.level === 'conversation') return writeConversation(context, state, input, target.plugin, target.key!, toggle);
-        const overrides = nextOverrides(blockOf(state.document, target.plugin)?.[FEATURE_OVERRIDES_KEY],
-          target.level as 'adapter' | 'endpoint', target.key!, toggle);
-        return writeOverrides(context, state, input, target.plugin, overrides);
+        return writeStored(context, state, input, target.plugin, target.level as Exclude<ConsoleFeatureLevel, 'global'>, target.key!, toggle);
       });
     }
     case 'feature.conversations':
       await authorize(context, { type });
-      await context.stores?.conversations.refresh();
+      await context.stores?.overrides.refresh();
       return readState(context, state => listConversations(state, input, context));
   }
 }

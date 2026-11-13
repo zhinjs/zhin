@@ -251,7 +251,11 @@ function disabledPlugins(document: Readonly<Record<string, unknown>> | undefined
   return Object.freeze(Array.isArray(list) ? list.filter((item): item is string => typeof item === 'string') : []);
 }
 
-/** The global plugin switch's warnings about the plugin's own overrides (as the instance computed them). */
+/**
+ * The global plugin switch's warnings about a legacy `overrides` block still in the file (as the
+ * instance computed them). Since ADR 0057 §2 adapter / account overrides live in the instance's
+ * database, which the gateway does not read, so this only reports a block waiting for its import.
+ */
 function overrideWarnings(document: Readonly<Record<string, unknown>>, plugin: string): readonly ConsoleFeatureWarning[] {
   const block = document[plugin];
   const overrides = block && typeof block === 'object' && !Array.isArray(block) ? (block as Record<string, unknown>)[FEATURE_OVERRIDES_KEY] : undefined;

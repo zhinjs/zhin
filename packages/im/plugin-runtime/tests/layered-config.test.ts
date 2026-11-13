@@ -4,7 +4,8 @@ import {
   parseFeatureResolutionKey, primaryConfigToken, readFeatureOverrides, resolveEndpointFeatureKey, resolveFeatureEnabled,
   resolveFeatureTargetKey, resolveLayeredConfig, rootPluginId,
   escapeFeatureConversationId, featureConversationEntry, featureConversationOverridesToken, featureEndpointKeyOf, featureInstancePath,
-  featureKeyLevel, formatFeatureConversationKey, parseFeatureConversationKey, readFeatureConversationOverrides, unescapeFeatureConversationId,
+  featureKeyLevel, formatFeatureConversationKey, parseFeatureConversationKey, readFeatureConversationOverrides, readStoredFeatureOverrides,
+  unescapeFeatureConversationId,
   type FeatureConversationOverride, type PluginId, type PrimaryConfig, type RuntimeSnapshot,
 } from '../src/index.js';
 
@@ -91,10 +92,13 @@ describe('dispatch gate helpers', () => {
   const owner = childPluginId(rootPluginId(), 'rss');
   const nested = childPluginId(owner, 'child');
   const adapterOwner = childPluginId(rootPluginId(), 'qq');
-  const snapshot = (document: Record<string, unknown>): RuntimeSnapshot => ({
+  const snapshot = (document: Record<string, unknown>, rows?: ReadonlyMap<string, FeatureConversationOverride>): RuntimeSnapshot => ({
     generation: 1, root: rootPluginId(), config: new Map(), capabilities: new Map(),
     tree: new Map([[adapterOwner, { id: adapterOwner, instanceKey: 'qq', packageName: '@x/qq', packageRoot: '/x', children: [] } as never]]),
-    resources: new Map([[rootPluginId(), new Map([[primaryConfigToken.id, { document, expanded: document, get: () => undefined } satisfies PrimaryConfig]])]]),
+    resources: new Map([[rootPluginId(), new Map<string, unknown>([
+      [primaryConfigToken.id, { document, expanded: document, get: () => undefined } satisfies PrimaryConfig],
+      ...(rows ? [[featureConversationOverridesToken.id, { version: 1, get: (plugin: string, key: string) => rows.get(`${plugin}|${key}`) }] as const] : []),
+    ])]]),
     projections: new Map([[featureId('zhin.adapter'), {
       owner: (id: string) => { if (!id.startsWith('ep:')) throw new Error('unknown'); return adapterOwner; },
       endpointEntry: (id: string) => id === 'ep:a' ? { desired: { endpointId: 'bot-a' } } : undefined,
@@ -126,9 +130,9 @@ describe('dispatch gate helpers', () => {
     expect(resolveFeatureTargetKey(undefined, { endpoint: { adapter: 'OneBot', endpointKey: '' } })).toBeUndefined();
   });
 
-  it('gates owners by override levels, nested Plugins by their ancestors', () => {
-    const value = snapshot({ configVersion: 2, plugins: { rss: '@x/rss' },
-      rss: { overrides: { endpoints: { 'qq/bot-a': { enabled: false } } }, child: {} } });
+  it('gates owners by the stored override levels, nested Plugins by their ancestors (ADR 0057 §2)', () => {
+    const value = snapshot({ configVersion: 2, plugins: { rss: '@x/rss' }, rss: { child: {} } },
+      new Map([['rss|qq/bot-a', { enabled: false, patch: {}, revision: 1, updatedAt: 1 }]]));
     expect(isFeatureOwnerEnabled(value, owner, 'qq/bot-a')).toBe(false);
     expect(isFeatureOwnerEnabled(value, owner, 'qq/bot-b')).toBe(true);
     expect(isFeatureOwnerEnabled(value, nested, 'qq/bot-a')).toBe(false);
@@ -136,6 +140,24 @@ describe('dispatch gate helpers', () => {
     expect(isFeatureOwnerEnabled(value, rootPluginId(), 'qq/bot-a')).toBe(true);
     expect([...disabledFeatureOwners(value, [owner, nested, adapterOwner] as PluginId[], 'qq/bot-a')]).toEqual([owner, nested]);
     expect(disabledFeatureOwners(value, [owner], undefined).size).toBe(0);
+  });
+
+  it('reads adapter and endpoint levels from the store and never from a legacy overrides block', () => {
+    const rows = new Map<string, FeatureConversationOverride>([
+      ['rss|tg', { enabled: false, patch: {}, revision: 1, updatedAt: 1 }],
+      ['rss|qq', { patch: { maxItems: 3 }, revision: 2, updatedAt: 1 }],
+      ['rss|qq/bot-a', { patch: { maxItems: 4 }, revision: 1, updatedAt: 1 }],
+    ]);
+    const reader = { get: (plugin: string, key: string) => rows.get(`${plugin}|${key}`) };
+    expect(readStoredFeatureOverrides(reader, 'rss', 'qq/bot-a/group:1')).toEqual({
+      adapters: { qq: { maxItems: 3 } }, endpoints: { 'qq/bot-a': { maxItems: 4 } } });
+    expect(readStoredFeatureOverrides(reader, 'rss', 'tg')).toEqual({ adapters: { tg: { enabled: false } } });
+    expect(readStoredFeatureOverrides(reader, 'rss', '')).toEqual({});
+    expect(readStoredFeatureOverrides(undefined, 'rss', 'qq')).toEqual({});
+    // A block left in the configuration file has no effect on dispatch: only the store counts.
+    const legacy = snapshot({ configVersion: 2, plugins: { rss: '@x/rss' }, rss: { overrides: { adapters: { qq: { enabled: false } } } } }, new Map());
+    expect(isFeatureOwnerEnabled(legacy, owner, 'qq/bot-a')).toBe(true);
+    expect(isFeatureOwnerEnabled(snapshot({ configVersion: 2, plugins: { rss: '@x/rss' }, rss: {} }, rows), owner, 'tg/x')).toBe(false);
   });
 });
 

@@ -1,5 +1,5 @@
 /**
- * ADR 0055 / 0056: conversation-level feature overrides and chat roles for the instance.
+ * ADR 0055 / 0056 / 0057: adapter / endpoint / conversation feature overrides and chat roles for the instance.
  * Defines the instance-owned tables, loads them once the DatabaseHost started, provides the
  * conversation read side to the Runtime (dispatch gates, `configFor` / `isEnabledFor`), the chat
  * role resolution behind `sender.chatRole`, and installs the in-chat `feature` / `role` commands
@@ -15,7 +15,7 @@ import {
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 import { ChatRoleStore, defineChatRoleTable, type InstanceChatRoleService } from './chat-roles.js';
 import {
-  defineFeatureConversationTable, FeatureConversationOverrideStore,
+  defineFeatureOverrideTable, FeatureOverrideStore,
   type FeatureRecentConversation, type FeatureRpcContext, type FeatureStores,
 } from './console/module.js';
 import { installFeatureSelfService, readFeatureSelfServiceConfig, type FeatureSelfServiceConfig } from './feature-self-service.js';
@@ -28,7 +28,7 @@ export interface FeatureHostOptions {
    * Runs once after the stores loaded (configuration migration, ADR 0056 §3); `candidate` is the
    * generation being activated (its adapter capability profiles classify the migration targets).
    */
-  readonly afterLoad?: (roles: InstanceChatRoleService, candidate: RuntimeSnapshot | undefined) => Promise<void>;
+  readonly afterLoad?: (roles: InstanceChatRoleService, candidate: RuntimeSnapshot | undefined, overrides: FeatureOverrideStore) => Promise<void>;
 }
 
 export interface FeatureHost {
@@ -49,10 +49,10 @@ export const RECENT_EVENT_WINDOW = 5_000;
 
 /** Must be created before the DatabaseHost starts (tables are defined here). */
 export function createFeatureHost(options: FeatureHostOptions): FeatureHost {
-  defineFeatureConversationTable(options.database);
+  defineFeatureOverrideTable(options.database);
   defineChatRoleTable(options.database);
   const selfService = readFeatureSelfServiceConfig(options.hostConfig);
-  const conversations = new FeatureConversationOverrideStore({ database: options.database });
+  const overrides = new FeatureOverrideStore({ database: options.database });
   const roles: InstanceChatRoleService = new ChatRoleService({ store: new ChatRoleStore({ database: options.database }) });
   // Owner approvals (tool hard gate, self-changes) grant host-wide authority, so only a global
   // owner with an identity on this adapter is asked (ADR 0056 §2); account-level owners are not.
@@ -92,19 +92,19 @@ export function createFeatureHost(options: FeatureHostOptions): FeatureHost {
       return Object.freeze([...seen.values()]);
     } finally { lease.release(); }
   };
-  const stores: FeatureStores = Object.freeze({ conversations, roles, recentConversations });
+  const stores: FeatureStores = Object.freeze({ overrides, roles, recentConversations });
   let loaded = false;
   const install: FeatureHost['install'] = deps => context => {
-    context.resources.provide(featureConversationOverridesToken, conversations.reader);
+    context.resources.provide(featureConversationOverridesToken, overrides.reader);
     context.handoff.add({
       activateNext: async signal => {
         signal.throwIfAborted();
         if (loaded) return;
-        await conversations.load(id => getLogger('feature').warn(`Skipped malformed conversation override ${id}`));
+        await overrides.load(id => getLogger('feature').warn(`Skipped malformed feature override ${id}`));
         await roles.store.load();
         let candidate: RuntimeSnapshot | undefined;
         try { candidate = context.readCandidateSnapshot?.(); } catch { candidate = undefined; }
-        await options.afterLoad?.(roles, candidate);
+        await options.afterLoad?.(roles, candidate, overrides);
         loaded = true;
       },
     });

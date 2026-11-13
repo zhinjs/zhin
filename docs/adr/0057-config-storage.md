@@ -48,6 +48,15 @@ sidebar: false
 
 ### 2. 适配器 / 账号级功能覆盖迁入数据库
 
+> 已实现（2026-11-13）。实现要点：
+>
+> - 表 `feature_overrides`：`id`（`sha256(plugin, level, key)`）、`plugin`、`level`、`key`、`enabled`、`patch`、`revision`、`updated_at`、`updated_by`。旧表 `feature_conversation_overrides` 的行在首次加载时以 `level = 'conversation'` 复制过来（新表已有该键的行或墓碑时跳过，可重复执行）；旧表保留、只读、不再写入，确认无误后可手动删除。
+> - 有效配置解析（`configFor` / `isEnabledFor`、分发门禁、Agent 工具披露、Console `feature.*`）的适配器 / 账号级只读数据库，合并顺序、锁定与字段白名单不变；配置文件里遗留的 `overrides` 块不参与解析。
+> - 迁移由实例在启动时完成（与聊天角色迁移同一做法，网关此时尚未接管写入）：配置解析前找出各插件块（含嵌套子插件块）的 `overrides`；数据库加载后逐条写入（已有行或墓碑时保留数据库的值），记录 `imported`；首个世代启动后先把配置文件备份到 `.zhin/backups/feature-overrides-<时间>/`，再经配置文档 `prepare` / `commit`（原子写，按启动前读到的修订号比对）删除这些块，记录 `done`。任何一步失败都不改配置文件，下次启动重试；值里含 `${…}` / `env://` 引用时直接停止启动（数据库里的覆盖不做环境变量展开）。
+> - `done` 之后（以及从未写过 `overrides` 的项目），启动时与每次配置更新时出现 `overrides` 都被拒绝，提示改用 Console 功能页或「功能 设置」聊天命令，见 `docs/migrations/feature-overrides.md`。
+> - 非关系型方言下写入被拒绝（503 `feature-overrides-unpersisted`），会话级也一样；首次迁移的条目只在内存中生效，配置文件不动、迁移记录保持 `pending`，直到换用关系型数据库。
+> - `feature.*` 请求与响应形状不变；适配器 / 账号级的 `revision` 改为该行的修订号，兼容旧版 Console：适配器 / 账号级仍接受等于当前配置修订号的 `expectedRevision`（不做行级检查）。
+
 - `feature_conversation_overrides` 扩展为通用的 `feature_overrides` 表，新增 `level` 列（`adapter` / `endpoint` / `conversation`）。主键按 `(plugin, level, key)` 生成；`enabled`、`patch`、`revision`、`updated_at`、`updated_by` 语义不变。现有会话行迁移时写入 `level = 'conversation'`。
 - **全局级仍在 yml**：插件配置块本身就是全局默认，`disable_plugins` 管全局启停。
 - 锁的规则不变（ADR 0055）：上级停用会锁住下级，字段白名单仍由插件 Schema 声明。
@@ -125,7 +134,7 @@ sidebar: false
    - Schema 增加 `x-zhin-secret` 标注；
    - 明文密钥启动警告，`zhin doctor --fix` 搬到 `.env`；
    - `.env` 改为原子写。
-2. **功能覆盖迁移**：`feature_overrides` 表、导入并从 yml 删除、Console 与聊天写入路径改到数据库、拒绝 yml 里的 `overrides`。
+2. **功能覆盖迁移**（已完成）：`feature_overrides` 表、导入并从 yml 删除、Console 与聊天写入路径改到数据库、拒绝 yml 里的 `overrides`。
 3. **种子移除与导出**：`endpoints[]`、`ai.plan.yml` 导入后移除，Console 导出（含网关 RPC 与审计）。
 4. **永久批准入库**。
 5. **钥匙集中**与 `zhin backup`。

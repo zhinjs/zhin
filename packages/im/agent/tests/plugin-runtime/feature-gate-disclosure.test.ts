@@ -43,14 +43,20 @@ function turn(endpoint?: string, scene = 'scene'): TurnAccessContext {
 }
 
 const document = {
-  configVersion: 2, plugins: { rss: '@x/rss', weather: '@x/weather', qq: '@x/qq' },
-  rss: { overrides: { endpoints: { 'qq/news': { enabled: false } } } },
-  weather: { overrides: { adapters: { qq: { enabled: false } } } },
+  configVersion: 2, plugins: { rss: '@x/rss', weather: '@x/weather', qq: '@x/qq' }, rss: {}, weather: {},
 };
+
+/** ADR 0057 §2: adapter / endpoint switches come from the override store (rss off on qq/news, weather on qq). */
+function withStoredSwitches(snapshot: RuntimeSnapshot): RuntimeSnapshot {
+  const off = new Set(['rss|qq/news', 'weather|qq']);
+  (snapshot.resources.get(root) as Map<string, unknown>).set(featureConversationOverridesToken.id, { version: 1,
+    get: (plugin: string, key: string) => off.has(`${plugin}|${key}`) ? { enabled: false as const, patch: {}, revision: 1, updatedAt: 1 } : undefined });
+  return snapshot;
+}
 
 describe('ADR 0050 tool disclosure gate', () => {
   it('hides tools of Plugins disabled for the conversation endpoint', async () => {
-    const snapshot = fixture(document);
+    const snapshot = withStoredSwitches(fixture(document));
     const ingress = new CapabilityIngress();
     const names = async (endpoint?: string) => (await ingress.read({ snapshot, owner: root, isActive: () => true, turn: turn(endpoint) }))
       .tools.map(tool => tool.name).sort();
@@ -62,7 +68,7 @@ describe('ADR 0050 tool disclosure gate', () => {
   });
 
   it('exposes the owner predicate for other disclosure paths', () => {
-    const snapshot = fixture(document);
+    const snapshot = withStoredSwitches(fixture(document));
     const gate = featureGate(snapshot, turn('news'));
     expect([rss, weather, root].map(owner => gate(owner))).toEqual([false, false, true]);
     expect(featureGate(snapshot, { ...turn('news'), origin: { kind: 'http', sessionId: 'x' } } as never)(rss)).toBe(true);
