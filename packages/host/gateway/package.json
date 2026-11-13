@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/gateway",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Zhin.js management gateway: Console access control, terminal, project configuration and instance supervision (ADR 0054)",
   "type": "module",
   "main": "./lib/index.js",
