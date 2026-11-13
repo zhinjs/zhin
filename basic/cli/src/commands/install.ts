@@ -378,3 +378,17 @@ export async function enablePluginInProjectConfig(cwd: string, pluginName: strin
     message: `已在 ${path.basename(preview.configFile)} 中启用 ${pluginName}`,
   };
 }
+
+/**
+ * `zhin add <包名>` 以前是 `zhin install` 的别名：保留为旧写法，提示后把原参数（含选项）交给 install。
+ * 生成能力文件用 `zhin create`，创建插件用 `zhin new`。
+ */
+export const addAliasCommand = new Command('add')
+  .description('旧写法，等同 zhin install（生成能力文件用 zhin create）')
+  .argument('[args...]')
+  .allowUnknownOption()
+  .helpOption(false)
+  .action(async (_args: string[], _options: unknown, command: Command) => {
+    logger.warn('zhin add 是 zhin install 的旧写法，这次按安装处理；以后请用 zhin install <包名>（生成命令等文件用 zhin create）');
+    await installCommand.parseAsync(command.args, { from: 'user' });
+  });

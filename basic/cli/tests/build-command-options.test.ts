@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { buildCommand } from '../src/commands/build.js';
-import { installCommand } from '../src/commands/install.js';
+import { addAliasCommand, installCommand } from '../src/commands/install.js';
 import { uninstallCommand } from '../src/commands/uninstall.js';
 
 describe('CLI option surface', () => {
@@ -15,9 +15,19 @@ describe('CLI option surface', () => {
     buildCommand.setOptionValue('production', true);
   });
 
-  it('install: no `add` alias (`zhin add` generates convention files and forwards anything else), and the unread -S/--save flag is gone', () => {
+  it('install: no `add` alias, and the unread -S/--save flag is gone', () => {
     expect(installCommand.aliases()).toEqual([]);
     expect(installCommand.options.map((option) => option.long)).not.toContain('--save');
+  });
+
+  it('`zhin add <package>` is the hidden old spelling of install: it forwards the original arguments', async () => {
+    const install = vi.spyOn(installCommand, 'parseAsync').mockResolvedValue(installCommand);
+    try {
+      await addAliasCommand.parseAsync(['@zhin.js/adapter-qq', '-D'], { from: 'user' });
+      expect(install).toHaveBeenCalledWith(['@zhin.js/adapter-qq', '-D'], { from: 'user' });
+    } finally {
+      install.mockRestore();
+    }
   });
 
   it('uninstall: only plugin and adapter; services are removed with `zhin service uninstall`', () => {

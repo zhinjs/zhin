@@ -79,7 +79,7 @@ export function resolvePluginStackRanges(
   return ranges;
 }
 
-/** One package of {@link resolvePluginStackRanges}; `zhin add` uses it for Feature packages too. */
+/** One package of {@link resolvePluginStackRanges}; `zhin create` uses it for Feature packages too. */
 export function resolveStackRange(name: string, cwd: string, releaseRanges?: StackVersionRanges): string {
   const released = scaffoldDependencyRange(name, releaseRanges);
   const floor = released.startsWith('^') ? semver.valid(released.slice(1)) : null;
@@ -178,7 +178,7 @@ export const CONVENTION_SOURCE_DIRECTORIES = [
 /**
  * Feature package that discovers each convention directory (docs/authoring/conventions.md).
  * `zhin plugin check` warns when a directory with capability sources lacks its feature;
- * `zhin add` declares it.
+ * `zhin create` declares it.
  */
 export const CONVENTION_FEATURE_PACKAGES: Readonly<Record<string, string>> = {
   commands: '@zhin.js/command',

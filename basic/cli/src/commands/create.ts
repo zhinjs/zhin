@@ -8,18 +8,17 @@ import {
   resolveStackRange,
 } from './new-plugin-manifest.js';
 import { toCapitalizedName } from './new.js';
-import { installCommand } from './install.js';
 
 /**
- * `zhin add <kind> <name>`: write one convention-directory capability file into the current plugin
+ * `zhin create <kind> <name>`: write one convention-directory capability file into the current plugin
  * package and declare the Feature package it needs in `package.json#zhin.features`
  * (docs/authoring/conventions.md). Templates are the smallest default export of the authoring API.
  */
-export const ADD_KINDS = ['command', 'middleware', 'handler', 'tool', 'component'] as const;
-export type AddKind = (typeof ADD_KINDS)[number];
+export const CREATE_KINDS = ['command', 'middleware', 'handler', 'tool', 'component'] as const;
+export type CreateKind = (typeof CREATE_KINDS)[number];
 
-export function isAddKind(value: string): value is AddKind {
-  return (ADD_KINDS as readonly string[]).includes(value);
+export function isCreateKind(value: string): value is CreateKind {
+  return (CREATE_KINDS as readonly string[]).includes(value);
 }
 
 interface KindSpec {
@@ -30,7 +29,7 @@ interface KindSpec {
   readonly nested: boolean;
 }
 
-const KIND_SPECS: Readonly<Record<AddKind, KindSpec>> = {
+const KIND_SPECS: Readonly<Record<CreateKind, KindSpec>> = {
   command: { directory: 'commands', file: 'index.ts', nested: true },
   middleware: { directory: 'middlewares', file: 'index.ts', nested: false },
   handler: { directory: 'handlers', file: 'index.ts', nested: true },
@@ -47,9 +46,9 @@ const CANONICAL_HANDLER_EVENTS = new Set([
 ]);
 
 /** A user error: printed without a stack, exit code 1. */
-export class AddConventionError extends Error {}
+export class CreateConventionError extends Error {}
 
-export interface AddConventionOptions {
+export interface CreateConventionOptions {
   readonly kind: string;
   readonly name: string;
   /** Directory to start the plugin package lookup from (default `process.cwd()`). */
@@ -59,7 +58,7 @@ export interface AddConventionOptions {
   readonly event?: string;
 }
 
-export interface AddConventionResult {
+export interface CreateConventionResult {
   readonly pluginDirectory: string;
   /** Package-relative (posix) path of the written file. */
   readonly file: string;
@@ -74,8 +73,8 @@ function isObject(value: unknown): value is JsonObject {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-function isKind(kind: string): kind is AddKind {
-  return (ADD_KINDS as readonly string[]).includes(kind);
+function isKind(kind: string): kind is CreateKind {
+  return (CREATE_KINDS as readonly string[]).includes(kind);
 }
 
 /**
@@ -92,10 +91,10 @@ export function findPluginPackage(start: string): { directory: string; manifest:
       try {
         manifest = JSON.parse(raw);
       } catch (error) {
-        throw new AddConventionError(`${manifestPath} 无法解析：${error instanceof Error ? error.message : String(error)}`);
+        throw new CreateConventionError(`${manifestPath} 无法解析：${error instanceof Error ? error.message : String(error)}`);
       }
       if (!isObject(manifest) || !isObject(manifest.zhin) || manifest.zhin.type !== 'plugin') {
-        throw new AddConventionError(
+        throw new CreateConventionError(
           `${manifestPath} 不是插件包（缺少 zhin.type: "plugin" 清单）；请在插件目录运行，或用 --cwd 指定插件目录（创建插件：zhin new <name>）`,
         );
       }
@@ -103,22 +102,22 @@ export function findPluginPackage(start: string): { directory: string; manifest:
     }
     const parent = path.dirname(current);
     if (parent === current) {
-      throw new AddConventionError(`${path.resolve(start)} 及其上级目录没有 package.json；请在插件目录运行，或用 --cwd 指定插件目录`);
+      throw new CreateConventionError(`${path.resolve(start)} 及其上级目录没有 package.json；请在插件目录运行，或用 --cwd 指定插件目录`);
     }
     current = parent;
   }
 }
 
 /** Validated path segments; a command may end in one `[param]` segment. */
-export function parseConventionName(kind: AddKind, name: string): { segments: string[]; parameter?: string } {
+export function parseConventionName(kind: CreateKind, name: string): { segments: string[]; parameter?: string } {
   const spec = KIND_SPECS[kind];
   const segments = name.replace(/^\/+|\/+$/g, '').split('/');
   const hint = '每段需匹配 /^[a-z][a-z0-9-]*$/（小写字母开头，仅小写字母、数字、横线）';
   if (segments.length === 0 || segments.some((segment) => segment === '')) {
-    throw new AddConventionError(`无效的名称 ${JSON.stringify(name)}：${hint}`);
+    throw new CreateConventionError(`无效的名称 ${JSON.stringify(name)}：${hint}`);
   }
   if (!spec.nested && segments.length > 1) {
-    throw new AddConventionError(`${kind} 名称不能包含 /（${spec.directory}/<name>/${spec.file}）：${JSON.stringify(name)}`);
+    throw new CreateConventionError(`${kind} 名称不能包含 /（${spec.directory}/<name>/${spec.file}）：${JSON.stringify(name)}`);
   }
   let parameter: string | undefined;
   for (const [index, segment] of segments.entries()) {
@@ -129,12 +128,12 @@ export function parseConventionName(kind: AddKind, name: string): { segments: st
       continue;
     }
     if (kind === 'command' && segment.startsWith('[')) {
-      throw new AddConventionError(
-        `zhin add 只生成必填参数目录 [name]，且只能放在最后一段、前面至少有一段命令名：${JSON.stringify(name)}。`
+      throw new CreateConventionError(
+        `zhin create 只生成必填参数目录 [name]，且只能放在最后一段、前面至少有一段命令名：${JSON.stringify(name)}。`
           + '[[name]] / [...name] / [[...name]] 请手动创建目录并在 defineCommand({ params }) 声明（见 https://zhin.js.org/authoring/commands）',
       );
     }
-    throw new AddConventionError(`无效的名称段 ${JSON.stringify(segment)}（${JSON.stringify(name)}）：${hint}`);
+    throw new CreateConventionError(`无效的名称段 ${JSON.stringify(segment)}（${JSON.stringify(name)}）：${hint}`);
   }
   return { segments, parameter };
 }
@@ -149,7 +148,7 @@ function propertyAccess(name: string): string {
 
 /** Template sources; each is the smallest default export the authoring API accepts. */
 export function conventionTemplate(
-  kind: AddKind,
+  kind: CreateKind,
   segments: readonly string[],
   options: { parameter?: string; event?: string } = {},
 ): string {
@@ -295,12 +294,12 @@ export function declareFeature(manifest: JsonObject, featurePackage: string, plu
   return changes;
 }
 
-/** Validate, write the convention file and update package.json. Throws {@link AddConventionError}. */
-export function addConvention(options: AddConventionOptions): AddConventionResult {
+/** Validate, write the convention file and update package.json. Throws {@link CreateConventionError}. */
+export function createConvention(options: CreateConventionOptions): CreateConventionResult {
   const { kind } = options;
   if (!isKind(kind)) {
-    throw new AddConventionError(
-      `未知的类型 ${JSON.stringify(kind)}（可选 ${ADD_KINDS.join(' | ')}）。安装插件请用 zhin install <包名>`,
+    throw new CreateConventionError(
+      `未知的类型 ${JSON.stringify(kind)}（可选 ${CREATE_KINDS.join(' | ')}）。安装插件请用 zhin install <包名>`,
     );
   }
   const spec = KIND_SPECS[kind];
@@ -309,15 +308,15 @@ export function addConvention(options: AddConventionOptions): AddConventionResul
   if (kind === 'handler') {
     event = options.event ?? segments.join('.');
     if (options.event === undefined && !CANONICAL_HANDLER_EVENTS.has(event)) {
-      throw new AddConventionError(
+      throw new CreateConventionError(
         `handlers/${segments.join('/')} 不对应内置事件（${[...CANONICAL_HANDLER_EVENTS].join(' | ')}）；请用 --event <事件> 指定`,
       );
     }
     if (!EVENT_PATTERN.test(event)) {
-      throw new AddConventionError(`无效的事件名 ${JSON.stringify(event)}：形如 message.receive`);
+      throw new CreateConventionError(`无效的事件名 ${JSON.stringify(event)}：形如 message.receive`);
     }
   } else if (options.event !== undefined) {
-    throw new AddConventionError('--event 只用于 handler');
+    throw new CreateConventionError('--event 只用于 handler');
   }
 
   const plugin = findPluginPackage(options.cwd ?? process.cwd());
@@ -325,7 +324,7 @@ export function addConvention(options: AddConventionOptions): AddConventionResul
   const target = path.join(plugin.directory, ...file.split('/'));
   const exists = fs.existsSync(target);
   if (exists && !options.force) {
-    throw new AddConventionError(`${file} 已存在；加 --force 覆盖`);
+    throw new CreateConventionError(`${file} 已存在；加 --force 覆盖`);
   }
 
   const featurePackage = CONVENTION_FEATURE_PACKAGES[spec.directory]!;
@@ -340,19 +339,16 @@ export function addConvention(options: AddConventionOptions): AddConventionResul
   return { pluginDirectory: plugin.directory, file, overwritten: exists, manifestChanges };
 }
 
-interface AddCommandOptions {
+interface CreateCommandOptions {
   cwd?: string;
   force?: boolean;
   event?: string;
 }
 
-export const addCommand = new Command('add')
+export const createCommand = new Command('create')
   .description('在当前插件包生成约定目录能力文件，并在 package.json#zhin.features 声明对应 Feature')
-  .argument('<kind>', `能力类型（${ADD_KINDS.join(' | ')}）`)
-  .argument('[name]', '名称；command / handler 可用 / 分段（如 gh/issue、message/receive），command 末段可为 [param]')
-  // `zhin add <包名>` 以前是 `zhin install` 的别名：不是能力类型时原样转给 install（含其选项）。
-  .allowUnknownOption()
-  .allowExcessArguments()
+  .argument('<kind>', `能力类型（${CREATE_KINDS.join(' | ')}）`)
+  .argument('<name>', '名称；command / handler 可用 / 分段（如 gh/issue、message/receive），command 末段可为 [param]')
   .option('--cwd <dir>', '插件目录（默认从当前目录向上找最近的 package.json）')
   .option('--force', '覆盖已存在的文件', false)
   .option('--event <event>', 'handler 监听的事件（默认由路径推断，如 message/receive → message.receive）')
@@ -366,27 +362,17 @@ export const addCommand = new Command('add')
     '  component   components/<name>/index.tsx   defineComponent（zhin.js/component）',
     '',
     '示例：',
-    '  zhin add command gh/issue',
-    '  zhin add command echo/[text]',
-    '  zhin add handler message/receive',
-    '  zhin add handler welcome --event notice.receive',
+    '  zhin create command gh/issue',
+    '  zhin create command echo/[text]',
+    '  zhin create handler message/receive',
+    '  zhin create handler welcome --event notice.receive',
     '',
     '已存在的文件不会被覆盖（除非 --force）；已声明的 Feature 与依赖保持不变。',
-    '第一个参数不是能力类型时按 zhin install 处理（旧写法 zhin add <包名> 仍可用，建议改用 zhin install）。',
+    '创建插件用 zhin new；安装 / 卸载插件用 zhin install / zhin uninstall。',
   ].join('\n'))
-  .action(async (kind: string, name: string | undefined, options: AddCommandOptions, command: Command) => {
-    if (!isAddKind(kind)) {
-      logger.warn(`zhin add <包名> 已改为 zhin install <包名>，这次按安装处理（能力类型：${ADD_KINDS.join(' / ')}）`);
-      await installCommand.parseAsync(command.args, { from: 'user' });
-      return;
-    }
-    if (name === undefined) {
-      logger.error(`缺少名称：zhin add ${kind} <name>`);
-      process.exitCode = 1;
-      return;
-    }
+  .action((kind: string, name: string, options: CreateCommandOptions) => {
     try {
-      const result = addConvention({ kind, name, cwd: options.cwd, force: options.force, event: options.event });
+      const result = createConvention({ kind, name, cwd: options.cwd, force: options.force, event: options.event });
       const relativeRoot = path.relative(process.cwd(), result.pluginDirectory) || '.';
       logger.success(`${result.overwritten ? '已覆盖' : '已创建'} ${path.join(relativeRoot, result.file)}`);
       if (result.manifestChanges.length === 0) {
@@ -399,7 +385,7 @@ export const addCommand = new Command('add')
       }
     } catch (error) {
       logger.error(error instanceof Error ? error.message : String(error));
-      if (!(error instanceof AddConventionError) && error instanceof Error && error.stack && process.env.DEBUG) {
+      if (!(error instanceof CreateConventionError) && error instanceof Error && error.stack && process.env.DEBUG) {
         logger.error(error.stack);
       }
       process.exitCode = 1;

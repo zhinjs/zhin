@@ -3,7 +3,7 @@
  * External plugin author acceptance:
  *   locally built CLI → `zhin new` (normal / service / adapter, non-interactive)
  *   → install against locally packed tarballs (simulates npm)
- *   → `zhin add` (every kind) on the normal plugin
+ *   → `zhin create` (every kind) on the normal plugin
  *   → generated vitest + tsc → `pnpm pack` ships plugin.js → `zhin plugin check --strict` passes.
  *
  * Also asserts no packed @zhin.js/* manifest still has the source-only
@@ -29,10 +29,10 @@ const cli = path.join(repo, 'basic/cli/lib/cli.js');
 const build = !process.argv.includes('--no-build');
 const keep = process.argv.includes('--keep');
 // Generated tests import @zhin.js/testing, so it ships from the same packed closure.
-// `zhin add` declares the middleware / handler / tool / component Feature packages as well.
+// `zhin create` declares the middleware / handler / tool / component Feature packages as well.
 const STACK_ROOTS = ['zhin.js', '@zhin.js/skill', '@zhin.js/command', '@zhin.js/adapter', '@zhin.js/testing',
   '@zhin.js/middleware', '@zhin.js/handler', '@zhin.js/tool', '@zhin.js/component'];
-/** `zhin add` runs on the normal scaffold; its templates must pass the generated tsc / pack / check. */
+/** `zhin create` runs on the normal scaffold; its templates must pass the generated tsc / pack / check. */
 const ADDS = [
   { args: ['command', 'demo'], js: 'commands/demo/index.js' },
   { args: ['command', 'demo-echo/[text]'], js: 'commands/demo-echo/[text]/index.js' },
@@ -237,8 +237,8 @@ try {
     console.log(`zhin new ${plugin.name} --standalone --type ${plugin.type}`);
     await run(process.execPath, [cli, 'new', plugin.name, '--standalone', '--type', plugin.type, '--skip-install'], path.join(host, 'plugins'));
     for (const add of plugin.adds ?? []) {
-      console.log(`${plugin.name}: zhin add ${add.args.join(' ')}`);
-      await run(process.execPath, [cli, 'add', ...add.args], path.join(host, 'plugins', plugin.name));
+      console.log(`${plugin.name}: zhin create ${add.args.join(' ')}`);
+      await run(process.execPath, [cli, 'create', ...add.args], path.join(host, 'plugins', plugin.name));
     }
     const generated = JSON.parse(await readFile(path.join(host, 'plugins', plugin.name, 'package.json'), 'utf8'));
     // This clean author project must advertise this release's real minimum BEFORE tarball overrides

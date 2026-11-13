@@ -34,7 +34,7 @@ Inside a project that has `@zhin.js/cli` installed, `npx zhin` uses it directly.
 | Find plugins and setup steps by purpose | `npx zhin use-cases` |
 | Create a new, publishable plugin | `npx @zhin.js/cli new my-plugin --standalone` |
 | Check a plugin before publishing | `npx @zhin.js/cli plugin check` |
-| Add a command, middleware, tool… file to a plugin | `npx zhin add command hello` |
+| Add a command, middleware, tool… file to a plugin | `npx zhin create command hello` |
 | Add a local plugin to an existing bot project | `npx zhin new my-plugin` |
 | Update dependencies (stop instance → install → start, rolled back on failure) | `npx zhin update` |
 | Upgrade Zhin | `npx zhin migrate --dry-run`, then again without `--dry-run` |
@@ -271,10 +271,10 @@ zhin new [plugin-name] [--standalone] [--type normal|service|adapter] [--package
 - The generated `pnpm test` (Vitest) and `pnpm typecheck` (`tsc --noEmit`) work as is; no `NODE_ENV` setting is needed.
 - `--skip-install` skips `pnpm install` in both the plugin directory and the project root.
 
-### add: Generate a Convention File {#add}
+### create: Generate a Convention File {#create}
 
 ```bash
-zhin add <command|middleware|handler|tool|component> <name> [--cwd <plugin-dir>] [--force] [--event <event>]
+zhin create <command|middleware|handler|tool|component> <name> [--cwd <plugin-dir>] [--force] [--event <event>]
 ```
 
 Writes one capability file into the current plugin package, so you do not hand-write the convention directory or the `package.json#zhin` manifest. The plugin package is the first `package.json` found walking up from the current directory, and it must carry a `zhin.type: "plugin"` manifest (plugins from `zhin new` and bot project roots do); `--cwd` sets another starting point.
@@ -288,18 +288,18 @@ Writes one capability file into the current plugin package, so you do not hand-w
 | `component` | `components/<name>/index.tsx` | `defineComponent` (`zhin.js/component`) | `@zhin.js/component` |
 
 ```bash
-zhin add command gh/issue                         # commands/gh/issue/index.ts → /gh issue
-zhin add command echo/[text]                      # trailing [text] is a required parameter; the template declares params.text
-zhin add handler message/receive                  # event inferred from the path: message.receive
-zhin add handler welcome --event notice.receive   # use --event when the path is not a built-in event
-zhin add tool lookup
+zhin create command gh/issue                         # commands/gh/issue/index.ts → /gh issue
+zhin create command echo/[text]                      # trailing [text] is a required parameter; the template declares params.text
+zhin create handler message/receive                  # event inferred from the path: message.receive
+zhin create handler welcome --event notice.receive   # use --event when the path is not a built-in event
+zhin create tool lookup
 ```
 
 - Every name segment must match `/^[a-z][a-z0-9-]*$/`. `command` and `handler` names may use `/`; the last segment of a `command` may be a required parameter directory `[name]` (create `[[name]]` / `[...name]` by hand, see [Commands](../authoring/commands.md)).
 - Templates are the smallest default export that type-checks; edit them from there.
 - `package.json`: when `zhin.features` does not list the feature package, `{ package, api }` is appended; when the plugin does not depend on it yet, it is added to `peerDependencies` (`optional`) and `devDependencies` following the `zhin new` rules, with the range following the plugin's own `zhin.js` spec (`workspace:` stays a workspace link, otherwise the release range `^x.y.z`). Existing entries are never duplicated; other fields and the formatting (2-space indent, trailing newline) are kept. When dependencies change it reminds you to run `pnpm install`.
 - An existing target file is an error (exit code 1); `--force` overwrites it.
-- When the first argument is not a kind, `zhin add <package>` still installs it like `zhin install <package>` (it used to be an alias) and suggests `zhin install` instead.
+- `zhin add <package>` is the old spelling of `zhin install` and still works (with a hint to use `zhin install`); create a plugin with `zhin new`.
 
 ### install: Install a Plugin
 

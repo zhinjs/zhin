@@ -27,7 +27,7 @@ zhin console init         # 初始化：数据库 + 第一个所有者（之后 
 zhin console user …       # 用户管理与救援（create / passwd / disable / enable / list）；网关运行时经网关，否则直接打开数据库
 zhin service install      # 安装开机自启的系统服务（前台网关）
 zhin new <name>           # 创建约定式插件
-zhin add <kind> <name>    # 在插件里生成 commands/、middlewares/、handlers/、tools/、components/ 文件并声明 Feature
+zhin create <kind> <name>    # 在插件里生成 commands/、middlewares/、handlers/、tools/、components/ 文件并声明 Feature
 zhin install <pkg>        # 安装插件并写入 plugins.<instanceKey>
 zhin setup                # 交互式配置向导（适配器 / AI / 数据库）
 zhin config check [--fix] # 校验/修复 zhin.config.yml
@@ -38,7 +38,7 @@ zhin schedule list|add|remove|pause|resume  # 管理运行中实例的持久化�
 zhin --help               # 全部命令
 ```
 
-命令分五组：运行（`start` / `stop` / `restart` / `status` / `logs` / `console`）、插件开发（`new` / `add` / `build` / `pub` / `install` / `uninstall` / `update` / `search` / `info` / `packages`）、配置与诊断（`setup` / `onboard` / `config` / `doctor` / `migrate`）、运行中实例（`send` / `watch` / `schedule` / `agent`）、系统服务（`service install` / `service uninstall` / `service status`）。每组的具体参数见 [docs/cli/index.md](../../docs/cli/index.md) 与 `zhin <command> --help`。
+命令分五组：运行（`start` / `stop` / `restart` / `status` / `logs` / `console`）、插件开发（`new` / `create` / `build` / `pub` / `install` / `uninstall` / `update` / `search` / `info` / `packages`）、配置与诊断（`setup` / `onboard` / `config` / `doctor` / `migrate`）、运行中实例（`send` / `watch` / `schedule` / `agent`）、系统服务（`service install` / `service uninstall` / `service status`）。每组的具体参数见 [docs/cli/index.md](../../docs/cli/index.md) 与 `zhin <command> --help`。
 
 ## 进程模型与退出码
 
