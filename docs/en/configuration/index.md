@@ -125,7 +125,25 @@ Saving follows the complete candidate validation and selective application descr
 
 ### Files and database records have separate ownership
 
-`zhin.config.yml` remains the deployment declaration, and Console configuration forms still write that file. The entire configuration is not moved into a database. Managed Endpoint desired records, model Services/Accounts/Profiles/purposes, and personal Session choices retain their own domain databases and APIs. File updates do not overwrite explicit domain records or clear personal choices. YAML account seeds do not rewrite existing managed accounts; adapter profile defaults can still update accounts that inherit them.
+Where a setting lives depends on who changes it, when, and how many entries it has ([ADR 0057](../../adr/0057-config-storage.md), Chinese):
+
+| Store | Holds | Written by |
+|---|---|---|
+| `zhin.config.yml` | **Declarations** fixed at deploy time, reviewed in git, applied by reload or restart: plugin instances and plugin config, `disable_plugins`, Host infrastructure (`http`, `database` connection, `console`, `gateway`, `mcp`, `a2a`, `log_level`, `locale`), `ai.*` behaviour and security policy, global feature defaults and `features.selfService` | People: by hand, the CLI, Console config forms (all through the gateway config transaction) |
+| Database | **Runtime state**: Console accounts and audit, chat roles, accounts and credentials, model directory, conversation-level feature overrides, control-plane switches, schedules, messages / sessions / memory, plugin state | Console RPCs, chat commands, AI tools, plugins |
+| `.env` | **Secrets and per-environment values**; the YAML only holds `${VAR}` references | People, `zhin doctor --fix`, the gateway |
+| `.zhin/` | **Machine-local runtime files**: sockets, locks, logs, caches, onboarding progress, encryption keys | Runtime, gateway |
+
+**Secret fields** are annotated with `x-zhin-secret: true` in the schema (the Host schema marks `http.token`, `database.password`, `mcp.token`, `a2a.token` and others; `Schema.string().secret()` emits it for plugins). Without an annotation the field name decides (`token`, `password`, `secret`, `apiKey`, `privateKey`, `*Token`, `*Secret`, …). At startup a literal value in such a field (not a `${…}` reference) produces one warning listing the paths, never the values. `zhin doctor` reports the same; `zhin doctor --fix` writes each literal into `.env` as `ZHIN_<PATH_UPPER_SNAKE>` (for example `ZHIN_HTTP_TOKEN`; an existing variable with the same value is reused, a name holding another value gets `_2`, `_3`) and replaces the YAML value with `${NAME}`. The YAML goes through the config file transaction (revision check, file lock, atomic replace); `.env` is written under the same kind of lock as a temporary file that is fsynced and renamed, keeping the file mode (`0600` for a new file). With the gateway running, these files are still edited directly (like the other `zhin doctor` fixes; the shared lock prevents lost writes) and the instance picks up the references the next time it loads the configuration.
+
+**Still being migrated** (later ADR 0057 steps; current behaviour is unchanged):
+
+- Adapter- and account-level feature overrides are still written to `plugins.<instance>.overrides` in the YAML (conversation-level ones are already in the database) until they move to a database table;
+- `endpoints[]` in plugin blocks and the project's `ai.plan.yml` are still seeds imported into the database on first start: once imported, YAML account seeds do not rewrite existing managed accounts, while adapter profile defaults still apply to accounts that inherit them; removing the seeds after import and Console export are not available yet;
+- Permanent approvals are still stored in `data/owner-approve-always.json`;
+- Encryption keys are still in `.zhin/inference/` and `.zhin/endpoint-credentials/`, and there is no `zhin backup` yet — back up these keys together with the database, or credentials cannot be decrypted.
+
+File updates do not overwrite explicit records in the database or clear personal Session choices.
 
 ## Environment Variable Expansion
 

@@ -6,7 +6,7 @@ sidebar: false
 
 本目录收录 Zhin.js 的架构决策记录（Architecture Decision Records, ADR）。每份 ADR 记录一项关键架构边界、背景动机、演进取舍与代码落盘位置。
 
-## 现存 ADR 列表（0034–0056）
+## 现存 ADR 列表（0034–0057）
 
 ### 服务插件与平台适配器契约
 
@@ -55,6 +55,7 @@ sidebar: false
 | [ADR 0054](./0054-management-gateway.md) | 管理网关——CLI 启动网关，网关管理 Zhin 实例 | Accepted | `@zhin.js/gateway`（`packages/host/gateway/src/`）、`zhin.js/instance`（`packages/im/zhin/src/instance/`）、`basic/cli`（`commands/`） |
 | [ADR 0055](./0055-conversation-feature-config.md) | 会话级功能配置——在账号之下按群 / 私聊覆盖，存数据库，可群内自助 | Accepted | `packages/im/plugin-runtime`、`packages/im/zhin/src/instance/console/` |
 | [ADR 0056](./0056-chat-roles.md) | 聊天角色——zhin 角色分四级；发言者平台身份与机器人自身身份是独立维度，三维度过滤能力（2026-11-12 修订） | Accepted | `packages/im/zhin/src/instance/`（`chat-roles.ts`、`feature-self-service.ts`）、`packages/im/core` |
+| [ADR 0057](./0057-config-storage.md) | 配置与状态存放——声明放 `zhin.config.yml`，运行时状态放数据库，密钥放 `.env`（分五步实施，第 1 步：规则、`x-zhin-secret`、明文密钥警告与 `zhin doctor --fix`、`.env` 原子写） | Accepted | `@zhin.js/runtime`（`config-secrets.ts`、`config-file/env-file.ts`）、`@zhin.js/gateway`（`config/literal-secrets.ts`）、`basic/cli`（`zhin doctor`）、`packages/im/zhin/src/instance/start-command.ts` |
 
 ---
 
