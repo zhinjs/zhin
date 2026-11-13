@@ -8,6 +8,18 @@ interface LoginAssistBinding {
   readonly dispose: () => void;
 }
 
+/**
+ * Event / history-safe copy of a legacy login task, matching {@link withoutLoginMedia} for flows:
+ * the QR image (`payload.image`) is replaced by `imageOmitted: true`. Consoles read it with
+ * `login.list`, which is authorized per Endpoint (the event history is replayed to every subscriber).
+ */
+export function eventSafeLoginTask<T extends { readonly payload?: Readonly<Record<string, unknown>> }>(task: T): T {
+  const payload = task.payload;
+  if (!payload || payload.image === undefined) return task;
+  const { image: _image, ...rest } = payload;
+  return Object.freeze({ ...task, payload: Object.freeze({ ...rest, imageOmitted: true }) });
+}
+
 export type LoginAssistStdinBinder = (assist: LoginAssist) => () => void;
 
 export class ConsoleLoginAssistBindings {
@@ -28,11 +40,13 @@ export class ConsoleLoginAssistBindings {
       return () => this.#release(assist, existing);
     }
 
+    // Legacy task events enter the hub's replayed history too: no QR image (Consoles read it with
+    // `login.list` / `login.flow.get`, which are authorized per Endpoint).
     const unsubPending = assist.subscribe('endpoint.login.pending', task => {
-      hub.publish('endpoint.login.pending', task);
+      hub.publish('endpoint.login.pending', eventSafeLoginTask(task));
     });
     const unsubExpired = assist.subscribe('endpoint.login.expired', task => {
-      hub.publish('endpoint.login.expired', task);
+      hub.publish('endpoint.login.expired', eventSafeLoginTask(task));
     });
     // ADR 0058: flow snapshots without QR images or sensitive material — the event history keeps
     // them, and Consoles read live material with `login.flow.get`.

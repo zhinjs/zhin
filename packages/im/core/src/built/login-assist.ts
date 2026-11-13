@@ -801,7 +801,19 @@ export class LoginAssist {
     return new Promise<SubmittedValue>((resolve, reject) => {
       const entry: PendingEntry = { task, owner: flow.owner, flow, stepId, legacy: !!legacy, resolve, reject };
       if (effectiveTimeout !== undefined) {
-        entry.timer = setTimeout(() => {
+        // setTimeout overflows above 2^31-1 ms (~24.8 days) and would fire at once: re-arm in steps.
+        let remaining = effectiveTimeout;
+        const arm = () => {
+          const step = Math.min(remaining, MAX_TIMER_DELAY_MS);
+          remaining -= step;
+          entry.timer = setTimeout(() => {
+            if (remaining > 0) { if (this.pending.get(id) === entry) arm(); return; }
+            expire();
+          }, step);
+          // Node: 不阻止进程退出
+          entry.timer.unref?.();
+        };
+        const expire = () => {
           if (!this.pending.has(id)) return;
           this.pending.delete(id);
           this.#detach(entry);
@@ -812,9 +824,8 @@ export class LoginAssist {
           }
           this.#expireChallenge(flow, stepId, id);
           reject(new Error(`LoginAssist task timed out after ${effectiveTimeout}ms`));
-        }, effectiveTimeout);
-        // Node: 不阻止进程退出
-        entry.timer.unref?.();
+        };
+        arm();
       }
       this.pending.set(id, entry);
       if (options.signal) {
@@ -911,7 +922,7 @@ export class LoginAssist {
       if (!lastActive(flow, 'verifying')) return;
       flow.pendingConfirmation = true;
       this.#emitFlow(flow);
-    }, this.#verifyTimeoutMs);
+    }, Math.min(this.#verifyTimeoutMs, MAX_TIMER_DELAY_MS));
     flow.verifyTimer.unref?.();
   }
 
@@ -1526,6 +1537,9 @@ function resolveAnswer(
   if (text) Object.assign(values, inputValues(text, false));
   return Object.freeze({ actionId: defaultAction(challenge, !!input), values: Object.freeze(values) });
 }
+
+/** Largest delay `setTimeout` accepts (2^31-1 ms); longer ones fire immediately. */
+const MAX_TIMER_DELAY_MS = 2 ** 31 - 1;
 
 function resolveTimeoutMs(
   explicit: number | undefined,

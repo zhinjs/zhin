@@ -312,3 +312,28 @@ describe('parseLoginTicket', () => {
     expect(parseLoginTicket(undefined).ok).toBe(false);
   });
 });
+
+describe('LoginAssist challenge deadlines beyond the setTimeout range', () => {
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('does not expire a challenge whose expiresAt is more than ~24.8 days away early', async () => {
+    vi.useFakeTimers();
+    const assist = new LoginAssist(null, { defaultTimeoutMs: 0 });
+    const flow = assist.beginFlow({ adapter: 'demo', endpointKey: 'bot', owner: {} });
+    const days = 30;
+    const answer = flow.challenge({
+      kind: 'confirm', title: '确认', expiresAt: Date.now() + days * 86_400_000,
+    });
+    answer.catch(() => undefined);
+    // An overflowing setTimeout fires after ~1 ms.
+    await vi.advanceTimersByTimeAsync(10);
+    expect(assist.listPending()).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(2 ** 31);
+    expect(assist.listPending()).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(days * 86_400_000 - 2 ** 31);
+    expect(assist.listPending()).toHaveLength(0);
+    await expect(answer).rejects.toThrow('timed out');
+    expect(assist.getFlow('demo', 'bot')!.state).toBe('expired');
+    assist.dispose();
+  });
+});

@@ -262,7 +262,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
         persistent: ['sqlite', 'mysql', 'pg'].includes(databaseHost.dialect),
         adapterKind: chatRoleMigrationAdapterKinds(candidate),
       });
-      await featureOverrideMigration.complete(overrides);
+      await featureOverrideMigration.complete(overrides, candidate);
     },
   });
   const senderEnricher = createSenderEnricher({ roles: () => featureHost.roles });

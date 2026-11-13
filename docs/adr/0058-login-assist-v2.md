@@ -73,7 +73,9 @@ onebots 的登录辅助（分步说明、复制设备信息、辅助脚本）证
 安全规则：
 
 - `sensitive` 的复制块（设备信息、令牌）只存在于**活动挑战**上。挑战结束、过期或被替换时内容清空并标 `redacted: true`；事件与历史（`endpoint.login.flow`）里始终是清空后的版本，实时内容只能用 `login.flow.get` 读。日志和审计从不包含它。
-- 终端只在用户选择「显示 xxx」这个编号操作时才打印敏感块。
+- 终端只在用户选择「显示 xxx」这个编号操作时才打印敏感块，且只写到不被采集的终端：stderr 本身是 TTY，或控制终端 `/dev/tty`。`zhin start --foreground` 下实例的 stdout / stderr 经管道进入网关的日志缓冲和日志文件（Console 可读），此时没有控制终端就不提供「显示」，提示改在 Console 中查看；设备锁 / 滑块 / 链接验证这类挑战的验证链接（可能带会话 `sid`）同样只写到不被采集的终端。
+- 兼容事件 `endpoint.login.pending` / `endpoint.login.expired` 进入事件历史前去掉 `payload.image`（标 `imageOmitted: true`），与 `endpoint.login.flow` 的 `qrImageOmitted` 一致；新旧 Console 都从 `login.list` 读二维码，不读事件里的图片。
+- 登录 RPC 与权限表读同一组字段（`data` 与顶层的 `adapter` / `endpointKey`，两处不一致即拒绝）；调用方只凭适配器 / 账号范围的授权进入时，`login.list`、`login.flow.list` / `get`、`login.submit` / `cancel`、`login.relogin` / `refresh` 都限定在被授权的那个账号。
 - 脚本块是适配器提供的**静态文本**，不得把用户或设备数据拼进脚本；需要的数据由用户在脚本的 `prompt()` 里粘贴。书签小程序由同一段静态文本生成。
 
 `extract: 'ticket-json-or-url'` 由 core 的纯函数 `parseLoginTicket()` 实现，Console、SDK 和终端共用。它接受：裸 ticket、`ticket,randstr`、验证接口返回的 JSON（`{ticket, randstr}`，也看 `data` / `result` 下一层）、带 `ticket=` 的链接（查询串或片段）。返回 `{ ticket, randstr? }`，失败时给出精确原因（「JSON 中没有 ticket 字段」「链接中没有 ticket 参数」等）。

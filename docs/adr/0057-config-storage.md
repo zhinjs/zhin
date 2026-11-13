@@ -53,6 +53,7 @@ sidebar: false
 > - 表 `feature_overrides`：`id`（`sha256(plugin, level, key)`）、`plugin`、`level`、`key`、`enabled`、`patch`、`revision`、`updated_at`、`updated_by`。旧表 `feature_conversation_overrides` 的行在首次加载时以 `level = 'conversation'` 复制过来（新表已有该键的行或墓碑时跳过，可重复执行）；旧表保留、只读、不再写入，确认无误后可手动删除。
 > - 有效配置解析（`configFor` / `isEnabledFor`、分发门禁、Agent 工具披露、Console `feature.*`）的适配器 / 账号级只读数据库，合并顺序、锁定与字段白名单不变；配置文件里遗留的 `overrides` 块不参与解析。
 > - 迁移由实例在启动时完成（与聊天角色迁移同一做法，网关此时尚未接管写入）：配置解析前找出各插件块（含嵌套子插件块）的 `overrides`；数据库加载后逐条写入（已有行或墓碑时保留数据库的值），记录 `imported`；首个世代启动后先把配置文件备份到 `.zhin/backups/feature-overrides-<时间>/`，再经配置文档 `prepare` / `commit`（原子写，按启动前读到的修订号比对）删除这些块，记录 `done`。任何一步失败都不改配置文件，下次启动重试；值里含 `${…}` / `env://` 引用时直接停止启动（数据库里的覆盖不做环境变量展开）。
+> - 修订（2026-11-13，合并后复审）：嵌套块只认候选世代插件树里的真实子插件实例（与配置合成器同一规则；插件树不可用时本次启动不导入）；键不合适配器 / 账号键格式、或层级写错的条目（以前不生效）跳过并警告，不导入、只留在备份里；`imported` 状态下配置文件的改动在数据库行仍为迁移所写（修订号 1、`updated_by` 为 `migration:…`）时覆盖该行，否则保留数据库值并逐条警告。
 > - `done` 之后（以及从未写过 `overrides` 的项目），启动时与每次配置更新时出现 `overrides` 都被拒绝，提示改用 Console 功能页或「功能 设置」聊天命令，见 `docs/migrations/feature-overrides.md`。
 > - 非关系型方言下写入被拒绝（503 `feature-overrides-unpersisted`），会话级也一样；首次迁移的条目只在内存中生效，配置文件不动、迁移记录保持 `pending`，直到换用关系型数据库。
 > - `feature.*` 请求与响应形状不变；适配器 / 账号级的 `revision` 改为该行的修订号，兼容旧版 Console：适配器 / 账号级仍接受等于当前配置修订号的 `expectedRevision`（不做行级检查）。
