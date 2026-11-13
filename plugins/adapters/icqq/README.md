@@ -216,6 +216,8 @@ icqq:
 | `icqq login status` | 查看在线状态与登录待办 |
 | `icqq login retry` | 强制重新触发登录 |
 
+**设备锁**：日志、Console 和通知里会给出验证链接。打开链接，用手机 QQ 完成验证后提交 `ok`（终端直接输入、Console 提交，或 `icqq login code ok`），登录继续。无法用链接验证时提交 `sms`，会向密保手机发送验证码，再提交收到的验证码。没有提交 `sms` 不会发短信。等待验证期间不会自动重新登录（否则链接会失效）；超过 5 分钟未处理，才会按退避重试并给出新的验证。
+
 命令只接受 master（顶层或 `endpoints[i].master`）或 `notify.id` 对应账号；两者都没配置时请用 Console 的 ICQQ 页面。没有配置 `notify` 时，掉线只写日志并在 Console 显示登录待办。
 
 ## 故障排查

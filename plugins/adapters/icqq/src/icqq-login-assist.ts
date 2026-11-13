@@ -15,10 +15,16 @@ type Logger = {
   warn(message: string): void;
 };
 
+/** How a login-assist step ended; the endpoint decides whether to retry from it. */
+export type IcqqLoginAssistOutcome = 'submitted' | 'failed';
+
 /**
  * Drive ICQQ login challenges through LoginAssist (refresh-safe pending tasks).
- * Mirrors the classic stdin flow: qrcode/auth → login(); slider → submitSlider;
- * device → sendSmsCode then submitSmsCode.
+ * qrcode/auth → login(); slider → submitSlider.
+ *
+ * device (设备锁) offers two ways, as ICQQ does: open the URL and verify in mobile QQ, then
+ * `login()` again (submit `ok`); or request an SMS code (submit `sms`) and submit it. No SMS is
+ * sent unless asked for: an unrequested `sendSmsCode()` can fail the login outright.
  */
 export async function runIcqqLoginAssistStep(input: {
   assist: LoginAssist;
@@ -32,7 +38,7 @@ export async function runIcqqLoginAssistStep(input: {
   step: LoginAssistType;
   event: unknown;
   locale?: Locale;
-}): Promise<void> {
+}): Promise<IcqqLoginAssistOutcome> {
   const { assist, client, adapter, endpointKey, owner, logger, step, event } = input;
   assist.cancelOwned(owner, `replaced_by_${step}`);
 
@@ -47,31 +53,22 @@ export async function runIcqqLoginAssistStep(input: {
 
   try {
     input.signal?.throwIfAborted();
+    const wait = (type: LoginAssistType, body: PendingLoginTaskPayload) =>
+      assist.waitForInput(adapter, endpointKey, type, body, { owner, signal: input.signal, endpointIdentity: input.endpointIdentity });
+
     if (step === 'device') {
-      try {
-        await client.sendSmsCode();
-      } catch (error) {
-        logger.warn(formatCompact({
-          op: 'login_assist_send_sms_failed',
-          endpoint: endpointKey,
-          error: error instanceof Error ? error.message : String(error),
-        }));
-      }
+      await runDeviceStep({ ...input, wait, payload });
+      return 'submitted';
     }
 
-    const value = await assist.waitForInput(adapter, endpointKey, step, payload, { owner, signal: input.signal, endpointIdentity: input.endpointIdentity });
+    const value = await wait(step, payload);
     input.signal?.throwIfAborted();
     const text = normalizeSubmitValue(value);
 
     switch (step) {
-      case 'qrcode':
-      case 'auth':
-        await client.login();
-        break;
       case 'slider':
         await client.submitSlider(text);
         break;
-      case 'device':
       case 'sms':
         await client.submitSmsCode(text);
         break;
@@ -79,6 +76,7 @@ export async function runIcqqLoginAssistStep(input: {
         await client.login();
         break;
     }
+    return 'submitted';
   } catch (error) {
     logger.warn(formatCompact({
       op: 'login_assist_failed',
@@ -86,7 +84,51 @@ export async function runIcqqLoginAssistStep(input: {
       type: step,
       error: error instanceof Error ? error.message : String(error),
     }));
+    return 'failed';
   }
+}
+
+/** 设备锁: wait for `ok` (verified via the URL → login()) or `sms` (send a code, then submit it). */
+async function runDeviceStep(input: {
+  client: IcqqLoginClient;
+  endpointKey: string;
+  logger: Logger;
+  signal?: AbortSignal;
+  locale?: Locale;
+  event: unknown;
+  payload: PendingLoginTaskPayload;
+  wait: (type: LoginAssistType, body: PendingLoginTaskPayload) => Promise<string | Record<string, unknown>>;
+}): Promise<void> {
+  const { client, endpointKey, logger, wait } = input;
+  let prompt = input.payload;
+  for (;;) {
+    const choice = deviceChoice(await wait('device', prompt));
+    input.signal?.throwIfAborted();
+    if (choice === 'continue') {
+      await client.login();
+      return;
+    }
+    try {
+      await client.sendSmsCode();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.warn(formatCompact({ op: 'login_assist_send_sms_failed', endpoint: endpointKey, error: message }));
+      prompt = { ...input.payload, message: t(input.locale, 'loginSmsSendFailed', { error: message }) };
+      continue;
+    }
+    const raw = input.event && typeof input.event === 'object' ? input.event as Record<string, unknown> : {};
+    const phone = typeof raw.phone === 'string' && raw.phone ? ` ${raw.phone}` : '';
+    const code = normalizeSubmitValue(await wait('sms', { message: t(input.locale, 'loginSms', { phone }), phone: raw.phone }));
+    input.signal?.throwIfAborted();
+    await client.submitSmsCode(code);
+    return;
+  }
+}
+
+/** `sms` (or `{ action: 'sms' }`) asks for an SMS code; anything else means the URL check is done. */
+export function deviceChoice(value: string | Record<string, unknown>): 'sms' | 'continue' {
+  const raw = typeof value === 'string' ? value : typeof value.action === 'string' ? value.action : normalizeSubmitValue(value);
+  return raw.trim().toLowerCase() === 'sms' ? 'sms' : 'continue';
 }
 
 function buildPayload(step: LoginAssistType, event: unknown, locale?: Locale): PendingLoginTaskPayload {
@@ -104,7 +146,7 @@ function buildPayload(step: LoginAssistType, event: unknown, locale?: Locale): P
       };
     case 'device':
       return {
-        message: t(locale, 'loginSms'),
+        message: t(locale, 'loginDevice'),
         url: typeof raw.url === 'string' ? raw.url : undefined,
         phone: raw.phone,
       };
@@ -121,6 +163,7 @@ function buildPayload(step: LoginAssistType, event: unknown, locale?: Locale): P
 
 function normalizeSubmitValue(value: string | Record<string, unknown>): string {
   if (typeof value === 'string') return value.trim();
+  if (typeof value.action === 'string') return value.action.trim();
   if (typeof value.ticket === 'string') return value.ticket.trim();
   if (typeof value.code === 'string') return value.code.trim();
   if (typeof value.value === 'string') return value.value.trim();

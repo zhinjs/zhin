@@ -135,6 +135,8 @@ With `autoReconnect: true`, the endpoint retries login automatically. When a QR 
 | `icqq login status` | show online state and pending login tasks |
 | `icqq login retry` | trigger another login attempt |
 
+**Device lock**: the log, Console and notification show a verification link. Open it, verify in mobile QQ, then submit `ok` (type it in the terminal, submit in Console, or `icqq login code ok`) to continue. If the link does not work, submit `sms` to send a code to the bound phone, then submit the code. No SMS is sent unless you submit `sms`. While the verification waits, no automatic relogin runs (it would void the link); only after 5 minutes without an answer does it retry with backoff and show a new verification.
+
 Only the chat role `owner` or the `notify.id` account may run these commands; when neither is configured, use the Console ICQQ page. Without `notify`, outages are only logged and shown as pending logins on the Console ICQQ page.
 
 ## Troubleshooting

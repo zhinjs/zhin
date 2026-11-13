@@ -140,6 +140,13 @@ export class IcqqEndpoint extends ManagedIcqqClient implements Endpoint {
   #reloginTimer?: ReturnType<typeof setTimeout>;
   #reloginAttempts = 0;
   #reloginInFlight?: Promise<void>;
+  /**
+   * The current login challenge (qrcode / slider / device / auth) waiting for the operator.
+   * While one is pending no automatic relogin runs: a relogin starts a new SDK login, which
+   * issues a new challenge and voids the URL / ticket the operator is working on.
+   */
+  #challengeToken = 0;
+  #challengePending = false;
   #offlineNoticeAt = 0;
   #challengeNoticeAt = 0;
 
@@ -323,6 +330,7 @@ export class IcqqEndpoint extends ManagedIcqqClient implements Endpoint {
 
   #scheduleRelogin(reason: string): void {
     if (!this.#options.config.autoReconnect || this.#stopped || this.#retiring) return;
+    if (this.#challengePending) return;
     if (this.#reloginTimer || this.#reloginInFlight) return;
     if (this.#reloginAttempts >= 8) return;
     const attempt = this.#reloginAttempts++;
@@ -822,6 +830,7 @@ export class IcqqEndpoint extends ManagedIcqqClient implements Endpoint {
       this.#handleLoginChallenge('slider', event);
     });
     this.on('system.login.error', (event) => {
+      this.#endChallenge();
       this.#options.loginAssist.cancelOwned(this.#loginAssistOwner, 'login_error');
       this.#logSystemEvent('login.error', event);
       this.#notifyOffline('login_error', this.#options.config.autoReconnect);
@@ -836,6 +845,7 @@ export class IcqqEndpoint extends ManagedIcqqClient implements Endpoint {
     this.on('system.online', (event) => {
       if (this.#retiring) return;
       this.#everOnline = true;
+      this.#endChallenge();
       this.#clearReloginTimer();
       this.#reloginAttempts = 0;
       this.#notifyRecovered();
@@ -905,6 +915,8 @@ export class IcqqEndpoint extends ManagedIcqqClient implements Endpoint {
     this.#logSystemEvent(`login.${step}`, event);
     this.#clearReloginTimer();
     this.#notifyChallenge(step);
+    const token = ++this.#challengeToken;
+    this.#challengePending = true;
     void runIcqqLoginAssistStep({
       assist: this.#options.loginAssist,
       locale: this.#options.locale,
@@ -916,7 +928,18 @@ export class IcqqEndpoint extends ManagedIcqqClient implements Endpoint {
       logger: this.#logger,
       step,
       event: payload ?? event,
+    }).then((outcome) => {
+      // A newer challenge, `login.error` or going online has taken over.
+      if (token !== this.#challengeToken) return;
+      this.#challengePending = false;
+      // Unanswered (timeout) or failed: retry with backoff, which raises a fresh challenge.
+      if (outcome === 'failed' && !this.isOnline()) this.#scheduleRelogin('login_assist_unanswered');
     });
+  }
+
+  #endChallenge(): void {
+    this.#challengeToken += 1;
+    this.#challengePending = false;
   }
 
   #logSystemEvent(type: string, event: unknown): void {
