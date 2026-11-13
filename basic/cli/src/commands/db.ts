@@ -34,6 +34,12 @@ export function describeConsoleRole(result: SetupConsoleRoleResult): string[] {
       `-- 受限账号 ${result.user}（${result.dialect}）：请 DBA 用有建号权限的账号执行；`,
       `-- ${CONSOLE_ROLE_PASSWORD_PLACEHOLDER} 换成 ${result.envFile} 里 ${CONSOLE_ROLE_PASSWORD_ENV} 的值。`,
       ...result.statements.map(statement => `${statement};`),
+      ...(result.dialect === 'pg' ? [
+        '-- 注意：受限账号不能执行其他角色拥有的 SECURITY DEFINER 函数（pg_catalog / information_schema 之外），否则实例的探针会停用 SQL 控制台。',
+        '-- PUBLIC 默认可执行函数；这里不替你改。逐个检查：',
+        "--   SELECT n.nspname, p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE p.prosecdef AND n.nspname NOT IN ('pg_catalog', 'information_schema');",
+        '--   REVOKE EXECUTE ON FUNCTION <schema>.<function>(<参数类型>) FROM PUBLIC;  -- 再只授予需要的角色',
+      ] : []),
       `-- 已写入 ${result.envFile} 与配置文件 database.console；执行完上述 SQL 后运行 zhin restart。`,
     ];
   }

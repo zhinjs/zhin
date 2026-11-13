@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { MySQL } from '../src/dialects/mysql.js';
 import { PG } from '../src/dialects/pg.js';
 import {
+  PG_DEFINER_FUNCTION_PROBLEM,
   probeConsoleCredential,
   provisionConsoleRole,
   refreshConsoleGrants,
@@ -143,6 +144,24 @@ describe.skipIf(!live)('Console role on PostgreSQL (live)', () => {
     expect((await probe()).problems.join('\n')).toMatch(/role settings/);
     await run(`ALTER ROLE ${role} SET search_path = public`);
     expect((await probe()).ok).toBe(true);
+  });
+
+  it('refuses SECURITY DEFINER functions of the main account the account may execute, until PUBLIC loses EXECUTE', async () => {
+    const probe = () => probeConsoleCredential(restrictedRun, { dialect: 'pg', expectedUser: plan.user, mainUser });
+    expect((await probe()).ok).toBe(true);
+    await run('CREATE OR REPLACE FUNCTION public.zhin_cve_definer() RETURNS text LANGUAGE sql SECURITY DEFINER AS $$ SELECT current_user::text $$');
+    try {
+      // PUBLIC may execute it by default: it would run with the main account's rights.
+      expect(await restrictedRun('SELECT public.zhin_cve_definer() AS who')).toEqual([{ who: mainUser }]);
+      const refused = await probe();
+      expect(refused.ok).toBe(false);
+      expect(refused.problems).toContain(PG_DEFINER_FUNCTION_PROBLEM);
+      expect(refused.details?.join(' ')).toContain('public.zhin_cve_definer');
+      await run('REVOKE EXECUTE ON FUNCTION public.zhin_cve_definer() FROM PUBLIC');
+      expect(await probe()).toMatchObject({ ok: true, problems: [] });
+    } finally {
+      await run('DROP FUNCTION IF EXISTS public.zhin_cve_definer()');
+    }
   });
 
   it('never sends the password: the role stores the client-computed SCRAM verifier', async () => {

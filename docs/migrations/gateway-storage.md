@@ -77,6 +77,7 @@ database:
 - 主账号没有建号权限（托管数据库常见）：`zhin db console-role --print-sql` 只打印 SQL（密码处是 `<ZHIN_DB_CONSOLE_PASSWORD>` 占位，真实值在 `.env`），交给 DBA 执行后 `zhin restart`；
 - `zhin doctor --fix` 做同样的事；
 - 实例启动时只**探测**这个账号（不是超级用户、不能建角色 / 库 / 模式、在任何模式上都不能建对象、不拥有任何对象、角色设置未被改动、不属于其他角色、MySQL 上只有本库权限且没有角色与 PROXY 等），不合格时 SQL 控制台关闭并说明原因，之后最多每 5 分钟重新探测一次；正常时每 60 秒、以及受限连接出错后的下一次使用前也会重新探测；PostgreSQL 上还会用主账号补授权给新建的表，并撤销它在网关表上的任何权限；
+- PostgreSQL 上受限账号若能执行其他角色拥有的 SECURITY DEFINER 函数（PUBLIC 默认可执行任何函数，扩展函数也算），探针会停用 SQL 控制台：这类函数以属主权限运行。`zhin db console-role` 不替你改（会影响其他用户）；按实例日志里列出的函数执行 `REVOKE EXECUTE ON FUNCTION <模式>.<函数>(<参数类型>) FROM PUBLIC`，再只授予需要的角色，然后 `zhin restart`；
 - 建议在 `pg_hba.conf`（或 MySQL 账号的主机部分）把受限账号限制为实例所在主机；PostgreSQL 建号时发送的是客户端算好的 SCRAM 校验值，`--print-sql` 输出可以原样交给 DBA；
 - **PostgreSQL 上 SQL 控制台不能做 DDL**（`CREATE` / `ALTER` / `DROP` 回 42501 权限不足）：请用 Console 的结构编辑器；
 - SQLite 不需要受限账号：账号在另一个文件里，实例的连接拒绝 `ATTACH`。

@@ -239,6 +239,17 @@ describe('restricted account: review follow-ups', () => {
     expect(host.console!.info().capabilities).toMatchObject({ sql: false, sqlReasonCode: 'console-role-invalid', sqlReason: expect.stringContaining('may CREATE in schema zhin') });
   });
 
+  it('keeps SECURITY DEFINER function names out of sqlReason (log only)', async () => {
+    const restricted = pgRestricted();
+    const base = restricted.query.getMockImplementation()!;
+    restricted.query.mockImplementation(async (sql: string, params?: unknown[]) => (/prosecdef/.test(sql) ? [{ schema: 'public', name: 'secret_fn' }] : base(sql, params)));
+    const { host } = pgHost(restricted);
+    await host.start();
+    const capabilities = host.console!.info().capabilities;
+    expect(capabilities).toMatchObject({ sql: false, sqlReasonCode: 'console-role-invalid', sqlReason: expect.stringContaining('SECURITY DEFINER') });
+    expect(JSON.stringify(capabilities)).not.toContain('secret_fn');
+  });
+
   it('reports why raw SQL is off as a code', async () => {
     const { host } = pgHost(pgRestricted(), { console: false });
     await host.start();

@@ -561,6 +561,9 @@ function createDatabaseConsole(
         await opened.stop().catch(() => undefined);
         if (restrictedDb === opened) restrictedDb = undefined;
         accessProblem = `The restricted Console database account is not restricted enough: ${probe.problems.join('; ')}`;
+        // Object names (e.g. SECURITY DEFINER functions) go to the log only, never into sqlReason.
+        const details = (probe as { details?: readonly string[] }).details;
+        if (details?.length) logger.warn(formatCompact({ op: 'database_console_role_details', details: details.join('; ') }));
         accessProblemCode = 'console-role-invalid';
       } else {
         restrictedDb = opened;

@@ -365,7 +365,32 @@ export interface ConsoleCredentialProbe {
   readonly problems: readonly string[];
   /** The account the connection logged in as. */
   readonly user?: string;
+  /**
+   * For the log only (never shown to Console users): object names behind a problem, e.g. the
+   * SECURITY DEFINER functions the account may execute.
+   */
+  readonly details?: readonly string[];
 }
+
+/** How many SECURITY DEFINER functions a probe names in its log details. */
+export const PG_DEFINER_FUNCTIONS_LOGGED = 5;
+
+/**
+ * The account may EXECUTE a SECURITY DEFINER function owned by another role outside `pg_catalog` /
+ * `information_schema` (extension functions in other schemas included): it would run with that
+ * owner's rights. PUBLIC has EXECUTE on functions by default, so provisioning cannot fix this
+ * without changing everyone's access — the owner revokes it (or grants it explicitly) instead.
+ */
+export const PG_DEFINER_FUNCTION_PROBLEM = 'the console user can execute SECURITY DEFINER functions owned by other roles (they run with the owner\'s rights): '
+  + 'REVOKE EXECUTE ON FUNCTION <schema>.<function>(…) FROM PUBLIC, or grant EXECUTE only to the roles that need it; the instance log names the functions';
+
+/** The query behind {@link PG_DEFINER_FUNCTION_PROBLEM} (at most PG_DEFINER_FUNCTIONS_LOGGED + 1 rows). */
+export const PG_DEFINER_FUNCTIONS_QUERY = `SELECT n.nspname AS schema, p.proname AS name FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE p.prosecdef AND p.proowner <> (SELECT oid FROM pg_roles WHERE rolname = current_user)
+      AND n.nspname NOT IN ('pg_catalog', 'information_schema') AND n.nspname NOT LIKE 'pg\\_temp\\_%' AND n.nspname NOT LIKE 'pg\\_toast\\_temp\\_%'
+      AND has_function_privilege(current_user, p.oid, 'EXECUTE')
+    ORDER BY 1, 2 LIMIT ${PG_DEFINER_FUNCTIONS_LOGGED + 1}`;
 
 export interface ProbeConsoleCredentialOptions {
   readonly dialect: ConsoleCredentialDialect;
@@ -435,7 +460,14 @@ async function probePg(run: ConsoleSqlRunner, options: ProbeConsoleCredentialOpt
     WHERE c.relkind IN ('r', 'p', 'v', 'm', 'f') AND has_table_privilege(current_user, c.oid, 'SELECT, INSERT, UPDATE, DELETE, TRUNCATE')`))
     .map(row => String(row.name)).filter(name => isGatewayOwnedTable(name));
   if (gatewayTables.length) problems.push(`the console user can reach gateway tables: ${gatewayTables.join(', ')}`);
-  return Object.freeze({ ok: problems.length === 0, problems: Object.freeze(problems), user });
+  const definers = rows(await run(PG_DEFINER_FUNCTIONS_QUERY)).map(row => `${String(row.schema)}.${String(row.name)}`);
+  const details: string[] = [];
+  if (definers.length) {
+    problems.push(PG_DEFINER_FUNCTION_PROBLEM);
+    const named = definers.slice(0, PG_DEFINER_FUNCTIONS_LOGGED);
+    details.push(`SECURITY DEFINER functions executable by the console user: ${named.join(', ')}${definers.length > named.length ? ', …' : ''}`);
+  }
+  return Object.freeze({ ok: problems.length === 0, problems: Object.freeze(problems), user, ...(details.length ? { details: Object.freeze(details) } : {}) });
 }
 
 async function probeMysql(run: ConsoleSqlRunner, options: ProbeConsoleCredentialOptions): Promise<ConsoleCredentialProbe> {

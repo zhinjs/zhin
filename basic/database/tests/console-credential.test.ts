@@ -5,6 +5,8 @@ import {
   consoleRoleName,
   mysqlRoleAndProxyGrants,
   mysqlVersionProblem,
+  PG_DEFINER_FUNCTION_PROBLEM,
+  PG_DEFINER_FUNCTIONS_QUERY,
   pgScramVerifier,
   scrubSecret,
   consoleRoleStatements,
@@ -160,6 +162,29 @@ describe('probeConsoleCredential', () => {
       'the console user has granted roles: `admin`@`%`',
       "the console user holds PROXY grants: 'root'@'%'",
     ]);
+  });
+});
+
+describe('PostgreSQL SECURITY DEFINER functions', () => {
+  it('refuses executable definer functions of other roles, naming them in the log details only', async () => {
+    const definers = Array.from({ length: 7 }, (_, index) => ({ schema: index < 2 ? 'public' : 'ext', name: `fn${index}` }));
+    const run = runner([
+      [/FROM pg_roles r WHERE r.rolname = current_user$/, [{ user: 'zhin_console_x', session: 'zhin_console_x', super: false, createrole: false, createdb: false, bypassrls: false, replication: false, schema_create: false, database_create: false, memberships: 0 }]],
+      [/unnest\(s.setconfig\)/, [{ setting: 'statement_timeout=60s' }, { setting: 'search_path=public' }]],
+      [/p\.prosecdef/, definers.slice(0, 6)],
+    ]);
+    const probe = await probeConsoleCredential(run, { dialect: 'pg', expectedUser: 'zhin_console_x' });
+    expect(probe.ok).toBe(false);
+    expect(probe.problems).toEqual([PG_DEFINER_FUNCTION_PROBLEM]);
+    expect(probe.problems.join(' ')).not.toMatch(/fn\d/);
+    expect(probe.problems.join(' ')).toMatch(/REVOKE EXECUTE ON FUNCTION .* FROM PUBLIC/);
+    expect(probe.details).toEqual(['SECURITY DEFINER functions executable by the console user: public.fn0, public.fn1, ext.fn2, ext.fn3, ext.fn4, …']);
+    const query = run.calls.find(call => /prosecdef/.test(call.sql))!.sql;
+    expect(query).toBe(PG_DEFINER_FUNCTIONS_QUERY);
+    expect(query).toMatch(/has_function_privilege\(current_user, p\.oid, 'EXECUTE'\)/);
+    expect(query).toMatch(/p\.proowner <> \(SELECT oid FROM pg_roles WHERE rolname = current_user\)/);
+    expect(query).toMatch(/NOT IN \('pg_catalog', 'information_schema'\)/);
+    expect(query).toMatch(/LIMIT 6$/);
   });
 });
 
