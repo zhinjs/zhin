@@ -45,6 +45,9 @@ function rpcPrincipal(http: HttpHost, resolved: ConsolePrincipal | undefined): C
 
 export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions): void {
   const { http, base } = options;
+  // Console SQL is recorded with its literals redacted by the database Host's own lexer.
+  const redactSql = options.databaseHost?.console?.redactSql;
+  const auditOptions = redactSql ? { redactSql: (sql: string) => redactSql(sql) } : undefined;
 
   http.route('POST', `${base}/console/request`, async (request, context) => {
     const authScope = 'full' as const;
@@ -62,7 +65,7 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
           action: `rpc:${String(message.type ?? '')}`.slice(0, 256),
           ...(decision.allowed && rpcAuditTarget(decision.rule) ? { target: rpcAuditTarget(decision.rule)! } : {}),
           outcome,
-          detail: login ? { ...rpcAuditDetail(message, body), ...login } : rpcAuditDetail(message, body),
+          detail: login ? { ...rpcAuditDetail(message, body, auditOptions), ...login } : rpcAuditDetail(message, body, auditOptions),
           ...(context.remoteAddress ? { ip: context.remoteAddress } : {}),
         });
       } catch { /* audit never breaks a request */ }

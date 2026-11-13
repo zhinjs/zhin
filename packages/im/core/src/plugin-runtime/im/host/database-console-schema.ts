@@ -26,6 +26,130 @@ export interface SchemaDialect {
   readonly name: string;
   mapColumnType(type: string): string;
   formatDefaultValue(value: unknown): string;
+  /** The dialect's own column DDL (`@zhin.js/database`): text keys, `(expr)` defaults, identity. */
+  formatColumnDefinition?(field: string, column: Record<string, unknown>): string;
+}
+
+/** A MySQL column as `information_schema.columns` describes it (for `MODIFY COLUMN`). */
+export interface MysqlColumnDefinition {
+  readonly name: string;
+  /** Full type, e.g. `varchar(64)`, `int unsigned`, `enum('a','b')`. */
+  readonly columnType: string;
+  readonly dataType: string;
+  readonly nullable: boolean;
+  /** `COLUMN_DEFAULT`: the literal value, or the expression when `extra` has `DEFAULT_GENERATED`. */
+  readonly defaultValue: string | null;
+  /** `EXTRA`: `auto_increment`, `on update CURRENT_TIMESTAMP`, `DEFAULT_GENERATED`, `VIRTUAL GENERATED`, `INVISIBLE`, … */
+  readonly extra: string;
+  readonly comment: string;
+  readonly characterSet: string | null;
+  readonly collation: string | null;
+  readonly generation: string | null;
+  /** The column is part of an index (a TEXT type would need a key length). */
+  readonly indexed: boolean;
+}
+
+/** Reads one MySQL column definition (parameterised). */
+export async function readMysqlColumnDefinition(
+  query: (sql: string, params?: unknown[]) => Promise<unknown>,
+  table: string,
+  column: string,
+): Promise<MysqlColumnDefinition | undefined> {
+  const rows = await query(
+    `SELECT COLUMN_NAME AS name, COLUMN_TYPE AS column_type, DATA_TYPE AS data_type, IS_NULLABLE AS is_nullable,
+            COLUMN_DEFAULT AS column_default, EXTRA AS extra, COLUMN_COMMENT AS column_comment,
+            CHARACTER_SET_NAME AS character_set, COLLATION_NAME AS collation_name, GENERATION_EXPRESSION AS generation
+       FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?`,
+    [table, column],
+  ) as Record<string, unknown>[];
+  const row = rows?.[0];
+  if (!row) return undefined;
+  const indexed = await query(
+    'SELECT 1 AS hit FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ? LIMIT 1',
+    [table, column],
+  ) as unknown[];
+  const text = (value: unknown) => (value === null || value === undefined ? null : String(value));
+  return Object.freeze({
+    name: String(row.name),
+    columnType: String(row.column_type ?? ''),
+    dataType: String(row.data_type ?? '').toLowerCase(),
+    nullable: row.is_nullable === 'YES',
+    defaultValue: text(row.column_default),
+    extra: String(row.extra ?? ''),
+    comment: String(row.column_comment ?? ''),
+    characterSet: text(row.character_set),
+    collation: text(row.collation_name),
+    generation: text(row.generation) || null,
+    indexed: Array.isArray(indexed) && indexed.length > 0,
+  });
+}
+
+/** MySQL types whose literal defaults must be written as an expression (`DEFAULT ('x')`, MySQL 8.0.13+). */
+const MYSQL_EXPRESSION_DEFAULT = /^(?:tinytext|text|mediumtext|longtext|tinyblob|blob|mediumblob|longblob|json|geometry|point|linestring|polygon|multipoint|multilinestring|multipolygon|geometrycollection)$/i;
+
+/** MySQL string literal: quotes doubled and backslashes escaped (backslash escapes are on by default). */
+function mysqlString(value: string): string {
+  return `'${value.replaceAll('\\', '\\\\').replaceAll('\'', '\'\'')}'`;
+}
+
+/**
+ * `MODIFY COLUMN` restates the whole column, so everything the change does not touch is copied
+ * from `information_schema`: the full type (`varchar(64)`, `unsigned`, enum values), character set
+ * and collation, `ON UPDATE` / `AUTO_INCREMENT` / `INVISIBLE`, the comment, and the default — an
+ * expression default (`CURRENT_TIMESTAMP`, `(uuid())`) stays an expression, a literal stays a
+ * literal (escaped), and TEXT / JSON literals become `DEFAULT ('…')`.
+ */
+export function renderMysqlModify(
+  current: MysqlColumnDefinition,
+  change: { readonly type?: string; readonly nullable?: boolean; readonly default?: string | number | boolean | null; readonly dropDefault?: boolean },
+  host: SchemaDialect,
+): string {
+  if (current.generation || /\b(?:virtual|stored) generated\b/i.test(current.extra)) {
+    throw new ConsoleSchemaRefusal('unsupported', 'Generated columns cannot be changed here; use a SQL statement instead');
+  }
+  const quote = (name: string) => `\`${name.replaceAll('`', '``')}\``;
+  let type = current.columnType;
+  let dataType = current.dataType;
+  if (change.type) {
+    type = host.mapColumnType(change.type);
+    // TEXT cannot be part of an index without a key length: keep the column indexable.
+    if (/^text$/i.test(type) && current.indexed) type = 'VARCHAR(768)';
+    dataType = type.toLowerCase().replace(/\(.*$/, '');
+  }
+  const parts = [`${quote(current.name)} ${type}`];
+  if (!change.type && current.characterSet && current.collation) parts.push(`CHARACTER SET ${current.characterSet} COLLATE ${current.collation}`);
+  const nullable = change.nullable ?? current.nullable;
+  parts.push(nullable ? 'NULL' : 'NOT NULL');
+  const expressionType = MYSQL_EXPRESSION_DEFAULT.test(dataType);
+  if (!change.dropDefault) {
+    if (change.default !== undefined) {
+      if (change.default === null) parts.push('DEFAULT NULL');
+      else {
+        const literal = typeof change.default === 'string' ? mysqlString(change.default) : host.formatDefaultValue(change.default);
+        parts.push(`DEFAULT ${expressionType ? `(${literal})` : literal}`);
+      }
+    } else if (current.defaultValue !== null) {
+      const generated = /\bdefault_generated\b/i.test(current.extra);
+      if (generated) {
+        // information_schema shows string literals of expression defaults as `_utf8mb4\'x\'`.
+        const expression = current.defaultValue.replaceAll("\\'", "'");
+        parts.push(/^(?:current_timestamp|now|localtime|localtimestamp)(?:\(\d*\))?$/i.test(expression) ? `DEFAULT ${expression}` : `DEFAULT (${expression})`);
+      } else if (/^b'[01]*'$/i.test(current.defaultValue)) {
+        parts.push(`DEFAULT ${current.defaultValue}`);
+      } else {
+        const literal = mysqlString(current.defaultValue);
+        parts.push(`DEFAULT ${expressionType ? `(${literal})` : literal}`);
+      }
+    } else if (nullable && current.nullable) {
+      // No default and nullable: MySQL's implicit DEFAULT NULL, nothing to restate.
+    }
+  }
+  const onUpdate = /\bon update ([a-z_]+(?:\(\d*\))?)/i.exec(current.extra);
+  if (onUpdate) parts.push(`ON UPDATE ${onUpdate[1]}`);
+  if (/\bauto_increment\b/i.test(current.extra)) parts.push('AUTO_INCREMENT');
+  if (/\binvisible\b/i.test(current.extra)) parts.push('INVISIBLE');
+  if (current.comment) parts.push(`COMMENT ${mysqlString(current.comment)}`);
+  return parts.join(' ');
 }
 
 export function quoteConsoleIdentifier(dialect: ConsoleSqlDialect, name: string): string {
@@ -75,6 +199,11 @@ function defaultValue(value: unknown): string | number | boolean | null {
 }
 
 function columnSql(dialect: ConsoleSqlDialect, host: SchemaDialect, spec: DatabaseHostColumnSpec): string {
+  if (host.formatColumnDefinition) {
+    // The dialect's own column DDL, as code-declared tables get it (length applies to text only).
+    const { name, length, ...column } = spec;
+    return host.formatColumnDefinition(name, { ...column, ...(length && spec.type === 'text' ? { length } : {}) });
+  }
   const name = quoteConsoleIdentifier(dialect, spec.name);
   let type = host.mapColumnType(spec.type);
   if (spec.autoIncrement && dialect === 'pg') type = spec.type === 'bigint' ? 'BIGSERIAL' : 'SERIAL';
@@ -86,7 +215,10 @@ function columnSql(dialect: ConsoleSqlDialect, host: SchemaDialect, spec: Databa
   if (spec.autoIncrement && dialect === 'mysql') parts.push('AUTO_INCREMENT');
   if (spec.unique) parts.push('UNIQUE');
   if (spec.nullable === false && !spec.primary) parts.push('NOT NULL');
-  if (spec.default !== undefined) parts.push(`DEFAULT ${host.formatDefaultValue(spec.default)}`);
+  if (spec.default !== undefined) {
+    const literal = host.formatDefaultValue(spec.default);
+    parts.push(`DEFAULT ${dialect === 'mysql' && spec.default !== null && MYSQL_EXPRESSION_DEFAULT.test(type) ? `(${literal})` : literal}`);
+  }
   return parts.join(' ');
 }
 
@@ -95,6 +227,10 @@ export interface SchemaPlanContext {
   readonly host: SchemaDialect;
   /** True when the table exists (declared, discovered or physical). */
   hasTable(table: string): boolean;
+  /** True when plugin code declares the table (its columns are read by that code). */
+  isDeclared?(table: string): boolean;
+  /** MySQL: the full current definition of a column, for `MODIFY COLUMN`. */
+  mysqlColumn?(table: string, column: string): Promise<MysqlColumnDefinition | undefined>;
   /** Current columns of an existing table, for checks and MySQL `MODIFY`. */
   describe(table: string): Promise<DatabaseHostTableSchema>;
 }
@@ -128,6 +264,12 @@ export async function planConsoleSchemaChange(input: unknown, context: SchemaPla
   if (!context.hasTable(table)) throw new ConsoleSchemaRefusal('not_found', `Table '${table}' not found`);
   const current = await context.describe(table);
   const column = (name: string) => current.columns.find(entry => entry.name === name);
+  /** Renaming or dropping a column a plugin declared breaks that plugin (and its next start re-creates it). */
+  const refuseDeclared = (verb: string, name: string) => {
+    if (context.isDeclared?.(table)) {
+      throw new ConsoleSchemaRefusal('unsupported', `Column '${name}' of '${table}' is declared by plugin code: ${verb} it here would break the plugin that reads it (and the plugin would add it back at its next start). Change the plugin's table definition instead.`);
+    }
+  };
 
   switch (raw.kind) {
     case 'add-column': {
@@ -143,6 +285,7 @@ export async function planConsoleSchemaChange(input: unknown, context: SchemaPla
     case 'rename-column': {
       const from = existingName(raw.column, 'column');
       if (!column(from)) throw new ConsoleSchemaRefusal('not_found', `Column '${from}' not found`);
+      refuseDeclared('renaming', from);
       const to = newName(raw.to, 'New column name');
       if (column(to)) throw new ConsoleSchemaRefusal('invalid', `Column '${to}' already exists`);
       warnings.push('code_may_reference_column');
@@ -153,6 +296,7 @@ export async function planConsoleSchemaChange(input: unknown, context: SchemaPla
       const name = existingName(raw.column, 'column');
       const existing = column(name);
       if (!existing) throw new ConsoleSchemaRefusal('not_found', `Column '${name}' not found`);
+      refuseDeclared('dropping', name);
       if (existing.primary) throw new ConsoleSchemaRefusal('unsupported', 'The primary key column cannot be dropped');
       if (current.columns.length < 2) throw new ConsoleSchemaRefusal('unsupported', 'A table must keep at least one column');
       const change: DatabaseHostSchemaChange = Object.freeze({ kind: 'drop-column', table, column: name });
@@ -193,13 +337,17 @@ export async function planConsoleSchemaChange(input: unknown, context: SchemaPla
         if (dropDefault) clauses.push(`ALTER COLUMN ${q(name)} DROP DEFAULT`);
         return plan(change, [`ALTER TABLE ${q(table)} ${clauses.join(', ')}`], !!type, type ? name : undefined, warnings);
       }
-      // MySQL MODIFY restates the whole column: unchanged parts come from the current definition.
+      // MySQL MODIFY restates the whole column: unchanged parts come from information_schema.
       if (existing.primary) throw new ConsoleSchemaRefusal('unsupported', 'Change the primary key column with a SQL statement instead');
-      const nativeType = type ? host.mapColumnType(type) : existing.nativeType;
-      const keepNull = nullable ?? existing.nullable;
-      const keepDefault = dropDefault ? undefined : hasDefault ? host.formatDefaultValue(value) : existing.defaultSql;
+      const definitionNow = await context.mysqlColumn?.(table, name);
+      if (!definitionNow) throw new ConsoleSchemaRefusal('unsupported', `Cannot read the current definition of column '${name}'`);
       warnings.push('mysql_modify_restates_column');
-      const definition = [`${q(name)} ${nativeType}`, keepNull ? 'NULL' : 'NOT NULL', ...(keepDefault !== undefined ? [`DEFAULT ${keepDefault}`] : [])].join(' ');
+      const definition = renderMysqlModify(definitionNow, {
+        ...(type ? { type } : {}),
+        ...(nullable !== undefined ? { nullable } : {}),
+        ...(hasDefault ? { default: value } : {}),
+        ...(dropDefault ? { dropDefault } : {}),
+      }, host);
       return plan(change, [`ALTER TABLE ${q(table)} MODIFY COLUMN ${definition}`], !!type, type ? name : undefined, warnings);
     }
     case 'create-index': {
@@ -284,7 +432,7 @@ export async function introspectConsoleTable(
       type: zhinColumnType(String(row.Type ?? '')),
       nullable: row.Null === 'YES',
       primary: row.Key === 'PRI',
-      ...(row.Default != null ? { defaultSql: `'${String(row.Default).replaceAll('\'', '\'\'')}'` } : {}),
+      ...(row.Default != null ? { defaultSql: mysqlString(String(row.Default)) } : {}),
     }));
     const byName = new Map<string, { name: string; columns: string[]; unique: boolean; primary: boolean }>();
     for (const row of await rows(`SHOW INDEX FROM ${q(table)}`)) {

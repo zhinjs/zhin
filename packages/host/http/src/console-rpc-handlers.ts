@@ -597,14 +597,20 @@ function sqlField(message: RuntimeConsoleRpcMessage): string {
   return typeof value === 'string' && value.trim() && value.length <= MAX_CONSOLE_SQL_LENGTH ? value : '';
 }
 
-const REFUSAL_NAMES: ReadonlySet<string> = new Set(['ConsoleSqlRefusal', 'ConsoleSchemaRefusal', 'ConsoleSelectRefusal']);
+const REFUSAL_NAMES: ReadonlySet<string> = new Set(['ConsoleSqlRefusal', 'ConsoleSchemaRefusal', 'ConsoleSelectRefusal', 'SqliteQueryTimeoutError']);
 
-/** `data.code` of a refusal by the database port (`read_only`, `protected_table`, …). */
-function refusalData(error: unknown): { data?: { code: string } } {
+/**
+ * `data.code` of a refusal by the database port (`read_only`, `protected_table`, …), and the DDL a
+ * failed `db:schema:apply` attempted (`data.statements`, for the audit log).
+ */
+function refusalData(error: unknown): { data?: { code?: string; statements?: readonly string[] } } {
   if (!(error instanceof Error)) return {};
-  if (error.name === 'GatewayOwnedTableError') return { data: { code: 'protected_table' } };
+  const attempted = (error as { statements?: unknown }).statements;
+  const statements = Array.isArray(attempted) && attempted.every(entry => typeof entry === 'string') ? { statements: attempted as string[] } : {};
+  if (error.name === 'GatewayOwnedTableError') return { data: { code: 'protected_table', ...statements } };
   const code = (error as { code?: unknown }).code;
-  return REFUSAL_NAMES.has(error.name) && typeof code === 'string' ? { data: { code } } : {};
+  const data = { ...(REFUSAL_NAMES.has(error.name) && typeof code === 'string' ? { code } : {}), ...statements };
+  return Object.keys(data).length ? { data } : {};
 }
 
 function unsupportedDatabaseFeature(payloads: RuntimeConsoleRpcReply[], requestId: number | string | undefined, feature: string): void {

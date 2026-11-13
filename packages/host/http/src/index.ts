@@ -43,6 +43,7 @@ export {
   requestMeta,
   rpcAuditDetail,
   rpcAuditTarget,
+  type RpcAuditOptions,
   type ConsoleAccessProvider,
   type ConsoleAuditEntry,
   type ConsoleBootstrapPrincipal,

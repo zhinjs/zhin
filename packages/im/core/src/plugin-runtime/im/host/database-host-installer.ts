@@ -42,6 +42,7 @@ import {
   ConsoleSqlRefusal,
   isProtectedConsoleTable,
   readOnlyConsoleStatement,
+  redactConsoleSql,
   writeConsoleStatements,
   type ConsoleSqlDialect,
 } from './database-console-sql.js';
@@ -50,6 +51,7 @@ import {
   introspectConsoleTable,
   listPhysicalTables,
   planConsoleSchemaChange,
+  readMysqlColumnDefinition,
 } from './database-console-schema.js';
 
 const logger = getLogger('Database');
@@ -91,6 +93,10 @@ type RawDatabase = {
     formatDropTable(name: string, ifExists?: boolean): unknown;
     mapColumnType(type: string): string;
     formatDefaultValue(value: unknown): string;
+    formatColumnDefinition?(field: string, column: Record<string, unknown>): string;
+    /** SQLite file databases: one read on its own connection in a worker (see `queryReadOnlyIsolated`). */
+    supportsIsolatedReads?(): boolean;
+    queryReadOnlyIsolated?(sql: string, options: { maxRows: number; timeoutMs: number }): Promise<{ columns: readonly string[]; rows: Record<string, unknown>[]; truncated: boolean }>;
   };
   dialectName: string;
   aggregate(name: string): {
@@ -361,6 +367,23 @@ const FILTER_OPERATOR_SET: ReadonlySet<string> = new Set(FILTER_OPERATORS);
 export const CONSOLE_QUERY_MAX_ROWS = 1000;
 export const CONSOLE_QUERY_TIMEOUT_MS = 10_000;
 const DML = /^\(*\s*(?:insert|update|delete|replace)\b/;
+/** Read kinds PostgreSQL can run behind a cursor (`DECLARE … CURSOR FOR`). */
+const PG_CURSOR_KINDS: ReadonlySet<string> = new Set(['select', 'with', 'values']);
+const PG_CONSOLE_CURSOR = 'zhin_console_cursor';
+
+/** One transaction of the Console SQL editor. */
+interface ConsoleTransaction {
+  /** Fixed SQL the Host itself wrote (`SET LOCAL …`). */
+  run(sql: string): Promise<unknown>;
+  /** SQL a person typed: exactly one statement through the dialect's single-statement protocol. */
+  statement(sql: string, options?: { maxRows?: number }): Promise<unknown>;
+}
+
+function cappedRows(result: unknown, maxRows: number): { rows: Record<string, unknown>[]; truncated: boolean } {
+  const all = Array.isArray(result) ? result as Record<string, unknown>[] : [];
+  const flagged = (result as { truncated?: unknown } | undefined)?.truncated === true;
+  return { rows: all.slice(0, maxRows), truncated: flagged || all.length > maxRows };
+}
 
 /** Thrown for a malformed `where` / `orderBy` of `db:select`. */
 export class ConsoleSelectRefusal extends Error {
@@ -436,18 +459,23 @@ function createDatabaseConsole(
     }
   };
   /** Runs `body` in one transaction; `rollback` discards it after collecting the result. */
-  const inTransaction = async <T>(body: (run: (sql: string) => Promise<unknown>) => Promise<T>, options: { readOnly?: boolean; rollback?: boolean; timeoutMs?: number }): Promise<T> => {
+  const inTransaction = async <T>(body: (trx: ConsoleTransaction) => Promise<T>, options: { readOnly?: boolean; rollback?: boolean; timeoutMs?: number }): Promise<T> => {
     const dialect = requireSql();
     const discard = Symbol('rollback');
     let result: T | undefined;
     try {
       await db.transaction(async trx => {
         const run = (sql: string) => trx.query(sql);
+        const statement = (sql: string, statementOptions?: { maxRows?: number }) => {
+          if (!trx.queryStatement) throw new Error('This database driver cannot run single statements');
+          return trx.queryStatement(sql, statementOptions);
+        };
         const timeout = Math.max(1, Math.floor(options.timeoutMs ?? CONSOLE_QUERY_TIMEOUT_MS));
+        // SET LOCAL ends with the transaction; Console SQL cannot lift it (SET / set_config are refused).
         if (dialect === 'pg') await run(`SET LOCAL statement_timeout = ${timeout}`);
         if (dialect === 'mysql' && options.readOnly) await run(`SET SESSION max_execution_time = ${timeout}`);
         try {
-          result = await body(run);
+          result = await body({ run, statement });
         } finally {
           if (dialect === 'mysql' && options.readOnly) await run('SET SESSION max_execution_time = DEFAULT').catch(() => undefined);
         }
@@ -475,11 +503,6 @@ function createDatabaseConsole(
     if (change.kind === 'add-column') {
       const { name, ...column } = change.column;
       next[name] = column;
-    } else if (change.kind === 'rename-column') {
-      next[change.to] = next[change.column];
-      delete next[change.column];
-    } else if (change.kind === 'drop-column') {
-      delete next[change.column];
     } else if (change.kind === 'alter-column') {
       const previous = (next[change.column] ?? {}) as Record<string, unknown>;
       const merged: Record<string, unknown> = { ...previous };
@@ -501,7 +524,9 @@ function createDatabaseConsole(
       dialect,
       host: db.dialect,
       hasTable: table => tableNames.has(table) || discovered.has(table),
+      isDeclared: table => tableNames.has(table),
       describe,
+      ...(dialect === 'mysql' ? { mysqlColumn: (table: string, column: string) => readMysqlColumnDefinition((sql, params) => db.query(sql, params), table, column) } : {}),
     });
   };
 
@@ -627,12 +652,25 @@ function createDatabaseConsole(
       const dialect = requireSql();
       const statement = readOnlyConsoleStatement(sql, dialect);
       const maxRows = Math.min(Math.max(1, Math.floor(options?.maxRows ?? CONSOLE_QUERY_MAX_ROWS)), CONSOLE_QUERY_MAX_ROWS);
+      const timeoutMs = Math.max(1, Math.floor(options?.timeoutMs ?? CONSOLE_QUERY_TIMEOUT_MS));
       const started = Date.now();
-      const result = await inTransaction(run => run(statement.text), { readOnly: true, rollback: true, ...(options?.timeoutMs ? { timeoutMs: options.timeoutMs } : {}) });
-      const all = Array.isArray(result) ? result as Record<string, unknown>[] : [];
-      const rows = all.slice(0, maxRows).map(jsonSafeRow);
-      const columns = [...new Set(rows.flatMap(row => Object.keys(row)))];
-      return Object.freeze({ columns, rows, rowCount: all.length, truncated: all.length > maxRows, durationMs: Date.now() - started });
+      let read: { rows: Record<string, unknown>[]; truncated: boolean; columns?: readonly string[] };
+      if (dialect === 'sqlite' && db.dialect.supportsIsolatedReads?.() && db.dialect.queryReadOnlyIsolated) {
+        // node:sqlite cannot interrupt a statement: run it off this event loop, stopped at the budget.
+        read = await db.dialect.queryReadOnlyIsolated(statement.text, { maxRows, timeoutMs });
+      } else {
+        read = await inTransaction(async trx => {
+          if (dialect === 'pg' && PG_CURSOR_KINDS.has(statement.kind)) {
+            // A cursor reads only the rows the cap keeps instead of the whole result.
+            await trx.statement(`DECLARE ${PG_CONSOLE_CURSOR} NO SCROLL CURSOR FOR\n${statement.text}\n`);
+            return cappedRows(await trx.statement(`FETCH FORWARD ${maxRows + 1} FROM ${PG_CONSOLE_CURSOR}`), maxRows);
+          }
+          return cappedRows(await trx.statement(statement.text, { maxRows }), maxRows);
+        }, { readOnly: true, rollback: true, timeoutMs });
+      }
+      const rows = read.rows.map(jsonSafeRow);
+      const columns = read.columns?.length ? [...read.columns] : [...new Set(rows.flatMap(row => Object.keys(row)))];
+      return Object.freeze({ columns, rows, rowCount: rows.length, truncated: read.truncated, durationMs: Date.now() - started });
     },
     async execute(sql, options) {
       const dialect = requireSql();
@@ -644,29 +682,44 @@ function createDatabaseConsole(
         for (const statement of statements) results.push(statementResult(statement.text, await run(statement.text)));
         return results;
       };
+      // Every statement goes through the single-statement protocol, so a COMMIT the lexer missed
+      // cannot ride along (and transaction control is refused): a dry run always rolls back.
       // MySQL commits DDL implicitly: only all-DML batches run in a transaction (and can be dry-run).
       const transactional = dialect !== 'mysql' || statements.every(statement => DML.test(statement.code));
       if (!transactional && dryRun) {
         return Object.freeze({ statements: statements.map(statement => ({ sql: statement.text })), dryRun, estimateUnavailable: true, durationMs: 0 });
       }
       const results = transactional
-        ? await inTransaction(runAll, { rollback: dryRun, ...(options?.timeoutMs ? { timeoutMs: options.timeoutMs } : {}) })
+        ? await inTransaction(trx => runAll(text => trx.statement(text)), { rollback: dryRun, ...(options?.timeoutMs ? { timeoutMs: options.timeoutMs } : {}) })
+        // MySQL DDL: dialect queries are prepared statements (one statement each).
         : await runAll(text => db.query(text));
       if (!dryRun) await refreshDiscovered().catch(() => undefined);
       return Object.freeze({ statements: Object.freeze(results), dryRun, durationMs: Date.now() - started });
     },
+    redactSql: (sql: string) => redactConsoleSql(sql, sqlDialect ?? 'mysql'),
     describe,
     previewSchema: plan,
     async applySchema(change, confirm) {
       const dialect = requireSql();
       const planned = await plan(change);
+      // The planned DDL travels with a failure too, so the audit log records what was attempted.
+      const attempted = <E>(error: E): E => {
+        if (error && typeof error === 'object' && !Object.isFrozen(error)) {
+          Object.defineProperty(error, 'statements', { value: planned.statements, enumerable: false, configurable: true });
+        }
+        return error;
+      };
       if (planned.destructive && confirm !== planned.confirm) {
-        throw new ConsoleSchemaRefusal('confirm_required', `Type '${planned.confirm}' to confirm this change`);
+        throw attempted(new ConsoleSchemaRefusal('confirm_required', `Type '${planned.confirm}' to confirm this change`));
       }
-      if (dialect === 'mysql') {
-        for (const statement of planned.statements) await db.query(statement);
-      } else {
-        await inTransaction(async run => { for (const statement of planned.statements) await run(statement); }, {});
+      try {
+        if (dialect === 'mysql') {
+          for (const statement of planned.statements) await db.query(statement);
+        } else {
+          await inTransaction(async trx => { for (const statement of planned.statements) await trx.run(statement); }, {});
+        }
+      } catch (error) {
+        throw attempted(error);
       }
       await syncAfterSchemaChange(planned.change);
       return planned;
@@ -702,25 +755,28 @@ function validateWhere(where: Record<string, unknown>, columns: readonly string[
   for (const key of keys) {
     const value = where[key];
     if (key === '$and' || key === '$or') {
-      if (!Array.isArray(value) || value.length > 50) throw new ConsoleSelectRefusal(`${key} needs an array of conditions`);
+      if (!Array.isArray(value) || !value.length || value.length > 50) throw new ConsoleSelectRefusal(`${key} needs a non-empty array of conditions`);
       for (const entry of value) {
-        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) throw new ConsoleSelectRefusal(`${key} needs an array of conditions`);
+        if (!entry || typeof entry !== 'object' || Array.isArray(entry) || !Object.keys(entry).length) throw new ConsoleSelectRefusal(`${key} needs a non-empty array of conditions`);
         validateWhere(entry as Record<string, unknown>, columns, depth + 1);
       }
       continue;
     }
     if (key === '$not') {
-      if (!value || typeof value !== 'object' || Array.isArray(value)) throw new ConsoleSelectRefusal('$not needs a condition');
+      if (!value || typeof value !== 'object' || Array.isArray(value) || !Object.keys(value).length) throw new ConsoleSelectRefusal('$not needs a condition');
       validateWhere(value as Record<string, unknown>, columns, depth + 1);
       continue;
     }
     if (key.startsWith('$') || (columns && !columns.includes(key))) throw new ConsoleSelectRefusal(`Unknown filter column '${key}'`);
     if (isScalar(value)) continue;
     if (!value || typeof value !== 'object' || Array.isArray(value)) throw new ConsoleSelectRefusal(`Unsupported filter value for '${key}'`);
-    for (const [operator, operand] of Object.entries(value as Record<string, unknown>)) {
+    const operators = Object.entries(value as Record<string, unknown>);
+    // `{}` would compile to no condition (or invalid SQL) instead of filtering.
+    if (!operators.length) throw new ConsoleSelectRefusal(`Filter on '${key}' needs an operator`);
+    for (const [operator, operand] of operators) {
       if (!FILTER_OPERATOR_SET.has(operator)) throw new ConsoleSelectRefusal(`Unsupported filter operator '${operator}'`);
       const ok = operator === '$in' || operator === '$nin'
-        ? Array.isArray(operand) && operand.length <= 500 && operand.every(isScalar)
+        ? Array.isArray(operand) && operand.length > 0 && operand.length <= 500 && operand.every(isScalar)
         : operator === '$like' || operator === '$nlike' ? typeof operand === 'string' : isScalar(operand);
       if (!ok) throw new ConsoleSelectRefusal(`Unsupported value for ${operator} on '${key}'`);
     }

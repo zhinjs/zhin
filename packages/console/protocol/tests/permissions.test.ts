@@ -135,8 +135,9 @@ describe('Console permission catalog (ADR 0049 §3)', () => {
     ]);
   });
 
-  it('maps the Console SQL editor and schema editor RPCs (read-only SQL is a read, writes are schema)', () => {
-    expect(consoleRpcPermission('db:query')).toBe('ops.database.read');
+  it('maps the Console SQL editor and schema editor RPCs (all raw SQL is schema, structured reads are reads)', () => {
+    expect(consoleRpcPermission('db:query')).toBe('ops.database.schema');
+    expect(consoleRpcPermission('db:select')).toBe('ops.database.read');
     expect(consoleRpcPermission('db:schema:describe')).toBe('ops.database.read');
     expect(consoleRpcPermission('db:schema:preview')).toBe('ops.database.read');
     expect(consoleRpcPermission('db:execute')).toBe('ops.database.schema');

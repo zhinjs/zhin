@@ -63,6 +63,10 @@ describe('Console schema DDL rendering', () => {
     indexes: [{ name: 'PRIMARY', columns: ['id'], unique: true, primary: true }],
   });
   const context = (dialect: 'pg' | 'mysql'): SchemaPlanContext => ({
+    mysqlColumn: async (_table, column) => (column === 'body' ? {
+      name: 'body', columnType: 'text', dataType: 'text', nullable: true, defaultValue: 'x', extra: '',
+      comment: '', characterSet: null, collation: null, generation: null, indexed: false,
+    } : undefined),
     dialect,
     host: {
       name: dialect,
@@ -81,7 +85,8 @@ describe('Console schema DDL rendering', () => {
 
   it('restates the whole column for MySQL MODIFY and quotes with backticks', async () => {
     const plan = await planConsoleSchemaChange({ kind: 'alter-column', table: 't', column: 'body', nullable: false }, context('mysql'));
-    expect(plan.statements).toEqual(['ALTER TABLE `t` MODIFY COLUMN `body` text NOT NULL DEFAULT \'x\'']);
+    // A TEXT literal default must be an expression on MySQL 8.0.13+.
+    expect(plan.statements).toEqual(['ALTER TABLE `t` MODIFY COLUMN `body` text NOT NULL DEFAULT (\'x\')']);
     const index = await planConsoleSchemaChange({ kind: 'create-index', table: 't', name: 'by_body', columns: ['body'] }, context('mysql'));
     expect(index.statements).toEqual(['CREATE INDEX `by_body` ON `t` (`body`(128))']);
     const drop = await planConsoleSchemaChange({ kind: 'drop-index', table: 't', name: 'by_body' }, { ...context('mysql'), describe: async () => ({ ...(await describeTable()), indexes: [{ name: 'by_body', columns: ['body'], unique: false, primary: false }] }) });

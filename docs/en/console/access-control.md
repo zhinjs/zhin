@@ -81,8 +81,8 @@ Built-in roles cannot be changed or deleted, but can be copied:
 | `agent.view` / `agent.configure` | AI and Agent reads / writes |
 | `ops.config.read` / `ops.config.write` | Raw configuration file |
 | `ops.env.read` / `ops.env.write` | Environment file |
-| `ops.database.read` / `ops.database.write` | Database browser and read-only SQL (one statement, read-only transaction, at most 1000 rows) / record edits |
-| `ops.database.schema` | Write SQL and schema changes (add / rename / drop columns, change types, create tables, indexes); owner-only by default, every statement is audited |
+| `ops.database.read` / `ops.database.write` | Database browser (sort, filter, table structure and schema change previews) / record edits |
+| `ops.database.schema` | The SQL console (read-only queries and write SQL) and schema changes (add / rename / drop columns, change types, create tables, indexes); owner-only by default, every statement is audited with its literals redacted. See [Database](./operations.md#database) |
 | `ops.schedule.read` / `ops.schedule.write` | Scheduled tasks |
 | `ops.files.read` / `ops.files.write` | Project files (reading or writing `.env` and the configuration file still needs `ops.env.*` / `ops.config.*`) |
 | `ops.restart` | Starting, stopping and restarting the instance |

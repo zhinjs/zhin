@@ -10,7 +10,7 @@ description: Console 侧栏「运维」分组：实例状态、起停与日志�
 | 页面 | 路由 | 读 | 写 |
 | --- | --- | --- | --- |
 | 实例（含项目依赖） | `/ops/instance` | `status.view`；依赖列表 `feature.view` | 起停 `ops.restart`；依赖 `plugin.manage` |
-| 数据库 | `/ops/database` | `ops.database.read`（含只读 SQL） | 记录 `ops.database.write`；写 SQL 与表结构 `ops.database.schema` |
+| 数据库 | `/ops/database` | `ops.database.read`（浏览、排序、筛选、表结构） | 记录 `ops.database.write`；SQL 控制台与表结构 `ops.database.schema` |
 | 配置文件 | `/ops/config` | `ops.config.read` | `ops.config.write` |
 | 环境变量 | `/ops/env` | `ops.env.read` | `ops.env.write` |
 | 定时任务 | `/ops/schedules` | `ops.schedule.read` | `ops.schedule.write` |
@@ -47,11 +47,25 @@ description: Console 侧栏「运维」分组：实例状态、起停与日志�
 
 ## 数据库、配置、环境变量、定时任务、文件 {#ops-pages}
 
-- **数据库**：浏览表、按条件查询、增删改行与 KV 存储。写操作直接作用于项目数据库，没有撤销。
+- **数据库**：浏览表、按条件查询、增删改行与 KV 存储，SQL 控制台与表结构调整见[下文](#database)。写操作直接作用于项目数据库，没有撤销。
 - **配置文件**：按当前 YAML / JSON 格式查看与编辑 `zhin.config.yml`，保存带修订号，保存失败自动回滚。实例离线时由网关读写。某个插件的配置在它的全局配置页（`/features/global/:plugin`）用表单改，按层级的覆盖在对象页的「功能」页签。
 - **环境变量**：`.env` 文件。可能含机密，所以 `viewer` 没有 `ops.env.read`。
 - **定时任务**：打开时是「全部任务」总览，汇总每个任务的状态、下次运行、最近结果、目标与审批，可按状态筛选；创建、暂停和查看记录在各自的页签：「管理员任务」（`?tab=admin`，按用途创建管理员任务）、「定时提醒」（`?tab=schedule`，插件注册的任务与持久化任务）、「助手任务」（`?tab=assistant`）、「执行记录」（`?tab=history`）。
 - **项目文件**：项目文件树与文本文件编辑；读写 `.env` 与配置文件仍需要对应的 `ops.env.*` / `ops.config.*` 权限。
+
+### 数据库 {#database}
+
+「数据库」页按表浏览数据：服务端排序与筛选（筛选只接受表中存在的列与 `$eq`、`$ne`、`$gt`、`$gte`、`$lt`、`$lte`、`$like`、`$nlike`、`$in`、`$nin`），查看表结构并预览结构变更，需要 `ops.database.read`；增删改记录需要 `ops.database.write`。
+
+**SQL 控制台**（只读查询与写 SQL）和**表结构调整**需要 `ops.database.schema`，内置角色中只有 `owner` 拥有。只读 SQL 也不对 `viewer` / `admin` 开放：网关与实例共用同一个数据库，按文本判断语句是否「只读」做不了安全边界（转义写法、动态 SQL 函数都能绕开），所以没有该权限的账号只用上面的结构化浏览；Console 会隐藏 SQL 页签并说明原因。
+
+SQL 控制台的约束（对 `owner` 同样生效）：
+
+- 每条语句都经单语句协议执行（PostgreSQL 扩展查询协议、MySQL 预处理语句、SQLite `prepare`），服务端不会执行藏在一条语句里的第二条；事务控制（`BEGIN`、`COMMIT`、`ROLLBACK`、`SAVEPOINT`、`SET`…）、`PREPARE` / `EXECUTE`、定义函数 / 过程 / 规则 / 扩展、改角色与服务端设置一律拒绝，所以「试运行」总能回滚。
+- 只读查询在只读事务中执行，最多返回 1000 行（PostgreSQL 用游标、MySQL 流式读取、SQLite 逐行读取，只取保留的行），超时 10 秒（PostgreSQL `SET LOCAL statement_timeout`，不能用 `set_config` 解除；MySQL `max_execution_time`）。SQLite 文件库的只读查询在独立线程里用只读连接执行，超时即停止，不阻塞实例；内存库没有这层隔离。
+- 网关的 `console_*` 表对所有人拒绝：按去掉引号、还原转义后的标识符与字面量比对；PostgreSQL `U&"…"` 转义写法、动态 SQL 与文件函数（`query_to_xml` 等 `*_to_xml*`、`xpath`、`ts_stat`、`dblink*`、`lo_*`、`pg_read_*`、`pg_ls_*`、`set_config`…）、MySQL 可执行注释 `/*! … */` 与优化器提示 `/*+ … */` 均被拒绝。表清单与表结构不列出 `console_*`；`sqlite_master`、`information_schema` 这类系统目录仍可查询，会看到 `console_*` 的表名与列名（看不到数据），这是已接受的限制。
+- 代码声明的表（插件 `define` 的表）不能在这里删列或改列名：插件读这些列，下次启动还会把它们加回来，应改插件里的表定义。MySQL 改列用 `MODIFY COLUMN` 重述整列，未改动的部分（完整类型、字符集与排序规则、`ON UPDATE`、`AUTO_INCREMENT`、注释、表达式默认值）取自 `information_schema`。
+- 审计日志记录 SQL 文本与结构变更（含失败时尝试执行的 DDL），字符串字面量替换为 `'…'`，不记录结果行。
 
 ## 终端 {#terminal}
 

@@ -77,24 +77,56 @@ describe('Console database: server-side sort and filter', () => {
 });
 
 describe('Console database: read-only SQL', () => {
-  it('runs one read statement in a read-only transaction and caps the rows', async () => {
+  it('runs one read statement on an isolated read-only connection and caps the rows', async () => {
     const db = await setup();
     try {
       const transaction = vi.spyOn(db.instance.db as unknown as { transaction: (...args: unknown[]) => unknown }, 'transaction');
       const reply = await db.rpc({ type: 'db:query', sql: 'SELECT id, title FROM notes ORDER BY id' });
       expect(reply.data).toMatchObject({ columns: ['id', 'title'], rowCount: 3, truncated: false, rows: [{ id: 1, title: 'b' }, { id: 2 }, { id: 3 }] });
       expect(typeof (reply.data as { durationMs: unknown }).durationMs).toBe('number');
-      expect(transaction).toHaveBeenCalledWith(expect.any(Function), { readOnly: true });
+      // SQLite file databases read in a worker on their own read-only connection, off the event loop.
+      expect(transaction).not.toHaveBeenCalled();
 
       const many = await db.rpc({ type: 'db:query', sql: 'WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM n WHERE x < 1500) SELECT x FROM n' });
-      expect(many.data).toMatchObject({ rowCount: 1500, truncated: true });
+      expect(many.data).toMatchObject({ rowCount: 1000, truncated: true });
       expect((many.data as { rows: unknown[] }).rows).toHaveLength(1000);
+      expect((await db.rpc({ type: 'db:query', sql: 'SELECT x FROM (SELECT 1 AS x UNION ALL SELECT 2)' })).data).toMatchObject({ rowCount: 2, truncated: false });
 
       expect((await db.rpc({ type: 'db:query', sql: 'PRAGMA table_info(notes)' })).data).toMatchObject({ rowCount: 3 });
       // Migration bookkeeping and engine catalogs stay readable.
       expect((await db.rpc({ type: 'db:query', sql: 'SELECT name FROM sqlite_master WHERE type = \'table\' AND name = \'notes\'' })).data)
         .toMatchObject({ rows: [{ name: 'notes' }] });
     } finally { await db.close(); }
+  });
+
+  it('stops a long read at the time budget while the event loop keeps running', async () => {
+    const db = await setup();
+    try {
+      let ticks = 0;
+      const interval = setInterval(() => { ticks += 1; }, 20);
+      const started = Date.now();
+      const slow = 'WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c WHERE x < 20000000) SELECT count(*) AS n FROM c';
+      const timed = await db.instance.console!.query!(slow, { timeoutMs: 300 }).then(() => undefined, (error: Error) => error);
+      clearInterval(interval);
+      expect(timed?.message).toMatch(/time limit/);
+      expect(Date.now() - started).toBeLessThan(3000);
+      expect(ticks).toBeGreaterThan(5);
+      // A read never waits on the stopped worker's thread: the next one is refused until it exits, not queued.
+      const next = await db.rpc({ type: 'db:query', sql: 'SELECT 1 AS one' });
+      expect(next.error ?? next.data).toBeTruthy();
+    } finally { await db.close(); }
+  }, 60_000);
+
+  it('reads row by row inside a read-only transaction for in-memory databases', async () => {
+    const host = createDatabaseHost({ dialect: 'sqlite', filename: ':memory:' });
+    host.define('notes', { id: { type: 'integer', primary: true } });
+    await host.start();
+    try {
+      const transaction = vi.spyOn(host.db as unknown as { transaction: (...args: unknown[]) => unknown }, 'transaction');
+      const result = await host.console!.query!('WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM n) SELECT x FROM n', { maxRows: 5 });
+      expect(result).toMatchObject({ rowCount: 5, truncated: true, rows: [{ x: 1 }, { x: 2 }, { x: 3 }, { x: 4 }, { x: 5 }] });
+      expect(transaction).toHaveBeenCalledWith(expect.any(Function), { readOnly: true });
+    } finally { await host.stop(); }
   });
 
   it('refuses writes, several statements, setting pragmas and the gateway tables', async () => {
@@ -176,19 +208,47 @@ describe('Console database: write SQL', () => {
     } finally { await db.close(); }
   });
 
-  it('records the statement text, never result rows, in the audit detail', () => {
-    expect(rpcAuditDetail({ type: 'db:execute', sql: 'DELETE FROM notes WHERE id = 1' }))
+  it('records the statement text with literals redacted, never result rows, in the audit detail', async () => {
+    const host = createDatabaseHost({ dialect: 'pg' } as never);
+    const audit = { redactSql: host.console!.redactSql! };
+    expect(rpcAuditDetail({ type: 'db:execute', sql: 'DELETE FROM notes WHERE id = 1' }, undefined, audit))
       .toMatchObject({ type: 'db:execute', statements: ['DELETE FROM notes WHERE id = 1'] });
-    expect(rpcAuditDetail({ type: 'db:execute', sql: 'DELETE FROM notes', dryRun: true })).toMatchObject({ dryRun: true });
+    expect(rpcAuditDetail({ type: 'db:execute', sql: 'DELETE FROM notes', dryRun: true }, undefined, audit)).toMatchObject({ dryRun: true });
     const applied = rpcAuditDetail(
       { type: 'db:schema:apply', change: { kind: 'drop-column', table: 'notes', column: 'score' }, confirm: 'score' },
       { success: true, data: { statements: ['ALTER TABLE "notes" DROP COLUMN "score"'], rows: [{ secret: 1 }] } },
+      audit,
     );
     expect(applied).toMatchObject({ change: 'drop-column', table: 'notes', statements: ['ALTER TABLE "notes" DROP COLUMN "score"'] });
     expect(JSON.stringify(applied)).not.toContain('secret');
-    const long = rpcAuditDetail({ type: 'db:execute', sql: `SELECT '${'x'.repeat(10_000)}'` });
-    expect(JSON.stringify(long).length).toBeLessThan(4096);
+    // Literal values may be passwords or tokens: only their shape is kept.
+    const secret = rpcAuditDetail({ type: 'db:execute', sql: "UPDATE \"users\" SET api_key = 'sk-live-123', note = E'it\\'s $x$' WHERE note = $q$hidden$q$" }, undefined, audit);
+    expect(secret).toMatchObject({ statements: ["UPDATE \"users\" SET api_key = '…', note = E'…' WHERE note = $q$…$q$"] });
+    expect(JSON.stringify(secret)).not.toMatch(/sk-live|hidden|it\\/);
+    // Without the Host's lexer no statement text is recorded at all.
+    expect(rpcAuditDetail({ type: 'db:execute', sql: "SELECT 'sk-live-123'" })).toMatchObject({ statementLength: 20 });
+    expect(JSON.stringify(rpcAuditDetail({ type: 'db:execute', sql: "SELECT 'sk-live-123'" }))).not.toContain('sk-live');
+    // The detail stays parseable once the gateway stores it, whatever the statement contains.
+    for (const sql of [`SELECT '${'x'.repeat(10_000)}'`, `DELETE FROM notes WHERE 1=0${'\n'.repeat(2500)}`, `SELECT "${'\\"'.repeat(3000)}"`]) {
+      const detail = rpcAuditDetail({ type: 'db:execute', sql }, undefined, audit);
+      const stored = JSON.stringify(detail);
+      expect(stored.length).toBeLessThanOrEqual(3500);
+      expect(JSON.parse(stored)).toMatchObject({ type: 'db:execute' });
+    }
+    expect(rpcAuditDetail({ type: 'db:execute', sql: `DELETE FROM notes WHERE 1=0${'\n'.repeat(2500)}` }, undefined, audit)).toMatchObject({ truncated: true });
     expect(rpcAuditDetail({ type: 'db:select', table: 'notes' })).not.toHaveProperty('statements');
+  });
+
+  it('records the DDL a failed schema change attempted', async () => {
+    const db = await setup();
+    try {
+      const reply = await db.rpc({ type: 'db:schema:apply', change: { kind: 'create-index', table: 'notes', name: 'by_title', columns: ['title'] } });
+      expect(reply.error).toBeUndefined();
+      const again = await db.rpc({ type: 'db:schema:apply', change: { kind: 'drop-index', table: 'notes', name: 'by_title' } });
+      expect(again.data).toEqual({ code: 'confirm_required', statements: ['DROP INDEX "by_title"'] });
+      const detail = rpcAuditDetail({ type: 'db:schema:apply', change: { kind: 'drop-index', table: 'notes', name: 'by_title' } }, again as never, { redactSql: db.instance.console!.redactSql! });
+      expect(detail).toMatchObject({ change: 'drop-index', statements: ['DROP INDEX "by_title"'] });
+    } finally { await db.close(); }
   });
 });
 
@@ -201,17 +261,29 @@ describe('Console database: schema editor', () => {
       expect((await db.rpc({ type: 'db:schema:describe', table: 'notes' })).data).not.toMatchObject({ columns: expect.arrayContaining([expect.objectContaining({ name: 'tag' })]) });
 
       await db.rpc({ type: 'db:schema:apply', change: { kind: 'add-column', table: 'notes', column: { name: 'tag', type: 'text', nullable: true } } });
-      await db.rpc({ type: 'db:schema:apply', change: { kind: 'rename-column', table: 'notes', column: 'tag', to: 'label' } });
-      const described = await db.rpc({ type: 'db:schema:describe', table: 'notes' });
-      expect((described.data as { columns: { name: string }[] }).columns.map(column => column.name)).toEqual(['id', 'title', 'score', 'label']);
-      expect(db.instance.console!.tables().find(table => table.name === 'notes')!.columns).toHaveProperty('label');
+      expect(db.instance.console!.tables().find(table => table.name === 'notes')!.columns).toHaveProperty('tag');
+      // Columns of a code-declared table cannot be renamed or dropped: the plugin reads them.
+      for (const change of [
+        { kind: 'rename-column', table: 'notes', column: 'tag', to: 'label' },
+        { kind: 'drop-column', table: 'notes', column: 'score' },
+      ]) {
+        const refused = await db.rpc({ type: 'db:schema:preview', change });
+        expect(refused.data, change.kind).toEqual({ code: 'unsupported' });
+        expect(refused.error).toMatch(/declared by plugin code/);
+      }
 
-      const drop = { kind: 'drop-column', table: 'notes', column: 'label' };
+      await db.rpc({ type: 'db:schema:apply', change: { kind: 'create-table', table: 'scratch', columns: [{ name: 'id', type: 'integer', primary: true }, { name: 'tag', type: 'text' }, { name: 'extra', type: 'text' }] } });
+      await db.rpc({ type: 'db:schema:apply', change: { kind: 'rename-column', table: 'scratch', column: 'tag', to: 'label' } });
+      const described = await db.rpc({ type: 'db:schema:describe', table: 'scratch' });
+      expect((described.data as { columns: { name: string }[] }).columns.map(column => column.name)).toEqual(['id', 'label', 'extra']);
+      expect(db.instance.console!.tables().find(table => table.name === 'scratch')!.columns).toHaveProperty('label');
+
+      const drop = { kind: 'drop-column', table: 'scratch', column: 'label' };
       expect((await db.rpc({ type: 'db:schema:preview', change: drop })).data).toMatchObject({ destructive: true, confirm: 'label', warnings: ['data_loss'] });
-      expect((await db.rpc({ type: 'db:schema:apply', change: drop })).data).toEqual({ code: 'confirm_required' });
-      expect((await db.rpc({ type: 'db:schema:apply', change: drop, confirm: 'wrong' })).data).toEqual({ code: 'confirm_required' });
+      expect((await db.rpc({ type: 'db:schema:apply', change: drop })).data).toMatchObject({ code: 'confirm_required' });
+      expect((await db.rpc({ type: 'db:schema:apply', change: drop, confirm: 'wrong' })).data).toMatchObject({ code: 'confirm_required' });
       expect((await db.rpc({ type: 'db:schema:apply', change: drop, confirm: 'label' })).error).toBeUndefined();
-      expect(db.instance.console!.tables().find(table => table.name === 'notes')!.columns).not.toHaveProperty('label');
+      expect(db.instance.console!.tables().find(table => table.name === 'scratch')!.columns).not.toHaveProperty('label');
 
       expect((await db.rpc({ type: 'db:schema:preview', change: { kind: 'alter-column', table: 'notes', column: 'title', nullable: false } })).data)
         .toEqual({ code: 'unsupported' });

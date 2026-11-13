@@ -10,7 +10,7 @@ The **Operations** group in the sidebar answers "how is the host doing". The ins
 | Page | Route | Read | Write |
 | --- | --- | --- | --- |
 | Instance (with project dependencies) | `/ops/instance` | `status.view`; dependency list `feature.view` | Start / stop `ops.restart`; dependencies `plugin.manage` |
-| Database | `/ops/database` | `ops.database.read` (incl. read-only SQL) | records `ops.database.write`; write SQL and schema `ops.database.schema` |
+| Database | `/ops/database` | `ops.database.read` (browse, sort, filter, table structure) | records `ops.database.write`; SQL console and schema `ops.database.schema` |
 | Configuration file | `/ops/config` | `ops.config.read` | `ops.config.write` |
 | Environment variables | `/ops/env` | `ops.env.read` | `ops.env.write` |
 | Scheduled tasks | `/ops/schedules` | `ops.schedule.read` | `ops.schedule.write` |
@@ -47,11 +47,25 @@ If an install receipt is lost (outcome unknown), the page only checks the curren
 
 ## Database, configuration, environment, schedules, files {#ops-pages}
 
-- **Database**: browse tables, query with conditions, edit rows and the KV store. Writes hit the project database directly; there is no undo.
+- **Database**: browse tables, query with conditions, edit rows and the KV store; the SQL console and schema changes are [below](#database). Writes hit the project database directly; there is no undo.
 - **Configuration file**: view and edit `zhin.config.yml` in its current YAML / JSON format; saves carry the revision and roll back on failure. While the instance is offline the gateway reads and writes it. A plugin's settings are edited as a form on its global settings page (`/features/global/:plugin`); per-level overrides are in the Features tab of the object pages.
 - **Environment variables**: the `.env` file. It may contain secrets, which is why `viewer` lacks `ops.env.read`.
 - **Scheduled tasks**: opens on the **All tasks** overview, summarizing each task's status, next run, latest result, target and approval, filterable by status; creating, pausing and reading history happen in their own tabs: **Administrator tasks** (`?tab=admin`, create administrator tasks by use case), **Scheduled reminders** (`?tab=schedule`, plugin-registered and persisted tasks), **Assistant tasks** (`?tab=assistant`) and **Execution history** (`?tab=history`).
 - **Project files**: the project file tree and text editing; reading or writing `.env` and the configuration file still needs `ops.env.*` / `ops.config.*`.
+
+### Database {#database}
+
+The **Database** page browses tables: server-side sorting and filtering (filters accept only columns of the table and `$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte`, `$like`, `$nlike`, `$in`, `$nin`), the table structure and previews of schema changes need `ops.database.read`; editing rows needs `ops.database.write`.
+
+The **SQL console** (read-only queries and write SQL) and **schema changes** need `ops.database.schema`, which only `owner` has among the built-in roles. Read-only SQL is not open to `viewer` / `admin` either: the gateway and the instance share one database, and deciding from the text whether a statement "only reads" cannot be a security boundary (escaped spellings and dynamic-SQL functions get around it), so accounts without the permission keep the structured browser above; the Console hides the SQL tab and says why.
+
+Limits of the SQL console (they apply to `owner` too):
+
+- Every statement runs through a single-statement protocol (PostgreSQL extended query protocol, MySQL prepared statements, SQLite `prepare`), so the server never runs a second statement hidden in one; transaction control (`BEGIN`, `COMMIT`, `ROLLBACK`, `SAVEPOINT`, `SET`, …), `PREPARE` / `EXECUTE`, defining functions / procedures / rules / extensions and changing roles or server settings are refused, so a dry run always rolls back.
+- Read-only queries run in a read-only transaction, return at most 1000 rows (PostgreSQL through a cursor, MySQL streamed, SQLite row by row — only the kept rows are read) and time out after 10 seconds (PostgreSQL `SET LOCAL statement_timeout`, which `set_config` cannot lift; MySQL `max_execution_time`). On a SQLite file database a read runs on its own read-only connection in a separate thread and is stopped at the time limit without blocking the instance; in-memory databases have no such isolation.
+- The gateway's `console_*` tables are refused for everyone: names and literals are compared unquoted with escapes resolved; PostgreSQL `U&"…"` spellings, dynamic-SQL and file functions (`query_to_xml` and the other `*_to_xml*`, `xpath`, `ts_stat`, `dblink*`, `lo_*`, `pg_read_*`, `pg_ls_*`, `set_config`, …) and MySQL executable comments `/*! … */` and optimizer hints `/*+ … */` are refused. Table lists and table structure leave `console_*` out; system catalogs such as `sqlite_master` and `information_schema` stay queryable and show the names and columns of `console_*` tables (not their data) — an accepted limit.
+- Tables declared by code (a plugin's `define`) cannot have columns dropped or renamed here: the plugin reads them and adds them back at its next start, so change the plugin's table definition instead. On MySQL a column change restates the column with `MODIFY COLUMN`; everything the change does not touch (full type, character set and collation, `ON UPDATE`, `AUTO_INCREMENT`, comment, expression defaults) is taken from `information_schema`.
+- The audit log records the SQL text and schema changes (including the DDL a failed change attempted) with string literals replaced by `'…'`; result rows are never recorded.
 
 ## Terminal {#terminal}
 

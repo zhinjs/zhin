@@ -313,7 +313,7 @@ export class ConsoleIamService implements ConsoleAccessProvider {
       action: entry.action.slice(0, 256),
       target: entry.target?.slice(0, 256) ?? null,
       outcome: entry.outcome,
-      detail: entry.detail ? JSON.stringify(entry.detail).slice(0, 4096) : null,
+      detail: entry.detail ? auditDetailJson(entry.detail) : null,
       ip: entry.ip?.slice(0, 64) ?? null,
     }).catch(this.#onError);
   }
@@ -896,4 +896,22 @@ function auditView(row: Record<string, unknown>): ConsoleAuditView {
     detail,
     ip: row.ip === null || row.ip === undefined ? null : String(row.ip),
   });
+}
+
+/** Longest stored audit `detail` (characters of JSON). */
+export const AUDIT_DETAIL_MAX_LENGTH = 4096;
+
+/**
+ * Audit detail as JSON that always parses back: a detail longer than the column budget is
+ * replaced by `{ truncated, length, preview }` instead of being cut mid-string.
+ */
+export function auditDetailJson(detail: unknown): string {
+  const json = JSON.stringify(detail) ?? 'null';
+  if (json.length <= AUDIT_DETAIL_MAX_LENGTH) return json;
+  let keep = AUDIT_DETAIL_MAX_LENGTH - 64;
+  for (;;) {
+    const replacement = JSON.stringify({ truncated: true, length: json.length, preview: json.slice(0, Math.max(0, keep)) });
+    if (replacement.length <= AUDIT_DETAIL_MAX_LENGTH || keep <= 0) return replacement;
+    keep -= replacement.length - AUDIT_DETAIL_MAX_LENGTH;
+  }
 }

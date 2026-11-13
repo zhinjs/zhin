@@ -98,7 +98,7 @@ export interface DatabaseHostConsoleCapabilities {
   readonly sort: boolean;
   /** `where` operators `db:select` accepts per column (`$eq`, `$ne`, `$gt`, …). */
   readonly filterOperators: readonly string[];
-  /** `db:query` (read-only) and `db:execute` (write, `ops.database.schema`). */
+  /** `db:query` (read-only) and `db:execute` (write); both need `ops.database.schema`. */
   readonly sql: boolean;
   /** `db:schema:*` structured schema editor. */
   readonly schema: boolean;
@@ -204,8 +204,10 @@ export interface DatabaseHostConsole {
     where?: Record<string, unknown>,
     orderBy?: DatabaseHostOrderBy,
   ): Promise<DatabaseHostSelectResult>;
-  /** One read-only statement in a read-only transaction, capped at `maxRows`. */
+  /** One read statement (`ops.database.schema`) in a read-only transaction, capped at `maxRows`. */
   query?(sql: string, options?: { readonly maxRows?: number; readonly timeoutMs?: number }): Promise<DatabaseHostQueryResult>;
+  /** SQL text with literal values replaced by `'…'` (audit log), lexed by the dialect. */
+  redactSql?(sql: string): string;
   /** Write statements (`ops.database.schema`); `dryRun` runs them in a transaction and rolls back. */
   execute?(sql: string, options?: { readonly dryRun?: boolean; readonly timeoutMs?: number }): Promise<DatabaseHostExecuteResult>;
   describe?(table: string): Promise<DatabaseHostTableSchema>;

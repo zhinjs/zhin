@@ -35,7 +35,7 @@ export const CONSOLE_PERMISSIONS = Object.freeze({
   OPS_ENV_WRITE: 'ops.env.write',
   OPS_DATABASE_READ: 'ops.database.read',
   OPS_DATABASE_WRITE: 'ops.database.write',
-  /** Raw write SQL and schema changes (table structure, indexes) from the Console. */
+  /** Raw SQL (read-only queries included), write SQL and schema changes from the Console. */
   OPS_DATABASE_SCHEMA: 'ops.database.schema',
   OPS_SCHEDULE_READ: 'ops.schedule.read',
   OPS_SCHEDULE_WRITE: 'ops.schedule.write',
@@ -275,8 +275,10 @@ export const CONSOLE_RPC_PERMISSIONS: Readonly<Record<string, ConsolePermission>
   'db:drop-table': P.OPS_DATABASE_WRITE,
   'db:kv:set': P.OPS_DATABASE_WRITE,
   'db:kv:delete': P.OPS_DATABASE_WRITE,
-  // Read-only SQL runs in a read-only transaction; schema preview only renders DDL.
-  'db:query': P.OPS_DATABASE_READ,
+  // Raw SQL, even read-only, is owner-level: a text classifier is no security boundary on a
+  // database the gateway shares. Viewers keep structured browsing (db:select). Describe and
+  // preview are structured and parameterised (preview only renders DDL).
+  'db:query': P.OPS_DATABASE_SCHEMA,
   'db:schema:describe': P.OPS_DATABASE_READ,
   'db:schema:preview': P.OPS_DATABASE_READ,
   'db:execute': P.OPS_DATABASE_SCHEMA,
