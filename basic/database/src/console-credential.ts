@@ -325,18 +325,64 @@ export function mysqlVersionProblem(version: string): string | undefined {
   return ok ? undefined : `${mariadb ? 'MariaDB' : 'MySQL'} ${version} is too old for the restricted Console account (needs ${mariadb ? 'MariaDB 10.1.3' : 'MySQL 5.7.6'}+ for CREATE USER IF NOT EXISTS / ALTER USER)`;
 }
 
+interface GrantToken { readonly kind: 'word' | 'quoted' | 'at' | 'comma'; readonly text: string; readonly start: number; readonly end: number }
+
+/** Splits a `SHOW GRANTS` line into words, quoted names, `@` and `,` in one linear pass (no regex backtracking). */
+function grantTokens(line: string): GrantToken[] | undefined {
+  const tokens: GrantToken[] = [];
+  let index = 0;
+  while (index < line.length) {
+    const char = line[index]!;
+    if (char === ' ' || char === '\t' || char === '\n' || char === '\r') { index += 1; continue; }
+    if (char === '`' || char === "'" || char === '"') {
+      let end = index + 1;
+      while (end < line.length && line[end] !== char) end += 1;
+      if (end >= line.length) return undefined; // unterminated quote: not a line we understand
+      tokens.push({ kind: 'quoted', text: line.slice(index, end + 1), start: index, end: end + 1 });
+      index = end + 1;
+      continue;
+    }
+    if (char === '@' || char === ',') {
+      tokens.push({ kind: char === '@' ? 'at' : 'comma', text: char, start: index, end: index + 1 });
+      index += 1;
+      continue;
+    }
+    let end = index;
+    while (end < line.length && !' \t\n\r`\'"@,'.includes(line[end]!)) end += 1;
+    tokens.push({ kind: 'word', text: line.slice(index, end), start: index, end });
+    index = end;
+  }
+  return tokens;
+}
+
+const isWord = (token: GrantToken | undefined, word: string) => token?.kind === 'word' && token.text.toUpperCase() === word;
+
 /** Role grants and PROXY grants in `SHOW GRANTS` output (`GRANT \`r\`@\`%\` TO …`, `GRANT PROXY ON …`). */
 export function mysqlRoleAndProxyGrants(lines: readonly string[]): { readonly roles: readonly string[]; readonly proxies: readonly string[] } {
   const roles: string[] = [];
   const proxies: string[] = [];
   for (const line of lines) {
-    const proxy = /^GRANT\s+PROXY\s+ON\s+(.+?)\s+TO\s/iu.exec(line);
-    if (proxy) { proxies.push(proxy[1]!); continue; }
-    // A role grant has no ON clause: GRANT `r1`@`%`,`r2`@`%` TO `u`@`h` (MariaDB: GRANT `r1` TO …, no host).
-    const role = /^GRANT\s+((?:[`'][^`']*[`'](?:@[`'][^`']*[`'])?\s*,?\s*)+)\s+TO\s/iu.exec(line);
-    if (role && !/\sON\s/iu.test(line.slice(0, line.search(/\sTO\s/iu)))) {
-      roles.push(...role[1]!.split(/,\s*/u).map(entry => entry.trim()).filter(Boolean));
+    const tokens = grantTokens(line);
+    if (!tokens || !isWord(tokens[0], 'GRANT')) continue;
+    const to = tokens.findIndex((token, index) => index > 0 && isWord(token, 'TO'));
+    if (to < 0) continue;
+    if (isWord(tokens[1], 'PROXY') && isWord(tokens[2], 'ON')) {
+      if (to > 3) proxies.push(line.slice(tokens[3]!.start, tokens[to - 1]!.end));
+      continue;
     }
+    // A role grant has no ON clause and lists only quoted names: GRANT `r1`@`%`,`r2`@`%` TO `u`@`h`
+    // (MariaDB: GRANT `r1` TO …, no host).
+    const names = tokens.slice(1, to);
+    if (names.length === 0 || names.some(token => token.kind === 'word')) continue;
+    let entryStart: number | undefined;
+    let entryEnd = 0;
+    const flush = () => { if (entryStart !== undefined) roles.push(line.slice(entryStart, entryEnd)); entryStart = undefined; };
+    for (const token of names) {
+      if (token.kind === 'comma') { flush(); continue; }
+      if (entryStart === undefined) entryStart = token.start;
+      entryEnd = token.end;
+    }
+    flush();
   }
   return Object.freeze({ roles: Object.freeze(roles), proxies: Object.freeze(proxies) });
 }

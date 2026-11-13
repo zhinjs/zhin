@@ -198,6 +198,19 @@ describe('MySQL roles, PROXY, versions and secrets', () => {
     ])).toEqual({ roles: ['`r1`@`%`', '`r2`@`localhost`'], proxies: ["''@''"] });
   });
 
+  it('reads MariaDB role grants without a host, ignores lines it cannot parse, and stays linear on hostile input', () => {
+    expect(mysqlRoleAndProxyGrants([
+      'GRANT `r1` TO `u`@`%`',
+      "GRANT 'r2' TO 'u'@'%' WITH ADMIN OPTION",
+      'GRANT `unterminated TO `u`@`%`',
+      'GRANT SELECT ON `bot`.`t` TO `u`@`%`',
+    ])).toEqual({ roles: ['`r1`', "'r2'"], proxies: [] });
+    const hostile = [`GRANT\t'' ${"\t''".repeat(50_000)}`, `GRANT\tproxy\ton\t${'\t'.repeat(100_000)}a`, `GRANT ${'`a`@`b`,'.repeat(20_000)}`];
+    const started = performance.now();
+    expect(mysqlRoleAndProxyGrants(hostile)).toEqual({ roles: [], proxies: [] });
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
+
   it('revokes leftover roles and PROXY grants when provisioning', async () => {
     const run = runner([
       [/CURRENT_USER\(\) AS main/, [{ main: 'root@%', db: 'bot', version: '8.4.3' }]],
