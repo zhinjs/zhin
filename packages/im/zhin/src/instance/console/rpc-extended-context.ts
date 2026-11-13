@@ -14,10 +14,14 @@ export function createExtendedConsoleRpcContext(
   const withEndpointManagement: ConsoleRpcExtendedCtx['withEndpointManagement'] = im
     ? (adapter, endpointKey, run) => im.endpoints.withManagement(adapter, endpointKey, run)
     : undefined;
+  const withEndpointLogin: ConsoleRpcExtendedCtx['withEndpointLogin'] = im
+    ? (adapter, endpointKey, run) => im.endpoints.withLogin(adapter, endpointKey, run)
+    : undefined;
   return Object.freeze({
     projectRoot,
     scheduleHost,
     withEndpointManagement,
+    withEndpointLogin,
     databaseHost: databaseHost ? { models: databaseHost.models } : undefined,
     resolveScheduleEngine: () => resolveScheduleEngine(agent),
     loginAssist: im?.loginAssist,

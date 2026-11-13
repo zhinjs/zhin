@@ -4,7 +4,7 @@ import {
   actOnRequest, listInbox, listInboxMessages, listPendingRequests, listRecentInboxMessages,
   mapNoticeRow, mapRequestRow, markInboxConsumed, TABLE_NOTICE, TABLE_REQUEST,
 } from './inbox-rpc.js';
-import { cancelLogin, listLoginPending, submitLogin } from './login-rpc.js';
+import { cancelLogin, controlLogin, getLoginFlow, listLoginFlows, listLoginPending, submitLogin } from './login-rpc.js';
 import {
   deleteFriend, groupWriteOp, listChannels, listFriends, listGroupMembers, listGroups,
 } from './endpoint-rpc.js';
@@ -54,6 +54,13 @@ export async function dispatchExtendedConsoleRpc(
       return submitLogin(d, ctx);
     case 'login.cancel':
       return cancelLogin(d, ctx);
+    case 'login.flow.list':
+      return listLoginFlows(d, ctx);
+    case 'login.flow.get':
+      return getLoginFlow(d, ctx);
+    case 'login.relogin':
+    case 'login.refresh':
+      return controlLogin(type, d, ctx);
 
     case 'request.consumed':
       return markInboxConsumed(d, ctx, TABLE_REQUEST);

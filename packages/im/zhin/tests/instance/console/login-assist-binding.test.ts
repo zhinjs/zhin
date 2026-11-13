@@ -14,16 +14,18 @@ describe('ConsoleLoginAssistBindings', () => {
     const owner = {};
 
     await emitPendingTask(assist, owner);
-    expect(hub.history().items).toHaveLength(1);
+    expect(pendingEvents(hub)).toHaveLength(1);
     expect(bindStdin).toHaveBeenCalledTimes(1);
 
     firstRelease();
     await emitPendingTask(assist, owner);
-    expect(hub.history().items).toHaveLength(2);
+    expect(pendingEvents(hub)).toHaveLength(2);
 
     secondRelease();
+    const before = hub.history().items.length;
     await emitPendingTask(assist, owner);
-    expect(hub.history().items).toHaveLength(2);
+    expect(pendingEvents(hub)).toHaveLength(2);
+    expect(hub.history().items).toHaveLength(before);
     expect(unbindStdin).toHaveBeenCalledTimes(1);
   });
 
@@ -36,6 +38,31 @@ describe('ConsoleLoginAssistBindings', () => {
       .toThrow('LoginAssist cannot publish to multiple process Console hubs');
     release();
   });
+});
+
+function pendingEvents(hub: ReturnType<typeof createConsoleEventHub>) {
+  return hub.history().items.filter(item => item.type === 'endpoint.login.pending');
+}
+
+it('forwards login flow snapshots without QR images or sensitive material', async () => {
+  const assist = new LoginAssist(null, { defaultTimeoutMs: 0 });
+  const hub = createConsoleEventHub({ runtimeId: 'login-flow-test' });
+  const release = new ConsoleLoginAssistBindings(() => () => {}).acquire(assist, hub);
+  const flow = assist.beginFlow({ adapter: 'demo', endpointKey: 'bot', owner: {} });
+  const answer = flow.challenge({
+    kind: 'qrcode', title: '扫码', media: { qrImage: 'data:image/png;base64,QRDATA' },
+    blocks: [{ kind: 'copy', id: 'device', label: '设备信息', content: '{"guid":"SECRET"}', format: 'json', sensitive: true }],
+  });
+  const events = hub.history().items.filter(item => item.type === 'endpoint.login.flow');
+  expect(events.length).toBeGreaterThan(0);
+  const last = events.at(-1)!.data as { steps: { challenge?: { media?: { qrImageOmitted?: boolean } } }[] };
+  expect(last.steps[0]!.challenge!.media!.qrImageOmitted).toBe(true);
+  expect(JSON.stringify(hub.history().items.filter(item => item.type === 'endpoint.login.flow'))).not.toMatch(/QRDATA|SECRET/u);
+  // The live snapshot (login.flow.get) still has both.
+  expect(JSON.stringify(assist.listFlows())).toMatch(/QRDATA/u);
+  assist.submit(assist.listPending()[0]!.id, 'ok');
+  await answer;
+  release();
 });
 
 async function emitPendingTask(assist: LoginAssist, owner: object): Promise<void> {

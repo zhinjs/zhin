@@ -6,6 +6,7 @@ import type { EndpointControl } from './endpoint-control.js';
 import type { EndpointManagement } from './endpoint-management.js';
 import type { EndpointStreaming } from './endpoint-stream.js';
 import type { EndpointProfile } from './endpoint-profile.js';
+import type { EndpointLoginControl } from './login-capability.js';
 import { promoteInboundMessagePayload } from './inbound-promotion.js';
 
 /** Framework namespace; native SDK emit/on/off and other methods remain untouched. */
@@ -35,6 +36,8 @@ export interface EndpointHooks {
   readonly content?: EndpointContentPort;
   readonly streaming?: EndpointStreaming;
   readonly profile?: EndpointProfile;
+  /** ADR 0058: login control hooks; declare support with `defineAdapter({ login })`. */
+  readonly login?: EndpointLoginControl;
 }
 
 /** Admission attachment only: the actual Endpoint remains the native SDK instance. */
@@ -48,6 +51,7 @@ class NativeEndpointRuntime extends EndpointRuntime<object> {
     this.management = hooks.management;
     this.control = hooks.control;
     this.profile = hooks.profile;
+    this.login = hooks.login;
     Object.defineProperty(this, 'content', { get: () => hooks.content });
     Object.defineProperty(this, 'streaming', { get: () => hooks.streaming });
     if (!hooks.send) Object.defineProperty(this, 'send', { value: undefined });
@@ -57,6 +61,7 @@ class NativeEndpointRuntime extends EndpointRuntime<object> {
   override readonly management?: EndpointManagement;
   override readonly control?: EndpointControl;
   override readonly profile?: EndpointProfile;
+  override readonly login?: EndpointLoginControl;
   start(signal: AbortSignal): void | Promise<void> { return this.#hooks.start(signal); }
   open(): void { this.resumeIngress(); this.#hooks.open(); }
   async close(): Promise<void> {

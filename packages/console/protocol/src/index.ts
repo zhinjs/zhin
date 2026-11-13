@@ -1,3 +1,5 @@
+import type { ConsoleAdapterLoginDeclaration, ConsoleLoginFlow, ConsoleLoginTask } from './login.js';
+
 export const SIDE_EVENT_PUSH = {
   NOTICE_RECEIVE: 'notice.receive',
   REQUEST_RECEIVE: 'request.receive',
@@ -5,6 +7,8 @@ export const SIDE_EVENT_PUSH = {
   ENDPOINT_LIFECYCLE: 'endpoint.lifecycle',
   LOGIN_PENDING: 'endpoint.login.pending',
   LOGIN_EXPIRED: 'endpoint.login.expired',
+  /** ADR 0058: login flow snapshot (dedupe by id, highest revision wins). */
+  LOGIN_FLOW: 'endpoint.login.flow',
 } as const;
 
 export const SIDE_EVENT_RPC = {
@@ -19,6 +23,11 @@ export const LOGIN_RPC = {
   LIST: 'login.list',
   SUBMIT: 'login.submit',
   CANCEL: 'login.cancel',
+  /** ADR 0058 */
+  FLOW_LIST: 'login.flow.list',
+  FLOW_GET: 'login.flow.get',
+  RELOGIN: 'login.relogin',
+  REFRESH: 'login.refresh',
 } as const;
 
 export const INBOX_RPC = {
@@ -196,8 +205,9 @@ export interface ConsoleEventPayloadMap {
   readonly 'request.receive': ConsoleRequestEventData;
   readonly 'message.receive': ConsoleMessageEventData;
   readonly 'endpoint.lifecycle': ConsoleEndpointEventData;
-  readonly 'endpoint.login.pending': ConsoleEndpointEventData;
-  readonly 'endpoint.login.expired': ConsoleEndpointEventData;
+  readonly 'endpoint.login.pending': ConsoleLoginTask;
+  readonly 'endpoint.login.expired': ConsoleLoginTask;
+  readonly 'endpoint.login.flow': ConsoleLoginFlow;
   readonly sync: Readonly<{ key: string; value: unknown }>;
   readonly 'init-data': Readonly<{ timestamp: number }>;
   readonly 'config:updated': Readonly<{
@@ -406,6 +416,10 @@ export interface ConsoleEndpointSummary {
   readonly owner?: string;
   readonly phase?: ConsoleEndpointPhase;
   readonly pendingLogin?: boolean;
+  /** ADR 0058: step of the unfinished login flow (1-based). */
+  readonly loginStep?: Readonly<{ index: number; total: number; title: string }>;
+  /** ADR 0058: the Adapter's login declaration (absent = no Console login actions). */
+  readonly login?: ConsoleAdapterLoginDeclaration;
   readonly pendingRequestCount?: number;
   readonly pendingNoticeCount?: number;
   readonly operations?: readonly ConsoleEndpointOperation[];
@@ -711,6 +725,7 @@ export interface ConsoleVenueDefinition {
   readonly floor?: 'moderated' | 'open';
 }
 
+export * from './login.js';
 export * from './permissions.js';
 export * from './plugin-permissions.js';
 export * from './navigation.js';

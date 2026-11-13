@@ -2011,6 +2011,32 @@ describe('IM Runtime', () => {
     } finally { await fixture.adapters.stop(); await fixture.store.close(); }
   });
 
+  it('fills pendingLogin and loginStep of Endpoint rows from the latest login flow (ADR 0058)', async () => {
+    const fixture = await createFixture([], [], undefined, undefined, undefined, {
+      adapterConfig: { endpoints: [{ id: 'inline-account' }] },
+      outboundMiddleware: (_envelope, next) => next(),
+    });
+    try {
+      const row = fixture.im.endpoints.list()[0]!;
+      expect(row.pendingLogin).toBe(false);
+      expect(row.loginStep).toBeUndefined();
+      expect(row.login).toBeUndefined();
+      const flow = fixture.im.loginAssist.beginFlow({
+        adapter: row.adapter, endpointKey: 'inline-account', owner: {},
+        endpointIdentity: { canonicalId: row.id, instanceId: 'i', epoch: 1, incarnationId: 'x' },
+      });
+      flow.step('connect', '连接');
+      const answer = flow.challenge({ kind: 'qrcode', title: '扫码登录' }).catch(() => undefined);
+      expect(fixture.im.endpoints.list()[0]).toMatchObject({ pendingLogin: true, loginStep: { index: 2, total: 2, title: '扫码登录' } });
+      expect(fixture.im.endpoints.get(row.endpoint.adapter, row.endpoint.id)).toMatchObject({ pendingLogin: true });
+      flow.online();
+      await answer;
+      expect(fixture.im.endpoints.list()[0]).toMatchObject({ pendingLogin: false });
+      expect(fixture.im.endpoints.list()[0]!.loginStep).toBeUndefined();
+      await expect(fixture.im.endpoints.withLogin(row.endpoint.adapter, row.endpoint.id, login => login)).resolves.toEqual({});
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
   it('roundtrips two same-platform owner/account list identities through get, preview and isolated sends', async () => {
     const firstOwner = childPluginId(rootPluginId(), 'first');
     const secondOwner = childPluginId(rootPluginId(), 'second');

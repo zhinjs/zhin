@@ -157,6 +157,14 @@ function readConsoleTerminalConfig(config: unknown): unknown {
   return (consoleBlock as Record<string, unknown>).terminal;
 }
 
+/** Host config `console.loginAssist` (ADR 0058); invalid values are ignored by LoginAssist. */
+function readConsoleLoginAssistConfig(config: unknown): { captchaHelperUrl?: string } {
+  const consoleBlock = config && typeof config === 'object' ? (config as Record<string, unknown>).console : undefined;
+  const block = consoleBlock && typeof consoleBlock === 'object' ? (consoleBlock as Record<string, unknown>).loginAssist : undefined;
+  const url = block && typeof block === 'object' ? (block as Record<string, unknown>).captchaHelperUrl : undefined;
+  return typeof url === 'string' && url ? { captchaHelperUrl: url } : {};
+}
+
 function readableCapabilityId(value: string): string {
   return value.split('\0').join(':');
 }
@@ -259,6 +267,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   });
   const senderEnricher = createSenderEnricher({ roles: () => featureHost.roles });
   const im = new ImRuntime({ enrichSender: senderEnricher });
+  im.loginAssist.configure({ captchaHelperUrl: readConsoleLoginAssistConfig(hostConfig).captchaHelperUrl });
   const endpointRepository = new PersistentEndpointRepository({ rootId: resolve(options.root),
     directory: join(options.root, '.zhin', 'endpoint-credentials'), state: () => databaseHost.state });
   const isRelationalDialect = ['sqlite', 'mysql', 'pg'].includes(databaseHost.dialect);

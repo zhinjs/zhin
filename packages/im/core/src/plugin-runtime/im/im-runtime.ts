@@ -194,6 +194,7 @@ export class ImRuntime implements OutboundMessageService {
       retain: () => this.#retainSnapshot(),
       release: (lease) => this.#release(lease),
       send: (request, snapshot, execution) => this.#deliver(request, snapshot, execution),
+      loginFlows: () => this.loginAssist.listFlows(),
     });
     // ADR 0056 §1: `bot:*` permits read the Bot's own standing through the Adapter index cache;
     // the Bot's role events drop the cached answer of that conversation.
