@@ -109,7 +109,10 @@ const messages = createMessages({
   },
   locked: { 'zh-CN': '{plugin} 已在{level}层停用，下级不能开启或修改开关。', en: '{plugin} is disabled at the {level} level; levels below it cannot enable or change it.' },
   saved: { 'zh-CN': '已保存（{level}层），立即生效。', en: 'Saved ({level} level), effective now.' },
-  notPersistent: { 'zh-CN': '（当前数据库不支持持久化，重启后丢失）', en: ' (the current database cannot persist this; it is lost on restart)' },
+  overridesUnpersisted: {
+    'zh-CN': '未保存：功能覆盖需要关系型项目数据库（sqlite / mysql / pg），当前数据库不支持持久化。',
+    en: 'Not saved: feature overrides need a relational project database (sqlite / mysql / pg); the current database cannot persist them.',
+  },
   unchanged: { 'zh-CN': '没有变化。', en: 'Nothing changed.' },
   conflict: { 'zh-CN': '配置已被其他地方修改，未保存，请重试。', en: 'Changed elsewhere; not saved. Try again.' },
   invalid: { 'zh-CN': '校验失败，未保存：{errors}', en: 'Validation failed, not saved: {errors}' },
@@ -260,13 +263,11 @@ export async function executeFeatureChat(
       if (reply.status === 403) return messages(locale, 'denied');
       if (reply.status === 404) return messages(locale, 'notFound', { plugin });
       if (body.code === 'conflict') return messages(locale, 'conflict');
+      if (body.code === 'feature-overrides-unpersisted') return messages(locale, 'overridesUnpersisted');
       return messages(locale, 'failed', { error: String(body.error ?? '') });
     }
     const data = body.data as Record<string, any>;
-    if (data?.status === 'saved') {
-      const saved = messages(locale, 'saved', { level: levelName(locale, level) });
-      return data.persistent === false ? `${saved}${messages(locale, 'notPersistent')}` : saved;
-    }
+    if (data?.status === 'saved') return messages(locale, 'saved', { level: levelName(locale, level) });
     if (data?.status === 'unchanged') return messages(locale, 'unchanged');
     if (data?.status === 'conflict') return messages(locale, 'conflict');
     if (data?.status === 'invalid') {

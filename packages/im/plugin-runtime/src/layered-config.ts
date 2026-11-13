@@ -12,14 +12,22 @@ import { createToken } from './token.js';
 
 export type FeatureConfigLevel = 'global' | 'adapter' | 'endpoint' | 'conversation';
 export const FEATURE_CONFIG_LEVELS: readonly FeatureConfigLevel[] = Object.freeze(['global', 'adapter', 'endpoint', 'conversation']);
-/** Levels stored in the configuration file (`conversation` lives in the project database). */
+/**
+ * Levels that can lock the levels below them (`lockedBy`). Only `global` lives in the
+ * configuration file; adapter / endpoint / conversation overrides live in the project database
+ * (ADR 0057 §2).
+ */
 export type FeatureFileLevel = Exclude<FeatureConfigLevel, 'conversation'>;
 /** Mirrors `ConversationKind` of `@zhin.js/im-contract` (this package has no dependencies). */
 export type FeatureConversationKind = 'group' | 'private' | 'channel';
 export const FEATURE_CONVERSATION_KINDS: readonly FeatureConversationKind[] = Object.freeze(['group', 'private', 'channel']);
 /** Longest accepted platform conversation id (unescaped). */
 export const FEATURE_CONVERSATION_ID_MAX_LENGTH = 256;
-/** Reserved key in a Plugin's own config block that holds adapter / endpoint overrides. */
+/**
+ * Reserved key in a Plugin's own config block that held adapter / endpoint overrides before
+ * ADR 0057 §2. They live in the project database now; the key is only read by the one-time
+ * import and is otherwise refused.
+ */
 export const FEATURE_OVERRIDES_KEY = 'overrides';
 /** Reserved field inside one override entry: the level's enable switch. */
 export const FEATURE_ENABLED_KEY = 'enabled';
@@ -47,28 +55,34 @@ export interface FeatureConversationTarget {
   readonly id: string;
 }
 
-/** One stored conversation-level override (ADR 0055 §3). */
+/** One stored adapter / endpoint / conversation override (ADR 0055 §3, ADR 0057 §2). */
 export interface FeatureConversationOverride {
   /** Only `false` is ever stored: enabling at a lower level removes the switch. */
   readonly enabled?: false;
-  /** Field patch limited to the Plugin's `conversationFields`. */
+  /** Field patch limited to the fields the Plugin allows at the row's level. */
   readonly patch: Readonly<Record<string, unknown>>;
   readonly revision: number;
   readonly updatedAt: number;
   readonly updatedBy?: string;
 }
 
-/** Read side of the instance's conversation override store, provided on the Root Scope. */
+/**
+ * Read side of the instance's feature override store (adapter / endpoint / conversation levels),
+ * provided on the Root Scope. The level follows from the key.
+ */
 export interface FeatureConversationOverrideReader {
   /** Bumped on every write; resolution caches compare it. */
   readonly version: number;
-  /** `plugin` is the instance path (`rss`, `parent/child`); `key` a conversation resolution key. */
+  /**
+   * `plugin` is the instance path (`rss`, `parent/child`); `key` an adapter (`qq`), endpoint
+   * (`qq/bot-1`) or conversation (`qq/bot-1/group:1`) resolution key.
+   */
   get(plugin: string, key: string): FeatureConversationOverride | undefined;
 }
 
 export const featureConversationOverridesToken = createToken<FeatureConversationOverrideReader>(
   'zhin.feature-conversation-overrides',
-  'Conversation-level feature overrides (ADR 0055), read side',
+  'Adapter / endpoint / conversation feature overrides (ADR 0055, ADR 0057), read side',
 );
 
 /**
@@ -217,7 +231,7 @@ export function featureConversationEntry(override: FeatureConversationOverride |
   return Object.freeze({ ...override.patch, ...(override.enabled === false ? { [FEATURE_ENABLED_KEY]: false } : {}) });
 }
 
-/** The Root Scope's conversation override reader, when the instance provides one. */
+/** The Root Scope's feature override reader, when the instance provides one. */
 export function readFeatureConversationOverrides(snapshot: Pick<RuntimeSnapshot, 'root' | 'resources'> | undefined): FeatureConversationOverrideReader | undefined {
   const value = snapshot?.resources.get(snapshot.root)?.get(featureConversationOverridesToken.id) as Partial<FeatureConversationOverrideReader> | undefined;
   return value && typeof value.get === 'function' ? value as FeatureConversationOverrideReader : undefined;
@@ -228,7 +242,30 @@ export function featureInstancePath(owner: PluginId): string {
   return String(owner).split('/').slice(1).join('/');
 }
 
-/** Reads the structural `overrides` value; anything malformed contributes nothing. */
+/**
+ * Adapter / endpoint entries above (and at) `key` from the override store, shaped as
+ * {@link FeatureOverrides} for {@link resolveLayeredConfig} / {@link resolveFeatureEnabled}.
+ * Empty for the global key or without a reader.
+ */
+export function readStoredFeatureOverrides(
+  reader: Pick<FeatureConversationOverrideReader, 'get'> | undefined,
+  plugin: string,
+  key: FeatureResolutionKey | string | undefined,
+): FeatureOverrides {
+  if (!reader) return Object.freeze({});
+  let parsed: FeatureResolutionKey;
+  try { parsed = parseFeatureResolutionKey(key); } catch { return Object.freeze({}); }
+  if (parsed.adapter === undefined) return Object.freeze({});
+  const adapter = featureConversationEntry(reader.get(plugin, parsed.adapter));
+  const endpointKey = parsed.endpointId !== undefined ? `${parsed.adapter}/${parsed.endpointId}` : undefined;
+  const endpoint = endpointKey !== undefined ? featureConversationEntry(reader.get(plugin, endpointKey)) : undefined;
+  return Object.freeze({
+    ...(adapter ? { adapters: Object.freeze({ [parsed.adapter]: adapter }) } : {}),
+    ...(endpoint ? { endpoints: Object.freeze({ [endpointKey!]: endpoint }) } : {}),
+  });
+}
+
+/** Reads a structural `overrides` value; anything malformed contributes nothing. */
 export function readFeatureOverrides(value: unknown): FeatureOverrides {
   if (!plainObject(value)) return Object.freeze({});
   const pick = (entries: unknown): Readonly<Record<string, FeatureOverrideEntry>> | undefined => {
@@ -479,8 +516,8 @@ const ENABLED_CACHE_LIMIT = 20_000;
 
 /**
  * Dispatch gate: whether `owner` is enabled for one resolution key in this generation.
- * Plugins listed in `disable_plugins` never load, so only override levels are consulted here.
- * Conversation keys also read the instance's conversation overrides; the cache is keyed by
+ * Plugins listed in `disable_plugins` never load, so only the stored override levels (adapter /
+ * endpoint / conversation, ADR 0057 §2) are consulted here; the cache is keyed by
  * (configuration generation, store version, owner, key).
  */
 export function isFeatureOwnerEnabled(
@@ -493,19 +530,21 @@ export function isFeatureOwnerEnabled(
   if (!primary) return true;
   let parsed: FeatureResolutionKey;
   try { parsed = parseFeatureResolutionKey(key); } catch { return true; }
-  const reader = parsed.conversation ? readFeatureConversationOverrides(snapshot) : undefined;
+  if (parsed.adapter === undefined) return true;
+  const reader = readFeatureConversationOverrides(snapshot);
   const version = reader?.version ?? -1;
   let cache = enabledCache.get(primary);
   if (!cache || (reader && cache.version !== version)) {
-    // A store write invalidates the generation's cache; file-level entries are rebuilt cheaply.
+    // A store write invalidates the generation's cache.
     cache = { version: reader ? version : cache?.version ?? -1, entries: new Map() };
     enabledCache.set(primary, cache);
   }
   const cacheKey = `${String(owner)}\0${key}`;
   const cached = cache.entries.get(cacheKey);
   if (cached !== undefined) return cached;
-  const overrides = readPluginConfigBlock(primary.document, owner)?.[FEATURE_OVERRIDES_KEY];
-  const conversation = reader ? featureConversationEntry(reader.get(featureInstancePath(owner), key)) : undefined;
+  const plugin = featureInstancePath(owner);
+  const overrides = readStoredFeatureOverrides(reader, plugin, parsed);
+  const conversation = reader && parsed.conversation ? featureConversationEntry(reader.get(plugin, key)) : undefined;
   // A nested Plugin inherits its ancestors' switches: a disabled parent hides its children too.
   const parent = String(owner).slice(0, String(owner).lastIndexOf('/')) as PluginId;
   const enabled = (parent === snapshot.root || !String(parent) || isFeatureOwnerEnabled(snapshot, parent, key))

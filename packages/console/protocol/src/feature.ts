@@ -1,7 +1,8 @@
 /**
  * ADR 0050 §8 / ADR 0055 §6: layered feature configuration Console RPC (`feature.*`).
  * Levels are `global` < `adapter` (instance alias) < `endpoint` (`<alias>/<endpointId>`)
- * < `conversation` (`<alias>/<endpointId>/<kind>:<escaped id>`, stored in the project database).
+ * < `conversation` (`<alias>/<endpointId>/<kind>:<escaped id>`). `global` is the plugin's block in
+ * the configuration file; the other three are stored in the project database (ADR 0057 §2).
  */
 
 export const FEATURE_RPC = Object.freeze({
@@ -208,12 +209,13 @@ export interface ConsoleFeatureGetResult {
   readonly lockedBy?: ConsoleFeatureLock;
   /** `conversation` level only: the parsed key. */
   readonly conversation?: ConsoleFeatureConversationRef;
-  /** `conversation` level only: when / by whom the stored override was last written. */
+  /** Stored levels (adapter / endpoint / conversation): when / by whom the stored override was last written. */
   readonly updatedAt?: number;
   readonly updatedBy?: string;
   /**
-   * Whether conversation overrides survive a restart: false when the project database cannot
-   * store them (MongoDB, Redis, memory). Present whenever the conversation store is available.
+   * Whether overrides can be saved: false when the project database cannot store them (MongoDB,
+   * Redis, memory), in which case writes are refused (503 `feature-overrides-unpersisted`).
+   * Present whenever the override store is available.
    */
   readonly persistent?: boolean;
 }
@@ -231,8 +233,10 @@ export interface ConsoleFeatureSetOverrideRequest {
   /** Shallow field patch; `null` stores an explicit clear, `undefined` (in-process callers) deletes the field. */
   readonly patch: Readonly<Record<string, unknown>>;
   /**
-   * Defaults to the revision read by this request. Configuration file levels use the config
-   * revision; `conversation` uses the stored override's revision (`'0'` when none exists).
+   * Omitted: no revision check. The stored override's revision as `feature.get` returned it
+   * (`'0'` when none exists). For `adapter` / `endpoint`, the configuration revision of
+   * `feature.list` / `feature.matrix` is still accepted while it is current (Console builds before
+   * ADR 0057), without a row check.
    */
   readonly expectedRevision?: string;
 }
@@ -262,7 +266,7 @@ export type ConsoleFeatureWriteResult =
     restartRequired: boolean;
     warnings: readonly ConsoleFeatureWarning[];
     message: string;
-    /** Conversation level only: false when the write is kept in memory and lost on restart. */
+    /** Stored levels: whether the store persists (always true for a saved write since ADR 0057 §2). */
     persistent?: boolean;
   }>
   | Readonly<{ status: 'unchanged'; revision: string; warnings: readonly ConsoleFeatureWarning[] }>
@@ -324,6 +328,6 @@ export interface ConsoleFeatureConversationsResult {
   readonly nextCursor?: string;
   /** False when the instance has no conversation event store; only overridden conversations are listed. */
   readonly recentAvailable: boolean;
-  /** False when conversation overrides are kept in memory only and are lost on restart. */
+  /** False when the project database cannot store overrides (writes are refused). */
   readonly persistent?: boolean;
 }

@@ -8,6 +8,7 @@ import { PLUGIN_SWITCH_REQUIRES_GATEWAY } from '@zhin.js/host-http';
 import {
   createFeatureRpcContext, dispatchFeatureConsoleRpc, type FeatureRpcContext,
 } from '../../../src/instance/console/console-feature-rpc.js';
+import { FeatureOverrideStore } from '../../../src/instance/console/feature-override-store.js';
 
 const root = rootPluginId();
 const rss = childPluginId(root, 'rss');
@@ -41,7 +42,31 @@ function snapshot(): RuntimeSnapshot {
   };
 }
 
-function harness(document: RuntimeConfigDocument, options: Partial<FeatureRpcContext> = {}) {
+type Entry = Record<string, unknown> & { enabled?: boolean };
+/** ADR 0057 §2: stored adapter / endpoint entries per plugin (`{ rss: { qq: {...}, 'tg/news': {...} } }`). */
+type Seed = Record<string, Record<string, Entry>>;
+
+/** The adapter / endpoint overrides that used to be the `rss.overrides` block. */
+const seed: Seed = { rss: { qq: { enabled: false, maxItems: 3 }, 'tg/news': { maxItems: 1 } } };
+
+async function seeded(entries: Seed): Promise<FeatureOverrideStore> {
+  const store = new FeatureOverrideStore();
+  for (const [plugin, byKey] of Object.entries(entries)) {
+    for (const [key, { enabled, ...patch }] of Object.entries(byKey)) {
+      await store.write({ plugin, key, next: () => ({ ...(enabled === false ? { enabled: false as const } : {}), patch }) });
+    }
+  }
+  return store;
+}
+
+/** The stored entry as `{ enabled?, ...patch }` (undefined when none). */
+function stored(store: FeatureOverrideStore, plugin: string, key: string): Entry | undefined {
+  const row = store.get(plugin, key);
+  return row ? { ...row.patch, ...(row.enabled === false ? { enabled: false } : {}) } : undefined;
+}
+
+async function harness(document: RuntimeConfigDocument, options: Partial<FeatureRpcContext> = {}, entries: Seed = seed) {
+  const overrides = await seeded(entries);
   const state = { document: structuredClone(document), revision: 1 };
   const patches: ConsoleConfigPatchRequest[] = [];
   const configuration = {
@@ -56,40 +81,40 @@ function harness(document: RuntimeConfigDocument, options: Partial<FeatureRpcCon
   };
   const snap = snapshot();
   const context: FeatureRpcContext = {
-    authScope: 'full', authorize: () => true, configuration, snapshots: { acquire: () => ({ value: snap, release() {} }) as never }, ...options,
+    authScope: 'full', authorize: () => true, configuration, snapshots: { acquire: () => ({ value: snap, release() {} }) as never },
+    stores: { overrides }, ...options,
   };
   const call = async (type: string, data: Record<string, unknown> = {}) => dispatchFeatureConsoleRpc({ type, data, requestId: 7 }, context);
-  return { state, patches, call, context };
+  return { state, patches, call, context, overrides };
 }
 
 const base = {
   configVersion: 2, plugins: { rss: '@x/rss', qq: '@x/qq', tg: '@x/tg', plain: '@x/plain' }, disable_plugins: ['plain'],
   qq: { endpoints: [{ id: 'bot-1' }, { id: 'bot-2' }] },
-  rss: { maxItems: 5, apiKey: '${RSS_KEY}', style: { title: 'T', token: 'secret-token' },
-    overrides: { adapters: { qq: { enabled: false, maxItems: 3 } }, endpoints: { 'tg/news': { maxItems: 1 } } } },
+  rss: { maxItems: 5, apiKey: '${RSS_KEY}', style: { title: 'T', token: 'secret-token' } },
 };
 
 describe('feature.* Console RPC', () => {
   it('ignores other RPC types and denies every caller without an authorize hook', async () => {
-    const { call, context } = harness(base);
+    const { call, context } = await harness(base);
     expect(await dispatchFeatureConsoleRpc({ type: 'plugin:set-enabled' }, context)).toBeNull();
-    const denied = harness(base, { authorize: undefined });
+    const denied = await harness(base, { authorize: undefined });
     expect(await denied.call('feature.list')).toMatchObject({ status: 403, body: { success: false } });
     expect((await call('feature.list')).status).toBe(200);
   });
 
   it('passes level and key to the authorize hook', async () => {
     const authorize = vi.fn(async (request: { level?: string }) => request.level !== 'endpoint');
-    const { call } = harness(base, { authorize });
+    const { call } = await harness(base, { authorize });
     expect((await call('feature.get', { plugin: 'rss', level: 'adapter', key: 'qq' })).status).toBe(200);
     expect((await call('feature.get', { plugin: 'rss', level: 'endpoint', key: 'qq/bot-1' })).status).toBe(403);
     expect(authorize).toHaveBeenCalledWith({ type: 'feature.get', permission: 'feature.view', plugin: 'rss', level: 'endpoint', key: 'qq/bot-1' });
-    const throwing = harness(base, { authorize: () => { throw new Error('boom'); } });
+    const throwing = await harness(base, { authorize: () => { throw new Error('boom'); } });
     expect((await throwing.call('feature.list')).status).toBe(403);
   });
 
   it('lists features with levels, schema presence and the global switch', async () => {
-    const { call } = harness(base);
+    const { call } = await harness(base);
     const reply = await call('feature.list');
     expect(reply!.body.data).toMatchObject({ revision: 'r1', features: [
       { plugin: 'rss', displayName: 'RSS 订阅', levels: ['global', 'adapter', 'endpoint'], hasSchema: true, globalEnabled: true },
@@ -100,7 +125,7 @@ describe('feature.* Console RPC', () => {
   });
 
   it('builds the matrix with locks and override markers', async () => {
-    const { call } = harness(base);
+    const { call } = await harness(base);
     const data = (await call('feature.matrix'))!.body.data as { adapters: string[]; endpoints: Record<string, string[]>; rows: { plugin: string; global: unknown; adapters: Record<string, unknown> }[] };
     expect(data.adapters).toEqual(['qq', 'tg']);
     expect(data.endpoints).toEqual({ qq: ['bot-1', 'bot-2'], tg: ['news'] });
@@ -111,93 +136,145 @@ describe('feature.* Console RPC', () => {
       adapters: { qq: { enabled: false, lockedBy: 'global', overridden: false }, tg: { enabled: false, lockedBy: 'global', overridden: false } } });
   });
 
-  it('reads one level with masked secrets, sources and locks', async () => {
-    const { call } = harness(base);
+  it('reads one level with masked secrets, sources, locks and the stored row revision', async () => {
+    const { call } = await harness(base);
     const endpoint = (await call('feature.get', { plugin: 'rss', level: 'endpoint', key: 'qq/bot-1' }))!.body.data as Record<string, unknown>;
-    expect(endpoint).toMatchObject({ level: 'endpoint', key: 'qq/bot-1', enabled: false, lockedBy: 'adapter', values: {},
+    expect(endpoint).toMatchObject({ level: 'endpoint', key: 'qq/bot-1', enabled: false, lockedBy: 'adapter', values: {}, revision: '0',
       effective: { maxItems: 3, apiKey: '[redacted]', style: { title: 'T', token: '[redacted]' } },
-      sources: { '/maxItems': 'adapter', '/apiKey': 'global' } });
+      sources: { '/maxItems': 'adapter', '/apiKey': 'global' }, persistent: true });
     expect(Object.keys((endpoint.schema as { properties: object }).properties)).toEqual(['maxItems', 'style']);
     const adapter = (await call('feature.get', { plugin: 'rss', level: 'adapter', key: 'qq' }))!.body.data as Record<string, unknown>;
-    expect(adapter).toMatchObject({ values: { maxItems: 3 }, enabled: false });
+    expect(adapter).toMatchObject({ values: { maxItems: 3 }, enabled: false, revision: '1', updatedAt: expect.any(Number) });
     expect(adapter).not.toHaveProperty('lockedBy');
     const global = (await call('feature.get', { plugin: 'rss', level: 'global' }))!.body.data as Record<string, unknown>;
     expect(global.values).toEqual({ maxItems: 5, apiKey: '[redacted]', style: { title: 'T', token: '[redacted]' } });
+    expect(global.revision).toBe('r1');
     expect(JSON.stringify(global)).not.toContain('secret-token');
     expect(Object.keys((global.schema as { properties: object }).properties)).toEqual(['maxItems', 'apiKey', 'style']);
     expect((await call('feature.get', { plugin: 'ghost', level: 'global' }))!.status).toBe(404);
     expect((await call('feature.get', { plugin: 'rss', level: 'endpoint', key: 'no-slash' }))!.status).toBe(400);
+    // Adapter / endpoint levels need the store (ADR 0057 §2).
+    const storeless = await harness(base, { stores: undefined });
+    expect((await storeless.call('feature.get', { plugin: 'rss', level: 'adapter', key: 'qq' }))!.status).toBe(503);
+    expect((await storeless.call('feature.get', { plugin: 'rss', level: 'global' }))!.status).toBe(200);
   });
 
-  it('writes overrides through the revision-checked patch path and reports warnings', async () => {
-    const { call, state, patches } = harness(base);
+  it('ignores a legacy overrides block in the configuration file', async () => {
+    const { call } = await harness({ ...base, rss: { ...base.rss, overrides: { adapters: { tg: { enabled: false, maxItems: 9 } } } } }, {}, {});
+    const adapter = (await call('feature.get', { plugin: 'rss', level: 'adapter', key: 'tg' }))!.body.data as Record<string, unknown>;
+    expect(adapter).toMatchObject({ values: {}, enabled: true, effective: { maxItems: 5 } });
+    expect(Object.keys((adapter.schema as { properties: object }).properties)).not.toContain('overrides');
+  });
+
+  it('writes adapter / endpoint overrides to the store at once (no configuration write, no restart) and reports warnings', async () => {
+    const events: unknown[] = [];
+    const { call, patches, overrides } = await harness(base, { actor: 'user:u1', publishEvent: (type, data) => { events.push([type, data]); } });
+    const version = overrides.version;
     const reply = await call('feature.set-override', { plugin: 'rss', level: 'endpoint', key: 'qq/bot-9', patch: { maxItems: 2, style: null } });
-    expect(reply!.body.data).toMatchObject({ status: 'saved', restartRequired: false,
+    expect(reply!.body.data).toMatchObject({ status: 'saved', revision: '1', restartRequired: false, persistent: true,
       warnings: [{ code: 'unknown-endpoint', path: '/overrides/endpoints/qq~1bot-9' }] });
-    expect(patches[0]).toMatchObject({ instanceKey: 'rss', expectedRevision: 'r1', patches: [{ op: 'set', path: ['rss', 'overrides'] }] });
-    expect((state.document.rss as Record<string, any>).overrides.endpoints['qq/bot-9']).toEqual({ maxItems: 2, style: null });
+    expect(patches).toEqual([]);
+    expect(overrides.version).toBe(version + 1);
+    expect(overrides.get('rss', 'qq/bot-9')).toMatchObject({ level: 'endpoint', patch: { maxItems: 2, style: null }, updatedBy: 'user:u1' });
+    expect(events).toEqual([['feature:updated', { plugin: 'rss', level: 'endpoint', key: 'qq/bot-9' }]]);
     const invalid = await call('feature.set-override', { plugin: 'rss', level: 'endpoint', key: 'qq/bot-1', patch: { apiKey: 'x' } });
-    expect(invalid!.body.data).toMatchObject({ status: 'invalid', errors: [{ path: '/overrides/endpoints/qq~1bot-1' }] });
-    expect(patches).toHaveLength(1);
-    const stale = await call('feature.set-override', { plugin: 'rss', level: 'adapter', key: 'tg', patch: { maxItems: 4 }, expectedRevision: 'r1' });
-    expect(stale!.body.data).toMatchObject({ status: 'conflict', revision: 'r2' });
+    expect(invalid!.body.data).toMatchObject({ status: 'invalid', revision: '0', errors: [{ path: '', message: expect.stringContaining('apiKey') }] });
+    expect(overrides.get('rss', 'qq/bot-1')).toBeUndefined();
+    // Revision compare-and-swap on the stored row.
+    expect((await call('feature.set-override', { plugin: 'rss', level: 'adapter', key: 'tg', patch: { maxItems: 4 }, expectedRevision: '0' }))!.body.data)
+      .toMatchObject({ status: 'saved', revision: '1' });
+    expect((await call('feature.set-override', { plugin: 'rss', level: 'adapter', key: 'tg', patch: { maxItems: 6 }, expectedRevision: '0' }))!.body.data)
+      .toMatchObject({ status: 'conflict', revision: '1' });
+    // Console builds before ADR 0057 send the configuration revision: accepted while it is current, a conflict otherwise.
+    expect((await call('feature.set-override', { plugin: 'rss', level: 'adapter', key: 'tg', patch: { maxItems: 6 }, expectedRevision: 'r1' }))!.body.data)
+      .toMatchObject({ status: 'saved', revision: '2' });
+    expect((await call('feature.set-override', { plugin: 'rss', level: 'adapter', key: 'tg', patch: { maxItems: 7 }, expectedRevision: 'r0' }))!.body.data)
+      .toMatchObject({ status: 'conflict', revision: '2' });
+    expect(stored(overrides, 'rss', 'tg')).toEqual({ maxItems: 6 });
     expect((await call('feature.set-override', { plugin: 'rss', level: 'adapter', key: 'tg', patch: { enabled: false } }))!.status).toBe(400);
     expect((await call('feature.set-override', { plugin: 'rss', level: 'global', patch: { maxItems: 1 } }))!.status).toBe(400);
+    // A Plugin without a schema can only switch below global.
+    expect((await call('feature.set-override', { plugin: 'qq', level: 'adapter', key: 'tg', patch: { x: 1 } }))!.body.data).toMatchObject({ status: 'invalid' });
+  });
+
+  it('refuses writes when the project database cannot persist them (ADR 0057 §2)', async () => {
+    const database = { dialect: 'redis', started: true, models: { get: () => undefined } };
+    const store = new FeatureOverrideStore({ database: database as never });
+    await store.load();
+    const { call } = await harness(base, { stores: { overrides: store } }, {});
+    for (const [type, data] of [
+      ['feature.set-override', { plugin: 'rss', level: 'adapter', key: 'qq', patch: { maxItems: 2 } }],
+      ['feature.set-enabled', { plugin: 'rss', level: 'endpoint', key: 'qq/bot-1', enabled: false }],
+      ['feature.set-enabled', { plugin: 'rss', level: 'conversation', key: 'qq/bot-1/group:1', enabled: false }],
+    ] as const) {
+      expect(await call(type, data)).toMatchObject({ status: 503, body: { success: false, code: 'feature-overrides-unpersisted',
+        error: expect.stringContaining('关系型项目数据库') } });
+    }
+    expect(store.list()).toEqual([]);
+    expect(((await call('feature.get', { plugin: 'rss', level: 'adapter', key: 'qq' }))!.body.data as Record<string, unknown>).persistent).toBe(false);
   });
 
   it('refuses environment references unless the caller may edit the environment', async () => {
-    const denied = harness(base);
+    const denied = await harness(base);
     for (const patch of [{ style: { title: '${RSS_KEY}' } }, { style: { title: 'env://RSS_KEY' } }, { style: { ['${X}']: 'a' } }]) {
       const reply = await denied.call('feature.set-override', { plugin: 'rss', level: 'endpoint', key: 'qq/bot-1', patch });
       expect(reply).toMatchObject({ status: 400, body: { success: false, code: 'environment-reference' } });
     }
-    expect(denied.patches).toEqual([]);
-    const throwing = harness(base, { mayReferenceEnvironment: () => { throw new Error('boom'); } });
+    expect(denied.overrides.get('rss', 'qq/bot-1')).toBeUndefined();
+    const throwing = await harness(base, { mayReferenceEnvironment: () => { throw new Error('boom'); } });
     expect((await throwing.call('feature.set-override', { plugin: 'rss', level: 'endpoint', key: 'qq/bot-1', patch: { style: { title: '${RSS_KEY}' } } }))!.status).toBe(400);
-    const allowed = harness(base, { mayReferenceEnvironment: () => true });
+    const allowed = await harness(base, { mayReferenceEnvironment: () => true });
     const saved = await allowed.call('feature.set-override', { plugin: 'rss', level: 'endpoint', key: 'qq/bot-1', patch: { style: { title: '${RSS_KEY}' } } });
     expect(saved!.body.data).toMatchObject({ status: 'saved' });
   });
 
   it('removes a whole level entry or selected fields and cleans empty containers', async () => {
-    const { call, state } = harness({ ...base, rss: { ...base.rss, overrides: { endpoints: { 'tg/news': { maxItems: 1, style: { title: 'x' } } } } } });
+    const { call, overrides } = await harness(base, {}, { rss: { 'tg/news': { maxItems: 1, style: { title: 'x' } } } });
     await call('feature.remove-override', { plugin: 'rss', level: 'endpoint', key: 'tg/news', paths: [['style', 'title']] });
-    expect((state.document.rss as Record<string, any>).overrides).toEqual({ endpoints: { 'tg/news': { maxItems: 1 } } });
+    expect(stored(overrides, 'rss', 'tg/news')).toEqual({ maxItems: 1 });
     const reply = await call('feature.remove-override', { plugin: 'rss', level: 'endpoint', key: 'tg/news' });
-    expect(reply!.body.data).toMatchObject({ status: 'saved' });
-    expect(state.document.rss).not.toHaveProperty('overrides');
+    expect(reply!.body.data).toMatchObject({ status: 'saved', revision: '3' });
+    expect(overrides.get('rss', 'tg/news')).toBeUndefined();
+    // Tombstone: the revision keeps counting.
+    expect(overrides.revisionOf('rss', 'tg/news')).toBe(3);
     expect((await call('feature.remove-override', { plugin: 'rss', level: 'endpoint', key: 'tg/news' }))!.body.data).toMatchObject({ status: 'unchanged' });
   });
 
-  it('stores enabled: false and deletes the key for enabled: true at adapter / endpoint levels', async () => {
-    const { call, state, patches } = harness(base);
+  it('stores enabled: false and deletes the switch for enabled: true at adapter / endpoint levels', async () => {
+    const { call, patches, overrides } = await harness(base);
     await call('feature.set-enabled', { plugin: 'rss', level: 'adapter', key: 'qq', enabled: true });
-    expect((state.document.rss as Record<string, any>).overrides.adapters.qq).toEqual({ maxItems: 3 });
+    expect(stored(overrides, 'rss', 'qq')).toEqual({ maxItems: 3 });
     await call('feature.set-enabled', { plugin: 'rss', level: 'endpoint', key: 'tg/news', enabled: false });
-    expect((state.document.rss as Record<string, any>).overrides.endpoints['tg/news']).toEqual({ maxItems: 1, enabled: false });
+    expect(stored(overrides, 'rss', 'tg/news')).toEqual({ maxItems: 1, enabled: false });
     expect((await call('feature.set-enabled', { plugin: 'rss', level: 'endpoint', key: 'tg/news', enabled: true }))!.body.data).toMatchObject({ status: 'saved' });
-    expect((state.document.rss as Record<string, any>).overrides.endpoints['tg/news']).toEqual({ maxItems: 1 });
-    expect(patches).toHaveLength(3);
+    expect(stored(overrides, 'rss', 'tg/news')).toEqual({ maxItems: 1 });
+    // A switch-only entry disappears when it is enabled again.
+    await call('feature.set-enabled', { plugin: 'rss', level: 'adapter', key: 'tg', enabled: false });
+    expect(stored(overrides, 'rss', 'tg')).toEqual({ enabled: false });
+    await call('feature.set-enabled', { plugin: 'rss', level: 'adapter', key: 'tg', enabled: true });
+    expect(overrides.get('rss', 'tg')).toBeUndefined();
+    expect(patches).toEqual([]);
   });
 
   it('locks every level below a disabled level in both directions (ADR 0050 §4)', async () => {
-    const { call, state, patches } = harness(base);
+    const { call, patches, overrides } = await harness(base);
     // rss is disabled at adapter qq: the endpoint switch below it can neither enable nor disable.
     for (const enabled of [true, false]) {
       const reply = await call('feature.set-enabled', { plugin: 'rss', level: 'endpoint', key: 'qq/bot-1', enabled });
       expect(reply).toMatchObject({ status: 409, body: { success: false, code: 'locked', lockedBy: 'adapter', error: '已被适配器层停用，下级开关已锁定' } });
     }
+    // ... nor the conversation switches below it.
+    expect(await call('feature.set-enabled', { plugin: 'rss', level: 'conversation', key: 'qq/bot-1/group:1', enabled: false }))
+      .toMatchObject({ status: 409, body: { code: 'locked', lockedBy: 'adapter' } });
     // plain is disabled globally: adapter and endpoint switches are locked by global.
     expect(await call('feature.set-enabled', { plugin: 'plain', level: 'adapter', key: 'qq', enabled: false }))
       .toMatchObject({ status: 409, body: { code: 'locked', lockedBy: 'global', error: '已被全局层停用，下级开关已锁定' } });
     expect(patches).toEqual([]);
-    void state;
+    expect(overrides.list()).toHaveLength(2);
     // A lower `enabled: false` stored before the upper disable is kept by remove-override.
-    const document = structuredClone(base) as Record<string, any>;
-    document.rss.overrides.endpoints['qq/bot-1'] = { enabled: false, maxItems: 2 };
-    const kept = harness(document);
+    const kept = await harness(base, {}, { rss: { ...seed.rss, 'qq/bot-1': { enabled: false, maxItems: 2 } } });
     await kept.call('feature.remove-override', { plugin: 'rss', level: 'endpoint', key: 'qq/bot-1' });
-    expect((kept.state.document.rss as Record<string, any>).overrides.endpoints['qq/bot-1']).toEqual({ enabled: false });
+    expect(stored(kept.overrides, 'rss', 'qq/bot-1')).toEqual({ enabled: false });
     expect(await kept.call('feature.remove-override', { plugin: 'rss', level: 'endpoint', key: 'qq/bot-1', paths: [['enabled']] }))
       .toMatchObject({ status: 409, body: { code: 'locked' } });
   });
@@ -207,7 +284,7 @@ describe('feature.* Console RPC', () => {
     try {
       const setGlobalEnabled = vi.fn(async () => undefined);
       const requestRestart = vi.fn();
-      const { call, patches } = harness(base, { setGlobalEnabled, requestRestart });
+      const { call, patches } = await harness(base, { setGlobalEnabled, requestRestart });
       const reply = await call('feature.set-enabled', { plugin: 'plain', level: 'global', enabled: true });
       expect(reply!.body.data).toMatchObject({ status: 'saved', restartRequired: true });
       expect(setGlobalEnabled).toHaveBeenCalledWith('plain', true);
@@ -223,7 +300,7 @@ describe('feature.* Console RPC', () => {
     vi.useFakeTimers();
     try {
       const published: string[] = [];
-      const { call, patches, context } = harness(base, { publishEvent: type => { published.push(type); } });
+      const { call, patches, context } = await harness(base, { publishEvent: type => { published.push(type); } });
       for (const enabled of [true, false]) {
         // Refused whatever the current state (plain is disabled, rss enabled): never "unchanged".
         for (const plugin of ['plain', 'rss']) {
@@ -240,7 +317,7 @@ describe('feature.* Console RPC', () => {
   });
 
   it('builds the Console context without a global writer or restart hook', async () => {
-    const { context } = harness(base);
+    const { context } = await harness(base);
     const consoleContext = createFeatureRpcContext({
       configuration: context.configuration as never,
       snapshots: context.snapshots as never,

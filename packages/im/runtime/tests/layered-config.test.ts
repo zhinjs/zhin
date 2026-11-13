@@ -10,7 +10,7 @@ import {
   ConfigComposer, ConfigSchemaCollisionError, ConfigValidationError, NodePackageResolver, ProjectGraphService, RootRuntime,
   assertFeatureLevelDeclarations, collectFeatureOverrideWarnings, createLayeredConfigAccessor, createPrimaryConfig,
   featureOverrideEntrySchema, overridableFields, readFeatureConversationDeclaration, readFeatureLevels, readFieldLevels,
-  validateConversationOverride, validateFeatureOverrides,
+  validateConversationOverride, validateFeatureOverrides, validateStoredFeatureOverride,
   type ModuleRuntime,
 } from '../src/index.js';
 
@@ -150,18 +150,25 @@ describe('ConfigComposer overrides', () => {
 describe('layered config accessor', () => {
   const owner = childPluginId(rootPluginId(), 'rss');
   const env = { expandMissingAsEmpty: <T>(value: T) => value } as never;
-  const primary = (overrides: unknown, extra: Record<string, unknown> = {}) => createPrimaryConfig({
+  const primary = (extra: Record<string, unknown> = {}, block: Record<string, unknown> = {}) => createPrimaryConfig({
     configVersion: 2, plugins: { rss: '@x/rss', qq: '@x/qq' }, ...extra,
-    rss: { maxItems: 5, feeds: ['a'], overrides },
+    rss: { maxItems: 5, feeds: ['a'], ...block },
   }, env);
-  const snapshot = (generation: number, config: ReturnType<typeof primary>): RuntimeSnapshot => ({
+  /** ADR 0057 §2: adapter / endpoint / conversation levels come from the instance's override store. */
+  const store = (entries: Record<string, FeatureConversationOverride> = {}) => {
+    const rows = new Map(Object.entries(entries));
+    return { rows, reader: { version: 0, get: (plugin: string, key: string) => rows.get(`${plugin}|${key}`) } };
+  };
+  const row = (patch: Record<string, unknown>, enabled?: false): FeatureConversationOverride => ({ ...(enabled === false ? { enabled } : {}), patch, revision: 1, updatedAt: 1 });
+  const snapshot = (generation: number, config: ReturnType<typeof primary>, reader?: ReturnType<typeof store>['reader']): RuntimeSnapshot => ({
     generation, root: rootPluginId(), tree: new Map(), config: new Map(), capabilities: new Map(), projections: new Map(),
-    resources: new Map([[rootPluginId(), new Map([[primaryConfigToken.id, config]])]]),
+    resources: new Map([[rootPluginId(), new Map<string, unknown>([[primaryConfigToken.id, config], ...(reader ? [[featureConversationOverridesToken.id, reader] as const] : [])])]]) as never,
   });
 
-  it('reads the latest committed configuration and caches per generation and key', () => {
-    let committed = snapshot(1, primary({ endpoints: { 'qq/a': { maxItems: 1 } } }));
-    const accessor = createLayeredConfigAccessor({ owner, generation: 1, schema: { ...rssSchema }, candidate: primary(undefined),
+  it('reads the latest committed configuration and the stored overrides, cached per store version and key', () => {
+    const overrides = store({ 'rss|qq/a': row({ maxItems: 1 }) });
+    let committed = snapshot(1, primary(), overrides.reader);
+    const accessor = createLayeredConfigAccessor({ owner, generation: 1, schema: { ...rssSchema }, candidate: primary(),
       readCommitted: () => committed, expand: value => value, view: {} });
     const first = accessor.configFor<{ maxItems: number; feeds: string[] }>('qq/a');
     expect(first).toEqual({ maxItems: 1, feeds: ['a'] });
@@ -169,28 +176,62 @@ describe('layered config accessor', () => {
     expect(accessor.configFor('qq/a')).toBe(first);
     expect(accessor.configFor({ adapter: 'qq', endpointId: 'a' })).toBe(first);
     expect(accessor.configFor('')).toEqual({ maxItems: 5, feeds: ['a'] });
-    committed = snapshot(2, primary({ adapters: { qq: { enabled: false } }, endpoints: { 'qq/a': { maxItems: 3 } } }));
+    // A store write is visible at once (no new generation): the version invalidates the cache.
+    overrides.rows.set('rss|qq', row({}, false));
+    overrides.rows.set('rss|qq/a', { ...row({ maxItems: 3 }), revision: 2 });
+    overrides.reader.version = 1;
     expect(accessor.configFor('qq/a')).toEqual({ maxItems: 3, feeds: ['a'] });
     expect(accessor.isEnabledFor('qq/a')).toBe(false);
     expect(accessor.resolve('qq/a').lockedBy).toBe('adapter');
+    expect(accessor.resolve('qq/a').sources['/maxItems']).toBe('endpoint');
     expect(accessor.isEnabledFor('qq')).toBe(false);
     expect(accessor.isEnabledFor('tg/x')).toBe(true);
+    // A newer committed global block still merges under the stored levels.
+    committed = snapshot(2, primary({}, { feeds: ['b'] }), overrides.reader);
+    expect(accessor.configFor('qq/a')).toEqual({ maxItems: 3, feeds: ['b'] });
+  });
+
+  it('ignores a legacy overrides block in the configuration file', () => {
+    const accessor = createLayeredConfigAccessor({ owner, generation: 1, schema: { ...rssSchema },
+      candidate: primary({}, { overrides: { adapters: { qq: { enabled: false, maxItems: 9 } } } }),
+      readCandidate: () => snapshot(1, primary(), store().reader), expand: value => value, view: {} });
+    expect(accessor.configFor('qq')).toEqual({ maxItems: 5, feeds: ['a'] });
+    expect(accessor.isEnabledFor('qq')).toBe(true);
   });
 
   it('uses the candidate configuration before its generation commits and disable_plugins for the global level', () => {
-    const accessor = createLayeredConfigAccessor({ owner, generation: 3, candidate: primary({ adapters: { qq: { maxItems: 9 } } }, { disable_plugins: ['rss'] }),
-      readCommitted: () => snapshot(2, primary(undefined)), expand: value => value, view: {} });
+    const accessor = createLayeredConfigAccessor({ owner, generation: 3, candidate: primary({ disable_plugins: ['rss'] }),
+      readCommitted: () => snapshot(2, primary(), store({ 'rss|qq': row({ maxItems: 9 }) }).reader), expand: value => value, view: {} });
     expect(accessor.configFor('qq')).toMatchObject({ maxItems: 9 });
     expect(accessor.resolve('qq')).toMatchObject({ enabled: false, disabledAt: 'global', lockedBy: 'global' });
   });
 
   it('hides a nested Plugin wherever an ancestor is switched off', () => {
     const nested = childPluginId(owner, 'child');
-    const config = createPrimaryConfig({ configVersion: 2, plugins: { rss: '@x/rss' },
-      rss: { overrides: { endpoints: { 'qq/a': { enabled: false } } }, child: { label: 'x' } } }, env);
-    const accessor = createLayeredConfigAccessor({ owner: nested, generation: 1, candidate: config, expand: value => value, view: {} });
+    const config = createPrimaryConfig({ configVersion: 2, plugins: { rss: '@x/rss' }, rss: { child: { label: 'x' } } }, env);
+    const accessor = createLayeredConfigAccessor({ owner: nested, generation: 1, candidate: config,
+      readCandidate: () => snapshot(1, config, store({ 'rss|qq/a': row({}, false) }).reader), expand: value => value, view: {} });
     expect(accessor.isEnabledFor('qq/a')).toBe(false);
+    expect(accessor.isEnabledFor('qq/a/group:1')).toBe(false);
     expect(accessor.isEnabledFor('qq/b')).toBe(true);
+  });
+
+  it('validates stored adapter / endpoint entries against their level and the effective configuration', () => {
+    const block = { maxItems: 5, style: { title: 't' } };
+    expect(validateStoredFeatureOverride(rssSchema, { block, level: 'adapter', key: 'qq', entry: { region: 'cn', enabled: false } })).toEqual([]);
+    // region is adapter-only; apiKey global-only.
+    expect(validateStoredFeatureOverride(rssSchema, { block, level: 'endpoint', key: 'qq/a', entry: { region: 'cn' } }))
+      .toMatchObject([{ message: expect.stringContaining('additionalProperty: region') }]);
+    expect(validateStoredFeatureOverride(rssSchema, { block, level: 'adapter', key: 'qq', entry: { apiKey: null } })).toHaveLength(1);
+    expect(validateStoredFeatureOverride(rssSchema, { block, level: 'endpoint', key: 'qq/a', entry: { maxItems: 0 } })[0]!.path).toBe('/maxItems');
+    // The effective view includes the stored levels above the written one.
+    expect(validateStoredFeatureOverride(rssSchema, { block: { maxItems: 5 }, level: 'endpoint', key: 'qq/a', entry: { style: { color: 'x' } } }))
+      .toMatchObject([{ message: expect.stringContaining('effective configuration') }]);
+    expect(validateStoredFeatureOverride(rssSchema, { block: { maxItems: 5 }, level: 'endpoint', key: 'qq/a', entry: { style: { color: 'x' } },
+      overrides: { adapters: { qq: { style: { title: 't' } } } } })).toEqual([]);
+    // The level's own stored entry is replaced by the candidate.
+    expect(validateStoredFeatureOverride(rssSchema, { block, level: 'endpoint', key: 'qq/a', entry: { maxItems: 2 },
+      overrides: { endpoints: { 'qq/a': { maxItems: 0 } } } })).toEqual([]);
   });
 });
 
@@ -279,36 +320,38 @@ describe('conversation level declarations (ADR 0055)', () => {
   });
 });
 
-describe('RootRuntime override application', () => {
-  it('applies override-only edits in place: no Plugin reload, configFor sees the new value', async () => {
+describe('RootRuntime stored overrides (ADR 0057 §2)', () => {
+  it('reads adapter / endpoint overrides from the Root override reader in place: no Plugin reload, no new generation', async () => {
     const root = await project({ childSchema: rssSchema });
     const modules = new FakeModuleRuntime();
     let setups = 0;
     let context: PluginSetupContext | undefined;
     modules.set(join(root, 'plugin.ts'), { default: definePlugin({ name: 'root' }) });
     modules.set(join(root, 'plugins/child/plugin.ts'), { default: definePlugin({ name: 'child', setup(ctx) { setups += 1; context = ctx; } }) });
+    const rows = new Map<string, FeatureConversationOverride>();
+    const reader = { version: 0, get: (plugin: string, key: string) => rows.get(`${plugin}|${key}`) };
     const runtime = new RootRuntime({ projectRoot: root, modules,
       config: { configVersion: 2, plugins: { child: '@test/child' }, child: { style: { title: 't' } } },
+      installResources: ({ resources }) => { resources.provide(featureConversationOverridesToken, reader); },
       environment: { name: 'test', mode: 'test', platform: 'node' } });
     try {
       await runtime.start();
       expect(setups).toBe(1);
       expect(context!.configFor('child/a')).toMatchObject({ maxItems: 5 });
-      const scope = runtime.snapshot.resources.get(childPluginId(rootPluginId(), 'child'));
-      await runtime.patchConfig([{ op: 'set', path: ['child', 'overrides'], value: { endpoints: { 'child/a': { maxItems: 2, enabled: false } } } }]);
+      const generation = runtime.snapshot.generation;
+      rows.set('child|child/a', { enabled: false, patch: { maxItems: 2 }, revision: 1, updatedAt: 1 });
+      reader.version += 1;
+      expect(runtime.snapshot.generation).toBe(generation);
       expect(setups).toBe(1);
-      expect(runtime.snapshot.generation).toBe(2);
-      expect(runtime.snapshot.config.get(childPluginId(rootPluginId(), 'child'))).toEqual({ maxItems: 5, style: { title: 't' } });
-      expect(runtime.snapshot.resources.get(childPluginId(rootPluginId(), 'child'))?.get(primaryConfigToken.id)).not.toBe(scope?.get(primaryConfigToken.id));
       expect(context!.configFor('child/a')).toMatchObject({ maxItems: 2 });
       expect(context!.isEnabledFor('child/a')).toBe(false);
       expect(context!.config.get()).not.toHaveProperty('overrides');
-      expect(runtime.configurationApplication.groups).toEqual([expect.objectContaining({ id: 'plugins', effect: 'in-place', status: 'applied' })]);
-      // A global field still reloads the owner.
+      // A global field still reloads the owner; the stored level keeps applying on top.
       await runtime.patchConfig([{ op: 'set', path: ['child', 'maxItems'], value: 7 }]);
       expect(setups).toBe(2);
       expect(context!.configFor('child/a')).toMatchObject({ maxItems: 2 });
       expect(context!.configFor('child/b')).toMatchObject({ maxItems: 7 });
+      // The legacy block is still schema-checked while it may be waiting for its one-time import.
       await expect(runtime.patchConfig([{ op: 'set', path: ['child', 'overrides'], value: { adapters: { child: { apiKey: 'x' } } } }]))
         .rejects.toBeInstanceOf(ConfigValidationError);
     } finally { await runtime.stop(); }

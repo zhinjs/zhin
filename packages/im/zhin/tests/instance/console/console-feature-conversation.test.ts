@@ -5,7 +5,7 @@ import {
 } from '@zhin.js/plugin-runtime';
 import type { ConsoleConfigPatchRequest, ConsoleConfigPatchResult } from '@zhin.js/console-protocol';
 import { dispatchFeatureConsoleRpc, type FeatureRpcAuthorization, type FeatureRpcContext } from '../../../src/instance/console/console-feature-rpc.js';
-import { FeatureConversationOverrideStore } from '../../../src/instance/console/feature-conversation-store.js';
+import { FeatureOverrideStore } from '../../../src/instance/console/feature-override-store.js';
 
 const root = rootPluginId();
 const repeater = childPluginId(root, 'repeater');
@@ -41,10 +41,10 @@ function snapshot(): RuntimeSnapshot {
 const base: RuntimeConfigDocument = {
   configVersion: 2, plugins: { repeater: '@x/repeater', rss: '@x/rss', plain: '@x/plain', qq: '@x/qq' }, disable_plugins: ['plain'],
   qq: { endpoints: [{ id: 'bot-1' }, { id: 'bot-2' }] },
-  repeater: { threshold: 3, cooldown: 10, overrides: { endpoints: { 'qq/bot-2': { enabled: false } } } },
+  repeater: { threshold: 3, cooldown: 10 },
 };
 
-function harness(options: Partial<FeatureRpcContext> = {}) {
+async function harness(options: Partial<FeatureRpcContext> = {}) {
   const state = { document: structuredClone(base), revision: 1 };
   const configuration = {
     async readProject() { return { revision: `r${state.revision}`, exists: true, value: structuredClone(state.document) }; },
@@ -54,14 +54,16 @@ function harness(options: Partial<FeatureRpcContext> = {}) {
       return { status: 'saved', revision: `r${state.revision}`, restartRequired: false, paths: [], missingEnv: [], message: 'ok' };
     },
   };
-  const conversations = new FeatureConversationOverrideStore();
+  const conversations = new FeatureOverrideStore();
+  // ADR 0057 §2: the endpoint level lives in the same store (repeater is off on qq/bot-2).
+  await conversations.write({ plugin: 'repeater', key: 'qq/bot-2', next: () => ({ enabled: false, patch: {} }) });
   const snap = snapshot();
   const authorized: FeatureRpcAuthorization[] = [];
   const events: string[] = [];
   const context: FeatureRpcContext = {
     authScope: 'full', authorize: request => { authorized.push(request); return true; }, configuration,
     snapshots: { acquire: () => ({ value: snap, release() {} }) as never },
-    stores: { conversations, recentConversations: async () => [{ key: 'qq/bot-1/group:7', name: 'Seven', lastActiveAt: 5 }, { key: 'not a key' }] },
+    stores: { overrides: conversations, recentConversations: async () => [{ key: 'qq/bot-1/group:7', name: 'Seven', lastActiveAt: 5 }, { key: 'not a key' }] },
     publishEvent: type => { events.push(type); }, actor: 'user:u1', ...options,
   };
   const call = async (type: string, data: Record<string, unknown> = {}) => dispatchFeatureConsoleRpc({ type, data }, context);
@@ -72,7 +74,7 @@ const g1 = 'qq/bot-1/group:1001';
 
 describe('feature.* at the conversation level (ADR 0055)', () => {
   it('reads a conversation level with narrowed schema, declarations and the store revision', async () => {
-    const { call, authorized } = harness();
+    const { call, authorized } = await harness();
     const reply = await call('feature.get', { plugin: 'repeater', level: 'conversation', key: g1 });
     expect(reply).toMatchObject({ status: 200, body: { success: true, data: {
       revision: '0', level: 'conversation', key: g1, enabled: true, conversationFields: ['threshold', 'cooldown'], selfServiceFields: ['threshold'],
@@ -85,7 +87,7 @@ describe('feature.* at the conversation level (ADR 0055)', () => {
   });
 
   it('writes field overrides in place, validates them and checks the revision', async () => {
-    const { call, conversations, events } = harness();
+    const { call, conversations, events } = await harness();
     const saved = await call('feature.set-override', { plugin: 'repeater', level: 'conversation', key: g1, patch: { threshold: 6 } });
     expect(saved!.body.data).toMatchObject({ status: 'saved', revision: '1', restartRequired: false });
     expect(conversations.get('repeater', g1)).toMatchObject({ patch: { threshold: 6 }, updatedBy: 'user:u1' });
@@ -106,7 +108,7 @@ describe('feature.* at the conversation level (ADR 0055)', () => {
   });
 
   it('toggles the conversation switch, never stores enabled, and is locked below a disabled endpoint', async () => {
-    const { call, conversations } = harness();
+    const { call, conversations } = await harness();
     await call('feature.set-enabled', { plugin: 'repeater', level: 'conversation', key: g1, enabled: false });
     expect(conversations.get('repeater', g1)).toMatchObject({ enabled: false, patch: {} });
     expect((await call('feature.get', { plugin: 'repeater', level: 'conversation', key: g1 }))!.body.data).toMatchObject({ enabled: false });
@@ -123,14 +125,14 @@ describe('feature.* at the conversation level (ADR 0055)', () => {
   });
 
   it('gives schema-less plugins the conversation switch only', async () => {
-    const { call, conversations } = harness();
+    const { call, conversations } = await harness();
     expect((await call('feature.set-enabled', { plugin: 'rss', level: 'conversation', key: g1, enabled: false }))!.body.data).toMatchObject({ status: 'saved' });
     expect(conversations.get('rss', g1)?.enabled).toBe(false);
     expect((await call('feature.set-override', { plugin: 'rss', level: 'conversation', key: g1, patch: { maxItems: 1 } }))!.body.data).toMatchObject({ status: 'invalid' });
   });
 
   it('lists conversations with overrides and known recent ones, filtered and paginated', async () => {
-    const { call } = harness();
+    const { call } = await harness();
     await call('feature.set-enabled', { plugin: 'rss', level: 'conversation', key: g1, enabled: false });
     await call('feature.set-override', { plugin: 'repeater', level: 'conversation', key: g1, patch: { threshold: 4 } });
     await call('feature.set-enabled', { plugin: 'rss', level: 'conversation', key: 'qq/bot-1/private:a%2Fb', enabled: false });
@@ -159,20 +161,24 @@ describe('feature.* at the conversation level (ADR 0055)', () => {
     expect(matrix.rows.find((row: any) => row.plugin === 'rss').conversationOverrides).toEqual({ qq: { 'bot-1': 2 } });
   });
 
-  it('reports whether conversation overrides persist and says so on writes', async () => {
-    const { call } = harness();
-    expect((await call('feature.get', { plugin: 'repeater', level: 'conversation', key: g1 }))!.body.data).toMatchObject({ persistent: false });
-    expect((await call('feature.conversations'))!.body.data).toMatchObject({ persistent: false });
-    const saved = await call('feature.set-enabled', { plugin: 'rss', level: 'conversation', key: g1, enabled: false });
-    expect(saved!.body.data).toMatchObject({ status: 'saved', persistent: false, message: '会话覆盖已保存，立即生效；当前数据库不支持持久化，重启后丢失' });
-    class Persistent extends FeatureConversationOverrideStore { override get persistent(): boolean { return true; } }
-    const durable = harness({ stores: { conversations: new Persistent() } });
-    expect((await durable.call('feature.set-enabled', { plugin: 'rss', level: 'conversation', key: g1, enabled: false }))!.body.data)
-      .toMatchObject({ persistent: true, message: '会话覆盖已保存，立即生效' });
+  it('reports whether overrides persist and refuses writes a database cannot persist (ADR 0057 §2)', async () => {
+    const { call } = await harness();
+    expect((await call('feature.get', { plugin: 'repeater', level: 'conversation', key: g1 }))!.body.data).toMatchObject({ persistent: true });
+    expect((await call('feature.conversations'))!.body.data).toMatchObject({ persistent: true });
+    expect((await call('feature.set-enabled', { plugin: 'rss', level: 'conversation', key: g1, enabled: false }))!.body.data)
+      .toMatchObject({ status: 'saved', persistent: true, message: '会话覆盖已保存，立即生效' });
+    const unpersisted = new FeatureOverrideStore({ database: { dialect: 'memory', started: true, models: { get: () => undefined } } as never });
+    await unpersisted.load();
+    const memory = await harness({ stores: { overrides: unpersisted } });
+    expect((await memory.call('feature.get', { plugin: 'repeater', level: 'conversation', key: g1 }))!.body.data).toMatchObject({ persistent: false });
+    expect((await memory.call('feature.conversations'))!.body.data).toMatchObject({ persistent: false });
+    expect(await memory.call('feature.set-enabled', { plugin: 'rss', level: 'conversation', key: g1, enabled: false }))
+      .toMatchObject({ status: 503, body: { success: false, code: 'feature-overrides-unpersisted' } });
+    expect(unpersisted.list()).toEqual([]);
   });
 
   it('keeps the revision monotonic after a removal (no ABA through feature.get)', async () => {
-    const { call } = harness();
+    const { call } = await harness();
     await call('feature.set-enabled', { plugin: 'rss', level: 'conversation', key: g1, enabled: false, expectedRevision: '0' });
     await call('feature.set-enabled', { plugin: 'rss', level: 'conversation', key: g1, enabled: true, expectedRevision: '1' });
     expect((await call('feature.get', { plugin: 'rss', level: 'conversation', key: g1 }))!.body.data).toMatchObject({ revision: '2', enabled: true });
@@ -181,7 +187,7 @@ describe('feature.* at the conversation level (ADR 0055)', () => {
   });
 
   it('validates conversation keys by their parts, not by a fixed total length', async () => {
-    const { call } = harness();
+    const { call } = await harness();
     // A 256-character id made of escaped slashes is a valid Runtime key (768 characters escaped).
     const long = `qq/bot-1/group:${'%2F'.repeat(256)}`;
     expect((await call('feature.get', { plugin: 'repeater', level: 'conversation', key: long }))!.status).toBe(200);
@@ -190,7 +196,7 @@ describe('feature.* at the conversation level (ADR 0055)', () => {
   });
 
   it('locks a nested plugin wherever an ancestor is switched off above the level (409 locked)', async () => {
-    const { call } = harness();
+    const { call } = await harness();
     // repeater is disabled at endpoint qq/bot-2, so repeater/child is locked in that account's conversations.
     const reply = await call('feature.set-enabled', { plugin: 'repeater/child', level: 'conversation', key: 'qq/bot-2/group:1', enabled: false });
     expect(reply).toMatchObject({ status: 409, body: { success: false, code: 'locked', lockedBy: 'endpoint' } });
@@ -202,7 +208,7 @@ describe('feature.* at the conversation level (ADR 0055)', () => {
   });
 
   it('answers 503 for conversation calls without the stores', async () => {
-    const { call } = harness({ stores: undefined });
+    const { call } = await harness({ stores: undefined });
     expect((await call('feature.get', { plugin: 'repeater', level: 'conversation', key: g1 }))!.status).toBe(503);
     expect((await call('feature.conversations'))!.status).toBe(503);
   });

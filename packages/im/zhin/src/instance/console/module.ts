@@ -37,4 +37,6 @@ export { installHostConsoleTerminal, type InstallHostConsoleTerminalOptions } fr
 export {
   containsEnvironmentReference, dispatchFeatureConsoleRpc, type FeatureRecentConversation, type FeatureRpcContext, type FeatureRpcReply, type FeatureStores,
 } from './console-feature-rpc.js';
-export { defineFeatureConversationTable, FeatureConversationOverrideStore } from './feature-conversation-store.js';
+export {
+  defineFeatureOverrideTable, FeatureOverrideStore, FeatureOverrideStorageUnavailableError, FEATURE_OVERRIDE_TABLE,
+} from './feature-override-store.js';

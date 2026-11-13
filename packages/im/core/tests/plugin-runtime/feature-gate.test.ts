@@ -21,7 +21,10 @@ function node(id: PluginId, instanceKey: string, children: PluginId[] = []): Plu
   return { id, instanceKey, packageName: `@x/${instanceKey}`, packageRoot: `/x/${instanceKey}`, parent: id === root ? undefined : root, children } as unknown as PluginNodeSnapshot;
 }
 
-function fixture(document: Record<string, unknown>) {
+/** ADR 0057 §2: stored adapter / endpoint switches, keyed `<plugin>|<resolution key>`. */
+type Stored = Readonly<Record<string, { enabled?: false; patch?: Record<string, unknown> }>>;
+
+function fixture(document: Record<string, unknown>, stored: Stored = {}) {
   const events: string[] = [];
   const slots: CapabilitySlot[] = [
     createCapabilitySlot({ owner: rss, feature: commandFeatureId, localName: 'rss', source: '/rss/commands/rss/index.ts',
@@ -42,7 +45,11 @@ function fixture(document: Record<string, unknown>) {
   const snapshot: RuntimeSnapshot = {
     generation: 1, root,
     tree: new Map([[root, node(root, 'root', [rss, weather, qq])], [rss, node(rss, 'rss')], [weather, node(weather, 'weather')], [qq, node(qq, 'qq')]]),
-    config: new Map(), resources: new Map([[root, new Map([[primaryConfigToken.id, primary]])], [rss, new Map()], [weather, new Map()], [qq, new Map()]]),
+    config: new Map(), resources: new Map([[root, new Map<string, unknown>([[primaryConfigToken.id, primary],
+      ...(Object.keys(stored).length ? [[featureConversationOverridesToken.id, { version: 1, get: (plugin: string, key: string) => {
+        const entry = stored[`${plugin}|${key}`];
+        return entry ? { ...(entry.enabled === false ? { enabled: false as const } : {}), patch: entry.patch ?? {}, revision: 1, updatedAt: 1 } : undefined;
+      } }] as const] : [])])], [rss, new Map()], [weather, new Map()], [qq, new Map()]]),
     capabilities: new Map(slots.map(slot => [slot.id, slot])), projections,
   };
   // Duck-typed AdapterIndex surface used for endpoint → `<alias>/<endpointId>` resolution.
@@ -57,10 +64,10 @@ function fixture(document: Record<string, unknown>) {
 }
 
 const document = {
-  configVersion: 2, plugins: { rss: '@x/rss', weather: '@x/weather', qq: '@x/qq' },
-  rss: { overrides: { endpoints: { 'qq/news': { enabled: false } } } },
-  weather: { overrides: { adapters: { qq: { enabled: false } }, endpoints: { 'qq/main': { enabled: true } } } },
+  configVersion: 2, plugins: { rss: '@x/rss', weather: '@x/weather', qq: '@x/qq' }, rss: {}, weather: {},
 };
+/** rss is off on account qq/news, weather on the whole qq adapter (stored, not in the configuration file). */
+const stored: Stored = { 'rss|qq/news': { enabled: false }, 'weather|qq': { enabled: false } };
 
 const message = (endpoint: string, content: string, group = 'g1') => ({
   content, conversation: { kind: 'group', id: group, endpoint: { id: endpoint, adapter: 'qq' } },
@@ -68,7 +75,7 @@ const message = (endpoint: string, content: string, group = 'g1') => ({
 
 describe('ADR 0050 dispatch gate', () => {
   it('resolves the endpoint key of messages and endpoint events', () => {
-    const { snapshot } = fixture(document);
+    const { snapshot } = fixture(document, stored);
     expect(featureKeyOf(message('ep:news', ''), snapshot)).toBe('qq/news/group:g1');
     expect(featureKeyOf({ endpoint: { id: 'ep:main' }, payload: {} }, snapshot)).toBe('qq/main');
     expect(featureKeyOf({ payload: { conversation: { endpoint: { id: 'ep:x' } } } }, snapshot)).toBe('qq/x');
@@ -81,7 +88,7 @@ describe('ADR 0050 dispatch gate', () => {
   it('keeps the projected index when nothing is disabled and caches derived indexes', () => {
     const { snapshot } = fixture({ configVersion: 2, plugins: {} });
     expect(gatedCommandIndex(message('ep:news', ''), snapshot)).toBe(snapshot.projections.get(commandFeatureId));
-    const gated = fixture(document);
+    const gated = fixture(document, stored);
     const first = gatedCommandIndex(message('ep:news', ''), gated.snapshot);
     expect(first).not.toBe(gated.snapshot.projections.get(commandFeatureId));
     expect(gatedCommandIndex(message('ep:news', 'x'), gated.snapshot)).toBe(first);
@@ -92,7 +99,7 @@ describe('ADR 0050 dispatch gate', () => {
   });
 
   it('drops commands of disabled owners: no match, no "disabled" reply, hidden from the menu', async () => {
-    const { snapshot, events } = fixture(document);
+    const { snapshot, events } = fixture(document, stored);
     const dispatcher = new MessageDispatcher(() => '');
     expect(await dispatcher.dispatch(message('ep:news', 'rss'), snapshot)).toMatchObject({ matched: false });
     expect(await dispatcher.dispatch(message('ep:news', 'weather'), snapshot)).toMatchObject({ matched: false });
@@ -104,7 +111,7 @@ describe('ADR 0050 dispatch gate', () => {
   });
 
   it('skips middleware of disabled owners', async () => {
-    const { snapshot, events } = fixture(document);
+    const { snapshot, events } = fixture(document, stored);
     await runRuntimeMiddleware(snapshot, message('ep:main', 'hi'), async () => { events.push('terminal'); }, 'inbound');
     expect(events).toEqual(['middleware:rss', 'terminal']);
     events.length = 0;
@@ -114,7 +121,7 @@ describe('ADR 0050 dispatch gate', () => {
   });
 
   it('skips handlers of disabled owners for endpoint events only', async () => {
-    const { snapshot, events } = fixture(document);
+    const { snapshot, events } = fixture(document, stored);
     const event = { name: 'message.receive', endpoint: { id: 'ep:main', adapter: 'qq' }, payload: message('ep:main', 'hi') };
     await gatedHandlerIndex(event, snapshot)!.dispatch('message.receive', [event], { snapshot });
     expect(events).toEqual(['handler:rss']);
