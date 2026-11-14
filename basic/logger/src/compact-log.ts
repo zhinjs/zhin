@@ -39,7 +39,6 @@ export const LOG_NEWLINE_MARK = '⏎';
 export function escapeLogText(text: string): string {
   return text
     .replace(/\r\n|\r|\n|\u2028|\u2029/gu, LOG_NEWLINE_MARK)
-    // eslint-disable-next-line no-control-regex
     .replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/gu, (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, '0')}`);
 }
 
