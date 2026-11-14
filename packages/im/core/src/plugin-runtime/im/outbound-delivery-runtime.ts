@@ -347,7 +347,7 @@ export function failedDeliveryReceipt(code: string, retryable = false): Delivery
     status: 'failed' as const,
     failure: Object.freeze({
       code,
-      message: 'Outbound delivery failed.',
+      message: `Outbound delivery failed (${code}).`,
       ...(retryable ? { retryable: true } : {}),
     }),
   });

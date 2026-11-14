@@ -34,6 +34,12 @@ export interface ChatRolesRpcContext {
   /** Deny by default: without it every call is refused. */
   readonly authorize?: (request: ChatRolesRpcAuthorization) => boolean | Promise<boolean>;
   readonly actor?: string;
+  /**
+   * Display name of `actor` (the signed-in Console user). Used only to label grants this same
+   * principal made (`grantedBy === actor`); the instance cannot read other Console accounts
+   * (they live in the gateway's `.zhin/gateway.db`), so other grantors keep the raw id.
+   */
+  readonly actorDisplayName?: string;
   readonly publishEvent?: (type: string, data: unknown) => void;
 }
 
@@ -45,9 +51,37 @@ function redactedView(entry: ChatRoleEntry): ConsoleChatRoleEntry {
   return Object.freeze({ level: entry.level, key: entry.key, role: entry.role, source: entry.source, redacted: true as const });
 }
 
-export function chatRoleView(entry: ChatRoleEntry): ConsoleChatRoleEntry {
+export function chatRoleView(entry: ChatRoleEntry, grantor?: GrantorNames): ConsoleChatRoleEntry {
+  const grantedByDisplayName = entry.grantedBy ? grantorDisplayName(entry.grantedBy, grantor) : undefined;
   return Object.freeze({ level: entry.level, key: entry.key, adapter: entry.adapter, userId: entry.userId, role: entry.role, source: entry.source,
-    ...(entry.grantedBy ? { grantedBy: entry.grantedBy } : {}), ...(entry.grantedAt ? { grantedAt: entry.grantedAt } : {}) });
+    ...(entry.grantedBy ? { grantedBy: entry.grantedBy } : {}),
+    ...(grantedByDisplayName ? { grantedByDisplayName } : {}),
+    ...(entry.grantedAt ? { grantedAt: entry.grantedAt } : {}) });
+}
+
+/** The caller's own audit id and display name (#1250). */
+export interface GrantorNames {
+  readonly actor?: string;
+  readonly actorDisplayName?: string;
+}
+
+/**
+ * Readable label of `grantedBy` (#1250) from facts the instance already holds, never a lookup of
+ * other Console accounts: the caller's own id → their display name; `chat:<adapter>:<userId>` (a
+ * grant made in chat) → `<adapter> 用户 <userId>`; `migration:*` → configuration migration;
+ * `bootstrap` → bootstrap token. Other Console users / API tokens stay unresolved.
+ */
+export function grantorDisplayName(grantedBy: string, names?: GrantorNames): string | undefined {
+  if (names?.actor && names.actorDisplayName && grantedBy === names.actor) return names.actorDisplayName;
+  if (grantedBy.startsWith('chat:')) {
+    const rest = grantedBy.slice('chat:'.length);
+    const separator = rest.indexOf(':');
+    if (separator > 0 && separator < rest.length - 1) return `${rest.slice(0, separator)} 用户 ${rest.slice(separator + 1)}`;
+    return undefined;
+  }
+  if (grantedBy.startsWith('migration:')) return '配置迁移';
+  if (grantedBy === 'bootstrap') return '初始化令牌';
+  return undefined;
 }
 
 function readIdentity(input: Record_, scope: string): { adapter: string; userId: string } {
@@ -81,7 +115,7 @@ export async function dispatchChatRolesConsoleRpc(message: Record_, context: Cha
     if (type === 'chat-roles.list') {
       const entries = roles.list(scope, input.descendants === true);
       const views = await Promise.all(entries.map(async entry =>
-        await authorized({ level: entry.level, ...(entry.key ? { key: entry.key } : {}) }) ? chatRoleView(entry) : redactedView(entry)));
+        await authorized({ level: entry.level, ...(entry.key ? { key: entry.key } : {}) }) ? chatRoleView(entry, context) : redactedView(entry)));
       data = Object.freeze({ roles: Object.freeze(views) });
     } else {
       const identity = readIdentity(input, scope);
@@ -96,10 +130,10 @@ export async function dispatchChatRolesConsoleRpc(message: Record_, context: Cha
       if (!roles.store.persistent) throw new ChatRoleStorageUnavailableError();
       if (type === 'chat-roles.grant') {
         const status = await roles.store.grant({ level, key: scope, ...identity, role: granting as ChatRole, ...(context.actor ? { grantedBy: context.actor } : {}) });
-        data = Object.freeze({ status, entry: chatRoleView(roles.store.get(level, scope, identity)!) });
+        data = Object.freeze({ status, entry: chatRoleView(roles.store.get(level, scope, identity)!, context) });
       } else {
         const status = await roles.store.revoke({ level, key: scope, ...identity });
-        data = Object.freeze({ status, ...(before ? { entry: chatRoleView(before) } : {}) });
+        data = Object.freeze({ status, ...(before ? { entry: chatRoleView(before, context) } : {}) });
       }
       context.publishEvent?.('chat-roles:updated', { level, key: scope });
     }

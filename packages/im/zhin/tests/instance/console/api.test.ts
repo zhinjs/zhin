@@ -1,5 +1,5 @@
 import { mkdtemp, rm, writeFile, mkdir, readFile } from 'node:fs/promises';
-import { installTestConsoleUsers } from '../utils/console-users.js';
+import { installTestConsoleUsers, testUser } from '../utils/console-users.js';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -10,7 +10,7 @@ import { createConfigDocument } from '@zhin.js/runtime';
 // source, which ran inside the first Agent test's 10 s budget and timed out under suite load.
 // The tests below still `await import()` it so the Console's lazy loader sees it cached.
 import '@zhin.js/agent/runtime';
-import { createConsoleEventHub, type HttpHost } from '@zhin.js/host-http';
+import { createConsoleEventHub, type ConsoleAuditEntry, type HttpHost } from '@zhin.js/host-http';
 import { createHttpHost } from '@zhin.js/host-http/node';
 import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
 import type { ImRuntime, RuntimeMessageEvent } from '@zhin.js/core/runtime';
@@ -195,10 +195,23 @@ async function startHost(options: {
   projectRoot: string;
   snapshot?: () => RuntimeSnapshot;
   snapshots?: SnapshotReader;
+  audits?: ConsoleAuditEntry[];
 }): Promise<{ port: number }> {
   const host = createHttpHost({ host: '127.0.0.1', port: 0 });
   // The removed demo token is now the built-in read-only `viewer` user (ADR 0049).
-  if (options.withTokens) installTestConsoleUsers(host, { 'full-token': 'owner', 'demo-token': 'viewer', 'nobody-token': 'none' });
+  if (options.withTokens) {
+    const audits = installTestConsoleUsers(host, {
+      'full-token': 'owner', 'demo-token': 'viewer', 'nobody-token': 'none',
+      // Custom role holding only `ops.env.read` (may list and read the masked view, not reveal).
+      'env-reader-token': Object.freeze({ ...testUser('viewer', { kind: 'global' }, 'env-reader'), grants: Object.freeze([{ role: 'env-reader', scope: { kind: 'global' as const }, permissions: ['ops.env.read'] }]) }),
+    });
+    if (options.audits) {
+      // Mirror the recorded audit into the caller's array.
+      const sink = options.audits;
+      const original = audits.push.bind(audits);
+      audits.push = (...entries) => { sink.push(...entries); return original(...entries); };
+    }
+  }
   hosts.push(host);
   registerConsoleRoutes({
     http: host,
@@ -467,6 +480,57 @@ describe('console REST routes', () => {
     expect((await request('invalid-token', 'env:get')).status).toBe(401);
     expect((await request('full-token', 'env:get')).status).toBe(200);
     expect(await readFile(join(projectRoot, '.env'), 'utf8')).toBe(original);
+  });
+
+  it('masks env:get, reveals one variable behind ops.env.write + read with an audit entry, and saves only submitted keys (issue #1250)', async () => {
+    const original = '# bot\nFIXTURE_TOKEN=fake-private-value-0123\nPORT=8080\n';
+    await writeFile(join(projectRoot, '.env'), original);
+    const audits: ConsoleAuditEntry[] = [];
+    const { port } = await startHost({ projectRoot, withTokens: true, audits });
+    const rpc = (token: string, body: Record<string, unknown>) => fetch(`http://127.0.0.1:${port}/api/console/request`, {
+      method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ requestId: 1, ...body }),
+    });
+
+    // Default read: masks only, for every principal that may read.
+    for (const token of ['full-token', 'env-reader-token']) {
+      const read = await rpc(token, { type: 'env:get', filename: '.env' });
+      expect(read.status).toBe(200);
+      const text = await read.text();
+      expect(text).not.toMatch(/fake-private-value|8080/u);
+      expect(JSON.parse(text).data).toMatchObject({
+        format: 'masked',
+        variables: [{ key: 'FIXTURE_TOKEN', masked: 'fa●●●●●●●●23', hasValue: true }, { key: 'PORT', masked: '●●●●●●●●', hasValue: true }],
+        lines: [{ kind: 'comment', text: '# bot' }, { kind: 'entry', key: 'FIXTURE_TOKEN' }, { kind: 'entry', key: 'PORT' }],
+      });
+    }
+
+    // Reveal: 403 without ops.env.write (viewer, reader, nobody); denials are audited too.
+    for (const token of ['demo-token', 'env-reader-token', 'nobody-token']) {
+      const denied = await rpc(token, { type: 'env:reveal', filename: '.env', key: 'FIXTURE_TOKEN' });
+      expect(denied.status).toBe(403);
+      expect(await denied.text()).not.toContain('fake-private-value');
+    }
+    expect(audits.filter(entry => entry.action === 'rpc:env:reveal' && entry.outcome === 'denied')).toHaveLength(3);
+    const revealed = await rpc('full-token', { type: 'env:reveal', filename: '.env', key: 'FIXTURE_TOKEN' });
+    expect(revealed.status).toBe(200);
+    expect((await revealed.json()).data).toEqual({ file: '.env', key: 'FIXTURE_TOKEN', value: 'fake-private-value-0123' });
+    const okReveal = audits.filter(entry => entry.action === 'rpc:env:reveal' && entry.outcome === 'ok');
+    expect(okReveal).toEqual([expect.objectContaining({ actor: 'user:full-token', detail: expect.objectContaining({ file: '.env', key: 'FIXTURE_TOKEN' }) })]);
+    expect(JSON.stringify(audits)).not.toContain('fake-private-value');
+
+    // Save: only submitted keys; a mask placeholder or an undeclared whole file is refused.
+    expect((await rpc('full-token', { type: 'env:save', filename: '.env', changes: [{ key: 'FIXTURE_TOKEN', value: 'fa●●●●●●●●23' }] })).status).toBe(400);
+    expect((await rpc('full-token', { type: 'env:save', filename: '.env', content: 'FIXTURE_TOKEN=fa●●●●●●●●23\nPORT=1\n' })).status).toBe(400);
+    expect((await rpc('env-reader-token', { type: 'env:save', filename: '.env', changes: [{ key: 'PORT', value: '1' }] })).status).toBe(403);
+    expect(await readFile(join(projectRoot, '.env'), 'utf8')).toBe(original);
+    const saved = await rpc('full-token', { type: 'env:save', filename: '.env', changes: [{ key: 'PORT', value: '9090' }, { key: 'NEW_FLAG', value: 'on' }] });
+    expect(saved.status).toBe(200);
+    expect((await saved.json()).data).toMatchObject({ success: true, changed: ['PORT', 'NEW_FLAG'] });
+    expect(await readFile(join(projectRoot, '.env'), 'utf8')).toBe('# bot\nFIXTURE_TOKEN=fake-private-value-0123\nPORT=9090\nNEW_FLAG=on\n');
+    const saveAudit = audits.filter(entry => entry.action === 'rpc:env:save' && entry.outcome === 'ok');
+    expect(saveAudit.at(-1)?.detail).toMatchObject({ file: '.env', set: ['PORT', 'NEW_FLAG'], deleted: [] });
+    expect(JSON.stringify(audits)).not.toMatch(/9090|fake-private-value/u);
   });
 
   it('diagnoses the exact instance using its declared package installation', async () => {
@@ -764,6 +828,12 @@ describe('console REST routes', () => {
     expect(statusBody.success).toBe(true);
     expect(statusBody.data.runtime).toBe('node');
     expect(typeof statusBody.data.uptime).toBe('number');
+    // #1250: the memory block is labeled as the instance process and matches `memory` exactly.
+    const memory = statusBody.data.memory as Record<string, number>;
+    expect(statusBody.data.process).toMatchObject({
+      role: 'instance', pid: statusBody.data.pid,
+      memory: { rss: memory.rss, heapUsed: memory.heapUsed, heapTotal: memory.heapTotal },
+    });
 
     const stats = await fetch(`http://127.0.0.1:${port}/api/stats`, { headers });
     expect(stats.status).toBe(200);

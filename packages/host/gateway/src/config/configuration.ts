@@ -13,7 +13,14 @@ import { ConfigDocumentConflictError, ConfigValidationError, ConfigurationSupers
 import { loadRuntimeEnvironmentLayers } from '../project/environment.js';
 import { readPluginPackageMap } from './plugin-package-map.js';
 import { assertUnambiguousConfigKey, configKeyPatch, configKeyRemovePatch, flattenConfigDocument } from './configuration-projection.js';
-import { readEnvFile, writeEnvFile } from './environment-files.js';
+import {
+  readEnvFile,
+  readEnvFileView,
+  replaceEnvFileContent,
+  revealEnvVariable,
+  updateEnvVariables,
+  writeEnvFile,
+} from './environment-files.js';
 import { PluginSchemaCatalog } from './plugin-schema-catalog.js';
 import { findProjectLiteralSecrets } from './literal-secrets.js';
 import type { LiteralConfigSecret } from '@zhin.js/runtime';
@@ -553,6 +560,26 @@ export class ConsoleConfigurationStore {
 
   writeEnvironmentFile(filename: string, content: string): Promise<void> {
     return writeEnvFile(this.#projectRoot, filename, content);
+  }
+
+  /** Masked view for the Console (`env:get`); never a value. */
+  readEnvironmentView(filename: string): Promise<import('@zhin.js/console-protocol').ConsoleEnvFileView> {
+    return readEnvFileView(this.#projectRoot, filename);
+  }
+
+  /** One variable as written (`env:reveal`); the caller authorizes and audits. */
+  revealEnvironmentVariable(filename: string, key: string): Promise<import('@zhin.js/console-protocol').ConsoleEnvRevealResult> {
+    return revealEnvVariable(this.#projectRoot, filename, key);
+  }
+
+  /** Per-key save (`env:save { changes }`); keys not named keep their lines. */
+  updateEnvironmentVariables(filename: string, changes: unknown): Promise<{ readonly changed: readonly string[] }> {
+    return updateEnvVariables(this.#projectRoot, filename, changes);
+  }
+
+  /** Whole-file save (`env:save { content, mode: 'replace' }`); refused when it holds mask placeholders. */
+  replaceEnvironmentFile(filename: string, content: string): Promise<void> {
+    return replaceEnvFileContent(this.#projectRoot, filename, content);
   }
 
   async readSchema(pluginName?: string): Promise<unknown> {

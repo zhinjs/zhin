@@ -886,6 +886,7 @@ export type {
 // ── MCP Client ──
 export { McpClientManager, McpClientConnection, mcpToolToAgentTool } from './mcp-client/index.js';
 export type { McpClientConnectionState, McpToolDefinition } from './mcp-client/index.js';
+export type { McpConnectionFailure, McpConnectionFailureCategory } from './mcp-client/index.js';
 
 // ── Common adapter tools (migrated from core) ──
 export {
