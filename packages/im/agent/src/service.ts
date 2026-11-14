@@ -68,10 +68,12 @@ export class AIService {
   prepareModelRuntime(options: ModelRuntimeServiceOptions): Promise<void> {
     if (this.closing) return Promise.reject(new Error('AI service is disposed'));
     if (!this.modelPreparation) {
-      // Sub-agents never take a binding's `purposes.agents` key (#1250).
+      // Sub-agents never take a binding's `purposes.agents` key (#1250). Only configured
+      // bindings count: names merely discovered from agent files (setDiscoveredAgents) are
+      // sub-agents as well and keep their own keys.
       this.modelRuntime = new ModelRuntimeService({
         ...options,
-        bindingNames: options.bindingNames ?? (() => this.bindingRegistry.listAgentNames()),
+        bindingNames: options.bindingNames ?? (() => this.bindingRegistry.listConfiguredBindingNames()),
       });
       this.modelPreparation = Promise.resolve();
     }

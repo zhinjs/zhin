@@ -38,7 +38,7 @@ import { createActorTurnRunner } from './actor-turn.js';
 import { createCollaborationDirectory } from './directory.js';
 import { currentMailTurn } from './mail-turn-context.js';
 import { createCollaborationTools } from './tools.js';
-import type { ActorModelSelection, ActorModelSource, CollaborationDirectory } from './contracts.js';
+import type { ActorModelSelection, ActorModelSource, ActorTurnOutcome, CollaborationDirectory } from './contracts.js';
 import { getAgentTurnConfiguration } from '../turn/agent-turn-context.js';
 import type { AgentOutputElement } from '../outbound/agent-output.js';
 import type { ModelDelegationAuthority } from '../model-runtime/types.js';
@@ -222,7 +222,7 @@ function retainModelDelegation(): ModelDelegationAuthority | undefined {
 }
 
 /** Why the human is told a background task did not reach them. */
-type BackgroundFailure = 'aggregation_failed' | 'delivery_failed' | 'budget_exhausted';
+type BackgroundFailure = 'aggregation_failed' | 'delivery_failed' | 'budget_exhausted' | 'empty_result';
 
 function backgroundFailureNotice(reason: BackgroundFailure, locale: string | undefined): string {
   const en = locale?.toLowerCase().startsWith('en');
@@ -235,11 +235,22 @@ function backgroundFailureNotice(reason: BackgroundFailure, locale: string | und
       return en
         ? 'A background task ran out of its budget before it produced a result. Please try again.'
         : '后台任务的预算用完了，没能得出结果，请稍后再试。';
+    case 'empty_result':
+      return en
+        ? 'A background task finished without a result.'
+        : '后台任务结束了，但没有得出结果。';
     case 'delivery_failed':
       return en
         ? 'A background task finished, but its result could not be delivered. Please try again.'
         : '后台任务完成了，但结果没能发出来，请稍后再试。';
   }
+}
+
+/** Short line after a partial answer whose turn ran out of budget. */
+function budgetStoppedLine(locale: string | undefined): string {
+  return locale?.toLowerCase().startsWith('en')
+    ? '(The task ran out of its budget; this is as far as it got.)'
+    : '（后台任务的预算用完了，以上是目前得到的结果。）';
 }
 
 /**
@@ -296,16 +307,18 @@ export function createBackgroundTeller(turn: TurnIngress) {
       await send(text, signal);
     },
     /**
-     * Result of the entry actor continuing with delegated results. Any content
-     * it produced (a partial answer of a budget-stopped turn included) is
-     * delivered; a failure tells the human why, unless the actor was stopped
-     * (user stop, hot reload): then nothing more is said.
+     * Result of the entry actor continuing with delegated results. Only the
+     * actor's own reply ({@link ActorTurnOutcome.reply}) reaches the human,
+     * never the model-facing notes in `content` (budget stop, empty reply). A
+     * budget-stopped partial reply goes out with a short localized line; a
+     * failure, or no reply at all, tells the human why — unless the actor was
+     * stopped (user stop, hot reload): then nothing more is said.
      */
-    async deliverResult(result: ActorTurnResult, actorSignal: AbortSignal): Promise<void> {
+    async deliverResult(result: ActorTurnOutcome, actorSignal: AbortSignal): Promise<void> {
       if (turn.policy.unattended) return;
       // Delivery outlives a cancelled actor turn only briefly; the host bounds it.
       const signal = AbortSignal.any([AbortSignal.timeout(BACKGROUND_DELIVERY_TIMEOUT_MS), ...(actorSignal.aborted ? [] : [actorSignal])]);
-      const content = result.content?.trim();
+      const reply = result.reply?.trim();
       const notify = async (reason: BackgroundFailure): Promise<void> => {
         if (actorSignal.aborted) {
           logger.debug(`background collaboration stopped; not notifying (${reason})`);
@@ -314,25 +327,30 @@ export function createBackgroundTeller(turn: TurnIngress) {
         await send(backgroundFailureNotice(reason, turn.input.locale), AbortSignal.timeout(BACKGROUND_DELIVERY_TIMEOUT_MS));
       };
       if (result.status === 'cancelled') {
-        logger.debug(`background collaboration result cancelled: ${content ?? ''}`);
+        logger.debug(`background collaboration result cancelled: ${result.content ?? ''}`);
         return;
       }
       if (result.status === 'failed') {
-        logger.warn(`background collaboration result failed${content ? `: ${content.slice(0, 200)}` : ''}`);
+        logger.warn(`background collaboration result failed${result.content ? `: ${result.content.slice(0, 200)}` : ''}`);
         await notify('aggregation_failed');
         return;
       }
-      if (!content) {
+      if (!reply) {
         if (result.status === 'budget_exceeded') {
           logger.warn('background collaboration ran out of budget without a result');
           await notify('budget_exhausted');
         } else {
-          logger.debug('background collaboration completed without content');
+          logger.warn('background collaboration completed without a reply');
+          await notify('empty_result');
         }
         return;
       }
-      if (result.status === 'budget_exceeded') logger.warn('background collaboration ran out of budget; delivering its partial result');
-      const sent = await send(content, signal);
+      let text = reply;
+      if (result.status === 'budget_exceeded') {
+        logger.warn('background collaboration ran out of budget; delivering its partial result');
+        text = `${reply}\n\n${budgetStoppedLine(turn.input.locale)}`;
+      }
+      const sent = await send(text, signal);
       if (sent === 'failed') {
         await notify('delivery_failed');
       } else if (sent === 'partial') {

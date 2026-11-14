@@ -14,7 +14,6 @@ import {
   canCall,
   type ActorId,
   type ActorTurnResult,
-  type ActorTurnRunner,
   type Authority,
   type Harness,
   type Mail,
@@ -53,7 +52,7 @@ import type { TurnTraceTermination } from '../trace/turn-trace.js';
 import { getAgentTurnConfiguration, runWithAgentTurnConfiguration } from '../turn/agent-turn-context.js';
 import type { ModelExecutionScope } from '../model-runtime/types.js';
 import { createTurnIngress, type TurnIngress, type TurnPolicyContext } from '../turn/turn-ingress.js';
-import type { ActorModelSelection, ActorModelSource, CollaborationDirectory, CreateCollaborationTools } from './contracts.js';
+import type { ActorModelSelection, ActorModelSource, ActorTurnOutcome, AgentActorTurnRunner, CollaborationDirectory, CreateCollaborationTools } from './contracts.js';
 
 export interface ActorTurnRunnerOptions {
   readonly host: ZhinAgentPrivate;
@@ -95,7 +94,7 @@ export interface ActorTurnRunnerOptions {
 }
 
 const GENERIC_PERSONA = 'You are a focused assistant agent. Do the work you are given carefully and report the result plainly.';
-const EMPTY_REPLY_NOTE = '(the agent finished without a reply)';
+export const EMPTY_REPLY_NOTE = '(the agent finished without a reply)';
 
 /** Harness trust → the agent layer's trust tiers (#726). Strangers get the lowest initiator ceiling. */
 const TRUST_MAP: Readonly<Record<HarnessTrustLevel, InitiatorTrustLevel>> = Object.freeze({
@@ -110,7 +109,7 @@ const TRUST_RANK: Readonly<Record<InitiatorTrustLevel, number>> = Object.freeze(
   owner: 2,
 });
 
-export function createActorTurnRunner(options: ActorTurnRunnerOptions): ActorTurnRunner {
+export function createActorTurnRunner(options: ActorTurnRunnerOptions): AgentActorTurnRunner {
   // Captured while the root turn runs: background actor turns still get a trace after it ended.
   const tracing = options.tracing ?? captureSubTurnTracing(options.rootTurn.identity.turnId);
   const resolved = tracing ? { ...options, tracing } : options;
@@ -122,7 +121,7 @@ async function runActorTurn(
   actor: ActorId,
   batch: readonly Mail[],
   signal: AbortSignal,
-): Promise<ActorTurnResult> {
+): Promise<ActorTurnOutcome> {
   const { rootTurn } = options;
   const agent = options.directory.get(agentOf(actor));
   if (!agent) return { status: 'failed', content: `unknown agent ${agentOf(actor)}` };
@@ -186,15 +185,20 @@ interface ActorTurnRun {
 
 /**
  * Model ids for an actor turn on its own operation. The selected model leads.
- * A sub-agent purpose (`agent:<key>`) is one profile without fallbacks, so it
- * carries none; a turn on `chat` (entry actor, or a sub-agent without its own
- * purpose) keeps the root turn's fallback chain when the root ran the same
- * chat model, so a delegated turn degrades the way the root turn would.
+ * The entry actor runs on the root turn's purpose (chat or `agent:<binding>`),
+ * and a sub-agent without its own purpose on chat: both keep the root turn's
+ * fallback chain when they run the root's model, so a delegated turn degrades
+ * the way the root turn would. A sub-agent purpose (`agent:<key>`) is one
+ * profile without fallbacks and carries none.
  */
-export function actorModelSelection(models: ModelExecutionScope, root: ActorModelSelection | undefined): ActorModelSelection {
+export function actorModelSelection(
+  models: ModelExecutionScope,
+  root: ActorModelSelection | undefined,
+  entryActor = false,
+): ActorModelSelection {
   const modelId = models.chat.model.id;
-  const onChat = (models.purpose ?? 'chat') === 'chat';
-  const inherited = onChat && root?.modelId === modelId ? root.modelCandidates : [];
+  const rootPurpose = entryActor || (models.purpose ?? 'chat') === 'chat';
+  const inherited = rootPurpose && root?.modelId === modelId ? root.modelCandidates : [];
   return { modelId, modelCandidates: [...new Set([modelId, ...inherited])] };
 }
 
@@ -210,11 +214,11 @@ function recordModelSelection(trace: SubTurnTrace | undefined, models: ModelExec
   } });
 }
 
-async function runActorTurnWithModel(options: ActorTurnRunnerOptions, run: ActorTurnRun): Promise<ActorTurnResult> {
+async function runActorTurnWithModel(options: ActorTurnRunnerOptions, run: ActorTurnRun): Promise<ActorTurnOutcome> {
   const { host, rootTurn } = options;
   const { actor, batch, signal, agent, mail, harness, remainingCalls, turnId, sessionKey, trace, models } = run;
   const model: ActorModelSelection | undefined = models
-    ? actorModelSelection(models, options.resolveModel())
+    ? actorModelSelection(models, options.resolveModel(), agent.name === options.directory.entry.name)
     : options.resolveModel();
   if (!model) {
     trace?.close({ status: 'failed', code: 'model_unavailable' });
@@ -342,7 +346,7 @@ async function runActorTurnWithModel(options: ActorTurnRunnerOptions, run: Actor
     }
   };
 
-  let outcome: ActorTurnResult;
+  let outcome: ActorTurnOutcome;
   let reportedTokens: number | undefined;
   let reportedIterations = 0;
   // Each actor turn runs on its own model operation when the host provides one;
@@ -390,11 +394,13 @@ async function runActorTurnWithModel(options: ActorTurnRunnerOptions, run: Actor
     }), onEvent));
     reportedTokens = result.usage?.total_tokens;
     reportedIterations = result.iterations ?? 0;
+    // `content` speaks to the delegating model (notes included); `reply` is the actor's own words only.
+    const reply = result.reply.trim();
     outcome = budgetStop.signal.aborted
-      ? { status: 'budget_exceeded', content: budgetNote(result.reply, modelRequests) }
+      ? { status: 'budget_exceeded', content: budgetNote(result.reply, modelRequests), ...(reply ? { reply } : {}) }
       : turnSignal.aborted
         ? { status: 'cancelled', content: abortReason(turnSignal) }
-        : { status: 'completed', content: result.reply.trim() || EMPTY_REPLY_NOTE };
+        : { status: 'completed', content: reply || EMPTY_REPLY_NOTE, ...(reply ? { reply } : {}) };
     // Actor turns record no `turn_end`: their reply is checked for an unbacked lookup claim here.
     if (outcome.status === 'completed' && result.reply.trim()) trace?.note({ kind: 'final_reply', text: result.reply });
   } catch (error) {
@@ -410,7 +416,7 @@ async function runActorTurnWithModel(options: ActorTurnRunnerOptions, run: Actor
   const tokens = Math.max(usageTokens, reportedTokens ?? 0);
   if (calls > 0 || tokens > 0) {
     const charged = await harness.charge(mail, { modelCalls: calls, tokens });
-    if (!charged.ok && charged.code === 'budget_exceeded') outcome = { status: 'budget_exceeded', content: outcome.content };
+    if (!charged.ok && charged.code === 'budget_exceeded') outcome = { ...outcome, status: 'budget_exceeded' };
   }
   trace?.close(traceTermination(outcome));
   return outcome;
@@ -425,7 +431,7 @@ function traceTermination(outcome: ActorTurnResult): TurnTraceTermination {
   return { status: 'failed', ...(outcome.content ? { reason: outcome.content.slice(0, 300) } : {}) };
 }
 
-function budgetNote(reply: string, calls: number): string {
+export function budgetNote(reply: string, calls: number): string {
   const partial = reply.trim();
   const note = `Stopped: the budget granted for this work ran out after ${calls} model call(s).`;
   return partial ? `${partial}\n\n${note}` : note;

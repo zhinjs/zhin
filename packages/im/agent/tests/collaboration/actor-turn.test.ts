@@ -23,7 +23,7 @@ import {
 } from '@zhin.js/harness';
 import { rootPluginId } from '@zhin.js/plugin-runtime';
 import { actorModelSelection, createActorTurnRunner, renderMailBatch } from '../../src/collaboration/actor-turn.js';
-import type { ActorModelSelection, ActorModelSource, CollaborationAgent, CollaborationDirectory, CreateCollaborationTools } from '../../src/collaboration/contracts.js';
+import type { ActorModelSelection, ActorModelSource, ActorTurnOutcome, CollaborationAgent, CollaborationDirectory, CreateCollaborationTools } from '../../src/collaboration/contracts.js';
 import type { SubTurnTracing } from '../../src/trace/turn-trace-registry.js';
 import type { ToolCapability } from '../../src/plugin-runtime/capability-ingress.js';
 import { UsageQuota } from '../../src/security/usage-quota.js';
@@ -285,6 +285,8 @@ describe('actor turn runner', () => {
     const result = await ctx.runner('researcher', [mailFrom(root, { kind: 'ask', body: { kind: 'ask', question: 'q' } })], new AbortController().signal);
     // Overspend is caught live and stops the turn; the partial reply is kept with a budget note.
     expect(result).toMatchObject({ status: 'budget_exceeded', content: expect.stringMatching(/^done\n\nStopped: the budget granted for this work ran out after 3 model call\(s\)\.$/) });
+    // The human is shown only the actor's own words, never the model-facing budget note.
+    expect((result as ActorTurnOutcome).reply).toBe('done');
   });
 
   it('fails for an unknown agent', async () => {
@@ -349,6 +351,7 @@ describe('actor turn runner', () => {
     const result = await ctx.runner('researcher', [mailFrom(root, { kind: 'ask', body: { kind: 'ask', question: 'q' } })], new AbortController().signal);
     expect(result.status).toBe('completed');
     expect(result.content).toMatch(/without a reply/);
+    expect(result).not.toHaveProperty('reply');
     expect(ctx.inputs[0]!.promptProfile.persona).toMatch(/^You are a focused assistant agent/);
   });
 });
@@ -384,7 +387,7 @@ describe('#1250 actor turns own their model operation and trace', () => {
     });
     const { root } = await ctx.attach();
     const result = await ctx.runner('researcher', [mailFrom(root, { kind: 'ask', body: { kind: 'ask', question: 'which model?' } })], new AbortController().signal);
-    expect(result).toEqual({ status: 'completed', content: 'answer' });
+    expect(result).toEqual({ status: 'completed', content: 'answer', reply: 'answer' });
     expect(acquire).toHaveBeenCalledTimes(1);
     expect(acquire.mock.calls[0]![0]).toMatchObject({ agent: { name: 'researcher' }, sessionKey: 'im:icqq:bot:private:owner#actor:researcher' });
     expect(acquire.mock.calls[0]![0].operationId).toMatch(/^turn-1:actor:researcher:/);
@@ -418,6 +421,20 @@ describe('#1250 actor turns own their model operation and trace', () => {
     await ctx.runner('researcher', [mailFrom(root, { kind: 'ask', body: { kind: 'ask', question: 'q' } })], new AbortController().signal);
     expect(ctx.inputs[0]!.modelId).toBe('deepseek');
     expect(ctx.inputs[0]!.modelCandidates).toEqual(['deepseek', 'deepseek-backup', 'qwen']);
+  });
+
+  it('keeps the root fallback chain for the aggregation turn of a non-zhin entry binding', async () => {
+    const entry = fakeScope('deepseek', 'support-profile', 'agent:support');
+    const ctx = setup({
+      agents: [agentDef('zhin', ALL), agentDef('researcher', ALL)],
+      tools: [],
+      models: { acquire: async () => entry.scope },
+      rootModel: { modelId: 'deepseek', modelCandidates: ['deepseek', 'deepseek-backup'] },
+    });
+    const { root } = await ctx.attach();
+    await ctx.runner('zhin', [mailFrom(root, { from: { kind: 'actor', actor: 'researcher' }, to: 'zhin', kind: 'result',
+      body: { kind: 'result', inReplyTo: root.id, status: 'completed', content: 'done' } } as Partial<Mail>)], new AbortController().signal);
+    expect(ctx.inputs[0]!.modelCandidates).toEqual(['deepseek', 'deepseek-backup']);
   });
 
   it('selects model candidates from the purpose the sub-turn runs on', () => {

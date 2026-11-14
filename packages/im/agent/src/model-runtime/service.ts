@@ -182,7 +182,9 @@ export class ModelRuntimeService {
               const child: Promise<ModelExecutionScope> = this.#acquire({ lease: retained, snapshots: input.snapshots,
                 context: { ...context, operationId: childInput.operationId, sessionKey: childInput.sessionKey,
                   ...(childInput.epoch !== undefined ? { epoch: childInput.epoch } : {}) },
-                bindingName: childInput.bindingName, agent: childInput.agent, signal: childInput.signal, inferenceSnapshot: scope.snapshot,
+                // A child without a sub-agent continues the root turn's binding (the entry actor's
+                // aggregation turn), so it keeps the root's `agent:<binding>` purpose, not `chat`.
+                bindingName: childInput.bindingName ?? (childInput.agent ? undefined : input.bindingName), agent: childInput.agent, signal: childInput.signal, inferenceSnapshot: scope.snapshot,
               }, true).then(acquired => {
                 let childRelease: Promise<void> | undefined;
                 return Object.freeze({ ...acquired, release: () => childRelease ??= (async () => {

@@ -50,6 +50,22 @@ describe('#1250 actor turns run on their own delegated model operations', () => 
     await root.release();
   });
 
+  it('keeps a non-zhin root binding\'s purpose for the entry actor\'s aggregation turn', async () => {
+    const f = modelRuntimeFixture({ bindingNames: ['support'] });
+    f.update(withAgentProfile(f, { support: 'other' }));
+    const root = await f.acquire({}, 'support');
+    expect([root.chat.binding.profile.id, root.purpose]).toEqual(['other', 'agent:support']);
+    const delegation = root.retainDelegation();
+    await root.release();
+    // The aggregation turn (entry actor) names no sub-agent: it continues the root's binding.
+    const aggregation = await delegation.acquire({ operationId: 'agg', sessionKey: 's#actor:support' });
+    expect([aggregation.chat.binding.profile.id, aggregation.purpose]).toEqual(['other', 'agent:support']);
+    // A sub-agent of that root still never takes the binding's purpose.
+    const researcher = await delegation.acquire({ operationId: 'r', sessionKey: 's#actor:researcher', agent: { name: 'researcher' } });
+    expect([researcher.chat.binding.profile.id, researcher.purpose]).toEqual(['text', 'chat']);
+    await delegation.release();
+  });
+
   it('looks a sub-agent up by its qualified name first', async () => {
     const f = modelRuntimeFixture();
     f.update(withAgentProfile(f, { 'tools-plugin__researcher': 'other', researcher: 'text' }));

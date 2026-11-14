@@ -14,7 +14,7 @@
  * receives the same tools bound to its own mail, so any actor can ask,
  * delegate and tell within its attenuated authority.
  */
-import type { ActorId, AgentCeiling, AgentName, BudgetAmounts, Harness, Mail } from '@zhin.js/harness';
+import type { ActorId, ActorTurnResult, AgentCeiling, AgentName, BudgetAmounts, Harness, Mail } from '@zhin.js/harness';
 import type { ToolCapability } from '../plugin-runtime/capability-ingress.js';
 import type { ModelExecutionScope, SubAgentModelKey } from '../model-runtime/types.js';
 
@@ -106,3 +106,16 @@ export type CreateCollaborationTools = (
 ) => readonly ToolCapability[];
 
 export { type ActorTurnRunner } from '@zhin.js/harness';
+
+/**
+ * An actor turn's result as the agent host sees it. `content` is what the
+ * delegating model reads back (with model-facing notes such as the budget stop
+ * or empty-reply note); `reply` is only what the actor itself said, the part a
+ * human may be shown. Absent when the actor produced no reply.
+ */
+export interface ActorTurnOutcome extends ActorTurnResult {
+  readonly reply?: string;
+}
+
+/** {@link ActorTurnRunner} that reports the user-facing {@link ActorTurnOutcome.reply}. */
+export type AgentActorTurnRunner = (actor: ActorId, batch: readonly Mail[], signal: AbortSignal) => Promise<ActorTurnOutcome>;
