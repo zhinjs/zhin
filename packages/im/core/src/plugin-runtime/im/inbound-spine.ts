@@ -202,6 +202,7 @@ export type InboundSpineStage =
   | 'interactive'
   | 'command'
   | 'agent-ingress'
+  | 'command-suggestion'
   | 'none';
 
 export type InboundCommandObserve = (
@@ -236,6 +237,11 @@ export interface InboundTurnEnvelope {
   runHandlers(): Promise<void>;
   dispatchInteractive(): Promise<MessageDispatchResult | undefined>;
   dispatchCommand(observe: InboundCommandObserve): Promise<MessageDispatchOutcome>;
+  /**
+   * Before an unmatched message goes to the AI ingress: a "did you mean" reply when its
+   * first words resemble a registered command (issue #1250); `undefined` keeps the AI path.
+   */
+  suggestCommand?(): Promise<SendContent | undefined>;
   hasReplied(): boolean;
   findEventHandlerName?(event: string): string | undefined;
 }
@@ -339,11 +345,24 @@ export async function executeInboundTurnSpine(
       ? 'command'
       : 'none';
 
+  let suggestion: { readonly owner: PluginId; readonly content: SendContent } | undefined;
   if (!result.matched && ingressRoute) {
     logger.debug(formatCompact({
       op: 'unmatched',
       conv: formatConversationLog(message.conversation),
     }));
+    let suggested: SendContent | undefined;
+    if (!repliedDuringHandlers && !envelope.hasReplied()) {
+      // A suggestion is a convenience: its failure keeps the ordinary AI path.
+      try { suggested = await envelope.suggestCommand?.(); } catch { suggested = undefined; }
+    }
+    if (suggested !== undefined) {
+      diagnostics?.route('command');
+      suggestion = { owner: requester, content: suggested };
+      stage = 'command-suggestion';
+    }
+  }
+  if (!result.matched && ingressRoute && !suggestion) {
     const handled = await ingressRoute.route(
       message,
       lease,
@@ -357,7 +376,7 @@ export async function executeInboundTurnSpine(
     }
   }
 
-  const response = dispatched?.reply ?? (interactive?.value !== undefined && interactive.owner
+  const response = dispatched?.reply ?? suggestion ?? (interactive?.value !== undefined && interactive.owner
     ? { owner: interactive.owner, content: interactive.value as SendContent }
     : undefined);
   const replied = envelope.hasReplied() || response !== undefined;

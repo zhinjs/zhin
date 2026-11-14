@@ -174,6 +174,7 @@ dotenv 按 `.env` → `.env.<环境>` 加载。环境名由 `--environment` 指�
 | `htmlRenderer` | object | Shotium HTML 渲染（如 `width` / `viewport` / `scale`） |
 | `menuKeyword` | string \| false | 内置菜单关键词；默认 `菜单`，`false` 或空字符串关闭 |
 | `menuStyle` | object | 菜单标题、副标题、强调色与背景图；渲染能力可用时生效 |
+| `commandSuggestion` | boolean \| object | 未命中但与指令名相似时回复「你是不是想用」；`false` 关闭，可设 `maxDistance` / `limit` |
 | `plugin` | object | Root Plugin（应用自身）的配置 |
 | `configVersion` | number | 必须为 2 |
 | `plugins` | object | 实例名到插件包的映射 |

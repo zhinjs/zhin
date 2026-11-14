@@ -11,6 +11,8 @@ import { todayStr, resolveSender } from '../../src/shared-runtime.js';
 
 export default defineCommand<GroupSuiteConfig, SendContent, Message>({
   description: '查看今日群消息统计卡片（不支持图片时显示文本）', descriptionI18n: { en: "View today's group statistics card, with a text fallback" },
+  alias: ['stats card'],
+  preferredAliasI18n: { 'zh-CN': 'stats card', en: 'stats card' },
   permit: ['group()'],
   async execute(context) {
     if (!context.input) throw new Error('Group statistics require an incoming message');

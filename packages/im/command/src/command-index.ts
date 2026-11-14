@@ -22,6 +22,8 @@ import {
 import { commandAdapterMatches, toCommandPermissionSubject } from './permission-explanation.js';
 import { commandUsage, commandHelp, parseCommandArguments, requestsCommandHelp, commandValidationIssue, type CommandValidationIssue } from './arguments.js';
 import { commandDescription, commandMessages } from './messages.js';
+import { rankCommandSuggestions, resolveCommandSuggestionConfig, type CommandNameCandidate } from './command-suggestion.js';
+export type { CommandSuggestionConfig } from './command-suggestion.js';
 import { MENU_PAGE_SIZE, readMenuAppearance, renderCommandMenu, type CommandMenuSegment, type CommandMenuEntry, type CommandMenuAppearance } from './command-menu.js';
 export type { CommandMenuEntry, CommandMenuAppearance } from './command-menu.js';
 import { admitCommandExecution, admitDirectCommandExecution } from './execution-runtime.js';
@@ -339,6 +341,42 @@ export class CommandIndex {
       if (error instanceof CommandParameterValueError) return false;
       throw error;
     }
+  }
+
+  /**
+   * Near-miss names for text that did not route (issue #1250): display names (with
+   * `commandPrefix`) of commands the sender may run whose name or alias resembles the
+   * start of `text`. Root config `commandSuggestion` tunes or disables it (`false`).
+   */
+  async suggest(text: string, { source, commandPrefix = '', snapshot: operationSnapshot = this.snapshot, locale: localeOverride }: {
+    readonly source?: unknown; readonly commandPrefix?: string; readonly snapshot?: RuntimeSnapshot; readonly locale?: Locale;
+  } = {}): Promise<readonly string[]> {
+    const rootConfig = operationSnapshot.config.get(operationSnapshot.root) as { commandSuggestion?: unknown } | undefined;
+    const config = resolveCommandSuggestionConfig(rootConfig?.commandSuggestion);
+    if (!config.enabled) return [];
+    const candidates: CommandNameCandidate<CommandRecord>[] = this.#routes.map(route => ({
+      value: route.record,
+      words: route.segments.filter(segment => !segment.startsWith('$')),
+      arity: route.record.parameters.length + Object.keys(route.record.options).length,
+    }));
+    const ranked = rankCommandSuggestions(text, candidates, { ...config, limit: Number.MAX_SAFE_INTEGER });
+    const locale = localeOverride ?? commandLocale(source, operationSnapshot);
+    const names: string[] = [];
+    for (const record of ranked) {
+      if (names.length >= config.limit) break;
+      // Without a sender nothing proves a permit, so gated commands are never revealed.
+      if (source === undefined ? (record.permit?.length ?? 0) > 0 : !(await this.#listable(record, source, operationSnapshot))) continue;
+      names.push(`${commandPrefix}${commandDisplayName(record, locale)}`);
+    }
+    return names;
+  }
+
+  /** Localized "no such command, did you mean …" reply, or `undefined` when nothing is similar. */
+  async suggestReply(text: string, options: Parameters<CommandIndex['suggest']>[1] = {}): Promise<string | undefined> {
+    const names = await this.suggest(text, options);
+    if (names.length === 0) return undefined;
+    const locale = options.locale ?? commandLocale(options.source, options.snapshot ?? this.snapshot);
+    return commandMessages(locale, 'didYouMean', { commands: names.join(commandMessages(locale, 'suggestionSeparator')) });
   }
 
   async execute(name: string, args: readonly string[] = [], operationSnapshot: RuntimeSnapshot = this.snapshot): Promise<unknown> {

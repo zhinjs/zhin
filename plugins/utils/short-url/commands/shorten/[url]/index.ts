@@ -4,6 +4,8 @@ import { isValidUrl, shortenUrl } from '../../../src/short-url-lib.js';
 
 export default defineCommand({
   description: '缩短一个 URL', descriptionI18n: { en: "Shorten a URL" },
+  alias: ['short', '短链'],
+  preferredAliasI18n: { 'zh-CN': '短链', en: 'short' },
   params: { url: { type: 'string' } },
   async execute({ params, locale }) {
     const url = String(params.url ?? '');

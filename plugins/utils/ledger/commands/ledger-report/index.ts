@@ -7,7 +7,8 @@ import type { DailyReportAction } from '../../src/service.js';
 
 export default defineCommand({
   description: '订阅或取消每日私信记账日报：记账日报 [开启|关闭|状态]', descriptionI18n: { en: "Manage the daily expense report sent by private message" },
-  alias: ['记账日报'],
+  alias: ['记账日报', 'ledger report'],
+  preferredAliasI18n: { 'zh-CN': '记账日报', en: 'ledger report' },
   params: {
     action: { type: 'word', optional: true, description: '开启、关闭或状态（默认状态）', descriptionI18n: { en: "on, off, or status (default: status)" } },
   },

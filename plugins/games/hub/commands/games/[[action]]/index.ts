@@ -7,7 +7,10 @@ const messages = createMessages({
 });
 
 export default defineCommand({
-  description: 'Game hub — list loaded games',
+  description: '游戏大厅：列出已加载的游戏',
+  descriptionI18n: { en: 'Game hub: list loaded games' },
+  alias: ['游戏', '游戏列表'],
+  preferredAliasI18n: { 'zh-CN': '游戏' },
   params: { action: { type: 'string', default: '' } },
   async execute({ params, project, locale, formatCommand }) {
     const games = project<GameIndex>(gameFeatureId);

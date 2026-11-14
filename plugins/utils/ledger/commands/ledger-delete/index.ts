@@ -6,7 +6,8 @@ import { ledgerServiceToken } from '../../src/runtime.js';
 
 export default defineCommand({
   description: '删除自己的一笔记账：删账 <编号>', descriptionI18n: { en: "Delete one of your expense records" },
-  alias: ['删账'],
+  alias: ['删账', 'ledger delete'],
+  preferredAliasI18n: { 'zh-CN': '删账', en: 'ledger delete' },
   params: {
     id: { type: 'integer', min: 1, description: '账目编号（记账回复或「账单」中的 #编号）', descriptionI18n: { en: "Record ID from the expense list" } },
   },

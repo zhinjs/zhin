@@ -39,7 +39,7 @@ describe('@zhin.js/plugin-qrcode', () => {
     expect(invalid).toMatchObject({ status: 'invalid', issues: [{ field: '--size' }] });
     expect(invalid.value).toBeUndefined();
     const help = await index.dispatch({ input: 'gen --help', commandPrefix: '#' });
-    expect(String(help.value)).toContain('#gen <text> [--size <integer>]');
+    expect(String(help.value)).toContain('#生成二维码 <text> [--size <integer>]');
     expect(String(help.value)).toContain('默认值：300');
   });
 
@@ -106,7 +106,7 @@ describe('@zhin.js/plugin-qrcode', () => {
       for (const options of [undefined, {}]) {
         const index = commandIndex('scan/$url', { ...scanCommand, options, $parameter: { name: 'url', type: 'string' } });
         for (const input of ['scan --help', 'scan --help https://example.org', 'scan https://example.org --help']) {
-          await expect(index.dispatch({ input })).resolves.toMatchObject({ status: 'executed', value: expect.stringContaining('scan <url>') });
+          await expect(index.dispatch({ input })).resolves.toMatchObject({ status: 'executed', value: expect.stringContaining('识别二维码 <url>') });
         }
       }
       expect(fetchMock).not.toHaveBeenCalled();
