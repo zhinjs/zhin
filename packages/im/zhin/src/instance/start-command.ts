@@ -290,6 +290,9 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     },
     patch: request => consoleConfigurationStore.patchProject(request),
     expand: expandEnvironment,
+    expandStrict: (value: string) => {
+      try { return String(currentEnvironment().expand(value)); } catch { return undefined; }
+    },
   });
   const isRelationalDialect = ['sqlite', 'mysql', 'pg'].includes(databaseHost.dialect);
   if (isRelationalDialect) {

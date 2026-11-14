@@ -55,6 +55,16 @@ class ConfigFile implements EndpointConfigSource {
     return { revision: this.revision };
   }
   resolveIdentifier(value: string) { return value === '${MAIN_ID}' ? 'main' : value; }
+  /** In-process comparison only; `${MAIN_SECRET}` is set to the saved credential, `${OTHER_SECRET}` to another one. */
+  environment: Record<string, string> = { MAIN_SECRET: SECRET, OTHER_SECRET: 'some-other-credential' };
+  resolveReference(value: string) {
+    let missing = false;
+    const expanded = value.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/gu, (_match, name: string) => {
+      if (!Object.hasOwn(this.environment, name)) { missing = true; return ''; }
+      return this.environment[name]!;
+    });
+    return missing ? undefined : expanded;
+  }
   isSecretKey(key: string) { return /secret|token/iu.test(key); }
 }
 
@@ -138,10 +148,85 @@ describe('configured endpoint seeds and comparison', () => {
       existing: { id: '${MAIN_ID}', secret: '${MAIN_SECRET}' },
       record: { endpointId: 'main', config: { id: 'main', mode: 'ws', secret: SECRET, token: SECRET, password: SECRET, url: 'wss://x' },
         secretRefs: { appKey: '${APP_KEY}' } },
-      isSecretKey: key => /secret|token|password|key/iu.test(key), resolveIdentifier: value => value === '${MAIN_ID}' ? 'main' : value });
+      isSecretKey: key => /secret|token|password|key/iu.test(key), resolveIdentifier: value => value === '${MAIN_ID}' ? 'main' : value,
+      // Both file references resolve to the saved credential: they are kept (own) / stay inherited (base).
+      resolveReference: value => (value === '${MAIN_SECRET}' || value === '${BASE_TOKEN}' ? SECRET : undefined) });
     expect(written.entry).toEqual({ id: '${MAIN_ID}', appKey: '${APP_KEY}', secret: '${MAIN_SECRET}', password: '${QQ_MAIN_PASSWORD}', url: 'wss://x' });
     expect(written.placeholders).toEqual([{ id: 'main', path: 'password', variable: 'QQ_MAIN_PASSWORD' }]);
     expect(JSON.stringify(written)).not.toContain(SECRET);
+  });
+
+  it('never keeps a file reference that resolves to another credential than the saved account holds', () => {
+    const isSecretKey = (key: string) => /secret|token|password/iu.test(key);
+    const environment: Record<string, string> = { MAIN_SECRET: 'stale-credential', BASE_TOKEN: 'stale-token', MODE: 'http' };
+    const resolveReference = (value: string) => {
+      const name = /^\$\{([A-Z_]+)\}$/u.exec(value)?.[1];
+      return name && Object.hasOwn(environment, name) ? environment[name] : undefined;
+    };
+    const record = { endpointId: 'main', config: { id: 'main', secret: SECRET, token: SECRET, password: SECRET, mode: 'ws' } };
+    const written = endpointWritebackEntry({ adapter: 'qq', base: { token: '${BASE_TOKEN}', mode: '${MODE}' },
+      existing: { id: 'main', secret: '${MAIN_SECRET}', password: '${UNSET_PASSWORD}' }, record, isSecretKey, resolveReference });
+    expect(written.entry).toEqual({
+      id: 'main',
+      // Different value behind ${MAIN_SECRET}: a new placeholder, never the old name again.
+      secret: '${QQ_MAIN_SECRET}',
+      // The inherited ${BASE_TOKEN} resolves to another token: the entry overrides it with a placeholder.
+      token: '${QQ_MAIN_TOKEN}',
+      // ${UNSET_PASSWORD} cannot be compared: placeholder as well.
+      password: '${QQ_MAIN_PASSWORD}',
+      // Not a credential: the saved value is written over a reference that resolves differently.
+      mode: 'ws',
+    });
+    expect(written.placeholders).toEqual([
+      { id: 'main', path: 'password', variable: 'QQ_MAIN_PASSWORD', reason: 'reference_unresolved' },
+      { id: 'main', path: 'secret', variable: 'QQ_MAIN_SECRET', reason: 'reference_mismatch' },
+      { id: 'main', path: 'token', variable: 'QQ_MAIN_TOKEN', reason: 'reference_mismatch' },
+    ]);
+    // A mismatching reference that already uses the placeholder name gets a fresh one.
+    const same = endpointWritebackEntry({ adapter: 'qq', base: {}, existing: { id: 'main', secret: '${QQ_MAIN_SECRET}' },
+      record: { endpointId: 'main', config: { id: 'main', secret: SECRET } }, isSecretKey,
+      resolveReference: () => 'stale-credential' });
+    expect(same.entry).toEqual({ id: 'main', secret: '${QQ_MAIN_SECRET_NEW}' });
+    expect(same.placeholders).toEqual([{ id: 'main', path: 'secret', variable: 'QQ_MAIN_SECRET_NEW', reason: 'reference_mismatch' }]);
+    // Without a resolver nothing can be compared: never inherit silently.
+    expect(endpointWritebackEntry({ adapter: 'qq', base: { token: '${BASE_TOKEN}' }, existing: { id: 'main' },
+      record: { endpointId: 'main', config: { id: 'main', token: SECRET } }, isSecretKey }).entry).toEqual({ id: 'main', token: '${QQ_MAIN_TOKEN}' });
+    expect(JSON.stringify([written, same])).not.toContain(SECRET);
+    expect(JSON.stringify([written, same])).not.toContain('stale-credential');
+  });
+
+  it('detects credentials in URL userinfo, query parameters and lists by value', () => {
+    const isSecretKey = (key: string) => /secret|password|token$/iu.test(key);
+    const written = endpointWritebackEntry({ adapter: 'qq', base: {}, existing: { id: 'main' }, isSecretKey,
+      record: { endpointId: 'main', config: { id: 'main',
+        url: 'ws://user:pw@host:8080/ws', reverse: 'wss://host/ws?access_token=abc123', api: 'https://host/v1?sign=deadbeef&x=1',
+        plain: 'wss://host/ws?mode=1', nested: { endpoint: 'http://token@host/' } } } });
+    expect(written.entry).toEqual({ id: 'main', url: '${QQ_MAIN_URL}', reverse: '${QQ_MAIN_REVERSE}', api: '${QQ_MAIN_API}',
+      plain: 'wss://host/ws?mode=1', nested: { endpoint: '${QQ_MAIN_NESTED_ENDPOINT}' } });
+    expect(written.placeholders.map(item => item.path)).toEqual(['api', 'nested.endpoint', 'reverse', 'url']);
+    const text = JSON.stringify(written);
+    for (const leaked of ['user:pw', 'abc123', 'deadbeef', 'token@']) expect(text).not.toContain(leaked);
+    // A list of credentials cannot be referenced as a whole: refused rather than written in plaintext.
+    for (const config of [{ id: 'main', tokens: ['t-1', 't-2'] }, { id: 'main', upstreams: ['ws://u:p@a/'] },
+      { id: 'main', accounts: [{ name: 'a', password: 'p' }] }]) {
+      expect(() => endpointWritebackEntry({ adapter: 'qq', base: {}, isSecretKey, record: { endpointId: 'main', config } }), JSON.stringify(Object.keys(config)))
+        .toThrow(expect.objectContaining({ code: 'unsupported' }));
+    }
+    // Lists without credentials (and empty lists) are written as before.
+    expect(endpointWritebackEntry({ adapter: 'qq', base: {}, isSecretKey,
+      record: { endpointId: 'main', config: { id: 'main', groups: ['1', '2'], tokens: [] } } }).entry)
+      .toEqual({ id: 'main', groups: ['1', '2'], tokens: [] });
+  });
+
+  it('compares a file reference with the saved value in-process for drift', () => {
+    const seeds = configuredEndpointSeeds({ endpoints: [{ id: 'same', secret: '${GOOD}' }, { id: 'other', secret: '${BAD}' },
+      { id: 'unset', secret: '${NONE}' }] }, 'stub');
+    const records = [saved('same', { secret: SECRET }), saved('other', { secret: SECRET }), saved('unset', { secret: SECRET })];
+    const resolve = (value: string) => (value === '${GOOD}' ? SECRET : value === '${BAD}' ? 'another' : undefined);
+    const { entries, unverified } = compareEndpointDirectories(seeds, records, key => key === 'secret', resolve);
+    expect(entries).toEqual([{ id: 'other', kind: 'changed', instanceId: 'other', desiredEnabled: true, fields: [{ path: 'secret', sensitive: true }] }]);
+    expect(unverified).toEqual([{ id: 'unset', paths: ['secret'] }]);
+    expect(JSON.stringify({ entries, unverified })).not.toContain(SECRET);
   });
 });
 
@@ -204,6 +289,11 @@ describe('Adapter configuration drift, import and write-back', () => {
     expect(result.placeholders).toEqual([{ id: 'extra', path: 'secret', variable: 'STUB_EXTRA_SECRET' }]);
     expect(JSON.stringify(configFile.writes)).not.toContain(SECRET);
     expect(JSON.stringify(result)).not.toContain(SECRET);
+    configFile.environment.MAIN_SECRET = 'rotated-in-env-but-not-in-the-saved-account';
+    const rewritten = await adapter.writeBackConfigured(['main']);
+    expect((configFile.block?.endpoints as unknown[])[0]).toEqual({ id: '${MAIN_ID}', secret: '${STUB_MAIN_SECRET}' });
+    expect(rewritten.placeholders).toEqual([{ id: 'main', path: 'secret', variable: 'STUB_MAIN_SECRET', reason: 'reference_mismatch' }]);
+    expect(JSON.stringify(configFile.writes)).not.toContain('rotated-in-env');
     const read = configFile.read.bind(configFile);
     vi.spyOn(configFile, 'read').mockImplementationOnce(async () => ({ ...await read(), revision: 'stale' }));
     await expect(adapter.writeBackConfigured(['main'])).rejects.toMatchObject({ code: 'conflict' });

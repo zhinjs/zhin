@@ -259,7 +259,8 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
     const records = this.#desired();
     const document = await source.read(this.descriptor.owner, options.signal);
     const seeds = configuredEndpointSeeds(document.config, this.descriptor.name, source.resolveIdentifier?.bind(source));
-    const { entries, unverified } = compareEndpointDirectories(seeds, records, this.#secretKey(source, options.sensitiveFields));
+    const { entries, unverified } = compareEndpointDirectories(seeds, records, this.#secretKey(source, options.sensitiveFields),
+      source.resolveReference?.bind(source));
     return Object.freeze({ authority: 'snapshot', revision, configRevision: document.revision, entries, unverified });
   }
 
@@ -360,7 +361,7 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
       const index = entries.findIndex(entry => !!entry && typeof entry === 'object' && resolveId((entry as { id?: unknown }).id) === id);
       const existing = index >= 0 ? entries[index] as Readonly<Record<string, unknown>> : undefined;
       const written = endpointWritebackEntry({ adapter: this.descriptor.name, record: child.desired, existing, base,
-        isSecretKey, resolveIdentifier });
+        isSecretKey, resolveIdentifier, ...(source.resolveReference ? { resolveReference: source.resolveReference.bind(source) } : {}) });
       placeholders.push(...written.placeholders);
       if (index >= 0) entries[index] = written.entry; else entries.push(written.entry);
     }

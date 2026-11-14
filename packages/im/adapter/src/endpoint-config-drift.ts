@@ -12,11 +12,16 @@
  *   `${VAR}` references — the reference the file already had, or a placeholder the operator then
  *   sets in `.env`. A credential value is never written into the file.
  *
- * Comparison never resolves `${VAR}`: a reference equals only the same reference. A field the
- * file writes as a reference while the saved account holds a value cannot be compared without
- * resolving it; it is reported as `unverified`, not as a difference. Only paths are reported,
- * never values. Account ids written as `${VAR}` are the one exception: they name accounts (not
- * credentials) and are resolved through the source so accounts can be matched at all.
+ * A reference equals the same reference. A field the file writes as a reference while the saved
+ * account holds a value is compared in-process through {@link EndpointConfigSource.resolveReference}
+ * when the Host provides it (the value never leaves the comparison); without it, or when a variable
+ * is unset, the field is reported as `unverified`, not as a difference. Only paths are reported,
+ * never values. Account ids written as `${VAR}` are resolved through the source so accounts can be
+ * matched at all.
+ *
+ * Credentials are recognized by key name (Host predicate, plus console-spec `sensitiveFields`), by
+ * value (URL userinfo `ws://user:pass@host`, credential-like query parameters `?access_token=…`) and
+ * inside lists (a credential-like list key such as `tokens`, or list items that are credentials).
  */
 import { isDeepStrictEqual } from 'node:util';
 import type { PluginId } from '@zhin.js/plugin-runtime';
@@ -48,6 +53,12 @@ export interface EndpointConfigSource {
     signal?: AbortSignal): Promise<EndpointConfigWriteResult>;
   /** Resolve an account id written as `${VAR}` (ids only; never used for other fields). */
   resolveIdentifier?(value: string): string;
+  /**
+   * Expand every `${VAR}` of a stored value against the current environment, `undefined` when any
+   * variable is unset. Used only to compare a file reference with a saved value in-process; the
+   * result is never reported, logged or written.
+   */
+  resolveReference?(value: string): string | undefined;
   /** Credential-like configuration key (ADR 0057 predicate); a conservative default applies without it. */
   isSecretKey?(key: string): boolean;
 }
@@ -122,6 +133,84 @@ export function isSecretConfigurationPath(path: string, isSecretKey?: (key: stri
   return DEFAULT_SECRET_KEY.test(key.replace(/[^a-z0-9]/giu, '').toLowerCase());
 }
 
+/** Query parameter names that carry credentials in URLs (`?access_token=…`, `?key=…`). */
+const CREDENTIAL_QUERY_PARAMETER = /^(?:access[-_]?token|token|auth|authorization|key|api[-_]?key|apikey|secret|password|passwd|pass|pwd|sig|signature|sign|session|sessionid|ticket|code|credential|credentials|private[-_]?key)$/iu;
+
+/** `scheme://user[:pass]@host` or a credential-like query parameter. */
+function isCredentialUrl(value: string, isSecretKey?: (key: string) => boolean): boolean {
+  const match = /^[a-z][a-z0-9+.-]*:\/\/([^/?#]*)([^?#]*)(?:\?([^#]*))?/iu.exec(value.trim());
+  if (!match) return false;
+  if (match[1]!.includes('@')) return true;
+  for (const pair of (match[3] ?? '').split('&')) {
+    const raw = pair.split('=')[0] ?? '';
+    let name = raw;
+    try { name = decodeURIComponent(raw); } catch { /* keep the raw name */ }
+    if (!name) continue;
+    if (CREDENTIAL_QUERY_PARAMETER.test(name) || isSecretConfigurationPath(name, isSecretKey)) return true;
+  }
+  return false;
+}
+
+/**
+ * A credential leaf: credential-like key (a list key also in its singular, `tokens` → `token`), a
+ * URL carrying credentials, or a list / object holding any credential.
+ */
+function isCredentialValue(path: string, value: unknown, isSecretKey?: (key: string) => boolean): boolean {
+  if (isSecretConfigurationPath(path, isSecretKey)) return true;
+  if (typeof value === 'string') return isCredentialUrl(value, isSecretKey);
+  if (Array.isArray(value)) {
+    const key = path.split('.').at(-1) ?? path;
+    // `tokens` / `passwords` / `secrets`: a list key in its singular.
+    if (/s$/u.test(key) && isSecretConfigurationPath(key.slice(0, -1), isSecretKey)) return true;
+    return value.some(item => isCredentialValue(path, item, isSecretKey) || (plainObject(item) && credentialInside(item, isSecretKey)));
+  }
+  if (plainObject(value)) return credentialInside(value, isSecretKey);
+  return false;
+}
+
+function credentialInside(value: Readonly<Record<string, unknown>>, isSecretKey?: (key: string) => boolean): boolean {
+  return Object.entries(value).some(([key, item]) => isCredentialValue(key, item, isSecretKey));
+}
+
+/**
+ * Whether a stored `${VAR}` value would give the account `saved`: `equal` / `different`, or
+ * `unresolved` without a resolver or when a variable is unset. Never returns or keeps the value.
+ */
+function compareReference(reference: unknown, saved: unknown,
+  resolve: ((value: string) => string | undefined) | undefined): 'equal' | 'different' | 'unresolved' {
+  if (!resolve) return 'unresolved';
+  let unresolved = false;
+  const expand = (value: unknown): unknown => {
+    if (typeof value === 'string') {
+      if (!value.includes('${')) return value;
+      const resolved = resolve(value);
+      if (resolved === undefined) unresolved = true;
+      return resolved;
+    }
+    if (Array.isArray(value)) return value.map(expand);
+    if (plainObject(value)) return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, expand(item)]));
+    return value;
+  };
+  let expanded: unknown;
+  try { expanded = expand(reference); } catch { return 'unresolved'; }
+  if (unresolved) return 'unresolved';
+  return looselyEqual(expanded, saved) ? 'equal' : 'different';
+}
+
+/** Environment expansion yields strings: a saved number / boolean equals its string form. */
+function looselyEqual(expanded: unknown, saved: unknown): boolean {
+  if (isDeepStrictEqual(expanded, saved)) return true;
+  if (typeof expanded === 'string' && (typeof saved === 'number' || typeof saved === 'boolean')) return expanded === String(saved);
+  if (Array.isArray(expanded) && Array.isArray(saved)) {
+    return expanded.length === saved.length && expanded.every((item, index) => looselyEqual(item, saved[index]));
+  }
+  if (plainObject(expanded) && plainObject(saved)) {
+    const keys = new Set([...Object.keys(expanded), ...Object.keys(saved)]);
+    return [...keys].every(key => looselyEqual(expanded[key], saved[key]));
+  }
+  return false;
+}
+
 /** A value that still carries a `${VAR}` reference somewhere. */
 export function hasEnvironmentReference(value: unknown): boolean {
   if (typeof value === 'string') return value.includes('${');
@@ -176,6 +265,7 @@ export function configuredEndpointSeeds(config: Readonly<Record<string, unknown>
 /** Field-level comparison of a configured account and its persisted record (paths only). */
 export function compareEndpointConfiguration(configured: Readonly<Record<string, unknown>>,
   record: Pick<EndpointDesiredRecord, 'config' | 'secretRefs'>, isSecretKey?: (key: string) => boolean,
+  resolveReference?: (value: string) => string | undefined,
 ): Readonly<{ fields: readonly EndpointConfigDriftField[]; unverified: readonly string[] }> {
   const references = record.secretRefs ?? {};
   const paths = [...new Set([...configurationLeafPaths(configured), ...configurationLeafPaths(record.config),
@@ -189,12 +279,16 @@ export function compareEndpointConfiguration(configured: Readonly<Record<string,
     const wanted = readConfigurationPath(configured, path);
     const reference = Object.hasOwn(references, path) ? references[path] : undefined;
     const saved = readConfigurationPath(record.config, path);
-    const sensitive = isSecretConfigurationPath(path, isSecretKey) || reference !== undefined || hasEnvironmentReference(wanted);
+    const sensitive = isCredentialValue(path, wanted, isSecretKey) || isCredentialValue(path, saved, isSecretKey)
+      || reference !== undefined || hasEnvironmentReference(wanted);
     let differs: boolean;
     if (hasEnvironmentReference(wanted)) {
       if (reference !== undefined) differs = reference !== wanted;
-      else if (saved !== undefined) { unverified.push(path); differs = false; }
-      else differs = true;
+      else if (saved !== undefined) {
+        // Compared in-process; unset variables (or no resolver) leave it unverified.
+        const match = compareReference(wanted, saved, resolveReference);
+        if (match === 'unresolved') { unverified.push(path); differs = false; } else differs = match === 'different';
+      } else differs = true;
     } else if (reference !== undefined) differs = true;
     else differs = !isDeepStrictEqual(wanted, saved);
     if (differs) { fields.push(Object.freeze({ path, sensitive })); reported.push(path); }
@@ -205,6 +299,7 @@ export function compareEndpointConfiguration(configured: Readonly<Record<string,
 /** Configuration file accounts versus persisted records, by account id. */
 export function compareEndpointDirectories(seeds: readonly ConfiguredEndpointSeed[],
   records: readonly EndpointDesiredRecord[], isSecretKey?: (key: string) => boolean,
+  resolveReference?: (value: string) => string | undefined,
 ): Readonly<{ entries: readonly EndpointConfigDriftEntry[]; unverified: readonly EndpointConfigUnverified[] }> {
   const entries: EndpointConfigDriftEntry[] = [];
   const unverified: EndpointConfigUnverified[] = [];
@@ -212,7 +307,7 @@ export function compareEndpointDirectories(seeds: readonly ConfiguredEndpointSee
   for (const seed of seeds) {
     const record = byId.get(seed.endpointId);
     if (!record) { entries.push(Object.freeze({ id: seed.endpointId, kind: 'config_only' })); continue; }
-    const comparison = compareEndpointConfiguration(seed.config, record, isSecretKey);
+    const comparison = compareEndpointConfiguration(seed.config, record, isSecretKey, resolveReference);
     if (comparison.fields.length) {
       entries.push(Object.freeze({ id: seed.endpointId, kind: 'changed', instanceId: record.instanceId,
         desiredEnabled: record.desiredEnabled, fields: comparison.fields }));
@@ -258,6 +353,33 @@ export interface EndpointWritebackPlaceholder {
   readonly path: string;
   /** The `.env` variable the written reference names; it has to be set before the account can start from the file. */
   readonly variable: string;
+  /**
+   * Why a placeholder was written: `credential` — a saved credential value had no reference;
+   * `reference_mismatch` — the file's reference resolves to a different value than the saved
+   * account holds; `reference_unresolved` — the file's reference could not be resolved to compare.
+   * Absent means `credential`.
+   */
+  readonly reason?: 'credential' | 'reference_mismatch' | 'reference_unresolved';
+}
+
+/** `${VAR}` names inside a stored value. */
+function referencedVariables(value: unknown): readonly string[] {
+  let text = '';
+  try { text = typeof value === 'string' ? value : JSON.stringify(value) ?? ''; } catch { return []; }
+  return [...text.matchAll(/\$\{([A-Za-z_][A-Za-z0-9_]*)/gu)].map(match => match[1]!);
+}
+
+/**
+ * Placeholder name that is not one of `taken`: a reference that resolves to another value must not
+ * be written again under the same name (the account would keep the wrong credential).
+ */
+function placeholderVariableAvoiding(adapter: string, endpointId: string, path: string, taken: readonly string[]): string {
+  const name = placeholderVariable(adapter, endpointId, path);
+  if (!taken.includes(name)) return name;
+  for (let suffix = 1; ; suffix++) {
+    const candidate = `${name}_${suffix === 1 ? 'NEW' : `NEW${suffix}`}`;
+    if (!taken.includes(candidate)) return candidate;
+  }
 }
 
 /** `QQ_MAIN_SECRET` style variable name for a placeholder reference. */
@@ -270,8 +392,13 @@ export function placeholderVariable(adapter: string, endpointId: string, path: s
  * Configuration file entry for one persisted account. `existing` is its current entry (if any),
  * `base` the instance block without `endpoints`. Rules, per leaf path:
  * - a saved reference (`secretRefs`) is written as that reference;
- * - a reference in the existing entry is kept; one inherited from `base` stays inherited;
- * - a credential-like value without a reference becomes a placeholder `${VAR}` (reported);
+ * - a reference in the existing entry is kept, and one inherited from `base` stays inherited, only
+ *   when it resolves (in-process, `resolveReference`) to the saved value; otherwise a credential
+ *   gets a placeholder `${VAR}` (reported with `reference_mismatch` / `reference_unresolved`) and any
+ *   other value is written as saved;
+ * - a credential value without a reference (by key name, URL userinfo / credential query
+ *   parameter) becomes a placeholder `${VAR}` (reported);
+ * - a list holding credentials cannot be referenced as a whole and is refused (`unsupported`);
  * - other values are written unless `base` provides the same value.
  * The account id keeps the entry's `${VAR}` spelling when that resolves to the same id.
  */
@@ -282,6 +409,7 @@ export function endpointWritebackEntry(input: Readonly<{
   base: Readonly<Record<string, unknown>>;
   isSecretKey?: (key: string) => boolean;
   resolveIdentifier?: (value: string) => string;
+  resolveReference?: (value: string) => string | undefined;
 }>): Readonly<{ entry: Readonly<Record<string, unknown>>; placeholders: readonly EndpointWritebackPlaceholder[] }> {
   const { record, existing, base } = input;
   const references = record.secretRefs ?? {};
@@ -300,14 +428,33 @@ export function endpointWritebackEntry(input: Readonly<{
       continue;
     }
     const own = existing ? readConfigurationPath(existing, path) : undefined;
-    if (hasEnvironmentReference(own)) { writeConfigurationPath(entry, path, structuredClone(own)); continue; }
-    if (hasEnvironmentReference(inherited)) continue;
     const saved = readConfigurationPath(record.config, path);
-    if (isSecretConfigurationPath(path, input.isSecretKey)) {
-      if (saved === undefined || saved === null || saved === '') continue;
-      const variable = placeholderVariable(input.adapter, record.endpointId, path);
+    const credential = !(Array.isArray(saved) && saved.length === 0) && isCredentialValue(path, saved, input.isSecretKey);
+    const fileReference = hasEnvironmentReference(own) ? own : hasEnvironmentReference(inherited) ? inherited : undefined;
+    let reason: EndpointWritebackPlaceholder['reason'] = 'credential';
+    if (fileReference !== undefined) {
+      // Keep the file's reference only when it gives the account the saved value.
+      const match = compareReference(fileReference, saved, input.resolveReference);
+      if (match === 'equal') {
+        if (fileReference === own) writeConfigurationPath(entry, path, structuredClone(own));
+        continue;
+      }
+      if (!credential) { writeConfigurationPath(entry, path, structuredClone(saved)); continue; }
+      reason = match === 'different' ? 'reference_mismatch' : 'reference_unresolved';
+    }
+    if (credential) {
+      if (saved === undefined || saved === null || saved === '') {
+        // Nothing saved: an inherited / existing reference cannot be "wrong"; drop only a stale own one.
+        continue;
+      }
+      if (typeof saved !== 'string' && typeof saved !== 'number') {
+        throw new AdapterManagementError('unsupported',
+          `${record.endpointId}.${path} holds credentials in a list or object; edit it in zhin.config.yml directly`);
+      }
+      const variable = placeholderVariableAvoiding(input.adapter, record.endpointId, path,
+        reason === 'reference_mismatch' ? referencedVariables(fileReference) : []);
       writeConfigurationPath(entry, path, `\${${variable}}`);
-      placeholders.push(Object.freeze({ id: record.endpointId, path, variable }));
+      placeholders.push(Object.freeze({ id: record.endpointId, path, variable, ...(reason === 'credential' ? {} : { reason }) }));
       continue;
     }
     if (isDeepStrictEqual(saved, inherited)) continue;

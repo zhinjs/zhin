@@ -18,6 +18,11 @@ export interface EndpointConfigSourceOptions {
     patches: readonly Readonly<{ op: 'set'; path: readonly string[]; value: unknown }>[] }>) => Promise<ConsoleConfigProjectPatchResult>;
   /** Expands `${VAR}` against the current environment (missing → empty). */
   readonly expand: (value: string) => string;
+  /**
+   * Strict expansion (`undefined` when a variable is unset): in-process comparison of a file
+   * reference with a saved value during write-back / drift. Without it such fields stay unverified.
+   */
+  readonly expandStrict?: (value: string) => string | undefined;
 }
 
 function instanceOf(snapshot: RuntimeSnapshot, owner: PluginId): Readonly<{ instanceKey: string; schema?: JsonSchema }> | undefined {
@@ -65,6 +70,7 @@ export function createEndpointConfigSource(options: EndpointConfigSourceOptions)
       throw new AdapterManagementError('commit_unknown', 'Configuration save outcome is unconfirmed');
     },
     resolveIdentifier: (value: string) => options.expand(value),
+    ...(options.expandStrict ? { resolveReference: options.expandStrict } : {}),
     isSecretKey: (key: string) => isSecretConfigKey(key),
   });
 }
