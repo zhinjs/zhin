@@ -399,6 +399,7 @@
     "export * from './identity.js';",
     "export * from './inbox.js';",
     "export * from './layered-config.js';",
+    "export * from './marketplace-metadata.js';",
     "export * from './outbound-host.js';",
     "export * from './outbound-sender.js';",
     "export * from './persistent-state.js';",
